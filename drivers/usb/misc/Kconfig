@@ -269,3 +269,12 @@ config USB_TEST
 	  See <http://www.linux-usb.org/usbtest/> for more information,
 	  including sample test device firmware and "how to use it".
 
+config USB_GOTEMP
+	tristate "GoTemp USB thermometer driver support"
+	depends on USB
+	help
+	  Say Y here if you want to connect a GoTemp USB thermometer
+	  device to your computer's USB port.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called gotemp.
