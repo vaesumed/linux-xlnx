@@ -789,12 +789,21 @@ static void run_init_process(char *init_filename)
 	kernel_execve(init_filename, argv_init, envp_init);
 }
 
+/*
+ * __init/__init_data sections are turned into normal
+ * dynamically allocated memory later in boot.  When
+ * this is 0, the memory is for the __init purposes,
+ * when it it some other value, the memory is dynamic.
+ */
+int initmem_now_dynamic;
+
 /* This is a non __init function. Force it to be noinline otherwise gcc
  * makes it inline to init() and it becomes part of init.text section
  */
 static int noinline init_post(void)
 {
 	free_initmem();
+	initmem_now_dynamic = 1;
 	unlock_kernel();
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
