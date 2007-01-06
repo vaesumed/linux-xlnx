@@ -19,6 +19,7 @@
 
 #include "core.h"
 #include "bus.h"
+#include "lock.h"
 #include "mmc_ops.h"
 #include "sd_ops.h"
 
@@ -316,6 +317,9 @@ static struct attribute_group sd_std_attr_group = {
 
 static struct attribute_group *sd_attr_groups[] = {
 	&sd_std_attr_group,
+#ifdef CONFIG_MMC_PASSWORDS
+	&mmc_lock_attr_group,
+#endif
 	NULL,
 };
 

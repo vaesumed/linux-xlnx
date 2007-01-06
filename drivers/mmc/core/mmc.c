@@ -18,6 +18,7 @@
 
 #include "core.h"
 #include "bus.h"
+#include "lock.h"
 #include "mmc_ops.h"
 
 static const unsigned int tran_exp[] = {
@@ -278,6 +279,9 @@ static struct attribute_group mmc_std_attr_group = {
 
 static struct attribute_group *mmc_attr_groups[] = {
 	&mmc_std_attr_group,
+#ifdef CONFIG_MMC_PASSWORDS
+	&mmc_lock_attr_group,
+#endif
 	NULL,
 };
 
