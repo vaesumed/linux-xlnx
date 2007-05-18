@@ -336,6 +336,7 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	int err;
 	u32 cid[4];
 	unsigned int max_dtr;
+	u32 status;
 
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
@@ -412,6 +413,15 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 
 		mmc_set_bus_mode(host, MMC_BUSMODE_PUSHPULL);
 	}
+
+	/*
+	 * Check if card is locked.
+	 */
+	err = mmc_send_status(card, &status);
+	if (err)
+		goto free_card;
+	if (status & R1_CARD_IS_LOCKED)
+		mmc_card_set_locked(card);
 
 	if (!oldcard) {
 		/*
@@ -571,7 +581,7 @@ static void mmc_sd_suspend(struct mmc_host *host)
 	mmc_claim_host(host);
 	if (!mmc_host_is_spi(host))
 		mmc_deselect_cards(host);
-	host->card->state &= ~MMC_STATE_HIGHSPEED;
+	host->card->state &= ~(MMC_STATE_HIGHSPEED | MMC_STATE_LOCKED);
 	mmc_release_host(host);
 }
 
