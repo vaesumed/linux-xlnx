@@ -40,6 +40,7 @@ static mempool_t	*rpc_buffer_mempool __read_mostly;
 
 static void			rpc_async_schedule(struct work_struct *);
 static void			 rpc_release_task(struct rpc_task *task);
+static void __rpc_queue_timer_fn(unsigned long ptr);
 
 /*
  * RPC tasks sit here while waiting for conditions to improve.
@@ -61,6 +62,7 @@ __rpc_disable_timer(struct rpc_task *task)
 {
 	dprintk("RPC: %5u disabling timer\n", task->tk_pid);
 	task->tk_timeout = 0;
+	list_del(&task->u.tk_wait.timer_list);
 }
 
 /*
@@ -127,6 +129,7 @@ static void __rpc_add_wait_queue(struct rpc_wait_queue *queue, struct rpc_task *
 {
 	BUG_ON (RPC_IS_QUEUED(task));
 
+	INIT_LIST_HEAD(&task->u.tk_wait.timer_list);
 	if (RPC_IS_PRIORITY(queue))
 		__rpc_add_wait_queue_priority(queue, task);
 	else if (RPC_IS_SWAPPER(task))
@@ -153,7 +156,6 @@ static void __rpc_remove_wait_queue_priority(struct rpc_task *task)
 		list_move(&t->u.tk_wait.list, &task->u.tk_wait.list);
 		list_splice_init(&task->u.tk_wait.links, &t->u.tk_wait.links);
 	}
-	list_del(&task->u.tk_wait.list);
 }
 
 /*
@@ -162,10 +164,10 @@ static void __rpc_remove_wait_queue_priority(struct rpc_task *task)
  */
 static void __rpc_remove_wait_queue(struct rpc_wait_queue *queue, struct rpc_task *task)
 {
+	__rpc_disable_timer(task);
 	if (RPC_IS_PRIORITY(queue))
 		__rpc_remove_wait_queue_priority(task);
-	else
-		list_del(&task->u.tk_wait.list);
+	list_del(&task->u.tk_wait.list);
 	queue->qlen--;
 	dprintk("RPC: %5u removed from queue %p \"%s\"\n",
 			task->tk_pid, queue, rpc_qname(queue));
@@ -198,6 +200,9 @@ static void __rpc_init_priority_wait_queue(struct rpc_wait_queue *queue, const c
 		INIT_LIST_HEAD(&queue->tasks[i]);
 	queue->maxpriority = nr_queues - 1;
 	rpc_reset_waitqueue_priority(queue);
+	queue->qlen = 0;
+	setup_timer(&queue->timer_list.timer, __rpc_queue_timer_fn, (unsigned long)queue);
+	INIT_LIST_HEAD(&queue->timer_list.list);
 #ifdef RPC_DEBUG
 	queue->name = qname;
 #endif
@@ -216,6 +221,7 @@ EXPORT_SYMBOL_GPL(rpc_init_wait_queue);
 
 void rpc_destroy_wait_queue(struct rpc_wait_queue *queue)
 {
+	del_timer_sync(&queue->timer_list.timer);
 }
 EXPORT_SYMBOL_GPL(rpc_destroy_wait_queue);
 
@@ -369,7 +375,6 @@ static void __rpc_do_wake_up_task(struct rpc_wait_queue *queue, struct rpc_task 
 		return;
 	}
 
-	__rpc_disable_timer(task);
 	__rpc_remove_wait_queue(queue, task);
 
 	rpc_make_runnable(task);
@@ -560,6 +565,33 @@ static void rpc_run_timer(unsigned long ptr)
 	smp_mb__before_clear_bit();
 	clear_bit(RPC_TASK_HAS_TIMER, &task->tk_runstate);
 	smp_mb__after_clear_bit();
+}
+
+static void __rpc_queue_timer_fn(unsigned long ptr)
+{
+	struct rpc_wait_queue *queue = (struct rpc_wait_queue *)ptr;
+	struct rpc_task *task, *n;
+	unsigned long expires, now, timeo;
+
+	spin_lock(&queue->lock);
+	expires = now = jiffies;
+	list_for_each_entry_safe(task, n, &queue->timer_list.list, u.tk_wait.timer_list) {
+		timeo = task->u.tk_wait.expires;
+		if (time_after_eq(now, timeo)) {
+			list_del_init(&task->u.tk_wait.timer_list);
+			dprintk("RPC: %5u timeout\n", task->tk_pid);
+			task->tk_status = -ETIMEDOUT;
+			rpc_wake_up_task_queue_locked(queue, task);
+			continue;
+		}
+		if (expires == now || time_before(expires, timeo))
+			expires = timeo;
+	}
+	if (!list_empty(&queue->timer_list.list)) {
+		mod_timer(&queue->timer_list.timer, expires);
+		queue->timer_list.expires = expires;
+	}
+	spin_unlock(&queue->lock);
 }
 
 static void __rpc_atrun(struct rpc_task *task)
