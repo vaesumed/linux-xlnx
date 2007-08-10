@@ -419,10 +419,9 @@ int mmc_lock_unlock(struct mmc_card *card, struct key *key, int mode)
 		data_size = 2 + mpayload->datalen;
 	}
 
-	data_buf = kmalloc(data_size, GFP_KERNEL);
+	data_buf = kzalloc(data_size, GFP_KERNEL);
 	if (!data_buf)
 		return -ENOMEM;
-	memset(data_buf, 0, data_size);
 
 	data_buf[0] |= mode;
 	if (mode & MMC_LOCK_MODE_UNLOCK)
