@@ -91,6 +91,7 @@ struct sysfs_addrm_cxt {
 extern struct sysfs_dirent sysfs_root;
 extern struct super_block *sysfs_sb;
 extern struct kmem_cache *sysfs_dir_cachep;
+extern struct vfsmount *sysfs_mount;
 
 /*
  * dir.c
