@@ -668,8 +668,8 @@ static int idefloppy_open(struct inode *inode, struct file *filp)
 		if (ide_do_test_unit_ready(drive, disk))
 			ide_do_start_stop(drive, disk, 1);
 
-		if (ide_floppy_get_capacity(drive)
-		   && (filp->f_flags & O_NDELAY) == 0
+		if (ide_floppy_get_capacity (drive)
+		   && (filp->f_mode & FMODE_NDELAY) == 0
 		    /*
 		     * Allow O_NDELAY to open a drive without a disk, or with an
 		     * unreadable disk, so that we can get the format capacity
