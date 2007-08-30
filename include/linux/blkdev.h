@@ -1089,6 +1089,8 @@ static inline long nr_blockdev_pages(void)
 
 #endif /* CONFIG_BLOCK */
 
+extern int __blkdev_driver_ioctl(struct block_device *, fmode_t, unsigned int,
+				 unsigned long);
 struct file;
 struct inode;
 
