@@ -251,14 +251,13 @@ int _stb0899_read_reg(struct stb0899_state *state, unsigned int reg)
 		dprintk(verbose, FE_ERROR, 1, "Reg=[0x%02x], data=%02x",
 			reg, buf);
 
-
 	return (unsigned int)buf;
 }
 
 int stb0899_read_reg(struct stb0899_state *state, unsigned int reg)
 {
 	int result;
-	
+
 	result = _stb0899_read_reg(state, reg);
 	/*
 	 * Bug ID 9:
@@ -812,6 +811,13 @@ static int stb0899_wakeup(struct dvb_frontend *fe)
 	int rc;
 	struct stb0899_state *state = fe->demodulator_priv;
 
+	if ((rc = stb0899_write_reg(state, STB0899_SYNTCTRL, STB0899_SELOSCI)))
+		return rc;
+	/* Activate all clocks; DVB-S2 registers are inaccessible otherwise. */
+	if ((rc = stb0899_write_reg(state, STB0899_STOPCLK1, 0x00)))
+		return rc;
+	if ((rc = stb0899_write_reg(state, STB0899_STOPCLK2, 0x00)))
+		return rc;
 
 	return 0;
 }
@@ -1533,7 +1539,7 @@ static enum dvbfe_search stb0899_search(struct dvb_frontend *fe, struct dvbfe_pa
 //				internal->err_ctrl = stb0899_read_reg(state, STB0899_ERRCTRL1);
 //				dprintk(verbose, FE_DEBUG, 1, "VSTATUS=0x%02x", internal->v_status);
 //				dprintk(verbose, FE_DEBUG, 1, "ERR_CTRL=0x%02x", internal->err_ctrl);
-				
+
 				return DVBFE_ALGO_SEARCH_SUCCESS;
 			} else {
 				internal->lock		= 0;
@@ -1825,7 +1831,6 @@ static int stb0899_get_params(struct dvb_frontend *fe, struct dvbfe_params *para
 		dprintk(verbose, FE_DEBUG, 1, "Get DSS params");
 		params->delsys.dss.symbol_rate		= internal->srate;
 		params->delsys.dss.modulation		= DVBFE_MOD_QPSK;
-		
 		break;
 	case DVBFE_DELSYS_DVBS2:
 		dprintk(verbose, FE_DEBUG, 1, "Get DVB-S2 params");
@@ -1837,7 +1842,7 @@ static int stb0899_get_params(struct dvb_frontend *fe, struct dvbfe_params *para
 	}
 
 	return 0;
-} 
+}
 
 static enum dvbfe_algo stb0899_frontend_algo(struct dvb_frontend *fe)
 {
