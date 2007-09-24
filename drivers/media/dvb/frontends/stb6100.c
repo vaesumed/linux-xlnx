@@ -516,8 +516,6 @@ static struct dvb_tuner_ops stb6100_ops = {
 	.get_status	= stb6100_get_status,
 	.get_state	= stb6100_get_state,
 	.set_state	= stb6100_set_state,
-	.get_frequency	= stb6100_get_frequency,
-	.get_bandwidth	= stb6100_get_bandwidth,
 	.release	= stb6100_release
 };
 
@@ -537,13 +535,12 @@ struct dvb_frontend *stb6100_attach(struct dvb_frontend *fe,
 	state->reference	= config->refclock / 1000; /* kHz */
 	fe->tuner_priv		= state;
 	fe->ops.tuner_ops	= stb6100_ops;
-	
+
 	printk("%s: Attaching STB6100 \n", __func__);
 	return fe;
 
 error:
 	kfree(state);
-
 	return NULL;
 }
 
