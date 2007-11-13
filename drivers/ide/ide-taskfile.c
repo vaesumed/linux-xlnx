@@ -261,7 +261,7 @@ static void ide_pio_sector(ide_drive_t *drive, unsigned int write)
 		hwif->cursg = sg;
 	}
 
-	page = cursg->page;
+	page = sg_page(cursg);
 	offset = cursg->offset + hwif->cursg_ofs * SECTOR_SIZE;
 
 	/* get the current page and offset */
@@ -471,6 +471,7 @@ static int ide_diag_taskfile(ide_drive_t *drive, ide_task_t *args, unsigned long
 	struct request rq;
 
 	memset(&rq, 0, sizeof(rq));
+	rq.ref_count = 1;
 	rq.cmd_type = REQ_TYPE_ATA_TASKFILE;
 	rq.buffer = buf;
 
@@ -511,6 +512,7 @@ int ide_raw_taskfile (ide_drive_t *drive, ide_task_t *args, u8 *buf)
 
 EXPORT_SYMBOL(ide_raw_taskfile);
 
+#ifdef CONFIG_IDE_TASK_IOCTL
 int ide_taskfile_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 {
 	ide_task_request_t	*req_task;
@@ -660,6 +662,7 @@ abort:
 
 	return err;
 }
+#endif
 
 int ide_wait_cmd (ide_drive_t *drive, u8 cmd, u8 nsect, u8 feature, u8 sectors, u8 *buf)
 {

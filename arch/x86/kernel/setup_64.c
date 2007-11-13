@@ -58,6 +58,7 @@
 #include <asm/numa.h>
 #include <asm/sections.h>
 #include <asm/dmi.h>
+#include <asm/cacheflush.h>
 
 /*
  * Machine setup..
@@ -129,6 +130,12 @@ struct resource data_resource = {
 };
 struct resource code_resource = {
 	.name = "Kernel code",
+	.start = 0,
+	.end = 0,
+	.flags = IORESOURCE_RAM,
+};
+struct resource bss_resource = {
+	.name = "Kernel bss",
 	.start = 0,
 	.end = 0,
 	.flags = IORESOURCE_RAM,
@@ -276,6 +283,8 @@ void __init setup_arch(char **cmdline_p)
 	code_resource.end = virt_to_phys(&_etext)-1;
 	data_resource.start = virt_to_phys(&_etext);
 	data_resource.end = virt_to_phys(&_edata)-1;
+	bss_resource.start = virt_to_phys(&__bss_start);
+	bss_resource.end = virt_to_phys(&__bss_stop)-1;
 
 	early_identify_cpu(&boot_cpu_data);
 
@@ -1031,7 +1040,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 		/* Intel-defined (#2) */
 		"pni", NULL, NULL, "monitor", "ds_cpl", "vmx", "smx", "est",
 		"tm2", "ssse3", "cid", NULL, NULL, "cx16", "xtpr", NULL,
-		NULL, NULL, "dca", NULL, NULL, NULL, NULL, "popcnt",
+		NULL, NULL, "dca", "sse4_1", "sse4_2", NULL, NULL, "popcnt",
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 
 		/* VIA/Cyrix/Centaur-defined */
@@ -1041,10 +1050,10 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 
 		/* AMD-defined (#2) */
-		"lahf_lm", "cmp_legacy", "svm", "extapic", "cr8_legacy",
-		"altmovcr8", "abm", "sse4a",
-		"misalignsse", "3dnowprefetch",
-		"osvw", "ibs", NULL, NULL, NULL, NULL,
+		"lahf_lm", "cmp_legacy", "svm", "extapic",
+		"cr8_legacy", "abm", "sse4a", "misalignsse",
+		"3dnowprefetch", "osvw", "ibs", "sse5",
+		"skinit", "wdt", NULL, NULL,
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 

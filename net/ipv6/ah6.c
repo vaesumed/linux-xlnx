@@ -35,7 +35,6 @@
 #include <net/ipv6.h>
 #include <net/protocol.h>
 #include <net/xfrm.h>
-#include <asm/scatterlist.h>
 
 static int zero_out_mutable_opts(struct ipv6_opt_hdr *opthdr)
 {
@@ -483,6 +482,7 @@ static int ah6_init_state(struct xfrm_state *x)
 		break;
 	case XFRM_MODE_TUNNEL:
 		x->props.header_len += sizeof(struct ipv6hdr);
+		break;
 	default:
 		goto error;
 	}
