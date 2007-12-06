@@ -1588,6 +1588,10 @@ struct ctl_table_header *register_sysctl_table(struct ctl_table * table)
 void unregister_sysctl_table(struct ctl_table_header * header)
 {
 	might_sleep();
+
+	if (header == NULL)
+		return;
+
 	spin_lock(&sysctl_lock);
 	start_unregistering(header);
 	spin_unlock(&sysctl_lock);
@@ -2619,6 +2623,10 @@ static int deprecated_sysctl_warning(struct __sysctl_args *args)
 	static int msg_count;
 	int name[CTL_MAXNAME];
 	int i;
+
+	/* Check args->nlen. */
+	if (args->nlen < 0 || args->nlen > CTL_MAXNAME)
+		return -ENOTDIR;
 
 	/* Read in the sysctl name for better debug message logging */
 	for (i = 0; i < args->nlen; i++)

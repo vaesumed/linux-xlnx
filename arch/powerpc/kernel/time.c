@@ -241,8 +241,9 @@ void account_system_vtime(struct task_struct *tsk)
 		/* deltascaled includes both user and system time.
 		 * Hence scale it based on the purr ratio to estimate
 		 * the system time */
-		deltascaled = deltascaled * get_paca()->system_time /
-			(get_paca()->system_time + get_paca()->user_time);
+		if (get_paca()->user_time)
+			deltascaled = deltascaled * get_paca()->system_time /
+			     (get_paca()->system_time + get_paca()->user_time);
 		delta += get_paca()->system_time;
 		get_paca()->system_time = 0;
 	}
@@ -829,7 +830,7 @@ static void register_decrementer_clockevent(int cpu)
 	*dec = decrementer_clockevent;
 	dec->cpumask = cpumask_of_cpu(cpu);
 
-	printk(KERN_INFO "clockevent: %s mult[%lx] shift[%d] cpu[%d]\n",
+	printk(KERN_DEBUG "clockevent: %s mult[%lx] shift[%d] cpu[%d]\n",
 	       dec->name, dec->mult, dec->shift, cpu);
 
 	clockevents_register_device(dec);

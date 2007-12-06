@@ -457,10 +457,11 @@ done:
 EXPORT_SYMBOL_GPL(spi_register_master);
 
 
-static int __unregister(struct device *dev, void *unused)
+static int __unregister(struct device *dev, void *master_dev)
 {
 	/* note: before about 2.6.14-rc1 this would corrupt memory: */
-	spi_unregister_device(to_spi_device(dev));
+	if (dev != master_dev)
+		spi_unregister_device(to_spi_device(dev));
 	return 0;
 }
 
@@ -478,7 +479,8 @@ void spi_unregister_master(struct spi_master *master)
 {
 	int dummy;
 
-	dummy = device_for_each_child(master->dev.parent, NULL, __unregister);
+	dummy = device_for_each_child(master->dev.parent, &master->dev,
+					__unregister);
 	device_unregister(&master->dev);
 }
 EXPORT_SYMBOL_GPL(spi_unregister_master);
@@ -539,10 +541,7 @@ static void spi_complete(void *arg)
  * Also, the caller is guaranteeing that the memory associated with the
  * message will not be freed before this call returns.
  *
- * The return value is a negative error code if the message could not be
- * submitted, else zero.  When the value is zero, then message->status is
- * also defined;  it's the completion code for the transfer, either zero
- * or a negative error code from the controller driver.
+ * It returns zero on success, else a negative error code.
  */
 int spi_sync(struct spi_device *spi, struct spi_message *message)
 {
@@ -552,8 +551,10 @@ int spi_sync(struct spi_device *spi, struct spi_message *message)
 	message->complete = spi_complete;
 	message->context = &done;
 	status = spi_async(spi, message);
-	if (status == 0)
+	if (status == 0) {
 		wait_for_completion(&done);
+		status = message->status;
+	}
 	message->context = NULL;
 	return status;
 }
@@ -587,7 +588,7 @@ int spi_write_then_read(struct spi_device *spi,
 		const u8 *txbuf, unsigned n_tx,
 		u8 *rxbuf, unsigned n_rx)
 {
-	static DECLARE_MUTEX(lock);
+	static DEFINE_MUTEX(lock);
 
 	int			status;
 	struct spi_message	message;
@@ -613,7 +614,7 @@ int spi_write_then_read(struct spi_device *spi,
 	}
 
 	/* ... unless someone else is using the pre-allocated buffer */
-	if (down_trylock(&lock)) {
+	if (!mutex_trylock(&lock)) {
 		local_buf = kmalloc(SPI_BUFSIZ, GFP_KERNEL);
 		if (!local_buf)
 			return -ENOMEM;
@@ -626,13 +627,11 @@ int spi_write_then_read(struct spi_device *spi,
 
 	/* do the i/o */
 	status = spi_sync(spi, &message);
-	if (status == 0) {
+	if (status == 0)
 		memcpy(rxbuf, x[1].rx_buf, n_rx);
-		status = message.status;
-	}
 
 	if (x[0].tx_buf == buf)
-		up(&lock);
+		mutex_unlock(&lock);
 	else
 		kfree(local_buf);
 

@@ -1269,6 +1269,9 @@ tcp_sacktag_write_queue(struct sock *sk, struct sk_buff *ack_skb, u32 prior_snd_
 	if (before(TCP_SKB_CB(ack_skb)->ack_seq, prior_snd_una - tp->max_window))
 		return 0;
 
+	if (!tp->packets_out)
+		goto out;
+
 	/* SACK fastpath:
 	 * if the only SACK change is the increase of the end_seq of
 	 * the first block then only apply that SACK block
@@ -1515,6 +1518,8 @@ tcp_sacktag_write_queue(struct sock *sk, struct sk_buff *ack_skb, u32 prior_snd_
 	    (!tp->frto_highmark || after(tp->snd_una, tp->frto_highmark)))
 		tcp_update_reordering(sk, tp->fackets_out - reord, 0);
 
+out:
+
 #if FASTRETRANS_DEBUG > 0
 	BUG_TRAP((int)tp->sacked_out >= 0);
 	BUG_TRAP((int)tp->lost_out >= 0);
@@ -1669,6 +1674,9 @@ void tcp_enter_frto(struct sock *sk)
 	}
 	tcp_verify_left_out(tp);
 
+	/* Too bad if TCP was application limited */
+	tp->snd_cwnd = min(tp->snd_cwnd, tcp_packets_in_flight(tp) + 1);
+
 	/* Earlier loss recovery underway (see RFC4138; Appendix B).
 	 * The last condition is necessary at least in tp->frto_counter case.
 	 */
@@ -1701,6 +1709,8 @@ static void tcp_enter_frto_loss(struct sock *sk, int allowed_segments, int flag)
 	tcp_for_write_queue(skb, sk) {
 		if (skb == tcp_send_head(sk))
 			break;
+
+		TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST;
 		/*
 		 * Count the retransmission made on RTO correctly (only when
 		 * waiting for the first ACK and did not get it)...
@@ -1714,7 +1724,7 @@ static void tcp_enter_frto_loss(struct sock *sk, int allowed_segments, int flag)
 		} else {
 			if (TCP_SKB_CB(skb)->sacked & TCPCB_RETRANS)
 				tp->undo_marker = 0;
-			TCP_SKB_CB(skb)->sacked &= ~(TCPCB_LOST|TCPCB_SACKED_RETRANS);
+			TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_RETRANS;
 		}
 
 		/* Don't lost mark skbs that were fwd transmitted after RTO */
@@ -2993,17 +3003,13 @@ static int tcp_process_frto(struct sock *sk, int flag)
 	}
 
 	if (tp->frto_counter == 1) {
-		/* Sending of the next skb must be allowed or no F-RTO */
-		if (!tcp_send_head(sk) ||
-		    after(TCP_SKB_CB(tcp_send_head(sk))->end_seq,
-				     tp->snd_una + tp->snd_wnd)) {
-			tcp_enter_frto_loss(sk, (tp->frto_counter == 1 ? 2 : 3),
-					    flag);
-			return 1;
-		}
-
+		/* tcp_may_send_now needs to see updated state */
 		tp->snd_cwnd = tcp_packets_in_flight(tp) + 2;
 		tp->frto_counter = 2;
+
+		if (!tcp_may_send_now(sk))
+			tcp_enter_frto_loss(sk, 2, flag);
+
 		return 1;
 	} else {
 		switch (sysctl_tcp_frto_response) {
@@ -3059,6 +3065,7 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	}
 
 	prior_fackets = tp->fackets_out;
+	prior_in_flight = tcp_packets_in_flight(tp);
 
 	if (!(flag&FLAG_SLOWPATH) && after(ack, prior_snd_una)) {
 		/* Window is constant, pure forward advance.
@@ -3098,16 +3105,14 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	if (!prior_packets)
 		goto no_queue;
 
-	prior_in_flight = tcp_packets_in_flight(tp);
-
 	/* See if we can take anything off of the retransmit queue. */
 	flag |= tcp_clean_rtx_queue(sk, &seq_rtt, prior_fackets);
 
+	if (tp->frto_counter)
+		frto_cwnd = tcp_process_frto(sk, flag);
 	/* Guarantee sacktag reordering detection against wrap-arounds */
 	if (before(tp->frto_highmark, tp->snd_una))
 		tp->frto_highmark = 0;
-	if (tp->frto_counter)
-		frto_cwnd = tcp_process_frto(sk, flag);
 
 	if (tcp_ack_is_dubious(sk, flag)) {
 		/* Advance CWND, if state allows this. */
