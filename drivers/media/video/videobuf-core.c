@@ -806,7 +806,7 @@ ssize_t videobuf_read_one(struct videobuf_queue *q,
 }
 
 /* Locking: Caller holds q->lock */
-int videobuf_read_start(struct videobuf_queue *q)
+int __videobuf_read_start(struct videobuf_queue *q)
 {
 	enum v4l2_field field;
 	unsigned long flags=0;
@@ -862,6 +862,17 @@ static void __videobuf_read_stop(struct videobuf_queue *q)
 	
 }
 
+int videobuf_read_start(struct videobuf_queue *q)
+{
+	int rc;
+
+	mutex_lock(&q->lock);
+	rc = __videobuf_read_start(q);
+	mutex_unlock(&q->lock);
+
+	return rc;
+}
+
 void videobuf_read_stop(struct videobuf_queue *q)
 {
 	mutex_lock(&q->lock);
@@ -898,7 +909,7 @@ ssize_t videobuf_read_stream(struct videobuf_queue *q,
 	if (q->streaming)
 		goto done;
 	if (!q->reading) {
-		retval = videobuf_read_start(q);
+		retval = __videobuf_read_start(q);
 		if (retval < 0)
 			goto done;
 	}
@@ -971,7 +982,7 @@ unsigned int videobuf_poll_stream(struct file *file,
 					 struct videobuf_buffer, stream);
 	} else {
 		if (!q->reading)
-			videobuf_read_start(q);
+			__videobuf_read_start(q);
 		if (!q->reading) {
 			rc = POLLERR;
 		} else if (NULL == q->read_buf) {
@@ -1058,6 +1069,7 @@ EXPORT_SYMBOL_GPL(videobuf_dqbuf);
 EXPORT_SYMBOL_GPL(videobuf_streamon);
 EXPORT_SYMBOL_GPL(videobuf_streamoff);
 
+EXPORT_SYMBOL_GPL(videobuf_read_start);
 EXPORT_SYMBOL_GPL(videobuf_read_stop);
 EXPORT_SYMBOL_GPL(videobuf_stop);
 EXPORT_SYMBOL_GPL(videobuf_read_stream);
