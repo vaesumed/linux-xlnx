@@ -35,6 +35,7 @@ struct device;
 struct device_driver;
 struct driver_private;
 struct class;
+struct class_private;
 struct bus_type;
 struct bus_type_private;
 
@@ -182,11 +183,6 @@ struct class {
 	const char		*name;
 	struct module		*owner;
 
-	struct kset		subsys;
-	struct list_head	devices;
-	struct list_head	interfaces;
-	struct kset		class_dirs;
-	struct semaphore	sem; /* locks children, devices, interfaces */
 	struct class_attribute		*class_attrs;
 	struct device_attribute		*dev_attrs;
 	struct kobject			*dev_kobj;
@@ -198,6 +194,8 @@ struct class {
 
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
+
+	struct class_private *p;
 };
 
 extern struct kobject *sysfs_dev_block_kobj;
