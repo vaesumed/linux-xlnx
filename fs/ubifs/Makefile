@@ -1,0 +1,8 @@
+obj-$(CONFIG_UBIFS_FS) += ubifs.o
+
+ubifs-y += shrinker.o journal.o build.o file.o dir.o super.o sb.o io.o
+ubifs-y += tnc.o master.o scan.o replay.o log.o commit.o gc.o orphan.o sysfs.o
+ubifs-y += budget.o find.o tnc_commit.o compress.o lpt.o lprops.o
+ubifs-y += recovery.o ioctl.o
+
+ubifs-$(CONFIG_UBIFS_FS_DEBUG) += debug.o
