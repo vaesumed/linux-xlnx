@@ -1,0 +1,668 @@
+/*
+ * This file is part of UBIFS.
+ *
+ * Copyright (C) 2006, 2007 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ *
+ * Author: Artem Bityutskiy
+ *         Adrian Hunter
+ */
+
+/*
+ * All UBIFS on-flash objects are stored in form of nodes. All nodes start with
+ * magic UBIFS node number and have the same common header. Nodes always sit at
+ * 8-byte aligned positions on the media and node header sizes are also 8-byte
+ * aligned (except the padding node).
+ */
+
+#ifndef __LINUX_UBIFS_H__
+#define __LINUX_UBIFS_H__
+
+/* UBIFS nodes magic number (must not have the padding byte first or last) */
+#define UBIFS_NODE_MAGIC  0x06101831
+
+/* Minimum logical eraseblock size in bytes */
+#define UBIFS_MIN_LEB_SZ (15*1024)
+
+/* Initial CRC32 value used when calculating CRC checksums */
+#define UBIFS_CRC32_INIT 0xFFFFFFFFU
+
+/* Root inode number */
+#define UBIFS_ROOT_INO 1
+
+/* Lowest inode number used for regular inodes (not UBIFS-only internal ones) */
+#define UBIFS_FIRST_INO 64
+
+/* Maximum file name length (must be a multiple of 8, minus 1) */
+#define UBIFS_MAX_NLEN 255
+
+/* Maximum number of data journal heads */
+#define UBIFS_MAX_JHEADS 1
+
+/* Size of UBIFS data block */
+#define UBIFS_BLOCK_SIZE  4096
+#define UBIFS_BLOCK_SHIFT 12
+#define UBIFS_BLOCK_MASK  0x00000FFF
+
+/* Maximum number of data blocks stored in one data node */
+#define UBIFS_MAX_NODE_BLOCKS 1
+
+/* UBIFS padding byte pattern (must not be first or last byte of node magic) */
+#define UBIFS_PADDING_BYTE 0xCE
+
+/* Maximum possible key length */
+#define UBIFS_MAX_KEY_LEN 16
+
+/* Key length ("simple" format) */
+#define UBIFS_SK_LEN 8
+
+/* Minimum index tree fanout */
+#define UBIFS_MIN_FANOUT 2
+
+/* Maximum number of levels in UBIFS indexing B-tree */
+#define UBIFS_MAX_LEVELS 512
+
+/* Maximum possible inode size in bytes */
+#define UBIFS_MAX_INODE_SZ 0x3FFFFFFFFFFFFFFFULL /* 62 bits */
+
+/* Maximum amount of data attached to an inode in bytes */
+#define UBIFS_MAX_INO_DATA 4096
+
+/* LEB Properties Tree fanout (must be power of 2) and fanout shift */
+#define UBIFS_LPT_FANOUT 4
+#define UBIFS_LPT_FANOUT_SHIFT 2
+
+/* LEB Properties Tree bit field sizes */
+#define UBIFS_LPT_CRC_BITS 16
+#define UBIFS_LPT_CRC_BYTES 2
+#define UBIFS_LPT_TYPE_BITS 4
+
+/*
+ * LEB Properties Tree node types.
+ *
+ * UBIFS_LPT_PNODE: LPT leaf node (contains LEB properties)
+ * UBIFS_LPT_NNODE: LPT internal node
+ * UBIFS_LPT_LTAB: LPT's own lprops table
+ * UBIFS_LPT_LSAVE: LPT's save table (big model only)
+ * UBIFS_LPT_NODE_CNT: count of LPT node types
+ * UBIFS_LPT_NOT_A_NODE: all ones (15 for 4 bits) is never a valid node type
+ */
+enum
+{
+	UBIFS_LPT_PNODE,
+	UBIFS_LPT_NNODE,
+	UBIFS_LPT_LTAB,
+	UBIFS_LPT_LSAVE,
+	UBIFS_LPT_NODE_CNT,
+	UBIFS_LPT_NOT_A_NODE = (1 << UBIFS_LPT_TYPE_BITS) - 1,
+};
+
+/*
+ * UBIFS file types.
+ *
+ * UBIFS_ITYPE_REG: regular file
+ * UBIFS_ITYPE_DIR: directory
+ * UBIFS_ITYPE_LNK: soft link
+ * UBIFS_ITYPE_BLK: block device node
+ * UBIFS_ITYPE_CHR: character device node
+ * UBIFS_ITYPE_FIFO: fifo
+ * UBIFS_ITYPE_SOCK: socker
+ * UBIFS_ITYPES_CNT: count of supported file types
+ */
+enum {
+	UBIFS_ITYPE_REG,
+	UBIFS_ITYPE_DIR,
+	UBIFS_ITYPE_LNK,
+	UBIFS_ITYPE_BLK,
+	UBIFS_ITYPE_CHR,
+	UBIFS_ITYPE_FIFO,
+	UBIFS_ITYPE_SOCK,
+	UBIFS_ITYPES_CNT,
+};
+
+/*
+ * Supported key hash functions.
+ *
+ * UBIFS_KEY_HASH_R5: R5 hash
+ * UBIFS_KEY_HASH_TEST: test hash which just returns first 4 bytes of the name
+ */
+enum {
+	UBIFS_KEY_HASH_R5,
+	UBIFS_KEY_HASH_TEST,
+};
+
+/*
+ * Supported key formats.
+ *
+ * UBIFS_SIMPLE_KEY_FMT: simple key format
+ */
+enum {
+	UBIFS_SIMPLE_KEY_FMT,
+};
+
+/*
+ * Key types.
+ *
+ * UBIFS_DENT_KEY: directory entry node key
+ * UBIFS_INO_KEY: inode node key
+ * UBIFS_DATA_KEY: data node key
+ * UBIFS_TRUN_KEY: truncation node key
+ * UBIFS_KEY_TYPES_CNT: number of supported key types
+ */
+enum {
+	UBIFS_INO_KEY,
+	UBIFS_DENT_KEY,
+	UBIFS_DATA_KEY,
+	UBIFS_TRUN_KEY,
+	UBIFS_XATTR_KEY,
+	UBIFS_KEY_TYPES_CNT,
+};
+
+/* Count of LEBs reserved for the superblock area */
+#define UBIFS_SB_LEBS 1
+/* Count of LEBs reserved for the master area */
+#define UBIFS_MST_LEBS 2
+
+/* First LEB of the superblock area */
+#define UBIFS_SB_LNUM 0
+/* First LEB of the master area */
+#define UBIFS_MST_LNUM (UBIFS_SB_LNUM + UBIFS_SB_LEBS)
+/* First LEB of the log area */
+#define UBIFS_LOG_LNUM (UBIFS_MST_LNUM + UBIFS_MST_LEBS)
+
+/* Minimum number of logical eraseblocks in the log */
+#define UBIFS_MIN_LOG_LEBS 2
+/* Minimum number of bud logical eraseblocks */
+#define UBIFS_MIN_BUD_LEBS 2
+/* Minimum number of journal logical eraseblocks */
+#define UBIFS_MIN_JRN_LEBS (UBIFS_MIN_LOG_LEBS + UBIFS_MIN_BUD_LEBS)
+/* Minimum number of LPT area logical eraseblocks */
+#define UBIFS_MIN_LPT_LEBS 2
+/* Minimum number of orphan area logical eraseblocks */
+#define UBIFS_MIN_ORPH_LEBS 1
+/* Minimum number of main area logical eraseblocks */
+#define UBIFS_MIN_MAIN_LEBS 8
+
+/* Minimum number of logical eraseblocks */
+#define UBIFS_MIN_LEB_CNT (UBIFS_SB_LEBS + UBIFS_MST_LEBS + \
+			   UBIFS_MIN_LOG_LEBS + UBIFS_MIN_BUD_LEBS  + \
+			   UBIFS_MIN_LPT_LEBS + UBIFS_MIN_ORPH_LEBS + \
+			   UBIFS_MIN_MAIN_LEBS)
+
+/* Node sizes (N.B. these are guaranteed to be multiples of 8) */
+#define UBIFS_CH_SZ        sizeof(struct ubifs_ch)
+#define UBIFS_INO_NODE_SZ  sizeof(struct ubifs_ino_node)
+#define UBIFS_DENT_NODE_SZ sizeof(struct ubifs_dent_node)
+#define UBIFS_DATA_NODE_SZ sizeof(struct ubifs_data_node)
+#define UBIFS_TRUN_NODE_SZ sizeof(struct ubifs_trun_node)
+#define UBIFS_PAD_NODE_SZ  sizeof(struct ubifs_pad_node)
+#define UBIFS_SB_NODE_SZ   sizeof(struct ubifs_sb_node)
+#define UBIFS_MST_NODE_SZ  sizeof(struct ubifs_mst_node)
+#define UBIFS_REF_NODE_SZ  sizeof(struct ubifs_ref_node)
+#define UBIFS_IDX_NODE_SZ  sizeof(struct ubifs_idx_node)
+#define UBIFS_CS_NODE_SZ   sizeof(struct ubifs_cs_node)
+#define UBIFS_ORPH_NODE_SZ sizeof(struct ubifs_orph_node)
+/* Only this does not have to be multiple of 8 bytes */
+#define UBIFS_BRANCH_SZ    sizeof(struct ubifs_branch)
+
+/* Maximum node sizes (N.B. these are guaranteed to be multiples of 8) */
+#define UBIFS_MAX_DATA_NODE_SZ (UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE)
+#define UBIFS_MAX_INO_NODE_SZ  (UBIFS_INO_NODE_SZ + UBIFS_MAX_INO_DATA)
+#define UBIFS_MAX_DENT_NODE_SZ (UBIFS_DENT_NODE_SZ + UBIFS_MAX_NLEN + 1)
+
+/* The largest UBIFS node */
+#define UBIFS_MAX_NODE_SZ UBIFS_MAX_DATA_NODE_SZ
+
+/*
+ * On-flash inode flags.
+ *
+ * UBIFS_COMPR_FL: use compression for this inode
+ * UBIFS_SYNC_FL:  I/O on this inode has to be synchronous
+ * UBIFS_IMMUTABLE_FL: inode is immutable
+ * UBIFS_APPEND_FL: writes to the inode may only append data
+ * UBIFS_DIRSYNC_FL: I/O on this directory inode has to be synchronous
+ *
+ * Note, these are on-flash flags which correspond to ioctl flags
+ * (@FS_COMPR_FL, etc). They have the same values now, but generally, do not
+ * have to be the same.
+ */
+enum {
+	UBIFS_COMPR_FL     = 0x01,
+	UBIFS_SYNC_FL      = 0x02,
+	UBIFS_IMMUTABLE_FL = 0x04,
+	UBIFS_APPEND_FL    = 0x08,
+	UBIFS_DIRSYNC_FL   = 0x10,
+};
+
+/* Inode flag bits used by UBIFS */
+#define UBIFS_FL_MASK 0x0000001F
+
+/*
+ * UBIFS compression types.
+ *
+ * UBIFS_COMPRE_NONE: no compression
+ * UBIFS_COMPR_LZO: LZO compression
+ * UBIFS_COMPR_ZLIB: ZLIB compression
+ * UBIFS_COMPR_TYPES_CNT: count of supported compression types
+ */
+enum {
+	UBIFS_COMPR_NONE,
+	UBIFS_COMPR_LZO,
+	UBIFS_COMPR_ZLIB,
+	UBIFS_COMPR_TYPES_CNT,
+};
+
+/*
+ * UBIFS node types.
+ *
+ * UBIFS_INO_NODE: inode node
+ * UBIFS_DENT_NODE: directory entry node
+ * UBIFS_DATA_NODE: data node
+ * UBIFS_TRUN_NODE: truncation node
+ * UBIFS_PAD_NODE: padding node
+ * UBIFS_SB_NODE: superblock node
+ * UBIFS_MST_NODE: master node
+ * UBIFS_REF_NODE: LEB reference node
+ * UBIFS_IDX_NODE: index node
+ * UBIFS_CS_NODE: commit start node
+ * UBIFS_ORPH_NODE: orphan node
+ * UBIFS_XATTR_NODE: extended attribute node
+ * UBIFS_NODE_TYPES_CNT: count of supported node types
+ *
+ * Note, we index arrays by these numbers, so keep them low and contiguous.
+ * Node type constants for inodes, direntries and so on have to be the same as
+ * corresponding key type constants.
+ */
+enum {
+	UBIFS_INO_NODE,
+	UBIFS_DENT_NODE,
+	UBIFS_DATA_NODE,
+	UBIFS_TRUN_NODE,
+	UBIFS_PAD_NODE,
+	UBIFS_SB_NODE,
+	UBIFS_MST_NODE,
+	UBIFS_REF_NODE,
+	UBIFS_IDX_NODE,
+	UBIFS_CS_NODE,
+	UBIFS_ORPH_NODE,
+	UBIFS_XATTR_NODE,
+	UBIFS_NODE_TYPES_CNT,
+};
+
+/*
+ * Master node flags.
+ *
+ * UBIFS_MST_DIRTY: rebooted uncleanly - master node is dirty
+ * UBIFS_MST_NO_ORPHS: no orphan inodes present
+ * UBIFS_MST_RCVRY: written by recovery
+ */
+enum {
+	UBIFS_MST_DIRTY = 1,
+	UBIFS_MST_NO_ORPHS = 2,
+	UBIFS_MST_RCVRY = 4,
+};
+
+/*
+ * Node group type (used by recovery to recover whole group or none)
+ *
+ * UBIFS_NO_NODE_GROUP: this node is not part of a group
+ * UBIFS_IN_NODE_GROUP: this node is a part of a group
+ * UBIFS_LAST_OF_NODE_GROUP: this node is the last in a group
+ */
+enum {
+	UBIFS_NO_NODE_GROUP = 0,
+	UBIFS_IN_NODE_GROUP,
+	UBIFS_LAST_OF_NODE_GROUP,
+};
+
+/**
+ * struct ubifs_ch - common header node.
+ * @magic: UBIFS node magic number (%UBIFS_NODE_MAGIC)
+ * @crc: CRC-32 checksum of the node header
+ * @sqnum: sequence number
+ * @len: full node length
+ * @node_type: node type
+ * @group_type: node group type
+ * @padding: reserved for future, zeroes
+ *
+ * Every UBIFS node starts with this common part. If the node has a key, the
+ * key always goes next.
+ */
+struct ubifs_ch
+{
+	__be32 magic;
+	__be32 crc;
+	__be64 sqnum;
+	__be32 len;
+	__u8 node_type;
+	__u8 group_type;
+	__u8 padding[2];
+} __attribute__ ((packed));
+
+/**
+ * ubifs_dev_desc - device node descriptor
+ * @new: new type device descriptor
+ * @huge: huge type device descriptor
+ *
+ * This data structure describes major/minor numbers of a device node. In an
+ * inode is a device node then its data contains an object of this type. UBIFS
+ * uses standard Linux "new" and "huge" device node encodings.
+ */
+union ubifs_dev_desc
+{
+	__be32 new;
+	__be64 huge;
+} __attribute__ ((packed));
+
+/**
+ * ubifs_ino_node - inode node.
+ * @ch: common header
+ * @key: node key
+ * @size: inode size in bytes
+ * @nlink: number of hard links
+ * @atime: access time
+ * @ctime: creation time
+ * @mtime: modification time
+ * @uid: owner ID
+ * @gid: group ID
+ * @mode: access flags
+ * @flags: per-inode flags (%UBIFS_COMPR_FL, %UBIFS_SYNC_FL, etc)
+ * @data_len: inode data length
+ * @compr_type: compression type used for this inode
+ * @padding: reserved for future, zeroes
+ * @data: data attached to the inode
+ *
+ * Note, even though inode compression type is defined by @compr_type, some
+ * nodes of this inode may be compressed with different compressor - this
+ * happens if compression type is changed while the inode already has data
+ * nodes. But @compr_type will be use for further writes to the inode.
+ */
+struct ubifs_ino_node
+{
+	struct ubifs_ch ch;
+	__u8 key[UBIFS_MAX_KEY_LEN];
+	__be64 size;
+	__be32 nlink;
+	__be32 atime;
+	__be32 ctime;
+	__be32 mtime;
+	__be32 uid;
+	__be32 gid;
+	__be32 mode;
+	__be32 flags;
+	__be32 data_len;
+	__be16 compr_type;
+	__u8 padding[18];
+	__u8 data[];
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_dent_node - directory entry node.
+ * @ch: common header
+ * @key: node key
+ * @inum: target inode number
+ * @padding: reserved for future, zeroes
+ * @type: type of the target inode (%UBIFS_ITYPE_REG, %UBIFS_ITYPE_DIR, etc)
+ * @nlen: name length
+ * @padding1: reserved for future, zeroes
+ * @name: zero-terminated name
+ */
+struct ubifs_dent_node
+{
+	struct ubifs_ch ch;
+	__u8 key[UBIFS_MAX_KEY_LEN];
+	__be64 inum;
+	__u8 padding;
+	__u8 type;
+	__be16 nlen;
+	__u8 padding1[4];
+	__u8 name[];
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_data_node - data node.
+ * @ch: common header
+ * @key: node key
+ * @size: uncompressed data size in bytes
+ * @compr_type: compression type (%UBIFS_COMPR_NONE, %UBIFS_COMPR_LZO, etc)
+ * @padding: reserved for future, zeroes
+ * @data: data
+ */
+struct ubifs_data_node
+{
+	struct ubifs_ch ch;
+	__u8 key[UBIFS_MAX_KEY_LEN];
+	__be32 size;
+	__be16 compr_type;
+	__u8 padding[2];
+	__u8 data[];
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_trun_node - truncation node.
+ * @ch: common header
+ * @key: truncation node key
+ * @old_size: size before truncation
+ * @new_size: size after truncation
+ *
+ * This node exists only in the journal and never goes to the main area.
+ */
+struct ubifs_trun_node
+{
+	struct ubifs_ch ch;
+	__u8 key[UBIFS_MAX_KEY_LEN];
+	__be64 old_size;
+	__be64 new_size;
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_pad_node - padding node.
+ * @ch: common header
+ * @pad_len: how many bytes after this node are unused (because padded)
+ * @padding: reserved for future, zeroes
+ */
+struct ubifs_pad_node
+{
+	struct ubifs_ch ch;
+	__be32 pad_len;
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_sb_node - superblock node.
+ * @ch: common header
+ * @padding: reserved for future, zeroes
+ * @key_hash: type of hash function used in keys
+ * @key_fmt: format of the key
+ * @big_lpt: flag that LPT is too big to write whole during commit
+ * @flags: file-system flags
+ * @min_io_size: minimal input/output unit size
+ * @leb_size: logical eraseblock size in bytes
+ * @leb_cnt: count of LEBs used by filesystem
+ * @max_leb_cnt: maximum count of LEBs used by filesystem
+ * @max_bud_bytes: maximum amount of data stored in buds
+ * @log_lebs: log size in logical eraseblocks
+ * @lpt_lebs: number of LEBs used for lprops table
+ * @orph_lebs: number of LEBs used for recording orphans
+ * @jhead_cnt: count of journal heads
+ * @fanout: tree fanout (max. number of links per indexing node)
+ * @lsave_cnt: number of LEB numbers in LPT's save table
+ * @padding1: reserved for future, zeroes
+ */
+struct ubifs_sb_node
+{
+	struct ubifs_ch ch;
+	__u8 padding[1];
+	__u8 key_hash;
+	__u8 key_fmt;
+	__u8 big_lpt;
+	__be32 flags;
+	__be32 min_io_size;
+	__be32 leb_size;
+	__be32 leb_cnt;
+	__be32 max_leb_cnt;
+	__be64 max_bud_bytes;
+	__be32 log_lebs;
+	__be32 lpt_lebs;
+	__be32 orph_lebs;
+	__be32 jhead_cnt;
+	__be32 fanout;
+	__be32 lsave_cnt;
+	__be16 default_compr;
+	__u8 padding1[510];
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_mst_node - master node.
+ * @ch: common header
+ * @highest_inum: highest inode number in the committed index
+ * @cmt_no: commit number
+ * @flags: various flags (%UBIFS_MST_DIRTY, etc)
+ * @log_lnum: start of the log
+ * @root_lnum: LEB number of the root indexing node
+ * @root_lnum: offset within @root_lnum
+ * @root_len: root indexing node length
+ * @gc_lnum: LEB reserved for garbage collection (%-1 value means the LEB was
+ * not reserved and should be reserved on mount)
+ * @ihead_lnum: LEB number of index head
+ * @ihead_offs: offset of index head
+ * @index_size: size of index on flash
+ * @total_free: total free space in bytes
+ * @total_dirty: total dirty space in bytes
+ * @total_used: total used space in bytes (includes only data LEBs)
+ * @total_dead: total dead space in bytes (includes only data LEBs)
+ * @total_dark: total dark space in bytes (includes only data LEBs)
+ * @lpt_lnum: LEB number of LPT root nnode
+ * @lpt_offs: offset of LPT root nnode
+ * @nhead_lnum: LEB number of LPT head
+ * @nhead_offs: offset of LPT head
+ * @ltab_lnum: LEB number of LPT's own lprops table
+ * @ltab_offs: offset of LPT's own lprops table
+ * @lsave_lnum: LEB number of LPT's save table (big model only)
+ * @lsave_offs: offset of LPT's save table (big model only)
+ * @lscan_lnum: LEB number of last LPT scan
+ * @empty_lebs: number of empty logical eraseblocks
+ * @idx_lebs: number of indexing logical eraseblocks
+ * @leb_cnt: count of LEBs used by filesystem
+ * @padding: reserved for future, zeroes
+ */
+struct ubifs_mst_node
+{
+	struct ubifs_ch ch;
+	__be64 highest_inum;
+	__be64 cmt_no;
+	__be32 flags;
+	__be32 log_lnum;
+	__be32 root_lnum;
+	__be32 root_offs;
+	__be32 root_len;
+	__be32 gc_lnum;
+	__be32 ihead_lnum;
+	__be32 ihead_offs;
+	__be64 index_size;
+	__be64 total_free;
+	__be64 total_dirty;
+	__be64 total_used;
+	__be64 total_dead;
+	__be64 total_dark;
+	__be32 lpt_lnum;
+	__be32 lpt_offs;
+	__be32 nhead_lnum;
+	__be32 nhead_offs;
+	__be32 ltab_lnum;
+	__be32 ltab_offs;
+	__be32 lsave_lnum;
+	__be32 lsave_offs;
+	__be32 lscan_lnum;
+	__be32 empty_lebs;
+	__be32 idx_lebs;
+	__be32 leb_cnt;
+	__u8 padding[128];
+} __attribute__ ((packed));
+
+/**
+ * ubifs_ref_node - logical eraseblock reference node.
+ * @ch: common header
+ * @lnum: the referred logical eraseblock number
+ * @offs: start offset in the referred LEB
+ * @jhead: journal head number
+ * @padding: reserved for future, zeroes
+ */
+struct ubifs_ref_node
+{
+	struct ubifs_ch ch;
+	__be32 lnum;
+	__be32 offs;
+	__be32 jhead;
+	__u8 padding[28];
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_branch - key/reference/length branch
+ * @key: key
+ * @lnum: LEB number of the target node
+ * @offs: offset within @lnum
+ * @len: target node length
+ */
+struct ubifs_branch
+{
+	__u8 key[UBIFS_MAX_KEY_LEN];
+	__be32 lnum;
+	__be32 offs;
+	__be32 len;
+} __attribute__ ((packed));
+
+/**
+ * struct ubifs_idx_node - indexing node.
+ * @ch: common header
+ * @child_cnt: number of child index nodes
+ * @level: tree level
+ * @padding: reserved for future, zeroes
+ * @branch: key/reference/length branches
+ * TODO: Get rid of child_cnt, level and padding
+ */
+struct ubifs_idx_node
+{
+	struct ubifs_ch ch;
+	__be16 child_cnt;
+	__be16 level;
+	__u8 padding[4];
+	struct ubifs_branch branch[];
+} __attribute__ ((packed));
+
+/**
+ * ubifs_cs_node - commit start node.
+ * @ch: common header
+ * @cmt_no: commit number
+ */
+struct ubifs_cs_node
+{
+	struct ubifs_ch ch;
+	__be64 cmt_no;
+} __attribute__ ((packed));
+
+/**
+ * ubifs_orph_node - orphan node.
+ * @ch: common header
+ * @cmt_no: commit number (also top bit is set on the last node of the commit)
+ * @inos: inode numbers of orphans
+ */
+struct ubifs_orph_node
+{
+	struct ubifs_ch ch;
+	__be64 cmt_no;
+	__be64 inos[];
+} __attribute__ ((packed));
+
+#endif /* __LINUX_UBIFS_H__ */
