@@ -1205,6 +1205,7 @@ extern struct inode_operations ubifs_file_inode_operations;
 extern struct file_operations ubifs_dir_operations;
 extern struct inode_operations ubifs_dir_inode_operations;
 extern struct inode_operations ubifs_symlink_inode_operations;
+extern struct backing_dev_info ubifs_backing_dev_info;
 extern struct kset ubifs_kset;
 extern struct ubifs_compressor *ubifs_compressors[UBIFS_COMPR_TYPES_CNT];
 

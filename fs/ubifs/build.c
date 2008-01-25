@@ -1325,10 +1325,14 @@ static int __init ubifs_init(void)
 
 	BUILD_BUG_ON(UBIFS_BLOCK_SIZE != PAGE_CACHE_SIZE);
 
+	err  = bdi_init(&ubifs_backing_dev_info);
+	if (err)
+		return err;
+
 	err = register_filesystem(&ubifs_fs_type);
 	if (err) {
 		ubifs_err("cannot register file system, error %d", err);
-		return err;
+		goto out;
 	}
 
 	err = -ENOMEM;
@@ -1337,7 +1341,7 @@ static int __init ubifs_init(void)
 				SLAB_MEM_SPREAD | SLAB_RECLAIM_ACCOUNT,
 				&inode_slab_ctor UBIFSCOMPATNULL);
 	if (!ubifs_inode_slab)
-		goto out;
+		goto out_reg;
 
 	/* Registers UBIFS under 'fs' sysfs subsystem */
 	kobj_set_kset_s(&ubifs_kset, fs_subsys);
@@ -1360,8 +1364,10 @@ out_compr:
 	kset_unregister(&ubifs_kset);
 out_slab:
 	kmem_cache_destroy(ubifs_inode_slab);
-out:
+out_reg:
 	unregister_filesystem(&ubifs_fs_type);
+out:
+	bdi_destroy(&ubifs_backing_dev_info);
 	return err;
 }
 /* late_initcall to let compressors initialize first */
@@ -1378,6 +1384,7 @@ static void __exit ubifs_exit(void)
 	kset_unregister(&ubifs_kset);
 	kmem_cache_destroy(ubifs_inode_slab);
 	unregister_filesystem(&ubifs_fs_type);
+	bdi_destroy(&ubifs_backing_dev_info);
 	dbg_leak_rpt();
 }
 module_exit(ubifs_exit);
