@@ -1,0 +1,38 @@
+config UBIFS_FS
+	tristate "UBIFS file system support"
+	select CRC16
+	select CRC32
+	depends on MTD_UBI
+	help
+	  UBIFS is a file system for flash devices which works on top of UBI.
+
+config UBIFS_COMPRESSION_OPTIONS
+	bool "Advanced compression options for UBIFS"
+	depends on UBIFS_FS
+	default n
+	help
+	  This option allows to explicitly choose which compressions, if any,
+	  are enabled in UBIFS. Removing compressors means inbility to read
+	  existing file systems.
+
+	  If unsure, say 'N'.
+
+config UBIFS_LZO
+	bool "UBIFS LZO compression support" if UBIFS_COMPRESSION_OPTIONS
+	select CRYPTO_LZO
+	depends on UBIFS_FS
+	default y
+	help
+	   LZO compressor is generally faster then zlib but compresses worse.
+	   Say 'Y' if unsure.
+
+config UBIFS_ZLIB
+	bool "UBIFS ZLIB compression support" if UBIFS_COMPRESSION_OPTIONS
+	select CRYPTO_DEFLATE
+	depends on UBIFS_FS
+	default y
+	help
+	  Zlib copresses better then LZO but it is slower. Say 'Y' if unsure.
+
+# Debugging-related stuff
+source "fs/ubifs/Kconfig.debug"
