@@ -39,7 +39,7 @@
  * have to wait not just for their own I/O but the readahead I/O as well i.e.
  * completely pointless.
  */
-static struct backing_dev_info ubifs_backing_dev_info = {
+struct backing_dev_info ubifs_backing_dev_info = {
 	.ra_pages	= 0, /* Set to zero to disable readahead */
 	.state		= 0,
 	.capabilities	= BDI_CAP_MAP_COPY,
