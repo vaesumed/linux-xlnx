@@ -2126,7 +2126,7 @@ nfs4_preprocess_seqid_op(struct svc_fh *current_fh, u32 seqid, stateid_t *statei
                }
 	}
 
-	if ((flags & CHECK_FH) && nfs4_check_fh(current_fh, stp)) {
+	if (nfs4_check_fh(current_fh, stp)) {
 		dprintk("NFSD: preprocess_seqid_op: fh-stateid mismatch!\n");
 		return nfserr_bad_stateid;
 	}
@@ -2193,7 +2193,7 @@ nfsd4_open_confirm(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	if ((status = nfs4_preprocess_seqid_op(&cstate->current_fh,
 					oc->oc_seqid, &oc->oc_req_stateid,
-					CHECK_FH | CONFIRM | OPEN_STATE,
+					CONFIRM | OPEN_STATE,
 					&oc->oc_stateowner, &stp, NULL)))
 		goto out; 
 
@@ -2264,7 +2264,7 @@ nfsd4_open_downgrade(struct svc_rqst *rqstp,
 	if ((status = nfs4_preprocess_seqid_op(&cstate->current_fh,
 					od->od_seqid,
 					&od->od_stateid, 
-					CHECK_FH | OPEN_STATE, 
+					OPEN_STATE,
 					&od->od_stateowner, &stp, NULL)))
 		goto out; 
 
@@ -2317,7 +2317,7 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if ((status = nfs4_preprocess_seqid_op(&cstate->current_fh,
 					close->cl_seqid,
 					&close->cl_stateid, 
-					CHECK_FH | OPEN_STATE | CLOSE_STATE,
+					OPEN_STATE | CLOSE_STATE,
 					&close->cl_stateowner, &stp, NULL)))
 		goto out; 
 	status = nfs_ok;
@@ -2622,7 +2622,7 @@ nfsd4_lock(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		status = nfs4_preprocess_seqid_op(&cstate->current_fh,
 				        lock->lk_new_open_seqid,
 		                        &lock->lk_new_open_stateid,
-		                        CHECK_FH | OPEN_STATE,
+					OPEN_STATE,
 		                        &lock->lk_replay_owner, &open_stp,
 					lock);
 		if (status)
@@ -2649,7 +2649,7 @@ nfsd4_lock(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		status = nfs4_preprocess_seqid_op(&cstate->current_fh,
 				       lock->lk_old_lock_seqid, 
 				       &lock->lk_old_lock_stateid, 
-				       CHECK_FH | LOCK_STATE, 
+				       LOCK_STATE,
 				       &lock->lk_replay_owner, &lock_stp, lock);
 		if (status)
 			goto out;
@@ -2846,7 +2846,7 @@ nfsd4_locku(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if ((status = nfs4_preprocess_seqid_op(&cstate->current_fh,
 					locku->lu_seqid, 
 					&locku->lu_stateid, 
-					CHECK_FH | LOCK_STATE, 
+					LOCK_STATE,
 					&locku->lu_stateowner, &stp, NULL)))
 		goto out;
 
