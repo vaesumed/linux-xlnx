@@ -1004,28 +1004,17 @@ static int sb_set(struct super_block *sb, void *data)
 /*
  * UBIFS mount options.
  *
- * Opt_khash_r5: set key hash type to "R5" when creating file system
- * Opt_khash_test: set key hash type to "test" when creating file system
  * Opt_fanout: set indexing tree fanout when creating file system
- * Opt_compr_none: set default compression to "none" when creating file system
- * Opt_compr_lzo: set default compression to "lzo" when creating file system
- * Opt_compr_zlib: set default compression to "zlib" when creating file system
  * Opt_fast_unmount: do not run a journal commit before un-mounting
  * Opt_norm_unmount: run a journal commit before un-mounting
  * Opt_err: just end of array marker
  */
 enum {
-	Opt_khash_r5, Opt_khash_test, Opt_fanout, Opt_compr_none, Opt_compr_lzo,
-	Opt_compr_zlib, Opt_fast_unmount, Opt_norm_unmount, Opt_err,
+	Opt_fanout, Opt_fast_unmount, Opt_norm_unmount, Opt_err,
 };
 
 static match_table_t tokens = {
-	{Opt_khash_r5, "khash=r5"},
-	{Opt_khash_test, "khash=test"},
 	{Opt_fanout, "fanout=%u"},
-	{Opt_compr_none, "compr=none"},
-	{Opt_compr_lzo, "compr=lzo"},
-	{Opt_compr_zlib, "compr=zlib"},
 	{Opt_fast_unmount, "fast_unmount"},
 	{Opt_norm_unmount, "norm_unmount"},
 	{Opt_err, NULL},
@@ -1059,18 +1048,6 @@ int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 
 		token = match_token(p, tokens, args);
 		switch (token) {
-		case Opt_khash_r5:
-			if (is_remount)
-				return -EINVAL;
-			dbg_gen("key hash type is 'r5'");
-			c->key_hash_type = UBIFS_KEY_HASH_R5;
-			break;
-		case Opt_khash_test:
-			if (is_remount)
-				return -EINVAL;
-			dbg_gen("key hash type is 'test'");
-			c->key_hash_type = UBIFS_KEY_HASH_TEST;
-			break;
 		case Opt_fanout:
 			if (is_remount)
 				return -EINVAL;
@@ -1085,21 +1062,6 @@ int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 			}
 			dbg_gen("fanout set to %d", option);
 			c->fanout = option;
-			break;
-		case Opt_compr_none:
-			if (is_remount)
-				return -EINVAL;
-			c->default_compr = UBIFS_COMPR_NONE;
-			break;
-		case Opt_compr_lzo:
-			if (is_remount)
-				return -EINVAL;
-			c->default_compr = UBIFS_COMPR_LZO;
-			break;
-		case Opt_compr_zlib:
-			if (is_remount)
-				return -EINVAL;
-			c->default_compr = UBIFS_COMPR_ZLIB;
 			break;
 		case Opt_fast_unmount:
 			c->fast_unmount = 1;

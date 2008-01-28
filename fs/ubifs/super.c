@@ -420,37 +420,6 @@ static int ubifs_show_options(struct seq_file *s, struct vfsmount *mnt)
 {
 	struct ubifs_info *c = mnt->mnt_sb->s_fs_info;
 
-	if (c->default_compr != UBIFS_COMPR_LZO) {
-		char *compr;
-
-		switch (c->default_compr) {
-		case UBIFS_COMPR_NONE:
-			compr = "none";
-			break;
-		case UBIFS_COMPR_ZLIB:
-			compr = "zlib";
-			break;
-		default:
-			compr = "unknown";
-			break;
-		}
-		seq_printf(s, ",compr=%s", compr);
-	}
-
-	if (c->key_hash_type != UBIFS_KEY_HASH_R5) {
-		char *khash;
-
-		switch (c->key_hash_type) {
-		case UBIFS_KEY_HASH_TEST:
-			khash = "test";
-			break;
-		default:
-			khash = "unknown";
-			break;
-		}
-		seq_printf(s, ",khash=%s", khash);
-	}
-
 	if (c->fanout != DEFAULT_TREE_FANOUT)
 		seq_printf(s, ",fanout=%d", c->fanout);
 
