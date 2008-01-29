@@ -320,16 +320,9 @@ struct ubifs_scan_leb *ubifs_scan(const struct ubifs_info *c, int lnum,
 
 	ubifs_end_scan(c, sleb, lnum, offs);
 
-	for (; len > 4; offs += 4, buf = buf + 4, len -= 4) {
-		if (*(uint32_t *)buf == 0xffffffff)
-			continue;
-		for (; len; offs++, buf++, len--)
-			if (*(uint8_t *)buf != 0xff) {
-				ubifs_err("corrupt empty space at LEB %d:%d",
-					lnum, offs);
-				goto corrupted;
-			}
-	}
+	for (; len > 4; offs += 4, buf = buf + 4, len -= 4)
+		if (*(uint32_t *)buf != 0xffffffff)
+			break;
 	for (; len; offs++, buf++, len--)
 		if (*(uint8_t *)buf != 0xff) {
 			ubifs_err("corrupt empty space at LEB %d:%d",
