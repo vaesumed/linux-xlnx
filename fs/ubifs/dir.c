@@ -29,8 +29,7 @@
 #include "ubifs-priv.h"
 
 /* How much a directory entry adds to parent inode */
-/* TODO: do not add UBIFS_INO_NODE_SZ, fix it in mkfs.ubifs too */
-#define DIRENTRY_SIZE(dent) ALIGN(UBIFS_INO_NODE_SZ + UBIFS_DENT_NODE_SZ \
+#define DIRENTRY_SIZE(dent) ALIGN(UBIFS_DENT_NODE_SZ \
 				  + (dent)->d_name.len + 1, 8)
 
 /*
