@@ -921,13 +921,13 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
  * matches_name - determine if a dent matches a given name.
  * @c: UBIFS file-system description object
  * @zt: zbranch of dent
- * @name: name to match
+ * @nm: name to match
  *
  * This function returns %1 if the name matches, %0 if the name does not match
  * and a negative error code otherwise.
  */
 static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
-			const char *name, const unsigned int len)
+			const struct qstr *nm)
 {
 	struct ubifs_dent_node *dent;
 	int nlen, err;
@@ -937,7 +937,7 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	if (dent) {
 		nlen = be16_to_cpu(dent->nlen);
 
-		if (nlen == len && !memcmp(dent->name, name, nlen))
+		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			return 1;
 		return 0;
 	}
@@ -959,7 +959,7 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 			goto out;
 		}
 
-		if (nlen == len && !memcmp(dent->name, name, nlen))
+		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			err = 1;
 	}
 
@@ -1087,17 +1087,17 @@ static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
  * @key: key of directory entry
  * @zn: znode is returned here
  * @nn: znode branch slot number is passed and returned here
- * @name: name of directory entry
+ * @nm: name of directory entry
  *
  * This function returns %1 and sets @zn and @nn if the collision is resolved.
- * %0 is returned if @name is not found and @zn and @nn are set to the
+ * %0 is returned if @nm is not found and @zn and @nn are set to the
  * next directory entry.  %-ENOENT is returned if there are no
  * following directory entries for the same inode.  Otherwise a negative error
  * code is returned.
  */
 static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			     struct ubifs_znode **zn, int *nn,
-			     const char *name, const unsigned int len)
+			     const struct qstr *nm)
 {
 	struct ubifs_znode *znode;
 	union ubifs_key *okey;
@@ -1106,7 +1106,7 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 	dbg_tnc_key(c, key, "key ");
 	znode = *zn;
 	n = *nn;
-	err = matches_name(c, &znode->zbranch[n], name, len);
+	err = matches_name(c, &znode->zbranch[n], nm);
 	if (err < 0)
 		return err;
 	if (err == 1)
@@ -1121,7 +1121,7 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			return err;
 		if (keys_cmp(c, &znode->zbranch[n].key, key))
 			break;
-		err = matches_name(c, &znode->zbranch[n], name, len);
+		err = matches_name(c, &znode->zbranch[n], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
@@ -1141,7 +1141,7 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 		okey = &znode->zbranch[n].key;
 		if (keys_cmp(c, okey, key))
 			return -ENOENT;
-		err = matches_name(c, &znode->zbranch[n], name, len);
+		err = matches_name(c, &znode->zbranch[n], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
@@ -1158,13 +1158,13 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
  * fallible_matches_name - determine if a dent matches a given name.
  * @c: UBIFS file-system description object
  * @zt: zbranch of dent
- * @name: name to match
+ * @nm: name to match
  *
  * This function returns %1 if the name matches, %0 if the name does not match,
  * %2 if the node was not present, and a negative error code otherwise.
  */
 static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
-				 const char *name, const unsigned int len)
+				 const struct qstr *nm)
 {
 	struct ubifs_dent_node *dent;
 	int nlen, err;
@@ -1174,7 +1174,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	if (dent) {
 		nlen = be16_to_cpu(dent->nlen);
 
-		if (nlen == len && !memcmp(dent->name, name, nlen))
+		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			return 1;
 		return 0;
 	}
@@ -1202,7 +1202,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 			goto out;
 		}
 
-		if (nlen == len && !memcmp(dent->name, name, nlen))
+		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			err = 1;
 		else
 			err = 0;
@@ -1221,10 +1221,10 @@ out:
  * @key: key of directory entry
  * @zn: znode is returned here
  * @nn: znode branch slot number is passed and returned here
- * @name: name of directory entry
+ * @nm: name of directory entry
  *
  * This function returns %1 and sets @zn and @nn if the collision is resolved.
- * %0 is returned if @name is not found and @zn and @nn are set to the
+ * %0 is returned if @nm is not found and @zn and @nn are set to the
  * next directory entry.  %-ENOENT is returned if there are no
  * following directory entries for the same inode.  Otherwise a negative error
  * code is returned.
@@ -1232,7 +1232,7 @@ out:
 static int fallible_resolve_collision(struct ubifs_info *c,
 				      const union ubifs_key *key,
 				      struct ubifs_znode **zn, int *nn,
-				      const char *name, const unsigned int len)
+				      const struct qstr *nm)
 {
 	struct ubifs_znode *znode, *o_znode = NULL;
 	union ubifs_key *okey;
@@ -1241,7 +1241,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 	dbg_tnc_key(c, key, "key ");
 	znode = *zn;
 	n = *nn;
-	err = fallible_matches_name(c, &znode->zbranch[n], name, len);
+	err = fallible_matches_name(c, &znode->zbranch[n], nm);
 	if (err < 0)
 		return err;
 	if (err == 1)
@@ -1260,7 +1260,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			return err;
 		if (keys_cmp(c, &znode->zbranch[n].key, key))
 			break;
-		err = fallible_matches_name(c, &znode->zbranch[n], name, len);
+		err = fallible_matches_name(c, &znode->zbranch[n], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
@@ -1304,7 +1304,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			*nn = o_n;
 			return 1;
 		}
-		err = fallible_matches_name(c, &znode->zbranch[n], name, len);
+		err = fallible_matches_name(c, &znode->zbranch[n], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
@@ -1538,7 +1538,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 
 	ubifs_assert(n >= 0);
 
-	err = resolve_collision(c, key, &znode, &n, nm->name, nm->len);
+	err = resolve_collision(c, key, &znode, &n, nm);
 	if (err < 0)
 		goto out;
 	if (err == 0) {
@@ -2078,10 +2078,9 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 	if (found == 1) {
 		if (c->replaying)
 			found = fallible_resolve_collision(c, key, &znode, &n,
-							nm->name, nm->len);
+							   nm);
 		else
-			found = resolve_collision(c, key, &znode, &n,
-							nm->name, nm->len);
+			found = resolve_collision(c, key, &znode, &n, nm);
 		if (found < 0 && found != -ENOENT) {
 			err = found;
 			goto out;
@@ -2290,10 +2289,9 @@ int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 	if (found) {
 		if (c->replaying)
 			found = fallible_resolve_collision(c, key, &znode, &n,
-							nm->name, nm->len);
+							   nm);
 		else
-			found = resolve_collision(c, key, &znode, &n,
-							nm->name, nm->len);
+			found = resolve_collision(c, key, &znode, &n, nm);
 		if (found == -ENOENT)
 			found = 0;
 		if (found < 0) {
@@ -2428,7 +2426,6 @@ out:
  * if there is one. @name is used to resolve collisions. %-ENOENT is returned
  * if no entry is found.  The directory entry node is returned if an entry is
  * found. Otherwise a negative error code is returned.
- * TODO: use qstr instead of name:len
  */
 struct ubifs_dent_node *ubifs_tnc_next_dent(struct ubifs_info *c,
 					    union ubifs_key *key,
@@ -2439,6 +2436,7 @@ struct ubifs_dent_node *ubifs_tnc_next_dent(struct ubifs_info *c,
 	struct ubifs_dent_node *dent = NULL;
 	struct ubifs_zbranch *zbr;
 	union ubifs_key *dkey;
+	struct qstr nm;
 
 	dbg_tnc_key(c, key, "%s", (name ? name : ""));
 	mutex_lock(&c->tnc_mutex);
@@ -2450,7 +2448,9 @@ struct ubifs_dent_node *ubifs_tnc_next_dent(struct ubifs_info *c,
 
 	/* Handle collisions */
 	if (found && name) {
-		err = resolve_collision(c, key, &znode, &n, name, len);
+		nm.name = name;
+		nm.len = len;
+		err = resolve_collision(c, key, &znode, &n, &nm);
 		if (err < 0)
 			goto out;
 		if (err == 0)
