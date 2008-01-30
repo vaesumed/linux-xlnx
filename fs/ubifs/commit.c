@@ -521,7 +521,8 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 
 	INIT_LIST_HEAD(&list);
 
-	sz = sizeof(struct idx_node) + sizeof(struct ubifs_branch) * c->fanout;
+	sz = sizeof(struct idx_node) + ubifs_idx_node_sz(c, c->fanout) -
+	     UBIFS_IDX_NODE_SZ;
 
 	/* Start at the old zroot */
 	lnum = c->old_zroot.lnum;
@@ -534,6 +535,8 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 	 * its subtrees from left to right.
 	 */
 	while (1) {
+		struct ubifs_branch *br;
+
 		/* Get the next index node */
 		i = kmalloc(sz, GFP_NOFS);
 		if (!i) {
@@ -568,7 +571,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 			/* Set last values as though root had a parent */
 			last_level = le16_to_cpu(idx->level) + 1;
 			last_sqnum = le64_to_cpu(idx->ch.sqnum) + 1;
-			key_read(c, &idx->branch[0].key, &lower_key);
+			key_read(c, ubifs_idx_key(c, idx), &lower_key);
 			max_inum_key(c, &upper_key, INUM_WATERMARK);
 		}
 		key_copy(c, &upper_key, &i->upper_key);
@@ -585,8 +588,9 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 			goto out_dump;
 		}
 		/* Check key range */
-		key_read(c, &idx->branch[0].key, &l_key);
-		key_read(c, &idx->branch[child_cnt - 1].key, &u_key);
+		key_read(c, ubifs_idx_key(c, idx), &l_key);
+		br = ubifs_idx_branch(c, idx, child_cnt - 1);
+		key_read(c, &br->key, &u_key);
 		if (keys_cmp(c, &lower_key, &l_key) > 0) {
 			err = 5;
 			goto out_dump;
@@ -631,14 +635,16 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 		 */
 		last_level = le16_to_cpu(idx->level);
 		last_sqnum = le64_to_cpu(idx->ch.sqnum);
-		key_read(c, &idx->branch[iip].key, &lower_key);
-		if (iip + 1 < le16_to_cpu(idx->child_cnt))
-			key_read(c, &idx->branch[iip + 1].key, &upper_key);
-		else
+		br = ubifs_idx_branch(c, idx, iip);
+		lnum = le32_to_cpu(br->lnum);
+		offs = le32_to_cpu(br->offs);
+		len = le32_to_cpu(br->len);
+		key_read(c, &br->key, &lower_key);
+		if (iip + 1 < le16_to_cpu(idx->child_cnt)) {
+			br = ubifs_idx_branch(c, idx, iip + 1);
+			key_read(c, &br->key, &upper_key);
+		} else
 			key_copy(c, &i->upper_key, &upper_key);
-		lnum = le32_to_cpu(idx->branch[iip].lnum);
-		offs = le32_to_cpu(idx->branch[iip].offs);
-		len = le32_to_cpu(idx->branch[iip].len);
 	}
 out:
 	err = dbg_old_index_check_init(c, zroot);

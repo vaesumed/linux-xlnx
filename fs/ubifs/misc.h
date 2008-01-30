@@ -200,4 +200,40 @@ static inline int ubifs_return_leb(struct ubifs_info *c, int lnum)
 	return ubifs_change_one_lp(c, lnum, -1, -1, 0, LPROPS_TAKEN, 0);
 }
 
+/**
+ * ubifs_idx_node_sz - return index node size.
+ * @c: the UBIFS file-system description object
+ * @child_cnt: number of children of this index node
+ */
+static inline int ubifs_idx_node_sz(const struct ubifs_info *c, int child_cnt)
+{
+	return UBIFS_IDX_NODE_SZ + (UBIFS_BRANCH_SZ + c->key_len) * child_cnt;
+}
+
+/**
+ * ubifs_idx_branch - return pointer to an index branch.
+ * @c: the UBIFS file-system description object
+ * @idx: index node
+ * @bnum: branch number
+ */
+static inline
+struct ubifs_branch *ubifs_idx_branch(const struct ubifs_info *c,
+				      const struct ubifs_idx_node *idx,
+				      int bnum)
+{
+	return (struct ubifs_branch *)((void *)idx->branches +
+				       (UBIFS_BRANCH_SZ + c->key_len) * bnum);
+}
+
+/**
+ * ubifs_idx_key - return pointer to an index key.
+ * @c: the UBIFS file-system description object
+ * @idx: index node
+ */
+static inline void *ubifs_idx_key(const struct ubifs_info *c,
+				  const struct ubifs_idx_node *idx)
+{
+	return (void *)((struct ubifs_branch *)idx->branches)->key;
+}
+
 #endif /* __UBIFS_MISC_H__ */

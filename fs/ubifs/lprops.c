@@ -418,7 +418,7 @@ int ubifs_categorize_lprops(const struct ubifs_info *c,
 	}
 
 	if (lprops->flags & LPROPS_INDEX) {
-		if (lprops->dirty + lprops->free >= MIN_IDX_NODE_SZ)
+		if (lprops->dirty + lprops->free >= c->min_idx_node_sz)
 			return LPROPS_DIRTY_IDX;
 	} else {
 		if (lprops->dirty >= c->dead_wm &&
@@ -1161,7 +1161,7 @@ static int scan_check_cb(struct ubifs_info *c,
 		if (snod->type == UBIFS_IDX_NODE) {
 			struct ubifs_idx_node *idx = snod->node;
 
-			key_read(c, &idx->branch[0].key, &snod->key);
+			key_read(c, ubifs_idx_key(c, idx), &snod->key);
 			level = le16_to_cpu(idx->level);
 		}
 
