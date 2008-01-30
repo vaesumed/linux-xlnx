@@ -44,10 +44,10 @@ static int make_idx_node(struct ubifs_info *c, struct ubifs_idx_node *idx,
 	idx->child_cnt = cpu_to_le16(znode->child_cnt);
 	idx->level = cpu_to_le16(znode->level);
 	for (i = 0; i < znode->child_cnt; i++) {
-		struct ubifs_branch *br = &idx->branch[i];
+		struct ubifs_branch *br = ubifs_idx_branch(c, idx, i);
 		struct ubifs_zbranch *zbr = &znode->zbranch[i];
 
-		key_write(c, &zbr->key, &br->key);
+		key_write_idx(c, &zbr->key, &br->key);
 		br->lnum = cpu_to_le32(zbr->lnum);
 		br->offs = cpu_to_le32(zbr->offs);
 		br->len = cpu_to_le32(zbr->len);
@@ -121,7 +121,7 @@ static int fill_gap(struct ubifs_info *c, int lnum, int gap_start, int gap_end,
 	gap_pos = gap_start;
 	written = 0;
 	while (c->enext) {
-		len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * c->enext->child_cnt;
+		len = ubifs_idx_node_sz(c, c->enext->child_cnt);
 		if (len < gap_remains) {
 			struct ubifs_znode *znode = c->enext;
 			const int alen = ALIGN(len, 8);
@@ -257,7 +257,7 @@ static int layout_leb_in_gaps(struct ubifs_info *c, int *p)
 
 		ubifs_assert(snod->type == UBIFS_IDX_NODE);
 		idx = snod->node;
-		key_read(c, &idx->branch[0].key, &snod->key);
+		key_read(c, ubifs_idx_key(c, idx), &snod->key);
 		level = le16_to_cpu(idx->level);
 		/* Determine if the index node is in use (not obsolete) */
 		in_use = is_idx_node_in_use(c, &snod->key, level, lnum,
@@ -422,20 +422,20 @@ static int layout_in_empty_space(struct ubifs_info *c)
 	lnum = c->ihead_lnum;
 	buf_offs = c->ihead_offs;
 
-	buf_len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * c->fanout;
+	buf_len = ubifs_idx_node_sz(c, c->fanout);
 	buf_len = ALIGN(buf_len, c->min_io_size);
 	used = 0;
 	avail = buf_len;
 
 	/* Ensure there is enough room for first write */
-	next_len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * cnext->child_cnt;
+	next_len = ubifs_idx_node_sz(c, cnext->child_cnt);
 	if (buf_offs + next_len > c->leb_size)
 		lnum = -1;
 
 	while (1) {
 		znode = cnext;
 
-		len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * znode->child_cnt;
+		len = ubifs_idx_node_sz(c, znode->child_cnt);
 
 		/* Determine the index node position */
 		if (lnum == -1) {
@@ -489,8 +489,7 @@ static int layout_in_empty_space(struct ubifs_info *c)
 		if (cnext == c->cnext)
 			next_len = 0;
 		else
-			next_len = UBIFS_IDX_NODE_SZ +
-				   UBIFS_BRANCH_SZ * cnext->child_cnt;
+			next_len = ubifs_idx_node_sz(c, cnext->child_cnt);
 
 		if (c->min_io_size == 1) {
 			/* TODO: write-buffer has to be used instead, then this
@@ -862,7 +861,7 @@ static int write_index(struct ubifs_info *c)
 	avail = buf_len;
 
 	/* Ensure there is enough room for first write */
-	next_len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * cnext->child_cnt;
+	next_len = ubifs_idx_node_sz(c, cnext->child_cnt);
 	if (buf_offs + next_len > c->leb_size) {
 		err = ubifs_update_one_lp(c, lnum, -1, -1, 0, LPROPS_TAKEN);
 		if (err)
@@ -881,10 +880,10 @@ static int write_index(struct ubifs_info *c)
 		idx->child_cnt = cpu_to_le16(znode->child_cnt);
 		idx->level = cpu_to_le16(znode->level);
 		for (i = 0; i < znode->child_cnt; i++) {
-			struct ubifs_branch *br = &idx->branch[i];
+			struct ubifs_branch *br = ubifs_idx_branch(c, idx, i);
 			struct ubifs_zbranch *zbr = &znode->zbranch[i];
 
-			key_write(c, &zbr->key, &br->key);
+			key_write_idx(c, &zbr->key, &br->key);
 			br->lnum = cpu_to_le32(zbr->lnum);
 			br->offs = cpu_to_le32(zbr->offs);
 			br->len = cpu_to_le32(zbr->len);
@@ -895,7 +894,7 @@ static int write_index(struct ubifs_info *c)
 					dbg_dump_znode(c, zbr->znode);
 			}
 		}
-		len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * znode->child_cnt;
+		len = ubifs_idx_node_sz(c, znode->child_cnt);
 		ubifs_prepare_node(c, idx, len, 0);
 
 		/* Determine the index node position */
@@ -940,8 +939,7 @@ static int write_index(struct ubifs_info *c)
 		if (cnext == c->cnext)
 			next_len = 0;
 		else
-			next_len = UBIFS_IDX_NODE_SZ +
-				   UBIFS_BRANCH_SZ * cnext->child_cnt;
+			next_len = ubifs_idx_node_sz(c, cnext->child_cnt);
 
 		if (c->min_io_size == 1) {
 			/*

@@ -270,7 +270,7 @@ static int read_znode(struct ubifs_info *c, int lnum, int offs, int len,
 	}
 
 	for (i = 0; i < znode->child_cnt; i++) {
-		const struct ubifs_branch *br = &idx->branch[i];
+		const struct ubifs_branch *br = ubifs_idx_branch(c, idx, i);
 		struct ubifs_zbranch *zbr = &znode->zbranch[i];
 
 		key_read(c, &br->key, &zbr->key);
@@ -3339,7 +3339,7 @@ static int dbg_add_size(struct ubifs_info *c, struct ubifs_znode *znode,
 	long long *idx_size = priv;
 	int add;
 
-	add = UBIFS_IDX_NODE_SZ + znode->child_cnt * UBIFS_BRANCH_SZ;
+	add = ubifs_idx_node_sz(c, znode->child_cnt);
 	add = ALIGN(add, 8);
 	*idx_size += add;
 	return 0;

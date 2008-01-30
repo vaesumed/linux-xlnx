@@ -429,8 +429,9 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "Branches:\n");
 
 		for (i = 0; i < n && i < c->fanout - 1; i++) {
-			const struct ubifs_branch *br = &idx->branch[i];
+			const struct ubifs_branch *br;
 
+			br = ubifs_idx_branch(c, idx, i);
 			key_read(c, &br->key, &key);
 			printk(KERN_DEBUG "\t  %04d: key %s",
 			       i, dbg_get_key_dump(c, &key));

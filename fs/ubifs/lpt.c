@@ -889,7 +889,7 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 	 * The first pnode contains the LEB properties for the LEBs that contain
 	 * the root inode node and the root index node of the index tree.
 	 */
-	node_sz = MIN_IDX_NODE_SZ;
+	node_sz = ALIGN(ubifs_idx_node_sz(c, 1), 8);
 	iopos = ALIGN(node_sz, c->min_io_size);
 	pnode->lprops[0].free = c->leb_size - iopos;
 	pnode->lprops[0].dirty = iopos - node_sz;

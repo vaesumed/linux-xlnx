@@ -67,8 +67,10 @@ static int create_default_filesystem(struct ubifs_info *c)
 	struct ubifs_sb_node *sup;
 	struct ubifs_mst_node *mst;
 	struct ubifs_idx_node *idx;
+	struct ubifs_branch *br;
 	struct ubifs_ino_node *ino;
 	struct ubifs_cs_node *cs;
+	union ubifs_key key;
 	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste;
 	long long tmp64;
@@ -171,12 +173,12 @@ static int create_default_filesystem(struct ubifs_info *c)
 	mst->cmt_no       = cpu_to_le64(0);
 	mst->root_lnum    = cpu_to_le32(main_first + DEFAULT_IDX_LEB);
 	mst->root_offs    = cpu_to_le32(0);
-	tmp = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ;
+	tmp = ubifs_idx_node_sz(c, 1);
 	mst->root_len     = cpu_to_le32(tmp);
 	mst->gc_lnum      = cpu_to_le32(main_first + DEFAULT_GC_LEB);
 	mst->ihead_lnum   = cpu_to_le32(main_first + DEFAULT_IDX_LEB);
 	mst->ihead_offs   = cpu_to_le32(ALIGN(tmp, c->max_align));
-	mst->index_size   = cpu_to_le64(MIN_IDX_NODE_SZ);
+	mst->index_size   = cpu_to_le64(ALIGN(tmp, 8));
 	mst->lpt_lnum     = cpu_to_le32(c->lpt_lnum);
 	mst->lpt_offs     = cpu_to_le32(c->lpt_offs);
 	mst->nhead_lnum   = cpu_to_le32(c->nhead_lnum);
@@ -192,15 +194,15 @@ static int create_default_filesystem(struct ubifs_info *c)
 
 	/* Calculate lprops statistics */
 	tmp64 = (long long)main_lebs * c->leb_size;
-	tmp64 -= ALIGN(UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ, c->max_align);
+	tmp64 -= ALIGN(ubifs_idx_node_sz(c, 1), c->max_align);
 	tmp64 -= ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size);
 	mst->total_free = cpu_to_le64(tmp64);
 
-	tmp64 = ALIGN(UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ, c->max_align);
+	tmp64 = ALIGN(ubifs_idx_node_sz(c, 1), c->max_align);
 	ino_waste = ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size) -
 			  UBIFS_INO_NODE_SZ;
 	tmp64 += ino_waste;
-	tmp64 -= MIN_IDX_NODE_SZ;
+	tmp64 -= ALIGN(ubifs_idx_node_sz(c, 1), 8);
 	mst->total_dirty = cpu_to_le64(tmp64);
 
 	/*  The indexing LEB does not contribute to dark space */
@@ -224,7 +226,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	dbg_gen("default master node created at LEB %d:0", UBIFS_MST_LNUM);
 
 	/* Create the root indexing node */
-	tmp = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ;
+	tmp = ubifs_idx_node_sz(c, 1);
 	idx = kzalloc(ALIGN(tmp, c->min_io_size), GFP_KERNEL);
 	if (!idx)
 		return -ENOMEM;
@@ -234,9 +236,11 @@ static int create_default_filesystem(struct ubifs_info *c)
 
 	idx->ch.node_type = UBIFS_IDX_NODE;
 	idx->child_cnt = cpu_to_le16(1);
-	ino_key_init_flash(c, &idx->branch[0].key, UBIFS_ROOT_INO);
-	idx->branch[0].lnum = cpu_to_le32(main_first + DEFAULT_DATA_LEB);
-	idx->branch[0].len = cpu_to_le32(UBIFS_INO_NODE_SZ);
+	ino_key_init(c, &key, UBIFS_ROOT_INO);
+	br = ubifs_idx_branch(c, idx, 0);
+	key_write_idx(c, &key, &br->key);
+	br->lnum = cpu_to_le32(main_first + DEFAULT_DATA_LEB);
+	br->len  = cpu_to_le32(UBIFS_INO_NODE_SZ);
 	err = ubifs_write_node(c, idx, tmp, main_first + DEFAULT_IDX_LEB, 0,
 			       UBI_UNKNOWN);
 	kfree(idx);
@@ -361,7 +365,7 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 	}
 
 	if (c->fanout < UBIFS_MIN_FANOUT ||
-	    UBIFS_IDX_NODE_SZ + c->fanout * UBIFS_BRANCH_SZ > c->leb_size) {
+	    ubifs_idx_node_sz(c, c->fanout) > c->leb_size) {
 		dbg_err("bad fanout");
 		goto failed;
 	}
