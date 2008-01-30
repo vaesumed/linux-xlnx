@@ -54,22 +54,22 @@ static void ubifs_read_inode(struct inode *inode)
 		goto out_ino;
 
 	inode->i_flags |= (S_NOCMTIME | S_NOATIME);
-	inode->i_nlink = be32_to_cpu(ino->nlink);
-	inode->i_uid   = be32_to_cpu(ino->uid);
-	inode->i_gid   = be32_to_cpu(ino->gid);
-	inode->i_atime.tv_sec = be32_to_cpu(ino->atime);
-	inode->i_mtime.tv_sec = be32_to_cpu(ino->mtime);
-	inode->i_ctime.tv_sec = be32_to_cpu(ino->ctime);
+	inode->i_nlink = le32_to_cpu(ino->nlink);
+	inode->i_uid   = le32_to_cpu(ino->uid);
+	inode->i_gid   = le32_to_cpu(ino->gid);
+	inode->i_atime.tv_sec = le32_to_cpu(ino->atime);
+	inode->i_mtime.tv_sec = le32_to_cpu(ino->mtime);
+	inode->i_ctime.tv_sec = le32_to_cpu(ino->ctime);
 	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
 					inode->i_ctime.tv_nsec = 0;
-	inode->i_mode  = be32_to_cpu(ino->mode);
-	inode->i_size  = be64_to_cpu(ino->size);
+	inode->i_mode  = le32_to_cpu(ino->mode);
+	inode->i_size  = le64_to_cpu(ino->size);
 
 	ubifs_set_i_bytes(inode);
 
-	ui->data_len = be32_to_cpu(ino->data_len);
-	ui->flags = be32_to_cpu(ino->flags);
-	ui->compr_type = be16_to_cpu(ino->compr_type);
+	ui->data_len = le32_to_cpu(ino->data_len);
+	ui->flags = le32_to_cpu(ino->flags);
+	ui->compr_type = le16_to_cpu(ino->compr_type);
 
 	if (inode->i_size > c->max_inode_sz) {
 		ubifs_err("inode is too large (%lld)",
@@ -130,9 +130,9 @@ static void ubifs_read_inode(struct inode *inode)
 
 		dev = (union ubifs_dev_desc *)ino->data;
 		if (ui->data_len == sizeof(dev->new)) {
-			rdev = new_decode_dev(__be32_to_cpu(dev->new));
+			rdev = new_decode_dev(__le32_to_cpu(dev->new));
 		} else if (ui->data_len == sizeof(dev->huge)) {
-			rdev = huge_decode_dev(__be64_to_cpu(dev->huge));
+			rdev = huge_decode_dev(__le64_to_cpu(dev->huge));
 		} else {
 			ubifs_err("invalid inode size");
 			goto out_invalid;
@@ -250,9 +250,9 @@ static void ubifs_put_super(struct super_block *sb)
 			 */
 			int err;
 
-			c->mst_node->flags &= ~cpu_to_be32(UBIFS_MST_DIRTY);
-			c->mst_node->flags |= cpu_to_be32(UBIFS_MST_NO_ORPHS);
-			c->mst_node->gc_lnum = cpu_to_be32(c->gc_lnum);
+			c->mst_node->flags &= ~cpu_to_le32(UBIFS_MST_DIRTY);
+			c->mst_node->flags |= cpu_to_le32(UBIFS_MST_NO_ORPHS);
+			c->mst_node->gc_lnum = cpu_to_le32(c->gc_lnum);
 			err = ubifs_write_master(c);
 			if (err)
 				/*

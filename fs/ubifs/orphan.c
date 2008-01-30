@@ -39,7 +39,7 @@
  *
  * The number of orphans that can fit in a LEB is:
  *
- *         (c->leb_size - UBIFS_ORPH_NODE_SZ) / sizeof(__be64)
+ *         (c->leb_size - UBIFS_ORPH_NODE_SZ) / sizeof(__le64)
  *
  * For example: a 15872 byte LEB can fit 1980 orphans so 1 LEB may be enough.
  *
@@ -202,10 +202,10 @@ static int avail_orphs(struct ubifs_info *c)
 
 	avail_lebs = c->orph_lebs - (c->ohead_lnum - c->orph_first) - 1;
 	avail = avail_lebs *
-	       ((c->leb_size - UBIFS_ORPH_NODE_SZ) / sizeof(__be64));
+	       ((c->leb_size - UBIFS_ORPH_NODE_SZ) / sizeof(__le64));
 	gap = c->leb_size - c->ohead_offs;
-	if (gap >= UBIFS_ORPH_NODE_SZ + sizeof(__be64))
-		avail += (gap - UBIFS_ORPH_NODE_SZ) / sizeof(__be64);
+	if (gap >= UBIFS_ORPH_NODE_SZ + sizeof(__le64))
+		avail += (gap - UBIFS_ORPH_NODE_SZ) / sizeof(__le64);
 	return avail;
 }
 
@@ -222,7 +222,7 @@ static int tot_avail_orphs(struct ubifs_info *c)
 
 	avail_lebs = c->orph_lebs;
 	avail = avail_lebs *
-	       ((c->leb_size - UBIFS_ORPH_NODE_SZ) / sizeof(__be64));
+	       ((c->leb_size - UBIFS_ORPH_NODE_SZ) / sizeof(__le64));
 	return avail / 2;
 }
 
@@ -276,7 +276,7 @@ static int write_orph_node(struct ubifs_info *c, int atomic)
 
 	ubifs_assert(c->cmt_orphans > 0);
 	gap = c->leb_size - c->ohead_offs;
-	if (gap < UBIFS_ORPH_NODE_SZ + sizeof(__be64)) {
+	if (gap < UBIFS_ORPH_NODE_SZ + sizeof(__le64)) {
 		c->ohead_lnum += 1;
 		c->ohead_offs = 0;
 		gap = c->leb_size;
@@ -289,10 +289,10 @@ static int write_orph_node(struct ubifs_info *c, int atomic)
 			return -EINVAL;
 		}
 	}
-	cnt = (gap - UBIFS_ORPH_NODE_SZ) / sizeof(__be64);
+	cnt = (gap - UBIFS_ORPH_NODE_SZ) / sizeof(__le64);
 	if (cnt > c->cmt_orphans)
 		cnt = c->cmt_orphans;
-	len = UBIFS_ORPH_NODE_SZ + cnt * sizeof(__be64);
+	len = UBIFS_ORPH_NODE_SZ + cnt * sizeof(__le64);
 	ubifs_assert(c->orph_buf != NULL);
 	orph = c->orph_buf;
 	orph->ch.node_type = UBIFS_ORPH_NODE;
@@ -300,7 +300,7 @@ static int write_orph_node(struct ubifs_info *c, int atomic)
 	cnext = c->orph_cnext;
 	for (i = 0; i < cnt; i++) {
 		orphan = cnext;
-		orph->inos[i] = cpu_to_be64(orphan->ino);
+		orph->inos[i] = cpu_to_le64(orphan->ino);
 		cnext = orphan->cnext;
 		orphan->cnext = NULL;
 	}
@@ -308,10 +308,10 @@ static int write_orph_node(struct ubifs_info *c, int atomic)
 	c->cmt_orphans -= cnt;
 	spin_unlock(&c->orphan_lock);
 	if (c->cmt_orphans)
-		orph->cmt_no = cpu_to_be64(c->cmt_no + 1);
+		orph->cmt_no = cpu_to_le64(c->cmt_no + 1);
 	else
 		/* Mark the last node of the commit */
-		orph->cmt_no = cpu_to_be64((c->cmt_no + 1) | (1ULL << 63));
+		orph->cmt_no = cpu_to_le64((c->cmt_no + 1) | (1ULL << 63));
 	ubifs_assert(c->ohead_offs + len <= c->leb_size);
 	ubifs_assert(c->ohead_lnum >= c->orph_first);
 	ubifs_assert(c->ohead_lnum <= c->orph_last);
@@ -570,7 +570,7 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		}
 		orph = snod->node;
 		/* Check commit number */
-		cmt_no = be64_to_cpu(orph->cmt_no) & LLONG_MAX;
+		cmt_no = le64_to_cpu(orph->cmt_no) & LLONG_MAX;
 		/*
 		 * The commit number on the master node may be less, because
 		 * of a failed commit. If there are several failed commits in a
@@ -600,9 +600,9 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		}
 		if (first)
 			first = 0;
-		n = (be32_to_cpu(orph->ch.len) - UBIFS_ORPH_NODE_SZ) >> 3;
+		n = (le32_to_cpu(orph->ch.len) - UBIFS_ORPH_NODE_SZ) >> 3;
 		for (i = 0; i < n; i++) {
-			ino = be64_to_cpu(orph->inos[i]);
+			ino = le64_to_cpu(orph->inos[i]);
 			dbg_rcvry("deleting orphaned inode %lu", ino);
 			min_inum_key(c, &from_key, ino);
 			max_inum_key(c, &to_key, ino);
@@ -614,7 +614,7 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 				return err;
 		}
 		*last_cmt_no = cmt_no;
-		if (be64_to_cpu(orph->cmt_no) & (1ULL << 63)) {
+		if (le64_to_cpu(orph->cmt_no) & (1ULL << 63)) {
 			dbg_rcvry("last orph node for commit %llu at %d:%d",
 				  cmt_no, sleb->lnum, snod->offs);
 			*last_flagged = 1;
@@ -866,9 +866,9 @@ static int dbg_read_orphans(struct check_info *ci, struct ubifs_scan_leb *sleb)
 		if (snod->type != UBIFS_ORPH_NODE)
 			continue;
 		orph = snod->node;
-		n = (be32_to_cpu(orph->ch.len) - UBIFS_ORPH_NODE_SZ) >> 3;
+		n = (le32_to_cpu(orph->ch.len) - UBIFS_ORPH_NODE_SZ) >> 3;
 		for (i = 0; i < n; i++) {
-			ino = be64_to_cpu(orph->inos[i]);
+			ino = le64_to_cpu(orph->inos[i]);
 			err = dbg_ins_check_orphan(&ci->root, ino);
 			if (err)
 				return err;

@@ -255,8 +255,8 @@ static int read_znode(struct ubifs_info *c, int lnum, int offs, int len,
 	if (err < 0)
 		goto out;
 
-	znode->child_cnt = be16_to_cpu(idx->child_cnt);
-	znode->level = be16_to_cpu(idx->level);
+	znode->child_cnt = le16_to_cpu(idx->child_cnt);
+	znode->level = le16_to_cpu(idx->level);
 
 	dbg_tnc("LEB %d:%d, level %d, %d branch",
 		lnum, offs, znode->level, znode->child_cnt);
@@ -274,9 +274,9 @@ static int read_znode(struct ubifs_info *c, int lnum, int offs, int len,
 		struct ubifs_zbranch *zbr = &znode->zbranch[i];
 
 		key_read(c, &br->key, &zbr->key);
-		zbr->lnum = be32_to_cpu(br->lnum);
-		zbr->offs = be32_to_cpu(br->offs);
-		zbr->len  = be32_to_cpu(br->len);
+		zbr->lnum = le32_to_cpu(br->lnum);
+		zbr->offs = le32_to_cpu(br->offs);
+		zbr->len  = le32_to_cpu(br->len);
 		zbr->znode = NULL;
 
 		/* Validate branch */
@@ -744,8 +744,8 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		return 0;
 
 	/* Do very basic direntry node validation */
-	if (be32_to_cpu(dent->ch.len) !=
-	    be16_to_cpu(dent->nlen) + UBIFS_DENT_NODE_SZ + 1) {
+	if (le32_to_cpu(dent->ch.len) !=
+	    le16_to_cpu(dent->nlen) + UBIFS_DENT_NODE_SZ + 1) {
 		ubifs_err("bad direntry node");
 		dbg_dump_node(c, dent);
 		return -EINVAL;
@@ -935,7 +935,7 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	/* If possible, match against the dent in the leaf-node-cache */
 	dent = lnc_peek(c, zt);
 	if (dent) {
-		nlen = be16_to_cpu(dent->nlen);
+		nlen = le16_to_cpu(dent->nlen);
 
 		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			return 1;
@@ -948,10 +948,10 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 
 	err = tnc_read_node(c, &zt->key, zt, dent);
 	if (!err) {
-		nlen = be16_to_cpu(dent->nlen);
+		nlen = le16_to_cpu(dent->nlen);
 
 		/* Do very basic direntry node validation */
-		if (be32_to_cpu(dent->ch.len) !=
+		if (le32_to_cpu(dent->ch.len) !=
 		    nlen + UBIFS_DENT_NODE_SZ + 1) {
 			ubifs_err("bad direntry node");
 			dbg_dump_node(c, dent);
@@ -1172,7 +1172,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	/* If possible, match against the dent in the leaf-node-cache */
 	dent = lnc_peek(c, zt);
 	if (dent) {
-		nlen = be16_to_cpu(dent->nlen);
+		nlen = le16_to_cpu(dent->nlen);
 
 		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			return 1;
@@ -1191,10 +1191,10 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 		goto out;
 	}
 	if (err == 1) {
-		nlen = be16_to_cpu(dent->nlen);
+		nlen = le16_to_cpu(dent->nlen);
 
 		/* Do very basic direntry node validation */
-		if (be32_to_cpu(dent->ch.len) !=
+		if (le32_to_cpu(dent->ch.len) !=
 		    nlen + UBIFS_DENT_NODE_SZ + 1) {
 			ubifs_err("bad direntry node");
 			dbg_dump_node(c, dent);
@@ -1586,7 +1586,7 @@ int ubifs_tnc_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	if (err)
 		return err;
 
-	len = be16_to_cpu(dent->nlen);
+	len = le16_to_cpu(dent->nlen);
 	if (nm->len == len && !memcmp(dent->name, nm->name, len))
 		return 0;
 
