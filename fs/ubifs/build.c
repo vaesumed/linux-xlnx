@@ -1287,6 +1287,12 @@ static int __init ubifs_init(void)
 
 	BUILD_BUG_ON(UBIFS_BLOCK_SIZE != PAGE_CACHE_SIZE);
 
+	/* Defined node sizes */
+	BUILD_BUG_ON(UBIFS_SB_NODE_SZ != 4096);
+	BUILD_BUG_ON(UBIFS_MST_NODE_SZ != 512);
+	BUILD_BUG_ON(UBIFS_INO_NODE_SZ != 128);
+	BUILD_BUG_ON(UBIFS_REF_NODE_SZ != 64);
+
 	err  = bdi_init(&ubifs_backing_dev_info);
 	if (err)
 		return err;

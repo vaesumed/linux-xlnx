@@ -33,6 +33,9 @@
 /* UBIFS nodes magic number (must not have the padding byte first or last) */
 #define UBIFS_NODE_MAGIC  0x06101831
 
+/* UBIFS on-flash format version */
+#define UBIFS_FORMAT_VERSION 1
+
 /* Minimum logical eraseblock size in bytes */
 #define UBIFS_MIN_LEB_SZ (15*1024)
 
@@ -404,7 +407,7 @@ struct ubifs_ino_node
 	__be32 flags;
 	__be32 data_len;
 	__be16 compr_type;
-	__u8 padding[18];
+	__u8 padding[42];
 	__u8 data[];
 } __attribute__ ((packed));
 
@@ -498,6 +501,8 @@ struct ubifs_pad_node
  * @jhead_cnt: count of journal heads
  * @fanout: tree fanout (max. number of links per indexing node)
  * @lsave_cnt: number of LEB numbers in LPT's save table
+ * @fmt_vers: UBIFS on-flash format version
+ * @default_compr: default compression
  * @padding1: reserved for future, zeroes
  */
 struct ubifs_sb_node
@@ -519,8 +524,9 @@ struct ubifs_sb_node
 	__be32 jhead_cnt;
 	__be32 fanout;
 	__be32 lsave_cnt;
+	__be32 fmt_vers;
 	__be16 default_compr;
-	__u8 padding1[510];
+	__u8 padding1[4010];
 } __attribute__ ((packed));
 
 /**
@@ -588,7 +594,7 @@ struct ubifs_mst_node
 	__be32 empty_lebs;
 	__be32 idx_lebs;
 	__be32 leb_cnt;
-	__u8 padding[128];
+	__u8 padding[344];
 } __attribute__ ((packed));
 
 /**
