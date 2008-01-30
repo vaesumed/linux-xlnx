@@ -493,9 +493,9 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 		case UBIFS_INO_NODE:
 		{
 			struct ubifs_ino_node *ino = snod->node;
-			loff_t new_size = be64_to_cpu(ino->size);
+			loff_t new_size = le64_to_cpu(ino->size);
 
-			if (be32_to_cpu(ino->nlink) == 0)
+			if (le32_to_cpu(ino->nlink) == 0)
 				deletion = 1;
 			err = insert_node(c, lnum, snod->offs, snod->len,
 					  &snod->key, snod->sqnum, deletion,
@@ -505,7 +505,7 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 		case UBIFS_DATA_NODE:
 		{
 			struct ubifs_data_node *dn = snod->node;
-			loff_t new_size = be32_to_cpu(dn->size) +
+			loff_t new_size = le32_to_cpu(dn->size) +
 					  key_block(c, &snod->key) *
 					  UBIFS_BLOCK_SIZE;
 
@@ -517,8 +517,8 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 		case UBIFS_DENT_NODE:
 		{
 			struct ubifs_dent_node *dent = snod->node;
-			int nlen = be16_to_cpu(dent->nlen);
-			int node_len = be32_to_cpu(dent->ch.len);
+			int nlen = le16_to_cpu(dent->nlen);
+			int node_len = le32_to_cpu(dent->ch.len);
 
 			/* Validate directory entry node */
 			if (node_len != nlen + UBIFS_DENT_NODE_SZ + 1 ||
@@ -531,14 +531,14 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 			err = insert_dent(c, lnum, snod->offs, snod->len,
 					  &snod->key, dent->name,
 					  nlen, snod->sqnum,
-					  !be64_to_cpu(dent->inum), &used);
+					  !le64_to_cpu(dent->inum), &used);
 			break;
 		}
 		case UBIFS_TRUN_NODE:
 		{
 			struct ubifs_trun_node *trun = snod->node;
-			loff_t old_size = be64_to_cpu(trun->old_size);
-			loff_t new_size = be64_to_cpu(trun->new_size);
+			loff_t old_size = le64_to_cpu(trun->old_size);
+			loff_t new_size = le64_to_cpu(trun->new_size);
 
 			/* Validate truncation node */
 			if (old_size < 0 || old_size > c->max_inode_sz ||
@@ -739,9 +739,9 @@ static int add_replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 static int validate_ref(struct ubifs_info *c, const struct ubifs_ref_node *ref)
 {
 	struct ubifs_bud *bud;
-	int lnum = be32_to_cpu(ref->lnum);
-	unsigned int offs = be32_to_cpu(ref->offs);
-	unsigned int jhead = be32_to_cpu(ref->jhead);
+	int lnum = le32_to_cpu(ref->lnum);
+	unsigned int offs = le32_to_cpu(ref->offs);
+	unsigned int jhead = le32_to_cpu(ref->jhead);
 
 	/*
 	 * ref->offs may point to the end of LEB when the journal head points
@@ -813,15 +813,15 @@ static int replay_log_leb(struct ubifs_info *c, int lnum, int offs, void *sbuf)
 				lnum, offs);
 			goto out_dump;
 		}
-		if (be64_to_cpu(node->cmt_no) != c->cmt_no) {
+		if (le64_to_cpu(node->cmt_no) != c->cmt_no) {
 			dbg_err("first CS node at LEB %d:%d has wrong "
 				"commit number %llu expected %llu",
-				lnum, offs, be64_to_cpu(node->cmt_no),
+				lnum, offs, le64_to_cpu(node->cmt_no),
 				c->cmt_no);
 			goto out_dump;
 		}
 
-		c->cs_sqnum = be64_to_cpu(node->ch.sqnum);
+		c->cs_sqnum = le64_to_cpu(node->ch.sqnum);
 		dbg_mnt("commit start sqnum %llu", c->cs_sqnum);
 	}
 
@@ -871,9 +871,9 @@ static int replay_log_leb(struct ubifs_info *c, int lnum, int offs, void *sbuf)
 			if (err)
 				goto out_dump;
 
-			err = add_replay_bud(c, be32_to_cpu(ref->lnum),
-					     be32_to_cpu(ref->offs),
-					     be32_to_cpu(ref->jhead),
+			err = add_replay_bud(c, le32_to_cpu(ref->lnum),
+					     le32_to_cpu(ref->offs),
+					     le32_to_cpu(ref->jhead),
 					     snod->sqnum);
 			if (err)
 				goto out;

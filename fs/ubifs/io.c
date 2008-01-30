@@ -86,7 +86,7 @@ int ubifs_check_node(const struct ubifs_info *c, const void *buf, int lnum,
 	ubifs_assert(lnum >= 0 && lnum < c->leb_cnt && offs >= 0);
 	ubifs_assert(!(offs & 7) && offs < c->leb_size);
 
-	magic = be32_to_cpu(ch->magic);
+	magic = le32_to_cpu(ch->magic);
 	if (magic != UBIFS_NODE_MAGIC) {
 		if (!quiet)
 			ubifs_err("bad magic %#08x, expected %#08x",
@@ -102,7 +102,7 @@ int ubifs_check_node(const struct ubifs_info *c, const void *buf, int lnum,
 		goto out;
 	}
 
-	node_len = be32_to_cpu(ch->len);
+	node_len = le32_to_cpu(ch->len);
 	if (node_len + offs > c->leb_size)
 		goto out_len;
 
@@ -114,7 +114,7 @@ int ubifs_check_node(const struct ubifs_info *c, const void *buf, int lnum,
 		goto out_len;
 
 	crc = crc32(UBIFS_CRC32_INIT, buf + 8, node_len - 8);
-	node_crc = be32_to_cpu(ch->crc);
+	node_crc = le32_to_cpu(ch->crc);
 	if (crc != node_crc) {
 		if (!quiet)
 			ubifs_err("bad CRC: calculated %#08x, read %#08x",
@@ -163,16 +163,16 @@ void ubifs_pad(const struct ubifs_info *c, void *buf, int pad)
 		struct ubifs_ch *ch = buf;
 		struct ubifs_pad_node *pad_node = buf;
 
-		ch->magic = cpu_to_be32(UBIFS_NODE_MAGIC);
+		ch->magic = cpu_to_le32(UBIFS_NODE_MAGIC);
 		ch->node_type = UBIFS_PAD_NODE;
 		ch->group_type = UBIFS_NO_NODE_GROUP;
 		ch->padding[0] = ch->padding[1] = 0;
-		ch->sqnum = cpu_to_be64(0);
-		ch->len = cpu_to_be32(UBIFS_PAD_NODE_SZ);
+		ch->sqnum = cpu_to_le64(0);
+		ch->len = cpu_to_le32(UBIFS_PAD_NODE_SZ);
 		pad -= UBIFS_PAD_NODE_SZ;
-		pad_node->pad_len = cpu_to_be32(pad);
+		pad_node->pad_len = cpu_to_le32(pad);
 		crc = crc32(UBIFS_CRC32_INIT, buf + 8, UBIFS_PAD_NODE_SZ - 8);
-		ch->crc = cpu_to_be32(crc);
+		ch->crc = cpu_to_le32(crc);
 		memset(buf + UBIFS_PAD_NODE_SZ, 0, pad);
 	} else if (pad > 0)
 		/* Too little space, padding node won't fit */
@@ -222,13 +222,13 @@ void ubifs_prepare_node(struct ubifs_info *c, void *node, int len, int pad)
 
 	ubifs_assert(len >= UBIFS_CH_SZ);
 
-	ch->magic = cpu_to_be32(UBIFS_NODE_MAGIC);
-	ch->len = cpu_to_be32(len);
+	ch->magic = cpu_to_le32(UBIFS_NODE_MAGIC);
+	ch->len = cpu_to_le32(len);
 	ch->group_type = UBIFS_NO_NODE_GROUP;
-	ch->sqnum = cpu_to_be64(sqnum);
+	ch->sqnum = cpu_to_le64(sqnum);
 	ch->padding[0] = ch->padding[1] = 0;
 	crc = crc32(UBIFS_CRC32_INIT, node + 8, len - 8);
-	ch->crc = cpu_to_be32(crc);
+	ch->crc = cpu_to_le32(crc);
 
 	if (pad) {
 		len = ALIGN(len, 8);
@@ -255,16 +255,16 @@ void ubifs_prep_grp_node(struct ubifs_info *c, void *node, int len, int last)
 
 	ubifs_assert(len >= UBIFS_CH_SZ);
 
-	ch->magic = cpu_to_be32(UBIFS_NODE_MAGIC);
-	ch->len = cpu_to_be32(len);
+	ch->magic = cpu_to_le32(UBIFS_NODE_MAGIC);
+	ch->len = cpu_to_le32(len);
 	if (last)
 		ch->group_type = UBIFS_LAST_OF_NODE_GROUP;
 	else
 		ch->group_type = UBIFS_IN_NODE_GROUP;
-	ch->sqnum = cpu_to_be64(sqnum);
+	ch->sqnum = cpu_to_le64(sqnum);
 	ch->padding[0] = ch->padding[1] = 0;
 	crc = crc32(UBIFS_CRC32_INIT, node + 8, len - 8);
-	ch->crc = cpu_to_be32(crc);
+	ch->crc = cpu_to_le32(crc);
 }
 
 /**
@@ -729,7 +729,7 @@ int ubifs_read_node_wbuf(const struct ubifs_info *c, struct ubifs_wbuf *wbuf,
 		goto out;
 	}
 
-	rlen = be32_to_cpu(ch->len);
+	rlen = le32_to_cpu(ch->len);
 	if (rlen != len) {
 		ubifs_err("bad node length %d, expected %d", rlen, len);
 		goto out;
@@ -788,7 +788,7 @@ int ubifs_read_node(const struct ubifs_info *c, void *buf, int type, int len,
 		goto out;
 	}
 
-	l = be32_to_cpu(ch->len);
+	l = le32_to_cpu(ch->len);
 	if (l != len) {
 		ubifs_err("bad node length %d, expected %d", l, len);
 		goto out;
@@ -884,18 +884,18 @@ int ubifs_try_read_node(const struct ubifs_info *c, void *buf, int type, int len
 		return err;
 	}
 
-	if (be32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC)
+	if (le32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC)
 		return 0;
 
 	if (ch->node_type != type)
 		return 0;
 
-	node_len = be32_to_cpu(ch->len);
+	node_len = le32_to_cpu(ch->len);
 	if (node_len != len)
 		return 0;
 
 	crc = crc32(UBIFS_CRC32_INIT, buf + 8, node_len - 8);
-	node_crc = be32_to_cpu(ch->crc);
+	node_crc = le32_to_cpu(ch->crc);
 	if (crc != node_crc)
 		return 0;
 

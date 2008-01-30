@@ -235,9 +235,9 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 	bud->jhead = jhead;
 
 	ref->ch.node_type = UBIFS_REF_NODE;
-	ref->lnum = cpu_to_be32(bud->lnum);
-	ref->offs = cpu_to_be32(bud->start);
-	ref->jhead = cpu_to_be32(jhead);
+	ref->lnum = cpu_to_le32(bud->lnum);
+	ref->offs = cpu_to_le32(bud->start);
+	ref->jhead = cpu_to_le32(jhead);
 
 	if (c->lhead_offs > c->leb_size - c->ref_node_alsz) {
 		c->lhead_lnum = next_log_lnum(c, c->lhead_lnum);
@@ -374,7 +374,7 @@ int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum)
 		return -ENOMEM;
 
 	cs->ch.node_type = UBIFS_CS_NODE;
-	cs->cmt_no = cpu_to_be64(c->cmt_no + 1);
+	cs->cmt_no = cpu_to_le64(c->cmt_no + 1);
 	ubifs_prepare_node(c, cs, UBIFS_CS_NODE_SZ, 0);
 
 	/*
@@ -396,9 +396,9 @@ int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum)
 		dbg_log("add ref to LEB %d:%d for jhead %d", lnum, offs, i);
 		ref = buf + len;
 		ref->ch.node_type = UBIFS_REF_NODE;
-		ref->lnum = cpu_to_be32(lnum);
-		ref->offs = cpu_to_be32(offs);
-		ref->jhead = cpu_to_be32(i);
+		ref->lnum = cpu_to_le32(lnum);
+		ref->offs = cpu_to_le32(offs);
+		ref->jhead = cpu_to_le32(i);
 
 		ubifs_prepare_node(c, ref, UBIFS_REF_NODE_SZ, 0);
 		len += UBIFS_REF_NODE_SZ;
@@ -617,7 +617,7 @@ static int add_node(struct ubifs_info *c, void *buf, int *lnum, int *offs,
 		    void *node)
 {
 	struct ubifs_ch *ch = node;
-	int len = be32_to_cpu(ch->len), remains = c->leb_size - *offs;
+	int len = le32_to_cpu(ch->len), remains = c->leb_size - *offs;
 
 	if (len > remains) {
 		int sz = ALIGN(*offs, c->min_io_size), err;
@@ -669,7 +669,7 @@ int ubifs_consolidate_log(struct ubifs_info *c)
 			switch (snod->type) {
 			case UBIFS_REF_NODE: {
 				struct ubifs_ref_node *ref = snod->node;
-				int ref_lnum = be32_to_cpu(ref->lnum);
+				int ref_lnum = le32_to_cpu(ref->lnum);
 
 				err = done_already(&done_tree, ref_lnum);
 				if (err < 0)
