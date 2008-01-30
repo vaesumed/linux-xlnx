@@ -784,7 +784,7 @@ static int scan_dirty_idx_cb(struct ubifs_info *c,
 	if (!(lprops->flags & LPROPS_INDEX))
 		return ret;
 	/* Exclude LEBs with too little space */
-	if (lprops->free + lprops->dirty < MIN_IDX_NODE_SZ)
+	if (lprops->free + lprops->dirty < c->min_idx_node_sz)
 		return ret;
 	/* Finally we found space */
 	data->lnum = lprops->lnum;
@@ -842,7 +842,7 @@ found:
 	if (IS_ERR(lprops))
 		return PTR_ERR(lprops);
 	ubifs_assert(lprops->lnum == data.lnum);
-	ubifs_assert(lprops->free + lprops->dirty >= MIN_IDX_NODE_SZ);
+	ubifs_assert(lprops->free + lprops->dirty >= c->min_idx_node_sz);
 	ubifs_assert(!(lprops->flags & LPROPS_TAKEN));
 	ubifs_assert((lprops->flags & LPROPS_INDEX));
 
