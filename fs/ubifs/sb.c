@@ -455,6 +455,10 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	if (IS_ERR(sup))
 		return PTR_ERR(sup);
 
+	/*
+	 * The software supports all previous versions but not future versions,
+	 * due to the unavailability of time-travelling equipment.
+	 */
 	c->fmt_vers = le32_to_cpu(sup->fmt_vers);
 	if (c->fmt_vers > UBIFS_FORMAT_VERSION) {
 		ubifs_err("on-flash format version is %d, but software only "
