@@ -28,9 +28,6 @@
 #include <asm/div64.h>
 #include "ubifs-priv.h"
 
-/* TODO: Put things that affect the resizability of UBIFS into the super block */
-/* TODO: Add a UBIFS version number to the super block and do not mount if it is greater than the software version number */
-
 /*
  * Default journal size in logical eraseblocks as a percent of total
  * flash size.
@@ -153,6 +150,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->jhead_cnt     = cpu_to_be32(DEFAULT_JHEADS_CNT);
 	sup->fanout        = cpu_to_be32(c->fanout);
 	sup->lsave_cnt     = cpu_to_be32(c->lsave_cnt);
+	sup->fmt_vers      = cpu_to_be32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_be16(c->default_compr);
 
 	err = ubifs_write_node(c, sup, UBIFS_SB_NODE_SZ, 0, 0, UBI_LONGTERM);
@@ -456,6 +454,15 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	sup = ubifs_read_sb_node(c);
 	if (IS_ERR(sup))
 		return PTR_ERR(sup);
+
+	c->fmt_vers = be32_to_cpu(sup->fmt_vers);
+	if (c->fmt_vers > UBIFS_FORMAT_VERSION) {
+		ubifs_err("on-flash format version is %d, but software only "
+			  "supports up to version %d", c->fmt_vers,
+			  UBIFS_FORMAT_VERSION);
+		err = -EINVAL;
+		goto out;
+	}
 
 	switch(sup->key_hash) {
 		case UBIFS_KEY_HASH_R5:

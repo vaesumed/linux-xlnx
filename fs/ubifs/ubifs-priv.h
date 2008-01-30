@@ -761,6 +761,7 @@ struct ubifs_orphan
  * @max_sqnum: current global sequence number
  * @cmt_no: commit number (last successfully completed commit)
  * @cnt_lock: protects @highest_inum, @vfs_gen, and @max_sqnum counters
+ * @fmt_vers: UBIFS on-flash format version
  *
  * @lhead_lnum: log head logical eraseblock number
  * @lhead_offs: log head offset
@@ -984,6 +985,7 @@ struct ubifs_info
 	unsigned long long max_sqnum;
 	unsigned long long cmt_no;
 	spinlock_t cnt_lock;
+	int fmt_vers;
 
 	int lhead_lnum;
 	int lhead_offs;
