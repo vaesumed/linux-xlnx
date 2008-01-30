@@ -114,7 +114,7 @@ static struct inode *new_ubifs_inode(struct ubifs_info *c,
 	if (S_ISLNK(mode))
 		ui->flags &= ~(UBIFS_IMMUTABLE_FL|UBIFS_APPEND_FL);
 	if (!S_ISDIR(mode))
-		/* The "DIRSYNC" flagg only applies to directories */
+		/* The "DIRSYNC" flag only applies to directories */
 		ui->flags &= ~UBIFS_DIRSYNC_FL;
 	ubifs_set_inode_flags(inode);
 
