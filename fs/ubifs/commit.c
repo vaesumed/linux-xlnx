@@ -91,34 +91,34 @@ static int do_commit(struct ubifs_info *c)
 		goto out;
 
 	mutex_lock(&c->mst_mutex);
-	c->mst_node->cmt_no      = cpu_to_be64(++c->cmt_no);
-	c->mst_node->log_lnum    = cpu_to_be32(new_ltail_lnum);
-	c->mst_node->root_lnum   = cpu_to_be32(zroot.lnum);
-	c->mst_node->root_offs   = cpu_to_be32(zroot.offs);
-	c->mst_node->root_len    = cpu_to_be32(zroot.len);
-	c->mst_node->ihead_lnum  = cpu_to_be32(c->ihead_lnum);
-	c->mst_node->ihead_offs  = cpu_to_be32(c->ihead_offs);
-	c->mst_node->index_size  = cpu_to_be64(c->old_idx_sz);
-	c->mst_node->lpt_lnum    = cpu_to_be32(c->lpt_lnum);
-	c->mst_node->lpt_offs    = cpu_to_be32(c->lpt_offs);
-	c->mst_node->nhead_lnum  = cpu_to_be32(c->nhead_lnum);
-	c->mst_node->nhead_offs  = cpu_to_be32(c->nhead_offs);
-	c->mst_node->ltab_lnum   = cpu_to_be32(c->ltab_lnum);
-	c->mst_node->ltab_offs   = cpu_to_be32(c->ltab_offs);
-	c->mst_node->lsave_lnum  = cpu_to_be32(c->lsave_lnum);
-	c->mst_node->lsave_offs  = cpu_to_be32(c->lsave_offs);
-	c->mst_node->lscan_lnum  = cpu_to_be32(c->lscan_lnum);
-	c->mst_node->empty_lebs  = cpu_to_be32(lst.empty_lebs);
-	c->mst_node->idx_lebs    = cpu_to_be32(lst.idx_lebs);
-	c->mst_node->total_free  = cpu_to_be64(lst.total_free);
-	c->mst_node->total_dirty = cpu_to_be64(lst.total_dirty);
-	c->mst_node->total_used  = cpu_to_be64(lst.total_used);
-	c->mst_node->total_dead  = cpu_to_be64(lst.total_dead);
-	c->mst_node->total_dark  = cpu_to_be64(lst.total_dark);
+	c->mst_node->cmt_no      = cpu_to_le64(++c->cmt_no);
+	c->mst_node->log_lnum    = cpu_to_le32(new_ltail_lnum);
+	c->mst_node->root_lnum   = cpu_to_le32(zroot.lnum);
+	c->mst_node->root_offs   = cpu_to_le32(zroot.offs);
+	c->mst_node->root_len    = cpu_to_le32(zroot.len);
+	c->mst_node->ihead_lnum  = cpu_to_le32(c->ihead_lnum);
+	c->mst_node->ihead_offs  = cpu_to_le32(c->ihead_offs);
+	c->mst_node->index_size  = cpu_to_le64(c->old_idx_sz);
+	c->mst_node->lpt_lnum    = cpu_to_le32(c->lpt_lnum);
+	c->mst_node->lpt_offs    = cpu_to_le32(c->lpt_offs);
+	c->mst_node->nhead_lnum  = cpu_to_le32(c->nhead_lnum);
+	c->mst_node->nhead_offs  = cpu_to_le32(c->nhead_offs);
+	c->mst_node->ltab_lnum   = cpu_to_le32(c->ltab_lnum);
+	c->mst_node->ltab_offs   = cpu_to_le32(c->ltab_offs);
+	c->mst_node->lsave_lnum  = cpu_to_le32(c->lsave_lnum);
+	c->mst_node->lsave_offs  = cpu_to_le32(c->lsave_offs);
+	c->mst_node->lscan_lnum  = cpu_to_le32(c->lscan_lnum);
+	c->mst_node->empty_lebs  = cpu_to_le32(lst.empty_lebs);
+	c->mst_node->idx_lebs    = cpu_to_le32(lst.idx_lebs);
+	c->mst_node->total_free  = cpu_to_le64(lst.total_free);
+	c->mst_node->total_dirty = cpu_to_le64(lst.total_dirty);
+	c->mst_node->total_used  = cpu_to_le64(lst.total_used);
+	c->mst_node->total_dead  = cpu_to_le64(lst.total_dead);
+	c->mst_node->total_dark  = cpu_to_le64(lst.total_dark);
 	if (c->no_orphs)
-		c->mst_node->flags |= cpu_to_be32(UBIFS_MST_NO_ORPHS);
+		c->mst_node->flags |= cpu_to_le32(UBIFS_MST_NO_ORPHS);
 	else
-		c->mst_node->flags &= ~cpu_to_be32(UBIFS_MST_NO_ORPHS);
+		c->mst_node->flags &= ~cpu_to_le32(UBIFS_MST_NO_ORPHS);
 	err = ubifs_write_master(c);
 	mutex_unlock(&c->mst_mutex);
 	if (err)
@@ -488,8 +488,8 @@ int dbg_old_index_check_init(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 	if (err)
 		goto out;
 
-	c->old_zroot_level = be16_to_cpu(idx->level);
-	c->old_zroot_sqnum = be64_to_cpu(idx->ch.sqnum);
+	c->old_zroot_level = le16_to_cpu(idx->level);
+	c->old_zroot_sqnum = le64_to_cpu(idx->ch.sqnum);
 out:
 	kfree(idx);
 	return err;
@@ -549,7 +549,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 		if (err)
 			goto out_free;
 		/* Validate index node */
-		child_cnt = be16_to_cpu(idx->child_cnt);
+		child_cnt = le16_to_cpu(idx->child_cnt);
 		if (child_cnt < 1 || child_cnt > c->fanout) {
 			err = 1;
 			goto out_dump;
@@ -557,22 +557,22 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 		if (first) {
 			first = 0;
 			/* Check root level and sqnum */
-			if (be16_to_cpu(idx->level) != c->old_zroot_level) {
+			if (le16_to_cpu(idx->level) != c->old_zroot_level) {
 				err = 2;
 				goto out_dump;
 			}
-			if (be64_to_cpu(idx->ch.sqnum) != c->old_zroot_sqnum) {
+			if (le64_to_cpu(idx->ch.sqnum) != c->old_zroot_sqnum) {
 				err = 3;
 				goto out_dump;
 			}
 			/* Set last values as though root had a parent */
-			last_level = be16_to_cpu(idx->level) + 1;
-			last_sqnum = be64_to_cpu(idx->ch.sqnum) + 1;
+			last_level = le16_to_cpu(idx->level) + 1;
+			last_sqnum = le64_to_cpu(idx->ch.sqnum) + 1;
 			key_read(c, &idx->branch[0].key, &lower_key);
 			max_inum_key(c, &upper_key, INUM_WATERMARK);
 		}
 		key_copy(c, &upper_key, &i->upper_key);
-		if (be16_to_cpu(idx->level) != last_level - 1) {
+		if (le16_to_cpu(idx->level) != last_level - 1) {
 			err = 3;
 			goto out_dump;
 		}
@@ -580,7 +580,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 		 * The index is always written bottom up hence a child's sqnum
 		 * is always less than the parents.
 		 */
-		if (be64_to_cpu(idx->ch.sqnum) >= last_sqnum) {
+		if (le64_to_cpu(idx->ch.sqnum) >= last_sqnum) {
 			err = 4;
 			goto out_dump;
 		}
@@ -601,7 +601,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 				goto out_dump;
 			}
 		/* Go to next index node */
-		if (be16_to_cpu(idx->level) == 0) {
+		if (le16_to_cpu(idx->level) == 0) {
 			/* At the bottom, so go up until can go right */
 			while (1) {
 				/* Drop the bottom of the list */
@@ -615,7 +615,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 					       list);
 				idx = &i->idx;
 				/* Can we go right */
-				if (iip + 1 < be16_to_cpu(idx->child_cnt)) {
+				if (iip + 1 < le16_to_cpu(idx->child_cnt)) {
 					iip = iip + 1;
 					break;
 				} else
@@ -629,16 +629,16 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 		 * We have the parent in 'idx' and now we set up for reading the
 		 * child pointed to by slot 'iip'.
 		 */
-		last_level = be16_to_cpu(idx->level);
-		last_sqnum = be64_to_cpu(idx->ch.sqnum);
+		last_level = le16_to_cpu(idx->level);
+		last_sqnum = le64_to_cpu(idx->ch.sqnum);
 		key_read(c, &idx->branch[iip].key, &lower_key);
-		if (iip + 1 < be16_to_cpu(idx->child_cnt))
+		if (iip + 1 < le16_to_cpu(idx->child_cnt))
 			key_read(c, &idx->branch[iip + 1].key, &upper_key);
 		else
 			key_copy(c, &i->upper_key, &upper_key);
-		lnum = be32_to_cpu(idx->branch[iip].lnum);
-		offs = be32_to_cpu(idx->branch[iip].offs);
-		len = be32_to_cpu(idx->branch[iip].len);
+		lnum = le32_to_cpu(idx->branch[iip].lnum);
+		offs = le32_to_cpu(idx->branch[iip].offs);
+		len = le32_to_cpu(idx->branch[iip].len);
 	}
 out:
 	err = dbg_old_index_check_init(c, zroot);

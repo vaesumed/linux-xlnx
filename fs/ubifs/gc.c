@@ -298,7 +298,7 @@ static int garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 		       lnum, lp->free, lp->dirty);
 		list_for_each_entry(snod, &sleb->nodes, list) {
 			struct ubifs_idx_node *idx = snod->node;
-			int level = be16_to_cpu(idx->level);
+			int level = le16_to_cpu(idx->level);
 
 			ubifs_assert(snod->type == UBIFS_IDX_NODE);
 			key_read(c, &idx->branch[0].key, &snod->key);

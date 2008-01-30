@@ -292,40 +292,40 @@ int ubifs_read_master(struct ubifs_info *c)
 	}
 
 	/* Make sure that the recovery flag is clear */
-	c->mst_node->flags &= cpu_to_be32(~UBIFS_MST_RCVRY);
+	c->mst_node->flags &= cpu_to_le32(~UBIFS_MST_RCVRY);
 
-	c->max_sqnum       = be64_to_cpu(c->mst_node->ch.sqnum);
-	c->highest_inum    = be64_to_cpu(c->mst_node->highest_inum);
-	c->cmt_no          = be64_to_cpu(c->mst_node->cmt_no);
-	c->zroot.lnum      = be32_to_cpu(c->mst_node->root_lnum);
-	c->zroot.offs      = be32_to_cpu(c->mst_node->root_offs);
-	c->zroot.len       = be32_to_cpu(c->mst_node->root_len);
-	c->lhead_lnum      = be32_to_cpu(c->mst_node->log_lnum);
-	c->gc_lnum         = be32_to_cpu(c->mst_node->gc_lnum);
-	c->ihead_lnum      = be32_to_cpu(c->mst_node->ihead_lnum);
-	c->ihead_offs      = be32_to_cpu(c->mst_node->ihead_offs);
-	c->old_idx_sz      = be64_to_cpu(c->mst_node->index_size);
-	c->lpt_lnum        = be32_to_cpu(c->mst_node->lpt_lnum);
-	c->lpt_offs        = be32_to_cpu(c->mst_node->lpt_offs);
-	c->nhead_lnum      = be32_to_cpu(c->mst_node->nhead_lnum);
-	c->nhead_offs      = be32_to_cpu(c->mst_node->nhead_offs);
-	c->ltab_lnum       = be32_to_cpu(c->mst_node->ltab_lnum);
-	c->ltab_offs       = be32_to_cpu(c->mst_node->ltab_offs);
-	c->lsave_lnum      = be32_to_cpu(c->mst_node->lsave_lnum);
-	c->lsave_offs      = be32_to_cpu(c->mst_node->lsave_offs);
-	c->lscan_lnum      = be32_to_cpu(c->mst_node->lscan_lnum);
-	c->lst.empty_lebs  = be32_to_cpu(c->mst_node->empty_lebs);
-	c->lst.idx_lebs    = be32_to_cpu(c->mst_node->idx_lebs);
-	old_leb_cnt        = be32_to_cpu(c->mst_node->leb_cnt);
-	c->lst.total_free  = be64_to_cpu(c->mst_node->total_free);
-	c->lst.total_dirty = be64_to_cpu(c->mst_node->total_dirty);
-	c->lst.total_used  = be64_to_cpu(c->mst_node->total_used);
-	c->lst.total_dead  = be64_to_cpu(c->mst_node->total_dead);
-	c->lst.total_dark  = be64_to_cpu(c->mst_node->total_dark);
+	c->max_sqnum       = le64_to_cpu(c->mst_node->ch.sqnum);
+	c->highest_inum    = le64_to_cpu(c->mst_node->highest_inum);
+	c->cmt_no          = le64_to_cpu(c->mst_node->cmt_no);
+	c->zroot.lnum      = le32_to_cpu(c->mst_node->root_lnum);
+	c->zroot.offs      = le32_to_cpu(c->mst_node->root_offs);
+	c->zroot.len       = le32_to_cpu(c->mst_node->root_len);
+	c->lhead_lnum      = le32_to_cpu(c->mst_node->log_lnum);
+	c->gc_lnum         = le32_to_cpu(c->mst_node->gc_lnum);
+	c->ihead_lnum      = le32_to_cpu(c->mst_node->ihead_lnum);
+	c->ihead_offs      = le32_to_cpu(c->mst_node->ihead_offs);
+	c->old_idx_sz      = le64_to_cpu(c->mst_node->index_size);
+	c->lpt_lnum        = le32_to_cpu(c->mst_node->lpt_lnum);
+	c->lpt_offs        = le32_to_cpu(c->mst_node->lpt_offs);
+	c->nhead_lnum      = le32_to_cpu(c->mst_node->nhead_lnum);
+	c->nhead_offs      = le32_to_cpu(c->mst_node->nhead_offs);
+	c->ltab_lnum       = le32_to_cpu(c->mst_node->ltab_lnum);
+	c->ltab_offs       = le32_to_cpu(c->mst_node->ltab_offs);
+	c->lsave_lnum      = le32_to_cpu(c->mst_node->lsave_lnum);
+	c->lsave_offs      = le32_to_cpu(c->mst_node->lsave_offs);
+	c->lscan_lnum      = le32_to_cpu(c->mst_node->lscan_lnum);
+	c->lst.empty_lebs  = le32_to_cpu(c->mst_node->empty_lebs);
+	c->lst.idx_lebs    = le32_to_cpu(c->mst_node->idx_lebs);
+	old_leb_cnt        = le32_to_cpu(c->mst_node->leb_cnt);
+	c->lst.total_free  = le64_to_cpu(c->mst_node->total_free);
+	c->lst.total_dirty = le64_to_cpu(c->mst_node->total_dirty);
+	c->lst.total_used  = le64_to_cpu(c->mst_node->total_used);
+	c->lst.total_dead  = le64_to_cpu(c->mst_node->total_dead);
+	c->lst.total_dark  = le64_to_cpu(c->mst_node->total_dark);
 
 	c->calc_idx_sz = c->old_idx_sz;
 
-	if (c->mst_node->flags & cpu_to_be32(UBIFS_MST_NO_ORPHS))
+	if (c->mst_node->flags & cpu_to_le32(UBIFS_MST_NO_ORPHS))
 		c->no_orphs = 1;
 
 	if (old_leb_cnt != c->leb_cnt) {
@@ -351,10 +351,10 @@ int ubifs_read_master(struct ubifs_info *c)
 		 * remounting) in read-write mode, so we do not need to write it
 		 * here.
 		 */
-		c->mst_node->leb_cnt = cpu_to_be32(c->leb_cnt);
-		c->mst_node->empty_lebs = cpu_to_be32(c->lst.empty_lebs);
-		c->mst_node->total_free = cpu_to_be64(c->lst.total_free);
-		c->mst_node->total_dark = cpu_to_be64(c->lst.total_dark);
+		c->mst_node->leb_cnt = cpu_to_le32(c->leb_cnt);
+		c->mst_node->empty_lebs = cpu_to_le32(c->lst.empty_lebs);
+		c->mst_node->total_free = cpu_to_le64(c->lst.total_free);
+		c->mst_node->total_dark = cpu_to_le64(c->lst.total_dark);
 	}
 
 	err = validate_master(c);
@@ -391,7 +391,7 @@ int ubifs_write_master(struct ubifs_info *c)
 	}
 
 	c->mst_offs = offs;
-	c->mst_node->highest_inum = cpu_to_be64(c->highest_inum);
+	c->mst_node->highest_inum = cpu_to_le64(c->highest_inum);
 
 	err = ubifs_write_node(c, c->mst_node, len, lnum, offs, UBI_SHORTTERM);
 	if (err)

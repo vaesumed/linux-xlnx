@@ -81,7 +81,7 @@ static int get_master_node(const struct ubifs_info *c, int lnum, void **pbuf,
 	while (offs + UBIFS_MST_NODE_SZ <= c->leb_size) {
 		struct ubifs_ch *ch = buf;
 
-		if (be32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC)
+		if (le32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC)
 			break;
 		offs += sz;
 		buf  += sz;
@@ -161,7 +161,7 @@ static int write_rcvrd_mst_node(struct ubifs_info *c,
 	dbg_rcvry("recovery");
 
 	save_flags = mst->flags;
-	mst->flags = cpu_to_be32(be32_to_cpu(mst->flags) | UBIFS_MST_RCVRY);
+	mst->flags = cpu_to_le32(le32_to_cpu(mst->flags) | UBIFS_MST_RCVRY);
 
 	ubifs_prepare_node(c, mst, UBIFS_MST_NODE_SZ, 1);
 	err = ubi_leb_change(c->ubi, lnum, mst, sz, UBI_SHORTTERM);
@@ -203,7 +203,7 @@ int ubifs_recover_master_node(struct ubifs_info *c)
 
 	if (mst1) {
 		offs1 = (void *)mst1 - buf1;
-		if ((be32_to_cpu(mst1->flags) & UBIFS_MST_RCVRY) &&
+		if ((le32_to_cpu(mst1->flags) & UBIFS_MST_RCVRY) &&
 		    (offs1 == 0 && !cor1)) {
 			/*
 			 * mst1 was written by recovery at offset 0 with no
@@ -270,7 +270,7 @@ int ubifs_recover_master_node(struct ubifs_info *c)
 		memcpy(c->rcvrd_mst_node, c->mst_node, UBIFS_MST_NODE_SZ);
 	} else {
 		/* Write the recovered master node */
-		c->max_sqnum = be64_to_cpu(mst->ch.sqnum) - 1;
+		c->max_sqnum = le64_to_cpu(mst->ch.sqnum) - 1;
 		err = write_rcvrd_mst_node(c, c->mst_node);
 		if (err)
 			goto out_free;
@@ -313,8 +313,8 @@ int ubifs_write_rcvrd_mst_node(struct ubifs_info *c)
 
 	if (!c->rcvrd_mst_node)
 		return 0;
-	c->rcvrd_mst_node->flags |= cpu_to_be32(UBIFS_MST_DIRTY);
-	c->mst_node->flags |= cpu_to_be32(UBIFS_MST_DIRTY);
+	c->rcvrd_mst_node->flags |= cpu_to_le32(UBIFS_MST_DIRTY);
+	c->mst_node->flags |= cpu_to_le32(UBIFS_MST_DIRTY);
 	err = write_rcvrd_mst_node(c, c->rcvrd_mst_node);
 	if (err)
 		return err;
@@ -423,7 +423,7 @@ static int no_more_nodes(const struct ubifs_info *c, void *buf, int len,
 
 	if (len > UBIFS_DATA_NODE_SZ) {
 		struct ubifs_ch *ch = buf;
-		int dlen = be32_to_cpu(ch->len);
+		int dlen = le32_to_cpu(ch->len);
 
 		if (ch->node_type == UBIFS_DATA_NODE && dlen >= UBIFS_CH_SZ &&
 		    dlen <= UBIFS_MAX_DATA_NODE_SZ)
@@ -441,7 +441,7 @@ static int no_more_nodes(const struct ubifs_info *c, void *buf, int len,
 	len -= skip;
 	while (len > 8) {
 		struct ubifs_ch *ch = buf;
-		uint32_t magic = be32_to_cpu(ch->magic);
+		uint32_t magic = le32_to_cpu(ch->magic);
 		int ret;
 
 		if (magic == UBIFS_NODE_MAGIC) {
@@ -453,7 +453,7 @@ static int no_more_nodes(const struct ubifs_info *c, void *buf, int len,
 				 * this is part of a file that itself contains
 				 * a UBIFS image.
 				 */
-				if (next_offs && offs + be32_to_cpu(ch->len) <=
+				if (next_offs && offs + le32_to_cpu(ch->len) <=
 				    next_offs)
 					continue;
 				dbg_rcvry("unexpected node at %d:%d",
@@ -620,7 +620,7 @@ struct ubifs_scan_leb *ubifs_recover_leb(struct ubifs_info *c, int lnum,
 			err = ubifs_add_snod(c, sleb, buf, offs);
 			if (err)
 				goto error;
-			node_len = ALIGN(be32_to_cpu(ch->len), 8);
+			node_len = ALIGN(le32_to_cpu(ch->len), 8);
 			offs += node_len;
 			buf += node_len;
 			len -= node_len;
@@ -758,12 +758,12 @@ static int get_cs_sqnum(struct ubifs_info *c, int lnum, int offs,
 		dbg_err("Node a CS node, type is %d", cs_node->ch.node_type);
 		goto out_err;
 	}
-	if (be64_to_cpu(cs_node->cmt_no) != c->cmt_no) {
+	if (le64_to_cpu(cs_node->cmt_no) != c->cmt_no) {
 		dbg_err("CS node cmt_no %llu != current cmt_no %llu",
-			be64_to_cpu(cs_node->cmt_no), c->cmt_no);
+			le64_to_cpu(cs_node->cmt_no), c->cmt_no);
 		goto out_err;
 	}
-	*cs_sqnum = be64_to_cpu(cs_node->ch.sqnum);
+	*cs_sqnum = le64_to_cpu(cs_node->ch.sqnum);
 	dbg_rcvry("commit start sqnum %llu", *cs_sqnum);
 	kfree(cs_node);
 	return 0;
@@ -967,7 +967,7 @@ static int clean_an_unclean_leb(const struct ubifs_info *c,
 			struct ubifs_ch *ch = buf;
 			int node_len;
 
-			node_len = ALIGN(be32_to_cpu(ch->len), 8);
+			node_len = ALIGN(le32_to_cpu(ch->len), 8);
 			offs += node_len;
 			buf += node_len;
 			len -= node_len;
@@ -1294,7 +1294,7 @@ static int fix_size_in_place(struct ubifs_info *c, struct size_entry *e)
 	 * If the size recorded on the inode node is greater than the size that
 	 * was calculated from nodes in the journal then don't change the inode.
 	 */
-	i_size = be64_to_cpu(ino->size);
+	i_size = le64_to_cpu(ino->size);
 	if (i_size >= e->d_size)
 		return 0;
 	/* Read the LEB */
@@ -1303,10 +1303,10 @@ static int fix_size_in_place(struct ubifs_info *c, struct size_entry *e)
 		goto out;
 	/* Change the size field and recalculate the CRC */
 	ino = c->sbuf + offs;
-	ino->size = cpu_to_be64(e->d_size);
-	len = be32_to_cpu(ino->ch.len);
+	ino->size = cpu_to_le64(e->d_size);
+	len = le32_to_cpu(ino->ch.len);
 	crc = crc32(UBIFS_CRC32_INIT, (void *)ino + 8, len - 8);
-	ino->ch.crc = cpu_to_be32(crc);
+	ino->ch.crc = cpu_to_le32(crc);
 	/* Work out where data in the LEB ends and free space begins */
 	p = c->sbuf;
 	len = c->leb_size - 1;
@@ -1373,7 +1373,7 @@ int ubifs_recover_size(struct ubifs_info *c)
 				struct ubifs_ino_node *ino = c->sbuf;
 
 				e->exists = 1;
-				e->i_size = be64_to_cpu(ino->size);
+				e->i_size = le64_to_cpu(ino->size);
 			}
 		}
 		if (e->exists && e->i_size < e->d_size) {

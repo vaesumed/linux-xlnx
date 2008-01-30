@@ -179,14 +179,14 @@ const char *dbg_cstate(int cmt_state)
 
 static void dump_ch(const struct ubifs_ch *ch)
 {
-	printk(KERN_DEBUG "\tmagic          %#x\n", be32_to_cpu(ch->magic));
-	printk(KERN_DEBUG "\tcrc            %#x\n", be32_to_cpu(ch->crc));
+	printk(KERN_DEBUG "\tmagic          %#x\n", le32_to_cpu(ch->magic));
+	printk(KERN_DEBUG "\tcrc            %#x\n", le32_to_cpu(ch->crc));
 	printk(KERN_DEBUG "\tnode_type      %d (%s)\n", ch->node_type,
 	       dbg_ntype(ch->node_type));
 	printk(KERN_DEBUG "\tgroup_type     %d (%s)\n", ch->group_type,
 	       dbg_gtype(ch->group_type));
-	printk(KERN_DEBUG "\tsqnum          %llu\n", be64_to_cpu(ch->sqnum));
-	printk(KERN_DEBUG "\tlen            %u\n", be32_to_cpu(ch->len));
+	printk(KERN_DEBUG "\tsqnum          %llu\n", le64_to_cpu(ch->sqnum));
+	printk(KERN_DEBUG "\tlen            %u\n", le32_to_cpu(ch->len));
 }
 
 void dbg_dump_node(const struct ubifs_info *c, const void *node)
@@ -199,7 +199,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		return;
 
 	/* If the magic is incorrect, just hexdump the first bytes */
-	if (be32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC) {
+	if (le32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC) {
 		printk(KERN_DEBUG "Not a node, first %zu bytes:", UBIFS_CH_SZ);
 		print_hex_dump(KERN_DEBUG, "", DUMP_PREFIX_OFFSET, 32, 1,
 			       (void *)node, UBIFS_CH_SZ, 1);
@@ -215,7 +215,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_pad_node *pad = node;
 
 		printk(KERN_DEBUG "\tpad_len        %u\n",
-		       be32_to_cpu(pad->pad_len));
+		       le32_to_cpu(pad->pad_len));
 		break;
 	}
 	case UBIFS_SB_NODE:
@@ -227,33 +227,33 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tkey_fmt        %d (%s)\n",
 		       (int)sup->key_fmt, get_key_fmt(sup->key_fmt));
 		printk(KERN_DEBUG "\tbig_lpt        %u\n",
-		       be32_to_cpu(sup->big_lpt));
+		       le32_to_cpu(sup->big_lpt));
 		printk(KERN_DEBUG "\tflags          %#x\n",
-		       be32_to_cpu(sup->flags));
+		       le32_to_cpu(sup->flags));
 		printk(KERN_DEBUG "\tmin_io_size    %u\n",
-		       be32_to_cpu(sup->min_io_size));
+		       le32_to_cpu(sup->min_io_size));
 		printk(KERN_DEBUG "\tleb_size       %u\n",
-		       be32_to_cpu(sup->leb_size));
+		       le32_to_cpu(sup->leb_size));
 		printk(KERN_DEBUG "\tleb_cnt        %u\n",
-		       be32_to_cpu(sup->leb_cnt));
+		       le32_to_cpu(sup->leb_cnt));
 		printk(KERN_DEBUG "\tmax_leb_cnt    %u\n",
-		       be32_to_cpu(sup->max_leb_cnt));
+		       le32_to_cpu(sup->max_leb_cnt));
 		printk(KERN_DEBUG "\tmax_bud_bytes  %llu\n",
-		       be64_to_cpu(sup->max_bud_bytes));
+		       le64_to_cpu(sup->max_bud_bytes));
 		printk(KERN_DEBUG "\tlog_lebs       %u\n",
-		       be32_to_cpu(sup->log_lebs));
+		       le32_to_cpu(sup->log_lebs));
 		printk(KERN_DEBUG "\tlpt_lebs       %u\n",
-		       be32_to_cpu(sup->lpt_lebs));
+		       le32_to_cpu(sup->lpt_lebs));
 		printk(KERN_DEBUG "\torph_lebs      %u\n",
-		       be32_to_cpu(sup->orph_lebs));
+		       le32_to_cpu(sup->orph_lebs));
 		printk(KERN_DEBUG "\tjhead_cnt      %u\n",
-		       be32_to_cpu(sup->jhead_cnt));
+		       le32_to_cpu(sup->jhead_cnt));
 		printk(KERN_DEBUG "\tfanout         %u\n",
-		       be32_to_cpu(sup->fanout));
+		       le32_to_cpu(sup->fanout));
 		printk(KERN_DEBUG "\tlsave_cnt      %u\n",
-		       be32_to_cpu(sup->lsave_cnt));
+		       le32_to_cpu(sup->lsave_cnt));
 		printk(KERN_DEBUG "\tdefault_compr  %u\n",
-		       (int)be16_to_cpu(sup->default_compr));
+		       (int)le16_to_cpu(sup->default_compr));
 		break;
 	}
 	case UBIFS_MST_NODE:
@@ -261,61 +261,61 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_mst_node *mst = node;
 
 		printk(KERN_DEBUG "\thighest_inum   %llu\n",
-		       be64_to_cpu(mst->highest_inum));
+		       le64_to_cpu(mst->highest_inum));
 		printk(KERN_DEBUG "\tcommit number  %llu\n",
-		       be64_to_cpu(mst->cmt_no));
+		       le64_to_cpu(mst->cmt_no));
 		printk(KERN_DEBUG "\tflags          %#x\n",
-		       be32_to_cpu(mst->flags));
+		       le32_to_cpu(mst->flags));
 		printk(KERN_DEBUG "\tlog_lnum       %u\n",
-		       be32_to_cpu(mst->log_lnum));
+		       le32_to_cpu(mst->log_lnum));
 		printk(KERN_DEBUG "\troot_lnum      %u\n",
-		       be32_to_cpu(mst->root_lnum));
+		       le32_to_cpu(mst->root_lnum));
 		printk(KERN_DEBUG "\troot_offs      %u\n",
-		       be32_to_cpu(mst->root_offs));
+		       le32_to_cpu(mst->root_offs));
 		printk(KERN_DEBUG "\troot_len       %u\n",
-		       be32_to_cpu(mst->root_len));
+		       le32_to_cpu(mst->root_len));
 		printk(KERN_DEBUG "\tgc_lnum        %u\n",
-		       be32_to_cpu(mst->gc_lnum));
+		       le32_to_cpu(mst->gc_lnum));
 		printk(KERN_DEBUG "\tihead_lnum     %u\n",
-		       be32_to_cpu(mst->ihead_lnum));
+		       le32_to_cpu(mst->ihead_lnum));
 		printk(KERN_DEBUG "\tihead_offs     %u\n",
-		       be32_to_cpu(mst->ihead_offs));
+		       le32_to_cpu(mst->ihead_offs));
 		printk(KERN_DEBUG "\tindex_size     %u\n",
-		       be32_to_cpu(mst->index_size));
+		       le32_to_cpu(mst->index_size));
 		printk(KERN_DEBUG "\tlpt_lnum       %u\n",
-		       be32_to_cpu(mst->lpt_lnum));
+		       le32_to_cpu(mst->lpt_lnum));
 		printk(KERN_DEBUG "\tlpt_offs       %u\n",
-		       be32_to_cpu(mst->lpt_offs));
+		       le32_to_cpu(mst->lpt_offs));
 		printk(KERN_DEBUG "\tnhead_lnum     %u\n",
-		       be32_to_cpu(mst->nhead_lnum));
+		       le32_to_cpu(mst->nhead_lnum));
 		printk(KERN_DEBUG "\tnhead_offs     %u\n",
-		       be32_to_cpu(mst->nhead_offs));
+		       le32_to_cpu(mst->nhead_offs));
 		printk(KERN_DEBUG "\tltab_lnum      %u\n",
-		       be32_to_cpu(mst->ltab_lnum));
+		       le32_to_cpu(mst->ltab_lnum));
 		printk(KERN_DEBUG "\tltab_offs      %u\n",
-		       be32_to_cpu(mst->ltab_offs));
+		       le32_to_cpu(mst->ltab_offs));
 		printk(KERN_DEBUG "\tlsave_lnum     %u\n",
-		       be32_to_cpu(mst->lsave_lnum));
+		       le32_to_cpu(mst->lsave_lnum));
 		printk(KERN_DEBUG "\tlsave_offs     %u\n",
-		       be32_to_cpu(mst->lsave_offs));
+		       le32_to_cpu(mst->lsave_offs));
 		printk(KERN_DEBUG "\tlscan_lnum     %u\n",
-		       be32_to_cpu(mst->lscan_lnum));
+		       le32_to_cpu(mst->lscan_lnum));
 		printk(KERN_DEBUG "\tleb_cnt        %u\n",
-		       be32_to_cpu(mst->leb_cnt));
+		       le32_to_cpu(mst->leb_cnt));
 		printk(KERN_DEBUG "\tempty_lebs     %u\n",
-		       be32_to_cpu(mst->empty_lebs));
+		       le32_to_cpu(mst->empty_lebs));
 		printk(KERN_DEBUG "\tidx_lebs       %u\n",
-		       be32_to_cpu(mst->idx_lebs));
+		       le32_to_cpu(mst->idx_lebs));
 		printk(KERN_DEBUG "\ttotal_free     %llu\n",
-		       be64_to_cpu(mst->total_free));
+		       le64_to_cpu(mst->total_free));
 		printk(KERN_DEBUG "\ttotal_dirty    %llu\n",
-		       be64_to_cpu(mst->total_dirty));
+		       le64_to_cpu(mst->total_dirty));
 		printk(KERN_DEBUG "\ttotal_used     %llu\n",
-		       be64_to_cpu(mst->total_used));
+		       le64_to_cpu(mst->total_used));
 		printk(KERN_DEBUG "\ttotal_dead     %llu\n",
-		       be64_to_cpu(mst->total_dead));
+		       le64_to_cpu(mst->total_dead));
 		printk(KERN_DEBUG "\ttotal_dark     %llu\n",
-		       be64_to_cpu(mst->total_dark));
+		       le64_to_cpu(mst->total_dark));
 		break;
 	}
 	case UBIFS_REF_NODE:
@@ -323,11 +323,11 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_ref_node *ref = node;
 
 		printk(KERN_DEBUG "\tlnum           %u\n",
-		       be32_to_cpu(ref->lnum));
+		       le32_to_cpu(ref->lnum));
 		printk(KERN_DEBUG "\toffs           %u\n",
-		       be32_to_cpu(ref->offs));
+		       le32_to_cpu(ref->offs));
 		printk(KERN_DEBUG "\tjhead          %u\n",
-		       be32_to_cpu(ref->jhead));
+		       le32_to_cpu(ref->jhead));
 		break;
 	}
 	case UBIFS_INO_NODE:
@@ -338,39 +338,39 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tkey            %s\n",
 		       dbg_get_key_dump(c, &key));
 		printk(KERN_DEBUG "\tsize           %llu\n",
-		       be64_to_cpu(ino->size));
+		       le64_to_cpu(ino->size));
 		printk(KERN_DEBUG "\tnlink          %u\n",
-		       be32_to_cpu(ino->nlink));
+		       le32_to_cpu(ino->nlink));
 		printk(KERN_DEBUG "\tatime          %u\n",
-		       be32_to_cpu(ino->atime));
+		       le32_to_cpu(ino->atime));
 		printk(KERN_DEBUG "\tctime          %u\n",
-		       be32_to_cpu(ino->ctime));
+		       le32_to_cpu(ino->ctime));
 		printk(KERN_DEBUG "\tmtime          %u\n",
-		       be32_to_cpu(ino->mtime));
+		       le32_to_cpu(ino->mtime));
 		printk(KERN_DEBUG "\tuid            %u\n",
-		       be32_to_cpu(ino->uid));
+		       le32_to_cpu(ino->uid));
 		printk(KERN_DEBUG "\tgid            %u\n",
-		       be32_to_cpu(ino->gid));
+		       le32_to_cpu(ino->gid));
 		printk(KERN_DEBUG "\tmode           %u\n",
-		       be32_to_cpu(ino->mode));
+		       le32_to_cpu(ino->mode));
 		printk(KERN_DEBUG "\tflags          %#x\n",
-		       be32_to_cpu(ino->flags));
+		       le32_to_cpu(ino->flags));
 		printk(KERN_DEBUG "\tcompr_type     %#x\n",
-		       (int)be16_to_cpu(ino->compr_type));
+		       (int)le16_to_cpu(ino->compr_type));
 		printk(KERN_DEBUG "\tdata len       %u\n",
-		       be32_to_cpu(ino->data_len));
+		       le32_to_cpu(ino->data_len));
 		break;
 	}
 	case UBIFS_DENT_NODE:
 	{
 		const struct ubifs_dent_node *dent = node;
-		int nlen = be16_to_cpu(dent->nlen);
+		int nlen = le16_to_cpu(dent->nlen);
 
 		key_read(c, &dent->key, &key);
 		printk(KERN_DEBUG "\tkey            %s\n",
 		       dbg_get_key_dump(c, &key));
 		printk(KERN_DEBUG "\tinum           %llu\n",
-		       be64_to_cpu(dent->inum));
+		       le64_to_cpu(dent->inum));
 		printk(KERN_DEBUG "\ttype           %d\n", (int)dent->type);
 		printk(KERN_DEBUG "\tnlen           %d\n", nlen);
 		printk(KERN_DEBUG "\tname           ");
@@ -389,15 +389,15 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 	case UBIFS_DATA_NODE:
 	{
 		const struct ubifs_data_node *dn = node;
-		int dlen = be32_to_cpu(ch->len) - UBIFS_DATA_NODE_SZ;
+		int dlen = le32_to_cpu(ch->len) - UBIFS_DATA_NODE_SZ;
 
 		key_read(c, &dn->key, &key);
 		printk(KERN_DEBUG "\tkey            %s\n",
 		       dbg_get_key_dump(c, &key));
 		printk(KERN_DEBUG "\tsize           %u\n",
-		       be32_to_cpu(dn->size));
+		       le32_to_cpu(dn->size));
 		printk(KERN_DEBUG "\tcompr_typ      %d\n",
-		       (int)be16_to_cpu(dn->compr_type));
+		       (int)le16_to_cpu(dn->compr_type));
 		printk(KERN_DEBUG "\tdata size      %d\n",
 		       dlen);
 		printk(KERN_DEBUG "\tdata:\n");
@@ -413,19 +413,19 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tkey            %s\n",
 		       dbg_get_key_dump(c, &key));
 		printk(KERN_DEBUG "\told_size       %llu\n",
-		       be64_to_cpu(trun->old_size));
+		       le64_to_cpu(trun->old_size));
 		printk(KERN_DEBUG "\tnew_size       %llu\n",
-		       be64_to_cpu(trun->new_size));
+		       le64_to_cpu(trun->new_size));
 		break;
 	}
 	case UBIFS_IDX_NODE:
 	{
 		const struct ubifs_idx_node *idx = node;
 
-		n = be16_to_cpu(idx->child_cnt);
+		n = le16_to_cpu(idx->child_cnt);
 		printk(KERN_DEBUG "\tchild_cnt      %d\n", n);
 		printk(KERN_DEBUG "\tlevel          %d\n",
-		       (int)be16_to_cpu(idx->level));
+		       (int)le16_to_cpu(idx->level));
 		printk(KERN_DEBUG "Branches:\n");
 
 		for (i = 0; i < n && i < c->fanout - 1; i++) {
@@ -435,8 +435,8 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 			printk(KERN_DEBUG "\t  %04d: key %s",
 			       i, dbg_get_key_dump(c, &key));
 			printk(KERN_DEBUG "\t        lnum %6d, offs %6d, "
-			       "len %6d\n", be32_to_cpu(br->lnum),
-			       be32_to_cpu(br->offs), be32_to_cpu(br->len));
+			       "len %6d\n", le32_to_cpu(br->lnum),
+			       le32_to_cpu(br->offs), le32_to_cpu(br->len));
 		}
 		break;
 	}
@@ -447,14 +447,14 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_orph_node *orph = node;
 
 		printk(KERN_DEBUG "\tcommit number  %llu\n",
-		       be64_to_cpu(orph->cmt_no) & LLONG_MAX);
+		       le64_to_cpu(orph->cmt_no) & LLONG_MAX);
 		printk(KERN_DEBUG "\tlast node flag %llu\n",
-		       be64_to_cpu(orph->cmt_no) >> 63);
-		n = (be32_to_cpu(ch->len) - UBIFS_ORPH_NODE_SZ) >> 3;
+		       le64_to_cpu(orph->cmt_no) >> 63);
+		n = (le32_to_cpu(ch->len) - UBIFS_ORPH_NODE_SZ) >> 3;
 		printk(KERN_DEBUG "\t%d orphan inode numbers:\n", n);
 		for (i = 0; i < n; i++)
 			printk(KERN_DEBUG "\t  ino %llu\n",
-			       be64_to_cpu(orph->inos[i]));
+			       le64_to_cpu(orph->inos[i]));
 		break;
 	}
 	default:
