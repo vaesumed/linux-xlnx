@@ -61,9 +61,6 @@
 /* Minimum amount of data UBIFS writes to the flash */
 #define MIN_WRITE_SZ (UBIFS_DATA_NODE_SZ + 8)
 
-/* Minimum indexing node size */
-#define MIN_IDX_NODE_SZ ALIGN(UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ, 8)
-
 /*
  * Currently we do not support inode number overlapping and re-using, so this
  * watermark defines dangerous inode number level. This should be fixed later,
@@ -869,6 +866,7 @@ struct ubifs_orphan
  * @ref_node_alsz: size of the LEB reference node aligned to the min. flash
  * I/O unit
  * @mst_node_alsz: master node aligned size
+ * @min_idx_node_sz: minimum indexing node aligned on 8-bytes boundary
  * @max_idx_node_sz: maximum indexing node aligned on 8-bytes boundary
  * @max_inode_sz: maximum possible inode size in bytes
  * @max_znode_sz: size of znode in bytes
@@ -1086,6 +1084,7 @@ struct ubifs_info
 
 	int ref_node_alsz;
 	int mst_node_alsz;
+	int min_idx_node_sz;
 	int max_idx_node_sz;
 	long long max_inode_sz;
 	int max_znode_sz;

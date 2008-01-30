@@ -125,8 +125,8 @@ static int validate_master(const struct ubifs_info *c)
 		goto out;
 	}
 
-	if (c->zroot.len < UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ ||
-	    c->zroot.len > UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * c->fanout) {
+	if (c->zroot.len < c->ranges[UBIFS_IDX_NODE].min_len ||
+	    c->zroot.len > c->ranges[UBIFS_IDX_NODE].max_len) {
 		dbg_err("bad root indexing node length");
 		err = 6;
 		goto out;

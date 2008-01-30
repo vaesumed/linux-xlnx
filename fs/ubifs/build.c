@@ -130,6 +130,10 @@ static int init_constants_early(struct ubifs_info *c)
 	c->ranges[UBIFS_DATA_NODE].min_len = UBIFS_DATA_NODE_SZ;
 	c->ranges[UBIFS_DATA_NODE].max_len =
 		UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE * UBIFS_MAX_NODE_BLOCKS;
+	/*
+	 * Minimum indexing node size is amended later when superblock is
+	 * read and the key length is known.
+	 */
 	c->ranges[UBIFS_IDX_NODE].min_len = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ;
 	/*
 	 * Maximum indexing node size is amended later when superblock is
@@ -193,7 +197,11 @@ static int init_constants_late(struct ubifs_info *c)
 	c->max_znode_sz = sizeof(struct ubifs_znode) +
 				c->fanout * sizeof(struct ubifs_zbranch);
 
-	tmp = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ * c->fanout;
+	tmp = ubifs_idx_node_sz(c, 1);
+	c->ranges[UBIFS_IDX_NODE].min_len = tmp;
+	c->min_idx_node_sz = ALIGN(tmp, 8);
+
+	tmp = ubifs_idx_node_sz(c, c->fanout);
 	c->ranges[UBIFS_IDX_NODE].max_len = tmp;
 	c->max_idx_node_sz = ALIGN(tmp, 8);
 
@@ -1054,7 +1062,7 @@ int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 			if (match_int(&args[0], &option))
 				return -EINVAL;
 			maxf = (c->leb_size - UBIFS_IDX_NODE_SZ) /
-			       UBIFS_BRANCH_SZ;
+			       (UBIFS_BRANCH_SZ + UBIFS_MAX_KEY_LEN);
 			if (option < UBIFS_MIN_FANOUT || option > maxf) {
 				ubifs_err("bad fanout: out of [%d, %d] range",
 					  UBIFS_MIN_FANOUT, maxf);
@@ -1127,6 +1135,8 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	get_random_bytes(&c->vfs_gen, sizeof(int));
 	c->lhead_lnum = c->ltail_lnum = UBIFS_LOG_LNUM;
 
+	c->key_fmt = UBIFS_SIMPLE_KEY_FMT;
+	c->key_len = UBIFS_SK_LEN;
 	c->key_hash_type = UBIFS_KEY_HASH_R5;
 	c->fanout = DEFAULT_TREE_FANOUT;
 	c->default_compr = UBIFS_COMPR_LZO;
