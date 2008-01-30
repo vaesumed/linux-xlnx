@@ -103,8 +103,8 @@ static inline void ino_key_init_flash(const struct ubifs_info *c, void *k,
 {
 	union ubifs_key *key = k;
 
-	key->j32[0] = cpu_to_be32(inum);
-	key->j32[1] = cpu_to_be32(UBIFS_INO_KEY << 29);
+	key->j32[0] = cpu_to_le32(inum);
+	key->j32[1] = cpu_to_le32(UBIFS_INO_KEY << 29);
 	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
 }
 
@@ -164,8 +164,8 @@ static inline void dent_key_init_flash(const struct ubifs_info *c, void *k,
 	union ubifs_key *key = k;
 	uint32_t hash = c->key_hash(dname->name, dname->len);
 
-	key->j32[0] = cpu_to_be32(inum);
-	key->j32[1] = cpu_to_be32((hash & 0x01FFFFFF) | (UBIFS_DENT_KEY << 29));
+	key->j32[0] = cpu_to_le32(inum);
+	key->j32[1] = cpu_to_le32((hash & 0x01FFFFFF) | (UBIFS_DENT_KEY << 29));
 	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
 }
 
@@ -196,8 +196,8 @@ static inline void data_key_init_flash(const struct ubifs_info *c, void *k,
 {
 	union ubifs_key *key = k;
 
-	key->j32[0] = cpu_to_be32(inum);
-	key->j32[1] = cpu_to_be32((block & 0x01FFFFFF) | (UBIFS_DATA_KEY << 29));
+	key->j32[0] = cpu_to_le32(inum);
+	key->j32[1] = cpu_to_le32((block & 0x01FFFFFF) | (UBIFS_DATA_KEY << 29));
 	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
 }
 
@@ -253,8 +253,8 @@ static inline void trun_key_init_flash(const struct ubifs_info *c, void *k,
 {
 	union ubifs_key *key = k;
 
-	key->j32[0] = cpu_to_be32(inum);
-	key->j32[1] = cpu_to_be32(UBIFS_TRUN_KEY << 29);
+	key->j32[0] = cpu_to_le32(inum);
+	key->j32[1] = cpu_to_le32(UBIFS_TRUN_KEY << 29);
 	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
 }
 
@@ -290,7 +290,7 @@ static inline ino_t key_ino_flash(const struct ubifs_info *c, const void *k)
 {
 	const union ubifs_key *key = k;
 
-	return be32_to_cpu(key->j32[0]);
+	return le32_to_cpu(key->j32[0]);
 }
 
 /**
@@ -313,7 +313,7 @@ static inline int key_hash_flash(const struct ubifs_info *c, const void *k)
 {
 	const union ubifs_key *key = k;
 
-	return be32_to_cpu(key->j32[1]) & 0x01FFFFFF;
+	return le32_to_cpu(key->j32[1]) & 0x01FFFFFF;
 }
 
 /**
@@ -337,8 +337,8 @@ static inline void key_read(const struct ubifs_info *c, const void *from,
 {
 	const union ubifs_key *f = from;
 
-	to->u32[0] = be32_to_cpu(f->j32[0]);
-	to->u32[1] = be32_to_cpu(f->j32[1]);
+	to->u32[0] = le32_to_cpu(f->j32[0]);
+	to->u32[1] = le32_to_cpu(f->j32[1]);
 }
 
 /**
@@ -351,8 +351,8 @@ static inline void key_write(const struct ubifs_info *c,
 {
 	union ubifs_key *t = to;
 
-	t->j32[0] = cpu_to_be32(from->u32[0]);
-	t->j32[1] = cpu_to_be32(from->u32[1]);
+	t->j32[0] = cpu_to_le32(from->u32[0]);
+	t->j32[1] = cpu_to_le32(from->u32[1]);
 }
 
 /**

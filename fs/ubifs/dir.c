@@ -179,7 +179,7 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 	 * TODO: add paranoid check that the found direntry has the the right
 	 * name.
 	 */
-	inode = iget(dir->i_sb, be64_to_cpu(dent->inum));
+	inode = iget(dir->i_sb, le64_to_cpu(dent->inum));
 	if (!inode) {
 		/*
 		 * This should not happen. Probably the file-system needs
@@ -290,13 +290,13 @@ static unsigned int vfs_dent_type(uint8_t type)
 static int validate_dent(struct ubifs_info *c,
 			 const struct ubifs_dent_node *dent)
 {
-	int nlen = be16_to_cpu(dent->nlen);
+	int nlen = le16_to_cpu(dent->nlen);
 
-	if (be32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
+	if (le32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
 	    dent->type >= UBIFS_ITYPES_CNT ||
 	    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
 	    strnlen(dent->name, nlen) != nlen ||
-	    be64_to_cpu(dent->inum) > MAX_INUM) {
+	    le64_to_cpu(dent->inum) > MAX_INUM) {
 		ubifs_err("bad direntry node");
 		dbg_dump_node(c, dent);
 		return -EINVAL;
@@ -377,8 +377,8 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		dbg_gen("feed '%s', new f_pos %#x",
 			dent->name, key_hash_flash(c, &dent->key));
 		over = filldir(dirent, dent->name,
-			       be16_to_cpu(dent->nlen), filp->f_pos,
-			       be64_to_cpu(dent->inum),
+			       le16_to_cpu(dent->nlen), filp->f_pos,
+			       le64_to_cpu(dent->inum),
 			       vfs_dent_type(dent->type));
 		if (over) {
 			kfree(dent);
@@ -393,7 +393,7 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	while (1) {
 		if (saved) {
 			key_read(c, &saved->key, &key);
-			dent = ubifs_tnc_next_dent(c, &key, saved->name, be16_to_cpu(saved->nlen));
+			dent = ubifs_tnc_next_dent(c, &key, saved->name, le16_to_cpu(saved->nlen));
 		} else {
 			make_dent_key(c, &key, dir->i_ino, filp->f_pos);
 			dent = ubifs_tnc_next_dent(c, &key, NULL, 0);
@@ -409,8 +409,8 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
 		dbg_gen("feed '%s', new f_pos %#x",
 			dent->name, key_hash_flash(c, &dent->key));
-		over = filldir(dirent, dent->name, be16_to_cpu(dent->nlen),
-			       filp->f_pos, be64_to_cpu(dent->inum),
+		over = filldir(dirent, dent->name, le16_to_cpu(dent->nlen),
+			       filp->f_pos, le64_to_cpu(dent->inum),
 			       vfs_dent_type(dent->type));
 		if (over) {
 			kfree(dent);

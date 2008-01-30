@@ -139,19 +139,19 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->ch.node_type  = UBIFS_SB_NODE;
 	sup->key_hash      = c->key_hash_type;
 	sup->big_lpt       = big_lpt;
-	sup->min_io_size   = cpu_to_be32(c->min_io_size);
-	sup->leb_size      = cpu_to_be32(c->leb_size);
-	sup->leb_cnt       = cpu_to_be32(c->leb_cnt);
-	sup->max_leb_cnt   = cpu_to_be32(c->max_leb_cnt);
-	sup->max_bud_bytes = cpu_to_be64(tmp64);
-	sup->log_lebs      = cpu_to_be32(log_lebs);
-	sup->lpt_lebs      = cpu_to_be32(lpt_lebs);
-	sup->orph_lebs     = cpu_to_be32(orph_lebs);
-	sup->jhead_cnt     = cpu_to_be32(DEFAULT_JHEADS_CNT);
-	sup->fanout        = cpu_to_be32(c->fanout);
-	sup->lsave_cnt     = cpu_to_be32(c->lsave_cnt);
-	sup->fmt_vers      = cpu_to_be32(UBIFS_FORMAT_VERSION);
-	sup->default_compr = cpu_to_be16(c->default_compr);
+	sup->min_io_size   = cpu_to_le32(c->min_io_size);
+	sup->leb_size      = cpu_to_le32(c->leb_size);
+	sup->leb_cnt       = cpu_to_le32(c->leb_cnt);
+	sup->max_leb_cnt   = cpu_to_le32(c->max_leb_cnt);
+	sup->max_bud_bytes = cpu_to_le64(tmp64);
+	sup->log_lebs      = cpu_to_le32(log_lebs);
+	sup->lpt_lebs      = cpu_to_le32(lpt_lebs);
+	sup->orph_lebs     = cpu_to_le32(orph_lebs);
+	sup->jhead_cnt     = cpu_to_le32(DEFAULT_JHEADS_CNT);
+	sup->fanout        = cpu_to_le32(c->fanout);
+	sup->lsave_cnt     = cpu_to_le32(c->lsave_cnt);
+	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
+	sup->default_compr = cpu_to_le16(c->default_compr);
 
 	err = ubifs_write_node(c, sup, UBIFS_SB_NODE_SZ, 0, 0, UBI_LONGTERM);
 	kfree(sup);
@@ -166,48 +166,48 @@ static int create_default_filesystem(struct ubifs_info *c)
 		return -ENOMEM;
 
 	mst->ch.node_type = UBIFS_MST_NODE;
-	mst->log_lnum     = cpu_to_be32(UBIFS_LOG_LNUM);
-	mst->highest_inum = cpu_to_be64(UBIFS_FIRST_INO);
-	mst->cmt_no       = cpu_to_be64(0);
-	mst->root_lnum    = cpu_to_be32(main_first + DEFAULT_IDX_LEB);
-	mst->root_offs    = cpu_to_be32(0);
+	mst->log_lnum     = cpu_to_le32(UBIFS_LOG_LNUM);
+	mst->highest_inum = cpu_to_le64(UBIFS_FIRST_INO);
+	mst->cmt_no       = cpu_to_le64(0);
+	mst->root_lnum    = cpu_to_le32(main_first + DEFAULT_IDX_LEB);
+	mst->root_offs    = cpu_to_le32(0);
 	tmp = UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ;
-	mst->root_len     = cpu_to_be32(tmp);
-	mst->gc_lnum      = cpu_to_be32(main_first + DEFAULT_GC_LEB);
-	mst->ihead_lnum   = cpu_to_be32(main_first + DEFAULT_IDX_LEB);
-	mst->ihead_offs   = cpu_to_be32(ALIGN(tmp, c->max_align));
-	mst->index_size   = cpu_to_be64(MIN_IDX_NODE_SZ);
-	mst->lpt_lnum     = cpu_to_be32(c->lpt_lnum);
-	mst->lpt_offs     = cpu_to_be32(c->lpt_offs);
-	mst->nhead_lnum   = cpu_to_be32(c->nhead_lnum);
-	mst->nhead_offs   = cpu_to_be32(c->nhead_offs);
-	mst->ltab_lnum    = cpu_to_be32(c->ltab_lnum);
-	mst->ltab_offs    = cpu_to_be32(c->ltab_offs);
-	mst->lsave_lnum   = cpu_to_be32(c->lsave_lnum);
-	mst->lsave_offs   = cpu_to_be32(c->lsave_offs);
-	mst->lscan_lnum   = cpu_to_be32(main_first);
-	mst->empty_lebs   = cpu_to_be32(main_lebs - 2);
-	mst->idx_lebs     = cpu_to_be32(1);
-	mst->leb_cnt      = cpu_to_be32(c->leb_cnt);
+	mst->root_len     = cpu_to_le32(tmp);
+	mst->gc_lnum      = cpu_to_le32(main_first + DEFAULT_GC_LEB);
+	mst->ihead_lnum   = cpu_to_le32(main_first + DEFAULT_IDX_LEB);
+	mst->ihead_offs   = cpu_to_le32(ALIGN(tmp, c->max_align));
+	mst->index_size   = cpu_to_le64(MIN_IDX_NODE_SZ);
+	mst->lpt_lnum     = cpu_to_le32(c->lpt_lnum);
+	mst->lpt_offs     = cpu_to_le32(c->lpt_offs);
+	mst->nhead_lnum   = cpu_to_le32(c->nhead_lnum);
+	mst->nhead_offs   = cpu_to_le32(c->nhead_offs);
+	mst->ltab_lnum    = cpu_to_le32(c->ltab_lnum);
+	mst->ltab_offs    = cpu_to_le32(c->ltab_offs);
+	mst->lsave_lnum   = cpu_to_le32(c->lsave_lnum);
+	mst->lsave_offs   = cpu_to_le32(c->lsave_offs);
+	mst->lscan_lnum   = cpu_to_le32(main_first);
+	mst->empty_lebs   = cpu_to_le32(main_lebs - 2);
+	mst->idx_lebs     = cpu_to_le32(1);
+	mst->leb_cnt      = cpu_to_le32(c->leb_cnt);
 
 	/* Calculate lprops statistics */
 	tmp64 = (long long)main_lebs * c->leb_size;
 	tmp64 -= ALIGN(UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ, c->max_align);
 	tmp64 -= ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size);
-	mst->total_free = cpu_to_be64(tmp64);
+	mst->total_free = cpu_to_le64(tmp64);
 
 	tmp64 = ALIGN(UBIFS_IDX_NODE_SZ + UBIFS_BRANCH_SZ, c->max_align);
 	ino_waste = ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size) -
 			  UBIFS_INO_NODE_SZ;
 	tmp64 += ino_waste;
 	tmp64 -= MIN_IDX_NODE_SZ;
-	mst->total_dirty = cpu_to_be64(tmp64);
+	mst->total_dirty = cpu_to_le64(tmp64);
 
 	/*  The indexing LEB does not contribute to dark space */
 	tmp64 = (c->main_lebs - 1) * c->dark_wm;
-	mst->total_dark = cpu_to_be64(tmp64);
+	mst->total_dark = cpu_to_le64(tmp64);
 
-	mst->total_used = cpu_to_be64(UBIFS_INO_NODE_SZ);
+	mst->total_used = cpu_to_le64(UBIFS_INO_NODE_SZ);
 
 	err = ubifs_write_node(c, mst, UBIFS_MST_NODE_SZ, UBIFS_MST_LNUM, 0,
 			       UBI_UNKNOWN);
@@ -233,10 +233,10 @@ static int create_default_filesystem(struct ubifs_info *c)
 	c->key_hash = key_r5_hash;
 
 	idx->ch.node_type = UBIFS_IDX_NODE;
-	idx->child_cnt = cpu_to_be16(1);
+	idx->child_cnt = cpu_to_le16(1);
 	ino_key_init_flash(c, &idx->branch[0].key, UBIFS_ROOT_INO);
-	idx->branch[0].lnum = cpu_to_be32(main_first + DEFAULT_DATA_LEB);
-	idx->branch[0].len = cpu_to_be32(UBIFS_INO_NODE_SZ);
+	idx->branch[0].lnum = cpu_to_le32(main_first + DEFAULT_DATA_LEB);
+	idx->branch[0].len = cpu_to_le32(UBIFS_INO_NODE_SZ);
 	err = ubifs_write_node(c, idx, tmp, main_first + DEFAULT_IDX_LEB, 0,
 			       UBI_UNKNOWN);
 	kfree(idx);
@@ -254,13 +254,13 @@ static int create_default_filesystem(struct ubifs_info *c)
 
 	ino_key_init_flash(c, &ino->key, UBIFS_ROOT_INO);
 	ino->ch.node_type = UBIFS_INO_NODE;
-	ino->nlink = cpu_to_be32(2);
+	ino->nlink = cpu_to_le32(2);
 	ino->atime = ino->ctime = ino->mtime =
-				cpu_to_be32(CURRENT_TIME_SEC.tv_sec);
-	ino->mode = cpu_to_be32(S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
+				cpu_to_le32(CURRENT_TIME_SEC.tv_sec);
+	ino->mode = cpu_to_le32(S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
 
 	/* Set compression enabled by default */
-	ino->flags = cpu_to_be32(UBIFS_COMPR_FL);
+	ino->flags = cpu_to_le32(UBIFS_COMPR_FL);
 
 	err = ubifs_write_node(c, ino, UBIFS_INO_NODE_SZ,
 			       main_first + DEFAULT_DATA_LEB, 0,
@@ -303,7 +303,7 @@ static int create_default_filesystem(struct ubifs_info *c)
  */
 static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 {
-	if (be32_to_cpu(sup->flags))
+	if (le32_to_cpu(sup->flags))
 		goto failed;
 
 	if (!c->key_hash)
@@ -312,15 +312,15 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 	if (sup->key_fmt != UBIFS_SIMPLE_KEY_FMT)
 		goto failed;
 
-	if (be32_to_cpu(sup->min_io_size) != c->min_io_size) {
+	if (le32_to_cpu(sup->min_io_size) != c->min_io_size) {
 		ubifs_err("min. I/O unit mismatch: %d in superblock, %d real",
-			  be32_to_cpu(sup->min_io_size), c->min_io_size);
+			  le32_to_cpu(sup->min_io_size), c->min_io_size);
 		goto failed;
 	}
 
-	if (be32_to_cpu(sup->leb_size) != c->leb_size) {
+	if (le32_to_cpu(sup->leb_size) != c->leb_size) {
 		ubifs_err("LEB size mismatch: %d in superblock, %d real",
-			  be32_to_cpu(sup->leb_size), c->leb_size);
+			  le32_to_cpu(sup->leb_size), c->leb_size);
 		goto failed;
 	}
 
@@ -455,7 +455,7 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	if (IS_ERR(sup))
 		return PTR_ERR(sup);
 
-	c->fmt_vers = be32_to_cpu(sup->fmt_vers);
+	c->fmt_vers = le32_to_cpu(sup->fmt_vers);
 	if (c->fmt_vers > UBIFS_FORMAT_VERSION) {
 		ubifs_err("on-flash format version is %d, but software only "
 			  "supports up to version %d", c->fmt_vers,
@@ -481,16 +481,16 @@ int ubifs_read_superblock(struct ubifs_info *c)
 
 	c->big_lpt = sup->big_lpt;
 
-	c->leb_cnt       = be32_to_cpu(sup->leb_cnt);
-	c->max_leb_cnt   = be32_to_cpu(sup->max_leb_cnt);
-	c->max_bud_bytes = be64_to_cpu(sup->max_bud_bytes);
-	c->log_lebs      = be32_to_cpu(sup->log_lebs);
-	c->lpt_lebs      = be32_to_cpu(sup->lpt_lebs);
-	c->orph_lebs     = be32_to_cpu(sup->orph_lebs);
-	c->jhead_cnt     = be32_to_cpu(sup->jhead_cnt) + NONDATA_JHEADS_CNT;
-	c->fanout        = be32_to_cpu(sup->fanout);
-	c->lsave_cnt     = be32_to_cpu(sup->lsave_cnt);
-	c->default_compr = be16_to_cpu(sup->default_compr);
+	c->leb_cnt       = le32_to_cpu(sup->leb_cnt);
+	c->max_leb_cnt   = le32_to_cpu(sup->max_leb_cnt);
+	c->max_bud_bytes = le64_to_cpu(sup->max_bud_bytes);
+	c->log_lebs      = le32_to_cpu(sup->log_lebs);
+	c->lpt_lebs      = le32_to_cpu(sup->lpt_lebs);
+	c->orph_lebs     = le32_to_cpu(sup->orph_lebs);
+	c->jhead_cnt     = le32_to_cpu(sup->jhead_cnt) + NONDATA_JHEADS_CNT;
+	c->fanout        = le32_to_cpu(sup->fanout);
+	c->lsave_cnt     = le32_to_cpu(sup->lsave_cnt);
+	c->default_compr = le16_to_cpu(sup->default_compr);
 
 	/* Automatically increase file system size to the maximum size */
 	c->old_leb_cnt = c->leb_cnt;
@@ -502,7 +502,7 @@ int ubifs_read_superblock(struct ubifs_info *c)
 		else {
 			dbg_mnt("Auto resizing (sb) from %d LEBs to %d LEBs",
 				c->old_leb_cnt, c->leb_cnt);
-			sup->leb_cnt = cpu_to_be32(c->leb_cnt);
+			sup->leb_cnt = cpu_to_le32(c->leb_cnt);
 			err = ubifs_write_sb_node(c, sup);
 			if (err)
 				goto out;

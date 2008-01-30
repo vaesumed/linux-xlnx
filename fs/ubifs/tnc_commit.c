@@ -41,16 +41,16 @@ static int make_idx_node(struct ubifs_info *c, struct ubifs_idx_node *idx,
 
 	/* Make index node */
 	idx->ch.node_type = UBIFS_IDX_NODE;
-	idx->child_cnt = cpu_to_be16(znode->child_cnt);
-	idx->level = cpu_to_be16(znode->level);
+	idx->child_cnt = cpu_to_le16(znode->child_cnt);
+	idx->level = cpu_to_le16(znode->level);
 	for (i = 0; i < znode->child_cnt; i++) {
 		struct ubifs_branch *br = &idx->branch[i];
 		struct ubifs_zbranch *zbr = &znode->zbranch[i];
 
 		key_write(c, &zbr->key, &br->key);
-		br->lnum = cpu_to_be32(zbr->lnum);
-		br->offs = cpu_to_be32(zbr->offs);
-		br->len = cpu_to_be32(zbr->len);
+		br->lnum = cpu_to_le32(zbr->lnum);
+		br->offs = cpu_to_le32(zbr->offs);
+		br->len = cpu_to_le32(zbr->len);
 		if (!zbr->lnum || !zbr->len) {
 			ubifs_err("bad ref in znode");
 			dbg_dump_znode(c, znode);
@@ -258,7 +258,7 @@ static int layout_leb_in_gaps(struct ubifs_info *c, int *p)
 		ubifs_assert(snod->type == UBIFS_IDX_NODE);
 		idx = snod->node;
 		key_read(c, &idx->branch[0].key, &snod->key);
-		level = be16_to_cpu(idx->level);
+		level = le16_to_cpu(idx->level);
 		/* Determine if the index node is in use (not obsolete) */
 		in_use = is_idx_node_in_use(c, &snod->key, level, lnum,
 					    snod->offs);
@@ -878,16 +878,16 @@ static int write_index(struct ubifs_info *c)
 
 		/* Make index node */
 		idx->ch.node_type = UBIFS_IDX_NODE;
-		idx->child_cnt = cpu_to_be16(znode->child_cnt);
-		idx->level = cpu_to_be16(znode->level);
+		idx->child_cnt = cpu_to_le16(znode->child_cnt);
+		idx->level = cpu_to_le16(znode->level);
 		for (i = 0; i < znode->child_cnt; i++) {
 			struct ubifs_branch *br = &idx->branch[i];
 			struct ubifs_zbranch *zbr = &znode->zbranch[i];
 
 			key_write(c, &zbr->key, &br->key);
-			br->lnum = cpu_to_be32(zbr->lnum);
-			br->offs = cpu_to_be32(zbr->offs);
-			br->len = cpu_to_be32(zbr->len);
+			br->lnum = cpu_to_le32(zbr->lnum);
+			br->offs = cpu_to_le32(zbr->offs);
+			br->len = cpu_to_le32(zbr->len);
 			if (!zbr->lnum || !zbr->len) {
 				ubifs_err("bad ref in znode");
 				dbg_dump_znode(c, znode);

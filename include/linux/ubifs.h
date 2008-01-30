@@ -345,10 +345,10 @@ enum {
  */
 struct ubifs_ch
 {
-	__be32 magic;
-	__be32 crc;
-	__be64 sqnum;
-	__be32 len;
+	__le32 magic;
+	__le32 crc;
+	__le64 sqnum;
+	__le32 len;
 	__u8 node_type;
 	__u8 group_type;
 	__u8 padding[2];
@@ -365,8 +365,8 @@ struct ubifs_ch
  */
 union ubifs_dev_desc
 {
-	__be32 new;
-	__be64 huge;
+	__le32 new;
+	__le64 huge;
 } __attribute__ ((packed));
 
 /**
@@ -396,17 +396,17 @@ struct ubifs_ino_node
 {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
-	__be64 size;
-	__be32 nlink;
-	__be32 atime;
-	__be32 ctime;
-	__be32 mtime;
-	__be32 uid;
-	__be32 gid;
-	__be32 mode;
-	__be32 flags;
-	__be32 data_len;
-	__be16 compr_type;
+	__le64 size;
+	__le32 nlink;
+	__le32 atime;
+	__le32 ctime;
+	__le32 mtime;
+	__le32 uid;
+	__le32 gid;
+	__le32 mode;
+	__le32 flags;
+	__le32 data_len;
+	__le16 compr_type;
 	__u8 padding[42];
 	__u8 data[];
 } __attribute__ ((packed));
@@ -426,10 +426,10 @@ struct ubifs_dent_node
 {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
-	__be64 inum;
+	__le64 inum;
 	__u8 padding;
 	__u8 type;
-	__be16 nlen;
+	__le16 nlen;
 	__u8 padding1[4];
 	__u8 name[];
 } __attribute__ ((packed));
@@ -447,8 +447,8 @@ struct ubifs_data_node
 {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
-	__be32 size;
-	__be16 compr_type;
+	__le32 size;
+	__le16 compr_type;
 	__u8 padding[2];
 	__u8 data[];
 } __attribute__ ((packed));
@@ -466,8 +466,8 @@ struct ubifs_trun_node
 {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
-	__be64 old_size;
-	__be64 new_size;
+	__le64 old_size;
+	__le64 new_size;
 } __attribute__ ((packed));
 
 /**
@@ -479,7 +479,7 @@ struct ubifs_trun_node
 struct ubifs_pad_node
 {
 	struct ubifs_ch ch;
-	__be32 pad_len;
+	__le32 pad_len;
 } __attribute__ ((packed));
 
 /**
@@ -512,20 +512,20 @@ struct ubifs_sb_node
 	__u8 key_hash;
 	__u8 key_fmt;
 	__u8 big_lpt;
-	__be32 flags;
-	__be32 min_io_size;
-	__be32 leb_size;
-	__be32 leb_cnt;
-	__be32 max_leb_cnt;
-	__be64 max_bud_bytes;
-	__be32 log_lebs;
-	__be32 lpt_lebs;
-	__be32 orph_lebs;
-	__be32 jhead_cnt;
-	__be32 fanout;
-	__be32 lsave_cnt;
-	__be32 fmt_vers;
-	__be16 default_compr;
+	__le32 flags;
+	__le32 min_io_size;
+	__le32 leb_size;
+	__le32 leb_cnt;
+	__le32 max_leb_cnt;
+	__le64 max_bud_bytes;
+	__le32 log_lebs;
+	__le32 lpt_lebs;
+	__le32 orph_lebs;
+	__le32 jhead_cnt;
+	__le32 fanout;
+	__le32 lsave_cnt;
+	__le32 fmt_vers;
+	__le16 default_compr;
 	__u8 padding1[4010];
 } __attribute__ ((packed));
 
@@ -566,34 +566,34 @@ struct ubifs_sb_node
 struct ubifs_mst_node
 {
 	struct ubifs_ch ch;
-	__be64 highest_inum;
-	__be64 cmt_no;
-	__be32 flags;
-	__be32 log_lnum;
-	__be32 root_lnum;
-	__be32 root_offs;
-	__be32 root_len;
-	__be32 gc_lnum;
-	__be32 ihead_lnum;
-	__be32 ihead_offs;
-	__be64 index_size;
-	__be64 total_free;
-	__be64 total_dirty;
-	__be64 total_used;
-	__be64 total_dead;
-	__be64 total_dark;
-	__be32 lpt_lnum;
-	__be32 lpt_offs;
-	__be32 nhead_lnum;
-	__be32 nhead_offs;
-	__be32 ltab_lnum;
-	__be32 ltab_offs;
-	__be32 lsave_lnum;
-	__be32 lsave_offs;
-	__be32 lscan_lnum;
-	__be32 empty_lebs;
-	__be32 idx_lebs;
-	__be32 leb_cnt;
+	__le64 highest_inum;
+	__le64 cmt_no;
+	__le32 flags;
+	__le32 log_lnum;
+	__le32 root_lnum;
+	__le32 root_offs;
+	__le32 root_len;
+	__le32 gc_lnum;
+	__le32 ihead_lnum;
+	__le32 ihead_offs;
+	__le64 index_size;
+	__le64 total_free;
+	__le64 total_dirty;
+	__le64 total_used;
+	__le64 total_dead;
+	__le64 total_dark;
+	__le32 lpt_lnum;
+	__le32 lpt_offs;
+	__le32 nhead_lnum;
+	__le32 nhead_offs;
+	__le32 ltab_lnum;
+	__le32 ltab_offs;
+	__le32 lsave_lnum;
+	__le32 lsave_offs;
+	__le32 lscan_lnum;
+	__le32 empty_lebs;
+	__le32 idx_lebs;
+	__le32 leb_cnt;
 	__u8 padding[344];
 } __attribute__ ((packed));
 
@@ -608,9 +608,9 @@ struct ubifs_mst_node
 struct ubifs_ref_node
 {
 	struct ubifs_ch ch;
-	__be32 lnum;
-	__be32 offs;
-	__be32 jhead;
+	__le32 lnum;
+	__le32 offs;
+	__le32 jhead;
 	__u8 padding[28];
 } __attribute__ ((packed));
 
@@ -624,9 +624,9 @@ struct ubifs_ref_node
 struct ubifs_branch
 {
 	__u8 key[UBIFS_MAX_KEY_LEN];
-	__be32 lnum;
-	__be32 offs;
-	__be32 len;
+	__le32 lnum;
+	__le32 offs;
+	__le32 len;
 } __attribute__ ((packed));
 
 /**
@@ -641,8 +641,8 @@ struct ubifs_branch
 struct ubifs_idx_node
 {
 	struct ubifs_ch ch;
-	__be16 child_cnt;
-	__be16 level;
+	__le16 child_cnt;
+	__le16 level;
 	__u8 padding[4];
 	struct ubifs_branch branch[];
 } __attribute__ ((packed));
@@ -655,7 +655,7 @@ struct ubifs_idx_node
 struct ubifs_cs_node
 {
 	struct ubifs_ch ch;
-	__be64 cmt_no;
+	__le64 cmt_no;
 } __attribute__ ((packed));
 
 /**
@@ -667,8 +667,8 @@ struct ubifs_cs_node
 struct ubifs_orph_node
 {
 	struct ubifs_ch ch;
-	__be64 cmt_no;
-	__be64 inos[];
+	__le64 cmt_no;
+	__le64 inos[];
 } __attribute__ ((packed));
 
 #endif /* __LINUX_UBIFS_H__ */

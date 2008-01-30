@@ -122,7 +122,7 @@ static int init_constants_early(struct ubifs_info *c)
 	c->ranges[UBIFS_INO_NODE].max_len  =
 				UBIFS_INO_NODE_SZ + UBIFS_MAX_INO_DATA;
 	c->ranges[UBIFS_ORPH_NODE].min_len =
-				UBIFS_ORPH_NODE_SZ + sizeof(__be64);
+				UBIFS_ORPH_NODE_SZ + sizeof(__le64);
 	c->ranges[UBIFS_ORPH_NODE].max_len = c->leb_size;
 	c->ranges[UBIFS_DENT_NODE].min_len = UBIFS_DENT_NODE_SZ;
 	c->ranges[UBIFS_DENT_NODE].max_len =
@@ -541,7 +541,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (err)
 		return err;
 
-	if ((c->mst_node->flags & cpu_to_be32(UBIFS_MST_DIRTY)) != 0) {
+	if ((c->mst_node->flags & cpu_to_le32(UBIFS_MST_DIRTY)) != 0) {
 		ubifs_msg("recovery needed");
 		c->need_recovery = 1;
 		if (!mounted_read_only) {
@@ -554,7 +554,7 @@ static int mount_ubifs(struct ubifs_info *c)
 		 * Set the "dirty" flag so that if we reboot uncleanly we
 		 * will notice this immediately on the next mount.
 		 */
-		c->mst_node->flags |= cpu_to_be32(UBIFS_MST_DIRTY);
+		c->mst_node->flags |= cpu_to_le32(UBIFS_MST_DIRTY);
 		err = ubifs_write_master(c);
 		if (err)
 			return err;
@@ -754,7 +754,7 @@ int ubifs_remount_rw(struct ubifs_info *c)
 			err = PTR_ERR(sup);
 			goto out;
 		}
-		sup->leb_cnt = cpu_to_be32(c->leb_cnt);
+		sup->leb_cnt = cpu_to_le32(c->leb_cnt);
 		err = ubifs_write_sb_node(c, sup);
 		if (err)
 			goto out;
@@ -776,8 +776,8 @@ int ubifs_remount_rw(struct ubifs_info *c)
 			goto out;
 	}
 
-	if (!(c->mst_node->flags & cpu_to_be32(UBIFS_MST_DIRTY))) {
-		c->mst_node->flags |= cpu_to_be32(UBIFS_MST_DIRTY);
+	if (!(c->mst_node->flags & cpu_to_le32(UBIFS_MST_DIRTY))) {
+		c->mst_node->flags |= cpu_to_le32(UBIFS_MST_DIRTY);
 		err = ubifs_write_master(c);
 		if (err)
 			goto out;
@@ -910,9 +910,9 @@ void ubifs_remount_ro(struct ubifs_info *c)
 		del_timer_sync(&c->jheads[i].wbuf.timer);
 	}
 
-	c->mst_node->flags &= ~cpu_to_be32(UBIFS_MST_DIRTY);
-	c->mst_node->flags |= cpu_to_be32(UBIFS_MST_NO_ORPHS);
-	c->mst_node->gc_lnum = cpu_to_be32(c->gc_lnum);
+	c->mst_node->flags &= ~cpu_to_le32(UBIFS_MST_DIRTY);
+	c->mst_node->flags |= cpu_to_le32(UBIFS_MST_NO_ORPHS);
+	c->mst_node->gc_lnum = cpu_to_le32(c->gc_lnum);
 	err = ubifs_write_master(c);
 	if (err)
 		/* TODO: set error state */
