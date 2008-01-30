@@ -618,17 +618,17 @@ struct ubifs_ref_node
 
 /**
  * struct ubifs_branch - key/reference/length branch
- * @key: key
  * @lnum: LEB number of the target node
  * @offs: offset within @lnum
  * @len: target node length
+ * @key: key
  */
 struct ubifs_branch
 {
-	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le32 lnum;
 	__le32 offs;
 	__le32 len;
+	__u8 key[];
 } __attribute__ ((packed));
 
 /**
@@ -637,8 +637,7 @@ struct ubifs_branch
  * @child_cnt: number of child index nodes
  * @level: tree level
  * @padding: reserved for future, zeroes
- * @branch: key/reference/length branches
- * TODO: Get rid of child_cnt, level and padding
+ * @branches: LEB number / offset / length / key branches
  */
 struct ubifs_idx_node
 {
@@ -646,7 +645,7 @@ struct ubifs_idx_node
 	__le16 child_cnt;
 	__le16 level;
 	__u8 padding[4];
-	struct ubifs_branch branch[];
+	__u8 branches[];
 } __attribute__ ((packed));
 
 /**

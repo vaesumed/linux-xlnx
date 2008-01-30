@@ -353,6 +353,21 @@ static inline void key_write(const struct ubifs_info *c,
 
 	t->j32[0] = cpu_to_le32(from->u32[0]);
 	t->j32[1] = cpu_to_le32(from->u32[1]);
+	memset(to + 8, 0, UBIFS_MAX_KEY_LEN - 8);
+}
+
+/**
+ * key_write_idx - transform a key from in-memory format for the index.
+ * @c: UBIFS file-system description object
+ * @key: the key to transform
+ */
+static inline void key_write_idx(const struct ubifs_info *c,
+				 const union ubifs_key *from, void *to)
+{
+	union ubifs_key *t = to;
+
+	t->j32[0] = cpu_to_le32(from->u32[0]);
+	t->j32[1] = cpu_to_le32(from->u32[1]);
 }
 
 /**

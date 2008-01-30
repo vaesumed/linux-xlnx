@@ -301,7 +301,7 @@ static int garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 			int level = le16_to_cpu(idx->level);
 
 			ubifs_assert(snod->type == UBIFS_IDX_NODE);
-			key_read(c, &idx->branch[0].key, &snod->key);
+			key_read(c, ubifs_idx_key(c, idx), &snod->key);
 			err = ubifs_dirty_idx_node(c, &snod->key, level, lnum,
 						   snod->offs);
 			if (err)
