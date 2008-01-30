@@ -256,6 +256,7 @@ struct ubifs_gced_idx_leb
  * @budg_mutex: serializes inode budgeting and write-back
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @data_len: length of the data attached to the inode
+ * @creat_sqnum: sequence number at time of creation
  * @data: inode's data
  *
  * UBIFS has its own inode mutex, besides the VFS 'i_mutex'. The reason for
@@ -286,6 +287,7 @@ struct ubifs_inode
 	int flags;
 	int compr_type;
 	int data_len;
+	unsigned long long creat_sqnum;
 	void *data;
 };
 

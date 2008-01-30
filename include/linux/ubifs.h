@@ -373,6 +373,7 @@ union ubifs_dev_desc
  * ubifs_ino_node - inode node.
  * @ch: common header
  * @key: node key
+ * @creat_sqnum: sequence number at time of creation
  * @size: inode size in bytes
  * @nlink: number of hard links
  * @atime: access time
@@ -396,6 +397,7 @@ struct ubifs_ino_node
 {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
+	__le64 creat_sqnum;
 	__le64 size;
 	__le32 nlink;
 	__le32 atime;
@@ -407,7 +409,7 @@ struct ubifs_ino_node
 	__le32 flags;
 	__le32 data_len;
 	__le16 compr_type;
-	__u8 padding[42];
+	__u8 padding[34];
 	__u8 data[];
 } __attribute__ ((packed));
 

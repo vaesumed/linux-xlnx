@@ -412,6 +412,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
+	ino->creat_sqnum = cpu_to_le64(ui->creat_sqnum);
 	ino->size  = cpu_to_le64(i_size_read(inode));
 	ino->nlink = cpu_to_le32(inode->i_nlink);
 	ino->atime = cpu_to_le32(inode->i_atime.tv_sec);

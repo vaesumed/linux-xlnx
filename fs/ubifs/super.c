@@ -70,6 +70,7 @@ static void ubifs_read_inode(struct inode *inode)
 	ui->data_len = le32_to_cpu(ino->data_len);
 	ui->flags = le32_to_cpu(ino->flags);
 	ui->compr_type = le16_to_cpu(ino->compr_type);
+	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
 
 	if (inode->i_size > c->max_inode_sz) {
 		ubifs_err("inode is too large (%lld)",
@@ -180,6 +181,7 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 	ui->dirty = ui->data_len = 0;
 	ui->data = NULL;
 	ui->flags = 0;
+	ui->creat_sqnum = 0;
 
 	return &ui->vfs_inode;
 };
