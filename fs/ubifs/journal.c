@@ -412,16 +412,16 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
-	ino->size  = cpu_to_be64(i_size_read(inode));
-	ino->nlink = cpu_to_be32(inode->i_nlink);
-	ino->atime = cpu_to_be32(inode->i_atime.tv_sec);
-	ino->ctime = cpu_to_be32(inode->i_ctime.tv_sec);
-	ino->mtime = cpu_to_be32(inode->i_mtime.tv_sec);
-	ino->uid   = cpu_to_be32(inode->i_uid);
-	ino->gid   = cpu_to_be32(inode->i_gid);
-	ino->mode  = cpu_to_be32(inode->i_mode);
-	ino->flags = cpu_to_be32(ui->flags);
-	ino->compr_type = cpu_to_be16(ui->compr_type);
+	ino->size  = cpu_to_le64(i_size_read(inode));
+	ino->nlink = cpu_to_le32(inode->i_nlink);
+	ino->atime = cpu_to_le32(inode->i_atime.tv_sec);
+	ino->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	ino->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	ino->uid   = cpu_to_le32(inode->i_uid);
+	ino->gid   = cpu_to_le32(inode->i_gid);
+	ino->mode  = cpu_to_le32(inode->i_mode);
+	ino->flags = cpu_to_le32(ui->flags);
+	ino->compr_type = cpu_to_le16(ui->compr_type);
 
 	if ((inode->i_mode & S_IFMT) == S_IFCHR ||
 	    (inode->i_mode & S_IFMT) == S_IFBLK) {
@@ -430,7 +430,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 		ui->data_len = ubifs_encode_dev(dev, inode->i_rdev);
 	}
 
-	ino->data_len = cpu_to_be32(ui->data_len);
+	ino->data_len = cpu_to_le32(ui->data_len);
 	if (ui->data_len)
 		memcpy(ino->data, ui->data, ui->data_len);
 
@@ -483,10 +483,10 @@ int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
 	if (del)
 		dent->inum = 0;
 	else
-		dent->inum = cpu_to_be64(inode->i_ino);
+		dent->inum = cpu_to_le64(inode->i_ino);
 	dent->padding = 0;
 	dent->type = get_dent_type(inode->i_mode);
-	dent->nlen = cpu_to_be16(dentry->d_name.len);
+	dent->nlen = cpu_to_le16(dentry->d_name.len);
 	memcpy(dent->name, dentry->d_name.name, dentry->d_name.len);
 	dent->name[dentry->d_name.len] = '\0';
 	ubifs_prep_grp_node(c, dent, dlen, 0);
@@ -589,7 +589,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 
 	data->ch.node_type = UBIFS_DATA_NODE;
 	key_write(c, key, &data->key);
-	data->size = cpu_to_be32(len);
+	data->size = cpu_to_le32(len);
 
 	if (!(ui->flags && UBIFS_COMPR_FL))
 		/* Compression is disabled for this inode */
@@ -602,7 +602,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	ubifs_assert(out_len <= UBIFS_BLOCK_SIZE);
 
 	dlen = UBIFS_DATA_NODE_SZ + out_len;
-	data->compr_type = cpu_to_be16(compr_type);
+	data->compr_type = cpu_to_le16(compr_type);
 
 	err = make_reservation(c, DATAHD, dlen);
 	if (err)
@@ -731,10 +731,10 @@ int ubifs_jrn_rename(struct ubifs_info *c, struct inode *old_dir,
 	/* Make new dent */
 	dent->ch.node_type = UBIFS_DENT_NODE;
 	dent_key_init_flash(c, &dent->key, new_dir->i_ino, &new_dentry->d_name);
-	dent->inum = cpu_to_be64(old_inode->i_ino);
+	dent->inum = cpu_to_le64(old_inode->i_ino);
 	dent->padding = 0;
 	dent->type = get_dent_type(old_inode->i_mode);
-	dent->nlen = cpu_to_be16(new_dentry->d_name.len);
+	dent->nlen = cpu_to_le16(new_dentry->d_name.len);
 	memcpy(dent->name, new_dentry->d_name.name, new_dentry->d_name.len);
 	dent->name[new_dentry->d_name.len] = '\0';
 	ubifs_prep_grp_node(c, dent, dlen1, 0);
@@ -744,10 +744,10 @@ int ubifs_jrn_rename(struct ubifs_info *c, struct inode *old_dir,
 	/* Make deletion dent */
 	dent2->ch.node_type = UBIFS_DENT_NODE;
 	dent_key_init_flash(c, &dent2->key, old_dir->i_ino, &old_dentry->d_name);
-	dent2->inum = cpu_to_be64(0);
+	dent2->inum = cpu_to_le64(0);
 	dent2->padding = 0;
 	dent2->type = DT_UNKNOWN;
-	dent2->nlen = cpu_to_be16(old_dentry->d_name.len);
+	dent2->nlen = cpu_to_le16(old_dentry->d_name.len);
 	memcpy(dent2->name, old_dentry->d_name.name, old_dentry->d_name.len);
 	dent2->name[old_dentry->d_name.len] = '\0';
 	ubifs_prep_grp_node(c, dent2, dlen2, 0);
@@ -854,21 +854,21 @@ static int recomp_data_node(struct ubifs_data_node *dn, int *new_len)
 	void *buf;
 	int err, len, compr_type, out_len;
 
-	out_len = be32_to_cpu(dn->size);
+	out_len = le32_to_cpu(dn->size);
 	buf = kmalloc(out_len * WORST_COMPR_FACTOR, GFP_NOFS);
 	if (!buf)
 		return -ENOMEM;
 
-	len = be32_to_cpu(dn->ch.len) - UBIFS_DATA_NODE_SZ;
-	compr_type = be16_to_cpu(dn->compr_type);
+	len = le32_to_cpu(dn->ch.len) - UBIFS_DATA_NODE_SZ;
+	compr_type = le16_to_cpu(dn->compr_type);
 	err = ubifs_decompress(&dn->data, len, buf, &out_len, compr_type);
 	if (err)
 		goto out;
 
 	ubifs_compress(buf, *new_len, &dn->data, &out_len, &compr_type);
 	ubifs_assert(out_len <= UBIFS_BLOCK_SIZE);
-	dn->compr_type = cpu_to_be16(compr_type);
-	dn->size = cpu_to_be32(*new_len);
+	dn->compr_type = cpu_to_le16(compr_type);
+	dn->size = cpu_to_le32(*new_len);
 	*new_len = UBIFS_DATA_NODE_SZ + out_len;
 
 out:
@@ -908,8 +908,8 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 
 	trun->ch.node_type = UBIFS_TRUN_NODE;
 	trun_key_init_flash(c, &trun->key, ino);
-	trun->old_size = cpu_to_be64(old_size);
-	trun->new_size = cpu_to_be64(new_size);
+	trun->old_size = cpu_to_le64(old_size);
+	trun->new_size = cpu_to_le64(new_size);
 	ubifs_prepare_node(c, trun, UBIFS_TRUN_NODE_SZ, 0);
 
 	dlen = new_size & (UBIFS_BLOCK_SIZE - 1);
@@ -926,17 +926,17 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 		else if (err)
 			goto out_free;
 		else {
-			if (be32_to_cpu(dn->size) <= dlen)
+			if (le32_to_cpu(dn->size) <= dlen)
 				dlen = 0; /* Nothing to do */
 			else {
-				int compr_type = be16_to_cpu(dn->compr_type);
+				int compr_type = le16_to_cpu(dn->compr_type);
 
 				if (compr_type != UBIFS_COMPR_NONE) {
 					err = recomp_data_node(dn, &dlen);
 					if (err)
 						goto out_free;
 				} else {
-					dn->size = cpu_to_be32(dlen);
+					dn->size = cpu_to_le32(dlen);
 					dlen += UBIFS_DATA_NODE_SZ;
 				}
 				ubifs_prepare_node(c, dn, dlen, 0);

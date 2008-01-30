@@ -188,7 +188,7 @@ union ubifs_key
 	uint8_t u8[CUR_MAX_KEY_LEN];
 	uint32_t u32[CUR_MAX_KEY_LEN/4];
 	uint64_t u64[CUR_MAX_KEY_LEN/8];
-	__be32 j32[CUR_MAX_KEY_LEN/4];
+	__le32 j32[CUR_MAX_KEY_LEN/4];
 };
 
 /**

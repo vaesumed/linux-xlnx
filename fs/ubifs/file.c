@@ -129,14 +129,14 @@ static int do_readpage(struct page *page)
 		goto error;
 	}
 
-	len = be32_to_cpu(dn->size);
+	len = le32_to_cpu(dn->size);
 	if (len <= 0 || len > PAGE_CACHE_SIZE)
 		goto dump;
 
-	dlen = be32_to_cpu(dn->ch.len) - UBIFS_DATA_NODE_SZ;
+	dlen = le32_to_cpu(dn->ch.len) - UBIFS_DATA_NODE_SZ;
 	out_len = PAGE_CACHE_SIZE;
 	err = ubifs_decompress(&dn->data, dlen, addr, &out_len,
-			       be16_to_cpu(dn->compr_type));
+			       le16_to_cpu(dn->compr_type));
 	if (err || len != out_len)
 		goto dump;
 

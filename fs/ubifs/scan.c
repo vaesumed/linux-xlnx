@@ -67,7 +67,7 @@ int ubifs_scan_a_node(const struct ubifs_info *c, void *buf, int len, int lnum,
 
 	ubifs_assert(len >= 4);
 
-	magic = be32_to_cpu(ch->magic);
+	magic = le32_to_cpu(ch->magic);
 
 	if (magic == 0xFFFFFFFF) {
 		dbg_scan("hit empty space");
@@ -87,8 +87,8 @@ int ubifs_scan_a_node(const struct ubifs_info *c, void *buf, int len, int lnum,
 
 	if (ch->node_type == UBIFS_PAD_NODE) {
 		struct ubifs_pad_node *pad = buf;
-		int pad_len = be32_to_cpu(pad->pad_len);
-		int node_len = be32_to_cpu(ch->len);
+		int pad_len = le32_to_cpu(pad->pad_len);
+		int node_len = le32_to_cpu(ch->len);
 
 		/* Validate the padding node */
 		if (pad_len < 0 ||
@@ -201,10 +201,10 @@ int ubifs_add_snod(const struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 	if (!snod)
 		return -ENOMEM;
 
-	snod->sqnum = be64_to_cpu(ch->sqnum);
+	snod->sqnum = le64_to_cpu(ch->sqnum);
 	snod->type = ch->node_type;
 	snod->offs = offs;
-	snod->len = be32_to_cpu(ch->len);
+	snod->len = le32_to_cpu(ch->len);
 	snod->node = buf;
 
 	switch (ch->node_type) {
@@ -309,7 +309,7 @@ struct ubifs_scan_leb *ubifs_scan(const struct ubifs_info *c, int lnum,
 		if (err)
 			goto error;
 
-		node_len = ALIGN(be32_to_cpu(ch->len), 8);
+		node_len = ALIGN(le32_to_cpu(ch->len), 8);
 		offs += node_len;
 		buf += node_len;
 		len -= node_len;

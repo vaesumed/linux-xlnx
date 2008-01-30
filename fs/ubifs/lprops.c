@@ -1162,7 +1162,7 @@ static int scan_check_cb(struct ubifs_info *c,
 			struct ubifs_idx_node *idx = snod->node;
 
 			key_read(c, &idx->branch[0].key, &snod->key);
-			level = be16_to_cpu(idx->level);
+			level = le16_to_cpu(idx->level);
 		}
 
 		found = ubifs_tnc_has_node(c, &snod->key, level, lnum,
