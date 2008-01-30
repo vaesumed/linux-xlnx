@@ -139,6 +139,14 @@ static struct inode *new_ubifs_inode(struct ubifs_info *c,
 
 	inode->i_ino = ++c->highest_inum;
 	inode->i_generation = ++c->vfs_gen;
+	/*
+	 * The creation sequence number remains with this inode for its
+	 * lifetime. All nodes for this inode have a greater sequence number,
+	 * and so it is possible to distinguish obsolete nodes belonging to a
+	 * previous incarnation of the same inode number - for example, for the
+	 * purpose of rebuilding the index.
+	 */
+	ui->creat_sqnum = ++c->max_sqnum;
 	spin_unlock(&c->cnt_lock);
 
 	return inode;
