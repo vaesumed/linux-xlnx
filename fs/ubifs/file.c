@@ -129,6 +129,8 @@ static int do_readpage(struct page *page)
 		goto error;
 	}
 
+	ubifs_assert(dn->ch.sqnum > ubifs_inode(inode)->creat_sqnum);
+
 	len = le32_to_cpu(dn->size);
 	if (len <= 0 || len > PAGE_CACHE_SIZE)
 		goto dump;
