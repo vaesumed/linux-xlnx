@@ -382,6 +382,8 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		if (err)
 			goto out_free;
 
+		ubifs_assert(dent->ch.sqnum > ubifs_inode(dir)->creat_sqnum);
+
 		dbg_gen("feed '%s', new f_pos %#x",
 			dent->name, key_hash_flash(c, &dent->key));
 		over = filldir(dirent, dent->name,
@@ -401,7 +403,8 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	while (1) {
 		if (saved) {
 			key_read(c, &saved->key, &key);
-			dent = ubifs_tnc_next_dent(c, &key, saved->name, le16_to_cpu(saved->nlen));
+			dent = ubifs_tnc_next_dent(c, &key, saved->name,
+						   le16_to_cpu(saved->nlen));
 		} else {
 			make_dent_key(c, &key, dir->i_ino, filp->f_pos);
 			dent = ubifs_tnc_next_dent(c, &key, NULL, 0);
@@ -414,6 +417,8 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		err = validate_dent(c, dent);
 		if (unlikely(err))
 			goto out_free;
+
+		ubifs_assert(dent->ch.sqnum > ubifs_inode(dir)->creat_sqnum);
 
 		dbg_gen("feed '%s', new f_pos %#x",
 			dent->name, key_hash_flash(c, &dent->key));
