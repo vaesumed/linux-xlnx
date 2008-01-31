@@ -258,6 +258,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 
 	ino_key_init_flash(c, &ino->key, UBIFS_ROOT_INO);
 	ino->ch.node_type = UBIFS_INO_NODE;
+	ino->creat_sqnum = cpu_to_le64(++c->max_sqnum);
 	ino->nlink = cpu_to_le32(2);
 	ino->atime = ino->ctime = ino->mtime =
 				cpu_to_le32(CURRENT_TIME_SEC.tv_sec);
