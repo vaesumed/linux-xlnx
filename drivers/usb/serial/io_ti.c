@@ -1087,12 +1087,11 @@ static int TIDownloadFirmware (struct edgeport_serial *serial)
 	if (serial->product_info.TiMode == TI_MODE_DOWNLOAD) {
 		struct ti_i2c_desc *rom_desc;
 
-		dbg ("%s - <<<<<<<<<<<<<<<RUNNING IN DOWNLOAD MODE>>>>>>>>>>", __FUNCTION__);
+		dbg("%s - RUNNING IN DOWNLOAD MODE", __func__);
 
 		status = TiValidateI2cImage (serial);
 		if (status) {
-			dbg ("%s - <<<<<<<<<<<<<<<DOWNLOAD MODE -- BAD I2C >>>>>>>>>>",
-			     __FUNCTION__);
+			dbg("%s - DOWNLOAD MODE -- BAD I2C", __func__);
 			return status;
 		}
 		
@@ -1346,8 +1345,7 @@ static int TIDownloadFirmware (struct edgeport_serial *serial)
 	/********************************************************************/
 	/* Boot Mode */
 	/********************************************************************/
-	dbg ("%s - <<<<<<<<<<<<<<<RUNNING IN BOOT MODE>>>>>>>>>>>>>>>",
-	     __FUNCTION__);
+	dbg("%s - RUNNING IN BOOT MODE", __func__);
 
 	// Configure the TI device so we can use the BULK pipes for download
 	status = TIConfigureBootDevice (serial->serial->dev);
@@ -1462,7 +1460,7 @@ static int TIDownloadFirmware (struct edgeport_serial *serial)
 
 StayInBootMode:
 	// Eprom is invalid or blank stay in boot mode
-	dbg ("%s - <<<<<<<<<<<<<<<STAYING IN BOOT MODE>>>>>>>>>>>>", __FUNCTION__);
+	dbg("%s - STAYING IN BOOT MODE", __func__);
 	serial->product_info.TiMode = TI_MODE_BOOT;
 
 	return 0;
