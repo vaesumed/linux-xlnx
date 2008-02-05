@@ -29,7 +29,7 @@
 #include <linux/dma-mapping.h>
 
 /**
- * enum dma_state - resource PNP/power managment state
+ * enum dma_state - resource PNP/power management state
  * @DMA_RESOURCE_SUSPEND: DMA device going into low power state
  * @DMA_RESOURCE_RESUME: DMA device returning to full power
  * @DMA_RESOURCE_AVAILABLE: DMA device available to the system
@@ -132,7 +132,7 @@ struct dma_chan {
 
 	/* sysfs */
 	int chan_id;
-	struct class_device class_dev;
+	struct device dev;
 
 	struct kref refcount;
 	int slow_ref;
@@ -142,6 +142,7 @@ struct dma_chan {
 	struct dma_chan_percpu *local;
 };
 
+#define to_dma_chan(p) container_of(p, struct dma_chan, dev)
 
 void dma_chan_cleanup(struct kref *kref);
 

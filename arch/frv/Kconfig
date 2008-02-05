@@ -79,7 +79,7 @@ config FRV_OUTOFLINE_ATOMIC_OPS
 	  Setting this option causes the FR-V atomic operations to be mostly
 	  implemented out-of-line.
 
-	  See Documentation/fujitsu/frv/atomic-ops.txt for more information.
+	  See Documentation/frv/atomic-ops.txt for more information.
 
 config HIGHMEM
 	bool "High memory support"
@@ -322,11 +322,6 @@ config PCI
 	  onboard. If you have one of these boards and you wish to use the PCI
 	  facilities, say Y here.
 
-	  The PCI-HOWTO, available from
-	  <http://www.tldp.org/docs.html#howto>, contains valuable
-	  information about which PCI hardware does work under Linux and which
-	  doesn't.
-
 config RESERVE_DMA_COHERENT
 	bool "Reserve DMA coherent memory"
 	depends on PCI && !MMU
@@ -357,6 +352,11 @@ source "drivers/pcmcia/Kconfig"
 #	  should probably wait a while.
 
 menu "Power management options"
+
+config ARCH_SUSPEND_POSSIBLE
+	def_bool y
+	depends on !SMP
+
 source kernel/power/Kconfig
 endmenu
 
@@ -374,8 +374,6 @@ source "net/Kconfig"
 source "drivers/Kconfig"
 
 source "fs/Kconfig"
-
-source "kernel/Kconfig.instrumentation"
 
 source "arch/frv/Kconfig.debug"
 
