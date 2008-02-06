@@ -415,7 +415,7 @@ config HPET_TIMER
 
 config HPET_EMULATE_RTC
 	def_bool y
-	depends on HPET_TIMER && (RTC=y || RTC=m)
+	depends on HPET_TIMER && (RTC=y || RTC=m || RTC_DRV_CMOS=m || RTC_DRV_CMOS=y)
 
 # Mark as embedded because too many people got it wrong.
 # The code disables itself when not needed.
@@ -464,6 +464,9 @@ config CALGARY_IOMMU_ENABLED_BY_DEFAULT
 	  used even if it exists. If you choose 'n' and would like to use
 	  Calgary anyway, pass 'iommu=calgary' on the kernel command line.
 	  If unsure, say Y.
+
+config IOMMU_HELPER
+	def_bool (CALGARY_IOMMU || GART_IOMMU)
 
 # need this always selected by IOMMU for the VIA workaround
 config SWIOTLB

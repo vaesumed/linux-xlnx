@@ -325,7 +325,7 @@ static inline int mm_alloc_pgd(struct mm_struct * mm)
 
 static inline void mm_free_pgd(struct mm_struct * mm)
 {
-	pgd_free(mm->pgd);
+	pgd_free(mm, mm->pgd);
 }
 #else
 #define dup_mmap(mm, oldmm)	(0)
@@ -1118,6 +1118,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 #ifdef CONFIG_SECURITY
 	p->security = NULL;
 #endif
+	p->cap_bset = current->cap_bset;
 	p->io_context = NULL;
 	p->audit_context = NULL;
 	cgroup_fork(p);
@@ -1398,7 +1399,7 @@ fork_out:
 	return ERR_PTR(retval);
 }
 
-noinline struct pt_regs * __devinit __attribute__((weak)) idle_regs(struct pt_regs *regs)
+noinline struct pt_regs * __cpuinit __attribute__((weak)) idle_regs(struct pt_regs *regs)
 {
 	memset(regs, 0, sizeof(struct pt_regs));
 	return regs;
@@ -1450,6 +1451,23 @@ long do_fork(unsigned long clone_flags,
 	int trace = 0;
 	long nr;
 
+	/*
+	 * We hope to recycle these flags after 2.6.26
+	 */
+	if (unlikely(clone_flags & CLONE_STOPPED)) {
+		static int __read_mostly count = 100;
+
+		if (count > 0 && printk_ratelimit()) {
+			char comm[TASK_COMM_LEN];
+
+			count--;
+			printk(KERN_INFO "fork(): process `%s' used deprecated "
+					"clone flags 0x%lx\n",
+				get_task_comm(comm, current),
+				clone_flags & CLONE_STOPPED);
+		}
+	}
+
 	if (unlikely(current->ptrace)) {
 		trace = fork_traceflag (clone_flags);
 		if (trace)
@@ -1492,7 +1510,7 @@ long do_fork(unsigned long clone_flags,
 		if (!(clone_flags & CLONE_STOPPED))
 			wake_up_new_task(p, clone_flags);
 		else
-			p->state = TASK_STOPPED;
+			__set_task_state(p, TASK_STOPPED);
 
 		if (unlikely (trace)) {
 			current->ptrace_message = nr;
