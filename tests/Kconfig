@@ -1,0 +1,10 @@
+# tests/Kconfig
+
+menuconfig KERNEL_TESTS
+	bool "Kernel subsystem tests"
+	help
+	  You can build kernel subsystem specific tests.
+
+if KERNEL_TESTS
+
+endif # KERNEL_TESTS
