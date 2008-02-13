@@ -254,6 +254,12 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       le32_to_cpu(sup->lsave_cnt));
 		printk(KERN_DEBUG "\tdefault_compr  %u\n",
 		       (int)le16_to_cpu(sup->default_compr));
+		printk(KERN_DEBUG "\trp_size        %llu\n",
+		       le64_to_cpu(sup->rp_size));
+		printk(KERN_DEBUG "\trp_uid         %u\n",
+		       le32_to_cpu(sup->rp_uid));
+		printk(KERN_DEBUG "\trp_gid         %u\n",
+		       le32_to_cpu(sup->rp_gid));
 		break;
 	}
 	case UBIFS_MST_NODE:
