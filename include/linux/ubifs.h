@@ -506,6 +506,10 @@ struct ubifs_pad_node
  * @fmt_vers: UBIFS on-flash format version
  * @default_compr: default compression
  * @padding1: reserved for future, zeroes
+ * @rp_uid: reserve pool UID
+ * @rp_gid: reserve pool GID
+ * @rp_size: size of the reserved pool in bytes
+ * @padding2: reserved for future, zeroes
  */
 struct ubifs_sb_node
 {
@@ -528,7 +532,11 @@ struct ubifs_sb_node
 	__le32 lsave_cnt;
 	__le32 fmt_vers;
 	__le16 default_compr;
-	__u8 padding1[4010];
+	__u8 padding1[2];
+	__le32 rp_uid;
+	__le32 rp_gid;
+	__le64 rp_size;
+	__u8 padding2[3992];
 } __attribute__ ((packed));
 
 /**
