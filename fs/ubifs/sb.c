@@ -308,6 +308,8 @@ static int create_default_filesystem(struct ubifs_info *c)
  */
 static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 {
+	long long max_bytes;
+
 	if (le32_to_cpu(sup->flags))
 		goto failed;
 
@@ -385,6 +387,13 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 
 	if (c->default_compr < 0 || c->default_compr >= UBIFS_COMPR_TYPES_CNT) {
 		dbg_err("bad compression type");
+		goto failed;
+	}
+
+	max_bytes = c->main_lebs * (long long)c->leb_size;
+	if (c->rp_size < 0 || max_bytes < c->rp_size) {
+		dbg_err("bad reserved pool size, must be >= 0 and <= %lld\n",
+			max_bytes);
 		goto failed;
 	}
 
@@ -528,6 +537,9 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->main_lebs = c->leb_cnt - UBIFS_SB_LEBS - UBIFS_MST_LEBS;
 	c->main_lebs -= c->log_lebs + c->lpt_lebs + c->orph_lebs;
 	c->main_first = c->leb_cnt - c->main_lebs;
+	c->rp_size = le64_to_cpu(sup->rp_size);
+	c->rp_uid = le32_to_cpu(sup->rp_uid);
+	c->rp_gid = le32_to_cpu(sup->rp_gid);
 
 	err = validate_sb(c, sup);
 out:
