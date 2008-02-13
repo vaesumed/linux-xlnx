@@ -957,6 +957,10 @@ struct ubifs_orphan
  * @lsave: LPT's save table
  * @lscan_lnum: LEB number of last LPT scan
  *
+ * @rp_size: size of the reserved pool in bytes
+ * @rp_uid: reserved pool user ID
+ * @rp_gid: reserved pool group ID
+ *
  * @empty: if the UBI device is empty
  * @replay_tree: temporary tree used during journal replay
  * @replay_list: temporary list used during journal replay
@@ -1173,6 +1177,10 @@ struct ubifs_info
 	int lsave_offs;
 	int *lsave;
 	int lscan_lnum;
+
+	long long rp_size;
+	uid_t rp_uid;
+	gid_t rp_gid;
 
 	/* The below fields are used only during mounting and re-mounting */
 	int empty;

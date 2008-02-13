@@ -319,6 +319,27 @@ static long long calc_available(const struct ubifs_info *c)
 }
 
 /**
+ * rp_can_write - check whether the user is allowed to write.
+ * @c: UBIFS file-system description object
+ * @avail: available space on FS
+ *
+ * UBIFS has so-called "reserved pool" which is flash space reserved
+ * for the superuser and for uses whose UID/GID is recorded in UBIFS superblock.
+ * This function checks whether current user is allowed to write
+ * to the file-system - it returns %1 if there is plenty of space or the user
+ * is eligible to use the reserved pool and %0 otherwise.
+ */
+static int rp_can_write(struct ubifs_info *c, long long avail)
+{
+	if (avail > c->rp_size || current->fsuid == c->rp_uid ||
+	    capable(CAP_SYS_RESOURCE) || (c->rp_gid != 0 &&
+	    in_group_p(c->rp_gid)))
+		return 1;
+
+	return 0;
+}
+
+/**
  * do_budget_space - reserve flash space for index and data growth.
  * @c: UBIFS file-system description object
  *
@@ -392,6 +413,9 @@ static int do_budget_space(struct ubifs_info *c)
 			 available, outstanding);
 		return -ENOSPC;
 	}
+
+	if (!rp_can_write(c, available - outstanding))
+		return -ENOSPC;
 
 	c->min_idx_lebs = min_idx_lebs;
 	return 0;
