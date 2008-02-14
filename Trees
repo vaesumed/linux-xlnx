@@ -1,0 +1,12 @@
+Trees included into this release:
+
+Name		Type	URL
+----		----	---
+driver-core	quilt	http://kernel.org/pub/linux/kernel/people/gregkh/gregkh-2.6/gregkh-01-driver/
+pci		quilt	http://kernel.org/pub/linux/kernel/people/gregkh/gregkh-2.6/gregkh-02-pci/
+usb		quilt	http://kernel.org/pub/linux/kernel/people/gregkh/gregkh-2.6/gregkh-03-usb/
+device-mapper	quilt	http://www.kernel.org/pub/linux/kernel/people/agk/patches/2.6/editing/	(Only from NEXT_PATCHES_START to NEXT_PATCHES_END marker)
+hid		git	git://git.kernel.org/pub/scm/linux/kernel/git/jikos/hid.git#mm
+i2c		quilt	http://khali.linux-fr.org/devel/linux-2.6/jdelvare-i2c/
+kernel-doc	quilt	http://oss.oracle.com/~rdunlap/kernel-doc-patches/current/
+avr32		git	git://git.kernel.org/pub/scm/linux/kernel/git/hskinnemoen/avr32-2.6.git#avr32-arch
