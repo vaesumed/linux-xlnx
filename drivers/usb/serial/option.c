@@ -247,10 +247,10 @@ static int debug;
 struct option_port_private {
 	/* Input endpoints and buffer for this port */
 	struct urb *in_urbs[N_IN_URB];
-	char in_buffer[N_IN_URB][IN_BUFLEN];
+	u8 *in_buffer[N_IN_URB];
 	/* Output endpoints and buffer for this port */
 	struct urb *out_urbs[N_OUT_URB];
-	char out_buffer[N_OUT_URB][OUT_BUFLEN];
+	u8 *out_buffer[N_OUT_URB];
 	unsigned long out_busy;		/* Bit vector of URBs in use */
 
 	/* Settings for the port */
@@ -737,7 +737,7 @@ static int option_send_setup(struct usb_serial_port *port)
 
 static int option_startup(struct usb_serial *serial)
 {
-	int i, err;
+	int i, j, err;
 	struct usb_serial_port *port;
 	struct option_port_private *portdata;
 
@@ -753,6 +753,18 @@ static int option_startup(struct usb_serial *serial)
 			return (1);
 		}
 
+		for (j = 0; j < N_IN_URB; j++) {
+			portdata->in_buffer[j] = (u8 *)__get_free_page(GFP_KERNEL);
+			if (!portdata->in_buffer[j])
+				goto bail_out_error;
+		}
+
+		for (j = 0; j < N_OUT_URB; j++) {
+			portdata->out_buffer[j] = kmalloc(OUT_BUFLEN, GFP_KERNEL);
+			if (!portdata->out_buffer[j])
+				goto bail_out_error2;
+		}
+
 		usb_set_serial_port_data(port, portdata);
 
 		if (! port->interrupt_in_urb)
@@ -766,6 +778,16 @@ static int option_startup(struct usb_serial *serial)
 	option_setup_urbs(serial);
 
 	return (0);
+
+bail_out_error2:
+	for (j = 0; j < N_OUT_URB; j++)
+		kfree(portdata->out_buffer[j]);
+bail_out_error:
+	for (j = 0; j < N_IN_URB; j++)
+		if(portdata->in_buffer[j])
+			free_page((unsigned long)portdata->in_buffer[j]);
+	kfree(portdata);
+	return 1;
 }
 
 static void option_shutdown(struct usb_serial *serial)
@@ -794,12 +816,14 @@ static void option_shutdown(struct usb_serial *serial)
 		for (j = 0; j < N_IN_URB; j++) {
 			if (portdata->in_urbs[j]) {
 				usb_free_urb(portdata->in_urbs[j]);
+				free_page((unsigned long)portdata->in_buffer[j]);
 				portdata->in_urbs[j] = NULL;
 			}
 		}
 		for (j = 0; j < N_OUT_URB; j++) {
 			if (portdata->out_urbs[j]) {
 				usb_free_urb(portdata->out_urbs[j]);
+				kfree(portdata->out_buffer[j]);
 				portdata->out_urbs[j] = NULL;
 			}
 		}
