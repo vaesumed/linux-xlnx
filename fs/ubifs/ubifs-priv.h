@@ -795,6 +795,7 @@ struct ubifs_mount_opts
  * @cs_lock: commit state lock
  * @cmt_wq: wait queue to sleep on if the log is full and a commit is running
  * @fast_unmount: do not run journal commit before unmounting
+ * @big_lpt: flag that LPT is too big to write whole during commit
  *
  * @tnc_mutex: protects the Tree Node Cache (TNC), @zroot, @cnext, @enext, and
  *             @calc_idx_sz
@@ -938,7 +939,6 @@ struct ubifs_mount_opts
  * @lpt_offs: offset of the root nnode of the LPT
  * @nhead_lnum: LEB number of LPT head
  * @nhead_offs: offset of LPT head
- * @big_lpt: flag that LPT is too big to write whole during commit
  * @lpt_drty_flgs: dirty flags for LPT special nodes e.g. ltab
  * @dirty_nn_cnt: number of dirty nnodes
  * @dirty_pn_cnt: number of dirty pnodes
@@ -1023,6 +1023,7 @@ struct ubifs_info
 	spinlock_t cs_lock;
 	wait_queue_head_t cmt_wq;
 	unsigned int fast_unmount:1;
+	unsigned int big_lpt:1;
 
 	struct mutex tnc_mutex;
 	struct ubifs_zbranch zroot;
@@ -1161,7 +1162,6 @@ struct ubifs_info
 	int lpt_offs;
 	int nhead_lnum;
 	int nhead_offs;
-	int big_lpt;
 	int lpt_drty_flgs;
 	int dirty_nn_cnt;
 	int dirty_pn_cnt;

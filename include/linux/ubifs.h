@@ -318,7 +318,7 @@ enum {
 };
 
 /*
- * Node group type (used by recovery to recover whole group or none)
+ * Node group type (used by recovery to recover whole group or none).
  *
  * UBIFS_NO_NODE_GROUP: this node is not part of a group
  * UBIFS_IN_NODE_GROUP: this node is a part of a group
@@ -331,12 +331,14 @@ enum {
 };
 
 /*
- * Superblock flags
+ * Superblock flags.
  *
  * UBIFS_FLG_FASTUNMOUNT: do not run journal commit before unmounting
+ * UBIFS_FLG_BIGLPT: if "big" LPT model is used if set
  */
 enum {
-	UBIFS_FLG_FASTUNMNT = 0x00000001,
+	UBIFS_FLG_FASTUNMNT = 0x01,
+	UBIFS_FLG_BIGLPT    = 0x02,
 };
 
 /**
@@ -499,8 +501,7 @@ struct ubifs_pad_node
  * @padding: reserved for future, zeroes
  * @key_hash: type of hash function used in keys
  * @key_fmt: format of the key
- * @big_lpt: flag that LPT is too big to write whole during commit
- * @flags: file-system flags (%UBIFS_FLG_FASTUNMNT, etc)
+ * @flags: file-system flags (%UBIFS_FLG_FASTUNMNT, %UBIFS_FLG_BIGLPT)
  * @min_io_size: minimal input/output unit size
  * @leb_size: logical eraseblock size in bytes
  * @leb_cnt: count of LEBs used by filesystem
@@ -523,10 +524,9 @@ struct ubifs_pad_node
 struct ubifs_sb_node
 {
 	struct ubifs_ch ch;
-	__u8 padding[1];
+	__u8 padding[2];
 	__u8 key_hash;
 	__u8 key_fmt;
-	__u8 big_lpt;
 	__le32 flags;
 	__le32 min_io_size;
 	__le32 leb_size;

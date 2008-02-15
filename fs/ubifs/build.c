@@ -650,8 +650,9 @@ static int mount_ubifs(struct ubifs_info *c)
 	ubifs_msg("default compressor:      %s",
 		  ubifs_compr_name(c->default_compr));
 
-	dbg_msg("fast unmount:           %d", c->fast_unmount);
 	dbg_msg("compiled on:            " __DATE__ " at " __TIME__);
+	dbg_msg("fast unmount:           %d", c->fast_unmount);
+	dbg_msg("big_lpt                 %d", c->big_lpt);
 	dbg_msg("log LEBs:               %d (%d - %d)",
 		c->log_lebs, UBIFS_LOG_LNUM, c->log_last);
 	dbg_msg("LPT area LEBs:          %d (%d - %d)",
