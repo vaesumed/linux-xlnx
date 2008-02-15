@@ -425,8 +425,10 @@ static int ubifs_show_options(struct seq_file *s, struct vfsmount *mnt)
 	if (c->fanout != DEFAULT_TREE_FANOUT)
 		seq_printf(s, ",fanout=%d", c->fanout);
 
-	if (c->fast_unmount)
+	if (c->mount_opts.unmount_mode == 2)
 		seq_printf(s, ",fast_unmount");
+	else if (c->mount_opts.unmount_mode == 1)
+		seq_printf(s, ",norm_unmount");
 
 	return 0;
 }

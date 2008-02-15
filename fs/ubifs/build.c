@@ -650,6 +650,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	ubifs_msg("default compressor:      %s",
 		  ubifs_compr_name(c->default_compr));
 
+	dbg_msg("fast unmount:           %d", c->fast_unmount);
 	dbg_msg("compiled on:            " __DATE__ " at " __TIME__);
 	dbg_msg("log LEBs:               %d (%d - %d)",
 		c->log_lebs, UBIFS_LOG_LNUM, c->log_last);
@@ -1018,7 +1019,10 @@ static int sb_set(struct super_block *sb, void *data)
  * Opt_err: just end of array marker
  */
 enum {
-	Opt_fanout, Opt_fast_unmount, Opt_norm_unmount, Opt_err,
+	Opt_fanout,
+	Opt_fast_unmount,
+	Opt_norm_unmount,
+	Opt_err,
 };
 
 static match_table_t tokens = {
@@ -1072,9 +1076,11 @@ int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 			c->fanout = option;
 			break;
 		case Opt_fast_unmount:
+			c->mount_opts.unmount_mode = 2;
 			c->fast_unmount = 1;
 			break;
 		case Opt_norm_unmount:
+			c->mount_opts.unmount_mode = 1;
 			c->fast_unmount = 0;
 			break;
 		default:
