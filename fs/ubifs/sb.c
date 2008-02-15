@@ -55,6 +55,12 @@
 /* Default number of LEB numbers in LPT's save table */
 #define DEFAULT_LSAVE_CNT 256
 
+/* Default reserved pool size as a percent of maximum free space */
+#define DEFAULT_RP_PERCENT 5
+
+/* The default maximum size of reserved pool in bytes */
+#define DEFAULT_MAX_RP_SIZE (5*1024*1024)
+
 /**
  * create_default_filesystem - format empty UBI volume.
  * @c: UBIFS file-system description object
@@ -73,7 +79,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	union ubifs_key key;
 	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste;
-	long long tmp64;
+	long long tmp64, main_bytes;
 
 	/*
 	 * First of all, we have to calculate default file-system geometry -
@@ -155,6 +161,13 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_le16(c->default_compr);
 
+	main_bytes = (long long)main_lebs * c->leb_size;
+	tmp64 = main_bytes * DEFAULT_RP_PERCENT;
+	do_div(tmp64, 100);
+	if (tmp64 > DEFAULT_MAX_RP_SIZE)
+		tmp64 = DEFAULT_MAX_RP_SIZE;
+	sup->rp_size       = cpu_to_le64(tmp64);
+
 	err = ubifs_write_node(c, sup, UBIFS_SB_NODE_SZ, 0, 0, UBI_LONGTERM);
 	kfree(sup);
 	if (err)
@@ -193,7 +206,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	mst->leb_cnt      = cpu_to_le32(c->leb_cnt);
 
 	/* Calculate lprops statistics */
-	tmp64 = (long long)main_lebs * c->leb_size;
+	tmp64 = main_bytes;
 	tmp64 -= ALIGN(ubifs_idx_node_sz(c, 1), c->max_align);
 	tmp64 -= ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size);
 	mst->total_free = cpu_to_le64(tmp64);
