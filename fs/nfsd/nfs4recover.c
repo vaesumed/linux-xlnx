@@ -41,6 +41,7 @@
 #include <linux/nfsd/xdr4.h>
 #include <linux/param.h>
 #include <linux/file.h>
+#include <linux/mount.h>
 #include <linux/namei.h>
 #include <asm/uaccess.h>
 #include <linux/scatterlist.h>
@@ -154,7 +155,11 @@ nfsd4_create_clid_dir(struct nfs4_client *clp)
 		dprintk("NFSD: nfsd4_create_clid_dir: DIRECTORY EXISTS\n");
 		goto out_put;
 	}
+	status = mnt_want_write(rec_dir.path.mnt);
+	if (status)
+		goto out_put;
 	status = vfs_mkdir(rec_dir.path.dentry->d_inode, dentry, S_IRWXU);
+	mnt_drop_write(rec_dir.path.mnt);
 out_put:
 	dput(dentry);
 out_unlock:
