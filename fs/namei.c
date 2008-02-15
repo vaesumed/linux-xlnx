@@ -2281,7 +2281,11 @@ static long do_unlinkat(int dfd, const char __user *pathname)
 		inode = dentry->d_inode;
 		if (inode)
 			atomic_inc(&inode->i_count);
+		error = mnt_want_write(nd.path.mnt);
+		if (error)
+			goto exit2;
 		error = vfs_unlink(nd.path.dentry->d_inode, dentry);
+		mnt_drop_write(nd.path.mnt);
 	exit2:
 		dput(dentry);
 	}
