@@ -100,7 +100,6 @@ extern struct pci_raw_ops pci_direct_conf1;
 extern int pci_direct_probe(void);
 extern void pci_direct_init(int type);
 extern void pci_pcbios_init(void);
-extern void pci_mmcfg_init(int type);
 extern void pcibios_sort(void);
 
 /* pci-mmconfig.c */
