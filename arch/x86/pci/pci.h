@@ -105,6 +105,7 @@ extern void pcibios_sort(void);
 /* pci-mmconfig.c */
 
 extern int __init pci_mmcfg_arch_init(void);
+extern void __init pci_mmcfg_arch_free(void);
 
 /*
  * AMD Fam10h CPUs are buggy, and cannot access MMIO config space
