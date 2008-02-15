@@ -330,6 +330,15 @@ enum {
 	UBIFS_LAST_OF_NODE_GROUP,
 };
 
+/*
+ * Superblock flags
+ *
+ * UBIFS_FLG_FASTUNMOUNT: do not run journal commit before unmounting
+ */
+enum {
+	UBIFS_FLG_FASTUNMNT = 0x00000001,
+};
+
 /**
  * struct ubifs_ch - common header node.
  * @magic: UBIFS node magic number (%UBIFS_NODE_MAGIC)
@@ -491,7 +500,7 @@ struct ubifs_pad_node
  * @key_hash: type of hash function used in keys
  * @key_fmt: format of the key
  * @big_lpt: flag that LPT is too big to write whole during commit
- * @flags: file-system flags
+ * @flags: file-system flags (%UBIFS_FLG_FASTUNMNT, etc)
  * @min_io_size: minimal input/output unit size
  * @leb_size: logical eraseblock size in bytes
  * @leb_cnt: count of LEBs used by filesystem

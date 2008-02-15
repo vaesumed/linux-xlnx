@@ -751,6 +751,15 @@ struct ubifs_orphan
 };
 
 /**
+ * struct ubifs_mount_opts - UBIFS-specific mount options information.
+ * @unmount_mode: selected unmount mode (%0 default, %1 normal, %2 fast)
+ */
+struct ubifs_mount_opts
+{
+	unsigned int unmount_mode:2;
+};
+
+/**
  * struct ubifs_info - UBIFS file-system description data structure
  * (per-superblock).
  * @vfs_sb: VFS @struct super_block object
@@ -973,6 +982,7 @@ struct ubifs_orphan
  * @size_tree: inode size information for recovery
  * @recovery_needs_commit: a commit must be done before unmounting
  * @remounting_rw: set while remounting from ro to rw (sb flags have MS_RDONLY)
+ * @mount_opst: UBIFS-specific mount options
  *
  * @dbg_buf: a buffer of LEB size used for debugging purposes
  * @old_zroot: old index root - used by 'dbg_check_old_index()'
@@ -1012,7 +1022,7 @@ struct ubifs_info
 	int cmt_state;
 	spinlock_t cs_lock;
 	wait_queue_head_t cmt_wq;
-	int fast_unmount;
+	unsigned int fast_unmount:1;
 
 	struct mutex tnc_mutex;
 	struct ubifs_zbranch zroot;
@@ -1195,6 +1205,7 @@ struct ubifs_info
 	struct rb_root size_tree;
 	int recovery_needs_commit;
 	int remounting_rw;
+	struct ubifs_mount_opts mount_opts;
 
 #ifdef CONFIG_UBIFS_FS_DEBUG
 	void *dbg_buf;
