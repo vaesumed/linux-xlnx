@@ -221,15 +221,17 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 	case UBIFS_SB_NODE:
 	{
 		const struct ubifs_sb_node *sup = node;
+		unsigned int sup_flags = le32_to_cpu(sup->flags);
 
 		printk(KERN_DEBUG "\tkey_hash       %d (%s)\n",
 		       (int)sup->key_hash, get_key_hash(sup->key_hash));
 		printk(KERN_DEBUG "\tkey_fmt        %d (%s)\n",
 		       (int)sup->key_fmt, get_key_fmt(sup->key_fmt));
-		printk(KERN_DEBUG "\tbig_lpt        %u\n",
-		       le32_to_cpu(sup->big_lpt));
-		printk(KERN_DEBUG "\tflags          %#x\n",
-		       le32_to_cpu(sup->flags));
+		printk(KERN_DEBUG "\tflags          %#x\n", sup_flags);
+		printk(KERN_DEBUG "\t\tfast_unmount   %u\n",
+		       !!(sup_flags & UBIFS_FLG_FASTUNMNT));
+		printk(KERN_DEBUG "\t\tbig_lpt        %u\n",
+		       !!(sup_flags & UBIFS_FLG_BIGLPT));
 		printk(KERN_DEBUG "\tmin_io_size    %u\n",
 		       le32_to_cpu(sup->min_io_size));
 		printk(KERN_DEBUG "\tleb_size       %u\n",
