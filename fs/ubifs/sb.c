@@ -80,6 +80,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste;
 	long long tmp64, main_bytes;
+	unsigned int sup_flags = 0;
 
 	/*
 	 * First of all, we have to calculate default file-system geometry -
@@ -144,9 +145,12 @@ static int create_default_filesystem(struct ubifs_info *c)
 		return -ENOMEM;
 
 	tmp64 = (long long)max_buds * c->leb_size;
+	if (big_lpt)
+		sup_flags |= UBIFS_FLG_BIGLPT;
+
 	sup->ch.node_type  = UBIFS_SB_NODE;
 	sup->key_hash      = c->key_hash_type;
-	sup->big_lpt       = big_lpt;
+	sup->flags         = cpu_to_le32(sup_flags);
 	sup->min_io_size   = cpu_to_le32(c->min_io_size);
 	sup->leb_size      = cpu_to_le32(c->leb_size);
 	sup->leb_cnt       = cpu_to_le32(c->leb_cnt);
@@ -508,8 +512,6 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->key_fmt = sup->key_fmt;
 	c->key_len = UBIFS_SK_LEN;
 
-	c->big_lpt = sup->big_lpt;
-
 	c->leb_cnt       = le32_to_cpu(sup->leb_cnt);
 	c->max_leb_cnt   = le32_to_cpu(sup->max_leb_cnt);
 	c->max_bud_bytes = le64_to_cpu(sup->max_bud_bytes);
@@ -524,6 +526,8 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->rp_uid        = le32_to_cpu(sup->rp_uid);
 	c->rp_gid        = le32_to_cpu(sup->rp_gid);
 	sup_flags        = le32_to_cpu(sup->flags);
+
+	c->big_lpt = !!(sup_flags & UBIFS_FLG_BIGLPT);
 
 	/*
 	 * Use superblock unmount mode settings unless they were overriden by
