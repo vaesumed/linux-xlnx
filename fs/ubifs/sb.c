@@ -323,9 +323,6 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 {
 	long long max_bytes;
 
-	if (le32_to_cpu(sup->flags))
-		goto failed;
-
 	if (!c->key_hash)
 		goto failed;
 
@@ -470,6 +467,7 @@ int ubifs_write_sb_node(struct ubifs_info *c, struct ubifs_sb_node *sup)
 int ubifs_read_superblock(struct ubifs_info *c)
 {
 	int err;
+	unsigned int sup_flags;
 	struct ubifs_sb_node *sup;
 
 	if (c->empty) {
@@ -522,6 +520,17 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->fanout        = le32_to_cpu(sup->fanout);
 	c->lsave_cnt     = le32_to_cpu(sup->lsave_cnt);
 	c->default_compr = le16_to_cpu(sup->default_compr);
+	c->rp_size       = le64_to_cpu(sup->rp_size);
+	c->rp_uid        = le32_to_cpu(sup->rp_uid);
+	c->rp_gid        = le32_to_cpu(sup->rp_gid);
+	sup_flags        = le32_to_cpu(sup->flags);
+
+	/*
+	 * Use superblock unmount mode settings unless they were overriden by
+	 * the mount options.
+	 */
+	if (!c->mount_opts.unmount_mode)
+		c->fast_unmount = sup_flags & UBIFS_FLG_FASTUNMNT;
 
 	/* Automatically increase file system size to the maximum size */
 	c->old_leb_cnt = c->leb_cnt;
@@ -550,9 +559,6 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->main_lebs = c->leb_cnt - UBIFS_SB_LEBS - UBIFS_MST_LEBS;
 	c->main_lebs -= c->log_lebs + c->lpt_lebs + c->orph_lebs;
 	c->main_first = c->leb_cnt - c->main_lebs;
-	c->rp_size = le64_to_cpu(sup->rp_size);
-	c->rp_uid = le32_to_cpu(sup->rp_uid);
-	c->rp_gid = le32_to_cpu(sup->rp_gid);
 
 	err = validate_sb(c, sup);
 out:
