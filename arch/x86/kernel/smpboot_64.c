@@ -132,7 +132,7 @@ struct task_struct *idle_thread_array[NR_CPUS] __cpuinitdata ;
  * has made sure it's suitably aligned.
  */
 
-static unsigned long __cpuinit setup_trampoline(void)
+unsigned long __cpuinit setup_trampoline(void)
 {
 	void *tramp = __va(SMP_TRAMPOLINE_BASE); 
 	memcpy(tramp, trampoline_data, trampoline_end - trampoline_data);
@@ -648,6 +648,9 @@ do_rest:
 	Dprintk("2.\n");
 	*((volatile unsigned short *) phys_to_virt(0x467)) = start_rip & 0xf;
 	Dprintk("3.\n");
+
+	/* Trampoline assumes it is at beggining of segment */
+	BUG_ON(start_rip & 0xf);
 
 	/*
 	 * Be paranoid about clearing APIC errors.
