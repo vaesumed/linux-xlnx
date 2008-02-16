@@ -38,7 +38,7 @@
 #define DEFAULT_MAX_JRN (32*1024*1024)
 
 /* Default indexing tree fanout */
-#define DEFAULT_FANOUT 6
+#define DEFAULT_FANOUT 8
 
 /* Default number of LEBs for orphan information */
 #ifdef CONFIG_UBIFS_FS_DEBUG
