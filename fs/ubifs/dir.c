@@ -26,7 +26,7 @@
  * This file implements directory operations.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /* How much a directory entry adds to parent inode */
 #define DIRENTRY_SIZE(dent) ALIGN(UBIFS_DENT_NODE_SZ \

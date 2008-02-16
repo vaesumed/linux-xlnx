@@ -20,7 +20,7 @@
  *          Artem Bityutskiy
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * make_idx_node - make an index node for fill-the-gaps method of TNC commit.

@@ -19,7 +19,7 @@
  * Author: Adrian Hunter
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /*
  * An orphan is an inode number whose inode node has been committed to the index

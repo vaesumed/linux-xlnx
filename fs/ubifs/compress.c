@@ -23,7 +23,7 @@
  */
 
 #include <linux/crypto.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /* Fake description object for the "none" compressor */
 static struct ubifs_compressor none_compr = {

@@ -27,7 +27,7 @@
  * journal.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
 static int dbg_check_bud_bytes(struct ubifs_info *c);

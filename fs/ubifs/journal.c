@@ -52,7 +52,7 @@
  * takes (indexing in the TNC).
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * reserve_space - reserve space in the journal.

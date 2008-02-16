@@ -28,7 +28,7 @@
 #include <linux/kthread.h>
 #include <linux/seq_file.h>
 #include <linux/mount.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 static void ubifs_read_inode(struct inode *inode)
 {

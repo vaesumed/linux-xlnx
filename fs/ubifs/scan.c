@@ -20,7 +20,7 @@
  *          Artem Bityutskiy
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * scan_padding_bytes - scan for padding bytes.

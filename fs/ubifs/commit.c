@@ -22,7 +22,7 @@
 
 #include <linux/freezer.h>
 #include <linux/kthread.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * do_commit - commit the journal.
