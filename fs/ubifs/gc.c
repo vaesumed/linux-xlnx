@@ -24,7 +24,7 @@
  * once instead of writing node-by-node via wbuf. */
 
 #include <linux/pagemap.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /*
  * GC tries to optimize the way it fit nodes to available space, and it sorts

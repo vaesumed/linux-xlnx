@@ -57,7 +57,7 @@
  */
 
 #include <linux/crc32.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * ubifs_check_node - check node.

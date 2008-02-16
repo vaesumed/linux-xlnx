@@ -26,7 +26,7 @@
  */
 
 #include <linux/sort.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * struct scan_data - data provided to scan callback functions

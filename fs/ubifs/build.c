@@ -35,7 +35,7 @@
 #include <linux/random.h>
 #include <linux/kthread.h>
 #include <linux/parser.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_EMPTY
 static int dbg_check_volume_empty(struct ubifs_info *c);

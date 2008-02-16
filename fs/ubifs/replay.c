@@ -32,7 +32,7 @@
  * larger is the journal, the more memory its index may consume.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /*
  * Replay flags.

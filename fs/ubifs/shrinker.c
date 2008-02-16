@@ -39,7 +39,7 @@
  * un-mounts, which is done by the 'ubifs_infos_lock' and 'c->umount_mutex'.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /* List of all UBIFS file-system instances */
 LIST_HEAD(ubifs_infos);
