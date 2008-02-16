@@ -1123,17 +1123,9 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	get_random_bytes(&c->vfs_gen, sizeof(int));
 	c->lhead_lnum = c->ltail_lnum = UBIFS_LOG_LNUM;
 
-	c->key_fmt = UBIFS_SIMPLE_KEY_FMT;
-	c->key_len = UBIFS_SK_LEN;
-	c->key_hash_type = UBIFS_KEY_HASH_R5;
-	c->default_compr = UBIFS_COMPR_LZO;
-
 	err = ubifs_parse_options(c, data, 0);
 	if (err)
 		goto out_free;
-
-	if (!ubifs_compr_present(c->default_compr))
-		c->default_compr = UBIFS_COMPR_NONE;
 
 	/*
 	 * Get UBI device number and volume ID. Mount it read-only so far
