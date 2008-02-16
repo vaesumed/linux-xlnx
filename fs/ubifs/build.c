@@ -608,10 +608,6 @@ static int mount_ubifs(struct ubifs_info *c)
 			return err;
 	}
 
-	err = ubifs_sysfs_init(c);
-	if (err)
-		return err;
-
 	if (c->need_recovery) {
 		err = ubifs_recover_size(c);
 		if (err)
@@ -702,8 +698,6 @@ void ubifs_umount(struct ubifs_info *c)
 		c->vi.vol_id);
 
 	ubifs_destroy_size_tree(c);
-
-	ubifs_sysfs_close(c);
 
 	if (c->bgt)
 		kthread_stop(c->bgt);
@@ -1302,12 +1296,6 @@ static int __init ubifs_init(void)
 	if (!ubifs_inode_slab)
 		goto out_reg;
 
-	/* Registers UBIFS under 'fs' sysfs subsystem */
-	kobj_set_kset_s(&ubifs_kset, fs_subsys);
-	err = kset_register(&ubifs_kset);
-	if (err)
-		goto out_slab;
-
 	register_shrinker(&ubifs_shrinker_info);
 	dbg_mempressure_init();
 
@@ -1320,8 +1308,6 @@ static int __init ubifs_init(void)
 out_compr:
 	dbg_mempressure_exit();
 	unregister_shrinker(&ubifs_shrinker_info);
-	kset_unregister(&ubifs_kset);
-out_slab:
 	kmem_cache_destroy(ubifs_inode_slab);
 out_reg:
 	unregister_filesystem(&ubifs_fs_type);
@@ -1340,7 +1326,6 @@ static void __exit ubifs_exit(void)
 	ubifs_compressors_exit();
 	dbg_mempressure_exit();
 	unregister_shrinker(&ubifs_shrinker_info);
-	kset_unregister(&ubifs_kset);
 	kmem_cache_destroy(ubifs_inode_slab);
 	unregister_filesystem(&ubifs_fs_type);
 	bdi_destroy(&ubifs_backing_dev_info);
