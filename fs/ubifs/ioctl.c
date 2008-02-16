@@ -24,7 +24,7 @@
 
 #include <linux/compat.h>
 #include <linux/smp_lock.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * ubifs_set_inode_flags - set VFS inode flags.

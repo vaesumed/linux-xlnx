@@ -20,7 +20,7 @@
  *          Adrian Hunter
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * scan_for_master - search the valid master node.

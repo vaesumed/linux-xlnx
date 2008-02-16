@@ -30,7 +30,7 @@
 #define UBIFS_DBG_PRESERVE_KMALLOC
 #define UBIFS_DBG_PRESERVE_UBI
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 #ifdef CONFIG_UBIFS_FS_DEBUG
 

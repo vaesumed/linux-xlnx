@@ -20,7 +20,7 @@
  *          Artem Bityutskiy
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 #if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS) || \
     defined(CONFIG_UBIFS_FS_DEBUG_CHK_OTHER)

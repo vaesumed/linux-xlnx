@@ -35,7 +35,7 @@
  * read-only mode. */
 /* TODO: use slab cache for znodes */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * insert_old_idx - record an index node obsoleted since the last commit start.

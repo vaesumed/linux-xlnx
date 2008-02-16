@@ -21,7 +21,7 @@
  */
 
 #include <linux/crc32.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /**
  * is_empty - determine whether a buffer is empty (contains all 0xff).
