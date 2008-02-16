@@ -21,7 +21,7 @@
  */
 
 #include <linux/crc16.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS
 static int dbg_check_ltab(struct ubifs_info *c);

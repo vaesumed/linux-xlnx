@@ -83,7 +83,7 @@
  * keep hunting problems.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 #include <linux/mount.h>
 
 static int do_readpage(struct page *page)

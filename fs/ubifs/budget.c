@@ -30,7 +30,7 @@
  * approximations are used.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 #include <linux/writeback.h>
 #include <asm/div64.h>
 

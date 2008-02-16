@@ -21,10 +21,13 @@
  */
 
 /*
+ * This file describes UBIFS on-flash format and contains definition of all the
+ * relevant data structures and contantnts.
+ *
  * All UBIFS on-flash objects are stored in form of nodes. All nodes start with
  * magic UBIFS node number and have the same common header. Nodes always sit at
  * 8-byte aligned positions on the media and node header sizes are also 8-byte
- * aligned (except the padding node).
+ * aligned (except of the padding node).
  */
 
 #ifndef __LINUX_UBIFS_H__
