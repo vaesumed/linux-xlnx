@@ -25,7 +25,7 @@
  * 'fs/ubifs' directory in sysfs.
  */
 
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 static ssize_t fs_attr_show(struct kobject *kobj, struct attribute *attr,
 			       char *buf);

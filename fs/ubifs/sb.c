@@ -26,7 +26,7 @@
  */
 
 #include <asm/div64.h>
-#include "ubifs-priv.h"
+#include "ubifs.h"
 
 /*
  * Default journal size in logical eraseblocks as a percent of total
