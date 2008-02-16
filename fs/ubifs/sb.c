@@ -85,6 +85,9 @@ static int create_default_filesystem(struct ubifs_info *c)
 	long long tmp64, main_bytes;
 	unsigned int sup_flags = 0;
 
+	/* Some functions called from here depend on the @c->key_len filed */
+	c->key_len = UBIFS_SK_LEN;
+
 	/*
 	 * First of all, we have to calculate default file-system geometry -
 	 * log size, journal size, etc.
@@ -513,6 +516,7 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	};
 
 	c->key_fmt = sup->key_fmt;
+	/* TODO: this should depend on key format */
 	c->key_len = UBIFS_SK_LEN;
 
 	c->leb_cnt       = le32_to_cpu(sup->leb_cnt);
