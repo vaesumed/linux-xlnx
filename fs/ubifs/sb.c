@@ -37,6 +37,9 @@
 /* Default maximum journal size in bytes */
 #define DEFAULT_MAX_JRN (32*1024*1024)
 
+/* Default indexing tree fanout */
+#define DEFAULT_FANOUT 6
+
 /* Default number of LEBs for orphan information */
 #ifdef CONFIG_UBIFS_FS_DEBUG
 #define DEFAULT_ORPHAN_LEBS 2 /* 2 is better for testing */
@@ -160,7 +163,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->lpt_lebs      = cpu_to_le32(lpt_lebs);
 	sup->orph_lebs     = cpu_to_le32(orph_lebs);
 	sup->jhead_cnt     = cpu_to_le32(DEFAULT_JHEADS_CNT);
-	sup->fanout        = cpu_to_le32(c->fanout);
+	sup->fanout        = cpu_to_le32(DEFAULT_FANOUT);
 	sup->lsave_cnt     = cpu_to_le32(c->lsave_cnt);
 	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_le16(c->default_compr);

@@ -1014,20 +1014,17 @@ static int sb_set(struct super_block *sb, void *data)
 /*
  * UBIFS mount options.
  *
- * Opt_fanout: set indexing tree fanout when creating file system
  * Opt_fast_unmount: do not run a journal commit before un-mounting
  * Opt_norm_unmount: run a journal commit before un-mounting
  * Opt_err: just end of array marker
  */
 enum {
-	Opt_fanout,
 	Opt_fast_unmount,
 	Opt_norm_unmount,
 	Opt_err,
 };
 
 static match_table_t tokens = {
-	{Opt_fanout, "fanout=%u"},
 	{Opt_fast_unmount, "fast_unmount"},
 	{Opt_norm_unmount, "norm_unmount"},
 	{Opt_err, NULL},
@@ -1048,34 +1045,18 @@ int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 {
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
-	int option;
 
 	if (!options)
 		return 0;
 
 	while ((p = strsep(&options, ",")) != NULL) {
-		int token, maxf;
+		int token;
 
 		if (!*p)
 			continue;
 
 		token = match_token(p, tokens, args);
 		switch (token) {
-		case Opt_fanout:
-			if (is_remount)
-				return -EINVAL;
-			if (match_int(&args[0], &option))
-				return -EINVAL;
-			maxf = (c->leb_size - UBIFS_IDX_NODE_SZ) /
-			       (UBIFS_BRANCH_SZ + UBIFS_MAX_KEY_LEN);
-			if (option < UBIFS_MIN_FANOUT || option > maxf) {
-				ubifs_err("bad fanout: out of [%d, %d] range",
-					  UBIFS_MIN_FANOUT, maxf);
-				return -EINVAL;
-			}
-			dbg_gen("fanout set to %d", option);
-			c->fanout = option;
-			break;
 		case Opt_fast_unmount:
 			c->mount_opts.unmount_mode = 2;
 			c->fast_unmount = 1;
@@ -1145,7 +1126,6 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	c->key_fmt = UBIFS_SIMPLE_KEY_FMT;
 	c->key_len = UBIFS_SK_LEN;
 	c->key_hash_type = UBIFS_KEY_HASH_R5;
-	c->fanout = DEFAULT_TREE_FANOUT;
 	c->default_compr = UBIFS_COMPR_LZO;
 
 	err = ubifs_parse_options(c, data, 0);
