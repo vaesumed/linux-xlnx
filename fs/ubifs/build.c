@@ -1133,8 +1133,10 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	 * read-write user at a time.
 	 */
 	err = open_ubi(c, name, UBI_READONLY);
-	if (err)
+	if (err) {
+		ubifs_err("cannot open \"%s\", error %d", name, err);
 		goto out_free;
+	}
 
 	dbg_gen("opened ubi%d_%d", c->vi.ubi_num, c->vi.vol_id);
 
