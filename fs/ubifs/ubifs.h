@@ -73,9 +73,6 @@
 /* Largest key size supported in this implementation */
 #define CUR_MAX_KEY_LEN UBIFS_SK_LEN
 
-/* Default tree fanout */
-#define DEFAULT_TREE_FANOUT 6
-
 /* znode flags */
 #define DIRTY_ZNODE 0
 #define COW_ZNODE 1
