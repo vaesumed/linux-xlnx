@@ -911,7 +911,6 @@ struct ubifs_mount_opts
  * @idx_gc: list of index LEBs that have been garbage collected
  * @idx_gc_cnt: number of elements on the idx_gc list
  *
- * @kobj: UBIFS kobject for sysfs support
  * @infos_list: links all 'ubifs_info' objects
  * @umount_mutex: serializes shrinker and un-mount
  * @shrinker_run_no: shrinker run number
@@ -1134,7 +1133,6 @@ struct ubifs_info
 	struct list_head idx_gc;
 	int idx_gc_cnt;
 
-	struct kobject kobj;
 	struct list_head infos_list;
 	struct mutex umount_mutex;
 	unsigned int shrinker_run_no;
@@ -1225,7 +1223,6 @@ extern struct file_operations ubifs_dir_operations;
 extern struct inode_operations ubifs_dir_inode_operations;
 extern struct inode_operations ubifs_symlink_inode_operations;
 extern struct backing_dev_info ubifs_backing_dev_info;
-extern struct kset ubifs_kset;
 extern struct ubifs_compressor *ubifs_compressors[UBIFS_COMPR_TYPES_CNT];
 
 /* io.c */
@@ -1440,10 +1437,6 @@ const struct ubifs_lprops *ubifs_fast_find_frdi_idx(struct ubifs_info *c);
 /* file.c */
 int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync);
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
-
-/* sysfs.c */
-int ubifs_sysfs_init(struct ubifs_info *c);
-void ubifs_sysfs_close(struct ubifs_info *c);
 
 /* recovery.c */
 int ubifs_recover_master_node(struct ubifs_info *c);
