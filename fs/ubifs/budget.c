@@ -604,7 +604,8 @@ again:
 	 * have to budget for this.
 	 */
 	req->dirtied_ino = !ui->dirty;
-	req->dirtied_ino_d = ui->data_len;
+	if (req->dirtied_ino)
+		req->dirtied_ino_d = ui->data_len;
 
 	err = ubifs_budget_space(c, req);
 	if (unlikely(err))
@@ -615,6 +616,7 @@ again:
 	if (req->dirtied_ino != !ui->dirty) {
 		ubifs_release_budget(c, req);
 		mutex_unlock(&ui->budg_mutex);
+		req->dirtied_ino_d = 0;
 		goto again;
 	}
 
@@ -642,9 +644,11 @@ void ubifs_release_op_budget(struct ubifs_info *c, struct inode *inode,
 	ubifs_assert(req->data_growth >= 0);
 	ubifs_assert(req->dd_growth >= 0);
 
-	if (req->dirtied_ino)
+	if (req->dirtied_ino) {
 		req->dd_growth -= c->inode_budget;
-	req->dd_growth -= req->dirtied_ino_d;
+		req->dd_growth -= req->dirtied_ino_d;
+	}
+
 	if (req->dirtied_page) {
 		req->dd_growth -= c->page_budget;
 		ubifs_assert(req->new_page == 0);
