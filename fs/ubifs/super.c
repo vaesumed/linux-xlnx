@@ -365,6 +365,7 @@ static void ubifs_dirty_inode(struct inode *inode)
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
+	ubifs_assert(mutex_is_locked(&ui->budg_mutex));
 
 	if (!ui->dirty) {
 		struct ubifs_info *c = inode->i_sb->s_fs_info;
