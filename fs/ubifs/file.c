@@ -194,7 +194,7 @@ static int ubifs_readpage(struct file *file, struct page *page)
 
 static int do_writepage(struct page *page, int len)
 {
-	int err, retries = 0;
+	int err;
 	void *addr;
 	union ubifs_key key;
 	struct inode *inode = page->mapping->host;
@@ -208,14 +208,8 @@ static int do_writepage(struct page *page, int len)
 	data_key_init(c, &key, inode->i_ino, page->index);
 	addr = kmap(page);
 
-retry:
 	err = ubifs_jrn_write_data(c, inode, &key, addr, len);
 	if (err) {
-		if (err != -ENOSPC) {
-			retries += 1;
-			if (retries < 3)
-				goto retry;
-		}
 		SetPageError(page);
 		ubifs_err("cannot write page %lu of inode %lu, error %d",
 			  page->index, inode->i_ino, err);
