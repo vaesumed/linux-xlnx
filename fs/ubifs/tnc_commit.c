@@ -347,7 +347,7 @@ static int get_leb_cnt(struct ubifs_info *c, int cnt)
 	if (cnt < 0)
 		cnt = 0;
 	d = c->leb_size / c->max_idx_node_sz;
-	return (cnt + d - 1) / d;
+	return DIV_ROUND_UP(cnt, d);
 }
 
 /**
