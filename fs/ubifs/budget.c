@@ -379,6 +379,7 @@ static int do_budget_space(struct ubifs_info *c)
 		rsvd_idx_lebs = min_idx_lebs - c->lst.idx_lebs;
 	else
 		rsvd_idx_lebs = 0;
+
 	/*
 	 * The number of LEBs that are available to be used by the index is:
 	 *
