@@ -20,8 +20,8 @@
  *          Adrian Hunter
  */
 
-#ifndef __UBIFS_UBIFS_PRIV_H__
-#define __UBIFS_UBIFS_PRIV_H__
+#ifndef __UBIFS_H__
+#define __UBIFS_H__
 
 #include <linux/statfs.h>
 #include <linux/fs.h>
@@ -1473,4 +1473,4 @@ int ubifs_decompress(const void *buf, int len, void *out, int *out_len,
 #include "misc.h"
 #include "key.h"
 
-#endif /* !__UBIFS_UBIFS_PRIV_H__ */
+#endif /* !__UBIFS_H__ */
