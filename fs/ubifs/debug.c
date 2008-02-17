@@ -1039,3 +1039,47 @@ int dbg_is_mapped(struct ubi_volume_desc *desc, int lnum)
 }
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY */
+
+/*
+ * Backward compatibility stuff.
+ *
+ * TODO: remove as late as possible.
+ */
+#include <linux/version.h>
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23))
+
+#define BYTES_PER_LINE 32
+
+/**
+ * ubifs_hexdump - dump a buffer.
+ * @ptr: the buffer to dump
+ * @size: buffer size which must be multiple of 4 bytes
+ */
+void ubifs_hexdump(const void *ptr, int size)
+{
+	int i, k = 0, rows, columns;
+	const uint8_t *p = ptr;
+
+	rows = size / BYTES_PER_LINE + size % BYTES_PER_LINE;
+	for (i = 0; i < rows; i++) {
+		int j;
+
+		cond_resched();
+		columns = min(size - k, BYTES_PER_LINE) / 4;
+		if (columns == 0)
+			break;
+		printk(KERN_DEBUG "%5d:  ", i * BYTES_PER_LINE);
+		for (j = 0; j < columns; j++) {
+			int n, N;
+
+			N = size - k > 4 ? 4 : size - k;
+			for (n = 0; n < N; n++)
+				printk("%02x", p[k++]);
+			printk(" ");
+		}
+		printk("\n");
+	}
+}
+
+#endif /* LINUX_VERSION_CODE < 2.6.23 */
