@@ -1228,7 +1228,11 @@ static struct file_system_type ubifs_fs_type =
 	.kill_sb = ubifs_kill_sb
 };
 
-/* Inode slab cache constructor */
+/*
+ * Inode slab cache constructor.
+ *
+ * TODO: remove backward compatibility as late as possible
+ */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 static void inode_slab_ctor(void *obj, struct kmem_cache *cachep,
 			    unsigned long flags)
@@ -1406,42 +1410,3 @@ static int dbg_check_volume_empty(struct ubifs_info *c)
 }
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_CHK_EMPTY */
-
-/* TODO: for backward compatibility, remove later */
-#include <linux/version.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23))
-
-#define BYTES_PER_LINE 32
-
-/**
- * ubifs_hexdump - dump a buffer.
- * @ptr: the buffer to dump
- * @size: buffer size which must be multiple of 4 bytes
- */
-void ubifs_hexdump(const void *ptr, int size)
-{
-	int i, k = 0, rows, columns;
-	const uint8_t *p = ptr;
-
-	rows = size / BYTES_PER_LINE + size % BYTES_PER_LINE;
-	for (i = 0; i < rows; i++) {
-		int j;
-
-		cond_resched();
-		columns = min(size - k, BYTES_PER_LINE) / 4;
-		if (columns == 0)
-			break;
-		printk(KERN_DEBUG "%5d:  ", i * BYTES_PER_LINE);
-		for (j = 0; j < columns; j++) {
-			int n, N;
-
-			N = size - k > 4 ? 4 : size - k;
-			for (n = 0; n < N; n++)
-				printk("%02x", p[k++]);
-			printk(" ");
-		}
-		printk("\n");
-	}
-}
-
-#endif /* LINUX_VERSION_CODE < 2.6.23 */
