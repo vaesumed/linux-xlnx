@@ -51,12 +51,12 @@ static void do_calc_lpt_geom(struct ubifs_info *c)
 	int n, bits, per_leb_wastage;
 	long long sz, tot_wastage;
 
-	c->pnode_cnt = (c->main_lebs + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+	c->pnode_cnt = DIV_ROUND_UP(c->main_lebs, UBIFS_LPT_FANOUT);
 
-	n = (c->pnode_cnt + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+	n = DIV_ROUND_UP(c->pnode_cnt, UBIFS_LPT_FANOUT);
 	c->nnode_cnt = n;
 	while (n > 1) {
-		n = (n + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+		n = DIV_ROUND_UP(n, UBIFS_LPT_FANOUT);
 		c->nnode_cnt += n;
 	}
 
@@ -72,7 +72,7 @@ static void do_calc_lpt_geom(struct ubifs_info *c)
 	c->lpt_offs_bits = fls(c->leb_size - 1);
 	c->lpt_spc_bits = fls(c->leb_size);
 
-	n = (c->max_leb_cnt + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+	n = DIV_ROUND_UP(c->max_leb_cnt, UBIFS_LPT_FANOUT);
 	c->pcnt_bits = fls(n - 1);
 
 	c->lnum_bits = fls(c->max_leb_cnt - 1);
@@ -956,7 +956,7 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 	/* Add all nnodes, one level at a time */
 	while (1) {
 		/* Number of internal nodes (nnodes) at next level */
-		cnt = (cnt + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+		cnt = DIV_ROUND_UP(cnt, UBIFS_LPT_FANOUT);
 		for (i = 0; i < cnt; i++) {
 			if (len + c->nnode_sz > c->leb_size) {
 				alen = ALIGN(len, c->min_io_size);
@@ -3654,7 +3654,7 @@ static int dbg_is_pnode_dirty(struct ubifs_info *c, int lnum, int offs)
 {
 	int i, cnt;
 
-	cnt = (c->main_lebs + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+	cnt = DIV_ROUND_UP(c->main_lebs, UBIFS_LPT_FANOUT);
 	for (i = 0; i < cnt; i++) {
 		struct ubifs_pnode *pnode;
 		struct ubifs_nbranch *branch;
@@ -3793,7 +3793,7 @@ static int dbg_check_ltab(struct ubifs_info *c)
 	int lnum, err, i, cnt;
 
 	/* Bring the entire tree into memory */
-	cnt = (c->main_lebs + UBIFS_LPT_FANOUT - 1) / UBIFS_LPT_FANOUT;
+	cnt = DIV_ROUND_UP(c->main_lebs, UBIFS_LPT_FANOUT);
 	for (i = 0; i < cnt; i++) {
 		struct ubifs_pnode *pnode;
 
