@@ -24,6 +24,15 @@
  * This file implements VFS file and inode operations of regular files, device
  * nodes and symlinks as well as address space operations.
  *
+ * UBIFS uses 2 page flags: PG_private and PG_checked. PG_private is set if the
+ * page is dirty and is used for budgeting purposes - dirty pages should not be
+ * budgeted. The PG_checked flag is set if full budgeting is required for the
+ * page e.g., when it corresponds to a file hole or it is just beyond the file
+ * size. The budgeting is done in 'ubifs_prepare_write()', because it is OK to
+ * fail in this function, and the budget is released in 'ubifs_writepage()'. So
+ * the PG_private and PG_checked flags carry the information about how the page
+ * was budgeted, to make it possible to release the budget properly.
+ *
  * A thing to keep in mind: inode's 'i_mutex' is locked in most VFS operations
  * we implement. However, this is not true for '->writepage()', which might be
  * called with 'i_mutex' unlocked. For example, when pdflush is performing
@@ -39,7 +48,7 @@
  * not set as well.
  *
  * This, for example means that there might be 2 concurrent '->writepage()'
- * calls for the same inode, but different inode's dirty pages.
+ * calls for the same inode, but different inode dirty pages.
  */
 
 /*
@@ -62,7 +71,7 @@
  *
  * TODO: prepare_write(), unless this write is _synchronous_, we have to
  * reserve space before we've entered writepage(). But it is kinda problematic
- * because of compression - we do not know how much date we may really fit. We
+ * because of compression - we do not know how much data we may really fit. We
  * can either guess using some empirical approach, or we may use "pessimistic"
  * space reservation - reserve maximum possible number of bytes.
  *
@@ -72,7 +81,7 @@
  * possible - nasty locking problems? This has to be thought of better.
  *
  * TODO: when we cannot write page - mark inode bad or something - otherwise
- *       pdflush tries again and again forever. Fix this somehow.
+ * pdflush tries again and again forever. Fix this somehow.
  *
  * TODO: we have to add a 'ubi_sync' support which calls mtd->sync, and call it
  * when we want stuff to go to flash: fsync(), unmount, rw->ro remount.
@@ -100,12 +109,14 @@ static int do_readpage(struct page *page)
 	dbg_gen("ino %lu, pg %lu, i_size %lld, flags %#lx",
 		inode->i_ino, page->index, i_size, page->flags);
 	ubifs_assert(PageLocked(page));
-	ubifs_assert(!PageDirty(page));
+	ubifs_assert(!PageChecked(page));
+	ubifs_assert(!PagePrivate(page));
 
 	addr = kmap(page);
 
 	if (((loff_t)page->index << PAGE_CACHE_SHIFT) >= i_size) {
 		/* Reading beyond inode */
+		SetPageChecked(page);
 		memset(addr, 0, PAGE_CACHE_SIZE);
 		goto out;
 	}
@@ -121,6 +132,7 @@ static int do_readpage(struct page *page)
 	if (err) {
 		if (err == -ENOENT) {
 			/* Not found, so it must be a hole */
+			SetPageChecked(page);
 			memset(addr, 0, PAGE_CACHE_SIZE);
 			goto out_free;
 		}
@@ -219,8 +231,10 @@ retry:
 	} else
 		req.dd_growth = c->page_budget;
 	ubifs_release_budget(c, &req);
+
 	atomic_long_dec(&c->dirty_pg_cnt);
 	ClearPagePrivate(page);
+	ClearPageChecked(page);
 
 	kunmap(page);
 	unlock_page(page);
@@ -276,8 +290,6 @@ static int ubifs_prepare_write(struct file *file, struct page *page,
 	struct inode *inode = page->mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_budget_req req;
-	pgoff_t uninitialized_var(end_index);
-	int err;
 
 	ubifs_assert(PageLocked(page));
 	ubifs_assert(mutex_is_locked(&inode->i_mutex));
@@ -287,30 +299,21 @@ static int ubifs_prepare_write(struct file *file, struct page *page,
 	if (c->ro_media)
 		return -EINVAL;
 
-	if (!PageUptodate(page) || !PagePrivate(page)) {
-		end_index = inode->i_size >> PAGE_CACHE_SHIFT;
-		end_index += !!(inode->i_size & (PAGE_CACHE_SIZE - 1));
-		err = 0;
-	}
-
 	if (!PageUptodate(page)) {
 		/*
-		 * The page is not loaded from the flash and we have to load in
-		 * unless we are writing all of it or this is a new page.
+		 * The page is not loaded from the flash and havs to be loaded
+		 * unless we are writing all of it.
 		 */
-
-		if (page->index >= end_index) {
-			void *addr;
-
+		if (from == 0 && to == PAGE_CACHE_SIZE)
 			/*
-			 * This page has never been written to, so it is
-			 * in fact uptodate already.
+			 * Set the PG_checked flag to make the further code
+			 * allocate full budget, because we do not know whether
+			 * the page exists on the flash media or not.
 			 */
-			addr = kmap(page);
-			memset(addr, 0, PAGE_CACHE_SIZE);
-			flush_dcache_page(page);
-			kunmap(page);
-		} else if (from || to < PAGE_CACHE_SIZE) {
+			SetPageChecked(page);
+		else {
+			int err;
+
 			err = do_readpage(page);
 			if (err)
 				return err;
@@ -323,19 +326,14 @@ static int ubifs_prepare_write(struct file *file, struct page *page,
 	memset(&req, 0, sizeof(struct ubifs_budget_req));
 	if (!PagePrivate(page)) {
 		/*
-		 * If 'do_readpage()' returned '-ENOENT', this is a hole and we
-		 * have to budget for a new page.
-		 *
-		 * We usde PG_checked flag to indicate whether we budgeted for
-		 * a new page of for page change.
+		 * If the PG_Checked flag is set, the page corresponds to a
+		 * hole or to a place beyond the inode. In this case we have to
+		 * budget for a new page, otherwise for a dirtied page.
 		 */
-		if (page->index >= end_index || err != -ENOENT) {
+		if (PageChecked(page))
 			req.new_page = 1;
-			SetPageChecked(page);
-		} else {
+		else
 			req.dirtied_page = 1;
-			ClearPageChecked(page);
-		}
 	} else
 		req.locked_pg = 1;
 
@@ -566,6 +564,7 @@ static void ubifs_invalidatepage(struct page *page, unsigned long offset)
 
 	atomic_long_dec(&c->dirty_pg_cnt);
 	ClearPagePrivate(page);
+	ClearPageChecked(page);
 }
 
 static void *ubifs_follow_link(struct dentry *dentry, struct nameidata *nd)
@@ -702,6 +701,7 @@ static int ubifs_releasepage(struct page *page, gfp_t unused_gfp_flags)
 	ubifs_assert(PagePrivate(page));
 	ubifs_assert(0);
 	ClearPagePrivate(page);
+	ClearPageChecked(page);
 	return 1;
 }
 
