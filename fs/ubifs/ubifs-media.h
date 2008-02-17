@@ -30,8 +30,8 @@
  * aligned (except of the padding node).
  */
 
-#ifndef __LINUX_UBIFS_H__
-#define __LINUX_UBIFS_H__
+#ifndef __UBIFS_MEDIA_H__
+#define __UBIFS_MEDIA_H__
 
 /* UBIFS nodes magic number (must not have the padding byte first or last) */
 #define UBIFS_NODE_MAGIC  0x06101831
@@ -692,4 +692,4 @@ struct ubifs_orph_node
 	__le64 inos[];
 } __attribute__ ((packed));
 
-#endif /* __LINUX_UBIFS_H__ */
+#endif /* __UBIFS_MEDIA_H__ */
