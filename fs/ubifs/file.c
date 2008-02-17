@@ -283,7 +283,9 @@ static int ubifs_prepare_write(struct file *file, struct page *page,
 {
 	struct inode *inode = page->mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	loff_t pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
 	struct ubifs_budget_req req;
+	int err;
 
 	ubifs_assert(PageLocked(page));
 	ubifs_assert(mutex_is_locked(&inode->i_mutex));
@@ -306,8 +308,6 @@ static int ubifs_prepare_write(struct file *file, struct page *page,
 			 */
 			SetPageChecked(page);
 		else {
-			int err;
-
 			err = do_readpage(page);
 			if (err)
 				return err;
@@ -337,7 +337,27 @@ static int ubifs_prepare_write(struct file *file, struct page *page,
 	 * this is OK, in this case the budget for inode will be released in
 	 * 'ubifs_commit_write()', so the over-budget will last short time.
 	 */
-	return ubifs_budget_operation(c, inode, &req);
+	if (pos > inode->i_size)
+		/*
+		 * We are writing beyond the file which means we are going to
+		 * change inode size and make the inode dirty. And in turn,
+		 * this means we have to budget for making the inode dirty.
+		 *
+		 * Note, if the inode is already dirty,
+		 * 'ubifs_budget_operation()' will not allocate any budget, but
+		 * will just lock the @budg_mutex of the inode to prevent it
+		 * from becoming clean before we have changed its size, which is
+		 * going to happen in 'ubifs_write_end()'.
+		 */
+		err = ubifs_budget_operation(c, inode, &req);
+	else
+		/*
+		 * The inode is not going to be marked as dirty by this write
+		 * operation, do do not budget for this.
+		 */
+		err = ubifs_budget_space(c, &req);
+
+	return err;
 }
 
 static int ubifs_commit_write(struct file *file, struct page *page,
@@ -354,36 +374,35 @@ static int ubifs_commit_write(struct file *file, struct page *page,
 	ubifs_assert(PageUptodate(page));
 	ubifs_assert(mutex_is_locked(&inode->i_mutex));
 
-	if (pos > inode->i_size) {
-		i_size_write(inode, pos);
-		ubifs_set_i_bytes(inode);
-		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
-		/*
-		 * Note, we do not set 'I_DIRTY_PAGES' (which means that the
-		 * inode has dirty pages), this is done in
-		 * '__set_page_dirty_nobuffers()' later.
-		 */
-		mark_inode_dirty_sync(inode);
-	}
-
 	if (!PagePrivate(page)) {
 		SetPagePrivate(page);
 		atomic_long_inc(&c->dirty_pg_cnt);
 		__set_page_dirty_nobuffers(page);
 	}
 
-	/*
-	 * If we have not marked the inode dirty but we have budgeted for this,
-	 * so release this budget. Otherwisie, there is no budget to free now,
-	 * so we just unlock the inode.
-	 */
-	if (!ui->dirty) {
-		struct ubifs_budget_req req = {.dd_growth = c->inode_budget};
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		ubifs_set_i_bytes(inode);
+		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+		/*
+		 * Note, we do not set 'I_DIRTY_PAGES' (which means that the
+		 * inode has dirty pages), this has been done in
+		 * '__set_page_dirty_nobuffers()'.
+		 */
+		mark_inode_dirty_sync(inode);
 
-		ubifs_release_budget(c, &req);
+		/*
+		 * The inode has been marked dirty, unlock it. This is a bit
+		 * hacky because normally we would have to call
+		 * 'ubifs_release_op_budget()'. But we know there is nothing to
+		 * release because page's budget will be released in
+		 * 'ubifs_write_page()' and inode's budget will be released in
+		 * 'ubifs_write_inode()', so just unlock the inode here for
+		 * optimization.
+		 */
+		mutex_unlock(&ui->budg_mutex);
 	}
 
-	mutex_unlock(&ui->budg_mutex);
 	return 0;
 }
 
@@ -431,7 +450,7 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 				} else {
 					/*
 					 * TODO: If there are one or more blocks
-					 * per page, then kmap the page and
+					 * per page, then 'kmap()' the page and
 					 * pass the data to ubifs_jrn_truncate
 					 * to save it from having to read it.
 					 */
@@ -516,7 +535,7 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 
 	if (req.dirtied_page) {
 		/*
-		 * Truncation code does not make the runcated page dirty, it
+		 * Truncation code does not make the reenacted page dirty, it
 		 * just changes it on journal level, so we have to release page
 		 * change budget.
 		 */
@@ -595,7 +614,7 @@ int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync)
 }
 
 /**
- * update_mctime - update mtime and ctime of an inode.
+ * update_ctime - update mtime and ctime of an inode.
  * @c: UBIFS file-system description object
  * @inode: inode to update
  *
