@@ -278,18 +278,15 @@ int dbg_check_lprops(struct ubifs_info *c);
 #define dbg_check_lprops(c) 0
 #endif
 
-/* TODO: remove later */
-extern int bug_hunting;
-#define dbg_bug(fmt, ...) do {                        \
-	if (bug_hunting) dbg_msg(fmt, ##__VA_ARGS__); \
-} while(0)
-
 #ifdef CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY
+
 void dbg_failure_mode_registration(struct ubifs_info *c);
 void dbg_failure_mode_deregistration(struct ubifs_info *c);
+
 #undef dbg_dump_stack
 #define dbg_dump_stack()
 #define dbg_failure_mode 1
+
 #ifndef UBIFS_DBG_PRESERVE_UBI
 #define ubi_leb_read   dbg_leb_read
 #define ubi_leb_write  dbg_leb_write
@@ -297,6 +294,7 @@ void dbg_failure_mode_deregistration(struct ubifs_info *c);
 #define ubi_leb_erase  dbg_leb_erase
 #define ubi_leb_unmap  dbg_leb_unmap
 #define ubi_is_mapped  dbg_is_mapped
+
 int dbg_leb_read(struct ubi_volume_desc *desc, int lnum, char *buf, int offset,
 		 int len, int check);
 int dbg_leb_write(struct ubi_volume_desc *desc, int lnum, const void *buf,
@@ -322,34 +320,47 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 	return dbg_leb_change(desc, lnum, buf, len, UBI_UNKNOWN);
 }
 #endif /* !UBIFS_DBG_PRESERVE_UBI */
-#else  /* CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY */
+
+#else
+
 #define dbg_failure_mode_registration(c) ({})
 #define dbg_failure_mode_deregistration(c) ({})
 #define dbg_failure_mode 0
+
 #endif /* !CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY */
 
-/* TODO: for backward compatibility, remove later */
+/*
+ * Backward compatibility stuff.
+ *
+ * TODO: remove as late as possible.
+ */
 #include <linux/version.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
-#define uninitialized_var(x) x
-#endif
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23))
+
 void ubifs_hexdump(const void *ptr, int size);
+
 #define print_hex_dump(a, b, c, f, e, buf, len, g) ubifs_hexdump(buf, len)
+
 struct shrinker {
 	int (*shrink)(int nr_to_scan, gfp_t gfp_mask);
 	int seeks;
 };
+
 #define register_shrinker(x)
 #define unregister_shrinker(x)
+#define set_freezable()
+
 #define is_owner_or_cap(inode)  \
         ((current->fsuid == (inode)->i_uid) || capable(CAP_FOWNER))
+
+/* This is to hide slab cache interface changes */
 #define UBIFSCOMPATNULL ,NULL
-#define set_freezable()
+
 #else
+
 #define UBIFSCOMPATNULL
-#endif
+
+#endif /* LINUX_VERSION_CODE >= 2.6.23 */
 
 #endif /* !__UBIFS_DEBUG_H__ */
