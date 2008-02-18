@@ -54,6 +54,7 @@
 #include <linux/kthread.h>
 #include <linux/highmem.h>
 #include <linux/freezer.h>
+#include <linux/vmalloc.h>
 #include <linux/usb.h>
 #include "s2255drv.h"
 #include "f2255usb.h" /* firmware in header file */
