@@ -72,6 +72,11 @@ struct dasd_block;
 #define DASD_SENSE_BIT_2 0x20
 #define DASD_SENSE_BIT_3 0x10
 
+/* BIT DEFINITIONS FOR SIM SENSE */
+#define DASD_SIM_SENSE 0x0F
+#define DASD_SIM_MSG_TO_OP 0x03
+#define DASD_SIM_LOG 0x0C
+
 /*
  * SECTION: MACROs for klogd and s390 debug feature (dbf)
  */
