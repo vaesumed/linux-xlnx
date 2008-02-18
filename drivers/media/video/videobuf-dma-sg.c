@@ -39,7 +39,7 @@
 #define MAGIC_CHECK(is,should)	if (unlikely((is) != (should))) \
 	{ printk(KERN_ERR "magic mismatch: %x (expected %x)\n",is,should); BUG(); }
 
-static int debug = 0;
+static int debug;
 module_param(debug, int, 0644);
 
 MODULE_DESCRIPTION("helper module to manage video4linux pci dma sg buffers");
@@ -356,7 +356,7 @@ videobuf_vm_close(struct vm_area_struct *vma)
 	map->count--;
 	if (0 == map->count) {
 		dprintk(1,"munmap %p q=%p\n",map,q);
-		mutex_lock(&q->lock);
+		mutex_lock(&q->vb_lock);
 		for (i = 0; i < VIDEO_MAX_FRAME; i++) {
 			if (NULL == q->bufs[i])
 				continue;
@@ -373,7 +373,7 @@ videobuf_vm_close(struct vm_area_struct *vma)
 			q->bufs[i]->baddr = 0;
 			q->ops->buf_release(q,q->bufs[i]);
 		}
-		mutex_unlock(&q->lock);
+		mutex_unlock(&q->vb_lock);
 		kfree(map);
 	}
 	return;

@@ -40,7 +40,7 @@ static unsigned int empress_nr[] = {[0 ... (SAA7134_MAXBOARDS - 1)] = UNSET };
 module_param_array(empress_nr, int, NULL, 0444);
 MODULE_PARM_DESC(empress_nr,"ts device number");
 
-static unsigned int debug = 0;
+static unsigned int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug,"enable debug messages");
 
@@ -87,7 +87,7 @@ static int ts_open(struct inode *inode, struct file *file)
 
 	dprintk("open minor=%d\n",minor);
 	err = -EBUSY;
-	if (!mutex_trylock(&dev->empress_tsq.lock))
+	if (!mutex_trylock(&dev->empress_tsq.vb_lock))
 		goto done;
 	if (dev->empress_users)
 		goto done_up;
@@ -101,7 +101,7 @@ static int ts_open(struct inode *inode, struct file *file)
 	err = 0;
 
 done_up:
-	mutex_unlock(&dev->empress_tsq.lock);
+	mutex_unlock(&dev->empress_tsq.vb_lock);
 done:
 	return err;
 }
@@ -110,7 +110,6 @@ static int ts_release(struct inode *inode, struct file *file)
 {
 	struct saa7134_dev *dev = file->private_data;
 
-	mutex_lock(&dev->empress_tsq.lock);
 	videobuf_stop(&dev->empress_tsq);
 	videobuf_mmap_free(&dev->empress_tsq);
 	dev->empress_users--;
@@ -122,7 +121,6 @@ static int ts_release(struct inode *inode, struct file *file)
 	saa_writeb(SAA7134_AUDIO_MUTE_CTRL,
 		saa_readb(SAA7134_AUDIO_MUTE_CTRL) | (1 << 6));
 
-	mutex_unlock(&dev->empress_tsq.lock);
 	return 0;
 }
 
