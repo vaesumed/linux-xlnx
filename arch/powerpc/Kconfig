@@ -169,7 +169,7 @@ config ARCH_HIBERNATION_POSSIBLE
 	bool
 	depends on (PPC64 && HIBERNATE_64) || (PPC32 && HIBERNATE_32)
 # This is needed as long as kernel_page_present() is not implemented
-	depends on !DEBUG_PAGEALLOC
+#	depends on !DEBUG_PAGEALLOC
 	default y
 
 config ARCH_SUSPEND_POSSIBLE
