@@ -336,31 +336,36 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
  */
 #include <linux/version.h>
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+/* iget() does not exist since 2.6.25 */
+#define UBIFS_COMPAT_USE_OLD_IGET
+void ubifs_read_inode(struct inode *inode);
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23))
 
+/* print_hex_dump() did not exist in kerenel prior to 2.6.23 */
+#define print_hex_dump(a, b, c, f, e, buf, len, g) ubifs_hexdump(buf, len)
 void ubifs_hexdump(const void *ptr, int size);
 
-#define print_hex_dump(a, b, c, f, e, buf, len, g) ubifs_hexdump(buf, len)
-
+/* Shrinker was introduced in 2.6.23 as well */
 struct shrinker {
 	int (*shrink)(int nr_to_scan, gfp_t gfp_mask);
 	int seeks;
 };
-
 #define register_shrinker(x)
 #define unregister_shrinker(x)
 #define set_freezable()
 
+/* And this helper did not exist */
 #define is_owner_or_cap(inode)  \
         ((current->fsuid == (inode)->i_uid) || capable(CAP_FOWNER))
 
-/* This is to hide slab cache interface changes */
+/* This is to hide slab cache interface changes - destructor was dropped */
 #define UBIFSCOMPATNULL ,NULL
 
 #else
-
 #define UBIFSCOMPATNULL
-
 #endif /* LINUX_VERSION_CODE >= 2.6.23 */
 
 #endif /* !__UBIFS_DEBUG_H__ */
