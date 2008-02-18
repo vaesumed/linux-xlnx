@@ -1767,6 +1767,7 @@ static inline void __end_request(struct request *rq, int uptodate,
 
 /**
  * blk_rq_bytes - Returns bytes left to complete in the entire request
+ * @rq: the request being processed
  **/
 unsigned int blk_rq_bytes(struct request *rq)
 {
@@ -1779,6 +1780,7 @@ EXPORT_SYMBOL_GPL(blk_rq_bytes);
 
 /**
  * blk_rq_cur_bytes - Returns bytes left to complete in the current segment
+ * @rq: the request being processed
  **/
 unsigned int blk_rq_cur_bytes(struct request *rq)
 {
