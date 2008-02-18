@@ -78,6 +78,8 @@ static __inline__ unsigned long ide_default_io_base(int index)
 #define ide_ack_intr(hwif) ((hwif)->ack_intr ? (hwif)->ack_intr(hwif) : 1)
 #endif
 
+#else /* __powerpc64__ */
+#define ide_default_irq(base)	0
 #endif /* __powerpc64__ */
 
 #endif /* __KERNEL__ */
