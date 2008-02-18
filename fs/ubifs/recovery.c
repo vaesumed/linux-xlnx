@@ -1382,13 +1382,9 @@ int ubifs_recover_size(struct ubifs_info *c)
 				/* Fix the inode size and pin it in memory */
 				struct inode *inode;
 
-				inode = iget(c->vfs_sb, e->inum);
-				if (!inode)
-					return -EINVAL;
-				if (is_bad_inode(inode)) {
-					iput(inode);
-					return -EINVAL;
-				}
+				inode = ubifs_iget(c->vfs_sb, e->inum);
+				if (IS_ERR(inode))
+					return PTR_ERR(inode);
 				if (inode->i_size < e->d_size) {
 					dbg_rcvry("ino %lu size %lld -> %lld",
 						  e->inum, e->d_size,
