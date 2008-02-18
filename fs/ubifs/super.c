@@ -30,16 +30,26 @@
 #include <linux/mount.h>
 #include "ubifs.h"
 
-static void ubifs_read_inode(struct inode *inode)
+/* TODO: remove compatibility crap as late as possible */
+#ifndef UBIFS_COMPAT_USE_OLD_IGET
+
+struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 {
 	int err;
 	union ubifs_key key;
 	struct ubifs_ino_node *ino;
-	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_info *c = sb->s_fs_info;
+	struct inode *inode;
+	struct ubifs_inode *ui;
 
-	dbg_gen("inode %lu", inode->i_ino);
-	ubifs_assert(inode->i_state & I_LOCK);
+	dbg_gen("inode %lu", inum);
+
+	inode = iget_locked(sb, inum);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+	if (!(inode->i_state & I_NEW))
+		return inode;
+	ui = ubifs_inode(inode);
 
 	ino = kmalloc(UBIFS_MAX_INO_NODE_SZ, GFP_NOFS);
 	if (!ino) {
@@ -153,9 +163,10 @@ static void ubifs_read_inode(struct inode *inode)
 		goto out_invalid;
 	}
 
-	ubifs_set_inode_flags(inode);
 	kfree(ino);
-	return;
+	ubifs_set_inode_flags(inode);
+	unlock_new_inode(inode);
+	return inode;
 
 out_invalid:
 	ubifs_err("inode %lu validation failed", inode->i_ino);
@@ -165,9 +176,11 @@ out_ino:
 	kfree(ino);
 out:
 	ubifs_err("failed to read inode %lu, error %d", inode->i_ino, err);
-	make_bad_inode(inode);
-	return;
+	iget_failed(inode);
+	return ERR_PTR(err);
 }
+
+#endif /* UBIFS_COMPAT_USE_OLD_IGET */
 
 static struct inode *ubifs_alloc_inode(struct super_block *sb)
 {
@@ -433,7 +446,10 @@ static int ubifs_show_options(struct seq_file *s, struct vfsmount *mnt)
 
 struct super_operations ubifs_super_operations =
 {
+/* TODO: remove compatibility stuff as late as possible */
+#ifdef UBIFS_COMPAT_USE_OLD_IGET
 	.read_inode    = ubifs_read_inode,
+#endif
 	.alloc_inode   = ubifs_alloc_inode,
 	.destroy_inode = ubifs_destroy_inode,
 	.put_super     = ubifs_put_super,

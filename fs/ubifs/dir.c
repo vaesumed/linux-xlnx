@@ -187,15 +187,15 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 	 * TODO: add paranoid check that the found direntry has the the right
 	 * name.
 	 */
-	inode = iget(dir->i_sb, le64_to_cpu(dent->inum));
-	if (!inode) {
+	inode = ubifs_iget(dir->i_sb, le64_to_cpu(dent->inum));
+	if (IS_ERR(inode)) {
 		/*
 		 * This should not happen. Probably the file-system needs
 		 * checking.
 		 */
 		ubifs_err("dead directory entry");
 		ubifs_ro_mode(c);
-		err = -ENOENT;
+		err = PTR_ERR(inode);
 		goto out;
 	}
 

@@ -1083,3 +1083,158 @@ void ubifs_hexdump(const void *ptr, int size)
 }
 
 #endif /* LINUX_VERSION_CODE < 2.6.23 */
+
+#ifdef UBIFS_COMPAT_USE_OLD_IGET
+struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
+{
+	struct inode *inode;
+
+	inode = iget(sb, inum);
+	if (!inode) {
+		make_bad_inode(inode);
+		return ERR_PTR(-EINVAL);
+	}
+
+	return inode;
+}
+
+void ubifs_read_inode(struct inode *inode)
+{
+	int err;
+	union ubifs_key key;
+	struct ubifs_ino_node *ino;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	struct ubifs_inode *ui = ubifs_inode(inode);
+
+	dbg_gen("inode %lu", inode->i_ino);
+	ubifs_assert(inode->i_state & I_LOCK);
+
+	ino = kmalloc(UBIFS_MAX_INO_NODE_SZ, GFP_NOFS);
+	if (!ino) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	ino_key_init(c, &key, inode->i_ino);
+
+	err = ubifs_tnc_lookup(c, &key, ino);
+	if (err)
+		goto out_ino;
+
+	inode->i_flags |= (S_NOCMTIME | S_NOATIME);
+	inode->i_nlink = le32_to_cpu(ino->nlink);
+	inode->i_uid   = le32_to_cpu(ino->uid);
+	inode->i_gid   = le32_to_cpu(ino->gid);
+	inode->i_atime.tv_sec = le32_to_cpu(ino->atime);
+	inode->i_mtime.tv_sec = le32_to_cpu(ino->mtime);
+	inode->i_ctime.tv_sec = le32_to_cpu(ino->ctime);
+	inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
+					inode->i_ctime.tv_nsec = 0;
+	inode->i_mode  = le32_to_cpu(ino->mode);
+	inode->i_size  = le64_to_cpu(ino->size);
+
+	ubifs_set_i_bytes(inode);
+
+	ui->data_len = le32_to_cpu(ino->data_len);
+	ui->flags = le32_to_cpu(ino->flags);
+	ui->compr_type = le16_to_cpu(ino->compr_type);
+	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
+
+	if (inode->i_size > c->max_inode_sz) {
+		ubifs_err("inode is too large (%lld)",
+			  (long long)inode->i_size);
+		goto out_invalid;
+	}
+	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
+		ubifs_err("unknown compression type %d", ui->compr_type);
+		goto out_invalid;
+	}
+
+	if (!ubifs_compr_present(ui->compr_type)) {
+		ubifs_warn("inode %lu uses '%s' compression, but it was not "
+			   "compiled in", inode->i_ino,
+			   ubifs_compr_name(ui->compr_type));
+	}
+
+	switch (inode->i_mode & S_IFMT) {
+	case S_IFREG:
+		inode->i_mapping->a_ops = &ubifs_file_address_operations;
+		inode->i_op = &ubifs_file_inode_operations;
+		inode->i_fop = &ubifs_file_operations;
+		if (ui->data_len != 0)
+			goto out_invalid;
+		break;
+	case S_IFDIR:
+		inode->i_op  = &ubifs_dir_inode_operations;
+		inode->i_fop = &ubifs_dir_operations;
+		if (ui->data_len != 0)
+			goto out_invalid;
+		break;
+	case S_IFLNK:
+		inode->i_op = &ubifs_symlink_inode_operations;
+		if (ui->data_len <= 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
+			ubifs_err("invalid inode size");
+			goto out_invalid;
+		}
+		ui->data = kmalloc(ui->data_len + 1, GFP_KERNEL);
+		if (!ui->data) {
+			err = -ENOMEM;
+			goto out_ino;
+		}
+		memcpy(ui->data, ino->data, ui->data_len);
+		((char *)ui->data)[ui->data_len] = '\0';
+		break;
+	case S_IFBLK:
+	case S_IFCHR:
+	{
+		dev_t rdev;
+		union ubifs_dev_desc *dev;
+		struct ubifs_inode *ui = ubifs_inode(inode);
+
+		ui->data = kmalloc(sizeof(union ubifs_dev_desc), GFP_NOFS);
+		if (!ui->data) {
+			err = -ENOMEM;
+			goto out_ino;
+		}
+
+		dev = (union ubifs_dev_desc *)ino->data;
+		if (ui->data_len == sizeof(dev->new)) {
+			rdev = new_decode_dev(__le32_to_cpu(dev->new));
+		} else if (ui->data_len == sizeof(dev->huge)) {
+			rdev = huge_decode_dev(__le64_to_cpu(dev->huge));
+		} else {
+			ubifs_err("invalid inode size");
+			goto out_invalid;
+		}
+		inode->i_op = &ubifs_file_inode_operations;
+		init_special_inode(inode, inode->i_mode, rdev);
+		break;
+	}
+	case S_IFSOCK:
+	case S_IFIFO:
+		inode->i_op = &ubifs_file_inode_operations;
+		init_special_inode(inode, inode->i_mode, 0);
+		if (ui->data_len != 0)
+			goto out_invalid;
+		break;
+	default:
+		goto out_invalid;
+	}
+
+	ubifs_set_inode_flags(inode);
+	kfree(ino);
+	return;
+
+out_invalid:
+	ubifs_err("inode %lu validation failed", inode->i_ino);
+	dbg_dump_node(c, ino);
+	err = -EINVAL;
+out_ino:
+	kfree(ino);
+out:
+	ubifs_err("failed to read inode %lu, error %d", inode->i_ino, err);
+	make_bad_inode(inode);
+	return;
+}
+
+#endif /* UBIFS_COMPAT_USE_OLD_IGET */
