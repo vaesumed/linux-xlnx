@@ -389,20 +389,29 @@ static const struct ide_port_info qd65xx_port_info __initdata = {
 static int __init qd_probe(int base)
 {
 	ide_hwif_t *hwif;
+	u8 config, unit;
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
-	u8 config;
-	u8 unit;
+	hw_regs_t hw[2];
 
 	config = inb(QD_CONFIG_PORT);
 
 	if (! ((config & QD_CONFIG_BASEPORT) >> 1 == (base == 0xb0)) )
-		return 1;
+		return -ENODEV;
 
 	unit = ! (config & QD_CONFIG_IDE_BASEPORT);
 
+	memset(&hw, 0, sizeof(hw));
+
+	ide_std_init_ports(&hw[0], 0x1f0, 0x3f6);
+	hw[0].irq = 14;
+
+	ide_std_init_ports(&hw[1], 0x170, 0x376);
+	hw[1].irq = 15;
+
 	if ((config & 0xf0) == QD_CONFIG_QD6500) {
 
-		if (qd_testreg(base)) return 1;		/* bad register */
+		if (qd_testreg(base))
+			 return -ENODEV;	/* bad register */
 
 		/* qd6500 found */
 
@@ -413,8 +422,10 @@ static int __init qd_probe(int base)
 		
 		if (config & QD_CONFIG_DISABLED) {
 			printk(KERN_WARNING "qd6500 is disabled !\n");
-			return 1;
+			return -ENODEV;
 		}
+
+		ide_init_port_hw(hwif, &hw[unit]);
 
 		qd_setup(hwif, base, config);
 
@@ -433,8 +444,8 @@ static int __init qd_probe(int base)
 
 		u8 control;
 
-		if (qd_testreg(base) || qd_testreg(base+0x02)) return 1;
-			/* bad registers */
+		if (qd_testreg(base) || qd_testreg(base + 0x02))
+			return -ENODEV;	/* bad registers */
 
 		/* qd6580 found */
 
@@ -450,6 +461,8 @@ static int __init qd_probe(int base)
 			hwif = &ide_hwifs[unit];
 			printk(KERN_INFO "%s: qd6580: single IDE board\n",
 					 hwif->name);
+
+			ide_init_port_hw(hwif, &hw[unit]);
 
 			qd_setup(hwif, base, config | (control << 8));
 
@@ -472,6 +485,9 @@ static int __init qd_probe(int base)
 			printk(KERN_INFO "%s&%s: qd6580: dual IDE board\n",
 					hwif->name, mate->name);
 
+			ide_init_port_hw(hwif, &hw[0]);
+			ide_init_port_hw(mate, &hw[1]);
+
 			qd_setup(hwif, base, config | (control << 8));
 
 			hwif->port_init_devs = qd6580_port_init_devs;
@@ -493,7 +509,7 @@ static int __init qd_probe(int base)
 		}
 	}
 	/* no qd65xx found */
-	return 1;
+	return -ENODEV;
 }
 
 int probe_qd65xx = 0;
@@ -503,14 +519,18 @@ MODULE_PARM_DESC(probe, "probe for QD65xx chipsets");
 
 static int __init qd65xx_init(void)
 {
+	int rc1, rc2 = -ENODEV;
+
 	if (probe_qd65xx == 0)
 		return -ENODEV;
 
-	if (qd_probe(0x30))
-		qd_probe(0xb0);
-	if (ide_hwifs[0].chipset != ide_qd65xx &&
-	    ide_hwifs[1].chipset != ide_qd65xx)
+	rc1 = qd_probe(0x30);
+	if (rc1)
+		rc2 = qd_probe(0xb0);
+
+	if (rc1 < 0 && rc2 < 0)
 		return -ENODEV;
+
 	return 0;
 }
 

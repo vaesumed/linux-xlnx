@@ -112,9 +112,8 @@ static void
 sgiioc4_maskproc(ide_drive_t * drive, int mask)
 {
 	writeb(mask ? (drive->ctl | 2) : (drive->ctl & ~2),
-	       (void __iomem *)IDE_CONTROL_REG);
+	       (void __iomem *)drive->hwif->io_ports[IDE_CONTROL_OFFSET]);
 }
-
 
 static int
 sgiioc4_checkirq(ide_hwif_t * hwif)
@@ -142,18 +141,18 @@ sgiioc4_clearirq(ide_drive_t * drive)
 	intr_reg = readl((void __iomem *)other_ir);
 	if (intr_reg & 0x03) { /* Valid IOC4-IDE interrupt */
 		/*
-		 * Using sgiioc4_INB to read the IDE_STATUS_REG has a side effect
-		 * of clearing the interrupt.  The first read should clear it
-		 * if it is set.  The second read should return a "clear" status
-		 * if it got cleared.  If not, then spin for a bit trying to
-		 * clear it.
+		 * Using sgiioc4_INB to read the Status register has a side
+		 * effect of clearing the interrupt.  The first read should
+		 * clear it if it is set.  The second read should return
+		 * a "clear" status if it got cleared.  If not, then spin
+		 * for a bit trying to clear it.
 		 */
-		u8 stat = sgiioc4_INB(IDE_STATUS_REG);
+		u8 stat = sgiioc4_INB(hwif->io_ports[IDE_STATUS_OFFSET]);
 		int count = 0;
-		stat = sgiioc4_INB(IDE_STATUS_REG);
+		stat = sgiioc4_INB(hwif->io_ports[IDE_STATUS_OFFSET]);
 		while ((stat & 0x80) && (count++ < 100)) {
 			udelay(1);
-			stat = sgiioc4_INB(IDE_STATUS_REG);
+			stat = sgiioc4_INB(hwif->io_ports[IDE_STATUS_OFFSET]);
 		}
 
 		if (intr_reg & 0x02) {
@@ -592,20 +591,12 @@ sgiioc4_ide_setup_pci_device(struct pci_dev *dev)
 	unsigned long bar0, cmd_phys_base, ctl;
 	void __iomem *virt_base;
 	ide_hwif_t *hwif;
-	int h;
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 	hw_regs_t hw;
 	struct ide_port_info d = sgiioc4_port_info;
 
-	/*
-	 * Find an empty HWIF; if none available, return -ENOMEM.
-	 */
-	for (h = 0; h < MAX_HWIFS; ++h) {
-		hwif = &ide_hwifs[h];
-		if (hwif->chipset == ide_unknown)
-			break;
-	}
-	if (h == MAX_HWIFS) {
+	hwif = ide_find_port();
+	if (hwif == NULL) {
 		printk(KERN_ERR "%s: too many IDE interfaces, no room in table\n",
 				DRV_NAME);
 		return -ENOMEM;

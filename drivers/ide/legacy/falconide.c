@@ -54,7 +54,7 @@ static void __init falconide_setup_ports(hw_regs_t *hw)
 	for (i = 1; i < 8; i++)
 		hw->io_ports[i] = ATA_HD_BASE + 1 + i * 4;
 
-	hw->io_ports[IDE_CONTROL_OFFSET] = ATA_HD_CONTROL;
+	hw->io_ports[IDE_CONTROL_OFFSET] = ATA_HD_BASE + ATA_HD_CONTROL;
 
 	hw->irq = IRQ_MFP_IDE;
 	hw->ack_intr = NULL;
@@ -76,7 +76,7 @@ static int __init falconide_init(void)
 
 	falconide_setup_ports(&hw);
 
-	hwif = ide_find_port(hw.io_ports[IDE_DATA_OFFSET]);
+	hwif = ide_find_port();
 	if (hwif) {
 		u8 index = hwif->index;
 		u8 idx[4] = { index, 0xff, 0xff, 0xff };
@@ -84,7 +84,9 @@ static int __init falconide_init(void)
 		ide_init_port_data(hwif, index);
 		ide_init_port_hw(hwif, &hw);
 
+		ide_get_lock(NULL, NULL);
 		ide_device_add(idx, NULL);
+		ide_release_lock();
 	}
 
 	return 0;

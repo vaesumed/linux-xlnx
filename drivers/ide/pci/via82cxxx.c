@@ -432,8 +432,7 @@ static const struct ide_port_info via82cxxx_chipset __devinitdata = {
 			  IDE_HFLAG_PIO_NO_DOWNGRADE |
 			  IDE_HFLAG_ABUSE_SET_DMA_MODE |
 			  IDE_HFLAG_POST_SET_MODE |
-			  IDE_HFLAG_IO_32BIT |
-			  IDE_HFLAG_BOOTABLE,
+			  IDE_HFLAG_IO_32BIT,
 	.pio_mask	= ATA_PIO5,
 	.swdma_mask	= ATA_SWDMA2,
 	.mwdma_mask	= ATA_MWDMA2,
@@ -479,6 +478,7 @@ static int __devinit via_init_one(struct pci_dev *dev, const struct pci_device_i
 static const struct pci_device_id via_pci_tbl[] = {
 	{ PCI_VDEVICE(VIA, PCI_DEVICE_ID_VIA_82C576_1),  0 },
 	{ PCI_VDEVICE(VIA, PCI_DEVICE_ID_VIA_82C586_1),  0 },
+	{ PCI_VDEVICE(VIA, PCI_DEVICE_ID_VIA_CX700_IDE), 0 },
 	{ PCI_VDEVICE(VIA, PCI_DEVICE_ID_VIA_6410),      1 },
 	{ PCI_VDEVICE(VIA, PCI_DEVICE_ID_VIA_SATA_EIDE), 1 },
 	{ 0, },
