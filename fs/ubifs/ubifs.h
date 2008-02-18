@@ -1438,6 +1438,9 @@ const struct ubifs_lprops *ubifs_fast_find_frdi_idx(struct ubifs_info *c);
 int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync);
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
 
+/* super.c */
+struct inode *ubifs_iget(struct super_block *sb, unsigned long inum);
+
 /* recovery.c */
 int ubifs_recover_master_node(struct ubifs_info *c);
 int ubifs_write_rcvrd_mst_node(struct ubifs_info *c);

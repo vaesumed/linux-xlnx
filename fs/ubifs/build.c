@@ -1174,12 +1174,11 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	}
 
 	/* Read the root inode */
-	err = -EIO;
-	root = iget(sb, UBIFS_ROOT_INO);
-	if (!root)
+	root = ubifs_iget(sb, UBIFS_ROOT_INO);
+	if (IS_ERR(root)) {
+		err = PTR_ERR(root);
 		goto out_umount;
-	if (is_bad_inode(root))
-		goto out_iput;
+	}
 
 	sb->s_root = d_alloc_root(root);
 	if (!sb->s_root)
