@@ -1,0 +1,30 @@
+Trees included into this release:
+
+Name		Type	URL
+----		----	---
+origin		git	git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux-2.6.git#master
+driver-core	quilt	http://kernel.org/pub/linux/kernel/people/gregkh/gregkh-2.6/gregkh-01-driver/
+pci		quilt	http://kernel.org/pub/linux/kernel/people/gregkh/gregkh-2.6/gregkh-02-pci/
+usb		quilt	http://kernel.org/pub/linux/kernel/people/gregkh/gregkh-2.6/gregkh-03-usb/
+device-mapper	quilt	http://www.kernel.org/pub/linux/kernel/people/agk/patches/2.6/editing/
+hid		git	git://git.kernel.org/pub/scm/linux/kernel/git/jikos/hid.git#mm
+i2c		quilt	http://khali.linux-fr.org/devel/linux-2.6/jdelvare-i2c/
+kernel-doc	quilt	http://oss.oracle.com/~rdunlap/kernel-doc-patches/current/
+avr32		git	git://git.kernel.org/pub/scm/linux/kernel/git/hskinnemoen/avr32-2.6.git#avr32-arch
+v4l-dvb		git	ssh://master.kernel.org/pub/scm/linux/kernel/git/mchehab/linux-next.git#stable
+s390		git	git://git390.osdl.marist.edu/pub/scm/linux-2.6.git#features
+sh		git	ssh://master.kernel.org/pub/scm/linux/kernel/git/lethal/sh-2.6.git#master
+jfs		git	git://git.kernel.org/pub/scm/linux/kernel/git/shaggy/jfs-2.6.git#next
+kbuild		git	git://git.kernel.org/pub/scm/linux/kernel/git/sam/kbuild.git#master
+pata		quilt	http://kernel.org/pub/linux/kernel/people/bart/pata-2.6/patches/
+libata		git	git://git.kernel.org/pub/scm/linux/kernel/git/jgarzik/libata-dev.git#NEXT
+nfs		git	git://git.linux-nfs.org/projects/trondmy/nfs-2.6.git#linux-next
+xfs		git	git://oss.sgi.com:8090/xfs/xfs-2.6.git#master
+infiniband	git	git://git.kernel.org/pub/scm/linux/kernel/git/roland/infiniband.git#for-next
+acpi		git	git://git.kernel.org/pub/scm/linux/kernel/git/lenb/linux-acpi-2.6#test
+blackfin	git	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/blackfin-2.6.git#for-linus
+nfsd		git	git://git.linux-nfs.org/~bfields/linux.git#nfsd-next
+firewire	git	git://git.kernel.org/pub/scm/linux/kernel/git/ieee1394/linux1394-2.6.git#for-next
+hwmon		git	git://lm-sensors.org/kernel/mhoffman/hwmon-2.6.git#testing
+ubi		git	git://git.infradead.org/~dedekind/ubi-2.6.git#master
+kvm		git	git://git.kernel.org/pub/scm/linux/kernel/git/avi/kvm.git#master
