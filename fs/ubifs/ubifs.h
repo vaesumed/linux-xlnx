@@ -693,7 +693,6 @@ struct ubifs_compressor {
  * @dirtied_page: non-zero if the operation makes a page dirty
  * @new_dent: non-zero if the operation adds a new directory entry
  * @rm_dent: non-zero if the operation removes a directory entry
- * @locked_pg: non-zero if the caller has a dirty page locked
  * @new_ino_d: now much data newly created inode contains
  * @dirtied_ino_d: now much data dirtied inode contains
  * @idx_growth: how much the index will supposedly grow
@@ -717,7 +716,10 @@ struct ubifs_budget_req
 	unsigned int dirtied_page:1;
 	unsigned int new_dent:1;
 	unsigned int rm_dent:1;
+/* TODO: remove compatibility crap as late as possible */
+#ifndef UBIFS_COMPAT_USE_OLD_IGET
 	unsigned int locked_pg:1;
+#endif
 	unsigned int new_ino_d:13;
 	unsigned int dirtied_ino_d:13;
 	int idx_growth;
@@ -1302,6 +1304,7 @@ void ubifs_cancel_op_budget(struct ubifs_info *c, struct inode *inode,
 			    struct ubifs_budget_req *req);
 long long ubifs_budg_get_free_space(struct ubifs_info *c);
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c);
+void ubifs_convert_page_budget(struct ubifs_info *c);
 
 /* find.c */
 int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
