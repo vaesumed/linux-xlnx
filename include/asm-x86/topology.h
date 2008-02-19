@@ -172,7 +172,18 @@ extern int __node_distance(int, int);
 #define node_distance(a, b) __node_distance(a, b)
 #endif
 
+int get_mp_bus_to_node(int busnum);
+void set_mp_bus_to_node(int busnum, int node);
+
 #else /* CONFIG_NUMA */
+
+static inline int get_mp_bus_to_node(int busnum)
+{
+	return 0;
+}
+static inline void set_mp_bus_to_node(int busnum, int node)
+{
+}
 
 #include <asm-generic/topology.h>
 

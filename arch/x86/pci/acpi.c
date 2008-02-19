@@ -191,7 +191,10 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 {
 	struct pci_bus *bus;
 	struct pci_sysdata *sd;
+	int node;
+#ifdef CONFIG_ACPI_NUMA
 	int pxm;
+#endif
 
 	dmi_check_system(acpi_pciprobe_dmi_table);
 
@@ -200,6 +203,17 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 		       "(dom %d, bus %d)\n", domain, busnum);
 		return NULL;
 	}
+
+	node = -1;
+#ifdef CONFIG_ACPI_NUMA
+	pxm = acpi_get_pxm(device->handle);
+	if (pxm >= 0)
+		node = pxm_to_node(pxm);
+	if (node != -1)
+		set_mp_bus_to_node(busnum, node);
+	else
+		node = get_mp_bus_to_node(busnum);
+#endif
 
 	/* Allocate per-root-bus (not per bus) arch-specific data.
 	 * TODO: leak; this memory is never freed.
@@ -212,22 +226,16 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 	}
 
 	sd->domain = domain;
-	sd->node = -1;
-
-	pxm = acpi_get_pxm(device->handle);
-#ifdef CONFIG_ACPI_NUMA
-	if (pxm >= 0)
-		sd->node = pxm_to_node(pxm);
-#endif
+	sd->node = node;
 
 	bus = pci_scan_bus_parented(NULL, busnum, &pci_root_ops, sd);
 	if (!bus)
 		kfree(sd);
 
 #ifdef CONFIG_ACPI_NUMA
-	if (bus != NULL) {
+	if (bus) {
 		if (pxm >= 0) {
-			printk("bus %d -> pxm %d -> node %d\n",
+			printk(KERN_DEBUG "bus %02x -> pxm %d -> node %d\n",
 				busnum, pxm, sd->node);
 		}
 	}
@@ -235,7 +243,6 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 
 	if (bus && (pci_probe & PCI_USE__CRS))
 		get_current_resources(device, busnum, bus);
-	
 	return bus;
 }
 
