@@ -34,6 +34,7 @@
 #include <linux/hwmon-vid.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
+#include <linux/acpi.h>
 #include <asm/io.h>
 
 /* ISA device, if found */
@@ -49,7 +50,7 @@ module_param(force_id, ushort, 0);
 MODULE_PARM_DESC(force_id, "Override the detected device ID");
 
 /* Addresses to scan */
-static unsigned short normal_i2c[] = {0x2c, 0x2d, 0x2e, I2C_CLIENT_END};
+static const unsigned short normal_i2c[] = {0x2c, 0x2d, 0x2e, I2C_CLIENT_END};
 
 /* Insmod parameters */
 I2C_CLIENT_INSMOD_1(dme1737);
@@ -2237,6 +2238,10 @@ static int __init dme1737_isa_device_add(unsigned short addr)
 		.flags	= IORESOURCE_IO,
 	};
 	int err;
+
+	err = acpi_check_resource_conflict(&res);
+	if (err)
+		goto exit;
 
 	if (!(pdev = platform_device_alloc("dme1737", addr))) {
 		printk(KERN_ERR "dme1737: Failed to allocate device.\n");
