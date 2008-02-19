@@ -158,6 +158,16 @@ config IOMMU_LEAK
 	  Add a simple leak tracer to the IOMMU code. This is useful when you
 	  are debugging a buggy device driver that leaks IOMMU mappings.
 
+config SYSPROF
+	tristate "Enable sysprof userland performance sampler"
+	depends on PROFILING
+	help
+	  This option enables the sysprof debugfs file that is used by the
+	  sysprof tool. sysprof is a tool to show where in userspace CPU
+	  time is spent.
+
+	  When in doubt, say N
+
 #
 # IO delay types:
 #

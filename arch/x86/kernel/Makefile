@@ -79,6 +79,8 @@ obj-$(CONFIG_DEBUG_NX_TEST)	+= test_nx.o
 obj-$(CONFIG_VMI)		+= vmi_32.o vmiclock_32.o
 obj-$(CONFIG_PARAVIRT)		+= paravirt.o paravirt_patch_$(BITS).o
 
+obj-$(CONFIG_SYSPROF)		+= sysprof.o
+
 ifdef CONFIG_INPUT_PCSPKR
 obj-y				+= pcspeaker.o
 endif
