@@ -294,7 +294,6 @@ EXPORT_SYMBOL(blk_queue_stack_limits);
 
 /**
  * blk_queue_dma_drain - Set up a drain buffer for excess dma.
- *
  * @q:  the request queue for the device
  * @buf:	physically contiguous buffer
  * @size:	size of the buffer in bytes
