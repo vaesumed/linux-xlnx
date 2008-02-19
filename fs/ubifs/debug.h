@@ -368,4 +368,23 @@ struct shrinker {
 #define UBIFSCOMPATNULL
 #endif /* LINUX_VERSION_CODE >= 2.6.23 */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
+
+/*
+ * We have write_begin() write_end() instead of prepare_write(), commit_write()
+ * since 2.6.24.
+ */
+#define UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
+#define do_readpage(page) ubifs_do_readpage(page)
+int ubifs_do_readpage(struct page *page);
+int ubifs_prepare_write(struct file *file, struct page *page, unsigned from,
+			unsigned to);
+int ubifs_commit_write(struct file *file, struct page *page, unsigned from,
+		       unsigned to);
+struct retries_info;
+int ubifs_make_free_space(struct ubifs_info *c, struct retries_info *ri,
+			  int locked_pg);
+
+#endif /* LINUX_VERSION_CODE >= 2.6.24 */
+
 #endif /* !__UBIFS_DEBUG_H__ */

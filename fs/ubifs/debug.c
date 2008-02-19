@@ -1238,3 +1238,268 @@ out:
 }
 
 #endif /* UBIFS_COMPAT_USE_OLD_IGET */
+
+#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
+
+int ubifs_prepare_write(struct file *file, struct page *page, unsigned from,
+			unsigned to)
+{
+	struct inode *inode = page->mapping->host;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	loff_t pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
+	struct ubifs_budget_req req;
+	int err;
+
+	ubifs_assert(PageLocked(page));
+	ubifs_assert(mutex_is_locked(&inode->i_mutex));
+	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
+	dbg_eat_memory();
+
+	if (c->ro_media)
+		return -EINVAL;
+
+	if (!PageUptodate(page)) {
+		/*
+		 * The page is not loaded from the flash and has to be loaded
+		 * unless we are writing all of it.
+		 */
+		if (from == 0 && to == PAGE_CACHE_SIZE)
+			/*
+			 * Set the PG_checked flag to make the further code
+			 * allocate full budget, because we do not know whether
+			 * the page exists on the flash media or not.
+			 */
+			SetPageChecked(page);
+		else {
+			err = do_readpage(page);
+			if (err)
+				return err;
+		}
+
+		SetPageUptodate(page);
+		ClearPageError(page);
+	}
+
+	memset(&req, 0, sizeof(struct ubifs_budget_req));
+	if (!PagePrivate(page)) {
+		/*
+		 * If the PG_Checked flag is set, the page corresponds to a
+		 * hole or to a place beyond the inode. In this case we have to
+		 * budget for a new page, otherwise for a dirtied page.
+		 */
+		if (PageChecked(page))
+			req.new_page = 1;
+		else
+			req.dirtied_page = 1;
+	} else
+		req.locked_pg = 1;
+
+	if (pos > inode->i_size)
+		/*
+		 * We are writing beyond the file which means we are going to
+		 * change inode size and make the inode dirty. And in turn,
+		 * this means we have to budget for making the inode dirty.
+		 *
+		 * Note, if the inode is already dirty,
+		 * 'ubifs_budget_operation()' will not allocate any budget, but
+		 * will just lock the @budg_mutex of the inode to prevent it
+		 * from becoming clean before we have changed its size, which is
+		 * going to happen in 'ubifs_write_end()'.
+		 */
+		err = ubifs_budget_operation(c, inode, &req);
+	else
+		/*
+		 * The inode is not going to be marked as dirty by this write
+		 * operation, do do not budget for this.
+		 */
+		err = ubifs_budget_space(c, &req);
+
+	return err;
+}
+
+int ubifs_commit_write(struct file *file, struct page *page, unsigned from,
+		       unsigned to)
+{
+	struct inode *inode = page->mapping->host;
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	loff_t pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
+
+	dbg_gen("ino %lu, pg %lu, offs %lld-%lld (in pg: %u-%u, %u bytes) "
+		"flags %#lx", inode->i_ino, page->index, pos - to + from,
+		pos, from, to, to - from, page->flags);
+	ubifs_assert(PageUptodate(page));
+	ubifs_assert(mutex_is_locked(&inode->i_mutex));
+
+	if (!PagePrivate(page)) {
+		SetPagePrivate(page);
+		atomic_long_inc(&c->dirty_pg_cnt);
+		__set_page_dirty_nobuffers(page);
+	}
+
+	if (pos > inode->i_size) {
+		i_size_write(inode, pos);
+		ubifs_set_i_bytes(inode);
+
+		/*
+		 * Note, we do not set 'I_DIRTY_PAGES' (which means that the
+		 * inode has dirty pages), this has been done in
+		 * '__set_page_dirty_nobuffers()'.
+		 */
+		mark_inode_dirty_sync(inode);
+
+		/*
+		 * The inode has been marked dirty, unlock it. This is a bit
+		 * hacky because normally we would have to call
+		 * 'ubifs_release_op_budget()'. But we know there is nothing to
+		 * release because page's budget will be released in
+		 * 'ubifs_write_page()' and inode's budget will be released in
+		 * 'ubifs_write_inode()', so just unlock the inode here for
+		 * optimization.
+		 */
+		mutex_unlock(&ui->budg_mutex);
+	}
+
+	return 0;
+}
+
+#include <linux/writeback.h>
+
+#define MAX_SHINK_RETRIES 8
+#define MAX_GC_RETRIES    4
+#define MAX_CMT_RETRIES   2
+#define MAX_NOSPC_RETRIES 1
+#define NR_TO_WRITE 16
+
+struct retries_info {
+	long long prev_liability;
+	unsigned int shrink_cnt;
+	unsigned int shrink_retries:5;
+	unsigned int try_gc:1;
+	unsigned int gc_retries:4;
+	unsigned int cmt_retries:3;
+	unsigned int nospc_retries:1;
+};
+
+static int shrink_liability(struct ubifs_info *c, int nr_to_write,
+			    int locked_pg)
+{
+	struct writeback_control wbc = {
+		.sync_mode   = WB_SYNC_NONE,
+		.range_end   = LLONG_MAX,
+		.nr_to_write = nr_to_write,
+		.skip_locked_pages = locked_pg,
+	};
+
+	writeback_inodes_sb(c->vfs_sb, &wbc);
+	dbg_budg("%ld pages were written back", nr_to_write - wbc.nr_to_write);
+	return nr_to_write - wbc.nr_to_write;
+}
+
+static int run_gc(struct ubifs_info *c)
+{
+	int err, lnum;
+
+	/* Make some free space by garbage-collecting dirty space */
+	down_read(&c->commit_sem);
+	lnum = ubifs_garbage_collect(c, 1);
+	up_read(&c->commit_sem);
+	if (lnum < 0)
+		return lnum;
+
+	/* GC freed one LEB, return it to lprops */
+	dbg_budg("GC freed LEB %d", lnum);
+	err = ubifs_return_leb(c, lnum);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+int ubifs_make_free_space(struct ubifs_info *c, struct retries_info *ri,
+			  int locked_pg)
+{
+	int err;
+
+	/*
+	 * If we have some dirty pages and inodes (liability), try to write
+	 * them back unless this was tried too many times without effect
+	 * already.
+	 */
+	if (ri->shrink_retries < MAX_SHINK_RETRIES && !ri->try_gc) {
+		long long liability;
+
+		spin_lock(&c->space_lock);
+		liability = c->budg_idx_growth + c->budg_data_growth +
+			    c->budg_dd_growth;
+		spin_unlock(&c->space_lock);
+
+		if (ri->prev_liability >= liability) {
+			/* Liability does not shrink, next time try GC then */
+			ri->shrink_retries += 1;
+			if (ri->gc_retries < MAX_GC_RETRIES)
+				ri->try_gc = 1;
+			dbg_budg("liability did not shrink: retries %d of %d",
+				 ri->shrink_retries, MAX_SHINK_RETRIES);
+		}
+
+		dbg_budg("force write-back (count %d)", ri->shrink_cnt);
+		shrink_liability(c, NR_TO_WRITE + ri->shrink_cnt, locked_pg);
+
+		ri->prev_liability = liability;
+		ri->shrink_cnt += 1;
+		return -EAGAIN;
+	}
+
+	/*
+	 * Try to run garbage collector unless it was already tried too many
+	 * times.
+	 */
+	if (ri->gc_retries < MAX_GC_RETRIES) {
+		ri->gc_retries += 1;
+		dbg_budg("run GC, retries %d of %d",
+			 ri->gc_retries, MAX_GC_RETRIES);
+
+		ri->try_gc = 0;
+		err = run_gc(c);
+		if (!err)
+			return -EAGAIN;
+
+		if (err == -EAGAIN) {
+			dbg_budg("GC asked to commit");
+			err = ubifs_run_commit(c);
+			if (err)
+				return err;
+			return -EAGAIN;
+		}
+
+		if (err != -ENOSPC)
+			return err;
+
+		/*
+		 * GC could not make any progress. If this is the first time,
+		 * then it makes sense to try to commit, because it might make
+		 * some dirty space.
+		 */
+		dbg_budg("GC returned -ENOSPC, retries %d",
+			 ri->nospc_retries);
+		if (ri->nospc_retries >= MAX_NOSPC_RETRIES)
+			return err;
+		ri->nospc_retries += 1;
+	}
+
+	/* Neither GC nor write-back helped, try to commit */
+	if (ri->cmt_retries < MAX_CMT_RETRIES) {
+		ri->cmt_retries += 1;
+		dbg_budg("run commit, retries %d of %d",
+			 ri->cmt_retries, MAX_CMT_RETRIES);
+		err = ubifs_run_commit(c);
+		if (err)
+			return err;
+		return -EAGAIN;
+	}
+
+	return -ENOSPC;
+}
+
+#endif /* UBIFS_COMPAT_USE_OLD_PREPARE_WRITE */
