@@ -79,7 +79,6 @@ struct retries_info {
  * shrink_liability - write-back some dirty pages/inodes.
  * @c: UBIFS file-system description object
  * @nr_to_write: how many dirty pages to write-back
- * @locked_pg: non-zero if the caller is holding a dirty page locked
  *
  * This function shrinks UBIFS liability by means of writing back some amount
  * of dirty inodes and their pages. Returns the amount of pages which were
@@ -87,23 +86,22 @@ struct retries_info {
  * synchronized.
  *
  * Note, this function synchronizes even VFS inodes which are locked
- * ('i_mutex') by the caller of the budgeting function, because write-back does
- * not touch 'i_mutex'.
+ * (@i_mutex) by the caller of the budgeting function, because write-back does
+ * not touch @i_mutex.
  */
-static int shrink_liability(struct ubifs_info *c, int nr_to_write,
-			    int locked_pg)
+static int shrink_liability(struct ubifs_info *c, int nr_to_write)
 {
 	struct writeback_control wbc = {
 		.sync_mode   = WB_SYNC_NONE,
 		.range_end   = LLONG_MAX,
 		.nr_to_write = nr_to_write,
-		.skip_locked_pages = locked_pg,
 	};
 
 	writeback_inodes_sb(c->vfs_sb, &wbc);
 	dbg_budg("%ld pages were written back", nr_to_write - wbc.nr_to_write);
 	return nr_to_write - wbc.nr_to_write;
 }
+
 
 /**
  * run_gc - run garbage collector.
@@ -137,7 +135,6 @@ static int run_gc(struct ubifs_info *c)
  * make_free_space - make more free space on the file-system.
  * @c: UBIFS file-system description object
  * @ri: information about previous invocations of this function
- * @locked_pg: non-zero of the caller is holding a dirty page
  *
  * This function is called when an operation cannot be budgeted because there
  * is supposedly no free space. But in most cases there is some free space:
@@ -153,8 +150,7 @@ static int run_gc(struct ubifs_info *c)
  * Returns %-ENOSPC if it couldn't do more free space, and other negative error
  * codes on failures.
  */
-static int make_free_space(struct ubifs_info *c, struct retries_info *ri,
-			   int locked_pg)
+static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
 {
 	int err;
 
@@ -181,7 +177,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri,
 		}
 
 		dbg_budg("force write-back (count %d)", ri->shrink_cnt);
-		shrink_liability(c, NR_TO_WRITE + ri->shrink_cnt, locked_pg);
+		shrink_liability(c, NR_TO_WRITE + ri->shrink_cnt);
 
 		ri->prev_liability = liability;
 		ri->shrink_cnt += 1;
@@ -308,7 +304,7 @@ static long long calc_available(const struct ubifs_info *c)
 	available -= c->lst.total_dead;
 
 	/*
-	 * Subtract dark space, which migh or might not be usable - it depends
+	 * Subtract dark space, which might or might not be usable - it depends
 	 * on the data which we have on the media and which will be written. If
 	 * this is a lot of uncompressed or not-compressible data, the dark
 	 * space cannot be used.
@@ -530,7 +526,13 @@ again:
 	return 0;
 
 make_space:
-	err = make_free_space(c, &ri, req->locked_pg);
+/* TODO: remove compatibility stuff as late as possible */
+#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
+	err = ubifs_make_free_space(c, &ri, req->locked_pg);
+#else
+	err = make_free_space(c, &ri);
+#endif
+
 	if (err == -EAGAIN) {
 		dbg_budg("try again");
 		cond_resched();
@@ -572,6 +574,29 @@ void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
 	ubifs_assert(c->budg_idx_growth >= 0);
 	ubifs_assert(c->budg_data_growth >= 0);
 	ubifs_assert(c->min_idx_lebs < c->main_lebs);
+	spin_unlock(&c->space_lock);
+}
+
+/**
+ * ubifs_convert_page_budget - convert budget of a new page.
+ * @c: UBIFS file-system description object
+ *
+ * This function convert budget which was allocated for a new page of data to
+ * the budget of changing an existing page of data. The latter is not larger
+ * then the former, so this function only does simple re-calculation and does
+ * not involve any write-back.
+ */
+void ubifs_convert_page_budget(struct ubifs_info *c)
+{
+	spin_lock(&c->space_lock);
+	/* Release the index growth reservation */
+	c->budg_idx_growth -= c->max_idx_node_sz;
+	/* Release the data growth reservation */
+	c->budg_data_growth -= c->page_budget;
+	/* Increase the dirty data growth reservation instead */
+	c->budg_dd_growth += c->page_budget;
+	/* And re-calculate the indexing space reservation */
+	c->min_idx_lebs = ubifs_calc_min_idx_lebs(c);
 	spin_unlock(&c->space_lock);
 }
 
