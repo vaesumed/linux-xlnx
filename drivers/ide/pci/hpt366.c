@@ -760,7 +760,7 @@ static void hpt3xx_maskproc(ide_drive_t *drive, int mask)
 		}
 	} else
 		outb(mask ? (drive->ctl | 2) : (drive->ctl & ~2),
-		     IDE_CONTROL_REG);
+		     hwif->io_ports[IDE_CONTROL_OFFSET]);
 }
 
 /*
@@ -1614,7 +1614,7 @@ static int __devinit hpt366_init_one(struct pci_dev *dev, const struct pci_devic
 			hpt374_init(dev, dev2);
 		else {
 			if (hpt36x_init(dev, dev2))
-				d.host_flags |= IDE_HFLAG_BOOTABLE;
+				d.host_flags &= ~IDE_HFLAG_NON_BOOTABLE;
 		}
 
 		ret = ide_setup_pci_devices(dev, dev2, &d);

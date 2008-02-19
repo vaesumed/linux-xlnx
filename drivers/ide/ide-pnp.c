@@ -38,7 +38,7 @@ static int idepnp_probe(struct pnp_dev * dev, const struct pnp_device_id *dev_id
 				pnp_port_start(dev, 1));
 	hw.irq = pnp_irq(dev, 0);
 
-	hwif = ide_find_port(hw.io_ports[IDE_DATA_OFFSET]);
+	hwif = ide_find_port();
 	if (hwif) {
 		u8 index = hwif->index;
 		u8 idx[4] = { index, 0xff, 0xff, 0xff };
@@ -62,7 +62,7 @@ static void idepnp_remove(struct pnp_dev * dev)
 	ide_hwif_t *hwif = pnp_get_drvdata(dev);
 
 	if (hwif)
-		ide_unregister(hwif->index, 0, 0);
+		ide_unregister(hwif->index);
 	else
 		printk(KERN_ERR "idepnp: Unable to remove device, please report.\n");
 }
