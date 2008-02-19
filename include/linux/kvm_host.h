@@ -67,7 +67,9 @@ void kvm_io_bus_register_dev(struct kvm_io_bus *bus,
 
 struct kvm_vcpu {
 	struct kvm *kvm;
+#ifdef CONFIG_PREEMPT_NOTIFIERS
 	struct preempt_notifier preempt_notifier;
+#endif
 	int vcpu_id;
 	struct mutex mutex;
 	int   cpu;
@@ -107,6 +109,7 @@ struct kvm_memory_slot {
 struct kvm {
 	struct mutex lock; /* protects the vcpus array and APIC accesses */
 	spinlock_t mmu_lock;
+	struct rw_semaphore slots_lock;
 	struct mm_struct *mm; /* userspace tied to this vm */
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS +

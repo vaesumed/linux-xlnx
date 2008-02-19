@@ -57,7 +57,8 @@
 
 #define KVM_PERMILLE_MMU_PAGES 20
 #define KVM_MIN_ALLOC_MMU_PAGES 64
-#define KVM_NUM_MMU_PAGES 1024
+#define KVM_MMU_HASH_SHIFT 10
+#define KVM_NUM_MMU_PAGES (1 << KVM_MMU_HASH_SHIFT)
 #define KVM_MIN_FREE_MMU_PAGES 5
 #define KVM_REFILL_PAGES 25
 #define KVM_MAX_CPUID_ENTRIES 40
@@ -260,6 +261,11 @@ struct kvm_vcpu_arch {
 	/* emulate context */
 
 	struct x86_emulate_ctxt emulate_ctxt;
+
+	gpa_t time;
+	struct kvm_vcpu_time_info hv_clock;
+	unsigned int time_offset;
+	struct page *time_page;
 };
 
 struct kvm_mem_alias {
@@ -286,6 +292,8 @@ struct kvm_arch{
 	int round_robin_prev_vcpu;
 	unsigned int tss_addr;
 	struct page *apic_access_page;
+
+	gpa_t wall_clock;
 };
 
 struct kvm_vm_stat {
@@ -409,6 +417,8 @@ void kvm_mmu_zap_all(struct kvm *kvm);
 unsigned int kvm_mmu_calculate_mmu_pages(struct kvm *kvm);
 void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages);
 
+int load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3);
+
 enum emulation_result {
 	EMULATE_DONE,       /* no further processing */
 	EMULATE_DO_MMIO,      /* kvm_run filled with mmio request */
@@ -428,6 +438,7 @@ void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
 unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr);
 void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long value,
 		     unsigned long *rflags);
+void kvm_enable_efer_bits(u64);
 int kvm_get_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *data);
 int kvm_set_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 data);
 
@@ -489,6 +500,8 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu);
 int kvm_fix_hypercall(struct kvm_vcpu *vcpu);
 
 int kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gva_t gva, u32 error_code);
+
+void kvm_enable_tdp(void);
 
 int load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3);
 int complete_pio(struct kvm_vcpu *vcpu);
@@ -599,6 +612,7 @@ static inline void kvm_inject_gp(struct kvm_vcpu *vcpu, u32 error_code)
 #define ASM_VMX_VMWRITE_RSP_RDX   ".byte 0x0f, 0x79, 0xd4"
 #define ASM_VMX_VMXOFF            ".byte 0x0f, 0x01, 0xc4"
 #define ASM_VMX_VMXON_RAX         ".byte 0xf3, 0x0f, 0xc7, 0x30"
+#define ASM_VMX_INVVPID		  ".byte 0x66, 0x0f, 0x38, 0x81, 0x08"
 
 #define MSR_IA32_TIME_STAMP_COUNTER		0x010
 
