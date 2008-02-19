@@ -64,6 +64,9 @@
 /* The default maximum size of reserved pool in bytes */
 #define DEFAULT_MAX_RP_SIZE (5*1024*1024)
 
+/* Default UBIFS compressor */
+#define DEFAULT_COMPRESSOR UBIFS_COMPR_LZO
+
 /**
  * create_default_filesystem - format empty UBI volume.
  * @c: UBIFS file-system description object
@@ -169,7 +172,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->fanout        = cpu_to_le32(DEFAULT_FANOUT);
 	sup->lsave_cnt     = cpu_to_le32(c->lsave_cnt);
 	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
-	sup->default_compr = cpu_to_le16(c->default_compr);
+	sup->default_compr = cpu_to_le16(DEFAULT_COMPRESSOR);
 
 	main_bytes = (long long)main_lebs * c->leb_size;
 	tmp64 = main_bytes * DEFAULT_RP_PERCENT;
