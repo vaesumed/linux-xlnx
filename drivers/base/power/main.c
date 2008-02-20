@@ -415,7 +415,7 @@ EXPORT_SYMBOL_GPL(device_power_down);
  *	@dev:	Device.
  *	@state:	Power state device is entering.
  */
-int suspend_device(struct device *dev, pm_message_t state)
+static int suspend_device(struct device *dev, pm_message_t state)
 {
 	int error = 0;
 
@@ -523,6 +523,7 @@ static void lock_all_devices(void)
 
 /**
  *	device_suspend - Save state and stop all devices in system.
+ *	@state: new power management state
  *
  *	Prevent new devices from being registered, then lock all devices
  *	and suspend them.
