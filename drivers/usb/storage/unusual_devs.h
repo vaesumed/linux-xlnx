@@ -357,7 +357,7 @@ UNUSUAL_DEV(  0x04b0, 0x040f, 0x0100, 0x0200,
 		US_FL_FIX_CAPACITY),
 
 /* Reported by Emil Larsson <emil@swip.net> */
-UNUSUAL_DEV(  0x04b0, 0x0411, 0x0100, 0x0101,
+UNUSUAL_DEV(  0x04b0, 0x0411, 0x0100, 0x0110,
 		"NIKON",
 		"NIKON DSC D80",
 		US_SC_DEVICE, US_PR_DEVICE, NULL,
@@ -758,6 +758,18 @@ UNUSUAL_DEV(  0x0595, 0x4343, 0x0000, 0x2210,
 		"Fujifilm",
 		"Digital Camera EX-20 DSC",
 		US_SC_8070, US_PR_DEVICE, NULL, 0 ),
+
+/* Reported by Andre Welter <a.r.welter@gmx.de>
+ * This antique device predates the release of the Bulk-only Transport
+ * spec, and if it gets a Get-Max-LUN then it requires the host to do a
+ * Clear-Halt on the bulk endpoints.  The SINGLE_LUN flag will prevent
+ * us from sending the request.
+ */
+UNUSUAL_DEV(  0x059b, 0x0001, 0x0100, 0x0100,
+		"Iomega",
+		"ZIP 100",
+		US_SC_DEVICE, US_PR_DEVICE, NULL,
+		US_FL_SINGLE_LUN ),
 
 /* Reported by <Hendryk.Pfeiffer@gmx.de> */
 UNUSUAL_DEV(  0x059f, 0x0643, 0x0000, 0x0000,
