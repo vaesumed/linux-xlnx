@@ -1,7 +1,7 @@
 # UBIFS debugging configuration options, part of fs/ubifs/Kconfig
 
 config UBIFS_FS_DEBUG
-	bool "UBIFS debugging"
+	bool "Enable debugging"
 	default n
 	depends on UBIFS_FS
 	select DEBUG_FS
@@ -9,7 +9,7 @@ config UBIFS_FS_DEBUG
 	help
 	  This option enables UBIFS debugging.
 
-menu "UBIFS debugging messages"
+menu "Debugging messages"
 	depends on UBIFS_FS_DEBUG
 
 config UBIFS_FS_DEBUG_MSG_GEN
@@ -92,7 +92,7 @@ config UBIFS_FS_DEBUG_MSG_RCVRY
 
 endmenu
 
-menu "UBIFS Extra self-checks"
+menu "Extra self-checks"
 	depends on UBIFS_FS_DEBUG
 
 config UBIFS_FS_DEBUG_CHK_MEMPRESS
@@ -166,7 +166,7 @@ config UBIFS_FS_DEBUG_TEST_RCVRY
 	depends on UBIFS_FS_DEBUG
 	help
 	  This option provides the ability to test recovery from unclean
-	  unmounts.  It causes UBIFS to simulate device removal.  At a some
+	  unmounts. It causes UBIFS to simulate device removal.  At a some
 	  random point UBIFS will switch to "failure mode" after which all I/O
-	  operations will fail.  UBIFS can then be unmounted and mounted again
+	  operations will fail. UBIFS can then be unmounted and mounted again
 	  at which point "failure mode" is switched off and recovery ensues.
