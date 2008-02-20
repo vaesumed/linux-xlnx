@@ -22,6 +22,8 @@
 #define SUBORDINATE_LDT_BUS_NUMBER(dword) ((dword >> 16) & 0xFF)
 #define PCI_DEVICE_ID_K8HTCONFIG 0x1100
 
+#ifdef CONFIG_NUMA
+
 #define BUS_NR 256
 
 static int mp_bus_to_node[BUS_NR];
@@ -51,6 +53,8 @@ int get_mp_bus_to_node(int busnum)
 	return node;
 }
 
+#endif
+
 /**
  * early_fill_mp_bus_to_node()
  * called before pcibios_scan_root and pci_scan_bus
@@ -60,6 +64,7 @@ int get_mp_bus_to_node(int busnum)
 __init static int
 early_fill_mp_bus_to_node(void)
 {
+#ifdef CONFIG_NUMA
 	int i, j;
 	unsigned slot;
 	u32 ldtbus, nid;
@@ -111,6 +116,7 @@ early_fill_mp_bus_to_node(void)
 		if (node >= 0)
 			printk(KERN_DEBUG "bus: %02x to node: %02x\n", i, node);
 	}
+#endif
 	return 0;
 }
 

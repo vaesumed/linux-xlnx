@@ -193,8 +193,8 @@ extern cpumask_t cpu_coregroup_map(int cpu);
 #endif
 
 #ifdef CONFIG_NUMA
-int get_mp_bus_to_node(int busnum);
-void set_mp_bus_to_node(int busnum, int node);
+extern int get_mp_bus_to_node(int busnum);
+extern void set_mp_bus_to_node(int busnum, int node);
 #else
 static inline int get_mp_bus_to_node(int busnum)
 {
