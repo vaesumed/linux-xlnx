@@ -65,6 +65,14 @@
 #define MemAbs      (1<<9)      /* Memory operand is absolute displacement */
 #define String      (1<<10)     /* String instruction (rep capable) */
 #define Stack       (1<<11)     /* Stack instruction (push/pop) */
+#define Group       (1<<14)     /* Bits 3:5 of modrm byte extend opcode */
+#define GroupDual   (1<<15)     /* Alternate decoding of mod == 3 */
+#define GroupMask   0xff        /* Group number stored in bits 0:7 */
+
+enum {
+	Group1_80, Group1_81, Group1_82, Group1_83,
+	Group1A, Group3_Byte, Group3, Group4, Group5, Group7,
+};
 
 static u16 opcode_table[256] = {
 	/* 0x00 - 0x07 */
@@ -123,14 +131,14 @@ static u16 opcode_table[256] = {
 	ImplicitOps, ImplicitOps, ImplicitOps, ImplicitOps,
 	ImplicitOps, ImplicitOps, ImplicitOps, ImplicitOps,
 	/* 0x80 - 0x87 */
-	ByteOp | DstMem | SrcImm | ModRM, DstMem | SrcImm | ModRM,
-	ByteOp | DstMem | SrcImm | ModRM, DstMem | SrcImmByte | ModRM,
+	Group | Group1_80, Group | Group1_81,
+	Group | Group1_82, Group | Group1_83,
 	ByteOp | DstMem | SrcReg | ModRM, DstMem | SrcReg | ModRM,
 	ByteOp | DstMem | SrcReg | ModRM, DstMem | SrcReg | ModRM,
 	/* 0x88 - 0x8F */
 	ByteOp | DstMem | SrcReg | ModRM | Mov, DstMem | SrcReg | ModRM | Mov,
 	ByteOp | DstReg | SrcMem | ModRM | Mov, DstReg | SrcMem | ModRM | Mov,
-	0, ModRM | DstReg, 0, DstMem | SrcNone | ModRM | Mov | Stack,
+	0, ModRM | DstReg, 0, Group | Group1A,
 	/* 0x90 - 0x9F */
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, ImplicitOps | Stack, ImplicitOps | Stack, 0, 0,
@@ -164,16 +172,15 @@ static u16 opcode_table[256] = {
 	0, 0, 0, 0,
 	/* 0xF0 - 0xF7 */
 	0, 0, 0, 0,
-	ImplicitOps, ImplicitOps,
-	ByteOp | DstMem | SrcNone | ModRM, DstMem | SrcNone | ModRM,
+	ImplicitOps, ImplicitOps, Group | Group3_Byte, Group | Group3,
 	/* 0xF8 - 0xFF */
 	ImplicitOps, 0, ImplicitOps, ImplicitOps,
-	0, 0, ByteOp | DstMem | SrcNone | ModRM, DstMem | SrcNone | ModRM
+	0, 0, Group | Group4, Group | Group5,
 };
 
 static u16 twobyte_table[256] = {
 	/* 0x00 - 0x0F */
-	0, SrcMem | ModRM | DstReg, 0, 0, 0, 0, ImplicitOps, 0,
+	0, Group | GroupDual | Group7, 0, 0, 0, 0, ImplicitOps, 0,
 	ImplicitOps, ImplicitOps, 0, 0, 0, ImplicitOps | ModRM, 0, 0,
 	/* 0x10 - 0x1F */
 	0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0, 0, 0, 0, 0, 0,
@@ -227,6 +234,53 @@ static u16 twobyte_table[256] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0xF0 - 0xFF */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+static u16 group_table[] = {
+	[Group1_80*8] =
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	[Group1_81*8] =
+	DstMem | SrcImm | ModRM, DstMem | SrcImm | ModRM,
+	DstMem | SrcImm | ModRM, DstMem | SrcImm | ModRM,
+	DstMem | SrcImm | ModRM, DstMem | SrcImm | ModRM,
+	DstMem | SrcImm | ModRM, DstMem | SrcImm | ModRM,
+	[Group1_82*8] =
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	ByteOp | DstMem | SrcImm | ModRM, ByteOp | DstMem | SrcImm | ModRM,
+	[Group1_83*8] =
+	DstMem | SrcImmByte | ModRM, DstMem | SrcImmByte | ModRM,
+	DstMem | SrcImmByte | ModRM, DstMem | SrcImmByte | ModRM,
+	DstMem | SrcImmByte | ModRM, DstMem | SrcImmByte | ModRM,
+	DstMem | SrcImmByte | ModRM, DstMem | SrcImmByte | ModRM,
+	[Group1A*8] =
+	DstMem | SrcNone | ModRM | Mov | Stack, 0, 0, 0, 0, 0, 0, 0,
+	[Group3_Byte*8] =
+	ByteOp | SrcImm | DstMem | ModRM, 0,
+	ByteOp | DstMem | SrcNone | ModRM, ByteOp | DstMem | SrcNone | ModRM,
+	0, 0, 0, 0,
+	[Group3*8] =
+	DstMem | SrcImm | ModRM | SrcImm, 0,
+	DstMem | SrcNone | ModRM, ByteOp | DstMem | SrcNone | ModRM,
+	0, 0, 0, 0,
+	[Group4*8] =
+	ByteOp | DstMem | SrcNone | ModRM, ByteOp | DstMem | SrcNone | ModRM,
+	0, 0, 0, 0, 0, 0,
+	[Group5*8] =
+	DstMem | SrcNone | ModRM, DstMem | SrcNone | ModRM, 0, 0,
+	SrcMem | ModRM, 0, SrcMem | ModRM | Stack, 0,
+	[Group7*8] =
+	0, 0, ModRM | SrcMem, ModRM | SrcMem,
+	SrcNone | ModRM | DstMem, 0, SrcMem | ModRM, SrcMem | ModRM | ByteOp,
+};
+
+static u16 group2_table[] = {
+	[Group7*8] =
+	SrcNone | ModRM, 0, 0, 0, SrcNone | ModRM | DstMem, 0, SrcMem | ModRM, 0,
 };
 
 /* EFLAGS bit definitions. */
@@ -426,10 +480,15 @@ static u16 twobyte_table[256] = {
 	(_type)_x;							\
 })
 
+static inline unsigned long ad_mask(struct decode_cache *c)
+{
+	return (1UL << (c->ad_bytes << 3)) - 1;
+}
+
 /* Access/update address held in a register, based on addressing mode. */
 #define address_mask(reg)						\
 	((c->ad_bytes == sizeof(unsigned long)) ? 			\
-		(reg) :	((reg) & ((1UL << (c->ad_bytes << 3)) - 1)))
+		(reg) :	((reg) & ad_mask(c)))
 #define register_address(base, reg)                                     \
 	((base) + address_mask(reg))
 #define register_address_increment(reg, inc)                            \
@@ -440,9 +499,9 @@ static u16 twobyte_table[256] = {
 			(reg) += _inc;					\
 		else							\
 			(reg) = ((reg) & 				\
-				 ~((1UL << (c->ad_bytes << 3)) - 1)) |	\
+				 ~ad_mask(c)) |	\
 				(((reg) + _inc) &			\
-				 ((1UL << (c->ad_bytes << 3)) - 1));	\
+				 ad_mask(c));	\
 	} while (0)
 
 #define JMP_REL(rel) 							\
@@ -763,7 +822,7 @@ x86_decode_insn(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 	struct decode_cache *c = &ctxt->decode;
 	int rc = 0;
 	int mode = ctxt->mode;
-	int def_op_bytes, def_ad_bytes;
+	int def_op_bytes, def_ad_bytes, group;
 
 	/* Shadow copy of register state. Committed on successful emulation. */
 
@@ -864,12 +923,24 @@ done_prefixes:
 			c->b = insn_fetch(u8, 1, c->eip);
 			c->d = twobyte_table[c->b];
 		}
+	}
 
-		/* Unrecognised? */
-		if (c->d == 0) {
-			DPRINTF("Cannot emulate %02x\n", c->b);
-			return -1;
-		}
+	if (c->d & Group) {
+		group = c->d & GroupMask;
+		c->modrm = insn_fetch(u8, 1, c->eip);
+		--c->eip;
+
+		group = (group << 3) + ((c->modrm >> 3) & 7);
+		if ((c->d & GroupDual) && (c->modrm >> 6) == 3)
+			c->d = group2_table[group];
+		else
+			c->d = group_table[group];
+	}
+
+	/* Unrecognised? */
+	if (c->d == 0) {
+		DPRINTF("Cannot emulate %02x\n", c->b);
+		return -1;
 	}
 
 	if (mode == X86EMUL_MODE_PROT64 && (c->d & Stack))
@@ -1043,26 +1114,6 @@ static inline int emulate_grp3(struct x86_emulate_ctxt *ctxt,
 
 	switch (c->modrm_reg) {
 	case 0 ... 1:	/* test */
-		/*
-		 * Special case in Grp3: test has an immediate
-		 * source operand.
-		 */
-		c->src.type = OP_IMM;
-		c->src.ptr = (unsigned long *)c->eip;
-		c->src.bytes = (c->d & ByteOp) ? 1 : c->op_bytes;
-		if (c->src.bytes == 8)
-			c->src.bytes = 4;
-		switch (c->src.bytes) {
-		case 1:
-			c->src.val = insn_fetch(s8, 1, c->eip);
-			break;
-		case 2:
-			c->src.val = insn_fetch(s16, 2, c->eip);
-			break;
-		case 4:
-			c->src.val = insn_fetch(s32, 4, c->eip);
-			break;
-		}
 		emulate_2op_SrcV("test", c->src, c->dst, ctxt->eflags);
 		break;
 	case 2:	/* not */
@@ -1076,7 +1127,6 @@ static inline int emulate_grp3(struct x86_emulate_ctxt *ctxt,
 		rc = X86EMUL_UNHANDLEABLE;
 		break;
 	}
-done:
 	return rc;
 }
 
@@ -1084,7 +1134,6 @@ static inline int emulate_grp45(struct x86_emulate_ctxt *ctxt,
 			       struct x86_emulate_ops *ops)
 {
 	struct decode_cache *c = &ctxt->decode;
-	int rc;
 
 	switch (c->modrm_reg) {
 	case 0:	/* inc */
@@ -1094,36 +1143,11 @@ static inline int emulate_grp45(struct x86_emulate_ctxt *ctxt,
 		emulate_1op("dec", c->dst, ctxt->eflags);
 		break;
 	case 4: /* jmp abs */
-		if (c->b == 0xff)
-			c->eip = c->dst.val;
-		else {
-			DPRINTF("Cannot emulate %02x\n", c->b);
-			return X86EMUL_UNHANDLEABLE;
-		}
+		c->eip = c->src.val;
 		break;
 	case 6:	/* push */
-
-		/* 64-bit mode: PUSH always pushes a 64-bit operand. */
-
-		if (ctxt->mode == X86EMUL_MODE_PROT64) {
-			c->dst.bytes = 8;
-			rc = ops->read_std((unsigned long)c->dst.ptr,
-					   &c->dst.val, 8, ctxt->vcpu);
-			if (rc != 0)
-				return rc;
-		}
-		register_address_increment(c->regs[VCPU_REGS_RSP],
-					   -c->dst.bytes);
-		rc = ops->write_emulated(register_address(ctxt->ss_base,
-				    c->regs[VCPU_REGS_RSP]), &c->dst.val,
-				    c->dst.bytes, ctxt->vcpu);
-		if (rc != 0)
-			return rc;
-		c->dst.type = OP_NONE;
+		emulate_push(ctxt);
 		break;
-	default:
-		DPRINTF("Cannot emulate %02x\n", c->b);
-		return X86EMUL_UNHANDLEABLE;
 	}
 	return 0;
 }
