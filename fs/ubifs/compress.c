@@ -32,7 +32,7 @@ static struct ubifs_compressor none_compr = {
 	.capi_name = "",
 };
 
-#ifdef CONFIG_UBIFS_LZO
+#ifdef CONFIG_UBIFS_FS_LZO
 static DEFINE_MUTEX(lzo_mutex);
 
 static struct ubifs_compressor lzo_compr = {
@@ -48,7 +48,7 @@ static struct ubifs_compressor lzo_compr = {
 };
 #endif
 
-#ifdef CONFIG_UBIFS_ZLIB
+#ifdef CONFIG_UBIFS_FS_ZLIB
 static DEFINE_MUTEX(deflate_mutex);
 static DEFINE_MUTEX(inflate_mutex);
 

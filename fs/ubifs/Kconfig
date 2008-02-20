@@ -6,8 +6,8 @@ config UBIFS_FS
 	help
 	  UBIFS is a file system for flash devices which works on top of UBI.
 
-config UBIFS_COMPRESSION_OPTIONS
-	bool "Advanced compression options for UBIFS"
+config UBIFS_FS_ADVANCED_COMPR
+	bool "Advanced compression options"
 	depends on UBIFS_FS
 	default n
 	help
@@ -17,8 +17,8 @@ config UBIFS_COMPRESSION_OPTIONS
 
 	  If unsure, say 'N'.
 
-config UBIFS_LZO
-	bool "UBIFS LZO compression support" if UBIFS_COMPRESSION_OPTIONS
+config UBIFS_FS_LZO
+	bool "LZO compression support" if UBIFS_FS_ADVANCED_COMPR
 	select CRYPTO_LZO
 	depends on UBIFS_FS
 	default y
@@ -26,8 +26,8 @@ config UBIFS_LZO
 	   LZO compressor is generally faster then zlib but compresses worse.
 	   Say 'Y' if unsure.
 
-config UBIFS_ZLIB
-	bool "UBIFS ZLIB compression support" if UBIFS_COMPRESSION_OPTIONS
+config UBIFS_FS_ZLIB
+	bool "ZLIB compression support" if UBIFS_FS_ADVANCED_COMPR
 	select CRYPTO_DEFLATE
 	depends on UBIFS_FS
 	default y
