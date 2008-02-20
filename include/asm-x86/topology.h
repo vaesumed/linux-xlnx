@@ -172,8 +172,8 @@ extern int __node_distance(int, int);
 #define node_distance(a, b) __node_distance(a, b)
 #endif
 
-int get_mp_bus_to_node(int busnum);
-void set_mp_bus_to_node(int busnum, int node);
+extern int get_mp_bus_to_node(int busnum);
+extern void set_mp_bus_to_node(int busnum, int node);
 
 #else /* CONFIG_NUMA */
 
