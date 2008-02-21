@@ -238,7 +238,7 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 static void destroy_replay_tree(struct ubifs_info *c)
 {
 	struct rb_node *this = c->replay_tree.rb_node;
-	struct replay_entry *replay;
+	struct replay_entry *r;
 
 	while (this) {
 		if (this->rb_left) {
@@ -248,17 +248,17 @@ static void destroy_replay_tree(struct ubifs_info *c)
 			this = this->rb_right;
 			continue;
 		}
-		replay = rb_entry(this, struct replay_entry, rb);
+		r = rb_entry(this, struct replay_entry, rb);
 		this = rb_parent(this);
 		if (this) {
-			if (this->rb_left == &replay->rb)
+			if (this->rb_left == &r->rb)
 				this->rb_left = NULL;
 			else
 				this->rb_right = NULL;
 		}
-		if (key_type(c, &replay->key) == UBIFS_DENT_KEY)
-			kfree(replay->nm.name);
-		kfree(replay);
+		if (key_type(c, &r->key) == UBIFS_DENT_KEY)
+			kfree(r->nm.name);
+		kfree(r);
 	}
 	c->replay_tree = RB_ROOT;
 }
@@ -276,13 +276,13 @@ static int apply_replay_tree(struct ubifs_info *c)
 	struct rb_node *this = rb_first(&c->replay_tree);
 
 	while (this) {
-		struct replay_entry *replay;
+		struct replay_entry *r;
 		int err;
 
 		cond_resched();
 
-		replay = rb_entry(this, struct replay_entry, rb);
-		err = apply_replay_entry(c, replay);
+		r = rb_entry(this, struct replay_entry, rb);
+		err = apply_replay_entry(c, r);
 		if (err)
 			return err;
 		this = rb_next(this);
@@ -313,7 +313,7 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
 		       loff_t new_size)
 {
 	struct rb_node **p = &c->replay_tree.rb_node, *parent = NULL;
-	struct replay_entry *replay;
+	struct replay_entry *r;
 
 	if (key_ino(c, key) >= c->highest_inum)
 		c->highest_inum = key_ino(c, key);
@@ -321,11 +321,11 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
 	dbg_mnt_key(c, key, "add LEB %d:%d, key ", lnum, offs);
 	while (*p) {
 		parent = *p;
-		replay = rb_entry(parent, struct replay_entry, rb);
-		if (sqnum < replay->sqnum) {
+		r = rb_entry(parent, struct replay_entry, rb);
+		if (sqnum < r->sqnum) {
 			p = &(*p)->rb_left;
 			continue;
-		} else if (sqnum > replay->sqnum) {
+		} else if (sqnum > r->sqnum) {
 			p = &(*p)->rb_right;
 			continue;
 		}
@@ -333,23 +333,23 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
 		return -EINVAL;
 	}
 
-	replay = kzalloc(sizeof(struct replay_entry), GFP_KERNEL);
-	if (!replay)
+	r = kzalloc(sizeof(struct replay_entry), GFP_KERNEL);
+	if (!r)
 		return -ENOMEM;
 
 	if (!deletion)
 		*used += ALIGN(len, 8);
-	replay->lnum = lnum;
-	replay->offs = offs;
-	replay->len = len;
-	replay->sqnum = sqnum;
-	replay->flags = (deletion ? REPLAY_DELETION : 0);
-	replay->old_size = old_size;
-	replay->new_size = new_size;
-	key_copy(c, key, &replay->key);
+	r->lnum = lnum;
+	r->offs = offs;
+	r->len = len;
+	r->sqnum = sqnum;
+	r->flags = (deletion ? REPLAY_DELETION : 0);
+	r->old_size = old_size;
+	r->new_size = new_size;
+	key_copy(c, key, &r->key);
 
-	rb_link_node(&replay->rb, parent, p);
-	rb_insert_color(&replay->rb, &c->replay_tree);
+	rb_link_node(&r->rb, parent, p);
+	rb_insert_color(&r->rb, &c->replay_tree);
 	return 0;
 }
 
@@ -375,7 +375,7 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 		       unsigned long long sqnum, int deletion, int *used)
 {
 	struct rb_node **p = &c->replay_tree.rb_node, *parent = NULL;
-	struct replay_entry *replay;
+	struct replay_entry *r;
 	char *nbuf;
 
 	if (key_ino(c, key) >= c->highest_inum)
@@ -384,12 +384,12 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 	dbg_mnt_key(c, key, "add LEB %d:%d, key ", lnum, offs);
 	while (*p) {
 		parent = *p;
-		replay = rb_entry(parent, struct replay_entry, rb);
-		if (sqnum < replay->sqnum) {
+		r = rb_entry(parent, struct replay_entry, rb);
+		if (sqnum < r->sqnum) {
 			p = &(*p)->rb_left;
 			continue;
 		}
-		if (sqnum > replay->sqnum) {
+		if (sqnum > r->sqnum) {
 			p = &(*p)->rb_right;
 			continue;
 		}
@@ -397,31 +397,31 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 		return -EINVAL;
 	}
 
-	replay = kzalloc(sizeof(struct replay_entry), GFP_KERNEL);
-	if (!replay)
+	r = kzalloc(sizeof(struct replay_entry), GFP_KERNEL);
+	if (!r)
 		return -ENOMEM;
 	nbuf = kmalloc(nlen + 1, GFP_KERNEL);
 	if (!nbuf) {
-		kfree(replay);
+		kfree(r);
 		return -ENOMEM;
 	}
 
 	if (!deletion)
 		*used += ALIGN(len, 8);
-	replay->lnum = lnum;
-	replay->offs = offs;
-	replay->len = len;
-	replay->sqnum = sqnum;
-	replay->nm.len = nlen;
+	r->lnum = lnum;
+	r->offs = offs;
+	r->len = len;
+	r->sqnum = sqnum;
+	r->nm.len = nlen;
 	memcpy(nbuf, name, nlen);
 	nbuf[nlen] = '\0';
-	replay->nm.name = nbuf;
-	replay->flags = (deletion ? REPLAY_DELETION : 0);
-	key_copy(c, key, &replay->key);
+	r->nm.name = nbuf;
+	r->flags = (deletion ? REPLAY_DELETION : 0);
+	key_copy(c, key, &r->key);
 
 	ubifs_assert(!*p);
-	rb_link_node(&replay->rb, parent, p);
-	rb_insert_color(&replay->rb, &c->replay_tree);
+	rb_link_node(&r->rb, parent, p);
+	rb_insert_color(&r->rb, &c->replay_tree);
 	return 0;
 }
 
@@ -605,7 +605,7 @@ static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 			   unsigned long long sqnum, int free, int dirty)
 {
 	struct rb_node **p = &c->replay_tree.rb_node, *parent = NULL;
-	struct replay_entry *replay;
+	struct replay_entry *r;
 	union ubifs_key key;
 	int cmp;
 
@@ -613,33 +613,33 @@ static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 	max_inum_key(c, &key, -1);
 	while (*p) {
 		parent = *p;
-		replay = rb_entry(parent, struct replay_entry, rb);
-		cmp = keys_cmp(c, &key, &replay->key);
-		if (sqnum < replay->sqnum) {
+		r = rb_entry(parent, struct replay_entry, rb);
+		cmp = keys_cmp(c, &key, &r->key);
+		if (sqnum < r->sqnum) {
 			p = &(*p)->rb_left;
 			continue;
-		} else if (sqnum > replay->sqnum) {
+		} else if (sqnum > r->sqnum) {
 			p = &(*p)->rb_right;
 			continue;
 		}
-		ubifs_err("duplicate sqnum in replay");
+		ubifs_err("duplicate sqnum in r");
 		return -EINVAL;
 	}
 
-	replay = kzalloc(sizeof(struct replay_entry), GFP_KERNEL);
-	if (!replay)
+	r = kzalloc(sizeof(struct replay_entry), GFP_KERNEL);
+	if (!r)
 		return -ENOMEM;
 
-	replay->lnum = lnum;
-	replay->offs = offs;
-	replay->sqnum = sqnum;
-	replay->flags = REPLAY_REF;
-	replay->free = free;
-	replay->dirty = dirty;
-	key_copy(c, &key, &replay->key);
+	r->lnum = lnum;
+	r->offs = offs;
+	r->sqnum = sqnum;
+	r->flags = REPLAY_REF;
+	r->free = free;
+	r->dirty = dirty;
+	key_copy(c, &key, &r->key);
 
-	rb_link_node(&replay->rb, parent, p);
-	rb_insert_color(&replay->rb, &c->replay_tree);
+	rb_link_node(&r->rb, parent, p);
+	rb_insert_color(&r->rb, &c->replay_tree);
 	return 0;
 }
 
