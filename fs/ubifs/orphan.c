@@ -607,8 +607,8 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		for (i = 0; i < n; i++) {
 			inum = le64_to_cpu(orph->inos[i]);
 			dbg_rcvry("deleting orphaned inode %lu", inum);
-			min_inum_key(c, &from_key, inum);
-			max_inum_key(c, &to_key, inum);
+			lowest_ino_key(c, &from_key, inum);
+			highest_ino_key(c, &to_key, inum);
 			err = ubifs_tnc_remove_range(c, &from_key, &to_key);
 			if (err)
 				return err;
