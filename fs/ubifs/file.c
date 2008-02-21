@@ -191,22 +191,6 @@ error:
 	return err;
 }
 
-/**
- * release_new_page_budget - release budget of a new page.
- * @c: UBIFS file-system description object
- *
- * This is a helper function which releases budget corresponding to the budget
- * of one new page of data.
- */
-static void release_new_page_budget(struct ubifs_info *c)
-{
-	struct ubifs_budget_req req = { .new_page = 1,
-					.idx_growth = -1,
-					.data_growth = c->page_budget};
-
-	ubifs_release_budget(c, &req);
-}
-
 /* TODO: remove compatibility stuff as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 
@@ -308,7 +292,7 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		 * because we cannot as we are really going to mark it dirty in
 		 * the 'ubifs_write_end()' function.
 		 */
-		release_new_page_budget(c);
+		ubifs_release_new_page_budget(c);
 	else if (!PageChecked(page))
 		/*
 		 * The page is not new, which means we are changing the page
@@ -420,6 +404,8 @@ static int ubifs_readpage(struct file *file, struct page *page)
  *
  * This is a helper function which releases budget corresponding to the budget
  * of changing one one page of data which already exists on the flash media.
+ *
+ * This function was not moved to "budget.c" because there is only one user.
  */
 static void release_existing_page_budget(struct ubifs_info *c)
 {
@@ -453,7 +439,7 @@ static int do_writepage(struct page *page, int len)
 
 	ubifs_assert(PagePrivate(page));
 	if (PageChecked(page))
-		release_new_page_budget(c);
+		ubifs_release_new_page_budget(c);
 	else
 		release_existing_page_budget(c);
 
