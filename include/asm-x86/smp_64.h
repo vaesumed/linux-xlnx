@@ -47,8 +47,6 @@ static inline int cpu_present_to_apicid(int mps_cpu)
 
 #ifdef CONFIG_SMP
 
-#define SMP_TRAMPOLINE_BASE 0x6000
-
 extern int __cpu_disable(void);
 extern void __cpu_die(unsigned int cpu);
 extern void prefill_possible_map(void);
