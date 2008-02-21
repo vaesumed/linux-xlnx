@@ -755,7 +755,7 @@ static struct bsg_device *bsg_add_device(struct inode *inode,
 	mutex_lock(&bsg_mutex);
 	hlist_add_head(&bd->dev_list, bsg_dev_idx_hash(bd->minor));
 
-	strncpy(bd->name, rq->bsg_dev.class_dev->class_id, sizeof(bd->name) - 1);
+	strncpy(bd->name, rq->bsg_dev.class_dev->bus_id, sizeof(bd->name) - 1);
 	dprintk("bound to <%s>, max queue %d\n",
 		format_dev_t(buf, inode->i_rdev), bd->max_queue);
 
@@ -939,7 +939,7 @@ void bsg_unregister_queue(struct request_queue *q)
 	mutex_lock(&bsg_mutex);
 	idr_remove(&bsg_minor_idr, bcd->minor);
 	sysfs_remove_link(&q->kobj, "bsg");
-	class_device_unregister(bcd->class_dev);
+	device_unregister(bcd->class_dev);
 	put_device(bcd->dev);
 	bcd->class_dev = NULL;
 	bcd->dev = NULL;
@@ -953,7 +953,7 @@ int bsg_register_queue(struct request_queue *q, struct device *gdev,
 	struct bsg_class_device *bcd;
 	dev_t dev;
 	int ret, minor;
-	struct class_device *class_dev = NULL;
+	struct device *class_dev = NULL;
 	const char *devname;
 
 	if (name)
@@ -992,8 +992,7 @@ int bsg_register_queue(struct request_queue *q, struct device *gdev,
 	bcd->queue = q;
 	bcd->dev = get_device(gdev);
 	dev = MKDEV(bsg_major, bcd->minor);
-	class_dev = class_device_create(bsg_class, NULL, dev, gdev, "%s",
-					devname);
+	class_dev = device_create(bsg_class, gdev, dev, "%s", devname);
 	if (IS_ERR(class_dev)) {
 		ret = PTR_ERR(class_dev);
 		goto put_dev;
@@ -1010,7 +1009,7 @@ int bsg_register_queue(struct request_queue *q, struct device *gdev,
 	return 0;
 
 unregister_class_dev:
-	class_device_unregister(class_dev);
+	device_unregister(class_dev);
 put_dev:
 	put_device(gdev);
 remove_idr:
