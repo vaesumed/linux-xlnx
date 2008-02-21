@@ -223,7 +223,7 @@ static void walk_pmd_level(struct seq_file *m, struct pg_state *st, pud_t addr,
 		if (!pmd_none(*start)) {
 			pgprotval_t prot = pmd_val(*start) & ~PTE_MASK;
 
-			if (pmd_large(*start))
+			if (pmd_large(*start) || !pmd_present(*start))
 				note_page(m, st, __pgprot(prot), 3);
 			else
 				walk_pte_level(m, st, *start,
@@ -255,7 +255,7 @@ static void walk_pud_level(struct seq_file *m, struct pg_state *st, pgd_t addr,
 		if (!pud_none(*start)) {
 			pgprotval_t prot = pud_val(*start) & ~PTE_MASK;
 
-			if (pud_large(*start))
+			if (pud_large(*start) || !pud_present(*start))
 				note_page(m, st, __pgprot(prot), 2);
 			else
 				walk_pmd_level(m, st, *start,
@@ -290,7 +290,7 @@ static void walk_pgd_level(struct seq_file *m)
 		if (!pgd_none(*start)) {
 			pgprotval_t prot = pgd_val(*start) & ~PTE_MASK;
 
-			if (pgd_large(*start))
+			if (pgd_large(*start) || !pgd_present(*start))
 				note_page(m, &st, __pgprot(prot), 1);
 			else
 				walk_pud_level(m, &st, *start,
