@@ -688,7 +688,7 @@ struct ubifs_compressor {
  * struct ubifs_budget_req - budget requirements of an operation.
  *
  * @new_ino: non-zero if the operation adds a new inode
- * @dirtied_ino: if the operation makes an inode dirty
+ * @dirtied_ino: non-zero if the operation makes an inode dirty
  * @new_page: non-zero if the operation adds a new page
  * @dirtied_page: non-zero if the operation makes a page dirty
  * @new_dent: non-zero if the operation adds a new directory entry
@@ -1305,6 +1305,7 @@ void ubifs_cancel_op_budget(struct ubifs_info *c, struct inode *inode,
 long long ubifs_budg_get_free_space(struct ubifs_info *c);
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c);
 void ubifs_convert_page_budget(struct ubifs_info *c);
+void ubifs_release_new_page_budget(struct ubifs_info *c);
 
 /* find.c */
 int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
