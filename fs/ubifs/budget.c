@@ -466,7 +466,6 @@ static int calc_dd_growth(const struct ubifs_info *c,
 	int dd_growth;
 
 	dd_growth =  req->dirtied_ino  ? c->inode_budget : 0;
-	dd_growth += req->mod_ino      ? c->inode_budget : 0;
 	dd_growth += req->dirtied_page ? c->page_budget  : 0;
 	dd_growth += req->rm_dent      ? c->dent_budget  : 0;
 	dd_growth += req->dirtied_ino_d;
