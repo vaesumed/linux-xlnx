@@ -152,6 +152,22 @@ static inline void dent_key_init(const struct ubifs_info *c,
 }
 
 /**
+ * dent_key_init_hash - initialize directory entry key without re-calculating
+ *                      hash function.
+ * @c: UBIFS file-system description object
+ * @key: key to initialize
+ * @inum: parent inode number
+ * @hash: direntry name hash
+ */
+static inline void dent_key_init_hash(const struct ubifs_info *c,
+				      union ubifs_key *key, ino_t inum,
+				      uint32_t hash)
+{
+	key->u32[0] = inum;
+	key->u32[1] = (hash & 0x01FFFFFF) | (UBIFS_DENT_KEY << 29);
+}
+
+/**
  * dent_key_init_flash - initialize on-flash directory entry key.
  * @c: UBIFS file-system description object
  * @key: key to initialize
@@ -212,21 +228,6 @@ static inline void lowest_dent_key(const struct ubifs_info *c,
 {
 	key->u32[0] = pino;
 	key->u32[1] = UBIFS_DENT_KEY << 29;
-}
-
-/**
- * make_dent_key - make directory entry key.
- * @c: UBIFS file-system description object
- * @key: key to initialize
- * @inum: parent inode number
- * @hash: hash
- */
-static inline void make_dent_key(const struct ubifs_info *c,
-				 union ubifs_key *key, ino_t inum,
-				 uint32_t hash)
-{
-	key->u32[0] = inum;
-	key->u32[1] = (hash & 0x01FFFFFF) | (UBIFS_DENT_KEY << 29);
 }
 
 /**
