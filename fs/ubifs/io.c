@@ -905,11 +905,11 @@ int ubifs_try_read_node(const struct ubifs_info *c, void *buf, int type, int len
 /**
  * ubifs_wbuf_add_ino_nolock - add an inode number into the wbuf inode array.
  * @wbuf - the write-buffer whereto add
- * @ino - the inode number
+ * @inum - the inode number
  *
  * This function adds an inode number to the inode array of the write-buffer.
  */
-void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t ino)
+void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t inum)
 {
 	if (!wbuf->buf)
 		/* NOR flash or something similar */
@@ -917,25 +917,25 @@ void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t ino)
 
 	spin_lock(&wbuf->lock);
 	if (wbuf->used)
-		wbuf->inodes[wbuf->next_ino++] = ino;
+		wbuf->inodes[wbuf->next_ino++] = inum;
 	spin_unlock(&wbuf->lock);
 }
 
 /**
  * wbuf_has_ino - returns if the wbuf contains data from the inode.
  * @wbuf - the write-buffer
- * @ino - the inode number
+ * @inum - the inode number
  *
  * This function returns with %1 if the write-buffer contains some data from the
  * given inode otherwise it returns with %0.
  */
-static int wbuf_has_ino(struct ubifs_wbuf *wbuf, ino_t ino)
+static int wbuf_has_ino(struct ubifs_wbuf *wbuf, ino_t inum)
 {
 	int i, ret = 0;
 
 	spin_lock(&wbuf->lock);
 	for (i = 0; i < wbuf->next_ino; i++)
-		if (ino == wbuf->inodes[i]) {
+		if (inum == wbuf->inodes[i]) {
 			ret = 1;
 			break;
 		}
