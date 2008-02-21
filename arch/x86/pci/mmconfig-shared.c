@@ -123,6 +123,14 @@ static const char __init *pci_mmcfg_amd_fam10h(void)
 
 	busnbits = (msr >> FAM10H_MMIO_CONF_BUSRANGE_SHIFT) &
 			 FAM10H_MMIO_CONF_BUSRANGE_MASK;
+
+	/*
+	 * only handle bus 0 ?
+	 * need to skip it
+	 */
+	if (!busnbits)
+		return NULL;
+
 	if (busnbits > 8) {
 		segnbits = busnbits - 8;
 		busnbits = 8;
