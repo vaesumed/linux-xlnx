@@ -411,7 +411,7 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			dent = ubifs_tnc_next_dent(c, &key, saved->name,
 						   le16_to_cpu(saved->nlen));
 		} else {
-			make_dent_key(c, &key, dir->i_ino, filp->f_pos);
+			dent_key_init_hash(c, &key, dir->i_ino, filp->f_pos);
 			dent = ubifs_tnc_next_dent(c, &key, NULL, 0);
 		}
 		if (unlikely(IS_ERR(dent))) {
