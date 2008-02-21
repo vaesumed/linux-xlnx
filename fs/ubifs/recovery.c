@@ -1357,8 +1357,8 @@ int ubifs_recover_size(struct ubifs_info *c)
 				union ubifs_key to_key;
 
 				dbg_rcvry("removing ino %lu", e->inum);
-				min_inum_key(c, &key, e->inum);
-				max_inum_key(c, &to_key, e->inum);
+				lowest_ino_key(c, &key, e->inum);
+				highest_ino_key(c, &to_key, e->inum);
 				err = ubifs_tnc_remove_range(c, &key, &to_key);
 				if (err)
 					return err;
