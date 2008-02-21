@@ -54,7 +54,7 @@ enum {
  * @flags: replay flags
  * @rb: links the replay tree
  * @key: node key
- * @name: directory entry name
+ * @nm: directory entry name
  * @old_size: truncation old size
  * @new_size: truncation new size
  * @free: amount of free space in a bud
@@ -73,7 +73,7 @@ struct replay_entry
 	struct rb_node rb;
 	union ubifs_key key;
 	union {
-		struct qstr name;
+		struct qstr nm;
 		struct {
 			loff_t old_size;
 			loff_t new_size;
@@ -199,10 +199,10 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 		err = set_bud_lprops(c, r);
 	else if (is_hash_key(c, &r->key)) {
 		if (deletion)
-			err = ubifs_tnc_remove_nm(c, &r->key, &r->name);
+			err = ubifs_tnc_remove_nm(c, &r->key, &r->nm);
 		else
 			err = ubifs_tnc_add_nm(c, &r->key, r->lnum, r->offs,
-					       r->len, &r->name);
+					       r->len, &r->nm);
 	} else {
 		if (deletion)
 			switch (key_type(c, &r->key)) {
@@ -257,7 +257,7 @@ static void destroy_replay_tree(struct ubifs_info *c)
 				this->rb_right = NULL;
 		}
 		if (key_type(c, &replay->key) == UBIFS_DENT_KEY)
-			kfree(replay->name.name);
+			kfree(replay->nm.name);
 		kfree(replay);
 	}
 	c->replay_tree = RB_ROOT;
@@ -412,10 +412,10 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 	replay->offs = offs;
 	replay->len = len;
 	replay->sqnum = sqnum;
-	replay->name.len = nlen;
+	replay->nm.len = nlen;
 	memcpy(nbuf, name, nlen);
 	nbuf[nlen] = '\0';
-	replay->name.name = nbuf;
+	replay->nm.name = nbuf;
 	replay->flags = (deletion ? REPLAY_DELETION : 0);
 	key_copy(c, key, &replay->key);
 
