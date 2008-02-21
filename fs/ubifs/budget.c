@@ -446,9 +446,9 @@ static int calc_data_growth(const struct ubifs_info *c,
 {
 	int data_growth;
 
-	data_growth = req->new_ino ? c->inode_budget : 0;
-	data_growth += req->new_page ? c->page_budget : 0;
-	data_growth += req->new_dent ? c->dent_budget : 0;
+	data_growth  = req->new_ino  ? c->inode_budget : 0;
+	data_growth += req->new_page ? c->page_budget  : 0;
+	data_growth += req->new_dent ? c->dent_budget  : 0;
 	data_growth += req->new_ino_d;
 
 	return data_growth;
@@ -465,9 +465,10 @@ static int calc_dd_growth(const struct ubifs_info *c,
 {
 	int dd_growth;
 
-	dd_growth = req->dirtied_ino ? c->inode_budget : 0;
-	dd_growth += req->dirtied_page ? c->page_budget : 0;
-	dd_growth += req->rm_dent ? c->dent_budget : 0;
+	dd_growth =  req->dirtied_ino  ? c->inode_budget : 0;
+	dd_growth += req->mod_ino      ? c->inode_budget : 0;
+	dd_growth += req->dirtied_page ? c->page_budget  : 0;
+	dd_growth += req->rm_dent      ? c->dent_budget  : 0;
 	dd_growth += req->dirtied_ino_d;
 
 	return dd_growth;
@@ -648,6 +649,22 @@ again:
 
 	UBIFS_DBG(ui->budgeted = 1);
 	return 0;
+}
+
+/**
+ * ubifs_release_new_page_budget - release budget of a new page.
+ * @c: UBIFS file-system description object
+ *
+ * This is a helper function which releases budget corresponding to the budget
+ * of one new page of data.
+ */
+void ubifs_release_new_page_budget(struct ubifs_info *c)
+{
+	struct ubifs_budget_req req = { .new_page = 1,
+					.idx_growth = -1,
+					.data_growth = c->page_budget};
+
+	ubifs_release_budget(c, &req);
 }
 
 /**
