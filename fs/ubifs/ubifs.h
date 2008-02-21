@@ -734,7 +734,7 @@ struct ubifs_budget_req
  * @new_list: list head of list of orphans added since the last commit
  * @cnext: next orphan to commit
  * @dnext: next orphan to delete
- * @ino: inode number
+ * @inum: inode number
  * @new: %1 => added since the last commit, otherwise %0
  */
 struct ubifs_orphan
@@ -744,8 +744,7 @@ struct ubifs_orphan
 	struct list_head new_list;
 	struct ubifs_orphan *cnext;
 	struct ubifs_orphan *dnext;
-	/* TODO: use ino_t instead */
-	unsigned long ino;
+	ino_t inum;
 	int new;
 };
 
@@ -1249,7 +1248,7 @@ int ubifs_wbuf_sync_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf);
 int ubifs_try_read_node(const struct ubifs_info *c, void *buf, int type, int len,
 			int lnum, int offs);
 int ubifs_bg_wbuf_sync(struct ubifs_info *c);
-void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t ino);
+void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t inum);
 int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			       struct inode * const *inodes, int count);
 
@@ -1288,7 +1287,7 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, struct inode *inode,
 int ubifs_jrn_rename(struct ubifs_info *c, struct inode *old_dir,
 		     struct dentry *old_dentry, struct inode *new_dir,
 		     struct dentry *new_dentry);
-int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
+int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		       loff_t old_size, loff_t new_size);
 
 /* budget.c */
@@ -1392,9 +1391,8 @@ void ubifs_destroy_idx_gc(struct ubifs_info *c);
 int ubifs_get_idx_gc_leb(struct ubifs_info *c);
 
 /* orphan.c */
-/* TODO: use ino_t instead */
-int ubifs_add_orphan(struct ubifs_info *c, unsigned long ino);
-void ubifs_delete_orphan(struct ubifs_info *c, unsigned long ino);
+int ubifs_add_orphan(struct ubifs_info *c, ino_t inum);
+void ubifs_delete_orphan(struct ubifs_info *c, ino_t inum);
 int ubifs_orphan_start_commit(struct ubifs_info *c);
 int ubifs_orphan_end_commit(struct ubifs_info *c);
 int ubifs_mount_orphans(struct ubifs_info *c, int unclean);
