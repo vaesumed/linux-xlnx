@@ -38,11 +38,11 @@
 } while(0)
 
 /* Debugging message which prints UBIFS key */
-#define dbg_key(c, key, fmt, ...) do {                                        \
-	spin_lock(&dbg_lock);                                                 \
-	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt " %s", current->pid, \
-	       __FUNCTION__,  ##__VA_ARGS__, dbg_get_key_dump(c, key));       \
-	spin_unlock(&dbg_lock);                                               \
+#define dbg_key(c, key, fmt, ...) do {                                          \
+	spin_lock(&dbg_lock);                                                   \
+	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt " %s\n", current->pid, \
+	       __FUNCTION__,  ##__VA_ARGS__, dbg_get_key_dump(c, key));         \
+	spin_unlock(&dbg_lock);                                                 \
 } while(0)
 
 #define dbg_err(fmt, ...) ubifs_err(fmt, ##__VA_ARGS__)
