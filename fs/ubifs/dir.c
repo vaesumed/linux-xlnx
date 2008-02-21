@@ -24,6 +24,11 @@
 
 /*
  * This file implements directory operations.
+ *
+ * TODO: budgeting is wrong. Most operations re-write the inode and parent
+ * inode and this is not budgeted, which is dangerous. Also, if we re-write
+ * inode and it is dirty, we should mark it as clean since it is not dirty
+ * anymore.
  */
 
 #include "ubifs.h"
