@@ -306,9 +306,9 @@ static irqreturn_t interrupt_hw(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
-	if( 0 != (dev->ext)) {
+	if( NULL != (dev->ext)) {
 		if( 0 != (dev->ext->irq_mask & isr )) {
-			if( 0 != dev->ext->irq_func ) {
+			if( NULL != dev->ext->irq_func ) {
 				dev->ext->irq_func(dev, &isr);
 			}
 			isr &= ~dev->ext->irq_mask;
@@ -316,13 +316,13 @@ static irqreturn_t interrupt_hw(int irq, void *dev_id)
 	}
 	if (0 != (isr & (MASK_27))) {
 		DEB_INT(("irq: RPS0 (0x%08x).\n",isr));
-		if( 0 != dev->vv_data && 0 != dev->vv_callback) {
+		if( NULL != dev->vv_data && NULL != dev->vv_callback) {
 			dev->vv_callback(dev,isr);
 		}
 		isr &= ~MASK_27;
 	}
 	if (0 != (isr & (MASK_28))) {
-		if( 0 != dev->vv_data && 0 != dev->vv_callback) {
+		if( NULL != dev->vv_data && NULL != dev->vv_callback) {
 			dev->vv_callback(dev,isr);
 		}
 		isr &= ~MASK_28;
