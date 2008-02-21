@@ -139,13 +139,13 @@ static inline void max_inum_key(const struct ubifs_info *c,
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: parent inode number
- * @dname: direntry name and length
+ * @nm: direntry name and length
  */
 static inline void dent_key_init(const struct ubifs_info *c,
 				 union ubifs_key *key, ino_t inum,
-				 const struct qstr *dname)
+				 const struct qstr *nm)
 {
-	uint32_t hash = c->key_hash(dname->name, dname->len);
+	uint32_t hash = c->key_hash(nm->name, nm->len);
 
 	key->u32[0] = inum;
 	key->u32[1] = (hash & 0x01FFFFFF) | (UBIFS_DENT_KEY << 29);
@@ -156,13 +156,13 @@ static inline void dent_key_init(const struct ubifs_info *c,
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: parent inode number
- * @dname: direntry name and length
+ * @nm: direntry name and length
  */
 static inline void dent_key_init_flash(const struct ubifs_info *c, void *k,
-				       ino_t inum, const struct qstr *dname)
+				       ino_t inum, const struct qstr *nm)
 {
 	union ubifs_key *key = k;
-	uint32_t hash = c->key_hash(dname->name, dname->len);
+	uint32_t hash = c->key_hash(nm->name, nm->len);
 
 	key->j32[0] = cpu_to_le32(inum);
 	key->j32[1] = cpu_to_le32((hash & 0x01FFFFFF) | (UBIFS_DENT_KEY << 29));
