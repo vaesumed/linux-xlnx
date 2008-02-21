@@ -37,7 +37,7 @@
 #define __UBIFS_KEY_H__
 
 /**
- * _key_r5_hash - R5 hash function (borrowed from reiserfs).
+ * key_r5_hash - R5 hash function (borrowed from reiserfs).
  * @str: direntry name
  * @len: name length
  */
@@ -64,7 +64,7 @@ static inline uint32_t key_r5_hash(const char *s, int len)
 }
 
 /**
- * _key_test_hash - testing hash function.
+ * key_test_hash - testing hash function.
  * @str: direntry name
  * @len: name length
  */
@@ -109,12 +109,12 @@ static inline void ino_key_init_flash(const struct ubifs_info *c, void *k,
 }
 
 /**
- * min_inum_key - initialize min inum key.
+ * lowest_ino_key - get the lowest possible inode key.
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: inode number
  */
-static inline void min_inum_key(const struct ubifs_info *c,
+static inline void lowest_ino_key(const struct ubifs_info *c,
 				union ubifs_key *key, ino_t inum)
 {
 	key->u32[0] = inum;
@@ -122,12 +122,12 @@ static inline void min_inum_key(const struct ubifs_info *c,
 }
 
 /**
- * max_inum_key - initialize max inum key.
+ * highest_ino_key - get the highest possible inode key.
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: inode number
  */
-static inline void max_inum_key(const struct ubifs_info *c,
+static inline void highest_ino_key(const struct ubifs_info *c,
 				union ubifs_key *key, ino_t inum)
 {
 	key->u32[0] = inum;
@@ -186,6 +186,19 @@ static inline void dent_key_init_flash(const struct ubifs_info *c, void *k,
 }
 
 /**
+ * lowest_dent_key - get the lowest possible directory entry key.
+ * @c: UBIFS file-system description object
+ * @key: where to store the lowest key
+ * @inum: parent inode number
+ */
+static inline void lowest_dent_key(const struct ubifs_info *c,
+				   union ubifs_key *key, ino_t inum)
+{
+	key->u32[0] = inum;
+	key->u32[1] = UBIFS_DENT_KEY << 29;
+}
+
+/**
  * data_key_init - initialize data key.
  * @c: UBIFS file-system description object
  * @key: key to initialize
@@ -218,20 +231,7 @@ static inline void data_key_init_flash(const struct ubifs_info *c, void *k,
 }
 
 /**
- * lowest_key - get the lowest possible key for a directory entry.
- * @c: UBIFS file-system description object
- * @key: where to store the lowest key
- * @pino: parent inode number
- */
-static inline void lowest_dent_key(const struct ubifs_info *c,
-				   union ubifs_key *key, uint32_t pino)
-{
-	key->u32[0] = pino;
-	key->u32[1] = UBIFS_DENT_KEY << 29;
-}
-
-/**
- * trun_key_init - initialize truncate key.
+ * trun_key_init - initialize truncation node key.
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: inode number
@@ -244,7 +244,7 @@ static inline void trun_key_init(const struct ubifs_info *c,
 }
 
 /**
- * trun_key_init_flash - initialize on-flash truncate key.
+ * trun_key_init_flash - initialize on-flash truncation node key.
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: inode number
