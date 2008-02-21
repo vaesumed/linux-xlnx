@@ -661,8 +661,8 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, struct inode *inode,
 	if (deletion) {
 		union ubifs_key min_key, max_key;
 
-		min_inum_key(c, &min_key, inode->i_ino);
-		max_inum_key(c, &max_key, inode->i_ino);
+		lowest_ino_key(c, &min_key, inode->i_ino);
+		highest_ino_key(c, &max_key, inode->i_ino);
 		err = ubifs_tnc_remove_range(c, &min_key, &max_key);
 		if (err)
 			goto out_finish;

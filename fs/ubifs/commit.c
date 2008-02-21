@@ -572,7 +572,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 			last_level = le16_to_cpu(idx->level) + 1;
 			last_sqnum = le64_to_cpu(idx->ch.sqnum) + 1;
 			key_read(c, ubifs_idx_key(c, idx), &lower_key);
-			max_inum_key(c, &upper_key, INUM_WATERMARK);
+			highest_ino_key(c, &upper_key, INUM_WATERMARK);
 		}
 		key_copy(c, &upper_key, &i->upper_key);
 		if (le16_to_cpu(idx->level) != last_level - 1) {

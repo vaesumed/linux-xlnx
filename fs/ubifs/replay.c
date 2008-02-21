@@ -150,8 +150,8 @@ static int ino_remove_range(struct ubifs_info *c, unsigned long ino)
 {
 	union ubifs_key min_key, max_key;
 
-	min_inum_key(c, &min_key, ino);
-	max_inum_key(c, &max_key, ino);
+	lowest_ino_key(c, &min_key, ino);
+	highest_ino_key(c, &max_key, ino);
 	return ubifs_tnc_remove_range(c, &min_key, &max_key);
 }
 
@@ -610,7 +610,7 @@ static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 	int cmp;
 
 	dbg_mnt("add ref LEB %d:%d", lnum, offs);
-	max_inum_key(c, &key, -1);
+	highest_ino_key(c, &key, -1);
 	while (*p) {
 		parent = *p;
 		r = rb_entry(parent, struct replay_entry, rb);
