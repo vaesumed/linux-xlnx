@@ -190,14 +190,14 @@ out_return:
  * @len: node length
  * @lnum: LEB number written is returned here
  * @offs: offset written is returned here
- * @ino: inode number of the node
+ * @inum: inode number of the node
  *
  * This function writes a node to reserved space of journal head @jhead.
  * Returns zero in case of success and a negative error code in case of
  * failure.
  */
 static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
-		      int *lnum, int *offs, ino_t ino)
+		      int *lnum, int *offs, ino_t inum)
 {
 	int err;
 
@@ -211,7 +211,7 @@ static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
 
 	err = ubifs_wbuf_write_nolock(c, &c->jheads[jhead].wbuf, node, len);
 	if (!err)
-		ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, ino);
+		ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, inum);
 	return err;
 }
 
@@ -223,15 +223,15 @@ static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
  * @len: length to write
  * @lnum: LEB number written is returned here
  * @offs: offset written is returned here
- * @ino: inode number of the first node in @buf
- * @ino2: inode number of the second node in @buf
+ * @inum: inode number of the first node in @buf
+ * @inum2: inode number of the second node in @buf
  *
  * This function is the same as 'write_node()' but it does not assume the
  * buffer it is writing is a node, so it does not prepare it (which means
  * initializing common header and calculating CRC).
  */
 static int write_head(struct ubifs_info *c, int jhead, void *buf, int len,
-		      int *lnum, int *offs, ino_t ino, ino_t ino2)
+		      int *lnum, int *offs, ino_t inum, ino_t inum2)
 {
 	int err;
 
@@ -243,9 +243,10 @@ static int write_head(struct ubifs_info *c, int jhead, void *buf, int len,
 
 	err = ubifs_wbuf_write_nolock(c, &c->jheads[jhead].wbuf, buf, len);
 	if (!err) {
-		ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, ino);
-		if (ino2)
-			ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, ino2);
+		ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, inum);
+		if (inum2)
+			ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf,
+						  inum2);
 	}
 	return err;
 }
@@ -891,7 +892,7 @@ out:
  * This function returns %0 in the case of success, and a negative error code in
  * case of failure.
  */
-int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
+int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		       loff_t old_size, loff_t new_size)
 {
 	union ubifs_key key, to_key;
@@ -900,7 +901,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 	int err, dlen, len, lnum, offs, bit, sz;
 	unsigned int blk;
 
-	dbg_jrn("ino %lu, size %lld -> %lld", ino, old_size, new_size);
+	dbg_jrn("ino %lu, size %lld -> %lld", inum, old_size, new_size);
 
 	sz = UBIFS_TRUN_NODE_SZ + UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
 	trun = kmalloc(sz, GFP_NOFS);
@@ -908,7 +909,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 		return -ENOMEM;
 
 	trun->ch.node_type = UBIFS_TRUN_NODE;
-	trun_key_init_flash(c, &trun->key, ino);
+	trun_key_init_flash(c, &trun->key, inum);
 	trun->old_size = cpu_to_le64(old_size);
 	trun->new_size = cpu_to_le64(new_size);
 	ubifs_prepare_node(c, trun, UBIFS_TRUN_NODE_SZ, 0);
@@ -919,7 +920,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 		/* Get last data block so it can be truncated */
 		dn = (void *)trun + ALIGN(UBIFS_TRUN_NODE_SZ, 8);
 		blk = new_size / UBIFS_BLOCK_SIZE;
-		data_key_init(c, &key, ino, blk);
+		data_key_init(c, &key, inum, blk);
 		dbg_jrn_key(c, &key, "key ");
 		err = ubifs_tnc_lookup(c, &key, dn);
 		if (err == -ENOENT)
@@ -954,7 +955,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 	if (err)
 		goto out_free;
 
-	err = write_head(c, BASEHD, trun, len, &lnum, &offs, ino, 0);
+	err = write_head(c, BASEHD, trun, len, &lnum, &offs, inum, 0);
 	release_head(c, BASEHD);
 	if (err)
 		goto out;
@@ -973,12 +974,12 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t ino,
 	bit = new_size & (UBIFS_BLOCK_SIZE - 1);
 
 	blk = new_size / UBIFS_BLOCK_SIZE + (bit ? 1 : 0);
-	data_key_init(c, &key, ino, blk);
+	data_key_init(c, &key, inum, blk);
 
 	bit = old_size & (UBIFS_BLOCK_SIZE - 1);
 
 	blk = old_size / UBIFS_BLOCK_SIZE - (bit ? 0: 1);
-	data_key_init(c, &to_key, ino, blk);
+	data_key_init(c, &to_key, inum, blk);
 
 	err = ubifs_tnc_remove_range(c, &key, &to_key);
 
