@@ -594,8 +594,10 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 			return PTR_ERR(znode);
 	}
 
-	dbg_tnc("found: child_cnt %d, LEB %d:%d", znode->child_cnt,
-		znode->lnum, znode->offs);
+	if (exact)
+		dbg_tnc("exact match: child_cnt %d, LEB %d:%d",
+			znode->child_cnt, znode->lnum, znode->offs);
+
 	*zn = znode;
 	ubifs_assert(exact >= 0 && exact < c->fanout);
 	return exact;
