@@ -250,7 +250,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
 	if (err)
 		goto out_budg;
 
@@ -500,7 +500,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
 	if (err)
 		goto out;
 
@@ -556,7 +556,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	inode->i_ctime = dir->i_ctime;
 	drop_nlink(inode);
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 1);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1);
 	if (err)
 		goto out_budg;
 
@@ -645,7 +645,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	drop_nlink(inode);
 	drop_nlink(inode);
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 1);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1);
 	if (err)
 		goto out_budg;
 
@@ -699,7 +699,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 	inc_nlink(dir);
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
 	if (err) {
 		ubifs_err("cannot create directory, error %d", err);
 		goto out_inode;
@@ -771,7 +771,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
 	if (err)
 		goto out_inode;
 
@@ -844,7 +844,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, dentry, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
 	if (err)
 		goto out_dir;
 
