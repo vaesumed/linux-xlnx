@@ -162,7 +162,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, struct inode *dir, int mode)
  */
 void ubifs_set_i_bytes(struct inode *inode)
 {
-	loff_t size = i_size_read(inode);
+	loff_t size = i_size_read(inode) + ubifs_inode(inode)->xattr_bytes;
 
 	inode->i_bytes = size & 0x1FF;
 

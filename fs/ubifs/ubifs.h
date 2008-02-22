@@ -254,6 +254,9 @@ struct ubifs_gced_idx_leb
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @data_len: length of the data attached to the inode
  * @creat_sqnum: sequence number at time of creation
+ * @xattr_cnt: count of extended attributes this inode has
+ * @xattr_bytes: how many bytes all the extended attributes belonging to this
+ *               inode take
  * @data: inode's data
  *
  * UBIFS has its own inode mutex, besides the VFS 'i_mutex'. The reason for
@@ -285,6 +288,8 @@ struct ubifs_inode
 	int compr_type;
 	int data_len;
 	unsigned long long creat_sqnum;
+	long long xattr_bytes;
+	int xattr_cnt;
 	void *data;
 };
 
