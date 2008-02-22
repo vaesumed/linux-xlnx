@@ -28,26 +28,6 @@
 #define __UBIFS_MISC_H__
 
 /**
- * ubifs_set_i_bytes - set inode size for VFS.
- * @inode: the inode to set
- *
- * This is a helper function which sets @inode->i_bytes and @inode->i_blopcks.
- * VFS expects the blocks size in this case to be 512 bytes, no matter what is
- * the FS's I/O block size (ours is 4KiB).
- */
-static inline void ubifs_set_i_bytes(struct inode *inode)
-{
-	loff_t size = i_size_read(inode);
-
-	inode->i_bytes = size & 0x1FF;
-
-	/* First align inode size up to UBIFS block size boundary */
-	size = (size + UBIFS_BLOCK_SIZE - 1) & ~UBIFS_BLOCK_MASK;
-	/* Then calculate amount of 512 byte blocks */
-	inode->i_blocks = size >> 9;
-}
-
-/**
  * ubifs_zn_dirty - check if znode is dirty.
  * @znode: znode to check
  *
