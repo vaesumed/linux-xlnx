@@ -91,7 +91,10 @@ static bool FNAME(cmpxchg_gpte)(struct kvm *kvm,
 	pt_element_t *table;
 	struct page *page;
 
+	down_read(&current->mm->mmap_sem);
 	page = gfn_to_page(kvm, table_gfn);
+	up_read(&current->mm->mmap_sem);
+
 	table = kmap_atomic(page, KM_USER0);
 
 	ret = CMPXCHG(&table[index], orig_pte, new_pte);
@@ -140,7 +143,7 @@ walk:
 	}
 #endif
 	ASSERT((!is_long_mode(vcpu) && is_pae(vcpu)) ||
-	       (vcpu->cr3 & CR3_NONPAE_RESERVED_BITS) == 0);
+	       (vcpu->arch.cr3 & CR3_NONPAE_RESERVED_BITS) == 0);
 
 	pt_access = ACC_ALL;
 
@@ -240,8 +243,7 @@ err:
 }
 
 static void FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
-			      u64 *spte, const void *pte, int bytes,
-			      int offset_in_pte)
+			      u64 *spte, const void *pte)
 {
 	pt_element_t gpte;
 	unsigned pte_access;
@@ -249,12 +251,10 @@ static void FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
 
 	gpte = *(const pt_element_t *)pte;
 	if (~gpte & (PT_PRESENT_MASK | PT_ACCESSED_MASK)) {
-		if (!offset_in_pte && !is_present_pte(gpte))
+		if (!is_present_pte(gpte))
 			set_shadow_pte(spte, shadow_notrap_nonpresent_pte);
 		return;
 	}
-	if (bytes < sizeof(pt_element_t))
-		return;
 	pgprintk("%s: gpte %llx spte %p\n", __FUNCTION__, (u64)gpte, spte);
 	pte_access = page->role.access & FNAME(gpte_access)(vcpu, gpte);
 	if (gpte_to_gfn(gpte) != vcpu->arch.update_pte.gfn)
@@ -378,7 +378,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	if (r)
 		return r;
 
-	down_read(&current->mm->mmap_sem);
+	down_read(&vcpu->kvm->slots_lock);
 	/*
 	 * Look up the shadow pte for the faulting address.
 	 */
@@ -392,11 +392,21 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		pgprintk("%s: guest page fault\n", __FUNCTION__);
 		inject_page_fault(vcpu, addr, walker.error_code);
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
-		up_read(&current->mm->mmap_sem);
+		up_read(&vcpu->kvm->slots_lock);
 		return 0;
 	}
 
+	down_read(&current->mm->mmap_sem);
 	page = gfn_to_page(vcpu->kvm, walker.gfn);
+	up_read(&current->mm->mmap_sem);
+
+	/* mmio */
+	if (is_error_page(page)) {
+		pgprintk("gfn %x is mmio\n", walker.gfn);
+		kvm_release_page_clean(page);
+		up_read(&vcpu->kvm->slots_lock);
+		return 1;
+	}
 
 	spin_lock(&vcpu->kvm->mmu_lock);
 	kvm_mmu_free_some_pages(vcpu);
@@ -408,19 +418,10 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	if (!write_pt)
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
 
-	/*
-	 * mmio: emulate if accessible, otherwise its a guest fault.
-	 */
-	if (shadow_pte && is_io_pte(*shadow_pte)) {
-		spin_unlock(&vcpu->kvm->mmu_lock);
-		up_read(&current->mm->mmap_sem);
-		return 1;
-	}
-
 	++vcpu->stat.pf_fixed;
 	kvm_mmu_audit(vcpu, "post page fault (fixed)");
 	spin_unlock(&vcpu->kvm->mmu_lock);
-	up_read(&current->mm->mmap_sem);
+	up_read(&vcpu->kvm->slots_lock);
 
 	return write_pt;
 }
