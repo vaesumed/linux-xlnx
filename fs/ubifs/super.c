@@ -318,7 +318,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 
 	ubifs_assert(ui->budgeted);
 
-	err = ubifs_jrn_write_inode(c, inode, 0);
+	err = ubifs_jrn_write_inode(c, inode, 0, IS_SYNC(inode));
 	if (err)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
@@ -353,7 +353,7 @@ static void ubifs_delete_inode(struct inode *inode)
 
 	inode->i_size = 0;
 
-	err = ubifs_jrn_write_inode(c, inode, 1);
+	err = ubifs_jrn_write_inode(c, inode, 1, IS_SYNC(inode));
 	if (err) {
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 		goto out_unlock;
