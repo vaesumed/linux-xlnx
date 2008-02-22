@@ -250,19 +250,14 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+			       IS_DIRSYNC(dir));
 	if (err)
 		goto out_budg;
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-
 	ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir))
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, &dir, 1);
-
 	ubifs_set_i_bytes(dir);
 	return 0;
 
@@ -500,22 +495,14 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+			       IS_DIRSYNC(dir));
 	if (err)
 		goto out;
 
 	atomic_inc(&inode->i_count);
 	d_instantiate(dentry, inode);
-
 	ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir)) {
-		struct inode *inodes[2] = {dir, inode};
-
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, inodes, 2);
-	}
-
 	ubifs_set_i_bytes(dir);
 	return 0;
 
@@ -556,19 +543,13 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	inode->i_ctime = dir->i_ctime;
 	drop_nlink(inode);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
+			       IS_DIRSYNC(dir));
 	if (err)
 		goto out_budg;
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir)) {
-		struct inode *inodes[2] = {dir, inode};
-
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, inodes, 2);
-	}
 
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -645,19 +626,13 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	drop_nlink(inode);
 	drop_nlink(inode);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
+			       IS_DIRSYNC(dir));
 	if (err)
 		goto out_budg;
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir)) {
-		struct inode *inodes[2] = {dir, inode};
-
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, inodes, 2);
-	}
 
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -699,7 +674,8 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 	inc_nlink(dir);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+			       IS_DIRSYNC(dir));
 	if (err) {
 		ubifs_err("cannot create directory, error %d", err);
 		goto out_inode;
@@ -707,11 +683,6 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir))
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, &dir, 1);
-
 	ubifs_set_i_bytes(inode);
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -771,19 +742,14 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+			       IS_DIRSYNC(dir));
 	if (err)
 		goto out_inode;
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-
 	ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir))
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, &dir, 1);
-
 	ubifs_set_i_bytes(inode);
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -844,19 +810,14 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0);
+	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+			       IS_DIRSYNC(dir));
 	if (err)
 		goto out_dir;
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-
 	ubifs_release_budget(c, &req);
-
-	if (IS_DIRSYNC(dir))
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, &dir, 1);
-
 	ubifs_set_i_bytes(inode);
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -948,54 +909,12 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	} else
 		new_dir->i_size += new_sz;
 
-	err = ubifs_jrn_rename(c, old_dir, old_dentry, new_dir, new_dentry);
+	err = ubifs_jrn_rename(c, old_dir, old_dentry, new_dir, new_dentry,
+			       dirsync);
 	if (err)
 		goto out_inode;
 
 	ubifs_release_budget(c, &req);
-
-	if (dirsync) {
-		/* TODO: just move this all to journal */
-		int count;
-		struct inode *inodes[4];
-
-		/*
-		 * Initialize array of inodes which were changed by this
-		 * operation. First off, the parent directory ('old_dir') of
-		 * the moved object ('old_inode') was changed because inode
-		 * [mc]time was be updated. The same is for the object which
-		 * was renamed ('old_inode') - its ctime was be updated.
-		 */
-		inodes[0] = old_dir;
-		inodes[1] = old_inode;
-		count = 2;
-
-		if (move)
-			/*
-			 * The object is moved to another directory ('new_dir') which
-			 * was changed because it's [mc]time will be updated.
-			 *
-			 * Note, ext3 behaves strangely in this case (2.6.23): it does
-			 * not change [mc]time 'n' if we do:
-			 *     mkdir n o; touch n/f; touch o/f; mv o/f n/
-			 * but it does change it if we do
-			 *     mkdir n o; touch n/f; touch o/f;  ln n/f n/hl; mv o/f n/
-			 * But I suspect this is ext3 bug (Artem).
-			 */
-			inodes[count++] = new_dir;
-
-		if (unlink)
-			/*
-			 * There is already another object with the same name, we have
-			 * to unlink it, which means its link count and ctime
-			 * was changed.
-			 */
-			inodes[count++] = new_inode;
-
-		/* TODO: error handling */
-		ubifs_sync_wbufs_by_inodes(c, inodes, count);
-	}
-
 	ubifs_set_i_bytes(old_dir);
 	ubifs_set_i_bytes(new_dir);
 	return 0;

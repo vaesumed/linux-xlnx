@@ -635,13 +635,8 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 		ubifs_release_budget(c, &req);
 	}
 
-	if (IS_SYNC(inode)) {
+	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
-		if (err)
-			return err;
-
-		err = ubifs_sync_wbufs_by_inodes(c, &inode, 1);
-	}
 
 	return err;
 }
