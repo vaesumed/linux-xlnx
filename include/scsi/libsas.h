@@ -676,4 +676,6 @@ extern int sas_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 extern void sas_ssp_task_response(struct device *dev, struct sas_task *task,
 				  struct ssp_response_iu *iu);
 
+int sas_request_addr(struct Scsi_Host *shost, u8 *addr);
+
 #endif /* _SASLIB_H_ */
