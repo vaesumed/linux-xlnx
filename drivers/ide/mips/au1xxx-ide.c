@@ -603,9 +603,11 @@ static int au_ide_probe(struct device *dev)
 		goto out;
 	}
 
-	/* FIXME:  This might possibly break PCMCIA IDE devices */
-
-	hwif                            = &ide_hwifs[pdev->id];
+	hwif = ide_find_port();
+	if (hwif == NULL) {
+		ret = -ENOENT;
+		goto out;
+	}
 
 	memset(&hw, 0, sizeof(hw));
 	auide_setup_ports(&hw, ahwif);
@@ -616,9 +618,6 @@ static int au_ide_probe(struct device *dev)
 	ide_init_port_hw(hwif, &hw);
 
 	hwif->dev = dev;
-
-	/* hold should be on in all cases */
-	hwif->hold                      = 1;
 
 	hwif->mmio  = 1;
 
@@ -677,7 +676,7 @@ static int au_ide_remove(struct device *dev)
 	ide_hwif_t *hwif = dev_get_drvdata(dev);
 	_auide_hwif *ahwif = &auide_hwif;
 
-	ide_unregister(hwif->index, 0, 0);
+	ide_unregister(hwif->index);
 
 	iounmap((void *)ahwif->regbase);
 

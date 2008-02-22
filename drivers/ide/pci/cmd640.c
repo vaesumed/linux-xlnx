@@ -185,7 +185,6 @@ static DEFINE_SPINLOCK(cmd640_lock);
  * These are initialized to point at the devices we control
  */
 static ide_hwif_t  *cmd_hwif0, *cmd_hwif1;
-static ide_drive_t *cmd_drives[4];
 
 /*
  * Interface to access cmd640x registers
@@ -386,9 +385,8 @@ static void cmd640_dump_regs (void)
  * Check whether prefetch is on for a drive,
  * and initialize the unmask flags for safe operation.
  */
-static void __init check_prefetch (unsigned int index)
+static void __init check_prefetch(ide_drive_t *drive, unsigned int index)
 {
-	ide_drive_t *drive = cmd_drives[index];
 	u8 b = get_cmd640_reg(prefetch_regs[index]);
 
 	if (b & prefetch_masks[index]) {	/* is prefetch off? */
@@ -404,38 +402,13 @@ static void __init check_prefetch (unsigned int index)
 	}
 }
 
-/*
- * Figure out which devices we control
- */
-static void __init setup_device_ptrs (void)
-{
-	unsigned int i;
-
-	cmd_hwif0 = &ide_hwifs[0]; /* default, if not found below */
-	cmd_hwif1 = &ide_hwifs[1]; /* default, if not found below */
-	for (i = 0; i < MAX_HWIFS; i++) {
-		ide_hwif_t *hwif = &ide_hwifs[i];
-		if (hwif->chipset == ide_unknown || hwif->chipset == ide_forced) {
-			if (hwif->io_ports[IDE_DATA_OFFSET] == 0x1f0)
-				cmd_hwif0 = hwif;
-			else if (hwif->io_ports[IDE_DATA_OFFSET] == 0x170)
-				cmd_hwif1 = hwif;
-		}
-	}
-	cmd_drives[0] = &cmd_hwif0->drives[0];
-	cmd_drives[1] = &cmd_hwif0->drives[1];
-	cmd_drives[2] = &cmd_hwif1->drives[0];
-	cmd_drives[3] = &cmd_hwif1->drives[1];
-}
-
 #ifdef CONFIG_BLK_DEV_CMD640_ENHANCED
 
 /*
  * Sets prefetch mode for a drive.
  */
-static void set_prefetch_mode (unsigned int index, int mode)
+static void set_prefetch_mode(ide_drive_t *drive, unsigned int index, int mode)
 {
-	ide_drive_t *drive = cmd_drives[index];
 	unsigned long flags;
 	int reg = prefetch_regs[index];
 	u8 b;
@@ -518,7 +491,7 @@ static void __init retrieve_drive_counts (unsigned int index)
  * This routine writes the prepared setup/active/recovery counts
  * for a drive into the cmd640 chipset registers to active them.
  */
-static void program_drive_counts (unsigned int index)
+static void program_drive_counts(ide_drive_t *drive, unsigned int index)
 {
 	unsigned long flags;
 	u8 setup_count    = setup_counts[index];
@@ -532,8 +505,11 @@ static void program_drive_counts (unsigned int index)
 	 * so we merge the timings, using the slowest value for each timing.
 	 */
 	if (index > 1) {
-		unsigned int mate;
-		if (cmd_drives[mate = index ^ 1]->present) {
+		ide_hwif_t *hwif = drive->hwif;
+		ide_drive_t *peer = &hwif->drives[!drive->select.b.unit];
+		unsigned int mate = index ^ 1;
+
+		if (peer->present) {
 			if (setup_count < setup_counts[mate])
 				setup_count = setup_counts[mate];
 			if (active_count < active_counts[mate])
@@ -572,7 +548,8 @@ static void program_drive_counts (unsigned int index)
 /*
  * Set a specific pio_mode for a drive
  */
-static void cmd640_set_mode (unsigned int index, u8 pio_mode, unsigned int cycle_time)
+static void cmd640_set_mode(ide_drive_t *drive, unsigned int index,
+			    u8 pio_mode, unsigned int cycle_time)
 {
 	int setup_time, active_time, recovery_time, clock_time;
 	u8 setup_count, active_count, recovery_count, recovery_count2, cycle_count;
@@ -584,15 +561,15 @@ static void cmd640_set_mode (unsigned int index, u8 pio_mode, unsigned int cycle
 	active_time = ide_pio_timings[pio_mode].active_time;
 	recovery_time = cycle_time - (setup_time + active_time);
 	clock_time = 1000 / bus_speed;
-	cycle_count = (cycle_time + clock_time - 1) / clock_time;
+	cycle_count = DIV_ROUND_UP(cycle_time, clock_time);
 
-	setup_count = (setup_time + clock_time - 1) / clock_time;
+	setup_count = DIV_ROUND_UP(setup_time, clock_time);
 
-	active_count = (active_time + clock_time - 1) / clock_time;
+	active_count = DIV_ROUND_UP(active_time, clock_time);
 	if (active_count < 2)
 		active_count = 2; /* minimum allowed by cmd640 */
 
-	recovery_count = (recovery_time + clock_time - 1) / clock_time;
+	recovery_count = DIV_ROUND_UP(recovery_time, clock_time);
 	recovery_count2 = cycle_count - (setup_count + active_count);
 	if (recovery_count2 > recovery_count)
 		recovery_count = recovery_count2;
@@ -621,7 +598,7 @@ static void cmd640_set_mode (unsigned int index, u8 pio_mode, unsigned int cycle
 	 *	1) this is the wrong place to do it (proper is do_special() in ide.c)
 	 * 	2) in practice this is rarely, if ever, necessary
 	 */
-	program_drive_counts (index);
+	program_drive_counts(drive, index);
 }
 
 static void cmd640_set_pio_mode(ide_drive_t *drive, const u8 pio)
@@ -629,13 +606,6 @@ static void cmd640_set_pio_mode(ide_drive_t *drive, const u8 pio)
 	unsigned int index = 0, cycle_time;
 	u8 b;
 
-	while (drive != cmd_drives[index]) {
-		if (++index > 3) {
-			printk(KERN_ERR "%s: bad news in %s\n",
-					drive->name, __FUNCTION__);
-			return;
-		}
-	}
 	switch (pio) {
 		case 6: /* set fast-devsel off */
 		case 7: /* set fast-devsel on */
@@ -648,13 +618,13 @@ static void cmd640_set_pio_mode(ide_drive_t *drive, const u8 pio)
 
 		case 8: /* set prefetch off */
 		case 9: /* set prefetch on */
-			set_prefetch_mode(index, pio & 1);
+			set_prefetch_mode(drive, index, pio & 1);
 			printk("%s: %sabled cmd640 prefetch\n", drive->name, (pio & 1) ? "en" : "dis");
 			return;
 	}
 
 	cycle_time = ide_pio_cycle_time(drive, pio);
-	cmd640_set_mode(index, pio, cycle_time);
+	cmd640_set_mode(drive, index, pio, cycle_time);
 
 	printk("%s: selected cmd640 PIO mode%d (%dns)",
 		drive->name, pio, cycle_time);
@@ -722,8 +692,9 @@ static int __init cmd640x_init(void)
 	int second_port_cmd640 = 0;
 	const char *bus_type, *port2;
 	unsigned int index;
-	u8 b, cfr;
+	u8 b, cfr, oldnoprobe;
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
+	hw_regs_t hw[2];
 
 	if (cmd640_vlb && probe_for_cmd640_vlb()) {
 		bus_type = "VLB";
@@ -762,17 +733,32 @@ static int __init cmd640x_init(void)
 		return 0;
 	}
 
+	memset(&hw, 0, sizeof(hw));
+
+	ide_std_init_ports(&hw[0], 0x1f0, 0x3f6);
+	hw[0].irq = 14;
+
+	ide_std_init_ports(&hw[1], 0x170, 0x376);
+	hw[1].irq = 15;
+
+	printk(KERN_INFO "cmd640: buggy cmd640%c interface on %s, config=0x%02x"
+			 "\n", 'a' + cmd640_chip_version - 1, bus_type, cfr);
+
+	cmd_hwif0 = ide_find_port();
+
 	/*
 	 * Initialize data for primary port
 	 */
-	setup_device_ptrs ();
-	printk("%s: buggy cmd640%c interface on %s, config=0x%02x\n",
-	       cmd_hwif0->name, 'a' + cmd640_chip_version - 1, bus_type, cfr);
+	if (cmd_hwif0) {
+		oldnoprobe = cmd_hwif0->noprobe;
+		ide_init_port_hw(cmd_hwif0, &hw[0]);
+		cmd_hwif0->noprobe = oldnoprobe;
 #ifdef CONFIG_BLK_DEV_CMD640_ENHANCED
-	cmd_hwif0->set_pio_mode = &cmd640_set_pio_mode;
+		cmd_hwif0->set_pio_mode = &cmd640_set_pio_mode;
 #endif /* CONFIG_BLK_DEV_CMD640_ENHANCED */
 
-	idx[0] = cmd_hwif0->index;
+		idx[0] = cmd_hwif0->index;
+	}
 
 	/*
 	 * Ensure compatibility by always using the slowest timings
@@ -787,7 +773,7 @@ static int __init cmd640x_init(void)
 	/*
 	 * Try to enable the secondary interface, if not already enabled
 	 */
-	if (cmd_hwif1->noprobe) {
+	if (cmd_hwif1 && cmd_hwif1->noprobe) {
 		port2 = "not probed";
 	} else {
 		b = get_cmd640_reg(CNTRL);
@@ -818,14 +804,17 @@ static int __init cmd640x_init(void)
 	/*
 	 * Initialize data for secondary cmd640 port, if enabled
 	 */
-	if (second_port_cmd640) {
+	if (second_port_cmd640 && cmd_hwif1) {
+		oldnoprobe = cmd_hwif1->noprobe;
+		ide_init_port_hw(cmd_hwif1, &hw[1]);
+		cmd_hwif1->noprobe = oldnoprobe;
 #ifdef CONFIG_BLK_DEV_CMD640_ENHANCED
 		cmd_hwif1->set_pio_mode = &cmd640_set_pio_mode;
 #endif /* CONFIG_BLK_DEV_CMD640_ENHANCED */
 
 		idx[1] = cmd_hwif1->index;
 	}
-	printk(KERN_INFO "%s: %sserialized, secondary interface %s\n", cmd_hwif1->name,
+	printk(KERN_INFO "cmd640: %sserialized, secondary interface %s\n",
 			 second_port_cmd640 ? "" : "not ", port2);
 
 	/*
@@ -833,7 +822,18 @@ static int __init cmd640x_init(void)
 	 * Do not unnecessarily disturb any prior BIOS setup of these.
 	 */
 	for (index = 0; index < (2 + (second_port_cmd640 << 1)); index++) {
-		ide_drive_t *drive = cmd_drives[index];
+		ide_drive_t *drive;
+
+		if (index > 1) {
+			if (cmd_hwif1 == NULL)
+				continue;
+			drive = &cmd_hwif1->drives[index & 1];
+		} else  {
+			if (cmd_hwif0 == NULL)
+				continue;
+			drive = &cmd_hwif0->drives[index & 1];
+		}
+
 #ifdef CONFIG_BLK_DEV_CMD640_ENHANCED
 		if (drive->autotune || ((index > 1) && second_port_toggled)) {
 	 		/*
@@ -843,8 +843,8 @@ static int __init cmd640x_init(void)
 			setup_counts    [index] = 4;	/* max possible */
 			active_counts   [index] = 16;	/* max possible */
 			recovery_counts [index] = 16;	/* max possible */
-			program_drive_counts (index);
-			set_prefetch_mode (index, 0);
+			program_drive_counts(drive, index);
+			set_prefetch_mode(drive, index, 0);
 			printk("cmd640: drive%d timings/prefetch cleared\n", index);
 		} else {
 			/*
@@ -852,7 +852,7 @@ static int __init cmd640x_init(void)
 			 * This preserves any prior BIOS setup.
 			 */
 			retrieve_drive_counts (index);
-			check_prefetch (index);
+			check_prefetch(drive, index);
 			printk("cmd640: drive%d timings/prefetch(%s) preserved",
 				index, drive->no_io_32bit ? "off" : "on");
 			display_clocks(index);
@@ -861,7 +861,7 @@ static int __init cmd640x_init(void)
 		/*
 		 * Set the drive unmask flags to match the prefetch setting
 		 */
-		check_prefetch (index);
+		check_prefetch(drive, index);
 		printk("cmd640: drive%d timings/prefetch(%s) preserved\n",
 			index, drive->no_io_32bit ? "off" : "on");
 #endif /* CONFIG_BLK_DEV_CMD640_ENHANCED */
