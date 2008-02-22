@@ -56,7 +56,8 @@ struct backing_dev_info ubifs_backing_dev_info = {
  * initializes it. Returns new inode in case of success and an error code in
  * case of failure.
  */
-struct inode *ubifs_new_inode(struct ubifs_info *c, struct inode *dir, int mode)
+struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
+			      int mode)
 {
 	struct inode *inode;
 	struct ubifs_inode *ui;
