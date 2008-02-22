@@ -407,7 +407,7 @@ static int get_dent_type(int mode)
  * @last: indicates the last node of the group
  */
 static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
-		       struct inode *inode, int last)
+		       const struct inode *inode, int last)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
@@ -443,17 +443,18 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * ubifs_jrn_update - update inode.
  * @c: UBIFS file-system description object
  * @dir: parent inode
- * @dentry: directory entry
+ * @nm: directory entry name
  * @inode: inode
- * @del: indicates a directory entry deletion i.e unlink or rmdir
+ * @deletion: indicates a directory entry deletion i.e unlink or rmdir
  *
  * This function updates an inode by writing a directory entry, the inode and
  * the parent directory inode to the journal.
  *
  * This function returns %0 on success and a negative error code on failure.
  */
-int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
-		     struct dentry *dentry, struct inode *inode, int del)
+int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
+		     const struct qstr *nm, const struct inode *inode,
+		     int deletion)
 {
 	int err, dlen, ilen, len, lnum, ino_offs, dent_offs, aligned_dlen;
 	int aligned_ilen, plen = UBIFS_INO_NODE_SZ;
@@ -462,10 +463,10 @@ int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
 	union ubifs_key dent_key, ino_key;
 
 	dbg_jrn("ino %lu, dent '%.*s', data len %d in dir ino %lu",
-		inode->i_ino, dentry->d_name.len, dentry->d_name.name,
-		ubifs_inode(inode)->data_len, dir->i_ino);
+		inode->i_ino, nm->len, nm->name, ubifs_inode(inode)->data_len,
+		dir->i_ino);
 
-	dlen = UBIFS_DENT_NODE_SZ + dentry->d_name.len + 1;
+	dlen = UBIFS_DENT_NODE_SZ + nm->len + 1;
 	ilen = UBIFS_INO_NODE_SZ + ubifs_inode(inode)->data_len;
 
 	ubifs_assert(ubifs_inode(dir)->data_len == 0);
@@ -480,17 +481,17 @@ int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
 		return -ENOMEM;
 
 	dent->ch.node_type = UBIFS_DENT_NODE;
-	dent_key_init(c, &dent_key, dir->i_ino, &dentry->d_name);
+	dent_key_init(c, &dent_key, dir->i_ino, nm);
 	key_write(c, &dent_key, dent->key);
-	if (del)
+	if (deletion)
 		dent->inum = 0;
 	else
 		dent->inum = cpu_to_le64(inode->i_ino);
 	dent->padding = 0;
 	dent->type = get_dent_type(inode->i_mode);
-	dent->nlen = cpu_to_le16(dentry->d_name.len);
-	memcpy(dent->name, dentry->d_name.name, dentry->d_name.len);
-	dent->name[dentry->d_name.len] = '\0';
+	dent->nlen = cpu_to_le16(nm->len);
+	memcpy(dent->name, nm->name, nm->len);
+	dent->name[nm->len] = '\0';
 	ubifs_prep_grp_node(c, dent, dlen, 0);
 
 	ino = (void *)dent + aligned_dlen;
@@ -503,7 +504,7 @@ int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
 	if (err)
 		goto out_free;
 
-	if (del && inode->i_nlink == 0) {
+	if (deletion && inode->i_nlink == 0) {
 		err = ubifs_add_orphan(c, inode->i_ino);
 		if (err) {
 			release_head(c, BASEHD);
@@ -519,14 +520,13 @@ int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
 
 	kfree(dent);
 
-	if (del) {
-		err = ubifs_tnc_remove_nm(c, &dent_key, &dentry->d_name);
+	if (deletion) {
+		err = ubifs_tnc_remove_nm(c, &dent_key, nm);
 		if (err)
 			goto out_ro;
 		err = ubifs_add_dirt(c, lnum, dlen);
 	} else
-		err = ubifs_tnc_add_nm(c, &dent_key, lnum, dent_offs, dlen,
-				       &dentry->d_name);
+		err = ubifs_tnc_add_nm(c, &dent_key, lnum, dent_offs, dlen, nm);
 	if (err)
 		goto out_ro;
 
@@ -546,7 +546,7 @@ int ubifs_jrn_update(struct ubifs_info *c, struct inode *dir,
 	return 0;
 
 out_orph:
-	if (del && inode->i_nlink == 0)
+	if (deletion && inode->i_nlink == 0)
 		ubifs_delete_orphan(c, inode->i_ino);
 out_finish:
 	finish_reservation(c);
@@ -556,7 +556,7 @@ out_free:
 
 out_ro:
 	ubifs_ro_mode(c);
-	if (del && inode->i_nlink == 0)
+	if (deletion && inode->i_nlink == 0)
 		ubifs_delete_orphan(c, inode->i_ino);
 	finish_reservation(c);
 	return err;
@@ -692,12 +692,13 @@ out_free:
  *
  * Returns zero in case of success and a negative error code in case of failure.
  */
-int ubifs_jrn_rename(struct ubifs_info *c, struct inode *old_dir,
-		     struct dentry *old_dentry, struct inode *new_dir,
-		     struct dentry *new_dentry)
+int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
+		     const struct dentry *old_dentry,
+		     const struct inode *new_dir,
+		     const struct dentry *new_dentry)
 {
-	struct inode *old_inode = old_dentry->d_inode;
-	struct inode *new_inode = new_dentry->d_inode;
+	const struct inode *old_inode = old_dentry->d_inode;
+	const struct inode *new_inode = new_dentry->d_inode;
 	int err, dlen1, dlen2, ilen, lnum, offs, len;
 	int aligned_dlen1, aligned_dlen2, plen = UBIFS_INO_NODE_SZ;
 	struct ubifs_dent_node *dent, *dent2;
