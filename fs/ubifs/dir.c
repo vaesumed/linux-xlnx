@@ -815,6 +815,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	memcpy(ui->data, symname, len);
 	((char *)ui->data)[len] = '\0';
+	/* TODO: data_len has to be len+1 */
 	ui->data_len = len;
 	inode->i_size = len;
 
