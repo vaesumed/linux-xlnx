@@ -1480,5 +1480,11 @@ struct tunertype tuners[] = {
 		/* see xc5000.c for details */
 	},
 };
+EXPORT_SYMBOL(tuners);
 
 unsigned const int tuner_count = ARRAY_SIZE(tuners);
+EXPORT_SYMBOL(tuner_count);
+
+MODULE_DESCRIPTION("Simple tuner device type database");
+MODULE_AUTHOR("Ralph Metzler, Gerd Knorr, Gunther Mayer");
+MODULE_LICENSE("GPL");
