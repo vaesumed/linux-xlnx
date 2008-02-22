@@ -47,7 +47,7 @@ struct backing_dev_info ubifs_backing_dev_info = {
 };
 
 /**
- * new_ubifs_inode - allocate new UBIFS inode object.
+ * ubifs_new_inode - allocate new UBIFS inode object.
  * @c: UBIFS file-system description object
  * @dir: parent directory inode
  * @mode: inode mode flags
@@ -56,8 +56,7 @@ struct backing_dev_info ubifs_backing_dev_info = {
  * initializes it. Returns new inode in case of success and an error code in
  * case of failure.
  */
-static struct inode *new_ubifs_inode(struct ubifs_info *c,
-				     struct inode *dir, int mode)
+struct inode *ubifs_new_inode(struct ubifs_info *c, struct inode *dir, int mode)
 {
 	struct inode *inode;
 	struct ubifs_inode *ui;
@@ -221,7 +220,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
 	ubifs_assert(mutex_is_locked(&dir->i_mutex));
 
-	inode = new_ubifs_inode(c, dir, mode);
+	inode = ubifs_new_inode(c, dir, mode);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
@@ -668,7 +667,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	if (err)
 		return err;
 
-	inode = new_ubifs_inode(c, dir, S_IFDIR | mode);
+	inode = ubifs_new_inode(c, dir, S_IFDIR | mode);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out_budg;
@@ -737,7 +736,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 		return err;
 	}
 
-	inode = new_ubifs_inode(c, dir, mode);
+	inode = ubifs_new_inode(c, dir, mode);
 	if (IS_ERR(inode)) {
 		kfree(dev);
 		err = PTR_ERR(inode);
@@ -800,7 +799,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		return err;
 
-	inode = new_ubifs_inode(c, dir, S_IFLNK | S_IRWXUGO);
+	inode = ubifs_new_inode(c, dir, S_IFLNK | S_IRWXUGO);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto out_budg;
