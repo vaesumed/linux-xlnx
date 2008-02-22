@@ -109,6 +109,9 @@
 /* First "general purpose" journal head */
 #define DATAHD 2
 
+/* How much a directory entry adds to parent inode */
+#define CALC_DENT_SIZE(name_len) ALIGN(UBIFS_DENT_NODE_SZ + (name_len) + 1, 8)
+
 /*
  * Znodes which were not touched for 'OLD_ZNODE_AGE' seconds are considered
  * "old", and znode which were touched last 'YOUNG_ZNODE_AGE' seconds ago are
