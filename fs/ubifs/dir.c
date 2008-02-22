@@ -33,10 +33,6 @@
 
 #include "ubifs.h"
 
-/* How much a directory entry adds to parent inode */
-#define DIRENTRY_SIZE(dent) ALIGN(UBIFS_DENT_NODE_SZ \
-				  + (dent)->d_name.len + 1, 8)
-
 /*
  * Provide backing_dev_info in order to disable readahead. For UBIFS, I/O is
  * not deferred, it is done immediately in readpage, which means the user would
@@ -219,7 +215,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1};
-	int err, sz_change = DIRENTRY_SIZE(dentry);
+	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
@@ -467,7 +463,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = old_dentry->d_inode;
 	struct ubifs_budget_req req = {.new_dent = 1};
-	int err, sz_change = DIRENTRY_SIZE(dentry);
+	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 
 	dbg_gen("dent '%.*s' to ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
@@ -517,7 +513,8 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_budget_req req = {.rm_dent = 1};
-	int err, sz_change = DIRENTRY_SIZE(dentry), budgeted = 1;
+	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
+	int err, budgeted = 1;
 
 	dbg_gen("dent '%.*s' from ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
@@ -599,7 +596,8 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct ubifs_budget_req req = {.rm_dent = 1};
-	int err, sz_change = DIRENTRY_SIZE(dentry), budgeted = 0;
+	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
+	int err, budgeted = 0;
 
 	dbg_gen("directory '%.*s', ino %lu in dir ino %lu", dentry->d_name.len,
 		dentry->d_name.name, inode->i_ino, dir->i_ino);
@@ -660,7 +658,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1};
-	int err, sz_change = DIRENTRY_SIZE(dentry);
+	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
@@ -716,7 +714,8 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1};
 	union ubifs_dev_desc *dev = NULL;
-	int err, sz_change = DIRENTRY_SIZE(dentry), devlen = 0;
+	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
+	int err, devlen = 0;
 
 	dbg_gen("dent '%.*s' in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, dir->i_ino);
@@ -785,7 +784,8 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	struct ubifs_inode *ui;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	int err, len = strlen(symname), sz_change = DIRENTRY_SIZE(dentry);
+	int err, len = strlen(symname);
+	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1,
 				       .new_ino_d = len};
 
@@ -859,8 +859,8 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int is_dir = S_ISDIR(old_inode->i_mode);
 	int unlink = !!new_inode;
 	int dirsync = (IS_DIRSYNC(old_dir) || IS_DIRSYNC(new_dir));
-	int new_sz = DIRENTRY_SIZE(new_dentry);
-	int old_sz = DIRENTRY_SIZE(old_dentry);
+	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
+	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
 
 	dbg_gen("dent '%.*s' ino %lu in dir ino %lu to dent '%.*s' in "
 		"dir ino %lu", old_dentry->d_name.len, old_dentry->d_name.name,
