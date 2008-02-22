@@ -398,6 +398,9 @@ union ubifs_dev_desc
  * @mode: access flags
  * @flags: per-inode flags (%UBIFS_COMPR_FL, %UBIFS_SYNC_FL, etc)
  * @data_len: inode data length
+ * @xattr_cnt: count of extended attributes this inode has
+ * @xattr_bytes: how many bytes all the extended attributes belonging to this
+ *               inode take
  * @compr_type: compression type used for this inode
  * @padding: reserved for future, zeroes
  * @data: data attached to the inode
@@ -422,8 +425,10 @@ struct ubifs_ino_node
 	__le32 mode;
 	__le32 flags;
 	__le32 data_len;
+	__le32 xattr_cnt;
+	__le64 xattr_bytes;
 	__le16 compr_type;
-	__u8 padding[34];
+	__u8 padding[22];
 	__u8 data[];
 } __attribute__ ((packed));
 

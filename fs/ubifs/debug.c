@@ -23,8 +23,8 @@
 /*
  * This file implements most of the debugging stuff which is compiled in only
  * when it is enabled. But some debugging check functions are implemented in
- * corresponging subsystem, just because they are closely related and utilize
- * various local funtions of the subsystems.
+ * corresponding subsystem, just because they are closely related and utilize
+ * various local functions of the subsystems.
  */
 
 #define UBIFS_DBG_PRESERVE_KMALLOC
@@ -363,6 +363,10 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       le32_to_cpu(ino->mode));
 		printk(KERN_DEBUG "\tflags          %#x\n",
 		       le32_to_cpu(ino->flags));
+		printk(KERN_DEBUG "\txattr_cnt      %u\n",
+		       le32_to_cpu(ino->xattr_cnt));
+		printk(KERN_DEBUG "\txattr_bytes    %llu\n",
+		       le64_to_cpu(ino->xattr_bytes));
 		printk(KERN_DEBUG "\tcompr_type     %#x\n",
 		       (int)le16_to_cpu(ino->compr_type));
 		printk(KERN_DEBUG "\tdata len       %u\n",
@@ -1139,14 +1143,29 @@ void ubifs_read_inode(struct inode *inode)
 	ui->flags = le32_to_cpu(ino->flags);
 	ui->compr_type = le16_to_cpu(ino->compr_type);
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
+	ui->xattr_cnt = le32_to_cpu(ino->xattr_cnt);
+	ui->xattr_bytes = le64_to_cpu(ino->xattr_bytes);
 
+	/* Validate inode to prevent potential voulnerabilities */
 	if (inode->i_size > c->max_inode_sz) {
 		ubifs_err("inode is too large (%lld)",
 			  (long long)inode->i_size);
 		goto out_invalid;
 	}
+
 	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
 		ubifs_err("unknown compression type %d", ui->compr_type);
+		goto out_invalid;
+	}
+
+	if (ui->xattr_cnt < 0 || ui->xattr_bytes < 0) {
+		dbg_err("bad xattr_cnt %d or xattr_bytes %ld",
+			ui->xattr_cnt, ui->xattr_bytes);
+		goto out_invalid;
+	}
+
+	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
+		ubifs_err("invalid inode data length %d", ui->data_len);
 		goto out_invalid;
 	}
 
