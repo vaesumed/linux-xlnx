@@ -417,7 +417,9 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->gid   = cpu_to_le32(inode->i_gid);
 	ino->mode  = cpu_to_le32(inode->i_mode);
 	ino->flags = cpu_to_le32(ui->flags);
-	ino->compr_type = cpu_to_le16(ui->compr_type);
+	ino->compr_type  = cpu_to_le16(ui->compr_type);
+	ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
+	ino->xattr_bytes = cpu_to_le64(ui->xattr_bytes);
 
 	if ((inode->i_mode & S_IFMT) == S_IFCHR ||
 	    (inode->i_mode & S_IFMT) == S_IFBLK) {
