@@ -152,11 +152,9 @@ int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 
 		ubifs_release_op_budget(c, inode, &req);
 
-		if (IS_SYNC(inode)) {
+		if (IS_SYNC(inode))
 			/* TODO: error handling */
 			write_inode_now(inode, 1);
-			ubifs_sync_wbufs_by_inodes(c, &inode, 1);
-		}
 
 		mutex_unlock(&inode->i_mutex);
 		return 0;
