@@ -594,10 +594,6 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 			return PTR_ERR(znode);
 	}
 
-	if (exact)
-		dbg_tnc("exact match: child_cnt %d, LEB %d:%d",
-			znode->child_cnt, znode->lnum, znode->offs);
-
 	*zn = znode;
 	ubifs_assert(exact >= 0 && exact < c->fanout);
 	return exact;
@@ -689,8 +685,6 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 			return PTR_ERR(znode);
 	}
 
-	dbg_tnc("found: child_cnt %d, LEB %d:%d", znode->child_cnt,
-		znode->lnum, znode->offs);
 	*zn = znode;
 	ubifs_assert(exact >= 0 && exact < c->fanout);
 	return exact;
@@ -813,7 +807,9 @@ static int tnc_read_node(struct ubifs_info *c, const union ubifs_key *key,
 	const struct ubifs_bud *bud;
 	union ubifs_key key1;
 
-	dbg_tnc_key(c, key, "key ");
+        dbg_tnc_key(c, key, "LEB %d:%d, len %d, key",
+		    zbr->lnum, zbr->offs, zbr->len);
+
 	if (lnc_lookup(c, zbr, node))
 		return 0; /* Read from the leaf-node-cache */
 	/*
