@@ -190,16 +190,15 @@ out_return:
  * @len: node length
  * @lnum: LEB number written is returned here
  * @offs: offset written is returned here
- * @inum: inode number of the node
  *
  * This function writes a node to reserved space of journal head @jhead.
  * Returns zero in case of success and a negative error code in case of
  * failure.
  */
 static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
-		      int *lnum, int *offs, ino_t inum)
+		      int *lnum, int *offs)
 {
-	int err;
+	struct ubifs_wbuf *wbuf = &c->jheads[jhead].wbuf;
 
 	ubifs_assert(jhead != GCHD);
 
@@ -209,10 +208,7 @@ static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
 	dbg_jrn("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
 	ubifs_prepare_node(c, node, len, 0);
 
-	err = ubifs_wbuf_write_nolock(c, &c->jheads[jhead].wbuf, node, len);
-	if (!err)
-		ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, inum);
-	return err;
+	return ubifs_wbuf_write_nolock(c, wbuf, node, len);
 }
 
 /**
@@ -223,17 +219,17 @@ static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
  * @len: length to write
  * @lnum: LEB number written is returned here
  * @offs: offset written is returned here
- * @inum: inode number of the first node in @buf
- * @inum2: inode number of the second node in @buf
+ * @sync: non-zero if the write-buffer has to by synchronized
  *
  * This function is the same as 'write_node()' but it does not assume the
  * buffer it is writing is a node, so it does not prepare it (which means
  * initializing common header and calculating CRC).
  */
 static int write_head(struct ubifs_info *c, int jhead, void *buf, int len,
-		      int *lnum, int *offs, ino_t inum, ino_t inum2)
+		      int *lnum, int *offs, int sync)
 {
 	int err;
+	struct ubifs_wbuf *wbuf = &c->jheads[jhead].wbuf;
 
 	ubifs_assert(jhead != GCHD);
 
@@ -241,13 +237,11 @@ static int write_head(struct ubifs_info *c, int jhead, void *buf, int len,
 	*offs = c->jheads[jhead].wbuf.offs + c->jheads[jhead].wbuf.used;
 	dbg_jrn("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
 
-	err = ubifs_wbuf_write_nolock(c, &c->jheads[jhead].wbuf, buf, len);
-	if (!err) {
-		ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf, inum);
-		if (inum2)
-			ubifs_wbuf_add_ino_nolock(&c->jheads[jhead].wbuf,
-						  inum2);
-	}
+	err = ubifs_wbuf_write_nolock(c, wbuf, buf, len);
+	if (err)
+		return err;
+	if (sync)
+		err = ubifs_wbuf_sync_nolock(c, wbuf);
 	return err;
 }
 
@@ -446,6 +440,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * @nm: directory entry name
  * @inode: inode
  * @deletion: indicates a directory entry deletion i.e unlink or rmdir
+ * @sync: non-zero if the write-buffer has to be synchronized
  *
  * This function updates an inode by writing a directory entry, the inode and
  * the parent directory inode to the journal.
@@ -454,7 +449,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  */
 int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
-		     int deletion)
+		     int deletion, int sync)
 {
 	int err, dlen, ilen, len, lnum, ino_offs, dent_offs, aligned_dlen;
 	int aligned_ilen, plen = UBIFS_INO_NODE_SZ;
@@ -512,8 +507,13 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		}
 	}
 
-	err = write_head(c, BASEHD, dent, len, &lnum, &dent_offs, inode->i_ino,
-			 dir->i_ino);
+	err = write_head(c, BASEHD, dent, len, &lnum, &dent_offs, sync);
+	if (!sync) {
+		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
+
+		ubifs_wbuf_add_ino_nolock(wbuf, inode->i_ino);
+		ubifs_wbuf_add_ino_nolock(wbuf, dir->i_ino);
+	}
 	release_head(c, BASEHD);
 	if (err)
 		goto out_orph;
@@ -610,7 +610,8 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	err = write_node(c, DATAHD, data, dlen, &lnum, &offs, key_ino(c, key));
+	err = write_node(c, DATAHD, data, dlen, &lnum, &offs);
+	ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf, key_ino(c, key));
 	release_head(c, DATAHD);
 	if (err)
 		goto out_finish;
@@ -629,12 +630,13 @@ out_free:
  * @c: UBIFS file-system description object
  * @inode: inode to flush
  * @deletion: inode has been deleted
+ * @sync: non-zero if the write-buffer has to be synchronized
  *
  * This function writes inode @inode to the journal (to the base head). Returns
  * zero in case of success and a negative error code in case of failure.
  */
-int ubifs_jrn_write_inode(struct ubifs_info *c, struct inode *inode,
-			  int deletion)
+int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
+			  int deletion, int sync)
 {
 	int err, len, lnum, offs;
 	struct ubifs_ino_node *ino;
@@ -653,7 +655,9 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		goto out_free;
 
-	err = write_head(c, BASEHD, ino, len, &lnum, &offs, inode->i_ino, 0);
+	err = write_head(c, BASEHD, ino, len, &lnum, &offs, 0);
+	if (!sync)
+		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inode->i_ino);
 	release_head(c, BASEHD);
 	if (err)
 		goto out_finish;
@@ -689,13 +693,14 @@ out_free:
  * @old_dentry: directory entry to rename
  * @new_dir: parent inode of directory entry to rename
  * @new_dentry: new directory entry (or directory entry to replace)
+ * @sync: non-zero if the write-buffer has to be synchronized
  *
  * Returns zero in case of success and a negative error code in case of failure.
  */
 int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 		     const struct dentry *old_dentry,
 		     const struct inode *new_dir,
-		     const struct dentry *new_dentry)
+		     const struct dentry *new_dentry, int sync)
 {
 	const struct inode *old_inode = old_dentry->d_inode;
 	const struct inode *new_inode = new_dentry->d_inode;
@@ -781,8 +786,13 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 		}
 	}
 
-	err = write_head(c, BASEHD, dent, len, &lnum, &offs,
-	                 new_dir->i_ino, old_dir->i_ino);
+	err = write_head(c, BASEHD, dent, len, &lnum, &offs, sync);
+	if (!sync) {
+		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
+
+		ubifs_wbuf_add_ino_nolock(wbuf, new_dir->i_ino);
+		ubifs_wbuf_add_ino_nolock(wbuf, old_dir->i_ino);
+	}
 	release_head(c, BASEHD);
 	if (err) {
 		if (new_inode && new_inode->i_nlink == 0)
@@ -956,7 +966,8 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	if (err)
 		goto out_free;
 
-	err = write_head(c, BASEHD, trun, len, &lnum, &offs, inum, 0);
+	err = write_head(c, BASEHD, trun, len, &lnum, &offs, 0);
+	ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
 	release_head(c, BASEHD);
 	if (err)
 		goto out;
