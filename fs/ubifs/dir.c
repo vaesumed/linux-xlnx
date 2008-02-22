@@ -152,6 +152,26 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, struct inode *dir, int mode)
 	return inode;
 }
 
+/**
+ * ubifs_set_i_bytes - set inode size for VFS.
+ * @inode: the inode to set the size for
+ *
+ * This is a helper function which sets @inode->i_bytes and @inode->i_blopcks.
+ * VFS expects the blocks size in this case to be 512 bytes, no matter what is
+ * the FS's I/O block size (ours is 4KiB).
+ */
+void ubifs_set_i_bytes(struct inode *inode)
+{
+	loff_t size = i_size_read(inode);
+
+	inode->i_bytes = size & 0x1FF;
+
+	/* First align inode size up to UBIFS block size boundary */
+	size = (size + UBIFS_BLOCK_SIZE - 1) & ~UBIFS_BLOCK_MASK;
+	/* Then calculate amount of 512 byte blocks */
+	inode->i_blocks = size >> 9;
+}
+
 static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
                                    struct nameidata *nd)
 {
@@ -814,7 +834,11 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	memcpy(ui->data, symname, len);
 	((char *)ui->data)[len] = '\0';
-	/* TODO: data_len has to be len+1 */
+	/*
+	 * The terminating zero byte is not written to the flash media and it
+	 * is put just to make later in-memory string processing simpler. Thus,
+	 * data length is @len, not @len + %1.
+	 */
 	ui->data_len = len;
 	inode->i_size = len;
 
