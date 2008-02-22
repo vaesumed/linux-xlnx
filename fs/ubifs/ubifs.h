@@ -1451,7 +1451,7 @@ int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync);
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
 
 /* dir.c */
-struct inode *ubifs_new_inode(struct ubifs_info *c, struct inode *dir,
+struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			      int mode);
 void ubifs_set_i_bytes(struct inode *inode);
 
