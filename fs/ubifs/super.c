@@ -91,11 +91,6 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		goto out_invalid;
 	}
 
-	if (inode->i_size > c->max_inode_sz) {
-		ubifs_err("inode is too large (%lld)",
-			  (long long)inode->i_size);
-		goto out_invalid;
-	}
 	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
 		ubifs_err("unknown compression type %d", ui->compr_type);
 		goto out_invalid;
