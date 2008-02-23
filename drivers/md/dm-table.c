@@ -342,7 +342,7 @@ static int open_dev(struct dm_dev *d, dev_t dev, struct mapped_device *md)
 		return PTR_ERR(bdev);
 	r = bd_claim_by_disk(bdev, _claim_ptr, dm_disk(md));
 	if (r)
-		blkdev_put(bdev);
+		blkdev_put(bdev, d->mode);
 	else
 		d->bdev = bdev;
 	return r;
@@ -357,7 +357,7 @@ static void close_dev(struct dm_dev *d, struct mapped_device *md)
 		return;
 
 	bd_release_from_disk(d->bdev, dm_disk(md));
-	blkdev_put(d->bdev);
+	blkdev_put(d->bdev, d->mode);
 	d->bdev = NULL;
 }
 
