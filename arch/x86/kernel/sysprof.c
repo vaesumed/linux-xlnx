@@ -1,5 +1,3 @@
-/* -*- c-basic-offset: 8 -*- */
-
 /* Sysprof -- Sampling, systemwide CPU profiler
  * Copyright 2004, Red Hat, Inc.
  * Copyright 2004, 2005, Soeren Sandmann
@@ -21,7 +19,6 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/proc_fs.h>
 #include <linux/poll.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
@@ -140,7 +137,7 @@ out:
 	return 0;
 }
 
-static ssize_t procfile_read(struct file *filp, char __user *buffer,
+static ssize_t sysprof_file_read(struct file *filp, char __user *buffer,
 			size_t count, loff_t *ppos)
 {
 	ssize_t bcount;
@@ -158,7 +155,7 @@ static ssize_t procfile_read(struct file *filp, char __user *buffer,
 	return bcount;
 }
 
-static unsigned int procfile_poll(struct file *filp, poll_table * poll_table)
+static unsigned int sysprof_file_poll(struct file *filp, poll_table * poll_table)
 {
 	if (head != tail)
 		return POLLIN | POLLRDNORM;
@@ -173,27 +170,36 @@ static unsigned int procfile_poll(struct file *filp, poll_table * poll_table)
 
 static const struct file_operations sysprof_fops = {
 	.owner = THIS_MODULE,
-	.read = procfile_read,
-	.poll = procfile_poll,
+	.read = sysprof_file_read,
+	.poll = sysprof_file_poll,
 };
 
-static struct dentry *debugfs_pe;
-int init_module(void)
-{
-	debugfs_pe = debugfs_create_file("sysprof-trace", 0600, NULL, NULL,
-				&sysprof_fops);
-	if (!debugfs_pe)
-		return -ENODEV;
-	register_timer_hook(timer_notify);
+static struct dentry *sysprof_trace_dentry;
 
-	return 0;
+static int sysprof_init(void)
+{
+	int err;
+
+	sysprof_trace_dentry = debugfs_create_file("sysprof-trace", 0600,
+						   NULL, NULL, &sysprof_fops);
+	if (!sysprof_trace_dentry)
+		return -ENOMEM;
+
+	err = register_timer_hook(timer_notify);
+	if (err)
+		debugfs_remove(sysprof_trace_dentry);
+
+	return err;
 }
 
-void cleanup_module(void)
+static void sysprof_exit(void)
 {
 	unregister_timer_hook(timer_notify);
-	debugfs_remove(debugfs_pe);
+	debugfs_remove(sysprof_trace_dentry);
 }
+
+module_init(sysprof_init);
+module_exit(sysprof_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Soeren Sandmann (sandmann@daimi.au.dk)");
