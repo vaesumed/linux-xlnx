@@ -177,6 +177,8 @@ config I2C_I801
 	    ESB2
 	    ICH8
 	    ICH9
+	    Tolapai
+	    ICH10
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called i2c-i801.
@@ -244,7 +246,7 @@ config I2C_PIIX4
 
 config I2C_IBM_IIC
 	tristate "IBM PPC 4xx on-chip I2C interface"
-	depends on IBM_OCP
+	depends on 4xx
 	help
 	  Say Y here if you want to use IIC peripheral found on 
 	  embedded IBM PPC 4xx based systems. 
