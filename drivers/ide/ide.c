@@ -506,7 +506,7 @@ void ide_remove_port_from_hwgroup(ide_hwif_t *hwif)
 }
 
 /* Called with ide_lock held. */
-static void ide_port_unregister_devices(ide_hwif_t *hwif)
+static void __ide_port_unregister_devices(ide_hwif_t *hwif)
 {
 	int i;
 
@@ -521,6 +521,18 @@ static void ide_port_unregister_devices(ide_hwif_t *hwif)
 		}
 	}
 }
+
+void ide_port_unregister_devices(ide_hwif_t *hwif)
+{
+	mutex_lock(&ide_cfg_mtx);
+	spin_lock_irq(&ide_lock);
+	__ide_port_unregister_devices(hwif);
+	hwif->present = 0;
+	ide_port_init_devices_data(hwif);
+	spin_unlock_irq(&ide_lock);
+	mutex_unlock(&ide_cfg_mtx);
+}
+EXPORT_SYMBOL_GPL(ide_port_unregister_devices);
 
 /**
  *	ide_unregister		-	free an IDE interface
@@ -562,7 +574,7 @@ void ide_unregister(unsigned int index, int init_default, int restore)
 	hwif = &ide_hwifs[index];
 	if (!hwif->present)
 		goto abort;
-	ide_port_unregister_devices(hwif);
+	__ide_port_unregister_devices(hwif);
 	hwif->present = 0;
 
 	spin_unlock_irq(&ide_lock);
@@ -652,8 +664,8 @@ EXPORT_SYMBOL_GPL(ide_init_port_hw);
  *	Returns -1 on error.
  */
 
-int ide_register_hw(hw_regs_t *hw, void (*quirkproc)(ide_drive_t *),
-		    ide_hwif_t **hwifp)
+static int ide_register_hw(hw_regs_t *hw, void (*quirkproc)(ide_drive_t *),
+			   ide_hwif_t **hwifp)
 {
 	int index, retry = 1;
 	ide_hwif_t *hwif;
@@ -686,8 +698,6 @@ found:
 
 	return hwif->present ? index : -1;
 }
-
-EXPORT_SYMBOL(ide_register_hw);
 
 /*
  *	Locks for IDE setting functionality
