@@ -1091,6 +1091,7 @@ static int sbp2_probe(struct device *dev)
 		goto fail_shost_put;
 
 	fw_device_get(device);
+	get_device(&unit->device);
 
 	/* Initialize to values that won't match anything in our table. */
 	firmware_revision = 0xff000000;
@@ -1105,8 +1106,6 @@ static int sbp2_probe(struct device *dev)
 		goto fail_tgt_put;
 
 	sbp2_init_workarounds(tgt, model, firmware_revision);
-
-	get_device(&unit->device);
 
 	/* Do the login in a workqueue so we can easily reschedule retries. */
 	list_for_each_entry(lu, &tgt->lu_list, link)
