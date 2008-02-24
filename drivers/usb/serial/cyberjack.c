@@ -302,7 +302,7 @@ static int cyberjack_write_room( struct usb_serial_port *port )
 
 static void cyberjack_read_int_callback( struct urb *urb )
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	struct cyberjack_private *priv = usb_get_serial_port_data(port);
 	unsigned char *data = urb->transfer_buffer;
 	int status = urb->status;
@@ -359,7 +359,7 @@ resubmit:
 
 static void cyberjack_read_bulk_callback (struct urb *urb)
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	struct cyberjack_private *priv = usb_get_serial_port_data(port);
 	struct tty_struct *tty;
 	unsigned char *data = urb->transfer_buffer;
@@ -411,7 +411,7 @@ static void cyberjack_read_bulk_callback (struct urb *urb)
 
 static void cyberjack_write_bulk_callback (struct urb *urb)
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	struct cyberjack_private *priv = usb_get_serial_port_data(port);
 	int status = urb->status;
 
