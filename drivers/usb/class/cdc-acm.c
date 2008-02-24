@@ -450,7 +450,7 @@ urbs:
 /* data interface wrote those outgoing bytes */
 static void acm_write_bulk(struct urb *urb)
 {
-	struct acm *acm = (struct acm *)urb->context;
+	struct acm *acm = urb->context;
 
 	dbg("Entering acm_write_bulk with status %d", urb->status);
 
