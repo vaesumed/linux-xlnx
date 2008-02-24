@@ -697,11 +697,12 @@ struct ubifs_compressor {
  * struct ubifs_budget_req - budget requirements of an operation.
  *
  * @new_ino: non-zero if the operation adds a new inode
- * @dirtied_ino: non-zero if the operation makes an inode dirty
+ * @dirtied_ino: how many inodes the operation makes dirty
  * @new_page: non-zero if the operation adds a new page
  * @dirtied_page: non-zero if the operation makes a page dirty
  * @new_dent: non-zero if the operation adds a new directory entry
- * @rm_dent: non-zero if the operation removes a directory entry
+ * @mod_dent: non-zero if the operation removes or modifies an existing
+ *            directory entry
  * @new_ino_d: now much data newly created inode contains
  * @dirtied_ino_d: now much data dirtied inode contains
  * @idx_growth: how much the index will supposedly grow
@@ -714,23 +715,24 @@ struct ubifs_compressor {
  * re-calculating them when the budget is released. However, if @idx_growth is
  * %-1, it is calculated by the release function using other fields.
  *
- * An inode may contain 4KiB of data at max., thus are widths of @new_ino_d
- * and @dirtied_ino_d is 13.
+ * An inode may contain 4KiB of data at max., thus the widths of @new_ino_d
+ * is 13 bits, and @dirtied_ino_d - 15, because up to 4 inodes may be made
+ * dirty by the re-name operation.
  */
 struct ubifs_budget_req
 {
 	unsigned int new_ino:1;
-	unsigned int dirtied_ino:1;
+	unsigned int dirtied_ino:4;
 	unsigned int new_page:1;
 	unsigned int dirtied_page:1;
 	unsigned int new_dent:1;
-	unsigned int rm_dent:1;
+	unsigned int mod_dent:1;
 /* TODO: remove compatibility crap as late as possible */
-#ifndef UBIFS_COMPAT_USE_OLD_IGET
+#ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 	unsigned int locked_pg:1;
 #endif
 	unsigned int new_ino_d:13;
-	unsigned int dirtied_ino_d:13;
+	unsigned int dirtied_ino_d:15;
 	int idx_growth;
 	int data_growth;
 	int dd_growth;
@@ -1304,14 +1306,16 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 /* budget.c */
 int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req);
 void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req);
-int ubifs_budget_operation_m(struct ubifs_info *c, struct inode **inodes,
-			     int count, struct ubifs_budget_req *req);
-int ubifs_budget_operation(struct ubifs_info *c, struct inode *inode,
-			   struct ubifs_budget_req *req);
-void ubifs_release_op_budget(struct ubifs_info *c, struct inode *inode,
+int ubifs_budget_inode_op(struct ubifs_info *c, struct inode *inode,
+			  struct ubifs_budget_req *req);
+void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
+				struct ubifs_budget_req *req);
+void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
+			 struct ubifs_budget_req *req);
+int ubifs_budget_ino_cleaning(struct ubifs_info *c, struct inode *inode,
+			      struct ubifs_budget_req *req);
+void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 			     struct ubifs_budget_req *req);
-void ubifs_cancel_op_budget(struct ubifs_info *c, struct inode *inode,
-			    struct ubifs_budget_req *req);
 long long ubifs_budg_get_free_space(struct ubifs_info *c);
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c);
 void ubifs_convert_page_budget(struct ubifs_info *c);
