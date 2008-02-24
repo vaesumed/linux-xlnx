@@ -35,6 +35,7 @@
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
+#include <linux/ctype.h>
 #include <scsi/libsas.h>
 #include <asm/io.h>
 
