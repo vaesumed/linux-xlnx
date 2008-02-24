@@ -486,8 +486,8 @@ void dbg_dump_budget_req(const struct ubifs_budget_req *req)
 	       req->new_ino_d, req->dirtied_ino_d);
 	printk(KERN_DEBUG "\tnew_page    %d, dirtied_page %d\n",
 	       req->new_page, req->dirtied_page);
-	printk(KERN_DEBUG "\tnew_dent    %d, rm_dent      %d\n",
-	       req->new_dent, req->rm_dent);
+	printk(KERN_DEBUG "\tnew_dent    %d, mod_dent     %d\n",
+	       req->new_dent, req->mod_dent);
 	printk(KERN_DEBUG "\tlocked_pg   %d idx_growth    %d\n",
 	       req->locked_pg, req->idx_growth);
 	printk(KERN_DEBUG "\tdata_growth %d dd_growth     %d\n",
@@ -1320,12 +1320,12 @@ int ubifs_prepare_write(struct file *file, struct page *page, unsigned from,
 		 * this means we have to budget for making the inode dirty.
 		 *
 		 * Note, if the inode is already dirty,
-		 * 'ubifs_budget_operation()' will not allocate any budget, but
-		 * will just lock the @budg_mutex of the inode to prevent it
-		 * from becoming clean before we have changed its size, which is
-		 * going to happen in 'ubifs_write_end()'.
+		 * 'ubifs_budget_inode_op()' will not allocate any budget,
+		 * but will just lock the @budg_mutex of the inode to prevent
+		 * it from becoming clean before we have changed its size,
+		 * which is going to happen in 'ubifs_write_end()'.
 		 */
-		err = ubifs_budget_operation(c, inode, &req);
+		err = ubifs_budget_inode_op(c, inode, &req);
 	else
 		/*
 		 * The inode is not going to be marked as dirty by this write
@@ -1370,10 +1370,10 @@ int ubifs_commit_write(struct file *file, struct page *page, unsigned from,
 		/*
 		 * The inode has been marked dirty, unlock it. This is a bit
 		 * hacky because normally we would have to call
-		 * 'ubifs_release_op_budget()'. But we know there is nothing to
-		 * release because page's budget will be released in
-		 * 'ubifs_write_page()' and inode's budget will be released in
-		 * 'ubifs_write_inode()', so just unlock the inode here for
+		 * 'ubifs_release_ino_dirty()'. But we know there is nothing
+		 * to release because page's budget will be released
+		 * in'ubifs_write_page()' and inode's budget will be released
+		 * in 'ubifs_write_inode()', so just unlock the inode here for
 		 * optimization.
 		 */
 		mutex_unlock(&ui->budg_mutex);

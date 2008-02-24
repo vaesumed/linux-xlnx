@@ -234,16 +234,16 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		 * this means we have to budget for making the inode dirty.
 		 *
 		 * Note, if the inode is already dirty,
-		 * 'ubifs_budget_operation()' will not allocate any budget, but
-		 * will just lock the @budg_mutex of the inode to prevent it
-		 * from becoming clean before we have changed its size, which is
-		 * going to happen in 'ubifs_write_end()'.
+		 * 'ubifs_budget_inode_op()' will not allocate any budget,
+		 * but will just lock the @budg_mutex of the inode to prevent
+		 * it from becoming clean before we have changed its size,
+		 * which is going to happen in 'ubifs_write_end()'.
 		 */
-		err = ubifs_budget_operation(c, inode, &req);
+		err = ubifs_budget_inode_op(c, inode, &req);
 	else
 		/*
 		 * The inode is not going to be marked as dirty by this write
-		 * operation, do do not budget for this.
+		 * operation, do not budget for this.
 		 */
 		err = ubifs_budget_space(c, &req);
 	if (unlikely(err))
@@ -376,8 +376,8 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		/*
 		 * The inode has been marked dirty, unlock it. This is a bit
 		 * hacky because normally we would have to call
-		 * 'ubifs_release_op_budget()'. But we know there is nothing to
-		 * release because page's budget will be released in
+		 * 'ubifs_release_ino_dirty()'. But we know there is nothing
+		 * to release because page's budget will be released in
 		 * 'ubifs_write_page()' and inode's budget will be released in
 		 * 'ubifs_write_inode()', so just unlock the inode here for
 		 * optimization.
@@ -585,14 +585,14 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	if (truncation && (attr->ia_size & (UBIFS_BLOCK_SIZE - 1)))
 		req.dirtied_page = 1;
 
-	err = ubifs_budget_operation(c, inode, &req);
+	err = ubifs_budget_inode_op(c, inode, &req);
 	if (err)
 		return err;
 
 	if (truncation) {
 		err = ubifs_trunc(inode, attr->ia_size);
 		if (err) {
-			ubifs_cancel_op_budget(c, inode, &req);
+			ubifs_cancel_ino_op(c, inode, &req);
 			return err;
 		}
 
@@ -622,7 +622,7 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 
 	mark_inode_dirty_sync(inode);
-	ubifs_release_op_budget(c, inode, &req);
+	ubifs_release_ino_dirty(c, inode, &req);
 
 	if (req.dirtied_page) {
 		/*
@@ -716,7 +716,7 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 
 	if (inode->i_mtime.tv_sec != now || inode->i_ctime.tv_sec != now) {
 		memset(&req, 0, sizeof(struct ubifs_budget_req));
-		err = ubifs_budget_operation(c, inode, &req);
+		err = ubifs_budget_inode_op(c, inode, &req);
 		if (err)
 			return err;
 
