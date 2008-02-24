@@ -128,7 +128,7 @@ int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 		mutex_lock(&inode->i_mutex);
 
 		memset(&req, 0 , sizeof(struct ubifs_budget_req));
-		err = ubifs_budget_operation(c, inode, &req);
+		err = ubifs_budget_inode_op(c, inode, &req);
 		if (err)
 			goto out;
 
@@ -150,7 +150,7 @@ int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 		inode->i_ctime = CURRENT_TIME_SEC;
 		mark_inode_dirty_sync(inode);
 
-		ubifs_release_op_budget(c, inode, &req);
+		ubifs_release_ino_dirty(c, inode, &req);
 
 		if (IS_SYNC(inode))
 			/* TODO: error handling */
@@ -160,7 +160,7 @@ int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 		return 0;
 
 out_budg:
-		ubifs_cancel_op_budget(c, inode, &req);
+		ubifs_cancel_ino_op(c, inode, &req);
 out:
 		ubifs_err("can't modify inode %lu attributes", inode->i_ino);
 		mutex_unlock(&inode->i_mutex);
