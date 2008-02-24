@@ -1171,6 +1171,8 @@ source "drivers/dma/Kconfig"
 
 source "drivers/dca/Kconfig"
 
+source "drivers/uio/Kconfig"
+
 endmenu
 
 source "fs/Kconfig"
