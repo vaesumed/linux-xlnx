@@ -25,10 +25,19 @@
 /*
  * This file implements directory operations.
  *
- * TODO: budgeting is wrong. Most operations re-write the inode and parent
- * inode and this is not budgeted, which is dangerous. Also, if we re-write
- * inode and it is dirty, we should mark it as clean since it is not dirty
- * anymore.
+ * All FS operations in this file allocate budget before writing anything to the
+ * media. If they fail to allocate it, the error is returned. The only
+ * exception are 'ubifs_unlink()' and 'ubifs_rmdir()' which keep working even
+ * if they unable to allocate the budget, because deletion %-ENOSPC failure is
+ * not what users are usually ready to get. UBIFS budgeting subsystem has some
+ * space reserved for these purposes.
+ *
+ * All operations in this file change the parent inode, e.g., 'ubifs_link()'
+ * changes ctime and nlink of the parent inode. The parent inode is written to
+ * the media straight away - it is not marked as dirty and there is no
+ * write-back for it. This was done to simplify file-system recovery which
+ * would otherwise be very difficult to do. So instead of marking the parent
+ * inode dirty, the operations mark it clean.
  */
 
 #include "ubifs.h"
@@ -69,7 +78,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	/*
 	 * Set 'S_NOCMTIME' to prevent VFS form updating [mc]time of inodes and
 	 * marking them dirty in file write path (see 'file_update_time()').
-	 * UBIFS has to fullby control "clean <-> dirty" transitions of inodes
+	 * UBIFS has to fully control "clean <-> dirty" transitions of inodes
 	 * to make budgeting work.
 	 */
 	inode->i_flags |= (S_NOCMTIME);
@@ -157,7 +166,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
  * ubifs_set_i_bytes - set inode size for VFS.
  * @inode: the inode to set the size for
  *
- * This is a helper function which sets @inode->i_bytes and @inode->i_blopcks.
+ * This is a helper function which sets @inode->i_bytes and @inode->i_blocks.
  * VFS expects the blocks size in this case to be 512 bytes, no matter what is
  * the FS's I/O block size (ours is 4KiB).
  */
@@ -234,7 +243,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 {
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1};
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
@@ -245,7 +254,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err)
 		goto out;
 
@@ -258,13 +267,13 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
+	ubifs_release_ino_clean(c, dir, &req);
 	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_budg:
 	dir->i_size -= sz_change;
-	ubifs_release_budget(c, &req);
+	ubifs_cancel_ino_op(c, dir, &req);
 	ubifs_err("cannot create regular file, error %d", err);
 out:
 	make_bad_inode(inode);
@@ -477,7 +486,9 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = old_dentry->d_inode;
-	struct ubifs_budget_req req = {.new_dent = 1};
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_budget_req req = { .new_dent = 1, .dirtied_ino = 1,
+					.dirtied_ino_d = ui->data_len };
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 
 	dbg_gen("dent '%.*s' to ino %lu (nlink %d) in dir ino %lu",
@@ -486,7 +497,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	ubifs_assert(mutex_is_locked(&dir->i_mutex));
 	ubifs_assert(mutex_is_locked(&inode->i_mutex));
 
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err)
 		return err;
 
@@ -499,19 +510,19 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir));
 	if (err)
-		goto out;
+		goto out_budg;
 
 	atomic_inc(&inode->i_count);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
+	ubifs_release_ino_clean(c, dir, &req);
 	ubifs_set_i_bytes(dir);
 	return 0;
 
-out:
+out_budg:
 	dir->i_size -= sz_change;
+	ubifs_cancel_ino_op(c, dir, &req);
 	drop_nlink(inode);
 	iput(inode);
-	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -519,7 +530,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = dentry->d_inode;
-	struct ubifs_budget_req req = {.rm_dent = 1};
+	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 1 };
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 1;
 
@@ -530,7 +541,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	ubifs_assert(mutex_is_locked(&inode->i_mutex));
 	ubifs_assert(!S_ISDIR(inode->i_mode));
 
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err) {
 		if (err != -ENOSPC)
 			return err;
@@ -550,7 +561,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		goto out_budg;
 
 	if (budgeted)
-		ubifs_release_budget(c, &req);
+		ubifs_release_ino_clean(c, dir, &req);
 
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -559,7 +570,7 @@ out_budg:
 	dir->i_size += sz_change;
 	inc_nlink(inode);
 	if (budgeted)
-		ubifs_release_budget(c, &req);
+		ubifs_cancel_ino_op(c, dir, &req);
 	return err;
 }
 
@@ -594,9 +605,9 @@ static int check_dir_empty(struct ubifs_info *c, struct inode *dir)
 
 static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 {
-	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = {.rm_dent = 1};
+	struct inode *inode = dentry->d_inode;
+	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 1 };
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 0;
 
@@ -611,7 +622,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 		return err;
 
 	budgeted = 1;
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err) {
 		if (err != -ENOSPC)
 			return err;
@@ -633,7 +644,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 		goto out_budg;
 
 	if (budgeted)
-		ubifs_release_budget(c, &req);
+		ubifs_release_ino_clean(c, dir, &req);
 
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -644,7 +655,7 @@ out_budg:
 	inc_nlink(inode);
 	inc_nlink(inode);
 	if (budgeted)
-		ubifs_release_budget(c, &req);
+		ubifs_cancel_ino_op(c, dir, &req);
 	return err;
 }
 
@@ -652,14 +663,14 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1};
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
 	ubifs_assert(mutex_is_locked(&dir->i_mutex));
 
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err)
 		return err;
 
@@ -683,7 +694,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	}
 
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
+	ubifs_release_ino_clean(c, dir, &req);
 	ubifs_set_i_bytes(inode);
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -694,7 +705,7 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_release_budget(c, &req);
+	ubifs_cancel_ino_op(c, dir, &req);
 	return err;
 }
 
@@ -703,7 +714,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 {
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1};
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
 	union ubifs_dev_desc *dev = NULL;
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, devlen = 0;
@@ -722,7 +733,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 		devlen = ubifs_encode_dev(dev, rdev);
 	}
 
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err) {
 		kfree(dev);
 		return err;
@@ -750,7 +761,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
+	ubifs_release_ino_clean(c, dir, &req);
 	ubifs_set_i_bytes(inode);
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -760,7 +771,7 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_release_budget(c, &req);
+	ubifs_cancel_ino_op(c, dir, &req);
 	return err;
 }
 
@@ -772,8 +783,8 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	int err, len = strlen(symname);
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
-	struct ubifs_budget_req req = {.new_ino = 1, .new_dent = 1,
-				       .new_ino_d = len};
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
+					.new_ino_d = len };
 
 	dbg_gen("dent '%.*s', target '%s' in dir ino %lu", dentry->d_name.len,
 		dentry->d_name.name, symname, dir->i_ino);
@@ -782,7 +793,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	if (len > UBIFS_MAX_INO_DATA)
 		return -ENAMETOOLONG;
 
-	err = ubifs_budget_space(c, &req);
+	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err)
 		return err;
 
@@ -818,7 +829,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
+	ubifs_release_ino_clean(c, dir, &req);
 	ubifs_set_i_bytes(inode);
 	ubifs_set_i_bytes(dir);
 	return 0;
@@ -829,7 +840,7 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_release_budget(c, &req);
+	ubifs_cancel_ino_op(c, dir, &req);
 	return err;
 }
 
@@ -839,13 +850,13 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct ubifs_info *c = old_dir->i_sb->s_fs_info;
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	struct ubifs_budget_req req = {.new_dent = 1, .rm_dent = 1};
 	int err, move = (new_dir != old_dir);
 	int is_dir = S_ISDIR(old_inode->i_mode);
 	int unlink = !!new_inode;
 	int dirsync = (IS_DIRSYNC(old_dir) || IS_DIRSYNC(new_dir));
 	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
+	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1 };
 
 	dbg_gen("dent '%.*s' ino %lu in dir ino %lu to dent '%.*s' in "
 		"dir ino %lu", old_dentry->d_name.len, old_dentry->d_name.name,
@@ -862,7 +873,19 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			return err;
 	}
 
-	err = ubifs_budget_space(c, &req);
+	if (move) {
+		req.dirtied_ino = 3;
+		req.dirtied_ino_d = ubifs_inode(new_inode)->data_len;
+		req.dirtied_ino_d = ubifs_inode(new_dir)->data_len;
+	}
+
+	/*
+	 * Note, rename may write @new_dir inode if the directory entry is
+	 * moved there. And if the @new_dir is dirty, we do not bother to make
+	 * it clean. It could be done, but requires extra coding which does not
+	 * seem to be really worth it.
+	 */
+	err = ubifs_budget_inode_op(c, old_dir, &req);
 	if (err)
 		return err;
 
@@ -915,7 +938,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (err)
 		goto out_inode;
 
-	ubifs_release_budget(c, &req);
+	ubifs_release_ino_clean(c, old_dir, &req);
 	ubifs_set_i_bytes(old_dir);
 	ubifs_set_i_bytes(new_dir);
 	return 0;
@@ -932,7 +955,7 @@ out_inode:
 		drop_nlink(new_dir);
 		inc_nlink(old_dir);
 	}
-	ubifs_release_budget(c, &req);
+	ubifs_cancel_ino_op(c, old_dir, &req);
 	return err;
 }
 

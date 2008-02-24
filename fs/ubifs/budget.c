@@ -446,9 +446,11 @@ static int calc_data_growth(const struct ubifs_info *c,
 {
 	int data_growth;
 
-	data_growth  = req->new_ino  ? c->inode_budget : 0;
-	data_growth += req->new_page ? c->page_budget  : 0;
-	data_growth += req->new_dent ? c->dent_budget  : 0;
+	data_growth = req->new_ino  ? c->inode_budget : 0;
+	if (req->new_page)
+		data_growth += c->page_budget;
+	if (req->new_dent)
+		data_growth += c->dent_budget;
 	data_growth += req->new_ino_d;
 
 	return data_growth;
@@ -465,9 +467,12 @@ static int calc_dd_growth(const struct ubifs_info *c,
 {
 	int dd_growth;
 
-	dd_growth =  req->dirtied_ino  ? c->inode_budget : 0;
-	dd_growth += req->dirtied_page ? c->page_budget  : 0;
-	dd_growth += req->rm_dent      ? c->dent_budget  : 0;
+	dd_growth = req->dirtied_page ? c->page_budget : 0;
+
+	if (req->dirtied_ino)
+		dd_growth += c->inode_budget << (req->dirtied_ino - 1);
+	if (req->mod_dent)
+		dd_growth += c->dent_budget;
 	dd_growth += req->dirtied_ino_d;
 
 	return dd_growth;
@@ -581,7 +586,7 @@ void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
  * ubifs_convert_page_budget - convert budget of a new page.
  * @c: UBIFS file-system description object
  *
- * This function convert budget which was allocated for a new page of data to
+ * This function converts budget which was allocated for a new page of data to
  * the budget of changing an existing page of data. The latter is not larger
  * then the former, so this function only does simple re-calculation and does
  * not involve any write-back.
@@ -601,36 +606,42 @@ void ubifs_convert_page_budget(struct ubifs_info *c)
 }
 
 /**
- * ubifs_budget_operation - budget an operation on inode.
+ * ubifs_budget_inode_op - budget an operation on inode.
  * @c: UBIFS file-system description object
  * @inode: VFS inode which will be made dirty by the operation
  * @req: budget request of the operation
  *
- * This function is called to get budget for an operation which may mark an
- * inode dirty. The caller has to pass the inode the operation is going to
- * change and mark dirty. This function acquires budget for this operation and
- * returns zero in case of success, %-ENOSPC if there is no more flash space,
- * and other negative error codes in case of failure.
+ * This function is called to get budget for an operation which changes an
+ * inode. The inode may be in dirty or clean state. The former means there is
+ * no need to allocate the budget as it has already been allocated before. The
+ * latter means that the inode change budget has to be allocated.
+ *
+ * The caller has to pass the inode which is going to be changed. This function
+ * acquires budget the for as described in @req plus the budget for changing
+ * the inode dirty, if needed. Returns zero in case of success, %-ENOSPC if
+ * there is no more flash space, and other negative error codes in case of
+ * failure.
  *
  * Note, upon exit, this function leaves the inode locked, and the
- * 'ubifs_release_op_budget()' function has to unlock it.
+ * 'ubifs_release_ino_dirty()' or 'ubifs_release_ino_clean()' function has to
+ * be called to unlock it.
  */
-int ubifs_budget_operation(struct ubifs_info *c, struct inode *inode,
-			   struct ubifs_budget_req *req)
+int ubifs_budget_inode_op(struct ubifs_info *c, struct inode *inode,
+			      struct ubifs_budget_req *req)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	int err;
+	int err, old = req->dirtied_ino;
 
-	ubifs_assert(req->dirtied_ino == 0);
-	ubifs_assert(req->dirtied_ino_d == 0);
+	ubifs_assert(req->dirtied_ino <= 3);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 3);
 
 again:
 	/*
 	 * If the inode is clean, it will be dirtied by this operation and we
 	 * have to budget for this.
 	 */
-	req->dirtied_ino = !ui->dirty;
-	if (req->dirtied_ino)
+	req->dirtied_ino += !ui->dirty;
+	if (req->dirtied_ino > old)
 		req->dirtied_ino_d = ui->data_len;
 
 	err = ubifs_budget_space(c, req);
@@ -639,10 +650,12 @@ again:
 
 	mutex_lock(&ui->budg_mutex);
 
-	if (req->dirtied_ino != !ui->dirty) {
+	if (req->dirtied_ino != old + !ui->dirty) {
+		/* The inode has probably been written back meanwhile */
 		ubifs_release_budget(c, req);
 		mutex_unlock(&ui->budg_mutex);
-		req->dirtied_ino_d = 0;
+		req->dirtied_ino = old;
+		req->dirtied_ino_d -= ui->data_len;
 		goto again;
 	}
 
@@ -651,37 +664,24 @@ again:
 }
 
 /**
- * ubifs_release_new_page_budget - release budget of a new page.
- * @c: UBIFS file-system description object
- *
- * This is a helper function which releases budget corresponding to the budget
- * of one new page of data.
- */
-void ubifs_release_new_page_budget(struct ubifs_info *c)
-{
-	struct ubifs_budget_req req = { .new_page = 1,
-					.idx_growth = -1,
-					.data_growth = c->page_budget};
-
-	ubifs_release_budget(c, &req);
-}
-
-/**
- * ubifs_release_op_budget - release budget of an operation.
+ * ubifs_release_ino_dirty - release budget of a "dirtying" operation.
  * @c: UBIFS file-system description object
  * @inode: VFS inode the operation worked on
  * @req: budget to release
  *
  * This function has to be called at the end of VFS operations which acquired
- * budget via 'ubifs_budget_operation()'. It unlocks the inode and releases the
- * budget. Budget for dirtied inodes and pages is not released.
+ * budget via 'ubifs_budget_inode_op()'. It assumes that the inode has been
+ * marked as dirty and will be synchronized later by write-back, so it does not
+ * release the budget of the inode.
+ *
+ * Note, this function also avoids releasing page budgets which are released
+ * separately.
  */
-void ubifs_release_op_budget(struct ubifs_info *c, struct inode *inode,
-			     struct ubifs_budget_req *req)
+void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
+				struct ubifs_budget_req *req)
 {
-	ubifs_assert(req->dirtied_ino == 0 || req->dirtied_ino == 1);
-	ubifs_assert(req->dirtied_ino_d >= 0 &&
-		     req->dirtied_ino_d <= req->dd_growth);
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
 	ubifs_assert(req->idx_growth >= 0);
 	ubifs_assert(req->data_growth >= 0);
 	ubifs_assert(req->dd_growth >= 0);
@@ -700,6 +700,27 @@ void ubifs_release_op_budget(struct ubifs_info *c, struct inode *inode,
 		ubifs_assert(req->dirtied_page == 0);
 	}
 
+	ubifs_assert(req->dd_growth >= 0);
+	ubifs_release_budget(c, req);
+	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+}
+
+/**
+ * ubifs_cancel_ino_op - cancel budget of an operation on inode.
+ * @c: UBIFS file-system description object
+ * @inodes: VFS inode the operation worked on
+ * @req: budget to release
+ *
+ * This function has to be called if the operation failed and whole budget has
+ * to be released, including the budget for inode which would had been
+ * dirtied. It is important not to mark the inode dirty before calling this
+ * function.
+ */
+void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
+			 struct ubifs_budget_req *req)
+{
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
 	ubifs_assert(req->idx_growth >= 0);
 	ubifs_assert(req->data_growth >= 0);
 	ubifs_assert(req->dd_growth >= 0);
@@ -709,25 +730,58 @@ void ubifs_release_op_budget(struct ubifs_info *c, struct inode *inode,
 }
 
 /**
- * ubifs_cancel_op_budget - cancel budget of an operation.
+ * ubifs_release_ino_clean - release budget of a "cleaning" operation.
  * @c: UBIFS file-system description object
- * @inodes: VFS inode the operation worked on
+ * @inode: VFS inode the operation worked on
  * @req: budget to release
  *
- * This function has to be called if the operation failed and whole budget has
- * to be released, including the budget for inode which would has been
- * dirtied. It is important not to mark the inode dirty before calling this
- * function.
+ * This function has to be called at the end of VFS operations which acquired
+ * budget via 'ubifs_budget_inode_op()'. It assumed the operation synchronized
+ * the inode, so it marks the inode clean, unlocks it and releases whole budget.
+ *
+ * Note, this function also avoids releasing page budgets which are released
+ * separately.
  */
-void ubifs_cancel_op_budget(struct ubifs_info *c, struct inode *inode,
-			    struct ubifs_budget_req *req)
+void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
+			     struct ubifs_budget_req *req)
 {
-	ubifs_assert(req->dirtied_ino == 0 || req->dirtied_ino == 1);
-	ubifs_assert(req->dirtied_ino_d >= 0 &&
-		     req->dirtied_ino_d <= req->dd_growth);
+	struct ubifs_inode *ui = ubifs_inode(inode);
+
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
+	ubifs_assert(req->idx_growth >= 0);
+	ubifs_assert(req->data_growth >= 0);
+	ubifs_assert(req->dd_growth >= 0);
+
+	if (req->dirtied_page) {
+		req->dd_growth -= c->page_budget;
+		ubifs_assert(req->new_page == 0);
+	} else if (req->new_page) {
+		req->idx_growth -= c->max_idx_node_sz;
+		req->data_growth -= c->page_budget;
+		ubifs_assert(req->dirtied_page == 0);
+	}
 
 	ubifs_release_budget(c, req);
+	ui->dirty = 0;
+	UBIFS_DBG(ui->budgeted = 0);
 	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+}
+
+/**
+ * ubifs_release_new_page_budget - release budget of a new page.
+ * @c: UBIFS file-system description object
+ *
+ * This is a helper function which releases budget corresponding to the budget
+ * of one new page of data.
+ */
+void ubifs_release_new_page_budget(struct ubifs_info *c)
+{
+	struct ubifs_budget_req req = { .new_page = 1,
+					.idx_growth = -1,
+					.data_growth = c->page_budget};
+
+	ubifs_release_budget(c, &req);
 }
 
 /**
