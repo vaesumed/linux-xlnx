@@ -36,7 +36,6 @@
 #include "xfs_bmap.h"
 #include "xfs_error.h"
 #include "xfs_quota.h"
-#include "xfs_refcache.h"
 #include "xfs_utils.h"
 #include "xfs_trans_space.h"
 #include "xfs_vnodeops.h"
@@ -94,7 +93,8 @@ xfs_lock_for_rename(
 	xfs_inode_t	**i_tab,/* array of inode returned, sorted */
 	int		*num_inodes)  /* number of inodes in array */
 {
-	xfs_inode_t		*ip1, *ip2, *temp;
+	xfs_inode_t		*ip1 = VNAME_TO_INODE(vname1);
+	xfs_inode_t		*ip2, *temp;
 	xfs_ino_t		inum1, inum2;
 	int			error;
 	int			i, j;
@@ -110,16 +110,11 @@ xfs_lock_for_rename(
 	 * to see if we still have the right inodes, directories, etc.
 	 */
 	lock_mode = xfs_ilock_map_shared(dp1);
-	error = xfs_get_dir_entry(vname1, &ip1);
-	if (error) {
-		xfs_iunlock_map_shared(dp1, lock_mode);
-		return error;
-	}
+	IHOLD(ip1);
+	xfs_itrace_ref(ip1);
 
 	inum1 = ip1->i_ino;
 
-	ASSERT(ip1);
-	xfs_itrace_ref(ip1);
 
 	/*
 	 * Unlock dp1 and lock dp2 if they are different.
@@ -580,10 +575,8 @@ xfs_rename(
 	 * the vnode references.
 	 */
 	error = xfs_trans_commit(tp, XFS_TRANS_RELEASE_LOG_RES);
-	if (target_ip != NULL) {
-		xfs_refcache_purge_ip(target_ip);
+	if (target_ip != NULL)
 		IRELE(target_ip);
-	}
 	/*
 	 * Let interposed file systems know about removed links.
 	 */
