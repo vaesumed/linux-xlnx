@@ -332,7 +332,7 @@ static void flush_and_resubmit_read_urb (struct usb_serial_port *port)
 
 void usb_serial_generic_read_bulk_callback (struct urb *urb)
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	unsigned char *data = urb->transfer_buffer;
 	int status = urb->status;
 	unsigned long flags;
@@ -360,7 +360,7 @@ EXPORT_SYMBOL_GPL(usb_serial_generic_read_bulk_callback);
 
 void usb_serial_generic_write_bulk_callback (struct urb *urb)
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	int status = urb->status;
 
 	dbg("%s - port %d", __func__, port->number);
