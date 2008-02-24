@@ -971,7 +971,7 @@ static void command_port_write_callback(struct urb *urb)
 
 static void command_port_read_callback(struct urb *urb)
 {
-	struct usb_serial_port *command_port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *command_port = urb->context;
 	struct whiteheat_command_private *command_info;
 	int status = urb->status;
 	unsigned char *data = urb->transfer_buffer;
@@ -1021,7 +1021,7 @@ static void command_port_read_callback(struct urb *urb)
 
 static void whiteheat_read_callback(struct urb *urb)
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	struct whiteheat_urb_wrap *wrap;
 	unsigned char *data = urb->transfer_buffer;
 	struct whiteheat_private *info = usb_get_serial_port_data(port);
@@ -1065,7 +1065,7 @@ static void whiteheat_read_callback(struct urb *urb)
 
 static void whiteheat_write_callback(struct urb *urb)
 {
-	struct usb_serial_port *port = (struct usb_serial_port *)urb->context;
+	struct usb_serial_port *port = urb->context;
 	struct whiteheat_private *info = usb_get_serial_port_data(port);
 	struct whiteheat_urb_wrap *wrap;
 	int status = urb->status;
