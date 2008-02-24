@@ -306,3 +306,11 @@ Why:	Largely unmaintained and almost entirely unused.  File system
 	is largely pointless as without a lot of work only the most
 	trivial of Solaris binaries can work with the emulation code.
 Who:	David S. Miller <davem@davemloft.net>
+
+---------------------------
+
+What:	asm/semaphore.h
+When:	2.6.26
+Why:	Implementation became generic; users should now include
+	linux/semaphore.h instead.
+Who:	Matthew Wilcox <willy@linux.intel.com>

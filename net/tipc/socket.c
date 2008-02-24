@@ -43,7 +43,7 @@
 #include <linux/slab.h>
 #include <linux/poll.h>
 #include <linux/fcntl.h>
-#include <asm/semaphore.h>
+#include <linux/semaphore.h>
 #include <asm/string.h>
 #include <asm/atomic.h>
 #include <net/sock.h>
