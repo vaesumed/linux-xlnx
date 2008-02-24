@@ -58,38 +58,38 @@ EXPORT_SYMBOL(__up);
 void __sched __down(struct semaphore *sem)
 {
 	struct task_struct *tsk = current;
-        DECLARE_WAITQUEUE(wait, tsk);
-        unsigned long flags;
+	DECLARE_WAITQUEUE(wait, tsk);
+	unsigned long flags;
 
-        tsk->state = TASK_UNINTERRUPTIBLE;
-        spin_lock_irqsave(&sem->wait.lock, flags);
-        add_wait_queue_exclusive_locked(&sem->wait, &wait);
+	tsk->state = TASK_UNINTERRUPTIBLE;
+	spin_lock_irqsave(&sem->wait.lock, flags);
+	add_wait_queue_exclusive_locked(&sem->wait, &wait);
 
-        sem->sleepers++;
-        for (;;) {
-                int sleepers = sem->sleepers;
+	sem->sleepers++;
+	for (;;) {
+		int sleepers = sem->sleepers;
 
-                /*
-                 * Add "everybody else" into it. They aren't
-                 * playing, because we own the spinlock in
-                 * the wait_queue_head.
-                 */
-                if (atomic_add_return(sleepers - 1, &sem->count) >= 0) {
-                        sem->sleepers = 0;
-                        break;
-                }
-                sem->sleepers = 1;      /* us - see -1 above */
-                spin_unlock_irqrestore(&sem->wait.lock, flags);
+		/*
+		 * Add "everybody else" into it. They aren't
+		 * playing, because we own the spinlock in
+		 * the wait_queue_head.
+		 */
+		if (atomic_add_return(sleepers - 1, &sem->count) >= 0) {
+			sem->sleepers = 0;
+			break;
+		}
+		sem->sleepers = 1;      /* us - see -1 above */
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
 
-                schedule();
+		schedule();
 
-                spin_lock_irqsave(&sem->wait.lock, flags);
-                tsk->state = TASK_UNINTERRUPTIBLE;
-        }
-        remove_wait_queue_locked(&sem->wait, &wait);
-        wake_up_locked(&sem->wait);
-        spin_unlock_irqrestore(&sem->wait.lock, flags);
-        tsk->state = TASK_RUNNING;
+		spin_lock_irqsave(&sem->wait.lock, flags);
+		tsk->state = TASK_UNINTERRUPTIBLE;
+	}
+	remove_wait_queue_locked(&sem->wait, &wait);
+	wake_up_locked(&sem->wait);
+	spin_unlock_irqrestore(&sem->wait.lock, flags);
+	tsk->state = TASK_RUNNING;
 }
 EXPORT_SYMBOL(__down);
 
@@ -97,16 +97,16 @@ int __sched __down_interruptible(struct semaphore *sem)
 {
 	int retval = 0;
 	struct task_struct *tsk = current;
-        DECLARE_WAITQUEUE(wait, tsk);
-        unsigned long flags;
+	DECLARE_WAITQUEUE(wait, tsk);
+	unsigned long flags;
 
-        tsk->state = TASK_INTERRUPTIBLE;
-        spin_lock_irqsave(&sem->wait.lock, flags);
-        add_wait_queue_exclusive_locked(&sem->wait, &wait);
+	tsk->state = TASK_INTERRUPTIBLE;
+	spin_lock_irqsave(&sem->wait.lock, flags);
+	add_wait_queue_exclusive_locked(&sem->wait, &wait);
 
-        sem->sleepers++;
-        for (;;) {
-                int sleepers = sem->sleepers;
+	sem->sleepers++;
+	for (;;) {
+		int sleepers = sem->sleepers;
 
 		/*
 		 * With signals pending, this turns into the trylock
@@ -121,28 +121,28 @@ int __sched __down_interruptible(struct semaphore *sem)
 			break;
 		}
 
-                /*
-                 * Add "everybody else" into it. They aren't
-                 * playing, because we own the spinlock in
-                 * the wait_queue_head.
-                 */
-                if (atomic_add_return(sleepers - 1, &sem->count) >= 0) {
-                        sem->sleepers = 0;
-                        break;
-                }
-                sem->sleepers = 1;      /* us - see -1 above */
-                spin_unlock_irqrestore(&sem->wait.lock, flags);
+		/*
+		 * Add "everybody else" into it. They aren't
+		 * playing, because we own the spinlock in
+		 * the wait_queue_head.
+		 */
+		if (atomic_add_return(sleepers - 1, &sem->count) >= 0) {
+			sem->sleepers = 0;
+			break;
+		}
+		sem->sleepers = 1;      /* us - see -1 above */
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
 
-                schedule();
+		schedule();
 
-                spin_lock_irqsave(&sem->wait.lock, flags);
-                tsk->state = TASK_INTERRUPTIBLE;
-        }
-        remove_wait_queue_locked(&sem->wait, &wait);
-        wake_up_locked(&sem->wait);
-        spin_unlock_irqrestore(&sem->wait.lock, flags);
+		spin_lock_irqsave(&sem->wait.lock, flags);
+		tsk->state = TASK_INTERRUPTIBLE;
+	}
+	remove_wait_queue_locked(&sem->wait, &wait);
+	wake_up_locked(&sem->wait);
+	spin_unlock_irqrestore(&sem->wait.lock, flags);
 
-        tsk->state = TASK_RUNNING;
+	tsk->state = TASK_RUNNING;
 	return retval;
 }
 EXPORT_SYMBOL(__down_interruptible);
