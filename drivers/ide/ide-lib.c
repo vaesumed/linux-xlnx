@@ -300,7 +300,8 @@ void ide_set_pio(ide_drive_t *drive, u8 req_pio)
 	ide_hwif_t *hwif = drive->hwif;
 	u8 host_pio, pio;
 
-	if (hwif->set_pio_mode == NULL)
+	if (hwif->set_pio_mode == NULL ||
+	    (hwif->host_flags & IDE_HFLAG_NO_SET_MODE))
 		return;
 
 	BUG_ON(hwif->pio_mask == 0x00);
@@ -353,6 +354,9 @@ int ide_set_pio_mode(ide_drive_t *drive, const u8 mode)
 {
 	ide_hwif_t *hwif = drive->hwif;
 
+	if (hwif->host_flags & IDE_HFLAG_NO_SET_MODE)
+		return 0;
+
 	if (hwif->set_pio_mode == NULL)
 		return -1;
 
@@ -379,6 +383,9 @@ int ide_set_pio_mode(ide_drive_t *drive, const u8 mode)
 int ide_set_dma_mode(ide_drive_t *drive, const u8 mode)
 {
 	ide_hwif_t *hwif = drive->hwif;
+
+	if (hwif->host_flags & IDE_HFLAG_NO_SET_MODE)
+		return 0;
 
 	if (hwif->set_dma_mode == NULL)
 		return -1;
@@ -410,7 +417,8 @@ int ide_set_xfer_rate(ide_drive_t *drive, u8 rate)
 {
 	ide_hwif_t *hwif = drive->hwif;
 
-	if (hwif->set_dma_mode == NULL)
+	if (hwif->set_dma_mode == NULL ||
+	    (hwif->host_flags & IDE_HFLAG_NO_SET_MODE))
 		return -1;
 
 	rate = ide_rate_filter(drive, rate);
