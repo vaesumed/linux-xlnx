@@ -68,9 +68,9 @@ static unsigned short normal_i2c[] = {
 I2C_CLIENT_INSMOD;
 
 /* insmod options used at init time => read/only */
-static unsigned int addr = 0;
-static unsigned int no_autodetect = 0;
-static unsigned int show_i2c = 0;
+static unsigned int addr;
+static unsigned int no_autodetect;
+static unsigned int show_i2c;
 
 /* insmod options used at runtime => read/write */
 static int tuner_debug;
@@ -313,18 +313,8 @@ static void tuner_i2c_address_check(struct tuner *t)
 	tuner_warn("output to v4l-dvb-maintainer@linuxtv.org\n");
 	tuner_warn("Please use subject line: \"obsolete tuner i2c address.\"\n");
 	tuner_warn("driver: %s, addr: 0x%02x, type: %d (%s)\n",
-		   t->i2c->adapter->name, t->i2c->addr, t->type,
-		   tuners[t->type].name);
+		   t->i2c->adapter->name, t->i2c->addr, t->type, t->i2c->name);
 	tuner_warn("====================== WARNING! ======================\n");
-}
-
-static void attach_simple_tuner(struct tuner *t)
-{
-	struct simple_tuner_config cfg = {
-		.type = t->type,
-		.tun  = &tuners[t->type]
-	};
-	simple_tuner_attach(&t->fe, t->i2c->adapter, t->i2c->addr, &cfg);
 }
 
 static void attach_tda829x(struct tuner *t)
@@ -349,11 +339,6 @@ static void set_type(struct i2c_client *c, unsigned int type,
 
 	if (type == UNSET || type == TUNER_ABSENT) {
 		tuner_dbg ("tuner 0x%02x: Tuner type absent\n",c->addr);
-		return;
-	}
-
-	if (type >= tuner_count) {
-		tuner_warn ("tuner 0x%02x: Tuner count greater than %d\n",c->addr,tuner_count);
 		return;
 	}
 
@@ -409,7 +394,12 @@ static void set_type(struct i2c_client *c, unsigned int type,
 		buffer[2] = 0x86;
 		buffer[3] = 0x54;
 		i2c_master_send(c, buffer, 4);
-		attach_simple_tuner(t);
+		if (simple_tuner_attach(&t->fe, t->i2c->adapter, t->i2c->addr,
+					t->type) == NULL) {
+			t->type = TUNER_ABSENT;
+			t->mode_mask = T_UNINITIALIZED;
+			return;
+		}
 		break;
 	case TUNER_PHILIPS_TD1316:
 		buffer[0] = 0x0b;
@@ -417,7 +407,12 @@ static void set_type(struct i2c_client *c, unsigned int type,
 		buffer[2] = 0x86;
 		buffer[3] = 0xa4;
 		i2c_master_send(c,buffer,4);
-		attach_simple_tuner(t);
+		if (simple_tuner_attach(&t->fe, t->i2c->adapter,
+					t->i2c->addr, t->type) == NULL) {
+			t->type = TUNER_ABSENT;
+			t->mode_mask = T_UNINITIALIZED;
+			return;
+		}
 		break;
 	case TUNER_XC2028:
 	{
@@ -455,7 +450,12 @@ static void set_type(struct i2c_client *c, unsigned int type,
 		}
 		break;
 	default:
-		attach_simple_tuner(t);
+		if (simple_tuner_attach(&t->fe, t->i2c->adapter,
+					t->i2c->addr, t->type) == NULL) {
+			t->type = TUNER_ABSENT;
+			t->mode_mask = T_UNINITIALIZED;
+			return;
+		}
 		break;
 	}
 

@@ -253,7 +253,10 @@ struct saa7134_format {
 #define SAA7134_BOARD_BEHOLD_607_9FM	129
 #define SAA7134_BOARD_BEHOLD_M6		130
 #define SAA7134_BOARD_TWINHAN_DTV_DVB_3056 131
-#define SAA7134_BOARD_GENIUS_TVGO_A11MCE 132
+#define SAA7134_BOARD_GENIUS_TVGO_A11MCE   132
+#define SAA7134_BOARD_PHILIPS_SNAKE        133
+#define SAA7134_BOARD_CREATIX_CTX953       134
+#define SAA7134_BOARD_MSI_TVANYWHERE_AD11  135
 
 #define SAA7134_MAXBOARDS 8
 #define SAA7134_INPUT_MAX 8
@@ -556,7 +559,9 @@ struct saa7134_dev {
 #if defined(CONFIG_VIDEO_SAA7134_DVB) || defined(CONFIG_VIDEO_SAA7134_DVB_MODULE)
 	/* SAA7134_MPEG_DVB only */
 	struct videobuf_dvb        dvb;
-	int (*original_demod_sleep)(struct dvb_frontend* fe);
+	int (*original_demod_sleep)(struct dvb_frontend *fe);
+	int (*original_set_voltage)(struct dvb_frontend *fe, fe_sec_voltage_t voltage);
+	int (*original_set_high_voltage)(struct dvb_frontend *fe, long arg);
 #endif
 };
 

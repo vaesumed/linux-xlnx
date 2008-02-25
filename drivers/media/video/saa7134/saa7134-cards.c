@@ -2484,27 +2484,28 @@ struct saa7134_board saa7134_boards[] = {
 		.tuner_addr     = ADDR_UNSET,
 		.radio_addr     = ADDR_UNSET,
 		.gpiomask       = 0x080200000,
-		.inputs         = {{
-			  .name = name_tv,
-			  .vmux = 4,
-			  .amux = TV,
-			  .tv   = 1,
-		},{
-			  .name = name_comp1,
-			  .vmux = 1,
-			 .amux = LINE2,
-	       },{
-			 .name = name_comp2,
-			 .vmux = 0,
-			  .amux = LINE2,
-		},{
-			  .name = name_svideo,
-			  .vmux = 8,
-			  .amux = LINE2,
-		}},
+		.inputs         = { {
+			.name = name_tv,
+			.vmux = 4,
+			.amux = TV,
+			.tv   = 1,
+		}, {
+			.name = name_comp1,
+			.vmux = 1,
+			.amux = LINE2,
+		}, {
+			.name = name_comp2,
+			.vmux = 0,
+			.amux = LINE2,
+		}, {
+			.name = name_svideo,
+			.vmux = 8,
+			.amux = LINE2,
+		} },
 		.radio = {
-			  .name = name_radio,
-			  .amux = LINE1,
+			.name = name_radio,
+			.amux = TV,
+			.gpio = 0x0200000,
 		},
 	},
 	[SAA7134_BOARD_ASUSTeK_P7131_DUAL] = {
@@ -3991,6 +3992,78 @@ struct saa7134_board saa7134_boards[] = {
 			.gpio = 0x6000,
 		},
 	},
+	[SAA7134_BOARD_PHILIPS_SNAKE] = {
+		.name           = "NXP Snake DVB-S reference design",
+		.audio_clock    = 0x00200000,
+		.tuner_type     = TUNER_ABSENT,
+		.radio_type     = UNSET,
+		.tuner_addr     = ADDR_UNSET,
+		.radio_addr     = ADDR_UNSET,
+		.mpeg           = SAA7134_MPEG_DVB,
+		.inputs = {{
+			.name   = name_comp1,
+			.vmux   = 3,
+			.amux   = LINE1,
+		}, {
+			.name   = name_svideo,
+			.vmux   = 8,
+			.amux   = LINE1,
+		} },
+	},
+	[SAA7134_BOARD_CREATIX_CTX953] = {
+		.name         = "Medion/Creatix CTX953 Hybrid",
+		.audio_clock  = 0x00187de7,
+		.tuner_type   = TUNER_PHILIPS_TDA8290,
+		.radio_type   = UNSET,
+		.tuner_addr   = ADDR_UNSET,
+		.radio_addr   = ADDR_UNSET,
+		.tuner_config = 0,
+		.mpeg         = SAA7134_MPEG_DVB,
+		.inputs       = {{
+			.name = name_tv,
+			.vmux = 1,
+			.amux = TV,
+			.tv   = 1,
+		}, {
+			.name = name_comp1,
+			.vmux = 0,
+			.amux = LINE1,
+		}, {
+			.name = name_svideo,
+			.vmux = 8,
+			.amux = LINE1,
+		} },
+	},
+	[SAA7134_BOARD_MSI_TVANYWHERE_AD11] = {
+		.name           = "MSI TV@nywhere A/D v1.1",
+		.audio_clock    = 0x00187de7,
+		.tuner_type     = TUNER_PHILIPS_TDA8290,
+		.radio_type     = UNSET,
+		.tuner_addr	= ADDR_UNSET,
+		.radio_addr	= ADDR_UNSET,
+		.tuner_config   = 2,
+		.mpeg           = SAA7134_MPEG_DVB,
+		.gpiomask       = 0x0200000,
+		.inputs = { {
+			.name   = name_tv,
+			.vmux   = 1,
+			.amux   = TV,
+			.tv     = 1,
+		}, {
+			.name   = name_comp1,
+			.vmux   = 3,
+			.amux   = LINE1,
+		}, {
+			.name   = name_svideo,
+			.vmux   = 8,
+			.amux   = LINE1,
+		} },
+		.radio = {
+			.name   = name_radio,
+			.amux   = TV,
+			.gpio   = 0x0200000,
+		},
+	},
 };
 
 const unsigned int saa7134_bcount = ARRAY_SIZE(saa7134_boards);
@@ -4941,6 +5014,18 @@ struct pci_device_id saa7134_pci_tbl[] = {
 		.subvendor    = 0x1822, /*Twinhan Technology Co. Ltd*/
 		.subdevice    = 0x0022,
 		.driver_data  = SAA7134_BOARD_TWINHAN_DTV_DVB_3056,
+	}, {
+		.vendor       = PCI_VENDOR_ID_PHILIPS,
+		.device       = PCI_DEVICE_ID_PHILIPS_SAA7133,
+		.subvendor    = 0x16be,
+		.subdevice    = 0x0010, /* Medion version CTX953_V.1.4.3 */
+		.driver_data  = SAA7134_BOARD_CREATIX_CTX953,
+	}, {
+		.vendor       = PCI_VENDOR_ID_PHILIPS,
+		.device       = PCI_DEVICE_ID_PHILIPS_SAA7133,
+		.subvendor    = 0x1462, /* MSI */
+		.subdevice    = 0x8625, /* TV@nywhere A/D v1.1 */
+		.driver_data  = SAA7134_BOARD_MSI_TVANYWHERE_AD11,
 	},{
 		/* --- boards without eeprom + subsystem ID --- */
 		.vendor       = PCI_VENDOR_ID_PHILIPS,
@@ -5282,6 +5367,14 @@ int saa7134_board_init2(struct saa7134_dev *dev)
 		}
 		break;
 	case SAA7134_BOARD_PHILIPS_EUROPA:
+		if (dev->autodetected && (dev->eedata[0x41] == 0x1c)) {
+			/* Reconfigure board as Snake reference design */
+			dev->board = SAA7134_BOARD_PHILIPS_SNAKE;
+			dev->tuner_type = saa7134_boards[dev->board].tuner_type;
+			printk(KERN_INFO "%s: Reconfigured board as %s\n",
+				dev->name, saa7134_boards[dev->board].name);
+			break;
+		}
 	case SAA7134_BOARD_VIDEOMATE_DVBT_300:
 	case SAA7134_BOARD_ASUS_EUROPA2_HYBRID:
 		/* The Philips EUROPA based hybrid boards have the tuner connected through
@@ -5332,6 +5425,7 @@ int saa7134_board_init2(struct saa7134_dev *dev)
 	case SAA7134_BOARD_MEDION_MD8800_QUADRO:
 	case SAA7134_BOARD_AVERMEDIA_SUPER_007:
 	case SAA7134_BOARD_TWINHAN_DTV_DVB_3056:
+	case SAA7134_BOARD_CREATIX_CTX953:
 		/* this is a hybrid board, initialize to analog mode
 		 * and configure firmware eeprom address
 		 */
