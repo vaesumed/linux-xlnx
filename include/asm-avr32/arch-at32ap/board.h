@@ -92,4 +92,7 @@ struct platform_device *
 at32_add_device_cf(unsigned int id, unsigned int extint,
 		struct cf_platform_data *data);
 
+struct platform_device *
+at32_add_device_psif(unsigned int id);
+
 #endif /* __ASM_ARCH_BOARD_H */
