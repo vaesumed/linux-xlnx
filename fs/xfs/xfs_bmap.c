@@ -4047,17 +4047,17 @@ xfs_bmap_add_attrfork(
 		xfs_trans_log_inode(tp, ip, logflags);
 	if (error)
 		goto error2;
-	if (!XFS_SB_VERSION_HASATTR(&mp->m_sb) ||
-	   (!XFS_SB_VERSION_HASATTR2(&mp->m_sb) && version == 2)) {
+	if (!xfs_sb_version_hasattr(&mp->m_sb) ||
+	   (!xfs_sb_version_hasattr2(&mp->m_sb) && version == 2)) {
 		__int64_t sbfields = 0;
 
 		spin_lock(&mp->m_sb_lock);
-		if (!XFS_SB_VERSION_HASATTR(&mp->m_sb)) {
-			XFS_SB_VERSION_ADDATTR(&mp->m_sb);
+		if (!xfs_sb_version_hasattr(&mp->m_sb)) {
+			xfs_sb_version_addattr(&mp->m_sb);
 			sbfields |= XFS_SB_VERSIONNUM;
 		}
-		if (!XFS_SB_VERSION_HASATTR2(&mp->m_sb) && version == 2) {
-			XFS_SB_VERSION_ADDATTR2(&mp->m_sb);
+		if (!xfs_sb_version_hasattr2(&mp->m_sb) && version == 2) {
+			xfs_sb_version_addattr2(&mp->m_sb);
 			sbfields |= (XFS_SB_VERSIONNUM | XFS_SB_FEATURES2);
 		}
 		if (sbfields) {
@@ -5043,7 +5043,7 @@ xfs_bmapi(
 			 * A wasdelay extent has been initialized, so
 			 * shouldn't be flagged as unwritten.
 			 */
-			if (wr && XFS_SB_VERSION_HASEXTFLGBIT(&mp->m_sb)) {
+			if (wr && xfs_sb_version_hasextflgbit(&mp->m_sb)) {
 				if (!wasdelay && (flags & XFS_BMAPI_PREALLOC))
 					got.br_state = XFS_EXT_UNWRITTEN;
 			}
@@ -5483,7 +5483,7 @@ xfs_bunmapi(
 			 * get rid of part of a realtime extent.
 			 */
 			if (del.br_state == XFS_EXT_UNWRITTEN ||
-			    !XFS_SB_VERSION_HASEXTFLGBIT(&mp->m_sb)) {
+			    !xfs_sb_version_hasextflgbit(&mp->m_sb)) {
 				/*
 				 * This piece is unwritten, or we're not
 				 * using unwritten extents.  Skip over it.
@@ -5535,7 +5535,7 @@ xfs_bunmapi(
 			} else if ((del.br_startoff == start &&
 				    (del.br_state == XFS_EXT_UNWRITTEN ||
 				     xfs_trans_get_block_res(tp) == 0)) ||
-				   !XFS_SB_VERSION_HASEXTFLGBIT(&mp->m_sb)) {
+				   !xfs_sb_version_hasextflgbit(&mp->m_sb)) {
 				/*
 				 * Can't make it unwritten.  There isn't
 				 * a full extent here so just skip it.
@@ -5869,6 +5869,10 @@ xfs_getbmap(
 		/* xfs_fsize_t last_byte = xfs_file_last_byte(ip); */
 		error = xfs_flush_pages(ip, (xfs_off_t)0,
 					       -1, 0, FI_REMAPF);
+		if (error) {
+			xfs_iunlock(ip, XFS_IOLOCK_SHARED);
+		return error;
+		}
 	}
 
 	ASSERT(whichfork == XFS_ATTR_FORK || ip->i_delayed_blks == 0);
