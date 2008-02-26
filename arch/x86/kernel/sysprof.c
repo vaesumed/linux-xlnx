@@ -39,14 +39,13 @@ static struct sysprof_stacktrace *tail = &stack_traces[0];
 static DECLARE_WAIT_QUEUE_HEAD(wait_for_trace);
 
 struct stack_frame {
-	struct stack_frame __user *next;
-	unsigned long return_address;
+	const void __user	*next_fp;
+	unsigned long		return_address;
 };
 
-static int read_frame(struct stack_frame __user *frame_pointer,
-					struct stack_frame *frame)
+static int copy_stack_frame(const void __user *fp, struct stack_frame *frame)
 {
-	if (!access_ok(VERIFY_READ, frame_pointer, sizeof(*frame)))
+	if (!access_ok(VERIFY_READ, fp, sizeof(*frame)))
 		return 0;
 
 	if (__copy_from_user_inatomic(frame, frame_pointer, sizeof(*frame)))
@@ -93,7 +92,7 @@ static int timer_notify(struct pt_regs *regs)
 		/* 0x1 is taken by sysprof to mean "in kernel" */
 		trace->addresses[0] = 0x1;
 	} else {
-		struct stack_frame __user *frame_pointer;
+		const void __user *frame_pointer;
 		struct stack_frame frame;
 		memset(trace, 0, sizeof(struct sysprof_stacktrace));
 
@@ -104,13 +103,13 @@ static int timer_notify(struct pt_regs *regs)
 
 		trace->addresses[i++] = regs->ip;
 
-		frame_pointer = (struct stack_frame __user *)regs->bp;
+		frame_pointer = (void __user *)regs->bp;
 
-		while (read_frame(frame_pointer, &frame) &&
+		while (copy_stack_frame(frame_pointer, &frame) &&
 		       i < SYSPROF_MAX_ADDRESSES &&
 		       (unsigned long)frame_pointer >= regs->sp) {
 			trace->addresses[i++] = frame.return_address;
-			frame_pointer = frame.next;
+			frame_pointer = frame.next_fp;
 		}
 
 		trace->n_addresses = i;
