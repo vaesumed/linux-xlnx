@@ -25,7 +25,7 @@
 
 #include "tda827x.h"
 
-static int debug = 0;
+static int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "Turn on/off frontend debugging (default:off).");
 
@@ -578,8 +578,7 @@ static void tda827xa_lna_gain(struct dvb_frontend *fe, int high,
 		else
 			arg = 0;
 		if (priv->cfg->tuner_callback)
-			priv->cfg->tuner_callback(priv->i2c_adap->algo_data,
-						  1, arg);
+			priv->cfg->tuner_callback(priv, 1, arg);
 		buf[1] = high ? 0 : 1;
 		if (*priv->cfg->config == 2)
 			buf[1] = high ? 1 : 0;
@@ -587,8 +586,7 @@ static void tda827xa_lna_gain(struct dvb_frontend *fe, int high,
 		break;
 	case 3: /* switch with GPIO of saa713x */
 		if (priv->cfg->tuner_callback)
-			priv->cfg->tuner_callback(priv->i2c_adap->algo_data,
-						  0, high);
+			priv->cfg->tuner_callback(priv, 0, high);
 		break;
 	}
 }
