@@ -27,7 +27,21 @@
 #include <asm/uaccess.h>
 #include <asm/atomic.h>
 
-#include "sysprof.h"
+/*
+ * This is the user-space visible ABI.
+ */
+#define SYSPROF_MAX_ADDRESSES 512
+
+struct sysprof_stacktrace {
+	int pid;		/* -1 if in kernel */
+	int truncated;
+	/*
+	 * Note: n_addresses can be 1 if the process was compiled with
+	 * -fomit-frame-pointer or is otherwise weird.
+	 */
+	int n_addresses;
+	unsigned long addresses[SYSPROF_MAX_ADDRESSES];
+};
 
 #define SAMPLES_PER_SECOND (200)
 #define INTERVAL ((HZ <= SAMPLES_PER_SECOND)? 1 : (HZ / SAMPLES_PER_SECOND))
