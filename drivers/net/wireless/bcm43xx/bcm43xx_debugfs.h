@@ -7,7 +7,6 @@ struct bcm43xx_xmitstatus;
 #ifdef CONFIG_BCM43XX_DEBUG
 
 #include <linux/list.h>
-#include <asm/semaphore.h>
 
 struct dentry;
 
