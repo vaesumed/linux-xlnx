@@ -1648,7 +1648,8 @@ static int find_best_unit(struct file *fp,
 			  const struct ipath_user_info *uinfo)
 {
 	int ret = 0, i, prefunit = -1, devmax;
-	int maxofallports, npresent, nup;
+	int npresent, nup;
+	u32 maxofallports;
 	int ndev;
 
 	devmax = ipath_count_units(&npresent, &nup, &maxofallports);
