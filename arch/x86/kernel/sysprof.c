@@ -55,10 +55,13 @@ struct stack_frame {
 static int read_frame(struct stack_frame __user *frame_pointer,
 					struct stack_frame *frame)
 {
-	if (__copy_from_user_inatomic(frame, frame_pointer,
-					sizeof(struct stack_frame)))
-		return 1;
-	return 0;
+	if (!access_ok(VERIFY_READ, frame_pointer, sizeof(*frame)))
+		return 0;
+
+	if (__copy_from_user_inatomic(frame, frame_pointer, sizeof(*frame)))
+		return 0;
+
+	return 1;
 }
 
 static DEFINE_PER_CPU(int, n_samples);
@@ -112,7 +115,7 @@ static int timer_notify(struct pt_regs *regs)
 
 		frame_pointer = (struct stack_frame __user *)regs->bp;
 
-		while (read_frame(frame_pointer, &frame) == 0 &&
+		while (read_frame(frame_pointer, &frame) &&
 		       i < SYSPROF_MAX_ADDRESSES &&
 		       (unsigned long)frame_pointer >= regs->sp) {
 			trace->addresses[i++] = frame.return_address;
