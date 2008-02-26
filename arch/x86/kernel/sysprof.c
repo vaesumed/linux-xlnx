@@ -37,15 +37,6 @@ static struct sysprof_stacktrace stack_traces[N_TRACES];
 static struct sysprof_stacktrace *head = &stack_traces[0];
 static struct sysprof_stacktrace *tail = &stack_traces[0];
 static DECLARE_WAIT_QUEUE_HEAD(wait_for_trace);
-static DECLARE_WAIT_QUEUE_HEAD(wait_for_exit);
-
-struct userspace_reader {
-	struct task_struct *task;
-	unsigned long cache_address;
-	unsigned long *cache;
-};
-
-struct stack_frame;
 
 struct stack_frame {
 	struct stack_frame __user *next;
