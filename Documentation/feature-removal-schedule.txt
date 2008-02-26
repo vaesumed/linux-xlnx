@@ -221,8 +221,6 @@ Who:	Thomas Gleixner <tglx@linutronix.de>
 
 ---------------------------
 
----------------------------
-
 What:	i2c-i810, i2c-prosavage and i2c-savage4
 When:	May 2008
 Why:	These drivers are superseded by i810fb, intelfb and savagefb.
@@ -306,3 +304,15 @@ Why:	Largely unmaintained and almost entirely unused.  File system
 	is largely pointless as without a lot of work only the most
 	trivial of Solaris binaries can work with the emulation code.
 Who:	David S. Miller <davem@davemloft.net>
+
+---------------------------
+
+What:	ide-tape driver
+When:	July 2008
+Files:	drivers/ide/ide-tape.c
+Why:	This driver might not have any users anymore and maintaining it for no
+	reason is an effort no one wants to make.
+Who:	Bartlomiej Zolnierkiewicz <bzolnier@gmail.com>, Borislav Petkov
+	<petkovbb@googlemail.com>
+
+---------------------------
