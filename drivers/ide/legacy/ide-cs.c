@@ -143,6 +143,10 @@ static void ide_detach(struct pcmcia_device *link)
     kfree(link->priv);
 } /* ide_detach */
 
+static const struct ide_port_ops idecs_port_ops = {
+	.quirkproc		= ide_undecoded_slave,
+};
+
 static int idecs_register(unsigned long io, unsigned long ctl, unsigned long irq, struct pcmcia_device *handle)
 {
     ide_hwif_t *hwif;
@@ -156,19 +160,19 @@ static int idecs_register(unsigned long io, unsigned long ctl, unsigned long irq
     hw.chipset = ide_pci;
     hw.dev = &handle->dev;
 
-    hwif = ide_deprecated_find_port(hw.io_ports[IDE_DATA_OFFSET]);
+    hwif = ide_find_port();
     if (hwif == NULL)
 	return -1;
 
     i = hwif->index;
 
     if (hwif->present)
-	ide_unregister(i, 0, 0);
-    else if (!hwif->hold)
+	ide_unregister(i);
+    else
 	ide_init_port_data(hwif, i);
 
     ide_init_port_hw(hwif, &hw);
-    hwif->quirkproc = &ide_undecoded_slave;
+    hwif->port_ops = &idecs_port_ops;
 
     idx[0] = i;
 
@@ -360,7 +364,7 @@ void ide_release(struct pcmcia_device *link)
     if (info->ndev) {
 	/* FIXME: if this fails we need to queue the cleanup somehow
 	   -- need to investigate the required PCMCIA magic */
-	ide_unregister(info->hd, 0, 0);
+	ide_unregister(info->hd);
     }
     info->ndev = 0;
 
