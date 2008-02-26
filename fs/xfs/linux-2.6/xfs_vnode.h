@@ -46,18 +46,6 @@ static inline struct inode *vn_to_inode(bhv_vnode_t *vnode)
 }
 
 /*
- * Values for the vop_rwlock/rwunlock flags parameter.
- */
-typedef enum bhv_vrwlock {
-	VRWLOCK_NONE,
-	VRWLOCK_READ,
-	VRWLOCK_WRITE,
-	VRWLOCK_WRITE_DIRECT,
-	VRWLOCK_TRY_READ,
-	VRWLOCK_TRY_WRITE
-} bhv_vrwlock_t;
-
-/*
  * Return values for xfs_inactive.  A return value of
  * VN_INACTIVE_NOCACHE implies that the file system behavior
  * has disassociated its state and bhv_desc_t from the vnode.
@@ -73,12 +61,9 @@ typedef enum bhv_vrwlock {
 #define IO_INVIS	0x00020		/* don't update inode timestamps */
 
 /*
- * Flags for vop_iflush call
+ * Flags for xfs_inode_flush
  */
 #define FLUSH_SYNC		1	/* wait for flush to complete	*/
-#define FLUSH_INODE		2	/* flush the inode itself	*/
-#define FLUSH_LOG		4	/* force the last log entry for
-					 * this inode out to disk	*/
 
 /*
  * Flush/Invalidate options for vop_toss/flush/flushinval_pages.
@@ -230,7 +215,7 @@ static inline bhv_vnode_t *vn_grab(bhv_vnode_t *vp)
  */
 #define VNAME(dentry)		((char *) (dentry)->d_name.name)
 #define VNAMELEN(dentry)	((dentry)->d_name.len)
-#define VNAME_TO_VNODE(dentry)	(vn_from_inode((dentry)->d_inode))
+#define VNAME_TO_INODE(dentry)	(XFS_I((dentry)->d_inode))
 
 /*
  * Dealing with bad inodes

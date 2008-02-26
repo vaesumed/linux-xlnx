@@ -48,7 +48,6 @@
 #include "xfs_quota.h"
 #include "xfs_utils.h"
 #include "xfs_rtalloc.h"
-#include "xfs_refcache.h"
 #include "xfs_trans_space.h"
 #include "xfs_log_priv.h"
 #include "xfs_filestream.h"
@@ -634,6 +633,15 @@ xfs_setattr(
 	 * Truncate file.  Must have write permission and not be a directory.
 	 */
 	if (mask & XFS_AT_SIZE) {
+		/*
+		 * Only change the c/mtime if we are changing the size
+		 * or we are explicitly asked to change it. This handles
+		 * the semantic difference between truncate() and ftruncate()
+		 * as implemented in the VFS.
+		 */
+		if (vap->va_size != ip->i_size || (mask & XFS_AT_CTIME))
+			timeflags |= XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG;
+
 		if (vap->va_size > ip->i_size) {
 			xfs_igrow_finish(tp, ip, vap->va_size,
 			    !(flags & ATTR_DMI));
@@ -662,10 +670,6 @@ xfs_setattr(
 			 */
 			xfs_iflags_set(ip, XFS_ITRUNCATED);
 		}
-		/*
-		 * Have to do this even if the file's size doesn't change.
-		 */
-		timeflags |= XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG;
 	}
 
 	/*
@@ -1520,12 +1524,6 @@ xfs_release(
 			xfs_flush_pages(ip, 0, -1, XFS_B_ASYNC, FI_NONE);
 	}
 
-#ifdef HAVE_REFCACHE
-	/* If we are in the NFS reference cache then don't do this now */
-	if (ip->i_refcache)
-		return 0;
-#endif
-
 	if (ip->i_d.di_nlink != 0) {
 		if ((((ip->i_d.di_mode & S_IFMT) == S_IFREG) &&
 		     ((ip->i_size > 0) || (VN_CACHED(vp) > 0 ||
@@ -2277,40 +2275,29 @@ xfs_remove(
 	bhv_vnode_t		*dir_vp = XFS_ITOV(dp);
 	char			*name = VNAME(dentry);
 	xfs_mount_t		*mp = dp->i_mount;
-	xfs_inode_t             *ip;
+	xfs_inode_t             *ip = VNAME_TO_INODE(dentry);
+	int			namelen = VNAMELEN(dentry);
 	xfs_trans_t             *tp = NULL;
 	int                     error = 0;
 	xfs_bmap_free_t         free_list;
 	xfs_fsblock_t           first_block;
 	int			cancel_flags;
 	int			committed;
-	int			dm_di_mode = 0;
 	int			link_zero;
 	uint			resblks;
-	int			namelen;
 
 	xfs_itrace_entry(dp);
 
 	if (XFS_FORCED_SHUTDOWN(mp))
 		return XFS_ERROR(EIO);
 
-	namelen = VNAMELEN(dentry);
-
-	if (!xfs_get_dir_entry(dentry, &ip)) {
-	        dm_di_mode = ip->i_d.di_mode;
-		IRELE(ip);
-	}
-
 	if (DM_EVENT_ENABLED(dp, DM_EVENT_REMOVE)) {
 		error = XFS_SEND_NAMESP(mp, DM_EVENT_REMOVE, dir_vp,
 					DM_RIGHT_NULL, NULL, DM_RIGHT_NULL,
-					name, NULL, dm_di_mode, 0, 0);
+					name, NULL, ip->i_d.di_mode, 0, 0);
 		if (error)
 			return error;
 	}
-
-	/* From this point on, return through std_return */
-	ip = NULL;
 
 	/*
 	 * We need to get a reference to ip before we get our log
@@ -2324,13 +2311,7 @@ xfs_remove(
 	 * when we call xfs_iget.  Instead we get an unlocked reference
 	 * to the inode before getting our log reservation.
 	 */
-	error = xfs_get_dir_entry(dentry, &ip);
-	if (error) {
-		REMOVE_DEBUG_TRACE(__LINE__);
-		goto std_return;
-	}
-
-	dm_di_mode = ip->i_d.di_mode;
+	IHOLD(ip);
 
 	xfs_itrace_entry(ip);
 	xfs_itrace_ref(ip);
@@ -2449,14 +2430,6 @@ xfs_remove(
 	}
 
 	/*
-	 * Before we drop our extra reference to the inode, purge it
-	 * from the refcache if it is there.  By waiting until afterwards
-	 * to do the IRELE, we ensure that we won't go inactive in the
-	 * xfs_refcache_purge_ip routine (although that would be OK).
-	 */
-	xfs_refcache_purge_ip(ip);
-
-	/*
 	 * If we are using filestreams, kill the stream association.
 	 * If the file is still open it may get a new one but that
 	 * will get killed on last close in xfs_close() so we don't
@@ -2474,7 +2447,7 @@ xfs_remove(
 		(void) XFS_SEND_NAMESP(mp, DM_EVENT_POSTREMOVE,
 				dir_vp, DM_RIGHT_NULL,
 				NULL, DM_RIGHT_NULL,
-				name, NULL, dm_di_mode, error, 0);
+				name, NULL, ip->i_d.di_mode, error, 0);
 	}
 	return error;
 
@@ -2494,14 +2467,6 @@ xfs_remove(
 	xfs_bmap_cancel(&free_list);
 	cancel_flags |= XFS_TRANS_ABORT;
 	xfs_trans_cancel(tp, cancel_flags);
-
-	/*
-	 * Before we drop our extra reference to the inode, purge it
-	 * from the refcache if it is there.  By waiting until afterwards
-	 * to do the IRELE, we ensure that we won't go inactive in the
-	 * xfs_refcache_purge_ip routine (although that would be OK).
-	 */
-	xfs_refcache_purge_ip(ip);
 
 	IRELE(ip);
 
@@ -2891,14 +2856,13 @@ xfs_rmdir(
 	char			*name = VNAME(dentry);
 	int			namelen = VNAMELEN(dentry);
 	xfs_mount_t		*mp = dp->i_mount;
-  	xfs_inode_t             *cdp;   /* child directory */
+  	xfs_inode_t             *cdp = VNAME_TO_INODE(dentry);
 	xfs_trans_t             *tp;
 	int                     error;
 	xfs_bmap_free_t         free_list;
 	xfs_fsblock_t           first_block;
 	int			cancel_flags;
 	int			committed;
-	int			dm_di_mode = S_IFDIR;
 	int			last_cdp_link;
 	uint			resblks;
 
@@ -2907,23 +2871,14 @@ xfs_rmdir(
 	if (XFS_FORCED_SHUTDOWN(mp))
 		return XFS_ERROR(EIO);
 
-	if (!xfs_get_dir_entry(dentry, &cdp)) {
-	        dm_di_mode = cdp->i_d.di_mode;
-		IRELE(cdp);
-	}
-
 	if (DM_EVENT_ENABLED(dp, DM_EVENT_REMOVE)) {
 		error = XFS_SEND_NAMESP(mp, DM_EVENT_REMOVE,
 					dir_vp, DM_RIGHT_NULL,
 					NULL, DM_RIGHT_NULL,
-					name, NULL, dm_di_mode, 0, 0);
+					name, NULL, cdp->i_d.di_mode, 0, 0);
 		if (error)
 			return XFS_ERROR(error);
 	}
-
-	/* Return through std_return after this point. */
-
-	cdp = NULL;
 
 	/*
 	 * We need to get a reference to cdp before we get our log
@@ -2937,13 +2892,7 @@ xfs_rmdir(
 	 * when we call xfs_iget.  Instead we get an unlocked reference
 	 * to the inode before getting our log reservation.
 	 */
-	error = xfs_get_dir_entry(dentry, &cdp);
-	if (error) {
-		REMOVE_DEBUG_TRACE(__LINE__);
-		goto std_return;
-	}
-	mp = dp->i_mount;
-	dm_di_mode = cdp->i_d.di_mode;
+	IHOLD(cdp);
 
 	/*
 	 * Get the dquots for the inodes.
@@ -3100,7 +3049,7 @@ xfs_rmdir(
 		(void) XFS_SEND_NAMESP(mp, DM_EVENT_POSTREMOVE,
 					dir_vp, DM_RIGHT_NULL,
 					NULL, DM_RIGHT_NULL,
-					name, NULL, dm_di_mode,
+					name, NULL, cdp->i_d.di_mode,
 					error, 0);
 	}
 	return error;
@@ -3431,60 +3380,11 @@ std_return:
 }
 
 int
-xfs_rwlock(
-	xfs_inode_t	*ip,
-	bhv_vrwlock_t	locktype)
-{
-	if (S_ISDIR(ip->i_d.di_mode))
-		return 1;
-	if (locktype == VRWLOCK_WRITE) {
-		xfs_ilock(ip, XFS_IOLOCK_EXCL);
-	} else if (locktype == VRWLOCK_TRY_READ) {
-		return xfs_ilock_nowait(ip, XFS_IOLOCK_SHARED);
-	} else if (locktype == VRWLOCK_TRY_WRITE) {
-		return xfs_ilock_nowait(ip, XFS_IOLOCK_EXCL);
-	} else {
-		ASSERT((locktype == VRWLOCK_READ) ||
-		       (locktype == VRWLOCK_WRITE_DIRECT));
-		xfs_ilock(ip, XFS_IOLOCK_SHARED);
-	}
-
-	return 1;
-}
-
-
-void
-xfs_rwunlock(
-	xfs_inode_t     *ip,
-	bhv_vrwlock_t	locktype)
-{
- 	if (S_ISDIR(ip->i_d.di_mode))
-  		return;
-	if (locktype == VRWLOCK_WRITE) {
-		/*
-		 * In the write case, we may have added a new entry to
-		 * the reference cache.  This might store a pointer to
-		 * an inode to be released in this inode.  If it is there,
-		 * clear the pointer and release the inode after unlocking
-		 * this one.
-		 */
-		xfs_refcache_iunlock(ip, XFS_IOLOCK_EXCL);
-	} else {
-		ASSERT((locktype == VRWLOCK_READ) ||
-		       (locktype == VRWLOCK_WRITE_DIRECT));
-		xfs_iunlock(ip, XFS_IOLOCK_SHARED);
-	}
-	return;
-}
-
-
-int
 xfs_inode_flush(
 	xfs_inode_t	*ip,
 	int		flags)
 {
 	xfs_mount_t	*mp = ip->i_mount;
-	xfs_inode_log_item_t *iip = ip->i_itemp;
 	int		error = 0;
 
 	if (XFS_FORCED_SHUTDOWN(mp))
@@ -3494,32 +3394,8 @@ xfs_inode_flush(
 	 * Bypass inodes which have already been cleaned by
 	 * the inode flush clustering code inside xfs_iflush
 	 */
-	if ((ip->i_update_core == 0) &&
-	    ((iip == NULL) || !(iip->ili_format.ilf_fields & XFS_ILOG_ALL)))
+	if (xfs_inode_clean(ip))
 		return 0;
-
-	if (flags & FLUSH_LOG) {
-		if (iip && iip->ili_last_lsn) {
-			xlog_t		*log = mp->m_log;
-			xfs_lsn_t	sync_lsn;
-			int		log_flags = XFS_LOG_FORCE;
-
-			spin_lock(&log->l_grant_lock);
-			sync_lsn = log->l_last_sync_lsn;
-			spin_unlock(&log->l_grant_lock);
-
-			if ((XFS_LSN_CMP(iip->ili_last_lsn, sync_lsn) > 0)) {
-				if (flags & FLUSH_SYNC)
-					log_flags |= XFS_LOG_SYNC;
-				error = xfs_log_force(mp, iip->ili_last_lsn, log_flags);
-				if (error)
-					return error;
-			}
-
-			if (ip->i_update_core == 0)
-				return 0;
-		}
-	}
 
 	/*
 	 * We make this non-blocking if the inode is contended,
@@ -3528,29 +3404,21 @@ xfs_inode_flush(
 	 * blocking on inodes inside another operation right
 	 * now, they get caught later by xfs_sync.
 	 */
-	if (flags & FLUSH_INODE) {
-		int	flush_flags;
-
-		if (flags & FLUSH_SYNC) {
-			xfs_ilock(ip, XFS_ILOCK_SHARED);
-			xfs_iflock(ip);
-		} else if (xfs_ilock_nowait(ip, XFS_ILOCK_SHARED)) {
-			if (xfs_ipincount(ip) || !xfs_iflock_nowait(ip)) {
-				xfs_iunlock(ip, XFS_ILOCK_SHARED);
-				return EAGAIN;
-			}
-		} else {
+	if (flags & FLUSH_SYNC) {
+		xfs_ilock(ip, XFS_ILOCK_SHARED);
+		xfs_iflock(ip);
+	} else if (xfs_ilock_nowait(ip, XFS_ILOCK_SHARED)) {
+		if (xfs_ipincount(ip) || !xfs_iflock_nowait(ip)) {
+			xfs_iunlock(ip, XFS_ILOCK_SHARED);
 			return EAGAIN;
 		}
-
-		if (flags & FLUSH_SYNC)
-			flush_flags = XFS_IFLUSH_SYNC;
-		else
-			flush_flags = XFS_IFLUSH_ASYNC;
-
-		error = xfs_iflush(ip, flush_flags);
-		xfs_iunlock(ip, XFS_ILOCK_SHARED);
+	} else {
+		return EAGAIN;
 	}
+
+	error = xfs_iflush(ip, (flags & FLUSH_SYNC) ? XFS_IFLUSH_SYNC
+						    : XFS_IFLUSH_ASYNC_NOBLOCK);
+	xfs_iunlock(ip, XFS_ILOCK_SHARED);
 
 	return error;
 }
@@ -3694,12 +3562,12 @@ xfs_finish_reclaim(
 	 * We get the flush lock regardless, though, just to make sure
 	 * we don't free it while it is being flushed.
 	 */
-	if (!XFS_FORCED_SHUTDOWN(ip->i_mount)) {
-		if (!locked) {
-			xfs_ilock(ip, XFS_ILOCK_EXCL);
-			xfs_iflock(ip);
-		}
+	if (!locked) {
+		xfs_ilock(ip, XFS_ILOCK_EXCL);
+		xfs_iflock(ip);
+	}
 
+	if (!XFS_FORCED_SHUTDOWN(ip->i_mount)) {
 		if (ip->i_update_core ||
 		    ((ip->i_itemp != NULL) &&
 		     (ip->i_itemp->ili_format.ilf_fields != 0))) {
@@ -3719,16 +3587,10 @@ xfs_finish_reclaim(
 		ASSERT(ip->i_update_core == 0);
 		ASSERT(ip->i_itemp == NULL ||
 		       ip->i_itemp->ili_format.ilf_fields == 0);
-		xfs_iunlock(ip, XFS_ILOCK_EXCL);
-	} else if (locked) {
-		/*
-		 * We are not interested in doing an iflush if we're
-		 * in the process of shutting down the filesystem forcibly.
-		 * So, just reclaim the inode.
-		 */
-		xfs_ifunlock(ip);
-		xfs_iunlock(ip, XFS_ILOCK_EXCL);
 	}
+
+	xfs_ifunlock(ip);
+	xfs_iunlock(ip, XFS_ILOCK_EXCL);
 
  reclaim:
 	xfs_ireclaim(ip);
@@ -4132,7 +3994,7 @@ xfs_free_file_space(
 	 * actually need to zero the extent edges.  Otherwise xfs_bunmapi
 	 * will take care of it for us.
 	 */
-	if (rt && !XFS_SB_VERSION_HASEXTFLGBIT(&mp->m_sb)) {
+	if (rt && !xfs_sb_version_hasextflgbit(&mp->m_sb)) {
 		nimap = 1;
 		error = xfs_bmapi(NULL, ip, startoffset_fsb,
 			1, 0, NULL, 0, &imap, &nimap, NULL, NULL);
