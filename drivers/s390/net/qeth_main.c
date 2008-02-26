@@ -59,7 +59,6 @@
 #include <asm/io.h>
 #include <asm/qeth.h>
 #include <asm/timex.h>
-#include <asm/semaphore.h>
 #include <asm/uaccess.h>
 #include <asm/s390_rdev.h>
 
