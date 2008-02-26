@@ -66,6 +66,7 @@
 #include <asm/mce.h>
 #include <asm/ds.h>
 #include <asm/topology.h>
+#include <asm/trampoline.h>
 
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
@@ -1184,3 +1185,18 @@ const struct seq_operations cpuinfo_op = {
 	.stop =	c_stop,
 	.show =	show_cpuinfo,
 };
+
+#ifdef CONFIG_X86_TRAMPOLINE
+/*
+ * Currently trivial. Write the real->protected mode
+ * bootstrap into the page concerned. The caller
+ * has made sure it's suitably aligned.
+ */
+
+unsigned long setup_trampoline(void)
+{
+	void *tramp = __va(TRAMPOLINE_BASE);
+	memcpy(tramp, trampoline_data, trampoline_end - trampoline_data);
+	return virt_to_phys(tramp);
+}
+#endif /* CONFIG_X86_TRAMPOLINE */
