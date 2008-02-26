@@ -58,17 +58,11 @@ struct nfs_write_data *nfs_commit_alloc(void)
 	return p;
 }
 
-static void nfs_commit_rcu_free(struct rcu_head *head)
+void nfs_commit_free(struct nfs_write_data *p)
 {
-	struct nfs_write_data *p = container_of(head, struct nfs_write_data, task.u.tk_rcu);
 	if (p && (p->pagevec != &p->page_array[0]))
 		kfree(p->pagevec);
 	mempool_free(p, nfs_commit_mempool);
-}
-
-void nfs_commit_free(struct nfs_write_data *wdata)
-{
-	call_rcu_bh(&wdata->task.u.tk_rcu, nfs_commit_rcu_free);
 }
 
 struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
@@ -92,21 +86,18 @@ struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
 	return p;
 }
 
-static void nfs_writedata_rcu_free(struct rcu_head *head)
+static void nfs_writedata_free(struct nfs_write_data *p)
 {
-	struct nfs_write_data *p = container_of(head, struct nfs_write_data, task.u.tk_rcu);
 	if (p && (p->pagevec != &p->page_array[0]))
 		kfree(p->pagevec);
 	mempool_free(p, nfs_wdata_mempool);
 }
 
-static void nfs_writedata_free(struct nfs_write_data *wdata)
+void nfs_writedata_release(void *data)
 {
-	call_rcu_bh(&wdata->task.u.tk_rcu, nfs_writedata_rcu_free);
-}
+	struct nfs_write_data *wdata = data;
 
-void nfs_writedata_release(void *wdata)
-{
+	put_nfs_open_context(wdata->args.context);
 	nfs_writedata_free(wdata);
 }
 
@@ -738,7 +729,7 @@ int nfs_updatepage(struct file *file, struct page *page,
 	 */
 	if (nfs_write_pageuptodate(page, inode) &&
 			inode->i_flock == NULL &&
-			!(file->f_mode & O_SYNC)) {
+			!(file->f_flags & O_SYNC)) {
 		count = max(count + offset, nfs_page_length(page));
 		offset = 0;
 	}
@@ -804,6 +795,7 @@ static void nfs_write_rpcsetup(struct nfs_page *req,
 		.rpc_message = &msg,
 		.callback_ops = call_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = flags,
 		.priority = priority,
 	};
@@ -820,7 +812,7 @@ static void nfs_write_rpcsetup(struct nfs_page *req,
 	data->args.pgbase = req->wb_pgbase + offset;
 	data->args.pages  = data->pagevec;
 	data->args.count  = count;
-	data->args.context = req->wb_context;
+	data->args.context = get_nfs_open_context(req->wb_context);
 	data->args.stable  = NFS_UNSTABLE;
 	if (how & FLUSH_STABLE) {
 		data->args.stable = NFS_DATA_SYNC;
@@ -1157,8 +1149,11 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 
 
 #if defined(CONFIG_NFS_V3) || defined(CONFIG_NFS_V4)
-void nfs_commit_release(void *wdata)
+void nfs_commit_release(void *data)
 {
+	struct nfs_write_data *wdata = data;
+
+	put_nfs_open_context(wdata->args.context);
 	nfs_commit_free(wdata);
 }
 
@@ -1185,6 +1180,7 @@ static void nfs_commit_rpcsetup(struct list_head *head,
 		.rpc_message = &msg,
 		.callback_ops = &nfs_commit_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = flags,
 		.priority = priority,
 	};
@@ -1201,6 +1197,7 @@ static void nfs_commit_rpcsetup(struct list_head *head,
 	/* Note: we always request a commit of the entire inode */
 	data->args.offset = 0;
 	data->args.count  = 0;
+	data->args.context = get_nfs_open_context(first->wb_context);
 	data->res.count   = 0;
 	data->res.fattr   = &data->fattr;
 	data->res.verf    = &data->verf;

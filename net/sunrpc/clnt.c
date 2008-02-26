@@ -1066,7 +1066,7 @@ call_transmit(struct rpc_task *task)
 	if (task->tk_msg.rpc_proc->p_decode != NULL)
 		return;
 	task->tk_action = rpc_exit_task;
-	rpc_wake_up_task(task);
+	rpc_wake_up_queued_task(&task->tk_xprt->pending, task);
 }
 
 /*
@@ -1535,7 +1535,7 @@ void rpc_show_tasks(void)
 				proc = -1;
 
 			if (RPC_IS_QUEUED(t))
-				rpc_waitq = rpc_qname(t->u.tk_wait.rpc_waitq);
+				rpc_waitq = rpc_qname(t->tk_waitqueue);
 
 			printk("%5u %04d %04x %6d %8p %6d %8p %8ld %8s %8p %8p\n",
 				t->tk_pid, proc,
