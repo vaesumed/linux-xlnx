@@ -1338,8 +1338,6 @@ static int __init ide_setup(char *s)
 			"minus10", "four", "qd65xx", "ht6560b", "cmd640_vlb",
 			"dtc2278", "umc8672", "ali14xx", NULL };
 
-		hw_regs_t hwregs;
-
 		hw = s[3] - '0';
 		hwif = &ide_hwifs[hw];
 		i = match_parm(&s[4], ide_words, vals, 3);
@@ -1440,21 +1438,11 @@ static int __init ide_setup(char *s)
 			case -1: /* "noprobe" */
 				hwif->noprobe = 1;
 				goto obsolete_option;
-
-			case 1:	/* base */
-				vals[1] = vals[0] + 0x206; /* default ctl */
-			case 2: /* base,ctl */
-				vals[2] = 0;	/* default irq = probe for it */
-			case 3: /* base,ctl,irq */
-				memset(&hwregs, 0, sizeof(hwregs));
-				ide_init_hwif_ports(&hwregs, vals[0], vals[1], &hwif->irq);
-				memcpy(hwif->io_ports, hwregs.io_ports, sizeof(hwif->io_ports));
-				hwif->irq      = vals[2];
-				hwif->noprobe  = 0;
-				hwif->chipset  = ide_forced;
-				goto obsolete_option;
-
-			case 0: goto bad_option;
+			case 0:
+			case 1:
+			case 2:
+			case 3:
+				goto bad_option;
 			default:
 				printk(" -- SUPPORT NOT CONFIGURED IN THIS KERNEL\n");
 				return 1;
