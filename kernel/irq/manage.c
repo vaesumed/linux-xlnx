@@ -11,6 +11,8 @@
 #include <linux/module.h>
 #include <linux/random.h>
 #include <linux/interrupt.h>
+#include <linux/cpumask.h>
+#include <linux/cpuset.h>
 
 #include "internals.h"
 
@@ -488,6 +490,24 @@ void free_irq(unsigned int irq, void *dev_id)
 }
 EXPORT_SYMBOL(free_irq);
 
+#if !defined(CONFIG_AUTO_IRQ_AFFINITY) && defined(CONFIG_SMP)
+int select_smp_affinity(unsigned int irq)
+{
+	cpumask_t online_system;
+
+	if (!irq_can_set_affinity(irq))
+		return 0;
+
+	cpus_and(online_system, cpu_system_map, cpu_online_map);
+
+	set_balance_irq_affinity(irq, online_system);
+
+	irq_desc[irq].affinity = online_system;
+	irq_desc[irq].chip->set_affinity(irq, online_system);
+	return 0;
+}
+#endif
+
 /**
  *	request_irq - allocate an interrupt line
  *	@irq: Interrupt line to allocate
@@ -555,7 +575,9 @@ int request_irq(unsigned int irq, irq_handler_t handler,
 	action->next = NULL;
 	action->dev_id = dev_id;
 
+#if !defined(CONFIG_AUTO_IRQ_AFFINITY) && defined(CONFIG_SMP)
 	select_smp_affinity(irq);
+#endif
 
 #ifdef CONFIG_DEBUG_SHIRQ
 	if (irqflags & IRQF_SHARED) {
@@ -580,3 +602,45 @@ int request_irq(unsigned int irq, irq_handler_t handler,
 	return retval;
 }
 EXPORT_SYMBOL(request_irq);
+
+#ifdef CONFIG_CPUSETS
+static int system_irq_notifier(struct notifier_block *nb,
+		unsigned long action, void *cpus)
+{
+	cpumask_t *new_system_map = (cpumask_t *)cpus;
+	int i;
+
+	for (i = 0; i < NR_IRQS; i++) {
+		struct irq_desc *desc = &irq_desc[i];
+
+		if (desc->chip == &no_irq_chip || !irq_can_set_affinity(i))
+			continue;
+
+		if (cpus_match_system(desc->affinity)) {
+			cpumask_t online_system;
+
+			cpus_and(online_system, new_system_map, cpu_online_map);
+
+			set_balance_irq_affinity(i, online_system);
+
+			desc->affinity = online_system;
+			desc->chip->set_affinity(i, online_system);
+		}
+	}
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block fn_system_irq_notifier = {
+	.notifier_call = system_irq_notifier,
+};
+
+static int __init init_irq(void)
+{
+	blocking_notifier_chain_register(&system_map_notifier,
+			&fn_system_irq_notifier);
+	return 0;
+}
+
+module_init(init_irq);
+#endif
