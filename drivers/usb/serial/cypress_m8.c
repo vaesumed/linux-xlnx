@@ -120,6 +120,11 @@ static struct usb_driver cypress_driver = {
 	.no_dynamic_id = 	1,
 };
 
+enum packet_format {
+	packet_format_1,  /* b0:status, b1:payload count */
+	packet_format_2   /* b0[7:3]:status, b0[2:0]:payload count */
+};
+
 struct cypress_private {
 	spinlock_t lock;		   /* private lock */
 	int chiptype;			   /* identifier of device, for quirks/etc */
@@ -137,6 +142,8 @@ struct cypress_private {
 	__u8 current_status;	   	   /* received from last read - info on dsr,cts,cd,ri,etc */
 	__u8 current_config;	   	   /* stores the current configuration byte */
 	__u8 rx_flags;			   /* throttling - used from whiteheat/ftdi_sio */
+	enum packet_format pkt_fmt;	   /* format to use for packet send / receive */
+	int get_cfg_unsafe;		   /* If true, the CYPRESS_GET_CONFIG is unsafe */
 	int baud_rate;			   /* stores current baud rate in integer form */
 	int cbr_mask;			   /* stores current baud rate in masked form */
 	int isthrottled;		   /* if throttled, discard reads */
@@ -282,13 +289,66 @@ static struct usb_serial_driver cypress_ca42v2_device = {
  *****************************************************************************/
 
 
+static int analyze_baud_rate(struct usb_serial_port *port, unsigned baud_mask)
+{
+	int new_rate;
+	struct cypress_private *priv;
+	priv = usb_get_serial_port_data(port);
+
+	/*
+	 * The general purpose firmware for the Cypress M8 allows for
+	 * a maximum speed of 57600bps (I have no idea whether DeLorme
+	 * chose to use the general purpose firmware or not), if you
+	 * need to modify this speed setting for your own project
+	 * please add your own chiptype and modify the code likewise.
+	 * The Cypress HID->COM device will work successfully up to
+	 * 115200bps (but the actual throughput is around 3kBps).
+	 */
+	new_rate = mask_to_rate(baud_mask);
+	if (new_rate < 0) {
+		dbg("%s - failed setting baud rate, untranslatable speed",
+		    __func__);
+		return -1;
+	}
+	if (port->serial->dev->speed == USB_SPEED_LOW) {
+		/*
+		 * Mike Isely <isely@pobox.com> 2-Feb-2008: The
+		 * Cypress app note that describes this mechanism
+		 * states the the low-speed part can't handle more
+		 * than 800 bytes/sec, in which case 4800 baud is the
+		 * safest speed for a part like that.
+		 */
+		if (new_rate > 4800) {
+			dbg("%s - failed setting baud rate, device incapable "
+			    "speed %d", __func__, new_rate);
+			return -1;
+		}
+	}
+	switch (priv->chiptype) {
+	case CT_EARTHMATE:
+		if (new_rate <= 600) {
+			/* 300 and 600 baud rates are supported under
+			 * the generic firmware, but are not used with
+			 * NMEA and SiRF protocols */
+			dbg("%s - failed setting baud rate, unsupported speed "
+			    "of %d on Earthmate GPS", __func__, new_rate);
+			return -1;
+		}
+		break;
+	default:
+		break;
+	}
+	return new_rate;
+}
+
+
 /* This function can either set or retrieve the current serial line settings */
 static int cypress_serial_control (struct usb_serial_port *port, unsigned baud_mask, int data_bits, int stop_bits,
 				   int parity_enable, int parity_type, int reset, int cypress_request_type)
 {
 	int new_baudrate = 0, retval = 0, tries = 0;
 	struct cypress_private *priv;
-	__u8 feature_buffer[8];
+	__u8 feature_buffer[5];
 	unsigned long flags;
 
 	dbg("%s", __FUNCTION__);
@@ -300,58 +360,19 @@ static int cypress_serial_control (struct usb_serial_port *port, unsigned baud_m
 
 	switch(cypress_request_type) {
 		case CYPRESS_SET_CONFIG:
-
-			/*
-			 * The general purpose firmware for the Cypress M8 allows for a maximum speed
- 			 * of 57600bps (I have no idea whether DeLorme chose to use the general purpose
-			 * firmware or not), if you need to modify this speed setting for your own
-			 * project please add your own chiptype and modify the code likewise.  The
-			 * Cypress HID->COM device will work successfully up to 115200bps (but the
-			 * actual throughput is around 3kBps).
-			 */
+			new_baudrate = priv->baud_rate;
 			if (baud_mask != priv->cbr_mask) {
 				dbg("%s - baud rate is changing", __FUNCTION__);
-				if ( priv->chiptype == CT_EARTHMATE ) {
-					/* 300 and 600 baud rates are supported under the generic firmware,
-					 * but are not used with NMEA and SiRF protocols */
-					
-					if ( (baud_mask == B300) || (baud_mask == B600) ) {
-						err("%s - failed setting baud rate, unsupported speed",
-						    __FUNCTION__);
-						new_baudrate = priv->baud_rate;
-					} else if ( (new_baudrate = mask_to_rate(baud_mask)) == -1) {
-						err("%s - failed setting baud rate, unsupported speed",
-						    __FUNCTION__);
-						new_baudrate = priv->baud_rate;
-					}
-				} else if (priv->chiptype == CT_CYPHIDCOM) {
-					if ( (new_baudrate = mask_to_rate(baud_mask)) == -1) {
-						err("%s - failed setting baud rate, unsupported speed",
-						    __FUNCTION__);
-						new_baudrate = priv->baud_rate;
-					}
-				} else if (priv->chiptype == CT_CA42V2) {
-					if ( (new_baudrate = mask_to_rate(baud_mask)) == -1) {
-						err("%s - failed setting baud rate, unsupported speed",
-						    __FUNCTION__);
-						new_baudrate = priv->baud_rate;
-					}
-				} else if (priv->chiptype == CT_GENERIC) {
-					if ( (new_baudrate = mask_to_rate(baud_mask)) == -1) {
-						err("%s - failed setting baud rate, unsupported speed",
-						    __FUNCTION__);
-						new_baudrate = priv->baud_rate;
-					}
-				} else {
-					info("%s - please define your chiptype", __FUNCTION__);
-					new_baudrate = priv->baud_rate;
+				retval = analyze_baud_rate(port, baud_mask);
+				if (retval >=  0) {
+					new_baudrate = retval;
+					dbg("%s - New baud rate set to %d",
+					    __func__, new_baudrate);
 				}
-			} else {  /* baud rate not changing, keep the old */
-				new_baudrate = priv->baud_rate;
 			}
 			dbg("%s - baud rate is being sent as %d", __FUNCTION__, new_baudrate);
 			
-			memset(feature_buffer, 0, 8);
+			memset(feature_buffer, 0, sizeof(feature_buffer));
 			/* fill the feature_buffer with new configuration */
 			*((u_int32_t *)feature_buffer) = new_baudrate;
 
@@ -368,16 +389,20 @@ static int cypress_serial_control (struct usb_serial_port *port, unsigned baud_m
 		            feature_buffer[2], feature_buffer[3], feature_buffer[4]);
 			
 			do {
-			retval = usb_control_msg (port->serial->dev, usb_sndctrlpipe(port->serial->dev, 0),
-					  	  HID_REQ_SET_REPORT, USB_DIR_OUT | USB_RECIP_INTERFACE | USB_TYPE_CLASS,
-						  	  0x0300, 0, feature_buffer, 8, 500);
+				retval = usb_control_msg(port->serial->dev,
+						usb_sndctrlpipe(port->serial->dev, 0),
+						HID_REQ_SET_REPORT,
+						USB_DIR_OUT | USB_RECIP_INTERFACE | USB_TYPE_CLASS,
+						0x0300, 0, feature_buffer,
+						sizeof(feature_buffer), 500);
 
 				if (tries++ >= 3)
 					break;
 
-			} while (retval != 8 && retval != -ENODEV);
+			} while (retval != sizeof(feature_buffer) &&
+				 retval != -ENODEV);
 
-			if (retval != 8) {
+			if (retval != sizeof(feature_buffer)) {
 				err("%s - failed sending serial line settings - %d", __FUNCTION__, retval);
 				cypress_set_dead(port);
 			} else {
@@ -389,21 +414,31 @@ static int cypress_serial_control (struct usb_serial_port *port, unsigned baud_m
 			}
 		break;
 		case CYPRESS_GET_CONFIG:
+			if (priv->get_cfg_unsafe) {
+				/* Not implemented for this device,
+				   and if we try to do it we're likely
+				   to crash the hardware. */
+				return -ENOTTY;
+			}
 			dbg("%s - retreiving serial line settings", __FUNCTION__);
 			/* set initial values in feature buffer */
-			memset(feature_buffer, 0, 8);
+			memset(feature_buffer, 0, sizeof(feature_buffer));
 
 			do {
-			retval = usb_control_msg (port->serial->dev, usb_rcvctrlpipe(port->serial->dev, 0),
-						  HID_REQ_GET_REPORT, USB_DIR_IN | USB_RECIP_INTERFACE | USB_TYPE_CLASS,
-							  0x0300, 0, feature_buffer, 8, 500);
-				
+				retval = usb_control_msg(port->serial->dev,
+						usb_rcvctrlpipe(port->serial->dev, 0),
+						HID_REQ_GET_REPORT,
+						USB_DIR_IN | USB_RECIP_INTERFACE | USB_TYPE_CLASS,
+						0x0300, 0, feature_buffer,
+						sizeof(feature_buffer), 500);
+
 				if (tries++ >= 3)
 					break;
 
-			} while (retval != 5 && retval != -ENODEV);
+			} while (retval != sizeof(feature_buffer) &&
+				 retval != -ENODEV);
 
-			if (retval != 5) {
+			if (retval != sizeof(feature_buffer)) {
 				err("%s - failed to retrieve serial line settings - %d", __FUNCTION__, retval);
 				cypress_set_dead(port);
 				return retval;
@@ -522,6 +557,17 @@ static int generic_startup (struct usb_serial *serial)
 	priv->termios_initialized = 0;
 	priv->rx_flags = 0;
 	priv->cbr_mask = B300;
+	/* Default packet format setting is determined by packet size.
+	   Anything with a size larger then 9 must have a separate
+	   count field since the 3 bit count field is otherwise too
+	   small.  Otherwise we can use the slightly more compact
+	   format.  This is in accordance with the cypress_m8 serial
+	   converter app note. */
+	if (port->interrupt_out_size > 9) {
+		priv->pkt_fmt = packet_format_1;
+	} else {
+		priv->pkt_fmt = packet_format_2;
+	}
 	if (interval > 0) {
 		priv->write_urb_interval = interval;
 		priv->read_urb_interval = interval;
@@ -543,17 +589,30 @@ static int generic_startup (struct usb_serial *serial)
 static int cypress_earthmate_startup (struct usb_serial *serial)
 {
 	struct cypress_private *priv;
+	struct usb_serial_port *port = serial->port[0];
 
 	dbg("%s", __FUNCTION__);
 
 	if (generic_startup(serial)) {
 		dbg("%s - Failed setting up port %d", __FUNCTION__,
-				serial->port[0]->number);
+				port->number);
 		return 1;
 	}
 
-	priv = usb_get_serial_port_data(serial->port[0]);
+	priv = usb_get_serial_port_data(port);
 	priv->chiptype = CT_EARTHMATE;
+	/* All Earthmate devices use the separated-count packet
+	   format!  Idiotic. */
+	priv->pkt_fmt = packet_format_1;
+	if (serial->dev->descriptor.idProduct != PRODUCT_ID_EARTHMATEUSB) {
+		/* The old original USB Earthmate seemed able to
+		   handle GET_CONFIG requests; everything they've
+		   produced since that time crashes if this command is
+		   attempted :-( */
+		dbg("%s - Marking this device as unsafe for GET_CONFIG "
+		    "commands", __func__);
+		priv->get_cfg_unsafe = !0;
+	}
 
 	return 0;
 } /* cypress_earthmate_startup */
@@ -801,21 +860,18 @@ static void cypress_send(struct usb_serial_port *port)
 	memset(port->interrupt_out_urb->transfer_buffer, 0, port->interrupt_out_size);
 
 	spin_lock_irqsave(&priv->lock, flags);
-	switch (port->interrupt_out_size) {
-		case 32:
-			/* this is for the CY7C64013... */
-			offset = 2;
-			port->interrupt_out_buffer[0] = priv->line_control;
-			break;
-		case 8:
-			/* this is for the CY7C63743... */
-			offset = 1;
-			port->interrupt_out_buffer[0] = priv->line_control;
-			break;
-		default:
-			dbg("%s - wrong packet size", __FUNCTION__);
-			spin_unlock_irqrestore(&priv->lock, flags);
-			return;
+	switch (priv->pkt_fmt) {
+	default:
+	case packet_format_1:
+		/* this is for the CY7C64013... */
+		offset = 2;
+		port->interrupt_out_buffer[0] = priv->line_control;
+		break;
+	case packet_format_2:
+		/* this is for the CY7C63743... */
+		offset = 1;
+		port->interrupt_out_buffer[0] = priv->line_control;
+		break;
 	}
 
 	if (priv->line_control & CONTROL_RESET)
@@ -836,12 +892,13 @@ static void cypress_send(struct usb_serial_port *port)
 		return;
 	}
 
-	switch (port->interrupt_out_size) {
-		case 32:
-			port->interrupt_out_buffer[1] = count;
-			break;
-		case 8:
-			port->interrupt_out_buffer[0] |= count;
+	switch (priv->pkt_fmt) {
+	default:
+	case packet_format_1:
+		port->interrupt_out_buffer[1] = count;
+		break;
+	case packet_format_2:
+		port->interrupt_out_buffer[0] |= count;
 	}
 
 	dbg("%s - count is %d", __FUNCTION__, count);
@@ -854,8 +911,9 @@ send:
 	if (priv->cmd_ctrl)
 		actual_size = 1;
 	else
-		actual_size = count + (port->interrupt_out_size == 32 ? 2 : 1);
-	
+		actual_size = count +
+			      (priv->pkt_fmt == packet_format_1 ? 2 : 1);
+
 	usb_serial_debug_data(debug, &port->dev, __FUNCTION__, port->interrupt_out_size,
 			      port->interrupt_out_urb->transfer_buffer);
 
@@ -1321,43 +1379,43 @@ static void cypress_read_int_callback(struct urb *urb)
 	}
 
 	spin_lock_irqsave(&priv->lock, flags);
-	switch(urb->actual_length) {
-		case 32:
-			/* This is for the CY7C64013... */
-			priv->current_status = data[0] & 0xF8;
-			bytes = data[1] + 2;
-			i = 2;
-			if (bytes > 2)
-				havedata = 1;
-			break;
-		case 8:
-			/* This is for the CY7C63743... */
-			priv->current_status = data[0] & 0xF8;
-			bytes = (data[0] & 0x07) + 1;
-			i = 1;
-			if (bytes > 1)
-				havedata = 1;
-			break;
-		default:
-			dbg("%s - wrong packet size - received %d bytes",
-					__FUNCTION__, urb->actual_length);
-			spin_unlock_irqrestore(&priv->lock, flags);
-			goto continue_read;
+	result = urb->actual_length;
+	switch (priv->pkt_fmt) {
+	default:
+	case packet_format_1:
+		/* This is for the CY7C64013... */
+		priv->current_status = data[0] & 0xF8;
+		bytes = data[1] + 2;
+		i = 2;
+		if (bytes > 2)
+			havedata = 1;
+		break;
+	case packet_format_2:
+		/* This is for the CY7C63743... */
+		priv->current_status = data[0] & 0xF8;
+		bytes = (data[0] & 0x07) + 1;
+		i = 1;
+		if (bytes > 1)
+			havedata = 1;
+		break;
 	}
 	spin_unlock_irqrestore(&priv->lock, flags);
+	if (result < bytes) {
+		dbg("%s - wrong packet size - received %d bytes but packet "
+		    "said %d bytes", __func__, result, bytes);
+		goto continue_read;
+	}
 
 	usb_serial_debug_data (debug, &port->dev, __FUNCTION__,
 			urb->actual_length, data);
 
 	spin_lock_irqsave(&priv->lock, flags);
 	/* check to see if status has changed */
-	if (priv != NULL) {
-		if (priv->current_status != priv->prev_status) {
-			priv->diff_status |= priv->current_status ^
-				priv->prev_status;
-			wake_up_interruptible(&priv->delta_msr_wait);
-			priv->prev_status = priv->current_status;
-		}
+	if (priv->current_status != priv->prev_status) {
+		priv->diff_status |= priv->current_status ^
+			priv->prev_status;
+		wake_up_interruptible(&priv->delta_msr_wait);
+		priv->prev_status = priv->current_status;
 	}
 	spin_unlock_irqrestore(&priv->lock, flags);
 
