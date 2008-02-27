@@ -37,10 +37,9 @@
 #include <linux/string.h>
 #include <linux/vmalloc.h>
 #include <linux/mtd/mtd.h>
-
-#include <mtd/ubi-header.h>
 #include <linux/mtd/ubi.h>
 
+#include "ubi-media.h"
 #include "scan.h"
 #include "debug.h"
 
@@ -217,11 +216,11 @@ struct ubi_volume {
 	void *upd_buf;
 
 	int *eba_tbl;
-	int checked:1;
-	int corrupted:1;
-	int upd_marker:1;
-	int updating:1;
-	int changing_leb:1;
+	unsigned int checked:1;
+	unsigned int corrupted:1;
+	unsigned int upd_marker:1;
+	unsigned int updating:1;
+	unsigned int changing_leb:1;
 
 #ifdef CONFIG_MTD_UBI_GLUEBI
 	/*
