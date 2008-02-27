@@ -189,6 +189,7 @@ static void nfs_free_client(struct nfs_client *clp)
 	if (__test_and_clear_bit(NFS_CS_CALLBACK, &clp->cl_res_state))
 		nfs_callback_down();
 
+	rpc_destroy_wait_queue(&clp->cl_rpcwaitq);
 	kfree(clp->cl_hostname);
 	kfree(clp);
 
