@@ -13,6 +13,8 @@
 #include <linux/file.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/cpumask.h>
+#include <linux/cpuset.h>
 #include <asm/semaphore.h>
 
 #define KTHREAD_NICE_LEVEL (-5)
@@ -107,7 +109,7 @@ static void create_kthread(struct kthread_create_info *create)
 		 */
 		sched_setscheduler(create->result, SCHED_NORMAL, &param);
 		set_user_nice(create->result, KTHREAD_NICE_LEVEL);
-		set_cpus_allowed(create->result, CPU_MASK_ALL);
+		set_cpus_allowed(create->result, cpu_system_map);
 	}
 	complete(&create->done);
 }
@@ -232,7 +234,7 @@ int kthreadd(void *unused)
 	set_task_comm(tsk, "kthreadd");
 	ignore_signals(tsk);
 	set_user_nice(tsk, KTHREAD_NICE_LEVEL);
-	set_cpus_allowed(tsk, CPU_MASK_ALL);
+	set_cpus_allowed(tsk, cpu_system_map);
 
 	current->flags |= PF_NOFREEZE;
 
@@ -260,3 +262,47 @@ int kthreadd(void *unused)
 
 	return 0;
 }
+
+#ifdef CONFIG_CPUSETS
+static int system_kthread_notifier(struct notifier_block *nb,
+		unsigned long action, void *cpus)
+{
+	cpumask_t *new_system_map = (cpumask_t *)cpus;
+	struct task_struct *g, *t;
+
+again:
+	rcu_read_lock();
+	do_each_thread(g, t) {
+		if (t->parent != kthreadd_task && t != kthreadd_task)
+			continue;
+
+		if (cpus_match_system(t->cpus_allowed) &&
+		    !cpus_equal(t->cpus_allowed, *new_system_map)) {
+			/*
+			 * What is holding a ref on t->usage here?!
+			 */
+			get_task_struct(t);
+			rcu_read_unlock();
+			set_cpus_allowed(t, *new_system_map);
+			put_task_struct(t);
+			goto again;
+		}
+	} while_each_thread(g, t);
+	rcu_read_unlock();
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block fn_system_kthread_notifier = {
+	.notifier_call = system_kthread_notifier,
+};
+
+static int __init init_kthread(void)
+{
+	blocking_notifier_chain_register(&system_map_notifier,
+			&fn_system_kthread_notifier);
+	return 0;
+}
+
+module_init(init_kthread);
+#endif
