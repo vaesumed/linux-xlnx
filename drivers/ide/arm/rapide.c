@@ -44,7 +44,7 @@ rapide_probe(struct expansion_card *ec, const struct ecard_id *id)
 		goto release;
 	}
 
-	hwif = ide_find_port((unsigned long)base);
+	hwif = ide_find_port();
 	if (hwif) {
 		memset(&hw, 0, sizeof(hw));
 		rapide_setup_ports(&hw, base, base + 0x818, 1 << 6, ec->irq);
@@ -76,7 +76,7 @@ static void __devexit rapide_remove(struct expansion_card *ec)
 
 	ecard_set_drvdata(ec, NULL);
 
-	ide_unregister(hwif->index, 0, 0);
+	ide_unregister(hwif->index);
 
 	ecard_release_resources(ec);
 }
