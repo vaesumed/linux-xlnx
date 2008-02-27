@@ -64,6 +64,7 @@
  * short circuit some hooks.
  */
 int number_of_cpusets __read_mostly;
+int number_of_system_sets __read_mostly;
 
 /* Forward declare cgroup structures */
 struct cgroup_subsys cpuset_subsys;
@@ -131,6 +132,7 @@ typedef enum {
 	CS_SCHED_LOAD_BALANCE,
 	CS_SPREAD_PAGE,
 	CS_SPREAD_SLAB,
+	CS_SYSTEM,
 } cpuset_flagbits_t;
 
 /* convenient tests for these bits */
@@ -164,6 +166,11 @@ static inline int is_spread_slab(const struct cpuset *cs)
 	return test_bit(CS_SPREAD_SLAB, &cs->flags);
 }
 
+static inline int is_system(const struct cpuset *cs)
+{
+	return test_bit(CS_SYSTEM, &cs->flags);
+}
+
 /*
  * Increment this integer everytime any cpuset changes its
  * mems_allowed value.  Users of cpusets can track this generation
@@ -186,7 +193,9 @@ static inline int is_spread_slab(const struct cpuset *cs)
 static int cpuset_mems_generation;
 
 static struct cpuset top_cpuset = {
-	.flags = ((1 << CS_CPU_EXCLUSIVE) | (1 << CS_MEM_EXCLUSIVE)),
+	.flags = ((1 << CS_CPU_EXCLUSIVE) |
+		  (1 << CS_MEM_EXCLUSIVE) |
+		  (1 << CS_SYSTEM)),
 	.cpus_allowed = CPU_MASK_ALL,
 	.mems_allowed = NODE_MASK_ALL,
 };
@@ -467,6 +476,9 @@ static int validate_change(const struct cpuset *cur, const struct cpuset *trial)
 			return -ENOSPC;
 		}
 	}
+
+	if (number_of_system_sets == 1 && is_system(cur) && !is_system(trial))
+		return -EINVAL;
 
 	return 0;
 }
@@ -1051,6 +1063,74 @@ static int update_relax_domain_level(struct cpuset *cs, char *buf)
 	return 0;
 }
 
+BLOCKING_NOTIFIER_HEAD(system_map_notifier);
+EXPORT_SYMBOL_GPL(system_map_notifier);
+
+int cpus_match_system(cpumask_t mask)
+{
+	cpumask_t online_system, online_mask;
+
+	cpus_and(online_system, cpu_system_map, cpu_online_map);
+	cpus_and(online_mask, mask, cpu_online_map);
+
+	return cpus_equal(online_system, online_mask);
+}
+
+static void rebuild_system_map(void)
+{
+	cpumask_t *new_system_map;
+	struct kfifo *q = NULL;
+	struct cpuset *cp;
+
+	new_system_map = kmalloc(sizeof(cpumask_t), GFP_KERNEL);
+	if (!new_system_map)
+		return;
+
+	if (is_system(&top_cpuset)) {
+		cpus_setall(*new_system_map);
+		goto notify;
+	}
+
+	cpus_clear(*new_system_map);
+
+	q = kfifo_alloc(number_of_cpusets * sizeof(cp), GFP_KERNEL, NULL);
+	if (IS_ERR(q))
+		goto done;
+
+	cp = &top_cpuset;
+	__kfifo_put(q, (void *)&cp, sizeof(cp));
+	while (__kfifo_get(q, (void *)&cp, sizeof(cp))) {
+		struct cgroup *cont;
+		struct cpuset *child;
+
+		if (is_system(cp)) {
+			cpus_or(*new_system_map,
+					*new_system_map, cp->cpus_allowed);
+			continue;
+		}
+
+		list_for_each_entry(cont, &cp->css.cgroup->children, sibling) {
+			child = cgroup_cs(cont);
+			__kfifo_put(q, (void *)&child, sizeof(cp));
+		}
+	}
+
+	if (cpus_empty(*new_system_map))
+		BUG();
+
+notify:
+	if (!cpus_match_system(*new_system_map)) {
+		blocking_notifier_call_chain(&system_map_notifier, 0,
+				new_system_map);
+	}
+	cpu_system_map = *new_system_map;
+
+done:
+	kfree(new_system_map);
+	if (q && !IS_ERR(q))
+		kfifo_free(q);
+}
+
 /*
  * update_flag - read a 0 or a 1 in a file and update associated flag
  * bit:	the bit to update (CS_CPU_EXCLUSIVE, CS_MEM_EXCLUSIVE,
@@ -1069,6 +1149,7 @@ static int update_flag(cpuset_flagbits_t bit, struct cpuset *cs, char *buf)
 	struct cpuset trialcs;
 	int err;
 	int cpus_nonempty, balance_flag_changed;
+	int system_flag_changed;
 
 	turning_on = (simple_strtoul(buf, NULL, 10) != 0);
 
@@ -1085,6 +1166,7 @@ static int update_flag(cpuset_flagbits_t bit, struct cpuset *cs, char *buf)
 	cpus_nonempty = !cpus_empty(trialcs.cpus_allowed);
 	balance_flag_changed = (is_sched_load_balance(cs) !=
 		 			is_sched_load_balance(&trialcs));
+	system_flag_changed = (is_system(cs) != is_system(&trialcs));
 
 	mutex_lock(&callback_mutex);
 	cs->flags = trialcs.flags;
@@ -1092,6 +1174,15 @@ static int update_flag(cpuset_flagbits_t bit, struct cpuset *cs, char *buf)
 
 	if (cpus_nonempty && balance_flag_changed)
 		rebuild_sched_domains();
+
+	if (system_flag_changed) {
+		rebuild_system_map();
+
+		if (is_system(cs))
+			number_of_system_sets++;
+		else
+			number_of_system_sets--;
+	}
 
 	return 0;
 }
@@ -1247,6 +1338,7 @@ typedef enum {
 	FILE_MEMORY_PRESSURE,
 	FILE_SPREAD_PAGE,
 	FILE_SPREAD_SLAB,
+	FILE_SYSTEM,
 } cpuset_filetype_t;
 
 static ssize_t cpuset_common_file_write(struct cgroup *cont,
@@ -1316,6 +1408,9 @@ static ssize_t cpuset_common_file_write(struct cgroup *cont,
 	case FILE_SPREAD_SLAB:
 		retval = update_flag(CS_SPREAD_SLAB, cs, buffer);
 		cs->mems_generation = cpuset_mems_generation++;
+		break;
+	case FILE_SYSTEM:
+		retval = update_flag(CS_SYSTEM, cs, buffer);
 		break;
 	default:
 		retval = -EINVAL;
@@ -1416,6 +1511,9 @@ static ssize_t cpuset_common_file_read(struct cgroup *cont,
 	case FILE_SPREAD_SLAB:
 		*s++ = is_spread_slab(cs) ? '1' : '0';
 		break;
+	case FILE_SYSTEM:
+		*s++ = is_system(cs) ? '1' : '0';
+		break;
 	default:
 		retval = -EINVAL;
 		goto out;
@@ -1513,6 +1611,13 @@ static struct cftype cft_spread_slab = {
 	.private = FILE_SPREAD_SLAB,
 };
 
+static struct cftype cft_system = {
+	.name = "system",
+	.read = cpuset_common_file_read,
+	.write = cpuset_common_file_write,
+	.private = FILE_SYSTEM,
+};
+
 static int cpuset_populate(struct cgroup_subsys *ss, struct cgroup *cont)
 {
 	int err;
@@ -1537,6 +1642,8 @@ static int cpuset_populate(struct cgroup_subsys *ss, struct cgroup *cont)
 	if ((err = cgroup_add_file(cont, ss, &cft_spread_page)) < 0)
 		return err;
 	if ((err = cgroup_add_file(cont, ss, &cft_spread_slab)) < 0)
+		return err;
+	if ((err = cgroup_add_file(cont, ss, &cft_system)) < 0)
 		return err;
 	/* memory_pressure_enabled is in root cpuset only */
 	if (err == 0 && !cont->parent)
@@ -1612,6 +1719,7 @@ static struct cgroup_subsys_state *cpuset_create(
 	if (is_spread_slab(parent))
 		set_bit(CS_SPREAD_SLAB, &cs->flags);
 	set_bit(CS_SCHED_LOAD_BALANCE, &cs->flags);
+	set_bit(CS_SYSTEM, &cs->flags);
 	cpus_clear(cs->cpus_allowed);
 	nodes_clear(cs->mems_allowed);
 	cs->mems_generation = cpuset_mems_generation++;
@@ -1620,6 +1728,7 @@ static struct cgroup_subsys_state *cpuset_create(
 
 	cs->parent = parent;
 	number_of_cpusets++;
+	number_of_system_sets++;
 	return &cs->css ;
 }
 
@@ -1643,8 +1752,11 @@ static void cpuset_destroy(struct cgroup_subsys *ss, struct cgroup *cont)
 
 	if (is_sched_load_balance(cs))
 		update_flag(CS_SCHED_LOAD_BALANCE, cs, "0");
+	if (!is_system(cs))
+		update_flag(CS_SYSTEM, cs, "1");
 
 	number_of_cpusets--;
+	number_of_system_sets--;
 	kfree(cs);
 }
 
@@ -1696,6 +1808,7 @@ int __init cpuset_init(void)
 		return err;
 
 	number_of_cpusets = 1;
+	number_of_system_sets = 1;
 	return 0;
 }
 
