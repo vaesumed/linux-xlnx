@@ -1087,12 +1087,11 @@ static int TIDownloadFirmware (struct edgeport_serial *serial)
 	if (serial->product_info.TiMode == TI_MODE_DOWNLOAD) {
 		struct ti_i2c_desc *rom_desc;
 
-		dbg ("%s - <<<<<<<<<<<<<<<RUNNING IN DOWNLOAD MODE>>>>>>>>>>", __FUNCTION__);
+		dbg("%s - RUNNING IN DOWNLOAD MODE", __func__);
 
 		status = TiValidateI2cImage (serial);
 		if (status) {
-			dbg ("%s - <<<<<<<<<<<<<<<DOWNLOAD MODE -- BAD I2C >>>>>>>>>>",
-			     __FUNCTION__);
+			dbg("%s - DOWNLOAD MODE -- BAD I2C", __func__);
 			return status;
 		}
 		
@@ -1346,8 +1345,7 @@ static int TIDownloadFirmware (struct edgeport_serial *serial)
 	/********************************************************************/
 	/* Boot Mode */
 	/********************************************************************/
-	dbg ("%s - <<<<<<<<<<<<<<<RUNNING IN BOOT MODE>>>>>>>>>>>>>>>",
-	     __FUNCTION__);
+	dbg("%s - RUNNING IN BOOT MODE", __func__);
 
 	// Configure the TI device so we can use the BULK pipes for download
 	status = TIConfigureBootDevice (serial->serial->dev);
@@ -1462,7 +1460,7 @@ static int TIDownloadFirmware (struct edgeport_serial *serial)
 
 StayInBootMode:
 	// Eprom is invalid or blank stay in boot mode
-	dbg ("%s - <<<<<<<<<<<<<<<STAYING IN BOOT MODE>>>>>>>>>>>>", __FUNCTION__);
+	dbg("%s - STAYING IN BOOT MODE", __func__);
 	serial->product_info.TiMode = TI_MODE_BOOT;
 
 	return 0;
@@ -2562,9 +2560,11 @@ static int edge_tiocmset (struct usb_serial_port *port, struct file *file, unsig
 {
 	struct edgeport_port *edge_port = usb_get_serial_port_data(port);
 	unsigned int mcr;
+	unsigned long flags;
 
 	dbg("%s - port %d", __FUNCTION__, port->number);
 
+	spin_lock_irqsave(&edge_port->ep_lock, flags);
 	mcr = edge_port->shadow_mcr;
 	if (set & TIOCM_RTS)
 		mcr |= MCR_RTS;
@@ -2581,6 +2581,7 @@ static int edge_tiocmset (struct usb_serial_port *port, struct file *file, unsig
 		mcr &= ~MCR_LOOPBACK;
 
 	edge_port->shadow_mcr = mcr;
+	spin_unlock_irqrestore(&edge_port->ep_lock, flags);
 
 	TIRestoreMCR (edge_port, mcr);
 
@@ -2593,8 +2594,11 @@ static int edge_tiocmget(struct usb_serial_port *port, struct file *file)
 	unsigned int result = 0;
 	unsigned int msr;
 	unsigned int mcr;
+	unsigned long flags;
 
 	dbg("%s - port %d", __FUNCTION__, port->number);
+
+	spin_lock_irqsave(&edge_port->ep_lock, flags);
 
 	msr = edge_port->shadow_msr;
 	mcr = edge_port->shadow_mcr;
@@ -2607,6 +2611,7 @@ static int edge_tiocmget(struct usb_serial_port *port, struct file *file)
 
 
 	dbg("%s -- %x", __FUNCTION__, result);
+	spin_unlock_irqrestore(&edge_port->ep_lock, flags);
 
 	return result;
 }
