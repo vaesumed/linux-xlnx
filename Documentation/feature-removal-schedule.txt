@@ -316,3 +316,13 @@ Why:	Largely unmaintained and almost entirely unused.  File system
 	is largely pointless as without a lot of work only the most
 	trivial of Solaris binaries can work with the emulation code.
 Who:	David S. Miller <davem@davemloft.net>
+
+---------------------------
+
+What:	/sys/o2cb symlink
+When:	January 2010
+Why:	/sys/fs/o2cb is the proper location for this information - /sys/o2cb
+	exists as a symlink for backwards compatibility for old versions of
+	ocfs2-tools. 2 years should be sufficient time to phase in new versions
+	which know to look in /sys/fs/o2cb.
+Who:	ocfs2-devel@oss.oracle.com
