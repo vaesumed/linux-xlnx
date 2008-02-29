@@ -444,9 +444,9 @@ static void o2net_set_nn_state(struct o2net_node *nn,
 		/* delay if we're withing a RECONNECT_DELAY of the
 		 * last attempt */
 		delay = (nn->nn_last_connect_attempt +
-			 msecs_to_jiffies(o2net_reconnect_delay(sc->sc_node)))
+			 msecs_to_jiffies(o2net_reconnect_delay(NULL)))
 			- jiffies;
-		if (delay > msecs_to_jiffies(o2net_reconnect_delay(sc->sc_node)))
+		if (delay > msecs_to_jiffies(o2net_reconnect_delay(NULL)))
 			delay = 0;
 		mlog(ML_CONN, "queueing conn attempt in %lu jiffies\n", delay);
 		queue_delayed_work(o2net_wq, &nn->nn_connect_work, delay);
@@ -460,7 +460,7 @@ static void o2net_set_nn_state(struct o2net_node *nn,
 		 * the connect_expired work will do anything.  The rest will see
 		 * that it's already queued and do nothing.
 		 */
-		delay += msecs_to_jiffies(o2net_idle_timeout(sc->sc_node));
+		delay += msecs_to_jiffies(o2net_idle_timeout(NULL));
 		queue_delayed_work(o2net_wq, &nn->nn_connect_expired, delay);
 	}
 
