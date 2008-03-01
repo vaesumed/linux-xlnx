@@ -544,7 +544,7 @@ static int
 context_add_buffer(struct context *ctx)
 {
 	struct descriptor_buffer *desc;
-	dma_addr_t bus_addr;
+	dma_addr_t uninitialized_var(bus_addr);
 	int offset;
 
 	/*
@@ -1334,7 +1334,7 @@ ohci_set_config_rom(struct fw_card *card, u32 *config_rom, size_t length)
 	unsigned long flags;
 	int retval = -EBUSY;
 	__be32 *next_config_rom;
-	dma_addr_t next_config_rom_bus;
+	dma_addr_t uninitialized_var(next_config_rom_bus);
 
 	ohci = fw_ohci(card);
 
