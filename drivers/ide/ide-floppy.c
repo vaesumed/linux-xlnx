@@ -644,9 +644,9 @@ static ide_driver_t idefloppy_driver = {
 #endif
 };
 
-static int idefloppy_open(struct inode *inode, struct file *filp)
+static int idefloppy_open(struct block_device *bdev, fmode_t mode)
 {
-	struct gendisk *disk = inode->i_bdev->bd_disk;
+	struct gendisk *disk = bdev->bd_disk;
 	struct ide_floppy_obj *floppy;
 	ide_drive_t *drive;
 	int ret = 0;
@@ -669,7 +669,7 @@ static int idefloppy_open(struct inode *inode, struct file *filp)
 			ide_do_start_stop(drive, disk, 1);
 
 		if (ide_floppy_get_capacity (drive)
-		   && (filp->f_mode & FMODE_NDELAY) == 0
+		   && (mode & FMODE_NDELAY) == 0
 		    /*
 		     * Allow O_NDELAY to open a drive without a disk, or with an
 		     * unreadable disk, so that we can get the format capacity
@@ -680,14 +680,14 @@ static int idefloppy_open(struct inode *inode, struct file *filp)
 			goto out_put_floppy;
 		}
 
-		if ((drive->atapi_flags & IDE_AFLAG_WP) && (filp->f_mode & FMODE_WRITE)) {
+		if ((drive->atapi_flags & IDE_AFLAG_WP) && (mode & FMODE_WRITE)) {
 			ret = -EROFS;
 			goto out_put_floppy;
 		}
 
 		drive->atapi_flags |= IDE_AFLAG_MEDIA_CHANGED;
 		ide_set_media_lock(drive, disk, 1);
-		check_disk_change(inode->i_bdev);
+		check_disk_change(bdev);
 	} else if (drive->atapi_flags & IDE_AFLAG_FORMAT_IN_PROGRESS) {
 		ret = -EBUSY;
 		goto out_put_floppy;
@@ -700,9 +700,8 @@ out_put_floppy:
 	return ret;
 }
 
-static int idefloppy_release(struct inode *inode, struct file *filp)
+static int idefloppy_release(struct gendisk *disk, fmode_t mode)
 {
-	struct gendisk *disk = inode->i_bdev->bd_disk;
 	struct ide_floppy_obj *floppy = ide_drv_g(disk, ide_floppy_obj);
 	ide_drive_t *drive = floppy->drive;
 
@@ -757,9 +756,9 @@ static int idefloppy_revalidate_disk(struct gendisk *disk)
 
 static struct block_device_operations idefloppy_ops = {
 	.owner			= THIS_MODULE,
-	.__open			= idefloppy_open,
-	.__release		= idefloppy_release,
-	.__ioctl			= ide_floppy_ioctl,
+	.open			= idefloppy_open,
+	.release		= idefloppy_release,
+	.locked_ioctl		= ide_floppy_ioctl,
 	.getgeo			= idefloppy_getgeo,
 	.media_changed		= idefloppy_media_changed,
 	.revalidate_disk	= idefloppy_revalidate_disk
