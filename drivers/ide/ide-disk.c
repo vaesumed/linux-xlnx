@@ -912,9 +912,9 @@ static int idedisk_revalidate_disk(struct gendisk *disk)
 
 static struct block_device_operations idedisk_ops = {
 	.owner			= THIS_MODULE,
-	.open			= idedisk_open,
-	.release		= idedisk_release,
-	.ioctl			= ide_disk_ioctl,
+	.__open			= idedisk_open,
+	.__release		= idedisk_release,
+	.__ioctl			= ide_disk_ioctl,
 	.getgeo			= idedisk_getgeo,
 	.media_changed		= idedisk_media_changed,
 	.revalidate_disk	= idedisk_revalidate_disk

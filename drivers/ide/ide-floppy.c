@@ -757,9 +757,9 @@ static int idefloppy_revalidate_disk(struct gendisk *disk)
 
 static struct block_device_operations idefloppy_ops = {
 	.owner			= THIS_MODULE,
-	.open			= idefloppy_open,
-	.release		= idefloppy_release,
-	.ioctl			= ide_floppy_ioctl,
+	.__open			= idefloppy_open,
+	.__release		= idefloppy_release,
+	.__ioctl			= ide_floppy_ioctl,
 	.getgeo			= idefloppy_getgeo,
 	.media_changed		= idefloppy_media_changed,
 	.revalidate_disk	= idefloppy_revalidate_disk
