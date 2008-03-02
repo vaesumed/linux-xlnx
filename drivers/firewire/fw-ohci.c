@@ -375,7 +375,7 @@ static __le32 *handle_ar_packet(struct ar_context *ctx, __le32 *buffer)
 	 */
 
 	if (p.ack + 16 == 0x09)
-		ohci->request_generation = (p.header[2] >> 16) & 0xff;
+		ohci->request_generation = (buffer[2] >> 16) & 0xff;
 	else if (ctx == &ohci->ar_request_ctx)
 		fw_core_handle_request(&ohci->card, &p);
 	else
@@ -1487,7 +1487,7 @@ static int handle_ir_dualbuffer_packet(struct context *context,
 	void *p, *end;
 	int i;
 
-	if (db->first_res_count != 0 && db->second_res_count != 0) {
+	if (db->first_res_count > 0 && db->second_res_count > 0) {
 		if (ctx->excess_bytes <= le16_to_cpu(db->second_req_count)) {
 			/* This descriptor isn't done yet, stop iteration. */
 			return 0;
@@ -1513,7 +1513,7 @@ static int handle_ir_dualbuffer_packet(struct context *context,
 		memcpy(ctx->header + i + 4, p + 8, ctx->base.header_size - 4);
 		i += ctx->base.header_size;
 		ctx->excess_bytes +=
-			(le32_to_cpu(*(__le32 *)(p + 4)) >> 16) & 0xffff;
+			(le32_to_cpu(*(u32 *)(p + 4)) >> 16) & 0xffff;
 		p += ctx->base.header_size + 4;
 	}
 	ctx->header_length = i;
@@ -2059,7 +2059,7 @@ pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 	err = pci_enable_device(dev);
 	if (err) {
 		fw_error("Failed to enable OHCI hardware.\n");
-		goto fail_free;
+		goto fail_put_card;
 	}
 
 	pci_set_master(dev);
@@ -2151,8 +2151,8 @@ pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 	pci_release_region(dev, 0);
  fail_disable:
 	pci_disable_device(dev);
- fail_free:
-	kfree(&ohci->card);
+ fail_put_card:
+	fw_card_put(&ohci->card);
 
 	return err;
 }
@@ -2180,7 +2180,7 @@ static void pci_remove(struct pci_dev *dev)
 	pci_iounmap(dev, ohci->registers);
 	pci_release_region(dev, 0);
 	pci_disable_device(dev);
-	kfree(&ohci->card);
+	fw_card_put(&ohci->card);
 
 	fw_notify("Removed fw-ohci device.\n");
 }
