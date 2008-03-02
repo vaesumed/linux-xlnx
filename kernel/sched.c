@@ -638,7 +638,7 @@ const_debug unsigned int sysctl_sched_features =
 		SCHED_FEAT_AFFINE_WAKEUPS	* 1 |
 		SCHED_FEAT_CACHE_HOT_BUDDY	* 1 |
 		SCHED_FEAT_SYNC_WAKEUPS		* 1 |
-		SCHED_FEAT_HRTICK		* 1 |
+		SCHED_FEAT_HRTICK		* 0 |
 		SCHED_FEAT_DOUBLE_TICK		* 0;
 
 #define sched_feat(x) (sysctl_sched_features & SCHED_FEAT_##x)
