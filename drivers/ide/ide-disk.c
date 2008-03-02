@@ -827,14 +827,12 @@ static int idedisk_set_doorlock(ide_drive_t *drive, int on)
 	return ide_no_data_taskfile(drive, &task);
 }
 
-static int idedisk_open(struct inode *inode, struct file *filp)
+static int idedisk_open(struct block_device *bdev, fmode_t mode)
 {
-	struct gendisk *disk = inode->i_bdev->bd_disk;
-	struct ide_disk_obj *idkp;
+	struct ide_disk_obj *idkp = ide_disk_get(bdev->bd_disk);
 	ide_drive_t *drive;
 
-	idkp = ide_disk_get(disk);
-	if (idkp == NULL)
+	if (!idkp)
 		return -ENXIO;
 
 	drive = idkp->drive;
@@ -842,7 +840,7 @@ static int idedisk_open(struct inode *inode, struct file *filp)
 	idkp->openers++;
 
 	if ((drive->dev_flags & IDE_DFLAG_REMOVABLE) && idkp->openers == 1) {
-		check_disk_change(inode->i_bdev);
+		check_disk_change(bdev);
 		/*
 		 * Ignore the return code from door_lock,
 		 * since the open() has already succeeded,
@@ -855,9 +853,8 @@ static int idedisk_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static int idedisk_release(struct inode *inode, struct file *filp)
+static int idedisk_release(struct gendisk *disk, fmode_t mode)
 {
-	struct gendisk *disk = inode->i_bdev->bd_disk;
 	struct ide_disk_obj *idkp = ide_disk_g(disk);
 	ide_drive_t *drive = idkp->drive;
 
@@ -912,9 +909,9 @@ static int idedisk_revalidate_disk(struct gendisk *disk)
 
 static struct block_device_operations idedisk_ops = {
 	.owner			= THIS_MODULE,
-	.__open			= idedisk_open,
-	.__release		= idedisk_release,
-	.__ioctl			= ide_disk_ioctl,
+	.open			= idedisk_open,
+	.release		= idedisk_release,
+	.locked_ioctl		= ide_disk_ioctl,
 	.getgeo			= idedisk_getgeo,
 	.media_changed		= idedisk_media_changed,
 	.revalidate_disk	= idedisk_revalidate_disk

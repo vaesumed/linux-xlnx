@@ -21,7 +21,7 @@ ide_decl_devset(wcache);
 ide_decl_devset(acoustic);
 
 /* ide-disk_ioctl.c */
-int ide_disk_ioctl(struct inode *, struct file *, unsigned int, unsigned long);
+int ide_disk_ioctl(struct block_device *, fmode_t, unsigned int, unsigned long);
 
 #ifdef CONFIG_IDE_PROC_FS
 /* ide-disk_proc.c */
