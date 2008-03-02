@@ -44,8 +44,6 @@
  *  inspiration from lots of linux users, esp.  hamish@zot.apana.org.au
  */
 
-#define	REVISION	"Revision: 7.00alpha2"
-
 #define _IDE_C			/* Tell ide.h it's really us */
 
 #include <linux/module.h>
@@ -592,11 +590,6 @@ void ide_unregister(unsigned int index, int init_default, int restore)
 		hwif->extra_ports = 0;
 	}
 
-	/*
-	 * Note that we only release the standard ports,
-	 * and do not even try to handle any extra ports
-	 * allocated for weird IDE interface chipsets.
-	 */
 	ide_hwif_release_regions(hwif);
 
 	/* copy original settings */
@@ -1038,10 +1031,9 @@ int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device
 			drive->nice1 = (arg >> IDE_NICE_1) & 1;
 			return 0;
 		case HDIO_DRIVE_RESET:
-		{
-			unsigned long flags;
-			if (!capable(CAP_SYS_ADMIN)) return -EACCES;
-			
+			if (!capable(CAP_SYS_ADMIN))
+				return -EACCES;
+
 			/*
 			 *	Abort the current command on the
 			 *	group if there is one, taking
@@ -1060,17 +1052,15 @@ int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device
 			ide_abort(drive, "drive reset");
 
 			BUG_ON(HWGROUP(drive)->handler);
-				
+
 			/* Ensure nothing gets queued after we
 			   drop the lock. Reset will clear the busy */
-		   
+
 			HWGROUP(drive)->busy = 1;
 			spin_unlock_irqrestore(&ide_lock, flags);
 			(void) ide_do_reset(drive);
 
 			return 0;
-		}
-
 		case HDIO_GET_BUSSTATE:
 			if (!capable(CAP_SYS_ADMIN))
 				return -EACCES;
@@ -1231,7 +1221,7 @@ static int __init ide_setup(char *s)
 	if (!strcmp(s, "ide=reverse")) {
 		ide_scan_direction = 1;
 		printk(" : Enabled support for IDE inverse scan order.\n");
-		return 1;
+		goto obsolete_option;
 	}
 #endif
 
@@ -1451,7 +1441,7 @@ static int __init ide_setup(char *s)
 
 			case -1: /* "noprobe" */
 				hwif->noprobe = 1;
-				goto done;
+				goto obsolete_option;
 
 			case 1:	/* base */
 				vals[1] = vals[0] + 0x206; /* default ctl */
@@ -1618,7 +1608,7 @@ static int __init ide_init(void)
 {
 	int ret;
 
-	printk(KERN_INFO "Uniform Multi-Platform E-IDE driver " REVISION "\n");
+	printk(KERN_INFO "Uniform Multi-Platform E-IDE driver\n");
 	system_bus_speed = ide_system_bus_speed();
 
 	printk(KERN_INFO "ide: Assuming %dMHz system bus speed "
