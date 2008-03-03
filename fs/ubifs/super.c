@@ -206,7 +206,8 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 		return NULL;
 
 	mutex_init(&ui->budg_mutex);
-	ui->dirty = ui->data_len = 0;
+	ui->dirty = ui->data_len = ui->xattr_cnt = 0;
+	ui->xattr_bytes = 0;
 	ui->data = NULL;
 	ui->flags = 0;
 	ui->creat_sqnum = 0;
