@@ -1159,7 +1159,7 @@ void ubifs_read_inode(struct inode *inode)
 	}
 
 	if (ui->xattr_cnt < 0 || ui->xattr_bytes < 0) {
-		dbg_err("bad xattr_cnt %d or xattr_bytes %ld",
+		dbg_err("bad xattr_cnt %d or xattr_bytes %lld",
 			ui->xattr_cnt, ui->xattr_bytes);
 		goto out_invalid;
 	}
