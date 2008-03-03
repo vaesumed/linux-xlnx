@@ -257,11 +257,6 @@ static void __devinit init_hwif_trm290(ide_hwif_t *hwif)
 	printk(KERN_INFO "    %s: BM-DMA at 0x%04lx-0x%04lx",
 	       hwif->name, hwif->dma_base, hwif->dma_base + 3);
 
-	if (!request_region(hwif->dma_base, 4, hwif->name)) {
-		printk(KERN_CONT " -- Error, ports in use.\n");
-		return;
-	}
-
 	hwif->dmatable_cpu = pci_alloc_consistent(dev, PRD_ENTRIES * PRD_BYTES,
 						  &hwif->dmatable_dma);
 	if (!hwif->dmatable_cpu) {
@@ -297,8 +292,6 @@ static void __devinit init_hwif_trm290(ide_hwif_t *hwif)
 	hwif->dma_start 	= &trm290_dma_start;
 	hwif->ide_dma_end	= &trm290_ide_dma_end;
 	hwif->ide_dma_test_irq	= &trm290_ide_dma_test_irq;
-
-	hwif->selectproc = &trm290_selectproc;
 #if 1
 	{
 	/*
@@ -328,16 +321,20 @@ static void __devinit init_hwif_trm290(ide_hwif_t *hwif)
 #endif
 }
 
+static const struct ide_port_ops trm290_port_ops = {
+	.selectproc		= trm290_selectproc,
+};
+
 static const struct ide_port_info trm290_chipset __devinitdata = {
 	.name		= "TRM290",
 	.init_hwif	= init_hwif_trm290,
 	.chipset	= ide_trm290,
+	.port_ops	= &trm290_port_ops,
 	.host_flags	= IDE_HFLAG_NO_ATAPI_DMA |
 #if 0 /* play it safe for now */
 			  IDE_HFLAG_TRUST_BIOS_FOR_DMA |
 #endif
 			  IDE_HFLAG_NO_AUTODMA |
-			  IDE_HFLAG_BOOTABLE |
 			  IDE_HFLAG_NO_LBA48,
 };
 
