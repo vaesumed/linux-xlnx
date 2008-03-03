@@ -233,6 +233,7 @@ static int usb_probe_interface(struct device *dev)
 		if (error) {
 			mark_quiesced(intf);
 			intf->needs_remote_wakeup = 0;
+			intf->wants_persist = 0;
 			intf->condition = USB_INTERFACE_UNBOUND;
 		} else
 			intf->condition = USB_INTERFACE_BOUND;
@@ -271,6 +272,7 @@ static int usb_unbind_interface(struct device *dev)
 	intf->condition = USB_INTERFACE_UNBOUND;
 	mark_quiesced(intf);
 	intf->needs_remote_wakeup = 0;
+	intf->wants_persist = 0;
 
 	if (!error)
 		usb_autosuspend_device(udev);
@@ -368,6 +370,7 @@ void usb_driver_release_interface(struct usb_driver *driver,
 	iface->condition = USB_INTERFACE_UNBOUND;
 	mark_quiesced(iface);
 	iface->needs_remote_wakeup = 0;
+	iface->wants_persist = 0;
 	usb_pm_unlock(udev);
 }
 EXPORT_SYMBOL_GPL(usb_driver_release_interface);

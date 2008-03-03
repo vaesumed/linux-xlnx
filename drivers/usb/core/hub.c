@@ -625,6 +625,27 @@ static void hub_port_logical_disconnect(struct usb_hub *hub, int port1)
  	kick_khubd(hub);
 }
 
+/* Should USB-PERSIST be enabled for this device? */
+static bool persist_enabled(struct usb_device *udev)
+{
+	struct usb_host_config *config;
+	int i;
+
+	if (udev->persist_enabled)
+		return true;
+
+	config = udev->actconfig;
+	if (config) {
+		for (i = 0; i < config->desc.bNumInterfaces; ++i) {
+			struct usb_interface *intf = config->interface[i];
+
+			if (intf->wants_persist)
+				return true;
+		}
+	}
+	return false;
+}
+
 /* caller has locked the hub device */
 static void hub_stop(struct usb_hub *hub)
 {
@@ -688,8 +709,8 @@ static void hub_restart(struct usb_hub *hub, int type)
 		 * turn off the various status changes to prevent
 		 * khubd from disconnecting it later.
 		 */
-		if (udev->persist_enabled && status == 0 &&
-				!(portstatus & USB_PORT_STAT_ENABLE)) {
+		if (status == 0 && !(portstatus & USB_PORT_STAT_ENABLE) &&
+				persist_enabled(udev)) {
 			if (portchange & USB_PORT_STAT_C_ENABLE)
 				clear_port_feature(hub->hdev, port1,
 						USB_PORT_FEAT_C_ENABLE);
