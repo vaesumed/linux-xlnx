@@ -109,6 +109,8 @@ enum usb_interface_condition {
  * @sysfs_files_created: sysfs attributes exist
  * @needs_remote_wakeup: flag set when the driver requires remote-wakeup
  *	capability during autosuspend.
+ * @wants_persist: USB-PERSIST handling should be enabled for the device,
+ *	even if the user has turned off udev->persist_enabled.
  * @dev: driver model's view of this device
  * @usb_dev: if an interface is bound to the USB major, this will point
  *	to the sysfs representation for that device.
@@ -159,6 +161,7 @@ struct usb_interface {
 	unsigned is_active:1;		/* the interface is not suspended */
 	unsigned sysfs_files_created:1;	/* the sysfs attributes exist */
 	unsigned needs_remote_wakeup:1;	/* driver requires remote wakeup */
+	unsigned wants_persist:1;	/* driver wants USB-PERSIST handling */
 
 	struct device dev;		/* interface specific device info */
 	struct device *usb_dev;
