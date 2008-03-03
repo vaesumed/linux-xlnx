@@ -103,7 +103,6 @@ header-y += irda.h
 header-y += iso_fs.h
 header-y += ixjuser.h
 header-y += jffs2.h
-header-y += ubifs.h
 header-y += keyctl.h
 header-y += limits.h
 header-y += dlm_plock.h
