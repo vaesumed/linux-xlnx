@@ -235,7 +235,7 @@ struct memstick_host {
 #define MEMSTICK_CAP_AUTO_GET_INT  2
 
 	struct work_struct  media_checker;
-	struct class_device cdev;
+	struct device       dev;
 
 	struct memstick_dev *card;
 	unsigned int        retries;
