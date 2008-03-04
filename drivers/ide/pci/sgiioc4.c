@@ -112,9 +112,8 @@ static void
 sgiioc4_maskproc(ide_drive_t * drive, int mask)
 {
 	writeb(mask ? (drive->ctl | 2) : (drive->ctl & ~2),
-	       (void __iomem *)IDE_CONTROL_REG);
+	       (void __iomem *)drive->hwif->io_ports[IDE_CONTROL_OFFSET]);
 }
-
 
 static int
 sgiioc4_checkirq(ide_hwif_t * hwif)
@@ -142,18 +141,18 @@ sgiioc4_clearirq(ide_drive_t * drive)
 	intr_reg = readl((void __iomem *)other_ir);
 	if (intr_reg & 0x03) { /* Valid IOC4-IDE interrupt */
 		/*
-		 * Using sgiioc4_INB to read the IDE_STATUS_REG has a side effect
-		 * of clearing the interrupt.  The first read should clear it
-		 * if it is set.  The second read should return a "clear" status
-		 * if it got cleared.  If not, then spin for a bit trying to
-		 * clear it.
+		 * Using sgiioc4_INB to read the Status register has a side
+		 * effect of clearing the interrupt.  The first read should
+		 * clear it if it is set.  The second read should return
+		 * a "clear" status if it got cleared.  If not, then spin
+		 * for a bit trying to clear it.
 		 */
-		u8 stat = sgiioc4_INB(IDE_STATUS_REG);
+		u8 stat = sgiioc4_INB(hwif->io_ports[IDE_STATUS_OFFSET]);
 		int count = 0;
-		stat = sgiioc4_INB(IDE_STATUS_REG);
+		stat = sgiioc4_INB(hwif->io_ports[IDE_STATUS_OFFSET]);
 		while ((stat & 0x80) && (count++ < 100)) {
 			udelay(1);
-			stat = sgiioc4_INB(IDE_STATUS_REG);
+			stat = sgiioc4_INB(hwif->io_ports[IDE_STATUS_OFFSET]);
 		}
 
 		if (intr_reg & 0x02) {
@@ -552,18 +551,6 @@ static int sgiioc4_ide_dma_setup(ide_drive_t *drive)
 static void __devinit
 ide_init_sgiioc4(ide_hwif_t * hwif)
 {
-	hwif->mmio = 1;
-	hwif->set_pio_mode = NULL; /* Sets timing for PIO mode */
-	hwif->set_dma_mode = &sgiioc4_set_dma_mode;
-	hwif->selectproc = NULL;/* Use the default routine to select drive */
-	hwif->reset_poll = NULL;/* No HBA specific reset_poll needed */
-	hwif->pre_reset = NULL;	/* No HBA specific pre_set needed */
-	hwif->resetproc = &sgiioc4_resetproc;/* Reset DMA engine,
-						clear interrupts */
-	hwif->maskproc = &sgiioc4_maskproc;	/* Mask on/off NIEN register */
-	hwif->quirkproc = NULL;
-	hwif->busproc = NULL;
-
 	hwif->INB = &sgiioc4_INB;
 
 	if (hwif->dma_base == 0)
@@ -578,8 +565,17 @@ ide_init_sgiioc4(ide_hwif_t * hwif)
 	hwif->dma_timeout = &ide_dma_timeout;
 }
 
+static const struct ide_port_ops sgiioc4_port_ops = {
+	.set_dma_mode		= sgiioc4_set_dma_mode,
+	/* reset DMA engine, clear IRQs */
+	.resetproc		= sgiioc4_resetproc,
+	/* mask on/off NIEN register */
+	.maskproc		= sgiioc4_maskproc,
+};
+
 static const struct ide_port_info sgiioc4_port_info __devinitdata = {
 	.chipset		= ide_pci,
+	.port_ops		= &sgiioc4_port_ops,
 	.host_flags		= IDE_HFLAG_NO_DMA | /* no SFF-style DMA */
 				  IDE_HFLAG_NO_AUTOTUNE,
 	.mwdma_mask		= ATA_MWDMA2_ONLY,
@@ -592,20 +588,12 @@ sgiioc4_ide_setup_pci_device(struct pci_dev *dev)
 	unsigned long bar0, cmd_phys_base, ctl;
 	void __iomem *virt_base;
 	ide_hwif_t *hwif;
-	int h;
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 	hw_regs_t hw;
 	struct ide_port_info d = sgiioc4_port_info;
 
-	/*
-	 * Find an empty HWIF; if none available, return -ENOMEM.
-	 */
-	for (h = 0; h < MAX_HWIFS; ++h) {
-		hwif = &ide_hwifs[h];
-		if (hwif->chipset == ide_unknown)
-			break;
-	}
-	if (h == MAX_HWIFS) {
+	hwif = ide_find_port();
+	if (hwif == NULL) {
 		printk(KERN_ERR "%s: too many IDE interfaces, no room in table\n",
 				DRV_NAME);
 		return -ENOMEM;
