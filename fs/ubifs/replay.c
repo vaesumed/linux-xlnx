@@ -164,7 +164,7 @@ static int trun_remove_range(struct ubifs_info *c, struct replay_entry *r)
 {
 	unsigned min_blk, max_blk;
 	union ubifs_key min_key, max_key;
-	unsigned long ino;
+	ino_t ino;
 
 	min_blk = r->new_size / UBIFS_BLOCK_SIZE;
 	if (r->new_size & (UBIFS_BLOCK_SIZE - 1))
