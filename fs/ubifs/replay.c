@@ -142,20 +142,6 @@ out:
 }
 
 /**
- * ino_remove_range - apply a replay entry for a inode deletion to the TNC.
- * @c: UBIFS file-system description object
- * @ino: inode number
- */
-static int ino_remove_range(struct ubifs_info *c, unsigned long ino)
-{
-	union ubifs_key min_key, max_key;
-
-	lowest_ino_key(c, &min_key, ino);
-	highest_ino_key(c, &max_key, ino);
-	return ubifs_tnc_remove_range(c, &min_key, &max_key);
-}
-
-/**
  * trun_remove_range - apply a replay entry for a truncation to the TNC.
  * @c: UBIFS file-system description object
  * @r: replay entry of truncation
@@ -207,8 +193,12 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 		if (deletion)
 			switch (key_type(c, &r->key)) {
 			case UBIFS_INO_KEY:
-				err = ino_remove_range(c, key_ino(c, &r->key));
+			{
+				ino_t inum = key_ino(c, &r->key);
+
+				err = ubifs_tnc_remove_ino(c, inum);
 				break;
+			}
 			case UBIFS_TRUN_KEY:
 				err = trun_remove_range(c, r);
 				break;
@@ -219,13 +209,14 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 		else
 			err = ubifs_tnc_add(c, &r->key, r->lnum, r->offs,
 					    r->len);
-		if (c->need_recovery) {
-			if (err)
-				return err;
+		if (err)
+			return err;
+
+		if (c->need_recovery)
 			err = ubifs_recover_size_accum(c, &r->key, deletion,
 						       r->new_size);
-		}
 	}
+
 	return err;
 }
 
