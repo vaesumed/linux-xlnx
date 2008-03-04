@@ -167,6 +167,10 @@ int sysdev_driver_register(struct sysdev_class *cls, struct sysdev_driver *drv)
 {
 	int err = 0;
 
+	/* Check whether this driver has already been added to a class. */
+	WARN_ON(drv->entry.next != drv->entry.prev);
+	WARN_ON(drv->entry.next != NULL);
+
 	mutex_lock(&sysdev_drivers_lock);
 	if (cls && kset_get(&cls->kset)) {
 		list_add_tail(&drv->entry, &cls->drivers);
