@@ -753,18 +753,13 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 	ubifs_assert(req->data_growth >= 0);
 	ubifs_assert(req->dd_growth >= 0);
 
-	if (req->dirtied_page) {
-		req->dd_growth -= c->page_budget;
-		ubifs_assert(req->new_page == 0);
-	} else if (req->new_page) {
-		req->idx_growth -= c->max_idx_node_sz;
-		req->data_growth -= c->page_budget;
-		ubifs_assert(req->dirtied_page == 0);
-	}
+	ubifs_assert(!req->dirtied_page);
+	ubifs_assert(!req->new_page);
+
+	UBIFS_DBG(ui->budgeted = 0);
 
 	ubifs_release_budget(c, req);
 	ui->dirty = 0;
-	UBIFS_DBG(ui->budgeted = 0);
 	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
 }
 
