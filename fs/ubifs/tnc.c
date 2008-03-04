@@ -2415,6 +2415,24 @@ out:
 }
 
 /**
+ * ubifs_tnc_remove_ino - remove an inode from TNC.
+ * @c: UBIFS file-system description object
+ * @inum: inode number to remove
+ *
+ * This function remove inode @inum from TNC and returns zero in case of
+ * success or a negative error code in case of failure.
+ */
+int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
+{
+	union ubifs_key min_key, max_key;
+
+	lowest_ino_key(c, &min_key, inum);
+	highest_ino_key(c, &max_key, inum);
+
+	return ubifs_tnc_remove_range(c, &min_key, &max_key);
+}
+
+/**
  * ubifs_tnc_next_dent - find and read the next directory entry if there is one.
  * @c: UBIFS file-system description object
  * @key: key of last directory entry found or the lowest dent key
