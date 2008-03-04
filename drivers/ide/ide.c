@@ -595,6 +595,7 @@ void ide_unregister(unsigned int index, int init_default, int restore)
 
 	ide_remove_port_from_hwgroup(hwif);
 
+	class_device_unregister(&hwif->classdev);
 	device_unregister(&hwif->gendev);
 	wait_for_completion(&hwif->gendev_rel_comp);
 
@@ -1602,6 +1603,16 @@ struct bus_type ide_bus_type = {
 
 EXPORT_SYMBOL_GPL(ide_bus_type);
 
+static void ide_port_class_release(struct class_device *class_dev)
+{
+	put_device(&class_to_ide_port(class_dev)->gendev);
+}
+
+struct class ide_port_class = {
+	.name		= "ide_port",
+	.release	= ide_port_class_release,
+};
+
 /*
  * This is gets invoked once during initialization, to set *everything* up
  */
@@ -1622,11 +1633,20 @@ static int __init ide_init(void)
 		return ret;
 	}
 
+	ret = class_register(&ide_port_class);
+	if (ret)
+		goto out_port_class;
+
 	init_ide_data();
 
 	proc_ide_create();
 
 	return 0;
+
+out_port_class:
+	bus_unregister(&ide_bus_type);
+
+	return ret;
 }
 
 #ifdef MODULE
@@ -1662,6 +1682,8 @@ void __exit cleanup_module (void)
 		ide_unregister(index, 0, 0);
 
 	proc_ide_destroy();
+
+	class_unregister(&ide_port_class);
 
 	bus_unregister(&ide_bus_type);
 }
