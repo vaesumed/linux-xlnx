@@ -561,7 +561,7 @@ static int hub_hub_status(struct usb_hub *hub,
 	ret = get_hub_status(hub->hdev, &hub->status->hub);
 	if (ret < 0)
 		dev_err (hub->intfdev,
-			"%s failed (err = %d)\n", __FUNCTION__, ret);
+			"%s failed (err = %d)\n", __func__, ret);
 	else {
 		*status = le16_to_cpu(hub->status->hub.wHubStatus);
 		*change = le16_to_cpu(hub->status->hub.wHubChange); 
@@ -1174,7 +1174,7 @@ void usb_disconnect(struct usb_device **pdev)
 	int			i;
 
 	if (!udev) {
-		pr_debug ("%s nodev\n", __FUNCTION__);
+		pr_debug ("%s nodev\n", __func__);
 		return;
 	}
 
@@ -1520,7 +1520,7 @@ static int hub_port_status(struct usb_hub *hub, int port1,
 	ret = get_port_status(hub->hdev, port1, &hub->status->port);
 	if (ret < 4) {
 		dev_err (hub->intfdev,
-			"%s failed (err = %d)\n", __FUNCTION__, ret);
+			"%s failed (err = %d)\n", __func__, ret);
 		if (ret >= 0)
 			ret = -EIO;
 	} else {
@@ -2001,7 +2001,7 @@ static int hub_suspend(struct usb_interface *intf, pm_message_t msg)
 		}
 	}
 
-	dev_dbg(&intf->dev, "%s\n", __FUNCTION__);
+	dev_dbg(&intf->dev, "%s\n", __func__);
 
 	/* stop khubd and related activity */
 	hub_quiesce(hub);
@@ -2012,7 +2012,7 @@ static int hub_resume(struct usb_interface *intf)
 {
 	struct usb_hub		*hub = usb_get_intfdata (intf);
 
-	dev_dbg(&intf->dev, "%s\n", __FUNCTION__);
+	dev_dbg(&intf->dev, "%s\n", __func__);
 
 	/* tell khubd to look for changes on this hub */
 	hub_activate(hub);
@@ -3045,7 +3045,7 @@ int usb_reset_device(struct usb_device *udev)
 
 	if (!parent_hdev) {
 		/* this requires hcd-specific logic; see OHCI hc_restart() */
-		dev_dbg(&udev->dev, "%s for root hub!\n", __FUNCTION__);
+		dev_dbg(&udev->dev, "%s for root hub!\n", __func__);
 		return -EISDIR;
 	}
 	parent_hub = hdev_to_hub(parent_hdev);
