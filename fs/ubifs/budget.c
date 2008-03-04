@@ -755,11 +755,18 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 
 	ubifs_assert(!req->dirtied_page);
 	ubifs_assert(!req->new_page);
-
 	UBIFS_DBG(ui->budgeted = 0);
 
 	ubifs_release_budget(c, req);
-	ui->dirty = 0;
+	if (ui->dirty) {
+		ui->dirty = 0;
+		/*
+		 * Note, VFS still treats the inode as dirty and
+		 * 'ubifs_write_inode()' will be called, but it'll do nothing
+		 * because @ui->dirty is %0.
+		 */
+		atomic_long_dec(&c->dirty_ino_cnt);
+	}
 	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
 }
 
