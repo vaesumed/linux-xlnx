@@ -460,6 +460,7 @@ EXPORT_SYMBOL_GPL(device_create_bin_file);
  */
 void device_remove_bin_file(struct device *dev, struct bin_attribute *attr)
 {
+	/* might_sleep(); */
 	if (dev)
 		sysfs_remove_bin_file(&dev->kobj, attr);
 }
@@ -770,13 +771,6 @@ int device_add(struct device *dev)
 	struct class_interface *class_intf;
 	int error;
 
-	error = pm_sleep_lock();
-	if (error) {
-		dev_warn(dev, "Suspicious %s during suspend\n", __FUNCTION__);
-		dump_stack();
-		return error;
-	}
-
 	dev = get_device(dev);
 	if (!dev || !strlen(dev->bus_id)) {
 		error = -EINVAL;
@@ -843,11 +837,9 @@ int device_add(struct device *dev)
 	}
  Done:
 	put_device(dev);
-	pm_sleep_unlock();
 	return error;
  BusError:
 	device_pm_remove(dev);
-	dpm_sysfs_remove(dev);
  PMError:
 	if (dev->bus)
 		blocking_notifier_call_chain(&dev->bus->p->bus_notifier,

@@ -276,7 +276,6 @@ static SYSDEV_CLASS_ATTR(has_normal_memory, 0444, print_nodes_has_normal_memory,
 									NULL);
 static SYSDEV_CLASS_ATTR(has_cpu, 0444, print_nodes_has_cpu, NULL);
 
-#ifdef CONFIG_HIGHMEM
 static ssize_t print_nodes_has_high_memory(struct sysdev_class *class,
 						 char *buf)
 {
@@ -285,15 +284,11 @@ static ssize_t print_nodes_has_high_memory(struct sysdev_class *class,
 
 static SYSDEV_CLASS_ATTR(has_high_memory, 0444, print_nodes_has_high_memory,
 									 NULL);
-#endif
-
 struct sysdev_class_attribute *node_state_attr[] = {
 	&attr_possible,
 	&attr_online,
 	&attr_has_normal_memory,
-#ifdef CONFIG_HIGHMEM
 	&attr_has_high_memory,
-#endif
 	&attr_has_cpu,
 };
 
@@ -302,7 +297,7 @@ static int node_states_init(void)
 	int i;
 	int err = 0;
 
-	for (i = 0;  i < NR_NODE_STATES; i++) {
+	for (i = 0;  i < ARRAY_SIZE(node_state_attr); i++) {
 		int ret;
 		ret = sysdev_class_create_file(&node_class, node_state_attr[i]);
 		if (!err)
