@@ -1354,12 +1354,8 @@ int ubifs_recover_size(struct ubifs_info *c)
 				return err;
 			if (err == -ENOENT) {
 				/* Remove data nodes that have no inode */
-				union ubifs_key to_key;
-
 				dbg_rcvry("removing ino %lu", e->inum);
-				lowest_ino_key(c, &key, e->inum);
-				highest_ino_key(c, &to_key, e->inum);
-				err = ubifs_tnc_remove_range(c, &key, &to_key);
+				err = ubifs_tnc_remove_ino(c, e->inum);
 				if (err)
 					return err;
 				/*
