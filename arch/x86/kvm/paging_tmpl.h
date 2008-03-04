@@ -91,7 +91,10 @@ static bool FNAME(cmpxchg_gpte)(struct kvm *kvm,
 	pt_element_t *table;
 	struct page *page;
 
+	down_read(&current->mm->mmap_sem);
 	page = gfn_to_page(kvm, table_gfn);
+	up_read(&current->mm->mmap_sem);
+
 	table = kmap_atomic(page, KM_USER0);
 
 	ret = CMPXCHG(&table[index], orig_pte, new_pte);
@@ -140,7 +143,7 @@ walk:
 	}
 #endif
 	ASSERT((!is_long_mode(vcpu) && is_pae(vcpu)) ||
-	       (vcpu->cr3 & CR3_NONPAE_RESERVED_BITS) == 0);
+	       (vcpu->arch.cr3 & CR3_NONPAE_RESERVED_BITS) == 0);
 
 	pt_access = ACC_ALL;
 
@@ -240,21 +243,19 @@ err:
 }
 
 static void FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
-			      u64 *spte, const void *pte, int bytes,
-			      int offset_in_pte)
+			      u64 *spte, const void *pte)
 {
 	pt_element_t gpte;
 	unsigned pte_access;
 	struct page *npage;
+	int largepage = vcpu->arch.update_pte.largepage;
 
 	gpte = *(const pt_element_t *)pte;
 	if (~gpte & (PT_PRESENT_MASK | PT_ACCESSED_MASK)) {
-		if (!offset_in_pte && !is_present_pte(gpte))
+		if (!is_present_pte(gpte))
 			set_shadow_pte(spte, shadow_notrap_nonpresent_pte);
 		return;
 	}
-	if (bytes < sizeof(pt_element_t))
-		return;
 	pgprintk("%s: gpte %llx spte %p\n", __FUNCTION__, (u64)gpte, spte);
 	pte_access = page->role.access & FNAME(gpte_access)(vcpu, gpte);
 	if (gpte_to_gfn(gpte) != vcpu->arch.update_pte.gfn)
@@ -264,7 +265,8 @@ static void FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
 		return;
 	get_page(npage);
 	mmu_set_spte(vcpu, spte, page->role.access, pte_access, 0, 0,
-		     gpte & PT_DIRTY_MASK, NULL, gpte_to_gfn(gpte), npage);
+		     gpte & PT_DIRTY_MASK, NULL, largepage, gpte_to_gfn(gpte),
+		     npage);
 }
 
 /*
@@ -272,8 +274,8 @@ static void FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
  */
 static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 			 struct guest_walker *walker,
-			 int user_fault, int write_fault, int *ptwrite,
-			 struct page *page)
+			 int user_fault, int write_fault, int largepage,
+			 int *ptwrite, struct page *page)
 {
 	hpa_t shadow_addr;
 	int level;
@@ -297,15 +299,22 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 		u64 shadow_pte;
 		int metaphysical;
 		gfn_t table_gfn;
-		bool new_page = 0;
 
 		shadow_ent = ((u64 *)__va(shadow_addr)) + index;
 		if (level == PT_PAGE_TABLE_LEVEL)
 			break;
-		if (is_shadow_present_pte(*shadow_ent)) {
+
+		if (largepage && level == PT_DIRECTORY_LEVEL)
+			break;
+
+		if (is_shadow_present_pte(*shadow_ent)
+		    && !is_large_pte(*shadow_ent)) {
 			shadow_addr = *shadow_ent & PT64_BASE_ADDR_MASK;
 			continue;
 		}
+
+		if (is_large_pte(*shadow_ent))
+			rmap_remove(vcpu->kvm, shadow_ent);
 
 		if (level - 1 == PT_PAGE_TABLE_LEVEL
 		    && walker->level == PT_DIRECTORY_LEVEL) {
@@ -319,8 +328,8 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 		}
 		shadow_page = kvm_mmu_get_page(vcpu, table_gfn, addr, level-1,
 					       metaphysical, access,
-					       shadow_ent, &new_page);
-		if (new_page && !metaphysical) {
+					       shadow_ent);
+		if (!metaphysical) {
 			int r;
 			pt_element_t curr_pte;
 			r = kvm_read_guest_atomic(vcpu->kvm,
@@ -340,7 +349,7 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 	mmu_set_spte(vcpu, shadow_ent, access, walker->pte_access & access,
 		     user_fault, write_fault,
 		     walker->ptes[walker->level-1] & PT_DIRTY_MASK,
-		     ptwrite, walker->gfn, page);
+		     ptwrite, largepage, walker->gfn, page);
 
 	return shadow_ent;
 }
@@ -370,6 +379,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	int write_pt = 0;
 	int r;
 	struct page *page;
+	int largepage = 0;
 
 	pgprintk("%s: addr %lx err %x\n", __FUNCTION__, addr, error_code);
 	kvm_mmu_audit(vcpu, "pre page fault");
@@ -378,7 +388,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	if (r)
 		return r;
 
-	down_read(&current->mm->mmap_sem);
+	down_read(&vcpu->kvm->slots_lock);
 	/*
 	 * Look up the shadow pte for the faulting address.
 	 */
@@ -392,35 +402,45 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		pgprintk("%s: guest page fault\n", __FUNCTION__);
 		inject_page_fault(vcpu, addr, walker.error_code);
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
-		up_read(&current->mm->mmap_sem);
+		up_read(&vcpu->kvm->slots_lock);
 		return 0;
 	}
 
+	down_read(&current->mm->mmap_sem);
+	if (walker.level == PT_DIRECTORY_LEVEL) {
+		gfn_t large_gfn;
+		large_gfn = walker.gfn & ~(KVM_PAGES_PER_HPAGE-1);
+		if (is_largepage_backed(vcpu, large_gfn)) {
+			walker.gfn = large_gfn;
+			largepage = 1;
+		}
+	}
 	page = gfn_to_page(vcpu->kvm, walker.gfn);
+	up_read(&current->mm->mmap_sem);
+
+	/* mmio */
+	if (is_error_page(page)) {
+		pgprintk("gfn %x is mmio\n", walker.gfn);
+		kvm_release_page_clean(page);
+		up_read(&vcpu->kvm->slots_lock);
+		return 1;
+	}
 
 	spin_lock(&vcpu->kvm->mmu_lock);
 	kvm_mmu_free_some_pages(vcpu);
 	shadow_pte = FNAME(fetch)(vcpu, addr, &walker, user_fault, write_fault,
-				  &write_pt, page);
+				  largepage, &write_pt, page);
+
 	pgprintk("%s: shadow pte %p %llx ptwrite %d\n", __FUNCTION__,
 		 shadow_pte, *shadow_pte, write_pt);
 
 	if (!write_pt)
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
 
-	/*
-	 * mmio: emulate if accessible, otherwise its a guest fault.
-	 */
-	if (shadow_pte && is_io_pte(*shadow_pte)) {
-		spin_unlock(&vcpu->kvm->mmu_lock);
-		up_read(&current->mm->mmap_sem);
-		return 1;
-	}
-
 	++vcpu->stat.pf_fixed;
 	kvm_mmu_audit(vcpu, "post page fault (fixed)");
 	spin_unlock(&vcpu->kvm->mmu_lock);
-	up_read(&current->mm->mmap_sem);
+	up_read(&vcpu->kvm->slots_lock);
 
 	return write_pt;
 }
