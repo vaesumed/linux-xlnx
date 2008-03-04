@@ -27,21 +27,21 @@
 #define UBIFS_DBG(op) op
 #define ubifs_assert(expr)  do {if (unlikely(!(expr))) { \
 	printk(KERN_CRIT "UBIFS assert failed in %s at %u (pid %d)\n" , \
-	       __FUNCTION__, __LINE__, current->pid);                   \
+	       __func__, __LINE__, current->pid);                       \
 	dump_stack();                                                   \
 }} while (0)
 
 /* Generic debugging message */
 #define dbg_msg(fmt, ...) do {                                               \
 	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt "\n", current->pid, \
-	       __FUNCTION__, ##__VA_ARGS__);                                 \
+	       __func__, ##__VA_ARGS__);                                     \
 } while(0)
 
 /* Debugging message which prints UBIFS key */
 #define dbg_key(c, key, fmt, ...) do {                                          \
 	spin_lock(&dbg_lock);                                                   \
 	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt " %s\n", current->pid, \
-	       __FUNCTION__,  ##__VA_ARGS__, dbg_get_key_dump(c, key));         \
+	       __func__,  ##__VA_ARGS__, dbg_get_key_dump(c, key));             \
 	spin_unlock(&dbg_lock);                                                 \
 } while(0)
 
