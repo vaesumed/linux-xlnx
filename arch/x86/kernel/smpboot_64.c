@@ -59,6 +59,7 @@
 #include <asm/irq.h>
 #include <asm/hw_irq.h>
 #include <asm/numa.h>
+#include <asm/trampoline.h>
 
 /* Number of siblings per CPU package */
 int smp_num_siblings = 1;
@@ -96,13 +97,6 @@ EXPORT_PER_CPU_SYMBOL(cpu_sibling_map);
 DEFINE_PER_CPU(cpumask_t, cpu_core_map);
 EXPORT_PER_CPU_SYMBOL(cpu_core_map);
 
-/*
- * Trampoline 80x86 program as an array.
- */
-
-extern const unsigned char trampoline_data[];
-extern const unsigned char trampoline_end[];
-
 /* State of each CPU */
 DEFINE_PER_CPU(int, cpu_state) = { 0 };
 
@@ -125,19 +119,6 @@ struct task_struct *idle_thread_array[NR_CPUS] __cpuinitdata ;
 #define set_idle_for_cpu(x,p)   (idle_thread_array[(x)] = (p))
 #endif
 
-
-/*
- * Currently trivial. Write the real->protected mode
- * bootstrap into the page concerned. The caller
- * has made sure it's suitably aligned.
- */
-
-static unsigned long __cpuinit setup_trampoline(void)
-{
-	void *tramp = __va(SMP_TRAMPOLINE_BASE); 
-	memcpy(tramp, trampoline_data, trampoline_end - trampoline_data);
-	return virt_to_phys(tramp);
-}
 
 /*
  * The bootstrap kernel entry code has set these up. Save them for
@@ -649,6 +630,9 @@ do_rest:
 	*((volatile unsigned short *) phys_to_virt(0x467)) = start_rip & 0xf;
 	Dprintk("3.\n");
 
+	/* Trampoline assumes it is at beggining of segment */
+	BUG_ON(start_rip & 0xf);
+
 	/*
 	 * Be paranoid about clearing APIC errors.
 	 */
@@ -687,7 +671,7 @@ do_rest:
 			Dprintk("CPU has booted.\n");
 		} else {
 			boot_error = 1;
-			if (*((volatile unsigned char *)phys_to_virt(SMP_TRAMPOLINE_BASE))
+			if (*((unsigned char *)phys_to_virt(TRAMPOLINE_BASE))
 					== 0xA5)
 				/* trampoline started but...? */
 				printk("Stuck ??\n");
