@@ -440,7 +440,7 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
 {
 	int err;
 
-	err = pcibios_enable_resources(dev, mask);
+	err = pci_enable_resources(dev, mask);
 	if (err == 0)
 		pcibios_enable_irq(dev);
 	return err;
