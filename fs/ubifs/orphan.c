@@ -559,7 +559,6 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 {
 	struct ubifs_scan_node *snod;
 	struct ubifs_orph_node *orph;
-	union ubifs_key from_key, to_key;
 	unsigned long long cmt_no;
 	ino_t inum;
 	int i, n, err, first = 1;
@@ -571,7 +570,9 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 			dbg_dump_node(c, snod->node);
 			return -EINVAL;
 		}
+
 		orph = snod->node;
+
 		/* Check commit number */
 		cmt_no = le64_to_cpu(orph->cmt_no) & LLONG_MAX;
 		/*
@@ -601,21 +602,22 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 			*outofdate = 1;
 			return 0;
 		}
+
 		if (first)
 			first = 0;
+
 		n = (le32_to_cpu(orph->ch.len) - UBIFS_ORPH_NODE_SZ) >> 3;
 		for (i = 0; i < n; i++) {
 			inum = le64_to_cpu(orph->inos[i]);
 			dbg_rcvry("deleting orphaned inode %lu", inum);
-			lowest_ino_key(c, &from_key, inum);
-			highest_ino_key(c, &to_key, inum);
-			err = ubifs_tnc_remove_range(c, &from_key, &to_key);
+			err = ubifs_tnc_remove_ino(c, inum);
 			if (err)
 				return err;
 			err = insert_dead_orphan(c, inum);
 			if (err)
 				return err;
 		}
+
 		*last_cmt_no = cmt_no;
 		if (le64_to_cpu(orph->cmt_no) & (1ULL << 63)) {
 			dbg_rcvry("last orph node for commit %llu at %d:%d",
@@ -624,6 +626,7 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		} else
 			*last_flagged = 0;
 	}
+
 	return 0;
 }
 
