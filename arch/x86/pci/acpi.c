@@ -218,28 +218,36 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 		node = -1;
 #endif
 
-	/* Allocate per-root-bus (not per bus) arch-specific data.
-	 * TODO: leak; this memory is never freed.
-	 * It's arguable whether it's worth the trouble to care.
-	 */
-	sd = kzalloc(sizeof(*sd), GFP_KERNEL);
-	if (!sd) {
-		printk(KERN_ERR "PCI: OOM, not probing PCI bus %02x\n", busnum);
-		return NULL;
+	bus = pci_find_bus(domain, busnum);
+	if (bus) {
+		/* already scanned ?*/
+		sd = bus->sysdata;
+		sd->node = node;
+	} else {
+		/* Allocate per-root-bus (not per bus) arch-specific data.
+		 * TODO: leak; this memory is never freed.
+		 * It's arguable whether it's worth the trouble to care.
+		 */
+		sd = kzalloc(sizeof(*sd), GFP_KERNEL);
+		if (!sd) {
+			printk(KERN_ERR "PCI: OOM, not probing PCI bus %02x\n",
+				 busnum);
+			return NULL;
+		}
+
+		sd->domain = domain;
+		sd->node = node;
+
+		bus = pci_scan_bus_parented(NULL, busnum, &pci_root_ops, sd);
+		if (!bus)
+			kfree(sd);
 	}
-
-	sd->domain = domain;
-	sd->node = node;
-
-	bus = pci_scan_bus_parented(NULL, busnum, &pci_root_ops, sd);
-	if (!bus)
-		kfree(sd);
 
 #ifdef CONFIG_ACPI_NUMA
 	if (bus) {
 		if (pxm >= 0) {
 			printk(KERN_DEBUG "bus %02x -> pxm %d -> node %d\n",
-				busnum, pxm, sd->node);
+				busnum, pxm, node);
 		}
 	}
 #endif
