@@ -239,10 +239,10 @@ int dbg_check_cats(struct ubifs_info *c);
 
 /* Additional gc messages */
 #ifdef CONFIG_UBIFS_FS_DEBUG_MSG_GC
-#define dbg_gc(fmt, ...) dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_gc(fmt, ...)             dbg_msg(fmt, ##__VA_ARGS__)
 #define dbg_gc_key(c, key, fmt, ...) dbg_key(c, key, fmt, ##__VA_ARGS__)
 #else
-#define dbg_gc(fmt, ...) ({})
+#define dbg_gc(fmt, ...)             ({})
 #define dbg_gc_key(c, key, fmt, ...) ({})
 #endif
 
