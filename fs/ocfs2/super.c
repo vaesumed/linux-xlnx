@@ -1405,7 +1405,7 @@ static int ocfs2_initialize_super(struct super_block *sb,
 	osb->local_alloc_state = OCFS2_LA_UNUSED;
 	osb->local_alloc_bh = NULL;
 
-	osb->s_num_inodes_stolen = ATOMIC_INIT(0);
+	atomic_set(&osb->s_num_inodes_stolen, 0);
 
 	ocfs2_setup_hb_callbacks(osb);
 
