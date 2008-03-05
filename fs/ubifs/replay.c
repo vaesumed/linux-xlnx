@@ -508,20 +508,14 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 		case UBIFS_DENT_NODE:
 		{
 			struct ubifs_dent_node *dent = snod->node;
-			int nlen = le16_to_cpu(dent->nlen);
-			int node_len = le32_to_cpu(dent->ch.len);
 
-			/* Validate directory entry node */
-			if (node_len != nlen + UBIFS_DENT_NODE_SZ + 1 ||
-			    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
-			    strnlen(dent->name, nlen) != nlen) {
-				ubifs_err("bad direntry node");
+			err = ubifs_validate_entry(c, dent);
+			if (err)
 				goto out_dump;
-			}
 
 			err = insert_dent(c, lnum, snod->offs, snod->len,
 					  &snod->key, dent->name,
-					  nlen, snod->sqnum,
+					  le16_to_cpu(dent->nlen), snod->sqnum,
 					  !le64_to_cpu(dent->inum), &used);
 			break;
 		}
