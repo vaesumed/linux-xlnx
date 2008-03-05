@@ -201,7 +201,7 @@ found:
 
 static void simple_callback (struct urb *urb)
 {
-	complete ((struct completion *) urb->context);
+	complete(urb->context);
 }
 
 static struct urb *simple_alloc_urb (
@@ -1045,7 +1045,7 @@ static void unlink1_callback (struct urb *urb)
 		status = usb_submit_urb (urb, GFP_ATOMIC);
 	if (status) {
 		urb->status = status;
-		complete ((struct completion *) urb->context);
+		complete(urb->context);
 	}
 }
 
@@ -1135,7 +1135,7 @@ static int verify_not_halted (int ep, struct urb *urb)
 		dbg ("ep %02x bogus status: %04x != 0", ep, status);
 		return -EINVAL;
 	}
-	retval = simple_io (urb, 1, 0, 0, __FUNCTION__);
+	retval = simple_io (urb, 1, 0, 0, __func__);
 	if (retval != 0)
 		return -EINVAL;
 	return 0;
@@ -1157,7 +1157,7 @@ static int verify_halted (int ep, struct urb *urb)
 		dbg ("ep %02x bogus status: %04x != 1", ep, status);
 		return -EINVAL;
 	}
-	retval = simple_io (urb, 1, 0, -EPIPE, __FUNCTION__);
+	retval = simple_io (urb, 1, 0, -EPIPE, __func__);
 	if (retval != -EPIPE)
 		return -EINVAL;
 	retval = simple_io (urb, 1, 0, -EPIPE, "verify_still_halted");
