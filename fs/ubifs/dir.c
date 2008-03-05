@@ -312,32 +312,6 @@ static unsigned int vfs_dent_type(uint8_t type)
 	return 0;
 }
 
-/**
- * validate_dent - validate direntry node.
- * @c: UBIFS file-system description object
- * @dent: directory entry node to validate
- *
- * This function validates direntry node @dent. Returns zero if the node is all
- * right and a %-EINVAL if not.
- */
-static int validate_dent(struct ubifs_info *c,
-			 const struct ubifs_dent_node *dent)
-{
-	int nlen = le16_to_cpu(dent->nlen);
-
-	if (le32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
-	    dent->type >= UBIFS_ITYPES_CNT ||
-	    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
-	    strnlen(dent->name, nlen) != nlen ||
-	    le64_to_cpu(dent->inum) > MAX_INUM) {
-		ubifs_err("bad direntry node");
-		dbg_dump_node(c, dent);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 /*
  * The classical Unix view for directory is that it is a linear array of
  * (name, inode number) entries. Linux/VFS assumes this model as well.
@@ -403,10 +377,6 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			goto out;
 		}
 
-		err = validate_dent(c, dent);
-		if (err)
-			goto out_free;
-
 		ubifs_assert(dent->ch.sqnum > ubifs_inode(dir)->creat_sqnum);
 
 		dbg_gen("feed '%s', new f_pos %#x",
@@ -439,14 +409,10 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			goto out;
 		}
 
-		err = validate_dent(c, dent);
-		if (unlikely(err))
-			goto out_free;
-
 		ubifs_assert(dent->ch.sqnum > ubifs_inode(dir)->creat_sqnum);
-
 		dbg_gen("feed '%s', new f_pos %#x",
 			dent->name, key_hash_flash(c, &dent->key));
+
 		over = filldir(dirent, dent->name, le16_to_cpu(dent->nlen),
 			       filp->f_pos, le64_to_cpu(dent->inum),
 			       vfs_dent_type(dent->type));
@@ -463,8 +429,6 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
 	return 0;
 
-out_free:
-	kfree(dent);
 out:
 	if (err != -ENOENT) {
 		ubifs_err("cannot find next direntry, error %d", err);
