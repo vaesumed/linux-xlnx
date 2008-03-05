@@ -70,6 +70,8 @@ static const char *get_key_type(int type)
 		return "inode";
 	case UBIFS_DENT_KEY:
 		return "direntry";
+	case UBIFS_XENT_KEY:
+		return "xentry";
 	case UBIFS_DATA_KEY:
 		return "data";
 	case UBIFS_TRUN_KEY:
@@ -92,6 +94,7 @@ const char *dbg_get_key_dump(const struct ubifs_info *c,
 			       get_key_type(type));
 			break;
 		case UBIFS_DENT_KEY:
+		case UBIFS_XENT_KEY:
 			sprintf(p, "(%lu, %s, %#08x)", key_ino(c, key),
 				get_key_type(type), key_hash(c, key));
 			break;
@@ -128,6 +131,8 @@ const char *dbg_ntype(int type)
 		return "inode node";
 	case UBIFS_DENT_NODE:
 		return "direntry node";
+	case UBIFS_XENT_NODE:
+		return "xentry node";
 	case UBIFS_DATA_NODE:
 		return "data node";
 	case UBIFS_TRUN_NODE:
@@ -380,6 +385,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		break;
 	}
 	case UBIFS_DENT_NODE:
+	case UBIFS_XENT_NODE:
 	{
 		const struct ubifs_dent_node *dent = node;
 		int nlen = le16_to_cpu(dent->nlen);
