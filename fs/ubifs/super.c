@@ -30,9 +30,77 @@
 #include <linux/mount.h>
 #include "ubifs.h"
 
+/**
+ * validate_inode - validate inode.
+ * @c: UBIFS file-system description object
+ * @inode: the inode to validate
+ *
+ * This is a helper function for 'ubifs_iget()' which validates various fields
+ * of a newly built inode to make sure they contain sane values and prevent
+ * possible vulnerabilities. Returns zero if the inode is all right and
+ * %-EINVAL if not.
+ */
 /* TODO: remove compatibility crap as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_IGET
+static int validate_inode(const struct ubifs_info *c, const struct inode *inode)
+#else
+int validate_inode(const struct ubifs_info *c, const struct inode *inode)
+#endif
+{
+	const struct ubifs_inode *ui = ubifs_inode(inode);
 
+	if (inode->i_size > c->max_inode_sz) {
+		ubifs_err("inode is too large (%lld)",
+			  (long long)inode->i_size);
+		return -EINVAL;
+	}
+
+	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
+		ubifs_err("unknown compression type %d", ui->compr_type);
+		return -EINVAL;
+	}
+
+	if (ui->msize > inode->i_size) {
+		dbg_err("bad msize %lld", ui->msize);
+		return -EINVAL;
+	}
+
+	if (ui->xattr_cnt < 0) {
+		dbg_err("bad xattr_cnt %d", ui->xattr_cnt);
+		return -EINVAL;
+	}
+
+	if (ui->xattr_size < 0) {
+		dbg_err("bad xattr_size %lld", ui->xattr_size);
+		return -EINVAL;
+	}
+
+	if (ui->xattr_msize < 0 || ui->xattr_msize > ui->xattr_size) {
+		dbg_err("bad xattr_msize %lld", ui->xattr_msize);
+		return -EINVAL;
+	}
+
+	if (ui->xattr_names < 0) {
+		dbg_err("bad xattr_names %d", ui->xattr_names);
+		return -EINVAL;
+	}
+
+	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
+		ubifs_err("invalid inode data length %d", ui->data_len);
+		return -EINVAL;
+	}
+
+	if (!ubifs_compr_present(ui->compr_type)) {
+		ubifs_warn("inode %lu uses '%s' compression, but it was not "
+			   "compiled in", inode->i_ino,
+			   ubifs_compr_name(ui->compr_type));
+	}
+
+	return 0;
+}
+
+/* TODO: remove compatibility crap as late as possible */
+#ifndef UBIFS_COMPAT_USE_OLD_IGET
 struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 {
 	int err;
@@ -77,41 +145,19 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 
 	ubifs_set_i_bytes(inode);
 
-	ui->data_len = le32_to_cpu(ino->data_len);
-	ui->flags = le32_to_cpu(ino->flags);
-	ui->compr_type = le16_to_cpu(ino->compr_type);
+	ui->data_len    = le32_to_cpu(ino->data_len);
+	ui->flags       = le32_to_cpu(ino->flags);
+	ui->compr_type  = le16_to_cpu(ino->compr_type);
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
-	ui->xattr_cnt = le32_to_cpu(ino->xattr_cnt);
-	ui->xattr_bytes = le64_to_cpu(ino->xattr_bytes);
+	ui->msize       = le64_to_cpu(ino->msize);
+	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
+	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
+	ui->xattr_msize = le64_to_cpu(ino->xattr_msize);
+	ui->xattr_names = le32_to_cpu(ino->xattr_names);
 
-	/* Validate inode to prevent potential voulnerabilities */
-	if (inode->i_size > c->max_inode_sz) {
-		ubifs_err("inode is too large (%lld)",
-			  (long long)inode->i_size);
+	err = validate_inode(c, inode);
+	if (err)
 		goto out_invalid;
-	}
-
-	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
-		ubifs_err("unknown compression type %d", ui->compr_type);
-		goto out_invalid;
-	}
-
-	if (ui->xattr_cnt < 0 || ui->xattr_bytes < 0) {
-		dbg_err("bad xattr_cnt %d or xattr_bytes %lld",
-			ui->xattr_cnt, ui->xattr_bytes);
-		goto out_invalid;
-	}
-
-	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
-		ubifs_err("invalid inode data length %d", ui->data_len);
-		goto out_invalid;
-	}
-
-	if (!ubifs_compr_present(ui->compr_type)) {
-		ubifs_warn("inode %lu uses '%s' compression, but it was not "
-			   "compiled in", inode->i_ino,
-			   ubifs_compr_name(ui->compr_type));
-	}
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
@@ -205,13 +251,9 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 	if (!ui)
 		return NULL;
 
+	memset((void *)ui + sizeof(struct inode), 0,
+	       sizeof(struct ubifs_inode) - sizeof(struct inode));
 	mutex_init(&ui->budg_mutex);
-	ui->dirty = ui->data_len = ui->xattr_cnt = 0;
-	ui->xattr_bytes = 0;
-	ui->data = NULL;
-	ui->flags = 0;
-	ui->creat_sqnum = 0;
-
 	return &ui->vfs_inode;
 };
 

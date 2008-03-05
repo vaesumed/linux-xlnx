@@ -109,7 +109,10 @@
 /* First "general purpose" journal head */
 #define DATAHD 2
 
-/* How much a directory entry adds to parent inode */
+/*
+ * How much a directory entry/exteded attribyte entry adds to the parent/host
+ * inode.
+ */
 #define CALC_DENT_SIZE(name_len) ALIGN(UBIFS_DENT_NODE_SZ + (name_len) + 1, 8)
 
 /*
@@ -248,15 +251,21 @@ struct ubifs_gced_idx_leb
 /**
  * struct ubifs_inode - UBIFS in-memory inode description.
  * @vfs_inode: VFS inode description object
- * @dirty: non-zero if inode is dirty
+ * @msize: on-the-media inode size in bytes (size of all data nodes)
+ * @xattr_size: summarized size of all extended attributes in bytes
+ * @xattr_msize: summarized on-the-media size of all extended attributes in
+ *               bytes (size of all extended attribute entries and extended
+ *               attribute inodes belonging to this inode)
+ * @xattr_cnt: count of extended attributes this inode has
+ * @xattr_names: sum of lengthes of all extended attribute names belonging to
+ *               this inode
+ * @dirty: non-zero if the inode is dirty
+ * @xattr: non-zero if this is an extended attribute inode
  * @budgeted: non-zero if the inode has been budgeted (used for debugging)
  * @budg_mutex: serializes inode budgeting and write-back
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @data_len: length of the data attached to the inode
  * @creat_sqnum: sequence number at time of creation
- * @xattr_cnt: count of extended attributes this inode has
- * @xattr_bytes: how many bytes all the extended attributes belonging to this
- *               inode take
  * @data: inode's data
  *
  * UBIFS has its own inode mutex, besides the VFS 'i_mutex'. The reason for
@@ -279,7 +288,14 @@ struct ubifs_gced_idx_leb
 struct ubifs_inode
 {
 	struct inode vfs_inode;
+	unsigned long long creat_sqnum;
+	unsigned long long msize;
+	long long xattr_size;
+	long long xattr_msize;
+	int xattr_cnt;
+	int xattr_names;
 	unsigned int dirty:1;
+	unsigned int xattr:1;
 #ifdef CONFIG_UBIFS_FS_DEBUG
 	unsigned int budgeted:1;
 #endif
@@ -287,9 +303,6 @@ struct ubifs_inode
 	int flags;
 	int compr_type;
 	int data_len;
-	unsigned long long creat_sqnum;
-	long long xattr_bytes;
-	int xattr_cnt;
 	void *data;
 };
 

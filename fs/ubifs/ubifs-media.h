@@ -388,7 +388,10 @@ union ubifs_dev_desc
  * @ch: common header
  * @key: node key
  * @creat_sqnum: sequence number at time of creation
- * @size: inode size in bytes
+ * @size: inode size in bytes (amount of uncompressed data)
+ * @msize: on-the-media inode size in bytes (size of all data nodes)
+ * compressed data size plus data
+ * node headers size plus directory entries size
  * @nlink: number of hard links
  * @atime: access time
  * @ctime: creation time
@@ -399,8 +402,12 @@ union ubifs_dev_desc
  * @flags: per-inode flags (%UBIFS_COMPR_FL, %UBIFS_SYNC_FL, etc)
  * @data_len: inode data length
  * @xattr_cnt: count of extended attributes this inode has
- * @xattr_bytes: how many bytes all the extended attributes belonging to this
- *               inode take
+ * @xattr_size: summarized size of all extended attributes in bytes
+ * @xattr_msize: summarized on-the-media size of all extended attributes in
+ *               bytes (size of all extended attribute entries and extended
+ *               attribute inodes belonging to this inode)
+ * @xattr_names: sum of lengthes of all extended attribute names belonging to
+ *               this inode
  * @compr_type: compression type used for this inode
  * @padding: reserved for future, zeroes
  * @data: data attached to the inode
@@ -416,6 +423,7 @@ struct ubifs_ino_node
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 creat_sqnum;
 	__le64 size;
+	__le64 msize;
 	__le32 nlink;
 	__le32 atime;
 	__le32 ctime;
@@ -426,9 +434,11 @@ struct ubifs_ino_node
 	__le32 flags;
 	__le32 data_len;
 	__le32 xattr_cnt;
-	__le64 xattr_bytes;
+	__le64 xattr_size;
+	__le64 xattr_msize;
+	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding[22];
+	__u8 padding[34];
 	__u8 data[];
 } __attribute__ ((packed));
 
