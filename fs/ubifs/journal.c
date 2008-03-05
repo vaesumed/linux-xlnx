@@ -423,14 +423,6 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
 	ino->xattr_msize = cpu_to_le64(ui->xattr_msize);
 	ino->xattr_names = cpu_to_le32(ui->xattr_names);
-
-	if ((inode->i_mode & S_IFMT) == S_IFCHR ||
-	    (inode->i_mode & S_IFMT) == S_IFBLK) {
-		union ubifs_dev_desc *dev = ui->data;
-
-		ui->data_len = ubifs_encode_dev(dev, inode->i_rdev);
-	}
-
 	ino->data_len = cpu_to_le32(ui->data_len);
 	if (ui->data_len)
 		memcpy(ino->data, ui->data, ui->data_len);
