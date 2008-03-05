@@ -30,6 +30,8 @@
  * faster I/O speed because it allows to change the index seldom. So this is a
  * trade-off. Also, the journal is indexed by the in-memory index (TNC), so the
  * larger is the journal, the more memory its index may consume.
+ *
+ * TODO: in function where mentioning dentry also mention xentry
  */
 
 #include "ubifs.h"
@@ -506,6 +508,7 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 			break;
 		}
 		case UBIFS_DENT_NODE:
+		case UBIFS_XENT_NODE:
 		{
 			struct ubifs_dent_node *dent = snod->node;
 

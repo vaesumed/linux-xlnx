@@ -293,7 +293,7 @@ static int read_znode(struct ubifs_info *c, int lnum, int offs, int len,
 		case UBIFS_INO_KEY:
 		case UBIFS_DATA_KEY:
 		case UBIFS_DENT_KEY:
-		case UBIFS_XATTR_KEY:
+		case UBIFS_XENT_KEY:
 			break;
 		default:
 			dbg_key(c, &zbr->key, "bad key type at slot %d: ", i);
