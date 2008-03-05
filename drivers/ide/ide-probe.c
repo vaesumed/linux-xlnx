@@ -623,7 +623,7 @@ static void hwif_release_dev (struct device *dev)
 	complete(&hwif->gendev_rel_comp);
 }
 
-static void ide_register_port(ide_hwif_t *hwif)
+static int ide_register_port(ide_hwif_t *hwif)
 {
 	int ret;
 
@@ -639,9 +639,23 @@ static void ide_register_port(ide_hwif_t *hwif)
 	}
 	hwif->gendev.release = hwif_release_dev;
 	ret = device_register(&hwif->gendev);
-	if (ret < 0)
+	if (ret < 0) {
 		printk(KERN_WARNING "IDE: %s: device_register error: %d\n",
 			__FUNCTION__, ret);
+		goto out;
+	}
+
+	get_device(&hwif->gendev);
+
+	strlcpy(hwif->classdev.class_id, hwif->name, BUS_ID_SIZE);
+	hwif->classdev.dev = &hwif->gendev;
+	hwif->classdev.class = &ide_port_class;
+
+	ret = class_device_register(&hwif->classdev);
+	if (ret < 0)
+		device_unregister(&hwif->gendev);
+out:
+	return ret;
 }
 
 /**
@@ -1375,6 +1389,57 @@ static void ide_port_cable_detect(ide_hwif_t *hwif)
 	}
 }
 
+static ssize_t store_delete_devices(struct class_device *class_dev,
+				    const char *buf, size_t n)
+{
+	ide_hwif_t *hwif = class_to_ide_port(class_dev);
+
+	if (strncmp(buf, "1", n))
+		return -EINVAL;
+
+	ide_port_unregister_devices(hwif);
+
+	return n;
+};
+
+static CLASS_DEVICE_ATTR(delete_devices, S_IWUSR, NULL, store_delete_devices);
+
+static ssize_t store_scan(struct class_device *class_dev, const char *buf,
+			  size_t n)
+{
+	ide_hwif_t *hwif = class_to_ide_port(class_dev);
+
+	if (strncmp(buf, "1", n))
+		return -EINVAL;
+
+	ide_port_unregister_devices(hwif);
+	ide_port_scan(hwif);
+
+	return n;
+};
+
+static CLASS_DEVICE_ATTR(scan, S_IWUSR, NULL, store_scan);
+
+static struct class_device_attribute *ide_port_attrs[] = {
+	&class_device_attr_delete_devices,
+	&class_device_attr_scan,
+	NULL
+};
+
+static int ide_sysfs_register_port(ide_hwif_t *hwif)
+{
+	int i, rc;
+
+	for (i = 0; ide_port_attrs[i]; i++) {
+		rc = class_device_create_file(&hwif->classdev,
+					      ide_port_attrs[i]);
+		if (rc)
+			break;
+	}
+
+	return rc;
+}
+
 int ide_device_add_all(u8 *idx, const struct ide_port_info *d)
 {
 	ide_hwif_t *hwif, *mate = NULL;
@@ -1471,6 +1536,7 @@ int ide_device_add_all(u8 *idx, const struct ide_port_info *d)
 		hwif = &ide_hwifs[idx[i]];
 
 		if (hwif->present) {
+			ide_sysfs_register_port(hwif);
 			ide_proc_register_port(hwif);
 			ide_proc_port_register_devices(hwif);
 		}
