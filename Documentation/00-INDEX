@@ -43,8 +43,6 @@ ManagementStyle
 	- how to (attempt to) manage kernel hackers.
 MSI-HOWTO.txt
 	- the Message Signaled Interrupts (MSI) Driver Guide HOWTO and FAQ.
-PCIEBUS-HOWTO.txt
-	- a guide describing the PCI Express Port Bus driver.
 RCU/
 	- directory with info on RCU (read-copy update).
 README.DAC960
@@ -293,12 +291,6 @@ parport.txt
 	- how to use the parallel-port driver.
 parport-lowlevel.txt
 	- description and usage of the low level parallel port functions.
-pci-error-recovery.txt
-	- info on PCI error recovery.
-pci.txt
-	- info on the PCI subsystem for device driver authors.
-pcieaer-howto.txt
-	- the PCI Express Advanced Error Reporting Driver Guide HOWTO.
 pcmcia/
 	- info on the Linux PCMCIA driver.
 pi-futex.txt
