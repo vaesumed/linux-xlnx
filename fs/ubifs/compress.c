@@ -25,6 +25,12 @@
 #include <linux/crypto.h>
 #include "ubifs.h"
 
+/*
+ * UBIFS does not try to compress data if its length is less then the below
+ * constant.
+ */
+#define MIN_COMPR_LEN 128
+
 /* Fake description object for the "none" compressor */
 static struct ubifs_compressor none_compr = {
 	.compr_type = UBIFS_COMPR_NONE,
@@ -99,7 +105,7 @@ void ubifs_compress(const void *in_buf, int in_len, void *out_buf, int *out_len,
 		goto no_compr;
 
 	/* If the input data is small, do not even try to compress it */
-	if (in_len < 16)
+	if (in_len < MIN_COMPR_LEN)
 		goto no_compr;
 
 	ubifs_assert(compr->capi_name);
