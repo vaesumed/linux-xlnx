@@ -1193,6 +1193,7 @@ static int ocfs2_mount_volume(struct super_block *sb)
 		mlog_errno(status);
 		goto leave;
 	}
+	ocfs2_init_inode_steal_slot(osb);
 
 	/* load all node-local system inodes */
 	status = ocfs2_init_local_system_inodes(osb);
@@ -1403,6 +1404,8 @@ static int ocfs2_initialize_super(struct super_block *sb,
 
 	osb->local_alloc_state = OCFS2_LA_UNUSED;
 	osb->local_alloc_bh = NULL;
+
+	osb->s_num_inodes_stolen = ATOMIC_INIT(0);
 
 	ocfs2_setup_hb_callbacks(osb);
 
