@@ -271,6 +271,18 @@ static inline int key_type(const struct ubifs_info *c,
 }
 
 /**
+ * key_type_flash - get type of a on-flash formatted key.
+ * @c: UBIFS file-system description object
+ * @key: key to get type of
+ */
+static inline int key_type_flash(const struct ubifs_info *c, const void *k)
+{
+	const union ubifs_key *key = k;
+
+	return le32_to_cpu(key->u32[1]) >> 29;
+}
+
+/**
  * key_ino - fetch inode number from key.
  * @c: UBIFS file-system description object
  * @key: key to fetch inode number from
