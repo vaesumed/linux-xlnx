@@ -1364,6 +1364,8 @@ int ubifs_tnc_has_node(struct ubifs_info *c, union ubifs_key *key, int level,
 		       int lnum, int offs, int is_idx);
 int ubifs_dirty_idx_node(struct ubifs_info *c, union ubifs_key *key, int level,
 			 int lnum, int offs);
+int ubifs_validate_entry(struct ubifs_info *c,
+			 const struct ubifs_dent_node *dent);
 
 /* tnc_commit.c */
 int ubifs_tnc_start_commit(struct ubifs_info *c, struct ubifs_zbranch *zroot);
