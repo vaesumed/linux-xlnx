@@ -718,6 +718,45 @@ static int lnc_lookup(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 }
 
 /**
+ * ubifs_validate_entry - validate dirctory or extended attribute entry node.
+ * @c: UBIFS file-system description object
+ * @dent: the node to validate
+ *
+ * This function validates dirctory or extended attribute entry node @dent.
+ * Returns zero if the node is all right and a %-EINVAL if not.
+ */
+int ubifs_validate_entry(struct ubifs_info *c,
+			 const struct ubifs_dent_node *dent)
+{
+	int key_type, nlen = le16_to_cpu(dent->nlen);
+
+	if (le32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
+	    dent->type >= UBIFS_ITYPES_CNT ||
+	    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
+	    strnlen(dent->name, nlen) != nlen ||
+	    le64_to_cpu(dent->inum) > MAX_INUM) {
+		const char *node_type;
+
+		if (key_type_flash(c, dent->key) == UBIFS_DENT_KEY)
+			node_type = "directory entry";
+		else
+			node_type = "extended attribute entry";
+
+		ubifs_err("bad %s node", node_type);
+		return -EINVAL;
+	}
+
+	key_type = key_type_flash(c, dent->key);
+	if (key_type_flash(c, dent->key) != UBIFS_DENT_KEY &&
+	    key_type_flash(c, dent->key) != UBIFS_XENT_KEY) {
+		ubifs_err("bad key type %d", key_type);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/**
  * lnc_add - add a leaf node to the leaf-node-cache.
  * @c: UBIFS file-system description object
  * @zbr: zbranch of leaf node
@@ -729,6 +768,7 @@ static int lnc_lookup(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		   const void *node)
 {
+	int err;
 	void *lnc_node;
 	const struct ubifs_dent_node *dent = node;
 
@@ -739,12 +779,10 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	if (key_type(c, &zbr->key) != UBIFS_DENT_KEY)
 		return 0;
 
-	/* Do very basic direntry node validation */
-	if (le32_to_cpu(dent->ch.len) !=
-	    le16_to_cpu(dent->nlen) + UBIFS_DENT_NODE_SZ + 1) {
-		ubifs_err("bad direntry node");
+	err = ubifs_validate_entry(c, dent);
+	if (err) {
 		dbg_dump_node(c, dent);
-		return -EINVAL;
+		return err;
 	}
 
 	lnc_node = kmalloc(zbr->len, GFP_NOFS);
@@ -946,17 +984,13 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 
 	err = tnc_read_node(c, &zt->key, zt, dent);
 	if (!err) {
-		nlen = le16_to_cpu(dent->nlen);
-
-		/* Do very basic direntry node validation */
-		if (le32_to_cpu(dent->ch.len) !=
-		    nlen + UBIFS_DENT_NODE_SZ + 1) {
-			ubifs_err("bad direntry node");
+		err = ubifs_validate_entry(c, dent);
+		if (err) {
 			dbg_dump_node(c, dent);
-			err = -EINVAL;
 			goto out;
 		}
 
+		nlen = le16_to_cpu(dent->nlen);
 		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			err = 1;
 	}
@@ -1189,17 +1223,13 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 		goto out;
 	}
 	if (err == 1) {
-		nlen = le16_to_cpu(dent->nlen);
-
-		/* Do very basic direntry node validation */
-		if (le32_to_cpu(dent->ch.len) !=
-		    nlen + UBIFS_DENT_NODE_SZ + 1) {
-			ubifs_err("bad direntry node");
+		err = ubifs_validate_entry(c, dent);
+		if (err) {
 			dbg_dump_node(c, dent);
-			err = -EINVAL;
 			goto out;
 		}
 
+		nlen = le16_to_cpu(dent->nlen);
 		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
 			err = 1;
 		else
