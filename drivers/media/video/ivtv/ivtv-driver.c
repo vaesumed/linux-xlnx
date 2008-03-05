@@ -54,7 +54,6 @@
 #include "ivtv-vbi.h"
 #include "ivtv-routing.h"
 #include "ivtv-gpio.h"
-#include "ivtv-yuv.h"
 
 #include <media/tveeprom.h>
 #include <media/saa7115.h>
@@ -127,11 +126,11 @@ static int dec_mpg_buffers = IVTV_DEFAULT_DEC_MPG_BUFFERS;
 static int dec_yuv_buffers = IVTV_DEFAULT_DEC_YUV_BUFFERS;
 static int dec_vbi_buffers = IVTV_DEFAULT_DEC_VBI_BUFFERS;
 
-static int ivtv_yuv_mode = 0;
-static int ivtv_yuv_threshold=-1;
+static int ivtv_yuv_mode;
+static int ivtv_yuv_threshold = -1;
 static int ivtv_pci_latency = 1;
 
-int ivtv_debug = 0;
+int ivtv_debug;
 
 static int newi2c = -1;
 
@@ -700,6 +699,9 @@ static int __devinit ivtv_init_struct1(struct ivtv *itv)
 	itv->vbi.in.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
 	itv->vbi.sliced_in = &itv->vbi.in.fmt.sliced;
 
+	/* Init the sg table for osd/yuv output */
+	sg_init_table(itv->udma.SGlist, IVTV_DMA_SG_OSD_ENT);
+
 	/* OSD */
 	itv->osd_global_alpha_state = 1;
 	itv->osd_global_alpha = 255;
@@ -709,6 +711,7 @@ static int __devinit ivtv_init_struct1(struct ivtv *itv)
 	itv->yuv_info.lace_mode = ivtv_yuv_mode;
 	itv->yuv_info.lace_threshold = ivtv_yuv_threshold;
 	itv->yuv_info.max_frames_buffered = 3;
+	itv->yuv_info.track_osd = 1;
 	return 0;
 }
 
@@ -1052,9 +1055,6 @@ static int __devinit ivtv_probe(struct pci_dev *dev,
 		retval = -ENOMEM;
 		goto free_io;
 	}
-
-	/* Check yuv output filter table */
-	if (itv->has_cx23415) ivtv_yuv_filter_check(itv);
 
 	ivtv_gpio_init(itv);
 
