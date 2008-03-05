@@ -18,6 +18,12 @@ config UBIFS_FS_DEBUG_MSG_GEN
 	help
 	  This option enables general debugging messages.
 
+config UBIFS_FS_DEBUG_MSG_XATTR
+	bool "Extended attribute messages"
+	default n
+	help
+	  This option enables extended attribute debugging messages.
+
 config UBIFS_FS_DEBUG_MSG_JRN
 	bool "Journal messages"
 	default n

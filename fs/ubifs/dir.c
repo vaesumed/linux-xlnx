@@ -925,16 +925,22 @@ out_inode:
 
 struct inode_operations ubifs_dir_inode_operations =
 {
-	.lookup  = ubifs_lookup,
-	.create  = ubifs_create,
-	.link    = ubifs_link,
-	.symlink = ubifs_symlink,
-	.unlink  = ubifs_unlink,
-	.mkdir   = ubifs_mkdir,
-	.rmdir   = ubifs_rmdir,
-	.mknod   = ubifs_mknod,
-	.rename  = ubifs_rename,
-	.setattr = ubifs_setattr,
+#ifdef CONFIG_FS_UBIFS_FS_XATTR
+	.setxattr    = ubifs_setxattr,
+	.getxattr    = ubifs_getxattr,
+	.listxattr   = ubifs_listxattr,
+	.removexattr = ubifs_removexattr,
+#endif
+	.lookup      = ubifs_lookup,
+	.create      = ubifs_create,
+	.link        = ubifs_link,
+	.symlink     = ubifs_symlink,
+	.unlink      = ubifs_unlink,
+	.mkdir       = ubifs_mkdir,
+	.rmdir       = ubifs_rmdir,
+	.mknod       = ubifs_mknod,
+	.rename      = ubifs_rename,
+	.setattr     = ubifs_setattr,
 };
 
 struct file_operations ubifs_dir_operations =
