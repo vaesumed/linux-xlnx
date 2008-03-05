@@ -6,3 +6,4 @@ ubifs-y += budget.o find.o tnc_commit.o compress.o lpt.o lprops.o
 ubifs-y += recovery.o ioctl.o
 
 ubifs-$(CONFIG_UBIFS_FS_DEBUG) += debug.o
+ubifs-$(CONFIG_UBIFS_FS_XATTR) += xattr.o
