@@ -347,6 +347,8 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       dbg_get_key_dump(c, &key));
 		printk(KERN_DEBUG "\tsize           %llu\n",
 		       le64_to_cpu(ino->size));
+		printk(KERN_DEBUG "\tmsize          %llu\n",
+		       le64_to_cpu(ino->msize));
 		printk(KERN_DEBUG "\tnlink          %u\n",
 		       le32_to_cpu(ino->nlink));
 		printk(KERN_DEBUG "\tatime          %u\n",
@@ -365,8 +367,12 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       le32_to_cpu(ino->flags));
 		printk(KERN_DEBUG "\txattr_cnt      %u\n",
 		       le32_to_cpu(ino->xattr_cnt));
-		printk(KERN_DEBUG "\txattr_bytes    %llu\n",
-		       le64_to_cpu(ino->xattr_bytes));
+		printk(KERN_DEBUG "\txattr_size     %llu\n",
+		       le64_to_cpu(ino->xattr_size));
+		printk(KERN_DEBUG "\txattr_msize    %llu\n",
+		       le64_to_cpu(ino->xattr_msize));
+		printk(KERN_DEBUG "\txattr_names    %u\n",
+		       le32_to_cpu(ino->xattr_names));
 		printk(KERN_DEBUG "\tcompr_type     %#x\n",
 		       (int)le16_to_cpu(ino->compr_type));
 		printk(KERN_DEBUG "\tdata len       %u\n",
@@ -738,7 +744,7 @@ void dbg_leak_rpt(void)
 /*
  * struct eaten_memory - memory object eaten by UBIFS to cause memory pressure.
  * @list: link in the list of eaten memory objects
- * @pad: just pads to memury page size
+ * @pad: just pads to memory page size
  */
 struct eaten_memory
 {
@@ -1102,6 +1108,8 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	return inode;
 }
 
+int validate_inode(const struct ubifs_info *c, const struct inode *inode);
+
 void ubifs_read_inode(struct inode *inode)
 {
 	int err;
@@ -1139,41 +1147,19 @@ void ubifs_read_inode(struct inode *inode)
 
 	ubifs_set_i_bytes(inode);
 
-	ui->data_len = le32_to_cpu(ino->data_len);
-	ui->flags = le32_to_cpu(ino->flags);
-	ui->compr_type = le16_to_cpu(ino->compr_type);
+	ui->data_len    = le32_to_cpu(ino->data_len);
+	ui->flags       = le32_to_cpu(ino->flags);
+	ui->compr_type  = le16_to_cpu(ino->compr_type);
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
-	ui->xattr_cnt = le32_to_cpu(ino->xattr_cnt);
-	ui->xattr_bytes = le64_to_cpu(ino->xattr_bytes);
+	ui->msize       = le64_to_cpu(ino->msize);
+	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
+	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
+	ui->xattr_msize = le64_to_cpu(ino->xattr_msize);
+	ui->xattr_names = le32_to_cpu(ino->xattr_names);
 
-	/* Validate inode to prevent potential voulnerabilities */
-	if (inode->i_size > c->max_inode_sz) {
-		ubifs_err("inode is too large (%lld)",
-			  (long long)inode->i_size);
+	err = validate_inode(c, inode);
+	if (err)
 		goto out_invalid;
-	}
-
-	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
-		ubifs_err("unknown compression type %d", ui->compr_type);
-		goto out_invalid;
-	}
-
-	if (ui->xattr_cnt < 0 || ui->xattr_bytes < 0) {
-		dbg_err("bad xattr_cnt %d or xattr_bytes %lld",
-			ui->xattr_cnt, ui->xattr_bytes);
-		goto out_invalid;
-	}
-
-	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
-		ubifs_err("invalid inode data length %d", ui->data_len);
-		goto out_invalid;
-	}
-
-	if (!ubifs_compr_present(ui->compr_type)) {
-		ubifs_warn("inode %lu uses '%s' compression, but it was not "
-			   "compiled in", inode->i_ino,
-			   ubifs_compr_name(ui->compr_type));
-	}
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
@@ -1372,7 +1358,6 @@ int ubifs_commit_write(struct file *file, struct page *page, unsigned from,
 		 * hacky because normally we would have to call
 		 * 'ubifs_release_ino_dirty()'. But we know there is nothing
 		 * to release because page's budget will be released
-		 * in'ubifs_write_page()' and inode's budget will be released
 		 * in 'ubifs_write_inode()', so just unlock the inode here for
 		 * optimization.
 		 */
