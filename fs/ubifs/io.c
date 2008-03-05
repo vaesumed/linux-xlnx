@@ -26,7 +26,7 @@
  * This file implements UBIFS I/O unit. The I/O unit provides various
  * I/O-related helper functions (reading/writing/checking/validating nodes) and
  * implements write-buffering support. Write buffers help to save space which
- * otherwise would have been wasted for paddings the nearest minimal I/O
+ * otherwise would have been wasted for paddings to the nearest minimal I/O
  * boundary. Instead, data first goes to the write-buffer and flushed when the
  * buffer is full or when it is not used for some time (by timer).
  *

@@ -197,7 +197,7 @@ int ubifs_add_snod(const struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 	struct ubifs_ino_node *ino = buf;
 	struct ubifs_scan_node *snod;
 
-	snod = kzalloc(sizeof(*snod), GFP_NOFS);
+	snod = kzalloc(sizeof(struct ubifs_scan_node), GFP_NOFS);
 	if (!snod)
 		return -ENOMEM;
 
@@ -210,6 +210,7 @@ int ubifs_add_snod(const struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 	switch (ch->node_type) {
 	case UBIFS_INO_NODE:
 	case UBIFS_DENT_NODE:
+	case UBIFS_XENT_NODE:
 	case UBIFS_DATA_NODE:
 	case UBIFS_TRUN_NODE:
 		/*
