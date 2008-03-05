@@ -51,7 +51,10 @@
 /* Lowest inode number used for regular inodes (not UBIFS-only internal ones) */
 #define UBIFS_FIRST_INO 64
 
-/* Maximum file name length (must be a multiple of 8, minus 1) */
+/*
+ * Maximum file name and extended attribute length (must be a multiple of 8,
+ * minus 1).
+ */
 #define UBIFS_MAX_NLEN 255
 
 /* Maximum number of data journal heads */
@@ -61,9 +64,6 @@
 #define UBIFS_BLOCK_SIZE  4096
 #define UBIFS_BLOCK_SHIFT 12
 #define UBIFS_BLOCK_MASK  0x00000FFF
-
-/* Maximum number of data blocks stored in one data node */
-#define UBIFS_MAX_NODE_BLOCKS 1
 
 /* UBIFS padding byte pattern (must not be first or last byte of node magic) */
 #define UBIFS_PADDING_BYTE 0xCE
@@ -116,7 +116,7 @@ enum
 };
 
 /*
- * UBIFS file types.
+ * UBIFS inode types.
  *
  * UBIFS_ITYPE_REG: regular file
  * UBIFS_ITYPE_DIR: directory
@@ -124,7 +124,7 @@ enum
  * UBIFS_ITYPE_BLK: block device node
  * UBIFS_ITYPE_CHR: character device node
  * UBIFS_ITYPE_FIFO: fifo
- * UBIFS_ITYPE_SOCK: socker
+ * UBIFS_ITYPE_SOCK: socket
  * UBIFS_ITYPES_CNT: count of supported file types
  */
 enum {
@@ -161,18 +161,19 @@ enum {
 /*
  * Key types.
  *
- * UBIFS_DENT_KEY: directory entry node key
  * UBIFS_INO_KEY: inode node key
  * UBIFS_DATA_KEY: data node key
+ * UBIFS_DENT_KEY: directory entry node key
+ * UBIFS_XENT_KEY: extended attribyte entry key
  * UBIFS_TRUN_KEY: truncation node key
  * UBIFS_KEY_TYPES_CNT: number of supported key types
  */
 enum {
 	UBIFS_INO_KEY,
-	UBIFS_DENT_KEY,
 	UBIFS_DATA_KEY,
+	UBIFS_DENT_KEY,
+	UBIFS_XENT_KEY,
 	UBIFS_TRUN_KEY,
-	UBIFS_XATTR_KEY,
 	UBIFS_KEY_TYPES_CNT,
 };
 
@@ -210,8 +211,8 @@ enum {
 /* Node sizes (N.B. these are guaranteed to be multiples of 8) */
 #define UBIFS_CH_SZ        sizeof(struct ubifs_ch)
 #define UBIFS_INO_NODE_SZ  sizeof(struct ubifs_ino_node)
-#define UBIFS_DENT_NODE_SZ sizeof(struct ubifs_dent_node)
 #define UBIFS_DATA_NODE_SZ sizeof(struct ubifs_data_node)
+#define UBIFS_DENT_NODE_SZ sizeof(struct ubifs_dent_node)
 #define UBIFS_TRUN_NODE_SZ sizeof(struct ubifs_trun_node)
 #define UBIFS_PAD_NODE_SZ  sizeof(struct ubifs_pad_node)
 #define UBIFS_SB_NODE_SZ   sizeof(struct ubifs_sb_node)
@@ -220,16 +221,19 @@ enum {
 #define UBIFS_IDX_NODE_SZ  sizeof(struct ubifs_idx_node)
 #define UBIFS_CS_NODE_SZ   sizeof(struct ubifs_cs_node)
 #define UBIFS_ORPH_NODE_SZ sizeof(struct ubifs_orph_node)
+/* Extended attribute entry nodes are identical to directory entry nodes */
+#define UBIFS_XENT_NODE_SZ UBIFS_DENT_NODE_SZ
 /* Only this does not have to be multiple of 8 bytes */
 #define UBIFS_BRANCH_SZ    sizeof(struct ubifs_branch)
 
 /* Maximum node sizes (N.B. these are guaranteed to be multiples of 8) */
-#define UBIFS_MAX_DATA_NODE_SZ (UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE)
-#define UBIFS_MAX_INO_NODE_SZ  (UBIFS_INO_NODE_SZ + UBIFS_MAX_INO_DATA)
-#define UBIFS_MAX_DENT_NODE_SZ (UBIFS_DENT_NODE_SZ + UBIFS_MAX_NLEN + 1)
+#define UBIFS_MAX_DATA_NODE_SZ  (UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE)
+#define UBIFS_MAX_INO_NODE_SZ   (UBIFS_INO_NODE_SZ + UBIFS_MAX_INO_DATA)
+#define UBIFS_MAX_DENT_NODE_SZ  (UBIFS_DENT_NODE_SZ + UBIFS_MAX_NLEN + 1)
+#define UBIFS_MAX_XENT_NODE_SZ  UBIFS_MAX_DENT_NODE_SZ
 
 /* The largest UBIFS node */
-#define UBIFS_MAX_NODE_SZ UBIFS_MAX_DATA_NODE_SZ
+#define UBIFS_MAX_NODE_SZ UBIFS_MAX_INO_NODE_SZ
 
 /*
  * On-flash inode flags.
@@ -274,8 +278,9 @@ enum {
  * UBIFS node types.
  *
  * UBIFS_INO_NODE: inode node
- * UBIFS_DENT_NODE: directory entry node
  * UBIFS_DATA_NODE: data node
+ * UBIFS_DENT_NODE: directory entry node
+ * UBIFS_XENT_NODE: extended attribute node
  * UBIFS_TRUN_NODE: truncation node
  * UBIFS_PAD_NODE: padding node
  * UBIFS_SB_NODE: superblock node
@@ -284,7 +289,6 @@ enum {
  * UBIFS_IDX_NODE: index node
  * UBIFS_CS_NODE: commit start node
  * UBIFS_ORPH_NODE: orphan node
- * UBIFS_XATTR_NODE: extended attribute node
  * UBIFS_NODE_TYPES_CNT: count of supported node types
  *
  * Note, we index arrays by these numbers, so keep them low and contiguous.
@@ -293,8 +297,9 @@ enum {
  */
 enum {
 	UBIFS_INO_NODE,
-	UBIFS_DENT_NODE,
 	UBIFS_DATA_NODE,
+	UBIFS_DENT_NODE,
+	UBIFS_XENT_NODE,
 	UBIFS_TRUN_NODE,
 	UBIFS_PAD_NODE,
 	UBIFS_SB_NODE,
@@ -303,7 +308,6 @@ enum {
 	UBIFS_IDX_NODE,
 	UBIFS_CS_NODE,
 	UBIFS_ORPH_NODE,
-	UBIFS_XATTR_NODE,
 	UBIFS_NODE_TYPES_CNT,
 };
 

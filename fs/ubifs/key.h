@@ -17,6 +17,7 @@
  * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Author: Artem Bityutskiy
+ *         Adrian Hunter
  */
 
 /*
@@ -196,6 +197,70 @@ static inline void lowest_dent_key(const struct ubifs_info *c,
 {
 	key->u32[0] = inum;
 	key->u32[1] = UBIFS_DENT_KEY << 29;
+}
+
+/**
+ * xent_key_init - initialize extended attribute entry key.
+ * @c: UBIFS file-system description object
+ * @key: key to initialize
+ * @inum: host inode number
+ * @nm: extended attribute entry name and length
+ */
+static inline void xent_key_init(const struct ubifs_info *c,
+				 union ubifs_key *key, ino_t inum,
+				 const struct qstr *nm)
+{
+	uint32_t hash = c->key_hash(nm->name, nm->len);
+
+	key->u32[0] = inum;
+	key->u32[1] = (hash & 0x01FFFFFF) | (UBIFS_XENT_KEY << 29);
+}
+
+/**
+ * xent_key_init_hash - initialize extended attribute entry key without
+ *                      re-calculating hash function.
+ * @c: UBIFS file-system description object
+ * @key: key to initialize
+ * @inum: host inode number
+ * @hash: extended attribute entry name hash
+ */
+static inline void xent_key_init_hash(const struct ubifs_info *c,
+				      union ubifs_key *key, ino_t inum,
+				      uint32_t hash)
+{
+	key->u32[0] = inum;
+	key->u32[1] = (hash & 0x01FFFFFF) | (UBIFS_XENT_KEY << 29);
+}
+
+/**
+ * xent_key_init_flash - initialize on-flash extended attribute entry key.
+ * @c: UBIFS file-system description object
+ * @key: key to initialize
+ * @inum: host inode number
+ * @nm: extended attribute entry name and length
+ */
+static inline void xent_key_init_flash(const struct ubifs_info *c, void *k,
+				       ino_t inum, const struct qstr *nm)
+{
+	union ubifs_key *key = k;
+	uint32_t hash = c->key_hash(nm->name, nm->len);
+
+	key->j32[0] = cpu_to_le32(inum);
+	key->j32[1] = cpu_to_le32((hash & 0x01FFFFFF) | (UBIFS_XENT_KEY << 29));
+	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
+}
+
+/**
+ * lowest_xent_key - get the lowest possible extended attribute entry key.
+ * @c: UBIFS file-system description object
+ * @key: where to store the lowest key
+ * @inum: host inode number
+ */
+static inline void lowest_xent_key(const struct ubifs_info *c,
+				   union ubifs_key *key, ino_t inum)
+{
+	key->u32[0] = inum;
+	key->u32[1] = UBIFS_XENT_KEY << 29;
 }
 
 /**
@@ -432,7 +497,7 @@ static inline int is_hash_key(const struct ubifs_info *c,
 {
 	int type = key_type(c, key);
 
-	return type == UBIFS_DENT_KEY || type == UBIFS_XATTR_KEY;
+	return type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY;
 }
 
 #endif /* !__UBIFS_KEY_H__ */
