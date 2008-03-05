@@ -448,6 +448,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * the parent directory inode to the journal.
  *
  * This function returns %0 on success and a negative error code on failure.
+ * TODO: compress data attache to inodes
  */
 int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
