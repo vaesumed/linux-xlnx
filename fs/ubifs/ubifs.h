@@ -1476,6 +1476,14 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			      int mode);
 void ubifs_set_i_bytes(struct inode *inode);
 
+/* xattr.c */
+int ubifs_setxattr(struct dentry *dentry, const char *name,
+		   const void *value, size_t size, int flags);
+ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
+		       size_t size);
+ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size);
+int ubifs_removexattr(struct dentry *dentry, const char *name);
+
 /* super.c */
 struct inode *ubifs_iget(struct super_block *sb, unsigned long inum);
 
