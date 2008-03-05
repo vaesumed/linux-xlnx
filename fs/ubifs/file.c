@@ -823,7 +823,13 @@ struct address_space_operations ubifs_file_address_operations =
 
 struct inode_operations ubifs_file_inode_operations =
 {
-	.setattr = ubifs_setattr,
+#ifdef CONFIG_UBIFS_FS_XATTR
+	.setxattr    = ubifs_setxattr,
+	.getxattr    = ubifs_getxattr,
+	.listxattr   = ubifs_listxattr,
+	.removexattr = ubifs_removexattr,
+#endif
+	.setattr     = ubifs_setattr,
 };
 
 struct inode_operations ubifs_symlink_inode_operations =
