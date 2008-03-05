@@ -119,17 +119,16 @@ static int init_constants_early(struct ubifs_info *c)
 	c->ranges[UBIFS_CS_NODE].len   = UBIFS_CS_NODE_SZ;
 
 	c->ranges[UBIFS_INO_NODE].min_len  = UBIFS_INO_NODE_SZ;
-	c->ranges[UBIFS_INO_NODE].max_len  =
-				UBIFS_INO_NODE_SZ + UBIFS_MAX_INO_DATA;
+	c->ranges[UBIFS_INO_NODE].max_len  = UBIFS_MAX_INO_NODE_SZ;
 	c->ranges[UBIFS_ORPH_NODE].min_len =
 				UBIFS_ORPH_NODE_SZ + sizeof(__le64);
 	c->ranges[UBIFS_ORPH_NODE].max_len = c->leb_size;
 	c->ranges[UBIFS_DENT_NODE].min_len = UBIFS_DENT_NODE_SZ;
-	c->ranges[UBIFS_DENT_NODE].max_len =
-				UBIFS_DENT_NODE_SZ + UBIFS_MAX_NLEN + 1;
+	c->ranges[UBIFS_DENT_NODE].max_len = UBIFS_MAX_DENT_NODE_SZ;
+	c->ranges[UBIFS_XENT_NODE].min_len = UBIFS_XENT_NODE_SZ;
+	c->ranges[UBIFS_XENT_NODE].max_len = UBIFS_MAX_XENT_NODE_SZ;
 	c->ranges[UBIFS_DATA_NODE].min_len = UBIFS_DATA_NODE_SZ;
-	c->ranges[UBIFS_DATA_NODE].max_len =
-		UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE * UBIFS_MAX_NODE_BLOCKS;
+	c->ranges[UBIFS_DATA_NODE].max_len = UBIFS_MAX_DATA_NODE_SZ;
 	/*
 	 * Minimum indexing node size is amended later when superblock is
 	 * read and the key length is known.
@@ -1253,6 +1252,7 @@ static int __init ubifs_init(void)
 	BUILD_BUG_ON(UBIFS_CH_SZ        & 7);
 	BUILD_BUG_ON(UBIFS_INO_NODE_SZ  & 7);
 	BUILD_BUG_ON(UBIFS_DENT_NODE_SZ & 7);
+	BUILD_BUG_ON(UBIFS_XENT_NODE_SZ & 7);
 	BUILD_BUG_ON(UBIFS_DATA_NODE_SZ & 7);
 	BUILD_BUG_ON(UBIFS_TRUN_NODE_SZ & 7);
 	BUILD_BUG_ON(UBIFS_SB_NODE_SZ   & 7);
@@ -1263,6 +1263,7 @@ static int __init ubifs_init(void)
 	BUILD_BUG_ON(UBIFS_ORPH_NODE_SZ & 7);
 
 	BUILD_BUG_ON(UBIFS_MAX_DENT_NODE_SZ & 7);
+	BUILD_BUG_ON(UBIFS_MAX_XENT_NODE_SZ & 7);
 	BUILD_BUG_ON(UBIFS_MAX_DATA_NODE_SZ & 7);
 	BUILD_BUG_ON(UBIFS_MAX_INO_NODE_SZ  & 7);
 	BUILD_BUG_ON(UBIFS_MAX_NODE_SZ      & 7);
@@ -1271,8 +1272,15 @@ static int __init ubifs_init(void)
 	/* Check min. node size */
 	BUILD_BUG_ON(UBIFS_INO_NODE_SZ  < MIN_WRITE_SZ);
 	BUILD_BUG_ON(UBIFS_DENT_NODE_SZ < MIN_WRITE_SZ);
+	BUILD_BUG_ON(UBIFS_XENT_NODE_SZ < MIN_WRITE_SZ);
 	BUILD_BUG_ON(UBIFS_TRUN_NODE_SZ < MIN_WRITE_SZ);
 
+	BUILD_BUG_ON(UBIFS_MAX_DENT_NODE_SZ > UBIFS_MAX_NODE_SZ);
+	BUILD_BUG_ON(UBIFS_MAX_XENT_NODE_SZ > UBIFS_MAX_NODE_SZ);
+	BUILD_BUG_ON(UBIFS_MAX_DATA_NODE_SZ > UBIFS_MAX_NODE_SZ);
+	BUILD_BUG_ON(UBIFS_MAX_INO_NODE_SZ  > UBIFS_MAX_NODE_SZ);
+
+	/* We do not support multiple pages per block ATM */
 	BUILD_BUG_ON(UBIFS_BLOCK_SIZE != PAGE_CACHE_SIZE);
 
 	/* Defined node sizes */
