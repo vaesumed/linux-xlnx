@@ -422,6 +422,11 @@ static int dummy_inode_listsecurity(struct inode *inode, char *buffer, size_t bu
 	return 0;
 }
 
+static void dummy_inode_getsecid(const struct inode *inode, u32 *secid)
+{
+	*secid = 0;
+}
+
 static int dummy_file_permission (struct file *file, int mask)
 {
 	return 0;
@@ -540,7 +545,9 @@ static int dummy_task_getsid (struct task_struct *p)
 }
 
 static void dummy_task_getsecid (struct task_struct *p, u32 *secid)
-{ }
+{
+	*secid = 0;
+}
 
 static int dummy_task_setgroups (struct group_info *group_info)
 {
@@ -612,6 +619,11 @@ static void dummy_task_to_inode(struct task_struct *p, struct inode *inode)
 static int dummy_ipc_permission (struct kern_ipc_perm *ipcp, short flag)
 {
 	return 0;
+}
+
+static void dummy_ipc_getsecid(struct kern_ipc_perm *ipcp, u32 *secid)
+{
+	*secid = 0;
 }
 
 static int dummy_msg_msg_alloc_security (struct msg_msg *msg)
@@ -979,6 +991,30 @@ static inline int dummy_key_permission(key_ref_t key_ref,
 }
 #endif /* CONFIG_KEYS */
 
+#ifdef CONFIG_AUDIT
+static inline int dummy_audit_rule_init(u32 field, u32 op, char *rulestr,
+					void **lsmrule)
+{
+	return 0;
+}
+
+static inline int dummy_audit_rule_known(struct audit_krule *krule)
+{
+	return 0;
+}
+
+static inline int dummy_audit_rule_match(u32 secid, u32 field, u32 op,
+					 void *lsmrule,
+					 struct audit_context *actx)
+{
+	return 0;
+}
+
+static inline void dummy_audit_rule_free(void *lsmrule)
+{ }
+
+#endif /* CONFIG_AUDIT */
+
 struct security_operations dummy_security_ops;
 
 #define set_to_dummy_if_null(ops, function)				\
@@ -1055,6 +1091,7 @@ void security_fixup_ops (struct security_operations *ops)
 	set_to_dummy_if_null(ops, inode_getsecurity);
 	set_to_dummy_if_null(ops, inode_setsecurity);
 	set_to_dummy_if_null(ops, inode_listsecurity);
+	set_to_dummy_if_null(ops, inode_getsecid);
 	set_to_dummy_if_null(ops, file_permission);
 	set_to_dummy_if_null(ops, file_alloc_security);
 	set_to_dummy_if_null(ops, file_free_security);
@@ -1091,6 +1128,7 @@ void security_fixup_ops (struct security_operations *ops)
 	set_to_dummy_if_null(ops, task_reparent_to_init);
  	set_to_dummy_if_null(ops, task_to_inode);
 	set_to_dummy_if_null(ops, ipc_permission);
+	set_to_dummy_if_null(ops, ipc_getsecid);
 	set_to_dummy_if_null(ops, msg_msg_alloc_security);
 	set_to_dummy_if_null(ops, msg_msg_free_security);
 	set_to_dummy_if_null(ops, msg_queue_alloc_security);
@@ -1165,6 +1203,11 @@ void security_fixup_ops (struct security_operations *ops)
 	set_to_dummy_if_null(ops, key_free);
 	set_to_dummy_if_null(ops, key_permission);
 #endif	/* CONFIG_KEYS */
-
+#ifdef CONFIG_AUDIT
+	set_to_dummy_if_null(ops, audit_rule_init);
+	set_to_dummy_if_null(ops, audit_rule_known);
+	set_to_dummy_if_null(ops, audit_rule_match);
+	set_to_dummy_if_null(ops, audit_rule_free);
+#endif
 }
 

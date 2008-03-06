@@ -516,6 +516,11 @@ int security_inode_listsecurity(struct inode *inode, char *buffer, size_t buffer
 	return security_ops->inode_listsecurity(inode, buffer, buffer_size);
 }
 
+void security_inode_getsecid(const struct inode *inode, u32 *secid)
+{
+	security_ops->inode_getsecid(inode, secid);
+}
+
 int security_file_permission(struct file *file, int mask)
 {
 	return security_ops->file_permission(file, mask);
@@ -703,6 +708,11 @@ void security_task_to_inode(struct task_struct *p, struct inode *inode)
 int security_ipc_permission(struct kern_ipc_perm *ipcp, short flag)
 {
 	return security_ops->ipc_permission(ipcp, flag);
+}
+
+void security_ipc_getsecid(struct kern_ipc_perm *ipcp, u32 *secid)
+{
+	security_ops->ipc_getsecid(ipcp, secid);
 }
 
 int security_msg_msg_alloc(struct msg_msg *msg)
@@ -1103,3 +1113,28 @@ int security_key_permission(key_ref_t key_ref,
 }
 
 #endif	/* CONFIG_KEYS */
+
+#ifdef CONFIG_AUDIT
+
+int security_audit_rule_init(u32 field, u32 op, char *rulestr, void **lsmrule)
+{
+	return security_ops->audit_rule_init(field, op, rulestr, lsmrule);
+}
+
+int security_audit_rule_known(struct audit_krule *krule)
+{
+	return security_ops->audit_rule_known(krule);
+}
+
+void security_audit_rule_free(void *lsmrule)
+{
+	security_ops->audit_rule_free(lsmrule);
+}
+
+int security_audit_rule_match(u32 secid, u32 field, u32 op, void *lsmrule,
+			      struct audit_context *actx)
+{
+	return security_ops->audit_rule_match(secid, field, op, lsmrule, actx);
+}
+
+#endif /* CONFIG_AUDIT */
