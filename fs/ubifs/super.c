@@ -80,8 +80,10 @@ int validate_inode(const struct ubifs_info *c, const struct inode *inode)
 		return -EINVAL;
 	}
 
-	if (ui->xattr_names < 0) {
-		dbg_err("bad xattr_names %d", ui->xattr_names);
+	if (ui->xattr_names < 0 ||
+	    ui->xattr_names + ui->xattr_cnt > XATTR_LIST_MAX) {
+		dbg_err("bad xattr_names %d or xattr_cnt %d",
+			ui->xattr_names, ui->xattr_cnt);
 		return -EINVAL;
 	}
 
@@ -356,8 +358,8 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	struct ubifs_budget_req req = {.dd_growth = c->inode_budget,
 				       .dirtied_ino_d = ui->data_len};
 
-	dbg_gen("inode %lu", inode->i_ino);
 	ubifs_assert(!(c->vfs_sb->s_flags & MS_RDONLY));
+	ubifs_assert(!ui->xattr);
 
 	if (is_bad_inode(inode))
 		return 0;
@@ -367,7 +369,10 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	/*
 	 * Due to races between write-back forced by budgeting
 	 * (see 'sync_some_inodes()') and pdflush write-back, the inode may
-	 * have already be synchronized, do not do this again.
+	 * have already been synchronized, do not do this again.
+	 *
+	 * This might also happen if it was synchronized in e.g. ubifs_link()',
+	 * etc.
 	 */
 	if (!ui->dirty) {
 		mutex_unlock(&ui->budg_mutex);
@@ -375,6 +380,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	}
 
 	ubifs_assert(ui->budgeted);
+	dbg_gen("inode %lu", inode->i_ino);
 
 	err = ubifs_jrn_write_inode(c, inode, 0, IS_SYNC(inode));
 	if (err)
@@ -398,6 +404,16 @@ static void ubifs_delete_inode(struct inode *inode)
 	struct ubifs_budget_req req = {.dd_growth = c->inode_budget,
 				       .dirtied_ino_d = ui->data_len};
 	int err;
+
+	if (ui->xattr) {
+		/*
+		 * Extended attribute inode deletions are fully handeled in
+		 * 'ubifs_removexattr()'. These inodes are special and have
+		 * limited usage, so there is nothing to do here.
+		 */
+		ubifs_assert(!ui->dirty);
+		goto out;
+	}
 
 	dbg_gen("inode %lu", inode->i_ino);
 	ubifs_assert(!atomic_read(&inode->i_count));
