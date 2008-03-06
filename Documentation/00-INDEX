@@ -43,8 +43,6 @@ ManagementStyle
 	- how to (attempt to) manage kernel hackers.
 MSI-HOWTO.txt
 	- the Message Signaled Interrupts (MSI) Driver Guide HOWTO and FAQ.
-PCIEBUS-HOWTO.txt
-	- a guide describing the PCI Express Port Bus driver.
 RCU/
 	- directory with info on RCU (read-copy update).
 README.DAC960
@@ -227,8 +225,6 @@ kprobes.txt
 	- documents the kernel probes debugging feature.
 kref.txt
 	- docs on adding reference counters (krefs) to kernel objects.
-laptop-mode.txt
-	- how to conserve battery power using laptop-mode.
 laptops/
 	- directory with laptop related info and laptop driver documentation.
 ldm.txt
@@ -293,22 +289,12 @@ parport.txt
 	- how to use the parallel-port driver.
 parport-lowlevel.txt
 	- description and usage of the low level parallel port functions.
-pci-error-recovery.txt
-	- info on PCI error recovery.
-pci.txt
-	- info on the PCI subsystem for device driver authors.
-pcieaer-howto.txt
-	- the PCI Express Advanced Error Reporting Driver Guide HOWTO.
 pcmcia/
 	- info on the Linux PCMCIA driver.
 pi-futex.txt
 	- documentation on lightweight PI-futexes.
-pm.txt
-	- info on Linux power management support.
 pnp.txt
 	- Linux Plug and Play documentation.
-power_supply_class.txt
-	- Tells userspace about battery, UPS, AC or DC power supply properties
 power/
 	- directory with info on Linux PCI power management.
 powerpc/
@@ -353,8 +339,6 @@ sgi-visws.txt
 	- short blurb on the SGI Visual Workstations.
 sh/
 	- directory with info on porting Linux to a new architecture.
-smart-config.txt
-	- description of the Smart Config makefile feature.
 sound/
 	- directory with info on sound card support.
 sparc/
