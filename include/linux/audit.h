@@ -377,8 +377,8 @@ struct audit_field {
 	u32				type;
 	u32				val;
 	u32				op;
-	char				*lsm_str;
-	void				*lsm_rule;
+	char				*se_str;
+	void				*se_rule;
 };
 
 #define AUDITSC_INVALID 0
