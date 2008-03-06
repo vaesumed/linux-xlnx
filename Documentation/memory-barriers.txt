@@ -430,7 +430,7 @@ There are certain things that the Linux kernel memory barriers do not guarantee:
 
 	[*] For information on bus mastering DMA and coherency please read:
 
-	    Documentation/pci.txt
+	    Documentation/PCI/pci.txt
 	    Documentation/DMA-mapping.txt
 	    Documentation/DMA-API.txt
 
