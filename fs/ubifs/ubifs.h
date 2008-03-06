@@ -1304,17 +1304,22 @@ int ubifs_consolidate_log(struct ubifs_info *c);
 /* journal.c */
 int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
-		     int deletion, int sync);
+		     int deletion, int sync, int xent);
 int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 			 const union ubifs_key *key, const void *buf, int len);
 int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
-			  int deletion, int sync);
+			  int last_reference, int sync);
 int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 		     const struct dentry *old_dentry,
 		     const struct inode *new_dir,
 		     const struct dentry *new_dentry, int sync);
 int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		       loff_t old_size, loff_t new_size);
+int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
+			   const struct inode *inode, const struct qstr *nm,
+			   int sync);
+int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
+			     const struct inode *inode2, int sync);
 
 /* budget.c */
 int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req);

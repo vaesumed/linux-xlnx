@@ -261,7 +261,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	dir->i_size += sz_change;
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
 
@@ -472,7 +472,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
 
@@ -520,7 +520,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	drop_nlink(inode);
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
 
@@ -603,7 +603,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	drop_nlink(inode);
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
 
@@ -651,7 +651,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	inc_nlink(dir);
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err) {
 		ubifs_err("cannot create directory, error %d", err);
 		goto out_inode;
@@ -719,7 +719,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	dir->i_size += sz_change;
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_inode;
 
@@ -787,7 +787,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	dir->i_size += sz_change;
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir));
+			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_dir;
 
@@ -925,7 +925,7 @@ out_inode:
 
 struct inode_operations ubifs_dir_inode_operations =
 {
-#ifdef CONFIG_FS_UBIFS_FS_XATTR
+#ifdef CONFIG_UBIFS_FS_XATTR
 	.setxattr    = ubifs_setxattr,
 	.getxattr    = ubifs_getxattr,
 	.listxattr   = ubifs_listxattr,
