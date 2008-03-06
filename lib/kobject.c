@@ -577,6 +577,9 @@ static void kobject_cleanup(struct kobject *kobj)
 		pr_debug("kobject: '%s': free name\n", name);
 		kfree(name);
 	}
+
+	/* Set the state to uninitialized */
+	kobj->state_initialized = 0;
 }
 
 static void kobject_release(struct kref *kref)
