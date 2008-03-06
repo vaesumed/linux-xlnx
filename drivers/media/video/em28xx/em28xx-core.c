@@ -31,7 +31,7 @@
 
 /* #define ENABLE_DEBUG_ISOC_FRAMES */
 
-static unsigned int core_debug = 0;
+static unsigned int core_debug;
 module_param(core_debug,int,0644);
 MODULE_PARM_DESC(core_debug,"enable debug messages [core]");
 
@@ -40,7 +40,7 @@ MODULE_PARM_DESC(core_debug,"enable debug messages [core]");
 		printk(KERN_INFO "%s %s :"fmt, \
 			 dev->name, __FUNCTION__ , ##arg); } while (0)
 
-static unsigned int reg_debug = 0;
+static unsigned int reg_debug;
 module_param(reg_debug,int,0644);
 MODULE_PARM_DESC(reg_debug,"enable debug messages [URB reg]");
 
@@ -49,7 +49,7 @@ MODULE_PARM_DESC(reg_debug,"enable debug messages [URB reg]");
 		printk(KERN_INFO "%s %s :"fmt, \
 			 dev->name, __FUNCTION__ , ##arg); } while (0)
 
-static unsigned int isoc_debug = 0;
+static unsigned int isoc_debug;
 module_param(isoc_debug,int,0644);
 MODULE_PARM_DESC(isoc_debug,"enable debug messages [isoc transfers]");
 
@@ -267,7 +267,7 @@ static int em28xx_write_ac97(struct em28xx *dev, u8 reg, u8 *val)
 	for (i = 0; i < 10; i++) {
 		if ((ret = em28xx_read_reg(dev, AC97BUSY_REG)) < 0)
 			return ret;
-		if (!((u8) ret) & 0x01)
+		if (!(ret & 0x01))
 			return 0;
 		msleep(5);
 	}
