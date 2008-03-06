@@ -441,21 +441,6 @@ static void pndisc_destructor(struct pneigh_entry *n)
 /*
  *	Send a Neighbour Advertisement
  */
-
-static inline void ndisc_flow_init(struct flowi *fl, u8 type,
-			    struct in6_addr *saddr, struct in6_addr *daddr,
-			    int oif)
-{
-	memset(fl, 0, sizeof(*fl));
-	ipv6_addr_copy(&fl->fl6_src, saddr);
-	ipv6_addr_copy(&fl->fl6_dst, daddr);
-	fl->proto	 	= IPPROTO_ICMPV6;
-	fl->fl_icmp_type	= type;
-	fl->fl_icmp_code	= 0;
-	fl->oif			= oif;
-	security_sk_classify_flow(ndisc_socket->sk, fl);
-}
-
 static void __ndisc_send(struct net_device *dev,
 			 struct neighbour *neigh,
 			 struct in6_addr *daddr, struct in6_addr *saddr,
@@ -474,10 +459,10 @@ static void __ndisc_send(struct net_device *dev,
 
 	type = icmp6h->icmp6_type;
 
-	ndisc_flow_init(&fl, type, saddr, daddr,
-			dev->ifindex);
+	icmpv6_flow_init(ndisc_socket->sk, &fl, type,
+			 saddr, daddr, dev->ifindex);
 
-	dst = ndisc_dst_alloc(dev, neigh, daddr, ip6_output);
+	dst = icmp6_dst_alloc(dev, neigh, daddr);
 	if (!dst)
 		return;
 
@@ -1439,10 +1424,10 @@ void ndisc_send_redirect(struct sk_buff *skb, struct neighbour *neigh,
 		return;
 	}
 
-	ndisc_flow_init(&fl, NDISC_REDIRECT, &saddr_buf, &ipv6_hdr(skb)->saddr,
-			dev->ifindex);
+	icmpv6_flow_init(ndisc_socket->sk, &fl, NDISC_REDIRECT,
+			 &saddr_buf, &ipv6_hdr(skb)->saddr, dev->ifindex);
 
-	dst = ip6_route_output(NULL, &fl);
+	dst = ip6_route_output(&init_net, NULL, &fl);
 	if (dst == NULL)
 		return;
 
@@ -1613,6 +1598,7 @@ int ndisc_rcv(struct sk_buff *skb)
 static int ndisc_netdev_event(struct notifier_block *this, unsigned long event, void *ptr)
 {
 	struct net_device *dev = ptr;
+	struct net *net = dev->nd_net;
 
 	if (dev->nd_net != &init_net)
 		return NOTIFY_DONE;
@@ -1620,11 +1606,11 @@ static int ndisc_netdev_event(struct notifier_block *this, unsigned long event, 
 	switch (event) {
 	case NETDEV_CHANGEADDR:
 		neigh_changeaddr(&nd_tbl, dev);
-		fib6_run_gc(~0UL);
+		fib6_run_gc(~0UL, net);
 		break;
 	case NETDEV_DOWN:
 		neigh_ifdown(&nd_tbl, dev);
-		fib6_run_gc(~0UL);
+		fib6_run_gc(~0UL, net);
 		break;
 	default:
 		break;
@@ -1733,7 +1719,7 @@ static int ndisc_ifinfo_sysctl_strategy(ctl_table *ctl, int __user *name,
 
 #endif
 
-int __init ndisc_init(struct net_proto_family *ops)
+int __init ndisc_init(void)
 {
 	struct ipv6_pinfo *np;
 	struct sock *sk;
