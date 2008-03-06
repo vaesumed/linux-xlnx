@@ -797,7 +797,6 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 /**
  * lnc_free - remove a leaf node from the leaf-node-cache.
- * @c: UBIFS file-system description object
  * @zbr: zbranch of leaf node
  * @node: leaf node
  *
@@ -805,7 +804,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
  * otherwise.
  * TODO: consider to get rid of this function.
  */
-static void lnc_free(struct ubifs_info *c, struct ubifs_zbranch *zbr)
+static void lnc_free(struct ubifs_zbranch *zbr)
 {
 	if (zbr->znode == NULL)
 		return;
@@ -822,7 +821,7 @@ static void lnc_free(struct ubifs_info *c, struct ubifs_zbranch *zbr)
  * NULL otherwise.
  * TODO: consider to get rid of this function.
  */
-static void *lnc_peek(struct ubifs_info *c, struct ubifs_zbranch *zbr)
+static void *lnc_peek(const struct ubifs_info *c, struct ubifs_zbranch *zbr)
 {
 	return zbr->znode;
 }
@@ -954,7 +953,8 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 }
 
 /**
- * matches_name - determine if a dent matches a given name.
+ * matches_name - determine if a directory or extended attribute entry matches
+ *                a given name.
  * @c: UBIFS file-system description object
  * @zt: zbranch of dent
  * @nm: name to match
@@ -1116,16 +1116,15 @@ static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
 /**
  * resolve_collision - resolve a collision.
  * @c: UBIFS file-system description object
- * @key: key of directory entry
+ * @key: key of a directory or extended attribute entry
  * @zn: znode is returned here
  * @nn: znode branch slot number is passed and returned here
- * @nm: name of directory entry
+ * @nm: name of the entry
  *
  * This function returns %1 and sets @zn and @nn if the collision is resolved.
- * %0 is returned if @nm is not found and @zn and @nn are set to the
- * next directory entry.  %-ENOENT is returned if there are no
- * following directory entries for the same inode.  Otherwise a negative error
- * code is returned.
+ * %0 is returned if @nm is not found and @zn and @nn are set to the next
+ * entry. %-ENOENT is returned if there are no following entries for the same
+ * inode. Otherwise a negative error code is returned.
  */
 static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			     struct ubifs_znode **zn, int *nn,
@@ -1135,7 +1134,8 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 	union ubifs_key *okey;
 	int n, err;
 
-	dbg_tnc_key(c, key, "key ");
+	dbg_tnc_key(c, key, "key");
+
 	znode = *zn;
 	n = *nn;
 	err = matches_name(c, &znode->zbranch[n], nm);
@@ -1157,12 +1157,13 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 		if (err < 0)
 			return err;
 		if (err == 1) {
-			dbg_tnc_key(c, key, "collision resolved ");
+			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
 			*nn = n;
 			return 1;
 		}
 	}
+
 	/* Look right */
 	znode = *zn;
 	n = *nn;
@@ -1177,12 +1178,13 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 		if (err < 0)
 			return err;
 		if (err == 1) {
-			dbg_tnc_key(c, key, "collision resolved ");
+			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
 			*nn = n;
 			return 1;
 		}
 	}
+
 	return -EINVAL;
 }
 
@@ -1266,7 +1268,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 	union ubifs_key *okey;
 	int n, o_n = 0, err;
 
-	dbg_tnc_key(c, key, "key ");
+	dbg_tnc_key(c, key, "key");
 	znode = *zn;
 	n = *nn;
 	err = fallible_matches_name(c, &znode->zbranch[n], nm);
@@ -1553,7 +1555,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 	struct ubifs_zbranch zbr;
 
-	dbg_tnc_key(c, key, "key ");
+	dbg_tnc_key(c, key, "key");
 	mutex_lock(&c->tnc_mutex);
 	found = lookup_level0(c, key, &znode, &n);
 	if (!found) {
@@ -1918,7 +1920,7 @@ int ubifs_tnc_add(struct ubifs_info *c, const union ubifs_key *key, int lnum,
 	} else if (found == 1) {
 		struct ubifs_zbranch *zbr = &znode->zbranch[n];
 
-		lnc_free(c, zbr);
+		lnc_free(zbr);
 		err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
 		zbr->lnum = lnum;
 		zbr->offs = offs;
@@ -2024,7 +2026,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 
 		found = 0;
 		if (zbr->lnum == old_lnum && zbr->offs == old_offs) {
-			lnc_free(c, zbr);
+			lnc_free(zbr);
 			err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
 			if (err)
 				goto out;
@@ -2051,7 +2053,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 					    }
 				}
 				zbr = &znode->zbranch[n];
-				lnc_free(c, zbr);
+				lnc_free(zbr);
 				err = ubifs_add_dirt(c, zbr->lnum,
 						     zbr->len);
 				if (err)
@@ -2128,7 +2130,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		else if (found == 1) {
 			struct ubifs_zbranch *zbr = &znode->zbranch[n];
 
-			lnc_free(c, zbr);
+			lnc_free(zbr);
 			err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
 			zbr->lnum = lnum;
 			zbr->offs = offs;
@@ -2175,7 +2177,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 	dbg_tnc_key(c, &znode->zbranch[n].key, "deleting");
 
 	zbr = &znode->zbranch[n];
-	lnc_free(c, zbr);
+	lnc_free(zbr);
 
 	err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
 	if (err) {
@@ -2418,7 +2420,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 			key = &znode->zbranch[i].key;
 			if (!key_in_range(c, key, from_key, to_key))
 				break;
-			lnc_free(c, &znode->zbranch[i]);
+			lnc_free(&znode->zbranch[i]);
 			err = ubifs_add_dirt(c, znode->zbranch[i].lnum,
 					     znode->zbranch[i].len);
 			if (err) {
@@ -2449,42 +2451,90 @@ out:
  * @c: UBIFS file-system description object
  * @inum: inode number to remove
  *
- * This function remove inode @inum from TNC and returns zero in case of
- * success or a negative error code in case of failure.
+ * This function remove inode @inum and all the extended attributes associated
+ * with the anode from TNC and returns zero in case of success or a negative
+ * error code in case of failure.
+ * TODO: make sure all callers switch to RO if this func fails
  */
 int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 {
-	union ubifs_key min_key, max_key;
+	union ubifs_key key1, key2;
+	struct ubifs_dent_node *xent, *pxent = NULL;
+	struct qstr nm = { .name = NULL };
+	int err;
 
-	lowest_ino_key(c, &min_key, inum);
-	highest_ino_key(c, &max_key, inum);
+	dbg_tnc("ino %lu", inum);
 
-	return ubifs_tnc_remove_range(c, &min_key, &max_key);
+	/*
+	 * Walk all extended attribute entries and remove them together with
+	 * corresponding extended attribute inodes.
+	 */
+	lowest_xent_key(c, &key1, inum);
+	while (1) {
+		ino_t xattr_inum;
+
+		xent = ubifs_tnc_next_ent(c, &key1, nm.name, nm.len);
+		if (IS_ERR(xent)) {
+			return err;
+		}
+
+		xattr_inum = le64_to_cpu(xent->inum);
+		dbg_tnc("xent '%s', ino %llu", xent->name, xattr_inum);
+
+		nm.name = xent->name;
+		nm.len = le16_to_cpu(xent->nlen);
+		err = ubifs_tnc_remove_nm(c, &key1, &nm);
+		if (err)
+			return err;
+
+		lowest_ino_key(c, &key1, xattr_inum);
+		highest_ino_key(c, &key2, xattr_inum);
+		err = ubifs_tnc_remove_range(c, &key1, &key2);
+		if (err)
+			return err;
+
+		kfree(pxent);
+		pxent = xent;
+		key_read(c, &xent->key, &key1);
+	}
+
+	kfree(pxent);
+	lowest_ino_key(c, &key1, inum);
+	highest_ino_key(c, &key2, inum);
+
+	return ubifs_tnc_remove_range(c, &key1, &key2);
 }
 
 /**
- * ubifs_tnc_next_dent - find and read the next directory entry if there is one.
+ * ubifs_tnc_next_ent - walk directory or extended attribute entries.
  * @c: UBIFS file-system description object
- * @key: key of last directory entry found or the lowest dent key
- * @name: name of last directory entry found or NULL
+ * @key: key of last entry
+ * @name: name of last entry found or %NULL
  *
- * This function finds and reads the next directory entry after the given @key
- * if there is one. @name is used to resolve collisions. %-ENOENT is returned
- * if no entry is found.  The directory entry node is returned if an entry is
- * found. Otherwise a negative error code is returned.
+ * This function finds and reads the next directory or extended attribyte entry
+ * after the given key (@key) if there is one. @name is used to resolve
+ * collisions. If the fist entry has to be found, @key has to contain the
+ * lowest possible key value for this inode and @name has to be %NULL.
+ *
+ * This function returns the found directory or extended attribute entry node
+ * in case of success, %-ENOENT is returned if no entry is found, or a negative
+ * error code in case of failure.
+ * TODO: this should take qstr parameter instead
  */
-struct ubifs_dent_node *ubifs_tnc_next_dent(struct ubifs_info *c,
-					    union ubifs_key *key,
-					    const char *name, unsigned int len)
+struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
+					   union ubifs_key *key,
+					   const char *name, int len)
 {
-	int found, n, err;
+	int found, n, err, type = key_type(c, key);
 	struct ubifs_znode *znode;
 	struct ubifs_dent_node *dent = NULL;
 	struct ubifs_zbranch *zbr;
 	union ubifs_key *dkey;
 	struct qstr nm;
 
-	dbg_tnc_key(c, key, "%s", (name ? name : ""));
+	dbg_tnc_key(c, key, "%s", (name ? name : "(lowest)"));
+	ubifs_assert(type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY);
+
 	mutex_lock(&c->tnc_mutex);
 	found = lookup_level0(c, key, &znode, &n);
 	if (found < 0) {
@@ -2502,6 +2552,7 @@ struct ubifs_dent_node *ubifs_tnc_next_dent(struct ubifs_info *c,
 		if (err == 0)
 			goto name_not_found;
 	}
+
 again:
 	/* Now find next entry */
 	err = tnc_next(c, &znode, &n);
@@ -2513,7 +2564,7 @@ name_not_found:
 	zbr = &znode->zbranch[n];
 
 	if (key_ino(c, dkey) != key_ino(c, key) ||
-	    key_type(c, dkey) != UBIFS_DENT_KEY) {
+	    key_type(c, dkey) != type) {
 		err = -ENOENT;
 		goto out;
 	}

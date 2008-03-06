@@ -371,7 +371,7 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		ubifs_assert(!saved);
 
 		lowest_dent_key(c, &key, dir->i_ino);
-		dent = ubifs_tnc_next_dent(c, &key, NULL, 0);
+		dent = ubifs_tnc_next_ent(c, &key, NULL, 0);
 		if (IS_ERR(dent)) {
 			err = PTR_ERR(dent);
 			goto out;
@@ -398,11 +398,11 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	while (1) {
 		if (saved) {
 			key_read(c, &saved->key, &key);
-			dent = ubifs_tnc_next_dent(c, &key, saved->name,
+			dent = ubifs_tnc_next_ent(c, &key, saved->name,
 						   le16_to_cpu(saved->nlen));
 		} else {
 			dent_key_init_hash(c, &key, dir->i_ino, filp->f_pos);
-			dent = ubifs_tnc_next_dent(c, &key, NULL, 0);
+			dent = ubifs_tnc_next_ent(c, &key, NULL, 0);
 		}
 		if (unlikely(IS_ERR(dent))) {
 			err = PTR_ERR(dent);
@@ -554,7 +554,7 @@ static int check_dir_empty(struct ubifs_info *c, struct inode *dir)
 	int err;
 
 	lowest_dent_key(c, &key, dir->i_ino);
-	dent = ubifs_tnc_next_dent(c, &key, NULL, 0);
+	dent = ubifs_tnc_next_ent(c, &key, NULL, 0);
 	if (IS_ERR(dent)) {
 		err = PTR_ERR(dent);
 		if (err == -ENOENT)
