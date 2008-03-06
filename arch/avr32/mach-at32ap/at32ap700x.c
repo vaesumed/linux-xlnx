@@ -11,6 +11,7 @@
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/spi/spi.h>
+#include <linux/usb/atmel_usba_udc.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -989,7 +990,9 @@ static struct clk atmel_twi0_pclk = {
 	.index		= 2,
 };
 
-struct platform_device *__init at32_add_device_twi(unsigned int id)
+struct platform_device *__init at32_add_device_twi(unsigned int id,
+						    struct i2c_board_info *b,
+						    unsigned int n)
 {
 	struct platform_device *pdev;
 
@@ -1008,6 +1011,9 @@ struct platform_device *__init at32_add_device_twi(unsigned int id)
 	select_peripheral(PA(7),  PERIPH_A, 0);	/* SDL	*/
 
 	atmel_twi0_pclk.dev = &pdev->dev;
+
+	if (b)
+		i2c_register_board_info(id, b, n);
 
 	platform_device_add(pdev);
 	return pdev;
@@ -1351,9 +1357,39 @@ static struct clk usba0_hclk = {
 	.index		= 6,
 };
 
+#define EP(nam, idx, maxpkt, maxbk, dma, isoc)			\
+	[idx] = {						\
+		.name		= nam,				\
+		.index		= idx,				\
+		.fifo_size	= maxpkt,			\
+		.nr_banks	= maxbk,			\
+		.can_dma	= dma,				\
+		.can_isoc	= isoc,				\
+	}
+
+static struct usba_ep_data at32_usba_ep[] __initdata = {
+	EP("ep0", 0, 64, 1, 0, 0),
+	EP("ep1in-bulk", 1, 512, 2, 1, 1),
+	EP("ep2out-bulk", 2, 512, 2, 1, 1),
+	EP("ep3in-int", 3, 64, 3, 1, 0),
+	EP("ep4out-int", 4, 64, 3, 1, 0),
+	EP("ep5in-iso", 5, 1024, 3, 1, 1),
+	EP("ep6out-iso", 6, 1024, 3, 1, 1),
+};
+
+#undef EP
+
 struct platform_device *__init
 at32_add_device_usba(unsigned int id, struct usba_platform_data *data)
 {
+	/*
+	 * pdata doesn't have room for any endpoints, so we need to
+	 * append room for the ones we need right after it.
+	 */
+	struct {
+		struct usba_platform_data pdata;
+		struct usba_ep_data ep[7];
+	} usba_data;
 	struct platform_device *pdev;
 
 	if (id != 0)
@@ -1367,13 +1403,20 @@ at32_add_device_usba(unsigned int id, struct usba_platform_data *data)
 					  ARRAY_SIZE(usba0_resource)))
 		goto out_free_pdev;
 
-	if (data) {
-		if (platform_device_add_data(pdev, data, sizeof(*data)))
-			goto out_free_pdev;
+	if (data)
+		usba_data.pdata.vbus_pin = data->vbus_pin;
+	else
+		usba_data.pdata.vbus_pin = GPIO_PIN_NONE;
 
-		if (data->vbus_pin != GPIO_PIN_NONE)
-			at32_select_gpio(data->vbus_pin, 0);
-	}
+	data = &usba_data.pdata;
+	data->num_ep = ARRAY_SIZE(at32_usba_ep);
+	memcpy(data->ep, at32_usba_ep, sizeof(at32_usba_ep));
+
+	if (platform_device_add_data(pdev, data, sizeof(usba_data)))
+		goto out_free_pdev;
+
+	if (data->vbus_pin != GPIO_PIN_NONE)
+		at32_select_gpio(data->vbus_pin, 0);
 
 	usba0_pclk.dev = &pdev->dev;
 	usba0_hclk.dev = &pdev->dev;
