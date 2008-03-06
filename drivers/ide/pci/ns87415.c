@@ -181,6 +181,10 @@ static int ns87415_ide_dma_setup(ide_drive_t *drive)
 	return 1;
 }
 
+#ifndef ide_default_irq
+#define ide_default_irq(irq) 0
+#endif
+
 static void __devinit init_hwif_ns87415 (ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
@@ -190,8 +194,6 @@ static void __devinit init_hwif_ns87415 (ide_hwif_t *hwif)
 	int timeout;
 	u8 stat;
 #endif
-
-	hwif->selectproc = &ns87415_selectproc;
 
 	/*
 	 * We cannot probe for IRQ: both ports share common IRQ on INTA.
@@ -254,15 +256,19 @@ static void __devinit init_hwif_ns87415 (ide_hwif_t *hwif)
 	hwif->ide_dma_end = &ns87415_ide_dma_end;
 }
 
+static const struct ide_port_ops ns87415_port_ops = {
+	.selectproc		= ns87415_selectproc,
+};
+
 static const struct ide_port_info ns87415_chipset __devinitdata = {
 	.name		= "NS87415",
 #ifdef CONFIG_SUPERIO
 	.init_iops	= init_iops_ns87415,
 #endif
 	.init_hwif	= init_hwif_ns87415,
+	.port_ops	= &ns87415_port_ops,
 	.host_flags	= IDE_HFLAG_TRUST_BIOS_FOR_DMA |
-			  IDE_HFLAG_NO_ATAPI_DMA |
-			  IDE_HFLAG_BOOTABLE,
+			  IDE_HFLAG_NO_ATAPI_DMA,
 };
 
 static int __devinit ns87415_init_one(struct pci_dev *dev, const struct pci_device_id *id)
