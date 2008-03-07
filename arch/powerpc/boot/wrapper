@@ -50,8 +50,11 @@ objbin=$object
 # directory for working files
 tmpdir=.
 
+# physical offset of kernel image
+membase=0x00000000
+
 usage() {
-    echo 'Usage: wrapper [-o output] [-p platform] [-i initrd]' >&2
+    echo 'Usage: wrapper [-o output] [-p platform] [-i initrd] [-m membase]' >&2
     echo '       [-d devtree] [-s tree.dts] [-c] [-C cross-prefix]' >&2
     echo '       [-D datadir] [-W workingdir] [--no-gzip] [vmlinux]' >&2
     exit 1
@@ -83,6 +86,11 @@ while [ "$#" -gt 0 ]; do
 	shift
 	[ "$#" -gt 0 ] || usage
 	dts="$1"
+	;;
+    -m)
+	shift
+	[ "$#" -gt 0 ] || usage
+	membase="$1"
 	;;
     -c)
 	cacheit=y
@@ -229,7 +237,7 @@ fi
 case "$platform" in
 uboot)
     rm -f "$ofile"
-    mkimage -A ppc -O linux -T kernel -C gzip -a 00000000 -e 00000000 \
+    mkimage -A ppc -O linux -T kernel -C gzip -a $membase -e $membase \
 	$uboot_version -d "$vmz" "$ofile"
     if [ -z "$cacheit" ]; then
 	rm -f "$vmz"
