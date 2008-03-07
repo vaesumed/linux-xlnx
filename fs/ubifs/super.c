@@ -60,11 +60,6 @@ int validate_inode(const struct ubifs_info *c, const struct inode *inode)
 		return -EINVAL;
 	}
 
-	if (ui->msize > inode->i_size) {
-		dbg_err("bad msize %lld", ui->msize);
-		return -EINVAL;
-	}
-
 	if (ui->xattr_cnt < 0) {
 		dbg_err("bad xattr_cnt %d", ui->xattr_cnt);
 		return -EINVAL;
