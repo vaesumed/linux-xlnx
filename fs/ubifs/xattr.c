@@ -51,6 +51,8 @@
  * Since extended attributes are represented by regular inodes, they are cached
  * in the VFS inode cache. The xentries are cached in the LNC cache (see
  * tnc.c).
+ *
+ * ACL support is not implemented.
  */
 
 #include <linux/xattr.h>
@@ -62,11 +64,13 @@
 
 /*
  * Extended attribute type constants.
+ *
+ * USER_XATTR: user extended attribute ("user.*")
+ * TRUSTED_XATTR: trusted extended attribute ("trusted.*)
+ * SECURITY_XATTR: security extended attribute ("security.*")
  */
 enum {
 	USER_XATTR,
-	ACL_ACCESS_XATTR,
-	ACL_DEFAULT_XATTR,
 	TRUSTED_XATTR,
 	SECURITY_XATTR,
 };
@@ -270,24 +274,11 @@ static int check_namespace(const struct qstr *nm)
 		if (nm->name[XATTR_USER_PREFIX_LEN] == '\0')
 			return -EINVAL;
 		type = USER_XATTR;
-	} else if (strncmp(nm->name, POSIX_ACL_XATTR_ACCESS,
-				     sizeof(POSIX_ACL_XATTR_ACCESS) - 1)) {
-		if (nm->name[sizeof(POSIX_ACL_XATTR_ACCESS) - 1] != '\0')
-			return -EINVAL;
-		type = ACL_ACCESS_XATTR;
-	/* TODO: implement ACLs */
-#if 0
-	} else if (strncmp(nm->name, POSIX_ACL_XATTR_DEFAULT,
-				     sizeof(POSIX_ACL_XATTR_DEFAULT) - 1)) {
-		if (nm->name[sizeof(POSIX_ACL_XATTR_DEFAULT) - 1] != '\0')
-			return -EINVAL;
-		type = ACL_DEFAULT_XATTR;
 	} else if (strncmp(nm->name, XATTR_SECURITY_PREFIX,
 				     XATTR_SECURITY_PREFIX_LEN)) {
 		if (nm->name[sizeof(XATTR_SECURITY_PREFIX) - 1] == '\0')
 			return -EINVAL;
 		type = SECURITY_XATTR;
-#endif
 	} else
 		return -EOPNOTSUPP;
 
@@ -302,7 +293,7 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 	struct qstr nm = { .name = name, .len = strlen(name) };
 	struct ubifs_dent_node *xent;
 	union ubifs_key key;
-	int err;
+	int err, type;
 
 	dbg_gen("xattr '%s', host ino %lu ('%.*s'), size %d", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
@@ -315,9 +306,9 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 	if (size > UBIFS_MAX_INO_DATA)
 		return -ERANGE;
 
-	err = check_namespace(&nm);
-	if (err < 0)
-		return err;
+	type = check_namespace(&nm);
+	if (type < 0)
+		return type;
 
 	xent = kmalloc(UBIFS_MAX_XENT_NODE_SZ, GFP_NOFS);
 	if (!xent)
