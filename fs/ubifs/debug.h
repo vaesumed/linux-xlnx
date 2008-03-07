@@ -132,7 +132,7 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, const union ubifs_key *key,
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_MEMPRESS
 void dbg_eat_memory(void);
 void __init dbg_mempressure_init(void);
-void __exit dbg_mempressure_exit(void);
+void dbg_mempressure_exit(void);
 #else
 #define dbg_eat_memory()       ({})
 #define dbg_mempressure_init() ({})

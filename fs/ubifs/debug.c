@@ -828,7 +828,7 @@ void __init dbg_mempressure_init(void)
 	register_shrinker(&dbg_shrinker_info);
 }
 
-void __exit dbg_mempressure_exit(void)
+void dbg_mempressure_exit(void)
 {
 	unregister_shrinker(&dbg_shrinker_info);
 	return_eaten_memory(-1);
