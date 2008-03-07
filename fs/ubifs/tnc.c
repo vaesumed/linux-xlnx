@@ -2461,7 +2461,6 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 	union ubifs_key key1, key2;
 	struct ubifs_dent_node *xent, *pxent = NULL;
 	struct qstr nm = { .name = NULL };
-	int err;
 
 	dbg_tnc("ino %lu", inum);
 
@@ -2472,26 +2471,33 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 	lowest_xent_key(c, &key1, inum);
 	while (1) {
 		ino_t xattr_inum;
+		int err;
 
 		xent = ubifs_tnc_next_ent(c, &key1, nm.name, nm.len);
 		if (IS_ERR(xent)) {
+			if (PTR_ERR(xent) == -ENOENT)
+				break;
 			return err;
 		}
 
 		xattr_inum = le64_to_cpu(xent->inum);
-		dbg_tnc("xent '%s', ino %llu", xent->name, xattr_inum);
+		dbg_tnc("xent '%s', ino %lu", xent->name, xattr_inum);
 
 		nm.name = xent->name;
 		nm.len = le16_to_cpu(xent->nlen);
 		err = ubifs_tnc_remove_nm(c, &key1, &nm);
-		if (err)
+		if (err) {
+			kfree(xent);
 			return err;
+		}
 
 		lowest_ino_key(c, &key1, xattr_inum);
 		highest_ino_key(c, &key2, xattr_inum);
 		err = ubifs_tnc_remove_range(c, &key1, &key2);
-		if (err)
+		if (err) {
+			kfree(xent);
 			return err;
+		}
 
 		kfree(pxent);
 		pxent = xent;
