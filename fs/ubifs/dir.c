@@ -38,6 +38,8 @@
  * write-back for it. This was done to simplify file-system recovery which
  * would otherwise be very difficult to do. So instead of marking the parent
  * inode dirty, the operations mark it clean.
+ *
+ * TODO: support "immutable" flag
  */
 
 #include "ubifs.h"
