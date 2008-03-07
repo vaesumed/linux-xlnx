@@ -393,6 +393,16 @@ static inline void ipv6_addr_set_v4mapped(const __be32 addr,
 }
 
 /*
+ * Check for a RFC 4843 ORCHID address
+ * (Overlay Routable Cryptographic Hash Identifiers)
+ */
+static inline int ipv6_addr_orchid(const struct in6_addr *a)
+{
+	return ((a->s6_addr32[0] & htonl(0xfffffff0))
+		== htonl(0x20010010));
+}
+
+/*
  * find the first different bit between two addresses
  * length of address must be a multiple of 32bits
  */
@@ -554,10 +564,6 @@ extern int			compat_ipv6_getsockopt(struct sock *sk,
 						char __user *optval,
 						int __user *optlen);
 
-extern int			ipv6_packet_init(void);
-
-extern void			ipv6_packet_cleanup(void);
-
 extern int			ip6_datagram_connect(struct sock *sk, 
 						     struct sockaddr *addr, int addr_len);
 
@@ -602,14 +608,18 @@ extern int  tcp6_proc_init(void);
 extern void tcp6_proc_exit(void);
 extern int  udp6_proc_init(void);
 extern void udp6_proc_exit(void);
+#ifdef CONFIG_IP_UDPLITE
 extern int  udplite6_proc_init(void);
 extern void udplite6_proc_exit(void);
+#else
+static inline int udplite6_proc_init(void) { return 0; }
+static inline void udplite6_proc_exit(void) { }
+#endif
 extern int  ipv6_misc_proc_init(void);
 extern void ipv6_misc_proc_exit(void);
 extern int snmp6_register_dev(struct inet6_dev *idev);
 extern int snmp6_unregister_dev(struct inet6_dev *idev);
 
-extern struct rt6_statistics rt6_stats;
 #else
 static inline int snmp6_register_dev(struct inet6_dev *idev)
 {

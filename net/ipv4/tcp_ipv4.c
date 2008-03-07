@@ -552,7 +552,7 @@ static void tcp_v4_send_reset(struct sock *sk, struct sk_buff *skb)
 	if (th->rst)
 		return;
 
-	if (((struct rtable *)skb->dst)->rt_type != RTN_LOCAL)
+	if (skb->rtable->rt_type != RTN_LOCAL)
 		return;
 
 	/* Swap the send and the receive. */
@@ -723,8 +723,8 @@ static void tcp_v4_reqsk_send_ack(struct sk_buff *skb,
  *	This still operates on a request_sock only, not on a big
  *	socket.
  */
-static int tcp_v4_send_synack(struct sock *sk, struct request_sock *req,
-			      struct dst_entry *dst)
+static int __tcp_v4_send_synack(struct sock *sk, struct request_sock *req,
+				struct dst_entry *dst)
 {
 	const struct inet_request_sock *ireq = inet_rsk(req);
 	int err = -1;
@@ -732,7 +732,7 @@ static int tcp_v4_send_synack(struct sock *sk, struct request_sock *req,
 
 	/* First, grab a route. */
 	if (!dst && (dst = inet_csk_route_req(sk, req)) == NULL)
-		goto out;
+		return -1;
 
 	skb = tcp_make_synack(sk, dst, req);
 
@@ -751,9 +751,13 @@ static int tcp_v4_send_synack(struct sock *sk, struct request_sock *req,
 		err = net_xmit_eval(err);
 	}
 
-out:
 	dst_release(dst);
 	return err;
+}
+
+static int tcp_v4_send_synack(struct sock *sk, struct request_sock *req)
+{
+	return __tcp_v4_send_synack(sk, req, NULL);
 }
 
 /*
@@ -1258,8 +1262,7 @@ int tcp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
 #endif
 
 	/* Never answer to SYNs send to broadcast or multicast */
-	if (((struct rtable *)skb->dst)->rt_flags &
-	    (RTCF_BROADCAST | RTCF_MULTICAST))
+	if (skb->rtable->rt_flags & (RTCF_BROADCAST | RTCF_MULTICAST))
 		goto drop;
 
 	/* TW buckets are converted to open requests without
@@ -1351,8 +1354,7 @@ int tcp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
 			    (s32)(peer->tcp_ts - req->ts_recent) >
 							TCP_PAWS_WINDOW) {
 				NET_INC_STATS_BH(LINUX_MIB_PAWSPASSIVEREJECTED);
-				dst_release(dst);
-				goto drop_and_free;
+				goto drop_and_release;
 			}
 		}
 		/* Kill the following clause, if you dislike this way. */
@@ -1372,24 +1374,21 @@ int tcp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
 				       "request from %u.%u.%u.%u/%u\n",
 				       NIPQUAD(saddr),
 				       ntohs(tcp_hdr(skb)->source));
-			dst_release(dst);
-			goto drop_and_free;
+			goto drop_and_release;
 		}
 
 		isn = tcp_v4_init_sequence(skb);
 	}
 	tcp_rsk(req)->snt_isn = isn;
 
-	if (tcp_v4_send_synack(sk, req, dst))
+	if (__tcp_v4_send_synack(sk, req, dst) || want_cookie)
 		goto drop_and_free;
 
-	if (want_cookie) {
-		reqsk_free(req);
-	} else {
-		inet_csk_reqsk_queue_hash_add(sk, req, TCP_TIMEOUT_INIT);
-	}
+	inet_csk_reqsk_queue_hash_add(sk, req, TCP_TIMEOUT_INIT);
 	return 0;
 
+drop_and_release:
+	dst_release(dst);
 drop_and_free:
 	reqsk_free(req);
 drop:
@@ -2443,7 +2442,7 @@ struct proto tcp_prot = {
 	REF_PROTO_INUSE(tcp)
 };
 
-void __init tcp_v4_init(struct net_proto_family *ops)
+void __init tcp_v4_init(void)
 {
 	if (inet_csk_ctl_sock_create(&tcp_socket, PF_INET, SOCK_RAW,
 				     IPPROTO_TCP) < 0)
