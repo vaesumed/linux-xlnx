@@ -19,7 +19,7 @@
 #include <linux/kdev_t.h>
 #include <linux/notifier.h>
 #include <linux/genhd.h>
-#include <asm/semaphore.h>
+#include <linux/semaphore.h>
 
 #include "base.h"
 #include "power/power.h"
