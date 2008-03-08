@@ -289,7 +289,7 @@ static ssize_t store_val_norm(int id,struct device *class_dev,
 	int ret;
 	sfp = (struct pvr2_sysfs *)class_dev->driver_data;
 	pvr2_sysfs_trace("pvr2_sysfs(%p) store_val_norm(cid=%d) \"%.*s\"",
-			 sfp,id,count,buf);
+			 sfp,id,(int)count,buf);
 	ret = store_val_any(id,0,sfp,buf,count);
 	if (!ret) ret = count;
 	return ret;
@@ -302,7 +302,7 @@ static ssize_t store_val_custom(int id,struct device *class_dev,
 	int ret;
 	sfp = (struct pvr2_sysfs *)class_dev->driver_data;
 	pvr2_sysfs_trace("pvr2_sysfs(%p) store_val_custom(cid=%d) \"%.*s\"",
-			 sfp,id,count,buf);
+			 sfp,id,(int)count,buf);
 	ret = store_val_any(id,1,sfp,buf,count);
 	if (!ret) ret = count;
 	return ret;
