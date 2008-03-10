@@ -194,8 +194,6 @@ error:
 /* TODO: remove compatibility stuff as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 
-/* TODO: rate-limiting is required. Look at something like
- * balance_dirty_pages_ratelimited_nr()! */
 static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 			     loff_t pos, unsigned len, unsigned flags,
 			     struct page **pagep, void **fsdata)
