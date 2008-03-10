@@ -23,8 +23,6 @@
 #include "dvb_frontend.h"
 
 
-#define PREFIX "xc2028"
-
 static int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "enable verbose debug messages");
@@ -145,7 +143,7 @@ static unsigned int xc2028_get_reg(struct xc2028_data *priv, u16 reg, u16 *val)
 }
 
 #define dump_firm_type(t) 	dump_firm_type_and_int_freq(t, 0)
-void dump_firm_type_and_int_freq(unsigned int type, u16 int_freq)
+static void dump_firm_type_and_int_freq(unsigned int type, u16 int_freq)
 {
 	 if (type & BASE)
 		printk("BASE ");
@@ -906,9 +904,11 @@ static int generic_set_freq(struct dvb_frontend *fe, u32 freq /* in HZ */,
 	if (rc < 0)
 		goto ret;
 
-	rc = priv->tuner_callback(priv->video_dev, XC2028_RESET_CLK, 1);
-	if (rc < 0)
-		goto ret;
+	/* Return code shouldn't be checked.
+	   The reset CLK is needed only with tm6000.
+	   Driver should work fine even if this fails.
+	 */
+	priv->tuner_callback(priv->video_dev, XC2028_RESET_CLK, 1);
 
 	msleep(10);
 
@@ -1153,13 +1153,13 @@ struct dvb_frontend *xc2028_attach(struct dvb_frontend *fe,
 	void               *video_dev;
 
 	if (debug)
-		printk(KERN_DEBUG PREFIX ": Xcv2028/3028 init called!\n");
+		printk(KERN_DEBUG "xc2028: Xcv2028/3028 init called!\n");
 
 	if (NULL == cfg || NULL == cfg->video_dev)
 		return NULL;
 
 	if (!fe) {
-		printk(KERN_ERR PREFIX ": No frontend!\n");
+		printk(KERN_ERR "xc2028: No frontend!\n");
 		return NULL;
 	}
 
@@ -1183,6 +1183,8 @@ struct dvb_frontend *xc2028_attach(struct dvb_frontend *fe,
 
 		priv->i2c_props.addr = cfg->i2c_addr;
 		priv->i2c_props.adap = cfg->i2c_adap;
+		priv->i2c_props.name = "xc2028";
+
 		priv->video_dev = video_dev;
 		priv->tuner_callback = cfg->callback;
 		priv->ctrl.max_len = 13;
