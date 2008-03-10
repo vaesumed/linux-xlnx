@@ -265,7 +265,7 @@ static int check_namespace(const struct qstr *nm)
 	if (nm->len > UBIFS_MAX_NLEN)
 		return -ENAMETOOLONG;
 
-	if (strncmp(nm->name, XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN)) {
+	if (!strncmp(nm->name, XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN)) {
 		if (nm->name[sizeof(XATTR_TRUSTED_PREFIX) - 1] == '\0')
 			return -EINVAL;
 		type = TRUSTED_XATTR;
@@ -274,7 +274,7 @@ static int check_namespace(const struct qstr *nm)
 		if (nm->name[XATTR_USER_PREFIX_LEN] == '\0')
 			return -EINVAL;
 		type = USER_XATTR;
-	} else if (strncmp(nm->name, XATTR_SECURITY_PREFIX,
+	} else if (!strncmp(nm->name, XATTR_SECURITY_PREFIX,
 				     XATTR_SECURITY_PREFIX_LEN)) {
 		if (nm->name[sizeof(XATTR_SECURITY_PREFIX) - 1] == '\0')
 			return -EINVAL;
