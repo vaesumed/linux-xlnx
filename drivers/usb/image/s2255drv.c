@@ -2393,9 +2393,7 @@ static int s2255_board_init(struct s2255_dev *dev)
 	for (j = 0; j < MAX_PIPE_BUFFERS; j++) {
 		struct s2255_pipeinfo *pipe = &dev->pipes[j];
 
-		memset(pipe, sizeof(struct s2255_pipeinfo), 0);
-		pipe->state = 0;
-		pipe->prev_state = 0;
+		memset(pipe, 0, sizeof(*pipe));
 		pipe->dev = dev;
 		pipe->cur_transfer_size = DEFAULT_PIPE_USBBLOCK;
 		pipe->max_transfer_size = MAX_PIPE_USBBLOCK;
