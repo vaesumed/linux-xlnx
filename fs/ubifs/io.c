@@ -320,9 +320,7 @@ int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf)
 
 	cancel_wbuf_timer_nolock(wbuf);
 	if (!wbuf->used || wbuf->lnum == -1)
-		/*
-		 * Write-buffer is empty or not seeked, nothing to synchronize.
-		 */
+		/* Write-buffer is empty or not seeked */
 		return 0;
 
 	dbg_io("LEB %d:%d, %d bytes",
@@ -406,16 +404,20 @@ int ubifs_wbuf_seek_nolock(struct ubifs_wbuf *wbuf, int lnum, int offs,
  */
 int ubifs_bg_wbufs_sync(struct ubifs_info *c)
 {
-	int i;
+	int err, i;
 
 	if (!c->need_wbuf_sync)
 		return 0;
 	c->need_wbuf_sync = 0;
 
+	if (c->ro_media) {
+		err = -EROFS;
+		goto out_timers;
+	}
+
 	dbg_io("synchronize");
 	for (i = 0; i < c->jhead_cnt; i++) {
 		struct ubifs_wbuf *wbuf = &c->jheads[i].wbuf;
-		int err;
 
 		cond_resched();
 
@@ -435,14 +437,24 @@ int ubifs_bg_wbufs_sync(struct ubifs_info *c)
 		err = ubifs_wbuf_sync_nolock(wbuf);
 		mutex_unlock(&wbuf->io_mutex);
 		if (err) {
-			/* TODO: should we also cancel all timers here? */
 			ubifs_err("cannot sync write-buffer, error %d", err);
 			ubifs_ro_mode(c);
-			return err;
+			goto out_timers;
 		}
 	}
 
 	return 0;
+
+out_timers:
+	/* Cancel all timers to prevent repeated errors */
+	for (i = 0; i < c->jhead_cnt; i++) {
+		struct ubifs_wbuf *wbuf = &c->jheads[i].wbuf;
+
+		mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
+		cancel_wbuf_timer_nolock(wbuf);
+		mutex_unlock(&wbuf->io_mutex);
+	}
+	return err;
 }
 
 /**
@@ -907,7 +919,7 @@ static int wbuf_has_ino(struct ubifs_wbuf *wbuf, ino_t inum)
 }
 
 /**
- * ubifs_sync_wbufs_by_inodes - synchronize write-buffers which have data
+ * ubifs_sync_wbufs_by_inodes - synchronize write-buffers which have data.
  * belonging to specified inodes.
  * @c: UBIFS file-system description object
  * @inodes: array of inodes
@@ -931,7 +943,8 @@ int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			/*
 			 * GC head is special, do not look at it. Even if the
 			 * head contains something related to this inode, it is
-			 * a _copy_ of corresponding on-flash node.
+			 * a _copy_ of corresponding on-flash node which sits
+			 * somewhere else.
 			 */
 			continue;
 
