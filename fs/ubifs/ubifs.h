@@ -865,7 +865,6 @@ struct ubifs_mount_opts
  *
  * @min_io_size: minimal input/output unit size
  * @min_io_shift: number of bits in @min_io_size minus one
- * @max_align: max(8, @min_io_size)
  * @leb_size: logical eraseblock size in bytes
  * @half_leb_size: half LEB size
  * @leb_cnt: count of logical eraseblocks
@@ -1093,7 +1092,6 @@ struct ubifs_info
 
 	int min_io_size;
 	int min_io_shift;
-	int max_align;
 	int leb_size;
 	int half_leb_size;
 	int leb_cnt;

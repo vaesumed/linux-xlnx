@@ -50,11 +50,6 @@
  * every time they are read from the flash media.
  */
 
-/*
- * TODO: in order to have less troubles with I/O units just make the
- * min_io_size = 8 if it is less then 8.
- */
-
 #include <linux/crc32.h>
 #include "ubifs.h"
 
@@ -142,14 +137,14 @@ out:
  * @buf: buffer to put padding to
  * @pad: how many bytes to pad
  *
- * The flash media obliges us to write only in chunks of %c->min_io_size (for
- * NOR flash it is %1) and when we have to write less data we add padding node
- * to the write-buffer and pad it to the next minimal I/O unit's boundary.
- * Padding nodes help when the media is being scanned. If the amount of wasted
- * space is not enough to fit a padding node which takes %UBIFS_PAD_NODE_SZ
- * bytes, we write padding bytes pattern (%UBIFS_PADDING_BYTE).
+ * The flash media obliges us to write only in chunks of %c->min_io_size and
+ * when we have to write less data we add padding node to the write-buffer and
+ * pad it to the next minimal I/O unit's boundary. Padding nodes help when the
+ * media is being scanned. If the amount of wasted space is not enough to fit a
+ * padding node which takes %UBIFS_PAD_NODE_SZ bytes, we write padding bytes
+ * pattern (%UBIFS_PADDING_BYTE).
  *
- * Padding nodes are also used to fill gaps when the "commit in gaps" method is
+ * Padding nodes are also used to fill gaps when the "commit-in-gaps" method is
  * used.
  */
 void ubifs_pad(const struct ubifs_info *c, void *buf, int pad)
@@ -323,14 +318,7 @@ int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf)
 	struct ubifs_info *c = wbuf->c;
 	int err, dirt;
 
-	ubifs_assert(!(c->vfs_sb->s_flags & MS_RDONLY));
-
-	if (c->min_io_size == 1)
-		/* NOR flash (and similar) does not have write buffer */
-		return 0;
-
 	cancel_wbuf_timer_nolock(wbuf);
-
 	if (!wbuf->used || wbuf->lnum == -1)
 		/*
 		 * Write-buffer is empty or not seeked, nothing to synchronize.
@@ -339,6 +327,7 @@ int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf)
 
 	dbg_io("LEB %d:%d, %d bytes",
 	       wbuf->lnum, wbuf->offs, wbuf->used);
+	ubifs_assert(!(c->vfs_sb->s_flags & MS_RDONLY));
 	ubifs_assert(!(wbuf->avail & 7));
 	ubifs_assert(wbuf->offs + c->min_io_size <= c->leb_size);
 
@@ -484,26 +473,6 @@ int ubifs_wbuf_write_nolock(struct ubifs_wbuf *wbuf, void *buf, int len)
 	ubifs_assert(!(wbuf->offs & 7) && wbuf->offs <= c->leb_size);
 	ubifs_assert(wbuf->avail > 0 && wbuf->avail <= c->min_io_size);
 	ubifs_assert(mutex_is_locked(&wbuf->io_mutex));
-
-	if (c->min_io_size == 1) {
-		/*
-		 * NOR flash or something like this. We do not have
-		 * write-buffer in this case just because we do not need it.
-		 */
-		err = ubi_leb_write(c->ubi, wbuf->lnum, buf, wbuf->offs,
-				    len, wbuf->dtype);
-		if (err)
-			goto out;
-
-		wbuf->offs += aligned_len;
-		if (wbuf->sync_callback) {
-			err = wbuf->sync_callback(c, wbuf->lnum,
-						  c->leb_size - wbuf->offs, 0);
-			if (err)
-				goto out;
-		}
-		return 0;
-	}
 
 	if (c->leb_size - wbuf->offs - wbuf->used < aligned_len) {
 		err = -ENOSPC;
@@ -684,10 +653,6 @@ int ubifs_read_node_wbuf(struct ubifs_wbuf *wbuf, void *buf, int type, int len,
 	ubifs_assert(!(offs & 7) && offs < c->leb_size);
 	ubifs_assert(type >= 0 && type < UBIFS_NODE_TYPES_CNT);
 
-	if (c->min_io_size == 1)
-		/* We do not have write-buffer if min. I/O size is 1 */
-		return ubifs_read_node(c, buf, type, len, lnum, offs);
-
 	spin_lock(&wbuf->lock);
 	overlap = (lnum == wbuf->lnum && offs + len > wbuf->offs);
 	if (!overlap) {
@@ -812,20 +777,18 @@ out:
  */
 int ubifs_wbuf_init(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
 {
-	if (c->min_io_size > 1) {
-		size_t size;
+	size_t size;
 
-		wbuf->buf = kmalloc(c->min_io_size, GFP_KERNEL);
-		if (!wbuf->buf)
-			return -ENOMEM;
+	wbuf->buf = kmalloc(c->min_io_size, GFP_KERNEL);
+	if (!wbuf->buf)
+		return -ENOMEM;
 
-		size = (c->min_io_size / UBIFS_CH_SZ + 1) * sizeof(ino_t);
-		wbuf->inodes = kmalloc(size, GFP_KERNEL);
-		if (!wbuf->inodes) {
-			kfree(wbuf->buf);
-			wbuf->buf = NULL;
-			return -ENOMEM;
-		}
+	size = (c->min_io_size / UBIFS_CH_SZ + 1) * sizeof(ino_t);
+	wbuf->inodes = kmalloc(size, GFP_KERNEL);
+	if (!wbuf->inodes) {
+		kfree(wbuf->buf);
+		wbuf->buf = NULL;
+		return -ENOMEM;
 	}
 
 	wbuf->used = 0;

@@ -84,8 +84,6 @@ static int init_constants_early(struct ubifs_info *c)
 	c->half_leb_size = c->leb_size / 2;
 	c->min_io_size = c->di.min_io_size;
 	c->min_io_shift = fls(c->min_io_size) - 1;
-	/* TODO: propose to make the below with c->min_io_size (dedekind) */
-	c->max_align = max_t(int, c->min_io_size, 8);
 
 	if (c->leb_size < UBIFS_MIN_LEB_SZ) {
 		ubifs_err("too small LEBs (%d bytes), min. is %d bytes",
@@ -102,6 +100,16 @@ static int init_constants_early(struct ubifs_info *c)
 	if (!is_power_of_2(c->min_io_size)) {
 		ubifs_err("bad min. I/O size %d", c->min_io_size);
 		return -EINVAL;
+	}
+
+	/*
+	 * UBIFS aligns all node to 8-byte boundary, so to make function in
+	 * io.c simpler, assume minimum I/O unit size to be 8 bytes if it is
+	 * less then 8.
+	 */
+	if (c->min_io_size < 8) {
+		c->min_io_size = 8;
+		c->min_io_shift = 3;
 	}
 
 	c->ref_node_alsz = ALIGN(UBIFS_REF_NODE_SZ, c->min_io_size);
