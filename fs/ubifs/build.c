@@ -909,7 +909,7 @@ void ubifs_remount_ro(struct ubifs_info *c)
 	}
 
 	for (i = 0; i < c->jhead_cnt; i++) {
-		ubifs_wbuf_sync(c, &c->jheads[i].wbuf);
+		ubifs_wbuf_sync(&c->jheads[i].wbuf);
 		del_timer_sync(&c->jheads[i].wbuf.timer);
 	}
 
