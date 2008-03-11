@@ -37,6 +37,7 @@
 #include <linux/pagemap.h>
 #include <linux/backing-dev.h>
 #include "ubifs-media.h"
+#include "compat.h"
 
 /* Version of this UBIFS implementation */
 #define UBIFS_VERSION 1
@@ -743,7 +744,7 @@ struct ubifs_budget_req
 	unsigned int new_dent:1;
 	unsigned int mod_dent:1;
 /* TODO: remove compatibility crap as late as possible */
-#ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
+#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 	unsigned int locked_pg:1;
 #endif
 	unsigned int new_ino_d:13;
