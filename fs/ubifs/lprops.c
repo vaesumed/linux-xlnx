@@ -1276,7 +1276,7 @@ int dbg_check_lprops(struct ubifs_info *c)
 	 * synchronized.
 	 */
 	for (i = 0; i < c->jhead_cnt; i++) {
-		err = ubifs_wbuf_sync(c, &c->jheads[i].wbuf);
+		err = ubifs_wbuf_sync(&c->jheads[i].wbuf);
 		if (err)
 			return err;
 	}

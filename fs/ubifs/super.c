@@ -309,7 +309,7 @@ static void ubifs_put_super(struct super_block *sb)
 		/* Synchronize write-buffers */
 		if (c->jheads)
 			for (i = 0; i < c->jhead_cnt; i++) {
-				ubifs_wbuf_sync(c, &c->jheads[i].wbuf);
+				ubifs_wbuf_sync(&c->jheads[i].wbuf);
 				del_timer_sync(&c->jheads[i].wbuf.timer);
 			}
 
