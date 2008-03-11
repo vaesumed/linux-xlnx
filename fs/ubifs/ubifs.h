@@ -1253,15 +1253,14 @@ extern struct backing_dev_info ubifs_backing_dev_info;
 extern struct ubifs_compressor *ubifs_compressors[UBIFS_COMPR_TYPES_CNT];
 
 /* io.c */
-int ubifs_wbuf_write_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf,
-			    void *buf, int len);
-int ubifs_wbuf_seek_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf,
-			   int lnum, int offs, int dtype);
+int ubifs_wbuf_write_nolock(struct ubifs_wbuf *wbuf, void *buf, int len);
+int ubifs_wbuf_seek_nolock(struct ubifs_wbuf *wbuf, int lnum, int offs,
+			   int dtype);
 int ubifs_wbuf_init(struct ubifs_info *c, struct ubifs_wbuf *wbuf);
 int ubifs_read_node(const struct ubifs_info *c, void *buf, int type, int len,
 		    int lnum, int offs);
-int ubifs_read_node_wbuf(const struct ubifs_info *c, struct ubifs_wbuf *wbuf,
-			 void *buf, int type, int len, int lnum, int offs);
+int ubifs_read_node_wbuf(struct ubifs_wbuf *wbuf, void *buf, int type, int len,
+			 int lnum, int offs);
 int ubifs_write_node(struct ubifs_info *c, void *node, int len, int lnum,
 		     int offs, int dtype);
 int ubifs_check_node(const struct ubifs_info *c, const void *buf, int lnum,
@@ -1270,10 +1269,10 @@ void ubifs_prepare_node(struct ubifs_info *c, void *buf, int len, int pad);
 void ubifs_prep_grp_node(struct ubifs_info *c, void *node, int len, int last);
 int ubifs_io_init(struct ubifs_info *c);
 void ubifs_pad(const struct ubifs_info *c, void *buf, int pad);
-int ubifs_wbuf_sync_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf);
+int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf);
 int ubifs_try_read_node(const struct ubifs_info *c, void *buf, int type, int len,
 			int lnum, int offs);
-int ubifs_bg_wbuf_sync(struct ubifs_info *c);
+int ubifs_bg_wbufs_sync(struct ubifs_info *c);
 void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t inum);
 int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			       struct inode * const *inodes, int count);

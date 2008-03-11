@@ -45,7 +45,7 @@ static int do_commit(struct ubifs_info *c)
 
 	/* Sync all write buffers (necessary for recovery) */
 	for (i = 0; i < c->jhead_cnt; i++) {
-		err = ubifs_wbuf_sync(c, &c->jheads[i].wbuf);
+		err = ubifs_wbuf_sync(&c->jheads[i].wbuf);
 		if (err)
 			goto out_up;
 	}
@@ -221,7 +221,7 @@ int ubifs_bg_thread(void *info)
 
 		c->need_bgt = 0;
 
-		err = ubifs_bg_wbuf_sync(c);
+		err = ubifs_bg_wbufs_sync(c);
 		if (err)
 			ubifs_ro_mode(c);
 

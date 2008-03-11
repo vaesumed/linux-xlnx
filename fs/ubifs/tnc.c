@@ -865,7 +865,7 @@ static int tnc_read_node(struct ubifs_info *c, const union ubifs_key *key,
 		 *    to serialize access to the LEB in this case?
 		 * A: TODO: no idea so far, sorry.
 		 */
-		err = ubifs_read_node_wbuf(c, &c->jheads[bud->jhead].wbuf,
+		err = ubifs_read_node_wbuf(&c->jheads[bud->jhead].wbuf,
 					   node, type, zbr->len, zbr->lnum,
 					   zbr->offs);
 	else

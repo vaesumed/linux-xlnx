@@ -23,12 +23,13 @@
  */
 
 /*
- * This file implements UBIFS I/O unit. The I/O unit provides various
- * I/O-related helper functions (reading/writing/checking/validating nodes) and
- * implements write-buffering support. Write buffers help to save space which
- * otherwise would have been wasted for paddings to the nearest minimal I/O
+ * This file implements UBIFS I/O subsystem which provides various I/O-related
+ * helper functions (reading/writing/checking/validating nodes) and implements
+ * write-buffering support. Write buffers help to save space which otherwise
+ * would have been wasted for paddings to the nearest minimal I/O unit
  * boundary. Instead, data first goes to the write-buffer and flushed when the
- * buffer is full or when it is not used for some time (by timer).
+ * buffer is full or when it is not used for some time (by timer). Similar
+ * mechanism is used by JFFS2.
  *
  * Write-buffers are defined by 'struct ubifs_wbuf' objects and protected by
  * rw-semaphores defined inside these objects. Since sometimes upper-level code
@@ -39,11 +40,11 @@
  * UBIFS stores nodes at 64 bit-aligned addresses. If node length is not
  * aligned, UBIFS starts the next node from the aligned address, and the padded
  * bytes may contain any rubbish. In other words, UBIFS does not put padding
- * bytes to those gaps. Common headers of nodes store real node lengths, not
- * aligned lengths. Indexing nodes also store real lengths in branches.
+ * bytes to those small gaps. Common headers of nodes store real node lengths,
+ * not aligned lengths. Indexing nodes also store real lengths in branches.
  *
- * UBIFS does use padding when it pads to the next min. I/O unit. In this case
- * it uses either padding bytes or padding node.
+ * UBIFS uses padding when it pads to the next min. I/O unit. In this case it
+ * uses padding nodes or padding bytes, if the padding node does not fit.
  *
  * All UBIFS nodes are protected by CRC checksums and UBIFS checks all nodes
  * every time they are read from the flash media.
@@ -52,8 +53,6 @@
 /*
  * TODO: in order to have less troubles with I/O units just make the
  * min_io_size = 8 if it is less then 8.
- *
- * TODO: wbuf has c inside, do we really has to pass c everywhere?
  */
 
 #include <linux/crc32.h>
@@ -314,14 +313,14 @@ static void cancel_wbuf_timer_nolock(struct ubifs_wbuf *wbuf)
 
 /**
  * ubifs_wbuf_sync_nolock - synchronize write-buffer.
- * @c: UBIFS file-system description object
  * @wbuf: write-buffer to synchronize
  *
  * This function synchronizes write-buffer @buf and returns zero in case of
  * success or a negative error code in case of failure.
  */
-int ubifs_wbuf_sync_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
+int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf)
 {
+	struct ubifs_info *c = wbuf->c;
 	int err, dirt;
 
 	ubifs_assert(!(c->vfs_sb->s_flags & MS_RDONLY));
@@ -370,7 +369,6 @@ int ubifs_wbuf_sync_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
 
 /**
  * ubifs_wbuf_seek_nolock - seek write-buffer.
- * @c: UBIFS file-system description object
  * @wbuf: write-buffer
  * @lnum: logical eraseblock number to seek to
  * @offs: logical eraseblock offset to seek to
@@ -380,9 +378,11 @@ int ubifs_wbuf_sync_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
  * The write-buffer is synchronized if it is not empty. Returns zero in case of
  * success and a negative error code in case of failure.
  */
-int ubifs_wbuf_seek_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf,
-			   int lnum, int offs, int dtype)
+int ubifs_wbuf_seek_nolock(struct ubifs_wbuf *wbuf, int lnum, int offs,
+			   int dtype)
 {
+	const struct ubifs_info *c = wbuf->c;
+
 	dbg_io("LEB %d:%d", lnum, offs);
 	ubifs_assert(lnum >= 0 && lnum < c->leb_cnt);
 	ubifs_assert(offs >= 0 && offs <= c->leb_size);
@@ -390,7 +390,7 @@ int ubifs_wbuf_seek_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf,
 	ubifs_assert(lnum != wbuf->lnum);
 
 	if (wbuf->used > 0) {
-		int err = ubifs_wbuf_sync_nolock(c, wbuf);
+		int err = ubifs_wbuf_sync_nolock(wbuf);
 
 		if (err)
 			return err;
@@ -408,14 +408,14 @@ int ubifs_wbuf_seek_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf,
 }
 
 /**
- * ubifs_bg_wbuf_sync - sync write buffers.
+ * ubifs_bg_wbufs_sync - synchronize write-buffers.
  * @c: UBIFS file-system description object
  *
  * This function is called by background thread to synchronize write-buffers.
  * Returns zero in case of success and a negative error code in case of
  * failure.
  */
-int ubifs_bg_wbuf_sync(struct ubifs_info *c)
+int ubifs_bg_wbufs_sync(struct ubifs_info *c)
 {
 	int i;
 
@@ -443,7 +443,7 @@ int ubifs_bg_wbuf_sync(struct ubifs_info *c)
 			continue;
 		}
 
-		err = ubifs_wbuf_sync_nolock(wbuf->c, wbuf);
+		err = ubifs_wbuf_sync_nolock(wbuf);
 		mutex_unlock(&wbuf->io_mutex);
 		if (err) {
 			/* TODO: should we also cancel all timers here? */
@@ -458,7 +458,6 @@ int ubifs_bg_wbuf_sync(struct ubifs_info *c)
 
 /**
  * ubifs_wbuf_write_nolock - write data to flash via write-buffer.
- * @c: UBIFS file-system description object
  * @wbuf: write-buffer
  * @buf: node to write
  * @len: node length
@@ -472,9 +471,9 @@ int ubifs_bg_wbuf_sync(struct ubifs_info *c)
  * case of failure. If the node cannot be written because there is no more
  * space in this logical eraseblock, %-ENOSPC is returned.
  */
-int ubifs_wbuf_write_nolock(struct ubifs_info *c, struct ubifs_wbuf *wbuf,
-			    void *buf, int len)
+int ubifs_wbuf_write_nolock(struct ubifs_wbuf *wbuf, void *buf, int len)
 {
+	struct ubifs_info *c = wbuf->c;
 	int err, written, n, aligned_len = ALIGN(len, 8), offs;
 
 	dbg_io("%d bytes (%s) to wbuf at LEB %d:%d", len,
@@ -660,7 +659,6 @@ int ubifs_write_node(struct ubifs_info *c, void *buf, int len, int lnum,
 
 /**
  * ubifs_read_node_wbuf - read node from the media or write-buffer.
- * @c: UBIFS file-system description object
  * @wbuf: wbuf to check for un-written data
  * @buf: buffer to read to
  * @type: node type
@@ -674,9 +672,10 @@ int ubifs_write_node(struct ubifs_info *c, void *buf, int len, int lnum,
  * Returns zero in case of success, %-EUCLEAN if CRC mismatched and a negative
  * error code in case of failure.
  */
-int ubifs_read_node_wbuf(const struct ubifs_info *c, struct ubifs_wbuf *wbuf,
-			 void *buf, int type, int len, int lnum, int offs)
+int ubifs_read_node_wbuf(struct ubifs_wbuf *wbuf, void *buf, int type, int len,
+			 int lnum, int offs)
 {
+	const struct ubifs_info *c = wbuf->c;
 	int err, rlen, overlap;
 	struct ubifs_ch *ch = buf;
 
@@ -977,7 +976,7 @@ int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			if (wbuf_has_ino(wbuf, inodes[j]->i_ino)) {
 				mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
 				if (wbuf_has_ino(wbuf, inodes[j]->i_ino))
-					err = ubifs_wbuf_sync_nolock(c, wbuf);
+					err = ubifs_wbuf_sync_nolock(wbuf);
 				mutex_unlock(&wbuf->io_mutex);
 				break;
 			}
