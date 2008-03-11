@@ -285,6 +285,8 @@ struct page __init *sparse_early_mem_map_alloc(unsigned long pnum)
 	return NULL;
 }
 
+/* section_map pointer array is 64k */
+static __initdata struct page *section_map[NR_MEM_SECTIONS];
 /*
  * Allocate the accumulated non-linear sections, allocate a mem_map
  * for each and record the physical to section mapping.
@@ -295,13 +297,28 @@ void __init sparse_init(void)
 	struct page *map;
 	unsigned long *usemap;
 
+	/*
+	 * map is using big page (aka 2M in x86 64 bit)
+	 * usemap is less one page (aka 24 bytes)
+	 * so alloc 2M (with 2M align) and 24 bytes in turn will
+	 * make next 2M slip to one more 2M later.
+	 * then in big system, the memmory will have a lot hole...
+	 * here try to allocate 2M pages continously.
+	 */
+	for (pnum = 0; pnum < NR_MEM_SECTIONS; pnum++) {
+		if (!present_section_nr(pnum))
+			continue;
+		section_map[pnum] = sparse_early_mem_map_alloc(pnum);
+	}
+
+
 	for (pnum = 0; pnum < NR_MEM_SECTIONS; pnum++) {
 		if (!present_section_nr(pnum))
 			continue;
 
-		map = sparse_early_mem_map_alloc(pnum);
+		map = section_map[pnum];
 		if (!map)
-			continue;
+			 continue;
 
 		usemap = sparse_early_usemap_alloc(pnum);
 		if (!usemap)
