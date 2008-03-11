@@ -563,7 +563,7 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 
 	if (sleb->endpt + c->min_io_size <= c->leb_size &&
 	    !(c->vfs_sb->s_flags & MS_RDONLY))
-		err = ubifs_wbuf_seek_nolock(c, &c->jheads[jhead].wbuf, lnum,
+		err = ubifs_wbuf_seek_nolock(&c->jheads[jhead].wbuf, lnum,
 					     sleb->endpt, UBI_SHORTTERM);
 
 	*dirty = sleb->endpt - offs - used;

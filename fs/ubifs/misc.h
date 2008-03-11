@@ -118,16 +118,17 @@ static inline const char *ubifs_compr_name(int compr_type)
 
 /**
  * ubifs_wbuf_sync - synchronize write-buffer.
+ * @wbuf: write-buffer to synchronize
  *
  * This is the same as as 'ubifs_wbuf_sync_nolock()' but it does not assume
  * that the write-buffer is already locked.
  */
-static inline int ubifs_wbuf_sync(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
+static inline int ubifs_wbuf_sync(struct ubifs_wbuf *wbuf)
 {
 	int err;
 
 	mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
-	err = ubifs_wbuf_sync_nolock(c, wbuf);
+	err = ubifs_wbuf_sync_nolock(wbuf);
 	mutex_unlock(&wbuf->io_mutex);
 	return err;
 }

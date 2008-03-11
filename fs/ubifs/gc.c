@@ -76,7 +76,7 @@ static int switch_gc_head(struct ubifs_info *c)
 	       wbuf->lnum, wbuf->offs + wbuf->used, gc_lnum,
 	       c->leb_size - wbuf->offs - wbuf->used);
 
-	err = ubifs_wbuf_sync_nolock(c, wbuf);
+	err = ubifs_wbuf_sync_nolock(wbuf);
 	if (err)
 		return err;
 
@@ -93,7 +93,7 @@ static int switch_gc_head(struct ubifs_info *c)
 		return err;
 
 	c->gc_lnum = -1;
-	err = ubifs_wbuf_seek_nolock(c, wbuf, gc_lnum, 0, UBI_LONGTERM);
+	err = ubifs_wbuf_seek_nolock(wbuf, gc_lnum, 0, UBI_LONGTERM);
 	return err;
 }
 
@@ -199,7 +199,7 @@ static int move_nodes(struct ubifs_info *c, struct ubifs_scan_leb *sleb)
 
 			new_lnum = wbuf->lnum;
 			new_offs = wbuf->offs + wbuf->used;
-			err = ubifs_wbuf_write_nolock(c, wbuf, snod->node,
+				err = ubifs_wbuf_write_nolock(wbuf, snod->node,
 						      snod->len);
 
 			err = ubifs_tnc_replace(c, &snod->key, sleb->lnum,
@@ -255,7 +255,7 @@ static int gc_sync_wbufs(struct ubifs_info *c)
 	for (i = 0; i < c->jhead_cnt; i++) {
 		if (i == GCHD)
 			continue;
-		err = ubifs_wbuf_sync(c, &c->jheads[i].wbuf);
+		err = ubifs_wbuf_sync(&c->jheads[i].wbuf);
 		if (err)
 			return err;
 	}
@@ -349,7 +349,7 @@ static int garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 			c->gc_lnum = lnum;
 			err = LEB_RETAINED;
 		} else {
-			err = ubifs_wbuf_sync_nolock(c, wbuf);
+			err = ubifs_wbuf_sync_nolock(wbuf);
 			if (err)
 				goto out;
 
@@ -588,7 +588,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 		ret = -EAGAIN;
 	}
 
-	err = ubifs_wbuf_sync_nolock(c, wbuf);
+	err = ubifs_wbuf_sync_nolock(wbuf);
 	if (!err)
 		err = ubi_leb_unmap(c->ubi, c->gc_lnum);
 	if (err)
@@ -599,7 +599,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 out:
 	ubifs_assert(ret < 0);
 	ubifs_assert(ret != -ENOSPC && ret != -EAGAIN);
-	ubifs_wbuf_sync_nolock(c, wbuf);
+	ubifs_wbuf_sync_nolock(wbuf);
 	mutex_unlock(&wbuf->io_mutex);
 	ubifs_return_leb(c, lp.lnum);
 	return ret;
