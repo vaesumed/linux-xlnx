@@ -738,7 +738,7 @@ static int validate_ref(struct ubifs_info *c, const struct ubifs_ref_node *ref)
 	 */
 	if (jhead >= c->jhead_cnt || lnum >= c->leb_cnt ||
 	    lnum < c->main_first || offs > c->leb_size ||
-	    offs & (c->max_align - 1))
+	    offs & (c->min_io_size - 1))
 		return -EINVAL;
 
 	/* Make sure we have not already looked at this bud */
