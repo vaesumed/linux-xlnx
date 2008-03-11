@@ -66,7 +66,7 @@ void auide_insw(unsigned long port, void *addr, u32 count)
 
 	if(!put_dest_flags(ahwif->rx_chan, (void*)addr, count << 1, 
 			   DDMA_FLAGS_NOIE)) {
-		printk(KERN_ERR "%s failed %d\n", __FUNCTION__, __LINE__);
+		printk(KERN_ERR "%s failed %d\n", __func__, __LINE__);
 		return;
 	}
 	ctp = *((chan_tab_t **)ahwif->rx_chan);
@@ -84,7 +84,7 @@ void auide_outsw(unsigned long port, void *addr, u32 count)
 
 	if(!put_source_flags(ahwif->tx_chan, (void*)addr,
 			     count << 1, DDMA_FLAGS_NOIE)) {
-		printk(KERN_ERR "%s failed %d\n", __FUNCTION__, __LINE__);
+		printk(KERN_ERR "%s failed %d\n", __func__, __LINE__);
 		return;
 	}
 	ctp = *((chan_tab_t **)ahwif->tx_chan);
@@ -255,7 +255,7 @@ static int auide_build_dmatable(ide_drive_t *drive)
 						     (void*) sg_virt(sg),
 						     tc, flags)) { 
 					printk(KERN_ERR "%s failed %d\n", 
-					       __FUNCTION__, __LINE__);
+					       __func__, __LINE__);
 				}
 			} else 
 			{
@@ -263,7 +263,7 @@ static int auide_build_dmatable(ide_drive_t *drive)
 						   (void*) sg_virt(sg),
 						   tc, flags)) { 
 					printk(KERN_ERR "%s failed %d\n", 
-					       __FUNCTION__, __LINE__);
+					       __func__, __LINE__);
 				}
 			}
 
@@ -548,7 +548,16 @@ static void auide_setup_ports(hw_regs_t *hw, _auide_hwif *ahwif)
 	*ata_regs = ahwif->regbase + (14 << AU1XXX_ATA_REG_OFFSET);
 }
 
+static const struct ide_port_ops au1xxx_port_ops = {
+	.set_pio_mode		= au1xxx_set_pio_mode,
+	.set_dma_mode		= auide_set_dma_mode,
+#ifdef CONFIG_BLK_DEV_IDE_AU1XXX_MDMA2_DBDMA
+	.mdma_filter		= auide_mdma_filter,
+#endif
+};
+
 static const struct ide_port_info au1xxx_port_info = {
+	.port_ops		= &au1xxx_port_ops,
 	.host_flags		= IDE_HFLAG_POST_SET_MODE |
 				  IDE_HFLAG_NO_DMA | /* no SFF-style DMA */
 				  IDE_HFLAG_NO_IO_32BIT |
@@ -603,9 +612,11 @@ static int au_ide_probe(struct device *dev)
 		goto out;
 	}
 
-	/* FIXME:  This might possibly break PCMCIA IDE devices */
-
-	hwif                            = &ide_hwifs[pdev->id];
+	hwif = ide_find_port();
+	if (hwif == NULL) {
+		ret = -ENOENT;
+		goto out;
+	}
 
 	memset(&hw, 0, sizeof(hw));
 	auide_setup_ports(&hw, ahwif);
@@ -617,11 +628,6 @@ static int au_ide_probe(struct device *dev)
 
 	hwif->dev = dev;
 
-	/* hold should be on in all cases */
-	hwif->hold                      = 1;
-
-	hwif->mmio  = 1;
-
 	/* If the user has selected DDMA assisted copies,
 	   then set up a few local I/O function entry points 
 	*/
@@ -630,15 +636,8 @@ static int au_ide_probe(struct device *dev)
 	hwif->INSW                      = auide_insw;
 	hwif->OUTSW                     = auide_outsw;
 #endif
-
-	hwif->set_pio_mode		= &au1xxx_set_pio_mode;
-	hwif->set_dma_mode		= &auide_set_dma_mode;
-
 #ifdef CONFIG_BLK_DEV_IDE_AU1XXX_MDMA2_DBDMA
 	hwif->dma_timeout		= &auide_dma_timeout;
-
-	hwif->mdma_filter		= &auide_mdma_filter;
-
 	hwif->dma_host_set		= &auide_dma_host_set;
 	hwif->dma_exec_cmd              = &auide_dma_exec_cmd;
 	hwif->dma_start                 = &auide_dma_start;
@@ -677,7 +676,7 @@ static int au_ide_remove(struct device *dev)
 	ide_hwif_t *hwif = dev_get_drvdata(dev);
 	_auide_hwif *ahwif = &auide_hwif;
 
-	ide_unregister(hwif->index, 0, 0);
+	ide_unregister(hwif->index);
 
 	iounmap((void *)ahwif->regbase);
 

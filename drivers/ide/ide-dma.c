@@ -542,7 +542,7 @@ static int __ide_dma_test_irq(ide_drive_t *drive)
 		return 1;
 	if (!drive->waiting_for_dma)
 		printk(KERN_WARNING "%s: (%s) called while not waiting\n",
-			drive->name, __FUNCTION__);
+			drive->name, __func__);
 	return 0;
 }
 #else
@@ -574,6 +574,7 @@ static unsigned int ide_get_mode_mask(ide_drive_t *drive, u8 base, u8 req_mode)
 {
 	struct hd_driveid *id = drive->id;
 	ide_hwif_t *hwif = drive->hwif;
+	const struct ide_port_ops *port_ops = hwif->port_ops;
 	unsigned int mask = 0;
 
 	switch(base) {
@@ -581,8 +582,8 @@ static unsigned int ide_get_mode_mask(ide_drive_t *drive, u8 base, u8 req_mode)
 		if ((id->field_valid & 4) == 0)
 			break;
 
-		if (hwif->udma_filter)
-			mask = hwif->udma_filter(drive);
+		if (port_ops && port_ops->udma_filter)
+			mask = port_ops->udma_filter(drive);
 		else
 			mask = hwif->ultra_mask;
 		mask &= id->dma_ultra;
@@ -598,8 +599,8 @@ static unsigned int ide_get_mode_mask(ide_drive_t *drive, u8 base, u8 req_mode)
 	case XFER_MW_DMA_0:
 		if ((id->field_valid & 2) == 0)
 			break;
-		if (hwif->mdma_filter)
-			mask = hwif->mdma_filter(drive);
+		if (port_ops && port_ops->mdma_filter)
+			mask = port_ops->mdma_filter(drive);
 		else
 			mask = hwif->mwdma_mask;
 		mask &= id->dma_mword;
@@ -703,17 +704,8 @@ static int ide_tune_dma(ide_drive_t *drive)
 
 	speed = ide_max_dma_mode(drive);
 
-	if (!speed) {
-		 /* is this really correct/needed? */
-		if ((hwif->host_flags & IDE_HFLAG_CY82C693) &&
-		    ide_dma_good_drive(drive))
-			return 1;
-		else
-			return 0;
-	}
-
-	if (hwif->host_flags & IDE_HFLAG_NO_SET_MODE)
-		return 1;
+	if (!speed)
+		return 0;
 
 	if (ide_set_dma_mode(drive, speed))
 		return 0;
@@ -818,7 +810,7 @@ void ide_dma_timeout (ide_drive_t *drive)
 
 EXPORT_SYMBOL(ide_dma_timeout);
 
-static void ide_release_dma_engine(ide_hwif_t *hwif)
+void ide_release_dma_engine(ide_hwif_t *hwif)
 {
 	if (hwif->dmatable_cpu) {
 		struct pci_dev *pdev = to_pci_dev(hwif->dev);
@@ -827,27 +819,6 @@ static void ide_release_dma_engine(ide_hwif_t *hwif)
 				    hwif->dmatable_cpu, hwif->dmatable_dma);
 		hwif->dmatable_cpu = NULL;
 	}
-}
-
-static int ide_release_iomio_dma(ide_hwif_t *hwif)
-{
-	release_region(hwif->dma_base, 8);
-	if (hwif->extra_ports)
-		release_region(hwif->extra_base, hwif->extra_ports);
-	return 1;
-}
-
-/*
- * Needed for allowing full modular support of ide-driver
- */
-int ide_release_dma(ide_hwif_t *hwif)
-{
-	ide_release_dma_engine(hwif);
-
-	if (hwif->mmio)
-		return 1;
-	else
-		return ide_release_iomio_dma(hwif);
 }
 
 static int ide_allocate_dma_engine(ide_hwif_t *hwif)
@@ -862,62 +833,25 @@ static int ide_allocate_dma_engine(ide_hwif_t *hwif)
 		return 0;
 
 	printk(KERN_ERR "%s: -- Error, unable to allocate DMA table.\n",
-	       hwif->cds->name);
+			hwif->name);
 
 	return 1;
-}
-
-static int ide_mapped_mmio_dma(ide_hwif_t *hwif, unsigned long base)
-{
-	printk(KERN_INFO "    %s: MMIO-DMA ", hwif->name);
-
-	return 0;
-}
-
-static int ide_iomio_dma(ide_hwif_t *hwif, unsigned long base)
-{
-	printk(KERN_INFO "    %s: BM-DMA at 0x%04lx-0x%04lx",
-	       hwif->name, base, base + 7);
-
-	if (!request_region(base, 8, hwif->name)) {
-		printk(" -- Error, ports in use.\n");
-		return 1;
-	}
-
-	if (hwif->cds->extra) {
-		hwif->extra_base = base + (hwif->channel ? 8 : 16);
-
-		if (!hwif->mate || !hwif->mate->extra_ports) {
-			if (!request_region(hwif->extra_base,
-					    hwif->cds->extra, hwif->cds->name)) {
-				printk(" -- Error, extra ports in use.\n");
-				release_region(base, 8);
-				return 1;
-			}
-			hwif->extra_ports = hwif->cds->extra;
-		}
-	}
-
-	return 0;
-}
-
-static int ide_dma_iobase(ide_hwif_t *hwif, unsigned long base)
-{
-	if (hwif->mmio)
-		return ide_mapped_mmio_dma(hwif, base);
-
-	return ide_iomio_dma(hwif, base);
 }
 
 void ide_setup_dma(ide_hwif_t *hwif, unsigned long base)
 {
 	u8 dma_stat;
 
-	if (ide_dma_iobase(hwif, base))
-		return;
+	if (hwif->mmio)
+		printk(KERN_INFO "    %s: MMIO-DMA ", hwif->name);
+	else
+		printk(KERN_INFO "    %s: BM-DMA at 0x%04lx-0x%04lx",
+				 hwif->name, base, base + 7);
+
+	hwif->extra_base = base + (hwif->channel ? 8 : 16);
 
 	if (ide_allocate_dma_engine(hwif)) {
-		ide_release_dma(hwif);
+		ide_release_dma_engine(hwif);
 		return;
 	}
 
