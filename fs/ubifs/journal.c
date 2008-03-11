@@ -162,7 +162,7 @@ again:
 	offs = 0;
 
 out:
-	err = ubifs_wbuf_seek_nolock(c, wbuf, lnum, offs, UBI_SHORTTERM);
+	err = ubifs_wbuf_seek_nolock(wbuf, lnum, offs, UBI_SHORTTERM);
 	if (err)
 		goto out_unlock;
 
@@ -213,7 +213,7 @@ static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
 	dbg_jrn("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
 	ubifs_prepare_node(c, node, len, 0);
 
-	return ubifs_wbuf_write_nolock(c, wbuf, node, len);
+	return ubifs_wbuf_write_nolock(wbuf, node, len);
 }
 
 /**
@@ -242,11 +242,11 @@ static int write_head(struct ubifs_info *c, int jhead, void *buf, int len,
 	*offs = c->jheads[jhead].wbuf.offs + c->jheads[jhead].wbuf.used;
 	dbg_jrn("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
 
-	err = ubifs_wbuf_write_nolock(c, wbuf, buf, len);
+	err = ubifs_wbuf_write_nolock(wbuf, buf, len);
 	if (err)
 		return err;
 	if (sync)
-		err = ubifs_wbuf_sync_nolock(c, wbuf);
+		err = ubifs_wbuf_sync_nolock(wbuf);
 	return err;
 }
 
