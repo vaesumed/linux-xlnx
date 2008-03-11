@@ -831,7 +831,7 @@ static void sbp2_set_busy_timeout(struct sbp2_logical_unit *lu)
 	struct fw_device *device = fw_device(lu->tgt->unit->device.parent);
 	DECLARE_COMPLETION_ONSTACK(done);
 	struct fw_transaction t;
-	static u32 busy_timeout;
+	static __be32 busy_timeout;
 
 	busy_timeout = cpu_to_be32(SBP2_CYCLE_LIMIT | SBP2_RETRY_LIMIT);
 
