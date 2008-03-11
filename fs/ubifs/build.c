@@ -46,12 +46,15 @@ static int dbg_check_volume_empty(struct ubifs_info *c);
 /* Slab cache for UBIFS inodes */
 struct kmem_cache *ubifs_inode_slab;
 
+/* TODO: remove compatibility stuff as late as possible */
+#ifndef UBIFS_COMPAT_NO_SHRINKER
 /* UBIFS TNC shrinker description */
 static struct shrinker ubifs_shrinker_info =
 {
 	.shrink = ubifs_shrinker,
 	.seeks = DEFAULT_SEEKS,
 };
+#endif
 
 /**
  * init_constants_early - initialize UBIFS constants.

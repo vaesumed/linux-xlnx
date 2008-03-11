@@ -338,7 +338,7 @@ out:
 		dbg_dump_budg(c);
 		spin_unlock(&c->space_lock);
 		dbg_dump_lprops(c);
-		dbg_check_lprops(c);
+		cmt_retries = dbg_check_lprops(c);
 		up_write(&c->commit_sem);
 	}
 
