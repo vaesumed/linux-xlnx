@@ -112,7 +112,7 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->lhead_lnum < UBIFS_LOG_LNUM ||
 	    c->lhead_lnum >= UBIFS_LOG_LNUM + c->log_lebs ||
 	    c->lhead_offs < 0 || c->lhead_offs >= c->leb_size ||
-	    c->lhead_offs & (c->max_align - 1)) {
+	    c->lhead_offs & (c->min_io_size - 1)) {
 		dbg_err("bad log head reference");
 		err = 4;
 		goto out;

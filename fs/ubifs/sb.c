@@ -203,7 +203,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	mst->root_len     = cpu_to_le32(tmp);
 	mst->gc_lnum      = cpu_to_le32(main_first + DEFAULT_GC_LEB);
 	mst->ihead_lnum   = cpu_to_le32(main_first + DEFAULT_IDX_LEB);
-	mst->ihead_offs   = cpu_to_le32(ALIGN(tmp, c->max_align));
+	mst->ihead_offs   = cpu_to_le32(ALIGN(tmp, c->min_io_size));
 	mst->index_size   = cpu_to_le64(ALIGN(tmp, 8));
 	mst->lpt_lnum     = cpu_to_le32(c->lpt_lnum);
 	mst->lpt_offs     = cpu_to_le32(c->lpt_offs);
@@ -220,11 +220,11 @@ static int create_default_filesystem(struct ubifs_info *c)
 
 	/* Calculate lprops statistics */
 	tmp64 = main_bytes;
-	tmp64 -= ALIGN(ubifs_idx_node_sz(c, 1), c->max_align);
+	tmp64 -= ALIGN(ubifs_idx_node_sz(c, 1), c->min_io_size);
 	tmp64 -= ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size);
 	mst->total_free = cpu_to_le64(tmp64);
 
-	tmp64 = ALIGN(ubifs_idx_node_sz(c, 1), c->max_align);
+	tmp64 = ALIGN(ubifs_idx_node_sz(c, 1), c->min_io_size);
 	ino_waste = ALIGN(UBIFS_INO_NODE_SZ, c->min_io_size) -
 			  UBIFS_INO_NODE_SZ;
 	tmp64 += ino_waste;
