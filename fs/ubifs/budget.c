@@ -75,6 +75,8 @@ struct retries_info {
 	unsigned int nospc_retries:1;
 };
 
+/* TODO: remove compatibility crap as late as possible */
+#ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 /**
  * shrink_liability - write-back some dirty pages/inodes.
  * @c: UBIFS file-system description object
@@ -234,6 +236,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
 
 	return -ENOSPC;
 }
+#endif /* UBIFS_COMPAT_USE_OLD_PREPARE_WRITE */
 
 /**
  * ubifs_calc_min_idx_lebs - calculate amount of eraseblocks for the index.
