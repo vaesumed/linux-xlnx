@@ -24,8 +24,8 @@
 
 #include <asm/kvm_host.h>
 
-#define KVM_MAX_VCPUS 4
-#define KVM_MEMORY_SLOTS 8
+#define KVM_MAX_VCPUS 16
+#define KVM_MEMORY_SLOTS 32
 /* memory slots that does not exposed to userspace */
 #define KVM_PRIVATE_MEM_SLOTS 4
 
@@ -37,6 +37,8 @@
 #define KVM_REQ_TLB_FLUSH          0
 #define KVM_REQ_MIGRATE_TIMER      1
 #define KVM_REQ_REPORT_TPR_ACCESS  2
+#define KVM_REQ_MMU_RELOAD         3
+#define KVM_REQ_TRIPLE_FAULT       4
 
 struct kvm_vcpu;
 extern struct kmem_cache *kvm_vcpu_cache;
@@ -67,7 +69,9 @@ void kvm_io_bus_register_dev(struct kvm_io_bus *bus,
 
 struct kvm_vcpu {
 	struct kvm *kvm;
+#ifdef CONFIG_PREEMPT_NOTIFIERS
 	struct preempt_notifier preempt_notifier;
+#endif
 	int vcpu_id;
 	struct mutex mutex;
 	int   cpu;
@@ -100,6 +104,10 @@ struct kvm_memory_slot {
 	unsigned long flags;
 	unsigned long *rmap;
 	unsigned long *dirty_bitmap;
+	struct {
+		unsigned long rmap_pde;
+		int write_count;
+	} *lpage_info;
 	unsigned long userspace_addr;
 	int user_alloc;
 };
@@ -166,6 +174,7 @@ int kvm_arch_set_memory_region(struct kvm *kvm,
 				int user_alloc);
 gfn_t unalias_gfn(struct kvm *kvm, gfn_t gfn);
 struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn);
+unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn);
 void kvm_release_page_clean(struct page *page);
 void kvm_release_page_dirty(struct page *page);
 int kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset,
@@ -188,6 +197,7 @@ void kvm_resched(struct kvm_vcpu *vcpu);
 void kvm_load_guest_fpu(struct kvm_vcpu *vcpu);
 void kvm_put_guest_fpu(struct kvm_vcpu *vcpu);
 void kvm_flush_remote_tlbs(struct kvm *kvm);
+void kvm_reload_remote_mmus(struct kvm *kvm);
 
 long kvm_arch_dev_ioctl(struct file *filp,
 			unsigned int ioctl, unsigned long arg);
