@@ -70,11 +70,15 @@ extern unsigned long machine_flags;
 #define MACHINE_HAS_CSP		(machine_flags & 8)
 #define MACHINE_HAS_DIAG44	(1)
 #define MACHINE_HAS_MVCOS	(0)
+#define MACHINE_HAS_HPAGE	(0)
+#define MACHINE_HAS_CPAGE	(0)
 #else /* __s390x__ */
 #define MACHINE_HAS_IEEE	(1)
 #define MACHINE_HAS_CSP		(1)
 #define MACHINE_HAS_DIAG44	(machine_flags & 32)
 #define MACHINE_HAS_MVCOS	(machine_flags & 512)
+#define MACHINE_HAS_HPAGE	(machine_flags & 1024)
+#define MACHINE_HAS_CPAGE	(machine_flags & 2048)
 #endif /* __s390x__ */
 
 #define MACHINE_HAS_SCLP	(!MACHINE_IS_P390)
