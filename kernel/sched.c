@@ -6804,6 +6804,10 @@ static int ndoms_cur;		/* number of sched domains in 'doms_cur' */
  */
 static cpumask_t fallback_doms;
 
+void __attribute__((weak)) arch_update_cpu_topology(void)
+{
+}
+
 /*
  * Set up scheduler domains and groups. Callers must hold the hotplug lock.
  * For now this just excludes isolated cpus, but could be used to
@@ -6813,6 +6817,7 @@ static int arch_init_sched_domains(const cpumask_t *cpu_map)
 {
 	int err;
 
+	arch_update_cpu_topology();
 	ndoms_cur = 1;
 	doms_cur = kmalloc(sizeof(cpumask_t), GFP_KERNEL);
 	if (!doms_cur)
