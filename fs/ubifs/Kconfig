@@ -2,6 +2,7 @@ config UBIFS_FS
 	tristate "UBIFS file system support"
 	select CRC16
 	select CRC32
+	select CRYPTO
 	depends on MTD_UBI
 	help
 	  UBIFS is a file system for flash devices which works on top of UBI.
