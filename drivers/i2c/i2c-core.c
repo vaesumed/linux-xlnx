@@ -90,12 +90,16 @@ static int i2c_device_probe(struct device *dev)
 {
 	struct i2c_client	*client = to_i2c_client(dev);
 	struct i2c_driver	*driver = to_i2c_driver(dev->driver);
+	int status;
 
 	if (!driver->probe)
 		return -ENODEV;
 	client->driver = driver;
 	dev_dbg(dev, "probe\n");
-	return driver->probe(client);
+	status = driver->probe(client);
+	if (status)
+		client->driver = NULL;
+	return status;
 }
 
 static int i2c_device_remove(struct device *dev)
@@ -1502,7 +1506,7 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 		read_write = I2C_SMBUS_READ;
 		if (data->block[0] > I2C_SMBUS_BLOCK_MAX) {
 			dev_err(&adapter->dev, "%s called with invalid "
-				"block proc call size (%d)\n", __FUNCTION__,
+				"block proc call size (%d)\n", __func__,
 				data->block[0]);
 			return -1;
 		}
