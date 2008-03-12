@@ -1312,19 +1312,6 @@ static void __devinit init_hwif_hpt366(ide_hwif_t *hwif)
 
 	if (new_mcr != old_mcr)
 		pci_write_config_byte(dev, hwif->select_data + 1, new_mcr);
-
-	if (hwif->dma_base == 0)
-		return;
-
-	if (chip_type >= HPT374) {
-		hwif->ide_dma_test_irq	= &hpt374_ide_dma_test_irq;
-		hwif->ide_dma_end	= &hpt374_ide_dma_end;
-	} else if (chip_type >= HPT370) {
-		hwif->dma_start 	= &hpt370_ide_dma_start;
-		hwif->ide_dma_end	= &hpt370_ide_dma_end;
-		hwif->dma_timeout	= &hpt370_dma_timeout;
-	} else
-		hwif->dma_lost_irq	= &hpt366_dma_lost_irq;
 }
 
 static int __devinit init_dma_hpt366(ide_hwif_t *hwif,
@@ -1360,7 +1347,7 @@ static int __devinit init_dma_hpt366(ide_hwif_t *hwif,
 	if (ide_allocate_dma_engine(hwif))
 		return -1;
 
-	ide_setup_dma(hwif, base);
+	ide_setup_dma(hwif, base, d);
 
 	return 0;
 }
@@ -1428,6 +1415,21 @@ static const struct ide_port_ops hpt3xx_port_ops = {
 	.cable_detect		= hpt3xx_cable_detect,
 };
 
+static struct ide_dma_ops hpt3xxx_dma_ops = {
+	.dma_end		= hpt374_ide_dma_end,
+	.dma_test_irq		= hpt374_ide_dma_test_irq,
+};
+
+static struct ide_dma_ops hpt370x_dma_ops = {
+	.dma_start		= hpt370_ide_dma_start,
+	.dma_end		= hpt370_ide_dma_end,
+	.dma_timeout		= hpt370_dma_timeout,
+};
+
+static struct ide_dma_ops hpt36x_dma_ops = {
+	.dma_lost_irq		= hpt366_dma_lost_irq,
+};
+
 static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 	{	/* 0 */
 		.name		= "HPT36x",
@@ -1442,6 +1444,7 @@ static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 		 */
 		.enablebits	= {{0x50,0x10,0x10}, {0x54,0x04,0x04}},
 		.port_ops	= &hpt3xx_port_ops,
+		.dma_ops	= &hpt36x_dma_ops,
 		.host_flags	= IDE_HFLAGS_HPT3XX | IDE_HFLAG_SINGLE,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -1452,6 +1455,7 @@ static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 		.init_dma	= init_dma_hpt366,
 		.enablebits	= {{0x50,0x04,0x04}, {0x54,0x04,0x04}},
 		.port_ops	= &hpt3xx_port_ops,
+		.dma_ops	= &hpt3xxx_dma_ops,
 		.host_flags	= IDE_HFLAGS_HPT3XX,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -1472,6 +1476,7 @@ static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 		.init_dma	= init_dma_hpt366,
 		.enablebits	= {{0x50,0x04,0x04}, {0x54,0x04,0x04}},
 		.port_ops	= &hpt3xx_port_ops,
+		.dma_ops	= &hpt370x_dma_ops,
 		.host_flags	= IDE_HFLAGS_HPT3XX,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -1483,6 +1488,7 @@ static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 		.enablebits	= {{0x50,0x04,0x04}, {0x54,0x04,0x04}},
 		.udma_mask	= ATA_UDMA5,
 		.port_ops	= &hpt3xx_port_ops,
+		.dma_ops	= &hpt370x_dma_ops,
 		.host_flags	= IDE_HFLAGS_HPT3XX,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -1493,6 +1499,7 @@ static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 		.init_dma	= init_dma_hpt366,
 		.enablebits	= {{0x50,0x04,0x04}, {0x54,0x04,0x04}},
 		.port_ops	= &hpt3xx_port_ops,
+		.dma_ops	= &hpt3xxx_dma_ops,
 		.host_flags	= IDE_HFLAGS_HPT3XX,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
