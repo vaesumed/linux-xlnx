@@ -331,6 +331,7 @@ Who:	Thomas Gleixner <tglx@linutronix.de>
 
 ---------------------------
 
+<<<<<<< HEAD:Documentation/feature-removal-schedule.txt
 What:	/sys/o2cb symlink
 When:	January 2010
 Why:	/sys/fs/o2cb is the proper location for this information - /sys/o2cb
@@ -339,3 +340,10 @@ Why:	/sys/fs/o2cb is the proper location for this information - /sys/o2cb
 	which know to look in /sys/fs/o2cb.
 Who:	ocfs2-devel@oss.oracle.com
 
+=======
+What:	asm/semaphore.h
+When:	2.6.26
+Why:	Implementation became generic; users should now include
+	linux/semaphore.h instead.
+Who:	Matthew Wilcox <willy@linux.intel.com>
+>>>>>>> semaphore/semaphore:Documentation/feature-removal-schedule.txt
