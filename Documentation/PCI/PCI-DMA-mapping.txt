@@ -319,7 +319,7 @@ you should do:
 
 where dev is a struct pci_dev *. You should pass NULL for PCI like buses
 where devices don't have struct pci_dev (like ISA, EISA).  This may be
-called in interrupt context. 
+called in interrupt context.
 
 This argument is needed because the DMA translations may be bus
 specific (and often is private to the bus which the device is attached
