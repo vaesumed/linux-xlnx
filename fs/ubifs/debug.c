@@ -500,10 +500,15 @@ void dbg_dump_budget_req(const struct ubifs_budget_req *req)
 	       req->new_page, req->dirtied_page);
 	printk(KERN_DEBUG "\tnew_dent    %d, mod_dent     %d\n",
 	       req->new_dent, req->mod_dent);
+/* TODO: remove compatibility stuff as late as possible */
+#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 	printk(KERN_DEBUG "\tlocked_pg   %d idx_growth    %d\n",
 	       req->locked_pg, req->idx_growth);
+#else
+	printk(KERN_DEBUG "\tidx_growth  %d\n", req->idx_growth);
+#endif
 	printk(KERN_DEBUG "\tdata_growth %d dd_growth     %d\n",
-	       req->locked_pg, req->idx_growth);
+	       req->data_growth, req->dd_growth);
 	spin_unlock(&dbg_lock);
 }
 
