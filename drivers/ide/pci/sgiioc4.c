@@ -327,8 +327,6 @@ sgiioc4_INB(unsigned long port)
 	return reg;
 }
 
-static void __devinit ide_init_sgiioc4(ide_hwif_t *);
-
 /* Creates a dma map for the scatter-gather list entries */
 static int __devinit
 ide_dma_sgiioc4(ide_hwif_t *hwif, const struct ide_port_info *d)
@@ -377,7 +375,6 @@ ide_dma_sgiioc4(ide_hwif_t *hwif, const struct ide_port_info *d)
 
 	if (pad) {
 		ide_set_hwifdata(hwif, pad);
-		ide_init_sgiioc4(hwif);
 		return 0;
 	}
 
@@ -555,18 +552,6 @@ static int sgiioc4_ide_dma_setup(ide_drive_t *drive)
 	return 0;
 }
 
-static void __devinit
-ide_init_sgiioc4(ide_hwif_t * hwif)
-{
-	hwif->dma_host_set = &sgiioc4_dma_host_set;
-	hwif->dma_setup = &sgiioc4_ide_dma_setup;
-	hwif->dma_start = &sgiioc4_ide_dma_start;
-	hwif->ide_dma_end = &sgiioc4_ide_dma_end;
-	hwif->ide_dma_test_irq = &sgiioc4_ide_dma_test_irq;
-	hwif->dma_lost_irq = &sgiioc4_dma_lost_irq;
-	hwif->dma_timeout = &ide_dma_timeout;
-}
-
 static const struct ide_port_ops sgiioc4_port_ops = {
 	.set_dma_mode		= sgiioc4_set_dma_mode,
 	/* reset DMA engine, clear IRQs */
@@ -575,10 +560,21 @@ static const struct ide_port_ops sgiioc4_port_ops = {
 	.maskproc		= sgiioc4_maskproc,
 };
 
+static struct ide_dma_ops sgiioc4_dma_ops = {
+	.dma_host_set		= sgiioc4_dma_host_set,
+	.dma_setup		= sgiioc4_ide_dma_setup,
+	.dma_start		= sgiioc4_ide_dma_start,
+	.dma_end		= sgiioc4_ide_dma_end,
+	.dma_test_irq		= sgiioc4_ide_dma_test_irq,
+	.dma_lost_irq		= sgiioc4_dma_lost_irq,
+	.dma_timeout		= ide_dma_timeout,
+};
+
 static const struct ide_port_info sgiioc4_port_info __devinitdata = {
 	.chipset		= ide_pci,
 	.init_dma		= ide_dma_sgiioc4,
 	.port_ops		= &sgiioc4_port_ops,
+	.dma_ops		= &sgiioc4_dma_ops,
 	.host_flags		= IDE_HFLAG_NO_AUTOTUNE,
 	.mwdma_mask		= ATA_MWDMA2_ONLY,
 };

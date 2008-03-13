@@ -252,12 +252,15 @@ static void __devinit init_hwif_ns87415 (ide_hwif_t *hwif)
 		return;
 
 	outb(0x60, hwif->dma_status);
-	hwif->dma_setup = &ns87415_ide_dma_setup;
-	hwif->ide_dma_end = &ns87415_ide_dma_end;
 }
 
 static const struct ide_port_ops ns87415_port_ops = {
 	.selectproc		= ns87415_selectproc,
+};
+
+static struct ide_dma_ops ns87415_dma_ops = {
+	.dma_setup		= ns87415_ide_dma_setup,
+	.dma_end		= ns87415_ide_dma_end,
 };
 
 static const struct ide_port_info ns87415_chipset __devinitdata = {
@@ -267,6 +270,7 @@ static const struct ide_port_info ns87415_chipset __devinitdata = {
 #endif
 	.init_hwif	= init_hwif_ns87415,
 	.port_ops	= &ns87415_port_ops,
+	.dma_ops	= &ns87415_dma_ops,
 	.host_flags	= IDE_HFLAG_TRUST_BIOS_FOR_DMA |
 			  IDE_HFLAG_NO_ATAPI_DMA,
 };
