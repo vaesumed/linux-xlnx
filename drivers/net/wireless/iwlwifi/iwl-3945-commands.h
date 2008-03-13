@@ -515,14 +515,20 @@ struct iwl3945_qosparam_cmd {
 #define STA_CONTROL_MODIFY_MSK		0x01
 
 /* key flags __le16*/
-#define STA_KEY_FLG_ENCRYPT_MSK	__constant_cpu_to_le16(0x7)
-#define STA_KEY_FLG_NO_ENC	__constant_cpu_to_le16(0x0)
-#define STA_KEY_FLG_WEP		__constant_cpu_to_le16(0x1)
-#define STA_KEY_FLG_CCMP	__constant_cpu_to_le16(0x2)
-#define STA_KEY_FLG_TKIP	__constant_cpu_to_le16(0x3)
+#define STA_KEY_FLG_ENCRYPT_MSK	__constant_cpu_to_le16(0x0007)
+#define STA_KEY_FLG_NO_ENC	__constant_cpu_to_le16(0x0000)
+#define STA_KEY_FLG_WEP		__constant_cpu_to_le16(0x0001)
+#define STA_KEY_FLG_CCMP	__constant_cpu_to_le16(0x0002)
+#define STA_KEY_FLG_TKIP	__constant_cpu_to_le16(0x0003)
 
 #define STA_KEY_FLG_KEYID_POS	8
 #define STA_KEY_FLG_INVALID 	__constant_cpu_to_le16(0x0800)
+/* wep key is either from global key (0) or from station info array (1) */
+#define STA_KEY_FLG_WEP_KEY_MAP_MSK  __constant_cpu_to_le16(0x0008)
+
+/* wep key in STA: 5-bytes (0) or 13-bytes (1) */
+#define STA_KEY_FLG_KEY_SIZE_MSK     __constant_cpu_to_le16(0x1000)
+#define STA_KEY_MULTICAST_MSK        __constant_cpu_to_le16(0x4000)
 
 /* Flags indicate whether to modify vs. don't change various station params */
 #define	STA_MODIFY_KEY_MASK		0x01
@@ -546,7 +552,8 @@ struct iwl3945_keyinfo {
 	u8 tkip_rx_tsc_byte2;	/* TSC[2] for key mix ph1 detection */
 	u8 reserved1;
 	__le16 tkip_rx_ttak[5];	/* 10-byte unicast TKIP TTAK */
-	__le16 reserved2;
+	u8 key_offset;
+	u8 reserved2;
 	u8 key[16];		/* 16-byte unicast decryption key */
 } __attribute__ ((packed));
 
@@ -659,26 +666,26 @@ struct iwl3945_rx_frame_hdr {
 	u8 payload[0];
 } __attribute__ ((packed));
 
-#define	RX_RES_STATUS_NO_CRC32_ERROR	__constant_cpu_to_le32(1 << 0)
-#define	RX_RES_STATUS_NO_RXE_OVERFLOW	__constant_cpu_to_le32(1 << 1)
+#define RX_RES_STATUS_NO_CRC32_ERROR	__constant_cpu_to_le32(1 << 0)
+#define RX_RES_STATUS_NO_RXE_OVERFLOW	__constant_cpu_to_le32(1 << 1)
 
-#define	RX_RES_PHY_FLAGS_BAND_24_MSK	__constant_cpu_to_le16(1 << 0)
-#define	RX_RES_PHY_FLAGS_MOD_CCK_MSK		__constant_cpu_to_le16(1 << 1)
-#define	RX_RES_PHY_FLAGS_SHORT_PREAMBLE_MSK	__constant_cpu_to_le16(1 << 2)
-#define	RX_RES_PHY_FLAGS_NARROW_BAND_MSK	__constant_cpu_to_le16(1 << 3)
-#define	RX_RES_PHY_FLAGS_ANTENNA_MSK		__constant_cpu_to_le16(0xf0)
+#define RX_RES_PHY_FLAGS_BAND_24_MSK	__constant_cpu_to_le16(1 << 0)
+#define RX_RES_PHY_FLAGS_MOD_CCK_MSK		__constant_cpu_to_le16(1 << 1)
+#define RX_RES_PHY_FLAGS_SHORT_PREAMBLE_MSK	__constant_cpu_to_le16(1 << 2)
+#define RX_RES_PHY_FLAGS_NARROW_BAND_MSK	__constant_cpu_to_le16(1 << 3)
+#define RX_RES_PHY_FLAGS_ANTENNA_MSK		__constant_cpu_to_le16(0xf0)
 
-#define	RX_RES_STATUS_SEC_TYPE_MSK	(0x7 << 8)
-#define	RX_RES_STATUS_SEC_TYPE_NONE	(0x0 << 8)
-#define	RX_RES_STATUS_SEC_TYPE_WEP	(0x1 << 8)
-#define	RX_RES_STATUS_SEC_TYPE_CCMP	(0x2 << 8)
-#define	RX_RES_STATUS_SEC_TYPE_TKIP	(0x3 << 8)
+#define RX_RES_STATUS_SEC_TYPE_MSK	(0x7 << 8)
+#define RX_RES_STATUS_SEC_TYPE_NONE	(0x0 << 8)
+#define RX_RES_STATUS_SEC_TYPE_WEP	(0x1 << 8)
+#define RX_RES_STATUS_SEC_TYPE_CCMP	(0x2 << 8)
+#define RX_RES_STATUS_SEC_TYPE_TKIP	(0x3 << 8)
 
-#define	RX_RES_STATUS_DECRYPT_TYPE_MSK	(0x3 << 11)
-#define	RX_RES_STATUS_NOT_DECRYPT	(0x0 << 11)
-#define	RX_RES_STATUS_DECRYPT_OK	(0x3 << 11)
-#define	RX_RES_STATUS_BAD_ICV_MIC	(0x1 << 11)
-#define	RX_RES_STATUS_BAD_KEY_TTAK	(0x2 << 11)
+#define RX_RES_STATUS_DECRYPT_TYPE_MSK	(0x3 << 11)
+#define RX_RES_STATUS_NOT_DECRYPT	(0x0 << 11)
+#define RX_RES_STATUS_DECRYPT_OK	(0x3 << 11)
+#define RX_RES_STATUS_BAD_ICV_MIC	(0x1 << 11)
+#define RX_RES_STATUS_BAD_KEY_TTAK	(0x2 << 11)
 
 struct iwl3945_rx_frame_end {
 	__le32 status;

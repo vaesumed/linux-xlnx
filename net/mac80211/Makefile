@@ -19,7 +19,6 @@ mac80211-y := \
 	ieee80211_iface.o \
 	ieee80211_rate.o \
 	michael.o \
-	regdomain.o \
 	tkip.o \
 	aes_ccm.o \
 	cfg.o \
@@ -36,6 +35,12 @@ mac80211-$(CONFIG_MAC80211_DEBUGFS) += \
 	debugfs_sta.o \
 	debugfs_netdev.o \
 	debugfs_key.o
+
+mac80211-$(CONFIG_MAC80211_MESH) += \
+	mesh.o \
+	mesh_pathtbl.o \
+	mesh_plink.o \
+	mesh_hwmp.o
 
 
 # Build rate control algorithm(s)
