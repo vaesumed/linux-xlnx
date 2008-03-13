@@ -31,8 +31,6 @@
  * should be fine for embedded ones. And after all, this can be improved later.
  */
 
-/* TODO: if a TNC operation fails, the file-system have to be switched to
- * read-only mode. */
 /* TODO: use slab cache for znodes */
 
 #include "ubifs.h"
@@ -772,7 +770,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	void *lnc_node;
 	const struct ubifs_dent_node *dent = node;
 
-	ubifs_assert(zbr->znode == NULL);
+	ubifs_assert(zbr->leaf == NULL);
 	ubifs_assert(zbr->len != 0);
 
 	/* Add all dents, but nothing else */
@@ -790,8 +788,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		return 0; /* We don't have to have the cache, so no error */
 
 	memcpy(lnc_node, node, zbr->len);
-	/* TODO: Consider using an anonymous union with znode */
-	zbr->znode = lnc_node; /* Yeah, it's not a znode */
+	zbr->leaf = lnc_node;
 	return 0;
 }
 
@@ -802,28 +799,13 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
  *
  * This function returns %0 to indicate success and a negative error code
  * otherwise.
- * TODO: consider to get rid of this function.
  */
 static void lnc_free(struct ubifs_zbranch *zbr)
 {
-	if (zbr->znode == NULL)
+	if (zbr->leaf == NULL)
 		return;
-	kfree(zbr->znode);
-	zbr->znode = NULL;
-}
-
-/**
- * lnc_peek - peek at leaf nodes in the leaf-node-cache.
- * @c: UBIFS file-system description object
- * @zbr: zbranch of leaf node
- *
- * This function returns a pointer to the leaf node if it is in the cache or
- * NULL otherwise.
- * TODO: consider to get rid of this function.
- */
-static void *lnc_peek(const struct ubifs_info *c, struct ubifs_zbranch *zbr)
-{
-	return zbr->znode;
+	kfree(zbr->leaf);
+	zbr->leaf = NULL;
 }
 
 /**
@@ -969,7 +951,7 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	int nlen, err;
 
 	/* If possible, match against the dent in the leaf-node-cache */
-	dent = lnc_peek(c, zt);
+	dent = zt->leaf;
 	if (dent) {
 		nlen = le16_to_cpu(dent->nlen);
 
@@ -1204,7 +1186,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	int nlen, err;
 
 	/* If possible, match against the dent in the leaf-node-cache */
-	dent = lnc_peek(c, zt);
+	dent = zt->leaf;
 	if (dent) {
 		nlen = le16_to_cpu(dent->nlen);
 
