@@ -30,8 +30,6 @@
  * @lnum: LEB number where new index node will be written
  * @offs: offset where new index node will be written
  * @len: length of new index node
- *
- * TODO: Consider putting parameters into a structure (as with fill_gap)
  */
 static int make_idx_node(struct ubifs_info *c, struct ubifs_idx_node *idx,
 			 struct ubifs_znode *znode, int lnum, int offs, int len)
@@ -103,7 +101,6 @@ static int make_idx_node(struct ubifs_info *c, struct ubifs_idx_node *idx,
  * @gap_end: offset of end of gap
  * @dirt: adds dirty space to this
  *
- * TODO: Consider putting fill_gap parameters into a structure
  * This function returns the number of index nodes written into the gap.
  */
 static int fill_gap(struct ubifs_info *c, int lnum, int gap_start, int gap_end,
@@ -223,8 +220,6 @@ static int is_idx_node_in_use(struct ubifs_info *c, union ubifs_key *key,
  * to try to maximise the number of znodes that fit.
  * This function returns the number of index nodes written into the gaps, or a
  * negative error code on failure.
- *
- * TODO: Consider allocating lnum in caller
  */
 static int layout_leb_in_gaps(struct ubifs_info *c, int *p)
 {
@@ -237,15 +232,17 @@ static int layout_leb_in_gaps(struct ubifs_info *c, int *p)
 	lnum = ubifs_find_dirty_idx_leb(c);
 	if (lnum < 0)
 		/*
-		 * TODO: There also may be dirt in the index head  that could be
-		 * filled
+		 * There also may be dirt in the index head that could be
+		 * filled, however we do not check there at present.
 		 */
 		return lnum; /* Error code */
 	*p = lnum;
 	dbg_gc("LEB %d", lnum);
-	/* Scan the index LEB */
-	/* TODO: Use a better scan for this purpose */
-	/* TODO: Have more than one buffer */
+	/*
+	 * Scan the index LEB.  We use the generic scan for this even though
+	 * it is more comprehensive and less efficient than is needed for this
+	 * purpose.
+	 */
 	sleb = ubifs_scan(c, lnum, 0, c->ileb_buf);
 	c->ileb_len = 0;
 	if (IS_ERR(sleb))
@@ -318,7 +315,6 @@ static int layout_leb_in_gaps(struct ubifs_info *c, int *p)
 				  0, 0, 0);
 	if (err)
 		return err;
-	/* TODO: Write buffers during end commit */
 	err = ubi_leb_change(c->ubi, lnum, c->ileb_buf, c->ileb_len,
 			     UBI_SHORTTERM);
 	if (err) {
@@ -492,9 +488,6 @@ static int layout_in_empty_space(struct ubifs_info *c)
 			next_len = ubifs_idx_node_sz(c, cnext->child_cnt);
 
 		if (c->min_io_size == 1) {
-			/* TODO: write-buffer has to be used instead, then this
-			 * would not be needed. And it is actually why we have
-			 * write-buffers! */
 			buf_offs += ALIGN(len, 8);
 			if (next_len) {
 				if (buf_offs + next_len <= c->leb_size)
@@ -828,7 +821,7 @@ static int write_index(struct ubifs_info *c)
 {
 	struct ubifs_idx_node *idx;
 	struct ubifs_znode *znode, *cnext;
-	int isz, i, lnum, offs, len, next_len, buf_len, buf_offs, used;
+	int i, lnum, offs, len, next_len, buf_len, buf_offs, used;
 	int avail, wlen, err, lnum_pos = 0;
 
 	cnext = c->enext;
@@ -843,20 +836,7 @@ static int write_index(struct ubifs_info *c)
 	buf_offs = c->ihead_offs;
 
 	/* Allocate commit buffer */
-	/* TODO: allocate it on build please */
-	isz = c->max_idx_node_sz;
-	buf_len = ALIGN(isz, c->min_io_size);
-	if (!c->cbuf) {
-		int sz;
-
-		if (c->min_io_size > 1)
-			sz = ALIGN(buf_len + isz, c->min_io_size);
-		else
-			sz = isz;
-		c->cbuf = kmalloc(sz, GFP_NOFS);
-		if (!c->cbuf)
-			return -ENOMEM;
-	}
+	buf_len = ALIGN(c->max_idx_node_sz, c->min_io_size);
 	used = 0;
 	avail = buf_len;
 
