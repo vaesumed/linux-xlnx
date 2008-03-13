@@ -293,8 +293,6 @@ parport-lowlevel.txt
 	- description and usage of the low level parallel port functions.
 pci-error-recovery.txt
 	- info on PCI error recovery.
-pci.txt
-	- info on the PCI subsystem for device driver authors.
 pcieaer-howto.txt
 	- the PCI Express Advanced Error Reporting Driver Guide HOWTO.
 pcmcia/
