@@ -650,6 +650,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	inc_nlink(inode);
 
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+	dir->i_size += sz_change;
 	inc_nlink(dir);
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
