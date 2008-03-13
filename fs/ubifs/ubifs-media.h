@@ -393,9 +393,7 @@ union ubifs_dev_desc
  * @key: node key
  * @creat_sqnum: sequence number at time of creation
  * @size: inode size in bytes (amount of uncompressed data)
- * @msize: on-the-media inode size in bytes (size of all data nodes)
- * compressed data size plus data
- * node headers size plus directory entries size
+ * @msize: not used at present.
  * @nlink: number of hard links
  * @atime: access time
  * @ctime: creation time
