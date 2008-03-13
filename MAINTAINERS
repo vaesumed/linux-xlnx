@@ -3598,6 +3598,11 @@ M:	mhoffman@lightlink.com
 L:	lm-sensors@lm-sensors.org
 S:	Maintained
 
+SMX UIO Interface
+P:	Ben Nizette
+M:	bn@niasdigital.com
+S:	Maintained
+
 SOFTMAC LAYER (IEEE 802.11)
 P:	Daniel Drake
 M:	dsd@gentoo.org
