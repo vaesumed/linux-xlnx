@@ -99,7 +99,7 @@ struct srp_device {
 struct srp_host {
 	struct srp_device      *srp_dev;
 	u8			port;
-	struct device		dev;
+	struct class_device	class_dev;
 	struct list_head	target_list;
 	spinlock_t		target_lock;
 	struct completion	released;

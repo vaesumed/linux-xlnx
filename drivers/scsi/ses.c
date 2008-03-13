@@ -407,7 +407,7 @@ static void ses_match_to_enclosure(struct enclosure_device *edev,
 
 #define INIT_ALLOC_SIZE 32
 
-static int ses_intf_add(struct device *cdev,
+static int ses_intf_add(struct class_device *cdev,
 			struct class_interface *intf)
 {
 	struct scsi_device *sdev = to_scsi_device(cdev->dev);
@@ -426,7 +426,7 @@ static int ses_intf_add(struct device *cdev,
 		edev = enclosure_find(&sdev->host->shost_gendev);
 		if (edev) {
 			ses_match_to_enclosure(edev, sdev);
-			device_put(&edev->cdev);
+			class_device_put(&edev->cdev);
 		}
 		return -ENODEV;
 	}
@@ -625,7 +625,7 @@ static int ses_remove(struct device *dev)
 	return 0;
 }
 
-static void ses_intf_remove(struct device *cdev,
+static void ses_intf_remove(struct class_device *cdev,
 			    struct class_interface *intf)
 {
 	struct scsi_device *sdev = to_scsi_device(cdev->dev);
@@ -649,13 +649,13 @@ static void ses_intf_remove(struct device *cdev,
 
 	kfree(edev->component[0].scratch);
 
-	device_put(&edev->cdev);
+	class_device_put(&edev->cdev);
 	enclosure_unregister(edev);
 }
 
 static struct class_interface ses_interface = {
-	.add_dev	= ses_intf_add,
-	.remove_dev	= ses_intf_remove,
+	.add	= ses_intf_add,
+	.remove	= ses_intf_remove,
 };
 
 static struct scsi_driver ses_template = {

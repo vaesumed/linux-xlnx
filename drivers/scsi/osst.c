@@ -5591,10 +5591,9 @@ static void osst_remove_sysfs_files(struct device_driver *sysfs)
  * sysfs support for accessing ADR header information
  */
 
-static ssize_t osst_adr_rev_show(struct device *dev,
-				 struct device_attribute *attr, char *buf)
+static ssize_t osst_adr_rev_show(struct class_device *class_dev, char *buf)
 {
-	struct osst_tape * STp = (struct osst_tape *) dev_get_drvdata (dev);
+	struct osst_tape * STp = (struct osst_tape *) class_get_devdata (class_dev);
 	ssize_t l = 0;
 
 	if (STp && STp->header_ok && STp->linux_media)
@@ -5602,13 +5601,11 @@ static ssize_t osst_adr_rev_show(struct device *dev,
 	return l;
 }
 
-DEVICE_ATTR(ADR_rev, S_IRUGO, osst_adr_rev_show, NULL);
+CLASS_DEVICE_ATTR(ADR_rev, S_IRUGO, osst_adr_rev_show, NULL);
 
-static ssize_t osst_linux_media_version_show(struct device *dev,
-					     struct device_attribute *attr,
-					     char *buf)
+static ssize_t osst_linux_media_version_show(struct class_device *class_dev, char *buf)
 {
-	struct osst_tape * STp = (struct osst_tape *) dev_get_drvdata (dev);
+	struct osst_tape * STp = (struct osst_tape *) class_get_devdata (class_dev);
 	ssize_t l = 0;
 
 	if (STp && STp->header_ok && STp->linux_media)
@@ -5616,12 +5613,11 @@ static ssize_t osst_linux_media_version_show(struct device *dev,
 	return l;
 }
 
-DEVICE_ATTR(media_version, S_IRUGO, osst_linux_media_version_show, NULL);
+CLASS_DEVICE_ATTR(media_version, S_IRUGO, osst_linux_media_version_show, NULL);
 
-static ssize_t osst_capacity_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
+static ssize_t osst_capacity_show(struct class_device *class_dev, char *buf)
 {
-	struct osst_tape * STp = (struct osst_tape *) dev_get_drvdata (dev);
+	struct osst_tape * STp = (struct osst_tape *) class_get_devdata (class_dev);
 	ssize_t l = 0;
 
 	if (STp && STp->header_ok && STp->linux_media)
@@ -5629,13 +5625,11 @@ static ssize_t osst_capacity_show(struct device *dev,
 	return l;
 }
 
-DEVICE_ATTR(capacity, S_IRUGO, osst_capacity_show, NULL);
+CLASS_DEVICE_ATTR(capacity, S_IRUGO, osst_capacity_show, NULL);
 
-static ssize_t osst_first_data_ppos_show(struct device *dev,
-					 struct device_attribute *attr,
-					 char *buf)
+static ssize_t osst_first_data_ppos_show(struct class_device *class_dev, char *buf)
 {
-	struct osst_tape * STp = (struct osst_tape *) dev_get_drvdata (dev);
+	struct osst_tape * STp = (struct osst_tape *) class_get_devdata (class_dev);
 	ssize_t l = 0;
 
 	if (STp && STp->header_ok && STp->linux_media)
@@ -5643,13 +5637,11 @@ static ssize_t osst_first_data_ppos_show(struct device *dev,
 	return l;
 }
 
-DEVICE_ATTR(BOT_frame, S_IRUGO, osst_first_data_ppos_show, NULL);
+CLASS_DEVICE_ATTR(BOT_frame, S_IRUGO, osst_first_data_ppos_show, NULL);
 
-static ssize_t osst_eod_frame_ppos_show(struct device *dev,
-					struct device_attribute *attr,
-					char *buf)
+static ssize_t osst_eod_frame_ppos_show(struct class_device *class_dev, char *buf)
 {
-	struct osst_tape * STp = (struct osst_tape *) dev_get_drvdata (dev);
+	struct osst_tape * STp = (struct osst_tape *) class_get_devdata (class_dev);
 	ssize_t l = 0;
 
 	if (STp && STp->header_ok && STp->linux_media)
@@ -5657,12 +5649,11 @@ static ssize_t osst_eod_frame_ppos_show(struct device *dev,
 	return l;
 }
 
-DEVICE_ATTR(EOD_frame, S_IRUGO, osst_eod_frame_ppos_show, NULL);
+CLASS_DEVICE_ATTR(EOD_frame, S_IRUGO, osst_eod_frame_ppos_show, NULL);
 
-static ssize_t osst_filemark_cnt_show(struct device *dev,
-				      struct device_attribute *attr, char *buf)
+static ssize_t osst_filemark_cnt_show(struct class_device *class_dev, char *buf)
 {
-	struct osst_tape * STp = (struct osst_tape *) dev_get_drvdata (dev);
+	struct osst_tape * STp = (struct osst_tape *) class_get_devdata (class_dev);
 	ssize_t l = 0;
 
 	if (STp && STp->header_ok && STp->linux_media)
@@ -5670,7 +5661,7 @@ static ssize_t osst_filemark_cnt_show(struct device *dev,
 	return l;
 }
 
-DEVICE_ATTR(file_count, S_IRUGO, osst_filemark_cnt_show, NULL);
+CLASS_DEVICE_ATTR(file_count, S_IRUGO, osst_filemark_cnt_show, NULL);
 
 static struct class *osst_sysfs_class;
 
@@ -5687,37 +5678,44 @@ static int osst_sysfs_init(void)
 
 static void osst_sysfs_destroy(dev_t dev)
 {
-	device_destroy(osst_sysfs_class, dev);
+	class_device_destroy(osst_sysfs_class, dev);
 }
 
 static int osst_sysfs_add(dev_t dev, struct device *device, struct osst_tape * STp, char * name)
 {
-	struct device *osst_member;
+	struct class_device *osst_class_member;
 	int err;
 
-	osst_member = device_create(osst_sysfs_class, device, dev, "%s", name);
-	if (IS_ERR(osst_member)) {
+	osst_class_member = class_device_create(osst_sysfs_class, NULL, dev,
+						device, "%s", name);
+	if (IS_ERR(osst_class_member)) {
 		printk(KERN_WARNING "osst :W: Unable to add sysfs class member %s\n", name);
-		return PTR_ERR(osst_member);
+		return PTR_ERR(osst_class_member);
 	}
 
-	dev_set_drvdata(osst_member, STp);
-	err = device_create_file(osst_member, &dev_attr_ADR_rev);
+	class_set_devdata(osst_class_member, STp);
+	err = class_device_create_file(osst_class_member,
+				       &class_device_attr_ADR_rev);
 	if (err)
 		goto err_out;
-	err = device_create_file(osst_member, &dev_attr_media_version);
+	err = class_device_create_file(osst_class_member,
+				       &class_device_attr_media_version);
 	if (err)
 		goto err_out;
-	err = device_create_file(osst_member, &dev_attr_capacity);
+	err = class_device_create_file(osst_class_member,
+				       &class_device_attr_capacity);
 	if (err)
 		goto err_out;
-	err = device_create_file(osst_member, &dev_attr_BOT_frame);
+	err = class_device_create_file(osst_class_member,
+				       &class_device_attr_BOT_frame);
 	if (err)
 		goto err_out;
-	err = device_create_file(osst_member, &dev_attr_EOD_frame);
+	err = class_device_create_file(osst_class_member,
+				       &class_device_attr_EOD_frame);
 	if (err)
 		goto err_out;
-	err = device_create_file(osst_member, &dev_attr_file_count);
+	err = class_device_create_file(osst_class_member,
+				       &class_device_attr_file_count);
 	if (err)
 		goto err_out;
 

@@ -469,7 +469,7 @@ struct scsi_host_template {
 	/*
 	 * Pointer to the sysfs class properties for this host, NULL terminated.
 	 */
-	struct device_attribute **shost_attrs;
+	struct class_device_attribute **shost_attrs;
 
 	/*
 	 * Pointer to the SCSI device properties for this host, NULL terminated.
@@ -654,7 +654,8 @@ struct Scsi_Host {
 	enum scsi_host_state shost_state;
 
 	/* ldm bits */
-	struct device		shost_gendev, shost_dev;
+	struct device		shost_gendev;
+	struct class_device	shost_classdev;
 
 	/*
 	 * List of hosts per template.
@@ -681,7 +682,7 @@ struct Scsi_Host {
 };
 
 #define		class_to_shost(d)	\
-	container_of(d, struct Scsi_Host, shost_dev)
+	container_of(d, struct Scsi_Host, shost_classdev)
 
 #define shost_printk(prefix, shost, fmt, a...)	\
 	dev_printk(prefix, &(shost)->shost_gendev, fmt, ##a)

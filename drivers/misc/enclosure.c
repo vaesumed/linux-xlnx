@@ -49,7 +49,7 @@ struct enclosure_device *enclosure_find(struct device *dev)
 	mutex_lock(&container_list_lock);
 	list_for_each_entry(edev, &container_list, node) {
 		if (edev->cdev.dev == dev) {
-			device_get(&edev->cdev);
+			class_device_get(&edev->cdev);
 			mutex_unlock(&container_list_lock);
 			return edev;
 		}
@@ -121,7 +121,7 @@ enclosure_register(struct device *dev, const char *name, int components,
 	edev->cdev.dev = get_device(dev);
 	edev->cb = cb;
 	snprintf(edev->cdev.class_id, BUS_ID_SIZE, "%s", name);
-	err = device_register(&edev->cdev);
+	err = class_device_register(&edev->cdev);
 	if (err)
 		goto err;
 
@@ -158,15 +158,15 @@ void enclosure_unregister(struct enclosure_device *edev)
 
 	for (i = 0; i < edev->components; i++)
 		if (edev->component[i].number != -1)
-			device_unregister(&edev->component[i].cdev);
+			class_device_unregister(&edev->component[i].cdev);
 
 	/* prevent any callbacks into service user */
 	edev->cb = &enclosure_null_callbacks;
-	device_unregister(&edev->cdev);
+	class_device_unregister(&edev->cdev);
 }
 EXPORT_SYMBOL_GPL(enclosure_unregister);
 
-static void enclosure_release(struct device *cdev)
+static void enclosure_release(struct class_device *cdev)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev);
 
@@ -174,11 +174,11 @@ static void enclosure_release(struct device *cdev)
 	kfree(edev);
 }
 
-static void enclosure_component_release(struct device *cdev)
+static void enclosure_component_release(struct class_device *cdev)
 {
 	if (cdev->dev)
 		put_device(cdev->dev);
-	device_put(cdev->parent);
+	class_device_put(cdev->parent);
 }
 
 /**
@@ -201,7 +201,7 @@ enclosure_component_register(struct enclosure_device *edev,
 			     const char *name)
 {
 	struct enclosure_component *ecomp;
-	struct device *cdev;
+	struct class_device *cdev;
 	int err;
 
 	if (number >= edev->components)
@@ -215,14 +215,14 @@ enclosure_component_register(struct enclosure_device *edev,
 	ecomp->type = type;
 	ecomp->number = number;
 	cdev = &ecomp->cdev;
-	cdev->parent = device_get(&edev->cdev);
+	cdev->parent = class_device_get(&edev->cdev);
 	cdev->class = &enclosure_component_class;
 	if (name)
 		snprintf(cdev->class_id, BUS_ID_SIZE, "%s", name);
 	else
 		snprintf(cdev->class_id, BUS_ID_SIZE, "%u", number);
 
-	err = device_register(cdev);
+	err = class_device_register(cdev);
 	if (err)
 		ERR_PTR(err);
 
@@ -247,18 +247,18 @@ EXPORT_SYMBOL_GPL(enclosure_component_register);
 int enclosure_add_device(struct enclosure_device *edev, int component,
 			 struct device *dev)
 {
-	struct device *cdev;
+	struct class_device *cdev;
 
 	if (!edev || component >= edev->components)
 		return -EINVAL;
 
 	cdev = &edev->component[component].cdev;
 
-	device_del(cdev);
+	class_device_del(cdev);
 	if (cdev->dev)
 		put_device(cdev->dev);
 	cdev->dev = get_device(dev);
-	return device_add(cdev);
+	return class_device_add(cdev);
 }
 EXPORT_SYMBOL_GPL(enclosure_add_device);
 
@@ -272,18 +272,18 @@ EXPORT_SYMBOL_GPL(enclosure_add_device);
  */
 int enclosure_remove_device(struct enclosure_device *edev, int component)
 {
-	struct device *cdev;
+	struct class_device *cdev;
 
 	if (!edev || component >= edev->components)
 		return -EINVAL;
 
 	cdev = &edev->component[component].cdev;
 
-	device_del(cdev);
+	class_device_del(cdev);
 	if (cdev->dev)
 		put_device(cdev->dev);
 	cdev->dev = NULL;
-	return device_add(cdev);
+	return class_device_add(cdev);
 }
 EXPORT_SYMBOL_GPL(enclosure_remove_device);
 
@@ -291,15 +291,14 @@ EXPORT_SYMBOL_GPL(enclosure_remove_device);
  * sysfs pieces below
  */
 
-static ssize_t enclosure_show_components(struct device *cdev,
-					 struct attribute *attr, char *buf)
+static ssize_t enclosure_show_components(struct class_device *cdev, char *buf)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev);
 
 	return snprintf(buf, 40, "%d\n", edev->components);
 }
 
-static struct device_attribute enclosure_attrs[] = {
+static struct class_device_attribute enclosure_attrs[] = {
 	__ATTR(components, S_IRUGO, enclosure_show_components, NULL),
 	__ATTR_NULL
 };
@@ -308,7 +307,7 @@ static struct class enclosure_class = {
 	.name			= "enclosure",
 	.owner			= THIS_MODULE,
 	.release		= enclosure_release,
-	.dev_attrs		= enclosure_attrs,
+	.class_dev_attrs	= enclosure_attrs,
 };
 
 static const char *const enclosure_status [] = {
@@ -327,8 +326,7 @@ static const char *const enclosure_type [] = {
 	[ENCLOSURE_COMPONENT_ARRAY_DEVICE] = "array device",
 };
 
-static ssize_t get_component_fault(struct device *cdev,
-				   struct attribute *attr, char *buf)
+static ssize_t get_component_fault(struct class_device *cdev, char *buf)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -338,8 +336,8 @@ static ssize_t get_component_fault(struct device *cdev,
 	return snprintf(buf, 40, "%d\n", ecomp->fault);
 }
 
-static ssize_t set_component_fault(struct device *cdev, struct attribute *attr,
-				   const char *buf, size_t count)
+static ssize_t set_component_fault(struct class_device *cdev, const char *buf,
+				   size_t count)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -350,8 +348,7 @@ static ssize_t set_component_fault(struct device *cdev, struct attribute *attr,
 	return count;
 }
 
-static ssize_t get_component_status(struct device *cdev,
-				    struct attribute *attr,char *buf)
+static ssize_t get_component_status(struct class_device *cdev, char *buf)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -361,8 +358,8 @@ static ssize_t get_component_status(struct device *cdev,
 	return snprintf(buf, 40, "%s\n", enclosure_status[ecomp->status]);
 }
 
-static ssize_t set_component_status(struct device *cdev, struct attribute *attr,
-				    const char *buf, size_t count)
+static ssize_t set_component_status(struct class_device *cdev, const char *buf,
+				   size_t count)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -383,8 +380,7 @@ static ssize_t set_component_status(struct device *cdev, struct attribute *attr,
 		return -EINVAL;
 }
 
-static ssize_t get_component_active(struct device *cdev,
-				    struct attribute *attr, char *buf)
+static ssize_t get_component_active(struct class_device *cdev, char *buf)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -394,9 +390,8 @@ static ssize_t get_component_active(struct device *cdev,
 	return snprintf(buf, 40, "%d\n", ecomp->active);
 }
 
-static ssize_t set_component_active(struct device *cdev,
-				    struct attribute *attr,
-				    const char *buf, size_t count)
+static ssize_t set_component_active(struct class_device *cdev, const char *buf,
+				   size_t count)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -407,8 +402,7 @@ static ssize_t set_component_active(struct device *cdev,
 	return count;
 }
 
-static ssize_t get_component_locate(struct device *cdev,
-				    struct attribute *attr, char *buf)
+static ssize_t get_component_locate(struct class_device *cdev, char *buf)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -418,9 +412,8 @@ static ssize_t get_component_locate(struct device *cdev,
 	return snprintf(buf, 40, "%d\n", ecomp->locate);
 }
 
-static ssize_t set_component_locate(struct device *cdev,
-				    struct attribute *attr,
-				    const char *buf, size_t count)
+static ssize_t set_component_locate(struct class_device *cdev, const char *buf,
+				   size_t count)
 {
 	struct enclosure_device *edev = to_enclosure_device(cdev->parent);
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
@@ -431,8 +424,7 @@ static ssize_t set_component_locate(struct device *cdev,
 	return count;
 }
 
-static ssize_t get_component_type(struct device *cdev,
-				  struct attribute *attr, char *buf)
+static ssize_t get_component_type(struct class_device *cdev, char *buf)
 {
 	struct enclosure_component *ecomp = to_enclosure_component(cdev);
 
@@ -440,7 +432,7 @@ static ssize_t get_component_type(struct device *cdev,
 }
 
 
-static struct device_attribute enclosure_component_attrs[] = {
+static struct class_device_attribute enclosure_component_attrs[] = {
 	__ATTR(fault, S_IRUGO | S_IWUSR, get_component_fault,
 	       set_component_fault),
 	__ATTR(status, S_IRUGO | S_IWUSR, get_component_status,
@@ -456,7 +448,7 @@ static struct device_attribute enclosure_component_attrs[] = {
 static struct class enclosure_component_class =  {
 	.name			= "enclosure_component",
 	.owner			= THIS_MODULE,
-	.dev_attrs	= enclosure_component_attrs,
+	.class_dev_attrs	= enclosure_component_attrs,
 	.release		= enclosure_component_release,
 };
 

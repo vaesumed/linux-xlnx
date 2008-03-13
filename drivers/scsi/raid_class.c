@@ -24,15 +24,15 @@ struct raid_internal {
 	struct raid_template r;
 	struct raid_function_template *f;
 	/* The actual attributes */
-	struct device_attribute private_attrs[RAID_NUM_ATTRS];
+	struct class_device_attribute private_attrs[RAID_NUM_ATTRS];
 	/* The array of null terminated pointers to attributes 
 	 * needed by scsi_sysfs.c */
-	struct device_attribute *attrs[RAID_NUM_ATTRS + 1];
+	struct class_device_attribute *attrs[RAID_NUM_ATTRS + 1];
 };
 
 struct raid_component {
 	struct list_head node;
-	struct device dev;
+	struct class_device cdev;
 	int num;
 };
 
@@ -50,9 +50,9 @@ struct raid_component {
 	tc_to_raid_internal(tc);					\
 })
 
-#define device_to_raid_internal(dev) ({				\
+#define class_device_to_raid_internal(cdev) ({				\
 	struct attribute_container *ac =				\
-		attribute_container_classdev_to_container(dev);	\
+		attribute_container_classdev_to_container(cdev);	\
 	ac_to_raid_internal(ac);					\
 })
 	
@@ -76,33 +76,33 @@ static int raid_match(struct attribute_container *cont, struct device *dev)
 }
 
 static int raid_setup(struct transport_container *tc, struct device *dev,
-		       struct device *cdev)
+		       struct class_device *cdev)
 {
 	struct raid_data *rd;
 
-	BUG_ON(dev_get_drvdata(cdev));
+	BUG_ON(class_get_devdata(cdev));
 
 	rd = kzalloc(sizeof(*rd), GFP_KERNEL);
 	if (!rd)
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&rd->component_list);
-	dev_set_drvdata(cdev, rd);
+	class_set_devdata(cdev, rd);
 		
 	return 0;
 }
 
 static int raid_remove(struct transport_container *tc, struct device *dev,
-		       struct device *cdev)
+		       struct class_device *cdev)
 {
-	struct raid_data *rd = dev_get_drvdata(cdev);
+	struct raid_data *rd = class_get_devdata(cdev);
 	struct raid_component *rc, *next;
 	dev_printk(KERN_ERR, dev, "RAID REMOVE\n");
-	dev_set_drvdata(cdev, NULL);
+	class_set_devdata(cdev, NULL);
 	list_for_each_entry_safe(rc, next, &rd->component_list, node) {
 		list_del(&rc->node);
-		dev_printk(KERN_ERR, rc->dev.parent, "RAID COMPONENT REMOVE\n");
-		device_unregister(&rc->dev);
+		dev_printk(KERN_ERR, rc->cdev.dev, "RAID COMPONENT REMOVE\n");
+		class_device_unregister(&rc->cdev);
 	}
 	dev_printk(KERN_ERR, dev, "RAID REMOVE DONE\n");
 	kfree(rd);
@@ -171,11 +171,9 @@ static const char *raid_level_name(enum raid_level level)
 }
 
 #define raid_attr_show_internal(attr, fmt, var, code)			\
-static ssize_t raid_show_##attr(struct device *dev, 			\
-				struct device_attribute *attr, 		\
-				char *buf)				\
+static ssize_t raid_show_##attr(struct class_device *cdev, char *buf)	\
 {									\
-	struct raid_data *rd = dev_get_drvdata(dev);			\
+	struct raid_data *rd = class_get_devdata(cdev);			\
 	code								\
 	return snprintf(buf, 20, #fmt "\n", var);			\
 }
@@ -186,17 +184,17 @@ raid_attr_show_internal(attr, %s, name,					\
 	code								\
 	name = raid_##states##_name(rd->attr);				\
 )									\
-static DEVICE_ATTR(attr, S_IRUGO, raid_show_##attr, NULL)
+static CLASS_DEVICE_ATTR(attr, S_IRUGO, raid_show_##attr, NULL)
 
 
 #define raid_attr_ro_internal(attr, code)				\
 raid_attr_show_internal(attr, %d, rd->attr, code)			\
-static DEVICE_ATTR(attr, S_IRUGO, raid_show_##attr, NULL)
+static CLASS_DEVICE_ATTR(attr, S_IRUGO, raid_show_##attr, NULL)
 
 #define ATTR_CODE(attr)							\
-	struct raid_internal *i = device_to_raid_internal(dev);		\
+	struct raid_internal *i = class_device_to_raid_internal(cdev);	\
 	if (i->f->get_##attr)						\
-		i->f->get_##attr(dev->parent);
+		i->f->get_##attr(cdev->dev);
 
 #define raid_attr_ro(attr)	raid_attr_ro_internal(attr, )
 #define raid_attr_ro_fn(attr)	raid_attr_ro_internal(attr, ATTR_CODE(attr))
@@ -208,23 +206,23 @@ raid_attr_ro_state(level);
 raid_attr_ro_fn(resync);
 raid_attr_ro_state_fn(state);
 
-static void raid_component_release(struct device *dev)
+static void raid_component_release(struct class_device *cdev)
 {
-	struct raid_component *rc =
-		container_of(dev, struct raid_component, dev);
-	dev_printk(KERN_ERR, rc->dev.parent, "COMPONENT RELEASE\n");
-	put_device(rc->dev.parent);
+	struct raid_component *rc = container_of(cdev, struct raid_component,
+						 cdev);
+	dev_printk(KERN_ERR, rc->cdev.dev, "COMPONENT RELEASE\n");
+	put_device(rc->cdev.dev);
 	kfree(rc);
 }
 
 int raid_component_add(struct raid_template *r,struct device *raid_dev,
 		       struct device *component_dev)
 {
-	struct device *cdev =
+	struct class_device *cdev =
 		attribute_container_find_class_device(&r->raid_attrs.ac,
 						      raid_dev);
 	struct raid_component *rc;
-	struct raid_data *rd = dev_get_drvdata(cdev);
+	struct raid_data *rd = class_get_devdata(cdev);
 	int err;
 
 	rc = kzalloc(sizeof(*rc), GFP_KERNEL);
@@ -232,16 +230,17 @@ int raid_component_add(struct raid_template *r,struct device *raid_dev,
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&rc->node);
-	device_initialize(&rc->dev);
-	rc->dev.release = raid_component_release;
-	rc->dev.parent = get_device(component_dev);
+	class_device_initialize(&rc->cdev);
+	rc->cdev.release = raid_component_release;
+	rc->cdev.dev = get_device(component_dev);
 	rc->num = rd->component_count++;
 
-	snprintf(rc->dev.bus_id, sizeof(rc->dev.bus_id),
+	snprintf(rc->cdev.class_id, sizeof(rc->cdev.class_id),
 		 "component-%d", rc->num);
 	list_add_tail(&rc->node, &rd->component_list);
-	rc->dev.class = &raid_class.class;
-	err = device_add(&rc->dev);
+	rc->cdev.parent = cdev;
+	rc->cdev.class = &raid_class.class;
+	err = class_device_add(&rc->cdev);
 	if (err)
 		goto err_out;
 
@@ -274,9 +273,9 @@ raid_class_attach(struct raid_function_template *ft)
 
 	attribute_container_register(&i->r.raid_attrs.ac);
 
-	i->attrs[count++] = &dev_attr_level;
-	i->attrs[count++] = &dev_attr_resync;
-	i->attrs[count++] = &dev_attr_state;
+	i->attrs[count++] = &class_device_attr_level;
+	i->attrs[count++] = &class_device_attr_resync;
+	i->attrs[count++] = &class_device_attr_state;
 
 	i->attrs[count] = NULL;
 	BUG_ON(count > RAID_NUM_ATTRS);
