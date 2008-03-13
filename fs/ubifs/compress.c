@@ -202,8 +202,8 @@ static int __init compr_init(struct ubifs_compressor *compr)
 	if (compr->capi_name) {
 		compr->cc = crypto_alloc_comp(compr->capi_name, 0, 0);
 		if (IS_ERR(compr->cc)) {
-			ubifs_err("cannot initialize compressor %s",
-				  compr->name);
+			ubifs_err("cannot initialize compressor %s, error %ld",
+				  compr->name, PTR_ERR(compr->cc));
 			return PTR_ERR(compr->cc);
 		}
 	}
