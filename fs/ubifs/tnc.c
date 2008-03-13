@@ -2475,7 +2475,8 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 
 		xent = ubifs_tnc_next_ent(c, &key1, nm.name, nm.len);
 		if (IS_ERR(xent)) {
-			if (PTR_ERR(xent) == -ENOENT)
+			err = PTR_ERR(xent);
+			if (err == -ENOENT)
 				break;
 			return err;
 		}
