@@ -654,7 +654,10 @@ struct ubifs_jhead
 struct ubifs_zbranch
 {
 	union ubifs_key key;
-	struct ubifs_znode *znode;
+	union {
+		struct ubifs_znode *znode;
+		void *leaf;
+	};
 	int lnum;
 	int offs;
 	int len;
@@ -678,7 +681,6 @@ struct ubifs_znode
 	struct ubifs_znode *cnext;
 	unsigned long flags; /* TODO: why is this long? */ /* Looks to me like bitops require it - A.H. */
 	unsigned long time;
-	/* TODO: could 2 below be 16-bit? */
 	int level;
 	int child_cnt;
 	int iip;
