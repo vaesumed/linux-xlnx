@@ -761,11 +761,11 @@ enum led_brightness value)
 }
 
 static struct led_classdev mail_led = {
-	.name = "acer-mail:green",
+	.name = "acer-wmi::mail",
 	.brightness_set = mail_led_set,
 };
 
-static int __init acer_led_init(struct device *dev)
+static int __devinit acer_led_init(struct device *dev)
 {
 	return led_classdev_register(dev, &mail_led);
 }
@@ -798,7 +798,7 @@ static struct backlight_ops acer_bl_ops = {
 	.update_status = update_bl_status,
 };
 
-static int __init acer_backlight_init(struct device *dev)
+static int __devinit acer_backlight_init(struct device *dev)
 {
 	struct backlight_device *bd;
 
@@ -817,7 +817,7 @@ static int __init acer_backlight_init(struct device *dev)
 	return 0;
 }
 
-static void __exit acer_backlight_exit(void)
+static void acer_backlight_exit(void)
 {
 	backlight_device_unregister(acer_backlight_device);
 }
@@ -1069,10 +1069,8 @@ static int __init acer_wmi_init(void)
 		}
 	}
 
-	if (wmi_has_guid(AMW0_GUID1)) {
-		if (ACPI_FAILURE(AMW0_find_mailled()))
-			printk(ACER_ERR "Unable to detect mail LED\n");
-	}
+	if (wmi_has_guid(AMW0_GUID1))
+		AMW0_find_mailled();
 
 	find_quirks();
 
