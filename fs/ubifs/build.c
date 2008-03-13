@@ -477,6 +477,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	struct super_block *sb = c->vfs_sb;
 	int err, mounted_read_only = (sb->s_flags & MS_RDONLY);
 	unsigned long long x;
+	size_t sz;
 
 	err = init_constants_early(c);
 	if (err)
@@ -536,6 +537,12 @@ static int mount_ubifs(struct ubifs_info *c)
 	err = init_constants_late(c);
 	if (err)
 		return err;
+
+	sz = ALIGN(c->max_idx_node_sz, c->min_io_size);
+	sz = ALIGN(sz + c->max_idx_node_sz, c->min_io_size);
+	c->cbuf = kmalloc(sz, GFP_NOFS);
+	if (!c->cbuf)
+		return -ENOMEM;
 
 	if (!mounted_read_only) {
 		err = alloc_wbufs(c);
