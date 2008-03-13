@@ -235,8 +235,6 @@ Summary of ide driver parameters for kernel command line
 			  As for VLB, it is safest to not specify it.
 			  Bigger values are safer than smaller ones.
 
- "idex=reset"		: reset interface after probe
-
  "ide=reverse"		: formerly called to pci sub-system, but now local.
 
 The following are valid ONLY on ide0, which usually corresponds
