@@ -327,4 +327,15 @@ config ENCLOSURE_SERVICES
 	  driver (SCSI/ATA) which supports enclosures
 	  or a SCSI enclosure device (SES) to use these services.
 
+config EEEPC_LAPTOP
+	tristate "Eee PC Hotkey Driver (EXPERIMENTAL)"
+	depends on X86
+	depends on ACPI
+	depends on EXPERIMENTAL
+	---help---
+	  This driver supports the Fn-Fx keys on Eee PC laptops.
+	  It also adds the ability to switch camera/wlan on/off.
+
+	  If you have an Eee PC laptop, say Y or M here.
+
 endif # MISC_DEVICES
