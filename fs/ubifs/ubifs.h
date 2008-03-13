@@ -254,7 +254,11 @@ struct ubifs_gced_idx_leb
 /**
  * struct ubifs_inode - UBIFS in-memory inode description.
  * @vfs_inode: VFS inode description object
- * @msize: on-the-media inode size in bytes (size of all data nodes)
+ * @msize: not used. This field was to store on-the-media inode size in bytes,
+ * however it proved too complicated to maintain because it would change when
+ * data is compressed during writeback, requiring that the inode is then
+ * dirtied, which is not something that VFS expects and in addition requires
+ * UBIFS to budget space.
  * @xattr_size: summarized size of all extended attributes in bytes
  * @xattr_msize: summarized on-the-media size of all extended attributes in
  *               bytes (size of all extended attribute entries and extended
