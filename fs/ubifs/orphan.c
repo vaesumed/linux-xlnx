@@ -843,7 +843,7 @@ static int dbg_orphan_check(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 				  key_type(c, &zbr->key));
 		ci->last_ino = inum;
 		ci->tot_inos += 1;
-		err = dbg_read_leaf_nolock(c, &zbr->key, zbr, ci->node);
+		err = dbg_read_leaf_nolock(c, zbr, ci->node);
 		if (err) {
 			ubifs_err("node read failed, error %d", err);
 			return err;

@@ -107,8 +107,8 @@ typedef int (*dbg_znode_callback)(struct ubifs_info *c,
 
 int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 		   dbg_znode_callback znode_cb, void *priv);
-int dbg_read_leaf_nolock(struct ubifs_info *c, const union ubifs_key *key,
-			 struct ubifs_zbranch *zbr, void *node);
+int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			 void *node);
 #else
 
 #define dbg_ntype(type)             ""
@@ -125,7 +125,7 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, const union ubifs_key *key,
 #define dbg_dump_heap(c, heap, cat) ({})
 #define dbg_leak_rpt()              ({})
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
-#define dbg_read_leaf_nolock(c, key, zbr, node)    0
+#define dbg_read_leaf_nolock(c, zbr, node)    0
 
 #endif /* !CONFIG_UBIFS_FS_DEBUG */
 
