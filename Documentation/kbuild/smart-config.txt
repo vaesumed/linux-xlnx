@@ -87,7 +87,7 @@ Credit
 
     Werner Almesberger had the original idea and wrote the first
     version of this patch.
-    
+
     Michael Chastain picked it up and continued development.  He is
     now the principal author and maintainer.  Please report any bugs
     to him.
