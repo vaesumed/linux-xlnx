@@ -695,7 +695,7 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 	while (1) {
 		int err;
 
-		dent = ubifs_tnc_next_ent(c, &key, nm.name, nm.len);
+		dent = ubifs_tnc_next_ent(c, &key, &nm);
 		if (IS_ERR(dent)) {
 			err = PTR_ERR(dent);
 			if (err == -ENOENT)
