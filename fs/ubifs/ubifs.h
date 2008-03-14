@@ -1376,7 +1376,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum);
 struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
-					   const char *name, int len);
+					   const struct qstr *nm);
 void ubifs_tnc_close(struct ubifs_info *c);
 long ubifs_destroy_tnc_subtree(struct ubifs_znode *zr);
 void destroy_old_idx(struct ubifs_info *c); /* TODO: shared between tnc* */
