@@ -109,8 +109,6 @@ void ubifs_read_inode(struct inode *inode)
 	inode->i_mode  = le32_to_cpu(ino->mode);
 	inode->i_size  = le64_to_cpu(ino->size);
 
-	ubifs_set_i_bytes(inode);
-
 	ui->data_len    = le32_to_cpu(ino->data_len);
 	ui->flags       = le32_to_cpu(ino->flags);
 	ui->compr_type  = le16_to_cpu(ino->compr_type);
@@ -306,7 +304,6 @@ int ubifs_commit_write(struct file *file, struct page *page, unsigned from,
 
 	if (pos > inode->i_size) {
 		i_size_write(inode, pos);
-		ubifs_set_i_bytes(inode);
 
 		/*
 		 * Note, we do not set 'I_DIRTY_PAGES' (which means that the
