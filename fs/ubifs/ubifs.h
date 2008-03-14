@@ -57,6 +57,16 @@
 /* UBIFS file system VFS magic number */
 #define UBIFS_SUPER_MAGIC 0x24051905
 
+/*
+ * UBIFS has to report some block size to VFS and user-space and pretend to be
+ * a block-based file system sometimes. We use 512 bytes for these purposes,
+ * because this way utilities like 'du' which assume they deal with a
+ * traditional FS would give a little better results (rounding to 512 gives
+ * smaller mistake then rounding to 4096).
+ */
+#define REPORTED_BLOCK_SIZE  512
+#define REPORTED_BLOCK_SHIFT 9
+
 /* "File system end of life" sequence number watermark */
 #define SQNUM_WARN_WATERMARK 0xFFFFFFFF00000000ULL
 #define SQNUM_WATERMARK      0xFFFFFFFFFF000000ULL
