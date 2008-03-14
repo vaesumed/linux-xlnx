@@ -1497,7 +1497,7 @@ static struct device_attribute ibmvscsi_host_partition_name = {
 	.show = show_host_partition_name,
 };
 
-static ssize_t show_host_partition_number(struct device *class_dev,
+static ssize_t show_host_partition_number(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
 {
