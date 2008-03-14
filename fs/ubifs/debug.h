@@ -267,6 +267,12 @@ int dbg_check_cats(struct ubifs_info *c);
 #define dbg_rcvry(fmt, ...) ({})
 #endif
 
+#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir);
+#else
+#define dbg_check_dir_size(c, dir) 0
+#endif
+
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_TNC
 int dbg_check_tnc(struct ubifs_info *c, int extra);
 #else
