@@ -346,12 +346,10 @@ enum {
 /*
  * Superblock flags.
  *
- * UBIFS_FLG_FASTUNMOUNT: do not run journal commit before unmounting
  * UBIFS_FLG_BIGLPT: if "big" LPT model is used if set
  */
 enum {
-	UBIFS_FLG_FASTUNMNT = 0x01,
-	UBIFS_FLG_BIGLPT    = 0x02,
+	UBIFS_FLG_BIGLPT = 0x02,
 };
 
 /**
@@ -527,7 +525,7 @@ struct ubifs_pad_node
  * @padding: reserved for future, zeroes
  * @key_hash: type of hash function used in keys
  * @key_fmt: format of the key
- * @flags: file-system flags (%UBIFS_FLG_FASTUNMNT, %UBIFS_FLG_BIGLPT)
+ * @flags: file-system flags (%UBIFS_FLG_BIGLPT, etc)
  * @min_io_size: minimal input/output unit size
  * @leb_size: logical eraseblock size in bytes
  * @leb_cnt: count of LEBs used by filesystem

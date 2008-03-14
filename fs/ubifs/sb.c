@@ -84,9 +84,8 @@ static int create_default_filesystem(struct ubifs_info *c)
 	struct ubifs_cs_node *cs;
 	union ubifs_key key;
 	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
-	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste;
+	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste, sup_flags = 0;
 	long long tmp64, main_bytes;
-	unsigned int sup_flags = 0;
 
 	/* Some functions called from here depend on the @c->key_len filed */
 	c->key_len = UBIFS_SK_LEN;
@@ -479,8 +478,7 @@ int ubifs_write_sb_node(struct ubifs_info *c, struct ubifs_sb_node *sup)
  */
 int ubifs_read_superblock(struct ubifs_info *c)
 {
-	int err;
-	unsigned int sup_flags;
+	int err, sup_flags;
 	struct ubifs_sb_node *sup;
 
 	if (c->empty) {
@@ -538,13 +536,6 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	sup_flags        = le32_to_cpu(sup->flags);
 
 	c->big_lpt = !!(sup_flags & UBIFS_FLG_BIGLPT);
-
-	/*
-	 * Use superblock unmount mode settings unless they were overriden by
-	 * the mount options.
-	 */
-	if (!c->mount_opts.unmount_mode)
-		c->fast_unmount = sup_flags & UBIFS_FLG_FASTUNMNT;
 
 	/* Automatically increase file system size to the maximum size */
 	c->old_leb_cnt = c->leb_cnt;
