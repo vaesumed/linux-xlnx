@@ -350,8 +350,6 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       dbg_get_key_dump(c, &key));
 		printk(KERN_DEBUG "\tsize           %llu\n",
 		       le64_to_cpu(ino->size));
-		printk(KERN_DEBUG "\tmsize          %llu\n",
-		       le64_to_cpu(ino->msize));
 		printk(KERN_DEBUG "\tnlink          %u\n",
 		       le32_to_cpu(ino->nlink));
 		printk(KERN_DEBUG "\tatime          %u\n",
