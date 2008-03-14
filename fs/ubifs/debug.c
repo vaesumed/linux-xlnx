@@ -672,6 +672,62 @@ void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat)
 	}
 }
 
+#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+
+/*
+ * dbg_check_dir - check directory inode size.
+ * @c: UBIFS file-system description object
+ * @dir: the directory to calculate size for
+ * @size: the result is returned here
+ *
+ * This function makes sure that directory size is correct. Returns zero
+ * in case of success and a negative error code in case of failure.
+ *
+ * Note, it is good idea to make sure the @dir->i_mutex is locked before
+ * calling this function.
+ */
+int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
+{
+	union ubifs_key key;
+	struct ubifs_dent_node *dent, *pdent = NULL;
+	struct qstr nm = { .name = NULL };
+	loff_t size = 0;
+
+	lowest_dent_key(c, &key, dir->i_ino);
+	while (1) {
+		int err;
+
+		dent = ubifs_tnc_next_ent(c, &key, nm.name, nm.len);
+		if (IS_ERR(dent)) {
+			err = PTR_ERR(dent);
+			if (err == -ENOENT)
+				break;
+			return err;
+		}
+
+		size += CALC_DENT_SIZE(dent->nlen);
+		nm.name = dent->name;
+		nm.len = le16_to_cpu(dent->nlen);
+		kfree(pdent);
+		pdent = dent;
+		key_read(c, &dent->key, &key);
+	}
+
+	kfree(pdent);
+
+	if (i_size_read(dir) != size) {
+		ubifs_err("bad directory dir %lu size %llu, "
+			  "calculated %llu", dir->i_ino,
+			  i_size_read(dir), size);
+		dump_stack();
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_OTHER */
+
 void *dbg_km_chkr(size_t size, gfp_t flags)
 {
 	void *addr;
