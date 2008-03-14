@@ -473,7 +473,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
 		     int deletion, int sync, int xent)
 {
-	int err, dlen, ilen, plen, len, lnum, ino_offs, dent_offs;
+	int err, dlen, ilen, len, lnum, ino_offs, dent_offs;
 	int aligned_dlen, aligned_ilen;
 	int last_reference = !!(deletion && inode->i_nlink == 0);
 	struct ubifs_dent_node *dent;
@@ -483,6 +483,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 	dbg_jrn("ino %lu, dent '%.*s', data len %d in dir ino %lu",
 		inode->i_ino, nm->len, nm->name, ubifs_inode(inode)->data_len,
 		dir->i_ino);
+	ubifs_assert(ubifs_inode(dir)->data_len == 0);
 
 	dlen = UBIFS_DENT_NODE_SZ + nm->len + 1;
 	ilen = UBIFS_INO_NODE_SZ;
@@ -497,8 +498,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 	aligned_dlen = ALIGN(dlen, 8);
 	aligned_ilen = ALIGN(ilen, 8);
 
-	plen = ubifs_inode(dir)->data_len + UBIFS_INO_NODE_SZ;
-	len = aligned_dlen + aligned_ilen + ALIGN(plen, 8);
+	len = aligned_dlen + aligned_ilen + UBIFS_INO_NODE_SZ;
 
 	dent = kmalloc(len, GFP_KERNEL);
 	if (!dent)
@@ -577,7 +577,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 
 	ino_key_init(c, &ino_key, dir->i_ino);
 	ino_offs += aligned_ilen;
-	err = ubifs_tnc_add(c, &ino_key, lnum, ino_offs, plen);
+	err = ubifs_tnc_add(c, &ino_key, lnum, ino_offs, UBIFS_INO_NODE_SZ);
 	if (err)
 		goto out_ro;
 
