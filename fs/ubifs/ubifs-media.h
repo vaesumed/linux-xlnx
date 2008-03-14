@@ -397,7 +397,6 @@ union ubifs_dev_desc
  * @key: node key
  * @creat_sqnum: sequence number at time of creation
  * @size: inode size in bytes (amount of uncompressed data)
- * @msize: not used at present.
  * @nlink: number of hard links
  * @atime: access time
  * @ctime: creation time
@@ -429,7 +428,7 @@ struct ubifs_ino_node
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 creat_sqnum;
 	__le64 size;
-	__le64 msize;
+	__u8 padding2[8];
 	__le32 nlink;
 	__le32 atime;
 	__le32 ctime;
