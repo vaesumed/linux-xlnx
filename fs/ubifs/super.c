@@ -140,8 +140,6 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	inode->i_mode  = le32_to_cpu(ino->mode);
 	inode->i_size  = le64_to_cpu(ino->size);
 
-	ubifs_set_i_bytes(inode);
-
 	ui->data_len    = le32_to_cpu(ino->data_len);
 	ui->flags       = le32_to_cpu(ino->flags);
 	ui->compr_type  = le16_to_cpu(ino->compr_type);

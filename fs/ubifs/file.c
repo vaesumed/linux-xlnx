@@ -362,7 +362,6 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 
 	if (pos + len > i_size) {
 		i_size_write(inode, pos + len);
-		ubifs_set_i_bytes(inode);
 
 		/*
 		 * Note, we do not set @I_DIRTY_PAGES (which means that the
@@ -595,7 +594,6 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 		}
 
 		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
-		ubifs_set_i_bytes(inode);
 	}
 
 	if (ia_valid & ATTR_UID)
@@ -821,13 +819,14 @@ struct address_space_operations ubifs_file_address_operations =
 
 struct inode_operations ubifs_file_inode_operations =
 {
+	.setattr     = ubifs_setattr,
+	.getattr     = ubifs_getattr,
 #ifdef CONFIG_UBIFS_FS_XATTR
 	.setxattr    = ubifs_setxattr,
 	.getxattr    = ubifs_getxattr,
 	.listxattr   = ubifs_listxattr,
 	.removexattr = ubifs_removexattr,
 #endif
-	.setattr     = ubifs_setattr,
 };
 
 struct inode_operations ubifs_symlink_inode_operations =
@@ -835,6 +834,7 @@ struct inode_operations ubifs_symlink_inode_operations =
 	.readlink    = generic_readlink,
 	.follow_link = ubifs_follow_link,
 	.setattr     = ubifs_setattr,
+	.getattr     = ubifs_getattr,
 };
 
 struct file_operations ubifs_file_operations =
