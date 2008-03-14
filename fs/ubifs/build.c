@@ -1175,8 +1175,8 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	c->vfs_sb = sb;
 	sb->s_fs_info = c;
 	sb->s_magic = UBIFS_SUPER_MAGIC;
-	sb->s_blocksize = REPORTED_BLOCK_SIZE;
-	sb->s_blocksize_bits = REPORTED_BLOCK_SHIFT;
+	sb->s_blocksize = UBIFS_BLOCK_SIZE;
+	sb->s_blocksize_bits = UBIFS_BLOCK_SHIFT;
 	sb->s_dev = c->vi.cdev;
 	sb->s_maxbytes = c->max_inode_sz =
 			min_t(uint64_t, MAX_LFS_FILESIZE, UBIFS_MAX_INODE_SZ);

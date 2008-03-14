@@ -910,7 +910,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	stat->atime = inode->i_atime;
 	stat->mtime = inode->i_mtime;
 	stat->ctime = inode->i_ctime;
-	stat->blksize = REPORTED_BLOCK_SIZE;
+	stat->blksize = UBIFS_BLOCK_SIZE;
 	stat->size = i_size_read(inode);
 
 	spin_lock(&inode->i_lock);
@@ -932,7 +932,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	if (S_ISREG(inode->i_mode))
 		size += stat->size;
 
-	size = ALIGN(size, REPORTED_BLOCK_SIZE);
+	size = ALIGN(size, UBIFS_BLOCK_SIZE);
 	/*
 	 * Note, userspace expects 512-byte blocks count irrespectively of what
 	 * was reported in @stat->size.
