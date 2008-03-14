@@ -61,12 +61,11 @@
 #define UBIFS_MAX_JHEADS 1
 
 /*
- * Size of UBIFS data block. Note, UBIFS is not block oriented file-system,
- * which means it does not treat the underlying media as consisting of blocks
- * like in case of hard drive. So the notion of block in UBIFS has nothing to
- * do with notion of "block" in case of traditional file-systems like Ext2. Do
- * not be confused. UBIFS block is just the maximum amount of data which one
- * data node can have or which can be attached to an inode node.
+ * Size of UBIFS data block. Note, UBIFS is not a block oriented file-system,
+ * which means that it does not treat the underlying media as consisting of
+ * blocks like in case of hard drives. Do not be confused. UBIFS block is just
+ * the maximum amount of data which one data node can have or which can be
+ * attached to an inode node.
  */
 #define UBIFS_BLOCK_SIZE  4096
 #define UBIFS_BLOCK_SHIFT 12
