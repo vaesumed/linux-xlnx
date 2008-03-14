@@ -259,7 +259,8 @@ struct ubifs_gced_idx_leb
  * data is compressed during writeback, requiring that the inode is then
  * dirtied, which is not something that VFS expects and in addition requires
  * UBIFS to budget space.
- * @xattr_size: summarized size of all extended attributes in bytes
+ * @xattr_size: summarized size of all extended attributes in bytes, protected
+ *              by @inode->i_lock
  * @xattr_msize: summarized on-the-media size of all extended attributes in
  *               bytes (size of all extended attribute entries and extended
  *               attribute inodes belonging to this inode)
@@ -1482,7 +1483,8 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
 /* dir.c */
 struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			      int mode);
-void ubifs_set_i_bytes(struct inode *inode);
+int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
+		  struct kstat *stat);
 
 /* xattr.c */
 int ubifs_setxattr(struct dentry *dentry, const char *name,
