@@ -466,9 +466,9 @@ static int ubifs_statfs(struct dentry *dentry, struct kstatfs *buf)
 		free, free >> UBIFS_BLOCK_SHIFT);
 
 	buf->f_type = UBIFS_SUPER_MAGIC;
-	buf->f_bsize = REPORTED_BLOCK_SIZE;
+	buf->f_bsize = UBIFS_BLOCK_SIZE;
 	buf->f_blocks = c->block_cnt;
-	buf->f_bfree = free >> REPORTED_BLOCK_SHIFT;
+	buf->f_bfree = free >> UBIFS_BLOCK_SHIFT;
 	buf->f_bavail = buf->f_bfree;
 	buf->f_files = 0;
 	buf->f_ffree = 0;
