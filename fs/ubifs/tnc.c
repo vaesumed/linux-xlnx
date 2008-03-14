@@ -31,8 +31,6 @@
  * should be fine for embedded ones. And after all, this can be improved later.
  */
 
-/* TODO: use slab cache for znodes */
-
 #include "ubifs.h"
 
 /**
@@ -375,6 +373,10 @@ static struct ubifs_znode *load_znode(struct ubifs_info *c,
 	struct ubifs_znode *znode;
 
 	ubifs_assert(!zbr->znode);
+	/*
+	 * A slab cache is not presently used for znodes because the znode size
+	 * depends on the fanout which is stored in the superblock.
+	 */
 	znode = kzalloc(c->max_znode_sz, GFP_NOFS);
 	if (!znode)
 		return ERR_PTR(-ENOMEM);
@@ -2401,7 +2403,6 @@ out:
  * This function remove inode @inum and all the extended attributes associated
  * with the anode from TNC and returns zero in case of success or a negative
  * error code in case of failure.
- * TODO: make sure all callers switch to RO if this func fails
  */
 int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 {
