@@ -221,11 +221,9 @@ typedef void (*dma_async_tx_callback)(void *dma_async_param);
  * @callback: routine to call after this operation is complete
  * @callback_param: general parameter to pass to the callback routine
  * ---async_tx api specific fields---
- * @depend_list: at completion this list of transactions are submitted
- * @depend_node: allow this transaction to be executed after another
- *	transaction has completed, possibly on another channel
+ * @next: at completion submit this descriptor
  * @parent: pointer to the next level up in the dependency chain
- * @lock: protect the dependency list
+ * @lock: protect the parent and next pointers
  */
 struct dma_async_tx_descriptor {
 	dma_cookie_t cookie;
@@ -236,8 +234,7 @@ struct dma_async_tx_descriptor {
 	dma_cookie_t (*tx_submit)(struct dma_async_tx_descriptor *tx);
 	dma_async_tx_callback callback;
 	void *callback_param;
-	struct list_head depend_list;
-	struct list_head depend_node;
+	struct dma_async_tx_descriptor *next;
 	struct dma_async_tx_descriptor *parent;
 	spinlock_t lock;
 };
@@ -261,7 +258,6 @@ struct dma_async_tx_descriptor {
  * @device_prep_dma_zero_sum: prepares a zero_sum operation
  * @device_prep_dma_memset: prepares a memset operation
  * @device_prep_dma_interrupt: prepares an end of chain interrupt operation
- * @device_dependency_added: async_tx notifies the channel about new deps
  * @device_issue_pending: push pending transactions to hardware
  */
 struct dma_device {
@@ -296,7 +292,6 @@ struct dma_device {
 	struct dma_async_tx_descriptor *(*device_prep_dma_interrupt)(
 		struct dma_chan *chan);
 
-	void (*device_dependency_added)(struct dma_chan *chan);
 	enum dma_status (*device_is_tx_complete)(struct dma_chan *chan,
 			dma_cookie_t cookie, dma_cookie_t *last,
 			dma_cookie_t *used);
