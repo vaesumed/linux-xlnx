@@ -1343,22 +1343,6 @@ static void netlink_data_ready(struct sock *sk, int len)
  *	queueing.
  */
 
-static void __netlink_release(struct sock *sk)
-{
-	/*
-	 * Last sock_put should drop referrence to sk->sk_net. It has already
-	 * been dropped in netlink_kernel_create. Taking referrence to stopping
-	 * namespace is not an option.
-	 * Take referrence to a socket to remove it from netlink lookup table
-	 * _alive_ and after that destroy it in the context of init_net.
-	 */
-
-	sock_hold(sk);
-	sock_release(sk->sk_socket);
-	sk->sk_net = get_net(&init_net);
-	sock_put(sk);
-}
-
 struct sock *
 netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 		      void (*input)(struct sk_buff *skb),
@@ -1387,8 +1371,7 @@ netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 		goto out_sock_release_nosk;
 
 	sk = sock->sk;
-	put_net(sk->sk_net);
-	sk->sk_net = net;
+	sk_change_net(sk, net);
 
 	if (groups < 32)
 		groups = 32;
@@ -1423,7 +1406,7 @@ netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 
 out_sock_release:
 	kfree(listeners);
-	__netlink_release(sk);
+	netlink_kernel_release(sk);
 	return NULL;
 
 out_sock_release_nosk:
@@ -1436,10 +1419,7 @@ EXPORT_SYMBOL(netlink_kernel_create);
 void
 netlink_kernel_release(struct sock *sk)
 {
-	if (sk == NULL || sk->sk_socket == NULL)
-		return;
-
-	__netlink_release(sk);
+	sk_release_kernel(sk);
 }
 EXPORT_SYMBOL(netlink_kernel_release);
 
