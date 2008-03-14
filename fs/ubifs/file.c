@@ -51,47 +51,6 @@
  * calls for the same inode, but different inode dirty pages.
  */
 
-/*
- * TODO: Page size is not always 4KiB, it may be 16KiB or larger. UBIFS block
- * size is fixed and is always 4KiB, because we want to be portable. Fix this.
- *
- * TODO: For NOR flash, when there is no compression, readpage() could read
- * data straight to the page, not via a temporary buffer.
- *
- * TODO: readpage() and writepage() have to return the error if they do
- * synchronous() I/O, and they have to ClearPageUptodate() and SetPageError()
- * if they do asynchronous I/O.
- *
- * TODO: We are also planning to be able to store more then on block in a node,
- * so when we read a data node to fetch a page, and there is the next page
- * present, we should "forcefully" propagate the next page to the Page Cache.
- * Just because it will likely be needed soon, and we have already read it,
- * checked CRC, uncompressed - no need to do this many times. ZISOFS is using
- * this technique.
- *
- * TODO: prepare_write(), unless this write is _synchronous_, we have to
- * reserve space before we've entered writepage(). But it is kinda problematic
- * because of compression - we do not know how much data we may really fit. We
- * can either guess using some empirical approach, or we may use "pessimistic"
- * space reservation - reserve maximum possible number of bytes.
- *
- * But the latter is tricky - when the pessimistic calculation says there is no
- * space, do we return %-ENOSPC in prepare_write()? But surely it is bad. We
- * may want to initiate page cache flushing instead. But I am not sure it is
- * possible - nasty locking problems? This has to be thought of better.
- *
- * TODO: when we cannot write page - mark inode bad or something - otherwise
- * pdflush tries again and again forever. Fix this somehow.
- *
- * TODO: we have to add a 'ubi_sync' support which calls mtd->sync, and call it
- * when we want stuff to go to flash: fsync(), unmount, rw->ro remount.
- * Probably we just have add it to 'ubifs_sync_wbufs_by_inodes()'.
- *
- * TODO: consider to use mutex_lock_interruptible() instead of mutex_lock() in
- * the code. Often it is much better - process locks up, you interrupt it and
- * keep hunting problems.
- */
-
 #include "ubifs.h"
 #include <linux/mount.h>
 
@@ -532,13 +491,12 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 					if (err)
 						return err;
 					/*
-					 * TODO: Tell ubifs_jrn_truncate not to
-					 * read the last block
+					 * We could now tell ubifs_jrn_truncate
+					 * not to read the last block.
 					 */
 				} else {
 					/*
-					 * TODO: If there are one or more blocks
-					 * per page, then 'kmap()' the page and
+					 * We could 'kmap()' the page and
 					 * pass the data to ubifs_jrn_truncate
 					 * to save it from having to read it.
 					 */
@@ -549,7 +507,6 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 		}
 		err = ubifs_jrn_truncate(c, inode->i_ino, old_size, new_size);
 		if (err)
-			/* TODO: Determine how to handle this error */
 			return err;
 	}
 
@@ -844,7 +801,6 @@ struct file_operations ubifs_file_operations =
 	.write     = ubifs_write,
 	.aio_read  = generic_file_aio_read,
 	.aio_write = ubifs_aio_write,
-	/* TODO: do we need to change mtime for mmap? */
 	.mmap      = generic_file_mmap,
 	.fsync     = ubifs_fsync,
 	.ioctl     = ubifs_ioctl,
