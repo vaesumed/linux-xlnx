@@ -105,7 +105,7 @@ struct sysinfo_3_2_2 {
 	} vm[8];
 };
 
-static inline int stsi(void *sysinfo, int fc, int sel1, int sel2)
+int stsi(void *sysinfo, int fc, int sel1, int sel2)
 {
 	register int r0 asm("0") = (fc << 28) | sel1;
 	register int r1 asm("1") = sel2;
