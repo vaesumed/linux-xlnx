@@ -164,26 +164,6 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	return inode;
 }
 
-/**
- * ubifs_set_i_bytes - set inode size for VFS.
- * @inode: the inode to set the size for
- *
- * This is a helper function which sets @inode->i_bytes and @inode->i_blocks.
- * VFS expects the blocks size in this case to be 512 bytes, no matter what is
- * the FS's I/O block size (ours is 4KiB).
- */
-void ubifs_set_i_bytes(struct inode *inode)
-{
-	loff_t size = i_size_read(inode) + ubifs_inode(inode)->xattr_size;
-
-	inode->i_bytes = size & 0x1FF;
-
-	/* First align inode size up to UBIFS block size boundary */
-	size = (size + UBIFS_BLOCK_SIZE - 1) & ~UBIFS_BLOCK_MASK;
-	/* Then calculate amount of 512 byte blocks */
-	inode->i_blocks = size >> 9;
-}
-
 static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
                                    struct nameidata *nd)
 {
@@ -270,7 +250,6 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_ino_clean(c, dir, &req);
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_budg:
@@ -481,7 +460,6 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	atomic_inc(&inode->i_count);
 	d_instantiate(dentry, inode);
 	ubifs_release_ino_clean(c, dir, &req);
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_budg:
@@ -529,7 +507,6 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	if (budgeted)
 		ubifs_release_ino_clean(c, dir, &req);
 
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_budg:
@@ -612,7 +589,6 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (budgeted)
 		ubifs_release_ino_clean(c, dir, &req);
 
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_budg:
@@ -662,8 +638,6 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	d_instantiate(dentry, inode);
 	ubifs_release_ino_clean(c, dir, &req);
-	ubifs_set_i_bytes(inode);
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_inode:
@@ -729,8 +703,6 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_ino_clean(c, dir, &req);
-	ubifs_set_i_bytes(inode);
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_inode:
@@ -797,8 +769,6 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_ino_clean(c, dir, &req);
-	ubifs_set_i_bytes(inode);
-	ubifs_set_i_bytes(dir);
 	return 0;
 
 out_dir:
@@ -835,7 +805,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		ubifs_assert(mutex_is_locked(&new_inode->i_mutex));
 
 	if (unlink && is_dir) {
-		err = check_dir_empty(c, new_dentry->d_inode);
+		err = check_dir_empty(c, new_inode);
 		if (err)
 			return err;
 	}
@@ -871,16 +841,14 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		drop_nlink(old_dir);
 	old_dir->i_size -= old_sz;
 	old_dir->i_mtime = old_dir->i_ctime = CURRENT_TIME_SEC;
+	new_dir->i_mtime = new_dir->i_ctime = CURRENT_TIME_SEC;
 
 	/*
-	 * If we moved the object to new directory. Update its [mc]time. If we
-	 * moved a directory object, parent's 'i_nlink' should also be adjusted.
+	 * If we moved a directory object to new directory, parent's 'i_nlink'
+	 * should be adjusted.
 	 */
-	if (move) {
-		new_dir->i_mtime = new_dir->i_ctime = CURRENT_TIME_SEC;
-		if (is_dir)
-			inc_nlink(new_dir);
-	}
+	if (move && is_dir)
+		inc_nlink(new_dir);
 
 	/*
 	 * And finally, if we unlinked a direntry which happened to have the
@@ -906,8 +874,6 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto out_inode;
 
 	ubifs_release_ino_clean(c, old_dir, &req);
-	ubifs_set_i_bytes(old_dir);
-	ubifs_set_i_bytes(new_dir);
 	return 0;
 
 out_inode:
@@ -926,14 +892,54 @@ out_inode:
 	return err;
 }
 
+int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
+		  struct kstat *stat)
+{
+	struct inode *inode = dentry->d_inode;
+	loff_t size;
+
+	stat->dev = inode->i_sb->s_dev;
+	stat->ino = inode->i_ino;
+	stat->mode = inode->i_mode;
+	stat->nlink = inode->i_nlink;
+	stat->uid = inode->i_uid;
+	stat->gid = inode->i_gid;
+	stat->rdev = inode->i_rdev;
+	stat->atime = inode->i_atime;
+	stat->mtime = inode->i_mtime;
+	stat->ctime = inode->i_ctime;
+	stat->blksize = UBIFS_BLOCK_SIZE;
+	stat->size = i_size_read(inode);
+
+	spin_lock(&inode->i_lock);
+	size = ubifs_inode(inode)->xattr_size;
+	spin_unlock(&inode->i_lock);
+
+	/*
+	 * Unfortunatelly, the 'stat()' system call was designed for block
+	 * device based file systems, and it is not appropriate for UBIFS,
+	 * because UBIFS does not have notion of "block". For example, it is
+	 * difficult to tell how many block a directory takes - it actually
+	 * takes less then 300 bytes, but we have to round it to block size,
+	 * which itroduces large mistake. This makes utilities like 'du' to
+	 * report completely senseless dumbers. This is the reason why UBIFS
+	 * goes the same way as JFFS2 - it reports zero blocks for everything
+	 * but regular files, which makes more sense than reporting completely
+	 * wrong sizes.
+	 */
+	if (S_ISREG(inode->i_mode))
+		size += stat->size;
+
+	/* First align inode size up to UBIFS block size boundary */
+	size = (size + UBIFS_BLOCK_SIZE - 1) & ~UBIFS_BLOCK_MASK;
+	/* Then calculate amount of 512 byte blocks */
+	stat->blocks = size >> 9;
+
+	return 0;
+}
+
 struct inode_operations ubifs_dir_inode_operations =
 {
-#ifdef CONFIG_UBIFS_FS_XATTR
-	.setxattr    = ubifs_setxattr,
-	.getxattr    = ubifs_getxattr,
-	.listxattr   = ubifs_listxattr,
-	.removexattr = ubifs_removexattr,
-#endif
 	.lookup      = ubifs_lookup,
 	.create      = ubifs_create,
 	.link        = ubifs_link,
@@ -944,6 +950,13 @@ struct inode_operations ubifs_dir_inode_operations =
 	.mknod       = ubifs_mknod,
 	.rename      = ubifs_rename,
 	.setattr     = ubifs_setattr,
+	.getattr     = ubifs_getattr,
+#ifdef CONFIG_UBIFS_FS_XATTR
+	.setxattr    = ubifs_setxattr,
+	.getxattr    = ubifs_getxattr,
+	.listxattr   = ubifs_listxattr,
+	.removexattr = ubifs_removexattr,
+#endif
 };
 
 struct file_operations ubifs_dir_operations =

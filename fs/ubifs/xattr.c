@@ -142,8 +142,10 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	memcpy(ui->data, value, size);
 	host->i_ctime = CURRENT_TIME_SEC;
 	host_ui->xattr_cnt += 1;
+	spin_lock(&host->i_lock);
 	host_ui->xattr_size += CALC_DENT_SIZE(nm->len);
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);
+	spin_unlock(&host->i_lock);
 	host_ui->xattr_names += nm->len;
 
 	/*
@@ -165,15 +167,15 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 
 	ubifs_release_ino_clean(c, host, &req);
 	insert_inode_hash(inode);
-	ubifs_set_i_bytes(inode);
-	ubifs_set_i_bytes(host);
 	iput(inode);
 	return 0;
 
 out_cancel:
 	host_ui->xattr_cnt -= 1;
+	spin_lock(&host->i_lock);
 	host_ui->xattr_size -= CALC_DENT_SIZE(nm->len);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(size);
+	spin_unlock(&host->i_lock);
 out_inode:
 	make_bad_inode(inode);
 	iput(inode);
@@ -212,8 +214,10 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 		return err;
 
 	host->i_ctime = CURRENT_TIME_SEC;
+	spin_lock(&host->i_lock);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);
+	spin_unlock(&host->i_lock);
 
 	kfree(ui->data);
 	ui->data = kmalloc(size, GFP_KERNEL);
@@ -237,13 +241,13 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 		goto out_cancel;
 
 	ubifs_release_ino_clean(c, host, &req);
-	ubifs_set_i_bytes(inode);
-	ubifs_set_i_bytes(host);
 	return 0;
 
 out_cancel:
+	spin_lock(&host->i_lock);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(size);
 	host_ui->xattr_size += CALC_XATTR_BYTES(ui->data_len);
+	spin_unlock(&host->i_lock);
 	make_bad_inode(inode);
 out_budg:
 	ubifs_cancel_ino_op(c, host, &req);
@@ -512,7 +516,9 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 
 	host->i_ctime = CURRENT_TIME_SEC;
 	host_ui->xattr_cnt -= 1;
+	spin_lock(&host->i_lock);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);
+	spin_unlock(&host->i_lock);
 	host_ui->xattr_names -= nm->len;
 
 	err = ubifs_jrn_delete_xattr(c, host, inode, nm, IS_DIRSYNC(host));
@@ -520,13 +526,14 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 		goto out_cancel;
 
 	ubifs_release_ino_clean(c, host, &req);
-	ubifs_set_i_bytes(host);
 	return 0;
 
 out_cancel:
 	ubifs_cancel_ino_op(c, host, &req);
 	host_ui->xattr_cnt += 1;
+	spin_lock(&host->i_lock);
 	host_ui->xattr_size += CALC_XATTR_BYTES(ui->data_len);
+	spin_unlock(&host->i_lock);
 	make_bad_inode(inode);
 	return err;
 }
