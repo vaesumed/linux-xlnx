@@ -72,7 +72,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	return inode;
 }
 
-int validate_inode(const struct ubifs_info *c, const struct inode *inode);
+int validate_inode(struct ubifs_info *c, const struct inode *inode);
 
 void ubifs_read_inode(struct inode *inode)
 {
