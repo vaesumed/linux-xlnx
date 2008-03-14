@@ -42,11 +42,12 @@
  */
 /* TODO: remove compatibility crap as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_IGET
-static int validate_inode(const struct ubifs_info *c, const struct inode *inode)
+static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 #else
-int validate_inode(const struct ubifs_info *c, const struct inode *inode)
+int validate_inode(struct ubifs_info *c, const struct inode *inode)
 #endif
 {
+	int err;
 	const struct ubifs_inode *ui = ubifs_inode(inode);
 
 	if (inode->i_size > c->max_inode_sz) {
@@ -93,7 +94,8 @@ int validate_inode(const struct ubifs_info *c, const struct inode *inode)
 			   ubifs_compr_name(ui->compr_type));
 	}
 
-	return 0;
+	err = dbg_check_dir_size(c, inode);
+	return err;
 }
 
 /* TODO: remove compatibility crap as late as possible */
