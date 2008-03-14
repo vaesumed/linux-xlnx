@@ -38,25 +38,28 @@
 #include "mt352_priv.h" /* FIXME */
 #include "tda1004x.h"
 #include "nxt200x.h"
+#include "tuner-xc2028.h"
 
 #include "tda10086.h"
 #include "tda826x.h"
 #include "tda827x.h"
 #include "isl6421.h"
+#include "isl6405.h"
+#include "lnbp21.h"
 
 MODULE_AUTHOR("Gerd Knorr <kraxel@bytesex.org> [SuSE Labs]");
 MODULE_LICENSE("GPL");
 
-static unsigned int antenna_pwr = 0;
+static unsigned int antenna_pwr;
 
 module_param(antenna_pwr, int, 0444);
 MODULE_PARM_DESC(antenna_pwr,"enable antenna power (Pinnacle 300i)");
 
-static int use_frontend = 0;
+static int use_frontend;
 module_param(use_frontend, int, 0644);
 MODULE_PARM_DESC(use_frontend,"for cards with multiple frontends (0: terrestrial, 1: satellite)");
 
-static int debug = 0;
+static int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "Turn on/off module debugging (default:off).");
 
@@ -186,6 +189,11 @@ static struct mt352_config pinnacle_300i = {
 static struct mt352_config avermedia_777 = {
 	.demod_address = 0xf,
 	.demod_init    = mt352_aver777_init,
+};
+
+static struct mt352_config avermedia_e506r_mt352_dev = {
+	.demod_address   = (0x1e >> 1),
+	.no_tuner        = 1,
 };
 
 /* ==================================================================
@@ -844,6 +852,36 @@ static struct tda10086_config flydvbs = {
 	.diseqc_tone = 0,
 };
 
+/* ------------------------------------------------------------------
+ * special case: lnb supply is connected to the gated i2c
+ */
+
+static int md8800_set_voltage(struct dvb_frontend *fe, fe_sec_voltage_t voltage)
+{
+	int res = -EIO;
+	struct saa7134_dev *dev = fe->dvb->priv;
+	if (fe->ops.i2c_gate_ctrl) {
+		fe->ops.i2c_gate_ctrl(fe, 1);
+		if (dev->original_set_voltage)
+			res = dev->original_set_voltage(fe, voltage);
+		fe->ops.i2c_gate_ctrl(fe, 0);
+	}
+	return res;
+};
+
+static int md8800_set_high_voltage(struct dvb_frontend *fe, long arg)
+{
+	int res = -EIO;
+	struct saa7134_dev *dev = fe->dvb->priv;
+	if (fe->ops.i2c_gate_ctrl) {
+		fe->ops.i2c_gate_ctrl(fe, 1);
+		if (dev->original_set_high_voltage)
+			res = dev->original_set_high_voltage(fe, arg);
+		fe->ops.i2c_gate_ctrl(fe, 0);
+	}
+	return res;
+};
+
 /* ==================================================================
  * nxt200x based ATSC cards, helper functions
  */
@@ -863,12 +901,14 @@ static struct nxt200x_config kworldatsc110 = {
 static int dvb_init(struct saa7134_dev *dev)
 {
 	int ret;
+	int attach_xc3028 = 0;
+
 	/* init struct videobuf_dvb */
 	dev->ts.nr_bufs    = 32;
 	dev->ts.nr_packets = 32*4;
 	dev->dvb.name = dev->name;
-	videobuf_queue_pci_init(&dev->dvb.dvbq, &saa7134_ts_qops,
-			    dev->pci, &dev->slock,
+	videobuf_queue_sg_init(&dev->dvb.dvbq, &saa7134_ts_qops,
+			    &dev->pci->dev, &dev->slock,
 			    V4L2_BUF_TYPE_VIDEO_CAPTURE,
 			    V4L2_FIELD_ALTERNATE,
 			    sizeof(struct saa7134_buf),
@@ -990,7 +1030,35 @@ static int dvb_init(struct saa7134_dev *dev)
 		configure_tda827x_fe(dev, &tevion_dvbt220rf_config);
 		break;
 	case SAA7134_BOARD_MEDION_MD8800_QUADRO:
-		configure_tda827x_fe(dev, &md8800_dvbt_config);
+		if (!use_frontend) {     /* terrestrial */
+			configure_tda827x_fe(dev, &md8800_dvbt_config);
+		} else {        /* satellite */
+			dev->dvb.frontend = dvb_attach(tda10086_attach,
+							&flydvbs, &dev->i2c_adap);
+			if (dev->dvb.frontend) {
+				struct dvb_frontend *fe;
+				if (dvb_attach(tda826x_attach, dev->dvb.frontend,
+						0x60, &dev->i2c_adap, 0) == NULL)
+					wprintk("%s: Medion Quadro, no tda826x "
+						"found !\n", __FUNCTION__);
+				/* Note 10.2. Hac
+				 * up to here. configuration for ctx948 and and one branch
+				 * of md8800 should be identical
+				 */
+				/* we need to open the i2c gate (we know it exists) */
+				fe = dev->dvb.frontend;
+				fe->ops.i2c_gate_ctrl(fe, 1);
+				if (dvb_attach(isl6405_attach, fe,
+						&dev->i2c_adap, 0x08, 0, 0) == NULL)
+					wprintk("%s: Medion Quadro, no ISL6405 "
+						"found !\n", __FUNCTION__);
+				fe->ops.i2c_gate_ctrl(fe, 0);
+				dev->original_set_voltage = fe->ops.set_voltage;
+				fe->ops.set_voltage = md8800_set_voltage;
+				dev->original_set_high_voltage = fe->ops.enable_high_lnb_voltage;
+				fe->ops.enable_high_lnb_voltage = md8800_set_high_voltage;
+			}
+		}
 		break;
 	case SAA7134_BOARD_AVERMEDIA_AVERTVHD_A180:
 		dev->dvb.frontend = dvb_attach(nxt200x_attach, &avertvhda180,
@@ -1064,9 +1132,51 @@ static int dvb_init(struct saa7134_dev *dev)
 	case SAA7134_BOARD_TWINHAN_DTV_DVB_3056:
 		configure_tda827x_fe(dev, &twinhan_dtv_dvb_3056_config);
 		break;
+	case SAA7134_BOARD_PHILIPS_SNAKE:
+		dev->dvb.frontend = dvb_attach(tda10086_attach, &flydvbs,
+						&dev->i2c_adap);
+		if (dev->dvb.frontend) {
+			if (dvb_attach(tda826x_attach, dev->dvb.frontend, 0x60,
+					&dev->i2c_adap, 0) == NULL)
+				wprintk("%s: No tda826x found!\n", __FUNCTION__);
+			if (dvb_attach(lnbp21_attach, dev->dvb.frontend,
+					&dev->i2c_adap, 0, 0) == NULL)
+				wprintk("%s: No lnbp21 found!\n", __FUNCTION__);
+		}
+		break;
+	case SAA7134_BOARD_CREATIX_CTX953:
+		configure_tda827x_fe(dev, &md8800_dvbt_config);
+		break;
+	case SAA7134_BOARD_MSI_TVANYWHERE_AD11:
+		configure_tda827x_fe(dev, &philips_tiger_s_config);
+		break;
+	case SAA7134_BOARD_AVERMEDIA_CARDBUS_506:
+		dev->dvb.frontend = dvb_attach(mt352_attach,
+					       &avermedia_e506r_mt352_dev,
+					       &dev->i2c_adap);
+		attach_xc3028 = 1;
+		break;
 	default:
 		wprintk("Huh? unknown DVB card?\n");
 		break;
+	}
+
+	if (attach_xc3028) {
+		struct dvb_frontend *fe;
+		struct xc2028_config cfg = {
+			.i2c_adap  = &dev->i2c_adap,
+			.i2c_addr  = 0x61,
+			.video_dev = dev,
+		};
+		fe = dvb_attach(xc2028_attach, dev->dvb.frontend, &cfg);
+		if (!fe) {
+			printk(KERN_ERR "%s/2: xc3028 attach failed\n",
+			       dev->name);
+			dvb_frontend_detach(dev->dvb.frontend);
+			dvb_unregister_frontend(dev->dvb.frontend);
+			dev->dvb.frontend = NULL;
+			return -1;
+		}
 	}
 
 	if (NULL == dev->dvb.frontend) {
