@@ -811,20 +811,17 @@ static void lnc_free(struct ubifs_zbranch *zbr)
 /**
  * tnc_read_node - read a leaf node.
  * @c: UBIFS file-system description object
- * @key:  key of node to read
- * @zbr:  position of node
+ * @zbr:  key and position of node
  * @node: node returned
  *
  * This function reads a node or returns a negative error code.
- * TODO: Surely @zbr already contains the key, so the additional @key argument
- * is useless?
  */
-static int tnc_read_node(struct ubifs_info *c, const union ubifs_key *key,
-			 struct ubifs_zbranch *zbr, void *node)
+static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			 void *node)
 {
+	union ubifs_key key1, *key = &zbr->key;
 	int err, type = key_type(c, key);
 	const struct ubifs_bud *bud;
-	union ubifs_key key1;
 
         dbg_tnc_key(c, key, "LEB %d:%d, len %d, key",
 		    zbr->lnum, zbr->offs, zbr->len);
@@ -840,35 +837,11 @@ static int tnc_read_node(struct ubifs_info *c, const union ubifs_key *key,
 	else
 		bud = NULL;
 	if (bud)
-		/*
-		 * The bud can't go because we are under @c->commit_sem.
-		 *
-		 * Q: So we are planning to GC the base head, what do we do
-		 *    to serialize access to the LEB in this case?
-		 * A: TODO: no idea so far, sorry.
-		 */
+		/* The bud can't go because we are under @c->commit_sem */
 		err = ubifs_read_node_wbuf(&c->jheads[bud->jhead].wbuf,
 					   node, type, zbr->len, zbr->lnum,
 					   zbr->offs);
 	else
-		/*
-		 * Q: What if the @lnum LEB was not a bud when we called
-		 *    'ubifs_search_bud', but now it has become a bud?
-		 * A: It is not a problem - the node we are about to read is
-		 *    still there.
-		 *
-		 * Q: What if the @lnum LEB is being Garbage Collected
-		 * in-place?
-		 * A: TODO: no idea. After we have implemented displacement
-		 * table the below layer has to handle this somehow.
-		 *
-		 * Q: What if the @lnum LEB is being Garbage Collected
-		 * out-of-place?
-		 * A: TODO: no idea so far. This means the node we are about to
-		 * read may go away, so we have to take care about this.
-		 * Probably there has to be a layer just above I/O which
-		 * implements LEB locking.
-		 */
 		err = ubifs_read_node(c, node, type, zbr->len, zbr->lnum,
 				      zbr->offs);
 
@@ -963,8 +936,11 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	dent = kmalloc(zt->len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
-
-	err = tnc_read_node(c, &zt->key, zt, dent);
+	/*
+	 * In this case we end up allocating another dent object in lnc_add(),
+	 * although it could have just inserted this dent.
+	 */
+	err = tnc_read_node(c, zt, dent);
 	if (!err) {
 		err = ubifs_validate_entry(c, dent);
 		if (err) {
@@ -977,8 +953,6 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 			err = 1;
 	}
 
-	/* TODO: in this case we do not need to allocate one more dent object
-	 * in lnc_add(). It could just inset this dent. */
 out:
 	kfree(dent);
 	return err;
@@ -1198,7 +1172,10 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 	dent = kmalloc(zt->len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
-
+	/*
+	 * In this case we end up allocating another dent object in lnc_add(),
+	 * although it could have just inserted this dent.
+	 */
 	err = fallible_read_node(c, &zt->key, zt, dent);
 	if (err < 0)
 		goto out;
@@ -1219,9 +1196,6 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 		else
 			err = 0;
 	}
-
-	/* TODO: in this case we do not need to allocate one more dent object
-	 * in lnc_add(). It could just inset this dent. */
 out:
 	kfree(dent);
 	return err;
@@ -1450,13 +1424,13 @@ int ubifs_tnc_lookup(struct ubifs_info *c, const union ubifs_key *key,
 		 * In this case the leaf-node-cache gets used, so we pass the
 		 * address of the zbranch and keep the mutex locked
 		 */
-		err = tnc_read_node(c, key, zt, node);
+		err = tnc_read_node(c, zt, node);
 		goto out;
 	}
 	zbr = znode->zbranch[n];
 	mutex_unlock(&c->tnc_mutex);
 
-	err = tnc_read_node(c, key, &zbr, node);
+	err = tnc_read_node(c, &zbr, node);
 	return err;
 
 out:
@@ -1499,7 +1473,7 @@ int ubifs_tnc_locate(struct ubifs_info *c, const union ubifs_key *key,
 		 */
 		*lnum = zt->lnum;
 		*offs = zt->offs;
-		err = tnc_read_node(c, key, zt, node);
+		err = tnc_read_node(c, zt, node);
 		goto out;
 	}
 	zbr = znode->zbranch[n];
@@ -1508,7 +1482,7 @@ int ubifs_tnc_locate(struct ubifs_info *c, const union ubifs_key *key,
 	*lnum = zbr.lnum;
 	*offs = zbr.offs;
 
-	err = tnc_read_node(c, key, &zbr, node);
+	err = tnc_read_node(c, &zbr, node);
 	return err;
 
 out:
@@ -1561,7 +1535,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	zbr = znode->zbranch[n];
 	mutex_unlock(&c->tnc_mutex);
 
-	err = tnc_read_node(c, key, &zbr, node);
+	err = tnc_read_node(c, &zbr, node);
 
 	return err;
 
@@ -1771,8 +1745,8 @@ again:
 	}
 
 	/*
-	 * TODO: we should look at the right neighbor and see if we can move
-	 * some zbranches there.
+	 * Although we don't at present, we could look at the neighbors and see
+	 * if we can move some zbranches there.
 	 */
 
 	if (n < keep) {
@@ -2071,9 +2045,6 @@ out:
  *
  * This is the same as 'ubifs_tnc_add()' but it should be used with keys which
  * may have collisions, like directory entry keys.
- *
- * TODO: Q: does it matter how we insert the key? To the end of the colliding
- * sequence? To the beginning?
  */
 int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		     int lnum, int offs, int len, const struct qstr *nm)
@@ -2566,7 +2537,7 @@ name_not_found:
 		}
 	}
 
-	err = tnc_read_node(c, dkey, zbr, dent);
+	err = tnc_read_node(c, zbr, dent);
 	if (err)
 		goto out;
 
@@ -3374,8 +3345,13 @@ static int dbg_walk_sub_tree(struct ubifs_info *c, struct ubifs_znode *znode,
  * This function walks the UBIFS index and calls the @leaf_cb for each leaf
  * node and @znode_cb for each indexing node. Returns zero in case of success
  * and a negative error code in case of failure.
- * TODO: make it non-recursive.
- * TODO: it should remove every znode it pulled to TNC.
+ *
+ * Because 'dbg_walk_sub_tree()' is recursive, it runs the risk of exceeding the
+ * stack space.
+ *
+ * It would be better if this function removed every znode it pulled to into
+ * the TNC, so that the behaviour more closely matched the non-debugging
+ * behaviour.
  */
 int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 		   dbg_znode_callback znode_cb, void *priv)
@@ -3402,17 +3378,16 @@ out:
 /**
  * dbg_read_leaf_nolock - read a leaf node.
  * @c: UBIFS file-system description object
- * @key:  key of node to read
- * @zbr:  position of node
+ * @zbr:  key and position of node
  * @node: node returned
  *
  * This function reads leaf defined node by @zbr and returns zero in case of
  * success or a negative negative error code in case of failure.
  */
-int dbg_read_leaf_nolock(struct ubifs_info *c, const union ubifs_key *key,
-			 struct ubifs_zbranch *zbr, void *node)
+int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			 void *node)
 {
-	return tnc_read_node(c, key, zbr, node);
+	return tnc_read_node(c, zbr, node);
 }
 
 #endif /* CONFIG_UBIFS_FS_DEBUG */
