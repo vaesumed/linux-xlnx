@@ -1017,12 +1017,12 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		offs += ALIGN(UBIFS_TRUN_NODE_SZ, 8);
 		err = ubifs_tnc_add(c, &key, lnum, offs, dlen);
 		if (err)
-			goto out;
+			goto out_ro;
 	}
 
 	err = ubifs_add_dirt(c, lnum, UBIFS_TRUN_NODE_SZ);
 	if (err)
-		goto out;
+		goto out_ro;
 
 	bit = new_size & (UBIFS_BLOCK_SIZE - 1);
 
@@ -1035,10 +1035,18 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	data_key_init(c, &to_key, inum, blk);
 
 	err = ubifs_tnc_remove_range(c, &key, &to_key);
+	if (err)
+		goto out_ro;
 
 out:
 	finish_reservation(c);
 out_free:
+	kfree(trun);
+	return err;
+
+out_ro:
+	ubifs_ro_mode(c);
+	finish_reservation(c);
 	kfree(trun);
 	return err;
 }
