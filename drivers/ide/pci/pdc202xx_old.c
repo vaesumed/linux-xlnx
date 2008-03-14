@@ -263,23 +263,6 @@ static void pdc202xx_dma_timeout(ide_drive_t *drive)
 	ide_dma_timeout(drive);
 }
 
-static void __devinit init_hwif_pdc202xx(ide_hwif_t *hwif)
-{
-	struct pci_dev *dev = to_pci_dev(hwif->dev);
-
-	if (hwif->dma_base == 0)
-		return;
-
-	hwif->dma_lost_irq = &pdc202xx_dma_lost_irq;
-	hwif->dma_timeout = &pdc202xx_dma_timeout;
-
-	if (dev->device != PCI_DEVICE_ID_PROMISE_20246) {
-		hwif->dma_start = &pdc202xx_old_ide_dma_start;
-		hwif->ide_dma_end = &pdc202xx_old_ide_dma_end;
-	} 
-	hwif->ide_dma_test_irq = &pdc202xx_old_ide_dma_test_irq;
-}
-
 static unsigned int __devinit init_chipset_pdc202xx(struct pci_dev *dev,
 						    const char *name)
 {
@@ -346,12 +329,26 @@ static const struct ide_port_ops pdc2026x_port_ops = {
 	.cable_detect		= pdc2026x_cable_detect,
 };
 
+static struct ide_dma_ops pdc20246_dma_ops = {
+	.dma_test_irq		= pdc202xx_old_ide_dma_test_irq,
+	.dma_lost_irq		= pdc202xx_dma_lost_irq,
+	.dma_timeout		= pdc202xx_dma_timeout,
+};
+
+static struct ide_dma_ops pdc2026x_dma_ops = {
+	.dma_start		= pdc202xx_old_ide_dma_start,
+	.dma_end		= pdc202xx_old_ide_dma_end,
+	.dma_test_irq		= pdc202xx_old_ide_dma_test_irq,
+	.dma_lost_irq		= pdc202xx_dma_lost_irq,
+	.dma_timeout		= pdc202xx_dma_timeout,
+};
+
 #define DECLARE_PDC2026X_DEV(name_str, udma, extra_flags) \
 	{ \
 		.name		= name_str, \
 		.init_chipset	= init_chipset_pdc202xx, \
-		.init_hwif	= init_hwif_pdc202xx, \
 		.port_ops	= &pdc2026x_port_ops, \
+		.dma_ops	= &pdc2026x_dma_ops, \
 		.host_flags	= IDE_HFLAGS_PDC202XX | extra_flags, \
 		.pio_mask	= ATA_PIO4, \
 		.mwdma_mask	= ATA_MWDMA2, \
@@ -362,8 +359,8 @@ static const struct ide_port_info pdc202xx_chipsets[] __devinitdata = {
 	{	/* 0 */
 		.name		= "PDC20246",
 		.init_chipset	= init_chipset_pdc202xx,
-		.init_hwif	= init_hwif_pdc202xx,
 		.port_ops	= &pdc20246_port_ops,
+		.dma_ops	= &pdc20246_dma_ops,
 		.host_flags	= IDE_HFLAGS_PDC202XX,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
