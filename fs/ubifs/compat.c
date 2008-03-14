@@ -113,7 +113,6 @@ void ubifs_read_inode(struct inode *inode)
 	ui->flags       = le32_to_cpu(ino->flags);
 	ui->compr_type  = le16_to_cpu(ino->compr_type);
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
-	ui->msize       = le64_to_cpu(ino->msize);
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
 	ui->xattr_msize = le64_to_cpu(ino->xattr_msize);
@@ -465,4 +464,3 @@ int ubifs_make_free_space(struct ubifs_info *c, struct retries_info *ri,
 	return -ENOSPC;
 }
 #endif /* UBIFS_COMPAT_USE_OLD_PREPARE_WRITE */
-

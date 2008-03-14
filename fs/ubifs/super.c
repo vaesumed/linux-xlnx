@@ -146,7 +146,6 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->flags       = le32_to_cpu(ino->flags);
 	ui->compr_type  = le16_to_cpu(ino->compr_type);
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
-	ui->msize       = le64_to_cpu(ino->msize);
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
 	ui->xattr_msize = le64_to_cpu(ino->xattr_msize);
