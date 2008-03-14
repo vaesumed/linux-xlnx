@@ -447,9 +447,8 @@ static void rt2x00lib_intf_scheduled_iter(void *data, u8 *mac,
 		}
 	}
 
-	if (delayed_flags & DELAYED_CONFIG_PREAMBLE)
-		rt2x00lib_config_preamble(rt2x00dev, intf,
-					  intf->conf.use_short_preamble);
+	if (delayed_flags & DELAYED_CONFIG_ERP)
+		rt2x00lib_config_erp(rt2x00dev, intf, &intf->conf);
 }
 
 static void rt2x00lib_intf_scheduled(struct work_struct *work)
@@ -521,7 +520,7 @@ void rt2x00lib_txdone(struct queue_entry *entry,
 	tx_status.ack_signal = 0;
 	tx_status.excessive_retries = (txdesc->status == TX_FAIL_RETRY);
 	tx_status.retry_count = txdesc->retry;
-	memcpy(&tx_status.control, txdesc->control, sizeof(txdesc->control));
+	memcpy(&tx_status.control, txdesc->control, sizeof(*txdesc->control));
 
 	if (!(tx_status.control.flags & IEEE80211_TXCTL_NO_ACK)) {
 		if (success)
@@ -581,13 +580,8 @@ void rt2x00lib_rxdone(struct queue_entry *entry,
 	for (i = 0; i < sband->n_bitrates; i++) {
 		rate = rt2x00_get_rate(sband->bitrates[i].hw_value);
 
-		/*
-		 * When frame was received with an OFDM bitrate,
-		 * the signal is the PLCP value. If it was received with
-		 * a CCK bitrate the signal is the rate in 100kbit/s.
-		 */
-		if ((rxdesc->ofdm && rate->plcp == rxdesc->signal) ||
-		    (!rxdesc->ofdm && rate->bitrate == rxdesc->signal)) {
+		if ((rxdesc->signal_plcp && rate->plcp == rxdesc->signal) ||
+		    (!rxdesc->signal_plcp && rate->bitrate == rxdesc->signal)) {
 			idx = i;
 			break;
 		}
@@ -630,7 +624,7 @@ void rt2x00lib_write_tx_desc(struct rt2x00_dev *rt2x00dev,
 {
 	struct txentry_desc txdesc;
 	struct skb_frame_desc *skbdesc = get_skb_frame_desc(skb);
-	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
+	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skbdesc->data;
 	const struct rt2x00_rate *rate;
 	int tx_rate;
 	int length;
@@ -710,7 +704,7 @@ void rt2x00lib_write_tx_desc(struct rt2x00_dev *rt2x00dev,
 	txdesc.signal = rate->plcp;
 	txdesc.service = 0x04;
 
-	length = skb->len + FCS_LEN;
+	length = skbdesc->data_len + FCS_LEN;
 	if (rate->flags & DEV_RATE_OFDM) {
 		__set_bit(ENTRY_TXD_OFDM_RATE, &txdesc.flags);
 
@@ -767,75 +761,75 @@ EXPORT_SYMBOL_GPL(rt2x00lib_write_tx_desc);
  */
 const struct rt2x00_rate rt2x00_supported_rates[12] = {
 	{
-		.flags = DEV_RATE_CCK,
+		.flags = DEV_RATE_CCK | DEV_RATE_BASIC,
 		.bitrate = 10,
-		.ratemask = DEV_RATEMASK_1MB,
+		.ratemask = BIT(0),
 		.plcp = 0x00,
 	},
 	{
-		.flags = DEV_RATE_CCK | DEV_RATE_SHORT_PREAMBLE,
+		.flags = DEV_RATE_CCK | DEV_RATE_SHORT_PREAMBLE | DEV_RATE_BASIC,
 		.bitrate = 20,
-		.ratemask = DEV_RATEMASK_2MB,
+		.ratemask = BIT(1),
 		.plcp = 0x01,
 	},
 	{
-		.flags = DEV_RATE_CCK | DEV_RATE_SHORT_PREAMBLE,
+		.flags = DEV_RATE_CCK | DEV_RATE_SHORT_PREAMBLE | DEV_RATE_BASIC,
 		.bitrate = 55,
-		.ratemask = DEV_RATEMASK_5_5MB,
+		.ratemask = BIT(2),
 		.plcp = 0x02,
 	},
 	{
-		.flags = DEV_RATE_CCK | DEV_RATE_SHORT_PREAMBLE,
+		.flags = DEV_RATE_CCK | DEV_RATE_SHORT_PREAMBLE | DEV_RATE_BASIC,
 		.bitrate = 110,
-		.ratemask = DEV_RATEMASK_11MB,
+		.ratemask = BIT(3),
 		.plcp = 0x03,
 	},
 	{
-		.flags = DEV_RATE_OFDM,
+		.flags = DEV_RATE_OFDM | DEV_RATE_BASIC,
 		.bitrate = 60,
-		.ratemask = DEV_RATEMASK_6MB,
+		.ratemask = BIT(4),
 		.plcp = 0x0b,
 	},
 	{
 		.flags = DEV_RATE_OFDM,
 		.bitrate = 90,
-		.ratemask = DEV_RATEMASK_9MB,
+		.ratemask = BIT(5),
 		.plcp = 0x0f,
 	},
 	{
-		.flags = DEV_RATE_OFDM,
+		.flags = DEV_RATE_OFDM | DEV_RATE_BASIC,
 		.bitrate = 120,
-		.ratemask = DEV_RATEMASK_12MB,
+		.ratemask = BIT(6),
 		.plcp = 0x0a,
 	},
 	{
 		.flags = DEV_RATE_OFDM,
 		.bitrate = 180,
-		.ratemask = DEV_RATEMASK_18MB,
+		.ratemask = BIT(7),
 		.plcp = 0x0e,
 	},
 	{
-		.flags = DEV_RATE_OFDM,
+		.flags = DEV_RATE_OFDM | DEV_RATE_BASIC,
 		.bitrate = 240,
-		.ratemask = DEV_RATEMASK_24MB,
+		.ratemask = BIT(8),
 		.plcp = 0x09,
 	},
 	{
 		.flags = DEV_RATE_OFDM,
 		.bitrate = 360,
-		.ratemask = DEV_RATEMASK_36MB,
+		.ratemask = BIT(9),
 		.plcp = 0x0d,
 	},
 	{
 		.flags = DEV_RATE_OFDM,
 		.bitrate = 480,
-		.ratemask = DEV_RATEMASK_48MB,
+		.ratemask = BIT(10),
 		.plcp = 0x08,
 	},
 	{
 		.flags = DEV_RATE_OFDM,
 		.bitrate = 540,
-		.ratemask = DEV_RATEMASK_54MB,
+		.ratemask = BIT(11),
 		.plcp = 0x0c,
 	},
 };

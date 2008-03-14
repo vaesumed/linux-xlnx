@@ -99,7 +99,11 @@ int rt2x00mac_tx(struct ieee80211_hw *hw, struct sk_buff *skb,
 	/*
 	 * Determine which queue to put packet on.
 	 */
-	queue = rt2x00queue_get_queue(rt2x00dev, control->queue);
+	if (control->flags & IEEE80211_TXCTL_SEND_AFTER_DTIM &&
+	    test_bit(DRIVER_REQUIRE_ATIM_QUEUE, &rt2x00dev->flags))
+		queue = rt2x00queue_get_queue(rt2x00dev, RT2X00_BCN_QUEUE_ATIM);
+	else
+		queue = rt2x00queue_get_queue(rt2x00dev, control->queue);
 	if (unlikely(!queue)) {
 		ERROR(rt2x00dev,
 		      "Attempt to send packet over invalid queue %d.\n"
@@ -432,17 +436,15 @@ void rt2x00mac_bss_info_changed(struct ieee80211_hw *hw,
 	}
 
 	/*
-	 * When the preamble mode has changed, we should perform additional
-	 * configuration steps. For all other changes we are already done.
+	 * When the erp information has changed, we should perform
+	 * additional configuration steps. For all other changes we are done.
 	 */
-	if (changes & BSS_CHANGED_ERP_PREAMBLE) {
-		rt2x00lib_config_preamble(rt2x00dev, intf,
-					  bss_conf->use_short_preamble);
+	if (changes & BSS_CHANGED_ERP_PREAMBLE)
+		rt2x00lib_config_erp(rt2x00dev, intf, bss_conf);
 
-		spin_lock(&intf->lock);
-		memcpy(&intf->conf, bss_conf, sizeof(*bss_conf));
-		spin_unlock(&intf->lock);
-	}
+	spin_lock(&intf->lock);
+	memcpy(&intf->conf, bss_conf, sizeof(*bss_conf));
+	spin_unlock(&intf->lock);
 }
 EXPORT_SYMBOL_GPL(rt2x00mac_bss_info_changed);
 
