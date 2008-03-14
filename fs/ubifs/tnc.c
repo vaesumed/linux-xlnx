@@ -360,6 +360,8 @@ out_dump:
  * load_znode - load znode to TNC cache.
  * @c: UBIFS file-system description object
  * @zbr: znode branch
+ * @parent: znode's parent
+ * @iip: index in parent
  *
  * This function loads znode pointed to by @zbr into the TNC cache and
  * returns pointer to it in case of success and a negative error code in case
@@ -367,7 +369,7 @@ out_dump:
  */
 static struct ubifs_znode *load_znode(struct ubifs_info *c,
 				      struct ubifs_zbranch *zbr,
-				      struct ubifs_znode *parent)
+				      struct ubifs_znode *parent, int iip)
 {
 	int err;
 	struct ubifs_znode *znode;
@@ -394,15 +396,7 @@ static struct ubifs_znode *load_znode(struct ubifs_info *c,
 	zbr->znode = znode;
 	znode->parent = parent;
 	znode->time = get_seconds();
-	if (parent)
-		/*
-		 * TODO: Sparse complains about this.
-		 * fs/ubifs/tnc.c:122:22: warning: potentially expensive
-		 * pointer subtraction
-		 * Consider to pass znode and index to this function which
-		 * looks easier to understand, rather then passing 2 pointers.
-		 */
-		znode->iip = zbr - (struct ubifs_zbranch *)parent->zbranch;
+	znode->iip = iip;
 
 	return znode;
 
@@ -551,7 +545,7 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 
 	znode = c->zroot.znode;
 	if (unlikely(!znode)) {
-		znode = load_znode(c, &c->zroot, NULL);
+		znode = load_znode(c, &c->zroot, NULL, 0);
 		if (IS_ERR(znode))
 			return PTR_ERR(znode);
 	}
@@ -587,7 +581,7 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 		}
 
 		/* znode is not in TNC cache, load it from the media */
-		znode = load_znode(c, zbr, znode);
+		znode = load_znode(c, zbr, znode, *n);
 		if (IS_ERR(znode))
 			return PTR_ERR(znode);
 	}
@@ -633,7 +627,7 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 
 	znode = c->zroot.znode;
 	if (unlikely(!znode)) {
-		znode = load_znode(c, &c->zroot, NULL);
+		znode = load_znode(c, &c->zroot, NULL, 0);
 		if (IS_ERR(znode))
 			return PTR_ERR(znode);
 	}
@@ -675,7 +669,7 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 		}
 
 		/* znode is not in TNC cache, load it from the media */
-		znode = load_znode(c, zbr, znode);
+		znode = load_znode(c, zbr, znode, *n);
 		if (IS_ERR(znode))
 			return PTR_ERR(znode);
 		znode = dirty_cow_znode(c, zbr);
@@ -975,7 +969,7 @@ static struct ubifs_znode *get_znode(struct ubifs_info *c,
 	if (zbr->znode)
 		znode = zbr->znode;
 	else
-		znode = load_znode(c, zbr, znode);
+		znode = load_znode(c, zbr, znode, n);
 	return znode;
 }
 
@@ -2426,7 +2420,7 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 		ino_t xattr_inum;
 		int err;
 
-		xent = ubifs_tnc_next_ent(c, &key1, nm.name, nm.len);
+		xent = ubifs_tnc_next_ent(c, &key1, &nm);
 		if (IS_ERR(xent)) {
 			err = PTR_ERR(xent);
 			if (err == -ENOENT)
@@ -2469,7 +2463,7 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
  * ubifs_tnc_next_ent - walk directory or extended attribute entries.
  * @c: UBIFS file-system description object
  * @key: key of last entry
- * @name: name of last entry found or %NULL
+ * @nm: name of last entry found or %NULL
  *
  * This function finds and reads the next directory or extended attribyte entry
  * after the given key (@key) if there is one. @name is used to resolve
@@ -2479,20 +2473,19 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
  * This function returns the found directory or extended attribute entry node
  * in case of success, %-ENOENT is returned if no entry is found, or a negative
  * error code in case of failure.
- * TODO: this should take qstr parameter instead
  */
 struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
-					   const char *name, int len)
+					   const struct qstr *nm)
 {
 	int found, n, err, type = key_type(c, key);
 	struct ubifs_znode *znode;
 	struct ubifs_dent_node *dent = NULL;
 	struct ubifs_zbranch *zbr;
 	union ubifs_key *dkey;
-	struct qstr nm;
 
-	dbg_tnc_key(c, key, "%s", (name ? name : "(lowest)"));
+	dbg_tnc_key(c, key, "%s",
+		    ((nm && nm->name) ? (char *)nm->name : "(lowest)"));
 	ubifs_assert(type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY);
 
 	mutex_lock(&c->tnc_mutex);
@@ -2503,10 +2496,8 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	}
 
 	/* Handle collisions */
-	if (found && name) {
-		nm.name = name;
-		nm.len = len;
-		err = resolve_collision(c, key, &znode, &n, &nm);
+	if (found && nm && nm->name) {
+		err = resolve_collision(c, key, &znode, &n, nm);
 		if (err < 0)
 			goto out;
 		if (err == 0)
@@ -2783,7 +2774,7 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 	/* Get the root znode */
 	znode = c->zroot.znode;
 	if (!znode) {
-		znode = load_znode(c, &c->zroot, NULL);
+		znode = load_znode(c, &c->zroot, NULL, 0);
 		if (IS_ERR(znode))
 			return znode;
 	}
@@ -3360,7 +3351,7 @@ int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 
 	mutex_lock(&c->tnc_mutex);
 	if (!c->zroot.znode) {
-		c->zroot.znode = load_znode(c, &c->zroot, NULL);
+		c->zroot.znode = load_znode(c, &c->zroot, NULL, 0);
 		if (IS_ERR(c->zroot.znode)) {
 			err = PTR_ERR(c->zroot.znode);
 			c->zroot.znode = NULL;
