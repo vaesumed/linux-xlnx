@@ -424,7 +424,6 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->gid   = cpu_to_le32(inode->i_gid);
 	ino->mode  = cpu_to_le32(inode->i_mode);
 	ino->flags = cpu_to_le32(ui->flags);
-	ino->msize = cpu_to_le64(ui->msize);
 	ino->compr_type  = cpu_to_le16(ui->compr_type);
 	ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
 	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
