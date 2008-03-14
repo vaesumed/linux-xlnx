@@ -811,9 +811,11 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	if (move) {
-		req.dirtied_ino = 3;
-		req.dirtied_ino_d = ubifs_inode(new_inode)->data_len;
-		req.dirtied_ino_d = ubifs_inode(new_dir)->data_len;
+		req.dirtied_ino = 1;
+		if (unlink) {
+			req.dirtied_ino += 2;
+			req.dirtied_ino_d = ubifs_inode(new_inode)->data_len;
+		}
 	}
 
 	/*
