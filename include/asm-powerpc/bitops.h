@@ -312,6 +312,11 @@ static __inline__ int fls(unsigned int x)
 	asm ("cntlzw %0,%1" : "=r" (lz) : "r" (x));
 	return 32 - lz;
 }
+
+static __inline__ unsigned long __fls(unsigned long x)
+{
+	return __ilog2(x);
+}
 #include <asm-generic/bitops/fls64.h>
 
 #include <asm-generic/bitops/hweight.h>
