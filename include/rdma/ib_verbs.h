@@ -496,6 +496,10 @@ enum ib_qp_type {
 	IB_QPT_RAW_ETY
 };
 
+enum ib_qp_create_flags {
+	IB_QP_CREATE_IPOIB_UD_LSO	= 1 << 0,
+};
+
 struct ib_qp_init_attr {
 	void                  (*event_handler)(struct ib_event *, void *);
 	void		       *qp_context;
@@ -505,6 +509,7 @@ struct ib_qp_init_attr {
 	struct ib_qp_cap	cap;
 	enum ib_sig_type	sq_sig_type;
 	enum ib_qp_type		qp_type;
+	enum ib_qp_create_flags	create_flags;
 	u8			port_num; /* special QP types only */
 };
 
