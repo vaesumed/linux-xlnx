@@ -24,8 +24,6 @@
  * This file implements UBIFS initialization, mount and un-mount. Some
  * initialization stuff which is rather large and complex is placed at
  * corresponding subsystems, but most of it is here.
- *
- * TODO: when mounted an FS, make sure there is space for deletions.
  */
 
 #include <linux/init.h>
@@ -247,8 +245,7 @@ static int init_constants_late(struct ubifs_info *c)
 	 * Note, data, which may be stored in inodes is budgeted separately, so
 	 * it is not included into 'c->inode_budget'.
 	 *
-	 * TODO: c->page_budget should be PAGE_CACHE_SIZE + UBIFS_CH_SZ *
-	 * pages_per_block
+	 * c->page_budget is PAGE_CACHE_SIZE + UBIFS_CH_SZ * blocks_per_page
 	 */
 	c->page_budget = PAGE_CACHE_SIZE + UBIFS_CH_SZ;
 	c->inode_budget = UBIFS_INO_NODE_SZ;
@@ -276,10 +273,6 @@ static int init_constants_late(struct ubifs_info *c)
 	 */
 	c->block_cnt = (long long)c->main_lebs * (c->leb_size - c->dark_wm);
 	c->block_cnt >>= UBIFS_BLOCK_SHIFT;
-
-	/*
-	 * TODO: guarantee at least 2 buds per head.
-	 */
 
 	return 0;
 }
@@ -620,6 +613,12 @@ static int mount_ubifs(struct ubifs_info *c)
 				return err;
 		}
 
+		/* Check for enough free space */
+		if (ubifs_calc_available(c) <= 0) {
+			ubifs_err("insufficient available space");
+			return -EINVAL;
+		}
+
 		err = dbg_check_lprops(c);
 		if (err)
 			return err;
@@ -766,6 +765,13 @@ int ubifs_remount_rw(struct ubifs_info *c)
 
 	mutex_lock(&c->umount_mutex);
 	c->remounting_rw = 1;
+
+	/* Check for enough free space */
+	if (ubifs_calc_available(c) <= 0) {
+		ubifs_err("insufficient available space");
+		err = -EINVAL;
+		goto out;
+	}
 
 	if (c->old_leb_cnt != c->leb_cnt) {
 		struct ubifs_sb_node *sup;
@@ -936,8 +942,7 @@ void ubifs_remount_ro(struct ubifs_info *c)
 	c->mst_node->gc_lnum = cpu_to_le32(c->gc_lnum);
 	err = ubifs_write_master(c);
 	if (err)
-		/* TODO: set error state */
-		c->need_recovery = 1;
+		ubifs_ro_mode(c);
 
 	ubifs_destroy_idx_gc(c);
 	free_wbufs(c);
@@ -1049,8 +1054,6 @@ static match_table_t tokens = {
  *
  * This function parses UBIFS mount options and returns zero in case success
  * and a negative error code in case of failure.
- *
- * TODO: most of the stuff here should go away when we have mkfs.ubifs
  */
 int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 {
@@ -1086,7 +1089,6 @@ int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount)
 	return 0;
 }
 
-/* TODO: Validate mount options - still need to validate on remount */
 static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 			const char *name, void *data, struct vfsmount *mnt)
 {
