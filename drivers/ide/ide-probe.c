@@ -1518,8 +1518,7 @@ int ide_device_add_all(u8 *idx, const struct ide_port_info *d)
 		hwif = &ide_hwifs[idx[i]];
 
 		if (hwif->present) {
-			if (hwif->chipset == ide_unknown ||
-			    hwif->chipset == ide_forced)
+			if (hwif->chipset == ide_unknown)
 				hwif->chipset = ide_generic;
 			hwif_register_devices(hwif);
 		}
