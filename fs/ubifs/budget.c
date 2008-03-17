@@ -270,12 +270,12 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 }
 
 /**
- * calc_available - calculate available FS space.
+ * ubifs_calc_available - calculate available FS space.
  * @c: UBIFS file-system description object
  *
  * This function calculates and returns amount of FS space available for use.
  */
-static long long calc_available(const struct ubifs_info *c)
+long long ubifs_calc_available(const struct ubifs_info *c)
 {
 	long long available, subtract_lebs;
 
@@ -405,7 +405,7 @@ static int do_budget_space(struct ubifs_info *c)
 		return -ENOSPC;
 	}
 
-	available = calc_available(c);
+	available = ubifs_calc_available(c);
 	outstanding = c->budg_data_growth + c->budg_dd_growth;
 
 	if (unlikely(available < outstanding)) {
@@ -815,7 +815,7 @@ long long ubifs_budg_get_free_space(struct ubifs_info *c)
 		return 0;
 	}
 
-	available = calc_available(c);
+	available = ubifs_calc_available(c);
 	outstanding = c->budg_data_growth + c->budg_dd_growth;
 	spin_unlock(&c->space_lock);
 
