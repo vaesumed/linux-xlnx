@@ -705,10 +705,10 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 static int lnc_lookup(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		      void *node)
 {
-	if (zbr->znode == NULL)
+	if (zbr->leaf == NULL)
 		return 0;
 	ubifs_assert(zbr->len != 0);
-	memcpy(node, zbr->znode, zbr->len);
+	memcpy(node, zbr->leaf, zbr->len);
 	return 1;
 }
 
@@ -2534,7 +2534,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
 					   const struct qstr *nm)
 {
-	int found, n, err, type = key_type(c, key);
+	int found, n, err, type = key_type(c, key), dlen = 0;
 	struct ubifs_znode *znode;
 	struct ubifs_dent_node *dent = NULL;
 	struct ubifs_zbranch *zbr;
@@ -2576,8 +2576,10 @@ name_not_found:
 		goto out;
 	}
 
-	if (!dent) {
-		dent = kmalloc(zbr->len, GFP_NOFS);
+	if (!dent || dlen < zbr->len) {
+		kfree(dent);
+		dlen = zbr->len;
+		dent = kmalloc(dlen, GFP_NOFS);
 		if (!dent) {
 			err = -ENOMEM;
 			goto out;
