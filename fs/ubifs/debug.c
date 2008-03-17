@@ -691,6 +691,9 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 	struct qstr nm = { .name = NULL };
 	loff_t size = 0;
 
+	if (!S_ISDIR(dir->i_mode))
+		return 0;
+
 	lowest_dent_key(c, &key, dir->i_ino);
 	while (1) {
 		int err;
