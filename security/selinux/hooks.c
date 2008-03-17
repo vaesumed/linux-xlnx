@@ -1638,6 +1638,12 @@ static inline u32 file_to_av(struct file *file)
 		else
 			av |= FILE__WRITE;
 	}
+	if (!av) {
+		/*
+		 * Special file opened with flags 3 for ioctl-only use.
+		 */
+		av = FILE__IOCTL;
+	}
 
 	return av;
 }
