@@ -38,8 +38,6 @@
  * write-back for it. This was done to simplify file-system recovery which
  * would otherwise be very difficult to do. So instead of marking the parent
  * inode dirty, the operations mark it clean.
- *
- * TODO: support "immutable" flag
  */
 
 #include "ubifs.h"
@@ -136,7 +134,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 		ui->compr_type = UBIFS_COMPR_NONE;
 
 	spin_lock(&c->cnt_lock);
-	/* TODO: inode number overflow is currently not supported */
+	/* Inode number overflow is currently not supported */
 	if (c->highest_inum >= INUM_WARN_WATERMARK) {
 		if (c->highest_inum >= INUM_WATERMARK) {
 			spin_unlock(&c->cnt_lock);
@@ -163,6 +161,19 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 
 	return inode;
 }
+
+#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+static int dbg_check_name(struct ubifs_dent_node *dent, struct qstr *nm)
+{
+	if (le16_to_cpu(dent->nlen) != nm->len)
+		return -EINVAL;
+	if (memcmp(dent->name, nm->name, nm->len))
+		return -EINVAL;
+	return 0;
+}
+#else
+#define dbg_check_name(dent, nm) 0
+#endif
 
 static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
                                    struct nameidata *nd)
@@ -195,10 +206,11 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 		goto out;
 	}
 
-	/*
-	 * TODO: add paranoid check that the found direntry has the the right
-	 * name.
-	 */
+	if (dbg_check_name(dent, &dentry->d_name)) {
+		err = -EINVAL;
+		goto out;
+	}
+
 	inode = ubifs_iget(dir->i_sb, le64_to_cpu(dent->inum));
 	if (IS_ERR(inode)) {
 		/*
