@@ -20,9 +20,6 @@
  *          Artem Bityutskiy
  */
 
-/* TODO: it might be better to prepare large buffer and write everything at
- * once instead of writing node-by-node via wbuf. */
-
 #include <linux/pagemap.h>
 #include "ubifs.h"
 
@@ -114,9 +111,6 @@ static int switch_gc_head(struct ubifs_info *c)
  *
  * This function returns zero in case of success, %-EAGAIN if commit is
  * required, and other negative error codes in case of other failures.
- *
- * TODO: we may know in advance if we are going to make no progress or not. No
- * need to actually move stuff to find this out.
  */
 static int move_nodes(struct ubifs_info *c, struct ubifs_scan_leb *sleb)
 {
@@ -282,8 +276,10 @@ static int garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 	ubifs_assert(c->gc_lnum != lnum);
 	ubifs_assert(wbuf->lnum != lnum);
 
-	/* TODO: if lnum has free space at the end, ubifs_scan() does not have
-	 * to scan it */
+	/*
+	 * We scan the entire LEB even though we only really need to scan up to
+	 * (c->leb_size - lp->free).
+	 */
 	sleb = ubifs_scan(c, lnum, 0, c->sbuf);
 	if (IS_ERR(sleb))
 		return PTR_ERR(sleb);
