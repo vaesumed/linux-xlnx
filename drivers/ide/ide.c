@@ -1239,6 +1239,38 @@ static void ide_port_class_release(struct device *portdev)
 	put_device(&hwif->gendev);
 }
 
+static unsigned int ide_ignore_cable;
+
+static int ide_set_ignore_cable(const char *s, struct kernel_param *kp)
+{
+	unsigned long i = simple_strtoul(s, NULL, 0);
+
+	if (i >= MAX_HWIFS)
+		return -EINVAL;
+
+	ide_ignore_cable |= (1 << i);
+
+	return 0;
+}
+
+module_param_call(ignore_cable, ide_set_ignore_cable, NULL, NULL, 0);
+MODULE_PARM_DESC(ignore_cable, "ignore cable detection");
+
+static void __init ide_apply_params(void)
+{
+	int i;
+
+	for (i = 0; i < MAX_HWIFS; i++) {
+		ide_hwif_t *hwif = &ide_hwifs[i];
+
+		if (ide_ignore_cable & (1 << i)) {
+			printk(KERN_INFO "ide: ignoring cable detection for "
+					 "ide%d\n", i);
+			hwif->cbl = ATA_CBL_PATA40_SHORT;
+		}
+	}
+}
+
 /*
  * This is gets invoked once during initialization, to set *everything* up
  */
@@ -1269,6 +1301,8 @@ static int __init ide_init(void)
 	init_ide_data();
 
 	proc_ide_create();
+
+	ide_apply_params();
 
 	return 0;
 
