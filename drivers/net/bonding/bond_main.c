@@ -2646,10 +2646,7 @@ static int bond_arp_rcv(struct sk_buff *skb, struct net_device *dev, struct pack
 	if (!slave || !slave_do_arp_validate(bond, slave))
 		goto out_unlock;
 
-	/* ARP header, plus 2 device addresses, plus 2 IP addresses.  */
-	if (!pskb_may_pull(skb, (sizeof(struct arphdr) +
-				 (2 * dev->addr_len) +
-				 (2 * sizeof(u32)))))
+	if (!pskb_may_pull(skb, arp_hdr_len(dev)))
 		goto out_unlock;
 
 	arp = arp_hdr(skb);
@@ -3510,6 +3507,9 @@ static int bond_inetaddr_event(struct notifier_block *this, unsigned long event,
 	struct net_device *vlan_dev, *event_dev = ifa->ifa_dev->dev;
 	struct bonding *bond, *bond_next;
 	struct vlan_entry *vlan, *vlan_next;
+
+	if (ifa->ifa_dev->dev->nd_net != &init_net)
+		return NOTIFY_DONE;
 
 	list_for_each_entry_safe(bond, bond_next, &bond_dev_list, bond_list) {
 		if (bond->dev == event_dev) {
