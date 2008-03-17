@@ -709,12 +709,12 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 		size += CALC_DENT_SIZE(dent->nlen);
 		nm.name = dent->name;
 		nm.len = le16_to_cpu(dent->nlen);
-		kfree(pdent);
+		dbg_kf_chkr(pdent); /* kfree via debug function */
 		pdent = dent;
 		key_read(c, &dent->key, &key);
 	}
 
-	kfree(pdent);
+	dbg_kf_chkr(pdent); /* kfree via debug function */
 
 	if (i_size_read(dir) != size) {
 		ubifs_err("bad directory dir %lu size %llu, "
