@@ -517,8 +517,16 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	};
 
 	c->key_fmt = sup->key_fmt;
-	/* TODO: this should depend on key format */
-	c->key_len = UBIFS_SK_LEN;
+
+	switch (c->key_fmt) {
+	case UBIFS_SIMPLE_KEY_FMT:
+		c->key_len = UBIFS_SK_LEN;
+		break;
+	default:
+		ubifs_err("unsupported key format");
+		err = -EINVAL;
+		goto out;
+	}
 
 	c->leb_cnt       = le32_to_cpu(sup->leb_cnt);
 	c->max_leb_cnt   = le32_to_cpu(sup->max_leb_cnt);
