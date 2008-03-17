@@ -67,6 +67,7 @@
 #include <linux/pagemap.h>
 #include <linux/hrtimer.h>
 #include <linux/ftrace.h>
+#include <linux/tick.h>
 
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
