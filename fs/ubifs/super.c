@@ -22,7 +22,6 @@
 
 /*
  * This file implements VFS superblock operations.
- * TODO: implement blocks reservation for the superuser
  */
 
 #include <linux/kthread.h>
@@ -40,7 +39,7 @@
  * possible vulnerabilities. Returns zero if the inode is all right and
  * %-EINVAL if not.
  */
-/* TODO: remove compatibility crap as late as possible */
+/* TODO: remove compatibility stuff as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_IGET
 static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 #else
@@ -98,7 +97,7 @@ int validate_inode(struct ubifs_info *c, const struct inode *inode)
 	return err;
 }
 
-/* TODO: remove compatibility crap as late as possible */
+/* TODO: remove compatibility stuff as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_IGET
 struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 {
@@ -342,7 +341,6 @@ static void ubifs_put_super(struct super_block *sb)
 
 /*
  * Note, Linux write-back code calls this without 'i_mutex'.
- * TODO: handle errors better
  */
 static int ubifs_write_inode(struct inode *inode, int wait)
 {
@@ -390,7 +388,6 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	return err;
 }
 
-/* TODO: handle errors better */
 static void ubifs_delete_inode(struct inode *inode)
 {
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
@@ -422,10 +419,12 @@ static void ubifs_delete_inode(struct inode *inode)
 	inode->i_size = 0;
 
 	err = ubifs_jrn_write_inode(c, inode, 1, IS_SYNC(inode));
-	if (err) {
+	if (err)
+		/*
+		 * Worst case we have a lost orphan inode wasting space, so a
+		 * simple error message is ok here.
+		 */
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
-		goto out_unlock;
-	}
 
 	if (ui->dirty) {
 		ubifs_assert(ui->budgeted);
@@ -435,7 +434,6 @@ static void ubifs_delete_inode(struct inode *inode)
 		ubifs_release_budget(c, &req);
 	}
 
-out_unlock:
 	mutex_unlock(&ui->budg_mutex);
 out:
 	clear_inode(inode);
@@ -512,6 +510,25 @@ static int ubifs_show_options(struct seq_file *s, struct vfsmount *mnt)
 	return 0;
 }
 
+static int ubifs_sync_fs(struct super_block *sb, int wait)
+{
+	struct ubifs_info *c = sb->s_fs_info;
+	int i, ret = 0, err;
+
+	if (c->jheads)
+		for (i = 0; i < c->jhead_cnt; i++) {
+			err = ubifs_wbuf_sync(&c->jheads[i].wbuf);
+			if (err && !ret)
+				ret = err;
+		}
+	/*
+	 * We ought to call sync for c->ubi but it does not have one. If it had
+	 * it would in turn call mtd->sync, however mtd operations are
+	 * synchronous anyway, so we don't lose any sleep here.
+	 */
+	return ret;
+}
+
 struct super_operations ubifs_super_operations =
 {
 /* TODO: remove compatibility stuff as late as possible */
@@ -527,6 +544,5 @@ struct super_operations ubifs_super_operations =
 	.dirty_inode   = ubifs_dirty_inode,
 	.remount_fs    = ubifs_remount_fs,
 	.show_options  = ubifs_show_options,
-	/* TODO: sync_fs to sync wbufs */
-	/* TODO: also need to call mtd sync? */
+	.sync_fs       = ubifs_sync_fs,
 };
