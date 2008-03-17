@@ -30,8 +30,6 @@
  * faster I/O speed because it allows to change the index seldom. So this is a
  * trade-off. Also, the journal is indexed by the in-memory index (TNC), so the
  * larger is the journal, the more memory its index may consume.
- *
- * TODO: in function where mentioning dentry also mention xentry
  */
 
 #include "ubifs.h"
@@ -362,6 +360,9 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
  * This function inserts a scanned directory entry node to the replay tree.
  * Returns zero in case of success and a negative error code in case of
  * failure.
+ *
+ * This function is also used for extended attribute entries because they are
+ * implemented as directory entry nodes.
  */
 static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 		       union ubifs_key *key, const char *name, int nlen,
