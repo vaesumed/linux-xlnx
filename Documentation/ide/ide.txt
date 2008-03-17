@@ -271,8 +271,6 @@ Summary of ide driver parameters for kernel command line
 			  ability to bit test for detection is currently
 			  unknown.
 
- "ide=reverse"		: formerly called to pci sub-system, but now local.
-
 The following are valid ONLY on ide0, which usually corresponds
 to the first ATA interface found on the particular host, and the defaults for
 the base,ctl ports must not be altered.
