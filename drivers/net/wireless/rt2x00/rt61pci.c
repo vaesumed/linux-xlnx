@@ -24,6 +24,7 @@
 	Supported chipsets: RT2561, RT2561s, RT2661.
  */
 
+#include <linux/crc-itu-t.h>
 #include <linux/delay.h>
 #include <linux/etherdevice.h>
 #include <linux/init.h>
@@ -336,7 +337,6 @@ static void rt61pci_config_intf(struct rt2x00_dev *rt2x00dev,
 		 * bits which (when set to 0) will invalidate the entire beacon.
 		 */
 		beacon_base = HW_BEACON_OFFSET(intf->beacon->entry_idx);
-		rt2x00pci_register_write(rt2x00dev, TXRX_CSR9, 0);
 		rt2x00pci_register_write(rt2x00dev, beacon_base, 0);
 
 		/*
@@ -344,10 +344,8 @@ static void rt61pci_config_intf(struct rt2x00_dev *rt2x00dev,
 		 */
 		rt2x00pci_register_read(rt2x00dev, TXRX_CSR9, &reg);
 		rt2x00_set_field32(&reg, TXRX_CSR9_TSF_TICKING, 1);
-		rt2x00_set_field32(&reg, TXRX_CSR9_TBTT_ENABLE,
-				  (conf->sync == TSF_SYNC_BEACON));
-		rt2x00_set_field32(&reg, TXRX_CSR9_BEACON_GEN, 0);
 		rt2x00_set_field32(&reg, TXRX_CSR9_TSF_SYNC, conf->sync);
+		rt2x00_set_field32(&reg, TXRX_CSR9_TBTT_ENABLE, 1);
 		rt2x00pci_register_write(rt2x00dev, TXRX_CSR9, reg);
 	}
 
@@ -370,20 +368,18 @@ static void rt61pci_config_intf(struct rt2x00_dev *rt2x00dev,
 	}
 }
 
-static int rt61pci_config_preamble(struct rt2x00_dev *rt2x00dev,
-				   const int short_preamble,
-				   const int ack_timeout,
-				   const int ack_consume_time)
+static int rt61pci_config_erp(struct rt2x00_dev *rt2x00dev,
+			      struct rt2x00lib_erp *erp)
 {
 	u32 reg;
 
 	rt2x00pci_register_read(rt2x00dev, TXRX_CSR0, &reg);
-	rt2x00_set_field32(&reg, TXRX_CSR0_RX_ACK_TIMEOUT, ack_timeout);
+	rt2x00_set_field32(&reg, TXRX_CSR0_RX_ACK_TIMEOUT, erp->ack_timeout);
 	rt2x00pci_register_write(rt2x00dev, TXRX_CSR0, reg);
 
 	rt2x00pci_register_read(rt2x00dev, TXRX_CSR4, &reg);
 	rt2x00_set_field32(&reg, TXRX_CSR4_AUTORESPOND_PREAMBLE,
-			   !!short_preamble);
+			   !!erp->short_preamble);
 	rt2x00pci_register_write(rt2x00dev, TXRX_CSR4, reg);
 
 	return 0;
@@ -485,14 +481,8 @@ static void rt61pci_config_antenna_5x(struct rt2x00_dev *rt2x00dev,
 		else
 			rt2x00_set_field8(&r77, BBP_R77_RX_ANTENNA, 3);
 		break;
-	case ANTENNA_SW_DIVERSITY:
-		/*
-		 * NOTE: We should never come here because rt2x00lib is
-		 * supposed to catch this and send us the correct antenna
-		 * explicitely. However we are nog going to bug about this.
-		 * Instead, just default to antenna B.
-		 */
 	case ANTENNA_B:
+	default:
 		rt2x00_set_field8(&r4, BBP_R4_RX_ANTENNA_CONTROL, 1);
 		rt2x00_set_field8(&r4, BBP_R4_RX_FRAME_END, 0);
 		if (rt2x00dev->curr_band == IEEE80211_BAND_5GHZ)
@@ -534,14 +524,8 @@ static void rt61pci_config_antenna_2x(struct rt2x00_dev *rt2x00dev,
 		rt2x00_set_field8(&r4, BBP_R4_RX_ANTENNA_CONTROL, 1);
 		rt2x00_set_field8(&r77, BBP_R77_RX_ANTENNA, 3);
 		break;
-	case ANTENNA_SW_DIVERSITY:
-		/*
-		 * NOTE: We should never come here because rt2x00lib is
-		 * supposed to catch this and send us the correct antenna
-		 * explicitely. However we are nog going to bug about this.
-		 * Instead, just default to antenna B.
-		 */
 	case ANTENNA_B:
+	default:
 		rt2x00_set_field8(&r4, BBP_R4_RX_ANTENNA_CONTROL, 1);
 		rt2x00_set_field8(&r77, BBP_R77_RX_ANTENNA, 0);
 		break;
@@ -579,10 +563,6 @@ static void rt61pci_config_antenna_2529(struct rt2x00_dev *rt2x00dev,
 	rt61pci_bbp_read(rt2x00dev, 4, &r4);
 	rt61pci_bbp_read(rt2x00dev, 77, &r77);
 
-	/* FIXME: Antenna selection for the rf 2529 is very confusing in the
-	 * legacy driver. The code below should be ok for non-diversity setups.
-	 */
-
 	/*
 	 * Configure the RX antenna.
 	 */
@@ -592,15 +572,14 @@ static void rt61pci_config_antenna_2529(struct rt2x00_dev *rt2x00dev,
 		rt2x00_set_field8(&r77, BBP_R77_RX_ANTENNA, 0);
 		rt61pci_config_antenna_2529_rx(rt2x00dev, 0, 0);
 		break;
-	case ANTENNA_SW_DIVERSITY:
 	case ANTENNA_HW_DIVERSITY:
 		/*
-		 * NOTE: We should never come here because rt2x00lib is
-		 * supposed to catch this and send us the correct antenna
-		 * explicitely. However we are nog going to bug about this.
-		 * Instead, just default to antenna B.
+		 * FIXME: Antenna selection for the rf 2529 is very confusing
+		 * in the legacy driver. Just default to antenna B until the
+		 * legacy code can be properly translated into rt2x00 code.
 		 */
 	case ANTENNA_B:
+	default:
 		rt2x00_set_field8(&r4, BBP_R4_RX_ANTENNA_CONTROL, 1);
 		rt2x00_set_field8(&r77, BBP_R77_RX_ANTENNA, 3);
 		rt61pci_config_antenna_2529_rx(rt2x00dev, 1, 1);
@@ -650,6 +629,13 @@ static void rt61pci_config_antenna(struct rt2x00_dev *rt2x00dev,
 	unsigned int lna;
 	unsigned int i;
 	u32 reg;
+
+	/*
+	 * We should never come here because rt2x00lib is supposed
+	 * to catch this and send us the correct antenna explicitely.
+	 */
+	BUG_ON(ant->rx == ANTENNA_SW_DIVERSITY ||
+	       ant->tx == ANTENNA_SW_DIVERSITY);
 
 	if (rt2x00dev->curr_band == IEEE80211_BAND_5GHZ) {
 		sel = antenna_sel_a;
@@ -861,7 +847,7 @@ dynamic_cca_tune:
 }
 
 /*
- * Firmware name function.
+ * Firmware functions
  */
 static char *rt61pci_get_firmware_name(struct rt2x00_dev *rt2x00dev)
 {
@@ -885,9 +871,23 @@ static char *rt61pci_get_firmware_name(struct rt2x00_dev *rt2x00dev)
 	return fw_name;
 }
 
-/*
- * Initialization functions.
- */
+static u16 rt61pci_get_firmware_crc(void *data, const size_t len)
+{
+	u16 crc;
+
+	/*
+	 * Use the crc itu-t algorithm.
+	 * The last 2 bytes in the firmware array are the crc checksum itself,
+	 * this means that we should never pass those 2 bytes to the crc
+	 * algorithm.
+	 */
+	crc = crc_itu_t(0, data, len - 2);
+	crc = crc_itu_t_byte(crc, 0);
+	crc = crc_itu_t_byte(crc, 0);
+
+	return crc;
+}
+
 static int rt61pci_load_firmware(struct rt2x00_dev *rt2x00dev, void *data,
 				 const size_t len)
 {
@@ -968,6 +968,9 @@ static int rt61pci_load_firmware(struct rt2x00_dev *rt2x00dev, void *data,
 	return 0;
 }
 
+/*
+ * Initialization functions.
+ */
 static void rt61pci_init_rxentry(struct rt2x00_dev *rt2x00dev,
 				 struct queue_entry *entry)
 {
@@ -1562,6 +1565,8 @@ static void rt61pci_kick_tx_queue(struct rt2x00_dev *rt2x00dev,
 
 		rt2x00pci_register_read(rt2x00dev, TXRX_CSR9, &reg);
 		if (!rt2x00_get_field32(reg, TXRX_CSR9_BEACON_GEN)) {
+			rt2x00_set_field32(&reg, TXRX_CSR9_TSF_TICKING, 1);
+			rt2x00_set_field32(&reg, TXRX_CSR9_TBTT_ENABLE, 1);
 			rt2x00_set_field32(&reg, TXRX_CSR9_BEACON_GEN, 1);
 			rt2x00pci_register_write(rt2x00dev, TXRX_CSR9, reg);
 		}
@@ -1640,10 +1645,14 @@ static void rt61pci_fill_rxdone(struct queue_entry *entry,
 
 	/*
 	 * Obtain the status about this packet.
+	 * When frame was received with an OFDM bitrate,
+	 * the signal is the PLCP value. If it was received with
+	 * a CCK bitrate the signal is the rate in 100kbit/s.
 	 */
-	rxdesc->signal = rt2x00_get_field32(word1, RXD_W1_SIGNAL);
-	rxdesc->rssi = rt61pci_agc_to_rssi(entry->queue->rt2x00dev, word1);
 	rxdesc->ofdm = rt2x00_get_field32(word0, RXD_W0_OFDM);
+	rxdesc->signal = rt2x00_get_field32(word1, RXD_W1_SIGNAL);
+	rxdesc->signal_plcp = rxdesc->ofdm;
+	rxdesc->rssi = rt61pci_agc_to_rssi(entry->queue->rt2x00dev, word1);
 	rxdesc->size = rt2x00_get_field32(word0, RXD_W0_DATABYTE_COUNT);
 	rxdesc->my_bss = !!rt2x00_get_field32(word0, RXD_W0_MY_BSS);
 }
@@ -2260,7 +2269,6 @@ static int rt61pci_probe_hw(struct rt2x00_dev *rt2x00dev)
 	 * This device requires firmware.
 	 */
 	__set_bit(DRIVER_REQUIRE_FIRMWARE, &rt2x00dev->flags);
-	__set_bit(DRIVER_REQUIRE_FIRMWARE_CRC_ITU_T, &rt2x00dev->flags);
 
 	/*
 	 * Set the rssi offset.
@@ -2373,6 +2381,7 @@ static int rt61pci_beacon_update(struct ieee80211_hw *hw, struct sk_buff *skb,
 	struct rt2x00_intf *intf = vif_to_intf(control->vif);
 	struct skb_frame_desc *skbdesc;
 	unsigned int beacon_base;
+	u32 reg;
 
 	if (unlikely(!intf->beacon))
 		return -ENOBUFS;
@@ -2406,6 +2415,16 @@ static int rt61pci_beacon_update(struct ieee80211_hw *hw, struct sk_buff *skb,
 	skbdesc->desc = skb->data;
 	skbdesc->desc_len = intf->beacon->queue->desc_size;
 	skbdesc->entry = intf->beacon;
+
+	/*
+	 * Disable beaconing while we are reloading the beacon data,
+	 * otherwise we might be sending out invalid data.
+	 */
+	rt2x00pci_register_read(rt2x00dev, TXRX_CSR9, &reg);
+	rt2x00_set_field32(&reg, TXRX_CSR9_TSF_TICKING, 0);
+	rt2x00_set_field32(&reg, TXRX_CSR9_TBTT_ENABLE, 0);
+	rt2x00_set_field32(&reg, TXRX_CSR9_BEACON_GEN, 0);
+	rt2x00pci_register_write(rt2x00dev, TXRX_CSR9, reg);
 
 	/*
 	 * mac80211 doesn't provide the control->queue variable
@@ -2449,6 +2468,7 @@ static const struct rt2x00lib_ops rt61pci_rt2x00_ops = {
 	.irq_handler		= rt61pci_interrupt,
 	.probe_hw		= rt61pci_probe_hw,
 	.get_firmware_name	= rt61pci_get_firmware_name,
+	.get_firmware_crc	= rt61pci_get_firmware_crc,
 	.load_firmware		= rt61pci_load_firmware,
 	.initialize		= rt2x00pci_initialize,
 	.uninitialize		= rt2x00pci_uninitialize,
@@ -2465,7 +2485,7 @@ static const struct rt2x00lib_ops rt61pci_rt2x00_ops = {
 	.kick_tx_queue		= rt61pci_kick_tx_queue,
 	.fill_rxdone		= rt61pci_fill_rxdone,
 	.config_intf		= rt61pci_config_intf,
-	.config_preamble	= rt61pci_config_preamble,
+	.config_erp		= rt61pci_config_erp,
 	.config			= rt61pci_config,
 };
 

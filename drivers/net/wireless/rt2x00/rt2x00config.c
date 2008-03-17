@@ -75,43 +75,40 @@ void rt2x00lib_config_intf(struct rt2x00_dev *rt2x00dev,
 	rt2x00dev->ops->lib->config_intf(rt2x00dev, intf, &conf, flags);
 }
 
-void rt2x00lib_config_preamble(struct rt2x00_dev *rt2x00dev,
-			       struct rt2x00_intf *intf,
-			       const unsigned int short_preamble)
+void rt2x00lib_config_erp(struct rt2x00_dev *rt2x00dev,
+			  struct rt2x00_intf *intf,
+			  struct ieee80211_bss_conf *bss_conf)
 {
+	struct rt2x00lib_erp erp;
 	int retval;
-	int ack_timeout;
-	int ack_consume_time;
 
-	ack_timeout = PLCP + get_duration(ACK_SIZE, 10);
-	ack_consume_time = SIFS + PLCP + get_duration(ACK_SIZE, 10);
+	memset(&erp, 0, sizeof(erp));
+
+	erp.short_preamble = bss_conf->use_short_preamble;
+	erp.ack_timeout = PLCP + get_duration(ACK_SIZE, 10);
+	erp.ack_consume_time = SIFS + PLCP + get_duration(ACK_SIZE, 10);
 
 	if (rt2x00dev->hw->conf.flags & IEEE80211_CONF_SHORT_SLOT_TIME)
-		ack_timeout += SHORT_DIFS;
+		erp.ack_timeout += SHORT_DIFS;
 	else
-		ack_timeout += DIFS;
+		erp.ack_timeout += DIFS;
 
-	if (short_preamble) {
-		ack_timeout += SHORT_PREAMBLE;
-		ack_consume_time += SHORT_PREAMBLE;
+	if (bss_conf->use_short_preamble) {
+		erp.ack_timeout += SHORT_PREAMBLE;
+		erp.ack_consume_time += SHORT_PREAMBLE;
 	} else {
-		ack_timeout += PREAMBLE;
-		ack_consume_time += PREAMBLE;
+		erp.ack_timeout += PREAMBLE;
+		erp.ack_consume_time += PREAMBLE;
 	}
 
-	retval = rt2x00dev->ops->lib->config_preamble(rt2x00dev,
-						      short_preamble,
-						      ack_timeout,
-						      ack_consume_time);
-
-	spin_lock(&intf->lock);
+	retval = rt2x00dev->ops->lib->config_erp(rt2x00dev, &erp);
 
 	if (retval) {
-		intf->delayed_flags |= DELAYED_CONFIG_PREAMBLE;
+		spin_lock(&intf->lock);
+		intf->delayed_flags |= DELAYED_CONFIG_ERP;
 		queue_work(rt2x00dev->hw->workqueue, &rt2x00dev->intf_work);
+		spin_unlock(&intf->lock);
 	}
-
-	spin_unlock(&intf->lock);
 }
 
 void rt2x00lib_config_antenna(struct rt2x00_dev *rt2x00dev,
@@ -148,12 +145,26 @@ void rt2x00lib_config_antenna(struct rt2x00_dev *rt2x00dev,
 		rt2x00lib_toggle_rx(rt2x00dev, STATE_RADIO_RX_ON_LINK);
 }
 
+static u32 rt2x00lib_get_basic_rates(struct ieee80211_supported_band *band)
+{
+	const struct rt2x00_rate *rate;
+	unsigned int i;
+	u32 mask = 0;
+
+	for (i = 0; i < band->n_bitrates; i++) {
+		rate = rt2x00_get_rate(band->bitrates[i].hw_value);
+		if (rate->flags & DEV_RATE_BASIC)
+			mask |= rate->ratemask;
+	}
+
+	return mask;
+}
+
 void rt2x00lib_config(struct rt2x00_dev *rt2x00dev,
 		      struct ieee80211_conf *conf, const int force_config)
 {
 	struct rt2x00lib_conf libconf;
 	struct ieee80211_supported_band *band;
-	struct ieee80211_rate *rate;
 	struct antenna_setup *default_ant = &rt2x00dev->default_ant;
 	struct antenna_setup *active_ant = &rt2x00dev->link.ant.active;
 	int flags = 0;
@@ -230,10 +241,9 @@ config:
 
 	if (flags & CONFIG_UPDATE_PHYMODE) {
 		band = &rt2x00dev->bands[conf->channel->band];
-		rate = &band->bitrates[band->n_bitrates - 1];
 
 		libconf.band = conf->channel->band;
-		libconf.basic_rates = rt2x00_get_rate(rate->hw_value)->ratemask;
+		libconf.basic_rates = rt2x00lib_get_basic_rates(band);
 	}
 
 	if (flags & CONFIG_UPDATE_CHANNEL) {

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2003 - 2007 Intel Corporation. All rights reserved.
+ * Copyright(c) 2003 - 2008 Intel Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,7 @@
 #include <linux/etherdevice.h>
 #include <asm/unaligned.h>
 
+#include "iwl-eeprom.h"
 #include "iwl-core.h"
 #include "iwl-4965.h"
 #include "iwl-helpers.h"
@@ -254,7 +255,7 @@ u8 iwl4965_hw_find_station(struct iwl4965_priv *priv, const u8 *addr)
 		start = IWL_STA_ID;
 
 	if (is_broadcast_ether_addr(addr))
-		return IWL4965_BROADCAST_ID;
+		return priv->hw_setting.bcast_sta_id;
 
 	spin_lock_irqsave(&priv->sta_lock, flags);
 	for (i = start; i < priv->hw_setting.max_stations; i++)
@@ -2836,7 +2837,7 @@ unsigned int iwl4965_hw_get_beacon_cmd(struct iwl4965_priv *priv,
 	tx_beacon_cmd = &frame->u.beacon;
 	memset(tx_beacon_cmd, 0, sizeof(*tx_beacon_cmd));
 
-	tx_beacon_cmd->tx.sta_id = IWL4965_BROADCAST_ID;
+	tx_beacon_cmd->tx.sta_id = priv->hw_setting.bcast_sta_id;
 	tx_beacon_cmd->tx.stop_time.life_time = TX_CMD_LIFE_TIME_INFINITE;
 
 	frame_size = iwl4965_fill_beacon_frame(priv,
@@ -4262,7 +4263,7 @@ static void iwl4965_rx_reply_compressed_ba(struct iwl4965_priv *priv,
 			   "%d, scd_ssn = %d\n",
 			   ba_resp->tid,
 			   ba_resp->seq_ctl,
-			   (unsigned long long)ba_resp->bitmap,
+			   (unsigned long long)le64_to_cpu(ba_resp->bitmap),
 			   ba_resp->scd_flow,
 			   ba_resp->scd_ssn);
 	IWL_DEBUG_TX_REPLY("DAT start_idx = %d, bitmap = 0x%llx \n",
@@ -4436,7 +4437,7 @@ void iwl4965_add_station(struct iwl4965_priv *priv, const u8 *addr, int is_ap)
 	link_cmd.agg_params.agg_time_limit = cpu_to_le16(4000);
 
 	/* Update the rate scaling for control frame Tx to AP */
-	link_cmd.sta_id = is_ap ? IWL_AP_ID : IWL4965_BROADCAST_ID;
+	link_cmd.sta_id = is_ap ? IWL_AP_ID : priv->hw_setting.bcast_sta_id;
 
 	iwl4965_send_cmd_pdu(priv, REPLY_TX_LINK_QUALITY_CMD, sizeof(link_cmd),
 			 &link_cmd);
@@ -4824,10 +4825,23 @@ void iwl4965_hw_cancel_deferred_work(struct iwl4965_priv *priv)
 	cancel_delayed_work(&priv->init_alive_start);
 }
 
+static struct iwl_lib_ops iwl4965_lib = {
+	.eeprom_ops = {
+		.verify_signature  = iwlcore_eeprom_verify_signature,
+		.acquire_semaphore = iwlcore_eeprom_acquire_semaphore,
+		.release_semaphore = iwlcore_eeprom_release_semaphore,
+	},
+};
+
+static struct iwl_ops iwl4965_ops = {
+	.lib = &iwl4965_lib,
+};
+
 static struct iwl_cfg iwl4965_agn_cfg = {
 	.name = "4965AGN",
 	.fw_name = "iwlwifi-4965" IWL4965_UCODE_API ".ucode",
 	.sku = IWL_SKU_A|IWL_SKU_G|IWL_SKU_N,
+	.ops = &iwl4965_ops,
 };
 
 struct pci_device_id iwl4965_hw_card_ids[] = {
@@ -4835,36 +4849,5 @@ struct pci_device_id iwl4965_hw_card_ids[] = {
 	{IWL_PCI_DEVICE(0x4230, PCI_ANY_ID, iwl4965_agn_cfg)},
 	{0}
 };
-
-/*
- * The device's EEPROM semaphore prevents conflicts between driver and uCode
- * when accessing the EEPROM; each access is a series of pulses to/from the
- * EEPROM chip, not a single event, so even reads could conflict if they
- * weren't arbitrated by the semaphore.
- */
-int iwl4965_eeprom_acquire_semaphore(struct iwl4965_priv *priv)
-{
-	u16 count;
-	int rc;
-
-	for (count = 0; count < EEPROM_SEM_RETRY_LIMIT; count++) {
-		/* Request semaphore */
-		iwl4965_set_bit(priv, CSR_HW_IF_CONFIG_REG,
-			CSR_HW_IF_CONFIG_REG_BIT_EEPROM_OWN_SEM);
-
-		/* See if we got it */
-		rc = iwl4965_poll_bit(priv, CSR_HW_IF_CONFIG_REG,
-					CSR_HW_IF_CONFIG_REG_BIT_EEPROM_OWN_SEM,
-					CSR_HW_IF_CONFIG_REG_BIT_EEPROM_OWN_SEM,
-					EEPROM_SEM_TIMEOUT);
-		if (rc >= 0) {
-			IWL_DEBUG_IO("Acquired semaphore after %d tries.\n",
-				count+1);
-			return rc;
-		}
-	}
-
-	return rc;
-}
 
 MODULE_DEVICE_TABLE(pci, iwl4965_hw_card_ids);

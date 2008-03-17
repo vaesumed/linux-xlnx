@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2003 - 2007 Intel Corporation. All rights reserved.
+ * Copyright(c) 2003 - 2008 Intel Corporation. All rights reserved.
  *
  * Portions of this file are derived from the ipw3945 project, as well
  * as portions of the ieee80211 subsystem header files.
@@ -93,7 +93,7 @@ int iwl3945_param_queues_num = IWL_MAX_NUM_QUEUES; /* def: 8 Tx queues */
 #endif
 
 #define IWLWIFI_VERSION "1.2.26k" VD VS
-#define DRV_COPYRIGHT	"Copyright(c) 2003-2007 Intel Corporation"
+#define DRV_COPYRIGHT	"Copyright(c) 2003-2008 Intel Corporation"
 #define DRV_VERSION     IWLWIFI_VERSION
 
 
@@ -6309,18 +6309,23 @@ static void iwl3945_bg_request_scan(struct work_struct *data)
 	if (priv->iw_mode == IEEE80211_IF_TYPE_MNTR)
 		scan->filter_flags = RXON_FILTER_PROMISC_MSK;
 
-	if (direct_mask)
+	if (direct_mask) {
 		IWL_DEBUG_SCAN
 		    ("Initiating direct scan for %s.\n",
 		     iwl3945_escape_essid(priv->essid, priv->essid_len));
-	else
+		scan->channel_count =
+			iwl3945_get_channels_for_scan(
+				priv, band, 1, /* active */
+				direct_mask,
+				(void *)&scan->data[le16_to_cpu(scan->tx_cmd.len)]);
+	} else {
 		IWL_DEBUG_SCAN("Initiating indirect scan.\n");
-
-	scan->channel_count =
-		iwl3945_get_channels_for_scan(
-			priv, band, 1, /* active */
-			direct_mask,
-			(void *)&scan->data[le16_to_cpu(scan->tx_cmd.len)]);
+		scan->channel_count =
+			iwl3945_get_channels_for_scan(
+				priv, band, 0, /* passive */
+				direct_mask,
+				(void *)&scan->data[le16_to_cpu(scan->tx_cmd.len)]);
+	}
 
 	cmd.len += le16_to_cpu(scan->tx_cmd.len) +
 	    scan->channel_count * sizeof(struct iwl3945_scan_channel);
