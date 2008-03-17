@@ -1270,8 +1270,6 @@ void ubifs_prep_grp_node(struct ubifs_info *c, void *node, int len, int last);
 int ubifs_io_init(struct ubifs_info *c);
 void ubifs_pad(const struct ubifs_info *c, void *buf, int pad);
 int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf);
-int ubifs_try_read_node(const struct ubifs_info *c, void *buf, int type, int len,
-			int lnum, int offs);
 int ubifs_bg_wbufs_sync(struct ubifs_info *c);
 void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t inum);
 int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,

@@ -822,61 +822,6 @@ int ubifs_wbuf_init(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
 }
 
 /**
- * ubifs_try_read_node - read a node if it is a node.
- * @c: UBIFS file-system description object
- * @buf: buffer to read to
- * @type: node type
- * @len: node length (not aligned)
- * @lnum: LEB number of node to read
- * @offs: offset of node to read
- *
- * This function tries to read a node of known type and length, checks it and
- * stores it in @buf. This function returns %1 if a node is present and %0 if
- * a node is not present.  A negative error code is returned for I/O errors.
- * This function performs that same function as ubifs_read_node except that
- * it does not require that there is actually a node present and instead
- * the return code indicates if a node was read.
- * TODO: consider to move this function to tnc.c
- */
-int ubifs_try_read_node(const struct ubifs_info *c, void *buf, int type, int len,
-			int lnum, int offs)
-{
-	int err, node_len;
-	struct ubifs_ch *ch = buf;
-	uint32_t crc, node_crc;
-
-	dbg_io("LEB %d:%d, %s, length %d", lnum, offs, dbg_ntype(type), len);
-	ubifs_assert(lnum >= 0 && lnum < c->leb_cnt && offs >= 0);
-	ubifs_assert(len >= UBIFS_CH_SZ && offs + len <= c->leb_size);
-	ubifs_assert(!(offs & 7) && offs < c->leb_size);
-	ubifs_assert(type >= 0 && type < UBIFS_NODE_TYPES_CNT);
-
-	err = ubi_read(c->ubi, lnum, buf, offs, len);
-	if (err) {
-		ubifs_err("cannot read node type %d from LEB %d:%d, error %d",
-			  type, lnum, offs, err);
-		return err;
-	}
-
-	if (le32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC)
-		return 0;
-
-	if (ch->node_type != type)
-		return 0;
-
-	node_len = le32_to_cpu(ch->len);
-	if (node_len != len)
-		return 0;
-
-	crc = crc32(UBIFS_CRC32_INIT, buf + 8, node_len - 8);
-	node_crc = le32_to_cpu(ch->crc);
-	if (crc != node_crc)
-		return 0;
-
-	return 1;
-}
-
-/**
  * ubifs_wbuf_add_ino_nolock - add an inode number into the wbuf inode array.
  * @wbuf - the write-buffer whereto add
  * @inum - the inode number
@@ -948,7 +893,7 @@ int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			 */
 			continue;
 
-		for(j = 0; j < count; j++)
+		for (j = 0; j < count && !err; j++)
 			if (wbuf_has_ino(wbuf, inodes[j]->i_ino)) {
 				mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
 				if (wbuf_has_ino(wbuf, inodes[j]->i_ino))
@@ -958,7 +903,6 @@ int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			}
 
 		if (err) {
-			/* TODO: improve error handling. */
 			ubifs_ro_mode(c);
 			break;
 		}
