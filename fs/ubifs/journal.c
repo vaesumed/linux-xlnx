@@ -460,13 +460,12 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * The function writes the host inode @dir last, which is important in case of
  * extended attributes. Indeed, then we guarantee that if the host inode gets
  * synchronized, and the write-buffer it sits in gets flushed, the extended
- * attribute inode gets flushed to. And this is exactly what the user expects -
+ * attribute inode gets flushed too. And this is exactly what the user expects -
  * synchronizing the host inode synchronizes its extended attributes.
  * Similarly, this guarantees that if @dir is synchronized, its directory entry
  * corresponding to @nm gets synchronized too.
  *
  * This function returns %0 on success and a negative error code on failure.
- * TODO: compress data attached to inodes
  */
 int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
@@ -538,8 +537,6 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 		}
 	}
 
-	/* TODO: it might be good idea to either handle sync in write_head
-	 * fully, or fully handle it here, not a mixture */
 	err = write_head(c, BASEHD, dent, len, &lnum, &dent_offs, sync);
 	if (!sync) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
@@ -646,15 +643,21 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 		goto out_free;
 
 	err = write_node(c, DATAHD, data, dlen, &lnum, &offs);
-	/* TODO: from now on we have to switch to RO in case of errors */
 	ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf, key_ino(c, key));
 	release_head(c, DATAHD);
 	if (err)
-		goto out_finish;
+		goto out_ro;
 
 	err = ubifs_tnc_add(c, key, lnum, offs, dlen);
+	if (err)
+		goto out_ro;
 
-out_finish:
+	finish_reservation(c);
+	kfree(data);
+	return 0;
+
+out_ro:
+	ubifs_ro_mode(c);
 	finish_reservation(c);
 out_free:
 	kfree(data);
@@ -696,18 +699,17 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	err = write_head(c, BASEHD, ino, len, &lnum, &offs, 0);
+	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
 	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inode->i_ino);
 	release_head(c, BASEHD);
-	/* TODO: from now on we have to switch to RO in case of errors */
 	if (err)
-		goto out_finish;
+		goto out_ro;
 
 	if (last_reference) {
 		err = ubifs_tnc_remove_ino(c, inode->i_ino);
 		if (err)
-			goto out_finish;
+			goto out_ro;
 		ubifs_delete_orphan(c, inode->i_ino);
 		err = ubifs_add_dirt(c, lnum, len + ui->data_len);
 	} else {
@@ -716,8 +718,15 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 		ino_key_init(c, &key, inode->i_ino);
 		err = ubifs_tnc_add(c, &key, lnum, offs, len);
 	}
+	if (err)
+		goto out_ro;
 
-out_finish:
+	finish_reservation(c);
+	kfree(ino);
+	return 0;
+
+out_ro:
+	ubifs_ro_mode(c);
 	finish_reservation(c);
 out_free:
 	kfree(ino);
@@ -835,11 +844,8 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 		ubifs_wbuf_add_ino_nolock(wbuf, old_dir->i_ino);
 	}
 	release_head(c, BASEHD);
-	if (err) {
-		if (last_reference)
-			ubifs_delete_orphan(c, new_inode->i_ino);
-		goto out_finish;
-	}
+	if (err)
+		goto out_ro;
 	if (new_inode)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 					  new_inode->i_ino);
@@ -880,17 +886,17 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 			goto out_ro;
 	}
 
-out_finish:
 	finish_reservation(c);
-out_free:
 	kfree(dent);
-	return err;
+	return 0;
 
 out_ro:
 	ubifs_ro_mode(c);
 	if (last_reference)
 		ubifs_delete_orphan(c, new_inode->i_ino);
+out_finish:
 	finish_reservation(c);
+out_free:
 	kfree(dent);
 	return err;
 }
@@ -924,7 +930,6 @@ static int recomp_data_node(struct ubifs_data_node *dn, int *new_len)
 	dn->compr_type = cpu_to_le16(compr_type);
 	dn->size = cpu_to_le32(*new_len);
 	*new_len = UBIFS_DATA_NODE_SZ + out_len;
-
 out:
 	kfree(buf);
 	return err;
@@ -1011,7 +1016,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
 	release_head(c, BASEHD);
 	if (err)
-		goto out;
+		goto out_ro;
 
 	if (dlen) {
 		offs += ALIGN(UBIFS_TRUN_NODE_SZ, 8);
@@ -1038,15 +1043,14 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	if (err)
 		goto out_ro;
 
-out:
 	finish_reservation(c);
-out_free:
 	kfree(trun);
-	return err;
+	return 0;
 
 out_ro:
 	ubifs_ro_mode(c);
 	finish_reservation(c);
+out_free:
 	kfree(trun);
 	return err;
 }
@@ -1194,7 +1198,7 @@ int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 	}
 	release_head(c, BASEHD);
 	if (err)
-		goto out_finish;
+		goto out_ro;
 
 	ino_key_init(c, &key, inode1->i_ino);
 	err = ubifs_tnc_add(c, &key, lnum, offs, len1);
@@ -1210,10 +1214,9 @@ int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 	kfree(ino);
 	return 0;
 
-out_finish:
-	finish_reservation(c);
 out_ro:
 	ubifs_ro_mode(c);
+	finish_reservation(c);
 out_free:
 	kfree(ino);
 	return err;
