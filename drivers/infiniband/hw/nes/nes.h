@@ -143,12 +143,12 @@
 #ifdef CONFIG_INFINIBAND_NES_DEBUG
 #define nes_debug(level, fmt, args...) \
 	if (level & nes_debug_level) \
-		printk(KERN_ERR PFX "%s[%u]: " fmt, __FUNCTION__, __LINE__, ##args)
+		printk(KERN_ERR PFX "%s[%u]: " fmt, __func__, __LINE__, ##args)
 
 #define assert(expr)                                                \
 if (!(expr)) {                                                       \
 	printk(KERN_ERR PFX "Assertion failed! %s, %s, %s, line %d\n",  \
-		   #expr, __FILE__, __FUNCTION__, __LINE__);                \
+		   #expr, __FILE__, __func__, __LINE__);                \
 }
 
 #define NES_EVENT_TIMEOUT   1200000
@@ -166,7 +166,6 @@ if (!(expr)) {                                                       \
 #include "nes_cm.h"
 
 extern int max_mtu;
-extern int nics_per_function;
 #define max_frame_len (max_mtu+ETH_HLEN)
 extern int interrupt_mod_interval;
 extern int nes_if_count;
@@ -218,14 +217,6 @@ extern u32 int_mod_cq_depth_24;
 extern u32 int_mod_cq_depth_16;
 extern u32 int_mod_cq_depth_4;
 extern u32 int_mod_cq_depth_1;
-
-extern atomic_t cqp_reqs_allocated;
-extern atomic_t cqp_reqs_freed;
-extern atomic_t cqp_reqs_dynallocated;
-extern atomic_t cqp_reqs_dynfreed;
-extern atomic_t cqp_reqs_queued;
-extern atomic_t cqp_reqs_redriven;
-
 
 struct nes_device {
 	struct nes_adapter	   *nesadapter;
@@ -412,7 +403,7 @@ static inline int nes_alloc_resource(struct nes_adapter *nesadapter,
 	if (resource_num >= max_resources) {
 		resource_num = find_first_zero_bit(resource_array, max_resources);
 		if (resource_num >= max_resources) {
-			printk(KERN_ERR PFX "%s: No available resourcess.\n", __FUNCTION__);
+			printk(KERN_ERR PFX "%s: No available resourcess.\n", __func__);
 			spin_unlock_irqrestore(&nesadapter->resource_lock, flags);
 			return -EMFILE;
 		}
