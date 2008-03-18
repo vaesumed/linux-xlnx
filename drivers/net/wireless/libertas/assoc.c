@@ -181,17 +181,6 @@ int lbs_update_channel(struct lbs_private *priv)
 	return ret;
 }
 
-void lbs_sync_channel(struct work_struct *work)
-{
-	struct lbs_private *priv = container_of(work, struct lbs_private,
-		sync_channel);
-
-	lbs_deb_enter(LBS_DEB_ASSOC);
-	if (lbs_update_channel(priv))
-		lbs_pr_info("Channel synchronization failed.");
-	lbs_deb_leave(LBS_DEB_ASSOC);
-}
-
 static int assoc_helper_channel(struct lbs_private *priv,
                                 struct assoc_request * assoc_req)
 {
@@ -360,11 +349,7 @@ static int assoc_helper_wpa_keys(struct lbs_private *priv,
 
 	if (test_bit(ASSOC_FLAG_WPA_UCAST_KEY, &assoc_req->flags)) {
 		clear_bit(ASSOC_FLAG_WPA_MCAST_KEY, &assoc_req->flags);
-		ret = lbs_prepare_and_send_command(priv,
-					CMD_802_11_KEY_MATERIAL,
-					CMD_ACT_SET,
-					CMD_OPTION_WAITFORRSP,
-					0, assoc_req);
+		ret = lbs_cmd_802_11_key_material(priv, CMD_ACT_SET, assoc_req);
 		assoc_req->flags = flags;
 	}
 
@@ -374,11 +359,7 @@ static int assoc_helper_wpa_keys(struct lbs_private *priv,
 	if (test_bit(ASSOC_FLAG_WPA_MCAST_KEY, &assoc_req->flags)) {
 		clear_bit(ASSOC_FLAG_WPA_UCAST_KEY, &assoc_req->flags);
 
-		ret = lbs_prepare_and_send_command(priv,
-					CMD_802_11_KEY_MATERIAL,
-					CMD_ACT_SET,
-					CMD_OPTION_WAITFORRSP,
-					0, assoc_req);
+		ret = lbs_cmd_802_11_key_material(priv, CMD_ACT_SET, assoc_req);
 		assoc_req->flags = flags;
 	}
 
@@ -413,11 +394,10 @@ static int should_deauth_infrastructure(struct lbs_private *priv,
 {
 	int ret = 0;
 
-	lbs_deb_enter(LBS_DEB_ASSOC);
-
 	if (priv->connect_status != LBS_CONNECTED)
 		return 0;
 
+	lbs_deb_enter(LBS_DEB_ASSOC);
 	if (test_bit(ASSOC_FLAG_SSID, &assoc_req->flags)) {
 		lbs_deb_assoc("Deauthenticating due to new SSID\n");
 		ret = 1;
@@ -456,7 +436,7 @@ static int should_deauth_infrastructure(struct lbs_private *priv,
 
 out:
 	lbs_deb_leave_args(LBS_DEB_ASSOC, "ret %d", ret);
-	return 0;
+	return ret;
 }
 
 
@@ -643,9 +623,7 @@ void lbs_association_worker(struct work_struct *work)
 		}
 
 		if (success) {
-			lbs_deb_assoc("ASSOC: associated to '%s', %s\n",
-				escape_essid(priv->curbssparams.ssid,
-				             priv->curbssparams.ssid_len),
+			lbs_deb_assoc("associated to %s\n",
 				print_mac(mac, priv->curbssparams.bssid));
 			lbs_prepare_and_send_command(priv,
 				CMD_802_11_RSSI,
