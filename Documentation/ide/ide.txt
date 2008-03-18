@@ -228,11 +228,6 @@ Summary of ide driver parameters for kernel command line
 
  "hdx=cyl,head,sect"	: disk drive is present, with specified geometry
 
- "hdx=remap"		: remap access of sector 0 to sector 1 (for EZDrive)
-
- "hdx=remap63"		: remap the drive: add 63 to all sector numbers
-			  (for DM OnTrack)
-
  "idex=noautotune"	: driver will NOT attempt to tune interface speed
 
  "hdx=autotune"		: driver will attempt to tune interface speed
