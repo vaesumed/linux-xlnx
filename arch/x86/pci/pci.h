@@ -95,6 +95,8 @@ struct pci_raw_ops {
 extern struct pci_raw_ops *raw_pci_ops;
 extern struct pci_raw_ops *raw_pci_ext_ops;
 
+extern struct pci_raw_ops pci_direct_conf1;
+
 extern int pci_direct_probe(void);
 extern void pci_direct_init(int type);
 extern void pci_pcbios_init(void);
