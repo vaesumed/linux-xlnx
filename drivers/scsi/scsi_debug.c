@@ -39,16 +39,17 @@
 #include <linux/vmalloc.h>
 #include <linux/moduleparam.h>
 #include <linux/scatterlist.h>
-
 #include <linux/blkdev.h>
-#include "scsi.h"
+
+#include <scsi/scsi.h>
+#include <scsi/scsi_cmnd.h>
+#include <scsi/scsi_device.h>
 #include <scsi/scsi_host.h>
 #include <scsi/scsicam.h>
 
 #include <linux/stat.h>
 
 #include "scsi_logging.h"
-#include "scsi_debug.h"
 
 #define SCSI_DEBUG_VERSION "1.81"
 static const char * scsi_debug_version_date = "20070104";
@@ -165,6 +166,9 @@ static int sdebug_sectors_per;		/* sectors per cylinder */
 
 #define SDEBUG_SENSE_LEN 32
 
+#define SCSI_DEBUG_CANQUEUE  255
+#define SCSI_DEBUG_MAX_CMD_LEN 16
+
 struct sdebug_dev_info {
 	struct list_head dev_list;
 	unsigned char sense_buff[SDEBUG_SENSE_LEN];	/* weak nexus */
@@ -201,30 +205,6 @@ struct sdebug_queued_cmd {
 	int scsi_result;
 };
 static struct sdebug_queued_cmd queued_arr[SCSI_DEBUG_CANQUEUE];
-
-static struct scsi_host_template sdebug_driver_template = {
-	.proc_info =		scsi_debug_proc_info,
-	.name =			"SCSI DEBUG",
-	.info =			scsi_debug_info,
-	.slave_alloc =		scsi_debug_slave_alloc,
-	.slave_configure =	scsi_debug_slave_configure,
-	.slave_destroy =	scsi_debug_slave_destroy,
-	.ioctl =		scsi_debug_ioctl,
-	.queuecommand =		scsi_debug_queuecommand,
-	.eh_abort_handler =	scsi_debug_abort,
-	.eh_bus_reset_handler = scsi_debug_bus_reset,
-	.eh_device_reset_handler = scsi_debug_device_reset,
-	.eh_host_reset_handler = scsi_debug_host_reset,
-	.bios_param =		scsi_debug_biosparam,
-	.can_queue =		SCSI_DEBUG_CANQUEUE,
-	.this_id =		7,
-	.sg_tablesize =		256,
-	.cmd_per_lun =		16,
-	.max_sectors =		0xffff,
-	.unchecked_isa_dma = 	0,
-	.use_clustering = 	DISABLE_CLUSTERING,
-	.module =		THIS_MODULE,
-};
 
 static unsigned char * fake_storep;	/* ramdisk storage */
 
@@ -364,9 +344,6 @@ int scsi_debug_queuecommand(struct scsi_cmnd * SCpnt, done_funct_t done)
 	int inj_transport = 0;
 	int delay_override = 0;
 
-	if (done == NULL)
-		return 0;	/* assume mid level reprocessing command */
-
 	scsi_set_resid(SCpnt, 0);
 	if ((SCSI_DEBUG_OPT_NOISE & scsi_debug_opts) && cmd) {
 		printk(KERN_INFO "scsi_debug: cmd ");
@@ -374,7 +351,8 @@ int scsi_debug_queuecommand(struct scsi_cmnd * SCpnt, done_funct_t done)
 			printk("%02x ", (int)cmd[k]);
 		printk("\n");
 	}
-        if(target == sdebug_driver_template.this_id) {
+
+	if (target == SCpnt->device->host->hostt->this_id) {
 		printk(KERN_INFO "scsi_debug: initiator's id used as "
 		       "target!\n");
 		return schedule_resp(SCpnt, NULL, done,
@@ -613,81 +591,37 @@ static int check_readiness(struct scsi_cmnd * SCpnt, int reset_only,
 }
 
 /* Returns 0 if ok else (DID_ERROR << 16). Sets scp->resid . */
-static int fill_from_dev_buffer(struct scsi_cmnd * scp, unsigned char * arr,
+static int fill_from_dev_buffer(struct scsi_cmnd *scp, unsigned char *arr,
 				int arr_len)
 {
-	int k, req_len, act_len, len, active;
-	void * kaddr;
-	void * kaddr_off;
-	struct scatterlist *sg;
+	int act_len;
 	struct scsi_data_buffer *sdb = scsi_in(scp);
 
 	if (!sdb->length)
 		return 0;
-	if (!sdb->table.sgl)
-		return (DID_ERROR << 16);
 	if (!(scsi_bidi_cmnd(scp) || scp->sc_data_direction == DMA_FROM_DEVICE))
 		return (DID_ERROR << 16);
-	active = 1;
-	req_len = act_len = 0;
-	for_each_sg(sdb->table.sgl, sg, sdb->table.nents, k) {
-		if (active) {
-			kaddr = (unsigned char *)
-				kmap_atomic(sg_page(sg), KM_USER0);
-			if (NULL == kaddr)
-				return (DID_ERROR << 16);
-			kaddr_off = (unsigned char *)kaddr + sg->offset;
-			len = sg->length;
-			if ((req_len + len) > arr_len) {
-				active = 0;
-				len = arr_len - req_len;
-			}
-			memcpy(kaddr_off, arr + req_len, len);
-			kunmap_atomic(kaddr, KM_USER0);
-			act_len += len;
-		}
-		req_len += sg->length;
-	}
+
+	act_len = sg_copy_from_buffer(sdb->table.sgl, sdb->table.nents,
+				      arr, arr_len);
 	if (sdb->resid)
 		sdb->resid -= act_len;
 	else
-		sdb->resid = req_len - act_len;
+		sdb->resid = scsi_bufflen(scp) - act_len;
+
 	return 0;
 }
 
 /* Returns number of bytes fetched into 'arr' or -1 if error. */
-static int fetch_to_dev_buffer(struct scsi_cmnd * scp, unsigned char * arr,
-			       int max_arr_len)
+static int fetch_to_dev_buffer(struct scsi_cmnd *scp, unsigned char *arr,
+			       int arr_len)
 {
-	int k, req_len, len, fin;
-	void * kaddr;
-	void * kaddr_off;
-	struct scatterlist * sg;
-
-	if (0 == scsi_bufflen(scp))
+	if (!scsi_bufflen(scp))
 		return 0;
-	if (NULL == scsi_sglist(scp))
-		return -1;
 	if (!(scsi_bidi_cmnd(scp) || scp->sc_data_direction == DMA_TO_DEVICE))
 		return -1;
-	req_len = fin = 0;
-	scsi_for_each_sg(scp, sg, scsi_sg_count(scp), k) {
-		kaddr = (unsigned char *)kmap_atomic(sg_page(sg), KM_USER0);
-		if (NULL == kaddr)
-			return -1;
-		kaddr_off = (unsigned char *)kaddr + sg->offset;
-		len = sg->length;
-		if ((req_len + len) > max_arr_len) {
-			len = max_arr_len - req_len;
-			fin = 1;
-		}
-		memcpy(arr + req_len, kaddr_off, len);
-		kunmap_atomic(kaddr, KM_USER0);
-		if (fin)
-			return req_len + len;
-		req_len += sg->length;
-	}
-	return req_len;
+
+	return scsi_sg_copy_to_buffer(scp, arr, arr_len);
 }
 
 
@@ -1987,16 +1921,7 @@ static int resp_xdwriteread(struct scsi_cmnd *scp, unsigned long long lba,
 	if (!buf)
 		return ret;
 
-	offset = 0;
-	scsi_for_each_sg(scp, sg, scsi_sg_count(scp), i) {
-		kaddr = (unsigned char *)kmap_atomic(sg_page(sg), KM_USER0);
-		if (!kaddr)
-			goto out;
-
-		memcpy(buf + offset, kaddr + sg->offset, sg->length);
-		offset += sg->length;
-		kunmap_atomic(kaddr, KM_USER0);
-	}
+	scsi_sg_copy_to_buffer(scp, buf, scsi_bufflen(scp));
 
 	offset = 0;
 	for_each_sg(sdb->table.sgl, sg, sdb->table.nents, i) {
@@ -2098,8 +2023,8 @@ static struct sdebug_dev_info * devInfoReg(struct scsi_device * sdev)
 
 	if (devip)
 		return devip;
-	sdbg_host = *(struct sdebug_host_info **) sdev->host->hostdata;
-        if(! sdbg_host) {
+	sdbg_host = *(struct sdebug_host_info **)shost_priv(sdev->host);
+	if (!sdbg_host) {
                 printk(KERN_ERR "Host info NULL\n");
 		return NULL;
         }
@@ -2226,7 +2151,7 @@ static int scsi_debug_bus_reset(struct scsi_cmnd * SCpnt)
 		printk(KERN_INFO "scsi_debug: bus_reset\n");
 	++num_bus_resets;
 	if (SCpnt && ((sdp = SCpnt->device)) && ((hp = sdp->host))) {
-		sdbg_host = *(struct sdebug_host_info **) hp->hostdata;
+		sdbg_host = *(struct sdebug_host_info **)shost_priv(hp);
 		if (sdbg_host) {
 			list_for_each_entry(dev_info,
                                             &sdbg_host->dev_info_list,
@@ -2922,8 +2847,6 @@ static int __init scsi_debug_init(void)
 
 	init_all_queued();
 
-	sdebug_driver_template.proc_name = sdebug_proc_name;
-
 	host_to_add = scsi_debug_add_host;
         scsi_debug_add_host = 0;
 
@@ -3082,6 +3005,30 @@ static void sdebug_remove_adapter(void)
         device_unregister(&sdbg_host->dev);
         --scsi_debug_add_host;
 }
+
+static struct scsi_host_template sdebug_driver_template = {
+	.proc_info =		scsi_debug_proc_info,
+	.proc_name =		sdebug_proc_name,
+	.name =			"SCSI DEBUG",
+	.info =			scsi_debug_info,
+	.slave_alloc =		scsi_debug_slave_alloc,
+	.slave_configure =	scsi_debug_slave_configure,
+	.slave_destroy =	scsi_debug_slave_destroy,
+	.ioctl =		scsi_debug_ioctl,
+	.queuecommand =		scsi_debug_queuecommand,
+	.eh_abort_handler =	scsi_debug_abort,
+	.eh_bus_reset_handler = scsi_debug_bus_reset,
+	.eh_device_reset_handler = scsi_debug_device_reset,
+	.eh_host_reset_handler = scsi_debug_host_reset,
+	.bios_param =		scsi_debug_biosparam,
+	.can_queue =		SCSI_DEBUG_CANQUEUE,
+	.this_id =		7,
+	.sg_tablesize =		256,
+	.cmd_per_lun =		16,
+	.max_sectors =		0xffff,
+	.use_clustering = 	DISABLE_CLUSTERING,
+	.module =		THIS_MODULE,
+};
 
 static int sdebug_driver_probe(struct device * dev)
 {
