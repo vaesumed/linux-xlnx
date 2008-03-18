@@ -75,7 +75,7 @@ struct retries_info {
 	unsigned int nospc_retries:1;
 };
 
-/* TODO: remove compatibility crap as late as possible */
+/* TODO: remove compatibility stuff as late as possible */
 #ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 /**
  * shrink_liability - write-back some dirty pages/inodes.
