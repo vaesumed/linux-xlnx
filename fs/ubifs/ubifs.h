@@ -113,7 +113,7 @@
 #define DATAHD 2
 
 /*
- * How much a directory entry/exteded attribyte entry adds to the parent/host
+ * How much a directory entry/extended attribute entry adds to the parent/host
  * inode.
  */
 #define CALC_DENT_SIZE(name_len) ALIGN(UBIFS_DENT_NODE_SZ + (name_len) + 1, 8)
@@ -129,7 +129,7 @@
 
 /*
  * Some compressors, like LZO, may end up with more data then the input buffer.
- * So UBIFS always allocates larger output buffer, to be sure the copressor
+ * So UBIFS always allocates larger output buffer, to be sure the compressor
  * will not corrupt memory in case of worst case compression.
  */
 #define WORST_COMPR_FACTOR 2
@@ -260,7 +260,7 @@ struct ubifs_gced_idx_leb
  *               bytes (size of all extended attribute entries and extended
  *               attribute inodes belonging to this inode)
  * @xattr_cnt: count of extended attributes this inode has
- * @xattr_names: sum of lengthes of all extended attribute names belonging to
+ * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
  * @dirty: non-zero if the inode is dirty
  * @xattr: non-zero if this is an extended attribute inode
@@ -279,7 +279,7 @@ struct ubifs_gced_idx_leb
  * has to have full control over "clean <-> dirty" transitions of inodes (and
  * pages actually, but it is easy for pages, because we have
  * 'ubifs_prepare_write()' which is called _before_ every page change). But
- * unfortynatelly, VFS marks inodes dirty in many places, and it does not ask
+ * unfortunately, VFS marks inodes dirty in many places, and it does not ask
  * the file-system if it is allowed to do so (there is a notifier, but it is
  * not enough), i.e., there is no mechanism to synchronize with this. So we
  * introduce our own dirty flag to UBIFS inodes and our own inode mutex to
@@ -691,7 +691,7 @@ struct ubifs_node_range
  * struct ubifs_compressor - UBIFS compressor description structure.
  * @compr_type: compressor type (%UBIFS_COMPR_LZO, etc)
  * @cc: cryptoapi compressor handle
- * @comp_mutex: mutex used during copmression
+ * @comp_mutex: mutex used during compression
  * @decomp_mutex: mutex used during decompression
  * @name: compressor name
  * @capi_name: cryptoapi compressor name
@@ -878,7 +878,7 @@ struct ubifs_mount_opts
  * @budg_data_growth: amount of bytes budgeted for cached data
  * @budg_dd_growth: amount of bytes budgeted for cached data that will make
  *                  other data dirty
- * @budg_uncommitted_idx: amount of bytes were budgeted for growth ot the index,
+ * @budg_uncommitted_idx: amount of bytes were budgeted for growth of the index,
  *                        but which still have to be taken into account because
  *                        the index has not been committed so far
  * @space_lock: protects @budg_idx_growth, @budg_data_growth, @budg_dd_growth,

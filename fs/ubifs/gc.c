@@ -78,7 +78,7 @@ static int switch_gc_head(struct ubifs_info *c)
 		return err;
 
 	/*
-	 * The GC write-buffer was synchronized, we may savely unmap
+	 * The GC write-buffer was synchronized, we may safely unmap
 	 * 'c->gc_lnum'.
 	 */
 	err = ubi_leb_unmap(c->ubi, gc_lnum);
@@ -561,7 +561,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 		 * 1. pick another LEB in a hope it'll contain a small node
 		 *    which will fit the space we have at the end of current GC
 		 *    head LEB, but there is no guarantee, so we try this out
-		 *    unless we have laready been working for too long;
+		 *    unless we have already been working for too long;
 		 * 2. request an LEB with more dirty space, which will force
 		 *    'ubifs_find_dirty_leb()' to start scanning the lprops
 		 *    table, instead of just picking one from the heap

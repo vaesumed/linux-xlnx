@@ -694,7 +694,7 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
  * Leaf nodes are non-index nodes like dent (directory entry) nodes or data
  * nodes.  The purpose of the leaf-node-cache is to save re-reading the same
  * leaf node over and over again.  Most things are cached by VFS, however the
- * file system must cache directory entries for readddir and for resolving hash
+ * file system must cache directory entries for readdir and for resolving hash
  * collisions.  The present implementation of the leaf-node-cache is extremely
  * simple, and allows for error returns that are not used but that may be needed
  * if a more complex implementation is created.
@@ -713,11 +713,11 @@ static int lnc_lookup(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 }
 
 /**
- * ubifs_validate_entry - validate dirctory or extended attribute entry node.
+ * ubifs_validate_entry - validate directory or extended attribute entry node.
  * @c: UBIFS file-system description object
  * @dent: the node to validate
  *
- * This function validates dirctory or extended attribute entry node @dent.
+ * This function validates directory or extended attribute entry node @dent.
  * Returns zero if the node is all right and a %-EINVAL if not.
  */
 int ubifs_validate_entry(struct ubifs_info *c,
@@ -2521,7 +2521,7 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
  * @key: key of last entry
  * @nm: name of last entry found or %NULL
  *
- * This function finds and reads the next directory or extended attribyte entry
+ * This function finds and reads the next directory or extended attribute entry
  * after the given key (@key) if there is one. @name is used to resolve
  * collisions. If the fist entry has to be found, @key has to contain the
  * lowest possible key value for this inode and @name has to be %NULL.

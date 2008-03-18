@@ -347,7 +347,7 @@ static int get_leb_cnt(struct ubifs_info *c, int cnt)
 }
 
 /**
- * layout_in_gaps - in-the-gaps method of commiting TNC.
+ * layout_in_gaps - in-the-gaps method of committing TNC.
  * @c: UBIFS file-system description object
  * @cnt: number of dirty znodes to commit.
  *
@@ -557,7 +557,7 @@ static int layout_in_empty_space(struct ubifs_info *c)
 /**
  * layout_commit - determine positions of index nodes to commit.
  * @c: UBIFS file-system description object
- * @no_space: indicates that insuffiencient empty LEBs were allocated
+ * @no_space: indicates that insufficient empty LEBs were allocated
  * @cnt: number of znodes to commit
  *
  * Calculate and update the positions of index nodes to commit.  If there were

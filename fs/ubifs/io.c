@@ -26,7 +26,7 @@
  * This file implements UBIFS I/O subsystem which provides various I/O-related
  * helper functions (reading/writing/checking/validating nodes) and implements
  * write-buffering support. Write buffers help to save space which otherwise
- * would have been wasted for paddings to the nearest minimal I/O unit
+ * would have been wasted for padding to the nearest minimal I/O unit
  * boundary. Instead, data first goes to the write-buffer and flushed when the
  * buffer is full or when it is not used for some time (by timer). Similar
  * mechanism is used by JFFS2.

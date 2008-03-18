@@ -909,7 +909,7 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 	len = c->pnode_sz;
 	pnode->num += 1;
 
-	/* Reset pnode values for remaing pnodes */
+	/* Reset pnode values for remaining pnodes */
 	pnode->lprops[0].free = c->leb_size;
 	pnode->lprops[0].dirty = 0;
 	pnode->lprops[0].flags = 0;
