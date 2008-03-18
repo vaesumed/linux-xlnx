@@ -2676,6 +2676,7 @@ static int make_node_dirty(struct ubifs_info *c, int node_type, int node_num,
  *
  * This function returns the next pnode or %NULL if there are no more pnodes.
  */
+static
 struct ubifs_pnode *next_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode)
 {
 	struct ubifs_nnode *nnode;
