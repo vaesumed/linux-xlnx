@@ -21,7 +21,7 @@
  */
 
 /*
- * This file implements budgeting unit which is responsible for UBIFS space
+ * This file implements the budgeting unit which is responsible for UBIFS space
  * management.
  *
  * Factors such as compression, wasted space at the ends of LEBs, space in other

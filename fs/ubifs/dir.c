@@ -27,7 +27,7 @@
  *
  * All FS operations in this file allocate budget before writing anything to the
  * media. If they fail to allocate it, the error is returned. The only
- * exception are 'ubifs_unlink()' and 'ubifs_rmdir()' which keep working even
+ * exceptions are 'ubifs_unlink()' and 'ubifs_rmdir()' which keep working even
  * if they unable to allocate the budget, because deletion %-ENOSPC failure is
  * not what users are usually ready to get. UBIFS budgeting subsystem has some
  * space reserved for these purposes.

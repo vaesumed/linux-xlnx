@@ -20,6 +20,29 @@
  *          Artem Bityutskiy
  */
 
+/*
+ * This file implements the LEB properties tree (LPT) area. The LPT area
+ * contains the LEB properties tree, a table of LPT area eraseblocks (ltab), and
+ * (for the "big" model) a table of saved LEB numbers (lsave). The LPT area sits
+ * between the log and the orphan area.
+ *
+ * The LPT area is like a miniature self-contained file system. It is required
+ * that it never runs out of space, is fast to access and update, and scales
+ * logarithmically. The LEB properties tree is implemented as a wandering tree
+ * much like the TNC, and the LPT area has its own garbage collection.
+ *
+ * The LPT has two slightly different forms called the "small model" and the
+ * "big model". The small model is used when the entire LEB properties table
+ * can be written into a single eraseblock. In that case, garbage collection
+ * consists of just writing the whole table, which therefore makes all other
+ * eraseblocks reusable. In the case of the big model, dirty eraseblocks are
+ * selected for garbage collection, which consists are marking the nodes in
+ * that LEB as dirty, and then only the dirty nodes are written out. Also, in
+ * the case of the big model, a table of LEB numbers is saved so that the entire
+ * LPT does not to be scanned looking for empty eraseblocks when UBIFS is first
+ * mounted.
+ */
+
 #include <linux/crc16.h>
 #include "ubifs.h"
 

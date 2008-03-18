@@ -21,19 +21,19 @@
  */
 
 /*
- * This file describes UBIFS on-flash format and contains definition of all the
+ * This file describes UBIFS on-flash format and contains definitions of all the
  * relevant data structures and constants.
  *
- * All UBIFS on-flash objects are stored in form of nodes. All nodes start with
- * magic UBIFS node number and have the same common header. Nodes always sit at
- * 8-byte aligned positions on the media and node header sizes are also 8-byte
- * aligned (except of the padding node).
+ * All UBIFS on-flash objects are stored in the form of nodes. All nodes start
+ * with the UBIFS node magic number and have the same common header. Nodes
+ * always sit at 8-byte aligned positions on the media and node header sizes are
+ * also 8-byte aligned (except of the padding node).
  */
 
 #ifndef __UBIFS_MEDIA_H__
 #define __UBIFS_MEDIA_H__
 
-/* UBIFS nodes magic number (must not have the padding byte first or last) */
+/* UBIFS node magic number (must not have the padding byte first or last) */
 #define UBIFS_NODE_MAGIC  0x06101831
 
 /* UBIFS on-flash format version */

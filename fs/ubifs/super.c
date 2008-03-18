@@ -20,9 +20,7 @@
  *          Adrian Hunter
  */
 
-/*
- * This file implements VFS superblock operations.
- */
+/* This file implements VFS superblock operations */
 
 #include <linux/kthread.h>
 #include <linux/seq_file.h>

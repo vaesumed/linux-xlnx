@@ -24,10 +24,10 @@
  * This file implements UBIFS journal.
  *
  * The journal consists of 2 parts - the log and bud LEBs. The log has fixed
- * length and position, while the bud logical eraseblock is any LEB in the main
+ * length and position, while a bud logical eraseblock is any LEB in the main
  * area. Buds contain file system data - data nodes, inode nodes, etc. The log
  * contains only references to buds and some other stuff like commit
- * start/commit end nodes. The idea is that when we commit the journal, we do
+ * start node. The idea is that when we commit the journal, we do
  * not copy the data, the buds just become indexed. Since after the commit the
  * nodes in bud eraseblocks become leaf nodes of the file system index tree, we
  * use term "bud". Analogy is obvious, bud eraseblocks contain nodes which will
@@ -36,24 +36,25 @@
  * The journal is multi-headed because we want to write data to the journal as
  * optimally as possible. It is nice to have nodes belonging to the same inode
  * in one LEB, so we may write data owned by different inodes to different
- * journal heads.
+ * journal heads, although at present only one data head is used.
  *
  * For recovery reasons, the base head contains all inode nodes, all directory
  * entry nodes and all truncate nodes.  This means that the other heads contain
  * only data nodes.
  *
- * Obviously, bud LEBs may be half-indexed. For example, if there is a LEB in
- * the main area with a lot of dirt, and UBIFS cleans it up using in-place
- * garbage collection, then the journal may use this half-free LEB as a bud
- * LEB.
+ * Bud LEBs may be half-indexed. For example, if the bud was not full at the
+ * time of commit, the bud is retained to continue to be used in the journal,
+ * even though the "front" of the LEB is now indexed. In that case, the log
+ * reference contains the offset where the bud starts for the purposes of the
+ * journal.
  *
  * The journal size has to be limited, because the larger is the journal, the
  * longer it takes to mount UBIFS (scanning the journal) and the more memory it
  * takes (indexing in the TNC).
  *
- * Note, all the journal write operations like 'ubifs_jrn_update()' here which
- * write multiple UBIFS nodes to the journal at one go are atomic with respect
- * to unclean reboots. Should the unclean reboot happen, the replay code drops
+ * Note, all the journal write operations like 'ubifs_jrn_update()' here, which
+ * write multiple UBIFS nodes to the journal at one go, are atomic with respect
+ * to unclean reboots. Should the unclean reboot happen, the recovery code drops
  * all the nodes.
  */
 

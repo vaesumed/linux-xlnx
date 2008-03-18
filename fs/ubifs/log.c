@@ -23,7 +23,7 @@
 /*
  * This file is a part of UBIFS journal implementation and contains various
  * functions which manipulate the log. The log is a fixed area on the flash
- * which does not contain any data but refers buds. The log is a part of the
+ * which does not contain any data but refers to buds. The log is a part of the
  * journal.
  */
 
