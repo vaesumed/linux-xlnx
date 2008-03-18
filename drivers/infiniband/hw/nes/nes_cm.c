@@ -79,7 +79,30 @@ static struct nes_cm_listener *mini_cm_listen(struct nes_cm_core *,
 static int add_ref_cm_node(struct nes_cm_node *);
 static int rem_ref_cm_node(struct nes_cm_core *, struct nes_cm_node *);
 static int mini_cm_del_listen(struct nes_cm_core *, struct nes_cm_listener *);
+static struct sk_buff *form_cm_frame(struct sk_buff *, struct nes_cm_node *,
+				     void *, u32, void *, u32, u8);
+static struct sk_buff *get_free_pkt(struct nes_cm_node *cm_node);
 
+static struct nes_cm_node *mini_cm_connect(struct nes_cm_core *,
+					   struct nes_vnic *,
+					   struct ietf_mpa_frame *,
+					   struct nes_cm_info *);
+static int mini_cm_accept(struct nes_cm_core *, struct ietf_mpa_frame *,
+			  struct nes_cm_node *);
+static int mini_cm_reject(struct nes_cm_core *, struct ietf_mpa_frame *,
+			  struct nes_cm_node *);
+static int mini_cm_close(struct nes_cm_core *, struct nes_cm_node *);
+static int mini_cm_recv_pkt(struct nes_cm_core *, struct nes_vnic *,
+			    struct sk_buff *);
+static int mini_cm_dealloc_core(struct nes_cm_core *);
+static int mini_cm_get(struct nes_cm_core *);
+static int mini_cm_set(struct nes_cm_core *, u32, u32);
+static int nes_cm_disconn_true(struct nes_qp *);
+static int nes_cm_post_event(struct nes_cm_event *event);
+static int nes_disconnect(struct nes_qp *nesqp, int abrupt);
+static void nes_disconnect_worker(struct work_struct *work);
+static int send_ack(struct nes_cm_node *cm_node);
+static int send_fin(struct nes_cm_node *cm_node, struct sk_buff *skb);
 
 /* External CM API Interface */
 /* instance of function pointers for client API */
@@ -98,7 +121,7 @@ static struct nes_cm_ops nes_cm_api = {
 	mini_cm_set
 };
 
-struct nes_cm_core *g_cm_core;
+static struct nes_cm_core *g_cm_core;
 
 atomic_t cm_connects;
 atomic_t cm_accepts;
@@ -148,7 +171,7 @@ static struct nes_cm_event *create_event(struct nes_cm_node *cm_node,
 /**
  * send_mpa_request
  */
-int send_mpa_request(struct nes_cm_node *cm_node)
+static int send_mpa_request(struct nes_cm_node *cm_node)
 {
 	struct sk_buff *skb;
 	int ret;
@@ -242,8 +265,9 @@ static int handle_exception_pkt(struct nes_cm_node *cm_node, struct sk_buff *skb
  * form_cm_frame - get a free packet and build empty frame Use
  * node info to build.
  */
-struct sk_buff *form_cm_frame(struct sk_buff *skb, struct nes_cm_node *cm_node,
-		void *options, u32 optionsize, void *data, u32 datasize, u8 flags)
+static struct sk_buff *form_cm_frame(struct sk_buff *skb, struct nes_cm_node *cm_node,
+				     void *options, u32 optionsize, void *data,
+				     u32 datasize, u8 flags)
 {
 	struct tcphdr *tcph;
 	struct iphdr *iph;
@@ -441,7 +465,7 @@ int schedule_nes_timer(struct nes_cm_node *cm_node, struct sk_buff *skb,
 /**
  * nes_cm_timer_tick
  */
-void nes_cm_timer_tick(unsigned long pass)
+static void nes_cm_timer_tick(unsigned long pass)
 {
 	unsigned long flags, qplockflags;
 	unsigned long nexttimeout = jiffies + NES_LONG_TIME;
@@ -643,7 +667,7 @@ void nes_cm_timer_tick(unsigned long pass)
 /**
  * send_syn
  */
-int send_syn(struct nes_cm_node *cm_node, u32 sendack)
+static int send_syn(struct nes_cm_node *cm_node, u32 sendack)
 {
 	int ret;
 	int flags = SET_SYN;
@@ -709,7 +733,7 @@ int send_syn(struct nes_cm_node *cm_node, u32 sendack)
 /**
  * send_reset
  */
-int send_reset(struct nes_cm_node *cm_node)
+static int send_reset(struct nes_cm_node *cm_node)
 {
 	int ret;
 	struct sk_buff *skb = get_free_pkt(cm_node);
@@ -731,7 +755,7 @@ int send_reset(struct nes_cm_node *cm_node)
 /**
  * send_ack
  */
-int send_ack(struct nes_cm_node *cm_node)
+static int send_ack(struct nes_cm_node *cm_node)
 {
 	int ret;
 	struct sk_buff *skb = get_free_pkt(cm_node);
@@ -751,7 +775,7 @@ int send_ack(struct nes_cm_node *cm_node)
 /**
  * send_fin
  */
-int send_fin(struct nes_cm_node *cm_node, struct sk_buff *skb)
+static int send_fin(struct nes_cm_node *cm_node, struct sk_buff *skb)
 {
 	int ret;
 
@@ -774,7 +798,7 @@ int send_fin(struct nes_cm_node *cm_node, struct sk_buff *skb)
 /**
  * get_free_pkt
  */
-struct sk_buff *get_free_pkt(struct nes_cm_node *cm_node)
+static struct sk_buff *get_free_pkt(struct nes_cm_node *cm_node)
 {
 	struct sk_buff *skb, *new_skb;
 
@@ -1271,8 +1295,8 @@ static int process_options(struct nes_cm_node *cm_node, u8 *optionsloc, u32 opti
 /**
  * process_packet
  */
-int process_packet(struct nes_cm_node *cm_node, struct sk_buff *skb,
-		struct nes_cm_core *cm_core)
+static int process_packet(struct nes_cm_node *cm_node, struct sk_buff *skb,
+			  struct nes_cm_core *cm_core)
 {
 	int optionsize;
 	int datasize;
@@ -1630,9 +1654,10 @@ static struct nes_cm_listener *mini_cm_listen(struct nes_cm_core *cm_core,
 /**
  * mini_cm_connect - make a connection node with params
  */
-struct nes_cm_node *mini_cm_connect(struct nes_cm_core *cm_core,
-		struct nes_vnic *nesvnic, struct ietf_mpa_frame *mpa_frame,
-		struct nes_cm_info *cm_info)
+static struct nes_cm_node *mini_cm_connect(struct nes_cm_core *cm_core,
+					   struct nes_vnic *nesvnic,
+					   struct ietf_mpa_frame *mpa_frame,
+					   struct nes_cm_info *cm_info)
 {
 	int ret = 0;
 	struct nes_cm_node *cm_node;
@@ -1716,8 +1741,8 @@ struct nes_cm_node *mini_cm_connect(struct nes_cm_core *cm_core,
  * mini_cm_accept - accept a connection
  * This function is never called
  */
-int mini_cm_accept(struct nes_cm_core *cm_core, struct ietf_mpa_frame *mpa_frame,
-		struct nes_cm_node *cm_node)
+static int mini_cm_accept(struct nes_cm_core *cm_core, struct ietf_mpa_frame *mpa_frame,
+			  struct nes_cm_node *cm_node)
 {
 	return 0;
 }
@@ -1726,9 +1751,9 @@ int mini_cm_accept(struct nes_cm_core *cm_core, struct ietf_mpa_frame *mpa_frame
 /**
  * mini_cm_reject - reject and teardown a connection
  */
-int mini_cm_reject(struct nes_cm_core *cm_core,
-		struct ietf_mpa_frame *mpa_frame,
-		struct nes_cm_node *cm_node)
+static int mini_cm_reject(struct nes_cm_core *cm_core,
+			  struct ietf_mpa_frame *mpa_frame,
+			  struct nes_cm_node *cm_node)
 {
 	int ret = 0;
 	struct sk_buff *skb;
@@ -1760,7 +1785,7 @@ int mini_cm_reject(struct nes_cm_core *cm_core,
 /**
  * mini_cm_close
  */
-int mini_cm_close(struct nes_cm_core *cm_core, struct nes_cm_node *cm_node)
+static int mini_cm_close(struct nes_cm_core *cm_core, struct nes_cm_node *cm_node)
 {
 	int ret = 0;
 
@@ -1807,8 +1832,8 @@ int mini_cm_close(struct nes_cm_core *cm_core, struct nes_cm_node *cm_node)
  * recv_pkt - recv an ETHERNET packet, and process it through CM
  * node state machine
  */
-int mini_cm_recv_pkt(struct nes_cm_core *cm_core, struct nes_vnic *nesvnic,
-		struct sk_buff *skb)
+static int mini_cm_recv_pkt(struct nes_cm_core *cm_core, struct nes_vnic *nesvnic,
+			    struct sk_buff *skb)
 {
 	struct nes_cm_node *cm_node = NULL;
 	struct nes_cm_listener *listener = NULL;
@@ -1897,7 +1922,7 @@ int mini_cm_recv_pkt(struct nes_cm_core *cm_core, struct nes_vnic *nesvnic,
 /**
  * nes_cm_alloc_core - allocate a top level instance of a cm core
  */
-struct nes_cm_core *nes_cm_alloc_core(void)
+static struct nes_cm_core *nes_cm_alloc_core(void)
 {
 	int i;
 
@@ -1957,7 +1982,7 @@ struct nes_cm_core *nes_cm_alloc_core(void)
 /**
  * mini_cm_dealloc_core - deallocate a top level instance of a cm core
  */
-int mini_cm_dealloc_core(struct nes_cm_core *cm_core)
+static int mini_cm_dealloc_core(struct nes_cm_core *cm_core)
 {
 	nes_debug(NES_DBG_CM, "De-Alloc CM Core (%p)\n", cm_core);
 
@@ -1982,7 +2007,7 @@ int mini_cm_dealloc_core(struct nes_cm_core *cm_core)
 /**
  * mini_cm_get
  */
-int mini_cm_get(struct nes_cm_core *cm_core)
+static int mini_cm_get(struct nes_cm_core *cm_core)
 {
 	return cm_core->state;
 }
@@ -1991,7 +2016,7 @@ int mini_cm_get(struct nes_cm_core *cm_core)
 /**
  * mini_cm_set
  */
-int mini_cm_set(struct nes_cm_core *cm_core, u32 type, u32 value)
+static int mini_cm_set(struct nes_cm_core *cm_core, u32 type, u32 value)
 {
 	int ret = 0;
 
@@ -2108,7 +2133,7 @@ int nes_cm_disconn(struct nes_qp *nesqp)
 /**
  * nes_disconnect_worker
  */
-void nes_disconnect_worker(struct work_struct *work)
+static void nes_disconnect_worker(struct work_struct *work)
 {
 	struct nes_qp *nesqp = container_of(work, struct nes_qp, disconn_work);
 
@@ -2121,7 +2146,7 @@ void nes_disconnect_worker(struct work_struct *work)
 /**
  * nes_cm_disconn_true
  */
-int nes_cm_disconn_true(struct nes_qp *nesqp)
+static int nes_cm_disconn_true(struct nes_qp *nesqp)
 {
 	unsigned long flags;
 	int ret = 0;
@@ -2264,7 +2289,7 @@ int nes_cm_disconn_true(struct nes_qp *nesqp)
 /**
  * nes_disconnect
  */
-int nes_disconnect(struct nes_qp *nesqp, int abrupt)
+static int nes_disconnect(struct nes_qp *nesqp, int abrupt)
 {
 	int ret = 0;
 	struct nes_vnic *nesvnic;
@@ -2739,7 +2764,7 @@ int nes_cm_stop(void)
  * cm_event_connected
  * handle a connected event, setup QPs and HW
  */
-void cm_event_connected(struct nes_cm_event *event)
+static void cm_event_connected(struct nes_cm_event *event)
 {
 	u64 u64temp;
 	struct nes_qp *nesqp;
@@ -2876,7 +2901,7 @@ void cm_event_connected(struct nes_cm_event *event)
 /**
  * cm_event_connect_error
  */
-void cm_event_connect_error(struct nes_cm_event *event)
+static void cm_event_connect_error(struct nes_cm_event *event)
 {
 	struct nes_qp *nesqp;
 	struct iw_cm_id *cm_id;
@@ -2929,7 +2954,7 @@ void cm_event_connect_error(struct nes_cm_event *event)
 /**
  * cm_event_reset
  */
-void cm_event_reset(struct nes_cm_event *event)
+static void cm_event_reset(struct nes_cm_event *event)
 {
 	struct nes_qp *nesqp;
 	struct iw_cm_id *cm_id;
@@ -2972,7 +2997,7 @@ void cm_event_reset(struct nes_cm_event *event)
 /**
  * cm_event_mpa_req
  */
-void cm_event_mpa_req(struct nes_cm_event *event)
+static void cm_event_mpa_req(struct nes_cm_event *event)
 {
 	struct iw_cm_id   *cm_id;
 	struct iw_cm_event cm_event;
@@ -3018,7 +3043,7 @@ static void nes_cm_event_handler(struct work_struct *);
  * nes_cm_post_event
  * post an event to the cm event handler
  */
-int nes_cm_post_event(struct nes_cm_event *event)
+static int nes_cm_post_event(struct nes_cm_event *event)
 {
 	atomic_inc(&event->cm_node->cm_core->events_posted);
 	add_ref_cm_node(event->cm_node);
