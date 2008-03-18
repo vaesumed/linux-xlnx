@@ -397,7 +397,7 @@ static void ubifs_delete_inode(struct inode *inode)
 
 	if (ui->xattr) {
 		/*
-		 * Extended attribute inode deletions are fully handeled in
+		 * Extended attribute inode deletions are fully handled in
 		 * 'ubifs_removexattr()'. These inodes are special and have
 		 * limited usage, so there is nothing to do here.
 		 */

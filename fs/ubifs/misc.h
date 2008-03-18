@@ -21,7 +21,7 @@
  */
 
 /*
- * This file contains miscelanious helper finctions.
+ * This file contains miscellaneous helper functions.
  */
 
 #ifndef __UBIFS_MISC_H__
