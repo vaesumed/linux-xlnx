@@ -250,20 +250,15 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 	int rem;
 	long long idx_size;
 
-	/*
-	 * TODO: we can avoid calculations if 'c->lst.idx_lebs' is much larger
-	 * then 'c->min_idx_lebs', or if there is really a lot of free LEBs.
-	 */
 	idx_size = c->old_idx_sz + c->budg_idx_growth + c->budg_uncommitted_idx;
 
 	/* And make sure we have twice the index size of space reserved */
 	idx_size <<= 1;
 
 	/*
-	 * TODO: if we maintain 'old_idx_size' as
-	 * 'old_idx_lebs'/'old_idx_bytes' pair, as well as similar 2 variables
-	 * for the new index size, we will not have to do this costly 64-bit
-	 * division on fast-path.
+	 * We do not maintain 'old_idx_size' as 'old_idx_lebs'/'old_idx_bytes'
+	 * pair, nor similarly the two variables for the new index size, so we
+	 * have to do this costly 64-bit division on fast-path.
 	 */
 	rem = do_div(idx_size, c->leb_size - c->max_idx_node_sz);
 	return idx_size + !!rem;
@@ -362,8 +357,6 @@ static int rp_can_write(struct ubifs_info *c, long long avail)
  *
  * This function returns zero in case of success, and %-ENOSPC in case of
  * failure.
- *
- * TODO: do things differently for data_growth and dd_growth
  */
 static int do_budget_space(struct ubifs_info *c)
 {
