@@ -396,6 +396,7 @@ static int scan_for_free_cb(struct ubifs_info *c,
  * This function returns a pointer to the LEB properties found or a negative
  * error code.
  */
+static
 const struct ubifs_lprops *do_find_free_space(struct ubifs_info *c,
 					      int min_space, int pick_free,
 					      int squeeze)
