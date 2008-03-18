@@ -226,8 +226,6 @@ Summary of ide driver parameters for kernel command line
 			  As for VLB, it is safest to not specify it.
 			  Bigger values are safer than smaller ones.
 
- "idex=reset"		: reset interface after probe
-
 The following are valid ONLY on ide0, which usually corresponds
 to the first ATA interface found on the particular host, and the defaults for
 the base,ctl ports must not be altered.
