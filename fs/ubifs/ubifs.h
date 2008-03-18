@@ -284,9 +284,6 @@ struct ubifs_gced_idx_leb
  * not enough), i.e., there is no mechanism to synchronize with this. So we
  * introduce our own dirty flag to UBIFS inodes and our own inode mutex to
  * serialize "clean <-> dirty" transitions.
- *
- * TODO: consider to improve VFS in the long-term.
- * TODO: consider making flags and compr_type 16-bit
  */
 struct ubifs_inode
 {
@@ -401,8 +398,8 @@ struct ubifs_lpt_lprops
  * @total_dead: total dead space in bytes (includes only data LEBs)
  * @total_dark: total dark space in bytes (includes only data LEBs)
  *
- * TODO: total_dirty and total_used are different to other total_* fields,
- * because they accaunt _all_ LEBs, not just data LEBs.
+ * N.B. total_dirty and total_used are different to other total_* fields,
+ * because they account _all_ LEBs, not just data LEBs.
  *
  * 'taken_empty_lebs' counts the LEBs that are in the transient state of having
  * been 'taken' for use but not yet written to. 'taken_empty_lebs' is needed
@@ -553,7 +550,7 @@ typedef int (*ubifs_lpt_scan_callback)(struct ubifs_info *c,
  * @used:  number of used bytes in the write-buffer
  * @dtype: type of data stored in this LEB (%UBI_LONGTERM, %UBI_SHORTTERM,
  * %UBI_UNKNOWN)
- * @jhead: journal head the mutex belongsto (note, needed only to shut lockdep
+ * @jhead: journal head the mutex belongs to (note, needed only to shut lockdep
  * up by 'mutex_lock_nested()).
  * @sync_callback: write-buffer synchronization callback
  * @io_mutex: serializes write-buffer I/O
@@ -567,15 +564,13 @@ typedef int (*ubifs_lpt_scan_callback)(struct ubifs_info *c,
  *
  * The write-buffer synchronization callback is called when the write-buffer is
  * synchronized in order to notify how much space was wasted due to
- * write-buffer padding and how much free space left in the LEB.
+ * write-buffer padding and how much free space is left in the LEB.
  *
  * Note: the fields @buf, @lnum, @offs, @avail and @used can be read under
  * spin-lock or mutex because they are written under both mutex and spin-lock.
  * @buf is appended to under mutex but overwritten under both mutex and
  * spin-lock. Thus the data between @buf and @buf + @used can be read under
  * spinlock.
- *
- * TODO: document wbuf locking rules here
  */
 struct ubifs_wbuf
 {
@@ -663,7 +658,7 @@ struct ubifs_znode
 {
 	struct ubifs_znode *parent;
 	struct ubifs_znode *cnext;
-	unsigned long flags; /* TODO: why is this long? */ /* Looks to me like bitops require it - A.H. */
+	unsigned long flags;
 	unsigned long time;
 	int level;
 	int child_cnt;
@@ -744,7 +739,7 @@ struct ubifs_budget_req
 	unsigned int dirtied_page:1;
 	unsigned int new_dent:1;
 	unsigned int mod_dent:1;
-/* TODO: remove compatibility crap as late as possible */
+/* TODO: remove compatibility stuff as late as possible */
 #ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 	unsigned int locked_pg:1;
 #endif
@@ -1372,17 +1367,17 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   const struct qstr *nm);
 void ubifs_tnc_close(struct ubifs_info *c);
 long ubifs_destroy_tnc_subtree(struct ubifs_znode *zr);
-void destroy_old_idx(struct ubifs_info *c); /* TODO: shared between tnc* */
-int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
-		       int lnum, int offs); /* TODO: shared between tnc* */
-/* TODO: shared between tnc* */
-int insert_old_idx_znode(struct ubifs_info *c, struct ubifs_znode *znode);
 int ubifs_tnc_has_node(struct ubifs_info *c, union ubifs_key *key, int level,
 		       int lnum, int offs, int is_idx);
 int ubifs_dirty_idx_node(struct ubifs_info *c, union ubifs_key *key, int level,
 			 int lnum, int offs);
 int ubifs_validate_entry(struct ubifs_info *c,
 			 const struct ubifs_dent_node *dent);
+/* Shared by tnc.c for tnc_commit.c */
+void destroy_old_idx(struct ubifs_info *c);
+int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
+		       int lnum, int offs);
+int insert_old_idx_znode(struct ubifs_info *c, struct ubifs_znode *znode);
 
 /* tnc_commit.c */
 int ubifs_tnc_start_commit(struct ubifs_info *c, struct ubifs_zbranch *zroot);
