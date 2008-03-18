@@ -161,7 +161,6 @@ static int task_alloc_security(struct task_struct *task)
 	if (!tsec)
 		return -ENOMEM;
 
-	tsec->task = task;
 	tsec->osid = tsec->sid = tsec->ptrace_sid = SECINITSID_UNLABELED;
 	task->security = tsec;
 
@@ -218,7 +217,6 @@ static int file_alloc_security(struct file *file)
 	if (!fsec)
 		return -ENOMEM;
 
-	fsec->file = file;
 	fsec->sid = tsec->sid;
 	fsec->fown_sid = tsec->sid;
 	file->f_security = fsec;
@@ -275,12 +273,11 @@ static int sk_alloc_security(struct sock *sk, int family, gfp_t priority)
 	if (!ssec)
 		return -ENOMEM;
 
-	ssec->sk = sk;
 	ssec->peer_sid = SECINITSID_UNLABELED;
 	ssec->sid = SECINITSID_UNLABELED;
 	sk->sk_security = ssec;
 
-	selinux_netlbl_sk_security_init(ssec, family);
+	selinux_netlbl_sk_security_reset(ssec, family);
 
 	return 0;
 }
@@ -671,7 +668,7 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	rc = security_fs_use(sb->s_type->name, &sbsec->behavior, &sbsec->sid);
 	if (rc) {
 		printk(KERN_WARNING "%s: security_fs_use(%s) returned %d\n",
-		       __FUNCTION__, sb->s_type->name, rc);
+		       __func__, sb->s_type->name, rc);
 		goto out;
 	}
 
@@ -1136,7 +1133,7 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 		}
 		if (!dentry) {
 			printk(KERN_WARNING "%s:  no dentry for dev=%s "
-			       "ino=%ld\n", __FUNCTION__, inode->i_sb->s_id,
+			       "ino=%ld\n", __func__, inode->i_sb->s_id,
 			       inode->i_ino);
 			goto out_unlock;
 		}
@@ -1174,7 +1171,7 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 		if (rc < 0) {
 			if (rc != -ENODATA) {
 				printk(KERN_WARNING "%s:  getxattr returned "
-				       "%d for dev=%s ino=%ld\n", __FUNCTION__,
+				       "%d for dev=%s ino=%ld\n", __func__,
 				       -rc, inode->i_sb->s_id, inode->i_ino);
 				kfree(context);
 				goto out_unlock;
@@ -1188,7 +1185,7 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 			if (rc) {
 				printk(KERN_WARNING "%s:  context_to_sid(%s) "
 				       "returned %d for dev=%s ino=%ld\n",
-				       __FUNCTION__, context, -rc,
+				       __func__, context, -rc,
 				       inode->i_sb->s_id, inode->i_ino);
 				kfree(context);
 				/* Leave with the unlabeled SID */
@@ -1616,6 +1613,35 @@ static inline u32 file_mask_to_av(int mode, int mask)
 	return av;
 }
 
+/*
+ * Convert a file mask to an access vector and include the correct open
+ * open permission.
+ */
+static inline u32 open_file_mask_to_av(int mode, int mask)
+{
+	u32 av = file_mask_to_av(mode, mask);
+
+	if (selinux_policycap_openperm) {
+		/*
+		 * lnk files and socks do not really have an 'open'
+		 */
+		if (S_ISREG(mode))
+			av |= FILE__OPEN;
+		else if (S_ISCHR(mode))
+			av |= CHR_FILE__OPEN;
+		else if (S_ISBLK(mode))
+			av |= BLK_FILE__OPEN;
+		else if (S_ISFIFO(mode))
+			av |= FIFO_FILE__OPEN;
+		else if (S_ISDIR(mode))
+			av |= DIR__OPEN;
+		else
+			printk(KERN_ERR "SELinux: WARNING: inside open_file_to_av "
+				"with unknown mode:%x\n", mode);
+	}
+	return av;
+}
+
 /* Convert a Linux file to an access vector. */
 static inline u32 file_to_av(struct file *file)
 {
@@ -1628,6 +1654,12 @@ static inline u32 file_to_av(struct file *file)
 			av |= FILE__APPEND;
 		else
 			av |= FILE__WRITE;
+	}
+	if (!av) {
+		/*
+		 * Special file opened with flags 3 for ioctl-only use.
+		 */
+		av = FILE__IOCTL;
 	}
 
 	return av;
@@ -1881,7 +1913,6 @@ static int selinux_bprm_alloc_security(struct linux_binprm *bprm)
 	if (!bsec)
 		return -ENOMEM;
 
-	bsec->bprm = bprm;
 	bsec->sid = SECINITSID_UNLABELED;
 	bsec->set = 0;
 
@@ -2404,7 +2435,7 @@ static int selinux_inode_init_security(struct inode *inode, struct inode *dir,
 			printk(KERN_WARNING "%s:  "
 			       "security_transition_sid failed, rc=%d (dev=%s "
 			       "ino=%ld)\n",
-			       __FUNCTION__,
+			       __func__,
 			       -rc, inode->i_sb->s_id, inode->i_ino);
 			return rc;
 		}
@@ -2528,7 +2559,7 @@ static int selinux_inode_permission(struct inode *inode, int mask,
 	}
 
 	return inode_has_perm(current, inode,
-			       file_mask_to_av(inode->i_mode, mask), NULL);
+			       open_file_mask_to_av(inode->i_mode, mask), NULL);
 }
 
 static int selinux_inode_setattr(struct dentry *dentry, struct iattr *iattr)
@@ -2638,7 +2669,7 @@ static void selinux_inode_post_setxattr(struct dentry *dentry, char *name,
 	rc = security_context_to_sid(value, size, &newsid);
 	if (rc) {
 		printk(KERN_WARNING "%s:  unable to obtain SID for context "
-		       "%s, rc=%d\n", __FUNCTION__, (char*)value, -rc);
+		       "%s, rc=%d\n", __func__, (char *)value, -rc);
 		return;
 	}
 
@@ -4131,7 +4162,7 @@ static void selinux_sk_clone_security(const struct sock *sk, struct sock *newsk)
 	newssec->peer_sid = ssec->peer_sid;
 	newssec->sclass = ssec->sclass;
 
-	selinux_netlbl_sk_security_clone(ssec, newssec);
+	selinux_netlbl_sk_security_reset(newssec, newsk->sk_family);
 }
 
 static void selinux_sk_getsecid(struct sock *sk, u32 *secid)
@@ -4553,7 +4584,6 @@ static int ipc_alloc_security(struct task_struct *task,
 		return -ENOMEM;
 
 	isec->sclass = sclass;
-	isec->ipc_perm = perm;
 	isec->sid = tsec->sid;
 	perm->security = isec;
 
@@ -4575,7 +4605,6 @@ static int msg_msg_alloc_security(struct msg_msg *msg)
 	if (!msec)
 		return -ENOMEM;
 
-	msec->msg = msg;
 	msec->sid = SECINITSID_UNLABELED;
 	msg->security = msec;
 
@@ -4986,14 +5015,14 @@ static int selinux_register_security (const char *name, struct security_operatio
 {
 	if (secondary_ops != original_ops) {
 		printk(KERN_ERR "%s:  There is already a secondary security "
-		       "module registered.\n", __FUNCTION__);
+		       "module registered.\n", __func__);
 		return -EINVAL;
  	}
 
 	secondary_ops = ops;
 
 	printk(KERN_INFO "%s:  Registering secondary module %s\n",
-	       __FUNCTION__,
+	       __func__,
 	       name);
 
 	return 0;
@@ -5186,7 +5215,6 @@ static int selinux_key_alloc(struct key *k, struct task_struct *tsk,
 	if (!ksec)
 		return -ENOMEM;
 
-	ksec->obj = k;
 	if (tsec->keycreate_sid)
 		ksec->sid = tsec->keycreate_sid;
 	else
