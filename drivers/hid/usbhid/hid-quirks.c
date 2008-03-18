@@ -32,6 +32,9 @@
 #define USB_VENDOR_ID_ADS_TECH 		0x06e1
 #define USB_DEVICE_ID_ADS_TECH_RADIO_SI470X	0xa155
 
+#define USB_VENDOR_ID_AFATECH		0x15a4
+#define USB_DEVICE_ID_AFATECH_AF9016	0x9016
+
 #define USB_VENDOR_ID_AIPTEK		0x08ca
 #define USB_DEVICE_ID_AIPTEK_01		0x0001
 #define USB_DEVICE_ID_AIPTEK_10		0x0010
@@ -332,6 +335,7 @@
 #define USB_VENDOR_ID_MICROSOFT		0x045e
 #define USB_DEVICE_ID_SIDEWINDER_GV	0x003b
 #define USB_DEVICE_ID_WIRELESS_OPTICAL_DESKTOP_3_0 0x009d
+#define USB_DEVICE_ID_DESKTOP_RECV_1028 0x00f9
 #define USB_DEVICE_ID_MS_NE4K		0x00db
 #define USB_DEVICE_ID_MS_LK6K		0x00f9
 
@@ -344,6 +348,9 @@
 
 #define USB_VENDOR_ID_NATIONAL_SEMICONDUCTOR 0x0400
 #define USB_DEVICE_ID_N_S_HARMONY       0xc359
+
+#define USB_VENDOR_ID_NATSU             0x08b7
+#define USB_DEVICE_ID_NATSU_GAMEPAD     0x0001
 
 #define USB_VENDOR_ID_NEC		0x073e
 #define USB_DEVICE_ID_NEC_USB_GAME_PAD	0x0301
@@ -373,6 +380,9 @@
 
 #define USB_VENDOR_ID_SUN		0x0430
 #define USB_DEVICE_ID_RARITAN_KVM_DONGLE	0xcdab
+
+#define USB_VENDOR_ID_SUNPLUS		0x04fc
+#define USB_DEVICE_ID_SUNPLUS_WDESKTOP	0x05d8
 
 #define USB_VENDOR_ID_TOPMAX		0x0663
 #define USB_DEVICE_ID_TOPMAX_COBRAPAD	0x0103
@@ -426,11 +436,14 @@ static const struct hid_blacklist {
 	{ USB_VENDOR_ID_HAPP, USB_DEVICE_ID_UGCI_DRIVING, HID_QUIRK_BADPAD | HID_QUIRK_MULTI_INPUT },
 	{ USB_VENDOR_ID_HAPP, USB_DEVICE_ID_UGCI_FLYING, HID_QUIRK_BADPAD | HID_QUIRK_MULTI_INPUT },
 	{ USB_VENDOR_ID_HAPP, USB_DEVICE_ID_UGCI_FIGHTING, HID_QUIRK_BADPAD | HID_QUIRK_MULTI_INPUT },
+	{ USB_VENDOR_ID_NATSU, USB_DEVICE_ID_NATSU_GAMEPAD, HID_QUIRK_BADPAD },
 	{ USB_VENDOR_ID_NEC, USB_DEVICE_ID_NEC_USB_GAME_PAD, HID_QUIRK_BADPAD },
 	{ USB_VENDOR_ID_SAITEK, USB_DEVICE_ID_SAITEK_RUMBLEPAD, HID_QUIRK_BADPAD },
 	{ USB_VENDOR_ID_TOPMAX, USB_DEVICE_ID_TOPMAX_COBRAPAD, HID_QUIRK_BADPAD },
 	
 	{ USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_DINOVO_EDGE, HID_QUIRK_DUPLICATE_USAGES },
+
+	{ USB_VENDOR_ID_AFATECH, USB_DEVICE_ID_AFATECH_AF9016, HID_QUIRK_FULLSPEED_INTERVAL },
 
 	{ USB_VENDOR_ID_BELKIN, USB_DEVICE_ID_FLIP_KVM, HID_QUIRK_HIDDEV },
 	{ USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_IRCONTROL4, HID_QUIRK_HIDDEV | HID_QUIRK_IGNORE_HIDINPUT },
@@ -715,6 +728,7 @@ static const struct hid_rdesc_blacklist {
 	{ USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_MX3000_RECEIVER, HID_QUIRK_RDESC_LOGITECH },
 	{ USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_S510_RECEIVER, HID_QUIRK_RDESC_LOGITECH },
 	{ USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_S510_RECEIVER_2, HID_QUIRK_RDESC_LOGITECH },
+	{ USB_VENDOR_ID_MICROSOFT, USB_DEVICE_ID_DESKTOP_RECV_1028, HID_QUIRK_RDESC_MICROSOFT_RECV_1028 },
 
 	{ USB_VENDOR_ID_MONTEREY, USB_DEVICE_ID_GENIUS_KB29E, HID_QUIRK_RDESC_BUTTON_CONSUMER },
 
@@ -723,6 +737,8 @@ static const struct hid_rdesc_blacklist {
 	{ USB_VENDOR_ID_PETALYNX, USB_DEVICE_ID_PETALYNX_MAXTER_REMOTE, HID_QUIRK_RDESC_PETALYNX },
 
 	{ USB_VENDOR_ID_SAMSUNG, USB_DEVICE_ID_SAMSUNG_IR_REMOTE, HID_QUIRK_RDESC_SAMSUNG_REMOTE },
+
+	{ USB_VENDOR_ID_SUNPLUS, USB_DEVICE_ID_SUNPLUS_WDESKTOP, HID_QUIRK_RDESC_SUNPLUS_WDESKTOP },
 
 	{ USB_VENDOR_ID_CYPRESS, USB_DEVICE_ID_CYPRESS_BARCODE_1, HID_QUIRK_RDESC_SWAPPED_MIN_MAX },
 	{ USB_VENDOR_ID_CYPRESS, USB_DEVICE_ID_CYPRESS_BARCODE_2, HID_QUIRK_RDESC_SWAPPED_MIN_MAX },
@@ -998,6 +1014,17 @@ static void usbhid_fixup_logitech_descriptor(unsigned char *rdesc, int rsize)
 	}
 }
 
+static void usbhid_fixup_sunplus_wdesktop(unsigned char *rdesc, int rsize)
+{
+	if (rsize >= 107 && rdesc[104] == 0x26
+			 && rdesc[105] == 0x80
+			 && rdesc[106] == 0x03) {
+		printk(KERN_INFO "Fixing up Sunplus Wireless Desktop report descriptor\n");
+		rdesc[105] = rdesc[110] = 0x03;
+		rdesc[106] = rdesc[111] = 0x21;
+	}
+}
+
 /*
  * Samsung IrDA remote controller (reports as Cypress USB Mouse).
  *
@@ -1085,6 +1112,28 @@ static void usbhid_fixup_button_consumer_descriptor(unsigned char *rdesc, int rs
 	}
 }
 
+/*
+ * Microsoft Wireless Desktop Receiver (Model 1028) has several
+ * 'Usage Min/Max' where it ought to have 'Physical Min/Max'
+ */
+static void usbhid_fixup_microsoft_descriptor(unsigned char *rdesc, int rsize)
+{
+	if (rsize == 571 && rdesc[284] == 0x19
+	                 && rdesc[286] == 0x2a
+	                 && rdesc[304] == 0x19
+	                 && rdesc[306] == 0x29
+	                 && rdesc[352] == 0x1a
+	                 && rdesc[355] == 0x2a
+			 && rdesc[557] == 0x19
+			 && rdesc[559] == 0x29) {
+		printk(KERN_INFO "Fixing up Microsoft Wireless Receiver Model 1028 report descriptor\n");
+		rdesc[284] = rdesc[304] = rdesc[558] = 0x35;
+		rdesc[352] = 0x36;
+		rdesc[286] = rdesc[355] = 0x46;
+		rdesc[306] = rdesc[559] = 0x45;
+	}
+}
+
 static void __usbhid_fixup_report_descriptor(__u32 quirks, char *rdesc, unsigned rsize)
 {
 	if ((quirks & HID_QUIRK_RDESC_CYMOTION))
@@ -1108,6 +1157,8 @@ static void __usbhid_fixup_report_descriptor(__u32 quirks, char *rdesc, unsigned
 	if (quirks & HID_QUIRK_RDESC_SAMSUNG_REMOTE)
 		usbhid_fixup_samsung_irda_descriptor(rdesc, rsize);
 
+	if (quirks & HID_QUIRK_RDESC_MICROSOFT_RECV_1028)
+		usbhid_fixup_microsoft_descriptor(rdesc, rsize);
 }
 
 /**
@@ -1146,5 +1197,8 @@ void usbhid_fixup_report_descriptor(const u16 idVendor, const u16 idProduct,
 		else if (paramVendor == idVendor && paramProduct == idProduct)
 			__usbhid_fixup_report_descriptor(quirks, rdesc, rsize);
 	}
+
+	if (quirks & HID_QUIRK_RDESC_SUNPLUS_WDESKTOP)
+		usbhid_fixup_sunplus_wdesktop(rdesc, rsize);
 
 }
