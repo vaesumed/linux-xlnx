@@ -68,7 +68,7 @@ int ubifs_make_free_space(struct ubifs_info *c, struct retries_info *ri,
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
 #define uninitialized_var(x) x = x
-/* print_hex_dump() did not exist in kerenel prior to 2.6.22 */
+/* print_hex_dump() did not exist in kernel prior to 2.6.22 */
 #define print_hex_dump(a, b, c, f, e, buf, len, g) ubifs_hexdump(buf, len)
 void ubifs_hexdump(const void *ptr, int size);
 #endif

@@ -46,9 +46,9 @@
  * Orphans are accumulated in a rb-tree. When an inode's link count drops to
  * zero, the inode number is added to the rb-tree. It is removed from the tree
  * when the inode is deleted.  Any new orphans that are in the orphan tree when
- * the commmit is run, are written to the orphan area in 1 or more orph nodes.
+ * the commit is run, are written to the orphan area in 1 or more orph nodes.
  * If the orphan area is full, it is consolidated to make space.  There is
- * always enough space because validatation prevents the user from creating more
+ * always enough space because validation prevents the user from creating more
  * than the maximum number of orphans allowed.
  */
 
@@ -370,7 +370,7 @@ static int consolidate(struct ubifs_info *c)
 	int tot_avail = tot_avail_orphs(c), err = 0;
 
 	spin_lock(&c->orphan_lock);
-	dbg_cmt("there is space for %d orphans amd there are %d",
+	dbg_cmt("there is space for %d orphans and there are %d",
 		tot_avail, c->tot_orphans);
 	if (c->tot_orphans - c->new_orphans <= tot_avail) {
 		struct ubifs_orphan *orphan, **last;
@@ -542,7 +542,7 @@ static int insert_dead_orphan(struct ubifs_info *c, ino_t inum)
 }
 
 /**
- * do_kill_orhans - remove orphan inodes from the index.
+ * do_kill_orphans - remove orphan inodes from the index.
  * @c: UBIFS file-system description object
  * @sleb: scanned LEB
  * @last_cmt_no: cmt_no of last orph node read is passed and returned here

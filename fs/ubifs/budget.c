@@ -40,10 +40,10 @@
  * or committing. The below constants define maximum number of times UBIFS
  * repeats the operations.
  */
-#define MAX_SHINK_RETRIES 8
-#define MAX_GC_RETRIES    4
-#define MAX_CMT_RETRIES   2
-#define MAX_NOSPC_RETRIES 1
+#define MAX_SHRINK_RETRIES 8
+#define MAX_GC_RETRIES     4
+#define MAX_CMT_RETRIES    2
+#define MAX_NOSPC_RETRIES  1
 
 /*
  * The below constant defines amount of dirty pages which should be written
@@ -161,7 +161,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
 	 * them back unless this was tried too many times without effect
 	 * already.
 	 */
-	if (ri->shrink_retries < MAX_SHINK_RETRIES && !ri->try_gc) {
+	if (ri->shrink_retries < MAX_SHRINK_RETRIES && !ri->try_gc) {
 		long long liability;
 
 		spin_lock(&c->space_lock);
@@ -175,7 +175,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
 			if (ri->gc_retries < MAX_GC_RETRIES)
 				ri->try_gc = 1;
 			dbg_budg("liability did not shrink: retries %d of %d",
-				 ri->shrink_retries, MAX_SHINK_RETRIES);
+				 ri->shrink_retries, MAX_SHRINK_RETRIES);
 		}
 
 		dbg_budg("force write-back (count %d)", ri->shrink_cnt);
@@ -242,7 +242,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
  * ubifs_calc_min_idx_lebs - calculate amount of eraseblocks for the index.
  * @c: UBIFS file-system description object
  *
- * This function calculates and returns the number of easeblocks which should
+ * This function calculates and returns the number of eraseblocks which should
  * be kept for index usage.
  */
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
@@ -289,7 +289,7 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 	/*
 	 * The GC journal head LEB is not really accessible. And since
 	 * different write types go to different heads, we may count only on
-	 * one heads's space.
+	 * one head's space.
 	 */
 	subtract_lebs += c->jhead_cnt - 1;
 

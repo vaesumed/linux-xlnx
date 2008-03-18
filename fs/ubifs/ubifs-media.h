@@ -22,7 +22,7 @@
 
 /*
  * This file describes UBIFS on-flash format and contains definition of all the
- * relevant data structures and contantnts.
+ * relevant data structures and constants.
  *
  * All UBIFS on-flash objects are stored in form of nodes. All nodes start with
  * magic UBIFS node number and have the same common header. Nodes always sit at
@@ -170,7 +170,7 @@ enum {
  * UBIFS_INO_KEY: inode node key
  * UBIFS_DATA_KEY: data node key
  * UBIFS_DENT_KEY: directory entry node key
- * UBIFS_XENT_KEY: extended attribyte entry key
+ * UBIFS_XENT_KEY: extended attribute entry key
  * UBIFS_TRUN_KEY: truncation node key
  * UBIFS_KEY_TYPES_CNT: number of supported key types
  */
@@ -268,7 +268,7 @@ enum {
 /*
  * UBIFS compression types.
  *
- * UBIFS_COMPRE_NONE: no compression
+ * UBIFS_COMPR_NONE: no compression
  * UBIFS_COMPR_LZO: LZO compression
  * UBIFS_COMPR_ZLIB: ZLIB compression
  * UBIFS_COMPR_TYPES_CNT: count of supported compression types
@@ -411,7 +411,7 @@ union ubifs_dev_desc
  * @xattr_msize: summarized on-the-media size of all extended attributes in
  *               bytes (size of all extended attribute entries and extended
  *               attribute inodes belonging to this inode)
- * @xattr_names: sum of lengthes of all extended attribute names belonging to
+ * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
  * @compr_type: compression type used for this inode
  * @padding: reserved for future, zeroes

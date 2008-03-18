@@ -1047,7 +1047,7 @@ struct scan_check_data
  *
  * This function returns a code that indicates whether the scan should continue
  * (%LPT_SCAN_CONTINUE), whether the LEB properties should be added to the tree
- * in main memeory (%LPT_SCAN_ADD), or whether the scan should stop
+ * in main memory (%LPT_SCAN_ADD), or whether the scan should stop
  * (%LPT_SCAN_STOP).
  */
 static int scan_check_cb(struct ubifs_info *c,

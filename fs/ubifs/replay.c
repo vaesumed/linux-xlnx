@@ -89,7 +89,7 @@ struct replay_entry
  * struct bud_entry - entry in the list of buds to replay.
  * @list: next bud in the list
  * @bud: bud description object
- * @free: free bytes in the byd
+ * @free: free bytes in the bud
  * @sqnum: reference node sequence number
  */
 struct bud_entry
