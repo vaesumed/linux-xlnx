@@ -26,6 +26,11 @@ struct sysinfo_1_1_1 {
 	char sequence[16];
 	char plant[4];
 	char model[16];
+	char model_perm_cap[16];
+	char model_temp_cap[16];
+	char model_cap_rating[4];
+	char model_perm_cap_rating[4];
+	char model_temp_cap_rating[4];
 };
 
 struct sysinfo_1_2_1 {
@@ -100,7 +105,7 @@ struct sysinfo_3_2_2 {
 	} vm[8];
 };
 
-static inline int stsi(void *sysinfo, int fc, int sel1, int sel2)
+int stsi(void *sysinfo, int fc, int sel1, int sel2)
 {
 	register int r0 asm("0") = (fc << 28) | sel1;
 	register int r1 asm("1") = sel2;
@@ -133,6 +138,8 @@ static int stsi_1_1_1(struct sysinfo_1_1_1 *info, char *page, int len)
 	EBCASC(info->sequence, sizeof(info->sequence));
 	EBCASC(info->plant, sizeof(info->plant));
 	EBCASC(info->model_capacity, sizeof(info->model_capacity));
+	EBCASC(info->model_perm_cap, sizeof(info->model_perm_cap));
+	EBCASC(info->model_temp_cap, sizeof(info->model_temp_cap));
 	len += sprintf(page + len, "Manufacturer:         %-16.16s\n",
 		       info->manufacturer);
 	len += sprintf(page + len, "Type:                 %-4.4s\n",
@@ -155,8 +162,18 @@ static int stsi_1_1_1(struct sysinfo_1_1_1 *info, char *page, int len)
 		       info->sequence);
 	len += sprintf(page + len, "Plant:                %-4.4s\n",
 		       info->plant);
-	len += sprintf(page + len, "Model Capacity:       %-16.16s\n",
-		       info->model_capacity);
+	len += sprintf(page + len, "Model Capacity:       %-16.16s %08u\n",
+		       info->model_capacity, *(u32 *) info->model_cap_rating);
+	if (info->model_perm_cap[0] != '\0')
+		len += sprintf(page + len,
+			       "Model Perm. Capacity: %-16.16s %08u\n",
+			       info->model_perm_cap,
+			       *(u32 *) info->model_perm_cap_rating);
+	if (info->model_temp_cap[0] != '\0')
+		len += sprintf(page + len,
+			       "Model Temp. Capacity: %-16.16s %08u\n",
+			       info->model_temp_cap,
+			       *(u32 *) info->model_temp_cap_rating);
 	return len;
 }
 
