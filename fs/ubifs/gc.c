@@ -20,6 +20,19 @@
  *          Artem Bityutskiy
  */
 
+/*
+ * This file implements garbage collection. The procedure for garbage collection
+ * is different depending on whether a LEB as an index LEB (contains index
+ * nodes) or not. For non-index LEBs, garbage collection finds a LEB which
+ * contains a lot of dirty space (obsolete nodes), and copies the non-obsolete
+ * nodes to the journal, at which point the garbage-collected LEB is free to be
+ * reused. For index LEBs, garbage collection marks the non-obsolete index nodes
+ * dirty in the TNC, and after the next commit, the garbage-collected LEB is
+ * to be reused. Garbage collection will cause the number of dirty index nodes
+ * to grow, however sufficient space is reserved for the index to ensure the
+ * commit will never run out of space.
+ */
+
 #include <linux/pagemap.h>
 #include "ubifs.h"
 

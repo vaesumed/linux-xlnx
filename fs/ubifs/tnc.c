@@ -25,10 +25,9 @@
  * the UBIFS B-tree.
  *
  * At the moment the locking rules of the TNC tree are quite simple and
- * straightforward. We just have on mutex and lock it when we traverse the
+ * straightforward. We just have a mutex and lock it when we traverse the
  * tree. If a znode is not in memory, we read it from flash while still having
- * the mutex locked. This would be performance killer for "big" systems, but it
- * should be fine for embedded ones. And after all, this can be improved later.
+ * the mutex locked.
  */
 
 #include <linux/crc32.h>

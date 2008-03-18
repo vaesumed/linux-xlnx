@@ -20,6 +20,8 @@
  *          Artem Bityutskiy
  */
 
+/* This file implements TNC functions for committing */
+
 #include "ubifs.h"
 
 /**

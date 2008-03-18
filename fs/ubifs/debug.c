@@ -1,7 +1,7 @@
 /*
  * This file is part of UBIFS.
  *
- * Copyright (C) 2006, 2007 Nokia Corporation
+ * Copyright (C) 2006-2008 Nokia Corporation
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -24,7 +24,7 @@
  * This file implements most of the debugging stuff which is compiled in only
  * when it is enabled. But some debugging check functions are implemented in
  * corresponding subsystem, just because they are closely related and utilize
- * various local functions of the subsystems.
+ * various local functions of those subsystems.
  */
 
 #define UBIFS_DBG_PRESERVE_KMALLOC
