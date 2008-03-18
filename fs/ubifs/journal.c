@@ -487,7 +487,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 	ilen = UBIFS_INO_NODE_SZ;
 
 	/*
-	 * If the last referece to the inode is being deleted, then there is no
+	 * If the last reference to the inode is being deleted, then there is no
 	 * need to attach and write inode data, it is being deleted anyway.
 	 */
 	if (!last_reference)

@@ -89,7 +89,7 @@ static int valuable(struct ubifs_info *c, const struct ubifs_lprops *lprops)
  *
  * This function returns a code that indicates whether the scan should continue
  * (%LPT_SCAN_CONTINUE), whether the LEB properties should be added to the tree
- * in main memeory (%LPT_SCAN_ADD), or whether the scan should stop
+ * in main memory (%LPT_SCAN_ADD), or whether the scan should stop
  * (%LPT_SCAN_STOP).
  */
 static int scan_for_dirty_cb(struct ubifs_info *c,
@@ -227,7 +227,7 @@ static const struct ubifs_lprops *scan_for_dirty(struct ubifs_info *c,
  * In opposite, if the Garbage Collector is called from the budgeting, it
  * should just make free space, not retuning LEBs which are already free (or
  * freeable, which is basically the same, but freeable will become available
- * ony after the commit).
+ * only after the commit).
  */
 int ubifs_find_dirty_leb(struct ubifs_info *c, struct ubifs_lprops *ret_lp,
 			 int min_space, int pick_free)
@@ -289,7 +289,7 @@ int ubifs_find_dirty_leb(struct ubifs_info *c, struct ubifs_lprops *ret_lp,
 		sum = idx_lp->free + idx_lp->dirty;
 		/*
 		 * Since we reserve twice as more space for the index than it
-		 * actually takes, it does not make sence to pick indexing LEBs
+		 * actually takes, it does not make sense to pick indexing LEBs
 		 * with less then half LEB of dirty space.
 		 */
 		if (sum < min_space || sum < c->half_leb_size)
@@ -349,7 +349,7 @@ out:
  *
  * This function returns a code that indicates whether the scan should continue
  * (%LPT_SCAN_CONTINUE), whether the LEB properties should be added to the tree
- * in main memeory (%LPT_SCAN_ADD), or whether the scan should stop
+ * in main memory (%LPT_SCAN_ADD), or whether the scan should stop
  * (%LPT_SCAN_STOP).
  */
 static int scan_for_free_cb(struct ubifs_info *c,
@@ -475,7 +475,7 @@ const struct ubifs_lprops *do_find_free_space(struct ubifs_info *c,
  * @squeeze: whether to try to find space in a non-empty LEB first
  *
  * This function looks for an LEB with at least @min_space bytes of free space.
- * It tries to find an empty LEB if possible. If no empty LEBs are avalilable,
+ * It tries to find an empty LEB if possible. If no empty LEBs are available,
  * this function searches for a non-empty data LEB. The returned LEB is marked
  * as "taken".
  *
@@ -577,7 +577,7 @@ out:
  *
  * This function returns a code that indicates whether the scan should continue
  * (%LPT_SCAN_CONTINUE), whether the LEB properties should be added to the tree
- * in main memeory (%LPT_SCAN_ADD), or whether the scan should stop
+ * in main memory (%LPT_SCAN_ADD), or whether the scan should stop
  * (%LPT_SCAN_STOP).
  */
 static int scan_for_idx_cb(struct ubifs_info *c,
@@ -766,7 +766,7 @@ int ubifs_save_dirty_idx_lnums(struct ubifs_info *c)
  *
  * This function returns a code that indicates whether the scan should continue
  * (%LPT_SCAN_CONTINUE), whether the LEB properties should be added to the tree
- * in main memeory (%LPT_SCAN_ADD), or whether the scan should stop
+ * in main memory (%LPT_SCAN_ADD), or whether the scan should stop
  * (%LPT_SCAN_STOP).
  */
 static int scan_dirty_idx_cb(struct ubifs_info *c,
