@@ -28,8 +28,8 @@
  * page is dirty and is used for budgeting purposes - dirty pages should not be
  * budgeted. The PG_checked flag is set if full budgeting is required for the
  * page e.g., when it corresponds to a file hole or it is just beyond the file
- * size. The budgeting is done in 'ubifs_prepare_write()', because it is OK to
- * fail in this function, and the budget is released in 'ubifs_writepage()'. So
+ * size. The budgeting is done in 'ubifs_write_begin()', because it is OK to
+ * fail in this function, and the budget is released in 'ubifs_write_end()'. So
  * the PG_private and PG_checked flags carry the information about how the page
  * was budgeted, to make it possible to release the budget properly.
  *

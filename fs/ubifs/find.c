@@ -21,8 +21,9 @@
  */
 
 /*
- * This file contains "find" functions, like "find a dirty LEB", "find an empty
- * LEB", etc.
+ * This file contains functions for finding LEBs for various purposes e.g.
+ * garbage collection. In general, lprops category heaps and lists are used
+ * for fast access, falling back on scanning the LPT as a last resort.
  */
 
 #include <linux/sort.h>
