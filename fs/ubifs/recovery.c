@@ -1,7 +1,7 @@
 /*
  * This file is part of UBIFS.
  *
- * Copyright (C) 2006, 2007 Nokia Corporation
+ * Copyright (C) 2006-2008 Nokia Corporation
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -18,6 +18,16 @@
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy
+ */
+
+/*
+ * This file implements functions needed to recover from unclean un-mounts.
+ * When UBIFS is mounted, it checks a flag on the master node to determine if
+ * an un-mount was completed sucessfully. If not, the process of mounting
+ * incorparates additional checking and fixing of on-flash data structures.
+ * UBIFS always cleans away all remnants of an unclean un-mount, so that
+ * errors do not accumulate. However UBIFS defers recovery if it is mounted
+ * read-only, and the flash is not modified in that case.
  */
 
 #include <linux/crc32.h>

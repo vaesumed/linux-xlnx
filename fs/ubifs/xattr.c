@@ -29,7 +29,7 @@
  * which are almost identical to directory entries, but have different key type.
  *
  * In other words, the situation with extended attributes is very similar to
- * directories. Indeed, any inode (but of course not xattr inode) may have a
+ * directories. Indeed, any inode (but of course not xattr inodes) may have a
  * number of associated xentries, just like directory inodes have associated
  * directory entries. Extended attribute entries store the name of the extended
  * attribute, the host inode number, and the extended attribute inode number.
@@ -45,8 +45,8 @@
  *
  * Extended attributes are synchronous, which means they are written to the
  * flash media synchronously and there is no write-back for extended attribute
- * inodes. The extended attribute values are stored in compressed form on the
- * media.
+ * inodes. The extended attribute values are not stored in compressed form on
+ * the media.
  *
  * Since extended attributes are represented by regular inodes, they are cached
  * in the VFS inode cache. The xentries are cached in the LNC cache (see
@@ -59,7 +59,7 @@
 #include <linux/posix_acl_xattr.h>
 #include "ubifs.h"
 
-/* How much bytes an extended attribute adds to the host inode */
+/* How many bytes an extended attribute adds to the host inode */
 #define CALC_XATTR_BYTES(data_len) ALIGN(UBIFS_INO_NODE_SZ + (data_len) + 1, 8)
 
 /*
@@ -89,7 +89,7 @@ static struct file_operations none_file_operations;
  *
  * This is a helper function which creates an extended attribute of name @nm
  * and value @value for inode @host. The host inode is also updated on flash
- * because this ctime and extended attribute accounting data changes. This
+ * because the ctime and extended attribute accounting data changes. This
  * function returns zero in case of success and a negative error code in case
  * of failure.
  */
@@ -105,8 +105,8 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	/*
 	 * Linux limits the maximum size of the extended attribute names list
 	 * to %XATTR_LIST_MAX. This means we should not allow creating more*
-	 * extended attributes if name list becomes larger. This limitation is
-	 * artificial for UBIFS, though.
+	 * extended attributes if the name list becomes larger. This limitation
+	 * is artificial for UBIFS, though.
 	 */
 	if (host_ui->xattr_names + host_ui->xattr_cnt +
 					nm->len + 1 > XATTR_LIST_MAX)
@@ -149,15 +149,15 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	host_ui->xattr_names += nm->len;
 
 	/*
-	 * We do not use i_size_write() because nobody can race with us as are
-	 * holding host @host->i_mutex - every xattr operation for this inode
-	 * is serialized by it.
+	 * We do not use i_size_write() because nobody can race with us as we
+	 * are holding host @host->i_mutex - every xattr operation for this
+	 * inode is serialized by it.
 	 */
 	inode->i_size = size;
 	ui->data_len = size;
 
 	/*
-	 * Note, this is important that 'ubifs_jrn_update()' writes the @host
+	 * Note, it is important that 'ubifs_jrn_update()' writes the @host
 	 * inode last, so when it gets synchronized and the write-buffer is
 	 * flushed, the extended attribute is flushed as well.
 	 */
@@ -232,9 +232,9 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 
 	/*
 	 * It is important to write the host inode after the xattr inode
-	 * because if the host inode gets synchronized, the extended attribute
-	 * inode gets synchronized to as it goes before the host inode in the
-	 * write-buffer.
+	 * because if the host inode gets synchronized, then the extended
+	 * attribute inode gets synchronized, because it goes before the host
+	 * inode in the write-buffer.
 	 */
 	err = ubifs_jrn_write_2_inodes(c, inode, host, IS_DIRSYNC(host));
 	if (err)
@@ -446,8 +446,8 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 	len = host_ui->xattr_names + host_ui->xattr_cnt;
 	if (!buffer)
 		/*
-		 * We should return minimum buffer size which will fit
-		 * zero-terminated list of all the extended attribute names.
+		 * We should return the minimum buffer size which will fit a
+		 * null-terminated list of all the extended attribute names.
 		 */
 		return len;
 

@@ -22,6 +22,8 @@
  *          Adrian Hunter
  */
 
+/* This file implements EXT2-compatible extended attribute ioctl() calls */
+
 #include <linux/compat.h>
 #include <linux/smp_lock.h>
 #include "ubifs.h"

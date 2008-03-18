@@ -1,7 +1,7 @@
 /*
  * This file is part of UBIFS.
  *
- * Copyright (C) 2006, 2007 Nokia Corporation
+ * Copyright (C) 2006-2008 Nokia Corporation
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -18,6 +18,13 @@
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy
+ */
+
+/*
+ * This file implements the scan which is a general-purpose function for
+ * determining what nodes are in an eraseblock. The scan is used to replay the
+ * journal, to do garbage collection. for the TNC in-the-gaps method, and by
+ * debugging functions.
  */
 
 #include "ubifs.h"

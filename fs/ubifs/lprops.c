@@ -20,6 +20,14 @@
  *          Artem Bityutskiy
  */
 
+/*
+ * This file implements the functions that access LEB properties and their
+ * categories. LEBs are categorized based on the needs of UBIFS, and the
+ * categories are stored as either heaps or lists to provide a fast way of
+ * finding a LEB in a particular category. For example, UBIFS may need to find
+ * an empty LEB for the journal, or a very dirty LEB for garbage collection.
+ */
+
 #include "ubifs.h"
 
 #if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS) || \

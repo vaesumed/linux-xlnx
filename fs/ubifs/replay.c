@@ -26,8 +26,8 @@
  *
  * The larger is the journal, the longer it takes to scan it, so the longer it
  * takes to mount UBIFS. This is why the journal has limited size which may be
- * changed depending in the system requirements. But larger journal assumes
- * faster I/O speed because it allows to change the index seldom. So this is a
+ * changed depending on the system requirements. But a larger journal gives
+ * faster I/O speed because it writes the index less frequently. So this is a
  * trade-off. Also, the journal is indexed by the in-memory index (TNC), so the
  * larger is the journal, the more memory its index may consume.
  */

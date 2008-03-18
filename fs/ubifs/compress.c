@@ -22,6 +22,11 @@
  *          Zoltan Sogor
  */
 
+/*
+ * This file provides a single place to access to compression and
+ * decompression.
+ */
+
 #include <linux/crypto.h>
 #include "ubifs.h"
 

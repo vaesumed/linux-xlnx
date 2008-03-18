@@ -26,21 +26,21 @@
  * This file implements UBIFS I/O subsystem which provides various I/O-related
  * helper functions (reading/writing/checking/validating nodes) and implements
  * write-buffering support. Write buffers help to save space which otherwise
- * would have been wasted for padding to the nearest minimal I/O unit
- * boundary. Instead, data first goes to the write-buffer and flushed when the
- * buffer is full or when it is not used for some time (by timer). Similar
- * mechanism is used by JFFS2.
+ * would have been wasted for padding to the nearest minimal I/O unit boundary.
+ * Instead, data first goes to the write-buffer and is flushed when the
+ * buffer is full or when it is not used for some time (by timer). This is
+ * similarto the mechanism is used by JFFS2.
  *
  * Write-buffers are defined by 'struct ubifs_wbuf' objects and protected by
- * rw-semaphores defined inside these objects. Since sometimes upper-level code
- * has to lock write-buffer (e.g. journal space reservation code), many
+ * mutexes defined inside these objects. Since sometimes upper-level code
+ * has to lock the write-buffer (e.g. journal space reservation code), many
  * functions related to write-buffers have "nolock" suffix which means that the
  * caller has to lock the write-buffer before calling this function.
  *
- * UBIFS stores nodes at 64 bit-aligned addresses. If node length is not
+ * UBIFS stores nodes at 64 bit-aligned addresses. If the node length is not
  * aligned, UBIFS starts the next node from the aligned address, and the padded
  * bytes may contain any rubbish. In other words, UBIFS does not put padding
- * bytes to those small gaps. Common headers of nodes store real node lengths,
+ * bytes in those small gaps. Common headers of nodes store real node lengths,
  * not aligned lengths. Indexing nodes also store real lengths in branches.
  *
  * UBIFS uses padding when it pads to the next min. I/O unit. In this case it

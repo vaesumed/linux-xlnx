@@ -28,12 +28,12 @@
  * would add additional overhead to the file system fast paths. So the shrinker
  * just walks the TNC tree when searching for znodes to free.
  *
- * If the root of a TNC sub-tree is clean and old enough, the children are as
- * well clean and old enough. So the shrinker walks the TNC in level order and
+ * If the root of a TNC sub-tree is clean and old enough, then the children are
+ * also clean and old enough. So the shrinker walks the TNC in level order and
  * dumps entire sub-trees.
  *
  * The age of znodes is just the time-stamp when they were last looked at.
- * Current shrinker first tries to evict old znodes, then young ones.
+ * The current shrinker first tries to evict old znodes, then young ones.
  *
  * Since the shrinker is global, it has to protect against races with FS
  * un-mounts, which is done by the 'ubifs_infos_lock' and 'c->umount_mutex'.
