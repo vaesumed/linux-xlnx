@@ -41,22 +41,10 @@ struct rt2x00_rate {
 #define DEV_RATE_CCK			0x0001
 #define DEV_RATE_OFDM			0x0002
 #define DEV_RATE_SHORT_PREAMBLE		0x0004
+#define DEV_RATE_BASIC			0x0008
 
 	unsigned short bitrate; /* In 100kbit/s */
-
 	unsigned short ratemask;
-#define DEV_RATEMASK_1MB	( (1 << 1) - 1 )
-#define DEV_RATEMASK_2MB	( (1 << 2) - 1 )
-#define DEV_RATEMASK_5_5MB	( (1 << 3) - 1 )
-#define DEV_RATEMASK_11MB	( (1 << 4) - 1 )
-#define DEV_RATEMASK_6MB	( (1 << 5) - 1 )
-#define DEV_RATEMASK_9MB	( (1 << 6) - 1 )
-#define DEV_RATEMASK_12MB	( (1 << 7) - 1 )
-#define DEV_RATEMASK_18MB	( (1 << 8) - 1 )
-#define DEV_RATEMASK_24MB	( (1 << 9) - 1 )
-#define DEV_RATEMASK_36MB	( (1 << 10) - 1 )
-#define DEV_RATEMASK_48MB	( (1 << 11) - 1 )
-#define DEV_RATEMASK_54MB	( (1 << 12) - 1 )
 
 	unsigned short plcp;
 };
@@ -100,9 +88,9 @@ void rt2x00lib_config_intf(struct rt2x00_dev *rt2x00dev,
 			   struct rt2x00_intf *intf,
 			   enum ieee80211_if_types type,
 			   u8 *mac, u8 *bssid);
-void rt2x00lib_config_preamble(struct rt2x00_dev *rt2x00dev,
-			       struct rt2x00_intf *intf,
-			       const unsigned int short_preamble);
+void rt2x00lib_config_erp(struct rt2x00_dev *rt2x00dev,
+			  struct rt2x00_intf *intf,
+			  struct ieee80211_bss_conf *conf);
 void rt2x00lib_config_antenna(struct rt2x00_dev *rt2x00dev,
 			      enum antenna rx, enum antenna tx);
 void rt2x00lib_config(struct rt2x00_dev *rt2x00dev,
@@ -189,7 +177,7 @@ static inline void rt2x00rfkill_free(struct rt2x00_dev *rt2x00dev)
  */
 #ifdef CONFIG_RT2X00_LIB_LEDS
 void rt2x00leds_led_quality(struct rt2x00_dev *rt2x00dev, int rssi);
-int rt2x00leds_register(struct rt2x00_dev *rt2x00dev);
+void rt2x00leds_register(struct rt2x00_dev *rt2x00dev);
 void rt2x00leds_unregister(struct rt2x00_dev *rt2x00dev);
 void rt2x00leds_suspend(struct rt2x00_dev *rt2x00dev);
 void rt2x00leds_resume(struct rt2x00_dev *rt2x00dev);
@@ -199,9 +187,8 @@ static inline void rt2x00leds_led_quality(struct rt2x00_dev *rt2x00dev,
 {
 }
 
-static inline int rt2x00leds_register(struct rt2x00_dev *rt2x00dev)
+static inline void rt2x00leds_register(struct rt2x00_dev *rt2x00dev)
 {
-	return 0;
 }
 
 static inline void rt2x00leds_unregister(struct rt2x00_dev *rt2x00dev)

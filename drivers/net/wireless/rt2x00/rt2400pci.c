@@ -279,8 +279,6 @@ static void rt2400pci_config_intf(struct rt2x00_dev *rt2x00dev,
 	u32 reg;
 
 	if (flags & CONFIG_UPDATE_TYPE) {
-		rt2x00pci_register_write(rt2x00dev, CSR14, 0);
-
 		/*
 		 * Enable beacon config
 		 */
@@ -294,10 +292,8 @@ static void rt2400pci_config_intf(struct rt2x00_dev *rt2x00dev,
 		 */
 		rt2x00pci_register_read(rt2x00dev, CSR14, &reg);
 		rt2x00_set_field32(&reg, CSR14_TSF_COUNT, 1);
-		rt2x00_set_field32(&reg, CSR14_TBCN,
-				   (conf->sync == TSF_SYNC_BEACON));
-		rt2x00_set_field32(&reg, CSR14_BEACON_GEN, 0);
 		rt2x00_set_field32(&reg, CSR14_TSF_SYNC, conf->sync);
+		rt2x00_set_field32(&reg, CSR14_TBCN, 1);
 		rt2x00pci_register_write(rt2x00dev, CSR14, reg);
 	}
 
@@ -310,10 +306,8 @@ static void rt2400pci_config_intf(struct rt2x00_dev *rt2x00dev,
 					      conf->bssid, sizeof(conf->bssid));
 }
 
-static int rt2400pci_config_preamble(struct rt2x00_dev *rt2x00dev,
-				     const int short_preamble,
-				     const int ack_timeout,
-				     const int ack_consume_time)
+static int rt2400pci_config_erp(struct rt2x00_dev *rt2x00dev,
+				struct rt2x00lib_erp *erp)
 {
 	int preamble_mask;
 	u32 reg;
@@ -321,11 +315,13 @@ static int rt2400pci_config_preamble(struct rt2x00_dev *rt2x00dev,
 	/*
 	 * When short preamble is enabled, we should set bit 0x08
 	 */
-	preamble_mask = short_preamble << 3;
+	preamble_mask = erp->short_preamble << 3;
 
 	rt2x00pci_register_read(rt2x00dev, TXCSR1, &reg);
-	rt2x00_set_field32(&reg, TXCSR1_ACK_TIMEOUT, ack_timeout);
-	rt2x00_set_field32(&reg, TXCSR1_ACK_CONSUME_TIME, ack_consume_time);
+	rt2x00_set_field32(&reg, TXCSR1_ACK_TIMEOUT,
+			   erp->ack_timeout);
+	rt2x00_set_field32(&reg, TXCSR1_ACK_CONSUME_TIME,
+			   erp->ack_consume_time);
 	rt2x00pci_register_write(rt2x00dev, TXCSR1, reg);
 
 	rt2x00pci_register_read(rt2x00dev, ARCSR2, &reg);
@@ -423,6 +419,13 @@ static void rt2400pci_config_antenna(struct rt2x00_dev *rt2x00dev,
 	u8 r1;
 	u8 r4;
 
+	/*
+	 * We should never come here because rt2x00lib is supposed
+	 * to catch this and send us the correct antenna explicitely.
+	 */
+	BUG_ON(ant->rx == ANTENNA_SW_DIVERSITY ||
+	       ant->tx == ANTENNA_SW_DIVERSITY);
+
 	rt2400pci_bbp_read(rt2x00dev, 4, &r4);
 	rt2400pci_bbp_read(rt2x00dev, 1, &r1);
 
@@ -436,14 +439,8 @@ static void rt2400pci_config_antenna(struct rt2x00_dev *rt2x00dev,
 	case ANTENNA_A:
 		rt2x00_set_field8(&r1, BBP_R1_TX_ANTENNA, 0);
 		break;
-	case ANTENNA_SW_DIVERSITY:
-		/*
-		 * NOTE: We should never come here because rt2x00lib is
-		 * supposed to catch this and send us the correct antenna
-		 * explicitely. However we are nog going to bug about this.
-		 * Instead, just default to antenna B.
-		 */
 	case ANTENNA_B:
+	default:
 		rt2x00_set_field8(&r1, BBP_R1_TX_ANTENNA, 2);
 		break;
 	}
@@ -458,14 +455,8 @@ static void rt2400pci_config_antenna(struct rt2x00_dev *rt2x00dev,
 	case ANTENNA_A:
 		rt2x00_set_field8(&r4, BBP_R4_RX_ANTENNA, 0);
 		break;
-	case ANTENNA_SW_DIVERSITY:
-		/*
-		 * NOTE: We should never come here because rt2x00lib is
-		 * supposed to catch this and send us the correct antenna
-		 * explicitely. However we are nog going to bug about this.
-		 * Instead, just default to antenna B.
-		 */
 	case ANTENNA_B:
+	default:
 		rt2x00_set_field8(&r4, BBP_R4_RX_ANTENNA, 2);
 		break;
 	}
@@ -678,7 +669,7 @@ static int rt2400pci_init_queues(struct rt2x00_dev *rt2x00dev)
 
 	priv_rx = rt2x00dev->rx->entries[0].priv_data;
 	rt2x00pci_register_read(rt2x00dev, RXCSR2, &reg);
-	rt2x00_set_field32(&reg, RXCSR2_RX_RING_REGISTER, priv_tx->desc_dma);
+	rt2x00_set_field32(&reg, RXCSR2_RX_RING_REGISTER, priv_rx->desc_dma);
 	rt2x00pci_register_write(rt2x00dev, RXCSR2, reg);
 
 	return 0;
@@ -1040,6 +1031,8 @@ static void rt2400pci_kick_tx_queue(struct rt2x00_dev *rt2x00dev,
 	if (queue == RT2X00_BCN_QUEUE_BEACON) {
 		rt2x00pci_register_read(rt2x00dev, CSR14, &reg);
 		if (!rt2x00_get_field32(reg, CSR14_BEACON_GEN)) {
+			rt2x00_set_field32(&reg, CSR14_TSF_COUNT, 1);
+			rt2x00_set_field32(&reg, CSR14_TBCN, 1);
 			rt2x00_set_field32(&reg, CSR14_BEACON_GEN, 1);
 			rt2x00pci_register_write(rt2x00dev, CSR14, reg);
 		}
@@ -1065,9 +1058,11 @@ static void rt2400pci_fill_rxdone(struct queue_entry *entry,
 	struct queue_entry_priv_pci_rx *priv_rx = entry->priv_data;
 	u32 word0;
 	u32 word2;
+	u32 word3;
 
 	rt2x00_desc_read(priv_rx->desc, 0, &word0);
 	rt2x00_desc_read(priv_rx->desc, 2, &word2);
+	rt2x00_desc_read(priv_rx->desc, 3, &word3);
 
 	rxdesc->flags = 0;
 	if (rt2x00_get_field32(word0, RXD_W0_CRC_ERROR))
@@ -1077,9 +1072,12 @@ static void rt2400pci_fill_rxdone(struct queue_entry *entry,
 
 	/*
 	 * Obtain the status about this packet.
+	 * The signal is the PLCP value, and needs to be stripped
+	 * of the preamble bit (0x08).
 	 */
-	rxdesc->signal = rt2x00_get_field32(word2, RXD_W2_SIGNAL);
-	rxdesc->rssi = rt2x00_get_field32(word2, RXD_W2_RSSI) -
+	rxdesc->signal = rt2x00_get_field32(word2, RXD_W2_SIGNAL) & ~0x08;
+	rxdesc->signal_plcp = 1;
+	rxdesc->rssi = rt2x00_get_field32(word2, RXD_W3_RSSI) -
 	    entry->queue->rt2x00dev->rssi_offset;
 	rxdesc->ofdm = 0;
 	rxdesc->size = rt2x00_get_field32(word0, RXD_W0_DATABYTE_COUNT);
@@ -1517,10 +1515,10 @@ static int rt2400pci_beacon_update(struct ieee80211_hw *hw, struct sk_buff *skb,
 	struct rt2x00_intf *intf = vif_to_intf(control->vif);
 	struct queue_entry_priv_pci_tx *priv_tx;
 	struct skb_frame_desc *skbdesc;
+	u32 reg;
 
 	if (unlikely(!intf->beacon))
 		return -ENOBUFS;
-
 	priv_tx = intf->beacon->priv_data;
 
 	/*
@@ -1534,6 +1532,16 @@ static int rt2400pci_beacon_update(struct ieee80211_hw *hw, struct sk_buff *skb,
 	skbdesc->desc = priv_tx->desc;
 	skbdesc->desc_len = intf->beacon->queue->desc_size;
 	skbdesc->entry = intf->beacon;
+
+	/*
+	 * Disable beaconing while we are reloading the beacon data,
+	 * otherwise we might be sending out invalid data.
+	 */
+	rt2x00pci_register_read(rt2x00dev, CSR14, &reg);
+	rt2x00_set_field32(&reg, CSR14_TSF_COUNT, 0);
+	rt2x00_set_field32(&reg, CSR14_TBCN, 0);
+	rt2x00_set_field32(&reg, CSR14_BEACON_GEN, 0);
+	rt2x00pci_register_write(rt2x00dev, CSR14, reg);
 
 	/*
 	 * mac80211 doesn't provide the control->queue variable
@@ -1600,7 +1608,7 @@ static const struct rt2x00lib_ops rt2400pci_rt2x00_ops = {
 	.kick_tx_queue		= rt2400pci_kick_tx_queue,
 	.fill_rxdone		= rt2400pci_fill_rxdone,
 	.config_intf		= rt2400pci_config_intf,
-	.config_preamble	= rt2400pci_config_preamble,
+	.config_erp		= rt2400pci_config_erp,
 	.config			= rt2400pci_config,
 };
 
