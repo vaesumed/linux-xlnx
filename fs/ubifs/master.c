@@ -20,6 +20,8 @@
  *          Adrian Hunter
  */
 
+/* This file implements reading and writing the master node */
+
 #include "ubifs.h"
 
 /**

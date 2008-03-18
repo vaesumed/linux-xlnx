@@ -20,6 +20,29 @@
  *         Artem Bityutskiy
  */
 
+/*
+ * This file implements functions that manage the running of the commit process.
+ * Each affected module has its own functions to accomplish their part in the
+ * commit and those functions are called here.
+ *
+ * The commit is the process whereby all updates to the index and LEB properties
+ * are written out together and the journal becomes empty. This keeps the
+ * file system consistent - at all times the state can be recreated by reading
+ * the index and LEB properties and then replaying the journal.
+ *
+ * The commit is split into two parts named "commit start" and "commit end".
+ * During commit start, the commit process has exclusive access to the journal
+ * by holding the commit semaphore down for writing. As few I/O operations as
+ * possible are performed during commit start, instead the nodes that are to be
+ * written are merely identified. During commit end, the commit semaphore is no
+ * longer held and the journal is again in operation, allowing users to continue
+ * to use the file system while the bulk of the commit I/O is performed. The
+ * purpose of this two-step approach is to prevent the commit from causing any
+ * latency blips. Note that in any case, the commit does not prevent lookups
+ * (as permitted by the TNC mutex), or access to VFS data structures e.g. page
+ * cache.
+ */
+
 #include <linux/freezer.h>
 #include <linux/kthread.h>
 #include "ubifs.h"
