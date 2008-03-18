@@ -187,7 +187,6 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	{
 		dev_t rdev;
 		union ubifs_dev_desc *dev;
-		struct ubifs_inode *ui = ubifs_inode(inode);
 
 		ui->data = kmalloc(sizeof(union ubifs_dev_desc), GFP_NOFS);
 		if (!ui->data) {
