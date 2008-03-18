@@ -148,7 +148,7 @@ const char *dbg_ntype(int type)
 	}
 }
 
-const char *dbg_gtype(int type)
+static const char *dbg_gtype(int type)
 {
 	switch (type) {
 	case UBIFS_NO_NODE_GROUP:
@@ -819,7 +819,7 @@ struct eaten_memory
 };
 
 /* List of eaten memory pages */
-LIST_HEAD(eaten_list);
+static LIST_HEAD(eaten_list);
 /* Count of allocated 'struct eaten_memory' objects */
 static unsigned long eaten_cnt;
 /* Protects 'eaten_list' and 'eaten_cnt' */

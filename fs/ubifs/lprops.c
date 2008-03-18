@@ -311,8 +311,8 @@ void ubifs_add_to_cat(struct ubifs_info *c, struct ubifs_lprops *lprops,
  *
  * LEB properties are categorized to enable fast find operations.
  */
-void ubifs_remove_from_cat(struct ubifs_info *c, struct ubifs_lprops *lprops,
-			   int cat)
+static void ubifs_remove_from_cat(struct ubifs_info *c,
+				  struct ubifs_lprops *lprops, int cat)
 {
 	switch (cat) {
 	case LPROPS_DIRTY:

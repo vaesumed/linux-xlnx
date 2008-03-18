@@ -62,12 +62,12 @@ static int do_readpage(struct page *page)
 #endif
 {
 	void *addr;
-	int err, len;
+	int err, len, out_len;
 	union ubifs_key key;
 	struct ubifs_data_node *dn;
 	struct inode *inode = page->mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	unsigned int dlen, out_len;
+	unsigned int dlen;
 	loff_t i_size =  i_size_read(inode);
 
 	dbg_gen("ino %lu, pg %lu, i_size %lld, flags %#lx",
