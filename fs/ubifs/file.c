@@ -44,7 +44,7 @@
  *
  * Similarly, 'i_mutex' does not have to be locked in readpage(), e.g.,
  * readahead path does not have it locked ("sys_read -> generic_file_aio_read
- * -> ondemand_readahead -> readpage"). In case of readeahead, 'I_LOCK' flag is
+ * -> ondemand_readahead -> readpage"). In case of readahead, 'I_LOCK' flag is
  * not set as well.
  *
  * This, for example means that there might be 2 concurrent '->writepage()'

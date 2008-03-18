@@ -165,7 +165,7 @@ static int run_bg_commit(struct ubifs_info *c)
 {
 	spin_lock(&c->cs_lock);
 	/*
-	 * Run background commit only if backgound commit was requested or if
+	 * Run background commit only if background commit was requested or if
 	 * commit is required.
 	 */
 	if (c->cmt_state != COMMIT_BACKGROUND &&
@@ -546,7 +546,7 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 		i->iip = iip;
 		/* Keep the index nodes on our path in a linked list */
 		list_add_tail(&i->list, &list);
-		/* Read the inde node */
+		/* Read the index node */
 		idx = &i->idx;
 		err = ubifs_read_node(c, idx, UBIFS_IDX_NODE, len, lnum, offs);
 		if (err)

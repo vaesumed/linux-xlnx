@@ -933,13 +933,13 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	spin_unlock(&inode->i_lock);
 
 	/*
-	 * Unfortunatelly, the 'stat()' system call was designed for block
+	 * Unfortunately, the 'stat()' system call was designed for block
 	 * device based file systems, and it is not appropriate for UBIFS,
 	 * because UBIFS does not have notion of "block". For example, it is
 	 * difficult to tell how many block a directory takes - it actually
 	 * takes less then 300 bytes, but we have to round it to block size,
-	 * which itroduces large mistake. This makes utilities like 'du' to
-	 * report completely senseless dumbers. This is the reason why UBIFS
+	 * which introduces large mistake. This makes utilities like 'du' to
+	 * report completely senseless numbers. This is the reason why UBIFS
 	 * goes the same way as JFFS2 - it reports zero blocks for everything
 	 * but regular files, which makes more sense than reporting completely
 	 * wrong sizes.
