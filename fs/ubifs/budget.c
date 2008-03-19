@@ -307,7 +307,7 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 	 * this is a lot of uncompressed or not-compressible data, the dark
 	 * space cannot be used.
 	 */
-	available -=c->lst.total_dark;
+	available -= c->lst.total_dark;
 
 	return available;
 }

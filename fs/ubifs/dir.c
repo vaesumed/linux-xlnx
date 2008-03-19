@@ -176,7 +176,7 @@ static int dbg_check_name(struct ubifs_dent_node *dent, struct qstr *nm)
 #endif
 
 static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
-                                   struct nameidata *nd)
+				   struct nameidata *nd)
 {
 	int err;
 	union ubifs_key key;
@@ -283,8 +283,7 @@ out:
  */
 static unsigned int vfs_dent_type(uint8_t type)
 {
-	switch (type)
-	{
+	switch (type) {
 	case UBIFS_ITYPE_REG:
 		return DT_REG;
 	case UBIFS_ITYPE_DIR:
@@ -957,8 +956,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	return 0;
 }
 
-struct inode_operations ubifs_dir_inode_operations =
-{
+struct inode_operations ubifs_dir_inode_operations = {
 	.lookup      = ubifs_lookup,
 	.create      = ubifs_create,
 	.link        = ubifs_link,
@@ -978,8 +976,7 @@ struct inode_operations ubifs_dir_inode_operations =
 #endif
 };
 
-struct file_operations ubifs_dir_operations =
-{
+struct file_operations ubifs_dir_operations = {
 	.llseek  = generic_file_llseek,
 	.release = ubifs_dir_release,
 	.read    = generic_read_dir,

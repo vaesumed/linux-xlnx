@@ -1154,7 +1154,8 @@ static void replace_cats(struct ubifs_info *c, struct ubifs_pnode *old_pnode,
 	for (i = 0; i < UBIFS_LPT_FANOUT; i++) {
 		if (!new_pnode->lprops[i].lnum)
 			return;
-		ubifs_replace_cat(c, &old_pnode->lprops[i], &new_pnode->lprops[i]);
+		ubifs_replace_cat(c, &old_pnode->lprops[i],
+				  &new_pnode->lprops[i]);
 	}
 }
 
@@ -1974,8 +1975,7 @@ static struct ubifs_cnode *next_dirty_cnode(struct ubifs_cnode *cnode)
 		return NULL;
 	for (i = cnode->iip + 1; i < UBIFS_LPT_FANOUT; i++) {
 		cnode = nnode->nbranch[i].cnode;
-		if (cnode && test_bit(DIRTY_CNODE, &cnode->flags))
-		{
+		if (cnode && test_bit(DIRTY_CNODE, &cnode->flags)) {
 			if (cnode->level == 0)
 				return cnode; /* cnode is a pnode */
 			/* cnode is a nnode */
@@ -2427,8 +2427,7 @@ int ubifs_lpt_init(struct ubifs_info *c, int rd, int wr)
  */
 static int get_lpt_node_len(struct ubifs_info *c, int node_type)
 {
-	switch (node_type)
-	{
+	switch (node_type) {
 	case UBIFS_LPT_NNODE:
 		return c->nnode_sz;
 	case UBIFS_LPT_PNODE:
@@ -2699,8 +2698,8 @@ static int make_node_dirty(struct ubifs_info *c, int node_type, int node_num,
  *
  * This function returns the next pnode or %NULL if there are no more pnodes.
  */
-static
-struct ubifs_pnode *next_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode)
+static struct ubifs_pnode *
+next_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode)
 {
 	struct ubifs_nnode *nnode;
 	int iip;
@@ -2825,10 +2824,10 @@ static int lpt_gc(struct ubifs_info *c)
 
 	mutex_lock(&c->lp_mutex);
 	for (i = 0; i < c->lpt_lebs; i++) {
-                ubifs_assert(!c->ltab[i].tgc);
-                if (i + c->lpt_first == c->nhead_lnum ||
-                    c->ltab[i].free + c->ltab[i].dirty == c->leb_size)
-                        continue;
+		ubifs_assert(!c->ltab[i].tgc);
+		if (i + c->lpt_first == c->nhead_lnum ||
+		    c->ltab[i].free + c->ltab[i].dirty == c->leb_size)
+			continue;
 		if (c->ltab[i].dirty > dirty) {
 			dirty = c->ltab[i].dirty;
 			lnum = i + c->lpt_first;
@@ -3101,8 +3100,7 @@ int ubifs_lpt_end_commit(struct ubifs_info *c)
  * @ptr.pnode: ditto for pnode
  * @ptr.cnode: ditto for cnode
  */
-struct lpt_scan_node
-{
+struct lpt_scan_node {
 	union {
 		struct ubifs_nnode nnode;
 		struct ubifs_pnode pnode;

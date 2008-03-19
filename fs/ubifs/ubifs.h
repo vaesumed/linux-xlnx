@@ -178,16 +178,14 @@ enum {
  * @lnum: LEB number of obsoleted index node
  * @offs: offset of obsoleted index node
  */
-struct ubifs_old_idx
-{
+struct ubifs_old_idx {
 	struct rb_node rb;
 	int lnum;
 	int offs;
 };
 
 /* The below union makes it easier to deal with keys */
-union ubifs_key
-{
+union ubifs_key {
 	uint8_t u8[CUR_MAX_KEY_LEN];
 	uint32_t u32[CUR_MAX_KEY_LEN/4];
 	uint64_t u64[CUR_MAX_KEY_LEN/8];
@@ -204,8 +202,7 @@ union ubifs_key
  * @len: length of node scanned
  * @node: raw node
  */
-struct ubifs_scan_node
-{
+struct ubifs_scan_node {
 	struct list_head list;
 	union ubifs_key key;
 	unsigned long long sqnum;
@@ -224,8 +221,7 @@ struct ubifs_scan_node
  * @ecc: read returned -EBADMSG
  * @buf: buffer containing entire LEB scanned
  */
-struct ubifs_scan_leb
-{
+struct ubifs_scan_leb {
 	int lnum;
 	int nodes_cnt;
 	struct list_head nodes;
@@ -244,8 +240,7 @@ struct ubifs_scan_leb
  * LEBs - they are not released immediately, but only after the next commit.
  * This is needed to guarantee recoverability.
  */
-struct ubifs_gced_idx_leb
-{
+struct ubifs_gced_idx_leb {
 	struct list_head list;
 	int lnum;
 	int unmap;
@@ -285,8 +280,7 @@ struct ubifs_gced_idx_leb
  * introduce our own dirty flag to UBIFS inodes and our own inode mutex to
  * serialize "clean <-> dirty" transitions.
  */
-struct ubifs_inode
-{
+struct ubifs_inode {
 	struct inode vfs_inode;
 	unsigned long long creat_sqnum;
 	long long xattr_size;
@@ -315,8 +309,7 @@ struct ubifs_inode
  * cleaned but was not because UBIFS was mounted read-only. The information
  * is used to clean the LEB when remounting to read-write mode.
  */
-struct ubifs_unclean_leb
-{
+struct ubifs_unclean_leb {
 	struct list_head list;
 	int lnum;
 	int endpt;
@@ -360,8 +353,7 @@ enum {
  * @list: list of same-category lprops (for LPROPS_EMPTY and LPROPS_FREEABLE)
  * @hpos: heap position in heap of same-category lprops (other categories)
  */
-struct ubifs_lprops
-{
+struct ubifs_lprops {
 	int free;
 	int dirty;
 	int flags;
@@ -379,8 +371,7 @@ struct ubifs_lprops
  * @tgc: trivial GC flag (1 => unmap after commit end)
  * @cmt: commit flag (1 => reserved for commit)
  */
-struct ubifs_lpt_lprops
-{
+struct ubifs_lpt_lprops {
 	int free;
 	int dirty;
 	unsigned tgc : 1;
@@ -433,8 +424,7 @@ struct ubifs_nnode;
  * @level: level in the tree (zero for pnodes, greater than zero for nnodes)
  * @num: node number
  */
-struct ubifs_cnode
-{
+struct ubifs_cnode {
 	struct ubifs_nnode *parent;
 	struct ubifs_cnode *cnext;
 	unsigned long flags;
@@ -453,8 +443,7 @@ struct ubifs_cnode
  * @num: node number
  * @lprops: LEB properties array
  */
-struct ubifs_pnode
-{
+struct ubifs_pnode {
 	struct ubifs_nnode *parent;
 	struct ubifs_cnode *cnext;
 	unsigned long flags;
@@ -472,12 +461,10 @@ struct ubifs_pnode
  * @pnode: pnode child
  * @cnode: cnode child
  */
-struct ubifs_nbranch
-{
+struct ubifs_nbranch {
 	int lnum;
 	int offs;
-	union
-	{
+	union {
 		struct ubifs_nnode *nnode;
 		struct ubifs_pnode *pnode;
 		struct ubifs_cnode *cnode;
@@ -494,8 +481,7 @@ struct ubifs_nbranch
  * @num: node number
  * @nbranch: branches to child nodes
  */
-struct ubifs_nnode
-{
+struct ubifs_nnode {
 	struct ubifs_nnode *parent;
 	struct ubifs_cnode *cnext;
 	unsigned long flags;
@@ -513,8 +499,7 @@ struct ubifs_nnode
  *
  * There are %LPROPS_HEAP_CNT heaps.
  */
-struct ubifs_lpt_heap
-{
+struct ubifs_lpt_heap {
 	struct ubifs_lprops **arr;
 	int cnt;
 	int max_cnt;
@@ -572,8 +557,7 @@ typedef int (*ubifs_lpt_scan_callback)(struct ubifs_info *c,
  * spin-lock. Thus the data between @buf and @buf + @used can be read under
  * spinlock.
  */
-struct ubifs_wbuf
-{
+struct ubifs_wbuf {
 	struct ubifs_info *c;
 	void *buf;
 	int lnum;
@@ -600,8 +584,7 @@ struct ubifs_wbuf
  * @list: link in the list buds belonging to the same journal head
  * @rb: link in the tree of all buds
  */
-struct ubifs_bud
-{
+struct ubifs_bud {
 	int lnum;
 	int start;
 	int jhead;
@@ -616,8 +599,7 @@ struct ubifs_bud
  *
  * Note, the @buds list is protected by the @c->buds_lock.
  */
-struct ubifs_jhead
-{
+struct ubifs_jhead {
 	struct ubifs_wbuf wbuf;
 	struct list_head buds_list;
 };
@@ -630,8 +612,7 @@ struct ubifs_jhead
  * @offs: offset of the indexing node within @lnum
  * @len: target node length
  */
-struct ubifs_zbranch
-{
+struct ubifs_zbranch {
 	union ubifs_key key;
 	union {
 		struct ubifs_znode *znode;
@@ -654,8 +635,7 @@ struct ubifs_zbranch
  * @alt: lower bound of key range has altered i.e. child inserted at slot 0
  * @zbranch: array of znode branches (@c->fanout elements)
  */
-struct ubifs_znode
-{
+struct ubifs_znode {
 	struct ubifs_znode *parent;
 	struct ubifs_znode *cnext;
 	unsigned long flags;
@@ -678,8 +658,7 @@ struct ubifs_znode
  *
  * If @max_len is %0, the node has fixed length @len.
  */
-struct ubifs_node_range
-{
+struct ubifs_node_range {
 	union {
 		int len;
 		int min_len;
@@ -731,8 +710,7 @@ struct ubifs_compressor {
  * is 13 bits, and @dirtied_ino_d - 15, because up to 4 inodes may be made
  * dirty by the re-name operation.
  */
-struct ubifs_budget_req
-{
+struct ubifs_budget_req {
 	unsigned int new_ino:1;
 	unsigned int dirtied_ino:4;
 	unsigned int new_page:1;
@@ -760,8 +738,7 @@ struct ubifs_budget_req
  * @inum: inode number
  * @new: %1 => added since the last commit, otherwise %0
  */
-struct ubifs_orphan
-{
+struct ubifs_orphan {
 	struct rb_node rb;
 	struct list_head list;
 	struct list_head new_list;
@@ -775,8 +752,7 @@ struct ubifs_orphan
  * struct ubifs_mount_opts - UBIFS-specific mount options information.
  * @unmount_mode: selected unmount mode (%0 default, %1 normal, %2 fast)
  */
-struct ubifs_mount_opts
-{
+struct ubifs_mount_opts {
 	unsigned int unmount_mode:2;
 };
 
@@ -1009,8 +985,7 @@ struct ubifs_mount_opts
  * @old_zroot_sqnum: old index root sqnum - used by 'dbg_check_old_index()'
  * @failure_mode: failure mode for recovery testing
  */
-struct ubifs_info
-{
+struct ubifs_info {
 	struct super_block *vfs_sb;
 
 	ino_t highest_inum;

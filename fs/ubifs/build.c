@@ -47,8 +47,7 @@ struct kmem_cache *ubifs_inode_slab;
 /* TODO: remove compatibility stuff as late as possible */
 #ifndef UBIFS_COMPAT_NO_SHRINKER
 /* UBIFS TNC shrinker description */
-static struct shrinker ubifs_shrinker_info =
-{
+static struct shrinker ubifs_shrinker_info = {
 	.shrink = ubifs_shrinker,
 	.seeks = DEFAULT_SEEKS,
 };
@@ -703,10 +702,10 @@ static int mount_ubifs(struct ubifs_info *c)
  * ubifs_umount - un-mount UBIFS file-system.
  * @c: UBIFS file-system description object
  *
- * Note, this function is called to free allocated resourced when un-mounting, as
- * well as free resources when an error occurred while we were half way through
- * mounting (error path cleanup function). So it has to make sure the resource
- * was actually allocated before freeing it.
+ * Note, this function is called to free allocated resourced when un-mounting,
+ * as well as free resources when an error occurred while we were half way
+ * through mounting (error path cleanup function). So it has to make sure the
+ * resource was actually allocated before freeing it.
  */
 void ubifs_umount(struct ubifs_info *c)
 {
@@ -1238,8 +1237,7 @@ static void ubifs_kill_sb(struct super_block *sb)
 	generic_shutdown_super(sb);
 }
 
-static struct file_system_type ubifs_fs_type =
-{
+static struct file_system_type ubifs_fs_type = {
 	.name    = "ubifs",
 	.owner   = THIS_MODULE,
 	.get_sb  = ubifs_get_sb,

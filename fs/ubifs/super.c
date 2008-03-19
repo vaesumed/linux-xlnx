@@ -526,8 +526,7 @@ static int ubifs_sync_fs(struct super_block *sb, int wait)
 	return ret;
 }
 
-struct super_operations ubifs_super_operations =
-{
+struct super_operations ubifs_super_operations = {
 /* TODO: remove compatibility stuff as late as possible */
 #ifdef UBIFS_COMPAT_USE_OLD_IGET
 	.read_inode    = ubifs_read_inode,

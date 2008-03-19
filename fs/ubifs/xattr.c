@@ -269,7 +269,8 @@ static int check_namespace(const struct qstr *nm)
 	if (nm->len > UBIFS_MAX_NLEN)
 		return -ENAMETOOLONG;
 
-	if (!strncmp(nm->name, XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN)) {
+	if (!strncmp(nm->name, XATTR_TRUSTED_PREFIX,
+		     XATTR_TRUSTED_PREFIX_LEN)) {
 		if (nm->name[sizeof(XATTR_TRUSTED_PREFIX) - 1] == '\0')
 			return -EINVAL;
 		type = TRUSTED_XATTR;
@@ -468,7 +469,8 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
 		nm.name = xent->name;
 		nm.len = le16_to_cpu(xent->nlen);
-		dbg_xattr("xent '%s', ino %llu", nm.name, le64_to_cpu(xent->inum));
+		dbg_xattr("xent '%s', ino %llu",
+			  nm.name, le64_to_cpu(xent->inum));
 
 		type = check_namespace(&nm);
 		if (unlikely(type < 0)) {

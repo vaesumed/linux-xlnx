@@ -629,7 +629,7 @@ static void *ubifs_follow_link(struct dentry *dentry, struct nameidata *nd)
 
 int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync)
 {
-	struct inode * inode = dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	int err;
 
@@ -757,8 +757,7 @@ static int ubifs_releasepage(struct page *page, gfp_t unused_gfp_flags)
 	return 1;
 }
 
-struct address_space_operations ubifs_file_address_operations =
-{
+struct address_space_operations ubifs_file_address_operations = {
 	.readpage       = ubifs_readpage,
 	.writepage      = ubifs_writepage,
 /* TODO: remove compatibility stuff as late as possible */
@@ -774,8 +773,7 @@ struct address_space_operations ubifs_file_address_operations =
 	.releasepage    = ubifs_releasepage,
 };
 
-struct inode_operations ubifs_file_inode_operations =
-{
+struct inode_operations ubifs_file_inode_operations = {
 	.setattr     = ubifs_setattr,
 	.getattr     = ubifs_getattr,
 #ifdef CONFIG_UBIFS_FS_XATTR
@@ -786,16 +784,14 @@ struct inode_operations ubifs_file_inode_operations =
 #endif
 };
 
-struct inode_operations ubifs_symlink_inode_operations =
-{
+struct inode_operations ubifs_symlink_inode_operations = {
 	.readlink    = generic_readlink,
 	.follow_link = ubifs_follow_link,
 	.setattr     = ubifs_setattr,
 	.getattr     = ubifs_getattr,
 };
 
-struct file_operations ubifs_file_operations =
-{
+struct file_operations ubifs_file_operations = {
 	.llseek    = generic_file_llseek,
 	.read      = do_sync_read,
 	.write     = ubifs_write,
