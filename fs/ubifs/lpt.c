@@ -71,23 +71,26 @@ static int dbg_chk_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
  */
 static void do_calc_lpt_geom(struct ubifs_info *c)
 {
-	int n, bits, per_leb_wastage;
+	int i, n, bits, per_leb_wastage, max_pnode_cnt;
 	long long sz, tot_wastage;
+
+	n = c->main_lebs + c->max_leb_cnt - c->leb_cnt;
+	max_pnode_cnt = DIV_ROUND_UP(n, UBIFS_LPT_FANOUT);
+
+	c->lpt_hght = 1;
+	n = UBIFS_LPT_FANOUT;
+	while (n < max_pnode_cnt) {
+		c->lpt_hght += 1;
+		n <<= UBIFS_LPT_FANOUT_SHIFT;
+	}
 
 	c->pnode_cnt = DIV_ROUND_UP(c->main_lebs, UBIFS_LPT_FANOUT);
 
 	n = DIV_ROUND_UP(c->pnode_cnt, UBIFS_LPT_FANOUT);
 	c->nnode_cnt = n;
-	while (n > 1) {
+	for (i = 1; i < c->lpt_hght; i++) {
 		n = DIV_ROUND_UP(n, UBIFS_LPT_FANOUT);
 		c->nnode_cnt += n;
-	}
-
-	c->lpt_hght = 1;
-	n = UBIFS_LPT_FANOUT;
-	while (n < c->pnode_cnt) {
-		c->lpt_hght += 1;
-		n <<= UBIFS_LPT_FANOUT_SHIFT;
 	}
 
 	c->space_bits = fls(c->leb_size) - 3;
