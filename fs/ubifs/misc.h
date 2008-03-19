@@ -88,6 +88,7 @@ static inline void ubifs_ro_mode(struct ubifs_info *c)
 	if (!c->ro_media) {
 		c->ro_media = 1;
 		ubifs_warn("switched to read-only mode");
+		dbg_dump_stack();
 	}
 }
 
