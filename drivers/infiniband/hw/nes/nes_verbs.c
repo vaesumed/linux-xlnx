@@ -49,6 +49,7 @@ atomic_t mod_qp_timouts;
 atomic_t qps_created;
 atomic_t sw_qps_destroyed;
 
+static void nes_unregister_ofa_device(struct nes_ib_device *nesibdev);
 
 /**
  * nes_alloc_mw
@@ -1908,13 +1909,13 @@ static int nes_destroy_cq(struct ib_cq *ib_cq)
 		nesadapter->free_256pbl++;
 		if (nesadapter->free_256pbl > nesadapter->max_256pbl) {
 			printk(KERN_ERR PFX "%s: free 256B PBLs(%u) has exceeded the max(%u)\n",
-					__FUNCTION__, nesadapter->free_256pbl, nesadapter->max_256pbl);
+					__func__, nesadapter->free_256pbl, nesadapter->max_256pbl);
 		}
 	} else if (nescq->virtual_cq == 2) {
 		nesadapter->free_4kpbl++;
 		if (nesadapter->free_4kpbl > nesadapter->max_4kpbl) {
 			printk(KERN_ERR PFX "%s: free 4K PBLs(%u) has exceeded the max(%u)\n",
-					__FUNCTION__, nesadapter->free_4kpbl, nesadapter->max_4kpbl);
+					__func__, nesadapter->free_4kpbl, nesadapter->max_4kpbl);
 		}
 		opcode |= NES_CQP_CQ_4KB_CHUNK;
 	}
@@ -3895,13 +3896,10 @@ int nes_register_ofa_device(struct nes_ib_device *nesibdev)
 /**
  * nes_unregister_ofa_device
  */
-void nes_unregister_ofa_device(struct nes_ib_device *nesibdev)
+static void nes_unregister_ofa_device(struct nes_ib_device *nesibdev)
 {
 	struct nes_vnic *nesvnic = nesibdev->nesvnic;
 	int i;
-
-	if (nesibdev == NULL)
-		return;
 
 	for (i = 0; i < ARRAY_SIZE(nes_class_attributes); ++i) {
 		class_device_remove_file(&nesibdev->ibdev.class_dev, nes_class_attributes[i]);
