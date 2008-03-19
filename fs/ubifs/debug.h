@@ -57,11 +57,11 @@
 } while(0)
 
 #ifndef UBIFS_DBG_PRESERVE_KMALLOC
-#define kmalloc dbg_km_chkr
-#define kzalloc dbg_kz_chkr
-#define kfree dbg_kf_chkr
-#define vmalloc dbg_vm_chkr
-#define vfree dbg_vf_chkr
+#define kmalloc dbg_kmalloc
+#define kzalloc dbg_kzalloc
+#define kfree dbg_kfree
+#define vmalloc dbg_vmalloc
+#define vfree dbg_vfree
 #endif
 
 #else
@@ -93,12 +93,12 @@ void dbg_dump_leb(const struct ubifs_info *c, int lnum);
 void dbg_dump_znode(const struct ubifs_info *c,
 		    const struct ubifs_znode *znode);
 void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat);
-void *dbg_km_chkr(size_t size, gfp_t flags);
-void *dbg_kz_chkr(size_t size, gfp_t flags);
-void dbg_kf_chkr(const void *addr);
-void *dbg_vm_chkr(size_t size);
-void dbg_vf_chkr(void *addr);
-void dbg_leak_rpt(void);
+void *dbg_kmalloc(size_t size, gfp_t flags);
+void *dbg_kzalloc(size_t size, gfp_t flags);
+void dbg_kfree(const void *addr);
+void *dbg_vmalloc(size_t size);
+void dbg_vfree(void *addr);
+void dbg_leak_report(void);
 
 typedef int (*dbg_leaf_callback)(struct ubifs_info *c,
 				 struct ubifs_zbranch *zbr, void *priv);
@@ -123,7 +123,7 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 #define dbg_dump_leb(c, lnum)       ({})
 #define dbg_dump_znode(c, znode)    ({})
 #define dbg_dump_heap(c, heap, cat) ({})
-#define dbg_leak_rpt()              ({})
+#define dbg_leak_report()           ({})
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
 #define dbg_read_leaf_nolock(c, zbr, node)    0
 
