@@ -381,6 +381,9 @@ int ubifs_write_master(struct ubifs_info *c)
 {
 	int err, lnum, offs, len;
 
+	if (c->ro_media)
+		return -EINVAL;
+
 	lnum = UBIFS_MST_LNUM;
 	offs = c->mst_offs + c->mst_node_alsz;
 	len = UBIFS_MST_NODE_SZ;
