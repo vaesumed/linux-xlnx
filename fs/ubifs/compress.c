@@ -158,8 +158,8 @@ no_compr:
  * The length of the uncompressed data is returned in @out_len. This functions
  * returns %0 on success or a negative error code on failure.
  */
-int ubifs_decompress(const void *in_buf, int in_len, void *out_buf, int *out_len,
-		     int compr_type)
+int ubifs_decompress(const void *in_buf, int in_len, void *out_buf,
+		     int *out_len, int compr_type)
 {
 	int err;
 	struct ubifs_compressor *compr;
