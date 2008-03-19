@@ -329,6 +329,9 @@ int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf)
 	ubifs_assert(!(wbuf->avail & 7));
 	ubifs_assert(wbuf->offs + c->min_io_size <= c->leb_size);
 
+	if (c->ro_media)
+		return -EROFS;
+
 	ubifs_pad(c, wbuf->buf + wbuf->used, wbuf->avail);
 	err = ubi_leb_write(c->ubi, wbuf->lnum, wbuf->buf, wbuf->offs,
 			    c->min_io_size, wbuf->dtype);
@@ -493,6 +496,9 @@ int ubifs_wbuf_write_nolock(struct ubifs_wbuf *wbuf, void *buf, int len)
 
 	cancel_wbuf_timer_nolock(wbuf);
 
+	if (c->ro_media)
+		return -EROFS;
+
 	if (aligned_len <= wbuf->avail) {
 		/*
 		 * The node is not very large and fits entirely within
@@ -625,6 +631,9 @@ int ubifs_write_node(struct ubifs_info *c, void *buf, int len, int lnum,
 	       buf_len);
 	ubifs_assert(lnum >= 0 && lnum < c->leb_cnt && offs >= 0);
 	ubifs_assert(offs % c->min_io_size == 0 && offs < c->leb_size);
+
+	if (c->ro_media)
+		return -EROFS;
 
 	ubifs_prepare_node(c, buf, len, 1);
 	err = ubi_leb_write(c->ubi, lnum, buf, offs, buf_len, dtype);
