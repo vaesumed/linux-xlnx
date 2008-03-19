@@ -326,8 +326,8 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 static int rp_can_write(struct ubifs_info *c, long long avail)
 {
 	if (avail > c->rp_size || current->fsuid == c->rp_uid ||
-	    capable(CAP_SYS_RESOURCE) || (c->rp_gid != 0 &&
-	    in_group_p(c->rp_gid)))
+	    capable(CAP_SYS_RESOURCE) ||
+	    (c->rp_gid != 0 && in_group_p(c->rp_gid)))
 		return 1;
 
 	return 0;
