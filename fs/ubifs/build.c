@@ -1360,7 +1360,7 @@ static void __exit ubifs_exit(void)
 	kmem_cache_destroy(ubifs_inode_slab);
 	unregister_filesystem(&ubifs_fs_type);
 	bdi_destroy(&ubifs_backing_dev_info);
-	dbg_leak_rpt();
+	dbg_leak_report();
 }
 module_exit(ubifs_exit);
 
