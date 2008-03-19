@@ -291,7 +291,8 @@ static inline void data_key_init_flash(const struct ubifs_info *c, void *k,
 	union ubifs_key *key = k;
 
 	key->j32[0] = cpu_to_le32(inum);
-	key->j32[1] = cpu_to_le32((block & 0x01FFFFFF) | (UBIFS_DATA_KEY << 29));
+	key->j32[1] = cpu_to_le32((block & 0x01FFFFFF) |
+				  (UBIFS_DATA_KEY << 29));
 	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
 }
 

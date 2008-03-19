@@ -59,7 +59,7 @@ int ubifs_make_free_space(struct ubifs_info *c, struct retries_info *ri,
 #define unregister_shrinker(x)
 #define set_freezable()
 #define is_owner_or_cap(inode)  \
-        ((current->fsuid == (inode)->i_uid) || capable(CAP_FOWNER))
+	((current->fsuid == (inode)->i_uid) || capable(CAP_FOWNER))
 /* This is to hide slab cache interface changes - destructor was dropped */
 #define UBIFSCOMPATNULL ,NULL
 #else

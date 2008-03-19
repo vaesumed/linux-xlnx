@@ -36,8 +36,7 @@
  * @lnum: LEB number found is returned here
  * @exclude_index: whether to exclude index LEBs
  */
-struct scan_data
-{
+struct scan_data {
 	int min_space;
 	int pick_free;
 	int lnum;
@@ -743,8 +742,8 @@ int ubifs_save_dirty_idx_lnums(struct ubifs_info *c)
 	       sizeof(void *) * c->dirty_idx.cnt);
 	/* Sort it so that the dirtiest is now at the end */
 	sort(c->dirty_idx.arr, c->dirty_idx.cnt, sizeof(void *),
-	     (int (*)(const void *,const void *))cmp_dirty_idx,
-	     (void (*)(void *,void *,int))swap_dirty_idx);
+	     (int (*)(const void *, const void *))cmp_dirty_idx,
+	     (void (*)(void *, void *, int))swap_dirty_idx);
 	dbg_find("found %d dirty index LEBs", c->dirty_idx.cnt);
 	if (c->dirty_idx.cnt)
 		dbg_find("dirtiest index LEB is %d with dirty %d and free %d",
@@ -906,7 +905,8 @@ static int find_dirtiest_idx_leb(struct ubifs_info *c)
 			return PTR_ERR(lp);
 		if ((lp->flags & LPROPS_TAKEN) || !(lp->flags & LPROPS_INDEX))
 			continue;
-		lp = ubifs_change_lp(c, lp, -1, -1, lp->flags | LPROPS_TAKEN,0);
+		lp = ubifs_change_lp(c, lp, -1, -1,
+				     lp->flags | LPROPS_TAKEN, 0);
 		if (IS_ERR(lp))
 			return PTR_ERR(lp);
 		break;

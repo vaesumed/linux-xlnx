@@ -504,16 +504,16 @@ int ubifs_read_superblock(struct ubifs_info *c)
 		goto out;
 	}
 
-	switch(sup->key_hash) {
-		case UBIFS_KEY_HASH_R5:
-			c->key_hash = key_r5_hash;
-			c->key_hash_type = UBIFS_KEY_HASH_R5;
-			break;
+	switch (sup->key_hash) {
+	case UBIFS_KEY_HASH_R5:
+		c->key_hash = key_r5_hash;
+		c->key_hash_type = UBIFS_KEY_HASH_R5;
+		break;
 
-		case UBIFS_KEY_HASH_TEST:
-			c->key_hash = key_test_hash;
-			c->key_hash_type = UBIFS_KEY_HASH_TEST;
-			break;
+	case UBIFS_KEY_HASH_TEST:
+		c->key_hash = key_test_hash;
+		c->key_hash_type = UBIFS_KEY_HASH_TEST;
+		break;
 	};
 
 	c->key_fmt = sup->key_fmt;

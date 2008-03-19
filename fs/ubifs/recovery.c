@@ -1096,8 +1096,7 @@ int ubifs_recover_gc_lnum(struct ubifs_info *c)
  * @exists: indicates whether the inode exists
  * @inode: inode if pinned in memory awaiting rw mode to fix it
  */
-struct size_entry
-{
+struct size_entry {
 	struct rb_node rb;
 	ino_t inum;
 	loff_t i_size;
@@ -1327,13 +1326,13 @@ static int fix_size_in_place(struct ubifs_info *c, struct size_entry *e)
 	err = ubi_leb_change(c->ubi, lnum, c->sbuf, len, UBI_UNKNOWN);
 	if (err)
 		goto out;
-	dbg_rcvry("inode %lu at %d:%d size %lld -> %lld ",e->inum, lnum, offs,
+	dbg_rcvry("inode %lu at %d:%d size %lld -> %lld ", e->inum, lnum, offs,
 		  i_size, e->d_size);
 	return 0;
 
 out:
-	ubifs_warn("inode %lu failed to fix size %lld -> %lld error %d", e->inum,
-		   e->i_size, e->d_size, err);
+	ubifs_warn("inode %lu failed to fix size %lld -> %lld error %d",
+		   e->inum, e->i_size, e->d_size, err);
 	return err;
 }
 
