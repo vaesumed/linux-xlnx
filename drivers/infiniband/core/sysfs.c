@@ -427,17 +427,17 @@ static struct kobj_type port_type = {
 	.default_attrs = port_default_attrs
 };
 
-static void ib_device_release(struct device *device)
+static void ib_device_release(struct class_device *cdev)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 
 	kfree(dev);
 }
 
-static int ib_device_uevent(struct device *device,
+static int ib_device_uevent(struct class_device *cdev,
 			    struct kobj_uevent_env *env)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 
 	if (add_uevent_var(env, "NAME=%s", dev->name))
 		return -ENOMEM;
@@ -567,10 +567,9 @@ err_put:
 	return ret;
 }
 
-static ssize_t show_node_type(struct device *device,
-			      struct device_attribute *attr, char *buf)
+static ssize_t show_node_type(struct class_device *cdev, char *buf)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 
 	if (!ibdev_is_alive(dev))
 		return -ENODEV;
@@ -584,10 +583,9 @@ static ssize_t show_node_type(struct device *device,
 	}
 }
 
-static ssize_t show_sys_image_guid(struct device *device,
-				   struct device_attribute *dev_attr, char *buf)
+static ssize_t show_sys_image_guid(struct class_device *cdev, char *buf)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 	struct ib_device_attr attr;
 	ssize_t ret;
 
@@ -605,10 +603,9 @@ static ssize_t show_sys_image_guid(struct device *device,
 		       be16_to_cpu(((__be16 *) &attr.sys_image_guid)[3]));
 }
 
-static ssize_t show_node_guid(struct device *device,
-			      struct device_attribute *attr, char *buf)
+static ssize_t show_node_guid(struct class_device *cdev, char *buf)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 
 	if (!ibdev_is_alive(dev))
 		return -ENODEV;
@@ -620,19 +617,17 @@ static ssize_t show_node_guid(struct device *device,
 		       be16_to_cpu(((__be16 *) &dev->node_guid)[3]));
 }
 
-static ssize_t show_node_desc(struct device *device,
-			      struct device_attribute *attr, char *buf)
+static ssize_t show_node_desc(struct class_device *cdev, char *buf)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 
 	return sprintf(buf, "%.64s\n", dev->node_desc);
 }
 
-static ssize_t set_node_desc(struct device *device,
-			     struct device_attribute *attr,
-			     const char *buf, size_t count)
+static ssize_t set_node_desc(struct class_device *cdev, const char *buf,
+			      size_t count)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(cdev, struct ib_device, class_dev);
 	struct ib_device_modify desc = {};
 	int ret;
 
@@ -647,43 +642,44 @@ static ssize_t set_node_desc(struct device *device,
 	return count;
 }
 
-static DEVICE_ATTR(node_type, S_IRUGO, show_node_type, NULL);
-static DEVICE_ATTR(sys_image_guid, S_IRUGO, show_sys_image_guid, NULL);
-static DEVICE_ATTR(node_guid, S_IRUGO, show_node_guid, NULL);
-static DEVICE_ATTR(node_desc, S_IRUGO | S_IWUSR, show_node_desc, set_node_desc);
+static CLASS_DEVICE_ATTR(node_type, S_IRUGO, show_node_type, NULL);
+static CLASS_DEVICE_ATTR(sys_image_guid, S_IRUGO, show_sys_image_guid, NULL);
+static CLASS_DEVICE_ATTR(node_guid, S_IRUGO, show_node_guid, NULL);
+static CLASS_DEVICE_ATTR(node_desc, S_IRUGO | S_IWUSR, show_node_desc,
+			 set_node_desc);
 
-static struct device_attribute *ib_class_attributes[] = {
-	&dev_attr_node_type,
-	&dev_attr_sys_image_guid,
-	&dev_attr_node_guid,
-	&dev_attr_node_desc
+static struct class_device_attribute *ib_class_attributes[] = {
+	&class_device_attr_node_type,
+	&class_device_attr_sys_image_guid,
+	&class_device_attr_node_guid,
+	&class_device_attr_node_desc
 };
 
 static struct class ib_class = {
 	.name    = "infiniband",
-	.dev_release = ib_device_release,
-	.dev_uevent = ib_device_uevent,
+	.release = ib_device_release,
+	.uevent = ib_device_uevent,
 };
 
 int ib_device_register_sysfs(struct ib_device *device)
 {
-	struct device *class_dev = &device->dev;
+	struct class_device *class_dev = &device->class_dev;
 	int ret;
 	int i;
 
 	class_dev->class      = &ib_class;
-	class_dev->driver_data = device;
-	class_dev->parent     = device->dma_device;
-	strlcpy(class_dev->bus_id, device->name, BUS_ID_SIZE);
+	class_dev->class_data = device;
+	class_dev->dev	      = device->dma_device;
+	strlcpy(class_dev->class_id, device->name, BUS_ID_SIZE);
 
 	INIT_LIST_HEAD(&device->port_list);
 
-	ret = device_register(class_dev);
+	ret = class_device_register(class_dev);
 	if (ret)
 		goto err;
 
 	for (i = 0; i < ARRAY_SIZE(ib_class_attributes); ++i) {
-		ret = device_create_file(class_dev, ib_class_attributes[i]);
+		ret = class_device_create_file(class_dev, ib_class_attributes[i]);
 		if (ret)
 			goto err_unregister;
 	}
@@ -727,7 +723,7 @@ err_put:
 	kobject_put(&class_dev->kobj);
 
 err_unregister:
-	device_unregister(class_dev);
+	class_device_unregister(class_dev);
 
 err:
 	return ret;
@@ -748,7 +744,7 @@ void ib_device_unregister_sysfs(struct ib_device *device)
 	}
 
 	kobject_put(device->ports_parent);
-	device_unregister(&device->dev);
+	class_device_unregister(&device->class_dev);
 }
 
 int ib_sysfs_setup(void)
