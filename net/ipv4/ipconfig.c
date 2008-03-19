@@ -103,6 +103,7 @@
 					   - '3' from resolv.h */
 
 #define NONE __constant_htonl(INADDR_NONE)
+#define ANY __constant_htonl(INADDR_ANY)
 
 /*
  * Public IP configuration
@@ -291,7 +292,7 @@ static int __init ic_dev_ioctl(unsigned int cmd, struct ifreq *arg)
 
 	mm_segment_t oldfs = get_fs();
 	set_fs(get_ds());
-	res = devinet_ioctl(cmd, (struct ifreq __user *) arg);
+	res = devinet_ioctl(&init_net, cmd, (struct ifreq __user *) arg);
 	set_fs(oldfs);
 	return res;
 }
@@ -459,10 +460,7 @@ ic_rarp_recv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt
 	if (rarp->ar_pro != htons(ETH_P_IP))
 		goto drop;
 
-	if (!pskb_may_pull(skb,
-			   sizeof(struct arphdr) +
-			   (2 * dev->addr_len) +
-			   (2 * 4)))
+	if (!pskb_may_pull(skb, arp_hdr_len(dev)))
 		goto drop;
 
 	/* OK, it is all there and looks valid, process... */
@@ -1479,19 +1477,19 @@ static int __init ip_auto_config_setup(char *addrs)
 			DBG(("IP-Config: Parameter #%d: `%s'\n", num, ip));
 			switch (num) {
 			case 0:
-				if ((ic_myaddr = in_aton(ip)) == INADDR_ANY)
+				if ((ic_myaddr = in_aton(ip)) == ANY)
 					ic_myaddr = NONE;
 				break;
 			case 1:
-				if ((ic_servaddr = in_aton(ip)) == INADDR_ANY)
+				if ((ic_servaddr = in_aton(ip)) == ANY)
 					ic_servaddr = NONE;
 				break;
 			case 2:
-				if ((ic_gateway = in_aton(ip)) == INADDR_ANY)
+				if ((ic_gateway = in_aton(ip)) == ANY)
 					ic_gateway = NONE;
 				break;
 			case 3:
-				if ((ic_netmask = in_aton(ip)) == INADDR_ANY)
+				if ((ic_netmask = in_aton(ip)) == ANY)
 					ic_netmask = NONE;
 				break;
 			case 4:

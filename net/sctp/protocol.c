@@ -337,14 +337,14 @@ static int sctp_v4_cmp_addr(const union sctp_addr *addr1,
 static void sctp_v4_inaddr_any(union sctp_addr *addr, __be16 port)
 {
 	addr->v4.sin_family = AF_INET;
-	addr->v4.sin_addr.s_addr = INADDR_ANY;
+	addr->v4.sin_addr.s_addr = htonl(INADDR_ANY);
 	addr->v4.sin_port = port;
 }
 
 /* Is this a wildcard address? */
 static int sctp_v4_is_any(const union sctp_addr *addr)
 {
-	return INADDR_ANY == addr->v4.sin_addr.s_addr;
+	return htonl(INADDR_ANY) == addr->v4.sin_addr.s_addr;
 }
 
 /* This function checks if the address is a valid address to be used for
@@ -363,7 +363,7 @@ static int sctp_v4_addr_valid(union sctp_addr *addr,
 		return 0;
 
 	/* Is this a broadcast address? */
-	if (skb && ((struct rtable *)skb->dst)->rt_flags & RTCF_BROADCAST)
+	if (skb && skb->rtable->rt_flags & RTCF_BROADCAST)
 		return 0;
 
 	return 1;
@@ -375,7 +375,7 @@ static int sctp_v4_available(union sctp_addr *addr, struct sctp_sock *sp)
 	int ret = inet_addr_type(&init_net, addr->v4.sin_addr.s_addr);
 
 
-	if (addr->v4.sin_addr.s_addr != INADDR_ANY &&
+	if (addr->v4.sin_addr.s_addr != htonl(INADDR_ANY) &&
 	   ret != RTN_LOCAL &&
 	   !sp->inet.freebind &&
 	   !sysctl_ip_nonlocal_bind)
@@ -451,7 +451,7 @@ static struct dst_entry *sctp_v4_get_dst(struct sctp_association *asoc,
 		fl.fl4_src = saddr->v4.sin_addr.s_addr;
 
 	SCTP_DEBUG_PRINTK("%s: DST:%u.%u.%u.%u, SRC:%u.%u.%u.%u - ",
-			  __FUNCTION__, NIPQUAD(fl.fl4_dst),
+			  __func__, NIPQUAD(fl.fl4_dst),
 			  NIPQUAD(fl.fl4_src));
 
 	if (!ip_route_output_key(&init_net, &rt, &fl)) {
@@ -539,7 +539,7 @@ static void sctp_v4_get_saddr(struct sctp_association *asoc,
 /* What interface did this skb arrive on? */
 static int sctp_v4_skb_iif(const struct sk_buff *skb)
 {
-	return ((struct rtable *)skb->dst)->rt_iif;
+	return skb->rtable->rt_iif;
 }
 
 /* Was this packet marked by Explicit Congestion Notification? */
@@ -629,6 +629,9 @@ static int sctp_inetaddr_event(struct notifier_block *this, unsigned long ev,
 	struct sctp_sockaddr_entry *addr = NULL;
 	struct sctp_sockaddr_entry *temp;
 	int found = 0;
+
+	if (ifa->ifa_dev->dev->nd_net != &init_net)
+		return NOTIFY_DONE;
 
 	switch (ev) {
 	case NETDEV_UP:
@@ -785,8 +788,8 @@ static int sctp_inet_cmp_addr(const union sctp_addr *addr1,
 	/* PF_INET only supports AF_INET addresses. */
 	if (addr1->sa.sa_family != addr2->sa.sa_family)
 		return 0;
-	if (INADDR_ANY == addr1->v4.sin_addr.s_addr ||
-	    INADDR_ANY == addr2->v4.sin_addr.s_addr)
+	if (htonl(INADDR_ANY) == addr1->v4.sin_addr.s_addr ||
+	    htonl(INADDR_ANY) == addr2->v4.sin_addr.s_addr)
 		return 1;
 	if (addr1->v4.sin_addr.s_addr == addr2->v4.sin_addr.s_addr)
 		return 1;
@@ -826,9 +829,9 @@ static inline int sctp_v4_xmit(struct sk_buff *skb,
 {
 	SCTP_DEBUG_PRINTK("%s: skb:%p, len:%d, "
 			  "src:%u.%u.%u.%u, dst:%u.%u.%u.%u\n",
-			  __FUNCTION__, skb, skb->len,
-			  NIPQUAD(((struct rtable *)skb->dst)->rt_src),
-			  NIPQUAD(((struct rtable *)skb->dst)->rt_dst));
+			  __func__, skb, skb->len,
+			  NIPQUAD(skb->rtable->rt_src),
+			  NIPQUAD(skb->rtable->rt_dst));
 
 	SCTP_INC_STATS(SCTP_MIB_OUTSCTPPACKS);
 	return ip_queue_xmit(skb, ipfragok);

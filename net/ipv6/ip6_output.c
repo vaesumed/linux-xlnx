@@ -404,6 +404,7 @@ int ip6_forward(struct sk_buff *skb)
 	struct dst_entry *dst = skb->dst;
 	struct ipv6hdr *hdr = ipv6_hdr(skb);
 	struct inet6_skb_parm *opt = IP6CB(skb);
+	struct net *net = dst->dev->nd_net;
 
 	if (ipv6_devconf.forwarding == 0)
 		goto error;
@@ -450,7 +451,7 @@ int ip6_forward(struct sk_buff *skb)
 
 	/* XXX: idev->cnf.proxy_ndp? */
 	if (ipv6_devconf.proxy_ndp &&
-	    pneigh_lookup(&nd_tbl, &init_net, &hdr->daddr, skb->dev, 0)) {
+	    pneigh_lookup(&nd_tbl, net, &hdr->daddr, skb->dev, 0)) {
 		int proxied = ip6_forward_proxy_check(skb);
 		if (proxied > 0)
 			return ip6_input(skb);
@@ -596,7 +597,6 @@ int ip6_find_1stfragopt(struct sk_buff *skb, u8 **nexthdr)
 
 	return offset;
 }
-EXPORT_SYMBOL_GPL(ip6_find_1stfragopt);
 
 static int ip6_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
 {
@@ -912,15 +912,17 @@ static int ip6_dst_lookup_tail(struct sock *sk,
 			       struct dst_entry **dst, struct flowi *fl)
 {
 	int err;
+	struct net *net = sk->sk_net;
 
 	if (*dst == NULL)
-		*dst = ip6_route_output(sk, fl);
+		*dst = ip6_route_output(net, sk, fl);
 
 	if ((err = (*dst)->error))
 		goto out_err_release;
 
 	if (ipv6_addr_any(&fl->fl6_src)) {
-		err = ipv6_get_saddr(*dst, &fl->fl6_dst, &fl->fl6_src);
+		err = ipv6_dev_get_saddr(ip6_dst_idev(*dst)->dev,
+					 &fl->fl6_dst, &fl->fl6_src);
 		if (err)
 			goto out_err_release;
 	}
@@ -939,7 +941,7 @@ static int ip6_dst_lookup_tail(struct sock *sk,
 			struct flowi fl_gw;
 			int redirect;
 
-			ifp = ipv6_get_ifaddr(&init_net, &fl->fl6_src,
+			ifp = ipv6_get_ifaddr(net, &fl->fl6_src,
 					      (*dst)->dev, 1);
 
 			redirect = (ifp && ifp->flags & IFA_F_OPTIMISTIC);
@@ -954,7 +956,7 @@ static int ip6_dst_lookup_tail(struct sock *sk,
 				dst_release(*dst);
 				memcpy(&fl_gw, fl, sizeof(struct flowi));
 				memset(&fl_gw.fl6_dst, 0, sizeof(struct in6_addr));
-				*dst = ip6_route_output(sk, &fl_gw);
+				*dst = ip6_route_output(net, sk, &fl_gw);
 				if ((err = (*dst)->error))
 					goto out_err_release;
 			}
