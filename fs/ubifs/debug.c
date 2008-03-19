@@ -709,12 +709,12 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 		size += CALC_DENT_SIZE(dent->nlen);
 		nm.name = dent->name;
 		nm.len = le16_to_cpu(dent->nlen);
-		dbg_kf_chkr(pdent); /* kfree via debug function */
+		dbg_kfree(pdent); /* kfree via debug function */
 		pdent = dent;
 		key_read(c, &dent->key, &key);
 	}
 
-	dbg_kf_chkr(pdent); /* kfree via debug function */
+	dbg_kfree(pdent); /* kfree via debug function */
 
 	if (i_size_read(dir) != size) {
 		ubifs_err("bad directory dir %lu size %llu, "
@@ -729,7 +729,7 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_CHK_OTHER */
 
-void *dbg_km_chkr(size_t size, gfp_t flags)
+void *dbg_kmalloc(size_t size, gfp_t flags)
 {
 	void *addr;
 
@@ -742,7 +742,7 @@ void *dbg_km_chkr(size_t size, gfp_t flags)
 	return addr;
 }
 
-void *dbg_kz_chkr(size_t size, gfp_t flags)
+void *dbg_kzalloc(size_t size, gfp_t flags)
 {
 	void *addr;
 
@@ -755,7 +755,7 @@ void *dbg_kz_chkr(size_t size, gfp_t flags)
 	return addr;
 }
 
-void dbg_kf_chkr(const void *addr)
+void dbg_kfree(const void *addr)
 {
 	if (addr != NULL) {
 		spin_lock(&dbg_lock);
@@ -765,7 +765,7 @@ void dbg_kf_chkr(const void *addr)
 	}
 }
 
-void *dbg_vm_chkr(size_t size)
+void *dbg_vmalloc(size_t size)
 {
 	void *addr;
 
@@ -778,7 +778,7 @@ void *dbg_vm_chkr(size_t size)
 	return addr;
 }
 
-void dbg_vf_chkr(void *addr)
+void dbg_vfree(void *addr)
 {
 	if (addr != NULL) {
 		spin_lock(&dbg_lock);
@@ -788,7 +788,7 @@ void dbg_vf_chkr(void *addr)
 	}
 }
 
-void dbg_leak_rpt(void)
+void dbg_leak_report(void)
 {
 	spin_lock(&dbg_lock);
 	if (km_alloc_cnt || vm_alloc_cnt) {
