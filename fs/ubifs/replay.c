@@ -63,8 +63,7 @@ enum {
  * UBIFS journal replay must compare node sequence numbers, which means it must
  * build a tree of node information to insert into the TNC.
  */
-struct replay_entry
-{
+struct replay_entry {
 	int lnum;
 	int offs;
 	int len;
@@ -92,8 +91,7 @@ struct replay_entry
  * @free: free bytes in the bud
  * @sqnum: reference node sequence number
  */
-struct bud_entry
-{
+struct bud_entry {
 	struct list_head list;
 	struct ubifs_bud *bud;
 	int free;
@@ -644,7 +642,7 @@ static int replay_buds(struct ubifs_info *c)
 	struct bud_entry *b;
 	int err, uninitialized_var(free), uninitialized_var(dirty);
 
-	list_for_each_entry(b, &c->replay_buds,list) {
+	list_for_each_entry(b, &c->replay_buds, list) {
 		err = replay_bud(c, b->bud->lnum, b->bud->start, b->bud->jhead,
 				 &free, &dirty);
 		if (err)

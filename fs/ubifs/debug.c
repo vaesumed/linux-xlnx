@@ -38,8 +38,8 @@ DEFINE_SPINLOCK(dbg_lock);
 
 static char dbg_get_key_dump_dump_buf[100];
 
-static size_t km_alloc_cnt = 0;
-static size_t vm_alloc_cnt = 0;
+static size_t km_alloc_cnt;
+static size_t vm_alloc_cnt;
 
 static const char *get_key_fmt(int fmt)
 {
@@ -812,8 +812,7 @@ void dbg_leak_report(void)
  * @list: link in the list of eaten memory objects
  * @pad: just pads to memory page size
  */
-struct eaten_memory
-{
+struct eaten_memory {
 	struct list_head list;
 	uint8_t pad[PAGE_CACHE_SIZE - sizeof(struct list_head)];
 };
@@ -877,8 +876,7 @@ static int dbg_shrinker(int nr, gfp_t gfp_mask)
 	return return_eaten_memory(nr);
 }
 
-static struct shrinker dbg_shrinker_info =
-{
+static struct shrinker dbg_shrinker_info = {
 	.shrink = dbg_shrinker,
 	.seeks = DEFAULT_SEEKS,
 };
@@ -900,8 +898,7 @@ void dbg_mempressure_exit(void)
 
 #define chance(n, d) (simple_rand() <= (n) * 32768LL / (d))
 
-struct failure_mode_info
-{
+struct failure_mode_info {
 	struct list_head list;
 	struct ubifs_info *c;
 };
@@ -909,14 +906,14 @@ struct failure_mode_info
 static LIST_HEAD(fmi_list);
 static DEFINE_SPINLOCK(fmi_lock);
 
-static unsigned int next = 0;
+static unsigned int next;
 
 static int simple_rand(void)
 {
 	if (next == 0)
 		next = current->pid;
-        next = next * 1103515245 + 12345;
-        return (next >> 16) & 32767;
+	next = next * 1103515245 + 12345;
+	return (next >> 16) & 32767;
 }
 
 void dbg_failure_mode_registration(struct ubifs_info *c)
@@ -1009,7 +1006,7 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 			return 0;
 		dbg_rcvry("failing in index head LEB %d", lnum);
 	} else if (write && !RB_EMPTY_ROOT(&c->buds) &&
-	           ubifs_search_bud(c, lnum) == NULL) {
+		   ubifs_search_bud(c, lnum) == NULL) {
 		if (chance(19, 20))
 			return 0;
 		dbg_rcvry("failing in non-bud LEB %d", lnum);

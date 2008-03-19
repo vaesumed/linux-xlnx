@@ -819,7 +819,7 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	int err, type = key_type(c, key);
 	const struct ubifs_bud *bud;
 
-        dbg_tnc_key(c, key, "LEB %d:%d, len %d, key",
+	dbg_tnc_key(c, key, "LEB %d:%d, len %d, key",
 		    zbr->lnum, zbr->offs, zbr->len);
 
 	if (lnc_lookup(c, zbr, node))
@@ -1415,12 +1415,14 @@ static int resolve_collision_directly(struct ubifs_info *c,
 			break;
 		if (matches_position(&znode->zbranch[n], lnum, offs)) {
 			dbg_tnc_key(c, key, "collision resolved");
-			dbg_mnt_key(c, key, "LEB %d:%d collision resolved", lnum, offs);
+			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
+				    lnum, offs);
 			*zn = znode;
 			*nn = n;
 			return 1;
 		}
 	}
+
 	/* Look right */
 	znode = *zn;
 	n = *nn;
@@ -1433,7 +1435,8 @@ static int resolve_collision_directly(struct ubifs_info *c,
 			return 0;
 		if (matches_position(&znode->zbranch[n], lnum, offs)) {
 			dbg_tnc_key(c, key, "collision resolved");
-			dbg_mnt_key(c, key, "LEB %d:%d collision resolved", lnum, offs);
+			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
+				    lnum, offs);
 			*zn = znode;
 			*nn = n;
 			return 1;
@@ -1626,10 +1629,10 @@ int ubifs_tnc_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	if (nm->len == len && !memcmp(dent->name, nm->name, len))
 		return 0;
 
-        /*
-         * Unluckily, there are hash collisions and we have to iterate over
-         * them look at each direntry with colliding name hash sequentially.
-         */
+	/*
+	 * Unluckily, there are hash collisions and we have to iterate over
+	 * them look at each direntry with colliding name hash sequentially.
+	 */
 	return do_lookup_nm(c, key, node, nm);
 }
 
@@ -2052,7 +2055,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 				/* Ensure the znode is dirtied */
 				if (znode->cnext || !ubifs_zn_dirty(znode)) {
 					    znode = dirty_cow_bottom_up(c,
-								        znode);
+									znode);
 					    if (IS_ERR(znode)) {
 						    err = PTR_ERR(znode);
 						    goto out;

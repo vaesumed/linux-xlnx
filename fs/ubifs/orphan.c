@@ -719,14 +719,12 @@ int ubifs_mount_orphans(struct ubifs_info *c, int unclean)
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_ORPH
 
-struct check_orphan
-{
+struct check_orphan {
 	struct rb_node rb;
 	ino_t inum;
 };
 
-struct check_info
-{
+struct check_info {
 	unsigned long last_ino;
 	unsigned long tot_inos;
 	unsigned long missing;
