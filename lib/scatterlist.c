@@ -360,7 +360,6 @@ static size_t sg_copy_buffer(struct scatterlist *sgl, unsigned int nents,
 
 	return buf_off;
 }
-EXPORT_SYMBOL(sg_copy_buffer);
 
 /**
  * sg_copy_from_buffer - Copy from a linear buffer to an SG list
