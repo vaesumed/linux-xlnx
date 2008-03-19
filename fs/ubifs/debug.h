@@ -156,7 +156,8 @@ int dbg_check_old_index(struct ubifs_info *c, struct ubifs_zbranch *zroot);
 #define dbg_check_old_index(c, zroot) 0
 #endif
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+#if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS) || \
+    defined(CONFIG_UBIFS_FS_DEBUG_CHK_OTHER)
 int dbg_check_cats(struct ubifs_info *c);
 #else
 #define dbg_check_cats(c) 0
