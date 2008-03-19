@@ -702,7 +702,8 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
 	if (!sync)
-		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inode->i_ino);
+		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
+					  inode->i_ino);
 	release_head(c, BASEHD);
 	if (err)
 		goto out_ro;
@@ -802,7 +803,8 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 
 	/* Make deletion dent */
 	dent2->ch.node_type = UBIFS_DENT_NODE;
-	dent_key_init_flash(c, &dent2->key, old_dir->i_ino, &old_dentry->d_name);
+	dent_key_init_flash(c, &dent2->key, old_dir->i_ino,
+			    &old_dentry->d_name);
 	dent2->inum = cpu_to_le64(0);
 	dent2->padding = 0;
 	dent2->type = DT_UNKNOWN;

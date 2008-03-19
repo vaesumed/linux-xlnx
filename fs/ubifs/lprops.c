@@ -640,7 +640,7 @@ const struct ubifs_lprops *ubifs_change_lp(struct ubifs_info *c,
 	}
 
 	if ((lprops->flags & LPROPS_TAKEN) && lprops->free == c->leb_size)
-		c->lst.taken_empty_lebs +=1;
+		c->lst.taken_empty_lebs += 1;
 
 	change_category(c, lprops);
 
@@ -1040,8 +1040,7 @@ out:
 /**
  * struct scan_check_data - data provided to scan callback function.
  */
-struct scan_check_data
-{
+struct scan_check_data {
 	struct ubifs_lp_stats lst;
 	int err;
 };

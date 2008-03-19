@@ -251,9 +251,8 @@ int ubifs_bg_thread(void *info)
 		run_bg_commit(c);
 
 		set_current_state(TASK_INTERRUPTIBLE);
-		if (!c->need_bgt && !kthread_should_stop()) {
+		if (!c->need_bgt && !kthread_should_stop())
 			schedule();
-		}
 		__set_current_state(TASK_RUNNING);
 
 		cond_resched();
@@ -474,8 +473,7 @@ int ubifs_gc_should_commit(struct ubifs_info *c)
  * @idx: index node (8-byte aligned because all node structures must be 8-byte
  * aligned)
  */
-struct idx_node
-{
+struct idx_node {
 	struct list_head list;
 	int iip;
 	union ubifs_key upper_key;

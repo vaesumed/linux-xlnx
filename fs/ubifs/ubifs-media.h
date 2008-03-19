@@ -111,8 +111,7 @@
  * UBIFS_LPT_NODE_CNT: count of LPT node types
  * UBIFS_LPT_NOT_A_NODE: all ones (15 for 4 bits) is never a valid node type
  */
-enum
-{
+enum {
 	UBIFS_LPT_PNODE,
 	UBIFS_LPT_NNODE,
 	UBIFS_LPT_LTAB,
@@ -365,8 +364,7 @@ enum {
  * Every UBIFS node starts with this common part. If the node has a key, the
  * key always goes next.
  */
-struct ubifs_ch
-{
+struct ubifs_ch {
 	__le32 magic;
 	__le32 crc;
 	__le64 sqnum;
@@ -385,8 +383,7 @@ struct ubifs_ch
  * inode is a device node then its data contains an object of this type. UBIFS
  * uses standard Linux "new" and "huge" device node encodings.
  */
-union ubifs_dev_desc
-{
+union ubifs_dev_desc {
 	__le32 new;
 	__le64 huge;
 } __attribute__ ((packed));
@@ -422,8 +419,7 @@ union ubifs_dev_desc
  * happens if compression type is changed while the inode already has data
  * nodes. But @compr_type will be use for further writes to the inode.
  */
-struct ubifs_ino_node
-{
+struct ubifs_ino_node {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 creat_sqnum;
@@ -458,8 +454,7 @@ struct ubifs_ino_node
  * @padding1: reserved for future, zeroes
  * @name: zero-terminated name
  */
-struct ubifs_dent_node
-{
+struct ubifs_dent_node {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 inum;
@@ -479,8 +474,7 @@ struct ubifs_dent_node
  * @padding: reserved for future, zeroes
  * @data: data
  */
-struct ubifs_data_node
-{
+struct ubifs_data_node {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le32 size;
@@ -498,8 +492,7 @@ struct ubifs_data_node
  *
  * This node exists only in the journal and never goes to the main area.
  */
-struct ubifs_trun_node
-{
+struct ubifs_trun_node {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 old_size;
@@ -512,8 +505,7 @@ struct ubifs_trun_node
  * @pad_len: how many bytes after this node are unused (because padded)
  * @padding: reserved for future, zeroes
  */
-struct ubifs_pad_node
-{
+struct ubifs_pad_node {
 	struct ubifs_ch ch;
 	__le32 pad_len;
 } __attribute__ ((packed));
@@ -544,8 +536,7 @@ struct ubifs_pad_node
  * @rp_size: size of the reserved pool in bytes
  * @padding2: reserved for future, zeroes
  */
-struct ubifs_sb_node
-{
+struct ubifs_sb_node {
 	struct ubifs_ch ch;
 	__u8 padding[2];
 	__u8 key_hash;
@@ -605,8 +596,7 @@ struct ubifs_sb_node
  * @leb_cnt: count of LEBs used by filesystem
  * @padding: reserved for future, zeroes
  */
-struct ubifs_mst_node
-{
+struct ubifs_mst_node {
 	struct ubifs_ch ch;
 	__le64 highest_inum;
 	__le64 cmt_no;
@@ -647,8 +637,7 @@ struct ubifs_mst_node
  * @jhead: journal head number
  * @padding: reserved for future, zeroes
  */
-struct ubifs_ref_node
-{
+struct ubifs_ref_node {
 	struct ubifs_ch ch;
 	__le32 lnum;
 	__le32 offs;
@@ -663,8 +652,7 @@ struct ubifs_ref_node
  * @len: target node length
  * @key: key
  */
-struct ubifs_branch
-{
+struct ubifs_branch {
 	__le32 lnum;
 	__le32 offs;
 	__le32 len;
@@ -679,8 +667,7 @@ struct ubifs_branch
  * @padding: reserved for future, zeroes
  * @branches: LEB number / offset / length / key branches
  */
-struct ubifs_idx_node
-{
+struct ubifs_idx_node {
 	struct ubifs_ch ch;
 	__le16 child_cnt;
 	__le16 level;
@@ -693,8 +680,7 @@ struct ubifs_idx_node
  * @ch: common header
  * @cmt_no: commit number
  */
-struct ubifs_cs_node
-{
+struct ubifs_cs_node {
 	struct ubifs_ch ch;
 	__le64 cmt_no;
 } __attribute__ ((packed));
@@ -705,8 +691,7 @@ struct ubifs_cs_node
  * @cmt_no: commit number (also top bit is set on the last node of the commit)
  * @inos: inode numbers of orphans
  */
-struct ubifs_orph_node
-{
+struct ubifs_orph_node {
 	struct ubifs_ch ch;
 	__le64 cmt_no;
 	__le64 inos[];
