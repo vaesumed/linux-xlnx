@@ -762,6 +762,9 @@ int ubifs_remount_rw(struct ubifs_info *c)
 {
 	int err, lnum;
 
+	if (c->ro_media)
+		return -EINVAL;
+
 	mutex_lock(&c->umount_mutex);
 	c->remounting_rw = 1;
 
@@ -936,12 +939,14 @@ void ubifs_remount_ro(struct ubifs_info *c)
 		del_timer_sync(&c->jheads[i].wbuf.timer);
 	}
 
-	c->mst_node->flags &= ~cpu_to_le32(UBIFS_MST_DIRTY);
-	c->mst_node->flags |= cpu_to_le32(UBIFS_MST_NO_ORPHS);
-	c->mst_node->gc_lnum = cpu_to_le32(c->gc_lnum);
-	err = ubifs_write_master(c);
-	if (err)
-		ubifs_ro_mode(c);
+	if (!c->ro_media) {
+		c->mst_node->flags &= ~cpu_to_le32(UBIFS_MST_DIRTY);
+		c->mst_node->flags |= cpu_to_le32(UBIFS_MST_NO_ORPHS);
+		c->mst_node->gc_lnum = cpu_to_le32(c->gc_lnum);
+		err = ubifs_write_master(c);
+		if (err)
+			ubifs_ro_mode(c);
+	}
 
 	ubifs_destroy_idx_gc(c);
 	free_wbufs(c);

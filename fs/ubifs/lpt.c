@@ -1500,6 +1500,29 @@ out:
 	return err;
 }
 
+#ifdef CONFIG_UBIFS_FS_DEBUG
+void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
+		    struct ubifs_nnode *parent, int iip)
+{
+	int i;
+
+	printk(KERN_DEBUG "Dumping pnode:\n");
+	printk(KERN_DEBUG "\taddress %zx parent %zx cnext %zx calc num %d\n",
+	       (size_t)pnode, (size_t)parent, (size_t)pnode->cnext,
+	       calc_pnode_num_from_parent(c, parent, iip));
+	printk(KERN_DEBUG "\tflags %lu iip %d level %d num %d\n",
+	       pnode->flags, iip, pnode->level, pnode->num);
+	for (i = 0; i < UBIFS_LPT_FANOUT; i++) {
+		struct ubifs_lprops *lp = &pnode->lprops[i];
+
+		printk(KERN_DEBUG "\t%d: free %d dirty %d flags %d lnum %d\n",
+		       i, lp->free, lp->dirty, lp->flags, lp->lnum);
+	}
+}
+#else
+#define dbg_dump_pnode(c, pnode, parent, iip) ({})
+#endif
+
 /**
  * read_pnode - read a pnode from flash and link it to the tree in memory.
  * @c: UBIFS file-system description object
@@ -1561,6 +1584,7 @@ static int read_pnode(struct ubifs_info *c, struct ubifs_nnode *parent, int iip)
 
 out:
 	ubifs_err("error %d reading pnode at %d:%d", err, lnum, offs);
+	dbg_dump_pnode(c, pnode, parent, iip);
 	kfree(pnode);
 	return err;
 }
