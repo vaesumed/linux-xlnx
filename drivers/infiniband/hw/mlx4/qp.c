@@ -122,7 +122,7 @@ static void *get_send_wqe(struct mlx4_ib_qp *qp, int n)
  */
 static void stamp_send_wqe(struct mlx4_ib_qp *qp, int n, int size)
 {
-	u32 *wqe;
+	__be32 *wqe;
 	int i;
 	int s;
 	int ind;
@@ -143,7 +143,7 @@ static void stamp_send_wqe(struct mlx4_ib_qp *qp, int n, int size)
 		buf = get_send_wqe(qp, n & (qp->sq.wqe_cnt - 1));
 		for (i = 64; i < s; i += 64) {
 			wqe = buf + i;
-			*wqe = 0xffffffff;
+			*wqe = cpu_to_be32(0xffffffff);
 		}
 	}
 }
@@ -1436,6 +1436,9 @@ int mlx4_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
 			 cpu_to_be32(MLX4_WQE_CTRL_CQ_UPDATE) : 0) |
 			(wr->send_flags & IB_SEND_SOLICITED ?
 			 cpu_to_be32(MLX4_WQE_CTRL_SOLICITED) : 0) |
+			((wr->send_flags & IB_SEND_IP_CSUM) ?
+			 cpu_to_be32(MLX4_WQE_CTRL_IP_CSUM |
+				     MLX4_WQE_CTRL_TCP_UDP_CSUM) : 0) |
 			qp->sq_signal_bits;
 
 		if (wr->opcode == IB_WR_SEND_WITH_IMM ||
