@@ -518,6 +518,7 @@ static void ext4_put_super (struct super_block * sb)
 	for (i = 0; i < sbi->s_gdb_count; i++)
 		brelse(sbi->s_group_desc[i]);
 	kfree(sbi->s_group_desc);
+	kfree(sbi->s_flex_groups);
 	percpu_counter_destroy(&sbi->s_freeblocks_counter);
 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
 	percpu_counter_destroy(&sbi->s_dirs_counter);
@@ -944,8 +945,8 @@ static match_table_t tokens = {
 	{Opt_mballoc, "mballoc"},
 	{Opt_nomballoc, "nomballoc"},
 	{Opt_stripe, "stripe=%u"},
-	{Opt_err, NULL},
 	{Opt_resize, "resize"},
+	{Opt_err, NULL},
 };
 
 static ext4_fsblk_t get_sb_block(void **data)
@@ -1387,11 +1388,11 @@ static int ext4_setup_super(struct super_block *sb, struct ext4_super_block *es,
 		 * a plain journaled filesystem we can keep it set as
 		 * valid forever! :)
 		 */
-	es->s_state = cpu_to_le16(le16_to_cpu(es->s_state) & ~EXT4_VALID_FS);
+	es->s_state &= cpu_to_le16(~EXT4_VALID_FS);
 #endif
 	if (!(__s16) le16_to_cpu(es->s_max_mnt_count))
 		es->s_max_mnt_count = cpu_to_le16(EXT4_DFL_MAX_MNT_COUNT);
-	es->s_mnt_count=cpu_to_le16(le16_to_cpu(es->s_mnt_count) + 1);
+	le16_add_cpu(&es->s_mnt_count, 1);
 	es->s_mtime = cpu_to_le32(get_seconds());
 	ext4_update_dynamic_rev(sb);
 	EXT4_SET_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_RECOVER);
@@ -1416,6 +1417,54 @@ static int ext4_setup_super(struct super_block *sb, struct ext4_super_block *es,
 		printk("internal journal\n");
 	}
 	return res;
+}
+
+static int ext4_fill_flex_info(struct super_block *sb)
+{
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
+	struct ext4_group_desc *gdp = NULL;
+	struct buffer_head *bh;
+	ext4_group_t flex_group_count;
+	ext4_group_t flex_group;
+	int groups_per_flex = 0;
+	__u64 block_bitmap = 0;
+	int i;
+
+	if (!sbi->s_es->s_log_groups_per_flex) {
+		sbi->s_log_groups_per_flex = 0;
+		return 1;
+	}
+
+	sbi->s_log_groups_per_flex = sbi->s_es->s_log_groups_per_flex;
+	groups_per_flex = 1 << sbi->s_log_groups_per_flex;
+
+	flex_group_count = (sbi->s_groups_count + groups_per_flex - 1) /
+		groups_per_flex;
+	sbi->s_flex_groups = kmalloc(flex_group_count *
+				     sizeof(struct flex_groups), GFP_KERNEL);
+	if (sbi->s_flex_groups == NULL) {
+		printk(KERN_ERR "EXT4-fs: not enough memory\n");
+		goto failed;
+	}
+	memset(sbi->s_flex_groups, 0, flex_group_count *
+	       sizeof(struct flex_groups));
+
+	gdp = ext4_get_group_desc(sb, 1, &bh);
+	block_bitmap = ext4_block_bitmap(sb, gdp) - 1;
+
+	for (i = 0; i < sbi->s_groups_count; i++) {
+		gdp = ext4_get_group_desc(sb, i, &bh);
+
+		flex_group = ext4_flex_group(sbi, i);
+		sbi->s_flex_groups[flex_group].free_inodes +=
+			le16_to_cpu(gdp->bg_free_inodes_count);
+		sbi->s_flex_groups[flex_group].free_blocks +=
+			le16_to_cpu(gdp->bg_free_blocks_count);
+	}
+
+	return 1;
+failed:
+	return 0;
 }
 
 __le16 ext4_group_desc_csum(struct ext4_sb_info *sbi, __u32 block_group,
@@ -2115,6 +2164,14 @@ static int ext4_fill_super (struct super_block *sb, void *data, int silent)
 		printk(KERN_ERR "EXT4-fs: group descriptors corrupted!\n");
 		goto failed_mount2;
 	}
+	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_FLEX_BG))
+		if (!ext4_fill_flex_info(sb)) {
+			printk(KERN_ERR
+			       "EXT4-fs: unable to initialize "
+			       "flex_bg meta info!\n");
+			goto failed_mount2;
+		}
+
 	sbi->s_gdb_count = db_count;
 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
 	spin_lock_init(&sbi->s_next_gen_lock);
