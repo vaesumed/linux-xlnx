@@ -58,17 +58,11 @@ struct nfs_write_data *nfs_commit_alloc(void)
 	return p;
 }
 
-static void nfs_commit_rcu_free(struct rcu_head *head)
+void nfs_commit_free(struct nfs_write_data *p)
 {
-	struct nfs_write_data *p = container_of(head, struct nfs_write_data, task.u.tk_rcu);
 	if (p && (p->pagevec != &p->page_array[0]))
 		kfree(p->pagevec);
 	mempool_free(p, nfs_commit_mempool);
-}
-
-void nfs_commit_free(struct nfs_write_data *wdata)
-{
-	call_rcu_bh(&wdata->task.u.tk_rcu, nfs_commit_rcu_free);
 }
 
 struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
@@ -92,21 +86,18 @@ struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
 	return p;
 }
 
-static void nfs_writedata_rcu_free(struct rcu_head *head)
+static void nfs_writedata_free(struct nfs_write_data *p)
 {
-	struct nfs_write_data *p = container_of(head, struct nfs_write_data, task.u.tk_rcu);
 	if (p && (p->pagevec != &p->page_array[0]))
 		kfree(p->pagevec);
 	mempool_free(p, nfs_wdata_mempool);
 }
 
-static void nfs_writedata_free(struct nfs_write_data *wdata)
+void nfs_writedata_release(void *data)
 {
-	call_rcu_bh(&wdata->task.u.tk_rcu, nfs_writedata_rcu_free);
-}
+	struct nfs_write_data *wdata = data;
 
-void nfs_writedata_release(void *wdata)
-{
+	put_nfs_open_context(wdata->args.context);
 	nfs_writedata_free(wdata);
 }
 
@@ -360,15 +351,13 @@ int nfs_writepages(struct address_space *mapping, struct writeback_control *wbc)
 /*
  * Insert a write request into an inode
  */
-static int nfs_inode_add_request(struct inode *inode, struct nfs_page *req)
+static void nfs_inode_add_request(struct inode *inode, struct nfs_page *req)
 {
 	struct nfs_inode *nfsi = NFS_I(inode);
 	int error;
 
 	error = radix_tree_insert(&nfsi->nfs_page_tree, req->wb_index, req);
-	BUG_ON(error == -EEXIST);
-	if (error)
-		return error;
+	BUG_ON(error);
 	if (!nfsi->npages) {
 		igrab(inode);
 		if (nfs_have_delegation(inode, FMODE_WRITE))
@@ -378,8 +367,8 @@ static int nfs_inode_add_request(struct inode *inode, struct nfs_page *req)
 	set_page_private(req->wb_page, (unsigned long)req);
 	nfsi->npages++;
 	kref_get(&req->wb_kref);
-	radix_tree_tag_set(&nfsi->nfs_page_tree, req->wb_index, NFS_PAGE_TAG_LOCKED);
-	return 0;
+	radix_tree_tag_set(&nfsi->nfs_page_tree, req->wb_index,
+				NFS_PAGE_TAG_LOCKED);
 }
 
 /*
@@ -591,6 +580,13 @@ static struct nfs_page * nfs_update_request(struct nfs_open_context* ctx,
 		/* Loop over all inode entries and see if we find
 		 * A request for the page we wish to update
 		 */
+		if (new) {
+			if (radix_tree_preload(GFP_NOFS)) {
+				nfs_release_request(new);
+				return ERR_PTR(-ENOMEM);
+			}
+		}
+
 		spin_lock(&inode->i_lock);
 		req = nfs_page_find_request_locked(page);
 		if (req) {
@@ -601,28 +597,27 @@ static struct nfs_page * nfs_update_request(struct nfs_open_context* ctx,
 				error = nfs_wait_on_request(req);
 				nfs_release_request(req);
 				if (error < 0) {
-					if (new)
+					if (new) {
+						radix_tree_preload_end();
 						nfs_release_request(new);
+					}
 					return ERR_PTR(error);
 				}
 				continue;
 			}
 			spin_unlock(&inode->i_lock);
-			if (new)
+			if (new) {
+				radix_tree_preload_end();
 				nfs_release_request(new);
+			}
 			break;
 		}
 
 		if (new) {
-			int error;
 			nfs_lock_request_dontget(new);
-			error = nfs_inode_add_request(inode, new);
-			if (error) {
-				spin_unlock(&inode->i_lock);
-				nfs_unlock_request(new);
-				return ERR_PTR(error);
-			}
+			nfs_inode_add_request(inode, new);
 			spin_unlock(&inode->i_lock);
+			radix_tree_preload_end();
 			req = new;
 			goto zero_page;
 		}
@@ -800,6 +795,7 @@ static void nfs_write_rpcsetup(struct nfs_page *req,
 		.rpc_message = &msg,
 		.callback_ops = call_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = flags,
 		.priority = priority,
 	};
@@ -816,7 +812,7 @@ static void nfs_write_rpcsetup(struct nfs_page *req,
 	data->args.pgbase = req->wb_pgbase + offset;
 	data->args.pages  = data->pagevec;
 	data->args.count  = count;
-	data->args.context = req->wb_context;
+	data->args.context = get_nfs_open_context(req->wb_context);
 	data->args.stable  = NFS_UNSTABLE;
 	if (how & FLUSH_STABLE) {
 		data->args.stable = NFS_DATA_SYNC;
@@ -1153,8 +1149,11 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 
 
 #if defined(CONFIG_NFS_V3) || defined(CONFIG_NFS_V4)
-void nfs_commit_release(void *wdata)
+void nfs_commit_release(void *data)
 {
+	struct nfs_write_data *wdata = data;
+
+	put_nfs_open_context(wdata->args.context);
 	nfs_commit_free(wdata);
 }
 
@@ -1181,6 +1180,7 @@ static void nfs_commit_rpcsetup(struct list_head *head,
 		.rpc_message = &msg,
 		.callback_ops = &nfs_commit_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = flags,
 		.priority = priority,
 	};
@@ -1197,6 +1197,7 @@ static void nfs_commit_rpcsetup(struct list_head *head,
 	/* Note: we always request a commit of the entire inode */
 	data->args.offset = 0;
 	data->args.count  = 0;
+	data->args.context = get_nfs_open_context(first->wb_context);
 	data->res.count   = 0;
 	data->res.fattr   = &data->fattr;
 	data->res.verf    = &data->verf;
