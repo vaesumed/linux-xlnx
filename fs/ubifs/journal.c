@@ -713,7 +713,7 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 		if (err)
 			goto out_ro;
 		ubifs_delete_orphan(c, inode->i_ino);
-		err = ubifs_add_dirt(c, lnum, len + ui->data_len);
+		err = ubifs_add_dirt(c, lnum, len);
 	} else {
 		union ubifs_key key;
 
@@ -1067,7 +1067,6 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	int err, xlen, hlen, len, lnum, xent_offs, aligned_xlen;
 	struct ubifs_dent_node *xent;
 	struct ubifs_ino_node *ino;
-	struct ubifs_inode *ui = ubifs_inode(inode);
 	union ubifs_key xent_key, key1, key2;
 
 	dbg_jrn("host %lu, xattr ino %lu, name '%s', data len %d",
@@ -1136,7 +1135,7 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	err = ubifs_tnc_remove_range(c, &key1, &key2);
 	if (err)
 		goto out_ro;
-	err = ubifs_add_dirt(c, lnum, UBIFS_INO_NODE_SZ + ui->data_len);
+	err = ubifs_add_dirt(c, lnum, UBIFS_INO_NODE_SZ);
 	if (err)
 		goto out_ro;
 
