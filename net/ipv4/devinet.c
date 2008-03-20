@@ -446,9 +446,6 @@ static int inet_rtm_deladdr(struct sk_buff *skb, struct nlmsghdr *nlh, void *arg
 
 	ASSERT_RTNL();
 
-	if (net != &init_net)
-		return -EINVAL;
-
 	err = nlmsg_parse(nlh, sizeof(*ifm), tb, IFA_MAX, ifa_ipv4_policy);
 	if (err < 0)
 		goto errout;
@@ -560,9 +557,6 @@ static int inet_rtm_newaddr(struct sk_buff *skb, struct nlmsghdr *nlh, void *arg
 
 	ASSERT_RTNL();
 
-	if (net != &init_net)
-		return -EINVAL;
-
 	ifa = rtm_to_ifaddr(net, nlh);
 	if (IS_ERR(ifa))
 		return PTR_ERR(ifa);
@@ -595,7 +589,7 @@ static __inline__ int inet_abc_len(__be32 addr)
 }
 
 
-int devinet_ioctl(unsigned int cmd, void __user *arg)
+int devinet_ioctl(struct net *net, unsigned int cmd, void __user *arg)
 {
 	struct ifreq ifr;
 	struct sockaddr_in sin_orig;
@@ -624,7 +618,7 @@ int devinet_ioctl(unsigned int cmd, void __user *arg)
 		*colon = 0;
 
 #ifdef CONFIG_KMOD
-	dev_load(&init_net, ifr.ifr_name);
+	dev_load(net, ifr.ifr_name);
 #endif
 
 	switch (cmd) {
@@ -665,7 +659,7 @@ int devinet_ioctl(unsigned int cmd, void __user *arg)
 	rtnl_lock();
 
 	ret = -ENODEV;
-	if ((dev = __dev_get_by_name(&init_net, ifr.ifr_name)) == NULL)
+	if ((dev = __dev_get_by_name(net, ifr.ifr_name)) == NULL)
 		goto done;
 
 	if (colon)
@@ -878,6 +872,7 @@ __be32 inet_select_addr(const struct net_device *dev, __be32 dst, int scope)
 {
 	__be32 addr = 0;
 	struct in_device *in_dev;
+	struct net *net = dev->nd_net;
 
 	rcu_read_lock();
 	in_dev = __in_dev_get_rcu(dev);
@@ -906,7 +901,7 @@ no_in_dev:
 	 */
 	read_lock(&dev_base_lock);
 	rcu_read_lock();
-	for_each_netdev(&init_net, dev) {
+	for_each_netdev(net, dev) {
 		if ((in_dev = __in_dev_get_rcu(dev)) == NULL)
 			continue;
 
@@ -1045,9 +1040,6 @@ static int inetdev_event(struct notifier_block *this, unsigned long event,
 	struct net_device *dev = ptr;
 	struct in_device *in_dev = __in_dev_get_rtnl(dev);
 
-	if (dev->nd_net != &init_net)
-		return NOTIFY_DONE;
-
 	ASSERT_RTNL();
 
 	if (!in_dev) {
@@ -1172,9 +1164,6 @@ static int inet_dump_ifaddr(struct sk_buff *skb, struct netlink_callback *cb)
 	struct in_device *in_dev;
 	struct in_ifaddr *ifa;
 	int s_ip_idx, s_idx = cb->args[0];
-
-	if (net != &init_net)
-		return 0;
 
 	s_ip_idx = ip_idx = cb->args[1];
 	idx = 0;

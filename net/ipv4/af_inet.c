@@ -458,7 +458,7 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	err = -EADDRNOTAVAIL;
 	if (!sysctl_ip_nonlocal_bind &&
 	    !inet->freebind &&
-	    addr->sin_addr.s_addr != INADDR_ANY &&
+	    addr->sin_addr.s_addr != htonl(INADDR_ANY) &&
 	    chk_addr_ret != RTN_LOCAL &&
 	    chk_addr_ret != RTN_MULTICAST &&
 	    chk_addr_ret != RTN_BROADCAST)
@@ -784,6 +784,7 @@ int inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 {
 	struct sock *sk = sock->sk;
 	int err = 0;
+	struct net *net = sk->sk_net;
 
 	switch (cmd) {
 		case SIOCGSTAMP:
@@ -795,12 +796,12 @@ int inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 		case SIOCADDRT:
 		case SIOCDELRT:
 		case SIOCRTMSG:
-			err = ip_rt_ioctl(sk->sk_net, cmd, (void __user *)arg);
+			err = ip_rt_ioctl(net, cmd, (void __user *)arg);
 			break;
 		case SIOCDARP:
 		case SIOCGARP:
 		case SIOCSARP:
-			err = arp_ioctl(sk->sk_net, cmd, (void __user *)arg);
+			err = arp_ioctl(net, cmd, (void __user *)arg);
 			break;
 		case SIOCGIFADDR:
 		case SIOCSIFADDR:
@@ -813,7 +814,7 @@ int inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 		case SIOCSIFPFLAGS:
 		case SIOCGIFPFLAGS:
 		case SIOCSIFFLAGS:
-			err = devinet_ioctl(cmd, (void __user *)arg);
+			err = devinet_ioctl(net, cmd, (void __user *)arg);
 			break;
 		default:
 			if (sk->sk_prot->ioctl)
@@ -1059,7 +1060,7 @@ static int inet_sk_reselect_saddr(struct sock *sk)
 	if (sysctl_ip_dynaddr > 1) {
 		printk(KERN_INFO "%s(): shifting inet->"
 				 "saddr from %d.%d.%d.%d to %d.%d.%d.%d\n",
-		       __FUNCTION__,
+		       __func__,
 		       NIPQUAD(old_saddr),
 		       NIPQUAD(new_saddr));
 	}
@@ -1414,7 +1415,7 @@ static int __init inet_init(void)
 
 	ip_init();
 
-	tcp_v4_init(&inet_family_ops);
+	tcp_v4_init();
 
 	/* Setup TCP slab cache for open requests. */
 	tcp_init();
@@ -1429,7 +1430,8 @@ static int __init inet_init(void)
 	 *	Set the ICMP layer up
 	 */
 
-	icmp_init(&inet_family_ops);
+	if (icmp_init() < 0)
+		panic("Failed to create the ICMP control socket.\n");
 
 	/*
 	 *	Initialise the multicast router
