@@ -391,4 +391,10 @@ config SGI_XP
 	  this feature will allow for direct communication between SSIs
 	  based on a network adapter and DMA messaging.
 
+config ME4000
+	tristate "me4000 driver"
+	default n
+	help
+	  FIXME!
+
 endif # MISC_DEVICES
