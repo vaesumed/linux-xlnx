@@ -251,7 +251,6 @@ static int nfs_pagein_multi(struct inode *inode, struct list_head *head, unsigne
 		data = nfs_readdata_alloc(1);
 		if (!data)
 			goto out_bad;
-		INIT_LIST_HEAD(&data->pages);
 		list_add(&data->pages, &list);
 		requests++;
 		nbytes -= len;
@@ -298,7 +297,6 @@ static int nfs_pagein_one(struct inode *inode, struct list_head *head, unsigned 
 	if (!data)
 		goto out_bad;
 
-	INIT_LIST_HEAD(&data->pages);
 	pages = data->pagevec;
 	while (!list_empty(head)) {
 		req = nfs_list_entry(head->next);
@@ -531,7 +529,10 @@ readpage_async_filler(void *data, struct page *page)
 
 	if (len < PAGE_CACHE_SIZE)
 		zero_user_segment(page, len, PAGE_CACHE_SIZE);
-	nfs_pageio_add_request(desc->pgio, new);
+	if (!nfs_pageio_add_request(desc->pgio, new)) {
+		error = desc->pgio->pg_error;
+		goto out_unlock;
+	}
 	return 0;
 out_error:
 	error = PTR_ERR(new);

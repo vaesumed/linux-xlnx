@@ -39,6 +39,7 @@ static struct nfs_page * nfs_update_request(struct nfs_open_context*,
 					    unsigned int, unsigned int);
 static void nfs_pageio_init_write(struct nfs_pageio_descriptor *desc,
 				  struct inode *inode, int ioflags);
+static void nfs_redirty_request(struct nfs_page *req);
 static const struct rpc_call_ops nfs_write_partial_ops;
 static const struct rpc_call_ops nfs_write_full_ops;
 static const struct rpc_call_ops nfs_commit_ops;
@@ -279,7 +280,10 @@ static int nfs_page_async_flush(struct nfs_pageio_descriptor *pgio,
 		BUG();
 	}
 	spin_unlock(&inode->i_lock);
-	nfs_pageio_add_request(pgio, req);
+	if (!nfs_pageio_add_request(pgio, req)) {
+		nfs_redirty_request(req);
+		return pgio->pg_error;
+	}
 	return 0;
 }
 
@@ -396,7 +400,7 @@ static void nfs_inode_remove_request(struct nfs_page *req)
 }
 
 static void
-nfs_redirty_request(struct nfs_page *req)
+nfs_mark_request_dirty(struct nfs_page *req)
 {
 	__set_page_dirty_nobuffers(req->wb_page);
 }
@@ -450,7 +454,7 @@ int nfs_reschedule_unstable_write(struct nfs_page *req)
 		return 1;
 	}
 	if (test_and_clear_bit(PG_NEED_RESCHED, &req->wb_flags)) {
-		nfs_redirty_request(req);
+		nfs_mark_request_dirty(req);
 		return 1;
 	}
 	return 0;
@@ -841,6 +845,17 @@ static void nfs_write_rpcsetup(struct nfs_page *req,
 		rpc_put_task(task);
 }
 
+/* If a nfs_flush_* function fails, it should remove reqs from @head and
+ * call this on each, which will prepare them to be retried on next
+ * writeback using standard nfs.
+ */
+static void nfs_redirty_request(struct nfs_page *req)
+{
+	nfs_mark_request_dirty(req);
+	nfs_end_page_writeback(req->wb_page);
+	nfs_clear_page_tag_locked(req);
+}
+
 /*
  * Generate multiple small requests to write out a single
  * contiguous dirty area on one page.
@@ -896,8 +911,6 @@ out_bad:
 		nfs_writedata_release(data);
 	}
 	nfs_redirty_request(req);
-	nfs_end_page_writeback(req->wb_page);
-	nfs_clear_page_tag_locked(req);
 	return -ENOMEM;
 }
 
@@ -938,8 +951,6 @@ static int nfs_flush_one(struct inode *inode, struct list_head *head, unsigned i
 		req = nfs_list_entry(head->next);
 		nfs_list_remove_request(req);
 		nfs_redirty_request(req);
-		nfs_end_page_writeback(req->wb_page);
-		nfs_clear_page_tag_locked(req);
 	}
 	return -ENOMEM;
 }
@@ -1292,7 +1303,7 @@ static void nfs_commit_done(struct rpc_task *task, void *calldata)
 		}
 		/* We have a mismatch. Write the page again */
 		dprintk(" mismatch\n");
-		nfs_redirty_request(req);
+		nfs_mark_request_dirty(req);
 	next:
 		nfs_clear_page_tag_locked(req);
 	}
