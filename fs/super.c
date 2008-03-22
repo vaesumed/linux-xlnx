@@ -38,6 +38,7 @@
 #include <linux/kobject.h>
 #include <linux/mutex.h>
 #include <asm/uaccess.h>
+#include "internal.h"
 
 
 LIST_HEAD(super_blocks);
