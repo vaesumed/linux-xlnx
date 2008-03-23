@@ -79,66 +79,77 @@ do {									\
 #define SAVE_CONTEXT    "pushf ; pushq %%rbp ; movq %%rsi,%%rbp\n\t"
 #define RESTORE_CONTEXT "movq %%rbp,%%rsi ; popq %%rbp ; popf\t"
 
-#define __EXTRA_CLOBBER  \
-	, "rcx", "rbx", "rdx", "r8", "r9", "r10", "r11", \
-	  "r12", "r13", "r14", "r15"
+#define __EXTRA_CLOBBER					\
+	, "rcx", "rbx", "rdx", "r8", "r9", "r10", "r11"	\
+	, "r12", "r13", "r14", "r15"
 
 /* Save restore flags to clear handle leaking NT */
 #define switch_to(prev, next, last) \
-	asm volatile(SAVE_CONTEXT						    \
-	     "movq %%rsp,%P[threadrsp](%[prev])\n\t" /* save RSP */	  \
-	     "movq %P[threadrsp](%[next]),%%rsp\n\t" /* restore RSP */	  \
-	     "call __switch_to\n\t"					  \
-	     ".globl thread_return\n"					  \
-	     "thread_return:\n\t"					  \
-	     "movq %%gs:%P[pda_pcurrent],%%rsi\n\t"			  \
-	     "movq %P[task_canary](%%rsi),%%r8\n\t"			  \
-	     "movq %%r8,%%gs:%P[pda_canary]\n\t"			  \
-	     "movq %P[thread_info](%%rsi),%%r8\n\t"			  \
-	     LOCK_PREFIX "btr  %[tif_fork],%P[ti_flags](%%r8)\n\t"	  \
-	     "movq %%rax,%%rdi\n\t" 					  \
-	     "jc   ret_from_fork\n\t"					  \
-	     RESTORE_CONTEXT						  \
-	     : "=a" (last)					  	  \
-	     : [next] "S" (next), [prev] "D" (prev),			  \
-	       [threadrsp] "i" (offsetof(struct task_struct, thread.sp)), \
-	       [ti_flags] "i" (offsetof(struct thread_info, flags)),	  \
-	       [tif_fork] "i" (TIF_FORK),			  	  \
-	       [thread_info] "i" (offsetof(struct task_struct, stack)),   \
-	       [task_canary] "i" (offsetof(struct task_struct, stack_canary)),\
-	       [pda_pcurrent] "i" (offsetof(struct x8664_pda, pcurrent)), \
-	       [pda_canary] "i" (offsetof(struct x8664_pda, stack_canary))\
-	     : "memory", "cc" __EXTRA_CLOBBER)
+	asm volatile(SAVE_CONTEXT					\
+		     "movq %%rsp,%P[threadrsp](%[prev])\n\t" /* save RSP */ \
+		     "movq %P[threadrsp](%[next]),%%rsp\n\t" /* restore RSP */ \
+		     "call __switch_to\n\t"				\
+		     ".globl thread_return\n"				\
+		     "thread_return:\n\t"				\
+		     "movq %%gs:%P[pda_pcurrent],%%rsi\n\t"		\
+		     "movq %P[task_canary](%%rsi),%%r8\n\t"		\
+		     "movq %%r8,%%gs:%P[pda_canary]\n\t"		\
+		     "movq %P[thread_info](%%rsi),%%r8\n\t"		\
+		     LOCK_PREFIX "btr  %[tif_fork],%P[ti_flags](%%r8)\n\t" \
+		     "movq %%rax,%%rdi\n\t"				\
+		     "jc   ret_from_fork\n\t"				\
+		     RESTORE_CONTEXT					\
+		     : "=a" (last)					\
+		     : [next] "S" (next), [prev] "D" (prev),		\
+		     [threadrsp]					\
+		       "i" (offsetof(struct task_struct, thread.sp)),	\
+		     [ti_flags]						\
+		       "i" (offsetof(struct thread_info, flags)),	\
+		     [tif_fork]						\
+		       "i" (TIF_FORK),					\
+		     [thread_info]					\
+		       "i" (offsetof(struct task_struct, stack)),	\
+		     [task_canary]					\
+		       "i" (offsetof(struct task_struct, stack_canary)), \
+		     [pda_pcurrent]					\
+		       "i" (offsetof(struct x8664_pda, pcurrent)),	\
+		     [pda_canary]					\
+		       "i" (offsetof(struct x8664_pda, stack_canary))	\
+		     : "memory", "cc" __EXTRA_CLOBBER)
 #endif
 
 #ifdef __KERNEL__
-#define _set_base(addr, base) do { unsigned long __pr; \
-__asm__ __volatile__ ("movw %%dx,%1\n\t" \
-	"rorl $16,%%edx\n\t" \
-	"movb %%dl,%2\n\t" \
-	"movb %%dh,%3" \
-	:"=&d" (__pr) \
-	:"m" (*((addr)+2)), \
-	 "m" (*((addr)+4)), \
-	 "m" (*((addr)+7)), \
-	 "0" (base) \
-	); } while (0)
+#define _set_base(addr, base)				\
+do {							\
+	unsigned long __pr;				\
+	asm volatile ("movw %%dx,%1\n\t"		\
+		      "rorl $16,%%edx\n\t"		\
+		      "movb %%dl,%2\n\t"		\
+		      "movb %%dh,%3"			\
+		      : "=&d" (__pr)			\
+		      : "m" (*((addr)+2)),		\
+			"m" (*((addr)+4)),		\
+			"m" (*((addr)+7)),		\
+			"0" (base));			\
+} while (0)
 
-#define _set_limit(addr, limit) do { unsigned long __lr; \
-__asm__ __volatile__ ("movw %%dx,%1\n\t" \
-	"rorl $16,%%edx\n\t" \
-	"movb %2,%%dh\n\t" \
-	"andb $0xf0,%%dh\n\t" \
-	"orb %%dh,%%dl\n\t" \
-	"movb %%dl,%2" \
-	:"=&d" (__lr) \
-	:"m" (*(addr)), \
-	 "m" (*((addr)+6)), \
-	 "0" (limit) \
-	); } while (0)
+#define _set_limit(addr, limit)				\
+do {							\
+	unsigned long __lr;				\
+	asm volatile ("movw %%dx,%1\n\t"		\
+		      "rorl $16,%%edx\n\t"		\
+		      "movb %2,%%dh\n\t"		\
+		      "andb $0xf0,%%dh\n\t"		\
+		      "orb %%dh,%%dl\n\t"		\
+		      "movb %%dl,%2"			\
+		      : "=&d" (__lr)			\
+		      : "m" (*(addr)),			\
+			"m" (*((addr)+6)),		\
+			"0" (limit));			\
+} while (0)
 
-#define set_base(ldt, base) _set_base(((char *)&(ldt)) , (base))
-#define set_limit(ldt, limit) _set_limit(((char *)&(ldt)) , ((limit)-1))
+#define set_base(ldt, base) _set_base(((char *)&(ldt)), (base))
+#define set_limit(ldt, limit) _set_limit(((char *)&(ldt)), ((limit) - 1))
 
 extern void load_gs_index(unsigned);
 
