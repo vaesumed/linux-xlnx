@@ -152,6 +152,20 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 			break;
 		}
 		break;
+	case PCI_VENDOR_ID_VIA:
+		if (pdev->device == 0x3104 && (pdev->revision & 0xf0) == 0x60) {
+			u8 tmp;
+
+			/* The VT6212 defaults to a 1 usec EHCI sleep time which
+			 * hogs the PCI bus *badly*. Setting bit 5 of 0x4B makes
+			 * that sleep time use the conventional 10 usec.
+			 */
+			pci_read_config_byte(pdev, 0x4b, &tmp);
+			if (tmp & 0x20)
+				break;
+			pci_write_config_byte(pdev, 0x4b, tmp | 0x20);
+		}
+		break;
 	}
 
 	ehci_reset(ehci);
@@ -315,7 +329,6 @@ static int ehci_pci_resume(struct usb_hcd *hcd)
 
 	/* here we "know" root ports should always stay powered */
 	ehci_port_power(ehci, 1);
-	ehci_handover_companion_ports(ehci);
 
 	hcd->state = HC_STATE_SUSPENDED;
 	return 0;
