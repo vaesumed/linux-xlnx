@@ -26,7 +26,13 @@
 
 struct tda18271_std_map_item {
 	u16 if_freq;
-	u8 std_bits;
+
+	/* EP3[4:3] */
+	unsigned int agc_mode:2;
+	/* EP3[2:0] */
+	unsigned int std:3;
+	/* EP4[7] */
+	unsigned int fm_rfn:1;
 };
 
 struct tda18271_std_map {
@@ -58,6 +64,9 @@ struct tda18271_config {
 
 	/* use i2c gate provided by analog or digital demod */
 	enum tda18271_i2c_gate gate;
+
+	/* some i2c providers cant write all 39 registers at once */
+	unsigned int small_i2c:1;
 };
 
 #if defined(CONFIG_DVB_TDA18271) || (defined(CONFIG_DVB_TDA18271_MODULE) && defined(MODULE))
