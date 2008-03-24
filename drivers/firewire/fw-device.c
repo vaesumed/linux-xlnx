@@ -877,8 +877,7 @@ static void fw_device_refresh(struct work_struct *work)
 
 		fw_device_update(work);
 		device->config_rom_retries = 0;
-
-		return;
+		goto out;
 
 	case REREAD_BIB_CHANGED:
 		break;
@@ -982,7 +981,8 @@ void fw_node_event(struct fw_card *card, struct fw_node *node, int event)
 			    FW_DEVICE_RUNNING,
 			    FW_DEVICE_INITIALIZING) == FW_DEVICE_RUNNING) {
 			PREPARE_DELAYED_WORK(&device->work, fw_device_refresh);
-			schedule_delayed_work(&device->work, INITIAL_DELAY);
+			schedule_delayed_work(&device->work,
+				node == card->local_node ? 0 : INITIAL_DELAY);
 		}
 		break;
 
