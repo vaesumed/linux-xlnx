@@ -928,8 +928,8 @@ static int write_index(struct ubifs_info *c)
 			 * Write the prepared index node immediately if there is
 			 * no minimum IO size
 			 */
-			err = ubi_leb_write(c->ubi, lnum, c->cbuf, buf_offs,
-					    wlen, UBI_SHORTTERM);
+			err = ubifs_leb_write(c, lnum, c->cbuf, buf_offs,
+					      wlen, UBI_SHORTTERM);
 			if (err)
 				return err;
 			buf_offs += ALIGN(wlen, 8);
@@ -963,8 +963,8 @@ static int write_index(struct ubifs_info *c)
 			 * The buffer is full or there are no more znodes
 			 * to do
 			 */
-			err = ubi_leb_write(c->ubi, lnum, c->cbuf, buf_offs,
-					    blen, UBI_SHORTTERM);
+			err = ubifs_leb_write(c, lnum, c->cbuf, buf_offs,
+					      blen, UBI_SHORTTERM);
 			if (err)
 				return err;
 			buf_offs += blen;

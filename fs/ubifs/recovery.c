@@ -517,7 +517,7 @@ static int fix_unclean_leb(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		dbg_mnt("fixing LEB %d start %d endpt %d",
 			lnum, start, sleb->endpt);
 		if (endpt == 0) {
-			err = ubi_leb_unmap(c->ubi, lnum);
+			err = ubifs_leb_unmap(c, lnum);
 			if (err)
 				return err;
 		} else {
@@ -886,7 +886,7 @@ static int recover_head(const struct ubifs_info *c, int lnum, int offs,
 	if (need_clean) {
 		dbg_mnt("cleaning head at %d:%d", lnum, offs);
 		if (offs == 0)
-			return ubi_leb_unmap(c->ubi, lnum);
+			return ubifs_leb_unmap(c, lnum);
 		err = ubi_read(c->ubi, lnum, sbuf, 0, offs);
 		if (err)
 			return err;
@@ -954,7 +954,7 @@ static int clean_an_unclean_leb(const struct ubifs_info *c,
 
 	if (len == 0) {
 		/* Nothing to read, just unmap it */
-		err = ubi_leb_unmap(c->ubi, lnum);
+		err = ubifs_leb_unmap(c, lnum);
 		if (err)
 			return err;
 		return 0;
