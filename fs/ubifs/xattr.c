@@ -122,9 +122,6 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 		goto out_budg;
 	}
 
-	dbg_xattr("host ino %lu, new xattr ino %lu, size %d",
-		   host->i_ino, inode->i_ino, size);
-
 	/* Re-define all operations to be "nothing" */
 	inode->i_mapping->a_ops = &none_address_operations;
 	inode->i_op = &none_inode_operations;
@@ -205,8 +202,6 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 					.dirtied_ino_d = ui->data_len };
 	int err;
 
-	dbg_xattr("host ino %lu, xattr ino %lu, size %d, new size %d",
-		   host->i_ino, inode->i_ino, ui->data_len, size);
 	ubifs_assert(ui->data_len == inode->i_size);
 
 	err = ubifs_budget_inode_op(c, host, &req);
@@ -469,8 +464,6 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
 		nm.name = xent->name;
 		nm.len = le16_to_cpu(xent->nlen);
-		dbg_xattr("xent '%s', ino %llu",
-			  nm.name, le64_to_cpu(xent->inum));
 
 		type = check_namespace(&nm);
 		if (unlikely(type < 0)) {
@@ -508,8 +501,6 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 	struct ubifs_budget_req req = { .dirtied_ino = 1, .mod_dent = 1 };
 	int err;
 
-	dbg_xattr("host ino %lu, xattr ino %lu ('%s'), size %d",
-		   host->i_ino, inode->i_ino, nm->name, ui->data_len);
 	ubifs_assert(ui->data_len == inode->i_size);
 
 	err = ubifs_budget_inode_op(c, host, &req);
