@@ -282,8 +282,11 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size);
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS
 int dbg_check_lprops(struct ubifs_info *c);
+int dbg_check_lpt_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
+			int row, int col);
 #else
 #define dbg_check_lprops(c) 0
+#define dbg_check_lpt_nodes(c, cnode, row, col) 0
 #endif
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY
