@@ -67,7 +67,7 @@ xp_unregister_nofault_code_sn2(void)
 
 	/* unregister the PIO read nofault code region */
 	(void)sn_register_nofault_code(func_addr, err_func_addr,
-					err_func_addr, 1, 0);
+				       err_func_addr, 1, 0);
 }
 
 /*
@@ -155,15 +155,14 @@ xp_free_amos_sn2(u64 *amos_page, int n_amos)
 {
 	int n_pages = DIV_ROUND_UP(n_amos * xp_sizeof_amo, PAGE_SIZE);
 
-	uncached_free_page(__IA64_UNCACHED_OFFSET | TO_PHYS((u64) amos_page),
+	uncached_free_page(__IA64_UNCACHED_OFFSET | TO_PHYS((u64)amos_page),
 			   n_pages);
 }
-
 
 static enum xp_retval
 xp_set_amo_sn2(u64 *amo_va, int op, u64 operand, int remote)
 {
-	unsigned long irq_flags = irq_flags; /* eliminate compiler warning */
+	unsigned long irq_flags = irq_flags;	/* eliminate compiler warning */
 	int ret = xpSuccess;
 	/* >>> eliminate remote arg and xp_nofault_PIOR() call */
 
@@ -188,7 +187,8 @@ xp_set_amo_sn2(u64 *amo_va, int op, u64 operand, int remote)
 		 * it until the heartbeat times out.
 		 */
 		if (xp_nofault_PIOR((u64 *)GLOBAL_MMR_ADDR(NASID_GET(amo_va),
-				    xp_nofault_PIOR_target)) != 0)
+							   xp_nofault_PIOR_target))
+		    != 0)
 			ret = xpPioReadError;
 
 		local_irq_restore(irq_flags);
@@ -201,7 +201,7 @@ static enum xp_retval
 xp_set_amo_with_interrupt_sn2(u64 *amo_va, int op, u64 operand, int remote,
 			      int nasid, int phys_cpuid, int vector)
 {
-	unsigned long irq_flags = irq_flags; /* eliminate compiler warning */
+	unsigned long irq_flags = irq_flags;	/* eliminate compiler warning */
 	int ret = xpSuccess;
 
 	if (op == XP_AMO_AND)
@@ -226,7 +226,8 @@ xp_set_amo_with_interrupt_sn2(u64 *amo_va, int op, u64 operand, int remote,
 		 * it until the heartbeat times out.
 		 */
 		if (xp_nofault_PIOR((u64 *)GLOBAL_MMR_ADDR(NASID_GET(amo_va),
-				    xp_nofault_PIOR_target)) != 0)
+							   xp_nofault_PIOR_target))
+		    != 0)
 			ret = xpPioReadError;
 
 		local_irq_restore(irq_flags);
@@ -321,22 +322,28 @@ xp_change_memprotect_shub_wars_1_1_sn2(int request)
 			nasid = cnodeid_to_nasid(node);
 			/* save current protection values */
 			xpc_prot_vec[node] =
-				(u64)HUB_L((u64 *)GLOBAL_MMR_ADDR(nasid,
-					   SH1_MD_DQLP_MMR_DIR_PRIVEC0));
+			    (u64)HUB_L((u64 *)GLOBAL_MMR_ADDR(nasid,
+							      SH1_MD_DQLP_MMR_DIR_PRIVEC0));
 			/* open up everything */
 			HUB_S((u64 *)GLOBAL_MMR_ADDR(nasid,
-			      SH1_MD_DQLP_MMR_DIR_PRIVEC0), -1UL);
-			HUB_S((u64 *)GLOBAL_MMR_ADDR(nasid,
-			      SH1_MD_DQRP_MMR_DIR_PRIVEC0), -1UL);
+						     SH1_MD_DQLP_MMR_DIR_PRIVEC0),
+			      -1UL);
+			HUB_S((u64 *)
+			      GLOBAL_MMR_ADDR(nasid,
+					      SH1_MD_DQRP_MMR_DIR_PRIVEC0),
+			      -1UL);
 		}
 	} else if (request == XP_MEMPROT_DISALLOW_ALL) {
 		for_each_online_node(node) {
 			nasid = cnodeid_to_nasid(node);
 			/* restore original protection values */
 			HUB_S((u64 *)GLOBAL_MMR_ADDR(nasid,
-			      SH1_MD_DQLP_MMR_DIR_PRIVEC0), xpc_prot_vec[node]);
-			HUB_S((u64 *)GLOBAL_MMR_ADDR(nasid,
-			      SH1_MD_DQRP_MMR_DIR_PRIVEC0), xpc_prot_vec[node]);
+						     SH1_MD_DQLP_MMR_DIR_PRIVEC0),
+			      xpc_prot_vec[node]);
+			HUB_S((u64 *)
+			      GLOBAL_MMR_ADDR(nasid,
+					      SH1_MD_DQRP_MMR_DIR_PRIVEC0),
+			      xpc_prot_vec[node]);
 		}
 	} else
 		BUG();
@@ -361,13 +368,13 @@ xp_allow_IPI_ops_sn2(void)
 	/*  >>> The following should get moved into SAL. */
 	if (is_shub2()) {
 		xpc_sh2_IPI_access0 =
-			(u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS0));
+		    (u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS0));
 		xpc_sh2_IPI_access1 =
-			(u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS1));
+		    (u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS1));
 		xpc_sh2_IPI_access2 =
-			(u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS2));
+		    (u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS2));
 		xpc_sh2_IPI_access3 =
-			(u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS3));
+		    (u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH2_IPI_ACCESS3));
 
 		for_each_online_node(node) {
 			nasid = cnodeid_to_nasid(node);
@@ -382,7 +389,7 @@ xp_allow_IPI_ops_sn2(void)
 		}
 	} else {
 		xpc_sh1_IPI_access =
-			(u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH1_IPI_ACCESS));
+		    (u64)HUB_L((u64 *)LOCAL_MMR_ADDR(SH1_IPI_ACCESS));
 
 		for_each_online_node(node) {
 			nasid = cnodeid_to_nasid(node);
@@ -455,7 +462,7 @@ xp_init_sn2(void)
 	 * reflect its existence.
 	 */
 	BUG_ON(offsetof(AMO_t, variable) != 0);
-	BUG_ON(sizeof(((AMO_t *)NULL)->variable) != sizeof(u64));
+	BUG_ON(sizeof(((AMO_t *) NULL)->variable) != sizeof(u64));
 	xp_sizeof_amo = sizeof(AMO_t);
 	xp_alloc_amos = xp_alloc_amos_sn2;
 	xp_free_amos = xp_free_amos_sn2;
@@ -467,7 +474,7 @@ xp_init_sn2(void)
 
 	xp_change_memprotect = xp_change_memprotect_sn2;
 	xp_change_memprotect_shub_wars_1_1 =
-				xp_change_memprotect_shub_wars_1_1_sn2;
+	    xp_change_memprotect_shub_wars_1_1_sn2;
 	xp_allow_IPI_ops = xp_allow_IPI_ops_sn2;
 	xp_disallow_IPI_ops = xp_disallow_IPI_ops_sn2;
 
@@ -484,4 +491,3 @@ xp_exit_sn2(void)
 
 	xp_unregister_nofault_code_sn2();
 }
-

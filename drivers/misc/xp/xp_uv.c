@@ -154,8 +154,8 @@ xp_init_uv(void)
 {
 	BUG_ON(!is_uv());
 
-	xp_partition_id = 0;		/* >>> not correct value */
-	xp_region_size = 0;		/* >>> not correct value */
+	xp_partition_id = 0;	/* >>> not correct value */
+	xp_region_size = 0;	/* >>> not correct value */
 	xp_rtc_cycles_per_second = 0;	/* >>> not correct value */
 
 	xp_remote_memcpy = xp_remote_memcpy_uv;
@@ -174,7 +174,7 @@ xp_init_uv(void)
 
 	xp_change_memprotect = xp_change_memprotect_uv;
 	xp_change_memprotect_shub_wars_1_1 =
-				xp_change_memprotect_shub_wars_1_1_uv;
+	    xp_change_memprotect_shub_wars_1_1_uv;
 	xp_allow_IPI_ops = xp_allow_IPI_ops_uv;
 	xp_disallow_IPI_ops = xp_disallow_IPI_ops_uv;
 
@@ -191,4 +191,3 @@ xp_exit_uv(void)
 
 	xp_unregister_nofault_code_uv();
 }
-

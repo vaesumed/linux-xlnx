@@ -6,15 +6,12 @@
  * Copyright (C) 2004-2008 Silicon Graphics, Inc. All rights reserved.
  */
 
-
 /*
  * External Cross Partition (XP) structures and defines.
  */
 
-
 #ifndef _DRIVERS_MISC_XP_XP_H
 #define _DRIVERS_MISC_XP_XP_H
-
 
 #include <linux/cache.h>
 #include <linux/hardirq.h>
@@ -35,13 +32,11 @@
 #error architecture is NOT supported
 #endif
 
-
 #ifdef USE_DBUG_ON
 #define DBUG_ON(condition)	BUG_ON(condition)
 #else
 #define DBUG_ON(condition)
 #endif
-
 
 #ifndef is_shub1
 #define is_shub1()	0
@@ -58,7 +53,6 @@
 #ifndef is_uv
 #define is_uv()		0
 #endif
-
 
 /*
  * Define the maximum number of logically defined partitions the system
@@ -78,9 +72,8 @@
 #error  XP_NPARTITIONS exceeds MAXIMUM possible.
 #endif
 
-#define XP_MIN_PARTID		1			/* inclusive */
+#define XP_MIN_PARTID		1	/* inclusive */
 #define XP_MAX_PARTID		(XP_NPARTITIONS - 1)	/* inclusive */
-
 
 /*
  * XPC establishes channel connections between the local partition and any
@@ -106,7 +99,6 @@
 #if XPC_NCHANNELS > XPC_MAX_NCHANNELS
 #error	XPC_NCHANNELS exceeds MAXIMUM possible.
 #endif
-
 
 /*
  * The format of an XPC message is as follows:
@@ -145,11 +137,9 @@ struct xpc_msg {
 	u64 payload;		/* user defined portion of message */
 };
 
-
 #define XPC_MSG_PAYLOAD_OFFSET	(u64) (&((struct xpc_msg *)0)->payload)
 #define XPC_MSG_SIZE(_payload_size) \
 		L1_CACHE_ALIGN(XPC_MSG_PAYLOAD_OFFSET + (_payload_size))
-
 
 /*
  * Define the return values and values passed to user's callout functions.
@@ -237,7 +227,6 @@ enum xp_retval {
 	xpUnknownReason		/* 56: unknown reason (must be last in list) */
 };
 
-
 /* the following are valid xp_set_amo() ops */
 #define XP_AMO_OR	1	/* set variable to (variable | operand) */
 #define XP_AMO_AND	2	/* set variable to (variable & operand) */
@@ -251,7 +240,6 @@ enum xp_retval {
 #define XP_MEMPROT_ALLOW_CPU_AMO	1
 #define XP_MEMPROT_ALLOW_CPU_MEM	2
 #define XP_MEMPROT_ALLOW_ALL		3	/* Shub 1.1 only */
-
 
 /*
  * Define the callout function types used by XPC to update the user on
@@ -357,12 +345,11 @@ enum xp_retval {
  * =====================+================================+=====================
  */
 
-typedef void (*xpc_channel_func)(enum xp_retval reason, short partid,
-		int ch_number, void *data, void *key);
+typedef void (*xpc_channel_func) (enum xp_retval reason, short partid,
+				  int ch_number, void *data, void *key);
 
-typedef void (*xpc_notify_func)(enum xp_retval reason, short partid,
-		int ch_number, void *key);
-
+typedef void (*xpc_notify_func) (enum xp_retval reason, short partid,
+				 int ch_number, void *key);
 
 /*
  * The following is a registration entry. There is a global array of these,
@@ -380,50 +367,45 @@ typedef void (*xpc_notify_func)(enum xp_retval reason, short partid,
  */
 struct xpc_registration {
 	struct mutex mutex;
-	xpc_channel_func func;		/* function to call */
-	void *key;			/* pointer to user's key */
-	u16 nentries;			/* #of msg entries in local msg queue */
-	u16 msg_size;			/* message queue's message size */
-	u32 assigned_limit;		/* limit on #of assigned kthreads */
-	u32 idle_limit;			/* limit on #of idle kthreads */
+	xpc_channel_func func;	/* function to call */
+	void *key;		/* pointer to user's key */
+	u16 nentries;		/* #of msg entries in local msg queue */
+	u16 msg_size;		/* message queue's message size */
+	u32 assigned_limit;	/* limit on #of assigned kthreads */
+	u32 idle_limit;		/* limit on #of idle kthreads */
 } ____cacheline_aligned;
-
 
 #define XPC_CHANNEL_REGISTERED(_c)	(xpc_registrations[_c].func != NULL)
 
-
 /* the following are valid xpc_allocate() flags */
-#define XPC_WAIT	0		/* wait flag */
-#define XPC_NOWAIT	1		/* no wait flag */
-
+#define XPC_WAIT	0	/* wait flag */
+#define XPC_NOWAIT	1	/* no wait flag */
 
 struct xpc_interface {
-	void (*connect)(int);
-	void (*disconnect)(int);
-	enum xp_retval (*allocate)(short, int, u32, void **);
-	enum xp_retval (*send)(short, int, void *);
-	enum xp_retval (*send_notify)(short, int, void *,
-						xpc_notify_func, void *);
-	void (*received)(short, int, void *);
-	enum xp_retval (*partid_to_nasids)(short, void *);
+	void (*connect) (int);
+	void (*disconnect) (int);
+	enum xp_retval (*allocate) (short, int, u32, void **);
+	enum xp_retval (*send) (short, int, void *);
+	enum xp_retval (*send_notify) (short, int, void *,
+				       xpc_notify_func, void *);
+	void (*received) (short, int, void *);
+	enum xp_retval (*partid_to_nasids) (short, void *);
 };
-
 
 extern struct xpc_interface xpc_interface;
 
 extern void xpc_set_interface(void (*)(int),
-		void (*)(int),
-		enum xp_retval (*)(short, int, u32, void **),
-		enum xp_retval (*)(short, int, void *),
-		enum xp_retval (*)(short, int, void *, xpc_notify_func,
-								void *),
-		void (*)(short, int, void *),
-		enum xp_retval (*)(short, void *));
+			      void (*)(int),
+			      enum xp_retval (*)(short, int, u32, void **),
+			      enum xp_retval (*)(short, int, void *),
+			      enum xp_retval (*)(short, int, void *,
+						 xpc_notify_func, void *),
+			      void (*)(short, int, void *),
+			      enum xp_retval (*)(short, void *));
 extern void xpc_clear_interface(void);
 
-
 extern enum xp_retval xpc_connect(int, xpc_channel_func, void *, u16,
-						u16, u32, u32);
+				  u16, u32, u32);
 extern void xpc_disconnect(int);
 
 static inline enum xp_retval
@@ -440,7 +422,7 @@ xpc_send(short partid, int ch_number, void *payload)
 
 static inline enum xp_retval
 xpc_send_notify(short partid, int ch_number, void *payload,
-			xpc_notify_func func, void *key)
+		xpc_notify_func func, void *key)
 {
 	return xpc_interface.send_notify(partid, ch_number, payload, func, key);
 }
@@ -460,31 +442,36 @@ xpc_partid_to_nasids(short partid, void *nasids)
 extern short xp_partition_id;
 extern u8 xp_region_size;
 extern unsigned long xp_rtc_cycles_per_second;
-extern enum xp_retval (*xp_remote_memcpy)(void *, const void *, size_t);
-extern enum xp_retval (*xp_register_remote_amos)(u64, size_t);
-extern enum xp_retval (*xp_unregister_remote_amos)(u64, size_t);
+extern enum xp_retval (*xp_remote_memcpy) (void *, const void *, size_t);
+extern enum xp_retval (*xp_register_remote_amos) (u64, size_t);
+extern enum xp_retval (*xp_unregister_remote_amos) (u64, size_t);
 extern int xp_sizeof_nasid_mask;
 extern int xp_sizeof_amo;
-extern u64 *(*xp_alloc_amos)(int);
-extern void (*xp_free_amos)(u64 *, int);
-extern enum xp_retval (*xp_set_amo)(u64 *, int, u64, int);
-extern enum xp_retval (*xp_set_amo_with_interrupt)(u64 *, int, u64, int, int,
+extern u64 *(*xp_alloc_amos) (int);
+extern void (*xp_free_amos) (u64 *, int);
+extern enum xp_retval (*xp_set_amo) (u64 *, int, u64, int);
+extern enum xp_retval (*xp_set_amo_with_interrupt) (u64 *, int, u64, int, int,
 						    int, int);
-extern enum xp_retval (*xp_get_amo)(u64 *, int, u64 *);
-extern enum xp_retval (*xp_get_partition_rsvd_page_pa)(u64, u64 *, u64 *,
+extern enum xp_retval (*xp_get_amo) (u64 *, int, u64 *);
+extern enum xp_retval (*xp_get_partition_rsvd_page_pa) (u64, u64 *, u64 *,
 							size_t *);
-extern enum xp_retval (*xp_change_memprotect)(u64, size_t, int, u64 *);
-extern void (*xp_change_memprotect_shub_wars_1_1)(int);
-extern void (*xp_allow_IPI_ops)(void);
-extern void (*xp_disallow_IPI_ops)(void);
+extern enum xp_retval (*xp_change_memprotect) (u64, size_t, int, u64 *);
+extern void (*xp_change_memprotect_shub_wars_1_1) (int);
+extern void (*xp_allow_IPI_ops) (void);
+extern void (*xp_disallow_IPI_ops) (void);
 
-extern int (*xp_cpu_to_nasid)(int);
-extern int (*xp_node_to_nasid)(int);
+extern int (*xp_cpu_to_nasid) (int);
+extern int (*xp_node_to_nasid) (int);
 
 extern u64 xp_nofault_PIOR_target;
 extern int xp_nofault_PIOR(void *);
 extern int xp_error_PIOR(void);
 
+extern struct device *xp;
+extern enum xp_retval xp_init_sn2(void);
+extern enum xp_retval xp_init_uv(void);
+extern void xp_exit_sn2(void);
+extern void xp_exit_uv(void);
 
 static inline int
 xp_partid_mask_words(int npartitions)
@@ -498,6 +485,4 @@ xp_nasid_mask_words(void)
 	return DIV_ROUND_UP(xp_sizeof_nasid_mask, BYTES_PER_WORD);
 }
 
-
 #endif /* _DRIVERS_MISC_XP_XP_H */
-

@@ -6,7 +6,6 @@
  * Copyright (c) 2004-2008 Silicon Graphics, Inc.  All Rights Reserved.
  */
 
-
 /*
  * Cross Partition (XP) base.
  *
@@ -14,7 +13,6 @@
  *	with XPC, yet not be dependent on XPC.
  *
  */
-
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -28,7 +26,7 @@ struct device_driver xp_dbg_name = {
 };
 
 struct device xp_dbg_subname = {
-	.bus_id = {0},			/* set to "" */
+	.bus_id = {0},		/* set to "" */
 	.driver = &xp_dbg_name
 };
 
@@ -43,66 +41,68 @@ short xp_partition_id;
 u8 xp_region_size;
 unsigned long xp_rtc_cycles_per_second;
 
-enum xp_retval (*xp_remote_memcpy)(void *dst, const void *src, size_t len);
+enum xp_retval (*xp_remote_memcpy) (void *dst, const void *src, size_t len);
 
-enum xp_retval (*xp_register_remote_amos)(u64 paddr, size_t len);
-enum xp_retval (*xp_unregister_remote_amos)(u64 paddr, size_t len);
+enum xp_retval (*xp_register_remote_amos) (u64 paddr, size_t len);
+enum xp_retval (*xp_unregister_remote_amos) (u64 paddr, size_t len);
 
 int xp_sizeof_nasid_mask;
 int xp_sizeof_amo;
 
-u64 *(*xp_alloc_amos)(int n_amos);
-void (*xp_free_amos)(u64 *amos_page, int n_amos);
+u64 *(*xp_alloc_amos) (int n_amos);
+void (*xp_free_amos) (u64 *amos_page, int n_amos);
 
-enum xp_retval (*xp_set_amo)(u64 *amo_va, int op, u64 operand, int remote);
-enum xp_retval (*xp_set_amo_with_interrupt)(u64 *amo_va, int op, u64 operand,
+enum xp_retval (*xp_set_amo) (u64 *amo_va, int op, u64 operand, int remote);
+enum xp_retval (*xp_set_amo_with_interrupt) (u64 *amo_va, int op, u64 operand,
 					     int remote, int nasid,
 					     int phys_cpuid, int vector);
 
-enum xp_retval (*xp_get_amo)(u64 *amo_va, int op, u64 *amo_value_addr);
+enum xp_retval (*xp_get_amo) (u64 *amo_va, int op, u64 *amo_value_addr);
 
-enum xp_retval (*xp_get_partition_rsvd_page_pa)(u64 buf, u64 *cookie,
+enum xp_retval (*xp_get_partition_rsvd_page_pa) (u64 buf, u64 *cookie,
 						 u64 *paddr, size_t *len);
 
-enum xp_retval (*xp_change_memprotect)(u64 paddr, size_t len, int request,
+enum xp_retval (*xp_change_memprotect) (u64 paddr, size_t len, int request,
 					u64 *nasid_array);
-void (*xp_change_memprotect_shub_wars_1_1)(int request);
-void (*xp_allow_IPI_ops)(void);
-void (*xp_disallow_IPI_ops)(void);
+void (*xp_change_memprotect_shub_wars_1_1) (int request);
+void (*xp_allow_IPI_ops) (void);
+void (*xp_disallow_IPI_ops) (void);
 
-int (*xp_cpu_to_nasid)(int cpuid);
-int (*xp_node_to_nasid)(int nid);
-
+int (*xp_cpu_to_nasid) (int cpuid);
+int (*xp_node_to_nasid) (int nid);
 
 /*
  * Initialize the XPC interface to indicate that XPC isn't loaded.
  */
-static enum xp_retval xpc_notloaded(void) { return xpNotLoaded; }
+static enum xp_retval
+xpc_notloaded(void)
+{
+	return xpNotLoaded;
+}
 
 struct xpc_interface xpc_interface = {
-	(void (*)(int)) xpc_notloaded,
-	(void (*)(int)) xpc_notloaded,
-	(enum xp_retval (*)(short, int, u32, void **)) xpc_notloaded,
-	(enum xp_retval (*)(short, int, void *)) xpc_notloaded,
-	(enum xp_retval (*)(short, int, void *, xpc_notify_func, void *))
-							xpc_notloaded,
-	(void (*)(short, int, void *)) xpc_notloaded,
-	(enum xp_retval (*)(short, void *)) xpc_notloaded
+	(void (*)(int))xpc_notloaded,
+	(void (*)(int))xpc_notloaded,
+	(enum xp_retval(*)(short, int, u32, void **))xpc_notloaded,
+	(enum xp_retval(*)(short, int, void *))xpc_notloaded,
+	(enum xp_retval(*)(short, int, void *, xpc_notify_func, void *))
+	    xpc_notloaded,
+	(void (*)(short, int, void *))xpc_notloaded,
+	(enum xp_retval(*)(short, void *))xpc_notloaded
 };
-
 
 /*
  * XPC calls this when it (the XPC module) has been loaded.
  */
 void
-xpc_set_interface(void (*connect)(int),
-		void (*disconnect)(int),
-		enum xp_retval (*allocate)(short, int, u32, void **),
-		enum xp_retval (*send)(short, int, void *),
-		enum xp_retval (*send_notify)(short, int, void *,
-						xpc_notify_func, void *),
-		void (*received)(short, int, void *),
-		enum xp_retval (*partid_to_nasids)(short, void *))
+xpc_set_interface(void (*connect) (int),
+		  void (*disconnect) (int),
+		  enum xp_retval (*allocate) (short, int, u32, void **),
+		  enum xp_retval (*send) (short, int, void *),
+		  enum xp_retval (*send_notify) (short, int, void *,
+						 xpc_notify_func, void *),
+		  void (*received) (short, int, void *),
+		  enum xp_retval (*partid_to_nasids) (short, void *))
 {
 	xpc_interface.connect = connect;
 	xpc_interface.disconnect = disconnect;
@@ -113,34 +113,32 @@ xpc_set_interface(void (*connect)(int),
 	xpc_interface.partid_to_nasids = partid_to_nasids;
 }
 
-
 /*
  * XPC calls this when it (the XPC module) is being unloaded.
  */
 void
 xpc_clear_interface(void)
 {
-	xpc_interface.connect = (void (*)(int)) xpc_notloaded;
-	xpc_interface.disconnect = (void (*)(int)) xpc_notloaded;
-	xpc_interface.allocate = (enum xp_retval (*)(short, int, u32,
-					void **)) xpc_notloaded;
-	xpc_interface.send = (enum xp_retval (*)(short, int, void *))
-					xpc_notloaded;
-	xpc_interface.send_notify = (enum xp_retval (*)(short, int, void *,
-				    xpc_notify_func, void *)) xpc_notloaded;
+	xpc_interface.connect = (void (*)(int))xpc_notloaded;
+	xpc_interface.disconnect = (void (*)(int))xpc_notloaded;
+	xpc_interface.allocate = (enum xp_retval(*)(short, int, u32,
+						    void **))xpc_notloaded;
+	xpc_interface.send = (enum xp_retval(*)(short, int, void *))
+	    xpc_notloaded;
+	xpc_interface.send_notify = (enum xp_retval(*)(short, int, void *,
+						       xpc_notify_func,
+						       void *))xpc_notloaded;
 	xpc_interface.received = (void (*)(short, int, void *))
-					xpc_notloaded;
-	xpc_interface.partid_to_nasids = (enum xp_retval (*)(short, void *))
-					xpc_notloaded;
+	    xpc_notloaded;
+	xpc_interface.partid_to_nasids = (enum xp_retval(*)(short, void *))
+	    xpc_notloaded;
 }
-
 
 /*
  * xpc_registrations[] keeps track of xpc_connect()'s done by the kernel-level
  * users of XPC.
  */
 struct xpc_registration xpc_registrations[XPC_NCHANNELS];
-
 
 /*
  * Register for automatic establishment of a channel connection whenever
@@ -168,10 +166,9 @@ struct xpc_registration xpc_registrations[XPC_NCHANNELS];
  */
 enum xp_retval
 xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
-		u16 nentries, u32 assigned_limit, u32 idle_limit)
+	    u16 nentries, u32 assigned_limit, u32 idle_limit)
 {
 	struct xpc_registration *registration;
-
 
 	DBUG_ON(ch_number < 0 || ch_number >= XPC_NCHANNELS);
 	DBUG_ON(payload_size == 0 || nentries == 0);
@@ -205,7 +202,6 @@ xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
 	return xpSuccess;
 }
 
-
 /*
  * Remove the registration for automatic connection of the specified channel
  * when a partition comes up.
@@ -223,7 +219,6 @@ void
 xpc_disconnect(int ch_number)
 {
 	struct xpc_registration *registration;
-
 
 	DBUG_ON(ch_number < 0 || ch_number >= XPC_NCHANNELS);
 
@@ -284,6 +279,7 @@ xp_init(void)
 
 	return 0;
 }
+
 module_init(xp_init);
 
 extern void xp_exit_sn2(void);
@@ -297,8 +293,8 @@ xp_exit(void)
 	else if (is_uv())
 		xp_exit_uv();
 }
-module_exit(xp_exit);
 
+module_exit(xp_exit);
 
 MODULE_AUTHOR("Silicon Graphics, Inc.");
 MODULE_DESCRIPTION("Cross Partition (XP) base");
@@ -330,4 +326,3 @@ EXPORT_SYMBOL(xpc_clear_interface);
 EXPORT_SYMBOL(xpc_set_interface);
 EXPORT_SYMBOL(xpc_connect);
 EXPORT_SYMBOL(xpc_disconnect);
-
