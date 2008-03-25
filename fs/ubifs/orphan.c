@@ -598,7 +598,7 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 				dbg_dump_node(c, snod->node);
 				return -EINVAL;
 			}
-			dbg_rcvry("out of date LEB %d", sleb->lnum);
+			dbg_mnt("out of date LEB %d", sleb->lnum);
 			*outofdate = 1;
 			return 0;
 		}
@@ -609,7 +609,7 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		n = (le32_to_cpu(orph->ch.len) - UBIFS_ORPH_NODE_SZ) >> 3;
 		for (i = 0; i < n; i++) {
 			inum = le64_to_cpu(orph->inos[i]);
-			dbg_rcvry("deleting orphaned inode %lu", inum);
+			dbg_mnt("deleting orphaned inode %lu", inum);
 			err = ubifs_tnc_remove_ino(c, inum);
 			if (err)
 				return err;
@@ -620,8 +620,8 @@ static int do_kill_orphans(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 
 		*last_cmt_no = cmt_no;
 		if (le64_to_cpu(orph->cmt_no) & (1ULL << 63)) {
-			dbg_rcvry("last orph node for commit %llu at %d:%d",
-				  cmt_no, sleb->lnum, snod->offs);
+			dbg_mnt("last orph node for commit %llu at %d:%d",
+				cmt_no, sleb->lnum, snod->offs);
 			*last_flagged = 1;
 		} else
 			*last_flagged = 0;
@@ -649,7 +649,7 @@ static int kill_orphans(struct ubifs_info *c)
 	c->ohead_offs = 0;
 	/* Check no-orphans flag and skip this if no orphans */
 	if (c->no_orphs) {
-		dbg_rcvry("no orphans");
+		dbg_mnt("no orphans");
 		return 0;
 	}
 	/*
@@ -666,7 +666,7 @@ static int kill_orphans(struct ubifs_info *c)
 	for (lnum = c->orph_first; lnum <= c->orph_last; lnum++) {
 		struct ubifs_scan_leb *sleb;
 
-		dbg_rcvry("LEB %d", lnum);
+		dbg_mnt("LEB %d", lnum);
 		sleb = ubifs_scan(c, lnum, 0, c->sbuf);
 		if (IS_ERR(sleb)) {
 			sleb = ubifs_recover_leb(c, lnum, 0, c->sbuf, 0);
