@@ -35,12 +35,6 @@
 #include <linux/parser.h>
 #include "ubifs.h"
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_EMPTY
-static int dbg_check_volume_empty(struct ubifs_info *c);
-#else
-#define dbg_check_volume_empty(c) 0
-#endif
-
 /* Slab cache for UBIFS inodes */
 struct kmem_cache *ubifs_inode_slab;
 
@@ -443,12 +437,6 @@ static int check_volume_empty(struct ubifs_info *c)
 		}
 
 		cond_resched();
-	}
-
-	if (c->empty) {
-		err = dbg_check_volume_empty(c);
-		if (err)
-			return err;
 	}
 
 	return 0;
@@ -1371,72 +1359,3 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION(__stringify(UBIFS_VERSION));
 MODULE_AUTHOR("Artem Bityutskiy, Adrian Hunter");
 MODULE_DESCRIPTION("UBIFS - UBI File System");
-
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_EMPTY
-
-/**
- * dbg_check_ff - check that a region of flash is empty.
- * @c: UBIFS file-system description object
- * @lnum: logical eraseblock number
- * @offs: offset within the logical eraseblock
- * @len: the length of the region to check
- *
- * This function returns zero if only 0xFF bytes are present at offset
- * @offs of the logical eraseblock @lnum, %-EINVAL if not, or other negative
- * error code if an error occurred.
- */
-static int dbg_check_ff(struct ubifs_info *c, int lnum, int offs, int len)
-{
-	int err, i;
-	uint8_t *buf = c->dbg_buf;
-
-	memset(buf, 0, len);
-
-	err = ubi_read(c->ubi, lnum, buf, offs, len);
-	if (err && err != -EBADMSG) {
-		ubifs_err("error %d while reading %d bytes from LEB %d:%d",
-			  err, len, lnum, offs);
-		return err;
-	}
-
-	cond_resched();
-
-	for (i = 0; i < len; i++)
-		if (buf[i] != 0xff)
-			goto fail;
-
-	return 0;
-
-fail:
-	ubifs_err("flash region at LEB %d:%d, length %d does not "
-		  "contain all 0xFF bytes", lnum, offs, len);
-	ubifs_err("hex dump of the %d-%d region", offs,
-		  offs + len);
-	print_hex_dump(KERN_DEBUG, "", DUMP_PREFIX_OFFSET, 32, 1, buf, len, 1);
-	dump_stack();
-	err = -EINVAL;
-	return err;
-}
-
-/**
- * dbg_check_volume_empty - check if the UBI volume is empty.
- * @c: UBIFS file-system description object
- *
- * This function reads the whole UBI device and makes sure it contains only 0xFF
- * bytes. Returns %-EINVAL if the UBI volume is not empty, zero if it is empty,
- * and a negative error code in case of failure.
- */
-static int dbg_check_volume_empty(struct ubifs_info *c)
-{
-	int lnum, err;
-
-	for (lnum = 0; lnum < c->leb_cnt; lnum++) {
-		err = dbg_check_ff(c, lnum, 0, c->leb_size);
-		if (err)
-			return -EINVAL;
-	}
-
-	return 0;
-}
-
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_EMPTY */
