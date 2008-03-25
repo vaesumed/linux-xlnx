@@ -378,6 +378,7 @@ void ubifs_replace_cat(struct ubifs_info *c, struct ubifs_lprops *old_lprops,
 
 /**
  * ubifs_ensure_cat - ensure LEB properties are categorized.
+ * @c: UBIFS file-system description object
  * @lprops: LEB properties
  *
  * A LEB may have fallen off of the bottom of a heap, and ended up as
@@ -1039,6 +1040,8 @@ out:
 
 /**
  * struct scan_check_data - data provided to scan callback function.
+ * @lst: LEB properties statistics
+ * @err: error code
  */
 struct scan_check_data {
 	struct ubifs_lp_stats lst;
@@ -1048,7 +1051,7 @@ struct scan_check_data {
 /**
  * scan_check_cb - scan callback.
  * @c: the UBIFS file-system description object
- * @lprops: LEB properties to scan
+ * @lp: LEB properties to scan
  * @in_tree: whether the LEB properties are in main memory
  * @data: information passed to and from the caller of the scan
  *

@@ -375,7 +375,7 @@ struct ubifs_ch {
 } __attribute__ ((packed));
 
 /**
- * ubifs_dev_desc - device node descriptor
+ * union ubifs_dev_desc - device node descriptor
  * @new: new type device descriptor
  * @huge: huge type device descriptor
  *
@@ -389,11 +389,12 @@ union ubifs_dev_desc {
 } __attribute__ ((packed));
 
 /**
- * ubifs_ino_node - inode node.
+ * struct ubifs_ino_node - inode node.
  * @ch: common header
  * @key: node key
  * @creat_sqnum: sequence number at time of creation
  * @size: inode size in bytes (amount of uncompressed data)
+ * @padding1: reserved for future, zeroed
  * @nlink: number of hard links
  * @atime: access time
  * @ctime: creation time
@@ -411,7 +412,7 @@ union ubifs_dev_desc {
  * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
  * @compr_type: compression type used for this inode
- * @padding: reserved for future, zeroes
+ * @padding2: reserved for future, zeroes
  * @data: data attached to the inode
  *
  * Note, even though inode compression type is defined by @compr_type, some
@@ -424,7 +425,7 @@ struct ubifs_ino_node {
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 creat_sqnum;
 	__le64 size;
-	__u8 padding2[8];
+	__u8 padding1[8];
 	__le32 nlink;
 	__le32 atime;
 	__le32 ctime;
@@ -439,7 +440,7 @@ struct ubifs_ino_node {
 	__le64 xattr_msize;
 	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding[34];
+	__u8 padding2[34];
 	__u8 data[];
 } __attribute__ ((packed));
 
@@ -570,7 +571,7 @@ struct ubifs_sb_node {
  * @flags: various flags (%UBIFS_MST_DIRTY, etc)
  * @log_lnum: start of the log
  * @root_lnum: LEB number of the root indexing node
- * @root_lnum: offset within @root_lnum
+ * @root_offs: offset within @root_lnum
  * @root_len: root indexing node length
  * @gc_lnum: LEB reserved for garbage collection (%-1 value means the LEB was
  * not reserved and should be reserved on mount)
@@ -630,7 +631,7 @@ struct ubifs_mst_node {
 } __attribute__ ((packed));
 
 /**
- * ubifs_ref_node - logical eraseblock reference node.
+ * struct ubifs_ref_node - logical eraseblock reference node.
  * @ch: common header
  * @lnum: the referred logical eraseblock number
  * @offs: start offset in the referred LEB
@@ -676,7 +677,7 @@ struct ubifs_idx_node {
 } __attribute__ ((packed));
 
 /**
- * ubifs_cs_node - commit start node.
+ * struct ubifs_cs_node - commit start node.
  * @ch: common header
  * @cmt_no: commit number
  */
@@ -686,7 +687,7 @@ struct ubifs_cs_node {
 } __attribute__ ((packed));
 
 /**
- * ubifs_orph_node - orphan node.
+ * struct ubifs_orph_node - orphan node.
  * @ch: common header
  * @cmt_no: commit number (also top bit is set on the last node of the commit)
  * @inos: inode numbers of orphans

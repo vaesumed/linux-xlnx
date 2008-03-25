@@ -832,8 +832,8 @@ int ubifs_wbuf_init(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
 
 /**
  * ubifs_wbuf_add_ino_nolock - add an inode number into the wbuf inode array.
- * @wbuf - the write-buffer whereto add
- * @inum - the inode number
+ * @wbuf: the write-buffer whereto add
+ * @inum: the inode number
  *
  * This function adds an inode number to the inode array of the write-buffer.
  */
@@ -851,8 +851,8 @@ void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t inum)
 
 /**
  * wbuf_has_ino - returns if the wbuf contains data from the inode.
- * @wbuf - the write-buffer
- * @inum - the inode number
+ * @wbuf: the write-buffer
+ * @inum: the inode number
  *
  * This function returns with %1 if the write-buffer contains some data from the
  * given inode otherwise it returns with %0.

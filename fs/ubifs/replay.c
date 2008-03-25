@@ -350,7 +350,7 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
  * @len: node length
  * @key: node key
  * @name: directory entry name
- * @name_len: directory entry name length
+ * @nlen: directory entry name length
  * @sqnum: sequence number
  * @deletion: non-zero if this is a deletion
  * @used: number of bytes in use in a LEB
