@@ -251,7 +251,7 @@ static int do_write_orph_node(struct ubifs_info *c, int len, int atomic)
 	} else {
 		if (c->ohead_offs == 0) {
 			/* Ensure LEB has been unmapped */
-			err = ubi_leb_unmap(c->ubi, c->ohead_lnum);
+			err = ubifs_leb_unmap(c, c->ohead_lnum);
 			if (err)
 				return err;
 		}
@@ -346,7 +346,7 @@ static int write_orph_nodes(struct ubifs_info *c, int atomic)
 		/* Unmap any unused LEBs after consolidation */
 		lnum = c->ohead_lnum + 1;
 		for (lnum = c->ohead_lnum + 1; lnum <= c->orph_last; lnum++) {
-			err = ubi_leb_unmap(c->ubi, lnum);
+			err = ubifs_leb_unmap(c, lnum);
 			if (err)
 				return err;
 		}
@@ -488,7 +488,7 @@ static int clear_orphans(struct ubifs_info *c)
 	int lnum, err;
 
 	for (lnum = c->orph_first; lnum <= c->orph_last; lnum++) {
-		err = ubi_leb_unmap(c->ubi, lnum);
+		err = ubifs_leb_unmap(c, lnum);
 		if (err)
 			return err;
 	}

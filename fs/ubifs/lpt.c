@@ -238,50 +238,6 @@ static int calc_dflt_lpt_geom(struct ubifs_info *c, int *main_lebs,
 }
 
 /**
- * unmap_leb - unmap a LEB.
- * @c: UBIFS file-system description object
- * @lnum: LEB number to unmap
- *
- * This function returns %0 on success and a negative error code on failure.
- */
-static int unmap_leb(struct ubifs_info *c, int lnum)
-{
-	int err;
-
-	err = ubi_leb_unmap(c->ubi, lnum);
-	if (err) {
-		ubifs_err("unmap LEB %d failed, error %d", lnum, err);
-		return err;
-	}
-	return 0;
-}
-
-/**
- * write_leb - write to a LEB.
- * @c: UBIFS file-system description object
- * @lnum: LEB number to write
- * @buf: buffer to write from
- * @offs: offset within buffer and within LEB to write to
- * @len: length to write
- *
- * This function returns %0 on success and a negative error code on failure.
- */
-static int write_leb(struct ubifs_info *c, int lnum, void *buf, int offs,
-		     int len)
-{
-	int err;
-
-	err = ubi_leb_write(c->ubi, lnum, buf + offs, offs, len, UBI_SHORTTERM);
-	if (err) {
-		ubifs_err("writing %d bytes at %d:%d, error %d",
-			  len, lnum, offs, err);
-		return err;
-	}
-	dbg_lp("LPT wrote %d bytes at %d:%d", len, lnum, offs);
-	return 0;
-}
-
-/**
  * pack_bits - pack bit fields end-to-end.
  * @addr: address at which to pack (passed and next address returned)
  * @pos: bit position at which to pack (passed and next position returned)
@@ -2162,7 +2118,7 @@ static int write_cnodes(struct ubifs_info *c)
 	from = offs;
 	/* Ensure empty LEB is unmapped */
 	if (offs == 0) {
-		err = unmap_leb(c, lnum);
+		err = ubifs_leb_unmap(c, lnum);
 		if (err)
 			return err;
 	}
@@ -2190,7 +2146,8 @@ static int write_cnodes(struct ubifs_info *c)
 			if (wlen) {
 				alen = ALIGN(wlen, c->min_io_size);
 				memset(buf + offs, 0xff, alen - wlen);
-				err = write_leb(c, lnum, buf, from, alen);
+				err = ubifs_leb_write(c, lnum, buf, from, alen,
+						      UBI_SHORTTERM);
 				if (err)
 					return err;
 			}
@@ -2201,7 +2158,7 @@ static int write_cnodes(struct ubifs_info *c)
 			from = 0;
 			ubifs_assert(lnum >= c->lpt_first &&
 				     lnum <= c->lpt_last);
-			err = unmap_leb(c, lnum);
+			err = ubifs_leb_unmap(c, lnum);
 			if (err)
 				return err;
 			/* Try to place lsave and ltab nicely */
@@ -2236,7 +2193,8 @@ static int write_cnodes(struct ubifs_info *c)
 			wlen = offs - from;
 			alen = ALIGN(wlen, c->min_io_size);
 			memset(buf + offs, 0xff, alen - wlen);
-			err = write_leb(c, lnum, buf, from, alen);
+			err = ubifs_leb_write(c, lnum, buf, from, alen,
+					      UBI_SHORTTERM);
 			if (err)
 				return err;
 			err = realloc_lpt_leb(c, &lnum);
@@ -2245,7 +2203,7 @@ static int write_cnodes(struct ubifs_info *c)
 			offs = 0;
 			ubifs_assert(lnum >= c->lpt_first &&
 				     lnum <= c->lpt_last);
-			err = unmap_leb(c, lnum);
+			err = ubifs_leb_unmap(c, lnum);
 			if (err)
 				return err;
 		}
@@ -2259,7 +2217,8 @@ static int write_cnodes(struct ubifs_info *c)
 			wlen = offs - from;
 			alen = ALIGN(wlen, c->min_io_size);
 			memset(buf + offs, 0xff, alen - wlen);
-			err = write_leb(c, lnum, buf, from, alen);
+			err = ubifs_leb_write(c, lnum, buf, from, alen,
+					      UBI_SHORTTERM);
 			if (err)
 				return err;
 			err = realloc_lpt_leb(c, &lnum);
@@ -2268,7 +2227,7 @@ static int write_cnodes(struct ubifs_info *c)
 			offs = 0;
 			ubifs_assert(lnum >= c->lpt_first &&
 				     lnum <= c->lpt_last);
-			err = unmap_leb(c, lnum);
+			err = ubifs_leb_unmap(c, lnum);
 			if (err)
 				return err;
 		}
@@ -2280,7 +2239,7 @@ static int write_cnodes(struct ubifs_info *c)
 	wlen = offs - from;
 	alen = ALIGN(wlen, c->min_io_size);
 	memset(buf + offs, 0xff, alen - wlen);
-	err = write_leb(c, lnum, buf, from, alen);
+	err = ubifs_leb_write(c, lnum, buf, from, alen, UBI_SHORTTERM);
 	if (err)
 		return err;
 	c->nhead_lnum = lnum;
@@ -2384,7 +2343,7 @@ static int lpt_init_wr(struct ubifs_info *c)
 
 	for (i = 0; i < c->lpt_lebs; i++)
 		if (c->ltab[i].free == c->leb_size) {
-			err = unmap_leb(c, i + c->lpt_first);
+			err = ubifs_leb_unmap(c, i + c->lpt_first);
 			if (err)
 				return err;
 		}
@@ -2908,7 +2867,7 @@ static int lpt_tgc_end(struct ubifs_info *c)
 
 	for (i = 0; i < c->lpt_lebs; i++)
 		if (c->ltab[i].tgc) {
-			err = unmap_leb(c, i + c->lpt_first);
+			err = ubifs_leb_unmap(c, i + c->lpt_first);
 			if (err)
 				return err;
 			c->ltab[i].tgc = 0;
