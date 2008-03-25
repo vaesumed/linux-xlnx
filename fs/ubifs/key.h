@@ -39,7 +39,7 @@
 
 /**
  * key_r5_hash - R5 hash function (borrowed from reiserfs).
- * @str: direntry name
+ * @s: direntry name
  * @len: name length
  */
 static inline uint32_t key_r5_hash(const char *s, int len)
@@ -96,7 +96,7 @@ static inline void ino_key_init(const struct ubifs_info *c,
 /**
  * ino_key_init_flash - initialize on-flash inode key.
  * @c: UBIFS file-system description object
- * @key: key to initialize
+ * @k: key to initialize
  * @inum: inode number
  */
 static inline void ino_key_init_flash(const struct ubifs_info *c, void *k,
@@ -171,7 +171,7 @@ static inline void dent_key_init_hash(const struct ubifs_info *c,
 /**
  * dent_key_init_flash - initialize on-flash directory entry key.
  * @c: UBIFS file-system description object
- * @key: key to initialize
+ * @k: key to initialize
  * @inum: parent inode number
  * @nm: direntry name and length
  */
@@ -235,7 +235,7 @@ static inline void xent_key_init_hash(const struct ubifs_info *c,
 /**
  * xent_key_init_flash - initialize on-flash extended attribute entry key.
  * @c: UBIFS file-system description object
- * @key: key to initialize
+ * @k: key to initialize
  * @inum: host inode number
  * @nm: extended attribute entry name and length
  */
@@ -281,7 +281,7 @@ static inline void data_key_init(const struct ubifs_info *c,
 /**
  * data_key_init_flash - initialize on-flash data key.
  * @c: UBIFS file-system description object
- * @key: key to initialize
+ * @k: key to initialize
  * @inum: inode number
  * @block: block number
  */
@@ -312,7 +312,7 @@ static inline void trun_key_init(const struct ubifs_info *c,
 /**
  * trun_key_init_flash - initialize on-flash truncation node key.
  * @c: UBIFS file-system description object
- * @key: key to initialize
+ * @k: key to initialize
  * @inum: inode number
  */
 static inline void trun_key_init_flash(const struct ubifs_info *c, void *k,
@@ -339,7 +339,7 @@ static inline int key_type(const struct ubifs_info *c,
 /**
  * key_type_flash - get type of a on-flash formatted key.
  * @c: UBIFS file-system description object
- * @key: key to get type of
+ * @k: key to get type of
  */
 static inline int key_type_flash(const struct ubifs_info *c, const void *k)
 {
@@ -351,7 +351,7 @@ static inline int key_type_flash(const struct ubifs_info *c, const void *k)
 /**
  * key_ino - fetch inode number from key.
  * @c: UBIFS file-system description object
- * @key: key to fetch inode number from
+ * @k: key to fetch inode number from
  */
 static inline ino_t key_ino(const struct ubifs_info *c, const void *k)
 {
@@ -409,7 +409,8 @@ static inline unsigned int key_block(const struct ubifs_info *c,
 /**
  * key_read - transform a key to in-memory format.
  * @c: UBIFS file-system description object
- * @key: the key to transform
+ * @from: the key to transform
+ * @to: the key to store the result
  */
 static inline void key_read(const struct ubifs_info *c, const void *from,
 			    union ubifs_key *to)
@@ -423,7 +424,8 @@ static inline void key_read(const struct ubifs_info *c, const void *from,
 /**
  * key_write - transform a key from in-memory format.
  * @c: UBIFS file-system description object
- * @key: the key to transform
+ * @from: the key to transform
+ * @to: the key to store the result
  */
 static inline void key_write(const struct ubifs_info *c,
 			     const union ubifs_key *from, void *to)
@@ -438,7 +440,8 @@ static inline void key_write(const struct ubifs_info *c,
 /**
  * key_write_idx - transform a key from in-memory format for the index.
  * @c: UBIFS file-system description object
- * @key: the key to transform
+ * @from: the key to transform
+ * @to: the key to store the result
  */
 static inline void key_write_idx(const struct ubifs_info *c,
 				 const union ubifs_key *from, void *to)
@@ -450,7 +453,7 @@ static inline void key_write_idx(const struct ubifs_info *c,
 }
 
 /**
- * key_copy - copy a key
+ * key_copy - copy a key.
  * @c: UBIFS file-system description object
  * @from: the key to copy from
  * @to: the key to copy to

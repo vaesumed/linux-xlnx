@@ -249,6 +249,7 @@ struct ubifs_gced_idx_leb {
 /**
  * struct ubifs_inode - UBIFS in-memory inode description.
  * @vfs_inode: VFS inode description object
+ * @creat_sqnum: sequence number at time of creation
  * @xattr_size: summarized size of all extended attributes in bytes, protected
  *              by @inode->i_lock
  * @xattr_msize: summarized on-the-media size of all extended attributes in
@@ -262,8 +263,8 @@ struct ubifs_gced_idx_leb {
  * @budgeted: non-zero if the inode has been budgeted (used for debugging)
  * @budg_mutex: serializes inode budgeting and write-back
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
+ * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
- * @creat_sqnum: sequence number at time of creation
  * @data: inode's data
  *
  * UBIFS has its own inode mutex, besides the VFS 'i_mutex'. The reason for
@@ -595,7 +596,7 @@ struct ubifs_bud {
 /**
  * struct ubifs_jhead - journal head.
  * @wbuf: head's write-buffer
- * @buds: list of bud LEBs belonging to this journal head
+ * @buds_list: list of bud LEBs belonging to this journal head
  *
  * Note, the @buds list is protected by the @c->buds_lock.
  */
@@ -633,6 +634,9 @@ struct ubifs_zbranch {
  * @child_cnt: count of child znodes
  * @iip: index in parent's zbranch array
  * @alt: lower bound of key range has altered i.e. child inserted at slot 0
+ * @lnum: LEB number of the corresponding indexing node
+ * @offs: offset of the corresponding indexing node
+ * @len: length  of the corresponding indexing node
  * @zbranch: array of znode branches (@c->fanout elements)
  */
 struct ubifs_znode {
@@ -810,7 +814,7 @@ struct ubifs_mount_opts {
  * @ileb_nxt: next pre-allocated index LEBs
  * @old_idx: tree of index nodes obsoleted since the last commit start
  * @new_ihead_lnum: used by debugging to check ihead_lnum
- * @new_ihead_ofs: used by debugging to check ihead_offs
+ * @new_ihead_offs: used by debugging to check ihead_offs
  *
  * @mst_node: master node
  * @mst_offs: offset of valid master node
@@ -977,7 +981,7 @@ struct ubifs_mount_opts {
  * @size_tree: inode size information for recovery
  * @recovery_needs_commit: a commit must be done before unmounting
  * @remounting_rw: set while remounting from ro to rw (sb flags have MS_RDONLY)
- * @mount_opst: UBIFS-specific mount options
+ * @mount_opts: UBIFS-specific mount options
  *
  * @dbg_buf: a buffer of LEB size used for debugging purposes
  * @old_zroot: old index root - used by 'dbg_check_old_index()'

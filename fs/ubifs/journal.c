@@ -941,7 +941,7 @@ out:
 /**
  * ubifs_jrn_truncate - update the journal for a truncation.
  * @c: UBIFS file-system description object
- * @ino: inode number of inode being truncated
+ * @inum: inode number of inode being truncated
  * @old_size: old size
  * @new_size: new size
  *

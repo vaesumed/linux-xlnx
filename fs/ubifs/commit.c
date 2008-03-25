@@ -475,8 +475,12 @@ int ubifs_gc_should_commit(struct ubifs_info *c)
 /**
  * struct idx_node - hold index nodes during index tree traversal.
  * @list: list
+ * @iip: index in parent (slot number of this indexing node in the parent
+ *       indexing node)
+ * @upper_key: all keys in this indexing node have to be less or equivalent to
+ *             this key
  * @idx: index node (8-byte aligned because all node structures must be 8-byte
- * aligned)
+ *       aligned)
  */
 struct idx_node {
 	struct list_head list;

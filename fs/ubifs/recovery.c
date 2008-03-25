@@ -384,6 +384,7 @@ static int is_last_write(const struct ubifs_info *c, void *buf, int offs)
  * clean_buf - clean the data from an LEB sitting in a buffer.
  * @c: UBIFS file-system description object
  * @buf: buffer to clean
+ * @lnum: LEB number to clean
  * @offs: offset from which to clean
  * @len: length of buffer
  *
@@ -1089,6 +1090,7 @@ int ubifs_recover_gc_lnum(struct ubifs_info *c)
 
 /**
  * struct size_entry - inode size information for recovery.
+ * @rb: link in the RB-tree of sizes
  * @inum: inode number
  * @i_size: size on inode
  * @d_size: maximum size based on data nodes
