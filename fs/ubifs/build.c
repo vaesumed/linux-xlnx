@@ -38,14 +38,11 @@
 /* Slab cache for UBIFS inodes */
 struct kmem_cache *ubifs_inode_slab;
 
-/* TODO: remove compatibility stuff as late as possible */
-#ifndef UBIFS_COMPAT_NO_SHRINKER
 /* UBIFS TNC shrinker description */
 static struct shrinker ubifs_shrinker_info = {
 	.shrink = ubifs_shrinker,
 	.seeks = DEFAULT_SEEKS,
 };
-#endif
 
 /**
  * init_constants_early - initialize UBIFS constants.
@@ -1239,15 +1236,8 @@ static struct file_system_type ubifs_fs_type = {
 
 /*
  * Inode slab cache constructor.
- *
- * TODO: remove backward compatibility as late as possible
  */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
-static void inode_slab_ctor(void *obj, struct kmem_cache *cachep,
-			    unsigned long flags)
-#else
 static void inode_slab_ctor(struct kmem_cache *cachep, void *obj)
-#endif
 {
 	struct ubifs_inode *inode = obj;
 	inode_init_once(&inode->vfs_inode);
@@ -1314,7 +1304,7 @@ static int __init ubifs_init(void)
 	ubifs_inode_slab = kmem_cache_create("ubifs_inode_slab",
 				sizeof(struct ubifs_inode), 0,
 				SLAB_MEM_SPREAD | SLAB_RECLAIM_ACCOUNT,
-				&inode_slab_ctor UBIFSCOMPATNULL);
+				&inode_slab_ctor);
 	if (!ubifs_inode_slab)
 		goto out_reg;
 

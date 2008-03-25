@@ -54,12 +54,7 @@
 #include "ubifs.h"
 #include <linux/mount.h>
 
-/* TODO: remove compatibility stuff as late as possible */
-#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
-int ubifs_do_readpage(struct page *page)
-#else
 static int do_readpage(struct page *page)
-#endif
 {
 	void *addr;
 	int err, len, out_len;
@@ -149,9 +144,6 @@ error:
 	kunmap(page);
 	return err;
 }
-
-/* TODO: remove compatibility stuff as late as possible */
-#ifndef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
 
 static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 			     loff_t pos, unsigned len, unsigned flags,
@@ -346,8 +338,6 @@ out:
 	page_cache_release(page);
 	return copied;
 }
-
-#endif /* UBIFS_COMPAT_USE_OLD_PREPARE_WRITE */
 
 static int ubifs_readpage(struct file *file, struct page *page)
 {
@@ -760,14 +750,8 @@ static int ubifs_releasepage(struct page *page, gfp_t unused_gfp_flags)
 struct address_space_operations ubifs_file_address_operations = {
 	.readpage       = ubifs_readpage,
 	.writepage      = ubifs_writepage,
-/* TODO: remove compatibility stuff as late as possible */
-#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
-	.prepare_write  = ubifs_prepare_write,
-	.commit_write   = ubifs_commit_write,
-#else
 	.write_begin    = ubifs_write_begin,
 	.write_end      = ubifs_write_end,
-#endif
 	.invalidatepage = ubifs_invalidatepage,
 	.set_page_dirty = ubifs_set_page_dirty,
 	.releasepage    = ubifs_releasepage,
