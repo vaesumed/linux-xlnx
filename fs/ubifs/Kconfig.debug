@@ -64,7 +64,8 @@ config UBIFS_FS_DEBUG_MSG_MNT
 	bool "Mount messages"
 	default n
 	help
-	  This option enables detailed mount debugging messages.
+	  This option enables detailed mount debugging messages, including
+	  recovery messages.
 
 config UBIFS_FS_DEBUG_MSG_IO
 	bool "Input/output messages"
@@ -83,12 +84,6 @@ config UBIFS_FS_DEBUG_MSG_SCAN
 	default n
 	help
 	  This option enables detailed scan debugging messages.
-
-config UBIFS_FS_DEBUG_MSG_RCVRY
-	bool "Recovery messages"
-	default n
-	help
-	  This option enables detailed recovery debugging messages.
 
 endmenu
 

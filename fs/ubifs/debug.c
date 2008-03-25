@@ -982,43 +982,43 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 	else if (lnum == UBIFS_MST_LNUM || lnum == UBIFS_MST_LNUM + 1) {
 		if (chance(19, 20))
 			return 0;
-		dbg_rcvry("failing in master LEB %d", lnum);
+		dbg_mnt("failing in master LEB %d", lnum);
 	} else if (lnum >= UBIFS_LOG_LNUM && lnum <= c->log_last) {
 		if (write && chance(99, 100))
 			return 0;
 		else if (chance(399, 400))
 			return 0;
-		dbg_rcvry("failing in log LEB %d", lnum);
+		dbg_mnt("failing in log LEB %d", lnum);
 	} else if (lnum >= c->lpt_first && lnum <= c->lpt_last) {
 		if (write && chance(99, 100))
 			return 0;
 		else if (chance(399, 400))
 			return 0;
-		dbg_rcvry("failing in LPT LEB %d", lnum);
+		dbg_mnt("failing in LPT LEB %d", lnum);
 	} else if (lnum >= c->orph_first && lnum <= c->orph_last) {
 		if (write && chance(9, 10))
 			return 0;
 		else if (chance(39, 40))
 			return 0;
-		dbg_rcvry("failing in orphan LEB %d", lnum);
+		dbg_mnt("failing in orphan LEB %d", lnum);
 	} else if (lnum == c->ihead_lnum) {
 		if (chance(99, 100))
 			return 0;
-		dbg_rcvry("failing in index head LEB %d", lnum);
+		dbg_mnt("failing in index head LEB %d", lnum);
 	} else if (write && !RB_EMPTY_ROOT(&c->buds) &&
 		   ubifs_search_bud(c, lnum) == NULL) {
 		if (chance(19, 20))
 			return 0;
-		dbg_rcvry("failing in non-bud LEB %d", lnum);
+		dbg_mnt("failing in non-bud LEB %d", lnum);
 	} else if (c->cmt_state == COMMIT_RUNNING_BACKGROUND ||
 		   c->cmt_state == COMMIT_RUNNING_REQUIRED) {
 		if (chance(999, 1000))
 			return 0;
-		dbg_rcvry("failing in bud LEB %d commit running", lnum);
+		dbg_mnt("failing in bud LEB %d commit running", lnum);
 	} else {
 		if (chance(9999, 10000))
 			return 0;
-		dbg_rcvry("failing in bud LEB %d commit not running", lnum);
+		dbg_mnt("failing in bud LEB %d commit not running", lnum);
 	}
 	ubifs_err("*** SETTING FAILURE MODE ON ***");
 	c->failure_mode = 1;
