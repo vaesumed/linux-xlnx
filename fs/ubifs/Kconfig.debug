@@ -98,14 +98,6 @@ config UBIFS_FS_DEBUG_CHK_MEMPRESS
 	  This option causes kernel memory pressure in order to make TNC shrinker
 	  run.
 
-config UBIFS_FS_DEBUG_CHK_EMPTY
-	bool "Check empty volume"
-	default n
-	depends on UBIFS_FS_DEBUG
-	help
-	  This option enables a function which checks that empty volumes contain
-	  only 0xFF bytes.
-
 config UBIFS_FS_DEBUG_CHK_LPROPS
 	bool "Check LEB properties (lprops)"
 	default n
