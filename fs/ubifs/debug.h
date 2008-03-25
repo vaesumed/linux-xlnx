@@ -172,13 +172,6 @@ int dbg_check_cats(struct ubifs_info *c);
 #define dbg_gen_key(c, key, fmt, ...) ({})
 #endif
 
-/* Extended attribute messages */
-#ifdef CONFIG_UBIFS_FS_DEBUG_MSG_XATTR
-#define dbg_xattr(fmt, ...) dbg_msg(fmt, ##__VA_ARGS__)
-#else
-#define dbg_xattr(fmt, ...) ({})
-#endif
-
 /* Additional journal messages */
 #ifdef CONFIG_UBIFS_FS_DEBUG_MSG_JRN
 #define dbg_jrn(fmt, ...)             dbg_msg(fmt, ##__VA_ARGS__)
