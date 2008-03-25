@@ -3507,3 +3507,14 @@ int ext4_change_inode_journal_flag(struct inode *inode, int val)
 
 	return err;
 }
+
+int ext4_page_mkwrite(struct vm_area_struct *vma, struct page *page)
+{
+	/*
+	 * if ext4_get_block resulted in a split of an uninitialized extent,
+	 * in file system full case, we will have to take the journal write
+	 * access and zero out the page. The journal handle get initialized
+	 * in ext4_get_block.
+	 */
+	return block_page_mkwrite(vma, page, ext4_get_block);
+}
