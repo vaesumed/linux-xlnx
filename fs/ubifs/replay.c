@@ -580,7 +580,7 @@ out_dump:
 }
 
 /**
- * insert_ref_node - insert a ref node to the journal tree.
+ * insert_ref_node - insert a ref node to the replay tree.
  * @c: UBIFS file-system description object
  * @lnum: node logical eraseblock number
  * @offs: node offset
