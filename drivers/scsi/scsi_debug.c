@@ -39,16 +39,17 @@
 #include <linux/vmalloc.h>
 #include <linux/moduleparam.h>
 #include <linux/scatterlist.h>
-
 #include <linux/blkdev.h>
-#include "scsi.h"
+
+#include <scsi/scsi.h>
+#include <scsi/scsi_cmnd.h>
+#include <scsi/scsi_device.h>
 #include <scsi/scsi_host.h>
 #include <scsi/scsicam.h>
 
 #include <linux/stat.h>
 
 #include "scsi_logging.h"
-#include "scsi_debug.h"
 
 #define SCSI_DEBUG_VERSION "1.81"
 static const char * scsi_debug_version_date = "20070104";
@@ -165,6 +166,9 @@ static int sdebug_sectors_per;		/* sectors per cylinder */
 
 #define SDEBUG_SENSE_LEN 32
 
+#define SCSI_DEBUG_CANQUEUE  255
+#define SCSI_DEBUG_MAX_CMD_LEN 16
+
 struct sdebug_dev_info {
 	struct list_head dev_list;
 	unsigned char sense_buff[SDEBUG_SENSE_LEN];	/* weak nexus */
@@ -202,30 +206,6 @@ struct sdebug_queued_cmd {
 };
 static struct sdebug_queued_cmd queued_arr[SCSI_DEBUG_CANQUEUE];
 
-static struct scsi_host_template sdebug_driver_template = {
-	.proc_info =		scsi_debug_proc_info,
-	.name =			"SCSI DEBUG",
-	.info =			scsi_debug_info,
-	.slave_alloc =		scsi_debug_slave_alloc,
-	.slave_configure =	scsi_debug_slave_configure,
-	.slave_destroy =	scsi_debug_slave_destroy,
-	.ioctl =		scsi_debug_ioctl,
-	.queuecommand =		scsi_debug_queuecommand,
-	.eh_abort_handler =	scsi_debug_abort,
-	.eh_bus_reset_handler = scsi_debug_bus_reset,
-	.eh_device_reset_handler = scsi_debug_device_reset,
-	.eh_host_reset_handler = scsi_debug_host_reset,
-	.bios_param =		scsi_debug_biosparam,
-	.can_queue =		SCSI_DEBUG_CANQUEUE,
-	.this_id =		7,
-	.sg_tablesize =		256,
-	.cmd_per_lun =		16,
-	.max_sectors =		0xffff,
-	.unchecked_isa_dma = 	0,
-	.use_clustering = 	DISABLE_CLUSTERING,
-	.module =		THIS_MODULE,
-};
-
 static unsigned char * fake_storep;	/* ramdisk storage */
 
 static int num_aborts = 0;
@@ -255,56 +235,11 @@ static unsigned char ctrl_m_pg[] = {0xa, 10, 2, 0, 0, 0, 0, 0,
 static unsigned char iec_m_pg[] = {0x1c, 0xa, 0x08, 0, 0, 0, 0, 0,
 			           0, 0, 0x0, 0x0};
 
-/* function declarations */
-static int resp_inquiry(struct scsi_cmnd * SCpnt, int target,
-			struct sdebug_dev_info * devip);
-static int resp_requests(struct scsi_cmnd * SCpnt,
-			 struct sdebug_dev_info * devip);
-static int resp_start_stop(struct scsi_cmnd * scp,
-			   struct sdebug_dev_info * devip);
-static int resp_report_tgtpgs(struct scsi_cmnd * scp,
-			      struct sdebug_dev_info * devip);
-static int resp_readcap(struct scsi_cmnd * SCpnt,
-			struct sdebug_dev_info * devip);
-static int resp_readcap16(struct scsi_cmnd * SCpnt,
-			  struct sdebug_dev_info * devip);
-static int resp_mode_sense(struct scsi_cmnd * scp, int target,
-			   struct sdebug_dev_info * devip);
-static int resp_mode_select(struct scsi_cmnd * scp, int mselect6,
-			    struct sdebug_dev_info * devip);
-static int resp_log_sense(struct scsi_cmnd * scp,
-			  struct sdebug_dev_info * devip);
-static int resp_read(struct scsi_cmnd * SCpnt, unsigned long long lba,
-		     unsigned int num, struct sdebug_dev_info * devip);
-static int resp_write(struct scsi_cmnd * SCpnt, unsigned long long lba,
-		      unsigned int num, struct sdebug_dev_info * devip);
-static int resp_report_luns(struct scsi_cmnd * SCpnt,
-			    struct sdebug_dev_info * devip);
-static int resp_xdwriteread(struct scsi_cmnd *scp, unsigned long long lba,
-			    unsigned int num, struct sdebug_dev_info *devip);
-static int fill_from_dev_buffer(struct scsi_cmnd * scp, unsigned char * arr,
-                                int arr_len);
-static int fetch_to_dev_buffer(struct scsi_cmnd * scp, unsigned char * arr,
-                               int max_arr_len);
-static void timer_intr_handler(unsigned long);
 static struct sdebug_dev_info * devInfoReg(struct scsi_device * sdev);
 static void mk_sense_buffer(struct sdebug_dev_info * devip, int key,
 			    int asc, int asq);
-static int check_readiness(struct scsi_cmnd * SCpnt, int reset_only,
-			   struct sdebug_dev_info * devip);
-static int schedule_resp(struct scsi_cmnd * cmnd,
-			 struct sdebug_dev_info * devip,
-			 done_funct_t done, int scsi_result, int delta_jiff);
-static void __init sdebug_build_parts(unsigned char * ramp);
-static void __init init_all_queued(void);
 static void stop_all_queued(void);
 static int stop_queued_cmnd(struct scsi_cmnd * cmnd);
-static int inquiry_evpd_83(unsigned char * arr, int port_group_id,
-			   int target_dev_id, int dev_id_num,
-			   const char * dev_id_str, int dev_id_str_len);
-static int inquiry_evpd_88(unsigned char * arr, int target_dev_id);
-static int do_create_driverfs_files(void);
-static void do_remove_driverfs_files(void);
 
 static int sdebug_add_adapter(void);
 static void sdebug_remove_adapter(void);
@@ -350,237 +285,6 @@ static void get_data_transfer_info(unsigned char *cmd,
 	}
 }
 
-static
-int scsi_debug_queuecommand(struct scsi_cmnd * SCpnt, done_funct_t done)
-{
-	unsigned char *cmd = (unsigned char *) SCpnt->cmnd;
-	int len, k;
-	unsigned int num;
-	unsigned long long lba;
-	int errsts = 0;
-	int target = SCpnt->device->id;
-	struct sdebug_dev_info * devip = NULL;
-	int inj_recovered = 0;
-	int inj_transport = 0;
-	int delay_override = 0;
-
-	if (done == NULL)
-		return 0;	/* assume mid level reprocessing command */
-
-	scsi_set_resid(SCpnt, 0);
-	if ((SCSI_DEBUG_OPT_NOISE & scsi_debug_opts) && cmd) {
-		printk(KERN_INFO "scsi_debug: cmd ");
-		for (k = 0, len = SCpnt->cmd_len; k < len; ++k)
-			printk("%02x ", (int)cmd[k]);
-		printk("\n");
-	}
-        if(target == sdebug_driver_template.this_id) {
-		printk(KERN_INFO "scsi_debug: initiator's id used as "
-		       "target!\n");
-		return schedule_resp(SCpnt, NULL, done,
-				     DID_NO_CONNECT << 16, 0);
-        }
-
-	if ((SCpnt->device->lun >= scsi_debug_max_luns) &&
-	    (SCpnt->device->lun != SAM2_WLUN_REPORT_LUNS))
-		return schedule_resp(SCpnt, NULL, done,
-				     DID_NO_CONNECT << 16, 0);
-	devip = devInfoReg(SCpnt->device);
-	if (NULL == devip)
-		return schedule_resp(SCpnt, NULL, done,
-				     DID_NO_CONNECT << 16, 0);
-
-        if ((scsi_debug_every_nth != 0) &&
-            (++scsi_debug_cmnd_count >= abs(scsi_debug_every_nth))) {
-                scsi_debug_cmnd_count = 0;
-		if (scsi_debug_every_nth < -1)
-			scsi_debug_every_nth = -1;
-		if (SCSI_DEBUG_OPT_TIMEOUT & scsi_debug_opts)
-			return 0; /* ignore command causing timeout */
-		else if (SCSI_DEBUG_OPT_RECOVERED_ERR & scsi_debug_opts)
-			inj_recovered = 1; /* to reads and writes below */
-		else if (SCSI_DEBUG_OPT_TRANSPORT_ERR & scsi_debug_opts)
-			inj_transport = 1; /* to reads and writes below */
-        }
-
-	if (devip->wlun) {
-		switch (*cmd) {
-		case INQUIRY:
-		case REQUEST_SENSE:
-		case TEST_UNIT_READY:
-		case REPORT_LUNS:
-			break;  /* only allowable wlun commands */
-		default:
-			if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts)
-				printk(KERN_INFO "scsi_debug: Opcode: 0x%x "
-				       "not supported for wlun\n", *cmd);
-			mk_sense_buffer(devip, ILLEGAL_REQUEST,
-					INVALID_OPCODE, 0);
-			errsts = check_condition_result;
-			return schedule_resp(SCpnt, devip, done, errsts,
-					     0);
-		}
-	}
-
-	switch (*cmd) {
-	case INQUIRY:     /* mandatory, ignore unit attention */
-		delay_override = 1;
-		errsts = resp_inquiry(SCpnt, target, devip);
-		break;
-	case REQUEST_SENSE:	/* mandatory, ignore unit attention */
-		delay_override = 1;
-		errsts = resp_requests(SCpnt, devip);
-		break;
-	case REZERO_UNIT:	/* actually this is REWIND for SSC */
-	case START_STOP:
-		errsts = resp_start_stop(SCpnt, devip);
-		break;
-	case ALLOW_MEDIUM_REMOVAL:
-		if ((errsts = check_readiness(SCpnt, 1, devip)))
-			break;
-		if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts)
-			printk(KERN_INFO "scsi_debug: Medium removal %s\n",
-			        cmd[4] ? "inhibited" : "enabled");
-		break;
-	case SEND_DIAGNOSTIC:     /* mandatory */
-		errsts = check_readiness(SCpnt, 1, devip);
-		break;
-	case TEST_UNIT_READY:     /* mandatory */
-		delay_override = 1;
-		errsts = check_readiness(SCpnt, 0, devip);
-		break;
-        case RESERVE:
-		errsts = check_readiness(SCpnt, 1, devip);
-                break;
-        case RESERVE_10:
-		errsts = check_readiness(SCpnt, 1, devip);
-                break;
-        case RELEASE:
-		errsts = check_readiness(SCpnt, 1, devip);
-                break;
-        case RELEASE_10:
-		errsts = check_readiness(SCpnt, 1, devip);
-                break;
-	case READ_CAPACITY:
-		errsts = resp_readcap(SCpnt, devip);
-		break;
-	case SERVICE_ACTION_IN:
-		if (SAI_READ_CAPACITY_16 != cmd[1]) {
-			mk_sense_buffer(devip, ILLEGAL_REQUEST,
-					INVALID_OPCODE, 0);
-			errsts = check_condition_result;
-			break;
-		}
-		errsts = resp_readcap16(SCpnt, devip);
-		break;
-	case MAINTENANCE_IN:
-		if (MI_REPORT_TARGET_PGS != cmd[1]) {
-			mk_sense_buffer(devip, ILLEGAL_REQUEST,
-					INVALID_OPCODE, 0);
-			errsts = check_condition_result;
-			break;
-		}
-		errsts = resp_report_tgtpgs(SCpnt, devip);
-		break;
-	case READ_16:
-	case READ_12:
-	case READ_10:
-	case READ_6:
-		if ((errsts = check_readiness(SCpnt, 0, devip)))
-			break;
-		if (scsi_debug_fake_rw)
-			break;
-		get_data_transfer_info(cmd, &lba, &num);
-		errsts = resp_read(SCpnt, lba, num, devip);
-		if (inj_recovered && (0 == errsts)) {
-			mk_sense_buffer(devip, RECOVERED_ERROR,
-					THRESHOLD_EXCEEDED, 0);
-			errsts = check_condition_result;
-		} else if (inj_transport && (0 == errsts)) {
-                        mk_sense_buffer(devip, ABORTED_COMMAND,
-                                        TRANSPORT_PROBLEM, ACK_NAK_TO);
-                        errsts = check_condition_result;
-                }
-		break;
-	case REPORT_LUNS:	/* mandatory, ignore unit attention */
-		delay_override = 1;
-		errsts = resp_report_luns(SCpnt, devip);
-		break;
-	case VERIFY:		/* 10 byte SBC-2 command */
-		errsts = check_readiness(SCpnt, 0, devip);
-		break;
-	case WRITE_16:
-	case WRITE_12:
-	case WRITE_10:
-	case WRITE_6:
-		if ((errsts = check_readiness(SCpnt, 0, devip)))
-			break;
-		if (scsi_debug_fake_rw)
-			break;
-		get_data_transfer_info(cmd, &lba, &num);
-		errsts = resp_write(SCpnt, lba, num, devip);
-		if (inj_recovered && (0 == errsts)) {
-			mk_sense_buffer(devip, RECOVERED_ERROR,
-					THRESHOLD_EXCEEDED, 0);
-			errsts = check_condition_result;
-		}
-		break;
-	case MODE_SENSE:
-	case MODE_SENSE_10:
-		errsts = resp_mode_sense(SCpnt, target, devip);
-		break;
-	case MODE_SELECT:
-		errsts = resp_mode_select(SCpnt, 1, devip);
-		break;
-	case MODE_SELECT_10:
-		errsts = resp_mode_select(SCpnt, 0, devip);
-		break;
-	case LOG_SENSE:
-		errsts = resp_log_sense(SCpnt, devip);
-		break;
-	case SYNCHRONIZE_CACHE:
-		delay_override = 1;
-		errsts = check_readiness(SCpnt, 0, devip);
-		break;
-	case WRITE_BUFFER:
-		errsts = check_readiness(SCpnt, 1, devip);
-		break;
-	case XDWRITEREAD_10:
-		if (!scsi_bidi_cmnd(SCpnt)) {
-			mk_sense_buffer(devip, ILLEGAL_REQUEST,
-					INVALID_FIELD_IN_CDB, 0);
-			errsts = check_condition_result;
-			break;
-		}
-
-		errsts = check_readiness(SCpnt, 0, devip);
-		if (errsts)
-			break;
-		if (scsi_debug_fake_rw)
-			break;
-		get_data_transfer_info(cmd, &lba, &num);
-		errsts = resp_read(SCpnt, lba, num, devip);
-		if (errsts)
-			break;
-		errsts = resp_write(SCpnt, lba, num, devip);
-		if (errsts)
-			break;
-		errsts = resp_xdwriteread(SCpnt, lba, num, devip);
-		break;
-	default:
-		if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts)
-			printk(KERN_INFO "scsi_debug: Opcode: 0x%x not "
-			       "supported\n", *cmd);
-		if ((errsts = check_readiness(SCpnt, 1, devip)))
-			break;	/* Unit attention takes precedence */
-		mk_sense_buffer(devip, ILLEGAL_REQUEST, INVALID_OPCODE, 0);
-		errsts = check_condition_result;
-		break;
-	}
-	return schedule_resp(SCpnt, devip, done, errsts,
-			     (delay_override ? 0 : scsi_debug_delay));
-}
-
 static int scsi_debug_ioctl(struct scsi_device *dev, int cmd, void __user *arg)
 {
 	if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts) {
@@ -613,81 +317,37 @@ static int check_readiness(struct scsi_cmnd * SCpnt, int reset_only,
 }
 
 /* Returns 0 if ok else (DID_ERROR << 16). Sets scp->resid . */
-static int fill_from_dev_buffer(struct scsi_cmnd * scp, unsigned char * arr,
+static int fill_from_dev_buffer(struct scsi_cmnd *scp, unsigned char *arr,
 				int arr_len)
 {
-	int k, req_len, act_len, len, active;
-	void * kaddr;
-	void * kaddr_off;
-	struct scatterlist *sg;
+	int act_len;
 	struct scsi_data_buffer *sdb = scsi_in(scp);
 
 	if (!sdb->length)
 		return 0;
-	if (!sdb->table.sgl)
-		return (DID_ERROR << 16);
 	if (!(scsi_bidi_cmnd(scp) || scp->sc_data_direction == DMA_FROM_DEVICE))
 		return (DID_ERROR << 16);
-	active = 1;
-	req_len = act_len = 0;
-	for_each_sg(sdb->table.sgl, sg, sdb->table.nents, k) {
-		if (active) {
-			kaddr = (unsigned char *)
-				kmap_atomic(sg_page(sg), KM_USER0);
-			if (NULL == kaddr)
-				return (DID_ERROR << 16);
-			kaddr_off = (unsigned char *)kaddr + sg->offset;
-			len = sg->length;
-			if ((req_len + len) > arr_len) {
-				active = 0;
-				len = arr_len - req_len;
-			}
-			memcpy(kaddr_off, arr + req_len, len);
-			kunmap_atomic(kaddr, KM_USER0);
-			act_len += len;
-		}
-		req_len += sg->length;
-	}
+
+	act_len = sg_copy_from_buffer(sdb->table.sgl, sdb->table.nents,
+				      arr, arr_len);
 	if (sdb->resid)
 		sdb->resid -= act_len;
 	else
-		sdb->resid = req_len - act_len;
+		sdb->resid = scsi_bufflen(scp) - act_len;
+
 	return 0;
 }
 
 /* Returns number of bytes fetched into 'arr' or -1 if error. */
-static int fetch_to_dev_buffer(struct scsi_cmnd * scp, unsigned char * arr,
-			       int max_arr_len)
+static int fetch_to_dev_buffer(struct scsi_cmnd *scp, unsigned char *arr,
+			       int arr_len)
 {
-	int k, req_len, len, fin;
-	void * kaddr;
-	void * kaddr_off;
-	struct scatterlist * sg;
-
-	if (0 == scsi_bufflen(scp))
+	if (!scsi_bufflen(scp))
 		return 0;
-	if (NULL == scsi_sglist(scp))
-		return -1;
 	if (!(scsi_bidi_cmnd(scp) || scp->sc_data_direction == DMA_TO_DEVICE))
 		return -1;
-	req_len = fin = 0;
-	scsi_for_each_sg(scp, sg, scsi_sg_count(scp), k) {
-		kaddr = (unsigned char *)kmap_atomic(sg_page(sg), KM_USER0);
-		if (NULL == kaddr)
-			return -1;
-		kaddr_off = (unsigned char *)kaddr + sg->offset;
-		len = sg->length;
-		if ((req_len + len) > max_arr_len) {
-			len = max_arr_len - req_len;
-			fin = 1;
-		}
-		memcpy(arr + req_len, kaddr_off, len);
-		kunmap_atomic(kaddr, KM_USER0);
-		if (fin)
-			return req_len + len;
-		req_len += sg->length;
-	}
-	return req_len;
+
+	return scsi_sg_copy_to_buffer(scp, arr, arr_len);
 }
 
 
@@ -1987,16 +1647,7 @@ static int resp_xdwriteread(struct scsi_cmnd *scp, unsigned long long lba,
 	if (!buf)
 		return ret;
 
-	offset = 0;
-	scsi_for_each_sg(scp, sg, scsi_sg_count(scp), i) {
-		kaddr = (unsigned char *)kmap_atomic(sg_page(sg), KM_USER0);
-		if (!kaddr)
-			goto out;
-
-		memcpy(buf + offset, kaddr + sg->offset, sg->length);
-		offset += sg->length;
-		kunmap_atomic(kaddr, KM_USER0);
-	}
+	scsi_sg_copy_to_buffer(scp, buf, scsi_bufflen(scp));
 
 	offset = 0;
 	for_each_sg(sdb->table.sgl, sg, sdb->table.nents, i) {
@@ -2089,6 +1740,19 @@ static void scsi_debug_slave_destroy(struct scsi_device * sdp)
 	}
 }
 
+struct sdebug_dev_info *sdebug_device_create(struct sdebug_host_info *sdbg_host,
+					     gfp_t flags)
+{
+	struct sdebug_dev_info *devip;
+
+	devip = kzalloc(sizeof(*devip), flags);
+	if (devip) {
+		devip->sdbg_host = sdbg_host;
+		list_add_tail(&devip->dev_list, &sdbg_host->dev_info_list);
+	}
+	return devip;
+}
+
 static struct sdebug_dev_info * devInfoReg(struct scsi_device * sdev)
 {
 	struct sdebug_host_info * sdbg_host;
@@ -2098,8 +1762,8 @@ static struct sdebug_dev_info * devInfoReg(struct scsi_device * sdev)
 
 	if (devip)
 		return devip;
-	sdbg_host = *(struct sdebug_host_info **) sdev->host->hostdata;
-        if(! sdbg_host) {
+	sdbg_host = *(struct sdebug_host_info **)shost_priv(sdev->host);
+	if (!sdbg_host) {
                 printk(KERN_ERR "Host info NULL\n");
 		return NULL;
         }
@@ -2113,36 +1777,32 @@ static struct sdebug_dev_info * devInfoReg(struct scsi_device * sdev)
 				open_devip = devip;
 		}
 	}
-	if (NULL == open_devip) { /* try and make a new one */
-		open_devip = kzalloc(sizeof(*open_devip),GFP_ATOMIC);
-		if (NULL == open_devip) {
+	if (!open_devip) { /* try and make a new one */
+		open_devip = sdebug_device_create(sdbg_host, GFP_ATOMIC);
+		if (!open_devip) {
 			printk(KERN_ERR "%s: out of memory at line %d\n",
 				__FUNCTION__, __LINE__);
 			return NULL;
 		}
-		open_devip->sdbg_host = sdbg_host;
-		list_add_tail(&open_devip->dev_list,
-		&sdbg_host->dev_info_list);
 	}
-        if (open_devip) {
-		open_devip->channel = sdev->channel;
-		open_devip->target = sdev->id;
-		open_devip->lun = sdev->lun;
-		open_devip->sdbg_host = sdbg_host;
-		open_devip->reset = 1;
-		open_devip->used = 1;
-		memset(open_devip->sense_buff, 0, SDEBUG_SENSE_LEN);
-		if (scsi_debug_dsense)
-			open_devip->sense_buff[0] = 0x72;
-		else {
-			open_devip->sense_buff[0] = 0x70;
-			open_devip->sense_buff[7] = 0xa;
-		}
-		if (sdev->lun == SAM2_WLUN_REPORT_LUNS)
-			open_devip->wlun = SAM2_WLUN_REPORT_LUNS & 0xff;
-		return open_devip;
-        }
-        return NULL;
+
+	open_devip->channel = sdev->channel;
+	open_devip->target = sdev->id;
+	open_devip->lun = sdev->lun;
+	open_devip->sdbg_host = sdbg_host;
+	open_devip->reset = 1;
+	open_devip->used = 1;
+	memset(open_devip->sense_buff, 0, SDEBUG_SENSE_LEN);
+	if (scsi_debug_dsense)
+		open_devip->sense_buff[0] = 0x72;
+	else {
+		open_devip->sense_buff[0] = 0x70;
+		open_devip->sense_buff[7] = 0xa;
+	}
+	if (sdev->lun == SAM2_WLUN_REPORT_LUNS)
+		open_devip->wlun = SAM2_WLUN_REPORT_LUNS & 0xff;
+
+	return open_devip;
 }
 
 static void mk_sense_buffer(struct sdebug_dev_info * devip, int key,
@@ -2226,7 +1886,7 @@ static int scsi_debug_bus_reset(struct scsi_cmnd * SCpnt)
 		printk(KERN_INFO "scsi_debug: bus_reset\n");
 	++num_bus_resets;
 	if (SCpnt && ((sdp = SCpnt->device)) && ((hp = sdp->host))) {
-		sdbg_host = *(struct sdebug_host_info **) hp->hostdata;
+		sdbg_host = *(struct sdebug_host_info **)shost_priv(hp);
 		if (sdbg_host) {
 			list_for_each_entry(dev_info,
                                             &sdbg_host->dev_info_list,
@@ -2756,21 +2416,10 @@ static ssize_t sdebug_add_host_show(struct device_driver * ddp, char * buf)
 static ssize_t sdebug_add_host_store(struct device_driver * ddp,
 				     const char * buf, size_t count)
 {
-        int delta_hosts;
-	char work[20];
+	int delta_hosts;
 
-        if (1 != sscanf(buf, "%10s", work))
+	if (sscanf(buf, "%d", &delta_hosts) != 1)
 		return -EINVAL;
-	{	/* temporary hack around sscanf() problem with -ve nums */
-		int neg = 0;
-
-		if ('-' == *work)
-			neg = 1;
-		if (1 != sscanf(work + neg, "%d", &delta_hosts))
-			return -EINVAL;
-		if (neg)
-			delta_hosts = -delta_hosts;
-	}
 	if (delta_hosts > 0) {
 		do {
 			sdebug_add_adapter();
@@ -2782,7 +2431,7 @@ static ssize_t sdebug_add_host_store(struct device_driver * ddp,
 	}
 	return count;
 }
-DRIVER_ATTR(add_host, S_IRUGO | S_IWUSR, sdebug_add_host_show, 
+DRIVER_ATTR(add_host, S_IRUGO | S_IWUSR, sdebug_add_host_show,
 	    sdebug_add_host_store);
 
 static ssize_t sdebug_vpd_use_hostno_show(struct device_driver * ddp,
@@ -2922,8 +2571,6 @@ static int __init scsi_debug_init(void)
 
 	init_all_queued();
 
-	sdebug_driver_template.proc_name = sdebug_proc_name;
-
 	host_to_add = scsi_debug_add_host;
         scsi_debug_add_host = 0;
 
@@ -3009,8 +2656,7 @@ static int sdebug_add_adapter(void)
 	int k, devs_per_host;
         int error = 0;
         struct sdebug_host_info *sdbg_host;
-        struct sdebug_dev_info *sdbg_devinfo;
-        struct list_head *lh, *lh_sf;
+	struct sdebug_dev_info *sdbg_devinfo, *tmp;
 
         sdbg_host = kzalloc(sizeof(*sdbg_host),GFP_KERNEL);
         if (NULL == sdbg_host) {
@@ -3023,16 +2669,13 @@ static int sdebug_add_adapter(void)
 
 	devs_per_host = scsi_debug_num_tgts * scsi_debug_max_luns;
         for (k = 0; k < devs_per_host; k++) {
-                sdbg_devinfo = kzalloc(sizeof(*sdbg_devinfo),GFP_KERNEL);
-                if (NULL == sdbg_devinfo) {
+		sdbg_devinfo = sdebug_device_create(sdbg_host, GFP_KERNEL);
+		if (!sdbg_devinfo) {
                         printk(KERN_ERR "%s: out of memory at line %d\n",
                                __FUNCTION__, __LINE__);
                         error = -ENOMEM;
 			goto clean;
                 }
-                sdbg_devinfo->sdbg_host = sdbg_host;
-                list_add_tail(&sdbg_devinfo->dev_list,
-                              &sdbg_host->dev_info_list);
         }
 
         spin_lock(&sdebug_host_list_lock);
@@ -3053,9 +2696,8 @@ static int sdebug_add_adapter(void)
         return error;
 
 clean:
-	list_for_each_safe(lh, lh_sf, &sdbg_host->dev_info_list) {
-		sdbg_devinfo = list_entry(lh, struct sdebug_dev_info,
-					  dev_list);
+	list_for_each_entry_safe(sdbg_devinfo, tmp, &sdbg_host->dev_info_list,
+				 dev_list) {
 		list_del(&sdbg_devinfo->dev_list);
 		kfree(sdbg_devinfo);
 	}
@@ -3082,6 +2724,263 @@ static void sdebug_remove_adapter(void)
         device_unregister(&sdbg_host->dev);
         --scsi_debug_add_host;
 }
+
+static
+int scsi_debug_queuecommand(struct scsi_cmnd *SCpnt, done_funct_t done)
+{
+	unsigned char *cmd = (unsigned char *) SCpnt->cmnd;
+	int len, k;
+	unsigned int num;
+	unsigned long long lba;
+	int errsts = 0;
+	int target = SCpnt->device->id;
+	struct sdebug_dev_info *devip = NULL;
+	int inj_recovered = 0;
+	int inj_transport = 0;
+	int delay_override = 0;
+
+	scsi_set_resid(SCpnt, 0);
+	if ((SCSI_DEBUG_OPT_NOISE & scsi_debug_opts) && cmd) {
+		printk(KERN_INFO "scsi_debug: cmd ");
+		for (k = 0, len = SCpnt->cmd_len; k < len; ++k)
+			printk("%02x ", (int)cmd[k]);
+		printk("\n");
+	}
+
+	if (target == SCpnt->device->host->hostt->this_id) {
+		printk(KERN_INFO "scsi_debug: initiator's id used as "
+		       "target!\n");
+		return schedule_resp(SCpnt, NULL, done,
+				     DID_NO_CONNECT << 16, 0);
+	}
+
+	if ((SCpnt->device->lun >= scsi_debug_max_luns) &&
+	    (SCpnt->device->lun != SAM2_WLUN_REPORT_LUNS))
+		return schedule_resp(SCpnt, NULL, done,
+				     DID_NO_CONNECT << 16, 0);
+	devip = devInfoReg(SCpnt->device);
+	if (NULL == devip)
+		return schedule_resp(SCpnt, NULL, done,
+				     DID_NO_CONNECT << 16, 0);
+
+	if ((scsi_debug_every_nth != 0) &&
+	    (++scsi_debug_cmnd_count >= abs(scsi_debug_every_nth))) {
+		scsi_debug_cmnd_count = 0;
+		if (scsi_debug_every_nth < -1)
+			scsi_debug_every_nth = -1;
+		if (SCSI_DEBUG_OPT_TIMEOUT & scsi_debug_opts)
+			return 0; /* ignore command causing timeout */
+		else if (SCSI_DEBUG_OPT_RECOVERED_ERR & scsi_debug_opts)
+			inj_recovered = 1; /* to reads and writes below */
+		else if (SCSI_DEBUG_OPT_TRANSPORT_ERR & scsi_debug_opts)
+			inj_transport = 1; /* to reads and writes below */
+	}
+
+	if (devip->wlun) {
+		switch (*cmd) {
+		case INQUIRY:
+		case REQUEST_SENSE:
+		case TEST_UNIT_READY:
+		case REPORT_LUNS:
+			break;  /* only allowable wlun commands */
+		default:
+			if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts)
+				printk(KERN_INFO "scsi_debug: Opcode: 0x%x "
+				       "not supported for wlun\n", *cmd);
+			mk_sense_buffer(devip, ILLEGAL_REQUEST,
+					INVALID_OPCODE, 0);
+			errsts = check_condition_result;
+			return schedule_resp(SCpnt, devip, done, errsts,
+					     0);
+		}
+	}
+
+	switch (*cmd) {
+	case INQUIRY:     /* mandatory, ignore unit attention */
+		delay_override = 1;
+		errsts = resp_inquiry(SCpnt, target, devip);
+		break;
+	case REQUEST_SENSE:	/* mandatory, ignore unit attention */
+		delay_override = 1;
+		errsts = resp_requests(SCpnt, devip);
+		break;
+	case REZERO_UNIT:	/* actually this is REWIND for SSC */
+	case START_STOP:
+		errsts = resp_start_stop(SCpnt, devip);
+		break;
+	case ALLOW_MEDIUM_REMOVAL:
+		errsts = check_readiness(SCpnt, 1, devip);
+		if (errsts)
+			break;
+		if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts)
+			printk(KERN_INFO "scsi_debug: Medium removal %s\n",
+			       cmd[4] ? "inhibited" : "enabled");
+		break;
+	case SEND_DIAGNOSTIC:     /* mandatory */
+		errsts = check_readiness(SCpnt, 1, devip);
+		break;
+	case TEST_UNIT_READY:     /* mandatory */
+		delay_override = 1;
+		errsts = check_readiness(SCpnt, 0, devip);
+		break;
+	case RESERVE:
+		errsts = check_readiness(SCpnt, 1, devip);
+		break;
+	case RESERVE_10:
+		errsts = check_readiness(SCpnt, 1, devip);
+		break;
+	case RELEASE:
+		errsts = check_readiness(SCpnt, 1, devip);
+		break;
+	case RELEASE_10:
+		errsts = check_readiness(SCpnt, 1, devip);
+		break;
+	case READ_CAPACITY:
+		errsts = resp_readcap(SCpnt, devip);
+		break;
+	case SERVICE_ACTION_IN:
+		if (SAI_READ_CAPACITY_16 != cmd[1]) {
+			mk_sense_buffer(devip, ILLEGAL_REQUEST,
+					INVALID_OPCODE, 0);
+			errsts = check_condition_result;
+			break;
+		}
+		errsts = resp_readcap16(SCpnt, devip);
+		break;
+	case MAINTENANCE_IN:
+		if (MI_REPORT_TARGET_PGS != cmd[1]) {
+			mk_sense_buffer(devip, ILLEGAL_REQUEST,
+					INVALID_OPCODE, 0);
+			errsts = check_condition_result;
+			break;
+		}
+		errsts = resp_report_tgtpgs(SCpnt, devip);
+		break;
+	case READ_16:
+	case READ_12:
+	case READ_10:
+	case READ_6:
+		errsts = check_readiness(SCpnt, 0, devip);
+		if (errsts)
+			break;
+		if (scsi_debug_fake_rw)
+			break;
+		get_data_transfer_info(cmd, &lba, &num);
+		errsts = resp_read(SCpnt, lba, num, devip);
+		if (inj_recovered && (0 == errsts)) {
+			mk_sense_buffer(devip, RECOVERED_ERROR,
+					THRESHOLD_EXCEEDED, 0);
+			errsts = check_condition_result;
+		} else if (inj_transport && (0 == errsts)) {
+			mk_sense_buffer(devip, ABORTED_COMMAND,
+					TRANSPORT_PROBLEM, ACK_NAK_TO);
+			errsts = check_condition_result;
+		}
+		break;
+	case REPORT_LUNS:	/* mandatory, ignore unit attention */
+		delay_override = 1;
+		errsts = resp_report_luns(SCpnt, devip);
+		break;
+	case VERIFY:		/* 10 byte SBC-2 command */
+		errsts = check_readiness(SCpnt, 0, devip);
+		break;
+	case WRITE_16:
+	case WRITE_12:
+	case WRITE_10:
+	case WRITE_6:
+		errsts = check_readiness(SCpnt, 0, devip);
+		if (errsts)
+			break;
+		if (scsi_debug_fake_rw)
+			break;
+		get_data_transfer_info(cmd, &lba, &num);
+		errsts = resp_write(SCpnt, lba, num, devip);
+		if (inj_recovered && (0 == errsts)) {
+			mk_sense_buffer(devip, RECOVERED_ERROR,
+					THRESHOLD_EXCEEDED, 0);
+			errsts = check_condition_result;
+		}
+		break;
+	case MODE_SENSE:
+	case MODE_SENSE_10:
+		errsts = resp_mode_sense(SCpnt, target, devip);
+		break;
+	case MODE_SELECT:
+		errsts = resp_mode_select(SCpnt, 1, devip);
+		break;
+	case MODE_SELECT_10:
+		errsts = resp_mode_select(SCpnt, 0, devip);
+		break;
+	case LOG_SENSE:
+		errsts = resp_log_sense(SCpnt, devip);
+		break;
+	case SYNCHRONIZE_CACHE:
+		delay_override = 1;
+		errsts = check_readiness(SCpnt, 0, devip);
+		break;
+	case WRITE_BUFFER:
+		errsts = check_readiness(SCpnt, 1, devip);
+		break;
+	case XDWRITEREAD_10:
+		if (!scsi_bidi_cmnd(SCpnt)) {
+			mk_sense_buffer(devip, ILLEGAL_REQUEST,
+					INVALID_FIELD_IN_CDB, 0);
+			errsts = check_condition_result;
+			break;
+		}
+
+		errsts = check_readiness(SCpnt, 0, devip);
+		if (errsts)
+			break;
+		if (scsi_debug_fake_rw)
+			break;
+		get_data_transfer_info(cmd, &lba, &num);
+		errsts = resp_read(SCpnt, lba, num, devip);
+		if (errsts)
+			break;
+		errsts = resp_write(SCpnt, lba, num, devip);
+		if (errsts)
+			break;
+		errsts = resp_xdwriteread(SCpnt, lba, num, devip);
+		break;
+	default:
+		if (SCSI_DEBUG_OPT_NOISE & scsi_debug_opts)
+			printk(KERN_INFO "scsi_debug: Opcode: 0x%x not "
+			       "supported\n", *cmd);
+		errsts = check_readiness(SCpnt, 1, devip);
+		if (errsts)
+			break;	/* Unit attention takes precedence */
+		mk_sense_buffer(devip, ILLEGAL_REQUEST, INVALID_OPCODE, 0);
+		errsts = check_condition_result;
+		break;
+	}
+	return schedule_resp(SCpnt, devip, done, errsts,
+			     (delay_override ? 0 : scsi_debug_delay));
+}
+
+static struct scsi_host_template sdebug_driver_template = {
+	.proc_info =		scsi_debug_proc_info,
+	.proc_name =		sdebug_proc_name,
+	.name =			"SCSI DEBUG",
+	.info =			scsi_debug_info,
+	.slave_alloc =		scsi_debug_slave_alloc,
+	.slave_configure =	scsi_debug_slave_configure,
+	.slave_destroy =	scsi_debug_slave_destroy,
+	.ioctl =		scsi_debug_ioctl,
+	.queuecommand =		scsi_debug_queuecommand,
+	.eh_abort_handler =	scsi_debug_abort,
+	.eh_bus_reset_handler = scsi_debug_bus_reset,
+	.eh_device_reset_handler = scsi_debug_device_reset,
+	.eh_host_reset_handler = scsi_debug_host_reset,
+	.bios_param =		scsi_debug_biosparam,
+	.can_queue =		SCSI_DEBUG_CANQUEUE,
+	.this_id =		7,
+	.sg_tablesize =		256,
+	.cmd_per_lun =		16,
+	.max_sectors =		0xffff,
+	.use_clustering = 	DISABLE_CLUSTERING,
+	.module =		THIS_MODULE,
+};
 
 static int sdebug_driver_probe(struct device * dev)
 {
@@ -3120,9 +3019,8 @@ static int sdebug_driver_probe(struct device * dev)
 
 static int sdebug_driver_remove(struct device * dev)
 {
-        struct list_head *lh, *lh_sf;
         struct sdebug_host_info *sdbg_host;
-        struct sdebug_dev_info *sdbg_devinfo;
+	struct sdebug_dev_info *sdbg_devinfo, *tmp;
 
 	sdbg_host = to_sdebug_host(dev);
 
@@ -3134,9 +3032,8 @@ static int sdebug_driver_remove(struct device * dev)
 
         scsi_remove_host(sdbg_host->shost);
 
-        list_for_each_safe(lh, lh_sf, &sdbg_host->dev_info_list) {
-                sdbg_devinfo = list_entry(lh, struct sdebug_dev_info,
-                                          dev_list);
+	list_for_each_entry_safe(sdbg_devinfo, tmp, &sdbg_host->dev_info_list,
+				 dev_list) {
                 list_del(&sdbg_devinfo->dev_list);
                 kfree(sdbg_devinfo);
         }
