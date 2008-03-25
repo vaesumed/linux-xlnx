@@ -3,7 +3,7 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (c) 2004-2005 Silicon Graphics, Inc.  All Rights Reserved.
+ * Copyright (c) 2004-2008 Silicon Graphics, Inc.  All Rights Reserved.
  */
 
 
@@ -17,41 +17,77 @@
 
 
 #include <linux/kernel.h>
-#include <linux/interrupt.h>
 #include <linux/module.h>
-#include <linux/mutex.h>
-#include <asm/sn/intr.h>
-#include <asm/sn/sn_sal.h>
-#include <asm/sn/xp.h>
+#include <linux/device.h>
+#include "xp.h"
 
+/* Define the XP debug device structures to be used with dev_dbg() et al */
+
+struct device_driver xp_dbg_name = {
+	.name = "xp"
+};
+
+struct device xp_dbg_subname = {
+	.bus_id = {0},			/* set to "" */
+	.driver = &xp_dbg_name
+};
+
+struct device *xp = &xp_dbg_subname;
 
 /*
  * Target of nofault PIO read.
  */
 u64 xp_nofault_PIOR_target;
 
+short xp_partition_id;
+u8 xp_region_size;
+unsigned long xp_rtc_cycles_per_second;
 
-/*
- * xpc_registrations[] keeps track of xpc_connect()'s done by the kernel-level
- * users of XPC.
- */
-struct xpc_registration xpc_registrations[XPC_NCHANNELS];
+enum xp_retval (*xp_remote_memcpy)(void *dst, const void *src, size_t len);
+
+enum xp_retval (*xp_register_remote_amos)(u64 paddr, size_t len);
+enum xp_retval (*xp_unregister_remote_amos)(u64 paddr, size_t len);
+
+int xp_sizeof_nasid_mask;
+int xp_sizeof_amo;
+
+u64 *(*xp_alloc_amos)(int n_amos);
+void (*xp_free_amos)(u64 *amos_page, int n_amos);
+
+enum xp_retval (*xp_set_amo)(u64 *amo_va, int op, u64 operand, int remote);
+enum xp_retval (*xp_set_amo_with_interrupt)(u64 *amo_va, int op, u64 operand,
+					     int remote, int nasid,
+					     int phys_cpuid, int vector);
+
+enum xp_retval (*xp_get_amo)(u64 *amo_va, int op, u64 *amo_value_addr);
+
+enum xp_retval (*xp_get_partition_rsvd_page_pa)(u64 buf, u64 *cookie,
+						 u64 *paddr, size_t *len);
+
+enum xp_retval (*xp_change_memprotect)(u64 paddr, size_t len, int request,
+					u64 *nasid_array);
+void (*xp_change_memprotect_shub_wars_1_1)(int request);
+void (*xp_allow_IPI_ops)(void);
+void (*xp_disallow_IPI_ops)(void);
+
+int (*xp_cpu_to_nasid)(int cpuid);
+int (*xp_node_to_nasid)(int nid);
 
 
 /*
  * Initialize the XPC interface to indicate that XPC isn't loaded.
  */
-static enum xpc_retval xpc_notloaded(void) { return xpcNotLoaded; }
+static enum xp_retval xpc_notloaded(void) { return xpNotLoaded; }
 
 struct xpc_interface xpc_interface = {
 	(void (*)(int)) xpc_notloaded,
 	(void (*)(int)) xpc_notloaded,
-	(enum xpc_retval (*)(partid_t, int, u32, void **)) xpc_notloaded,
-	(enum xpc_retval (*)(partid_t, int, void *)) xpc_notloaded,
-	(enum xpc_retval (*)(partid_t, int, void *, xpc_notify_func, void *))
+	(enum xp_retval (*)(short, int, u32, void **)) xpc_notloaded,
+	(enum xp_retval (*)(short, int, void *)) xpc_notloaded,
+	(enum xp_retval (*)(short, int, void *, xpc_notify_func, void *))
 							xpc_notloaded,
-	(void (*)(partid_t, int, void *)) xpc_notloaded,
-	(enum xpc_retval (*)(partid_t, void *)) xpc_notloaded
+	(void (*)(short, int, void *)) xpc_notloaded,
+	(enum xp_retval (*)(short, void *)) xpc_notloaded
 };
 
 
@@ -61,12 +97,12 @@ struct xpc_interface xpc_interface = {
 void
 xpc_set_interface(void (*connect)(int),
 		void (*disconnect)(int),
-		enum xpc_retval (*allocate)(partid_t, int, u32, void **),
-		enum xpc_retval (*send)(partid_t, int, void *),
-		enum xpc_retval (*send_notify)(partid_t, int, void *,
+		enum xp_retval (*allocate)(short, int, u32, void **),
+		enum xp_retval (*send)(short, int, void *),
+		enum xp_retval (*send_notify)(short, int, void *,
 						xpc_notify_func, void *),
-		void (*received)(partid_t, int, void *),
-		enum xpc_retval (*partid_to_nasids)(partid_t, void *))
+		void (*received)(short, int, void *),
+		enum xp_retval (*partid_to_nasids)(short, void *))
 {
 	xpc_interface.connect = connect;
 	xpc_interface.disconnect = disconnect;
@@ -86,17 +122,24 @@ xpc_clear_interface(void)
 {
 	xpc_interface.connect = (void (*)(int)) xpc_notloaded;
 	xpc_interface.disconnect = (void (*)(int)) xpc_notloaded;
-	xpc_interface.allocate = (enum xpc_retval (*)(partid_t, int, u32,
+	xpc_interface.allocate = (enum xp_retval (*)(short, int, u32,
 					void **)) xpc_notloaded;
-	xpc_interface.send = (enum xpc_retval (*)(partid_t, int, void *))
+	xpc_interface.send = (enum xp_retval (*)(short, int, void *))
 					xpc_notloaded;
-	xpc_interface.send_notify = (enum xpc_retval (*)(partid_t, int, void *,
+	xpc_interface.send_notify = (enum xp_retval (*)(short, int, void *,
 				    xpc_notify_func, void *)) xpc_notloaded;
-	xpc_interface.received = (void (*)(partid_t, int, void *))
+	xpc_interface.received = (void (*)(short, int, void *))
 					xpc_notloaded;
-	xpc_interface.partid_to_nasids = (enum xpc_retval (*)(partid_t, void *))
+	xpc_interface.partid_to_nasids = (enum xp_retval (*)(short, void *))
 					xpc_notloaded;
 }
+
+
+/*
+ * xpc_registrations[] keeps track of xpc_connect()'s done by the kernel-level
+ * users of XPC.
+ */
+struct xpc_registration xpc_registrations[XPC_NCHANNELS];
 
 
 /*
@@ -117,13 +160,13 @@ xpc_clear_interface(void)
  *	nentries - max #of XPC message entries a message queue can contain.
  *		   The actual number, which is determined when a connection
  * 		   is established and may be less then requested, will be
- *		   passed to the user via the xpcConnected callout.
+ *		   passed to the user via the xpConnected callout.
  *	assigned_limit - max number of kthreads allowed to be processing
  * 			 messages (per connection) at any given instant.
  *	idle_limit - max number of kthreads allowed to be idle at any given
  * 		     instant.
  */
-enum xpc_retval
+enum xp_retval
 xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
 		u16 nentries, u32 assigned_limit, u32 idle_limit)
 {
@@ -138,13 +181,13 @@ xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
 	registration = &xpc_registrations[ch_number];
 
 	if (mutex_lock_interruptible(&registration->mutex) != 0) {
-		return xpcInterrupted;
+		return xpInterrupted;
 	}
 
 	/* if XPC_CHANNEL_REGISTERED(ch_number) */
 	if (registration->func != NULL) {
 		mutex_unlock(&registration->mutex);
-		return xpcAlreadyRegistered;
+		return xpAlreadyRegistered;
 	}
 
 	/* register the channel for connection */
@@ -159,7 +202,7 @@ xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
 
 	xpc_interface.connect(ch_number);
 
-	return xpcSuccess;
+	return xpSuccess;
 }
 
 
@@ -214,41 +257,24 @@ xpc_disconnect(int ch_number)
 	return;
 }
 
+extern enum xp_retval xp_init_sn2(void);
+extern enum xp_retval xp_init_uv(void);
 
 int __init
 xp_init(void)
 {
-	int ret, ch_number;
-	u64 func_addr = *(u64 *) xp_nofault_PIOR;
-	u64 err_func_addr = *(u64 *) xp_error_PIOR;
+	enum xp_retval ret;
+	int ch_number;
 
+	if (is_shub())
+		ret = xp_init_sn2();
+	else if (is_uv())
+		ret = xp_init_uv();
+	else
+		ret = xpUnsupported;
 
-	if (!ia64_platform_is("sn2")) {
+	if (ret != xpSuccess) {
 		return -ENODEV;
-	}
-
-	/*
-	 * Register a nofault code region which performs a cross-partition
-	 * PIO read. If the PIO read times out, the MCA handler will consume
-	 * the error and return to a kernel-provided instruction to indicate
-	 * an error. This PIO read exists because it is guaranteed to timeout
-	 * if the destination is down (AMO operations do not timeout on at
-	 * least some CPUs on Shubs <= v1.2, which unfortunately we have to
-	 * work around).
-	 */
-	if ((ret = sn_register_nofault_code(func_addr, err_func_addr,
-						err_func_addr, 1, 1)) != 0) {
-		printk(KERN_ERR "XP: can't register nofault code, error=%d\n",
-			ret);
-	}
-	/*
-	 * Setup the nofault PIO read target. (There is no special reason why
-	 * SH_IPI_ACCESS was selected.)
-	 */
-	if (is_shub2()) {
-		xp_nofault_PIOR_target = SH2_IPI_ACCESS0;
-	} else {
-		xp_nofault_PIOR_target = SH1_IPI_ACCESS;
 	}
 
 	/* initialize the connection registration mutex */
@@ -260,17 +286,16 @@ xp_init(void)
 }
 module_init(xp_init);
 
+extern void xp_exit_sn2(void);
+extern void xp_exit_uv(void);
 
 void __exit
 xp_exit(void)
 {
-	u64 func_addr = *(u64 *) xp_nofault_PIOR;
-	u64 err_func_addr = *(u64 *) xp_error_PIOR;
-
-
-	/* unregister the PIO read nofault code region */
-	(void) sn_register_nofault_code(func_addr, err_func_addr,
-					err_func_addr, 1, 0);
+	if (is_shub())
+		xp_exit_sn2();
+	else if (is_uv())
+		xp_exit_uv();
 }
 module_exit(xp_exit);
 
@@ -279,8 +304,26 @@ MODULE_AUTHOR("Silicon Graphics, Inc.");
 MODULE_DESCRIPTION("Cross Partition (XP) base");
 MODULE_LICENSE("GPL");
 
-EXPORT_SYMBOL(xp_nofault_PIOR);
-EXPORT_SYMBOL(xp_nofault_PIOR_target);
+EXPORT_SYMBOL(xp_partition_id);
+EXPORT_SYMBOL(xp_region_size);
+EXPORT_SYMBOL(xp_rtc_cycles_per_second);
+EXPORT_SYMBOL(xp_remote_memcpy);
+EXPORT_SYMBOL(xp_register_remote_amos);
+EXPORT_SYMBOL(xp_unregister_remote_amos);
+EXPORT_SYMBOL(xp_sizeof_nasid_mask);
+EXPORT_SYMBOL(xp_sizeof_amo);
+EXPORT_SYMBOL(xp_alloc_amos);
+EXPORT_SYMBOL(xp_free_amos);
+EXPORT_SYMBOL(xp_set_amo);
+EXPORT_SYMBOL(xp_set_amo_with_interrupt);
+EXPORT_SYMBOL(xp_get_amo);
+EXPORT_SYMBOL(xp_get_partition_rsvd_page_pa);
+EXPORT_SYMBOL(xp_change_memprotect);
+EXPORT_SYMBOL(xp_change_memprotect_shub_wars_1_1);
+EXPORT_SYMBOL(xp_allow_IPI_ops);
+EXPORT_SYMBOL(xp_disallow_IPI_ops);
+EXPORT_SYMBOL(xp_cpu_to_nasid);
+EXPORT_SYMBOL(xp_node_to_nasid);
 EXPORT_SYMBOL(xpc_registrations);
 EXPORT_SYMBOL(xpc_interface);
 EXPORT_SYMBOL(xpc_clear_interface);
