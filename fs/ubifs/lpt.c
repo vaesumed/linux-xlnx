@@ -60,8 +60,6 @@ static int dbg_chk_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
 #define dbg_chk_nodes(c, cnode, row, col) 0
 #endif
 
-#define dbg_lpt dbg_lp
-
 /**
  * do_calc_lpt_geom - calculate sizes for the LPT area.
  * @c: the UBIFS file-system description object
@@ -279,7 +277,7 @@ static int write_leb(struct ubifs_info *c, int lnum, void *buf, int offs,
 			  len, lnum, offs, err);
 		return err;
 	}
-	dbg_lpt("LPT wrote %d bytes at %d:%d", len, lnum, offs);
+	dbg_lp("LPT wrote %d bytes at %d:%d", len, lnum, offs);
 	return 0;
 }
 
@@ -649,9 +647,9 @@ static void add_lpt_dirt(struct ubifs_info *c, int lnum, int dirty)
  */
 static void set_ltab(struct ubifs_info *c, int lnum, int free, int dirty)
 {
-	dbg_lpt("LEB %d free %d dirty %d to %d %d",
-		lnum, c->ltab[lnum - c->lpt_first].free,
-		c->ltab[lnum - c->lpt_first].dirty, free, dirty);
+	dbg_lp("LEB %d free %d dirty %d to %d %d",
+	       lnum, c->ltab[lnum - c->lpt_first].free,
+	       c->ltab[lnum - c->lpt_first].dirty, free, dirty);
 	ubifs_assert(lnum >= c->lpt_first && lnum <= c->lpt_last);
 	c->ltab[lnum - c->lpt_first].free = free;
 	c->ltab[lnum - c->lpt_first].dirty = dirty;
@@ -666,9 +664,9 @@ static void set_ltab(struct ubifs_info *c, int lnum, int free, int dirty)
  */
 static void upd_ltab(struct ubifs_info *c, int lnum, int free, int dirty)
 {
-	dbg_lpt("LEB %d free %d dirty %d to %d +%d",
-		lnum, c->ltab[lnum - c->lpt_first].free,
-		c->ltab[lnum - c->lpt_first].dirty, free, dirty);
+	dbg_lp("LEB %d free %d dirty %d to %d +%d",
+	       lnum, c->ltab[lnum - c->lpt_first].free,
+	       c->ltab[lnum - c->lpt_first].dirty, free, dirty);
 	ubifs_assert(lnum >= c->lpt_first && lnum <= c->lpt_last);
 	c->ltab[lnum - c->lpt_first].free = free;
 	c->ltab[lnum - c->lpt_first].dirty += dirty;
@@ -1090,23 +1088,23 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 	c->nhead_lnum = lnum;
 	c->nhead_offs = ALIGN(len, c->min_io_size);
 
-	dbg_lpt("space_bits %d", c->space_bits);
-	dbg_lpt("lpt_lnum_bits %d", c->lpt_lnum_bits);
-	dbg_lpt("lpt_offs_bits %d", c->lpt_offs_bits);
-	dbg_lpt("lpt_spc_bits %d", c->lpt_spc_bits);
-	dbg_lpt("pcnt_bits %d", c->pcnt_bits);
-	dbg_lpt("lnum_bits %d", c->lnum_bits);
-	dbg_lpt("pnode_sz %d", c->pnode_sz);
-	dbg_lpt("nnode_sz %d", c->nnode_sz);
-	dbg_lpt("ltab_sz %d", c->ltab_sz);
-	dbg_lpt("lsave_sz %d", c->lsave_sz);
-	dbg_lpt("lpt_hght %d", c->lpt_hght);
-	dbg_lpt("big_lpt %d", c->big_lpt);
-	dbg_lpt("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
-	dbg_lpt("LPT head is at %d:%d", c->nhead_lnum, c->nhead_offs);
-	dbg_lpt("LPT ltab is at %d:%d", c->ltab_lnum, c->ltab_offs);
+	dbg_lp("space_bits %d", c->space_bits);
+	dbg_lp("lpt_lnum_bits %d", c->lpt_lnum_bits);
+	dbg_lp("lpt_offs_bits %d", c->lpt_offs_bits);
+	dbg_lp("lpt_spc_bits %d", c->lpt_spc_bits);
+	dbg_lp("pcnt_bits %d", c->pcnt_bits);
+	dbg_lp("lnum_bits %d", c->lnum_bits);
+	dbg_lp("pnode_sz %d", c->pnode_sz);
+	dbg_lp("nnode_sz %d", c->nnode_sz);
+	dbg_lp("ltab_sz %d", c->ltab_sz);
+	dbg_lp("lsave_sz %d", c->lsave_sz);
+	dbg_lp("lpt_hght %d", c->lpt_hght);
+	dbg_lp("big_lpt %d", c->big_lpt);
+	dbg_lp("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
+	dbg_lp("LPT head is at %d:%d", c->nhead_lnum, c->nhead_offs);
+	dbg_lp("LPT ltab is at %d:%d", c->ltab_lnum, c->ltab_offs);
 	if (c->big_lpt)
-		dbg_lpt("LPT lsave is at %d:%d", c->lsave_lnum, c->lsave_offs);
+		dbg_lp("LPT lsave is at %d:%d", c->lsave_lnum, c->lsave_offs);
 out:
 	c->ltab = NULL;
 	kfree(lsave);
@@ -2047,7 +2045,7 @@ static int get_cnodes_to_commit(struct ubifs_info *c)
 		cnt += 1;
 	}
 	dbg_cmt("committing %d cnodes", cnt);
-	dbg_lpt("committing %d cnodes", cnt);
+	dbg_lp("committing %d cnodes", cnt);
 	ubifs_assert(cnt == c->dirty_nn_cnt + c->dirty_pn_cnt);
 	return cnt;
 }
@@ -2309,11 +2307,11 @@ static int write_cnodes(struct ubifs_info *c)
 		return err;
 	c->nhead_lnum = lnum;
 	c->nhead_offs = ALIGN(offs, c->min_io_size);
-	dbg_lpt("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
-	dbg_lpt("LPT head is at %d:%d", c->nhead_lnum, c->nhead_offs);
-	dbg_lpt("LPT ltab is at %d:%d", c->ltab_lnum, c->ltab_offs);
+	dbg_lp("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
+	dbg_lp("LPT head is at %d:%d", c->nhead_lnum, c->nhead_offs);
+	dbg_lp("LPT ltab is at %d:%d", c->ltab_lnum, c->ltab_offs);
 	if (c->big_lpt)
-		dbg_lpt("LPT lsave is at %d:%d", c->lsave_lnum, c->lsave_offs);
+		dbg_lp("LPT lsave is at %d:%d", c->lsave_lnum, c->lsave_offs);
 	return 0;
 }
 
@@ -2355,24 +2353,24 @@ static int lpt_init_rd(struct ubifs_info *c)
 	if (err)
 		return err;
 
-	dbg_lpt("space_bits %d", c->space_bits);
-	dbg_lpt("lpt_lnum_bits %d", c->lpt_lnum_bits);
-	dbg_lpt("lpt_offs_bits %d", c->lpt_offs_bits);
-	dbg_lpt("lpt_spc_bits %d", c->lpt_spc_bits);
-	dbg_lpt("pcnt_bits %d", c->pcnt_bits);
-	dbg_lpt("lnum_bits %d", c->lnum_bits);
-	dbg_lpt("pnode_sz %d", c->pnode_sz);
-	dbg_lpt("nnode_sz %d", c->nnode_sz);
-	dbg_lpt("ltab_sz %d", c->ltab_sz);
-	dbg_lpt("lsave_sz %d", c->lsave_sz);
-	dbg_lpt("lsave_cnt %d", c->lsave_cnt);
-	dbg_lpt("lpt_hght %d", c->lpt_hght);
-	dbg_lpt("big_lpt %d", c->big_lpt);
-	dbg_lpt("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
-	dbg_lpt("LPT head is at %d:%d", c->nhead_lnum, c->nhead_offs);
-	dbg_lpt("LPT ltab is at %d:%d", c->ltab_lnum, c->ltab_offs);
+	dbg_lp("space_bits %d", c->space_bits);
+	dbg_lp("lpt_lnum_bits %d", c->lpt_lnum_bits);
+	dbg_lp("lpt_offs_bits %d", c->lpt_offs_bits);
+	dbg_lp("lpt_spc_bits %d", c->lpt_spc_bits);
+	dbg_lp("pcnt_bits %d", c->pcnt_bits);
+	dbg_lp("lnum_bits %d", c->lnum_bits);
+	dbg_lp("pnode_sz %d", c->pnode_sz);
+	dbg_lp("nnode_sz %d", c->nnode_sz);
+	dbg_lp("ltab_sz %d", c->ltab_sz);
+	dbg_lp("lsave_sz %d", c->lsave_sz);
+	dbg_lp("lsave_cnt %d", c->lsave_cnt);
+	dbg_lp("lpt_hght %d", c->lpt_hght);
+	dbg_lp("big_lpt %d", c->big_lpt);
+	dbg_lp("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
+	dbg_lp("LPT head is at %d:%d", c->nhead_lnum, c->nhead_offs);
+	dbg_lp("LPT ltab is at %d:%d", c->ltab_lnum, c->ltab_offs);
 	if (c->big_lpt)
-		dbg_lpt("LPT lsave is at %d:%d", c->lsave_lnum, c->lsave_offs);
+		dbg_lp("LPT lsave is at %d:%d", c->lsave_lnum, c->lsave_offs);
 
 	return 0;
 }
@@ -2804,7 +2802,7 @@ static int lpt_gc_lnum(struct ubifs_info *c, int lnum)
 	int err, len = c->leb_size, node_type, node_num, node_len, offs;
 	void *buf = c->lpt_buf;
 
-	dbg_lpt("LEB %d", lnum);
+	dbg_lp("LEB %d", lnum);
 	err = ubi_read(c->ubi, lnum, buf, 0, c->leb_size);
 	if (err) {
 		ubifs_err("cannot read LEB %d, error %d", lnum, err);
@@ -2912,7 +2910,7 @@ static void lpt_tgc_start(struct ubifs_info *c)
 			c->ltab[i].tgc = 1;
 			c->ltab[i].free = c->leb_size;
 			c->ltab[i].dirty = 0;
-			dbg_lpt("LEB %d", i + c->lpt_first);
+			dbg_lp("LEB %d", i + c->lpt_first);
 		}
 	}
 }
@@ -2936,7 +2934,7 @@ static int lpt_tgc_end(struct ubifs_info *c)
 			if (err)
 				return err;
 			c->ltab[i].tgc = 0;
-			dbg_lpt("LEB %d", i + c->lpt_first);
+			dbg_lp("LEB %d", i + c->lpt_first);
 		}
 	return 0;
 }
@@ -3785,7 +3783,7 @@ static int dbg_check_ltab_lnum(struct ubifs_info *c, int lnum)
 	int ret;
 	void *buf = c->dbg_buf;
 
-	dbg_lpt("LEB %d", lnum);
+	dbg_lp("LEB %d", lnum);
 	err = ubi_read(c->ubi, lnum, buf, 0, c->leb_size);
 	if (err) {
 		dbg_msg("ubi_read failed, LEB %d, error %d", lnum, err);
@@ -3867,8 +3865,7 @@ static int dbg_check_ltab(struct ubifs_info *c)
 		}
 	}
 
-	dbg_lpt("succeeded");
-
+	dbg_lp("succeeded");
 	return 0;
 }
 
