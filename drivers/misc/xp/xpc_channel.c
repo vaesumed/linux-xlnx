@@ -24,7 +24,7 @@
 #include "xpc.h"
 
 #ifdef CONFIG_X86_64
-#define cmpxchg_rel(ptr,o,n)	cmpxchg(ptr,o,n)
+#define cmpxchg_rel(ptr, o, n)	cmpxchg(ptr, o, n)
 #endif
 
 /*
@@ -35,19 +35,19 @@ xpc_kzalloc_cacheline_aligned(size_t size, gfp_t flags, void **base)
 {
 	/* see if kzalloc will give us cachline aligned memory by default */
 	*base = kzalloc(size, flags);
-	if (*base == NULL) {
+	if (*base == NULL)
 		return NULL;
-	}
-	if ((u64)*base == L1_CACHE_ALIGN((u64)*base)) {
+
+	if ((u64)*base == L1_CACHE_ALIGN((u64)*base))
 		return *base;
-	}
+
 	kfree(*base);
 
 	/* nope, we'll have to do it ourselves */
 	*base = kzalloc(size + L1_CACHE_BYTES, flags);
-	if (*base == NULL) {
+	if (*base == NULL)
 		return NULL;
-	}
+
 	return (void *)L1_CACHE_ALIGN((u64)*base);
 }
 
@@ -98,6 +98,7 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 	int ret, cpuid;
 	struct timer_list *timer;
 	short partid = XPC_PARTID(part);
+	enum xp_retval retval;
 
 	/*
 	 * Zero out MOST of the entry for this partition. Only the fields
@@ -127,11 +128,10 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 							GFP_KERNEL,
 							&part->local_GPs_base);
 	if (part->local_GPs == NULL) {
-		kfree(part->channels);
-		part->channels = NULL;
 		dev_err(xpc_chan, "can't get memory for local get/put "
 			"values\n");
-		return xpNoMemory;
+		retval = xpNoMemory;
+		goto out_1;
 	}
 
 	part->remote_GPs = xpc_kzalloc_cacheline_aligned(XPC_GP_SIZE,
@@ -141,11 +141,8 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 	if (part->remote_GPs == NULL) {
 		dev_err(xpc_chan, "can't get memory for remote get/put "
 			"values\n");
-		kfree(part->local_GPs_base);
-		part->local_GPs = NULL;
-		kfree(part->channels);
-		part->channels = NULL;
-		return xpNoMemory;
+		retval = xpNoMemory;
+		goto out_2;
 	}
 
 	/* allocate all the required open and close args */
@@ -155,13 +152,8 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 					  &part->local_openclose_args_base);
 	if (part->local_openclose_args == NULL) {
 		dev_err(xpc_chan, "can't get memory for local connect args\n");
-		kfree(part->remote_GPs_base);
-		part->remote_GPs = NULL;
-		kfree(part->local_GPs_base);
-		part->local_GPs = NULL;
-		kfree(part->channels);
-		part->channels = NULL;
-		return xpNoMemory;
+		retval = xpNoMemory;
+		goto out_3;
 	}
 
 	part->remote_openclose_args =
@@ -169,15 +161,8 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 					  &part->remote_openclose_args_base);
 	if (part->remote_openclose_args == NULL) {
 		dev_err(xpc_chan, "can't get memory for remote connect args\n");
-		kfree(part->local_openclose_args_base);
-		part->local_openclose_args = NULL;
-		kfree(part->remote_GPs_base);
-		part->remote_GPs = NULL;
-		kfree(part->local_GPs_base);
-		part->local_GPs = NULL;
-		kfree(part->channels);
-		part->channels = NULL;
-		return xpNoMemory;
+		retval = xpNoMemory;
+		goto out_4;
 	}
 
 	xpc_initialize_channels(part, partid);
@@ -201,17 +186,8 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 	if (ret != 0) {
 		dev_err(xpc_chan, "can't register NOTIFY IRQ handler, "
 			"errno=%d\n", -ret);
-		kfree(part->remote_openclose_args_base);
-		part->remote_openclose_args = NULL;
-		kfree(part->local_openclose_args_base);
-		part->local_openclose_args = NULL;
-		kfree(part->remote_GPs_base);
-		part->remote_GPs = NULL;
-		kfree(part->local_GPs_base);
-		part->local_GPs = NULL;
-		kfree(part->channels);
-		part->channels = NULL;
-		return xpLackOfResources;
+		retval = xpLackOfResources;
+		goto out_5;
 	}
 
 	/* Setup a timer to check for dropped IPIs */
@@ -246,6 +222,25 @@ xpc_setup_infrastructure(struct xpc_partition *part)
 	xpc_vars_part[partid].magic = XPC_VP_MAGIC1;
 
 	return xpSuccess;
+
+	/* setup of infrastructure failed */
+out_5:
+	kfree(part->remote_openclose_args_base);
+	part->remote_openclose_args = NULL;
+out_4:
+	kfree(part->local_openclose_args_base);
+	part->local_openclose_args = NULL;
+out_3:
+	kfree(part->remote_GPs_base);
+	part->remote_GPs = NULL;
+out_2:
+	kfree(part->local_GPs_base);
+	part->local_GPs = NULL;
+out_1:
+	kfree(part->channels);
+	part->channels = NULL;
+
+	return retval;
 }
 
 /*
@@ -266,9 +261,8 @@ xpc_pull_remote_cachelines(struct xpc_partition *part, void *dst,
 	DBUG_ON((u64)dst != L1_CACHE_ALIGN((u64)dst));
 	DBUG_ON(cnt != L1_CACHE_ALIGN(cnt));
 
-	if (part->act_state == XPC_P_AS_DEACTIVATING) {
+	if (part->act_state == XPC_P_AS_DEACTIVATING)
 		return part->reason;
-	}
 
 	ret = xp_remote_memcpy(dst, src, cnt);
 	if (ret != xpSuccess) {
@@ -358,18 +352,16 @@ xpc_pull_remote_vars_part(struct xpc_partition *part)
 		part->remote_IPI_nasid = pulled_entry->IPI_nasid;
 		part->remote_IPI_phys_cpuid = pulled_entry->IPI_phys_cpuid;
 
-		if (part->nchannels > pulled_entry->nchannels) {
+		if (part->nchannels > pulled_entry->nchannels)
 			part->nchannels = pulled_entry->nchannels;
-		}
 
 		/* let the other side know that we've pulled their variables */
 
 		xpc_vars_part[partid].magic = XPC_VP_MAGIC2;
 	}
 
-	if (pulled_entry->magic == XPC_VP_MAGIC1) {
+	if (pulled_entry->magic == XPC_VP_MAGIC1)
 		return xpRetry;
-	}
 
 	return xpSuccess;
 }
@@ -389,9 +381,10 @@ xpc_get_IPI_flags(struct xpc_partition *part)
 	 */
 
 	spin_lock_irqsave(&part->IPI_lock, irq_flags);
-	if ((IPI_amo = part->local_IPI_amo) != 0) {
+	IPI_amo = part->local_IPI_amo;
+	if (IPI_amo != 0)
 		part->local_IPI_amo = 0;
-	}
+
 	spin_unlock_irqrestore(&part->IPI_lock, irq_flags);
 
 	if (XPC_ANY_OPENCLOSE_IPI_FLAGS_SET(IPI_amo)) {
@@ -445,11 +438,9 @@ xpc_allocate_local_msgqueue(struct xpc_channel *ch)
 		nbytes = nentries * ch->msg_size;
 		ch->local_msgqueue = xpc_kzalloc_cacheline_aligned(nbytes,
 								   GFP_KERNEL,
-								   &ch->
-								   local_msgqueue_base);
-		if (ch->local_msgqueue == NULL) {
+						      &ch->local_msgqueue_base);
+		if (ch->local_msgqueue == NULL)
 			continue;
-		}
 
 		nbytes = nentries * sizeof(struct xpc_notify);
 		ch->notify_queue = kzalloc(nbytes, GFP_KERNEL);
@@ -493,11 +484,9 @@ xpc_allocate_remote_msgqueue(struct xpc_channel *ch)
 		nbytes = nentries * ch->msg_size;
 		ch->remote_msgqueue = xpc_kzalloc_cacheline_aligned(nbytes,
 								    GFP_KERNEL,
-								    &ch->
-								    remote_msgqueue_base);
-		if (ch->remote_msgqueue == NULL) {
+						     &ch->remote_msgqueue_base);
+		if (ch->remote_msgqueue == NULL)
 			continue;
-		}
 
 		spin_lock_irqsave(&ch->lock, irq_flags);
 		if (nentries < ch->remote_nentries) {
@@ -529,11 +518,12 @@ xpc_allocate_msgqueues(struct xpc_channel *ch)
 
 	DBUG_ON(ch->flags & XPC_C_SETUP);
 
-	if ((ret = xpc_allocate_local_msgqueue(ch)) != xpSuccess) {
+	ret = xpc_allocate_local_msgqueue(ch);
+	if (ret != xpSuccess)
 		return ret;
-	}
 
-	if ((ret = xpc_allocate_remote_msgqueue(ch)) != xpSuccess) {
+	ret = xpc_allocate_remote_msgqueue(ch);
+	if (ret != xpSuccess) {
 		kfree(ch->local_msgqueue_base);
 		ch->local_msgqueue = NULL;
 		kfree(ch->notify_queue);
@@ -573,12 +563,11 @@ xpc_process_connect(struct xpc_channel *ch, unsigned long *irq_flags)
 		ret = xpc_allocate_msgqueues(ch);
 		spin_lock_irqsave(&ch->lock, *irq_flags);
 
-		if (ret != xpSuccess) {
+		if (ret != xpSuccess)
 			XPC_DISCONNECT_CHANNEL(ch, ret, irq_flags);
-		}
-		if (ch->flags & (XPC_C_CONNECTED | XPC_C_DISCONNECTING)) {
+
+		if (ch->flags & (XPC_C_CONNECTED | XPC_C_DISCONNECTING))
 			return;
-		}
 
 		DBUG_ON(!(ch->flags & XPC_C_SETUP));
 		DBUG_ON(ch->local_msgqueue == NULL);
@@ -590,9 +579,8 @@ xpc_process_connect(struct xpc_channel *ch, unsigned long *irq_flags)
 		xpc_IPI_send_openreply(ch, irq_flags);
 	}
 
-	if (!(ch->flags & XPC_C_ROPENREPLY)) {
+	if (!(ch->flags & XPC_C_ROPENREPLY))
 		return;
-	}
 
 	DBUG_ON(ch->remote_msgqueue_pa == 0);
 
@@ -711,9 +699,8 @@ xpc_process_disconnect(struct xpc_channel *ch, unsigned long *irq_flags)
 
 	DBUG_ON(!spin_is_locked(&ch->lock));
 
-	if (!(ch->flags & XPC_C_DISCONNECTING)) {
+	if (!(ch->flags & XPC_C_DISCONNECTING))
 		return;
-	}
 
 	DBUG_ON(!(ch->flags & XPC_C_CLOSEREQUEST));
 
@@ -728,26 +715,23 @@ xpc_process_disconnect(struct xpc_channel *ch, unsigned long *irq_flags)
 
 	if (part->act_state == XPC_P_AS_DEACTIVATING) {
 		/* can't proceed until the other side disengages from us */
-		if (xpc_partition_engaged(ch->partid)) {
+		if (xpc_partition_engaged(ch->partid))
 			return;
-		}
 
 	} else {
 
 		/* as long as the other side is up do the full protocol */
 
-		if (!(ch->flags & XPC_C_RCLOSEREQUEST)) {
+		if (!(ch->flags & XPC_C_RCLOSEREQUEST))
 			return;
-		}
 
 		if (!(ch->flags & XPC_C_CLOSEREPLY)) {
 			ch->flags |= XPC_C_CLOSEREPLY;
 			xpc_IPI_send_closereply(ch, irq_flags);
 		}
 
-		if (!(ch->flags & XPC_C_RCLOSEREPLY)) {
+		if (!(ch->flags & XPC_C_RCLOSEREPLY))
 			return;
-		}
 	}
 
 	/* wake those waiting for notify completion */
@@ -807,9 +791,10 @@ xpc_process_openclose_IPI(struct xpc_partition *part, int ch_number,
 
 	spin_lock_irqsave(&ch->lock, irq_flags);
 
-      again:
+again:
 
-	if ((ch->flags & XPC_C_DISCONNECTED) && (ch->flags & XPC_C_WDISCONNECT)) {
+	if ((ch->flags & XPC_C_DISCONNECTED) &&
+	    (ch->flags & XPC_C_WDISCONNECT)) {
 		/*
 		 * Delay processing IPI flags until thread waiting disconnect
 		 * has had a chance to see that the channel is disconnected.
@@ -882,11 +867,10 @@ xpc_process_openclose_IPI(struct xpc_partition *part, int ch_number,
 
 		if (!(ch->flags & XPC_C_DISCONNECTING)) {
 			reason = args->reason;
-			if (reason <= xpSuccess || reason > xpUnknownReason) {
+			if (reason <= xpSuccess || reason > xpUnknownReason)
 				reason = xpUnknownReason;
-			} else if (reason == xpUnregistering) {
+			else if (reason == xpUnregistering)
 				reason = xpOtherUnregistering;
-			}
 
 			XPC_DISCONNECT_CHANNEL(ch, reason, &irq_flags);
 
@@ -1060,9 +1044,8 @@ xpc_connect_channel(struct xpc_channel *ch)
 	unsigned long irq_flags;
 	struct xpc_registration *registration = &xpc_registrations[ch->number];
 
-	if (mutex_trylock(&registration->mutex) == 0) {
+	if (mutex_trylock(&registration->mutex) == 0)
 		return xpRetry;
-	}
 
 	if (!XPC_CHANNEL_REGISTERED(ch->number)) {
 		mutex_unlock(&registration->mutex);
@@ -1151,7 +1134,7 @@ xpc_clear_local_msgqueue_flags(struct xpc_channel *ch)
 					 (get % ch->local_nentries) *
 					 ch->msg_size);
 		msg->flags = 0;
-	} while (++get < (volatile s64)ch->remote_GP.get);
+	} while (++get < ch->remote_GP.get);
 }
 
 /*
@@ -1169,7 +1152,7 @@ xpc_clear_remote_msgqueue_flags(struct xpc_channel *ch)
 					 (put % ch->remote_nentries) *
 					 ch->msg_size);
 		msg->flags = 0;
-	} while (++put < (volatile s64)ch->remote_GP.put);
+	} while (++put < ch->remote_GP.put);
 }
 
 static void
@@ -1236,9 +1219,8 @@ xpc_process_msg_IPI(struct xpc_partition *part, int ch_number)
 		 * If anyone was waiting for message queue entries to become
 		 * available, wake them up.
 		 */
-		if (atomic_read(&ch->n_on_msg_allocate_wq) > 0) {
+		if (atomic_read(&ch->n_on_msg_allocate_wq) > 0)
 			wake_up(&ch->msg_allocate_wq);
-		}
 	}
 
 	/*
@@ -1265,9 +1247,8 @@ xpc_process_msg_IPI(struct xpc_partition *part, int ch_number)
 				"delivered=%d, partid=%d, channel=%d\n",
 				nmsgs_sent, ch->partid, ch->number);
 
-			if (ch->flags & XPC_C_CONNECTEDCALLOUT_MADE) {
+			if (ch->flags & XPC_C_CONNECTEDCALLOUT_MADE)
 				xpc_activate_kthreads(ch, nmsgs_sent);
-			}
 		}
 	}
 
@@ -1302,9 +1283,8 @@ xpc_process_channel_activity(struct xpc_partition *part)
 
 		IPI_flags = XPC_GET_IPI_FLAGS(IPI_amo, ch_number);
 
-		if (XPC_ANY_OPENCLOSE_IPI_FLAGS_SET(IPI_flags)) {
+		if (XPC_ANY_OPENCLOSE_IPI_FLAGS_SET(IPI_flags))
 			xpc_process_openclose_IPI(part, ch_number, IPI_flags);
-		}
 
 		ch_flags = ch->flags;	/* need an atomic snapshot of flags */
 
@@ -1315,9 +1295,8 @@ xpc_process_channel_activity(struct xpc_partition *part)
 			continue;
 		}
 
-		if (part->act_state == XPC_P_AS_DEACTIVATING) {
+		if (part->act_state == XPC_P_AS_DEACTIVATING)
 			continue;
-		}
 
 		if (!(ch_flags & XPC_C_CONNECTED)) {
 			if (!(ch_flags & XPC_C_OPENREQUEST)) {
@@ -1337,9 +1316,8 @@ xpc_process_channel_activity(struct xpc_partition *part)
 		 * from the other partition.
 		 */
 
-		if (XPC_ANY_MSG_IPI_FLAGS_SET(IPI_flags)) {
+		if (XPC_ANY_MSG_IPI_FLAGS_SET(IPI_flags))
 			xpc_process_msg_IPI(part, ch_number);
-		}
 	}
 }
 
@@ -1552,9 +1530,9 @@ xpc_disconnect_channel(const int line, struct xpc_channel *ch,
 
 	DBUG_ON(!spin_is_locked(&ch->lock));
 
-	if (ch->flags & (XPC_C_DISCONNECTING | XPC_C_DISCONNECTED)) {
+	if (ch->flags & (XPC_C_DISCONNECTING | XPC_C_DISCONNECTED))
 		return;
-	}
+
 	DBUG_ON(!(ch->flags & (XPC_C_CONNECTING | XPC_C_CONNECTED)));
 
 	dev_dbg(xpc_chan, "reason=%d, line=%d, partid=%d, channel=%d\n",
@@ -1570,9 +1548,8 @@ xpc_disconnect_channel(const int line, struct xpc_channel *ch,
 
 	xpc_IPI_send_closerequest(ch, irq_flags);
 
-	if (channel_was_connected) {
+	if (channel_was_connected)
 		ch->flags |= XPC_C_WASCONNECTED;
-	}
 
 	spin_unlock_irqrestore(&ch->lock, *irq_flags);
 
@@ -1587,9 +1564,8 @@ xpc_disconnect_channel(const int line, struct xpc_channel *ch,
 	}
 
 	/* wake those waiting to allocate an entry from the local msg queue */
-	if (atomic_read(&ch->n_on_msg_allocate_wq) > 0) {
+	if (atomic_read(&ch->n_on_msg_allocate_wq) > 0)
 		wake_up(&ch->msg_allocate_wq);
-	}
 
 	spin_lock_irqsave(&ch->lock, *irq_flags);
 }
@@ -1677,9 +1653,9 @@ xpc_allocate_msg(struct xpc_channel *ch, u32 flags,
 
 	while (1) {
 
-		put = (volatile s64)ch->w_local_GP.put;
-		if (put - (volatile s64)ch->w_remote_GP.get <
-		    ch->local_nentries) {
+		put = ch->w_local_GP.put;
+		rmb();	/* guarantee that .put loads before .get */
+		if (put - ch->w_remote_GP.get < ch->local_nentries) {
 
 			/* There are available message entries. We need to try
 			 * to secure one for ourselves. We'll do this by trying
@@ -1703,9 +1679,8 @@ xpc_allocate_msg(struct xpc_channel *ch, u32 flags,
 		 * that will cause the IPI handler to fetch the latest
 		 * GP values as if an IPI was sent by the other side.
 		 */
-		if (ret == xpTimeout) {
+		if (ret == xpTimeout)
 			xpc_IPI_send_local_msgrequest(ch);
-		}
 
 		if (flags & XPC_NOWAIT) {
 			xpc_msgqueue_deref(ch);
@@ -1764,9 +1739,8 @@ xpc_initiate_allocate(short partid, int ch_number, u32 flags, void **payload)
 		ret = xpc_allocate_msg(&part->channels[ch_number], flags, &msg);
 		xpc_part_deref(part);
 
-		if (msg != NULL) {
+		if (msg != NULL)
 			*payload = &msg->payload;
-		}
 	}
 
 	return ret;
@@ -1787,17 +1761,15 @@ xpc_send_msgs(struct xpc_channel *ch, s64 initial_put)
 	while (1) {
 
 		while (1) {
-			if (put == (volatile s64)ch->w_local_GP.put) {
+			if (put == ch->w_local_GP.put)
 				break;
-			}
 
 			msg = (struct xpc_msg *)((u64)ch->local_msgqueue +
 						 (put % ch->local_nentries) *
 						 ch->msg_size);
 
-			if (!(msg->flags & XPC_M_READY)) {
+			if (!(msg->flags & XPC_M_READY))
 				break;
-			}
 
 			put++;
 		}
@@ -1810,7 +1782,7 @@ xpc_send_msgs(struct xpc_channel *ch, s64 initial_put)
 		if (cmpxchg_rel(&ch->local_GP->put, initial_put, put) !=
 		    initial_put) {
 			/* someone else beat us to it */
-			DBUG_ON((volatile s64)ch->local_GP->put < initial_put);
+			DBUG_ON(ch->local_GP->put < initial_put);
 			break;
 		}
 
@@ -1829,9 +1801,8 @@ xpc_send_msgs(struct xpc_channel *ch, s64 initial_put)
 		initial_put = put;
 	}
 
-	if (send_IPI) {
+	if (send_IPI)
 		xpc_IPI_send_msgrequest(ch);
-	}
 }
 
 /*
@@ -1905,9 +1876,8 @@ xpc_send_msg(struct xpc_channel *ch, struct xpc_msg *msg, u8 notify_type,
 	/* see if the message is next in line to be sent, if so send it */
 
 	put = ch->local_GP->put;
-	if (put == msg_number) {
+	if (put == msg_number)
 		xpc_send_msgs(ch, put);
-	}
 
 	/* drop the reference grabbed in xpc_allocate_msg() */
 	xpc_msgqueue_deref(ch);
@@ -2024,10 +1994,8 @@ xpc_pull_remote_msg(struct xpc_channel *ch, s64 get)
 
 		msg_index = ch->next_msg_to_pull % ch->remote_nentries;
 
-		DBUG_ON(ch->next_msg_to_pull >=
-			(volatile s64)ch->w_remote_GP.put);
-		nmsgs = (volatile s64)ch->w_remote_GP.put -
-		    ch->next_msg_to_pull;
+		DBUG_ON(ch->next_msg_to_pull >= ch->w_remote_GP.put);
+		nmsgs = ch->w_remote_GP.put - ch->next_msg_to_pull;
 		if (msg_index + nmsgs > ch->remote_nentries) {
 			/* ignore the ones that wrap the msg queue for now */
 			nmsgs = ch->remote_nentries - msg_index;
@@ -2038,10 +2006,9 @@ xpc_pull_remote_msg(struct xpc_channel *ch, s64 get)
 		remote_msg = (struct xpc_msg *)(ch->remote_msgqueue_pa +
 						msg_offset);
 
-		if ((ret = xpc_pull_remote_cachelines(part, msg, remote_msg,
-						      nmsgs * ch->msg_size)) !=
-		    xpSuccess) {
-
+		ret = xpc_pull_remote_cachelines(part, msg, remote_msg, nmsgs *
+						 ch->msg_size);
+		if (ret != xpSuccess) {
 			dev_dbg(xpc_chan, "failed to pull %d msgs starting with"
 				" msg %" U64_ELL "d from partition %d, "
 				"channel=%d, ret=%d\n", nmsgs,
@@ -2053,8 +2020,6 @@ xpc_pull_remote_msg(struct xpc_channel *ch, s64 get)
 			mutex_unlock(&ch->msg_to_pull_mutex);
 			return NULL;
 		}
-
-		mb();		/* >>> this may not be needed, we're not sure */
 
 		ch->next_msg_to_pull += nmsgs;
 	}
@@ -2078,14 +2043,13 @@ xpc_get_deliverable_msg(struct xpc_channel *ch)
 	s64 get;
 
 	do {
-		if ((volatile u32)ch->flags & XPC_C_DISCONNECTING) {
+		if (ch->flags & XPC_C_DISCONNECTING)
 			break;
-		}
 
-		get = (volatile s64)ch->w_local_GP.get;
-		if (get == (volatile s64)ch->w_remote_GP.put) {
+		get = ch->w_local_GP.get;
+		rmb();	/* guarantee that .get loads before .put */
+		if (get == ch->w_remote_GP.put)
 			break;
-		}
 
 		/* There are messages waiting to be pulled and delivered.
 		 * We need to try to secure one for ourselves. We'll do this
@@ -2125,7 +2089,8 @@ xpc_deliver_msg(struct xpc_channel *ch)
 {
 	struct xpc_msg *msg;
 
-	if ((msg = xpc_get_deliverable_msg(ch)) != NULL) {
+	msg = xpc_get_deliverable_msg(ch);
+	if (msg != NULL) {
 
 		/*
 		 * This ref is taken to protect the payload itself from being
@@ -2171,17 +2136,15 @@ xpc_acknowledge_msgs(struct xpc_channel *ch, s64 initial_get, u8 msg_flags)
 	while (1) {
 
 		while (1) {
-			if (get == (volatile s64)ch->w_local_GP.get) {
+			if (get == ch->w_local_GP.get)
 				break;
-			}
 
 			msg = (struct xpc_msg *)((u64)ch->remote_msgqueue +
 						 (get % ch->remote_nentries) *
 						 ch->msg_size);
 
-			if (!(msg->flags & XPC_M_DONE)) {
+			if (!(msg->flags & XPC_M_DONE))
 				break;
-			}
 
 			msg_flags |= msg->flags;
 			get++;
@@ -2195,7 +2158,7 @@ xpc_acknowledge_msgs(struct xpc_channel *ch, s64 initial_get, u8 msg_flags)
 		if (cmpxchg_rel(&ch->local_GP->get, initial_get, get) !=
 		    initial_get) {
 			/* someone else beat us to it */
-			DBUG_ON((volatile s64)ch->local_GP->get <= initial_get);
+			DBUG_ON(ch->local_GP->get <= initial_get);
 			break;
 		}
 
@@ -2214,9 +2177,8 @@ xpc_acknowledge_msgs(struct xpc_channel *ch, s64 initial_get, u8 msg_flags)
 		initial_get = get;
 	}
 
-	if (send_IPI) {
+	if (send_IPI)
 		xpc_IPI_send_msgrequest(ch);
-	}
 }
 
 /*
@@ -2270,9 +2232,8 @@ xpc_initiate_received(short partid, int ch_number, void *payload)
 	 * been delivered.
 	 */
 	get = ch->local_GP->get;
-	if (get == msg_number) {
+	if (get == msg_number)
 		xpc_acknowledge_msgs(ch, get, msg->flags);
-	}
 
 	/* the call to xpc_msgqueue_ref() was done by xpc_deliver_msg()  */
 	xpc_msgqueue_deref(ch);

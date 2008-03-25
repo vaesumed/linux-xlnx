@@ -84,8 +84,8 @@ struct xpnet_message {
 #define XPNET_VERSION_MAJOR(_v)		((_v) >> 4)
 #define XPNET_VERSION_MINOR(_v)		((_v) & 0xf)
 
-#define	XPNET_VERSION _XPNET_VERSION(1,0)	/* version 1.0 */
-#define	XPNET_VERSION_EMBED _XPNET_VERSION(1,1)	/* version 1.1 */
+#define	XPNET_VERSION _XPNET_VERSION(1, 0)	/* version 1.0 */
+#define	XPNET_VERSION_EMBED _XPNET_VERSION(1, 1)	/* version 1.1 */
 #define XPNET_MAGIC	0x88786984	/* "XNET" */
 
 #define XPNET_VALID_MSG(_m)						     \
@@ -571,9 +571,8 @@ xpnet_init(void)
 	short partid;
 	int result = -ENOMEM;
 
-	if (!is_shub() && !is_uv()) {
+	if (!is_shub() && !is_uv())
 		return -ENODEV;
-	}
 
 	dev_info(xpnet, "registering network device %s\n", XPNET_DEVICE_NAME);
 
@@ -583,9 +582,8 @@ xpnet_init(void)
 	 */
 	xpnet_device = alloc_netdev(sizeof(struct xpnet_dev_private),
 				    XPNET_DEVICE_NAME, ether_setup);
-	if (xpnet_device == NULL) {
+	if (xpnet_device == NULL)
 		return -ENOMEM;
-	}
 
 	netif_carrier_off(xpnet_device);
 
@@ -603,7 +601,7 @@ xpnet_init(void)
 	 * MAC addresses.  We chose the first octet of the MAC to be unlikely
 	 * to collide with any vendor's officially issued MAC.
 	 */
-	xpnet_device->dev_addr[0] = 0x02;	/* locally administered, no OUI */
+	xpnet_device->dev_addr[0] = 0x02;     /* locally administered, no OUI */
 
 	partid = xp_partition_id;
 
@@ -624,9 +622,8 @@ xpnet_init(void)
 	xpnet_device->features = NETIF_F_NO_CSUM;
 
 	result = register_netdev(xpnet_device);
-	if (result != 0) {
+	if (result != 0)
 		free_netdev(xpnet_device);
-	}
 
 	return result;
 }

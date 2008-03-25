@@ -109,16 +109,16 @@ struct xpc_rsvd_page {
 	u8 SAL_partid;		/* SAL: partition ID */
 	u8 version;
 	u8 pad[6];
-	volatile u64 vars_pa;	/* physical address of struct xpc_vars */
+	u64 vars_pa;		/* physical address of struct xpc_vars */
 	struct timespec stamp;	/* time when reserved page was setup by XPC */
 	u64 pad2[9];		/* align to last u64 in cacheline */
 	u64 SAL_nasids_size;	/* SAL: size of each nasid mask in bytes */
 };
 
-#define XPC_RP_VERSION _XPC_VERSION(2,0)	/* version 2.0 of the reserved page */
+#define XPC_RP_VERSION _XPC_VERSION(2, 0) /* version 2.0 of the reserved page */
 
 #define XPC_SUPPORTS_RP_STAMP(_version) \
-			(_version >= _XPC_VERSION(1,1))
+			(_version >= _XPC_VERSION(1, 1))
 
 /*
  * compare stamps - the return value is:
@@ -132,9 +132,10 @@ xpc_compare_stamps(struct timespec *stamp1, struct timespec *stamp2)
 {
 	int ret;
 
-	if ((ret = stamp1->tv_sec - stamp2->tv_sec) == 0) {
+	ret = stamp1->tv_sec - stamp2->tv_sec;
+	if (ret == 0)
 		ret = stamp1->tv_nsec - stamp2->tv_nsec;
-	}
+
 	return ret;
 }
 
@@ -166,10 +167,10 @@ struct xpc_vars {
 	u64 heartbeating_to_mask[BITS_TO_LONGS(XP_MAX_NPARTITIONS)];
 };
 
-#define XPC_V_VERSION _XPC_VERSION(4,0)	/* version 4.0 of the cross vars */
+#define XPC_V_VERSION _XPC_VERSION(4, 0)    /* version 4.0 of the cross vars */
 
 #define XPC_SUPPORTS_DISENGAGE_REQUEST(_version) \
-			(_version >= _XPC_VERSION(3,1))
+			(_version >= _XPC_VERSION(3, 1))
 
 static inline int
 xpc_hb_allowed(short partid, struct xpc_vars *vars)
@@ -267,7 +268,7 @@ xpc_number_of_amos(int npartitions)
  * occupies half a cacheline.
  */
 struct xpc_vars_part {
-	volatile u64 magic;
+	u64 magic;
 
 	u64 openclose_args_pa;	/* physical address of open and close args */
 	u64 GPs_pa;		/* physical address of Get/Put values */
@@ -290,8 +291,8 @@ struct xpc_vars_part {
  * MAGIC2 indicates that this partition has pulled the remote partititions
  * per partition variables that pertain to this partition.
  */
-#define XPC_VP_MAGIC1	0x0053524156435058L	/* 'XPCVARS\0'L (little endian) */
-#define XPC_VP_MAGIC2	0x0073726176435058L	/* 'XPCvars\0'L (little endian) */
+#define XPC_VP_MAGIC1	0x0053524156435058L   /* 'XPCVARS\0'L (little endian) */
+#define XPC_VP_MAGIC2	0x0073726176435058L   /* 'XPCvars\0'L (little endian) */
 
 /* the reserved page sizes and offsets */
 
@@ -301,9 +302,10 @@ struct xpc_vars_part {
 #define XPC_RP_PART_NASIDS(_rp) (u64 *)((u8 *)(_rp) + XPC_RP_HEADER_SIZE)
 #define XPC_RP_MACH_NASIDS(_rp) (XPC_RP_PART_NASIDS(_rp) + \
 				 xp_nasid_mask_words())
-#define XPC_RP_VARS(_rp)	(struct xpc_vars *)(XPC_RP_MACH_NASIDS(_rp) + \
-	       			 xp_nasid_mask_words())
-#define XPC_RP_VARS_PART(_rp)	(struct xpc_vars_part *)((u8 *)XPC_RP_VARS(_rp) + XPC_RP_VARS_SIZE)
+#define XPC_RP_VARS(_rp)	((struct xpc_vars *)(XPC_RP_MACH_NASIDS(_rp) + \
+				xp_nasid_mask_words()))
+#define XPC_RP_VARS_PART(_rp)	((struct xpc_vars_part *) \
+				((u8 *)XPC_RP_VARS(_rp) + XPC_RP_VARS_SIZE))
 
 /*
  * Functions registered by add_timer() or called by kernel_thread() only
@@ -322,8 +324,8 @@ struct xpc_vars_part {
  * Define a Get/Put value pair (pointers) used with a message queue.
  */
 struct xpc_gp {
-	volatile s64 get;	/* Get value */
-	volatile s64 put;	/* Put value */
+	s64 get;		/* Get value */
+	s64 put;		/* Put value */
 };
 
 #define XPC_GP_SIZE \
@@ -360,7 +362,7 @@ struct xpc_openclose_args {
  * and consumed by the intended recipient.
  */
 struct xpc_notify {
-	volatile u8 type;	/* type of notification */
+	u8 type;		/* type of notification */
 
 	/* the following two fields are only used if type == XPC_N_CALL */
 	xpc_notify_func func;	/* user's notify function */
@@ -466,10 +468,10 @@ struct xpc_channel {
 	void *local_msgqueue_base;	/* base address of kmalloc'd space */
 	struct xpc_msg *local_msgqueue;	/* local message queue */
 	void *remote_msgqueue_base;	/* base address of kmalloc'd space */
-	struct xpc_msg *remote_msgqueue;	/* cached copy of remote partition's */
-	/* local message queue */
+	struct xpc_msg *remote_msgqueue; /* cached copy of remote partition's */
+					 /* local message queue */
 	u64 remote_msgqueue_pa;	/* phys addr of remote partition's */
-	/* local message queue */
+				/* local message queue */
 
 	atomic_t references;	/* #of external references to queues */
 
@@ -477,21 +479,21 @@ struct xpc_channel {
 	wait_queue_head_t msg_allocate_wq;	/* msg allocation wait queue */
 
 	u8 delayed_IPI_flags;	/* IPI flags received, but delayed */
-	/* action until channel disconnected */
+				/* action until channel disconnected */
 
 	/* queue of msg senders who want to be notified when msg received */
 
 	atomic_t n_to_notify;	/* #of msg senders to notify */
-	struct xpc_notify *notify_queue;	/* notify queue for messages sent */
+	struct xpc_notify *notify_queue;    /* notify queue for messages sent */
 
 	xpc_channel_func func;	/* user's channel function */
 	void *key;		/* pointer to user's key */
 
 	struct mutex msg_to_pull_mutex;	/* next msg to pull serialization */
-	struct completion wdisconnect_wait;	/* wait for channel disconnect */
+	struct completion wdisconnect_wait;    /* wait for channel disconnect */
 
-	struct xpc_openclose_args *local_openclose_args;	/* args passed on */
-	/* opening or closing of channel */
+	struct xpc_openclose_args *local_openclose_args;    /* args passed on */
+					     /* opening or closing of channel */
 
 	/* various flavors of local and remote Get/Put values */
 
@@ -519,28 +521,28 @@ struct xpc_channel {
 
 #define	XPC_C_ROPENREPLY	0x00000002	/* remote open channel reply */
 #define	XPC_C_OPENREPLY		0x00000004	/* local open channel reply */
-#define	XPC_C_ROPENREQUEST	0x00000008	/* remote open channel request */
+#define	XPC_C_ROPENREQUEST	0x00000008     /* remote open channel request */
 #define	XPC_C_OPENREQUEST	0x00000010	/* local open channel request */
 
-#define	XPC_C_SETUP		0x00000020	/* channel's msgqueues are alloc'd */
-#define	XPC_C_CONNECTEDCALLOUT	0x00000040	/* connected callout initiated */
+#define	XPC_C_SETUP		0x00000020 /* channel's msgqueues are alloc'd */
+#define	XPC_C_CONNECTEDCALLOUT	0x00000040     /* connected callout initiated */
 #define	XPC_C_CONNECTEDCALLOUT_MADE \
-				0x00000080	/* connected callout completed */
+				0x00000080     /* connected callout completed */
 #define	XPC_C_CONNECTED		0x00000100	/* local channel is connected */
 #define	XPC_C_CONNECTING	0x00000200	/* channel is being connected */
 
 #define	XPC_C_RCLOSEREPLY	0x00000400	/* remote close channel reply */
 #define	XPC_C_CLOSEREPLY	0x00000800	/* local close channel reply */
-#define	XPC_C_RCLOSEREQUEST	0x00001000	/* remote close channel request */
-#define	XPC_C_CLOSEREQUEST	0x00002000	/* local close channel request */
+#define	XPC_C_RCLOSEREQUEST	0x00001000    /* remote close channel request */
+#define	XPC_C_CLOSEREQUEST	0x00002000     /* local close channel request */
 
 #define	XPC_C_DISCONNECTED	0x00004000	/* channel is disconnected */
-#define	XPC_C_DISCONNECTING	0x00008000	/* channel is being disconnected */
+#define	XPC_C_DISCONNECTING	0x00008000   /* channel is being disconnected */
 #define	XPC_C_DISCONNECTINGCALLOUT \
-				0x00010000	/* disconnecting callout initiated */
+				0x00010000 /* disconnecting callout initiated */
 #define	XPC_C_DISCONNECTINGCALLOUT_MADE \
-				0x00020000	/* disconnecting callout completed */
-#define	XPC_C_WDISCONNECT	0x00040000	/* waiting for channel disconnect */
+				0x00020000 /* disconnecting callout completed */
+#define	XPC_C_WDISCONNECT	0x00040000  /* waiting for channel disconnect */
 
 /*
  * Manages channels on a partition basis. There is one of these structures
@@ -554,7 +556,7 @@ struct xpc_partition {
 	u8 remote_rp_version;	/* version# of partition's rsvd pg */
 	short remote_npartitions;	/* value of XPC_NPARTITIONS */
 	u32 flags;		/* general flags */
-	struct timespec remote_rp_stamp;	/* time when rsvd pg was initialized */
+	struct timespec remote_rp_stamp; /* time when rsvd pg was initialized */
 	u64 remote_rp_pa;	/* phys addr of partition's rsvd pg */
 	u64 remote_vars_pa;	/* phys addr of partition's vars */
 	u64 remote_vars_part_pa;	/* phys addr of partition's vars part */
@@ -564,7 +566,7 @@ struct xpc_partition {
 	int remote_act_phys_cpuid;	/* active part's act/deact phys cpuid */
 	u32 act_IRQ_rcvd;	/* IRQs since activation */
 	spinlock_t lock;	/* protect updating of act_state and */
-	/* the general flags */
+				/* the general flags */
 	u8 act_state;		/* from XPC HB viewpoint */
 	u8 remote_vars_version;	/* version# of partition's vars */
 	enum xp_retval reason;	/* reason partition is deactivating */
@@ -576,7 +578,7 @@ struct xpc_partition {
 
 	/* XPC infrastructure referencing and teardown control */
 
-	volatile u8 setup_state;	/* infrastructure setup state */
+	u8 setup_state;		/* infrastructure setup state */
 	wait_queue_head_t teardown_wq;	/* kthread waiting to teardown infra */
 	atomic_t references;	/* #of references to infrastructure */
 
@@ -588,25 +590,25 @@ struct xpc_partition {
 	 */
 
 	u8 nchannels;		/* #of defined channels supported */
-	atomic_t nchannels_active;	/* #of channels that are not DISCONNECTED */
-	atomic_t nchannels_engaged;	/* #of channels engaged with remote part */
+	atomic_t nchannels_active;  /* #of channels that are not DISCONNECTED */
+	atomic_t nchannels_engaged;  /* #of channels engaged with remote part */
 	struct xpc_channel *channels;	/* array of channel structures */
 
 	void *local_GPs_base;	/* base address of kmalloc'd space */
 	struct xpc_gp *local_GPs;	/* local Get/Put values */
 	void *remote_GPs_base;	/* base address of kmalloc'd space */
-	struct xpc_gp *remote_GPs;	/* copy of remote partition's local Get/Put */
-	/* values */
+	struct xpc_gp *remote_GPs;/* copy of remote partition's local Get/Put */
+				  /* values */
 	u64 remote_GPs_pa;	/* phys address of remote partition's local */
-	/* Get/Put values */
+				/* Get/Put values */
 
 	/* fields used to pass args when opening or closing a channel */
 
-	void *local_openclose_args_base;	/* base address of kmalloc'd space */
-	struct xpc_openclose_args *local_openclose_args;	/* local's args */
-	void *remote_openclose_args_base;	/* base address of kmalloc'd space */
-	struct xpc_openclose_args *remote_openclose_args;	/* copy of remote's */
-	/* args */
+	void *local_openclose_args_base;   /* base address of kmalloc'd space */
+	struct xpc_openclose_args *local_openclose_args;      /* local's args */
+	void *remote_openclose_args_base;  /* base address of kmalloc'd space */
+	struct xpc_openclose_args *remote_openclose_args; /* copy of remote's */
+							  /* args */
 	u64 remote_openclose_args_pa;	/* phys addr of remote's args */
 
 	/* IPI sending, receiving and handling related fields */
@@ -631,7 +633,7 @@ struct xpc_partition {
 
 /* struct xpc_partition flags */
 
-#define	XPC_P_RAMOSREGISTERED	0x00000001	/* remote AMOs were registered */
+#define	XPC_P_RAMOSREGISTERED	0x00000001    /* remote AMOs were registered */
 
 /* struct xpc_partition act_state values (for XPC HB) */
 
@@ -725,9 +727,8 @@ extern void xpc_teardown_infrastructure(struct xpc_partition *);
 static inline void
 xpc_wakeup_channel_mgr(struct xpc_partition *part)
 {
-	if (atomic_inc_return(&part->channel_mgr_requests) == 1) {
+	if (atomic_inc_return(&part->channel_mgr_requests) == 1)
 		wake_up(&part->channel_mgr_wq);
-	}
 }
 
 /*
@@ -746,9 +747,8 @@ xpc_msgqueue_deref(struct xpc_channel *ch)
 	s32 refs = atomic_dec_return(&ch->references);
 
 	DBUG_ON(refs < 0);
-	if (refs == 0) {
+	if (refs == 0)
 		xpc_wakeup_channel_mgr(&xpc_partitions[ch->partid]);
-	}
 }
 
 #define XPC_DISCONNECT_CHANNEL(_ch, _reason, _irqflgs) \
@@ -764,9 +764,8 @@ xpc_part_deref(struct xpc_partition *part)
 	s32 refs = atomic_dec_return(&part->references);
 
 	DBUG_ON(refs < 0);
-	if (refs == 0 && part->setup_state == XPC_P_SS_WTEARDOWN) {
+	if (refs == 0 && part->setup_state == XPC_P_SS_WTEARDOWN)
 		wake_up(&part->teardown_wq);
-	}
 }
 
 static inline int
@@ -776,9 +775,9 @@ xpc_part_ref(struct xpc_partition *part)
 
 	atomic_inc(&part->references);
 	setup = (part->setup_state == XPC_P_SS_SETUP);
-	if (!setup) {
+	if (!setup)
 		xpc_part_deref(part);
-	}
+
 	return setup;
 }
 
@@ -955,7 +954,7 @@ xpc_activate_IRQ_send(u64 amos_page_pa, int from_nasid, int to_nasid,
 					BIT_MASK(from_nasid / 2),
 					remote_amo, to_nasid,
 					to_phys_cpuid, SGI_XPC_ACTIVATE);
-	BUG_ON(!remote_amo && ret != xpSuccess);	/* should never happen */
+	BUG_ON(!remote_amo && ret != xpSuccess);      /* should never happen */
 }
 
 static inline void
@@ -1150,9 +1149,8 @@ xpc_check_for_channel_activity(struct xpc_partition *part)
 
 	ret = xp_get_amo(part->local_IPI_amo_va, XP_AMO_CLEAR, &IPI_amo);
 	BUG_ON(ret != xpSuccess);	/* should never happen */
-	if (IPI_amo == 0) {
+	if (IPI_amo == 0)
 		return;
-	}
 
 	spin_lock_irqsave(&part->IPI_lock, irq_flags);
 	part->local_IPI_amo |= IPI_amo;

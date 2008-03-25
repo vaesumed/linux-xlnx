@@ -18,8 +18,6 @@
 #include <linux/device.h>
 #include "xp.h"
 
-extern struct device *xp;
-
 static enum xp_retval
 xp_register_nofault_code_uv(void)
 {

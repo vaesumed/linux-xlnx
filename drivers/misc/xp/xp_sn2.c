@@ -22,8 +22,6 @@
 #include <asm/sn/sn_sal.h>
 #include "xp.h"
 
-extern struct device *xp;
-
 /*
  * Register a nofault code region which performs a cross-partition PIO read.
  * If the PIO read times out, the MCA handler will consume the error and
@@ -187,10 +185,10 @@ xp_set_amo_sn2(u64 *amo_va, int op, u64 operand, int remote)
 		 * it until the heartbeat times out.
 		 */
 		if (xp_nofault_PIOR((u64 *)GLOBAL_MMR_ADDR(NASID_GET(amo_va),
-							   xp_nofault_PIOR_target))
-		    != 0)
+							xp_nofault_PIOR_target))
+		    != 0) {
 			ret = xpPioReadError;
-
+		}
 		local_irq_restore(irq_flags);
 	}
 
@@ -226,10 +224,10 @@ xp_set_amo_with_interrupt_sn2(u64 *amo_va, int op, u64 operand, int remote,
 		 * it until the heartbeat times out.
 		 */
 		if (xp_nofault_PIOR((u64 *)GLOBAL_MMR_ADDR(NASID_GET(amo_va),
-							   xp_nofault_PIOR_target))
-		    != 0)
+							xp_nofault_PIOR_target))
+		    != 0) {
 			ret = xpPioReadError;
-
+		}
 		local_irq_restore(irq_flags);
 	}
 
@@ -323,10 +321,10 @@ xp_change_memprotect_shub_wars_1_1_sn2(int request)
 			/* save current protection values */
 			xpc_prot_vec[node] =
 			    (u64)HUB_L((u64 *)GLOBAL_MMR_ADDR(nasid,
-							      SH1_MD_DQLP_MMR_DIR_PRIVEC0));
+						  SH1_MD_DQLP_MMR_DIR_PRIVEC0));
 			/* open up everything */
 			HUB_S((u64 *)GLOBAL_MMR_ADDR(nasid,
-						     SH1_MD_DQLP_MMR_DIR_PRIVEC0),
+						   SH1_MD_DQLP_MMR_DIR_PRIVEC0),
 			      -1UL);
 			HUB_S((u64 *)
 			      GLOBAL_MMR_ADDR(nasid,
@@ -338,15 +336,16 @@ xp_change_memprotect_shub_wars_1_1_sn2(int request)
 			nasid = cnodeid_to_nasid(node);
 			/* restore original protection values */
 			HUB_S((u64 *)GLOBAL_MMR_ADDR(nasid,
-						     SH1_MD_DQLP_MMR_DIR_PRIVEC0),
+						   SH1_MD_DQLP_MMR_DIR_PRIVEC0),
 			      xpc_prot_vec[node]);
 			HUB_S((u64 *)
 			      GLOBAL_MMR_ADDR(nasid,
 					      SH1_MD_DQRP_MMR_DIR_PRIVEC0),
 			      xpc_prot_vec[node]);
 		}
-	} else
+	} else {
 		BUG();
+	}
 }
 
 /* SH_IPI_ACCESS shub register value on startup */

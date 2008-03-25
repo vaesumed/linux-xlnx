@@ -38,38 +38,58 @@ struct device *xp = &xp_dbg_subname;
 u64 xp_nofault_PIOR_target;
 
 short xp_partition_id;
+EXPORT_SYMBOL_GPL(xp_partition_id);
 u8 xp_region_size;
+EXPORT_SYMBOL_GPL(xp_region_size);
 unsigned long xp_rtc_cycles_per_second;
+EXPORT_SYMBOL_GPL(xp_rtc_cycles_per_second);
 
 enum xp_retval (*xp_remote_memcpy) (void *dst, const void *src, size_t len);
+EXPORT_SYMBOL_GPL(xp_remote_memcpy);
 
 enum xp_retval (*xp_register_remote_amos) (u64 paddr, size_t len);
+EXPORT_SYMBOL_GPL(xp_register_remote_amos);
 enum xp_retval (*xp_unregister_remote_amos) (u64 paddr, size_t len);
+EXPORT_SYMBOL_GPL(xp_unregister_remote_amos);
 
 int xp_sizeof_nasid_mask;
+EXPORT_SYMBOL_GPL(xp_sizeof_nasid_mask);
 int xp_sizeof_amo;
+EXPORT_SYMBOL_GPL(xp_sizeof_amo);
 
 u64 *(*xp_alloc_amos) (int n_amos);
+EXPORT_SYMBOL_GPL(xp_alloc_amos);
 void (*xp_free_amos) (u64 *amos_page, int n_amos);
+EXPORT_SYMBOL_GPL(xp_free_amos);
 
 enum xp_retval (*xp_set_amo) (u64 *amo_va, int op, u64 operand, int remote);
+EXPORT_SYMBOL_GPL(xp_set_amo);
 enum xp_retval (*xp_set_amo_with_interrupt) (u64 *amo_va, int op, u64 operand,
 					     int remote, int nasid,
 					     int phys_cpuid, int vector);
+EXPORT_SYMBOL_GPL(xp_set_amo_with_interrupt);
 
 enum xp_retval (*xp_get_amo) (u64 *amo_va, int op, u64 *amo_value_addr);
+EXPORT_SYMBOL_GPL(xp_get_amo);
 
 enum xp_retval (*xp_get_partition_rsvd_page_pa) (u64 buf, u64 *cookie,
 						 u64 *paddr, size_t *len);
+EXPORT_SYMBOL_GPL(xp_get_partition_rsvd_page_pa);
 
 enum xp_retval (*xp_change_memprotect) (u64 paddr, size_t len, int request,
 					u64 *nasid_array);
+EXPORT_SYMBOL_GPL(xp_change_memprotect);
 void (*xp_change_memprotect_shub_wars_1_1) (int request);
+EXPORT_SYMBOL_GPL(xp_change_memprotect_shub_wars_1_1);
 void (*xp_allow_IPI_ops) (void);
+EXPORT_SYMBOL_GPL(xp_allow_IPI_ops);
 void (*xp_disallow_IPI_ops) (void);
+EXPORT_SYMBOL_GPL(xp_disallow_IPI_ops);
 
 int (*xp_cpu_to_nasid) (int cpuid);
+EXPORT_SYMBOL_GPL(xp_cpu_to_nasid);
 int (*xp_node_to_nasid) (int nid);
+EXPORT_SYMBOL_GPL(xp_node_to_nasid);
 
 /*
  * Initialize the XPC interface to indicate that XPC isn't loaded.
@@ -90,6 +110,7 @@ struct xpc_interface xpc_interface = {
 	(void (*)(short, int, void *))xpc_notloaded,
 	(enum xp_retval(*)(short, void *))xpc_notloaded
 };
+EXPORT_SYMBOL_GPL(xpc_interface);
 
 /*
  * XPC calls this when it (the XPC module) has been loaded.
@@ -112,6 +133,7 @@ xpc_set_interface(void (*connect) (int),
 	xpc_interface.received = received;
 	xpc_interface.partid_to_nasids = partid_to_nasids;
 }
+EXPORT_SYMBOL_GPL(xpc_set_interface);
 
 /*
  * XPC calls this when it (the XPC module) is being unloaded.
@@ -133,12 +155,14 @@ xpc_clear_interface(void)
 	xpc_interface.partid_to_nasids = (enum xp_retval(*)(short, void *))
 	    xpc_notloaded;
 }
+EXPORT_SYMBOL_GPL(xpc_clear_interface);
 
 /*
  * xpc_registrations[] keeps track of xpc_connect()'s done by the kernel-level
  * users of XPC.
  */
 struct xpc_registration xpc_registrations[XPC_NCHANNELS];
+EXPORT_SYMBOL_GPL(xpc_registrations);
 
 /*
  * Register for automatic establishment of a channel connection whenever
@@ -177,9 +201,8 @@ xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
 
 	registration = &xpc_registrations[ch_number];
 
-	if (mutex_lock_interruptible(&registration->mutex) != 0) {
+	if (mutex_lock_interruptible(&registration->mutex) != 0)
 		return xpInterrupted;
-	}
 
 	/* if XPC_CHANNEL_REGISTERED(ch_number) */
 	if (registration->func != NULL) {
@@ -201,6 +224,7 @@ xpc_connect(int ch_number, xpc_channel_func func, void *key, u16 payload_size,
 
 	return xpSuccess;
 }
+EXPORT_SYMBOL_GPL(xpc_connect);
 
 /*
  * Remove the registration for automatic connection of the specified channel
@@ -251,9 +275,7 @@ xpc_disconnect(int ch_number)
 
 	return;
 }
-
-extern enum xp_retval xp_init_sn2(void);
-extern enum xp_retval xp_init_uv(void);
+EXPORT_SYMBOL_GPL(xpc_disconnect);
 
 int __init
 xp_init(void)
@@ -268,22 +290,17 @@ xp_init(void)
 	else
 		ret = xpUnsupported;
 
-	if (ret != xpSuccess) {
+	if (ret != xpSuccess)
 		return -ENODEV;
-	}
 
 	/* initialize the connection registration mutex */
-	for (ch_number = 0; ch_number < XPC_NCHANNELS; ch_number++) {
+	for (ch_number = 0; ch_number < XPC_NCHANNELS; ch_number++)
 		mutex_init(&xpc_registrations[ch_number].mutex);
-	}
 
 	return 0;
 }
 
 module_init(xp_init);
-
-extern void xp_exit_sn2(void);
-extern void xp_exit_uv(void);
 
 void __exit
 xp_exit(void)
@@ -299,30 +316,3 @@ module_exit(xp_exit);
 MODULE_AUTHOR("Silicon Graphics, Inc.");
 MODULE_DESCRIPTION("Cross Partition (XP) base");
 MODULE_LICENSE("GPL");
-
-EXPORT_SYMBOL(xp_partition_id);
-EXPORT_SYMBOL(xp_region_size);
-EXPORT_SYMBOL(xp_rtc_cycles_per_second);
-EXPORT_SYMBOL(xp_remote_memcpy);
-EXPORT_SYMBOL(xp_register_remote_amos);
-EXPORT_SYMBOL(xp_unregister_remote_amos);
-EXPORT_SYMBOL(xp_sizeof_nasid_mask);
-EXPORT_SYMBOL(xp_sizeof_amo);
-EXPORT_SYMBOL(xp_alloc_amos);
-EXPORT_SYMBOL(xp_free_amos);
-EXPORT_SYMBOL(xp_set_amo);
-EXPORT_SYMBOL(xp_set_amo_with_interrupt);
-EXPORT_SYMBOL(xp_get_amo);
-EXPORT_SYMBOL(xp_get_partition_rsvd_page_pa);
-EXPORT_SYMBOL(xp_change_memprotect);
-EXPORT_SYMBOL(xp_change_memprotect_shub_wars_1_1);
-EXPORT_SYMBOL(xp_allow_IPI_ops);
-EXPORT_SYMBOL(xp_disallow_IPI_ops);
-EXPORT_SYMBOL(xp_cpu_to_nasid);
-EXPORT_SYMBOL(xp_node_to_nasid);
-EXPORT_SYMBOL(xpc_registrations);
-EXPORT_SYMBOL(xpc_interface);
-EXPORT_SYMBOL(xpc_clear_interface);
-EXPORT_SYMBOL(xpc_set_interface);
-EXPORT_SYMBOL(xpc_connect);
-EXPORT_SYMBOL(xpc_disconnect);
