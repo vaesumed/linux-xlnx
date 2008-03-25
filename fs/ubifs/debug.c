@@ -490,19 +490,13 @@ void dbg_dump_budget_req(const struct ubifs_budget_req *req)
 	spin_lock(&dbg_lock);
 	printk(KERN_DEBUG "Budgeting request: new_ino %d, dirtied_ino %d\n",
 	       req->new_ino, req->dirtied_ino);
-	printk(KERN_DEBUG "\tnew_ino_d  %d, dirtied_ino_d %d\n",
+	printk(KERN_DEBUG "\tnew_ino_d   %d, dirtied_ino_d %d\n",
 	       req->new_ino_d, req->dirtied_ino_d);
 	printk(KERN_DEBUG "\tnew_page    %d, dirtied_page %d\n",
 	       req->new_page, req->dirtied_page);
 	printk(KERN_DEBUG "\tnew_dent    %d, mod_dent     %d\n",
 	       req->new_dent, req->mod_dent);
-/* TODO: remove compatibility stuff as late as possible */
-#ifdef UBIFS_COMPAT_USE_OLD_PREPARE_WRITE
-	printk(KERN_DEBUG "\tlocked_pg   %d idx_growth    %d\n",
-	       req->locked_pg, req->idx_growth);
-#else
 	printk(KERN_DEBUG "\tidx_growth  %d\n", req->idx_growth);
-#endif
 	printk(KERN_DEBUG "\tdata_growth %d dd_growth     %d\n",
 	       req->data_growth, req->dd_growth);
 	spin_unlock(&dbg_lock);
@@ -816,8 +810,6 @@ void dbg_leak_report(void)
 	spin_unlock(&dbg_lock);
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG */
-
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_MEMPRESS
 
 /*
@@ -1130,3 +1122,4 @@ int dbg_is_mapped(struct ubi_volume_desc *desc, int lnum)
 }
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY */
+#endif /* CONFIG_UBIFS_FS_DEBUG */
