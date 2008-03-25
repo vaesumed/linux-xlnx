@@ -659,7 +659,7 @@ void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat)
 {
 	int i;
 
-	printk(KERN_DEBUG "dumping heap cat %d (%d elements)\n",
+	printk(KERN_DEBUG "Dumping heap cat %d (%d elements)\n",
 	       cat, heap->cnt);
 	for (i = 0; i < heap->cnt; i++) {
 		struct ubifs_lprops *lprops = heap->arr[i];
@@ -667,6 +667,24 @@ void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat)
 		printk(KERN_DEBUG "\t%d. LEB %d hpos %d free %d dirty %d "
 		       "flags %d\n", i, lprops->lnum, lprops->hpos,
 		       lprops->free, lprops->dirty, lprops->flags);
+	}
+}
+
+void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
+		    struct ubifs_nnode *parent, int iip)
+{
+	int i;
+
+	printk(KERN_DEBUG "Dumping pnode:\n");
+	printk(KERN_DEBUG "\taddress %zx parent %zx cnext %zx\n",
+	       (size_t)pnode, (size_t)parent, (size_t)pnode->cnext);
+	printk(KERN_DEBUG "\tflags %lu iip %d level %d num %d\n",
+	       pnode->flags, iip, pnode->level, pnode->num);
+	for (i = 0; i < UBIFS_LPT_FANOUT; i++) {
+		struct ubifs_lprops *lp = &pnode->lprops[i];
+
+		printk(KERN_DEBUG "\t%d: free %d dirty %d flags %d lnum %d\n",
+		       i, lp->free, lp->dirty, lp->flags, lp->lnum);
 	}
 }
 

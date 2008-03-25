@@ -96,6 +96,9 @@ void dbg_dump_leb(const struct ubifs_info *c, int lnum);
 void dbg_dump_znode(const struct ubifs_info *c,
 		    const struct ubifs_znode *znode);
 void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat);
+void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
+		    struct ubifs_nnode *parent, int iip);
+
 void *dbg_kmalloc(size_t size, gfp_t flags);
 void *dbg_kzalloc(size_t size, gfp_t flags);
 void dbg_kfree(const void *addr);
@@ -114,19 +117,21 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			 void *node);
 #else
 
-#define dbg_ntype(type)             ""
-#define dbg_cstate(cmt_state)       ""
-#define dbg_get_key_dump(c, key)    ({})
-#define dbg_dump_node(c, node)      ({})
-#define dbg_dump_budget_req(req)    ({})
-#define dbg_dump_lstats(lst)        ({})
-#define dbg_dump_budg(c)            ({})
-#define dbg_dump_lprop(c, lp)       ({})
-#define dbg_dump_lprops(c)          ({})
-#define dbg_dump_leb(c, lnum)       ({})
-#define dbg_dump_znode(c, znode)    ({})
-#define dbg_dump_heap(c, heap, cat) ({})
-#define dbg_leak_report()           ({})
+#define dbg_ntype(type)                       ""
+#define dbg_cstate(cmt_state)                 ""
+#define dbg_get_key_dump(c, key)              ({})
+#define dbg_dump_node(c, node)                ({})
+#define dbg_dump_budget_req(req)              ({})
+#define dbg_dump_lstats(lst)                  ({})
+#define dbg_dump_budg(c)                      ({})
+#define dbg_dump_lprop(c, lp)                 ({})
+#define dbg_dump_lprops(c)                    ({})
+#define dbg_dump_leb(c, lnum)                 ({})
+#define dbg_dump_znode(c, znode)              ({})
+#define dbg_dump_heap(c, heap, cat)           ({})
+#define dbg_dump_pnode(c, pnode, parent, iip) ({})
+
+#define dbg_leak_report() ({})
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
 #define dbg_read_leaf_nolock(c, zbr, node)    0
 
