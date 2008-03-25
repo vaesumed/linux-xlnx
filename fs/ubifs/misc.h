@@ -135,6 +135,52 @@ static inline int ubifs_wbuf_sync(struct ubifs_wbuf *wbuf)
 }
 
 /**
+ * ubifs_leb_unmap - unmap an LEB.
+ * @c: UBIFS file-system description object
+ * @lnum: LEB number to unmap
+ *
+ * This function returns %0 on success and a negative error code on failure.
+ */
+static inline int ubifs_leb_unmap(const struct ubifs_info *c, int lnum)
+{
+	int err;
+
+	err = ubi_leb_unmap(c->ubi, lnum);
+	if (err) {
+		ubifs_err("unmap LEB %d failed, error %d", lnum, err);
+		return err;
+	}
+
+	return 0;
+}
+
+/**
+ * ubifs_leb_write - write to a LEB.
+ * @c: UBIFS file-system description object
+ * @lnum: LEB number to write
+ * @buf: buffer to write from
+ * @offs: offset within buffer and within LEB to write to
+ * @len: length to write
+ * @dtype: data type
+ *
+ * This function returns %0 on success and a negative error code on failure.
+ */
+static inline int ubifs_leb_write(const struct ubifs_info *c, int lnum,
+				  const void *buf, int offs, int len, int dtype)
+{
+	int err;
+
+	err = ubi_leb_write(c->ubi, lnum, buf + offs, offs, len, UBI_SHORTTERM);
+	if (err) {
+		ubifs_err("writing %d bytes at %d:%d, error %d",
+			  len, lnum, offs, err);
+		return err;
+	}
+
+	return 0;
+}
+
+/**
  * ubifs_encode_dev - encode device node IDs.
  * @dev: UBIFS device node information
  * @rdev: device IDs to encode

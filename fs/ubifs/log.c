@@ -246,7 +246,7 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 
 	if (c->lhead_offs == 0) {
 		/* Must ensure next log LEB has been unmapped */
-		err = ubi_leb_unmap(c->ubi, c->lhead_lnum);
+		err = ubifs_leb_unmap(c, c->lhead_lnum);
 		if (err)
 			goto out_unlock;
 	}
@@ -415,14 +415,14 @@ int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum)
 
 	if (c->lhead_offs == 0) {
 		/* Must ensure next LEB has been unmapped */
-		err = ubi_leb_unmap(c->ubi, c->lhead_lnum);
+		err = ubifs_leb_unmap(c, c->lhead_lnum);
 		if (err)
 			goto out;
 	}
 
 	len = ALIGN(len, c->min_io_size);
 	dbg_log("writing commit start at LEB %d:0, len %d", c->lhead_lnum, len);
-	err = ubi_leb_write(c->ubi, c->lhead_lnum, cs, 0, len, UBI_SHORTTERM);
+	err = ubifs_leb_write(c, c->lhead_lnum, cs, 0, len, UBI_SHORTTERM);
 	if (err)
 		goto out;
 
@@ -519,7 +519,7 @@ int ubifs_log_post_commit(struct ubifs_info *c, int old_ltail_lnum)
 	for (lnum = old_ltail_lnum; lnum != c->ltail_lnum;
 	     lnum = next_log_lnum(c, lnum)) {
 		dbg_log("unmap log LEB %d", lnum);
-		err = ubi_leb_unmap(c->ubi, lnum);
+		err = ubifs_leb_unmap(c, lnum);
 		if (err)
 			goto out;
 	}
@@ -718,7 +718,7 @@ int ubifs_consolidate_log(struct ubifs_info *c)
 	lnum = write_lnum;
 	do {
 		lnum = next_log_lnum(c, lnum);
-		err = ubi_leb_unmap(c->ubi, lnum);
+		err = ubifs_leb_unmap(c, lnum);
 		if (err)
 			return err;
 	} while (lnum != c->lhead_lnum);

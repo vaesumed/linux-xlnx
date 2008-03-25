@@ -290,7 +290,7 @@ static int care_about_gc_lnum(struct ubifs_info *c)
 		return -EINVAL;
 	}
 
-	err = ubi_leb_unmap(c->ubi, c->gc_lnum);
+	err = ubifs_leb_unmap(c, c->gc_lnum);
 	if (err)
 		return err;
 
