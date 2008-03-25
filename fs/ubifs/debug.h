@@ -16,8 +16,8 @@
  * this program; if not, write to the Free Software Foundation, Inc., 51
  * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
- * Author: Artem Bityutskiy
- *         Adrian Hunter
+ * Authors: Artem Bityutskiy (Битюцкий Артём)
+ *          Adrian Hunter
  */
 
 #ifndef __UBIFS_DEBUG_H__
