@@ -37,12 +37,7 @@
  * possible vulnerabilities. Returns zero if the inode is all right and
  * %-EINVAL if not.
  */
-/* TODO: remove compatibility stuff as late as possible */
-#ifndef UBIFS_COMPAT_USE_OLD_IGET
 static int validate_inode(struct ubifs_info *c, const struct inode *inode)
-#else
-int validate_inode(struct ubifs_info *c, const struct inode *inode)
-#endif
 {
 	int err;
 	const struct ubifs_inode *ui = ubifs_inode(inode);
@@ -95,8 +90,6 @@ int validate_inode(struct ubifs_info *c, const struct inode *inode)
 	return err;
 }
 
-/* TODO: remove compatibility stuff as late as possible */
-#ifndef UBIFS_COMPAT_USE_OLD_IGET
 struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 {
 	int err;
@@ -232,8 +225,6 @@ out:
 	iget_failed(inode);
 	return ERR_PTR(err);
 }
-
-#endif /* UBIFS_COMPAT_USE_OLD_IGET */
 
 static struct inode *ubifs_alloc_inode(struct super_block *sb)
 {
@@ -527,10 +518,6 @@ static int ubifs_sync_fs(struct super_block *sb, int wait)
 }
 
 struct super_operations ubifs_super_operations = {
-/* TODO: remove compatibility stuff as late as possible */
-#ifdef UBIFS_COMPAT_USE_OLD_IGET
-	.read_inode    = ubifs_read_inode,
-#endif
 	.alloc_inode   = ubifs_alloc_inode,
 	.destroy_inode = ubifs_destroy_inode,
 	.put_super     = ubifs_put_super,
