@@ -31,8 +31,7 @@ struct request_sock_ops {
 	int		obj_size;
 	struct kmem_cache	*slab;
 	int		(*rtx_syn_ack)(struct sock *sk,
-				       struct request_sock *req,
-				       struct dst_entry *dst);
+				       struct request_sock *req);
 	void		(*send_ack)(struct sk_buff *skb,
 				    struct request_sock *req);
 	void		(*send_reset)(struct sock *sk,
@@ -116,8 +115,8 @@ struct request_sock_queue {
 	struct request_sock	*rskq_accept_head;
 	struct request_sock	*rskq_accept_tail;
 	rwlock_t		syn_wait_lock;
-	u8			rskq_defer_accept;
-	/* 3 bytes hole, try to pack */
+	u16			rskq_defer_accept;
+	/* 2 bytes hole, try to pack */
 	struct listen_sock	*listen_opt;
 };
 

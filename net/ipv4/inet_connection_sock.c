@@ -80,7 +80,7 @@ EXPORT_SYMBOL_GPL(inet_csk_bind_conflict);
  */
 int inet_csk_get_port(struct sock *sk, unsigned short snum)
 {
-	struct inet_hashinfo *hashinfo = sk->sk_prot->hashinfo;
+	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct inet_bind_hashbucket *head;
 	struct hlist_node *node;
 	struct inet_bind_bucket *tb;
@@ -414,8 +414,7 @@ void inet_csk_reqsk_queue_prune(struct sock *parent,
 	struct inet_connection_sock *icsk = inet_csk(parent);
 	struct request_sock_queue *queue = &icsk->icsk_accept_queue;
 	struct listen_sock *lopt = queue->listen_opt;
-	int max_retries = icsk->icsk_syn_retries ? : sysctl_tcp_synack_retries;
-	int thresh = max_retries;
+	int thresh = icsk->icsk_syn_retries ? : sysctl_tcp_synack_retries;
 	unsigned long now = jiffies;
 	struct request_sock **reqp, *req;
 	int i, budget;
@@ -451,9 +450,6 @@ void inet_csk_reqsk_queue_prune(struct sock *parent,
 		}
 	}
 
-	if (queue->rskq_defer_accept)
-		max_retries = queue->rskq_defer_accept;
-
 	budget = 2 * (lopt->nr_table_entries / (timeout / interval));
 	i = lopt->clock_hand;
 
@@ -461,9 +457,8 @@ void inet_csk_reqsk_queue_prune(struct sock *parent,
 		reqp=&lopt->syn_table[i];
 		while ((req = *reqp) != NULL) {
 			if (time_after_eq(now, req->expires)) {
-				if ((req->retrans < thresh ||
-				     (inet_rsk(req)->acked && req->retrans < max_retries))
-				    && !req->rsk_ops->rtx_syn_ack(parent, req, NULL)) {
+				if (req->retrans < thresh &&
+				    !req->rsk_ops->rtx_syn_ack(parent, req)) {
 					unsigned long timeo;
 
 					if (req->retrans++ == 0)

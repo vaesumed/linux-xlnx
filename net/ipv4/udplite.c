@@ -17,17 +17,6 @@ DEFINE_SNMP_STAT(struct udp_mib, udplite_statistics)	__read_mostly;
 
 struct hlist_head 	udplite_hash[UDP_HTABLE_SIZE];
 
-int udplite_get_port(struct sock *sk, unsigned short p,
-		     int (*c)(const struct sock *, const struct sock *))
-{
-	return  __udp_lib_get_port(sk, p, udplite_hash, c);
-}
-
-static int udplite_v4_get_port(struct sock *sk, unsigned short snum)
-{
-	return udplite_get_port(sk, snum, ipv4_rcv_saddr_equal);
-}
-
 static int udplite_rcv(struct sk_buff *skb)
 {
 	return __udp4_lib_rcv(skb, udplite_hash, IPPROTO_UDPLITE);
@@ -63,8 +52,9 @@ struct proto 	udplite_prot = {
 	.backlog_rcv	   = udp_queue_rcv_skb,
 	.hash		   = udp_lib_hash,
 	.unhash		   = udp_lib_unhash,
-	.get_port	   = udplite_v4_get_port,
+	.get_port	   = udp_v4_get_port,
 	.obj_size	   = sizeof(struct udp_sock),
+	.h.udp_hash	   = udplite_hash,
 #ifdef CONFIG_COMPAT
 	.compat_setsockopt = compat_udp_setsockopt,
 	.compat_getsockopt = compat_udp_getsockopt,
@@ -105,17 +95,16 @@ void __init udplite4_register(void)
 	inet_register_protosw(&udplite4_protosw);
 
 #ifdef CONFIG_PROC_FS
-	if (udp_proc_register(&udplite4_seq_afinfo)) /* udplite4_proc_init() */
-		printk(KERN_ERR "%s: Cannot register /proc!\n", __FUNCTION__);
+	if (udp_proc_register(&init_net, &udplite4_seq_afinfo))
+		printk(KERN_ERR "%s: Cannot register /proc!\n", __func__);
 #endif
 	return;
 
 out_unregister_proto:
 	proto_unregister(&udplite_prot);
 out_register_err:
-	printk(KERN_CRIT "%s: Cannot add UDP-Lite protocol.\n", __FUNCTION__);
+	printk(KERN_CRIT "%s: Cannot add UDP-Lite protocol.\n", __func__);
 }
 
 EXPORT_SYMBOL(udplite_hash);
 EXPORT_SYMBOL(udplite_prot);
-EXPORT_SYMBOL(udplite_get_port);

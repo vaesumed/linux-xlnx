@@ -3561,7 +3561,7 @@ static void tcp_fin(struct sk_buff *skb, struct sock *sk, struct tcphdr *th)
 		 * cases we should never reach this piece of code.
 		 */
 		printk(KERN_ERR "%s: Impossible, sk->sk_state=%d\n",
-		       __FUNCTION__, sk->sk_state);
+		       __func__, sk->sk_state);
 		break;
 	}
 
@@ -4451,6 +4451,49 @@ static void tcp_urg(struct sock *sk, struct sk_buff *skb, struct tcphdr *th)
 	}
 }
 
+static int tcp_defer_accept_check(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (tp->defer_tcp_accept.request) {
+		int queued_data =  tp->rcv_nxt - tp->copied_seq;
+		int hasfin =  !skb_queue_empty(&sk->sk_receive_queue) ?
+			tcp_hdr((struct sk_buff *)
+				sk->sk_receive_queue.prev)->fin : 0;
+
+		if (queued_data && hasfin)
+			queued_data--;
+
+		if (queued_data &&
+		    tp->defer_tcp_accept.listen_sk->sk_state == TCP_LISTEN) {
+			if (sock_flag(sk, SOCK_KEEPOPEN)) {
+				inet_csk_reset_keepalive_timer(sk,
+							       keepalive_time_when(tp));
+			} else {
+				inet_csk_delete_keepalive_timer(sk);
+			}
+
+			inet_csk_reqsk_queue_add(
+				tp->defer_tcp_accept.listen_sk,
+				tp->defer_tcp_accept.request,
+				sk);
+
+			tp->defer_tcp_accept.listen_sk->sk_data_ready(
+				tp->defer_tcp_accept.listen_sk, 0);
+
+			sock_put(tp->defer_tcp_accept.listen_sk);
+			sock_put(sk);
+			tp->defer_tcp_accept.listen_sk = NULL;
+			tp->defer_tcp_accept.request = NULL;
+		} else if (hasfin ||
+			   tp->defer_tcp_accept.listen_sk->sk_state != TCP_LISTEN) {
+			tcp_reset(sk);
+			return -1;
+		}
+	}
+	return 0;
+}
+
 static int tcp_copy_to_iovec(struct sock *sk, struct sk_buff *skb, int hlen)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -4811,6 +4854,9 @@ step5:
 
 	tcp_data_snd_check(sk);
 	tcp_ack_snd_check(sk);
+
+	if (tcp_defer_accept_check(sk))
+		return -1;
 	return 0;
 
 csum_error:
@@ -5330,6 +5376,7 @@ discard:
 
 EXPORT_SYMBOL(sysctl_tcp_ecn);
 EXPORT_SYMBOL(sysctl_tcp_reordering);
+EXPORT_SYMBOL(sysctl_tcp_adv_win_scale);
 EXPORT_SYMBOL(tcp_parse_options);
 EXPORT_SYMBOL(tcp_rcv_established);
 EXPORT_SYMBOL(tcp_rcv_state_process);

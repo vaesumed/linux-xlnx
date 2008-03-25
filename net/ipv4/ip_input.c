@@ -283,13 +283,14 @@ static inline int ip_rcv_options(struct sk_buff *skb)
 	}
 
 	iph = ip_hdr(skb);
+	opt = &(IPCB(skb)->opt);
+	opt->optlen = iph->ihl*4 - sizeof(struct iphdr);
 
-	if (ip_options_compile(NULL, skb)) {
+	if (ip_options_compile(opt, skb)) {
 		IP_INC_STATS_BH(IPSTATS_MIB_INHDRERRORS);
 		goto drop;
 	}
 
-	opt = &(IPCB(skb)->opt);
 	if (unlikely(opt->srr)) {
 		struct in_device *in_dev = in_dev_get(dev);
 		if (in_dev) {
@@ -351,7 +352,7 @@ static int ip_rcv_finish(struct sk_buff *skb)
 	if (iph->ihl > 5 && ip_rcv_options(skb))
 		goto drop;
 
-	rt = (struct rtable*)skb->dst;
+	rt = skb->rtable;
 	if (rt->rt_type == RTN_MULTICAST)
 		IP_INC_STATS_BH(IPSTATS_MIB_INMCASTPKTS);
 	else if (rt->rt_type == RTN_BROADCAST)
