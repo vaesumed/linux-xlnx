@@ -95,17 +95,12 @@ enum dma_transaction_type {
 #define DMA_TX_TYPE_END (DMA_INTERRUPT + 1)
 
 /**
- * enum dma_ctrl_flags - DMA flags to augment operation preparation,
- * 	control completion, and communicate status.
+ * enum dma_prep_flags - DMA flags to augment operation preparation
  * @DMA_PREP_INTERRUPT - trigger an interrupt (callback) upon completion of
  * 	this transaction
- * @DMA_CTRL_ACK - the descriptor cannot be reused until the client
- * 	acknowledges receipt, i.e. has has a chance to establish any
- * 	dependency chains
  */
-enum dma_ctrl_flags {
+enum dma_prep_flags {
 	DMA_PREP_INTERRUPT = (1 << 0),
-	DMA_CTRL_ACK = (1 << 1),
 };
 
 /**
@@ -216,8 +211,8 @@ typedef void (*dma_async_tx_callback)(void *dma_async_param);
  * ---dma generic offload fields---
  * @cookie: tracking cookie for this transaction, set to -EBUSY if
  *	this tx is sitting on a dependency list
- * @flags: flags to augment operation preparation, control completion, and
- * 	communicate status
+ * @ack: the descriptor can not be reused until the client acknowledges
+ *	receipt, i.e. has has a chance to establish any dependency chains
  * @phys: physical address of the descriptor
  * @tx_list: driver common field for operations that require multiple
  *	descriptors
@@ -232,7 +227,7 @@ typedef void (*dma_async_tx_callback)(void *dma_async_param);
  */
 struct dma_async_tx_descriptor {
 	dma_cookie_t cookie;
-	enum dma_ctrl_flags flags; /* not a 'long' to pack with cookie */
+	int ack;
 	dma_addr_t phys;
 	struct list_head tx_list;
 	struct dma_chan *chan;
@@ -295,7 +290,7 @@ struct dma_device {
 		struct dma_chan *chan, dma_addr_t dest, int value, size_t len,
 		unsigned long flags);
 	struct dma_async_tx_descriptor *(*device_prep_dma_interrupt)(
-		struct dma_chan *chan, unsigned long flags);
+		struct dma_chan *chan);
 
 	enum dma_status (*device_is_tx_complete)(struct dma_chan *chan,
 			dma_cookie_t cookie, dma_cookie_t *last,
@@ -321,13 +316,7 @@ void dma_async_tx_descriptor_init(struct dma_async_tx_descriptor *tx,
 static inline void
 async_tx_ack(struct dma_async_tx_descriptor *tx)
 {
-	tx->flags |= DMA_CTRL_ACK;
-}
-
-static inline int
-async_tx_test_ack(struct dma_async_tx_descriptor *tx)
-{
-	return tx->flags & DMA_CTRL_ACK;
+	tx->ack = 1;
 }
 
 #define first_dma_cap(mask) __first_dma_cap(&(mask))
