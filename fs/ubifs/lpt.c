@@ -3751,6 +3751,7 @@ static int dbg_is_lsave_dirty(struct ubifs_info *c, int lnum, int offs)
 /**
  * dbg_is_node_dirty - determine if a node is dirty.
  * @c: the UBIFS file-system description object
+ * @node_type: node type
  * @lnum: LEB number where node was written
  * @offs: offset where node was written
  */
