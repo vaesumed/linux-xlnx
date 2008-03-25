@@ -257,13 +257,6 @@ int dbg_check_cats(struct ubifs_info *c);
 #define dbg_scan(fmt, ...) ({})
 #endif
 
-/* Additional recovery messages */
-#ifdef CONFIG_UBIFS_FS_DEBUG_MSG_RCVRY
-#define dbg_rcvry(fmt, ...) dbg_msg(fmt, ##__VA_ARGS__)
-#else
-#define dbg_rcvry(fmt, ...) ({})
-#endif
-
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
 int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir);
 #else
