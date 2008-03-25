@@ -704,7 +704,7 @@ void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
 /**
  * ubifs_cancel_ino_op - cancel budget of an operation on inode.
  * @c: UBIFS file-system description object
- * @inodes: VFS inode the operation worked on
+ * @inode: VFS inode the operation worked on
  * @req: budget to release
  *
  * This function has to be called if the operation failed and whole budget has

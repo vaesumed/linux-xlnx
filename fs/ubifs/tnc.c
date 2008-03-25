@@ -2306,7 +2306,7 @@ int ubifs_tnc_remove(struct ubifs_info *c, const union ubifs_key *key)
  * ubifs_tnc_remove_nm - remove an index entry for a "hashed" node.
  * @c: UBIFS file-system description object
  * @key: key of node
- * @name: directory entry name
+ * @nm: directory entry name
  *
  * Returns %0 on success or negative error code on failure.
  */
