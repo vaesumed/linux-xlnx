@@ -94,7 +94,7 @@ static int switch_gc_head(struct ubifs_info *c)
 	 * The GC write-buffer was synchronized, we may safely unmap
 	 * 'c->gc_lnum'.
 	 */
-	err = ubi_leb_unmap(c->ubi, gc_lnum);
+	err = ubifs_leb_unmap(c, gc_lnum);
 	if (err)
 		return err;
 
@@ -362,7 +362,7 @@ static int garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 			if (err)
 				goto out;
 
-			err = ubi_leb_unmap(c->ubi, lnum);
+			err = ubifs_leb_unmap(c, lnum);
 			if (err)
 				goto out;
 
@@ -501,7 +501,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 				if (ret)
 					goto out;
 			}
-			ret = ubi_leb_unmap(c->ubi, lp.lnum);
+			ret = ubifs_leb_unmap(c, lp.lnum);
 			if (ret)
 				goto out;
 			ret = lp.lnum;
@@ -599,7 +599,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 
 	err = ubifs_wbuf_sync_nolock(wbuf);
 	if (!err)
-		err = ubi_leb_unmap(c->ubi, c->gc_lnum);
+		err = ubifs_leb_unmap(c, c->gc_lnum);
 	if (err)
 		ret = err;
 	mutex_unlock(&wbuf->io_mutex);
@@ -647,7 +647,7 @@ int ubifs_gc_start_commit(struct ubifs_info *c)
 			break;
 		ubifs_assert(!(lp->flags & LPROPS_TAKEN));
 		ubifs_assert(!(lp->flags & LPROPS_INDEX));
-		err = ubi_leb_unmap(c->ubi, lp->lnum);
+		err = ubifs_leb_unmap(c, lp->lnum);
 		if (err)
 			goto out;
 		lp = ubifs_change_lp(c, lp, c->leb_size, 0, lp->flags, 0);
@@ -715,7 +715,7 @@ int ubifs_gc_end_commit(struct ubifs_info *c)
 	list_for_each_entry_safe(idx_gc, tmp, &c->idx_gc, list)
 		if (idx_gc->unmap) {
 			dbg_gc("LEB %d", idx_gc->lnum);
-			err = ubi_leb_unmap(c->ubi, idx_gc->lnum);
+			err = ubifs_leb_unmap(c, idx_gc->lnum);
 			if (err)
 				goto out;
 			err = ubifs_change_one_lp(c, idx_gc->lnum, -1, -1, 0,
