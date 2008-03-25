@@ -549,7 +549,7 @@ int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
 		 * LEBs that were freeable LEBs (free + dirty == leb_size) will
 		 * not have been unmapped.
 		 */
-		err = ubi_leb_unmap(c->ubi, lnum);
+		err = ubifs_leb_unmap(c, lnum);
 		if (err)
 			return err;
 	}
@@ -691,7 +691,7 @@ int ubifs_find_free_leb_for_idx(struct ubifs_info *c)
 	 * for example, because of an unclean unmount. Also LEBs that were
 	 * freeable LEBs (free + dirty == leb_size) will not have been unmapped.
 	 */
-	err = ubi_leb_unmap(c->ubi, lnum);
+	err = ubifs_leb_unmap(c, lnum);
 	if (err) {
 		ubifs_change_one_lp(c, lnum, -1, -1, 0,
 				    LPROPS_TAKEN | LPROPS_INDEX, 0);
