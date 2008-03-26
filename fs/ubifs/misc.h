@@ -159,7 +159,7 @@ static inline int ubifs_leb_unmap(const struct ubifs_info *c, int lnum)
  * @c: UBIFS file-system description object
  * @lnum: LEB number to write
  * @buf: buffer to write from
- * @offs: offset within buffer and within LEB to write to
+ * @offs: offset within LEB to write to
  * @len: length to write
  * @dtype: data type
  *
@@ -170,7 +170,7 @@ static inline int ubifs_leb_write(const struct ubifs_info *c, int lnum,
 {
 	int err;
 
-	err = ubi_leb_write(c->ubi, lnum, buf + offs, offs, len, UBI_SHORTTERM);
+	err = ubi_leb_write(c->ubi, lnum, buf, offs, len, dtype);
 	if (err) {
 		ubifs_err("writing %d bytes at %d:%d, error %d",
 			  len, lnum, offs, err);
