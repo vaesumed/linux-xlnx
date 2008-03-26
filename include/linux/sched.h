@@ -1541,12 +1541,6 @@ static inline void idle_task_exit(void) {}
 
 extern void sched_idle_next(void);
 
-#ifdef CONFIG_NO_HZ
-extern void wake_up_idle_cpu(int cpu);
-#else
-static inline void wake_up_idle_cpu(int cpu) { }
-#endif
-
 #ifdef CONFIG_SCHED_DEBUG
 extern unsigned int sysctl_sched_latency;
 extern unsigned int sysctl_sched_min_granularity;
