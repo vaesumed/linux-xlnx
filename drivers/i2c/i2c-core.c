@@ -489,8 +489,8 @@ EXPORT_SYMBOL(i2c_add_adapter);
  * Context: can sleep
  *
  * This routine is used to declare an I2C adapter when its bus number
- * matters.  Example: for I2C adapters from system-on-chip CPUs, or
- * otherwise built in to the system's mainboard, and where i2c_board_info
+ * matters.  For example, use it for I2C adapters from system-on-chip CPUs,
+ * or otherwise built in to the system's mainboard, and where i2c_board_info
  * is used to properly configure I2C devices.
  *
  * If no devices have pre-been declared for this bus, then be sure to
@@ -1506,7 +1506,7 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 		read_write = I2C_SMBUS_READ;
 		if (data->block[0] > I2C_SMBUS_BLOCK_MAX) {
 			dev_err(&adapter->dev, "%s called with invalid "
-				"block proc call size (%d)\n", __FUNCTION__,
+				"block proc call size (%d)\n", __func__,
 				data->block[0]);
 			return -1;
 		}
