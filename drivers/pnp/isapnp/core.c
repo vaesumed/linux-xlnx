@@ -834,17 +834,18 @@ static unsigned char __init isapnp_checksum(unsigned char *data)
 static void isapnp_parse_card_id(struct pnp_card *card, unsigned short vendor,
 				 unsigned short device)
 {
-	struct pnp_id *id = kzalloc(sizeof(struct pnp_id), GFP_KERNEL);
+	char id[8];
 
-	if (!id)
-		return;
-	sprintf(id->id, "%c%c%c%x%x%x%x",
-		'A' + ((vendor >> 2) & 0x3f) - 1,
-		'A' + (((vendor & 3) << 3) | ((vendor >> 13) & 7)) - 1,
-		'A' + ((vendor >> 8) & 0x1f) - 1,
-		(device >> 4) & 0x0f,
-		device & 0x0f, (device >> 12) & 0x0f, (device >> 8) & 0x0f);
-	pnp_add_card_id(id, card);
+	id[0] = 'A' + ((vendor >> 2) & 0x3f) - 1;
+	id[1] = 'A' + (((vendor & 3) << 3) | ((vendor >> 13) & 7)) - 1;
+	id[2] = 'A' + ((vendor >> 8) & 0x1f) - 1;
+	id[3] = '0' + ((device >> 4) & 0x0f);
+	id[4] = '0' + (device & 0x0f);
+	id[5] = '0' + ((device >> 12) & 0x0f);
+	id[6] = '0' + ((device >> 8) & 0x0f);
+	id[7] = '\0';
+
+	pnp_add_card_id(card, id);
 }
 
 /*
