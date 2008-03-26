@@ -8,6 +8,7 @@
  */
 
 #include <asm/types.h>
+#include <linux/compiler.h>
 #include <linux/ioctl.h>
 #include <asm/kvm.h>
 
@@ -233,6 +234,12 @@ struct kvm_vapic_addr {
 #define KVM_CAP_SET_TSS_ADDR 4
 #define KVM_CAP_VAPIC 6
 #define KVM_CAP_EXT_CPUID 7
+#define KVM_CAP_CLOCKSOURCE 8
+#define KVM_CAP_NR_VCPUS 9       /* returns max vcpus per vm */
+#define KVM_CAP_NR_MEMSLOTS 10   /* returns max memory slots per vm */
+#define KVM_CAP_PIT 11
+#define KVM_CAP_NOP_IO_DELAY 12
+#define KVM_CAP_PV_MMU 13
 
 /*
  * ioctls for VM fds
@@ -255,6 +262,9 @@ struct kvm_vapic_addr {
 #define KVM_IRQ_LINE		  _IOW(KVMIO, 0x61, struct kvm_irq_level)
 #define KVM_GET_IRQCHIP		  _IOWR(KVMIO, 0x62, struct kvm_irqchip)
 #define KVM_SET_IRQCHIP		  _IOR(KVMIO,  0x63, struct kvm_irqchip)
+#define KVM_CREATE_PIT		  _IO(KVMIO,  0x64)
+#define KVM_GET_PIT		  _IOWR(KVMIO, 0x65, struct kvm_pit_state)
+#define KVM_SET_PIT		  _IOR(KVMIO,  0x66, struct kvm_pit_state)
 
 /*
  * ioctls for vcpu fds
