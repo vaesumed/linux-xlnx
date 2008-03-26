@@ -539,7 +539,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 	}
 
 	err = write_head(c, BASEHD, dent, len, &lnum, &dent_offs, sync);
-	if (!sync) {
+	if (!sync && !err) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
 
 		ubifs_wbuf_add_ino_nolock(wbuf, inode->i_ino);
@@ -644,7 +644,9 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 		goto out_free;
 
 	err = write_node(c, DATAHD, data, dlen, &lnum, &offs);
-	ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf, key_ino(c, key));
+	if (!err)
+		ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf,
+					  key_ino(c, key));
 	release_head(c, DATAHD);
 	if (err)
 		goto out_ro;
@@ -701,7 +703,7 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 		goto out_free;
 
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
-	if (!sync)
+	if (!sync && !err)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 					  inode->i_ino);
 	release_head(c, BASEHD);
@@ -840,7 +842,7 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 	}
 
 	err = write_head(c, BASEHD, dent, len, &lnum, &offs, sync);
-	if (!sync) {
+	if (!sync && !err) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
 
 		ubifs_wbuf_add_ino_nolock(wbuf, new_dir->i_ino);
@@ -1016,7 +1018,8 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		goto out_free;
 
 	err = write_head(c, BASEHD, trun, len, &lnum, &offs, 0);
-	ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
+	if (!err)
+		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
 	release_head(c, BASEHD);
 	if (err)
 		goto out_ro;
@@ -1111,7 +1114,7 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	}
 
 	err = write_head(c, BASEHD, xent, len, &lnum, &xent_offs, sync);
-	if (!sync)
+	if (!sync && !err)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, host->i_ino);
 	release_head(c, BASEHD);
 	kfree(xent);
@@ -1192,7 +1195,7 @@ int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 		goto out_free;
 
 	err = write_head(c, BASEHD, ino, aligned_len, &lnum, &offs, 0);
-	if (!sync) {
+	if (!sync && !err) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
 
 		ubifs_wbuf_add_ino_nolock(wbuf, inode1->i_ino);
