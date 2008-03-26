@@ -493,7 +493,7 @@ int pnp_check_dma(struct pnp_dev *dev, int idx)
 
 int pnp_add_irq_resource(struct pnp_dev *dev, int irq, int flags)
 {
-	struct pnp_resource_table *res = &dev->res;
+	struct pnp_resource_table *res = dev->res;
 	int i = 0;
 	static unsigned char warned;
 
@@ -517,7 +517,7 @@ int pnp_add_irq_resource(struct pnp_dev *dev, int irq, int flags)
 
 int pnp_add_dma_resource(struct pnp_dev *dev, int dma, int flags)
 {
-	struct pnp_resource_table *res = &dev->res;
+	struct pnp_resource_table *res = dev->res;
 	int i = 0;
 	static unsigned char warned;
 
@@ -541,7 +541,7 @@ int pnp_add_dma_resource(struct pnp_dev *dev, int dma, int flags)
 
 int pnp_add_io_resource(struct pnp_dev *dev, resource_size_t start, resource_size_t len, int flags)
 {
-	struct pnp_resource_table *res = &dev->res;
+	struct pnp_resource_table *res = dev->res;
 	resource_size_t end = start + len - 1;
 	int i = 0;
 	static unsigned char warned;
@@ -566,7 +566,7 @@ int pnp_add_io_resource(struct pnp_dev *dev, resource_size_t start, resource_siz
 
 int pnp_add_mem_resource(struct pnp_dev *dev, resource_size_t start, resource_size_t len, int flags)
 {
-	struct pnp_resource_table *res = &dev->res;
+	struct pnp_resource_table *res = dev->res;
 	int i = 0;
 	static unsigned char warned;
 
@@ -591,7 +591,7 @@ int pnp_add_mem_resource(struct pnp_dev *dev, resource_size_t start, resource_si
 struct resource *pnp_get_resource(struct pnp_dev *dev,
 				  unsigned int type, unsigned int num)
 {
-	struct pnp_resource_table *res = &dev->res;
+	struct pnp_resource_table *res = dev->res;
 
 	switch (type) {
 	case IORESOURCE_IO:
