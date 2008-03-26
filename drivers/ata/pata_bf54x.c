@@ -1314,17 +1314,6 @@ static void bfin_std_postreset(struct ata_link *link, unsigned int *classes)
 	write_atapi_register(base, ATA_REG_CTRL, ap->ctl);
 }
 
-/**
- *	bfin_error_handler - Stock error handler for DMA controller
- *	@ap: port to handle error for
- */
-
-static void bfin_error_handler(struct ata_port *ap)
-{
-	ata_bmdma_drive_eh(ap, ata_std_prereset, bfin_std_softreset, NULL,
-			   bfin_std_postreset);
-}
-
 static void bfin_port_stop(struct ata_port *ap)
 {
 	dev_dbg(ap->dev, "in atapi port stop\n");
@@ -1357,24 +1346,14 @@ static int bfin_port_start(struct ata_port *ap)
 }
 
 static struct scsi_host_template bfin_sht = {
-	.module			= THIS_MODULE,
-	.name			= DRV_NAME,
-	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,
-	.can_queue		= ATA_DEF_QUEUE,
-	.this_id		= ATA_SHT_THIS_ID,
+	ATA_BASE_SHT(DRV_NAME),
 	.sg_tablesize		= SG_NONE,
-	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,
-	.emulated		= ATA_SHT_EMULATED,
-	.use_clustering		= ATA_SHT_USE_CLUSTERING,
-	.proc_name		= DRV_NAME,
 	.dma_boundary		= ATA_DMA_BOUNDARY,
-	.slave_configure	= ata_scsi_slave_config,
-	.slave_destroy		= ata_scsi_slave_destroy,
-	.bios_param		= ata_std_bios_param,
 };
 
 static const struct ata_port_operations bfin_pata_ops = {
+	.inherits		= &ata_sff_port_ops,
+
 	.set_piomode		= bfin_set_piomode,
 	.set_dmamode		= bfin_set_dmamode,
 
@@ -1392,14 +1371,13 @@ static const struct ata_port_operations bfin_pata_ops = {
 	.data_xfer		= bfin_data_xfer,
 
 	.qc_prep		= ata_noop_qc_prep,
-	.qc_issue		= ata_qc_issue_prot,
 
 	.freeze			= bfin_bmdma_freeze,
 	.thaw			= bfin_bmdma_thaw,
-	.error_handler		= bfin_error_handler,
+	.softreset		= bfin_std_softreset,
+	.postreset		= bfin_std_postreset,
 	.post_internal_cmd	= bfin_bmdma_stop,
 
-	.irq_handler		= ata_interrupt,
 	.irq_clear		= bfin_irq_clear,
 	.irq_on			= bfin_irq_on,
 
@@ -1409,7 +1387,6 @@ static const struct ata_port_operations bfin_pata_ops = {
 
 static struct ata_port_info bfin_port_info[] = {
 	{
-		.sht		= &bfin_sht,
 		.flags		= ATA_FLAG_SLAVE_POSS
 				| ATA_FLAG_MMIO
 				| ATA_FLAG_NO_LEGACY,

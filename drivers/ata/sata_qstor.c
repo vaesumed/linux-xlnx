@@ -121,50 +121,38 @@ static unsigned int qs_qc_issue(struct ata_queued_cmd *qc);
 static int qs_check_atapi_dma(struct ata_queued_cmd *qc);
 static void qs_bmdma_stop(struct ata_queued_cmd *qc);
 static u8 qs_bmdma_status(struct ata_port *ap);
-static void qs_irq_clear(struct ata_port *ap);
 static void qs_freeze(struct ata_port *ap);
 static void qs_thaw(struct ata_port *ap);
+static int qs_prereset(struct ata_link *link, unsigned long deadline);
 static void qs_error_handler(struct ata_port *ap);
 
 static struct scsi_host_template qs_ata_sht = {
-	.module			= THIS_MODULE,
-	.name			= DRV_NAME,
-	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,
-	.can_queue		= ATA_DEF_QUEUE,
-	.this_id		= ATA_SHT_THIS_ID,
+	ATA_BASE_SHT(DRV_NAME),
 	.sg_tablesize		= QS_MAX_PRD,
-	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,
-	.emulated		= ATA_SHT_EMULATED,
-	.use_clustering		= ENABLE_CLUSTERING,
-	.proc_name		= DRV_NAME,
 	.dma_boundary		= QS_DMA_BOUNDARY,
-	.slave_configure	= ata_scsi_slave_config,
-	.slave_destroy		= ata_scsi_slave_destroy,
-	.bios_param		= ata_std_bios_param,
 };
 
-static const struct ata_port_operations qs_ata_ops = {
-	.tf_load		= ata_tf_load,
-	.tf_read		= ata_tf_read,
-	.check_status		= ata_check_status,
+static struct ata_port_operations qs_ata_ops = {
+	.inherits		= &ata_sff_port_ops,
+
 	.check_atapi_dma	= qs_check_atapi_dma,
-	.exec_command		= ata_exec_command,
-	.dev_select		= ata_std_dev_select,
-	.qc_prep		= qs_qc_prep,
-	.qc_issue		= qs_qc_issue,
-	.data_xfer		= ata_data_xfer,
-	.freeze			= qs_freeze,
-	.thaw			= qs_thaw,
-	.error_handler		= qs_error_handler,
-	.irq_clear		= qs_irq_clear,
-	.irq_on			= ata_irq_on,
-	.scr_read		= qs_scr_read,
-	.scr_write		= qs_scr_write,
-	.port_start		= qs_port_start,
-	.host_stop		= qs_host_stop,
 	.bmdma_stop		= qs_bmdma_stop,
 	.bmdma_status		= qs_bmdma_status,
+	.qc_prep		= qs_qc_prep,
+	.qc_issue		= qs_qc_issue,
+
+	.freeze			= qs_freeze,
+	.thaw			= qs_thaw,
+	.prereset		= qs_prereset,
+	.softreset		= ATA_OP_NULL,
+	.error_handler		= qs_error_handler,
+	.post_internal_cmd	= ATA_OP_NULL,
+
+	.scr_read		= qs_scr_read,
+	.scr_write		= qs_scr_write,
+
+	.port_start		= qs_port_start,
+	.host_stop		= qs_host_stop,
 };
 
 static const struct ata_port_info qs_port_info[] = {
@@ -209,11 +197,6 @@ static void qs_bmdma_stop(struct ata_queued_cmd *qc)
 static u8 qs_bmdma_status(struct ata_port *ap)
 {
 	return 0;
-}
-
-static void qs_irq_clear(struct ata_port *ap)
-{
-	/* nothing */
 }
 
 static inline void qs_enter_reg_mode(struct ata_port *ap)
@@ -270,8 +253,7 @@ static int qs_scr_read(struct ata_port *ap, unsigned int sc_reg, u32 *val)
 static void qs_error_handler(struct ata_port *ap)
 {
 	qs_enter_reg_mode(ap);
-	ata_do_eh(ap, qs_prereset, NULL, sata_std_hardreset,
-		  ata_std_postreset);
+	ata_std_error_handler(ap);
 }
 
 static int qs_scr_write(struct ata_port *ap, unsigned int sc_reg, u32 val)
