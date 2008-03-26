@@ -1517,12 +1517,19 @@ int ide_device_add_all(u8 *idx, const struct ide_port_info *d)
 	int i, rc = 0;
 
 	for (i = 0; i < MAX_HWIFS; i++) {
-		if (d == NULL || idx[i] == 0xff) {
+		if (idx[i] == 0xff) {
 			mate = NULL;
 			continue;
 		}
 
 		hwif = &ide_hwifs[idx[i]];
+
+		ide_port_apply_params(hwif);
+
+		if (d == NULL) {
+			mate = NULL;
+			continue;
+		}
 
 		if (d->chipset != ide_etrax100 && (i & 1) && mate) {
 			hwif->mate = mate;
@@ -1620,6 +1627,7 @@ EXPORT_SYMBOL_GPL(ide_device_add);
 
 void ide_port_scan(ide_hwif_t *hwif)
 {
+	ide_port_apply_params(hwif);
 	ide_port_cable_detect(hwif);
 	ide_port_init_devices(hwif);
 
