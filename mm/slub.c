@@ -1368,7 +1368,7 @@ static void deactivate_slab(struct kmem_cache *s, struct kmem_cache_cpu *c)
 	struct page *page = c->page;
 	int tail = 1;
 
-	if (c->freelist)
+	if (page->freelist)
 		stat(c, DEACTIVATE_REMOTE_FREES);
 	/*
 	 * Merge cpu freelist into slab freelist. Typically we get here
@@ -1536,9 +1536,15 @@ new_slab:
 	 * That is only possible if certain conditions are met that are being
 	 * checked when a slab is created.
 	 */
-	if (!(gfpflags & __GFP_NORETRY) && (s->flags & __PAGE_ALLOC_FALLBACK))
-		return kmalloc_large(s->objsize, gfpflags);
-
+	if (!(gfpflags & __GFP_NORETRY) &&
+				(s->flags & __PAGE_ALLOC_FALLBACK)) {
+		if (gfpflags & __GFP_WAIT)
+			local_irq_enable();
+		object = kmalloc_large(s->objsize, gfpflags);
+		if (gfpflags & __GFP_WAIT)
+			local_irq_disable();
+		return object;
+	}
 	return NULL;
 debug:
 	if (!alloc_debug_processing(s, c->page, object, addr))
@@ -1856,12 +1862,15 @@ static unsigned long calculate_alignment(unsigned long flags,
 	 * The hardware cache alignment cannot override the specified
 	 * alignment though. If that is greater then use it.
 	 */
-	if ((flags & SLAB_HWCACHE_ALIGN) &&
-			size > cache_line_size() / 2)
-		return max_t(unsigned long, align, cache_line_size());
+	if (flags & SLAB_HWCACHE_ALIGN) {
+		unsigned long ralign = cache_line_size();
+		while (size <= ralign / 2)
+			ralign /= 2;
+		align = max(align, ralign);
+	}
 
 	if (align < ARCH_SLAB_MINALIGN)
-		return ARCH_SLAB_MINALIGN;
+		align = ARCH_SLAB_MINALIGN;
 
 	return ALIGN(align, sizeof(void *));
 }

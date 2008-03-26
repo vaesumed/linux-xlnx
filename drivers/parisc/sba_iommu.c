@@ -314,8 +314,8 @@ sba_dump_sg( struct ioc *ioc, struct scatterlist *startsg, int nents)
 #define RESMAP_MASK(n)    (~0UL << (BITS_PER_LONG - (n)))
 #define RESMAP_IDX_MASK   (sizeof(unsigned long) - 1)
 
-unsigned long ptr_to_pide(struct ioc *ioc, unsigned long *res_ptr,
-			  unsigned int bitshiftcnt)
+static unsigned long ptr_to_pide(struct ioc *ioc, unsigned long *res_ptr,
+				 unsigned int bitshiftcnt)
 {
 	return (((unsigned long)res_ptr - (unsigned long)ioc->res_map) << 3)
 		+ bitshiftcnt;
@@ -341,8 +341,8 @@ sba_search_bitmap(struct ioc *ioc, struct device *dev,
 	unsigned long shift;
 	int ret;
 
-	boundary_size = ALIGN(dma_get_seg_boundary(dev) + 1, 1 << IOVP_SHIFT);
-	boundary_size >>= IOVP_SHIFT;
+	boundary_size = ALIGN((unsigned long long)dma_get_seg_boundary(dev) + 1,
+			      1ULL << IOVP_SHIFT) >> IOVP_SHIFT;
 
 #if defined(ZX1_SUPPORT)
 	BUG_ON(ioc->ibase & ~IOVP_MASK);

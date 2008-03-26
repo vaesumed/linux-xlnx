@@ -667,7 +667,6 @@ int ide_register_hw(hw_regs_t *hw, void (*quirkproc)(ide_drive_t *),
 
 	do {
 		hwif = ide_deprecated_find_port(hw->io_ports[IDE_DATA_OFFSET]);
-		index = hwif->index;
 		if (hwif)
 			goto found;
 		for (index = 0; index < MAX_HWIFS; index++)
@@ -675,6 +674,7 @@ int ide_register_hw(hw_regs_t *hw, void (*quirkproc)(ide_drive_t *),
 	} while (retry--);
 	return -1;
 found:
+	index = hwif->index;
 	if (hwif->present)
 		ide_unregister(index, 0, 1);
 	else if (!hwif->hold)
@@ -1180,7 +1180,7 @@ static int __initdata is_chipset_set[MAX_HWIFS];
  * ide_setup() gets called VERY EARLY during initialization,
  * to handle kernel "command line" strings beginning with "hdx=" or "ide".
  *
- * Remember to update Documentation/ide.txt if you change something here.
+ * Remember to update Documentation/ide/ide.txt if you change something here.
  */
 static int __init ide_setup(char *s)
 {
@@ -1258,7 +1258,7 @@ static int __init ide_setup(char *s)
 		drive = &hwif->drives[unit];
 		if (strncmp(s + 4, "ide-", 4) == 0) {
 			strlcpy(drive->driver_req, s + 4, sizeof(drive->driver_req));
-			goto done;
+			goto obsolete_option;
 		}
 		switch (match_parm(&s[3], hd_words, vals, 3)) {
 			case -1: /* "none" */
@@ -1290,13 +1290,13 @@ static int __init ide_setup(char *s)
 				goto done;
 			case -12: /* "remap" */
 				drive->remap_0_to_1 = 1;
-				goto done;
+				goto obsolete_option;
 			case -13: /* "remap63" */
 				drive->sect0 = 63;
-				goto done;
+				goto obsolete_option;
 			case -14: /* "scsi" */
 				drive->scsi = 1;
-				goto done;
+				goto obsolete_option;
 			case 3: /* cyl,head,sect */
 				drive->media	= ide_disk;
 				drive->ready_stat = READY_STAT;
@@ -1370,32 +1370,32 @@ static int __init ide_setup(char *s)
 #ifdef CONFIG_BLK_DEV_ALI14XX
 			case -17: /* "ali14xx" */
 				probe_ali14xx = 1;
-				goto done;
+				goto obsolete_option;
 #endif
 #ifdef CONFIG_BLK_DEV_UMC8672
 			case -16: /* "umc8672" */
 				probe_umc8672 = 1;
-				goto done;
+				goto obsolete_option;
 #endif
 #ifdef CONFIG_BLK_DEV_DTC2278
 			case -15: /* "dtc2278" */
 				probe_dtc2278 = 1;
-				goto done;
+				goto obsolete_option;
 #endif
 #ifdef CONFIG_BLK_DEV_CMD640
 			case -14: /* "cmd640_vlb" */
 				cmd640_vlb = 1;
-				goto done;
+				goto obsolete_option;
 #endif
 #ifdef CONFIG_BLK_DEV_HT6560B
 			case -13: /* "ht6560b" */
 				probe_ht6560b = 1;
-				goto done;
+				goto obsolete_option;
 #endif
 #ifdef CONFIG_BLK_DEV_QD65XX
 			case -12: /* "qd65xx" */
 				probe_qd65xx = 1;
-				goto done;
+				goto obsolete_option;
 #endif
 #ifdef CONFIG_BLK_DEV_4DRIVES
 			case -11: /* "four" drives on one set of ports */
