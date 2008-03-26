@@ -73,6 +73,19 @@ module_param_named(debug, ipath_debug, uint, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(debug, "mask for debug prints");
 EXPORT_SYMBOL_GPL(ipath_debug);
 
+unsigned ipath_mtu4096 = 1; /* max 4KB IB mtu by default, if supported */
+module_param_named(mtu4096, ipath_mtu4096, uint, S_IRUGO);
+MODULE_PARM_DESC(mtu4096, "enable MTU of 4096 bytes, if supported");
+
+static unsigned ipath_hol_timeout_ms = 13000;
+module_param_named(hol_timeout_ms, ipath_hol_timeout_ms, uint, S_IRUGO);
+MODULE_PARM_DESC(hol_timeout_ms,
+	"duration of user app suspension after link failure");
+
+unsigned ipath_linkrecovery = 1;
+module_param_named(linkrecovery, ipath_linkrecovery, uint, S_IWUSR | S_IRUGO);
+MODULE_PARM_DESC(linkrecovery, "enable workaround for link recovery issue");
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("QLogic <support@pathscale.com>");
 MODULE_DESCRIPTION("QLogic InfiniPath driver");
@@ -234,12 +247,12 @@ struct ipath_devdata *ipath_lookup(int unit)
 	return dd;
 }
 
-int ipath_count_units(int *npresentp, int *nupp, u32 *maxportsp)
+int ipath_count_units(int *npresentp, int *nupp, int *maxportsp)
 {
 	int nunits, npresent, nup;
 	struct ipath_devdata *dd;
 	unsigned long flags;
-	u32 maxports;
+	int maxports;
 
 	nunits = npresent = nup = maxports = 0;
 
@@ -1666,11 +1679,8 @@ static void ipath_set_ib_lstate(struct ipath_devdata *dd, int which)
 	ipath_cdbg(VERBOSE, "Trying to move unit %u to %s, current ltstate "
 		   "is %s\n", dd->ipath_unit,
 		   what[linkcmd],
-		   ipath_ibcstatus_str[
-			   (ipath_read_kreg64
-			    (dd, dd->ipath_kregs->kr_ibcstatus) >>
-			    INFINIPATH_IBCS_LINKTRAININGSTATE_SHIFT) &
-			   INFINIPATH_IBCS_LINKTRAININGSTATE_MASK]);
+		   ipath_ibcstatus_str[ipath_ib_linktrstate(dd,
+			ipath_read_kreg64(dd, dd->ipath_kregs->kr_ibcstatus))]);
 	/* flush all queued sends when going to DOWN to be sure that
 	 * they don't block MAD packets */
 	if (linkcmd == INFINIPATH_IBCC_LINKCMD_DOWN)
@@ -1800,7 +1810,7 @@ int ipath_set_mtu(struct ipath_devdata *dd, u16 arg)
 	 * piosize).  We check that it's one of the valid IB sizes.
 	 */
 	if (arg != 256 && arg != 512 && arg != 1024 && arg != 2048 &&
-	    arg != 4096) {
+	    (arg != 4096 || !ipath_mtu4096)) {
 		ipath_dbg("Trying to set invalid mtu %u, failing\n", arg);
 		ret = -EINVAL;
 		goto bail;
@@ -1816,6 +1826,8 @@ int ipath_set_mtu(struct ipath_devdata *dd, u16 arg)
 	if (arg >= (piosize - IPATH_PIO_MAXIBHDR)) {
 		/* Only if it's not the initial value (or reset to it) */
 		if (piosize != dd->ipath_init_ibmaxlen) {
+			if (arg > piosize && arg <= dd->ipath_init_ibmaxlen)
+				piosize = dd->ipath_init_ibmaxlen;
 			dd->ipath_ibmaxlen = piosize;
 			changed = 1;
 		}
@@ -1829,24 +1841,17 @@ int ipath_set_mtu(struct ipath_devdata *dd, u16 arg)
 	}
 
 	if (changed) {
+		u64 ibc = dd->ipath_ibcctrl, ibdw;
 		/*
-		 * set the IBC maxpktlength to the size of our pio
-		 * buffers in words
+		 * update our housekeeping variables, and set IBC max
+		 * size, same as init code; max IBC is max we allow in
+		 * buffer, less the qword pbc, plus 1 for ICRC, in dwords
 		 */
-		u64 ibc = dd->ipath_ibcctrl;
+		dd->ipath_ibmaxlen = piosize - 2 * sizeof(u32);
+		ibdw = (dd->ipath_ibmaxlen >> 2) + 1;
 		ibc &= ~(INFINIPATH_IBCC_MAXPKTLEN_MASK <<
-			 INFINIPATH_IBCC_MAXPKTLEN_SHIFT);
-
-		piosize = piosize - 2 * sizeof(u32);    /* ignore pbc */
-		dd->ipath_ibmaxlen = piosize;
-		piosize /= sizeof(u32); /* in words */
-		/*
-		 * for ICRC, which we only send in diag test pkt mode, and
-		 * we don't need to worry about that for mtu
-		 */
-		piosize += 1;
-
-		ibc |= piosize << INFINIPATH_IBCC_MAXPKTLEN_SHIFT;
+			 dd->ibcc_mpl_shift);
+		ibc |= ibdw << dd->ibcc_mpl_shift;
 		dd->ipath_ibcctrl = ibc;
 		ipath_write_kreg(dd, dd->ipath_kregs->kr_ibcctrl,
 				 dd->ipath_ibcctrl);
@@ -1926,9 +1931,8 @@ static void ipath_run_led_override(unsigned long opaque)
 	 */
 	val = ipath_read_kreg64(dd, dd->ipath_kregs->kr_ibcstatus);
 	ltstate = (val >> INFINIPATH_IBCS_LINKTRAININGSTATE_SHIFT) &
-		  INFINIPATH_IBCS_LINKTRAININGSTATE_MASK;
-	lstate = (val >> INFINIPATH_IBCS_LINKSTATE_SHIFT) &
-		 INFINIPATH_IBCS_LINKSTATE_MASK;
+		  dd->ibcs_lts_mask;
+	lstate = (val >> dd->ibcs_ls_shift) & INFINIPATH_IBCS_LINKSTATE_MASK;
 
 	dd->ipath_f_setextled(dd, lstate, ltstate);
 	mod_timer(&dd->ipath_led_override_timer, jiffies + timeoff);
@@ -1989,6 +1993,8 @@ void ipath_shutdown_device(struct ipath_devdata *dd)
 
 	ipath_dbg("Shutting down the device\n");
 
+	ipath_hol_up(dd); /* make sure user processes aren't suspended */
+
 	dd->ipath_flags |= IPATH_LINKUNK;
 	dd->ipath_flags &= ~(IPATH_INITTED | IPATH_LINKDOWN |
 			     IPATH_LINKINIT | IPATH_LINKARMED |
@@ -2038,6 +2044,8 @@ void ipath_shutdown_device(struct ipath_devdata *dd)
 	 */
 	dd->ipath_f_quiet_serdes(dd);
 
+	/* stop all the timers that might still be running */
+	del_timer_sync(&dd->ipath_hol_timer);
 	if (dd->ipath_stats_timer_active) {
 		del_timer_sync(&dd->ipath_stats_timer);
 		dd->ipath_stats_timer_active = 0;
@@ -2251,6 +2259,114 @@ int ipath_reset_device(int unit)
 
 bail:
 	return ret;
+}
+
+/*
+ * send a signal to all the processes that have the driver open
+ * through the normal interfaces (i.e., everything other than diags
+ * interface).  Returns number of signalled processes.
+ */
+int ipath_signal_procs(struct ipath_devdata *dd, int sig)
+{
+	int i, sub, any = 0;
+	pid_t pid;
+
+	if (!dd->ipath_pd)
+		return 0;
+	for (i = 1; i < dd->ipath_cfgports; i++) {
+		if (!dd->ipath_pd[i] || !dd->ipath_pd[i]->port_cnt ||
+		    !dd->ipath_pd[i]->port_pid)
+			continue;
+		pid = dd->ipath_pd[i]->port_pid;
+		dev_info(&dd->pcidev->dev, "context %d in use "
+			  "(PID %u), sending signal %d\n",
+			  i, pid, sig);
+		kill_proc(pid, sig, 1);
+		any++;
+		for (sub = 0; sub < INFINIPATH_MAX_SUBPORT; sub++) {
+			pid = dd->ipath_pd[i]->port_subpid[sub];
+			if (!pid)
+				continue;
+			dev_info(&dd->pcidev->dev, "sub-context "
+				"%d:%d in use (PID %u), sending "
+				"signal %d\n", i, sub, pid, sig);
+			kill_proc(pid, sig, 1);
+			any++;
+		}
+	}
+	return any;
+}
+
+static void ipath_hol_signal_down(struct ipath_devdata *dd)
+{
+	if (ipath_signal_procs(dd, SIGSTOP))
+		ipath_dbg("Stopped some processes\n");
+	ipath_cancel_sends(dd, 1);
+}
+
+
+static void ipath_hol_signal_up(struct ipath_devdata *dd)
+{
+	if (ipath_signal_procs(dd, SIGCONT))
+		ipath_dbg("Continued some processes\n");
+}
+
+/*
+ * link is down, stop any users processes, and flush pending sends
+ * to prevent HoL blocking, then start the HoL timer that
+ * periodically continues, then stop procs, so they can detect
+ * link down if they want, and do something about it.
+ * Timer may already be running, so use __mod_timer, not add_timer.
+ */
+void ipath_hol_down(struct ipath_devdata *dd)
+{
+	dd->ipath_hol_state = IPATH_HOL_DOWN;
+	ipath_hol_signal_down(dd);
+	dd->ipath_hol_next = IPATH_HOL_DOWNCONT;
+	dd->ipath_hol_timer.expires = jiffies +
+		msecs_to_jiffies(ipath_hol_timeout_ms);
+	__mod_timer(&dd->ipath_hol_timer, dd->ipath_hol_timer.expires);
+}
+
+/*
+ * link is up, continue any user processes, and ensure timer
+ * is a nop, if running.  Let timer keep running, if set; it
+ * will nop when it sees the link is up
+ */
+void ipath_hol_up(struct ipath_devdata *dd)
+{
+	ipath_hol_signal_up(dd);
+	dd->ipath_hol_state = IPATH_HOL_UP;
+}
+
+/*
+ * toggle the running/not running state of user proceses
+ * to prevent HoL blocking on chip resources, but still allow
+ * user processes to do link down special case handling.
+ * Should only be called via the timer
+ */
+void ipath_hol_event(unsigned long opaque)
+{
+	struct ipath_devdata *dd = (struct ipath_devdata *)opaque;
+
+	if (dd->ipath_hol_next == IPATH_HOL_DOWNSTOP
+		&& dd->ipath_hol_state != IPATH_HOL_UP) {
+		dd->ipath_hol_next = IPATH_HOL_DOWNCONT;
+		ipath_dbg("Stopping processes\n");
+		ipath_hol_signal_down(dd);
+	} else { /* may do "extra" if also in ipath_hol_up() */
+		dd->ipath_hol_next = IPATH_HOL_DOWNSTOP;
+		ipath_dbg("Continuing processes\n");
+		ipath_hol_signal_up(dd);
+	}
+	if (dd->ipath_hol_state == IPATH_HOL_UP)
+		ipath_dbg("link's up, don't resched timer\n");
+	else {
+		dd->ipath_hol_timer.expires = jiffies +
+			msecs_to_jiffies(ipath_hol_timeout_ms);
+		__mod_timer(&dd->ipath_hol_timer,
+			dd->ipath_hol_timer.expires);
+	}
 }
 
 int ipath_set_rx_pol_inv(struct ipath_devdata *dd, u8 new_pol_inv)

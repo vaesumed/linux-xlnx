@@ -553,6 +553,10 @@ struct ib_uverbs_send_wr {
 			__u32 remote_qkey;
 			__u32 reserved;
 		} ud;
+		struct {
+			__u32 rkey;
+			__u32 reserved;
+		} invalidate;
 	} wr;
 };
 
