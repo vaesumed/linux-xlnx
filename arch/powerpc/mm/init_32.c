@@ -59,8 +59,9 @@ DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 unsigned long total_memory;
 unsigned long total_lowmem;
 
-unsigned long ppc_memstart;
-unsigned long ppc_memoffset = PAGE_OFFSET;
+phys_addr_t memstart_addr;
+EXPORT_SYMBOL(memstart_addr);
+phys_addr_t lowmem_end_addr;
 
 int boot_mapsize;
 #ifdef CONFIG_PPC_PMAC
@@ -145,8 +146,8 @@ void __init MMU_init(void)
 		printk(KERN_WARNING "Only using first contiguous memory region");
 	}
 
-	total_memory = lmb_end_of_DRAM();
-	total_lowmem = total_memory;
+	total_lowmem = total_memory = lmb_end_of_DRAM() - memstart_addr;
+	lowmem_end_addr = memstart_addr + total_lowmem;
 
 #ifdef CONFIG_FSL_BOOKE
 	/* Freescale Book-E parts expect lowmem to be mapped by fixed TLB
@@ -157,9 +158,10 @@ void __init MMU_init(void)
 
 	if (total_lowmem > __max_low_memory) {
 		total_lowmem = __max_low_memory;
+		lowmem_end_addr = memstart_addr + total_lowmem;
 #ifndef CONFIG_HIGHMEM
 		total_memory = total_lowmem;
-		lmb_enforce_memory_limit(total_lowmem);
+		lmb_enforce_memory_limit(lowmem_end_addr);
 		lmb_analyze();
 #endif /* CONFIG_HIGHMEM */
 	}
