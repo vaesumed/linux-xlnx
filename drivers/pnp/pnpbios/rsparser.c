@@ -54,26 +54,6 @@ inline void pcibios_penalize_isa_irq(int irq, int active)
  * Allocated Resources
  */
 
-static void pnpbios_parse_allocated_ioresource(struct pnp_dev *dev,
-					       int io, int len)
-{
-	struct pnp_resource_table *res = &dev->res;
-	int i = 0;
-
-	while (!(res->port_resource[i].flags & IORESOURCE_UNSET)
-	       && i < PNP_MAX_PORT)
-		i++;
-	if (i < PNP_MAX_PORT) {
-		res->port_resource[i].flags = IORESOURCE_IO;	// Also clears _UNSET flag
-		if (len <= 0 || (io + len - 1) >= 0x10003) {
-			res->port_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->port_resource[i].start = (unsigned long)io;
-		res->port_resource[i].end = (unsigned long)(io + len - 1);
-	}
-}
-
 static void pnpbios_parse_allocated_memresource(struct pnp_dev *dev,
 						int mem, int len)
 {
@@ -179,7 +159,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 				goto len_err;
 			io = p[2] + p[3] * 256;
 			size = p[7];
-			pnpbios_parse_allocated_ioresource(dev, io, size);
+			pnp_add_io_resource(dev, io, size, 0);
 			break;
 
 		case SMALL_TAG_VENDOR:
@@ -191,7 +171,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 				goto len_err;
 			io = p[1] + p[2] * 256;
 			size = p[3];
-			pnpbios_parse_allocated_ioresource(dev, io, size);
+			pnp_add_io_resource(dev, io, size, 0);
 			break;
 
 		case SMALL_TAG_END:

@@ -511,6 +511,31 @@ int pnp_add_dma_resource(struct pnp_dev *dev, int dma, int flags)
 	return 0;
 }
 
+int pnp_add_io_resource(struct pnp_dev *dev, resource_size_t start, resource_size_t len, int flags)
+{
+	struct pnp_resource_table *res = &dev->res;
+	resource_size_t end = start + len - 1;
+	int i = 0;
+	static unsigned char warned;
+
+	while (set(res->port_resource[i].flags) && i < PNP_MAX_PORT)
+		i++;
+	if (i >= PNP_MAX_PORT && !warned) {
+		dev_err(&dev->dev, "too many PORTs (max %d)\n", PNP_MAX_PORT);
+		warned = 1;
+		return -ENOSPC;
+	}
+
+	res->port_resource[i].flags = IORESOURCE_IO | flags;
+	if (len <= 0 || end >= 0x10003) {
+		res->port_resource[i].flags |= IORESOURCE_DISABLED;
+		return -EINVAL;
+	}
+	res->port_resource[i].start = start;
+	res->port_resource[i].end = end;
+	return 0;
+}
+
 /* format is: pnp_reserve_irq=irq1[,irq2] .... */
 static int __init pnp_setup_reserve_irq(char *str)
 {

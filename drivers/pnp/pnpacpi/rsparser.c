@@ -153,33 +153,6 @@ static int dma_flags(int type, int bus_master, int transfer)
 	return flags;
 }
 
-static void pnpacpi_parse_allocated_ioresource(struct pnp_dev *dev,
-					       u64 io, u64 len, int io_decode)
-{
-	struct pnp_resource_table *res = &dev->res;
-	int i = 0;
-	static unsigned char warned;
-
-	while (!(res->port_resource[i].flags & IORESOURCE_UNSET) &&
-	       i < PNP_MAX_PORT)
-		i++;
-	if (i < PNP_MAX_PORT) {
-		res->port_resource[i].flags = IORESOURCE_IO;	// Also clears _UNSET flag
-		if (io_decode == ACPI_DECODE_16)
-			res->port_resource[i].flags |= PNP_PORT_FLAG_16BITADDR;
-		if (len <= 0 || (io + len - 1) >= 0x10003) {
-			res->port_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->port_resource[i].start = io;
-		res->port_resource[i].end = io + len - 1;
-	} else if (!warned) {
-		printk(KERN_ERR "pnpacpi: exceeded the max number of IO "
-				"resources: %d \n", PNP_MAX_PORT);
-		warned = 1;
-	}
-}
-
 static void pnpacpi_parse_allocated_memresource(struct pnp_dev *dev,
 						u64 mem, u64 len,
 						int write_protect)
@@ -230,10 +203,8 @@ static void pnpacpi_parse_allocated_address_space(struct pnp_dev *dev,
 			p->minimum, p->address_length,
 			p->info.mem.write_protect);
 	else if (p->resource_type == ACPI_IO_RANGE)
-		pnpacpi_parse_allocated_ioresource(dev,
-			p->minimum, p->address_length,
-			p->granularity == 0xfff ? ACPI_DECODE_10 :
-				ACPI_DECODE_16);
+		pnp_add_io_resource(dev, p->minimum, p->address_length,
+			p->granularity == 0xfff ? 0 : PNP_PORT_FLAG_16BITADDR);
 }
 
 static acpi_status pnpacpi_allocated_resource(struct acpi_resource *res,
@@ -277,10 +248,9 @@ static acpi_status pnpacpi_allocated_resource(struct acpi_resource *res,
 
 	case ACPI_RESOURCE_TYPE_IO:
 		io = &res->data.io;
-		pnpacpi_parse_allocated_ioresource(dev,
-			io->minimum,
-			io->address_length,
-			io->io_decode);
+		pnp_add_io_resource(dev, io->minimum, io->address_length,
+			io->io_decode == ACPI_DECODE_16 ?
+			    PNP_PORT_FLAG_16BITADDR : 0);
 		break;
 
 	case ACPI_RESOURCE_TYPE_START_DEPENDENT:
@@ -289,10 +259,9 @@ static acpi_status pnpacpi_allocated_resource(struct acpi_resource *res,
 
 	case ACPI_RESOURCE_TYPE_FIXED_IO:
 		fixed_io = &res->data.fixed_io;
-		pnpacpi_parse_allocated_ioresource(dev,
+		pnp_add_io_resource(dev,
 			fixed_io->address,
-			fixed_io->address_length,
-			ACPI_DECODE_10);
+			fixed_io->address_length, 0);
 		break;
 
 	case ACPI_RESOURCE_TYPE_VENDOR:
