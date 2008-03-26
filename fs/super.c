@@ -37,7 +37,9 @@
 #include <linux/idr.h>
 #include <linux/kobject.h>
 #include <linux/mutex.h>
+#include <linux/file.h>
 #include <asm/uaccess.h>
+#include "internal.h"
 
 
 LIST_HEAD(super_blocks);
@@ -567,10 +569,29 @@ static void mark_files_ro(struct super_block *sb)
 {
 	struct file *f;
 
+retry:
 	file_list_lock();
 	list_for_each_entry(f, &sb->s_files, f_u.fu_list) {
-		if (S_ISREG(f->f_path.dentry->d_inode->i_mode) && file_count(f))
-			f->f_mode &= ~FMODE_WRITE;
+		struct vfsmount *mnt;
+		if (!S_ISREG(f->f_path.dentry->d_inode->i_mode))
+		       continue;
+		if (!file_count(f))
+			continue;
+		if (!(f->f_mode & FMODE_WRITE))
+			continue;
+		f->f_mode &= ~FMODE_WRITE;
+		if (file_check_writeable(f) != 0)
+			continue;
+		file_release_write(f);
+		mnt = mntget(f->f_path.mnt);
+		file_list_unlock();
+		/*
+		 * This can sleep, so we can't hold
+		 * the file_list_lock() spinlock.
+		 */
+		mnt_drop_write(mnt);
+		mntput(mnt);
+		goto retry;
 	}
 	file_list_unlock();
 }
@@ -945,6 +966,7 @@ do_kern_mount(const char *fstype, int flags, const char *name, void *data)
 	put_filesystem(type);
 	return mnt;
 }
+EXPORT_SYMBOL_GPL(do_kern_mount);
 
 struct vfsmount *kern_mount_data(struct file_system_type *type, void *data)
 {

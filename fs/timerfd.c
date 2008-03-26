@@ -182,8 +182,6 @@ asmlinkage long sys_timerfd_create(int clockid, int flags)
 {
 	int error, ufd;
 	struct timerfd_ctx *ctx;
-	struct file *file;
-	struct inode *inode;
 
 	if (flags)
 		return -EINVAL;
@@ -199,8 +197,7 @@ asmlinkage long sys_timerfd_create(int clockid, int flags)
 	ctx->clockid = clockid;
 	hrtimer_init(&ctx->tmr, clockid, HRTIMER_MODE_ABS);
 
-	error = anon_inode_getfd(&ufd, &inode, &file, "[timerfd]",
-				 &timerfd_fops, ctx);
+	error = anon_inode_getfd(&ufd, "[timerfd]", &timerfd_fops, ctx);
 	if (error) {
 		kfree(ctx);
 		return error;
