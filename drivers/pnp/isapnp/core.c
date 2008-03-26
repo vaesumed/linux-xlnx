@@ -741,9 +741,8 @@ static int __init isapnp_create_device(struct pnp_card *card,
 				isapnp_skip_bytes(size);
 			return 1;
 		default:
-			printk(KERN_ERR
-			       "isapnp: unexpected or unknown tag type 0x%x for logical device %i (device %i), ignored\n",
-			       type, dev->number, card->number);
+			dev_err(&dev->dev, "unknown tag 0x%x (card %i), "
+				"ignored\n", type, card->number);
 		}
 __skip:
 		if (size > 0)
@@ -796,9 +795,8 @@ static void __init isapnp_parse_resource_map(struct pnp_card *card)
 				isapnp_skip_bytes(size);
 			return;
 		default:
-			printk(KERN_ERR
-			       "isapnp: unexpected or unknown tag type 0x%x for device %i, ignored\n",
-			       type, card->number);
+			dev_err(&card->dev, "unknown tag 0x%x, ignored\n",
+			       type);
 		}
 __skip:
 		if (size > 0)
@@ -844,18 +842,19 @@ static int __init isapnp_build_device_list(void)
 		isapnp_wake(csn);
 		isapnp_peek(header, 9);
 		checksum = isapnp_checksum(header);
-#if 0
-		printk(KERN_DEBUG
-		       "vendor: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
-		       header[0], header[1], header[2], header[3], header[4],
-		       header[5], header[6], header[7], header[8]);
-		printk(KERN_DEBUG "checksum = 0x%x\n", checksum);
-#endif
 		isapnp_to_pnpid((header[1] << 8) | header[0],
 				(header[3] << 8) | header[2], id);
 		card = pnp_alloc_card(&isapnp_protocol, csn, id);
 		if (!card)
 			continue;
+
+#if 0
+		dev_info(&card->dev,
+		       "vendor: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
+		       header[0], header[1], header[2], header[3], header[4],
+		       header[5], header[6], header[7], header[8]);
+		dev_info(&card->dev, "checksum = 0x%x\n", checksum);
+#endif
 
 		INIT_LIST_HEAD(&card->devices);
 		card->serial =
@@ -864,9 +863,8 @@ static int __init isapnp_build_device_list(void)
 		isapnp_checksum_value = 0x00;
 		isapnp_parse_resource_map(card);
 		if (isapnp_checksum_value != 0x00)
-			printk(KERN_ERR
-			       "isapnp: checksum for device %i is not valid (0x%x)\n",
-			       csn, isapnp_checksum_value);
+			dev_err(&card->dev, "invalid checksum 0x%x\n",
+				isapnp_checksum_value);
 		card->checksum = isapnp_checksum_value;
 
 		pnp_add_card(card);
@@ -1117,13 +1115,13 @@ static int __init isapnp_init(void)
 	protocol_for_each_card(&isapnp_protocol, card) {
 		cards++;
 		if (isapnp_verbose) {
-			printk(KERN_INFO "isapnp: Card '%s'\n",
-			       card->name[0] ? card->name : "Unknown");
+			dev_info(&card->dev, "card '%s'\n",
+			       card->name[0] ? card->name : "unknown");
 			if (isapnp_verbose < 2)
 				continue;
 			card_for_each_dev(card, dev) {
-				printk(KERN_INFO "isapnp:   Device '%s'\n",
-				       dev->name[0] ? dev->name : "Unknown");
+				dev_info(&card->dev, "device '%s'\n",
+				       dev->name[0] ? dev->name : "unknown");
 			}
 		}
 	}
