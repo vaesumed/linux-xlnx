@@ -54,26 +54,6 @@ inline void pcibios_penalize_isa_irq(int irq, int active)
  * Allocated Resources
  */
 
-static void pnpbios_parse_allocated_memresource(struct pnp_dev *dev,
-						int mem, int len)
-{
-	struct pnp_resource_table *res = &dev->res;
-	int i = 0;
-
-	while (!(res->mem_resource[i].flags & IORESOURCE_UNSET)
-	       && i < PNP_MAX_MEM)
-		i++;
-	if (i < PNP_MAX_MEM) {
-		res->mem_resource[i].flags = IORESOURCE_MEM;	// Also clears _UNSET flag
-		if (len <= 0) {
-			res->mem_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->mem_resource[i].start = (unsigned long)mem;
-		res->mem_resource[i].end = (unsigned long)(mem + len - 1);
-	}
-}
-
 static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 							    unsigned char *p,
 							    unsigned char *end)
@@ -104,7 +84,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 				goto len_err;
 			io = *(short *)&p[4];
 			size = *(short *)&p[10];
-			pnpbios_parse_allocated_memresource(dev, io, size);
+			pnp_add_mem_resource(dev, io, size, 0);
 			break;
 
 		case LARGE_TAG_ANSISTR:
@@ -120,7 +100,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 				goto len_err;
 			io = *(int *)&p[4];
 			size = *(int *)&p[16];
-			pnpbios_parse_allocated_memresource(dev, io, size);
+			pnp_add_mem_resource(dev, io, size, 0);
 			break;
 
 		case LARGE_TAG_FIXEDMEM32:
@@ -128,7 +108,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 				goto len_err;
 			io = *(int *)&p[4];
 			size = *(int *)&p[8];
-			pnpbios_parse_allocated_memresource(dev, io, size);
+			pnp_add_mem_resource(dev, io, size, 0);
 			break;
 
 		case SMALL_TAG_IRQ:

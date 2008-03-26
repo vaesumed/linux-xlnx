@@ -536,6 +536,30 @@ int pnp_add_io_resource(struct pnp_dev *dev, resource_size_t start, resource_siz
 	return 0;
 }
 
+int pnp_add_mem_resource(struct pnp_dev *dev, resource_size_t start, resource_size_t len, int flags)
+{
+	struct pnp_resource_table *res = &dev->res;
+	int i = 0;
+	static unsigned char warned;
+
+	while (set(res->mem_resource[i].flags) && i < PNP_MAX_MEM)
+		i++;
+	if (i >= PNP_MAX_MEM && !warned) {
+		dev_err(&dev->dev, "too many MEMs (max %d)\n", PNP_MAX_MEM);
+		warned = 1;
+		return -ENOSPC;
+	}
+
+	res->mem_resource[i].flags = IORESOURCE_MEM | flags;
+	if (len <= 0) {
+		res->mem_resource[i].flags |= IORESOURCE_DISABLED;
+		return -EINVAL;
+	}
+	res->mem_resource[i].start = start;
+	res->mem_resource[i].end = start + len - 1;
+	return 0;
+}
+
 /* format is: pnp_reserve_irq=irq1[,irq2] .... */
 static int __init pnp_setup_reserve_irq(char *str)
 {

@@ -370,7 +370,6 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 		goto done;
 	}
 	if (!strnicmp(buf, "set", 3)) {
-		int nmem = 0;
 		if (dev->active)
 			goto done;
 		buf += 3;
@@ -401,24 +400,18 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 				buf += 3;
 				while (isspace(*buf))
 					++buf;
-				dev->res.mem_resource[nmem].start =
-				    simple_strtoul(buf, &buf, 0);
+				start = simple_strtoul(buf, &buf, 0);
 				while (isspace(*buf))
 					++buf;
 				if (*buf == '-') {
 					buf += 1;
 					while (isspace(*buf))
 						++buf;
-					dev->res.mem_resource[nmem].end =
-					    simple_strtoul(buf, &buf, 0);
+					end = simple_strtoul(buf, &buf, 0);
 				} else
-					dev->res.mem_resource[nmem].end =
-					    dev->res.mem_resource[nmem].start;
-				dev->res.mem_resource[nmem].flags =
-				    IORESOURCE_MEM;
-				nmem++;
-				if (nmem >= PNP_MAX_MEM)
-					break;
+					end = start;
+				length = end - start + 1;
+				pnp_add_mem_resource(dev, start, length, 0);
 				continue;
 			}
 			if (!strnicmp(buf, "irq", 3)) {

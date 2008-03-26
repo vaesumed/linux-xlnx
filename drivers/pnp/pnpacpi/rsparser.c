@@ -153,35 +153,6 @@ static int dma_flags(int type, int bus_master, int transfer)
 	return flags;
 }
 
-static void pnpacpi_parse_allocated_memresource(struct pnp_dev *dev,
-						u64 mem, u64 len,
-						int write_protect)
-{
-	struct pnp_resource_table *res = &dev->res;
-	int i = 0;
-	static unsigned char warned;
-
-	while (!(res->mem_resource[i].flags & IORESOURCE_UNSET) &&
-	       (i < PNP_MAX_MEM))
-		i++;
-	if (i < PNP_MAX_MEM) {
-		res->mem_resource[i].flags = IORESOURCE_MEM;	// Also clears _UNSET flag
-		if (len <= 0) {
-			res->mem_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		if (write_protect == ACPI_READ_WRITE_MEMORY)
-			res->mem_resource[i].flags |= IORESOURCE_MEM_WRITEABLE;
-
-		res->mem_resource[i].start = mem;
-		res->mem_resource[i].end = mem + len - 1;
-	} else if (!warned) {
-		printk(KERN_ERR "pnpacpi: exceeded the max number of mem "
-				"resources: %d\n", PNP_MAX_MEM);
-		warned = 1;
-	}
-}
-
 static void pnpacpi_parse_allocated_address_space(struct pnp_dev *dev,
 						  struct acpi_resource *res)
 {
@@ -199,9 +170,9 @@ static void pnpacpi_parse_allocated_address_space(struct pnp_dev *dev,
 		return;
 
 	if (p->resource_type == ACPI_MEMORY_RANGE)
-		pnpacpi_parse_allocated_memresource(dev,
-			p->minimum, p->address_length,
-			p->info.mem.write_protect);
+		pnp_add_mem_resource(dev, p->minimum, p->address_length,
+			p->info.mem.write_protect == ACPI_READ_WRITE_MEMORY ?
+			    IORESOURCE_MEM_WRITEABLE : 0);
 	else if (p->resource_type == ACPI_IO_RANGE)
 		pnp_add_io_resource(dev, p->minimum, p->address_length,
 			p->granularity == 0xfff ? 0 : PNP_PORT_FLAG_16BITADDR);
@@ -272,24 +243,27 @@ static acpi_status pnpacpi_allocated_resource(struct acpi_resource *res,
 
 	case ACPI_RESOURCE_TYPE_MEMORY24:
 		memory24 = &res->data.memory24;
-		pnpacpi_parse_allocated_memresource(dev,
+		pnp_add_mem_resource(dev,
 			memory24->minimum,
 			memory24->address_length,
-			memory24->write_protect);
+			memory24->write_protect == ACPI_READ_WRITE_MEMORY ?
+			    IORESOURCE_MEM_WRITEABLE : 0);
 		break;
 	case ACPI_RESOURCE_TYPE_MEMORY32:
 		memory32 = &res->data.memory32;
-		pnpacpi_parse_allocated_memresource(dev,
+		pnp_add_mem_resource(dev,
 			memory32->minimum,
 			memory32->address_length,
-			memory32->write_protect);
+			memory32->write_protect == ACPI_READ_WRITE_MEMORY ?
+			    IORESOURCE_MEM_WRITEABLE : 0);
 		break;
 	case ACPI_RESOURCE_TYPE_FIXED_MEMORY32:
 		fixed_memory32 = &res->data.fixed_memory32;
-		pnpacpi_parse_allocated_memresource(dev,
+		pnp_add_mem_resource(dev,
 			fixed_memory32->address,
 			fixed_memory32->address_length,
-			fixed_memory32->write_protect);
+			fixed_memory32->write_protect == ACPI_READ_WRITE_MEMORY ?
+			    IORESOURCE_MEM_WRITEABLE : 0);
 		break;
 	case ACPI_RESOURCE_TYPE_ADDRESS16:
 	case ACPI_RESOURCE_TYPE_ADDRESS32:
