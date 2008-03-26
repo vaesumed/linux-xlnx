@@ -370,7 +370,7 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 		goto done;
 	}
 	if (!strnicmp(buf, "set", 3)) {
-		int nport = 0, nmem = 0, ndma = 0;
+		int nport = 0, nmem = 0;
 		if (dev->active)
 			goto done;
 		buf += 3;
@@ -439,14 +439,8 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 				buf += 3;
 				while (isspace(*buf))
 					++buf;
-				dev->res.dma_resource[ndma].start =
-				    dev->res.dma_resource[ndma].end =
-				    simple_strtoul(buf, &buf, 0);
-				dev->res.dma_resource[ndma].flags =
-				    IORESOURCE_DMA;
-				ndma++;
-				if (ndma >= PNP_MAX_DMA)
-					break;
+				start = simple_strtoul(buf, &buf, 0);
+				pnp_add_dma_resource(dev, start, 0);
 				continue;
 			}
 			break;

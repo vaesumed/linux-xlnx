@@ -968,9 +968,7 @@ static int isapnp_read_resources(struct pnp_dev *dev)
 			ret = isapnp_read_byte(ISAPNP_CFG_DMA + tmp);
 			if (ret == 4)
 				continue;
-			res->dma_resource[tmp].start =
-			    res->dma_resource[tmp].end = ret;
-			res->dma_resource[tmp].flags = IORESOURCE_DMA;
+			pnp_add_dma_resource(dev, ret, 0);
 		}
 	}
 	return 0;
