@@ -121,7 +121,6 @@ void ide_init_port_data(ide_hwif_t *hwif, unsigned int index)
 
 	ide_port_init_devices_data(hwif);
 }
-EXPORT_SYMBOL_GPL(ide_init_port_data);
 
 static void ide_port_init_devices_data(ide_hwif_t *hwif)
 {
@@ -148,18 +147,6 @@ static void ide_port_init_devices_data(ide_hwif_t *hwif)
 
 		INIT_LIST_HEAD(&drive->list);
 		init_completion(&drive->gendev_rel_comp);
-	}
-}
-
-static void __init init_ide_data (void)
-{
-	unsigned int index;
-
-	/* Initialise all interface structures */
-	for (index = 0; index < MAX_HWIFS; ++index) {
-		ide_hwif_t *hwif = &ide_hwifs[index];
-
-		ide_init_port_data(hwif, index);
 	}
 }
 
@@ -1023,8 +1010,6 @@ static int __init ide_init(void)
 		goto out_port_class;
 	}
 	ide_port_class->dev_release = ide_port_class_release;
-
-	init_ide_data();
 
 	proc_ide_create();
 

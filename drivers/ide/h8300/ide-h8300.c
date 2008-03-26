@@ -105,7 +105,6 @@ static int __init h8300_ide_init(void)
 	}
 
 	index = hwif->index;
-	ide_init_port_data(hwif, index);
 	ide_init_port_hw(hwif, &hw);
 	hwif_setup(hwif);
 	printk(KERN_INFO "ide%d: H8/300 generic IDE interface\n", index);
