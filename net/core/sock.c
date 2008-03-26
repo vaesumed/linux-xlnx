@@ -981,11 +981,30 @@ void sk_free(struct sock *sk)
 
 	if (atomic_read(&sk->sk_omem_alloc))
 		printk(KERN_DEBUG "%s: optmem leakage (%d bytes) detected.\n",
-		       __FUNCTION__, atomic_read(&sk->sk_omem_alloc));
+		       __func__, atomic_read(&sk->sk_omem_alloc));
 
 	put_net(sk->sk_net);
 	sk_prot_free(sk->sk_prot_creator, sk);
 }
+
+/*
+ * Last sock_put should drop referrence to sk->sk_net. It has already
+ * been dropped in sk_change_net. Taking referrence to stopping namespace
+ * is not an option.
+ * Take referrence to a socket to remove it from hash _alive_ and after that
+ * destroy it in the context of init_net.
+ */
+void sk_release_kernel(struct sock *sk)
+{
+	if (sk == NULL || sk->sk_socket == NULL)
+		return;
+
+	sock_hold(sk);
+	sock_release(sk->sk_socket);
+	sk->sk_net = get_net(&init_net);
+	sock_put(sk);
+}
+EXPORT_SYMBOL(sk_release_kernel);
 
 struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
 {
@@ -1076,10 +1095,12 @@ void sk_setup_caps(struct sock *sk, struct dst_entry *dst)
 	if (sk->sk_route_caps & NETIF_F_GSO)
 		sk->sk_route_caps |= NETIF_F_GSO_SOFTWARE;
 	if (sk_can_gso(sk)) {
-		if (dst->header_len)
+		if (dst->header_len) {
 			sk->sk_route_caps &= ~NETIF_F_GSO_MASK;
-		else
+		} else {
 			sk->sk_route_caps |= NETIF_F_SG | NETIF_F_HW_CSUM;
+			sk->sk_gso_max_size = dst->dev->gso_max_size;
+		}
 	}
 }
 EXPORT_SYMBOL_GPL(sk_setup_caps);

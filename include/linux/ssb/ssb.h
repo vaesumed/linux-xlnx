@@ -72,8 +72,10 @@ struct ssb_device;
 /* Lowlevel read/write operations on the device MMIO.
  * Internal, don't use that outside of ssb. */
 struct ssb_bus_ops {
+	u8 (*read8)(struct ssb_device *dev, u16 offset);
 	u16 (*read16)(struct ssb_device *dev, u16 offset);
 	u32 (*read32)(struct ssb_device *dev, u16 offset);
+	void (*write8)(struct ssb_device *dev, u16 offset, u8 value);
 	void (*write16)(struct ssb_device *dev, u16 offset, u16 value);
 	void (*write32)(struct ssb_device *dev, u16 offset, u32 value);
 };
@@ -243,9 +245,9 @@ struct ssb_bus {
 	/* Pointer to the PCMCIA device (only if bustype == SSB_BUSTYPE_PCMCIA). */
 	struct pcmcia_device *host_pcmcia;
 
-#ifdef CONFIG_SSB_PCIHOST
+#ifdef CONFIG_SSB_SPROM
 	/* Mutex to protect the SPROM writing. */
-	struct mutex pci_sprom_mutex;
+	struct mutex sprom_mutex;
 #endif
 
 	/* ID information about the Chip. */
@@ -344,6 +346,10 @@ void ssb_device_disable(struct ssb_device *dev, u32 core_specific_flags);
 
 
 /* Device MMIO register read/write functions. */
+static inline u8 ssb_read8(struct ssb_device *dev, u16 offset)
+{
+	return dev->ops->read8(dev, offset);
+}
 static inline u16 ssb_read16(struct ssb_device *dev, u16 offset)
 {
 	return dev->ops->read16(dev, offset);
@@ -351,6 +357,10 @@ static inline u16 ssb_read16(struct ssb_device *dev, u16 offset)
 static inline u32 ssb_read32(struct ssb_device *dev, u16 offset)
 {
 	return dev->ops->read32(dev, offset);
+}
+static inline void ssb_write8(struct ssb_device *dev, u16 offset, u8 value)
+{
+	dev->ops->write8(dev, offset, value);
 }
 static inline void ssb_write16(struct ssb_device *dev, u16 offset, u16 value)
 {
@@ -412,5 +422,12 @@ extern int ssb_bus_powerup(struct ssb_bus *bus, bool dynamic_pctl);
 extern u32 ssb_admatch_base(u32 adm);
 extern u32 ssb_admatch_size(u32 adm);
 
+/* PCI device mapping and fixup routines.
+ * Called from the architecture pcibios init code.
+ * These are only available on SSB_EMBEDDED configurations. */
+#ifdef CONFIG_SSB_EMBEDDED
+int ssb_pcibios_plat_dev_init(struct pci_dev *dev);
+int ssb_pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin);
+#endif /* CONFIG_SSB_EMBEDDED */
 
 #endif /* LINUX_SSB_H_ */

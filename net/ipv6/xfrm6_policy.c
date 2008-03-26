@@ -38,7 +38,7 @@ static struct dst_entry *xfrm6_dst_lookup(int tos, xfrm_address_t *saddr,
 	if (saddr)
 		memcpy(&fl.fl6_src, saddr, sizeof(fl.fl6_src));
 
-	dst = ip6_route_output(NULL, &fl);
+	dst = ip6_route_output(&init_net, NULL, &fl);
 
 	err = dst->error;
 	if (dst->error) {
@@ -57,8 +57,9 @@ static int xfrm6_get_saddr(xfrm_address_t *saddr, xfrm_address_t *daddr)
 	if (IS_ERR(dst))
 		return -EHOSTUNREACH;
 
-	ipv6_get_saddr(dst, (struct in6_addr *)&daddr->a6,
-		       (struct in6_addr *)&saddr->a6);
+	ipv6_dev_get_saddr(ip6_dst_idev(dst)->dev,
+			   (struct in6_addr *)&daddr->a6, 0,
+			   (struct in6_addr *)&saddr->a6);
 	dst_release(dst);
 	return 0;
 }

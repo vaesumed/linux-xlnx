@@ -885,6 +885,13 @@ retry:
 	if (netlink_is_kernel(sk))
 		return netlink_unicast_kernel(sk, skb);
 
+	if (sk_filter(sk, skb)) {
+		int err = skb->len;
+		kfree_skb(skb);
+		sock_put(sk);
+		return err;
+	}
+
 	err = netlink_attachskb(sk, skb, nonblock, &timeo, ssk);
 	if (err == 1)
 		goto retry;
@@ -979,6 +986,9 @@ static inline int do_one_broadcast(struct sock *sk,
 		netlink_overrun(sk);
 		/* Clone failed. Notify ALL listeners. */
 		p->failure = 1;
+	} else if (sk_filter(sk, p->skb2)) {
+		kfree_skb(p->skb2);
+		p->skb2 = NULL;
 	} else if ((val = netlink_broadcast_deliver(sk, p->skb2)) < 0) {
 		netlink_overrun(sk);
 	} else {
@@ -1343,22 +1353,6 @@ static void netlink_data_ready(struct sock *sk, int len)
  *	queueing.
  */
 
-static void __netlink_release(struct sock *sk)
-{
-	/*
-	 * Last sock_put should drop referrence to sk->sk_net. It has already
-	 * been dropped in netlink_kernel_create. Taking referrence to stopping
-	 * namespace is not an option.
-	 * Take referrence to a socket to remove it from netlink lookup table
-	 * _alive_ and after that destroy it in the context of init_net.
-	 */
-
-	sock_hold(sk);
-	sock_release(sk->sk_socket);
-	sk->sk_net = get_net(&init_net);
-	sock_put(sk);
-}
-
 struct sock *
 netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 		      void (*input)(struct sk_buff *skb),
@@ -1387,8 +1381,7 @@ netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 		goto out_sock_release_nosk;
 
 	sk = sock->sk;
-	put_net(sk->sk_net);
-	sk->sk_net = net;
+	sk_change_net(sk, net);
 
 	if (groups < 32)
 		groups = 32;
@@ -1423,7 +1416,7 @@ netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 
 out_sock_release:
 	kfree(listeners);
-	__netlink_release(sk);
+	netlink_kernel_release(sk);
 	return NULL;
 
 out_sock_release_nosk:
@@ -1436,10 +1429,7 @@ EXPORT_SYMBOL(netlink_kernel_create);
 void
 netlink_kernel_release(struct sock *sk)
 {
-	if (sk == NULL || sk->sk_socket == NULL)
-		return;
-
-	__netlink_release(sk);
+	sk_release_kernel(sk);
 }
 EXPORT_SYMBOL(netlink_kernel_release);
 
@@ -1552,8 +1542,13 @@ static int netlink_dump(struct sock *sk)
 
 	if (len > 0) {
 		mutex_unlock(nlk->cb_mutex);
-		skb_queue_tail(&sk->sk_receive_queue, skb);
-		sk->sk_data_ready(sk, len);
+
+		if (sk_filter(sk, skb))
+			kfree_skb(skb);
+		else {
+			skb_queue_tail(&sk->sk_receive_queue, skb);
+			sk->sk_data_ready(sk, skb->len);
+		}
 		return 0;
 	}
 
@@ -1563,8 +1558,12 @@ static int netlink_dump(struct sock *sk)
 
 	memcpy(nlmsg_data(nlh), &len, sizeof(len));
 
-	skb_queue_tail(&sk->sk_receive_queue, skb);
-	sk->sk_data_ready(sk, skb->len);
+	if (sk_filter(sk, skb))
+		kfree_skb(skb);
+	else {
+		skb_queue_tail(&sk->sk_receive_queue, skb);
+		sk->sk_data_ready(sk, skb->len);
+	}
 
 	if (cb->done)
 		cb->done(cb);
