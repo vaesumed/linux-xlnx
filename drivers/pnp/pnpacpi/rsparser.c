@@ -406,8 +406,7 @@ acpi_status pnpacpi_parse_allocated_resource(struct pnp_dev *dev)
 {
 	acpi_handle handle = dev->data;
 
-	/* Blank the resource table values */
-	pnp_init_resource_table(&dev->res);
+	pnp_init_resources(dev);
 
 	return acpi_walk_resources(handle, METHOD_NAME__CRS,
 				   pnpacpi_allocated_resource, dev);
