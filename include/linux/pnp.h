@@ -28,12 +28,24 @@ struct pnp_dev;
 struct resource *pnp_get_resource(struct pnp_dev *, unsigned int, unsigned int);
 
 /* Use these instead of directly reading pnp_dev to get resource information */
-#define pnp_port_start(dev,bar)   ((dev)->res.port_resource[(bar)].start)
-#define pnp_port_end(dev,bar)     ((dev)->res.port_resource[(bar)].end)
-#define pnp_port_flags(dev,bar)   ((dev)->res.port_resource[(bar)].flags)
-#define pnp_port_valid(dev,bar) \
-	((pnp_port_flags((dev),(bar)) & (IORESOURCE_IO | IORESOURCE_UNSET)) \
-		== IORESOURCE_IO)
+
+#define pnp_port_start(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_IO, bar)->start
+#define pnp_port_end(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_IO, bar)->end
+#define pnp_port_flags(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_IO, bar)->flags
+
+static inline resource_size_t pnp_port_valid(struct pnp_dev *dev,
+					     unsigned int bar)
+{
+	struct resource *res = pnp_get_resource(dev, IORESOURCE_IO, bar);
+
+	if (res && !(res->flags & IORESOURCE_UNSET))
+		return 1;
+	return 0;
+}
+
 #define pnp_port_len(dev,bar) \
 	((pnp_port_start((dev),(bar)) == 0 &&	\
 	  pnp_port_end((dev),(bar)) ==		\
@@ -42,12 +54,23 @@ struct resource *pnp_get_resource(struct pnp_dev *, unsigned int, unsigned int);
 	 (pnp_port_end((dev),(bar)) -		\
 	  pnp_port_start((dev),(bar)) + 1))
 
-#define pnp_mem_start(dev,bar)   ((dev)->res.mem_resource[(bar)].start)
-#define pnp_mem_end(dev,bar)     ((dev)->res.mem_resource[(bar)].end)
-#define pnp_mem_flags(dev,bar)   ((dev)->res.mem_resource[(bar)].flags)
-#define pnp_mem_valid(dev,bar) \
-	((pnp_mem_flags((dev),(bar)) & (IORESOURCE_MEM | IORESOURCE_UNSET)) \
-		== IORESOURCE_MEM)
+#define pnp_mem_start(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_MEM, bar)->start
+#define pnp_mem_end(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_MEM, bar)->end
+#define pnp_mem_flags(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_MEM, bar)->flags
+
+static inline resource_size_t pnp_mem_valid(struct pnp_dev *dev,
+					    unsigned int bar)
+{
+	struct resource *res = pnp_get_resource(dev, IORESOURCE_MEM, bar);
+
+	if (res && !(res->flags & IORESOURCE_UNSET))
+		return 1;
+	return 0;
+}
+
 #define pnp_mem_len(dev,bar) \
 	((pnp_mem_start((dev),(bar)) == 0 &&	\
 	  pnp_mem_end((dev),(bar)) ==		\
@@ -56,17 +79,35 @@ struct resource *pnp_get_resource(struct pnp_dev *, unsigned int, unsigned int);
 	 (pnp_mem_end((dev),(bar)) -		\
 	  pnp_mem_start((dev),(bar)) + 1))
 
-#define pnp_irq(dev,bar)	 ((dev)->res.irq_resource[(bar)].start)
-#define pnp_irq_flags(dev,bar)	 ((dev)->res.irq_resource[(bar)].flags)
-#define pnp_irq_valid(dev,bar) \
-	((pnp_irq_flags((dev),(bar)) & (IORESOURCE_IRQ | IORESOURCE_UNSET)) \
-		== IORESOURCE_IRQ)
+#define pnp_irq(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_IRQ, bar)->start
+#define pnp_irq_flags(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_IRQ, bar)->flags
 
-#define pnp_dma(dev,bar)	 ((dev)->res.dma_resource[(bar)].start)
-#define pnp_dma_flags(dev,bar)	 ((dev)->res.dma_resource[(bar)].flags)
-#define pnp_dma_valid(dev,bar) \
-	((pnp_dma_flags((dev),(bar)) & (IORESOURCE_DMA | IORESOURCE_UNSET)) \
-		== IORESOURCE_DMA)
+static inline resource_size_t pnp_irq_valid(struct pnp_dev *dev,
+					    unsigned int bar)
+{
+	struct resource *res = pnp_get_resource(dev, IORESOURCE_IRQ, bar);
+
+	if (res && !(res->flags & IORESOURCE_UNSET))
+		return 1;
+	return 0;
+}
+
+#define pnp_dma(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_DMA, bar)->start
+#define pnp_dma_flags(dev,bar)	\
+	pnp_get_resource(dev, IORESOURCE_DMA, bar)->flags
+
+static inline resource_size_t pnp_dma_valid(struct pnp_dev *dev,
+					    unsigned int bar)
+{
+	struct resource *res = pnp_get_resource(dev, IORESOURCE_DMA, bar);
+
+	if (res && !(res->flags & IORESOURCE_UNSET))
+		return 1;
+	return 0;
+}
 
 #define PNP_PORT_FLAG_16BITADDR	(1<<0)
 #define PNP_PORT_FLAG_FIXED	(1<<1)
