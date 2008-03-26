@@ -318,7 +318,6 @@ static int __init insert_device(struct pnp_bios_node *node)
 {
 	struct list_head *pos;
 	struct pnp_dev *dev;
-	struct pnp_id *dev_id;
 	char id[8];
 
 	/* check if the device is already added */
@@ -328,18 +327,12 @@ static int __init insert_device(struct pnp_bios_node *node)
 			return -1;
 	}
 
-	dev = kzalloc(sizeof(struct pnp_dev), GFP_KERNEL);
-	if (!dev)
-		return -1;
-
 	pnpid32_to_pnpid(node->eisa_id, id);
-	dev_id = pnp_add_id(dev, id);
-	if (!dev_id) {
-		kfree(dev);
-		return -1;
-	}
 
-	dev->number = node->handle;
+	dev = pnp_alloc_dev(&pnpbios_protocol, node->handle, id);
+	if (!dev)
+		return -ENOMEM;
+
 	pnpbios_parse_data_stream(dev, node);
 	dev->active = pnp_is_active(dev);
 	dev->flags = node->flags;
@@ -352,7 +345,6 @@ static int __init insert_device(struct pnp_bios_node *node)
 		dev->capabilities |= PNP_WRITE;
 	if (dev->flags & PNPBIOS_REMOVABLE)
 		dev->capabilities |= PNP_REMOVABLE;
-	dev->protocol = &pnpbios_protocol;
 
 	/* clear out the damaged flags */
 	if (!dev->active)

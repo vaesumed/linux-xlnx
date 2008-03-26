@@ -109,6 +109,31 @@ static void pnp_release_device(struct device *dmdev)
 	kfree(dev);
 }
 
+struct pnp_dev *pnp_alloc_dev(struct pnp_protocol *protocol, int id, char *pnpid)
+{
+	struct pnp_dev *dev;
+	struct pnp_id *dev_id;
+
+	dev = kzalloc(sizeof(struct pnp_dev), GFP_KERNEL);
+	if (!dev)
+		return NULL;
+
+	dev->protocol = protocol;
+	dev->number = id;
+
+	dev->dev.parent = &dev->protocol->dev;
+	sprintf(dev->dev.bus_id, "%02x:%02x", dev->protocol->number,
+		dev->number);
+
+	dev_id = pnp_add_id(dev, pnpid);
+	if (!dev_id) {
+		kfree(dev);
+		return NULL;
+	}
+
+	return dev;
+}
+
 int __pnp_add_device(struct pnp_dev *dev)
 {
 	int ret;
@@ -145,9 +170,6 @@ int pnp_add_device(struct pnp_dev *dev)
 	if (dev->card)
 		return -EINVAL;
 
-	dev->dev.parent = &dev->protocol->dev;
-	sprintf(dev->dev.bus_id, "%02x:%02x", dev->protocol->number,
-		dev->number);
 	ret = __pnp_add_device(dev);
 	if (ret)
 		return ret;

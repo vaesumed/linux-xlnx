@@ -424,17 +424,16 @@ static struct pnp_dev *__init isapnp_parse_device(struct pnp_card *card,
 	struct pnp_dev *dev;
 
 	isapnp_peek(tmp, size);
-	dev = kzalloc(sizeof(struct pnp_dev), GFP_KERNEL);
+	isapnp_to_pnpid((tmp[1] << 8) | tmp[0], (tmp[3] << 8) | tmp[2], id);
+
+	dev = pnp_alloc_dev(&isapnp_protocol, number, id);
 	if (!dev)
 		return NULL;
-	dev->number = number;
-	isapnp_to_pnpid((tmp[1] << 8) | tmp[0], (tmp[3] << 8) | tmp[2], id);
-	pnp_add_id(dev, id);
+
 	dev->regs = tmp[4];
 	dev->card = card;
 	if (size > 5)
 		dev->regs |= tmp[5] << 8;
-	dev->protocol = &isapnp_protocol;
 	dev->capabilities |= PNP_CONFIGURABLE;
 	dev->capabilities |= PNP_READ;
 	dev->capabilities |= PNP_WRITE;
