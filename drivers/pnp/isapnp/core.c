@@ -400,11 +400,9 @@ static void __init isapnp_skip_bytes(int count)
 /*
  *  Parse EISA id.
  */
-static void isapnp_parse_id(struct pnp_dev *dev, unsigned short vendor,
-			    unsigned short device)
+static void isapnp_to_pnpid(unsigned short vendor, unsigned short device,
+			    char *id)
 {
-	char id[8];
-
 	id[0] = 'A' + ((vendor >> 2) & 0x3f) - 1;
 	id[1] = 'A' + (((vendor & 3) << 3) | ((vendor >> 13) & 7)) - 1;
 	id[2] = 'A' + ((vendor >> 8) & 0x1f) - 1;
@@ -413,8 +411,6 @@ static void isapnp_parse_id(struct pnp_dev *dev, unsigned short vendor,
 	id[5] = '0' + ((device >> 12) & 0x0f);
 	id[6] = '0' + ((device >> 8) & 0x0f);
 	id[7] = '\0';
-
-	pnp_add_id(dev, id);
 }
 
 /*
@@ -424,6 +420,7 @@ static struct pnp_dev *__init isapnp_parse_device(struct pnp_card *card,
 						  int size, int number)
 {
 	unsigned char tmp[6];
+	char id[8];
 	struct pnp_dev *dev;
 
 	isapnp_peek(tmp, size);
@@ -431,7 +428,8 @@ static struct pnp_dev *__init isapnp_parse_device(struct pnp_card *card,
 	if (!dev)
 		return NULL;
 	dev->number = number;
-	isapnp_parse_id(dev, (tmp[1] << 8) | tmp[0], (tmp[3] << 8) | tmp[2]);
+	isapnp_to_pnpid((tmp[1] << 8) | tmp[0], (tmp[3] << 8) | tmp[2], id);
+	pnp_add_id(dev, id);
 	dev->regs = tmp[4];
 	dev->card = card;
 	if (size > 5)
@@ -621,6 +619,7 @@ static int __init isapnp_create_device(struct pnp_card *card,
 	unsigned char type, tmp[17];
 	struct pnp_option *option;
 	struct pnp_dev *dev;
+	char id[8];
 
 	if ((dev = isapnp_parse_device(card, size, number++)) == NULL)
 		return 1;
@@ -660,8 +659,9 @@ static int __init isapnp_create_device(struct pnp_card *card,
 		case _STAG_COMPATDEVID:
 			if (size == 4 && compat < DEVICE_COUNT_COMPATIBLE) {
 				isapnp_peek(tmp, 4);
-				isapnp_parse_id(dev, (tmp[1] << 8) | tmp[0],
-						(tmp[3] << 8) | tmp[2]);
+				isapnp_to_pnpid((tmp[1] << 8) | tmp[0],
+						(tmp[3] << 8) | tmp[2], id);
+				pnp_add_id(dev, id);
 				compat++;
 				size = 0;
 			}
