@@ -164,8 +164,8 @@ static struct tda829x_config tda829x_no_probe = {
 };
 
 static struct tda18271_std_map hauppauge_tda18271_std_map = {
-	.atsc_6   = { .if_freq = 5380, .std_bits = 0x1b },
-	.qam_6    = { .if_freq = 4000, .std_bits = 0x18 },
+	.atsc_6   = { .if_freq = 5380, .agc_mode = 3, .std = 3 },
+	.qam_6    = { .if_freq = 4000, .agc_mode = 3, .std = 0 },
 };
 
 static struct tda18271_config hauppauge_tda18271_config = {
@@ -297,7 +297,6 @@ static int dvb_register(struct cx23885_tsport *port)
 			struct xc2028_config cfg = {
 				.i2c_adap  = &i2c_bus->i2c_adap,
 				.i2c_addr  = 0x61,
-				.video_dev = port,
 				.callback  = cx23885_hvr1500_xc3028_callback,
 			};
 			static struct xc2028_ctrl ctl = {
@@ -349,7 +348,7 @@ int cx23885_dvb_register(struct cx23885_tsport *port)
 
 	/* dvb stuff */
 	printk("%s: cx23885 based dvb card\n", dev->name);
-	videobuf_queue_pci_init(&port->dvb.dvbq, &dvb_qops, dev->pci, &port->slock,
+	videobuf_queue_sg_init(&port->dvb.dvbq, &dvb_qops, &dev->pci->dev, &port->slock,
 			    V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_FIELD_TOP,
 			    sizeof(struct cx23885_buffer), port);
 	err = dvb_register(port);

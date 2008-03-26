@@ -31,30 +31,14 @@ static int tda18271_cal_on_startup;
 module_param_named(cal, tda18271_cal_on_startup, int, 0644);
 MODULE_PARM_DESC(cal, "perform RF tracking filter calibration on startup");
 
-static LIST_HEAD(tda18271_list);
 static DEFINE_MUTEX(tda18271_list_mutex);
+static LIST_HEAD(hybrid_tuner_instance_list);
 
 /*---------------------------------------------------------------------*/
 
-static int tda18271_ir_cal_init(struct dvb_frontend *fe)
-{
-	struct tda18271_priv *priv = fe->tuner_priv;
-	unsigned char *regs = priv->tda18271_regs;
-
-	tda18271_read_regs(fe);
-
-	/* test IR_CAL_OK to see if we need init */
-	if ((regs[R_EP1] & 0x08) == 0)
-		tda18271_init_regs(fe);
-
-	return 0;
-}
-
-/* ------------------------------------------------------------------ */
-
 static int tda18271_channel_configuration(struct dvb_frontend *fe,
-					  u32 ifc, u32 freq, u32 bw, u8 std,
-					  int radio)
+					  struct tda18271_std_map_item *map,
+					  u32 freq, u32 bw)
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
 	unsigned char *regs = priv->tda18271_regs;
@@ -64,7 +48,7 @@ static int tda18271_channel_configuration(struct dvb_frontend *fe,
 
 	/* set standard */
 	regs[R_EP3]  &= ~0x1f; /* clear std bits */
-	regs[R_EP3]  |= std;
+	regs[R_EP3]  |= (map->agc_mode << 3) | map->std;
 
 	/* set cal mode to normal */
 	regs[R_EP4]  &= ~0x03;
@@ -82,10 +66,9 @@ static int tda18271_channel_configuration(struct dvb_frontend *fe,
 		break;
 	}
 
-	if (radio)
-		regs[R_EP4]  |=  0x80;
-	else
-		regs[R_EP4]  &= ~0x80;
+	/* update FM_RFn */
+	regs[R_EP4]  &= ~0x80;
+	regs[R_EP4]  |= map->fm_rfn << 7;
 
 	/* update RF_TOP / IF_TOP */
 	switch (priv->mode) {
@@ -130,7 +113,7 @@ static int tda18271_channel_configuration(struct dvb_frontend *fe,
 
 	/* --------------------------------------------------------------- */
 
-	N = freq + ifc;
+	N = map->if_freq * 1000 + freq;
 
 	/* FIXME: assumes master */
 	tda18271_calc_main_pll(fe, N);
@@ -195,8 +178,10 @@ static int tda18271_read_thermometer(struct dvb_frontend *fe)
 	return tm;
 }
 
-static int tda18271_rf_tracking_filters_correction(struct dvb_frontend *fe,
-						   u32 freq)
+/* ------------------------------------------------------------------ */
+
+static int tda18271c2_rf_tracking_filters_correction(struct dvb_frontend *fe,
+						     u32 freq)
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
 	struct tda18271_rf_tracking_filter_cal *map = priv->rf_cal_state;
@@ -587,7 +572,7 @@ static int tda18271_calc_rf_filter_curve(struct dvb_frontend *fe)
 
 /* ------------------------------------------------------------------ */
 
-static int tda18271_rf_cal_init(struct dvb_frontend *fe)
+static int tda18271c2_rf_cal_init(struct dvb_frontend *fe)
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
 	unsigned char *regs = priv->tda18271_regs;
@@ -610,62 +595,12 @@ static int tda18271_rf_cal_init(struct dvb_frontend *fe)
 	return 0;
 }
 
-static int tda18271_init(struct dvb_frontend *fe)
-{
-	struct tda18271_priv *priv = fe->tuner_priv;
-
-	mutex_lock(&priv->lock);
-
-	/* power up */
-	tda18271_set_standby_mode(fe, 0, 0, 0);
-
-	/* initialization */
-	tda18271_ir_cal_init(fe);
-
-	if (priv->id == TDA18271HDC2)
-		tda18271_rf_cal_init(fe);
-
-	mutex_unlock(&priv->lock);
-
-	return 0;
-}
-
-static int tda18271c2_tune(struct dvb_frontend *fe,
-			   u32 ifc, u32 freq, u32 bw, u8 std, int radio)
-{
-	struct tda18271_priv *priv = fe->tuner_priv;
-
-	tda_dbg("freq = %d, ifc = %d\n", freq, ifc);
-
-	tda18271_init(fe);
-
-	mutex_lock(&priv->lock);
-
-	tda18271_rf_tracking_filters_correction(fe, freq);
-
-	tda18271_channel_configuration(fe, ifc, freq, bw, std, radio);
-
-	mutex_unlock(&priv->lock);
-
-	return 0;
-}
-
-/* ------------------------------------------------------------------ */
-
-static int tda18271c1_tune(struct dvb_frontend *fe,
-			   u32 ifc, u32 freq, u32 bw, u8 std, int radio)
+static int tda18271c1_rf_tracking_filter_calibration(struct dvb_frontend *fe,
+						     u32 freq, u32 bw)
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
 	unsigned char *regs = priv->tda18271_regs;
 	u32 N = 0;
-
-	tda18271_init(fe);
-
-	mutex_lock(&priv->lock);
-
-	tda_dbg("freq = %d, ifc = %d\n", freq, ifc);
-
-	/* RF tracking filter calibration */
 
 	/* calculate bp filter */
 	tda18271_calc_bp_filter(fe, &freq);
@@ -737,7 +672,7 @@ static int tda18271c1_tune(struct dvb_frontend *fe,
 
 	regs[R_EB7]   = 0x40;
 	tda18271_write_regs(fe, R_EB7, 1);
-	msleep(10);
+	msleep(10); /* pll locking */
 
 	regs[R_EB20]  = 0xec;
 	tda18271_write_regs(fe, R_EB20, 1);
@@ -752,74 +687,70 @@ static int tda18271c1_tune(struct dvb_frontend *fe,
 	if (0 == tda18271_calc_rf_cal(fe, &freq))
 		tda18271_write_regs(fe, R_EB14, 1);
 
-	/* Channel Configuration */
+	return 0;
+}
 
-	switch (priv->mode) {
-	case TDA18271_ANALOG:
-		regs[R_EB22]  = 0x2c;
-		break;
-	case TDA18271_DIGITAL:
-		regs[R_EB22]  = 0x37;
-		break;
-	}
-	tda18271_write_regs(fe, R_EB22, 1);
+/* ------------------------------------------------------------------ */
 
-	regs[R_EP1]  |= 0x40; /* set dis power level on */
+static int tda18271_ir_cal_init(struct dvb_frontend *fe)
+{
+	struct tda18271_priv *priv = fe->tuner_priv;
+	unsigned char *regs = priv->tda18271_regs;
 
-	/* set standard */
-	regs[R_EP3]  &= ~0x1f; /* clear std bits */
+	tda18271_read_regs(fe);
 
-	/* see table 22 */
-	regs[R_EP3]  |= std;
+	/* test IR_CAL_OK to see if we need init */
+	if ((regs[R_EP1] & 0x08) == 0)
+		tda18271_init_regs(fe);
 
-	regs[R_EP4]  &= ~0x03; /* set cal mode to normal */
+	return 0;
+}
 
-	regs[R_EP4]  &= ~0x1c; /* clear if level bits */
-	switch (priv->mode) {
-	case TDA18271_ANALOG:
-		regs[R_MPD]  &= ~0x80; /* IF notch = 0 */
-		break;
-	case TDA18271_DIGITAL:
-		regs[R_EP4]  |= 0x04;
-		regs[R_MPD]  |= 0x80;
-		break;
-	}
+static int tda18271_init(struct dvb_frontend *fe)
+{
+	struct tda18271_priv *priv = fe->tuner_priv;
 
-	if (radio)
-		regs[R_EP4]  |=  0x80;
-	else
-		regs[R_EP4]  &= ~0x80;
+	mutex_lock(&priv->lock);
 
-	/* image rejection validity */
-	tda18271_calc_ir_measure(fe, &freq);
+	/* power up */
+	tda18271_set_standby_mode(fe, 0, 0, 0);
 
-	/* calculate MAIN PLL */
-	N = freq + ifc;
+	/* initialization */
+	tda18271_ir_cal_init(fe);
 
-	tda18271_calc_main_pll(fe, N);
+	if (priv->id == TDA18271HDC2)
+		tda18271c2_rf_cal_init(fe);
 
-	tda18271_write_regs(fe, R_TM, 15);
-	msleep(5);
 	mutex_unlock(&priv->lock);
 
 	return 0;
 }
 
-static inline int tda18271_tune(struct dvb_frontend *fe,
-				u32 ifc, u32 freq, u32 bw, u8 std, int radio)
+static int tda18271_tune(struct dvb_frontend *fe,
+			 struct tda18271_std_map_item *map, u32 freq, u32 bw)
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
-	int ret = -EINVAL;
+
+	tda_dbg("freq = %d, ifc = %d, bw = %d, agc_mode = %d, std = %d\n",
+		freq, map->if_freq, bw, map->agc_mode, map->std);
+
+	tda18271_init(fe);
+
+	mutex_lock(&priv->lock);
 
 	switch (priv->id) {
 	case TDA18271HDC1:
-		ret = tda18271c1_tune(fe, ifc, freq, bw, std, radio);
+		tda18271c1_rf_tracking_filter_calibration(fe, freq, bw);
 		break;
 	case TDA18271HDC2:
-		ret = tda18271c2_tune(fe, ifc, freq, bw, std, radio);
+		tda18271c2_rf_tracking_filters_correction(fe, freq);
 		break;
 	}
-	return ret;
+	tda18271_channel_configuration(fe, map, freq, bw);
+
+	mutex_unlock(&priv->lock);
+
+	return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -829,9 +760,8 @@ static int tda18271_set_params(struct dvb_frontend *fe,
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
 	struct tda18271_std_map *std_map = &priv->std;
+	struct tda18271_std_map_item *map;
 	int ret;
-	u8 std;
-	u16 sgIF;
 	u32 bw, freq = params->frequency;
 
 	priv->mode = TDA18271_DIGITAL;
@@ -840,13 +770,11 @@ static int tda18271_set_params(struct dvb_frontend *fe,
 		switch (params->u.vsb.modulation) {
 		case VSB_8:
 		case VSB_16:
-			std  = std_map->atsc_6.std_bits;
-			sgIF = std_map->atsc_6.if_freq;
+			map = &std_map->atsc_6;
 			break;
 		case QAM_64:
 		case QAM_256:
-			std  = std_map->qam_6.std_bits;
-			sgIF = std_map->qam_6.if_freq;
+			map = &std_map->qam_6;
 			break;
 		default:
 			tda_warn("modulation not set!\n");
@@ -861,18 +789,15 @@ static int tda18271_set_params(struct dvb_frontend *fe,
 		switch (params->u.ofdm.bandwidth) {
 		case BANDWIDTH_6_MHZ:
 			bw = 6000000;
-			std  = std_map->dvbt_6.std_bits;
-			sgIF = std_map->dvbt_6.if_freq;
+			map = &std_map->dvbt_6;
 			break;
 		case BANDWIDTH_7_MHZ:
 			bw = 7000000;
-			std  = std_map->dvbt_7.std_bits;
-			sgIF = std_map->dvbt_7.if_freq;
+			map = &std_map->dvbt_7;
 			break;
 		case BANDWIDTH_8_MHZ:
 			bw = 8000000;
-			std  = std_map->dvbt_8.std_bits;
-			sgIF = std_map->dvbt_8.if_freq;
+			map = &std_map->dvbt_8;
 			break;
 		default:
 			tda_warn("bandwidth not set!\n");
@@ -887,7 +812,7 @@ static int tda18271_set_params(struct dvb_frontend *fe,
 	if (fe->ops.analog_ops.standby)
 		fe->ops.analog_ops.standby(fe);
 
-	ret = tda18271_tune(fe, sgIF * 1000, freq, bw, std, 0);
+	ret = tda18271_tune(fe, map, freq, bw);
 
 	if (ret < 0)
 		goto fail;
@@ -904,57 +829,46 @@ static int tda18271_set_analog_params(struct dvb_frontend *fe,
 {
 	struct tda18271_priv *priv = fe->tuner_priv;
 	struct tda18271_std_map *std_map = &priv->std;
+	struct tda18271_std_map_item *map;
 	char *mode;
-	int ret, radio = 0;
-	u8 std;
-	u16 sgIF;
+	int ret;
 	u32 freq = params->frequency * 62500;
 
 	priv->mode = TDA18271_ANALOG;
 
 	if (params->mode == V4L2_TUNER_RADIO) {
-		radio = 1;
 		freq = freq / 1000;
-		std  = std_map->fm_radio.std_bits;
-		sgIF = std_map->fm_radio.if_freq;
+		map = &std_map->fm_radio;
 		mode = "fm";
 	} else if (params->std & V4L2_STD_MN) {
-		std  = std_map->atv_mn.std_bits;
-		sgIF = std_map->atv_mn.if_freq;
+		map = &std_map->atv_mn;
 		mode = "MN";
 	} else if (params->std & V4L2_STD_B) {
-		std  = std_map->atv_b.std_bits;
-		sgIF = std_map->atv_b.if_freq;
+		map = &std_map->atv_b;
 		mode = "B";
 	} else if (params->std & V4L2_STD_GH) {
-		std  = std_map->atv_gh.std_bits;
-		sgIF = std_map->atv_gh.if_freq;
+		map = &std_map->atv_gh;
 		mode = "GH";
 	} else if (params->std & V4L2_STD_PAL_I) {
-		std  = std_map->atv_i.std_bits;
-		sgIF = std_map->atv_i.if_freq;
+		map = &std_map->atv_i;
 		mode = "I";
 	} else if (params->std & V4L2_STD_DK) {
-		std  = std_map->atv_dk.std_bits;
-		sgIF = std_map->atv_dk.if_freq;
+		map = &std_map->atv_dk;
 		mode = "DK";
 	} else if (params->std & V4L2_STD_SECAM_L) {
-		std  = std_map->atv_l.std_bits;
-		sgIF = std_map->atv_l.if_freq;
+		map = &std_map->atv_l;
 		mode = "L";
 	} else if (params->std & V4L2_STD_SECAM_LC) {
-		std  = std_map->atv_lc.std_bits;
-		sgIF = std_map->atv_lc.if_freq;
+		map = &std_map->atv_lc;
 		mode = "L'";
 	} else {
-		std  = std_map->atv_i.std_bits;
-		sgIF = std_map->atv_i.if_freq;
+		map = &std_map->atv_i;
 		mode = "xx";
 	}
 
 	tda_dbg("setting tda18271 to system %s\n", mode);
 
-	ret = tda18271_tune(fe, sgIF * 1000, freq, 0, std, radio);
+	ret = tda18271_tune(fe, map, freq, 0);
 
 	if (ret < 0)
 		goto fail;
@@ -986,16 +900,9 @@ static int tda18271_release(struct dvb_frontend *fe)
 
 	mutex_lock(&tda18271_list_mutex);
 
-	priv->count--;
+	if (priv)
+		hybrid_tuner_release_state(priv);
 
-	if (!priv->count) {
-		tda_dbg("destroying instance @ %d-%04x\n",
-			i2c_adapter_id(priv->i2c_adap),
-			priv->i2c_addr);
-		list_del(&priv->tda18271_list);
-
-		kfree(priv);
-	}
 	mutex_unlock(&tda18271_list_mutex);
 
 	fe->tuner_priv = NULL;
@@ -1020,15 +927,17 @@ static int tda18271_get_bandwidth(struct dvb_frontend *fe, u32 *bandwidth)
 /* ------------------------------------------------------------------ */
 
 #define tda18271_update_std(std_cfg, name) do {				\
-	if (map->std_cfg.if_freq + map->std_cfg.std_bits > 0) {		\
+	if (map->std_cfg.if_freq +					\
+		map->std_cfg.agc_mode + map->std_cfg.std > 0) {		\
 		tda_dbg("Using custom std config for %s\n", name);	\
 		memcpy(&std->std_cfg, &map->std_cfg,			\
 			sizeof(struct tda18271_std_map_item));		\
 	} } while (0)
 
 #define tda18271_dump_std_item(std_cfg, name) do {			\
-	tda_dbg("(%s) if freq = %d, std bits = 0x%02x\n",		\
-		name, std->std_cfg.if_freq, std->std_cfg.std_bits);	\
+	tda_dbg("(%s) if freq = %d, agc_mode = %d, std = %d\n",		\
+		name, std->std_cfg.if_freq,				\
+		std->std_cfg.agc_mode, std->std_cfg.std);		\
 	} while (0)
 
 static int tda18271_dump_std_map(struct dvb_frontend *fe)
@@ -1109,7 +1018,8 @@ static int tda18271_get_id(struct dvb_frontend *fe)
 	}
 
 	tda_info("%s detected @ %d-%04x%s\n", name,
-		 i2c_adapter_id(priv->i2c_adap), priv->i2c_addr,
+		 i2c_adapter_id(priv->i2c_props.adap),
+		 priv->i2c_props.addr,
 		 (0 == ret) ? "" : ", device not supported.");
 
 	return ret;
@@ -1136,45 +1046,27 @@ struct dvb_frontend *tda18271_attach(struct dvb_frontend *fe, u8 addr,
 				     struct tda18271_config *cfg)
 {
 	struct tda18271_priv *priv = NULL;
-	int state_found = 0;
+	int instance;
 
 	mutex_lock(&tda18271_list_mutex);
 
-	list_for_each_entry(priv, &tda18271_list, tda18271_list) {
-		if ((i2c_adapter_id(priv->i2c_adap) == i2c_adapter_id(i2c)) &&
-		    (priv->i2c_addr == addr)) {
-			tda_dbg("attaching existing tuner @ %d-%04x\n",
-				i2c_adapter_id(priv->i2c_adap),
-				priv->i2c_addr);
-			priv->count++;
-			fe->tuner_priv = priv;
-			state_found = 1;
-			/* allow dvb driver to override i2c gate setting */
-			if ((cfg) && (cfg->gate != TDA18271_GATE_ANALOG))
-				priv->gate = cfg->gate;
-			break;
-		}
-	}
-	if (state_found == 0) {
-		tda_dbg("creating new tuner instance @ %d-%04x\n",
-			i2c_adapter_id(i2c), addr);
-
-		priv = kzalloc(sizeof(struct tda18271_priv), GFP_KERNEL);
-		if (priv == NULL) {
-			mutex_unlock(&tda18271_list_mutex);
-			return NULL;
-		}
-
-		priv->i2c_addr = addr;
-		priv->i2c_adap = i2c;
+	instance = hybrid_tuner_request_state(struct tda18271_priv, priv,
+					      hybrid_tuner_instance_list,
+					      i2c, addr, "tda18271");
+	switch (instance) {
+	case 0:
+		goto fail;
+		break;
+	case 1:
+		/* new tuner instance */
 		priv->gate = (cfg) ? cfg->gate : TDA18271_GATE_AUTO;
 		priv->cal_initialized = false;
 		mutex_init(&priv->lock);
-		priv->count++;
 
 		fe->tuner_priv = priv;
 
-		list_add_tail(&priv->tda18271_list, &tda18271_list);
+		if (cfg)
+			priv->small_i2c = cfg->small_i2c;
 
 		if (tda18271_get_id(fe) < 0)
 			goto fail;
@@ -1186,9 +1078,18 @@ struct dvb_frontend *tda18271_attach(struct dvb_frontend *fe, u8 addr,
 		tda18271_init_regs(fe);
 
 		if ((tda18271_cal_on_startup) && (priv->id == TDA18271HDC2))
-			tda18271_rf_cal_init(fe);
+			tda18271c2_rf_cal_init(fe);
 
 		mutex_unlock(&priv->lock);
+		break;
+	default:
+		/* existing tuner instance */
+		fe->tuner_priv = priv;
+
+		/* allow dvb driver to override i2c gate setting */
+		if ((cfg) && (cfg->gate != TDA18271_GATE_ANALOG))
+			priv->gate = cfg->gate;
+		break;
 	}
 
 	/* override default std map with values in config struct */
