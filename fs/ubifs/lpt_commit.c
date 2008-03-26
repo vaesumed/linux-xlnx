@@ -394,8 +394,8 @@ static int write_cnodes(struct ubifs_info *c)
 			if (wlen) {
 				alen = ALIGN(wlen, c->min_io_size);
 				memset(buf + offs, 0xff, alen - wlen);
-				err = ubifs_leb_write(c, lnum, buf, from, alen,
-						      UBI_SHORTTERM);
+				err = ubifs_leb_write(c, lnum, buf + from, from,
+						       alen, UBI_SHORTTERM);
 				if (err)
 					return err;
 			}
@@ -444,7 +444,7 @@ static int write_cnodes(struct ubifs_info *c)
 			wlen = offs - from;
 			alen = ALIGN(wlen, c->min_io_size);
 			memset(buf + offs, 0xff, alen - wlen);
-			err = ubifs_leb_write(c, lnum, buf, from, alen,
+			err = ubifs_leb_write(c, lnum, buf + from, from, alen,
 					      UBI_SHORTTERM);
 			if (err)
 				return err;
@@ -469,7 +469,7 @@ static int write_cnodes(struct ubifs_info *c)
 			wlen = offs - from;
 			alen = ALIGN(wlen, c->min_io_size);
 			memset(buf + offs, 0xff, alen - wlen);
-			err = ubifs_leb_write(c, lnum, buf, from, alen,
+			err = ubifs_leb_write(c, lnum, buf + from, from, alen,
 					      UBI_SHORTTERM);
 			if (err)
 				return err;
@@ -492,7 +492,7 @@ static int write_cnodes(struct ubifs_info *c)
 	wlen = offs - from;
 	alen = ALIGN(wlen, c->min_io_size);
 	memset(buf + offs, 0xff, alen - wlen);
-	err = ubifs_leb_write(c, lnum, buf, from, alen, UBI_SHORTTERM);
+	err = ubifs_leb_write(c, lnum, buf + from, from, alen, UBI_SHORTTERM);
 	if (err)
 		return err;
 	c->nhead_lnum = lnum;
