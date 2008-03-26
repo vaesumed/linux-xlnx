@@ -461,6 +461,32 @@ int pnp_check_dma(struct pnp_dev *dev, int idx)
 #endif
 }
 
+#define set(flags)	((flags & IORESOURCE_UNSET) == 0)
+
+int pnp_add_irq_resource(struct pnp_dev *dev, int irq, int flags)
+{
+	struct pnp_resource_table *res = &dev->res;
+	int i = 0;
+	static unsigned char warned;
+
+	while (set(res->irq_resource[i].flags) && i < PNP_MAX_IRQ)
+		i++;
+	if (i >= PNP_MAX_IRQ && !warned) {
+		dev_err(&dev->dev, "too many IRQs (max %d)\n", PNP_MAX_IRQ);
+		warned = 1;
+		return -ENOSPC;
+	}
+
+	res->irq_resource[i].flags = IORESOURCE_IRQ | flags;
+	if (irq < 0) {
+		res->irq_resource[i].flags |= IORESOURCE_DISABLED;
+		return -EINVAL;
+	}
+	res->irq_resource[i].start = irq;
+	res->irq_resource[i].end = irq;
+	return 0;
+}
+
 /* format is: pnp_reserve_irq=irq1[,irq2] .... */
 static int __init pnp_setup_reserve_irq(char *str)
 {

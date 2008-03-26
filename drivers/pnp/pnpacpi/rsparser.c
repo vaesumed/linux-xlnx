@@ -22,6 +22,7 @@
 #include <linux/acpi.h>
 #include <linux/pci.h>
 #include "pnpacpi.h"
+#include "../base.h"
 
 #ifdef CONFIG_IA64
 #define valid_IRQ(i) (1)
@@ -80,24 +81,12 @@ static void pnpacpi_parse_allocated_irqresource(struct pnp_dev *dev,
 						u32 gsi, int triggering,
 						int polarity, int shareable)
 {
-	struct pnp_resource_table *res = &dev->res;
-	int i = 0;
-	int irq;
+	int irq, flags;
 	int p, t;
-	static unsigned char warned;
 
 	if (!valid_IRQ(gsi))
 		return;
 
-	while (!(res->irq_resource[i].flags & IORESOURCE_UNSET) &&
-	       i < PNP_MAX_IRQ)
-		i++;
-	if (i >= PNP_MAX_IRQ && !warned) {
-		printk(KERN_ERR "pnpacpi: exceeded the max number of IRQ "
-				"resources: %d \n", PNP_MAX_IRQ);
-		warned = 1;
-		return;
-	}
 	/*
 	 * in IO-APIC mode, use overrided attribute. Two reasons:
 	 * 1. BIOS bug in DSDT
@@ -114,18 +103,11 @@ static void pnpacpi_parse_allocated_irqresource(struct pnp_dev *dev,
 			polarity = p;
 		}
 	}
+	flags = irq_flags(triggering, polarity, shareable);
 
-	res->irq_resource[i].flags = IORESOURCE_IRQ;	// Also clears _UNSET flag
-	res->irq_resource[i].flags |= irq_flags(triggering, polarity, shareable);
 	irq = acpi_register_gsi(gsi, triggering, polarity);
-	if (irq < 0) {
-		res->irq_resource[i].flags |= IORESOURCE_DISABLED;
-		return;
-	}
-
-	res->irq_resource[i].start = irq;
-	res->irq_resource[i].end = irq;
-	pcibios_penalize_isa_irq(irq, 1);
+	if (pnp_add_irq_resource(dev, irq, flags) == 0)
+		pcibios_penalize_isa_irq(irq, 1);
 }
 
 static int dma_flags(int type, int bus_master, int transfer)

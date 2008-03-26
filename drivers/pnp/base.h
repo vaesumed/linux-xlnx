@@ -14,3 +14,5 @@ int pnp_check_port(struct pnp_dev * dev, int idx);
 int pnp_check_mem(struct pnp_dev * dev, int idx);
 int pnp_check_irq(struct pnp_dev * dev, int idx);
 int pnp_check_dma(struct pnp_dev * dev, int idx);
+
+int pnp_add_irq_resource(struct pnp_dev *dev, int irq, int flags);

@@ -54,26 +54,6 @@ inline void pcibios_penalize_isa_irq(int irq, int active)
  * Allocated Resources
  */
 
-static void pnpbios_parse_allocated_irqresource(struct pnp_dev *dev, int irq)
-{
-	struct pnp_resource_table *res = &dev->res;
-	int i = 0;
-
-	while (!(res->irq_resource[i].flags & IORESOURCE_UNSET)
-	       && i < PNP_MAX_IRQ)
-		i++;
-	if (i < PNP_MAX_IRQ) {
-		res->irq_resource[i].flags = IORESOURCE_IRQ;	// Also clears _UNSET flag
-		if (irq == -1) {
-			res->irq_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->irq_resource[i].start =
-		    res->irq_resource[i].end = (unsigned long)irq;
-		pcibios_penalize_isa_irq(irq, 1);
-	}
-}
-
 static void pnpbios_parse_allocated_dmaresource(struct pnp_dev *dev, int dma)
 {
 	struct pnp_resource_table *res = &dev->res;
@@ -198,7 +178,8 @@ static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
 			for (i = 0; i < 16; i++, mask = mask >> 1)
 				if (mask & 0x01)
 					io = i;
-			pnpbios_parse_allocated_irqresource(dev, io);
+			if (pnp_add_irq_resource(dev, io, 0) == 0)
+				pcibios_penalize_isa_irq(io, 1);
 			break;
 
 		case SMALL_TAG_DMA:

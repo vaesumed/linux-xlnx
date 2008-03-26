@@ -325,6 +325,7 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 	struct pnp_dev *dev = to_pnp_dev(dmdev);
 	char *buf = (void *)ubuf;
 	int retval = 0;
+	resource_size_t start;
 
 	if (dev->status & PNP_ATTACHED) {
 		retval = -EBUSY;
@@ -369,7 +370,7 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 		goto done;
 	}
 	if (!strnicmp(buf, "set", 3)) {
-		int nport = 0, nmem = 0, nirq = 0, ndma = 0;
+		int nport = 0, nmem = 0, ndma = 0;
 		if (dev->active)
 			goto done;
 		buf += 3;
@@ -430,14 +431,8 @@ pnp_set_current_resources(struct device *dmdev, struct device_attribute *attr,
 				buf += 3;
 				while (isspace(*buf))
 					++buf;
-				dev->res.irq_resource[nirq].start =
-				    dev->res.irq_resource[nirq].end =
-				    simple_strtoul(buf, &buf, 0);
-				dev->res.irq_resource[nirq].flags =
-				    IORESOURCE_IRQ;
-				nirq++;
-				if (nirq >= PNP_MAX_IRQ)
-					break;
+				start = simple_strtoul(buf, &buf, 0);
+				pnp_add_irq_resource(dev, start, 0);
 				continue;
 			}
 			if (!strnicmp(buf, "dma", 3)) {
