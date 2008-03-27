@@ -794,7 +794,7 @@ long long ubifs_budg_get_free_space(struct ubifs_info *c)
 		rsvd_idx_lebs = 0;
 
 	if (rsvd_idx_lebs > c->lst.empty_lebs + c->freeable_cnt + c->idx_gc_cnt
-	    - c->lst.taken_empty_lebs) {
+				- c->lst.taken_empty_lebs) {
 		spin_unlock(&c->space_lock);
 		return 0;
 	}
@@ -803,20 +803,10 @@ long long ubifs_budg_get_free_space(struct ubifs_info *c)
 	outstanding = c->budg_data_growth + c->budg_dd_growth;
 	spin_unlock(&c->space_lock);
 
-	if (available > outstanding) {
-		int divisor, factor;
-
-		free = available - outstanding;
-		/*
-		 * Assume free space is made up of uncompressed data nodes and
-		 * full index nodes (one per data node, doubled because we
-		 * always allow enough space to write the index twice).
-		 */
-		divisor = UBIFS_MAX_DATA_NODE_SZ + (c->max_idx_node_sz << 1);
-		factor = UBIFS_MAX_DATA_NODE_SZ - UBIFS_DATA_NODE_SZ;
-		do_div(free, divisor);
-		free *= factor;
-	} else
+	if (available > outstanding)
+		free = ubifs_reported_space(c, available - outstanding);
+	else
 		free = 0;
+
 	return free;
 }

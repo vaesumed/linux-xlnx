@@ -260,9 +260,14 @@ static int init_constants_late(struct ubifs_info *c)
 	 * Calculate total amount of FS blocks. This number is not used
 	 * internally because it does not make much sense for UBIFS, but it is
 	 * necessary to report something for the 'statfs()' call.
+	 *
+	 * Subtract the LEB reserved for GC and the LEB which is reserved for
+	 * deletions.
 	 */
-	c->block_cnt = (long long)c->main_lebs * (c->leb_size - c->dark_wm);
-	c->block_cnt >>= UBIFS_BLOCK_SHIFT;
+	tmp64 = c->main_lebs - 2;
+	tmp64 *= c->leb_size - c->dark_wm;
+	tmp64 = ubifs_reported_space(c, tmp64);
+	c->block_cnt = tmp64 >> UBIFS_BLOCK_SHIFT;
 
 	return 0;
 }
