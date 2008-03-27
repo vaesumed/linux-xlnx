@@ -89,7 +89,7 @@ static int __devinit plat_ide_probe(struct platform_device *pdev)
 			res_alt->start, res_alt->end - res_alt->start + 1);
 	}
 
-	hwif = ide_find_port((unsigned long)base);
+	hwif = ide_find_port();
 	if (!hwif) {
 		ret = -ENODEV;
 		goto out;
@@ -101,10 +101,8 @@ static int __devinit plat_ide_probe(struct platform_device *pdev)
 
 	ide_init_port_hw(hwif, &hw);
 
-	if (mmio) {
-		hwif->mmio = 1;
+	if (mmio)
 		default_hwif_mmiops(hwif);
-	}
 
 	idx[0] = hwif->index;
 
@@ -122,7 +120,7 @@ static int __devexit plat_ide_remove(struct platform_device *pdev)
 {
 	ide_hwif_t *hwif = pdev->dev.driver_data;
 
-	ide_unregister(hwif->index, 0, 0);
+	ide_unregister(hwif);
 
 	return 0;
 }
