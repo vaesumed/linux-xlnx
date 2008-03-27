@@ -309,6 +309,7 @@ struct ipath_devdata {
 	ipath_err_t ipath_lasthwerror;
 	/* errors masked because they occur too fast */
 	ipath_err_t ipath_maskederrs;
+	u64 ipath_lastlinkrecov; /* link recoveries at last ACTIVE */
 	/* time in jiffies at which to re-enable maskederrs */
 	unsigned long ipath_unmasktime;
 	/* count of egrfull errors, combined for all ports */
@@ -426,6 +427,11 @@ struct ipath_devdata {
 	dma_addr_t ipath_dummy_hdrq_phys;
 
 	unsigned long ipath_ureg_align; /* user register alignment */
+
+	/* HoL blocking / user app forward-progress state */
+	unsigned          ipath_hol_state;
+	unsigned          ipath_hol_next;
+	struct timer_list ipath_hol_timer;
 
 	/*
 	 * Shadow copies of registers; size indicates read access size.
@@ -546,10 +552,10 @@ struct ipath_devdata {
 	u32 ipath_init_ibmaxlen;
 	/* size of each rcvegrbuffer */
 	u32 ipath_rcvegrbufsize;
-	/* width (2,4,8,16,32) from HT config reg */
-	u32 ipath_htwidth;
-	/* HT speed (200,400,800,1000) from HT config */
-	u32 ipath_htspeed;
+	/* localbus width (1, 2,4,8,16,32) from config space  */
+	u32 ipath_lbus_width;
+	/* localbus speed (HT: 200,400,800,1000; PCIe 2500) */
+	u32 ipath_lbus_speed;
 	/*
 	 * number of sequential ibcstatus change for polling active/quiet
 	 * (i.e., link not coming up).
@@ -574,6 +580,7 @@ struct ipath_devdata {
 	u8 ipath_serial[16];
 	/* human readable board version */
 	u8 ipath_boardversion[80];
+	u8 ipath_lbus_info[32]; /* human readable localbus info */
 	/* chip major rev, from ipath_revision */
 	u8 ipath_majrev;
 	/* chip minor rev, from ipath_revision */
@@ -705,6 +712,13 @@ struct ipath_devdata {
 	u16 ipath_jint_max_packets;	/* max packets across all ports */
 };
 
+/* ipath_hol_state values (stopping/starting user proc, send flushing) */
+#define IPATH_HOL_UP       0
+#define IPATH_HOL_DOWN     1
+/* ipath_hol_next toggle values, used when hol_state IPATH_HOL_DOWN */
+#define IPATH_HOL_DOWNSTOP 0
+#define IPATH_HOL_DOWNCONT 1
+
 /* Private data for file operations */
 struct ipath_filedata {
 	struct ipath_portdata *pd;
@@ -718,9 +732,10 @@ extern struct ipath_devdata *ipath_lookup(int unit);
 int ipath_init_chip(struct ipath_devdata *, int);
 int ipath_enable_wc(struct ipath_devdata *dd);
 void ipath_disable_wc(struct ipath_devdata *dd);
-int ipath_count_units(int *npresentp, int *nupp, u32 *maxportsp);
+int ipath_count_units(int *npresentp, int *nupp, int *maxportsp);
 void ipath_shutdown_device(struct ipath_devdata *);
 void ipath_clear_freeze(struct ipath_devdata *);
+int ipath_signal_procs(struct ipath_devdata *, int);
 
 struct file_operations;
 int ipath_cdev_init(int minor, char *name, const struct file_operations *fops,
@@ -774,6 +789,9 @@ int ipath_set_lid(struct ipath_devdata *, u32, u8);
 int ipath_set_rx_pol_inv(struct ipath_devdata *dd, u8 new_pol_inv);
 void ipath_enable_armlaunch(struct ipath_devdata *);
 void ipath_disable_armlaunch(struct ipath_devdata *);
+void ipath_hol_down(struct ipath_devdata *);
+void ipath_hol_up(struct ipath_devdata *);
+void ipath_hol_event(unsigned long);
 
 /* for use in system calls, where we want to know device type, etc. */
 #define port_fp(fp) ((struct ipath_filedata *)(fp)->private_data)->pd
@@ -785,6 +803,8 @@ void ipath_disable_armlaunch(struct ipath_devdata *);
 /*
  * values for ipath_flags
  */
+		/* chip can report link latency (IB 1.2) */
+#define IPATH_HAS_LINK_LATENCY 0x1
 /* The chip is up and initted */
 #define IPATH_INITTED       0x2
 		/* set if any user code has set kr_rcvhdrsize */
@@ -829,6 +849,7 @@ void ipath_disable_armlaunch(struct ipath_devdata *);
 		/* Suppress heartbeat, even if turning off loopback */
 #define IPATH_NO_HRTBT      0x1000000
 #define IPATH_HAS_MULT_IB_SPEED 0x8000000
+#define IPATH_IB_FORCE_NOTIFY 0x80000000 /* force notify on next ib change */
 
 /* Bits in GPIO for the added interrupts */
 #define IPATH_GPIO_PORT0_BIT 2
@@ -1029,6 +1050,21 @@ static inline u32 ipath_ib_linktrstate(struct ipath_devdata *dd, u64 ibcs)
 }
 
 /*
+ * from contents of IBCStatus (or a saved copy), return logical link state
+ * combination of link state and linktraining state (down, active, init,
+ * arm, etc.
+ */
+static inline u32 ipath_ib_state(struct ipath_devdata *dd, u64 ibcs)
+{
+	u32 ibs;
+	ibs = (u32)(ibcs >> INFINIPATH_IBCS_LINKTRAININGSTATE_SHIFT) &
+		dd->ibcs_lts_mask;
+	ibs |= (u32)(ibcs &
+		(INFINIPATH_IBCS_LINKSTATE_MASK << dd->ibcs_ls_shift));
+	return ibs;
+}
+
+/*
  * sysfs interface.
  */
 
@@ -1065,6 +1101,8 @@ dma_addr_t ipath_map_single(struct pci_dev *, void *, size_t, int);
 #endif
 
 extern unsigned ipath_debug; /* debugging bit mask */
+extern unsigned ipath_linkrecovery;
+extern unsigned ipath_mtu4096;
 
 #define IPATH_MAX_PARITY_ATTEMPTS 10000 /* max times to try recovery */
 

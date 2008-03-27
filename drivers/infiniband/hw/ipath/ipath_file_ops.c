@@ -219,7 +219,12 @@ static int ipath_get_base_info(struct file *fp,
 	kinfo->spi_pioalign = dd->ipath_palign;
 
 	kinfo->spi_qpair = IPATH_KD_QP;
-	kinfo->spi_piosize = dd->ipath_ibmaxlen;
+	/*
+	 * user mode PIO buffers are always 2KB, even when 4KB can
+	 * be received, and sent via the kernel; this is ibmaxlen
+	 * for 2K MTU.
+	 */
+	kinfo->spi_piosize = dd->ipath_piosize2k - 2 * sizeof(u32);
 	kinfo->spi_mtu = dd->ipath_ibmaxlen;	/* maxlen, not ibmtu */
 	kinfo->spi_port = pd->port_port;
 	kinfo->spi_subport = subport_fp(fp);
@@ -1760,7 +1765,7 @@ static int find_shared_port(struct file *fp,
 	for (ndev = 0; ndev < devmax; ndev++) {
 		struct ipath_devdata *dd = ipath_lookup(ndev);
 
-		if (!dd)
+		if (!usable(dd))
 			continue;
 		for (i = 1; i < dd->ipath_cfgports; i++) {
 			struct ipath_portdata *pd = dd->ipath_pd[i];

@@ -1492,6 +1492,10 @@ ssize_t ib_uverbs_post_send(struct ib_uverbs_file *file,
 				next->wr.atomic.swap = user_wr->wr.atomic.swap;
 				next->wr.atomic.rkey = user_wr->wr.atomic.rkey;
 				break;
+			case IB_WR_SEND:
+				next->wr.invalidate.rkey =
+					user_wr->wr.invalidate.rkey;
+				break;
 			default:
 				break;
 			}
