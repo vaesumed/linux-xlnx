@@ -613,6 +613,7 @@ struct resource *pnp_get_resource(struct pnp_dev *dev,
 	}
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(pnp_get_resource);
 
 /* format is: pnp_reserve_irq=irq1[,irq2] .... */
 static int __init pnp_setup_reserve_irq(char *str)
