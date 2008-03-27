@@ -5258,7 +5258,8 @@ static int saa7134_tda8290_callback(struct saa7134_dev *dev,
 
 int saa7134_tuner_callback(void *priv, int command, int arg)
 {
-	struct saa7134_dev *dev = priv;
+	struct i2c_algo_bit_data *i2c_algo = priv;
+	struct saa7134_dev *dev = i2c_algo->data;
 	if (dev != NULL) {
 		switch (dev->tuner_type) {
 		case TUNER_PHILIPS_TDA8290:
