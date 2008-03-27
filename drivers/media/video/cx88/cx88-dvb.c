@@ -48,7 +48,6 @@
 #include "tuner-xc2028.h"
 #include "tuner-xc2028-types.h"
 #include "tuner-simple.h"
-#include "tda9887.h"
 
 MODULE_DESCRIPTION("driver for cx2388x based DVB cards");
 MODULE_AUTHOR("Chris Pascoe <c.pascoe@itee.uq.edu.au>");
@@ -696,11 +695,9 @@ static int dvb_register(struct cx8802_dev *dev)
 					       &fusionhdtv_5_gold,
 					       &dev->core->i2c_adap);
 		if (dev->dvb.frontend != NULL) {
-			dvb_attach(simple_tuner_attach, dev->dvb.frontend,
-				   &dev->core->i2c_adap, 0x61,
-				   TUNER_LG_TDVS_H06XF);
-			dvb_attach(tda9887_attach, dev->dvb.frontend,
-				   &dev->core->i2c_adap, 0x43);
+			dvb_attach(dvb_pll_attach, dev->dvb.frontend, 0x61,
+				   &dev->core->i2c_adap,
+				   DVB_PLL_LG_TDVS_H06XF);
 		}
 		}
 		break;
@@ -718,11 +715,9 @@ static int dvb_register(struct cx8802_dev *dev)
 					       &pchdtv_hd5500,
 					       &dev->core->i2c_adap);
 		if (dev->dvb.frontend != NULL) {
-			dvb_attach(simple_tuner_attach, dev->dvb.frontend,
-				   &dev->core->i2c_adap, 0x61,
-				   TUNER_LG_TDVS_H06XF);
-			dvb_attach(tda9887_attach, dev->dvb.frontend,
-				   &dev->core->i2c_adap, 0x43);
+			dvb_attach(dvb_pll_attach, dev->dvb.frontend, 0x61,
+				   &dev->core->i2c_adap,
+				   DVB_PLL_LG_TDVS_H06XF);
 		}
 		}
 		break;
