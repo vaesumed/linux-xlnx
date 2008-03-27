@@ -169,7 +169,7 @@ extern void show_stack_log_lvl(struct task_struct *tsk, unsigned long sp,
 static inline void prefetch(const void *x)
 {
 	const char *c = x;
-	asm volatile("pref %0" : : "RKs16"(*c));
+	asm volatile("pref %0" : : "r"(c));
 }
 #define PREFETCH_STRIDE	L1_CACHE_BYTES
 
