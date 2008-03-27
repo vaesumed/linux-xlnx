@@ -1668,7 +1668,6 @@ config NFSD
 	select SUNRPC
 	select EXPORTFS
 	select NFS_ACL_SUPPORT if NFSD_V2_ACL
-	select PROC_FS if NFSD_V4
 	select PROC_FS if SUNRPC_GSS
 	help
 	  Choose Y here if you want to allow other computers to access
@@ -1730,8 +1729,7 @@ config NFSD_V3_ACL
 
 config NFSD_V4
 	bool "NFS server support for NFS version 4 (EXPERIMENTAL)"
-	depends on NFSD && NFSD_V3 && EXPERIMENTAL
-	select FS_POSIX_ACL
+	depends on NFSD && NFSD_V3 && PROC_FS && EXPERIMENTAL
 	select RPCSEC_GSS_KRB5
 	help
 	  This option enables support in your system's NFS server for
