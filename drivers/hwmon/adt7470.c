@@ -402,14 +402,17 @@ static ssize_t show_fan_max(struct device *dev,
 			    struct device_attribute *devattr,
 			    char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adt7470_data *data = adt7470_update_device(dev);
+	int val;
 
-	if (FAN_DATA_VALID(data->fan_max[attr->index]))
-		return sprintf(buf, "%d\n",
-			       FAN_PERIOD_TO_RPM(data->fan_max[attr->index]));
+	mutex_lock(&data->lock);
+	if (FAN_DATA_VALID(data->fan_max[index]))
+		val = FAN_PERIOD_TO_RPM(data->fan_max[index]);
 	else
-		return sprintf(buf, "0\n");
+		val = 0;
+	mutex_unlock(&data->lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t set_fan_max(struct device *dev,
@@ -437,14 +440,16 @@ static ssize_t show_fan_min(struct device *dev,
 			    struct device_attribute *devattr,
 			    char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adt7470_data *data = adt7470_update_device(dev);
-
-	if (FAN_DATA_VALID(data->fan_min[attr->index]))
-		return sprintf(buf, "%d\n",
-			       FAN_PERIOD_TO_RPM(data->fan_min[attr->index]));
+	int val;
+	mutex_lock(&data->lock);
+	if (FAN_DATA_VALID(data->fan_min[index]))
+		val = FAN_PERIOD_TO_RPM(data->fan_min[index]);
 	else
-		return sprintf(buf, "0\n");
+		val = 0;
+	mutex_unlock(&data->lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t set_fan_min(struct device *dev,
@@ -471,14 +476,17 @@ static ssize_t set_fan_min(struct device *dev,
 static ssize_t show_fan(struct device *dev, struct device_attribute *devattr,
 			char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adt7470_data *data = adt7470_update_device(dev);
+	int val;
 
-	if (FAN_DATA_VALID(data->fan[attr->index]))
-		return sprintf(buf, "%d\n",
-			       FAN_PERIOD_TO_RPM(data->fan[attr->index]));
+	mutex_lock(&data->lock);
+	if (FAN_DATA_VALID(data->fan[index]))
+		val = FAN_PERIOD_TO_RPM(data->fan[index]);
 	else
-		return sprintf(buf, "0\n");
+		val = 0;
+	mutex_unlock(&data->lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t show_force_pwm_max(struct device *dev,
