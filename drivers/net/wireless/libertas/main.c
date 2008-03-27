@@ -581,45 +581,45 @@ static int lbs_copy_multicast_address(struct lbs_private *priv,
 static void lbs_set_multicast_list(struct net_device *dev)
 {
 	struct lbs_private *priv = dev->priv;
-	int oldpacketfilter;
+	int old_mac_control;
 	DECLARE_MAC_BUF(mac);
 
 	lbs_deb_enter(LBS_DEB_NET);
 
-	oldpacketfilter = priv->currentpacketfilter;
+	old_mac_control = priv->mac_control;
 
 	if (dev->flags & IFF_PROMISC) {
 		lbs_deb_net("enable promiscuous mode\n");
-		priv->currentpacketfilter |=
+		priv->mac_control |=
 		    CMD_ACT_MAC_PROMISCUOUS_ENABLE;
-		priv->currentpacketfilter &=
+		priv->mac_control &=
 		    ~(CMD_ACT_MAC_ALL_MULTICAST_ENABLE |
 		      CMD_ACT_MAC_MULTICAST_ENABLE);
 	} else {
 		/* Multicast */
-		priv->currentpacketfilter &=
+		priv->mac_control &=
 		    ~CMD_ACT_MAC_PROMISCUOUS_ENABLE;
 
 		if (dev->flags & IFF_ALLMULTI || dev->mc_count >
 		    MRVDRV_MAX_MULTICAST_LIST_SIZE) {
 			lbs_deb_net( "enabling all multicast\n");
-			priv->currentpacketfilter |=
+			priv->mac_control |=
 			    CMD_ACT_MAC_ALL_MULTICAST_ENABLE;
-			priv->currentpacketfilter &=
+			priv->mac_control &=
 			    ~CMD_ACT_MAC_MULTICAST_ENABLE;
 		} else {
-			priv->currentpacketfilter &=
+			priv->mac_control &=
 			    ~CMD_ACT_MAC_ALL_MULTICAST_ENABLE;
 
 			if (!dev->mc_count) {
 				lbs_deb_net("no multicast addresses, "
 				       "disabling multicast\n");
-				priv->currentpacketfilter &=
+				priv->mac_control &=
 				    ~CMD_ACT_MAC_MULTICAST_ENABLE;
 			} else {
 				int i;
 
-				priv->currentpacketfilter |=
+				priv->mac_control |=
 				    CMD_ACT_MAC_MULTICAST_ENABLE;
 
 				priv->nr_of_multicastmacaddr =
@@ -642,9 +642,8 @@ static void lbs_set_multicast_list(struct net_device *dev)
 		}
 	}
 
-	if (priv->currentpacketfilter != oldpacketfilter) {
-		lbs_set_mac_packet_filter(priv);
-	}
+	if (priv->mac_control != old_mac_control)
+		lbs_set_mac_control(priv);
 
 	lbs_deb_leave(LBS_DEB_NET);
 }
@@ -804,7 +803,7 @@ static int lbs_thread(void *data)
 				lbs_deb_thread("main_thread: PRE_SLEEP--intcounter=%d currenttxskb=%p dnld_sent=%d cur_cmd=%p, confirm now\n",
 					       priv->intcounter, priv->currenttxskb, priv->dnld_sent, priv->cur_cmd);
 
-				lbs_ps_confirm_sleep(priv, (u16) priv->psmode);
+				lbs_ps_confirm_sleep(priv);
 			} else {
 				/* workaround for firmware sending
 				 * deauth/linkloss event immediately
@@ -945,7 +944,7 @@ static int lbs_setup_firmware(struct lbs_private *priv)
 		goto done;
 	}
 
-	lbs_set_mac_packet_filter(priv);
+	lbs_set_mac_control(priv);
 
 	ret = lbs_get_data_rate(priv);
 	if (ret < 0) {
@@ -984,6 +983,18 @@ out:
 	spin_unlock_irqrestore(&priv->driver_lock, flags);
 	lbs_deb_leave(LBS_DEB_CMD);
 }
+
+static void lbs_sync_channel_worker(struct work_struct *work)
+{
+	struct lbs_private *priv = container_of(work, struct lbs_private,
+		sync_channel);
+
+	lbs_deb_enter(LBS_DEB_MAIN);
+	if (lbs_update_channel(priv))
+		lbs_pr_info("Channel synchronization failed.");
+	lbs_deb_leave(LBS_DEB_MAIN);
+}
+
 
 static int lbs_init_adapter(struct lbs_private *priv)
 {
@@ -1024,7 +1035,7 @@ static int lbs_init_adapter(struct lbs_private *priv)
 	priv->secinfo.auth_mode = IW_AUTH_ALG_OPEN_SYSTEM;
 	priv->mode = IW_MODE_INFRA;
 	priv->curbssparams.channel = DEFAULT_AD_HOC_CHANNEL;
-	priv->currentpacketfilter = CMD_ACT_MAC_RX_ON | CMD_ACT_MAC_TX_ON;
+	priv->mac_control = CMD_ACT_MAC_RX_ON | CMD_ACT_MAC_TX_ON;
 	priv->radioon = RADIO_ON;
 	priv->auto_rate = 1;
 	priv->capability = WLAN_CAPABILITY_SHORT_PREAMBLE;
@@ -1128,7 +1139,7 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
 	priv->work_thread = create_singlethread_workqueue("lbs_worker");
 	INIT_DELAYED_WORK(&priv->assoc_work, lbs_association_worker);
 	INIT_DELAYED_WORK(&priv->scan_work, lbs_scan_worker);
-	INIT_WORK(&priv->sync_channel, lbs_sync_channel);
+	INIT_WORK(&priv->sync_channel, lbs_sync_channel_worker);
 
 	sprintf(priv->mesh_ssid, "mesh");
 	priv->mesh_ssid_len = 4;
@@ -1380,7 +1391,7 @@ static void lbs_remove_mesh(struct lbs_private *priv)
  *  @param cfp_no  A pointer to CFP number
  *  @return 	   A pointer to CFP
  */
-struct chan_freq_power *lbs_get_region_cfp_table(u8 region, u8 band, int *cfp_no)
+struct chan_freq_power *lbs_get_region_cfp_table(u8 region, int *cfp_no)
 {
 	int i, end;
 
@@ -1414,7 +1425,7 @@ int lbs_set_regiontable(struct lbs_private *priv, u8 region, u8 band)
 
 	memset(priv->region_channel, 0, sizeof(priv->region_channel));
 
-	cfp = lbs_get_region_cfp_table(region, band, &cfp_no);
+	cfp = lbs_get_region_cfp_table(region, &cfp_no);
 	if (cfp != NULL) {
 		priv->region_channel[i].nrcfp = cfp_no;
 		priv->region_channel[i].CFP = cfp;

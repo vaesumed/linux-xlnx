@@ -125,6 +125,8 @@ static inline void udp_lib_close(struct sock *sk, long timeout)
 	sk_common_release(sk);
 }
 
+extern int	udp_lib_get_port(struct sock *sk, unsigned short snum,
+		int (*)(const struct sock*,const struct sock*));
 
 /* net/ipv4/udp.c */
 extern int	udp_get_port(struct sock *sk, unsigned short snum,
@@ -192,6 +194,7 @@ struct udp_seq_afinfo {
 };
 
 struct udp_iter_state {
+	struct net              *net;
 	sa_family_t		family;
 	struct hlist_head	*hashtable;
 	int			bucket;
@@ -199,8 +202,8 @@ struct udp_iter_state {
 };
 
 #ifdef CONFIG_PROC_FS
-extern int udp_proc_register(struct udp_seq_afinfo *afinfo);
-extern void udp_proc_unregister(struct udp_seq_afinfo *afinfo);
+extern int udp_proc_register(struct net *net, struct udp_seq_afinfo *afinfo);
+extern void udp_proc_unregister(struct net *net, struct udp_seq_afinfo *afinfo);
 
 extern int  udp4_proc_init(void);
 extern void udp4_proc_exit(void);
