@@ -39,7 +39,6 @@
 #include "lgdt330x.h"
 #include "zl10353.h"
 #include "dvb-pll.h"
-#include "tuner-simple.h"
 
 struct dvb_bt8xx_card {
 	struct mutex lock;
