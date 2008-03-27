@@ -33,7 +33,7 @@
 #define MAGIC_CHECK(is,should)	if (unlikely((is) != (should))) \
 	{ printk(KERN_ERR "magic mismatch: %x (expected %x)\n",is,should); BUG(); }
 
-static int debug = 0;
+static int debug;
 module_param(debug, int, 0644);
 
 MODULE_DESCRIPTION("helper module to manage video4linux vmalloc buffers");
@@ -102,7 +102,7 @@ static struct vm_operations_struct videobuf_vm_ops =
 /* Allocated area consists on 3 parts:
 	struct video_buffer
 	struct <driver>_buffer (cx88_buffer, saa7134_buf, ...)
-	struct videobuf_pci_sg_memory
+	struct videobuf_dma_sg_memory
  */
 
 static void *__videobuf_alloc(size_t size)

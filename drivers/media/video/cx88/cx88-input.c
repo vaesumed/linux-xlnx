@@ -57,7 +57,7 @@ struct cx88_IR {
 	u32 mask_keyup;
 };
 
-static int ir_debug = 0;
+static int ir_debug;
 module_param(ir_debug, int, 0644);	/* debug level [IR] */
 MODULE_PARM_DESC(ir_debug, "enable debug messages [IR]");
 
@@ -255,6 +255,13 @@ int cx88_ir_init(struct cx88_core *core, struct pci_dev *pci)
 		ir_codes = ir_codes_pixelview;
 		ir->gpio_addr = MO_GP1_IO;
 		ir->mask_keycode = 0x1f;
+		ir->mask_keyup = 0x80;
+		ir->polling = 1; /* ms */
+		break;
+	case CX88_BOARD_PROLINK_PV_8000GT:
+		ir_codes = ir_codes_pixelview_new;
+		ir->gpio_addr = MO_GP1_IO;
+		ir->mask_keycode = 0x3f;
 		ir->mask_keyup = 0x80;
 		ir->polling = 1; /* ms */
 		break;
