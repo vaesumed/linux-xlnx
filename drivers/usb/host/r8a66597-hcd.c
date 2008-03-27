@@ -959,9 +959,9 @@ static void prepare_packet_read(struct r8a66597 *r8a66597,
 				r8a66597_write(r8a66597, TRCLR,
 						td->pipe->pipetre);
 				r8a66597_write(r8a66597,
-						(urb->transfer_buffer_length
-						+ td->maxpacket - 1)
-						/ td->maxpacket,
+						DIV_ROUND_UP
+						  (urb->transfer_buffer_length,
+						   td->maxpacket),
 						td->pipe->pipetrn);
 				r8a66597_bset(r8a66597, TRENB,
 						td->pipe->pipetre);
@@ -2106,13 +2106,11 @@ static struct hc_driver r8a66597_hc_driver = {
 #if defined(CONFIG_PM)
 static int r8a66597_suspend(struct platform_device *pdev, pm_message_t state)
 {
-	pdev->dev.power.power_state = state;
 	return 0;
 }
 
 static int r8a66597_resume(struct platform_device *pdev)
 {
-	pdev->dev.power.power_state = PMSG_ON;
 	return 0;
 }
 #else	/* if defined(CONFIG_PM) */
