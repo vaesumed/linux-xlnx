@@ -35,7 +35,6 @@ enum {
 	SATA_FSL_HOST_FLAGS	= (ATA_FLAG_SATA | ATA_FLAG_NO_LEGACY |
 				ATA_FLAG_MMIO | ATA_FLAG_PIO_DMA |
 				ATA_FLAG_NCQ),
-	SATA_FSL_HOST_LFLAGS	= ATA_LFLAG_SKIP_D2H_BSY,
 
 	SATA_FSL_MAX_CMDS	= SATA_FSL_QUEUE_DEPTH,
 	SATA_FSL_CMD_HDR_SIZE	= 16,	/* 4 DWORDS */
@@ -913,16 +912,6 @@ err:
 	return -EIO;
 }
 
-static void sata_fsl_error_handler(struct ata_port *ap)
-{
-
-	DPRINTK("in xx_error_handler\n");
-
-	/* perform recovery */
-	ata_do_eh(ap, ata_std_prereset, sata_fsl_softreset, sata_std_hardreset,
-		  ata_std_postreset);
-}
-
 static void sata_fsl_post_internal_cmd(struct ata_queued_cmd *qc)
 {
 	if (qc->flags & ATA_QCFLAG_FAILED)
@@ -932,11 +921,6 @@ static void sata_fsl_post_internal_cmd(struct ata_queued_cmd *qc)
 		/* make DMA engine forget about the failed command */
 
 	}
-}
-
-static void sata_fsl_irq_clear(struct ata_port *ap)
-{
-	/* unused */
 }
 
 static void sata_fsl_error_intr(struct ata_port *ap)
@@ -996,7 +980,7 @@ static void sata_fsl_error_intr(struct ata_port *ap)
 	/* handle fatal errors */
 	if (hstatus & FATAL_ERROR_DECODE) {
 		err_mask |= AC_ERR_ATA_BUS;
-		action |= ATA_EH_SOFTRESET;
+		action |= ATA_EH_RESET;
 		/* how will fatal error interrupts be completed ?? */
 		freeze = 1;
 	}
@@ -1197,41 +1181,29 @@ static int sata_fsl_init_controller(struct ata_host *host)
  * scsi mid-layer and libata interface structures
  */
 static struct scsi_host_template sata_fsl_sht = {
-	.module = THIS_MODULE,
-	.name = "sata_fsl",
-	.ioctl = ata_scsi_ioctl,
-	.queuecommand = ata_scsi_queuecmd,
-	.change_queue_depth = ata_scsi_change_queue_depth,
+	ATA_NCQ_SHT("sata_fsl"),
 	.can_queue = SATA_FSL_QUEUE_DEPTH,
-	.this_id = ATA_SHT_THIS_ID,
 	.sg_tablesize = SATA_FSL_MAX_PRD_USABLE,
-	.cmd_per_lun = ATA_SHT_CMD_PER_LUN,
-	.emulated = ATA_SHT_EMULATED,
-	.use_clustering = ATA_SHT_USE_CLUSTERING,
-	.proc_name = "sata_fsl",
 	.dma_boundary = ATA_DMA_BOUNDARY,
-	.slave_configure = ata_scsi_slave_config,
-	.slave_destroy = ata_scsi_slave_destroy,
-	.bios_param = ata_std_bios_param,
 };
 
 static const struct ata_port_operations sata_fsl_ops = {
+	.inherits = &sata_port_ops,
+
 	.check_status = sata_fsl_check_status,
 	.check_altstatus = sata_fsl_check_status,
-	.dev_select = ata_noop_dev_select,
 
 	.tf_read = sata_fsl_tf_read,
 
 	.qc_prep = sata_fsl_qc_prep,
 	.qc_issue = sata_fsl_qc_issue,
-	.irq_clear = sata_fsl_irq_clear,
 
 	.scr_read = sata_fsl_scr_read,
 	.scr_write = sata_fsl_scr_write,
 
 	.freeze = sata_fsl_freeze,
 	.thaw = sata_fsl_thaw,
-	.error_handler = sata_fsl_error_handler,
+	.softreset = sata_fsl_softreset,
 	.post_internal_cmd = sata_fsl_post_internal_cmd,
 
 	.port_start = sata_fsl_port_start,
@@ -1241,7 +1213,6 @@ static const struct ata_port_operations sata_fsl_ops = {
 static const struct ata_port_info sata_fsl_port_info[] = {
 	{
 	 .flags = SATA_FSL_HOST_FLAGS,
-	 .link_flags = SATA_FSL_HOST_LFLAGS,
 	 .pio_mask = 0x1f,	/* pio 0-4 */
 	 .udma_mask = 0x7f,	/* udma 0-6 */
 	 .port_ops = &sata_fsl_ops,

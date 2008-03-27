@@ -148,98 +148,52 @@ static void pdc_freeze(struct ata_port *ap);
 static void pdc_sata_freeze(struct ata_port *ap);
 static void pdc_thaw(struct ata_port *ap);
 static void pdc_sata_thaw(struct ata_port *ap);
-static void pdc_pata_error_handler(struct ata_port *ap);
-static void pdc_sata_error_handler(struct ata_port *ap);
+static void pdc_error_handler(struct ata_port *ap);
 static void pdc_post_internal_cmd(struct ata_queued_cmd *qc);
 static int pdc_pata_cable_detect(struct ata_port *ap);
 static int pdc_sata_cable_detect(struct ata_port *ap);
 
 static struct scsi_host_template pdc_ata_sht = {
-	.module			= THIS_MODULE,
-	.name			= DRV_NAME,
-	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,
-	.can_queue		= ATA_DEF_QUEUE,
-	.this_id		= ATA_SHT_THIS_ID,
+	ATA_BASE_SHT(DRV_NAME),
 	.sg_tablesize		= PDC_MAX_PRD,
-	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,
-	.emulated		= ATA_SHT_EMULATED,
-	.use_clustering		= ATA_SHT_USE_CLUSTERING,
-	.proc_name		= DRV_NAME,
 	.dma_boundary		= ATA_DMA_BOUNDARY,
-	.slave_configure	= ata_scsi_slave_config,
-	.slave_destroy		= ata_scsi_slave_destroy,
-	.bios_param		= ata_std_bios_param,
 };
 
-static const struct ata_port_operations pdc_sata_ops = {
-	.tf_load		= pdc_tf_load_mmio,
-	.tf_read		= ata_tf_read,
-	.check_status		= ata_check_status,
-	.exec_command		= pdc_exec_command_mmio,
-	.dev_select		= ata_std_dev_select,
-	.check_atapi_dma	= pdc_check_atapi_dma,
+static const struct ata_port_operations pdc_common_ops = {
+	.inherits		= &ata_sff_port_ops,
 
+	.tf_load		= pdc_tf_load_mmio,
+	.exec_command		= pdc_exec_command_mmio,
+	.check_atapi_dma	= pdc_check_atapi_dma,
 	.qc_prep		= pdc_qc_prep,
 	.qc_issue		= pdc_qc_issue_prot,
+	.irq_clear		= pdc_irq_clear,
+
+	.post_internal_cmd	= pdc_post_internal_cmd,
+	.error_handler		= pdc_error_handler,
+};
+
+static struct ata_port_operations pdc_sata_ops = {
+	.inherits		= &pdc_common_ops,
+	.cable_detect		= pdc_sata_cable_detect,
 	.freeze			= pdc_sata_freeze,
 	.thaw			= pdc_sata_thaw,
-	.error_handler		= pdc_sata_error_handler,
-	.post_internal_cmd	= pdc_post_internal_cmd,
-	.cable_detect		= pdc_sata_cable_detect,
-	.data_xfer		= ata_data_xfer,
-	.irq_clear		= pdc_irq_clear,
-	.irq_on			= ata_irq_on,
-
 	.scr_read		= pdc_sata_scr_read,
 	.scr_write		= pdc_sata_scr_write,
 	.port_start		= pdc_sata_port_start,
 };
 
 /* First-generation chips need a more restrictive ->check_atapi_dma op */
-static const struct ata_port_operations pdc_old_sata_ops = {
-	.tf_load		= pdc_tf_load_mmio,
-	.tf_read		= ata_tf_read,
-	.check_status		= ata_check_status,
-	.exec_command		= pdc_exec_command_mmio,
-	.dev_select		= ata_std_dev_select,
+static struct ata_port_operations pdc_old_sata_ops = {
+	.inherits		= &pdc_sata_ops,
 	.check_atapi_dma	= pdc_old_sata_check_atapi_dma,
-
-	.qc_prep		= pdc_qc_prep,
-	.qc_issue		= pdc_qc_issue_prot,
-	.freeze			= pdc_sata_freeze,
-	.thaw			= pdc_sata_thaw,
-	.error_handler		= pdc_sata_error_handler,
-	.post_internal_cmd	= pdc_post_internal_cmd,
-	.cable_detect		= pdc_sata_cable_detect,
-	.data_xfer		= ata_data_xfer,
-	.irq_clear		= pdc_irq_clear,
-	.irq_on			= ata_irq_on,
-
-	.scr_read		= pdc_sata_scr_read,
-	.scr_write		= pdc_sata_scr_write,
-	.port_start		= pdc_sata_port_start,
 };
 
-static const struct ata_port_operations pdc_pata_ops = {
-	.tf_load		= pdc_tf_load_mmio,
-	.tf_read		= ata_tf_read,
-	.check_status		= ata_check_status,
-	.exec_command		= pdc_exec_command_mmio,
-	.dev_select		= ata_std_dev_select,
-	.check_atapi_dma	= pdc_check_atapi_dma,
-
-	.qc_prep		= pdc_qc_prep,
-	.qc_issue		= pdc_qc_issue_prot,
+static struct ata_port_operations pdc_pata_ops = {
+	.inherits		= &pdc_common_ops,
+	.cable_detect		= pdc_pata_cable_detect,
 	.freeze			= pdc_freeze,
 	.thaw			= pdc_thaw,
-	.error_handler		= pdc_pata_error_handler,
-	.post_internal_cmd	= pdc_post_internal_cmd,
-	.cable_detect		= pdc_pata_cable_detect,
-	.data_xfer		= ata_data_xfer,
-	.irq_clear		= pdc_irq_clear,
-	.irq_on			= ata_irq_on,
-
 	.port_start		= pdc_common_port_start,
 };
 
@@ -738,24 +692,12 @@ static void pdc_sata_thaw(struct ata_port *ap)
 	readl(host_mmio + hotplug_offset); /* flush */
 }
 
-static void pdc_common_error_handler(struct ata_port *ap, ata_reset_fn_t hardreset)
+static void pdc_error_handler(struct ata_port *ap)
 {
 	if (!(ap->pflags & ATA_PFLAG_FROZEN))
 		pdc_reset_port(ap);
 
-	/* perform recovery */
-	ata_do_eh(ap, ata_std_prereset, ata_std_softreset, hardreset,
-		  ata_std_postreset);
-}
-
-static void pdc_pata_error_handler(struct ata_port *ap)
-{
-	pdc_common_error_handler(ap, NULL);
-}
-
-static void pdc_sata_error_handler(struct ata_port *ap)
-{
-	pdc_common_error_handler(ap, sata_std_hardreset);
+	ata_std_error_handler(ap);
 }
 
 static void pdc_post_internal_cmd(struct ata_queued_cmd *qc)
