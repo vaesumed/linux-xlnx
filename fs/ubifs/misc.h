@@ -27,6 +27,8 @@
 #ifndef __UBIFS_MISC_H__
 #define __UBIFS_MISC_H__
 
+#include <asm/div64.h>
+
 /**
  * ubifs_zn_dirty - check if znode is dirty.
  * @znode: znode to check
@@ -262,6 +264,38 @@ static inline void *ubifs_idx_key(const struct ubifs_info *c,
 				  const struct ubifs_idx_node *idx)
 {
 	return (void *)((struct ubifs_branch *)idx->branches)->key;
+}
+
+/**
+ * ubifs_reported_space - calculate reported free space.
+ * @c: the UBIFS file-system description object
+ * @free: amount of free space
+ *
+ * This function calculates amount of free space which will be reported to
+ * user-space. User-space application tend to expect that if the file-system
+ * (e.g., via the 'statfs()' call) reports that it has N bytes available, they
+ * are able to write a file of size N. UBIFS attaches node headers to each data
+ * node and it has to write indexind nodes as well. This introduces additional
+ * overhead, and UBIFS it has to report sligtly less free space to meet the
+ * above expectetion.
+ *
+ * This function assumes free space is made up of uncompressed data nodes and
+ * full index nodes (one per data node, doubled because we always allow enough
+ * space to write the index twice).
+ *
+ * Note, the calculation is pessimistic, which means that most of the time
+ * UBIFS reports less space than it actually has.
+ */
+static inline long long ubifs_reported_space(const struct ubifs_info *c,
+					     long long free)
+{
+	int divisor, factor;
+
+	divisor = UBIFS_MAX_DATA_NODE_SZ + (c->max_idx_node_sz << 1);
+	factor = UBIFS_MAX_DATA_NODE_SZ - UBIFS_DATA_NODE_SZ;
+	do_div(free, divisor);
+
+	return free * factor;
 }
 
 #endif /* __UBIFS_MISC_H__ */
