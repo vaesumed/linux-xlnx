@@ -1124,7 +1124,7 @@ void __init early_init_devtree(void *params)
 	parse_early_param();
 
 	/* Reserve LMB regions used by kernel, initrd, dt, etc... */
-	lmb_reserve(PHYSICAL_START, __pa(klimit) - PHYSICAL_START);
+	lmb_reserve(__pa(_stext), _end - _stext);
 	reserve_kdump_trampoline();
 	reserve_crashkernel();
 	early_reserve_mem();
