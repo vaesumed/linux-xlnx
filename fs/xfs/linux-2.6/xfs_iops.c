@@ -62,12 +62,11 @@ void
 xfs_synchronize_atime(
 	xfs_inode_t	*ip)
 {
-	bhv_vnode_t	*vp;
+	struct inode	*inode = ip->i_vnode;
 
-	vp = XFS_ITOV_NULL(ip);
-	if (vp) {
-		ip->i_d.di_atime.t_sec = (__int32_t)vp->i_atime.tv_sec;
-		ip->i_d.di_atime.t_nsec = (__int32_t)vp->i_atime.tv_nsec;
+	if (inode) {
+		ip->i_d.di_atime.t_sec = (__int32_t)inode->i_atime.tv_sec;
+		ip->i_d.di_atime.t_nsec = (__int32_t)inode->i_atime.tv_nsec;
 	}
 }
 
@@ -80,11 +79,10 @@ void
 xfs_mark_inode_dirty_sync(
 	xfs_inode_t	*ip)
 {
-	bhv_vnode_t	*vp;
+	struct inode	*inode = ip->i_vnode;
 
-	vp = XFS_ITOV_NULL(ip);
-	if (vp)
-		mark_inode_dirty_sync(vn_to_inode(vp));
+	if (inode)
+		mark_inode_dirty_sync(inode);
 }
 
 /*
@@ -215,48 +213,36 @@ xfs_validate_fields(
  */
 STATIC int
 xfs_init_security(
-	bhv_vnode_t	*vp,
+	struct inode	*inode,
 	struct inode	*dir)
 {
-	struct inode	*ip = vn_to_inode(vp);
+	struct xfs_inode *ip = XFS_I(inode);
 	size_t		length;
 	void		*value;
 	char		*name;
 	int		error;
 
-	error = security_inode_init_security(ip, dir, &name, &value, &length);
+	error = security_inode_init_security(inode, dir, &name,
+					     &value, &length);
 	if (error) {
 		if (error == -EOPNOTSUPP)
 			return 0;
 		return -error;
 	}
 
-	error = xfs_attr_set(XFS_I(ip), name, value,
-			length, ATTR_SECURE);
+	error = xfs_attr_set(ip, name, value, length, ATTR_SECURE);
 	if (!error)
-		xfs_iflags_set(XFS_I(ip), XFS_IMODIFIED);
+		xfs_iflags_set(ip, XFS_IMODIFIED);
 
 	kfree(name);
 	kfree(value);
 	return error;
 }
 
-/*
- * Determine whether a process has a valid fs_struct (kernel daemons
- * like knfsd don't have an fs_struct).
- *
- * XXX(hch):  nfsd is broken, better fix it instead.
- */
-STATIC_INLINE int
-xfs_has_fs_struct(struct task_struct *task)
-{
-	return (task->fs != init_task.fs);
-}
-
 STATIC void
 xfs_cleanup_inode(
 	struct inode	*dir,
-	bhv_vnode_t	*vp,
+	struct inode	*inode,
 	struct dentry	*dentry,
 	int		mode)
 {
@@ -267,14 +253,14 @@ xfs_cleanup_inode(
 	 * xfs_init_security we must back out.
 	 * ENOSPC can hit here, among other things.
 	 */
-	teardown.d_inode = vn_to_inode(vp);
+	teardown.d_inode = inode;
 	teardown.d_name = dentry->d_name;
 
 	if (S_ISDIR(mode))
 		xfs_rmdir(XFS_I(dir), &teardown);
 	else
 		xfs_remove(XFS_I(dir), &teardown);
-	VN_RELE(vp);
+	iput(inode);
 }
 
 STATIC int
@@ -284,8 +270,8 @@ xfs_vn_mknod(
 	int		mode,
 	dev_t		rdev)
 {
-	struct inode	*ip;
-	bhv_vnode_t	*vp = NULL, *dvp = vn_from_inode(dir);
+	struct inode	*inode;
+	struct xfs_inode *ip = NULL;
 	xfs_acl_t	*default_acl = NULL;
 	attrexists_t	test_default_acl = _ACL_DEFAULT_EXISTS;
 	int		error;
@@ -297,59 +283,65 @@ xfs_vn_mknod(
 	if (unlikely(!sysv_valid_dev(rdev) || MAJOR(rdev) & ~0x1ff))
 		return -EINVAL;
 
-	if (unlikely(test_default_acl && test_default_acl(dvp))) {
+	if (test_default_acl && test_default_acl(dir)) {
 		if (!_ACL_ALLOC(default_acl)) {
 			return -ENOMEM;
 		}
-		if (!_ACL_GET_DEFAULT(dvp, default_acl)) {
+		if (!_ACL_GET_DEFAULT(dir, default_acl)) {
 			_ACL_FREE(default_acl);
 			default_acl = NULL;
 		}
 	}
 
-	if (IS_POSIXACL(dir) && !default_acl && xfs_has_fs_struct(current))
+	if (IS_POSIXACL(dir) && !default_acl)
 		mode &= ~current->fs->umask;
 
 	switch (mode & S_IFMT) {
-	case S_IFCHR: case S_IFBLK: case S_IFIFO: case S_IFSOCK:
+	case S_IFCHR:
+	case S_IFBLK:
+	case S_IFIFO:
+	case S_IFSOCK:
 		rdev = sysv_encode_dev(rdev);
 	case S_IFREG:
-		error = xfs_create(XFS_I(dir), dentry, mode, rdev, &vp, NULL);
+		error = xfs_create(XFS_I(dir), dentry, mode, rdev, &ip, NULL);
 		break;
 	case S_IFDIR:
-		error = xfs_mkdir(XFS_I(dir), dentry, mode, &vp, NULL);
+		error = xfs_mkdir(XFS_I(dir), dentry, mode, &ip, NULL);
 		break;
 	default:
 		error = EINVAL;
 		break;
 	}
 
-	if (unlikely(!error)) {
-		error = xfs_init_security(vp, dir);
-		if (error)
-			xfs_cleanup_inode(dir, vp, dentry, mode);
-	}
+	if (unlikely(error))
+		goto out_free_acl;
 
-	if (unlikely(default_acl)) {
-		if (!error) {
-			error = _ACL_INHERIT(vp, mode, default_acl);
-			if (!error)
-				xfs_iflags_set(XFS_I(vp), XFS_IMODIFIED);
-			else
-				xfs_cleanup_inode(dir, vp, dentry, mode);
-		}
+	inode = ip->i_vnode;
+
+	error = xfs_init_security(inode, dir);
+	if (unlikely(error))
+		goto out_cleanup_inode;
+
+	if (default_acl) {
+		error = _ACL_INHERIT(inode, mode, default_acl);
+		if (unlikely(error))
+			goto out_cleanup_inode;
+		xfs_iflags_set(ip, XFS_IMODIFIED);
 		_ACL_FREE(default_acl);
 	}
 
-	if (likely(!error)) {
-		ASSERT(vp);
-		ip = vn_to_inode(vp);
 
-		if (S_ISDIR(mode))
-			xfs_validate_fields(ip);
-		d_instantiate(dentry, ip);
-		xfs_validate_fields(dir);
-	}
+	if (S_ISDIR(mode))
+		xfs_validate_fields(inode);
+	d_instantiate(dentry, inode);
+	xfs_validate_fields(dir);
+	return -error;
+
+ out_cleanup_inode:
+	xfs_cleanup_inode(dir, inode, dentry, mode);
+ out_free_acl:
+	if (default_acl)
+		_ACL_FREE(default_acl);
 	return -error;
 }
 
@@ -378,13 +370,13 @@ xfs_vn_lookup(
 	struct dentry	*dentry,
 	struct nameidata *nd)
 {
-	bhv_vnode_t	*cvp;
+	struct xfs_inode *cip;
 	int		error;
 
 	if (dentry->d_name.len >= MAXNAMELEN)
 		return ERR_PTR(-ENAMETOOLONG);
 
-	error = xfs_lookup(XFS_I(dir), dentry, &cvp);
+	error = xfs_lookup(XFS_I(dir), dentry, &cip);
 	if (unlikely(error)) {
 		if (unlikely(error != ENOENT))
 			return ERR_PTR(-error);
@@ -392,7 +384,7 @@ xfs_vn_lookup(
 		return NULL;
 	}
 
-	return d_splice_alias(vn_to_inode(cvp), dentry);
+	return d_splice_alias(cip->i_vnode, dentry);
 }
 
 STATIC int
@@ -401,23 +393,22 @@ xfs_vn_link(
 	struct inode	*dir,
 	struct dentry	*dentry)
 {
-	struct inode	*ip;	/* inode of guy being linked to */
-	bhv_vnode_t	*vp;	/* vp of name being linked */
+	struct inode	*inode;	/* inode of guy being linked to */
 	int		error;
 
-	ip = old_dentry->d_inode;	/* inode being linked to */
-	vp = vn_from_inode(ip);
+	inode = old_dentry->d_inode;
 
-	VN_HOLD(vp);
-	error = xfs_link(XFS_I(dir), vp, dentry);
+	igrab(inode);
+	error = xfs_link(XFS_I(dir), XFS_I(inode), dentry);
 	if (unlikely(error)) {
-		VN_RELE(vp);
-	} else {
-		xfs_iflags_set(XFS_I(dir), XFS_IMODIFIED);
-		xfs_validate_fields(ip);
-		d_instantiate(dentry, ip);
+		iput(inode);
+		return -error;
 	}
-	return -error;
+
+	xfs_iflags_set(XFS_I(dir), XFS_IMODIFIED);
+	xfs_validate_fields(inode);
+	d_instantiate(dentry, inode);
+	return 0;
 }
 
 STATIC int
@@ -444,29 +435,33 @@ xfs_vn_symlink(
 	struct dentry	*dentry,
 	const char	*symname)
 {
-	struct inode	*ip;
-	bhv_vnode_t	*cvp;	/* used to lookup symlink to put in dentry */
+	struct inode	*inode;
+	struct xfs_inode *cip = NULL;
 	int		error;
 	mode_t		mode;
-
-	cvp = NULL;
 
 	mode = S_IFLNK |
 		(irix_symlink_mode ? 0777 & ~current->fs->umask : S_IRWXUGO);
 
 	error = xfs_symlink(XFS_I(dir), dentry, (char *)symname, mode,
-			    &cvp, NULL);
-	if (likely(!error && cvp)) {
-		error = xfs_init_security(cvp, dir);
-		if (likely(!error)) {
-			ip = vn_to_inode(cvp);
-			d_instantiate(dentry, ip);
-			xfs_validate_fields(dir);
-			xfs_validate_fields(ip);
-		} else {
-			xfs_cleanup_inode(dir, cvp, dentry, 0);
-		}
-	}
+			    &cip, NULL);
+	if (unlikely(error))
+		goto out;
+
+	inode = cip->i_vnode;
+
+	error = xfs_init_security(inode, dir);
+	if (unlikely(error))
+		goto out_cleanup_inode;
+
+	d_instantiate(dentry, inode);
+	xfs_validate_fields(dir);
+	xfs_validate_fields(inode);
+	return 0;
+
+ out_cleanup_inode:
+	xfs_cleanup_inode(dir, inode, dentry, 0);
+ out:
 	return -error;
 }
 
@@ -494,12 +489,9 @@ xfs_vn_rename(
 	struct dentry	*ndentry)
 {
 	struct inode	*new_inode = ndentry->d_inode;
-	bhv_vnode_t	*tvp;	/* target directory */
 	int		error;
 
-	tvp = vn_from_inode(ndir);
-
-	error = xfs_rename(XFS_I(odir), odentry, tvp, ndentry);
+	error = xfs_rename(XFS_I(odir), odentry, XFS_I(ndir), ndentry);
 	if (likely(!error)) {
 		if (new_inode)
 			xfs_validate_fields(new_inode);
