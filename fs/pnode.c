@@ -9,6 +9,7 @@
 #include <linux/mnt_namespace.h>
 #include <linux/mount.h>
 #include <linux/fs.h>
+#include "internal.h"
 #include "pnode.h"
 
 /* return the next shared peer mount of @p */
@@ -211,8 +212,7 @@ int propagate_mnt(struct vfsmount *dest_mnt, struct dentry *dest_dentry,
 out:
 	spin_lock(&vfsmount_lock);
 	while (!list_empty(&tmp_list)) {
-		child = list_entry(tmp_list.next, struct vfsmount, mnt_hash);
-		list_del_init(&child->mnt_hash);
+		child = list_first_entry(&tmp_list, struct vfsmount, mnt_hash);
 		umount_tree(child, 0, &umount_list);
 	}
 	spin_unlock(&vfsmount_lock);
@@ -225,7 +225,7 @@ out:
  */
 static inline int do_refcount_check(struct vfsmount *mnt, int count)
 {
-	int mycount = atomic_read(&mnt->mnt_count);
+	int mycount = atomic_read(&mnt->mnt_count) - mnt->mnt_ghosts;
 	return (mycount > count);
 }
 

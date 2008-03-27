@@ -205,8 +205,6 @@ asmlinkage long sys_signalfd(int ufd, sigset_t __user *user_mask, size_t sizemas
 	int error;
 	sigset_t sigmask;
 	struct signalfd_ctx *ctx;
-	struct file *file;
-	struct inode *inode;
 
 	if (sizemask != sizeof(sigset_t) ||
 	    copy_from_user(&sigmask, user_mask, sizeof(sigmask)))
@@ -225,12 +223,12 @@ asmlinkage long sys_signalfd(int ufd, sigset_t __user *user_mask, size_t sizemas
 		 * When we call this, the initialization must be complete, since
 		 * anon_inode_getfd() will install the fd.
 		 */
-		error = anon_inode_getfd(&ufd, &inode, &file, "[signalfd]",
+		error = anon_inode_getfd(&ufd, "[signalfd]",
 					 &signalfd_fops, ctx);
 		if (error)
 			goto err_fdalloc;
 	} else {
-		file = fget(ufd);
+		struct file *file = fget(ufd);
 		if (!file)
 			return -EBADF;
 		ctx = file->private_data;
