@@ -812,6 +812,7 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 	dbg_lp("nnode_sz %d", c->nnode_sz);
 	dbg_lp("ltab_sz %d", c->ltab_sz);
 	dbg_lp("lsave_sz %d", c->lsave_sz);
+	dbg_lp("lsave_cnt %d", c->lsave_cnt);
 	dbg_lp("lpt_hght %d", c->lpt_hght);
 	dbg_lp("big_lpt %d", c->big_lpt);
 	dbg_lp("LPT root is at %d:%d", c->lpt_lnum, c->lpt_offs);
