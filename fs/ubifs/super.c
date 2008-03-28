@@ -456,7 +456,10 @@ static int ubifs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_bsize = UBIFS_BLOCK_SIZE;
 	buf->f_blocks = c->block_cnt;
 	buf->f_bfree = free >> UBIFS_BLOCK_SHIFT;
-	buf->f_bavail = buf->f_bfree;
+	if (free > c->report_rp_size)
+		buf->f_bavail = (free - c->report_rp_size) >> UBIFS_BLOCK_SHIFT;
+	else
+		buf->f_bavail = 0;
 	buf->f_files = 0;
 	buf->f_ffree = 0;
 	buf->f_namelen = UBIFS_MAX_NLEN;
