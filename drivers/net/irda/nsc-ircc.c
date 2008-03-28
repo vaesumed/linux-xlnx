@@ -100,7 +100,6 @@ static int nsc_ircc_probe_39x(nsc_chip_t *chip, chipio_t *info);
 static int nsc_ircc_init_108(nsc_chip_t *chip, chipio_t *info);
 static int nsc_ircc_init_338(nsc_chip_t *chip, chipio_t *info);
 static int nsc_ircc_init_39x(nsc_chip_t *chip, chipio_t *info);
-static int nsc_ircc_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *id);
 
 /* These are the known NSC chips */
 static nsc_chip_t chips[] = {
@@ -145,8 +144,10 @@ static char *dongle_types[] = {
 	"No dongle connected",
 };
 
-/* PNP probing */
 static chipio_t pnp_info;
+
+#ifdef CONFIG_PNP
+/* PNP probing */
 static const struct pnp_device_id nsc_ircc_pnp_table[] = {
 	{ .id = "NSC6001", .driver_data = 0 },
 	{ .id = "IBM0071", .driver_data = 0 },
@@ -155,11 +156,16 @@ static const struct pnp_device_id nsc_ircc_pnp_table[] = {
 
 MODULE_DEVICE_TABLE(pnp, nsc_ircc_pnp_table);
 
+static int nsc_ircc_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *id);
+
 static struct pnp_driver nsc_ircc_pnp_driver = {
 	.name = "nsc-ircc",
 	.id_table = nsc_ircc_pnp_table,
 	.probe = nsc_ircc_pnp_probe,
 };
+#else
+static struct pnp_driver nsc_ircc_pnp_driver;
+#endif
 
 /* Some prototypes */
 static int  nsc_ircc_open(chipio_t *info);
@@ -916,6 +922,7 @@ static int nsc_ircc_probe_39x(nsc_chip_t *chip, chipio_t *info)
 	return 0;
 }
 
+#ifdef CONFIG_PNP
 /* PNP probing */
 static int nsc_ircc_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *id)
 {
@@ -952,6 +959,7 @@ static int nsc_ircc_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *i
 
 	return 0;
 }
+#endif
 
 /*
  * Function nsc_ircc_setup (info)
