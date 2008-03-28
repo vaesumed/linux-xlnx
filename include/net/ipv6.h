@@ -202,6 +202,7 @@ struct ip6_flowlabel
 	u32			owner;
 	unsigned long		lastuse;
 	unsigned long		expires;
+	struct net		*fl_net;
 };
 
 #define IPV6_FLOWINFO_MASK	__constant_htonl(0x0FFFFFFF)
@@ -393,6 +394,16 @@ static inline void ipv6_addr_set_v4mapped(const __be32 addr,
 }
 
 /*
+ * Check for a RFC 4843 ORCHID address
+ * (Overlay Routable Cryptographic Hash Identifiers)
+ */
+static inline int ipv6_addr_orchid(const struct in6_addr *a)
+{
+	return ((a->s6_addr32[0] & htonl(0xfffffff0))
+		== htonl(0x20010010));
+}
+
+/*
  * find the first different bit between two addresses
  * length of address must be a multiple of 32bits
  */
@@ -554,10 +565,6 @@ extern int			compat_ipv6_getsockopt(struct sock *sk,
 						char __user *optval,
 						int __user *optlen);
 
-extern int			ipv6_packet_init(void);
-
-extern void			ipv6_packet_cleanup(void);
-
 extern int			ip6_datagram_connect(struct sock *sk, 
 						     struct sockaddr *addr, int addr_len);
 
@@ -594,14 +601,14 @@ extern int ip6_mc_msfget(struct sock *sk, struct group_filter *gsf,
 			 int __user *optlen);
 
 #ifdef CONFIG_PROC_FS
-extern int  ac6_proc_init(void);
-extern void ac6_proc_exit(void);
+extern int  ac6_proc_init(struct net *net);
+extern void ac6_proc_exit(struct net *net);
 extern int  raw6_proc_init(void);
 extern void raw6_proc_exit(void);
-extern int  tcp6_proc_init(void);
-extern void tcp6_proc_exit(void);
-extern int  udp6_proc_init(void);
-extern void udp6_proc_exit(void);
+extern int  tcp6_proc_init(struct net *net);
+extern void tcp6_proc_exit(struct net *net);
+extern int  udp6_proc_init(struct net *net);
+extern void udp6_proc_exit(struct net *net);
 extern int  udplite6_proc_init(void);
 extern void udplite6_proc_exit(void);
 extern int  ipv6_misc_proc_init(void);
@@ -609,17 +616,11 @@ extern void ipv6_misc_proc_exit(void);
 extern int snmp6_register_dev(struct inet6_dev *idev);
 extern int snmp6_unregister_dev(struct inet6_dev *idev);
 
-extern struct rt6_statistics rt6_stats;
 #else
-static inline int snmp6_register_dev(struct inet6_dev *idev)
-{
-	return 0;
-}
-
-static inline int snmp6_unregister_dev(struct inet6_dev *idev)
-{
-	return 0;
-}
+static inline int ac6_proc_init(struct net *net) { return 0; }
+static inline void ac6_proc_exit(struct net *net) { }
+static inline int snmp6_register_dev(struct inet6_dev *idev) { return 0; }
+static inline int snmp6_unregister_dev(struct inet6_dev *idev) { return 0; }
 #endif
 
 #ifdef CONFIG_SYSCTL

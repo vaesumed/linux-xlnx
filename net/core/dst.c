@@ -279,7 +279,7 @@ static inline void dst_ifdown(struct dst_entry *dst, struct net_device *dev,
 	if (!unregister) {
 		dst->input = dst->output = dst_discard;
 	} else {
-		dst->dev = dst->dev->nd_net->loopback_dev;
+		dst->dev = dev_net(dst->dev)->loopback_dev;
 		dev_hold(dst->dev);
 		dev_put(dev);
 		if (dst->neighbour && dst->neighbour->dev == dev) {
@@ -294,9 +294,6 @@ static int dst_dev_event(struct notifier_block *this, unsigned long event, void 
 {
 	struct net_device *dev = ptr;
 	struct dst_entry *dst, *last = NULL;
-
-	if (dev->nd_net != &init_net)
-		return NOTIFY_DONE;
 
 	switch (event) {
 	case NETDEV_UNREGISTER:
