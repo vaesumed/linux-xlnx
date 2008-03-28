@@ -480,7 +480,7 @@ struct pneigh_entry *__pneigh_lookup(struct neigh_table *tbl,
 
 	for (n = tbl->phash_buckets[hash_val]; n; n = n->next) {
 		if (!memcmp(n->key, pkey, key_len) &&
-		    (n->net == net) &&
+		    net_eq(pneigh_net(n), net) &&
 		    (n->dev == dev || !n->dev))
 			break;
 	}
