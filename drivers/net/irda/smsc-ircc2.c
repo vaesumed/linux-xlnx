@@ -79,9 +79,13 @@ MODULE_AUTHOR("Daniele Peri <peri@csai.unipa.it>");
 MODULE_DESCRIPTION("SMC IrCC SIR/FIR controller driver");
 MODULE_LICENSE("GPL");
 
+#ifdef CONFIG_PNP
 static int smsc_nopnp = 1;
 module_param_named(nopnp, smsc_nopnp, bool, 0);
 MODULE_PARM_DESC(nopnp, "Do not use PNP to detect controller settings, defaults to true");
+#else
+#define smsc_nopnp 1
+#endif
 
 #define DMA_INVAL 255
 static int ircc_dma = DMA_INVAL;
@@ -366,6 +370,10 @@ static inline void register_bank(int iobase, int bank)
                iobase + IRCC_MASTER);
 }
 
+static int pnp_driver_registered;
+
+#ifdef CONFIG_PNP
+
 /* PNP hotplug support */
 static const struct pnp_device_id smsc_ircc_pnp_table[] = {
 	{ .id = "SMCf010", .driver_data = 0 },
@@ -373,8 +381,6 @@ static const struct pnp_device_id smsc_ircc_pnp_table[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(pnp, smsc_ircc_pnp_table);
-
-static int pnp_driver_registered;
 
 static int __init smsc_ircc_pnp_probe(struct pnp_dev *dev,
 				      const struct pnp_device_id *dev_id)
@@ -402,6 +408,10 @@ static struct pnp_driver smsc_ircc_pnp_driver = {
 	.id_table	= smsc_ircc_pnp_table,
 	.probe		= smsc_ircc_pnp_probe,
 };
+
+#else
+static struct pnp_driver smsc_ircc_pnp_driver;
+#endif
 
 
 /*******************************************************************************
