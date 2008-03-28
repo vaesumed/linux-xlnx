@@ -187,11 +187,21 @@ startup_continue:
 	oi	6(%r12),2		# set MVCOS flag
 1:
 
+	la	%r1,0f-.LPG1(%r13)
+	stg	%r1,__LC_PGM_NEW_PSW+8
+	lhi	%r1,-1
+	.short	0xb9af
+	.short	0x0011
+0:	tm	0x8f,0x6		# specification exception?
+	bno	1f-.LPG1(%r13)
+	oi	6(%r12),8
+1:
+
 	lpswe	.Lentry-.LPG1(13)	# jump to _stext in primary-space,
 					# virtual and never return ...
 	.align	16
 .Lentry:.quad	0x0000000180000000,_stext
-.Lctl:	.quad	0x04b50002		# cr0: various things
+.Lctl:	.quad	0x04350002		# cr0: various things
 	.quad	0			# cr1: primary space segment table
 	.quad	.Lduct			# cr2: dispatchable unit control table
 	.quad	0			# cr3: instruction authorization

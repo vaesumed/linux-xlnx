@@ -263,6 +263,19 @@ static noinline __init void setup_lowcore_early(void)
 	s390_base_pgm_handler_fn = early_pgm_check_handler;
 }
 
+static noinline __init void setup_hpage(void)
+{
+#ifndef CONFIG_DEBUG_PAGEALLOC
+	unsigned int facilities;
+
+	facilities = stfl();
+	if (!(facilities & (1UL << 23)) || !(facilities & (1UL << 29)))
+		return;
+	machine_flags |= 1024;
+	__ctl_set_bit(0, 23);
+#endif
+}
+
 /*
  * Save ipl parameters, clear bss memory, initialize storage keys
  * and create a kernel NSS at startup if the SAVESYS= parm is defined
@@ -280,6 +293,7 @@ void __init startup_init(void)
 	create_kernel_nss();
 	sort_main_extable();
 	setup_lowcore_early();
+	setup_hpage();
 	sclp_read_info_early();
 	sclp_facilities_detect();
 	memsize = sclp_memory_detect();
