@@ -50,6 +50,13 @@ typedef struct {
 	__u32 u[4];
 } __attribute__((aligned(16))) __vector128;
 
+/* Physical address used by some IO functions */
+#if defined(CONFIG_PPC64) || defined(CONFIG_PHYS_64BIT)
+typedef __u64 phys_addr_t;
+#else
+typedef __u32 phys_addr_t;
+#endif
+
 #endif /* __ASSEMBLY__ */
 
 #ifdef __KERNEL__
