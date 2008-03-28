@@ -396,8 +396,9 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 		goto failed;
 	}
 
-	if (c->lsave_cnt < 0 || c->lsave_cnt > c->max_leb_cnt - UBIFS_SB_LEBS -
-	    UBIFS_MST_LEBS - c->log_lebs - c->lpt_lebs - c->orph_lebs) {
+	if (c->lsave_cnt < 0 || (c->lsave_cnt > DEFAULT_LSAVE_CNT &&
+	    c->lsave_cnt > c->max_leb_cnt - UBIFS_SB_LEBS - UBIFS_MST_LEBS -
+	    c->log_lebs - c->lpt_lebs - c->orph_lebs)) {
 		dbg_err("bad lsave_cnt");
 		goto failed;
 	}
