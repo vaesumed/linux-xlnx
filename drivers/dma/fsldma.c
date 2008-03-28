@@ -412,7 +412,7 @@ static void fsl_dma_free_chan_resources(struct dma_chan *chan)
 }
 
 static struct dma_async_tx_descriptor *
-fsl_dma_prep_interrupt(struct dma_chan *chan)
+fsl_dma_prep_interrupt(struct dma_chan *chan, unsigned long flags)
 {
 	struct fsl_dma_chan *fsl_chan;
 	struct fsl_desc_sw *new;
@@ -429,7 +429,7 @@ fsl_dma_prep_interrupt(struct dma_chan *chan)
 	}
 
 	new->async_tx.cookie = -EBUSY;
-	new->async_tx.ack = 0;
+	new->async_tx.flags = flags;
 
 	/* Insert the link descriptor to the LD ring */
 	list_add_tail(&new->node, &new->async_tx.tx_list);
@@ -482,7 +482,7 @@ static struct dma_async_tx_descriptor *fsl_dma_prep_memcpy(
 			set_desc_next(fsl_chan, &prev->hw, new->async_tx.phys);
 
 		new->async_tx.cookie = 0;
-		new->async_tx.ack = 1;
+		async_tx_ack(&new->async_tx);
 
 		prev = new;
 		len -= copy;
@@ -493,7 +493,7 @@ static struct dma_async_tx_descriptor *fsl_dma_prep_memcpy(
 		list_add_tail(&new->node, &first->async_tx.tx_list);
 	} while (len);
 
-	new->async_tx.ack = 0; /* client is in control of this ack */
+	new->async_tx.flags = flags; /* client is in control of this ack */
 	new->async_tx.cookie = -EBUSY;
 
 	/* Set End-of-link to the last link descriptor of new list*/
@@ -656,13 +656,6 @@ static void fsl_dma_memcpy_issue_pending(struct dma_chan *chan)
 #endif
 
 	fsl_chan_xfer_ld_queue(fsl_chan);
-}
-
-static void fsl_dma_dependency_added(struct dma_chan *chan)
-{
-	struct fsl_dma_chan *fsl_chan = to_fsl_chan(chan);
-
-	fsl_chan_ld_cleanup(fsl_chan);
 }
 
 /**
@@ -867,7 +860,7 @@ static int fsl_dma_self_test(struct fsl_dma_chan *fsl_chan)
 	async_tx_ack(tx3);
 
 	/* Interrupt tx test */
-	tx1 = fsl_dma_prep_interrupt(chan);
+	tx1 = fsl_dma_prep_interrupt(chan, 0);
 	async_tx_ack(tx1);
 	cookie = fsl_dma_tx_submit(tx1);
 
@@ -1080,7 +1073,6 @@ static int __devinit of_fsl_dma_probe(struct of_device *dev,
 	fdev->common.device_prep_dma_memcpy = fsl_dma_prep_memcpy;
 	fdev->common.device_is_tx_complete = fsl_dma_is_complete;
 	fdev->common.device_issue_pending = fsl_dma_memcpy_issue_pending;
-	fdev->common.device_dependency_added = fsl_dma_dependency_added;
 	fdev->common.dev = &dev->dev;
 
 	irq = irq_of_parse_and_map(dev->node, 0);
