@@ -179,7 +179,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	do_div(tmp64, 100);
 	if (tmp64 > DEFAULT_MAX_RP_SIZE)
 		tmp64 = DEFAULT_MAX_RP_SIZE;
-	sup->rp_size       = cpu_to_le64(tmp64);
+	sup->rp_size = cpu_to_le64(tmp64);
 
 	err = ubifs_write_node(c, sup, UBIFS_SB_NODE_SZ, 0, 0, UBI_LONGTERM);
 	kfree(sup);
@@ -573,6 +573,7 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->main_lebs = c->leb_cnt - UBIFS_SB_LEBS - UBIFS_MST_LEBS;
 	c->main_lebs -= c->log_lebs + c->lpt_lebs + c->orph_lebs;
 	c->main_first = c->leb_cnt - c->main_lebs;
+	c->report_rp_size = ubifs_reported_space(c, c->rp_size);
 
 	err = validate_sb(c, sup);
 out:

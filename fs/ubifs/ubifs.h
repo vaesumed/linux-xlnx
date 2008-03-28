@@ -961,6 +961,7 @@ struct ubifs_mount_opts {
  * @lscan_lnum: LEB number of last LPT scan
  *
  * @rp_size: size of the reserved pool in bytes
+ * @report_rp_size: size of the reserved pool reported to userspace
  * @rp_uid: reserved pool user ID
  * @rp_gid: reserved pool group ID
  *
@@ -1180,6 +1181,7 @@ struct ubifs_info {
 	int lscan_lnum;
 
 	long long rp_size;
+	long long report_rp_size;
 	uid_t rp_uid;
 	gid_t rp_gid;
 
