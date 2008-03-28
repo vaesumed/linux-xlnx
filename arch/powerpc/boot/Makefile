@@ -35,8 +35,8 @@ endif
 
 BOOTCFLAGS	+= -I$(obj) -I$(srctree)/$(obj) -I$(srctree)/$(src)/libfdt
 
-ifdef CONFIG_MEMORY_START
-MEMBASE=$(CONFIG_MEMORY_START)
+ifdef CONFIG_PHYSICAL_START
+MEMBASE=$(CONFIG_PHYSICAL_START)
 else
 MEMBASE=0x00000000
 endif
