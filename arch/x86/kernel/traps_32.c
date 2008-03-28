@@ -498,7 +498,7 @@ do_trap(int trapnr, int signr, char *str, int vm86, struct pt_regs *regs,
 {
 	struct task_struct *tsk = current;
 
-	if (regs->flags & VM_MASK) {
+	if (regs->flags & X86_VM_MASK) {
 		if (vm86)
 			goto vm86_trap;
 		goto trap_signal;
