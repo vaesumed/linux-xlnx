@@ -3502,27 +3502,11 @@ ips_send_wait(ips_ha_t * ha, ips_scb_t * scb, int timeout, int intr)
 static void
 ips_scmd_buf_write(struct scsi_cmnd *scmd, void *data, unsigned int count)
 {
-        int i;
-        unsigned int min_cnt, xfer_cnt;
-        char *cdata = (char *) data;
-        unsigned char *buffer;
-        unsigned long flags;
-        struct scatterlist *sg = scsi_sglist(scmd);
+	unsigned long flags;
 
-        for (i = 0, xfer_cnt = 0;
-             (i < scsi_sg_count(scmd)) && (xfer_cnt < count); i++) {
-                min_cnt = min(count - xfer_cnt, sg[i].length);
-
-                /* kmap_atomic() ensures addressability of the data buffer.*/
-                /* local_irq_save() protects the KM_IRQ0 address slot.     */
-                local_irq_save(flags);
-                buffer = kmap_atomic(sg_page(&sg[i]), KM_IRQ0) + sg[i].offset;
-                memcpy(buffer, &cdata[xfer_cnt], min_cnt);
-                kunmap_atomic(buffer - sg[i].offset, KM_IRQ0);
-                local_irq_restore(flags);
-
-                xfer_cnt += min_cnt;
-        }
+	local_irq_save(flags);
+	scsi_sg_copy_from_buffer(scmd, data, count);
+	local_irq_restore(flags);
 }
 
 /****************************************************************************/
@@ -3535,27 +3519,11 @@ ips_scmd_buf_write(struct scsi_cmnd *scmd, void *data, unsigned int count)
 static void
 ips_scmd_buf_read(struct scsi_cmnd *scmd, void *data, unsigned int count)
 {
-        int i;
-        unsigned int min_cnt, xfer_cnt;
-        char *cdata = (char *) data;
-        unsigned char *buffer;
-        unsigned long flags;
-        struct scatterlist *sg = scsi_sglist(scmd);
+	unsigned long flags;
 
-        for (i = 0, xfer_cnt = 0;
-             (i < scsi_sg_count(scmd)) && (xfer_cnt < count); i++) {
-                min_cnt = min(count - xfer_cnt, sg[i].length);
-
-                /* kmap_atomic() ensures addressability of the data buffer.*/
-                /* local_irq_save() protects the KM_IRQ0 address slot.     */
-                local_irq_save(flags);
-                buffer = kmap_atomic(sg_page(&sg[i]), KM_IRQ0) + sg[i].offset;
-                memcpy(&cdata[xfer_cnt], buffer, min_cnt);
-                kunmap_atomic(buffer - sg[i].offset, KM_IRQ0);
-                local_irq_restore(flags);
-
-                xfer_cnt += min_cnt;
-        }
+	local_irq_save(flags);
+	scsi_sg_copy_to_buffer(scmd, data, count);
+	local_irq_restore(flags);
 }
 
 /****************************************************************************/
@@ -6842,7 +6810,6 @@ ips_register_scsi(int index)
 	sh->sg_tablesize = sh->hostt->sg_tablesize;
 	sh->can_queue = sh->hostt->can_queue;
 	sh->cmd_per_lun = sh->hostt->cmd_per_lun;
-	sh->unchecked_isa_dma = sh->hostt->unchecked_isa_dma;
 	sh->use_clustering = sh->hostt->use_clustering;
 	sh->max_sectors = 128;
 
