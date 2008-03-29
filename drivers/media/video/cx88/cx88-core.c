@@ -47,15 +47,15 @@ MODULE_LICENSE("GPL");
 
 /* ------------------------------------------------------------------ */
 
-static unsigned int core_debug = 0;
+static unsigned int core_debug;
 module_param(core_debug,int,0644);
 MODULE_PARM_DESC(core_debug,"enable debug messages [core]");
 
-static unsigned int nicam = 0;
+static unsigned int nicam;
 module_param(nicam,int,0644);
 MODULE_PARM_DESC(nicam,"tv audio is nicam");
 
-static unsigned int nocomb = 0;
+static unsigned int nocomb;
 module_param(nocomb,int,0644);
 MODULE_PARM_DESC(nocomb,"disable comb filter");
 
@@ -219,7 +219,7 @@ cx88_free_buffer(struct videobuf_queue *q, struct cx88_buffer *buf)
 	videobuf_waiton(&buf->vb,0,0);
 	videobuf_dma_unmap(q, dma);
 	videobuf_dma_free(dma);
-	btcx_riscmem_free((struct pci_dev *)q->dev, &buf->risc);
+	btcx_riscmem_free(to_pci_dev(q->dev), &buf->risc);
 	buf->vb.state = VIDEOBUF_NEEDS_INIT;
 }
 

@@ -120,7 +120,7 @@ int videobuf_iolock(struct videobuf_queue *q, struct videobuf_buffer *vb,
 
 void videobuf_queue_core_init(struct videobuf_queue *q,
 			 struct videobuf_queue_ops *ops,
-			 void *dev,
+			 struct device *dev,
 			 spinlock_t *irqlock,
 			 enum v4l2_buf_type type,
 			 enum v4l2_field field,
@@ -605,7 +605,9 @@ int videobuf_dqbuf(struct videobuf_queue *q,
 		goto done;
 	}
 	buf = list_entry(q->stream.next, struct videobuf_buffer, stream);
+	mutex_unlock(&q->vb_lock);
 	retval = videobuf_waiton(buf, nonblocking, 1);
+	mutex_lock(&q->vb_lock);
 	if (retval < 0) {
 		dprintk(1, "dqbuf: waiton returned %d\n", retval);
 		goto done;
@@ -740,14 +742,13 @@ ssize_t videobuf_read_one(struct videobuf_queue *q,
 {
 	enum v4l2_field field;
 	unsigned long flags = 0;
-	unsigned size, nbufs;
+	unsigned size = 0, nbufs = 1;
 	int retval;
 
 	MAGIC_CHECK(q->int_ops->magic, MAGIC_QTYPE_OPS);
 
 	mutex_lock(&q->vb_lock);
 
-	nbufs = 1; size = 0;
 	q->ops->buf_setup(q, &nbufs, &size);
 
 	if (NULL == q->read_buf  &&
