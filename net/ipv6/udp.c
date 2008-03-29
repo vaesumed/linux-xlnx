@@ -51,9 +51,9 @@
 #include <linux/seq_file.h>
 #include "udp_impl.h"
 
-static inline int udp_v6_get_port(struct sock *sk, unsigned short snum)
+int udp_v6_get_port(struct sock *sk, unsigned short snum)
 {
-	return udp_get_port(sk, snum, ipv6_rcv_saddr_equal);
+	return udp_lib_get_port(sk, snum, ipv6_rcv_saddr_equal);
 }
 
 static struct sock *__udp6_lib_lookup(struct net *net,
@@ -70,7 +70,7 @@ static struct sock *__udp6_lib_lookup(struct net *net,
 	sk_for_each(sk, node, &udptable[hnum & (UDP_HTABLE_SIZE - 1)]) {
 		struct inet_sock *inet = inet_sk(sk);
 
-		if (sk->sk_net == net && sk->sk_hash == hnum &&
+		if (net_eq(sock_net(sk), net) && sk->sk_hash == hnum &&
 				sk->sk_family == PF_INET6) {
 			struct ipv6_pinfo *np = inet6_sk(sk);
 			int score = 0;
@@ -235,7 +235,7 @@ void __udp6_lib_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 	struct sock *sk;
 	int err;
 
-	sk = __udp6_lib_lookup(skb->dev->nd_net, daddr, uh->dest,
+	sk = __udp6_lib_lookup(dev_net(skb->dev), daddr, uh->dest,
 			       saddr, uh->source, inet6_iif(skb), udptable);
 	if (sk == NULL)
 		return;
@@ -322,6 +322,9 @@ static struct sock *udp_v6_mcast_next(struct sock *sk,
 
 	sk_for_each_from(s, node) {
 		struct inet_sock *inet = inet_sk(s);
+
+		if (sock_net(s) != sock_net(sk))
+			continue;
 
 		if (s->sk_hash == num && s->sk_family == PF_INET6) {
 			struct ipv6_pinfo *np = inet6_sk(s);
@@ -480,7 +483,7 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct hlist_head udptable[],
 	 * check socket cache ... must talk to Alan about his plans
 	 * for sock caches... i'll skip this for now.
 	 */
-	sk = __udp6_lib_lookup(skb->dev->nd_net, saddr, uh->source,
+	sk = __udp6_lib_lookup(dev_net(skb->dev), saddr, uh->source,
 			       daddr, uh->dest, inet6_iif(skb), udptable);
 
 	if (sk == NULL) {
@@ -789,9 +792,7 @@ do_udp_sendmsg:
 		else
 			hlimit = np->hop_limit;
 		if (hlimit < 0)
-			hlimit = dst_metric(dst, RTAX_HOPLIMIT);
-		if (hlimit < 0)
-			hlimit = ipv6_get_hoplimit(dst->dev);
+			hlimit = ip6_dst_hoplimit(dst);
 	}
 
 	if (tclass < 0) {
@@ -986,13 +987,13 @@ static struct udp_seq_afinfo udp6_seq_afinfo = {
 	.seq_fops	= &udp6_seq_fops,
 };
 
-int __init udp6_proc_init(void)
+int udp6_proc_init(struct net *net)
 {
-	return udp_proc_register(&udp6_seq_afinfo);
+	return udp_proc_register(net, &udp6_seq_afinfo);
 }
 
-void udp6_proc_exit(void) {
-	udp_proc_unregister(&udp6_seq_afinfo);
+void udp6_proc_exit(struct net *net) {
+	udp_proc_unregister(net, &udp6_seq_afinfo);
 }
 #endif /* CONFIG_PROC_FS */
 
@@ -1021,6 +1022,7 @@ struct proto udpv6_prot = {
 	.sysctl_wmem	   = &sysctl_udp_wmem_min,
 	.sysctl_rmem	   = &sysctl_udp_rmem_min,
 	.obj_size	   = sizeof(struct udp6_sock),
+	.h.udp_hash	   = udp_hash,
 #ifdef CONFIG_COMPAT
 	.compat_setsockopt = compat_udpv6_setsockopt,
 	.compat_getsockopt = compat_udpv6_getsockopt,

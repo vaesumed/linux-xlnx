@@ -70,7 +70,11 @@
 #define SOCK_DEBUG(sk, msg...) do { if ((sk) && sock_flag((sk), SOCK_DBG)) \
 					printk(KERN_DEBUG msg); } while (0)
 #else
-#define SOCK_DEBUG(sk, msg...) do { } while (0)
+/* Validate arguments and do nothing */
+static void inline int __attribute__ ((format (printf, 2, 3)))
+SOCK_DEBUG(struct sock *sk, const char *msg, ...)
+{
+}
 #endif
 
 /* This is the per-socket lock.  The spinlock provides a synchronization
@@ -122,7 +126,9 @@ struct sock_common {
 	atomic_t		skc_refcnt;
 	unsigned int		skc_hash;
 	struct proto		*skc_prot;
+#ifdef CONFIG_NET_NS
 	struct net	 	*skc_net;
+#endif
 };
 
 /**
@@ -151,6 +157,7 @@ struct sock_common {
   *	@sk_no_check: %SO_NO_CHECK setting, wether or not checkup packets
   *	@sk_route_caps: route capabilities (e.g. %NETIF_F_TSO)
   *	@sk_gso_type: GSO type (e.g. %SKB_GSO_TCPV4)
+  *	@sk_gso_max_size: Maximum GSO segment size to build
   *	@sk_lingertime: %SO_LINGER l_linger setting
   *	@sk_backlog: always used with the per-socket spinlock held
   *	@sk_callback_lock: used with the callbacks in the end of this struct
@@ -237,6 +244,7 @@ struct sock {
 	gfp_t			sk_allocation;
 	int			sk_route_caps;
 	int			sk_gso_type;
+	unsigned int		sk_gso_max_size;
 	int			sk_rcvlowat;
 	unsigned long 		sk_flags;
 	unsigned long	        sk_lingertime;
@@ -498,6 +506,7 @@ extern int sk_wait_data(struct sock *sk, long *timeo);
 struct request_sock_ops;
 struct timewait_sock_ops;
 struct inet_hashinfo;
+struct raw_hashinfo;
 
 /* Networking protocol blocks we attach to sockets.
  * socket layer -> transport layer interface
@@ -580,7 +589,11 @@ struct proto {
 	struct request_sock_ops	*rsk_prot;
 	struct timewait_sock_ops *twsk_prot;
 
-	struct inet_hashinfo	*hashinfo;
+	union {
+		struct inet_hashinfo	*hashinfo;
+		struct hlist_head	*udp_hash;
+		struct raw_hashinfo	*raw_hash;
+	} h;
 
 	struct module		*owner;
 
@@ -850,6 +863,7 @@ extern struct sock		*sk_alloc(struct net *net, int family,
 					  gfp_t priority,
 					  struct proto *prot);
 extern void			sk_free(struct sock *sk);
+extern void			sk_release_kernel(struct sock *sk);
 extern struct sock		*sk_clone(const struct sock *sk,
 					  const gfp_t priority);
 
@@ -1332,6 +1346,36 @@ static inline void sk_eat_skb(struct sock *sk, struct sk_buff *skb, int copied_e
 	__kfree_skb(skb);
 }
 #endif
+
+static inline
+struct net *sock_net(const struct sock *sk)
+{
+#ifdef CONFIG_NET_NS
+	return sk->sk_net;
+#else
+	return &init_net;
+#endif
+}
+
+static inline
+void sock_net_set(struct sock *sk, struct net *net)
+{
+#ifdef CONFIG_NET_NS
+	sk->sk_net = net;
+#endif
+}
+
+/*
+ * Kernel sockets, f.e. rtnl or icmp_socket, are a part of a namespace.
+ * They should not hold a referrence to a namespace in order to allow
+ * to stop it.
+ * Sockets after sk_change_net should be released using sk_release_kernel
+ */
+static inline void sk_change_net(struct sock *sk, struct net *net)
+{
+	put_net(sock_net(sk));
+	sock_net_set(sk, net);
+}
 
 extern void sock_enable_timestamp(struct sock *sk);
 extern int sock_get_timestamp(struct sock *, struct timeval __user *);
