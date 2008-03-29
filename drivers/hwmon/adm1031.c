@@ -466,8 +466,10 @@ static ssize_t show_fan(struct device *dev,
 	struct adm1031_data *data = adm1031_update_device(dev);
 	int value;
 
+	mutex_lock(&data->update_lock);
 	value = trust_fan_readings(data, nr) ? FAN_FROM_REG(data->fan[nr],
 				 FAN_DIV_FROM_REG(data->fan_div[nr])) : 0;
+	mutex_unlock(&data->update_lock);
 	return sprintf(buf, "%d\n", value);
 }
 
@@ -483,9 +485,13 @@ static ssize_t show_fan_min(struct device *dev,
 {
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct adm1031_data *data = adm1031_update_device(dev);
-	return sprintf(buf, "%d\n",
-		       FAN_FROM_REG(data->fan_min[nr],
-				    FAN_DIV_FROM_REG(data->fan_div[nr])));
+	int value;
+
+	mutex_lock(&data->update_lock);
+	value = FAN_FROM_REG(data->fan_min[nr],
+				    FAN_DIV_FROM_REG(data->fan_div[nr]));
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", value);
 }
 static ssize_t set_fan_min(struct device *dev, struct device_attribute *attr,
 			   const char *buf, size_t count)
@@ -567,11 +573,15 @@ static ssize_t show_temp(struct device *dev,
 {
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct adm1031_data *data = adm1031_update_device(dev);
-	int ext;
+	int ext, val;
+
+	mutex_lock(&data->update_lock);
 	ext = nr == 0 ?
 	    ((data->ext_temp[nr] >> 6) & 0x3) * 2 :
 	    (((data->ext_temp[nr] >> ((nr - 1) * 3)) & 7));
-	return sprintf(buf, "%d\n", TEMP_FROM_REG_EXT(data->temp[nr], ext));
+	val = TEMP_FROM_REG_EXT(data->temp[nr], ext);
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 static ssize_t show_temp_min(struct device *dev,
 			     struct device_attribute *attr, char *buf)
