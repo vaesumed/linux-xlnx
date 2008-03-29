@@ -948,6 +948,7 @@ static void ide_port_setup_devices(ide_hwif_t *hwif)
 {
 	int i;
 
+	mutex_lock(&ide_cfg_mtx);
 	for (i = 0; i < MAX_DRIVES; i++) {
 		ide_drive_t *drive = &hwif->drives[i];
 
@@ -962,6 +963,7 @@ static void ide_port_setup_devices(ide_hwif_t *hwif)
 
 		ide_add_drive_to_hwgroup(drive);
 	}
+	mutex_unlock(&ide_cfg_mtx);
 }
 
 /*
@@ -1086,8 +1088,6 @@ static int init_irq (ide_hwif_t *hwif)
 		printk(" (%sed with %s)",
 			hwif->sharing_irq ? "shar" : "serializ", match->name);
 	printk("\n");
-
-	ide_port_setup_devices(hwif);
 
 	mutex_unlock(&ide_cfg_mtx);
 	return 0;
@@ -1445,6 +1445,8 @@ int ide_device_add_all(u8 *idx, const struct ide_port_info *d)
 			rc = -1;
 			continue;
 		}
+
+		ide_port_setup_devices(hwif);
 
 		ide_acpi_init(hwif);
 		ide_acpi_port_init_devices(hwif);
