@@ -155,24 +155,13 @@ static int bringup_link(struct ipath_devdata *dd)
 			 dd->ipath_control);
 
 	/*
-	 * Note that prior to try 14 or 15 of IB, the credit scaling
-	 * wasn't working, because it was swapped for writes with the
-	 * 1 bit default linkstate field
+	 * set initial max size pkt IBC will send, including ICRC; it's the
+	 * PIO buffer size in dwords, less 1; also see ipath_set_mtu()
 	 */
+	val = (dd->ipath_ibmaxlen >> 2) + 1;
+	ibc = val << dd->ibcc_mpl_shift;
 
-	/* ignore pbc and align word */
-	val = dd->ipath_piosize2k - 2 * sizeof(u32);
-	/*
-	 * for ICRC, which we only send in diag test pkt mode, and we
-	 * don't need to worry about that for mtu
-	 */
-	val += 1;
-	/*
-	 * Set the IBC maxpktlength to the size of our pio buffers the
-	 * maxpktlength is in words.  This is *not* the IB data MTU.
-	 */
-	ibc = (val / sizeof(u32)) << INFINIPATH_IBCC_MAXPKTLEN_SHIFT;
-	/* in KB */
+	/* flowcontrolwatermark is in units of KBytes */
 	ibc |= 0x5ULL << INFINIPATH_IBCC_FLOWCTRLWATERMARK_SHIFT;
 	/*
 	 * How often flowctrl sent.  More or less in usecs; balance against
@@ -191,10 +180,13 @@ static int bringup_link(struct ipath_devdata *dd)
 	/*
 	 * Want to start out with both LINKCMD and LINKINITCMD in NOP
 	 * (0 and 0).  Don't put linkinitcmd in ipath_ibcctrl, want that
-	 * to stay a NOP
+	 * to stay a NOP. Flag that we are disabled, for the (unlikely)
+	 * case that some recovery path is trying to bring the link up
+	 * before we are ready.
 	 */
 	ibc |= INFINIPATH_IBCC_LINKINITCMD_DISABLE <<
 		INFINIPATH_IBCC_LINKINITCMD_SHIFT;
+	dd->ipath_flags |= IPATH_IB_LINK_DISABLED;
 	ipath_cdbg(VERBOSE, "Writing 0x%llx to ibcctrl\n",
 		   (unsigned long long) ibc);
 	ipath_write_kreg(dd, dd->ipath_kregs->kr_ibcctrl, ibc);
@@ -295,12 +287,9 @@ static int init_chip_first(struct ipath_devdata *dd,
 	val = ipath_read_kreg64(dd, dd->ipath_kregs->kr_sendpiosize);
 	dd->ipath_piosize2k = val & ~0U;
 	dd->ipath_piosize4k = val >> 32;
-	/*
-	 * Note: the chips support a maximum MTU of 4096, but the driver
-	 * hasn't implemented this feature yet, so set the initial value
-	 * to 2048.
-	 */
-	dd->ipath_ibmtu = 2048;
+	if (dd->ipath_piosize4k == 0 && ipath_mtu4096)
+		ipath_mtu4096 = 0; /* 4KB not supported by this chip */
+	dd->ipath_ibmtu = ipath_mtu4096 ? 4096 : 2048;
 	val = ipath_read_kreg64(dd, dd->ipath_kregs->kr_sendpiobufcnt);
 	dd->ipath_piobcnt2k = val & ~0U;
 	dd->ipath_piobcnt4k = val >> 32;
@@ -509,12 +498,12 @@ static void enable_chip(struct ipath_devdata *dd,
 	 * head values to match.
 	 */
 	val = ipath_read_ureg32(dd, ur_rcvegrindextail, 0);
-	(void)ipath_write_ureg(dd, ur_rcvegrindexhead, val, 0);
+	ipath_write_ureg(dd, ur_rcvegrindexhead, val, 0);
 
 	/* Initialize so we interrupt on next packet received */
-	(void)ipath_write_ureg(dd, ur_rcvhdrhead,
-			       dd->ipath_rhdrhead_intr_off |
-			       dd->ipath_pd[0]->port_head, 0);
+	ipath_write_ureg(dd, ur_rcvhdrhead,
+			 dd->ipath_rhdrhead_intr_off |
+			 dd->ipath_pd[0]->port_head, 0);
 
 	/*
 	 * by now pioavail updates to memory should have occurred, so
@@ -523,16 +512,18 @@ static void enable_chip(struct ipath_devdata *dd,
 	 * initial values of the generation bit correct.
 	 */
 	for (i = 0; i < dd->ipath_pioavregs; i++) {
-		__le64 val;
+		__le64 pioavail;
 
 		/*
 		 * Chip Errata bug 6641; even and odd qwords>3 are swapped.
 		 */
 		if (i > 3 && (dd->ipath_flags & IPATH_SWAP_PIOBUFS))
-			val = dd->ipath_pioavailregs_dma[i ^ 1];
+			pioavail = dd->ipath_pioavailregs_dma[i ^ 1];
 		else
-			val = dd->ipath_pioavailregs_dma[i];
-		dd->ipath_pioavailshadow[i] = le64_to_cpu(val);
+			pioavail = dd->ipath_pioavailregs_dma[i];
+		dd->ipath_pioavailshadow[i] = le64_to_cpu(pioavail) |
+			(~dd->ipath_pioavailkernel[i] <<
+			INFINIPATH_SENDPIOAVAIL_BUSY_SHIFT);
 	}
 	/* can get counters, stats, etc. */
 	dd->ipath_flags |= IPATH_PRESENT;
@@ -754,7 +745,9 @@ int ipath_init_chip(struct ipath_devdata *dd, int reinit)
 		ipath_dbg("%u pbufs/port leaves %u unused, add to kernel\n",
 			  dd->ipath_pbufsport, val32);
 	}
-	dd->ipath_lastpioindex = dd->ipath_lastport_piobuf;
+	dd->ipath_lastpioindex = 0;
+	dd->ipath_lastpioindexl = dd->ipath_piobcnt2k;
+	ipath_chg_pioavailkernel(dd, 0, piobufs, 1);
 	ipath_cdbg(VERBOSE, "%d PIO bufs for kernel out of %d total %u "
 		   "each for %u user ports\n", kpiobufs,
 		   piobufs, dd->ipath_pbufsport, uports);
@@ -783,8 +776,8 @@ int ipath_init_chip(struct ipath_devdata *dd, int reinit)
 			goto done;
 	}
 
-	(void)ipath_write_kreg(dd, dd->ipath_kregs->kr_sendpioavailaddr,
-			       dd->ipath_pioavailregs_phys);
+	ipath_write_kreg(dd, dd->ipath_kregs->kr_sendpioavailaddr,
+			 dd->ipath_pioavailregs_phys);
 	/*
 	 * this is to detect s/w errors, which the h/w works around by
 	 * ignoring the low 6 bits of address, if it wasn't aligned.
@@ -921,6 +914,12 @@ int ipath_init_chip(struct ipath_devdata *dd, int reinit)
 		add_timer(&dd->ipath_stats_timer);
 		dd->ipath_stats_timer_active = 1;
 	}
+
+	/* Set up HoL state */
+	init_timer(&dd->ipath_hol_timer);
+	dd->ipath_hol_timer.function = ipath_hol_event;
+	dd->ipath_hol_timer.data = (unsigned long)dd;
+	dd->ipath_hol_state = IPATH_HOL_UP;
 
 done:
 	if (!ret) {

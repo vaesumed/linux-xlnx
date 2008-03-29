@@ -94,7 +94,7 @@ enum ib_device_cap_flags {
 	IB_DEVICE_SRQ_RESIZE		= (1<<13),
 	IB_DEVICE_N_NOTIFY_CQ		= (1<<14),
 	IB_DEVICE_ZERO_STAG		= (1<<15),
-	IB_DEVICE_SEND_W_INV		= (1<<16),
+	IB_DEVICE_RESERVED		= (1<<16), /* old SEND_W_INV */
 	IB_DEVICE_MEM_WINDOW		= (1<<17),
 	/*
 	 * Devices should set IB_DEVICE_UD_IP_SUM if they support
@@ -104,6 +104,7 @@ enum ib_device_cap_flags {
 	 * IPoIB driver may set NETIF_F_IP_CSUM for datagram mode.
 	 */
 	IB_DEVICE_UD_IP_CSUM		= (1<<18),
+	IB_DEVICE_SEND_W_INV		= (1<<21),
 };
 
 enum ib_atomic_cap {
@@ -495,6 +496,10 @@ enum ib_qp_type {
 	IB_QPT_RAW_ETY
 };
 
+enum ib_qp_create_flags {
+	IB_QP_CREATE_IPOIB_UD_LSO	= 1 << 0,
+};
+
 struct ib_qp_init_attr {
 	void                  (*event_handler)(struct ib_event *, void *);
 	void		       *qp_context;
@@ -504,6 +509,7 @@ struct ib_qp_init_attr {
 	struct ib_qp_cap	cap;
 	enum ib_sig_type	sq_sig_type;
 	enum ib_qp_type		qp_type;
+	enum ib_qp_create_flags	create_flags;
 	u8			port_num; /* special QP types only */
 };
 
@@ -625,7 +631,8 @@ enum ib_send_flags {
 	IB_SEND_SIGNALED	= (1<<1),
 	IB_SEND_SOLICITED	= (1<<2),
 	IB_SEND_INLINE		= (1<<3),
-	IB_SEND_IP_CSUM		= (1<<4)
+	IB_SEND_IP_CSUM		= (1<<4),
+	IB_SEND_INVALIDATE	= (1<<6)
 };
 
 struct ib_sge {
@@ -660,6 +667,9 @@ struct ib_send_wr {
 			u16	pkey_index; /* valid for GSI only */
 			u8	port_num;   /* valid for DR SMPs on switch only */
 		} ud;
+		struct {
+			u32	rkey;
+		} invalidate;
 	} wr;
 };
 
@@ -730,7 +740,7 @@ struct ib_uobject {
 	struct ib_ucontext     *context;	/* associated user context */
 	void		       *object;		/* containing object */
 	struct list_head	list;		/* link to context's list */
-	u32			id;		/* index into kernel idr */
+	int			id;		/* index into kernel idr */
 	struct kref		ref;
 	struct rw_semaphore	mutex;		/* protects .live */
 	int			live;
