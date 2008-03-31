@@ -542,7 +542,7 @@ static void ttusb_handle_sec_data(struct ttusb_channel *channel,
 				  const u8 * data, int len);
 #endif
 
-static int numpkt = 0, numts, numstuff, numsec, numinvalid;
+static int numpkt, numts, numstuff, numsec, numinvalid;
 static unsigned long lastj;
 
 static void ttusb_process_muxpack(struct ttusb *ttusb, const u8 * muxpack,
@@ -1005,7 +1005,7 @@ static int stc_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static struct file_operations stc_fops = {
+static const struct file_operations stc_fops = {
 	.owner = THIS_MODULE,
 	.read = stc_read,
 	.open = stc_open,
