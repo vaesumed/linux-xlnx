@@ -19,7 +19,6 @@ mac80211-y := \
 	ieee80211_iface.o \
 	ieee80211_rate.o \
 	michael.o \
-	regdomain.o \
 	tkip.o \
 	aes_ccm.o \
 	cfg.o \
@@ -37,11 +36,15 @@ mac80211-$(CONFIG_MAC80211_DEBUGFS) += \
 	debugfs_netdev.o \
 	debugfs_key.o
 
+mac80211-$(CONFIG_MAC80211_MESH) += \
+	mesh.o \
+	mesh_pathtbl.o \
+	mesh_plink.o \
+	mesh_hwmp.o
+
 
 # Build rate control algorithm(s)
-CFLAGS_rc80211_simple.o += -DRC80211_SIMPLE_COMPILE
 CFLAGS_rc80211_pid_algo.o += -DRC80211_PID_COMPILE
-mac80211-$(CONFIG_MAC80211_RC_SIMPLE) += rc80211_simple.o
 mac80211-$(CONFIG_MAC80211_RC_PID) += $(rc-pid-$(CONFIG_MAC80211_RC_PID))
 
 # Modular rate algorithms are assigned to mac80211-m - make separate modules
