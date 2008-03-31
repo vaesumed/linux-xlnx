@@ -1983,7 +1983,7 @@ again:
 			err = dbg_check_lpt_nodes(c, (struct ubifs_cnode *)
 						  c->nroot, 0, 0);
 			if (err)
-				return err;
+				goto out;
 			err = dbg_check_cats(c);
 			if (err)
 				goto out;
