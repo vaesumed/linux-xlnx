@@ -520,14 +520,12 @@ static int calc_dark(struct ubifs_info *c, int spc)
 static int is_lprops_dirty(struct ubifs_info *c, struct ubifs_lprops *lprops)
 {
 	struct ubifs_pnode *pnode;
-	void *addr;
 	int pos;
 
 	pos = (lprops->lnum - c->main_first) & (UBIFS_LPT_FANOUT - 1);
-	addr = container_of(lprops, struct ubifs_pnode, lprops[0]) -
-	       pos * sizeof(struct ubifs_lprops);
-	pnode = (struct ubifs_pnode *)addr;
-
+	pnode = (struct ubifs_pnode *)container_of(lprops - pos,
+						   struct ubifs_pnode,
+						   lprops[0]);
 	return !test_bit(COW_ZNODE, &pnode->flags) &&
 	       test_bit(DIRTY_CNODE, &pnode->flags);
 }
@@ -578,7 +576,8 @@ const struct ubifs_lprops *ubifs_change_lp(struct ubifs_info *c,
 		lprops = ubifs_lpt_lookup_dirty(c, lprops->lnum);
 		if (IS_ERR(lprops))
 			return lprops;
-	}
+	} else
+		ubifs_assert(lprops == ubifs_lpt_lookup_dirty(c, lprops->lnum));
 
 	ubifs_assert(!(lprops->free & 7) && !(lprops->dirty & 7));
 
