@@ -284,6 +284,7 @@ struct hid_item {
 #define HID_QUIRK_2WHEEL_MOUSE_HACK_B8		0x02000000
 #define HID_QUIRK_HWHEEL_WHEEL_INVERT		0x04000000
 #define HID_QUIRK_MICROSOFT_KEYS		0x08000000
+#define HID_QUIRK_FULLSPEED_INTERVAL		0x10000000
 
 /*
  * Separate quirks for runtime report descriptor fixup
@@ -296,6 +297,8 @@ struct hid_item {
 #define HID_QUIRK_RDESC_MACBOOK_JIS		0x00000010
 #define HID_QUIRK_RDESC_BUTTON_CONSUMER		0x00000020
 #define HID_QUIRK_RDESC_SAMSUNG_REMOTE		0x00000040
+#define HID_QUIRK_RDESC_MICROSOFT_RECV_1028	0x00000080
+#define HID_QUIRK_RDESC_SUNPLUS_WDESKTOP	0x00000100
 
 /*
  * This is the global environment of the parser. This information is
@@ -320,7 +323,7 @@ struct hid_global {
  * This is the local environment. It is persistent up the next main-item.
  */
 
-#define HID_MAX_USAGES			8192
+#define HID_MAX_USAGES			12288
 #define HID_DEFAULT_NUM_COLLECTIONS	16
 
 struct hid_local {
@@ -452,8 +455,6 @@ struct hid_device {							/* device report descriptor */
 	void *hidraw;
 	int minor;							/* Hiddev minor number */
 
-	wait_queue_head_t wait;						/* For sleeping */
-
 	int open;							/* is the device open by anyone? */
 	char name[128];							/* Device name */
 	char phys[64];							/* Device physical location */
@@ -566,7 +567,11 @@ static inline int hid_ff_init(struct hid_device *hid) { return -1; }
 #define dbg_hid_line(format, arg...) if (hid_debug) \
 				printk(format, ## arg)
 #else
-#define dbg_hid(format, arg...) do {} while (0)
+static inline int __attribute__((format(printf, 1, 2)))
+dbg_hid(const char *fmt, ...)
+{
+	return 0;
+}
 #define dbg_hid_line dbg_hid
 #endif
 
