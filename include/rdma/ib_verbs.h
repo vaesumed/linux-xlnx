@@ -94,7 +94,7 @@ enum ib_device_cap_flags {
 	IB_DEVICE_SRQ_RESIZE		= (1<<13),
 	IB_DEVICE_N_NOTIFY_CQ		= (1<<14),
 	IB_DEVICE_ZERO_STAG		= (1<<15),
-	IB_DEVICE_SEND_W_INV		= (1<<16),
+	IB_DEVICE_RESERVED		= (1<<16), /* old SEND_W_INV */
 	IB_DEVICE_MEM_WINDOW		= (1<<17),
 	/*
 	 * Devices should set IB_DEVICE_UD_IP_SUM if they support
@@ -104,6 +104,7 @@ enum ib_device_cap_flags {
 	 * IPoIB driver may set NETIF_F_IP_CSUM for datagram mode.
 	 */
 	IB_DEVICE_UD_IP_CSUM		= (1<<18),
+	IB_DEVICE_SEND_W_INV		= (1<<21),
 };
 
 enum ib_atomic_cap {
@@ -625,7 +626,8 @@ enum ib_send_flags {
 	IB_SEND_SIGNALED	= (1<<1),
 	IB_SEND_SOLICITED	= (1<<2),
 	IB_SEND_INLINE		= (1<<3),
-	IB_SEND_IP_CSUM		= (1<<4)
+	IB_SEND_IP_CSUM		= (1<<4),
+	IB_SEND_INVALIDATE	= (1<<6)
 };
 
 struct ib_sge {
@@ -660,6 +662,9 @@ struct ib_send_wr {
 			u16	pkey_index; /* valid for GSI only */
 			u8	port_num;   /* valid for DR SMPs on switch only */
 		} ud;
+		struct {
+			u32	rkey;
+		} invalidate;
 	} wr;
 };
 
