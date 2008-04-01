@@ -1266,6 +1266,7 @@ void ubifs_add_bud(struct ubifs_info *c, struct ubifs_bud *bud);
 void ubifs_create_buds_lists(struct ubifs_info *c);
 int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs);
 struct ubifs_bud *ubifs_search_bud(struct ubifs_info *c, int lnum);
+struct ubifs_wbuf *ubifs_get_wbuf(struct ubifs_info *c, int lnum);
 int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum);
 int ubifs_log_end_commit(struct ubifs_info *c, int new_ltail_lnum);
 int ubifs_log_post_commit(struct ubifs_info *c, int old_ltail_lnum);

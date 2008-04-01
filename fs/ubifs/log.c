@@ -66,6 +66,40 @@ struct ubifs_bud *ubifs_search_bud(struct ubifs_info *c, int lnum)
 }
 
 /**
+ * ubifs_get_wbuf - get the wbuf associated with a LEB, if there is one.
+ * @c: UBIFS file-system description object
+ * @lnum: logical eraseblock number to search
+ *
+ * This functions returns the wbuf for @lnum or %NULL if there is not one.
+ */
+struct ubifs_wbuf *ubifs_get_wbuf(struct ubifs_info *c, int lnum)
+{
+	struct rb_node *p;
+	struct ubifs_bud *bud;
+	int jhead;
+
+	if (!c->jheads)
+		return NULL;
+
+	spin_lock(&c->buds_lock);
+	p = c->buds.rb_node;
+	while (p) {
+		bud = rb_entry(p, struct ubifs_bud, rb);
+		if (lnum < bud->lnum)
+			p = p->rb_left;
+		else if (lnum > bud->lnum)
+			p = p->rb_right;
+		else {
+			jhead = bud->jhead;
+			spin_unlock(&c->buds_lock);
+			return &c->jheads[jhead].wbuf;
+		}
+	}
+	spin_unlock(&c->buds_lock);
+	return NULL;
+}
+
+/**
  * next_log_lnum - switch to the next log LEB.
  * @c: UBIFS file-system description object
  * @lnum: current log LEB
