@@ -765,14 +765,11 @@ static const struct file_operations kvm_vcpu_fops = {
 static int create_vcpu_fd(struct kvm_vcpu *vcpu)
 {
 	int fd, r;
-	struct inode *inode;
-	struct file *file;
 
-	r = anon_inode_getfd(&fd, &inode, &file,
-			     "kvm-vcpu", &kvm_vcpu_fops, vcpu);
+	r = anon_inode_getfd(&fd, "kvm-vcpu", &kvm_vcpu_fops, vcpu);
 	if (r)
 		return r;
-	atomic_inc(&vcpu->kvm->filp->f_count);
+	get_file(vcpu->kvm->filp);
 	return fd;
 }
 
@@ -1073,20 +1070,26 @@ static const struct file_operations kvm_vm_fops = {
 static int kvm_dev_ioctl_create_vm(void)
 {
 	int fd, r;
-	struct inode *inode;
 	struct file *file;
 	struct kvm *kvm;
 
 	kvm = kvm_create_vm();
 	if (IS_ERR(kvm))
 		return PTR_ERR(kvm);
-	r = anon_inode_getfd(&fd, &inode, &file, "kvm-vm", &kvm_vm_fops, kvm);
+	r = __anon_inode_getfd(&fd, &file, "kvm-vm", &kvm_vm_fops, kvm);
 	if (r) {
 		kvm_destroy_vm(kvm);
 		return r;
 	}
 
 	kvm->filp = file;
+	/*
+	 * Drop the temporary reference pinned for us by __anon_inode_getfd().
+	 * If we'd raced with close() from another thread, that could free kvm,
+	 * but by that point we don't care - from here on it could be reached
+	 * only via file->private_data.
+	 */ 
+	fput(file);
 
 	return fd;
 }
