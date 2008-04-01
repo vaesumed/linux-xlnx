@@ -303,7 +303,6 @@ static void scsi_device_dev_release_usercontext(struct work_struct *work)
 	}
 
 	if (sdev->request_queue) {
-		bsg_unregister_queue(sdev->request_queue);
 		sdev->request_queue->queuedata = NULL;
 		/* user context needed to free queue */
 		scsi_free_queue(sdev->request_queue);
@@ -878,6 +877,7 @@ void __scsi_remove_device(struct scsi_device *sdev)
 	if (scsi_device_set_state(sdev, SDEV_CANCEL) != 0)
 		return;
 
+	bsg_unregister_queue(sdev->request_queue);
 	device_unregister(&sdev->sdev_dev);
 	transport_remove_device(dev);
 	device_del(dev);
