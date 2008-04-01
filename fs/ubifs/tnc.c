@@ -817,7 +817,7 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 {
 	union ubifs_key key1, *key = &zbr->key;
 	int err, type = key_type(c, key);
-	const struct ubifs_bud *bud;
+	struct ubifs_wbuf *wbuf;
 
 	dbg_tnc_key(c, key, "LEB %d:%d, len %d, key",
 		    zbr->lnum, zbr->offs, zbr->len);
@@ -828,15 +828,10 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	 * 'zbr' has to point to on-flash node. The node may sit in a bud and
 	 * may even be in a write buffer, so we have to take care about this.
 	 */
-	if (c->jheads)
-		bud = ubifs_search_bud(c, zbr->lnum);
-	else
-		bud = NULL;
-	if (bud)
-		/* The bud can't go because we are under @c->commit_sem */
-		err = ubifs_read_node_wbuf(&c->jheads[bud->jhead].wbuf,
-					   node, type, zbr->len, zbr->lnum,
-					   zbr->offs);
+	wbuf = ubifs_get_wbuf(c, zbr->lnum);
+	if (wbuf)
+		err = ubifs_read_node_wbuf(wbuf, node, type, zbr->len,
+					   zbr->lnum, zbr->offs);
 	else
 		err = ubifs_read_node(c, node, type, zbr->len, zbr->lnum,
 				      zbr->offs);
