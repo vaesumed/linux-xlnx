@@ -590,8 +590,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 
 	inode->i_size = 0;
 	inode->i_ctime = dir->i_ctime;
-	drop_nlink(inode);
-	drop_nlink(inode);
+	clear_nlink(inode);
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
