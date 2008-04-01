@@ -119,6 +119,29 @@ void kvm_flush_remote_tlbs(struct kvm *kvm)
 	smp_call_function_mask(cpus, ack_flush, NULL, 1);
 }
 
+void kvm_reload_remote_mmus(struct kvm *kvm)
+{
+	int i, cpu;
+	cpumask_t cpus;
+	struct kvm_vcpu *vcpu;
+
+	cpus_clear(cpus);
+	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
+		vcpu = kvm->vcpus[i];
+		if (!vcpu)
+			continue;
+		if (test_and_set_bit(KVM_REQ_MMU_RELOAD, &vcpu->requests))
+			continue;
+		cpu = vcpu->cpu;
+		if (cpu != -1 && cpu != raw_smp_processor_id())
+			cpu_set(cpu, cpus);
+	}
+	if (cpus_empty(cpus))
+		return;
+	smp_call_function_mask(cpus, ack_flush, NULL, 1);
+}
+
+
 int kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 {
 	struct page *page;
@@ -189,9 +212,13 @@ static void kvm_free_physmem_slot(struct kvm_memory_slot *free,
 	if (!dont || free->dirty_bitmap != dont->dirty_bitmap)
 		vfree(free->dirty_bitmap);
 
+	if (!dont || free->lpage_info != dont->lpage_info)
+		vfree(free->lpage_info);
+
 	free->npages = 0;
 	free->dirty_bitmap = NULL;
 	free->rmap = NULL;
+	free->lpage_info = NULL;
 }
 
 void kvm_free_physmem(struct kvm *kvm)
@@ -300,6 +327,22 @@ int __kvm_set_memory_region(struct kvm *kvm,
 
 		new.user_alloc = user_alloc;
 		new.userspace_addr = mem->userspace_addr;
+	}
+	if (npages && !new.lpage_info) {
+		int largepages = npages / KVM_PAGES_PER_HPAGE;
+		if (npages % KVM_PAGES_PER_HPAGE)
+			largepages++;
+		new.lpage_info = vmalloc(largepages * sizeof(*new.lpage_info));
+
+		if (!new.lpage_info)
+			goto out_free;
+
+		memset(new.lpage_info, 0, largepages * sizeof(*new.lpage_info));
+
+		if (base_gfn % KVM_PAGES_PER_HPAGE)
+			new.lpage_info[0].write_count = 1;
+		if ((base_gfn+npages) % KVM_PAGES_PER_HPAGE)
+			new.lpage_info[largepages-1].write_count = 1;
 	}
 
 	/* Allocate page dirty bitmap if needed */
@@ -444,7 +487,7 @@ int kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 }
 EXPORT_SYMBOL_GPL(kvm_is_visible_gfn);
 
-static unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn)
+unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn)
 {
 	struct kvm_memory_slot *slot;
 
@@ -554,7 +597,9 @@ int kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data,
 	addr = gfn_to_hva(kvm, gfn);
 	if (kvm_is_error_hva(addr))
 		return -EFAULT;
+	pagefault_disable();
 	r = __copy_from_user_inatomic(data, (void __user *)addr + offset, len);
+	pagefault_enable();
 	if (r)
 		return -EFAULT;
 	return 0;
@@ -678,8 +723,10 @@ static int kvm_vcpu_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	if (vmf->pgoff == 0)
 		page = virt_to_page(vcpu->run);
+#ifdef CONFIG_X86
 	else if (vmf->pgoff == KVM_PIO_PAGE_OFFSET)
 		page = virt_to_page(vcpu->arch.pio_data);
+#endif
 	else
 		return VM_FAULT_SIGBUS;
 	get_page(page);
@@ -705,7 +752,7 @@ static int kvm_vcpu_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static struct file_operations kvm_vcpu_fops = {
+static const struct file_operations kvm_vcpu_fops = {
 	.release        = kvm_vcpu_release,
 	.unlocked_ioctl = kvm_vcpu_ioctl,
 	.compat_ioctl   = kvm_vcpu_ioctl,
@@ -802,28 +849,39 @@ static long kvm_vcpu_ioctl(struct file *filp,
 		r = kvm_arch_vcpu_ioctl_run(vcpu, vcpu->run);
 		break;
 	case KVM_GET_REGS: {
-		struct kvm_regs kvm_regs;
+		struct kvm_regs *kvm_regs;
 
-		memset(&kvm_regs, 0, sizeof kvm_regs);
-		r = kvm_arch_vcpu_ioctl_get_regs(vcpu, &kvm_regs);
+		r = -ENOMEM;
+		kvm_regs = kzalloc(sizeof(struct kvm_regs), GFP_KERNEL);
+		if (!kvm_regs)
+			goto out;
+		r = kvm_arch_vcpu_ioctl_get_regs(vcpu, kvm_regs);
 		if (r)
-			goto out;
+			goto out_free1;
 		r = -EFAULT;
-		if (copy_to_user(argp, &kvm_regs, sizeof kvm_regs))
-			goto out;
+		if (copy_to_user(argp, kvm_regs, sizeof(struct kvm_regs)))
+			goto out_free1;
 		r = 0;
+out_free1:
+		kfree(kvm_regs);
 		break;
 	}
 	case KVM_SET_REGS: {
-		struct kvm_regs kvm_regs;
+		struct kvm_regs *kvm_regs;
 
+		r = -ENOMEM;
+		kvm_regs = kzalloc(sizeof(struct kvm_regs), GFP_KERNEL);
+		if (!kvm_regs)
+			goto out;
 		r = -EFAULT;
-		if (copy_from_user(&kvm_regs, argp, sizeof kvm_regs))
-			goto out;
-		r = kvm_arch_vcpu_ioctl_set_regs(vcpu, &kvm_regs);
+		if (copy_from_user(kvm_regs, argp, sizeof(struct kvm_regs)))
+			goto out_free2;
+		r = kvm_arch_vcpu_ioctl_set_regs(vcpu, kvm_regs);
 		if (r)
-			goto out;
+			goto out_free2;
 		r = 0;
+out_free2:
+		kfree(kvm_regs);
 		break;
 	}
 	case KVM_GET_SREGS: {
@@ -1005,7 +1063,7 @@ static int kvm_vm_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
-static struct file_operations kvm_vm_fops = {
+static const struct file_operations kvm_vm_fops = {
 	.release        = kvm_vm_release,
 	.unlocked_ioctl = kvm_vm_ioctl,
 	.compat_ioctl   = kvm_vm_ioctl,
@@ -1059,7 +1117,10 @@ static long kvm_dev_ioctl(struct file *filp,
 		r = -EINVAL;
 		if (arg)
 			goto out;
-		r = 2 * PAGE_SIZE;
+		r = PAGE_SIZE;     /* struct kvm_run */
+#ifdef CONFIG_X86
+		r += PAGE_SIZE;    /* pio data page */
+#endif
 		break;
 	default:
 		return kvm_arch_dev_ioctl(filp, ioctl, arg);
