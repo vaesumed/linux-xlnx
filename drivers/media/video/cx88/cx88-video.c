@@ -63,11 +63,11 @@ MODULE_PARM_DESC(video_nr,"video device numbers");
 MODULE_PARM_DESC(vbi_nr,"vbi device numbers");
 MODULE_PARM_DESC(radio_nr,"radio device numbers");
 
-static unsigned int video_debug = 0;
+static unsigned int video_debug;
 module_param(video_debug,int,0644);
 MODULE_PARM_DESC(video_debug,"enable debug messages [video]");
 
-static unsigned int irq_debug = 0;
+static unsigned int irq_debug;
 module_param(irq_debug,int,0644);
 MODULE_PARM_DESC(irq_debug,"enable debug messages [IRQ handler]");
 
@@ -776,14 +776,14 @@ static int video_open(struct inode *inode, struct file *file)
 	fh->height   = 240;
 	fh->fmt      = format_by_fourcc(V4L2_PIX_FMT_BGR24);
 
-	videobuf_queue_pci_init(&fh->vidq, &cx8800_video_qops,
-			    dev->pci, &dev->slock,
+	videobuf_queue_sg_init(&fh->vidq, &cx8800_video_qops,
+			    &dev->pci->dev, &dev->slock,
 			    V4L2_BUF_TYPE_VIDEO_CAPTURE,
 			    V4L2_FIELD_INTERLACED,
 			    sizeof(struct cx88_buffer),
 			    fh);
-	videobuf_queue_pci_init(&fh->vbiq, &cx8800_vbi_qops,
-			    dev->pci, &dev->slock,
+	videobuf_queue_sg_init(&fh->vbiq, &cx8800_vbi_qops,
+			    &dev->pci->dev, &dev->slock,
 			    V4L2_BUF_TYPE_VBI_CAPTURE,
 			    V4L2_FIELD_SEQ_TB,
 			    sizeof(struct cx88_buffer),
@@ -1832,8 +1832,11 @@ static int __devinit cx8800_initdev(struct pci_dev *pci_dev,
 
 	switch (core->boardnr) {
 	case CX88_BOARD_DVICO_FUSIONHDTV_5_GOLD:
-		request_module("ir-kbd-i2c");
+	case CX88_BOARD_DVICO_FUSIONHDTV_7_GOLD:
 		request_module("rtc-isl1208");
+		/* break intentionally omitted */
+	case CX88_BOARD_DVICO_FUSIONHDTV_5_PCI_NANO:
+		request_module("ir-kbd-i2c");
 	}
 
 	/* register v4l devices */
