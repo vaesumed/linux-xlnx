@@ -59,8 +59,10 @@ DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 unsigned long total_memory;
 unsigned long total_lowmem;
 
-phys_addr_t memstart_addr;
+phys_addr_t memstart_addr = (phys_addr_t)~0ull;
 EXPORT_SYMBOL(memstart_addr);
+phys_addr_t kernstart_addr;
+EXPORT_SYMBOL(kernstart_addr);
 phys_addr_t lowmem_end_addr;
 
 int boot_mapsize;
@@ -99,7 +101,7 @@ unsigned long __max_low_memory = MAX_LOW_MEM;
  * address of the limit of what is accessible with initial MMU setup -
  * 256MB usually, but only 16MB on 601.
  */
-unsigned long __initial_memory_limit_addr = 0x10000000;
+phys_addr_t __initial_memory_limit_addr = (phys_addr_t)0x10000000;
 
 /*
  * Check for command-line options that affect what MMU_init will do.

@@ -82,7 +82,6 @@ unsigned long __init mmu_mapin_ram(void)
 #else
 	unsigned long tot, bl, done;
 	unsigned long max_size = (256<<20);
-	unsigned long align;
 
 	if (__map_without_bats) {
 		printk(KERN_DEBUG "RAM mapped without BATs\n");
