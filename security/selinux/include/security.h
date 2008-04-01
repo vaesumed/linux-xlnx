@@ -36,6 +36,11 @@
 #define POLICYDB_VERSION_MAX	POLICYDB_VERSION_PERMISSIVE
 #endif
 
+#define CONTEXT_STR	"context="
+#define FSCONTEXT_STR	"fscontext="
+#define ROOTCONTEXT_STR	"rootcontext="
+#define DEFCONTEXT_STR	"defcontext="
+
 struct netlbl_lsm_secattr;
 
 extern int selinux_enabled;
