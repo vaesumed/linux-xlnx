@@ -811,16 +811,24 @@ int c2_post_send(struct ib_qp *ibqp, struct ib_send_wr *ib_wr,
 
 		switch (ib_wr->opcode) {
 		case IB_WR_SEND:
-			if (ib_wr->send_flags & IB_SEND_SOLICITED) {
+			if (ib_wr->send_flags & IB_SEND_SOLICITED &&
+			    ib_wr->send_flags & IB_SEND_INVALIDATE) {
+				c2_wr_set_id(&wr, C2_WR_TYPE_SEND_SE_INV);
+				wr.sqwr.send.remote_stag =
+					cpu_to_be32(ib_wr->wr.invalidate.rkey);
+			} else if (ib_wr->send_flags & IB_SEND_INVALIDATE) {
+				c2_wr_set_id(&wr, C2_WR_TYPE_SEND_INV);
+				wr.sqwr.send.remote_stag =
+					cpu_to_be32(ib_wr->wr.invalidate.rkey);
+			} else if (ib_wr->send_flags & IB_SEND_SOLICITED) {
 				c2_wr_set_id(&wr, C2_WR_TYPE_SEND_SE);
-				msg_size = sizeof(struct c2wr_send_req);
 			} else {
 				c2_wr_set_id(&wr, C2_WR_TYPE_SEND);
-				msg_size = sizeof(struct c2wr_send_req);
 			}
 
 			wr.sqwr.send.remote_stag = 0;
-			msg_size += sizeof(struct c2_data_addr) * ib_wr->num_sge;
+			msg_size = sizeof(struct c2wr_send_req) +
+				sizeof(struct c2_data_addr) * ib_wr->num_sge;
 			if (ib_wr->num_sge > qp->send_sgl_depth) {
 				err = -EINVAL;
 				break;
