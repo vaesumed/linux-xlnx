@@ -1065,6 +1065,7 @@ ssize_t ib_uverbs_create_qp(struct ib_uverbs_file *file,
 	attr.srq           = srq;
 	attr.sq_sig_type   = cmd.sq_sig_all ? IB_SIGNAL_ALL_WR : IB_SIGNAL_REQ_WR;
 	attr.qp_type       = cmd.qp_type;
+	attr.create_flags  = 0;
 
 	attr.cap.max_send_wr     = cmd.max_send_wr;
 	attr.cap.max_recv_wr     = cmd.max_recv_wr;
@@ -1491,6 +1492,10 @@ ssize_t ib_uverbs_post_send(struct ib_uverbs_file *file,
 					user_wr->wr.atomic.compare_add;
 				next->wr.atomic.swap = user_wr->wr.atomic.swap;
 				next->wr.atomic.rkey = user_wr->wr.atomic.rkey;
+				break;
+			case IB_WR_SEND:
+				next->wr.invalidate.rkey =
+					user_wr->wr.invalidate.rkey;
 				break;
 			default:
 				break;
