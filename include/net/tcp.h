@@ -29,6 +29,7 @@
 #include <linux/skbuff.h>
 #include <linux/dmaengine.h>
 #include <linux/crypto.h>
+#include <linux/cryptohash.h>
 
 #include <net/inet_connection_sock.h>
 #include <net/inet_timewait_sock.h>
@@ -138,6 +139,7 @@ extern void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define MAX_TCP_KEEPINTVL	32767
 #define MAX_TCP_KEEPCNT		127
 #define MAX_TCP_SYNCNT		127
+#define MAX_TCP_ACCEPT_DEFERRED 65535
 
 #define TCP_SYNQ_INTERVAL	(HZ/5)	/* Period of SYNACK timer */
 
@@ -434,9 +436,15 @@ extern int			tcp_disconnect(struct sock *sk, int flags);
 extern void			tcp_unhash(struct sock *sk);
 
 /* From syncookies.c */
+extern __u32 syncookie_secret[2][16-4+SHA_DIGEST_WORDS];
 extern struct sock *cookie_v4_check(struct sock *sk, struct sk_buff *skb, 
 				    struct ip_options *opt);
 extern __u32 cookie_v4_init_sequence(struct sock *sk, struct sk_buff *skb, 
+				     __u16 *mss);
+
+/* From net/ipv6/syncookies.c */
+extern struct sock *cookie_v6_check(struct sock *sk, struct sk_buff *skb);
+extern __u32 cookie_v6_init_sequence(struct sock *sk, struct sk_buff *skb,
 				     __u16 *mss);
 
 /* tcp_output.c */
@@ -1321,6 +1329,7 @@ struct tcp_seq_afinfo {
 };
 
 struct tcp_iter_state {
+	struct net              *net;
 	sa_family_t		family;
 	enum tcp_seq_states	state;
 	struct sock		*syn_wait_sk;
@@ -1328,10 +1337,11 @@ struct tcp_iter_state {
 	struct seq_operations	seq_ops;
 };
 
-extern int tcp_proc_register(struct tcp_seq_afinfo *afinfo);
-extern void tcp_proc_unregister(struct tcp_seq_afinfo *afinfo);
+extern int tcp_proc_register(struct net *net, struct tcp_seq_afinfo *afinfo);
+extern void tcp_proc_unregister(struct net *net, struct tcp_seq_afinfo *afinfo);
 
 extern struct request_sock_ops tcp_request_sock_ops;
+extern struct request_sock_ops tcp6_request_sock_ops;
 
 extern int tcp_v4_destroy_sock(struct sock *sk);
 
@@ -1373,7 +1383,7 @@ struct tcp_request_sock_ops {
 #endif
 };
 
-extern void tcp_v4_init(struct net_proto_family *ops);
+extern void tcp_v4_init(void);
 extern void tcp_init(void);
 
 #endif	/* _TCP_H */
