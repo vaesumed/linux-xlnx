@@ -40,13 +40,16 @@ static ssize_t show_##name(struct sys_device *dev, char *buf)	\
 	return sprintf(buf, "%d\n", topology_##name(cpu));	\
 }
 
-#define define_siblings_show_func(name)					\
-static ssize_t show_##name(struct sys_device *dev, char *buf)		\
-{									\
-	ssize_t len = -1;						\
-	unsigned int cpu = dev->id;					\
-	len = cpumask_scnprintf(buf, NR_CPUS+1, topology_##name(cpu));	\
-	return (len + sprintf(buf + len, "\n"));			\
+#define define_siblings_show_func(name)				\
+static ssize_t show_##name(struct sys_device *dev, char *buf)	\
+{								\
+	ssize_t len = -1;					\
+	unsigned int cpu = dev->id;				\
+	cpumask_t mask; 					\
+								\
+	mask = topology_##name(cpu);				\
+	len = cpumask_scnprintf(buf, NR_CPUS + 1, mask);	\
+	return len + sprintf(buf + len, "\n");			\
 }
 
 #ifdef	topology_physical_package_id
