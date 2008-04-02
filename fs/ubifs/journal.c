@@ -61,6 +61,36 @@
 #include "ubifs.h"
 
 /**
+ * zero_ino_node_unused - zero out unused fields of an on-flash inode node.
+ * @ino: the inode to zero out
+ */
+static inline void zero_ino_node_unused(struct ubifs_ino_node *ino)
+{
+	memset(ino->padding1, 0, 8);
+	memset(ino->padding2, 0, 34);
+}
+
+/**
+ * zero_dent_node_unused - zero out unused fields of an on-flash directory
+ *                          entry node.
+ * @ino: the directory entry to zero out
+ */
+static inline void zero_dent_node_unused(struct ubifs_dent_node *dent)
+{
+	dent->padding1 = 0;
+	memset(dent->padding2, 0, 4);
+}
+
+/**
+ * zero_data_node_unused - zero out unused fields of an on-flash data node.
+ * @ino: the data node to zero out
+ */
+static inline void zero_data_node_unused(struct ubifs_data_node *data)
+{
+	memset(data->padding, 0, 2);
+}
+
+/**
  * reserve_space - reserve space in the journal.
  * @c: UBIFS file-system description object
  * @jhead: journal head number
@@ -431,6 +461,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->xattr_msize = cpu_to_le64(ui->xattr_msize);
 	ino->xattr_names = cpu_to_le32(ui->xattr_names);
 	ino->data_len    = cpu_to_le32(ui->data_len);
+	zero_ino_node_unused(ino);
 
 	/*
 	 * Drop the attached data if this is a deletion inode, the data is not
@@ -499,7 +530,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 
 	len = aligned_dlen + aligned_ilen + UBIFS_INO_NODE_SZ;
 
-	dent = kmalloc(len, GFP_KERNEL);
+	dent = kmalloc(len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
 
@@ -513,11 +544,11 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 
 	key_write(c, &dent_key, dent->key);
 	dent->inum = deletion ? 0 : cpu_to_le64(inode->i_ino);
-	dent->padding = 0;
 	dent->type = get_dent_type(inode->i_mode);
 	dent->nlen = cpu_to_le16(nm->len);
 	memcpy(dent->name, nm->name, nm->len);
 	dent->name[nm->len] = '\0';
+	zero_dent_node_unused(dent);
 	ubifs_prep_grp_node(c, dent, dlen, 0);
 
 	ino = (void *)dent + aligned_dlen;
@@ -625,6 +656,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	data->ch.node_type = UBIFS_DATA_NODE;
 	key_write(c, key, &data->key);
 	data->size = cpu_to_le32(len);
+	zero_data_node_unused(data);
 
 	if (!(ui->flags && UBIFS_COMPR_FL))
 		/* Compression is disabled for this inode */
@@ -794,11 +826,11 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 	dent->ch.node_type = UBIFS_DENT_NODE;
 	dent_key_init_flash(c, &dent->key, new_dir->i_ino, &new_dentry->d_name);
 	dent->inum = cpu_to_le64(old_inode->i_ino);
-	dent->padding = 0;
 	dent->type = get_dent_type(old_inode->i_mode);
 	dent->nlen = cpu_to_le16(new_dentry->d_name.len);
 	memcpy(dent->name, new_dentry->d_name.name, new_dentry->d_name.len);
 	dent->name[new_dentry->d_name.len] = '\0';
+	zero_dent_node_unused(dent);
 	ubifs_prep_grp_node(c, dent, dlen1, 0);
 
 	dent2 = (void *)dent + aligned_dlen1;
@@ -808,11 +840,11 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 	dent_key_init_flash(c, &dent2->key, old_dir->i_ino,
 			    &old_dentry->d_name);
 	dent2->inum = cpu_to_le64(0);
-	dent2->padding = 0;
 	dent2->type = DT_UNKNOWN;
 	dent2->nlen = cpu_to_le16(old_dentry->d_name.len);
 	memcpy(dent2->name, old_dentry->d_name.name, old_dentry->d_name.len);
 	dent2->name[old_dentry->d_name.len] = '\0';
+	zero_dent_node_unused(dent2);
 	ubifs_prep_grp_node(c, dent2, dlen2, 0);
 
 	p = (void *)dent2 + aligned_dlen2;
@@ -1003,6 +1035,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 					dn->size = cpu_to_le32(dlen);
 					dlen += UBIFS_DATA_NODE_SZ;
 				}
+				zero_data_node_unused(dn);
 				ubifs_prepare_node(c, dn, dlen, 0);
 			}
 		}
@@ -1086,7 +1119,7 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	hlen = ubifs_inode(host)->data_len + UBIFS_INO_NODE_SZ;
 	len = aligned_xlen + UBIFS_INO_NODE_SZ + ALIGN(hlen, 8);
 
-	xent = kmalloc(len, GFP_KERNEL);
+	xent = kmalloc(len, GFP_NOFS);
 	if (!xent)
 		return -ENOMEM;
 
@@ -1094,11 +1127,11 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	xent_key_init(c, &xent_key, host->i_ino, nm);
 	key_write(c, &xent_key, xent->key);
 	xent->inum = 0;
-	xent->padding = 0;
 	xent->type = get_dent_type(inode->i_mode);
 	xent->nlen = cpu_to_le16(nm->len);
 	memcpy(xent->name, nm->name, nm->len);
 	xent->name[nm->len] = '\0';
+	zero_dent_node_unused(xent);
 	ubifs_prep_grp_node(c, xent, xlen, 0);
 
 	ino = (void *)xent + aligned_xlen;
