@@ -510,7 +510,7 @@ int dbg_old_index_check_init(struct ubifs_info *c, struct ubifs_zbranch *zroot)
 	offs = c->old_zroot.offs;
 	len = c->old_zroot.len;
 
-	idx = kmalloc(c->max_idx_node_sz, GFP_KERNEL);
+	idx = kmalloc(c->max_idx_node_sz, GFP_NOFS);
 	if (!idx)
 		return -ENOMEM;
 

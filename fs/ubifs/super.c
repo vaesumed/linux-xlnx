@@ -165,7 +165,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 			ubifs_err("invalid inode size");
 			goto out_invalid;
 		}
-		ui->data = kmalloc(ui->data_len + 1, GFP_KERNEL);
+		ui->data = kmalloc(ui->data_len + 1, GFP_NOFS);
 		if (!ui->data) {
 			err = -ENOMEM;
 			goto out_ino;
