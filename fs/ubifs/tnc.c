@@ -243,7 +243,7 @@ static int read_znode(struct ubifs_info *c, int lnum, int offs, int len,
 	int i, err, type, cmp;
 	struct ubifs_idx_node *idx;
 
-	idx = kmalloc(c->max_idx_node_sz, GFP_KERNEL);
+	idx = kmalloc(c->max_idx_node_sz, GFP_NOFS);
 	if (!idx)
 		return -ENOMEM;
 

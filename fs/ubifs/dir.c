@@ -757,7 +757,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	}
 
 	ui = ubifs_inode(inode);
-	ui->data = kmalloc(len + 1, GFP_KERNEL);
+	ui->data = kmalloc(len + 1, GFP_NOFS);
 	if (!ui->data) {
 		err = -ENOMEM;
 		goto out_inode;
