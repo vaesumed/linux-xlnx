@@ -46,13 +46,13 @@
 #define PCMCIA1AttrSp	PCMCIAAttrSp	/* PCMCIA 1 Attribute Space [byte] */
 #define PCMCIA1MemSp	PCMCIAMemSp	/* PCMCIA 1 Memory Space [byte]    */
 
-#define _PCMCIA(Nb)	        	/* PCMCIA [0..1]                   */ \
-                	(0x20000000 + (Nb)*PCMCIASp)
+#define _PCMCIA(Nb)			/* PCMCIA [0..1]                   */ \
+			(0x20000000 + (Nb)*PCMCIASp)
 #define _PCMCIAIO(Nb)	_PCMCIA (Nb)	/* PCMCIA I/O [0..1]               */
-#define _PCMCIAAttr(Nb)	        	/* PCMCIA Attribute [0..1]         */ \
-                	(_PCMCIA (Nb) + 2*PCMCIAPrtSp)
-#define _PCMCIAMem(Nb)	        	/* PCMCIA Memory [0..1]            */ \
-                	(_PCMCIA (Nb) + 3*PCMCIAPrtSp)
+#define _PCMCIAAttr(Nb)			/* PCMCIA Attribute [0..1]         */ \
+			(_PCMCIA (Nb) + 2*PCMCIAPrtSp)
+#define _PCMCIAMem(Nb)			/* PCMCIA Memory [0..1]            */ \
+			(_PCMCIA (Nb) + 3*PCMCIAPrtSp)
 
 #define _PCMCIA0	_PCMCIA (0)	/* PCMCIA 0                        */
 #define _PCMCIA0IO	_PCMCIAIO (0)	/* PCMCIA 0 I/O                    */
@@ -1248,19 +1248,26 @@
 #define GPIO10_RTCCLK		10	/* real time clock (1 Hz) */
 #define GPIO11_3_6MHz		11	/* 3.6 MHz oscillator out */
 #define GPIO12_32KHz		12	/* 32 kHz out */
+#define GPIO12_CIF_DD7		12	/* Capture Interface D7 (PXA27x) */
 #define GPIO13_MBGNT		13	/* memory controller grant */
 #define GPIO14_MBREQ		14	/* alternate bus master request */
 #define GPIO15_nCS_1		15	/* chip select 1 */
 #define GPIO16_PWM0		16	/* PWM0 output */
 #define GPIO17_PWM1		17	/* PWM1 output */
+#define GPIO17_CIF_DD6		17	/* Capture Interface D6 (PXA27x) */
 #define GPIO18_RDY		18	/* Ext. Bus Ready */
 #define GPIO19_DREQ1		19	/* External DMA Request */
 #define GPIO20_DREQ0		20	/* External DMA Request */
 #define GPIO23_SCLK		23	/* SSP clock */
+#define GPIO23_CIF_MCLK		23	/* Capture Interface MCLK (PXA27x) */
 #define GPIO24_SFRM		24	/* SSP Frame */
+#define GPIO24_CIF_FV		24	/* Capture Interface FV (PXA27x) */
 #define GPIO25_STXD		25	/* SSP transmit */
+#define GPIO25_CIF_LV		25	/* Capture Interface LV (PXA27x) */
 #define GPIO26_SRXD		26	/* SSP receive */
+#define GPIO26_CIF_PCLK		26	/* Capture Interface PCLK (PXA27x) */
 #define GPIO27_SEXTCLK		27	/* SSP ext_clk */
+#define GPIO27_CIF_DD0		27	/* Capture Interface D0 (PXA27x) */
 #define GPIO28_BITCLK		28	/* AC97/I2S bit_clk */
 #define GPIO29_SDATA_IN		29	/* AC97 Sdata_in0 / I2S Sdata_in */
 #define GPIO30_SDATA_OUT	30	/* AC97/I2S Sdata_out */
@@ -1281,28 +1288,40 @@
 #define GPIO41_FFRTS		41	/* FFUART request to send */
 #define GPIO42_BTRXD		42	/* BTUART receive data */
 #define GPIO42_HWRXD		42	/* HWUART receive data */
+#define GPIO42_CIF_MCLK		42	/* Capture interface MCLK (PXA27x) */
 #define GPIO43_BTTXD		43	/* BTUART transmit data */
 #define GPIO43_HWTXD		43	/* HWUART transmit data */
+#define GPIO43_CIF_FV		43	/* Capture interface FV (PXA27x) */
 #define GPIO44_BTCTS		44	/* BTUART clear to send */
 #define GPIO44_HWCTS		44	/* HWUART clear to send */
+#define GPIO44_CIF_LV		44	/* Capture interface LV (PXA27x) */
 #define GPIO45_BTRTS		45	/* BTUART request to send */
 #define GPIO45_HWRTS		45	/* HWUART request to send */
 #define GPIO45_AC97_SYSCLK	45	/* AC97 System Clock */
+#define GPIO45_CIF_PCLK		45	/* Capture interface PCLK (PXA27x) */
 #define GPIO46_ICPRXD		46	/* ICP receive data */
 #define GPIO46_STRXD		46	/* STD_UART receive data */
 #define GPIO47_ICPTXD		47	/* ICP transmit data */
 #define GPIO47_STTXD		47	/* STD_UART transmit data */
+#define GPIO47_CIF_DD0		47	/* Capture interface D0 (PXA27x) */
 #define GPIO48_nPOE		48	/* Output Enable for Card Space */
+#define GPIO48_CIF_DD5		48	/* Capture interface D5 (PXA27x) */
 #define GPIO49_nPWE		49	/* Write Enable for Card Space */
 #define GPIO50_nPIOR		50	/* I/O Read for Card Space */
+#define GPIO50_CIF_DD3		50	/* Capture interface D3 (PXA27x) */
 #define GPIO51_nPIOW		51	/* I/O Write for Card Space */
+#define GPIO51_CIF_DD2		51	/* Capture interface D2 (PXA27x) */
 #define GPIO52_nPCE_1		52	/* Card Enable for Card Space */
+#define GPIO52_CIF_DD4		52	/* Capture interface D4 (PXA27x) */
 #define GPIO53_nPCE_2		53	/* Card Enable for Card Space */
 #define GPIO53_MMCCLK		53	/* MMC Clock */
+#define GPIO53_CIF_MCLK		53	/* Capture interface MCLK (PXA27x) */
 #define GPIO54_MMCCLK		54	/* MMC Clock */
 #define GPIO54_pSKTSEL		54	/* Socket Select for Card Space */
 #define GPIO54_nPCE_2		54	/* Card Enable for Card Space (PXA27x) */
+#define GPIO54_CIF_PCLK		54	/* Capture interface PCLK (PXA27x) */
 #define GPIO55_nPREG		55	/* Card Address bit 26 */
+#define GPIO55_CIF_DD1		55	/* Capture interface D1 (PXA27x) */
 #define GPIO56_nPWAIT		56	/* Wait signal for Card Space */
 #define GPIO57_nIOIS16		57	/* Bus Width select for I/O Card Space */
 #define GPIO58_LDD_0		58	/* LCD data pin 0 */
@@ -1337,11 +1356,28 @@
 #define GPIO79_nCS_3		79	/* chip select 3 */
 #define GPIO80_nCS_4		80	/* chip select 4 */
 #define GPIO81_NSCLK		81	/* NSSP clock */
+#define GPIO81_CIF_DD0		81	/* Capture Interface D0 (PXA27x) */
 #define GPIO82_NSFRM		82	/* NSSP Frame */
+#define GPIO82_CIF_DD5		82	/* Capture Interface D5 (PXA27x) */
 #define GPIO83_NSTXD		83	/* NSSP transmit */
+#define GPIO83_CIF_DD4		83	/* Capture Interface D4 (PXA27x) */
 #define GPIO84_NSRXD		84	/* NSSP receive */
+#define GPIO84_CIF_FV		84	/* Capture Interface FV (PXA27x) */
 #define GPIO85_nPCE_1		85	/* Card Enable for Card Space (PXA27x) */
+#define GPIO85_CIF_LV		85	/* Capture Interface LV (PXA27x) */
+#define GPIO90_CIF_DD4		90	/* Capture Interface DD4 (PXA27x) */
+#define GPIO91_CIF_DD5		91	/* Capture Interface DD5 (PXA27x) */
 #define GPIO92_MMCDAT0		92	/* MMC DAT0 (PXA27x) */
+#define GPIO93_CIF_DD6		93	/* Capture interface D6 (PXA27x) */
+#define GPIO94_CIF_DD5		94	/* Capture interface D5 (PXA27x) */
+#define GPIO95_CIF_DD4		95	/* Capture interface D4 (PXA27x) */
+#define GPIO98_CIF_DD0		98	/* Capture interface D0 (PXA27x) */
+#define GPIO103_CIF_DD3		103	/* Capture interface D3 (PXA27x) */
+#define GPIO104_CIF_DD2		104	/* Capture interface D2 (PXA27x) */
+#define GPIO105_CIF_DD1		105	/* Capture interface D1 (PXA27x) */
+#define GPIO106_CIF_DD9		106	/* Capture interface D9 (PXA27x) */
+#define GPIO107_CIF_DD8		107	/* Capture interface D8 (PXA27x) */
+#define GPIO108_CIF_DD7		108	/* Capture interface D7 (PXA27x) */
 #define GPIO102_nPCE_1		102	/* PCMCIA (PXA27x) */
 #define GPIO109_MMCDAT1		109	/* MMC DAT1 (PXA27x) */
 #define GPIO110_MMCDAT2		110	/* MMC DAT2 (PXA27x) */
@@ -1351,6 +1387,9 @@
 #define GPIO112_MMCCMD		112	/* MMC CMD (PXA27x) */
 #define GPIO113_I2S_SYSCLK	113	/* I2S System Clock (PXA27x) */
 #define GPIO113_AC97_RESET_N	113	/* AC97 NRESET on (PXA27x) */
+#define GPIO114_CIF_DD1		114	/* Capture interface D1 (PXA27x) */
+#define GPIO115_CIF_DD3		115	/* Capture interface D3 (PXA27x) */
+#define GPIO116_CIF_DD2		116	/* Capture interface D2 (PXA27x) */
 
 /* GPIO alternate function mode & direction */
 
@@ -1376,19 +1415,26 @@
 #define GPIO10_RTCCLK_MD	(10 | GPIO_ALT_FN_1_OUT)
 #define GPIO11_3_6MHz_MD	(11 | GPIO_ALT_FN_1_OUT)
 #define GPIO12_32KHz_MD		(12 | GPIO_ALT_FN_1_OUT)
+#define GPIO12_CIF_DD7_MD	(12 | GPIO_ALT_FN_2_IN)
 #define GPIO13_MBGNT_MD		(13 | GPIO_ALT_FN_2_OUT)
 #define GPIO14_MBREQ_MD		(14 | GPIO_ALT_FN_1_IN)
 #define GPIO15_nCS_1_MD		(15 | GPIO_ALT_FN_2_OUT)
 #define GPIO16_PWM0_MD		(16 | GPIO_ALT_FN_2_OUT)
 #define GPIO17_PWM1_MD		(17 | GPIO_ALT_FN_2_OUT)
+#define GPIO17_CIF_DD6_MD	(17 | GPIO_ALT_FN_2_IN)
 #define GPIO18_RDY_MD		(18 | GPIO_ALT_FN_1_IN)
 #define GPIO19_DREQ1_MD		(19 | GPIO_ALT_FN_1_IN)
 #define GPIO20_DREQ0_MD		(20 | GPIO_ALT_FN_1_IN)
+#define GPIO23_CIF_MCLK_MD	(23 | GPIO_ALT_FN_1_OUT)
 #define GPIO23_SCLK_MD		(23 | GPIO_ALT_FN_2_OUT)
+#define GPIO24_CIF_FV_MD	(24 | GPIO_ALT_FN_1_OUT)
 #define GPIO24_SFRM_MD		(24 | GPIO_ALT_FN_2_OUT)
+#define GPIO25_CIF_LV_MD	(25 | GPIO_ALT_FN_1_OUT)
 #define GPIO25_STXD_MD		(25 | GPIO_ALT_FN_2_OUT)
 #define GPIO26_SRXD_MD		(26 | GPIO_ALT_FN_1_IN)
+#define GPIO26_CIF_PCLK_MD	(26 | GPIO_ALT_FN_2_IN)
 #define GPIO27_SEXTCLK_MD	(27 | GPIO_ALT_FN_1_IN)
+#define GPIO27_CIF_DD0_MD	(27 | GPIO_ALT_FN_3_IN)
 #define GPIO28_BITCLK_AC97_MD	(28 | GPIO_ALT_FN_1_IN)
 #define GPIO28_BITCLK_IN_I2S_MD	(28 | GPIO_ALT_FN_2_IN)
 #define GPIO28_BITCLK_OUT_I2S_MD	(28 | GPIO_ALT_FN_1_OUT)
@@ -1413,34 +1459,46 @@
 #define GPIO40_FFDTR_MD		(40 | GPIO_ALT_FN_2_OUT)
 #define GPIO41_FFRTS_MD		(41 | GPIO_ALT_FN_2_OUT)
 #define GPIO42_BTRXD_MD		(42 | GPIO_ALT_FN_1_IN)
+#define GPIO42_CIF_MCLK_MD	(42 | GPIO_ALT_FN_3_OUT)
 #define GPIO42_HWRXD_MD		(42 | GPIO_ALT_FN_3_IN)
 #define GPIO43_BTTXD_MD		(43 | GPIO_ALT_FN_2_OUT)
+#define GPIO43_CIF_FV_MD	(43 | GPIO_ALT_FN_3_OUT)
 #define GPIO43_HWTXD_MD		(43 | GPIO_ALT_FN_3_OUT)
 #define GPIO44_BTCTS_MD		(44 | GPIO_ALT_FN_1_IN)
 #define GPIO44_HWCTS_MD		(44 | GPIO_ALT_FN_3_IN)
+#define GPIO44_CIF_LV_MD	(44 | GPIO_ALT_FN_3_OUT)
 #define GPIO45_BTRTS_MD		(45 | GPIO_ALT_FN_2_OUT)
 #define GPIO45_HWRTS_MD		(45 | GPIO_ALT_FN_3_OUT)
 #define GPIO45_SYSCLK_AC97_MD		(45 | GPIO_ALT_FN_1_OUT)
+#define GPIO45_CIF_PCLK_MD	(45 | GPIO_ALT_FN_3_IN)
 #define GPIO46_ICPRXD_MD	(46 | GPIO_ALT_FN_1_IN)
 #define GPIO46_STRXD_MD		(46 | GPIO_ALT_FN_2_IN)
 #define GPIO47_ICPTXD_MD	(47 | GPIO_ALT_FN_2_OUT)
 #define GPIO47_STTXD_MD		(47 | GPIO_ALT_FN_1_OUT)
+#define GPIO47_CIF_DD0_MD	(47 | GPIO_ALT_FN_1_IN)
 #define GPIO48_nPOE_MD		(48 | GPIO_ALT_FN_2_OUT)
+#define GPIO48_CIF_DD5_MD	(48 | GPIO_ALT_FN_1_IN)
 #define GPIO48_HWTXD_MD         (48 | GPIO_ALT_FN_1_OUT)
 #define GPIO48_nPOE_MD          (48 | GPIO_ALT_FN_2_OUT)
 #define GPIO49_HWRXD_MD		(49 | GPIO_ALT_FN_1_IN)
 #define GPIO49_nPWE_MD		(49 | GPIO_ALT_FN_2_OUT)
 #define GPIO50_nPIOR_MD		(50 | GPIO_ALT_FN_2_OUT)
+#define GPIO50_CIF_DD3_MD	(50 | GPIO_ALT_FN_1_IN)
 #define GPIO50_HWCTS_MD         (50 | GPIO_ALT_FN_1_IN)
 #define GPIO51_HWRTS_MD         (51 | GPIO_ALT_FN_1_OUT)
 #define GPIO51_nPIOW_MD		(51 | GPIO_ALT_FN_2_OUT)
+#define GPIO51_CIF_DD2_MD	(51 | GPIO_ALT_FN_1_IN)
 #define GPIO52_nPCE_1_MD	(52 | GPIO_ALT_FN_2_OUT)
+#define GPIO52_CIF_DD4_MD	(52 | GPIO_ALT_FN_1_IN)
 #define GPIO53_nPCE_2_MD	(53 | GPIO_ALT_FN_2_OUT)
 #define GPIO53_MMCCLK_MD	(53 | GPIO_ALT_FN_1_OUT)
+#define GPIO53_CIF_MCLK_MD	(53 | GPIO_ALT_FN_2_OUT)
 #define GPIO54_MMCCLK_MD	(54 | GPIO_ALT_FN_1_OUT)
 #define GPIO54_nPCE_2_MD	(54 | GPIO_ALT_FN_2_OUT)
 #define GPIO54_pSKTSEL_MD	(54 | GPIO_ALT_FN_2_OUT)
+#define GPIO54_CIF_PCLK_MD	(54 | GPIO_ALT_FN_3_IN)
 #define GPIO55_nPREG_MD		(55 | GPIO_ALT_FN_2_OUT)
+#define GPIO55_CIF_DD1_MD	(55 | GPIO_ALT_FN_1_IN)
 #define GPIO56_nPWAIT_MD	(56 | GPIO_ALT_FN_1_IN)
 #define GPIO57_nIOIS16_MD	(57 | GPIO_ALT_FN_1_IN)
 #define GPIO58_LDD_0_MD		(58 | GPIO_ALT_FN_2_OUT)
@@ -1477,16 +1535,33 @@
 #define GPIO80_nCS_4_MD		(80 | GPIO_ALT_FN_2_OUT)
 #define GPIO81_NSSP_CLK_OUT 	(81 | GPIO_ALT_FN_1_OUT)
 #define GPIO81_NSSP_CLK_IN  	(81 | GPIO_ALT_FN_1_IN)
+#define GPIO81_CIF_DD0_MD	(81 | GPIO_ALT_FN_2_IN)
 #define GPIO82_NSSP_FRM_OUT 	(82 | GPIO_ALT_FN_1_OUT)
 #define GPIO82_NSSP_FRM_IN  	(82 | GPIO_ALT_FN_1_IN)
+#define GPIO82_CIF_DD5_MD	(82 | GPIO_ALT_FN_3_IN)
 #define GPIO83_NSSP_TX      	(83 | GPIO_ALT_FN_1_OUT)
 #define GPIO83_NSSP_RX      	(83 | GPIO_ALT_FN_2_IN)
+#define GPIO83_CIF_DD4_MD	(83 | GPIO_ALT_FN_3_IN)
 #define GPIO84_NSSP_TX      	(84 | GPIO_ALT_FN_1_OUT)
 #define GPIO84_NSSP_RX      	(84 | GPIO_ALT_FN_2_IN)
+#define GPIO84_CIF_FV_MD	(84 | GPIO_ALT_FN_3_OUT)
 #define GPIO85_nPCE_1_MD	(85 | GPIO_ALT_FN_1_OUT)
+#define GPIO85_CIF_LV_MD	(85 | GPIO_ALT_FN_3_OUT)
+#define GPIO90_CIF_DD4_MD	(90 | GPIO_ALT_FN_3_IN)
+#define GPIO91_CIF_DD5_MD	(91 | GPIO_ALT_FN_3_IN)
 #define GPIO92_MMCDAT0_MD	(92 | GPIO_ALT_FN_1_OUT)
+#define GPIO93_CIF_DD6_MD	(93 | GPIO_ALT_FN_2_IN)
+#define GPIO94_CIF_DD5_MD	(94 | GPIO_ALT_FN_2_IN)
+#define GPIO95_CIF_DD4_MD	(95 | GPIO_ALT_FN_2_IN)
+#define GPIO98_CIF_DD0_MD	(98 | GPIO_ALT_FN_2_IN)
 #define GPIO102_nPCE_1_MD	(102 | GPIO_ALT_FN_1_OUT)
+#define GPIO103_CIF_DD3_MD	(103 | GPIO_ALT_FN_1_IN)
 #define GPIO104_pSKTSEL_MD	(104 | GPIO_ALT_FN_1_OUT)
+#define GPIO104_CIF_DD2_MD	(104 | GPIO_ALT_FN_1_IN)
+#define GPIO105_CIF_DD1_MD	(105 | GPIO_ALT_FN_1_IN)
+#define GPIO106_CIF_DD9_MD	(106 | GPIO_ALT_FN_1_IN)
+#define GPIO107_CIF_DD8_MD	(107 | GPIO_ALT_FN_1_IN)
+#define GPIO108_CIF_DD7_MD	(108 | GPIO_ALT_FN_1_IN)
 #define GPIO109_MMCDAT1_MD	(109 | GPIO_ALT_FN_1_OUT)
 #define GPIO110_MMCDAT2_MD	(110 | GPIO_ALT_FN_1_OUT)
 #define GPIO110_MMCCS0_MD	(110 | GPIO_ALT_FN_1_OUT)
@@ -1715,7 +1790,7 @@
 #define LCCR0_Color     (LCCR0_CMS*0)   /*  Color display                  */
 #define LCCR0_Mono      (LCCR0_CMS*1)   /*  Monochrome display             */
 #define LCCR0_SDS	(1 << 2)	/* Single/Dual Panel Display       */
-                                        /* Select                          */
+					/* Select                          */
 #define LCCR0_Sngl      (LCCR0_SDS*0)   /*  Single panel display           */
 #define LCCR0_Dual      (LCCR0_SDS*1)   /*  Dual panel display             */
 
@@ -1727,11 +1802,11 @@
 #define LCCR0_Pas       (LCCR0_PAS*0)   /*  Passive display (STN)          */
 #define LCCR0_Act       (LCCR0_PAS*1)   /*  Active display (TFT)           */
 #define LCCR0_DPD	(1 << 9)	/* Double Pixel Data (monochrome   */
-                                        /* display mode)                   */
+					/* display mode)                   */
 #define LCCR0_4PixMono  (LCCR0_DPD*0)   /*  4-Pixel/clock Monochrome       */
-                                        /*  display                        */
+					/*  display                        */
 #define LCCR0_8PixMono  (LCCR0_DPD*1)   /*  8-Pixel/clock Monochrome       */
-                                        /*  display                        */
+					/*  display                        */
 #define LCCR0_DIS	(1 << 10)	/* LCD Disable */
 #define LCCR0_QDM	(1 << 11)	/* LCD Quick Disable mask */
 #define LCCR0_PDD	(0xff << 12)	/* Palette DMA request delay */
@@ -1746,47 +1821,47 @@
 
 #define LCCR1_PPL       Fld (10, 0)      /* Pixels Per Line - 1 */
 #define LCCR1_DisWdth(Pixel)            /* Display Width [1..800 pix.]  */ \
-                        (((Pixel) - 1) << FShft (LCCR1_PPL))
+			(((Pixel) - 1) << FShft (LCCR1_PPL))
 
 #define LCCR1_HSW       Fld (6, 10)     /* Horizontal Synchronization     */
 #define LCCR1_HorSnchWdth(Tpix)         /* Horizontal Synchronization     */ \
-                                        /* pulse Width [1..64 Tpix]       */ \
-                        (((Tpix) - 1) << FShft (LCCR1_HSW))
+					/* pulse Width [1..64 Tpix]       */ \
+			(((Tpix) - 1) << FShft (LCCR1_HSW))
 
 #define LCCR1_ELW       Fld (8, 16)     /* End-of-Line pixel clock Wait    */
-                                        /* count - 1 [Tpix]                */
+					/* count - 1 [Tpix]                */
 #define LCCR1_EndLnDel(Tpix)            /*  End-of-Line Delay              */ \
-                                        /*  [1..256 Tpix]                  */ \
-                        (((Tpix) - 1) << FShft (LCCR1_ELW))
+					/*  [1..256 Tpix]                  */ \
+			(((Tpix) - 1) << FShft (LCCR1_ELW))
 
 #define LCCR1_BLW       Fld (8, 24)     /* Beginning-of-Line pixel clock   */
-                                        /* Wait count - 1 [Tpix]           */
+					/* Wait count - 1 [Tpix]           */
 #define LCCR1_BegLnDel(Tpix)            /*  Beginning-of-Line Delay        */ \
-                                        /*  [1..256 Tpix]                  */ \
-                        (((Tpix) - 1) << FShft (LCCR1_BLW))
+					/*  [1..256 Tpix]                  */ \
+			(((Tpix) - 1) << FShft (LCCR1_BLW))
 
 
 #define LCCR2_LPP       Fld (10, 0)     /* Line Per Panel - 1              */
 #define LCCR2_DisHght(Line)             /*  Display Height [1..1024 lines] */ \
-                        (((Line) - 1) << FShft (LCCR2_LPP))
+			(((Line) - 1) << FShft (LCCR2_LPP))
 
 #define LCCR2_VSW       Fld (6, 10)     /* Vertical Synchronization pulse  */
-                                        /* Width - 1 [Tln] (L_FCLK)        */
+					/* Width - 1 [Tln] (L_FCLK)        */
 #define LCCR2_VrtSnchWdth(Tln)          /*  Vertical Synchronization pulse */ \
-                                        /*  Width [1..64 Tln]              */ \
-                        (((Tln) - 1) << FShft (LCCR2_VSW))
+					/*  Width [1..64 Tln]              */ \
+			(((Tln) - 1) << FShft (LCCR2_VSW))
 
 #define LCCR2_EFW       Fld (8, 16)     /* End-of-Frame line clock Wait    */
-                                        /* count [Tln]                     */
+					/* count [Tln]                     */
 #define LCCR2_EndFrmDel(Tln)            /*  End-of-Frame Delay             */ \
-                                        /*  [0..255 Tln]                   */ \
-                        ((Tln) << FShft (LCCR2_EFW))
+					/*  [0..255 Tln]                   */ \
+			((Tln) << FShft (LCCR2_EFW))
 
 #define LCCR2_BFW       Fld (8, 24)     /* Beginning-of-Frame line clock   */
-                                        /* Wait count [Tln]                */
+					/* Wait count [Tln]                */
 #define LCCR2_BegFrmDel(Tln)            /*  Beginning-of-Frame Delay       */ \
-                                        /*  [0..255 Tln]                   */ \
-                        ((Tln) << FShft (LCCR2_BFW))
+					/*  [0..255 Tln]                   */ \
+			((Tln) << FShft (LCCR2_BFW))
 
 #if 0
 #define LCCR3_PCD	(0xff)		/* Pixel clock divisor */
@@ -1803,7 +1878,7 @@
 #define LCCR3_PixFlEdg  (LCCR3_PCP*1)   /*  Pixel clock Falling-Edge       */
 
 #define LCCR3_OEP       (1 << 23)       /* Output Enable Polarity (L_BIAS, */
-                                        /* active display mode)            */
+					/* active display mode)            */
 #define LCCR3_OutEnH    (LCCR3_OEP*0)   /*  Output Enable active High      */
 #define LCCR3_OutEnL    (LCCR3_OEP*1)   /*  Output Enable active Low       */
 
@@ -1816,25 +1891,25 @@
 
 #define LCCR3_PCD       Fld (8, 0)      /* Pixel Clock Divisor */
 #define LCCR3_PixClkDiv(Div)            /* Pixel Clock Divisor */ \
-                        (((Div) << FShft (LCCR3_PCD)))
+			(((Div) << FShft (LCCR3_PCD)))
 
 
 #define LCCR3_BPP       Fld (3, 24)     /* Bit Per Pixel */
 #define LCCR3_Bpp(Bpp)                  /* Bit Per Pixel */ \
-                        (((Bpp) << FShft (LCCR3_BPP)))
+			(((Bpp) << FShft (LCCR3_BPP)))
 
 #define LCCR3_ACB       Fld (8, 8)      /* AC Bias */
 #define LCCR3_Acb(Acb)                  /* BAC Bias */ \
-                        (((Acb) << FShft (LCCR3_ACB)))
+			(((Acb) << FShft (LCCR3_ACB)))
 
 #define LCCR3_HorSnchH  (LCCR3_HSP*0)   /*  Horizontal Synchronization     */
-                                        /*  pulse active High              */
+					/*  pulse active High              */
 #define LCCR3_HorSnchL  (LCCR3_HSP*1)   /*  Horizontal Synchronization     */
 
 #define LCCR3_VrtSnchH  (LCCR3_VSP*0)   /*  Vertical Synchronization pulse */
-                                        /*  active High                    */
+					/*  active High                    */
 #define LCCR3_VrtSnchL  (LCCR3_VSP*1)   /*  Vertical Synchronization pulse */
-                                        /*  active Low                     */
+					/*  active Low                     */
 
 #define LCSR_LDD	(1 << 0)	/* LCD Disable Done */
 #define LCSR_SOF	(1 << 1)	/* Start of frame */
@@ -1941,6 +2016,11 @@
 #define CICR0_ENB	(1 << 28)	/* Camera interface enable */
 #define CICR0_DIS	(1 << 27)	/* Camera interface disable */
 #define CICR0_SIM	(0x7 << 24)	/* Sensor interface mode mask */
+#define CICR0_SIM_MP	(0 << 24)
+#define CICR0_SIM_SP	(1 << 24)
+#define CICR0_SIM_MS	(2 << 24)
+#define CICR0_SIM_EP	(3 << 24)
+#define CICR0_SIM_ES	(4 << 24)
 #define CICR0_TOM	(1 << 9)	/* Time-out mask */
 #define CICR0_RDAVM	(1 << 8)	/* Receive-data-available mask */
 #define CICR0_FEM	(1 << 7)	/* FIFO-empty mask */
@@ -1990,6 +2070,20 @@
 #define CICR4_MCLK_EN	(1 << 19)	/* MCLK enable */
 #define CICR4_FR_RATE	(0x7 << 8)	/* Frame rate mask */
 #define CICR4_DIV	(0xff << 0)	/* Clock divisor mask */
+
+#define CICR1_DW_VAL(x)		((x) & CICR1_DW)		/* Data bus width */
+#define CICR1_PPL_VAL(x)	(((x) << 15) & CICR1_PPL)	/* Pixels per line */
+
+#define CICR2_BLW_VAL(x)	(((x) << 24) & CICR2_BLW)	/* Beginning-of-line pixel clock wait count */
+#define CICR2_ELW_VAL(x)	(((x) << 16) & CICR2_ELW)	/* End-of-line pixel clock wait count */
+#define CICR2_HSW_VAL(x)	(((x) << 10) & CICR2_HSW)	/* Horizontal sync pulse width */
+#define CICR2_BFPW_VAL(x)	(((x) << 3) & CICR2_BFPW)	/* Beginning-of-frame pixel clock wait count */
+#define CICR2_FSW_VAL(x)	(((x) << 0) & CICR2_FSW)	/* Frame stabilization wait count */
+
+#define CICR3_BFW_VAL(x)	(((x) << 24) & CICR3_BFW)	/* Beginning-of-frame line clock wait count  */
+#define CICR3_EFW_VAL(x)	(((x) << 16) & CICR3_EFW)	/* End-of-frame line clock wait count */
+#define CICR3_VSW_VAL(x)	(((x) << 11) & CICR3_VSW)	/* Vertical sync pulse width */
+#define CICR3_LPF_VAL(x)	(((x) << 0) & CICR3_LPF)	/* Lines per frame */
 
 #define CISR_FTO	(1 << 15)	/* FIFO time-out */
 #define CISR_RDAV_2	(1 << 14)	/* Channel 2 receive data available */
