@@ -377,7 +377,7 @@ xfs_qm_scall_trunc_qfiles(
 	if (!capable(CAP_SYS_ADMIN))
 		return XFS_ERROR(EPERM);
 	error = 0;
-	if (!XFS_SB_VERSION_HASQUOTA(&mp->m_sb) || flags == 0) {
+	if (!xfs_sb_version_hasquota(&mp->m_sb) || flags == 0) {
 		qdprintk("qtrunc flags=%x m_qflags=%x\n", flags, mp->m_qflags);
 		return XFS_ERROR(EINVAL);
 	}
@@ -386,7 +386,7 @@ xfs_qm_scall_trunc_qfiles(
 		error = xfs_iget(mp, NULL, mp->m_sb.sb_uquotino, 0, 0, &qip, 0);
 		if (! error) {
 			(void) xfs_truncate_file(mp, qip);
-			VN_RELE(XFS_ITOV(qip));
+			IRELE(qip);
 		}
 	}
 
@@ -395,7 +395,7 @@ xfs_qm_scall_trunc_qfiles(
 		error = xfs_iget(mp, NULL, mp->m_sb.sb_gquotino, 0, 0, &qip, 0);
 		if (! error) {
 			(void) xfs_truncate_file(mp, qip);
-			VN_RELE(XFS_ITOV(qip));
+			IRELE(qip);
 		}
 	}
 
@@ -522,7 +522,7 @@ xfs_qm_scall_getqstat(
 	memset(out, 0, sizeof(fs_quota_stat_t));
 
 	out->qs_version = FS_QSTAT_VERSION;
-	if (! XFS_SB_VERSION_HASQUOTA(&mp->m_sb)) {
+	if (!xfs_sb_version_hasquota(&mp->m_sb)) {
 		out->qs_uquota.qfs_ino = NULLFSINO;
 		out->qs_gquota.qfs_ino = NULLFSINO;
 		return (0);
@@ -552,13 +552,13 @@ xfs_qm_scall_getqstat(
 		out->qs_uquota.qfs_nblks = uip->i_d.di_nblocks;
 		out->qs_uquota.qfs_nextents = uip->i_d.di_nextents;
 		if (tempuqip)
-			VN_RELE(XFS_ITOV(uip));
+			IRELE(uip);
 	}
 	if (gip) {
 		out->qs_gquota.qfs_nblks = gip->i_d.di_nblocks;
 		out->qs_gquota.qfs_nextents = gip->i_d.di_nextents;
 		if (tempgqip)
-			VN_RELE(XFS_ITOV(gip));
+			IRELE(gip);
 	}
 	if (mp->m_quotainfo) {
 		out->qs_incoredqs = XFS_QI_MPLNDQUOTS(mp);
@@ -1095,7 +1095,7 @@ again:
 		 * inactive code in hell.
 		 */
 		if (vnode_refd)
-			VN_RELE(vp);
+			IRELE(ip);
 		XFS_MOUNT_ILOCK(mp);
 		/*
 		 * If an inode was inserted or removed, we gotta
