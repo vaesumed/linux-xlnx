@@ -144,6 +144,8 @@ struct videobuf_qtype_ops {
 				 int vbihack,
 				 int nonblocking);
 	int (*mmap_free)	(struct videobuf_queue *q);
+	int (*mmap_setup)	(struct videobuf_queue *q,
+				 struct videobuf_buffer *vb);
 	int (*mmap_mapper)	(struct videobuf_queue *q,
 				struct vm_area_struct *vma);
 };
@@ -164,7 +166,6 @@ struct videobuf_queue {
 
 	unsigned int               streaming:1;
 	unsigned int               reading:1;
-	unsigned int		   is_mmapped:1;
 
 	/* capture via mmap() + ioctl(QBUF/DQBUF) */
 	struct list_head           stream;
