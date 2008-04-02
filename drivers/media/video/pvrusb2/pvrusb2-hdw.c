@@ -44,13 +44,13 @@
 static struct pvr2_hdw *unit_pointers[PVR_NUM] = {[ 0 ... PVR_NUM-1 ] = NULL};
 static DEFINE_MUTEX(pvr2_unit_mtx);
 
-static int ctlchg = 0;
+static int ctlchg;
 static int initusbreset = 1;
-static int procreload = 0;
+static int procreload;
 static int tuner[PVR_NUM] = { [0 ... PVR_NUM-1] = -1 };
 static int tolerance[PVR_NUM] = { [0 ... PVR_NUM-1] = 0 };
 static int video_std[PVR_NUM] = { [0 ... PVR_NUM-1] = 0 };
-static int init_pause_msec = 0;
+static int init_pause_msec;
 
 module_param(ctlchg, int, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(ctlchg, "0=optimize ctl change 1=always accept new ctl value");
@@ -183,6 +183,7 @@ static const char *control_values_srate[] = {
 
 static const char *control_values_input[] = {
 	[PVR2_CVAL_INPUT_TV]        = "television",  /*xawtv needs this name*/
+	[PVR2_CVAL_INPUT_DTV]       = "dtv",
 	[PVR2_CVAL_INPUT_RADIO]     = "radio",
 	[PVR2_CVAL_INPUT_SVIDEO]    = "s-video",
 	[PVR2_CVAL_INPUT_COMPOSITE] = "composite",
@@ -221,7 +222,6 @@ static int pvr2_hdw_state_eval(struct pvr2_hdw *);
 static void pvr2_hdw_set_cur_freq(struct pvr2_hdw *,unsigned long);
 static void pvr2_hdw_worker_i2c(struct work_struct *work);
 static void pvr2_hdw_worker_poll(struct work_struct *work);
-static void pvr2_hdw_worker_init(struct work_struct *work);
 static int pvr2_hdw_wait(struct pvr2_hdw *,int state);
 static int pvr2_hdw_untrip_unlocked(struct pvr2_hdw *);
 static void pvr2_hdw_state_log_state(struct pvr2_hdw *);
@@ -368,6 +368,11 @@ static int ctrl_get_input(struct pvr2_ctrl *cptr,int *vp)
 	return 0;
 }
 
+static int ctrl_check_input(struct pvr2_ctrl *cptr,int v)
+{
+	return ((1 << v) & cptr->hdw->input_avail_mask) != 0;
+}
+
 static int ctrl_set_input(struct pvr2_ctrl *cptr,int m,int v)
 {
 	struct pvr2_hdw *hdw = cptr->hdw;
@@ -383,7 +388,8 @@ static int ctrl_set_input(struct pvr2_ctrl *cptr,int m,int v)
 	if (hdw->input_val == PVR2_CVAL_INPUT_RADIO) {
 		hdw->freqSelector = 0;
 		hdw->freqDirty = !0;
-	} else if (hdw->input_val == PVR2_CVAL_INPUT_TV) {
+	} else if ((hdw->input_val == PVR2_CVAL_INPUT_TV) ||
+		   (hdw->input_val == PVR2_CVAL_INPUT_DTV)) {
 		hdw->freqSelector = 1;
 		hdw->freqDirty = !0;
 	}
@@ -804,6 +810,7 @@ static const struct pvr2_ctl_info control_defs[] = {
 		.name = "input",
 		.internal_id = PVR2_CID_INPUT,
 		.default_value = PVR2_CVAL_INPUT_TV,
+		.check_value = ctrl_check_input,
 		DEFREF(input),
 		DEFENUM(control_values_input),
 	},{
@@ -1496,7 +1503,7 @@ struct pvr2_std_hack {
    default - which can always be overridden explicitly - and if the user
    has otherwise named a default then that default will always be used in
    place of this table. */
-const static struct pvr2_std_hack std_eeprom_maps[] = {
+static const struct pvr2_std_hack std_eeprom_maps[] = {
 	{	/* PAL(B/G) */
 		.pat = V4L2_STD_B|V4L2_STD_GH,
 		.std = V4L2_STD_PAL_B|V4L2_STD_PAL_B1|V4L2_STD_PAL_G,
@@ -1806,12 +1813,28 @@ static void pvr2_hdw_setup(struct pvr2_hdw *hdw)
 }
 
 
-/* Create and return a structure for interacting with the underlying
-   hardware */
+/* Perform second stage initialization.  Set callback pointer first so that
+   we can avoid a possible initialization race (if the kernel thread runs
+   before the callback has been set). */
+int pvr2_hdw_initialize(struct pvr2_hdw *hdw,
+			void (*callback_func)(void *),
+			void *callback_data)
+{
+	LOCK_TAKE(hdw->big_lock); do {
+		hdw->state_data = callback_data;
+		hdw->state_func = callback_func;
+	} while (0); LOCK_GIVE(hdw->big_lock);
+	pvr2_hdw_setup(hdw);
+	return hdw->flag_init_ok;
+}
+
+
+/* Create, set up, and return a structure for interacting with the
+   underlying hardware.  */
 struct pvr2_hdw *pvr2_hdw_create(struct usb_interface *intf,
 				 const struct usb_device_id *devid)
 {
-	unsigned int idx,cnt1,cnt2;
+	unsigned int idx,cnt1,cnt2,m;
 	struct pvr2_hdw *hdw;
 	int valid_std_mask;
 	struct pvr2_ctrl *cptr;
@@ -1842,6 +1865,25 @@ struct pvr2_hdw *pvr2_hdw_create(struct usb_interface *intf,
 	hdw->tuner_signal_stale = !0;
 	cx2341x_fill_defaults(&hdw->enc_ctl_state);
 
+	/* Calculate which inputs are OK */
+	m = 0;
+	if (hdw_desc->flag_has_analogtuner) m |= 1 << PVR2_CVAL_INPUT_TV;
+	if (hdw_desc->digital_control_scheme != PVR2_DIGITAL_SCHEME_NONE) {
+		m |= 1 << PVR2_CVAL_INPUT_DTV;
+	}
+	if (hdw_desc->flag_has_svideo) m |= 1 << PVR2_CVAL_INPUT_SVIDEO;
+	if (hdw_desc->flag_has_composite) m |= 1 << PVR2_CVAL_INPUT_COMPOSITE;
+	if (hdw_desc->flag_has_fmradio) m |= 1 << PVR2_CVAL_INPUT_RADIO;
+	hdw->input_avail_mask = m;
+
+	/* If not a hybrid device, pathway_state never changes.  So
+	   initialize it here to what it should forever be. */
+	if (!(hdw->input_avail_mask & (1 << PVR2_CVAL_INPUT_DTV))) {
+		hdw->pathway_state = PVR2_PATHWAY_ANALOG;
+	} else if (!(hdw->input_avail_mask & (1 << PVR2_CVAL_INPUT_TV))) {
+		hdw->pathway_state = PVR2_PATHWAY_DIGITAL;
+	}
+
 	hdw->control_cnt = CTRLDEF_COUNT;
 	hdw->control_cnt += MPEGDEF_COUNT;
 	hdw->controls = kzalloc(sizeof(struct pvr2_ctrl) * hdw->control_cnt,
@@ -1859,6 +1901,15 @@ struct pvr2_hdw *pvr2_hdw_create(struct usb_interface *intf,
 		cptr = hdw->controls + idx;
 		cptr->info = control_defs+idx;
 	}
+
+	/* Ensure that default input choice is a valid one. */
+	m = hdw->input_avail_mask;
+	if (m) for (idx = 0; idx < (sizeof(m) << 3); idx++) {
+		if (!((1 << idx) & m)) continue;
+		hdw->input_val = idx;
+		break;
+	}
+
 	/* Define and configure additional controls from cx2341x module. */
 	hdw->mpeg_ctrl_info = kzalloc(
 		sizeof(*(hdw->mpeg_ctrl_info)) * MPEGDEF_COUNT, GFP_KERNEL);
@@ -1982,7 +2033,6 @@ struct pvr2_hdw *pvr2_hdw_create(struct usb_interface *intf,
 	hdw->workqueue = create_singlethread_workqueue(hdw->name);
 	INIT_WORK(&hdw->workpoll,pvr2_hdw_worker_poll);
 	INIT_WORK(&hdw->worki2csync,pvr2_hdw_worker_i2c);
-	INIT_WORK(&hdw->workinit,pvr2_hdw_worker_init);
 
 	pvr2_trace(PVR2_TRACE_INIT,"Driver unit number is %d, name is %s",
 		   hdw->unit_number,hdw->name);
@@ -2004,7 +2054,6 @@ struct pvr2_hdw *pvr2_hdw_create(struct usb_interface *intf,
 	mutex_init(&hdw->ctl_lock_mutex);
 	mutex_init(&hdw->big_lock_mutex);
 
-	queue_work(hdw->workqueue,&hdw->workinit);
 	return hdw;
  fail:
 	if (hdw) {
@@ -2065,13 +2114,13 @@ void pvr2_hdw_destroy(struct pvr2_hdw *hdw)
 {
 	if (!hdw) return;
 	pvr2_trace(PVR2_TRACE_INIT,"pvr2_hdw_destroy: hdw=%p",hdw);
-	del_timer_sync(&hdw->quiescent_timer);
-	del_timer_sync(&hdw->encoder_wait_timer);
 	if (hdw->workqueue) {
 		flush_workqueue(hdw->workqueue);
 		destroy_workqueue(hdw->workqueue);
 		hdw->workqueue = NULL;
 	}
+	del_timer_sync(&hdw->quiescent_timer);
+	del_timer_sync(&hdw->encoder_wait_timer);
 	if (hdw->fw_buffer) {
 		kfree(hdw->fw_buffer);
 		hdw->fw_buffer = NULL;
@@ -2353,6 +2402,18 @@ static int pvr2_hdw_commit_execute(struct pvr2_hdw *hdw)
 		}
 	}
 
+	if (hdw->input_dirty &&
+	    (((hdw->input_val == PVR2_CVAL_INPUT_DTV) ?
+	      PVR2_PATHWAY_DIGITAL : PVR2_PATHWAY_ANALOG) !=
+	     hdw->pathway_state)) {
+		/* Change of mode being asked for... */
+		hdw->state_pathway_ok = 0;
+		trace_stbit("state_pathway_ok",hdw->state_pathway_ok);
+	}
+	if (!hdw->state_pathway_ok) {
+		/* Can't commit anything until pathway is ok. */
+		return 0;
+	}
 	/* If any of the below has changed, then we can't do the update
 	   while the pipeline is running.  Pipeline must be paused first
 	   and decoder -> encoder connection be made quiescent before we
@@ -2409,9 +2470,11 @@ static int pvr2_hdw_commit_execute(struct pvr2_hdw *hdw)
 	/* Now execute i2c core update */
 	pvr2_i2c_core_sync(hdw);
 
-	if (hdw->state_encoder_run) {
-		/* If encoder isn't running, then this will get worked out
-		   later when we start the encoder. */
+	if ((hdw->pathway_state == PVR2_PATHWAY_ANALOG) &&
+	    hdw->state_encoder_run) {
+		/* If encoder isn't running or it can't be touched, then
+		   this will get worked out later when we start the
+		   encoder. */
 		if (pvr2_encoder_adjust(hdw) < 0) return !0;
 	}
 
@@ -2454,32 +2517,12 @@ static void pvr2_hdw_worker_poll(struct work_struct *work)
 }
 
 
-static void pvr2_hdw_worker_init(struct work_struct *work)
-{
-	struct pvr2_hdw *hdw = container_of(work,struct pvr2_hdw,workinit);
-	LOCK_TAKE(hdw->big_lock); do {
-		pvr2_hdw_setup(hdw);
-	} while (0); LOCK_GIVE(hdw->big_lock);
-}
-
-
 static int pvr2_hdw_wait(struct pvr2_hdw *hdw,int state)
 {
 	return wait_event_interruptible(
 		hdw->state_wait_data,
 		(hdw->state_stale == 0) &&
 		(!state || (hdw->master_state != state)));
-}
-
-
-void pvr2_hdw_set_state_callback(struct pvr2_hdw *hdw,
-				 void (*callback_func)(void *),
-				 void *callback_data)
-{
-	LOCK_TAKE(hdw->big_lock); do {
-		hdw->state_data = callback_data;
-		hdw->state_func = callback_func;
-	} while (0); LOCK_GIVE(hdw->big_lock);
 }
 
 
@@ -3168,15 +3211,30 @@ int pvr2_hdw_cmd_deep_reset(struct pvr2_hdw *hdw)
 }
 
 
-int pvr2_hdw_cmd_powerup(struct pvr2_hdw *hdw)
+static int pvr2_hdw_cmd_power_ctrl(struct pvr2_hdw *hdw, int onoff)
 {
 	int status;
 	LOCK_TAKE(hdw->ctl_lock); do {
-		pvr2_trace(PVR2_TRACE_INIT,"Requesting powerup");
-		hdw->cmd_buffer[0] = FX2CMD_POWER_ON;
-		status = pvr2_send_request(hdw,hdw->cmd_buffer,1,NULL,0);
+		if (onoff) {
+			pvr2_trace(PVR2_TRACE_INIT, "Requesting powerup");
+			hdw->cmd_buffer[0] = FX2CMD_POWER_ON;
+		} else {
+			pvr2_trace(PVR2_TRACE_INIT, "Requesting powerdown");
+			hdw->cmd_buffer[0] = FX2CMD_POWER_OFF;
+		}
+		status = pvr2_send_request(hdw, hdw->cmd_buffer, 1, NULL, 0);
 	} while (0); LOCK_GIVE(hdw->ctl_lock);
 	return status;
+}
+
+int pvr2_hdw_cmd_powerup(struct pvr2_hdw *hdw)
+{
+	return pvr2_hdw_cmd_power_ctrl(hdw, 1);
+}
+
+int pvr2_hdw_cmd_powerdown(struct pvr2_hdw *hdw)
+{
+	return pvr2_hdw_cmd_power_ctrl(hdw, 0);
 }
 
 
@@ -3201,16 +3259,182 @@ int pvr2_hdw_cmd_decoder_reset(struct pvr2_hdw *hdw)
 }
 
 
-/* Stop / start video stream transport */
-static int pvr2_hdw_cmd_usbstream(struct pvr2_hdw *hdw,int runFl)
+static int pvr2_hdw_cmd_hcw_demod_reset(struct pvr2_hdw *hdw, int onoff)
+{
+	int status;
+
+	LOCK_TAKE(hdw->ctl_lock); do {
+		pvr2_trace(PVR2_TRACE_INIT,
+			   "Issuing fe demod wake command (%s)",
+			   (onoff ? "on" : "off"));
+		hdw->flag_ok = !0;
+		hdw->cmd_buffer[0] = FX2CMD_HCW_DEMOD_RESETIN;
+		hdw->cmd_buffer[1] = onoff;
+		status = pvr2_send_request(hdw, hdw->cmd_buffer, 2, NULL, 0);
+	} while (0); LOCK_GIVE(hdw->ctl_lock);
+
+	return status;
+}
+
+
+static int pvr2_hdw_cmd_onair_fe_power_ctrl(struct pvr2_hdw *hdw, int onoff)
+{
+	int status;
+
+	LOCK_TAKE(hdw->ctl_lock); do {
+		pvr2_trace(PVR2_TRACE_INIT,
+			   "Issuing fe power command to CPLD (%s)",
+			   (onoff ? "on" : "off"));
+		hdw->flag_ok = !0;
+		hdw->cmd_buffer[0] =
+			(onoff ? FX2CMD_ONAIR_DTV_POWER_ON :
+				 FX2CMD_ONAIR_DTV_POWER_OFF);
+		status = pvr2_send_request(hdw, hdw->cmd_buffer, 1, NULL, 0);
+	} while (0); LOCK_GIVE(hdw->ctl_lock);
+
+	return status;
+}
+
+
+static int pvr2_hdw_cmd_onair_digital_path_ctrl(struct pvr2_hdw *hdw,
+						int onoff)
 {
 	int status;
 	LOCK_TAKE(hdw->ctl_lock); do {
+		pvr2_trace(PVR2_TRACE_INIT,
+			   "Issuing onair digital setup command (%s)",
+			   (onoff ? "on" : "off"));
 		hdw->cmd_buffer[0] =
-			(runFl ? FX2CMD_STREAMING_ON : FX2CMD_STREAMING_OFF);
+			(onoff ? FX2CMD_ONAIR_DTV_STREAMING_ON :
+				 FX2CMD_ONAIR_DTV_STREAMING_OFF);
+		status = pvr2_send_request(hdw, hdw->cmd_buffer, 1, NULL, 0);
+	} while (0); LOCK_GIVE(hdw->ctl_lock);
+	return status;
+}
+
+
+static void pvr2_hdw_cmd_modeswitch(struct pvr2_hdw *hdw,int digitalFl)
+{
+	int cmode;
+	/* Compare digital/analog desired setting with current setting.  If
+	   they don't match, fix it... */
+	cmode = (digitalFl ? PVR2_PATHWAY_DIGITAL : PVR2_PATHWAY_ANALOG);
+	if (cmode == hdw->pathway_state) {
+		/* They match; nothing to do */
+		return;
+	}
+
+	switch (hdw->hdw_desc->digital_control_scheme) {
+	case PVR2_DIGITAL_SCHEME_HAUPPAUGE:
+		pvr2_hdw_cmd_hcw_demod_reset(hdw,digitalFl);
+		if (cmode == PVR2_PATHWAY_ANALOG) {
+			/* If moving to analog mode, also force the decoder
+			   to reset.  If no decoder is attached, then it's
+			   ok to ignore this because if/when the decoder
+			   attaches, it will reset itself at that time. */
+			pvr2_hdw_cmd_decoder_reset(hdw);
+		}
+		break;
+	case PVR2_DIGITAL_SCHEME_ONAIR:
+		/* Supposedly we should always have the power on whether in
+		   digital or analog mode.  But for now do what appears to
+		   work... */
+		if (digitalFl) pvr2_hdw_cmd_onair_fe_power_ctrl(hdw,!0);
+		pvr2_hdw_cmd_onair_digital_path_ctrl(hdw,digitalFl);
+		if (!digitalFl) pvr2_hdw_cmd_onair_fe_power_ctrl(hdw,0);
+		break;
+	default: break;
+	}
+
+	pvr2_hdw_untrip_unlocked(hdw);
+	hdw->pathway_state = cmode;
+}
+
+
+void pvr2_led_ctrl_hauppauge(struct pvr2_hdw *hdw, int onoff)
+{
+	/* change some GPIO data
+	 *
+	 * note: bit d7 of dir appears to control the LED,
+	 * so we shut it off here.
+	 *
+	 */
+	if (onoff) {
+		pvr2_hdw_gpio_chg_dir(hdw, 0xffffffff, 0x00000481);
+	} else {
+		pvr2_hdw_gpio_chg_dir(hdw, 0xffffffff, 0x00000401);
+	}
+	pvr2_hdw_gpio_chg_out(hdw, 0xffffffff, 0x00000000);
+}
+
+
+typedef void (*led_method_func)(struct pvr2_hdw *,int);
+
+static led_method_func led_methods[] = {
+	[PVR2_LED_SCHEME_HAUPPAUGE] = pvr2_led_ctrl_hauppauge,
+};
+
+
+/* Toggle LED */
+static void pvr2_led_ctrl(struct pvr2_hdw *hdw,int onoff)
+{
+	unsigned int scheme_id;
+	led_method_func fp;
+
+	if ((!onoff) == (!hdw->led_on)) return;
+
+	hdw->led_on = onoff != 0;
+
+	scheme_id = hdw->hdw_desc->led_scheme;
+	if (scheme_id < ARRAY_SIZE(led_methods)) {
+		fp = led_methods[scheme_id];
+	} else {
+		fp = NULL;
+	}
+
+	if (fp) (*fp)(hdw,onoff);
+}
+
+
+/* Stop / start video stream transport */
+static int pvr2_hdw_cmd_usbstream(struct pvr2_hdw *hdw,int runFl)
+{
+	int status,cc;
+	if ((hdw->pathway_state == PVR2_PATHWAY_DIGITAL) &&
+	    hdw->hdw_desc->digital_control_scheme ==
+	    PVR2_DIGITAL_SCHEME_HAUPPAUGE) {
+		cc = (runFl ?
+		      FX2CMD_HCW_DTV_STREAMING_ON :
+		      FX2CMD_HCW_DTV_STREAMING_OFF);
+	} else {
+		cc = (runFl ?
+		      FX2CMD_STREAMING_ON :
+		      FX2CMD_STREAMING_OFF);
+	}
+
+	LOCK_TAKE(hdw->ctl_lock); do {
+		hdw->cmd_buffer[0] = cc;
 		status = pvr2_send_request(hdw,hdw->cmd_buffer,1,NULL,0);
 	} while (0); LOCK_GIVE(hdw->ctl_lock);
 	return status;
+}
+
+
+/* Evaluate whether or not state_pathway_ok can change */
+static int state_eval_pathway_ok(struct pvr2_hdw *hdw)
+{
+	if (hdw->state_pathway_ok) {
+		/* Nothing to do if pathway is already ok */
+		return 0;
+	}
+	if (!hdw->state_pipeline_idle) {
+		/* Not allowed to change anything if pipeline is not idle */
+		return 0;
+	}
+	pvr2_hdw_cmd_modeswitch(hdw,hdw->input_val == PVR2_CVAL_INPUT_DTV);
+	hdw->state_pathway_ok = !0;
+	trace_stbit("state_pathway_ok",hdw->state_pathway_ok);
+	return !0;
 }
 
 
@@ -3223,6 +3447,7 @@ static int state_eval_encoder_ok(struct pvr2_hdw *hdw)
 	if (hdw->state_encoder_config) return 0;
 	if (hdw->state_decoder_run) return 0;
 	if (hdw->state_usbstream_run) return 0;
+	if (hdw->pathway_state != PVR2_PATHWAY_ANALOG) return 0;
 	if (pvr2_upload_firmware2(hdw) < 0) {
 		hdw->flag_tripped = !0;
 		trace_stbit("flag_tripped",hdw->flag_tripped);
@@ -3248,7 +3473,9 @@ static int state_eval_encoder_config(struct pvr2_hdw *hdw)
 		/* paranoia - solve race if timer just completed */
 		del_timer_sync(&hdw->encoder_wait_timer);
 	} else {
-		if (!hdw->state_encoder_ok ||
+		if (!hdw->state_pathway_ok ||
+		    (hdw->pathway_state != PVR2_PATHWAY_ANALOG) ||
+		    !hdw->state_encoder_ok ||
 		    !hdw->state_pipeline_idle ||
 		    hdw->state_pipeline_pause ||
 		    !hdw->state_pipeline_req ||
@@ -3302,13 +3529,16 @@ static int state_eval_encoder_run(struct pvr2_hdw *hdw)
 {
 	if (hdw->state_encoder_run) {
 		if (hdw->state_encoder_ok) {
-			if (hdw->state_decoder_run) return 0;
+			if (hdw->state_decoder_run &&
+			    hdw->state_pathway_ok) return 0;
 			if (pvr2_encoder_stop(hdw) < 0) return !0;
 		}
 		hdw->state_encoder_run = 0;
 	} else {
 		if (!hdw->state_encoder_ok) return 0;
 		if (!hdw->state_decoder_run) return 0;
+		if (!hdw->state_pathway_ok) return 0;
+		if (hdw->pathway_state != PVR2_PATHWAY_ANALOG) return 0;
 		if (pvr2_encoder_start(hdw) < 0) return !0;
 		hdw->state_encoder_run = !0;
 	}
@@ -3345,7 +3575,8 @@ static int state_eval_decoder_run(struct pvr2_hdw *hdw)
 	if (hdw->state_decoder_run) {
 		if (hdw->state_encoder_ok) {
 			if (hdw->state_pipeline_req &&
-			    !hdw->state_pipeline_pause) return 0;
+			    !hdw->state_pipeline_pause &&
+			    hdw->state_pathway_ok) return 0;
 		}
 		if (!hdw->flag_decoder_missed) {
 			pvr2_decoder_enable(hdw,0);
@@ -3378,7 +3609,9 @@ static int state_eval_decoder_run(struct pvr2_hdw *hdw)
 			   hopefully further stabilize the encoder. */
 			return 0;
 		}
-		if (!hdw->state_pipeline_req ||
+		if (!hdw->state_pathway_ok ||
+		    (hdw->pathway_state != PVR2_PATHWAY_ANALOG) ||
+		    !hdw->state_pipeline_req ||
 		    hdw->state_pipeline_pause ||
 		    !hdw->state_pipeline_config ||
 		    !hdw->state_encoder_config ||
@@ -3399,16 +3632,25 @@ static int state_eval_decoder_run(struct pvr2_hdw *hdw)
 static int state_eval_usbstream_run(struct pvr2_hdw *hdw)
 {
 	if (hdw->state_usbstream_run) {
-		if (hdw->state_encoder_ok) {
-			if (hdw->state_encoder_run) return 0;
+		if (hdw->pathway_state == PVR2_PATHWAY_ANALOG) {
+			if (hdw->state_encoder_ok &&
+			    hdw->state_encoder_run &&
+			    hdw->state_pathway_ok) return 0;
+		} else {
+			if (hdw->state_pipeline_req &&
+			    !hdw->state_pipeline_pause &&
+			    hdw->state_pathway_ok) return 0;
 		}
 		pvr2_hdw_cmd_usbstream(hdw,0);
 		hdw->state_usbstream_run = 0;
 	} else {
-		if (!hdw->state_encoder_ok ||
-		    !hdw->state_encoder_run ||
-		    !hdw->state_pipeline_req ||
-		    hdw->state_pipeline_pause) return 0;
+		if (!hdw->state_pipeline_req ||
+		    hdw->state_pipeline_pause ||
+		    !hdw->state_pathway_ok) return 0;
+		if (hdw->pathway_state == PVR2_PATHWAY_ANALOG) {
+			if (!hdw->state_encoder_ok ||
+			    !hdw->state_encoder_run) return 0;
+		}
 		if (pvr2_hdw_cmd_usbstream(hdw,!0) < 0) return 0;
 		hdw->state_usbstream_run = !0;
 	}
@@ -3454,7 +3696,8 @@ static int state_update_pipeline_state(struct pvr2_hdw *hdw)
 typedef int (*state_eval_func)(struct pvr2_hdw *);
 
 /* Set of functions to be run to evaluate various states in the driver. */
-const static state_eval_func eval_funcs[] = {
+static const state_eval_func eval_funcs[] = {
+	state_eval_pathway_ok,
 	state_eval_pipeline_config,
 	state_eval_encoder_ok,
 	state_eval_encoder_config,
@@ -3502,6 +3745,16 @@ static int pvr2_hdw_state_update(struct pvr2_hdw *hdw)
 }
 
 
+static const char *pvr2_pathway_state_name(int id)
+{
+	switch (id) {
+	case PVR2_PATHWAY_ANALOG: return "analog";
+	case PVR2_PATHWAY_DIGITAL: return "digital";
+	default: return "unknown";
+	}
+}
+
+
 static unsigned int pvr2_hdw_report_unlocked(struct pvr2_hdw *hdw,int which,
 					     char *buf,unsigned int acnt)
 {
@@ -3509,13 +3762,15 @@ static unsigned int pvr2_hdw_report_unlocked(struct pvr2_hdw *hdw,int which,
 	case 0:
 		return scnprintf(
 			buf,acnt,
-			"driver:%s%s%s%s%s",
+			"driver:%s%s%s%s%s <mode=%s>",
 			(hdw->flag_ok ? " <ok>" : " <fail>"),
 			(hdw->flag_init_ok ? " <init>" : " <uninitialized>"),
 			(hdw->flag_disconnected ? " <disconnected>" :
 			 " <connected>"),
 			(hdw->flag_tripped ? " <tripped>" : ""),
-			(hdw->flag_decoder_missed ? " <no decoder>" : ""));
+			(hdw->flag_decoder_missed ? " <no decoder>" : ""),
+			pvr2_pathway_state_name(hdw->pathway_state));
+
 	case 1:
 		return scnprintf(
 			buf,acnt,
@@ -3528,7 +3783,7 @@ static unsigned int pvr2_hdw_report_unlocked(struct pvr2_hdw *hdw,int which,
 	case 2:
 		return scnprintf(
 			buf,acnt,
-			"worker:%s%s%s%s%s%s",
+			"worker:%s%s%s%s%s%s%s",
 			(hdw->state_decoder_run ?
 			 " <decode:run>" :
 			 (hdw->state_decoder_quiescent ?
@@ -3544,7 +3799,9 @@ static unsigned int pvr2_hdw_report_unlocked(struct pvr2_hdw *hdw,int which,
 			 (hdw->state_encoder_waitok ?
 			  "" : " <encode:wait>")),
 			(hdw->state_usbstream_run ?
-			 " <usb:run>" : " <usb:stop>"));
+			 " <usb:run>" : " <usb:stop>"),
+			(hdw->state_pathway_ok ?
+			 " <pathway:ok>" : ""));
 		break;
 	case 3:
 		return scnprintf(
@@ -3597,6 +3854,7 @@ static int pvr2_hdw_state_eval(struct pvr2_hdw *hdw)
 	unsigned int st;
 	int state_updated = 0;
 	int callback_flag = 0;
+	int analog_mode;
 
 	pvr2_trace(PVR2_TRACE_STBITS,
 		   "Drive state check START");
@@ -3607,18 +3865,21 @@ static int pvr2_hdw_state_eval(struct pvr2_hdw *hdw)
 	/* Process all state and get back over disposition */
 	state_updated = pvr2_hdw_state_update(hdw);
 
+	analog_mode = (hdw->pathway_state != PVR2_PATHWAY_DIGITAL);
+
 	/* Update master state based upon all other states. */
 	if (!hdw->flag_ok) {
 		st = PVR2_STATE_DEAD;
 	} else if (hdw->fw1_state != FW1_STATE_OK) {
 		st = PVR2_STATE_COLD;
-	} else if (!hdw->state_encoder_ok) {
+	} else if (analog_mode && !hdw->state_encoder_ok) {
 		st = PVR2_STATE_WARM;
-	} else if (hdw->flag_tripped || hdw->flag_decoder_missed) {
+	} else if (hdw->flag_tripped ||
+		   (analog_mode && hdw->flag_decoder_missed)) {
 		st = PVR2_STATE_ERROR;
-	} else if (hdw->state_encoder_run &&
-		   hdw->state_decoder_run &&
-		   hdw->state_usbstream_run) {
+	} else if (hdw->state_usbstream_run &&
+		   (!analog_mode ||
+		    (hdw->state_encoder_run && hdw->state_decoder_run))) {
 		st = PVR2_STATE_RUN;
 	} else {
 		st = PVR2_STATE_READY;
@@ -3628,6 +3889,7 @@ static int pvr2_hdw_state_eval(struct pvr2_hdw *hdw)
 			   "Device state change from %s to %s",
 			   pvr2_get_state_name(hdw->master_state),
 			   pvr2_get_state_name(st));
+		pvr2_led_ctrl(hdw,st == PVR2_STATE_RUN);
 		hdw->master_state = st;
 		state_updated = !0;
 		callback_flag = !0;
@@ -3754,6 +4016,12 @@ int pvr2_hdw_gpio_chg_out(struct pvr2_hdw *hdw,u32 msk,u32 val)
 			   "GPIO output changing to 0x%x",nval);
 	}
 	return pvr2_write_register(hdw,PVR2_GPIO_OUT,nval);
+}
+
+
+unsigned int pvr2_hdw_get_input_available(struct pvr2_hdw *hdw)
+{
+	return hdw->input_avail_mask;
 }
 
 
