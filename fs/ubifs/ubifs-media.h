@@ -419,6 +419,9 @@ union ubifs_dev_desc {
  * nodes of this inode may be compressed with different compressor - this
  * happens if compression type is changed while the inode already has data
  * nodes. But @compr_type will be use for further writes to the inode.
+ *
+ * Note, do not forget to amend 'zero_ino_unused()' function when changing the
+ * padding fields.
  */
 struct ubifs_ino_node {
 	struct ubifs_ch ch;
@@ -449,20 +452,23 @@ struct ubifs_ino_node {
  * @ch: common header
  * @key: node key
  * @inum: target inode number
- * @padding: reserved for future, zeroes
+ * @padding1: reserved for future, zeroes
  * @type: type of the target inode (%UBIFS_ITYPE_REG, %UBIFS_ITYPE_DIR, etc)
  * @nlen: name length
- * @padding1: reserved for future, zeroes
+ * @padding2: reserved for future, zeroes
  * @name: zero-terminated name
+ *
+ * Note, do not forget to amend 'zero_dent_unused()' function when changing the
+ * padding fields.
  */
 struct ubifs_dent_node {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 inum;
-	__u8 padding;
+	__u8 padding1;
 	__u8 type;
 	__le16 nlen;
-	__u8 padding1[4];
+	__u8 padding2[4];
 	__u8 name[];
 } __attribute__ ((packed));
 
@@ -474,6 +480,9 @@ struct ubifs_dent_node {
  * @compr_type: compression type (%UBIFS_COMPR_NONE, %UBIFS_COMPR_LZO, etc)
  * @padding: reserved for future, zeroes
  * @data: data
+ *
+ * Note, do not forget to amend 'zero_data_unused()' function when changing the
+ * padding fields.
  */
 struct ubifs_data_node {
 	struct ubifs_ch ch;

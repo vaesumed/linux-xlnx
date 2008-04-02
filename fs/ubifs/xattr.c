@@ -130,7 +130,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	inode->i_flags |= S_SYNC | S_NOATIME | S_NOCMTIME | S_NOQUOTA;
 	ui = ubifs_inode(inode);
 	ui->xattr = 1;
-	ui->data = kmalloc(size, GFP_KERNEL);
+	ui->data = kmalloc(size, GFP_NOFS);
 	if (!ui->data) {
 		err = -ENOMEM;
 		goto out_inode;
@@ -215,7 +215,7 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 	spin_unlock(&host->i_lock);
 
 	kfree(ui->data);
-	ui->data = kmalloc(size, GFP_KERNEL);
+	ui->data = kmalloc(size, GFP_NOFS);
 	if (!ui->data) {
 		err = -ENOMEM;
 		goto out_budg;

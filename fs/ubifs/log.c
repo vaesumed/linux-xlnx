@@ -220,7 +220,7 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 	bud = kmalloc(sizeof(struct ubifs_bud), GFP_NOFS);
 	if (!bud)
 		return -ENOMEM;
-	ref = kmalloc(c->ref_node_alsz, GFP_NOFS);
+	ref = kzalloc(c->ref_node_alsz, GFP_NOFS);
 	if (!ref) {
 		kfree(bud);
 		return -ENOMEM;
