@@ -151,21 +151,26 @@ static int __videobuf_iolock (struct videobuf_queue* q,
 				(unsigned long)mem->vmalloc,
 				pages << PAGE_SHIFT);
 
-	/* It seems that some kernel versions need to do remap *after*
-	   the mmap() call
-	 */
-	if (mem->vma) {
-		int retval=remap_vmalloc_range(mem->vma, mem->vmalloc,0);
-		kfree(mem->vma);
-		mem->vma=NULL;
-		if (retval<0) {
-			dprintk(1,"mmap app bug: remap_vmalloc_range area %p error %d\n",
-				mem->vmalloc,retval);
-			return retval;
+	return 0;
+}
+
+static int __videobuf_mmap_setup(struct videobuf_queue *q,
+			      struct videobuf_buffer *vb)
+{
+	int retval = 0;
+	BUG_ON(vb->memory != V4L2_MEMORY_MMAP);
+	if (vb->state == VIDEOBUF_NEEDS_INIT) {
+		/* bsize == size since the buffer needs to be large enough to
+		 * hold an entire frame, not the case in the read case for
+		 * example*/
+		vb->size = vb->bsize;
+		retval = __videobuf_iolock(q, vb, NULL);
+		if (!retval) {
+			/* Don't IOLOCK later */
+			vb->state = VIDEOBUF_IDLE;
 		}
 	}
-
-	return 0;
+	return retval;
 }
 
 static int __videobuf_sync(struct videobuf_queue *q,
@@ -238,15 +243,8 @@ static int __videobuf_mmap_mapper(struct videobuf_queue *q,
 	/* Try to remap memory */
 	retval=remap_vmalloc_range(vma, mem->vmalloc,0);
 	if (retval<0) {
-		dprintk(1,"mmap: postponing remap_vmalloc_range\n");
-
-		mem->vma=kmalloc(sizeof(*vma),GFP_KERNEL);
-		if (!mem->vma) {
-			kfree(map);
-			q->bufs[first]->map=NULL;
-			return -ENOMEM;
-		}
-		memcpy(mem->vma,vma,sizeof(*vma));
+		dprintk(1, "mmap: failed to remap_vmalloc_range\n");
+		return -EINVAL;
 	}
 
 	dprintk(1,"mmap %p: q=%p %08lx-%08lx (%lx) pgoff %08lx buf %d\n",
@@ -314,6 +312,7 @@ static struct videobuf_qtype_ops qops = {
 	.alloc        = __videobuf_alloc,
 	.iolock       = __videobuf_iolock,
 	.sync         = __videobuf_sync,
+	.mmap_setup   = __videobuf_mmap_setup,
 	.mmap_free    = __videobuf_mmap_free,
 	.mmap_mapper  = __videobuf_mmap_mapper,
 	.video_copy_to_user = __videobuf_copy_to_user,
