@@ -1483,6 +1483,11 @@ ssize_t ib_uverbs_post_send(struct ib_uverbs_file *file,
 				next->wr.rdma.rkey        =
 					user_wr->wr.rdma.rkey;
 				break;
+			case IB_WR_SEND:
+			case IB_WR_SEND_WITH_IMM:
+				next->wr.rdma.invalidate_rkey =
+					user_wr->wr.rdma.invalidate_rkey;
+				break;
 			case IB_WR_ATOMIC_CMP_AND_SWP:
 			case IB_WR_ATOMIC_FETCH_AND_ADD:
 				next->wr.atomic.remote_addr =
