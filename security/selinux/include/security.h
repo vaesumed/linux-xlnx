@@ -26,13 +26,14 @@
 #define POLICYDB_VERSION_AVTAB		20
 #define POLICYDB_VERSION_RANGETRANS	21
 #define POLICYDB_VERSION_POLCAP		22
+#define POLICYDB_VERSION_PERMISSIVE	23
 
 /* Range of policy versions we understand*/
 #define POLICYDB_VERSION_MIN   POLICYDB_VERSION_BASE
 #ifdef CONFIG_SECURITY_SELINUX_POLICYDB_VERSION_MAX
 #define POLICYDB_VERSION_MAX	CONFIG_SECURITY_SELINUX_POLICYDB_VERSION_MAX_VALUE
 #else
-#define POLICYDB_VERSION_MAX	POLICYDB_VERSION_POLCAP
+#define POLICYDB_VERSION_MAX	POLICYDB_VERSION_PERMISSIVE
 #endif
 
 #define CONTEXT_MNT	0x01
@@ -48,11 +49,13 @@ extern int selinux_mls_enabled;
 /* Policy capabilities */
 enum {
 	POLICYDB_CAPABILITY_NETPEER,
+	POLICYDB_CAPABILITY_OPENPERM,
 	__POLICYDB_CAPABILITY_MAX
 };
 #define POLICYDB_CAPABILITY_MAX (__POLICYDB_CAPABILITY_MAX - 1)
 
 extern int selinux_policycap_netpeer;
+extern int selinux_policycap_openperm;
 
 int security_load_policy(void * data, size_t len);
 
@@ -66,6 +69,8 @@ struct av_decision {
 	u32 auditdeny;
 	u32 seqno;
 };
+
+int security_permissive_sid(u32 sid);
 
 int security_compute_av(u32 ssid, u32 tsid,
 	u16 tclass, u32 requested,
