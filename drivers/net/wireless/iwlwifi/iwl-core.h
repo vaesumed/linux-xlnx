@@ -91,6 +91,7 @@ struct iwl_lib_ops {
 	int (*init_drv)(struct iwl_priv *priv);
 	/* eeprom operations (as defined in iwl-eeprom.h) */
 	struct iwl_eeprom_ops eeprom_ops;
+	void (*radio_kill_sw)(struct iwl_priv *priv, int disable_radio);
 };
 
 struct iwl_ops {
@@ -137,13 +138,24 @@ int iwl_setup(struct iwl_priv *priv);
  *****************************************************/
 
 const char *get_cmd_string(u8 cmd);
-int iwl_send_cmd_sync(struct iwl_priv *priv, struct iwl_host_cmd *cmd);
+int __must_check iwl_send_cmd_sync(struct iwl_priv *priv,
+				   struct iwl_host_cmd *cmd);
 int iwl_send_cmd(struct iwl_priv *priv, struct iwl_host_cmd *cmd);
-int iwl_send_cmd_pdu(struct iwl_priv *priv, u8 id, u16 len, const void *data);
+int __must_check iwl_send_cmd_pdu(struct iwl_priv *priv, u8 id,
+				  u16 len, const void *data);
 int iwl_send_cmd_pdu_async(struct iwl_priv *priv, u8 id, u16 len,
 			   const void *data,
 			   int (*callback)(struct iwl_priv *priv,
 					   struct iwl_cmd *cmd,
 					   struct sk_buff *skb));
 
+enum iwlcore_card_notify {
+	IWLCORE_INIT_EVT = 0,
+	IWLCORE_START_EVT = 1,
+	IWLCORE_STOP_EVT = 2,
+	IWLCORE_REMOVE_EVT = 3,
+};
+
+int iwlcore_low_level_notify(struct iwl_priv *priv,
+			     enum iwlcore_card_notify notify);
 #endif /* __iwl_core_h__ */

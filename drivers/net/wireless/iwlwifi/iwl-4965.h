@@ -40,6 +40,7 @@
 extern struct pci_device_id iwl4965_hw_card_ids[];
 
 #define DRV_NAME        "iwl4965"
+#include "iwl-rfkill.h"
 #include "iwl-eeprom.h"
 #include "iwl-4965-hw.h"
 #include "iwl-csr.h"
@@ -414,23 +415,24 @@ struct iwl4965_rx_queue {
 #define MIN_B_CHANNELS  1
 
 #define STATUS_HCMD_ACTIVE	0	/* host command in progress */
-#define STATUS_INT_ENABLED	1
-#define STATUS_RF_KILL_HW	2
-#define STATUS_RF_KILL_SW	3
-#define STATUS_INIT		4
-#define STATUS_ALIVE		5
-#define STATUS_READY		6
-#define STATUS_TEMPERATURE	7
-#define STATUS_GEO_CONFIGURED	8
-#define STATUS_EXIT_PENDING	9
-#define STATUS_IN_SUSPEND	10
-#define STATUS_STATISTICS	11
-#define STATUS_SCANNING		12
-#define STATUS_SCAN_ABORTING	13
-#define STATUS_SCAN_HW		14
-#define STATUS_POWER_PMI	15
-#define STATUS_FW_ERROR		16
-#define STATUS_CONF_PENDING	17
+#define STATUS_HCMD_SYNC_ACTIVE	1	/* sync host command in progress */
+#define STATUS_INT_ENABLED	2
+#define STATUS_RF_KILL_HW	3
+#define STATUS_RF_KILL_SW	4
+#define STATUS_INIT		5
+#define STATUS_ALIVE		6
+#define STATUS_READY		7
+#define STATUS_TEMPERATURE	8
+#define STATUS_GEO_CONFIGURED	9
+#define STATUS_EXIT_PENDING	10
+#define STATUS_IN_SUSPEND	11
+#define STATUS_STATISTICS	12
+#define STATUS_SCANNING		13
+#define STATUS_SCAN_ABORTING	14
+#define STATUS_SCAN_HW		15
+#define STATUS_POWER_PMI	16
+#define STATUS_FW_ERROR		17
+#define STATUS_CONF_PENDING	18
 
 #define MAX_TID_COUNT        9
 
@@ -739,6 +741,7 @@ extern int iwl4965_tx_queue_reclaim(struct iwl_priv *priv, int txq_id, int index
 extern int iwl4965_queue_space(const struct iwl4965_queue *q);
 struct iwl_priv;
 
+extern void iwl4965_radio_kill_sw(struct iwl_priv *priv, int disable_radio);
 /*
  * Forward declare iwl-4965.c functions for iwl-base.c
  */
@@ -1050,6 +1053,9 @@ struct iwl_priv {
 	 * 4965's initialize alive response contains some calibration data. */
 	struct iwl4965_init_alive_resp card_alive_init;
 	struct iwl4965_alive_resp card_alive;
+#ifdef CONFIG_IWLCORE_RFKILL
+	struct iwl_rfkill_mngr rfkill_mngr;
+#endif
 
 #ifdef CONFIG_IWL4965_LEDS
 	struct iwl4965_led led[IWL_LED_TRG_MAX];

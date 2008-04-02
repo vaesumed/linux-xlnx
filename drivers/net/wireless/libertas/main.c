@@ -37,6 +37,11 @@ EXPORT_SYMBOL_GPL(lbs_debug);
 module_param_named(libertas_debug, lbs_debug, int, 0644);
 
 
+/* This global structure is used to send the confirm_sleep command as
+ * fast as possible down to the firmware. */
+struct cmd_confirm_sleep confirm_sleep;
+
+
 #define LBS_TX_PWR_DEFAULT		20	/*100mW */
 #define LBS_TX_PWR_US_DEFAULT		20	/*100mW */
 #define LBS_TX_PWR_JP_DEFAULT		16	/*50mW */
@@ -531,34 +536,27 @@ static int lbs_set_mac_address(struct net_device *dev, void *addr)
 	int ret = 0;
 	struct lbs_private *priv = (struct lbs_private *) dev->priv;
 	struct sockaddr *phwaddr = addr;
+	struct cmd_ds_802_11_mac_address cmd;
 
 	lbs_deb_enter(LBS_DEB_NET);
 
 	/* In case it was called from the mesh device */
-	dev = priv->dev ;
+	dev = priv->dev;
 
-	memset(priv->current_addr, 0, ETH_ALEN);
+	cmd.hdr.size = cpu_to_le16(sizeof(cmd));
+	cmd.action = cpu_to_le16(CMD_ACT_SET);
+	memcpy(cmd.macadd, phwaddr->sa_data, ETH_ALEN);
 
-	/* dev->dev_addr is 8 bytes */
-	lbs_deb_hex(LBS_DEB_NET, "dev->dev_addr", dev->dev_addr, ETH_ALEN);
-
-	lbs_deb_hex(LBS_DEB_NET, "addr", phwaddr->sa_data, ETH_ALEN);
-	memcpy(priv->current_addr, phwaddr->sa_data, ETH_ALEN);
-
-	ret = lbs_prepare_and_send_command(priv, CMD_802_11_MAC_ADDRESS,
-				    CMD_ACT_SET,
-				    CMD_OPTION_WAITFORRSP, 0, NULL);
-
+	ret = lbs_cmd_with_response(priv, CMD_802_11_MAC_ADDRESS, &cmd);
 	if (ret) {
 		lbs_deb_net("set MAC address failed\n");
-		ret = -1;
 		goto done;
 	}
 
-	lbs_deb_hex(LBS_DEB_NET, "priv->macaddr", priv->current_addr, ETH_ALEN);
-	memcpy(dev->dev_addr, priv->current_addr, ETH_ALEN);
+	memcpy(priv->current_addr, phwaddr->sa_data, ETH_ALEN);
+	memcpy(dev->dev_addr, phwaddr->sa_data, ETH_ALEN);
 	if (priv->mesh_dev)
-		memcpy(priv->mesh_dev->dev_addr, priv->current_addr, ETH_ALEN);
+		memcpy(priv->mesh_dev->dev_addr, phwaddr->sa_data, ETH_ALEN);
 
 done:
 	lbs_deb_leave_args(LBS_DEB_NET, "ret %d", ret);
@@ -1020,14 +1018,6 @@ static int lbs_init_adapter(struct lbs_private *priv)
 			      &priv->network_free_list);
 	}
 
-	priv->lbs_ps_confirm_sleep.seqnum = cpu_to_le16(++priv->seqnum);
-	priv->lbs_ps_confirm_sleep.command =
-	    cpu_to_le16(CMD_802_11_PS_MODE);
-	priv->lbs_ps_confirm_sleep.size =
-	    cpu_to_le16(sizeof(struct PS_CMD_ConfirmSleep));
-	priv->lbs_ps_confirm_sleep.action =
-	    cpu_to_le16(CMD_SUBCMD_SLEEP_CONFIRMED);
-
 	memset(priv->current_addr, 0xff, ETH_ALEN);
 
 	priv->connect_status = LBS_DISCONNECTED;
@@ -1469,6 +1459,10 @@ EXPORT_SYMBOL_GPL(lbs_interrupt);
 static int __init lbs_init_module(void)
 {
 	lbs_deb_enter(LBS_DEB_MAIN);
+	memset(&confirm_sleep, 0, sizeof(confirm_sleep));
+	confirm_sleep.hdr.command = cpu_to_le16(CMD_802_11_PS_MODE);
+	confirm_sleep.hdr.size = cpu_to_le16(sizeof(confirm_sleep));
+	confirm_sleep.action = cpu_to_le16(CMD_SUBCMD_SLEEP_CONFIRMED);
 	lbs_debugfs_init();
 	lbs_deb_leave(LBS_DEB_MAIN);
 	return 0;
@@ -1565,6 +1559,32 @@ out:
 	return ret;
 }
 
+#ifndef CONFIG_IEEE80211
+const char *escape_essid(const char *essid, u8 essid_len)
+{
+	static char escaped[IW_ESSID_MAX_SIZE * 2 + 1];
+	const char *s = essid;
+	char *d = escaped;
+
+	if (ieee80211_is_empty_essid(essid, essid_len)) {
+		memcpy(escaped, "<hidden>", sizeof("<hidden>"));
+		return escaped;
+	}
+
+	essid_len = min(essid_len, (u8) IW_ESSID_MAX_SIZE);
+	while (essid_len--) {
+		if (*s == '\0') {
+			*d++ = '\\';
+			*d++ = '0';
+			s++;
+		} else {
+			*d++ = *s++;
+		}
+	}
+	*d = '\0';
+	return escaped;
+}
+#endif
 
 module_init(lbs_init_module);
 module_exit(lbs_exit_module);

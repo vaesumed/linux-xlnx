@@ -953,50 +953,6 @@ static int lbs_cmd_reg_access(struct cmd_ds_command *cmdptr,
 	return 0;
 }
 
-static int lbs_cmd_802_11_mac_address(struct lbs_private *priv,
-				       struct cmd_ds_command *cmd,
-				       u16 cmd_action)
-{
-
-	lbs_deb_enter(LBS_DEB_CMD);
-	cmd->command = cpu_to_le16(CMD_802_11_MAC_ADDRESS);
-	cmd->size = cpu_to_le16(sizeof(struct cmd_ds_802_11_mac_address) +
-			     S_DS_GEN);
-	cmd->result = 0;
-
-	cmd->params.macadd.action = cpu_to_le16(cmd_action);
-
-	if (cmd_action == CMD_ACT_SET) {
-		memcpy(cmd->params.macadd.macadd,
-		       priv->current_addr, ETH_ALEN);
-		lbs_deb_hex(LBS_DEB_CMD, "SET_CMD: MAC addr", priv->current_addr, 6);
-	}
-
-	lbs_deb_leave(LBS_DEB_CMD);
-	return 0;
-}
-
-static int lbs_cmd_802_11_eeprom_access(struct cmd_ds_command *cmd,
-					void *pdata_buf)
-{
-	struct lbs_ioctl_regrdwr *ea = pdata_buf;
-
-	lbs_deb_enter(LBS_DEB_CMD);
-
-	cmd->command = cpu_to_le16(CMD_802_11_EEPROM_ACCESS);
-	cmd->size = cpu_to_le16(sizeof(struct cmd_ds_802_11_eeprom_access) +
-				S_DS_GEN);
-	cmd->result = 0;
-
-	cmd->params.rdeeprom.action = cpu_to_le16(ea->action);
-	cmd->params.rdeeprom.offset = cpu_to_le16(ea->offset);
-	cmd->params.rdeeprom.bytecount = cpu_to_le16(ea->NOB);
-	cmd->params.rdeeprom.value = 0;
-
-	lbs_deb_leave(LBS_DEB_CMD);
-	return 0;
-}
-
 static int lbs_cmd_bt_access(struct cmd_ds_command *cmd,
 			       u16 cmd_action, void *pdata_buf)
 {
@@ -1435,14 +1391,6 @@ int lbs_prepare_and_send_command(struct lbs_private *priv,
 		ret = lbs_cmd_80211_ad_hoc_stop(cmdptr);
 		break;
 
-	case CMD_802_11_MAC_ADDRESS:
-		ret = lbs_cmd_802_11_mac_address(priv, cmdptr, cmd_action);
-		break;
-
-	case CMD_802_11_EEPROM_ACCESS:
-		ret = lbs_cmd_802_11_eeprom_access(cmdptr, pdata_buf);
-		break;
-
 	case CMD_802_11_SET_AFC:
 	case CMD_802_11_GET_AFC:
 
@@ -1854,38 +1802,27 @@ void lbs_send_iwevcustom_event(struct lbs_private *priv, s8 *str)
 	lbs_deb_leave(LBS_DEB_WEXT);
 }
 
-static int sendconfirmsleep(struct lbs_private *priv, u8 *cmdptr, u16 size)
+static void lbs_send_confirmsleep(struct lbs_private *priv)
 {
 	unsigned long flags;
-	int ret = 0;
+	int ret;
 
 	lbs_deb_enter(LBS_DEB_HOST);
-	lbs_deb_hex(LBS_DEB_HOST, "sleep confirm command", cmdptr, size);
+	lbs_deb_hex(LBS_DEB_HOST, "sleep confirm", (u8 *) &confirm_sleep,
+		sizeof(confirm_sleep));
 
-	ret = priv->hw_host_to_card(priv, MVMS_CMD, cmdptr, size);
-
-	spin_lock_irqsave(&priv->driver_lock, flags);
-	if (priv->intcounter || priv->currenttxskb)
-		lbs_deb_host("SEND_SLEEPC_CMD: intcounter %d, currenttxskb %p\n",
-		       priv->intcounter, priv->currenttxskb);
-	spin_unlock_irqrestore(&priv->driver_lock, flags);
+	ret = priv->hw_host_to_card(priv, MVMS_CMD, (u8 *) &confirm_sleep,
+		sizeof(confirm_sleep));
 
 	if (ret) {
-		lbs_pr_alert(
-		       "SEND_SLEEPC_CMD: Host to Card failed for Confirm Sleep\n");
+		lbs_pr_alert("confirm_sleep failed\n");
 	} else {
 		spin_lock_irqsave(&priv->driver_lock, flags);
-		if (!priv->intcounter) {
+		if (!priv->intcounter)
 			priv->psstate = PS_STATE_SLEEP;
-		} else {
-			lbs_deb_host("SEND_SLEEPC_CMD: after sent, intcounter %d\n",
-			       priv->intcounter);
-		}
 		spin_unlock_irqrestore(&priv->driver_lock, flags);
 	}
-
-	lbs_deb_leave_args(LBS_DEB_HOST, "ret %d", ret);
-	return ret;
+	lbs_deb_leave(LBS_DEB_HOST);
 }
 
 void lbs_ps_sleep(struct lbs_private *priv, int wait_option)
@@ -1958,8 +1895,7 @@ void lbs_ps_confirm_sleep(struct lbs_private *priv)
 
 	if (allowed) {
 		lbs_deb_host("sending lbs_ps_confirm_sleep\n");
-		sendconfirmsleep(priv, (u8 *) & priv->lbs_ps_confirm_sleep,
-				 sizeof(struct PS_CMD_ConfirmSleep));
+		lbs_send_confirmsleep(priv);
 	} else {
 		lbs_deb_host("sleep confirm has been delayed\n");
 	}

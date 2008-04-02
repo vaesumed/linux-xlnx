@@ -2607,7 +2607,7 @@ static void iwl4965_set_rate(struct iwl_priv *priv)
 		   (IWL_OFDM_BASIC_RATES_MASK >> IWL_FIRST_OFDM_RATE) & 0xFF;
 }
 
-static void iwl4965_radio_kill_sw(struct iwl_priv *priv, int disable_radio)
+void iwl4965_radio_kill_sw(struct iwl_priv *priv, int disable_radio)
 {
 	unsigned long flags;
 
@@ -2625,8 +2625,16 @@ static void iwl4965_radio_kill_sw(struct iwl_priv *priv, int disable_radio)
 			iwl_write32(priv, CSR_UCODE_DRV_GP1_SET,
 				    CSR_UCODE_SW_BIT_RFKILL);
 			spin_unlock_irqrestore(&priv->lock, flags);
-			iwl4965_send_card_state(priv, CARD_STATE_CMD_DISABLE, 0);
+			/* call the host command only if no hw rf-kill set */
+			if (!test_bit(STATUS_RF_KILL_HW, &priv->status))
+				iwl4965_send_card_state(priv,
+							CARD_STATE_CMD_DISABLE,
+							0);
 			set_bit(STATUS_RF_KILL_SW, &priv->status);
+
+			/* make sure mac80211 stop sending Tx frame */
+			if (priv->mac80211_registered)
+				ieee80211_stop_queues(priv->hw);
 		}
 		return;
 	}
@@ -3111,7 +3119,7 @@ static int iwl4965_tx_status_reply_tx(struct iwl_priv *priv,
 		agg->rate_n_flags = le32_to_cpu(tx_resp->rate_n_flags);
 		IWL_DEBUG_TX_REPLY("Frames %d start_idx=%d bitmap=0x%llx\n",
 				   agg->frame_count, agg->start_idx,
-				   agg->bitmap);
+				   (unsigned long long)agg->bitmap);
 
 		if (bitmap)
 			agg->wait_for_ba = 1;
@@ -4277,6 +4285,14 @@ static void iwl4965_enable_interrupts(struct iwl_priv *priv)
 	iwl_write32(priv, CSR_INT_MASK, CSR_INI_SET_MASK);
 }
 
+/* call this function to flush any scheduled tasklet */
+static inline void iwl_synchronize_irq(struct iwl_priv *priv)
+{
+	/* wait to make sure we flush pedding tasklet*/
+	synchronize_irq(priv->pci_dev->irq);
+	tasklet_kill(&priv->irq_tasklet);
+}
+
 static inline void iwl4965_disable_interrupts(struct iwl_priv *priv)
 {
 	clear_bit(STATUS_INT_ENABLED, &priv->status);
@@ -4660,7 +4676,9 @@ static void iwl4965_irq_tasklet(struct iwl_priv *priv)
 	}
 
 	/* Re-enable all interrupts */
-	iwl4965_enable_interrupts(priv);
+	/* only Re-enable if diabled by irq */
+	if (test_bit(STATUS_INT_ENABLED, &priv->status))
+		iwl4965_enable_interrupts(priv);
 
 #ifdef CONFIG_IWLWIFI_DEBUG
 	if (iwl_debug_level & (IWL_DL_ISR)) {
@@ -4725,7 +4743,9 @@ static irqreturn_t iwl4965_isr(int irq, void *data)
 
  none:
 	/* re-enable interrupts here since we don't have anything to service. */
-	iwl4965_enable_interrupts(priv);
+	/* only Re-enable if diabled by irq */
+	if (test_bit(STATUS_INT_ENABLED, &priv->status))
+		iwl4965_enable_interrupts(priv);
 	spin_unlock(&priv->lock);
 	return IRQ_NONE;
 }
@@ -5724,6 +5744,7 @@ static void iwl4965_alive_start(struct iwl_priv *priv)
 	if (priv->error_recovering)
 		iwl4965_error_recovery(priv);
 
+	iwlcore_low_level_notify(priv, IWLCORE_START_EVT);
 	return;
 
  restart:
@@ -5747,6 +5768,8 @@ static void __iwl4965_down(struct iwl_priv *priv)
 
 	iwl_leds_unregister(priv);
 
+	iwlcore_low_level_notify(priv, IWLCORE_STOP_EVT);
+
 	iwlcore_clear_stations_table(priv);
 
 	/* Unblock any waiting calls */
@@ -5761,7 +5784,10 @@ static void __iwl4965_down(struct iwl_priv *priv)
 	iwl_write32(priv, CSR_RESET, CSR_RESET_REG_FLAG_NEVO_RESET);
 
 	/* tell the device to stop sending interrupts */
+	spin_lock_irqsave(&priv->lock, flags);
 	iwl4965_disable_interrupts(priv);
+	spin_unlock_irqrestore(&priv->lock, flags);
+	iwl_synchronize_irq(priv);
 
 	if (priv->mac80211_registered)
 		ieee80211_stop_queues(priv->hw);
@@ -5849,6 +5875,7 @@ static int __iwl4965_up(struct iwl_priv *priv)
 	if (test_bit(STATUS_RF_KILL_SW, &priv->status)) {
 		IWL_WARNING("Radio disabled by SW RF kill (module "
 			    "parameter)\n");
+		iwl_rfkill_set_hw_state(priv);
 		return -ENODEV;
 	}
 
@@ -5864,11 +5891,13 @@ static int __iwl4965_up(struct iwl_priv *priv)
 	else {
 		set_bit(STATUS_RF_KILL_HW, &priv->status);
 		if (!test_bit(STATUS_IN_SUSPEND, &priv->status)) {
+			iwl_rfkill_set_hw_state(priv);
 			IWL_WARNING("Radio disabled by HW RF Kill switch\n");
 			return -ENODEV;
 		}
 	}
 
+	iwl_rfkill_set_hw_state(priv);
 	iwl_write32(priv, CSR_INT, 0xFFFFFFFF);
 
 	rc = iwl4965_hw_nic_init(priv);
@@ -5982,6 +6011,9 @@ static void iwl4965_bg_rf_kill(struct work_struct *work)
 		if (!test_bit(STATUS_EXIT_PENDING, &priv->status))
 			queue_work(priv->workqueue, &priv->restart);
 	} else {
+		/* make sure mac80211 stop sending Tx frame */
+		if (priv->mac80211_registered)
+			ieee80211_stop_queues(priv->hw);
 
 		if (!test_bit(STATUS_RF_KILL_HW, &priv->status))
 			IWL_DEBUG_RF_KILL("Can not turn radio back on - "
@@ -5991,6 +6023,8 @@ static void iwl4965_bg_rf_kill(struct work_struct *work)
 				    "Kill switch must be turned off for "
 				    "wireless networking to work.\n");
 	}
+	iwl_rfkill_set_hw_state(priv);
+
 	mutex_unlock(&priv->mutex);
 }
 
@@ -6671,7 +6705,8 @@ static int iwl4965_mac_config(struct ieee80211_hw *hw, struct ieee80211_conf *co
 	}
 #endif
 
-	iwl4965_radio_kill_sw(priv, !conf->radio_enabled);
+	if (priv->cfg->ops->lib->radio_kill_sw)
+		priv->cfg->ops->lib->radio_kill_sw(priv, !conf->radio_enabled);
 
 	if (!conf->radio_enabled) {
 		IWL_DEBUG_MAC80211("leave - radio disabled\n");
@@ -7446,36 +7481,6 @@ static DRIVER_ATTR(debug_level, S_IWUSR | S_IRUGO,
 
 #endif /* CONFIG_IWLWIFI_DEBUG */
 
-static ssize_t show_rf_kill(struct device *d,
-			    struct device_attribute *attr, char *buf)
-{
-	/*
-	 * 0 - RF kill not enabled
-	 * 1 - SW based RF kill active (sysfs)
-	 * 2 - HW based RF kill active
-	 * 3 - Both HW and SW based RF kill active
-	 */
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
-	int val = (test_bit(STATUS_RF_KILL_SW, &priv->status) ? 0x1 : 0x0) |
-		  (test_bit(STATUS_RF_KILL_HW, &priv->status) ? 0x2 : 0x0);
-
-	return sprintf(buf, "%i\n", val);
-}
-
-static ssize_t store_rf_kill(struct device *d,
-			     struct device_attribute *attr,
-			     const char *buf, size_t count)
-{
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
-
-	mutex_lock(&priv->mutex);
-	iwl4965_radio_kill_sw(priv, buf[0] == '1');
-	mutex_unlock(&priv->mutex);
-
-	return count;
-}
-
-static DEVICE_ATTR(rf_kill, S_IWUSR | S_IRUGO, show_rf_kill, store_rf_kill);
 
 static ssize_t show_temperature(struct device *d,
 				struct device_attribute *attr, char *buf)
@@ -7961,7 +7966,6 @@ static struct attribute *iwl4965_sysfs_entries[] = {
 #endif
 	&dev_attr_power_level.attr,
 	&dev_attr_retry_rate.attr,
-	&dev_attr_rf_kill.attr,
 	&dev_attr_rs_window.attr,
 	&dev_attr_statistics.attr,
 	&dev_attr_status.attr,
@@ -8007,6 +8011,7 @@ static int iwl4965_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	struct iwl_priv *priv;
 	struct ieee80211_hw *hw;
 	struct iwl_cfg *cfg = (struct iwl_cfg *)(ent->driver_data);
+	unsigned long flags;
 	DECLARE_MAC_BUF(mac);
 
 	/************************
@@ -8144,7 +8149,9 @@ static int iwl4965_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	/********************
 	 * 8. Setup services
 	 ********************/
+	spin_lock_irqsave(&priv->lock, flags);
 	iwl4965_disable_interrupts(priv);
+	spin_unlock_irqrestore(&priv->lock, flags);
 
 	err = sysfs_create_group(&pdev->dev.kobj, &iwl4965_attribute_group);
 	if (err) {
@@ -8167,6 +8174,8 @@ static int iwl4965_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	pci_save_state(pdev);
 	pci_disable_device(pdev);
 
+	/* notify iwlcore to init */
+	iwlcore_low_level_notify(priv, IWLCORE_INIT_EVT);
 	return 0;
 
  out_remove_sysfs:
@@ -8191,15 +8200,30 @@ static void __devexit iwl4965_pci_remove(struct pci_dev *pdev)
 	struct iwl_priv *priv = pci_get_drvdata(pdev);
 	struct list_head *p, *q;
 	int i;
+	unsigned long flags;
 
 	if (!priv)
 		return;
 
 	IWL_DEBUG_INFO("*** UNLOAD DRIVER ***\n");
 
+	if (priv->mac80211_registered) {
+		ieee80211_unregister_hw(priv->hw);
+		priv->mac80211_registered = 0;
+	}
+
 	set_bit(STATUS_EXIT_PENDING, &priv->status);
 
 	iwl4965_down(priv);
+
+	/* make sure we flush any pending irq or
+	 * tasklet for the driver
+	 */
+	spin_lock_irqsave(&priv->lock, flags);
+	iwl4965_disable_interrupts(priv);
+	spin_unlock_irqrestore(&priv->lock, flags);
+
+	iwl_synchronize_irq(priv);
 
 	/* Free MAC hash list for ADHOC */
 	for (i = 0; i < IWL_IBSS_MAC_HASH_SIZE; i++) {
@@ -8209,6 +8233,7 @@ static void __devexit iwl4965_pci_remove(struct pci_dev *pdev)
 		}
 	}
 
+	iwlcore_low_level_notify(priv, IWLCORE_REMOVE_EVT);
 	iwl_dbgfs_unregister(priv);
 	sysfs_remove_group(&pdev->dev.kobj, &iwl4965_attribute_group);
 
@@ -8221,10 +8246,6 @@ static void __devexit iwl4965_pci_remove(struct pci_dev *pdev)
 	iwl4965_unset_hw_setting(priv);
 	iwlcore_clear_stations_table(priv);
 
-	if (priv->mac80211_registered) {
-		ieee80211_unregister_hw(priv->hw);
-		iwl4965_rate_control_unregister(priv->hw);
-	}
 
 	/*netif_stop_queue(dev); */
 	flush_workqueue(priv->workqueue);
@@ -8304,20 +8325,34 @@ static int __init iwl4965_init(void)
 	int ret;
 	printk(KERN_INFO DRV_NAME ": " DRV_DESCRIPTION ", " DRV_VERSION "\n");
 	printk(KERN_INFO DRV_NAME ": " DRV_COPYRIGHT "\n");
+
+	ret = iwl4965_rate_control_register();
+	if (ret) {
+		IWL_ERROR("Unable to register rate control algorithm: %d\n", ret);
+		return ret;
+	}
+
 	ret = pci_register_driver(&iwl4965_driver);
 	if (ret) {
 		IWL_ERROR("Unable to initialize PCI module\n");
-		return ret;
+		goto error_register;
 	}
 #ifdef CONFIG_IWLWIFI_DEBUG
 	ret = driver_create_file(&iwl4965_driver.driver, &driver_attr_debug_level);
 	if (ret) {
 		IWL_ERROR("Unable to create driver sysfs file\n");
-		pci_unregister_driver(&iwl4965_driver);
-		return ret;
+		goto error_debug;
 	}
 #endif
 
+	return ret;
+
+#ifdef CONFIG_IWLWIFI_DEBUG
+error_debug:
+	pci_unregister_driver(&iwl4965_driver);
+#endif
+error_register:
+	iwl4965_rate_control_unregister();
 	return ret;
 }
 
@@ -8327,6 +8362,7 @@ static void __exit iwl4965_exit(void)
 	driver_remove_file(&iwl4965_driver.driver, &driver_attr_debug_level);
 #endif
 	pci_unregister_driver(&iwl4965_driver);
+	iwl4965_rate_control_unregister();
 }
 
 module_exit(iwl4965_exit);

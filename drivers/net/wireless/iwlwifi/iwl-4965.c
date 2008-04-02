@@ -177,7 +177,6 @@ static int iwl4965_init_drv(struct iwl_priv *priv)
 		goto err_free_channel_map;
 	}
 
-	iwl4965_rate_control_register(priv->hw);
 	ret = ieee80211_register_hw(priv->hw);
 	if (ret) {
 		IWL_ERROR("Failed to register network device (error %d)\n",
@@ -1315,8 +1314,8 @@ void iwl4965_chain_noise_reset(struct iwl_priv *priv)
 		cmd.diff_gain_a = 0;
 		cmd.diff_gain_b = 0;
 		cmd.diff_gain_c = 0;
-		iwl_send_cmd_pdu(priv, REPLY_PHY_CALIBRATION_CMD,
-				 sizeof(cmd), &cmd);
+		iwl_send_cmd_pdu_async(priv, REPLY_PHY_CALIBRATION_CMD,
+				 sizeof(cmd), &cmd, NULL);
 		msleep(4);
 		data->state = IWL_CHAIN_NOISE_ACCUMULATE;
 		IWL_DEBUG_CALIB("Run chain_noise_calibrate\n");
@@ -3972,7 +3971,7 @@ static void iwl4965_rx_reply_rx(struct iwl_priv *priv,
 
 	IWL_DEBUG_STATS_LIMIT("Rssi %d, noise %d, qual %d, TSF %llu\n",
 			      rx_status.ssi, rx_status.noise, rx_status.signal,
-			      rx_status.mactime);
+			      (unsigned long long)rx_status.mactime);
 
 	network_packet = iwl4965_is_network_packet(priv, header);
 	if (network_packet) {
@@ -4564,8 +4563,8 @@ void iwl4965_add_station(struct iwl_priv *priv, const u8 *addr, int is_ap)
 	/* Update the rate scaling for control frame Tx to AP */
 	link_cmd.sta_id = is_ap ? IWL_AP_ID : priv->hw_setting.bcast_sta_id;
 
-	iwl_send_cmd_pdu(priv, REPLY_TX_LINK_QUALITY_CMD, sizeof(link_cmd),
-			 &link_cmd);
+	iwl_send_cmd_pdu_async(priv, REPLY_TX_LINK_QUALITY_CMD,
+			       sizeof(link_cmd), &link_cmd, NULL);
 }
 
 #ifdef CONFIG_IWL4965_HT
@@ -4961,6 +4960,7 @@ static struct iwl_lib_ops iwl4965_lib = {
 		.acquire_semaphore = iwlcore_eeprom_acquire_semaphore,
 		.release_semaphore = iwlcore_eeprom_release_semaphore,
 	},
+	.radio_kill_sw = iwl4965_radio_kill_sw,
 };
 
 static struct iwl_ops iwl4965_ops = {

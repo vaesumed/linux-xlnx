@@ -35,6 +35,7 @@ struct iwl_priv; /* FIXME: remove */
 #include "iwl-debug.h"
 #include "iwl-eeprom.h"
 #include "iwl-core.h"
+#include "iwl-rfkill.h"
 
 #include "iwl-4965.h" /* FIXME: remove */
 
@@ -248,4 +249,28 @@ int iwl_setup(struct iwl_priv *priv)
 	return ret;
 }
 EXPORT_SYMBOL(iwl_setup);
+
+/* Low level driver call this function to update iwlcore with
+ * driver status.
+ */
+int iwlcore_low_level_notify(struct iwl_priv *priv,
+			      enum iwlcore_card_notify notify)
+{
+	switch (notify) {
+	case IWLCORE_INIT_EVT:
+		iwl_rfkill_init(priv);
+		break;
+	case IWLCORE_START_EVT:
+		break;
+	case IWLCORE_STOP_EVT:
+		break;
+	case IWLCORE_REMOVE_EVT:
+		iwl_rfkill_unregister(priv);
+		iwl_rfkill_free(priv);
+		break;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(iwlcore_low_level_notify);
 

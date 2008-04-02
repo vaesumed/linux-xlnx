@@ -427,6 +427,8 @@ struct cmd_ds_802_11_rssi_rsp {
 };
 
 struct cmd_ds_802_11_mac_address {
+	struct cmd_header hdr;
+
 	__le16 action;
 	u8 macadd[ETH_ALEN];
 };
@@ -478,14 +480,11 @@ struct cmd_ds_802_11_ps_mode {
 	__le16 locallisteninterval;
 };
 
-struct PS_CMD_ConfirmSleep {
-	__le16 command;
-	__le16 size;
-	__le16 seqnum;
-	__le16 result;
+struct cmd_confirm_sleep {
+	struct cmd_header hdr;
 
 	__le16 action;
-	__le16 reserved1;
+	__le16 nullpktinterval;
 	__le16 multipledtim;
 	__le16 reserved;
 	__le16 locallisteninterval;
@@ -586,12 +585,13 @@ struct cmd_ds_802_11_key_material {
 } __attribute__ ((packed));
 
 struct cmd_ds_802_11_eeprom_access {
+	struct cmd_header hdr;
 	__le16 action;
-
-	/* multiple 4 */
 	__le16 offset;
-	__le16 bytecount;
-	u8 value;
+	__le16 len;
+	/* firmware says it returns a maximum of 20 bytes */
+#define LBS_EEPROM_READ_LEN 20
+	u8 value[LBS_EEPROM_READ_LEN];
 } __attribute__ ((packed));
 
 struct cmd_ds_802_11_tpc_cfg {
@@ -708,11 +708,9 @@ struct cmd_ds_command {
 		struct cmd_ds_802_11_rssi rssi;
 		struct cmd_ds_802_11_rssi_rsp rssirsp;
 		struct cmd_ds_802_11_disassociate dassociate;
-		struct cmd_ds_802_11_mac_address macadd;
 		struct cmd_ds_mac_reg_access macreg;
 		struct cmd_ds_bbp_reg_access bbpreg;
 		struct cmd_ds_rf_reg_access rfreg;
-		struct cmd_ds_802_11_eeprom_access rdeeprom;
 
 		struct cmd_ds_802_11d_domain_info domaininfo;
 		struct cmd_ds_802_11d_domain_info domaininforesp;

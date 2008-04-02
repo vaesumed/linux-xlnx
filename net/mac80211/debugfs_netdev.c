@@ -31,11 +31,13 @@ static ssize_t ieee80211_if_read(
 	ssize_t ret = -EINVAL;
 
 	read_lock(&dev_base_lock);
-	if (sdata->dev->reg_state == NETREG_REGISTERED) {
+	if (sdata->dev->reg_state == NETREG_REGISTERED)
 		ret = (*format)(sdata, buf, sizeof(buf));
-		ret = simple_read_from_buffer(userbuf, count, ppos, buf, ret);
-	}
 	read_unlock(&dev_base_lock);
+
+	if (ret != -EINVAL)
+		ret = simple_read_from_buffer(userbuf, count, ppos, buf, ret);
+
 	return ret;
 }
 
@@ -51,13 +53,13 @@ static ssize_t ieee80211_if_write(
 
 	memset(buf, 0x00, sizeof(buf));
 	buf_size = min(count, (sizeof(buf)-1));
-	read_lock(&dev_base_lock);
 	if (copy_from_user(buf, userbuf, buf_size))
-		goto endwrite;
+		return count;
+	read_lock(&dev_base_lock);
 	if (sdata->dev->reg_state == NETREG_REGISTERED)
 		(*format)(sdata, buf);
-endwrite:
 	read_unlock(&dev_base_lock);
+
 	return count;
 }
 #endif
@@ -222,7 +224,7 @@ IEEE80211_IF_WFILE(dot11MeshConfirmTimeout,
 IEEE80211_IF_WFILE(dot11MeshHoldingTimeout,
 		u.sta.mshcfg.dot11MeshHoldingTimeout, DEC, u16);
 IEEE80211_IF_WFILE(dot11MeshTTL, u.sta.mshcfg.dot11MeshTTL, DEC, u8);
-IEEE80211_IF_WFILE(auto_open_plinks, u.sta.mshcfg.auto_open_plinks, DEC, bool);
+IEEE80211_IF_WFILE(auto_open_plinks, u.sta.mshcfg.auto_open_plinks, DEC, u8);
 IEEE80211_IF_WFILE(dot11MeshMaxPeerLinks,
 		u.sta.mshcfg.dot11MeshMaxPeerLinks, DEC, u16);
 IEEE80211_IF_WFILE(dot11MeshHWMPactivePathTimeout,

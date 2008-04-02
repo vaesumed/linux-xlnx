@@ -36,16 +36,23 @@
  * (which is pretty useless) or insert it into the hash table using
  * sta_info_insert() which demotes the reference from ownership to a regular
  * RCU-protected reference; if the function is called without protection by an
- * RCU critical section the reference is instantly invalidated.
+ * RCU critical section the reference is instantly invalidated. Note that the
+ * caller may not do much with the STA info before inserting it, in particular,
+ * it may not start any mesh peer link management or add encryption keys.
+ *
+ * When the insertion fails (sta_info_insert()) returns non-zero), the
+ * structure will have been freed by sta_info_insert()!
  *
  * Because there are debugfs entries for each station, and adding those
  * must be able to sleep, it is also possible to "pin" a station entry,
  * that means it can be removed from the hash table but not be freed.
- * See the comment in __sta_info_unlink() for more information.
+ * See the comment in __sta_info_unlink() for more information, this is
+ * an internal capability only.
  *
  * In order to remove a STA info structure, the caller needs to first
  * unlink it (sta_info_unlink()) from the list and hash tables and
- * then wait for an RCU synchronisation before it can be freed. Due to
+ * then destroy it while holding the RTNL; sta_info_destroy() will wait
+ * for an RCU grace period to elapse before actually freeing it. Due to
  * the pinning and the possibility of multiple callers trying to remove
  * the same STA info at the same time, sta_info_unlink() can clear the
  * STA info pointer it is passed to indicate that the STA info is owned
@@ -127,18 +134,43 @@ struct sta_info *sta_info_get_by_idx(struct ieee80211_local *local, int idx,
 	return NULL;
 }
 
+/**
+ * __sta_info_free - internal STA free helper
+ *
+ * @sta: STA info to free
+ *
+ * This function must undo everything done by sta_info_alloc()
+ * that may happen before sta_info_insert().
+ */
+static void __sta_info_free(struct ieee80211_local *local,
+			    struct sta_info *sta)
+{
+	DECLARE_MAC_BUF(mbuf);
+
+	rate_control_free_sta(sta->rate_ctrl, sta->rate_ctrl_priv);
+	rate_control_put(sta->rate_ctrl);
+
+#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
+	printk(KERN_DEBUG "%s: Destroyed STA %s\n",
+	       wiphy_name(local->hw.wiphy), print_mac(mbuf, sta->addr));
+#endif /* CONFIG_MAC80211_VERBOSE_DEBUG */
+
+	kfree(sta);
+}
+
 void sta_info_destroy(struct sta_info *sta)
 {
-	struct ieee80211_local *local = sta->local;
+	struct ieee80211_local *local;
 	struct sk_buff *skb;
 	int i;
-	DECLARE_MAC_BUF(mbuf);
+
+	ASSERT_RTNL();
+	might_sleep();
 
 	if (!sta)
 		return;
 
-	ASSERT_RTNL();
-	might_sleep();
+	local = sta->local;
 
 	rate_control_remove_sta_debugfs(sta);
 	ieee80211_sta_debugfs_remove(sta);
@@ -148,13 +180,22 @@ void sta_info_destroy(struct sta_info *sta)
 		mesh_plink_deactivate(sta);
 #endif
 
-	/*
-	 * NOTE: This will call synchronize_rcu() internally to
-	 * make sure no key references can be in use. We rely on
-	 * that here for the mesh code!
-	 */
-	ieee80211_key_free(sta->key);
-	WARN_ON(sta->key);
+	if (sta->key) {
+		/*
+		 * NOTE: This will call synchronize_rcu() internally to
+		 * make sure no key references can be in use. We rely on
+		 * that when we take this branch to make sure nobody can
+		 * reference this STA struct any longer!
+		 */
+		ieee80211_key_free(sta->key);
+		WARN_ON(sta->key);
+	} else {
+		/*
+		 * Make sure that nobody can reference this STA struct
+		 * any longer.
+		 */
+		synchronize_rcu();
+	}
 
 #ifdef CONFIG_MAC80211_MESH
 	if (ieee80211_vif_is_mesh(&sta->sdata->vif))
@@ -180,15 +221,7 @@ void sta_info_destroy(struct sta_info *sta)
 		spin_unlock_bh(&sta->ampdu_mlme.ampdu_tx);
 	}
 
-	rate_control_free_sta(sta->rate_ctrl, sta->rate_ctrl_priv);
-	rate_control_put(sta->rate_ctrl);
-
-#ifdef CONFIG_MAC80211_VERBOSE_DEBUG
-	printk(KERN_DEBUG "%s: Destroyed STA %s\n",
-	       wiphy_name(local->hw.wiphy), print_mac(mbuf, sta->addr));
-#endif /* CONFIG_MAC80211_VERBOSE_DEBUG */
-
-	kfree(sta);
+	__sta_info_free(local, sta);
 }
 
 
@@ -264,6 +297,7 @@ int sta_info_insert(struct sta_info *sta)
 	struct ieee80211_local *local = sta->local;
 	struct ieee80211_sub_if_data *sdata = sta->sdata;
 	unsigned long flags;
+	int err = 0;
 	DECLARE_MAC_BUF(mac);
 
 	/*
@@ -271,20 +305,23 @@ int sta_info_insert(struct sta_info *sta)
 	 * something inserts a STA (on one CPU) without holding the RTNL
 	 * and another CPU turns off the net device.
 	 */
-	if (unlikely(!netif_running(sdata->dev)))
-		return -ENETDOWN;
+	if (unlikely(!netif_running(sdata->dev))) {
+		err = -ENETDOWN;
+		goto out_free;
+	}
 
-	if (WARN_ON(compare_ether_addr(sta->addr, sdata->dev->dev_addr) == 0))
-		return -EINVAL;
-
-	if (WARN_ON(is_multicast_ether_addr(sta->addr)))
-		return -EINVAL;
+	if (WARN_ON(compare_ether_addr(sta->addr, sdata->dev->dev_addr) == 0 ||
+	            is_multicast_ether_addr(sta->addr))) {
+		err = -EINVAL;
+		goto out_free;
+	}
 
 	spin_lock_irqsave(&local->sta_lock, flags);
 	/* check if STA exists already */
 	if (__sta_info_find(local, sta->addr)) {
 		spin_unlock_irqrestore(&local->sta_lock, flags);
-		return -EEXIST;
+		err = -EEXIST;
+		goto out_free;
 	}
 	list_add(&sta->list, &local->sta_list);
 	local->num_sta++;
@@ -307,9 +344,13 @@ int sta_info_insert(struct sta_info *sta)
 	spin_unlock_irqrestore(&local->sta_lock, flags);
 
 #ifdef CONFIG_MAC80211_DEBUGFS
-	/* debugfs entry adding might sleep, so schedule process
+	/*
+	 * Debugfs entry adding might sleep, so schedule process
 	 * context task for adding entry for STAs that do not yet
-	 * have one. */
+	 * have one.
+	 * NOTE: due to auto-freeing semantics this may only be done
+	 *       if the insertion is successful!
+	 */
 	queue_work(local->hw.workqueue, &local->sta_debugfs_add);
 #endif
 
@@ -317,6 +358,10 @@ int sta_info_insert(struct sta_info *sta)
 		mesh_accept_plinks_update(sdata);
 
 	return 0;
+ out_free:
+	BUG_ON(!err);
+	__sta_info_free(local, sta);
+	return err;
 }
 
 static inline void __bss_tim_set(struct ieee80211_if_ap *bss, u16 aid)
@@ -409,7 +454,7 @@ static struct sta_info *__sta_info_unpin(struct sta_info *sta)
 	return ret;
 }
 
-static void __sta_info_unlink(struct sta_info **sta)
+void __sta_info_unlink(struct sta_info **sta)
 {
 	struct ieee80211_local *local = (*sta)->local;
 	struct ieee80211_sub_if_data *sdata = (*sta)->sdata;
@@ -592,19 +637,48 @@ static void sta_info_debugfs_add_work(struct work_struct *work)
 		rate_control_add_sta_debugfs(sta);
 
 		sta = __sta_info_unpin(sta);
-
-		if (sta) {
-			synchronize_rcu();
-			sta_info_destroy(sta);
-		}
+		rtnl_lock();
+		sta_info_destroy(sta);
+		rtnl_unlock();
 	}
 }
 #endif
+
+void __ieee80211_run_pending_flush(struct ieee80211_local *local)
+{
+	struct sta_info *sta;
+	unsigned long flags;
+
+	ASSERT_RTNL();
+
+	spin_lock_irqsave(&local->sta_lock, flags);
+	while (!list_empty(&local->sta_flush_list)) {
+		sta = list_first_entry(&local->sta_flush_list,
+				       struct sta_info, list);
+		list_del(&sta->list);
+		spin_unlock_irqrestore(&local->sta_lock, flags);
+		sta_info_destroy(sta);
+		spin_lock_irqsave(&local->sta_lock, flags);
+	}
+	spin_unlock_irqrestore(&local->sta_lock, flags);
+}
+
+static void ieee80211_sta_flush_work(struct work_struct *work)
+{
+	struct ieee80211_local *local =
+		container_of(work, struct ieee80211_local, sta_flush_work);
+
+	rtnl_lock();
+	__ieee80211_run_pending_flush(local);
+	rtnl_unlock();
+}
 
 void sta_info_init(struct ieee80211_local *local)
 {
 	spin_lock_init(&local->sta_lock);
 	INIT_LIST_HEAD(&local->sta_list);
+	INIT_LIST_HEAD(&local->sta_flush_list);
+	INIT_WORK(&local->sta_flush_work, ieee80211_sta_flush_work);
 
 	setup_timer(&local->sta_cleanup, sta_info_cleanup,
 		    (unsigned long)local);
@@ -625,7 +699,12 @@ int sta_info_start(struct ieee80211_local *local)
 void sta_info_stop(struct ieee80211_local *local)
 {
 	del_timer(&local->sta_cleanup);
+	cancel_work_sync(&local->sta_flush_work);
+
+	rtnl_lock();
 	sta_info_flush(local, NULL);
+	__ieee80211_run_pending_flush(local);
+	rtnl_unlock();
 }
 
 /**
@@ -645,6 +724,7 @@ int sta_info_flush(struct ieee80211_local *local,
 	unsigned long flags;
 
 	might_sleep();
+	ASSERT_RTNL();
 
 	spin_lock_irqsave(&local->sta_lock, flags);
 	list_for_each_entry_safe(sta, tmp, &local->sta_list, list) {
@@ -658,10 +738,41 @@ int sta_info_flush(struct ieee80211_local *local,
 	}
 	spin_unlock_irqrestore(&local->sta_lock, flags);
 
-	synchronize_rcu();
-
 	list_for_each_entry_safe(sta, tmp, &tmp_list, list)
 		sta_info_destroy(sta);
 
 	return ret;
+}
+
+/**
+ * sta_info_flush_delayed - flush matching STA entries from the STA table
+ *
+ * This function unlinks all stations for a given interface and queues
+ * them for freeing. Note that the workqueue function scheduled here has
+ * to run before any new keys can be added to the system to avoid set_key()
+ * callback ordering issues.
+ *
+ * @sdata: the interface
+ */
+void sta_info_flush_delayed(struct ieee80211_sub_if_data *sdata)
+{
+	struct ieee80211_local *local = sdata->local;
+	struct sta_info *sta, *tmp;
+	unsigned long flags;
+	bool work = false;
+
+	spin_lock_irqsave(&local->sta_lock, flags);
+	list_for_each_entry_safe(sta, tmp, &local->sta_list, list) {
+		if (sdata == sta->sdata) {
+			__sta_info_unlink(&sta);
+			if (sta) {
+				list_add_tail(&sta->list,
+					      &local->sta_flush_list);
+				work = true;
+			}
+		}
+	}
+	if (work)
+		schedule_work(&local->sta_flush_work);
+	spin_unlock_irqrestore(&local->sta_lock, flags);
 }

@@ -188,19 +188,6 @@ static int lbs_ret_802_11_snmp_mib(struct lbs_private *priv,
 	return 0;
 }
 
-static int lbs_ret_802_11_mac_address(struct lbs_private *priv,
-				       struct cmd_ds_command *resp)
-{
-	struct cmd_ds_802_11_mac_address *macadd = &resp->params.macadd;
-
-	lbs_deb_enter(LBS_DEB_CMD);
-
-	memcpy(priv->current_addr, macadd->macadd, ETH_ALEN);
-
-	lbs_deb_enter(LBS_DEB_CMD);
-	return 0;
-}
-
 static int lbs_ret_802_11_rf_tx_power(struct lbs_private *priv,
 				       struct cmd_ds_command *resp)
 {
@@ -258,31 +245,6 @@ static int lbs_ret_802_11_rssi(struct lbs_private *priv,
 	       priv->RSSI[TYPE_BEACON][TYPE_NOAVG],
 	       priv->RSSI[TYPE_BEACON][TYPE_AVG]);
 
-	lbs_deb_leave(LBS_DEB_CMD);
-	return 0;
-}
-
-static int lbs_ret_802_11_eeprom_access(struct lbs_private *priv,
-				  struct cmd_ds_command *resp)
-{
-	struct lbs_ioctl_regrdwr *pbuf;
-	pbuf = (struct lbs_ioctl_regrdwr *) priv->prdeeprom;
-
-	lbs_deb_enter_args(LBS_DEB_CMD, "len %d",
-	       le16_to_cpu(resp->params.rdeeprom.bytecount));
-	if (pbuf->NOB < le16_to_cpu(resp->params.rdeeprom.bytecount)) {
-		pbuf->NOB = 0;
-		lbs_deb_cmd("EEPROM read length too big\n");
-		return -1;
-	}
-	pbuf->NOB = le16_to_cpu(resp->params.rdeeprom.bytecount);
-	if (pbuf->NOB > 0) {
-
-		memcpy(&pbuf->value, (u8 *) & resp->params.rdeeprom.value,
-		       le16_to_cpu(resp->params.rdeeprom.bytecount));
-		lbs_deb_hex(LBS_DEB_CMD, "EEPROM", (char *)&pbuf->value,
-			le16_to_cpu(resp->params.rdeeprom.bytecount));
-	}
 	lbs_deb_leave(LBS_DEB_CMD);
 	return 0;
 }
@@ -368,16 +330,8 @@ static inline int handle_cmd_response(struct lbs_private *priv,
 		ret = lbs_ret_802_11_rssi(priv, resp);
 		break;
 
-	case CMD_RET(CMD_802_11_MAC_ADDRESS):
-		ret = lbs_ret_802_11_mac_address(priv, resp);
-		break;
-
 	case CMD_RET(CMD_802_11_AD_HOC_STOP):
 		ret = lbs_ret_80211_ad_hoc_stop(priv);
-		break;
-
-	case CMD_RET(CMD_802_11_EEPROM_ACCESS):
-		ret = lbs_ret_802_11_eeprom_access(priv, resp);
 		break;
 
 	case CMD_RET(CMD_802_11D_DOMAIN_INFO):
@@ -594,21 +548,20 @@ done:
 
 static int lbs_send_confirmwake(struct lbs_private *priv)
 {
-	struct cmd_header *cmd = &priv->lbs_ps_confirm_wake;
+	struct cmd_header cmd;
 	int ret = 0;
 
 	lbs_deb_enter(LBS_DEB_HOST);
 
-	cmd->command = cpu_to_le16(CMD_802_11_WAKEUP_CONFIRM);
-	cmd->size = cpu_to_le16(sizeof(*cmd));
-	cmd->seqnum = cpu_to_le16(++priv->seqnum);
-	cmd->result = 0;
+	cmd.command = cpu_to_le16(CMD_802_11_WAKEUP_CONFIRM);
+	cmd.size = cpu_to_le16(sizeof(cmd));
+	cmd.seqnum = cpu_to_le16(++priv->seqnum);
+	cmd.result = 0;
 
-	lbs_deb_host("SEND_WAKEC_CMD: before download\n");
+	lbs_deb_hex(LBS_DEB_HOST, "wake confirm", (u8 *) &cmd,
+		sizeof(cmd));
 
-	lbs_deb_hex(LBS_DEB_HOST, "wake confirm command", (void *)cmd, sizeof(*cmd));
-
-	ret = priv->hw_host_to_card(priv, MVMS_CMD, (void *)cmd, sizeof(*cmd));
+	ret = priv->hw_host_to_card(priv, MVMS_CMD, (u8 *) &cmd, sizeof(cmd));
 	if (ret)
 		lbs_pr_alert("SEND_WAKEC_CMD: Host to Card failed for Confirm Wake\n");
 

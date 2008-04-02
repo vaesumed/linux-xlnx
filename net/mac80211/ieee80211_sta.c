@@ -27,6 +27,7 @@
 #include <linux/rtnetlink.h>
 #include <net/iw_handler.h>
 #include <asm/types.h>
+#include <asm/unaligned.h>
 
 #include <net/mac80211.h>
 #include "ieee80211_i.h"
@@ -244,7 +245,6 @@ static void ieee80211_sta_def_wmm_params(struct net_device *dev,
 
 	if (local->ops->conf_tx) {
 		struct ieee80211_tx_queue_params qparam;
-		int i;
 
 		memset(&qparam, 0, sizeof(qparam));
 
@@ -939,7 +939,6 @@ static void ieee80211_associated(struct net_device *dev,
 	rcu_read_unlock();
 
 	if (disassoc && sta) {
-		synchronize_rcu();
 		rtnl_lock();
 		sta_info_destroy(sta);
 		rtnl_unlock();
@@ -1942,7 +1941,6 @@ static void ieee80211_rx_mgmt_assoc_resp(struct ieee80211_sub_if_data *sdata,
 		if (err) {
 			printk(KERN_DEBUG "%s: failed to insert STA entry for"
 			       " the AP (error %d)\n", dev->name, err);
-			sta_info_destroy(sta);
 			rcu_read_unlock();
 			return;
 		}
@@ -2126,6 +2124,11 @@ ieee80211_rx_bss_get(struct net_device *dev, u8 *bssid, int freq,
 }
 
 #ifdef CONFIG_MAC80211_MESH
+static inline u32 bss_mesh_cfg_get(u8 *mesh_cfg, u8 offset)
+{
+	return be32_to_cpu(get_unaligned((__be32 *) (mesh_cfg + offset)));
+}
+
 static struct ieee80211_sta_bss *
 ieee80211_rx_mesh_bss_get(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
 			  u8 *mesh_cfg, int freq)
@@ -2153,16 +2156,19 @@ ieee80211_rx_mesh_bss_get(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
 
 static struct ieee80211_sta_bss *
 ieee80211_rx_mesh_bss_add(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
-			  u8 *mesh_cfg, int freq)
+			  u8 *mesh_cfg, int mesh_config_len, int freq)
 {
 	struct ieee80211_local *local = wdev_priv(dev->ieee80211_ptr);
 	struct ieee80211_sta_bss *bss;
+
+	if (mesh_config_len != MESH_CFG_LEN)
+		return NULL;
 
 	bss = kzalloc(sizeof(*bss), GFP_ATOMIC);
 	if (!bss)
 		return NULL;
 
-	bss->mesh_cfg = kmalloc(MESH_CFG_CMP_LEN, GFP_ATOMIC);
+	bss->mesh_cfg = kmalloc(sizeof(struct bss_mesh_config), GFP_ATOMIC);
 	if (!bss->mesh_cfg) {
 		kfree(bss);
 		return NULL;
@@ -2180,7 +2186,12 @@ ieee80211_rx_mesh_bss_add(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
 
 	atomic_inc(&bss->users);
 	atomic_inc(&bss->users);
-	memcpy(bss->mesh_cfg, mesh_cfg, MESH_CFG_CMP_LEN);
+	bss->mesh_cfg->mesh_version = mesh_cfg[0];
+	bss->mesh_cfg->path_proto_id = bss_mesh_cfg_get(mesh_cfg, PP_OFFSET);
+	bss->mesh_cfg->path_metric_id = bss_mesh_cfg_get(mesh_cfg, PM_OFFSET);
+	bss->mesh_cfg->cong_control_id = bss_mesh_cfg_get(mesh_cfg, CC_OFFSET);
+	bss->mesh_cfg->channel_precedence = bss_mesh_cfg_get(mesh_cfg,
+							     CP_OFFSET);
 	bss->mesh_id_len = mesh_id_len;
 	bss->freq = freq;
 	spin_lock_bh(&local->sta_bss_lock);
@@ -2253,8 +2264,10 @@ static int ieee80211_sta_join_ibss(struct net_device *dev,
 
 	sband = local->hw.wiphy->bands[local->hw.conf.channel->band];
 
+	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
+
 	/* Remove possible STA entries from other IBSS networks. */
-	sta_info_flush(local, NULL);
+	sta_info_flush_delayed(sdata);
 
 	if (local->ops->reset_tsf) {
 		/* Reset own TSF to allow time synchronization work. */
@@ -2267,7 +2280,6 @@ static int ieee80211_sta_join_ibss(struct net_device *dev,
 
 	local->hw.conf.beacon_int = bss->beacon_int >= 10 ? bss->beacon_int : 10;
 
-	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 	sdata->drop_unencrypted = bss->capability &
 		WLAN_CAPABILITY_PRIVACY ? 1 : 0;
 
@@ -2530,7 +2542,8 @@ static void ieee80211_rx_bss_info(struct net_device *dev,
 #ifdef CONFIG_MAC80211_MESH
 		if (elems.mesh_config)
 			bss = ieee80211_rx_mesh_bss_add(dev, elems.mesh_id,
-				elems.mesh_id_len, elems.mesh_config, freq);
+				elems.mesh_id_len, elems.mesh_config,
+				elems.mesh_config_len, freq);
 		else
 #endif
 			bss = ieee80211_rx_bss_add(dev, mgmt->bssid, freq,
@@ -3081,7 +3094,7 @@ static void ieee80211_sta_expire(struct net_device *dev, unsigned long exp_time)
 		if (time_after(jiffies, sta->last_rx + exp_time)) {
 			printk(KERN_DEBUG "%s: expiring inactive STA %s\n",
 			       dev->name, print_mac(mac, sta->addr));
-			sta_info_unlink(&sta);
+			__sta_info_unlink(&sta);
 			if (sta)
 				list_add(&sta->list, &tmp_list);
 		}
@@ -4055,36 +4068,33 @@ ieee80211_sta_scan_result(struct net_device *dev,
 
 	if (bss_mesh_cfg(bss)) {
 		char *buf;
-		u8 *cfg = bss_mesh_cfg(bss);
+		struct bss_mesh_config *cfg = bss_mesh_cfg(bss);
 		buf = kmalloc(50, GFP_ATOMIC);
 		if (buf) {
 			memset(&iwe, 0, sizeof(iwe));
 			iwe.cmd = IWEVCUSTOM;
-			sprintf(buf, "Mesh network (version %d)", cfg[0]);
+			sprintf(buf, "Mesh network (version %d)",
+				cfg->mesh_version);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Path Selection Protocol ID: "
-				"0x%02X%02X%02X%02X", cfg[1], cfg[2], cfg[3],
-							cfg[4]);
+				"0x%08X", cfg->path_proto_id);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Path Selection Metric ID: "
-				"0x%02X%02X%02X%02X", cfg[5], cfg[6], cfg[7],
-							cfg[8]);
+				"0x%08X", cfg->path_metric_id);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Congestion Control Mode ID: "
-				"0x%02X%02X%02X%02X", cfg[9], cfg[10],
-							cfg[11], cfg[12]);
+				"0x%08X", cfg->cong_control_id);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Channel Precedence: "
-				"0x%02X%02X%02X%02X", cfg[13], cfg[14],
-							cfg[15], cfg[16]);
+				"0x%08X", cfg->channel_precedence);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
@@ -4171,10 +4181,8 @@ struct sta_info * ieee80211_ibss_add_sta(struct net_device *dev,
 
 	rate_control_rate_init(sta, local);
 
-	if (sta_info_insert(sta)) {
-		sta_info_destroy(sta);
+	if (sta_info_insert(sta))
 		return NULL;
-	}
 
 	return sta;
 }
