@@ -276,8 +276,12 @@ static ssize_t show_fan(struct device *dev, struct device_attribute *attr,
 {
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct asb100_data *data = asb100_update_device(dev);
-	return sprintf(buf, "%d\n", FAN_FROM_REG(data->fan[nr],
-		DIV_FROM_REG(data->fan_div[nr])));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	val = FAN_FROM_REG(data->fan[nr], DIV_FROM_REG(data->fan_div[nr]));
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t show_fan_min(struct device *dev, struct device_attribute *attr,
@@ -285,8 +289,12 @@ static ssize_t show_fan_min(struct device *dev, struct device_attribute *attr,
 {
 	int nr = to_sensor_dev_attr(attr)->index;
 	struct asb100_data *data = asb100_update_device(dev);
-	return sprintf(buf, "%d\n", FAN_FROM_REG(data->fan_min[nr],
-		DIV_FROM_REG(data->fan_div[nr])));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	val = FAN_FROM_REG(data->fan_min[nr], DIV_FROM_REG(data->fan_div[nr]));
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t show_fan_div(struct device *dev, struct device_attribute *attr,
@@ -953,12 +961,8 @@ static void asb100_write_value(struct i2c_client *client, u16 reg, u16 value)
 static void asb100_init_client(struct i2c_client *client)
 {
 	struct asb100_data *data = i2c_get_clientdata(client);
-	int vid = 0;
 
-	vid = asb100_read_value(client, ASB100_REG_VID_FANDIV) & 0x0f;
-	vid |= (asb100_read_value(client, ASB100_REG_CHIPID) & 0x01) << 4;
 	data->vrm = vid_which_vrm();
-	vid = vid_from_reg(vid, data->vrm);
 
 	/* Start monitoring */
 	asb100_write_value(client, ASB100_REG_CONFIG,
