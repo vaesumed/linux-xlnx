@@ -280,7 +280,7 @@ show_addr(uint32_t addr)
 	BUG_ON(!pte);
 	BUG_ON(level != PG_LEVEL_4K);
 
-	pte->pte_low |= _PAGE_PRESENT;
+	set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
 	__flush_tlb_one(addr);
 	return 1;
 }
@@ -304,10 +304,10 @@ emergency_show_addr(uint32_t address)
 
 	/* Don't change pages that weren't hidden in the first place -- they
 	 * aren't ours to modify. */
-	if (!(pte->pte_low & _PAGE_HIDDEN))
+	if (!(pte_val(*pte) & _PAGE_HIDDEN))
 		return;
 
-	pte->pte_low |= _PAGE_PRESENT;
+	set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
 	__flush_tlb_one(address);
 }
 
@@ -324,7 +324,7 @@ hide_addr(uint32_t addr)
 	BUG_ON(!pte);
 	BUG_ON(level != PG_LEVEL_4K);
 
-	pte->pte_low &= ~_PAGE_PRESENT;
+	set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
 	__flush_tlb_one(addr);
 	return 1;
 }
@@ -471,8 +471,8 @@ kmemcheck_show_pages(struct page *p, unsigned int n)
 		BUG_ON(!pte);
 		BUG_ON(level != PG_LEVEL_4K);
 
-		pte->pte_low |= _PAGE_PRESENT;
-		pte->pte_low &= ~_PAGE_HIDDEN;
+		set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
+		set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_HIDDEN));
 		__flush_tlb_one(address);
 	}
 }
@@ -498,8 +498,8 @@ kmemcheck_hide_pages(struct page *p, unsigned int n)
 		BUG_ON(!pte);
 		BUG_ON(level != PG_LEVEL_4K);
 
-		pte->pte_low &= ~_PAGE_PRESENT;
-		pte->pte_low |= _PAGE_HIDDEN;
+		set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
+		set_pte(pte, __pte(pte_val(*pte) | _PAGE_HIDDEN));
 		__flush_tlb_one(address);
 	}
 }
