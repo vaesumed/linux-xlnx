@@ -91,24 +91,16 @@ int videobuf_iolock(struct videobuf_queue *q, struct videobuf_buffer *vb,
 	MAGIC_CHECK(vb->magic, MAGIC_BUFFER);
 	MAGIC_CHECK(q->int_ops->magic, MAGIC_QTYPE_OPS);
 
-	/* This is required to avoid OOPS on some cases,
-	   since mmap_mapper() method should be called before _iolock.
-	   On some cases, the mmap_mapper() is called only after scheduling.
-	 */
-	if (vb->memory == V4L2_MEMORY_MMAP) {
-		wait_event_timeout(vb->done, q->is_mmapped,
-				   msecs_to_jiffies(100));
-		if (!q->is_mmapped) {
-			printk(KERN_ERR
-			       "Error: mmap_mapper() never called!\n");
-			return -EINVAL;
-		}
-	}
-
 	return CALL(q, iolock, q, vb, fbuf);
 }
 
 /* --------------------------------------------------------------------- */
+
+static int videobuf_mmap_setup_default(struct videobuf_queue *q,
+					struct videobuf_buffer *vb)
+{
+	return 0;
+}
 
 
 void videobuf_queue_core_init(struct videobuf_queue *q,
@@ -130,6 +122,9 @@ void videobuf_queue_core_init(struct videobuf_queue *q,
 	q->ops       = ops;
 	q->priv_data = priv;
 	q->int_ops   = int_ops;
+
+	if (!q->int_ops->mmap_setup)
+		q->int_ops->mmap_setup = videobuf_mmap_setup_default;
 
 	/* All buffer operations are mandatory */
 	BUG_ON(!q->ops->buf_setup);
@@ -303,8 +298,6 @@ static int __videobuf_mmap_free(struct videobuf_queue *q)
 
 	rc  = CALL(q, mmap_free, q);
 
-	q->is_mmapped = 0;
-
 	if (rc < 0)
 		return rc;
 
@@ -356,6 +349,9 @@ static int __videobuf_mmap_setup(struct videobuf_queue *q,
 		switch (memory) {
 		case V4L2_MEMORY_MMAP:
 			q->bufs[i]->boff  = bsize * i;
+			err = q->int_ops->mmap_setup(q, q->bufs[i]);
+			if (err)
+				break;
 			break;
 		case V4L2_MEMORY_USERPTR:
 		case V4L2_MEMORY_OVERLAY:
@@ -1027,7 +1023,6 @@ int videobuf_mmap_mapper(struct videobuf_queue *q,
 
 	mutex_lock(&q->vb_lock);
 	retval = CALL(q, mmap_mapper, q, vma);
-	q->is_mmapped = 1;
 	mutex_unlock(&q->vb_lock);
 
 	return retval;
