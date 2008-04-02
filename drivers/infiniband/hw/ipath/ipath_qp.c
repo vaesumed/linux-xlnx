@@ -392,7 +392,6 @@ int ipath_error_qp(struct ipath_qp *qp, enum ib_wc_status err)
 		  qp->ibqp.qp_num, qp->remote_qpn, err);
 
 	spin_lock(&dev->pending_lock);
-	/* XXX What if its already removed by the timeout code? */
 	if (!list_empty(&qp->timerwait))
 		list_del_init(&qp->timerwait);
 	if (!list_empty(&qp->piowait))
@@ -516,13 +515,13 @@ int ipath_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 			goto inval;
 
 	/*
-	 * Note: the chips support a maximum MTU of 4096, but the driver
-	 * hasn't implemented this feature yet, so don't allow Path MTU
-	 * values greater than 2048.
+	 * don't allow invalid Path MTU values or greater than 2048
+	 * unless we are configured for a 4KB MTU
 	 */
-	if (attr_mask & IB_QP_PATH_MTU)
-		if (attr->path_mtu > IB_MTU_2048)
-			goto inval;
+	if ((attr_mask & IB_QP_PATH_MTU) &&
+		(ib_mtu_enum_to_int(attr->path_mtu) == -1 ||
+		(attr->path_mtu > IB_MTU_2048 && !ipath_mtu4096)))
+		goto inval;
 
 	if (attr_mask & IB_QP_PATH_MIG_STATE)
 		if (attr->path_mig_state != IB_MIG_MIGRATED &&
@@ -748,20 +747,31 @@ struct ib_qp *ipath_create_qp(struct ib_pd *ibpd,
 	size_t sz;
 	struct ib_qp *ret;
 
-	if (init_attr->cap.max_send_sge > ib_ipath_max_sges ||
-	    init_attr->cap.max_recv_sge > ib_ipath_max_sges ||
-	    init_attr->cap.max_send_wr > ib_ipath_max_qp_wrs ||
-	    init_attr->cap.max_recv_wr > ib_ipath_max_qp_wrs) {
-		ret = ERR_PTR(-ENOMEM);
+	if (init_attr->create_flags) {
+		ret = ERR_PTR(-EINVAL);
 		goto bail;
 	}
 
-	if (init_attr->cap.max_send_sge +
-	    init_attr->cap.max_recv_sge +
-	    init_attr->cap.max_send_wr +
-	    init_attr->cap.max_recv_wr == 0) {
+	if (init_attr->cap.max_send_sge > ib_ipath_max_sges ||
+	    init_attr->cap.max_send_wr > ib_ipath_max_qp_wrs) {
 		ret = ERR_PTR(-EINVAL);
 		goto bail;
+	}
+
+	/* Check receive queue parameters if no SRQ is specified. */
+	if (!init_attr->srq) {
+		if (init_attr->cap.max_recv_sge > ib_ipath_max_sges ||
+		    init_attr->cap.max_recv_wr > ib_ipath_max_qp_wrs) {
+			ret = ERR_PTR(-EINVAL);
+			goto bail;
+		}
+		if (init_attr->cap.max_send_sge +
+		    init_attr->cap.max_send_wr +
+		    init_attr->cap.max_recv_sge +
+		    init_attr->cap.max_recv_wr == 0) {
+			ret = ERR_PTR(-EINVAL);
+			goto bail;
+		}
 	}
 
 	switch (init_attr->qp_type) {
@@ -1021,7 +1031,6 @@ void ipath_sqerror_qp(struct ipath_qp *qp, struct ib_wc *wc)
 		  qp->ibqp.qp_num, qp->remote_qpn, wc->status);
 
 	spin_lock(&dev->pending_lock);
-	/* XXX What if its already removed by the timeout code? */
 	if (!list_empty(&qp->timerwait))
 		list_del_init(&qp->timerwait);
 	if (!list_empty(&qp->piowait))
