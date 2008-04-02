@@ -122,6 +122,8 @@ enum {
 
 	ATAPI_MAX_DRAIN		= 16 << 10,
 
+	ATA_ALL_DEVICES		= (1 << ATA_MAX_DEVICES) - 1,
+
 	ATA_SHT_EMULATED	= 1,
 	ATA_SHT_CMD_PER_LUN	= 1,
 	ATA_SHT_THIS_ID		= -1,
@@ -163,9 +165,6 @@ enum {
 	ATA_DEV_NONE		= 9,	/* no device */
 
 	/* struct ata_link flags */
-	ATA_LFLAG_HRST_TO_RESUME = (1 << 0), /* hardreset to resume link */
-	ATA_LFLAG_SKIP_D2H_BSY	= (1 << 1), /* can't wait for the first D2H
-					     * Register FIS clearing BSY */
 	ATA_LFLAG_NO_SRST	= (1 << 2), /* avoid softreset */
 	ATA_LFLAG_ASSUME_ATA	= (1 << 3), /* assume ATA class */
 	ATA_LFLAG_ASSUME_SEMB	= (1 << 4), /* assume SEMB class */
@@ -292,17 +291,16 @@ enum {
 
 	/* reset / recovery action types */
 	ATA_EH_REVALIDATE	= (1 << 0),
-	ATA_EH_SOFTRESET	= (1 << 1),
-	ATA_EH_HARDRESET	= (1 << 2),
+	ATA_EH_SOFTRESET	= (1 << 1), /* meaningful only in ->prereset */
+	ATA_EH_HARDRESET	= (1 << 2), /* meaningful only in ->prereset */
+	ATA_EH_RESET		= ATA_EH_SOFTRESET | ATA_EH_HARDRESET,
 	ATA_EH_ENABLE_LINK	= (1 << 3),
 	ATA_EH_LPM		= (1 << 4),  /* link power management action */
 
-	ATA_EH_RESET_MASK	= ATA_EH_SOFTRESET | ATA_EH_HARDRESET,
 	ATA_EH_PERDEV_MASK	= ATA_EH_REVALIDATE,
 
 	/* ata_eh_info->flags */
 	ATA_EHI_HOTPLUGGED	= (1 << 0),  /* could have been hotplugged */
-	ATA_EHI_RESUME_LINK	= (1 << 1),  /* resume link (reset modifier) */
 	ATA_EHI_NO_AUTOPSY	= (1 << 2),  /* no autopsy */
 	ATA_EHI_QUIET		= (1 << 3),  /* be quiet */
 
@@ -313,7 +311,6 @@ enum {
 	ATA_EHI_POST_SETMODE	= (1 << 20), /* revaildating after setmode */
 
 	ATA_EHI_DID_RESET	= ATA_EHI_DID_SOFTRESET | ATA_EHI_DID_HARDRESET,
-	ATA_EHI_RESET_MODIFIER_MASK = ATA_EHI_RESUME_LINK,
 
 	/* max tries if error condition is still set after ->error_handler */
 	ATA_EH_MAX_TRIES	= 5,
@@ -435,7 +432,7 @@ struct ata_host {
 	void __iomem * const	*iomap;
 	unsigned int		n_ports;
 	void			*private_data;
-	const struct ata_port_operations *ops;
+	struct ata_port_operations *ops;
 	unsigned long		flags;
 #ifdef CONFIG_ATA_ACPI
 	acpi_handle		acpi_handle;
@@ -604,7 +601,7 @@ struct ata_link {
 
 struct ata_port {
 	struct Scsi_Host	*scsi_host; /* our co-allocated scsi host */
-	const struct ata_port_operations *ops;
+	struct ata_port_operations *ops;
 	spinlock_t		*lock;
 	unsigned long		flags;	/* ATA_FLAG_xxx */
 	unsigned int		pflags; /* ATA_PFLAG_xxx */
@@ -666,81 +663,104 @@ struct ata_port {
 	u8			sector_buf[ATA_SECT_SIZE]; /* owned by EH */
 };
 
+/* The following initializer overrides a method to NULL whether one of
+ * its parent has the method defined or not.  This is equivalent to
+ * ERR_PTR(-ENOENT).  Unfortunately, ERR_PTR doesn't render a constant
+ * expression and thus can't be used as an initializer.
+ */
+#define ATA_OP_NULL		(void *)(unsigned long)(-ENOENT)
+
 struct ata_port_operations {
-	void (*dev_config) (struct ata_device *);
+	/*
+	 * Command execution
+	 */
+	int  (*qc_defer)(struct ata_queued_cmd *qc);
+	int  (*check_atapi_dma)(struct ata_queued_cmd *qc);
+	void (*qc_prep)(struct ata_queued_cmd *qc);
+	unsigned int (*qc_issue)(struct ata_queued_cmd *qc);
 
-	void (*set_piomode) (struct ata_port *, struct ata_device *);
-	void (*set_dmamode) (struct ata_port *, struct ata_device *);
-	unsigned long (*mode_filter) (struct ata_device *, unsigned long);
+	/*
+	 * Configuration and exception handling
+	 */
+	int  (*cable_detect)(struct ata_port *ap);
+	unsigned long (*mode_filter)(struct ata_device *dev, unsigned long xfer_mask);
+	void (*set_piomode)(struct ata_port *ap, struct ata_device *dev);
+	void (*set_dmamode)(struct ata_port *ap, struct ata_device *dev);
+	int  (*set_mode)(struct ata_link *link, struct ata_device **r_failed_dev);
 
-	void (*tf_load) (struct ata_port *ap, const struct ata_taskfile *tf);
-	void (*tf_read) (struct ata_port *ap, struct ata_taskfile *tf);
+	void (*dev_config)(struct ata_device *dev);
 
-	void (*exec_command)(struct ata_port *ap, const struct ata_taskfile *tf);
+	void (*freeze)(struct ata_port *ap);
+	void (*thaw)(struct ata_port *ap);
+	ata_prereset_fn_t	prereset;
+	ata_reset_fn_t		softreset;
+	ata_reset_fn_t		hardreset;
+	ata_postreset_fn_t	postreset;
+	ata_prereset_fn_t	pmp_prereset;
+	ata_reset_fn_t		pmp_softreset;
+	ata_reset_fn_t		pmp_hardreset;
+	ata_postreset_fn_t	pmp_postreset;
+	void (*error_handler)(struct ata_port *ap);
+	void (*post_internal_cmd)(struct ata_queued_cmd *qc);
+
+	/*
+	 * Optional features
+	 */
+	int  (*scr_read)(struct ata_port *ap, unsigned int sc_reg, u32 *val);
+	int  (*scr_write)(struct ata_port *ap, unsigned int sc_reg, u32 val);
+	void (*pmp_attach)(struct ata_port *ap);
+	void (*pmp_detach)(struct ata_port *ap);
+	int  (*enable_pm)(struct ata_port *ap, enum link_pm policy);
+	void (*disable_pm)(struct ata_port *ap);
+
+	/*
+	 * Start, stop, suspend and resume
+	 */
+	int  (*port_suspend)(struct ata_port *ap, pm_message_t mesg);
+	int  (*port_resume)(struct ata_port *ap);
+	int  (*port_start)(struct ata_port *ap);
+	void (*port_stop)(struct ata_port *ap);
+	void (*host_stop)(struct ata_host *host);
+
+	/*
+	 * SFF / taskfile oriented ops
+	 */
+	void (*dev_select)(struct ata_port *ap, unsigned int device);
 	u8   (*check_status)(struct ata_port *ap);
 	u8   (*check_altstatus)(struct ata_port *ap);
-	void (*dev_select)(struct ata_port *ap, unsigned int device);
+	void (*tf_load)(struct ata_port *ap, const struct ata_taskfile *tf);
+	void (*tf_read)(struct ata_port *ap, struct ata_taskfile *tf);
+	void (*exec_command)(struct ata_port *ap, const struct ata_taskfile *tf);
+	unsigned int (*data_xfer)(struct ata_device *dev, unsigned char *buf,
+				  unsigned int buflen, int rw);
+	u8   (*irq_on)(struct ata_port *);
 
-	void (*phy_reset) (struct ata_port *ap); /* obsolete */
-	int  (*set_mode) (struct ata_link *link, struct ata_device **r_failed_dev);
+	void (*irq_clear)(struct ata_port *);
+	void (*bmdma_setup)(struct ata_queued_cmd *qc);
+	void (*bmdma_start)(struct ata_queued_cmd *qc);
+	void (*bmdma_stop)(struct ata_queued_cmd *qc);
+	u8   (*bmdma_status)(struct ata_port *ap);
 
-	int (*cable_detect) (struct ata_port *ap);
-
-	int  (*check_atapi_dma) (struct ata_queued_cmd *qc);
-
-	void (*bmdma_setup) (struct ata_queued_cmd *qc);
-	void (*bmdma_start) (struct ata_queued_cmd *qc);
-
-	unsigned int (*data_xfer) (struct ata_device *dev, unsigned char *buf,
-				   unsigned int buflen, int rw);
-
-	int (*qc_defer) (struct ata_queued_cmd *qc);
-	void (*qc_prep) (struct ata_queued_cmd *qc);
-	unsigned int (*qc_issue) (struct ata_queued_cmd *qc);
-
-	/* port multiplier */
-	void (*pmp_attach) (struct ata_port *ap);
-	void (*pmp_detach) (struct ata_port *ap);
-
-	/* Error handlers.  ->error_handler overrides ->eng_timeout and
-	 * indicates that new-style EH is in place.
+	/*
+	 * Obsolete
 	 */
-	void (*eng_timeout) (struct ata_port *ap); /* obsolete */
+	void (*phy_reset)(struct ata_port *ap);
+	void (*eng_timeout)(struct ata_port *ap);
 
-	void (*freeze) (struct ata_port *ap);
-	void (*thaw) (struct ata_port *ap);
-	void (*error_handler) (struct ata_port *ap);
-	void (*post_internal_cmd) (struct ata_queued_cmd *qc);
-
-	irq_handler_t irq_handler;
-	void (*irq_clear) (struct ata_port *);
-	u8 (*irq_on) (struct ata_port *);
-
-	int (*scr_read) (struct ata_port *ap, unsigned int sc_reg, u32 *val);
-	int (*scr_write) (struct ata_port *ap, unsigned int sc_reg, u32 val);
-
-	int (*port_suspend) (struct ata_port *ap, pm_message_t mesg);
-	int (*port_resume) (struct ata_port *ap);
-	int (*enable_pm) (struct ata_port *ap, enum link_pm policy);
-	void (*disable_pm) (struct ata_port *ap);
-	int (*port_start) (struct ata_port *ap);
-	void (*port_stop) (struct ata_port *ap);
-
-	void (*host_stop) (struct ata_host *host);
-
-	void (*bmdma_stop) (struct ata_queued_cmd *qc);
-	u8   (*bmdma_status) (struct ata_port *ap);
+	/*
+	 * ->inherits must be the last field and all the preceding
+	 * fields must be pointers.
+	 */
+	const struct ata_port_operations	*inherits;
 };
 
 struct ata_port_info {
-	struct scsi_host_template	*sht;
 	unsigned long		flags;
 	unsigned long		link_flags;
 	unsigned long		pio_mask;
 	unsigned long		mwdma_mask;
 	unsigned long		udma_mask;
-	const struct ata_port_operations *port_ops;
-	irq_handler_t		irq_handler;
+	struct ata_port_operations *port_ops;
 	void 			*private_data;
 };
 
@@ -762,7 +782,7 @@ extern const unsigned long sata_deb_timing_normal[];
 extern const unsigned long sata_deb_timing_hotplug[];
 extern const unsigned long sata_deb_timing_long[];
 
-extern const struct ata_port_operations ata_dummy_port_ops;
+extern struct ata_port_operations ata_dummy_port_ops;
 extern const struct ata_port_info ata_dummy_port_info;
 
 static inline const unsigned long *
@@ -809,7 +829,7 @@ extern int ata_host_activate(struct ata_host *host, int irq,
 			     struct scsi_host_template *sht);
 extern void ata_host_detach(struct ata_host *host);
 extern void ata_host_init(struct ata_host *, struct device *,
-			  unsigned long, const struct ata_port_operations *);
+			  unsigned long, struct ata_port_operations *);
 extern int ata_scsi_detect(struct scsi_host_template *sht);
 extern int ata_scsi_ioctl(struct scsi_device *dev, int cmd, void __user *arg);
 extern int ata_scsi_queuecmd(struct scsi_cmnd *cmd, void (*done)(struct scsi_cmnd *));
@@ -892,12 +912,9 @@ extern void ata_bmdma_start(struct ata_queued_cmd *qc);
 extern void ata_bmdma_stop(struct ata_queued_cmd *qc);
 extern u8   ata_bmdma_status(struct ata_port *ap);
 extern void ata_bmdma_irq_clear(struct ata_port *ap);
+extern void ata_noop_irq_clear(struct ata_port *ap);
 extern void ata_bmdma_freeze(struct ata_port *ap);
 extern void ata_bmdma_thaw(struct ata_port *ap);
-extern void ata_bmdma_drive_eh(struct ata_port *ap, ata_prereset_fn_t prereset,
-			       ata_reset_fn_t softreset,
-			       ata_reset_fn_t hardreset,
-			       ata_postreset_fn_t postreset);
 extern void ata_bmdma_error_handler(struct ata_port *ap);
 extern void ata_bmdma_post_internal_cmd(struct ata_queued_cmd *qc);
 extern int ata_hsm_move(struct ata_port *ap, struct ata_queued_cmd *qc,
@@ -1002,7 +1019,8 @@ static inline int ata_acpi_cbl_80wire(struct ata_port *ap,
 struct pci_dev;
 
 extern int ata_pci_init_one(struct pci_dev *pdev,
-			     const struct ata_port_info * const * ppi);
+			    const struct ata_port_info * const * ppi,
+			    struct scsi_host_template *sht, void *host_priv);
 extern void ata_pci_remove_one(struct pci_dev *pdev);
 #ifdef CONFIG_PM
 extern void ata_pci_device_do_suspend(struct pci_dev *pdev, pm_message_t mesg);
@@ -1040,11 +1058,7 @@ extern int sata_pmp_std_prereset(struct ata_link *link, unsigned long deadline);
 extern int sata_pmp_std_hardreset(struct ata_link *link, unsigned int *class,
 				  unsigned long deadline);
 extern void sata_pmp_std_postreset(struct ata_link *link, unsigned int *class);
-extern void sata_pmp_do_eh(struct ata_port *ap,
-		ata_prereset_fn_t prereset, ata_reset_fn_t softreset,
-		ata_reset_fn_t hardreset, ata_postreset_fn_t postreset,
-		ata_prereset_fn_t pmp_prereset, ata_reset_fn_t pmp_softreset,
-		ata_reset_fn_t pmp_hardreset, ata_postreset_fn_t pmp_postreset);
+extern void sata_pmp_error_handler(struct ata_port *ap);
 
 /*
  * EH
@@ -1064,6 +1078,64 @@ extern void ata_eh_qc_retry(struct ata_queued_cmd *qc);
 extern void ata_do_eh(struct ata_port *ap, ata_prereset_fn_t prereset,
 		      ata_reset_fn_t softreset, ata_reset_fn_t hardreset,
 		      ata_postreset_fn_t postreset);
+extern void ata_std_error_handler(struct ata_port *ap);
+
+/*
+ * Base operations to inherit from and initializers for sht
+ *
+ * Operations
+ *
+ * base  : Common to all libata drivers.
+ * sata  : SATA controllers w/ native interface.
+ * pmp   : SATA controllers w/ PMP support.
+ * sff   : SFF ATA controllers w/o BMDMA support.
+ * bmdma : SFF ATA controllers w/ BMDMA support.
+ *
+ * sht initializers
+ *
+ * BASE  : Common to all libata drivers.  The user must set
+ *	   sg_tablesize and dma_boundary.
+ * PIO   : SFF ATA controllers w/ only PIO support.
+ * BMDMA : SFF ATA controllers w/ BMDMA support.  sg_tablesize and
+ *	   dma_boundary are set to BMDMA limits.
+ * NCQ   : SATA controllers supporting NCQ.  The user must set
+ *	   sg_tablesize, dma_boundary and can_queue.
+ */
+extern const struct ata_port_operations ata_base_port_ops;
+extern const struct ata_port_operations sata_port_ops;
+extern const struct ata_port_operations sata_pmp_port_ops;
+extern const struct ata_port_operations ata_sff_port_ops;
+extern const struct ata_port_operations ata_bmdma_port_ops;
+
+#define ATA_BASE_SHT(drv_name)					\
+	.module			= THIS_MODULE,			\
+	.name			= drv_name,			\
+	.ioctl			= ata_scsi_ioctl,		\
+	.queuecommand		= ata_scsi_queuecmd,		\
+	.can_queue		= ATA_DEF_QUEUE,		\
+	.this_id		= ATA_SHT_THIS_ID,		\
+	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,		\
+	.emulated		= ATA_SHT_EMULATED,		\
+	.use_clustering		= ATA_SHT_USE_CLUSTERING,	\
+	.proc_name		= drv_name,			\
+	.slave_configure	= ata_scsi_slave_config,	\
+	.slave_destroy		= ata_scsi_slave_destroy,	\
+	.bios_param		= ata_std_bios_param
+
+/* PIO only, sg_tablesize and dma_boundary limits can be removed */
+#define ATA_PIO_SHT(drv_name)					\
+	ATA_BASE_SHT(drv_name),					\
+	.sg_tablesize		= LIBATA_MAX_PRD,		\
+	.dma_boundary		= ATA_DMA_BOUNDARY
+
+#define ATA_BMDMA_SHT(drv_name)					\
+	ATA_BASE_SHT(drv_name),					\
+	.sg_tablesize		= LIBATA_MAX_PRD,		\
+	.dma_boundary		= ATA_DMA_BOUNDARY
+
+#define ATA_NCQ_SHT(drv_name)					\
+	ATA_BASE_SHT(drv_name),					\
+	.change_queue_depth	= ata_scsi_change_queue_depth
 
 /*
  * printk helpers
@@ -1092,18 +1164,11 @@ extern void ata_ehi_push_desc(struct ata_eh_info *ehi, const char *fmt, ...)
 	__attribute__ ((format (printf, 2, 3)));
 extern void ata_ehi_clear_desc(struct ata_eh_info *ehi);
 
-static inline void ata_ehi_schedule_probe(struct ata_eh_info *ehi)
-{
-	ehi->flags |= ATA_EHI_RESUME_LINK;
-	ehi->action |= ATA_EH_SOFTRESET;
-	ehi->probe_mask |= (1 << ATA_MAX_DEVICES) - 1;
-}
-
 static inline void ata_ehi_hotplugged(struct ata_eh_info *ehi)
 {
-	ata_ehi_schedule_probe(ehi);
+	ehi->probe_mask |= (1 << ATA_MAX_DEVICES) - 1;
 	ehi->flags |= ATA_EHI_HOTPLUGGED;
-	ehi->action |= ATA_EH_ENABLE_LINK;
+	ehi->action |= ATA_EH_RESET | ATA_EH_ENABLE_LINK;
 	ehi->err_mask |= AC_ERR_ATA_BUS;
 }
 
