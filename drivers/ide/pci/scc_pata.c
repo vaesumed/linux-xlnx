@@ -65,7 +65,7 @@
 
 static struct scc_ports {
 	unsigned long ctl, dma;
-	unsigned char hwif_id;  /* for removing hwif from system */
+	ide_hwif_t *hwif;  /* for removing port from system */
 } scc_ports[MAX_HWIFS];
 
 /* PIO transfer mode  table */
@@ -317,14 +317,14 @@ static int scc_dma_setup(ide_drive_t *drive)
 
 
 /**
- *	scc_ide_dma_end	-	Stop DMA
+ *	scc_dma_end	-	Stop DMA
  *	@drive: IDE drive
  *
  *	Check and clear INT Status register.
  *      Then call __ide_dma_end().
  */
 
-static int scc_ide_dma_end(ide_drive_t * drive)
+static int scc_dma_end(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = HWIF(drive);
 	unsigned long intsts_port = hwif->dma_base + 0x014;
@@ -334,7 +334,8 @@ static int scc_ide_dma_end(ide_drive_t * drive)
 
 	/* errata A308 workaround: Step5 (check data loss) */
 	/* We don't check non ide_disk because it is limited to UDMA4 */
-	if (!(in_be32((void __iomem *)IDE_ALTSTATUS_REG) & ERR_STAT) &&
+	if (!(in_be32((void __iomem *)hwif->io_ports.ctl_addr)
+	      & ERR_STAT) &&
 	    drive->media == ide_disk && drive->current_speed > XFER_UDMA_4) {
 		reg = in_be32((void __iomem *)intsts_port);
 		if (!(reg & INTSTS_ACTEINT)) {
@@ -437,7 +438,8 @@ static int scc_dma_test_irq(ide_drive_t *drive)
 	u32 int_stat = in_be32((void __iomem *)hwif->dma_base + 0x014);
 
 	/* SCC errata A252,A308 workaround: Step4 */
-	if ((in_be32((void __iomem *)IDE_ALTSTATUS_REG) & ERR_STAT) &&
+	if ((in_be32((void __iomem *)hwif->io_ports.ctl_addr)
+	     & ERR_STAT) &&
 	    (int_stat & INTSTS_INTRQ))
 		return 1;
 
@@ -447,7 +449,7 @@ static int scc_dma_test_irq(ide_drive_t *drive)
 
 	if (!drive->waiting_for_dma)
 		printk(KERN_WARNING "%s: (%s) called while not waiting\n",
-			drive->name, __FUNCTION__);
+			drive->name, __func__);
 	return 0;
 }
 
@@ -490,21 +492,11 @@ static int setup_mmio_scc (struct pci_dev *dev, const char *name)
 	if (i >= MAX_HWIFS)
 		return -ENOMEM;
 
-	if (!request_mem_region(ctl_base, ctl_size, name)) {
-		printk(KERN_WARNING "%s: IDE controller MMIO ports not available.\n", SCC_PATA_NAME);
-		goto fail_0;
-	}
-
-	if (!request_mem_region(dma_base, dma_size, name)) {
-		printk(KERN_WARNING "%s: IDE controller MMIO ports not available.\n", SCC_PATA_NAME);
-		goto fail_1;
-	}
-
 	if ((ctl_addr = ioremap(ctl_base, ctl_size)) == NULL)
-		goto fail_2;
+		goto fail_0;
 
 	if ((dma_addr = ioremap(dma_base, dma_size)) == NULL)
-		goto fail_3;
+		goto fail_1;
 
 	pci_set_master(dev);
 	scc_ports[i].ctl = (unsigned long)ctl_addr;
@@ -513,12 +505,8 @@ static int setup_mmio_scc (struct pci_dev *dev, const char *name)
 
 	return 1;
 
- fail_3:
-	iounmap(ctl_addr);
- fail_2:
-	release_mem_region(dma_base, dma_size);
  fail_1:
-	release_mem_region(ctl_base, ctl_size);
+	iounmap(ctl_addr);
  fail_0:
 	return -ENOMEM;
 }
@@ -596,6 +584,7 @@ static void __devinit init_mmio_iops_scc(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
 	struct scc_ports *ports = pci_get_drvdata(dev);
+	struct ide_io_ports *io_ports = &hwif->io_ports;
 	unsigned long dma_base = ports->dma;
 
 	ide_set_hwifdata(hwif, ports);
@@ -610,15 +599,15 @@ static void __devinit init_mmio_iops_scc(ide_hwif_t *hwif)
 	hwif->OUTSW = scc_ide_outsw;
 	hwif->OUTSL = scc_ide_outsl;
 
-	hwif->io_ports[IDE_DATA_OFFSET] = dma_base + 0x20;
-	hwif->io_ports[IDE_ERROR_OFFSET] = dma_base + 0x24;
-	hwif->io_ports[IDE_NSECTOR_OFFSET] = dma_base + 0x28;
-	hwif->io_ports[IDE_SECTOR_OFFSET] = dma_base + 0x2c;
-	hwif->io_ports[IDE_LCYL_OFFSET] = dma_base + 0x30;
-	hwif->io_ports[IDE_HCYL_OFFSET] = dma_base + 0x34;
-	hwif->io_ports[IDE_SELECT_OFFSET] = dma_base + 0x38;
-	hwif->io_ports[IDE_STATUS_OFFSET] = dma_base + 0x3c;
-	hwif->io_ports[IDE_CONTROL_OFFSET] = dma_base + 0x40;
+	io_ports->data_addr	= dma_base + 0x20;
+	io_ports->error_addr	= dma_base + 0x24;
+	io_ports->nsect_addr	= dma_base + 0x28;
+	io_ports->lbal_addr	= dma_base + 0x2c;
+	io_ports->lbam_addr	= dma_base + 0x30;
+	io_ports->lbah_addr	= dma_base + 0x34;
+	io_ports->device_addr	= dma_base + 0x38;
+	io_ports->status_addr	= dma_base + 0x3c;
+	io_ports->ctl_addr	= dma_base + 0x40;
 
 	hwif->irq = dev->irq;
 	hwif->dma_base = dma_base;
@@ -662,7 +651,7 @@ static void __devinit init_hwif_scc(ide_hwif_t *hwif)
 {
 	struct scc_ports *ports = ide_get_hwifdata(hwif);
 
-	ports->hwif_id = hwif->index;
+	ports->hwif = hwif;
 
 	hwif->dma_command = hwif->dma_base;
 	hwif->dma_status = hwif->dma_base + 0x04;
@@ -671,28 +660,38 @@ static void __devinit init_hwif_scc(ide_hwif_t *hwif)
 	/* PTERADD */
 	out_be32((void __iomem *)(hwif->dma_base + 0x018), hwif->dmatable_dma);
 
-	hwif->dma_setup = scc_dma_setup;
-	hwif->ide_dma_end = scc_ide_dma_end;
-	hwif->set_pio_mode = scc_set_pio_mode;
-	hwif->set_dma_mode = scc_set_dma_mode;
-	hwif->ide_dma_test_irq = scc_dma_test_irq;
-	hwif->udma_filter = scc_udma_filter;
-
 	if (in_be32((void __iomem *)(hwif->config_data + 0xff0)) & CCKCTRL_ATACLKOEN)
 		hwif->ultra_mask = ATA_UDMA6; /* 133MHz */
 	else
 		hwif->ultra_mask = ATA_UDMA5; /* 100MHz */
-
-	hwif->cable_detect = scc_cable_detect;
 }
+
+static const struct ide_port_ops scc_port_ops = {
+	.set_pio_mode		= scc_set_pio_mode,
+	.set_dma_mode		= scc_set_dma_mode,
+	.udma_filter		= scc_udma_filter,
+	.cable_detect		= scc_cable_detect,
+};
+
+static const struct ide_dma_ops scc_dma_ops = {
+	.dma_host_set		= ide_dma_host_set,
+	.dma_setup		= scc_dma_setup,
+	.dma_exec_cmd		= ide_dma_exec_cmd,
+	.dma_start		= ide_dma_start,
+	.dma_end		= scc_dma_end,
+	.dma_test_irq		= scc_dma_test_irq,
+	.dma_lost_irq		= ide_dma_lost_irq,
+	.dma_timeout		= ide_dma_timeout,
+};
 
 #define DECLARE_SCC_DEV(name_str)			\
   {							\
       .name		= name_str,			\
       .init_iops	= init_iops_scc,		\
       .init_hwif	= init_hwif_scc,		\
-      .host_flags	= IDE_HFLAG_SINGLE |		\
-			  IDE_HFLAG_BOOTABLE,		\
+      .port_ops		= &scc_port_ops,		\
+      .dma_ops		= &scc_dma_ops,			\
+      .host_flags	= IDE_HFLAG_SINGLE,		\
       .pio_mask		= ATA_PIO4,			\
   }
 
@@ -724,11 +723,7 @@ static int __devinit scc_init_one(struct pci_dev *dev, const struct pci_device_i
 static void __devexit scc_remove(struct pci_dev *dev)
 {
 	struct scc_ports *ports = pci_get_drvdata(dev);
-	ide_hwif_t *hwif = &ide_hwifs[ports->hwif_id];
-	unsigned long ctl_base = pci_resource_start(dev, 0);
-	unsigned long dma_base = pci_resource_start(dev, 1);
-	unsigned long ctl_size = pci_resource_len(dev, 0);
-	unsigned long dma_size = pci_resource_len(dev, 1);
+	ide_hwif_t *hwif = ports->hwif;
 
 	if (hwif->dmatable_cpu) {
 		pci_free_consistent(dev, PRD_ENTRIES * PRD_BYTES,
@@ -736,13 +731,11 @@ static void __devexit scc_remove(struct pci_dev *dev)
 		hwif->dmatable_cpu = NULL;
 	}
 
-	ide_unregister(hwif->index, 0, 0);
+	ide_unregister(hwif);
 
-	hwif->chipset = ide_unknown;
 	iounmap((void*)ports->dma);
 	iounmap((void*)ports->ctl);
-	release_mem_region(dma_base, dma_size);
-	release_mem_region(ctl_base, ctl_size);
+	pci_release_selected_regions(dev, (1 << 2) - 1);
 	memset(ports, 0, sizeof(*ports));
 }
 
