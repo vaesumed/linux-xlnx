@@ -38,7 +38,7 @@
 #include <linux/interrupt.h>
 #include <linux/pci.h>
 #include <linux/delay.h>
-
+#include <rdma/ib_verbs.h>
 
 #include "ipath_kernel.h"
 #include "ipath_registers.h"
@@ -311,6 +311,9 @@ static const struct ipath_cregs ipath_pe_cregs = {
 	.cr_ibsymbolerrcnt = IPATH_CREG_OFFSET(IBSymbolErrCnt)
 };
 
+/* kr_control bits */
+#define INFINIPATH_C_RESET 1U
+
 /* kr_intstatus, kr_intclear, kr_intmask bits */
 #define INFINIPATH_I_RCVURG_MASK ((1U<<5)-1)
 #define INFINIPATH_I_RCVAVAIL_MASK ((1U<<5)-1)
@@ -338,6 +341,9 @@ static const struct ipath_cregs ipath_pe_cregs = {
 #define INFINIPATH_EXTS_MEMBIST_ENDTEST     0x0000000000004000
 #define INFINIPATH_EXTS_MEMBIST_FOUND       0x0000000000008000
 
+/* kr_xgxsconfig bits */
+#define INFINIPATH_XGXS_RESET          0x5ULL
+
 #define _IPATH_GPIO_SDA_NUM 1
 #define _IPATH_GPIO_SCL_NUM 0
 
@@ -345,6 +351,16 @@ static const struct ipath_cregs ipath_pe_cregs = {
 	(_IPATH_GPIO_SDA_NUM+INFINIPATH_EXTC_GPIOOE_SHIFT))
 #define IPATH_GPIO_SCL (1ULL << \
 	(_IPATH_GPIO_SCL_NUM+INFINIPATH_EXTC_GPIOOE_SHIFT))
+
+#define INFINIPATH_RT_BUFSIZE_MASK 0xe0000000ULL
+#define INFINIPATH_RT_BUFSIZE_SHIFTVAL(tid) \
+	((((tid) & INFINIPATH_RT_BUFSIZE_MASK) >> 29) + 11 - 1)
+#define INFINIPATH_RT_BUFSIZE(tid) (1 << INFINIPATH_RT_BUFSIZE_SHIFTVAL(tid))
+#define INFINIPATH_RT_IS_VALID(tid) \
+	(((tid) & INFINIPATH_RT_BUFSIZE_MASK) && \
+	 ((((tid) & INFINIPATH_RT_BUFSIZE_MASK) != INFINIPATH_RT_BUFSIZE_MASK)))
+#define INFINIPATH_RT_ADDR_MASK 0x1FFFFFFFULL /* 29 bits valid */
+#define INFINIPATH_RT_ADDR_SHIFT 10
 
 #define INFINIPATH_R_INTRAVAIL_SHIFT 16
 #define INFINIPATH_R_TAILUPD_SHIFT 31
@@ -372,6 +388,8 @@ static const struct ipath_hwerror_msgs ipath_6120_hwerror_msgs[] = {
 #define TXE_PIO_PARITY ((INFINIPATH_HWE_TXEMEMPARITYERR_PIOBUF | \
 		        INFINIPATH_HWE_TXEMEMPARITYERR_PIOPBC) \
 		        << INFINIPATH_HWE_TXEMEMPARITYERR_SHIFT)
+#define RXE_EAGER_PARITY (INFINIPATH_HWE_RXEMEMPARITYERR_EAGERTID \
+			  << INFINIPATH_HWE_RXEMEMPARITYERR_SHIFT)
 
 static void ipath_pe_put_tid_2(struct ipath_devdata *, u64 __iomem *,
 			       u32, unsigned long);
@@ -450,10 +468,8 @@ static void ipath_pe_handle_hwerrors(struct ipath_devdata *dd, char *msg,
 	 * make sure we get this much out, unless told to be quiet,
 	 * or it's occurred within the last 5 seconds
 	 */
-	if ((hwerrs & ~(dd->ipath_lasthwerror |
-			((INFINIPATH_HWE_TXEMEMPARITYERR_PIOBUF |
-			  INFINIPATH_HWE_TXEMEMPARITYERR_PIOPBC)
-			 << INFINIPATH_HWE_TXEMEMPARITYERR_SHIFT))) ||
+	if ((hwerrs & ~(dd->ipath_lasthwerror | TXE_PIO_PARITY |
+			RXE_EAGER_PARITY)) ||
 	    (ipath_debug & __IPATH_VERBDBG))
 		dev_info(&dd->pcidev->dev, "Hardware error: hwerr=0x%llx "
 			 "(cleared)\n", (unsigned long long) hwerrs);
@@ -465,7 +481,7 @@ static void ipath_pe_handle_hwerrors(struct ipath_devdata *dd, char *msg,
 			      (hwerrs & ~dd->ipath_hwe_bitsextant));
 
 	ctrl = ipath_read_kreg32(dd, dd->ipath_kregs->kr_control);
-	if (ctrl & INFINIPATH_C_FREEZEMODE) {
+	if ((ctrl & INFINIPATH_C_FREEZEMODE) && !ipath_diag_inuse) {
 		/*
 		 * parity errors in send memory are recoverable,
 		 * just cancel the send (if indicated in * sendbuffererror),
@@ -609,7 +625,6 @@ static int ipath_pe_boardname(struct ipath_devdata *dd, char *name,
 		if (dd->ipath_minrev >= 2)
 			dd->ipath_f_put_tid = ipath_pe_put_tid_2;
 	}
-
 
 	/*
 	 * set here, not in ipath_init_*_funcs because we have to do
@@ -838,7 +853,7 @@ static void ipath_setup_pe_setextled(struct ipath_devdata *dd, u64 lst,
 	extctl = dd->ipath_extctrl & ~(INFINIPATH_EXTC_LED1PRIPORT_ON |
 				       INFINIPATH_EXTC_LED2PRIPORT_ON);
 
-	if (ltst & INFINIPATH_IBCS_LT_STATE_LINKUP)
+	if (ltst == INFINIPATH_IBCS_LT_STATE_LINKUP)
 		extctl |= INFINIPATH_EXTC_LED2PRIPORT_ON;
 	if (lst == INFINIPATH_IBCS_L_STATE_ACTIVE)
 		extctl |= INFINIPATH_EXTC_LED1PRIPORT_ON;
@@ -861,6 +876,62 @@ static void ipath_setup_pe_cleanup(struct ipath_devdata *dd)
 {
 	dd->ipath_msi_lo = 0;	/* just in case unload fails */
 	pci_disable_msi(dd->pcidev);
+}
+
+static void ipath_6120_pcie_params(struct ipath_devdata *dd)
+{
+	u16 linkstat, speed;
+	int pos;
+
+	pos = pci_find_capability(dd->pcidev, PCI_CAP_ID_EXP);
+	if (!pos) {
+		ipath_dev_err(dd, "Can't find PCI Express capability!\n");
+		goto bail;
+	}
+
+	pci_read_config_word(dd->pcidev, pos + PCI_EXP_LNKSTA,
+			     &linkstat);
+	/*
+	 * speed is bits 0-4, linkwidth is bits 4-8
+	 * no defines for them in headers
+	 */
+	speed = linkstat & 0xf;
+	linkstat >>= 4;
+	linkstat &= 0x1f;
+	dd->ipath_lbus_width = linkstat;
+
+	switch (speed) {
+	case 1:
+		dd->ipath_lbus_speed = 2500; /* Gen1, 2.5GHz */
+		break;
+	case 2:
+		dd->ipath_lbus_speed = 5000; /* Gen1, 5GHz */
+		break;
+	default: /* not defined, assume gen1 */
+		dd->ipath_lbus_speed = 2500;
+		break;
+	}
+
+	if (linkstat < 8)
+		ipath_dev_err(dd,
+			"PCIe width %u (x8 HCA), performance reduced\n",
+			linkstat);
+	else
+		ipath_cdbg(VERBOSE, "PCIe speed %u width %u (x8 HCA)\n",
+			dd->ipath_lbus_speed, linkstat);
+
+	if (speed != 1)
+		ipath_dev_err(dd,
+			"PCIe linkspeed %u is incorrect; "
+			"should be 1 (2500)!\n", speed);
+bail:
+	/* fill in string, even on errors */
+	snprintf(dd->ipath_lbus_info, sizeof(dd->ipath_lbus_info),
+		"PCIe,%uMHz,x%u\n",
+		dd->ipath_lbus_speed,
+		dd->ipath_lbus_width);
+
+	return;
 }
 
 /**
@@ -920,19 +991,8 @@ static int ipath_setup_pe_config(struct ipath_devdata *dd,
 	} else
 		ipath_dev_err(dd, "Can't find MSI capability, "
 			      "can't save MSI settings for reset\n");
-	if ((pos = pci_find_capability(dd->pcidev, PCI_CAP_ID_EXP))) {
-		u16 linkstat;
-		pci_read_config_word(dd->pcidev, pos + PCI_EXP_LNKSTA,
-				     &linkstat);
-		linkstat >>= 4;
-		linkstat &= 0x1f;
-		if (linkstat != 8)
-			ipath_dev_err(dd, "PCIe width %u, "
-				      "performance reduced\n", linkstat);
-	}
-	else
-		ipath_dev_err(dd, "Can't find PCI Express "
-			      "capability!\n");
+
+	ipath_6120_pcie_params(dd);
 
 	dd->ipath_link_width_supported = IB_WIDTH_1X | IB_WIDTH_4X;
 	dd->ipath_link_speed_supported = IPATH_IB_SDR;
@@ -1190,6 +1250,8 @@ static int ipath_setup_pe_reset(struct ipath_devdata *dd)
 	ret = 0; /* failed */
 
 bail:
+	if (ret)
+		ipath_6120_pcie_params(dd);
 	return ret;
 }
 
@@ -1213,12 +1275,12 @@ static void ipath_pe_put_tid(struct ipath_devdata *dd, u64 __iomem *tidptr,
 	if (pa != dd->ipath_tidinvalid) {
 		if (pa & ((1U << 11) - 1)) {
 			dev_info(&dd->pcidev->dev, "BUG: physaddr %lx "
-				 "not 4KB aligned!\n", pa);
+				 "not 2KB aligned!\n", pa);
 			return;
 		}
 		pa >>= 11;
 		/* paranoia check */
-		if (pa & (7<<29))
+		if (pa & ~INFINIPATH_RT_ADDR_MASK)
 			ipath_dev_err(dd,
 				      "BUG: Physical page address 0x%lx "
 				      "has bits set in 31-29\n", pa);
@@ -1270,7 +1332,7 @@ static void ipath_pe_put_tid_2(struct ipath_devdata *dd, u64 __iomem *tidptr,
 		}
 		pa >>= 11;
 		/* paranoia check */
-		if (pa & (7<<29))
+		if (pa & ~INFINIPATH_RT_ADDR_MASK)
 			ipath_dev_err(dd,
 				      "BUG: Physical page address 0x%lx "
 				      "has bits set in 31-29\n", pa);
@@ -1379,17 +1441,13 @@ static int ipath_pe_early_init(struct ipath_devdata *dd)
 	dd->ipath_egrtidbase = (u64 __iomem *)
 		((char __iomem *) dd->ipath_kregbase + dd->ipath_rcvegrbase);
 
-	/*
-	 * To truly support a 4KB MTU (for usermode), we need to
-	 * bump this to a larger value.  For now, we use them for
-	 * the kernel only.
-	 */
-	dd->ipath_rcvegrbufsize = 2048;
+	dd->ipath_rcvegrbufsize = ipath_mtu4096 ? 4096 : 2048;
 	/*
 	 * the min() check here is currently a nop, but it may not always
 	 * be, depending on just how we do ipath_rcvegrbufsize
 	 */
-	dd->ipath_ibmaxlen = min(dd->ipath_piosize2k,
+	dd->ipath_ibmaxlen = min(ipath_mtu4096 ? dd->ipath_piosize4k :
+				 dd->ipath_piosize2k,
 				 dd->ipath_rcvegrbufsize +
 				 (dd->ipath_rcvhdrentsize << 2));
 	dd->ipath_init_ibmaxlen = dd->ipath_ibmaxlen;

@@ -99,6 +99,10 @@ static int mlx4_ib_query_device(struct ib_device *ibdev,
 		props->device_cap_flags |= IB_DEVICE_AUTO_PATH_MIG;
 	if (dev->dev->caps.flags & MLX4_DEV_CAP_FLAG_UD_AV_PORT)
 		props->device_cap_flags |= IB_DEVICE_UD_AV_PORT_ENFORCE;
+	if (dev->dev->caps.flags & MLX4_DEV_CAP_FLAG_IPOIB_CSUM)
+		props->device_cap_flags |= IB_DEVICE_UD_IP_CSUM;
+	if (dev->dev->caps.max_gso_sz)
+		props->device_cap_flags |= IB_DEVICE_UD_TSO;
 
 	props->vendor_id	   = be32_to_cpup((__be32 *) (out_mad->data + 36)) &
 		0xffffff;
@@ -684,18 +688,20 @@ static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
 }
 
 static void mlx4_ib_event(struct mlx4_dev *dev, void *ibdev_ptr,
-			  enum mlx4_dev_event event, int subtype,
-			  int port)
+			  enum mlx4_dev_event event, int port)
 {
 	struct ib_event ibev;
 
 	switch (event) {
-	case MLX4_EVENT_TYPE_PORT_CHANGE:
-		ibev.event = subtype == MLX4_PORT_CHANGE_SUBTYPE_ACTIVE ?
-			IB_EVENT_PORT_ACTIVE : IB_EVENT_PORT_ERR;
+	case MLX4_DEV_EVENT_PORT_UP:
+		ibev.event = IB_EVENT_PORT_ACTIVE;
 		break;
 
-	case MLX4_EVENT_TYPE_LOCAL_CATAS_ERROR:
+	case MLX4_DEV_EVENT_PORT_DOWN:
+		ibev.event = IB_EVENT_PORT_ERR;
+		break;
+
+	case MLX4_DEV_EVENT_CATASTROPHIC_ERROR:
 		ibev.event = IB_EVENT_DEVICE_FATAL;
 		break;
 

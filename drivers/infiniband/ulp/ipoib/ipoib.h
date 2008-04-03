@@ -87,6 +87,7 @@ enum {
 	IPOIB_MCAST_STARTED	  = 8,
 	IPOIB_FLAG_ADMIN_CM	  = 9,
 	IPOIB_FLAG_UMCAST	  = 10,
+	IPOIB_FLAG_CSUM		  = 11,
 
 	IPOIB_MAX_BACKOFF_SECONDS = 16,
 
@@ -318,6 +319,7 @@ struct ipoib_dev_priv {
 	struct dentry *mcg_dentry;
 	struct dentry *path_dentry;
 #endif
+	int	hca_caps;
 };
 
 struct ipoib_ah {
