@@ -274,10 +274,58 @@ struct zfcp_dbf_dump {
 	u8 data[];		/* dump data */
 } __attribute__ ((packed));
 
-/* FIXME: to be inflated when reworking the erp dbf */
-struct zfcp_erp_dbf_record {
-	u8 dummy[16];
+struct zfcp_rec_dbf_record_thread {
+	u32 sema;
+	u32 total;
+	u32 ready;
+	u32 running;
 } __attribute__ ((packed));
+
+struct zfcp_rec_dbf_record_target {
+	u64 ref;
+	u32 status;
+	u32 d_id;
+	u64 wwpn;
+	u64 fcp_lun;
+	u32 erp_count;
+} __attribute__ ((packed));
+
+struct zfcp_rec_dbf_record_trigger {
+	u8 want;
+	u8 need;
+	u32 as;
+	u32 ps;
+	u32 us;
+	u64 ref;
+	u64 action;
+	u64 wwpn;
+	u64 fcp_lun;
+} __attribute__ ((packed));
+
+struct zfcp_rec_dbf_record_action {
+	u32 status;
+	u32 step;
+	u64 action;
+	u64 fsf_req;
+} __attribute__ ((packed));
+
+struct zfcp_rec_dbf_record {
+	u8 id;
+	u8 id2;
+	union {
+		struct zfcp_rec_dbf_record_action action;
+		struct zfcp_rec_dbf_record_thread thread;
+		struct zfcp_rec_dbf_record_target target;
+		struct zfcp_rec_dbf_record_trigger trigger;
+	} u;
+} __attribute__ ((packed));
+
+enum {
+	ZFCP_REC_DBF_ID_ACTION,
+	ZFCP_REC_DBF_ID_THREAD,
+	ZFCP_REC_DBF_ID_TARGET,
+	ZFCP_REC_DBF_ID_TRIGGER,
+};
 
 struct zfcp_hba_dbf_record_response {
 	u32 fsf_command;
@@ -634,7 +682,6 @@ do { \
 		 ZFCP_STATUS_PORT_NO_SCSI_ID)
 
 /* logical unit status */
-#define ZFCP_STATUS_UNIT_NOTSUPPUNITRESET	0x00000001
 #define ZFCP_STATUS_UNIT_TEMPORARY		0x00000002
 #define ZFCP_STATUS_UNIT_SHARED			0x00000004
 #define ZFCP_STATUS_UNIT_READONLY		0x00000008
@@ -917,15 +964,15 @@ struct zfcp_adapter {
 	u32			erp_low_mem_count; /* nr of erp actions waiting
 						      for memory */
 	struct zfcp_port	*nameserver_port;  /* adapter's nameserver */
-	debug_info_t		*erp_dbf;
+	debug_info_t		*rec_dbf;
 	debug_info_t		*hba_dbf;
 	debug_info_t		*san_dbf;          /* debug feature areas */
 	debug_info_t		*scsi_dbf;
-	spinlock_t		erp_dbf_lock;
+	spinlock_t		rec_dbf_lock;
 	spinlock_t		hba_dbf_lock;
 	spinlock_t		san_dbf_lock;
 	spinlock_t		scsi_dbf_lock;
-	struct zfcp_erp_dbf_record	erp_dbf_buf;
+	struct zfcp_rec_dbf_record	rec_dbf_buf;
 	struct zfcp_hba_dbf_record	hba_dbf_buf;
 	struct zfcp_san_dbf_record	san_dbf_buf;
 	struct zfcp_scsi_dbf_record	scsi_dbf_buf;

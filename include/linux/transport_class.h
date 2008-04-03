@@ -86,9 +86,9 @@ static inline int transport_container_register(struct transport_container *tc)
 	return attribute_container_register(&tc->ac);
 }
 
-static inline int transport_container_unregister(struct transport_container *tc)
+static inline void transport_container_unregister(struct transport_container *tc)
 {
-	return attribute_container_unregister(&tc->ac);
+	BUG_ON(attribute_container_unregister(&tc->ac));
 }
 
 int transport_class_register(struct transport_class *);
