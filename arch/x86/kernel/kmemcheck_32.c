@@ -184,7 +184,7 @@ error_recall(void)
 		break;
 	}
 
-	__show_registers(&e->regs, 1);
+	__show_regs(&e->regs, 1);
 	print_stack_trace(&e->trace, 0);
 }
 
