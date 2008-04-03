@@ -66,8 +66,7 @@
  */
 static inline void zero_ino_node_unused(struct ubifs_ino_node *ino)
 {
-	memset(ino->padding1, 0, 8);
-	memset(ino->padding2, 0, 34);
+	memset(ino->padding, 0, 34);
 }
 
 /**
@@ -448,9 +447,12 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->creat_sqnum = cpu_to_le64(ui->creat_sqnum);
 	ino->size  = cpu_to_le64(i_size_read(inode));
 	ino->nlink = cpu_to_le32(inode->i_nlink);
-	ino->atime = cpu_to_le32(inode->i_atime.tv_sec);
-	ino->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
-	ino->mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	ino->atime.sec  = cpu_to_le32(inode->i_atime.tv_sec);
+	ino->atime.nsec = cpu_to_le32(inode->i_atime.tv_nsec);
+	ino->ctime.sec  = cpu_to_le32(inode->i_ctime.tv_sec);
+	ino->ctime.nsec = cpu_to_le32(inode->i_ctime.tv_nsec);
+	ino->mtime.sec  = cpu_to_le32(inode->i_mtime.tv_sec);
+	ino->mtime.nsec = cpu_to_le32(inode->i_mtime.tv_nsec);
 	ino->uid   = cpu_to_le32(inode->i_uid);
 	ino->gid   = cpu_to_le32(inode->i_gid);
 	ino->mode  = cpu_to_le32(inode->i_mode);
