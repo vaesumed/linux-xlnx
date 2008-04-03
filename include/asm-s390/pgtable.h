@@ -231,6 +231,15 @@ extern char empty_zero_page[PAGE_SIZE];
 #define _PAGE_TYPE_EX_RW	0x002
 
 /*
+ * Only four types for huge pages, using the invalid bit and protection bit
+ * of a segment table entry.
+ */
+#define _HPAGE_TYPE_EMPTY	0x020	/* _SEGMENT_ENTRY_INV */
+#define _HPAGE_TYPE_NONE	0x220
+#define _HPAGE_TYPE_RO		0x200	/* _SEGMENT_ENTRY_RO  */
+#define _HPAGE_TYPE_RW		0x000
+
+/*
  * PTE type bits are rather complicated. handle_pte_fault uses pte_present,
  * pte_none and pte_file to find out the pte type WITHOUT holding the page
  * table lock. ptep_clear_flush on the other hand uses ptep_clear_flush to
@@ -314,6 +323,9 @@ extern char empty_zero_page[PAGE_SIZE];
 
 #define _SEGMENT_ENTRY		(0)
 #define _SEGMENT_ENTRY_EMPTY	(_SEGMENT_ENTRY_INV)
+
+#define _SEGMENT_ENTRY_LARGE	0x400	/* STE-format control, large page   */
+#define _SEGMENT_ENTRY_CO	0x100	/* change-recording override   */
 
 #endif /* __s390x__ */
 
@@ -890,6 +902,152 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
 #define pte_offset_map_nested(pmd, address) pte_offset_kernel(pmd, address)
 #define pte_unmap(pte) do { } while (0)
 #define pte_unmap_nested(pte) do { } while (0)
+
+#ifdef __s390x__
+static inline pte_t pte_mkhuge(pte_t pte)
+{
+	/*
+	 * PROT_NONE needs to be remapped from the pte type to the ste type.
+	 * The HW invalid bit is also different for pte and ste. The pte
+	 * invalid bit happens to be the same as the ste _SEGMENT_ENTRY_LARGE
+	 * bit, so we don't have to clear it.
+	 */
+	if (pte_val(pte) & _PAGE_INVALID) {
+		if (pte_val(pte) & _PAGE_SWT)
+			pte_val(pte) |= _HPAGE_TYPE_NONE;
+		pte_val(pte) |= _SEGMENT_ENTRY_INV;
+	}
+	/*
+	 * Clear SW pte bits SWT and SWX, there are no SW bits in a segment
+	 * table entry.
+	 */
+	pte_val(pte) &= ~(_PAGE_SWT | _PAGE_SWX);
+	/*
+	 * Also set the change-override bit because we don't need dirty bit
+	 * tracking for hugetlbfs pages.
+	 */
+	pte_val(pte) |= (_SEGMENT_ENTRY_LARGE | _SEGMENT_ENTRY_CO);
+	return pte;
+}
+
+static inline pte_t huge_pte_wrprotect(pte_t pte)
+{
+	pte_val(pte) |= _PAGE_RO;
+	return pte;
+}
+
+static inline int huge_pte_none(pte_t pte)
+{
+	return (pte_val(pte) & _SEGMENT_ENTRY_INV) &&
+		!(pte_val(pte) & _SEGMENT_ENTRY_RO);
+}
+
+static inline pte_t huge_ptep_get(pte_t *ptep)
+{
+	pte_t pte = *ptep;
+	unsigned long mask;
+
+	if (!MACHINE_HAS_HPAGE) {
+		ptep = (pte_t *) (pte_val(pte) & _SEGMENT_ENTRY_ORIGIN);
+		if (ptep) {
+			mask = pte_val(pte) &
+				(_SEGMENT_ENTRY_INV | _SEGMENT_ENTRY_RO);
+			pte = pte_mkhuge(*ptep);
+			pte_val(pte) |= mask;
+		}
+	}
+	return pte;
+}
+
+static inline pte_t huge_ptep_get_and_clear(struct mm_struct *mm,
+					    unsigned long addr, pte_t *ptep)
+{
+	pte_t pte = huge_ptep_get(ptep);
+
+	pmd_clear((pmd_t *) ptep);
+	return pte;
+}
+
+static inline void __pmd_csp(pmd_t *pmdp)
+{
+	register unsigned long reg2 asm("2") = pmd_val(*pmdp);
+	register unsigned long reg3 asm("3") = pmd_val(*pmdp) |
+					       _SEGMENT_ENTRY_INV;
+	register unsigned long reg4 asm("4") = ((unsigned long) pmdp) + 5;
+
+	asm volatile(
+		"	csp %1,%3"
+		: "=m" (*pmdp)
+		: "d" (reg2), "d" (reg3), "d" (reg4), "m" (*pmdp) : "cc");
+	pmd_val(*pmdp) = _SEGMENT_ENTRY_INV | _SEGMENT_ENTRY;
+}
+
+static inline void __pmd_idte(unsigned long address, pmd_t *pmdp)
+{
+	unsigned long sto = (unsigned long) pmdp -
+				pmd_index(address) * sizeof(pmd_t);
+
+	if (!(pmd_val(*pmdp) & _SEGMENT_ENTRY_INV)) {
+		asm volatile(
+			"	.insn	rrf,0xb98e0000,%2,%3,0,0"
+			: "=m" (*pmdp)
+			: "m" (*pmdp), "a" (sto),
+			  "a" ((address & HPAGE_MASK))
+		);
+	}
+	pmd_val(*pmdp) = _SEGMENT_ENTRY_INV | _SEGMENT_ENTRY;
+}
+
+static inline void huge_ptep_invalidate(struct mm_struct *mm,
+					unsigned long address, pte_t *ptep)
+{
+	pmd_t *pmdp = (pmd_t *) ptep;
+
+	if (!MACHINE_HAS_IDTE) {
+		__pmd_csp(pmdp);
+		if (mm->context.noexec) {
+			pmdp = get_shadow_table(pmdp);
+			__pmd_csp(pmdp);
+		}
+		return;
+	}
+
+	__pmd_idte(address, pmdp);
+	if (mm->context.noexec) {
+		pmdp = get_shadow_table(pmdp);
+		__pmd_idte(address, pmdp);
+	}
+	return;
+}
+
+#define huge_ptep_set_access_flags(__vma, __addr, __ptep, __entry, __dirty) \
+({									    \
+	int __changed = !pte_same(huge_ptep_get(__ptep), __entry);	    \
+	if (__changed) {						    \
+		huge_ptep_invalidate((__vma)->vm_mm, __addr, __ptep);	    \
+		set_huge_pte_at((__vma)->vm_mm, __addr, __ptep, __entry);   \
+	}								    \
+	__changed;							    \
+})
+
+#define huge_ptep_set_wrprotect(__mm, __addr, __ptep)			\
+({									\
+	pte_t __pte = huge_ptep_get(__ptep);				\
+	if (pte_write(__pte)) {						\
+		if (atomic_read(&(__mm)->mm_users) > 1 ||		\
+		    (__mm) != current->active_mm)			\
+			huge_ptep_invalidate(__mm, __addr, __ptep);	\
+		set_huge_pte_at(__mm, __addr, __ptep,			\
+				huge_pte_wrprotect(__pte));		\
+	}								\
+})
+
+static inline void huge_ptep_clear_flush(struct vm_area_struct *vma,
+					 unsigned long address, pte_t *ptep)
+{
+	huge_ptep_invalidate(vma->vm_mm, address, ptep);
+}
+#endif /* __s390x__ */
 
 /*
  * 31 bit swap entry format:
