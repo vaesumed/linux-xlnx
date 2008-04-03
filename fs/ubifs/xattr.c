@@ -137,7 +137,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	}
 
 	memcpy(ui->data, value, size);
-	host->i_ctime = CURRENT_TIME_SEC;
+	host->i_ctime = CURRENT_TIME;
 	host_ui->xattr_cnt += 1;
 	spin_lock(&host->i_lock);
 	host_ui->xattr_size += CALC_DENT_SIZE(nm->len);
@@ -208,7 +208,7 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 	if (err)
 		return err;
 
-	host->i_ctime = CURRENT_TIME_SEC;
+	host->i_ctime = CURRENT_TIME;
 	spin_lock(&host->i_lock);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);
@@ -507,7 +507,7 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 	if (err)
 		return err;
 
-	host->i_ctime = CURRENT_TIME_SEC;
+	host->i_ctime = CURRENT_TIME;
 	host_ui->xattr_cnt -= 1;
 	spin_lock(&host->i_lock);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);

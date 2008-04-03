@@ -286,8 +286,14 @@ static int create_default_filesystem(struct ubifs_info *c)
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino->creat_sqnum = cpu_to_le64(++c->max_sqnum);
 	ino->nlink = cpu_to_le32(2);
-	ino->atime = ino->ctime = ino->mtime =
-				cpu_to_le32(CURRENT_TIME_SEC.tv_sec);
+	tmp = cpu_to_le32(CURRENT_TIME.tv_sec);
+	ino->atime.sec  = cpu_to_le32(tmp);
+	ino->ctime.sec  = cpu_to_le32(tmp);
+	ino->mtime.sec  = cpu_to_le32(tmp);
+	tmp = cpu_to_le32(CURRENT_TIME.tv_nsec);
+	ino->atime.nsec  = cpu_to_le32(tmp);
+	ino->ctime.nsec  = cpu_to_le32(tmp);
+	ino->mtime.nsec  = cpu_to_le32(tmp);
 	ino->mode = cpu_to_le32(S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
 
 	/* Set compression enabled by default */
