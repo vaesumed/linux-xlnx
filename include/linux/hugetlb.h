@@ -80,6 +80,10 @@ static inline int prepare_hugepage_range(unsigned long addr, unsigned long len)
 int prepare_hugepage_range(unsigned long addr, unsigned long len);
 #endif
 
+#ifndef ARCH_HAS_HUGEPAGE_CLEAR_FLUSH
+#define huge_ptep_clear_flush(vma, addr, ptep)	do { } while (0)
+#endif
+
 #ifndef ARCH_HAS_SETCLEAR_HUGE_PTE
 #define set_huge_pte_at(mm, addr, ptep, pte)	set_pte_at(mm, addr, ptep, pte)
 #define huge_ptep_get_and_clear(mm, addr, ptep) ptep_get_and_clear(mm, addr, ptep)
