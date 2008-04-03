@@ -51,10 +51,10 @@ typedef struct {
 } __attribute__((aligned(16))) __vector128;
 
 /* Physical address used by some IO functions */
-#ifndef CONFIG_PHYS_64BIT
-typedef unsigned long phys_addr_t;
+#if defined(CONFIG_PPC64) || defined(CONFIG_PHYS_64BIT)
+typedef __u64 phys_addr_t;
 #else
-typedef unsigned long long phys_addr_t;
+typedef __u32 phys_addr_t;
 #endif
 
 #endif /* __ASSEMBLY__ */
