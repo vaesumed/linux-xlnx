@@ -1,0 +1,73 @@
+Merging origin/master
+Merging quilt/driver-core
+CONFLICT (content): Merge conflict in drivers/scsi/hosts.c
+CONFLICT (content): Merge conflict in drivers/scsi/scsi_sysfs.c
+Merging quilt/pci
+Merging quilt/usb
+Merging quilt/device-mapper
+Merging hid/mm
+Merging quilt/i2c
+Merging quilt/kernel-doc
+Merging avr32/avr32-arch
+Merging v4l-dvb/stable
+Merging s390/features
+Merging sh/master
+Merging jfs/next
+Merging kbuild/master
+Merging quilt/ide
+CONFLICT (content): Merge conflict in Documentation/ide/ide.txt
+CONFLICT (content): Merge conflict in Documentation/kernel-parameters.txt
+CONFLICT (content): Merge conflict in drivers/ide/ide.c
+Merging libata/NEXT
+Merging nfs/linux-next
+Merging xfs/master
+Merging infiniband/for-next
+CONFLICT (content): Merge conflict in drivers/infiniband/hw/amso1100/c2_provider.c
+CONFLICT (content): Merge conflict in drivers/infiniband/hw/cxgb3/iwch_provider.c
+CONFLICT (content): Merge conflict in drivers/infiniband/hw/nes/nes_verbs.c
+Merging acpi/test
+Merging blackfin/for-linus
+Merging nfsd/nfsd-next
+Merging ieee1394/for-next
+Merging hwmon/testing
+Merging ubi/master
+Merging kvm/master
+CONFLICT (add/add): Merge conflict in include/asm-s390/kvm.h
+CONFLICT (add/add): Merge conflict in include/asm-s390/sysinfo.h
+Merging dlm/next
+Merging scsi-rc-fixes/master
+Merging scsi/master
+Merging ia64/test
+Merging tests/master
+CONFLICT (content): Merge conflict in lib/Kconfig.debug
+Merging ocfs2/linux-next
+Merging selinux/for-akpm
+CONFLICT (content): Merge conflict in security/selinux/include/security.h
+Merging quilt/m68k
+Merging powerpc-merge/merge
+Merging powerpc/powerpc-next
+Merging hrt/mm
+Merging lblnet/master
+Merging ext4/next
+CONFLICT (content): Merge conflict in fs/jbd2/journal.c
+CONFLICT (content): Merge conflict in fs/jbd2/revoke.c
+Merging 4xx/next
+Merging async_tx/next
+Merging udf/for_next
+Merging security-testing/next
+Merging net/master
+CONFLICT (content): Merge conflict in MAINTAINERS
+CONFLICT (content): Merge conflict in drivers/net/s2io.c
+Merging galak/powerpc-next
+Merging mtd/master
+Merging wireless/master
+Merging crypto/master
+Merging vfs/vfs-2.6.25
+CONFLICT (content): Merge conflict in fs/xfs/linux-2.6/xfs_ioctl.c
+CONFLICT (content): Merge conflict in fs/xfs/xfs_ialloc.c
+CONFLICT (content): Merge conflict in fs/xfs/xfs_sb.h
+Merging semaphore/semaphore
+Merging quilt/ldp
+$ git revert 1addf848b1604e851a29156d0a986169c24b72de
+Created commit f18b5ae: Revert "novfs: Add the Novell filesystem client kernel module"
+
