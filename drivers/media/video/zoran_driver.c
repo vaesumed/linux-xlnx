@@ -205,7 +205,7 @@ extern int jpg_nbufs;
 extern int jpg_bufsize;
 extern int pass_through;
 
-static int lock_norm = 0;	/* 1=Don't change TV standard (norm) */
+static int lock_norm;	/* 0 = default 1 = Don't change TV standard (norm) */
 module_param(lock_norm, int, 0644);
 MODULE_PARM_DESC(lock_norm, "Prevent norm changes (1 = ignore, >1 = fail)");
 
@@ -4644,7 +4644,9 @@ static const struct file_operations zoran_fops = {
 	.open = zoran_open,
 	.release = zoran_close,
 	.ioctl = zoran_ioctl,
+#ifdef CONFIG_COMPAT
 	.compat_ioctl	= v4l_compat_ioctl32,
+#endif
 	.llseek = no_llseek,
 	.read = zoran_read,
 	.write = zoran_write,

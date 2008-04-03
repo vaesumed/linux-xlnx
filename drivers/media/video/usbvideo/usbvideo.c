@@ -522,7 +522,7 @@ void usbvideo_TestPattern(struct uvd *uvd, int fullframe, int pmode)
 	struct usbvideo_frame *frame;
 	int num_cell = 0;
 	int scan_length = 0;
-	static int num_pass = 0;
+	static int num_pass;
 
 	if (uvd == NULL) {
 		err("%s: uvd == NULL", __FUNCTION__);
@@ -946,7 +946,9 @@ static const struct file_operations usbvideo_fops = {
 	.read =   usbvideo_v4l_read,
 	.mmap =   usbvideo_v4l_mmap,
 	.ioctl =  usbvideo_v4l_ioctl,
+#ifdef CONFIG_COMPAT
 	.compat_ioctl = v4l_compat_ioctl32,
+#endif
 	.llseek = no_llseek,
 };
 static const struct video_device usbvideo_template = {
@@ -1035,10 +1037,10 @@ int usbvideo_RegisterVideoDevice(struct uvd *uvd)
 		     __FUNCTION__, uvd->iface, uvd->video_endp, uvd->paletteBits);
 	}
 	if (uvd->dev == NULL) {
-		err("%s: uvd->dev == NULL", __FUNCTION__);
+		err("%s: uvd->dev == NULL", __func__);
 		return -EINVAL;
 	}
-	uvd->vdev.dev=&(uvd->dev->dev);
+	uvd->vdev.dev = &uvd->dev->dev;
 	if (video_register_device(&uvd->vdev, VFL_TYPE_GRABBER, video_nr) == -1) {
 		err("%s: video_register_device failed", __FUNCTION__);
 		return -EPIPE;

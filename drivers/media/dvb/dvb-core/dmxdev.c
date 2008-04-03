@@ -374,7 +374,8 @@ static int dvb_dmxdev_ts_callback(const u8 *buffer1, size_t buffer1_len,
 		return 0;
 	}
 
-	if (dmxdevfilter->params.pes.output == DMX_OUT_TAP)
+	if (dmxdevfilter->params.pes.output == DMX_OUT_TAP
+	    || dmxdevfilter->params.pes.output == DMX_OUT_TSDEMUX_TAP)
 		buffer = &dmxdevfilter->buffer;
 	else
 		buffer = &dmxdevfilter->dev->dvr_buffer;
@@ -620,9 +621,10 @@ static int dvb_dmxdev_filter_start(struct dmxdev_filter *filter)
 
 		if (otype == DMX_OUT_TS_TAP)
 			ts_type |= TS_PACKET;
-
-		if (otype == DMX_OUT_TAP)
-			ts_type |= TS_PAYLOAD_ONLY | TS_PACKET;
+		else if (otype == DMX_OUT_TSDEMUX_TAP)
+			ts_type |= TS_PACKET | TS_DEMUX;
+		else if (otype == DMX_OUT_TAP)
+			ts_type |= TS_PACKET | TS_DEMUX | TS_PAYLOAD_ONLY;
 
 		ret = dmxdev->demux->allocate_ts_feed(dmxdev->demux,
 						      tsfeed,
