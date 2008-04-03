@@ -46,6 +46,7 @@
 #include "xfs_trans_priv.h"
 #include "xfs_quota.h"
 #include "xfs_rw.h"
+#include "xfs_utils.h"
 
 STATIC int	xlog_find_zeroed(xlog_t *, xfs_daddr_t *);
 STATIC int	xlog_clear_stale_blocks(xlog_t *, xfs_lsn_t);
@@ -478,7 +479,7 @@ xlog_find_verify_log_record(
 	 * reset last_blk.  Only when last_blk points in the middle of a log
 	 * record do we update last_blk.
 	 */
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb)) {
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb)) {
 		uint	h_size = be32_to_cpu(head->h_size);
 
 		xhdrs = h_size / XLOG_HEADER_CYCLE_SIZE;
@@ -888,7 +889,7 @@ xlog_find_tail(
 	 * unmount record if there is one, so we pass the lsn of the
 	 * unmount record rather than the block after it.
 	 */
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb)) {
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb)) {
 		int	h_size = be32_to_cpu(rhead->h_size);
 		int	h_version = be32_to_cpu(rhead->h_version);
 
@@ -1101,7 +1102,7 @@ xlog_add_record(
 	recp->h_magicno = cpu_to_be32(XLOG_HEADER_MAGIC_NUM);
 	recp->h_cycle = cpu_to_be32(cycle);
 	recp->h_version = cpu_to_be32(
-			XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb) ? 2 : 1);
+			xfs_sb_version_haslogv2(&log->l_mp->m_sb) ? 2 : 1);
 	recp->h_lsn = cpu_to_be64(xlog_assign_lsn(cycle, block));
 	recp->h_tail_lsn = cpu_to_be64(xlog_assign_lsn(tail_cycle, tail_block));
 	recp->h_fmt = cpu_to_be32(XLOG_FMT);
@@ -3214,7 +3215,8 @@ xlog_recover_process_iunlinks(
 					 * next inode in the bucket.
 					 */
 					error = xfs_itobp(mp, NULL, ip, &dip,
-							&ibp, 0, 0);
+							&ibp, 0, 0,
+							XFS_BUF_LOCK);
 					ASSERT(error || (dip != NULL));
 				}
 
@@ -3247,7 +3249,7 @@ xlog_recover_process_iunlinks(
 					if (ip->i_d.di_mode == 0)
 						xfs_iput_new(ip, 0);
 					else
-						VN_RELE(XFS_ITOV(ip));
+						IRELE(ip);
 				} else {
 					/*
 					 * We can't read in the inode
@@ -3348,7 +3350,7 @@ xlog_pack_data(
 		dp += BBSIZE;
 	}
 
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb)) {
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb)) {
 		xhdr = (xlog_in_core_2_t *)&iclog->ic_header;
 		for ( ; i < BTOBB(size); i++) {
 			j = i / (XLOG_HEADER_CYCLE_SIZE / BBSIZE);
@@ -3388,7 +3390,7 @@ xlog_unpack_data_checksum(
 			    be32_to_cpu(rhead->h_chksum), chksum);
 		    cmn_err(CE_DEBUG,
 "XFS: Disregard message if filesystem was created with non-DEBUG kernel");
-		    if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb)) {
+		    if (xfs_sb_version_haslogv2(&log->l_mp->m_sb)) {
 			    cmn_err(CE_DEBUG,
 				"XFS: LogR this is a LogV2 filesystem\n");
 		    }
@@ -3415,7 +3417,7 @@ xlog_unpack_data(
 		dp += BBSIZE;
 	}
 
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb)) {
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb)) {
 		xhdr = (xlog_in_core_2_t *)rhead;
 		for ( ; i < BTOBB(be32_to_cpu(rhead->h_len)); i++) {
 			j = i / (XLOG_HEADER_CYCLE_SIZE / BBSIZE);
@@ -3494,7 +3496,7 @@ xlog_do_recovery_pass(
 	 * Read the header of the tail block and get the iclog buffer size from
 	 * h_size.  Use this to tell how many sectors make up the log header.
 	 */
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb)) {
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb)) {
 		/*
 		 * When using variable length iclogs, read first sector of
 		 * iclog header and extract the header size from it.  Get a
@@ -3838,7 +3840,7 @@ xlog_do_recover(
 	sbp = &log->l_mp->m_sb;
 	xfs_sb_from_disk(sbp, XFS_BUF_TO_SBP(bp));
 	ASSERT(sbp->sb_magicnum == XFS_SB_MAGIC);
-	ASSERT(XFS_SB_GOOD_VERSION(sbp));
+	ASSERT(xfs_sb_good_version(sbp));
 	xfs_buf_relse(bp);
 
 	/* We've re-read the superblock so re-initialize per-cpu counters */

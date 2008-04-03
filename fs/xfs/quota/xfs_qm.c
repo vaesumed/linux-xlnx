@@ -1405,13 +1405,13 @@ xfs_qm_qino_alloc(
 #if defined(DEBUG) && defined(XFS_LOUD_RECOVERY)
 		unsigned oldv = mp->m_sb.sb_versionnum;
 #endif
-		ASSERT(!XFS_SB_VERSION_HASQUOTA(&mp->m_sb));
+		ASSERT(!xfs_sb_version_hasquota(&mp->m_sb));
 		ASSERT((sbfields & (XFS_SB_VERSIONNUM | XFS_SB_UQUOTINO |
 				   XFS_SB_GQUOTINO | XFS_SB_QFLAGS)) ==
 		       (XFS_SB_VERSIONNUM | XFS_SB_UQUOTINO |
 			XFS_SB_GQUOTINO | XFS_SB_QFLAGS));
 
-		XFS_SB_VERSION_ADDQUOTA(&mp->m_sb);
+		xfs_sb_version_addquota(&mp->m_sb);
 		mp->m_sb.sb_uquotino = NULLFSINO;
 		mp->m_sb.sb_gquotino = NULLFSINO;
 
@@ -1810,7 +1810,7 @@ xfs_qm_dqusage_adjust(
 	 * Now release the inode. This will send it to 'inactive', and
 	 * possibly even free blocks.
 	 */
-	VN_RELE(XFS_ITOV(ip));
+	IRELE(ip);
 
 	/*
 	 * Goto next inode.
@@ -1954,7 +1954,7 @@ xfs_qm_init_quotainos(
 	/*
 	 * Get the uquota and gquota inodes
 	 */
-	if (XFS_SB_VERSION_HASQUOTA(&mp->m_sb)) {
+	if (xfs_sb_version_hasquota(&mp->m_sb)) {
 		if (XFS_IS_UQUOTA_ON(mp) &&
 		    mp->m_sb.sb_uquotino != NULLFSINO) {
 			ASSERT(mp->m_sb.sb_uquotino > 0);
@@ -1968,7 +1968,7 @@ xfs_qm_init_quotainos(
 			if ((error = xfs_iget(mp, NULL, mp->m_sb.sb_gquotino,
 					     0, 0, &gip, 0))) {
 				if (uip)
-					VN_RELE(XFS_ITOV(uip));
+					IRELE(uip);
 				return XFS_ERROR(error);
 			}
 		}
@@ -1999,7 +1999,7 @@ xfs_qm_init_quotainos(
 					  sbflags | XFS_SB_GQUOTINO, flags);
 		if (error) {
 			if (uip)
-				VN_RELE(XFS_ITOV(uip));
+				IRELE(uip);
 
 			return XFS_ERROR(error);
 		}
