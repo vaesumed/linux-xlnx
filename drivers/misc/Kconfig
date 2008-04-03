@@ -333,4 +333,10 @@ config ME4000
 	help
 	  FIXME!
 
+config AECTC
+	tristate "AETC video timestamp device"
+	default n
+	help
+	  Provides support for something that needs to be documented here.
+
 endif # MISC_DEVICES
