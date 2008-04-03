@@ -540,7 +540,7 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 			return err;
 		}
 
-		inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+		inode->i_mtime = inode->i_ctime = CURRENT_TIME;
 	}
 
 	if (ia_valid & ATTR_UID)

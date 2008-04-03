@@ -91,7 +91,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	} else
 		inode->i_gid = current->fsgid;
 	inode->i_mode = mode;
-	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME_SEC;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
 	inode->i_mapping->nrpages = 0;
 	/* Disable readahead */
 	inode->i_mapping->backing_dev_info = &ubifs_backing_dev_info;
@@ -460,11 +460,9 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		return err;
 
-	inode->i_ctime = CURRENT_TIME_SEC;
 	inc_nlink(inode);
-
 	dir->i_size += sz_change;
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+	inode->i_ctime = dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 
 	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
@@ -508,7 +506,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	}
 
 	dir->i_size -= sz_change;
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 
 	inode->i_ctime = dir->i_ctime;
 	drop_nlink(inode);
@@ -587,7 +585,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	}
 
 	dir->i_size -= sz_change;
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 	drop_nlink(dir);
 
 	inode->i_size = 0;
@@ -639,7 +637,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	insert_inode_hash(inode);
 	inc_nlink(inode);
 
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 	dir->i_size += sz_change;
 	inc_nlink(dir);
 
@@ -808,6 +806,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1 };
+	struct timespec time = CURRENT_TIME;
 
 	dbg_gen("dent '%.*s' ino %lu in dir ino %lu to dent '%.*s' in "
 		"dir ino %lu", old_dentry->d_name.len, old_dentry->d_name.name,
@@ -846,7 +845,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	 * Like most other Unix systems, set the ctime for inodes on a
 	 * rename.
 	 */
-	old_inode->i_ctime = CURRENT_TIME_SEC;
+	old_inode->i_ctime = time;
 
 	/*
 	 * If we moved a directory to another parent directory, decrement
@@ -856,8 +855,8 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (is_dir && move)
 		drop_nlink(old_dir);
 	old_dir->i_size -= old_sz;
-	old_dir->i_mtime = old_dir->i_ctime = CURRENT_TIME_SEC;
-	new_dir->i_mtime = new_dir->i_ctime = CURRENT_TIME_SEC;
+	old_dir->i_mtime = old_dir->i_ctime = time;
+	new_dir->i_mtime = new_dir->i_ctime = time;
 
 	/*
 	 * If we moved a directory object to new directory, parent's 'i_nlink'
@@ -879,7 +878,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		 */
 		if (is_dir)
 			drop_nlink(new_inode);
-		new_inode->i_ctime = CURRENT_TIME_SEC;
+		new_inode->i_ctime = time;
 		drop_nlink(new_inode);
 	} else
 		new_dir->i_size += new_sz;
