@@ -158,15 +158,21 @@ EXPORT_SYMBOL(default_hwif_mmiops);
 
 void SELECT_DRIVE (ide_drive_t *drive)
 {
-	if (HWIF(drive)->selectproc)
-		HWIF(drive)->selectproc(drive);
-	HWIF(drive)->OUTB(drive->select.all, IDE_SELECT_REG);
+	ide_hwif_t *hwif = drive->hwif;
+	const struct ide_port_ops *port_ops = hwif->port_ops;
+
+	if (port_ops && port_ops->selectproc)
+		port_ops->selectproc(drive);
+
+	hwif->OUTB(drive->select.all, hwif->io_ports.device_addr);
 }
 
 void SELECT_MASK (ide_drive_t *drive, int mask)
 {
-	if (HWIF(drive)->maskproc)
-		HWIF(drive)->maskproc(drive, mask);
+	const struct ide_port_ops *port_ops = drive->hwif->port_ops;
+
+	if (port_ops && port_ops->maskproc)
+		port_ops->maskproc(drive, mask);
 }
 
 /*
@@ -188,21 +194,22 @@ static void ata_vlb_sync(ide_drive_t *drive, unsigned long port)
  */
 static void ata_input_data(ide_drive_t *drive, void *buffer, u32 wcount)
 {
-	ide_hwif_t *hwif	= HWIF(drive);
-	u8 io_32bit		= drive->io_32bit;
+	ide_hwif_t *hwif = drive->hwif;
+	struct ide_io_ports *io_ports = &hwif->io_ports;
+	u8 io_32bit = drive->io_32bit;
 
 	if (io_32bit) {
 		if (io_32bit & 2) {
 			unsigned long flags;
+
 			local_irq_save(flags);
-			ata_vlb_sync(drive, IDE_NSECTOR_REG);
-			hwif->INSL(IDE_DATA_REG, buffer, wcount);
+			ata_vlb_sync(drive, io_ports->nsect_addr);
+			hwif->INSL(io_ports->data_addr, buffer, wcount);
 			local_irq_restore(flags);
 		} else
-			hwif->INSL(IDE_DATA_REG, buffer, wcount);
-	} else {
-		hwif->INSW(IDE_DATA_REG, buffer, wcount<<1);
-	}
+			hwif->INSL(io_ports->data_addr, buffer, wcount);
+	} else
+		hwif->INSW(io_ports->data_addr, buffer, wcount << 1);
 }
 
 /*
@@ -210,21 +217,22 @@ static void ata_input_data(ide_drive_t *drive, void *buffer, u32 wcount)
  */
 static void ata_output_data(ide_drive_t *drive, void *buffer, u32 wcount)
 {
-	ide_hwif_t *hwif	= HWIF(drive);
-	u8 io_32bit		= drive->io_32bit;
+	ide_hwif_t *hwif = drive->hwif;
+	struct ide_io_ports *io_ports = &hwif->io_ports;
+	u8 io_32bit = drive->io_32bit;
 
 	if (io_32bit) {
 		if (io_32bit & 2) {
 			unsigned long flags;
+
 			local_irq_save(flags);
-			ata_vlb_sync(drive, IDE_NSECTOR_REG);
-			hwif->OUTSL(IDE_DATA_REG, buffer, wcount);
+			ata_vlb_sync(drive, io_ports->nsect_addr);
+			hwif->OUTSL(io_ports->data_addr, buffer, wcount);
 			local_irq_restore(flags);
 		} else
-			hwif->OUTSL(IDE_DATA_REG, buffer, wcount);
-	} else {
-		hwif->OUTSW(IDE_DATA_REG, buffer, wcount<<1);
-	}
+			hwif->OUTSL(io_ports->data_addr, buffer, wcount);
+	} else
+		hwif->OUTSW(io_ports->data_addr, buffer, wcount << 1);
 }
 
 /*
@@ -243,13 +251,14 @@ static void atapi_input_bytes(ide_drive_t *drive, void *buffer, u32 bytecount)
 #if defined(CONFIG_ATARI) || defined(CONFIG_Q40)
 	if (MACH_IS_ATARI || MACH_IS_Q40) {
 		/* Atari has a byte-swapped IDE interface */
-		insw_swapw(IDE_DATA_REG, buffer, bytecount / 2);
+		insw_swapw(hwif->io_ports.data_addr, buffer, bytecount / 2);
 		return;
 	}
 #endif /* CONFIG_ATARI || CONFIG_Q40 */
 	hwif->ata_input_data(drive, buffer, bytecount / 4);
 	if ((bytecount & 0x03) >= 2)
-		hwif->INSW(IDE_DATA_REG, ((u8 *)buffer)+(bytecount & ~0x03), 1);
+		hwif->INSW(hwif->io_ports.data_addr,
+			   (u8 *)buffer + (bytecount & ~0x03), 1);
 }
 
 static void atapi_output_bytes(ide_drive_t *drive, void *buffer, u32 bytecount)
@@ -260,13 +269,14 @@ static void atapi_output_bytes(ide_drive_t *drive, void *buffer, u32 bytecount)
 #if defined(CONFIG_ATARI) || defined(CONFIG_Q40)
 	if (MACH_IS_ATARI || MACH_IS_Q40) {
 		/* Atari has a byte-swapped IDE interface */
-		outsw_swapw(IDE_DATA_REG, buffer, bytecount / 2);
+		outsw_swapw(hwif->io_ports.data_addr, buffer, bytecount / 2);
 		return;
 	}
 #endif /* CONFIG_ATARI || CONFIG_Q40 */
 	hwif->ata_output_data(drive, buffer, bytecount / 4);
 	if ((bytecount & 0x03) >= 2)
-		hwif->OUTSW(IDE_DATA_REG, ((u8*)buffer)+(bytecount & ~0x03), 1);
+		hwif->OUTSW(hwif->io_ports.data_addr,
+			    (u8 *)buffer + (bytecount & ~0x03), 1);
 }
 
 void default_hwif_transport(ide_hwif_t *hwif)
@@ -416,7 +426,7 @@ int drive_is_ready (ide_drive_t *drive)
 	u8 stat			= 0;
 
 	if (drive->waiting_for_dma)
-		return hwif->ide_dma_test_irq(drive);
+		return hwif->dma_ops->dma_test_irq(drive);
 
 #if 0
 	/* need to guarantee 400ns since last command was issued */
@@ -429,7 +439,7 @@ int drive_is_ready (ide_drive_t *drive)
 	 * an interrupt with another pci card/device.  We make no assumptions
 	 * about possible isa-pnp and pci-pnp issues yet.
 	 */
-	if (IDE_CONTROL_REG)
+	if (hwif->io_ports.ctl_addr)
 		stat = ide_read_altstatus(drive);
 	else
 		/* Note: this may clear a pending IRQ!! */
@@ -631,7 +641,7 @@ int ide_driveid_update(ide_drive_t *drive)
 	SELECT_MASK(drive, 1);
 	ide_set_irq(drive, 1);
 	msleep(50);
-	hwif->OUTB(WIN_IDENTIFY, IDE_COMMAND_REG);
+	hwif->OUTB(WIN_IDENTIFY, hwif->io_ports.command_addr);
 	timeout = jiffies + WAIT_WORSTCASE;
 	do {
 		if (time_after(jiffies, timeout)) {
@@ -680,6 +690,7 @@ int ide_driveid_update(ide_drive_t *drive)
 int ide_config_drive_speed(ide_drive_t *drive, u8 speed)
 {
 	ide_hwif_t *hwif = drive->hwif;
+	struct ide_io_ports *io_ports = &hwif->io_ports;
 	int error = 0;
 	u8 stat;
 
@@ -687,8 +698,8 @@ int ide_config_drive_speed(ide_drive_t *drive, u8 speed)
 //		msleep(50);
 
 #ifdef CONFIG_BLK_DEV_IDEDMA
-	if (hwif->dma_host_set)	/* check if host supports DMA */
-		hwif->dma_host_set(drive, 0);
+	if (hwif->dma_ops)	/* check if host supports DMA */
+		hwif->dma_ops->dma_host_set(drive, 0);
 #endif
 
 	/* Skip setting PIO flow-control modes on pre-EIDE drives */
@@ -718,9 +729,9 @@ int ide_config_drive_speed(ide_drive_t *drive, u8 speed)
 	SELECT_MASK(drive, 0);
 	udelay(1);
 	ide_set_irq(drive, 0);
-	hwif->OUTB(speed, IDE_NSECTOR_REG);
-	hwif->OUTB(SETFEATURES_XFER, IDE_FEATURE_REG);
-	hwif->OUTBSYNC(drive, WIN_SETFEATURES, IDE_COMMAND_REG);
+	hwif->OUTB(speed, io_ports->nsect_addr);
+	hwif->OUTB(SETFEATURES_XFER, io_ports->feature_addr);
+	hwif->OUTBSYNC(drive, WIN_SETFEATURES, io_ports->command_addr);
 	if (drive->quirk_list == 2)
 		ide_set_irq(drive, 1);
 
@@ -745,8 +756,8 @@ int ide_config_drive_speed(ide_drive_t *drive, u8 speed)
 #ifdef CONFIG_BLK_DEV_IDEDMA
 	if ((speed >= XFER_SW_DMA_0 || (hwif->host_flags & IDE_HFLAG_VDMA)) &&
 	    drive->using_dma)
-		hwif->dma_host_set(drive, 1);
-	else if (hwif->dma_host_set)	/* check if host supports DMA */
+		hwif->dma_ops->dma_host_set(drive, 1);
+	else if (hwif->dma_ops)	/* check if host supports DMA */
 		ide_dma_off_quietly(drive);
 #endif
 
@@ -828,7 +839,7 @@ void ide_execute_command(ide_drive_t *drive, u8 cmd, ide_handler_t *handler,
 
 	spin_lock_irqsave(&ide_lock, flags);
 	__ide_set_handler(drive, handler, timeout, expiry);
-	hwif->OUTBSYNC(drive, cmd, IDE_COMMAND_REG);
+	hwif->OUTBSYNC(drive, cmd, hwif->io_ports.command_addr);
 	/*
 	 * Drive takes 400nS to respond, we must avoid the IRQ being
 	 * serviced before that.
@@ -891,10 +902,11 @@ static ide_startstop_t reset_pollfunc (ide_drive_t *drive)
 {
 	ide_hwgroup_t *hwgroup	= HWGROUP(drive);
 	ide_hwif_t *hwif	= HWIF(drive);
+	const struct ide_port_ops *port_ops = hwif->port_ops;
 	u8 tmp;
 
-	if (hwif->reset_poll != NULL) {
-		if (hwif->reset_poll(drive)) {
+	if (port_ops && port_ops->reset_poll) {
+		if (port_ops->reset_poll(drive)) {
 			printk(KERN_ERR "%s: host reset_poll failure for %s.\n",
 				hwif->name, drive->name);
 			return ide_stopped;
@@ -960,6 +972,8 @@ static void ide_disk_pre_reset(ide_drive_t *drive)
 
 static void pre_reset(ide_drive_t *drive)
 {
+	const struct ide_port_ops *port_ops = drive->hwif->port_ops;
+
 	if (drive->media == ide_disk)
 		ide_disk_pre_reset(drive);
 	else
@@ -980,8 +994,8 @@ static void pre_reset(ide_drive_t *drive)
 		return;
 	}
 
-	if (HWIF(drive)->pre_reset != NULL)
-		HWIF(drive)->pre_reset(drive);
+	if (port_ops && port_ops->pre_reset)
+		port_ops->pre_reset(drive);
 
 	if (drive->current_speed != 0xff)
 		drive->desired_speed = drive->current_speed;
@@ -1009,10 +1023,15 @@ static ide_startstop_t do_reset1 (ide_drive_t *drive, int do_not_try_atapi)
 	unsigned long flags;
 	ide_hwif_t *hwif;
 	ide_hwgroup_t *hwgroup;
-	
+	struct ide_io_ports *io_ports;
+	const struct ide_port_ops *port_ops;
+	u8 ctl;
+
 	spin_lock_irqsave(&ide_lock, flags);
 	hwif = HWIF(drive);
 	hwgroup = HWGROUP(drive);
+
+	io_ports = &hwif->io_ports;
 
 	/* We must not reset with running handlers */
 	BUG_ON(hwgroup->handler != NULL);
@@ -1023,7 +1042,7 @@ static ide_startstop_t do_reset1 (ide_drive_t *drive, int do_not_try_atapi)
 		pre_reset(drive);
 		SELECT_DRIVE(drive);
 		udelay (20);
-		hwif->OUTBSYNC(drive, WIN_SRST, IDE_COMMAND_REG);
+		hwif->OUTBSYNC(drive, WIN_SRST, io_ports->command_addr);
 		ndelay(400);
 		hwgroup->poll_timeout = jiffies + WAIT_WORSTCASE;
 		hwgroup->polling = 1;
@@ -1039,7 +1058,7 @@ static ide_startstop_t do_reset1 (ide_drive_t *drive, int do_not_try_atapi)
 	for (unit = 0; unit < MAX_DRIVES; ++unit)
 		pre_reset(&hwif->drives[unit]);
 
-	if (!IDE_CONTROL_REG) {
+	if (io_ports->ctl_addr == 0) {
 		spin_unlock_irqrestore(&ide_lock, flags);
 		return ide_stopped;
 	}
@@ -1054,16 +1073,14 @@ static ide_startstop_t do_reset1 (ide_drive_t *drive, int do_not_try_atapi)
 	 * recover from reset very quickly, saving us the first 50ms wait time.
 	 */
 	/* set SRST and nIEN */
-	hwif->OUTBSYNC(drive, drive->ctl|6,IDE_CONTROL_REG);
+	hwif->OUTBSYNC(drive, drive->ctl|6, io_ports->ctl_addr);
 	/* more than enough time */
 	udelay(10);
-	if (drive->quirk_list == 2) {
-		/* clear SRST and nIEN */
-		hwif->OUTBSYNC(drive, drive->ctl, IDE_CONTROL_REG);
-	} else {
-		/* clear SRST, leave nIEN */
-		hwif->OUTBSYNC(drive, drive->ctl|2, IDE_CONTROL_REG);
-	}
+	if (drive->quirk_list == 2)
+		ctl = drive->ctl;	/* clear SRST and nIEN */
+	else
+		ctl = drive->ctl | 2;	/* clear SRST, leave nIEN */
+	hwif->OUTBSYNC(drive, ctl, io_ports->ctl_addr);
 	/* more than enough time */
 	udelay(10);
 	hwgroup->poll_timeout = jiffies + WAIT_WORSTCASE;
@@ -1075,8 +1092,9 @@ static ide_startstop_t do_reset1 (ide_drive_t *drive, int do_not_try_atapi)
 	 * state when the disks are reset this way. At least, the Winbond
 	 * 553 documentation says that
 	 */
-	if (hwif->resetproc)
-		hwif->resetproc(drive);
+	port_ops = hwif->port_ops;
+	if (port_ops && port_ops->resetproc)
+		port_ops->resetproc(drive);
 
 	spin_unlock_irqrestore(&ide_lock, flags);
 	return ide_started;
@@ -1107,7 +1125,7 @@ int ide_wait_not_busy(ide_hwif_t *hwif, unsigned long timeout)
 		 * about locking issues (2.5 work ?).
 		 */
 		mdelay(1);
-		stat = hwif->INB(hwif->io_ports[IDE_STATUS_OFFSET]);
+		stat = hwif->INB(hwif->io_ports.status_addr);
 		if ((stat & BUSY_STAT) == 0)
 			return 0;
 		/*
