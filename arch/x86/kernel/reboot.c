@@ -400,7 +400,7 @@ static void native_machine_emergency_restart(void)
 	}
 }
 
-static void native_machine_shutdown(void)
+void native_machine_shutdown(void)
 {
 	/* Stop the cpus and apics */
 #ifdef CONFIG_SMP
@@ -471,7 +471,10 @@ struct machine_ops machine_ops = {
 	.shutdown = native_machine_shutdown,
 	.emergency_restart = native_machine_emergency_restart,
 	.restart = native_machine_restart,
-	.halt = native_machine_halt
+	.halt = native_machine_halt,
+#ifdef CONFIG_KEXEC
+	.crash_shutdown = native_machine_crash_shutdown,
+#endif
 };
 
 void machine_power_off(void)
@@ -499,3 +502,9 @@ void machine_halt(void)
 	machine_ops.halt();
 }
 
+#ifdef CONFIG_KEXEC
+void machine_crash_shutdown(struct pt_regs *regs)
+{
+	machine_ops.crash_shutdown(regs);
+}
+#endif
