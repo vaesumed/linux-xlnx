@@ -134,7 +134,7 @@ static void do_calc_lpt_geom(struct ubifs_info *c)
 int ubifs_calc_lpt_geom(struct ubifs_info *c)
 {
 	int lebs_needed;
-	long long sz;
+	uint64_t sz;
 
 	do_calc_lpt_geom(c);
 
@@ -173,7 +173,7 @@ static int calc_dflt_lpt_geom(struct ubifs_info *c, int *main_lebs,
 			      int *big_lpt)
 {
 	int i, lebs_needed;
-	long long sz;
+	uint64_t sz;
 
 	/* Start by assuming the minimum number of LPT LEBs */
 	c->lpt_lebs = UBIFS_MIN_LPT_LEBS;

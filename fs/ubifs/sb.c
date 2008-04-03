@@ -86,7 +86,8 @@ static int create_default_filesystem(struct ubifs_info *c)
 	union ubifs_key key;
 	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste, sup_flags = 0;
-	long long tmp64, main_bytes;
+	long long main_bytes;
+	uint64_t tmp64;
 
 	/* Some functions called from here depend on the @c->key_len filed */
 	c->key_len = UBIFS_SK_LEN;
