@@ -363,7 +363,7 @@ static int sctp_v4_addr_valid(union sctp_addr *addr,
 		return 0;
 
 	/* Is this a broadcast address? */
-	if (skb && ((struct rtable *)skb->dst)->rt_flags & RTCF_BROADCAST)
+	if (skb && skb->rtable->rt_flags & RTCF_BROADCAST)
 		return 0;
 
 	return 1;
@@ -451,7 +451,7 @@ static struct dst_entry *sctp_v4_get_dst(struct sctp_association *asoc,
 		fl.fl4_src = saddr->v4.sin_addr.s_addr;
 
 	SCTP_DEBUG_PRINTK("%s: DST:%u.%u.%u.%u, SRC:%u.%u.%u.%u - ",
-			  __FUNCTION__, NIPQUAD(fl.fl4_dst),
+			  __func__, NIPQUAD(fl.fl4_dst),
 			  NIPQUAD(fl.fl4_src));
 
 	if (!ip_route_output_key(&init_net, &rt, &fl)) {
@@ -539,7 +539,7 @@ static void sctp_v4_get_saddr(struct sctp_association *asoc,
 /* What interface did this skb arrive on? */
 static int sctp_v4_skb_iif(const struct sk_buff *skb)
 {
-	return ((struct rtable *)skb->dst)->rt_iif;
+	return skb->rtable->rt_iif;
 }
 
 /* Was this packet marked by Explicit Congestion Notification? */
@@ -554,7 +554,7 @@ static struct sock *sctp_v4_create_accept_sk(struct sock *sk,
 {
 	struct inet_sock *inet = inet_sk(sk);
 	struct inet_sock *newinet;
-	struct sock *newsk = sk_alloc(sk->sk_net, PF_INET, GFP_KERNEL,
+	struct sock *newsk = sk_alloc(sock_net(sk), PF_INET, GFP_KERNEL,
 			sk->sk_prot);
 
 	if (!newsk)
@@ -629,6 +629,9 @@ static int sctp_inetaddr_event(struct notifier_block *this, unsigned long ev,
 	struct sctp_sockaddr_entry *addr = NULL;
 	struct sctp_sockaddr_entry *temp;
 	int found = 0;
+
+	if (dev_net(ifa->ifa_dev->dev) != &init_net)
+		return NOTIFY_DONE;
 
 	switch (ev) {
 	case NETDEV_UP:
@@ -826,9 +829,9 @@ static inline int sctp_v4_xmit(struct sk_buff *skb,
 {
 	SCTP_DEBUG_PRINTK("%s: skb:%p, len:%d, "
 			  "src:%u.%u.%u.%u, dst:%u.%u.%u.%u\n",
-			  __FUNCTION__, skb, skb->len,
-			  NIPQUAD(((struct rtable *)skb->dst)->rt_src),
-			  NIPQUAD(((struct rtable *)skb->dst)->rt_dst));
+			  __func__, skb, skb->len,
+			  NIPQUAD(skb->rtable->rt_src),
+			  NIPQUAD(skb->rtable->rt_dst));
 
 	SCTP_INC_STATS(SCTP_MIB_OUTSCTPPACKS);
 	return ip_queue_xmit(skb, ipfragok);

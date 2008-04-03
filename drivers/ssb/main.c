@@ -14,6 +14,7 @@
 #include <linux/io.h>
 #include <linux/ssb/ssb.h>
 #include <linux/ssb/ssb_regs.h>
+#include <linux/ssb/ssb_driver_gige.h>
 #include <linux/dma-mapping.h>
 #include <linux/pci.h>
 
@@ -67,6 +68,44 @@ found:
 	return bus;
 }
 #endif /* CONFIG_SSB_PCIHOST */
+
+#ifdef CONFIG_SSB_PCMCIAHOST
+struct ssb_bus *ssb_pcmcia_dev_to_bus(struct pcmcia_device *pdev)
+{
+	struct ssb_bus *bus;
+
+	ssb_buses_lock();
+	list_for_each_entry(bus, &buses, list) {
+		if (bus->bustype == SSB_BUSTYPE_PCMCIA &&
+		    bus->host_pcmcia == pdev)
+			goto found;
+	}
+	bus = NULL;
+found:
+	ssb_buses_unlock();
+
+	return bus;
+}
+#endif /* CONFIG_SSB_PCMCIAHOST */
+
+int ssb_for_each_bus_call(unsigned long data,
+			  int (*func)(struct ssb_bus *bus, unsigned long data))
+{
+	struct ssb_bus *bus;
+	int res;
+
+	ssb_buses_lock();
+	list_for_each_entry(bus, &buses, list) {
+		res = func(bus, data);
+		if (res >= 0) {
+			ssb_buses_unlock();
+			return res;
+		}
+	}
+	ssb_buses_unlock();
+
+	return -ENODEV;
+}
 
 static struct ssb_device *ssb_device_get(struct ssb_device *dev)
 {
@@ -378,7 +417,7 @@ void ssb_bus_unregister(struct ssb_bus *bus)
 	list_del(&bus->list);
 	ssb_buses_unlock();
 
-	/* ssb_pcmcia_exit(bus); */
+	ssb_pcmcia_exit(bus);
 	ssb_pci_exit(bus);
 	ssb_iounmap(bus);
 }
@@ -505,6 +544,14 @@ error:
 	return err;
 }
 
+static u8 ssb_ssb_read8(struct ssb_device *dev, u16 offset)
+{
+	struct ssb_bus *bus = dev->bus;
+
+	offset += dev->core_index * SSB_CORE_SIZE;
+	return readb(bus->mmio + offset);
+}
+
 static u16 ssb_ssb_read16(struct ssb_device *dev, u16 offset)
 {
 	struct ssb_bus *bus = dev->bus;
@@ -519,6 +566,14 @@ static u32 ssb_ssb_read32(struct ssb_device *dev, u16 offset)
 
 	offset += dev->core_index * SSB_CORE_SIZE;
 	return readl(bus->mmio + offset);
+}
+
+static void ssb_ssb_write8(struct ssb_device *dev, u16 offset, u8 value)
+{
+	struct ssb_bus *bus = dev->bus;
+
+	offset += dev->core_index * SSB_CORE_SIZE;
+	writeb(value, bus->mmio + offset);
 }
 
 static void ssb_ssb_write16(struct ssb_device *dev, u16 offset, u16 value)
@@ -539,8 +594,10 @@ static void ssb_ssb_write32(struct ssb_device *dev, u16 offset, u32 value)
 
 /* Ops for the plain SSB bus without a host-device (no PCI or PCMCIA). */
 static const struct ssb_bus_ops ssb_ssb_ops = {
+	.read8		= ssb_ssb_read8,
 	.read16		= ssb_ssb_read16,
 	.read32		= ssb_ssb_read32,
+	.write8		= ssb_ssb_write8,
 	.write16	= ssb_ssb_write16,
 	.write32	= ssb_ssb_write32,
 };
@@ -625,7 +682,7 @@ out:
 err_dequeue:
 	list_del(&bus->list);
 err_pcmcia_exit:
-/*	ssb_pcmcia_exit(bus); */
+	ssb_pcmcia_exit(bus);
 err_pci_exit:
 	ssb_pci_exit(bus);
 err_unmap:
@@ -1153,7 +1210,14 @@ static int __init ssb_modinit(void)
 	err = b43_pci_ssb_bridge_init();
 	if (err) {
 		ssb_printk(KERN_ERR "Broadcom 43xx PCI-SSB-bridge "
-			   "initialization failed");
+			   "initialization failed\n");
+		/* don't fail SSB init because of this */
+		err = 0;
+	}
+	err = ssb_gige_init();
+	if (err) {
+		ssb_printk(KERN_ERR "SSB Broadcom Gigabit Ethernet "
+			   "driver initialization failed\n");
 		/* don't fail SSB init because of this */
 		err = 0;
 	}
@@ -1167,6 +1231,7 @@ fs_initcall(ssb_modinit);
 
 static void __exit ssb_modexit(void)
 {
+	ssb_gige_exit();
 	b43_pci_ssb_bridge_exit();
 	bus_unregister(&ssb_bustype);
 }
