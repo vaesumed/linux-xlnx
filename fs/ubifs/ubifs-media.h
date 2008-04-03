@@ -375,7 +375,7 @@ struct ubifs_ch {
 } __attribute__ ((packed));
 
 /**
- * union ubifs_dev_desc - device node descriptor
+ * union ubifs_dev_desc - device node descriptor.
  * @new: new type device descriptor
  * @huge: huge type device descriptor
  *
@@ -389,12 +389,23 @@ union ubifs_dev_desc {
 } __attribute__ ((packed));
 
 /**
+ * struct ubifs_timestamp - UBIFS time-stamp.
+ * @sec: seconds
+ * @nsec: nanoseconds
+ *
+ * This data structure is used to store time-stamps in the UBIFS inode.
+ */
+struct ubifs_timestamp {
+	__le32 sec;
+	__le32 nsec;
+}  __attribute__ ((packed));
+
+/**
  * struct ubifs_ino_node - inode node.
  * @ch: common header
  * @key: node key
  * @creat_sqnum: sequence number at time of creation
  * @size: inode size in bytes (amount of uncompressed data)
- * @padding1: reserved for future, zeroed
  * @nlink: number of hard links
  * @atime: access time
  * @ctime: creation time
@@ -412,7 +423,7 @@ union ubifs_dev_desc {
  * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
  * @compr_type: compression type used for this inode
- * @padding2: reserved for future, zeroes
+ * @padding: reserved for future, zeroes
  * @data: data attached to the inode
  *
  * Note, even though inode compression type is defined by @compr_type, some
@@ -428,11 +439,10 @@ struct ubifs_ino_node {
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 creat_sqnum;
 	__le64 size;
-	__u8 padding1[8];
 	__le32 nlink;
-	__le32 atime;
-	__le32 ctime;
-	__le32 mtime;
+	struct ubifs_timestamp atime;
+	struct ubifs_timestamp ctime;
+	struct ubifs_timestamp mtime;
 	__le32 uid;
 	__le32 gid;
 	__le32 mode;
@@ -443,7 +453,7 @@ struct ubifs_ino_node {
 	__le64 xattr_msize;
 	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding2[34];
+	__u8 padding[30];
 	__u8 data[];
 } __attribute__ ((packed));
 
