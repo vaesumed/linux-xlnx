@@ -303,6 +303,14 @@ void ata_bmdma_irq_clear(struct ata_port *ap)
 }
 
 /**
+ *	ata_noop_irq_clear - Noop placeholder for irq_clear
+ *	@ap: Port associated with this ATA transaction.
+ */
+void ata_noop_irq_clear(struct ata_port *ap)
+{
+}
+
+/**
  *	ata_bmdma_status - Read PCI IDE BMDMA status
  *	@ap: Port associated with this ATA transaction.
  *
@@ -388,28 +396,21 @@ void ata_bmdma_thaw(struct ata_port *ap)
 }
 
 /**
- *	ata_bmdma_drive_eh - Perform EH with given methods for BMDMA controller
+ *	ata_bmdma_error_handler - Stock error handler for BMDMA controller
  *	@ap: port to handle error for
- *	@prereset: prereset method (can be NULL)
- *	@softreset: softreset method (can be NULL)
- *	@hardreset: hardreset method (can be NULL)
- *	@postreset: postreset method (can be NULL)
  *
- *	Handle error for ATA BMDMA controller.  It can handle both
+ *	Stock error handler for BMDMA controller.  It can handle both
  *	PATA and SATA controllers.  Many controllers should be able to
  *	use this EH as-is or with some added handling before and
  *	after.
  *
- *	This function is intended to be used for constructing
- *	->error_handler callback by low level drivers.
- *
  *	LOCKING:
  *	Kernel thread context (may sleep)
  */
-void ata_bmdma_drive_eh(struct ata_port *ap, ata_prereset_fn_t prereset,
-			ata_reset_fn_t softreset, ata_reset_fn_t hardreset,
-			ata_postreset_fn_t postreset)
+void ata_bmdma_error_handler(struct ata_port *ap)
 {
+	ata_reset_fn_t softreset = ap->ops->softreset;
+	ata_reset_fn_t hardreset = ap->ops->hardreset;
 	struct ata_queued_cmd *qc;
 	unsigned long flags;
 	int thaw = 0;
@@ -452,29 +453,19 @@ void ata_bmdma_drive_eh(struct ata_port *ap, ata_prereset_fn_t prereset,
 		ata_eh_thaw_port(ap);
 
 	/* PIO and DMA engines have been stopped, perform recovery */
-	ata_do_eh(ap, prereset, softreset, hardreset, postreset);
-}
 
-/**
- *	ata_bmdma_error_handler - Stock error handler for BMDMA controller
- *	@ap: port to handle error for
- *
- *	Stock error handler for BMDMA controller.
- *
- *	LOCKING:
- *	Kernel thread context (may sleep)
- */
-void ata_bmdma_error_handler(struct ata_port *ap)
-{
-	ata_reset_fn_t softreset = NULL, hardreset = NULL;
+	/* ata_std_softreset and sata_std_hardreset are inherited to
+	 * all SFF drivers from ata_sff_port_ops.  Ignore softreset if
+	 * ctl isn't accessible.  Ignore hardreset if SCR access isn't
+	 * available.
+	 */
+	if (softreset == ata_std_softreset && !ap->ioaddr.ctl_addr)
+		softreset = NULL;
+	if (hardreset == sata_std_hardreset && !sata_scr_valid(&ap->link))
+		hardreset = NULL;
 
-	if (ap->ioaddr.ctl_addr)
-		softreset = ata_std_softreset;
-	if (sata_scr_valid(&ap->link))
-		hardreset = sata_std_hardreset;
-
-	ata_bmdma_drive_eh(ap, ata_std_prereset, softreset, hardreset,
-			   ata_std_postreset);
+	ata_do_eh(ap, ap->ops->prereset, softreset, hardreset,
+		  ap->ops->postreset);
 }
 
 /**
@@ -818,6 +809,8 @@ int ata_pci_activate_sff_host(struct ata_host *host,
  *	ata_pci_init_one - Initialize/register PCI IDE host controller
  *	@pdev: Controller to be initialized
  *	@ppi: array of port_info, must be enough for two ports
+ *	@sht: scsi_host_template to use when registering the host
+ *	@host_priv: host private_data
  *
  *	This is a helper function which can be called from a driver's
  *	xxx_init_one() probe function if the hardware uses traditional
@@ -838,7 +831,8 @@ int ata_pci_activate_sff_host(struct ata_host *host,
  *	Zero on success, negative on errno-based value on error.
  */
 int ata_pci_init_one(struct pci_dev *pdev,
-		     const struct ata_port_info * const * ppi)
+		     const struct ata_port_info * const * ppi,
+		     struct scsi_host_template *sht, void *host_priv)
 {
 	struct device *dev = &pdev->dev;
 	const struct ata_port_info *pi = NULL;
@@ -872,10 +866,10 @@ int ata_pci_init_one(struct pci_dev *pdev,
 	rc = ata_pci_prepare_sff_host(pdev, ppi, &host);
 	if (rc)
 		goto out;
+	host->private_data = host_priv;
 
 	pci_set_master(pdev);
-	rc = ata_pci_activate_sff_host(host, pi->port_ops->irq_handler,
-				       pi->sht);
+	rc = ata_pci_activate_sff_host(host, ata_interrupt, sht);
  out:
 	if (rc == 0)
 		devres_remove_group(&pdev->dev, NULL);

@@ -905,17 +905,6 @@ static void scc_std_postreset(struct ata_link *link, unsigned int *classes)
 }
 
 /**
- *	scc_error_handler - Stock error handler for BMDMA controller
- *	@ap: port to handle error for
- */
-
-static void scc_error_handler (struct ata_port *ap)
-{
-	ata_bmdma_drive_eh(ap, scc_pata_prereset, scc_std_softreset, NULL,
-			   scc_std_postreset);
-}
-
-/**
  *	scc_bmdma_irq_clear - Clear PCI IDE BMDMA interrupt.
  *	@ap: Port associated with this ATA transaction.
  *
@@ -968,24 +957,12 @@ static void scc_port_stop (struct ata_port *ap)
 }
 
 static struct scsi_host_template scc_sht = {
-	.module			= THIS_MODULE,
-	.name			= DRV_NAME,
-	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,
-	.can_queue		= ATA_DEF_QUEUE,
-	.this_id		= ATA_SHT_THIS_ID,
-	.sg_tablesize		= LIBATA_MAX_PRD,
-	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,
-	.emulated		= ATA_SHT_EMULATED,
-	.use_clustering		= ATA_SHT_USE_CLUSTERING,
-	.proc_name		= DRV_NAME,
-	.dma_boundary		= ATA_DMA_BOUNDARY,
-	.slave_configure	= ata_scsi_slave_config,
-	.slave_destroy		= ata_scsi_slave_destroy,
-	.bios_param		= ata_std_bios_param,
+	ATA_BMDMA_SHT(DRV_NAME),
 };
 
 static const struct ata_port_operations scc_pata_ops = {
+	.inherits		= &ata_bmdma_port_ops,
+
 	.set_piomode		= scc_set_piomode,
 	.set_dmamode		= scc_set_dmamode,
 	.mode_filter		= scc_mode_filter,
@@ -1003,13 +980,10 @@ static const struct ata_port_operations scc_pata_ops = {
 	.bmdma_status		= scc_bmdma_status,
 	.data_xfer		= scc_data_xfer,
 
-	.qc_prep		= ata_qc_prep,
-	.qc_issue		= ata_qc_issue_prot,
-
 	.freeze			= scc_bmdma_freeze,
-	.thaw			= ata_bmdma_thaw,
-
-	.error_handler		= scc_error_handler,
+	.prereset		= scc_pata_prereset,
+	.softreset		= scc_std_softreset,
+	.postreset		= scc_std_postreset,
 	.post_internal_cmd	= scc_bmdma_stop,
 
 	.irq_clear		= scc_bmdma_irq_clear,

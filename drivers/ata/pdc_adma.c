@@ -138,49 +138,40 @@ static unsigned int adma_qc_issue(struct ata_queued_cmd *qc);
 static int adma_check_atapi_dma(struct ata_queued_cmd *qc);
 static void adma_bmdma_stop(struct ata_queued_cmd *qc);
 static u8 adma_bmdma_status(struct ata_port *ap);
-static void adma_irq_clear(struct ata_port *ap);
 static void adma_freeze(struct ata_port *ap);
 static void adma_thaw(struct ata_port *ap);
-static void adma_error_handler(struct ata_port *ap);
+static int adma_prereset(struct ata_link *link, unsigned long deadline);
 
 static struct scsi_host_template adma_ata_sht = {
-	.module			= THIS_MODULE,
-	.name			= DRV_NAME,
-	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,
-	.slave_configure	= ata_scsi_slave_config,
-	.slave_destroy		= ata_scsi_slave_destroy,
-	.bios_param		= ata_std_bios_param,
-	.proc_name		= DRV_NAME,
-	.can_queue		= ATA_DEF_QUEUE,
-	.this_id		= ATA_SHT_THIS_ID,
+	ATA_BASE_SHT(DRV_NAME),
 	.sg_tablesize		= LIBATA_MAX_PRD,
 	.dma_boundary		= ADMA_DMA_BOUNDARY,
-	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,
-	.use_clustering		= ENABLE_CLUSTERING,
-	.emulated		= ATA_SHT_EMULATED,
 };
 
-static const struct ata_port_operations adma_ata_ops = {
+static struct ata_port_operations adma_ata_ops = {
+	.inherits		= &ata_base_port_ops,
+
+	.dev_select		= ata_std_dev_select,
 	.tf_load		= ata_tf_load,
 	.tf_read		= ata_tf_read,
-	.exec_command		= ata_exec_command,
 	.check_status		= ata_check_status,
-	.dev_select		= ata_std_dev_select,
-	.check_atapi_dma	= adma_check_atapi_dma,
+	.exec_command		= ata_exec_command,
 	.data_xfer		= ata_data_xfer,
+	.check_atapi_dma	= adma_check_atapi_dma,
+	.bmdma_stop		= adma_bmdma_stop,
+	.bmdma_status		= adma_bmdma_status,
 	.qc_prep		= adma_qc_prep,
 	.qc_issue		= adma_qc_issue,
+	.irq_on			= ata_irq_on,
+
 	.freeze			= adma_freeze,
 	.thaw			= adma_thaw,
-	.error_handler		= adma_error_handler,
-	.irq_clear		= adma_irq_clear,
-	.irq_on			= ata_irq_on,
+	.prereset		= adma_prereset,
+	.softreset		= ata_std_softreset,
+
 	.port_start		= adma_port_start,
 	.port_stop		= adma_port_stop,
 	.host_stop		= adma_host_stop,
-	.bmdma_stop		= adma_bmdma_stop,
-	.bmdma_status		= adma_bmdma_status,
 };
 
 static struct ata_port_info adma_port_info[] = {
@@ -221,11 +212,6 @@ static void adma_bmdma_stop(struct ata_queued_cmd *qc)
 static u8 adma_bmdma_status(struct ata_port *ap)
 {
 	return 0;
-}
-
-static void adma_irq_clear(struct ata_port *ap)
-{
-	/* nothing */
 }
 
 static void adma_reset_engine(struct ata_port *ap)
@@ -305,12 +291,6 @@ static int adma_prereset(struct ata_link *link, unsigned long deadline)
 	adma_reinit_engine(ap);
 
 	return ata_std_prereset(link, deadline);
-}
-
-static void adma_error_handler(struct ata_port *ap)
-{
-	ata_do_eh(ap, adma_prereset, ata_std_softreset, NULL,
-		  ata_std_postreset);
 }
 
 static int adma_fill_sg(struct ata_queued_cmd *qc)
