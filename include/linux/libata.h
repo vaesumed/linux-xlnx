@@ -409,7 +409,7 @@ enum link_pm {
 	MAX_PERFORMANCE,
 	MEDIUM_POWER,
 };
-extern struct class_device_attribute class_device_attr_link_power_management_policy;
+extern struct device_attribute dev_attr_link_power_management_policy;
 
 struct ata_ioports {
 	void __iomem		*cmd_addr;
