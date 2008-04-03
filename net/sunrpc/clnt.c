@@ -548,7 +548,7 @@ EXPORT_SYMBOL_GPL(rpc_run_task);
  * @msg: RPC call parameters
  * @flags: RPC call flags
  */
-int rpc_call_sync(struct rpc_clnt *clnt, struct rpc_message *msg, int flags)
+int rpc_call_sync(struct rpc_clnt *clnt, const struct rpc_message *msg, int flags)
 {
 	struct rpc_task	*task;
 	struct rpc_task_setup task_setup_data = {
@@ -579,7 +579,7 @@ EXPORT_SYMBOL_GPL(rpc_call_sync);
  * @data: user call data
  */
 int
-rpc_call_async(struct rpc_clnt *clnt, struct rpc_message *msg, int flags,
+rpc_call_async(struct rpc_clnt *clnt, const struct rpc_message *msg, int flags,
 	       const struct rpc_call_ops *tk_ops, void *data)
 {
 	struct rpc_task	*task;
@@ -1066,7 +1066,7 @@ call_transmit(struct rpc_task *task)
 	if (task->tk_msg.rpc_proc->p_decode != NULL)
 		return;
 	task->tk_action = rpc_exit_task;
-	rpc_wake_up_task(task);
+	rpc_wake_up_queued_task(&task->tk_xprt->pending, task);
 }
 
 /*
@@ -1535,7 +1535,7 @@ void rpc_show_tasks(void)
 				proc = -1;
 
 			if (RPC_IS_QUEUED(t))
-				rpc_waitq = rpc_qname(t->u.tk_wait.rpc_waitq);
+				rpc_waitq = rpc_qname(t->tk_waitqueue);
 
 			printk("%5u %04d %04x %6d %8p %6d %8p %8ld %8s %8p %8p\n",
 				t->tk_pid, proc,
