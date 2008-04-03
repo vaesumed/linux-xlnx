@@ -188,7 +188,7 @@ static int bud_wbuf_callback(struct ubifs_info *c, int lnum, int free, int pad)
 static int init_constants_late(struct ubifs_info *c)
 {
 	int tmp, err;
-	long long tmp64;
+	uint64_t tmp64;
 
 	c->main_bytes = c->main_lebs * c->leb_size;
 
