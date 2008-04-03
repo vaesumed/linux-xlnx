@@ -287,7 +287,7 @@ static inline void *ubifs_idx_key(const struct ubifs_info *c,
  * UBIFS reports less space than it actually has.
  */
 static inline long long ubifs_reported_space(const struct ubifs_info *c,
-					     long long free)
+					     uint64_t free)
 {
 	int divisor, factor;
 

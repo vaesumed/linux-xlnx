@@ -245,7 +245,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 {
 	int rem;
-	long long idx_size;
+	uint64_t idx_size;
 
 	idx_size = c->old_idx_sz + c->budg_idx_growth + c->budg_uncommitted_idx;
 

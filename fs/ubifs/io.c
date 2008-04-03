@@ -131,7 +131,7 @@ out:
 	return err;
 }
 
-/*
+/**
  * ubifs_pad - pad flash space.
  * @c: UBIFS file-system description object
  * @buf: buffer to put padding to
