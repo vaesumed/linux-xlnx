@@ -27,7 +27,7 @@
  * All UBIFS on-flash objects are stored in the form of nodes. All nodes start
  * with the UBIFS node magic number and have the same common header. Nodes
  * always sit at 8-byte aligned positions on the media and node header sizes are
- * also 8-byte aligned (except of the padding node).
+ * also 8-byte aligned (except of the indexing node and the padding node).
  */
 
 #ifndef __UBIFS_MEDIA_H__
@@ -684,14 +684,12 @@ struct ubifs_branch {
  * @ch: common header
  * @child_cnt: number of child index nodes
  * @level: tree level
- * @padding: reserved for future, zeroes
  * @branches: LEB number / offset / length / key branches
  */
 struct ubifs_idx_node {
 	struct ubifs_ch ch;
 	__le16 child_cnt;
 	__le16 level;
-	__u8 padding[4];
 	__u8 branches[];
 } __attribute__ ((packed));
 
