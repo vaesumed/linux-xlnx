@@ -252,9 +252,6 @@ struct ubifs_gced_idx_leb {
  * @creat_sqnum: sequence number at time of creation
  * @xattr_size: summarized size of all extended attributes in bytes, protected
  *              by @inode->i_lock
- * @xattr_msize: summarized on-the-media size of all extended attributes in
- *               bytes (size of all extended attribute entries and extended
- *               attribute inodes belonging to this inode)
  * @xattr_cnt: count of extended attributes this inode has
  * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
@@ -285,7 +282,6 @@ struct ubifs_inode {
 	struct inode vfs_inode;
 	unsigned long long creat_sqnum;
 	long long xattr_size;
-	long long xattr_msize;
 	int xattr_cnt;
 	int xattr_names;
 	unsigned int dirty:1;

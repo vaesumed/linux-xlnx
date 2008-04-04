@@ -59,15 +59,12 @@ static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 	if (ui->xattr_size < 0)
 		return 4;
 
-	if (ui->xattr_msize < 0 || ui->xattr_msize > ui->xattr_size)
-		return 6;
-
 	if (ui->xattr_names < 0 ||
 	    ui->xattr_names + ui->xattr_cnt > XATTR_LIST_MAX)
-		return 6;
+		return 5;
 
 	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA)
-		return 7;
+		return 6;
 
 	if (!ubifs_compr_present(ui->compr_type)) {
 		ubifs_warn("inode %lu uses '%s' compression, but it was not "
@@ -128,7 +125,6 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
-	ui->xattr_msize = le64_to_cpu(ino->xattr_msize);
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
 
 	err = validate_inode(c, inode);

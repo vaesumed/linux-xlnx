@@ -300,7 +300,6 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 	ubifs_assert(mutex_is_locked(&host->i_mutex));
 	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_msize >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);
 
 	if (size > UBIFS_MAX_INO_DATA)
@@ -369,7 +368,6 @@ ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
 	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_msize >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);
 
 	err = check_namespace(&nm);
@@ -436,7 +434,6 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 		dentry->d_name.len, dentry->d_name.name, size);
 	ubifs_assert(host_ui->xattr_cnt >= 0);
 	ubifs_assert(host_ui->xattr_size >= 0);
-	ubifs_assert(host_ui->xattr_msize >= 0);
 	ubifs_assert(host_ui->xattr_names >= 0);
 
 	len = host_ui->xattr_names + host_ui->xattr_cnt;
@@ -545,7 +542,6 @@ int ubifs_removexattr(struct dentry *dentry, const char *name)
 	ubifs_assert(mutex_is_locked(&host->i_mutex));
 	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_msize >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);
 
 	err = check_namespace(&nm);
