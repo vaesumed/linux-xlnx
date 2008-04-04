@@ -619,7 +619,7 @@ static int ipgre_rcv(struct sk_buff *skb)
 #ifdef CONFIG_NET_IPGRE_BROADCAST
 		if (ipv4_is_multicast(iph->daddr)) {
 			/* Looped back packet, drop it! */
-			if (((struct rtable*)skb->dst)->fl.iif == 0)
+			if (skb->rtable->fl.iif == 0)
 				goto drop;
 			tunnel->stat.multicast++;
 			skb->pkt_type = PACKET_BROADCAST;
@@ -699,7 +699,7 @@ static int ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 		}
 
 		if (skb->protocol == htons(ETH_P_IP)) {
-			rt = (struct rtable*)skb->dst;
+			rt = skb->rtable;
 			if ((dst = rt->rt_gateway) == 0)
 				goto tx_error_icmp;
 		}
@@ -1190,7 +1190,7 @@ static int ipgre_close(struct net_device *dev)
 	struct ip_tunnel *t = netdev_priv(dev);
 	if (ipv4_is_multicast(t->parms.iph.daddr) && t->mlink) {
 		struct in_device *in_dev;
-		in_dev = inetdev_by_index(dev->nd_net, t->mlink);
+		in_dev = inetdev_by_index(dev_net(dev), t->mlink);
 		if (in_dev) {
 			ip_mc_dec_group(in_dev, t->parms.iph.daddr);
 			in_dev_put(in_dev);
