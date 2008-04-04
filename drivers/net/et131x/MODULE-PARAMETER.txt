@@ -1,0 +1,36 @@
+written by Bernd Luxenburger 2006.12.17
+I added a view Module Parameter to do some vodoo to an not
+working ether device of my girlfriend's LG M1-3DGAG Notebook
+
+
+et131x_debug_level :
+ Level of debugging desired (0-7)
+   7 : DBG_RX_ON | DBG_TX_ON
+   6 : DBG_PARAM_ON
+   5 : DBG_VERBOSE_ON
+   4 : DBG_TRACE_ON
+   3 : DBG_NOTICE_ON
+   2 : no debug info
+   1 : no debug info
+   0 : no debug info
+
+et131x_speed_set :
+ Set Link speed and dublex manually (0-5)  [0]
+   1 : 10Mb   Half-Duplex
+   2 : 10Mb   Full-Duplex
+   3 : 100Mb  Half-Duplex
+   4 : 100Mb  Full-Duplex
+   5 : 1000Mb Full-Duplex
+   0 : Auto Speed Auto Dublex // default
+
+
+
+et131x_nmi_disable :
+ Disable NMI (0-2) [0]
+   0 :
+   1 :
+   2 :
+
+  /* unknown */
+
+
