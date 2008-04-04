@@ -35,7 +35,7 @@
  * This is a helper function for 'ubifs_iget()' which validates various fields
  * of a newly built inode to make sure they contain sane values and prevent
  * possible vulnerabilities. Returns zero if the inode is all right and
- * %-EINVAL if not.
+ * a non-zero error code if not.
  */
 static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 {
@@ -45,40 +45,29 @@ static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 	if (inode->i_size > c->max_inode_sz) {
 		ubifs_err("inode is too large (%lld)",
 			  (long long)inode->i_size);
-		return -EINVAL;
+		return 1;
 	}
 
 	if (ui->compr_type < 0 || ui->compr_type >= UBIFS_COMPR_TYPES_CNT) {
 		ubifs_err("unknown compression type %d", ui->compr_type);
-		return -EINVAL;
+		return 2;
 	}
 
-	if (ui->xattr_cnt < 0) {
-		dbg_err("bad xattr_cnt %d", ui->xattr_cnt);
-		return -EINVAL;
-	}
+	if (ui->xattr_cnt < 0)
+		return 3;
 
-	if (ui->xattr_size < 0) {
-		dbg_err("bad xattr_size %lld", ui->xattr_size);
-		return -EINVAL;
-	}
+	if (ui->xattr_size < 0)
+		return 4;
 
-	if (ui->xattr_msize < 0 || ui->xattr_msize > ui->xattr_size) {
-		dbg_err("bad xattr_msize %lld", ui->xattr_msize);
-		return -EINVAL;
-	}
+	if (ui->xattr_msize < 0 || ui->xattr_msize > ui->xattr_size)
+		return 6;
 
 	if (ui->xattr_names < 0 ||
-	    ui->xattr_names + ui->xattr_cnt > XATTR_LIST_MAX) {
-		dbg_err("bad xattr_names %d or xattr_cnt %d",
-			ui->xattr_names, ui->xattr_cnt);
-		return -EINVAL;
-	}
+	    ui->xattr_names + ui->xattr_cnt > XATTR_LIST_MAX)
+		return 6;
 
-	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
-		ubifs_err("invalid inode data length %d", ui->data_len);
-		return -EINVAL;
-	}
+	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA)
+		return 7;
 
 	if (!ubifs_compr_present(ui->compr_type)) {
 		ubifs_warn("inode %lu uses '%s' compression, but it was not "
@@ -151,19 +140,23 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		inode->i_mapping->a_ops = &ubifs_file_address_operations;
 		inode->i_op = &ubifs_file_inode_operations;
 		inode->i_fop = &ubifs_file_operations;
-		if (ui->data_len != 0)
+		if (ui->data_len != 0) {
+			err = 10;
 			goto out_invalid;
+		}
 		break;
 	case S_IFDIR:
 		inode->i_op  = &ubifs_dir_inode_operations;
 		inode->i_fop = &ubifs_dir_operations;
-		if (ui->data_len != 0)
+		if (ui->data_len != 0) {
+			err = 11;
 			goto out_invalid;
+		}
 		break;
 	case S_IFLNK:
 		inode->i_op = &ubifs_symlink_inode_operations;
 		if (ui->data_len <= 0 || ui->data_len > UBIFS_MAX_INO_DATA) {
-			ubifs_err("invalid inode size");
+			err = 12;
 			goto out_invalid;
 		}
 		ui->data = kmalloc(ui->data_len + 1, GFP_NOFS);
@@ -192,7 +185,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		} else if (ui->data_len == sizeof(dev->huge)) {
 			rdev = huge_decode_dev(__le64_to_cpu(dev->huge));
 		} else {
-			ubifs_err("invalid inode size");
+			err = 13;
 			goto out_invalid;
 		}
 		inode->i_op = &ubifs_file_inode_operations;
@@ -203,10 +196,13 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	case S_IFIFO:
 		inode->i_op = &ubifs_file_inode_operations;
 		init_special_inode(inode, inode->i_mode, 0);
-		if (ui->data_len != 0)
+		if (ui->data_len != 0) {
+			err = 14;
 			goto out_invalid;
+		}
 		break;
 	default:
+		err = 15;
 		goto out_invalid;
 	}
 
@@ -216,8 +212,9 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	return inode;
 
 out_invalid:
-	ubifs_err("inode %lu validation failed", inode->i_ino);
+	ubifs_err("inode %lu validation failed, error %d", inode->i_ino, err);
 	dbg_dump_node(c, ino);
+	dbg_dump_inode(c, inode);
 	err = -EINVAL;
 out_ino:
 	kfree(ino);
