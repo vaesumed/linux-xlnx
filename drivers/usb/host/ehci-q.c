@@ -250,7 +250,7 @@ __acquires(ehci->lock)
 #ifdef EHCI_URB_TRACE
 	ehci_dbg (ehci,
 		"%s %s urb %p ep%d%s status %d len %d/%d\n",
-		__FUNCTION__, urb->dev->devpath, urb,
+		__func__, urb->dev->devpath, urb,
 		usb_pipeendpoint (urb->pipe),
 		usb_pipein (urb->pipe) ? "in" : "out",
 		status,
@@ -657,6 +657,14 @@ qh_make (
 	type = usb_pipetype (urb->pipe);
 	maxp = usb_maxpacket (urb->dev, urb->pipe, !is_input);
 
+	/* 1024 byte maxpacket is a hardware ceiling.  High bandwidth
+	 * acts like up to 3KB, but is built from smaller packets.
+	 */
+	if (max_packet(maxp) > 1024) {
+		ehci_dbg(ehci, "bogus qh maxpacket %d\n", max_packet(maxp));
+		goto done;
+	}
+
 	/* Compute interrupt scheduling parameters just once, and save.
 	 * - allowing for high bandwidth, how many nsec/uframe are used?
 	 * - split transactions need a second CSPLIT uframe; same question
@@ -757,7 +765,13 @@ qh_make (
 			info2 |= (EHCI_TUNE_MULT_HS << 30);
 		} else if (type == PIPE_BULK) {
 			info1 |= (EHCI_TUNE_RL_HS << 28);
-			info1 |= 512 << 16;	/* usb2 fixed maxpacket */
+			/* The USB spec says that high speed bulk endpoints
+			 * always use 512 byte maxpacket.  But some device
+			 * vendors decided to ignore that, and MSFT is happy
+			 * to help them do so.  So now people expect to use
+			 * such nonconformant devices with Linux too; sigh.
+			 */
+			info1 |= max_packet(maxp) << 16;
 			info2 |= (EHCI_TUNE_MULT_HS << 30);
 		} else {		/* PIPE_INTERRUPT */
 			info1 |= max_packet (maxp) << 16;
@@ -932,7 +946,7 @@ submit_async (
 #ifdef EHCI_URB_TRACE
 	ehci_dbg (ehci,
 		"%s %s urb %p ep%d%s len %d, qtd %p [qh %p]\n",
-		__FUNCTION__, urb->dev->devpath, urb,
+		__func__, urb->dev->devpath, urb,
 		epnum & 0x0f, (epnum & USB_DIR_IN) ? "in" : "out",
 		urb->transfer_buffer_length,
 		qtd, urb->ep->hcpriv);
