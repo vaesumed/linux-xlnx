@@ -214,7 +214,6 @@ void dbg_dump_inode(const struct ubifs_info *c, const struct inode *inode)
 	       (unsigned int)inode->i_ctime.tv_nsec);
 	printk(KERN_DEBUG "creat_sqnum %llu\n", ui->creat_sqnum);
 	printk(KERN_DEBUG "xattr_size  %lld\n", ui->xattr_size);
-	printk(KERN_DEBUG "xattr_msize %lld\n", ui->xattr_msize);
 	printk(KERN_DEBUG "xattr_cnt   %d\n", ui->xattr_cnt);
 	printk(KERN_DEBUG "xattr_names %d\n", ui->xattr_names);
 	printk(KERN_DEBUG "dirty       %u\n", ui->dirty);
@@ -403,8 +402,6 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       le32_to_cpu(ino->xattr_cnt));
 		printk(KERN_DEBUG "\txattr_size     %llu\n",
 		       le64_to_cpu(ino->xattr_size));
-		printk(KERN_DEBUG "\txattr_msize    %llu\n",
-		       le64_to_cpu(ino->xattr_msize));
 		printk(KERN_DEBUG "\txattr_names    %u\n",
 		       le32_to_cpu(ino->xattr_names));
 		printk(KERN_DEBUG "\tcompr_type     %#x\n",
