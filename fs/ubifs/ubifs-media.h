@@ -417,9 +417,6 @@ struct ubifs_timestamp {
  * @data_len: inode data length
  * @xattr_cnt: count of extended attributes this inode has
  * @xattr_size: summarized size of all extended attributes in bytes
- * @xattr_msize: summarized on-the-media size of all extended attributes in
- *               bytes (size of all extended attribute entries and extended
- *               attribute inodes belonging to this inode)
  * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
  * @compr_type: compression type used for this inode
@@ -450,10 +447,9 @@ struct ubifs_ino_node {
 	__le32 data_len;
 	__le32 xattr_cnt;
 	__le64 xattr_size;
-	__le64 xattr_msize;
 	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding[30];
+	__u8 padding[38];
 	__u8 data[];
 } __attribute__ ((packed));
 

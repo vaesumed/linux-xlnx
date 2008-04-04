@@ -66,7 +66,7 @@
  */
 static inline void zero_ino_node_unused(struct ubifs_ino_node *ino)
 {
-	memset(ino->padding, 0, 34);
+	memset(ino->padding, 0, 38);
 }
 
 /**
@@ -460,7 +460,6 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->compr_type  = cpu_to_le16(ui->compr_type);
 	ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
 	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
-	ino->xattr_msize = cpu_to_le64(ui->xattr_msize);
 	ino->xattr_names = cpu_to_le32(ui->xattr_names);
 	ino->data_len    = cpu_to_le32(ui->data_len);
 	zero_ino_node_unused(ino);
