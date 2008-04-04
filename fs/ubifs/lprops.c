@@ -1208,6 +1208,23 @@ static int scan_check_cb(struct ubifs_info *c,
 			is_idx = 0;
 		    }
 
+	if (is_idx && lp->free + lp->dirty == free + dirty &&
+	    lnum != c->ihead_lnum) {
+		/*
+		 * After an unclean unmount, an index LEB could have a different
+		 * amount of free space than the value recorded by lprops. That
+		 * is because the in-the-gaps method may use free space or
+		 * create free space (as a side-effect of using ubi_leb_change
+		 * and not writing the whole LEB). The incorrect free space
+		 * value is not a problem because the index is only ever
+		 * allocated empty LEBs, so there will never be an attempt to
+		 * write to the free space at the end of an index LEB - except
+		 * by the in-the-gaps method for which it is not a problem.
+		 */
+		free = lp->free;
+		dirty = lp->dirty;
+	}
+
 	if (lp->free != free || lp->dirty != dirty)
 		goto out_print;
 
