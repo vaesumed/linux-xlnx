@@ -342,12 +342,17 @@ static int create_default_filesystem(struct ubifs_info *c)
 static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 {
 	long long max_bytes;
+	int err = 1;
 
-	if (!c->key_hash)
+	if (!c->key_hash) {
+		err = 2;
 		goto failed;
+	}
 
-	if (sup->key_fmt != UBIFS_SIMPLE_KEY_FMT)
+	if (sup->key_fmt != UBIFS_SIMPLE_KEY_FMT) {
+		err = 3;
 		goto failed;
+	}
 
 	if (le32_to_cpu(sup->min_io_size) != c->min_io_size) {
 		ubifs_err("min. I/O unit mismatch: %d in superblock, %d real",
@@ -377,61 +382,62 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 	if (c->log_lebs < UBIFS_MIN_LOG_LEBS ||
 	    c->lpt_lebs < UBIFS_MIN_LPT_LEBS ||
 	    c->orph_lebs < UBIFS_MIN_ORPH_LEBS ||
-	    c->main_lebs < UBIFS_MIN_MAIN_LEBS)
+	    c->main_lebs < UBIFS_MIN_MAIN_LEBS) {
+		err = 6;
 		goto failed;
+	}
 
 	if (c->main_lebs < UBIFS_MIN_MAIN_LEBS) {
-		dbg_err("bad main_lebs");
+		err = 7;
 		goto failed;
 	}
 
 	if (c->max_bud_bytes < (long long)c->leb_size * UBIFS_MIN_BUD_LEBS ||
 	    c->max_bud_bytes > (long long)c->leb_size * c->main_lebs) {
-		dbg_err("bad max_bud_bytes");
+		err = 8;
 		goto failed;
 	}
 
 	if (c->jhead_cnt < NONDATA_JHEADS_CNT + 1 ||
 	    c->jhead_cnt > NONDATA_JHEADS_CNT + UBIFS_MAX_JHEADS) {
-		dbg_err("bad jhead_cnt");
+		err = 9;
 		goto failed;
 	}
 
 	if (c->fanout < UBIFS_MIN_FANOUT ||
 	    ubifs_idx_node_sz(c, c->fanout) > c->leb_size) {
-		dbg_err("bad fanout");
+		err = 10;
 		goto failed;
 	}
 
 	if (c->lsave_cnt < 0 || (c->lsave_cnt > DEFAULT_LSAVE_CNT &&
 	    c->lsave_cnt > c->max_leb_cnt - UBIFS_SB_LEBS - UBIFS_MST_LEBS -
 	    c->log_lebs - c->lpt_lebs - c->orph_lebs)) {
-		dbg_err("bad lsave_cnt");
+		err = 11;
 		goto failed;
 	}
 
 	if (UBIFS_SB_LEBS + UBIFS_MST_LEBS + c->log_lebs + c->lpt_lebs +
 	    c->orph_lebs + c->main_lebs != c->leb_cnt) {
-		dbg_err("LEBs don't add up");
+		err = 12;
 		goto failed;
 	}
 
 	if (c->default_compr < 0 || c->default_compr >= UBIFS_COMPR_TYPES_CNT) {
-		dbg_err("bad compression type");
+		err = 13;
 		goto failed;
 	}
 
 	max_bytes = c->main_lebs * (long long)c->leb_size;
 	if (c->rp_size < 0 || max_bytes < c->rp_size) {
-		dbg_err("bad reserved pool size, must be >= 0 and <= %lld\n",
-			max_bytes);
+		err = 14;
 		goto failed;
 	}
 
 	return 0;
 
 failed:
-	ubifs_err("bad superblock");
+	ubifs_err("bad superblock, error %d", err);
 	dbg_dump_node(c, sup);
 	return -EINVAL;
 }

@@ -86,6 +86,7 @@ const char *dbg_ntype(int type);
 const char *dbg_cstate(int cmt_state);
 const char *dbg_get_key_dump(const struct ubifs_info *c,
 			     const union ubifs_key *key);
+void dbg_dump_inode(const struct ubifs_info *c, const struct inode *inode);
 void dbg_dump_node(const struct ubifs_info *c, const void *node);
 void dbg_dump_budget_req(const struct ubifs_budget_req *req);
 void dbg_dump_lstats(const struct ubifs_lp_stats *lst);
@@ -120,6 +121,7 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 #define dbg_ntype(type)                       ""
 #define dbg_cstate(cmt_state)                 ""
 #define dbg_get_key_dump(c, key)              ({})
+#define dbg_dump_inode(c, inode)              ({})
 #define dbg_dump_node(c, node)                ({})
 #define dbg_dump_budget_req(req)              ({})
 #define dbg_dump_lstats(lst)                  ({})
