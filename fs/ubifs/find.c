@@ -642,6 +642,12 @@ static const struct ubifs_lprops *scan_for_leb_for_idx(struct ubifs_info *c)
  * This function looks for a free LEB and returns that LEB number. The returned
  * LEB is marked as "taken", "index".
  *
+ * Only empty LEBs are allocated. This is for two reasons. First, the commit
+ * calculates the number of LEBs to allocate based on the assumption that they
+ * will be empty. Secondly, free space at the end of an index LEB is not
+ * guaranteed to be empty because it may have been used by the in-the-gaps
+ * method prior to an unclean unmount.
+ *
  * If no LEB is found %-ENOSPC is returned. For other failures another negative
  * error code is returned.
  */
