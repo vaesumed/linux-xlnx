@@ -194,6 +194,36 @@ static void dump_ch(const struct ubifs_ch *ch)
 	printk(KERN_DEBUG "\tlen            %u\n", le32_to_cpu(ch->len));
 }
 
+void dbg_dump_inode(const struct ubifs_info *c, const struct inode *inode)
+{
+	const struct ubifs_inode *ui = ubifs_inode(inode);
+
+	printk(KERN_DEBUG "inode      %lu\n", inode->i_ino);
+	printk(KERN_DEBUG "size       %llu\n", i_size_read(inode));
+	printk(KERN_DEBUG "nlink      %u\n", inode->i_nlink);
+	printk(KERN_DEBUG "uid        %u\n", (unsigned int)inode->i_uid);
+	printk(KERN_DEBUG "gid        %u\n", (unsigned int)inode->i_gid);
+	printk(KERN_DEBUG "atime      %u.%u\n",
+	       (unsigned int)inode->i_atime.tv_sec,
+	       (unsigned int)inode->i_atime.tv_nsec);
+	printk(KERN_DEBUG "mtime      %u.%u\n",
+	       (unsigned int)inode->i_mtime.tv_sec,
+	       (unsigned int)inode->i_mtime.tv_nsec);
+	printk(KERN_DEBUG "ctime       %u.%u\n",
+	       (unsigned int)inode->i_ctime.tv_sec,
+	       (unsigned int)inode->i_ctime.tv_nsec);
+	printk(KERN_DEBUG "creat_sqnum %llu\n", ui->creat_sqnum);
+	printk(KERN_DEBUG "xattr_size  %lld\n", ui->xattr_size);
+	printk(KERN_DEBUG "xattr_msize %lld\n", ui->xattr_msize);
+	printk(KERN_DEBUG "xattr_cnt   %d\n", ui->xattr_cnt);
+	printk(KERN_DEBUG "xattr_names %d\n", ui->xattr_names);
+	printk(KERN_DEBUG "dirty       %u\n", ui->dirty);
+	printk(KERN_DEBUG "xattr       %u\n", ui->xattr);
+	printk(KERN_DEBUG "flags       %d\n", ui->flags);
+	printk(KERN_DEBUG "compr_type  %d\n", ui->compr_type);
+	printk(KERN_DEBUG "data_len    %d\n", ui->data_len);
+}
+
 void dbg_dump_node(const struct ubifs_info *c, const void *node)
 {
 	int i, n;
