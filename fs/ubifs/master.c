@@ -94,19 +94,16 @@ static int validate_master(const struct ubifs_info *c)
 	int err;
 
 	if (c->max_sqnum >= SQNUM_WATERMARK) {
-		dbg_err("too large max_sqnum");
 		err = 1;
 		goto out;
 	}
 
 	if (c->cmt_no >= c->max_sqnum) {
-		dbg_err("invalid commit number");
 		err = 2;
 		goto out;
 	}
 
 	if (c->highest_inum >= INUM_WATERMARK) {
-		ubifs_err("too many inodes %lu", c->highest_inum);
 		err = 3;
 		goto out;
 	}
@@ -115,27 +112,23 @@ static int validate_master(const struct ubifs_info *c)
 	    c->lhead_lnum >= UBIFS_LOG_LNUM + c->log_lebs ||
 	    c->lhead_offs < 0 || c->lhead_offs >= c->leb_size ||
 	    c->lhead_offs & (c->min_io_size - 1)) {
-		dbg_err("bad log head reference");
 		err = 4;
 		goto out;
 	}
 
 	if (c->zroot.lnum >= c->leb_cnt || c->zroot.lnum < c->main_first ||
 	    c->zroot.offs >= c->leb_size || c->zroot.offs & 7) {
-		dbg_err("bad root indexing node reference");
 		err = 5;
 		goto out;
 	}
 
 	if (c->zroot.len < c->ranges[UBIFS_IDX_NODE].min_len ||
 	    c->zroot.len > c->ranges[UBIFS_IDX_NODE].max_len) {
-		dbg_err("bad root indexing node length");
 		err = 6;
 		goto out;
 	}
 
 	if (c->gc_lnum >= c->leb_cnt || c->gc_lnum < c->main_first) {
-		dbg_err("bad GC LEB number");
 		err = 7;
 		goto out;
 	}
@@ -143,21 +136,18 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->ihead_lnum >= c->leb_cnt || c->ihead_lnum < c->main_first ||
 	    c->ihead_offs % c->min_io_size || c->ihead_offs < 0 ||
 	    c->ihead_offs > c->leb_size || c->ihead_offs & 7) {
-		dbg_err("bad indexing head position");
 		err = 8;
 		goto out;
 	}
 
 	main_sz = c->main_lebs * (unsigned long long)c->leb_size;
 	if (c->old_idx_sz & 7 || c->old_idx_sz >= main_sz) {
-		dbg_err("bad index size");
 		err = 9;
 		goto out;
 	}
 
 	if (c->lpt_lnum < c->lpt_first || c->lpt_lnum > c->lpt_last ||
 	    c->lpt_offs < 0 || c->lpt_offs + c->nnode_sz > c->leb_size) {
-		dbg_err("bad LPT root position");
 		err = 10;
 		goto out;
 	}
@@ -165,7 +155,6 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->nhead_lnum < c->lpt_first || c->nhead_lnum > c->lpt_last ||
 	    c->nhead_offs < 0 || c->nhead_offs % c->min_io_size ||
 	    c->nhead_offs > c->leb_size) {
-		dbg_err("bad LPT head position");
 		err = 11;
 		goto out;
 	}
@@ -173,7 +162,6 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->ltab_lnum < c->lpt_first || c->ltab_lnum > c->lpt_last ||
 	    c->ltab_offs < 0 ||
 	    c->ltab_offs + c->ltab_sz > c->leb_size) {
-		dbg_err("bad ltab position");
 		err = 12;
 		goto out;
 	}
@@ -181,63 +169,49 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->big_lpt && (c->lsave_lnum < c->lpt_first ||
 	    c->lsave_lnum > c->lpt_last || c->lsave_offs < 0 ||
 	    c->lsave_offs + c->lsave_sz > c->leb_size)) {
-		dbg_err("bad lsave position");
 		err = 13;
 		goto out;
 	}
 
 	if (c->lscan_lnum < c->main_first || c->lscan_lnum >= c->leb_cnt) {
-		dbg_err("bad lscan_lnum");
 		err = 14;
 		goto out;
 	}
 
 	if (c->lst.empty_lebs < 0 || c->lst.empty_lebs > c->main_lebs - 2) {
-		dbg_err("bad empty LEB count");
 		err = 15;
 		goto out;
 	}
 
 	if (c->lst.idx_lebs < 0 || c->lst.idx_lebs > c->main_lebs - 1) {
-		dbg_err("bad index LEB count");
 		err = 16;
 		goto out;
 	}
 
 	if (c->lst.total_free < 0 || c->lst.total_free > main_sz ||
 	    c->lst.total_free & 7) {
-		dbg_err("bad total free");
 		err = 17;
 		goto out;
 	}
 
 	if (c->lst.total_dirty < 0 || (c->lst.total_dirty & 7)) {
-		dbg_err("bad total dirty");
 		err = 18;
 		goto out;
 	}
 
 	if (c->lst.total_used < 0 || (c->lst.total_used & 7)) {
-		dbg_err("bad total used");
 		err = 19;
 		goto out;
 	}
 
 	if (c->lst.total_free + c->lst.total_dirty +
 	    c->lst.total_used > main_sz) {
-		dbg_err("bad total free + total dirty + total used");
-		dbg_err("total free %lld, total dirty %lld, total used %lld, "
-			"sum %lld, main_sz %lld", c->lst.total_free,
-			c->lst.total_dirty, c->lst.total_used,
-			c->lst.total_free + c->lst.total_dirty +
-			c->lst.total_used, main_sz);
 		err = 20;
 		goto out;
 	}
 
 	if (c->lst.total_dead + c->lst.total_dark +
 	    c->lst.total_used + c->old_idx_sz > main_sz) {
-		dbg_err("bad total dead + total dark + total used + old idx");
 		err = 21;
 		goto out;
 	}
@@ -245,7 +219,6 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->lst.total_dead < 0 ||
 	    c->lst.total_dead > c->lst.total_free + c->lst.total_dirty ||
 	    c->lst.total_dead & 7) {
-		dbg_err("bad total dead space");
 		err = 22;
 		goto out;
 	}
@@ -253,7 +226,6 @@ static int validate_master(const struct ubifs_info *c)
 	if (c->lst.total_dark < 0 ||
 	    c->lst.total_dark > c->lst.total_free + c->lst.total_dirty ||
 	    c->lst.total_dark & 7) {
-		dbg_err("bad total dark space");
 		err = 23;
 		goto out;
 	}
