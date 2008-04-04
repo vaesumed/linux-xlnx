@@ -43,7 +43,6 @@
 #include "xfs_error.h"
 #include "xfs_bmap.h"
 #include "xfs_rw.h"
-#include "xfs_refcache.h"
 #include "xfs_buf_item.h"
 #include "xfs_log_priv.h"
 #include "xfs_dir2_trace.h"
@@ -56,6 +55,7 @@
 #include "xfs_fsops.h"
 #include "xfs_vnodeops.h"
 #include "xfs_vfsops.h"
+#include "xfs_utils.h"
 
 
 int __init
@@ -113,9 +113,6 @@ xfs_init(void)
 	xfs_ili_zone =
 		kmem_zone_init_flags(sizeof(xfs_inode_log_item_t), "xfs_ili",
 					KM_ZONE_SPREAD, NULL);
-	xfs_icluster_zone =
-		kmem_zone_init_flags(sizeof(xfs_icluster_t), "xfs_icluster",
-					KM_ZONE_SPREAD, NULL);
 
 	/*
 	 * Allocate global trace buffers.
@@ -153,11 +150,9 @@ xfs_cleanup(void)
 	extern kmem_zone_t	*xfs_inode_zone;
 	extern kmem_zone_t	*xfs_efd_zone;
 	extern kmem_zone_t	*xfs_efi_zone;
-	extern kmem_zone_t	*xfs_icluster_zone;
 
 	xfs_cleanup_procfs();
 	xfs_sysctl_unregister();
-	xfs_refcache_destroy();
 	xfs_filestream_uninit();
 	xfs_mru_cache_uninit();
 	xfs_acl_zone_destroy(xfs_acl_zone);
@@ -189,7 +184,6 @@ xfs_cleanup(void)
 	kmem_zone_destroy(xfs_efi_zone);
 	kmem_zone_destroy(xfs_ifork_zone);
 	kmem_zone_destroy(xfs_ili_zone);
-	kmem_zone_destroy(xfs_icluster_zone);
 }
 
 /*
@@ -330,7 +324,7 @@ xfs_finish_flags(
 	int			ronly = (mp->m_flags & XFS_MOUNT_RDONLY);
 
 	/* Fail a mount where the logbuf is smaller then the log stripe */
-	if (XFS_SB_VERSION_HASLOGV2(&mp->m_sb)) {
+	if (xfs_sb_version_haslogv2(&mp->m_sb)) {
 		if ((ap->logbufsize <= 0) &&
 		    (mp->m_sb.sb_logsunit > XLOG_BIG_RECORD_BSIZE)) {
 			mp->m_logbsize = mp->m_sb.sb_logsunit;
@@ -349,9 +343,8 @@ xfs_finish_flags(
 		}
 	}
 
-	if (XFS_SB_VERSION_HASATTR2(&mp->m_sb)) {
+	if (xfs_sb_version_hasattr2(&mp->m_sb))
 		mp->m_flags |= XFS_MOUNT_ATTR2;
-	}
 
 	/*
 	 * prohibit r/w mounts of read-only filesystems
@@ -366,7 +359,7 @@ xfs_finish_flags(
 	 * check for shared mount.
 	 */
 	if (ap->flags & XFSMNT_SHARED) {
-		if (!XFS_SB_VERSION_HASSHARED(&mp->m_sb))
+		if (!xfs_sb_version_hasshared(&mp->m_sb))
 			return XFS_ERROR(EINVAL);
 
 		/*
@@ -512,7 +505,7 @@ xfs_mount(
 	if (!error && logdev && logdev != ddev) {
 		unsigned int	log_sector_size = BBSIZE;
 
-		if (XFS_SB_VERSION_HASSECTOR(&mp->m_sb))
+		if (xfs_sb_version_hassector(&mp->m_sb))
 			log_sector_size = mp->m_sb.sb_logsectsize;
 		error = xfs_setsize_buftarg(mp->m_logdev_targp,
 					    mp->m_sb.sb_blocksize,
@@ -574,7 +567,7 @@ xfs_unmount(
 #ifdef HAVE_DMAPI
 	if (mp->m_flags & XFS_MOUNT_DMAPI) {
 		error = XFS_SEND_PREUNMOUNT(mp,
-				rvp, DM_RIGHT_NULL, rvp, DM_RIGHT_NULL,
+				rip, DM_RIGHT_NULL, rip, DM_RIGHT_NULL,
 				NULL, NULL, 0, 0,
 				(mp->m_dmevmask & (1<<DM_EVENT_PREUNMOUNT))?
 					0:DM_FLAGS_UNWANTED);
@@ -585,11 +578,6 @@ xfs_unmount(
 					0 : DM_FLAGS_UNWANTED;
 	}
 #endif
-	/*
-	 * First blow any referenced inode from this file system
-	 * out of the reference cache, and delete the timer.
-	 */
-	xfs_refcache_purge_mp(mp);
 
 	/*
 	 * Blow away any referenced inode in the filestreams cache.
@@ -608,7 +596,7 @@ xfs_unmount(
 	/*
 	 * Drop the reference count
 	 */
-	VN_RELE(rvp);
+	IRELE(rip);
 
 	/*
 	 * If we're forcing a shutdown, typically because of a media error,
@@ -630,7 +618,7 @@ out:
 		/* Note: mp structure must still exist for
 		 * XFS_SEND_UNMOUNT() call.
 		 */
-		XFS_SEND_UNMOUNT(mp, error == 0 ? rvp : NULL,
+		XFS_SEND_UNMOUNT(mp, error == 0 ? rip : NULL,
 			DM_RIGHT_NULL, 0, error, unmount_event_flags);
 	}
 	if (xfs_unmountfs_needed) {
@@ -653,7 +641,6 @@ xfs_quiesce_fs(
 {
 	int			count = 0, pincount;
 
-	xfs_refcache_purge_mp(mp);
 	xfs_flush_buftarg(mp->m_ddev_targp, 0);
 	xfs_finish_reclaim_all(mp, 0);
 
@@ -791,8 +778,8 @@ xfs_unmount_flush(
 		goto fscorrupt_out2;
 
 	if (rbmip) {
-		VN_RELE(XFS_ITOV(rbmip));
-		VN_RELE(XFS_ITOV(rsumip));
+		IRELE(rbmip);
+		IRELE(rsumip);
 	}
 
 	xfs_iunlock(rip, XFS_ILOCK_EXCL);
@@ -1170,10 +1157,10 @@ xfs_sync_inodes(
 			 * above, then wait until after we've unlocked
 			 * the inode to release the reference.  This is
 			 * because we can be already holding the inode
-			 * lock when VN_RELE() calls xfs_inactive().
+			 * lock when IRELE() calls xfs_inactive().
 			 *
 			 * Make sure to drop the mount lock before calling
-			 * VN_RELE() so that we don't trip over ourselves if
+			 * IRELE() so that we don't trip over ourselves if
 			 * we have to go for the mount lock again in the
 			 * inactive code.
 			 */
@@ -1181,7 +1168,7 @@ xfs_sync_inodes(
 				IPOINTER_INSERT(ip, mp);
 			}
 
-			VN_RELE(vp);
+			IRELE(ip);
 
 			vnode_refed = B_FALSE;
 		}
@@ -1321,18 +1308,6 @@ xfs_syncsub(
 		if (error) {
 			last_error = error;
 		}
-	}
-
-	/*
-	 * If this is the periodic sync, then kick some entries out of
-	 * the reference cache.  This ensures that idle entries are
-	 * eventually kicked out of the cache.
-	 */
-	if (flags & SYNC_REFCACHE) {
-		if (flags & SYNC_WAIT)
-			xfs_refcache_purge_mp(mp);
-		else
-			xfs_refcache_purge_some(mp);
 	}
 
 	/*
