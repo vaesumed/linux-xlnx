@@ -10,6 +10,7 @@
 
 #include <linux/init.h>
 #include <linux/kallsyms.h>
+#include <linux/kdebug.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -18,7 +19,6 @@
 #include <linux/timer.h>
 
 #include <asm/cacheflush.h>
-#include <asm/kdebug.h>
 #include <asm/kmemcheck.h>
 #include <asm/pgtable.h>
 #include <asm/string.h>
@@ -344,6 +344,14 @@ struct kmemcheck_context {
 
 DEFINE_PER_CPU(struct kmemcheck_context, kmemcheck_context);
 
+bool
+kmemcheck_active(struct pt_regs *regs)
+{
+	struct kmemcheck_context *data = &__get_cpu_var(kmemcheck_context);
+
+	return data->balance > 0;
+}
+
 /*
  * Called from the #PF handler.
  */
@@ -383,11 +391,11 @@ kmemcheck_show(struct pt_regs *regs)
 	 * NOTE: In the rare case of multiple faults, we must not override
 	 * the original flags:
 	 */
-	if (!(regs->flags & TF_MASK))
+	if (!(regs->flags & X86_EFLAGS_TF))
 		data->flags = regs->flags;
 
-	regs->flags |= TF_MASK;
-	regs->flags &= ~IF_MASK;
+	regs->flags |= X86_EFLAGS_TF;
+	regs->flags &= ~X86_EFLAGS_IF;
 }
 
 /*
@@ -397,11 +405,14 @@ void
 kmemcheck_hide(struct pt_regs *regs)
 {
 	struct kmemcheck_context *data = &__get_cpu_var(kmemcheck_context);
+	int n;
 
 	BUG_ON(!irqs_disabled());
 
-	--data->balance;
-	if (unlikely(data->balance != 0)) {
+	if (data->balance == 0)
+		return;
+
+	if (unlikely(data->balance != 1)) {
 		emergency_show_addr(data->addr1);
 		emergency_show_addr(data->addr2);
 		error_save_bug(regs);
@@ -409,49 +420,34 @@ kmemcheck_hide(struct pt_regs *regs)
 		data->addr2 = 0;
 		data->balance = 0;
 
-		if (!(data->flags & TF_MASK))
-			regs->flags &= ~TF_MASK;
-		if (data->flags & IF_MASK)
-			regs->flags |= IF_MASK;
+		if (!(data->flags & X86_EFLAGS_TF))
+			regs->flags &= ~X86_EFLAGS_TF;
+		if (data->flags & X86_EFLAGS_IF)
+			regs->flags |= X86_EFLAGS_IF;
 		return;
 	}
 
+	n = 0;
 	if (kmemcheck_enabled) {
-		hide_addr(data->addr1);
-		hide_addr(data->addr2);
+		n += hide_addr(data->addr1);
+		n += hide_addr(data->addr2);
+	} else {
+		n += show_addr(data->addr1);
+		n += show_addr(data->addr2);
 	}
+
+	if (n == 0)
+		return;
+
+	--data->balance;
 
 	data->addr1 = 0;
 	data->addr2 = 0;
 
-	if (!(data->flags & TF_MASK))
-		regs->flags &= ~TF_MASK;
-	if (data->flags & IF_MASK)
-		regs->flags |= IF_MASK;
-}
-
-void
-kmemcheck_prepare(struct pt_regs *regs)
-{
-	struct kmemcheck_context *data = &__get_cpu_var(kmemcheck_context);
-
-	/*
-	 * Detect and handle recursive page faults. This can happen, for
-	 * example, when we have an instruction that will cause a page fault
-	 * for both a tracked kernel page and a userspace page in the same
-	 * instruction.
-	 */
-	if (data->balance > 0) {
-		/*
-		 * We can have multi-address faults from accesses like:
-		 *
-		 *          rep movsb %ds:(%esi),%es:(%edi)
-		 *
-		 * So in this case, we hide the current in-progress fault
-		 * and handle it after the second fault has been handled.
-		 */
-		kmemcheck_hide(regs);
-	}
+	if (!(data->flags & X86_EFLAGS_TF))
+		regs->flags &= ~X86_EFLAGS_TF;
+	if (data->flags & X86_EFLAGS_IF)
+		regs->flags |= X86_EFLAGS_IF;
 }
 
 void
@@ -826,15 +822,18 @@ kmemcheck_access(struct pt_regs *regs,
  * whole memory area is within a single page.
  */
 static void
-memset_one_page(unsigned long s, int c, size_t n)
+memset_one_page(void *s, int c, size_t n)
 {
+	unsigned long addr;
 	void *x;
 	unsigned long flags;
 
-	x = address_get_shadow(s);
+	addr = (unsigned long) s;
+
+	x = address_get_shadow(addr);
 	if (!x) {
 		/* The page isn't being tracked. */
-		__memset((void *) s, c, n);
+		__memset(s, c, n);
 		return;
 	}
 
@@ -842,11 +841,11 @@ memset_one_page(unsigned long s, int c, size_t n)
 	 * should be able to change them. */
 	local_irq_save(flags);
 
-	show_addr(s);
-	__memset((void *) s, c, n);
-	__memset((void *) x, SHADOW_INITIALIZED, n);
+	show_addr(addr);
+	__memset(s, c, n);
+	__memset(x, SHADOW_INITIALIZED, n);
 	if (kmemcheck_enabled)
-		hide_addr(s);
+		hide_addr(addr);
 
 	local_irq_restore(flags);
 }
@@ -857,8 +856,9 @@ memset_one_page(unsigned long s, int c, size_t n)
  * split into page-sized (or smaller, for the ends) chunks.
  */
 void *
-kmemcheck_memset(unsigned long s, int c, size_t n)
+kmemcheck_memset(void *s, int c, size_t n)
 {
+	unsigned long addr;
 	unsigned long start_page, start_offset;
 	unsigned long end_page, end_offset;
 	unsigned long i;
@@ -867,12 +867,14 @@ kmemcheck_memset(unsigned long s, int c, size_t n)
 		return s;
 
 	if (!slab_is_available()) {
-		__memset((void *) s, c, n);
+		__memset(s, c, n);
 		return s;
 	}
 
-	start_page = s & PAGE_MASK;
-	end_page = (s + n) & PAGE_MASK;
+	addr = (unsigned long) s;
+
+	start_page = addr & PAGE_MASK;
+	end_page = (addr + n) & PAGE_MASK;
 
 	if (start_page == end_page) {
 		/* The entire area is within the same page. Good, we only
@@ -881,16 +883,16 @@ kmemcheck_memset(unsigned long s, int c, size_t n)
 		return s;
 	}
 
-	start_offset = s & ~PAGE_MASK;
-	end_offset = (s + n) & ~PAGE_MASK;
+	start_offset = addr & ~PAGE_MASK;
+	end_offset = (addr + n) & ~PAGE_MASK;
 
 	/* Clear the head, body, and tail of the memory area. */
 	if (start_offset < PAGE_SIZE)
 		memset_one_page(s, c, PAGE_SIZE - start_offset);
 	for (i = start_page + PAGE_SIZE; i < end_page; i += PAGE_SIZE)
-		memset_one_page(i, c, PAGE_SIZE);
+		memset_one_page((void *) i, c, PAGE_SIZE);
 	if (end_offset > 0)
-		memset_one_page(end_page, c, end_offset);
+		memset_one_page((void *) end_page, c, end_offset);
 
 	return s;
 }
