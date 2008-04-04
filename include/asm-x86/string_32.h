@@ -309,9 +309,9 @@ static __always_inline void *__constant_c_and_count_memset(void *s, unsigned lon
 /* If kmemcheck is enabled, our best bet is a custom memset() that disables
  * checking in order to save a whole lot of (unnecessary) page faults. */
 #ifdef CONFIG_KMEMCHECK
-void *kmemcheck_memset(unsigned long s, int c, size_t n);
+void *kmemcheck_memset(void *s, int c, size_t n);
 #undef memset
-#define memset(s, c, n) kmemcheck_memset((unsigned long) (s), (c), (n))
+#define memset(s, c, n) kmemcheck_memset((s), (c), (n))
 #endif
 
 /*
