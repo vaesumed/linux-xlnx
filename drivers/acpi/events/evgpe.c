@@ -248,7 +248,8 @@ acpi_status acpi_ev_disable_gpe(struct acpi_gpe_event_info *gpe_event_info)
 
 	ACPI_FUNCTION_TRACE(ev_disable_gpe);
 
-	if (!(gpe_event_info->flags & ACPI_GPE_ENABLE_MASK)) {
+	if (gpe_event_info->flags &&
+		(!(gpe_event_info->flags & ACPI_GPE_ENABLE_MASK))) {
 		return_ACPI_STATUS(AE_OK);
 	}
 
