@@ -10,13 +10,21 @@ enum kmemcheck_method {
 };
 
 #ifdef CONFIG_KMEMCHECK
-void kmemcheck_prepare(struct pt_regs *regs);
+bool kmemcheck_active(struct pt_regs *regs);
 
 void kmemcheck_show(struct pt_regs *regs);
 void kmemcheck_hide(struct pt_regs *regs);
 
 void kmemcheck_access(struct pt_regs *regs,
 	unsigned long address, enum kmemcheck_method method);
-#endif
+#else
+static inline bool kmemcheck_active(struct pt_regs *regs) { return false; }
+
+static inline void kmemcheck_show(struct pt_regs *regs) { }
+static inline void kmemcheck_hide(struct pt_regs *regs) { }
+
+static inline void kmemcheck_access(struct pt_regs *regs,
+	unsigned long address, enum kmemcheck_method method) { }
+#endif /* CONFIG_KMEMCHECK */
 
 #endif

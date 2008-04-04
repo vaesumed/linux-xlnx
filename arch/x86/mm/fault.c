@@ -515,13 +515,11 @@ static int vmalloc_fault(struct pt_regs *regs, unsigned long address,
 		if (!pte_hidden(*pte_k))
 			return -1;
 
-#ifdef CONFIG_KMEMCHECK
 		if (error_code & 2)
 			kmemcheck_access(regs, address, KMEMCHECK_WRITE);
 		else
 			kmemcheck_access(regs, address, KMEMCHECK_READ);
 		kmemcheck_show(regs);
-#endif
 	}
 	return 0;
 #else
@@ -611,12 +609,15 @@ void __kprobes do_page_fault(struct pt_regs *regs, unsigned long error_code)
 
 	si_code = SEGV_MAPERR;
 
+	/*
+	 * Detect and handle instructions that would cause a page fault for
+	 * both a tracked kernel page and a userspace page.
+	 */
+	if(kmemcheck_active(regs))
+		kmemcheck_hide(regs);
+
 	if (notify_page_fault(regs))
 		return;
-
-#ifdef CONFIG_KMEMCHECK
-	kmemcheck_prepare(regs);
-#endif
 
 	/*
 	 * We fault-in kernel-space virtual memory on-demand. The
