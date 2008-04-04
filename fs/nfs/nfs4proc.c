@@ -51,6 +51,7 @@
 
 #include "nfs4_fs.h"
 #include "delegation.h"
+#include "internal.h"
 #include "iostat.h"
 
 #define NFSDBG_FACILITY		NFSDBG_PROC
@@ -773,6 +774,7 @@ static int _nfs4_proc_open_confirm(struct nfs4_opendata *data)
 		.rpc_message = &msg,
 		.callback_ops = &nfs4_open_confirm_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
 	int status;
@@ -910,6 +912,7 @@ static int _nfs4_proc_open(struct nfs4_opendata *data)
 		.rpc_message = &msg,
 		.callback_ops = &nfs4_open_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
 	int status;
@@ -1315,6 +1318,7 @@ int nfs4_do_close(struct path *path, struct nfs4_state *state, int wait)
 		.rpc_client = server->client,
 		.rpc_message = &msg,
 		.callback_ops = &nfs4_close_ops,
+		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
 	int status = -ENOMEM;
@@ -1404,7 +1408,7 @@ nfs4_atomic_open(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 		BUG_ON(nd->intent.open.flags & O_CREAT);
 	}
 
-	cred = rpcauth_lookupcred(NFS_CLIENT(dir)->cl_auth, 0);
+	cred = rpc_lookup_cred();
 	if (IS_ERR(cred))
 		return (struct dentry *)cred;
 	parent = dentry->d_parent;
@@ -1439,7 +1443,7 @@ nfs4_open_revalidate(struct inode *dir, struct dentry *dentry, int openflags, st
 	struct rpc_cred *cred;
 	struct nfs4_state *state;
 
-	cred = rpcauth_lookupcred(NFS_CLIENT(dir)->cl_auth, 0);
+	cred = rpc_lookup_cred();
 	if (IS_ERR(cred))
 		return PTR_ERR(cred);
 	state = nfs4_do_open(dir, &path, openflags, NULL, cred);
@@ -1656,7 +1660,7 @@ nfs4_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 
 	nfs_fattr_init(fattr);
 	
-	cred = rpcauth_lookupcred(NFS_CLIENT(inode)->cl_auth, 0);
+	cred = rpc_lookup_cred();
 	if (IS_ERR(cred))
 		return PTR_ERR(cred);
 
@@ -1892,7 +1896,7 @@ nfs4_proc_create(struct inode *dir, struct dentry *dentry, struct iattr *sattr,
 	struct rpc_cred *cred;
 	int status = 0;
 
-	cred = rpcauth_lookupcred(NFS_CLIENT(dir)->cl_auth, 0);
+	cred = rpc_lookup_cred();
 	if (IS_ERR(cred)) {
 		status = PTR_ERR(cred);
 		goto out;
@@ -2761,10 +2765,10 @@ nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server)
 		case -NFS4ERR_STALE_CLIENTID:
 		case -NFS4ERR_STALE_STATEID:
 		case -NFS4ERR_EXPIRED:
-			rpc_sleep_on(&clp->cl_rpcwaitq, task, NULL, NULL);
+			rpc_sleep_on(&clp->cl_rpcwaitq, task, NULL);
 			nfs4_schedule_state_recovery(clp);
 			if (test_bit(NFS4CLNT_STATE_RECOVER, &clp->cl_state) == 0)
-				rpc_wake_up_task(task);
+				rpc_wake_up_queued_task(&clp->cl_rpcwaitq, task);
 			task->tk_status = 0;
 			return -EAGAIN;
 		case -NFS4ERR_DELAY:
@@ -3235,6 +3239,7 @@ static struct rpc_task *nfs4_do_unlck(struct file_lock *fl,
 		.rpc_client = NFS_CLIENT(lsp->ls_state->inode),
 		.rpc_message = &msg,
 		.callback_ops = &nfs4_locku_ops,
+		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
 
@@ -3419,6 +3424,7 @@ static int _nfs4_do_setlk(struct nfs4_state *state, int cmd, struct file_lock *f
 		.rpc_client = NFS_CLIENT(state->inode),
 		.rpc_message = &msg,
 		.callback_ops = &nfs4_lock_ops,
+		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
 	int ret;
