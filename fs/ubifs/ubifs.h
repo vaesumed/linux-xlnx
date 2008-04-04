@@ -25,6 +25,7 @@
 #ifndef __UBIFS_H__
 #define __UBIFS_H__
 
+#include <asm/div64.h>
 #include <linux/statfs.h>
 #include <linux/fs.h>
 #include <linux/err.h>

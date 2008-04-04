@@ -26,7 +26,6 @@
  * change it. The superblock node mostly contains geometry information.
  */
 
-#include <asm/div64.h>
 #include "ubifs.h"
 
 /*
