@@ -910,19 +910,13 @@ void __kprobes do_debug(struct pt_regs *regs, long error_code)
 
 	get_debugreg(condition, 6);
 
-#ifdef CONFIG_KMEMCHECK
 	/* Catch kmemcheck conditions first of all! */
 	if (condition & DR_STEP) {
-		if (!(regs->flags & X86_VM_MASK) && !user_mode(regs) &&
-			((void *)regs->ip != system_call) &&
-			((void *)regs->ip != x86_debug) &&
-			((void *)regs->ip != ia32_sysenter_target) &&
-			((void *)regs->ip != sysenter_past_esp)) {
+		if (kmemcheck_active(regs)) {
 			kmemcheck_hide(regs);
 			return;
 		}
 	}
-#endif
 
 	/*
 	 * The processor cleared BTF, so don't mark that we need it set.

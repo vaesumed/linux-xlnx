@@ -90,7 +90,7 @@ endif
 obj-$(CONFIG_SCx200)		+= scx200.o
 scx200-y			+= scx200_32.o
 
-obj-$(CONFIG_KMEMCHECK)		+= kmemcheck_32.o
+obj-$(CONFIG_KMEMCHECK)		+= kmemcheck.o
 
 ###
 # 64 bit specific files
