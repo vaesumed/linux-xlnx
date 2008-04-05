@@ -109,7 +109,7 @@ static void create_kthread(struct kthread_create_info *create)
 		 */
 		sched_setscheduler(create->result, SCHED_NORMAL, &param);
 		set_user_nice(create->result, KTHREAD_NICE_LEVEL);
-		set_cpus_allowed(create->result, cpu_system_map);
+		set_cpus_allowed_ptr(create->result, &cpu_system_map);
 	}
 	complete(&create->done);
 }
@@ -235,7 +235,7 @@ int kthreadd(void *unused)
 	set_task_comm(tsk, "kthreadd");
 	ignore_signals(tsk);
 	set_user_nice(tsk, KTHREAD_NICE_LEVEL);
-	set_cpus_allowed(tsk, cpu_system_map);
+	set_cpus_allowed_ptr(tsk, &cpu_system_map);
 
 	current->flags |= PF_NOFREEZE;
 
@@ -284,7 +284,7 @@ again:
 			 */
 			get_task_struct(t);
 			rcu_read_unlock();
-			set_cpus_allowed(t, *new_system_map);
+			set_cpus_allowed_ptr(t, new_system_map);
 			put_task_struct(t);
 			goto again;
 		}
