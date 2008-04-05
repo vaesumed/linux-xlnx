@@ -158,7 +158,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 		sup_flags |= UBIFS_FLG_BIGLPT;
 
 	sup->ch.node_type  = UBIFS_SB_NODE;
-	sup->key_hash      = c->key_hash_type;
+	sup->key_hash      = UBIFS_KEY_HASH_R5;
 	sup->flags         = cpu_to_le32(sup_flags);
 	sup->min_io_size   = cpu_to_le32(c->min_io_size);
 	sup->leb_size      = cpu_to_le32(c->leb_size);
