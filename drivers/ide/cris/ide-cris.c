@@ -811,7 +811,7 @@ static int __init init_e100_ide(void)
 		hwif = ide_find_port();
 		if (hwif == NULL)
 			continue;
-		ide_init_port_data(hwif, hwif->index);
+
 		ide_init_port_hw(hwif, &hw);
 
 		hwif->ata_input_data = &cris_ide_input_data;
