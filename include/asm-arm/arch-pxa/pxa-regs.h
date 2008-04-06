@@ -2016,11 +2016,6 @@
 #define CICR0_ENB	(1 << 28)	/* Camera interface enable */
 #define CICR0_DIS	(1 << 27)	/* Camera interface disable */
 #define CICR0_SIM	(0x7 << 24)	/* Sensor interface mode mask */
-#define CICR0_SIM_MP	(0 << 24)
-#define CICR0_SIM_SP	(1 << 24)
-#define CICR0_SIM_MS	(2 << 24)
-#define CICR0_SIM_EP	(3 << 24)
-#define CICR0_SIM_ES	(4 << 24)
 #define CICR0_TOM	(1 << 9)	/* Time-out mask */
 #define CICR0_RDAVM	(1 << 8)	/* Receive-data-available mask */
 #define CICR0_FEM	(1 << 7)	/* FIFO-empty mask */
@@ -2070,20 +2065,6 @@
 #define CICR4_MCLK_EN	(1 << 19)	/* MCLK enable */
 #define CICR4_FR_RATE	(0x7 << 8)	/* Frame rate mask */
 #define CICR4_DIV	(0xff << 0)	/* Clock divisor mask */
-
-#define CICR1_DW_VAL(x)		((x) & CICR1_DW)		/* Data bus width */
-#define CICR1_PPL_VAL(x)	(((x) << 15) & CICR1_PPL)	/* Pixels per line */
-
-#define CICR2_BLW_VAL(x)	(((x) << 24) & CICR2_BLW)	/* Beginning-of-line pixel clock wait count */
-#define CICR2_ELW_VAL(x)	(((x) << 16) & CICR2_ELW)	/* End-of-line pixel clock wait count */
-#define CICR2_HSW_VAL(x)	(((x) << 10) & CICR2_HSW)	/* Horizontal sync pulse width */
-#define CICR2_BFPW_VAL(x)	(((x) << 3) & CICR2_BFPW)	/* Beginning-of-frame pixel clock wait count */
-#define CICR2_FSW_VAL(x)	(((x) << 0) & CICR2_FSW)	/* Frame stabilization wait count */
-
-#define CICR3_BFW_VAL(x)	(((x) << 24) & CICR3_BFW)	/* Beginning-of-frame line clock wait count  */
-#define CICR3_EFW_VAL(x)	(((x) << 16) & CICR3_EFW)	/* End-of-frame line clock wait count */
-#define CICR3_VSW_VAL(x)	(((x) << 11) & CICR3_VSW)	/* Vertical sync pulse width */
-#define CICR3_LPF_VAL(x)	(((x) << 0) & CICR3_LPF)	/* Lines per frame */
 
 #define CISR_FTO	(1 << 15)	/* FIFO time-out */
 #define CISR_RDAV_2	(1 << 14)	/* Channel 2 receive data available */
