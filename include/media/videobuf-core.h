@@ -144,6 +144,8 @@ struct videobuf_qtype_ops {
 				 int vbihack,
 				 int nonblocking);
 	int (*mmap_free)	(struct videobuf_queue *q);
+	int (*mmap_setup)	(struct videobuf_queue *q,
+				 struct videobuf_buffer *vb);
 	int (*mmap_mapper)	(struct videobuf_queue *q,
 				struct vm_area_struct *vma);
 };
@@ -151,7 +153,9 @@ struct videobuf_qtype_ops {
 struct videobuf_queue {
 	struct mutex               vb_lock;
 	spinlock_t                 *irqlock;
-	void			   *dev; /* on pci, points to struct pci_dev */
+	struct device		   *dev;
+
+	wait_queue_head_t	   wait; /* wait if queue is empty */
 
 	enum v4l2_buf_type         type;
 	unsigned int               inputs; /* for V4L2_BUF_FLAG_INPUT */
@@ -164,7 +168,6 @@ struct videobuf_queue {
 
 	unsigned int               streaming:1;
 	unsigned int               reading:1;
-	unsigned int		   is_mmapped:1;
 
 	/* capture via mmap() + ioctl(QBUF/DQBUF) */
 	struct list_head           stream;
@@ -185,7 +188,7 @@ void *videobuf_alloc(struct videobuf_queue* q);
 
 void videobuf_queue_core_init(struct videobuf_queue *q,
 			 struct videobuf_queue_ops *ops,
-			 void *dev,
+			 struct device *dev,
 			 spinlock_t *irqlock,
 			 enum v4l2_buf_type type,
 			 enum v4l2_field field,
