@@ -516,176 +516,6 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
 }
 
 /**
- * lookup_level0 - search for zero-level znode.
- * @c: UBIFS file-system description object
- * @key:  key to lookup
- * @zn: znode is returned here
- * @n: znode branch slot number is returned here
- *
- * This function looks up the TNC tree and search for zero-level znode which
- * refers key @key. The found zero-level znode is returned in @zn. There are 3
- * cases:
- *   o exact match, i.e. the found zero-level znode contains key @key, then %1
- *     is returned and slot number of the matched branch is stored in @n;
- *   o not exact match, which means that zero-level znode does not contain @key
- *     then %0 is returned and slot number of the closed branch is stored in
- *     @n;
- *   o @key is so small that it is even less then the lowest key of the
- *     leftmost zero-level node, then %0 is returned and %0 is stored in @n.
- *
- * Note, when the TNC tree is traversed, some znodes may be absent, then this
- * function reads corresponding indexing nodes and inserts them to TNC. In
- * case of failure, a negative error code is returned.
- */
-static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
-			 struct ubifs_znode **zn, int *n)
-{
-	int exact;
-	struct ubifs_znode *znode;
-	unsigned long time = get_seconds();
-
-	dbg_tnc_key(c, key, "search key");
-
-	znode = c->zroot.znode;
-	if (unlikely(!znode)) {
-		znode = load_znode(c, &c->zroot, NULL, 0);
-		if (IS_ERR(znode))
-			return PTR_ERR(znode);
-	}
-
-	znode->time = time;
-
-	while (1) {
-		struct ubifs_zbranch *zbr;
-
-		/*
-		 * The below is a debugging hack to make UBIFS eat RAM and
-		 * cause fake memory pressure. It is compiled out if it is not
-		 * enabled in kernel configuration.
-		 */
-		dbg_eat_memory();
-
-		exact = search_zbranch(c, znode, key, n);
-
-		if (znode->level == 0)
-			break;
-
-		if (*n < 0)
-			*n = 0;
-		zbr = &znode->zbranch[*n];
-
-		dbg_tnc_key(c, &zbr->key, "at lvl %d, next zbr %d, key",
-			    znode->level, *n);
-
-		if (zbr->znode) {
-			znode->time = time;
-			znode = zbr->znode;
-			continue;
-		}
-
-		/* znode is not in TNC cache, load it from the media */
-		znode = load_znode(c, zbr, znode, *n);
-		if (IS_ERR(znode))
-			return PTR_ERR(znode);
-	}
-
-	*zn = znode;
-	ubifs_assert(exact >= 0 && exact < c->fanout);
-	return exact;
-}
-
-/**
- * lookup_level0_dirty - search for zero-level znode dirtying.
- * @c: UBIFS file-system description object
- * @key:  key to lookup
- * @zn: znode is returned here
- * @n: znode branch slot number is returned here
- *
- * This function looks up the TNC tree and search for zero-level znode which
- * refers key @key. The found zero-level znode is returned in @zn. There are 3
- * cases:
- *   o exact match, i.e. the found zero-level znode contains key @key, then %1
- *     is returned and slot number of the matched branch is stored in @n;
- *   o not exact match, which means that zero-level znode does not contain @key
- *     then %0 is returned and slot number of the closed branch is stored in
- *     @n;
- *   o @key is so small that it is even less then the lowest key of the
- *     leftmost zero-level node, then %0 is returned and %0 is stored in @n.
- *
- * Additionally all znodes in the path from the root to the located zero-level
- * znode are marked as dirty.
- *
- * Note, when the TNC tree is traversed, some znodes may be absent, then this
- * function reads corresponding indexing nodes and inserts them to TNC.. In
- * case of failure, a negative error code is returned.
- */
-static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
-			       struct ubifs_znode **zn, int *n)
-{
-	int exact;
-	struct ubifs_znode *znode;
-	unsigned long time = get_seconds();
-
-	dbg_tnc_key(c, key, "search and dirty key");
-
-	znode = c->zroot.znode;
-	if (unlikely(!znode)) {
-		znode = load_znode(c, &c->zroot, NULL, 0);
-		if (IS_ERR(znode))
-			return PTR_ERR(znode);
-	}
-
-	znode = dirty_cow_znode(c, &c->zroot);
-	if (IS_ERR(znode))
-		return PTR_ERR(znode);
-
-	znode->time = time;
-
-	while (1) {
-		struct ubifs_zbranch *zbr;
-
-		/*
-		 * The below is a debugging hack to make UBIFS eat RAM and
-		 * cause fake memory pressure. It is compiled out if it is not
-		 * enabled in kernel configuration.
-		 */
-		dbg_eat_memory();
-
-		exact = search_zbranch(c, znode, key, n);
-
-		if (znode->level == 0)
-			break;
-
-		if (*n < 0)
-			*n = 0;
-		zbr = &znode->zbranch[*n];
-
-		dbg_tnc_key(c, &zbr->key, "at lvl %d, next zbr %d, key",
-			    znode->level, *n);
-
-		if (zbr->znode) {
-			znode->time = time;
-			znode = dirty_cow_znode(c, zbr);
-			if (IS_ERR(znode))
-				return PTR_ERR(znode);
-			continue;
-		}
-
-		/* znode is not in TNC cache, load it from the media */
-		znode = load_znode(c, zbr, znode, *n);
-		if (IS_ERR(znode))
-			return PTR_ERR(znode);
-		znode = dirty_cow_znode(c, zbr);
-		if (IS_ERR(znode))
-			return PTR_ERR(znode);
-	}
-
-	*zn = znode;
-	ubifs_assert(exact >= 0 && exact < c->fanout);
-	return exact;
-}
-
-/**
  * lnc_lookup - lookup the leaf-node-cache.
  * @c: UBIFS file-system description object
  * @zbr: zbranch of leaf node
@@ -1439,6 +1269,320 @@ static int resolve_collision_directly(struct ubifs_info *c,
 }
 
 /**
+ * dirty_cow_bottom_up - dirty a znode and its ancestors.
+ * @c: UBIFS file-system description object
+ * @znode: znode to dirty
+ *
+ * If we do not have a unique key that resides in a znode, then we cannot
+ * dirty that znode from the top down (i.e. by using lookup_level0_dirty)
+ * This function records the path back to the last dirty ancestor, and then
+ * dirties the znodes on that path.
+ */
+static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
+					       struct ubifs_znode *znode)
+{
+	struct ubifs_znode *zp;
+	int *path = NULL, h, p = 0;
+
+	ubifs_assert(c->zroot.znode != NULL);
+	ubifs_assert(znode != NULL);
+	h = c->zroot.znode->level;
+	if (h) {
+		path = kmalloc(sizeof(int) * h, GFP_NOFS);
+		if (!path)
+			return ERR_PTR(-ENOMEM);
+		/* Go up until parent is dirty */
+		while (1) {
+			int n;
+
+			zp = znode->parent;
+			if (!zp)
+				break;
+			n = znode->iip;
+			ubifs_assert(p < h);
+			path[p++] = n;
+			if (!zp->cnext && ubifs_zn_dirty(znode))
+				break;
+			znode = zp;
+		}
+	}
+	/* Come back down, dirtying as we go */
+	while (1) {
+		struct ubifs_zbranch *zbr;
+
+		zp = znode->parent;
+		if (zp) {
+			ubifs_assert(path[p - 1] >= 0);
+			ubifs_assert(path[p - 1] < zp->child_cnt);
+			zbr = &zp->zbranch[path[--p]];
+			znode = dirty_cow_znode(c, zbr);
+		} else {
+			ubifs_assert(znode == c->zroot.znode);
+			znode = dirty_cow_znode(c, &c->zroot);
+		}
+		if (IS_ERR(znode) || !p)
+			break;
+		ubifs_assert(path[p - 1] >= 0);
+		ubifs_assert(path[p - 1] < znode->child_cnt);
+		znode = znode->zbranch[path[p - 1]].znode;
+	}
+	kfree(path);
+	return znode;
+}
+
+/**
+ * lookup_level0 - search for zero-level znode.
+ * @c: UBIFS file-system description object
+ * @key:  key to lookup
+ * @zn: znode is returned here
+ * @n: znode branch slot number is returned here
+ *
+ * This function looks up the TNC tree and search for zero-level znode which
+ * refers key @key. The found zero-level znode is returned in @zn. There are 3
+ * cases:
+ *   o exact match, i.e. the found zero-level znode contains key @key, then %1
+ *     is returned and slot number of the matched branch is stored in @n;
+ *   o not exact match, which means that zero-level znode does not contain @key
+ *     then %0 is returned and slot number of the closed branch is stored in
+ *     @n;
+ *   o @key is so small that it is even less then the lowest key of the
+ *     leftmost zero-level node, then %0 is returned and %0 is stored in @n.
+ *
+ * Note, when the TNC tree is traversed, some znodes may be absent, then this
+ * function reads corresponding indexing nodes and inserts them to TNC. In
+ * case of failure, a negative error code is returned.
+ */
+static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
+			 struct ubifs_znode **zn, int *n)
+{
+	int err, exact;
+	struct ubifs_znode *znode;
+	unsigned long time = get_seconds();
+
+	dbg_tnc_key(c, key, "search key");
+
+	znode = c->zroot.znode;
+	if (unlikely(!znode)) {
+		znode = load_znode(c, &c->zroot, NULL, 0);
+		if (IS_ERR(znode))
+			return PTR_ERR(znode);
+	}
+
+	znode->time = time;
+
+	while (1) {
+		struct ubifs_zbranch *zbr;
+
+		/*
+		 * The below is a debugging hack to make UBIFS eat RAM and
+		 * cause fake memory pressure. It is compiled out if it is not
+		 * enabled in kernel configuration.
+		 */
+		dbg_eat_memory();
+
+		exact = search_zbranch(c, znode, key, n);
+
+		if (znode->level == 0)
+			break;
+
+		if (*n < 0)
+			*n = 0;
+		zbr = &znode->zbranch[*n];
+
+		dbg_tnc_key(c, &zbr->key, "at lvl %d, next zbr %d, key",
+			    znode->level, *n);
+
+		if (zbr->znode) {
+			znode->time = time;
+			znode = zbr->znode;
+			continue;
+		}
+
+		/* znode is not in TNC cache, load it from the media */
+		znode = load_znode(c, zbr, znode, *n);
+		if (IS_ERR(znode))
+			return PTR_ERR(znode);
+	}
+
+	*zn = znode;
+	if (exact || !is_hash_key(c, key) || *n != -1)
+		return exact;
+
+	/*
+	 * Here is a tricky palace. We have not found the key and this is a
+	 * "hashed" key, which may collide. The rest of the code deals with
+	 * situations like this:
+	 *
+	 *                  | 3 | 5 |
+	 *                  /       \
+	 *          | 3 | 5 |      | 6 | 7 | (x)
+	 *
+	 * Or more complex example:
+	 *
+	 *                | 1 | 5 |
+	 *                /       \
+	 *       | 1 | 3 |         | 5 | 8 |
+	 *              \           /
+	 *          | 5 | 5 |   | 6 | 7 | (x)
+	 *
+	 * In the examples, if we are looking for key "5", we may reach nodes
+	 * marked with "(x)". In this case what we have do is to look at the
+	 * left and see if there is "5" key there. If there is, we have to
+	 * return it.
+	 *
+	 * Note, this whole situation is possible because we allow to have
+	 * elements which are equivalent to the next key in the parent in the
+	 * children of current znode. For example, this happens if we split a
+	 * znode like this: | 3 | 5 | 5 | 6 | 7 |which results in something
+	 * like this:
+	 *                      | 3 | 5 |
+	 *                       /     \
+	 *                | 3 | 5 |   | 5 | 6 | 7 |
+	 *                              ^
+	 * Which becomes what is at the first "picture" after key "5" marked
+	 * with "^" is removed. What could be done is we could prohibit
+	 * splitting in the middle of the colliding sequence. Also, when
+	 * removing the leftmost key, we would have to correct the key of the
+	 * parent node, which introduces additional complications. Namely, if
+	 * we change the the leftmost key of the parent znode, the garbage
+	 * collector will be unable to find it (it is doing this when GC'ing an
+	 * indexing LEB). Although we already an additional RB-tree where we
+	 * save such changed znodes (see 'ins_clr_old_idx_znode()') until
+	 * after the commit. But anyway, this does not look easy to implement
+	 * so we did not try this.
+	 */
+	err = tnc_prev(c, &znode, n);
+	if (err == -ENOENT) {
+		*n = -1;
+		return 0;
+	}
+	if (unlikely(err < 0))
+		return err;
+	if (keys_cmp(c, key, &znode->zbranch[*n].key)) {
+		*n = -1;
+		return 0;
+	}
+
+	*zn = znode;
+	return 1;
+}
+
+/**
+ * lookup_level0_dirty - search for zero-level znode dirtying.
+ * @c: UBIFS file-system description object
+ * @key:  key to lookup
+ * @zn: znode is returned here
+ * @n: znode branch slot number is returned here
+ *
+ * This function looks up the TNC tree and search for zero-level znode which
+ * refers key @key. The found zero-level znode is returned in @zn. There are 3
+ * cases:
+ *   o exact match, i.e. the found zero-level znode contains key @key, then %1
+ *     is returned and slot number of the matched branch is stored in @n;
+ *   o not exact match, which means that zero-level znode does not contain @key
+ *     then %0 is returned and slot number of the closed branch is stored in
+ *     @n;
+ *   o @key is so small that it is even less then the lowest key of the
+ *     leftmost zero-level node, then %0 is returned and %-1 is stored in @n.
+ *
+ * Additionally all znodes in the path from the root to the located zero-level
+ * znode are marked as dirty.
+ *
+ * Note, when the TNC tree is traversed, some znodes may be absent, then this
+ * function reads corresponding indexing nodes and inserts them to TNC. In
+ * case of failure, a negative error code is returned.
+ */
+static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
+			       struct ubifs_znode **zn, int *n)
+{
+	int err, exact;
+	struct ubifs_znode *znode;
+	unsigned long time = get_seconds();
+
+	dbg_tnc_key(c, key, "search and dirty key");
+
+	znode = c->zroot.znode;
+	if (unlikely(!znode)) {
+		znode = load_znode(c, &c->zroot, NULL, 0);
+		if (IS_ERR(znode))
+			return PTR_ERR(znode);
+	}
+
+	znode = dirty_cow_znode(c, &c->zroot);
+	if (IS_ERR(znode))
+		return PTR_ERR(znode);
+
+	znode->time = time;
+
+	while (1) {
+		struct ubifs_zbranch *zbr;
+
+		/*
+		 * The below is a debugging hack to make UBIFS eat RAM and
+		 * cause fake memory pressure. It is compiled out if it is not
+		 * enabled in kernel configuration.
+		 */
+		dbg_eat_memory();
+
+		exact = search_zbranch(c, znode, key, n);
+
+		if (znode->level == 0)
+			break;
+
+		if (*n < 0)
+			*n = 0;
+		zbr = &znode->zbranch[*n];
+
+		dbg_tnc_key(c, &zbr->key, "at lvl %d, next zbr %d, key",
+			    znode->level, *n);
+
+		if (zbr->znode) {
+			znode->time = time;
+			znode = dirty_cow_znode(c, zbr);
+			if (IS_ERR(znode))
+				return PTR_ERR(znode);
+			continue;
+		}
+
+		/* znode is not in TNC cache, load it from the media */
+		znode = load_znode(c, zbr, znode, *n);
+		if (IS_ERR(znode))
+			return PTR_ERR(znode);
+		znode = dirty_cow_znode(c, zbr);
+		if (IS_ERR(znode))
+			return PTR_ERR(znode);
+	}
+
+	*zn = znode;
+	if (exact || !is_hash_key(c, key) || *n != -1)
+		return exact;
+
+	/*
+	 * See huge comment at 'lookup_level0_dirty()' what is the rest of the
+	 * code.
+	 */
+	err = tnc_prev(c, &znode, n);
+	if (err == -ENOENT) {
+		*n = -1;
+		return 0;
+	}
+	if (unlikely(err < 0))
+		return err;
+	if (keys_cmp(c, key, &znode->zbranch[*n].key)) {
+		*n = -1;
+		return 0;
+	}
+
+	if (znode->cnext || !ubifs_zn_dirty(znode)) {
+		znode = dirty_cow_bottom_up(c, znode);
+		if (IS_ERR(znode))
+			return PTR_ERR(znode);
+	}
+	*zn = znode;
+	return 1;
+}
+
+/**
  * ubifs_tnc_lookup - look up a file-system node.
  * @c: UBIFS file-system description object
  * @key: node key to lookup
@@ -1935,68 +2079,6 @@ int ubifs_tnc_add(struct ubifs_info *c, const union ubifs_key *key, int lnum,
 	mutex_unlock(&c->tnc_mutex);
 
 	return err;
-}
-
-/**
- * dirty_cow_bottom_up - dirty a znode and its ancestors.
- * @c: UBIFS file-system description object
- * @znode: znode to dirty
- *
- * If we do not have a unique key that resides in a znode, then we cannot
- * dirty that znode from the top down (i.e. by using lookup_level0_dirty)
- * This function records the path back to the last dirty ancestor, and then
- * dirties the znodes on that path.
- */
-static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
-					       struct ubifs_znode *znode)
-{
-	struct ubifs_znode *zp;
-	int *path = NULL, h, p = 0;
-
-	ubifs_assert(c->zroot.znode != NULL);
-	ubifs_assert(znode != NULL);
-	h = c->zroot.znode->level;
-	if (h) {
-		path = kmalloc(sizeof(int) * h, GFP_NOFS);
-		if (!path)
-			return ERR_PTR(-ENOMEM);
-		/* Go up until parent is dirty */
-		while (1) {
-			int n;
-
-			zp = znode->parent;
-			if (!zp)
-				break;
-			n = znode->iip;
-			ubifs_assert(p < h);
-			path[p++] = n;
-			if (!zp->cnext && ubifs_zn_dirty(znode))
-				break;
-			znode = zp;
-		}
-	}
-	/* Come back down, dirtying as we go */
-	while (1) {
-		struct ubifs_zbranch *zbr;
-
-		zp = znode->parent;
-		if (zp) {
-			ubifs_assert(path[p - 1] >= 0);
-			ubifs_assert(path[p - 1] < zp->child_cnt);
-			zbr = &zp->zbranch[path[--p]];
-			znode = dirty_cow_znode(c, zbr);
-		} else {
-			ubifs_assert(znode == c->zroot.znode);
-			znode = dirty_cow_znode(c, &c->zroot);
-		}
-		if (IS_ERR(znode) || !p)
-			break;
-		ubifs_assert(path[p - 1] >= 0);
-		ubifs_assert(path[p - 1] < znode->child_cnt);
-		znode = znode->zbranch[path[p - 1]].znode;
-	}
-	kfree(path);
-	return znode;
 }
 
 /**
