@@ -87,7 +87,6 @@ void paging_init(void);
 extern unsigned long pg0[];
 
 #define pte_present(x)	((x).pte_low & (_PAGE_PRESENT | _PAGE_PROTNONE))
-#define pte_hidden(x)	((x).pte_low & (_PAGE_HIDDEN))
 
 #ifdef CONFIG_KMEMCHECK
 #define pte_hidden(x)	((x).pte_low & (_PAGE_HIDDEN))
