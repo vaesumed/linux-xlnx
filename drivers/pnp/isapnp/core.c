@@ -44,6 +44,8 @@
 #include <linux/mutex.h>
 #include <asm/io.h>
 
+#include "../base.h"
+
 #if 0
 #define ISAPNP_REGION_OK
 #endif
@@ -87,6 +89,14 @@ MODULE_LICENSE("GPL");
 #define _LTAG_VENDOR		0x84
 #define _LTAG_MEM32RANGE	0x85
 #define _LTAG_FIXEDMEM32RANGE	0x86
+
+/* Logical device control and configuration registers */
+
+#define ISAPNP_CFG_ACTIVATE	0x30	/* byte */
+#define ISAPNP_CFG_MEM		0x40	/* 4 * dword */
+#define ISAPNP_CFG_PORT		0x60	/* 8 * word */
+#define ISAPNP_CFG_IRQ		0x70	/* 2 * word */
+#define ISAPNP_CFG_DMA		0x74	/* 2 * byte */
 
 /*
  * Sizes of ISAPNP logical device configuration register sets.
@@ -390,23 +400,17 @@ static void __init isapnp_skip_bytes(int count)
 /*
  *  Parse EISA id.
  */
-static void isapnp_parse_id(struct pnp_dev *dev, unsigned short vendor,
-			    unsigned short device)
+static void isapnp_to_pnpid(unsigned short vendor, unsigned short device,
+			    char *id)
 {
-	struct pnp_id *id;
-
-	if (!dev)
-		return;
-	id = kzalloc(sizeof(struct pnp_id), GFP_KERNEL);
-	if (!id)
-		return;
-	sprintf(id->id, "%c%c%c%x%x%x%x",
-		'A' + ((vendor >> 2) & 0x3f) - 1,
-		'A' + (((vendor & 3) << 3) | ((vendor >> 13) & 7)) - 1,
-		'A' + ((vendor >> 8) & 0x1f) - 1,
-		(device >> 4) & 0x0f,
-		device & 0x0f, (device >> 12) & 0x0f, (device >> 8) & 0x0f);
-	pnp_add_id(id, dev);
+	id[0] = 'A' + ((vendor >> 2) & 0x3f) - 1;
+	id[1] = 'A' + (((vendor & 3) << 3) | ((vendor >> 13) & 7)) - 1;
+	id[2] = 'A' + ((vendor >> 8) & 0x1f) - 1;
+	id[3] = '0' + ((device >> 4) & 0x0f);
+	id[4] = '0' + (device & 0x0f);
+	id[5] = '0' + ((device >> 12) & 0x0f);
+	id[6] = '0' + ((device >> 8) & 0x0f);
+	id[7] = '\0';
 }
 
 /*
@@ -416,24 +420,25 @@ static struct pnp_dev *__init isapnp_parse_device(struct pnp_card *card,
 						  int size, int number)
 {
 	unsigned char tmp[6];
+	char id[8];
 	struct pnp_dev *dev;
 
 	isapnp_peek(tmp, size);
-	dev = kzalloc(sizeof(struct pnp_dev), GFP_KERNEL);
+	isapnp_to_pnpid((tmp[1] << 8) | tmp[0], (tmp[3] << 8) | tmp[2], id);
+
+	dev = pnp_alloc_dev(&isapnp_protocol, number, id);
 	if (!dev)
 		return NULL;
-	dev->number = number;
-	isapnp_parse_id(dev, (tmp[1] << 8) | tmp[0], (tmp[3] << 8) | tmp[2]);
+
 	dev->regs = tmp[4];
 	dev->card = card;
 	if (size > 5)
 		dev->regs |= tmp[5] << 8;
-	dev->protocol = &isapnp_protocol;
 	dev->capabilities |= PNP_CONFIGURABLE;
 	dev->capabilities |= PNP_READ;
 	dev->capabilities |= PNP_WRITE;
 	dev->capabilities |= PNP_DISABLE;
-	pnp_init_resource_table(&dev->res);
+	pnp_init_resources(dev);
 	return dev;
 }
 
@@ -613,6 +618,7 @@ static int __init isapnp_create_device(struct pnp_card *card,
 	unsigned char type, tmp[17];
 	struct pnp_option *option;
 	struct pnp_dev *dev;
+	char id[8];
 
 	if ((dev = isapnp_parse_device(card, size, number++)) == NULL)
 		return 1;
@@ -652,8 +658,9 @@ static int __init isapnp_create_device(struct pnp_card *card,
 		case _STAG_COMPATDEVID:
 			if (size == 4 && compat < DEVICE_COUNT_COMPATIBLE) {
 				isapnp_peek(tmp, 4);
-				isapnp_parse_id(dev, (tmp[1] << 8) | tmp[0],
-						(tmp[3] << 8) | tmp[2]);
+				isapnp_to_pnpid((tmp[1] << 8) | tmp[0],
+						(tmp[3] << 8) | tmp[2], id);
+				pnp_add_id(dev, id);
 				compat++;
 				size = 0;
 			}
@@ -734,9 +741,8 @@ static int __init isapnp_create_device(struct pnp_card *card,
 				isapnp_skip_bytes(size);
 			return 1;
 		default:
-			printk(KERN_ERR
-			       "isapnp: unexpected or unknown tag type 0x%x for logical device %i (device %i), ignored\n",
-			       type, dev->number, card->number);
+			dev_err(&dev->dev, "unknown tag 0x%x (card %i), "
+				"ignored\n", type, card->number);
 		}
 __skip:
 		if (size > 0)
@@ -789,9 +795,8 @@ static void __init isapnp_parse_resource_map(struct pnp_card *card)
 				isapnp_skip_bytes(size);
 			return;
 		default:
-			printk(KERN_ERR
-			       "isapnp: unexpected or unknown tag type 0x%x for device %i, ignored\n",
-			       type, card->number);
+			dev_err(&card->dev, "unknown tag 0x%x, ignored\n",
+			       type);
 		}
 __skip:
 		if (size > 0)
@@ -822,25 +827,6 @@ static unsigned char __init isapnp_checksum(unsigned char *data)
 }
 
 /*
- *  Parse EISA id for ISA PnP card.
- */
-static void isapnp_parse_card_id(struct pnp_card *card, unsigned short vendor,
-				 unsigned short device)
-{
-	struct pnp_id *id = kzalloc(sizeof(struct pnp_id), GFP_KERNEL);
-
-	if (!id)
-		return;
-	sprintf(id->id, "%c%c%c%x%x%x%x",
-		'A' + ((vendor >> 2) & 0x3f) - 1,
-		'A' + (((vendor & 3) << 3) | ((vendor >> 13) & 7)) - 1,
-		'A' + ((vendor >> 8) & 0x1f) - 1,
-		(device >> 4) & 0x0f,
-		device & 0x0f, (device >> 12) & 0x0f, (device >> 8) & 0x0f);
-	pnp_add_card_id(id, card);
-}
-
-/*
  *  Build device list for all present ISA PnP devices.
  */
 static int __init isapnp_build_device_list(void)
@@ -848,6 +834,7 @@ static int __init isapnp_build_device_list(void)
 	int csn;
 	unsigned char header[9], checksum;
 	struct pnp_card *card;
+	char id[8];
 
 	isapnp_wait();
 	isapnp_key();
@@ -855,32 +842,30 @@ static int __init isapnp_build_device_list(void)
 		isapnp_wake(csn);
 		isapnp_peek(header, 9);
 		checksum = isapnp_checksum(header);
+		isapnp_to_pnpid((header[1] << 8) | header[0],
+				(header[3] << 8) | header[2], id);
+		card = pnp_alloc_card(&isapnp_protocol, csn, id);
+		if (!card)
+			continue;
+
 #if 0
-		printk(KERN_DEBUG
+		dev_info(&card->dev,
 		       "vendor: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
 		       header[0], header[1], header[2], header[3], header[4],
 		       header[5], header[6], header[7], header[8]);
-		printk(KERN_DEBUG "checksum = 0x%x\n", checksum);
+		dev_info(&card->dev, "checksum = 0x%x\n", checksum);
 #endif
-		if ((card =
-		     kzalloc(sizeof(struct pnp_card), GFP_KERNEL)) == NULL)
-			continue;
 
-		card->number = csn;
 		INIT_LIST_HEAD(&card->devices);
-		isapnp_parse_card_id(card, (header[1] << 8) | header[0],
-				     (header[3] << 8) | header[2]);
 		card->serial =
 		    (header[7] << 24) | (header[6] << 16) | (header[5] << 8) |
 		    header[4];
 		isapnp_checksum_value = 0x00;
 		isapnp_parse_resource_map(card);
 		if (isapnp_checksum_value != 0x00)
-			printk(KERN_ERR
-			       "isapnp: checksum for device %i is not valid (0x%x)\n",
-			       csn, isapnp_checksum_value);
+			dev_err(&card->dev, "invalid checksum 0x%x\n",
+				isapnp_checksum_value);
 		card->checksum = isapnp_checksum_value;
-		card->protocol = &isapnp_protocol;
 
 		pnp_add_card(card);
 	}
@@ -947,8 +932,7 @@ EXPORT_SYMBOL(isapnp_cfg_begin);
 EXPORT_SYMBOL(isapnp_cfg_end);
 EXPORT_SYMBOL(isapnp_write_byte);
 
-static int isapnp_read_resources(struct pnp_dev *dev,
-				 struct pnp_resource_table *res)
+static int isapnp_read_resources(struct pnp_dev *dev)
 {
 	int tmp, ret;
 
@@ -958,16 +942,14 @@ static int isapnp_read_resources(struct pnp_dev *dev,
 			ret = isapnp_read_word(ISAPNP_CFG_PORT + (tmp << 1));
 			if (!ret)
 				continue;
-			res->port_resource[tmp].start = ret;
-			res->port_resource[tmp].flags = IORESOURCE_IO;
+			pnp_add_io_resource(dev, ret, 1, 0);
 		}
 		for (tmp = 0; tmp < ISAPNP_MAX_MEM; tmp++) {
 			ret =
 			    isapnp_read_word(ISAPNP_CFG_MEM + (tmp << 3)) << 8;
 			if (!ret)
 				continue;
-			res->mem_resource[tmp].start = ret;
-			res->mem_resource[tmp].flags = IORESOURCE_MEM;
+			pnp_add_mem_resource(dev, ret, 1, 0);
 		}
 		for (tmp = 0; tmp < ISAPNP_MAX_IRQ; tmp++) {
 			ret =
@@ -975,72 +957,62 @@ static int isapnp_read_resources(struct pnp_dev *dev,
 			     8);
 			if (!ret)
 				continue;
-			res->irq_resource[tmp].start =
-			    res->irq_resource[tmp].end = ret;
-			res->irq_resource[tmp].flags = IORESOURCE_IRQ;
+			pnp_add_irq_resource(dev, ret, 0);
 		}
 		for (tmp = 0; tmp < ISAPNP_MAX_DMA; tmp++) {
 			ret = isapnp_read_byte(ISAPNP_CFG_DMA + tmp);
 			if (ret == 4)
 				continue;
-			res->dma_resource[tmp].start =
-			    res->dma_resource[tmp].end = ret;
-			res->dma_resource[tmp].flags = IORESOURCE_DMA;
+			pnp_add_dma_resource(dev, ret, 0);
 		}
 	}
 	return 0;
 }
 
-static int isapnp_get_resources(struct pnp_dev *dev,
-				struct pnp_resource_table *res)
+static int isapnp_get_resources(struct pnp_dev *dev)
 {
 	int ret;
 
-	pnp_init_resource_table(res);
+	pnp_init_resources(dev);
 	isapnp_cfg_begin(dev->card->number, dev->number);
-	ret = isapnp_read_resources(dev, res);
+	ret = isapnp_read_resources(dev);
 	isapnp_cfg_end();
 	return ret;
 }
 
-static int isapnp_set_resources(struct pnp_dev *dev,
-				struct pnp_resource_table *res)
+static int isapnp_set_resources(struct pnp_dev *dev)
 {
-	int tmp;
+	int i, irq;
+	struct resource *res;
 
 	isapnp_cfg_begin(dev->card->number, dev->number);
 	dev->active = 1;
-	for (tmp = 0;
-	     tmp < ISAPNP_MAX_PORT
-	     && (res->port_resource[tmp].
-		 flags & (IORESOURCE_IO | IORESOURCE_UNSET)) == IORESOURCE_IO;
-	     tmp++)
-		isapnp_write_word(ISAPNP_CFG_PORT + (tmp << 1),
-				  res->port_resource[tmp].start);
-	for (tmp = 0;
-	     tmp < ISAPNP_MAX_IRQ
-	     && (res->irq_resource[tmp].
-		 flags & (IORESOURCE_IRQ | IORESOURCE_UNSET)) == IORESOURCE_IRQ;
-	     tmp++) {
-		int irq = res->irq_resource[tmp].start;
-		if (irq == 2)
-			irq = 9;
-		isapnp_write_byte(ISAPNP_CFG_IRQ + (tmp << 1), irq);
+	for (i = 0; i < ISAPNP_MAX_PORT; i++) {
+		res = pnp_get_resource(dev, IORESOURCE_IO, i);
+		if (res && !(res->flags & IORESOURCE_UNSET))
+			isapnp_write_word(ISAPNP_CFG_PORT + (i << 1),
+					  res->start);
 	}
-	for (tmp = 0;
-	     tmp < ISAPNP_MAX_DMA
-	     && (res->dma_resource[tmp].
-		 flags & (IORESOURCE_DMA | IORESOURCE_UNSET)) == IORESOURCE_DMA;
-	     tmp++)
-		isapnp_write_byte(ISAPNP_CFG_DMA + tmp,
-				  res->dma_resource[tmp].start);
-	for (tmp = 0;
-	     tmp < ISAPNP_MAX_MEM
-	     && (res->mem_resource[tmp].
-		 flags & (IORESOURCE_MEM | IORESOURCE_UNSET)) == IORESOURCE_MEM;
-	     tmp++)
-		isapnp_write_word(ISAPNP_CFG_MEM + (tmp << 3),
-				  (res->mem_resource[tmp].start >> 8) & 0xffff);
+	for (i = 0; i < ISAPNP_MAX_IRQ; i++) {
+		res = pnp_get_resource(dev, IORESOURCE_IRQ, i);
+		if (res && !(res->flags & IORESOURCE_UNSET)) {
+			irq = res->start;
+			if (irq == 2)
+				irq = 9;
+			isapnp_write_byte(ISAPNP_CFG_IRQ + (i << 1), irq);
+		}
+	}
+	for (i = 0; i < ISAPNP_MAX_DMA; i++) {
+		res = pnp_get_resource(dev, IORESOURCE_DMA, i);
+		if (res && !(res->flags & IORESOURCE_UNSET))
+			isapnp_write_byte(ISAPNP_CFG_DMA + i, res->start);
+	}
+	for (i = 0; i < ISAPNP_MAX_MEM; i++) {
+		res = pnp_get_resource(dev, IORESOURCE_MEM, i);
+		if (res && !(res->flags & IORESOURCE_UNSET))
+			isapnp_write_word(ISAPNP_CFG_MEM + (i << 3),
+					  (res->start >> 8) & 0xffff);
+	}
 	/* FIXME: We aren't handling 32bit mems properly here */
 	isapnp_activate(dev->number);
 	isapnp_cfg_end();
@@ -1138,13 +1110,13 @@ static int __init isapnp_init(void)
 	protocol_for_each_card(&isapnp_protocol, card) {
 		cards++;
 		if (isapnp_verbose) {
-			printk(KERN_INFO "isapnp: Card '%s'\n",
-			       card->name[0] ? card->name : "Unknown");
+			dev_info(&card->dev, "card '%s'\n",
+			       card->name[0] ? card->name : "unknown");
 			if (isapnp_verbose < 2)
 				continue;
 			card_for_each_dev(card, dev) {
-				printk(KERN_INFO "isapnp:   Device '%s'\n",
-				       dev->name[0] ? dev->name : "Unknown");
+				dev_info(&card->dev, "device '%s'\n",
+				       dev->name[0] ? dev->name : "unknown");
 			}
 		}
 	}
