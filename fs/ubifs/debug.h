@@ -99,6 +99,7 @@ void dbg_dump_znode(const struct ubifs_info *c,
 void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat);
 void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
 		    struct ubifs_nnode *parent, int iip);
+void dbg_dump_tnc(struct ubifs_info *c);
 
 void *dbg_kmalloc(size_t size, gfp_t flags);
 void *dbg_kzalloc(size_t size, gfp_t flags);
@@ -132,6 +133,7 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 #define dbg_dump_znode(c, znode)              ({})
 #define dbg_dump_heap(c, heap, cat)           ({})
 #define dbg_dump_pnode(c, pnode, parent, iip) ({})
+#define dbg_dump_tnc(c)                       ({})
 
 #define dbg_leak_report() ({})
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0

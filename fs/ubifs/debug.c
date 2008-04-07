@@ -712,6 +712,27 @@ void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
 	}
 }
 
+void dbg_dump_tnc(struct ubifs_info *c)
+{
+	struct ubifs_znode *znode;
+	int level;
+
+	printk(KERN_DEBUG "\nDumping the TNC tree");
+	znode = ubifs_tnc_levelorder_next(c->zroot.znode, NULL);
+	level = znode->level;
+	printk(KERN_DEBUG "== Level %d ==", level);
+	while (znode) {
+		if (level != znode->level) {
+			level = znode->level;
+			printk(KERN_DEBUG "== Level %d ==", level);
+		}
+		dbg_dump_znode(c, znode);
+		znode = ubifs_tnc_levelorder_next(c->zroot.znode, znode);
+	}
+
+	printk("\n");
+}
+
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
 
 /*

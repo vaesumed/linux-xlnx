@@ -1359,6 +1359,8 @@ int ubifs_tnc_end_commit(struct ubifs_info *c);
 
 /* shrinker.c */
 int ubifs_shrinker(int nr_to_scan, gfp_t gfp_mask);
+struct ubifs_znode *ubifs_tnc_levelorder_next(struct ubifs_znode *zr,
+					      struct ubifs_znode *znode);
 
 /* commit.c */
 int ubifs_bg_thread(void *info);
