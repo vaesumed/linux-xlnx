@@ -184,7 +184,8 @@ void destroy_old_idx(struct ubifs_info *c)
  *   o exact match, then %1 is returned, and the slot number of the branch is
  *     stored in @n;
  *   o no exact match, then %0 is returned and the slot number of the left
- *   closest branch is returned in @n.
+ *     closest branch is returned in @n; the slot if all keys in this znode are
+ *     greater then @key, then %-1 is returned in @n.
  */
 static int search_zbranch(const struct ubifs_info *c,
 			  const struct ubifs_znode *znode,
@@ -515,7 +516,7 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
 }
 
 /**
- * lookup_level0 - search for zero-level znode
+ * lookup_level0 - search for zero-level znode.
  * @c: UBIFS file-system description object
  * @key:  key to lookup
  * @zn: znode is returned here
@@ -533,7 +534,7 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
  *     leftmost zero-level node, then %0 is returned and %0 is stored in @n.
  *
  * Note, when the TNC tree is traversed, some znodes may be absent, then this
- * function reads corresponding indexing nodes and inserts them to TNC.. In
+ * function reads corresponding indexing nodes and inserts them to TNC. In
  * case of failure, a negative error code is returned.
  */
 static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
@@ -594,7 +595,7 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 }
 
 /**
- * lookup_level0_dirty - search for zero-level znode dirtying
+ * lookup_level0_dirty - search for zero-level znode dirtying.
  * @c: UBIFS file-system description object
  * @key:  key to lookup
  * @zn: znode is returned here
@@ -1132,7 +1133,6 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			     const struct qstr *nm)
 {
 	struct ubifs_znode *znode;
-	union ubifs_key *okey;
 	int n, err;
 
 	dbg_tnc_key(c, key, "key");
@@ -1172,8 +1172,7 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 		err = tnc_next(c, &znode, &n);
 		if (err)
 			return err;
-		okey = &znode->zbranch[n].key;
-		if (keys_cmp(c, okey, key))
+		if (keys_cmp(c, &znode->zbranch[n].key, key))
 			return -ENOENT;
 		err = matches_name(c, &znode->zbranch[n], nm);
 		if (err < 0)
@@ -1919,7 +1918,7 @@ int ubifs_tnc_add(struct ubifs_info *c, const union ubifs_key *key, int lnum,
 		zbr.lnum = lnum;
 		zbr.offs = offs;
 		zbr.len = len;
-		zbr.key = *key;
+		key_copy(c, key, &zbr.key);
 		err = tnc_insert(c, znode, &zbr, n + 1);
 	} else if (found == 1) {
 		struct ubifs_zbranch *zbr = &znode->zbranch[n];
@@ -2146,7 +2145,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		zbr.lnum = lnum;
 		zbr.offs = offs;
 		zbr.len = len;
-		zbr.key = *key;
+		key_copy(c, key, &zbr.key);
 		err = tnc_insert(c, znode, &zbr, n + 1);
 	}
 
