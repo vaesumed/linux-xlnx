@@ -371,8 +371,9 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
 		ubifs_assert(dent->ch.sqnum > ubifs_inode(dir)->creat_sqnum);
 
-		dbg_gen("feed '%s', new f_pos %#x",
-			dent->name, key_hash_flash(c, &dent->key));
+		dbg_gen("feed '%s', ino %llu, new f_pos %#x",
+			dent->name, be64_to_cpu(dent->inum),
+			key_hash_flash(c, &dent->key));
 		over = filldir(dirent, dent->name,
 			       le16_to_cpu(dent->nlen), filp->f_pos,
 			       le64_to_cpu(dent->inum),
@@ -405,8 +406,9 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		}
 
 		ubifs_assert(dent->ch.sqnum > ubifs_inode(dir)->creat_sqnum);
-		dbg_gen("feed '%s', new f_pos %#x",
-			dent->name, key_hash_flash(c, &dent->key));
+		dbg_gen("feed '%s', ino %llu, new f_pos %#x",
+			dent->name, be64_to_cpu(dent->inum),
+			key_hash_flash(c, &dent->key));
 
 		over = filldir(dirent, dent->name, le16_to_cpu(dent->nlen),
 			       filp->f_pos, le64_to_cpu(dent->inum),
