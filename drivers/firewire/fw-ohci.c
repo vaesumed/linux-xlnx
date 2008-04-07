@@ -27,6 +27,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/pci.h>
 #include <linux/spinlock.h>
 
@@ -177,7 +178,7 @@ struct fw_ohci {
 	struct tasklet_struct bus_reset_tasklet;
 	int node_id;
 	int generation;
-	int request_generation;
+	int request_generation;	/* for timestamping incoming requests */
 	u32 bus_seconds;
 	bool old_uninorth;
 
@@ -236,6 +237,181 @@ static inline struct fw_ohci *fw_ohci(struct fw_card *card)
 #define OHCI_VERSION_1_1		0x010010
 
 static char ohci_driver_name[] = KBUILD_MODNAME;
+
+#ifdef CONFIG_FIREWIRE_OHCI_DEBUG
+
+#define OHCI_PARAM_DEBUG_IRQS		1
+#define OHCI_PARAM_DEBUG_SELFIDS	2
+#define OHCI_PARAM_DEBUG_AT_AR		4
+
+static int param_debug;
+module_param_named(debug, param_debug, int, 0644);
+MODULE_PARM_DESC(debug, "Verbose logging (default = 0"
+	", IRQs = "		__stringify(OHCI_PARAM_DEBUG_IRQS)
+	", self-IDs = "		__stringify(OHCI_PARAM_DEBUG_SELFIDS)
+	", AT/AR events = "	__stringify(OHCI_PARAM_DEBUG_AT_AR)
+	", or a combination, or all = -1)");
+
+static void log_irqs(u32 evt)
+{
+	if (likely(!(param_debug & OHCI_PARAM_DEBUG_IRQS)))
+		return;
+
+	printk(KERN_DEBUG KBUILD_MODNAME ": IRQ %08x%s%s%s%s%s%s%s%s%s%s%s%s\n",
+	       evt,
+	       evt & OHCI1394_selfIDComplete	? " selfID"		: "",
+	       evt & OHCI1394_RQPkt		? " AR_req"		: "",
+	       evt & OHCI1394_RSPkt		? " AR_resp"		: "",
+	       evt & OHCI1394_reqTxComplete	? " AT_req"		: "",
+	       evt & OHCI1394_respTxComplete	? " AT_resp"		: "",
+	       evt & OHCI1394_isochRx		? " IR"			: "",
+	       evt & OHCI1394_isochTx		? " IT"			: "",
+	       evt & OHCI1394_postedWriteErr	? " postedWriteErr"	: "",
+	       evt & OHCI1394_cycleTooLong	? " cycleTooLong"	: "",
+	       evt & OHCI1394_cycle64Seconds	? " cycle64Seconds"	: "",
+	       evt & OHCI1394_regAccessFail	? " regAccessFail"	: "",
+	       evt & ~(OHCI1394_selfIDComplete | OHCI1394_RQPkt |
+		       OHCI1394_RSPkt | OHCI1394_reqTxComplete |
+		       OHCI1394_respTxComplete | OHCI1394_isochRx |
+		       OHCI1394_isochTx | OHCI1394_postedWriteErr |
+		       OHCI1394_cycleTooLong | OHCI1394_cycle64Seconds |
+		       OHCI1394_regAccessFail)
+						? " ?"			: "");
+}
+
+static const char *speed[] = {
+	[0] = "S100", [1] = "S200", [2] = "S400",    [3] = "beta",
+};
+static const char *power[] = {
+	[0] = "+0W",  [1] = "+15W", [2] = "+30W",    [3] = "+45W",
+	[4] = "-3W",  [5] = " ?W",  [6] = "-3..-6W", [7] = "-3..-10W",
+};
+static const char port[] = { '.', '-', 'p', 'c', };
+
+static char _p(u32 *s, int shift)
+{
+	return port[*s >> shift & 3];
+}
+
+static void log_selfids(int generation, int self_id_count, u32 *s)
+{
+	if (likely(!(param_debug & OHCI_PARAM_DEBUG_SELFIDS)))
+		return;
+
+	printk(KERN_DEBUG KBUILD_MODNAME ": %d selfIDs, generation %d\n",
+	       self_id_count, generation);
+
+	for (; self_id_count--; ++s)
+		if ((*s & 1 << 23) == 0)
+			printk(KERN_DEBUG "selfID 0: %08x, phy %d [%c%c%c] "
+			       "%s gc=%d %s %s%s%s\n",
+			       *s, *s >> 24 & 63, _p(s, 6), _p(s, 4), _p(s, 2),
+			       speed[*s >> 14 & 3], *s >> 16 & 63,
+			       power[*s >> 8 & 7], *s >> 22 & 1 ? "L" : "",
+			       *s >> 11 & 1 ? "c" : "", *s & 2 ? "i" : "");
+		else
+			printk(KERN_DEBUG "selfID n: %08x, phy %d "
+			       "[%c%c%c%c%c%c%c%c]\n",
+			       *s, *s >> 24 & 63,
+			       _p(s, 16), _p(s, 14), _p(s, 12), _p(s, 10),
+			       _p(s,  8), _p(s,  6), _p(s,  4), _p(s,  2));
+}
+
+static const char *evts[] = {
+	[0x00] = "evt_no_status",	[0x01] = "-reserved-",
+	[0x02] = "evt_long_packet",	[0x03] = "evt_missing_ack",
+	[0x04] = "evt_underrun",	[0x05] = "evt_overrun",
+	[0x06] = "evt_descriptor_read",	[0x07] = "evt_data_read",
+	[0x08] = "evt_data_write",	[0x09] = "evt_bus_reset",
+	[0x0a] = "evt_timeout",		[0x0b] = "evt_tcode_err",
+	[0x0c] = "-reserved-",		[0x0d] = "-reserved-",
+	[0x0e] = "evt_unknown",		[0x0f] = "evt_flushed",
+	[0x10] = "-reserved-",		[0x11] = "ack_complete",
+	[0x12] = "ack_pending ",	[0x13] = "-reserved-",
+	[0x14] = "ack_busy_X",		[0x15] = "ack_busy_A",
+	[0x16] = "ack_busy_B",		[0x17] = "-reserved-",
+	[0x18] = "-reserved-",		[0x19] = "-reserved-",
+	[0x1a] = "-reserved-",		[0x1b] = "ack_tardy",
+	[0x1c] = "-reserved-",		[0x1d] = "ack_data_error",
+	[0x1e] = "ack_type_error",	[0x1f] = "-reserved-",
+	[0x20] = "pending/cancelled",
+};
+static const char *tcodes[] = {
+	[0x0] = "QW req",		[0x1] = "BW req",
+	[0x2] = "W resp",		[0x3] = "-reserved-",
+	[0x4] = "QR req",		[0x5] = "BR req",
+	[0x6] = "QR resp",		[0x7] = "BR resp",
+	[0x8] = "cycle start",		[0x9] = "Lk req",
+	[0xa] = "async stream packet",	[0xb] = "Lk resp",
+	[0xc] = "-reserved-",		[0xd] = "-reserved-",
+	[0xe] = "link internal",	[0xf] = "-reserved-",
+};
+static const char *phys[] = {
+	[0x0] = "phy config packet",	[0x1] = "link-on packet",
+	[0x2] = "self-id packet",	[0x3] = "-reserved-",
+};
+
+static void log_ar_at_event(char dir, int speed, u32 *header, int evt)
+{
+	int tcode = header[0] >> 4 & 0xf;
+	char specific[12];
+
+	if (likely(!(param_debug & OHCI_PARAM_DEBUG_AT_AR)))
+		return;
+
+	if (unlikely(evt >= ARRAY_SIZE(evts)))
+			evt = 0x1f;
+
+	if (header[0] == ~header[1]) {
+		printk(KERN_DEBUG "A%c %s, %s, %08x\n",
+		       dir, evts[evt], phys[header[0] >> 30 & 0x3],
+		       header[0]);
+		return;
+	}
+
+	switch (tcode) {
+	case 0x0: case 0x6: case 0x8:
+		snprintf(specific, sizeof(specific), " = %08x",
+			 be32_to_cpu((__force __be32)header[3]));
+		break;
+	case 0x1: case 0x5: case 0x7: case 0x9: case 0xb:
+		snprintf(specific, sizeof(specific), " %x,%x",
+			 header[3] >> 16, header[3] & 0xffff);
+		break;
+	default:
+		specific[0] = '\0';
+	}
+
+	switch (tcode) {
+	case 0xe: case 0xa:
+		printk(KERN_DEBUG "A%c %s, %s\n",
+		       dir, evts[evt], tcodes[tcode]);
+		break;
+	case 0x0: case 0x1: case 0x4: case 0x5: case 0x9:
+		printk(KERN_DEBUG "A%c spd %x tl %02x, "
+		       "%04x -> %04x, %s, "
+		       "%s, %04x%08x%s\n",
+		       dir, speed, header[0] >> 10 & 0x3f,
+		       header[1] >> 16, header[0] >> 16, evts[evt],
+		       tcodes[tcode], header[1] & 0xffff, header[2], specific);
+		break;
+	default:
+		printk(KERN_DEBUG "A%c spd %x tl %02x, "
+		       "%04x -> %04x, %s, "
+		       "%s%s\n",
+		       dir, speed, header[0] >> 10 & 0x3f,
+		       header[1] >> 16, header[0] >> 16, evts[evt],
+		       tcodes[tcode], specific);
+	}
+}
+
+#else
+
+#define log_irqs(evt)
+#define log_selfids(generation, self_id_count, sid)
+#define log_ar_at_event(dir, speed, header, evt)
+
+#endif /* CONFIG_FIREWIRE_OHCI_DEBUG */
 
 static inline void reg_write(const struct fw_ohci *ohci, int offset, u32 data)
 {
@@ -320,6 +496,7 @@ static __le32 *handle_ar_packet(struct ar_context *ctx, __le32 *buffer)
 	struct fw_ohci *ohci = ctx->ohci;
 	struct fw_packet p;
 	u32 status, length, tcode;
+	int evt;
 
 	p.header[0] = cond_le32_to_cpu(buffer[0]);
 	p.header[1] = cond_le32_to_cpu(buffer[1]);
@@ -362,11 +539,14 @@ static __le32 *handle_ar_packet(struct ar_context *ctx, __le32 *buffer)
 	/* FIXME: What to do about evt_* errors? */
 	length = (p.header_length + p.payload_length + 3) / 4;
 	status = cond_le32_to_cpu(buffer[length]);
+	evt    = (status >> 16) & 0x1f;
 
-	p.ack        = ((status >> 16) & 0x1f) - 16;
+	p.ack        = evt - 16;
 	p.speed      = (status >> 21) & 0x7;
 	p.timestamp  = status & 0xffff;
 	p.generation = ohci->request_generation;
+
+	log_ar_at_event('R', p.speed, p.header, evt);
 
 	/*
 	 * The OHCI bus reset handler synthesizes a phy packet with
@@ -378,7 +558,7 @@ static __le32 *handle_ar_packet(struct ar_context *ctx, __le32 *buffer)
 	 * request.
 	 */
 
-	if (p.ack + 16 == 0x09)
+	if (evt == OHCI1394_evt_bus_reset)
 		ohci->request_generation = (p.header[2] >> 16) & 0xff;
 	else if (ctx == &ohci->ar_request_ctx)
 		fw_core_handle_request(&ohci->card, &p);
@@ -817,6 +997,8 @@ static int handle_at_packet(struct context *context,
 	evt = le16_to_cpu(last->transfer_status) & 0x1f;
 	packet->timestamp = le16_to_cpu(last->res_count);
 
+	log_ar_at_event('T', packet->speed, packet->header, evt);
+
 	switch (evt) {
 	case OHCI1394_evt_timeout:
 		/* Async response transmit timed out. */
@@ -1019,20 +1201,30 @@ static void bus_reset_tasklet(unsigned long data)
 	ohci->node_id = reg & (OHCI1394_NodeID_busNumber |
 			       OHCI1394_NodeID_nodeNumber);
 
+	reg = reg_read(ohci, OHCI1394_SelfIDCount);
+	if (reg & OHCI1394_SelfIDCount_selfIDError) {
+		fw_notify("inconsistent self IDs\n");
+		return;
+	}
 	/*
 	 * The count in the SelfIDCount register is the number of
 	 * bytes in the self ID receive buffer.  Since we also receive
 	 * the inverted quadlets and a header quadlet, we shift one
 	 * bit extra to get the actual number of self IDs.
 	 */
-
-	self_id_count = (reg_read(ohci, OHCI1394_SelfIDCount) >> 3) & 0x3ff;
+	self_id_count = (reg >> 3) & 0x3ff;
+	if (self_id_count == 0) {
+		fw_notify("inconsistent self IDs\n");
+		return;
+	}
 	generation = (cond_le32_to_cpu(ohci->self_id_cpu[0]) >> 16) & 0xff;
 	rmb();
 
 	for (i = 1, j = 0; j < self_id_count; i += 2, j++) {
-		if (ohci->self_id_cpu[i] != ~ohci->self_id_cpu[i + 1])
-			fw_error("inconsistent self IDs\n");
+		if (ohci->self_id_cpu[i] != ~ohci->self_id_cpu[i + 1]) {
+			fw_notify("inconsistent self IDs\n");
+			return;
+		}
 		ohci->self_id_buffer[j] =
 				cond_le32_to_cpu(ohci->self_id_cpu[i]);
 	}
@@ -1097,11 +1289,18 @@ static void bus_reset_tasklet(unsigned long data)
 		reg_write(ohci, OHCI1394_ConfigROMhdr, ohci->next_header);
 	}
 
+#ifdef CONFIG_FIREWIRE_OHCI_REMOTE_DMA
+	reg_write(ohci, OHCI1394_PhyReqFilterHiSet, ~0);
+	reg_write(ohci, OHCI1394_PhyReqFilterLoSet, ~0);
+#endif
+
 	spin_unlock_irqrestore(&ohci->lock, flags);
 
 	if (free_rom)
 		dma_free_coherent(ohci->card.device, CONFIG_ROM_SIZE,
 				  free_rom, free_rom_bus);
+
+	log_selfids(generation, self_id_count, ohci->self_id_buffer);
 
 	fw_core_handle_bus_reset(&ohci->card, ohci->node_id, generation,
 				 self_id_count, ohci->self_id_buffer);
@@ -1119,6 +1318,7 @@ static irqreturn_t irq_handler(int irq, void *data)
 		return IRQ_NONE;
 
 	reg_write(ohci, OHCI1394_IntEventClear, event);
+	log_irqs(event);
 
 	if (event & OHCI1394_selfIDComplete)
 		tasklet_schedule(&ohci->bus_reset_tasklet);
@@ -1152,6 +1352,10 @@ static irqreturn_t irq_handler(int irq, void *data)
 		tasklet_schedule(&ohci->it_context_list[i].context.tasklet);
 		iso_event &= ~(1 << i);
 	}
+
+	if (unlikely(event & OHCI1394_regAccessFail))
+		fw_error("Register access failure - "
+			 "please notify linux1394-devel@lists.sf.net\n");
 
 	if (unlikely(event & OHCI1394_postedWriteErr))
 		fw_error("PCI posted write error\n");
@@ -1192,6 +1396,8 @@ static int ohci_enable(struct fw_card *card, u32 *config_rom, size_t length)
 {
 	struct fw_ohci *ohci = fw_ohci(card);
 	struct pci_dev *dev = to_pci_dev(card->device);
+	u32 lps;
+	int i;
 
 	if (software_reset(ohci)) {
 		fw_error("Failed to reset ohci card.\n");
@@ -1203,13 +1409,24 @@ static int ohci_enable(struct fw_card *card, u32 *config_rom, size_t length)
 	 * most of the registers.  In fact, on some cards (ALI M5251),
 	 * accessing registers in the SClk domain without LPS enabled
 	 * will lock up the machine.  Wait 50msec to make sure we have
-	 * full link enabled.
+	 * full link enabled.  However, with some cards (well, at least
+	 * a JMicron PCIe card), we have to try again sometimes.
 	 */
 	reg_write(ohci, OHCI1394_HCControlSet,
 		  OHCI1394_HCControl_LPS |
 		  OHCI1394_HCControl_postedWriteEnable);
 	flush_writes(ohci);
-	msleep(50);
+
+	for (lps = 0, i = 0; !lps && i < 3; i++) {
+		msleep(50);
+		lps = reg_read(ohci, OHCI1394_HCControlSet) &
+		      OHCI1394_HCControl_LPS;
+	}
+
+	if (!lps) {
+		fw_error("Failed to set Link Power Status\n");
+		return -EIO;
+	}
 
 	reg_write(ohci, OHCI1394_HCControlClear,
 		  OHCI1394_HCControl_noByteSwapData);
@@ -1237,7 +1454,8 @@ static int ohci_enable(struct fw_card *card, u32 *config_rom, size_t length)
 		  OHCI1394_reqTxComplete | OHCI1394_respTxComplete |
 		  OHCI1394_isochRx | OHCI1394_isochTx |
 		  OHCI1394_postedWriteErr | OHCI1394_cycleTooLong |
-		  OHCI1394_cycle64Seconds | OHCI1394_masterIntEnable);
+		  OHCI1394_cycle64Seconds | OHCI1394_regAccessFail |
+		  OHCI1394_masterIntEnable);
 
 	/* Activate link_on bit and contender bit in our self ID packets.*/
 	if (ohci_update_phy_reg(card, 4, 0,
@@ -1421,6 +1639,7 @@ static int ohci_cancel_packet(struct fw_card *card, struct fw_packet *packet)
 	if (packet->ack != 0)
 		goto out;
 
+	log_ar_at_event('T', packet->speed, packet->header, 0x20);
 	driver_data->packet = NULL;
 	packet->ack = RCODE_CANCELLED;
 	packet->callback(packet, &ohci->card, packet->ack);
@@ -1435,6 +1654,9 @@ static int ohci_cancel_packet(struct fw_card *card, struct fw_packet *packet)
 static int
 ohci_enable_phys_dma(struct fw_card *card, int node_id, int generation)
 {
+#ifdef CONFIG_FIREWIRE_OHCI_REMOTE_DMA
+	return 0;
+#else
 	struct fw_ohci *ohci = fw_ohci(card);
 	unsigned long flags;
 	int n, retval = 0;
@@ -1466,6 +1688,7 @@ ohci_enable_phys_dma(struct fw_card *card, int node_id, int generation)
  out:
 	spin_unlock_irqrestore(&ohci->lock, flags);
 	return retval;
+#endif /* CONFIG_FIREWIRE_OHCI_REMOTE_DMA */
 }
 
 static u64
@@ -2045,6 +2268,35 @@ static const struct fw_card_driver ohci_driver = {
 	.stop_iso		= ohci_stop_iso,
 };
 
+#ifdef CONFIG_PPC_PMAC
+static void ohci_pmac_on(struct pci_dev *dev)
+{
+	if (machine_is(powermac)) {
+		struct device_node *ofn = pci_device_to_OF_node(dev);
+
+		if (ofn) {
+			pmac_call_feature(PMAC_FTR_1394_CABLE_POWER, ofn, 0, 1);
+			pmac_call_feature(PMAC_FTR_1394_ENABLE, ofn, 0, 1);
+		}
+	}
+}
+
+static void ohci_pmac_off(struct pci_dev *dev)
+{
+	if (machine_is(powermac)) {
+		struct device_node *ofn = pci_device_to_OF_node(dev);
+
+		if (ofn) {
+			pmac_call_feature(PMAC_FTR_1394_ENABLE, ofn, 0, 0);
+			pmac_call_feature(PMAC_FTR_1394_CABLE_POWER, ofn, 0, 0);
+		}
+	}
+}
+#else
+#define ohci_pmac_on(dev)
+#define ohci_pmac_off(dev)
+#endif /* CONFIG_PPC_PMAC */
+
 static int __devinit
 pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 {
@@ -2054,18 +2306,6 @@ pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 	int err;
 	size_t size;
 
-#ifdef CONFIG_PPC_PMAC
-	/* Necessary on some machines if fw-ohci was loaded/ unloaded before */
-	if (machine_is(powermac)) {
-		struct device_node *ofn = pci_device_to_OF_node(dev);
-
-		if (ofn) {
-			pmac_call_feature(PMAC_FTR_1394_CABLE_POWER, ofn, 0, 1);
-			pmac_call_feature(PMAC_FTR_1394_ENABLE, ofn, 0, 1);
-		}
-	}
-#endif /* CONFIG_PPC_PMAC */
-
 	ohci = kzalloc(sizeof(*ohci), GFP_KERNEL);
 	if (ohci == NULL) {
 		fw_error("Could not malloc fw_ohci data.\n");
@@ -2074,10 +2314,12 @@ pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 
 	fw_card_initialize(&ohci->card, &ohci_driver, &dev->dev);
 
+	ohci_pmac_on(dev);
+
 	err = pci_enable_device(dev);
 	if (err) {
 		fw_error("Failed to enable OHCI hardware.\n");
-		goto fail_put_card;
+		goto fail_free;
 	}
 
 	pci_set_master(dev);
@@ -2173,8 +2415,9 @@ pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 	pci_release_region(dev, 0);
  fail_disable:
 	pci_disable_device(dev);
- fail_put_card:
-	fw_card_put(&ohci->card);
+ fail_free:
+	kfree(&ohci->card);
+	ohci_pmac_off(dev);
 
 	return err;
 }
@@ -2202,72 +2445,42 @@ static void pci_remove(struct pci_dev *dev)
 	pci_iounmap(dev, ohci->registers);
 	pci_release_region(dev, 0);
 	pci_disable_device(dev);
-	fw_card_put(&ohci->card);
-
-#ifdef CONFIG_PPC_PMAC
-	/* On UniNorth, power down the cable and turn off the chip clock
-	 * to save power on laptops */
-	if (machine_is(powermac)) {
-		struct device_node *ofn = pci_device_to_OF_node(dev);
-
-		if (ofn) {
-			pmac_call_feature(PMAC_FTR_1394_ENABLE, ofn, 0, 0);
-			pmac_call_feature(PMAC_FTR_1394_CABLE_POWER, ofn, 0, 0);
-		}
-	}
-#endif /* CONFIG_PPC_PMAC */
+	kfree(&ohci->card);
+	ohci_pmac_off(dev);
 
 	fw_notify("Removed fw-ohci device.\n");
 }
 
 #ifdef CONFIG_PM
-static int pci_suspend(struct pci_dev *pdev, pm_message_t state)
+static int pci_suspend(struct pci_dev *dev, pm_message_t state)
 {
-	struct fw_ohci *ohci = pci_get_drvdata(pdev);
+	struct fw_ohci *ohci = pci_get_drvdata(dev);
 	int err;
 
 	software_reset(ohci);
-	free_irq(pdev->irq, ohci);
-	err = pci_save_state(pdev);
+	free_irq(dev->irq, ohci);
+	err = pci_save_state(dev);
 	if (err) {
 		fw_error("pci_save_state failed\n");
 		return err;
 	}
-	err = pci_set_power_state(pdev, pci_choose_state(pdev, state));
+	err = pci_set_power_state(dev, pci_choose_state(dev, state));
 	if (err)
 		fw_error("pci_set_power_state failed with %d\n", err);
-
-/* PowerMac suspend code comes last */
-#ifdef CONFIG_PPC_PMAC
-	if (machine_is(powermac)) {
-		struct device_node *ofn = pci_device_to_OF_node(pdev);
-
-		if (ofn)
-			pmac_call_feature(PMAC_FTR_1394_ENABLE, ofn, 0, 0);
-	}
-#endif /* CONFIG_PPC_PMAC */
+	ohci_pmac_off(dev);
 
 	return 0;
 }
 
-static int pci_resume(struct pci_dev *pdev)
+static int pci_resume(struct pci_dev *dev)
 {
-	struct fw_ohci *ohci = pci_get_drvdata(pdev);
+	struct fw_ohci *ohci = pci_get_drvdata(dev);
 	int err;
 
-/* PowerMac resume code comes first */
-#ifdef CONFIG_PPC_PMAC
-	if (machine_is(powermac)) {
-		struct device_node *ofn = pci_device_to_OF_node(pdev);
-
-		if (ofn)
-			pmac_call_feature(PMAC_FTR_1394_ENABLE, ofn, 0, 1);
-	}
-#endif /* CONFIG_PPC_PMAC */
-
-	pci_set_power_state(pdev, PCI_D0);
-	pci_restore_state(pdev);
-	err = pci_enable_device(pdev);
+	ohci_pmac_on(dev);
+	pci_set_power_state(dev, PCI_D0);
+	pci_restore_state(dev);
+	err = pci_enable_device(dev);
 	if (err) {
 		fw_error("pci_enable_device failed\n");
 		return err;
