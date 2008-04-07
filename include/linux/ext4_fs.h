@@ -19,7 +19,6 @@
 #include <linux/types.h>
 #include <linux/blkdev.h>
 #include <linux/magic.h>
-
 #include <linux/ext4_fs_i.h>
 
 /*
@@ -171,12 +170,20 @@ struct ext4_group_desc
 	__u32	bg_reserved2[3];
 };
 
+/*
+ * Structure of a flex block group info
+ */
+
+struct flex_groups {
+	__u32 free_inodes;
+	__u32 free_blocks;
+};
+
 #define EXT4_BG_INODE_UNINIT	0x0001 /* Inode table/bitmap not in use */
 #define EXT4_BG_BLOCK_UNINIT	0x0002 /* Block bitmap not in use */
 #define EXT4_BG_INODE_ZEROED	0x0004 /* On-disk itable initialized to zero */
 
 #ifdef __KERNEL__
-#include <linux/ext4_fs_i.h>
 #include <linux/ext4_fs_sb.h>
 #endif
 /*
@@ -231,6 +238,7 @@ struct ext4_group_desc
 #define EXT4_TOPDIR_FL			0x00020000 /* Top of directory hierarchies*/
 #define EXT4_HUGE_FILE_FL               0x00040000 /* Set to each huge file */
 #define EXT4_EXTENTS_FL			0x00080000 /* Inode uses extents */
+#define EXT4_EXT_MIGRATE		0x00100000 /* Inode is migrating */
 #define EXT4_RESERVED_FL		0x80000000 /* reserved for ext4 lib */
 
 #define EXT4_FL_USER_VISIBLE		0x000BDFFF /* User visible flags */
@@ -648,7 +656,10 @@ struct ext4_super_block {
 	__le16  s_mmp_interval;         /* # seconds to wait in MMP checking */
 	__le64  s_mmp_block;            /* Block for multi-mount protection */
 	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
-	__u32   s_reserved[163];        /* Padding to the end of the block */
+	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
+	__u8	s_reserved_char_pad2;
+	__le16  s_reserved_pad;
+	__u32   s_reserved[162];        /* Padding to the end of the block */
 };
 
 #ifdef __KERNEL__
@@ -1047,10 +1058,10 @@ extern void ext4_set_aops(struct inode *inode);
 extern int ext4_writepage_trans_blocks(struct inode *);
 extern int ext4_block_truncate_page(handle_t *handle, struct page *page,
 		struct address_space *mapping, loff_t from);
+extern int ext4_page_mkwrite(struct vm_area_struct *vma, struct page *page);
 
 /* ioctl.c */
-extern int ext4_ioctl (struct inode *, struct file *, unsigned int,
-		       unsigned long);
+extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
 extern long ext4_compat_ioctl (struct file *, unsigned int, unsigned long);
 
 /* migrate.c */
@@ -1160,6 +1171,17 @@ struct ext4_group_info *ext4_get_group_info(struct super_block *sb,
 	 return grp_info[indexv][indexh];
 }
 
+
+static inline ext4_group_t ext4_flex_group(struct ext4_sb_info *sbi,
+					     ext4_group_t block_group)
+{
+	return block_group >> sbi->s_log_groups_per_flex;
+}
+
+static inline unsigned int ext4_flex_bg_size(struct ext4_sb_info *sbi)
+{
+	return 1 << sbi->s_log_groups_per_flex;
+}
 
 #define ext4_std_error(sb, errno)				\
 do {								\
