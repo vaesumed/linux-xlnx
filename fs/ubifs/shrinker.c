@@ -58,15 +58,15 @@ DEFINE_SPINLOCK(ubifs_infos_lock);
 atomic_long_t ubifs_clean_zn_cnt;
 
 /**
- * tnc_levelorder_next - next TNC tree element in levelorder traversal.
+ * ubifs_tnc_levelorder_next - next TNC tree element in levelorder traversal.
  * @zr: root of the subtree to traverse
  * @znode: previous znode
  *
  * This function implements levelorder TNC traversal. The LNC is ignored.
  * Returns the next element or %NULL if @znode is already the last one.
  */
-static struct ubifs_znode *tnc_levelorder_next(struct ubifs_znode *zr,
-					       struct ubifs_znode *znode)
+struct ubifs_znode *ubifs_tnc_levelorder_next(struct ubifs_znode *zr,
+					      struct ubifs_znode *znode)
 {
 	int level, iip, level_search = 0;
 	struct ubifs_znode *zn;
@@ -177,7 +177,7 @@ static int shrink_tnc(struct ubifs_info *c, int nr, int age, int *contention)
 	 * changed only when the 'c->tnc_mutex' is held.
 	 */
 	zprev = NULL;
-	znode = tnc_levelorder_next(c->zroot.znode, NULL);
+	znode = ubifs_tnc_levelorder_next(c->zroot.znode, NULL);
 	while (znode && total_freed < nr &&
 	       atomic_long_read(&c->clean_zn_cnt) > 0) {
 		int freed;
@@ -225,7 +225,7 @@ static int shrink_tnc(struct ubifs_info *c, int nr, int age, int *contention)
 			break;
 
 		zprev = znode;
-		znode = tnc_levelorder_next(c->zroot.znode, znode);
+		znode = ubifs_tnc_levelorder_next(c->zroot.znode, znode);
 		cond_resched();
 	}
 
