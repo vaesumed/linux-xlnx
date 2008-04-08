@@ -1,0 +1,502 @@
+Importing driver-core based on 2.6.25-rc8-git2
+$ git branch -D quilt/driver-core
+Deleted branch quilt/driver-core.
+$ git checkout -b quilt/driver-core 9597362d354f8655ece324b01d0c640a0e99c077
+Switched to a new branch "quilt/driver-core"
+$ git quiltimport --patches ../quilt/driver-core
+kobject-catch-kobjects-that-are-not-initialized.patch
+uio-kconfig-improvements.patch
+uio-mark-pci_device_id-hilscher_pci_ids-__devinitdata.patch
+uio-arch-arm-kconfig-make-uio-available-on-arm-architecture.patch
+uio-remove-needless-pci_device_id-definition-from-uio_cif.c.patch
+uio-implement-a-uio-interface-for-the-smx-cryptengine.patch
+driver-core-memory-semaphore-to-mutex.patch
+driver-core-register_memory-unregister_memory-clean-ups-and-bugfix.patch
+driver-core-convert-debug-functions-declared-inline-__attribute__-to-statement-expression-macros.patch
+sysfs-small-header-file-cleanup-for-sysfs-n.patch
+firmware-move-firmware_class-from-documentation-to-samples.patch
+firmware-clean-up-samples-for-coding-style-issues.patch
+pnp-add-all-pnp-card-device-id-s-as-individual-aliases.patch
+power_state-remove-it-from-driver-core.patch
+driver-core-cpu-fix-section-mismatch-in-cpu.c-store_online.patch
+sysdev-detect-multiple-driver-registrations.patch
+block-send-disk-change-event-for-rescan_partitions.patch
+pm-handle-device-registrations-during-suspend-resume.patch
+driver-core-call-device_pm_add-after-bus_add_device-in-device_add.patch
+pm-fix-misuse-of-wakeup-flag-accessors-in-serial-core.patch
+pm-make-wakeup-flags-available-whenever-config_pm-is-set.patch
+pm-convert-wakeup-flag-accessors-to-inline-functions.patch
+driver-core-make-device_is_registered-work-for-class-devices.patch
+sysfs-explicitly-include-required-header-file-slab.h.patch
+kobject-replace-list_for_each-with-list_for_each_entry.patch
+pm-remove-legacy-pm.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+driver-core-replace-remaining-__function__-occurrences.patch
+memstick-convert-struct-class_device-to-struct-device.patch
+ib-convert-struct-class_device-to-struct-device.patch
+ib-rename-dev-to-srp_dev-in-srp_host-structure.patch
+drm-remove-unused-dev_class.patch
+scsi-convert-struct-class_device-to-struct-device.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing pci based on quilt/driver-core
+$ git branch -D quilt/pci
+Deleted branch quilt/pci.
+$ git checkout -b quilt/pci quilt/driver-core
+Switched to a new branch "quilt/pci"
+$ git quiltimport --patches ../quilt/pci
+pci-doc-pci-create-documentation-pci-and-move-files-into-it.patch
+pci-if-0-pci_assign_resource_fixed.patch
+pci-remove-pci_find_present.patch
+pci-remove-pci_get_device_reverse-from-calgary-driver.patch
+ide-remove-ide-reverse-ide-core.patch
+pci-remove-pci_get_device_reverse.patch
+pci-clean-up-search.c-a-lot.patch
+pci-hotplug-make-cpcihp-driver-use-modern-apis.patch
+pci-hotplug-the-ibm-driver-is-not-dependant-on-pci_legacy.patch
+pci-remove-initial-bios-sort-of-pci-devices-on-x86.patch
+pci-make-no_pci_devices-use-the-pci_bus_type-list.patch
+pci-add-is_added-flag-to-struct-pci_dev.patch
+pci-remove-pcibios_fixup_ghosts.patch
+pci-remove-parisc-consumer-of-the-pci-global_list.patch
+pci-remove-global-list-of-pci-devices.patch
+pci-pcie-aer-don-t-check-_osc-when-acpi-is-disabled.patch
+pci-if-0-pci_cleanup_aer_correct_error_status.patch
+pci-include-pci-domain-in-pci-bus-names-on-x86-x86_64.patch
+pci-remove-pci-routeirq-noise-from-dmesg.patch
+pci-add-pci-express-aspm-support.patch
+pci-add-generic-pci_enable_resources.patch
+pci-alpha-use-generic-pci_enable_resources.patch
+pci-arm-use-generic-pci_enable_resources.patch
+pci-cris-use-generic-pci_enable_resources.patch
+pci-frv-use-generic-pci_enable_resources.patch
+pci-ia64-use-generic-pci_enable_resources.patch
+pci-mips-use-generic-pci_enable_resources.patch
+pci-mn10300-use-generic-pci_enable_resources.patch
+pci-parisc-use-generic-pci_enable_resources.patch
+pci-powerpc-use-generic-pci_enable_resources.patch
+pci-ppc-use-generic-pci_enable_resources.patch
+pci-sh-use-generic-pci_enable_resources.patch
+pci-sparc64-use-generic-pci_enable_resources.patch
+pci-v850-use-generic-pci_enable_resources.patch
+pci-x86-use-generic-pci_enable_resources.patch
+pci-xtensa-use-generic-pci_enable_resources.patch
+pci-iova-rb-tree-setup-tweak.patch
+pci-simplify-quirk-debug-output.patch
+pci-iommu-iotlb-flushing.patch
+pci-expose-pci-vpd-through-sysfs.patch
+pci-update-via-cx700-quirk.patch
+pci-aerdrv_acpi.c-remove-unneeded-null-check.patch
+pci-clean-up-resource-alignment-management.patch
+pci-replace-remaining-__function__-occurrences.patch
+.dotest/patch:167: space before tab in indent.
+ 	dbg("%s - physical_slot = %s\n", __func__, hotplug_slot->name);
+warning: 1 line adds whitespace errors.
+Importing usb based on quilt/pci
+$ git branch -D quilt/usb
+Deleted branch quilt/usb.
+$ git checkout -b quilt/usb quilt/pci
+Switched to a new branch "quilt/usb"
+$ git quiltimport --patches ../quilt/usb
+usb-ehci-carry-out-port-handover-during-each-root-hub-resume.patch
+usb-reorganize-code-in-hub.c.patch
+usb-make-usb-persist-work-after-every-system-sleep.patch
+usb-remove-config_usb_persist-setting.patch
+.dotest/patch:225: space before tab in indent.
+ 	 */
+warning: 1 line adds whitespace errors.
+usb-check-serial-number-string-after-device-reset.patch
+usb-enable-usb-persist-by-default.patch
+usb-convert-usb.h-struct-usb_device-to-kernel-doc.patch
+usb-microtek-remove-unused-semaphore.patch
+usb-libusual-locking-cleanup.patch
+usb-make-usb_storage_onetouch-available-with-pm.patch
+usb-usb-ohci-sm501-driver-use-the-conventional-convention-for-suspend-and-resume.patch
+usb-usbatm-convert-heavy-init-dances-to-kthread-api.patch
+usb-defines-for-usb-link-power-management-ecn.patch
+usb-ehci-minor-cleanups.patch
+usb-ohci-port-reset-paranoia-timeout.patch
+usb-ehci-tolerates-some-buggy-devices.patch
+usb-ehci-minor-soc-bus-glue-fixes.patch
+usb-m66592-udc-reduce-size-of-data-structure.patch
+usb-ehci-refactor-if-state-hc_state_halt.patch
+usb-gadget-hangup-tty-on-g_serial-disconnect.patch
+usb-io_ti.c-remove-pointless-eye-candy-in-debug-statements.patch
+usb-cypress_m8-feature-buffer-fixes.patch
+usb-cypress_m8-packet-format-is-separate-from-characteristic-size.patch
+usb-cypress_m8-don-t-issue-get_config-for-certain-devices.patch
+usb-cypress_m8-get-rid-of-pointless-null-check.patch
+usb-cypress_m8-limit-baud-rate-to-4800-for-usb-low-speed-devices.patch
+usb-misc-auerswald-cp_mutex-to-mutex.diff
+usb-misc-auerswald-ccp_readmutex-to-mutex.diff
+usb-misc-auerswald-ccp_mutex-to-mutex.diff
+usb-minor-ehci-xitd-simplifications.patch
+usb-usb-serial-prepare-for-bkl-push-down.patch
+usb-ftdi_sio-note-missing-locking.patch
+usb-serial-note-mos7480-and-option-don-t-lock-modem-status.patch
+usb-iuu_phoenix-lock-priv-tiostatus-properly.patch
+usb-kobil_sct-get-rid-of-unneeded-priv-line_state.patch
+usb-ti_usb_3410_5052-extend-locking-to-msr-and-shadow-mcr.patch
+usb-io_ti-lock-mcr-and-msr-shadows-properly.patch
+usb-use-div_round_up.patch
+usb-io_ti.c-remove-unneeded-null-tty-check.patch
+usb-partial-usb-embedded-host-support.patch
+usb-ehci-remove-obsolete-workaround-for-bogus-irqs.patch
+usb-ipaq-fix-devices-having-more-than-one-endpoint.patch
+usb-remove-dev-power.power_state.patch
+usb-ehci-paranoia-reject-large-control-transfers.patch
+usb-cypress_m8-speed-handling.patch
+drivers-usb-core-devio.c-suppress-warning-with-64k-page_size.patch
+usb-usb.h-reduce-syslog-clutter.patch
+usb-standardize-inclusion-protection-and-add-where-missing.patch
+usb-mass-storage-emulation-of-sat-scsi_pass_thru-with-atacb.patch
+usb-remove-experimental-designation-from-usb-storage-kconfig-entries.patch
+usb-remove-experimental-tags-from-some-usb-gadget-kconfig-entries.patch
+usb-remove-experimental-designation-from-usb-misc-kconfig-entries.patch
+usb-remove-experimental-designation-from-usb-serial-kconfig-entries.patch
+usb-remove-experimental-designation-from-usb-mdc800-support.patch
+usb-remove-experimental-from-dynamic-usb-minor-allocation.patch
+usb-remove-experimental-designation-from-usb_ehci_root_hub_tt.patch
+usb-a-couple-corrections-and-clarifications-in-usb-doc.patch
+usb-fix-cut-and-paste-booboo-in-usbmon-makefile.patch
+ub-drop-bug-and-update-small-things.patch
+usbmon-restore-mmap.patch
+usb-cdc-acm-tell-tty-layer-not-to-split-things-up.patch
+usb-increase-cdc-acm-write-throughput.patch
+usb-serial-sierra-clean-up.patch
+usb-serial-sierra-c597-fix.patch
+usb-add-usb-serial-spcp8x5-driver.patch
+u132-hcd-fix-checkpatch-style-issues.patch
+u132-hdc-semaphore-to-mutex.patch
+usb-fix-comments-of-2-functions-in-hcd.c.patch
+usb-serial-remove-obsolete-contact-addresses.patch
+usb-test-for-null-return-from-platform_get_resource-in-ohci_hcd_sm501_drv_remove.patch
+usb-g_printer-bugfixes.patch
+usb-usb-storage-use-adaptive-dma-mask.patch
+usb-mem-leak-fixes-for-amd-5536-udc-high-full-speed-usb-device-controller-driver.patch
+usb-gadget-dummy_hcd.c-fix-nested-switch-statements.patch
+usb-replace-remaining-__function__-occurrences.patch
+.dotest/patch:2601: space before tab in indent.
+ 		dbg(1," %s : file is NULL", __func__);
+.dotest/patch:2609: space before tab in indent.
+ 		dbg(1," %s : object is NULL", __func__);
+.dotest/patch:8366: space before tab in indent.
+  	dbg ("%s - start_sddr = %x, length = %d", __func__, start_address, length);
+.dotest/patch:8741: space before tab in indent.
+		  	dbg ("%s - Update complete 0x%x", __func__, status);
+.dotest/patch:8805: space before tab in indent.
+	  		dbg ("%s - Error downloading operational code image", __func__);
+warning: squelched 5 whitespace errors
+warning: 10 lines add whitespace errors.
+usb-remove-unnecessary-type-casting-of-urb-context.patch
+usb-gotemp.patch
+Importing device-mapper based on 2.6.25-rc7
+$ git branch -D quilt/device-mapper
+Deleted branch quilt/device-mapper.
+$ git checkout -b quilt/device-mapper v2.6.25-rc7
+Switched to a new branch "quilt/device-mapper"
+$ git quiltimport --patches ../quilt/device-mapper
+Importing i2c based on 2.6.25-rc8-git3
+$ git branch -D quilt/i2c
+Deleted branch quilt/i2c.
+$ git checkout -b quilt/i2c e315c121a858499d84dc88c499046b9f10bb61ec
+Switched to a new branch "quilt/i2c"
+$ git quiltimport --patches ../quilt/i2c
+i2c-new-co-maintainer.patch
+i2c-ibm_iic-fast-mode-parm-desc-fixup.patch
+i2c-davinci-01-fix-lost-interrupt.patch
+i2c-tiny-usb-new-vid-pid-pair.patch
+i2c-no-algos-in-kconfig.patch
+i2c-pca-01-removing-trailing-whitespace.patch
+i2c-pca-02-extension-of-pca-algorithm.patch
+i2c-pca-03-platform-driver.patch
+i2c-ibm_iic-01-change-log-levels.patch
+i2c-ibm_iic-02-of-platform.patch
+i2c-dev-split-i2cdev_ioctl.patch
+i2c-bus-driver-for-sh7760-soc.patch
+i2c-replace-remaining-__FUNCTION__-occurrences.patch
+i2c-remove-whitespaces-in-busses-Kconfig.patch
+i2c-bfin-twi-01-add-repeated-start.patch
+i2c-bfin-twi-02-support-multiport-controllers.patch
+i2c-bfin-twi-03-add-pin-mux-operation.patch
+i2c-bfin-twi-04-driver-description.patch
+i2c-bfin-twi-05-use-simpler-comment-headers.patch
+i2c-bfin-twi-06-add-ADSP-BF52x-support.patch
+i2c-bfin-twi-07-fix-mismatch-in-add-timer-and-delete-timer.patch
+i2c-scx200_acb-dont-use-0-as-null-pointer.patch
+i2c-superh-mobile-i2c-bus-controller-v5.patch
+i2c-isp1301_omap-convert-to-new-style-1.patch
+Importing kernel-doc based on 2.6.25-rc8
+$ git branch -D quilt/kernel-doc
+Deleted branch quilt/kernel-doc.
+$ git checkout -b quilt/kernel-doc v2.6.25-rc8
+Switched to a new branch "quilt/kernel-doc"
+$ git quiltimport --patches ../quilt/kernel-doc
+docsrc-spi-split-fix.patch
+kconfig_allconfig_docv2.patch
+move-smart-config.patch
+kerndoc-dup-section-name-err.patch
+docbook-klocking-tryfunc.patch
+kerndoc-trailing-info.patch
+doc-dma-api-txt.patch
+Importing ide based on commit 950b0d28378c4ee63a30dad732a8319c8a41c95d
+$ git branch -D quilt/ide
+Deleted branch quilt/ide.
+$ git checkout -b quilt/ide 950b0d28378c4ee63a30dad732a8319c8a41c95d
+Switched to a new branch "quilt/ide"
+$ git quiltimport --patches ../quilt/ide
+siimage-fix-kernel-oops-on-ppc-44x.patch
+ide-remove-ide-reverse-ide-core.patch
+ide-generic-set-hwif-chipset.patch
+ide-fix-ide_find_port.patch
+ide-use-ide_find_port-instead-of-ide_deprecated_find_port.patch
+ide-acpi-add-missing-drive-acpidata-zeroing.patch
+ide-factor-out-cable-detection-from-ide_init_port.patch
+ide-remove-ide-devices-from-proc-ide-before-unregistering-them.patch
+ide-factor-out-unregistering-devices-from-ide_unregister.patch
+ide-factor-out-devices-init-from-ide_init_port_data.patch
+ide-move-ide_port_setup_devices-call-to-ide_device_add_all.patch
+ide-rework-powermac-media-bay-support-take-2.patch
+ide-remove-dead-obsolete-busproc-method.patch
+ide-add-warm-plug-support-for-ide-devices-take-2.patch
+ide-add-ide_generic-class-and-attribute-for-adding-new-interfaces.patch
+ide-remove-needless-config_blk_dev_hd-hack-from-init_hwif.patch
+ide-remove-config_blk_dev_hd_ide-config-option-take-2.patch
+ide-remove-obsoleted-idex-base_-ctl_-irq_-kernel-parameters-take-2.patch
+ide-remove-broken-dangerous-ide-unregister-scan-hwif-ioctls-take-3.patch
+ide-remove-hold-field-from-ide_hwif_t-take-2.patch
+ide-remove-init_hwif_default.patch
+ide-remove-ide_init_hwif_ports.patch
+ide-floppy-remove-struct-idefloppy_id_gcw.patch
+ide-add-ide_atapi_discard_data-write_zeros-inline-helpers.patch
+ide-remove-ide_-_reg-macros.patch
+ide-tape-move-all-struct-and-other-defs-at-the-top.patch
+ide-tape-remove-atomic-test_set-macros-for-packet-commands.patch
+ide-add-generic-packet-command-representation-ide_atapi_pc.patch
+ide-tape-convert-driver-to-using-generic-ide_atapi_pc.patch
+ide-floppy-convert-driver-to-using-generic-ide_atapi_pc.patch
+ide-scsi-convert-driver-to-using-generic-ide_atapi_pc.patch
+ide-floppy-rename-end_request-handler-properly.patch
+ide-use-generic-atapi-packet-command-flags-in-ide-floppy-tape.patch
+ide-scsi-do-non-atomic-pc-flags-testing.patch
+ide-pmac-remove-dead-code.patch
+ppc-hdpu-remove-dead-ide-code.patch
+ppc-ppc4xx-remove-ppc_ide_md-hooks.patch
+ppc-pmac-remove-ppc_ide_md-hooks.patch
+ppc-mpc8xx-remove-ppc_ide_md-hooks.patch
+ppc-lopec-remove-ppc_ide_md-hooks.patch
+ppc-sandpoint-remove-ppc_ide_md-hooks.patch
+ppc-pplus-remove-ppc_ide_md-ide_init_hwif-hook.patch
+ppc-remove-ppc_ide_md-ide_init_hwif-hook.patch
+ppc-dont-include-linux-ide-h.patch
+ppc-pmac-remove-no-longer-needed-ide-quirk.patch
+ide-add-config_ide_arch_obsolete_defaults-take-2.patch
+ide-remove-config_ide_arch_obsolete_init.patch
+ide-remove-ide_default_io_ctl-macro.patch
+ide-remove-ppc-ifdef-from-init_ide_data.patch
+ide-add-ide-4drives-host-driver-take-3.patch
+cmd640-cleanup-setup_device_ptrs.patch
+cmd640-init-hwif-io_ports-irq-explicitly.patch
+ide-limit-legacy-vlb-host-drivers-to-alpha-x86-and-mips.patch
+ide-init-hwif-io_ports-irq-explicitly-in-legacy-vlb-host-drivers.patch
+ide-remove-needless-hwif-irq-check-from-ide_hwif_configure.patch
+ide-remove-obsoleted-idex-noprobe-kernel-parameter-take-2.patch
+ide-move-default-ide-ports-setup-to-ide_generic-host-driver.patch
+ide-remove-ide_init_default_irq-macro.patch
+ide-cleanup-ide_match_hwif.patch
+ide-cleanup-ide_find_port.patch
+swarm-use-ide_find_port.patch
+ide-pmac-dynamically-allocate-struct-pmac_ide_hwif-instances-take-2.patch
+ide-pmac-use-ide_find_port.patch
+sgiioc4-use-ide_find_port.patch
+au1xxx-ide-use-ide_find_port.patch
+cmd640-remove-cmd_drives.patch
+cmd640-use-ide_find_port.patch
+scc_pata-store-hwif-pointer-in-struct-scc_ports.patch
+umc8672-dont-use-ide_hwifs-in-umc_set_pio_mode.patch
+ht6560b-use-driver-name-for-resource-allocation.patch
+qd65xx-return-error-value-in-qd_probe.patch
+ide-ide_hflag_bootable-to-ide_hflag_non_bootable.patch
+ide-use-div_round_up.patch
+ide-remove-pio-downgrade-quirk.patch
+ide-merge-ide_match_hwif-and-ide_find_port.patch
+ide-use-ide_find_port-in-legacy-vlb-host-drivers-take-2.patch
+ide-generic-use-ide_find_port-take-3.patch
+ide-unexport-ide_hwifs.patch
+ide-disk-add-proc_idedisk_read_smart-helper.patch
+ide-disk-fix-issues-found-by-checkpatch-pl.patch
+ide-cd-remove-the-internal-64k-buffer.patch
+remove-include-linux-hdsmart-h.patch
+ide_platform-fix-resources-handling.patch
+delkin_cb-fix-resources-handling.patch
+bast-ide-fix-resources-reservation.patch
+mpc8xx-make-m8xx_ide_init_ports-return-an-error-value.patch
+mpc8xx-fix-resources-reservation.patch
+falconide-fix-resources-reservation-take-2.patch
+ide-remove-ide_hflag_cy82c693-host-flag.patch
+ide-remove-hwif-straight8-flag.patch
+ide-coding-style-fixes-to-drivers_ide_setup-pci-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_tc86c001-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_slc90e66-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_sis5513-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_jmicron-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_generic-c.patch
+ide-coding-style-fixes-to-drivers_ide_legacy_umc8672-c.patch
+ide-coding-style-fixes-to-drivers_ide_legacy_ide-4drives-c.patch
+ide-coding-style-fixes-to-drivers_ide_ide-proc-c.patch
+ide-coding-style-fixes-to-drivers_ide_ide-pnp-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_opti621-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_cmd640-c.patch
+ide-coding-style-fixes-to-drivers_ide_legacy_hd-c.patch
+ide-coding-style-fixes-to-drivers_ide_legacy_ali14xx-c.patch
+ide-coding-style-fixes-to-drivers_ide_ide-floppy-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_it8213-c.patch
+ide-coding-style-fixes-to-drivers_ide_pci_cy82c693-c.patch
+ide-coding-style-fixes-to-drivers_ide_ide-cd-c.patch
+ide-cd-replace-__function__-with-__func__.patch
+ide-cd-put-proc-related-functions-together-under-single-ifdef.patch
+qd65xx-selectproc-method-needs-to-be-always-used.patch
+qd65xx-use-ide_hflag_single-host-flag.patch
+it821x-fix-kzalloc-failure-handling.patch
+sis5513-fail-early-for-unsupported-chipsets.patch
+ide-sanitize-handling-of-ide_hflag_no_set_mode-host-flag.patch
+ide-add-struct-ide_port_ops-take-2.patch
+ide-cd-include-proper-headers.patch
+ide-cd-put-all-proc-related-code-at-one-place.patch
+ide-cd-fixup-comments.patch
+ide-cd-shorten-lines-longer-than-80-columns.patch
+ide-cd-fix-remaining-checkpatch-pl-issues.patch
+ide-remove-noprobe-field-from-ide_hwif_t.patch
+ide-add-ide_legacy_device_add-helper.patch
+ide-use-ide_legacy_device_add-for-qd65xx-take-2.patch
+qd65xx-cleanup-qd_probe.patch
+ide-pnp-manage-io-resources-in-driver.patch
+ide-cs-manage-io-resources-in-driver.patch
+ide-register-ports-with-non-present-devices-for-warm-plug.patch
+ide-remove-ide_hwif_release_regions.patch
+ide-generic-manage-io-resources-in-driver.patch
+ide-4drives-manage-io-resources-in-driver.patch
+ide_arm-manage-io-resources-in-driver.patch
+ide-add-ide_legacy_init_one-helper.patch
+ide-manage-io-resources-in-ide_legacy_init_one.patch
+cmd640-manage-io-resources-in-driver.patch
+ide-manage-resources-for-pci-devices-in-ide_pci_enable-take-2.patch
+ide-remove-ide_hwif_request_regions.patch
+ide-cleanup-setting-hwif-mmio-flag.patch
+ide-tape-remove-idetape_pipeline_active.patch
+ide-replace-remaining-__function__-occurrences.patch
+ide-remove-extra-field-from-struct-ide_port_info.patch
+ide-remove-ide_dma_iobase.patch
+ide-remove-cds-field-from-ide_hwif_t.patch
+ide-dont-display-bios-settings-in-ide_setup_dma.patch
+pdc202xx_old-remove-init_dma_pdc202xx.patch
+alim15x3-skip-dma-initialization-completely-on-revs-lt-0x20.patch
+ide-move-ide_setup_dma-call-out-from-init_dma-method.patch
+ide-export-ide_allocate_dma_engine.patch
+ide-factor-out-setting-pci-bus-mastering-from-ide_hwif_setup_dma.patch
+ide-cleanup-ide_setup_dma.patch
+au1xxx-ide-fix-mwdma-support.patch
+ide-do-complete-dma-setup-in-init_dma-method-take-2.patch
+ide-pmac-use-init_dma-method.patch
+icside-use-init_dma-method.patch
+sgiioc4-use-init_dma-method.patch
+palm_bk3710-use-init_dma-method.patch
+au1xxx-ide-use-init_dma-method.patch
+sl82c105-check-bridge-revision-in-sl82c105_init_one.patch
+ide-add-ide_hflag_serialize_dma-host-flag.patch
+ide-add-struct-ide_dma_ops-take-2.patch
+ide-constify-struct-ide_dma_ops.patch
+ide-tape-remove-tape-cache_stage.patch
+ide-tape-remove-pipeline-specific-code-from-idetape_add_chrdev_write_request.patch
+ide-tape-remove-pipeline-speed_control-calculations.patch
+ide-tape-remove-pipeline-specific-code-from-idetape_add_chrdev_read_request.patch
+ide-add-ignore_cable-kernel-parameter-take-2.patch
+ide-remove-obsoleted-idex-serialize-kernel-parameter.patch
+ide-remove-obsoleted-idex-reset-kernel-parameter.patch
+ide-remove-obsoleted-idex-kernel-parameters.patch
+ide-remove-obsoleted-hdx-noautotune-kernel-parameter.patch
+ide-tape-remove-unused-parameter-from-idetape_copy_stage_to_user.patch
+ide-tape-remove-unused-parameter-from-idetape_copy_stage_from_user.patch
+ide-tape-remove-pipeline-specific-code-in-idetape_space_over_filemarks.patch
+ide-tape-remove-idetape_pipeline_size.patch
+ide-tape-remove-idetape_remove_stage_head.patch
+ide-tape-remove-pipeline-specific-code-from-idetape_end_request.patch
+ide-tape-unwrap-idetape_queue_pc_tail.patch
+ide-tape-remove-remaining-pipeline-functionality.patch
+ide-tape-remove-pipelined-mode-tape-control-flags.patch
+ide-tape-remove-pipeline-specific-members-from-struct-ide_tape_obj.patch
+ide-tape-remove-pipelined-mode-parameters.patch
+ide-tape-remove-misc-references-to-pipelined-operation-in-the-comments.patch
+ide-tape-remove-pipelined-mode-description-from-documentation_ide_ide-tape-txt.patch
+ide-tape-remove-comments-markup-from-documentation_ide_ide-tape-txt.patch
+ide-add-vlb-pci_clock-parameter.patch
+ide-mark-idebus-kernel-parameter-as-obsoleted-take-2.patch
+ide-remove-obsoleted-idebus-kernel-parameter.patch
+ide-always-auto-tune-pio-in-legacy-vlb-host-drivers.patch
+cmd640-always-auto-tune-pio.patch
+ide-remove-ide_hflag_no_autotune-host-flag.patch
+ide-remove-obsoleted-hdx-autotune-kernel-parameter.patch
+ide-add-nodma-noflush-noprobe-nowerr-parameters.patch
+ide-add-cdrom-and-chs-parameters.patch
+ide-remove-obsoleted-hdx-kernel-parameters.patch
+ide-cleanup-init_ide_data.patch
+gayle-add-doubler-parameter.patch
+ide-add-noacpi-acpigtf-acpionboot-parameters.patch
+ide-remove-obsoleted-ide-parameters.patch
+mpc8xx-ide-use-ide_find_port.patch
+ide-sanitize-ide_unregister-usage.patch
+ide-make-ide_unregister-take-ide_hwif_t-as-an-argument.patch
+ide-fix-hwif-s-initialization.patch
+ide-make-ide_hwifs-static.patch
+ide-make-32-bit-io-support-for-ide-vlb-available-only-when-it-makes-sense.patch
+ide-add-struct-ide_io_ports.patch
+ide-tape-improve-buffer-allocation-strategy.patch
+ide-tape-mv-tape-stage_size-tape-buffer_size.patch
+ide-tape-mv-tape-pages_per_stage-tape-pages_per_buffer.patch
+ide-tape-improve-buffer-pages-freeing-strategy.patch
+ide-remove-_proc_ide_ali.patch
+ide-remove-now-unused-ide_pci_create_host_proc.patch
+ide-tape-make-__idetape_discard_read_pipeline-of-type-void.patch
+ide-tape-mv-idetape_discard_read_pipeline-ide_tape_discard_merge_buffer.patch
+ide-tape-mv-idetape_empty_write_pipeline-ide_tape_flush_merge_buffer.patch
+ide-tape-mv-tape-merge_stage_size-tape-merge_bh_size.patch
+ide-tape-remove-tape-merge_stage.patch
+ide-tape-fix-mem-leak.patch
+Importing m68k based on e315c121a858499d84dc88c499046b9f10bb61ec
+$ git branch -D quilt/m68k
+Deleted branch quilt/m68k.
+$ git checkout -b quilt/m68k e315c121a858499d84dc88c499046b9f10bb61ec
+Switched to a new branch "quilt/m68k"
+$ git quiltimport --patches ../quilt/m68k
+m68k-use-KBUILD_DEFCONFIG.diff
+m68k-update-defconfig-for-2.6.25-rc8.diff
+m68k-convert-access_ok-to-inline-func.diff
+m68k-FB_HP300-does-not-need-FB_CFB_FILLRECT.diff
+m68k-whippet-serial-no-longer-exists.diff
+m68k-vme_scc-globals.diff
+m68k-silence-BUG-can-return-warnings.diff
+Importing ldp based on quilt/usb
+$ git branch -D quilt/ldp
+Deleted branch quilt/ldp.
+$ git checkout -b quilt/ldp quilt/usb
+Switched to a new branch "quilt/ldp"
+$ git quiltimport --patches ../quilt/ldp
+usb-add-sensoray-2255-v4l-driver.patch
+dvb-add-firesat-driver.patch
+video-add-the-go7007-driver.patch
+.dotest/patch:1896: space before tab in indent.
+				 					0xd3),
+.dotest/patch:1911: space before tab in indent.
+				  			GO7007_SENSOR_TV) &&
+.dotest/patch:1915: space before tab in indent.
+				  			GO7007_SENSOR_TV) &&
+.dotest/patch:2125: space before tab in indent.
+		 			(1 << 14) | (1 << 9) : 0) |
+.dotest/patch:2128: space before tab in indent.
+			 	GO7007_SENSOR_CONFIG_MASK),
+warning: 5 lines add whitespace errors.
+input-add-appleir-driver.patch
+add-me4000-pci-data-collection-driver.patch
+novfs-add-the-novell-filesystem-client-kernel-module.patch
+aectc-add-the-aectc-driver.patch
