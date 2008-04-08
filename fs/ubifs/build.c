@@ -490,6 +490,15 @@ static int mount_ubifs(struct ubifs_info *c)
 		return -EROFS;
 	}
 
+	/*
+	 * The requirement for the buffer is that it should fit indexing B-tree
+	 * height amount of integers. We assume the height if the TNC tree will
+	 * never exceed 64.
+	 */
+	c->bottom_up_buf = kmalloc(64 * sizeof(int), GFP_KERNEL);
+	if (!c->bottom_up_buf)
+		return -ENOMEM;
+
 	c->sbuf = vmalloc(c->leb_size);
 	if (!c->sbuf)
 		return -ENOMEM;
@@ -735,6 +744,7 @@ void ubifs_umount(struct ubifs_info *c)
 	kfree(c->rcvrd_mst_node);
 	kfree(c->mst_node);
 	vfree(c->sbuf);
+	kfree(c->bottom_up_buf);
 	UBIFS_DBG(vfree(c->dbg_buf));
 	vfree(c->ileb_buf);
 	dbg_failure_mode_deregistration(c);
