@@ -1282,15 +1282,12 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 					       struct ubifs_znode *znode)
 {
 	struct ubifs_znode *zp;
-	int *path = NULL, h, p = 0;
+	int *path = c->bottom_up_buf, p = 0;
 
 	ubifs_assert(c->zroot.znode != NULL);
 	ubifs_assert(znode != NULL);
-	h = c->zroot.znode->level;
-	if (h) {
-		path = kmalloc(sizeof(int) * h, GFP_NOFS);
-		if (!path)
-			return ERR_PTR(-ENOMEM);
+	ubifs_assert(c->zroot.znode->level < 64);
+	if (c->zroot.znode->level) {
 		/* Go up until parent is dirty */
 		while (1) {
 			int n;
@@ -1299,13 +1296,14 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 			if (!zp)
 				break;
 			n = znode->iip;
-			ubifs_assert(p < h);
+			ubifs_assert(p < c->zroot.znode->level);
 			path[p++] = n;
 			if (!zp->cnext && ubifs_zn_dirty(znode))
 				break;
 			znode = zp;
 		}
 	}
+
 	/* Come back down, dirtying as we go */
 	while (1) {
 		struct ubifs_zbranch *zbr;
@@ -1326,7 +1324,7 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 		ubifs_assert(path[p - 1] < znode->child_cnt);
 		znode = znode->zbranch[path[p - 1]].znode;
 	}
-	kfree(path);
+
 	return znode;
 }
 
