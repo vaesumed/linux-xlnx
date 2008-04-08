@@ -1551,7 +1551,6 @@ static inline void wake_up_idle_cpu(int cpu) { }
 extern unsigned int sysctl_sched_latency;
 extern unsigned int sysctl_sched_min_granularity;
 extern unsigned int sysctl_sched_wakeup_granularity;
-extern unsigned int sysctl_sched_batch_wakeup_granularity;
 extern unsigned int sysctl_sched_child_runs_first;
 extern unsigned int sysctl_sched_features;
 extern unsigned int sysctl_sched_migration_cost;
@@ -2031,6 +2030,32 @@ static inline void arch_pick_mmap_layout(struct mm_struct *mm)
 }
 #endif
 
+#ifdef CONFIG_CONTEXT_SWITCH_TRACER
+extern void
+ftrace_ctx_switch(struct task_struct *prev, struct task_struct *next);
+#else
+static inline void
+ftrace_ctx_switch(struct task_struct *prev, struct task_struct *next)
+{
+}
+#endif
+
+#ifdef CONFIG_SCHED_TRACER
+extern void
+ftrace_wake_up_task(struct task_struct *wakee, struct task_struct *curr);
+extern void
+ftrace_wake_up_new_task(struct task_struct *wakee, struct task_struct *curr);
+#else
+static inline void
+ftrace_wake_up_task(struct task_struct *wakee, struct task_struct *curr)
+{
+}
+static inline void
+ftrace_wake_up_new_task(struct task_struct *wakee, struct task_struct *curr)
+{
+}
+#endif
+
 extern long sched_setaffinity(pid_t pid, cpumask_t new_mask);
 extern long sched_getaffinity(pid_t pid, cpumask_t *mask);
 
@@ -2105,6 +2130,8 @@ static inline void migration_init(void)
 #ifndef TASK_SIZE_OF
 #define TASK_SIZE_OF(tsk)	TASK_SIZE
 #endif
+
+#define TASK_STATE_TO_CHAR_STR "RSDTtZX"
 
 #endif /* __KERNEL__ */
 
