@@ -290,19 +290,27 @@ vin(5);
 static ssize_t show_fan(struct device *dev,
 		struct device_attribute *devattr, char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adm9240_data *data = adm9240_update_device(dev);
-	return sprintf(buf, "%d\n", FAN_FROM_REG(data->fan[attr->index],
-				1 << data->fan_div[attr->index]));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	val = FAN_FROM_REG(data->fan[index], 1 << data->fan_div[index]);
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t show_fan_min(struct device *dev,
 		struct device_attribute *devattr, char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adm9240_data *data = adm9240_update_device(dev);
-	return sprintf(buf, "%d\n", FAN_FROM_REG(data->fan_min[attr->index],
-				1 << data->fan_div[attr->index]));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	val = FAN_FROM_REG(data->fan_min[index], 1 << data->fan_div[index]);
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t show_fan_div(struct device *dev,
