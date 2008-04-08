@@ -598,7 +598,6 @@ config FB_MAC
 config FB_HP300
 	bool
 	depends on (FB = y) && HP300
-	select FB_CFB_FILLRECT
 	select FB_CFB_IMAGEBLIT
 	default y
 
