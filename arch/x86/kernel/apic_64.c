@@ -881,11 +881,6 @@ void __init init_apic_mappings(void)
 	apic_printk(APIC_VERBOSE, "mapped APIC to %16lx (%16lx)\n",
 				APIC_BASE, apic_phys);
 
-	/* Put local APIC into the resource map. */
-	lapic_resource.start = apic_phys;
-	lapic_resource.end = lapic_resource.start + PAGE_SIZE - 1;
-	insert_resource(&iomem_resource, &lapic_resource);
-
 	/*
 	 * Fetch the APIC ID of the BSP in case we have a
 	 * default configuration (or the MP table is broken).
@@ -1180,9 +1175,19 @@ __cpuinit int apic_is_clustered_box(void)
 {
 	int i, clusters, zeros;
 	unsigned id;
-	u16 *bios_cpu_apicid = x86_bios_cpu_apicid_early_ptr;
+	u16 *bios_cpu_apicid;
 	DECLARE_BITMAP(clustermap, NUM_APIC_CLUSTERS);
 
+	/*
+	 * there is not this kind of box with AMD CPU yet.
+	 * Some AMD box with quadcore cpu and 8 sockets apicid
+	 * will be [4, 0x23] or [8, 0x27] could be thought to
+	 * vsmp box still need checking...
+	 */
+	if (!is_vsmp_box() && (boot_cpu_data.x86_vendor == X86_VENDOR_AMD))
+		return 0;
+
+	bios_cpu_apicid = x86_bios_cpu_apicid_early_ptr;
 	bitmap_zero(clustermap, NUM_APIC_CLUSTERS);
 
 	for (i = 0; i < NR_CPUS; i++) {
@@ -1290,3 +1295,21 @@ static __init int setup_apicpmtimer(char *s)
 }
 __setup("apicpmtimer", setup_apicpmtimer);
 
+static int __init lapic_insert_resource(void)
+{
+	if (!apic_phys)
+		return -1;
+
+	/* Put local APIC into the resource map. */
+	lapic_resource.start = apic_phys;
+	lapic_resource.end = lapic_resource.start + PAGE_SIZE - 1;
+	insert_resource(&iomem_resource, &lapic_resource);
+
+	return 0;
+}
+
+/*
+ * need call insert after e820_reserve_resources()
+ * that is using request_resource
+ */
+late_initcall(lapic_insert_resource);

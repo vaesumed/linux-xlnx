@@ -171,7 +171,7 @@ config X86_64_SMP
 config X86_HT
 	bool
 	depends on SMP
-	depends on (X86_32 && !(X86_VISWS || X86_VOYAGER)) || (X86_64 && !MK8)
+	depends on (X86_32 && !(X86_VISWS || X86_VOYAGER)) || X86_64
 	default y
 
 config X86_BIOS_REBOOT
@@ -241,8 +241,7 @@ config X86_ELAN
 
 config X86_VOYAGER
 	bool "Voyager (NCR)"
-	depends on X86_32
-	select SMP if !BROKEN
+	depends on X86_32 && (SMP || BROKEN)
 	help
 	  Voyager is an MCA-based 32-way capable SMP architecture proprietary
 	  to NCR Corp.  Machine classes 345x/35xx/4100/51xx are Voyager-based.
@@ -254,9 +253,8 @@ config X86_VOYAGER
 
 config X86_NUMAQ
 	bool "NUMAQ (IBM/Sequent)"
-	select SMP
+	depends on SMP && X86_32
 	select NUMA
-	depends on X86_32
 	help
 	  This option is used for getting Linux to run on a (IBM/Sequent) NUMA
 	  multiquad box. This changes the way that processors are bootstrapped,
@@ -327,8 +325,9 @@ config X86_RDC321X
 
 config X86_VSMP
 	bool "Support for ScaleMP vSMP"
-	depends on X86_64 && PCI
-	 help
+	select PARAVIRT
+	depends on X86_64
+	help
 	  Support for ScaleMP vSMP systems.  Say 'Y' here if this kernel is
 	  supposed to run on these EM64T-based machines.  Only choose this option
 	  if you have one of these machines.
@@ -507,7 +506,7 @@ config NR_CPUS
 
 config SCHED_SMT
 	bool "SMT (Hyperthreading) scheduler support"
-	depends on (X86_64 && SMP) || (X86_32 && X86_HT)
+	depends on X86_HT
 	help
 	  SMT scheduler support improves the CPU scheduler's decision making
 	  when dealing with Intel Pentium 4 chips with HyperThreading at a
@@ -517,7 +516,7 @@ config SCHED_SMT
 config SCHED_MC
 	def_bool y
 	prompt "Multi-core scheduler support"
-	depends on (X86_64 && SMP) || (X86_32 && X86_HT)
+	depends on X86_HT
 	help
 	  Multi-core scheduler support improves the CPU scheduler's decision
 	  making when dealing with multi-core CPU chips at a cost of slightly
@@ -1379,7 +1378,7 @@ endmenu
 menu "Bus options (PCI etc.)"
 
 config PCI
-	bool "PCI support" if !X86_VISWS
+	bool "PCI support" if !X86_VISWS && !X86_VSMP
 	depends on !X86_VOYAGER
 	default y
 	select ARCH_SUPPORTS_MSI if (X86_LOCAL_APIC && X86_IO_APIC)

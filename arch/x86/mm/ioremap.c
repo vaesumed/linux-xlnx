@@ -35,6 +35,18 @@ unsigned long __phys_addr(unsigned long x)
 }
 EXPORT_SYMBOL(__phys_addr);
 
+static inline int phys_addr_valid(unsigned long addr)
+{
+	return addr < (1UL << boot_cpu_data.x86_phys_bits);
+}
+
+#else
+
+static inline int phys_addr_valid(unsigned long addr)
+{
+	return 1;
+}
+
 #endif
 
 int page_is_ram(unsigned long pagenr)
@@ -118,6 +130,13 @@ static void __iomem *__ioremap(resource_size_t phys_addr, unsigned long size,
 	if (!size || last_addr < phys_addr)
 		return NULL;
 
+	if (!phys_addr_valid(phys_addr)) {
+		printk(KERN_WARNING "ioremap: invalid physical address %lx\n",
+		       phys_addr);
+		WARN_ON_ONCE(1);
+		return NULL;
+	}
+
 	/*
 	 * Don't remap the low PCI/ISA area, it's always mapped..
 	 */
@@ -127,11 +146,14 @@ static void __iomem *__ioremap(resource_size_t phys_addr, unsigned long size,
 	/*
 	 * Don't allow anybody to remap normal RAM that we're using..
 	 */
-	for (pfn = phys_addr >> PAGE_SHIFT; pfn < max_pfn_mapped &&
-	     (pfn << PAGE_SHIFT) < last_addr; pfn++) {
-		if (page_is_ram(pfn) && pfn_valid(pfn) &&
-		    !PageReserved(pfn_to_page(pfn)))
+	for (pfn = phys_addr >> PAGE_SHIFT;
+				(pfn << PAGE_SHIFT) < last_addr; pfn++) {
+
+		int is_ram = page_is_ram(pfn);
+
+		if (is_ram && pfn_valid(pfn) && !PageReserved(pfn_to_page(pfn)))
 			return NULL;
+		WARN_ON_ONCE(is_ram);
 	}
 
 	switch (mode) {
@@ -272,8 +294,8 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
-static __initdata pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)]
-				__attribute__((aligned(PAGE_SIZE)));
+static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)]
+		__section(.bss.page_aligned);
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {

@@ -54,6 +54,26 @@ static unsigned long dma_reserve __initdata;
 
 DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 
+int direct_gbpages __meminitdata
+#ifdef CONFIG_DIRECT_GBPAGES
+				= 1
+#endif
+;
+
+static int __init parse_direct_gbpages_off(char *arg)
+{
+	direct_gbpages = 0;
+	return 0;
+}
+early_param("nogbpages", parse_direct_gbpages_off);
+
+static int __init parse_direct_gbpages_on(char *arg)
+{
+	direct_gbpages = 1;
+	return 0;
+}
+early_param("gbpages", parse_direct_gbpages_on);
+
 /*
  * NOTE: pagetable_init alloc all the fixmap pagetables contiguous on the
  * physical space so we can cache the place of the first one and move
@@ -350,7 +370,14 @@ phys_pud_init(pud_t *pud_page, unsigned long addr, unsigned long end)
 		}
 
 		if (pud_val(*pud)) {
-			phys_pmd_update(pud, addr, end);
+			if (!pud_large(*pud))
+				phys_pmd_update(pud, addr, end);
+			continue;
+		}
+
+		if (direct_gbpages) {
+			set_pte((pte_t *)pud,
+				pfn_pte(addr >> PAGE_SHIFT, PAGE_KERNEL_LARGE));
 			continue;
 		}
 
@@ -371,9 +398,11 @@ static void __init find_early_table_space(unsigned long end)
 	unsigned long puds, pmds, tables, start;
 
 	puds = (end + PUD_SIZE - 1) >> PUD_SHIFT;
-	pmds = (end + PMD_SIZE - 1) >> PMD_SHIFT;
-	tables = round_up(puds * sizeof(pud_t), PAGE_SIZE) +
-		 round_up(pmds * sizeof(pmd_t), PAGE_SIZE);
+	tables = round_up(puds * sizeof(pud_t), PAGE_SIZE);
+	if (!direct_gbpages) {
+		pmds = (end + PMD_SIZE - 1) >> PMD_SHIFT;
+		tables += round_up(pmds * sizeof(pmd_t), PAGE_SIZE);
+	}
 
 	/*
 	 * RED-PEN putting page tables only on node 0 could
@@ -391,6 +420,14 @@ static void __init find_early_table_space(unsigned long end)
 	early_printk("kernel direct mapping tables up to %lx @ %lx-%lx\n",
 		end, table_start << PAGE_SHIFT,
 		(table_start << PAGE_SHIFT) + tables);
+}
+
+static void __init init_gbpages(void)
+{
+	if (direct_gbpages && cpu_has_gbpages)
+		printk(KERN_INFO "Using GB pages for direct mapping\n");
+	else
+		direct_gbpages = 0;
 }
 
 /*
@@ -411,8 +448,10 @@ void __init_refok init_memory_mapping(unsigned long start, unsigned long end)
 	 * memory mapped. Unfortunately this is done currently before the
 	 * nodes are discovered.
 	 */
-	if (!after_bootmem)
+	if (!after_bootmem) {
+		init_gbpages();
 		find_early_table_space(end);
+	}
 
 	start = (unsigned long)__va(start);
 	end = (unsigned long)__va(end);
