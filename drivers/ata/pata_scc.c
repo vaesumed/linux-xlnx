@@ -782,28 +782,28 @@ static unsigned int scc_data_xfer (struct ata_device *dev, unsigned char *buf,
 	struct ata_port *ap = dev->link->ap;
 	unsigned int words = buflen >> 1;
 	unsigned int i;
-	u16 *buf16 = (u16 *) buf;
+	__le16 *buf16 = (__le16 *) buf;
 	void __iomem *mmio = ap->ioaddr.data_addr;
 
 	/* Transfer multiple of 2 bytes */
 	if (rw == READ)
 		for (i = 0; i < words; i++)
-			buf16[i] = le16_to_cpu(in_be32(mmio));
+			buf16[i] = cpu_to_le16(in_be32(mmio));
 	else
 		for (i = 0; i < words; i++)
-			out_be32(mmio, cpu_to_le16(buf16[i]));
+			out_be32(mmio, le16_to_cpu(buf16[i]));
 
 	/* Transfer trailing 1 byte, if any. */
 	if (unlikely(buflen & 0x01)) {
-		u16 align_buf[1] = { 0 };
+		__le16 align_buf[1] = { 0 };
 		unsigned char *trailing_buf = buf + buflen - 1;
 
 		if (rw == READ) {
-			align_buf[0] = le16_to_cpu(in_be32(mmio));
+			align_buf[0] = cpu_to_le16(in_be32(mmio));
 			memcpy(trailing_buf, align_buf, 1);
 		} else {
 			memcpy(align_buf, trailing_buf, 1);
-			out_be32(mmio, cpu_to_le16(align_buf[0]));
+			out_be32(mmio, le16_to_cpu(align_buf[0]));
 		}
 		words++;
 	}
@@ -854,7 +854,7 @@ static void scc_bmdma_freeze (struct ata_port *ap)
 	 * ATA_NIEN manipulation.  Also, many controllers fail to mask
 	 * previously pending IRQ on ATA_NIEN assertion.  Clear it.
 	 */
-	ata_chk_status(ap);
+	ap->ops->check_status(ap);
 
 	ap->ops->irq_clear(ap);
 }
@@ -902,17 +902,6 @@ static void scc_std_postreset(struct ata_link *link, unsigned int *classes)
 		out_be32(ap->ioaddr.ctl_addr, ap->ctl);
 
 	DPRINTK("EXIT\n");
-}
-
-/**
- *	scc_error_handler - Stock error handler for BMDMA controller
- *	@ap: port to handle error for
- */
-
-static void scc_error_handler (struct ata_port *ap)
-{
-	ata_bmdma_drive_eh(ap, scc_pata_prereset, scc_std_softreset, NULL,
-			   scc_std_postreset);
 }
 
 /**
@@ -968,24 +957,12 @@ static void scc_port_stop (struct ata_port *ap)
 }
 
 static struct scsi_host_template scc_sht = {
-	.module			= THIS_MODULE,
-	.name			= DRV_NAME,
-	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,
-	.can_queue		= ATA_DEF_QUEUE,
-	.this_id		= ATA_SHT_THIS_ID,
-	.sg_tablesize		= LIBATA_MAX_PRD,
-	.cmd_per_lun		= ATA_SHT_CMD_PER_LUN,
-	.emulated		= ATA_SHT_EMULATED,
-	.use_clustering		= ATA_SHT_USE_CLUSTERING,
-	.proc_name		= DRV_NAME,
-	.dma_boundary		= ATA_DMA_BOUNDARY,
-	.slave_configure	= ata_scsi_slave_config,
-	.slave_destroy		= ata_scsi_slave_destroy,
-	.bios_param		= ata_std_bios_param,
+	ATA_BMDMA_SHT(DRV_NAME),
 };
 
-static const struct ata_port_operations scc_pata_ops = {
+static struct ata_port_operations scc_pata_ops = {
+	.inherits		= &ata_bmdma_port_ops,
+
 	.set_piomode		= scc_set_piomode,
 	.set_dmamode		= scc_set_dmamode,
 	.mode_filter		= scc_mode_filter,
@@ -1003,13 +980,10 @@ static const struct ata_port_operations scc_pata_ops = {
 	.bmdma_status		= scc_bmdma_status,
 	.data_xfer		= scc_data_xfer,
 
-	.qc_prep		= ata_qc_prep,
-	.qc_issue		= ata_qc_issue_prot,
-
 	.freeze			= scc_bmdma_freeze,
-	.thaw			= ata_bmdma_thaw,
-
-	.error_handler		= scc_error_handler,
+	.prereset		= scc_pata_prereset,
+	.softreset		= scc_std_softreset,
+	.postreset		= scc_std_postreset,
 	.post_internal_cmd	= scc_bmdma_stop,
 
 	.irq_clear		= scc_bmdma_irq_clear,

@@ -3508,8 +3508,8 @@ static int ata_scsi_user_scan(struct Scsi_Host *shost, unsigned int channel,
 
 		ata_port_for_each_link(link, ap) {
 			struct ata_eh_info *ehi = &link->eh_info;
-			ehi->probe_mask |= (1 << ata_link_max_devices(link)) - 1;
-			ehi->action |= ATA_EH_SOFTRESET;
+			ehi->probe_mask |= ATA_ALL_DEVICES;
+			ehi->action |= ATA_EH_RESET;
 		}
 	} else {
 		struct ata_device *dev = ata_find_dev(ap, devno);
@@ -3517,8 +3517,7 @@ static int ata_scsi_user_scan(struct Scsi_Host *shost, unsigned int channel,
 		if (dev) {
 			struct ata_eh_info *ehi = &dev->link->eh_info;
 			ehi->probe_mask |= 1 << dev->devno;
-			ehi->action |= ATA_EH_SOFTRESET;
-			ehi->flags |= ATA_EHI_RESUME_LINK;
+			ehi->action |= ATA_EH_RESET;
 		} else
 			rc = -EINVAL;
 	}
