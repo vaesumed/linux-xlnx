@@ -244,21 +244,38 @@ early_param("kmemcheck", param_kmemcheck);
 /*
  * Return the shadow address for the given address. Returns NULL if the
  * address is not tracked.
+ *
+ * We need to be extremely careful not to follow any invalid pointers,
+ * because this function can be called for *any* possible address.
  */
 static void *
 address_get_shadow(unsigned long address)
 {
+	pte_t *pte;
+	int level;
 	struct page *page;
 	struct page *head;
 
+	/* Check the PTE first of all */
+	pte = lookup_address(address, &level);
+	if (!pte)
+		return NULL;
+	if (level != PG_LEVEL_4K)
+		return NULL;
+	if (!(pte_val(*pte) & _PAGE_HIDDEN))
+		return NULL;
+
+	/* The accessed page */
 	if (address < PAGE_OFFSET)
 		return NULL;
 	page = virt_to_page(address);
 	if (!page)
 		return NULL;
-	head = compound_head(page);
-	if (!PageHead(head))
+	if (!PageCompound(page))
 		return NULL;
+
+	/* The head page */
+	head = compound_head(page);
 	if (!PageSlab(head))
 		return NULL;
 	if (!PageTracked(head))
@@ -456,8 +473,8 @@ kmemcheck_show_pages(struct page *p, unsigned int n)
 	unsigned int i;
 	struct page *head;
 
+	BUG_ON(!PageCompound(p));
 	head = compound_head(p);
-	BUG_ON(!PageHead(head));
 
 	ClearPageTracked(head);
 
@@ -485,8 +502,8 @@ kmemcheck_hide_pages(struct page *p, unsigned int n)
 	unsigned int i;
 	struct page *head;
 
+	BUG_ON(!PageCompound(p));
 	head = compound_head(p);
-	BUG_ON(!PageHead(head));
 
 	SetPageTracked(head);
 
