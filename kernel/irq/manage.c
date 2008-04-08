@@ -635,7 +635,8 @@ static int system_irq_notifier(struct notifier_block *nb,
 		if (cpus_match_system(desc->affinity)) {
 			cpumask_t online_system;
 
-			cpus_and(online_system, new_system_map, cpu_online_map);
+			cpus_and(online_system, *new_system_map,
+				 cpu_online_map);
 
 			set_balance_irq_affinity(i, online_system);
 
