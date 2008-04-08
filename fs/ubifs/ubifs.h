@@ -805,6 +805,7 @@ struct ubifs_mount_opts {
  * @ileb_cnt: number of pre-allocated index LEBs
  * @ileb_nxt: next pre-allocated index LEBs
  * @old_idx: tree of index nodes obsoleted since the last commit start
+ * @bottom_up_buf: a buffer which is used by 'dirty_cow_bottom_up()' in tnc.c
  * @new_ihead_lnum: used by debugging to check ihead_lnum
  * @new_ihead_offs: used by debugging to check ihead_offs
  *
@@ -1030,6 +1031,7 @@ struct ubifs_info {
 	int ileb_cnt;
 	int ileb_nxt;
 	struct rb_root old_idx;
+	int *bottom_up_buf;
 #ifdef CONFIG_UBIFS_FS_DEBUG
 	int new_ihead_lnum;
 	int new_ihead_offs;
