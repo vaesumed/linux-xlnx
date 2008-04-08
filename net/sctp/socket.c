@@ -525,7 +525,7 @@ static int sctp_send_asconf_add_ip(struct sock		*sk,
 	ep = sp->ep;
 
 	SCTP_DEBUG_PRINTK("%s: (sk: %p, addrs: %p, addrcnt: %d)\n",
-			  __FUNCTION__, sk, addrs, addrcnt);
+			  __func__, sk, addrs, addrcnt);
 
 	list_for_each(pos, &ep->asocs) {
 		asoc = list_entry(pos, struct sctp_association, asocs);
@@ -711,7 +711,7 @@ static int sctp_send_asconf_del_ip(struct sock		*sk,
 	ep = sp->ep;
 
 	SCTP_DEBUG_PRINTK("%s: (sk: %p, addrs: %p, addrcnt: %d)\n",
-			  __FUNCTION__, sk, addrs, addrcnt);
+			  __func__, sk, addrs, addrcnt);
 
 	list_for_each(pos, &ep->asocs) {
 		asoc = list_entry(pos, struct sctp_association, asocs);
@@ -1197,7 +1197,7 @@ SCTP_STATIC int sctp_setsockopt_connectx(struct sock* sk,
 	struct sockaddr *kaddrs;
 
 	SCTP_DEBUG_PRINTK("%s - sk %p addrs %p addrs_size %d\n",
-			  __FUNCTION__, sk, addrs, addrs_size);
+			  __func__, sk, addrs, addrs_size);
 
 	if (unlikely(addrs_size <= 0))
 		return -EINVAL;
@@ -1729,7 +1729,7 @@ SCTP_STATIC int sctp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	/* Now send the (possibly) fragmented message. */
 	list_for_each(pos, &datamsg->chunks) {
 		chunk = list_entry(pos, struct sctp_chunk, frag_list);
-		sctp_datamsg_track(chunk);
+		sctp_chunk_hold(chunk);
 
 		/* Do accounting for the write space.  */
 		sctp_set_owner_w(chunk);
@@ -1748,7 +1748,7 @@ SCTP_STATIC int sctp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		SCTP_DEBUG_PRINTK("We sent primitively.\n");
 	}
 
-	sctp_datamsg_free(datamsg);
+	sctp_datamsg_put(datamsg);
 	if (err)
 		goto out_free;
 	else
@@ -3302,7 +3302,7 @@ SCTP_STATIC int sctp_connect(struct sock *sk, struct sockaddr *addr,
 	sctp_lock_sock(sk);
 
 	SCTP_DEBUG_PRINTK("%s - sk: %p, sockaddr: %p, addr_len: %d\n",
-			  __FUNCTION__, sk, addr, addr_len);
+			  __func__, sk, addr, addr_len);
 
 	/* Validate addr_len before calling common connect/connectx routine. */
 	af = sctp_get_af_specific(addr->sa_family);
@@ -3823,7 +3823,7 @@ static int sctp_getsockopt_peeloff(struct sock *sk, int len, char __user *optval
 		goto out;
 	}
 
-	SCTP_DEBUG_PRINTK("%s: sk: %p asoc: %p\n", __FUNCTION__, sk, asoc);
+	SCTP_DEBUG_PRINTK("%s: sk: %p asoc: %p\n", __func__, sk, asoc);
 
 	retval = sctp_do_peeloff(asoc, &newsock);
 	if (retval < 0)
@@ -3837,7 +3837,7 @@ static int sctp_getsockopt_peeloff(struct sock *sk, int len, char __user *optval
 	}
 
 	SCTP_DEBUG_PRINTK("%s: sk: %p asoc: %p newsk: %p sd: %d\n",
-			  __FUNCTION__, sk, asoc, newsock->sk, retval);
+			  __func__, sk, asoc, newsock->sk, retval);
 
 	/* Return the fd mapped to the new socket.  */
 	peeloff.sd = retval;
@@ -6233,7 +6233,7 @@ static int sctp_wait_for_connect(struct sctp_association *asoc, long *timeo_p)
 	long current_timeo = *timeo_p;
 	DEFINE_WAIT(wait);
 
-	SCTP_DEBUG_PRINTK("%s: asoc=%p, timeo=%ld\n", __FUNCTION__, asoc,
+	SCTP_DEBUG_PRINTK("%s: asoc=%p, timeo=%ld\n", __func__, asoc,
 			  (long)(*timeo_p));
 
 	/* Increment the association's refcnt.  */
@@ -6513,8 +6513,6 @@ static void sctp_sock_migrate(struct sock *oldsk, struct sock *newsk,
 }
 
 
-DEFINE_PROTO_INUSE(sctp)
-
 /* This proto struct describes the ULP interface for SCTP.  */
 struct proto sctp_prot = {
 	.name        =	"SCTP",
@@ -6544,11 +6542,9 @@ struct proto sctp_prot = {
 	.enter_memory_pressure = sctp_enter_memory_pressure,
 	.memory_allocated = &sctp_memory_allocated,
 	.sockets_allocated = &sctp_sockets_allocated,
-	REF_PROTO_INUSE(sctp)
 };
 
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-DEFINE_PROTO_INUSE(sctpv6)
 
 struct proto sctpv6_prot = {
 	.name		= "SCTPv6",
@@ -6578,6 +6574,5 @@ struct proto sctpv6_prot = {
 	.enter_memory_pressure = sctp_enter_memory_pressure,
 	.memory_allocated = &sctp_memory_allocated,
 	.sockets_allocated = &sctp_sockets_allocated,
-	REF_PROTO_INUSE(sctpv6)
 };
 #endif /* defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE) */
