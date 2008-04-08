@@ -380,6 +380,7 @@ static inline void __cpus_remap(cpumask_t *dstp, const cpumask_t *srcp,
 extern cpumask_t cpu_possible_map;
 extern cpumask_t cpu_online_map;
 extern cpumask_t cpu_present_map;
+extern cpumask_t cpu_system_map;
 
 #if NR_CPUS > 1
 #define num_online_cpus()	cpus_weight(cpu_online_map)
@@ -388,6 +389,7 @@ extern cpumask_t cpu_present_map;
 #define cpu_online(cpu)		cpu_isset((cpu), cpu_online_map)
 #define cpu_possible(cpu)	cpu_isset((cpu), cpu_possible_map)
 #define cpu_present(cpu)	cpu_isset((cpu), cpu_present_map)
+#define cpu_system(cpu)		cpu_isset((cpu), cpu_system_map)
 #else
 #define num_online_cpus()	1
 #define num_possible_cpus()	1
@@ -395,7 +397,10 @@ extern cpumask_t cpu_present_map;
 #define cpu_online(cpu)		((cpu) == 0)
 #define cpu_possible(cpu)	((cpu) == 0)
 #define cpu_present(cpu)	((cpu) == 0)
+#define cpu_system(cpu)		((cpu) == 0)
 #endif
+
+extern int cpus_match_system(cpumask_t mask);
 
 #define cpu_is_offline(cpu)	unlikely(!cpu_online(cpu))
 

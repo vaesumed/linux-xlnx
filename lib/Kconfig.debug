@@ -542,6 +542,8 @@ config FIREWIRE_OHCI_REMOTE_DMA
 
 	  If unsure, say N.
 
+source kernel/trace/Kconfig
+
 config PROVIDE_OHCI1394_DMA_INIT
 	bool "Provide code for enabling DMA over FireWire early on boot"
 	depends on PCI && X86
