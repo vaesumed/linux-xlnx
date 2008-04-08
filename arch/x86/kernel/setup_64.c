@@ -43,6 +43,7 @@
 #include <linux/sort.h>
 #include <linux/uaccess.h>
 #include <linux/init_ohci1394_dma.h>
+#include <linux/kvm_para.h>
 
 #include <asm/mtrr.h>
 #include <asm/uaccess.h>
@@ -362,6 +363,10 @@ void __init setup_arch(char **cmdline_p)
 
 	io_delay_init();
 
+#ifdef CONFIG_KVM_CLOCK
+	kvmclock_init();
+#endif
+
 #ifdef CONFIG_SMP
 	/* setup to use the early static init tables during kernel startup */
 	x86_cpu_to_apicid_early_ptr = (void *)x86_cpu_to_apicid_init;
@@ -459,6 +464,8 @@ void __init setup_arch(char **cmdline_p)
 		get_smp_config();
 	init_apic_mappings();
 	ioapic_init_mappings();
+
+	kvm_guest_init();
 
 	/*
 	 * We trust e820 completely. No explicit ROM probing in memory.
