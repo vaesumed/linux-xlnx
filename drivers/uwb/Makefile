@@ -1,4 +1,5 @@
 obj-$(CONFIG_UWB)		+= uwb.o umc.o whci.o
+obj-$(CONFIG_UWB_WHCI)		+= whc-rc.o
 
 uwb-objs :=		\
 	address.o	\
