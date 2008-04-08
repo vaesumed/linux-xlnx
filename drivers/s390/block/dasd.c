@@ -980,12 +980,12 @@ void dasd_int_handler(struct ccw_device *cdev, unsigned long intparm,
 			break;
 		case -ETIMEDOUT:
 			printk(KERN_WARNING"%s(%s): request timed out\n",
-			       __FUNCTION__, cdev->dev.bus_id);
+			       __func__, cdev->dev.bus_id);
 			//FIXME - dasd uses own timeout interface...
 			break;
 		default:
 			printk(KERN_WARNING"%s(%s): unknown error %ld\n",
-			       __FUNCTION__, cdev->dev.bus_id, PTR_ERR(irb));
+			       __func__, cdev->dev.bus_id, PTR_ERR(irb));
 		}
 		return;
 	}
@@ -1956,6 +1956,7 @@ static int dasd_alloc_queue(struct dasd_block *block)
 	block->request_queue->queuedata = block;
 
 	elevator_exit(block->request_queue->elevator);
+	block->request_queue->elevator = NULL;
 	rc = elevator_init(block->request_queue, "deadline");
 	if (rc) {
 		blk_cleanup_queue(block->request_queue);
