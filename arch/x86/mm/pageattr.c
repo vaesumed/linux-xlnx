@@ -10,7 +10,7 @@
 #include <linux/mm.h>
 #include <linux/interrupt.h>
 #include <linux/seq_file.h>
-#include <linux/proc_fs.h>
+#include <linux/debugfs.h>
 
 #include <asm/e820.h>
 #include <asm/processor.h>
@@ -920,6 +920,7 @@ void kernel_map_pages(struct page *page, int numpages, int enable)
 	cpa_fill_pool(NULL);
 }
 
+#ifdef CONFIG_DEBUG_FS
 static int dpa_show(struct seq_file *m, void *v)
 {
 	seq_puts(m, "DEBUG_PAGEALLOC\n");
@@ -946,16 +947,17 @@ static const struct file_operations dpa_fops = {
 
 int __init debug_pagealloc_proc_init(void)
 {
-	struct proc_dir_entry *pe;
+	struct dentry *de;
 
-	pe = create_proc_entry("debug_pagealloc", 0600, NULL);
-	if (!pe)
+	de = debugfs_create_file("debug_pagealloc", 0600, NULL, NULL,
+				 &dpa_fops);
+	if (!de)
 		return -ENOMEM;
 
-	pe->proc_fops = &dpa_fops;
 	return 0;
 }
 __initcall(debug_pagealloc_proc_init);
+#endif
 
 #ifdef CONFIG_HIBERNATION
 
