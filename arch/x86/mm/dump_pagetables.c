@@ -14,7 +14,7 @@
 
 #include <linux/module.h>
 #include <linux/seq_file.h>
-#include <linux/proc_fs.h>
+#include <linux/debugfs.h>
 
 #include <asm/pgtable.h>
 
@@ -285,13 +285,13 @@ static const struct file_operations ptdump_fops = {
 
 int pt_dump_init(void)
 {
-	struct proc_dir_entry *pe;
+	struct dentry *pe;
 
-	pe = create_proc_entry("kernel_page_tables", 0600, NULL);
+	pe = debugfs_create_file("kernel_page_tables", 0600, NULL, NULL,
+				 &ptdump_fops);
 	if (!pe)
 		return -ENOMEM;
 
-	pe->proc_fops = &ptdump_fops;
 	return 0;
 }
 
