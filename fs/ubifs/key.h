@@ -55,9 +55,9 @@ static inline uint32_t key_r5_hash(const char *s, int len)
 	}
 
 	/*
-	 * We use hash values as offset in directories, so offsets 0 and 1 are
-	 * reserved for "." and "..". Offset 2 is also reserved for readdir()
-	 * purposes.
+	 * We use hash values as offset in directories, so values %0 and %1 are
+	 * reserved for "." and "..". Value %2 is also reserved for purposes of
+	 * 'ubifs_readdir()'.
 	 */
 	if (unlikely(a >= 0 && a <= 2))
 		a += 3;
@@ -477,14 +477,14 @@ static inline int keys_cmp(const struct ubifs_info *c,
 			   const union ubifs_key *key1,
 			   const union ubifs_key *key2)
 {
-	int i;
-
-	for (i = 0; i < 2; i++) {
-		if (key1->u32[i] < key2->u32[i])
-			return -1;
-		if (key1->u32[i] > key2->u32[i])
-			return 1;
-	}
+	if (key1->u32[0] < key2->u32[0])
+		return -1;
+	if (key1->u32[0] > key2->u32[0])
+		return 1;
+	if (key1->u32[1] < key2->u32[1])
+		return -1;
+	if (key1->u32[1] > key2->u32[1])
+		return 1;
 
 	return 0;
 }
