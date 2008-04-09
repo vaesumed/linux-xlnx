@@ -125,25 +125,25 @@ static int firesat_get_frontend(struct dvb_frontend *fe,
 /* And the definition itself...*/
 
 static struct dvb_frontend_ops firesat_ops = {
-	.init =	firesat_dvb_init,
-	.sleep = firesat_sleep,
+	.init				= firesat_dvb_init,
+	.sleep				= firesat_sleep,
 
-	.set_frontend = firesat_set_frontend,
-	.get_frontend = firesat_get_frontend,
+	.set_frontend			= firesat_set_frontend,
+	.get_frontend			= firesat_get_frontend,
 
-	.read_status = firesat_read_status,
-	.read_ber = firesat_read_ber,
-	.read_signal_strength = firesat_read_signal_strength,
-	.read_snr = firesat_read_snr,
-	.read_ucblocks = firesat_read_uncorrected_blocks,
+	.read_status			= firesat_read_status,
+	.read_ber			= firesat_read_ber,
+	.read_signal_strength		= firesat_read_signal_strength,
+	.read_snr			= firesat_read_snr,
+	.read_ucblocks			= firesat_read_uncorrected_blocks,
 
-	.diseqc_reset_overload = firesat_diseqc_reset_overload,
-	.diseqc_recv_slave_reply = firesat_diseqc_recv_slave_reply,
-	.diseqc_send_master_cmd = firesat_diseqc_send_master_cmd,
-	.diseqc_send_burst = firesat_diseqc_send_burst,
-	.set_tone = firesat_set_tone,
-	.set_voltage = firesat_set_voltage,
-	.enable_high_lnb_voltage = firesat_enable_high_lnb_voltage,
+	.diseqc_reset_overload		= firesat_diseqc_reset_overload,
+	.diseqc_recv_slave_reply	= firesat_diseqc_recv_slave_reply,
+	.diseqc_send_master_cmd 	= firesat_diseqc_send_master_cmd,
+	.diseqc_send_burst		= firesat_diseqc_send_burst,
+	.set_tone			= firesat_set_tone,
+	.set_voltage			= firesat_set_voltage,
+	.enable_high_lnb_voltage	= firesat_enable_high_lnb_voltage,
 };
 
 /* End of dvb_frontend_ops */
