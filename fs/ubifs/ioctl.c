@@ -128,7 +128,7 @@ static int setflags(struct inode *inode, int flags)
 	ui->flags = ioctl2ubifs(flags);
 	ubifs_set_inode_flags(inode);
 
-	inode->i_ctime = CURRENT_TIME;
+	inode->i_ctime = ubifs_current_time(inode);
 	mark_inode_dirty_sync(inode);
 
 	ubifs_release_ino_dirty(c, inode, &req);
