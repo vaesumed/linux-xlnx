@@ -8,3 +8,5 @@ make-configs.txt
 	- usage help for make *config
 modules.txt
 	- how to build modules and to install them
+smart-config.txt
+	- description of the Smart Config makefile feature.
