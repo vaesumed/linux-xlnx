@@ -70,4 +70,9 @@ struct firesat {
 extern struct list_head firesat_list;
 extern spinlock_t firesat_list_lock;
 
+/* firesat_dvb.c */
+extern int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed);
+extern int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
+
+
 #endif

@@ -1,4 +1,5 @@
 firesat-objs := firesat_1394.o	\
+		firesat_dvb.o	\
 		avc_api.o	\
 		cmp.o		\
 		firesat-rc.o	\
