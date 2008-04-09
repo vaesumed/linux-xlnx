@@ -9,6 +9,7 @@
  *	published by the Free Software Foundation; either version 2 of
  *	the License, or (at your option) any later version.
  */
+
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
@@ -98,31 +99,6 @@ static struct hpsb_highlevel firesat_highlevel = {
 // FIXME	.iso_receive =	iso_receive,
 	.fcp_request	= fcp_request,
 };
-
-#if 0
-static int firesat_dvb_init(struct dvb_frontend *fe);
-static int firesat_sleep(struct dvb_frontend *fe);
-
-static int firesat_diseqc_send_master_cmd(struct dvb_frontend *fe,
-					struct dvb_diseqc_master_cmd *cmd);
-static int firesat_diseqc_send_burst(struct dvb_frontend *fe,
-				     fe_sec_mini_cmd_t minicmd);
-static int firesat_set_tone(struct dvb_frontend *fe,
-			    fe_sec_tone_mode_t tone);
-static int firesat_set_voltage(struct dvb_frontend *fe,
-			       fe_sec_voltage_t voltage);
-
-static int firesat_read_status(struct dvb_frontend *fe, fe_status_t *status);
-static int firesat_read_ber(struct dvb_frontend *fe, u32 *ber);
-static int firesat_read_signal_strength(struct dvb_frontend *fe, u16 *strength);
-static int firesat_read_snr(struct dvb_frontend *fe, u16 *snr);
-static int firesat_read_uncorrected_blocks(struct dvb_frontend *fe,
-					   u32 *ucblocks);
-static int firesat_set_frontend(struct dvb_frontend *fe,
-				struct dvb_frontend_parameters *params);
-static int firesat_get_frontend(struct dvb_frontend *fe,
-				struct dvb_frontend_parameters *params);
-#endif
 
 static void firesat_add_host (struct hpsb_host *host)
 {
