@@ -183,8 +183,12 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	return 0;
 }
 
-int firesat_dvbdev_init(struct firesat *firesat)
+int firesat_dvbdev_init(struct firesat *firesat,
+			struct device *dev,
+			struct dvb_frontend *fe)
 {
+	int result;
+
 		firesat->has_ci = 1; // TEMP workaround
 
 #if 0
@@ -208,6 +212,7 @@ int firesat_dvbdev_init(struct firesat *firesat)
 			firesat->frontend_info = NULL;
 		}
 #endif
+/* // ------- CRAP -----------
 		if (!firesat->frontend_info) {
 			spin_lock_irqsave(&firesat_list_lock, flags);
 			list_del(&firesat->list);
@@ -215,7 +220,7 @@ int firesat_dvbdev_init(struct firesat *firesat)
 			kfree(firesat);
 			continue;
 		}
-
+*/
 		//initialising firesat->adapter before calling dvb_register_adapter
 		if (!(firesat->adapter = kmalloc(sizeof (struct dvb_adapter), GFP_KERNEL))) {
 			printk("%s: couldn't allocate memory.\n", __func__);
@@ -230,11 +235,12 @@ int firesat_dvbdev_init(struct firesat *firesat)
 						   dev)) < 0) {
 
 			printk("%s: dvb_register_adapter failed: error %d\n", __func__, result);
-
+#if 0
 			/* ### cleanup */
 			spin_lock_irqsave(&firesat_list_lock, flags);
 			list_del(&firesat->list);
 			spin_unlock_irqrestore(&firesat_list_lock, flags);
+#endif
 			kfree(firesat);
 
 			return result;
@@ -301,8 +307,10 @@ int firesat_dvbdev_init(struct firesat *firesat)
 
 		dvb_net_init(firesat->adapter, &firesat->dvbnet, &firesat->demux.dmx);
 
-		fe->ops = firesat_ops;
-		fe->dvb = firesat->adapter;
+//		fe->ops = firesat_ops;
+//		fe->dvb = firesat->adapter;
+		firesat_frontend_attach(firesat, fe);
+
 		fe->sec_priv = firesat; //IMPORTANT, functions depend on this!!!
 		if ((result= dvb_register_frontend(firesat->adapter, fe)) < 0) {
 			printk("%s: dvb_register_frontend_new failed: error %d\n", __func__, result);

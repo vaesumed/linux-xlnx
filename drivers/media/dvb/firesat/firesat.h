@@ -27,6 +27,7 @@ struct firesat {
 	struct dmx_frontend		frontend;
 	struct dvb_net			dvbnet;
 	struct dvb_frontend_info	*frontend_info;
+	struct dvb_frontend		*fe;
 
 	struct dvb_device		*cadev;
 	int				has_ci;
@@ -73,7 +74,12 @@ extern spinlock_t firesat_list_lock;
 /* firesat_dvb.c */
 extern int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed);
 extern int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
-extern int firesat_dvbdev_init(struct firesat *firesat);
+extern int firesat_dvbdev_init(struct firesat *firesat,
+				struct device *dev,
+				struct dvb_frontend *fe);
+
+/* firesat_fe.c */
+extern int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe);
 
 
 #endif
