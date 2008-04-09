@@ -381,15 +381,15 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       le64_to_cpu(ino->size));
 		printk(KERN_DEBUG "\tnlink          %u\n",
 		       le32_to_cpu(ino->nlink));
-		printk(KERN_DEBUG "\tatime          %u.%u\n",
-		       le32_to_cpu(ino->atime.sec),
-		       le32_to_cpu(ino->atime.nsec));
-		printk(KERN_DEBUG "\tmtime          %u.%u\n",
-		       le32_to_cpu(ino->mtime.sec),
-		       le32_to_cpu(ino->mtime.nsec));
-		printk(KERN_DEBUG "\tctime          %u.%u\n",
-		       le32_to_cpu(ino->ctime.sec),
-		       le32_to_cpu(ino->ctime.nsec));
+		printk(KERN_DEBUG "\tatime          %lld.%u\n",
+		       (long long)le64_to_cpu(ino->atime_sec),
+		       le32_to_cpu(ino->atime_nsec));
+		printk(KERN_DEBUG "\tmtime          %lld.%u\n",
+		       (long long)le64_to_cpu(ino->mtime_sec),
+		       le32_to_cpu(ino->mtime_nsec));
+		printk(KERN_DEBUG "\tctime          %lld.%u\n",
+		       (long long)le64_to_cpu(ino->ctime_sec),
+		       le32_to_cpu(ino->ctime_nsec));
 		printk(KERN_DEBUG "\tuid            %u\n",
 		       le32_to_cpu(ino->uid));
 		printk(KERN_DEBUG "\tgid            %u\n",
