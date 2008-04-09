@@ -64,32 +64,25 @@ void *videobuf_alloc(struct videobuf_queue *q)
 	return vb;
 }
 
+#define WAITON_CONDITION (vb->state != VIDEOBUF_ACTIVE &&\
+				vb->state != VIDEOBUF_QUEUED)
 int videobuf_waiton(struct videobuf_buffer *vb, int non_blocking, int intr)
 {
-	int retval = 0;
-	DECLARE_WAITQUEUE(wait, current);
-
 	MAGIC_CHECK(vb->magic, MAGIC_BUFFER);
-	add_wait_queue(&vb->done, &wait);
-	while (vb->state == VIDEOBUF_ACTIVE || vb->state == VIDEOBUF_QUEUED) {
-		if (non_blocking) {
-			retval = -EAGAIN;
-			break;
-		}
-		set_current_state(intr  ? TASK_INTERRUPTIBLE
-					: TASK_UNINTERRUPTIBLE);
-		if (vb->state == VIDEOBUF_ACTIVE ||
-		    vb->state == VIDEOBUF_QUEUED)
-			schedule();
-		set_current_state(TASK_RUNNING);
-		if (intr && signal_pending(current)) {
-			dprintk(1, "buffer waiton: -EINTR\n");
-			retval = -EINTR;
-			break;
-		}
+
+	if (non_blocking) {
+		if (WAITON_CONDITION)
+			return 0;
+		else
+			return -EAGAIN;
 	}
-	remove_wait_queue(&vb->done, &wait);
-	return retval;
+
+	if (intr)
+		return wait_event_interruptible(vb->done, WAITON_CONDITION);
+	else
+		wait_event(vb->done, WAITON_CONDITION);
+
+	return 0;
 }
 
 int videobuf_iolock(struct videobuf_queue *q, struct videobuf_buffer *vb,
@@ -98,29 +91,21 @@ int videobuf_iolock(struct videobuf_queue *q, struct videobuf_buffer *vb,
 	MAGIC_CHECK(vb->magic, MAGIC_BUFFER);
 	MAGIC_CHECK(q->int_ops->magic, MAGIC_QTYPE_OPS);
 
-	/* This is required to avoid OOPS on some cases,
-	   since mmap_mapper() method should be called before _iolock.
-	   On some cases, the mmap_mapper() is called only after scheduling.
-	 */
-	if (vb->memory == V4L2_MEMORY_MMAP) {
-		wait_event_timeout(vb->done, q->is_mmapped,
-				   msecs_to_jiffies(100));
-		if (!q->is_mmapped) {
-			printk(KERN_ERR
-			       "Error: mmap_mapper() never called!\n");
-			return -EINVAL;
-		}
-	}
-
 	return CALL(q, iolock, q, vb, fbuf);
 }
 
 /* --------------------------------------------------------------------- */
 
+static int videobuf_mmap_setup_default(struct videobuf_queue *q,
+					struct videobuf_buffer *vb)
+{
+	return 0;
+}
+
 
 void videobuf_queue_core_init(struct videobuf_queue *q,
 			 struct videobuf_queue_ops *ops,
-			 void *dev,
+			 struct device *dev,
 			 spinlock_t *irqlock,
 			 enum v4l2_buf_type type,
 			 enum v4l2_field field,
@@ -138,6 +123,9 @@ void videobuf_queue_core_init(struct videobuf_queue *q,
 	q->priv_data = priv;
 	q->int_ops   = int_ops;
 
+	if (!q->int_ops->mmap_setup)
+		q->int_ops->mmap_setup = videobuf_mmap_setup_default;
+
 	/* All buffer operations are mandatory */
 	BUG_ON(!q->ops->buf_setup);
 	BUG_ON(!q->ops->buf_prepare);
@@ -148,6 +136,7 @@ void videobuf_queue_core_init(struct videobuf_queue *q,
 	BUG_ON(!q->int_ops);
 
 	mutex_init(&q->vb_lock);
+	init_waitqueue_head(&q->wait);
 	INIT_LIST_HEAD(&q->stream);
 }
 
@@ -195,6 +184,10 @@ void videobuf_queue_cancel(struct videobuf_queue *q)
 	unsigned long flags = 0;
 	int i;
 
+	q->streaming = 0;
+	q->reading  = 0;
+	wake_up_interruptible_sync(&q->wait);
+
 	/* remove queued buffers from list */
 	if (q->irqlock)
 		spin_lock_irqsave(q->irqlock, flags);
@@ -204,6 +197,7 @@ void videobuf_queue_cancel(struct videobuf_queue *q)
 		if (q->bufs[i]->state == VIDEOBUF_QUEUED) {
 			list_del(&q->bufs[i]->queue);
 			q->bufs[i]->state = VIDEOBUF_ERROR;
+			wake_up_all(&q->bufs[i]->done);
 		}
 	}
 	if (q->irqlock)
@@ -309,8 +303,6 @@ static int __videobuf_mmap_free(struct videobuf_queue *q)
 
 	rc  = CALL(q, mmap_free, q);
 
-	q->is_mmapped = 0;
-
 	if (rc < 0)
 		return rc;
 
@@ -362,6 +354,9 @@ static int __videobuf_mmap_setup(struct videobuf_queue *q,
 		switch (memory) {
 		case V4L2_MEMORY_MMAP:
 			q->bufs[i]->boff  = bsize * i;
+			err = q->int_ops->mmap_setup(q, q->bufs[i]);
+			if (err)
+				break;
 			break;
 		case V4L2_MEMORY_USERPTR:
 		case V4L2_MEMORY_OVERLAY:
@@ -571,6 +566,7 @@ int videobuf_qbuf(struct videobuf_queue *q,
 	}
 	dprintk(1, "qbuf: succeded\n");
 	retval = 0;
+	wake_up_interruptible_sync(&q->wait);
 
  done:
 	mutex_unlock(&q->vb_lock);
@@ -581,35 +577,88 @@ int videobuf_qbuf(struct videobuf_queue *q,
 	return retval;
 }
 
+
+/* Locking: Caller holds q->vb_lock */
+static int stream_next_buffer_check_queue(struct videobuf_queue *q, int noblock)
+{
+	int retval;
+
+checks:
+	if (!q->streaming) {
+		dprintk(1, "next_buffer: Not streaming\n");
+		retval = -EINVAL;
+		goto done;
+	}
+
+	if (list_empty(&q->stream)) {
+		if (noblock) {
+			retval = -EAGAIN;
+			dprintk(2, "next_buffer: no buffers to dequeue\n");
+			goto done;
+		} else {
+			dprintk(2, "next_buffer: waiting on buffer\n");
+
+			/* Drop lock to avoid deadlock with qbuf */
+			mutex_unlock(&q->vb_lock);
+
+			/* Checking list_empty and streaming is safe without
+			 * locks because we goto checks to validate while
+			 * holding locks before proceeding */
+			retval = wait_event_interruptible(q->wait,
+				!list_empty(&q->stream) || !q->streaming);
+			mutex_lock(&q->vb_lock);
+
+			if (retval)
+				goto done;
+
+			goto checks;
+		}
+	}
+
+	retval = 0;
+
+done:
+	return retval;
+}
+
+
+/* Locking: Caller holds q->vb_lock */
+static int stream_next_buffer(struct videobuf_queue *q,
+			struct videobuf_buffer **vb, int nonblocking)
+{
+	int retval;
+	struct videobuf_buffer *buf = NULL;
+
+	retval = stream_next_buffer_check_queue(q, nonblocking);
+	if (retval)
+		goto done;
+
+	buf = list_entry(q->stream.next, struct videobuf_buffer, stream);
+	retval = videobuf_waiton(buf, nonblocking, 1);
+	if (retval < 0)
+		goto done;
+
+	*vb = buf;
+done:
+	return retval;
+}
+
 int videobuf_dqbuf(struct videobuf_queue *q,
 	       struct v4l2_buffer *b, int nonblocking)
 {
-	struct videobuf_buffer *buf;
+	struct videobuf_buffer *buf = NULL;
 	int retval;
 
 	MAGIC_CHECK(q->int_ops->magic, MAGIC_QTYPE_OPS);
 
 	mutex_lock(&q->vb_lock);
-	retval = -EBUSY;
-	if (q->reading) {
-		dprintk(1, "dqbuf: Reading running...\n");
-		goto done;
-	}
-	retval = -EINVAL;
-	if (b->type != q->type) {
-		dprintk(1, "dqbuf: Wrong type.\n");
-		goto done;
-	}
-	if (list_empty(&q->stream)) {
-		dprintk(1, "dqbuf: stream running\n");
-		goto done;
-	}
-	buf = list_entry(q->stream.next, struct videobuf_buffer, stream);
-	retval = videobuf_waiton(buf, nonblocking, 1);
+
+	retval = stream_next_buffer(q, &buf, nonblocking);
 	if (retval < 0) {
-		dprintk(1, "dqbuf: waiton returned %d\n", retval);
+		dprintk(1, "dqbuf: next_buffer error: %i\n", retval);
 		goto done;
 	}
+
 	switch (buf->state) {
 	case VIDEOBUF_ERROR:
 		dprintk(1, "dqbuf: state is error\n");
@@ -658,6 +707,7 @@ int videobuf_streamon(struct videobuf_queue *q)
 	if (q->irqlock)
 		spin_unlock_irqrestore(q->irqlock, flags);
 
+	wake_up_interruptible_sync(&q->wait);
  done:
 	mutex_unlock(&q->vb_lock);
 	return retval;
@@ -670,7 +720,6 @@ static int __videobuf_streamoff(struct videobuf_queue *q)
 		return -EINVAL;
 
 	videobuf_queue_cancel(q);
-	q->streaming = 0;
 
 	return 0;
 }
@@ -740,14 +789,13 @@ ssize_t videobuf_read_one(struct videobuf_queue *q,
 {
 	enum v4l2_field field;
 	unsigned long flags = 0;
-	unsigned size, nbufs;
+	unsigned size = 0, nbufs = 1;
 	int retval;
 
 	MAGIC_CHECK(q->int_ops->magic, MAGIC_QTYPE_OPS);
 
 	mutex_lock(&q->vb_lock);
 
-	nbufs = 1; size = 0;
 	q->ops->buf_setup(q, &nbufs, &size);
 
 	if (NULL == q->read_buf  &&
@@ -874,7 +922,6 @@ static void __videobuf_read_stop(struct videobuf_queue *q)
 		q->bufs[i] = NULL;
 	}
 	q->read_buf = NULL;
-	q->reading  = 0;
 
 }
 
@@ -1032,7 +1079,6 @@ int videobuf_mmap_mapper(struct videobuf_queue *q,
 
 	mutex_lock(&q->vb_lock);
 	retval = CALL(q, mmap_mapper, q, vma);
-	q->is_mmapped = 1;
 	mutex_unlock(&q->vb_lock);
 
 	return retval;
