@@ -1136,18 +1136,3 @@ static __init int setup_disablecpuid(char *arg)
 	return 1;
 }
 __setup("clearcpuid=", setup_disablecpuid);
-
-#ifdef CONFIG_X86_TRAMPOLINE
-/*
- * Currently trivial. Write the real->protected mode
- * bootstrap into the page concerned. The caller
- * has made sure it's suitably aligned.
- */
-
-unsigned long setup_trampoline(void)
-{
-	void *tramp = __va(TRAMPOLINE_BASE);
-	memcpy(tramp, trampoline_data, trampoline_end - trampoline_data);
-	return virt_to_phys(tramp);
-}
-#endif /* CONFIG_X86_TRAMPOLINE */
