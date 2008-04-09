@@ -540,7 +540,7 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 			return err;
 		}
 
-		inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 	}
 
 	if (ia_valid & ATTR_UID)
@@ -647,23 +647,25 @@ int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync)
  * @c: UBIFS file-system description object
  * @inode: inode to update
  *
- * Time resolution of UBIFS is one second. This function updates mtime and
- * ctime of the inode if it is not equivalent to current time. Returns zero in
- * case of success and a negative error code in case of failure.
+ * This function updates mtime and ctime of the inode if it is not equivalent to
+ * current time. Returns zero in case of success and a negative error code in
+ * case of failure.
  */
 static int update_mctime(struct ubifs_info *c, struct inode *inode)
 {
-	time_t now = get_seconds();
-	struct ubifs_budget_req req;
-	int err;
+	struct timespec now = ubifs_current_time(inode);
 
-	if (inode->i_mtime.tv_sec != now || inode->i_ctime.tv_sec != now) {
+	if (!timespec_equal(&inode->i_mtime, &now) ||
+	    !timespec_equal(&inode->i_ctime, &now)) {
+		struct ubifs_budget_req req;
+		int err;
+
 		memset(&req, 0, sizeof(struct ubifs_budget_req));
 		err = ubifs_budget_inode_op(c, inode, &req);
 		if (err)
 			return err;
 
-		inode->i_mtime.tv_sec = inode->i_ctime.tv_sec = now;
+		inode->i_mtime = inode->i_ctime = now;
 		mark_inode_dirty_sync(inode);
 		mutex_unlock(&ubifs_inode(inode)->budg_mutex);
 	}
