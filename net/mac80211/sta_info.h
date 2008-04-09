@@ -12,7 +12,7 @@
 #include <linux/list.h>
 #include <linux/types.h>
 #include <linux/if_ether.h>
-#include "ieee80211_key.h"
+#include "key.h"
 
 /**
  * enum ieee80211_sta_info_flags - Stations flags
@@ -359,6 +359,5 @@ void sta_info_stop(struct ieee80211_local *local);
 int sta_info_flush(struct ieee80211_local *local,
 		    struct ieee80211_sub_if_data *sdata);
 void sta_info_flush_delayed(struct ieee80211_sub_if_data *sdata);
-void __ieee80211_run_pending_flush(struct ieee80211_local *local);
 
 #endif /* STA_INFO_H */

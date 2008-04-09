@@ -9,7 +9,7 @@
 #include <linux/kernel.h>
 #include <linux/random.h>
 #include "ieee80211_i.h"
-#include "ieee80211_rate.h"
+#include "rate.h"
 #include "mesh.h"
 
 #ifdef CONFIG_MAC80211_VERBOSE_MPL_DEBUG
@@ -18,7 +18,6 @@
 #define mpl_dbg(fmt, args...)	do { (void)(0); } while (0)
 #endif
 
-#define IEEE80211_FC(type, stype) cpu_to_le16(type | stype)
 #define PLINK_GET_FRAME_SUBTYPE(p) (p)
 #define PLINK_GET_LLID(p) (p + 1)
 #define PLINK_GET_PLID(p) (p + 3)

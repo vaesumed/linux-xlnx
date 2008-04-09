@@ -19,8 +19,8 @@
 #include "dev.h"
 #include "wext.h"
 #include "debugfs.h"
+#include "scan.h"
 #include "assoc.h"
-#include "join.h"
 #include "cmd.h"
 
 #define DRIVER_RELEASE_VERSION "323.p0"

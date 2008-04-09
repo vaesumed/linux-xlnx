@@ -78,6 +78,12 @@ struct ssb_bus_ops {
 	void (*write8)(struct ssb_device *dev, u16 offset, u8 value);
 	void (*write16)(struct ssb_device *dev, u16 offset, u16 value);
 	void (*write32)(struct ssb_device *dev, u16 offset, u32 value);
+#ifdef CONFIG_SSB_BLOCKIO
+	void (*block_read)(struct ssb_device *dev, void *buffer,
+			   size_t count, u16 offset, u8 reg_width);
+	void (*block_write)(struct ssb_device *dev, const void *buffer,
+			    size_t count, u16 offset, u8 reg_width);
+#endif
 };
 
 
@@ -260,9 +266,6 @@ struct ssb_bus {
 	struct ssb_device devices[SSB_MAX_NR_CORES];
 	u8 nr_devices;
 
-	/* Reference count. Number of suspended devices. */
-	u8 suspend_cnt;
-
 	/* Software ID number for this bus. */
 	unsigned int busnumber;
 
@@ -334,6 +337,13 @@ extern int ssb_bus_pcmciabus_register(struct ssb_bus *bus,
 
 extern void ssb_bus_unregister(struct ssb_bus *bus);
 
+/* Suspend a SSB bus.
+ * Call this from the parent bus suspend routine. */
+extern int ssb_bus_suspend(struct ssb_bus *bus);
+/* Resume a SSB bus.
+ * Call this from the parent bus resume routine. */
+extern int ssb_bus_resume(struct ssb_bus *bus);
+
 extern u32 ssb_clockspeed(struct ssb_bus *bus);
 
 /* Is the device enabled in hardware? */
@@ -370,6 +380,19 @@ static inline void ssb_write32(struct ssb_device *dev, u16 offset, u32 value)
 {
 	dev->ops->write32(dev, offset, value);
 }
+#ifdef CONFIG_SSB_BLOCKIO
+static inline void ssb_block_read(struct ssb_device *dev, void *buffer,
+				  size_t count, u16 offset, u8 reg_width)
+{
+	dev->ops->block_read(dev, buffer, count, offset, reg_width);
+}
+
+static inline void ssb_block_write(struct ssb_device *dev, const void *buffer,
+				   size_t count, u16 offset, u8 reg_width)
+{
+	dev->ops->block_write(dev, buffer, count, offset, reg_width);
+}
+#endif /* CONFIG_SSB_BLOCKIO */
 
 
 /* Translation (routing) bits that need to be ORed to DMA

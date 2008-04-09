@@ -23,7 +23,7 @@
 #include <linux/spinlock.h>
 #include <linux/etherdevice.h>
 #include <net/wireless.h>
-#include "ieee80211_key.h"
+#include "key.h"
 #include "sta_info.h"
 
 /* ieee80211.o internal definitions, etc. These are not included into
@@ -35,9 +35,9 @@
 
 #define WLAN_FC_DATA_PRESENT(fc) (((fc) & 0x4c) == 0x08)
 
-struct ieee80211_local;
+#define IEEE80211_FC(type, subtype) cpu_to_le16(type | subtype)
 
-#define IEEE80211_ALIGN32_PAD(a) ((4 - ((a) & 3)) & 3)
+struct ieee80211_local;
 
 /* Maximum number of broadcast/multicast frames to buffer when some of the
  * associated stations are using power saving. */
@@ -69,14 +69,6 @@ struct ieee80211_fragment_entry {
 	u8 last_pn[6]; /* PN of the last fragment if CCMP was used */
 };
 
-struct bss_mesh_config {
-	u32 path_proto_id;
-	u32 path_metric_id;
-	u32 cong_control_id;
-	u32 channel_precedence;
-	u8 mesh_version;
-};
-
 
 struct ieee80211_sta_bss {
 	struct list_head list;
@@ -102,7 +94,7 @@ struct ieee80211_sta_bss {
 #ifdef CONFIG_MAC80211_MESH
 	u8 *mesh_id;
 	size_t mesh_id_len;
-	struct bss_mesh_config *mesh_cfg;
+	u8 *mesh_cfg;
 #endif
 #define IEEE80211_MAX_SUPP_RATES 32
 	u8 supp_rates[IEEE80211_MAX_SUPP_RATES];
@@ -121,8 +113,7 @@ struct ieee80211_sta_bss {
 	u8 erp_value;
 };
 
-static inline
-struct bss_mesh_config *bss_mesh_cfg(struct ieee80211_sta_bss *bss)
+static inline u8 *bss_mesh_cfg(struct ieee80211_sta_bss *bss)
 {
 #ifdef CONFIG_MAC80211_MESH
 	return bss->mesh_cfg;
@@ -609,8 +600,8 @@ struct ieee80211_local {
 	/*
 	 * The lock only protects the list, hash, timer and counter
 	 * against manipulation, reads are done in RCU. Additionally,
-	 * the lock protects each BSS's TIM bitmap and a few items
-	 * in a STA info structure.
+	 * the lock protects each BSS's TIM bitmap, a few items in
+	 * STA info structures and various key pointers.
 	 */
 	spinlock_t sta_lock;
 	unsigned long num_sta;
@@ -874,9 +865,9 @@ int ieee80211_if_config(struct net_device *dev);
 int ieee80211_if_config_beacon(struct net_device *dev);
 void ieee80211_tx_set_protected(struct ieee80211_tx_data *tx);
 void ieee80211_if_setup(struct net_device *dev);
-int ieee80211_hw_config_ht(struct ieee80211_local *local, int enable_ht,
-			   struct ieee80211_ht_info *req_ht_cap,
-			   struct ieee80211_ht_bss_info *req_bss_cap);
+u32 ieee80211_handle_ht(struct ieee80211_local *local, int enable_ht,
+			struct ieee80211_ht_info *req_ht_cap,
+			struct ieee80211_ht_bss_info *req_bss_cap);
 
 /* ieee80211_ioctl.c */
 extern const struct iw_handler_def ieee80211_iw_handler_def;
@@ -902,11 +893,8 @@ extern const struct iw_handler_def ieee80211_iw_handler_def;
 
 
 /* ieee80211_ioctl.c */
-int ieee80211_set_compression(struct ieee80211_local *local,
-			      struct net_device *dev, struct sta_info *sta);
 int ieee80211_set_freq(struct ieee80211_local *local, int freq);
 /* ieee80211_sta.c */
-#define IEEE80211_FC(type, stype) cpu_to_le16(type | stype)
 void ieee80211_sta_timer(unsigned long data);
 void ieee80211_sta_work(struct work_struct *work);
 void ieee80211_sta_scan_work(struct work_struct *work);

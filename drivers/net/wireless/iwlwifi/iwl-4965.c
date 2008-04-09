@@ -39,8 +39,8 @@
 #include <asm/unaligned.h>
 
 #include "iwl-eeprom.h"
-#include "iwl-core.h"
 #include "iwl-4965.h"
+#include "iwl-core.h"
 #include "iwl-io.h"
 #include "iwl-helpers.h"
 
@@ -532,7 +532,7 @@ static int iwl4965_txq_ctx_reset(struct iwl_priv *priv)
 	}
 
 	/* Turn off all Tx DMA channels */
-	iwl_write_prph(priv, KDR_SCD_TXFACT, 0);
+	iwl_write_prph(priv, IWL49_SCD_TXFACT, 0);
 	iwl_release_nic_access(priv);
 	spin_unlock_irqrestore(&priv->lock, flags);
 
@@ -1306,7 +1306,7 @@ void iwl4965_chain_noise_reset(struct iwl_priv *priv)
 	struct iwl4965_chain_noise_data *data = NULL;
 
 	data = &(priv->chain_noise_data);
-	if ((data->state == IWL_CHAIN_NOISE_ALIVE) && iwl4965_is_associated(priv)) {
+	if ((data->state == IWL_CHAIN_NOISE_ALIVE) && iwl_is_associated(priv)) {
 		struct iwl4965_calibration_cmd cmd;
 
 		memset(&cmd, 0, sizeof(cmd));
@@ -1581,7 +1581,7 @@ static void iwl4965_sensitivity_calibration(struct iwl_priv *priv,
 
 	data = &(priv->sensitivity_data);
 
-	if (!iwl4965_is_associated(priv)) {
+	if (!iwl_is_associated(priv)) {
 		IWL_DEBUG_CALIB("<< - not associated\n");
 		return;
 	}
@@ -1731,7 +1731,7 @@ static void iwl4965_set_wr_ptrs(struct iwl_priv *priv, int txq_id, u32 index)
 {
 	iwl_write_direct32(priv, HBUS_TARG_WRPTR,
 			     (index & 0xff) | (txq_id << 8));
-	iwl_write_prph(priv, KDR_SCD_QUEUE_RDPTR(txq_id), index);
+	iwl_write_prph(priv, IWL49_SCD_QUEUE_RDPTR(txq_id), index);
 }
 
 /**
@@ -1751,7 +1751,7 @@ static void iwl4965_tx_queue_set_status(struct iwl_priv *priv,
 	int active = test_bit(txq_id, &priv->txq_ctx_active_msk)?1:0;
 
 	/* Set up and activate */
-	iwl_write_prph(priv, KDR_SCD_QUEUE_STATUS_BITS(txq_id),
+	iwl_write_prph(priv, IWL49_SCD_QUEUE_STATUS_BITS(txq_id),
 				 (active << SCD_QUEUE_STTS_REG_POS_ACTIVE) |
 				 (tx_fifo_id << SCD_QUEUE_STTS_REG_POS_TXF) |
 				 (scd_retry << SCD_QUEUE_STTS_REG_POS_WSL) |
@@ -1810,7 +1810,7 @@ int iwl4965_alive_notify(struct iwl_priv *priv)
 	}
 
 	/* Clear 4965's internal Tx Scheduler data base */
-	priv->scd_base_addr = iwl_read_prph(priv, KDR_SCD_SRAM_BASE_ADDR);
+	priv->scd_base_addr = iwl_read_prph(priv, IWL49_SCD_SRAM_BASE_ADDR);
 	a = priv->scd_base_addr + SCD_CONTEXT_DATA_OFFSET;
 	for (; a < priv->scd_base_addr + SCD_TX_STTS_BITMAP_OFFSET; a += 4)
 		iwl_write_targ_mem(priv, a, 0);
@@ -1820,18 +1820,18 @@ int iwl4965_alive_notify(struct iwl_priv *priv)
 		iwl_write_targ_mem(priv, a, 0);
 
 	/* Tel 4965 where to find Tx byte count tables */
-	iwl_write_prph(priv, KDR_SCD_DRAM_BASE_ADDR,
+	iwl_write_prph(priv, IWL49_SCD_DRAM_BASE_ADDR,
 		(priv->hw_setting.shared_phys +
 		 offsetof(struct iwl4965_shared, queues_byte_cnt_tbls)) >> 10);
 
 	/* Disable chain mode for all queues */
-	iwl_write_prph(priv, KDR_SCD_QUEUECHAIN_SEL, 0);
+	iwl_write_prph(priv, IWL49_SCD_QUEUECHAIN_SEL, 0);
 
 	/* Initialize each Tx queue (including the command queue) */
 	for (i = 0; i < priv->hw_setting.max_txq_num; i++) {
 
 		/* TFD circular buffer read/write indexes */
-		iwl_write_prph(priv, KDR_SCD_QUEUE_RDPTR(i), 0);
+		iwl_write_prph(priv, IWL49_SCD_QUEUE_RDPTR(i), 0);
 		iwl_write_direct32(priv, HBUS_TARG_WRPTR, 0 | (i << 8));
 
 		/* Max Tx Window size for Scheduler-ACK mode */
@@ -1850,11 +1850,11 @@ int iwl4965_alive_notify(struct iwl_priv *priv)
 					SCD_QUEUE_CTX_REG2_FRAME_LIMIT_MSK);
 
 	}
-	iwl_write_prph(priv, KDR_SCD_INTERRUPT_MASK,
+	iwl_write_prph(priv, IWL49_SCD_INTERRUPT_MASK,
 				 (1 << priv->hw_setting.max_txq_num) - 1);
 
 	/* Activate all Tx DMA/FIFO channels */
-	iwl_write_prph(priv, KDR_SCD_TXFACT,
+	iwl_write_prph(priv, IWL49_SCD_TXFACT,
 				 SCD_TXFACT_REG_TXFIFO_MASK(0, 7));
 
 	iwl4965_set_wr_ptrs(priv, IWL_CMD_QUEUE_NUM, 0);
@@ -3296,6 +3296,7 @@ static void iwl4965_add_radiotap(struct iwl_priv *priv,
 	s8 noise = 0;
 	int rate = stats->rate_idx;
 	u64 tsf = stats->mactime;
+	__le16 antenna;
 	__le16 phy_flags_hw = rx_start->phy_flags;
 	struct iwl4965_rt_rx_hdr {
 		struct ieee80211_radiotap_header rt_hdr;
@@ -3380,8 +3381,8 @@ static void iwl4965_add_radiotap(struct iwl_priv *priv,
 	 * new 802.11n radiotap field "RX chains" that is defined
 	 * as a bitmask.
 	 */
-	iwl4965_rt->rt_antenna =
-		le16_to_cpu(phy_flags_hw & RX_RES_PHY_FLAGS_ANTENNA_MSK) >> 4;
+	antenna = phy_flags_hw & RX_RES_PHY_FLAGS_ANTENNA_MSK;
+	iwl4965_rt->rt_antenna = le16_to_cpu(antenna) >> 4;
 
 	/* set the preamble flag if appropriate */
 	if (phy_flags_hw & RX_RES_PHY_FLAGS_SHORT_PREAMBLE_MSK)
@@ -3574,77 +3575,6 @@ static int iwl4965_calc_rssi(struct iwl4965_rx_phy_res *rx_resp)
 }
 
 #ifdef CONFIG_IWL4965_HT
-
-/* Parsed Information Elements */
-struct ieee802_11_elems {
-	u8 *ds_params;
-	u8 ds_params_len;
-	u8 *tim;
-	u8 tim_len;
-	u8 *ibss_params;
-	u8 ibss_params_len;
-	u8 *erp_info;
-	u8 erp_info_len;
-	u8 *ht_cap_param;
-	u8 ht_cap_param_len;
-	u8 *ht_extra_param;
-	u8 ht_extra_param_len;
-};
-
-static int parse_elems(u8 *start, size_t len, struct ieee802_11_elems *elems)
-{
-	size_t left = len;
-	u8 *pos = start;
-	int unknown = 0;
-
-	memset(elems, 0, sizeof(*elems));
-
-	while (left >= 2) {
-		u8 id, elen;
-
-		id = *pos++;
-		elen = *pos++;
-		left -= 2;
-
-		if (elen > left)
-			return -1;
-
-		switch (id) {
-		case WLAN_EID_DS_PARAMS:
-			elems->ds_params = pos;
-			elems->ds_params_len = elen;
-			break;
-		case WLAN_EID_TIM:
-			elems->tim = pos;
-			elems->tim_len = elen;
-			break;
-		case WLAN_EID_IBSS_PARAMS:
-			elems->ibss_params = pos;
-			elems->ibss_params_len = elen;
-			break;
-		case WLAN_EID_ERP_INFO:
-			elems->erp_info = pos;
-			elems->erp_info_len = elen;
-			break;
-		case WLAN_EID_HT_CAPABILITY:
-			elems->ht_cap_param = pos;
-			elems->ht_cap_param_len = elen;
-			break;
-		case WLAN_EID_HT_EXTRA_INFO:
-			elems->ht_extra_param = pos;
-			elems->ht_extra_param_len = elen;
-			break;
-		default:
-			unknown++;
-			break;
-		}
-
-		left -= elen;
-		pos += elen;
-	}
-
-	return 0;
-}
 
 void iwl4965_init_ht_hw_capab(struct iwl_priv *priv,
 			      struct ieee80211_ht_info *ht_info,
@@ -3862,7 +3792,6 @@ static inline void iwl4965_dbg_report_frame(struct iwl_priv *priv,
 #endif
 
 
-#define IWL_DELAY_NEXT_SCAN_AFTER_ASSOC (HZ*6)
 
 /* Called for REPLY_RX (legacy ABG frames), or
  * REPLY_RX_MPDU_CMD (HT high-throughput N frames). */
@@ -3885,12 +3814,12 @@ static void iwl4965_rx_reply_rx(struct iwl_priv *priv,
 	u8 network_packet;
 
 	rx_status.mactime = le64_to_cpu(rx_start->timestamp);
-	rx_status.freq = ieee80211chan2mhz(le16_to_cpu(rx_start->channel));
+	rx_status.freq =
+		ieee80211_frequency_to_channel(le16_to_cpu(rx_start->channel));
 	rx_status.band = (rx_start->phy_flags & RX_RES_PHY_FLAGS_BAND_24_MSK) ?
 				IEEE80211_BAND_2GHZ : IEEE80211_BAND_5GHZ;
-	rx_status.rate_idx = iwl4965_hwrate_to_plcp_idx(
-					le32_to_cpu(rx_start->rate_n_flags));
-
+	rx_status.rate_idx =
+		iwl4965_hwrate_to_plcp_idx(le32_to_cpu(rx_start->rate_n_flags));
 	if (rx_status.band == IEEE80211_BAND_5GHZ)
 		rx_status.rate_idx -= IWL_FIRST_OFDM_RATE;
 
@@ -3898,9 +3827,8 @@ static void iwl4965_rx_reply_rx(struct iwl_priv *priv,
 	rx_status.flag = 0;
 
 	if ((unlikely(rx_start->cfg_phy_cnt > 20))) {
-		IWL_DEBUG_DROP
-			("dsp size out of range [0,20]: "
-			 "%d/n", rx_start->cfg_phy_cnt);
+		IWL_DEBUG_DROP("dsp size out of range [0,20]: %d/n",
+				rx_start->cfg_phy_cnt);
 		return;
 	}
 
@@ -3951,7 +3879,7 @@ static void iwl4965_rx_reply_rx(struct iwl_priv *priv,
 	 *   which are gathered only when associated, and indicate noise
 	 *   only for the associated network channel ...
 	 * Ignore these noise values while scanning (other channels) */
-	if (iwl4965_is_associated(priv) &&
+	if (iwl_is_associated(priv) &&
 	    !test_bit(STATUS_SCANNING, &priv->status)) {
 		rx_status.noise = priv->last_rx_noise;
 		rx_status.signal = iwl4965_calc_sig_qual(rx_status.ssi,
@@ -3962,7 +3890,7 @@ static void iwl4965_rx_reply_rx(struct iwl_priv *priv,
 	}
 
 	/* Reset beacon noise level if not associated. */
-	if (!iwl4965_is_associated(priv))
+	if (!iwl_is_associated(priv))
 		priv->last_rx_noise = IWL_NOISE_MEAS_NOT_AVAILABLE;
 
 	/* Set "1" to report good data frames in groups of 100 */
@@ -3983,101 +3911,9 @@ static void iwl4965_rx_reply_rx(struct iwl_priv *priv,
 	fc = le16_to_cpu(header->frame_control);
 	switch (fc & IEEE80211_FCTL_FTYPE) {
 	case IEEE80211_FTYPE_MGMT:
-
 		if (priv->iw_mode == IEEE80211_IF_TYPE_AP)
 			iwl4965_update_ps_mode(priv, fc  & IEEE80211_FCTL_PM,
 						header->addr2);
-		switch (fc & IEEE80211_FCTL_STYPE) {
-		case IEEE80211_STYPE_PROBE_RESP:
-		case IEEE80211_STYPE_BEACON:
-			if ((priv->iw_mode == IEEE80211_IF_TYPE_STA &&
-			     !compare_ether_addr(header->addr2, priv->bssid)) ||
-			    (priv->iw_mode == IEEE80211_IF_TYPE_IBSS &&
-			     !compare_ether_addr(header->addr3, priv->bssid))) {
-				struct ieee80211_mgmt *mgmt =
-					(struct ieee80211_mgmt *)header;
-				u64 timestamp =
-					le64_to_cpu(mgmt->u.beacon.timestamp);
-
-				priv->timestamp0 = timestamp & 0xFFFFFFFF;
-				priv->timestamp1 =
-					(timestamp >> 32) & 0xFFFFFFFF;
-				priv->beacon_int = le16_to_cpu(
-				    mgmt->u.beacon.beacon_int);
-				if (priv->call_post_assoc_from_beacon &&
-				    (priv->iw_mode == IEEE80211_IF_TYPE_STA)) {
-					priv->call_post_assoc_from_beacon = 0;
-					queue_work(priv->workqueue,
-					    &priv->post_associate.work);
-				}
-			}
-			break;
-
-		case IEEE80211_STYPE_ACTION:
-			break;
-
-			/*
-			 * TODO: Use the new callback function from
-			 * mac80211 instead of sniffing these packets.
-			 */
-		case IEEE80211_STYPE_ASSOC_RESP:
-		case IEEE80211_STYPE_REASSOC_RESP:
-			if (network_packet) {
-#ifdef CONFIG_IWL4965_HT
-				u8 *pos = NULL;
-				struct ieee802_11_elems elems;
-#endif				/*CONFIG_IWL4965_HT */
-				struct ieee80211_mgmt *mgnt =
-					(struct ieee80211_mgmt *)header;
-
-				/* We have just associated, give some
-				 * time for the 4-way handshake if
-				 * any. Don't start scan too early. */
-				priv->next_scan_jiffies = jiffies +
-					IWL_DELAY_NEXT_SCAN_AFTER_ASSOC;
-
-				priv->assoc_id = (~((1 << 15) | (1 << 14))
-					& le16_to_cpu(mgnt->u.assoc_resp.aid));
-				priv->assoc_capability =
-					le16_to_cpu(
-						mgnt->u.assoc_resp.capab_info);
-#ifdef CONFIG_IWL4965_HT
-				pos = mgnt->u.assoc_resp.variable;
-				if (!parse_elems(pos,
-						 len - (pos - (u8 *) mgnt),
-						 &elems)) {
-					if (elems.ht_extra_param &&
-					    elems.ht_cap_param)
-						break;
-				}
-#endif				/*CONFIG_IWL4965_HT */
-				/* assoc_id is 0 no association */
-				if (!priv->assoc_id)
-					break;
-				if (priv->beacon_int)
-					queue_work(priv->workqueue,
-					    &priv->post_associate.work);
-				else
-					priv->call_post_assoc_from_beacon = 1;
-			}
-
-			break;
-
-		case IEEE80211_STYPE_PROBE_REQ:
-			if ((priv->iw_mode == IEEE80211_IF_TYPE_IBSS) &&
-			    !iwl4965_is_associated(priv)) {
-				DECLARE_MAC_BUF(mac1);
-				DECLARE_MAC_BUF(mac2);
-				DECLARE_MAC_BUF(mac3);
-
-				IWL_DEBUG_DROP("Dropping (non network): "
-					       "%s, %s, %s\n",
-					       print_mac(mac1, header->addr1),
-					       print_mac(mac2, header->addr2),
-					       print_mac(mac3, header->addr3));
-				return;
-			}
-		}
 		iwl4965_handle_data_packet(priv, 0, include_phy, rxb, &rx_status);
 		break;
 
@@ -4136,7 +3972,6 @@ static void iwl4965_rx_reply_rx_phy(struct iwl_priv *priv,
 	memcpy(&priv->last_phy_res[1], &(pkt->u.raw[0]),
 	       sizeof(struct iwl4965_rx_phy_res));
 }
-
 static void iwl4965_rx_missed_beacon_notif(struct iwl_priv *priv,
 					   struct iwl4965_rx_mem_buffer *rxb)
 
@@ -4158,7 +3993,6 @@ static void iwl4965_rx_missed_beacon_notif(struct iwl_priv *priv,
 	}
 #endif /*CONFIG_IWL4965_SENSITIVITY*/
 }
-
 #ifdef CONFIG_IWL4965_HT
 
 /**
@@ -4256,7 +4090,7 @@ static void iwl4965_tx_queue_stop_scheduler(struct iwl_priv *priv,
 	/* Simply stop the queue, but don't change any configuration;
 	 * the SCD_ACT_EN bit is the write-enable mask for the ACTIVE bit. */
 	iwl_write_prph(priv,
-		KDR_SCD_QUEUE_STATUS_BITS(txq_id),
+		IWL49_SCD_QUEUE_STATUS_BITS(txq_id),
 		(0 << SCD_QUEUE_STTS_REG_POS_ACTIVE)|
 		(1 << SCD_QUEUE_STTS_REG_POS_SCD_ACT_EN));
 }
@@ -4282,14 +4116,14 @@ static int iwl4965_tx_queue_agg_disable(struct iwl_priv *priv, u16 txq_id,
 
 	iwl4965_tx_queue_stop_scheduler(priv, txq_id);
 
-	iwl_clear_bits_prph(priv, KDR_SCD_QUEUECHAIN_SEL, (1 << txq_id));
+	iwl_clear_bits_prph(priv, IWL49_SCD_QUEUECHAIN_SEL, (1 << txq_id));
 
 	priv->txq[txq_id].q.read_ptr = (ssn_idx & 0xff);
 	priv->txq[txq_id].q.write_ptr = (ssn_idx & 0xff);
 	/* supposes that ssn_idx is valid (!= 0xFFF) */
 	iwl4965_set_wr_ptrs(priv, txq_id, ssn_idx);
 
-	iwl_clear_bits_prph(priv, KDR_SCD_INTERRUPT_MASK, (1 << txq_id));
+	iwl_clear_bits_prph(priv, IWL49_SCD_INTERRUPT_MASK, (1 << txq_id));
 	iwl4965_txq_ctx_deactivate(priv, txq_id);
 	iwl4965_tx_queue_set_status(priv, &priv->txq[txq_id], tx_fifo, 0);
 
@@ -4478,7 +4312,7 @@ static int iwl4965_tx_queue_agg_enable(struct iwl_priv *priv, int txq_id,
 	iwl4965_tx_queue_set_q2ratid(priv, ra_tid, txq_id);
 
 	/* Set this queue as a chain-building queue */
-	iwl_set_bits_prph(priv, KDR_SCD_QUEUECHAIN_SEL, (1 << txq_id));
+	iwl_set_bits_prph(priv, IWL49_SCD_QUEUECHAIN_SEL, (1 << txq_id));
 
 	/* Place first TFD at index corresponding to start sequence number.
 	 * Assumes that ssn_idx is valid (!= 0xFFF) */
@@ -4497,7 +4331,7 @@ static int iwl4965_tx_queue_agg_enable(struct iwl_priv *priv, int txq_id,
 			(SCD_FRAME_LIMIT << SCD_QUEUE_CTX_REG2_FRAME_LIMIT_POS)
 			& SCD_QUEUE_CTX_REG2_FRAME_LIMIT_MSK);
 
-	iwl_set_bits_prph(priv, KDR_SCD_INTERRUPT_MASK, (1 << txq_id));
+	iwl_set_bits_prph(priv, IWL49_SCD_INTERRUPT_MASK, (1 << txq_id));
 
 	/* Set up Status area in SRAM, map to Tx DMA/FIFO, activate the queue */
 	iwl4965_tx_queue_set_status(priv, &priv->txq[txq_id], tx_fifo, 1);

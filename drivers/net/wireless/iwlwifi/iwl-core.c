@@ -34,10 +34,10 @@
 struct iwl_priv; /* FIXME: remove */
 #include "iwl-debug.h"
 #include "iwl-eeprom.h"
+#include "iwl-4965.h" /* FIXME: remove */
 #include "iwl-core.h"
 #include "iwl-rfkill.h"
 
-#include "iwl-4965.h" /* FIXME: remove */
 
 MODULE_DESCRIPTION("iwl core");
 MODULE_VERSION(IWLWIFI_VERSION);
@@ -256,9 +256,13 @@ EXPORT_SYMBOL(iwl_setup);
 int iwlcore_low_level_notify(struct iwl_priv *priv,
 			      enum iwlcore_card_notify notify)
 {
+	int ret;
 	switch (notify) {
 	case IWLCORE_INIT_EVT:
-		iwl_rfkill_init(priv);
+		ret = iwl_rfkill_init(priv);
+		if (ret)
+			IWL_ERROR("Unable to initialize RFKILL system. "
+				  "Ignoring error: %d\n", ret);
 		break;
 	case IWLCORE_START_EVT:
 		break;
@@ -266,7 +270,6 @@ int iwlcore_low_level_notify(struct iwl_priv *priv,
 		break;
 	case IWLCORE_REMOVE_EVT:
 		iwl_rfkill_unregister(priv);
-		iwl_rfkill_free(priv);
 		break;
 	}
 

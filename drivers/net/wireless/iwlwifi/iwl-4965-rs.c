@@ -36,7 +36,7 @@
 
 #include <linux/workqueue.h>
 
-#include "../net/mac80211/ieee80211_rate.h"
+#include "../net/mac80211/rate.h"
 
 #include "iwl-4965.h"
 #include "iwl-core.h"
@@ -275,7 +275,7 @@ static int rs_send_lq_cmd(struct iwl_priv *priv,
 	if (flags & CMD_ASYNC)
 		cmd.meta.u.callback = iwl4965_lq_sync_callback;
 
-	if (iwl4965_is_associated(priv) && priv->assoc_station_added &&
+	if (iwl_is_associated(priv) && priv->assoc_station_added &&
 	    priv->lq_mngr.lq_ready)
 		return  iwl_send_cmd(priv, &cmd);
 

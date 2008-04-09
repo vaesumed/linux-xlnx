@@ -74,6 +74,14 @@
  */
 
 /**
+ * enum ieee80211_notification_type - Low level driver notification
+ * @IEEE80211_NOTIFY_RE_ASSOC: start the re-association sequence
+ */
+enum ieee80211_notification_types {
+	IEEE80211_NOTIFY_RE_ASSOC,
+};
+
+/**
  * struct ieee80211_ht_bss_info - describing BSS's HT characteristics
  *
  * This structure describes most essential parameters needed
@@ -178,11 +186,13 @@ struct ieee80211_low_level_stats {
  *	also implies a change in the AID.
  * @BSS_CHANGED_ERP_CTS_PROT: CTS protection changed
  * @BSS_CHANGED_ERP_PREAMBLE: preamble changed
+ * @BSS_CHANGED_HT: 802.11n parameters changed
  */
 enum ieee80211_bss_change {
 	BSS_CHANGED_ASSOC		= 1<<0,
 	BSS_CHANGED_ERP_CTS_PROT	= 1<<1,
 	BSS_CHANGED_ERP_PREAMBLE	= 1<<2,
+	BSS_CHANGED_HT                  = 1<<4,
 };
 
 /**
@@ -195,6 +205,12 @@ enum ieee80211_bss_change {
  * @aid: association ID number, valid only when @assoc is true
  * @use_cts_prot: use CTS protection
  * @use_short_preamble: use 802.11b short preamble
+ * @timestamp: beacon timestamp
+ * @beacon_int: beacon interval
+ * @assoc_capability: capabbilities taken from assoc resp
+ * @assoc_ht: association in HT mode
+ * @ht_conf: ht capabilities
+ * @ht_bss_conf: ht extended capabilities
  */
 struct ieee80211_bss_conf {
 	/* association related data */
@@ -203,6 +219,13 @@ struct ieee80211_bss_conf {
 	/* erp related data */
 	bool use_cts_prot;
 	bool use_short_preamble;
+	u16 beacon_int;
+	u16 assoc_capability;
+	u64 timestamp;
+	/* ht related data */
+	bool assoc_ht;
+	struct ieee80211_ht_info *ht_conf;
+	struct ieee80211_ht_bss_info *ht_bss_conf;
 };
 
 /**
@@ -287,6 +310,7 @@ struct ieee80211_tx_control {
 	u8 iv_len;		/* length of the IV field in octets */
 	u8 queue;		/* hardware queue to use for this frame;
 				 * 0 = highest, hw->queues-1 = lowest */
+	u16 aid;		/* Station AID */
 	int type;	/* internal */
 };
 
@@ -1132,7 +1156,6 @@ struct ieee80211_ops {
 			     struct sk_buff *skb,
 			     struct ieee80211_tx_control *control);
 	int (*tx_last_beacon)(struct ieee80211_hw *hw);
-	int (*conf_ht)(struct ieee80211_hw *hw, struct ieee80211_conf *conf);
 	int (*ampdu_action)(struct ieee80211_hw *hw,
 			    enum ieee80211_ampdu_mlme_action action,
 			    const u8 *addr, u16 tid, u16 *ssn);
@@ -1663,4 +1686,15 @@ void ieee80211_stop_tx_ba_cb(struct ieee80211_hw *hw, u8 *ra, u8 tid);
 void ieee80211_stop_tx_ba_cb_irqsafe(struct ieee80211_hw *hw, const u8 *ra,
 				     u16 tid);
 
+/**
+ * ieee80211_notify_mac - low level driver notification
+ * @hw: pointer as obtained from ieee80211_alloc_hw().
+ * @notification_types: enum ieee80211_notification_types
+ *
+ * This function must be called by low level driver to inform mac80211 of
+ * low level driver status change or force mac80211 to re-assoc for low
+ * level driver internal error that require re-assoc.
+ */
+void ieee80211_notify_mac(struct ieee80211_hw *hw,
+			  enum ieee80211_notification_types  notif_type);
 #endif /* MAC80211_H */

@@ -36,6 +36,7 @@
 
 #include "iwl-4965.h"
 #include "iwl-debug.h"
+#include "iwl-core.h"
 #include "iwl-io.h"
 
 
@@ -243,7 +244,7 @@ static ssize_t iwl_dbgfs_stations_read(struct file *file, char __user *user_buf,
 						station->tid[j].agg.wait_for_ba);
 				pos += sprintf(buf+pos, "%u\t%llu\t%u\n",
 						station->tid[j].agg.start_idx,
-						station->tid[j].agg.bitmap,
+						(unsigned long long)station->tid[j].agg.bitmap,
 						station->tid[j].agg.rate_n_flags);
 			}
 			pos += sprintf(buf+pos, "\n");

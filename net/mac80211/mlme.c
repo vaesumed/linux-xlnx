@@ -27,12 +27,11 @@
 #include <linux/rtnetlink.h>
 #include <net/iw_handler.h>
 #include <asm/types.h>
-#include <asm/unaligned.h>
 
 #include <net/mac80211.h>
 #include "ieee80211_i.h"
-#include "ieee80211_rate.h"
-#include "ieee80211_led.h"
+#include "rate.h"
+#include "led.h"
 #include "mesh.h"
 
 #define IEEE80211_AUTH_TIMEOUT (HZ / 5)
@@ -57,8 +56,6 @@
 
 #define IEEE80211_IBSS_MAX_STA_ENTRIES 128
 
-
-#define IEEE80211_FC(type, stype) cpu_to_le16(type | stype)
 
 #define ERP_INFO_USE_PROTECTION BIT(1)
 
@@ -494,6 +491,7 @@ static void ieee80211_set_associated(struct net_device *dev,
 {
 	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 	struct ieee80211_local *local = sdata->local;
+	struct ieee80211_conf *conf = &local_to_hw(local)->conf;
 	union iwreq_data wrqu;
 	u32 changed = BSS_CHANGED_ASSOC;
 
@@ -506,13 +504,25 @@ static void ieee80211_set_associated(struct net_device *dev,
 			return;
 
 		bss = ieee80211_rx_bss_get(dev, ifsta->bssid,
-					   local->hw.conf.channel->center_freq,
+					   conf->channel->center_freq,
 					   ifsta->ssid, ifsta->ssid_len);
 		if (bss) {
+			/* set timing information */
+			sdata->bss_conf.beacon_int = bss->beacon_int;
+			sdata->bss_conf.timestamp = bss->timestamp;
+
 			if (bss->has_erp_value)
 				changed |= ieee80211_handle_erp_ie(
 						sdata, bss->erp_value);
+
 			ieee80211_rx_bss_put(dev, bss);
+		}
+
+		if (conf->flags & IEEE80211_CONF_SUPPORT_HT_MODE) {
+			changed |= BSS_CHANGED_HT;
+			sdata->bss_conf.assoc_ht = 1;
+			sdata->bss_conf.ht_conf = &conf->ht_conf;
+			sdata->bss_conf.ht_bss_conf = &conf->ht_bss_conf;
 		}
 
 		netif_carrier_on(dev);
@@ -525,15 +535,20 @@ static void ieee80211_set_associated(struct net_device *dev,
 		ifsta->flags &= ~IEEE80211_STA_ASSOCIATED;
 		netif_carrier_off(dev);
 		ieee80211_reset_erp_info(dev);
+
+		sdata->bss_conf.assoc_ht = 0;
+		sdata->bss_conf.ht_conf = NULL;
+		sdata->bss_conf.ht_bss_conf = NULL;
+
 		memset(wrqu.ap_addr.sa_data, 0, ETH_ALEN);
 	}
-	wrqu.ap_addr.sa_family = ARPHRD_ETHER;
-	wireless_send_event(dev, SIOCGIWAP, &wrqu, NULL);
 	ifsta->last_probe = jiffies;
 	ieee80211_led_assoc(local, assoc);
 
 	sdata->bss_conf.assoc = assoc;
 	ieee80211_bss_info_change_notify(sdata, changed);
+	wrqu.ap_addr.sa_family = ARPHRD_ETHER;
+	wireless_send_event(dev, SIOCGIWAP, &wrqu, NULL);
 }
 
 static void ieee80211_set_disassoc(struct net_device *dev,
@@ -937,11 +952,8 @@ static void ieee80211_associated(struct net_device *dev,
 
 	rcu_read_unlock();
 
-	if (disassoc && sta) {
-		rtnl_lock();
+	if (disassoc && sta)
 		sta_info_destroy(sta);
-		rtnl_unlock();
-	}
 
 	if (disassoc) {
 		ifsta->state = IEEE80211_DISABLED;
@@ -1263,7 +1275,7 @@ static void ieee80211_sta_process_addba_request(struct net_device *dev,
 		ret = local->ops->ampdu_action(hw, IEEE80211_AMPDU_RX_START,
 					       sta->addr, tid, &start_seq_num);
 #ifdef CONFIG_MAC80211_HT_DEBUG
-	printk(KERN_DEBUG "Rx A-MPDU on tid %d result %d", tid, ret);
+	printk(KERN_DEBUG "Rx A-MPDU request on tid %d result %d\n", tid, ret);
 #endif /* CONFIG_MAC80211_HT_DEBUG */
 
 	if (ret) {
@@ -1418,6 +1430,7 @@ void ieee80211_sta_stop_rx_ba_session(struct net_device *dev, u8 *ra, u16 tid,
 	struct ieee80211_hw *hw = &local->hw;
 	struct sta_info *sta;
 	int ret, i;
+	DECLARE_MAC_BUF(mac);
 
 	rcu_read_lock();
 
@@ -1438,11 +1451,16 @@ void ieee80211_sta_stop_rx_ba_session(struct net_device *dev, u8 *ra, u16 tid,
 	sta->ampdu_mlme.tid_state_rx[tid] =
 		HT_AGG_STATE_REQ_STOP_BA_MSK |
 		(initiator << HT_AGG_STATE_INITIATOR_SHIFT);
-		spin_unlock_bh(&sta->ampdu_mlme.ampdu_rx);
+	spin_unlock_bh(&sta->ampdu_mlme.ampdu_rx);
 
 	/* stop HW Rx aggregation. ampdu_action existence
 	 * already verified in session init so we add the BUG_ON */
 	BUG_ON(!local->ops->ampdu_action);
+
+#ifdef CONFIG_MAC80211_HT_DEBUG
+	printk(KERN_DEBUG "Rx BA session stop requested for %s tid %u\n",
+				print_mac(mac, ra), tid);
+#endif /* CONFIG_MAC80211_HT_DEBUG */
 
 	ret = local->ops->ampdu_action(hw, IEEE80211_AMPDU_RX_STOP,
 					ra, tid, NULL);
@@ -2000,17 +2018,15 @@ static void ieee80211_rx_mgmt_assoc_resp(struct ieee80211_sub_if_data *sdata,
 	else
 		sdata->flags &= ~IEEE80211_SDATA_OPERATING_GMODE;
 
-	if (elems.ht_cap_elem && elems.ht_info_elem && elems.wmm_param &&
-	    local->ops->conf_ht) {
+	if (elems.ht_cap_elem && elems.ht_info_elem && elems.wmm_param) {
 		struct ieee80211_ht_bss_info bss_info;
-
 		ieee80211_ht_cap_ie_to_ht_info(
 				(struct ieee80211_ht_cap *)
 				elems.ht_cap_elem, &sta->ht_info);
 		ieee80211_ht_addt_info_ie_to_ht_bss_info(
 				(struct ieee80211_ht_addt_info *)
 				elems.ht_info_elem, &bss_info);
-		ieee80211_hw_config_ht(local, 1, &sta->ht_info, &bss_info);
+		ieee80211_handle_ht(local, 1, &sta->ht_info, &bss_info);
 	}
 
 	rate_control_rate_init(sta, local);
@@ -2023,8 +2039,10 @@ static void ieee80211_rx_mgmt_assoc_resp(struct ieee80211_sub_if_data *sdata,
 	} else
 		rcu_read_unlock();
 
-	/* set AID, ieee80211_set_associated() will tell the driver */
+	/* set AID and assoc capability,
+	 * ieee80211_set_associated() will tell the driver */
 	bss_conf->aid = aid;
+	bss_conf->assoc_capability = capab_info;
 	ieee80211_set_associated(dev, ifsta, 1);
 
 	ieee80211_associated(dev, ifsta);
@@ -2123,11 +2141,6 @@ ieee80211_rx_bss_get(struct net_device *dev, u8 *bssid, int freq,
 }
 
 #ifdef CONFIG_MAC80211_MESH
-static inline u32 bss_mesh_cfg_get(u8 *mesh_cfg, u8 offset)
-{
-	return be32_to_cpu(get_unaligned((__be32 *) (mesh_cfg + offset)));
-}
-
 static struct ieee80211_sta_bss *
 ieee80211_rx_mesh_bss_get(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
 			  u8 *mesh_cfg, int freq)
@@ -2167,7 +2180,7 @@ ieee80211_rx_mesh_bss_add(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
 	if (!bss)
 		return NULL;
 
-	bss->mesh_cfg = kmalloc(sizeof(struct bss_mesh_config), GFP_ATOMIC);
+	bss->mesh_cfg = kmalloc(MESH_CFG_CMP_LEN, GFP_ATOMIC);
 	if (!bss->mesh_cfg) {
 		kfree(bss);
 		return NULL;
@@ -2185,12 +2198,7 @@ ieee80211_rx_mesh_bss_add(struct net_device *dev, u8 *mesh_id, int mesh_id_len,
 
 	atomic_inc(&bss->users);
 	atomic_inc(&bss->users);
-	bss->mesh_cfg->mesh_version = mesh_cfg[0];
-	bss->mesh_cfg->path_proto_id = bss_mesh_cfg_get(mesh_cfg, PP_OFFSET);
-	bss->mesh_cfg->path_metric_id = bss_mesh_cfg_get(mesh_cfg, PM_OFFSET);
-	bss->mesh_cfg->cong_control_id = bss_mesh_cfg_get(mesh_cfg, CC_OFFSET);
-	bss->mesh_cfg->channel_precedence = bss_mesh_cfg_get(mesh_cfg,
-							     CP_OFFSET);
+	memcpy(bss->mesh_cfg, mesh_cfg, MESH_CFG_CMP_LEN);
 	bss->mesh_id_len = mesh_id_len;
 	bss->freq = freq;
 	spin_lock_bh(&local->sta_bss_lock);
@@ -2771,20 +2779,14 @@ static void ieee80211_rx_mgmt_beacon(struct net_device *dev,
 		changed |= ieee80211_handle_erp_ie(sdata, elems.erp_info[0]);
 
 	if (elems.ht_cap_elem && elems.ht_info_elem &&
-	    elems.wmm_param && local->ops->conf_ht &&
-	    conf->flags & IEEE80211_CONF_SUPPORT_HT_MODE) {
+	    elems.wmm_param && conf->flags & IEEE80211_CONF_SUPPORT_HT_MODE) {
 		struct ieee80211_ht_bss_info bss_info;
 
 		ieee80211_ht_addt_info_ie_to_ht_bss_info(
 				(struct ieee80211_ht_addt_info *)
 				elems.ht_info_elem, &bss_info);
-		/* check if AP changed bss inforamation */
-		if ((conf->ht_bss_conf.primary_channel !=
-		     bss_info.primary_channel) ||
-		    (conf->ht_bss_conf.bss_cap != bss_info.bss_cap) ||
-		    (conf->ht_bss_conf.bss_op_mode != bss_info.bss_op_mode))
-			ieee80211_hw_config_ht(local, 1, &conf->ht_conf,
-						&bss_info);
+		changed |= ieee80211_handle_ht(local, 1, &conf->ht_conf,
+					       &bss_info);
 	}
 
 	if (elems.wmm_param && (ifsta->flags & IEEE80211_STA_WMM_ENABLED)) {
@@ -3099,12 +3101,8 @@ static void ieee80211_sta_expire(struct net_device *dev, unsigned long exp_time)
 		}
 	spin_unlock_irqrestore(&local->sta_lock, flags);
 
-	synchronize_rcu();
-
-	rtnl_lock();
 	list_for_each_entry_safe(sta, tmp, &tmp_list, list)
 		sta_info_destroy(sta);
-	rtnl_unlock();
 }
 
 
@@ -4067,33 +4065,36 @@ ieee80211_sta_scan_result(struct net_device *dev,
 
 	if (bss_mesh_cfg(bss)) {
 		char *buf;
-		struct bss_mesh_config *cfg = bss_mesh_cfg(bss);
+		u8 *cfg = bss_mesh_cfg(bss);
 		buf = kmalloc(50, GFP_ATOMIC);
 		if (buf) {
 			memset(&iwe, 0, sizeof(iwe));
 			iwe.cmd = IWEVCUSTOM;
-			sprintf(buf, "Mesh network (version %d)",
-				cfg->mesh_version);
+			sprintf(buf, "Mesh network (version %d)", cfg[0]);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Path Selection Protocol ID: "
-				"0x%08X", cfg->path_proto_id);
+				"0x%02X%02X%02X%02X", cfg[1], cfg[2], cfg[3],
+							cfg[4]);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Path Selection Metric ID: "
-				"0x%08X", cfg->path_metric_id);
+				"0x%02X%02X%02X%02X", cfg[5], cfg[6], cfg[7],
+							cfg[8]);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Congestion Control Mode ID: "
-				"0x%08X", cfg->cong_control_id);
+				"0x%02X%02X%02X%02X", cfg[9], cfg[10],
+							cfg[11], cfg[12]);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
 			sprintf(buf, "Channel Precedence: "
-				"0x%08X", cfg->channel_precedence);
+				"0x%02X%02X%02X%02X", cfg[13], cfg[14],
+							cfg[15], cfg[16]);
 			iwe.u.data.length = strlen(buf);
 			current_ev = iwe_stream_add_point(current_ev, end_buf,
 							  &iwe, buf);
@@ -4223,3 +4224,26 @@ int ieee80211_sta_disassociate(struct net_device *dev, u16 reason)
 	ieee80211_set_disassoc(dev, ifsta, 0);
 	return 0;
 }
+
+void ieee80211_notify_mac(struct ieee80211_hw *hw,
+			  enum ieee80211_notification_types  notif_type)
+{
+	struct ieee80211_local *local = hw_to_local(hw);
+	struct ieee80211_sub_if_data *sdata;
+
+	switch (notif_type) {
+	case IEEE80211_NOTIFY_RE_ASSOC:
+		rcu_read_lock();
+		list_for_each_entry_rcu(sdata, &local->interfaces, list) {
+
+			if (sdata->vif.type == IEEE80211_IF_TYPE_STA) {
+				ieee80211_sta_req_auth(sdata->dev,
+						       &sdata->u.sta);
+			}
+
+		}
+		rcu_read_unlock();
+		break;
+	}
+}
+EXPORT_SYMBOL(ieee80211_notify_mac);

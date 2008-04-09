@@ -21,8 +21,8 @@
 
 #include <net/mac80211.h>
 #include "ieee80211_i.h"
-#include "ieee80211_led.h"
-#include "ieee80211_rate.h"
+#include "led.h"
+#include "rate.h"
 #include "wpa.h"
 #include "aes_ccm.h"
 
@@ -36,6 +36,7 @@ static int ieee80211_set_encryption(struct net_device *dev, u8 *sta_addr,
 	struct sta_info *sta;
 	struct ieee80211_key *key;
 	struct ieee80211_sub_if_data *sdata;
+	int err;
 
 	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 
@@ -46,23 +47,31 @@ static int ieee80211_set_encryption(struct net_device *dev, u8 *sta_addr,
 	}
 
 	if (remove) {
+		rcu_read_lock();
+
+		err = 0;
+
 		if (is_broadcast_ether_addr(sta_addr)) {
 			key = sdata->keys[idx];
 		} else {
 			sta = sta_info_get(local, sta_addr);
-			if (!sta)
-				return -ENOENT;
+			if (!sta) {
+				err = -ENOENT;
+				goto out_unlock;
+			}
 			key = sta->key;
 		}
 
 		ieee80211_key_free(key);
-		return 0;
 	} else {
 		key = ieee80211_key_alloc(alg, idx, key_len, _key);
 		if (!key)
 			return -ENOMEM;
 
 		sta = NULL;
+		err = 0;
+
+		rcu_read_lock();
 
 		if (!is_broadcast_ether_addr(sta_addr)) {
 			set_tx_key = 0;
@@ -74,13 +83,15 @@ static int ieee80211_set_encryption(struct net_device *dev, u8 *sta_addr,
 			 */
 			if (idx != 0 && alg != ALG_WEP) {
 				ieee80211_key_free(key);
-				return -EINVAL;
+				err = -EINVAL;
+				goto out_unlock;
 			}
 
 			sta = sta_info_get(local, sta_addr);
 			if (!sta) {
 				ieee80211_key_free(key);
-				return -ENOENT;
+				err = -ENOENT;
+				goto out_unlock;
 			}
 		}
 
@@ -90,7 +101,10 @@ static int ieee80211_set_encryption(struct net_device *dev, u8 *sta_addr,
 			ieee80211_set_default_key(sdata, idx);
 	}
 
-	return 0;
+ out_unlock:
+	rcu_read_unlock();
+
+	return err;
 }
 
 static int ieee80211_ioctl_siwgenie(struct net_device *dev,
@@ -586,19 +600,25 @@ static int ieee80211_ioctl_giwrate(struct net_device *dev,
 
 	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 
-	if (sdata->vif.type == IEEE80211_IF_TYPE_STA)
-		sta = sta_info_get(local, sdata->u.sta.bssid);
-	else
+	if (sdata->vif.type != IEEE80211_IF_TYPE_STA)
 		return -EOPNOTSUPP;
-	if (!sta)
-		return -ENODEV;
 
 	sband = local->hw.wiphy->bands[local->hw.conf.channel->band];
 
-	if (sta->txrate_idx < sband->n_bitrates)
+	rcu_read_lock();
+
+	sta = sta_info_get(local, sdata->u.sta.bssid);
+
+	if (sta && sta->txrate_idx < sband->n_bitrates)
 		rate->value = sband->bitrates[sta->txrate_idx].bitrate;
 	else
 		rate->value = 0;
+
+	rcu_read_unlock();
+
+	if (!sta)
+		return -ENODEV;
+
 	rate->value *= 100000;
 
 	return 0;

@@ -25,12 +25,12 @@
 #include <asm/unaligned.h>
 
 #include "ieee80211_i.h"
-#include "ieee80211_led.h"
+#include "led.h"
 #include "mesh.h"
 #include "wep.h"
 #include "wpa.h"
 #include "wme.h"
-#include "ieee80211_rate.h"
+#include "rate.h"
 
 #define IEEE80211_TX_OK		0
 #define IEEE80211_TX_AGAIN	1
@@ -741,6 +741,7 @@ ieee80211_tx_h_misc(struct ieee80211_tx_data *tx)
 	}
 
 	if (tx->sta) {
+		control->aid = tx->sta->aid;
 		tx->sta->tx_packets++;
 		tx->sta->tx_fragments++;
 		tx->sta->tx_bytes += tx->skb->len;

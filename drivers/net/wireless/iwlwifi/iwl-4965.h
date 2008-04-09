@@ -294,8 +294,8 @@ struct iwl4965_frame {
 
 #define SEQ_TO_QUEUE(x)  ((x >> 8) & 0xbf)
 #define QUEUE_TO_SEQ(x)  ((x & 0xbf) << 8)
-#define SEQ_TO_INDEX(x) (x & 0xff)
-#define INDEX_TO_SEQ(x) (x & 0xff)
+#define SEQ_TO_INDEX(x) ((u8)(x & 0xff))
+#define INDEX_TO_SEQ(x) ((u8)(x & 0xff))
 #define SEQ_HUGE_FRAME  (0x4000)
 #define SEQ_RX_FRAME    __constant_cpu_to_le16(0x8000)
 #define SEQ_TO_SN(seq) (((seq) & IEEE80211_SCTL_SEQ) >> 4)
@@ -413,26 +413,6 @@ struct iwl4965_rx_queue {
 
 #define MAX_B_CHANNELS  14
 #define MIN_B_CHANNELS  1
-
-#define STATUS_HCMD_ACTIVE	0	/* host command in progress */
-#define STATUS_HCMD_SYNC_ACTIVE	1	/* sync host command in progress */
-#define STATUS_INT_ENABLED	2
-#define STATUS_RF_KILL_HW	3
-#define STATUS_RF_KILL_SW	4
-#define STATUS_INIT		5
-#define STATUS_ALIVE		6
-#define STATUS_READY		7
-#define STATUS_TEMPERATURE	8
-#define STATUS_GEO_CONFIGURED	9
-#define STATUS_EXIT_PENDING	10
-#define STATUS_IN_SUSPEND	11
-#define STATUS_STATISTICS	12
-#define STATUS_SCANNING		13
-#define STATUS_SCAN_ABORTING	14
-#define STATUS_SCAN_HW		15
-#define STATUS_POWER_PMI	16
-#define STATUS_FW_ERROR		17
-#define STATUS_CONF_PENDING	18
 
 #define MAX_TID_COUNT        9
 
@@ -1057,7 +1037,7 @@ struct iwl_priv {
 	struct iwl_rfkill_mngr rfkill_mngr;
 #endif
 
-#ifdef CONFIG_IWL4965_LEDS
+#ifdef CONFIG_IWLWIFI_LEDS
 	struct iwl4965_led led[IWL_LED_TRG_MAX];
 	unsigned long last_blink_time;
 	u8 last_blink_rate;
@@ -1068,7 +1048,6 @@ struct iwl_priv {
 	u16 active_rate;
 	u16 active_rate_basic;
 
-	u8 call_post_assoc_from_beacon;
 	u8 assoc_station_added;
 	u8 use_ant_b_for_management_frame;	/* Tx antenna selection */
 	u8 valid_antenna;	/* Bit mask of antennas actually connected */
@@ -1161,8 +1140,7 @@ struct iwl_priv {
 	struct sk_buff *ibss_beacon;
 
 	/* Last Rx'd beacon timestamp */
-	u32 timestamp0;
-	u32 timestamp1;
+	u64 timestamp;
 	u16 beacon_int;
 	struct iwl4965_driver_hw_info hw_setting;
 	struct ieee80211_vif *vif;
@@ -1226,7 +1204,7 @@ struct iwl_priv {
 	struct timer_list statistics_periodic;
 }; /*iwl_priv */
 
-static inline int iwl4965_is_associated(struct iwl_priv *priv)
+static inline int iwl_is_associated(struct iwl_priv *priv)
 {
 	return (priv->active_rxon.filter_flags & RXON_FILTER_ASSOC_MSK) ? 1 : 0;
 }

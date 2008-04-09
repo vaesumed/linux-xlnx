@@ -19,7 +19,7 @@
 
 #include <net/mac80211.h>
 #include "ieee80211_i.h"
-#include "ieee80211_rate.h"
+#include "rate.h"
 #include "sta_info.h"
 #include "debugfs_sta.h"
 #include "mesh.h"
@@ -51,17 +51,15 @@
  *
  * In order to remove a STA info structure, the caller needs to first
  * unlink it (sta_info_unlink()) from the list and hash tables and
- * then destroy it while holding the RTNL; sta_info_destroy() will wait
- * for an RCU grace period to elapse before actually freeing it. Due to
- * the pinning and the possibility of multiple callers trying to remove
- * the same STA info at the same time, sta_info_unlink() can clear the
- * STA info pointer it is passed to indicate that the STA info is owned
- * by somebody else now.
+ * then destroy it; sta_info_destroy() will wait for an RCU grace period
+ * to elapse before actually freeing it. Due to the pinning and the
+ * possibility of multiple callers trying to remove the same STA info at
+ * the same time, sta_info_unlink() can clear the STA info pointer it is
+ * passed to indicate that the STA info is owned by somebody else now.
  *
  * If sta_info_unlink() did not clear the pointer then the caller owns
  * the STA info structure now and is responsible of destroying it with
- * a call to sta_info_destroy(), not before RCU synchronisation, of
- * course. Note that sta_info_destroy() must be protected by the RTNL.
+ * a call to sta_info_destroy().
  *
  * In all other cases, there is no concept of ownership on a STA entry,
  * each structure is owned by the global hash table/list until it is
@@ -164,7 +162,6 @@ void sta_info_destroy(struct sta_info *sta)
 	struct sk_buff *skb;
 	int i;
 
-	ASSERT_RTNL();
 	might_sleep();
 
 	if (!sta)
@@ -180,22 +177,16 @@ void sta_info_destroy(struct sta_info *sta)
 		mesh_plink_deactivate(sta);
 #endif
 
-	if (sta->key) {
-		/*
-		 * NOTE: This will call synchronize_rcu() internally to
-		 * make sure no key references can be in use. We rely on
-		 * that when we take this branch to make sure nobody can
-		 * reference this STA struct any longer!
-		 */
-		ieee80211_key_free(sta->key);
-		WARN_ON(sta->key);
-	} else {
-		/*
-		 * Make sure that nobody can reference this STA struct
-		 * any longer.
-		 */
-		synchronize_rcu();
-	}
+	/*
+	 * We have only unlinked the key, and actually destroying it
+	 * may mean it is removed from hardware which requires that
+	 * the key->sta pointer is still valid, so flush the key todo
+	 * list here.
+	 *
+	 * ieee80211_key_todo() will synchronize_rcu() so after this
+	 * nothing can reference this sta struct any more.
+	 */
+	ieee80211_key_todo();
 
 #ifdef CONFIG_MAC80211_MESH
 	if (ieee80211_vif_is_mesh(&sta->sdata->vif))
@@ -351,7 +342,7 @@ int sta_info_insert(struct sta_info *sta)
 	 * NOTE: due to auto-freeing semantics this may only be done
 	 *       if the insertion is successful!
 	 */
-	queue_work(local->hw.workqueue, &local->sta_debugfs_add);
+	schedule_work(&local->sta_debugfs_add);
 #endif
 
 	if (ieee80211_vif_is_mesh(&sdata->vif))
@@ -424,36 +415,6 @@ void sta_info_clear_tim_bit(struct sta_info *sta)
 	spin_unlock_irqrestore(&sta->local->sta_lock, flags);
 }
 
-/*
- * See comment in __sta_info_unlink,
- * caller must hold local->sta_lock.
- */
-static void __sta_info_pin(struct sta_info *sta)
-{
-	WARN_ON(sta->pin_status != STA_INFO_PIN_STAT_NORMAL);
-	sta->pin_status = STA_INFO_PIN_STAT_PINNED;
-}
-
-/*
- * See comment in __sta_info_unlink, returns sta if it
- * needs to be destroyed.
- */
-static struct sta_info *__sta_info_unpin(struct sta_info *sta)
-{
-	struct sta_info *ret = NULL;
-	unsigned long flags;
-
-	spin_lock_irqsave(&sta->local->sta_lock, flags);
-	WARN_ON(sta->pin_status != STA_INFO_PIN_STAT_DESTROY &&
-		sta->pin_status != STA_INFO_PIN_STAT_PINNED);
-	if (sta->pin_status == STA_INFO_PIN_STAT_DESTROY)
-		ret = sta;
-	sta->pin_status = STA_INFO_PIN_STAT_NORMAL;
-	spin_unlock_irqrestore(&sta->local->sta_lock, flags);
-
-	return ret;
-}
-
 void __sta_info_unlink(struct sta_info **sta)
 {
 	struct ieee80211_local *local = (*sta)->local;
@@ -469,31 +430,9 @@ void __sta_info_unlink(struct sta_info **sta)
 		return;
 	}
 
-	/*
-	 * Also pull caller's reference if the STA is pinned by the
-	 * task that is adding the debugfs entries. In that case, we
-	 * leave the STA "to be freed".
-	 *
-	 * The rules are not trivial, but not too complex either:
-	 *  (1) pin_status is only modified under the sta_lock
-	 *  (2) sta_info_debugfs_add_work() will set the status
-	 *	to PINNED when it found an item that needs a new
-	 *	debugfs directory created. In that case, that item
-	 *	must not be freed although all *RCU* users are done
-	 *	with it. Hence, we tell the caller of _unlink()
-	 *	that the item is already gone (as can happen when
-	 *	two tasks try to unlink/destroy at the same time)
-	 *  (3) We set the pin_status to DESTROY here when we
-	 *	find such an item.
-	 *  (4) sta_info_debugfs_add_work() will reset the pin_status
-	 *	from PINNED to NORMAL when it is done with the item,
-	 *	but will check for DESTROY before resetting it in
-	 *	which case it will free the item.
-	 */
-	if ((*sta)->pin_status == STA_INFO_PIN_STAT_PINNED) {
-		(*sta)->pin_status = STA_INFO_PIN_STAT_DESTROY;
-		*sta = NULL;
-		return;
+	if ((*sta)->key) {
+		ieee80211_key_free((*sta)->key);
+		WARN_ON((*sta)->key);
 	}
 
 	list_del(&(*sta)->list);
@@ -526,6 +465,40 @@ void __sta_info_unlink(struct sta_info **sta)
 	printk(KERN_DEBUG "%s: Removed STA %s\n",
 	       wiphy_name(local->hw.wiphy), print_mac(mbuf, (*sta)->addr));
 #endif /* CONFIG_MAC80211_VERBOSE_DEBUG */
+
+	/*
+	 * Finally, pull caller's reference if the STA is pinned by the
+	 * task that is adding the debugfs entries. In that case, we
+	 * leave the STA "to be freed".
+	 *
+	 * The rules are not trivial, but not too complex either:
+	 *  (1) pin_status is only modified under the sta_lock
+	 *  (2) STAs may only be pinned under the RTNL so that
+	 *	sta_info_flush() is guaranteed to actually destroy
+	 *	all STAs that are active for a given interface, this
+	 *	is required for correctness because otherwise we
+	 *	could notify a driver that an interface is going
+	 *	away and only after that (!) notify it about a STA
+	 *	on that interface going away.
+	 *  (3) sta_info_debugfs_add_work() will set the status
+	 *	to PINNED when it found an item that needs a new
+	 *	debugfs directory created. In that case, that item
+	 *	must not be freed although all *RCU* users are done
+	 *	with it. Hence, we tell the caller of _unlink()
+	 *	that the item is already gone (as can happen when
+	 *	two tasks try to unlink/destroy at the same time)
+	 *  (4) We set the pin_status to DESTROY here when we
+	 *	find such an item.
+	 *  (5) sta_info_debugfs_add_work() will reset the pin_status
+	 *	from PINNED to NORMAL when it is done with the item,
+	 *	but will check for DESTROY before resetting it in
+	 *	which case it will free the item.
+	 */
+	if ((*sta)->pin_status == STA_INFO_PIN_STAT_PINNED) {
+		(*sta)->pin_status = STA_INFO_PIN_STAT_DESTROY;
+		*sta = NULL;
+		return;
+	}
 }
 
 void sta_info_unlink(struct sta_info **sta)
@@ -610,6 +583,36 @@ static void sta_info_cleanup(unsigned long data)
 }
 
 #ifdef CONFIG_MAC80211_DEBUGFS
+/*
+ * See comment in __sta_info_unlink,
+ * caller must hold local->sta_lock.
+ */
+static void __sta_info_pin(struct sta_info *sta)
+{
+	WARN_ON(sta->pin_status != STA_INFO_PIN_STAT_NORMAL);
+	sta->pin_status = STA_INFO_PIN_STAT_PINNED;
+}
+
+/*
+ * See comment in __sta_info_unlink, returns sta if it
+ * needs to be destroyed.
+ */
+static struct sta_info *__sta_info_unpin(struct sta_info *sta)
+{
+	struct sta_info *ret = NULL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&sta->local->sta_lock, flags);
+	WARN_ON(sta->pin_status != STA_INFO_PIN_STAT_DESTROY &&
+		sta->pin_status != STA_INFO_PIN_STAT_PINNED);
+	if (sta->pin_status == STA_INFO_PIN_STAT_DESTROY)
+		ret = sta;
+	sta->pin_status = STA_INFO_PIN_STAT_NORMAL;
+	spin_unlock_irqrestore(&sta->local->sta_lock, flags);
+
+	return ret;
+}
+
 static void sta_info_debugfs_add_work(struct work_struct *work)
 {
 	struct ieee80211_local *local =
@@ -617,6 +620,8 @@ static void sta_info_debugfs_add_work(struct work_struct *work)
 	struct sta_info *sta, *tmp;
 	unsigned long flags;
 
+	/* We need to keep the RTNL across the whole pinned status. */
+	rtnl_lock();
 	while (1) {
 		sta = NULL;
 
@@ -637,14 +642,13 @@ static void sta_info_debugfs_add_work(struct work_struct *work)
 		rate_control_add_sta_debugfs(sta);
 
 		sta = __sta_info_unpin(sta);
-		rtnl_lock();
 		sta_info_destroy(sta);
-		rtnl_unlock();
 	}
+	rtnl_unlock();
 }
 #endif
 
-void __ieee80211_run_pending_flush(struct ieee80211_local *local)
+static void __ieee80211_run_pending_flush(struct ieee80211_local *local)
 {
 	struct sta_info *sta;
 	unsigned long flags;
@@ -700,6 +704,15 @@ void sta_info_stop(struct ieee80211_local *local)
 {
 	del_timer(&local->sta_cleanup);
 	cancel_work_sync(&local->sta_flush_work);
+#ifdef CONFIG_MAC80211_DEBUGFS
+	/*
+	 * Make sure the debugfs adding work isn't pending after this
+	 * because we're about to be destroyed. It doesn't matter
+	 * whether it ran or not since we're going to flush all STAs
+	 * anyway.
+	 */
+	cancel_work_sync(&local->sta_debugfs_add);
+#endif
 
 	rtnl_lock();
 	sta_info_flush(local, NULL);

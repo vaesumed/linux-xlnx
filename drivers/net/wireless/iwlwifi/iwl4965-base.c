@@ -46,8 +46,8 @@
 #include <asm/div64.h>
 
 #include "iwl-eeprom.h"
-#include "iwl-core.h"
 #include "iwl-4965.h"
+#include "iwl-core.h"
 #include "iwl-io.h"
 #include "iwl-helpers.h"
 
@@ -496,41 +496,7 @@ u8 iwl4965_add_station_flags(struct iwl_priv *priv, const u8 *addr,
 
 }
 
-/*************** DRIVER STATUS FUNCTIONS   *****/
 
-static inline int iwl4965_is_ready(struct iwl_priv *priv)
-{
-	/* The adapter is 'ready' if READY and GEO_CONFIGURED bits are
-	 * set but EXIT_PENDING is not */
-	return test_bit(STATUS_READY, &priv->status) &&
-	       test_bit(STATUS_GEO_CONFIGURED, &priv->status) &&
-	       !test_bit(STATUS_EXIT_PENDING, &priv->status);
-}
-
-static inline int iwl4965_is_alive(struct iwl_priv *priv)
-{
-	return test_bit(STATUS_ALIVE, &priv->status);
-}
-
-static inline int iwl4965_is_init(struct iwl_priv *priv)
-{
-	return test_bit(STATUS_INIT, &priv->status);
-}
-
-static inline int iwl4965_is_rfkill(struct iwl_priv *priv)
-{
-	return test_bit(STATUS_RF_KILL_HW, &priv->status) ||
-	       test_bit(STATUS_RF_KILL_SW, &priv->status);
-}
-
-static inline int iwl4965_is_ready_rf(struct iwl_priv *priv)
-{
-
-	if (iwl4965_is_rfkill(priv))
-		return 0;
-
-	return iwl4965_is_ready(priv);
-}
 
 /*************** HOST COMMAND QUEUE FUNCTIONS   *****/
 
@@ -562,7 +528,7 @@ int iwl4965_enqueue_hcmd(struct iwl_priv *priv, struct iwl_host_cmd *cmd)
 	BUG_ON((fix_size > TFD_MAX_PAYLOAD_SIZE) &&
 	       !(cmd->meta.flags & CMD_SIZE_HUGE));
 
-	if (iwl4965_is_rfkill(priv)) {
+	if (iwl_is_rfkill(priv)) {
 		IWL_DEBUG_INFO("Not sending command - RF KILL");
 		return -EIO;
 	}
@@ -858,7 +824,7 @@ static int iwl4965_commit_rxon(struct iwl_priv *priv)
 	DECLARE_MAC_BUF(mac);
 	int rc = 0;
 
-	if (!iwl4965_is_alive(priv))
+	if (!iwl_is_alive(priv))
 		return -1;
 
 	/* always get timestamp with Rx frame */
@@ -901,7 +867,7 @@ static int iwl4965_commit_rxon(struct iwl_priv *priv)
 	 * an RXON_ASSOC and the new config wants the associated mask enabled,
 	 * we must clear the associated from the active configuration
 	 * before we apply the new config */
-	if (iwl4965_is_associated(priv) &&
+	if (iwl_is_associated(priv) &&
 	    (priv->staging_rxon.filter_flags & RXON_FILTER_ASSOC_MSK)) {
 		IWL_DEBUG_INFO("Toggling associated bit on current RXON\n");
 		active_rxon->filter_flags &= ~RXON_FILTER_ASSOC_MSK;
@@ -967,7 +933,7 @@ static int iwl4965_commit_rxon(struct iwl_priv *priv)
 
 	/* If we have set the ASSOC_MSK and we are in BSS mode then
 	 * add the IWL_AP_ID to the station rate table */
-	if (iwl4965_is_associated(priv) &&
+	if (iwl_is_associated(priv) &&
 	    (priv->iw_mode == IEEE80211_IF_TYPE_STA)) {
 		if (iwl4965_rxon_add_station(priv, priv->active_rxon.bssid_addr, 1)
 		    == IWL_INVALID_STATION) {
@@ -1319,7 +1285,7 @@ unsigned int iwl4965_fill_beacon_frame(struct iwl_priv *priv,
 				const u8 *dest, int left)
 {
 
-	if (!iwl4965_is_associated(priv) || !priv->ibss_beacon ||
+	if (!iwl_is_associated(priv) || !priv->ibss_beacon ||
 	    ((priv->iw_mode != IEEE80211_IF_TYPE_IBSS) &&
 	     (priv->iw_mode != IEEE80211_IF_TYPE_AP)))
 		return 0;
@@ -1582,7 +1548,7 @@ static void iwl4965_activate_qos(struct iwl_priv *priv, u8 force)
 
 	spin_unlock_irqrestore(&priv->lock, flags);
 
-	if (force || iwl4965_is_associated(priv)) {
+	if (force || iwl_is_associated(priv)) {
 		IWL_DEBUG_QOS("send QoS cmd with Qos active=%d FLAGS=0x%X\n",
 				priv->qos_data.qos_active,
 				priv->qos_data.def_qos_parm.qos_flags);
@@ -1921,13 +1887,13 @@ static void iwl4965_setup_rxon_timing(struct iwl_priv *priv)
 	conf = ieee80211_get_hw_conf(priv->hw);
 
 	spin_lock_irqsave(&priv->lock, flags);
-	priv->rxon_timing.timestamp.dw[1] = cpu_to_le32(priv->timestamp1);
-	priv->rxon_timing.timestamp.dw[0] = cpu_to_le32(priv->timestamp0);
+	priv->rxon_timing.timestamp.dw[1] = cpu_to_le32(priv->timestamp >> 32);
+	priv->rxon_timing.timestamp.dw[0] =
+				cpu_to_le32(priv->timestamp & 0xFFFFFFFF);
 
 	priv->rxon_timing.listen_interval = INTEL_CONN_LISTEN_INTERVAL;
 
-	tsf = priv->timestamp1;
-	tsf = ((tsf << 32) | priv->timestamp0);
+	tsf = priv->timestamp;
 
 	beacon_int = priv->beacon_int;
 	spin_unlock_irqrestore(&priv->lock, flags);
@@ -1973,7 +1939,7 @@ static int iwl4965_scan_initiate(struct iwl_priv *priv)
 		return 0;
 	}
 
-	if (!iwl4965_is_ready_rf(priv)) {
+	if (!iwl_is_ready_rf(priv)) {
 		IWL_DEBUG_SCAN("Aborting scan due to not ready.\n");
 		return -EIO;
 	}
@@ -2127,7 +2093,7 @@ static int iwl4965_set_mode(struct iwl_priv *priv, int mode)
 	iwlcore_clear_stations_table(priv);
 
 	/* dont commit rxon if rf-kill is on*/
-	if (!iwl4965_is_ready_rf(priv))
+	if (!iwl_is_ready_rf(priv))
 		return -EAGAIN;
 
 	cancel_delayed_work(&priv->scan_check);
@@ -2343,7 +2309,7 @@ static int iwl4965_tx_skb(struct iwl_priv *priv,
 	int rc;
 
 	spin_lock_irqsave(&priv->lock, flags);
-	if (iwl4965_is_rfkill(priv)) {
+	if (iwl_is_rfkill(priv)) {
 		IWL_DEBUG_DROP("Dropping - RF KILL\n");
 		goto drop_unlock;
 	}
@@ -2374,10 +2340,10 @@ static int iwl4965_tx_skb(struct iwl_priv *priv,
 
 	/* drop all data frame if we are not associated */
 	if (((fc & IEEE80211_FCTL_FTYPE) == IEEE80211_FTYPE_DATA) &&
-	   (!iwl4965_is_associated(priv) ||
+	   (!iwl_is_associated(priv) ||
 	    ((priv->iw_mode == IEEE80211_IF_TYPE_STA) && !priv->assoc_id) ||
 	    !priv->assoc_station_added)) {
-		IWL_DEBUG_DROP("Dropping - !iwl4965_is_associated\n");
+		IWL_DEBUG_DROP("Dropping - !iwl_is_associated\n");
 		goto drop_unlock;
 	}
 
@@ -2838,7 +2804,7 @@ static int iwl4965_get_measurement(struct iwl_priv *priv,
 	int spectrum_resp_status;
 	int duration = le16_to_cpu(params->duration);
 
-	if (iwl4965_is_associated(priv))
+	if (iwl_is_associated(priv))
 		add_time =
 		    iwl4965_usecs_to_beacons(
 			le64_to_cpu(params->start_time) - priv->last_tsf,
@@ -2853,7 +2819,7 @@ static int iwl4965_get_measurement(struct iwl_priv *priv,
 	cmd.len = sizeof(spectrum);
 	spectrum.len = cpu_to_le16(cmd.len - sizeof(spectrum.len));
 
-	if (iwl4965_is_associated(priv))
+	if (iwl_is_associated(priv))
 		spectrum.start_time =
 		    iwl4965_add_beacon_time(priv->last_beacon_time,
 				add_time,
@@ -4504,7 +4470,7 @@ static void iwl4965_irq_handle_error(struct iwl_priv *priv)
 		IWL_DEBUG(IWL_DL_INFO | IWL_DL_FW_ERRORS,
 			  "Restarting adapter due to uCode error.\n");
 
-		if (iwl4965_is_associated(priv)) {
+		if (iwl_is_associated(priv)) {
 			memcpy(&priv->recovery_rxon, &priv->active_rxon,
 			       sizeof(priv->recovery_rxon));
 			priv->error_recovering = 1;
@@ -4790,7 +4756,7 @@ static u16 iwl4965_get_passive_dwell_time(struct iwl_priv *priv,
 	    IWL_PASSIVE_DWELL_BASE + IWL_PASSIVE_DWELL_TIME_24 :
 	    IWL_PASSIVE_DWELL_BASE + IWL_PASSIVE_DWELL_TIME_52;
 
-	if (iwl4965_is_associated(priv)) {
+	if (iwl_is_associated(priv)) {
 		/* If we're associated, we clamp the maximum passive
 		 * dwell time to be 98% of the beacon interval (minus
 		 * 2 * channel tune time) */
@@ -4828,9 +4794,12 @@ static int iwl4965_get_channels_for_scan(struct iwl_priv *priv,
 	passive_dwell = iwl4965_get_passive_dwell_time(priv, band);
 
 	for (i = 0, added = 0; i < sband->n_channels; i++) {
+		if (channels[i].flags & IEEE80211_CHAN_DISABLED)
+			continue;
+
 		if (ieee80211_frequency_to_channel(channels[i].center_freq) ==
 		    le16_to_cpu(priv->active_rxon.channel)) {
-			if (iwl4965_is_associated(priv)) {
+			if (iwl_is_associated(priv)) {
 				IWL_DEBUG_SCAN
 				    ("Skipping current channel %d\n",
 				     le16_to_cpu(priv->active_rxon.channel));
@@ -5701,7 +5670,7 @@ static void iwl4965_alive_start(struct iwl_priv *priv)
 	/* Clear out the uCode error bit if it is set */
 	clear_bit(STATUS_FW_ERROR, &priv->status);
 
-	if (iwl4965_is_rfkill(priv))
+	if (iwl_is_rfkill(priv))
 		return;
 
 	ieee80211_start_queues(priv->hw);
@@ -5711,7 +5680,7 @@ static void iwl4965_alive_start(struct iwl_priv *priv)
 
 	iwl4965_send_power_mode(priv, IWL_POWER_LEVEL(priv->power_mode));
 
-	if (iwl4965_is_associated(priv)) {
+	if (iwl_is_associated(priv)) {
 		struct iwl4965_rxon_cmd *active_rxon =
 				(struct iwl4965_rxon_cmd *)(&priv->active_rxon);
 
@@ -5735,16 +5704,17 @@ static void iwl4965_alive_start(struct iwl_priv *priv)
 
 	iwl4965_rf_kill_ct_config(priv);
 
+	iwl_leds_register(priv);
+
 	IWL_DEBUG_INFO("ALIVE processing complete.\n");
 	set_bit(STATUS_READY, &priv->status);
 	wake_up_interruptible(&priv->wait_command_queue);
-
-	iwl_leds_register(priv);
 
 	if (priv->error_recovering)
 		iwl4965_error_recovery(priv);
 
 	iwlcore_low_level_notify(priv, IWLCORE_START_EVT);
+	ieee80211_notify_mac(priv->hw, IEEE80211_NOTIFY_RE_ASSOC);
 	return;
 
  restart:
@@ -5794,7 +5764,7 @@ static void __iwl4965_down(struct iwl_priv *priv)
 
 	/* If we have not previously called iwl4965_init() then
 	 * clear all bits but the RF Kill and SUSPEND bits and return */
-	if (!iwl4965_is_init(priv)) {
+	if (!iwl_is_init(priv)) {
 		priv->status = test_bit(STATUS_RF_KILL_HW, &priv->status) <<
 					STATUS_RF_KILL_HW |
 			       test_bit(STATUS_RF_KILL_SW, &priv->status) <<
@@ -6004,7 +5974,7 @@ static void iwl4965_bg_rf_kill(struct work_struct *work)
 
 	mutex_lock(&priv->mutex);
 
-	if (!iwl4965_is_rfkill(priv)) {
+	if (!iwl_is_rfkill(priv)) {
 		IWL_DEBUG(IWL_DL_INFO | IWL_DL_RF_KILL,
 			  "HW and/or SW RF Kill no longer active, restarting "
 			  "device\n");
@@ -6071,7 +6041,7 @@ static void iwl4965_bg_request_scan(struct work_struct *data)
 
 	mutex_lock(&priv->mutex);
 
-	if (!iwl4965_is_ready(priv)) {
+	if (!iwl_is_ready(priv)) {
 		IWL_WARNING("request scan called when driver not ready.\n");
 		goto done;
 	}
@@ -6100,7 +6070,7 @@ static void iwl4965_bg_request_scan(struct work_struct *data)
 		goto done;
 	}
 
-	if (iwl4965_is_rfkill(priv)) {
+	if (iwl_is_rfkill(priv)) {
 		IWL_DEBUG_HC("Aborting scan due to RF Kill activation\n");
 		goto done;
 	}
@@ -6129,7 +6099,7 @@ static void iwl4965_bg_request_scan(struct work_struct *data)
 	scan->quiet_plcp_th = IWL_PLCP_QUIET_THRESH;
 	scan->quiet_time = IWL_ACTIVE_QUIET_TIME;
 
-	if (iwl4965_is_associated(priv)) {
+	if (iwl_is_associated(priv)) {
 		u16 interval = 0;
 		u32 extra;
 		u32 suspend_time = 100;
@@ -6166,7 +6136,7 @@ static void iwl4965_bg_request_scan(struct work_struct *data)
 		memcpy(scan->direct_scan[0].ssid,
 		       priv->direct_ssid, priv->direct_ssid_len);
 		direct_mask = 1;
-	} else if (!iwl4965_is_associated(priv) && priv->essid_len) {
+	} else if (!iwl_is_associated(priv) && priv->essid_len) {
 		scan->direct_scan[0].id = WLAN_EID_SSID;
 		scan->direct_scan[0].len = priv->essid_len;
 		memcpy(scan->direct_scan[0].ssid, priv->essid, priv->essid_len);
@@ -6419,7 +6389,7 @@ static void iwl4965_bg_abort_scan(struct work_struct *work)
 {
 	struct iwl_priv *priv = container_of(work, struct iwl_priv, abort_scan);
 
-	if (!iwl4965_is_ready(priv))
+	if (!iwl_is_ready(priv))
 		return;
 
 	mutex_lock(&priv->mutex);
@@ -6552,7 +6522,7 @@ static void iwl4965_mac_stop(struct ieee80211_hw *hw)
 
 	priv->is_open = 0;
 
-	if (iwl4965_is_ready_rf(priv)) {
+	if (iwl_is_ready_rf(priv)) {
 		/* stop mac, cancel any scan request and clear
 		 * RXON_FILTER_ASSOC_MSK BIT
 		 */
@@ -6621,7 +6591,7 @@ static int iwl4965_mac_add_interface(struct ieee80211_hw *hw,
 		memcpy(priv->mac_addr, conf->mac_addr, ETH_ALEN);
 	}
 
-	if (iwl4965_is_ready(priv))
+	if (iwl_is_ready(priv))
 		iwl4965_set_mode(priv, conf->type);
 
 	mutex_unlock(&priv->mutex);
@@ -6649,7 +6619,7 @@ static int iwl4965_mac_config(struct ieee80211_hw *hw, struct ieee80211_conf *co
 
 	priv->add_radiotap = !!(conf->flags & IEEE80211_CONF_RADIOTAP);
 
-	if (!iwl4965_is_ready(priv)) {
+	if (!iwl_is_ready(priv)) {
 		IWL_DEBUG_MAC80211("leave - not ready\n");
 		ret = -EIO;
 		goto out;
@@ -6713,7 +6683,7 @@ static int iwl4965_mac_config(struct ieee80211_hw *hw, struct ieee80211_conf *co
 		goto out;
 	}
 
-	if (iwl4965_is_rfkill(priv)) {
+	if (iwl_is_rfkill(priv)) {
 		IWL_DEBUG_MAC80211("leave - RF kill\n");
 		ret = -EIO;
 		goto out;
@@ -6820,7 +6790,7 @@ static int iwl4965_mac_config_interface(struct ieee80211_hw *hw,
 		return 0;
 	}
 
-	if (!iwl4965_is_alive(priv))
+	if (!iwl_is_alive(priv))
 		return -EAGAIN;
 
 	mutex_lock(&priv->mutex);
@@ -6849,7 +6819,7 @@ static int iwl4965_mac_config_interface(struct ieee80211_hw *hw,
 		priv->ibss_beacon = conf->beacon;
 	}
 
-	if (iwl4965_is_rfkill(priv))
+	if (iwl_is_rfkill(priv))
 		goto done;
 
 	if (conf->bssid && !is_zero_ether_addr(conf->bssid) &&
@@ -6923,7 +6893,7 @@ static void iwl4965_mac_remove_interface(struct ieee80211_hw *hw,
 
 	mutex_lock(&priv->mutex);
 
-	if (iwl4965_is_ready_rf(priv)) {
+	if (iwl_is_ready_rf(priv)) {
 		iwl4965_scan_cancel_timeout(priv, 100);
 		cancel_delayed_work(&priv->post_associate);
 		priv->staging_rxon.filter_flags &= ~RXON_FILTER_ASSOC_MSK;
@@ -6941,6 +6911,65 @@ static void iwl4965_mac_remove_interface(struct ieee80211_hw *hw,
 
 }
 
+
+#ifdef CONFIG_IWL4965_HT
+static void iwl4965_ht_conf(struct iwl_priv *priv,
+			    struct ieee80211_bss_conf *bss_conf)
+{
+	struct ieee80211_ht_info *ht_conf = bss_conf->ht_conf;
+	struct ieee80211_ht_bss_info *ht_bss_conf = bss_conf->ht_bss_conf;
+	struct iwl_ht_info *iwl_conf = &priv->current_ht_config;
+
+	IWL_DEBUG_MAC80211("enter: \n");
+
+	iwl_conf->is_ht = bss_conf->assoc_ht;
+
+	if (!iwl_conf->is_ht)
+		return;
+
+	priv->ps_mode = (u8)((ht_conf->cap & IEEE80211_HT_CAP_MIMO_PS) >> 2);
+
+	if (ht_conf->cap & IEEE80211_HT_CAP_SGI_20)
+		iwl_conf->sgf |= 0x1;
+	if (ht_conf->cap & IEEE80211_HT_CAP_SGI_40)
+		iwl_conf->sgf |= 0x2;
+
+	iwl_conf->is_green_field = !!(ht_conf->cap & IEEE80211_HT_CAP_GRN_FLD);
+	iwl_conf->max_amsdu_size =
+		!!(ht_conf->cap & IEEE80211_HT_CAP_MAX_AMSDU);
+
+	iwl_conf->supported_chan_width =
+		!!(ht_conf->cap & IEEE80211_HT_CAP_SUP_WIDTH);
+	iwl_conf->extension_chan_offset =
+		ht_bss_conf->bss_cap & IEEE80211_HT_IE_CHA_SEC_OFFSET;
+	/* If no above or below channel supplied disable FAT channel */
+	if (iwl_conf->extension_chan_offset != IWL_EXT_CHANNEL_OFFSET_ABOVE &&
+	    iwl_conf->extension_chan_offset != IWL_EXT_CHANNEL_OFFSET_BELOW)
+		iwl_conf->supported_chan_width = 0;
+
+	iwl_conf->tx_mimo_ps_mode =
+		(u8)((ht_conf->cap & IEEE80211_HT_CAP_MIMO_PS) >> 2);
+	memcpy(iwl_conf->supp_mcs_set, ht_conf->supp_mcs_set, 16);
+
+	iwl_conf->control_channel = ht_bss_conf->primary_channel;
+	iwl_conf->tx_chan_width =
+		!!(ht_bss_conf->bss_cap & IEEE80211_HT_IE_CHA_WIDTH);
+	iwl_conf->ht_protection =
+		ht_bss_conf->bss_op_mode & IEEE80211_HT_IE_HT_PROTECTION;
+	iwl_conf->non_GF_STA_present =
+		!!(ht_bss_conf->bss_op_mode & IEEE80211_HT_IE_NON_GF_STA_PRSNT);
+
+	IWL_DEBUG_MAC80211("control channel %d\n", iwl_conf->control_channel);
+	IWL_DEBUG_MAC80211("leave\n");
+}
+#else
+static inline void iwl4965_ht_conf(struct iwl_priv *priv,
+				   struct ieee80211_bss_conf *bss_conf)
+{
+}
+#endif
+
+#define IWL_DELAY_NEXT_SCAN_AFTER_ASSOC (HZ*6)
 static void iwl4965_bss_info_changed(struct ieee80211_hw *hw,
 				     struct ieee80211_vif *vif,
 				     struct ieee80211_bss_conf *bss_conf,
@@ -6948,7 +6977,11 @@ static void iwl4965_bss_info_changed(struct ieee80211_hw *hw,
 {
 	struct iwl_priv *priv = hw->priv;
 
+	IWL_DEBUG_MAC80211("changes = 0x%X\n", changes);
+
 	if (changes & BSS_CHANGED_ERP_PREAMBLE) {
+		IWL_DEBUG_MAC80211("ERP_PREAMBLE %d\n",
+				   bss_conf->use_short_preamble);
 		if (bss_conf->use_short_preamble)
 			priv->staging_rxon.flags |= RXON_FLG_SHORT_PREAMBLE_MSK;
 		else
@@ -6956,21 +6989,38 @@ static void iwl4965_bss_info_changed(struct ieee80211_hw *hw,
 	}
 
 	if (changes & BSS_CHANGED_ERP_CTS_PROT) {
+		IWL_DEBUG_MAC80211("ERP_CTS %d\n", bss_conf->use_cts_prot);
 		if (bss_conf->use_cts_prot && (priv->band != IEEE80211_BAND_5GHZ))
 			priv->staging_rxon.flags |= RXON_FLG_TGG_PROTECT_MSK;
 		else
 			priv->staging_rxon.flags &= ~RXON_FLG_TGG_PROTECT_MSK;
 	}
 
-	if (changes & BSS_CHANGED_ASSOC) {
-		/*
-		 * TODO:
-		 * do stuff instead of sniffing assoc resp
-		 */
+	if (changes & BSS_CHANGED_HT) {
+		IWL_DEBUG_MAC80211("HT %d\n", bss_conf->assoc_ht);
+		iwl4965_ht_conf(priv, bss_conf);
+		iwl4965_set_rxon_chain(priv);
 	}
 
-	if (iwl4965_is_associated(priv))
-		iwl4965_send_rxon_assoc(priv);
+	if (changes & BSS_CHANGED_ASSOC) {
+		IWL_DEBUG_MAC80211("ASSOC %d\n", bss_conf->assoc);
+		if (bss_conf->assoc) {
+			priv->assoc_id = bss_conf->aid;
+			priv->beacon_int = bss_conf->beacon_int;
+			priv->timestamp = bss_conf->timestamp;
+			priv->assoc_capability = bss_conf->assoc_capability;
+			priv->next_scan_jiffies = jiffies +
+					IWL_DELAY_NEXT_SCAN_AFTER_ASSOC;
+			queue_work(priv->workqueue, &priv->post_associate.work);
+		} else {
+			priv->assoc_id = 0;
+			IWL_DEBUG_MAC80211("DISASSOC %d\n", bss_conf->assoc);
+		}
+	} else if (changes && iwl_is_associated(priv) && priv->assoc_id) {
+			IWL_DEBUG_MAC80211("Associated Changes %d\n", changes);
+			iwl4965_send_rxon_assoc(priv);
+	}
+
 }
 
 static int iwl4965_mac_hw_scan(struct ieee80211_hw *hw, u8 *ssid, size_t len)
@@ -6984,7 +7034,7 @@ static int iwl4965_mac_hw_scan(struct ieee80211_hw *hw, u8 *ssid, size_t len)
 	mutex_lock(&priv->mutex);
 	spin_lock_irqsave(&priv->lock, flags);
 
-	if (!iwl4965_is_ready_rf(priv)) {
+	if (!iwl_is_ready_rf(priv)) {
 		rc = -EIO;
 		IWL_DEBUG_MAC80211("leave - not ready or exit pending\n");
 		goto out_unlock;
@@ -7103,7 +7153,7 @@ static int iwl4965_mac_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 
 	/* FIXME: need to differenciate between static and dynamic key
 	 * in the level of mac80211 */
-	static_key = !iwl4965_is_associated(priv);
+	static_key = !iwl_is_associated(priv);
 
 	if (!static_key) {
 		sta_id = iwl4965_hw_find_station(priv, addr);
@@ -7151,7 +7201,7 @@ static int iwl4965_mac_conf_tx(struct ieee80211_hw *hw, int queue,
 
 	IWL_DEBUG_MAC80211("enter\n");
 
-	if (!iwl4965_is_ready_rf(priv)) {
+	if (!iwl_is_ready_rf(priv)) {
 		IWL_DEBUG_MAC80211("leave - RF not ready\n");
 		return -EIO;
 	}
@@ -7184,7 +7234,7 @@ static int iwl4965_mac_conf_tx(struct ieee80211_hw *hw, int queue,
 	mutex_lock(&priv->mutex);
 	if (priv->iw_mode == IEEE80211_IF_TYPE_AP)
 		iwl4965_activate_qos(priv, 1);
-	else if (priv->assoc_id && iwl4965_is_associated(priv))
+	else if (priv->assoc_id && iwl_is_associated(priv))
 		iwl4965_activate_qos(priv, 0);
 
 	mutex_unlock(&priv->mutex);
@@ -7204,7 +7254,7 @@ static int iwl4965_mac_get_tx_stats(struct ieee80211_hw *hw,
 
 	IWL_DEBUG_MAC80211("enter\n");
 
-	if (!iwl4965_is_ready_rf(priv)) {
+	if (!iwl_is_ready_rf(priv)) {
 		IWL_DEBUG_MAC80211("leave - RF not ready\n");
 		return -EIO;
 	}
@@ -7267,7 +7317,6 @@ static void iwl4965_mac_reset_tsf(struct ieee80211_hw *hw)
 	spin_lock_irqsave(&priv->lock, flags);
 	priv->assoc_id = 0;
 	priv->assoc_capability = 0;
-	priv->call_post_assoc_from_beacon = 0;
 	priv->assoc_station_added = 0;
 
 	/* new association get rid of ibss beacon skb */
@@ -7277,14 +7326,13 @@ static void iwl4965_mac_reset_tsf(struct ieee80211_hw *hw)
 	priv->ibss_beacon = NULL;
 
 	priv->beacon_int = priv->hw->conf.beacon_int;
-	priv->timestamp1 = 0;
-	priv->timestamp0 = 0;
+	priv->timestamp = 0;
 	if ((priv->iw_mode == IEEE80211_IF_TYPE_STA))
 		priv->beacon_int = 0;
 
 	spin_unlock_irqrestore(&priv->lock, flags);
 
-	if (!iwl4965_is_ready_rf(priv)) {
+	if (!iwl_is_ready_rf(priv)) {
 		IWL_DEBUG_MAC80211("leave - not ready\n");
 		mutex_unlock(&priv->mutex);
 		return;
@@ -7325,7 +7373,7 @@ static int iwl4965_mac_beacon_update(struct ieee80211_hw *hw, struct sk_buff *sk
 	mutex_lock(&priv->mutex);
 	IWL_DEBUG_MAC80211("enter\n");
 
-	if (!iwl4965_is_ready_rf(priv)) {
+	if (!iwl_is_ready_rf(priv)) {
 		IWL_DEBUG_MAC80211("leave - RF not ready\n");
 		mutex_unlock(&priv->mutex);
 		return -EIO;
@@ -7357,88 +7405,6 @@ static int iwl4965_mac_beacon_update(struct ieee80211_hw *hw, struct sk_buff *sk
 
 	return 0;
 }
-
-#ifdef CONFIG_IWL4965_HT
-
-static void iwl4965_ht_info_fill(struct ieee80211_conf *conf,
-				 struct iwl_priv *priv)
-{
-	struct iwl_ht_info *iwl_conf = &priv->current_ht_config;
-	struct ieee80211_ht_info *ht_conf = &conf->ht_conf;
-	struct ieee80211_ht_bss_info *ht_bss_conf = &conf->ht_bss_conf;
-
-	IWL_DEBUG_MAC80211("enter: \n");
-
-	if (!(conf->flags & IEEE80211_CONF_SUPPORT_HT_MODE)) {
-		iwl_conf->is_ht = 0;
-		return;
-	}
-
-	iwl_conf->is_ht = 1;
-	priv->ps_mode = (u8)((ht_conf->cap & IEEE80211_HT_CAP_MIMO_PS) >> 2);
-
-	if (ht_conf->cap & IEEE80211_HT_CAP_SGI_20)
-		iwl_conf->sgf |= 0x1;
-	if (ht_conf->cap & IEEE80211_HT_CAP_SGI_40)
-		iwl_conf->sgf |= 0x2;
-
-	iwl_conf->is_green_field = !!(ht_conf->cap & IEEE80211_HT_CAP_GRN_FLD);
-	iwl_conf->max_amsdu_size =
-		!!(ht_conf->cap & IEEE80211_HT_CAP_MAX_AMSDU);
-
-	iwl_conf->supported_chan_width =
-		!!(ht_conf->cap & IEEE80211_HT_CAP_SUP_WIDTH);
-	iwl_conf->extension_chan_offset =
-		ht_bss_conf->bss_cap & IEEE80211_HT_IE_CHA_SEC_OFFSET;
-	/* If no above or below channel supplied disable FAT channel */
-	if (iwl_conf->extension_chan_offset != IWL_EXT_CHANNEL_OFFSET_ABOVE &&
-	    iwl_conf->extension_chan_offset != IWL_EXT_CHANNEL_OFFSET_BELOW)
-		iwl_conf->supported_chan_width = 0;
-
-	iwl_conf->tx_mimo_ps_mode =
-		(u8)((ht_conf->cap & IEEE80211_HT_CAP_MIMO_PS) >> 2);
-	memcpy(iwl_conf->supp_mcs_set, ht_conf->supp_mcs_set, 16);
-
-	iwl_conf->control_channel = ht_bss_conf->primary_channel;
-	iwl_conf->tx_chan_width =
-		!!(ht_bss_conf->bss_cap & IEEE80211_HT_IE_CHA_WIDTH);
-	iwl_conf->ht_protection =
-		ht_bss_conf->bss_op_mode & IEEE80211_HT_IE_HT_PROTECTION;
-	iwl_conf->non_GF_STA_present =
-		!!(ht_bss_conf->bss_op_mode & IEEE80211_HT_IE_NON_GF_STA_PRSNT);
-
-	IWL_DEBUG_MAC80211("control channel %d\n",
-		iwl_conf->control_channel);
-	IWL_DEBUG_MAC80211("leave\n");
-}
-
-static int iwl4965_mac_conf_ht(struct ieee80211_hw *hw,
-			       struct ieee80211_conf *conf)
-{
-	struct iwl_priv *priv = hw->priv;
-
-	IWL_DEBUG_MAC80211("enter: \n");
-
-	iwl4965_ht_info_fill(conf, priv);
-	iwl4965_set_rxon_chain(priv);
-
-	if (priv && priv->assoc_id &&
-	    (priv->iw_mode == IEEE80211_IF_TYPE_STA)) {
-		unsigned long flags;
-
-		spin_lock_irqsave(&priv->lock, flags);
-		if (priv->beacon_int)
-			queue_work(priv->workqueue, &priv->post_associate.work);
-		else
-			priv->call_post_assoc_from_beacon = 1;
-		spin_unlock_irqrestore(&priv->lock, flags);
-	}
-
-	IWL_DEBUG_MAC80211("leave:\n");
-	return 0;
-}
-
-#endif /*CONFIG_IWL4965_HT*/
 
 /*****************************************************************************
  *
@@ -7487,7 +7453,7 @@ static ssize_t show_temperature(struct device *d,
 {
 	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
 
-	if (!iwl4965_is_alive(priv))
+	if (!iwl_is_alive(priv))
 		return -EAGAIN;
 
 	return sprintf(buf, "%d\n", iwl4965_hw_get_temperature(priv));
@@ -7709,7 +7675,7 @@ static ssize_t store_power_level(struct device *d,
 	mode = simple_strtoul(buf, NULL, 0);
 	mutex_lock(&priv->mutex);
 
-	if (!iwl4965_is_ready(priv)) {
+	if (!iwl_is_ready(priv)) {
 		rc = -EAGAIN;
 		goto out;
 	}
@@ -7806,7 +7772,7 @@ static ssize_t show_statistics(struct device *d,
 	u8 *data = (u8 *) & priv->statistics;
 	int rc = 0;
 
-	if (!iwl4965_is_alive(priv))
+	if (!iwl_is_alive(priv))
 		return -EAGAIN;
 
 	mutex_lock(&priv->mutex);
@@ -7840,7 +7806,7 @@ static ssize_t show_antenna(struct device *d,
 {
 	struct iwl_priv *priv = dev_get_drvdata(d);
 
-	if (!iwl4965_is_alive(priv))
+	if (!iwl_is_alive(priv))
 		return -EAGAIN;
 
 	return sprintf(buf, "%d\n", priv->antenna);
@@ -7877,7 +7843,7 @@ static ssize_t show_status(struct device *d,
 			   struct device_attribute *attr, char *buf)
 {
 	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
-	if (!iwl4965_is_alive(priv))
+	if (!iwl_is_alive(priv))
 		return -EAGAIN;
 	return sprintf(buf, "0x%08x\n", (int)priv->status);
 }
@@ -7999,7 +7965,6 @@ static struct ieee80211_ops iwl4965_hw_ops = {
 	.beacon_update = iwl4965_mac_beacon_update,
 	.bss_info_changed = iwl4965_bss_info_changed,
 #ifdef CONFIG_IWL4965_HT
-	.conf_ht = iwl4965_mac_conf_ht,
 	.ampdu_action = iwl4965_mac_ampdu_action,
 #endif  /* CONFIG_IWL4965_HT */
 	.hw_scan = iwl4965_mac_hw_scan
