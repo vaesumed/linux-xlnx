@@ -49,7 +49,6 @@ static int __init bastide_register(unsigned int base, unsigned int aux, int irq)
 
 	i = hwif->index;
 
-	ide_init_port_data(hwif, i);
 	ide_init_port_hw(hwif, &hw);
 	hwif->port_ops = NULL;
 
