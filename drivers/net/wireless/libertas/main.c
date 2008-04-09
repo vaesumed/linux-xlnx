@@ -37,6 +37,11 @@ EXPORT_SYMBOL_GPL(lbs_debug);
 module_param_named(libertas_debug, lbs_debug, int, 0644);
 
 
+/* This global structure is used to send the confirm_sleep command as
+ * fast as possible down to the firmware. */
+struct cmd_confirm_sleep confirm_sleep;
+
+
 #define LBS_TX_PWR_DEFAULT		20	/*100mW */
 #define LBS_TX_PWR_US_DEFAULT		20	/*100mW */
 #define LBS_TX_PWR_JP_DEFAULT		16	/*50mW */
@@ -277,10 +282,10 @@ static ssize_t lbs_rtap_set(struct device *dev,
 	struct lbs_private *priv = to_net_dev(dev)->priv;
 
 	sscanf(buf, "%x", &monitor_mode);
-	if (monitor_mode != LBS_MONITOR_OFF) {
-		if(priv->monitormode == monitor_mode)
+	if (monitor_mode) {
+		if (priv->monitormode == monitor_mode)
 			return strlen(buf);
-		if (priv->monitormode == LBS_MONITOR_OFF) {
+		if (!priv->monitormode) {
 			if (priv->infra_open || priv->mesh_open)
 				return -EBUSY;
 			if (priv->mode == IW_MODE_INFRA)
@@ -293,9 +298,9 @@ static ssize_t lbs_rtap_set(struct device *dev,
 	}
 
 	else {
-		if (priv->monitormode == LBS_MONITOR_OFF)
+		if (!priv->monitormode)
 			return strlen(buf);
-		priv->monitormode = LBS_MONITOR_OFF;
+		priv->monitormode = 0;
 		lbs_remove_rtap(priv);
 
 		if (priv->currenttxskb) {
@@ -392,7 +397,7 @@ static int lbs_dev_open(struct net_device *dev)
 
 	spin_lock_irq(&priv->driver_lock);
 
-	if (priv->monitormode != LBS_MONITOR_OFF) {
+	if (priv->monitormode) {
 		ret = -EBUSY;
 		goto out;
 	}
@@ -531,34 +536,27 @@ static int lbs_set_mac_address(struct net_device *dev, void *addr)
 	int ret = 0;
 	struct lbs_private *priv = (struct lbs_private *) dev->priv;
 	struct sockaddr *phwaddr = addr;
+	struct cmd_ds_802_11_mac_address cmd;
 
 	lbs_deb_enter(LBS_DEB_NET);
 
 	/* In case it was called from the mesh device */
-	dev = priv->dev ;
+	dev = priv->dev;
 
-	memset(priv->current_addr, 0, ETH_ALEN);
+	cmd.hdr.size = cpu_to_le16(sizeof(cmd));
+	cmd.action = cpu_to_le16(CMD_ACT_SET);
+	memcpy(cmd.macadd, phwaddr->sa_data, ETH_ALEN);
 
-	/* dev->dev_addr is 8 bytes */
-	lbs_deb_hex(LBS_DEB_NET, "dev->dev_addr", dev->dev_addr, ETH_ALEN);
-
-	lbs_deb_hex(LBS_DEB_NET, "addr", phwaddr->sa_data, ETH_ALEN);
-	memcpy(priv->current_addr, phwaddr->sa_data, ETH_ALEN);
-
-	ret = lbs_prepare_and_send_command(priv, CMD_802_11_MAC_ADDRESS,
-				    CMD_ACT_SET,
-				    CMD_OPTION_WAITFORRSP, 0, NULL);
-
+	ret = lbs_cmd_with_response(priv, CMD_802_11_MAC_ADDRESS, &cmd);
 	if (ret) {
 		lbs_deb_net("set MAC address failed\n");
-		ret = -1;
 		goto done;
 	}
 
-	lbs_deb_hex(LBS_DEB_NET, "priv->macaddr", priv->current_addr, ETH_ALEN);
-	memcpy(dev->dev_addr, priv->current_addr, ETH_ALEN);
+	memcpy(priv->current_addr, phwaddr->sa_data, ETH_ALEN);
+	memcpy(dev->dev_addr, phwaddr->sa_data, ETH_ALEN);
 	if (priv->mesh_dev)
-		memcpy(priv->mesh_dev->dev_addr, priv->current_addr, ETH_ALEN);
+		memcpy(priv->mesh_dev->dev_addr, phwaddr->sa_data, ETH_ALEN);
 
 done:
 	lbs_deb_leave_args(LBS_DEB_NET, "ret %d", ret);
@@ -581,45 +579,45 @@ static int lbs_copy_multicast_address(struct lbs_private *priv,
 static void lbs_set_multicast_list(struct net_device *dev)
 {
 	struct lbs_private *priv = dev->priv;
-	int oldpacketfilter;
+	int old_mac_control;
 	DECLARE_MAC_BUF(mac);
 
 	lbs_deb_enter(LBS_DEB_NET);
 
-	oldpacketfilter = priv->currentpacketfilter;
+	old_mac_control = priv->mac_control;
 
 	if (dev->flags & IFF_PROMISC) {
 		lbs_deb_net("enable promiscuous mode\n");
-		priv->currentpacketfilter |=
+		priv->mac_control |=
 		    CMD_ACT_MAC_PROMISCUOUS_ENABLE;
-		priv->currentpacketfilter &=
+		priv->mac_control &=
 		    ~(CMD_ACT_MAC_ALL_MULTICAST_ENABLE |
 		      CMD_ACT_MAC_MULTICAST_ENABLE);
 	} else {
 		/* Multicast */
-		priv->currentpacketfilter &=
+		priv->mac_control &=
 		    ~CMD_ACT_MAC_PROMISCUOUS_ENABLE;
 
 		if (dev->flags & IFF_ALLMULTI || dev->mc_count >
 		    MRVDRV_MAX_MULTICAST_LIST_SIZE) {
 			lbs_deb_net( "enabling all multicast\n");
-			priv->currentpacketfilter |=
+			priv->mac_control |=
 			    CMD_ACT_MAC_ALL_MULTICAST_ENABLE;
-			priv->currentpacketfilter &=
+			priv->mac_control &=
 			    ~CMD_ACT_MAC_MULTICAST_ENABLE;
 		} else {
-			priv->currentpacketfilter &=
+			priv->mac_control &=
 			    ~CMD_ACT_MAC_ALL_MULTICAST_ENABLE;
 
 			if (!dev->mc_count) {
 				lbs_deb_net("no multicast addresses, "
 				       "disabling multicast\n");
-				priv->currentpacketfilter &=
+				priv->mac_control &=
 				    ~CMD_ACT_MAC_MULTICAST_ENABLE;
 			} else {
 				int i;
 
-				priv->currentpacketfilter |=
+				priv->mac_control |=
 				    CMD_ACT_MAC_MULTICAST_ENABLE;
 
 				priv->nr_of_multicastmacaddr =
@@ -642,9 +640,8 @@ static void lbs_set_multicast_list(struct net_device *dev)
 		}
 	}
 
-	if (priv->currentpacketfilter != oldpacketfilter) {
-		lbs_set_mac_packet_filter(priv);
-	}
+	if (priv->mac_control != old_mac_control)
+		lbs_set_mac_control(priv);
 
 	lbs_deb_leave(LBS_DEB_NET);
 }
@@ -804,7 +801,7 @@ static int lbs_thread(void *data)
 				lbs_deb_thread("main_thread: PRE_SLEEP--intcounter=%d currenttxskb=%p dnld_sent=%d cur_cmd=%p, confirm now\n",
 					       priv->intcounter, priv->currenttxskb, priv->dnld_sent, priv->cur_cmd);
 
-				lbs_ps_confirm_sleep(priv, (u16) priv->psmode);
+				lbs_ps_confirm_sleep(priv);
 			} else {
 				/* workaround for firmware sending
 				 * deauth/linkloss event immediately
@@ -945,7 +942,7 @@ static int lbs_setup_firmware(struct lbs_private *priv)
 		goto done;
 	}
 
-	lbs_set_mac_packet_filter(priv);
+	lbs_set_mac_control(priv);
 
 	ret = lbs_get_data_rate(priv);
 	if (ret < 0) {
@@ -985,6 +982,18 @@ out:
 	lbs_deb_leave(LBS_DEB_CMD);
 }
 
+static void lbs_sync_channel_worker(struct work_struct *work)
+{
+	struct lbs_private *priv = container_of(work, struct lbs_private,
+		sync_channel);
+
+	lbs_deb_enter(LBS_DEB_MAIN);
+	if (lbs_update_channel(priv))
+		lbs_pr_info("Channel synchronization failed.");
+	lbs_deb_leave(LBS_DEB_MAIN);
+}
+
+
 static int lbs_init_adapter(struct lbs_private *priv)
 {
 	size_t bufsize;
@@ -1009,14 +1018,6 @@ static int lbs_init_adapter(struct lbs_private *priv)
 			      &priv->network_free_list);
 	}
 
-	priv->lbs_ps_confirm_sleep.seqnum = cpu_to_le16(++priv->seqnum);
-	priv->lbs_ps_confirm_sleep.command =
-	    cpu_to_le16(CMD_802_11_PS_MODE);
-	priv->lbs_ps_confirm_sleep.size =
-	    cpu_to_le16(sizeof(struct PS_CMD_ConfirmSleep));
-	priv->lbs_ps_confirm_sleep.action =
-	    cpu_to_le16(CMD_SUBCMD_SLEEP_CONFIRMED);
-
 	memset(priv->current_addr, 0xff, ETH_ALEN);
 
 	priv->connect_status = LBS_DISCONNECTED;
@@ -1024,7 +1025,7 @@ static int lbs_init_adapter(struct lbs_private *priv)
 	priv->secinfo.auth_mode = IW_AUTH_ALG_OPEN_SYSTEM;
 	priv->mode = IW_MODE_INFRA;
 	priv->curbssparams.channel = DEFAULT_AD_HOC_CHANNEL;
-	priv->currentpacketfilter = CMD_ACT_MAC_RX_ON | CMD_ACT_MAC_TX_ON;
+	priv->mac_control = CMD_ACT_MAC_RX_ON | CMD_ACT_MAC_TX_ON;
 	priv->radioon = RADIO_ON;
 	priv->auto_rate = 1;
 	priv->capability = WLAN_CAPABILITY_SHORT_PREAMBLE;
@@ -1128,7 +1129,7 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
 	priv->work_thread = create_singlethread_workqueue("lbs_worker");
 	INIT_DELAYED_WORK(&priv->assoc_work, lbs_association_worker);
 	INIT_DELAYED_WORK(&priv->scan_work, lbs_scan_worker);
-	INIT_WORK(&priv->sync_channel, lbs_sync_channel);
+	INIT_WORK(&priv->sync_channel, lbs_sync_channel_worker);
 
 	sprintf(priv->mesh_ssid, "mesh");
 	priv->mesh_ssid_len = 4;
@@ -1380,7 +1381,7 @@ static void lbs_remove_mesh(struct lbs_private *priv)
  *  @param cfp_no  A pointer to CFP number
  *  @return 	   A pointer to CFP
  */
-struct chan_freq_power *lbs_get_region_cfp_table(u8 region, u8 band, int *cfp_no)
+struct chan_freq_power *lbs_get_region_cfp_table(u8 region, int *cfp_no)
 {
 	int i, end;
 
@@ -1414,7 +1415,7 @@ int lbs_set_regiontable(struct lbs_private *priv, u8 region, u8 band)
 
 	memset(priv->region_channel, 0, sizeof(priv->region_channel));
 
-	cfp = lbs_get_region_cfp_table(region, band, &cfp_no);
+	cfp = lbs_get_region_cfp_table(region, &cfp_no);
 	if (cfp != NULL) {
 		priv->region_channel[i].nrcfp = cfp_no;
 		priv->region_channel[i].CFP = cfp;
@@ -1458,6 +1459,10 @@ EXPORT_SYMBOL_GPL(lbs_interrupt);
 static int __init lbs_init_module(void)
 {
 	lbs_deb_enter(LBS_DEB_MAIN);
+	memset(&confirm_sleep, 0, sizeof(confirm_sleep));
+	confirm_sleep.hdr.command = cpu_to_le16(CMD_802_11_PS_MODE);
+	confirm_sleep.hdr.size = cpu_to_le16(sizeof(confirm_sleep));
+	confirm_sleep.action = cpu_to_le16(CMD_SUBCMD_SLEEP_CONFIRMED);
 	lbs_debugfs_init();
 	lbs_deb_leave(LBS_DEB_MAIN);
 	return 0;
@@ -1554,6 +1559,32 @@ out:
 	return ret;
 }
 
+#ifndef CONFIG_IEEE80211
+const char *escape_essid(const char *essid, u8 essid_len)
+{
+	static char escaped[IW_ESSID_MAX_SIZE * 2 + 1];
+	const char *s = essid;
+	char *d = escaped;
+
+	if (ieee80211_is_empty_essid(essid, essid_len)) {
+		memcpy(escaped, "<hidden>", sizeof("<hidden>"));
+		return escaped;
+	}
+
+	essid_len = min(essid_len, (u8) IW_ESSID_MAX_SIZE);
+	while (essid_len--) {
+		if (*s == '\0') {
+			*d++ = '\\';
+			*d++ = '0';
+			s++;
+		} else {
+			*d++ = *s++;
+		}
+	}
+	*d = '\0';
+	return escaped;
+}
+#endif
 
 module_init(lbs_init_module);
 module_exit(lbs_exit_module);

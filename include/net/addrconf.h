@@ -55,9 +55,12 @@ struct prefix_info {
 extern int			addrconf_init(void);
 extern void			addrconf_cleanup(void);
 
-extern int			addrconf_add_ifaddr(void __user *arg);
-extern int			addrconf_del_ifaddr(void __user *arg);
-extern int			addrconf_set_dstaddr(void __user *arg);
+extern int			addrconf_add_ifaddr(struct net *net,
+						    void __user *arg);
+extern int			addrconf_del_ifaddr(struct net *net,
+						    void __user *arg);
+extern int			addrconf_set_dstaddr(struct net *net,
+						     void __user *arg);
 
 extern int			ipv6_chk_addr(struct net *net,
 					      struct in6_addr *addr,
@@ -68,16 +71,18 @@ extern int			ipv6_chk_addr(struct net *net,
 extern int			ipv6_chk_home_addr(struct net *net,
 						   struct in6_addr *addr);
 #endif
+
+extern int			ipv6_chk_prefix(struct in6_addr *addr,
+						struct net_device *dev);
+
 extern struct inet6_ifaddr      *ipv6_get_ifaddr(struct net *net,
 						 struct in6_addr *addr,
 						 struct net_device *dev,
 						 int strict);
 
-extern int			ipv6_get_saddr(struct dst_entry *dst, 
-					       struct in6_addr *daddr,
-					       struct in6_addr *saddr);
 extern int			ipv6_dev_get_saddr(struct net_device *dev, 
 					       struct in6_addr *daddr,
+					       unsigned int srcprefs,
 					       struct in6_addr *saddr);
 extern int			ipv6_get_lladdr(struct net_device *dev,
 						struct in6_addr *addr,
@@ -123,8 +128,6 @@ extern int ipv6_is_mld(struct sk_buff *skb, int nexthdr);
 
 extern void addrconf_prefix_rcv(struct net_device *dev, u8 *opt, int len);
 
-extern int ipv6_get_hoplimit(struct net_device *dev);
-
 /*
  *	anycast prototypes (anycast.c)
  */
@@ -135,7 +138,8 @@ extern int inet6_ac_check(struct sock *sk, struct in6_addr *addr, int ifindex);
 
 extern int ipv6_dev_ac_inc(struct net_device *dev, struct in6_addr *addr);
 extern int __ipv6_dev_ac_dec(struct inet6_dev *idev, struct in6_addr *addr);
-extern int ipv6_chk_acast_addr(struct net_device *dev, struct in6_addr *addr);
+extern int ipv6_chk_acast_addr(struct net *net, struct net_device *dev,
+			       struct in6_addr *addr);
 
 
 /* Device notifier */
@@ -185,7 +189,6 @@ static inline void in6_ifa_put(struct inet6_ifaddr *ifp)
 #define in6_ifa_hold(ifp)	atomic_inc(&(ifp)->refcnt)
 
 
-extern void			addrconf_forwarding_on(void);
 /*
  *	Hash function taken from net_alias.c
  */
@@ -214,29 +217,25 @@ static inline void addrconf_addr_solict_mult(const struct in6_addr *addr,
 					     struct in6_addr *solicited)
 {
 	ipv6_addr_set(solicited,
-		      __constant_htonl(0xFF020000), 0,
-		      __constant_htonl(0x1),
-		      __constant_htonl(0xFF000000) | addr->s6_addr32[3]);
+		      htonl(0xFF020000), 0,
+		      htonl(0x1),
+		      htonl(0xFF000000) | addr->s6_addr32[3]);
 }
 
 
 static inline void ipv6_addr_all_nodes(struct in6_addr *addr)
 {
-	ipv6_addr_set(addr,
-		      __constant_htonl(0xFF020000), 0, 0,
-		      __constant_htonl(0x1));
+	ipv6_addr_set(addr, htonl(0xFF020000), 0, 0, htonl(0x1));
 }
 
 static inline void ipv6_addr_all_routers(struct in6_addr *addr)
 {
-	ipv6_addr_set(addr,
-		      __constant_htonl(0xFF020000), 0, 0,
-		      __constant_htonl(0x2));
+	ipv6_addr_set(addr, htonl(0xFF020000), 0, 0, htonl(0x2));
 }
 
 static inline int ipv6_addr_is_multicast(const struct in6_addr *addr)
 {
-	return (addr->s6_addr32[0] & __constant_htonl(0xFF000000)) == __constant_htonl(0xFF000000);
+	return (addr->s6_addr32[0] & htonl(0xFF000000)) == htonl(0xFF000000);
 }
 
 static inline int ipv6_addr_is_ll_all_nodes(const struct in6_addr *addr)

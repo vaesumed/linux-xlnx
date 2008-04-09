@@ -168,6 +168,7 @@ config IPV6_SIT
 	tristate "IPv6: IPv6-in-IPv4 tunnel (SIT driver)"
 	depends on IPV6
 	select INET_TUNNEL
+	select IPV6_NDISC_NODETYPE
 	default y
 	---help---
 	  Tunneling means encapsulating data of one protocol type within
@@ -177,6 +178,9 @@ config IPV6_SIT
 	  networks over an IPv4-only path.
 
 	  Saying M here will produce a module called sit.ko. If unsure, say Y.
+
+config IPV6_NDISC_NODETYPE
+	bool
 
 config IPV6_TUNNEL
 	tristate "IPv6: IP-in-IPv6 tunnel (RFC2473)"
@@ -207,5 +211,19 @@ config IPV6_SUBTREES
 	  avoided by defining different routing tables for the normal and
 	  source prefix specific routes.
 
+	  If unsure, say N.
+
+config IPV6_MROUTE
+	bool "IPv6: multicast routing (EXPERIMENTAL)"
+	depends on IPV6 && EXPERIMENTAL
+	---help---
+	  Experimental support for IPv6 multicast forwarding.
+	  If unsure, say N.
+
+config IPV6_PIMSM_V2
+	bool "IPv6: PIM-SM version 2 support (EXPERIMENTAL)"
+	depends on IPV6_MROUTE
+	---help---
+	  Support for IPv6 PIM multicast routing protocol PIM-SMv2.
 	  If unsure, say N.
 
