@@ -1196,21 +1196,42 @@ void usb_set_device_state(struct usb_device *udev,
 	spin_unlock_irqrestore(&device_state_lock, flags);
 }
 
+/*
+ * WUSB devices are simple: they have no hubs behind, so the mapping
+ * device <-> virtual port number becomes 1:1. Why? to simplify the
+ * life of the device connection logic in
+ * drivers/usb/wusbcore/devconnect.c. When we do the initial secret
+ * handshake we need to assign a temporary address in the unauthorized
+ * space. For simplicity we use the first virtual port number found to
+ * be free [drivers/usb/wusbcore/devconnect.c:wusbhc_devconnect_ack()]
+ * and that becomes it's address [X < 128] or its unauthorized address
+ * [X | 0x80].
+ *
+ * We add 1 as an offset to the one-based USB-stack port number
+ * (zero-based wusb virtual port index) for two reasons: (a) dev addr
+ * 0 is reserved by USB for default address; (b) Linux's USB stack
+ * uses always #1 for the root hub of the controller. So USB stack's
+ * port #1, which is wusb virtual-port #0 has address #2.
+ */
 static void choose_address(struct usb_device *udev)
 {
 	int		devnum;
 	struct usb_bus	*bus = udev->bus;
 
 	/* If khubd ever becomes multithreaded, this will need a lock */
-
-	/* Try to allocate the next devnum beginning at bus->devnum_next. */
-	devnum = find_next_zero_bit(bus->devmap.devicemap, 128,
-			bus->devnum_next);
-	if (devnum >= 128)
-		devnum = find_next_zero_bit(bus->devmap.devicemap, 128, 1);
-
-	bus->devnum_next = ( devnum >= 127 ? 1 : devnum + 1);
-
+	if (udev->wusb) {
+		devnum = udev->portnum + 1;
+		BUG_ON(test_bit(devnum, bus->devmap.devicemap));
+	} else {
+		/* Try to allocate the next devnum beginning at
+		 * bus->devnum_next. */
+		devnum = find_next_zero_bit(bus->devmap.devicemap, 128,
+					    bus->devnum_next);
+		if (devnum >= 128)
+			devnum = find_next_zero_bit(bus->devmap.devicemap,
+						    128, 1);
+		bus->devnum_next = ( devnum >= 127 ? 1 : devnum + 1);
+	}
 	if (devnum < 128) {
 		set_bit(devnum, bus->devmap.devicemap);
 		udev->devnum = devnum;
@@ -1223,6 +1244,13 @@ static void release_address(struct usb_device *udev)
 		clear_bit(udev->devnum, udev->bus->devmap.devicemap);
 		udev->devnum = -1;
 	}
+}
+
+static void update_address(struct usb_device *udev, int devnum)
+{
+	/* The address for a WUSB device is managed by wusbcore. */
+	if (!udev->wusb)
+		udev->devnum = devnum;
 }
 
 #ifdef	CONFIG_USB_SUSPEND
@@ -1713,7 +1741,7 @@ static int hub_port_reset(struct usb_hub *hub, int port1,
 		case 0:
 			/* TRSTRCY = 10 ms; plus some extra */
 			msleep(10 + 40);
-		  	udev->devnum = 0;	/* Device now at address 0 */
+			update_address(udev, 0);
 			/* FALL THROUGH */
 		case -ENOTCONN:
 		case -ENODEV:
@@ -2193,12 +2221,13 @@ static int hub_port_debounce(struct usb_hub *hub, int port1)
 	return portstatus;
 }
 
-static void ep0_reinit(struct usb_device *udev)
+void usb_ep0_reinit(struct usb_device *udev)
 {
 	usb_disable_endpoint(udev, 0 + USB_DIR_IN);
 	usb_disable_endpoint(udev, 0 + USB_DIR_OUT);
 	usb_enable_endpoint(udev, &udev->ep0);
 }
+EXPORT_SYMBOL_GPL(usb_ep0_reinit);
 
 #define usb_sndaddr0pipe()	(PIPE_CONTROL << 30)
 #define usb_rcvaddr0pipe()	((PIPE_CONTROL << 30) | USB_DIR_IN)
@@ -2217,9 +2246,10 @@ static int hub_set_address(struct usb_device *udev, int devnum)
 		USB_REQ_SET_ADDRESS, 0, devnum, 0,
 		NULL, 0, USB_CTRL_SET_TIMEOUT);
 	if (retval == 0) {
-		udev->devnum = devnum;	/* Device now using proper address */
+		/* Device now using proper address. */
+		update_address(udev, devnum);
 		usb_set_device_state(udev, USB_STATE_ADDRESS);
-		ep0_reinit(udev);
+		usb_ep0_reinit(udev);
 	}
 	return retval;
 }
@@ -2401,26 +2431,33 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 #undef GET_DESCRIPTOR_BUFSIZE
 		}
 
-		for (j = 0; j < SET_ADDRESS_TRIES; ++j) {
-			retval = hub_set_address(udev, devnum);
-			if (retval >= 0)
+ 		/*
+ 		 * If device is WUSB, we already assigned an
+ 		 * unauthorized address in the Connect Ack sequence;
+ 		 * authorization will assign the final address.
+ 		 */
+ 		if (udev->wusb == 0) {
+			for (j = 0; j < SET_ADDRESS_TRIES; ++j) {
+				retval = hub_set_address(udev, devnum);
+				if (retval >= 0)
+					break;
+				msleep(200);
+			}
+			if (retval < 0) {
+				dev_err(&udev->dev,
+					"device not accepting address %d, error %d\n",
+					devnum, retval);
+				goto fail;
+			}
+
+			/* cope with hardware quirkiness:
+			 *  - let SET_ADDRESS settle, some device hardware wants it
+			 *  - read ep0 maxpacket even for high and low speed,
+			 */
+			msleep(10);
+			if (USE_NEW_SCHEME(retry_counter))
 				break;
-			msleep(200);
-		}
-		if (retval < 0) {
-			dev_err(&udev->dev,
-				"device not accepting address %d, error %d\n",
-				devnum, retval);
-			goto fail;
-		}
- 
-		/* cope with hardware quirkiness:
-		 *  - let SET_ADDRESS settle, some device hardware wants it
-		 *  - read ep0 maxpacket even for high and low speed,
-  		 */
-		msleep(10);
-		if (USE_NEW_SCHEME(retry_counter))
-			break;
+  		}
 
 		retval = usb_get_device_descriptor(udev, 8);
 		if (retval < 8) {
@@ -2437,7 +2474,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 	if (retval)
 		goto fail;
 
-	i = udev->descriptor.bMaxPacketSize0 == 0xff?
+	i = udev->descriptor.bMaxPacketSize0 == 0xff?	/* wusb device? */
 	    512 : udev->descriptor.bMaxPacketSize0;
 	if (le16_to_cpu(udev->ep0.desc.wMaxPacketSize) != i) {
 		if (udev->speed != USB_SPEED_FULL ||
@@ -2448,7 +2485,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 		}
 		dev_dbg(&udev->dev, "ep0 maxpacket = %d\n", i);
 		udev->ep0.desc.wMaxPacketSize = cpu_to_le16(i);
-		ep0_reinit(udev);
+		usb_ep0_reinit(udev);
 	}
   
 	retval = usb_get_device_descriptor(udev, USB_DT_DEVICE_SIZE);
@@ -2465,7 +2502,7 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 fail:
 	if (retval) {
 		hub_port_disable(hub, port1, 0);
-		udev->devnum = devnum;	/* for disconnect processing */
+		update_address(udev, devnum);	/* for disconnect processing */
 	}
 	mutex_unlock(&usb_address0_mutex);
 	return retval;
@@ -2614,6 +2651,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 		udev->speed = USB_SPEED_UNKNOWN;
  		udev->bus_mA = hub->mA_per_port;
 		udev->level = hdev->level + 1;
+		udev->wusb = hub_is_wusb(hub);
 
 		/* set the address */
 		choose_address(udev);
@@ -2703,7 +2741,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 loop_disable:
 		hub_port_disable(hub, port1, 1);
 loop:
-		ep0_reinit(udev);
+		usb_ep0_reinit(udev);
 		release_address(udev);
 		usb_put_dev(udev);
 		if ((status == -ENOTCONN) || (status == -ENOTSUPP))
@@ -3142,7 +3180,7 @@ int usb_reset_device(struct usb_device *udev)
 
 		/* ep0 maxpacket size may change; let the HCD know about it.
 		 * Other endpoints will be handled by re-enumeration. */
-		ep0_reinit(udev);
+		usb_ep0_reinit(udev);
 		ret = hub_port_init(parent_hub, udev, port1, i);
 		if (ret >= 0 || ret == -ENOTCONN || ret == -ENODEV)
 			break;

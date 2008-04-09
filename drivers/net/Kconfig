@@ -2031,6 +2031,24 @@ config E1000E
 config E1000E_ENABLED
 	def_bool E1000E != n
 
+config ET131X
+	tristate "Agere ET-1310 Gigabit Ethernet support"
+	depends on PCI
+	---help---
+	  This driver supports Agere ET-1310 ethernet adapters.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called et131x.
+
+config ET131X_DEBUG
+	bool "Enable et131x debugging"
+	depends on ET131X
+	default n
+	---help---
+	  Say Y for detailed debug information.
+
+	  If in doubt, say N.
+
 config IP1000
 	tristate "IP1000 Gigabit Ethernet support"
 	depends on PCI && EXPERIMENTAL
@@ -2364,6 +2382,20 @@ config ATL1
 
 	  To compile this driver as a module, choose M here.  The module
 	  will be called atl1.
+
+config SLICOSS
+	tristate "Alacritech Gigabit IS-NIC support"
+	depends on PCI
+	help
+	  This driver supports Alacritech's IS-NIC gigabit ethernet cards.
+
+	  This includes the following devices:
+	    Mojave cards (single port PCI Gigabit) both copper and fiber
+	    Oasis cards (single and dual port PCI-x Gigabit) copper and fiber
+	    Kalahari cards (dual and quad port PCI-e Gigabit) copper and fiber
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called slicoss.  This is recommended.
 
 endif # NETDEV_1000
 
