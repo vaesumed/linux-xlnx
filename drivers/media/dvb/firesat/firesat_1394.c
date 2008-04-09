@@ -103,9 +103,7 @@ static struct hpsb_highlevel firesat_highlevel = {
 
 static int firesat_dvb_init(struct dvb_frontend *fe);
 static int firesat_sleep(struct dvb_frontend *fe);
-static int firesat_diseqc_reset_overload(struct dvb_frontend *fe);
-static int firesat_diseqc_recv_slave_reply(struct dvb_frontend *fe,
-					struct dvb_diseqc_slave_reply *reply);
+
 static int firesat_diseqc_send_master_cmd(struct dvb_frontend *fe,
 					struct dvb_diseqc_master_cmd *cmd);
 static int firesat_diseqc_send_burst(struct dvb_frontend *fe,
@@ -114,7 +112,7 @@ static int firesat_set_tone(struct dvb_frontend *fe,
 			    fe_sec_tone_mode_t tone);
 static int firesat_set_voltage(struct dvb_frontend *fe,
 			       fe_sec_voltage_t voltage);
-static int firesat_enable_high_lnb_voltage(struct dvb_frontend *fe, long arg);
+
 static int firesat_read_status(struct dvb_frontend *fe, fe_status_t *status);
 static int firesat_read_ber(struct dvb_frontend *fe, u32 *ber);
 static int firesat_read_signal_strength(struct dvb_frontend *fe, u16 *strength);
