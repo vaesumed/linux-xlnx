@@ -246,6 +246,8 @@ extern asmlinkage void schedule_tail(struct task_struct *prev);
 extern void init_idle(struct task_struct *idle, int cpu);
 extern void init_idle_bootup_task(struct task_struct *idle);
 
+extern int runqueue_is_locked(void);
+
 extern cpumask_t nohz_cpu_mask;
 #if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ)
 extern int select_nohz_load_balancer(int cpu);
@@ -889,7 +891,8 @@ struct sched_class {
 	void (*set_curr_task) (struct rq *rq);
 	void (*task_tick) (struct rq *rq, struct task_struct *p, int queued);
 	void (*task_new) (struct rq *rq, struct task_struct *p);
-	void (*set_cpus_allowed)(struct task_struct *p, cpumask_t *newmask);
+	void (*set_cpus_allowed)(struct task_struct *p,
+				 const cpumask_t *newmask);
 
 	void (*join_domain)(struct rq *rq);
 	void (*leave_domain)(struct rq *rq);
@@ -1501,15 +1504,21 @@ static inline void put_task_struct(struct task_struct *t)
 #define used_math() tsk_used_math(current)
 
 #ifdef CONFIG_SMP
-extern int set_cpus_allowed(struct task_struct *p, cpumask_t new_mask);
+extern int set_cpus_allowed_ptr(struct task_struct *p,
+				const cpumask_t *new_mask);
 #else
-static inline int set_cpus_allowed(struct task_struct *p, cpumask_t new_mask)
+static inline int set_cpus_allowed_ptr(struct task_struct *p,
+				       const cpumask_t *new_mask)
 {
-	if (!cpu_isset(0, new_mask))
+	if (!cpu_isset(0, *new_mask))
 		return -EINVAL;
 	return 0;
 }
 #endif
+static inline int set_cpus_allowed(struct task_struct *p, cpumask_t new_mask)
+{
+	return set_cpus_allowed_ptr(p, &new_mask);
+}
 
 extern unsigned long long sched_clock(void);
 
@@ -1550,7 +1559,6 @@ static inline void wake_up_idle_cpu(int cpu) { }
 extern unsigned int sysctl_sched_latency;
 extern unsigned int sysctl_sched_min_granularity;
 extern unsigned int sysctl_sched_wakeup_granularity;
-extern unsigned int sysctl_sched_batch_wakeup_granularity;
 extern unsigned int sysctl_sched_child_runs_first;
 extern unsigned int sysctl_sched_features;
 extern unsigned int sysctl_sched_migration_cost;
@@ -1562,6 +1570,10 @@ int sched_nr_latency_handler(struct ctl_table *table, int write,
 #endif
 extern unsigned int sysctl_sched_rt_period;
 extern int sysctl_sched_rt_runtime;
+
+int sched_rt_handler(struct ctl_table *table, int write,
+		struct file *filp, void __user *buffer, size_t *lenp,
+		loff_t *ppos);
 
 extern unsigned int sysctl_sched_compat_yield;
 
@@ -2030,6 +2042,50 @@ static inline void arch_pick_mmap_layout(struct mm_struct *mm)
 }
 #endif
 
+#ifdef CONFIG_TRACING
+extern void
+__trace_special(void *__tr, void *__data,
+		unsigned long arg1, unsigned long arg2, unsigned long arg3);
+#else
+static inline void
+__trace_special(void *__tr, void *__data,
+		unsigned long arg1, unsigned long arg2, unsigned long arg3)
+{
+}
+#endif
+
+#ifdef CONFIG_CONTEXT_SWITCH_TRACER
+extern void
+ftrace_ctx_switch(void *rq, struct task_struct *prev, struct task_struct *next);
+extern void
+ftrace_wake_up_task(void *rq, struct task_struct *wakee,
+		    struct task_struct *curr);
+extern void ftrace_all_fair_tasks(void *__rq, void *__tr, void *__data);
+extern void
+ftrace_special(unsigned long arg1, unsigned long arg2, unsigned long arg3);
+#else
+static inline void
+ftrace_ctx_switch(void *rq, struct task_struct *prev, struct task_struct *next)
+{
+}
+static inline void
+sched_trace_special(unsigned long p1, unsigned long p2, unsigned long p3)
+{
+}
+static inline void
+ftrace_wake_up_task(void *rq, struct task_struct *wakee,
+		    struct task_struct *curr)
+{
+}
+static inline void ftrace_all_fair_tasks(void *__rq, void *__tr, void *__data)
+{
+}
+static inline void
+ftrace_special(unsigned long arg1, unsigned long arg2, unsigned long arg3)
+{
+}
+#endif
+
 extern long sched_setaffinity(pid_t pid, cpumask_t new_mask);
 extern long sched_getaffinity(pid_t pid, cpumask_t *mask);
 
@@ -2052,6 +2108,9 @@ extern unsigned long sched_group_shares(struct task_group *tg);
 extern int sched_group_set_rt_runtime(struct task_group *tg,
 				      long rt_runtime_us);
 extern long sched_group_rt_runtime(struct task_group *tg);
+extern int sched_group_set_rt_period(struct task_group *tg,
+				      long rt_period_us);
+extern long sched_group_rt_period(struct task_group *tg);
 #endif
 #endif
 
@@ -2104,6 +2163,8 @@ static inline void migration_init(void)
 #ifndef TASK_SIZE_OF
 #define TASK_SIZE_OF(tsk)	TASK_SIZE
 #endif
+
+#define TASK_STATE_TO_CHAR_STR "RSDTtZX"
 
 #endif /* __KERNEL__ */
 
