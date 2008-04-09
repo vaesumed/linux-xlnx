@@ -27,7 +27,7 @@
  * All UBIFS on-flash objects are stored in the form of nodes. All nodes start
  * with the UBIFS node magic number and have the same common header. Nodes
  * always sit at 8-byte aligned positions on the media and node header sizes are
- * also 8-byte aligned (except of the indexing node and the padding node).
+ * also 8-byte aligned (except for the indexing node and the padding node).
  */
 
 #ifndef __UBIFS_MEDIA_H__

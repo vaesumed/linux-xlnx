@@ -85,8 +85,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	union ubifs_key key;
 	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste, sup_flags = 0;
-	long long main_bytes;
-	uint64_t tmp64;
+	uint64_t tmp64, main_bytes;
 
 	/* Some functions called from here depend on the @c->key_len filed */
 	c->key_len = UBIFS_SK_LEN;
@@ -153,7 +152,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	if (!sup)
 		return -ENOMEM;
 
-	tmp64 = (long long)max_buds * c->leb_size;
+	tmp64 = (uint64_t)max_buds * c->leb_size;
 	if (big_lpt)
 		sup_flags |= UBIFS_FLG_BIGLPT;
 
@@ -174,7 +173,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_le16(DEFAULT_COMPRESSOR);
 
-	main_bytes = (long long)main_lebs * c->leb_size;
+	main_bytes = (uint64_t)main_lebs * c->leb_size;
 	tmp64 = main_bytes * DEFAULT_RP_PERCENT;
 	do_div(tmp64, 100);
 	if (tmp64 > DEFAULT_MAX_RP_SIZE)
@@ -286,14 +285,13 @@ static int create_default_filesystem(struct ubifs_info *c)
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino->creat_sqnum = cpu_to_le64(++c->max_sqnum);
 	ino->nlink = cpu_to_le32(2);
-	tmp = cpu_to_le32(CURRENT_TIME.tv_sec);
+	tmp = cpu_to_le32(CURRENT_TIME_SEC.tv_sec);
 	ino->atime.sec  = cpu_to_le32(tmp);
 	ino->ctime.sec  = cpu_to_le32(tmp);
 	ino->mtime.sec  = cpu_to_le32(tmp);
-	tmp = cpu_to_le32(CURRENT_TIME.tv_nsec);
-	ino->atime.nsec  = cpu_to_le32(tmp);
-	ino->ctime.nsec  = cpu_to_le32(tmp);
-	ino->mtime.nsec  = cpu_to_le32(tmp);
+	ino->atime.nsec  = 0;
+	ino->ctime.nsec  = 0;
+	ino->mtime.nsec  = 0;
 	ino->mode = cpu_to_le32(S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
 
 	/* Set compression enabled by default */
