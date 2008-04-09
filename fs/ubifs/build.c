@@ -1188,6 +1188,7 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 			min_t(uint64_t, MAX_LFS_FILESIZE, UBIFS_MAX_INODE_SZ);
 	sb->s_op = &ubifs_super_operations;
 	sb->s_flags = flags;
+	sb->s_time_gran = 1000000000; /* 1 second time granularity */
 
 	mutex_lock(&c->umount_mutex);
 	err = mount_ubifs(c);
