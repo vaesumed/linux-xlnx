@@ -267,21 +267,16 @@ ENTRY(secondary_startup_64)
 bad_address:
 	jmp bad_address
 
+	.section ".init.text","ax"
 #ifdef CONFIG_EARLY_PRINTK
-.macro early_idt_tramp first, last
-	.ifgt \last-\first
-	early_idt_tramp \first, \last-1
-	.endif
-	movl $\last,%esi
-	jmp early_idt_handler
-.endm
-
 	.globl early_idt_handlers
 early_idt_handlers:
-	early_idt_tramp 0, 63
-	early_idt_tramp 64, 127
-	early_idt_tramp 128, 191
-	early_idt_tramp 192, 255
+	i = 0
+	.rept NUM_EXCEPTION_VECTORS
+	movl $i, %esi
+	jmp early_idt_handler
+	i = i + 1
+	.endr
 #endif
 
 ENTRY(early_idt_handler)
@@ -327,6 +322,7 @@ early_idt_msg:
 early_idt_ripmsg:
 	.asciz "RIP %s\n"
 #endif /* CONFIG_EARLY_PRINTK */
+	.previous
 
 .balign PAGE_SIZE
 

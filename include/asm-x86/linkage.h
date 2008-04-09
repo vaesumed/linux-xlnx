@@ -1,6 +1,9 @@
 #ifndef __ASM_LINKAGE_H
 #define __ASM_LINKAGE_H
 
+#undef notrace
+#define notrace __attribute__((no_instrument_function))
+
 #ifdef CONFIG_X86_64
 #define __ALIGN .p2align 4,,15
 #define __ALIGN_STR ".p2align 4,,15"
@@ -8,7 +11,7 @@
 
 #ifdef CONFIG_X86_32
 #define asmlinkage CPP_ASMLINKAGE __attribute__((regparm(0)))
-#define prevent_tail_call(ret) __asm__ ("" : "=r" (ret) : "0" (ret))
+#define prevent_tail_call(ret) asm("" : "=r" (ret) : "0" (ret))
 /*
  * For 32-bit UML - mark functions implemented in assembly that use
  * regparm input parameters:

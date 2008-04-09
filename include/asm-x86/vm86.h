@@ -17,9 +17,9 @@
 #define IOPL_MASK	0x00003000
 #define NT_MASK		0x00004000
 #ifdef CONFIG_VM86
-#define VM_MASK		0x00020000
+#define X86_VM_MASK	X86_EFLAGS_VM
 #else
-#define VM_MASK		0 /* ignored */
+#define X86_VM_MASK	0 /* No VM86 support */
 #endif
 #define AC_MASK		0x00040000
 #define VIF_MASK	0x00080000	/* virtual interrupt flag */
@@ -42,9 +42,11 @@
 #define VM86_ARG(retval)	((retval) >> 8)
 
 #define VM86_SIGNAL	0	/* return due to signal */
-#define VM86_UNKNOWN	1	/* unhandled GP fault - IO-instruction or similar */
+#define VM86_UNKNOWN	1	/* unhandled GP fault
+				   - IO-instruction or similar */
 #define VM86_INTx	2	/* int3/int x instruction (ARG = x) */
-#define VM86_STI	3	/* sti/popf/iret instruction enabled virtual interrupts */
+#define VM86_STI	3	/* sti/popf/iret instruction enabled
+				   virtual interrupts */
 
 /*
  * Additional return values when invoking new vm86()
@@ -205,7 +207,8 @@ void release_vm86_irqs(struct task_struct *);
 #define handle_vm86_fault(a, b)
 #define release_vm86_irqs(a)
 
-static inline int handle_vm86_trap(struct kernel_vm86_regs *a, long b, int c) {
+static inline int handle_vm86_trap(struct kernel_vm86_regs *a, long b, int c)
+{
 	return 0;
 }
 

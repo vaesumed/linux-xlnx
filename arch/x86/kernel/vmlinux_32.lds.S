@@ -149,6 +149,11 @@ SECTIONS
 	*(.con_initcall.init)
   	__con_initcall_end = .;
   }
+  .x86cpuvendor.init : AT(ADDR(.x86cpuvendor.init) - LOAD_OFFSET) {
+	__x86cpuvendor_start = .;
+	*(.x86cpuvendor.init)
+	__x86cpuvendor_end = .;
+  }
   SECURITY_INIT
   . = ALIGN(4);
   .altinstructions : AT(ADDR(.altinstructions) - LOAD_OFFSET) {
@@ -184,6 +189,7 @@ SECTIONS
   . = ALIGN(PAGE_SIZE);
   .data.percpu  : AT(ADDR(.data.percpu) - LOAD_OFFSET) {
 	__per_cpu_start = .;
+	*(.data.percpu.page_aligned)
 	*(.data.percpu)
 	*(.data.percpu.shared_aligned)
 	__per_cpu_end = .;

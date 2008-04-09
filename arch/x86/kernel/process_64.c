@@ -16,6 +16,7 @@
 
 #include <stdarg.h>
 
+#include <linux/stackprotector.h>
 #include <linux/cpu.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
@@ -63,7 +64,6 @@ EXPORT_SYMBOL(boot_option_idle_override);
  */
 void (*pm_idle)(void);
 EXPORT_SYMBOL(pm_idle);
-static DEFINE_PER_CPU(unsigned int, cpu_idle_state);
 
 static ATOMIC_NOTIFIER_HEAD(idle_notifier);
 
@@ -108,16 +108,8 @@ void default_idle(void)
 	smp_mb();
 	local_irq_disable();
 	if (!need_resched()) {
-		ktime_t t0, t1;
-		u64 t0n, t1n;
-
-		t0 = ktime_get();
-		t0n = ktime_to_ns(t0);
 		safe_halt();	/* enables interrupts racelessly */
 		local_irq_disable();
-		t1 = ktime_get();
-		t1n = ktime_to_ns(t1);
-		sched_clock_idle_wakeup_event(t1n - t0n);
 	}
 	local_irq_enable();
 	current_thread_info()->status |= TS_POLLING;
@@ -167,14 +159,22 @@ static inline void play_dead(void)
 void cpu_idle(void)
 {
 	current_thread_info()->status |= TS_POLLING;
+
+	/*
+	 * If we're the non-boot CPU, nothing set the PDA stack
+	 * canary up for us - and if we are the boot CPU we have
+	 * a 0 stack canary. This is a good place for updating
+	 * it, as we wont ever return from this function (so the
+	 * invalid canaries already on the stack wont ever
+	 * trigger):
+	 */
+	boot_init_stack_canary();
+
 	/* endless idle loop with no priority at all */
 	while (1) {
 		tick_nohz_stop_sched_tick();
 		while (!need_resched()) {
 			void (*idle)(void);
-
-			if (__get_cpu_var(cpu_idle_state))
-				__get_cpu_var(cpu_idle_state) = 0;
 
 			rmb();
 			idle = pm_idle;
@@ -207,40 +207,19 @@ static void do_nothing(void *unused)
 {
 }
 
+/*
+ * cpu_idle_wait - Used to ensure that all the CPUs discard old value of
+ * pm_idle and update to new pm_idle value. Required while changing pm_idle
+ * handler on SMP systems.
+ *
+ * Caller must have changed pm_idle to the new value before the call. Old
+ * pm_idle value will not be used by any CPU after the return of this function.
+ */
 void cpu_idle_wait(void)
 {
-	unsigned int cpu, this_cpu = get_cpu();
-	cpumask_t map, tmp = current->cpus_allowed;
-
-	set_cpus_allowed(current, cpumask_of_cpu(this_cpu));
-	put_cpu();
-
-	cpus_clear(map);
-	for_each_online_cpu(cpu) {
-		per_cpu(cpu_idle_state, cpu) = 1;
-		cpu_set(cpu, map);
-	}
-
-	__get_cpu_var(cpu_idle_state) = 0;
-
-	wmb();
-	do {
-		ssleep(1);
-		for_each_online_cpu(cpu) {
-			if (cpu_isset(cpu, map) && !per_cpu(cpu_idle_state, cpu))
-				cpu_clear(cpu, map);
-		}
-		cpus_and(map, map, cpu_online_map);
-		/*
-		 * We waited 1 sec, if a CPU still did not call idle
-		 * it may be because it is in idle and not waking up
-		 * because it has nothing to do.
-		 * Give all the remaining CPUS a kick.
-		 */
-		smp_call_function_mask(map, do_nothing, 0, 0);
-	} while (!cpus_empty(map));
-
-	set_cpus_allowed(current, tmp);
+	smp_mb();
+	/* kick all the CPUs so that they exit out of pm_idle */
+	smp_call_function(do_nothing, NULL, 0, 1);
 }
 EXPORT_SYMBOL_GPL(cpu_idle_wait);
 
@@ -553,6 +532,25 @@ out:
 	return err;
 }
 
+void
+start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
+{
+	asm volatile("movl %0, %%fs; movl %0, %%es; movl %0, %%ds" :: "r"(0));
+	load_gs_index(0);
+	regs->ip		= new_ip;
+	regs->sp		= new_sp;
+	write_pda(oldrsp, new_sp);
+	regs->cs		= __USER_CS;
+	regs->ss		= __USER_DS;
+	regs->flags		= 0x200;
+	set_fs(USER_DS);
+	/*
+	 * Free the old FP and other extended state
+	 */
+	free_thread_xstate(current);
+}
+EXPORT_SYMBOL_GPL(start_thread);
+
 /*
  * This special macro can be used to load a debugging register
  */
@@ -573,12 +571,12 @@ static inline void __switch_to_xtra(struct task_struct *prev_p,
 		/* we clear debugctl to make sure DS
 		 * is not in use when we change it */
 		debugctl = 0;
-		wrmsrl(MSR_IA32_DEBUGCTLMSR, 0);
+		update_debugctlmsr(0);
 		wrmsrl(MSR_IA32_DS_AREA, next->ds_area_msr);
 	}
 
 	if (next->debugctlmsr != debugctl)
-		wrmsrl(MSR_IA32_DEBUGCTLMSR, next->debugctlmsr);
+		update_debugctlmsr(next->debugctlmsr);
 
 	if (test_tsk_thread_flag(next_p, TIF_DEBUG)) {
 		loaddebug(next, 0);
@@ -632,7 +630,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 	/* we're going to use this soon, after a few expensive things */
 	if (next_p->fpu_counter>5)
-		prefetch(&next->i387.fxsave);
+		prefetch(next->xstate);
 
 	/*
 	 * Reload esp0, LDT and the page table pointer:
@@ -703,7 +701,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	write_pda(kernelstack,
 	(unsigned long)task_stack_page(next_p) + THREAD_SIZE - PDA_STACKOFFSET);
 #ifdef CONFIG_CC_STACKPROTECTOR
-	write_pda(stack_canary, next_p->stack_canary);
 	/*
 	 * Build time only check to make sure the stack_canary is at
 	 * offset 40 in the pda; this is a gcc ABI requirement
