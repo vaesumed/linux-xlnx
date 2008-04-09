@@ -86,16 +86,20 @@ static void iso_receive(struct hpsb_host *host, int channel, quadlet_t *data,
 			size_t length);
 */
 
-static void fcp_request(struct hpsb_host *host, int nodeid, int direction,
-			int cts, u8 *data, size_t length);
+static void fcp_request(struct hpsb_host *host,
+			int nodeid,
+			int direction,
+			int cts,
+			u8 *data,
+			size_t length);
 
 static struct hpsb_highlevel firesat_highlevel = {
-	.name =         "FireSAT",
-	.add_host =     firesat_add_host,
-	.remove_host =  firesat_remove_host,
-	.host_reset =   firesat_host_reset,
+	.name		= "FireSAT",
+	.add_host	= firesat_add_host,
+	.remove_host	= firesat_remove_host,
+	.host_reset	= firesat_host_reset,
 // FIXME	.iso_receive =	iso_receive,
-	.fcp_request =	fcp_request,
+	.fcp_request	= fcp_request,
 };
 
 /* Start of dvb_frontend_ops */
@@ -212,8 +216,6 @@ static void firesat_add_host (struct hpsb_host *host)
 	/* We only work with the OHCI-1394 driver */
 	if (strcmp(host->driver->name, OHCI1394_DRIVER_NAME))
 		return;
-
-//	ohci = (struct ti_ohci *)host->hostdata;
 
 	if (!hpsb_create_hostinfo(&firesat_highlevel, host, 0)) {
 		printk(KERN_ERR "Cannot allocate hostinfo\n");
