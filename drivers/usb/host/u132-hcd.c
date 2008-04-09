@@ -3273,3 +3273,4 @@ static void __exit u132_hcd_exit(void)
 
 module_exit(u132_hcd_exit);
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:u132_hcd");

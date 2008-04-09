@@ -209,6 +209,8 @@ static struct platform_driver ohci_hcd_ep93xx_driver = {
 #endif
 	.driver		= {
 		.name	= "ep93xx-ohci",
+		.owner	= THIS_MODULE,
 	},
 };
 
+MODULE_ALIAS("platform:ep93xx-ohci");

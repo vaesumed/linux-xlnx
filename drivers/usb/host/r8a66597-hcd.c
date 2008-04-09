@@ -44,6 +44,7 @@
 MODULE_DESCRIPTION("R8A66597 USB Host Controller Driver");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yoshihiro Shimoda");
+MODULE_ALIAS("platform:r8a66597_hcd");
 
 #define DRIVER_VERSION	"10 Apr 2008"
 
@@ -2323,6 +2324,7 @@ static struct platform_driver r8a66597_driver = {
 	.resume =	r8a66597_resume,
 	.driver		= {
 		.name = (char *) hcd_name,
+		.owner	= THIS_MODULE,
 	},
 };
 
