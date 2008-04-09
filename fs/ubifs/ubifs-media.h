@@ -389,27 +389,18 @@ union ubifs_dev_desc {
 } __attribute__ ((packed));
 
 /**
- * struct ubifs_timestamp - UBIFS time-stamp.
- * @sec: seconds
- * @nsec: nanoseconds
- *
- * This data structure is used to store time-stamps in the UBIFS inode.
- */
-struct ubifs_timestamp {
-	__le32 sec;
-	__le32 nsec;
-}  __attribute__ ((packed));
-
-/**
  * struct ubifs_ino_node - inode node.
  * @ch: common header
  * @key: node key
  * @creat_sqnum: sequence number at time of creation
  * @size: inode size in bytes (amount of uncompressed data)
+ * @atime_sec: access time seconds
+ * @ctime_sec: creation time seconds
+ * @mtime_sec: modification time seconds
+ * @atime_nsec: access time nanoseconds
+ * @ctime_nsec: creation time nanoseconds
+ * @mtime_nsec: modification time nanoseconds
  * @nlink: number of hard links
- * @atime: access time
- * @ctime: creation time
- * @mtime: modification time
  * @uid: owner ID
  * @gid: group ID
  * @mode: access flags
@@ -436,10 +427,13 @@ struct ubifs_ino_node {
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le64 creat_sqnum;
 	__le64 size;
+	__le64 atime_sec;
+	__le64 ctime_sec;
+	__le64 mtime_sec;
+	__le32 atime_nsec;
+	__le32 ctime_nsec;
+	__le32 mtime_nsec;
 	__le32 nlink;
-	struct ubifs_timestamp atime;
-	struct ubifs_timestamp ctime;
-	struct ubifs_timestamp mtime;
 	__le32 uid;
 	__le32 gid;
 	__le32 mode;
@@ -449,7 +443,7 @@ struct ubifs_ino_node {
 	__le64 xattr_size;
 	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding[38];
+	__u8 padding[26];
 	__u8 data[];
 } __attribute__ ((packed));
 
