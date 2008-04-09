@@ -1348,7 +1348,7 @@ static struct idetape_bh *ide_tape_kmalloc_buffer(idetape_tape_t *tape,
 		prev_bh = bh;
 		bh = kmalloc(sizeof(struct idetape_bh), GFP_KERNEL);
 		if (!bh) {
-			free_page((unsigned long) b_data);
+			free_pages((unsigned long) b_data, order);
 			goto abort;
 		}
 		bh->b_reqnext = NULL;
