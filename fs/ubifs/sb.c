@@ -67,6 +67,9 @@
 /* Default UBIFS compressor */
 #define DEFAULT_COMPRESSOR UBIFS_COMPR_LZO
 
+/* Default time granularity in nanoseconds */
+#define DEFAULT_TIME_GRAN 1000000000
+
 /**
  * create_default_filesystem - format empty UBI volume.
  * @c: UBIFS file-system description object
@@ -172,6 +175,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->lsave_cnt     = cpu_to_le32(c->lsave_cnt);
 	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_le16(DEFAULT_COMPRESSOR);
+	sup->time_gran     = cpu_to_le32(DEFAULT_TIME_GRAN);
 
 	main_bytes = (uint64_t)main_lebs * c->leb_size;
 	tmp64 = main_bytes * DEFAULT_RP_PERCENT;
@@ -431,6 +435,12 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 		goto failed;
 	}
 
+	if (le32_to_cpu(sup->time_gran) > 1000000000 ||
+	    le32_to_cpu(sup->time_gran) < 1) {
+		err = 15;
+		goto failed;
+	}
+
 	return 0;
 
 failed:
@@ -554,6 +564,8 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	c->rp_uid        = le32_to_cpu(sup->rp_uid);
 	c->rp_gid        = le32_to_cpu(sup->rp_gid);
 	sup_flags        = le32_to_cpu(sup->flags);
+
+	c->vfs_sb->s_time_gran = le32_to_cpu(sup->time_gran);
 
 	c->big_lpt = !!(sup_flags & UBIFS_FLG_BIGLPT);
 
