@@ -38,49 +38,37 @@
  * Export information about protocols/devices supported by this driver.
  */
 static struct ieee1394_device_id firesat_id_table[] = {
-	/* FloppyDTV S/CI and FloppyDTV S2 */
 	{
-	.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-	.model_id = 0x000024,
-	.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
-	},
-
-	/* FloppyDTV T/CI */
-	{
-	.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-	.model_id = 0x000025,
-	.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
-	},
-
-	/* FloppyDTV C/CI */
-	{
-	.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-	.model_id = 0x000026,
-	.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
-	},
-
-	/* FireDTV S/CI and FloppyDTV S2 */
-	{
-	.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-	.model_id = 0x000034,
-	.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
-	},
-
-	/* ( FireDTV T/CI */
-	{
-	.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-	.model_id = 0x000035,
-	.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
-	},
-
-	/* FireDTV C/CI */
-	{
-	.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-	.model_id = 0x000036,
-	.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
-	},
-
-	{ }
+		/* FloppyDTV S/CI and FloppyDTV S2 */
+		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
+		.model_id = 0x000024,
+		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+	},{
+		/* FloppyDTV T/CI */
+		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
+		.model_id = 0x000025,
+		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+	},{
+		/* FloppyDTV C/CI */
+		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
+		.model_id = 0x000026,
+		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+	},{
+		/* FireDTV S/CI and FloppyDTV S2 */
+		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
+		.model_id = 0x000034,
+		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+	},{
+		/* FireDTV T/CI */
+		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
+		.model_id = 0x000035,
+		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+	},{
+		/* FireDTV C/CI */
+		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
+		.model_id = 0x000036,
+		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+	}, { }
 };
 
 MODULE_DEVICE_TABLE(ieee1394, firesat_id_table);
