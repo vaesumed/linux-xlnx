@@ -28,7 +28,7 @@
 
 /*-------------------------------------------------------------------------*/
 
-#ifdef	CONFIG_USB_PERSIST
+#ifdef	CONFIG_PM
 
 static int ehci_hub_control(
 	struct usb_hcd	*hcd,
@@ -103,15 +103,6 @@ static void ehci_handover_companion_ports(struct ehci_hcd *ehci)
 
 	ehci->owned_ports = 0;
 }
-
-#else	/* CONFIG_USB_PERSIST */
-
-static inline void ehci_handover_companion_ports(struct ehci_hcd *ehci)
-{ }
-
-#endif
-
-#ifdef	CONFIG_PM
 
 static int ehci_bus_suspend (struct usb_hcd *hcd)
 {
@@ -281,9 +272,7 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 	ehci_writel(ehci, INTR_MASK, &ehci->regs->intr_enable);
 
 	spin_unlock_irq (&ehci->lock);
-
-	if (!power_okay)
-		ehci_handover_companion_ports(ehci);
+	ehci_handover_companion_ports(ehci);
 	return 0;
 }
 
@@ -778,7 +767,7 @@ static int ehci_hub_control (
 		if (temp & PORT_POWER)
 			status |= 1 << USB_PORT_FEAT_POWER;
 
-#ifndef	EHCI_VERBOSE_DEBUG
+#ifndef	VERBOSE_DEBUG
 	if (status & ~0xffff)	/* only if wPortChange is interesting */
 #endif
 		dbg_port (ehci, "GetStatus", wIndex + 1, temp);
