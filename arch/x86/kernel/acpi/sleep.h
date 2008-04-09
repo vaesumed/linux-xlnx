@@ -9,7 +9,7 @@ extern char wakeup_code_start, wakeup_code_end;
 extern unsigned long saved_video_mode;
 extern long saved_magic;
 extern unsigned long init_rsp;
-extern void (*initial_code)(void);
+extern unsigned long initial_code;
 
 extern int wakeup_pmode_return;
 extern char swsusp_pg_dir[PAGE_SIZE];

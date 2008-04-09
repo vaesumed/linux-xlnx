@@ -73,7 +73,7 @@ int acpi_save_state_mem(void)
 #else /* CONFIG_64BIT */
 	header->trampoline_segment = setup_trampoline() >> 4;
 	init_rsp = (unsigned long)temp_stack + 4096;
-	initial_code = wakeup_long64;
+	initial_code = (unsigned long)wakeup_long64;
 	saved_magic = 0x123456789abcdef0;
 #endif /* CONFIG_64BIT */
 
