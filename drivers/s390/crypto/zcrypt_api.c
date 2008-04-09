@@ -40,7 +40,7 @@
 
 #include "zcrypt_api.h"
 
-/**
+/*
  * Module description.
  */
 MODULE_AUTHOR("IBM Corporation");
@@ -56,7 +56,7 @@ static atomic_t zcrypt_open_count = ATOMIC_INIT(0);
 static int zcrypt_rng_device_add(void);
 static void zcrypt_rng_device_remove(void);
 
-/**
+/*
  * Device attributes common for all crypto devices.
  */
 static ssize_t zcrypt_type_show(struct device *dev,
@@ -260,7 +260,7 @@ void zcrypt_device_unregister(struct zcrypt_device *zdev)
 EXPORT_SYMBOL(zcrypt_device_unregister);
 
 /**
- * zcrypt_read is not be supported beyond zcrypt 1.3.1
+ * zcrypt_read is not supported beyond zcrypt 1.3.1
  */
 static ssize_t zcrypt_read(struct file *filp, char __user *buf,
 			   size_t count, loff_t *f_pos)
@@ -302,7 +302,7 @@ static long zcrypt_rsa_modexpo(struct ica_rsa_modexpo *mex)
 
 	if (mex->outputdatalength < mex->inputdatalength)
 		return -EINVAL;
-	/**
+	/*
 	 * As long as outputdatalength is big enough, we can set the
 	 * outputdatalength equal to the inputdatalength, since that is the
 	 * number of bytes we will copy in any case
@@ -348,7 +348,7 @@ static long zcrypt_rsa_crt(struct ica_rsa_modexpo_crt *crt)
 	if (crt->outputdatalength < crt->inputdatalength ||
 	    (crt->inputdatalength & 1))
 		return -EINVAL;
-	/**
+	/*
 	 * As long as outputdatalength is big enough, we can set the
 	 * outputdatalength equal to the inputdatalength, since that is the
 	 * number of bytes we will copy in any case
@@ -365,7 +365,7 @@ static long zcrypt_rsa_crt(struct ica_rsa_modexpo_crt *crt)
 		    zdev->max_mod_size < crt->inputdatalength)
 			continue;
 		if (zdev->short_crt && crt->inputdatalength > 240) {
-			/**
+			/*
 			 * Check inputdata for leading zeros for cards
 			 * that can't handle np_prime, bp_key, or
 			 * u_mult_inv > 128 bytes.
@@ -381,7 +381,7 @@ static long zcrypt_rsa_crt(struct ica_rsa_modexpo_crt *crt)
 				    copy_from_user(&z3, crt->u_mult_inv, len))
 					return -EFAULT;
 				copied = 1;
-				/**
+				/*
 				 * We have to restart device lookup -
 				 * the device list may have changed by now.
 				 */
@@ -668,7 +668,7 @@ static long zcrypt_unlocked_ioctl(struct file *filp, unsigned int cmd,
 				(int __user *) arg);
 	case Z90STAT_DOMAIN_INDEX:
 		return put_user(ap_domain_index, (int __user *) arg);
-	/**
+	/*
 	 * Deprecated ioctls. Don't add another device count ioctl,
 	 * you can count them yourself in the user space with the
 	 * output of the Z90STAT_STATUS_MASK ioctl.
@@ -1075,7 +1075,7 @@ static int zcrypt_status_write(struct file *file, const char __user *buffer,
 	}
 
 	for (j = 0; j < 64 && *ptr; ptr++) {
-		/**
+		/*
 		 * '0' for no device, '1' for PCICA, '2' for PCICC,
 		 * '3' for PCIXCC_MCL2, '4' for PCIXCC_MCL3,
 		 * '5' for CEX2C and '6' for CEX2A'
@@ -1103,7 +1103,7 @@ static int zcrypt_rng_data_read(struct hwrng *rng, u32 *data)
 {
 	int rc;
 
-	/**
+	/*
 	 * We don't need locking here because the RNG API guarantees serialized
 	 * read method calls.
 	 */
