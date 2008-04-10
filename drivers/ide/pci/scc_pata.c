@@ -334,7 +334,7 @@ static int scc_dma_end(ide_drive_t *drive)
 
 	/* errata A308 workaround: Step5 (check data loss) */
 	/* We don't check non ide_disk because it is limited to UDMA4 */
-	if (!(in_be32((void __iomem *)hwif->io_ports[IDE_ALTSTATUS_OFFSET])
+	if (!(in_be32((void __iomem *)hwif->io_ports.ctl_addr)
 	      & ERR_STAT) &&
 	    drive->media == ide_disk && drive->current_speed > XFER_UDMA_4) {
 		reg = in_be32((void __iomem *)intsts_port);
@@ -438,7 +438,7 @@ static int scc_dma_test_irq(ide_drive_t *drive)
 	u32 int_stat = in_be32((void __iomem *)hwif->dma_base + 0x014);
 
 	/* SCC errata A252,A308 workaround: Step4 */
-	if ((in_be32((void __iomem *)hwif->io_ports[IDE_ALTSTATUS_OFFSET])
+	if ((in_be32((void __iomem *)hwif->io_ports.ctl_addr)
 	     & ERR_STAT) &&
 	    (int_stat & INTSTS_INTRQ))
 		return 1;
@@ -584,6 +584,7 @@ static void __devinit init_mmio_iops_scc(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
 	struct scc_ports *ports = pci_get_drvdata(dev);
+	struct ide_io_ports *io_ports = &hwif->io_ports;
 	unsigned long dma_base = ports->dma;
 
 	ide_set_hwifdata(hwif, ports);
@@ -598,15 +599,15 @@ static void __devinit init_mmio_iops_scc(ide_hwif_t *hwif)
 	hwif->OUTSW = scc_ide_outsw;
 	hwif->OUTSL = scc_ide_outsl;
 
-	hwif->io_ports[IDE_DATA_OFFSET] = dma_base + 0x20;
-	hwif->io_ports[IDE_ERROR_OFFSET] = dma_base + 0x24;
-	hwif->io_ports[IDE_NSECTOR_OFFSET] = dma_base + 0x28;
-	hwif->io_ports[IDE_SECTOR_OFFSET] = dma_base + 0x2c;
-	hwif->io_ports[IDE_LCYL_OFFSET] = dma_base + 0x30;
-	hwif->io_ports[IDE_HCYL_OFFSET] = dma_base + 0x34;
-	hwif->io_ports[IDE_SELECT_OFFSET] = dma_base + 0x38;
-	hwif->io_ports[IDE_STATUS_OFFSET] = dma_base + 0x3c;
-	hwif->io_ports[IDE_CONTROL_OFFSET] = dma_base + 0x40;
+	io_ports->data_addr	= dma_base + 0x20;
+	io_ports->error_addr	= dma_base + 0x24;
+	io_ports->nsect_addr	= dma_base + 0x28;
+	io_ports->lbal_addr	= dma_base + 0x2c;
+	io_ports->lbam_addr	= dma_base + 0x30;
+	io_ports->lbah_addr	= dma_base + 0x34;
+	io_ports->device_addr	= dma_base + 0x38;
+	io_ports->status_addr	= dma_base + 0x3c;
+	io_ports->ctl_addr	= dma_base + 0x40;
 
 	hwif->irq = dev->irq;
 	hwif->dma_base = dma_base;
