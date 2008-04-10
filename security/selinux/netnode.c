@@ -40,10 +40,16 @@
 #include <net/ipv6.h>
 #include <asm/bug.h>
 
+#include "netnode.h"
 #include "objsec.h"
 
 #define SEL_NETNODE_HASH_SIZE       256
 #define SEL_NETNODE_HASH_BKT_LIMIT   16
+
+struct sel_netnode_bkt {
+	unsigned int size;
+	struct list_head list;
+};
 
 struct sel_netnode {
 	struct netnode_security_struct nsec;
@@ -60,7 +66,7 @@ struct sel_netnode {
 
 static LIST_HEAD(sel_netnode_list);
 static DEFINE_SPINLOCK(sel_netnode_lock);
-static struct list_head sel_netnode_hash[SEL_NETNODE_HASH_SIZE];
+static struct sel_netnode_bkt sel_netnode_hash[SEL_NETNODE_HASH_SIZE];
 
 /**
  * sel_netnode_free - Frees a node entry
@@ -87,7 +93,7 @@ static void sel_netnode_free(struct rcu_head *p)
  * the bucket number for the given IP address.
  *
  */
-static u32 sel_netnode_hashfn_ipv4(__be32 addr)
+static unsigned int sel_netnode_hashfn_ipv4(__be32 addr)
 {
 	/* at some point we should determine if the mismatch in byte order
 	 * affects the hash function dramatically */
@@ -103,7 +109,7 @@ static u32 sel_netnode_hashfn_ipv4(__be32 addr)
  * the bucket number for the given IP address.
  *
  */
-static u32 sel_netnode_hashfn_ipv6(const struct in6_addr *addr)
+static unsigned int sel_netnode_hashfn_ipv6(const struct in6_addr *addr)
 {
 	/* just hash the least significant 32 bits to keep things fast (they
 	 * are the most likely to be different anyway), we can revisit this
@@ -123,7 +129,7 @@ static u32 sel_netnode_hashfn_ipv6(const struct in6_addr *addr)
  */
 static struct sel_netnode *sel_netnode_find(const void *addr, u16 family)
 {
-	u32 idx;
+	unsigned int idx;
 	struct sel_netnode *node;
 
 	switch (family) {
@@ -137,7 +143,7 @@ static struct sel_netnode *sel_netnode_find(const void *addr, u16 family)
 		BUG();
 	}
 
-	list_for_each_entry_rcu(node, &sel_netnode_hash[idx], list)
+	list_for_each_entry_rcu(node, &sel_netnode_hash[idx].list, list)
 		if (node->nsec.family == family)
 			switch (family) {
 			case PF_INET:
@@ -165,9 +171,7 @@ static struct sel_netnode *sel_netnode_find(const void *addr, u16 family)
  */
 static int sel_netnode_insert(struct sel_netnode *node)
 {
-	u32 idx;
-	u32 count = 0;
-	struct sel_netnode *iter;
+	unsigned int idx;
 
 	switch (node->nsec.family) {
 	case PF_INET:
@@ -179,32 +183,19 @@ static int sel_netnode_insert(struct sel_netnode *node)
 	default:
 		BUG();
 	}
-	list_add_rcu(&node->list, &sel_netnode_hash[idx]);
 
 	/* we need to impose a limit on the growth of the hash table so check
 	 * this bucket to make sure it is within the specified bounds */
-	list_for_each_entry(iter, &sel_netnode_hash[idx], list)
-		if (++count > SEL_NETNODE_HASH_BKT_LIMIT) {
-			list_del_rcu(&iter->list);
-			call_rcu(&iter->rcu, sel_netnode_free);
-			break;
-		}
+	list_add_rcu(&node->list, &sel_netnode_hash[idx].list);
+	if (sel_netnode_hash[idx].size == SEL_NETNODE_HASH_BKT_LIMIT) {
+		struct sel_netnode *tail;
+		tail = list_entry(node->list.prev, struct sel_netnode, list);
+		list_del_rcu(node->list.prev);
+		call_rcu(&tail->rcu, sel_netnode_free);
+	} else
+		sel_netnode_hash[idx].size++;
 
 	return 0;
-}
-
-/**
- * sel_netnode_destroy - Remove a node record from the table
- * @node: the existing node record
- *
- * Description:
- * Remove an existing node record from the network address table.
- *
- */
-static void sel_netnode_destroy(struct sel_netnode *node)
-{
-	list_del_rcu(&node->list);
-	call_rcu(&node->rcu, sel_netnode_free);
 }
 
 /**
@@ -312,13 +303,17 @@ int sel_netnode_sid(void *addr, u16 family, u32 *sid)
  */
 static void sel_netnode_flush(void)
 {
-	u32 idx;
+	unsigned int idx;
 	struct sel_netnode *node;
 
 	spin_lock_bh(&sel_netnode_lock);
-	for (idx = 0; idx < SEL_NETNODE_HASH_SIZE; idx++)
-		list_for_each_entry(node, &sel_netnode_hash[idx], list)
-			sel_netnode_destroy(node);
+	for (idx = 0; idx < SEL_NETNODE_HASH_SIZE; idx++) {
+		list_for_each_entry(node, &sel_netnode_hash[idx].list, list) {
+			list_del_rcu(&node->list);
+			call_rcu(&node->rcu, sel_netnode_free);
+		}
+		sel_netnode_hash[idx].size = 0;
+	}
 	spin_unlock_bh(&sel_netnode_lock);
 }
 
@@ -340,8 +335,10 @@ static __init int sel_netnode_init(void)
 	if (!selinux_enabled)
 		return 0;
 
-	for (iter = 0; iter < SEL_NETNODE_HASH_SIZE; iter++)
-		INIT_LIST_HEAD(&sel_netnode_hash[iter]);
+	for (iter = 0; iter < SEL_NETNODE_HASH_SIZE; iter++) {
+		INIT_LIST_HEAD(&sel_netnode_hash[iter].list);
+		sel_netnode_hash[iter].size = 0;
+	}
 
 	ret = avc_add_callback(sel_netnode_avc_callback, AVC_CALLBACK_RESET,
 	                       SECSID_NULL, SECSID_NULL, SECCLASS_NULL, 0);
