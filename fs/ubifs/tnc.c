@@ -790,8 +790,9 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
  * @zbr: zbranch of dent
  * @nm: name to match
  *
- * This function returns %1 if the name matches, %0 if the name does not match
- * and a negative error code otherwise.
+ * This function checks if xentry/direntry referred by zbranch @zbr matches name
+ * @nm. Returns %1 if it does, %0 if not, and a negative error code in case of
+ * failure.
  */
 static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			const struct qstr *nm)
@@ -800,36 +801,35 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	int nlen, err;
 
 	/* If possible, match against the dent in the leaf-node-cache */
-	dent = zbr->leaf;
-	if (dent) {
-		nlen = le16_to_cpu(dent->nlen);
+	if (!zbr->leaf) {
+		dent = kmalloc(zbr->len, GFP_NOFS);
+		if (!dent)
+			return -ENOMEM;
 
-		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
-			return 1;
-		return 0;
-	}
+		/*
+		 * In this case we end up allocating another dent object in
+		 * lnc_add(), although it could have just inserted this dent.
+		 */
+		err = tnc_read_node(c, zbr, dent);
+		if (err)
+			goto out_free;
 
-	dent = kmalloc(zbr->len, GFP_NOFS);
-	if (!dent)
-		return -ENOMEM;
-	/*
-	 * In this case we end up allocating another dent object in lnc_add(),
-	 * although it could have just inserted this dent.
-	 */
-	err = tnc_read_node(c, zbr, dent);
-	if (!err) {
 		err = ubifs_validate_entry(c, dent);
 		if (err) {
 			dbg_dump_node(c, dent);
-			goto out;
+			goto out_free;
 		}
 
-		nlen = le16_to_cpu(dent->nlen);
-		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
-			err = 1;
+		kfree(dent);
 	}
 
-out:
+	dent = zbr->leaf;
+	nlen = le16_to_cpu(dent->nlen);
+	if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
+		return 1;
+	return 0;
+
+out_free:
 	kfree(dent);
 	return err;
 }
@@ -1024,8 +1024,12 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
  * @zbr: zbranch of dent
  * @nm: name to match
  *
- * This function returns %1 if the name matches, %0 if the name does not match,
- * %2 if the node was not present, and a negative error code otherwise.
+ * This is a "fallible" version of 'matches_name()' function which does not
+ * panic if the direntry/xentry referred by @zbr does not exist on the media.
+ *
+ * This function checks if xentry/direntry referred by zbranch @zbr matches name
+ * @nm. Returns %1 it does, %0 if not, %2 if the referred xentry/direntry does
+ * not exist on the media, and a negative error in case of error.
  */
 static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 				 const struct qstr *nm)
@@ -1034,42 +1038,40 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 	int nlen, err;
 
 	/* If possible, match against the dent in the leaf-node-cache */
-	dent = zbr->leaf;
-	if (dent) {
-		nlen = le16_to_cpu(dent->nlen);
+	if (!zbr->leaf) {
+		dent = kmalloc(zbr->len, GFP_NOFS);
+		if (!dent)
+			return -ENOMEM;
 
-		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
-			return 1;
-		return 0;
-	}
+		/*
+		 * In this case we end up allocating another dent object in lnc_add(),
+		 * although it could have just inserted this dent.
+		 */
+		err = fallible_read_node(c, &zbr->key, zbr, dent);
+		if (err < 0)
+			goto out;
+		if (err == 0) {
+			/* The node was not present */
+			err = 2;
+			goto out;
+		}
 
-	dent = kmalloc(zbr->len, GFP_NOFS);
-	if (!dent)
-		return -ENOMEM;
-	/*
-	 * In this case we end up allocating another dent object in lnc_add(),
-	 * although it could have just inserted this dent.
-	 */
-	err = fallible_read_node(c, &zbr->key, zbr, dent);
-	if (err < 0)
-		goto out;
-	if (err == 0) {
-		err = 2; /* The node was not present */
-		goto out;
-	}
-	if (err == 1) {
+		ubifs_assert(err == 1);
 		err = ubifs_validate_entry(c, dent);
 		if (err) {
 			dbg_dump_node(c, dent);
 			goto out;
 		}
 
-		nlen = le16_to_cpu(dent->nlen);
-		if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
-			err = 1;
-		else
-			err = 0;
+		kfree(dent);
 	}
+
+	dent = zbr->leaf;
+	nlen = le16_to_cpu(dent->nlen);
+	if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
+		return 1;
+	return 0;
+
 out:
 	kfree(dent);
 	return err;
