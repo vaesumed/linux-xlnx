@@ -476,18 +476,16 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tchild_cnt      %d\n", n);
 		printk(KERN_DEBUG "\tlevel          %d\n",
 		       (int)le16_to_cpu(idx->level));
-		printk(KERN_DEBUG "Branches:\n");
+		printk(KERN_DEBUG "\tBranches:\n");
 
 		for (i = 0; i < n && i < c->fanout - 1; i++) {
 			const struct ubifs_branch *br;
 
 			br = ubifs_idx_branch(c, idx, i);
 			key_read(c, &br->key, &key);
-			printk(KERN_DEBUG "\t  %04d: key %s",
-			       i, dbg_get_key_dump(c, &key));
-			printk(KERN_DEBUG "\t        lnum %6d, offs %6d, "
-			       "len %6d\n", le32_to_cpu(br->lnum),
-			       le32_to_cpu(br->offs), le32_to_cpu(br->len));
+			printk(KERN_DEBUG "\t%d: %d:%d len %d key %s\n",
+			       i, le32_to_cpu(br->lnum), le32_to_cpu(br->offs),
+			       le32_to_cpu(br->len), dbg_get_key_dump(c, &key));
 		}
 		break;
 	}
@@ -666,14 +664,14 @@ void dbg_dump_znode(const struct ubifs_info *c, const struct ubifs_znode *znode)
 
 		cond_resched();
 		if (znode->level > 0)
-			printk(KERN_DEBUG "\t%d: znode %p lnum %d offs %d "
-					  "len %d key %s\n", n, zbr->znode,
-					  zbr->lnum, zbr->offs, zbr->len,
+			printk(KERN_DEBUG "\t%d: znode %p %d:%d len %d key "
+					  "%s\n", n, zbr->znode, zbr->lnum,
+					  zbr->offs, zbr->len,
 					  dbg_get_key_dump(c, &zbr->key));
 		else
-			printk(KERN_DEBUG "\t%d: LNC %p lnum %d offs %d "
-					  "len %d key %s\n", n, zbr->znode,
-					  zbr->lnum, zbr->offs, zbr->len,
+			printk(KERN_DEBUG "\t%d: LNC %p %d:%d len %d key "
+					  "%s\n", n, zbr->znode, zbr->lnum,
+					  zbr->offs, zbr->len,
 					  dbg_get_key_dump(c, &zbr->key));
 	}
 	spin_unlock(&dbg_lock);
@@ -717,20 +715,21 @@ void dbg_dump_tnc(struct ubifs_info *c)
 	struct ubifs_znode *znode;
 	int level;
 
-	printk(KERN_DEBUG "\nDumping the TNC tree");
+	printk(KERN_DEBUG "\n");
+	printk(KERN_DEBUG "Dumping the TNC tree\n");
 	znode = ubifs_tnc_levelorder_next(c->zroot.znode, NULL);
 	level = znode->level;
-	printk(KERN_DEBUG "== Level %d ==", level);
+	printk(KERN_DEBUG "== Level %d ==\n", level);
 	while (znode) {
 		if (level != znode->level) {
 			level = znode->level;
-			printk(KERN_DEBUG "== Level %d ==", level);
+			printk(KERN_DEBUG "== Level %d ==\n", level);
 		}
 		dbg_dump_znode(c, znode);
 		znode = ubifs_tnc_levelorder_next(c->zroot.znode, znode);
 	}
 
-	printk("\n");
+	printk(KERN_DEBUG "\n");
 }
 
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
