@@ -371,10 +371,10 @@ static void log_ar_at_event(char dir, int speed, u32 *header, int evt)
 	if (unlikely(evt >= ARRAY_SIZE(evts)))
 			evt = 0x1f;
 
-	if (header[0] == ~header[1]) {
+	if (header[1] == ~header[2]) {
 		printk(KERN_DEBUG "A%c %s, %s, %08x\n",
-		       dir, evts[evt], phys[header[0] >> 30 & 0x3],
-		       header[0]);
+		       dir, evts[evt], phys[header[1] >> 30 & 0x3],
+		       header[1]);
 		return;
 	}
 
