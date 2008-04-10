@@ -45,7 +45,7 @@ xfs_internal_inum(
 	xfs_ino_t	ino)
 {
 	return (ino == mp->m_sb.sb_rbmino || ino == mp->m_sb.sb_rsumino ||
-		(XFS_SB_VERSION_HASQUOTA(&mp->m_sb) &&
+		(xfs_sb_version_hasquota(&mp->m_sb) &&
 		 (ino == mp->m_sb.sb_uquotino || ino == mp->m_sb.sb_gquotino)));
 }
 
@@ -614,7 +614,8 @@ xfs_bulkstat(
 							xfs_buf_relse(bp);
 						error = xfs_itobp(mp, NULL, ip,
 								&dip, &bp, bno,
-								XFS_IMAP_BULKSTAT);
+								XFS_IMAP_BULKSTAT,
+								XFS_BUF_LOCK);
 						if (!error)
 							clustidx = ip->i_boffset / mp->m_sb.sb_inodesize;
 						kmem_zone_free(xfs_inode_zone, ip);

@@ -675,7 +675,7 @@ xfs_log_unmount_write(xfs_mount_t *mp)
 
 		spin_lock(&log->l_icloglock);
 		iclog = log->l_iclog;
-		iclog->ic_refcnt++;
+		atomic_inc(&iclog->ic_refcnt);
 		spin_unlock(&log->l_icloglock);
 		xlog_state_want_sync(log, iclog);
 		(void) xlog_state_release_iclog(log, iclog);
@@ -713,7 +713,7 @@ xfs_log_unmount_write(xfs_mount_t *mp)
 		 */
 		spin_lock(&log->l_icloglock);
 		iclog = log->l_iclog;
-		iclog->ic_refcnt++;
+		atomic_inc(&iclog->ic_refcnt);
 		spin_unlock(&log->l_icloglock);
 
 		xlog_state_want_sync(log, iclog);
@@ -1090,7 +1090,7 @@ xlog_get_iclog_buffer_size(xfs_mount_t	*mp,
 			size >>= 1;
 		}
 
-		if (XFS_SB_VERSION_HASLOGV2(&mp->m_sb)) {
+		if (xfs_sb_version_haslogv2(&mp->m_sb)) {
 			/* # headers = size / 32K
 			 * one header holds cycles from 32K of data
 			 */
@@ -1186,13 +1186,13 @@ xlog_alloc_log(xfs_mount_t	*mp,
 	log->l_grant_reserve_cycle = 1;
 	log->l_grant_write_cycle = 1;
 
-	if (XFS_SB_VERSION_HASSECTOR(&mp->m_sb)) {
+	if (xfs_sb_version_hassector(&mp->m_sb)) {
 		log->l_sectbb_log = mp->m_sb.sb_logsectlog - BBSHIFT;
 		ASSERT(log->l_sectbb_log <= mp->m_sectbb_log);
 		/* for larger sector sizes, must have v2 or external log */
 		ASSERT(log->l_sectbb_log == 0 ||
 			log->l_logBBstart == 0 ||
-			XFS_SB_VERSION_HASLOGV2(&mp->m_sb));
+			xfs_sb_version_haslogv2(&mp->m_sb));
 		ASSERT(mp->m_sb.sb_logsectlog >= BBSHIFT);
 	}
 	log->l_sectbb_mask = (1 << log->l_sectbb_log) - 1;
@@ -1247,7 +1247,7 @@ xlog_alloc_log(xfs_mount_t	*mp,
 		memset(head, 0, sizeof(xlog_rec_header_t));
 		head->h_magicno = cpu_to_be32(XLOG_HEADER_MAGIC_NUM);
 		head->h_version = cpu_to_be32(
-			XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb) ? 2 : 1);
+			xfs_sb_version_haslogv2(&log->l_mp->m_sb) ? 2 : 1);
 		head->h_size = cpu_to_be32(log->l_iclog_size);
 		/* new fields */
 		head->h_fmt = cpu_to_be32(XLOG_FMT);
@@ -1402,10 +1402,10 @@ xlog_sync(xlog_t		*log,
 	int		roundoff;       /* roundoff to BB or stripe */
 	int		split = 0;	/* split write into two regions */
 	int		error;
-	int		v2 = XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb);
+	int		v2 = xfs_sb_version_haslogv2(&log->l_mp->m_sb);
 
 	XFS_STATS_INC(xs_log_writes);
-	ASSERT(iclog->ic_refcnt == 0);
+	ASSERT(atomic_read(&iclog->ic_refcnt) == 0);
 
 	/* Add for LR header */
 	count_init = log->l_iclog_hsize + iclog->ic_offset;
@@ -2309,7 +2309,7 @@ xlog_state_done_syncing(
 
 	ASSERT(iclog->ic_state == XLOG_STATE_SYNCING ||
 	       iclog->ic_state == XLOG_STATE_IOERROR);
-	ASSERT(iclog->ic_refcnt == 0);
+	ASSERT(atomic_read(&iclog->ic_refcnt) == 0);
 	ASSERT(iclog->ic_bwritecnt == 1 || iclog->ic_bwritecnt == 2);
 
 
@@ -2391,7 +2391,7 @@ restart:
 	ASSERT(iclog->ic_state == XLOG_STATE_ACTIVE);
 	head = &iclog->ic_header;
 
-	iclog->ic_refcnt++;			/* prevents sync */
+	atomic_inc(&iclog->ic_refcnt);	/* prevents sync */
 	log_offset = iclog->ic_offset;
 
 	/* On the 1st write to an iclog, figure out lsn.  This works
@@ -2423,12 +2423,12 @@ restart:
 		xlog_state_switch_iclogs(log, iclog, iclog->ic_size);
 
 		/* If I'm the only one writing to this iclog, sync it to disk */
-		if (iclog->ic_refcnt == 1) {
+		if (atomic_read(&iclog->ic_refcnt) == 1) {
 			spin_unlock(&log->l_icloglock);
 			if ((error = xlog_state_release_iclog(log, iclog)))
 				return error;
 		} else {
-			iclog->ic_refcnt--;
+			atomic_dec(&iclog->ic_refcnt);
 			spin_unlock(&log->l_icloglock);
 		}
 		goto restart;
@@ -2813,33 +2813,35 @@ xlog_state_put_ticket(xlog_t	    *log,
  *
  */
 STATIC int
-xlog_state_release_iclog(xlog_t		*log,
-			 xlog_in_core_t	*iclog)
+xlog_state_release_iclog(
+	xlog_t		*log,
+	xlog_in_core_t	*iclog)
 {
 	int		sync = 0;	/* do we sync? */
 
-	xlog_assign_tail_lsn(log->l_mp);
+	if (iclog->ic_state & XLOG_STATE_IOERROR)
+		return XFS_ERROR(EIO);
 
-	spin_lock(&log->l_icloglock);
+	ASSERT(atomic_read(&iclog->ic_refcnt) > 0);
+	if (!atomic_dec_and_lock(&iclog->ic_refcnt, &log->l_icloglock))
+		return 0;
 
 	if (iclog->ic_state & XLOG_STATE_IOERROR) {
 		spin_unlock(&log->l_icloglock);
 		return XFS_ERROR(EIO);
 	}
-
-	ASSERT(iclog->ic_refcnt > 0);
 	ASSERT(iclog->ic_state == XLOG_STATE_ACTIVE ||
 	       iclog->ic_state == XLOG_STATE_WANT_SYNC);
 
-	if (--iclog->ic_refcnt == 0 &&
-	    iclog->ic_state == XLOG_STATE_WANT_SYNC) {
+	if (iclog->ic_state == XLOG_STATE_WANT_SYNC) {
+		/* update tail before writing to iclog */
+		xlog_assign_tail_lsn(log->l_mp);
 		sync++;
 		iclog->ic_state = XLOG_STATE_SYNCING;
 		iclog->ic_header.h_tail_lsn = cpu_to_be64(log->l_tail_lsn);
 		xlog_verify_tail_lsn(log, iclog, log->l_tail_lsn);
 		/* cycle incremented when incrementing curr_block */
 	}
-
 	spin_unlock(&log->l_icloglock);
 
 	/*
@@ -2849,11 +2851,9 @@ xlog_state_release_iclog(xlog_t		*log,
 	 * this iclog has consistent data, so we ignore IOERROR
 	 * flags after this point.
 	 */
-	if (sync) {
+	if (sync)
 		return xlog_sync(log, iclog);
-	}
 	return 0;
-
 }	/* xlog_state_release_iclog */
 
 
@@ -2881,7 +2881,7 @@ xlog_state_switch_iclogs(xlog_t		*log,
 	log->l_curr_block += BTOBB(eventual_size)+BTOBB(log->l_iclog_hsize);
 
 	/* Round up to next log-sunit */
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb) &&
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb) &&
 	    log->l_mp->m_sb.sb_logsunit > 1) {
 		__uint32_t sunit_bb = BTOBB(log->l_mp->m_sb.sb_logsunit);
 		log->l_curr_block = roundup(log->l_curr_block, sunit_bb);
@@ -2953,7 +2953,8 @@ xlog_state_sync_all(xlog_t *log, uint flags, int *log_flushed)
 		 * previous iclog and go to sleep.
 		 */
 		if (iclog->ic_state == XLOG_STATE_DIRTY ||
-		    (iclog->ic_refcnt == 0 && iclog->ic_offset == 0)) {
+		    (atomic_read(&iclog->ic_refcnt) == 0
+		     && iclog->ic_offset == 0)) {
 			iclog = iclog->ic_prev;
 			if (iclog->ic_state == XLOG_STATE_ACTIVE ||
 			    iclog->ic_state == XLOG_STATE_DIRTY)
@@ -2961,14 +2962,14 @@ xlog_state_sync_all(xlog_t *log, uint flags, int *log_flushed)
 			else
 				goto maybe_sleep;
 		} else {
-			if (iclog->ic_refcnt == 0) {
+			if (atomic_read(&iclog->ic_refcnt) == 0) {
 				/* We are the only one with access to this
 				 * iclog.  Flush it out now.  There should
 				 * be a roundoff of zero to show that someone
 				 * has already taken care of the roundoff from
 				 * the previous sync.
 				 */
-				iclog->ic_refcnt++;
+				atomic_inc(&iclog->ic_refcnt);
 				lsn = be64_to_cpu(iclog->ic_header.h_lsn);
 				xlog_state_switch_iclogs(log, iclog, 0);
 				spin_unlock(&log->l_icloglock);
@@ -3100,7 +3101,7 @@ try_again:
 			already_slept = 1;
 			goto try_again;
 		} else {
-			iclog->ic_refcnt++;
+			atomic_inc(&iclog->ic_refcnt);
 			xlog_state_switch_iclogs(log, iclog, 0);
 			spin_unlock(&log->l_icloglock);
 			if (xlog_state_release_iclog(log, iclog))
@@ -3334,7 +3335,7 @@ xlog_ticket_get(xlog_t		*log,
 	unit_bytes += sizeof(xlog_op_header_t) * num_headers;
 
 	/* for roundoff padding for transaction data and one for commit record */
-	if (XFS_SB_VERSION_HASLOGV2(&log->l_mp->m_sb) &&
+	if (xfs_sb_version_haslogv2(&log->l_mp->m_sb) &&
 	    log->l_mp->m_sb.sb_logsunit > 1) {
 		/* log su roundoff */
 		unit_bytes += 2*log->l_mp->m_sb.sb_logsunit;

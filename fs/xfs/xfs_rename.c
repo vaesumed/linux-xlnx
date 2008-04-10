@@ -36,7 +36,6 @@
 #include "xfs_bmap.h"
 #include "xfs_error.h"
 #include "xfs_quota.h"
-#include "xfs_refcache.h"
 #include "xfs_utils.h"
 #include "xfs_trans_space.h"
 #include "xfs_vnodeops.h"
@@ -94,7 +93,8 @@ xfs_lock_for_rename(
 	xfs_inode_t	**i_tab,/* array of inode returned, sorted */
 	int		*num_inodes)  /* number of inodes in array */
 {
-	xfs_inode_t		*ip1, *ip2, *temp;
+	xfs_inode_t		*ip1 = VNAME_TO_INODE(vname1);
+	xfs_inode_t		*ip2, *temp;
 	xfs_ino_t		inum1, inum2;
 	int			error;
 	int			i, j;
@@ -110,16 +110,11 @@ xfs_lock_for_rename(
 	 * to see if we still have the right inodes, directories, etc.
 	 */
 	lock_mode = xfs_ilock_map_shared(dp1);
-	error = xfs_get_dir_entry(vname1, &ip1);
-	if (error) {
-		xfs_iunlock_map_shared(dp1, lock_mode);
-		return error;
-	}
+	IHOLD(ip1);
+	xfs_itrace_ref(ip1);
 
 	inum1 = ip1->i_ino;
 
-	ASSERT(ip1);
-	xfs_itrace_ref(ip1);
 
 	/*
 	 * Unlock dp1 and lock dp2 if they are different.
@@ -224,12 +219,11 @@ int
 xfs_rename(
 	xfs_inode_t	*src_dp,
 	bhv_vname_t	*src_vname,
-	bhv_vnode_t	*target_dir_vp,
+	xfs_inode_t	*target_dp,
 	bhv_vname_t	*target_vname)
 {
-	bhv_vnode_t	*src_dir_vp = XFS_ITOV(src_dp);
 	xfs_trans_t	*tp;
-	xfs_inode_t	*target_dp, *src_ip, *target_ip;
+	xfs_inode_t	*src_ip, *target_ip;
 	xfs_mount_t	*mp = src_dp->i_mount;
 	int		new_parent;		/* moving to a new dir */
 	int		src_is_directory;	/* src_name is a directory */
@@ -249,22 +243,13 @@ xfs_rename(
 	int		target_namelen = VNAMELEN(target_vname);
 
 	xfs_itrace_entry(src_dp);
-	xfs_itrace_entry(xfs_vtoi(target_dir_vp));
-
-	/*
-	 * Find the XFS behavior descriptor for the target directory
-	 * vnode since it was not handed to us.
-	 */
-	target_dp = xfs_vtoi(target_dir_vp);
-	if (target_dp == NULL) {
-		return XFS_ERROR(EXDEV);
-	}
+	xfs_itrace_entry(target_dp);
 
 	if (DM_EVENT_ENABLED(src_dp, DM_EVENT_RENAME) ||
 	    DM_EVENT_ENABLED(target_dp, DM_EVENT_RENAME)) {
 		error = XFS_SEND_NAMESP(mp, DM_EVENT_RENAME,
-					src_dir_vp, DM_RIGHT_NULL,
-					target_dir_vp, DM_RIGHT_NULL,
+					src_dp, DM_RIGHT_NULL,
+					target_dp, DM_RIGHT_NULL,
 					src_name, target_name,
 					0, 0, 0);
 		if (error) {
@@ -365,10 +350,10 @@ xfs_rename(
 	 * them when they unlock the inodes.  Also, we need to be careful
 	 * not to add an inode to the transaction more than once.
 	 */
-	VN_HOLD(src_dir_vp);
+	IHOLD(src_dp);
 	xfs_trans_ijoin(tp, src_dp, XFS_ILOCK_EXCL);
 	if (new_parent) {
-		VN_HOLD(target_dir_vp);
+		IHOLD(target_dp);
 		xfs_trans_ijoin(tp, target_dp, XFS_ILOCK_EXCL);
 	}
 	if ((src_ip != src_dp) && (src_ip != target_dp)) {
@@ -580,10 +565,8 @@ xfs_rename(
 	 * the vnode references.
 	 */
 	error = xfs_trans_commit(tp, XFS_TRANS_RELEASE_LOG_RES);
-	if (target_ip != NULL) {
-		xfs_refcache_purge_ip(target_ip);
+	if (target_ip != NULL)
 		IRELE(target_ip);
-	}
 	/*
 	 * Let interposed file systems know about removed links.
 	 */
@@ -598,8 +581,8 @@ std_return:
 	if (DM_EVENT_ENABLED(src_dp, DM_EVENT_POSTRENAME) ||
 	    DM_EVENT_ENABLED(target_dp, DM_EVENT_POSTRENAME)) {
 		(void) XFS_SEND_NAMESP (mp, DM_EVENT_POSTRENAME,
-					src_dir_vp, DM_RIGHT_NULL,
-					target_dir_vp, DM_RIGHT_NULL,
+					src_dp, DM_RIGHT_NULL,
+					target_dp, DM_RIGHT_NULL,
 					src_name, target_name,
 					0, error, 0);
 	}
