@@ -787,20 +787,20 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
  * matches_name - determine if a directory or extended attribute entry matches
  *                a given name.
  * @c: UBIFS file-system description object
- * @zt: zbranch of dent
+ * @zbr: zbranch of dent
  * @nm: name to match
  *
  * This function returns %1 if the name matches, %0 if the name does not match
  * and a negative error code otherwise.
  */
-static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
+static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			const struct qstr *nm)
 {
 	struct ubifs_dent_node *dent;
 	int nlen, err;
 
 	/* If possible, match against the dent in the leaf-node-cache */
-	dent = zt->leaf;
+	dent = zbr->leaf;
 	if (dent) {
 		nlen = le16_to_cpu(dent->nlen);
 
@@ -809,14 +809,14 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 		return 0;
 	}
 
-	dent = kmalloc(zt->len, GFP_NOFS);
+	dent = kmalloc(zbr->len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
 	/*
 	 * In this case we end up allocating another dent object in lnc_add(),
 	 * although it could have just inserted this dent.
 	 */
-	err = tnc_read_node(c, zt, dent);
+	err = tnc_read_node(c, zbr, dent);
 	if (!err) {
 		err = ubifs_validate_entry(c, dent);
 		if (err) {
@@ -859,19 +859,19 @@ static struct ubifs_znode *get_znode(struct ubifs_info *c,
  * tnc_next - find next TNC entry.
  * @c: UBIFS file-system description object
  * @zn: znode is passed and returned here
- * @nn: znode branch slot number is passed and returned here
+ * @n: znode branch slot number is passed and returned here
  *
  * This function returns %0 if the next TNC entry is found, %-ENOENT if there is
  * no next entry, or a negative error code otherwise.
  */
-static int tnc_next(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
+static int tnc_next(struct ubifs_info *c, struct ubifs_znode **zn, int *n)
 {
 	struct ubifs_znode *znode = *zn;
-	int n = *nn;
+	int nn = *n;
 
-	n += 1;
-	if (n < znode->child_cnt) {
-		*nn = n;
+	nn += 1;
+	if (nn < znode->child_cnt) {
+		*n = nn;
 		return 0;
 	}
 	while (1) {
@@ -880,10 +880,10 @@ static int tnc_next(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
 		zp = znode->parent;
 		if (!zp)
 			return -ENOENT;
-		n = znode->iip + 1;
+		nn = znode->iip + 1;
 		znode = zp;
-		if (n < znode->child_cnt) {
-			znode = get_znode(c, znode, n);
+		if (nn < znode->child_cnt) {
+			znode = get_znode(c, znode, nn);
 			if (IS_ERR(znode))
 				return PTR_ERR(znode);
 			while (znode->level != 0) {
@@ -891,12 +891,12 @@ static int tnc_next(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
 				if (IS_ERR(znode))
 					return PTR_ERR(znode);
 			}
-			n = 0;
+			nn = 0;
 			break;
 		}
 	}
 	*zn = znode;
-	*nn = n;
+	*n = nn;
 	return 0;
 }
 
@@ -904,18 +904,18 @@ static int tnc_next(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
  * tnc_prev - find previous TNC entry.
  * @c: UBIFS file-system description object
  * @zn: znode is returned here
- * @nn: znode branch slot number is passed and returned here
+ * @n: znode branch slot number is passed and returned here
  *
  * This function returns %0 if the previous TNC entry is found, %-ENOENT if
  * there is no next entry, or a negative error code otherwise.
  */
-static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
+static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *n)
 {
 	struct ubifs_znode *znode = *zn;
-	int n = *nn;
+	int nn = *n;
 
-	if (n > 0) {
-		*nn = n - 1;
+	if (nn > 0) {
+		*n = nn - 1;
 		return 0;
 	}
 	while (1) {
@@ -924,24 +924,24 @@ static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
 		zp = znode->parent;
 		if (!zp)
 			return -ENOENT;
-		n = znode->iip - 1;
+		nn = znode->iip - 1;
 		znode = zp;
-		if (n >= 0) {
-			znode = get_znode(c, znode, n);
+		if (nn >= 0) {
+			znode = get_znode(c, znode, nn);
 			if (IS_ERR(znode))
 				return PTR_ERR(znode);
 			while (znode->level != 0) {
-				n = znode->child_cnt - 1;
-				znode = get_znode(c, znode, n);
+				nn = znode->child_cnt - 1;
+				znode = get_znode(c, znode, nn);
 				if (IS_ERR(znode))
 					return PTR_ERR(znode);
 			}
-			n = znode->child_cnt - 1;
+			nn = znode->child_cnt - 1;
 			break;
 		}
 	}
 	*zn = znode;
-	*nn = n;
+	*n = nn;
 	return 0;
 }
 
@@ -950,26 +950,26 @@ static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *nn)
  * @c: UBIFS file-system description object
  * @key: key of a directory or extended attribute entry
  * @zn: znode is returned here
- * @nn: znode branch slot number is passed and returned here
+ * @n: znode branch slot number is passed and returned here
  * @nm: name of the entry
  *
- * This function returns %1 and sets @zn and @nn if the collision is resolved.
- * %0 is returned if @nm is not found and @zn and @nn are set to the next
+ * This function returns %1 and sets @zn and @n if the collision is resolved.
+ * %0 is returned if @nm is not found and @zn and @n are set to the next
  * entry. %-ENOENT is returned if there are no following entries for the same
  * inode. Otherwise a negative error code is returned.
  */
 static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
-			     struct ubifs_znode **zn, int *nn,
+			     struct ubifs_znode **zn, int *n,
 			     const struct qstr *nm)
 {
 	struct ubifs_znode *znode;
-	int n, err;
+	int nn, err;
 
 	dbg_tnc_key(c, key, "key");
 
 	znode = *zn;
-	n = *nn;
-	err = matches_name(c, &znode->zbranch[n], nm);
+	nn = *n;
+	err = matches_name(c, &znode->zbranch[nn], nm);
 	if (err < 0)
 		return err;
 	if (err == 1)
@@ -977,40 +977,40 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 
 	/* Look left */
 	while (1) {
-		err = tnc_prev(c, &znode, &n);
+		err = tnc_prev(c, &znode, &nn);
 		if (err == -ENOENT)
 			break;
 		if (err)
 			return err;
-		if (keys_cmp(c, &znode->zbranch[n].key, key))
+		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
-		err = matches_name(c, &znode->zbranch[n], nm);
+		err = matches_name(c, &znode->zbranch[nn], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
-			*nn = n;
+			*n = nn;
 			return 1;
 		}
 	}
 
 	/* Look right */
 	znode = *zn;
-	n = *nn;
+	nn = *n;
 	while (1) {
-		err = tnc_next(c, &znode, &n);
+		err = tnc_next(c, &znode, &nn);
 		if (err)
 			return err;
-		if (keys_cmp(c, &znode->zbranch[n].key, key))
+		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			return -ENOENT;
-		err = matches_name(c, &znode->zbranch[n], nm);
+		err = matches_name(c, &znode->zbranch[nn], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
-			*nn = n;
+			*n = nn;
 			return 1;
 		}
 	}
@@ -1021,20 +1021,20 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 /**
  * fallible_matches_name - determine if a dent matches a given name.
  * @c: UBIFS file-system description object
- * @zt: zbranch of dent
+ * @zbr: zbranch of dent
  * @nm: name to match
  *
  * This function returns %1 if the name matches, %0 if the name does not match,
  * %2 if the node was not present, and a negative error code otherwise.
  */
-static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
+static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 				 const struct qstr *nm)
 {
 	struct ubifs_dent_node *dent;
 	int nlen, err;
 
 	/* If possible, match against the dent in the leaf-node-cache */
-	dent = zt->leaf;
+	dent = zbr->leaf;
 	if (dent) {
 		nlen = le16_to_cpu(dent->nlen);
 
@@ -1043,14 +1043,14 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zt,
 		return 0;
 	}
 
-	dent = kmalloc(zt->len, GFP_NOFS);
+	dent = kmalloc(zbr->len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
 	/*
 	 * In this case we end up allocating another dent object in lnc_add(),
 	 * although it could have just inserted this dent.
 	 */
-	err = fallible_read_node(c, &zt->key, zt, dent);
+	err = fallible_read_node(c, &zbr->key, zbr, dent);
 	if (err < 0)
 		goto out;
 	if (err == 0) {
@@ -1080,65 +1080,65 @@ out:
  * @c: UBIFS file-system description object
  * @key: key of directory entry
  * @zn: znode is returned here
- * @nn: znode branch slot number is passed and returned here
+ * @n: znode branch slot number is passed and returned here
  * @nm: name of directory entry
  *
- * This function returns %1 and sets @zn and @nn if the collision is resolved.
- * %0 is returned if @nm is not found and @zn and @nn are set to the
+ * This function returns %1 and sets @zn and @n if the collision is resolved.
+ * %0 is returned if @nm is not found and @zn and @n are set to the
  * next directory entry.  %-ENOENT is returned if there are no
  * following directory entries for the same inode.  Otherwise a negative error
  * code is returned.
  */
 static int fallible_resolve_collision(struct ubifs_info *c,
 				      const union ubifs_key *key,
-				      struct ubifs_znode **zn, int *nn,
+				      struct ubifs_znode **zn, int *n,
 				      const struct qstr *nm)
 {
 	struct ubifs_znode *znode, *o_znode = NULL;
 	union ubifs_key *okey;
-	int n, o_n = 0, err;
+	int nn, o_n = 0, err;
 
 	dbg_tnc_key(c, key, "key");
 	znode = *zn;
-	n = *nn;
-	err = fallible_matches_name(c, &znode->zbranch[n], nm);
+	nn = *n;
+	err = fallible_matches_name(c, &znode->zbranch[nn], nm);
 	if (err < 0)
 		return err;
 	if (err == 1)
 		return 1;
 	if (err == 2) {
 		o_znode = znode;
-		o_n = n;
+		o_n = nn;
 	}
 
 	/* Look left */
 	while (1) {
-		err = tnc_prev(c, &znode, &n);
+		err = tnc_prev(c, &znode, &nn);
 		if (err == -ENOENT)
 			break;
 		if (err)
 			return err;
-		if (keys_cmp(c, &znode->zbranch[n].key, key))
+		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
-		err = fallible_matches_name(c, &znode->zbranch[n], nm);
+		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
-			*nn = n;
+			*n = nn;
 			return 1;
 		}
 		if (err == 2) {
 			o_znode = znode;
-			o_n = n;
+			o_n = nn;
 		}
 	}
 	/* Look right */
 	znode = *zn;
-	n = *nn;
+	nn = *n;
 	while (1) {
-		err = tnc_next(c, &znode, &n);
+		err = tnc_next(c, &znode, &nn);
 		if (err == -ENOENT && o_znode) {
 			dbg_tnc_key(c, key, "collision resolved by default");
 			dbg_gc_key(c, key, "dangling match LEB %d:%d len %d ",
@@ -1146,12 +1146,12 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 				   o_znode->zbranch[o_n].offs,
 				   o_znode->zbranch[o_n].len);
 			*zn = o_znode;
-			*nn = o_n;
+			*n = o_n;
 			return 1;
 		}
 		if (err)
 			return err;
-		okey = &znode->zbranch[n].key;
+		okey = &znode->zbranch[nn].key;
 		if (keys_cmp(c, okey, key)) {
 			if (!o_znode)
 				return -ENOENT;
@@ -1161,21 +1161,21 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 				   o_znode->zbranch[o_n].offs,
 				   o_znode->zbranch[o_n].len);
 			*zn = o_znode;
-			*nn = o_n;
+			*n = o_n;
 			return 1;
 		}
-		err = fallible_matches_name(c, &znode->zbranch[n], nm);
+		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
 		if (err < 0)
 			return err;
 		if (err == 1) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
-			*nn = n;
+			*n = nn;
 			return 1;
 		}
 		if (err == 2) {
 			o_znode = znode;
-			o_n = n;
+			o_n = nn;
 		}
 	}
 	return -EINVAL;
@@ -1183,15 +1183,15 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 
 /**
  * matches_position - determine if a zbranch matches a given position.
- * @zt: zbranch of dent
+ * @zbr: zbranch of dent
  * @lnum: LEB number of dent to match
  * @offs: offset of dent to match
  *
  * This function returns %1 if @lnum:@offs matches, and %0 otherwise.
  */
-static int matches_position(struct ubifs_zbranch *zt, int lnum, int offs)
+static int matches_position(struct ubifs_zbranch *zbr, int lnum, int offs)
 {
-	if (zt->lnum == lnum && zt->offs == offs)
+	if (zbr->lnum == lnum && zbr->offs == offs)
 		return 1;
 	else
 		return 0;
@@ -1202,67 +1202,67 @@ static int matches_position(struct ubifs_zbranch *zt, int lnum, int offs)
  * @c: UBIFS file-system description object
  * @key: key of directory entry
  * @zn: znode is passed and returned here
- * @nn: znode branch slot number is passed and returned here
+ * @n: znode branch slot number is passed and returned here
  * @lnum: LEB number of dent node to match
  * @offs: offset of dent node to match
  *
- * This function returns %1 and sets @zn and @nn if the collision is resolved.
- * %0 is returned if @lnum:@offs is not found and @zn and @nn are set to the
+ * This function returns %1 and sets @zn and @n if the collision is resolved.
+ * %0 is returned if @lnum:@offs is not found and @zn and @n are set to the
  * next directory entry.  %-ENOENT is returned if there are no
  * following directory entries for the same inode.  Otherwise a negative error
  * code is returned.
  */
 static int resolve_collision_directly(struct ubifs_info *c,
 				      const union ubifs_key *key,
-				      struct ubifs_znode **zn, int *nn,
+				      struct ubifs_znode **zn, int *n,
 				      int lnum, int offs)
 {
 	struct ubifs_znode *znode;
 	union ubifs_key *okey;
-	int n, err;
+	int nn, err;
 
 	dbg_tnc_key(c, key, "key");
 	dbg_mnt_key(c, key, "LEB %d:%d", lnum, offs);
 	znode = *zn;
-	n = *nn;
-	if (matches_position(&znode->zbranch[n], lnum, offs))
+	nn = *n;
+	if (matches_position(&znode->zbranch[nn], lnum, offs))
 		return 1;
 
 	/* Look left */
 	while (1) {
-		err = tnc_prev(c, &znode, &n);
+		err = tnc_prev(c, &znode, &nn);
 		if (err == -ENOENT)
 			break;
 		if (err)
 			return err;
-		if (keys_cmp(c, &znode->zbranch[n].key, key))
+		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
-		if (matches_position(&znode->zbranch[n], lnum, offs)) {
+		if (matches_position(&znode->zbranch[nn], lnum, offs)) {
 			dbg_tnc_key(c, key, "collision resolved");
 			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
 				    lnum, offs);
 			*zn = znode;
-			*nn = n;
+			*n = nn;
 			return 1;
 		}
 	}
 
 	/* Look right */
 	znode = *zn;
-	n = *nn;
+	nn = *n;
 	while (1) {
-		err = tnc_next(c, &znode, &n);
+		err = tnc_next(c, &znode, &nn);
 		if (err)
 			return err;
-		okey = &znode->zbranch[n].key;
+		okey = &znode->zbranch[nn].key;
 		if (keys_cmp(c, okey, key))
 			return 0;
-		if (matches_position(&znode->zbranch[n], lnum, offs)) {
+		if (matches_position(&znode->zbranch[nn], lnum, offs)) {
 			dbg_tnc_key(c, key, "collision resolved");
 			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
 				    lnum, offs);
 			*zn = znode;
-			*nn = n;
+			*n = nn;
 			return 1;
 		}
 	}
