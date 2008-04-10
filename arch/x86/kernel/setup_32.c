@@ -46,6 +46,7 @@
 #include <linux/pfn.h>
 #include <linux/pci.h>
 #include <linux/init_ohci1394_dma.h>
+#include <linux/kvm_para.h>
 
 #include <video/edid.h>
 
@@ -819,6 +820,10 @@ void __init setup_arch(char **cmdline_p)
 
 	max_low_pfn = setup_memory();
 
+#ifdef CONFIG_KVM_CLOCK
+	kvmclock_init();
+#endif
+
 #ifdef CONFIG_VMI
 	/*
 	 * Must be after max_low_pfn is determined, and before kernel
@@ -826,6 +831,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	vmi_init();
 #endif
+	kvm_guest_init();
 
 	/*
 	 * NOTE: before this point _nobody_ is allowed to allocate
