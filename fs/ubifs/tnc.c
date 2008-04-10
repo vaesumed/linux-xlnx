@@ -816,6 +816,7 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 		err = ubifs_validate_entry(c, dent);
 		if (err) {
+			lnc_free(zbr);
 			dbg_dump_node(c, dent);
 			goto out_free;
 		}
@@ -1059,6 +1060,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 		ubifs_assert(err == 1);
 		err = ubifs_validate_entry(c, dent);
 		if (err) {
+			lnc_free(zbr);
 			dbg_dump_node(c, dent);
 			goto out;
 		}
