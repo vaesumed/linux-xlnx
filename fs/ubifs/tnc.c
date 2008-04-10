@@ -33,6 +33,24 @@
 #include <linux/crc32.h>
 #include "ubifs.h"
 
+/*
+ * Returned codes of 'matches_name()' and 'fallible_matches_name()' functions.
+ * @NAME_LESS: name corresponding to the first argument is less than second
+ * @NAME_MATCHES: names match
+ * @NAME_GREATER: name corresponding to the second argument is greater than
+ *                first
+ * @NOT_ON_MEDIA: node referred by zbranch does not exist on the media
+ *
+ * These constants were introduce to improve readability. Do not change values
+ * of the first 3, because the above functions assume the current values.
+ */
+enum {
+	NAME_LESS    = 0,
+	NAME_MATCHES = 1,
+	NAME_GREATER = 2,
+	NOT_ON_MEDIA = 3,
+};
+
 /**
  * insert_old_idx - record an index node obsoleted since the last commit start.
  * @c: UBIFS file-system description object
@@ -791,8 +809,9 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
  * @nm: name to match
  *
  * This function checks if xentry/direntry referred by zbranch @zbr matches name
- * @nm. Returns %1 if it does, %0 if not, and a negative error code in case of
- * failure.
+ * @nm. Returns %NAME_MATCHES if it does, %NAME_LESS if the name referred by
+ * @zbr is less than @nm, and %NAME_GREATER if it is greater then @nm. In case
+ * of failure, a negative error code is returned.
  */
 static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			const struct qstr *nm)
@@ -826,9 +845,11 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
-	if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
-		return 1;
-	return 0;
+	if (nlen == nm->len)
+		return memcmp(dent->name, nm->name, nlen) + 1;
+	if (nlen < nm->len)
+		return NAME_LESS;
+	return NAME_GREATER;
 
 out_free:
 	kfree(dent);
@@ -971,9 +992,9 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 	znode = *zn;
 	nn = *n;
 	err = matches_name(c, &znode->zbranch[nn], nm);
-	if (err < 0)
+	if (unlikely(err < 0))
 		return err;
-	if (err == 1)
+	if (err == NAME_MATCHES)
 		return 1;
 
 	/* Look left */
@@ -981,14 +1002,14 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 		err = tnc_prev(c, &znode, &nn);
 		if (err == -ENOENT)
 			break;
-		if (err)
+		if (unlikely(err < 0))
 			return err;
 		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
 		err = matches_name(c, &znode->zbranch[nn], nm);
-		if (err < 0)
+		if (unlikely(err < 0))
 			return err;
-		if (err == 1) {
+		if (err == NAME_MATCHES) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
 			*n = nn;
@@ -1006,9 +1027,9 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			return -ENOENT;
 		err = matches_name(c, &znode->zbranch[nn], nm);
-		if (err < 0)
+		if (unlikely(err < 0))
 			return err;
-		if (err == 1) {
+		if (err == NAME_MATCHES) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
 			*n = nn;
@@ -1029,8 +1050,10 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
  * panic if the direntry/xentry referred by @zbr does not exist on the media.
  *
  * This function checks if xentry/direntry referred by zbranch @zbr matches name
- * @nm. Returns %1 it does, %0 if not, %2 if the referred xentry/direntry does
- * not exist on the media, and a negative error in case of error.
+ * @nm. Returns %NAME_MATCHES it does, %NAME_LESS if the name referred by @zbr
+ * is less than @nm, %NAME_GREATER if it is greater than @nm, and @NOT_ON_MEDIA
+ * if xentry/direntry referred by @zbr does not exist on the media. A negative
+ * error code is returned in case of failure.
  */
 static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 				 const struct qstr *nm)
@@ -1053,7 +1076,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 			goto out;
 		if (err == 0) {
 			/* The node was not present */
-			err = 2;
+			err = NOT_ON_MEDIA;
 			goto out;
 		}
 
@@ -1070,9 +1093,11 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 
 	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
-	if (nlen == nm->len && !memcmp(dent->name, nm->name, nlen))
-		return 1;
-	return 0;
+	if (nlen == nm->len)
+		return memcmp(dent->name, nm->name, nlen) + 1;
+	if (nlen < nm->len)
+		return NAME_LESS;
+	return NAME_GREATER;
 
 out:
 	kfree(dent);
@@ -1106,11 +1131,11 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 	znode = *zn;
 	nn = *n;
 	err = fallible_matches_name(c, &znode->zbranch[nn], nm);
-	if (err < 0)
+	if (unlikely(err < 0))
 		return err;
-	if (err == 1)
+	if (err == NAME_MATCHES)
 		return 1;
-	if (err == 2) {
+	if (err == NOT_ON_MEDIA) {
 		o_znode = znode;
 		o_n = nn;
 	}
@@ -1120,20 +1145,20 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 		err = tnc_prev(c, &znode, &nn);
 		if (err == -ENOENT)
 			break;
-		if (err)
+		if (unlikely(err < 0))
 			return err;
 		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
 		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
-		if (err < 0)
+		if (unlikely(err < 0))
 			return err;
-		if (err == 1) {
+		if (err == NAME_MATCHES) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
 			*n = nn;
 			return 1;
 		}
-		if (err == 2) {
+		if (err == NOT_ON_MEDIA) {
 			o_znode = znode;
 			o_n = nn;
 		}
@@ -1169,15 +1194,15 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			return 1;
 		}
 		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
-		if (err < 0)
+		if (unlikely(err < 0))
 			return err;
-		if (err == 1) {
+		if (err == NAME_MATCHES) {
 			dbg_tnc_key(c, key, "collision resolved");
 			*zn = znode;
 			*n = nn;
 			return 1;
 		}
-		if (err == 2) {
+		if (err == NOT_ON_MEDIA) {
 			o_znode = znode;
 			o_n = nn;
 		}
@@ -1322,7 +1347,7 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 			ubifs_assert(znode == c->zroot.znode);
 			znode = dirty_cow_znode(c, &c->zroot);
 		}
-		if (IS_ERR(znode) || !p)
+		if (unlikely(IS_ERR(znode)) || !p)
 			break;
 		ubifs_assert(path[p - 1] >= 0);
 		ubifs_assert(path[p - 1] < znode->child_cnt);
@@ -1718,7 +1743,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	ubifs_assert(n >= 0);
 
 	err = resolve_collision(c, key, &znode, &n, nm);
-	if (err < 0)
+	if (unlikely(err < 0))
 		goto out;
 	if (err == 0) {
 		err = -ENOENT;
@@ -1907,7 +1932,7 @@ again:
 		ins_clr_old_idx_znode(c, znode);
 
 	zn = kzalloc(c->max_znode_sz, GFP_NOFS);
-	if (!zn)
+	if (unlikely(!zn))
 		return -ENOMEM;
 	zn->parent = zp;
 	zn->level = znode->level;
@@ -2007,7 +2032,7 @@ again:
 	dbg_tnc("creating new zroot at level %d", znode->level + 1);
 
 	zi = kzalloc(c->max_znode_sz, GFP_NOFS);
-	if (!zi)
+	if (unlikely(!zi))
 		return -ENOMEM;
 
 	zi->child_cnt = 2;
@@ -2115,7 +2140,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 		if (zbr->lnum == old_lnum && zbr->offs == old_offs) {
 			lnc_free(zbr);
 			err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
-			if (err)
+			if (unlikely(err))
 				goto out;
 			zbr->lnum = lnum;
 			zbr->offs = offs;
@@ -2134,7 +2159,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 				if (znode->cnext || !ubifs_zn_dirty(znode)) {
 					    znode = dirty_cow_bottom_up(c,
 									znode);
-					    if (IS_ERR(znode)) {
+					    if (unlikely(IS_ERR(znode))) {
 						    err = PTR_ERR(znode);
 						    goto out;
 					    }
@@ -2143,7 +2168,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 				lnc_free(zbr);
 				err = ubifs_add_dirt(c, zbr->lnum,
 						     zbr->len);
-				if (err)
+				if (unlikely(err))
 					goto out;
 				zbr->lnum = lnum;
 				zbr->offs = offs;
@@ -2154,7 +2179,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 
 	if (found == 0) {
 		err = ubifs_add_dirt(c, lnum, len);
-		if (err)
+		if (unlikely(err))
 			goto out;
 	}
 
@@ -2264,7 +2289,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 	lnc_free(zbr);
 
 	err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
-	if (err) {
+	if (unlikely(err)) {
 		dbg_dump_znode(c, znode);
 		return err;
 	}
@@ -2292,7 +2317,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 		atomic_long_dec(&c->dirty_zn_cnt);
 
 		err = insert_old_idx_znode(c, znode);
-		if (err)
+		if (unlikely(err))
 			return err;
 
 		if (znode->cnext) {
@@ -2322,10 +2347,10 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 			zp = znode;
 			zbr = &znode->zbranch[0];
 			znode = get_znode(c, znode, 0);
-			if (IS_ERR(znode))
+			if (unlikely(IS_ERR(znode)))
 				return PTR_ERR(znode);
 			znode = dirty_cow_znode(c, zbr);
-			if (IS_ERR(znode))
+			if (unlikely(IS_ERR(znode)))
 				return PTR_ERR(znode);
 			znode->parent = NULL;
 			znode->iip = 0;
@@ -2483,7 +2508,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 				err = 0;
 				goto out;
 			}
-			if (err < 0)
+			if (unlikely(err < 0))
 				goto out;
 			key = &znode->zbranch[n].key;
 			if (!key_in_range(c, key, from_key, to_key)) {
@@ -2494,7 +2519,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 		/* Ensure the znode is dirtied */
 		if (znode->cnext || !ubifs_zn_dirty(znode)) {
 			    znode = dirty_cow_bottom_up(c, znode);
-			    if (IS_ERR(znode)) {
+			    if (unlikely(IS_ERR(znode))) {
 				    err = PTR_ERR(znode);
 				    goto out;
 			    }
@@ -2520,7 +2545,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 		}
 		/* Now delete the first */
 		err = tnc_delete(c, znode, n);
-		if (err)
+		if (unlikely(err))
 			goto out;
 	}
 out:
@@ -2570,7 +2595,7 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 		nm.name = xent->name;
 		nm.len = le16_to_cpu(xent->nlen);
 		err = ubifs_tnc_remove_nm(c, &key1, &nm);
-		if (err) {
+		if (unlikely(err)) {
 			kfree(xent);
 			return err;
 		}
@@ -2578,7 +2603,7 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
 		lowest_ino_key(c, &key1, xattr_inum);
 		highest_ino_key(c, &key2, xattr_inum);
 		err = ubifs_tnc_remove_range(c, &key1, &key2);
-		if (err) {
+		if (unlikely(err)) {
 			kfree(xent);
 			return err;
 		}
@@ -2666,7 +2691,7 @@ name_not_found:
 	}
 
 	err = tnc_read_node(c, zbr, dent);
-	if (err)
+	if (unlikely(err))
 		goto out;
 
 	if (dent->inum == 0)
