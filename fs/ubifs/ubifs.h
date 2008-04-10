@@ -20,7 +20,7 @@
  *          Adrian Hunter
  */
 
-/* Implementation version 0.4 */
+/* Implementation version 0.5 */
 
 #ifndef __UBIFS_H__
 #define __UBIFS_H__
