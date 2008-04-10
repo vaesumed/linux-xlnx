@@ -321,6 +321,7 @@ static unsigned int vfs_dent_type(uint8_t type)
 static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 {
 	int err, over = 0;
+	struct qstr nm;
 	union ubifs_key key;
 	struct ubifs_dent_node *dent;
 	struct inode *dir = filp->f_path.dentry->d_inode;
@@ -333,15 +334,12 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	saved = filp->private_data;
 	if (saved)
 		if (filp->f_pos != key_hash_flash(c, &saved->key)) {
+			/* The directory was seek'ed */
 			kfree(saved);
-			filp->private_data = NULL;
-			saved = NULL;
+			filp->private_data = saved = NULL;
 		}
 
-	/*
-	 * File positions 0 and 1 correspond to "." and ".." directory
-	 * entries.
-	 */
+	/* File positions 0 and 1 correspond to "." and ".." */
 	if (filp->f_pos == 0) {
 		ubifs_assert(!saved);
 		over = filldir(dirent, ".", 1, 0, dir->i_ino, DT_DIR);
@@ -363,7 +361,8 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		ubifs_assert(!saved);
 
 		lowest_dent_key(c, &key, dir->i_ino);
-		dent = ubifs_tnc_next_ent(c, &key, NULL);
+		nm.name = NULL;
+		dent = ubifs_tnc_next_ent(c, &key, &nm);
 		if (IS_ERR(dent)) {
 			err = PTR_ERR(dent);
 			goto out;
@@ -390,17 +389,16 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
 	while (1) {
 		if (saved) {
-			struct qstr nm;
-
 			key_read(c, &saved->key, &key);
 			nm.name = saved->name;
 			nm.len = le16_to_cpu(saved->nlen);
 			dent = ubifs_tnc_next_ent(c, &key, &nm);
 		} else {
 			dent_key_init_hash(c, &key, dir->i_ino, filp->f_pos);
-			dent = ubifs_tnc_next_ent(c, &key, NULL);
+			nm.name = NULL;
+			dent = ubifs_tnc_next_ent(c, &key, &nm);
 		}
-		if (unlikely(IS_ERR(dent))) {
+		if (IS_ERR(dent)) {
 			err = PTR_ERR(dent);
 			goto out;
 		}
@@ -542,12 +540,13 @@ out_budg:
  */
 static int check_dir_empty(struct ubifs_info *c, struct inode *dir)
 {
+	struct qstr nm = { .name = NULL };
 	struct ubifs_dent_node *dent;
 	union ubifs_key key;
 	int err;
 
 	lowest_dent_key(c, &key, dir->i_ino);
-	dent = ubifs_tnc_next_ent(c, &key, NULL);
+	dent = ubifs_tnc_next_ent(c, &key, &nm);
 	if (IS_ERR(dent)) {
 		err = PTR_ERR(dent);
 		if (err == -ENOENT)
