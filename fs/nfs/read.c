@@ -58,22 +58,19 @@ struct nfs_read_data *nfs_readdata_alloc(unsigned int pagecount)
 	return p;
 }
 
-static void nfs_readdata_rcu_free(struct rcu_head *head)
+static void nfs_readdata_free(struct nfs_read_data *p)
 {
-	struct nfs_read_data *p = container_of(head, struct nfs_read_data, task.u.tk_rcu);
 	if (p && (p->pagevec != &p->page_array[0]))
 		kfree(p->pagevec);
 	mempool_free(p, nfs_rdata_mempool);
 }
 
-static void nfs_readdata_free(struct nfs_read_data *rdata)
-{
-	call_rcu_bh(&rdata->task.u.tk_rcu, nfs_readdata_rcu_free);
-}
-
 void nfs_readdata_release(void *data)
 {
-        nfs_readdata_free(data);
+	struct nfs_read_data *rdata = data;
+
+	put_nfs_open_context(rdata->args.context);
+	nfs_readdata_free(rdata);
 }
 
 static
@@ -174,6 +171,7 @@ static void nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 		.rpc_message = &msg,
 		.callback_ops = call_ops,
 		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC | swap_flags,
 	};
 
@@ -186,7 +184,7 @@ static void nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 	data->args.pgbase = req->wb_pgbase + offset;
 	data->args.pages  = data->pagevec;
 	data->args.count  = count;
-	data->args.context = req->wb_context;
+	data->args.context = get_nfs_open_context(req->wb_context);
 
 	data->res.fattr   = &data->fattr;
 	data->res.count   = count;
@@ -253,7 +251,6 @@ static int nfs_pagein_multi(struct inode *inode, struct list_head *head, unsigne
 		data = nfs_readdata_alloc(1);
 		if (!data)
 			goto out_bad;
-		INIT_LIST_HEAD(&data->pages);
 		list_add(&data->pages, &list);
 		requests++;
 		nbytes -= len;
@@ -300,7 +297,6 @@ static int nfs_pagein_one(struct inode *inode, struct list_head *head, unsigned 
 	if (!data)
 		goto out_bad;
 
-	INIT_LIST_HEAD(&data->pages);
 	pages = data->pagevec;
 	while (!list_empty(head)) {
 		req = nfs_list_entry(head->next);
