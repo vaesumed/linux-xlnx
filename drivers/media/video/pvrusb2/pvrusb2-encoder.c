@@ -480,10 +480,6 @@ int pvr2_encoder_start(struct pvr2_hdw *hdw)
 	/* unmask some interrupts */
 	pvr2_write_register(hdw, 0x0048, 0xbfffffff);
 
-	/* change some GPIO data */
-	pvr2_hdw_gpio_chg_dir(hdw,0xffffffff,0x00000481);
-	pvr2_hdw_gpio_chg_out(hdw,0xffffffff,0x00000000);
-
 	pvr2_encoder_vcmd(hdw,CX2341X_ENC_MUTE_VIDEO,1,
 			  hdw->input_val == PVR2_CVAL_INPUT_RADIO ? 1 : 0);
 
@@ -525,12 +521,6 @@ int pvr2_encoder_stop(struct pvr2_hdw *hdw)
 					   0x01,0,0x13);
 		break;
 	}
-
-	/* change some GPIO data */
-	/* Note: Bit d7 of dir appears to control the LED.  So we shut it
-	   off here. */
-	pvr2_hdw_gpio_chg_dir(hdw,0xffffffff,0x00000401);
-	pvr2_hdw_gpio_chg_out(hdw,0xffffffff,0x00000000);
 
 	return status;
 }
