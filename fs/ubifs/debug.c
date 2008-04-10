@@ -755,7 +755,7 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 	union ubifs_key key;
 	struct ubifs_dent_node *dent, *pdent = NULL;
 	struct qstr nm = { .name = NULL };
-	loff_t size = 0;
+	loff_t size = UBIFS_INO_NODE_SZ;
 
 	if (!S_ISDIR(dir->i_mode))
 		return 0;
@@ -772,9 +772,9 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 			return err;
 		}
 
-		size += CALC_DENT_SIZE(dent->nlen);
 		nm.name = dent->name;
 		nm.len = le16_to_cpu(dent->nlen);
+		size += CALC_DENT_SIZE(nm.len);
 		dbg_kfree(pdent); /* kfree via debug function */
 		pdent = dent;
 		key_read(c, &dent->key, &key);
