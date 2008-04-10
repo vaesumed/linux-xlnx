@@ -3270,8 +3270,13 @@ static int dbg_check_znode(const struct ubifs_info *c,
 		}
 
 		if (znode->iip != n) {
-			err = 8;
-			goto out;
+			/* This may happen only in case of collisions */
+			if (keys_cmp(c, &zp->zbranch[n].key,
+				     &zp->zbranch[znode->iip].key)) {
+				err = 8;
+				goto out;
+			}
+			n = znode->iip;
 		}
 
 		/*
