@@ -297,6 +297,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	ino->ctime_nsec  = 0;
 	ino->mtime_nsec  = 0;
 	ino->mode = cpu_to_le32(S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
+	ino->size = cpu_to_le64(UBIFS_INO_NODE_SZ);
 
 	/* Set compression enabled by default */
 	ino->flags = cpu_to_le32(UBIFS_COMPR_FL);
