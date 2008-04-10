@@ -987,8 +987,7 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 	int nn, err;
 
-	dbg_tnc_key(c, key, "key");
-
+	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
 	znode = *zn;
 	nn = *n;
 	err = matches_name(c, &znode->zbranch[nn], nm);
@@ -1127,7 +1126,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 	union ubifs_key *okey;
 	int nn, o_n = 0, err;
 
-	dbg_tnc_key(c, key, "key");
+	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
 	znode = *zn;
 	nn = *n;
 	err = fallible_matches_name(c, &znode->zbranch[nn], nm);
@@ -1163,6 +1162,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			o_n = nn;
 		}
 	}
+
 	/* Look right */
 	znode = *zn;
 	nn = *n;
@@ -1170,10 +1170,10 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 		err = tnc_next(c, &znode, &nn);
 		if (err == -ENOENT && o_znode) {
 			dbg_tnc_key(c, key, "collision resolved by default");
-			dbg_gc_key(c, key, "dangling match LEB %d:%d len %d ",
-				   o_znode->zbranch[o_n].lnum,
-				   o_znode->zbranch[o_n].offs,
-				   o_znode->zbranch[o_n].len);
+			dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
+				    o_znode->zbranch[o_n].lnum,
+				    o_znode->zbranch[o_n].offs,
+				    o_znode->zbranch[o_n].len);
 			*zn = o_znode;
 			*n = o_n;
 			return 1;
@@ -1185,10 +1185,10 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			if (!o_znode)
 				return -ENOENT;
 			dbg_tnc_key(c, key, "collision resolved by default");
-			dbg_gc_key(c, key, "dangling match LEB %d:%d len %d ",
-				   o_znode->zbranch[o_n].lnum,
-				   o_znode->zbranch[o_n].offs,
-				   o_znode->zbranch[o_n].len);
+			dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
+				    o_znode->zbranch[o_n].lnum,
+				    o_znode->zbranch[o_n].offs,
+				    o_znode->zbranch[o_n].len);
 			*zn = o_znode;
 			*n = o_n;
 			return 1;
@@ -1207,6 +1207,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			o_n = nn;
 		}
 	}
+
 	return -EINVAL;
 }
 
@@ -1416,9 +1417,6 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 			*n = 0;
 		zbr = &znode->zbranch[*n];
 
-		dbg_tnc_key(c, &zbr->key, "at lvl %d, next zbr %d, key",
-			    znode->level, *n);
-
 		if (zbr->znode) {
 			znode->time = time;
 			znode = zbr->znode;
@@ -1432,8 +1430,10 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 	}
 
 	*zn = znode;
-	if (exact || !is_hash_key(c, key) || *n != -1)
+	if (exact || !is_hash_key(c, key) || *n != -1) {
+		dbg_tnc("found %d, lvl %d, n %d", exact, znode->level, *n);
 		return exact;
+	}
 
 	/*
 	 * Here is a tricky palace. We have not found the key and this is a
@@ -1480,16 +1480,19 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 	 */
 	err = tnc_prev(c, &znode, n);
 	if (err == -ENOENT) {
+		dbg_tnc("found 0, lvl %d, n -1", znode->level);
 		*n = -1;
 		return 0;
 	}
 	if (unlikely(err < 0))
 		return err;
 	if (keys_cmp(c, key, &znode->zbranch[*n].key)) {
+		dbg_tnc("found 0, lvl %d, n -1", znode->level);
 		*n = -1;
 		return 0;
 	}
 
+	dbg_tnc("found 1, lvl %d, n %d", znode->level, *n);
 	*zn = znode;
 	return 1;
 }
@@ -1560,9 +1563,6 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 			*n = 0;
 		zbr = &znode->zbranch[*n];
 
-		dbg_tnc_key(c, &zbr->key, "at lvl %d, next zbr %d, key",
-			    znode->level, *n);
-
 		if (zbr->znode) {
 			znode->time = time;
 			znode = dirty_cow_znode(c, zbr);
@@ -1581,8 +1581,10 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 	}
 
 	*zn = znode;
-	if (exact || !is_hash_key(c, key) || *n != -1)
+	if (exact || !is_hash_key(c, key) || *n != -1) {
+		dbg_tnc("found %d, lvl %d, n %d", exact, znode->level, *n);
 		return exact;
+	}
 
 	/*
 	 * See huge comment at 'lookup_level0_dirty()' what is the rest of the
@@ -1591,12 +1593,14 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 	err = tnc_prev(c, &znode, n);
 	if (err == -ENOENT) {
 		*n = -1;
+		dbg_tnc("found 0, lvl %d, n -1", znode->level);
 		return 0;
 	}
 	if (unlikely(err < 0))
 		return err;
 	if (keys_cmp(c, key, &znode->zbranch[*n].key)) {
 		*n = -1;
+		dbg_tnc("found 0, lvl %d, n -1", znode->level);
 		return 0;
 	}
 
@@ -1605,6 +1609,8 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 		if (IS_ERR(znode))
 			return PTR_ERR(znode);
 	}
+
+	dbg_tnc("found 1, lvl %d, n %d", znode->level, *n);
 	*zn = znode;
 	return 1;
 }
@@ -2081,6 +2087,7 @@ int ubifs_tnc_add(struct ubifs_info *c, const union ubifs_key *key, int lnum,
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
+	dbg_tnc_key(c, key, "%d:%d, len %d, key", lnum, offs, len);
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (!found) {
 		struct ubifs_zbranch zbr;
@@ -2209,6 +2216,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
+	dbg_tnc_key(c, key, "%.*s, key", nm->len, nm->name);
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (found < 0) {
 		err = found;
@@ -2394,6 +2402,7 @@ int ubifs_tnc_remove(struct ubifs_info *c, const union ubifs_key *key)
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
+	dbg_tnc_key(c, key, "key");
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (found == 1)
 		err = tnc_delete(c, znode, n);
@@ -2420,6 +2429,7 @@ int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
+	dbg_tnc_key(c, key, "%.*s, key", nm->len, nm->name);
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (found < 0) {
 		err = found;
