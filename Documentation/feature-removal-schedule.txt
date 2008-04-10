@@ -211,18 +211,6 @@ Who:    Stephen Hemminger <shemminger@linux-foundation.org>
 
 ---------------------------
 
-What:	i386/x86_64 bzImage symlinks
-When:	April 2008
-
-Why:	The i386/x86_64 merge provides a symlink to the old bzImage
-	location so not yet updated user space tools, e.g. package
-	scripts, do not break.
-Who:	Thomas Gleixner <tglx@linutronix.de>
-
----------------------------
-
----------------------------
-
 What:	i2c-i810, i2c-prosavage and i2c-savage4
 When:	May 2008
 Why:	These drivers are superseded by i810fb, intelfb and savagefb.
