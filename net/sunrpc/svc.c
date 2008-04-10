@@ -584,7 +584,7 @@ __svc_create_thread(svc_thread_fn func, struct svc_serv *serv,
 	struct svc_rqst	*rqstp;
 	int		error = -ENOMEM;
 	int		have_oldmask = 0;
-	cpumask_t	oldmask;
+	cpumask_t	uninitialized_var(oldmask);
 
 	rqstp = svc_prepare_thread(serv, pool);
 	if (IS_ERR(rqstp)) {
@@ -611,16 +611,6 @@ out_thread:
 	svc_exit_thread(rqstp);
 	goto out;
 }
-
-/*
- * Create a thread in the default pool.  Caller must hold BKL.
- */
-int
-svc_create_thread(svc_thread_fn func, struct svc_serv *serv)
-{
-	return __svc_create_thread(func, serv, &serv->sv_pools[0]);
-}
-EXPORT_SYMBOL(svc_create_thread);
 
 /*
  * Choose a pool in which to create a new thread, for svc_set_num_threads
@@ -915,8 +905,7 @@ svc_process(struct svc_rqst *rqstp)
 	case SVC_OK:
 		break;
 	case SVC_GARBAGE:
-		rpc_stat = rpc_garbage_args;
-		goto err_bad;
+		goto err_garbage;
 	case SVC_SYSERR:
 		rpc_stat = rpc_system_err;
 		goto err_bad;
