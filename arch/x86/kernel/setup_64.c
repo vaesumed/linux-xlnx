@@ -67,6 +67,7 @@
 #include <asm/mce.h>
 #include <asm/ds.h>
 #include <asm/topology.h>
+#include <asm/trampoline.h>
 
 #include <mach_apic.h>
 #ifdef CONFIG_PARAVIRT
