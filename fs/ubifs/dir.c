@@ -106,6 +106,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	case S_IFDIR:
 		inode->i_op  = &ubifs_dir_inode_operations;
 		inode->i_fop = &ubifs_dir_operations;
+		inode->i_size = UBIFS_INO_NODE_SZ;
 		break;
 	case S_IFLNK:
 		inode->i_op = &ubifs_symlink_inode_operations;
