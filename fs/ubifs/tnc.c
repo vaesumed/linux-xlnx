@@ -2622,8 +2622,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	struct ubifs_zbranch *zbr;
 	union ubifs_key *dkey;
 
-	dbg_tnc_key(c, key, "%s",
-		    ((nm && nm->name) ? (char *)nm->name : "(lowest)"));
+	dbg_tnc_key(c, key, "%s", nm->name ? (char *)nm->name : "(lowest)");
 	ubifs_assert(type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY);
 
 	mutex_lock(&c->tnc_mutex);
@@ -2634,7 +2633,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	}
 
 	/* Handle collisions */
-	if (found && nm && nm->name) {
+	if (found && nm->name) {
 		err = resolve_collision(c, key, &znode, &n, nm);
 		if (err < 0)
 			goto out;
@@ -2673,6 +2672,7 @@ name_not_found:
 		goto out;
 
 	if (dent->inum == 0)
+		/* This is a deletion entry, skip it */
 		goto again;
 
 	mutex_unlock(&c->tnc_mutex);
