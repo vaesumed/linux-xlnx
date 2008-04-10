@@ -1793,12 +1793,6 @@ static void correct_parent_keys(const struct ubifs_info *c,
 	key1 = &znode->parent->zbranch[0].key;
 
 	while (keys_cmp(c, key, key1) < 0) {
-		/*
-		 * TODO: we want to get rid of this function. But for now
-		 * checki that it never runs.
-		 */
-		ubifs_warn("this is not supposed to happen!");
-		dump_stack();
 		key_copy(c, key, key1);
 		znode = znode->parent;
 		if (!znode->parent || znode->iip)
