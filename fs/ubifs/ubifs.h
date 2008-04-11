@@ -1342,7 +1342,6 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
 					   const struct qstr *nm);
 void ubifs_tnc_close(struct ubifs_info *c);
-long ubifs_destroy_tnc_subtree(struct ubifs_znode *zr);
 int ubifs_tnc_has_node(struct ubifs_info *c, union ubifs_key *key, int level,
 		       int lnum, int offs, int is_idx);
 int ubifs_dirty_idx_node(struct ubifs_info *c, union ubifs_key *key, int level,
@@ -1355,14 +1354,22 @@ int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
 		       int lnum, int offs);
 int insert_old_idx_znode(struct ubifs_info *c, struct ubifs_znode *znode);
 
+/* tnc_misc.c */
+struct ubifs_znode *ubifs_tnc_levelorder_next(struct ubifs_znode *zr,
+					      struct ubifs_znode *znode);
+int ubifs_search_zbranch(const struct ubifs_info *c,
+			 const struct ubifs_znode *znode,
+			 const union ubifs_key *key, int *n);
+struct ubifs_znode *ubifs_tnc_postorder_first(struct ubifs_znode *znode);
+struct ubifs_znode *ubifs_tnc_postorder_next(struct ubifs_znode *znode);
+long ubifs_destroy_tnc_subtree(struct ubifs_znode *zr);
+
 /* tnc_commit.c */
 int ubifs_tnc_start_commit(struct ubifs_info *c, struct ubifs_zbranch *zroot);
 int ubifs_tnc_end_commit(struct ubifs_info *c);
 
 /* shrinker.c */
 int ubifs_shrinker(int nr_to_scan, gfp_t gfp_mask);
-struct ubifs_znode *ubifs_tnc_levelorder_next(struct ubifs_znode *zr,
-					      struct ubifs_znode *znode);
 
 /* commit.c */
 int ubifs_bg_thread(void *info);
