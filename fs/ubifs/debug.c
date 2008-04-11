@@ -1038,6 +1038,45 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_CHK_TNC */
 
+#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_IDX_SZ
+
+static int dbg_add_size(struct ubifs_info *c, struct ubifs_znode *znode,
+			void *priv)
+{
+	long long *idx_size = priv;
+	int add;
+
+	add = ubifs_idx_node_sz(c, znode->child_cnt);
+	add = ALIGN(add, 8);
+	*idx_size += add;
+	return 0;
+}
+
+int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
+{
+	int err;
+	long long calc = 0;
+
+
+	err = dbg_walk_index(c, NULL, dbg_add_size, &calc);
+	if (err) {
+		ubifs_err("error %d while walking the index", err);
+		return err;
+	}
+
+	if (calc != idx_size) {
+		ubifs_err("index size check failed");
+		ubifs_err("calculated size is %lld, should be %lld",
+			  calc, idx_size);
+		dump_stack();
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_IDX_SZ */
+
 #ifdef  CONFIG_UBIFS_FS_DEBUG_FORCE_IN_THE_GAPS
 
 static int invocation_cnt;
