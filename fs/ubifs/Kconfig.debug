@@ -104,7 +104,9 @@ config UBIFS_FS_DEBUG_CHK_LPROPS
 	depends on UBIFS_FS_DEBUG
 	help
 	  This option enables a function which runs during journal commit and
-	  checks that the dirty and free space is correct for every LEB.
+	  checks that the dirty and free space is correct for every LEB. Note,
+	  this option makes UBIFS scan whole media before each commit which is
+	  very slow.
 
 config UBIFS_FS_DEBUG_CHK_TNC
 	bool "Check Tree Node Cache (TNC)"
@@ -146,6 +148,18 @@ config UBIFS_FS_DEBUG_CHK_OTHER
 	  affect file-system performance too much.
 
 endmenu
+
+config UBIFS_FS_DEBUG_FORCE_IN_THE_GAPS
+	bool "Force in-the-gaps commit method"
+	default n
+	depends on UBIFS_FS_DEBUG
+	help
+	  This option makes UBIFS use the in-the-gap commit method much more
+	  often than it is normally used (normally it is used only as fall-back
+	  method when there is no space to do the "normal" commit method). It
+	  is useful to run tests with this option enabled from time to time
+	  because it may reveal UBIFS bugs which would otherwise be really
+	  difficult to hit.
 
 config UBIFS_FS_DEBUG_TEST_RCVRY
 	bool "Simulate random device removal (recovery testing)"

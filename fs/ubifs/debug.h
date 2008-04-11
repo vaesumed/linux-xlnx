@@ -293,6 +293,14 @@ int dbg_check_lpt_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
 #define dbg_check_lpt_nodes(c, cnode, row, col) 0
 #endif
 
+#ifdef  CONFIG_UBIFS_FS_DEBUG_FORCE_IN_THE_GAPS
+#define force_in_the_gaps_enabled 1
+int dbg_force_in_the_gaps(void);
+#else
+#define force_in_the_gaps_enabled 0
+#define dbg_force_in_the_gaps() 0
+#endif
+
 #ifdef CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY
 
 void dbg_failure_mode_registration(struct ubifs_info *c);
