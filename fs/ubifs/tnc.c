@@ -1436,7 +1436,7 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 	}
 
 	/*
-	 * Here is a tricky palace. We have not found the key and this is a
+	 * Here is a tricky place. We have not found the key and this is a
 	 * "hashed" key, which may collide. The rest of the code deals with
 	 * situations like this:
 	 *
@@ -1444,7 +1444,7 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 	 *                  /       \
 	 *          | 3 | 5 |      | 6 | 7 | (x)
 	 *
-	 * Or more complex example:
+	 * Or more a complex example:
 	 *
 	 *                | 1 | 5 |
 	 *                /       \
@@ -1460,21 +1460,21 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 	 * Note, this whole situation is possible because we allow to have
 	 * elements which are equivalent to the next key in the parent in the
 	 * children of current znode. For example, this happens if we split a
-	 * znode like this: | 3 | 5 | 5 | 6 | 7 |which results in something
+	 * znode like this: | 3 | 5 | 5 | 6 | 7 |, which results in something
 	 * like this:
 	 *                      | 3 | 5 |
 	 *                       /     \
 	 *                | 3 | 5 |   | 5 | 6 | 7 |
 	 *                              ^
-	 * Which becomes what is at the first "picture" after key "5" marked
+	 * And this becomes what is at the first "picture" after key "5" marked
 	 * with "^" is removed. What could be done is we could prohibit
 	 * splitting in the middle of the colliding sequence. Also, when
 	 * removing the leftmost key, we would have to correct the key of the
-	 * parent node, which introduces additional complications. Namely, if
-	 * we change the the leftmost key of the parent znode, the garbage
-	 * collector will be unable to find it (it is doing this when GC'ing an
-	 * indexing LEB). Although we already an additional RB-tree where we
-	 * save such changed znodes (see 'ins_clr_old_idx_znode()') until
+	 * parent node, which would introduce additional complications. Namely,
+	 * if we changed the the leftmost key of the parent znode, the garbage
+	 * collector would be unable to find it (GC is doing this when GC'ing
+	 * indexing LEBs). Although we already have an additional RB-tree where
+	 * we save such changed znodes (see 'ins_clr_old_idx_znode()') until
 	 * after the commit. But anyway, this does not look easy to implement
 	 * so we did not try this.
 	 */
@@ -3033,16 +3033,13 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
  * @lnum: LEB number of index node
  * @offs: offset of index node
  *
- * This function returns %0 if the index node is not referred to in the TNC.
- * This function returns %1 if the index node is referred to in the TNC and the
- * corresponding znode is dirty.
- * This function returns %2 if an index node is referred to in the TNC and the
- * corresponding znode is clean.
- * Otherwise, this function returns a negative error code.
+ * This function returns %0 if the index node is not referred to in the TNC, %1
+ * if the index node is referred to in the TNC and the corresponding znode is
+ * dirty, %2 if an index node is referred to in the TNC and the corresponding
+ * znode is clean, and a negative error code in case of failure.
  *
- * For index nodes, the key is the key of the first child.
- *
- * This function relies on the fact that 0:0 is never a valid LEB number and
+ * Note, the @key argument has to be the key of the first child. Also note,
+ * this function relies on the fact that 0:0 is never a valid LEB number and
  * offset for a main-area node.
  */
 int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
@@ -3055,27 +3052,25 @@ int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
 		return 0;
 	if (IS_ERR(znode))
 		return PTR_ERR(znode);
-	if (ubifs_zn_dirty(znode))
-		return 1;
-	else
-		return 2;
+
+	return ubifs_zn_dirty(znode) ? 1 : 2;
 }
 
 /**
- * is_node_clean - determine if a node is clean.
+ * is_leaf_node_in_tnc - determine if a non-indexing not is in the TNC.
  * @c: UBIFS file-system description object
  * @key: node key
  * @lnum: node LEB number
  * @offs: node offset
  *
- * This function returns %1 if a node is referred to in the TNC and %0
- * if it is not.  Otherwise a negative error code is returned.
+ * This function returns %1 if the node is referred to in the TNC, %0 if it is
+ * not, and a negative error code in case of failure.
  *
- * This function relies on the fact that 0:0 is never a valid LEB number and
- * offset for a main-area node.
+ * Note, this function relies on the fact that 0:0 is never a valid LEB number
+ * and offset for a main-area node.
  */
-static int is_node_clean(struct ubifs_info *c, union ubifs_key *key,
-			     int lnum, int offs)
+static int is_leaf_node_in_tnc(struct ubifs_info *c, union ubifs_key *key,
+			       int lnum, int offs)
 {
 	struct ubifs_zbranch *zbr;
 	struct ubifs_znode *znode, *zn;
@@ -3139,35 +3134,35 @@ static int is_node_clean(struct ubifs_info *c, union ubifs_key *key,
  * @offs: node offset
  * @is_idx: non-zero if the node is an index node
  *
- * This function returns %1 if a node is in the TNC and %0 if it is not.
- * Otherwise a negative error code is returned.
- * For index nodes, the key is the key of the first child.
- * An index node is considered to be in the TNC only if the corresponding znode
- * is clean or has not been loaded.
+ * This function returns %1 if the node is in the TNC, %0 if it is not, and a
+ * negative error code in case of failure. For index nodes, @key has to be the
+ * key of the first child. An index node is considered to be in the TNC only if
+ * the corresponding znode is clean or has not been loaded.
  */
 int ubifs_tnc_has_node(struct ubifs_info *c, union ubifs_key *key, int level,
 		       int lnum, int offs, int is_idx)
 {
-	int ret;
+	int err;
 
 	mutex_lock(&c->tnc_mutex);
 	if (is_idx) {
-		ret = is_idx_node_in_tnc(c, key, level, lnum, offs);
-		if (ret < 0)
-			goto out; /* Error code */
-		if (ret == 1)
+		err = is_idx_node_in_tnc(c, key, level, lnum, offs);
+		if (err < 0)
+			goto out_unlock;
+		if (err == 1)
 			/* The index node was found but it was dirty */
-			ret = 0;
-		else if (ret == 2)
+			err = 0;
+		else if (err == 2)
 			/* The index node was found and it was clean */
-			ret = 1;
-		else if (ret != 0)
-			BUG();
+			err = 1;
+		else
+			BUG_ON(err != 0);
 	} else
-		ret = is_node_clean(c, key, lnum, offs);
-out:
+		err = is_leaf_node_in_tnc(c, key, lnum, offs);
+
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
-	return ret;
+	return err;
 }
 
 /**
@@ -3179,14 +3174,10 @@ out:
  * @offs: index node offset
  *
  * This function loads and dirties an index node so that it can be garbage
- * collected.
- *
- * For index nodes, the key is the key of the first child.
- *
- * This function relies on the fact that 0:0 is never a valid LEB number and
- * offset for a main-area node.
- *
- * This function returns %0 on success and a negative error code on failure.
+ * collected. The @key argument has to be the key of the first child. This
+ * function relies on the fact that 0:0 is never a valid LEB number and offset
+ * for a main-area node. Returns %0 on success and a negative error code on
+ * failure.
  */
 int ubifs_dirty_idx_node(struct ubifs_info *c, union ubifs_key *key, int level,
 			 int lnum, int offs)
@@ -3197,17 +3188,18 @@ int ubifs_dirty_idx_node(struct ubifs_info *c, union ubifs_key *key, int level,
 	mutex_lock(&c->tnc_mutex);
 	znode = lookup_znode(c, key, level, lnum, offs);
 	if (!znode)
-		goto out;
+		goto out_unlock;
 	if (IS_ERR(znode)) {
 		err = PTR_ERR(znode);
-		goto out;
+		goto out_unlock;
 	}
 	znode = dirty_cow_bottom_up(c, znode);
 	if (IS_ERR(znode)) {
 		err = PTR_ERR(znode);
-		goto out;
+		goto out_unlock;
 	}
-out:
+
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return err;
 }
@@ -3519,8 +3511,8 @@ static int dbg_walk_sub_tree(struct ubifs_info *c, struct ubifs_znode *znode,
  * stack space.
  *
  * It would be better if this function removed every znode it pulled to into
- * the TNC, so that the behaviour more closely matched the non-debugging
- * behaviour.
+ * the TNC, so that the behavior more closely matched the non-debugging
+ * behavior.
  */
 int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 		   dbg_znode_callback znode_cb, void *priv)
