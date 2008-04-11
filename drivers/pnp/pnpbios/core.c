@@ -69,6 +69,7 @@
 #include <asm/system.h>
 #include <asm/byteorder.h>
 
+#include "../base.h"
 #include "pnpbios.h"
 
 /*
@@ -203,8 +204,7 @@ static int pnp_dock_thread(void *unused)
 
 #endif				/* CONFIG_HOTPLUG */
 
-static int pnpbios_get_resources(struct pnp_dev *dev,
-				 struct pnp_resource_table *res)
+static int pnpbios_get_resources(struct pnp_dev *dev)
 {
 	u8 nodenum = dev->number;
 	struct pnp_bios_node *node;
@@ -219,14 +219,13 @@ static int pnpbios_get_resources(struct pnp_dev *dev,
 		kfree(node);
 		return -ENODEV;
 	}
-	pnpbios_read_resources_from_node(res, node);
+	pnpbios_read_resources_from_node(dev, node);
 	dev->active = pnp_is_active(dev);
 	kfree(node);
 	return 0;
 }
 
-static int pnpbios_set_resources(struct pnp_dev *dev,
-				 struct pnp_resource_table *res)
+static int pnpbios_set_resources(struct pnp_dev *dev)
 {
 	u8 nodenum = dev->number;
 	struct pnp_bios_node *node;
@@ -242,7 +241,7 @@ static int pnpbios_set_resources(struct pnp_dev *dev,
 		kfree(node);
 		return -ENODEV;
 	}
-	if (pnpbios_write_resources_to_node(res, node) < 0) {
+	if (pnpbios_write_resources_to_node(dev, node) < 0) {
 		kfree(node);
 		return -1;
 	}
@@ -317,7 +316,6 @@ static int __init insert_device(struct pnp_bios_node *node)
 {
 	struct list_head *pos;
 	struct pnp_dev *dev;
-	struct pnp_id *dev_id;
 	char id[8];
 
 	/* check if the device is already added */
@@ -327,20 +325,12 @@ static int __init insert_device(struct pnp_bios_node *node)
 			return -1;
 	}
 
-	dev = kzalloc(sizeof(struct pnp_dev), GFP_KERNEL);
-	if (!dev)
-		return -1;
-
-	dev_id = kzalloc(sizeof(struct pnp_id), GFP_KERNEL);
-	if (!dev_id) {
-		kfree(dev);
-		return -1;
-	}
-
-	dev->number = node->handle;
 	pnpid32_to_pnpid(node->eisa_id, id);
-	memcpy(dev_id->id, id, 7);
-	pnp_add_id(dev_id, dev);
+
+	dev = pnp_alloc_dev(&pnpbios_protocol, node->handle, id);
+	if (!dev)
+		return -ENOMEM;
+
 	pnpbios_parse_data_stream(dev, node);
 	dev->active = pnp_is_active(dev);
 	dev->flags = node->flags;
@@ -353,11 +343,10 @@ static int __init insert_device(struct pnp_bios_node *node)
 		dev->capabilities |= PNP_WRITE;
 	if (dev->flags & PNPBIOS_REMOVABLE)
 		dev->capabilities |= PNP_REMOVABLE;
-	dev->protocol = &pnpbios_protocol;
 
 	/* clear out the damaged flags */
 	if (!dev->active)
-		pnp_init_resource_table(&dev->res);
+		pnp_init_resources(dev);
 
 	pnp_add_device(dev);
 	pnpbios_interface_attach_device(node);
