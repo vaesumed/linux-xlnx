@@ -862,11 +862,16 @@ static int dbg_check_znode(const struct ubifs_info *c,
 			goto out;
 		}
 
+		if (znode->iip >= zp->child_cnt) {
+			err = 8;
+			goto out;
+		}
+
 		if (znode->iip != n) {
 			/* This may happen only in case of collisions */
 			if (keys_cmp(c, &zp->zbranch[n].key,
 				     &zp->zbranch[znode->iip].key)) {
-				err = 8;
+				err = 9;
 				goto out;
 			}
 			n = znode->iip;
@@ -879,7 +884,7 @@ static int dbg_check_znode(const struct ubifs_info *c,
 		min = &zbr->key;
 		cmp = keys_cmp(c, min, &znode->zbranch[0].key);
 		if (cmp == 1) {
-			err = 9;
+			err = 10;
 			goto out;
 		}
 
@@ -894,14 +899,14 @@ static int dbg_check_znode(const struct ubifs_info *c,
 			cmp = keys_cmp(c, max,
 				&znode->zbranch[znode->child_cnt - 1].key);
 			if (cmp == -1) {
-				err = 10;
+				err = 11;
 				goto out;
 			}
 		}
 	} else {
 		/* This may only be root znode */
 		if (zbr != &c->zroot) {
-			err = 11;
+			err = 12;
 			goto out;
 		}
 	}
@@ -914,13 +919,13 @@ static int dbg_check_znode(const struct ubifs_info *c,
 		cmp = keys_cmp(c, &znode->zbranch[n].key,
 			       &znode->zbranch[n - 1].key);
 		if (cmp < 0) {
-			err = 12;
+			err = 13;
 			goto out;
 		}
 		if (cmp == 0)
 			/* This can only be keys with colliding hash */
 			if (!is_hash_key(c, &znode->zbranch[n].key)) {
-				err = 13;
+				err = 14;
 				goto out;
 			}
 	}
@@ -929,31 +934,31 @@ static int dbg_check_znode(const struct ubifs_info *c,
 		if (znode->zbranch[n].znode == NULL &&
 		    (znode->zbranch[n].lnum == 0 ||
 		     znode->zbranch[n].len == 0)) {
-			err = 14;
+			err = 15;
 			goto out;
 		}
 
 		if (znode->zbranch[n].lnum != 0 &&
 		    znode->zbranch[n].len == 0) {
-			err = 15;
-			goto out;
-		}
-
-		if (znode->zbranch[n].lnum == 0 &&
-		    znode->zbranch[n].len != 0) {
 			err = 16;
 			goto out;
 		}
 
 		if (znode->zbranch[n].lnum == 0 &&
-		    znode->zbranch[n].offs != 0) {
+		    znode->zbranch[n].len != 0) {
 			err = 17;
+			goto out;
+		}
+
+		if (znode->zbranch[n].lnum == 0 &&
+		    znode->zbranch[n].offs != 0) {
+			err = 18;
 			goto out;
 		}
 
 		if (znode->level != 0 && znode->zbranch[n].znode)
 			if (znode->zbranch[n].znode->parent != znode) {
-				err = 18;
+				err = 19;
 				goto out;
 			}
 	}
