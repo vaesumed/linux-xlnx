@@ -21,8 +21,9 @@
 
 extern void fpu_init(void);
 extern void mxcsr_feature_mask_init(void);
-extern void init_fpu(struct task_struct *child);
+extern int init_fpu(struct task_struct *child);
 extern asmlinkage void math_state_restore(void);
+extern void init_thread_xstate(void);
 
 extern user_regset_active_fn fpregs_active, xfpregs_active;
 extern user_regset_get_fn fpregs_get, xfpregs_get, fpregs_soft_get;
@@ -41,7 +42,7 @@ static inline void tolerant_fwait(void)
 {
 	asm volatile("1: fwait\n"
 		     "2:\n"
-		     _ASM_EXTABLE(1b,2b));
+		     _ASM_EXTABLE(1b, 2b));
 }
 
 static inline int restore_fpu_checking(struct i387_fxsave_struct *fx)
@@ -54,7 +55,7 @@ static inline int restore_fpu_checking(struct i387_fxsave_struct *fx)
 		     "3:  movl $-1,%[err]\n"
 		     "    jmp  2b\n"
 		     ".previous\n"
-		     _ASM_EXTABLE(1b,3b)
+		     _ASM_EXTABLE(1b, 3b)
 		     : [err] "=r" (err)
 #if 0 /* See comment in __save_init_fpu() below. */
 		     : [fx] "r" (fx), "m" (*fx), "0" (0));
@@ -76,11 +77,11 @@ static inline int restore_fpu_checking(struct i387_fxsave_struct *fx)
 static inline void clear_fpu_state(struct i387_fxsave_struct *fx)
 {
 	if (unlikely(fx->swd & X87_FSW_ES))
-		 asm volatile("fnclex");
+		asm volatile("fnclex");
 	alternative_input(ASM_NOP8 ASM_NOP2,
-		     "    emms\n"		/* clear stack tags */
-		     "    fildl %%gs:0",	/* load to clear state */
-		     X86_FEATURE_FXSAVE_LEAK);
+			  "    emms\n"		/* clear stack tags */
+			  "    fildl %%gs:0",	/* load to clear state */
+			  X86_FEATURE_FXSAVE_LEAK);
 }
 
 static inline int save_i387_checking(struct i387_fxsave_struct __user *fx)
@@ -93,14 +94,15 @@ static inline int save_i387_checking(struct i387_fxsave_struct __user *fx)
 		     "3:  movl $-1,%[err]\n"
 		     "    jmp  2b\n"
 		     ".previous\n"
-		     _ASM_EXTABLE(1b,3b)
+		     _ASM_EXTABLE(1b, 3b)
 		     : [err] "=r" (err), "=m" (*fx)
 #if 0 /* See comment in __fxsave_clear() below. */
 		     : [fx] "r" (fx), "0" (0));
 #else
 		     : [fx] "cdaSDb" (fx), "0" (0));
 #endif
-	if (unlikely(err) && __clear_user(fx, sizeof(struct i387_fxsave_struct)))
+	if (unlikely(err) &&
+	    __clear_user(fx, sizeof(struct i387_fxsave_struct)))
 		err = -EFAULT;
 	/* No need to clear here because the caller clears USED_MATH */
 	return err;
@@ -115,25 +117,23 @@ static inline void __save_init_fpu(struct task_struct *tsk)
 #if 0
 	/* Using "fxsaveq %0" would be the ideal choice, but is only supported
 	   starting with gas 2.16. */
-	__asm__ __volatile__("fxsaveq %0"
-			     : "=m" (tsk->thread.i387.fxsave));
+	asm volatile("fxsaveq %0"
+		     : "=m" (tsk->thread.xstate->fxsave));
 #elif 0
 	/* Using, as a workaround, the properly prefixed form below isn't
 	   accepted by any binutils version so far released, complaining that
 	   the same type of prefix is used twice if an extended register is
 	   needed for addressing (fix submitted to mainline 2005-11-21). */
-	__asm__ __volatile__("rex64/fxsave %0"
-			     : "=m" (tsk->thread.i387.fxsave));
+	asm volatile("rex64/fxsave %0"
+		     : "=m" (tsk->thread.xstate->fxsave));
 #else
 	/* This, however, we can work around by forcing the compiler to select
 	   an addressing mode that doesn't require extended registers. */
-	__asm__ __volatile__("rex64/fxsave %P2(%1)"
-			     : "=m" (tsk->thread.i387.fxsave)
-			     : "cdaSDb" (tsk),
-				"i" (offsetof(__typeof__(*tsk),
-					      thread.i387.fxsave)));
+	asm volatile("rex64/fxsave (%1)"
+		     : "=m" (tsk->thread.xstate->fxsave)
+		     : "cdaSDb" (&tsk->thread.xstate->fxsave));
 #endif
-	clear_fpu_state(&tsk->thread.i387.fxsave);
+	clear_fpu_state(&tsk->thread.xstate->fxsave);
 	task_thread_info(tsk)->status &= ~TS_USEDFPU;
 }
 
@@ -147,7 +147,7 @@ static inline int save_i387(struct _fpstate __user *buf)
 	int err = 0;
 
 	BUILD_BUG_ON(sizeof(struct user_i387_struct) !=
-			sizeof(tsk->thread.i387.fxsave));
+		     sizeof(tsk->thread.xstate->fxsave));
 
 	if ((unsigned long)buf % 16)
 		printk("save_i387: bad fpstate %p\n", buf);
@@ -156,12 +156,14 @@ static inline int save_i387(struct _fpstate __user *buf)
 		return 0;
 	clear_used_math(); /* trigger finit */
 	if (task_thread_info(tsk)->status & TS_USEDFPU) {
-		err = save_i387_checking((struct i387_fxsave_struct __user *)buf);
-		if (err) return err;
+		err = save_i387_checking((struct i387_fxsave_struct __user *)
+					 buf);
+		if (err)
+			return err;
 		task_thread_info(tsk)->status &= ~TS_USEDFPU;
 		stts();
 	} else {
-		if (__copy_to_user(buf, &tsk->thread.i387.fxsave,
+		if (__copy_to_user(buf, &tsk->thread.xstate->fxsave,
 				   sizeof(struct i387_fxsave_struct)))
 			return -1;
 	}
@@ -191,14 +193,12 @@ static inline void tolerant_fwait(void)
 static inline void restore_fpu(struct task_struct *tsk)
 {
 	/*
-	 * The "nop" is needed to make the instructions the same
-	 * length.
+	 * The "nop" is needed to make the instructions the same length.
 	 */
-	alternative_input(
-		"nop ; frstor %1",
-		"fxrstor %1",
-		X86_FEATURE_FXSR,
-		"m" ((tsk)->thread.i387.fxsave));
+	alternative_input("nop ; frstor %1",
+			  "fxrstor %1",
+			  X86_FEATURE_FXSR,
+			  "m" (tsk->thread.xstate->fxsave));
 }
 
 /* We need a safe address that is cheap to find and that is already
@@ -217,22 +217,21 @@ static inline void __save_init_fpu(struct task_struct *tsk)
 {
 	/* Use more nops than strictly needed in case the compiler
 	   varies code */
-	alternative_input(
-		"fnsave %[fx] ;fwait;" GENERIC_NOP8 GENERIC_NOP4,
-		"fxsave %[fx]\n"
-		"bt $7,%[fsw] ; jnc 1f ; fnclex\n1:",
-		X86_FEATURE_FXSR,
-		[fx] "m" (tsk->thread.i387.fxsave),
-		[fsw] "m" (tsk->thread.i387.fxsave.swd) : "memory");
+	alternative_input("fnsave %[fx] ;fwait;" GENERIC_NOP8 GENERIC_NOP4,
+			  "fxsave %[fx]\n"
+			  "bt $7,%[fsw] ; jnc 1f ; fnclex\n1:",
+			  X86_FEATURE_FXSR,
+			  [fx] "m" (tsk->thread.xstate->fxsave),
+			  [fsw] "m" (tsk->thread.xstate->fxsave.swd)
+			  : "memory");
 	/* AMD K7/K8 CPUs don't save/restore FDP/FIP/FOP unless an exception
 	   is pending.  Clear the x87 state here by setting it to fixed
 	   values. safe_address is a random variable that should be in L1 */
-	alternative_input(
-		GENERIC_NOP8 GENERIC_NOP2,
-		"emms\n\t"	  	/* clear stack tags */
-		"fildl %[addr]", 	/* set F?P to defined value */
-		X86_FEATURE_FXSAVE_LEAK,
-		[addr] "m" (safe_address));
+	alternative_input(GENERIC_NOP8 GENERIC_NOP2,
+			  "emms\n\t"	  	/* clear stack tags */
+			  "fildl %[addr]", 	/* set F?P to defined value */
+			  X86_FEATURE_FXSAVE_LEAK,
+			  [addr] "m" (safe_address));
 	task_thread_info(tsk)->status &= ~TS_USEDFPU;
 }
 
@@ -323,29 +322,23 @@ static inline void clear_fpu(struct task_struct *tsk)
  */
 static inline unsigned short get_fpu_cwd(struct task_struct *tsk)
 {
-	if (cpu_has_fxsr) {
-		return tsk->thread.i387.fxsave.cwd;
-	} else {
-		return (unsigned short)tsk->thread.i387.fsave.cwd;
-	}
+	if (cpu_has_fxsr)
+		return tsk->thread.xstate->fxsave.cwd;
+	return (unsigned short)tsk->thread.xstate->fsave.cwd;
 }
 
 static inline unsigned short get_fpu_swd(struct task_struct *tsk)
 {
-	if (cpu_has_fxsr) {
-		return tsk->thread.i387.fxsave.swd;
-	} else {
-		return (unsigned short)tsk->thread.i387.fsave.swd;
-	}
+	if (cpu_has_fxsr)
+		return tsk->thread.xstate->fxsave.swd;
+	return (unsigned short)tsk->thread.xstate->fsave.swd;
 }
 
 static inline unsigned short get_fpu_mxcsr(struct task_struct *tsk)
 {
-	if (cpu_has_xmm) {
-		return tsk->thread.i387.fxsave.mxcsr;
-	} else {
-		return MXCSR_DEFAULT;
-	}
+	if (cpu_has_xmm)
+		return tsk->thread.xstate->fxsave.mxcsr;
+	return MXCSR_DEFAULT;
 }
 
 #endif	/* _ASM_X86_I387_H */

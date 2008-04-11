@@ -33,6 +33,8 @@
 #include <linux/kdebug.h>
 #include <linux/utsname.h>
 
+#include <mach_traps.h>
+
 #if defined(CONFIG_EDAC)
 #include <linux/edac.h>
 #endif
@@ -1115,11 +1117,24 @@ asmlinkage void __attribute__((weak)) mce_threshold_interrupt(void)
 asmlinkage void math_state_restore(void)
 {
 	struct task_struct *me = current;
-	clts();			/* Allow maths ops (or we recurse) */
 
-	if (!used_math())
-		init_fpu(me);
-	restore_fpu_checking(&me->thread.i387.fxsave);
+	if (!used_math()) {
+		local_irq_enable();
+		/*
+		 * does a slab alloc which can sleep
+		 */
+		if (init_fpu(me)) {
+			/*
+			 * ran out of memory!
+			 */
+			do_group_exit(SIGKILL);
+			return;
+		}
+		local_irq_disable();
+	}
+
+	clts();			/* Allow maths ops (or we recurse) */
+	restore_fpu_checking(&me->thread.xstate->fxsave);
 	task_thread_info(me)->status |= TS_USEDFPU;
 	me->fpu_counter++;
 }
@@ -1154,6 +1169,10 @@ void __init trap_init(void)
 	set_system_gate(IA32_SYSCALL_VECTOR, ia32_syscall);
 #endif
        
+	/*
+	 * initialize the per thread extended state:
+	 */
+        init_thread_xstate();
 	/*
 	 * Should be a barrier for any external CPU state.
 	 */
