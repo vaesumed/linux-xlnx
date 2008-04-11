@@ -795,6 +795,244 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_CHK_OTHER */
 
+#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_TNC
+
+/**
+ * dbg_check_znode - check if znode is all right.
+ * @c: UBIFS file-system description object
+ * @zbr: zbranch which points to this znode
+ *
+ * This function makes sure that znode referred to by @zbr is all right.
+ * Returns zero if it is, and %-EINVAL if it is not.
+ */
+static int dbg_check_znode(const struct ubifs_info *c,
+			   const struct ubifs_zbranch *zbr)
+{
+	const struct ubifs_znode *znode = zbr->znode;
+	const struct ubifs_znode *zp = znode->parent;
+	int n, err, cmp;
+
+	if (znode->child_cnt <= 0 || znode->child_cnt > c->fanout) {
+		err = 1;
+		goto out;
+	}
+	if (znode->level < 0) {
+		err = 2;
+		goto out;
+	}
+	if (znode->iip < 0 || znode->iip >= c->fanout) {
+		err = 3;
+		goto out;
+	}
+
+	if (zbr->len == 0)
+		/* Only dirty zbranch may have no on-flash nodes */
+		if (!ubifs_zn_dirty(znode)) {
+			err = 4;
+			goto out;
+		}
+
+	if (ubifs_zn_dirty(znode))
+		/* If znode is dirty, its parent has to be dirty as well */
+		if (zp && !ubifs_zn_dirty(zp))
+			/*
+			 * The dirty flag is atomic and is cleared outside the
+			 * TNC mutex, so znode's dirty flag may now have
+			 * been cleared. The child is always cleared before the
+			 * parent, so we just need to check again.
+			 */
+			if (ubifs_zn_dirty(znode)) {
+				err = 5;
+				goto out;
+			}
+
+	if (zp) {
+		const union ubifs_key *min, *max;
+
+		if (znode->level != zp->level - 1) {
+			err = 6;
+			goto out;
+		}
+
+		/* Make sure the 'parent' pointer in our znode is correct */
+		err = ubifs_search_zbranch(c, zp, &zbr->key, &n);
+		if (!err) {
+			/* This zbranch does not exist in the parent */
+			err = 7;
+			goto out;
+		}
+
+		if (znode->iip != n) {
+			/* This may happen only in case of collisions */
+			if (keys_cmp(c, &zp->zbranch[n].key,
+				     &zp->zbranch[znode->iip].key)) {
+				err = 8;
+				goto out;
+			}
+			n = znode->iip;
+		}
+
+		/*
+		 * Make sure that the first key in our znode is greater than or
+		 * equal to the key in the pointing zbranch.
+		 */
+		min = &zbr->key;
+		cmp = keys_cmp(c, min, &znode->zbranch[0].key);
+		if (cmp == 1) {
+			err = 9;
+			goto out;
+		}
+
+		if (n + 1 < zp->child_cnt) {
+			max = &zp->zbranch[n + 1].key;
+
+			/*
+			 * Make sure the last key in our znode is less than the
+			 * the key in zbranch which goes after our pointing
+			 * zbranch.
+			 */
+			cmp = keys_cmp(c, max,
+				&znode->zbranch[znode->child_cnt - 1].key);
+			if (cmp == -1) {
+				err = 10;
+				goto out;
+			}
+		}
+	} else {
+		/* This may only be root znode */
+		if (zbr != &c->zroot) {
+			err = 11;
+			goto out;
+		}
+	}
+
+	/*
+	 * Make sure that next key is greater or equivalent then the previous
+	 * one.
+	 */
+	for (n = 1; n < znode->child_cnt; n++) {
+		cmp = keys_cmp(c, &znode->zbranch[n].key,
+			       &znode->zbranch[n - 1].key);
+		if (cmp < 0) {
+			err = 12;
+			goto out;
+		}
+		if (cmp == 0)
+			/* This can only be keys with colliding hash */
+			if (!is_hash_key(c, &znode->zbranch[n].key)) {
+				err = 13;
+				goto out;
+			}
+	}
+
+	for (n = 0; n < znode->child_cnt; n++) {
+		if (znode->zbranch[n].znode == NULL &&
+		    (znode->zbranch[n].lnum == 0 ||
+		     znode->zbranch[n].len == 0)) {
+			err = 14;
+			goto out;
+		}
+
+		if (znode->zbranch[n].lnum != 0 &&
+		    znode->zbranch[n].len == 0) {
+			err = 15;
+			goto out;
+		}
+
+		if (znode->zbranch[n].lnum == 0 &&
+		    znode->zbranch[n].len != 0) {
+			err = 16;
+			goto out;
+		}
+
+		if (znode->zbranch[n].lnum == 0 &&
+		    znode->zbranch[n].offs != 0) {
+			err = 17;
+			goto out;
+		}
+
+		if (znode->level != 0 && znode->zbranch[n].znode)
+			if (znode->zbranch[n].znode->parent != znode) {
+				err = 18;
+				goto out;
+			}
+	}
+
+	return 0;
+
+out:
+	ubifs_err("failed, error %d", err);
+	ubifs_msg("dump of the znode");
+	dbg_dump_znode(c, znode);
+	if (zp) {
+		ubifs_msg("dump of the parent znode");
+		dbg_dump_znode(c, zp);
+	}
+	dump_stack();
+	return -EINVAL;
+}
+
+/**
+ * dbg_check_tnc - check TNC tree.
+ * @c: UBIFS file-system description object
+ * @extra: do extra checks that are possible at start commit
+ *
+ * This function traverses whole TNC tree and checks every znode. Returns zero
+ * if everything is all right and %-EINVAL if something is wrong with TNC.
+ */
+int dbg_check_tnc(struct ubifs_info *c, int extra)
+{
+	struct ubifs_znode *znode;
+	long clean_cnt = 0, dirty_cnt = 0;
+	int err;
+
+	ubifs_assert(mutex_is_locked(&c->tnc_mutex));
+	if (!c->zroot.znode)
+		return 0;
+
+	znode = ubifs_tnc_postorder_first(c->zroot.znode);
+	while (znode) {
+		const struct ubifs_zbranch *zbr;
+
+		if (!znode->parent)
+			zbr = &c->zroot;
+		else
+			zbr = &znode->parent->zbranch[znode->iip];
+
+		err = dbg_check_znode(c, zbr);
+		if (err)
+			return err;
+
+		if (extra) {
+			if (ubifs_zn_dirty(znode))
+				dirty_cnt += 1;
+			else
+				clean_cnt += 1;
+		}
+
+		znode = ubifs_tnc_postorder_next(znode);
+	}
+
+	if (extra) {
+		if (clean_cnt != atomic_long_read(&c->clean_zn_cnt)) {
+			ubifs_err("incorrect clean_zn_cnt %ld, calculated %ld",
+				  atomic_long_read(&c->clean_zn_cnt),
+				  clean_cnt);
+			return -EINVAL;
+		}
+		if (dirty_cnt != atomic_long_read(&c->dirty_zn_cnt)) {
+			ubifs_err("incorrect dirty_zn_cnt %ld, calculated %ld",
+				  atomic_long_read(&c->dirty_zn_cnt),
+				  dirty_cnt);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_TNC */
+
 void *dbg_kmalloc(size_t size, gfp_t flags)
 {
 	void *addr;
