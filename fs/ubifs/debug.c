@@ -1038,6 +1038,18 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 
 #endif /* CONFIG_UBIFS_FS_DEBUG_CHK_TNC */
 
+#ifdef  CONFIG_UBIFS_FS_DEBUG_FORCE_IN_THE_GAPS
+
+static int invocation_cnt;
+
+int dbg_force_in_the_gaps(void)
+{
+	/* Force in-the-gaps every 8th commit */
+	return !((invocation_cnt ++) & 0x7);
+}
+
+#endif
+
 void *dbg_kmalloc(size_t size, gfp_t flags)
 {
 	void *addr;

@@ -375,11 +375,18 @@ static int layout_in_gaps(struct ubifs_info *c, int cnt)
 		if (written < 0) {
 			err = written;
 			if (err == -ENOSPC) {
-				ubifs_err("out of space");
-				spin_lock(&c->space_lock);
-				dbg_dump_budg(c);
-				spin_unlock(&c->space_lock);
-				dbg_dump_lprops(c);
+				if (!force_in_the_gaps_enabled) {
+					/*
+					 * Do not print scary warnings if the
+					 * debugging option which forces
+					 * in-the-gaps is enabled.
+					 */
+					ubifs_err("out of space");
+					spin_lock(&c->space_lock);
+					dbg_dump_budg(c);
+					spin_unlock(&c->space_lock);
+					dbg_dump_lprops(c);
+				}
 				/* Try to commit anyway */
 				err = 0;
 				break;
@@ -702,6 +709,8 @@ static int alloc_idx_lebs(struct ubifs_info *c, int cnt)
 		c->ilebs[c->ileb_cnt++] = lnum;
 		dbg_cmt("LEB %d", lnum);
 	}
+	if (dbg_force_in_the_gaps())
+		return -ENOSPC;
 	return 0;
 }
 
