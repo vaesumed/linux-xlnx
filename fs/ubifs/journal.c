@@ -642,7 +642,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 			 const union ubifs_key *key, const void *buf, int len)
 {
 	int err, lnum, offs, compr_type, out_len;
-	int dlen = UBIFS_DATA_NODE_SZ + len * WORST_COMPR_FACTOR;
+	int dlen = UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE * WORST_COMPR_FACTOR;
 	const struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_data_node *data;
 
