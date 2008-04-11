@@ -365,16 +365,14 @@ dummy_enable (struct usb_ep *_ep, const struct usb_endpoint_descriptor *desc)
 		case USB_SPEED_HIGH:
 			if (max == 512)
 				break;
-			/* conserve return statements */
-		default:
-			switch (max) {
-			case 8: case 16: case 32: case 64:
+			goto done;
+		case USB_SPEED_FULL:
+			if (max == 8 || max == 16 || max == 32 || max == 64)
 				/* we'll fake any legal size */
 				break;
-			default:
-		case USB_SPEED_LOW:
-				goto done;
-			}
+			/* save a return statement */
+		default:
+			goto done;
 		}
 		break;
 	case USB_ENDPOINT_XFER_INT:
@@ -894,13 +892,12 @@ static int dummy_udc_suspend (struct platform_device *pdev, pm_message_t state)
 {
 	struct dummy	*dum = platform_get_drvdata(pdev);
 
-	dev_dbg (&pdev->dev, "%s\n", __FUNCTION__);
+	dev_dbg (&pdev->dev, "%s\n", __func__);
 	spin_lock_irq (&dum->lock);
 	dum->udc_suspended = 1;
 	set_link_state (dum);
 	spin_unlock_irq (&dum->lock);
 
-	pdev->dev.power.power_state = state;
 	usb_hcd_poll_rh_status (dummy_to_hcd (dum));
 	return 0;
 }
@@ -909,13 +906,12 @@ static int dummy_udc_resume (struct platform_device *pdev)
 {
 	struct dummy	*dum = platform_get_drvdata(pdev);
 
-	dev_dbg (&pdev->dev, "%s\n", __FUNCTION__);
+	dev_dbg (&pdev->dev, "%s\n", __func__);
 	spin_lock_irq (&dum->lock);
 	dum->udc_suspended = 0;
 	set_link_state (dum);
 	spin_unlock_irq (&dum->lock);
 
-	pdev->dev.power.power_state = PMSG_ON;
 	usb_hcd_poll_rh_status (dummy_to_hcd (dum));
 	return 0;
 }
@@ -1711,7 +1707,7 @@ static int dummy_bus_suspend (struct usb_hcd *hcd)
 {
 	struct dummy *dum = hcd_to_dummy (hcd);
 
-	dev_dbg (&hcd->self.root_hub->dev, "%s\n", __FUNCTION__);
+	dev_dbg (&hcd->self.root_hub->dev, "%s\n", __func__);
 
 	spin_lock_irq (&dum->lock);
 	dum->rh_state = DUMMY_RH_SUSPENDED;
@@ -1726,7 +1722,7 @@ static int dummy_bus_resume (struct usb_hcd *hcd)
 	struct dummy *dum = hcd_to_dummy (hcd);
 	int rc = 0;
 
-	dev_dbg (&hcd->self.root_hub->dev, "%s\n", __FUNCTION__);
+	dev_dbg (&hcd->self.root_hub->dev, "%s\n", __func__);
 
 	spin_lock_irq (&dum->lock);
 	if (!test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags)) {
@@ -1900,7 +1896,7 @@ static int dummy_hcd_suspend (struct platform_device *pdev, pm_message_t state)
 	struct dummy		*dum;
 	int			rc = 0;
 
-	dev_dbg (&pdev->dev, "%s\n", __FUNCTION__);
+	dev_dbg (&pdev->dev, "%s\n", __func__);
 
 	hcd = platform_get_drvdata (pdev);
 	dum = hcd_to_dummy (hcd);
@@ -1916,7 +1912,7 @@ static int dummy_hcd_resume (struct platform_device *pdev)
 {
 	struct usb_hcd		*hcd;
 
-	dev_dbg (&pdev->dev, "%s\n", __FUNCTION__);
+	dev_dbg (&pdev->dev, "%s\n", __func__);
 
 	hcd = platform_get_drvdata (pdev);
 	set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
