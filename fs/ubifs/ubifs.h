@@ -76,11 +76,6 @@
 /* Largest key size supported in this implementation */
 #define CUR_MAX_KEY_LEN UBIFS_SK_LEN
 
-/* znode flags */
-#define DIRTY_ZNODE 0
-#define COW_ZNODE 1
-#define OBSOLETE_ZNODE 2
-
 /* LPT cnode flags */
 #define DIRTY_CNODE 0
 #define COW_CNODE 1
@@ -133,6 +128,22 @@
  * will not corrupt memory in case of worst case compression.
  */
 #define WORST_COMPR_FACTOR 2
+
+/*
+ * Znode flags.
+ *
+ * DIRTY_ZNODE: znode is dirty
+ * COW_ZNODE: znode is being committed and a new instance of this znode has to
+ *            be created before changing this znode
+ * OBSOLETE_ZNODE: znode is obsolete, which means it was deleted, but it is
+ *                 still in the commit list and the ongoing commit operation
+ *                 will commit it, and deleti this znode after it is done
+ */
+enum {
+	DIRTY_ZNODE    = 0,
+	COW_ZNODE      = 1,
+	OBSOLETE_ZNODE = 2
+};
 
 /*
  * Commit states.
@@ -624,7 +635,7 @@ struct ubifs_zbranch {
  * struct ubifs_znode - in-memory representation of an indexing node.
  * @parent: parent znode or NULL if it is the root
  * @cnext: next znode to commit
- * @flags: flags
+ * @flags: znode flags (%DIRTY_ZNODE, %COW_ZNODE or %OBSOLETE_ZNODE)
  * @time: last access time (seconds)
  * @level: level of the entry in the TNC tree
  * @child_cnt: count of child znodes
