@@ -41,9 +41,9 @@ module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "Turn on/off debugging (default:off).");
 
 #define dprintk( args... ) \
-	do \
+	do { \
 		if (debug) printk(KERN_DEBUG args); \
-	while (0)
+	} while (0)
 
 #define IF_FREQUENCYx6 217    /* 6 * 36.16666666667MHz */
 
@@ -609,8 +609,9 @@ static void frontend_init(struct dvb_bt8xx_card *card, u32 type)
 		lgdt330x_reset(card);
 		card->fe = dvb_attach(lgdt330x_attach, &tdvs_tua6034_config, card->i2c_adapter);
 		if (card->fe != NULL) {
-			dvb_attach(dvb_pll_attach, card->fe, 0x61,
-				   card->i2c_adapter, DVB_PLL_LG_TDVS_H06XF);
+			dvb_attach(simple_tuner_attach, card->fe,
+				   card->i2c_adapter, 0x61,
+				   TUNER_LG_TDVS_H06XF);
 			dprintk ("dvb_bt8xx: lgdt330x detected\n");
 		}
 		break;
@@ -692,8 +693,9 @@ static void frontend_init(struct dvb_bt8xx_card *card, u32 type)
 	case BTTV_BOARD_PC_HDTV:
 		card->fe = dvb_attach(or51211_attach, &or51211_config, card->i2c_adapter);
 		if (card->fe != NULL)
-			dvb_attach(dvb_pll_attach, card->fe, 0x61,
-				   card->i2c_adapter, DVB_PLL_FCV1236D);
+			dvb_attach(simple_tuner_attach, card->fe,
+				   card->i2c_adapter, 0x61,
+				   TUNER_PHILIPS_FCV1236D);
 		break;
 	}
 
