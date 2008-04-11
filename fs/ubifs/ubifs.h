@@ -77,11 +77,13 @@
 #define CUR_MAX_KEY_LEN UBIFS_SK_LEN
 
 /* LPT cnode flags */
+/* TODO: turn into enum and document */
 #define DIRTY_CNODE 0
 #define COW_CNODE 1
 #define OBSOLETE_CNODE 2
 
 /* Dirty flags (lpt_drty_flgs) for LPT special nodes */
+/* TODO: turn into enum and document */
 #define LTAB_DIRTY 1
 #define LSAVE_DIRTY 2
 
@@ -130,14 +132,14 @@
 #define WORST_COMPR_FACTOR 2
 
 /*
- * Znode flags.
+ * Znode flags (actually, bit numbers which store the flags).
  *
  * DIRTY_ZNODE: znode is dirty
  * COW_ZNODE: znode is being committed and a new instance of this znode has to
  *            be created before changing this znode
  * OBSOLETE_ZNODE: znode is obsolete, which means it was deleted, but it is
  *                 still in the commit list and the ongoing commit operation
- *                 will commit it, and deleti this znode after it is done
+ *                 will commit it, and delete this znode after it is done
  */
 enum {
 	DIRTY_ZNODE    = 0,
