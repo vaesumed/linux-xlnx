@@ -1504,6 +1504,8 @@ static struct ubifs_pnode *dirty_cow_pnode(struct ubifs_info *c,
 {
 	struct ubifs_pnode *p;
 
+	/* TODO: explain why COW_ZNODE flag is used. Introduce own pnode flag
+	 * if there is not reason to use znode flage - it confuses! */
 	if (!test_bit(COW_ZNODE, &pnode->flags)) {
 		/* pnode is not being committed */
 		if (!test_and_set_bit(DIRTY_CNODE, &pnode->flags)) {
