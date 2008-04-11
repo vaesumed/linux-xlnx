@@ -487,7 +487,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 
 			br = ubifs_idx_branch(c, idx, i);
 			key_read(c, &br->key, &key);
-			printk(KERN_DEBUG "\t%d: %d:%d len %d key %s\n",
+			printk(KERN_DEBUG "\t%d: LEB %d:%d len %d key %s\n",
 			       i, le32_to_cpu(br->lnum), le32_to_cpu(br->offs),
 			       le32_to_cpu(br->len), dbg_get_key_dump(c, &key));
 		}
@@ -648,13 +648,21 @@ void dbg_dump_leb(const struct ubifs_info *c, int lnum)
 	return;
 }
 
-void dbg_dump_znode(const struct ubifs_info *c, const struct ubifs_znode *znode)
+void dbg_dump_znode(const struct ubifs_info *c,
+		    const struct ubifs_znode *znode)
 {
 	int n;
+	const struct ubifs_zbranch *zbr;
 
 	spin_lock(&dbg_lock);
-	printk(KERN_DEBUG "znode %p, parent %p iip %d level %d child_cnt %d "
-	       "flags %lx\n", znode, znode->parent, znode->iip, znode->level,
+	if (znode->parent)
+		zbr = &znode->parent->zbranch[znode->iip];
+	else
+		zbr = &c->zroot;
+
+	printk(KERN_DEBUG "znode %p, LEB %d:%d len %d parent %p iip %d level %d"
+	       " child_cnt %d flags %lx\n", znode, zbr->lnum, zbr->offs,
+	       zbr->len, znode->parent, znode->iip, znode->level,
 	       znode->child_cnt, znode->flags);
 
 	if (znode->child_cnt <= 0 || znode->child_cnt > c->fanout) {
@@ -664,16 +672,16 @@ void dbg_dump_znode(const struct ubifs_info *c, const struct ubifs_znode *znode)
 
 	printk(KERN_DEBUG "zbranches:\n");
 	for (n = 0; n < znode->child_cnt; n++) {
-		const struct ubifs_zbranch *zbr = &znode->zbranch[n];
-
 		cond_resched();
+
+		zbr = &znode->zbranch[n];
 		if (znode->level > 0)
-			printk(KERN_DEBUG "\t%d: znode %p %d:%d len %d key "
+			printk(KERN_DEBUG "\t%d: znode %p LEB %d:%d len %d key "
 					  "%s\n", n, zbr->znode, zbr->lnum,
 					  zbr->offs, zbr->len,
 					  dbg_get_key_dump(c, &zbr->key));
 		else
-			printk(KERN_DEBUG "\t%d: LNC %p %d:%d len %d key "
+			printk(KERN_DEBUG "\t%d: LNC %p LEB %d:%d len %d key "
 					  "%s\n", n, zbr->znode, zbr->lnum,
 					  zbr->offs, zbr->len,
 					  dbg_get_key_dump(c, &zbr->key));
