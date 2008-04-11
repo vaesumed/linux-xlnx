@@ -36,7 +36,7 @@
  * the Out-of-the-blue (OOTB) packets. A control sock will be created
  * for this socket at the initialization time.
  */
-static struct socket *dccp_v4_ctl_socket;
+static struct sock *dccp_v4_ctl_sk;
 
 int dccp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 {
@@ -450,7 +450,7 @@ static struct dst_entry* dccp_v4_route_skb(struct sock *sk,
 					   struct sk_buff *skb)
 {
 	struct rtable *rt;
-	struct flowi fl = { .oif = ((struct rtable *)skb->dst)->rt_iif,
+	struct flowi fl = { .oif = skb->rtable->rt_iif,
 			    .nl_u = { .ip4_u =
 				      { .daddr = ip_hdr(skb)->saddr,
 					.saddr = ip_hdr(skb)->daddr,
@@ -471,15 +471,14 @@ static struct dst_entry* dccp_v4_route_skb(struct sock *sk,
 	return &rt->u.dst;
 }
 
-static int dccp_v4_send_response(struct sock *sk, struct request_sock *req,
-				 struct dst_entry *dst)
+static int dccp_v4_send_response(struct sock *sk, struct request_sock *req)
 {
 	int err = -1;
 	struct sk_buff *skb;
+	struct dst_entry *dst;
 
-	/* First, grab a route. */
-
-	if (dst == NULL && (dst = inet_csk_route_req(sk, req)) == NULL)
+	dst = inet_csk_route_req(sk, req);
+	if (dst == NULL)
 		goto out;
 
 	skb = dccp_make_response(sk, dst, req);
@@ -512,14 +511,14 @@ static void dccp_v4_ctl_send_reset(struct sock *sk, struct sk_buff *rxskb)
 	if (dccp_hdr(rxskb)->dccph_type == DCCP_PKT_RESET)
 		return;
 
-	if (((struct rtable *)rxskb->dst)->rt_type != RTN_LOCAL)
+	if (rxskb->rtable->rt_type != RTN_LOCAL)
 		return;
 
-	dst = dccp_v4_route_skb(dccp_v4_ctl_socket->sk, rxskb);
+	dst = dccp_v4_route_skb(dccp_v4_ctl_sk, rxskb);
 	if (dst == NULL)
 		return;
 
-	skb = dccp_ctl_make_reset(dccp_v4_ctl_socket, rxskb);
+	skb = dccp_ctl_make_reset(dccp_v4_ctl_sk, rxskb);
 	if (skb == NULL)
 		goto out;
 
@@ -528,10 +527,10 @@ static void dccp_v4_ctl_send_reset(struct sock *sk, struct sk_buff *rxskb)
 								 rxiph->daddr);
 	skb->dst = dst_clone(dst);
 
-	bh_lock_sock(dccp_v4_ctl_socket->sk);
-	err = ip_build_and_send_pkt(skb, dccp_v4_ctl_socket->sk,
+	bh_lock_sock(dccp_v4_ctl_sk);
+	err = ip_build_and_send_pkt(skb, dccp_v4_ctl_sk,
 				    rxiph->daddr, rxiph->saddr, NULL);
-	bh_unlock_sock(dccp_v4_ctl_socket->sk);
+	bh_unlock_sock(dccp_v4_ctl_sk);
 
 	if (net_xmit_eval(err) == 0) {
 		DCCP_INC_STATS_BH(DCCP_MIB_OUTSEGS);
@@ -564,8 +563,7 @@ int dccp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
 	struct dccp_skb_cb *dcb = DCCP_SKB_CB(skb);
 
 	/* Never answer to DCCP_PKT_REQUESTs send to broadcast or multicast */
-	if (((struct rtable *)skb->dst)->rt_flags &
-	    (RTCF_BROADCAST | RTCF_MULTICAST))
+	if (skb->rtable->rt_flags & (RTCF_BROADCAST | RTCF_MULTICAST))
 		return 0;	/* discard, don't send a reset here */
 
 	if (dccp_bad_service_code(sk, service)) {
@@ -620,7 +618,7 @@ int dccp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
 	dreq->dreq_iss	   = dccp_v4_init_sequence(skb);
 	dreq->dreq_service = service;
 
-	if (dccp_v4_send_response(sk, req, NULL))
+	if (dccp_v4_send_response(sk, req))
 		goto drop_and_free;
 
 	inet_csk_reqsk_queue_hash_add(sk, req, DCCP_TIMEOUT_INIT);
@@ -917,8 +915,6 @@ static struct timewait_sock_ops dccp_timewait_sock_ops = {
 	.twsk_obj_size	= sizeof(struct inet_timewait_sock),
 };
 
-DEFINE_PROTO_INUSE(dccp_v4)
-
 static struct proto dccp_v4_prot = {
 	.name			= "DCCP",
 	.owner			= THIS_MODULE,
@@ -943,12 +939,11 @@ static struct proto dccp_v4_prot = {
 	.obj_size		= sizeof(struct dccp_sock),
 	.rsk_prot		= &dccp_request_sock_ops,
 	.twsk_prot		= &dccp_timewait_sock_ops,
-	.hashinfo		= &dccp_hashinfo,
+	.h.hashinfo		= &dccp_hashinfo,
 #ifdef CONFIG_COMPAT
 	.compat_setsockopt	= compat_dccp_setsockopt,
 	.compat_getsockopt	= compat_dccp_getsockopt,
 #endif
-	REF_PROTO_INUSE(dccp_v4)
 };
 
 static struct net_protocol dccp_v4_protocol = {
@@ -1007,8 +1002,8 @@ static int __init dccp_v4_init(void)
 
 	inet_register_protosw(&dccp_v4_protosw);
 
-	err = inet_csk_ctl_sock_create(&dccp_v4_ctl_socket, PF_INET,
-				       SOCK_DCCP, IPPROTO_DCCP);
+	err = inet_ctl_sock_create(&dccp_v4_ctl_sk, PF_INET,
+				   SOCK_DCCP, IPPROTO_DCCP, &init_net);
 	if (err)
 		goto out_unregister_protosw;
 out:
@@ -1023,6 +1018,7 @@ out_proto_unregister:
 
 static void __exit dccp_v4_exit(void)
 {
+	inet_ctl_sock_destroy(dccp_v4_ctl_sk);
 	inet_unregister_protosw(&dccp_v4_protosw);
 	inet_del_protocol(&dccp_v4_protocol, IPPROTO_DCCP);
 	proto_unregister(&dccp_v4_prot);
