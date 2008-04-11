@@ -42,11 +42,8 @@
 #include <asm/s390_ext.h>
 #include <asm/lowcore.h>
 #include <asm/debug.h>
+#include "entry.h"
 
-/* Called from entry.S only */
-extern void handle_per_exception(struct pt_regs *regs);
-
-typedef void pgm_check_handler_t(struct pt_regs *, long);
 pgm_check_handler_t *pgm_check_table[128];
 
 #ifdef CONFIG_SYSCTL
@@ -59,7 +56,6 @@ int sysctl_userprocess_debug = 0;
 
 extern pgm_check_handler_t do_protection_exception;
 extern pgm_check_handler_t do_dat_exception;
-extern pgm_check_handler_t do_monitor_call;
 extern pgm_check_handler_t do_asce_exception;
 
 #define stack_pointer ({ void **sp; asm("la %0,0(15)" : "=&d" (sp)); sp; })
@@ -739,6 +735,5 @@ void __init trap_init(void)
         pgm_check_table[0x15] = &operand_exception;
         pgm_check_table[0x1C] = &space_switch_exception;
         pgm_check_table[0x1D] = &hfp_sqrt_exception;
-	pgm_check_table[0x40] = &do_monitor_call;
 	pfault_irq_init();
 }
