@@ -62,16 +62,6 @@ const_debug unsigned int sysctl_sched_child_runs_first = 1;
 unsigned int __read_mostly sysctl_sched_compat_yield;
 
 /*
- * SCHED_BATCH wake-up granularity.
- * (default: 10 msec * (1 + ilog(ncpus)), units: nanoseconds)
- *
- * This option delays the preemption effects of decoupled workloads
- * and reduces their over-scheduling. Synchronous workloads will still
- * have immediate wakeup/sleep latencies.
- */
-unsigned int sysctl_sched_batch_wakeup_granularity = 10000000UL;
-
-/*
  * SCHED_OTHER wake-up granularity.
  * (default: 5 msec * (1 + ilog(ncpus)), units: nanoseconds)
  *
@@ -511,8 +501,11 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	if (!initial) {
 		/* sleeps upto a single latency don't count. */
 		if (sched_feat(NEW_FAIR_SLEEPERS)) {
-			vruntime -= calc_delta_fair(sysctl_sched_latency,
-						    &cfs_rq->load);
+			if (sched_feat(NORMALIZED_SLEEPER))
+				vruntime -= calc_delta_fair(sysctl_sched_latency,
+						&cfs_rq->load);
+			else
+				vruntime -= sysctl_sched_latency;
 		}
 
 		/* ensure we never gain time by being placed backwards. */
@@ -918,7 +911,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Already in the rightmost position?
 	 */
-	if (unlikely(rightmost->vruntime < se->vruntime))
+	if (unlikely(!rightmost || rightmost->vruntime < se->vruntime))
 		return;
 
 	/*
@@ -1148,7 +1141,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	if (unlikely(se->load.weight > NICE_0_LOAD))
 		gran = calc_delta_fair(gran, &se->load);
 
-	if (pse->vruntime + gran < se->vruntime)
+	if ((s64)(se->vruntime - pse->vruntime) > (s64)gran)
 		resched_task(curr);
 }
 
