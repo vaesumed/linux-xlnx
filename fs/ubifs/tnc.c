@@ -2820,8 +2820,24 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 		return NULL;
 	while (1) {
 		ubifs_search_zbranch(c, znode, key, &n);
-		if (n < 0)
-			return NULL;
+		if (n < 0) {
+			/*
+			 * We reached a znode where the leftmost key is greater
+			 * then the key we are searching. This is the same
+			 * situation which is described in huge comment at the
+			 * end of the 'lookup_level0()' function. And for
+			 * exactly the same reasons we have to try too look
+			 * left before giving up.
+			 */
+			znode = left_znode(c, znode);
+			if (!znode)
+				return NULL;
+			if (IS_ERR(znode))
+				return znode;
+			ubifs_search_zbranch(c, znode, key, &n);
+			if (n < 0)
+				return NULL;
+		}
 		if (znode->level == level + 1)
 			break;
 		znode = get_znode(c, znode, n);
