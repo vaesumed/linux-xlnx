@@ -45,6 +45,12 @@
 /* Initial CRC32 value used when calculating CRC checksums */
 #define UBIFS_CRC32_INIT 0xFFFFFFFFU
 
+/*
+ * UBIFS does not try to compress data if its length is less then the below
+ * constant.
+ */
+#define UBIFS_MIN_COMPR_LEN 128
+
 /* Root inode number */
 #define UBIFS_ROOT_INO 1
 
