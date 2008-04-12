@@ -2781,14 +2781,28 @@ static struct ubifs_znode *right_znode(struct ubifs_info *c,
 }
 
 /**
- * lookup_znode - find a particular znode.
+ * lookup_znode - find a particular indexing node from TNC.
  * @c: UBIFS file-system description object
- * @key: index node key
+ * @key: index node key to lookup
  * @level: index node level
  * @lnum: index node LEB number
  * @offs: index node offset
  *
- * This function returns a pointer to the znode found or NULL if it is not
+ * This function searches an indexing node by its first key @key and its
+ * address @lnum:@offs. It looks up the indexing tree by pulling all indexing
+ * nodes it traverses to TNC. This function is called fro indexing nodes which
+ * were found on the media by scanning, for example when garbage-collecting or
+ * when doing in-the-gaps commit. This means that the indexing node which is
+ * looked for does not have to have exactly the same leftmost key @key, because
+ * the leftmost key may have been changed, in which case TNC will contain a
+ * dirty znode which still refers the same @lnum:@offs. This function is clever
+ * enough to recognize such indexing nodes.
+ *
+ * Note, if a znode was deleted or changed too much, then this function will
+ * not find it. For situations like this UBIFS has the old index RB-tree
+ * (indexed by @lnum:@offs).
+ *
+ * This function returns a pointer to the znode found or %NULL if it is not
  * found. A negative error code is returned on failure.
  */
 static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
