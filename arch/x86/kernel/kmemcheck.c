@@ -597,7 +597,7 @@ opcode_get_size(const uint8_t *op)
 		++op;
 
 		if (*op == 0xb6)
-			return operand_size_override >> 1;
+			return 8;
 		if (*op == 0xb7)
 			return 16;
 	}
@@ -611,6 +611,39 @@ opcode_get_primary(const uint8_t *op)
 	/* skip prefixes */
 	for (; opcode_is_prefix(*op); ++op);
 	return op;
+}
+
+/*
+ * Check that an access does not span across two different pages, because
+ * that will mess up our shadow lookup.
+ */
+static bool
+check_page_boundary(struct pt_regs *regs, unsigned long addr, unsigned int size)
+{
+	unsigned long page[4];
+
+	if (size == 8)
+		return false;
+
+	page[0] = (addr + 0) & PAGE_MASK;
+	page[1] = (addr + 1) & PAGE_MASK;
+
+	if (size == 16 && page[0] == page[1])
+		return false;
+
+	page[2] = (addr + 2) & PAGE_MASK;
+	page[3] = (addr + 3) & PAGE_MASK;
+
+	if (size == 32 && page[0] == page[2] && page[0] == page[3])
+		return false;
+
+	/*
+	 * XXX: The addr/size data is also really interesting if this
+	 * case ever triggers. We should make a separate class of errors
+	 * for this case. -Vegard
+	 */
+	error_save_bug(regs);
+	return true;
 }
 
 static inline enum shadow
@@ -687,6 +720,9 @@ kmemcheck_read(struct pt_regs *regs, uint32_t address, unsigned int size)
 	if (!shadow)
 		return;
 
+	if (check_page_boundary(regs, address, size))
+		return;
+
 	status = test(shadow, size);
 	if (status == SHADOW_INITIALIZED)
 		return;
@@ -705,6 +741,10 @@ kmemcheck_write(struct pt_regs *regs, uint32_t address, unsigned int size)
 	shadow = address_get_shadow(address);
 	if (!shadow)
 		return;
+
+	if (check_page_boundary(regs, address, size))
+		return;
+
 	set(shadow, size);
 }
 
