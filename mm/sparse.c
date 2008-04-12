@@ -285,6 +285,9 @@ struct page __init *sparse_early_mem_map_alloc(unsigned long pnum)
 	return NULL;
 }
 
+void __attribute__((weak)) __meminit vmemmap_populate_print_last(void)
+{
+}
 /*
  * Allocate the accumulated non-linear sections, allocate a mem_map
  * for each and record the physical to section mapping.
@@ -332,6 +335,8 @@ void __init sparse_init(void)
 		sparse_init_one_section(__nr_to_section(pnum), pnum, map,
 								usemap);
 	}
+
+	vmemmap_populate_print_last();
 
 	free_bootmem(__pa(section_map), size);
 }
