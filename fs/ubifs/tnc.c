@@ -58,6 +58,8 @@ enum {
  * @offs: offset of obsoleted index node
  *
  * Returns %0 on success, and a negative error code on failure.
+ * TODO: improve comments of the stuff related to the old tree. Document whole
+ * "old index tree" concept - why we have this and so on.
  */
 static int insert_old_idx(struct ubifs_info *c, int lnum, int offs)
 {
@@ -758,7 +760,7 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
  *
  * This function checks if xentry/direntry referred by zbranch @zbr matches name
  * @nm. Returns %NAME_MATCHES if it does, %NAME_LESS if the name referred by
- * @zbr is less than @nm, and %NAME_GREATER if it is greater then @nm. In case
+ * @zbr is less than @nm, and %NAME_GREATER if it is greater than @nm. In case
  * of failure, a negative error code is returned.
  */
 static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
@@ -1321,7 +1323,7 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
  *   o not exact match, which means that zero-level znode does not contain @key
  *     then %0 is returned and slot number of the closed branch is stored in
  *     @n;
- *   o @key is so small that it is even less then the lowest key of the
+ *   o @key is so small that it is even less than the lowest key of the
  *     leftmost zero-level node, then %0 is returned and %0 is stored in @n.
  *
  * Note, when the TNC tree is traversed, some znodes may be absent, then this
@@ -1460,7 +1462,7 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
  *   o not exact match, which means that zero-level znode does not contain @key
  *     then %0 is returned and slot number of the closed branch is stored in
  *     @n;
- *   o @key is so small that it is even less then the lowest key of the
+ *   o @key is so small that it is even less than the lowest key of the
  *     leftmost zero-level node, then %0 is returned and %-1 is stored in @n.
  *
  * Additionally all znodes in the path from the root to the located zero-level
@@ -2837,11 +2839,11 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 		if (n < 0) {
 			/*
 			 * We reached a znode where the leftmost key is greater
-			 * then the key we are searching. This is the same
-			 * situation which is described in huge comment at the
-			 * end of the 'lookup_level0()' function. And for
-			 * exactly the same reasons we have to try too look
-			 * left before giving up.
+			 * than the key we are searching for. This is the same
+			 * situation as the one described in a huge comment at
+			 * the end of the 'lookup_level0()' function. And for
+			 * exactly the same reasons we have to try to look left
+			 * before giving up.
 			 */
 			znode = left_znode(c, znode);
 			if (!znode)
