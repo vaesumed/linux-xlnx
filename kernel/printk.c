@@ -671,6 +671,7 @@ static char printk_buf[1024];
 asmlinkage int vprintk(const char *fmt, va_list args)
 {
 	int printed_len = 0;
+	int current_log_level = default_message_loglevel;
 	unsigned long flags;
 	int this_cpu;
 	char *p;
@@ -720,7 +721,6 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	 */
 	for (p = printk_buf; *p; p++) {
 		if (new_text_line) {
-			int current_log_level = default_message_loglevel;
 			/* If a token, set current_log_level and skip over */
 			if (p[0] == '<' && p[1] >= '0' && p[1] <= '7' &&
 			    p[2] == '>') {
