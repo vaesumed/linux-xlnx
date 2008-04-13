@@ -49,6 +49,7 @@
 #ifndef __ASSEMBLY__
 
 extern int page_is_ram(unsigned long pagenr);
+extern int devmem_is_allowed(unsigned long pagenr);
 
 struct page;
 
