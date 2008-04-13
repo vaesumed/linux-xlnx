@@ -250,6 +250,10 @@ find_next_zero_bit(const unsigned long *addr, unsigned long size,
 	/* size is not constant or too big */
 	return __find_next_zero_bit(addr, size, offset);
 }
+
+#define find_first_bit(addr, size) find_next_bit((addr), (size), 0)
+#define find_first_zero_bit(addr, size) find_next_zero_bit((addr), (size), 0)
+
 #endif /* CONFIG_GENERIC_FIND_NEXT_BIT */
 #endif /* __KERNEL__ */
 #endif
