@@ -215,10 +215,16 @@ kmemcheck_init(void)
 	mod_timer(&kmemcheck_timer, jiffies + HZ);
 }
 
+#ifdef CONFIG_KMEMCHECK_DISABLED_BY_DEFAULT
+int kmemcheck_enabled = 0;
+#endif
+
 #ifdef CONFIG_KMEMCHECK_ENABLED_BY_DEFAULT
 int kmemcheck_enabled = 1;
-#else
-int kmemcheck_enabled = 0;
+#endif
+
+#ifdef CONFIG_KMEMCHECK_ONESHOT_BY_DEFAULT
+int kmemcheck_enabled = 2;
 #endif
 
 static int __init
@@ -227,16 +233,8 @@ param_kmemcheck(char *str)
 	if (!str)
 		return -EINVAL;
 
-	switch (str[0]) {
-	case '0':
-		kmemcheck_enabled = 0;
-		return 0;
-	case '1':
-		kmemcheck_enabled = 1;
-		return 0;
-	}
-
-	return -EINVAL;
+	sscanf("%d", str, &kmemcheck_enabled);
+	return 0;
 }
 
 early_param("kmemcheck", param_kmemcheck);
@@ -730,7 +728,11 @@ kmemcheck_read(struct pt_regs *regs, uint32_t address, unsigned int size)
 	/* Don't warn about it again. */
 	set(shadow, size);
 
-	error_save(status, address, size, regs);
+	if (kmemcheck_enabled)
+		error_save(status, address, size, regs);
+
+	if (kmemcheck_enabled == 2)
+		kmemcheck_enabled = 0;
 }
 
 static void
