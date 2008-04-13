@@ -264,13 +264,30 @@ config KMEMCHECK
 	  or enable kmemcheck at boot-time. If the kernel is started with
 	  kmemcheck=0, the large memory and CPU overhead is not incurred.
 
-config KMEMCHECK_ENABLED_BY_DEFAULT
-	bool "kmemcheck: enable at boot by default"
+choice
+	prompt "kmemcheck: default mode at boot"
 	depends on KMEMCHECK
-	default y
+	default KMEMCHECK_ONESHOT_BY_DEFAULT
 	help
 	  This option controls the default behaviour of kmemcheck when the
 	  kernel boots and no kmemcheck= parameter is given.
+
+config KMEMCHECK_DISABLED_BY_DEFAULT
+	bool "disabled"
+	depends on KMEMCHECK
+
+config KMEMCHECK_ENABLED_BY_DEFAULT
+	bool "enabled"
+	depends on KMEMCHECK
+	
+config KMEMCHECK_ONESHOT_BY_DEFAULT
+	bool "one-shot"
+	depends on KMEMCHECK
+	help
+	  In one-shot mode, only the first error detected is reported before
+	  kmemcheck is disabled.
+
+endchoice
 
 config KMEMCHECK_PARTIAL_OK
 	bool "kmemcheck: allow partially uninitialized memory"
