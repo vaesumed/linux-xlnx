@@ -1683,30 +1683,29 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	found = lookup_level0(c, key, &znode, &n);
 	if (!found) {
 		err = -ENOENT;
-		goto out;
+		goto out_unlock;
 	} else if (found < 0) {
 		err = found;
-		goto out;
+		goto out_unlock;
 	}
 
 	ubifs_assert(n >= 0);
 
 	err = resolve_collision(c, key, &znode, &n, nm);
 	if (unlikely(err < 0))
-		goto out;
+		goto out_unlock;
 	if (err == 0) {
 		err = -ENOENT;
-		goto out;
+		goto out_unlock;
 	}
 
 	zbr = znode->zbranch[n];
 	mutex_unlock(&c->tnc_mutex);
 
 	err = tnc_read_node(c, &zbr, node);
-
 	return err;
 
-out:
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return err;
 }
@@ -2080,10 +2079,12 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 
 	mutex_lock(&c->tnc_mutex);
 	found = lookup_level0_dirty(c, key, &znode, &n);
-	if (found < 0) {
+	if (unlikely(found < 0)) {
 		err = found;
-		goto out;
-	} else if (found == 1) {
+		goto out_unlock;
+	}
+
+	if (found == 1) {
 		struct ubifs_zbranch *zbr = &znode->zbranch[n];
 
 		found = 0;
@@ -2091,7 +2092,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 			lnc_free(zbr);
 			err = ubifs_add_dirt(c, zbr->lnum, zbr->len);
 			if (unlikely(err))
-				goto out;
+				goto out_unlock;
 			zbr->lnum = lnum;
 			zbr->offs = offs;
 			zbr->len = len;
@@ -2099,17 +2100,19 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 		} else if (is_hash_key(c, key)) {
 			found = resolve_collision_directly(c, key, &znode, &n,
 							   old_lnum, old_offs);
-			if (found < 0) {
+			if (unlikely(found < 0)) {
 				err = found;
-				goto out;
-			} else if (found) {
+				goto out_unlock;
+			}
+
+			if (found) {
 				/* Ensure the znode is dirtied */
 				if (znode->cnext || !ubifs_zn_dirty(znode)) {
 					    znode = dirty_cow_bottom_up(c,
 									znode);
 					    if (unlikely(IS_ERR(znode))) {
 						    err = PTR_ERR(znode);
-						    goto out;
+						    goto out_unlock;
 					    }
 				}
 				zbr = &znode->zbranch[n];
@@ -2117,7 +2120,7 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 				err = ubifs_add_dirt(c, zbr->lnum,
 						     zbr->len);
 				if (unlikely(err))
-					goto out;
+					goto out_unlock;
 				zbr->lnum = lnum;
 				zbr->offs = offs;
 				zbr->len = len;
@@ -2125,15 +2128,13 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 		}
 	}
 
-	if (found == 0) {
+	if (!found)
 		err = ubifs_add_dirt(c, lnum, len);
-		if (unlikely(err))
-			goto out;
-	}
 
-	err = dbg_check_tnc(c, 0);
+	if (!err)
+		err = dbg_check_tnc(c, 0);
 
-out:
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return err;
 }
@@ -2159,10 +2160,11 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 	mutex_lock(&c->tnc_mutex);
 	dbg_tnc_key(c, key, "%.*s, key", nm->len, nm->name);
 	found = lookup_level0_dirty(c, key, &znode, &n);
-	if (found < 0) {
+	if (unlikely(found < 0)) {
 		err = found;
-		goto out;
+		goto out_unlock;
 	}
+
 	if (found == 1) {
 		if (c->replaying)
 			found = fallible_resolve_collision(c, key, &znode, &n,
@@ -2171,16 +2173,18 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 			found = resolve_collision(c, key, &znode, &n, nm);
 		if (unlikely(found < 0)) {
 			err = found;
-			goto out;
+			goto out_unlock;
 		}
+
 		/* Ensure the znode is dirtied */
 		if (znode->cnext || !ubifs_zn_dirty(znode)) {
 			    znode = dirty_cow_bottom_up(c, znode);
-			    if (IS_ERR(znode)) {
+			    if (unlikely(IS_ERR(znode))) {
 				    err = PTR_ERR(znode);
-				    goto out;
+				    goto out_unlock;
 			    }
 		}
+
 		if (found == 0)
 			n -= 1;
 		else if (found == 1) {
@@ -2191,9 +2195,10 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 			zbr->lnum = lnum;
 			zbr->offs = offs;
 			zbr->len = len;
-			goto out;
+			goto out_unlock;
 		}
 	}
+
 	if (!found) {
 		struct ubifs_zbranch zbr;
 
@@ -2205,7 +2210,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		err = tnc_insert(c, znode, &zbr, n + 1);
 	}
 
-out:
+out_unlock:
 	if (!err)
 		err = dbg_check_tnc(c, 0);
 	mutex_unlock(&c->tnc_mutex);
@@ -2304,7 +2309,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 			if (c->zroot.len) {
 				err = insert_old_idx(c, c->zroot.lnum,
 						     c->zroot.offs);
-				if (err)
+				if (unlikely(err))
 					return err;
 			}
 			c->zroot.lnum = zbr->lnum;
@@ -2343,12 +2348,16 @@ int ubifs_tnc_remove(struct ubifs_info *c, const union ubifs_key *key)
 	mutex_lock(&c->tnc_mutex);
 	dbg_tnc_key(c, key, "key");
 	found = lookup_level0_dirty(c, key, &znode, &n);
+	if (unlikely(found < 0)) {
+		err = found;
+		goto out_unlock;
+	}
 	if (found == 1)
 		err = tnc_delete(c, znode, n);
-	else if (found < 0)
-		err = found;
 	if (!err)
 		err = dbg_check_tnc(c, 0);
+
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return err;
 }
@@ -2364,39 +2373,37 @@ int ubifs_tnc_remove(struct ubifs_info *c, const union ubifs_key *key)
 int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 			const struct qstr *nm)
 {
-	int found, n, err = 0;
+	int n, err;
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
 	dbg_tnc_key(c, key, "%.*s, key", nm->len, nm->name);
-	found = lookup_level0_dirty(c, key, &znode, &n);
-	if (unlikely(found < 0)) {
-		err = found;
-		goto out;
-	}
-	if (found) {
+	err = lookup_level0_dirty(c, key, &znode, &n);
+	if (unlikely(err < 0))
+		goto out_unlock;
+
+	if (err) {
 		if (c->replaying)
-			found = fallible_resolve_collision(c, key, &znode, &n,
-							   nm);
+			err = fallible_resolve_collision(c, key, &znode, &n,
+							 nm);
 		else
-			found = resolve_collision(c, key, &znode, &n, nm);
-		if (unlikely(found < 0)) {
-			err = found;
-			goto out;
-		}
-		if (found) {
+			err = resolve_collision(c, key, &znode, &n, nm);
+		if (unlikely(err < 0))
+			goto out_unlock;
+		if (err) {
 			/* Ensure the znode is dirtied */
 			if (znode->cnext || !ubifs_zn_dirty(znode)) {
 				    znode = dirty_cow_bottom_up(c, znode);
-				    if (IS_ERR(znode)) {
+				    if (unlikely(IS_ERR(znode))) {
 					    err = PTR_ERR(znode);
-					    goto out;
+					    goto out_unlock;
 				    }
 			}
 			err = tnc_delete(c, znode, n);
 		}
 	}
-out:
+
+out_unlock:
 	if (!err)
 		err = dbg_check_tnc(c, 0);
 	mutex_unlock(&c->tnc_mutex);
@@ -2435,42 +2442,43 @@ static int key_in_range(struct ubifs_info *c, union ubifs_key *key,
 int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 			   union ubifs_key *to_key)
 {
-	int found, i, n, k, err = 0;
+	int i, n, k, err = 0;
 	struct ubifs_znode *znode;
 	union ubifs_key *key;
 
 	mutex_lock(&c->tnc_mutex);
 	while (1) {
 		/* Find first level 0 znode that contains keys to remove */
-		found = lookup_level0(c, from_key, &znode, &n);
-		if (found < 0) {
-			err = found;
-			goto out;
-		}
-		if (found)
+		err = lookup_level0(c, from_key, &znode, &n);
+		if (unlikely(err < 0))
+			goto out_unlock;
+
+		if (err)
 			key = from_key;
 		else {
 			err = tnc_next(c, &znode, &n);
 			if (err == -ENOENT) {
 				err = 0;
-				goto out;
+				goto out_unlock;
 			}
 			if (unlikely(err < 0))
-				goto out;
+				goto out_unlock;
 			key = &znode->zbranch[n].key;
 			if (!key_in_range(c, key, from_key, to_key)) {
 				err = 0;
-				goto out;
+				goto out_unlock;
 			}
 		}
+
 		/* Ensure the znode is dirtied */
 		if (znode->cnext || !ubifs_zn_dirty(znode)) {
 			    znode = dirty_cow_bottom_up(c, znode);
 			    if (unlikely(IS_ERR(znode))) {
 				    err = PTR_ERR(znode);
-				    goto out;
+				    goto out_unlock;
 			    }
 		}
+
 		/* Remove all keys in range except the first */
 		for (i = n + 1, k = 0; i < znode->child_cnt; i++, k++) {
 			key = &znode->zbranch[i].key;
@@ -2481,7 +2489,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 					     znode->zbranch[i].len);
 			if (err) {
 				dbg_dump_znode(c, znode);
-				goto out;
+				goto out_unlock;
 			}
 			dbg_tnc_key(c, key, "removing");
 		}
@@ -2490,12 +2498,14 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 				znode->zbranch[i - k] = znode->zbranch[i];
 			znode->child_cnt -= k;
 		}
+
 		/* Now delete the first */
 		err = tnc_delete(c, znode, n);
 		if (unlikely(err))
-			goto out;
+			goto out_unlock;
 	}
-out:
+
+out_unlock:
 	if (!err)
 		err = dbg_check_tnc(c, 0);
 	mutex_unlock(&c->tnc_mutex);
@@ -2586,7 +2596,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
 					   const struct qstr *nm)
 {
-	int found, n, err, type = key_type(c, key), dlen = 0;
+	int n, err, type = key_type(c, key), dlen = 0;
 	struct ubifs_znode *znode;
 	struct ubifs_dent_node *dent = NULL;
 	struct ubifs_zbranch *zbr;
@@ -2596,17 +2606,15 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	ubifs_assert(type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY);
 
 	mutex_lock(&c->tnc_mutex);
-	found = lookup_level0(c, key, &znode, &n);
-	if (found < 0) {
-		err = found;
-		goto out;
-	}
+	err = lookup_level0(c, key, &znode, &n);
+	if (unlikely(err < 0))
+		goto out_free;
 
 	/* Handle collisions */
-	if (found && nm->name) {
+	if (err && nm->name) {
 		err = resolve_collision(c, key, &znode, &n, nm);
 		if (unlikely(err < 0))
-			goto out;
+			goto out_free;
 		if (err == 0)
 			goto name_not_found;
 	}
@@ -2615,7 +2623,7 @@ again:
 	/* Now find next entry */
 	err = tnc_next(c, &znode, &n);
 	if (err)
-		goto out;
+		goto out_free;
 
 name_not_found:
 	dkey = &znode->zbranch[n].key;
@@ -2624,7 +2632,7 @@ name_not_found:
 	if (key_ino(c, dkey) != key_ino(c, key) ||
 	    key_type(c, dkey) != type) {
 		err = -ENOENT;
-		goto out;
+		goto out_free;
 	}
 
 	if (!dent || dlen < zbr->len) {
@@ -2633,13 +2641,13 @@ name_not_found:
 		dent = kmalloc(dlen, GFP_NOFS);
 		if (!dent) {
 			err = -ENOMEM;
-			goto out;
+			goto out_free;
 		}
 	}
 
 	err = tnc_read_node(c, zbr, dent);
 	if (unlikely(err))
-		goto out;
+		goto out_free;
 
 	if (dent->inum == 0)
 		/* This is a deletion entry, skip it */
@@ -2648,7 +2656,7 @@ name_not_found:
 	mutex_unlock(&c->tnc_mutex);
 	return dent;
 
-out:
+out_free:
 	kfree(dent);
 	mutex_unlock(&c->tnc_mutex);
 	return ERR_PTR(err);
@@ -3167,13 +3175,13 @@ int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 		if (IS_ERR(c->zroot.znode)) {
 			err = PTR_ERR(c->zroot.znode);
 			c->zroot.znode = NULL;
-			goto out;
+			goto out_unlock;
 		}
 	}
 
 	err = dbg_walk_sub_tree(c, c->zroot.znode, leaf_cb, znode_cb, priv);
 
-out:
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return err;
 }
