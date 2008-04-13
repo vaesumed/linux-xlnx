@@ -78,6 +78,14 @@ still have to take a single page fault exception before tracking is turned off
 for that particular page. Enabling kmemcheck on will only enable tracking for
 allocations made from that point onwards.
 
+The default mode is the one-shot mode, where only the first error is reported
+before kmemcheck is disabled. This mode can be enabled by passing kmemcheck=2
+to the kernel at boot, or running
+
+echo 2 > /proc/sys/kernel/kmemcheck
+
+when the kernel is already running.
+
 
 Future enhancements
 ===================
