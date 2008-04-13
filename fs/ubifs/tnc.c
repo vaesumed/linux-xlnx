@@ -922,12 +922,16 @@ static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *n)
  * @c: UBIFS file-system description object
  * @key: key of a directory or extended attribute entry
  * @zn: znode is returned here
- * @n: znode branch slot number is passed and returned here
+ * @n: zbranch number is passed and returned here
  * @nm: name of the entry
  *
- * This function returns %1 and sets @zn and @n if the collision is resolved.
- * %0 is returned if @nm is not found and @zn and @n are set to the next
- * entry. Otherwise a negative error code is returned.
+ * This function is called for "hashed" keys to make sure that the found key
+ * really corresponds to the looked up node (directory or extended attribute
+ * entry). It returns %1 and sets @zn and @n if the collision is resolved.
+ * %0 is returned if @nm is not found and @zn and @n are set to the previous
+ * entry, i.e. to the entry after which @nm could follow if it were in TNC.
+ * This means that @n may be set to %-1 if the leftmost key in @zn is the
+ * previous one. A negative error code is returned on failures.
  */
 static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			     struct ubifs_znode **zn, int *n,
@@ -1021,11 +1025,11 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 		 */
 		err = fallible_read_node(c, &zbr->key, zbr, dent);
 		if (err < 0)
-			goto out;
+			goto out_free;
 		if (err == 0) {
 			/* The node was not present */
 			err = NOT_ON_MEDIA;
-			goto out;
+			goto out_free;
 		}
 
 		ubifs_assert(err == 1);
@@ -1033,7 +1037,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 		if (err) {
 			lnc_free(zbr);
 			dbg_dump_node(c, dent);
-			goto out;
+			goto out_free;
 		}
 
 		kfree(dent);
@@ -1047,7 +1051,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 		return NAME_LESS;
 	return NAME_GREATER;
 
-out:
+out_free:
 	kfree(dent);
 	return err;
 }
@@ -1057,12 +1061,27 @@ out:
  * @c: UBIFS file-system description object
  * @key: key of directory entry
  * @zn: znode is returned here
- * @n: znode branch slot number is passed and returned here
+ * @n: zbranch number is passed and returned here
  * @nm: name of directory entry
  *
- * This function returns %1 and sets @zn and @n if the collision is resolved.
- * %0 is returned if @nm is not found and @zn and @n are set to the next
- * directory entry. Otherwise a negative error code is returned.
+ * This is a "fallible" version of the 'resolve_collision()' function which
+ * does not panic if one of the nodes referred to by TNC does not exist on the
+ * media. This may happen when replaying the journal if a deleted node was
+ * Garbage-collected and the commit was not done. The following are return
+ * codes:
+ *  o if @nm was found, %1 is returned and @zn and @n are set to the found
+ *    entry;
+ *  o if @nm was not found, but there is a dangling zbranch, which is a zbranch
+ *    referring an entry which does not exist, %1 is returned as well and @zn
+ *    and @n are set to the dangling entry; this is needed during replay and
+ *    basically means that we assume that the dangling entry is the entry we
+ *    are looking for; to put it differently, this function is used by the
+ *    replay code, and when the replay code hits a deletion entry, it either
+ *    deletes an existing entry in the TNC, or a dangling entry, assuming the
+ *    corresponding node has just been GC'ed;
+ * o if @nm was not found, and no dangling entries were found, %-1 is returned
+ *   @zn and @n are set to the previous entry;
+ * o a negative error code is returned in case of failure.
  */
 static int fallible_resolve_collision(struct ubifs_info *c,
 				      const union ubifs_key *key,
@@ -1177,13 +1196,17 @@ static int matches_position(struct ubifs_zbranch *zbr, int lnum, int offs)
  * @c: UBIFS file-system description object
  * @key: key of directory entry
  * @zn: znode is passed and returned here
- * @n: znode branch slot number is passed and returned here
+ * @n: zbranch number is passed and returned here
  * @lnum: LEB number of dent node to match
  * @offs: offset of dent node to match
  *
- * This function returns %1 and sets @zn and @n if the collision is resolved,
- * %0 if @lnum:@offs is not found and @zn and @n are set to the next directory
- * entry. Otherwise a negative error code is returned.
+ * This function is used for "hashed" keys to make sure the found directory or
+ * extended attribute entry node is what was looked for. It is used when the
+ * flash address of the right node is known (@lnum:@offs) which makes it much
+ * easier to resolve collisions (no need to read entries and match full
+ * names). This function returns %1 and sets @zn and @n if the collision is
+ * resolved, %0 if @lnum:@offs is not found and @zn and @n are set to the
+ * previous directory entry. Otherwise a negative error code is returned.
  */
 static int resolve_collision_directly(struct ubifs_info *c,
 				      const union ubifs_key *key,
@@ -1810,6 +1833,7 @@ static void insert_zbranch(struct ubifs_znode *znode,
 
 	znode->zbranch[n] = *zbr;
 	znode->child_cnt += 1;
+
 	/*
 	 * After inserting at slot zero, the lower bound of the key range of
 	 * this znode may have changed. If this znode is subsequently split
@@ -2185,9 +2209,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 			    }
 		}
 
-		if (found == 0)
-			n -= 1;
-		else if (found == 1) {
+		if (found == 1) {
 			struct ubifs_zbranch *zbr = &znode->zbranch[n];
 
 			lnc_free(zbr);
