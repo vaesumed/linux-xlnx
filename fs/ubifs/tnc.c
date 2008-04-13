@@ -927,8 +927,7 @@ static int tnc_prev(struct ubifs_info *c, struct ubifs_znode **zn, int *n)
  *
  * This function returns %1 and sets @zn and @n if the collision is resolved.
  * %0 is returned if @nm is not found and @zn and @n are set to the next
- * entry. %-ENOENT is returned if there are no following entries for the same
- * inode. Otherwise a negative error code is returned.
+ * entry. Otherwise a negative error code is returned.
  */
 static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			     struct ubifs_znode **zn, int *n,
@@ -971,22 +970,22 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 	nn = *n;
 	while (1) {
 		err = tnc_next(c, &znode, &nn);
-		if (err)
+		if (err == -ENOENT)
+			return 0;
+		if (unlikely(err < 0))
 			return err;
 		if (keys_cmp(c, &znode->zbranch[nn].key, key))
-			return -ENOENT;
+			return 0;
 		err = matches_name(c, &znode->zbranch[nn], nm);
 		if (unlikely(err < 0))
 			return err;
+		*zn = znode;
+		*n = nn;
 		if (err == NAME_MATCHES) {
 			dbg_tnc_key(c, key, "collision resolved");
-			*zn = znode;
-			*n = nn;
 			return 1;
 		}
 	}
-
-	return -EINVAL;
 }
 
 /**
@@ -1062,10 +1061,8 @@ out:
  * @nm: name of directory entry
  *
  * This function returns %1 and sets @zn and @n if the collision is resolved.
- * %0 is returned if @nm is not found and @zn and @n are set to the
- * next directory entry.  %-ENOENT is returned if there are no
- * following directory entries for the same inode.  Otherwise a negative error
- * code is returned.
+ * %0 is returned if @nm is not found and @zn and @n are set to the next
+ * directory entry. Otherwise a negative error code is returned.
  */
 static int fallible_resolve_collision(struct ubifs_info *c,
 				      const union ubifs_key *key,
@@ -1073,8 +1070,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 				      const struct qstr *nm)
 {
 	struct ubifs_znode *znode, *o_znode = NULL;
-	union ubifs_key *okey;
-	int nn, o_n = 0, err;
+	int nn, uninitialized_var(o_n), err;
 
 	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
 	znode = *zn;
@@ -1118,7 +1114,9 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 	nn = *n;
 	while (1) {
 		err = tnc_next(c, &znode, &nn);
-		if (err == -ENOENT && o_znode) {
+		if (err == -ENOENT) {
+			if (!o_znode)
+				return 0;
 			dbg_tnc_key(c, key, "collision resolved by default");
 			dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
 				    o_znode->zbranch[o_n].lnum,
@@ -1128,12 +1126,11 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			*n = o_n;
 			return 1;
 		}
-		if (err)
+		if (unlikely(err))
 			return err;
-		okey = &znode->zbranch[nn].key;
-		if (keys_cmp(c, okey, key)) {
+		if (keys_cmp(c, &znode->zbranch[nn].key, key)) {
 			if (!o_znode)
-				return -ENOENT;
+				return 0;
 			dbg_tnc_key(c, key, "collision resolved by default");
 			dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
 				    o_znode->zbranch[o_n].lnum,
@@ -1146,10 +1143,10 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
 		if (unlikely(err < 0))
 			return err;
+		*zn = znode;
+		*n = nn;
 		if (err == NAME_MATCHES) {
 			dbg_tnc_key(c, key, "collision resolved");
-			*zn = znode;
-			*n = nn;
 			return 1;
 		}
 		if (err == NOT_ON_MEDIA) {
@@ -1157,8 +1154,6 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			o_n = nn;
 		}
 	}
-
-	return -EINVAL;
 }
 
 /**
@@ -1186,11 +1181,9 @@ static int matches_position(struct ubifs_zbranch *zbr, int lnum, int offs)
  * @lnum: LEB number of dent node to match
  * @offs: offset of dent node to match
  *
- * This function returns %1 and sets @zn and @n if the collision is resolved.
- * %0 is returned if @lnum:@offs is not found and @zn and @n are set to the
- * next directory entry.  %-ENOENT is returned if there are no
- * following directory entries for the same inode.  Otherwise a negative error
- * code is returned.
+ * This function returns %1 and sets @zn and @n if the collision is resolved,
+ * %0 if @lnum:@offs is not found and @zn and @n are set to the next directory
+ * entry. Otherwise a negative error code is returned.
  */
 static int resolve_collision_directly(struct ubifs_info *c,
 				      const union ubifs_key *key,
@@ -1198,7 +1191,6 @@ static int resolve_collision_directly(struct ubifs_info *c,
 				      int lnum, int offs)
 {
 	struct ubifs_znode *znode;
-	union ubifs_key *okey;
 	int nn, err;
 
 	dbg_tnc_key(c, key, "key");
@@ -1213,7 +1205,7 @@ static int resolve_collision_directly(struct ubifs_info *c,
 		err = tnc_prev(c, &znode, &nn);
 		if (err == -ENOENT)
 			break;
-		if (err)
+		if (unlikely(err < 0))
 			return err;
 		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
@@ -1232,17 +1224,18 @@ static int resolve_collision_directly(struct ubifs_info *c,
 	nn = *n;
 	while (1) {
 		err = tnc_next(c, &znode, &nn);
-		if (err)
-			return err;
-		okey = &znode->zbranch[nn].key;
-		if (keys_cmp(c, okey, key))
+		if (err == -ENOENT)
 			return 0;
+		if (unlikely(err < 0))
+			return err;
+		if (keys_cmp(c, &znode->zbranch[nn].key, key))
+			return 0;
+		*zn = znode;
+		*n = nn;
 		if (matches_position(&znode->zbranch[nn], lnum, offs)) {
 			dbg_tnc_key(c, key, "collision resolved");
 			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
 				    lnum, offs);
-			*zn = znode;
-			*n = nn;
 			return 1;
 		}
 	}
@@ -2106,8 +2099,6 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 		} else if (is_hash_key(c, key)) {
 			found = resolve_collision_directly(c, key, &znode, &n,
 							   old_lnum, old_offs);
-			if (found == -ENOENT)
-				found = 0;
 			if (found < 0) {
 				err = found;
 				goto out;
@@ -2178,7 +2169,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 							   nm);
 		else
 			found = resolve_collision(c, key, &znode, &n, nm);
-		if (found < 0 && found != -ENOENT) {
+		if (unlikely(found < 0)) {
 			err = found;
 			goto out;
 		}
@@ -2192,8 +2183,6 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		}
 		if (found == 0)
 			n -= 1;
-		else if (found == -ENOENT)
-			found = 0;
 		else if (found == 1) {
 			struct ubifs_zbranch *zbr = &znode->zbranch[n];
 
@@ -2381,7 +2370,7 @@ int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 	mutex_lock(&c->tnc_mutex);
 	dbg_tnc_key(c, key, "%.*s, key", nm->len, nm->name);
 	found = lookup_level0_dirty(c, key, &znode, &n);
-	if (found < 0) {
+	if (unlikely(found < 0)) {
 		err = found;
 		goto out;
 	}
@@ -2391,9 +2380,7 @@ int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 							   nm);
 		else
 			found = resolve_collision(c, key, &znode, &n, nm);
-		if (found == -ENOENT)
-			found = 0;
-		if (found < 0) {
+		if (unlikely(found < 0)) {
 			err = found;
 			goto out;
 		}
@@ -2618,7 +2605,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	/* Handle collisions */
 	if (found && nm->name) {
 		err = resolve_collision(c, key, &znode, &n, nm);
-		if (err < 0)
+		if (unlikely(err < 0))
 			goto out;
 		if (err == 0)
 			goto name_not_found;
