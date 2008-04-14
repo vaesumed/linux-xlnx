@@ -45,7 +45,7 @@ static int ap_poll_thread_start(void);
 static void ap_poll_thread_stop(void);
 static void ap_request_timeout(unsigned long);
 
-/**
+/*
  * Module description.
  */
 MODULE_AUTHOR("IBM Corporation");
@@ -53,7 +53,7 @@ MODULE_DESCRIPTION("Adjunct Processor Bus driver, "
 		   "Copyright 2006 IBM Corporation");
 MODULE_LICENSE("GPL");
 
-/**
+/*
  * Module parameter
  */
 int ap_domain_index = -1;	/* Adjunct Processor Domain Index */
@@ -69,7 +69,7 @@ static struct device *ap_root_device = NULL;
 static DEFINE_SPINLOCK(ap_device_lock);
 static LIST_HEAD(ap_device_list);
 
-/**
+/*
  * Workqueue & timer for bus rescan.
  */
 static struct workqueue_struct *ap_work_queue;
@@ -77,7 +77,7 @@ static struct timer_list ap_config_timer;
 static int ap_config_time = AP_CONFIG_TIME;
 static DECLARE_WORK(ap_config_work, ap_scan_bus);
 
-/**
+/*
  * Tasklet & timer for AP request polling.
  */
 static struct timer_list ap_poll_timer = TIMER_INITIALIZER(ap_poll_timeout,0,0);
@@ -371,7 +371,7 @@ static void ap_decrease_queue_count(struct ap_device *ap_dev)
 	if (ap_dev->queue_count > 0)
 		mod_timer(&ap_dev->timeout, jiffies + timeout);
 	else
-		/**
+		/*
 		 * The timeout timer should to be disabled now - since
 		 * del_timer_sync() is very expensive, we just tell via the
 		 * reset flag to ignore the pending timeout timer.
@@ -441,7 +441,7 @@ static int ap_bus_match(struct device *dev, struct device_driver *drv)
 	struct ap_driver *ap_drv = to_ap_drv(drv);
 	struct ap_device_id *id;
 
-	/**
+	/*
 	 * Compare device type of the device with the list of
 	 * supported types of the device_driver.
 	 */
@@ -565,7 +565,7 @@ void ap_driver_unregister(struct ap_driver *ap_drv)
 }
 EXPORT_SYMBOL(ap_driver_unregister);
 
-/**
+/*
  * AP bus attributes.
  */
 static ssize_t ap_domain_show(struct bus_type *bus, char *buf)
@@ -637,7 +637,7 @@ static int ap_select_domain(void)
 	int queue_depth, device_type, count, max_count, best_domain;
 	int rc, i, j;
 
-	/**
+	/*
 	 * We want to use a single domain. Either the one specified with
 	 * the "domain=" parameter or the domain with the maximum number
 	 * of devices.
