@@ -1452,7 +1452,7 @@ static struct ubifs_nnode *dirty_cow_nnode(struct ubifs_info *c,
 	struct ubifs_nnode *n;
 	int i;
 
-	if (!test_bit(COW_ZNODE, &nnode->flags)) {
+	if (!test_bit(COW_CNODE, &nnode->flags)) {
 		/* nnode is not being committed */
 		if (!test_and_set_bit(DIRTY_CNODE, &nnode->flags)) {
 			c->dirty_nn_cnt += 1;
@@ -1504,9 +1504,7 @@ static struct ubifs_pnode *dirty_cow_pnode(struct ubifs_info *c,
 {
 	struct ubifs_pnode *p;
 
-	/* TODO: explain why COW_ZNODE flag is used. Introduce own pnode flag
-	 * if there is not reason to use znode flage - it confuses! */
-	if (!test_bit(COW_ZNODE, &pnode->flags)) {
+	if (!test_bit(COW_CNODE, &pnode->flags)) {
 		/* pnode is not being committed */
 		if (!test_and_set_bit(DIRTY_CNODE, &pnode->flags)) {
 			c->dirty_pn_cnt += 1;
