@@ -823,10 +823,13 @@ static void set_pcie_port_type(struct pci_dev *pdev)
  * reading the dword at 0x100 which must either be 0 or a valid extended
  * capability header.
  */
-int pci_cfg_space_size(struct pci_dev *dev)
+int pci_cfg_space_size_ext(struct pci_dev *dev, unsigned check_exp_pcix)
 {
 	int pos;
 	u32 status;
+
+	if (!check_exp_pcix)
+		goto skip;
 
 	pos = pci_find_capability(dev, PCI_CAP_ID_EXP);
 	if (!pos) {
@@ -839,6 +842,7 @@ int pci_cfg_space_size(struct pci_dev *dev)
 			goto fail;
 	}
 
+ skip:
 	if (pci_read_config_dword(dev, 256, &status) != PCIBIOS_SUCCESSFUL)
 		goto fail;
 	if (status == 0xffffffff)
@@ -848,6 +852,11 @@ int pci_cfg_space_size(struct pci_dev *dev)
 
  fail:
 	return PCI_CFG_SPACE_SIZE;
+}
+
+int pci_cfg_space_size(struct pci_dev *dev)
+{
+	return pci_cfg_space_size_ext(dev, 1);
 }
 
 static void pci_release_bus_bridge_dev(struct device *dev)
@@ -946,7 +955,6 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	dev->dev.release = pci_release_dev;
 	pci_dev_get(dev);
 
-	set_dev_node(&dev->dev, pcibus_to_node(bus));
 	dev->dev.dma_mask = &dev->dma_mask;
 	dev->dev.dma_parms = &dev->dma_parms;
 	dev->dev.coherent_dma_mask = 0xffffffffull;
@@ -1062,6 +1070,10 @@ unsigned int __devinit pci_scan_child_bus(struct pci_bus *bus)
 	return max;
 }
 
+void __attribute__((weak)) set_pci_bus_resources_arch_default(struct pci_bus *b)
+{
+}
+
 struct pci_bus * pci_create_bus(struct device *parent,
 		int bus, struct pci_ops *ops, void *sysdata)
 {
@@ -1101,6 +1113,9 @@ struct pci_bus * pci_create_bus(struct device *parent,
 		goto dev_reg_err;
 	b->bridge = get_device(dev);
 
+	if (!parent)
+		set_dev_node(b->bridge, pcibus_to_node(b));
+
 	b->dev.class = &pcibus_class;
 	b->dev.parent = b->bridge;
 	sprintf(b->dev.bus_id, "%04x:%02x", pci_domain_nr(b), bus);
@@ -1117,6 +1132,8 @@ struct pci_bus * pci_create_bus(struct device *parent,
 	b->number = b->secondary = bus;
 	b->resource[0] = &ioport_resource;
 	b->resource[1] = &iomem_resource;
+
+	set_pci_bus_resources_arch_default(b);
 
 	return b;
 

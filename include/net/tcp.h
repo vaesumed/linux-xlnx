@@ -965,6 +965,17 @@ static inline void tcp_openreq_init(struct request_sock *req,
 	tcp_rsk(req)->rcv_isn = TCP_SKB_CB(skb)->seq;
 	req->mss = rx_opt->mss_clamp;
 	req->ts_recent = rx_opt->saw_tstamp ? rx_opt->rcv_tsval : 0;
+#ifdef CONFIG_KMEMCHECK
+	/* bitfield init */
+	ireq->snd_wscale =
+	ireq->rcv_wscale =
+	ireq->tstamp_ok =
+	ireq->sack_ok =
+	ireq->wscale_ok =
+	ireq->ecn_ok =
+	ireq->acked =
+	ireq->__filler = 0;
+#endif
 	ireq->tstamp_ok = rx_opt->tstamp_ok;
 	ireq->sack_ok = rx_opt->sack_ok;
 	ireq->snd_wscale = rx_opt->snd_wscale;
