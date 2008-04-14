@@ -131,6 +131,9 @@
  */
 #define WORST_COMPR_FACTOR 2
 
+/* Maximum expected tree height for use by bottom_up_buf */
+#define BOTTOM_UP_HEIGHT 64
+
 /*
  * Znode flags (actually, bit numbers which store the flags).
  *
