@@ -394,12 +394,11 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			key_read(c, &saved->key, &key);
 			nm.name = saved->name;
 			nm.len = le16_to_cpu(saved->nlen);
-			dent = ubifs_tnc_next_ent(c, &key, &nm);
 		} else {
 			dent_key_init_hash(c, &key, dir->i_ino, filp->f_pos);
 			nm.name = NULL;
-			dent = ubifs_tnc_next_ent(c, &key, &nm);
 		}
+		dent = ubifs_tnc_next_ent(c, &key, &nm);
 		if (IS_ERR(dent)) {
 			err = PTR_ERR(dent);
 			goto out;
