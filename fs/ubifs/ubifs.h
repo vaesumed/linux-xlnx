@@ -76,17 +76,6 @@
 /* Largest key size supported in this implementation */
 #define CUR_MAX_KEY_LEN UBIFS_SK_LEN
 
-/* LPT cnode flags */
-/* TODO: turn into enum and document */
-#define DIRTY_CNODE 0
-#define COW_CNODE 1
-#define OBSOLETE_CNODE 2
-
-/* Dirty flags (lpt_drty_flgs) for LPT special nodes */
-/* TODO: turn into enum and document */
-#define LTAB_DIRTY 1
-#define LSAVE_DIRTY 2
-
 /* Maximum number of entries in each LPT (LEB category) heap */
 #define LPT_HEAP_SZ 256
 
@@ -181,11 +170,36 @@ enum {
  * Greater than zero means: 'scanned that number of padding bytes'
  */
 enum {
-	SCANNED_GARBAGE = 0,
-	SCANNED_EMPTY_SPACE = -1,
-	SCANNED_A_NODE = -2,
+	SCANNED_GARBAGE        = 0,
+	SCANNED_EMPTY_SPACE    = -1,
+	SCANNED_A_NODE         = -2,
 	SCANNED_A_CORRUPT_NODE = -3,
 	SCANNED_A_BAD_PAD_NODE = -4,
+};
+
+/*
+ * LPT cnode flag bits.
+ *
+ * DIRTY_CNODE: cnode is dirty
+ * COW_CNODE: cnode is being committed and must be copied before writing
+ * OBSOLETE_CNODE: cnode is being committed and has been copied (or deleted),
+ * so it can (and must) be freed when the commit is finished
+ */
+enum {
+	DIRTY_CNODE    = 0,
+	COW_CNODE      = 1,
+	OBSOLETE_CNODE = 2,
+};
+
+/*
+ * Dirty flag bits (lpt_drty_flgs) for LPT special nodes.
+ *
+ * LTAB_DIRTY: ltab node is dirty
+ * LSAVE_DIRTY: lsave node is dirty
+ */
+enum {
+	LTAB_DIRTY  = 1,
+	LSAVE_DIRTY = 2,
 };
 
 /**
