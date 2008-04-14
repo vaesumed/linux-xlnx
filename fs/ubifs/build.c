@@ -495,7 +495,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	 * height amount of integers. We assume the height if the TNC tree will
 	 * never exceed 64.
 	 */
-	c->bottom_up_buf = kmalloc(64 * sizeof(int), GFP_KERNEL);
+	c->bottom_up_buf = kmalloc(BOTTOM_UP_HEIGHT * sizeof(int), GFP_KERNEL);
 	if (!c->bottom_up_buf)
 		return -ENOMEM;
 
