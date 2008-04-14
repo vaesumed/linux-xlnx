@@ -290,7 +290,7 @@
      <para>
        If you have a data structure which is only ever accessed from
        user context, then you can use a simple semaphore
-       (<filename>linux/asm/semaphore.h</filename>) to protect it.  This 
+       (<filename>include/asm/semaphore.h</filename>) to protect it.  This
        is the most trivial case: you initialize the semaphore to the number 
        of resources available (usually 1), and call
        <function>down_interruptible()</function> to grab the semaphore, and 
@@ -701,6 +701,29 @@
 </table>
 
 </sect1>
+</chapter>
+
+<chapter id="try-variants">
+ <title>The try variants</title>
+
+  <para>
+    <function>spin_trylock()</function> does not spin but returns non-zero if
+    it acquires the spinlock on the first try or 0 if not.
+  </para>
+
+  <para>
+    <function>mutex_trylock()</function> does not suspend your task
+    but returns non-zero if it could lock the mutex on the first try
+    or 0 if not.
+  </para>
+
+  <para>
+    <function>down_trylock()</function> does not suspend your task
+    but returns 0 if it could get the semaphore on the first try or
+    non-zero if not. The return value is the inverse of that of
+    <function>spin_trylock()</function> and <function>mutex_trylock()
+    </function>.
+  </para>
 </chapter>
 
   <chapter id="Examples">
