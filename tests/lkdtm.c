@@ -216,7 +216,7 @@ static int lkdtm_parse_commandline(void)
 	}
 
 	if (cpoint == INVALID || cptype == NONE)
-                return -EINVAL;
+		return -EINVAL;
 
 	count = cpoint_count;
 
@@ -232,7 +232,7 @@ static int recursive_loop(int a)
 	if (!recur_count)
 		return 0;
 	else
-        	return recursive_loop(a);
+		return recursive_loop(a);
 }
 
 void lkdtm_handler(void)
@@ -324,8 +324,8 @@ static int __init lkdtm_module_init(void)
 	}
 
 	if ((ret = register_jprobe(&lkdtm)) < 0) {
-                printk(KERN_INFO "lkdtm : Couldn't register jprobe\n");
-                return ret;
+		printk(KERN_INFO "lkdtm : Couldn't register jprobe\n");
+		return ret;
 	}
 
 	printk(KERN_INFO "lkdtm : Crash point %s of type %s registered\n",
@@ -335,8 +335,8 @@ static int __init lkdtm_module_init(void)
 
 static void __exit lkdtm_module_exit(void)
 {
-        unregister_jprobe(&lkdtm);
-        printk(KERN_INFO "lkdtm : Crash point unregistered\n");
+	unregister_jprobe(&lkdtm);
+	printk(KERN_INFO "lkdtm : Crash point unregistered\n");
 }
 
 module_init(lkdtm_module_init);
