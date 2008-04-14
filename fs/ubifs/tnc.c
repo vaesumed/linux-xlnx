@@ -58,8 +58,21 @@ enum {
  * @offs: offset of obsoleted index node
  *
  * Returns %0 on success, and a negative error code on failure.
- * TODO: improve comments of the stuff related to the old tree. Document whole
- * "old index tree" concept - why we have this and so on.
+ *
+ * For recovery, there must always be a complete intact version of the index on
+ * flash at all times. That is called the "old index". It is the index as at the
+ * time of the last successful commit. Many of the index nodes in the old index
+ * may be dirty, but they must not be erased until the next successful commit
+ * (at which point that index becomes the old index).
+ *
+ * That means that the garbage collection and the in-the-gaps method of
+ * committing must be able to determine if an index node is in the old index.
+ * Most of the old index nodes can be found by looking up the TNC using the
+ * 'lookup_znode()' function. However, some of the old index nodes may have
+ * been deleted from the current index or may have been changed so much that
+ * they cannot be easily found. In those cases, an entry is added to an RB-tree.
+ * That is what this function does. The RB-tree is ordered by LEB number and
+ * offset because they uniquely identify the old index node.
  */
 static int insert_old_idx(struct ubifs_info *c, int lnum, int offs)
 {
