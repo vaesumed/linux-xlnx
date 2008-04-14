@@ -11,7 +11,6 @@ selinux-y := avc.o \
 	     nlmsgtab.o \
 	     netif.o \
 	     netnode.o \
-	     netport.o \
 	     exports.o
 
 selinux-$(CONFIG_SECURITY_NETWORK_XFRM) += xfrm.o
