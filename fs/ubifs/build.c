@@ -263,6 +263,8 @@ static int init_constants_late(struct ubifs_info *c)
 	 *
 	 * Subtract the LEB reserved for GC and the LEB which is reserved for
 	 * deletions.
+	 *
+	 * Review 'ubifs_calc_available()' if changing this calculation.
 	 */
 	tmp64 = c->main_lebs - 2;
 	tmp64 *= c->leb_size - c->dark_wm;
