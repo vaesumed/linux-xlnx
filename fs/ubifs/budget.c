@@ -281,6 +281,18 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 {
 	long long available, subtract_lebs;
 
+	/*
+	 * Force the amount available to the total size reported if the used
+	 * space is zero.
+	 */
+	if (c->lst.total_used <= UBIFS_INO_NODE_SZ &&
+	    c->budg_data_growth + c->budg_dd_growth == 0) {
+		/* Do the same calculation as for c->block_cnt */
+		available = c->main_lebs - 2;
+		available *= c->leb_size - c->dark_wm;
+		return available;
+	}
+
 	available = c->main_bytes - c->lst.total_used;
 
 	/*
