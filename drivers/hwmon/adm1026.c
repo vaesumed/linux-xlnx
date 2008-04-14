@@ -838,20 +838,26 @@ static SENSOR_DEVICE_ATTR(in16_max, S_IRUGO | S_IWUSR, show_in16_max, set_in16_m
 static ssize_t show_fan(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
-	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
-	int nr = sensor_attr->index;
+	int nr = to_sensor_dev_attr(attr)->index;
 	struct adm1026_data *data = adm1026_update_device(dev);
-	return sprintf(buf, "%d\n", FAN_FROM_REG(data->fan[nr],
-		data->fan_div[nr]));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	val = FAN_FROM_REG(data->fan[nr], data->fan_div[nr]);
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 static ssize_t show_fan_min(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
-	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
-	int nr = sensor_attr->index;
+	int nr = to_sensor_dev_attr(attr)->index;
 	struct adm1026_data *data = adm1026_update_device(dev);
-	return sprintf(buf, "%d\n", FAN_FROM_REG(data->fan_min[nr],
-		data->fan_div[nr]));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	val = FAN_FROM_REG(data->fan_min[nr], data->fan_div[nr]);
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 static ssize_t set_fan_min(struct device *dev, struct device_attribute *attr,
 		const char *buf, size_t count)

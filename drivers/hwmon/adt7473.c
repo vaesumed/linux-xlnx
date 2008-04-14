@@ -211,6 +211,9 @@ static inline int adt7473_write_word_data(struct i2c_client *client, u8 reg,
 
 static void adt7473_init_client(struct i2c_client *client)
 {
+	struct adt7473_data *data = i2c_get_clientdata(client);
+	u8 cfg;
+
 	int reg = i2c_smbus_read_byte_data(client, ADT7473_REG_CFG1);
 
 	if (!(reg & ADT7473_CFG1_READY)) {
@@ -220,25 +223,6 @@ static void adt7473_init_client(struct i2c_client *client)
 		i2c_smbus_write_byte_data(client, ADT7473_REG_CFG1,
 					  reg | ADT7473_CFG1_START);
 	}
-}
-
-static struct adt7473_data *adt7473_update_device(struct device *dev)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct adt7473_data *data = i2c_get_clientdata(client);
-	unsigned long local_jiffies = jiffies;
-	u8 cfg;
-	int i;
-
-	mutex_lock(&data->lock);
-	if (time_before(local_jiffies, data->sensors_last_updated +
-		SENSOR_REFRESH_INTERVAL)
-		&& data->sensors_valid)
-		goto no_sensor_update;
-
-	for (i = 0; i < ADT7473_VOLT_COUNT; i++)
-		data->volt[i] = i2c_smbus_read_byte_data(client,
-						ADT7473_REG_VOLT(i));
 
 	/* Determine temperature encoding */
 	cfg = i2c_smbus_read_byte_data(client, ADT7473_REG_CFG5);
@@ -251,6 +235,24 @@ static struct adt7473_data *adt7473_update_device(struct device *dev)
 	 * means that you shift temp values by -64 if the above bit was set.
 	 */
 	data->temp_offset = (cfg & ADT7473_CFG5_TEMP_OFFSET);
+}
+
+static struct adt7473_data *adt7473_update_device(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct adt7473_data *data = i2c_get_clientdata(client);
+	unsigned long local_jiffies = jiffies;
+	int i;
+
+	mutex_lock(&data->lock);
+	if (time_before(local_jiffies, data->sensors_last_updated +
+		SENSOR_REFRESH_INTERVAL)
+		&& data->sensors_valid)
+		goto no_sensor_update;
+
+	for (i = 0; i < ADT7473_VOLT_COUNT; i++)
+		data->volt[i] = i2c_smbus_read_byte_data(client,
+						ADT7473_REG_VOLT(i));
 
 	for (i = 0; i < ADT7473_TEMP_COUNT; i++)
 		data->temp[i] = i2c_smbus_read_byte_data(client,
@@ -422,18 +424,14 @@ static ssize_t show_volt(struct device *dev, struct device_attribute *devattr,
  * number in the range -128 to 127, or as an unsigned number that must
  * be offset by 64.
  */
-static int decode_temp(struct adt7473_data *data, u8 raw)
+static int decode_temp(u8 twos_complement, u8 raw)
 {
-	if (data->temp_twos_complement)
-		return (s8)raw;
-	return raw - 64;
+	return twos_complement ? (s8)raw : raw - 64;
 }
 
-static u8 encode_temp(struct adt7473_data *data, int cooked)
+static u8 encode_temp(u8 twos_complement, int cooked)
 {
-	if (data->temp_twos_complement)
-		return (cooked & 0xFF);
-	return cooked + 64;
+	return twos_complement ? cooked & 0xFF : cooked + 64;
 }
 
 static ssize_t show_temp_min(struct device *dev,
@@ -442,8 +440,9 @@ static ssize_t show_temp_min(struct device *dev,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct adt7473_data *data = adt7473_update_device(dev);
-	return sprintf(buf, "%d\n",
-		       1000 * decode_temp(data, data->temp_min[attr->index]));
+	return sprintf(buf, "%d\n", 1000 * decode_temp(
+						data->temp_twos_complement,
+						data->temp_min[attr->index]));
 }
 
 static ssize_t set_temp_min(struct device *dev,
@@ -455,7 +454,7 @@ static ssize_t set_temp_min(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct adt7473_data *data = i2c_get_clientdata(client);
 	int temp = simple_strtol(buf, NULL, 10) / 1000;
-	temp = encode_temp(data, temp);
+	temp = encode_temp(data->temp_twos_complement, temp);
 
 	mutex_lock(&data->lock);
 	data->temp_min[attr->index] = temp;
@@ -472,8 +471,9 @@ static ssize_t show_temp_max(struct device *dev,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct adt7473_data *data = adt7473_update_device(dev);
-	return sprintf(buf, "%d\n",
-		       1000 * decode_temp(data, data->temp_max[attr->index]));
+	return sprintf(buf, "%d\n", 1000 * decode_temp(
+						data->temp_twos_complement,
+						data->temp_max[attr->index]));
 }
 
 static ssize_t set_temp_max(struct device *dev,
@@ -485,7 +485,7 @@ static ssize_t set_temp_max(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct adt7473_data *data = i2c_get_clientdata(client);
 	int temp = simple_strtol(buf, NULL, 10) / 1000;
-	temp = encode_temp(data, temp);
+	temp = encode_temp(data->temp_twos_complement, temp);
 
 	mutex_lock(&data->lock);
 	data->temp_max[attr->index] = temp;
@@ -501,22 +501,26 @@ static ssize_t show_temp(struct device *dev, struct device_attribute *devattr,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct adt7473_data *data = adt7473_update_device(dev);
-	return sprintf(buf, "%d\n",
-		       1000 * decode_temp(data, data->temp[attr->index]));
+	return sprintf(buf, "%d\n", 1000 * decode_temp(
+						data->temp_twos_complement,
+						data->temp[attr->index]));
 }
 
 static ssize_t show_fan_min(struct device *dev,
 			    struct device_attribute *devattr,
 			    char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adt7473_data *data = adt7473_update_device(dev);
+	int val;
 
-	if (FAN_DATA_VALID(data->fan_min[attr->index]))
-		return sprintf(buf, "%d\n",
-			       FAN_PERIOD_TO_RPM(data->fan_min[attr->index]));
+	mutex_lock(&data->lock);
+	if (FAN_DATA_VALID(data->fan_min[index]))
+		val = FAN_PERIOD_TO_RPM(data->fan_min[index]);
 	else
-		return sprintf(buf, "0\n");
+		val = 0;
+	mutex_unlock(&data->lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t set_fan_min(struct device *dev,
@@ -543,14 +547,17 @@ static ssize_t set_fan_min(struct device *dev,
 static ssize_t show_fan(struct device *dev, struct device_attribute *devattr,
 			char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adt7473_data *data = adt7473_update_device(dev);
+	int val;
 
-	if (FAN_DATA_VALID(data->fan[attr->index]))
-		return sprintf(buf, "%d\n",
-			       FAN_PERIOD_TO_RPM(data->fan[attr->index]));
+	mutex_lock(&data->lock);
+	if (FAN_DATA_VALID(data->fan[index]))
+		val = FAN_PERIOD_TO_RPM(data->fan[index]);
 	else
-		return sprintf(buf, "0\n");
+		val = 0;
+	mutex_unlock(&data->lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t show_max_duty_at_crit(struct device *dev,
@@ -671,8 +678,9 @@ static ssize_t show_temp_tmax(struct device *dev,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct adt7473_data *data = adt7473_update_device(dev);
-	return sprintf(buf, "%d\n",
-		       1000 * decode_temp(data, data->temp_tmax[attr->index]));
+	return sprintf(buf, "%d\n", 1000 * decode_temp(
+						data->temp_twos_complement,
+						data->temp_tmax[attr->index]));
 }
 
 static ssize_t set_temp_tmax(struct device *dev,
@@ -684,7 +692,7 @@ static ssize_t set_temp_tmax(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct adt7473_data *data = i2c_get_clientdata(client);
 	int temp = simple_strtol(buf, NULL, 10) / 1000;
-	temp = encode_temp(data, temp);
+	temp = encode_temp(data->temp_twos_complement, temp);
 
 	mutex_lock(&data->lock);
 	data->temp_tmax[attr->index] = temp;
@@ -701,8 +709,9 @@ static ssize_t show_temp_tmin(struct device *dev,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct adt7473_data *data = adt7473_update_device(dev);
-	return sprintf(buf, "%d\n",
-		       1000 * decode_temp(data, data->temp_tmin[attr->index]));
+	return sprintf(buf, "%d\n", 1000 * decode_temp(
+						data->temp_twos_complement,
+						data->temp_tmin[attr->index]));
 }
 
 static ssize_t set_temp_tmin(struct device *dev,
@@ -714,7 +723,7 @@ static ssize_t set_temp_tmin(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct adt7473_data *data = i2c_get_clientdata(client);
 	int temp = simple_strtol(buf, NULL, 10) / 1000;
-	temp = encode_temp(data, temp);
+	temp = encode_temp(data->temp_twos_complement, temp);
 
 	mutex_lock(&data->lock);
 	data->temp_tmin[attr->index] = temp;
