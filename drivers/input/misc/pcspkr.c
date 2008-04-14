@@ -36,7 +36,6 @@ static int pcspkr_event(struct input_dev *dev, unsigned int type, unsigned int c
 {
 	unsigned int count = 0;
 	unsigned long flags;
-	unsigned char val;
 
 	if (type != EV_SND)
 		return -1;
@@ -52,18 +51,17 @@ static int pcspkr_event(struct input_dev *dev, unsigned int type, unsigned int c
 
 	spin_lock_irqsave(&i8253_lock, flags);
 
-	val = inb(0x61);
 	if (count) {
 		/* enable counter 2 */
-		outb(val | 3, 0x61);
+		outb_p(inb_p(0x61) | 3, 0x61);
 		/* set command for counter 2, 2 byte write */
-		outb_pit(0xB6, PIT_MODE);
+		outb_p(0xB6, 0x43);
 		/* select desired HZ */
-		outb_pit(count & 0xff, PIT_CH2);
-		outb((count >> 8) & 0xff, PIT_CH2);
+		outb_p(count & 0xff, 0x42);
+		outb((count >> 8) & 0xff, 0x42);
 	} else {
 		/* disable counter 2 */
-		outb(val & 0xFC, 0x61);
+		outb(inb_p(0x61) & 0xFC, 0x61);
 	}
 
 	spin_unlock_irqrestore(&i8253_lock, flags);
