@@ -66,6 +66,7 @@
 #include <linux/unistd.h>
 #include <linux/pagemap.h>
 #include <linux/hrtimer.h>
+#include <linux/tick.h>
 
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
@@ -396,6 +397,7 @@ struct rq {
 	unsigned long cpu_load[CPU_LOAD_IDX_MAX];
 	unsigned char idle_at_tick;
 #ifdef CONFIG_NO_HZ
+	unsigned long last_tick_seen;
 	unsigned char in_nohz_recently;
 #endif
 	/* capture load from *all* tasks on this cpu: */
@@ -499,6 +501,32 @@ static inline int cpu_of(struct rq *rq)
 #endif
 }
 
+#ifdef CONFIG_NO_HZ
+static inline bool nohz_on(int cpu)
+{
+	return tick_get_tick_sched(cpu)->nohz_mode != NOHZ_MODE_INACTIVE;
+}
+
+static inline u64 max_skipped_ticks(struct rq *rq)
+{
+	return nohz_on(cpu_of(rq)) ? jiffies - rq->last_tick_seen + 2 : 1;
+}
+
+static inline void update_last_tick_seen(struct rq *rq)
+{
+	rq->last_tick_seen = jiffies;
+}
+#else
+static inline u64 max_skipped_ticks(struct rq *rq)
+{
+	return 1;
+}
+
+static inline void update_last_tick_seen(struct rq *rq)
+{
+}
+#endif
+
 /*
  * Update the per-runqueue clock, as finegrained as the platform can give
  * us, but without assuming monotonicity, etc.:
@@ -523,9 +551,12 @@ static void __update_rq_clock(struct rq *rq)
 		/*
 		 * Catch too large forward jumps too:
 		 */
-		if (unlikely(clock + delta > rq->tick_timestamp + TICK_NSEC)) {
-			if (clock < rq->tick_timestamp + TICK_NSEC)
-				clock = rq->tick_timestamp + TICK_NSEC;
+		u64 max_jump = max_skipped_ticks(rq) * TICK_NSEC;
+		u64 max_time = rq->tick_timestamp + max_jump;
+
+		if (unlikely(clock + delta > max_time)) {
+			if (clock < max_time)
+				clock = max_time;
 			else
 				clock++;
 			rq->clock_overflows++;
@@ -632,11 +663,39 @@ int sysctl_sched_rt_runtime = 950000;
  */
 #define RUNTIME_INF	((u64)~0ULL)
 
+static const unsigned long long time_sync_thresh = 100000;
+
+static DEFINE_PER_CPU(unsigned long long, time_offset);
+static DEFINE_PER_CPU(unsigned long long, prev_cpu_time);
+
 /*
- * For kernel-internal use: high-speed (but slightly incorrect) per-cpu
- * clock constructed from sched_clock():
+ * Global lock which we take every now and then to synchronize
+ * the CPUs time. This method is not warp-safe, but it's good
+ * enough to synchronize slowly diverging time sources and thus
+ * it's good enough for tracing:
  */
-unsigned long long cpu_clock(int cpu)
+static DEFINE_SPINLOCK(time_sync_lock);
+static unsigned long long prev_global_time;
+
+static unsigned long long __sync_cpu_clock(cycles_t time, int cpu)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&time_sync_lock, flags);
+
+	if (time < prev_global_time) {
+		per_cpu(time_offset, cpu) += prev_global_time - time;
+		time = prev_global_time;
+	} else {
+		prev_global_time = time;
+	}
+
+	spin_unlock_irqrestore(&time_sync_lock, flags);
+
+	return time;
+}
+
+static unsigned long long __cpu_clock(int cpu)
 {
 	unsigned long long now;
 	unsigned long flags;
@@ -656,6 +715,24 @@ unsigned long long cpu_clock(int cpu)
 	local_irq_restore(flags);
 
 	return now;
+}
+
+/*
+ * For kernel-internal use: high-speed (but slightly incorrect) per-cpu
+ * clock constructed from sched_clock():
+ */
+unsigned long long cpu_clock(int cpu)
+{
+	unsigned long long prev_cpu_time, time, delta_time;
+
+	prev_cpu_time = per_cpu(prev_cpu_time, cpu);
+	time = __cpu_clock(cpu) + per_cpu(time_offset, cpu);
+	delta_time = time-prev_cpu_time;
+
+	if (unlikely(delta_time > time_sync_thresh))
+		time = __sync_cpu_clock(time, cpu);
+
+	return time;
 }
 EXPORT_SYMBOL_GPL(cpu_clock);
 
@@ -3765,6 +3842,7 @@ void scheduler_tick(void)
 		rq->clock_underflows++;
 	}
 	rq->tick_timestamp = rq->clock;
+	update_last_tick_seen(rq);
 	update_cpu_load(rq);
 	curr->sched_class->task_tick(rq, curr, 0);
 	update_sched_rt_period(rq);
@@ -7214,6 +7292,7 @@ void __init sched_init(void)
 		lockdep_set_class(&rq->lock, &rq->rq_lock_key);
 		rq->nr_running = 0;
 		rq->clock = 1;
+		update_last_tick_seen(rq);
 		init_cfs_rq(&rq->cfs, rq);
 		init_rt_rq(&rq->rt, rq);
 #ifdef CONFIG_FAIR_GROUP_SCHED
