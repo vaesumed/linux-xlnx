@@ -244,7 +244,7 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
  */
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 {
-	int rem;
+	int ret;
 	uint64_t idx_size;
 
 	idx_size = c->old_idx_sz + c->budg_idx_growth + c->budg_uncommitted_idx;
@@ -257,8 +257,18 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 	 * pair, nor similarly the two variables for the new index size, so we
 	 * have to do this costly 64-bit division on fast-path.
 	 */
-	rem = do_div(idx_size, c->leb_size - c->max_idx_node_sz);
-	return idx_size + !!rem;
+	if (do_div(idx_size, c->leb_size - c->max_idx_node_sz))
+		ret = idx_size + 1;
+	else
+		ret = idx_size;
+	/*
+	 * At present the index needs at least 2 LEBs: one for the index head
+	 * and one for in-the-gaps method (which currently does not cater for
+	 * the index head and so excludes it from consideration).
+	 */
+	if (ret < 2)
+		ret = 2;
+	return ret;
 }
 
 /**
@@ -305,6 +315,17 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 	 * space cannot be used.
 	 */
 	available -= c->lst.total_dark;
+
+	/*
+	 * However, there is more dark space. The index may be bigger than
+	 * min_idx_lebs. Those extra LEBs are assumed to be available, but
+	 * their dark space is not included in total_dark, so it is subtracted
+	 * here.
+	 */
+	if (c->lst.idx_lebs > c->min_idx_lebs) {
+		subtract_lebs = c->lst.idx_lebs - c->min_idx_lebs;
+		available -= subtract_lebs * c->dark_wm;
+	}
 
 	return available;
 }
