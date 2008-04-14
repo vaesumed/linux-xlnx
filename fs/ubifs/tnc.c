@@ -1282,7 +1282,14 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 
 	ubifs_assert(c->zroot.znode != NULL);
 	ubifs_assert(znode != NULL);
-	ubifs_assert(c->zroot.znode->level < 64);
+	if (c->zroot.znode->level > BOTTOM_UP_HEIGHT) {
+		kfree(c->bottom_up_buf);
+		c->bottom_up_buf = kmalloc(c->zroot.znode->level * sizeof(int),
+					   GFP_NOFS);
+		if (!c->bottom_up_buf)
+			return ERR_PTR(-ENOMEM);
+		path = c->bottom_up_buf;
+	}
 	if (c->zroot.znode->level) {
 		/* Go up until parent is dirty */
 		while (1) {
