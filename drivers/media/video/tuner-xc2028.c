@@ -23,8 +23,6 @@
 #include "dvb_frontend.h"
 
 
-#define PREFIX "xc2028"
-
 static int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "enable verbose debug messages");
@@ -42,6 +40,11 @@ MODULE_PARM_DESC(audio_std,
 	"NICAM\n"
 	"NICAM/A\n"
 	"NICAM/B\n");
+
+static char firmware_name[FIRMWARE_NAME_MAX];
+module_param_string(firmware_name, firmware_name, sizeof(firmware_name), 0);
+MODULE_PARM_DESC(firmware_name, "Firmware file name. Allows overriding the "
+				"default firmware name\n");
 
 static LIST_HEAD(xc2028_list);
 static DEFINE_MUTEX(xc2028_list_mutex);
@@ -145,7 +148,7 @@ static unsigned int xc2028_get_reg(struct xc2028_data *priv, u16 reg, u16 *val)
 }
 
 #define dump_firm_type(t) 	dump_firm_type_and_int_freq(t, 0)
-void dump_firm_type_and_int_freq(unsigned int type, u16 int_freq)
+static void dump_firm_type_and_int_freq(unsigned int type, u16 int_freq)
 {
 	 if (type & BASE)
 		printk("BASE ");
@@ -255,19 +258,24 @@ static int load_all_firmwares(struct dvb_frontend *fe)
 	int                   rc = 0;
 	int		      n, n_array;
 	char		      name[33];
+	char		      *fname;
 
 	tuner_dbg("%s called\n", __FUNCTION__);
 
-	tuner_dbg("Reading firmware %s\n", priv->ctrl.fname);
-	rc = request_firmware(&fw, priv->ctrl.fname,
-			      &priv->i2c_props.adap->dev);
+	if (!firmware_name[0])
+		fname = priv->ctrl.fname;
+	else
+		fname = firmware_name;
+
+	tuner_dbg("Reading firmware %s\n", fname);
+	rc = request_firmware(&fw, fname, &priv->i2c_props.adap->dev);
 	if (rc < 0) {
 		if (rc == -ENOENT)
 			tuner_err("Error: firmware %s not found.\n",
-				   priv->ctrl.fname);
+				   fname);
 		else
 			tuner_err("Error %d while requesting firmware %s \n",
-				   rc, priv->ctrl.fname);
+				   rc, fname);
 
 		return rc;
 	}
@@ -276,7 +284,7 @@ static int load_all_firmwares(struct dvb_frontend *fe)
 
 	if (fw->size < sizeof(name) - 1 + 2 + 2) {
 		tuner_err("Error: firmware file %s has invalid size!\n",
-			  priv->ctrl.fname);
+			  fname);
 		goto corrupt;
 	}
 
@@ -291,7 +299,7 @@ static int load_all_firmwares(struct dvb_frontend *fe)
 	p += 2;
 
 	tuner_info("Loading %d firmware images from %s, type: %s, ver %d.%d\n",
-		   n_array, priv->ctrl.fname, name,
+		   n_array, fname, name,
 		   priv->firm_version >> 8, priv->firm_version & 0xff);
 
 	priv->firm = kzalloc(sizeof(*priv->firm) * n_array, GFP_KERNEL);
@@ -906,9 +914,11 @@ static int generic_set_freq(struct dvb_frontend *fe, u32 freq /* in HZ */,
 	if (rc < 0)
 		goto ret;
 
-	rc = priv->tuner_callback(priv->video_dev, XC2028_RESET_CLK, 1);
-	if (rc < 0)
-		goto ret;
+	/* Return code shouldn't be checked.
+	   The reset CLK is needed only with tm6000.
+	   Driver should work fine even if this fails.
+	 */
+	priv->tuner_callback(priv->video_dev, XC2028_RESET_CLK, 1);
 
 	msleep(10);
 
@@ -1153,23 +1163,29 @@ struct dvb_frontend *xc2028_attach(struct dvb_frontend *fe,
 	void               *video_dev;
 
 	if (debug)
-		printk(KERN_DEBUG PREFIX ": Xcv2028/3028 init called!\n");
+		printk(KERN_DEBUG "xc2028: Xcv2028/3028 init called!\n");
 
-	if (NULL == cfg || NULL == cfg->video_dev)
+	if (NULL == cfg)
 		return NULL;
 
 	if (!fe) {
-		printk(KERN_ERR PREFIX ": No frontend!\n");
+		printk(KERN_ERR "xc2028: No frontend!\n");
 		return NULL;
 	}
 
-	video_dev = cfg->video_dev;
+	video_dev = cfg->i2c_adap->algo_data;
+
+	if (debug)
+		printk(KERN_DEBUG "xc2028: video_dev =%p\n", video_dev);
 
 	mutex_lock(&xc2028_list_mutex);
 
 	list_for_each_entry(priv, &xc2028_list, xc2028_list) {
-		if (priv->video_dev == cfg->video_dev) {
+		if (&priv->i2c_props.adap->dev == &cfg->i2c_adap->dev) {
 			video_dev = NULL;
+			if (debug)
+				printk(KERN_DEBUG "xc2028: reusing device\n");
+
 			break;
 		}
 	}
@@ -1183,6 +1199,8 @@ struct dvb_frontend *xc2028_attach(struct dvb_frontend *fe,
 
 		priv->i2c_props.addr = cfg->i2c_addr;
 		priv->i2c_props.adap = cfg->i2c_adap;
+		priv->i2c_props.name = "xc2028";
+
 		priv->video_dev = video_dev;
 		priv->tuner_callback = cfg->callback;
 		priv->ctrl.max_len = 13;
@@ -1194,6 +1212,9 @@ struct dvb_frontend *xc2028_attach(struct dvb_frontend *fe,
 
 	fe->tuner_priv = priv;
 	priv->count++;
+
+	if (debug)
+		printk(KERN_DEBUG "xc2028: usage count is %i\n", priv->count);
 
 	memcpy(&fe->ops.tuner_ops, &xc2028_dvb_tuner_ops,
 	       sizeof(xc2028_dvb_tuner_ops));

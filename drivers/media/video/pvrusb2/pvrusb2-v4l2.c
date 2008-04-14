@@ -67,6 +67,10 @@ struct pvr2_v4l2 {
 
 	struct v4l2_prio_state prio;
 
+	/* Map contiguous ordinal value to input id */
+	unsigned char *input_map;
+	unsigned int input_cnt;
+
 	/* streams - Note that these must be separately, individually,
 	 * allocated pointers.  This is because the v4l core is going to
 	 * manage their deletion - separately, individually...  */
@@ -259,14 +263,21 @@ static int pvr2_v4l2_do_ioctl(struct inode *inode, struct file *file,
 		struct v4l2_input *vi = (struct v4l2_input *)arg;
 		struct v4l2_input tmp;
 		unsigned int cnt;
+		int val;
 
 		cptr = pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT);
 
 		memset(&tmp,0,sizeof(tmp));
 		tmp.index = vi->index;
 		ret = 0;
-		switch (vi->index) {
+		if ((vi->index < 0) || (vi->index >= vp->input_cnt)) {
+			ret = -EINVAL;
+			break;
+		}
+		val = vp->input_map[vi->index];
+		switch (val) {
 		case PVR2_CVAL_INPUT_TV:
+		case PVR2_CVAL_INPUT_DTV:
 		case PVR2_CVAL_INPUT_RADIO:
 			tmp.type = V4L2_INPUT_TYPE_TUNER;
 			break;
@@ -281,7 +292,7 @@ static int pvr2_v4l2_do_ioctl(struct inode *inode, struct file *file,
 		if (ret < 0) break;
 
 		cnt = 0;
-		pvr2_ctrl_get_valname(cptr,vi->index,
+		pvr2_ctrl_get_valname(cptr,val,
 				      tmp.name,sizeof(tmp.name)-1,&cnt);
 		tmp.name[cnt] = 0;
 
@@ -303,22 +314,33 @@ static int pvr2_v4l2_do_ioctl(struct inode *inode, struct file *file,
 
 	case VIDIOC_G_INPUT:
 	{
+		unsigned int idx;
 		struct pvr2_ctrl *cptr;
 		struct v4l2_input *vi = (struct v4l2_input *)arg;
 		int val;
 		cptr = pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT);
 		val = 0;
 		ret = pvr2_ctrl_get_value(cptr,&val);
-		vi->index = val;
+		vi->index = 0;
+		for (idx = 0; idx < vp->input_cnt; idx++) {
+			if (vp->input_map[idx] == val) {
+				vi->index = idx;
+				break;
+			}
+		}
 		break;
 	}
 
 	case VIDIOC_S_INPUT:
 	{
 		struct v4l2_input *vi = (struct v4l2_input *)arg;
+		if ((vi->index < 0) || (vi->index >= vp->input_cnt)) {
+			ret = -ERANGE;
+			break;
+		}
 		ret = pvr2_ctrl_set_value(
 			pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT),
-			vi->index);
+			vp->input_map[vi->index]);
 		break;
 	}
 
@@ -817,6 +839,10 @@ static void pvr2_v4l2_destroy_no_lock(struct pvr2_v4l2 *vp)
 		pvr2_v4l2_dev_destroy(vp->dev_radio);
 		vp->dev_radio = NULL;
 	}
+	if (vp->input_map) {
+		kfree(vp->input_map);
+		vp->input_map = NULL;
+	}
 
 	pvr2_trace(PVR2_TRACE_STRUCT,"Destroying pvr2_v4l2 id=%p",vp);
 	pvr2_channel_done(&vp->channel);
@@ -858,7 +884,6 @@ static int pvr2_v4l2_release(struct inode *inode, struct file *file)
 {
 	struct pvr2_v4l2_fh *fhp = file->private_data;
 	struct pvr2_v4l2 *vp = fhp->vhead;
-	struct pvr2_context *mp = fhp->vhead->channel.mc_head;
 	struct pvr2_hdw *hdw = fhp->channel.mc_head->hdw;
 
 	pvr2_trace(PVR2_TRACE_OPEN_CLOSE,"pvr2_v4l2_release");
@@ -875,42 +900,40 @@ static int pvr2_v4l2_release(struct inode *inode, struct file *file)
 	v4l2_prio_close(&vp->prio, &fhp->prio);
 	file->private_data = NULL;
 
-	pvr2_context_enter(mp); do {
-		/* Restore the previous input selection, if it makes sense
-		   to do so. */
-		if (fhp->dev_info->v4l_type == VFL_TYPE_RADIO) {
-			struct pvr2_ctrl *cp;
-			int pval;
-			cp = pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT);
-			pvr2_ctrl_get_value(cp,&pval);
-			/* Only restore if we're still selecting the radio */
-			if (pval == PVR2_CVAL_INPUT_RADIO) {
-				pvr2_ctrl_set_value(cp,fhp->prev_input_val);
-				pvr2_hdw_commit_ctl(hdw);
-			}
+	/* Restore the previous input selection, if it makes sense
+	   to do so. */
+	if (fhp->dev_info->v4l_type == VFL_TYPE_RADIO) {
+		struct pvr2_ctrl *cp;
+		int pval;
+		cp = pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT);
+		pvr2_ctrl_get_value(cp,&pval);
+		/* Only restore if we're still selecting the radio */
+		if (pval == PVR2_CVAL_INPUT_RADIO) {
+			pvr2_ctrl_set_value(cp,fhp->prev_input_val);
+			pvr2_hdw_commit_ctl(hdw);
 		}
+	}
 
-		if (fhp->vnext) {
-			fhp->vnext->vprev = fhp->vprev;
-		} else {
-			vp->vlast = fhp->vprev;
-		}
-		if (fhp->vprev) {
-			fhp->vprev->vnext = fhp->vnext;
-		} else {
-			vp->vfirst = fhp->vnext;
-		}
-		fhp->vnext = NULL;
-		fhp->vprev = NULL;
-		fhp->vhead = NULL;
-		pvr2_channel_done(&fhp->channel);
-		pvr2_trace(PVR2_TRACE_STRUCT,
-			   "Destroying pvr_v4l2_fh id=%p",fhp);
-		kfree(fhp);
-		if (vp->channel.mc_head->disconnect_flag && !vp->vfirst) {
-			pvr2_v4l2_destroy_no_lock(vp);
-		}
-	} while (0); pvr2_context_exit(mp);
+	if (fhp->vnext) {
+		fhp->vnext->vprev = fhp->vprev;
+	} else {
+		vp->vlast = fhp->vprev;
+	}
+	if (fhp->vprev) {
+		fhp->vprev->vnext = fhp->vnext;
+	} else {
+		vp->vfirst = fhp->vnext;
+	}
+	fhp->vnext = NULL;
+	fhp->vprev = NULL;
+	fhp->vhead = NULL;
+	pvr2_channel_done(&fhp->channel);
+	pvr2_trace(PVR2_TRACE_STRUCT,
+		   "Destroying pvr_v4l2_fh id=%p",fhp);
+	kfree(fhp);
+	if (vp->channel.mc_head->disconnect_flag && !vp->vfirst) {
+		pvr2_v4l2_destroy_no_lock(vp);
+	}
 	return 0;
 }
 
@@ -943,32 +966,30 @@ static int pvr2_v4l2_open(struct inode *inode, struct file *file)
 	init_waitqueue_head(&fhp->wait_data);
 	fhp->dev_info = dip;
 
-	pvr2_context_enter(vp->channel.mc_head); do {
-		pvr2_trace(PVR2_TRACE_STRUCT,"Creating pvr_v4l2_fh id=%p",fhp);
-		pvr2_channel_init(&fhp->channel,vp->channel.mc_head);
+	pvr2_trace(PVR2_TRACE_STRUCT,"Creating pvr_v4l2_fh id=%p",fhp);
+	pvr2_channel_init(&fhp->channel,vp->channel.mc_head);
 
-		fhp->vnext = NULL;
-		fhp->vprev = vp->vlast;
-		if (vp->vlast) {
-			vp->vlast->vnext = fhp;
-		} else {
-			vp->vfirst = fhp;
-		}
-		vp->vlast = fhp;
-		fhp->vhead = vp;
+	fhp->vnext = NULL;
+	fhp->vprev = vp->vlast;
+	if (vp->vlast) {
+		vp->vlast->vnext = fhp;
+	} else {
+		vp->vfirst = fhp;
+	}
+	vp->vlast = fhp;
+	fhp->vhead = vp;
 
-		/* Opening the /dev/radioX device implies a mode switch.
-		   So execute that here.  Note that you can get the
-		   IDENTICAL effect merely by opening the normal video
-		   device and setting the input appropriately. */
-		if (dip->v4l_type == VFL_TYPE_RADIO) {
-			struct pvr2_ctrl *cp;
-			cp = pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT);
-			pvr2_ctrl_get_value(cp,&fhp->prev_input_val);
-			pvr2_ctrl_set_value(cp,PVR2_CVAL_INPUT_RADIO);
-			pvr2_hdw_commit_ctl(hdw);
-		}
-	} while (0); pvr2_context_exit(vp->channel.mc_head);
+	/* Opening the /dev/radioX device implies a mode switch.
+	   So execute that here.  Note that you can get the
+	   IDENTICAL effect merely by opening the normal video
+	   device and setting the input appropriately. */
+	if (dip->v4l_type == VFL_TYPE_RADIO) {
+		struct pvr2_ctrl *cp;
+		cp = pvr2_hdw_get_ctrl_by_id(hdw,PVR2_CID_INPUT);
+		pvr2_ctrl_get_value(cp,&fhp->prev_input_val);
+		pvr2_ctrl_set_value(cp,PVR2_CVAL_INPUT_RADIO);
+		pvr2_hdw_commit_ctl(hdw);
+	}
 
 	fhp->file = file;
 	file->private_data = fhp;
@@ -1198,27 +1219,46 @@ static void pvr2_v4l2_dev_init(struct pvr2_v4l2_dev *dip,
 struct pvr2_v4l2 *pvr2_v4l2_create(struct pvr2_context *mnp)
 {
 	struct pvr2_v4l2 *vp;
+	struct pvr2_hdw *hdw;
+	unsigned int input_mask,input_cnt,idx;
 
 	vp = kzalloc(sizeof(*vp),GFP_KERNEL);
 	if (!vp) return vp;
-	vp->dev_video = kzalloc(sizeof(*vp->dev_video),GFP_KERNEL);
-	vp->dev_radio = kzalloc(sizeof(*vp->dev_radio),GFP_KERNEL);
-	if (!(vp->dev_video && vp->dev_radio)) {
-		kfree(vp->dev_video);
-		kfree(vp->dev_radio);
-		kfree(vp);
-		return NULL;
-	}
 	pvr2_channel_init(&vp->channel,mnp);
 	pvr2_trace(PVR2_TRACE_STRUCT,"Creating pvr2_v4l2 id=%p",vp);
 
 	vp->channel.check_func = pvr2_v4l2_internal_check;
 
+	hdw = vp->channel.mc_head->hdw;
+	input_mask = pvr2_hdw_get_input_available(hdw);
+	input_cnt = 0;
+	for (idx = 0; idx < (sizeof(input_mask) << 3); idx++) {
+		if (input_mask & (1 << idx)) input_cnt++;
+	}
+	vp->input_cnt = input_cnt;
+	vp->input_map = kzalloc(input_cnt,GFP_KERNEL);
+	if (!vp->input_map) goto fail;
+	input_cnt = 0;
+	for (idx = 0; idx < (sizeof(input_mask) << 3); idx++) {
+		if (!(input_mask & (1 << idx))) continue;
+		vp->input_map[input_cnt++] = idx;
+	}
+
 	/* register streams */
+	vp->dev_video = kzalloc(sizeof(*vp->dev_video),GFP_KERNEL);
+	if (!vp->dev_video) goto fail;
 	pvr2_v4l2_dev_init(vp->dev_video,vp,VFL_TYPE_GRABBER);
-	pvr2_v4l2_dev_init(vp->dev_radio,vp,VFL_TYPE_RADIO);
+	if (input_mask & (1 << PVR2_CVAL_INPUT_RADIO)) {
+		vp->dev_radio = kzalloc(sizeof(*vp->dev_radio),GFP_KERNEL);
+		if (!vp->dev_radio) goto fail;
+		pvr2_v4l2_dev_init(vp->dev_radio,vp,VFL_TYPE_RADIO);
+	}
 
 	return vp;
+ fail:
+	pvr2_trace(PVR2_TRACE_STRUCT,"Failure creating pvr2_v4l2 id=%p",vp);
+	pvr2_v4l2_destroy_no_lock(vp);
+	return 0;
 }
 
 /*
