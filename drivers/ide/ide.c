@@ -1041,11 +1041,6 @@ out_port_class:
 
 static void __exit ide_exit(void)
 {
-	int index;
-
-	for (index = 0; index < MAX_HWIFS; ++index)
-		ide_unregister(index);
-
 	proc_ide_destroy();
 
 	class_destroy(ide_port_class);
