@@ -152,6 +152,8 @@ out_err:
 	err = -EINVAL;
 out_free:
 	vfree(sbuf);
+	*mst = NULL;
+	*cor = NULL;
 	return err;
 }
 
