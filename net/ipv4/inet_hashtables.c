@@ -68,7 +68,7 @@ void inet_bind_hash(struct sock *sk, struct inet_bind_bucket *tb,
  */
 static void __inet_put_port(struct sock *sk)
 {
-	struct inet_hashinfo *hashinfo = sk->sk_prot->hashinfo;
+	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	const int bhash = inet_bhashfn(inet_sk(sk)->num, hashinfo->bhash_size);
 	struct inet_bind_hashbucket *head = &hashinfo->bhash[bhash];
 	struct inet_bind_bucket *tb;
@@ -139,7 +139,7 @@ static struct sock *inet_lookup_listener_slow(struct net *net,
 	sk_for_each(sk, node, head) {
 		const struct inet_sock *inet = inet_sk(sk);
 
-		if (sk->sk_net == net && inet->num == hnum &&
+		if (net_eq(sock_net(sk), net) && inet->num == hnum &&
 				!ipv6_only_sock(sk)) {
 			const __be32 rcv_saddr = inet->rcv_saddr;
 			int score = sk->sk_family == PF_INET ? 1 : 0;
@@ -182,7 +182,7 @@ struct sock *__inet_lookup_listener(struct net *net,
 		if (inet->num == hnum && !sk->sk_node.next &&
 		    (!inet->rcv_saddr || inet->rcv_saddr == daddr) &&
 		    (sk->sk_family == PF_INET || !ipv6_only_sock(sk)) &&
-		    !sk->sk_bound_dev_if && sk->sk_net == net)
+		    !sk->sk_bound_dev_if && net_eq(sock_net(sk), net))
 			goto sherry_cache;
 		sk = inet_lookup_listener_slow(net, head, daddr, hnum, dif);
 	}
@@ -254,7 +254,7 @@ static int __inet_check_established(struct inet_timewait_death_row *death_row,
 	struct sock *sk2;
 	const struct hlist_node *node;
 	struct inet_timewait_sock *tw;
-	struct net *net = sk->sk_net;
+	struct net *net = sock_net(sk);
 
 	prefetch(head->chain.first);
 	write_lock(lock);
@@ -288,7 +288,7 @@ unique:
 	sk->sk_hash = hash;
 	BUG_TRAP(sk_unhashed(sk));
 	__sk_add_node(sk, &head->chain);
-	sock_prot_inuse_add(sk->sk_prot, 1);
+	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 	write_unlock(lock);
 
 	if (twp) {
@@ -318,7 +318,7 @@ static inline u32 inet_sk_port_offset(const struct sock *sk)
 
 void __inet_hash_nolisten(struct sock *sk)
 {
-	struct inet_hashinfo *hashinfo = sk->sk_prot->hashinfo;
+	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct hlist_head *list;
 	rwlock_t *lock;
 	struct inet_ehash_bucket *head;
@@ -332,14 +332,14 @@ void __inet_hash_nolisten(struct sock *sk)
 
 	write_lock(lock);
 	__sk_add_node(sk, list);
-	sock_prot_inuse_add(sk->sk_prot, 1);
+	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 	write_unlock(lock);
 }
 EXPORT_SYMBOL_GPL(__inet_hash_nolisten);
 
 static void __inet_hash(struct sock *sk)
 {
-	struct inet_hashinfo *hashinfo = sk->sk_prot->hashinfo;
+	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct hlist_head *list;
 	rwlock_t *lock;
 
@@ -354,7 +354,7 @@ static void __inet_hash(struct sock *sk)
 
 	inet_listen_wlock(hashinfo);
 	__sk_add_node(sk, list);
-	sock_prot_inuse_add(sk->sk_prot, 1);
+	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 	write_unlock(lock);
 	wake_up(&hashinfo->lhash_wait);
 }
@@ -372,7 +372,7 @@ EXPORT_SYMBOL_GPL(inet_hash);
 void inet_unhash(struct sock *sk)
 {
 	rwlock_t *lock;
-	struct inet_hashinfo *hashinfo = sk->sk_prot->hashinfo;
+	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 
 	if (sk_unhashed(sk))
 		goto out;
@@ -387,7 +387,7 @@ void inet_unhash(struct sock *sk)
 	}
 
 	if (__sk_del_node_init(sk))
-		sock_prot_inuse_add(sk->sk_prot, -1);
+		sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
 	write_unlock_bh(lock);
 out:
 	if (sk->sk_state == TCP_LISTEN)
@@ -406,7 +406,7 @@ int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 	struct inet_bind_hashbucket *head;
 	struct inet_bind_bucket *tb;
 	int ret;
-	struct net *net = sk->sk_net;
+	struct net *net = sock_net(sk);
 
 	if (!snum) {
 		int i, remaining, low, high, port;
