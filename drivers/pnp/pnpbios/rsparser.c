@@ -16,6 +16,7 @@ inline void pcibios_penalize_isa_irq(int irq, int active)
 }
 #endif				/* CONFIG_PCI */
 
+#include "../base.h"
 #include "pnpbios.h"
 
 /* standard resource tags */
@@ -53,88 +54,9 @@ inline void pcibios_penalize_isa_irq(int irq, int active)
  * Allocated Resources
  */
 
-static void pnpbios_parse_allocated_irqresource(struct pnp_resource_table *res,
-						int irq)
-{
-	int i = 0;
-
-	while (!(res->irq_resource[i].flags & IORESOURCE_UNSET)
-	       && i < PNP_MAX_IRQ)
-		i++;
-	if (i < PNP_MAX_IRQ) {
-		res->irq_resource[i].flags = IORESOURCE_IRQ;	// Also clears _UNSET flag
-		if (irq == -1) {
-			res->irq_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->irq_resource[i].start =
-		    res->irq_resource[i].end = (unsigned long)irq;
-		pcibios_penalize_isa_irq(irq, 1);
-	}
-}
-
-static void pnpbios_parse_allocated_dmaresource(struct pnp_resource_table *res,
-						int dma)
-{
-	int i = 0;
-
-	while (i < PNP_MAX_DMA &&
-	       !(res->dma_resource[i].flags & IORESOURCE_UNSET))
-		i++;
-	if (i < PNP_MAX_DMA) {
-		res->dma_resource[i].flags = IORESOURCE_DMA;	// Also clears _UNSET flag
-		if (dma == -1) {
-			res->dma_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->dma_resource[i].start =
-		    res->dma_resource[i].end = (unsigned long)dma;
-	}
-}
-
-static void pnpbios_parse_allocated_ioresource(struct pnp_resource_table *res,
-					       int io, int len)
-{
-	int i = 0;
-
-	while (!(res->port_resource[i].flags & IORESOURCE_UNSET)
-	       && i < PNP_MAX_PORT)
-		i++;
-	if (i < PNP_MAX_PORT) {
-		res->port_resource[i].flags = IORESOURCE_IO;	// Also clears _UNSET flag
-		if (len <= 0 || (io + len - 1) >= 0x10003) {
-			res->port_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->port_resource[i].start = (unsigned long)io;
-		res->port_resource[i].end = (unsigned long)(io + len - 1);
-	}
-}
-
-static void pnpbios_parse_allocated_memresource(struct pnp_resource_table *res,
-						int mem, int len)
-{
-	int i = 0;
-
-	while (!(res->mem_resource[i].flags & IORESOURCE_UNSET)
-	       && i < PNP_MAX_MEM)
-		i++;
-	if (i < PNP_MAX_MEM) {
-		res->mem_resource[i].flags = IORESOURCE_MEM;	// Also clears _UNSET flag
-		if (len <= 0) {
-			res->mem_resource[i].flags |= IORESOURCE_DISABLED;
-			return;
-		}
-		res->mem_resource[i].start = (unsigned long)mem;
-		res->mem_resource[i].end = (unsigned long)(mem + len - 1);
-	}
-}
-
-static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
-							    unsigned char *end,
-							    struct
-							    pnp_resource_table
-							    *res)
+static unsigned char *pnpbios_parse_allocated_resource_data(struct pnp_dev *dev,
+							    unsigned char *p,
+							    unsigned char *end)
 {
 	unsigned int len, tag;
 	int io, size, mask, i;
@@ -142,8 +64,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 	if (!p)
 		return NULL;
 
-	/* Blank the resource table values */
-	pnp_init_resource_table(res);
+	pnp_init_resources(dev);
 
 	while ((char *)p < (char *)end) {
 
@@ -163,7 +84,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 				goto len_err;
 			io = *(short *)&p[4];
 			size = *(short *)&p[10];
-			pnpbios_parse_allocated_memresource(res, io, size);
+			pnp_add_mem_resource(dev, io, size, 0);
 			break;
 
 		case LARGE_TAG_ANSISTR:
@@ -179,7 +100,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 				goto len_err;
 			io = *(int *)&p[4];
 			size = *(int *)&p[16];
-			pnpbios_parse_allocated_memresource(res, io, size);
+			pnp_add_mem_resource(dev, io, size, 0);
 			break;
 
 		case LARGE_TAG_FIXEDMEM32:
@@ -187,7 +108,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 				goto len_err;
 			io = *(int *)&p[4];
 			size = *(int *)&p[8];
-			pnpbios_parse_allocated_memresource(res, io, size);
+			pnp_add_mem_resource(dev, io, size, 0);
 			break;
 
 		case SMALL_TAG_IRQ:
@@ -198,7 +119,8 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 			for (i = 0; i < 16; i++, mask = mask >> 1)
 				if (mask & 0x01)
 					io = i;
-			pnpbios_parse_allocated_irqresource(res, io);
+			if (pnp_add_irq_resource(dev, io, 0) == 0)
+				pcibios_penalize_isa_irq(io, 1);
 			break;
 
 		case SMALL_TAG_DMA:
@@ -209,7 +131,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 			for (i = 0; i < 8; i++, mask = mask >> 1)
 				if (mask & 0x01)
 					io = i;
-			pnpbios_parse_allocated_dmaresource(res, io);
+			pnp_add_dma_resource(dev, io, 0);
 			break;
 
 		case SMALL_TAG_PORT:
@@ -217,7 +139,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 				goto len_err;
 			io = p[2] + p[3] * 256;
 			size = p[7];
-			pnpbios_parse_allocated_ioresource(res, io, size);
+			pnp_add_io_resource(dev, io, size, 0);
 			break;
 
 		case SMALL_TAG_VENDOR:
@@ -229,7 +151,7 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 				goto len_err;
 			io = p[1] + p[2] * 256;
 			size = p[3];
-			pnpbios_parse_allocated_ioresource(res, io, size);
+			pnp_add_io_resource(dev, io, size, 0);
 			break;
 
 		case SMALL_TAG_END:
@@ -239,9 +161,8 @@ static unsigned char *pnpbios_parse_allocated_resource_data(unsigned char *p,
 
 		default:	/* an unkown tag */
 len_err:
-			printk(KERN_ERR
-			       "PnPBIOS: Unknown tag '0x%x', length '%d'.\n",
-			       tag, len);
+			dev_err(&dev->dev, "unknown tag 0x%x length %d\n",
+				tag, len);
 			break;
 		}
 
@@ -252,8 +173,7 @@ len_err:
 			p += len + 1;
 	}
 
-	printk(KERN_ERR
-	       "PnPBIOS: Resource structure does not contain an end tag.\n");
+	dev_err(&dev->dev, "no end tag in resource structure\n");
 
 	return NULL;
 }
@@ -460,8 +380,8 @@ pnpbios_parse_resource_option_data(unsigned char *p, unsigned char *end,
 			if (len != 0)
 				goto len_err;
 			if (option_independent == option)
-				printk(KERN_WARNING
-				       "PnPBIOS: Missing SMALL_TAG_STARTDEP tag\n");
+				dev_warn(&dev->dev, "missing "
+					 "SMALL_TAG_STARTDEP tag\n");
 			option = option_independent;
 			break;
 
@@ -470,9 +390,8 @@ pnpbios_parse_resource_option_data(unsigned char *p, unsigned char *end,
 
 		default:	/* an unkown tag */
 len_err:
-			printk(KERN_ERR
-			       "PnPBIOS: Unknown tag '0x%x', length '%d'.\n",
-			       tag, len);
+			dev_err(&dev->dev, "unknown tag 0x%x length %d\n",
+				tag, len);
 			break;
 		}
 
@@ -483,8 +402,7 @@ len_err:
 			p += len + 1;
 	}
 
-	printk(KERN_ERR
-	       "PnPBIOS: Resource structure does not contain an end tag.\n");
+	dev_err(&dev->dev, "no end tag in resource structure\n");
 
 	return NULL;
 }
@@ -548,13 +466,11 @@ static unsigned char *pnpbios_parse_compatible_ids(unsigned char *p,
 		case SMALL_TAG_COMPATDEVID:	/* compatible ID */
 			if (len != 4)
 				goto len_err;
-			dev_id = kzalloc(sizeof(struct pnp_id), GFP_KERNEL);
-			if (!dev_id)
-				return NULL;
 			pnpid32_to_pnpid(p[1] | p[2] << 8 | p[3] << 16 | p[4] <<
 					 24, id);
-			memcpy(&dev_id->id, id, 7);
-			pnp_add_id(dev_id, dev);
+			dev_id = pnp_add_id(dev, id);
+			if (!dev_id)
+				return NULL;
 			break;
 
 		case SMALL_TAG_END:
@@ -564,9 +480,8 @@ static unsigned char *pnpbios_parse_compatible_ids(unsigned char *p,
 
 		default:	/* an unkown tag */
 len_err:
-			printk(KERN_ERR
-			       "PnPBIOS: Unknown tag '0x%x', length '%d'.\n",
-			       tag, len);
+			dev_err(&dev->dev, "unknown tag 0x%x length %d\n",
+				tag, len);
 			break;
 		}
 
@@ -577,8 +492,7 @@ len_err:
 			p += len + 1;
 	}
 
-	printk(KERN_ERR
-	       "PnPBIOS: Resource structure does not contain an end tag.\n");
+	dev_err(&dev->dev, "no end tag in resource structure\n");
 
 	return NULL;
 }
@@ -673,11 +587,10 @@ static void pnpbios_encode_fixed_port(unsigned char *p, struct resource *res)
 	p[3] = len & 0xff;
 }
 
-static unsigned char *pnpbios_encode_allocated_resource_data(unsigned char *p,
-							     unsigned char *end,
-							     struct
-							     pnp_resource_table
-							     *res)
+static unsigned char *pnpbios_encode_allocated_resource_data(struct pnp_dev
+								*dev,
+							     unsigned char *p,
+							     unsigned char *end)
 {
 	unsigned int len, tag;
 	int port = 0, irq = 0, dma = 0, mem = 0;
@@ -701,42 +614,48 @@ static unsigned char *pnpbios_encode_allocated_resource_data(unsigned char *p,
 		case LARGE_TAG_MEM:
 			if (len != 9)
 				goto len_err;
-			pnpbios_encode_mem(p, &res->mem_resource[mem]);
+			pnpbios_encode_mem(p,
+				pnp_get_resource(dev, IORESOURCE_MEM, mem));
 			mem++;
 			break;
 
 		case LARGE_TAG_MEM32:
 			if (len != 17)
 				goto len_err;
-			pnpbios_encode_mem32(p, &res->mem_resource[mem]);
+			pnpbios_encode_mem32(p,
+				pnp_get_resource(dev, IORESOURCE_MEM, mem));
 			mem++;
 			break;
 
 		case LARGE_TAG_FIXEDMEM32:
 			if (len != 9)
 				goto len_err;
-			pnpbios_encode_fixed_mem32(p, &res->mem_resource[mem]);
+			pnpbios_encode_fixed_mem32(p,
+				pnp_get_resource(dev, IORESOURCE_MEM, mem));
 			mem++;
 			break;
 
 		case SMALL_TAG_IRQ:
 			if (len < 2 || len > 3)
 				goto len_err;
-			pnpbios_encode_irq(p, &res->irq_resource[irq]);
+			pnpbios_encode_irq(p,
+				pnp_get_resource(dev, IORESOURCE_IRQ, irq));
 			irq++;
 			break;
 
 		case SMALL_TAG_DMA:
 			if (len != 2)
 				goto len_err;
-			pnpbios_encode_dma(p, &res->dma_resource[dma]);
+			pnpbios_encode_dma(p,
+				pnp_get_resource(dev, IORESOURCE_DMA, dma));
 			dma++;
 			break;
 
 		case SMALL_TAG_PORT:
 			if (len != 7)
 				goto len_err;
-			pnpbios_encode_port(p, &res->port_resource[port]);
+			pnpbios_encode_port(p,
+				pnp_get_resource(dev, IORESOURCE_IO, port));
 			port++;
 			break;
 
@@ -747,7 +666,8 @@ static unsigned char *pnpbios_encode_allocated_resource_data(unsigned char *p,
 		case SMALL_TAG_FIXEDPORT:
 			if (len != 3)
 				goto len_err;
-			pnpbios_encode_fixed_port(p, &res->port_resource[port]);
+			pnpbios_encode_fixed_port(p,
+				pnp_get_resource(dev, IORESOURCE_IO, port));
 			port++;
 			break;
 
@@ -758,9 +678,8 @@ static unsigned char *pnpbios_encode_allocated_resource_data(unsigned char *p,
 
 		default:	/* an unkown tag */
 len_err:
-			printk(KERN_ERR
-			       "PnPBIOS: Unknown tag '0x%x', length '%d'.\n",
-			       tag, len);
+			dev_err(&dev->dev, "unknown tag 0x%x length %d\n",
+				tag, len);
 			break;
 		}
 
@@ -771,8 +690,7 @@ len_err:
 			p += len + 1;
 	}
 
-	printk(KERN_ERR
-	       "PnPBIOS: Resource structure does not contain an end tag.\n");
+	dev_err(&dev->dev, "no end tag in resource structure\n");
 
 	return NULL;
 }
@@ -787,7 +705,7 @@ int __init pnpbios_parse_data_stream(struct pnp_dev *dev,
 	unsigned char *p = (char *)node->data;
 	unsigned char *end = (char *)(node->data + node->size);
 
-	p = pnpbios_parse_allocated_resource_data(p, end, &dev->res);
+	p = pnpbios_parse_allocated_resource_data(dev, p, end);
 	if (!p)
 		return -EIO;
 	p = pnpbios_parse_resource_option_data(p, end, dev);
@@ -799,25 +717,25 @@ int __init pnpbios_parse_data_stream(struct pnp_dev *dev,
 	return 0;
 }
 
-int pnpbios_read_resources_from_node(struct pnp_resource_table *res,
+int pnpbios_read_resources_from_node(struct pnp_dev *dev,
 				     struct pnp_bios_node *node)
 {
 	unsigned char *p = (char *)node->data;
 	unsigned char *end = (char *)(node->data + node->size);
 
-	p = pnpbios_parse_allocated_resource_data(p, end, res);
+	p = pnpbios_parse_allocated_resource_data(dev, p, end);
 	if (!p)
 		return -EIO;
 	return 0;
 }
 
-int pnpbios_write_resources_to_node(struct pnp_resource_table *res,
+int pnpbios_write_resources_to_node(struct pnp_dev *dev,
 				    struct pnp_bios_node *node)
 {
 	unsigned char *p = (char *)node->data;
 	unsigned char *end = (char *)(node->data + node->size);
 
-	p = pnpbios_encode_allocated_resource_data(p, end, res);
+	p = pnpbios_encode_allocated_resource_data(dev, p, end);
 	if (!p)
 		return -EIO;
 	return 0;
