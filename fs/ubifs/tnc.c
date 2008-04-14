@@ -2888,8 +2888,7 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 			if (IS_ERR(znode))
 				return znode;
 			ubifs_search_zbranch(c, znode, key, &n);
-			if (n < 0)
-				return NULL;
+			ubifs_assert(n >= 0);
 		}
 		if (znode->level == level + 1)
 			break;
