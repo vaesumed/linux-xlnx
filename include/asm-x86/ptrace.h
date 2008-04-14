@@ -36,23 +36,23 @@ struct pt_regs {
 #else /* __KERNEL__ */
 
 struct pt_regs {
-	long bx;
-	long cx;
-	long dx;
-	long si;
-	long di;
-	long bp;
-	long ax;
-	int  ds;
-	int  es;
-	int  fs;
+	unsigned long bx;
+	unsigned long cx;
+	unsigned long dx;
+	unsigned long si;
+	unsigned long di;
+	unsigned long bp;
+	unsigned long ax;
+	unsigned long ds;
+	unsigned long es;
+	unsigned long fs;
 	/* int  gs; */
-	long orig_ax;
-	long ip;
-	int  cs;
-	long flags;
-	long sp;
-	int  ss;
+	unsigned long orig_ax;
+	unsigned long ip;
+	unsigned long cs;
+	unsigned long flags;
+	unsigned long sp;
+	unsigned long ss;
 };
 
 #include <asm/vm86.h>
@@ -125,14 +125,48 @@ struct pt_regs {
 #endif /* __KERNEL__ */
 #endif /* !__i386__ */
 
+
+#ifdef CONFIG_X86_PTRACE_BTS
+/* a branch trace record entry
+ *
+ * In order to unify the interface between various processor versions,
+ * we use the below data structure for all processors.
+ */
+enum bts_qualifier {
+	BTS_INVALID = 0,
+	BTS_BRANCH,
+	BTS_TASK_ARRIVES,
+	BTS_TASK_DEPARTS
+};
+
+struct bts_struct {
+	__u64 qualifier;
+	union {
+		/* BTS_BRANCH */
+		struct {
+			__u64 from_ip;
+			__u64 to_ip;
+		} lbr;
+		/* BTS_TASK_ARRIVES or
+		   BTS_TASK_DEPARTS */
+		__u64 jiffies;
+	} variant;
+};
+#endif /* CONFIG_X86_PTRACE_BTS */
+
 #ifdef __KERNEL__
 
-/* the DS BTS struct is used for ptrace as well */
-#include <asm/ds.h>
+#include <linux/init.h>
 
+struct cpuinfo_x86;
 struct task_struct;
 
+#ifdef CONFIG_X86_PTRACE_BTS
+extern void __cpuinit ptrace_bts_init_intel(struct cpuinfo_x86 *);
 extern void ptrace_bts_take_timestamp(struct task_struct *, enum bts_qualifier);
+#else
+#define ptrace_bts_init_intel(config) do {} while (0)
+#endif /* CONFIG_X86_PTRACE_BTS */
 
 extern unsigned long profile_pc(struct pt_regs *regs);
 
@@ -140,12 +174,16 @@ extern unsigned long
 convert_ip_to_linear(struct task_struct *child, struct pt_regs *regs);
 
 #ifdef CONFIG_X86_32
-extern void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs, int error_code);
+extern void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs,
+			 int error_code);
 #else
 void signal_fault(struct pt_regs *regs, void __user *frame, char *where);
 #endif
 
-#define regs_return_value(regs) ((regs)->ax)
+static inline unsigned long regs_return_value(struct pt_regs *regs)
+{
+	return regs->ax;
+}
 
 /*
  * user_mode_vm(regs) determines whether a register set came from user mode.
@@ -166,8 +204,8 @@ static inline int user_mode(struct pt_regs *regs)
 static inline int user_mode_vm(struct pt_regs *regs)
 {
 #ifdef CONFIG_X86_32
-	return ((regs->cs & SEGMENT_RPL_MASK) |
-		(regs->flags & VM_MASK)) >= USER_RPL;
+	return ((regs->cs & SEGMENT_RPL_MASK) | (regs->flags & X86_VM_MASK)) >=
+		USER_RPL;
 #else
 	return user_mode(regs);
 #endif
@@ -176,7 +214,7 @@ static inline int user_mode_vm(struct pt_regs *regs)
 static inline int v8086_mode(struct pt_regs *regs)
 {
 #ifdef CONFIG_X86_32
-	return (regs->flags & VM_MASK);
+	return (regs->flags & X86_VM_MASK);
 #else
 	return 0;	/* No V86 mode support in long mode */
 #endif

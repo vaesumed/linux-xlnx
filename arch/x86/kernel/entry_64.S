@@ -421,19 +421,17 @@ badsys:
 	/* Do syscall tracing */
 tracesys:			 
 	SAVE_REST
-	movq $-ENOSYS,RAX(%rsp)
+	movq $-ENOSYS,RAX(%rsp) /* ptrace can change this for a bad syscall */
 	FIXUP_TOP_OF_STACK %rdi
 	movq %rsp,%rdi
 	call syscall_trace_enter
 	LOAD_ARGS ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
 	cmpq $__NR_syscall_max,%rax
-	movq $-ENOSYS,%rcx
-	cmova %rcx,%rax
-	ja  1f
+	ja   int_ret_from_sys_call	/* RAX(%rsp) set to -ENOSYS above */
 	movq %r10,%rcx	/* fixup for C */
 	call *sys_call_table(,%rax,8)
-1:	movq %rax,RAX-ARGOFFSET(%rsp)
+	movq %rax,RAX-ARGOFFSET(%rsp)
 	/* Use IRET because user could have changed frame */
 		
 /* 
@@ -1177,13 +1175,13 @@ ENTRY(device_not_available)
 END(device_not_available)
 
 	/* runs on exception stack */
-KPROBE_ENTRY(debug)
+KPROBE_ENTRY(x86_debug)
  	INTR_FRAME
 	pushq $0
 	CFI_ADJUST_CFA_OFFSET 8		
 	paranoidentry do_debug, DEBUG_STACK
 	paranoidexit
-KPROBE_END(debug)
+KPROBE_END(x86_debug)
 
 	/* runs on exception stack */	
 KPROBE_ENTRY(nmi)

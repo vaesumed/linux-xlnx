@@ -875,8 +875,8 @@ struct file_lock {
 	struct pid *fl_nspid;
 	wait_queue_head_t fl_wait;
 	struct file *fl_file;
-	unsigned char fl_flags;
-	unsigned char fl_type;
+	unsigned int fl_flags;
+	unsigned int fl_type;
 	loff_t fl_start;
 	loff_t fl_end;
 
