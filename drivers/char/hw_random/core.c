@@ -234,11 +234,11 @@ static DEVICE_ATTR(rng_available, S_IRUGO,
 		   NULL);
 
 
-static void unregister_miscdev(bool suspended)
+static void unregister_miscdev(void)
 {
 	device_remove_file(rng_miscdev.this_device, &dev_attr_rng_available);
 	device_remove_file(rng_miscdev.this_device, &dev_attr_rng_current);
-	__misc_deregister(&rng_miscdev, suspended);
+	misc_deregister(&rng_miscdev);
 }
 
 static int register_miscdev(void)
@@ -313,7 +313,7 @@ out:
 }
 EXPORT_SYMBOL_GPL(hwrng_register);
 
-void __hwrng_unregister(struct hwrng *rng, bool suspended)
+void hwrng_unregister(struct hwrng *rng)
 {
 	int err;
 
@@ -332,11 +332,11 @@ void __hwrng_unregister(struct hwrng *rng, bool suspended)
 		}
 	}
 	if (list_empty(&rng_list))
-		unregister_miscdev(suspended);
+		unregister_miscdev();
 
 	mutex_unlock(&rng_mutex);
 }
-EXPORT_SYMBOL_GPL(__hwrng_unregister);
+EXPORT_SYMBOL_GPL(hwrng_unregister);
 
 
 MODULE_DESCRIPTION("H/W Random Number Generator (RNG) driver");
