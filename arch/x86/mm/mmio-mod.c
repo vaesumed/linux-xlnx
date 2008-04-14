@@ -405,8 +405,10 @@ static cpumask_t downed_cpus;
 static void enter_uniprocessor(void)
 {
 #ifdef CONFIG_SMP
+#ifdef CONFIG_HOTPLUG_CPU
 	int cpu;
 	int err;
+#endif
 
 	get_online_cpus();
 	downed_cpus = cpu_online_map;
@@ -415,6 +417,7 @@ static void enter_uniprocessor(void)
 		pr_notice(NAME "Disabling non-boot CPUs...\n");
 	put_online_cpus();
 
+#ifdef CONFIG_HOTPLUG_CPU
 	for_each_cpu_mask(cpu, downed_cpus) {
 		err = cpu_down(cpu);
 		if (!err) {
@@ -423,6 +426,7 @@ static void enter_uniprocessor(void)
 			pr_err(NAME "Error taking CPU%d down: %d\n", cpu, err);
 		}
 	}
+#endif
 	if (num_online_cpus() > 1)
 		pr_warning(NAME "multiple CPUs still online, "
 						"may miss events.\n");
