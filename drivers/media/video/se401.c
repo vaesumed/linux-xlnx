@@ -35,7 +35,7 @@ static const char version[] = "0.24";
 #include <linux/usb.h>
 #include "se401.h"
 
-static int flickerless=0;
+static int flickerless;
 static int video_nr = -1;
 
 static struct usb_device_id device_table [] = {
@@ -1224,7 +1224,9 @@ static const struct file_operations se401_fops = {
 	.read =         se401_read,
 	.mmap =         se401_mmap,
 	.ioctl =        se401_ioctl,
+#ifdef CONFIG_COMPAT
 	.compat_ioctl = v4l_compat_ioctl32,
+#endif
 	.llseek =       no_llseek,
 };
 static struct video_device se401_template = {
@@ -1279,7 +1281,7 @@ static int se401_init(struct usb_se401 *se401, int button)
 	rc=se401_sndctrl(0, se401, SE401_REQ_GET_HEIGHT, 0, cp, sizeof(cp));
 	se401->cheight=cp[0]+cp[1]*256;
 
-	if (!cp[2] && SE401_FORMAT_BAYER) {
+	if (!(cp[2] & SE401_FORMAT_BAYER)) {
 		err("Bayer format not supported!");
 		return 1;
 	}

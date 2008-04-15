@@ -340,7 +340,9 @@ static const struct file_operations typhoon_fops = {
 	.open           = video_exclusive_open,
 	.release        = video_exclusive_release,
 	.ioctl		= video_ioctl2,
+#ifdef CONFIG_COMPAT
 	.compat_ioctl	= v4l_compat_ioctl32,
+#endif
 	.llseek         = no_llseek,
 };
 
@@ -404,7 +406,7 @@ MODULE_PARM_DESC(io, "I/O address of the Typhoon card (0x316 or 0x336)");
 module_param(radio_nr, int, 0);
 
 #ifdef MODULE
-static unsigned long mutefreq = 0;
+static unsigned long mutefreq;
 module_param(mutefreq, ulong, 0);
 MODULE_PARM_DESC(mutefreq, "Frequency used when muting the card (in kHz)");
 #endif
