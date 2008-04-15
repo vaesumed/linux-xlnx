@@ -398,7 +398,6 @@ static int __devinit palm_bk3710_probe(struct platform_device *pdev)
 
 	i = hwif->index;
 
-	ide_init_port_data(hwif, i);
 	ide_init_port_hw(hwif, &hw);
 
 	hwif->mmio = 1;
