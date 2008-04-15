@@ -36,6 +36,7 @@ int jffs2_do_setattr (struct inode *inode, struct iattr *iattr)
 	unsigned int ivalid;
 	uint32_t alloclen;
 	int ret;
+	int alloc_type = ALLOC_NORMAL;
 
 	D1(printk(KERN_DEBUG "jffs2_setattr(): ino #%lu\n", inode->i_ino));
 
@@ -115,6 +116,10 @@ int jffs2_do_setattr (struct inode *inode, struct iattr *iattr)
 		ri->compr = JFFS2_COMPR_ZERO;
 		ri->dsize = cpu_to_je32(iattr->ia_size - inode->i_size);
 		ri->offset = cpu_to_je32(inode->i_size);
+	} else if (ivalid & ATTR_SIZE && !iattr->ia_size) {
+		/* For truncate-to-zero, treat it as deletion because
+		   it'll always be obsoleting all previous nodes */
+		alloc_type = ALLOC_DELETION;
 	}
 	ri->node_crc = cpu_to_je32(crc32(0, ri, sizeof(*ri)-8));
 	if (mdatalen)
@@ -122,7 +127,7 @@ int jffs2_do_setattr (struct inode *inode, struct iattr *iattr)
 	else
 		ri->data_crc = cpu_to_je32(0);
 
-	new_metadata = jffs2_write_dnode(c, f, ri, mdata, mdatalen, ALLOC_NORMAL);
+	new_metadata = jffs2_write_dnode(c, f, ri, mdata, mdatalen, alloc_type);
 	if (S_ISLNK(inode->i_mode))
 		kfree(mdata);
 
@@ -149,6 +154,7 @@ int jffs2_do_setattr (struct inode *inode, struct iattr *iattr)
 	if (ivalid & ATTR_SIZE && inode->i_size < iattr->ia_size) {
 		jffs2_add_full_dnode_to_inode(c, f, new_metadata);
 		inode->i_size = iattr->ia_size;
+		inode->i_blocks = (inode->i_size + 511) >> 9;
 		f->metadata = NULL;
 	} else {
 		f->metadata = new_metadata;
@@ -167,8 +173,10 @@ int jffs2_do_setattr (struct inode *inode, struct iattr *iattr)
 	   We are protected from a simultaneous write() extending i_size
 	   back past iattr->ia_size, because do_truncate() holds the
 	   generic inode semaphore. */
-	if (ivalid & ATTR_SIZE && inode->i_size > iattr->ia_size)
-		vmtruncate(inode, iattr->ia_size);
+	if (ivalid & ATTR_SIZE && inode->i_size > iattr->ia_size) {
+		vmtruncate(inode, iattr->ia_size);	
+		inode->i_blocks = (inode->i_size + 511) >> 9;
+	}	
 
 	return 0;
 }
