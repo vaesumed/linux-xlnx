@@ -216,7 +216,7 @@ static inline struct hlist_head *dev_index_hash(struct net *net, int ifindex)
 /* Device list insertion */
 static int list_netdevice(struct net_device *dev)
 {
-	struct net *net = dev->nd_net;
+	struct net *net = dev_net(dev);
 
 	ASSERT_RTNL();
 
@@ -852,8 +852,8 @@ int dev_alloc_name(struct net_device *dev, const char *name)
 	struct net *net;
 	int ret;
 
-	BUG_ON(!dev->nd_net);
-	net = dev->nd_net;
+	BUG_ON(!dev_net(dev));
+	net = dev_net(dev);
 	ret = __dev_alloc_name(net, name, buf);
 	if (ret >= 0)
 		strlcpy(dev->name, buf, IFNAMSIZ);
@@ -877,9 +877,9 @@ int dev_change_name(struct net_device *dev, char *newname)
 	struct net *net;
 
 	ASSERT_RTNL();
-	BUG_ON(!dev->nd_net);
+	BUG_ON(!dev_net(dev));
 
-	net = dev->nd_net;
+	net = dev_net(dev);
 	if (dev->flags & IFF_UP)
 		return -EBUSY;
 
@@ -2615,7 +2615,7 @@ static int ptype_seq_show(struct seq_file *seq, void *v)
 
 	if (v == SEQ_START_TOKEN)
 		seq_puts(seq, "Type Device      Function\n");
-	else {
+	else if (pt->dev == NULL || dev_net(pt->dev) == seq_file_net(seq)) {
 		if (pt->type == htons(ETH_P_ALL))
 			seq_puts(seq, "ALL ");
 		else
@@ -2639,7 +2639,8 @@ static const struct seq_operations ptype_seq_ops = {
 
 static int ptype_seq_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &ptype_seq_ops);
+	return seq_open_net(inode, file, &ptype_seq_ops,
+			sizeof(struct seq_net_private));
 }
 
 static const struct file_operations ptype_seq_fops = {
@@ -2647,7 +2648,7 @@ static const struct file_operations ptype_seq_fops = {
 	.open    = ptype_seq_open,
 	.read    = seq_read,
 	.llseek  = seq_lseek,
-	.release = seq_release,
+	.release = seq_release_net,
 };
 
 
@@ -3688,8 +3689,8 @@ int register_netdevice(struct net_device *dev)
 
 	/* When net_device's are persistent, this will be fatal. */
 	BUG_ON(dev->reg_state != NETREG_UNINITIALIZED);
-	BUG_ON(!dev->nd_net);
-	net = dev->nd_net;
+	BUG_ON(!dev_net(dev));
+	net = dev_net(dev);
 
 	spin_lock_init(&dev->queue_lock);
 	spin_lock_init(&dev->_xmit_lock);
@@ -4010,7 +4011,7 @@ struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 	dev = (struct net_device *)
 		(((long)p + NETDEV_ALIGN_CONST) & ~NETDEV_ALIGN_CONST);
 	dev->padded = (char *)dev - (char *)p;
-	dev->nd_net = &init_net;
+	dev_net_set(dev, &init_net);
 
 	if (sizeof_priv) {
 		dev->priv = ((char *)dev +
@@ -4021,6 +4022,7 @@ struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 	}
 
 	dev->egress_subqueue_count = queue_count;
+	dev->gso_max_size = GSO_MAX_SIZE;
 
 	dev->get_stats = internal_stats;
 	netpoll_netdev_init(dev);
@@ -4134,7 +4136,7 @@ int dev_change_net_namespace(struct net_device *dev, struct net *net, const char
 
 	/* Get out if there is nothing todo */
 	err = 0;
-	if (dev->nd_net == net)
+	if (net_eq(dev_net(dev), net))
 		goto out;
 
 	/* Pick the destination device name, and ensure
@@ -4185,7 +4187,7 @@ int dev_change_net_namespace(struct net_device *dev, struct net *net, const char
 	dev_addr_discard(dev);
 
 	/* Actually switch the network namespace */
-	dev->nd_net = net;
+	dev_net_set(dev, net);
 
 	/* Assign the new device name */
 	if (destname != dev->name)

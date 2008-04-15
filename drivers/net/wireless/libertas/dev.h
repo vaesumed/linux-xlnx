@@ -10,9 +10,10 @@
 #include <linux/wireless.h>
 #include <linux/ethtool.h>
 #include <linux/debugfs.h>
+#include <net/ieee80211.h>
 
 #include "defs.h"
-#include "scan.h"
+#include "hostcmd.h"
 
 extern struct ethtool_ops lbs_ethtool_ops;
 
@@ -143,9 +144,14 @@ struct lbs_private {
 	wait_queue_head_t waitq;
 	struct workqueue_struct *work_thread;
 
+	/** Scanning */
 	struct delayed_work scan_work;
 	struct delayed_work assoc_work;
 	struct work_struct sync_channel;
+	/* remember which channel was scanned last, != 0 if currently scanning */
+	int scan_channel;
+	u8 scan_ssid[IW_ESSID_MAX_SIZE + 1];
+	u8 scan_ssid_len;
 
 	/** Hardware access */
 	int (*hw_host_to_card) (struct lbs_private *priv, u8 type, u8 *payload, u16 nb);
@@ -247,7 +253,7 @@ struct lbs_private {
 	struct sk_buff *currenttxskb;
 
 	/** NIC Operation characteristics */
-	u16 currentpacketfilter;
+	u16 mac_control;
 	u32 connect_status;
 	u32 mesh_connect_status;
 	u16 regioncode;
@@ -261,9 +267,6 @@ struct lbs_private {
 	u32 psstate;
 	char ps_supported;
 	u8 needtowakeup;
-
-	struct PS_CMD_ConfirmSleep lbs_ps_confirm_sleep;
-	struct cmd_header lbs_ps_confirm_wake;
 
 	struct assoc_request * pending_assoc_req;
 	struct assoc_request * in_progress_assoc_req;
@@ -315,14 +318,50 @@ struct lbs_private {
 	u32 enable11d;
 
 	/**	MISCELLANEOUS */
-	u8 *prdeeprom;
 	struct lbs_offset_value offsetvalue;
 
-	struct cmd_ds_802_11_get_log logmsg;
-
 	u32 monitormode;
-	int last_scanned_channel;
 	u8 fw_ready;
+};
+
+extern struct cmd_confirm_sleep confirm_sleep;
+
+/**
+ *  @brief Structure used to store information for each beacon/probe response
+ */
+struct bss_descriptor {
+	u8 bssid[ETH_ALEN];
+
+	u8 ssid[IW_ESSID_MAX_SIZE + 1];
+	u8 ssid_len;
+
+	u16 capability;
+	u32 rssi;
+	u32 channel;
+	u16 beaconperiod;
+	u32 atimwindow;
+
+	/* IW_MODE_AUTO, IW_MODE_ADHOC, IW_MODE_INFRA */
+	u8 mode;
+
+	/* zero-terminated array of supported data rates */
+	u8 rates[MAX_RATES + 1];
+
+	unsigned long last_scanned;
+
+	union ieeetypes_phyparamset phyparamset;
+	union IEEEtypes_ssparamset ssparamset;
+
+	struct ieeetypes_countryinfofullset countryinfo;
+
+	u8 wpa_ie[MAX_WPA_IE_LEN];
+	size_t wpa_ie_len;
+	u8 rsn_ie[MAX_WPA_IE_LEN];
+	size_t rsn_ie_len;
+
+	u8 mesh;
+
+	struct list_head list;
 };
 
 /** Association request

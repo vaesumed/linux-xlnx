@@ -8,10 +8,12 @@
 #include <linux/workqueue.h>
 #include <linux/list.h>
 
+#include <net/netns/core.h>
 #include <net/netns/unix.h>
 #include <net/netns/packet.h>
 #include <net/netns/ipv4.h>
 #include <net/netns/ipv6.h>
+#include <net/netns/dccp.h>
 #include <net/netns/x_tables.h>
 
 struct proc_dir_entry;
@@ -46,40 +48,45 @@ struct net {
 
 	struct sock 		*rtnl;			/* rtnetlink socket */
 
-	/* core sysctls */
-	struct ctl_table_header	*sysctl_core_hdr;
-	int			sysctl_somaxconn;
-
+	struct netns_core	core;
 	struct netns_packet	packet;
 	struct netns_unix	unx;
 	struct netns_ipv4	ipv4;
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	struct netns_ipv6	ipv6;
 #endif
+#if defined(CONFIG_IP_DCCP) || defined(CONFIG_IP_DCCP_MODULE)
+	struct netns_dccp	dccp;
+#endif
 #ifdef CONFIG_NETFILTER
 	struct netns_xt		xt;
 #endif
 };
 
-#ifdef CONFIG_NET
+
+#include <linux/seq_file_net.h>
+
 /* Init's network namespace */
 extern struct net init_net;
-#define INIT_NET_NS(net_ns) .net_ns = &init_net,
-#else
-#define INIT_NET_NS(net_ns)
-#endif
-
-extern struct list_head net_namespace_list;
 
 #ifdef CONFIG_NET
+#define INIT_NET_NS(net_ns) .net_ns = &init_net,
+
 extern struct net *copy_net_ns(unsigned long flags, struct net *net_ns);
-#else
+
+#else /* CONFIG_NET */
+
+#define INIT_NET_NS(net_ns)
+
 static inline struct net *copy_net_ns(unsigned long flags, struct net *net_ns)
 {
 	/* There is nothing to copy so this is a noop */
 	return net_ns;
 }
-#endif
+#endif /* CONFIG_NET */
+
+
+extern struct list_head net_namespace_list;
 
 #ifdef CONFIG_NET_NS
 extern void __put_net(struct net *net);
@@ -118,6 +125,12 @@ static inline void release_net(struct net *net)
 {
 	atomic_dec(&net->use_count);
 }
+
+static inline
+int net_eq(const struct net *net1, const struct net *net2)
+{
+	return net1 == net2;
+}
 #else
 static inline struct net *get_net(struct net *net)
 {
@@ -140,6 +153,12 @@ static inline void release_net(struct net *net)
 static inline struct net *maybe_get_net(struct net *net)
 {
 	return net;
+}
+
+static inline
+int net_eq(const struct net *net1, const struct net *net2)
+{
+	return 1;
 }
 #endif
 
