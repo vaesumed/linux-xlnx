@@ -93,6 +93,7 @@ struct nfs_server {
 	unsigned int		wpages;		/* write size (in pages) */
 	unsigned int		wtmult;		/* server disk block size */
 	unsigned int		dtsize;		/* readdir size */
+	unsigned short		port;		/* "port=" setting */
 	unsigned int		bsize;		/* server block size */
 	unsigned int		acregmin;	/* attr cache timeouts */
 	unsigned int		acregmax;
@@ -117,6 +118,13 @@ struct nfs_server {
 
 	atomic_t active; /* Keep trace of any activity to this server */
 	wait_queue_head_t active_wq;  /* Wait for any activity to stop  */
+
+	/* mountd-related mount options */
+	struct sockaddr_storage	mountd_address;
+	size_t			mountd_addrlen;
+	u32			mountd_version;
+	unsigned short		mountd_port;
+	unsigned short		mountd_protocol;
 };
 
 /* Server capabilities */
