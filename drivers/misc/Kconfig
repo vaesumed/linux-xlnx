@@ -368,6 +368,7 @@ config ME4000
 
 config AECTC
 	tristate "AETC video timestamp device"
+	depends on PCI
 	default n
 	help
 	  Provides support for something that needs to be documented here.
