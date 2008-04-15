@@ -220,8 +220,8 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 		 * checking.
 		 */
 		ubifs_err("dead directory entry");
-		ubifs_ro_mode(c);
 		err = PTR_ERR(inode);
+		ubifs_ro_mode(c, err);
 		goto out;
 	}
 

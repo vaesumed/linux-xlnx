@@ -380,9 +380,9 @@ static int do_writepage(struct page *page, int len)
 	err = ubifs_jrn_write_data(c, inode, &key, addr, len);
 	if (err) {
 		SetPageError(page);
-		ubifs_err("cannot write page %lu of inode %lu, error %d",
-			  page->index, inode->i_ino, err);
-		ubifs_ro_mode(c);
+		ubifs_err("cannot write page %lu of inode %lu",
+			  page->index, inode->i_ino);
+		ubifs_ro_mode(c, err);
 	}
 
 	ubifs_assert(PagePrivate(page));
