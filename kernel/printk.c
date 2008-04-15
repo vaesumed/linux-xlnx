@@ -649,16 +649,14 @@ static int acquire_console_semaphore_for_printk(unsigned int cpu)
 	spin_unlock(&logbuf_lock);
 	return retval;
 }
-
-const char printk_recursion_bug_msg [] =
-			KERN_CRIT "BUG: recent printk recursion!\n";
-static int printk_recursion_bug;
+static const char recursion_bug_msg [] =
+		KERN_CRIT "BUG: recent printk recursion!\n";
+static int recursion_bug;
+static int log_level_unknown = 1;
+static char printk_buf[1024];
 
 asmlinkage int vprintk(const char *fmt, va_list args)
 {
-	static int log_level_unknown = 1;
-	static char printk_buf[1024];
-
 	unsigned long flags;
 	int printed_len = 0;
 	int this_cpu;
@@ -683,7 +681,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 		 * it can be printed at the next appropriate moment:
 		 */
 		if (!oops_in_progress) {
-			printk_recursion_bug = 1;
+			recursion_bug = 1;
 			goto out_restore_irqs;
 		}
 		zap_locks();
@@ -693,10 +691,10 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	spin_lock(&logbuf_lock);
 	printk_cpu = this_cpu;
 
-	if (printk_recursion_bug) {
-		printk_recursion_bug = 0;
-		strcpy(printk_buf, printk_recursion_bug_msg);
-		printed_len = sizeof(printk_recursion_bug_msg);
+	if (recursion_bug) {
+		recursion_bug = 0;
+		strcpy(printk_buf, recursion_bug_msg);
+		printed_len = sizeof(recursion_bug_msg);
 	}
 	/* Emit the output into the temporary buffer */
 	printed_len += vscnprintf(printk_buf + printed_len,
@@ -1001,7 +999,9 @@ void release_console_sem(void)
 		_log_end = log_end;
 		con_start = log_end;		/* Flush */
 		spin_unlock(&logbuf_lock);
+		stop_critical_timings();	/* don't trace print latency */
 		call_console_drivers(_con_start, _log_end);
+		start_critical_timings();
 		local_irq_restore(flags);
 	}
 	console_locked = 0;
@@ -1132,8 +1132,11 @@ void register_console(struct console *console)
 			console->index = 0;
 		if (console->setup == NULL ||
 		    console->setup(console, NULL) == 0) {
-			console->flags |= CON_ENABLED | CON_CONSDEV;
-			preferred_console = 0;
+			console->flags |= CON_ENABLED;
+			if (console->device) {
+				console->flags |= CON_CONSDEV;
+				preferred_console = 0;
+			}
 		}
 	}
 
