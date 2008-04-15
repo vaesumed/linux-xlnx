@@ -137,7 +137,7 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 #define dbg_leak_report() ({})
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
-#define dbg_read_leaf_nolock(c, zbr, node)    0
+#define dbg_read_leaf_nolock(c, zbr, node) 0
 
 #endif /* !CONFIG_UBIFS_FS_DEBUG */
 
