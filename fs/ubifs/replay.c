@@ -179,6 +179,11 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 
 	dbg_mnt_key(c, &r->key, "LEB %d:%d len %d flgs %d sqnum %llu", r->lnum,
 		    r->offs, r->len, r->flags, r->sqnum);
+	/*
+	 * Set c->replay_sqnum to help 'fallible_read_node()' identify dangling
+	 * branches.
+	 */
+	c->replay_sqnum = r->sqnum;
 	if (r->flags & REPLAY_REF)
 		err = set_bud_lprops(c, r);
 	else if (is_hash_key(c, &r->key)) {
