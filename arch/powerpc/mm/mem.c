@@ -31,6 +31,7 @@
 #include <linux/initrd.h>
 #include <linux/pagemap.h>
 #include <linux/suspend.h>
+#include <linux/lmb.h>
 
 #include <asm/pgalloc.h>
 #include <asm/prom.h>
@@ -42,7 +43,6 @@
 #include <asm/machdep.h>
 #include <asm/btext.h>
 #include <asm/tlb.h>
-#include <asm/lmb.h>
 #include <asm/sections.h>
 #include <asm/vdso.h>
 
@@ -111,7 +111,7 @@ int memory_add_physaddr_to_nid(u64 start)
 }
 #endif
 
-int __devinit arch_add_memory(int nid, u64 start, u64 size)
+int arch_add_memory(int nid, u64 start, u64 size)
 {
 	struct pglist_data *pgdata;
 	struct zone *zone;
@@ -175,7 +175,6 @@ void show_mem(void)
 
 	printk("Mem-info:\n");
 	show_free_areas();
-	printk("Free swap:       %6ldkB\n", nr_swap_pages<<(PAGE_SHIFT-10));
 	for_each_online_pgdat(pgdat) {
 		unsigned long flags;
 		pgdat_resize_lock(pgdat, &flags);
