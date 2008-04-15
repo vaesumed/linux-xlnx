@@ -690,7 +690,7 @@ extern pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 #define pmd_page_vaddr(pmd)	\
 	((unsigned long) (pmd_val(pmd) & PAGE_MASK))
 #define pmd_page(pmd)		\
-	(mem_map + (__pa(pmd_val(pmd)) >> PAGE_SHIFT) - ARCH_PFN_OFFSET)
+	pfn_to_page((__pa(pmd_val(pmd)) >> PAGE_SHIFT))
 #endif
 
 /* to find an entry in a kernel page-table-directory */

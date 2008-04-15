@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2001  Mike Corrigan IBM Corporation
+ * Copyright © 2008  Stephen Rothwell IBM Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,20 +15,17 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  */
+#ifndef _ASM_POWERPC_ISERIES_ALPACA_H
+#define _ASM_POWERPC_ISERIES_ALPACA_H
 
-#ifndef _ISERIES_SPCOMM_AREA_H
-#define _ISERIES_SPCOMM_AREA_H
-
-
-struct SpCommArea {
-	u32	xDesc;			// Descriptor (only in new formats)	000-003
-	u8	xFormat;		// Format (only in new formats)		004-004
-	u8	xRsvd1[11];		// Reserved				005-00F
-	u64	xRawTbAtIplStart;	// Raw HW TB value when IPL is started	010-017
-	u64	xRawTodAtIplStart;	// Raw HW TOD value when IPL is started	018-01F
-	u64	xBcdTimeAtIplStart;	// BCD time when IPL is started		020-027
-	u64	xBcdTimeAtOsStart;	// BCD time when OS passed control	028-02F
-	u8	xRsvd2[80];		// Reserved				030-07F
+/*
+ * This is the part of the paca that the iSeries hypervisor
+ * needs to be statically initialised. Immediately after boot
+ * we switch to the normal Linux paca.
+ */
+struct alpaca {
+	struct lppaca *lppaca_ptr;	/* Pointer to LpPaca for PLIC */
+	const void *reg_save_ptr;	/* Pointer to LpRegSave for PLIC */
 };
 
-#endif /* _ISERIES_SPCOMM_AREA_H */
+#endif /* _ASM_POWERPC_ISERIES_ALPACA_H */
