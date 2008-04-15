@@ -93,7 +93,7 @@ int ext4_forget(handle_t *handle, int is_metadata, struct inode *inode,
 	BUFFER_TRACE(bh, "call ext4_journal_revoke");
 	err = ext4_journal_revoke(handle, blocknr, bh);
 	if (err)
-		ext4_abort(inode->i_sb, __FUNCTION__,
+		ext4_abort(inode->i_sb, __func__,
 			   "error %d when attempting revoke", err);
 	BUFFER_TRACE(bh, "exit");
 	return err;
@@ -985,6 +985,16 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	} else {
 		retval = ext4_get_blocks_handle(handle, inode, block,
 				max_blocks, bh, create, extend_disksize);
+
+		if (retval > 0 && buffer_new(bh)) {
+			/*
+			 * We allocated new blocks which will result in
+			 * i_data format to change.  Force the migrate
+			 * to fail by * clearing migrate flags
+			 */
+			EXT4_I(inode)->i_flags = EXT4_I(inode)->i_flags &
+							~EXT4_EXT_MIGRATE;
+		}
 	}
 	up_write((&EXT4_I(inode)->i_data_sem));
 	return retval;
@@ -1230,7 +1240,7 @@ int ext4_journal_dirty_data(handle_t *handle, struct buffer_head *bh)
 {
 	int err = jbd2_journal_dirty_data(handle, bh);
 	if (err)
-		ext4_journal_abort_handle(__FUNCTION__, __FUNCTION__,
+		ext4_journal_abort_handle(__func__, __func__,
 						bh, handle, err);
 	return err;
 }
@@ -2501,12 +2511,10 @@ out_stop:
 static ext4_fsblk_t ext4_get_inode_block(struct super_block *sb,
 		unsigned long ino, struct ext4_iloc *iloc)
 {
-	unsigned long desc, group_desc;
 	ext4_group_t block_group;
 	unsigned long offset;
 	ext4_fsblk_t block;
-	struct buffer_head *bh;
-	struct ext4_group_desc * gdp;
+	struct ext4_group_desc *gdp;
 
 	if (!ext4_valid_inum(sb, ino)) {
 		/*
@@ -2518,22 +2526,10 @@ static ext4_fsblk_t ext4_get_inode_block(struct super_block *sb,
 	}
 
 	block_group = (ino - 1) / EXT4_INODES_PER_GROUP(sb);
-	if (block_group >= EXT4_SB(sb)->s_groups_count) {
-		ext4_error(sb,"ext4_get_inode_block","group >= groups count");
+	gdp = ext4_get_group_desc(sb, block_group, NULL);
+	if (!gdp)
 		return 0;
-	}
-	smp_rmb();
-	group_desc = block_group >> EXT4_DESC_PER_BLOCK_BITS(sb);
-	desc = block_group & (EXT4_DESC_PER_BLOCK(sb) - 1);
-	bh = EXT4_SB(sb)->s_group_desc[group_desc];
-	if (!bh) {
-		ext4_error (sb, "ext4_get_inode_block",
-			    "Descriptor not loaded");
-		return 0;
-	}
 
-	gdp = (struct ext4_group_desc *)((__u8 *)bh->b_data +
-		desc * EXT4_DESC_SIZE(sb));
 	/*
 	 * Figure out the offset within the block group inode table
 	 */
@@ -2976,7 +2972,8 @@ static int ext4_do_update_inode(handle_t *handle,
 	if (ext4_inode_blocks_set(handle, raw_inode, ei))
 		goto out_brelse;
 	raw_inode->i_dtime = cpu_to_le32(ei->i_dtime);
-	raw_inode->i_flags = cpu_to_le32(ei->i_flags);
+	/* clear the migrate flag in the raw_inode */
+	raw_inode->i_flags = cpu_to_le32(ei->i_flags & ~EXT4_EXT_MIGRATE);
 	if (EXT4_SB(inode->i_sb)->s_es->s_creator_os !=
 	    cpu_to_le32(EXT4_OS_HURD))
 		raw_inode->i_file_acl_high =
@@ -3374,7 +3371,7 @@ int ext4_mark_inode_dirty(handle_t *handle, struct inode *inode)
 				EXT4_I(inode)->i_state |= EXT4_STATE_NO_EXPAND;
 				if (mnt_count !=
 					le16_to_cpu(sbi->s_es->s_mnt_count)) {
-					ext4_warning(inode->i_sb, __FUNCTION__,
+					ext4_warning(inode->i_sb, __func__,
 					"Unable to expand inode %lu. Delete"
 					" some EAs or run e2fsck.",
 					inode->i_ino);
@@ -3415,7 +3412,7 @@ void ext4_dirty_inode(struct inode *inode)
 		current_handle->h_transaction != handle->h_transaction) {
 		/* This task has a transaction open against a different fs */
 		printk(KERN_EMERG "%s: transactions do not match!\n",
-		       __FUNCTION__);
+		       __func__);
 	} else {
 		jbd_debug(5, "marking dirty.  outer handle=%p\n",
 				current_handle);
@@ -3506,4 +3503,15 @@ int ext4_change_inode_journal_flag(struct inode *inode, int val)
 	ext4_std_error(inode->i_sb, err);
 
 	return err;
+}
+
+int ext4_page_mkwrite(struct vm_area_struct *vma, struct page *page)
+{
+	/*
+	 * if ext4_get_block resulted in a split of an uninitialized extent,
+	 * in file system full case, we will have to take the journal write
+	 * access and zero out the page. The journal handle get initialized
+	 * in ext4_get_block.
+	 */
+	return block_page_mkwrite(vma, page, ext4_get_block);
 }
