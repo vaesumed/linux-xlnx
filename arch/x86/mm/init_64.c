@@ -969,7 +969,7 @@ vmemmap_populate(struct page *start_page, unsigned long size, int node)
 							PAGE_KERNEL_LARGE);
 			set_pmd(pmd, __pmd(pte_val(entry)));
 
-			/* check if we got continous */
+			/* check to see if we have contiguous blocks */
 			if (p_end != p || node_start != node) {
 				if (p_start)
 					printk(KERN_DEBUG " [%lx-%lx] PMD -> [%p-%p] on node %d\n",
