@@ -31,7 +31,7 @@
  */
 #define NR_VECTORS 256
 
-#define FIRST_SYSTEM_VECTOR	0xef   /* duplicated in hw_irq.h */
+extern int first_system_vector;
 
 #if NR_CPUS < MAX_IO_APICS
 #define NR_IRQS (NR_VECTORS + (32 * NR_CPUS))
