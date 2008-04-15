@@ -806,6 +806,105 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 #ifdef CONFIG_UBIFS_FS_DEBUG_CHK_TNC
 
 /**
+ * dbg_check_key_order - make sure that colliding keys are properly ordered.
+ * @c: UBIFS file-system description object
+ * @zbr1: first zbranch
+ * @zbr1: following zbranch
+ *
+ * In UBIFS indexing B-tree colliding keys has to be sorted in lexographical
+ * order of names of the direntries/xentries which are referred by the keys.
+ * This function reads direntries/xentries referred by @zbr1 and @zbr2 and
+ * makes sure the name of direntry/xentry referred by @zbr1 is less then
+ * direntry/xentry referred by @zbr2. Returns zero if this is true, %1 if not,
+ * and a negative error code in case of failure.
+ */
+static int dbg_check_key_order(struct ubifs_info *c, struct ubifs_zbranch *zbr1,
+			       struct ubifs_zbranch *zbr2)
+{
+	int err, nlen1, nlen2;
+	struct ubifs_dent_node *dent1, *dent2;
+	union ubifs_key key;
+
+	ubifs_assert(!keys_cmp(c, &zbr1->key, &zbr2->key));
+	dent1 = kmalloc(UBIFS_MAX_DENT_NODE_SZ, GFP_NOFS);
+	if (!dent1)
+		return -ENOMEM;
+	dent2 = kmalloc(UBIFS_MAX_DENT_NODE_SZ, GFP_NOFS);
+	if (!dent2) {
+		err = -ENOMEM;
+		goto out_free;
+	}
+
+	err = dbg_read_leaf_nolock(c, zbr1, dent1);
+	if (err)
+		goto out_free;
+	err = ubifs_validate_entry(c, dent1);
+	if (err)
+		goto out_free;
+
+	err = dbg_read_leaf_nolock(c, zbr2, dent2);
+	if (err)
+		goto out_free;
+	err = ubifs_validate_entry(c, dent2);
+	if (err)
+		goto out_free;
+
+	/* Make sure node keys are the same as in zbranch */
+	err = 1;
+	key_read(c, &dent1->key, &key);
+	if (keys_cmp(c, &zbr1->key, &key)) {
+		ubifs_err("1st entry at %d:%d has key %s", zbr1->lnum,
+			  zbr1->offs, dbg_get_key_dump(c, &key));
+		ubifs_err("but it should have key %s according to tnc",
+			  dbg_get_key_dump(c, &zbr1->key));
+			dbg_dump_node(c, dent1);
+			goto out_free;
+	}
+
+	key_read(c, &dent2->key, &key);
+	if (keys_cmp(c, &zbr2->key, &key)) {
+		ubifs_err("2nd entry at %d:%d has key %s", zbr1->lnum,
+			  zbr1->offs, dbg_get_key_dump(c, &key));
+		ubifs_err("but it should have key %s according to tnc",
+			  dbg_get_key_dump(c, &zbr2->key));
+			dbg_dump_node(c, dent2);
+			goto out_free;
+	}
+
+	nlen1 = le16_to_cpu(dent1->nlen);
+	nlen2 = le16_to_cpu(dent2->nlen);
+	if (nlen1 == nlen2) {
+		int cmp = strcmp(dent1->name, dent2->name);
+
+		if (cmp < 0) {
+			err = 0;
+			goto out_free;
+		}
+
+		if (!cmp)
+			ubifs_err("2 xent/dent nodes with the same name");
+
+		if (cmp > 0)
+			ubifs_err("bad order of colliding key %s",
+				  dbg_get_key_dump(c, &key));
+
+	} else if (nlen1 < nlen2) {
+		err = 0;
+		goto out_free;
+	}
+
+	ubifs_msg("first node at %d:%d\n", zbr1->lnum, zbr1->offs);
+	dbg_dump_node(c, dent1);
+	ubifs_msg("second node at %d:%d\n", zbr2->lnum, zbr2->offs);
+	dbg_dump_node(c, dent2);
+
+out_free:
+	kfree(dent2);
+	kfree(dent1);
+	return err;
+}
+
+/**
  * dbg_check_znode - check if znode is all right.
  * @c: UBIFS file-system description object
  * @zbr: zbranch which points to this znode
@@ -813,11 +912,10 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
  * This function makes sure that znode referred to by @zbr is all right.
  * Returns zero if it is, and %-EINVAL if it is not.
  */
-static int dbg_check_znode(const struct ubifs_info *c,
-			   const struct ubifs_zbranch *zbr)
+static int dbg_check_znode(struct ubifs_info *c, struct ubifs_zbranch *zbr)
 {
-	const struct ubifs_znode *znode = zbr->znode;
-	const struct ubifs_znode *zp = znode->parent;
+	struct ubifs_znode *znode = zbr->znode;
+	struct ubifs_znode *zp = znode->parent;
 	int n, err, cmp;
 
 	if (znode->child_cnt <= 0 || znode->child_cnt > c->fanout) {
@@ -900,9 +998,9 @@ static int dbg_check_znode(const struct ubifs_info *c,
 			max = &zp->zbranch[n + 1].key;
 
 			/*
-			 * Make sure the last key in our znode is less than the
-			 * the key in zbranch which goes after our pointing
-			 * zbranch.
+			 * Make sure the last key in our znode is less or
+			 * equivalent than the the key in zbranch which goes
+			 * after our pointing zbranch.
 			 */
 			cmp = keys_cmp(c, max,
 				&znode->zbranch[znode->child_cnt - 1].key);
@@ -924,49 +1022,67 @@ static int dbg_check_znode(const struct ubifs_info *c,
 	 * one.
 	 */
 	for (n = 1; n < znode->child_cnt; n++) {
-		cmp = keys_cmp(c, &znode->zbranch[n].key,
-			       &znode->zbranch[n - 1].key);
-		if (cmp < 0) {
+		cmp = keys_cmp(c, &znode->zbranch[n - 1].key,
+			       &znode->zbranch[n].key);
+		if (cmp > 0) {
 			err = 13;
 			goto out;
 		}
-		if (cmp == 0)
+		if (cmp == 0) {
 			/* This can only be keys with colliding hash */
-			if (!is_hash_key(c, &znode->zbranch[n].key)) {
+			if (!is_hash_key(c, &znode->zbranch[n - 1].key) ||
+			    !is_hash_key(c, &znode->zbranch[n].key)) {
 				err = 14;
 				goto out;
 			}
+
+			if (znode->level != 0 || c->replaying)
+				continue;
+
+			/*
+			 * Colliding keys should follow the lexographical order
+			 * of corresponding xentry/dentry names.
+			 */
+			err = dbg_check_key_order(c, &znode->zbranch[n - 1],
+						  &znode->zbranch[n]);
+			if (err < 0)
+				return err;
+			if (err) {
+				err = 15;
+				goto out;
+			}
+		}
 	}
 
 	for (n = 0; n < znode->child_cnt; n++) {
 		if (znode->zbranch[n].znode == NULL &&
 		    (znode->zbranch[n].lnum == 0 ||
 		     znode->zbranch[n].len == 0)) {
-			err = 15;
+			err = 16;
 			goto out;
 		}
 
 		if (znode->zbranch[n].lnum != 0 &&
 		    znode->zbranch[n].len == 0) {
-			err = 16;
-			goto out;
-		}
-
-		if (znode->zbranch[n].lnum == 0 &&
-		    znode->zbranch[n].len != 0) {
 			err = 17;
 			goto out;
 		}
 
 		if (znode->zbranch[n].lnum == 0 &&
-		    znode->zbranch[n].offs != 0) {
+		    znode->zbranch[n].len != 0) {
 			err = 18;
+			goto out;
+		}
+
+		if (znode->zbranch[n].lnum == 0 &&
+		    znode->zbranch[n].offs != 0) {
+			err = 19;
 			goto out;
 		}
 
 		if (znode->level != 0 && znode->zbranch[n].znode)
 			if (znode->zbranch[n].znode->parent != znode) {
-				err = 19;
+				err = 20;
 				goto out;
 			}
 	}
@@ -997,15 +1113,16 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 {
 	struct ubifs_znode *znode;
 	long clean_cnt = 0, dirty_cnt = 0;
-	int err;
+	int err, last;
 
 	ubifs_assert(mutex_is_locked(&c->tnc_mutex));
 	if (!c->zroot.znode)
 		return 0;
 
 	znode = ubifs_tnc_postorder_first(c->zroot.znode);
-	while (znode) {
-		const struct ubifs_zbranch *zbr;
+	while (1) {
+		struct ubifs_znode *prev;
+		struct ubifs_zbranch *zbr;
 
 		if (!znode->parent)
 			zbr = &c->zroot;
@@ -1023,7 +1140,32 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 				clean_cnt += 1;
 		}
 
+		prev = znode;
 		znode = ubifs_tnc_postorder_next(znode);
+		if (!znode)
+			break;
+
+		/*
+		 * If the last key of this znode is equivalent to the first key
+		 * of the next znode (collision), then check order of the keys.
+		 */
+		last = prev->child_cnt - 1;
+		if (prev->level == 0 && znode->level == 0 &&
+		    !keys_cmp(c, &prev->zbranch[last].key,
+			      &znode->zbranch[0].key))
+		{
+			err = dbg_check_key_order(c, &prev->zbranch[last],
+						  &znode->zbranch[0]);
+			if (err < 0)
+				return err;
+			if (err) {
+				ubifs_msg("first znode");
+				dbg_dump_znode(c, prev);
+				ubifs_msg("second znode");
+				dbg_dump_znode(c, znode);
+				return -EINVAL;
+			}
+		}
 	}
 
 	if (extra) {
