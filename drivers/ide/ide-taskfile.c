@@ -36,6 +36,7 @@
 void ide_tf_load(ide_drive_t *drive, ide_task_t *task)
 {
 	ide_hwif_t *hwif = drive->hwif;
+	struct ide_io_ports *io_ports = &hwif->io_ports;
 	struct ide_taskfile *tf = &task->tf;
 	u8 HIHI = (task->tf_flags & IDE_TFLAG_LBA48) ? 0xE0 : 0xEF;
 
@@ -59,32 +60,33 @@ void ide_tf_load(ide_drive_t *drive, ide_task_t *task)
 		SELECT_MASK(drive, 0);
 
 	if (task->tf_flags & IDE_TFLAG_OUT_DATA)
-		hwif->OUTW((tf->hob_data << 8) | tf->data, IDE_DATA_REG);
+		hwif->OUTW((tf->hob_data << 8) | tf->data, io_ports->data_addr);
 
 	if (task->tf_flags & IDE_TFLAG_OUT_HOB_FEATURE)
-		hwif->OUTB(tf->hob_feature, IDE_FEATURE_REG);
+		hwif->OUTB(tf->hob_feature, io_ports->feature_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_HOB_NSECT)
-		hwif->OUTB(tf->hob_nsect, IDE_NSECTOR_REG);
+		hwif->OUTB(tf->hob_nsect, io_ports->nsect_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_HOB_LBAL)
-		hwif->OUTB(tf->hob_lbal, IDE_SECTOR_REG);
+		hwif->OUTB(tf->hob_lbal, io_ports->lbal_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_HOB_LBAM)
-		hwif->OUTB(tf->hob_lbam, IDE_LCYL_REG);
+		hwif->OUTB(tf->hob_lbam, io_ports->lbam_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_HOB_LBAH)
-		hwif->OUTB(tf->hob_lbah, IDE_HCYL_REG);
+		hwif->OUTB(tf->hob_lbah, io_ports->lbah_addr);
 
 	if (task->tf_flags & IDE_TFLAG_OUT_FEATURE)
-		hwif->OUTB(tf->feature, IDE_FEATURE_REG);
+		hwif->OUTB(tf->feature, io_ports->feature_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_NSECT)
-		hwif->OUTB(tf->nsect, IDE_NSECTOR_REG);
+		hwif->OUTB(tf->nsect, io_ports->nsect_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_LBAL)
-		hwif->OUTB(tf->lbal, IDE_SECTOR_REG);
+		hwif->OUTB(tf->lbal, io_ports->lbal_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_LBAM)
-		hwif->OUTB(tf->lbam, IDE_LCYL_REG);
+		hwif->OUTB(tf->lbam, io_ports->lbam_addr);
 	if (task->tf_flags & IDE_TFLAG_OUT_LBAH)
-		hwif->OUTB(tf->lbah, IDE_HCYL_REG);
+		hwif->OUTB(tf->lbah, io_ports->lbah_addr);
 
 	if (task->tf_flags & IDE_TFLAG_OUT_DEVICE)
-		hwif->OUTB((tf->device & HIHI) | drive->select.all, IDE_SELECT_REG);
+		hwif->OUTB((tf->device & HIHI) | drive->select.all,
+			   io_ports->device_addr);
 }
 
 int taskfile_lib_get_identify (ide_drive_t *drive, u8 *buf)
@@ -133,6 +135,7 @@ ide_startstop_t do_rw_taskfile (ide_drive_t *drive, ide_task_t *task)
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct ide_taskfile *tf = &task->tf;
 	ide_handler_t *handler = NULL;
+	const struct ide_dma_ops *dma_ops = hwif->dma_ops;
 
 	if (task->data_phase == TASKFILE_MULTI_IN ||
 	    task->data_phase == TASKFILE_MULTI_OUT) {
@@ -152,7 +155,7 @@ ide_startstop_t do_rw_taskfile (ide_drive_t *drive, ide_task_t *task)
 	switch (task->data_phase) {
 	case TASKFILE_MULTI_OUT:
 	case TASKFILE_OUT:
-		hwif->OUTBSYNC(drive, tf->command, IDE_COMMAND_REG);
+		hwif->OUTBSYNC(drive, tf->command, hwif->io_ports.command_addr);
 		ndelay(400);	/* FIXME */
 		return pre_task_out_intr(drive, task->rq);
 	case TASKFILE_MULTI_IN:
@@ -175,10 +178,10 @@ ide_startstop_t do_rw_taskfile (ide_drive_t *drive, ide_task_t *task)
 		return ide_started;
 	default:
 		if (task_dma_ok(task) == 0 || drive->using_dma == 0 ||
-		    hwif->dma_setup(drive))
+		    dma_ops->dma_setup(drive))
 			return ide_stopped;
-		hwif->dma_exec_cmd(drive, tf->command);
-		hwif->dma_start(drive);
+		dma_ops->dma_exec_cmd(drive, tf->command);
+		dma_ops->dma_start(drive);
 		return ide_started;
 	}
 }
@@ -280,7 +283,8 @@ static u8 wait_drive_not_busy(ide_drive_t *drive)
 	return stat;
 }
 
-static void ide_pio_sector(ide_drive_t *drive, unsigned int write)
+static void ide_pio_sector(ide_drive_t *drive, struct request *rq,
+			   unsigned int write)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	struct scatterlist *sg = hwif->sg_table;
@@ -320,9 +324,9 @@ static void ide_pio_sector(ide_drive_t *drive, unsigned int write)
 
 	/* do the actual data transfer */
 	if (write)
-		hwif->ata_output_data(drive, buf, SECTOR_WORDS);
+		hwif->output_data(drive, rq, buf, SECTOR_SIZE);
 	else
-		hwif->ata_input_data(drive, buf, SECTOR_WORDS);
+		hwif->input_data(drive, rq, buf, SECTOR_SIZE);
 
 	kunmap_atomic(buf, KM_BIO_SRC_IRQ);
 #ifdef CONFIG_HIGHMEM
@@ -330,13 +334,14 @@ static void ide_pio_sector(ide_drive_t *drive, unsigned int write)
 #endif
 }
 
-static void ide_pio_multi(ide_drive_t *drive, unsigned int write)
+static void ide_pio_multi(ide_drive_t *drive, struct request *rq,
+			  unsigned int write)
 {
 	unsigned int nsect;
 
 	nsect = min_t(unsigned int, drive->hwif->nleft, drive->mult_count);
 	while (nsect--)
-		ide_pio_sector(drive, write);
+		ide_pio_sector(drive, rq, write);
 }
 
 static void ide_pio_datablock(ide_drive_t *drive, struct request *rq,
@@ -359,10 +364,10 @@ static void ide_pio_datablock(ide_drive_t *drive, struct request *rq,
 	switch (drive->hwif->data_phase) {
 	case TASKFILE_MULTI_IN:
 	case TASKFILE_MULTI_OUT:
-		ide_pio_multi(drive, write);
+		ide_pio_multi(drive, rq, write);
 		break;
 	default:
-		ide_pio_sector(drive, write);
+		ide_pio_sector(drive, rq, write);
 		break;
 	}
 
@@ -452,7 +457,7 @@ static ide_startstop_t task_in_intr(ide_drive_t *drive)
 
 	/* Error? */
 	if (stat & ERR_STAT)
-		return task_error(drive, rq, __FUNCTION__, stat);
+		return task_error(drive, rq, __func__, stat);
 
 	/* Didn't want any data? Odd. */
 	if (!(stat & DRQ_STAT))
@@ -464,7 +469,7 @@ static ide_startstop_t task_in_intr(ide_drive_t *drive)
 	if (!hwif->nleft) {
 		stat = wait_drive_not_busy(drive);
 		if (!OK_STAT(stat, 0, BAD_STAT))
-			return task_error(drive, rq, __FUNCTION__, stat);
+			return task_error(drive, rq, __func__, stat);
 		task_end_request(drive, rq, stat);
 		return ide_stopped;
 	}
@@ -485,11 +490,11 @@ static ide_startstop_t task_out_intr (ide_drive_t *drive)
 	u8 stat = ide_read_status(drive);
 
 	if (!OK_STAT(stat, DRIVE_READY, drive->bad_wstat))
-		return task_error(drive, rq, __FUNCTION__, stat);
+		return task_error(drive, rq, __func__, stat);
 
 	/* Deal with unexpected ATA data phase. */
 	if (((stat & DRQ_STAT) == 0) ^ !hwif->nleft)
-		return task_error(drive, rq, __FUNCTION__, stat);
+		return task_error(drive, rq, __func__, stat);
 
 	if (!hwif->nleft) {
 		task_end_request(drive, rq, stat);
@@ -672,7 +677,7 @@ int ide_taskfile_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 				/* (hs): give up if multcount is not set */
 				printk(KERN_ERR "%s: %s Multimode Write " \
 					"multcount is not set\n",
-					drive->name, __FUNCTION__);
+					drive->name, __func__);
 				err = -EPERM;
 				goto abort;
 			}
@@ -689,7 +694,7 @@ int ide_taskfile_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 				/* (hs): give up if multcount is not set */
 				printk(KERN_ERR "%s: %s Multimode Read failure " \
 					"multcount is not set\n",
-					drive->name, __FUNCTION__);
+					drive->name, __func__);
 				err = -EPERM;
 				goto abort;
 			}
