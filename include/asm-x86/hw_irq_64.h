@@ -91,7 +91,6 @@
  * levels. (0x80 is the syscall vector)
  */
 #define FIRST_DEVICE_VECTOR	(IRQ15_VECTOR + 2)
-#define FIRST_SYSTEM_VECTOR	0xef   /* duplicated in irq.h */
 
 
 #ifndef __ASSEMBLY__
@@ -114,6 +113,8 @@ void invalidate_interrupt7(void);
 void thermal_interrupt(void);
 void threshold_interrupt(void);
 void i8254_timer_resume(void);
+
+extern int first_system_vector;
 
 typedef int vector_irq_t[NR_VECTORS];
 DECLARE_PER_CPU(vector_irq_t, vector_irq);
