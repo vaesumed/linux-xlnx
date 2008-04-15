@@ -360,4 +360,16 @@ config ENCLOSURE_SERVICES
 	  driver (SCSI/ATA) which supports enclosures
 	  or a SCSI enclosure device (SES) to use these services.
 
+config ME4000
+	tristate "me4000 driver"
+	default n
+	help
+	  FIXME!
+
+config AECTC
+	tristate "AETC video timestamp device"
+	default n
+	help
+	  Provides support for something that needs to be documented here.
+
 endif # MISC_DEVICES
