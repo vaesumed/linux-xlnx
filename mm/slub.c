@@ -21,6 +21,7 @@
 #include <linux/ctype.h>
 #include <linux/kallsyms.h>
 #include <linux/memory.h>
+#include <linux/kmemcheck.h>
 
 /*
  * Lock order:
@@ -191,7 +192,7 @@ static inline void ClearSlabDebug(struct page *page)
 		SLAB_TRACE | SLAB_DESTROY_BY_RCU)
 
 #define SLUB_MERGE_SAME (SLAB_DEBUG_FREE | SLAB_RECLAIM_ACCOUNT | \
-		SLAB_CACHE_DMA)
+		SLAB_CACHE_DMA | SLAB_NOTRACK)
 
 #ifndef ARCH_KMALLOC_MINALIGN
 #define ARCH_KMALLOC_MINALIGN __alignof__(unsigned long long)
@@ -1029,6 +1030,7 @@ static inline unsigned long kmem_cache_flags(unsigned long objsize,
 }
 #define slub_debug 0
 #endif
+
 /*
  * Slab allocation and freeing
  */
@@ -1038,6 +1040,9 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	int pages = 1 << s->order;
 
 	flags |= s->allocflags;
+
+	if (kmemcheck_enabled && !(s->flags & SLAB_NOTRACK))
+		return kmemcheck_allocate_slab(s, flags, node, pages);
 
 	if (node == -1)
 		page = alloc_pages(flags, s->order);
@@ -1120,6 +1125,13 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 		ClearSlabDebug(page);
 	}
 
+	if (PageTracked(page) && !(s->flags & SLAB_NOTRACK)) {
+		kmemcheck_free_slab(s, page, pages);
+		return;
+	}
+
+	__ClearPageSlab(page);
+
 	mod_zone_page_state(page_zone(page),
 		(s->flags & SLAB_RECLAIM_ACCOUNT) ?
 		NR_SLAB_RECLAIMABLE : NR_SLAB_UNRECLAIMABLE,
@@ -1155,7 +1167,6 @@ static void discard_slab(struct kmem_cache *s, struct page *page)
 
 	atomic_long_dec(&n->nr_slabs);
 	reset_page_mapcount(page);
-	__ClearPageSlab(page);
 	free_slab(s, page);
 }
 
@@ -1592,6 +1603,7 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	if (unlikely((gfpflags & __GFP_ZERO) && object))
 		memset(object, 0, c->objsize);
 
+	kmemcheck_slab_alloc(s, gfpflags, object);
 	return object;
 }
 
@@ -1693,6 +1705,8 @@ static __always_inline void slab_free(struct kmem_cache *s,
 	void **object = (void *)x;
 	struct kmem_cache_cpu *c;
 	unsigned long flags;
+
+	kmemcheck_slab_free(s, object);
 
 	local_irq_save(flags);
 	c = get_cpu_slab(s, smp_processor_id());
@@ -2449,12 +2463,10 @@ static int __init setup_slub_nomerge(char *str)
 __setup("slub_nomerge", setup_slub_nomerge);
 
 static struct kmem_cache *create_kmalloc_cache(struct kmem_cache *s,
-		const char *name, int size, gfp_t gfp_flags)
+	const char *name, int size, gfp_t gfp_flags, unsigned int flags)
 {
-	unsigned int flags = 0;
-
 	if (gfp_flags & SLUB_DMA)
-		flags = SLAB_CACHE_DMA;
+		flags |= SLAB_CACHE_DMA;
 
 	down_write(&slub_lock);
 	if (!kmem_cache_open(s, gfp_flags, name, size, ARCH_KMALLOC_MINALIGN,
@@ -2517,7 +2529,8 @@ static noinline struct kmem_cache *dma_kmalloc_cache(int index, gfp_t flags)
 
 	if (!s || !text || !kmem_cache_open(s, flags, text,
 			realsize, ARCH_KMALLOC_MINALIGN,
-			SLAB_CACHE_DMA|__SYSFS_ADD_DEFERRED, NULL)) {
+			SLAB_CACHE_DMA|SLAB_NOTRACK|__SYSFS_ADD_DEFERRED,
+			NULL)) {
 		kfree(s);
 		kfree(text);
 		goto unlock_out;
@@ -2910,7 +2923,7 @@ void __init kmem_cache_init(void)
 	 * kmem_cache_open for slab_state == DOWN.
 	 */
 	create_kmalloc_cache(&kmalloc_caches[0], "kmem_cache_node",
-		sizeof(struct kmem_cache_node), GFP_KERNEL);
+		sizeof(struct kmem_cache_node), GFP_KERNEL, 0);
 	kmalloc_caches[0].refcount = -1;
 	caches++;
 
@@ -2923,18 +2936,18 @@ void __init kmem_cache_init(void)
 	/* Caches that are not of the two-to-the-power-of size */
 	if (KMALLOC_MIN_SIZE <= 64) {
 		create_kmalloc_cache(&kmalloc_caches[1],
-				"kmalloc-96", 96, GFP_KERNEL);
+				"kmalloc-96", 96, GFP_KERNEL, 0);
 		caches++;
 	}
 	if (KMALLOC_MIN_SIZE <= 128) {
 		create_kmalloc_cache(&kmalloc_caches[2],
-				"kmalloc-192", 192, GFP_KERNEL);
+				"kmalloc-192", 192, GFP_KERNEL, 0);
 		caches++;
 	}
 
 	for (i = KMALLOC_SHIFT_LOW; i <= PAGE_SHIFT; i++) {
 		create_kmalloc_cache(&kmalloc_caches[i],
-			"kmalloc", 1 << i, GFP_KERNEL);
+			"kmalloc", 1 << i, GFP_KERNEL, 0);
 		caches++;
 	}
 
@@ -4167,6 +4180,8 @@ static char *create_unique_id(struct kmem_cache *s)
 		*p++ = 'a';
 	if (s->flags & SLAB_DEBUG_FREE)
 		*p++ = 'F';
+	if (!(s->flags & SLAB_NOTRACK))
+		*p++ = 't';
 	if (p != name + 1)
 		*p++ = '-';
 	p += sprintf(p, "%07d", s->size);

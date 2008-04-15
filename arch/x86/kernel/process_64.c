@@ -37,6 +37,7 @@
 #include <linux/kprobes.h>
 #include <linux/kdebug.h>
 #include <linux/tick.h>
+#include <linux/prctl.h>
 
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
@@ -311,7 +312,7 @@ static int __init idle_setup(char *str)
 early_param("idle", idle_setup);
 
 /* Prints also some state that isn't saved in the pt_regs */
-void __show_regs(struct pt_regs * regs)
+void __show_regs(struct pt_regs * regs, int all)
 {
 	unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L, fs, gs, shadowgs;
 	unsigned long d0, d1, d2, d3, d6, d7;
@@ -350,13 +351,17 @@ void __show_regs(struct pt_regs * regs)
 	rdmsrl(MSR_GS_BASE, gs); 
 	rdmsrl(MSR_KERNEL_GS_BASE, shadowgs); 
 
+	printk("FS:  %016lx(%04x) GS:%016lx(%04x) knlGS:%016lx\n",
+	       fs,fsindex,gs,gsindex,shadowgs);
+
+	if (!all)
+		return;
+
 	cr0 = read_cr0();
 	cr2 = read_cr2();
 	cr3 = read_cr3();
 	cr4 = read_cr4();
 
-	printk("FS:  %016lx(%04x) GS:%016lx(%04x) knlGS:%016lx\n", 
-	       fs,fsindex,gs,gsindex,shadowgs); 
 	printk("CS:  %04x DS: %04x ES: %04x CR0: %016lx\n", cs, ds, es, cr0); 
 	printk("CR2: %016lx CR3: %016lx CR4: %016lx\n", cr2, cr3, cr4);
 
@@ -373,7 +378,7 @@ void __show_regs(struct pt_regs * regs)
 void show_regs(struct pt_regs *regs)
 {
 	printk("CPU %d:", smp_processor_id());
-	__show_regs(regs);
+	__show_regs(regs, 1);
 	show_trace(NULL, regs, (void *)(regs + 1), regs->bp);
 }
 
@@ -398,6 +403,14 @@ void exit_thread(void)
 		t->io_bitmap_max = 0;
 		put_cpu();
 	}
+#ifdef CONFIG_X86_DS
+	/* Free any DS contexts that have not been properly released. */
+	if (unlikely(t->ds_ctx)) {
+		/* we clear debugctl to make sure DS is not used. */
+		update_debugctlmsr(0);
+		ds_free(t->ds_ctx);
+	}
+#endif /* CONFIG_X86_DS */
 }
 
 void flush_thread(void)
@@ -550,6 +563,64 @@ start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
 }
 EXPORT_SYMBOL_GPL(start_thread);
 
+static void hard_disable_TSC(void)
+{
+	write_cr4(read_cr4() | X86_CR4_TSD);
+}
+
+void disable_TSC(void)
+{
+	preempt_disable();
+	if (!test_and_set_thread_flag(TIF_NOTSC))
+		/*
+		 * Must flip the CPU state synchronously with
+		 * TIF_NOTSC in the current running context.
+		 */
+		hard_disable_TSC();
+	preempt_enable();
+}
+
+static void hard_enable_TSC(void)
+{
+	write_cr4(read_cr4() & ~X86_CR4_TSD);
+}
+
+void enable_TSC(void)
+{
+	preempt_disable();
+	if (test_and_clear_thread_flag(TIF_NOTSC))
+		/*
+		 * Must flip the CPU state synchronously with
+		 * TIF_NOTSC in the current running context.
+		 */
+		hard_enable_TSC();
+	preempt_enable();
+}
+
+int get_tsc_mode(unsigned long adr)
+{
+	unsigned int val;
+
+	if (test_thread_flag(TIF_NOTSC))
+		val = PR_TSC_SIGSEGV;
+	else
+		val = PR_TSC_ENABLE;
+
+	return put_user(val, (unsigned int __user *)adr);
+}
+
+int set_tsc_mode(unsigned int val)
+{
+	if (val == PR_TSC_SIGSEGV)
+		disable_TSC();
+	else if (val == PR_TSC_ENABLE)
+		enable_TSC();
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 /*
  * This special macro can be used to load a debugging register
  */
@@ -561,18 +632,27 @@ static inline void __switch_to_xtra(struct task_struct *prev_p,
 {
 	struct thread_struct *prev, *next;
 	unsigned long debugctl;
+	unsigned long ds_prev = 0, ds_next = 0;
 
 	prev = &prev_p->thread,
 	next = &next_p->thread;
 
 	debugctl = prev->debugctlmsr;
-	if (next->ds_area_msr != prev->ds_area_msr) {
+
+#ifdef CONFIG_X86_DS
+	if (prev->ds_ctx)
+		ds_prev = (unsigned long)prev->ds_ctx->ds;
+	if (next->ds_ctx)
+		ds_next = (unsigned long)next->ds_ctx->ds;
+
+	if (ds_next != ds_prev) {
 		/* we clear debugctl to make sure DS
 		 * is not in use when we change it */
 		debugctl = 0;
 		update_debugctlmsr(0);
-		wrmsrl(MSR_IA32_DS_AREA, next->ds_area_msr);
+		wrmsrl(MSR_IA32_DS_AREA, ds_next);
 	}
+#endif /* CONFIG_X86_DS */
 
 	if (next->debugctlmsr != debugctl)
 		update_debugctlmsr(next->debugctlmsr);
@@ -585,6 +665,15 @@ static inline void __switch_to_xtra(struct task_struct *prev_p,
 		/* no 4 and 5 */
 		loaddebug(next, 6);
 		loaddebug(next, 7);
+	}
+
+	if (test_tsk_thread_flag(prev_p, TIF_NOTSC) ^
+	    test_tsk_thread_flag(next_p, TIF_NOTSC)) {
+		/* prev and next are different */
+		if (test_tsk_thread_flag(next_p, TIF_NOTSC))
+			hard_disable_TSC();
+		else
+			hard_enable_TSC();
 	}
 
 	if (test_tsk_thread_flag(next_p, TIF_IO_BITMAP)) {
@@ -601,13 +690,13 @@ static inline void __switch_to_xtra(struct task_struct *prev_p,
 		memset(tss->io_bitmap, 0xff, prev->io_bitmap_max);
 	}
 
-#ifdef X86_BTS
+#ifdef CONFIG_X86_PTRACE_BTS
 	if (test_tsk_thread_flag(prev_p, TIF_BTS_TRACE_TS))
 		ptrace_bts_take_timestamp(prev_p, BTS_TASK_DEPARTS);
 
 	if (test_tsk_thread_flag(next_p, TIF_BTS_TRACE_TS))
 		ptrace_bts_take_timestamp(next_p, BTS_TASK_ARRIVES);
-#endif
+#endif /* CONFIG_X86_PTRACE_BTS */
 }
 
 /*

@@ -1,35 +1,33 @@
 config UML_X86
-	bool
-	default y
+	def_bool y
 
 config 64BIT
-	bool
-	default y
+	def_bool y
 
 #XXX: this is so in the underlying arch, but it's wrong!!!
 config RWSEM_GENERIC_SPINLOCK
-	bool
-	default y
+	def_bool y
 
 config 3_LEVEL_PGTABLES
-       bool
-       default y
+       def_bool y
 
 config ARCH_HAS_SC_SIGNALS
-	bool
-	default n
+	def_bool n
 
 config ARCH_REUSE_HOST_VSYSCALL_AREA
-	bool
-	default n
+	def_bool n
 
 config SMP_BROKEN
-	bool
-	default y
+	def_bool y
+
+config GENERIC_FIND_FIRST_BIT
+	def_bool y
+
+config GENERIC_FIND_NEXT_BIT
+	def_bool y
 
 config GENERIC_HWEIGHT
-	bool
-	default y
+	def_bool y
 
 config ARCH_SUPPORTS_AOUT
 	def_bool y

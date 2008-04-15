@@ -53,6 +53,7 @@
 #include <asm/nmi.h>
 #include <asm/irq.h>
 #include <asm/smp.h>
+#include <asm/trampoline.h>
 #include <asm/cpu.h>
 #include <asm/numa.h>
 #include <asm/pgtable.h>
@@ -138,9 +139,6 @@ EXPORT_PER_CPU_SYMBOL(cpu_info);
 static atomic_t init_deasserted;
 
 static int boot_cpu_logical_apicid;
-
-/* ready for x86_64, no harm for x86, since it will overwrite after alloc */
-unsigned char *trampoline_base = __va(SMP_TRAMPOLINE_BASE);
 
 /* representing cpus for which sibling maps can be computed */
 static cpumask_t cpu_sibling_setup_map;
@@ -437,7 +435,7 @@ valid_k7:
 #endif
 }
 
-void smp_checks(void)
+void __cpuinit smp_checks(void)
 {
 	if (smp_b_stepping)
 		printk(KERN_WARNING "WARNING: SMP operation may be unreliable"
@@ -547,19 +545,6 @@ cpumask_t cpu_coregroup_map(int cpu)
 		return per_cpu(cpu_core_map, cpu);
 	else
 		return c->llc_shared_map;
-}
-
-/*
- * Currently trivial. Write the real->protected mode
- * bootstrap into the page concerned. The caller
- * has made sure it's suitably aligned.
- */
-
-unsigned long __cpuinit setup_trampoline(void)
-{
-	memcpy(trampoline_base, trampoline_data,
-	       trampoline_end - trampoline_data);
-	return virt_to_phys(trampoline_base);
 }
 
 #ifdef CONFIG_X86_32
@@ -1043,8 +1028,8 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 
 #ifdef CONFIG_X86_32
 	/* init low mem mapping */
-	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + USER_PGD_PTRS,
-			min_t(unsigned long, KERNEL_PGD_PTRS, USER_PGD_PTRS));
+	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			min_t(unsigned long, KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
 	flush_tlb_all();
 #endif
 

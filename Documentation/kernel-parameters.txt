@@ -944,6 +944,11 @@ and is between 256 and 4096 characters. It is defined in the file
 	kstack=N	[X86-32,X86-64] Print N words from the kernel stack
 			in oops dumps.
 
+	kgdboc=		[HW] kgdb over consoles.
+			Requires a tty driver that supports console polling.
+			(only serial suported for now)
+			Format: <serial_device>[,baud]
+
 	l2cr=		[PPC]
 
 	l3cr=		[PPC]
@@ -1274,8 +1279,16 @@ and is between 256 and 4096 characters. It is defined in the file
 	noexec		[IA-64]
 
 	noexec		[X86-32,X86-64]
+			On X86-32 available only on PAE configured kernels.
 			noexec=on: enable non-executable mappings (default)
-			noexec=off: disable nn-executable mappings
+			noexec=off: disable non-executable mappings
+
+	noexec32	[X86-64]
+			This affects only 32-bit executables.
+			noexec32=on: enable non-executable mappings (default)
+				read doesn't imply executable mappings
+			noexec32=off: disable non-executable mappings
+				read implies executable mappings
 
 	nofxsr		[BUGS=X86-32] Disables x86 floating point extended
 			register save and restore. The kernel will only save
@@ -1496,6 +1509,8 @@ and is between 256 and 4096 characters. It is defined in the file
 				This is normally done in pci_enable_device(),
 				so this option is a temporary workaround
 				for broken drivers that don't call it.
+		skip_isa_align	[X86] do not align io start addr, so can
+				handle more pci cards
 		firmware	[ARM] Do not re-enumerate the bus but instead
 				just use the configuration from the
 				bootloader. This is currently used on

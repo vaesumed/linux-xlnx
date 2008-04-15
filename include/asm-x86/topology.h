@@ -25,6 +25,7 @@
 #ifndef _ASM_X86_TOPOLOGY_H
 #define _ASM_X86_TOPOLOGY_H
 
+struct pci_bus;
 #ifdef CONFIG_NUMA
 #include <linux/cpumask.h>
 #include <asm/mpspec.h>
@@ -88,6 +89,17 @@ static inline int cpu_to_node(int cpu)
 #endif
 	return per_cpu(x86_cpu_to_node_map, cpu);
 }
+
+#ifdef	CONFIG_NUMA
+
+/* Returns a pointer to the cpumask of CPUs on Node 'node'. */
+#define node_to_cpumask_ptr(v, node)		\
+		cpumask_t *v = &(node_to_cpumask_map[node])
+
+#define node_to_cpumask_ptr_next(v, node)	\
+			   v = &(node_to_cpumask_map[node])
+#endif
+
 #endif /* CONFIG_X86_64 */
 
 /*
@@ -172,11 +184,22 @@ extern int __node_distance(int, int);
 #define node_distance(a, b) __node_distance(a, b)
 #endif
 
+extern int get_mp_bus_to_node(int busnum);
+extern void set_mp_bus_to_node(int busnum, int node);
+
 #else /* CONFIG_NUMA */
 
-#include <asm-generic/topology.h>
+static inline int get_mp_bus_to_node(int busnum)
+{
+	return 0;
+}
+static inline void set_mp_bus_to_node(int busnum, int node)
+{
+}
 
 #endif
+
+#include <asm-generic/topology.h>
 
 extern cpumask_t cpu_coregroup_map(int cpu);
 
@@ -186,6 +209,8 @@ extern cpumask_t cpu_coregroup_map(int cpu);
 #define topology_core_siblings(cpu)		(per_cpu(cpu_core_map, cpu))
 #define topology_thread_siblings(cpu)		(per_cpu(cpu_sibling_map, cpu))
 #endif
+
+void set_pci_bus_resources_arch_default(struct pci_bus *b);
 
 #ifdef CONFIG_SMP
 #define mc_capable()			(boot_cpu_data.x86_max_cores > 1)
