@@ -947,7 +947,7 @@ void ubifs_remount_ro(struct ubifs_info *c)
 		c->mst_node->gc_lnum = cpu_to_le32(c->gc_lnum);
 		err = ubifs_write_master(c);
 		if (err)
-			ubifs_ro_mode(c);
+			ubifs_ro_mode(c, err);
 	}
 
 	ubifs_destroy_idx_gc(c);
