@@ -42,11 +42,6 @@
 	thunk rwsem_downgrade_thunk,rwsem_downgrade_wake
 #endif	
 	
-	thunk __down_failed,__down
-	thunk_retrax __down_failed_interruptible,__down_interruptible
-	thunk_retrax __down_failed_trylock,__down_trylock
-	thunk __up_wakeup,__up
-
 #ifdef CONFIG_TRACE_IRQFLAGS
 	/* put return address in rdi (arg1) */
 	.macro thunk_ra name,func
