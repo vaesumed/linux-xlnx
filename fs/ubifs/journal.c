@@ -620,7 +620,7 @@ out_free:
 	return err;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	if (last_reference)
 		ubifs_delete_orphan(c, inode->i_ino);
 	finish_reservation(c);
@@ -693,7 +693,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	return 0;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 out_free:
 	kfree(data);
@@ -763,7 +763,7 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 	return 0;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 out_free:
 	kfree(ino);
@@ -929,7 +929,7 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 	return 0;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	if (last_reference)
 		ubifs_delete_orphan(c, new_inode->i_ino);
 out_finish:
@@ -1088,7 +1088,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	return 0;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 out_free:
 	kfree(trun);
@@ -1186,7 +1186,7 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	return 0;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 	return err;
 }
@@ -1254,7 +1254,7 @@ int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 	return 0;
 
 out_ro:
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 out_free:
 	kfree(ino);

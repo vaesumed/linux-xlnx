@@ -189,7 +189,7 @@ static unsigned long long next_sqnum(struct ubifs_info *c)
 		if (sqnum >= SQNUM_WATERMARK) {
 			ubifs_err("sequence number overflow %llu, end of life",
 				  sqnum);
-			ubifs_ro_mode(c);
+			ubifs_ro_mode(c, -EINVAL);
 		}
 		ubifs_warn("running out of sequence numbers, end of life soon");
 	}
@@ -440,8 +440,8 @@ int ubifs_bg_wbufs_sync(struct ubifs_info *c)
 		err = ubifs_wbuf_sync_nolock(wbuf);
 		mutex_unlock(&wbuf->io_mutex);
 		if (err) {
-			ubifs_err("cannot sync write-buffer, error %d", err);
-			ubifs_ro_mode(c);
+			ubifs_err("cannot sync write-buffer");
+			ubifs_ro_mode(c, err);
 			goto out_timers;
 		}
 	}
@@ -912,7 +912,7 @@ int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			}
 
 		if (err) {
-			ubifs_ro_mode(c);
+			ubifs_ro_mode(c, err);
 			break;
 		}
 	}

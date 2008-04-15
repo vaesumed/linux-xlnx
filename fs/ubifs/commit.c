@@ -173,12 +173,12 @@ static int do_commit(struct ubifs_info *c)
 out_up:
 	up_write(&c->commit_sem);
 out:
-	ubifs_err("commit failed, error %d", err);
+	ubifs_err("commit failed");
 	spin_lock(&c->cs_lock);
 	c->cmt_state = COMMIT_BROKEN;
 	wake_up(&c->cmt_wq);
 	spin_unlock(&c->cs_lock);
-	ubifs_ro_mode(c);
+	ubifs_ro_mode(c, err);
 	return err;
 }
 
@@ -251,7 +251,7 @@ int ubifs_bg_thread(void *info)
 
 		err = ubifs_bg_wbufs_sync(c);
 		if (err)
-			ubifs_ro_mode(c);
+			ubifs_ro_mode(c, err);
 
 		run_bg_commit(c);
 
