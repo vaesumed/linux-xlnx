@@ -60,6 +60,7 @@ unsigned long total_memory;
 unsigned long total_lowmem;
 
 phys_addr_t memstart_addr = (phys_addr_t)~0ull;
+EXPORT_SYMBOL(memstart_addr);
 phys_addr_t kernstart_addr;
 EXPORT_SYMBOL(kernstart_addr);
 phys_addr_t lowmem_end_addr;
