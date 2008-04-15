@@ -998,6 +998,7 @@ struct ubifs_mount_opts {
  * @replay_list: temporary list used during journal replay
  * @replay_buds: list of buds to replay
  * @cs_sqnum: sequence number of first node in the log (commit start node)
+ * @replay_sqnum: sequence number of node currently being replayed
  * @need_recovery: file-system needs recovery
  * @replaying: set to %1 during journal replay
  * @unclean_leb_list: LEBs to recover when mounting ro to rw
@@ -1220,6 +1221,7 @@ struct ubifs_info {
 	struct list_head replay_list;
 	struct list_head replay_buds;
 	unsigned long long cs_sqnum;
+	unsigned long long replay_sqnum;
 	int need_recovery;
 	int replaying;
 	struct list_head unclean_leb_list;
