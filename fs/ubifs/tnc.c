@@ -622,7 +622,8 @@ static void lnc_free(struct ubifs_zbranch *zbr)
  * @zbr:  key and position of node
  * @node: node returned
  *
- * This function reads a node or returns a negative error code.
+ * This function reads leaf defined node by @zbr and returns zero in case of
+ * success or a negative negative error code in case of failure.
  */
 static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			 void *node)
@@ -670,7 +671,7 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 }
 
 /**
- * ubifs_try_read_node - read a node if it is a node.
+ * try_read_node - read a node if it is a node.
  * @c: UBIFS file-system description object
  * @buf: buffer to read to
  * @type: node type
@@ -680,7 +681,7 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
  *
  * This function tries to read a node of known type and length, checks it and
  * stores it in @buf. This function returns %1 if a node is present and %0 if
- * a node is not present.  A negative error code is returned for I/O errors.
+ * a node is not present. A negative error code is returned for I/O errors.
  * This function performs that same function as ubifs_read_node except that
  * it does not require that there is actually a node present and instead
  * the return code indicates if a node was read.
@@ -738,7 +739,7 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 {
 	int ret;
 
-	dbg_tnc_key(c, key, "key");
+	dbg_tnc_key(c, key, "LEB %d:%d, key", zbr->lnum, zbr->offs);
 
 	if (lnc_lookup(c, zbr, node))
 		return 0; /* Read from the leaf-node-cache */
@@ -759,8 +760,8 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 		} else
 			ret = 0;
 	} else if (ret == 0)
-		dbg_gc_key(c, key, "dangling branch LEB %d:%d len %d, key",
-			   zbr->lnum, zbr->offs, zbr->len);
+		dbg_mnt_key(c, key, "dangling branch LEB %d:%d len %d, key",
+			    zbr->lnum, zbr->offs, zbr->len);
 	return ret;
 }
 
@@ -950,57 +951,60 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			     struct ubifs_znode **zn, int *n,
 			     const struct qstr *nm)
 {
-	struct ubifs_znode *znode;
-	int nn, err;
+	int err;
 
 	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
-	znode = *zn;
-	nn = *n;
-	err = matches_name(c, &znode->zbranch[nn], nm);
+	err = matches_name(c, &(*zn)->zbranch[*n], nm);
 	if (unlikely(err < 0))
 		return err;
 	if (err == NAME_MATCHES)
 		return 1;
 
-	/* Look left */
-	while (1) {
-		err = tnc_prev(c, &znode, &nn);
-		if (err == -ENOENT)
-			break;
-		if (unlikely(err < 0))
-			return err;
-		if (keys_cmp(c, &znode->zbranch[nn].key, key))
-			break;
-		err = matches_name(c, &znode->zbranch[nn], nm);
-		if (unlikely(err < 0))
-			return err;
-		if (err == NAME_MATCHES) {
-			dbg_tnc_key(c, key, "collision resolved");
+	if (err == NAME_GREATER) {
+		/* Look left */
+		while (1) {
+			err = tnc_prev(c, zn, n);
+			if (err == -ENOENT) {
+				ubifs_assert(*n == 0);
+				*n = -1;
+				return 0;
+			}
+			if (unlikely(err < 0))
+				return err;
+			if (keys_cmp(c, &(*zn)->zbranch[*n].key, key))
+				return 0;
+			err = matches_name(c, &(*zn)->zbranch[*n], nm);
+			if (unlikely(err < 0))
+				return err;
+			if (err == NAME_LESS)
+				return 0;
+			if (err == NAME_MATCHES)
+				return 1;
+			ubifs_assert(err == NAME_GREATER);
+		}
+	} else {
+		int nn = *n;
+		struct ubifs_znode *znode = *zn;
+
+		/* Look right */
+		while (1) {
+			err = tnc_next(c, &znode, &nn);
+			if (err == -ENOENT)
+				return 0;
+			if (unlikely(err < 0))
+				return err;
+			if (keys_cmp(c, &znode->zbranch[nn].key, key))
+				return 0;
+			err = matches_name(c, &znode->zbranch[nn], nm);
+			if (unlikely(err < 0))
+				return err;
+			if (err == NAME_GREATER)
+				return 0;
 			*zn = znode;
 			*n = nn;
-			return 1;
-		}
-	}
-
-	/* Look right */
-	znode = *zn;
-	nn = *n;
-	while (1) {
-		err = tnc_next(c, &znode, &nn);
-		if (err == -ENOENT)
-			return 0;
-		if (unlikely(err < 0))
-			return err;
-		if (keys_cmp(c, &znode->zbranch[nn].key, key))
-			return 0;
-		err = matches_name(c, &znode->zbranch[nn], nm);
-		if (unlikely(err < 0))
-			return err;
-		*zn = znode;
-		*n = nn;
-		if (err == NAME_MATCHES) {
-			dbg_tnc_key(c, key, "collision resolved");
-			return 1;
+			if (err == NAME_MATCHES)
+				return 1;
+			ubifs_assert(err == NAME_LESS);
 		}
 	}
 }
@@ -1101,91 +1105,94 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 				      struct ubifs_znode **zn, int *n,
 				      const struct qstr *nm)
 {
-	struct ubifs_znode *znode, *o_znode = NULL;
-	int nn, uninitialized_var(o_n), err;
+	struct ubifs_znode *o_znode = NULL, *znode = *zn;
+	int uninitialized_var(o_n), err, cmp, unsure = 0, nn = *n;
 
 	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
-	znode = *zn;
-	nn = *n;
-	err = fallible_matches_name(c, &znode->zbranch[nn], nm);
-	if (unlikely(err < 0))
-		return err;
-	if (err == NAME_MATCHES)
+	cmp = fallible_matches_name(c, &znode->zbranch[nn], nm);
+	if (unlikely(cmp < 0))
+		return cmp;
+	if (cmp == NAME_MATCHES)
 		return 1;
-	if (err == NOT_ON_MEDIA) {
+	if (cmp == NOT_ON_MEDIA) {
 		o_znode = znode;
 		o_n = nn;
+		/*
+		 * We are unlucky and hit a dangling zbranch straight away. Now
+		 * we do not really know where to go to find the needed key -
+		 * to the left or to the right. Well, let's try left.
+		 */
+		dbg_mnt_key(c, key, "first dangling match LEB %d:%d len %d ",
+			    znode->zbranch[nn].lnum, znode->zbranch[nn].offs,
+			    znode->zbranch[nn].len);
+		unsure = 1;
 	}
 
-	/* Look left */
-	while (1) {
-		err = tnc_prev(c, &znode, &nn);
-		if (err == -ENOENT)
-			break;
-		if (unlikely(err < 0))
-			return err;
-		if (keys_cmp(c, &znode->zbranch[nn].key, key))
-			break;
-		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
-		if (unlikely(err < 0))
-			return err;
-		if (err == NAME_MATCHES) {
-			dbg_tnc_key(c, key, "collision resolved");
-			*zn = znode;
-			*n = nn;
-			return 1;
-		}
-		if (err == NOT_ON_MEDIA) {
-			o_znode = znode;
-			o_n = nn;
+	if (cmp == NAME_GREATER || unsure) {
+		/* Look left */
+		while (1) {
+			err = tnc_prev(c, zn, n);
+			if (err == -ENOENT) {
+				ubifs_assert(*n == 0);
+				*n = -1;
+				break;
+			}
+			if (unlikely(err < 0))
+				return err;
+			if (keys_cmp(c, &(*zn)->zbranch[*n].key, key))
+				break;
+			err = fallible_matches_name(c, &(*zn)->zbranch[*n], nm);
+			if (unlikely(err < 0))
+				return err;
+			if (err == NAME_LESS)
+				break;
+			if (err == NAME_MATCHES)
+				return 1;
+			if (err == NOT_ON_MEDIA) {
+				o_znode = *zn;
+				o_n = *n;
+			} else
+				unsure = 0;
 		}
 	}
 
-	/* Look right */
-	znode = *zn;
-	nn = *n;
-	while (1) {
-		err = tnc_next(c, &znode, &nn);
-		if (err == -ENOENT) {
-			if (!o_znode)
-				return 0;
-			dbg_tnc_key(c, key, "collision resolved by default");
-			dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
-				    o_znode->zbranch[o_n].lnum,
-				    o_znode->zbranch[o_n].offs,
-				    o_znode->zbranch[o_n].len);
-			*zn = o_znode;
-			*n = o_n;
-			return 1;
-		}
-		if (unlikely(err))
-			return err;
-		if (keys_cmp(c, &znode->zbranch[nn].key, key)) {
-			if (!o_znode)
-				return 0;
-			dbg_tnc_key(c, key, "collision resolved by default");
-			dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
-				    o_znode->zbranch[o_n].lnum,
-				    o_znode->zbranch[o_n].offs,
-				    o_znode->zbranch[o_n].len);
-			*zn = o_znode;
-			*n = o_n;
-			return 1;
-		}
-		err = fallible_matches_name(c, &znode->zbranch[nn], nm);
-		if (unlikely(err < 0))
-			return err;
+	if (cmp == NAME_LESS || unsure) {
+		/* Look right */
 		*zn = znode;
 		*n = nn;
-		if (err == NAME_MATCHES) {
-			dbg_tnc_key(c, key, "collision resolved");
-			return 1;
-		}
-		if (err == NOT_ON_MEDIA) {
-			o_znode = znode;
-			o_n = nn;
+		while (1) {
+			err = tnc_next(c, &znode, &nn);
+			if (err == -ENOENT)
+				break;
+			if (unlikely(err < 0))
+				return err;
+			if (keys_cmp(c, &znode->zbranch[nn].key, key))
+				break;
+			err = fallible_matches_name(c, &znode->zbranch[nn], nm);
+			if (unlikely(err < 0))
+				return err;
+			if (err == NAME_GREATER)
+				break;
+			*zn = znode;
+			*n = nn;
+			if (err == NAME_MATCHES)
+				return 1;
+			if (err == NOT_ON_MEDIA) {
+				o_znode = znode;
+				o_n = nn;
+			}
 		}
 	}
+
+	if (!o_znode)
+		return 0;
+
+	dbg_mnt_key(c, key, "dangling match LEB %d:%d len %d ",
+		    o_znode->zbranch[o_n].lnum, o_znode->zbranch[o_n].offs,
+		    o_znode->zbranch[o_n].len);
+	*zn = o_znode;
+	*n = o_n;
+	return 1;
 }
 
 /**
@@ -2202,7 +2209,8 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
-	dbg_tnc_key(c, key, "%.*s, key", nm->len, nm->name);
+	dbg_tnc_key(c, key, "LEB %d:%d, '%.*s', key",
+		    lnum, offs, nm->len, nm->name);
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (unlikely(found < 0)) {
 		err = found;
@@ -2653,12 +2661,10 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 		goto out_free;
 
 	/* Handle collisions */
-	if (err && nm->name) {
+	if (err) {
 		err = resolve_collision(c, key, &znode, &n, nm);
 		if (unlikely(err < 0))
 			goto out_free;
-		if (err == 0)
-			goto name_not_found;
 	}
 
 again:
@@ -2667,7 +2673,6 @@ again:
 	if (err)
 		goto out_free;
 
-name_not_found:
 	dkey = &znode->zbranch[n].key;
 	zbr = &znode->zbranch[n];
 
@@ -3227,18 +3232,10 @@ out_unlock:
 	return err;
 }
 
-/**
- * dbg_read_leaf_nolock - read a leaf node.
- * @c: UBIFS file-system description object
- * @zbr:  key and position of node
- * @node: node returned
- *
- * This function reads leaf defined node by @zbr and returns zero in case of
- * success or a negative negative error code in case of failure.
- */
 int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			 void *node)
 {
+	ubifs_assert(mutex_is_locked(&c->tnc_mutex));
 	return tnc_read_node(c, zbr, node);
 }
 
