@@ -373,7 +373,7 @@ acpi_ds_build_internal_package_obj(struct acpi_walk_state *walk_state,
 	union acpi_parse_object *parent;
 	union acpi_operand_object *obj_desc = NULL;
 	acpi_status status = AE_OK;
-	acpi_native_uint i;
+	u32 i;
 	u16 index;
 	u16 reference_count;
 
