@@ -39,6 +39,7 @@
 #include <linux/irqflags.h>
 #include <linux/utsname.h>
 #include <linux/hash.h>
+#include <linux/ftrace.h>
 
 #include <asm/sections.h>
 
@@ -982,7 +983,7 @@ check_noncircular(struct lock_class *source, unsigned int depth)
 	return 1;
 }
 
-#ifdef CONFIG_TRACE_IRQFLAGS
+#if defined(CONFIG_TRACE_IRQFLAGS) && defined(CONFIG_PROVE_LOCKING)
 /*
  * Forwards and backwards subgraph searching, for the purposes of
  * proving that two subgraphs can be connected by a new dependency
@@ -1680,7 +1681,7 @@ valid_state(struct task_struct *curr, struct held_lock *this,
 static int mark_lock(struct task_struct *curr, struct held_lock *this,
 		     enum lock_usage_bit new_bit);
 
-#ifdef CONFIG_TRACE_IRQFLAGS
+#if defined(CONFIG_TRACE_IRQFLAGS) && defined(CONFIG_PROVE_LOCKING)
 
 /*
  * print irq inversion bug:
@@ -2013,10 +2014,12 @@ void early_boot_irqs_on(void)
 /*
  * Hardirqs will be enabled:
  */
-void trace_hardirqs_on(void)
+void trace_hardirqs_on_caller(unsigned long a0)
 {
 	struct task_struct *curr = current;
 	unsigned long ip;
+
+	time_hardirqs_on(CALLER_ADDR0, a0);
 
 	if (unlikely(!debug_locks || current->lockdep_recursion))
 		return;
@@ -2055,15 +2058,22 @@ void trace_hardirqs_on(void)
 	curr->hardirq_enable_event = ++curr->irq_events;
 	debug_atomic_inc(&hardirqs_on_events);
 }
+EXPORT_SYMBOL(trace_hardirqs_on_caller);
 
+void trace_hardirqs_on(void)
+{
+	trace_hardirqs_on_caller(CALLER_ADDR0);
+}
 EXPORT_SYMBOL(trace_hardirqs_on);
 
 /*
  * Hardirqs were disabled:
  */
-void trace_hardirqs_off(void)
+void trace_hardirqs_off_caller(unsigned long a0)
 {
 	struct task_struct *curr = current;
+
+	time_hardirqs_off(CALLER_ADDR0, a0);
 
 	if (unlikely(!debug_locks || current->lockdep_recursion))
 		return;
@@ -2082,7 +2092,12 @@ void trace_hardirqs_off(void)
 	} else
 		debug_atomic_inc(&redundant_hardirqs_off);
 }
+EXPORT_SYMBOL(trace_hardirqs_off_caller);
 
+void trace_hardirqs_off(void)
+{
+	trace_hardirqs_off_caller(CALLER_ADDR0);
+}
 EXPORT_SYMBOL(trace_hardirqs_off);
 
 /*
@@ -2246,7 +2261,7 @@ static inline int separate_irq_context(struct task_struct *curr,
  * Mark a lock with a usage bit, and validate the state transition:
  */
 static int mark_lock(struct task_struct *curr, struct held_lock *this,
-		     enum lock_usage_bit new_bit)
+			     enum lock_usage_bit new_bit)
 {
 	unsigned int new_mask = 1 << new_bit, ret = 1;
 
@@ -2686,7 +2701,7 @@ static void check_flags(unsigned long flags)
  * and also avoid lockdep recursion:
  */
 void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
-		  int trylock, int read, int check, unsigned long ip)
+			  int trylock, int read, int check, unsigned long ip)
 {
 	unsigned long flags;
 
@@ -2708,7 +2723,8 @@ void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 
 EXPORT_SYMBOL_GPL(lock_acquire);
 
-void lock_release(struct lockdep_map *lock, int nested, unsigned long ip)
+void lock_release(struct lockdep_map *lock, int nested,
+			  unsigned long ip)
 {
 	unsigned long flags;
 
