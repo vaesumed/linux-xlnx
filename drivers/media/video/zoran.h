@@ -243,10 +243,8 @@ struct zoran_format {
 #ifdef CONFIG_VIDEO_V4L1_COMPAT
 	int palette;
 #endif
-#ifdef CONFIG_VIDEO_V4L2
 	__u32 fourcc;
 	int colorspace;
-#endif
 	int depth;
 	__u32 flags;
 	__u32 vfespfr;
@@ -271,8 +269,6 @@ struct zoran_v4l_settings {
 	const struct zoran_format *format;	/* capture format */
 };
 
-/* whoops, this one is undeclared if !v4l2 */
-#ifndef CONFIG_VIDEO_V4L2
 struct v4l2_jpegcompression {
 	int quality;
 	int APPn;
@@ -283,7 +279,6 @@ struct v4l2_jpegcompression {
 	__u32 jpeg_markers;
 	__u8 reserved[116];
 };
-#endif
 
 /* jpg-capture/-playback settings */
 struct zoran_jpg_settings {

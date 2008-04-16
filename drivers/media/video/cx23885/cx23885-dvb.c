@@ -39,6 +39,7 @@
 #include "dvb-pll.h"
 #include "tuner-xc2028.h"
 #include "tuner-xc2028-types.h"
+#include "tuner-simple.h"
 
 static unsigned int debug;
 
@@ -52,6 +53,8 @@ static unsigned int debug;
 static unsigned int alt_tuner;
 module_param(alt_tuner, int, 0644);
 MODULE_PARM_DESC(alt_tuner, "Enable alternate tuner configuration");
+
+DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 /* ------------------------------------------------------------------ */
 
@@ -164,8 +167,10 @@ static struct tda829x_config tda829x_no_probe = {
 };
 
 static struct tda18271_std_map hauppauge_tda18271_std_map = {
-	.atsc_6   = { .if_freq = 5380, .std_bits = 0x1b },
-	.qam_6    = { .if_freq = 4000, .std_bits = 0x18 },
+	.atsc_6   = { .if_freq = 5380, .agc_mode = 3, .std = 3,
+		      .if_lvl = 6, .rfagc_top = 0x37 },
+	.qam_6    = { .if_freq = 4000, .agc_mode = 3, .std = 0,
+		      .if_lvl = 6, .rfagc_top = 0x37 },
 };
 
 static struct tda18271_config hauppauge_tda18271_config = {
@@ -182,7 +187,7 @@ static int cx23885_hvr1500_xc3028_callback(void *ptr, int command, int arg)
 	case XC2028_TUNER_RESET:
 		/* Send the tuner in then out of reset */
 		/* GPIO-2 xc3028 tuner */
-		dprintk(1, "%s: XC2028_TUNER_RESET %d\n", __FUNCTION__, arg);
+		dprintk(1, "%s: XC2028_TUNER_RESET %d\n", __func__, arg);
 
 		cx_set(GP0_IO, 0x00040000);
 		cx_clear(GP0_IO, 0x00000004);
@@ -192,10 +197,10 @@ static int cx23885_hvr1500_xc3028_callback(void *ptr, int command, int arg)
 		msleep(5);
 		break;
 	case XC2028_RESET_CLK:
-		dprintk(1, "%s: XC2028_RESET_CLK %d\n", __FUNCTION__, arg);
+		dprintk(1, "%s: XC2028_RESET_CLK %d\n", __func__, arg);
 		break;
 	default:
-		dprintk(1, "%s: unknown command %d, arg %d\n", __FUNCTION__,
+		dprintk(1, "%s: unknown command %d, arg %d\n", __func__,
 			command, arg);
 		return -EINVAL;
 	}
@@ -271,8 +276,9 @@ static int dvb_register(struct cx23885_tsport *port)
 						&fusionhdtv_5_express,
 						&i2c_bus->i2c_adap);
 		if (port->dvb.frontend != NULL) {
-			dvb_attach(dvb_pll_attach, port->dvb.frontend, 0x61,
-				   &i2c_bus->i2c_adap, DVB_PLL_LG_TDVS_H06XF);
+			dvb_attach(simple_tuner_attach, port->dvb.frontend,
+				   &i2c_bus->i2c_adap, 0x61,
+				   TUNER_LG_TDVS_H06XF);
 		}
 		break;
 	case CX23885_BOARD_HAUPPAUGE_HVR1500Q:
@@ -297,7 +303,6 @@ static int dvb_register(struct cx23885_tsport *port)
 			struct xc2028_config cfg = {
 				.i2c_adap  = &i2c_bus->i2c_adap,
 				.i2c_addr  = 0x61,
-				.video_dev = port,
 				.callback  = cx23885_hvr1500_xc3028_callback,
 			};
 			static struct xc2028_ctrl ctl = {
@@ -330,7 +335,7 @@ static int dvb_register(struct cx23885_tsport *port)
 
 	/* register everything */
 	return videobuf_dvb_register(&port->dvb, THIS_MODULE, port,
-				     &dev->pci->dev);
+				     &dev->pci->dev, adapter_nr);
 }
 
 int cx23885_dvb_register(struct cx23885_tsport *port)
@@ -338,7 +343,7 @@ int cx23885_dvb_register(struct cx23885_tsport *port)
 	struct cx23885_dev *dev = port->dev;
 	int err;
 
-	dprintk(1, "%s\n", __FUNCTION__);
+	dprintk(1, "%s\n", __func__);
 	dprintk(1, " ->being probed by Card=%d Name=%s, PCI %02x:%02x\n",
 		dev->board,
 		dev->name,
@@ -349,12 +354,12 @@ int cx23885_dvb_register(struct cx23885_tsport *port)
 
 	/* dvb stuff */
 	printk("%s: cx23885 based dvb card\n", dev->name);
-	videobuf_queue_pci_init(&port->dvb.dvbq, &dvb_qops, dev->pci, &port->slock,
+	videobuf_queue_sg_init(&port->dvb.dvbq, &dvb_qops, &dev->pci->dev, &port->slock,
 			    V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_FIELD_TOP,
 			    sizeof(struct cx23885_buffer), port);
 	err = dvb_register(port);
 	if (err != 0)
-		printk("%s() dvb_register failed err = %d\n", __FUNCTION__, err);
+		printk("%s() dvb_register failed err = %d\n", __func__, err);
 
 	return err;
 }
