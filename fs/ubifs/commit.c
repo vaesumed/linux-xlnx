@@ -173,7 +173,7 @@ static int do_commit(struct ubifs_info *c)
 out_up:
 	up_write(&c->commit_sem);
 out:
-	ubifs_err("commit failed");
+	ubifs_err("commit failed, error %d", err);
 	spin_lock(&c->cs_lock);
 	c->cmt_state = COMMIT_BROKEN;
 	wake_up(&c->cmt_wq);
