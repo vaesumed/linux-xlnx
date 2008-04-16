@@ -45,6 +45,8 @@
 #include <linux/serial_core.h>
 #include <linux/kernel.h>
 
+#include <linux/of.h>
+
 #include "cpm_uart.h"
 
 /**************************************************************/
