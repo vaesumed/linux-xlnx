@@ -369,6 +369,9 @@ static int __futex_atomic_op_pt(int op, int __user *uaddr, int oparg, int *old)
 {
 	int oldval = 0, newval, ret;
 
+	if (!current->mm)
+		return -EFAULT;
+
 	switch (op) {
 	case FUTEX_OP_SET:
 		__futex_atomic_op("lr %2,%5\n",
