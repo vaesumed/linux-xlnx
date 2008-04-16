@@ -44,8 +44,8 @@
 
 #ifdef CONFIG_HID_DEBUG
 int hid_debug = 0;
-module_param_named(debug, hid_debug, bool, 0600);
-MODULE_PARM_DESC(debug, "Turn HID debugging mode on and off");
+module_param_named(debug, hid_debug, int, 0600);
+MODULE_PARM_DESC(debug, "HID debugging (0=off, 1=probing info, 2=continuous data dumping)");
 EXPORT_SYMBOL_GPL(hid_debug);
 #endif
 
@@ -97,7 +97,7 @@ static struct hid_field *hid_register_field(struct hid_report *report, unsigned 
 	field->index = report->maxfield++;
 	report->field[field->index] = field;
 	field->usage = (struct hid_usage *)(field + 1);
-	field->value = (unsigned *)(field->usage + usages);
+	field->value = (s32 *)(field->usage + usages);
 	field->report = report;
 
 	return field;
