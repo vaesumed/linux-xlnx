@@ -440,7 +440,7 @@ int ubifs_bg_wbufs_sync(struct ubifs_info *c)
 		err = ubifs_wbuf_sync_nolock(wbuf);
 		mutex_unlock(&wbuf->io_mutex);
 		if (err) {
-			ubifs_err("cannot sync write-buffer");
+			ubifs_err("cannot sync write-buffer, error %d", err);
 			ubifs_ro_mode(c, err);
 			goto out_timers;
 		}
