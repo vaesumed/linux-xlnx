@@ -1221,9 +1221,9 @@ static int suspend(int vetoable)
 	if (err != APM_SUCCESS)
 		apm_error("suspend", err);
 	err = (err == APM_SUCCESS) ? 0 : -EIO;
-	device_power_up();
+	device_power_up(PMSG_RESUME);
 	local_irq_enable();
-	device_resume();
+	device_resume(PMSG_RESUME);
 	pm_send_all(PM_RESUME, (void *)0);
 	queue_event(APM_NORMAL_RESUME, NULL);
  out:
@@ -1250,7 +1250,7 @@ static void standby(void)
 		apm_error("standby", err);
 
 	local_irq_disable();
-	device_power_up();
+	device_power_up(PMSG_RESUME);
 	local_irq_enable();
 }
 
@@ -1336,7 +1336,7 @@ static void check_events(void)
 			ignore_bounce = 1;
 			if ((event != APM_NORMAL_RESUME)
 			    || (ignore_normal_resume == 0)) {
-				device_resume();
+				device_resume(PMSG_RESUME);
 				pm_send_all(PM_RESUME, (void *)0);
 				queue_event(event, NULL);
 			}
