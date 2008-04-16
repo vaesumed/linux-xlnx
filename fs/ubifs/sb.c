@@ -527,6 +527,12 @@ int ubifs_read_superblock(struct ubifs_info *c)
 		goto out;
 	}
 
+	if (c->fmt_vers == 1) {
+		ubifs_err("this on-flash format is not supported");
+		err = -EINVAL;
+		goto out;
+	}
+
 	switch (sup->key_hash) {
 	case UBIFS_KEY_HASH_R5:
 		c->key_hash = key_r5_hash;
