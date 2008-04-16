@@ -1030,8 +1030,7 @@ static int dbg_check_znode(struct ubifs_info *c, struct ubifs_zbranch *zbr)
 		}
 		if (cmp == 0) {
 			/* This can only be keys with colliding hash */
-			if (!is_hash_key(c, &znode->zbranch[n - 1].key) ||
-			    !is_hash_key(c, &znode->zbranch[n].key)) {
+			if (!is_hash_key(c, &znode->zbranch[n].key)) {
 				err = 14;
 				goto out;
 			}
