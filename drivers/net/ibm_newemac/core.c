@@ -129,27 +129,8 @@ static struct device_node *emac_boot_list[EMAC_BOOT_LIST_SIZE];
 static inline void emac_report_timeout_error(struct emac_instance *dev,
 					     const char *error)
 {
-	if (emac_has_feature(dev, EMAC_FTR_440GX_PHY_CLK_FIX |
-				  EMAC_FTR_440EP_PHY_CLK_FIX))
-		DBG(dev, "%s" NL, error);
-	else if (net_ratelimit())
+	if (net_ratelimit())
 		printk(KERN_ERR "%s: %s\n", dev->ndev->name, error);
-}
-
-/* EMAC PHY clock workaround:
- * 440EP/440GR has more sane SDR0_MFR register implementation than 440GX,
- * which allows controlling each EMAC clock
- */
-static inline void emac_rx_clk_tx(struct emac_instance *dev)
-{
-	if (emac_has_feature(dev, EMAC_FTR_440EP_PHY_CLK_FIX))
-		dcri_clrset(SDR0, SDR0_MFR, 0, SDR0_MFR_ECS >> dev->cell_index);
-}
-
-static inline void emac_rx_clk_default(struct emac_instance *dev)
-{
-	if (emac_has_feature(dev, EMAC_FTR_440EP_PHY_CLK_FIX))
-		dcri_clrset(SDR0, SDR0_MFR, SDR0_MFR_ECS >> dev->cell_index, 0);
 }
 
 /* PHY polling intervals */
@@ -1115,11 +1096,9 @@ static int emac_open(struct net_device *ndev)
 		int link_poll_interval;
 		if (dev->phy.def->ops->poll_link(&dev->phy)) {
 			dev->phy.def->ops->read_link(&dev->phy);
-			emac_rx_clk_default(dev);
 			netif_carrier_on(dev->ndev);
 			link_poll_interval = PHY_POLL_LINK_ON;
 		} else {
-			emac_rx_clk_tx(dev);
 			netif_carrier_off(dev->ndev);
 			link_poll_interval = PHY_POLL_LINK_OFF;
 		}
@@ -1197,7 +1176,6 @@ static void emac_link_timer(struct work_struct *work)
 
 	if (dev->phy.def->ops->poll_link(&dev->phy)) {
 		if (!netif_carrier_ok(dev->ndev)) {
-			emac_rx_clk_default(dev);
 			/* Get new link parameters */
 			dev->phy.def->ops->read_link(&dev->phy);
 
@@ -1210,7 +1188,6 @@ static void emac_link_timer(struct work_struct *work)
 		link_poll_interval = PHY_POLL_LINK_ON;
 	} else {
 		if (netif_carrier_ok(dev->ndev)) {
-			emac_rx_clk_tx(dev);
 			netif_carrier_off(dev->ndev);
 			netif_tx_disable(dev->ndev);
 			emac_reinitialize(dev);
@@ -2355,12 +2332,9 @@ static int __devinit emac_init_phy(struct emac_instance *dev)
 	dev->phy.mdio_read = emac_mdio_read;
 	dev->phy.mdio_write = emac_mdio_write;
 
-	/* EMAC PHY clock workaround */
+	/* Enable internal clock source */
 	if (emac_has_feature(dev, EMAC_FTR_440GX_PHY_CLK_FIX))
-		/* Enable internal clock source */
 		dcri_clrset(SDR0, SDR0_MFR, 0, SDR0_MFR_ECS);
-	else
-		emac_rx_clk_tx(dev);
 
 	/* Configure EMAC with defaults so we can at least use MDIO
 	 * This is needed mostly for 440GX
@@ -2528,10 +2502,6 @@ static int __devinit emac_init_config(struct emac_instance *dev)
 		dev->features |= EMAC_FTR_EMAC4;
 		if (of_device_is_compatible(np, "ibm,emac-440gx"))
 			dev->features |= EMAC_FTR_440GX_PHY_CLK_FIX;
-	} else {
-		if (of_device_is_compatible(np, "ibm,emac-440ep") ||
-		    of_device_is_compatible(np, "ibm,emac-440gr"))
-			dev->features |= EMAC_FTR_440EP_PHY_CLK_FIX;
 	}
 
 	/* Fixup some feature bits based on the device tree */
