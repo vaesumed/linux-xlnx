@@ -339,7 +339,7 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 
 	inode = ubifs_iget(c->vfs_sb, le64_to_cpu(xent->inum));
 	if (IS_ERR(inode)) {
-		ubifs_err("dead extended attribute node entry");
+		ubifs_err("dead extended attribute entry, error %d", err);
 		ubifs_ro_mode(c);
 		err = PTR_ERR(inode);
 		goto out_free;
@@ -389,7 +389,7 @@ ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
 
 	inode = ubifs_iget(c->vfs_sb, le64_to_cpu(xent->inum));
 	if (IS_ERR(inode)) {
-		ubifs_err("dead extended attribute node entry");
+		ubifs_err("dead extended attribute entry, error %d", err);
 		ubifs_ro_mode(c);
 		err = PTR_ERR(inode);
 		goto out_unlock;

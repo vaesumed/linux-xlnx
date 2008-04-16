@@ -219,8 +219,8 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 		 * This should not happen. Probably the file-system needs
 		 * checking.
 		 */
-		ubifs_err("dead directory entry");
 		err = PTR_ERR(inode);
+		ubifs_err("dead directory entry, error %d", err);
 		ubifs_ro_mode(c, err);
 		goto out;
 	}
