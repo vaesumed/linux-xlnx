@@ -37,6 +37,7 @@
 #include <linux/device.h>
 #include <linux/bootmem.h>
 #include <linux/dma-mapping.h>
+#include <linux/of.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
