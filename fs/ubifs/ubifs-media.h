@@ -37,7 +37,7 @@
 #define UBIFS_NODE_MAGIC  0x06101831
 
 /* UBIFS on-flash format version */
-#define UBIFS_FORMAT_VERSION 1
+#define UBIFS_FORMAT_VERSION 2
 
 /* Minimum logical eraseblock size in bytes */
 #define UBIFS_MIN_LEB_SZ (15*1024)
