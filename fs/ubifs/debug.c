@@ -874,7 +874,7 @@ static int dbg_check_key_order(struct ubifs_info *c, struct ubifs_zbranch *zbr1,
 	nlen1 = le16_to_cpu(dent1->nlen);
 	nlen2 = le16_to_cpu(dent2->nlen);
 	if (nlen1 == nlen2) {
-		int cmp = strcmp(dent1->name, dent2->name);
+		int cmp = memcmp(dent1->name, dent2->name, nlen1);
 
 		if (cmp < 0) {
 			err = 0;
