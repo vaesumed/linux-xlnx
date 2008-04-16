@@ -811,10 +811,10 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
  * @zbr1: first zbranch
  * @zbr1: following zbranch
  *
- * In UBIFS indexing B-tree colliding keys has to be sorted in lexographical
- * order of names of the direntries/xentries which are referred by the keys.
- * This function reads direntries/xentries referred by @zbr1 and @zbr2 and
- * makes sure the name of direntry/xentry referred by @zbr1 is less then
+ * In UBIFS indexing B-tree colliding keys has to be sorted in binary order of
+ * names of the direntries/xentries which are referred by the keys. This
+ * function reads direntries/xentries referred by @zbr1 and @zbr2 and makes
+ * sure the name of direntry/xentry referred by @zbr1 is less then
  * direntry/xentry referred by @zbr2. Returns zero if this is true, %1 if not,
  * and a negative error code in case of failure.
  */
@@ -1040,8 +1040,8 @@ static int dbg_check_znode(struct ubifs_info *c, struct ubifs_zbranch *zbr)
 				continue;
 
 			/*
-			 * Colliding keys should follow the lexographical order
-			 * of corresponding xentry/dentry names.
+			 * Colliding keys should follow binary order of
+			 * corresponding xentry/dentry names.
 			 */
 			err = dbg_check_key_order(c, &znode->zbranch[n - 1],
 						  &znode->zbranch[n]);
