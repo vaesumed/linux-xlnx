@@ -632,9 +632,6 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	int err, type = key_type(c, key);
 	struct ubifs_wbuf *wbuf;
 
-	dbg_tnc_key(c, key, "LEB %d:%d, len %d, key",
-		    zbr->lnum, zbr->offs, zbr->len);
-
 	if (lnc_lookup(c, zbr, node))
 		return 0; /* Read from the leaf-node-cache */
 	/*
@@ -953,7 +950,6 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 {
 	int err;
 
-	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
 	err = matches_name(c, &(*zn)->zbranch[*n], nm);
 	if (unlikely(err < 0))
 		return err;
@@ -1108,7 +1104,6 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 	struct ubifs_znode *o_znode = NULL, *znode = *zn;
 	int uninitialized_var(o_n), err, cmp, unsure = 0, nn = *n;
 
-	dbg_tnc_key(c, key, "zbr %d, name %.*s, key", *n, nm->len, nm->name);
 	cmp = fallible_matches_name(c, &znode->zbranch[nn], nm);
 	if (unlikely(cmp < 0))
 		return cmp;
@@ -1236,8 +1231,6 @@ static int resolve_collision_directly(struct ubifs_info *c,
 	struct ubifs_znode *znode;
 	int nn, err;
 
-	dbg_tnc_key(c, key, "key");
-	dbg_mnt_key(c, key, "LEB %d:%d", lnum, offs);
 	znode = *zn;
 	nn = *n;
 	if (matches_position(&znode->zbranch[nn], lnum, offs))
@@ -1253,9 +1246,6 @@ static int resolve_collision_directly(struct ubifs_info *c,
 		if (keys_cmp(c, &znode->zbranch[nn].key, key))
 			break;
 		if (matches_position(&znode->zbranch[nn], lnum, offs)) {
-			dbg_tnc_key(c, key, "collision resolved");
-			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
-				    lnum, offs);
 			*zn = znode;
 			*n = nn;
 			return 1;
@@ -1276,9 +1266,6 @@ static int resolve_collision_directly(struct ubifs_info *c,
 		*zn = znode;
 		*n = nn;
 		if (matches_position(&znode->zbranch[nn], lnum, offs)) {
-			dbg_tnc_key(c, key, "collision resolved");
-			dbg_mnt_key(c, key, "LEB %d:%d collision resolved",
-				    lnum, offs);
 			return 1;
 		}
 	}
@@ -1728,7 +1715,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 	struct ubifs_zbranch zbr;
 
-	dbg_tnc_key(c, key, "key");
+	dbg_tnc_key(c, key, "name '%.*s' key", nm->len, nm->name);
 	mutex_lock(&c->tnc_mutex);
 	found = lookup_level0(c, key, &znode, &n);
 	if (!found) {
@@ -1742,6 +1729,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	ubifs_assert(n >= 0);
 
 	err = resolve_collision(c, key, &znode, &n, nm);
+	dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
 	if (unlikely(err < 0))
 		goto out_unlock;
 	if (err == 0) {
@@ -2129,6 +2117,8 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
+	dbg_tnc_key(c, key, "old LEB %d:%d, new LEB %d:%d, len %d, key",
+		    old_lnum, old_offs, lnum, offs, len);
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (unlikely(found < 0)) {
 		err = found;
@@ -2151,6 +2141,8 @@ int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,
 		} else if (is_hash_key(c, key)) {
 			found = resolve_collision_directly(c, key, &znode, &n,
 							   old_lnum, old_offs);
+			dbg_tnc("rc returned %d, znode %p, n %d, LEB %d:%d",
+				found, znode, n, old_lnum, old_offs);
 			if (unlikely(found < 0)) {
 				err = found;
 				goto out_unlock;
@@ -2209,7 +2201,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_znode *znode;
 
 	mutex_lock(&c->tnc_mutex);
-	dbg_tnc_key(c, key, "LEB %d:%d, '%.*s', key",
+	dbg_tnc_key(c, key, "LEB %d:%d, name '%.*s', key",
 		    lnum, offs, nm->len, nm->name);
 	found = lookup_level0_dirty(c, key, &znode, &n);
 	if (unlikely(found < 0)) {
@@ -2223,6 +2215,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 							   nm);
 		else
 			found = resolve_collision(c, key, &znode, &n, nm);
+		dbg_tnc("rc returned %d, znode %p, n %d", found, znode, n);
 		if (unlikely(found < 0)) {
 			err = found;
 			goto out_unlock;
@@ -2438,6 +2431,7 @@ int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 							 nm);
 		else
 			err = resolve_collision(c, key, &znode, &n, nm);
+		dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
 		if (unlikely(err < 0))
 			goto out_unlock;
 		if (err) {
@@ -2663,6 +2657,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	/* Handle collisions */
 	if (err) {
 		err = resolve_collision(c, key, &znode, &n, nm);
+		dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
 		if (unlikely(err < 0))
 			goto out_free;
 	}
