@@ -567,14 +567,13 @@ static int scc_ide_setup_pci_device(struct pci_dev *dev,
 	}
 
 	memset(&hw, 0, sizeof(hw));
-	for (i = IDE_DATA_OFFSET; i <= IDE_CONTROL_OFFSET; i++)
+	for (i = 0; i <= 8; i++)
 		hw.io_ports_array[i] = ports->dma + 0x20 + i * 4;
 	hw.irq = dev->irq;
 	hw.dev = &dev->dev;
 	hw.chipset = ide_pci;
 	ide_init_port_hw(hwif, &hw);
 	hwif->dev = &dev->dev;
-	hwif->cds = d;
 
 	idx[0] = hwif->index;
 
