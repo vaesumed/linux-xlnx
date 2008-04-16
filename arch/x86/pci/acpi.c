@@ -6,45 +6,6 @@
 #include <asm/numa.h>
 #include "pci.h"
 
-static int __devinit can_skip_ioresource_align(const struct dmi_system_id *d)
-{
-	pci_probe |= PCI_CAN_SKIP_ISA_ALIGN;
-	printk(KERN_INFO "PCI: %s detected, can skip ISA alignment\n", d->ident);
-	return 0;
-}
-
-static struct dmi_system_id acpi_pciprobe_dmi_table[] __devinitdata = {
-/*
- * Systems where PCI IO resource ISA alignment can be skipped
- * when the ISA enable bit in the bridge control is not set
- */
-	{
-		.callback = can_skip_ioresource_align,
-		.ident = "IBM System x3800",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "IBM"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "x3800"),
-		},
-	},
-	{
-		.callback = can_skip_ioresource_align,
-		.ident = "IBM System x3850",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "IBM"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "x3850"),
-		},
-	},
-	{
-		.callback = can_skip_ioresource_align,
-		.ident = "IBM System x3950",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "IBM"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "x3950"),
-		},
-	},
-	{}
-};
-
 struct pci_root_info {
 	char *name;
 	unsigned int res_num;
@@ -191,9 +152,10 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 {
 	struct pci_bus *bus;
 	struct pci_sysdata *sd;
+	int node;
+#ifdef CONFIG_ACPI_NUMA
 	int pxm;
-
-	dmi_check_system(acpi_pciprobe_dmi_table);
+#endif
 
 	if (domain && !pci_domains_supported) {
 		printk(KERN_WARNING "PCI: Multiple domains not supported "
@@ -201,41 +163,56 @@ struct pci_bus * __devinit pci_acpi_scan_root(struct acpi_device *device, int do
 		return NULL;
 	}
 
-	/* Allocate per-root-bus (not per bus) arch-specific data.
-	 * TODO: leak; this memory is never freed.
-	 * It's arguable whether it's worth the trouble to care.
-	 */
-	sd = kzalloc(sizeof(*sd), GFP_KERNEL);
-	if (!sd) {
-		printk(KERN_ERR "PCI: OOM, not probing PCI bus %02x\n", busnum);
-		return NULL;
-	}
-
-	sd->domain = domain;
-	sd->node = -1;
-
-	pxm = acpi_get_pxm(device->handle);
+	node = -1;
 #ifdef CONFIG_ACPI_NUMA
+	pxm = acpi_get_pxm(device->handle);
 	if (pxm >= 0)
-		sd->node = pxm_to_node(pxm);
+		node = pxm_to_node(pxm);
+	if (node != -1)
+		set_mp_bus_to_node(busnum, node);
+	else
+		node = get_mp_bus_to_node(busnum);
+
+	if (node != -1 && !node_online(node))
+		node = -1;
 #endif
 
-	bus = pci_scan_bus_parented(NULL, busnum, &pci_root_ops, sd);
-	if (!bus)
-		kfree(sd);
+	bus = pci_find_bus(domain, busnum);
+	if (bus) {
+		/* already scanned ?*/
+		sd = bus->sysdata;
+		sd->node = node;
+	} else {
+		/* Allocate per-root-bus (not per bus) arch-specific data.
+		 * TODO: leak; this memory is never freed.
+		 * It's arguable whether it's worth the trouble to care.
+		 */
+		sd = kzalloc(sizeof(*sd), GFP_KERNEL);
+		if (!sd) {
+			printk(KERN_ERR "PCI: OOM, not probing PCI bus %02x\n",
+				 busnum);
+			return NULL;
+		}
+
+		sd->domain = domain;
+		sd->node = node;
+
+		bus = pci_scan_bus_parented(NULL, busnum, &pci_root_ops, sd);
+		if (!bus)
+			kfree(sd);
+	}
 
 #ifdef CONFIG_ACPI_NUMA
-	if (bus != NULL) {
+	if (bus) {
 		if (pxm >= 0) {
-			printk("bus %d -> pxm %d -> node %d\n",
-				busnum, pxm, sd->node);
+			printk(KERN_DEBUG "bus %02x -> pxm %d -> node %d\n",
+				busnum, pxm, node);
 		}
 	}
 #endif
 
 	if (bus && (pci_probe & PCI_USE__CRS))
 		get_current_resources(device, busnum, domain, bus);
-	
 	return bus;
 }
 

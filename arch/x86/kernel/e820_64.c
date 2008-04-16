@@ -27,6 +27,7 @@
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/kdebug.h>
+#include <asm/trampoline.h>
 
 struct e820map e820;
 
@@ -58,8 +59,8 @@ struct early_res {
 };
 static struct early_res early_res[MAX_EARLY_RES] __initdata = {
 	{ 0, PAGE_SIZE, "BIOS data page" },			/* BIOS data page */
-#ifdef CONFIG_SMP
-	{ SMP_TRAMPOLINE_BASE, SMP_TRAMPOLINE_BASE + 2*PAGE_SIZE, "SMP_TRAMPOLINE" },
+#ifdef CONFIG_X86_TRAMPOLINE
+	{ TRAMPOLINE_BASE, TRAMPOLINE_BASE + 2 * PAGE_SIZE, "TRAMPOLINE" },
 #endif
 	{}
 };
@@ -83,19 +84,46 @@ void __init reserve_early(unsigned long start, unsigned long end, char *name)
 		strncpy(r->name, name, sizeof(r->name) - 1);
 }
 
-void __init early_res_to_bootmem(void)
+void __init free_early(unsigned long start, unsigned long end)
+{
+	struct early_res *r;
+	int i, j;
+
+	for (i = 0; i < MAX_EARLY_RES && early_res[i].end; i++) {
+		r = &early_res[i];
+		if (start == r->start && end == r->end)
+			break;
+	}
+	if (i >= MAX_EARLY_RES || !early_res[i].end)
+		panic("free_early on not reserved area: %lx-%lx!", start, end);
+
+	for (j = i + 1; j < MAX_EARLY_RES && early_res[j].end; j++)
+		;
+
+	memcpy(&early_res[i], &early_res[i + 1],
+	       (j - 1 - i) * sizeof(struct early_res));
+
+	early_res[j - 1].end = 0;
+}
+
+void __init early_res_to_bootmem(unsigned long start, unsigned long end)
 {
 	int i;
+	unsigned long final_start, final_end;
 	for (i = 0; i < MAX_EARLY_RES && early_res[i].end; i++) {
 		struct early_res *r = &early_res[i];
-		printk(KERN_INFO "early res: %d [%lx-%lx] %s\n", i,
-			r->start, r->end - 1, r->name);
-		reserve_bootmem_generic(r->start, r->end - r->start);
+		final_start = max(start, r->start);
+		final_end = min(end, r->end);
+		if (final_start >= final_end)
+			continue;
+		printk(KERN_INFO "  early res: %d [%lx-%lx] %s\n", i,
+			final_start, final_end - 1, r->name);
+		reserve_bootmem_generic(final_start, final_end - final_start);
 	}
 }
 
 /* Check for already reserved areas */
-static inline int
+static inline int __init
 bad_addr(unsigned long *addrp, unsigned long size, unsigned long align)
 {
 	int i;
@@ -115,7 +143,7 @@ again:
 }
 
 /* Check for already reserved areas */
-static inline int
+static inline int __init
 bad_addr_size(unsigned long *addrp, unsigned long *sizep, unsigned long align)
 {
 	int i;

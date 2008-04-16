@@ -23,12 +23,13 @@ obj-y			+= setup_$(BITS).o i8259_$(BITS).o setup.o
 obj-$(CONFIG_X86_32)	+= sys_i386_32.o i386_ksyms_32.o
 obj-$(CONFIG_X86_64)	+= sys_x86_64.o x8664_ksyms_64.o
 obj-$(CONFIG_X86_64)	+= syscall_64.o vsyscall_64.o setup64.o
-obj-y			+= pci-dma_$(BITS).o  bootflag.o e820_$(BITS).o
-obj-y			+= quirks.o i8237.o topology.o kdebugfs.o
-obj-y			+= alternative.o i8253.o
-obj-$(CONFIG_X86_64)	+= pci-nommu_64.o bugs_64.o
+obj-y			+= bootflag.o e820_$(BITS).o
+obj-y			+= pci-dma.o quirks.o i8237.o topology.o kdebugfs.o
+obj-y			+= alternative.o i8253.o pci-nommu.o
+obj-$(CONFIG_X86_64)	+= bugs_64.o
 obj-y			+= tsc_$(BITS).o io_delay.o rtc.o
 
+obj-$(CONFIG_X86_TRAMPOLINE)	+= trampoline.o
 obj-y				+= i387.o
 obj-y				+= ptrace.o
 obj-y				+= ds.o
@@ -68,6 +69,7 @@ obj-$(CONFIG_MODULES)		+= module_$(BITS).o
 obj-$(CONFIG_ACPI_SRAT) 	+= srat_32.o
 obj-$(CONFIG_EFI) 		+= efi.o efi_$(BITS).o efi_stub_$(BITS).o
 obj-$(CONFIG_DOUBLEFAULT) 	+= doublefault_32.o
+obj-$(CONFIG_KGDB)		+= kgdb.o
 obj-$(CONFIG_VM86)		+= vm86_32.o
 obj-$(CONFIG_EARLY_PRINTK)	+= early_printk.o
 
@@ -92,6 +94,8 @@ endif
 obj-$(CONFIG_SCx200)		+= scx200.o
 scx200-y			+= scx200_32.o
 
+obj-$(CONFIG_KMEMCHECK)		+= kmemcheck.o
+
 ###
 # 64 bit specific files
 ifeq ($(CONFIG_X86_64),y)
@@ -102,4 +106,6 @@ ifeq ($(CONFIG_X86_64),y)
         obj-$(CONFIG_GART_IOMMU)	+= pci-gart_64.o aperture_64.o
         obj-$(CONFIG_CALGARY_IOMMU)	+= pci-calgary_64.o tce_64.o
         obj-$(CONFIG_SWIOTLB)		+= pci-swiotlb_64.o
+
+        obj-$(CONFIG_PCI_MMCONFIG)	+= mmconf-fam10h_64.o
 endif

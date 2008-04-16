@@ -29,6 +29,7 @@
 #include <linux/crash_dump.h>
 #include <linux/root_dev.h>
 #include <linux/pci.h>
+#include <asm/pci-direct.h>
 #include <linux/efi.h>
 #include <linux/acpi.h>
 #include <linux/kallsyms.h>
@@ -40,6 +41,7 @@
 #include <linux/dmi.h>
 #include <linux/dma-mapping.h>
 #include <linux/ctype.h>
+#include <linux/sort.h>
 #include <linux/uaccess.h>
 #include <linux/init_ohci1394_dma.h>
 #include <linux/kvm_para.h>
@@ -67,6 +69,7 @@
 #include <asm/mce.h>
 #include <asm/ds.h>
 #include <asm/topology.h>
+#include <asm/trampoline.h>
 
 #include <mach_apic.h>
 #ifdef CONFIG_PARAVIRT
@@ -190,6 +193,7 @@ contig_initmem_init(unsigned long start_pfn, unsigned long end_pfn)
 	bootmap_size = init_bootmem(bootmap >> PAGE_SHIFT, end_pfn);
 	e820_register_active_regions(0, start_pfn, end_pfn);
 	free_bootmem_with_active_regions(0, end_pfn);
+	early_res_to_bootmem(0, end_pfn<<PAGE_SHIFT);
 	reserve_bootmem(bootmap, bootmap_size, BOOTMEM_DEFAULT);
 }
 #endif
@@ -264,6 +268,28 @@ void __attribute__((weak)) __init memory_setup(void)
        machine_specific_memory_setup();
 }
 
+static void __init parse_setup_data(void)
+{
+	struct setup_data *data;
+	unsigned long pa_data;
+
+	if (boot_params.hdr.version < 0x0209)
+		return;
+	pa_data = boot_params.hdr.setup_data;
+	while (pa_data) {
+		data = early_ioremap(pa_data, PAGE_SIZE);
+		switch (data->type) {
+		default:
+			break;
+		}
+#ifndef CONFIG_DEBUG_BOOT_PARAMS
+		free_early(pa_data, pa_data+sizeof(*data)+data->len);
+#endif
+		pa_data = data->next;
+		early_iounmap(data, PAGE_SIZE);
+	}
+}
+
 /*
  * setup_arch - architecture-specific boot-time initializations
  *
@@ -315,6 +341,8 @@ void __init setup_arch(char **cmdline_p)
 
 	strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
 	*cmdline_p = command_line;
+
+	parse_setup_data();
 
 	parse_early_param();
 
@@ -401,7 +429,7 @@ void __init setup_arch(char **cmdline_p)
 	contig_initmem_init(0, end_pfn);
 #endif
 
-	early_res_to_bootmem();
+	dma32_reserve_bootmem();
 
 #ifdef CONFIG_ACPI_SLEEP
 	/*
@@ -676,6 +704,14 @@ static void __cpuinit early_init_amd(struct cpuinfo_x86 *c)
 		set_cpu_cap(c, X86_FEATURE_CONSTANT_TSC);
 }
 
+#ifdef CONFIG_PCI_MMCONFIG
+extern void __cpuinit fam10h_check_enable_mmcfg(void);
+#else
+void __cpuinit fam10h_check_enable_mmcfg(void)
+{
+}
+#endif
+
 static void __cpuinit init_amd(struct cpuinfo_x86 *c)
 {
 	unsigned level;
@@ -740,6 +776,9 @@ static void __cpuinit init_amd(struct cpuinfo_x86 *c)
 
 	/* MFENCE stops RDTSC speculation */
 	set_cpu_cap(c, X86_FEATURE_MFENCE_RDTSC);
+
+	if (c->x86 == 0x10)
+		fam10h_check_enable_mmcfg();
 
 	if (amd_apic_timer_broken())
 		disable_apic_timer = 1;
@@ -871,11 +910,12 @@ static void __cpuinit init_intel(struct cpuinfo_x86 *c)
 			set_cpu_cap(c, X86_FEATURE_BTS);
 		if (!(l1 & (1<<12)))
 			set_cpu_cap(c, X86_FEATURE_PEBS);
+		ds_init_intel(c);
 	}
 
 
 	if (cpu_has_bts)
-		ds_init_intel(c);
+		ptrace_bts_init_intel(c);
 
 	n = c->extended_cpuid_level;
 	if (n >= 0x80000008) {
