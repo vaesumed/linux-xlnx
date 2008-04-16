@@ -165,27 +165,35 @@ show_temp(struct device *dev, struct device_attribute *devattr, char *buf)
 static ssize_t
 show_fan(struct device *dev, struct device_attribute *devattr, char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adm1029_data *data = adm1029_update_device(dev);
 	u16 val;
-	if (data->fan[attr->index] == 0 || data->fan_div[attr->index] == 0
-	    || data->fan[attr->index] == 255) {
-		return sprintf(buf, "0\n");
-	}
 
-	val = 1880 * 120 / DIV_FROM_REG(data->fan_div[attr->index])
-	    / data->fan[attr->index];
+	mutex_lock(&data->update_lock);
+	if (data->fan[index] == 0 || data->fan_div[index] == 0
+					|| data->fan[index] == 255)
+		val = 0;
+	else
+		val = 1880 * 120 / DIV_FROM_REG(data->fan_div[index])
+					/ data->fan[index];
+	mutex_unlock(&data->update_lock);
 	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t
 show_fan_div(struct device *dev, struct device_attribute *devattr, char *buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
+	int index = to_sensor_dev_attr(devattr)->index;
 	struct adm1029_data *data = adm1029_update_device(dev);
-	if (data->fan_div[attr->index] == 0)
-		return sprintf(buf, "0\n");
-	return sprintf(buf, "%d\n", DIV_FROM_REG(data->fan_div[attr->index]));
+	int val;
+
+	mutex_lock(&data->update_lock);
+	if (data->fan_div[index] == 0)
+		val = 0;
+	else
+		val = DIV_FROM_REG(data->fan_div[index]);
+	mutex_unlock(&data->update_lock);
+	return sprintf(buf, "%d\n", val);
 }
 
 static ssize_t set_fan_div(struct device *dev,
