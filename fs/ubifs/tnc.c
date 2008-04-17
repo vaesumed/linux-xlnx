@@ -816,7 +816,7 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
-	err = memcmp(dent->name, nm->name, min(nlen, nm->len));
+	err = memcmp(dent->name, nm->name, min_t(int, nlen, nm->len));
 	if (err == 0) {
 		if (nlen == nm->len)
 			return NAME_MATCHES;
@@ -1075,7 +1075,7 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 
 	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
-	err = memcmp(dent->name, nm->name, min(nlen, nm->len));
+	err = memcmp(dent->name, nm->name, min_t(int, nlen, nm->len));
 	if (err == 0) {
 		if (nlen == nm->len)
 			return NAME_MATCHES;
