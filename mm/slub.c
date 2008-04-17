@@ -1156,7 +1156,7 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 		ClearSlabDebug(page);
 	}
 
-	if (PageTracked(page) && !(s->flags & SLAB_NOTRACK)) {
+	if (kmemcheck_page_is_tracked(page) && !(s->flags & SLAB_NOTRACK)) {
 		kmemcheck_free_slab(s, page, pages);
 		return;
 	}

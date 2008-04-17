@@ -233,11 +233,26 @@ param_kmemcheck(char *str)
 	if (!str)
 		return -EINVAL;
 
-	sscanf("%d", str, &kmemcheck_enabled);
+	sscanf(str, "%d", &kmemcheck_enabled);
 	return 0;
 }
 
 early_param("kmemcheck", param_kmemcheck);
+
+static pte_t *
+address_get_pte(unsigned int address)
+{
+	pte_t *pte;
+	int level;
+
+	pte = lookup_address(address, &level);
+	if (!pte)
+		return NULL;
+	if (!pte_hidden(*pte))
+		return NULL;
+
+	return pte;
+}
 
 /*
  * Return the shadow address for the given address. Returns NULL if the
@@ -249,88 +264,53 @@ early_param("kmemcheck", param_kmemcheck);
 static void *
 address_get_shadow(unsigned long address)
 {
+	pte_t *pte;
 	struct page *page;
 	struct page *head;
 
 	if (!virt_addr_valid(address))
 		return NULL;
 
+	pte = address_get_pte(address);
+	if (!pte)
+		return NULL;
+
 	/* The accessed page */
 	page = virt_to_page(address);
-	if (!PageCompound(page))
-		return NULL;
+	BUG_ON(!PageCompound(page));
 
 	/* The head page */
 	head = compound_head(page);
-	if (!PageTracked(head))
-		return NULL;
+	BUG_ON(compound_order(head) == 0);
 
 	return (void *) address + (PAGE_SIZE << (compound_order(head) - 1));
 }
 
 static int
-show_addr(uint32_t addr)
+show_addr(uint32_t address)
 {
 	pte_t *pte;
-	int level;
 
-	if (!address_get_shadow(addr))
-		return 0;
-
-	pte = lookup_address(addr, &level);
-	BUG_ON(!pte);
-
-	if (level != PG_LEVEL_4K)
-		return 0;
-
-	set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
-	__flush_tlb_one(addr);
-	return 1;
-}
-
-/*
- * In case there's something seriously wrong with kmemcheck (like a recursive
- * or looping page fault), we should disable tracking for the page as a last
- * attempt to not hang the machine.
- */
-static void
-emergency_show_addr(uint32_t address)
-{
-	pte_t *pte;
-	int level;
-
-	pte = lookup_address(address, &level);
+	pte = address_get_pte(address);
 	if (!pte)
-		return;
-	if (level != PG_LEVEL_4K)
-		return;
-
-	/* Don't change pages that weren't hidden in the first place -- they
-	 * aren't ours to modify. */
-	if (!(pte_val(*pte) & _PAGE_HIDDEN))
-		return;
+		return 0;
 
 	set_pte(pte, __pte(pte_val(*pte) | _PAGE_PRESENT));
 	__flush_tlb_one(address);
+	return 1;
 }
 
 static int
-hide_addr(uint32_t addr)
+hide_addr(uint32_t address)
 {
 	pte_t *pte;
-	int level;
 
-	if (!address_get_shadow(addr))
-		return 0;
-
-	pte = lookup_address(addr, &level);
-	BUG_ON(!pte);
-
-	if (level != PG_LEVEL_4K)
+	pte = address_get_pte(address);
+	if (!pte)
 		return 0;
 
 	set_pte(pte, __pte(pte_val(*pte) & ~_PAGE_PRESENT));
-	__flush_tlb_one(addr);
+	__flush_tlb_one(address);
 	return 1;
 }
 
@@ -365,8 +345,8 @@ kmemcheck_show(struct pt_regs *regs)
 	BUG_ON(!irqs_disabled());
 
 	if (unlikely(data->balance != 0)) {
-		emergency_show_addr(data->addr1);
-		emergency_show_addr(data->addr2);
+		show_addr(data->addr1);
+		show_addr(data->addr2);
 		error_save_bug(regs);
 		data->balance = 0;
 		return;
@@ -414,8 +394,8 @@ kmemcheck_hide(struct pt_regs *regs)
 		return;
 
 	if (unlikely(data->balance != 1)) {
-		emergency_show_addr(data->addr1);
-		emergency_show_addr(data->addr2);
+		show_addr(data->addr1);
+		show_addr(data->addr2);
 		error_save_bug(regs);
 		data->addr1 = 0;
 		data->addr2 = 0;
@@ -456,9 +436,6 @@ kmemcheck_show_pages(struct page *p, unsigned int n)
 {
 	unsigned int i;
 
-	BUG_ON(!PageCompound(p));
-	ClearPageTracked(compound_head(p));
-
 	for (i = 0; i < n; ++i) {
 		unsigned long address;
 		pte_t *pte;
@@ -477,13 +454,17 @@ kmemcheck_show_pages(struct page *p, unsigned int n)
 	}
 }
 
+bool
+kmemcheck_page_is_tracked(struct page *p)
+{
+	/* This will also check the "hidden" flag of the PTE. */
+	return address_get_pte((unsigned long) page_address(p));
+}
+
 void
 kmemcheck_hide_pages(struct page *p, unsigned int n)
 {
 	unsigned int i;
-
-	BUG_ON(!PageCompound(p));
-	SetPageTracked(compound_head(p));
 
 	for (i = 0; i < n; ++i) {
 		unsigned long address;
@@ -762,7 +743,7 @@ kmemcheck_access(struct pt_regs *regs,
 
 	/* Recursive fault -- ouch. */
 	if (data->busy) {
-		emergency_show_addr(fallback_address);
+		show_addr(fallback_address);
 		error_save_bug(regs);
 		return;
 	}
