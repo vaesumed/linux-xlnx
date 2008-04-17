@@ -89,7 +89,6 @@
 #define PG_mappedtodisk		16	/* Has blocks allocated on-disk */
 #define PG_reclaim		17	/* To be reclaimed asap */
 #define PG_buddy		19	/* Page is free, on buddy lists */
-#define PG_tracked		20	/* Tracked by kmemcheck */
 
 /* PG_readahead is only used for file reads; PG_reclaim is only for writes */
 #define PG_readahead		PG_reclaim /* Reminder to do async read-ahead */
@@ -296,10 +295,6 @@ static inline void __ClearPageTail(struct page *page)
 #define PageUncached(page)	test_bit(PG_uncached, &(page)->flags)
 #define SetPageUncached(page)	set_bit(PG_uncached, &(page)->flags)
 #define ClearPageUncached(page)	clear_bit(PG_uncached, &(page)->flags)
-
-#define PageTracked(page)	test_bit(PG_tracked, &(page)->flags)
-#define SetPageTracked(page)	set_bit(PG_tracked, &(page)->flags)
-#define ClearPageTracked(page)	clear_bit(PG_tracked, &(page)->flags)
 
 
 struct page;	/* forward declaration */
