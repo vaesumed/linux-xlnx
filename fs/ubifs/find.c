@@ -209,7 +209,7 @@ static const struct ubifs_lprops *scan_for_dirty(struct ubifs_info *c,
  * or do not have an LEB which satisfies the @min_space criteria.
  *
  * Note:
- *   o LEBs which have less then dead watermark of dirty space are never picked
+ *   o LEBs which have less than dead watermark of dirty space are never picked
  *   by this function;
  *
  * Returns zero and the LEB properties of
@@ -290,7 +290,7 @@ int ubifs_find_dirty_leb(struct ubifs_info *c, struct ubifs_lprops *ret_lp,
 		/*
 		 * Since we reserve twice as more space for the index than it
 		 * actually takes, it does not make sense to pick indexing LEBs
-		 * with less then half LEB of dirty space.
+		 * with less than half LEB of dirty space.
 		 */
 		if (sum < min_space || sum < c->half_leb_size)
 			idx_lp = NULL;

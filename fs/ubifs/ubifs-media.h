@@ -46,7 +46,7 @@
 #define UBIFS_CRC32_INIT 0xFFFFFFFFU
 
 /*
- * UBIFS does not try to compress data if its length is less then the below
+ * UBIFS does not try to compress data if its length is less than the below
  * constant.
  */
 #define UBIFS_MIN_COMPR_LEN 128
@@ -106,6 +106,9 @@
 #define UBIFS_LPT_CRC_BITS 16
 #define UBIFS_LPT_CRC_BYTES 2
 #define UBIFS_LPT_TYPE_BITS 4
+
+/* The key is always at the same position in all keyed nodes */
+#define UBIFS_KEY_OFFSET offsetof(struct ubifs_ino_node, key)
 
 /*
  * LEB Properties Tree node types.

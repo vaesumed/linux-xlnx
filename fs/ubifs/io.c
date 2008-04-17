@@ -552,7 +552,7 @@ int ubifs_wbuf_write_nolock(struct ubifs_wbuf *wbuf, void *buf, int len)
 	 * The remaining data may take more whole min. I/O units, so write the
 	 * remains multiple to min. I/O unit size directly to the flash media.
 	 * We align node length to 8-byte boundary because we anyway flash wbuf
-	 * if the remaining space is less then 8 bytes.
+	 * if the remaining space is less than 8 bytes.
 	 */
 	n = aligned_len >> c->min_io_shift;
 	if (n) {
