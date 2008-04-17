@@ -1106,12 +1106,16 @@ config EFI
   	platforms.
 
 config IRQBALANCE
-	def_bool y
+	def_bool n
 	prompt "Enable kernel irq balancing"
-	depends on X86_32 && SMP && X86_IO_APIC
+	depends on X86_32 && SMP && X86_IO_APIC && BROKEN
 	help
 	  The default yes will allow the kernel to do irq load balancing.
 	  Saying no will keep the kernel from doing irq load balancing.
+
+	  This option is known to cause performance issues on SMP
+	  systems. The preferred method is to use the userspace
+	  'irqbalance' daemon instead. See http://irqbalance.org/.
 
 config SECCOMP
 	def_bool y
