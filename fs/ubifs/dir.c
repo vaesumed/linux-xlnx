@@ -937,7 +937,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	 * device based file systems, and it is not appropriate for UBIFS,
 	 * because UBIFS does not have notion of "block". For example, it is
 	 * difficult to tell how many block a directory takes - it actually
-	 * takes less then 300 bytes, but we have to round it to block size,
+	 * takes less than 300 bytes, but we have to round it to block size,
 	 * which introduces large mistake. This makes utilities like 'du' to
 	 * report completely senseless numbers. This is the reason why UBIFS
 	 * goes the same way as JFFS2 - it reports zero blocks for everything

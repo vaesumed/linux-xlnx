@@ -132,7 +132,7 @@ struct ubifs_znode *ubifs_tnc_levelorder_next(struct ubifs_znode *zr,
  *     stored in @n;
  *   o no exact match, then %0 is returned and the slot number of the left
  *     closest branch is returned in @n; the slot if all keys in this znode are
- *     greater then @key, then %-1 is returned in @n.
+ *     greater than @key, then %-1 is returned in @n.
  */
 int ubifs_search_zbranch(const struct ubifs_info *c,
 			 const struct ubifs_znode *znode,
