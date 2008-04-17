@@ -743,18 +743,30 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 			    zbr->offs);
 	if (ret == 1) {
 		union ubifs_key node_key;
+		struct ubifs_dent_node *dent = node;
 
 		/* All nodes have key in the same place */
-		key_read(c, &((struct ubifs_dent_node *)node)->key, &node_key);
+		key_read(c, &dent->key, &node_key);
 		if (keys_cmp(c, key, &node_key) == 0) {
-			/* Consider adding the node to the leaf node cache */
-			int err = lnc_add(c, zbr, node);
+			/*
+			 * If the node sequence number is greater than the
+			 * current replay sequence number, then the node should
+			 * not yet be in the index, so this must be a dangling
+			 * branch.
+			 */
+			if (le64_to_cpu(dent->ch.sqnum) > c->replay_sqnum)
+				ret = 0;
+			else {
+				/* Add the node to the leaf node cache */
+				int err = lnc_add(c, zbr, node);
 
-			if (err)
-				return err;
+				if (err)
+					return err;
+			}
 		} else
 			ret = 0;
-	} else if (ret == 0)
+	}
+	if (ret == 0)
 		dbg_mnt_key(c, key, "dangling branch LEB %d:%d len %d, key",
 			    zbr->lnum, zbr->offs, zbr->len);
 	return ret;
