@@ -96,7 +96,7 @@ static int init_constants_early(struct ubifs_info *c)
 	/*
 	 * UBIFS aligns all node to 8-byte boundary, so to make function in
 	 * io.c simpler, assume minimum I/O unit size to be 8 bytes if it is
-	 * less then 8.
+	 * less than 8.
 	 */
 	if (c->min_io_size < 8) {
 		c->min_io_size = 8;

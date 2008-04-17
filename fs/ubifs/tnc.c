@@ -651,7 +651,7 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	/* Make sure the key of the read node is correct */
 	key_read(c, key, &key1);
-	if (memcmp(node + UBIFS_CH_SZ, &key1, c->key_len)) {
+	if (memcmp(node + UBIFS_KEY_OFFSET, &key1, c->key_len)) {
 		ubifs_err("bad key in node at LEB %d:%d",
 			  zbr->lnum, zbr->offs);
 		dbg_tnc_key(c, key, "looked for key");
@@ -816,15 +816,18 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
-	if (nlen == nm->len) {
-		err = memcmp(dent->name, nm->name, nlen);
-		if (err == 0)
+	err = memcmp(dent->name, nm->name, min(nlen, nm->len));
+	if (err == 0) {
+		if (nlen == nm->len)
 			return NAME_MATCHES;
-		return err < 0 ? NAME_LESS : NAME_GREATER;
-	}
-	if (nlen < nm->len)
+		else if (nlen < nm->len)
+			return NAME_LESS;
+		else
+			return NAME_GREATER;
+	} else if (err < 0)
 		return NAME_LESS;
-	return NAME_GREATER;
+	else
+		return NAME_GREATER;
 
 out_free:
 	kfree(dent);
@@ -1072,16 +1075,18 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 
 	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
-	if (nlen == nm->len) {
-		err = memcmp(dent->name, nm->name, nlen);
-		if (err == 0)
+	err = memcmp(dent->name, nm->name, min(nlen, nm->len));
+	if (err == 0) {
+		if (nlen == nm->len)
 			return NAME_MATCHES;
-		return err < 0 ? NAME_LESS : NAME_GREATER;
-	}
-		return memcmp(dent->name, nm->name, nlen) + 1;
-	if (nlen < nm->len)
+		else if (nlen < nm->len)
+			return NAME_LESS;
+		else
+			return NAME_GREATER;
+	} else if (err < 0)
 		return NAME_LESS;
-	return NAME_GREATER;
+	else
+		return NAME_GREATER;
 
 out_free:
 	kfree(dent);

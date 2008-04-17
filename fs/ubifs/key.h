@@ -470,8 +470,8 @@ static inline void key_copy(const struct ubifs_info *c,
  * @key1: the first key to compare
  * @key2: the second key to compare
  *
- * This function compares 2 keys and returns %-1 if @key1 is less then
- * @key2, 0 if the keys are equivalent and %1 if @key1 is greater then @key2.
+ * This function compares 2 keys and returns %-1 if @key1 is less than
+ * @key2, 0 if the keys are equivalent and %1 if @key1 is greater than @key2.
  */
 static inline int keys_cmp(const struct ubifs_info *c,
 			   const union ubifs_key *key1,

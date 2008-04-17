@@ -814,14 +814,14 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
  * In UBIFS indexing B-tree colliding keys has to be sorted in binary order of
  * names of the direntries/xentries which are referred by the keys. This
  * function reads direntries/xentries referred by @zbr1 and @zbr2 and makes
- * sure the name of direntry/xentry referred by @zbr1 is less then
+ * sure the name of direntry/xentry referred by @zbr1 is less than
  * direntry/xentry referred by @zbr2. Returns zero if this is true, %1 if not,
  * and a negative error code in case of failure.
  */
 static int dbg_check_key_order(struct ubifs_info *c, struct ubifs_zbranch *zbr1,
 			       struct ubifs_zbranch *zbr2)
 {
-	int err, nlen1, nlen2;
+	int err, nlen1, nlen2, cmp;
 	struct ubifs_dent_node *dent1, *dent2;
 	union ubifs_key key;
 
@@ -873,25 +873,18 @@ static int dbg_check_key_order(struct ubifs_info *c, struct ubifs_zbranch *zbr1,
 
 	nlen1 = le16_to_cpu(dent1->nlen);
 	nlen2 = le16_to_cpu(dent2->nlen);
-	if (nlen1 == nlen2) {
-		int cmp = memcmp(dent1->name, dent2->name, nlen1);
 
-		if (cmp < 0) {
-			err = 0;
-			goto out_free;
-		}
+	cmp = memcmp(dent1->name, dent2->name, min(nlen1, nlen2));
 
-		if (!cmp)
-			ubifs_err("2 xent/dent nodes with the same name");
-
-		if (cmp > 0)
-			ubifs_err("bad order of colliding key %s",
-				  dbg_get_key_dump(c, &key));
-
-	} else if (nlen1 < nlen2) {
+	if (cmp < 0 || (cmp == 0 && nlen1 < nlen2)) {
 		err = 0;
 		goto out_free;
 	}
+	if (cmp == 0 && nlen1 == nlen2)
+		ubifs_err("2 xent/dent nodes with the same name");
+	else
+		ubifs_err("bad order of colliding key %s",
+			  dbg_get_key_dump(c, &key));
 
 	ubifs_msg("first node at %d:%d\n", zbr1->lnum, zbr1->offs);
 	dbg_dump_node(c, dent1);
