@@ -394,5 +394,5 @@ void __stack_chk_fail(void)
 }
 EXPORT_SYMBOL(__stack_chk_fail);
 
-late_initcall(__stack_chk_test);
+/* late_initcall(__stack_chk_test); */
 #endif
