@@ -20,10 +20,7 @@ void kmemcheck_mark_freed(void *address, unsigned int n);
 
 void kmemcheck_mark_unallocated_pages(struct page *p, unsigned int n);
 void kmemcheck_mark_uninitialized_pages(struct page *p, unsigned int n);
-#endif /* CONFIG_KMEMCHECK */
-
-
-#ifndef CONFIG_KMEMCHECK
+#else
 #define kmemcheck_enabled 0
 static inline void kmemcheck_init(void) { }
 static inline bool kmemcheck_page_is_tracked(struct page *p) { return false; }

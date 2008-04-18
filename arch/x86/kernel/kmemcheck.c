@@ -43,10 +43,10 @@ struct kmemcheck_error {
 		/* ERROR_INVALID_ACCESS */
 		struct {
 			/* Kind of access that caused the error */
-			enum shadow		state;
+			enum shadow	state;
 			/* Address and size of the erroneous read */
-			uint32_t		address;
-			unsigned int		size;
+			unsigned long	address;
+			unsigned int	size;
 		};
 	};
 
@@ -101,10 +101,10 @@ error_next_rd(void)
  * Save the context of an error.
  */
 static void
-error_save(enum shadow state, uint32_t address, unsigned int size,
+error_save(enum shadow state, unsigned long address, unsigned int size,
 	struct pt_regs *regs)
 {
-	static uint32_t prev_ip;
+	static unsigned long prev_ip;
 
 	struct kmemcheck_error *e;
 
@@ -227,6 +227,9 @@ int kmemcheck_enabled = 1;
 int kmemcheck_enabled = 2;
 #endif
 
+/*
+ * We need to parse the kmemcheck= option before any memory is allocated.
+ */
 static int __init
 param_kmemcheck(char *str)
 {
@@ -287,7 +290,7 @@ address_get_shadow(unsigned long address)
 }
 
 static int
-show_addr(uint32_t address)
+show_addr(unsigned long address)
 {
 	pte_t *pte;
 
@@ -301,7 +304,7 @@ show_addr(uint32_t address)
 }
 
 static int
-hide_addr(uint32_t address)
+hide_addr(unsigned long address)
 {
 	pte_t *pte;
 
@@ -318,9 +321,9 @@ struct kmemcheck_context {
 	bool busy;
 	int balance;
 
-	uint32_t addr1;
-	uint32_t addr2;
-	uint32_t flags;
+	unsigned long addr1;
+	unsigned long addr2;
+	unsigned long flags;
 };
 
 DEFINE_PER_CPU(struct kmemcheck_context, kmemcheck_context);
@@ -690,7 +693,7 @@ set(void *shadow, unsigned int size)
 }
 
 static void
-kmemcheck_read(struct pt_regs *regs, uint32_t address, unsigned int size)
+kmemcheck_read(struct pt_regs *regs, unsigned long address, unsigned int size)
 {
 	void *shadow;
 	enum shadow status;
@@ -717,7 +720,7 @@ kmemcheck_read(struct pt_regs *regs, uint32_t address, unsigned int size)
 }
 
 static void
-kmemcheck_write(struct pt_regs *regs, uint32_t address, unsigned int size)
+kmemcheck_write(struct pt_regs *regs, unsigned long address, unsigned int size)
 {
 	void *shadow;
 
