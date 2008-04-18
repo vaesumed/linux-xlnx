@@ -456,8 +456,6 @@ static inline void update_gtod(u64 new_tb_stamp, u64 new_stamp_xsec,
 	vdso_data->tb_to_xs = new_tb_to_xs;
 	vdso_data->wtom_clock_sec = wall_to_monotonic.tv_sec;
 	vdso_data->wtom_clock_nsec = wall_to_monotonic.tv_nsec;
-	smp_wmb();
-	++(vdso_data->tb_update_count);
 }
 
 #ifdef CONFIG_SMP
@@ -801,16 +799,29 @@ static cycle_t timebase_read(void)
 	return (cycle_t)get_tb();
 }
 
+/* update_vsyscall_lock/unlock:
+ *    methods for timekeeping core to block vsyscalls during update
+ */
+void update_vsyscall_lock(unsigned long *flags)
+{
+	/* Make userspace gettimeofday spin until we're done. */
+	++vdso_data->tb_update_count;
+	smp_mb();
+}
+
+void update_vsyscall_unlock(unsigned long *flags)
+{
+	smp_wmb();
+	++(vdso_data->tb_update_count);
+}
+
+/* Assumes update_vsyscall_lock() has been called */
 void update_vsyscall(struct timespec *wall_time, struct clocksource *clock)
 {
 	u64 t2x, stamp_xsec;
 
 	if (clock != &clocksource_timebase)
 		return;
-
-	/* Make userspace gettimeofday spin until we're done. */
-	++vdso_data->tb_update_count;
-	smp_mb();
 
 	/* XXX this assumes clock->shift == 22 */
 	/* 4611686018 ~= 2^(20+64-22) / 1e9 */
