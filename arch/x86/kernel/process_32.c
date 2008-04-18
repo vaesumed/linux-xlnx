@@ -111,12 +111,10 @@ void default_idle(void)
 		 */
 		smp_mb();
 
-		local_irq_disable();
-		if (!need_resched()) {
+		if (!need_resched())
 			safe_halt();	/* enables interrupts racelessly */
-			local_irq_disable();
-		}
-		local_irq_enable();
+		else
+			local_irq_enable();
 		current_thread_info()->status |= TS_POLLING;
 	} else {
 		local_irq_enable();
@@ -196,6 +194,7 @@ void cpu_idle(void)
 			if (cpu_is_offline(cpu))
 				play_dead();
 
+			local_irq_disable();
 			__get_cpu_var(irq_stat).idle_timestamp = jiffies;
 			/* Don't trace irqs off for idle */
 			stop_critical_timings();
@@ -255,7 +254,6 @@ void mwait_idle_with_hints(unsigned long ax, unsigned long cx)
 /* Default MONITOR/MWAIT with no hints, used for default C1 state */
 static void mwait_idle(void)
 {
-	local_irq_enable();
 	mwait_idle_with_hints(0, 0);
 }
 
