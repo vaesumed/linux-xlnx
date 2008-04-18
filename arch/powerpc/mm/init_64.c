@@ -72,9 +72,6 @@
 #warning TASK_SIZE is smaller than it needs to be.
 #endif
 
-/* max amount of RAM to use */
-unsigned long __max_memory;
-
 phys_addr_t memstart_addr = ~0;
 phys_addr_t kernstart_addr;
 
