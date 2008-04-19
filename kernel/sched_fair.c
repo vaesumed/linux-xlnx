@@ -549,6 +549,8 @@ update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
 
 #else /* CONFIG_FAIR_GROUP_SCHED */
 
+struct cfs_root_rq;
+
 static inline
 void avg_vruntime_add(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
@@ -581,14 +583,14 @@ void update_tree_enqueue(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
 }
 
-static rb_node *
+static struct rb_node *
 update_tree_dequeue_begin(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
 	return NULL;
 }
 
 static void
-update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, rb_node *node)
+update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
 {
 }
 
@@ -803,10 +805,10 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 */
 	if (rq_of(cfs_rq)->cfs_root.nr_queued)
 		slice = min_t(u64, slice, sysctl_sched_min_granularity);
-#endif
 
 	if (!se->eligible)
 		slice /= 2;
+#endif
 
 	return slice;
 }
