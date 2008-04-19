@@ -255,7 +255,7 @@ static u16 tcp_select_window(struct sock *sk)
 		 *
 		 * Relax Will Robinson.
 		 */
-		new_win = cur_win;
+		new_win = ALIGN(cur_win, 1 << tp->rx_opt.rcv_wscale);
 	}
 	tp->rcv_wnd = new_win;
 	tp->rcv_wup = tp->rcv_nxt;
@@ -1807,6 +1807,9 @@ void tcp_simple_retransmit(struct sock *sk)
 
 	if (!lost)
 		return;
+
+	if (tcp_is_reno(tp))
+		tcp_limit_reno_sacked(tp);
 
 	tcp_verify_left_out(tp);
 

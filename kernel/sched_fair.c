@@ -302,11 +302,6 @@ static u64 __sched_vslice(unsigned long rq_weight, unsigned long nr_running)
 	return vslice;
 }
 
-static u64 sched_vslice(struct cfs_rq *cfs_rq)
-{
-	return __sched_vslice(cfs_rq->load.weight, cfs_rq->nr_running);
-}
-
 static u64 sched_vslice_add(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	return __sched_vslice(cfs_rq->load.weight + se->load.weight,
@@ -504,15 +499,6 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	} else
 		vruntime = cfs_rq->min_vruntime;
 
-	if (sched_feat(TREE_AVG)) {
-		struct sched_entity *last = __pick_last_entity(cfs_rq);
-		if (last) {
-			vruntime += last->vruntime;
-			vruntime >>= 1;
-		}
-	} else if (sched_feat(APPROX_AVG) && cfs_rq->nr_running)
-		vruntime += sched_vslice(cfs_rq)/2;
-
 	/*
 	 * The 'current' period is already promised to the current tasks,
 	 * however the extra weight of the new task will slow them down a
@@ -524,10 +510,8 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 
 	if (!initial) {
 		/* sleeps upto a single latency don't count. */
-		if (sched_feat(NEW_FAIR_SLEEPERS)) {
-			vruntime -= calc_delta_fair(sysctl_sched_latency,
-						    &cfs_rq->load);
-		}
+		if (sched_feat(NEW_FAIR_SLEEPERS))
+			vruntime -= sysctl_sched_latency;
 
 		/* ensure we never gain time by being placed backwards. */
 		vruntime = max_vruntime(se->vruntime, vruntime);
