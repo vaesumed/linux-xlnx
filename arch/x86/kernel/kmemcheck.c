@@ -12,6 +12,7 @@
 #include <linux/kallsyms.h>
 #include <linux/kdebug.h>
 #include <linux/kernel.h>
+#include <linux/kmemcheck.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/page-flags.h>
@@ -176,8 +177,8 @@ error_recall(void)
 	switch (e->type) {
 	case ERROR_INVALID_ACCESS:
 		printk(KERN_ERR  "kmemcheck: Caught %d-bit read "
-			"from %s memory (%08x)\n",
-			e->size, desc[e->state], e->address);
+			"from %s memory (%p)\n",
+			e->size, desc[e->state], (void *) e->address);
 		break;
 	case ERROR_BUG:
 		printk(KERN_EMERG "kmemcheck: Fatal error\n");
@@ -246,7 +247,7 @@ static pte_t *
 address_get_pte(unsigned int address)
 {
 	pte_t *pte;
-	int level;
+	unsigned int level;
 
 	pte = lookup_address(address, &level);
 	if (!pte)
@@ -326,7 +327,7 @@ struct kmemcheck_context {
 	unsigned long flags;
 };
 
-DEFINE_PER_CPU(struct kmemcheck_context, kmemcheck_context);
+static DEFINE_PER_CPU(struct kmemcheck_context, kmemcheck_context);
 
 bool
 kmemcheck_active(struct pt_regs *regs)
@@ -442,7 +443,7 @@ kmemcheck_show_pages(struct page *p, unsigned int n)
 	for (i = 0; i < n; ++i) {
 		unsigned long address;
 		pte_t *pte;
-		int level;
+		unsigned int level;
 
 		address = (unsigned long) page_address(&p[i]);
 		pte = lookup_address(address, &level);
@@ -472,7 +473,7 @@ kmemcheck_hide_pages(struct page *p, unsigned int n)
 	for (i = 0; i < n; ++i) {
 		unsigned long address;
 		pte_t *pte;
-		int level;
+		unsigned int level;
 
 		address = (unsigned long) page_address(&p[i]);
 		pte = lookup_address(address, &level);
