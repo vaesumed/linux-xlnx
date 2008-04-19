@@ -447,13 +447,13 @@ EXPORT_SYMBOL_GPL(xprt_wake_pending_tasks);
  * @task: task to be put to sleep
  *
  */
-void xprt_wait_for_buffer_space(struct rpc_task *task)
+void xprt_wait_for_buffer_space(struct rpc_task *task, rpc_action action)
 {
 	struct rpc_rqst *req = task->tk_rqstp;
 	struct rpc_xprt *xprt = req->rq_xprt;
 
 	task->tk_timeout = req->rq_timeout;
-	rpc_sleep_on(&xprt->pending, task, NULL);
+	rpc_sleep_on(&xprt->pending, task, action);
 }
 EXPORT_SYMBOL_GPL(xprt_wait_for_buffer_space);
 
@@ -605,7 +605,34 @@ void xprt_force_disconnect(struct rpc_xprt *xprt)
 	xprt_wake_pending_tasks(xprt, -ENOTCONN);
 	spin_unlock_bh(&xprt->transport_lock);
 }
-EXPORT_SYMBOL_GPL(xprt_force_disconnect);
+
+/**
+ * xprt_conditional_disconnect - force a transport to disconnect
+ * @xprt: transport to disconnect
+ * @cookie: 'connection cookie'
+ *
+ * This attempts to break the connection if and only if 'cookie' matches
+ * the current transport 'connection cookie'. It ensures that we don't
+ * try to break the connection more than once when we need to retransmit
+ * a batch of RPC requests.
+ *
+ */
+void xprt_conditional_disconnect(struct rpc_xprt *xprt, unsigned int cookie)
+{
+	/* Don't race with the test_bit() in xprt_clear_locked() */
+	spin_lock_bh(&xprt->transport_lock);
+	if (cookie != xprt->connect_cookie)
+		goto out;
+	if (test_bit(XPRT_CLOSING, &xprt->state) || !xprt_connected(xprt))
+		goto out;
+	set_bit(XPRT_CLOSE_WAIT, &xprt->state);
+	/* Try to schedule an autoclose RPC call */
+	if (test_and_set_bit(XPRT_LOCKED, &xprt->state) == 0)
+		queue_work(rpciod_workqueue, &xprt->task_cleanup);
+	xprt_wake_pending_tasks(xprt, -ENOTCONN);
+out:
+	spin_unlock_bh(&xprt->transport_lock);
+}
 
 static void
 xprt_init_autodisconnect(unsigned long data)
@@ -757,9 +784,10 @@ void xprt_complete_rqst(struct rpc_task *task, int copied)
 	task->tk_rtt = (long)jiffies - req->rq_xtime;
 
 	list_del_init(&req->rq_list);
+	req->rq_private_buf.len = copied;
 	/* Ensure all writes are done before we update req->rq_received */
 	smp_wmb();
-	req->rq_received = req->rq_private_buf.len = copied;
+	req->rq_received = copied;
 	rpc_wake_up_queued_task(&xprt->pending, task);
 }
 EXPORT_SYMBOL_GPL(xprt_complete_rqst);
@@ -849,6 +877,7 @@ void xprt_transmit(struct rpc_task *task)
 	} else if (!req->rq_bytes_sent)
 		return;
 
+	req->rq_connect_cookie = xprt->connect_cookie;
 	status = xprt->ops->send_request(task);
 	if (status == 0) {
 		dprintk("RPC: %5u xmit complete\n", task->tk_pid);
