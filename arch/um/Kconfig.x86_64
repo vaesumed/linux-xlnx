@@ -27,6 +27,14 @@ config SMP_BROKEN
 	bool
 	default y
 
+config GENERIC_FIND_FIRST_BIT
+	bool
+	default y
+
+config GENERIC_FIND_NEXT_BIT
+	bool
+	default y
+
 config GENERIC_HWEIGHT
 	bool
 	default y

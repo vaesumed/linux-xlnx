@@ -134,7 +134,7 @@ static void __iomem *__ioremap(resource_size_t phys_addr, unsigned long size,
 
 	if (!phys_addr_valid(phys_addr)) {
 		printk(KERN_WARNING "ioremap: invalid physical address %llx\n",
-		       phys_addr);
+		       (unsigned long long)phys_addr);
 		WARN_ON_ONCE(1);
 		return NULL;
 	}
@@ -187,7 +187,8 @@ static void __iomem *__ioremap(resource_size_t phys_addr, unsigned long size,
 		     new_prot_val == _PAGE_CACHE_WB)) {
 			pr_debug(
 		"ioremap error for 0x%llx-0x%llx, requested 0x%lx, got 0x%lx\n",
-				phys_addr, phys_addr + size,
+				(unsigned long long)phys_addr,
+				(unsigned long long)(phys_addr + size),
 				prot_val, new_prot_val);
 			free_memtype(phys_addr, phys_addr + size);
 			return NULL;
@@ -335,6 +336,35 @@ void iounmap(volatile void __iomem *addr)
 }
 EXPORT_SYMBOL(iounmap);
 
+/*
+ * Convert a physical pointer to a virtual kernel pointer for /dev/mem
+ * access
+ */
+void *xlate_dev_mem_ptr(unsigned long phys)
+{
+	void *addr;
+	unsigned long start = phys & PAGE_MASK;
+
+	/* If page is RAM, we can use __va. Otherwise ioremap and unmap. */
+	if (page_is_ram(start >> PAGE_SHIFT))
+		return __va(phys);
+
+	addr = (void *)ioremap(start, PAGE_SIZE);
+	if (addr)
+		addr = (void *)((unsigned long)addr | (phys & ~PAGE_MASK));
+
+	return addr;
+}
+
+void unxlate_dev_mem_ptr(unsigned long phys, void *addr)
+{
+	if (page_is_ram(phys >> PAGE_SHIFT))
+		return;
+
+	iounmap((void __iomem *)((unsigned long)addr & PAGE_MASK));
+	return;
+}
+
 #ifdef CONFIG_X86_32
 
 int __initdata early_ioremap_debug;
@@ -406,7 +436,7 @@ void __init early_ioremap_clear(void)
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
 	pmd_clear(pmd);
-	paravirt_release_pt(__pa(bm_pte) >> PAGE_SHIFT);
+	paravirt_release_pte(__pa(bm_pte) >> PAGE_SHIFT);
 	__flush_tlb_all();
 }
 

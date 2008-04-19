@@ -4,8 +4,6 @@
  *
  * Author: J.E.J.Bottomley@HansenPartnership.com
  *
- * linux/arch/i386/kernel/voyager_smp.c
- *
  * This file provides all the same external entries as smp.c but uses
  * the voyager hal to provide the functionality
  */
@@ -562,8 +560,8 @@ static void __init do_boot_cpu(__u8 cpu)
 		hijack_source.idt.Offset, stack_start.sp));
 
 	/* init lowmem identity mapping */
-	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + USER_PGD_PTRS,
-			min_t(unsigned long, KERNEL_PGD_PTRS, USER_PGD_PTRS));
+	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			min_t(unsigned long, KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
 	flush_tlb_all();
 
 	if (quad_boot) {

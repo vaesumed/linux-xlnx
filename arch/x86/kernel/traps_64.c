@@ -53,6 +53,7 @@
 #include <asm/proto.h>
 #include <asm/nmi.h>
 #include <asm/stacktrace.h>
+#include <asm/kmemcheck.h>
 
 asmlinkage void divide_error(void);
 asmlinkage void debug(void);
@@ -470,7 +471,7 @@ void show_registers(struct pt_regs *regs)
 	sp = regs->sp;
 	ip = (u8 *) regs->ip - code_prologue;
 	printk("CPU %d ", cpu);
-	__show_regs(regs);
+	__show_regs(regs, 1);
 	printk("Process %s (pid: %d, threadinfo %p, task %p)\n",
 		cur->comm, cur->pid, task_thread_info(cur), cur);
 
@@ -600,7 +601,8 @@ void die(const char * str, struct pt_regs * regs, long err)
 	oops_end(flags, regs, SIGSEGV);
 }
 
-void __kprobes die_nmi(char *str, struct pt_regs *regs, int do_panic)
+notrace __kprobes void
+die_nmi(char *str, struct pt_regs *regs, int do_panic)
 {
 	unsigned long flags;
 
@@ -772,7 +774,7 @@ asmlinkage void __kprobes do_general_protection(struct pt_regs * regs,
 	die("general protection fault", regs, error_code);
 }
 
-static __kprobes void
+static notrace __kprobes void
 mem_parity_error(unsigned char reason, struct pt_regs * regs)
 {
 	printk(KERN_EMERG "Uhhuh. NMI received for unknown reason %02x.\n",
@@ -796,7 +798,7 @@ mem_parity_error(unsigned char reason, struct pt_regs * regs)
 	outb(reason, 0x61);
 }
 
-static __kprobes void
+static notrace __kprobes void
 io_check_error(unsigned char reason, struct pt_regs * regs)
 {
 	printk("NMI: IOCK error (debug interrupt?)\n");
@@ -810,7 +812,7 @@ io_check_error(unsigned char reason, struct pt_regs * regs)
 	outb(reason, 0x61);
 }
 
-static __kprobes void
+static notrace __kprobes void
 unknown_nmi_error(unsigned char reason, struct pt_regs * regs)
 {
 	if (notify_die(DIE_NMIUNKNOWN, "nmi", regs, reason, 2, SIGINT) == NOTIFY_STOP)
@@ -827,7 +829,7 @@ unknown_nmi_error(unsigned char reason, struct pt_regs * regs)
 
 /* Runs on IST stack. This code must keep interrupts off all the time.
    Nested NMIs are prevented by the CPU. */
-asmlinkage __kprobes void default_do_nmi(struct pt_regs *regs)
+asmlinkage notrace  __kprobes void default_do_nmi(struct pt_regs *regs)
 {
 	unsigned char reason = 0;
 	int cpu;
@@ -898,6 +900,9 @@ asmlinkage __kprobes struct pt_regs *sync_regs(struct pt_regs *eregs)
 	return regs;
 }
 
+extern void ia32_sysenter_target(void);
+extern void x86_debug(void);
+
 /* runs on IST stack. */
 asmlinkage void __kprobes do_debug(struct pt_regs * regs,
 				   unsigned long error_code)
@@ -909,6 +914,19 @@ asmlinkage void __kprobes do_debug(struct pt_regs * regs,
 	trace_hardirqs_fixup();
 
 	get_debugreg(condition, 6);
+
+#ifdef CONFIG_KMEMCHECK
+	/* Catch kmemcheck conditions first of all! */
+	if (condition & DR_STEP) {
+		if (!(regs->flags & X86_VM_MASK) && !user_mode(regs) &&
+			((void *)regs->ip != system_call) &&
+			((void *)regs->ip != x86_debug) &&
+			((void *)regs->ip != ia32_sysenter_target)) {
+			kmemcheck_hide(regs);
+			return;
+		}
+	}
+#endif
 
 	/*
 	 * The processor cleared BTF, so don't mark that we need it set.
@@ -1123,11 +1141,24 @@ asmlinkage void __attribute__((weak)) mce_threshold_interrupt(void)
 asmlinkage void math_state_restore(void)
 {
 	struct task_struct *me = current;
-	clts();			/* Allow maths ops (or we recurse) */
 
-	if (!used_math())
-		init_fpu(me);
-	restore_fpu_checking(&me->thread.i387.fxsave);
+	if (!used_math()) {
+		local_irq_enable();
+		/*
+		 * does a slab alloc which can sleep
+		 */
+		if (init_fpu(me)) {
+			/*
+			 * ran out of memory!
+			 */
+			do_group_exit(SIGKILL);
+			return;
+		}
+		local_irq_disable();
+	}
+
+	clts();			/* Allow maths ops (or we recurse) */
+	restore_fpu_checking(&me->thread.xstate->fxsave);
 	task_thread_info(me)->status |= TS_USEDFPU;
 	me->fpu_counter++;
 }
@@ -1136,7 +1167,7 @@ EXPORT_SYMBOL_GPL(math_state_restore);
 void __init trap_init(void)
 {
 	set_intr_gate(0,&divide_error);
-	set_intr_gate_ist(1,&debug,DEBUG_STACK);
+	set_intr_gate_ist(1,&x86_debug,DEBUG_STACK);
 	set_intr_gate_ist(2,&nmi,NMI_STACK);
  	set_system_gate_ist(3,&int3,DEBUG_STACK); /* int3 can be called from all */
 	set_system_gate(4,&overflow);	/* int4 can be called from all */
@@ -1162,6 +1193,10 @@ void __init trap_init(void)
 	set_system_gate(IA32_SYSCALL_VECTOR, ia32_syscall);
 #endif
        
+	/*
+	 * initialize the per thread extended state:
+	 */
+        init_thread_xstate();
 	/*
 	 * Should be a barrier for any external CPU state.
 	 */

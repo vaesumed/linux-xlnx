@@ -61,6 +61,7 @@
 #include <asm/mtrr.h>
 #include <asm/nmi.h>
 #include <asm/vmi.h>
+#include <asm/genapic.h>
 #include <linux/mc146818rtc.h>
 
 #include <mach_apic.h>
@@ -677,6 +678,12 @@ wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
 	unsigned long send_status, accept_status = 0;
 	int maxlvt, num_starts, j;
 
+	if (get_uv_system_type() == UV_NON_UNIQUE_APIC) {
+		send_status = uv_wakeup_secondary(phys_apicid, start_eip);
+		atomic_set(&init_deasserted, 1);
+		return send_status;
+	}
+
 	/*
 	 * Be paranoid about clearing APIC errors.
 	 */
@@ -918,16 +925,19 @@ do_rest:
 
 	atomic_set(&init_deasserted, 0);
 
-	Dprintk("Setting warm reset code and vector.\n");
+	if (get_uv_system_type() != UV_NON_UNIQUE_APIC) {
 
-	store_NMI_vector(&nmi_high, &nmi_low);
+		Dprintk("Setting warm reset code and vector.\n");
 
-	smpboot_setup_warm_reset_vector(start_ip);
-	/*
-	 * Be paranoid about clearing APIC errors.
-	 */
-	apic_write(APIC_ESR, 0);
-	apic_read(APIC_ESR);
+		store_NMI_vector(&nmi_high, &nmi_low);
+
+		smpboot_setup_warm_reset_vector(start_ip);
+		/*
+		 * Be paranoid about clearing APIC errors.
+	 	*/
+		apic_write(APIC_ESR, 0);
+		apic_read(APIC_ESR);
+	}
 
 	/*
 	 * Starting actual IPI sequence...
@@ -966,7 +976,8 @@ do_rest:
 			else
 				/* trampoline code not run */
 				printk(KERN_ERR "Not responding.\n");
-			inquire_remote_apic(apicid);
+			if (get_uv_system_type() != UV_NON_UNIQUE_APIC)
+				inquire_remote_apic(apicid);
 		}
 	}
 
@@ -1028,8 +1039,8 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 
 #ifdef CONFIG_X86_32
 	/* init low mem mapping */
-	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + USER_PGD_PTRS,
-			min_t(unsigned long, KERNEL_PGD_PTRS, USER_PGD_PTRS));
+	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			min_t(unsigned long, KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
 	flush_tlb_all();
 #endif
 
@@ -1170,6 +1181,7 @@ static void __init smp_cpu_index_default(void)
  */
 void __init native_smp_prepare_cpus(unsigned int max_cpus)
 {
+	preempt_disable();
 	nmi_watchdog_default();
 	smp_cpu_index_default();
 	current_cpu_data = boot_cpu_data;
@@ -1186,7 +1198,7 @@ void __init native_smp_prepare_cpus(unsigned int max_cpus)
 	if (smp_sanity_check(max_cpus) < 0) {
 		printk(KERN_INFO "SMP disabled\n");
 		disable_smp();
-		return;
+		goto out;
 	}
 
 	preempt_disable();
@@ -1226,6 +1238,8 @@ void __init native_smp_prepare_cpus(unsigned int max_cpus)
 	printk(KERN_INFO "CPU%d: ", 0);
 	print_cpu_info(&cpu_data(0));
 	setup_boot_clock();
+out:
+	preempt_enable();
 }
 /*
  * Early setup to make printk work.

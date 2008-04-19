@@ -132,6 +132,14 @@ void __put_task_struct(struct task_struct *tsk)
 		free_task(tsk);
 }
 
+/*
+ * macro override instead of weak attribute alias, to workaround
+ * gcc 4.1.0 and 4.1.1 bugs with weak attribute and empty functions.
+ */
+#ifndef arch_task_cache_init
+#define arch_task_cache_init()
+#endif
+
 void __init fork_init(unsigned long mempages)
 {
 #ifndef __HAVE_ARCH_TASK_STRUCT_ALLOCATOR
@@ -141,8 +149,11 @@ void __init fork_init(unsigned long mempages)
 	/* create a slab on which task_structs can be allocated */
 	task_struct_cachep =
 		kmem_cache_create("task_struct", sizeof(struct task_struct),
-			ARCH_MIN_TASKALIGN, SLAB_PANIC, NULL);
+			ARCH_MIN_TASKALIGN, SLAB_PANIC | SLAB_NOTRACK, NULL);
 #endif
+
+	/* do the arch specific task caches init */
+	arch_task_cache_init();
 
 	/*
 	 * The default maximum number of threads is set to a safe
@@ -163,6 +174,13 @@ void __init fork_init(unsigned long mempages)
 		init_task.signal->rlim[RLIMIT_NPROC];
 }
 
+int __attribute__((weak)) arch_dup_task_struct(struct task_struct *dst,
+					       struct task_struct *src)
+{
+	*dst = *src;
+	return 0;
+}
+
 static struct task_struct *dup_task_struct(struct task_struct *orig)
 {
 	struct task_struct *tsk;
@@ -181,15 +199,15 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 		return NULL;
 	}
 
-	*tsk = *orig;
+ 	err = arch_dup_task_struct(tsk, orig);
+	if (err)
+		goto out;
+
 	tsk->stack = ti;
 
 	err = prop_local_init_single(&tsk->dirties);
-	if (err) {
-		free_thread_info(ti);
-		free_task_struct(tsk);
-		return NULL;
-	}
+	if (err)
+		goto out;
 
 	setup_thread_stack(tsk, orig);
 
@@ -205,6 +223,11 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 #endif
 	tsk->splice_pipe = NULL;
 	return tsk;
+
+out:
+	free_thread_info(ti);
+	free_task_struct(tsk);
+	return NULL;
 }
 
 #ifdef CONFIG_MMU
@@ -1547,23 +1570,24 @@ void __init proc_caches_init(void)
 {
 	sighand_cachep = kmem_cache_create("sighand_cache",
 			sizeof(struct sighand_struct), 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_DESTROY_BY_RCU,
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_DESTROY_BY_RCU
+			|SLAB_NOTRACK,
 			sighand_ctor);
 	signal_cachep = kmem_cache_create("signal_cache",
 			sizeof(struct signal_struct), 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_NOTRACK, NULL);
 	files_cachep = kmem_cache_create("files_cache",
 			sizeof(struct files_struct), 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_NOTRACK, NULL);
 	fs_cachep = kmem_cache_create("fs_cache",
 			sizeof(struct fs_struct), 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_NOTRACK, NULL);
 	vm_area_cachep = kmem_cache_create("vm_area_struct",
 			sizeof(struct vm_area_struct), 0,
-			SLAB_PANIC, NULL);
+			SLAB_PANIC|SLAB_NOTRACK, NULL);
 	mm_cachep = kmem_cache_create("mm_struct",
 			sizeof(struct mm_struct), ARCH_MIN_MMSTRUCT_ALIGN,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_NOTRACK, NULL);
 }
 
 /*
