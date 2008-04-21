@@ -141,6 +141,7 @@ void acpi_processor_ffh_cstate_enter(struct acpi_processor_cx *cx)
 	percpu_entry = per_cpu_ptr(cpu_cstate_entry, cpu);
 	mwait_idle_with_hints(percpu_entry->states[cx->index].eax,
 	                      percpu_entry->states[cx->index].ecx);
+	local_irq_disable();
 }
 EXPORT_SYMBOL_GPL(acpi_processor_ffh_cstate_enter);
 
