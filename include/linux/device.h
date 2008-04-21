@@ -192,6 +192,7 @@ struct class {
 	struct class_attribute		*class_attrs;
 	struct class_device_attribute	*class_dev_attrs;
 	struct device_attribute		*dev_attrs;
+	struct kobject			*dev_kobj;
 
 	int (*uevent)(struct class_device *dev, struct kobj_uevent_env *env);
 	int (*dev_uevent)(struct device *dev, struct kobj_uevent_env *env);
@@ -204,6 +205,8 @@ struct class {
 	int (*resume)(struct device *dev);
 };
 
+extern struct kobject *sysfs_dev_block_kobj;
+extern struct kobject *sysfs_dev_char_kobj;
 extern int __must_check class_register(struct class *class);
 extern void class_unregister(struct class *class);
 extern int class_for_each_device(struct class *class, void *data,
