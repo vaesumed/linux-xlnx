@@ -565,7 +565,7 @@ void __init smp_alloc_memory(void)
 }
 #endif
 
-void impress_friends(void)
+static void impress_friends(void)
 {
 	int cpu;
 	unsigned long bogosum = 0;
