@@ -69,6 +69,8 @@ struct bus_type {
 	int (*resume_early)(struct device *dev);
 	int (*resume)(struct device *dev);
 
+	struct pm_ext_ops *pm;
+
 	struct bus_type_private *p;
 };
 
@@ -131,6 +133,8 @@ struct device_driver {
 	int (*suspend) (struct device *dev, pm_message_t state);
 	int (*resume) (struct device *dev);
 	struct attribute_group **groups;
+
+	struct pm_ops *pm;
 
 	struct driver_private *p;
 };
@@ -202,6 +206,8 @@ struct class {
 
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
+
+	struct pm_ops *pm;
 };
 
 extern int __must_check class_register(struct class *class);
@@ -345,8 +351,11 @@ struct device_type {
 	struct attribute_group **groups;
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	void (*release)(struct device *dev);
+
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
+
+	struct pm_ops *pm;
 };
 
 /* interface for exporting device attributes */
@@ -429,7 +438,6 @@ struct device {
 	struct kobject kobj;
 	char	bus_id[BUS_ID_SIZE];	/* position on parent bus */
 	struct device_type	*type;
-	unsigned		is_registered:1;
 	unsigned		uevent_suppress:1;
 
 	struct semaphore	sem;	/* semaphore to synchronize calls to
@@ -475,6 +483,9 @@ struct device {
 	void	(*release)(struct device *dev);
 };
 
+/* Get the wakeup routines, which depend on struct device */
+#include <linux/pm_wakeup.h>
+
 #ifdef CONFIG_NUMA
 static inline int dev_to_node(struct device *dev)
 {
@@ -506,7 +517,7 @@ static inline void dev_set_drvdata(struct device *dev, void *data)
 
 static inline int device_is_registered(struct device *dev)
 {
-	return dev->is_registered;
+	return dev->kobj.state_in_sysfs;
 }
 
 void driver_init(void);
@@ -543,20 +554,6 @@ extern struct device *device_create(struct class *cls, struct device *parent,
 				    dev_t devt, const char *fmt, ...)
 				    __attribute__((format(printf, 4, 5)));
 extern void device_destroy(struct class *cls, dev_t devt);
-#ifdef CONFIG_PM_SLEEP
-extern void destroy_suspended_device(struct class *cls, dev_t devt);
-extern void device_pm_schedule_removal(struct device *);
-#else /* !CONFIG_PM_SLEEP */
-static inline void destroy_suspended_device(struct class *cls, dev_t devt)
-{
-	device_destroy(cls, devt);
-}
-
-static inline void device_pm_schedule_removal(struct device *dev)
-{
-	device_unregister(dev);
-}
-#endif /* !CONFIG_PM_SLEEP */
 
 /*
  * Platform "fixup" functions - allow the platform to have their say
@@ -608,21 +605,16 @@ extern const char *dev_driver_string(struct device *dev);
 #define dev_dbg(dev, format, arg...)		\
 	dev_printk(KERN_DEBUG , dev , format , ## arg)
 #else
-static inline int __attribute__ ((format (printf, 2, 3)))
-dev_dbg(struct device *dev, const char *fmt, ...)
-{
-	return 0;
-}
+#define dev_dbg(dev, format, arg...)		\
+	({ if (0) dev_printk(KERN_DEBUG, dev, format, ##arg); 0; })
 #endif
 
 #ifdef VERBOSE_DEBUG
 #define dev_vdbg	dev_dbg
 #else
-static inline int __attribute__ ((format (printf, 2, 3)))
-dev_vdbg(struct device *dev, const char *fmt, ...)
-{
-	return 0;
-}
+
+#define dev_vdbg(dev, format, arg...)		\
+	({ if (0) dev_printk(KERN_DEBUG, dev, format, ##arg); 0; })
 #endif
 
 /* Create alias, so I can be autoloaded. */

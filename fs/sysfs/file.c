@@ -13,13 +13,22 @@
 #include <linux/module.h>
 #include <linux/kobject.h>
 #include <linux/kallsyms.h>
+#include <linux/slab.h>
 #include <linux/namei.h>
 #include <linux/poll.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include <linux/limits.h>
 #include <asm/uaccess.h>
 
 #include "sysfs.h"
+
+/* used in crash dumps to help with debugging */
+static char last_sysfs_file[PATH_MAX];
+void sysfs_printk_last_file(void)
+{
+	printk(KERN_EMERG "last sysfs file: %s\n", last_sysfs_file);
+}
 
 /*
  * There's one sysfs_buffer for each open file and one
@@ -128,7 +137,7 @@ sysfs_read_file(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 	ssize_t retval = 0;
 
 	mutex_lock(&buffer->mutex);
-	if (buffer->needs_read_fill) {
+	if (buffer->needs_read_fill || *ppos == 0) {
 		retval = fill_read_buffer(file->f_path.dentry,buffer);
 		if (retval)
 			goto out;
@@ -326,6 +335,11 @@ static int sysfs_open_file(struct inode *inode, struct file *file)
 	struct sysfs_buffer *buffer;
 	struct sysfs_ops *ops;
 	int error = -EACCES;
+	char *p;
+
+	p = d_path(&file->f_path, last_sysfs_file, sizeof(last_sysfs_file));
+	if (p)
+		memmove(last_sysfs_file, p, strlen(p) + 1);
 
 	/* need attr_sd for attr and ops, its parent for kobj */
 	if (!sysfs_get_active_two(attr_sd))
@@ -409,8 +423,7 @@ static int sysfs_release(struct inode *inode, struct file *filp)
  * return POLLERR|POLLPRI, and select will return the fd whether
  * it is waiting for read, write, or exceptions.
  * Once poll/select indicates that the value has changed, you
- * need to close and re-open the file, as simply seeking and reading
- * again will not get new data, or reset the state of 'poll'.
+ * need to close and re-open the file, or seek to 0 and read again.
  * Reminder: this only works for attributes which actively support
  * it, and it is not possible to test an attribute from userspace
  * to see if it supports poll (Neither 'poll' nor 'select' return
