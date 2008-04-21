@@ -35,8 +35,10 @@
 
 /* Generic debugging message */
 #define dbg_msg(fmt, ...) do {                                                 \
+	spin_lock(&dbg_lock);                                                  \
 	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt "\n", current->pid,   \
 	       __func__, ##__VA_ARGS__);                                       \
+	spin_unlock(&dbg_lock);                                                \
 } while (0)
 
 /* Debugging message which prints UBIFS key */
