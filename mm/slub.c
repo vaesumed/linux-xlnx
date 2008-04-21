@@ -22,6 +22,7 @@
 #include <linux/kallsyms.h>
 #include <linux/memory.h>
 #include <linux/kmemcheck.h>
+#include <linux/slub_kmemcheck.h>
 
 /*
  * Lock order:
@@ -2490,10 +2491,12 @@ static int __init setup_slub_nomerge(char *str)
 __setup("slub_nomerge", setup_slub_nomerge);
 
 static struct kmem_cache *create_kmalloc_cache(struct kmem_cache *s,
-	const char *name, int size, gfp_t gfp_flags, unsigned int flags)
+		const char *name, int size, gfp_t gfp_flags)
 {
+	unsigned int flags = 0;
+
 	if (gfp_flags & SLUB_DMA)
-		flags |= SLAB_CACHE_DMA;
+		flags = SLAB_CACHE_DMA;
 
 	down_write(&slub_lock);
 	if (!kmem_cache_open(s, gfp_flags, name, size, ARCH_KMALLOC_MINALIGN,
@@ -2936,7 +2939,7 @@ void __init kmem_cache_init(void)
 	 * kmem_cache_open for slab_state == DOWN.
 	 */
 	create_kmalloc_cache(&kmalloc_caches[0], "kmem_cache_node",
-		sizeof(struct kmem_cache_node), GFP_KERNEL, 0);
+		sizeof(struct kmem_cache_node), GFP_KERNEL);
 	kmalloc_caches[0].refcount = -1;
 	caches++;
 
@@ -2949,18 +2952,18 @@ void __init kmem_cache_init(void)
 	/* Caches that are not of the two-to-the-power-of size */
 	if (KMALLOC_MIN_SIZE <= 64) {
 		create_kmalloc_cache(&kmalloc_caches[1],
-				"kmalloc-96", 96, GFP_KERNEL, 0);
+				"kmalloc-96", 96, GFP_KERNEL);
 		caches++;
 	}
 	if (KMALLOC_MIN_SIZE <= 128) {
 		create_kmalloc_cache(&kmalloc_caches[2],
-				"kmalloc-192", 192, GFP_KERNEL, 0);
+				"kmalloc-192", 192, GFP_KERNEL);
 		caches++;
 	}
 
 	for (i = KMALLOC_SHIFT_LOW; i <= PAGE_SHIFT; i++) {
 		create_kmalloc_cache(&kmalloc_caches[i],
-			"kmalloc", 1 << i, GFP_KERNEL, 0);
+			"kmalloc", 1 << i, GFP_KERNEL);
 		caches++;
 	}
 
