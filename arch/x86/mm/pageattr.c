@@ -991,7 +991,7 @@ static const struct file_operations dpa_fops = {
 	.release	= single_release,
 };
 
-int __init debug_pagealloc_proc_init(void)
+static int __init debug_pagealloc_proc_init(void)
 {
 	struct dentry *de;
 
