@@ -10,7 +10,7 @@
 #include "dm.h"
 #include "dm-snap.h"
 #include "dm-io.h"
-#include "kcopyd.h"
+#include "dm-kcopyd.h"
 
 #include <linux/mm.h>
 #include <linux/pagemap.h>

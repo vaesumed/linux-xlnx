@@ -9,7 +9,7 @@
 #include "dm-bio-record.h"
 #include "dm-io.h"
 #include "dm-log.h"
-#include "kcopyd.h"
+#include "dm-kcopyd.h"
 
 #include <linux/ctype.h>
 #include <linux/init.h>

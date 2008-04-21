@@ -23,7 +23,7 @@
 #include <linux/workqueue.h>
 #include <linux/mutex.h>
 
-#include "kcopyd.h"
+#include "dm-kcopyd.h"
 #include "dm.h"
 
 /*-----------------------------------------------------------------
