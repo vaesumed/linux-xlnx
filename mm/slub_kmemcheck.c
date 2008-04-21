@@ -1,6 +1,7 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/kmemcheck.h>
+#include <linux/slub_kmemcheck.h>
 
 struct page *
 kmemcheck_allocate_slab(struct kmem_cache *s, gfp_t flags, int node, int pages)
