@@ -250,8 +250,6 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 		err = -EAGAIN;
 		goto out_unlock;
 	}
-	spin_unlock(&c->buds_lock);
-
 	/*
 	 * If the journal is full enough - start background commit. Note, it is
 	 * OK to read 'c->cmt_state' without spinlock because integer reads
@@ -263,6 +261,7 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 			c->bud_bytes, c->max_bud_bytes);
 		ubifs_request_bg_commit(c);
 	}
+	spin_unlock(&c->buds_lock);
 
 	bud->lnum = lnum;
 	bud->start = offs;
@@ -305,11 +304,11 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 	c->lhead_offs += c->ref_node_alsz;
 	if (err)
 		goto out_unlock;
-	mutex_unlock(&c->log_mutex);
 
-	kfree(ref);
 	ubifs_add_bud(c, bud);
 
+	mutex_unlock(&c->log_mutex);
+	kfree(ref);
 	return 0;
 
 out_unlock:
@@ -324,14 +323,11 @@ out_unlock:
  * @c: UBIFS file-system description object
  *
  * This function removes use buds from the buds tree. It does not remove the
- * buds which are pointed to by journal heads. Returns zero in case of success
- * and a negative error code in case of failure.
+ * buds which are pointed to by journal heads.
  */
-static int remove_buds(struct ubifs_info *c)
+static void remove_buds(struct ubifs_info *c)
 {
 	struct rb_node *p;
-	struct ubifs_bud *bud;
-	int err = 0;
 
 	ubifs_assert(list_empty(&c->old_buds));
 	c->cmt_bud_bytes = 0;
@@ -339,42 +335,43 @@ static int remove_buds(struct ubifs_info *c)
 	p = rb_first(&c->buds);
 	while (p) {
 		struct rb_node *p1 = p;
+		struct ubifs_bud *bud;
+		struct ubifs_wbuf *wbuf;
 
 		p = rb_next(p);
 		bud = rb_entry(p1, struct ubifs_bud, rb);
+		wbuf = &c->jheads[bud->jhead].wbuf;
 
-		/*
-		 * Do not remove buds which are pointed to by journal heads
-		 * (non-closed buds).
-		 */
-		if (c->jheads[bud->jhead].wbuf.lnum == bud->lnum) {
-			dbg_log("preserve LEB %d:%d (jhead %d)",
-				bud->lnum, bud->start, bud->jhead);
-			continue;
+		if (wbuf->lnum == bud->lnum) {
+			/*
+			 * Do not remove buds which are pointed to by journal
+			 * heads (non-closed buds).
+			 */
+			c->cmt_bud_bytes += wbuf->offs - bud->start;
+			dbg_log("preserve %d:%d, jhead %d, bud bytes %d, "
+				"cmt_bud_bytes %lld", bud->lnum, bud->start,
+				bud->jhead, wbuf->offs - bud->start,
+				c->cmt_bud_bytes);
+			bud->start = wbuf->offs;
+		} else {
+			c->cmt_bud_bytes += c->leb_size - bud->start;
+			dbg_log("remove %d:%d, jhead %d, bud bytes %d, "
+				"cmt_bud_bytes %lld", bud->lnum, bud->start,
+				bud->jhead, c->leb_size - bud->start,
+				c->cmt_bud_bytes);
+			rb_erase(p1, &c->buds);
+			list_del(&bud->list);
+			/*
+			 * If the commit does not finish, the recovery will need
+			 * to replay the journal, in which case the old buds
+			 * must be unchanged. Do not release them until post
+			 * commit i.e. do not allow them to be garbage
+			 * collected.
+			 */
+			list_add(&bud->list, &c->old_buds);
 		}
-
-		rb_erase(p1, &c->buds);
-		list_del(&bud->list);
-
-		/*
-		 * If the commit does not finish, the recovery will need to
-		 * replay the journal, in which case the old buds must be
-		 * intact.  Do not release them until post commit.
-		 */
-		list_add(&bud->list, &c->old_buds);
-
-		/*
-		 * We've removed this bud, save its size in 'c->cmt_bud_bytes'
-		 * - this value will be subtracted from 'c->bud_bytes' when
-		 * commit is done.
-		 */
-		c->cmt_bud_bytes += c->leb_size - bud->start;
-		dbg_log("LEB %d:%d, jhead %d, cmt_bud_bytes %lld",
-			bud->lnum, bud->start, bud->jhead, c->cmt_bud_bytes);
 	}
 	spin_unlock(&c->buds_lock);
-
-	return err;
 }
 
 /**
@@ -468,7 +465,7 @@ int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum)
 		c->lhead_offs = 0;
 	}
 
-	err = remove_buds(c);
+	remove_buds(c);
 
 	/*
 	 * We have started the commit and now users may use the rest of the log
