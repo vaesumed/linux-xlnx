@@ -14,6 +14,7 @@
 #include <linux/proc_fs.h>
 #include <linux/kernel.h>
 #include <linux/syscalls.h>
+#include <linux/stackprotector.h>
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/delay.h>
@@ -58,6 +59,7 @@
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <linux/signal.h>
+#include <linux/kmemcheck.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -538,6 +540,12 @@ asmlinkage void __init start_kernel(void)
 	 */
 	unwind_init();
 	lockdep_init();
+
+	/*
+	 * Set up the the initial canary ASAP:
+	 */
+	boot_init_stack_canary();
+
 	cgroup_init_early();
 
 	local_irq_disable();
@@ -773,6 +781,7 @@ static void __init do_pre_smp_initcalls(void)
 {
 	extern int spawn_ksoftirqd(void);
 
+	kmemcheck_init();
 	migration_init();
 	spawn_ksoftirqd();
 	if (!nosoftlockup)

@@ -330,6 +330,10 @@ static __inline__ int fls64(__u64 x)
 #include <asm-generic/bitops/fls64.h>
 #endif /* __powerpc64__ */
 
+static __inline__ unsigned long __fls(unsigned long x)
+{
+	return __ilog2(x);
+}
 #include <asm-generic/bitops/hweight.h>
 #include <asm-generic/bitops/find.h>
 
