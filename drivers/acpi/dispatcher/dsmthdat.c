@@ -172,6 +172,8 @@ void acpi_ds_method_data_delete_all(struct acpi_walk_state *walk_state)
 		}
 	}
 
+	acpi_ds_clear_implicit_return(walk_state);
+
 	return_VOID;
 }
 

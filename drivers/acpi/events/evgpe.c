@@ -248,7 +248,14 @@ acpi_status acpi_ev_disable_gpe(struct acpi_gpe_event_info *gpe_event_info)
 
 	ACPI_FUNCTION_TRACE(ev_disable_gpe);
 
-	if (!(gpe_event_info->flags & ACPI_GPE_ENABLE_MASK)) {
+	/*
+	 * Ignore this if the GPE is valid and not enabled.
+	 *
+	 * Flags is only zero if GPE is neither enabled or disabled -- it may
+	 * be a spurious or stray GPE -- disable it in the default case below.
+	 */
+	if (gpe_event_info->flags &&
+	    (!(gpe_event_info->flags & ACPI_GPE_ENABLE_MASK))) {
 		return_ACPI_STATUS(AE_OK);
 	}
 
