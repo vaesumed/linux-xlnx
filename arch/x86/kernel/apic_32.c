@@ -1338,7 +1338,7 @@ void smp_error_interrupt(struct pt_regs *regs)
 }
 
 #ifdef CONFIG_SMP
-void __init smp_intr_init(void)
+static void __init smp_intr_init(void)
 {
 	/*
 	 * IRQ0 must be given a fixed assignment and initialized,
