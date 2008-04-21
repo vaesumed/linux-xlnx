@@ -222,9 +222,19 @@ extern void clocksource_change_rating(struct clocksource *cs, int rating);
 extern void clocksource_resume(void);
 
 #ifdef CONFIG_GENERIC_TIME_VSYSCALL
+void update_vsyscall_lock(unsigned long *flags);
+void update_vsyscall_unlock(unsigned long *flags);
 extern void update_vsyscall(struct timespec *ts, struct clocksource *c);
 extern void update_vsyscall_tz(void);
 #else
+static inline void update_vsyscall_lock(unsigned long *flags)
+{
+}
+
+static inline void update_vsyscall_unlock(unsigned long *flags)
+{
+}
+
 static inline void update_vsyscall(struct timespec *ts, struct clocksource *c)
 {
 }
