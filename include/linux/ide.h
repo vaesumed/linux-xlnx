@@ -26,10 +26,11 @@
 #include <asm/semaphore.h>
 #include <asm/mutex.h>
 
-#if defined(CONFIG_CRIS) || defined(CONFIG_FRV)
-# define SUPPORT_VLB_SYNC 0
-#else
+#if defined(CONFIG_ISA) && \
+    (defined(CONFIG_ALPHA) || defined(CONFIG_X86) || defined(CONFIG_MIPS))
 # define SUPPORT_VLB_SYNC 1
+#else
+# define SUPPORT_VLB_SYNC 0
 #endif
 
 /*
