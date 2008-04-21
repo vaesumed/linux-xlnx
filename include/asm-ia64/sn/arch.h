@@ -5,7 +5,7 @@
  *
  * SGI specific setup.
  *
- * Copyright (C) 1995-1997,1999,2001-2005 Silicon Graphics, Inc.  All rights reserved.
+ * Copyright (C) 1995-1997,1999,2001-2005,2008 Silicon Graphics, Inc.  All rights reserved.
  * Copyright (C) 1999 Ralf Baechle (ralf@gnu.org)
  */
 #ifndef _ASM_IA64_SN_ARCH_H
@@ -42,7 +42,7 @@
  * This value is also the value of the maximum number of NASIDs in the numalink
  * fabric.
  */
-#define MAX_NUMALINK_NODES	16384
+#define SN_MAX_NUMALINK_NODES	16384
 
 /*
  * The following defines attributes of the HUB chip. These attributes are
@@ -60,6 +60,7 @@ DECLARE_PER_CPU(struct sn_hub_info_s, __sn_hub_info);
 #define sn_hub_info 	(&__get_cpu_var(__sn_hub_info))
 #define is_shub2()	(sn_hub_info->shub2)
 #define is_shub1()	(sn_hub_info->shub2 == 0)
+#define is_shub()	(is_shub1() || is_shub2())
 
 /*
  * Use this macro to test if shub 1.1 wars should be enabled

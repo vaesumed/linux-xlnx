@@ -3,25 +3,34 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 2004-2005 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 2004-2008 Silicon Graphics, Inc. All rights reserved.
  */
-
 
 /*
  * External Cross Partition (XP) structures and defines.
  */
 
-
-#ifndef _ASM_IA64_SN_XP_H
-#define _ASM_IA64_SN_XP_H
-
+#ifndef _DRIVERS_MISC_XP_XP_H
+#define _DRIVERS_MISC_XP_XP_H
 
 #include <linux/cache.h>
 #include <linux/hardirq.h>
 #include <linux/mutex.h>
-#include <asm/sn/types.h>
-#include <asm/sn/bte.h>
+#ifdef CONFIG_IA64
+#include <asm/sn/arch.h>
+#endif
 
+/* >>> Add these two #defines to some linux header file some day. */
+#define BYTES_PER_WORD	sizeof(void *)
+#define BITS_PER_WORD	(BYTES_PER_WORD * BITS_PER_BYTE)
+
+#if defined(CONFIG_IA64)
+#define U64_ELL "l"
+#elif defined(CONFIG_X86_64)
+#define U64_ELL "ll"
+#else
+#error architecture is NOT supported
+#endif
 
 #ifdef USE_DBUG_ON
 #define DBUG_ON(condition)	BUG_ON(condition)
@@ -29,6 +38,21 @@
 #define DBUG_ON(condition)
 #endif
 
+#ifndef is_shub1
+#define is_shub1()	0
+#endif
+
+#ifndef is_shub2
+#define is_shub2()	0
+#endif
+
+#ifndef is_shub
+#define is_shub()	0
+#endif
+
+#ifndef is_uv
+#define is_uv()		0
+#endif
 
 /*
  * Define the maximum number of logically defined partitions the system
@@ -41,61 +65,15 @@
  * maximum number of nodes in the entire system divided by the minimum number
  * of nodes that comprise an access protection grouping.
  */
-#define XP_MAX_PARTITIONS	64
+#define XP_NPARTITIONS		64	/* #of partitions allowed */
+#define XP_MAX_NPARTITIONS	256	/* max #of partitions possible */
 
+#if XP_NPARTITIONS > XP_MAX_NPARTITIONS
+#error  XP_NPARTITIONS exceeds MAXIMUM possible.
+#endif
 
-/*
- * Define the number of u64s required to represent all the C-brick nasids
- * as a bitmap.  The cross-partition kernel modules deal only with
- * C-brick nasids, thus the need for bitmaps which don't account for
- * odd-numbered (non C-brick) nasids.
- */
-#define XP_MAX_PHYSNODE_ID	(MAX_NUMALINK_NODES / 2)
-#define XP_NASID_MASK_BYTES	((XP_MAX_PHYSNODE_ID + 7) / 8)
-#define XP_NASID_MASK_WORDS	((XP_MAX_PHYSNODE_ID + 63) / 64)
-
-
-/*
- * Wrapper for bte_copy() that should it return a failure status will retry
- * the bte_copy() once in the hope that the failure was due to a temporary
- * aberration (i.e., the link going down temporarily).
- *
- * 	src - physical address of the source of the transfer.
- *	vdst - virtual address of the destination of the transfer.
- *	len - number of bytes to transfer from source to destination.
- *	mode - see bte_copy() for definition.
- *	notification - see bte_copy() for definition.
- *
- * Note: xp_bte_copy() should never be called while holding a spinlock.
- */
-static inline bte_result_t
-xp_bte_copy(u64 src, u64 vdst, u64 len, u64 mode, void *notification)
-{
-	bte_result_t ret;
-	u64 pdst = ia64_tpa(vdst);
-
-
-	/*
-	 * Ensure that the physically mapped memory is contiguous.
-	 *
-	 * We do this by ensuring that the memory is from region 7 only.
-	 * If the need should arise to use memory from one of the other
-	 * regions, then modify the BUG_ON() statement to ensure that the
-	 * memory from that region is always physically contiguous.
-	 */
-	BUG_ON(REGION_NUMBER(vdst) != RGN_KERNEL);
-
-	ret = bte_copy(src, pdst, len, mode, notification);
-	if ((ret != BTE_SUCCESS) && BTE_ERROR_RETRY(ret)) {
-		if (!in_interrupt()) {
-			cond_resched();
-		}
-		ret = bte_copy(src, pdst, len, mode, notification);
-	}
-
-	return ret;
-}
-
+#define XP_MIN_PARTID		1	/* inclusive */
+#define XP_MAX_PARTID		(XP_NPARTITIONS - 1)	/* inclusive */
 
 /*
  * XPC establishes channel connections between the local partition and any
@@ -115,13 +93,12 @@ xp_bte_copy(u64 src, u64 vdst, u64 len, u64 mode, void *notification)
 #define XPC_MEM_CHANNEL		0	/* memory channel number */
 #define	XPC_NET_CHANNEL		1	/* network channel number */
 
-#define	XPC_NCHANNELS		2	/* #of defined channels */
-#define XPC_MAX_NCHANNELS	8	/* max #of channels allowed */
+#define	XPC_NCHANNELS		2	/* #of channels allowed */
+#define XPC_MAX_NCHANNELS	8	/* max #of channels possible */
 
 #if XPC_NCHANNELS > XPC_MAX_NCHANNELS
-#error	XPC_NCHANNELS exceeds MAXIMUM allowed.
+#error	XPC_NCHANNELS exceeds MAXIMUM possible.
 #endif
-
 
 /*
  * The format of an XPC message is as follows:
@@ -160,116 +137,109 @@ struct xpc_msg {
 	u64 payload;		/* user defined portion of message */
 };
 
-
 #define XPC_MSG_PAYLOAD_OFFSET	(u64) (&((struct xpc_msg *)0)->payload)
 #define XPC_MSG_SIZE(_payload_size) \
 		L1_CACHE_ALIGN(XPC_MSG_PAYLOAD_OFFSET + (_payload_size))
 
-
 /*
  * Define the return values and values passed to user's callout functions.
  * (It is important to add new value codes at the end just preceding
- * xpcUnknownReason, which must have the highest numerical value.)
+ * xpUnknownReason, which must have the highest numerical value.)
  */
-enum xpc_retval {
-	xpcSuccess = 0,
+enum xp_retval {
+	xpSuccess = 0,
 
-	xpcNotConnected,	/*  1: channel is not connected */
-	xpcConnected,		/*  2: channel connected (opened) */
-	xpcRETIRED1,		/*  3: (formerly xpcDisconnected) */
+	xpNotConnected,		/*  1: channel is not connected */
+	xpConnected,		/*  2: channel connected (opened) */
+	xpRETIRED1,		/*  3: (formerly xpDisconnected) */
 
-	xpcMsgReceived,		/*  4: message received */
-	xpcMsgDelivered,	/*  5: message delivered and acknowledged */
+	xpMsgReceived,		/*  4: message received */
+	xpMsgDelivered,		/*  5: message delivered and acknowledged */
 
-	xpcRETIRED2,		/*  6: (formerly xpcTransferFailed) */
+	xpRETIRED2,		/*  6: (formerly xpTransferFailed) */
 
-	xpcNoWait,		/*  7: operation would require wait */
-	xpcRetry,		/*  8: retry operation */
-	xpcTimeout,		/*  9: timeout in xpc_allocate_msg_wait() */
-	xpcInterrupted,		/* 10: interrupted wait */
+	xpNoWait,		/*  7: operation would require wait */
+	xpRetry,		/*  8: retry operation */
+	xpTimeout,		/*  9: timeout in xpc_allocate_msg_wait() */
+	xpInterrupted,		/* 10: interrupted wait */
 
-	xpcUnequalMsgSizes,	/* 11: message size disparity between sides */
-	xpcInvalidAddress,	/* 12: invalid address */
+	xpUnequalMsgSizes,	/* 11: message size disparity between sides */
+	xpInvalidAddress,	/* 12: invalid address */
 
-	xpcNoMemory,		/* 13: no memory available for XPC structures */
-	xpcLackOfResources,	/* 14: insufficient resources for operation */
-	xpcUnregistered,	/* 15: channel is not registered */
-	xpcAlreadyRegistered,	/* 16: channel is already registered */
+	xpNoMemory,		/* 13: no memory available for XPC structures */
+	xpLackOfResources,	/* 14: insufficient resources for operation */
+	xpUnregistered,		/* 15: channel is not registered */
+	xpAlreadyRegistered,	/* 16: channel is already registered */
 
-	xpcPartitionDown,	/* 17: remote partition is down */
-	xpcNotLoaded,		/* 18: XPC module is not loaded */
-	xpcUnloading,		/* 19: this side is unloading XPC module */
+	xpPartitionDown,	/* 17: remote partition is down */
+	xpNotLoaded,		/* 18: XPC module is not loaded */
+	xpUnloading,		/* 19: this side is unloading XPC module */
 
-	xpcBadMagic,		/* 20: XPC MAGIC string not found */
+	xpBadMagic,		/* 20: XPC MAGIC string not found */
 
-	xpcReactivating,	/* 21: remote partition was reactivated */
+	xpReactivating,		/* 21: remote partition was reactivated */
 
-	xpcUnregistering,	/* 22: this side is unregistering channel */
-	xpcOtherUnregistering,	/* 23: other side is unregistering channel */
+	xpUnregistering,	/* 22: this side is unregistering channel */
+	xpOtherUnregistering,	/* 23: other side is unregistering channel */
 
-	xpcCloneKThread,	/* 24: cloning kernel thread */
-	xpcCloneKThreadFailed,	/* 25: cloning kernel thread failed */
+	xpCloneKThread,		/* 24: cloning kernel thread */
+	xpCloneKThreadFailed,	/* 25: cloning kernel thread failed */
 
-	xpcNoHeartbeat,		/* 26: remote partition has no heartbeat */
+	xpNoHeartbeat,		/* 26: remote partition has no heartbeat */
 
-	xpcPioReadError,	/* 27: PIO read error */
-	xpcPhysAddrRegFailed,	/* 28: registration of phys addr range failed */
+	xpPioReadError,		/* 27: PIO read error */
+	xpPhysAddrRegFailed,	/* 28: registration of phys addr range failed */
 
-	xpcBteDirectoryError,	/* 29: maps to BTEFAIL_DIR */
-	xpcBtePoisonError,	/* 30: maps to BTEFAIL_POISON */
-	xpcBteWriteError,	/* 31: maps to BTEFAIL_WERR */
-	xpcBteAccessError,	/* 32: maps to BTEFAIL_ACCESS */
-	xpcBtePWriteError,	/* 33: maps to BTEFAIL_PWERR */
-	xpcBtePReadError,	/* 34: maps to BTEFAIL_PRERR */
-	xpcBteTimeOutError,	/* 35: maps to BTEFAIL_TOUT */
-	xpcBteXtalkError,	/* 36: maps to BTEFAIL_XTERR */
-	xpcBteNotAvailable,	/* 37: maps to BTEFAIL_NOTAVAIL */
-	xpcBteUnmappedError,	/* 38: unmapped BTEFAIL_ error */
+	xpRETIRED3,		/* 29: (formerly xpBteDirectoryError) */
+	xpRETIRED4,		/* 30: (formerly xpBtePoisonError) */
+	xpRETIRED5,		/* 31: (formerly xpBteWriteError) */
+	xpRETIRED6,		/* 32: (formerly xpBteAccessError) */
+	xpRETIRED7,		/* 33: (formerly xpBtePWriteError) */
+	xpRETIRED8,		/* 34: (formerly xpBtePReadError) */
+	xpRETIRED9,		/* 35: (formerly xpBteTimeOutError) */
+	xpRETIRED10,		/* 36: (formerly xpBteXtalkError) */
+	xpRETIRED11,		/* 37: (formerly xpBteNotAvailable) */
+	xpRETIRED12,		/* 38: (formerly xpBteUnmappedError) */
 
-	xpcBadVersion,		/* 39: bad version number */
-	xpcVarsNotSet,		/* 40: the XPC variables are not set up */
-	xpcNoRsvdPageAddr,	/* 41: unable to get rsvd page's phys addr */
-	xpcInvalidPartid,	/* 42: invalid partition ID */
-	xpcLocalPartid,		/* 43: local partition ID */
+	xpBadVersion,		/* 39: bad version number */
+	xpVarsNotSet,		/* 40: the XPC variables are not set up */
+	xpNoRsvdPageAddr,	/* 41: unable to get rsvd page's phys addr */
+	xpInvalidPartid,	/* 42: invalid partition ID */
+	xpLocalPartid,		/* 43: local partition ID */
 
-	xpcOtherGoingDown,	/* 44: other side going down, reason unknown */
-	xpcSystemGoingDown,	/* 45: system is going down, reason unknown */
-	xpcSystemHalt,		/* 46: system is being halted */
-	xpcSystemReboot,	/* 47: system is being rebooted */
-	xpcSystemPoweroff,	/* 48: system is being powered off */
+	xpOtherGoingDown,	/* 44: other side going down, reason unknown */
+	xpSystemGoingDown,	/* 45: system is going down, reason unknown */
+	xpSystemHalt,		/* 46: system is being halted */
+	xpSystemReboot,		/* 47: system is being rebooted */
+	xpSystemPoweroff,	/* 48: system is being powered off */
 
-	xpcDisconnecting,	/* 49: channel disconnecting (closing) */
+	xpDisconnecting,	/* 49: channel disconnecting (closing) */
 
-	xpcOpenCloseError,	/* 50: channel open/close protocol error */
+	xpOpenCloseError,	/* 50: channel open/close protocol error */
 
-	xpcDisconnected,	/* 51: channel disconnected (closed) */
+	xpDisconnected,		/* 51: channel disconnected (closed) */
 
-	xpcBteSh2Start,		/* 52: BTE CRB timeout */
+	xpBteCopyError,		/* 52: bte_copy() returned error */
+	xpSalError,		/* 53: sn SAL error */
+	xpNeedMoreInfo,		/* 54: more info is needed by SAL */
 
-				/* 53: 0x1 BTE Error Response Short */
-	xpcBteSh2RspShort = xpcBteSh2Start + BTEFAIL_SH2_RESP_SHORT,
-
-				/* 54: 0x2 BTE Error Response Long */
-	xpcBteSh2RspLong = xpcBteSh2Start + BTEFAIL_SH2_RESP_LONG,
-
-				/* 56: 0x4 BTE Error Response DSB */
-	xpcBteSh2RspDSB = xpcBteSh2Start + BTEFAIL_SH2_RESP_DSP,
-
-				/* 60: 0x8 BTE Error Response Access */
-	xpcBteSh2RspAccess = xpcBteSh2Start + BTEFAIL_SH2_RESP_ACCESS,
-
-				/* 68: 0x10 BTE Error CRB timeout */
-	xpcBteSh2CRBTO = xpcBteSh2Start + BTEFAIL_SH2_CRB_TO,
-
-				/* 84: 0x20 BTE Error NACK limit */
-	xpcBteSh2NACKLimit = xpcBteSh2Start + BTEFAIL_SH2_NACK_LIMIT,
-
-				/* 115: BTE end */
-	xpcBteSh2End = xpcBteSh2Start + BTEFAIL_SH2_ALL,
-
-	xpcUnknownReason	/* 116: unknown reason -- must be last in list */
+	xpUnsupported,		/* 55: unsupported functionality or resource */
+	xpUnknownReason		/* 56: unknown reason (must be last in list) */
 };
 
+/* the following are valid xp_set_amo() ops */
+#define XP_AMO_OR	1	/* set variable to (variable | operand) */
+#define XP_AMO_AND	2	/* set variable to (variable & operand) */
+
+/* the following are valid xp_get_amo() ops */
+#define XP_AMO_LOAD	1	/* get variable contents */
+#define XP_AMO_CLEAR	2	/* get variable contents and clear variable */
+
+/* the following are valid xp_change_memprotect() ops */
+#define XP_MEMPROT_DISALLOW_ALL		0
+#define XP_MEMPROT_ALLOW_CPU_AMO	1
+#define XP_MEMPROT_ALLOW_CPU_MEM	2
+#define XP_MEMPROT_ALLOW_ALL		3	/* Shub 1.1 only */
 
 /*
  * Define the callout function types used by XPC to update the user on
@@ -302,85 +272,84 @@ enum xpc_retval {
  *
  * Reason Code          | Cause                          | Optional Data
  * =====================+================================+=====================
- * xpcConnected         | connection has been established| max #of entries
+ * xpConnected          | connection has been established| max #of entries
  *                      | to the specified partition on  | allowed in message
  *                      | the specified channel          | queue
  * ---------------------+--------------------------------+---------------------
- * xpcMsgReceived       | an XPC message arrived from    | address of payload
+ * xpMsgReceived        | an XPC message arrived from    | address of payload
  *                      | the specified partition on the |
  *                      | specified channel              | [the user must call
  *                      |                                | xpc_received() when
  *                      |                                | finished with the
  *                      |                                | payload]
  * ---------------------+--------------------------------+---------------------
- * xpcMsgDelivered      | notification that the message  | NA
+ * xpMsgDelivered       | notification that the message  | NA
  *                      | was delivered to the intended  |
  *                      | recipient and that they have   |
  *                      | acknowledged its receipt by    |
  *                      | calling xpc_received()         |
  * =====================+================================+=====================
- * xpcUnequalMsgSizes   | can't connect to the specified | NULL
+ * xpUnequalMsgSizes    | can't connect to the specified | NULL
  *                      | partition on the specified     |
  *                      | channel because of mismatched  |
  *                      | message sizes                  |
  * ---------------------+--------------------------------+---------------------
- * xpcNoMemory          | insufficient memory avaiable   | NULL
+ * xpNoMemory           | insufficient memory avaiable   | NULL
  *                      | to allocate message queue      |
  * ---------------------+--------------------------------+---------------------
- * xpcLackOfResources   | lack of resources to create    | NULL
+ * xpLackOfResources    | lack of resources to create    | NULL
  *                      | the necessary kthreads to      |
  *                      | support the channel            |
  * ---------------------+--------------------------------+---------------------
- * xpcUnregistering     | this side's user has           | NULL or NA
+ * xpUnregistering      | this side's user has           | NULL or NA
  *                      | unregistered by calling        |
  *                      | xpc_disconnect()               |
  * ---------------------+--------------------------------+---------------------
- * xpcOtherUnregistering| the other side's user has      | NULL or NA
+ * xpOtherUnregistering | the other side's user has      | NULL or NA
  *                      | unregistered by calling        |
  *                      | xpc_disconnect()               |
  * ---------------------+--------------------------------+---------------------
- * xpcNoHeartbeat       | the other side's XPC is no     | NULL or NA
+ * xpNoHeartbeat        | the other side's XPC is no     | NULL or NA
  *                      | longer heartbeating            |
  *                      |                                |
  * ---------------------+--------------------------------+---------------------
- * xpcUnloading         | this side's XPC module is      | NULL or NA
+ * xpUnloading          | this side's XPC module is      | NULL or NA
  *                      | being unloaded                 |
  *                      |                                |
  * ---------------------+--------------------------------+---------------------
- * xpcOtherUnloading    | the other side's XPC module is | NULL or NA
+ * xpOtherUnloading     | the other side's XPC module is | NULL or NA
  *                      | is being unloaded              |
  *                      |                                |
  * ---------------------+--------------------------------+---------------------
- * xpcPioReadError      | xp_nofault_PIOR() returned an  | NULL or NA
+ * xpPioReadError       | xp_nofault_PIOR() returned an  | NULL or NA
  *                      | error while sending an IPI     |
  *                      |                                |
  * ---------------------+--------------------------------+---------------------
- * xpcInvalidAddress    | the address either received or | NULL or NA
+ * xpInvalidAddress     | the address either received or | NULL or NA
  *                      | sent by the specified partition|
  *                      | is invalid                     |
  * ---------------------+--------------------------------+---------------------
- * xpcBteNotAvailable   | attempt to pull data from the  | NULL or NA
- * xpcBtePoisonError    | specified partition over the   |
- * xpcBteWriteError     | specified channel via a        |
- * xpcBteAccessError    | bte_copy() failed              |
- * xpcBteTimeOutError   |                                |
- * xpcBteXtalkError     |                                |
- * xpcBteDirectoryError |                                |
- * xpcBteGenericError   |                                |
- * xpcBteUnmappedError  |                                |
+ * xpBteNotAvailable    | attempt to pull data from the  | NULL or NA
+ * xpBtePoisonError     | specified partition over the   |
+ * xpBteWriteError      | specified channel via a        |
+ * xpBteAccessError     | bte_copy() failed              |
+ * xpBteTimeOutError    |                                |
+ * xpBteXtalkError      |                                |
+ * xpBteDirectoryError  |                                |
+ * xpBteGenericError    |                                |
+ * xpBteUnmappedError   |                                |
  * ---------------------+--------------------------------+---------------------
- * xpcUnknownReason     | the specified channel to the   | NULL or NA
+ * xpUnknownReason      | the specified channel to the   | NULL or NA
  *                      | specified partition was        |
  *                      | unavailable for unknown reasons|
  * =====================+================================+=====================
  */
 
-typedef void (*xpc_channel_func)(enum xpc_retval reason, partid_t partid,
-		int ch_number, void *data, void *key);
+typedef void (*xpc_channel_func) (enum xp_retval reason, short partid,
+				  int ch_number, void *data, void *key);
 
-typedef void (*xpc_notify_func)(enum xpc_retval reason, partid_t partid,
-		int ch_number, void *key);
-
+typedef void (*xpc_notify_func) (enum xp_retval reason, short partid,
+				 int ch_number, void *key);
 
 /*
  * The following is a registration entry. There is a global array of these,
@@ -398,88 +367,122 @@ typedef void (*xpc_notify_func)(enum xpc_retval reason, partid_t partid,
  */
 struct xpc_registration {
 	struct mutex mutex;
-	xpc_channel_func func;		/* function to call */
-	void *key;			/* pointer to user's key */
-	u16 nentries;			/* #of msg entries in local msg queue */
-	u16 msg_size;			/* message queue's message size */
-	u32 assigned_limit;		/* limit on #of assigned kthreads */
-	u32 idle_limit;			/* limit on #of idle kthreads */
+	xpc_channel_func func;	/* function to call */
+	void *key;		/* pointer to user's key */
+	u16 nentries;		/* #of msg entries in local msg queue */
+	u16 msg_size;		/* message queue's message size */
+	u32 assigned_limit;	/* limit on #of assigned kthreads */
+	u32 idle_limit;		/* limit on #of idle kthreads */
 } ____cacheline_aligned;
-
 
 #define XPC_CHANNEL_REGISTERED(_c)	(xpc_registrations[_c].func != NULL)
 
-
 /* the following are valid xpc_allocate() flags */
-#define XPC_WAIT	0		/* wait flag */
-#define XPC_NOWAIT	1		/* no wait flag */
-
+#define XPC_WAIT	0	/* wait flag */
+#define XPC_NOWAIT	1	/* no wait flag */
 
 struct xpc_interface {
-	void (*connect)(int);
-	void (*disconnect)(int);
-	enum xpc_retval (*allocate)(partid_t, int, u32, void **);
-	enum xpc_retval (*send)(partid_t, int, void *);
-	enum xpc_retval (*send_notify)(partid_t, int, void *,
-						xpc_notify_func, void *);
-	void (*received)(partid_t, int, void *);
-	enum xpc_retval (*partid_to_nasids)(partid_t, void *);
+	void (*connect) (int);
+	void (*disconnect) (int);
+	enum xp_retval (*allocate) (short, int, u32, void **);
+	enum xp_retval (*send) (short, int, void *);
+	enum xp_retval (*send_notify) (short, int, void *,
+				       xpc_notify_func, void *);
+	void (*received) (short, int, void *);
+	enum xp_retval (*partid_to_nasids) (short, void *);
 };
-
 
 extern struct xpc_interface xpc_interface;
 
 extern void xpc_set_interface(void (*)(int),
-		void (*)(int),
-		enum xpc_retval (*)(partid_t, int, u32, void **),
-		enum xpc_retval (*)(partid_t, int, void *),
-		enum xpc_retval (*)(partid_t, int, void *, xpc_notify_func,
-								void *),
-		void (*)(partid_t, int, void *),
-		enum xpc_retval (*)(partid_t, void *));
+			      void (*)(int),
+			      enum xp_retval (*)(short, int, u32, void **),
+			      enum xp_retval (*)(short, int, void *),
+			      enum xp_retval (*)(short, int, void *,
+						 xpc_notify_func, void *),
+			      void (*)(short, int, void *),
+			      enum xp_retval (*)(short, void *));
 extern void xpc_clear_interface(void);
 
-
-extern enum xpc_retval xpc_connect(int, xpc_channel_func, void *, u16,
-						u16, u32, u32);
+extern enum xp_retval xpc_connect(int, xpc_channel_func, void *, u16,
+				  u16, u32, u32);
 extern void xpc_disconnect(int);
 
-static inline enum xpc_retval
-xpc_allocate(partid_t partid, int ch_number, u32 flags, void **payload)
+static inline enum xp_retval
+xpc_allocate(short partid, int ch_number, u32 flags, void **payload)
 {
 	return xpc_interface.allocate(partid, ch_number, flags, payload);
 }
 
-static inline enum xpc_retval
-xpc_send(partid_t partid, int ch_number, void *payload)
+static inline enum xp_retval
+xpc_send(short partid, int ch_number, void *payload)
 {
 	return xpc_interface.send(partid, ch_number, payload);
 }
 
-static inline enum xpc_retval
-xpc_send_notify(partid_t partid, int ch_number, void *payload,
-			xpc_notify_func func, void *key)
+static inline enum xp_retval
+xpc_send_notify(short partid, int ch_number, void *payload,
+		xpc_notify_func func, void *key)
 {
 	return xpc_interface.send_notify(partid, ch_number, payload, func, key);
 }
 
 static inline void
-xpc_received(partid_t partid, int ch_number, void *payload)
+xpc_received(short partid, int ch_number, void *payload)
 {
 	return xpc_interface.received(partid, ch_number, payload);
 }
 
-static inline enum xpc_retval
-xpc_partid_to_nasids(partid_t partid, void *nasids)
+static inline enum xp_retval
+xpc_partid_to_nasids(short partid, void *nasids)
 {
 	return xpc_interface.partid_to_nasids(partid, nasids);
 }
 
+extern short xp_partition_id;
+extern u8 xp_region_size;
+extern unsigned long xp_rtc_cycles_per_second;
+extern enum xp_retval (*xp_remote_memcpy) (void *, const void *, size_t);
+extern enum xp_retval (*xp_register_remote_amos) (u64, size_t);
+extern enum xp_retval (*xp_unregister_remote_amos) (u64, size_t);
+extern int xp_sizeof_nasid_mask;
+extern int xp_sizeof_amo;
+extern u64 *(*xp_alloc_amos) (int);
+extern void (*xp_free_amos) (u64 *, int);
+extern enum xp_retval (*xp_set_amo) (u64 *, int, u64, int);
+extern enum xp_retval (*xp_set_amo_with_interrupt) (u64 *, int, u64, int, int,
+						    int, int);
+extern enum xp_retval (*xp_get_amo) (u64 *, int, u64 *);
+extern enum xp_retval (*xp_get_partition_rsvd_page_pa) (u64, u64 *, u64 *,
+							size_t *);
+extern enum xp_retval (*xp_change_memprotect) (u64, size_t, int, u64 *);
+extern void (*xp_change_memprotect_shub_wars_1_1) (int);
+extern void (*xp_allow_IPI_ops) (void);
+extern void (*xp_disallow_IPI_ops) (void);
+
+extern int (*xp_cpu_to_nasid) (int);
+extern int (*xp_node_to_nasid) (int);
 
 extern u64 xp_nofault_PIOR_target;
 extern int xp_nofault_PIOR(void *);
 extern int xp_error_PIOR(void);
 
+extern struct device *xp;
+extern enum xp_retval xp_init_sn2(void);
+extern enum xp_retval xp_init_uv(void);
+extern void xp_exit_sn2(void);
+extern void xp_exit_uv(void);
 
-#endif /* _ASM_IA64_SN_XP_H */
+static inline int
+xp_partid_mask_words(int npartitions)
+{
+	return DIV_ROUND_UP(npartitions, BITS_PER_WORD);
+}
 
+static inline int
+xp_nasid_mask_words(void)
+{
+	return DIV_ROUND_UP(xp_sizeof_nasid_mask, BYTES_PER_WORD);
+}
+
+#endif /* _DRIVERS_MISC_XP_XP_H */
