@@ -250,6 +250,18 @@ static int init_constants_late(struct ubifs_info *c)
 	 */
 	c->bg_bud_bytes = (c->max_bud_bytes * 13) >> 4;
 
+	/*
+	 * Ensure minimum journal size. All the bytes in the journal heads are
+	 * considered to be used, when calculating the current journal usage.
+	 * Consequently, if the journal is too small, UBIFS will treat it as
+	 * always full.
+	 */
+	tmp64 = (uint64_t)(c->jhead_cnt + 1) * c->leb_size + 1;
+	if (c->bg_bud_bytes < tmp64)
+		c->bg_bud_bytes = tmp64;
+	if (c->max_bud_bytes < tmp64 + c->leb_size)
+		c->max_bud_bytes = tmp64 + c->leb_size;
+
 	err = ubifs_calc_lpt_geom(c);
 	if (err)
 		return err;
