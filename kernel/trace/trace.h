@@ -5,6 +5,21 @@
 #include <asm/atomic.h>
 #include <linux/sched.h>
 #include <linux/clocksource.h>
+#include <linux/mmiotrace.h>
+
+enum trace_type {
+	__TRACE_FIRST_TYPE = 0,
+
+	TRACE_FN,
+	TRACE_CTX,
+	TRACE_WAKE,
+	TRACE_STACK,
+	TRACE_SPECIAL,
+	TRACE_MMIO_RW,
+	TRACE_MMIO_MAP,
+
+	__TRACE_LAST_TYPE
+};
 
 /*
  * Function trace entry - function address and parent function addres:
@@ -63,6 +78,8 @@ struct trace_entry {
 		struct ctx_switch_entry		ctx;
 		struct special_entry		special;
 		struct stack_entry		stack;
+		struct mmiotrace_rw		mmiorw;
+		struct mmiotrace_map		mmiomap;
 	};
 };
 
@@ -130,6 +147,7 @@ struct tracer {
 	int			(*selftest)(struct tracer *trace,
 					    struct trace_array *tr);
 #endif
+	int			(*print_line)(struct trace_iterator *iter);
 	struct tracer		*next;
 	int			print_max;
 };
@@ -205,6 +223,8 @@ extern unsigned long nsecs_to_usecs(unsigned long nsecs);
 extern unsigned long tracing_max_latency;
 extern unsigned long tracing_thresh;
 
+extern atomic_t trace_record_cmdline_enabled;
+
 void update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu);
 void update_max_tr_single(struct trace_array *tr,
 			  struct task_struct *tsk, int cpu);
@@ -250,6 +270,15 @@ extern unsigned long ftrace_update_tot_cnt;
 extern int DYN_FTRACE_TEST_NAME(void);
 #endif
 
+#ifdef CONFIG_MMIOTRACE
+extern void __trace_mmiotrace_rw(struct trace_array *tr,
+				struct trace_array_cpu *data,
+				struct mmiotrace_rw *rw);
+extern void __trace_mmiotrace_map(struct trace_array *tr,
+				struct trace_array_cpu *data,
+				struct mmiotrace_map *map);
+#endif
+
 #ifdef CONFIG_FTRACE_STARTUP_TEST
 #ifdef CONFIG_FTRACE
 extern int trace_selftest_startup_function(struct tracer *trace,
@@ -282,9 +311,18 @@ extern int trace_selftest_startup_sysprof(struct tracer *trace,
 #endif /* CONFIG_FTRACE_STARTUP_TEST */
 
 extern void *head_page(struct trace_array_cpu *data);
+extern int trace_seq_printf(struct trace_seq *s, const char *fmt, ...);
+extern long ns2usecs(cycle_t nsec);
 
 extern unsigned long trace_flags;
 
+/*
+ * trace_iterator_flags is an enumeration that defines bit
+ * positions into trace_flags that controls the output.
+ *
+ * NOTE: These bits must match the trace_options array in
+ *       trace.c.
+ */
 enum trace_iterator_flags {
 	TRACE_ITER_PRINT_PARENT		= 0x01,
 	TRACE_ITER_SYM_OFFSET		= 0x02,

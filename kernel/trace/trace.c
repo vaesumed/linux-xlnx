@@ -27,6 +27,7 @@
 #include <linux/poll.h>
 #include <linux/gfp.h>
 #include <linux/fs.h>
+#include <linux/writeback.h>
 
 #include <linux/stacktrace.h>
 
@@ -35,9 +36,25 @@
 unsigned long __read_mostly	tracing_max_latency = (cycle_t)ULONG_MAX;
 unsigned long __read_mostly	tracing_thresh;
 
+static unsigned long __read_mostly	tracing_nr_buffers;
+static cpumask_t __read_mostly		tracing_buffer_mask;
+
+#define for_each_tracing_cpu(cpu)	\
+	for_each_cpu_mask(cpu, tracing_buffer_mask)
+
+/* dummy trace to disable tracing */
+static struct tracer no_tracer __read_mostly = {
+	.name		= "none",
+};
+
+static int trace_alloc_page(void);
+static int trace_free_page(void);
+
 static int tracing_disabled = 1;
 
-static long
+static unsigned long tracing_pages_allocated;
+
+long
 ns2usecs(cycle_t nsec)
 {
 	nsec += 500;
@@ -50,26 +67,79 @@ cycle_t ftrace_now(int cpu)
 	return cpu_clock(cpu);
 }
 
+/*
+ * The global_trace is the descriptor that holds the tracing
+ * buffers for the live tracing. For each CPU, it contains
+ * a link list of pages that will store trace entries. The
+ * page descriptor of the pages in the memory is used to hold
+ * the link list by linking the lru item in the page descriptor
+ * to each of the pages in the buffer per CPU.
+ *
+ * For each active CPU there is a data field that holds the
+ * pages for the buffer for that CPU. Each CPU has the same number
+ * of pages allocated for its buffer.
+ */
 static struct trace_array	global_trace;
 
 static DEFINE_PER_CPU(struct trace_array_cpu, global_trace_cpu);
 
+/*
+ * The max_tr is used to snapshot the global_trace when a maximum
+ * latency is reached. Some tracers will use this to store a maximum
+ * trace while it continues examining live traces.
+ *
+ * The buffers for the max_tr are set up the same as the global_trace.
+ * When a snapshot is taken, the link list of the max_tr is swapped
+ * with the link list of the global_trace and the buffers are reset for
+ * the global_trace so the tracing can continue.
+ */
 static struct trace_array	max_tr;
 
 static DEFINE_PER_CPU(struct trace_array_cpu, max_data);
 
+/* tracer_enabled is used to toggle activation of a tracer */
 static int			tracer_enabled = 1;
+
+/*
+ * trace_nr_entries is the number of entries that is allocated
+ * for a buffer. Note, the number of entries is always rounded
+ * to ENTRIES_PER_PAGE.
+ */
 static unsigned long		trace_nr_entries = 65536UL;
 
+/* trace_types holds a link list of available tracers. */
 static struct tracer		*trace_types __read_mostly;
+
+/* current_trace points to the tracer that is currently active */
 static struct tracer		*current_trace __read_mostly;
+
+/*
+ * max_tracer_type_len is used to simplify the allocating of
+ * buffers to read userspace tracer names. We keep track of
+ * the longest tracer name registered.
+ */
 static int			max_tracer_type_len;
 
+/*
+ * trace_types_lock is used to protect the trace_types list.
+ * This lock is also used to keep user access serialized.
+ * Accesses from userspace will grab this lock while userspace
+ * activities happen inside the kernel.
+ */
 static DEFINE_MUTEX(trace_types_lock);
+
+/* trace_wait is a waitqueue for tasks blocked on trace_poll */
 static DECLARE_WAIT_QUEUE_HEAD(trace_wait);
 
+/* trace_flags holds iter_ctrl options */
 unsigned long trace_flags = TRACE_ITER_PRINT_PARENT;
 
+/**
+ * trace_wake_up - wake up tasks waiting for trace input
+ *
+ * Simply wakes up any task that is blocked on the trace_wait
+ * queue. These is used with trace_poll for tasks polling the trace.
+ */
 void trace_wake_up(void)
 {
 	/*
@@ -84,9 +154,16 @@ void trace_wake_up(void)
 
 static int __init set_nr_entries(char *str)
 {
+	unsigned long nr_entries;
+	int ret;
+
 	if (!str)
 		return 0;
-	trace_nr_entries = simple_strtoul(str, &str, 0);
+	ret = strict_strtoul(str, 0, &nr_entries);
+	/* nr_entries can not be zero */
+	if (ret < 0 || nr_entries == 0)
+		return 0;
+	trace_nr_entries = nr_entries;
 	return 1;
 }
 __setup("trace_entries=", set_nr_entries);
@@ -96,18 +173,14 @@ unsigned long nsecs_to_usecs(unsigned long nsecs)
 	return nsecs / 1000;
 }
 
-enum trace_type {
-	__TRACE_FIRST_TYPE = 0,
-
-	TRACE_FN,
-	TRACE_CTX,
-	TRACE_WAKE,
-	TRACE_STACK,
-	TRACE_SPECIAL,
-
-	__TRACE_LAST_TYPE
-};
-
+/*
+ * trace_flag_type is an enumeration that holds different
+ * states when a trace occurs. These are:
+ *  IRQS_OFF	- interrupts were disabled
+ *  NEED_RESCED - reschedule is requested
+ *  HARDIRQ	- inside an interrupt handler
+ *  SOFTIRQ	- inside a softirq handler
+ */
 enum trace_flag_type {
 	TRACE_FLAG_IRQS_OFF		= 0x01,
 	TRACE_FLAG_NEED_RESCHED		= 0x02,
@@ -115,10 +188,14 @@ enum trace_flag_type {
 	TRACE_FLAG_SOFTIRQ		= 0x08,
 };
 
+/*
+ * TRACE_ITER_SYM_MASK masks the options in trace_flags that
+ * control the output of kernel symbols.
+ */
 #define TRACE_ITER_SYM_MASK \
 	(TRACE_ITER_PRINT_PARENT|TRACE_ITER_SYM_OFFSET|TRACE_ITER_SYM_ADDR)
 
-/* These must match the bit postions above */
+/* These must match the bit postions in trace_iterator_flags */
 static const char *trace_options[] = {
 	"print-parent",
 	"sym-offset",
@@ -133,6 +210,15 @@ static const char *trace_options[] = {
 	NULL
 };
 
+/*
+ * ftrace_max_lock is used to protect the swapping of buffers
+ * when taking a max snapshot. The buffers themselves are
+ * protected by per_cpu spinlocks. But the action of the swap
+ * needs its own lock.
+ *
+ * This is defined as a raw_spinlock_t in order to help
+ * with performance when lockdep debugging is enabled.
+ */
 static raw_spinlock_t ftrace_max_lock =
 	(raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
 
@@ -163,6 +249,13 @@ __update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
 	tracing_record_cmdline(current);
 }
 
+/**
+ * check_pages - integrity check of trace buffers
+ *
+ * As a safty measure we check to make sure the data pages have not
+ * been corrupted. TODO: configure to disable this because it adds
+ * a bit of overhead.
+ */
 void check_pages(struct trace_array_cpu *data)
 {
 	struct page *page, *tmp;
@@ -176,6 +269,13 @@ void check_pages(struct trace_array_cpu *data)
 	}
 }
 
+/**
+ * head_page - page address of the first page in per_cpu buffer.
+ *
+ * head_page returns the page address of the first page in
+ * a per_cpu buffer. This also preforms various consistency
+ * checks to make sure the buffer has not been corrupted.
+ */
 void *head_page(struct trace_array_cpu *data)
 {
 	struct page *page;
@@ -190,7 +290,18 @@ void *head_page(struct trace_array_cpu *data)
 	return page_address(page);
 }
 
-static int
+/**
+ * trace_seq_printf - sequence printing of trace information
+ * @s: trace sequence descriptor
+ * @fmt: printf format string
+ *
+ * The tracer may use either sequence operations or its own
+ * copy to user routines. To simplify formating of a trace
+ * trace_seq_printf is used to store strings into a special
+ * buffer (@s). Then the output may be either used by
+ * the sequencer or pulled into another buffer.
+ */
+int
 trace_seq_printf(struct trace_seq *s, const char *fmt, ...)
 {
 	int len = (PAGE_SIZE - 1) - s->len;
@@ -205,7 +316,7 @@ trace_seq_printf(struct trace_seq *s, const char *fmt, ...)
 	va_end(ap);
 
 	/* If we can't write it all, don't bother writing anything */
-	if (ret > len)
+	if (ret >= len)
 		return 0;
 
 	s->len += ret;
@@ -213,6 +324,16 @@ trace_seq_printf(struct trace_seq *s, const char *fmt, ...)
 	return len;
 }
 
+/**
+ * trace_seq_puts - trace sequence printing of simple string
+ * @s: trace sequence descriptor
+ * @str: simple string to record
+ *
+ * The tracer may use either the sequence operations or its own
+ * copy to user routines. This function records a simple string
+ * into a special buffer (@s) for later retrieval by a sequencer
+ * or other mechanism.
+ */
 static int
 trace_seq_puts(struct trace_seq *s, const char *str)
 {
@@ -251,18 +372,17 @@ trace_seq_putmem(struct trace_seq *s, void *mem, size_t len)
 }
 
 #define HEX_CHARS 17
+static const char hex2asc[] = "0123456789abcdef";
 
 static int
 trace_seq_putmem_hex(struct trace_seq *s, void *mem, size_t len)
 {
 	unsigned char hex[HEX_CHARS];
-	unsigned char *data;
+	unsigned char *data = mem;
 	unsigned char byte;
 	int i, j;
 
 	BUG_ON(len >= HEX_CHARS);
-
-	data = mem;
 
 #ifdef __BIG_ENDIAN
 	for (i = 0, j = 0; i < len; i++) {
@@ -271,22 +391,10 @@ trace_seq_putmem_hex(struct trace_seq *s, void *mem, size_t len)
 #endif
 		byte = data[i];
 
-		hex[j]   = byte & 0x0f;
-		if (hex[j] >= 10)
-			hex[j] += 'a' - 10;
-		else
-			hex[j] += '0';
-		j++;
-
-		hex[j] = byte >> 4;
-		if (hex[j] >= 10)
-			hex[j] += 'a' - 10;
-		else
-			hex[j] += '0';
-		j++;
+		hex[j++] = hex2asc[byte & 0x0f];
+		hex[j++] = hex2asc[byte >> 4];
 	}
-	hex[j] = ' ';
-	j++;
+	hex[j++] = ' ';
 
 	return trace_seq_putmem(s, hex, j);
 }
@@ -308,6 +416,13 @@ trace_print_seq(struct seq_file *m, struct trace_seq *s)
 	trace_seq_reset(s);
 }
 
+/*
+ * flip the trace buffers between two trace descriptors.
+ * This usually is the buffers between the global_trace and
+ * the max_tr to record a snapshot of a current trace.
+ *
+ * The ftrace_max_lock must be held.
+ */
 static void
 flip_trace(struct trace_array_cpu *tr1, struct trace_array_cpu *tr2)
 {
@@ -329,6 +444,15 @@ flip_trace(struct trace_array_cpu *tr1, struct trace_array_cpu *tr2)
 	check_pages(tr2);
 }
 
+/**
+ * update_max_tr - snapshot all trace buffers from global_trace to max_tr
+ * @tr: tracer
+ * @tsk: the task with the latency
+ * @cpu: The cpu that initiated the trace.
+ *
+ * Flip the buffers between the @tr and the max_tr and record information
+ * about which task was the cause of this latency.
+ */
 void
 update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
 {
@@ -338,7 +462,7 @@ update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
 	WARN_ON_ONCE(!irqs_disabled());
 	__raw_spin_lock(&ftrace_max_lock);
 	/* clear out all the previous traces */
-	for_each_possible_cpu(i) {
+	for_each_tracing_cpu(i) {
 		data = tr->data[i];
 		flip_trace(max_tr.data[i], data);
 		tracing_reset(data);
@@ -353,6 +477,8 @@ update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
  * @tr - tracer
  * @tsk - task with the latency
  * @cpu - the cpu of the buffer to copy.
+ *
+ * Flip the trace of a single CPU buffer between the @tr and the max_tr.
  */
 void
 update_max_tr_single(struct trace_array *tr, struct task_struct *tsk, int cpu)
@@ -362,7 +488,7 @@ update_max_tr_single(struct trace_array *tr, struct task_struct *tsk, int cpu)
 
 	WARN_ON_ONCE(!irqs_disabled());
 	__raw_spin_lock(&ftrace_max_lock);
-	for_each_possible_cpu(i)
+	for_each_tracing_cpu(i)
 		tracing_reset(max_tr.data[i]);
 
 	flip_trace(max_tr.data[cpu], data);
@@ -372,6 +498,12 @@ update_max_tr_single(struct trace_array *tr, struct task_struct *tsk, int cpu)
 	__raw_spin_unlock(&ftrace_max_lock);
 }
 
+/**
+ * register_tracer - register a tracer with the ftrace system.
+ * @type - the plugin for the tracer
+ *
+ * Register a new plugin tracer.
+ */
 int register_tracer(struct tracer *type)
 {
 	struct tracer *t;
@@ -408,7 +540,7 @@ int register_tracer(struct tracer *type)
 		 * internal tracing to verify that everything is in order.
 		 * If we fail, we do not register this tracer.
 		 */
-		for_each_possible_cpu(i) {
+		for_each_tracing_cpu(i) {
 			data = tr->data[i];
 			if (!head_page(data))
 				continue;
@@ -427,7 +559,7 @@ int register_tracer(struct tracer *type)
 			goto out;
 		}
 		/* Only reset on passing, to avoid touching corrupted buffers */
-		for_each_possible_cpu(i) {
+		for_each_tracing_cpu(i) {
 			data = tr->data[i];
 			if (!head_page(data))
 				continue;
@@ -491,7 +623,12 @@ static unsigned map_cmdline_to_pid[SAVED_CMDLINES];
 static char saved_cmdlines[SAVED_CMDLINES][TASK_COMM_LEN];
 static int cmdline_idx;
 static DEFINE_SPINLOCK(trace_cmdline_lock);
-atomic_t trace_record_cmdline_disabled;
+
+/* trace in all context switches */
+atomic_t trace_record_cmdline_enabled __read_mostly;
+
+/* temporary disable recording */
+atomic_t trace_record_cmdline_disabled __read_mostly;
 
 static void trace_init_cmdlines(void)
 {
@@ -638,7 +775,7 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned long flags)
 	pc = preempt_count();
 
 	entry->preempt_count	= pc & 0xff;
-	entry->pid		= tsk->pid;
+	entry->pid		= (tsk) ? tsk->pid : 0;
 	entry->t		= ftrace_now(raw_smp_processor_id());
 	entry->flags = (irqs_disabled_flags(flags) ? TRACE_FLAG_IRQS_OFF : 0) |
 		((pc & HARDIRQ_MASK) ? TRACE_FLAG_HARDIRQ : 0) |
@@ -694,6 +831,48 @@ __trace_special(void *__tr, void *__data,
 
 	trace_wake_up();
 }
+
+#ifdef CONFIG_MMIOTRACE
+void __trace_mmiotrace_rw(struct trace_array *tr, struct trace_array_cpu *data,
+						struct mmiotrace_rw *rw)
+{
+	struct trace_entry *entry;
+	unsigned long irq_flags;
+
+	raw_local_irq_save(irq_flags);
+	__raw_spin_lock(&data->lock);
+
+	entry			= tracing_get_trace_entry(tr, data);
+	tracing_generic_entry_update(entry, 0);
+	entry->type		= TRACE_MMIO_RW;
+	entry->mmiorw		= *rw;
+
+	__raw_spin_unlock(&data->lock);
+	raw_local_irq_restore(irq_flags);
+
+	trace_wake_up();
+}
+
+void __trace_mmiotrace_map(struct trace_array *tr, struct trace_array_cpu *data,
+						struct mmiotrace_map *map)
+{
+	struct trace_entry *entry;
+	unsigned long irq_flags;
+
+	raw_local_irq_save(irq_flags);
+	__raw_spin_lock(&data->lock);
+
+	entry			= tracing_get_trace_entry(tr, data);
+	tracing_generic_entry_update(entry, 0);
+	entry->type		= TRACE_MMIO_MAP;
+	entry->mmiomap		= *map;
+
+	__raw_spin_unlock(&data->lock);
+	raw_local_irq_restore(irq_flags);
+
+	trace_wake_up();
+}
+#endif
 
 void __trace_stack(struct trace_array *tr,
 		   struct trace_array_cpu *data,
@@ -857,7 +1036,7 @@ find_next_entry(struct trace_iterator *iter, int *ent_cpu)
 	int next_cpu = -1;
 	int cpu;
 
-	for_each_possible_cpu(cpu) {
+	for_each_tracing_cpu(cpu) {
 		if (!head_page(tr->data[cpu]))
 			continue;
 		ent = trace_entry_idx(tr, tr->data[cpu], iter, cpu);
@@ -964,8 +1143,10 @@ static void *s_start(struct seq_file *m, loff_t *pos)
 
 	mutex_lock(&trace_types_lock);
 
-	if (!current_trace || current_trace != iter->trace)
+	if (!current_trace || current_trace != iter->trace) {
+		mutex_unlock(&trace_types_lock);
 		return NULL;
+	}
 
 	atomic_inc(&trace_record_cmdline_disabled);
 
@@ -980,7 +1161,7 @@ static void *s_start(struct seq_file *m, loff_t *pos)
 		iter->prev_ent = NULL;
 		iter->prev_cpu = -1;
 
-		for_each_possible_cpu(i) {
+		for_each_tracing_cpu(i) {
 			iter->next_idx[i] = 0;
 			iter->next_page[i] = NULL;
 		}
@@ -1097,7 +1278,7 @@ print_trace_header(struct seq_file *m, struct trace_iterator *iter)
 	if (type)
 		name = type->name;
 
-	for_each_possible_cpu(cpu) {
+	for_each_tracing_cpu(cpu) {
 		if (head_page(tr->data[cpu])) {
 			total += tr->data[cpu]->trace_idx;
 			if (tr->data[cpu]->trace_idx > tr->entries)
@@ -1169,12 +1350,12 @@ lat_print_generic(struct trace_seq *s, struct trace_entry *entry, int cpu)
 
 	hardirq = entry->flags & TRACE_FLAG_HARDIRQ;
 	softirq = entry->flags & TRACE_FLAG_SOFTIRQ;
-	if (hardirq && softirq)
+	if (hardirq && softirq) {
 		trace_seq_putc(s, 'H');
-	else {
-		if (hardirq)
+	} else {
+		if (hardirq) {
 			trace_seq_putc(s, 'h');
-		else {
+		} else {
 			if (softirq)
 				trace_seq_putc(s, 's');
 			else
@@ -1218,6 +1399,7 @@ print_lat_fmt(struct trace_iterator *iter, unsigned int trace_idx, int cpu)
 	char *comm;
 	int S, T;
 	int i;
+	unsigned state;
 
 	if (!next_entry)
 		next_entry = entry;
@@ -1248,11 +1430,11 @@ print_lat_fmt(struct trace_iterator *iter, unsigned int trace_idx, int cpu)
 		break;
 	case TRACE_CTX:
 	case TRACE_WAKE:
-		S = entry->ctx.prev_state < sizeof(state_to_char) ?
-			state_to_char[entry->ctx.prev_state] : 'X';
 		T = entry->ctx.next_state < sizeof(state_to_char) ?
 			state_to_char[entry->ctx.next_state] : 'X';
 
+		state = entry->ctx.prev_state ? __ffs(entry->ctx.prev_state) + 1 : 0;
+		S = state < sizeof(state_to_char) - 1 ? state_to_char[state] : 'X';
 		comm = trace_find_cmdline(entry->ctx.next_pid);
 		trace_seq_printf(s, " %5d:%3d:%c %s %5d:%3d:%c %s\n",
 				 entry->ctx.prev_pid,
@@ -1526,7 +1708,7 @@ static int trace_empty(struct trace_iterator *iter)
 	struct trace_array_cpu *data;
 	int cpu;
 
-	for_each_possible_cpu(cpu) {
+	for_each_tracing_cpu(cpu) {
 		data = iter->tr->data[cpu];
 
 		if (head_page(data) && data->trace_idx &&
@@ -1539,6 +1721,9 @@ static int trace_empty(struct trace_iterator *iter)
 
 static int print_trace_line(struct trace_iterator *iter)
 {
+	if (iter->trace && iter->trace->print_line)
+		return iter->trace->print_line(iter);
+
 	if (trace_flags & TRACE_ITER_BIN)
 		return print_bin_fmt(iter);
 
@@ -1835,7 +2020,7 @@ tracing_cpumask_write(struct file *filp, const char __user *ubuf,
 
 	raw_local_irq_disable();
 	__raw_spin_lock(&ftrace_max_lock);
-	for_each_possible_cpu(cpu) {
+	for_each_tracing_cpu(cpu) {
 		/*
 		 * Increase/decrease the disabled counter if we are
 		 * about to flip a bit in the cpumask:
@@ -1916,8 +2101,8 @@ tracing_iter_ctrl_write(struct file *filp, const char __user *ubuf,
 	int neg = 0;
 	int i;
 
-	if (cnt > 63)
-		cnt = 63;
+	if (cnt >= sizeof(buf))
+		return -EINVAL;
 
 	if (copy_from_user(&buf, ubuf, cnt))
 		return -EFAULT;
@@ -2006,18 +2191,21 @@ tracing_ctrl_write(struct file *filp, const char __user *ubuf,
 		   size_t cnt, loff_t *ppos)
 {
 	struct trace_array *tr = filp->private_data;
-	long val;
 	char buf[64];
+	long val;
+	int ret;
 
-	if (cnt > 63)
-		cnt = 63;
+	if (cnt >= sizeof(buf))
+		return -EINVAL;
 
 	if (copy_from_user(&buf, ubuf, cnt))
 		return -EFAULT;
 
 	buf[cnt] = 0;
 
-	val = simple_strtoul(buf, NULL, 10);
+	ret = strict_strtoul(buf, 10, &val);
+	if (ret < 0)
+		return ret;
 
 	val = !!val;
 
@@ -2109,10 +2297,10 @@ tracing_max_lat_read(struct file *filp, char __user *ubuf,
 	char buf[64];
 	int r;
 
-	r = snprintf(buf, 64, "%ld\n",
+	r = snprintf(buf, sizeof(buf), "%ld\n",
 		     *ptr == (unsigned long)-1 ? -1 : nsecs_to_usecs(*ptr));
-	if (r > 64)
-		r = 64;
+	if (r > sizeof(buf))
+		r = sizeof(buf);
 	return simple_read_from_buffer(ubuf, cnt, ppos, buf, r);
 }
 
@@ -2121,18 +2309,21 @@ tracing_max_lat_write(struct file *filp, const char __user *ubuf,
 		      size_t cnt, loff_t *ppos)
 {
 	long *ptr = filp->private_data;
-	long val;
 	char buf[64];
+	long val;
+	int ret;
 
-	if (cnt > 63)
-		cnt = 63;
+	if (cnt >= sizeof(buf))
+		return -EINVAL;
 
 	if (copy_from_user(&buf, ubuf, cnt))
 		return -EFAULT;
 
 	buf[cnt] = 0;
 
-	val = simple_strtoul(buf, NULL, 10);
+	ret = strict_strtoul(buf, 10, &val);
+	if (ret < 0)
+		return ret;
 
 	*ptr = val * 1000;
 
@@ -2160,6 +2351,7 @@ static int tracing_open_pipe(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 
 	iter->tr = &global_trace;
+	iter->trace = current_trace;
 
 	filp->private_data = iter;
 
@@ -2186,8 +2378,7 @@ tracing_poll_pipe(struct file *filp, poll_table *poll_table)
 		 * Always select as readable when in blocking mode
 		 */
 		return POLLIN | POLLRDNORM;
-	}
-	else {
+	} else {
 		if (!trace_empty(iter))
 			return POLLIN | POLLRDNORM;
 		poll_wait(filp, &trace_wait, poll_table);
@@ -2207,6 +2398,8 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 {
 	struct trace_iterator *iter = filp->private_data;
 	struct trace_array_cpu *data;
+	struct trace_array *tr = iter->tr;
+	struct tracer *tracer = iter->trace;
 	static cpumask_t mask;
 	static int start;
 	unsigned long flags;
@@ -2236,8 +2429,10 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 	start = 0;
 
 	while (trace_empty(iter)) {
-		if (!(trace_flags & TRACE_ITER_BLOCK))
-			return -EWOULDBLOCK;
+
+		if ((filp->f_flags & O_NONBLOCK))
+			return -EAGAIN;
+
 		/*
 		 * This is a make-shift waitqueue. The reason we don't use
 		 * an actual wait queue is because:
@@ -2257,6 +2452,9 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 
 		if (signal_pending(current))
 			return -EINTR;
+
+		if (iter->trace != current_trace)
+			return 0;
 
 		/*
 		 * We block until we read something and tracing is disabled.
@@ -2281,7 +2479,8 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 		cnt = PAGE_SIZE - 1;
 
 	memset(iter, 0, sizeof(*iter));
-	iter->tr = &global_trace;
+	iter->tr = tr;
+	iter->trace = tracer;
 	iter->pos = -1;
 
 	/*
@@ -2298,7 +2497,7 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 	ftrace_enabled = 0;
 #endif
 	smp_wmb();
-	for_each_possible_cpu(cpu) {
+	for_each_tracing_cpu(cpu) {
 		data = iter->tr->data[cpu];
 
 		if (!head_page(data) || !data->trace_idx)
@@ -2361,6 +2560,102 @@ tracing_read_pipe(struct file *filp, char __user *ubuf,
 	return read;
 }
 
+static ssize_t
+tracing_entries_read(struct file *filp, char __user *ubuf,
+		     size_t cnt, loff_t *ppos)
+{
+	struct trace_array *tr = filp->private_data;
+	char buf[64];
+	int r;
+
+	r = sprintf(buf, "%lu\n", tr->entries);
+	return simple_read_from_buffer(ubuf, cnt, ppos, buf, r);
+}
+
+static ssize_t
+tracing_entries_write(struct file *filp, const char __user *ubuf,
+		      size_t cnt, loff_t *ppos)
+{
+	unsigned long val;
+	char buf[64];
+	int ret;
+
+	if (cnt >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(&buf, ubuf, cnt))
+		return -EFAULT;
+
+	buf[cnt] = 0;
+
+	ret = strict_strtoul(buf, 10, &val);
+	if (ret < 0)
+		return ret;
+
+	/* must have at least 1 entry */
+	if (!val)
+		return -EINVAL;
+
+	mutex_lock(&trace_types_lock);
+
+	if (current_trace != &no_tracer) {
+		cnt = -EBUSY;
+		pr_info("ftrace: set current_tracer to none"
+			" before modifying buffer size\n");
+		goto out;
+	}
+
+	if (val > global_trace.entries) {
+		long pages_requested;
+		unsigned long freeable_pages;
+
+		/* make sure we have enough memory before mapping */
+		pages_requested =
+			(val + (ENTRIES_PER_PAGE-1)) / ENTRIES_PER_PAGE;
+
+		/* account for each buffer (and max_tr) */
+		pages_requested *= tracing_nr_buffers * 2;
+
+		/* Check for overflow */
+		if (pages_requested < 0) {
+			cnt = -ENOMEM;
+			goto out;
+		}
+
+		freeable_pages = determine_dirtyable_memory();
+
+		/* we only allow to request 1/4 of useable memory */
+		if (pages_requested >
+		    ((freeable_pages + tracing_pages_allocated) / 4)) {
+			cnt = -ENOMEM;
+			goto out;
+		}
+
+		while (global_trace.entries < val) {
+			if (trace_alloc_page()) {
+				cnt = -ENOMEM;
+				goto out;
+			}
+			/* double check that we don't go over the known pages */
+			if (tracing_pages_allocated > pages_requested)
+				break;
+		}
+
+	} else {
+		/* include the number of entries in val (inc of page entries) */
+		while (global_trace.entries > val + (ENTRIES_PER_PAGE - 1))
+			trace_free_page();
+	}
+
+	filp->f_pos += cnt;
+
+ out:
+	max_tr.entries = global_trace.entries;
+	mutex_unlock(&trace_types_lock);
+
+	return cnt;
+}
+
 static struct file_operations tracing_max_lat_fops = {
 	.open		= tracing_open_generic,
 	.read		= tracing_max_lat_read,
@@ -2384,6 +2679,12 @@ static struct file_operations tracing_pipe_fops = {
 	.poll		= tracing_poll_pipe,
 	.read		= tracing_read_pipe,
 	.release	= tracing_release_pipe,
+};
+
+static struct file_operations tracing_entries_fops = {
+	.open		= tracing_open_generic,
+	.read		= tracing_entries_read,
+	.write		= tracing_entries_write,
 };
 
 #ifdef CONFIG_DYNAMIC_FTRACE
@@ -2497,6 +2798,12 @@ static __init void tracer_init_debugfs(void)
 		pr_warning("Could not create debugfs "
 			   "'tracing_threash' entry\n");
 
+	entry = debugfs_create_file("trace_entries", 0644, d_tracer,
+				    &global_trace, &tracing_entries_fops);
+	if (!entry)
+		pr_warning("Could not create debugfs "
+			   "'tracing_threash' entry\n");
+
 #ifdef CONFIG_DYNAMIC_FTRACE
 	entry = debugfs_create_file("dyn_ftrace_total_info", 0444, d_tracer,
 				    &ftrace_update_tot_cnt,
@@ -2510,22 +2817,17 @@ static __init void tracer_init_debugfs(void)
 #endif
 }
 
-/* dummy trace to disable tracing */
-static struct tracer no_tracer __read_mostly =
-{
-	.name		= "none",
-};
-
 static int trace_alloc_page(void)
 {
 	struct trace_array_cpu *data;
 	struct page *page, *tmp;
 	LIST_HEAD(pages);
 	void *array;
+	unsigned pages_allocated = 0;
 	int i;
 
 	/* first allocate a page for each CPU */
-	for_each_possible_cpu(i) {
+	for_each_tracing_cpu(i) {
 		array = (void *)__get_free_page(GFP_KERNEL);
 		if (array == NULL) {
 			printk(KERN_ERR "tracer: failed to allocate page"
@@ -2533,6 +2835,7 @@ static int trace_alloc_page(void)
 			goto free_pages;
 		}
 
+		pages_allocated++;
 		page = virt_to_page(array);
 		list_add(&page->lru, &pages);
 
@@ -2544,15 +2847,15 @@ static int trace_alloc_page(void)
 			       "for trace buffer!\n");
 			goto free_pages;
 		}
+		pages_allocated++;
 		page = virt_to_page(array);
 		list_add(&page->lru, &pages);
 #endif
 	}
 
 	/* Now that we successfully allocate a page per CPU, add them */
-	for_each_possible_cpu(i) {
+	for_each_tracing_cpu(i) {
 		data = global_trace.data[i];
-		data->lock = (raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
 		page = list_entry(pages.next, struct page, lru);
 		list_del_init(&page->lru);
 		list_add_tail(&page->lru, &data->trace_pages);
@@ -2560,13 +2863,13 @@ static int trace_alloc_page(void)
 
 #ifdef CONFIG_TRACER_MAX_TRACE
 		data = max_tr.data[i];
-		data->lock = (raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
 		page = list_entry(pages.next, struct page, lru);
 		list_del_init(&page->lru);
 		list_add_tail(&page->lru, &data->trace_pages);
 		SetPageLRU(page);
 #endif
 	}
+	tracing_pages_allocated += pages_allocated;
 	global_trace.entries += ENTRIES_PER_PAGE;
 
 	return 0;
@@ -2577,6 +2880,57 @@ static int trace_alloc_page(void)
 		__free_page(page);
 	}
 	return -ENOMEM;
+}
+
+static int trace_free_page(void)
+{
+	struct trace_array_cpu *data;
+	struct page *page;
+	struct list_head *p;
+	int i;
+	int ret = 0;
+
+	/* free one page from each buffer */
+	for_each_tracing_cpu(i) {
+		data = global_trace.data[i];
+		p = data->trace_pages.next;
+		if (p == &data->trace_pages) {
+			/* should never happen */
+			WARN_ON(1);
+			tracing_disabled = 1;
+			ret = -1;
+			break;
+		}
+		page = list_entry(p, struct page, lru);
+		ClearPageLRU(page);
+		list_del(&page->lru);
+		tracing_pages_allocated--;
+		__free_page(page);
+
+		tracing_reset(data);
+
+#ifdef CONFIG_TRACER_MAX_TRACE
+		data = max_tr.data[i];
+		p = data->trace_pages.next;
+		if (p == &data->trace_pages) {
+			/* should never happen */
+			WARN_ON(1);
+			tracing_disabled = 1;
+			ret = -1;
+			break;
+		}
+		page = list_entry(p, struct page, lru);
+		ClearPageLRU(page);
+		list_del(&page->lru);
+		tracing_pages_allocated--;
+		__free_page(page);
+
+		tracing_reset(data);
+#endif
+	}
+	global_trace.entries -= ENTRIES_PER_PAGE;
+
+	return ret;
 }
 
 __init static int tracer_alloc_buffers(void)
@@ -2590,8 +2944,12 @@ __init static int tracer_alloc_buffers(void)
 
 	global_trace.ctrl = tracer_enabled;
 
+	/* TODO: make the number of buffers hot pluggable with CPUS */
+	tracing_nr_buffers = num_possible_cpus();
+	tracing_buffer_mask = cpu_possible_map;
+
 	/* Allocate the first page for all buffers */
-	for_each_possible_cpu(i) {
+	for_each_tracing_cpu(i) {
 		data = global_trace.data[i] = &per_cpu(global_trace_cpu, i);
 		max_tr.data[i] = &per_cpu(max_data, i);
 
@@ -2608,6 +2966,9 @@ __init static int tracer_alloc_buffers(void)
 		list_add(&page->lru, &data->trace_pages);
 		/* use the LRU flag to differentiate the two buffers */
 		ClearPageLRU(page);
+
+		data->lock = (raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
+		max_tr.data[i]->lock = (raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
 
 /* Only allocate if we are actually using the max trace */
 #ifdef CONFIG_TRACER_MAX_TRACE
