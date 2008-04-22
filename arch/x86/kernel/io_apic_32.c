@@ -83,6 +83,10 @@ int mp_irq_entries;
 
 static int disable_timer_pin_1 __initdata;
 
+extern int first_system_vector;
+
+extern char system_vectors[];
+
 /*
  * Rough estimation of how many shared IRQs there are, can
  * be changed anytime.
@@ -1176,7 +1180,7 @@ static int __assign_irq_vector(int irq)
 	offset = current_offset;
 next:
 	vector += 8;
-	if (vector >= FIRST_SYSTEM_VECTOR) {
+	if (vector >= first_system_vector) {
 		offset = (offset + 1) % 8;
 		vector = FIRST_DEVICE_VECTOR + offset;
 	}
@@ -2068,7 +2072,7 @@ static void __init setup_nmi(void)
  * cycles as some i82489DX-based boards have glue logic that keeps the
  * 8259A interrupt line asserted until INTA.  --macro
  */
-static inline void unlock_ExtINT_logic(void)
+static inline void __init unlock_ExtINT_logic(void)
 {
 	int apic, pin, i;
 	struct IO_APIC_route_entry entry0, entry1;
@@ -2269,7 +2273,7 @@ void __init setup_IO_APIC(void)
 	int i;
 
 	/* Reserve all the system vectors. */
-	for (i = FIRST_SYSTEM_VECTOR; i < NR_VECTORS; i++)
+	for (i = first_system_vector; i < NR_VECTORS; i++)
 		set_bit(i, used_vectors);
 
 	enable_IO_APIC();

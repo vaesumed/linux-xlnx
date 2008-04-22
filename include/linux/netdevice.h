@@ -193,8 +193,8 @@ struct dev_addr_list
 {
 	struct dev_addr_list	*next;
 	u8			da_addr[MAX_ADDR_LEN];
-	u8			da_addrlen;
-	u8			da_synced;
+	unsigned int		da_addrlen;
+	unsigned int		da_synced;
 	int			da_users;
 	int			da_gusers;
 };
