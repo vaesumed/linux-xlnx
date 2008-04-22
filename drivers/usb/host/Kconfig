@@ -30,8 +30,8 @@ config USB_EHCI_HCD
 	  module will be called ehci-hcd.
 
 config USB_EHCI_ROOT_HUB_TT
-	bool "Root Hub Transaction Translators (EXPERIMENTAL)"
-	depends on USB_EHCI_HCD && EXPERIMENTAL
+	bool "Root Hub Transaction Translators"
+	depends on USB_EHCI_HCD
 	---help---
 	  Some EHCI chips have vendor-specific extensions to integrate
 	  transaction translators, so that no OHCI or UHCI companion
@@ -259,4 +259,25 @@ config USB_R8A66597_HCD
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called r8a66597-hcd.
+
+config SUPERH_ON_CHIP_R8A66597
+	boolean "Enable SuperH on-chip USB like the R8A66597"
+	depends on USB_R8A66597_HCD && CPU_SUBTYPE_SH7366
+	help
+	   Renesas SuperH processor has USB like the R8A66597.
+	   This driver supported processor is SH7366.
+
+config USB_HWA_HCD
+	tristate "Wireless USB host controller driver for WUSB-compliant USB dongles (HWA)"
+	depends on USB
+	select USB_WUSB
+	select UWB_HWA
+	help
+	  This driver enables you to connect Wireless USB devices to
+	  your system using a Host Wire Adaptor USB dongle. This is an
+	  UWB Radio Controller and WUSB Host Controller connected to
+	  your machine via USB (specified in WUSB1.0).
+
+	  To compile this driver select Y (built in) or M (module). It
+	  is safe to select any even if you don't have the hardware.
 
