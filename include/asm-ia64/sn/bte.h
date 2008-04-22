@@ -3,7 +3,7 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (c) 2000-2007 Silicon Graphics, Inc.  All Rights Reserved.
+ * Copyright (c) 2000-2008 Silicon Graphics, Inc.  All Rights Reserved.
  */
 
 
@@ -176,9 +176,6 @@ typedef enum {
 
 #define BTE_GET_ERROR_STATUS(_status)					\
 	(BTE_SHUB2_ERROR(_status) & ~IBLS_ERROR)
-
-#define BTE_VALID_SH2_ERROR(value)					\
-	((value >= BTEFAIL_SH2_RESP_SHORT) && (value <= BTEFAIL_SH2_ALL))
 
 /*
  * Structure defining a bte.  An instance of this

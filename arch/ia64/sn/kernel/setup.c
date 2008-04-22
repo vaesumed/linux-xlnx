@@ -3,7 +3,7 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1999,2001-2006 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1999,2001-2008 Silicon Graphics, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -93,7 +93,7 @@ u8 sn_region_size;
 EXPORT_SYMBOL(sn_region_size);
 int sn_prom_type;	/* 0=hardware, 1=medusa/realprom, 2=medusa/fakeprom */
 
-short physical_node_map[MAX_NUMALINK_NODES];
+short physical_node_map[SN_MAX_NUMALINK_NODES];
 static unsigned long sn_prom_features[MAX_PROM_FEATURE_SETS];
 
 EXPORT_SYMBOL(physical_node_map);

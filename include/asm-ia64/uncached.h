@@ -8,5 +8,5 @@
  * Prototypes for the uncached page allocator
  */
 
-extern unsigned long uncached_alloc_page(int nid);
-extern void uncached_free_page(unsigned long);
+extern unsigned long uncached_alloc_page(int, int);
+extern void uncached_free_page(unsigned long, int);
