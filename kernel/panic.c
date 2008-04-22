@@ -354,7 +354,10 @@ static noinline void __stack_chk_test_func(void)
 	}
 #endif
 	barrier();
-	memset(&foo, 0, 2*sizeof(foo)); /* deliberate buffer overflow */
+	if (current->stack_canary == *(((unsigned long *)&foo)+1))
+		*(((unsigned long *)&foo)+1) = 0;
+	else
+		printk(KERN_ERR "No -fstack-protector canary found\n");
 	barrier();
 }
 
