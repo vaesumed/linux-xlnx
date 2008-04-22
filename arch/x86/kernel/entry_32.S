@@ -282,7 +282,7 @@ ENTRY(ia32_sysenter_target)
 	CFI_DEF_CFA esp, 0
 	CFI_REGISTER esp, ebp
 	movl TSS_sysenter_sp0(%esp),%esp
-sysenter_past_esp:
+ENTRY(sysenter_past_esp)
 	/*
 	 * Interrupts are disabled here, but we can't trace it until
 	 * enough kernel state to call TRACE_IRQS_OFF can be called - but
@@ -409,7 +409,7 @@ restore_nocheck_notrace:
 irq_return:
 	INTERRUPT_RETURN
 .section .fixup,"ax"
-iret_exc:
+ENTRY(iret_exc)
 	pushl $0			# no error code
 	pushl $do_iret_error
 	jmp error_code
@@ -761,7 +761,7 @@ label:						\
 	CFI_ADJUST_CFA_OFFSET 4;		\
 	CFI_REL_OFFSET eip, 0
 
-KPROBE_ENTRY(debug)
+KPROBE_ENTRY(x86_debug)
 	RING0_INT_FRAME
 	cmpl $ia32_sysenter_target,(%esp)
 	jne debug_stack_correct
@@ -775,7 +775,7 @@ debug_stack_correct:
 	call do_debug
 	jmp ret_from_exception
 	CFI_ENDPROC
-KPROBE_END(debug)
+KPROBE_END(x86_debug)
 
 /*
  * NMI is doubly nasty. It can happen _while_ we're handling
@@ -829,7 +829,7 @@ nmi_debug_stack_check:
 	/* We have a RING0_INT_FRAME here */
 	cmpw $__KERNEL_CS,16(%esp)
 	jne nmi_stack_correct
-	cmpl $debug,(%esp)
+	cmpl $x86_debug,(%esp)
 	jb nmi_stack_correct
 	cmpl $debug_esp_fix_insn,(%esp)
 	ja nmi_stack_correct
@@ -1017,6 +1017,13 @@ ENTRY(kernel_thread_helper)
 ENDPROC(kernel_thread_helper)
 
 #ifdef CONFIG_XEN
+/* Xen doesn't set %esp to be precisely what the normal sysenter
+   entrypoint expects, so fix it up before using the normal path. */
+ENTRY(xen_sysenter_target)
+	RING0_INT_FRAME
+	addl $5*4, %esp		/* remove xen-provided frame */
+	jmp sysenter_past_esp
+
 ENTRY(xen_hypervisor_callback)
 	CFI_STARTPROC
 	pushl $0
@@ -1035,8 +1042,9 @@ ENTRY(xen_hypervisor_callback)
 	cmpl $xen_iret_end_crit,%eax
 	jae  1f
 
-	call xen_iret_crit_fixup
+	jmp  xen_iret_crit_fixup
 
+ENTRY(xen_do_upcall)
 1:	mov %esp, %eax
 	call xen_evtchn_do_upcall
 	jmp  ret_from_intr
