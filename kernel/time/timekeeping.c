@@ -129,7 +129,7 @@ EXPORT_SYMBOL(do_gettimeofday);
  */
 int do_settimeofday(struct timespec *tv)
 {
-	unsigned long flags;
+	unsigned long flags, vflags;
 	time_t wtm_sec, sec = tv->tv_sec;
 	long wtm_nsec, nsec = tv->tv_nsec;
 
@@ -137,6 +137,7 @@ int do_settimeofday(struct timespec *tv)
 		return -EINVAL;
 
 	write_seqlock_irqsave(&xtime_lock, flags);
+	update_vsyscall_lock(&vflags);
 
 	nsec -= __get_nsec_offset();
 
@@ -152,6 +153,7 @@ int do_settimeofday(struct timespec *tv)
 
 	update_vsyscall(&xtime, clock);
 
+	update_vsyscall_unlock(&vflags);
 	write_sequnlock_irqrestore(&xtime_lock, flags);
 
 	/* signal hrtimers about time change */
@@ -444,12 +446,15 @@ static void clocksource_adjust(s64 offset)
  */
 void update_wall_time(void)
 {
+	unsigned long flags;
 	cycle_t offset;
 
 	/* Make sure we're fully resumed: */
 	if (unlikely(timekeeping_suspended))
 		return;
 
+	/* grab the vsyscall lock to block vsyscalls during update */
+	update_vsyscall_lock(&flags);
 #ifdef CONFIG_GENERIC_TIME
 	offset = (clocksource_read(clock) - clock->cycle_last) & clock->mask;
 #else
@@ -489,6 +494,7 @@ void update_wall_time(void)
 	/* check to see if there is a new clocksource to use */
 	change_clocksource();
 	update_vsyscall(&xtime, clock);
+	update_vsyscall_unlock(&flags);
 }
 
 /**
