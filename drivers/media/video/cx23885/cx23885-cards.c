@@ -130,6 +130,14 @@ struct cx23885_board cx23885_boards[] = {
 		.name		= "Hauppauge WinTV-HVR1500",
 		.portc		= CX23885_MPEG_DVB,
 	},
+	[CX23885_BOARD_HAUPPAUGE_HVR1200] = {
+		.name		= "Hauppauge WinTV-HVR1200",
+		.portc		= CX23885_MPEG_DVB,
+	},
+	[CX23885_BOARD_HAUPPAUGE_HVR1700] = {
+		.name		= "Hauppauge WinTV-HVR1700",
+		.portc		= CX23885_MPEG_DVB,
+	},
 };
 const unsigned int cx23885_bcount = ARRAY_SIZE(cx23885_boards);
 
@@ -181,6 +189,14 @@ struct cx23885_subid cx23885_subids[] = {
 		.subvendor = 0x0070,
 		.subdevice = 0x7717,
 		.card      = CX23885_BOARD_HAUPPAUGE_HVR1500,
+	}, {
+		.subvendor = 0x0070,
+		.subdevice = 0x71d1,
+		.card      = CX23885_BOARD_HAUPPAUGE_HVR1200,
+	}, {
+		.subvendor = 0x0070,
+		.subdevice = 0x8101,
+		.card      = CX23885_BOARD_HAUPPAUGE_HVR1700,
 	},
 };
 const unsigned int cx23885_idcount = ARRAY_SIZE(cx23885_subids);
@@ -235,6 +251,9 @@ static void hauppauge_eeprom(struct cx23885_dev *dev, u8 *eeprom_data)
 	case 79561: /* WinTV-HVR1250 (PCIe, OEM, No IR, half height, ATSC and Basic analog */
 	case 79571: /* WinTV-HVR1250 (PCIe, OEM, No IR, full height, ATSC and Basic analog */
 	case 79671: /* WinTV-HVR1250 (PCIe, OEM, No IR, half height, ATSC and Basic analog */
+	case 81519:
+		/* WinTV-HVR1700 (PCIe, Retail, No IR, half height,
+		 * DVB-T and MPEG2 HW Encoder */
 		break;
 	default:
 		printk("%s: warning: unknown hauppauge model #%d\n", dev->name, tv.model);
@@ -264,7 +283,7 @@ int cx23885_tuner_callback(void *priv, int command, int arg)
 		}
 		else {
 			printk(KERN_ERR
-				"%s(): Unknow command.\n", __FUNCTION__);
+				"%s(): Unknow command.\n", __func__);
 			return -EINVAL;
 		}
 		break;
@@ -314,6 +333,38 @@ void cx23885_gpio_setup(struct cx23885_dev *dev)
 		cx_set(GP0_IO, 0x00040004);
 		mdelay(20);
 		break;
+	case CX23885_BOARD_HAUPPAUGE_HVR1200:
+		/* GPIO-0 tda10048 demodulator reset */
+		/* GPIO-2 tda18271 tuner reset */
+
+		/* Put the parts into reset and back */
+		cx_set(GP0_IO, 0x00050000);
+		mdelay(20);
+		cx_clear(GP0_IO, 0x00000005);
+		mdelay(20);
+		cx_set(GP0_IO, 0x00050005);
+		break;
+	case CX23885_BOARD_HAUPPAUGE_HVR1700:
+		/* GPIO-0 TDA10048 demodulator reset */
+		/* GPIO-2 TDA8295A Reset */
+		/* GPIO-3-10 cx23417 data0-7 */
+		/* GPIO-11-14 cx23417 addr0-3 */
+		/* GPIO-15-18 cx23417 READY, CS, RD, WR */
+
+		/* The following GPIO's are on the interna AVCore (cx25840) */
+		/* GPIO-19 IR_RX */
+		/* GPIO-20 IR_TX 416/DVBT Select */
+		/* GPIO-21 IIS DAT */
+		/* GPIO-22 IIS WCLK */
+		/* GPIO-23 IIS BCLK */
+
+		/* Put the parts into reset and back */
+		cx_set(GP0_IO, 0x00050000);
+		mdelay(20);
+		cx_clear(GP0_IO, 0x00000005);
+		mdelay(20);
+		cx_set(GP0_IO, 0x00050005);
+		break;
 	}
 }
 
@@ -324,6 +375,7 @@ int cx23885_ir_init(struct cx23885_dev *dev)
 	case CX23885_BOARD_HAUPPAUGE_HVR1500:
 	case CX23885_BOARD_HAUPPAUGE_HVR1500Q:
 	case CX23885_BOARD_HAUPPAUGE_HVR1800:
+	case CX23885_BOARD_HAUPPAUGE_HVR1200:
 		/* FIXME: Implement me */
 		break;
 	}
@@ -353,6 +405,8 @@ void cx23885_card_setup(struct cx23885_dev *dev)
 		break;
 	case CX23885_BOARD_HAUPPAUGE_HVR1800:
 	case CX23885_BOARD_HAUPPAUGE_HVR1800lp:
+	case CX23885_BOARD_HAUPPAUGE_HVR1200:
+	case CX23885_BOARD_HAUPPAUGE_HVR1700:
 		if (dev->i2c_bus[0].i2c_rc == 0)
 			hauppauge_eeprom(dev, eeprom+0xc0);
 		break;
@@ -369,12 +423,24 @@ void cx23885_card_setup(struct cx23885_dev *dev)
 	case CX23885_BOARD_HAUPPAUGE_HVR1500Q:
 	case CX23885_BOARD_HAUPPAUGE_HVR1800:
 	case CX23885_BOARD_HAUPPAUGE_HVR1800lp:
+	case CX23885_BOARD_HAUPPAUGE_HVR1200:
+	case CX23885_BOARD_HAUPPAUGE_HVR1700:
 	default:
 		ts2->gen_ctrl_val  = 0xc; /* Serial bus + punctured clock */
 		ts2->ts_clk_en_val = 0x1; /* Enable TS_CLK */
 		ts2->src_sel_val   = CX23885_SRC_SEL_PARALLEL_MPEG_VIDEO;
 	}
 
+	/* Certain boards support analog, or require the avcore to be
+	 * loaded, ensure this happens.
+	 */
+	switch (dev->board) {
+	case CX23885_BOARD_HAUPPAUGE_HVR1800:
+	case CX23885_BOARD_HAUPPAUGE_HVR1800lp:
+	case CX23885_BOARD_HAUPPAUGE_HVR1700:
+		request_module("cx25840");
+		break;
+	}
 }
 
 /* ------------------------------------------------------------------ */
