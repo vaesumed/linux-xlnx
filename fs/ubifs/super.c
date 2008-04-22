@@ -176,14 +176,15 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		}
 
 		dev = (union ubifs_dev_desc *)ino->data;
-		if (ui->data_len == sizeof(dev->new)) {
-			rdev = new_decode_dev(__le32_to_cpu(dev->new));
-		} else if (ui->data_len == sizeof(dev->huge)) {
-			rdev = huge_decode_dev(__le64_to_cpu(dev->huge));
-		} else {
+		if (ui->data_len == sizeof(dev->new))
+			rdev = new_decode_dev(le32_to_cpu(dev->new));
+		else if (ui->data_len == sizeof(dev->huge))
+			rdev = huge_decode_dev(le64_to_cpu(dev->huge));
+		else {
 			err = 13;
 			goto out_invalid;
 		}
+		memcpy(ui->data, ino->data, ui->data_len);
 		inode->i_op = &ubifs_file_inode_operations;
 		init_special_inode(inode, inode->i_mode, rdev);
 		break;
