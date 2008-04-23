@@ -100,7 +100,7 @@ void local_bh_disable(void)
 
 EXPORT_SYMBOL(local_bh_disable);
 
-void __local_bh_enable(void)
+static void __local_bh_enable(void)
 {
 	WARN_ON_ONCE(in_irq());
 
@@ -119,7 +119,7 @@ EXPORT_SYMBOL_GPL(__local_bh_enable);
  * cond_resched_softirq(), or by __do_softirq(),
  * without processing still-pending softirqs:
  */
-void _local_bh_enable(void)
+static void _local_bh_enable(void)
 {
 	WARN_ON_ONCE(in_irq());
 	WARN_ON_ONCE(!irqs_disabled());
