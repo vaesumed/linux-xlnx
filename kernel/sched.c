@@ -1001,6 +1001,8 @@ unsigned long long notrace cpu_clock(int cpu)
 	if (unlikely(delta_time > time_sync_thresh))
 		time = __sync_cpu_clock(time, cpu);
 
+	per_cpu(prev_cpu_time, cpu) = time;
+
 	return time;
 }
 EXPORT_SYMBOL_GPL(cpu_clock);
