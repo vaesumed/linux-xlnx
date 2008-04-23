@@ -46,6 +46,7 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <linux/sysfs.h>
+#include <linux/acpi.h>
 #include <asm/io.h>
 
 #define DRVNAME "it87"
@@ -1486,6 +1487,10 @@ static int __init it87_device_add(unsigned short address,
 		.flags	= IORESOURCE_IO,
 	};
 	int err;
+
+	err = acpi_check_resource_conflict(&res);
+	if (err)
+		goto exit;
 
 	pdev = platform_device_alloc(DRVNAME, address);
 	if (!pdev) {
