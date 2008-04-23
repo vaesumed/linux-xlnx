@@ -83,7 +83,7 @@ static void at91_nand_disable(struct at91_nand_host *host)
 }
 
 #ifdef CONFIG_MTD_PARTITIONS
-const char *part_probes[] = { "cmdlinepart", NULL };
+static const char *part_probes[] = { "cmdlinepart", NULL };
 #endif
 
 /*
@@ -234,3 +234,4 @@ module_exit(at91_nand_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Rick Bronson");
 MODULE_DESCRIPTION("NAND/SmartMedia driver for AT91RM9200");
+MODULE_ALIAS("platform:at91_nand");
