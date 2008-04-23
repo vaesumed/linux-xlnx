@@ -834,7 +834,7 @@ void __cpuinit setup_local_APIC(void)
 	preempt_enable();
 }
 
-void __cpuinit lapic_setup_esr(void)
+static void __cpuinit lapic_setup_esr(void)
 {
 	unsigned maxlvt = lapic_get_maxlvt();
 
