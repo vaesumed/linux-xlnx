@@ -33,7 +33,7 @@ static unsigned int i2c_debug;
 module_param(i2c_debug, int, 0644);
 MODULE_PARM_DESC(i2c_debug, "enable debug messages [i2c]");
 
-static unsigned int i2c_scan = 0;
+static unsigned int i2c_scan;
 module_param(i2c_scan, int, 0444);
 MODULE_PARM_DESC(i2c_scan, "scan i2c bus at insmod time");
 
@@ -87,10 +87,10 @@ static int i2c_sendbytes(struct i2c_adapter *i2c_adap,
 	int retval, cnt;
 
 	if (joined_rlen)
-		dprintk(1, "%s(msg->wlen=%d, nextmsg->rlen=%d)\n", __FUNCTION__,
+		dprintk(1, "%s(msg->wlen=%d, nextmsg->rlen=%d)\n", __func__,
 			msg->len, joined_rlen);
 	else
-		dprintk(1, "%s(msg->len=%d)\n", __FUNCTION__, msg->len);
+		dprintk(1, "%s(msg->len=%d)\n", __func__, msg->len);
 
 	/* Deal with i2c probe functions with zero payload */
 	if (msg->len == 0) {
@@ -101,7 +101,7 @@ static int i2c_sendbytes(struct i2c_adapter *i2c_adap,
 		if (!i2c_slave_did_ack(i2c_adap))
 			return -EIO;
 
-		dprintk(1, "%s() returns 0\n", __FUNCTION__);
+		dprintk(1, "%s() returns 0\n", __func__);
 		return 0;
 	}
 
@@ -176,7 +176,7 @@ static int i2c_readbytes(struct i2c_adapter *i2c_adap,
 
 
 	if (i2c_debug && !joined)
-		dprintk(1, "%s(msg->len=%d)\n", __FUNCTION__, msg->len);
+		dprintk(1, "%s(msg->len=%d)\n", __func__, msg->len);
 
 	/* Deal with i2c probe functions with zero payload */
 	if (msg->len == 0) {
@@ -188,7 +188,7 @@ static int i2c_readbytes(struct i2c_adapter *i2c_adap,
 			return -EIO;
 
 
-		dprintk(1, "%s() returns 0\n", __FUNCTION__);
+		dprintk(1, "%s() returns 0\n", __func__);
 		return 0;
 	}
 
@@ -238,11 +238,11 @@ static int i2c_xfer(struct i2c_adapter *i2c_adap,
 	struct cx23885_dev *dev = bus->dev;
 	int i, retval = 0;
 
-	dprintk(1, "%s(num = %d)\n", __FUNCTION__, num);
+	dprintk(1, "%s(num = %d)\n", __func__, num);
 
 	for (i = 0 ; i < num; i++) {
 		dprintk(1, "%s(num = %d) addr = 0x%02x  len = 0x%x\n",
-			__FUNCTION__, num, msgs[i].addr, msgs[i].len);
+			__func__, num, msgs[i].addr, msgs[i].len);
 		if (msgs[i].flags & I2C_M_RD) {
 			/* read */
 			retval = i2c_readbytes(i2c_adap, &msgs[i], 0);
@@ -353,6 +353,7 @@ static struct i2c_client cx23885_i2c_client_template = {
 };
 
 static char *i2c_devs[128] = {
+	[0x10 >> 1]   = "tda10048",
 	[ 0x1c >> 1 ] = "lgdt3303",
 	[ 0x86 >> 1 ] = "tda9887",
 	[ 0x32 >> 1 ] = "cx24227",
@@ -383,7 +384,7 @@ int cx23885_i2c_register(struct cx23885_i2c *bus)
 {
 	struct cx23885_dev *dev = bus->dev;
 
-	dprintk(1, "%s(bus = %d)\n", __FUNCTION__, bus->nr);
+	dprintk(1, "%s(bus = %d)\n", __func__, bus->nr);
 
 	memcpy(&bus->i2c_adap, &cx23885_i2c_adap_template,
 	       sizeof(bus->i2c_adap));
