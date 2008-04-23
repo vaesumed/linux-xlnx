@@ -240,16 +240,19 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 	 * Make sure the the amount of space in buds will not exceed
 	 * 'c->max_bud_bytes' limit, because we want to guarantee mount time
 	 * limits.
+	 *
+	 * It is not necessary to hold @c->buds_lock when reading @c->bud_bytes
+	 * because we are holding @c->log_mutex. All @c->bud_bytes take place
+	 * when both @c->log_mutex and @c->bud_bytes are locked.
 	 */
-	spin_lock(&c->buds_lock);
 	if (c->bud_bytes + c->leb_size - offs > c->max_bud_bytes) {
 		dbg_log("bud bytes %lld (%lld max), require commit",
 			c->bud_bytes, c->max_bud_bytes);
-		spin_unlock(&c->buds_lock);
 		ubifs_commit_required(c);
 		err = -EAGAIN;
 		goto out_unlock;
 	}
+
 	/*
 	 * If the journal is full enough - start background commit. Note, it is
 	 * OK to read 'c->cmt_state' without spinlock because integer reads
@@ -261,7 +264,6 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 			c->bud_bytes, c->max_bud_bytes);
 		ubifs_request_bg_commit(c);
 	}
-	spin_unlock(&c->buds_lock);
 
 	bud->lnum = lnum;
 	bud->start = offs;
