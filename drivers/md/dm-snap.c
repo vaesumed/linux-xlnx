@@ -21,7 +21,7 @@
 
 #include "dm-snap.h"
 #include "dm-bio-list.h"
-#include "kcopyd.h"
+#include "dm-kcopyd.h"
 
 #define DM_MSG_PREFIX "snapshots"
 
