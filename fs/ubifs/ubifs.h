@@ -797,10 +797,11 @@ struct ubifs_mount_opts {
  * @lhead_lnum: log head logical eraseblock number
  * @lhead_offs: log head offset
  * @ltail_lnum: log tail logical eraseblock number (offset is always 0)
- * @log_mutex: protects the log, @lhead_lnum, @lhead_offs and @ltail_lnum
+ * @log_mutex: protects the log, @lhead_lnum, @lhead_offs, @ltail_lnum, and
+ *             @bud_bytes
  * @min_log_bytes: minimum required number of bytes in the log
  * @cmt_bud_bytes: used during commit to temporarily amount of bytes in
- * committed buds
+ *                 committed buds
  *
  * @buds: tree of all buds indexed by bud LEB number
  * @bud_bytes: how many bytes of flash is used by buds
@@ -971,7 +972,7 @@ struct ubifs_mount_opts {
  * @lpt_cnext: next LPT node to commit
  * @lpt_heap: array of heaps of categorized lprops
  * @dirty_idx: a (reverse sorted) copy of the LPROPS_DIRTY_IDX heap as at
- * previous commit start
+ *             previous commit start
  * @uncat_list: list of un-categorized LEBs
  * @empty_list: list of empty LEBs
  * @freeable_list: list of freeable non-index LEBs (free + dirty == leb_size)
