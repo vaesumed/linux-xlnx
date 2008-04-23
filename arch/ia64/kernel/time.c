@@ -427,11 +427,22 @@ void update_vsyscall_tz(void)
 {
 }
 
+/* update_vsyscall_lock/unlock:
+ *    methods for timekeeping core to block vsyscalls during update
+ */
+void update_vsyscall_lock(unsigned long *flags)
+{
+	write_seqlock_irqsave(&fsyscall_gtod_data.lock, *flags);
+}
+
+void update_vsyscall_unlock(unsigned long *flags)
+{
+	write_sequnlock_irqrestore(&fsyscall_gtod_data.lock, *flags);
+}
+
+/* Assumes fsyscall_gtod_data.lock has been taken via update_vsyscall_lock() */
 void update_vsyscall(struct timespec *wall, struct clocksource *c)
 {
-        unsigned long flags;
-
-        write_seqlock_irqsave(&fsyscall_gtod_data.lock, flags);
 
         /* copy fsyscall clock data */
         fsyscall_gtod_data.clk_mask = c->mask;
@@ -453,7 +464,5 @@ void update_vsyscall(struct timespec *wall, struct clocksource *c)
 		fsyscall_gtod_data.monotonic_time.tv_nsec -= NSEC_PER_SEC;
 		fsyscall_gtod_data.monotonic_time.tv_sec++;
 	}
-
-        write_sequnlock_irqrestore(&fsyscall_gtod_data.lock, flags);
 }
 
