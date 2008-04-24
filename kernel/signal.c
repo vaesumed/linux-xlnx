@@ -26,6 +26,7 @@
 #include <linux/freezer.h>
 #include <linux/pid_namespace.h>
 #include <linux/nsproxy.h>
+#include <linux/marker.h>
 
 #include <asm/param.h>
 #include <asm/uaccess.h>
@@ -662,6 +663,8 @@ static int send_signal(int sig, struct siginfo *info, struct task_struct *t,
 {
 	struct sigqueue * q = NULL;
 	int ret = 0;
+
+	trace_mark(kernel_send_signal, "pid %d signal %d", t->pid, sig);
 
 	/*
 	 * Deliver the signal to listening signalfds. This must be called
