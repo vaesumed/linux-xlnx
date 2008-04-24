@@ -137,8 +137,8 @@ transfer_to_handler:
 2:	/* if from kernel, check interrupted DOZE/NAP mode and
          * check for stack overflow
          */
-	lwz	r9,THREAD_INFO-THREAD(r12)
-	cmplw	r1,r9			/* if r1 <= current->thread_info */
+	lwz	r9,KSP_LIMIT(r12)
+	cmplw	r1,r9			/* if r1 <= ksp_limit */
 	ble-	stack_ovf		/* then the kernel stack overflowed */
 5:
 #ifdef CONFIG_6xx
