@@ -40,7 +40,7 @@ extern pte_t *pkmap_page_table;
  */
 #define LAST_PKMAP 	(1 << PTE_SHIFT)
 #define LAST_PKMAP_MASK (LAST_PKMAP-1)
-#define PKMAP_BASE	((FIXADDR_BOOT_START - PAGE_SIZE*(LAST_PKMAP + 1)) & PMD_MASK)
+#define PKMAP_BASE	((FIXADDR_START - PAGE_SIZE*(LAST_PKMAP + 1)) & PMD_MASK)
 #define PKMAP_NR(virt)  ((virt-PKMAP_BASE) >> PAGE_SHIFT)
 #define PKMAP_ADDR(nr)  (PKMAP_BASE + ((nr) << PAGE_SHIFT))
 

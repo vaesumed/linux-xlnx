@@ -12,7 +12,7 @@ CFLAGS_prom_init.o      += -fPIC
 CFLAGS_btext.o		+= -fPIC
 endif
 
-obj-y				:= semaphore.o cputable.o ptrace.o syscalls.o \
+obj-y				:= cputable.o ptrace.o syscalls.o \
 				   irq.o align.o signal_32.o pmc.o vdso.o \
 				   init_task.o process.o systbl.o idle.o \
 				   signal.o
@@ -105,5 +105,14 @@ quiet_cmd_systbl_chk = CALL    $<
 PHONY += systbl_chk
 systbl_chk: $(src)/systbl_chk.sh $(obj)/systbl_chk.i
 	$(call cmd,systbl_chk)
+
+$(obj)/built-in.o:		prom_init_check
+
+quiet_cmd_prom_init_check = CALL    $<
+      cmd_prom_init_check = $(CONFIG_SHELL) $< "$(NM)" "$(obj)/prom_init.o"
+
+PHONY += prom_init_check
+prom_init_check: $(src)/prom_init_check.sh $(obj)/prom_init.o
+	$(call cmd,prom_init_check)
 
 clean-files := vmlinux.lds

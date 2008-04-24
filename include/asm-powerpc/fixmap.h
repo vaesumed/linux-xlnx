@@ -7,8 +7,6 @@
  *
  * Copyright (C) 1998 Ingo Molnar
  *
- * Support of BIGMEM added by Gerhard Wichert, Siemens AG, July 1999
- *
  * Copyright 2008 Freescale Semiconductor Inc.
  *   Port to powerpc added by Kumar Gala
  */
@@ -16,7 +14,7 @@
 #ifndef _ASM_FIXMAP_H
 #define _ASM_FIXMAP_H
 
-extern unsigned long __FIXADDR_TOP;
+extern unsigned long FIXADDR_TOP;
 
 #ifndef __ASSEMBLY__
 #include <linux/kernel.h>
@@ -68,12 +66,8 @@ extern void __set_fixmap (enum fixed_addresses idx,
 #define clear_fixmap(idx) \
 		__set_fixmap(idx, 0, __pgprot(0))
 
-#define FIXADDR_TOP	((unsigned long)__FIXADDR_TOP)
-
 #define __FIXADDR_SIZE	(__end_of_fixed_addresses << PAGE_SHIFT)
-#define __FIXADDR_BOOT_SIZE	(__end_of_fixed_addresses << PAGE_SHIFT)
 #define FIXADDR_START		(FIXADDR_TOP - __FIXADDR_SIZE)
-#define FIXADDR_BOOT_START	(FIXADDR_TOP - __FIXADDR_BOOT_SIZE)
 
 #define __fix_to_virt(x)	(FIXADDR_TOP - ((x) << PAGE_SHIFT))
 #define __virt_to_fix(x)	((FIXADDR_TOP - ((x)&PAGE_MASK)) >> PAGE_SHIFT)
