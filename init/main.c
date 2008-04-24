@@ -60,6 +60,7 @@
 #include <linux/sched.h>
 #include <linux/signal.h>
 #include <linux/kmemcheck.h>
+#include <linux/immediate.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -102,6 +103,11 @@ static inline void mark_rodata_ro(void) { }
 
 #ifdef CONFIG_TC
 extern void tc_init(void);
+#endif
+#ifdef CONFIG_IMMEDIATE
+extern void imv_init_complete(void);
+#else
+static inline void imv_init_complete(void) { }
 #endif
 
 enum system_states system_state;
@@ -551,6 +557,7 @@ asmlinkage void __init start_kernel(void)
 	boot_init_stack_canary();
 
 	cgroup_init_early();
+	core_imv_update();
 
 	local_irq_disable();
 	early_boot_irqs_off();
@@ -676,6 +683,7 @@ asmlinkage void __init start_kernel(void)
 	cpuset_init();
 	taskstats_init_early();
 	delayacct_init();
+	imv_init_complete();
 
 	check_bugs();
 
