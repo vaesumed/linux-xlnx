@@ -95,6 +95,10 @@ enum kprobe_slot_state {
 	SLOT_USED = 2,
 };
 
+/*
+ * Protects the kprobe_insn_pages list. Can nest into kprobe_mutex.
+ */
+static DEFINE_MUTEX(kprobe_insn_mutex);
 static struct hlist_head kprobe_insn_pages;
 static int kprobe_garbage_slots;
 static int collect_garbage_slots(void);
@@ -131,7 +135,9 @@ kprobe_opcode_t __kprobes *get_insn_slot(void)
 {
 	struct kprobe_insn_page *kip;
 	struct hlist_node *pos;
+	kprobe_opcode_t *ret;
 
+	mutex_lock(&kprobe_insn_mutex);
  retry:
 	hlist_for_each_entry(kip, pos, &kprobe_insn_pages, hlist) {
 		if (kip->nused < INSNS_PER_PAGE) {
@@ -140,7 +146,8 @@ kprobe_opcode_t __kprobes *get_insn_slot(void)
 				if (kip->slot_used[i] == SLOT_CLEAN) {
 					kip->slot_used[i] = SLOT_USED;
 					kip->nused++;
-					return kip->insns + (i * MAX_INSN_SIZE);
+					ret = kip->insns + (i * MAX_INSN_SIZE);
+					goto end;
 				}
 			}
 			/* Surprise!  No unused slots.  Fix kip->nused. */
@@ -154,8 +161,10 @@ kprobe_opcode_t __kprobes *get_insn_slot(void)
 	}
 	/* All out of space.  Need to allocate a new page. Use slot 0. */
 	kip = kmalloc(sizeof(struct kprobe_insn_page), GFP_KERNEL);
-	if (!kip)
-		return NULL;
+	if (!kip) {
+		ret = NULL;
+		goto end;
+	}
 
 	/*
 	 * Use module_alloc so this page is within +/- 2GB of where the
@@ -165,7 +174,8 @@ kprobe_opcode_t __kprobes *get_insn_slot(void)
 	kip->insns = module_alloc(PAGE_SIZE);
 	if (!kip->insns) {
 		kfree(kip);
-		return NULL;
+		ret = NULL;
+		goto end;
 	}
 	INIT_HLIST_NODE(&kip->hlist);
 	hlist_add_head(&kip->hlist, &kprobe_insn_pages);
@@ -173,7 +183,10 @@ kprobe_opcode_t __kprobes *get_insn_slot(void)
 	kip->slot_used[0] = SLOT_USED;
 	kip->nused = 1;
 	kip->ngarbage = 0;
-	return kip->insns;
+	ret = kip->insns;
+end:
+	mutex_unlock(&kprobe_insn_mutex);
+	return ret;
 }
 
 /* Return 1 if all garbages are collected, otherwise 0. */
@@ -207,7 +220,7 @@ static int __kprobes collect_garbage_slots(void)
 	struct kprobe_insn_page *kip;
 	struct hlist_node *pos, *next;
 
-	/* Ensure no-one is preepmted on the garbages */
+	/* Ensure no-one is preempted on the garbages */
 	if (check_safety() != 0)
 		return -EAGAIN;
 
@@ -231,6 +244,7 @@ void __kprobes free_insn_slot(kprobe_opcode_t * slot, int dirty)
 	struct kprobe_insn_page *kip;
 	struct hlist_node *pos;
 
+	mutex_lock(&kprobe_insn_mutex);
 	hlist_for_each_entry(kip, pos, &kprobe_insn_pages, hlist) {
 		if (kip->insns <= slot &&
 		    slot < kip->insns + (INSNS_PER_PAGE * MAX_INSN_SIZE)) {
@@ -247,6 +261,7 @@ void __kprobes free_insn_slot(kprobe_opcode_t * slot, int dirty)
 
 	if (dirty && ++kprobe_garbage_slots > INSNS_PER_PAGE)
 		collect_garbage_slots();
+	mutex_unlock(&kprobe_insn_mutex);
 }
 #endif
 
