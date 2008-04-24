@@ -1643,8 +1643,10 @@ static void print_cfs_stats(struct seq_file *m, int cpu)
 	for_each_leaf_cfs_rq(cpu_rq(cpu), cfs_rq)
 		print_cfs_rq(m, cpu, cfs_rq);
 
-	seq_printf(m, "\nWeight tree:\n");
-	print_cfs_rq_tasks(m, &cpu_rq(cpu)->cfs, 1);
+	if (m) {
+		seq_printf(m, "\nWeight tree:\n");
+		print_cfs_rq_tasks(m, &cpu_rq(cpu)->cfs, 1);
+	}
 	rcu_read_unlock();
 }
 #endif
