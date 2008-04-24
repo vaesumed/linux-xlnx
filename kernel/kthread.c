@@ -15,6 +15,7 @@
 #include <linux/mutex.h>
 #include <linux/cpumask.h>
 #include <linux/cpuset.h>
+#include <linux/marker.h>
 
 #define KTHREAD_NICE_LEVEL (-5)
 
@@ -207,6 +208,8 @@ int kthread_stop(struct task_struct *k)
 	/* It could exit after stop_info.k set, but before wake_up_process. */
 	get_task_struct(k);
 
+	trace_mark(kernel_kthread_stop, "pid %d", k->pid);
+
 	/* Must init completion *before* thread sees kthread_stop_info.k */
 	init_completion(&kthread_stop_info.done);
 	smp_wmb();
@@ -221,6 +224,8 @@ int kthread_stop(struct task_struct *k)
 	kthread_stop_info.k = NULL;
 	ret = kthread_stop_info.err;
 	mutex_unlock(&kthread_stop_lock);
+
+	trace_mark(kernel_kthread_stop_ret, "ret %d", ret);
 
 	return ret;
 }
