@@ -15,6 +15,7 @@
 #include <linux/stringify.h>
 #include <linux/kobject.h>
 #include <linux/moduleparam.h>
+#include <linux/immediate.h>
 #include <linux/marker.h>
 #include <asm/local.h>
 
@@ -355,6 +356,10 @@ struct module
 	/* The command line arguments (may be mangled).  People like
 	   keeping pointers to this stuff */
 	char *args;
+#ifdef CONFIG_IMMEDIATE
+	const struct __imv *immediate;
+	unsigned int num_immediate;
+#endif
 #ifdef CONFIG_MARKERS
 	struct marker *markers;
 	unsigned int num_markers;
@@ -467,6 +472,9 @@ extern void print_modules(void);
 
 extern void module_update_markers(void);
 
+extern void _module_imv_update(void);
+extern void module_imv_update(void);
+
 #else /* !CONFIG_MODULES... */
 #define EXPORT_SYMBOL(sym)
 #define EXPORT_SYMBOL_GPL(sym)
@@ -568,6 +576,14 @@ static inline void print_modules(void)
 }
 
 static inline void module_update_markers(void)
+{
+}
+
+static inline void _module_imv_update(void)
+{
+}
+
+static inline void module_imv_update(void)
 {
 }
 
