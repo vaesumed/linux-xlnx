@@ -866,7 +866,8 @@ static DEFINE_PER_CPU(unsigned long long, prev_cpu_time);
 static DEFINE_SPINLOCK(time_sync_lock);
 static unsigned long long prev_global_time;
 
-static unsigned long long __sync_cpu_clock(unsigned long long time, int cpu)
+static unsigned long long notrace
+__sync_cpu_clock(unsigned long long time, int cpu)
 {
 	/*
 	 * We want this inlined, to not get tracer function calls
@@ -888,7 +889,7 @@ static unsigned long long __sync_cpu_clock(unsigned long long time, int cpu)
 	return time;
 }
 
-static unsigned long long __cpu_clock(int cpu)
+static unsigned long long notrace __cpu_clock(int cpu)
 {
 	unsigned long long now;
 
@@ -908,7 +909,7 @@ static unsigned long long __cpu_clock(int cpu)
  * For kernel-internal use: high-speed (but slightly incorrect) per-cpu
  * clock constructed from sched_clock():
  */
-unsigned long long cpu_clock(int cpu)
+unsigned long long notrace cpu_clock(int cpu)
 {
 	unsigned long long prev_cpu_time, time, delta_time;
 	unsigned long flags;
