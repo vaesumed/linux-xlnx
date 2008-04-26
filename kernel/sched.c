@@ -264,7 +264,7 @@ struct task_group {
 	struct sched_entity **se;
 	/* runqueue "owned" by this group on each cpu */
 	struct cfs_rq **cfs_rq;
-	unsigned long shares;
+	unsigned long weight;
 #endif
 
 #ifdef CONFIG_RT_GROUP_SCHED
@@ -1712,8 +1712,8 @@ void aggregate_group_shares(struct task_group *tg, struct sched_domain *sd)
 	for_each_cpu_mask(i, sd->span)
 		shares += tg->cfs_rq[i]->shares;
 
-	if ((!shares && aggregate(tg, sd)->rq_weight) || shares > tg->shares)
-		shares = tg->shares;
+	if ((!shares && aggregate(tg, sd)->rq_weight) || shares > tg->weight)
+		shares = tg->weight;
 
 	aggregate(tg, sd)->shares = shares;
 }
@@ -8082,7 +8082,7 @@ static void init_tg_cfs_entry(struct task_group *tg, struct cfs_rq *cfs_rq,
 		se->cfs_rq = parent->my_q;
 
 	se->my_q = cfs_rq;
-	se->load.weight = tg->shares;
+	se->load.weight = tg->weight;
 	se->load.inv_weight = 0;
 	se->parent = parent;
 }
@@ -8212,7 +8212,7 @@ void __init sched_init(void)
 		init_cfs_rq(&rq->cfs, rq);
 		init_rt_rq(&rq->rt, rq);
 #ifdef CONFIG_FAIR_GROUP_SCHED
-		init_task_group.shares = init_task_group_load;
+		init_task_group.weight = init_task_group_load;
 		INIT_LIST_HEAD(&rq->leaf_cfs_rq_list);
 #ifdef CONFIG_CGROUP_SCHED
 		/*
@@ -8236,7 +8236,7 @@ void __init sched_init(void)
 		 */
 		init_tg_cfs_entry(&init_task_group, &rq->cfs, NULL, i, 1, NULL);
 #elif defined CONFIG_USER_SCHED
-		root_task_group.shares = NICE_0_LOAD;
+		root_task_group.weight = NICE_0_LOAD;
 		init_tg_cfs_entry(&root_task_group, &rq->cfs, NULL, i, 0, NULL);
 		/*
 		 * In case of task-groups formed thr' the user id of tasks,
@@ -8484,7 +8484,7 @@ int alloc_fair_sched_group(struct task_group *tg, struct task_group *parent)
 	if (!tg->se)
 		goto err;
 
-	tg->shares = NICE_0_LOAD;
+	tg->weight = NICE_0_LOAD;
 
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
@@ -8791,7 +8791,7 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 		shares = MIN_SHARES;
 
 	mutex_lock(&shares_mutex);
-	if (tg->shares == shares)
+	if (tg->weight == shares)
 		goto done;
 
 	spin_lock_irqsave(&task_group_lock, flags);
@@ -8807,7 +8807,7 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	 * Now we are free to modify the group's share on each cpu
 	 * w/o tripping rebalance_share or load_balance_fair.
 	 */
-	tg->shares = shares;
+	tg->weight = shares;
 	for_each_possible_cpu(i) {
 		/*
 		 * force a rebalance
@@ -8832,7 +8832,7 @@ done:
 
 unsigned long sched_group_shares(struct task_group *tg)
 {
-	return inv_WLS(tg->shares);
+	return inv_WLS(tg->weight);
 }
 #endif
 
