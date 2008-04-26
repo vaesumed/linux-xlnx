@@ -92,9 +92,7 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 	if (!(pmd_val(*pmd) & _PAGE_PRESENT)) {
 		pte_t *page_table = NULL;
 
-#ifdef CONFIG_DEBUG_PAGEALLOC
 		page_table = (pte_t *) alloc_bootmem_pages(PAGE_SIZE);
-#endif
 		if (!page_table) {
 			page_table =
 				(pte_t *)alloc_bootmem_low_pages(PAGE_SIZE);
@@ -603,17 +601,6 @@ void __init mem_init(void)
 #endif
 	bad_ppro = ppro_with_ram_bug();
 
-#ifdef CONFIG_HIGHMEM
-	/* check that fixmap and pkmap do not overlap */
-	if (PKMAP_BASE + LAST_PKMAP*PAGE_SIZE >= FIXADDR_START) {
-		printk(KERN_ERR
-			"fixmap and kmap areas overlap - this will crash\n");
-		printk(KERN_ERR "pkstart: %lxh pkend: %lxh fixstart %lxh\n",
-				PKMAP_BASE, PKMAP_BASE + LAST_PKMAP*PAGE_SIZE,
-				FIXADDR_START);
-		BUG();
-	}
-#endif
 	/* this will put all low memory onto the freelists */
 	totalram_pages += free_all_bootmem();
 
@@ -646,7 +633,6 @@ void __init mem_init(void)
 		(unsigned long) (totalhigh_pages << (PAGE_SHIFT-10))
 	       );
 
-#if 1 /* double-sanity-check paranoia */
 	printk(KERN_INFO "virtual kernel memory layout:\n"
 		"    fixmap  : 0x%08lx - 0x%08lx   (%4ld kB)\n"
 #ifdef CONFIG_HIGHMEM
@@ -687,7 +673,6 @@ void __init mem_init(void)
 #endif
 	BUG_ON(VMALLOC_START				> VMALLOC_END);
 	BUG_ON((unsigned long)high_memory		> VMALLOC_START);
-#endif /* double-sanity-check paranoia */
 
 	if (boot_cpu_data.wp_works_ok < 0)
 		test_wp_bit();
