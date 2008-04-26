@@ -379,16 +379,24 @@ static inline void unlock_doms_cur(void) { }
 
 #endif	/* CONFIG_GROUP_SCHED */
 
-/* CFS-related fields in a runqueue */
-struct cfs_rq {
-	struct load_weight load;
-	unsigned long nr_running;
-
-	u64 exec_clock;
+struct cfs_root_rq {
 	u64 min_vruntime;
 
 	struct rb_root tasks_timeline;
 	struct rb_node *rb_leftmost;
+
+	struct sched_entity *next;
+
+#ifdef CONFIG_SCHEDSTATS
+	unsigned long nr_spread_over;
+	u64 exec_clock;
+#endif
+};
+
+/* CFS-related fields in a runqueue */
+struct cfs_rq {
+	struct load_weight load;
+	unsigned long nr_running;
 
 	struct list_head tasks;
 	struct list_head *balance_iterator;
@@ -397,9 +405,7 @@ struct cfs_rq {
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
-	struct sched_entity *curr, *next;
-
-	unsigned long nr_spread_over;
+	struct sched_entity *curr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	struct rq *rq;	/* cpu runqueue to which this cfs_rq is attached */
@@ -544,6 +550,7 @@ struct rq {
 	unsigned long nr_load_updates;
 	u64 nr_switches;
 
+	struct cfs_root_rq cfs_root;
 	struct cfs_rq cfs;
 	struct rt_rq rt;
 
@@ -2116,7 +2123,8 @@ task_hot(struct task_struct *p, u64 now, struct sched_domain *sd)
 	/*
 	 * Buddy candidates are cache hot:
 	 */
-	if (sched_feat(CACHE_HOT_BUDDY) && (&p->se == task_rq(p)->cfs.next))
+	if (sched_feat(CACHE_HOT_BUDDY) &&
+			(&p->se == task_rq(p)->cfs_root.next))
 		return 1;
 
 	if (p->sched_class != &fair_sched_class)
@@ -2137,8 +2145,8 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 {
 	int old_cpu = task_cpu(p);
 	struct rq *old_rq = cpu_rq(old_cpu), *new_rq = cpu_rq(new_cpu);
-	struct cfs_rq *old_cfsrq = task_cfs_rq(p),
-		      *new_cfsrq = cpu_cfs_rq(old_cfsrq, new_cpu);
+	struct cfs_root_rq *old_cfs_r_rq = &old_rq->cfs_root,
+			   *new_cfs_r_rq = &new_rq->cfs_root;
 	u64 clock_offset;
 
 	clock_offset = old_rq->clock - new_rq->clock;
@@ -2156,8 +2164,8 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 			schedstat_inc(p, se.nr_forced2_migrations);
 	}
 #endif
-	p->se.vruntime -= old_cfsrq->min_vruntime -
-					 new_cfsrq->min_vruntime;
+	p->se.vruntime -= old_cfs_r_rq->min_vruntime -
+			  new_cfs_r_rq->min_vruntime;
 
 	__set_task_cpu(p, new_cpu);
 }
@@ -8016,14 +8024,18 @@ int in_sched_functions(unsigned long addr)
 		&& addr < (unsigned long)__sched_text_end);
 }
 
+static void init_cfs_root_rq(struct cfs_root_rq *cfs_r_rq)
+{
+	cfs_r_rq->tasks_timeline = RB_ROOT;
+	cfs_r_rq->min_vruntime = (u64)(-(1LL << 20));
+}
+
 static void init_cfs_rq(struct cfs_rq *cfs_rq, struct rq *rq)
 {
-	cfs_rq->tasks_timeline = RB_ROOT;
 	INIT_LIST_HEAD(&cfs_rq->tasks);
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	cfs_rq->rq = rq;
 #endif
-	cfs_rq->min_vruntime = (u64)(-(1LL << 20));
 }
 
 static void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq)
@@ -8209,6 +8221,7 @@ void __init sched_init(void)
 		rq->nr_running = 0;
 		rq->clock = 1;
 		update_last_tick_seen(rq);
+		init_cfs_root_rq(&rq->cfs_root);
 		init_cfs_rq(&rq->cfs, rq);
 		init_rt_rq(&rq->rt, rq);
 #ifdef CONFIG_FAIR_GROUP_SCHED
