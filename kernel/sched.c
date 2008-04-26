@@ -1448,6 +1448,15 @@ static void __resched_task(struct task_struct *p, int tif_bit)
 }
 #endif
 
+/*
+ * We keep the prio_to_weight and its inverse in base WEIGHT_SHIFT
+ */
+#define WEIGHT_SHIFT 		10
+#define WEIGHT_LOAD_SHIFT	(SCHED_LOAD_SHIFT - WEIGHT_SHIFT)
+
+#define WLS(x)		((x) << WEIGHT_LOAD_SHIFT)
+#define inv_WLS(x)	((x) >> WEIGHT_LOAD_SHIFT)
+
 #if BITS_PER_LONG == 32
 # define WMULT_CONST	(~0UL)
 #else
@@ -1470,10 +1479,13 @@ calc_delta_mine(unsigned long delta_exec, unsigned long weight,
 {
 	u64 tmp;
 
-	if (unlikely(!lw->inv_weight))
-		lw->inv_weight = (WMULT_CONST-lw->weight/2) / (lw->weight+1);
+	if (unlikely(!lw->inv_weight)) {
+		unsigned long inv_wls = inv_WLS(lw->weight);
 
-	tmp = (u64)delta_exec * weight;
+		lw->inv_weight = 1 + (WMULT_CONST-inv_wls/2) / (inv_wls+1);
+	}
+
+	tmp = inv_WLS((u64)delta_exec * weight);
 	/*
 	 * Check whether we'd overflow the 64-bit multiplication:
 	 */
@@ -1949,7 +1961,7 @@ static void dec_nr_running(struct rq *rq)
 static void set_load_weight(struct task_struct *p)
 {
 	if (task_has_rt_policy(p)) {
-		p->se.load.weight = prio_to_weight[0] * 2;
+		p->se.load.weight = WLS(prio_to_weight[0] * 2);
 		p->se.load.inv_weight = prio_to_wmult[0] >> 1;
 		return;
 	}
@@ -1958,12 +1970,12 @@ static void set_load_weight(struct task_struct *p)
 	 * SCHED_IDLE tasks get minimal weight:
 	 */
 	if (p->policy == SCHED_IDLE) {
-		p->se.load.weight = WEIGHT_IDLEPRIO;
+		p->se.load.weight = WLS(WEIGHT_IDLEPRIO);
 		p->se.load.inv_weight = WMULT_IDLEPRIO;
 		return;
 	}
 
-	p->se.load.weight = prio_to_weight[p->static_prio - MAX_RT_PRIO];
+	p->se.load.weight = WLS(prio_to_weight[p->static_prio - MAX_RT_PRIO]);
 	p->se.load.inv_weight = prio_to_wmult[p->static_prio - MAX_RT_PRIO];
 }
 
@@ -8071,7 +8083,7 @@ static void init_tg_cfs_entry(struct task_group *tg, struct cfs_rq *cfs_rq,
 
 	se->my_q = cfs_rq;
 	se->load.weight = tg->shares;
-	se->load.inv_weight = div64_64(1ULL<<32, se->load.weight);
+	se->load.inv_weight = 0;
 	se->parent = parent;
 }
 #endif
@@ -8738,7 +8750,7 @@ static void __set_se_shares(struct sched_entity *se, unsigned long shares)
 		dequeue_entity(cfs_rq, se, 0);
 
 	se->load.weight = shares;
-	se->load.inv_weight = div64_64((1ULL<<32), shares);
+	se->load.inv_weight = 0;
 
 	if (on_rq)
 		enqueue_entity(cfs_rq, se, 0);
@@ -8767,6 +8779,8 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	 */
 	if (!tg->se[0])
 		return -EINVAL;
+
+	shares = WLS(shares);
 
 	/*
 	 * A weight of 0 or 1 can cause arithmetics problems.
@@ -8818,7 +8832,7 @@ done:
 
 unsigned long sched_group_shares(struct task_group *tg)
 {
-	return tg->shares;
+	return inv_WLS(tg->shares);
 }
 #endif
 
@@ -9111,9 +9125,7 @@ static int cpu_shares_write_uint(struct cgroup *cgrp, struct cftype *cftype,
 
 static u64 cpu_shares_read_uint(struct cgroup *cgrp, struct cftype *cft)
 {
-	struct task_group *tg = cgroup_tg(cgrp);
-
-	return (u64) tg->shares;
+	return (u64) sched_group_shares(cgroup_tg(cgrp));
 }
 #endif
 

@@ -690,7 +690,12 @@ enum cpu_idle_type {
 /*
  * Increase resolution of nice-level calculations:
  */
+#if BITS_PER_LONG == 64
+#define SCHED_LOAD_SHIFT	20
+#else
 #define SCHED_LOAD_SHIFT	10
+#endif
+
 #define SCHED_LOAD_SCALE	(1L << SCHED_LOAD_SHIFT)
 
 #define SCHED_LOAD_SCALE_FUZZ	SCHED_LOAD_SCALE

@@ -424,7 +424,7 @@ calc_delta_asym(unsigned long delta, struct sched_entity *se)
 {
 	struct load_weight lw = {
 		.weight = NICE_0_LOAD,
-		.inv_weight = 1UL << (WMULT_SHIFT-NICE_0_SHIFT)
+		.inv_weight = 1UL << (WMULT_SHIFT-WEIGHT_SHIFT),
 	};
 
 	for_each_sched_entity(se) {
