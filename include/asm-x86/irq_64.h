@@ -10,6 +10,8 @@
  *	<tomsoft@informatik.tu-chemnitz.de>
  */
 
+#include <asm/apicdef.h>
+
 #define TIMER_IRQ 0
 
 /*
@@ -29,9 +31,13 @@
  */
 #define NR_VECTORS 256
 
-#define FIRST_SYSTEM_VECTOR	0xef   /* duplicated in hw_irq.h */
+extern int first_system_vector;
 
+#if NR_CPUS < MAX_IO_APICS
 #define NR_IRQS (NR_VECTORS + (32 * NR_CPUS))
+#else
+#define NR_IRQS (NR_VECTORS + (32 * MAX_IO_APICS))
+#endif
 #define NR_IRQ_VECTORS NR_IRQS
 
 static inline int irq_canonicalize(int irq)

@@ -21,6 +21,8 @@
 #include <linux/ctype.h>
 #include <linux/kallsyms.h>
 #include <linux/memory.h>
+#include <linux/kmemcheck.h>
+#include <linux/slub_kmemcheck.h>
 
 /*
  * Lock order:
@@ -191,7 +193,7 @@ static inline void ClearSlabDebug(struct page *page)
 		SLAB_TRACE | SLAB_DESTROY_BY_RCU)
 
 #define SLUB_MERGE_SAME (SLAB_DEBUG_FREE | SLAB_RECLAIM_ACCOUNT | \
-		SLAB_CACHE_DMA)
+		SLAB_CACHE_DMA | SLAB_NOTRACK)
 
 #ifndef ARCH_KMALLOC_MINALIGN
 #define ARCH_KMALLOC_MINALIGN __alignof__(unsigned long long)
@@ -1063,6 +1065,7 @@ static inline unsigned long slabs_node(struct kmem_cache *s, int node)
 static inline void inc_slabs_node(struct kmem_cache *s, int node) {}
 static inline void dec_slabs_node(struct kmem_cache *s, int node) {}
 #endif
+
 /*
  * Slab allocation and freeing
  */
@@ -1072,6 +1075,9 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	int pages = 1 << s->order;
 
 	flags |= s->allocflags;
+
+	if (kmemcheck_enabled && !(s->flags & SLAB_NOTRACK))
+		return kmemcheck_allocate_slab(s, flags, node, pages);
 
 	if (node == -1)
 		page = alloc_pages(flags, s->order);
@@ -1151,12 +1157,18 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 		ClearSlabDebug(page);
 	}
 
+	if (kmemcheck_page_is_tracked(page) && !(s->flags & SLAB_NOTRACK)) {
+		kmemcheck_free_slab(s, page, pages);
+		return;
+	}
+
+	__ClearPageSlab(page);
+
 	mod_zone_page_state(page_zone(page),
 		(s->flags & SLAB_RECLAIM_ACCOUNT) ?
 		NR_SLAB_RECLAIMABLE : NR_SLAB_UNRECLAIMABLE,
 		-pages);
 
-	__ClearPageSlab(page);
 	reset_page_mapcount(page);
 	__free_pages(page, s->order);
 }
@@ -1184,7 +1196,6 @@ static void free_slab(struct kmem_cache *s, struct page *page)
 
 static void discard_slab(struct kmem_cache *s, struct page *page)
 {
-	dec_slabs_node(s, page_to_nid(page));
 	free_slab(s, page);
 }
 
@@ -1621,6 +1632,7 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	if (unlikely((gfpflags & __GFP_ZERO) && object))
 		memset(object, 0, c->objsize);
 
+	kmemcheck_slab_alloc(s, gfpflags, object);
 	return object;
 }
 
@@ -1722,6 +1734,8 @@ static __always_inline void slab_free(struct kmem_cache *s,
 	void **object = (void *)x;
 	struct kmem_cache_cpu *c;
 	unsigned long flags;
+
+	kmemcheck_slab_free(s, object);
 
 	local_irq_save(flags);
 	c = get_cpu_slab(s, smp_processor_id());
@@ -2546,7 +2560,8 @@ static noinline struct kmem_cache *dma_kmalloc_cache(int index, gfp_t flags)
 
 	if (!s || !text || !kmem_cache_open(s, flags, text,
 			realsize, ARCH_KMALLOC_MINALIGN,
-			SLAB_CACHE_DMA|__SYSFS_ADD_DEFERRED, NULL)) {
+			SLAB_CACHE_DMA|SLAB_NOTRACK|__SYSFS_ADD_DEFERRED,
+			NULL)) {
 		kfree(s);
 		kfree(text);
 		goto unlock_out;
@@ -4198,6 +4213,8 @@ static char *create_unique_id(struct kmem_cache *s)
 		*p++ = 'a';
 	if (s->flags & SLAB_DEBUG_FREE)
 		*p++ = 'F';
+	if (!(s->flags & SLAB_NOTRACK))
+		*p++ = 't';
 	if (p != name + 1)
 		*p++ = '-';
 	p += sprintf(p, "%07d", s->size);

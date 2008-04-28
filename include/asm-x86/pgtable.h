@@ -16,29 +16,30 @@
 #define _PAGE_BIT_GLOBAL	8	/* Global TLB entry PPro+ */
 #define _PAGE_BIT_UNUSED1	9	/* available for programmer */
 #define _PAGE_BIT_UNUSED2	10
-#define _PAGE_BIT_UNUSED3	11
 #define _PAGE_BIT_PAT_LARGE	12	/* On 2MB or 1GB pages */
-#define _PAGE_BIT_NX           63       /* No execute: only valid after cpuid check */
+#define _PAGE_BIT_HIDDEN	11
+#define _PAGE_BIT_NX		63	/* No execute:
+					 * only valid after cpuid check */
 
 /*
  * Note: we use _AC(1, L) instead of _AC(1, UL) so that we get a
  * sign-extended value on 32-bit with all 1's in the upper word,
  * which preserves the upper pte values on 64-bit ptes:
  */
-#define _PAGE_PRESENT	(_AC(1, L)<<_PAGE_BIT_PRESENT)
-#define _PAGE_RW	(_AC(1, L)<<_PAGE_BIT_RW)
-#define _PAGE_USER	(_AC(1, L)<<_PAGE_BIT_USER)
-#define _PAGE_PWT	(_AC(1, L)<<_PAGE_BIT_PWT)
-#define _PAGE_PCD	(_AC(1, L)<<_PAGE_BIT_PCD)
-#define _PAGE_ACCESSED	(_AC(1, L)<<_PAGE_BIT_ACCESSED)
-#define _PAGE_DIRTY	(_AC(1, L)<<_PAGE_BIT_DIRTY)
-#define _PAGE_PSE	(_AC(1, L)<<_PAGE_BIT_PSE)	/* 2MB page */
-#define _PAGE_GLOBAL	(_AC(1, L)<<_PAGE_BIT_GLOBAL)	/* Global TLB entry */
-#define _PAGE_UNUSED1	(_AC(1, L)<<_PAGE_BIT_UNUSED1)
-#define _PAGE_UNUSED2	(_AC(1, L)<<_PAGE_BIT_UNUSED2)
-#define _PAGE_UNUSED3	(_AC(1, L)<<_PAGE_BIT_UNUSED3)
-#define _PAGE_PAT	(_AC(1, L)<<_PAGE_BIT_PAT)
-#define _PAGE_PAT_LARGE (_AC(1, L)<<_PAGE_BIT_PAT_LARGE)
+#define _PAGE_PRESENT	(_AC(1, L) << _PAGE_BIT_PRESENT)
+#define _PAGE_RW	(_AC(1, L) << _PAGE_BIT_RW)
+#define _PAGE_USER	(_AC(1, L) << _PAGE_BIT_USER)
+#define _PAGE_PWT	(_AC(1, L) << _PAGE_BIT_PWT)
+#define _PAGE_PCD	(_AC(1, L) << _PAGE_BIT_PCD)
+#define _PAGE_ACCESSED	(_AC(1, L) << _PAGE_BIT_ACCESSED)
+#define _PAGE_DIRTY	(_AC(1, L) << _PAGE_BIT_DIRTY)
+#define _PAGE_PSE	(_AC(1, L) << _PAGE_BIT_PSE)	/* 2MB page */
+#define _PAGE_GLOBAL	(_AC(1, L) << _PAGE_BIT_GLOBAL)	/* Global TLB entry */
+#define _PAGE_UNUSED1	(_AC(1, L) << _PAGE_BIT_UNUSED1)
+#define _PAGE_UNUSED2	(_AC(1, L) << _PAGE_BIT_UNUSED2)
+#define _PAGE_PAT	(_AC(1, L) << _PAGE_BIT_PAT)
+#define _PAGE_PAT_LARGE (_AC(1, L) << _PAGE_BIT_PAT_LARGE)
+#define _PAGE_HIDDEN	(_AC(1, L) << _PAGE_BIT_HIDDEN)
 
 #if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
 #define _PAGE_NX	(_AC(1, ULL) << _PAGE_BIT_NX)
