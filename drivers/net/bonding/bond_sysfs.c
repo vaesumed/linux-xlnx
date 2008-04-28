@@ -30,6 +30,7 @@
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/in.h>
+#include <linux/mutex.h>
 #include <linux/sysfs.h>
 #include <linux/ctype.h>
 #include <linux/inet.h>
@@ -63,7 +64,7 @@ static struct class *netdev_class;
  * that we don't collide with an ongoing ioctl.
  */
 
-struct rw_semaphore bonding_rwsem;
+struct mutex bonding_mutex;
 
 
 
@@ -79,7 +80,7 @@ static ssize_t bonding_show_bonds(struct class *cls, char *buf)
 	int res = 0;
 	struct bonding *bond;
 
-	down_read(&(bonding_rwsem));
+	mutex_lock(&bonding_mutex);
 
 	list_for_each_entry(bond, &bond_dev_list, bond_list) {
 		if (res > (PAGE_SIZE - IFNAMSIZ)) {
@@ -93,7 +94,7 @@ static ssize_t bonding_show_bonds(struct class *cls, char *buf)
 	}
 	if (res)
 		buf[res-1] = '\n'; /* eat the leftover space */
-	up_read(&(bonding_rwsem));
+	mutex_unlock(&bonding_mutex);
 	return res;
 }
 
@@ -132,7 +133,7 @@ static ssize_t bonding_store_bonds(struct class *cls, const char *buffer, size_t
 
 	if (command[0] == '-') {
 		rtnl_lock();
-		down_write(&bonding_rwsem);
+		mutex_lock(&bonding_mutex);
 
 		list_for_each_entry_safe(bond, nxt, &bond_dev_list, bond_list)
 			if (strnicmp(bond->dev->name, ifname, IFNAMSIZ) == 0) {
@@ -152,7 +153,7 @@ static ssize_t bonding_store_bonds(struct class *cls, const char *buffer, size_t
 					": %s is being deleted...\n",
 					bond->dev->name);
 				bond_destroy(bond);
-				up_write(&bonding_rwsem);
+				mutex_unlock(&bonding_mutex);
 				rtnl_unlock();
 				goto out;
 			}
@@ -160,7 +161,7 @@ static ssize_t bonding_store_bonds(struct class *cls, const char *buffer, size_t
 		printk(KERN_ERR DRV_NAME
 			": unable to delete non-existent bond %s\n", ifname);
 		res = -ENODEV;
-		up_write(&bonding_rwsem);
+		mutex_unlock(&bonding_mutex);
 		rtnl_unlock();
 		goto out;
 	}
@@ -262,7 +263,7 @@ static ssize_t bonding_store_slaves(struct device *d,
 	/* Note:  We can't hold bond->lock here, as bond_create grabs it. */
 
 	rtnl_lock();
-	down_write(&(bonding_rwsem));
+	mutex_lock(&bonding_mutex);
 
 	sscanf(buffer, "%16s", command); /* IFNAMSIZ*/
 	ifname = command + 1;
@@ -379,7 +380,7 @@ err_no_cmd:
 	ret = -EPERM;
 
 out:
-	up_write(&(bonding_rwsem));
+	mutex_unlock(&bonding_mutex);
 	rtnl_unlock();
 	return ret;
 }
