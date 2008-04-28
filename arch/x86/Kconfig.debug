@@ -278,6 +278,8 @@ config KMEMCHECK
 	depends on !X86_USE_3DNOW
 	depends on !CC_OPTIMIZE_FOR_SIZE
 	depends on !DEBUG_PAGEALLOC && SLUB
+	depends on BROKEN_BOOT_ALLOWED
+	select BROKEN_BOOT
 	select FRAME_POINTER
 	select STACKTRACE
 	default n
