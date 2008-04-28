@@ -481,6 +481,14 @@ int scsi_setup_command_freelist(struct Scsi_Host *shost)
  */
 void scsi_destroy_command_freelist(struct Scsi_Host *shost)
 {
+	if (shost->free_list.next == NULL && shost->free_list.prev == NULL)
+		/*
+		 * If the next and prev pointers are NULL, that
+		 * means the list was never initialised, so it
+		 * doesn't need freeing
+		 */
+		return;
+
 	while (!list_empty(&shost->free_list)) {
 		struct scsi_cmnd *cmd;
 
