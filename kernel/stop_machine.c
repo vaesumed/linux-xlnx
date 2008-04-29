@@ -39,7 +39,7 @@ static unsigned int stopmachine_num_threads;
 static atomic_t stopmachine_thread_ack;
 static atomic_t stopmachine_busy_exit;
 
-static unsigned long stopmachine_timeout = 5; /* secs, arbitrary */
+unsigned long stopmachine_timeout = 5; /* secs, arbitrary */
 
 static int stopmachine(void *cpu)
 {
