@@ -371,5 +371,17 @@ config SGI_XP
 	  hardware based memory protection from the others.  Enabling
 	  this feature will allow for direct communication between SSIs
 	  based on a network adapter and DMA messaging.
+config EEEPC_LAPTOP
+	tristate "Eee PC Hotkey Driver (EXPERIMENTAL)"
+	depends on X86
+	depends on ACPI
+	depends on BACKLIGHT_CLASS_DEVICE
+	depends on HWMON
+	depends on EXPERIMENTAL
+	---help---
+	  This driver supports the Fn-Fx keys on Eee PC laptops.
+	  It also adds the ability to switch camera/wlan on/off.
+
+	  If you have an Eee PC laptop, say Y or M here.
 
 endif # MISC_DEVICES
