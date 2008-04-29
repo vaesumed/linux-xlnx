@@ -252,10 +252,11 @@ nodata:
 struct sk_buff *__netdev_alloc_skb(struct net_device *dev,
 		unsigned int length, gfp_t gfp_mask)
 {
-	int node = dev->dev.parent ? dev_to_node(dev->dev.parent) : -1;
+	int node = dev_to_node(&dev->dev);
 	struct sk_buff *skb;
 
-	skb = __alloc_skb(length + NET_SKB_PAD, gfp_mask, 0, node);
+	skb = __alloc_skb(length + NET_SKB_PAD, gfp_mask | __GFP_NOTRACK,
+		0, node);
 	if (likely(skb)) {
 		skb_reserve(skb, NET_SKB_PAD);
 		skb->dev = dev;
@@ -2351,16 +2352,12 @@ EXPORT_SYMBOL_GPL(skb_segment);
 void __init skb_init(void)
 {
 	skbuff_head_cache = kmem_cache_create("skbuff_head_cache",
-					      sizeof(struct sk_buff),
-					      0,
-					      SLAB_HWCACHE_ALIGN|SLAB_PANIC,
-					      NULL);
+		sizeof(struct sk_buff), 0,
+		SLAB_HWCACHE_ALIGN | SLAB_PANIC | SLAB_NOTRACK, NULL);
+
 	skbuff_fclone_cache = kmem_cache_create("skbuff_fclone_cache",
-						(2*sizeof(struct sk_buff)) +
-						sizeof(atomic_t),
-						0,
-						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
-						NULL);
+		2 * sizeof(struct sk_buff) + sizeof(atomic_t), 0,
+		SLAB_HWCACHE_ALIGN | SLAB_PANIC | SLAB_NOTRACK, NULL);
 }
 
 /**

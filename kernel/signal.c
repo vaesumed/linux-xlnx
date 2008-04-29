@@ -691,6 +691,12 @@ static int send_signal(int sig, struct siginfo *info, struct task_struct *t,
 		list_add_tail(&q->list, &signals->list);
 		switch ((unsigned long) info) {
 		case (unsigned long) SEND_SIG_NOINFO:
+			/*
+			 * Make sure we always have a fully initialized
+			 * siginfo struct:
+			 */
+			memset(&q->info, 0, sizeof(q->info));
+
 			q->info.si_signo = sig;
 			q->info.si_errno = 0;
 			q->info.si_code = SI_USER;
@@ -698,6 +704,12 @@ static int send_signal(int sig, struct siginfo *info, struct task_struct *t,
 			q->info.si_uid = current->uid;
 			break;
 		case (unsigned long) SEND_SIG_PRIV:
+			/*
+			 * Make sure we always have a fully initialized
+			 * siginfo struct:
+			 */
+			memset(&q->info, 0, sizeof(q->info));
+
 			q->info.si_signo = sig;
 			q->info.si_errno = 0;
 			q->info.si_code = SI_KERNEL;
