@@ -81,6 +81,7 @@ extern int compat_log;
 extern int maps_protect;
 extern int sysctl_stat_interval;
 extern int latencytop_enabled;
+extern unsigned long stopmachine_timeout;
 
 /* Constants used for minimum and  maximum */
 #if defined(CONFIG_DETECT_SOFTLOCKUP) || defined(CONFIG_HIGHMEM)
@@ -804,6 +805,17 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= &proc_dostring,
 		.strategy	= &sysctl_string,
 	},
+#ifdef CONFIG_STOP_MACHINE
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "stopmachine_timeout",
+		.data		= &stopmachine_timeout,
+		.maxlen		= sizeof(unsigned long),
+		.mode		= 0644,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.strategy	= &sysctl_intvec,
+	},
+#endif
 #ifdef CONFIG_KEYS
 	{
 		.ctl_name	= CTL_UNNUMBERED,
