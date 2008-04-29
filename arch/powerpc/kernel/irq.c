@@ -356,9 +356,7 @@ void __init init_IRQ(void)
 {
 	if (ppc_md.init_IRQ)
 		ppc_md.init_IRQ();
-#ifdef CONFIG_IRQSTACKS
 	irq_ctx_init();
-#endif
 }
 
 
