@@ -418,13 +418,12 @@ static void acpi_processor_idle(void)
 
 	cx = pr->power.state;
 	if (!cx || acpi_idle_suspend) {
-		if (pm_idle_save)
-			pm_idle_save();
-		else
+		if (pm_idle_save) {
+			pm_idle_save(); /* enables IRQs */
+		} else {
 			acpi_safe_halt();
-
-		if (irqs_disabled())
 			local_irq_enable();
+		}
 
 		return;
 	}
@@ -520,10 +519,12 @@ static void acpi_processor_idle(void)
 		 * Use the appropriate idle routine, the one that would
 		 * be used without acpi C-states.
 		 */
-		if (pm_idle_save)
-			pm_idle_save();
-		else
+		if (pm_idle_save) {
+			pm_idle_save(); /* enables IRQs */
+		} else {
 			acpi_safe_halt();
+			local_irq_enable();
+		}
 
 		/*
 		 * TBD: Can't get time duration while in C1, as resumes
@@ -534,8 +535,6 @@ static void acpi_processor_idle(void)
 		 *       skew otherwise.
 		 */
 		sleep_ticks = 0xFFFFFFFF;
-		if (irqs_disabled())
-			local_irq_enable();
 
 		break;
 
@@ -848,6 +847,7 @@ static int acpi_processor_get_power_info_default(struct acpi_processor *pr)
 		/* all processors need to support C1 */
 		pr->power.states[ACPI_STATE_C1].type = ACPI_STATE_C1;
 		pr->power.states[ACPI_STATE_C1].valid = 1;
+		pr->power.states[ACPI_STATE_C1].entry_method = ACPI_CSTATE_HALT;
 	}
 	/* the C0 state only exists as a filler in our array */
 	pr->power.states[ACPI_STATE_C0].valid = 1;
@@ -960,6 +960,9 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 				 cx.address);
 		}
 
+		if (cx.type == ACPI_STATE_C1) {
+			cx.valid = 1;
+		}
 
 		obj = &(element->package.elements[2]);
 		if (obj->type != ACPI_TYPE_INTEGER)
