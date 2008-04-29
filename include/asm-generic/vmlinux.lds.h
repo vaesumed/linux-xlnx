@@ -52,7 +52,10 @@
 	. = ALIGN(8);							\
 	VMLINUX_SYMBOL(__start___markers) = .;				\
 	*(__markers)							\
-	VMLINUX_SYMBOL(__stop___markers) = .;
+	VMLINUX_SYMBOL(__stop___markers) = .;				\
+	VMLINUX_SYMBOL(__start___imv) = .;				\
+	*(__imv)		/* Immediate values: pointers */ 	\
+	VMLINUX_SYMBOL(__stop___imv) = .;
 
 #define RO_DATA(align)							\
 	. = ALIGN((align));						\
