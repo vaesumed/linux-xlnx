@@ -1,6 +1,11 @@
+config IWLWIFI
+	bool
+	default n
+
 config IWLCORE
 	tristate "Intel Wireless Wifi Core"
 	depends on PCI && MAC80211 && WLAN_80211 && EXPERIMENTAL
+	select IWLWIFI
 
 config IWLWIFI_LEDS
 	bool
@@ -49,7 +54,9 @@ config IWL4965_HT
 
 config IWL4965_LEDS
 	bool "Enable LEDS features in iwl4965 driver"
-	depends on IWL4965 && MAC80211_LEDS && LEDS_CLASS
+	depends on IWL4965
+	select MAC80211_LEDS
+	select LEDS_CLASS
 	select IWLWIFI_LEDS
 	---help---
 	  This option enables LEDS for the iwlwifi drivers
@@ -104,6 +111,7 @@ config IWL3945
 	tristate "Intel PRO/Wireless 3945ABG/BG Network Connection"
 	depends on PCI && MAC80211 && WLAN_80211 && EXPERIMENTAL
 	select FW_LOADER
+	select IWLWIFI
 	---help---
 	  Select to build the driver supporting the:
 
@@ -134,7 +142,9 @@ config IWL3945_SPECTRUM_MEASUREMENT
 
 config IWL3945_LEDS
 	bool "Enable LEDS features in iwl3945 driver"
-	depends on IWL3945 && MAC80211_LEDS && LEDS_CLASS
+	depends on IWL3945
+	select MAC80211_LEDS
+	select LEDS_CLASS
 	---help---
 	  This option enables LEDS for the iwl3945 driver.
 

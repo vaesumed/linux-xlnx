@@ -92,15 +92,6 @@ static const u32 default_msg = NETIF_MSG_DRV | NETIF_MSG_PROBE | NETIF_MSG_LINK
 		| NETIF_MSG_IFUP | NETIF_MSG_IFDOWN;
 static int debug = -1;
 
-
-static int nes_netdev_open(struct net_device *);
-static int nes_netdev_stop(struct net_device *);
-static int nes_netdev_start_xmit(struct sk_buff *, struct net_device *);
-static struct net_device_stats *nes_netdev_get_stats(struct net_device *);
-static void nes_netdev_tx_timeout(struct net_device *);
-static int nes_netdev_set_mac_address(struct net_device *, void *);
-static int nes_netdev_change_mtu(struct net_device *, int);
-
 /**
  * nes_netdev_poll
  */
@@ -796,16 +787,14 @@ static int nes_netdev_set_mac_address(struct net_device *netdev, void *p)
 	int i;
 	u32 macaddr_low;
 	u16 macaddr_high;
+	DECLARE_MAC_BUF(mac);
 
 	if (!is_valid_ether_addr(mac_addr->sa_data))
 		return -EADDRNOTAVAIL;
 
 	memcpy(netdev->dev_addr, mac_addr->sa_data, netdev->addr_len);
-	printk(PFX "%s: Address length = %d, Address = %02X%02X%02X%02X%02X%02X..\n",
-		   __func__, netdev->addr_len,
-		   mac_addr->sa_data[0], mac_addr->sa_data[1],
-		   mac_addr->sa_data[2], mac_addr->sa_data[3],
-		   mac_addr->sa_data[4], mac_addr->sa_data[5]);
+	printk(PFX "%s: Address length = %d, Address = %s\n",
+	       __func__, netdev->addr_len, print_mac(mac, mac_addr->sa_data));
 	macaddr_high = ((u16)netdev->dev_addr[0]) << 8;
 	macaddr_high += (u16)netdev->dev_addr[1];
 	macaddr_low = ((u32)netdev->dev_addr[2]) << 24;
@@ -887,11 +876,11 @@ static void nes_netdev_set_multicast_list(struct net_device *netdev)
 			if (mc_nic_index < 0)
 				mc_nic_index = nesvnic->nic_index;
 			if (multicast_addr) {
-				nes_debug(NES_DBG_NIC_RX, "Assigning MC Address = %02X%02X%02X%02X%02X%02X to register 0x%04X nic_idx=%d\n",
-						  multicast_addr->dmi_addr[0], multicast_addr->dmi_addr[1],
-						  multicast_addr->dmi_addr[2], multicast_addr->dmi_addr[3],
-						  multicast_addr->dmi_addr[4], multicast_addr->dmi_addr[5],
-						  perfect_filter_register_address+(mc_index * 8), mc_nic_index);
+				DECLARE_MAC_BUF(mac);
+				nes_debug(NES_DBG_NIC_RX, "Assigning MC Address %s to register 0x%04X nic_idx=%d\n",
+					  print_mac(mac, multicast_addr->dmi_addr),
+					  perfect_filter_register_address+(mc_index * 8),
+					  mc_nic_index);
 				macaddr_high = ((u16)multicast_addr->dmi_addr[0]) << 8;
 				macaddr_high += (u16)multicast_addr->dmi_addr[1];
 				macaddr_low = ((u32)multicast_addr->dmi_addr[2]) << 24;

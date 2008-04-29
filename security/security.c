@@ -296,15 +296,15 @@ int security_sb_statfs(struct dentry *dentry)
 	return security_ops->sb_statfs(dentry);
 }
 
-int security_sb_mount(char *dev_name, struct nameidata *nd,
+int security_sb_mount(char *dev_name, struct path *path,
                        char *type, unsigned long flags, void *data)
 {
-	return security_ops->sb_mount(dev_name, nd, type, flags, data);
+	return security_ops->sb_mount(dev_name, path, type, flags, data);
 }
 
-int security_sb_check_sb(struct vfsmount *mnt, struct nameidata *nd)
+int security_sb_check_sb(struct vfsmount *mnt, struct path *path)
 {
-	return security_ops->sb_check_sb(mnt, nd);
+	return security_ops->sb_check_sb(mnt, path);
 }
 
 int security_sb_umount(struct vfsmount *mnt, int flags)
@@ -327,19 +327,19 @@ void security_sb_post_remount(struct vfsmount *mnt, unsigned long flags, void *d
 	security_ops->sb_post_remount(mnt, flags, data);
 }
 
-void security_sb_post_addmount(struct vfsmount *mnt, struct nameidata *mountpoint_nd)
+void security_sb_post_addmount(struct vfsmount *mnt, struct path *mountpoint)
 {
-	security_ops->sb_post_addmount(mnt, mountpoint_nd);
+	security_ops->sb_post_addmount(mnt, mountpoint);
 }
 
-int security_sb_pivotroot(struct nameidata *old_nd, struct nameidata *new_nd)
+int security_sb_pivotroot(struct path *old_path, struct path *new_path)
 {
-	return security_ops->sb_pivotroot(old_nd, new_nd);
+	return security_ops->sb_pivotroot(old_path, new_path);
 }
 
-void security_sb_post_pivotroot(struct nameidata *old_nd, struct nameidata *new_nd)
+void security_sb_post_pivotroot(struct path *old_path, struct path *new_path)
 {
-	security_ops->sb_post_pivotroot(old_nd, new_nd);
+	security_ops->sb_post_pivotroot(old_path, new_path);
 }
 
 int security_sb_get_mnt_opts(const struct super_block *sb,
@@ -733,9 +733,9 @@ int security_task_wait(struct task_struct *p)
 }
 
 int security_task_prctl(int option, unsigned long arg2, unsigned long arg3,
-			 unsigned long arg4, unsigned long arg5)
+			 unsigned long arg4, unsigned long arg5, long *rc_p)
 {
-	return security_ops->task_prctl(option, arg2, arg3, arg4, arg5);
+	return security_ops->task_prctl(option, arg2, arg3, arg4, arg5, rc_p);
 }
 
 void security_task_reparent_to_init(struct task_struct *p)

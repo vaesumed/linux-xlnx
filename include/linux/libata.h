@@ -443,7 +443,7 @@ enum link_pm {
 	MAX_PERFORMANCE,
 	MEDIUM_POWER,
 };
-extern struct class_device_attribute class_device_attr_link_power_management_policy;
+extern struct device_attribute dev_attr_link_power_management_policy;
 
 #ifdef CONFIG_ATA_SFF
 struct ata_ioports {
@@ -847,7 +847,6 @@ static inline int ata_port_is_dummy(struct ata_port *ap)
 	return ap->ops == &ata_dummy_port_ops;
 }
 
-extern void sata_print_link_status(struct ata_link *link);
 extern void ata_port_probe(struct ata_port *);
 extern int sata_set_spd(struct ata_link *link);
 extern int ata_std_prereset(struct ata_link *link, unsigned long deadline);

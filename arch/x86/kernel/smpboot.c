@@ -61,6 +61,7 @@
 #include <asm/mtrr.h>
 #include <asm/nmi.h>
 #include <asm/vmi.h>
+#include <asm/genapic.h>
 #include <linux/mc146818rtc.h>
 
 #include <mach_apic.h>
@@ -183,7 +184,7 @@ static void unmap_cpu_to_node(int cpu)
 u8 cpu_2_logical_apicid[NR_CPUS] __read_mostly =
 					{ [0 ... NR_CPUS-1] = BAD_APICID };
 
-void map_cpu_to_logical_apicid(void)
+static void map_cpu_to_logical_apicid(void)
 {
 	int cpu = smp_processor_id();
 	int apicid = logical_smp_processor_id();
@@ -196,7 +197,7 @@ void map_cpu_to_logical_apicid(void)
 	map_cpu_to_node(cpu, node);
 }
 
-void unmap_cpu_to_logical_apicid(int cpu)
+static void unmap_cpu_to_logical_apicid(int cpu)
 {
 	cpu_2_logical_apicid[cpu] = BAD_APICID;
 	unmap_cpu_to_node(cpu);
@@ -210,7 +211,7 @@ void unmap_cpu_to_logical_apicid(int cpu)
  * Report back to the Boot Processor.
  * Running on AP.
  */
-void __cpuinit smp_callin(void)
+static void __cpuinit smp_callin(void)
 {
 	int cpuid, phys_id;
 	unsigned long timeout;
@@ -435,7 +436,7 @@ valid_k7:
 #endif
 }
 
-void __cpuinit smp_checks(void)
+static void __cpuinit smp_checks(void)
 {
 	if (smp_b_stepping)
 		printk(KERN_WARNING "WARNING: SMP operation may be unreliable"
@@ -564,7 +565,7 @@ void __init smp_alloc_memory(void)
 }
 #endif
 
-void impress_friends(void)
+static void impress_friends(void)
 {
 	int cpu;
 	unsigned long bogosum = 0;
@@ -676,6 +677,12 @@ wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
 {
 	unsigned long send_status, accept_status = 0;
 	int maxlvt, num_starts, j;
+
+	if (get_uv_system_type() == UV_NON_UNIQUE_APIC) {
+		send_status = uv_wakeup_secondary(phys_apicid, start_eip);
+		atomic_set(&init_deasserted, 1);
+		return send_status;
+	}
 
 	/*
 	 * Be paranoid about clearing APIC errors.
@@ -918,16 +925,19 @@ do_rest:
 
 	atomic_set(&init_deasserted, 0);
 
-	Dprintk("Setting warm reset code and vector.\n");
+	if (get_uv_system_type() != UV_NON_UNIQUE_APIC) {
 
-	store_NMI_vector(&nmi_high, &nmi_low);
+		Dprintk("Setting warm reset code and vector.\n");
 
-	smpboot_setup_warm_reset_vector(start_ip);
-	/*
-	 * Be paranoid about clearing APIC errors.
-	 */
-	apic_write(APIC_ESR, 0);
-	apic_read(APIC_ESR);
+		store_NMI_vector(&nmi_high, &nmi_low);
+
+		smpboot_setup_warm_reset_vector(start_ip);
+		/*
+		 * Be paranoid about clearing APIC errors.
+	 	*/
+		apic_write(APIC_ESR, 0);
+		apic_read(APIC_ESR);
+	}
 
 	/*
 	 * Starting actual IPI sequence...
@@ -966,7 +976,8 @@ do_rest:
 			else
 				/* trampoline code not run */
 				printk(KERN_ERR "Not responding.\n");
-			inquire_remote_apic(apicid);
+			if (get_uv_system_type() != UV_NON_UNIQUE_APIC)
+				inquire_remote_apic(apicid);
 		}
 	}
 
@@ -1028,8 +1039,8 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 
 #ifdef CONFIG_X86_32
 	/* init low mem mapping */
-	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + USER_PGD_PTRS,
-			min_t(unsigned long, KERNEL_PGD_PTRS, USER_PGD_PTRS));
+	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			min_t(unsigned long, KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
 	flush_tlb_all();
 #endif
 
@@ -1047,7 +1058,7 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 	check_tsc_sync_source(cpu);
 	local_irq_restore(flags);
 
-	while (!cpu_isset(cpu, cpu_online_map)) {
+	while (!cpu_online(cpu)) {
 		cpu_relax();
 		touch_nmi_watchdog();
 	}
@@ -1157,7 +1168,7 @@ static void __init smp_cpu_index_default(void)
 	int i;
 	struct cpuinfo_x86 *c;
 
-	for_each_cpu_mask(i, cpu_possible_map) {
+	for_each_possible_cpu(i) {
 		c = &cpu_data(i);
 		/* mark all to hotplug */
 		c->cpu_index = NR_CPUS;
@@ -1276,7 +1287,7 @@ void cpu_exit_clear(void)
 }
 #  endif /* CONFIG_X86_32 */
 
-void remove_siblinginfo(int cpu)
+static void remove_siblinginfo(int cpu)
 {
 	int sibling;
 	struct cpuinfo_x86 *c = &cpu_data(cpu);

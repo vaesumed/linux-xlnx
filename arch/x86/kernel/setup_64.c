@@ -33,6 +33,7 @@
 #include <linux/acpi.h>
 #include <linux/kallsyms.h>
 #include <linux/edd.h>
+#include <linux/iscsi_ibft.h>
 #include <linux/mmzone.h>
 #include <linux/kexec.h>
 #include <linux/cpufreq.h>
@@ -41,6 +42,7 @@
 #include <linux/ctype.h>
 #include <linux/uaccess.h>
 #include <linux/init_ohci1394_dma.h>
+#include <linux/kvm_para.h>
 
 #include <asm/mtrr.h>
 #include <asm/uaccess.h>
@@ -115,7 +117,7 @@ extern int root_mountflags;
 
 char __initdata command_line[COMMAND_LINE_SIZE];
 
-struct resource standard_io_resources[] = {
+static struct resource standard_io_resources[] = {
 	{ .name = "dma1", .start = 0x00, .end = 0x1f,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
 	{ .name = "pic1", .start = 0x20, .end = 0x21,
@@ -189,6 +191,7 @@ contig_initmem_init(unsigned long start_pfn, unsigned long end_pfn)
 	bootmap_size = init_bootmem(bootmap >> PAGE_SHIFT, end_pfn);
 	e820_register_active_regions(0, start_pfn, end_pfn);
 	free_bootmem_with_active_regions(0, end_pfn);
+	early_res_to_bootmem(0, end_pfn<<PAGE_SHIFT);
 	reserve_bootmem(bootmap, bootmap_size, BOOTMEM_DEFAULT);
 }
 #endif
@@ -263,6 +266,28 @@ void __attribute__((weak)) __init memory_setup(void)
        machine_specific_memory_setup();
 }
 
+static void __init parse_setup_data(void)
+{
+	struct setup_data *data;
+	unsigned long pa_data;
+
+	if (boot_params.hdr.version < 0x0209)
+		return;
+	pa_data = boot_params.hdr.setup_data;
+	while (pa_data) {
+		data = early_ioremap(pa_data, PAGE_SIZE);
+		switch (data->type) {
+		default:
+			break;
+		}
+#ifndef CONFIG_DEBUG_BOOT_PARAMS
+		free_early(pa_data, pa_data+sizeof(*data)+data->len);
+#endif
+		pa_data = data->next;
+		early_iounmap(data, PAGE_SIZE);
+	}
+}
+
 /*
  * setup_arch - architecture-specific boot-time initializations
  *
@@ -315,6 +340,8 @@ void __init setup_arch(char **cmdline_p)
 	strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
 	*cmdline_p = command_line;
 
+	parse_setup_data();
+
 	parse_early_param();
 
 #ifdef CONFIG_PROVIDE_OHCI1394_DMA_INIT
@@ -358,6 +385,10 @@ void __init setup_arch(char **cmdline_p)
 
 	io_delay_init();
 
+#ifdef CONFIG_KVM_CLOCK
+	kvmclock_init();
+#endif
+
 #ifdef CONFIG_SMP
 	/* setup to use the early static init tables during kernel startup */
 	x86_cpu_to_apicid_early_ptr = (void *)x86_cpu_to_apicid_init;
@@ -396,7 +427,7 @@ void __init setup_arch(char **cmdline_p)
 	contig_initmem_init(0, end_pfn);
 #endif
 
-	early_res_to_bootmem();
+	dma32_reserve_bootmem();
 
 #ifdef CONFIG_ACPI_SLEEP
 	/*
@@ -420,11 +451,14 @@ void __init setup_arch(char **cmdline_p)
 		unsigned long end_of_mem    = end_pfn << PAGE_SHIFT;
 
 		if (ramdisk_end <= end_of_mem) {
-			reserve_bootmem_generic(ramdisk_image, ramdisk_size);
+			/*
+			 * don't need to reserve again, already reserved early
+			 * in x86_64_start_kernel, and early_res_to_bootmem
+			 * convert that to reserved in bootmem
+			 */
 			initrd_start = ramdisk_image + PAGE_OFFSET;
 			initrd_end = initrd_start+ramdisk_size;
 		} else {
-			/* Assumes everything on node 0 */
 			free_bootmem(ramdisk_image, ramdisk_size);
 			printk(KERN_ERR "initrd extends beyond end of memory "
 			       "(0x%08lx > 0x%08lx)\ndisabling initrd\n",
@@ -434,6 +468,9 @@ void __init setup_arch(char **cmdline_p)
 	}
 #endif
 	reserve_crashkernel();
+
+	reserve_ibft_region();
+
 	paging_init();
 	map_vsyscall();
 
@@ -455,6 +492,8 @@ void __init setup_arch(char **cmdline_p)
 		get_smp_config();
 	init_apic_mappings();
 	ioapic_init_mappings();
+
+	kvm_guest_init();
 
 	/*
 	 * We trust e820 completely. No explicit ROM probing in memory.
