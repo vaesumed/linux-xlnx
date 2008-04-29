@@ -81,7 +81,7 @@
 	tophys(r9,r9);			/* check local flags */		       \
 	lwz	r12,TI_LOCAL_FLAGS(r9);					       \
 	mtcrf	0x01,r12;						       \
-	bt-	31-TLF_NAPPING,4f;					       
+	bt-	31-TLF_NAPPING,4f;
 #define RESTORE_DOZE_NAP						       \
 4:	rlwinm	r12,r12,0,~_TLF_NAPPING;				       \
 	stw	r12,TI_LOCAL_FLAGS(r9);					       \
