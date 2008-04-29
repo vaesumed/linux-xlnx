@@ -507,10 +507,9 @@ void put_files_struct(struct files_struct *files)
 	}
 }
 
-EXPORT_SYMBOL(put_files_struct);
-
-void reset_files_struct(struct task_struct *tsk, struct files_struct *files)
+void reset_files_struct(struct files_struct *files)
 {
+	struct task_struct *tsk = current;
 	struct files_struct *old;
 
 	old = tsk->files;
@@ -519,7 +518,6 @@ void reset_files_struct(struct task_struct *tsk, struct files_struct *files)
 	task_unlock(tsk);
 	put_files_struct(old);
 }
-EXPORT_SYMBOL(reset_files_struct);
 
 void exit_files(struct task_struct *tsk)
 {
@@ -969,7 +967,7 @@ NORET_TYPE void do_exit(long code)
 	proc_exit_connector(tsk);
 	exit_notify(tsk, group_dead);
 #ifdef CONFIG_NUMA
-	mpol_free(tsk->mempolicy);
+	mpol_put(tsk->mempolicy);
 	tsk->mempolicy = NULL;
 #endif
 #ifdef CONFIG_FUTEX

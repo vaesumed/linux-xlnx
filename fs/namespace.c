@@ -14,7 +14,6 @@
 #include <linux/smp_lock.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
-#include <linux/quotaops.h>
 #include <linux/acct.h>
 #include <linux/capability.h>
 #include <linux/cpumask.h>
@@ -1061,10 +1060,11 @@ static int do_umount(struct vfsmount *mnt, int flags)
 	 * about for the moment.
 	 */
 
-	lock_kernel();
-	if (sb->s_op->umount_begin)
-		sb->s_op->umount_begin(mnt, flags);
-	unlock_kernel();
+	if (flags & MNT_FORCE && sb->s_op->umount_begin) {
+		lock_kernel();
+		sb->s_op->umount_begin(sb);
+		unlock_kernel();
+	}
 
 	/*
 	 * No sense to grab the lock for this test, but test itself looks
@@ -1083,7 +1083,6 @@ static int do_umount(struct vfsmount *mnt, int flags)
 		down_write(&sb->s_umount);
 		if (!(sb->s_flags & MS_RDONLY)) {
 			lock_kernel();
-			DQUOT_OFF(sb);
 			retval = do_remount_sb(sb, MS_RDONLY, NULL, 0);
 			unlock_kernel();
 		}
