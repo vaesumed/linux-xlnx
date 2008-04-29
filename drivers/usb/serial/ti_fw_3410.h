@@ -882,4 +882,8 @@ static unsigned char ti_fw_3410[] = {
 0x00,0x00,
 };
 
+static struct firmware fw_3410 = {
+	sizeof(ti_fw_3410),
+	ti_fw_3410
+};
 #endif /* ifndef _TI_FW_3410_H_ */
