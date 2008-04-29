@@ -20,6 +20,7 @@
 /* Thread to stop each CPU in user context. */
 enum stopmachine_state {
 	STOPMACHINE_WAIT,
+	STOPMACHINE_DEPLOY,
 	STOPMACHINE_PREPARE,
 	STOPMACHINE_DISABLE_IRQ,
 	STOPMACHINE_RUN,
@@ -43,9 +44,16 @@ static int stopmachine(void *cpu)
 	int prepared = 0;
 	int ran = 0;
 
+	/* Wait sisters */
+	while (stopmachine_state == STOPMACHINE_WAIT)
+		yield();
+	/* short path for cancel */
+	if (stopmachine_state == STOPMACHINE_EXIT)
+		goto exit;
+
 	set_cpus_allowed_ptr(current, &cpumask_of_cpu((int)(long)cpu));
 
-	/* Ack: we are alive */
+	/* Ack: we arrived */
 	smp_mb(); /* Theoretically the ack = 0 might not be on this CPU yet. */
 	atomic_inc(&stopmachine_thread_ack);
 
@@ -79,7 +87,7 @@ static int stopmachine(void *cpu)
 		else
 			cpu_relax();
 	}
-
+exit:
 	/* Ack: we are exiting. */
 	smp_mb(); /* Must read state first. */
 	atomic_inc(&stopmachine_thread_ack);
@@ -115,19 +123,14 @@ static int stop_machine(void)
 			continue;
 		ret = kernel_thread(stopmachine, (void *)(long)i,CLONE_KERNEL);
 		if (ret < 0)
-			break;
+			goto exit_threads;
 		stopmachine_num_threads++;
 	}
 
-	/* Wait for them all to come to life. */
+	/* Wait for them all to come to life on the target. */
+	stopmachine_state = STOPMACHINE_DEPLOY;
 	while (atomic_read(&stopmachine_thread_ack) != stopmachine_num_threads)
 		yield();
-
-	/* If some failed, kill them all. */
-	if (ret < 0) {
-		stopmachine_set_state(STOPMACHINE_EXIT);
-		return ret;
-	}
 
 	/* Now they are all started, make them hold the CPUs, ready. */
 	preempt_disable();
@@ -139,6 +142,12 @@ static int stop_machine(void)
 	stopmachine_set_state(STOPMACHINE_DISABLE_IRQ);
 
 	return 0;
+
+exit_threads:
+	/* Wait for them all to exit, since stop is canceled */
+	stopmachine_set_state(STOPMACHINE_EXIT);
+
+	return ret;
 }
 
 static void restart_machine(void)
