@@ -685,7 +685,6 @@ config VIDEO_MEYE
 	  module will be called meye.
 
 source "drivers/media/video/saa7134/Kconfig"
-source "drivers/media/video/go7007/Kconfig"
 
 source "drivers/media/video/saa7146/Kconfig"
 
