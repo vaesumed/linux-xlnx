@@ -52,6 +52,7 @@ obj-$(CONFIG_LEDS)		+= $(led-y)
 obj-$(CONFIG_PM)		+= pm.o sleep.o standby.o
 obj-$(CONFIG_CPU_FREQ)		+= cpu-pxa.o
 obj-$(CONFIG_PXA_SSP)		+= ssp.o
+obj-$(CONFIG_PXA_PWM)		+= pwm.o
 
 ifeq ($(CONFIG_PCI),y)
 obj-$(CONFIG_MACH_ARMCORE) += cm-x270-pci.o
