@@ -70,6 +70,7 @@
 
 #include <linux/kernel.h>
 #include <linux/errno.h>
+#include <linux/firmware.h>
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/tty.h>
@@ -86,9 +87,14 @@
 #include <linux/usb/serial.h>
 
 #include "ti_usb_3410_5052.h"
+
+#ifdef CONFIG_USB_SERIAL_TI_FIRMWARE
+/* Keep compatibility option for a while so we don't break systems
+   as we kick the firmware out into user space. In time this will
+   go away */
 #include "ti_fw_3410.h"		/* firmware image for 3410 */
 #include "ti_fw_5052.h"		/* firmware image for 5052 */
-
+#endif
 
 /* Defines */
 
@@ -194,8 +200,7 @@ static int ti_command_in_sync(struct ti_device *tdev, __u8 command,
 static int ti_write_byte(struct ti_device *tdev, unsigned long addr,
 	__u8 mask, __u8 byte);
 
-static int ti_download_firmware(struct ti_device *tdev,
-	unsigned char *firmware, unsigned int firmware_size);
+static int ti_download_firmware(struct ti_device *tdev, int type);
 
 /* circular buffer */
 static struct circ_buf *ti_buf_alloc(void);
@@ -429,13 +434,10 @@ static int ti_startup(struct usb_serial *serial)
 
 	/* if we have only 1 configuration, download firmware */
 	if (dev->descriptor.bNumConfigurations == 1) {
-
 		if (tdev->td_is_3410)
-			status = ti_download_firmware(tdev, ti_fw_3410,
-				sizeof(ti_fw_3410));
+			status = ti_download_firmware(tdev, 3410);
 		else
-			status = ti_download_firmware(tdev, ti_fw_5052,
-				sizeof(ti_fw_5052));
+			status = ti_download_firmware(tdev, 5052);
 		if (status)
 			goto free_tdev;
 
@@ -1656,50 +1658,82 @@ static int ti_write_byte(struct ti_device *tdev, unsigned long addr,
 	return status;
 }
 
-
-static int ti_download_firmware(struct ti_device *tdev,
-	unsigned char *firmware, unsigned int firmware_size)
+static int ti_do_download(struct usb_device *dev, int pipe,
+						u8 *buffer, int size)
 {
-	int status = 0;
-	int buffer_size;
 	int pos;
-	int len;
+	u8 cs = 0;
 	int done;
-	__u8 cs = 0;
-	__u8 *buffer;
-	struct usb_device *dev = tdev->td_serial->dev;
 	struct ti_firmware_header *header;
-	unsigned int pipe = usb_sndbulkpipe(dev,
-		tdev->td_serial->port[0]->bulk_out_endpointAddress);
+	int status;
+	int len;
 
-
-	buffer_size = TI_FIRMWARE_BUF_SIZE + sizeof(struct ti_firmware_header);
-	buffer = kmalloc(buffer_size, GFP_KERNEL);
-	if (!buffer) {
-		dev_err(&dev->dev, "%s - out of memory\n", __func__);
-		return -ENOMEM;
-	}
-
-	memcpy(buffer, firmware, firmware_size);
-	memset(buffer+firmware_size, 0xff, buffer_size-firmware_size);
-
-	for(pos = sizeof(struct ti_firmware_header); pos < buffer_size; pos++)
+	for(pos = sizeof(struct ti_firmware_header); pos < size; pos++)
 		cs = (__u8)(cs + buffer[pos]);
 
 	header = (struct ti_firmware_header *)buffer;
-	header->wLength = cpu_to_le16((__u16)(buffer_size - sizeof(struct ti_firmware_header)));
+	header->wLength = cpu_to_le16((__u16)(size
+					- sizeof(struct ti_firmware_header)));
 	header->bCheckSum = cs;
 
 	dbg("%s - downloading firmware", __func__);
-	for (pos = 0; pos < buffer_size; pos += done) {
-		len = min(buffer_size - pos, TI_DOWNLOAD_MAX_PACKET_SIZE);
-		status = usb_bulk_msg(dev, pipe, buffer+pos, len, &done, 1000);
+	for (pos = 0; pos < size; pos += done) {
+		len = min(size - pos, TI_DOWNLOAD_MAX_PACKET_SIZE);
+		status = usb_bulk_msg(dev, pipe, buffer + pos, len,
+								&done, 1000);
 		if (status)
 			break;
 	}
+	return status;
+}
 
-	kfree(buffer);
 
+static int ti_download_firmware(struct ti_device *tdev, int type)
+{
+	int status = -ENOMEM;
+	int buffer_size;
+	__u8 *buffer;
+	struct usb_device *dev = tdev->td_serial->dev;
+	unsigned int pipe = usb_sndbulkpipe(dev,
+		tdev->td_serial->port[0]->bulk_out_endpointAddress);
+	const struct firmware *fw_p;
+
+#ifdef CONFIG_USB_SERIAL_TI_FIRMWARE
+	switch (type) {
+	case 3410:
+		fw_p = &fw_3410;
+		break;
+	case 5052:
+		fw_p = &fw_5052;
+		break;
+	default:
+		return -EINVAL;
+	}
+#else
+	char buf[32];
+	sprintf(buf, "ti_usb-%d.bin", type);
+
+	if (request_firmware(&fw_p, buf, &dev->dev)) {
+		dev_err(&dev->dev, "%s - firmware not found\n", __func__);
+		return -ENOENT;
+	}
+	if (fw_p->size > TI_FIRMWARE_BUF_SIZE) {
+		dev_err(&dev->dev, "%s - firmware too large\n", __func__);
+		return -ENOENT;
+	}
+#endif
+
+	buffer_size = TI_FIRMWARE_BUF_SIZE + sizeof(struct ti_firmware_header);
+	buffer = kmalloc(buffer_size, GFP_KERNEL);
+	if (buffer) {
+		memcpy(buffer, fw_p->data, fw_p->size);
+		memset(buffer + fw_p->size, 0xff, buffer_size - fw_p->size);
+		ti_do_download(dev, pipe, buffer, fw_p->size);
+		kfree(buffer);
+	}
+#ifdef CONFIG_USB_SERIAL_TI_FIRMWARE
+	release_firmware(fw_p);
+#endif
 	if (status) {
 		dev_err(&dev->dev, "%s - error downloading firmware, %d\n", __func__, status);
 		return status;
