@@ -2417,6 +2417,9 @@ int kvm_arch_init(void *opaque)
 
 	kvm_x86_ops = ops;
 	kvm_mmu_set_nonpresent_ptes(0ull, 0ull);
+	kvm_mmu_set_base_ptes(PT_PRESENT_MASK);
+	kvm_mmu_set_mask_ptes(PT_USER_MASK, PT_ACCESSED_MASK,
+			PT_DIRTY_MASK, PT64_NX_MASK, 0);
 	return 0;
 
 out:
@@ -3403,7 +3406,7 @@ static int load_state_from_tss16(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
-int kvm_task_switch_16(struct kvm_vcpu *vcpu, u16 tss_selector,
+static int kvm_task_switch_16(struct kvm_vcpu *vcpu, u16 tss_selector,
 		       struct desc_struct *cseg_desc,
 		       struct desc_struct *nseg_desc)
 {
@@ -3426,7 +3429,7 @@ out:
 	return ret;
 }
 
-int kvm_task_switch_32(struct kvm_vcpu *vcpu, u16 tss_selector,
+static int kvm_task_switch_32(struct kvm_vcpu *vcpu, u16 tss_selector,
 		       struct desc_struct *cseg_desc,
 		       struct desc_struct *nseg_desc)
 {
@@ -3481,7 +3484,7 @@ int kvm_task_switch(struct kvm_vcpu *vcpu, u16 tss_selector, int reason)
 	}
 
 	if (reason == TASK_SWITCH_IRET || reason == TASK_SWITCH_JMP) {
-		cseg_desc.type &= ~(1 << 8); //clear the B flag
+		cseg_desc.type &= ~(1 << 1); //clear the B flag
 		save_guest_segment_descriptor(vcpu, tr_seg.selector,
 					      &cseg_desc);
 	}
@@ -3507,7 +3510,7 @@ int kvm_task_switch(struct kvm_vcpu *vcpu, u16 tss_selector, int reason)
 	}
 
 	if (reason != TASK_SWITCH_IRET) {
-		nseg_desc.type |= (1 << 8);
+		nseg_desc.type |= (1 << 1);
 		save_guest_segment_descriptor(vcpu, tss_selector,
 					      &nseg_desc);
 	}
