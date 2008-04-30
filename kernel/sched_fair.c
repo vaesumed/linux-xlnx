@@ -491,7 +491,20 @@ static u64 __sched_period(unsigned long nr_running)
  */
 static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	return calc_delta_weight(__sched_period(cfs_rq->nr_running), se);
+	u64 slice = calc_delta_weight(__sched_period(cfs_rq->nr_running), se);
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	/*
+	 * Limit the max slice length when there is contention (strictly
+	 * speaking we only need to do this when there are tasks of more
+	 * than a single group). This avoids very longs slices of a lightly
+	 * loaded group delaying tasks from another group.
+	 */
+	if (rq_of(cfs_rq)->cfs_root.nr_queued)
+		slice = min_t(u64, slice, sysctl_sched_min_granularity);
+#endif
+
+	return slice;
 }
 
 /*
