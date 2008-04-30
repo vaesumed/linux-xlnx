@@ -25,6 +25,14 @@ struct klist {
 	void			(*put)(struct klist_node *);
 };
 
+#define KLIST_INIT(_name, _get, _put)					\
+	{ .k_lock	= __SPIN_LOCK_UNLOCKED(_name.k_lock),		\
+	  .k_list	= LIST_HEAD_INIT(_name.k_list),			\
+	  .get		= _get,						\
+	  .put		= _put, }
+
+#define DEFINE_KLIST(_name, _get, _put)					\
+	struct klist _name = KLIST_INIT(_name, _get, _put)
 
 extern void klist_init(struct klist * k, void (*get)(struct klist_node *),
 		       void (*put)(struct klist_node *));
@@ -38,6 +46,8 @@ struct klist_node {
 
 extern void klist_add_tail(struct klist_node * n, struct klist * k);
 extern void klist_add_head(struct klist_node * n, struct klist * k);
+extern void klist_add_after(struct klist_node * n, struct klist_node * pos);
+extern void klist_add_before(struct klist_node * n, struct klist_node * pos);
 
 extern void klist_del(struct klist_node * n);
 extern void klist_remove(struct klist_node * n);
