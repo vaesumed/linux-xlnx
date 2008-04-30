@@ -388,4 +388,17 @@ config EEEPC_LAPTOP
 
 	  If you have an Eee PC laptop, say Y or M here.
 
+config ME4000
+	tristate "me4000 driver"
+	default n
+	help
+	  FIXME!
+
+config AECTC
+	tristate "AETC video timestamp device"
+	depends on PCI
+	default n
+	help
+	  Provides support for something that needs to be documented here.
+
 endif # MISC_DEVICES
