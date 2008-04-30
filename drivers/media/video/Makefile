@@ -136,6 +136,8 @@ obj-$(CONFIG_SOC_CAMERA_MT9V022)	+= mt9v022.o
 
 obj-$(CONFIG_VIDEO_AU0828) += au0828/
 
+obj-$(CONFIG_VIDEO_SAA7146) += saa7146/
+
 EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core
 EXTRA_CFLAGS += -Idrivers/media/dvb/frontends
 EXTRA_CFLAGS += -Idrivers/media/common/tuners
