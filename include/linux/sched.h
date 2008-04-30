@@ -134,7 +134,6 @@ extern unsigned long nr_running(void);
 extern unsigned long nr_uninterruptible(void);
 extern unsigned long nr_active(void);
 extern unsigned long nr_iowait(void);
-extern unsigned long weighted_cpuload(const int cpu);
 
 struct seq_file;
 struct cfs_rq;
@@ -157,6 +156,8 @@ print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 {
 }
 #endif
+
+extern unsigned long long time_sync_thresh;
 
 /*
  * Task state bitmask. NOTE! These bits are also
@@ -244,6 +245,8 @@ extern asmlinkage void schedule_tail(struct task_struct *prev);
 extern void init_idle(struct task_struct *idle, int cpu);
 extern void init_idle_bootup_task(struct task_struct *idle);
 
+extern int runqueue_is_locked(void);
+
 extern cpumask_t nohz_cpu_mask;
 #if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ)
 extern int select_nohz_load_balancer(int cpu);
@@ -292,7 +295,8 @@ extern void softlockup_tick(void);
 extern void spawn_softlockup_task(void);
 extern void touch_softlockup_watchdog(void);
 extern void touch_all_softlockup_watchdogs(void);
-extern unsigned long  softlockup_thresh;
+extern unsigned int  softlockup_panic;
+extern unsigned long softlockup_thresh;
 extern unsigned long sysctl_hung_task_check_count;
 extern unsigned long sysctl_hung_task_timeout_secs;
 extern unsigned long sysctl_hung_task_warnings;
@@ -685,7 +689,12 @@ enum cpu_idle_type {
 /*
  * Increase resolution of nice-level calculations:
  */
+#if BITS_PER_LONG == 64
+#define SCHED_LOAD_SHIFT	20
+#else
 #define SCHED_LOAD_SHIFT	10
+#endif
+
 #define SCHED_LOAD_SCALE	(1L << SCHED_LOAD_SHIFT)
 
 #define SCHED_LOAD_SCALE_FUZZ	SCHED_LOAD_SCALE
@@ -814,23 +823,6 @@ extern int arch_reinit_sched_domains(void);
 
 #endif	/* CONFIG_SMP */
 
-/*
- * A runqueue laden with a single nice 0 task scores a weighted_cpuload of
- * SCHED_LOAD_SCALE. This function returns 1 if any cpu is laden with a
- * task of nice 0 or enough lower priority tasks to bring up the
- * weighted_cpuload
- */
-static inline int above_background_load(void)
-{
-	unsigned long cpu;
-
-	for_each_online_cpu(cpu) {
-		if (weighted_cpuload(cpu) >= SCHED_LOAD_SCALE)
-			return 1;
-	}
-	return 0;
-}
-
 struct io_context;			/* See blkdev.h */
 #define NGROUPS_SMALL		32
 #define NGROUPS_PER_BLOCK	((unsigned int)(PAGE_SIZE / sizeof(gid_t)))
@@ -921,10 +913,6 @@ struct sched_class {
 			     int running);
 	void (*prio_changed) (struct rq *this_rq, struct task_struct *task,
 			     int oldprio, int running);
-
-#ifdef CONFIG_FAIR_GROUP_SCHED
-	void (*moved_group) (struct task_struct *p);
-#endif
 };
 
 struct load_weight {
@@ -943,9 +931,15 @@ struct load_weight {
  */
 struct sched_entity {
 	struct load_weight	load;		/* for load-balancing */
-	struct rb_node		run_node;
-	struct list_head	group_node;
+	struct rb_node		timeline_node;
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	struct rb_node		deadline_node;
+	u64			deadline;
+	u64			min_deadline;
+	unsigned int		eligible;
+#endif
 	unsigned int		on_rq;
+	struct list_head	group_node;
 
 	u64			exec_start;
 	u64			sum_exec_runtime;
@@ -1979,6 +1973,11 @@ static inline void clear_tsk_need_resched(struct task_struct *tsk)
 	clear_tsk_thread_flag(tsk,TIF_NEED_RESCHED);
 }
 
+static inline int test_tsk_need_resched(struct task_struct *tsk)
+{
+	return unlikely(test_tsk_thread_flag(tsk,TIF_NEED_RESCHED));
+}
+
 static inline int signal_pending(struct task_struct *p)
 {
 	return unlikely(test_tsk_thread_flag(p,TIF_SIGPENDING));
@@ -1993,7 +1992,7 @@ static inline int fatal_signal_pending(struct task_struct *p)
 
 static inline int need_resched(void)
 {
-	return unlikely(test_thread_flag(TIF_NEED_RESCHED));
+	return unlikely(test_tsk_need_resched(current));
 }
 
 /*
@@ -2079,28 +2078,14 @@ static inline void arch_pick_mmap_layout(struct mm_struct *mm)
 }
 #endif
 
-#ifdef CONFIG_CONTEXT_SWITCH_TRACER
+#ifdef CONFIG_TRACING
 extern void
-ftrace_ctx_switch(struct task_struct *prev, struct task_struct *next);
+__trace_special(void *__tr, void *__data,
+		unsigned long arg1, unsigned long arg2, unsigned long arg3);
 #else
 static inline void
-ftrace_ctx_switch(struct task_struct *prev, struct task_struct *next)
-{
-}
-#endif
-
-#ifdef CONFIG_SCHED_TRACER
-extern void
-ftrace_wake_up_task(struct task_struct *wakee, struct task_struct *curr);
-extern void
-ftrace_wake_up_new_task(struct task_struct *wakee, struct task_struct *curr);
-#else
-static inline void
-ftrace_wake_up_task(struct task_struct *wakee, struct task_struct *curr)
-{
-}
-static inline void
-ftrace_wake_up_new_task(struct task_struct *wakee, struct task_struct *curr)
+__trace_special(void *__tr, void *__data,
+		unsigned long arg1, unsigned long arg2, unsigned long arg3)
 {
 }
 #endif

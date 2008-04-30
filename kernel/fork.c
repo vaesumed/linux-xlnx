@@ -55,6 +55,7 @@
 #include <linux/proc_fs.h>
 #include <linux/blkdev.h>
 #include <linux/magic.h>
+#include <linux/marker.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -1044,7 +1045,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 
 	rt_mutex_init_task(p);
 
-#ifdef CONFIG_TRACE_IRQFLAGS
+#if defined(CONFIG_TRACE_IRQFLAGS) && defined(CONFIG_LOCKDEP)
 	DEBUG_LOCKS_WARN_ON(!p->hardirqs_enabled);
 	DEBUG_LOCKS_WARN_ON(!p->softirqs_enabled);
 #endif
@@ -1490,6 +1491,10 @@ long do_fork(unsigned long clone_flags,
 	 */
 	if (!IS_ERR(p)) {
 		struct completion vfork;
+
+		trace_mark(kernel_process_fork,
+			"parent_pid %d child_pid %d child_tgid %d",
+			current->pid, p->pid, p->tgid);
 
 		nr = task_pid_vnr(p);
 
