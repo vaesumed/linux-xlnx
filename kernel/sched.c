@@ -242,6 +242,12 @@ static void destroy_rt_bandwidth(struct rt_bandwidth *rt_b)
 }
 #endif
 
+/*
+ * sched_domains_mutex serializes calls to arch_init_sched_domains,
+ * detach_destroy_domains and partition_sched_domains.
+ */
+static DEFINE_MUTEX(sched_domains_mutex);
+
 #ifdef CONFIG_GROUP_SCHED
 
 #include <linux/cgroup.h>
@@ -308,9 +314,6 @@ static DEFINE_PER_CPU(struct rt_rq, init_rt_rq) ____cacheline_aligned_in_smp;
  */
 static DEFINE_SPINLOCK(task_group_lock);
 
-/* doms_cur_mutex serializes access to doms_cur[] array */
-static DEFINE_MUTEX(doms_cur_mutex);
-
 #ifdef CONFIG_FAIR_GROUP_SCHED
 #ifdef CONFIG_USER_SCHED
 # define INIT_TASK_GROUP_LOAD	(2*NICE_0_LOAD)
@@ -318,7 +321,13 @@ static DEFINE_MUTEX(doms_cur_mutex);
 # define INIT_TASK_GROUP_LOAD	NICE_0_LOAD
 #endif
 
+/*
+ * A weight of 0, 1 or ULONG_MAX can cause arithmetics problems.
+ * (The default weight is 1024 - so there's no practical
+ *  limitation from this.)
+ */
 #define MIN_SHARES	2
+#define MAX_SHARES	(ULONG_MAX - 1)
 
 static int init_task_group_load = INIT_TASK_GROUP_LOAD;
 #endif
@@ -358,21 +367,9 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
 #endif
 }
 
-static inline void lock_doms_cur(void)
-{
-	mutex_lock(&doms_cur_mutex);
-}
-
-static inline void unlock_doms_cur(void)
-{
-	mutex_unlock(&doms_cur_mutex);
-}
-
 #else
 
 static inline void set_task_rq(struct task_struct *p, unsigned int cpu) { }
-static inline void lock_doms_cur(void) { }
-static inline void unlock_doms_cur(void) { }
 
 #endif	/* CONFIG_GROUP_SCHED */
 
@@ -913,11 +910,14 @@ static DEFINE_PER_CPU(unsigned long long, prev_cpu_time);
 static DEFINE_SPINLOCK(time_sync_lock);
 static unsigned long long prev_global_time;
 
-static unsigned long long __sync_cpu_clock(cycles_t time, int cpu)
+static unsigned long long __sync_cpu_clock(unsigned long long time, int cpu)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&time_sync_lock, flags);
+	/*
+	 * We want this inlined, to not get tracer function calls
+	 * in this critical section:
+	 */
+	spin_acquire(&time_sync_lock.dep_map, 0, 0, _THIS_IP_);
+	__raw_spin_lock(&time_sync_lock.raw_lock);
 
 	if (time < prev_global_time) {
 		per_cpu(time_offset, cpu) += prev_global_time - time;
@@ -926,7 +926,8 @@ static unsigned long long __sync_cpu_clock(cycles_t time, int cpu)
 		prev_global_time = time;
 	}
 
-	spin_unlock_irqrestore(&time_sync_lock, flags);
+	__raw_spin_unlock(&time_sync_lock.raw_lock);
+	spin_release(&time_sync_lock.dep_map, 1, _THIS_IP_);
 
 	return time;
 }
@@ -934,7 +935,6 @@ static unsigned long long __sync_cpu_clock(cycles_t time, int cpu)
 static unsigned long long __cpu_clock(int cpu)
 {
 	unsigned long long now;
-	unsigned long flags;
 	struct rq *rq;
 
 	/*
@@ -944,11 +944,9 @@ static unsigned long long __cpu_clock(int cpu)
 	if (unlikely(!scheduler_running))
 		return 0;
 
-	local_irq_save(flags);
 	rq = cpu_rq(cpu);
 	update_rq_clock(rq);
 	now = rq->clock;
-	local_irq_restore(flags);
 
 	return now;
 }
@@ -960,13 +958,18 @@ static unsigned long long __cpu_clock(int cpu)
 unsigned long long cpu_clock(int cpu)
 {
 	unsigned long long prev_cpu_time, time, delta_time;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	prev_cpu_time = per_cpu(prev_cpu_time, cpu);
 	time = __cpu_clock(cpu) + per_cpu(time_offset, cpu);
 	delta_time = time-prev_cpu_time;
 
-	if (unlikely(delta_time > time_sync_thresh))
+	if (unlikely(delta_time > time_sync_thresh)) {
 		time = __sync_cpu_clock(time, cpu);
+		per_cpu(prev_cpu_time, cpu) = time;
+	}
+	local_irq_restore(flags);
 
 	return time;
 }
@@ -1748,6 +1751,8 @@ __update_group_shares_cpu(struct task_group *tg, struct sched_domain *sd,
 
 	if (shares < MIN_SHARES)
 		shares = MIN_SHARES;
+	else if (shares > MAX_SHARES)
+		shares = MAX_SHARES;
 
 	__set_se_shares(tg->se[tcpu], shares);
 }
@@ -7755,7 +7760,7 @@ void partition_sched_domains(int ndoms_new, cpumask_t *doms_new,
 {
 	int i, j;
 
-	lock_doms_cur();
+	mutex_lock(&sched_domains_mutex);
 
 	/* always unregister in case we don't destroy any domains */
 	unregister_sched_domain_sysctl();
@@ -7804,7 +7809,7 @@ match2:
 
 	register_sched_domain_sysctl();
 
-	unlock_doms_cur();
+	mutex_unlock(&sched_domains_mutex);
 }
 
 #if defined(CONFIG_SCHED_MC) || defined(CONFIG_SCHED_SMT)
@@ -7813,8 +7818,10 @@ int arch_reinit_sched_domains(void)
 	int err;
 
 	get_online_cpus();
+	mutex_lock(&sched_domains_mutex);
 	detach_destroy_domains(&cpu_online_map);
 	err = arch_init_sched_domains(&cpu_online_map);
+	mutex_unlock(&sched_domains_mutex);
 	put_online_cpus();
 
 	return err;
@@ -7932,10 +7939,12 @@ void __init sched_init_smp(void)
 	BUG_ON(sched_group_nodes_bycpu == NULL);
 #endif
 	get_online_cpus();
+	mutex_lock(&sched_domains_mutex);
 	arch_init_sched_domains(&cpu_online_map);
 	cpus_andnot(non_isolated_cpus, cpu_possible_map, cpu_isolated_map);
 	if (cpus_empty(non_isolated_cpus))
 		cpu_set(smp_processor_id(), non_isolated_cpus);
+	mutex_unlock(&sched_domains_mutex);
 	put_online_cpus();
 	/* XXX: Theoretical race here - CPU may be hotplugged now */
 	hotcpu_notifier(update_sched_domains, 0);
@@ -8722,13 +8731,10 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	if (!tg->se[0])
 		return -EINVAL;
 
-	/*
-	 * A weight of 0 or 1 can cause arithmetics problems.
-	 * (The default weight is 1024 - so there's no practical
-	 *  limitation from this.)
-	 */
 	if (shares < MIN_SHARES)
 		shares = MIN_SHARES;
+	else if (shares > MAX_SHARES)
+		shares = MAX_SHARES;
 
 	mutex_lock(&shares_mutex);
 	if (tg->shares == shares)
@@ -8753,7 +8759,7 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 		 * force a rebalance
 		 */
 		cfs_rq_set_shares(tg->cfs_rq[i], 0);
-		set_se_shares(tg->se[i], shares/nr_cpu_ids);
+		set_se_shares(tg->se[i], shares);
 	}
 
 	/*
