@@ -259,8 +259,12 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 
 out_unlock:
 	unlock_page(page);
-out_release:
 	page_cache_release(page);
+out_release:
+	if (pos + len > i_size)
+		ubifs_cancel_ino_op(c, inode, &req);
+	else
+		ubifs_release_budget(c, &req);
 	return err;
 
 }
