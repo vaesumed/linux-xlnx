@@ -241,10 +241,13 @@ config SONYPI_COMPAT
 config THINKPAD_ACPI
 	tristate "ThinkPad ACPI Laptop Extras"
 	depends on X86 && ACPI
+	select BACKLIGHT_LCD_SUPPORT
 	select BACKLIGHT_CLASS_DEVICE
 	select HWMON
 	select NVRAM
-	depends on INPUT
+	select INPUT
+	select NEW_LEDS
+	select LEDS_CLASS
 	---help---
 	  This is a driver for the IBM and Lenovo ThinkPad laptops. It adds
 	  support for Fn-Fx key combinations, Bluetooth control, video
@@ -344,6 +347,7 @@ config ATMEL_SSC
 config INTEL_MENLOW
 	tristate "Thermal Management driver for Intel menlow platform"
 	depends on ACPI_THERMAL
+	select THERMAL
 	depends on X86
 	---help---
 	  ACPI thermal management enhancement driver on
@@ -371,5 +375,17 @@ config SGI_XP
 	  hardware based memory protection from the others.  Enabling
 	  this feature will allow for direct communication between SSIs
 	  based on a network adapter and DMA messaging.
+config EEEPC_LAPTOP
+	tristate "Eee PC Hotkey Driver (EXPERIMENTAL)"
+	depends on X86
+	depends on ACPI
+	depends on BACKLIGHT_CLASS_DEVICE
+	depends on HWMON
+	depends on EXPERIMENTAL
+	---help---
+	  This driver supports the Fn-Fx keys on Eee PC laptops.
+	  It also adds the ability to switch camera/wlan on/off.
+
+	  If you have an Eee PC laptop, say Y or M here.
 
 endif # MISC_DEVICES
