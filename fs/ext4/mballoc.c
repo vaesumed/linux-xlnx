@@ -576,8 +576,6 @@ static void ext4_mb_store_history(struct ext4_allocation_context *ac);
 
 static struct proc_dir_entry *proc_root_ext4;
 struct buffer_head *read_block_bitmap(struct super_block *, ext4_group_t);
-ext4_fsblk_t ext4_new_blocks_old(handle_t *handle, struct inode *inode,
-			ext4_fsblk_t goal, unsigned long *count, int *errp);
 
 static void ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
 					ext4_group_t group);
@@ -736,7 +734,7 @@ static void mb_free_blocks_double(struct inode *inode, struct ext4_buddy *e4b,
 			blocknr +=
 			    le32_to_cpu(EXT4_SB(sb)->s_es->s_first_data_block);
 
-			ext4_error(sb, __FUNCTION__, "double-free of inode"
+			ext4_error(sb, __func__, "double-free of inode"
 				   " %lu's block %llu(bit %u in group %lu)\n",
 				   inode ? inode->i_ino : 0, blocknr,
 				   first + i, e4b->bd_group);
@@ -908,7 +906,7 @@ static int __mb_check_buddy(struct ext4_buddy *e4b, char *file,
 }
 #undef MB_CHECK_ASSERT
 #define mb_check_buddy(e4b) __mb_check_buddy(e4b,	\
-					__FILE__, __FUNCTION__, __LINE__)
+					__FILE__, __func__, __LINE__)
 #else
 #define mb_check_buddy(e4b)
 #endif
@@ -982,7 +980,7 @@ static void ext4_mb_generate_buddy(struct super_block *sb,
 	grp->bb_fragments = fragments;
 
 	if (free != grp->bb_free) {
-		ext4_error(sb, __FUNCTION__,
+		ext4_error(sb, __func__,
 			"EXT4-fs: group %lu: %u blocks in bitmap, %u in gd\n",
 			group, free, grp->bb_free);
 		/*
@@ -1168,8 +1166,9 @@ out:
 	return err;
 }
 
-static int ext4_mb_load_buddy(struct super_block *sb, ext4_group_t group,
-		struct ext4_buddy *e4b)
+static noinline int
+ext4_mb_load_buddy(struct super_block *sb, ext4_group_t group,
+					struct ext4_buddy *e4b)
 {
 	struct ext4_sb_info *sbi = EXT4_SB(sb);
 	struct inode *inode = sbi->s_buddy_cache;
@@ -1367,7 +1366,7 @@ static int mb_free_blocks(struct inode *inode, struct ext4_buddy *e4b,
 			blocknr +=
 			    le32_to_cpu(EXT4_SB(sb)->s_es->s_first_data_block);
 
-			ext4_error(sb, __FUNCTION__, "double-free of inode"
+			ext4_error(sb, __func__, "double-free of inode"
 				   " %lu's block %llu(bit %u in group %lu)\n",
 				   inode ? inode->i_ino : 0, blocknr, block,
 				   e4b->bd_group);
@@ -1848,7 +1847,7 @@ static void ext4_mb_complex_scan_group(struct ext4_allocation_context *ac,
 			 * free blocks even though group info says we
 			 * we have free blocks
 			 */
-			ext4_error(sb, __FUNCTION__, "%d free blocks as per "
+			ext4_error(sb, __func__, "%d free blocks as per "
 					"group info. But bitmap says 0\n",
 					free);
 			break;
@@ -1857,7 +1856,7 @@ static void ext4_mb_complex_scan_group(struct ext4_allocation_context *ac,
 		mb_find_extent(e4b, 0, i, ac->ac_g_ex.fe_len, &ex);
 		BUG_ON(ex.fe_len <= 0);
 		if (free < ex.fe_len) {
-			ext4_error(sb, __FUNCTION__, "%d free blocks as per "
+			ext4_error(sb, __func__, "%d free blocks as per "
 					"group info. But got %d blocks\n",
 					free, ex.fe_len);
 			/*
@@ -1965,7 +1964,8 @@ static int ext4_mb_good_group(struct ext4_allocation_context *ac,
 	return 0;
 }
 
-static int ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
+static noinline int
+ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
 {
 	ext4_group_t group;
 	ext4_group_t i;
@@ -2465,7 +2465,7 @@ static void ext4_mb_history_init(struct super_block *sb)
 	/* if we can't allocate history, then we simple won't use it */
 }
 
-static void ext4_mb_store_history(struct ext4_allocation_context *ac)
+static noinline void ext4_mb_store_history(struct ext4_allocation_context *ac)
 {
 	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
 	struct ext4_mb_history h;
@@ -2801,7 +2801,7 @@ int ext4_mb_release(struct super_block *sb)
 	return 0;
 }
 
-static void ext4_mb_free_committed_blocks(struct super_block *sb)
+static noinline void ext4_mb_free_committed_blocks(struct super_block *sb)
 {
 	struct ext4_sb_info *sbi = EXT4_SB(sb);
 	int err;
@@ -3021,7 +3021,8 @@ void exit_ext4_mballoc(void)
  * Check quota and mark choosed space (ac->ac_b_ex) non-free in bitmaps
  * Returns 0 if success or error code
  */
-static int ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
+static noinline int
+ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 				handle_t *handle)
 {
 	struct buffer_head *bitmap_bh = NULL;
@@ -3070,7 +3071,7 @@ static int ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 			in_range(block, ext4_inode_table(sb, gdp),
 				EXT4_SB(sb)->s_itb_per_group)) {
 
-		ext4_error(sb, __FUNCTION__,
+		ext4_error(sb, __func__,
 			   "Allocating block in system zone - block = %llu",
 			   block);
 	}
@@ -3094,9 +3095,7 @@ static int ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 						ac->ac_b_ex.fe_group,
 						gdp));
 	}
-	gdp->bg_free_blocks_count =
-		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count)
-				- ac->ac_b_ex.fe_len);
+	le16_add_cpu(&gdp->bg_free_blocks_count, -ac->ac_b_ex.fe_len);
 	gdp->bg_checksum = ext4_group_desc_csum(sbi, ac->ac_b_ex.fe_group, gdp);
 	spin_unlock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 	percpu_counter_sub(&sbi->s_freeblocks_counter, ac->ac_b_ex.fe_len);
@@ -3138,15 +3137,16 @@ static void ext4_mb_normalize_group_request(struct ext4_allocation_context *ac)
  * Normalization means making request better in terms of
  * size and alignment
  */
-static void ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+static noinline void
+ext4_mb_normalize_request(struct ext4_allocation_context *ac,
 				struct ext4_allocation_request *ar)
 {
 	int bsbits, max;
 	ext4_lblk_t end;
-	struct list_head *cur;
 	loff_t size, orig_size, start_off;
 	ext4_lblk_t start, orig_start;
 	struct ext4_inode_info *ei = EXT4_I(ac->ac_inode);
+	struct ext4_prealloc_space *pa;
 
 	/* do normalize only data requests, metadata requests
 	   do not need preallocation */
@@ -3232,11 +3232,8 @@ static void ext4_mb_normalize_request(struct ext4_allocation_context *ac,
 
 	/* check we don't cross already preallocated blocks */
 	rcu_read_lock();
-	list_for_each_rcu(cur, &ei->i_prealloc_list) {
-		struct ext4_prealloc_space *pa;
+	list_for_each_entry_rcu(pa, &ei->i_prealloc_list, pa_inode_list) {
 		unsigned long pa_end;
-
-		pa = list_entry(cur, struct ext4_prealloc_space, pa_inode_list);
 
 		if (pa->pa_deleted)
 			continue;
@@ -3279,10 +3276,8 @@ static void ext4_mb_normalize_request(struct ext4_allocation_context *ac,
 
 	/* XXX: extra loop to check we really don't overlap preallocations */
 	rcu_read_lock();
-	list_for_each_rcu(cur, &ei->i_prealloc_list) {
-		struct ext4_prealloc_space *pa;
+	list_for_each_entry_rcu(pa, &ei->i_prealloc_list, pa_inode_list) {
 		unsigned long pa_end;
-		pa = list_entry(cur, struct ext4_prealloc_space, pa_inode_list);
 		spin_lock(&pa->pa_lock);
 		if (pa->pa_deleted == 0) {
 			pa_end = pa->pa_lstart + pa->pa_len;
@@ -3404,12 +3399,11 @@ static void ext4_mb_use_group_pa(struct ext4_allocation_context *ac,
 /*
  * search goal blocks in preallocated space
  */
-static int ext4_mb_use_preallocated(struct ext4_allocation_context *ac)
+static noinline int ext4_mb_use_preallocated(struct ext4_allocation_context *ac)
 {
 	struct ext4_inode_info *ei = EXT4_I(ac->ac_inode);
 	struct ext4_locality_group *lg;
 	struct ext4_prealloc_space *pa;
-	struct list_head *cur;
 
 	/* only data can be preallocated */
 	if (!(ac->ac_flags & EXT4_MB_HINT_DATA))
@@ -3417,8 +3411,7 @@ static int ext4_mb_use_preallocated(struct ext4_allocation_context *ac)
 
 	/* first, try per-file preallocation */
 	rcu_read_lock();
-	list_for_each_rcu(cur, &ei->i_prealloc_list) {
-		pa = list_entry(cur, struct ext4_prealloc_space, pa_inode_list);
+	list_for_each_entry_rcu(pa, &ei->i_prealloc_list, pa_inode_list) {
 
 		/* all fields in this condition don't change,
 		 * so we can skip locking for them */
@@ -3450,8 +3443,7 @@ static int ext4_mb_use_preallocated(struct ext4_allocation_context *ac)
 		return 0;
 
 	rcu_read_lock();
-	list_for_each_rcu(cur, &lg->lg_prealloc_list) {
-		pa = list_entry(cur, struct ext4_prealloc_space, pa_inode_list);
+	list_for_each_entry_rcu(pa, &lg->lg_prealloc_list, pa_inode_list) {
 		spin_lock(&pa->pa_lock);
 		if (pa->pa_deleted == 0 && pa->pa_free >= ac->ac_o_ex.fe_len) {
 			atomic_inc(&pa->pa_count);
@@ -3571,7 +3563,7 @@ static void ext4_mb_put_pa(struct ext4_allocation_context *ac,
 /*
  * creates new preallocated space for given inode
  */
-static int ext4_mb_new_inode_pa(struct ext4_allocation_context *ac)
+static noinline int ext4_mb_new_inode_pa(struct ext4_allocation_context *ac)
 {
 	struct super_block *sb = ac->ac_sb;
 	struct ext4_prealloc_space *pa;
@@ -3658,7 +3650,7 @@ static int ext4_mb_new_inode_pa(struct ext4_allocation_context *ac)
 /*
  * creates new preallocated space for locality group inodes belongs to
  */
-static int ext4_mb_new_group_pa(struct ext4_allocation_context *ac)
+static noinline int ext4_mb_new_group_pa(struct ext4_allocation_context *ac)
 {
 	struct super_block *sb = ac->ac_sb;
 	struct ext4_locality_group *lg;
@@ -3731,7 +3723,7 @@ static int ext4_mb_new_preallocation(struct ext4_allocation_context *ac)
  * the caller MUST hold group/inode locks.
  * TODO: optimize the case when there are no in-core structures yet
  */
-static int ext4_mb_release_inode_pa(struct ext4_buddy *e4b,
+static noinline int ext4_mb_release_inode_pa(struct ext4_buddy *e4b,
 				struct buffer_head *bitmap_bh,
 				struct ext4_prealloc_space *pa)
 {
@@ -3789,7 +3781,7 @@ static int ext4_mb_release_inode_pa(struct ext4_buddy *e4b,
 			pa, (unsigned long) pa->pa_lstart,
 			(unsigned long) pa->pa_pstart,
 			(unsigned long) pa->pa_len);
-		ext4_error(sb, __FUNCTION__, "free %u, pa_free %u\n",
+		ext4_error(sb, __func__, "free %u, pa_free %u\n",
 						free, pa->pa_free);
 		/*
 		 * pa is already deleted so we use the value obtained
@@ -3803,7 +3795,7 @@ static int ext4_mb_release_inode_pa(struct ext4_buddy *e4b,
 	return err;
 }
 
-static int ext4_mb_release_group_pa(struct ext4_buddy *e4b,
+static noinline int ext4_mb_release_group_pa(struct ext4_buddy *e4b,
 				struct ext4_prealloc_space *pa)
 {
 	struct ext4_allocation_context *ac;
@@ -3845,7 +3837,7 @@ static int ext4_mb_release_group_pa(struct ext4_buddy *e4b,
  * - how many do we discard
  *   1) how many requested
  */
-static int ext4_mb_discard_group_preallocations(struct super_block *sb,
+static noinline int ext4_mb_discard_group_preallocations(struct super_block *sb,
 					ext4_group_t group, int needed)
 {
 	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
@@ -4167,7 +4159,8 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
 	mutex_lock(&ac->ac_lg->lg_mutex);
 }
 
-static int ext4_mb_initialize_context(struct ext4_allocation_context *ac,
+static noinline int
+ext4_mb_initialize_context(struct ext4_allocation_context *ac,
 				struct ext4_allocation_request *ar)
 {
 	struct super_block *sb = ar->inode->i_sb;
@@ -4398,7 +4391,8 @@ static void ext4_mb_poll_new_transaction(struct super_block *sb,
 	ext4_mb_free_committed_blocks(sb);
 }
 
-static int ext4_mb_free_metadata(handle_t *handle, struct ext4_buddy *e4b,
+static noinline int
+ext4_mb_free_metadata(handle_t *handle, struct ext4_buddy *e4b,
 			  ext4_group_t group, ext4_grpblk_t block, int count)
 {
 	struct ext4_group_info *db = e4b->bd_info;
@@ -4489,7 +4483,7 @@ void ext4_mb_free_blocks(handle_t *handle, struct inode *inode,
 	if (block < le32_to_cpu(es->s_first_data_block) ||
 	    block + count < block ||
 	    block + count > ext4_blocks_count(es)) {
-		ext4_error(sb, __FUNCTION__,
+		ext4_error(sb, __func__,
 			    "Freeing blocks not in datazone - "
 			    "block = %lu, count = %lu", block, count);
 		goto error_return;
@@ -4530,7 +4524,7 @@ do_more:
 	    in_range(block + count - 1, ext4_inode_table(sb, gdp),
 		      EXT4_SB(sb)->s_itb_per_group)) {
 
-		ext4_error(sb, __FUNCTION__,
+		ext4_error(sb, __func__,
 			   "Freeing blocks in system zone - "
 			   "Block = %lu, count = %lu", block, count);
 	}
@@ -4588,8 +4582,7 @@ do_more:
 	}
 
 	spin_lock(sb_bgl_lock(sbi, block_group));
-	gdp->bg_free_blocks_count =
-		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
+	le16_add_cpu(&gdp->bg_free_blocks_count, count);
 	gdp->bg_checksum = ext4_group_desc_csum(sbi, block_group, gdp);
 	spin_unlock(sb_bgl_lock(sbi, block_group));
 	percpu_counter_add(&sbi->s_freeblocks_counter, count);
