@@ -326,3 +326,59 @@ gss_decrypt_xdr_buf(struct crypto_blkcipher *tfm, struct xdr_buf *buf,
 
 	return xdr_process_buf(buf, offset, buf->len - offset, decryptor, &desc);
 }
+
+/*
+ * This function makes the assumption that it was ultimately called
+ * from gss_wrap().
+ *
+ * The client auth_gss code moves any existing tail data into a
+ * separate page before calling gss_wrap.
+ * The server svcauth_gss code ensures that both the head and the
+ * tail have slack space of RPC_MAX_AUTH_SIZE before calling gss_wrap.
+ *
+ * Even with that guarantee, this function may be called more than
+ * once in the processing of gss_wrap().  The best we can do is
+ * verify at compile-time (see GSS_KRB5_SLACK_CHECK) that the
+ * largest expected shift will fit within RPC_MAX_AUTH_SIZE.
+ * At run-time we can verify that a single invocation of this
+ * function doesn't attempt to use more the RPC_MAX_AUTH_SIZE.
+ */
+
+int
+shift_head_data(struct xdr_buf *buf, unsigned int base, unsigned int shiftlen)
+{
+	u8 *p;
+
+	if (shiftlen == 0)
+		return 0;
+
+	GSS_KRB5_SLACK_CHECK;
+	BUG_ON(shiftlen > RPC_MAX_AUTH_SIZE);
+
+	/*
+	 * If there is a tail, and it shares a page with the head,
+	 * make sure we don't clobber the tail.  This is a just a
+	 * defensive check.
+	 */
+	if (buf->tail[0].iov_base != NULL) {
+		if ((((long)buf->tail[0].iov_base >> PAGE_CACHE_SHIFT) ==
+		     ((long)buf->head[0].iov_base >> PAGE_CACHE_SHIFT)) &&
+		    buf->tail[0].iov_base - buf->head[0].iov_base < shiftlen) {
+			dprintk("%s: collision: head %p:%zu, tail %p:%zu, "
+				"shiftlen %u\n",
+				__func__, buf->head[0].iov_base,
+				buf->head[0].iov_len, buf->tail[0].iov_base,
+				buf->tail[0].iov_len, shiftlen);
+			return 1;
+		}
+	}
+
+	p = buf->head[0].iov_base + base;
+
+	memmove(p + shiftlen, p, buf->head[0].iov_len - base);
+
+	buf->head[0].iov_len += shiftlen;
+	buf->len += shiftlen;
+
+	return 0;
+}
