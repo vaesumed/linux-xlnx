@@ -41,6 +41,7 @@
 #include "xfs_error.h"
 #include "xfs_bmap.h"
 
+#include <linux/random.h>
 /*
  * Log specified fields for the inode given by bp and off.
  */
