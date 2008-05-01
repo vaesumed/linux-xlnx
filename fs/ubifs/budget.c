@@ -262,6 +262,11 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 	else
 		ret = idx_size;
 	/*
+	 * The index head is not available for the in-the-gaps method, so add an
+	 * extra LEB to compensate.
+	 */
+	ret += 1;
+	/*
 	 * At present the index needs at least 2 LEBs: one for the index head
 	 * and one for in-the-gaps method (which currently does not cater for
 	 * the index head and so excludes it from consideration).
