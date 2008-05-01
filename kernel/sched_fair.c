@@ -841,8 +841,10 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	 * queued ticks are scheduled to match the slice, so don't bother
 	 * validating it and just reschedule.
 	 */
-	if (queued)
-		return resched_task(rq_of(cfs_rq)->curr);
+	if (queued) {
+		resched_task(rq_of(cfs_rq)->curr);
+		return;
+	}
 	/*
 	 * don't let the period tick interfere with the hrtick preemption
 	 */
@@ -1007,7 +1009,7 @@ static int wake_idle(int cpu, struct task_struct *p)
 	 * sibling runqueue info. This will avoid the checks and cache miss
 	 * penalities associated with that.
 	 */
-	if (idle_cpu(cpu) || cpu_rq(cpu)->nr_running > 1)
+	if (idle_cpu(cpu) || cpu_rq(cpu)->cfs.nr_running > 1)
 		return cpu;
 
 	for_each_domain(cpu, sd) {
@@ -1611,30 +1613,6 @@ static const struct sched_class fair_sched_class = {
 };
 
 #ifdef CONFIG_SCHED_DEBUG
-static void
-print_cfs_rq_tasks(struct seq_file *m, struct cfs_rq *cfs_rq, int depth)
-{
-	struct sched_entity *se;
-
-	if (!cfs_rq)
-		return;
-
-	list_for_each_entry_rcu(se, &cfs_rq->tasks, group_node) {
-		int i;
-
-		for (i = depth; i; i--)
-			seq_puts(m, "  ");
-
-		seq_printf(m, "%lu %s %lu\n",
-				se->load.weight,
-				entity_is_task(se) ? "T" : "G",
-				calc_delta_weight(SCHED_LOAD_SCALE, se)
-				);
-		if (!entity_is_task(se))
-			print_cfs_rq_tasks(m, group_cfs_rq(se), depth + 1);
-	}
-}
-
 static void print_cfs_stats(struct seq_file *m, int cpu)
 {
 	struct cfs_rq *cfs_rq;
@@ -1642,9 +1620,6 @@ static void print_cfs_stats(struct seq_file *m, int cpu)
 	rcu_read_lock();
 	for_each_leaf_cfs_rq(cpu_rq(cpu), cfs_rq)
 		print_cfs_rq(m, cpu, cfs_rq);
-
-	seq_printf(m, "\nWeight tree:\n");
-	print_cfs_rq_tasks(m, &cpu_rq(cpu)->cfs, 1);
 	rcu_read_unlock();
 }
 #endif
