@@ -128,7 +128,9 @@ static struct resource standard_io_resources[] = {
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
 	{ .name = "timer1", .start = 0x50, .end = 0x53,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
-	{ .name = "keyboard", .start = 0x60, .end = 0x6f,
+	{ .name = "keyboard", .start = 0x60, .end = 0x60,
+		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	{ .name = "keyboard", .start = 0x64, .end = 0x64,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
 	{ .name = "dma page reg", .start = 0x80, .end = 0x8f,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
@@ -917,11 +919,12 @@ static void __cpuinit init_intel(struct cpuinfo_x86 *c)
 			set_cpu_cap(c, X86_FEATURE_BTS);
 		if (!(l1 & (1<<12)))
 			set_cpu_cap(c, X86_FEATURE_PEBS);
+		ds_init_intel(c);
 	}
 
 
 	if (cpu_has_bts)
-		ds_init_intel(c);
+		ptrace_bts_init_intel(c);
 
 	n = c->extended_cpuid_level;
 	if (n >= 0x80000008) {
