@@ -12,6 +12,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#include <linux/mmiotrace.h>
 
 #include <asm/cacheflush.h>
 #include <asm/e820.h>
@@ -122,10 +123,13 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 {
 	unsigned long pfn, offset, vaddr;
 	resource_size_t last_addr;
+	const resource_size_t unaligned_phys_addr = phys_addr;
+	const unsigned long unaligned_size = size;
 	struct vm_struct *area;
 	unsigned long new_prot_val;
 	pgprot_t prot;
 	int retval;
+	void __iomem *ret_addr;
 
 	/* Don't allow wraparound or zero size */
 	last_addr = phys_addr + size - 1;
@@ -229,7 +233,10 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 		return NULL;
 	}
 
-	return (void __iomem *) (vaddr + offset);
+	ret_addr = (void __iomem *) (vaddr + offset);
+	mmiotrace_ioremap(unaligned_phys_addr, unaligned_size, ret_addr);
+
+	return ret_addr;
 }
 
 /**
@@ -308,6 +315,8 @@ void iounmap(volatile void __iomem *addr)
 	if (addr >= phys_to_virt(ISA_START_ADDRESS) &&
 	    addr < phys_to_virt(ISA_END_ADDRESS))
 		return;
+
+	mmiotrace_iounmap(addr);
 
 	addr = (volatile void __iomem *)
 		(PAGE_MASK & (unsigned long __force)addr);
