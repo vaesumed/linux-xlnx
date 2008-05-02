@@ -517,8 +517,7 @@ int iscsi_add_session(struct iscsi_cls_session *session, unsigned int target_id)
 	session->sid = atomic_add_return(1, &iscsi_session_nr);
 	session->target_id = target_id;
 
-	snprintf(session->dev.bus_id, BUS_ID_SIZE, "session%u",
-		 session->sid);
+	dev_set_name(&session->dev, "session%u", session->sid);
 	err = device_add(&session->dev);
 	if (err) {
 		iscsi_cls_session_printk(KERN_ERR, session,
@@ -695,8 +694,7 @@ iscsi_create_conn(struct iscsi_cls_session *session, uint32_t cid)
 	if (!get_device(&session->dev))
 		goto free_conn;
 
-	snprintf(conn->dev.bus_id, BUS_ID_SIZE, "connection%d:%u",
-		 session->sid, cid);
+	dev_set_name(&conn->dev, "connection%d:%u", session->sid, cid);
 	conn->dev.parent = &session->dev;
 	conn->dev.release = iscsi_conn_release;
 	err = device_register(&conn->dev);
@@ -1582,7 +1580,7 @@ iscsi_register_transport(struct iscsi_transport *tt)
 	priv->t.user_scan = iscsi_user_scan;
 
 	priv->dev.class = &iscsi_transport_class;
-	snprintf(priv->dev.bus_id, BUS_ID_SIZE, "%s", tt->name);
+	dev_set_name(&priv->dev, "%s", tt->name);
 	err = device_register(&priv->dev);
 	if (err)
 		goto free_priv;

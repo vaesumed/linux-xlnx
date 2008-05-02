@@ -1924,7 +1924,7 @@ static int snd_ac97_dev_register(struct snd_device *device)
 	ac97->dev.bus = &ac97_bus_type;
 	ac97->dev.parent = ac97->bus->card->dev;
 	ac97->dev.release = ac97_device_release;
-	snprintf(ac97->dev.bus_id, BUS_ID_SIZE, "%d-%d:%s",
+	dev_set_name(&ac97->dev, "%d-%d:%s",
 		 ac97->bus->card->number, ac97->num,
 		 snd_ac97_get_short_name(ac97));
 	if ((err = device_register(&ac97->dev)) < 0) {

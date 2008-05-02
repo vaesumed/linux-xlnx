@@ -629,10 +629,10 @@ struct sas_phy *sas_phy_alloc(struct device *parent, int number)
 	INIT_LIST_HEAD(&phy->port_siblings);
 	if (scsi_is_sas_expander_device(parent)) {
 		struct sas_rphy *rphy = dev_to_rphy(parent);
-		sprintf(phy->dev.bus_id, "phy-%d:%d:%d", shost->host_no,
+		dev_set_name(&phy->dev, "phy-%d:%d:%d", shost->host_no,
 			rphy->scsi_target_id, number);
 	} else
-		sprintf(phy->dev.bus_id, "phy-%d:%d", shost->host_no, number);
+		dev_set_name(&phy->dev, "phy-%d:%d", shost->host_no, number);
 
 	transport_setup_device(&phy->dev);
 
@@ -821,10 +821,10 @@ struct sas_port *sas_port_alloc(struct device *parent, int port_id)
 
 	if (scsi_is_sas_expander_device(parent)) {
 		struct sas_rphy *rphy = dev_to_rphy(parent);
-		sprintf(port->dev.bus_id, "port-%d:%d:%d", shost->host_no,
+		dev_set_name(&port->dev, "port-%d:%d:%d", shost->host_no,
 			rphy->scsi_target_id, port->port_identifier);
 	} else
-		sprintf(port->dev.bus_id, "port-%d:%d", shost->host_no,
+		dev_set_name(&port->dev, "port-%d:%d", shost->host_no,
 			port->port_identifier);
 
 	transport_setup_device(&port->dev);
@@ -1369,10 +1369,10 @@ struct sas_rphy *sas_end_device_alloc(struct sas_port *parent)
 	rdev->rphy.dev.release = sas_end_device_release;
 	if (scsi_is_sas_expander_device(parent->dev.parent)) {
 		struct sas_rphy *rphy = dev_to_rphy(parent->dev.parent);
-		sprintf(rdev->rphy.dev.bus_id, "end_device-%d:%d:%d",
+		dev_set_name(&rdev->rphy.dev, "end_device-%d:%d:%d",
 			shost->host_no, rphy->scsi_target_id, parent->port_identifier);
 	} else
-		sprintf(rdev->rphy.dev.bus_id, "end_device-%d:%d",
+		dev_set_name(&rdev->rphy.dev, "end_device-%d:%d",
 			shost->host_no, parent->port_identifier);
 	rdev->rphy.identify.device_type = SAS_END_DEVICE;
 	sas_rphy_initialize(&rdev->rphy);
@@ -1413,7 +1413,7 @@ struct sas_rphy *sas_expander_alloc(struct sas_port *parent,
 	mutex_lock(&sas_host->lock);
 	rdev->rphy.scsi_target_id = sas_host->next_expander_id++;
 	mutex_unlock(&sas_host->lock);
-	sprintf(rdev->rphy.dev.bus_id, "expander-%d:%d",
+	dev_set_name(&rdev->rphy.dev, "expander-%d:%d",
 		shost->host_no, rdev->rphy.scsi_target_id);
 	rdev->rphy.identify.device_type = type;
 	sas_rphy_initialize(&rdev->rphy);
