@@ -1,0 +1,196 @@
+Importing driver-core based on 2.6.25-git17
+$ git branch -D quilt/driver-core
+Deleted branch quilt/driver-core.
+$ git checkout -b quilt/driver-core e4c576b911e364737b1bf4f5bfdab1c440713f26
+Switched to a new branch "quilt/driver-core"
+$ git quiltimport --patches ../quilt/driver-core
+sysfs-add-sys-dev-char-block-to-lookup-sysfs-path-by-major-minor.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+pm-introduce-new-top-level-suspend-and-hibernation-callbacks.patch
+pm-new-suspend-and-hibernation-callbacks-for-platform-bus-type.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git branch -D quilt/usb
+Deleted branch quilt/usb.
+$ git checkout -b quilt/usb quilt/driver-core
+Switched to a new branch "quilt/usb"
+$ git quiltimport --patches ../quilt/usb
+usb-isp1760-hcd-driver.patch
+usb-ldusb-ld_usb-semaphore-to-mutex.patch
+usb-storage-fix-build-failure-in-onetouch-driver.patch
+usb-storage-onetouch.c-make-a-function-static.patch
+usb-storage-add-unusual_devs-entry-for-samsung-yp-u3.patch
+usb-libusual-kthread_run-called-with-wrong-format.patch
+ub-fix-timeouts.patch
+ub-tune-retries.patch
+ub-ignore-bad-residue.patch
+ub-cosmetics.patch
+usb-usbtest-displays-diagnostics-again.patch
+usb-mos7840-test-and-propagate-set_uart_reg-return-value.patch
+usb-intova-pixtreme-camera-mass-storage-device.patch
+usb-pxa27x_udc-driver.patch
+usb-serial-gadget-cdc-acm-fixes.patch
+usb-gadget-zero-style-fixups.patch
+usb-gadget-zero-timer-init-fix.patch
+usb-fix-cannot-work-usb-storage-when-using-ohci-sm501.patch
+usb-add-more-ftdi-device-ids.patch
+usb-add-the-usb-2.0-extension-descriptor.patch
+usb-storage-unusual_devs-for-pandigital-picture-frame.patch
+usb-storage-update-mailling-list-address.patch
+usb-airprime-unlock-mutex-instead-of-trying-to-lock-it-again.patch
+c67x00-1-lowlevel.patch
+c67x00-2-core.patch
+c67x00-3-hcd.patch
+usb-ohci-work-around-bogus-compiler-warning.patch
+usb-uhci-disable-remote-wakeup-when-it-s-not-needed.patch
+usb-remove-redundant-dependencies-on-usb_atm.patch
+usb_serial-some-coding-style-fixes.patch
+ti_usb-kick-firmware-into-user-space.patch
+usb-add-new-routine-for-checking-port-resume-type.patch
+usb-debounce-before-unregistering.patch
+usb-simplify-hub_restart-logic.patch
+usb-try-to-salvage-lost-power-sessions.patch
+usb-optimize-port-debouncing-during-hub-activation.patch
+usb-combine-hub_activate-and-hub_restart.patch
+usb-combine-hub_quiesce-and-hub_stop.patch
+usb-gadget-peripheral-g_file_storage-bulk-only-transport-compliance.patch
+usb-gadget-peripheral-g_file_storage-bulk-only-transport-compliance-clear-feature-ignore.patch
+usb-create-attributes-before-sending-uevent.patch
+usb-add-usb_dev_reset_delayed.patch
+wusb-documentation.patch
+bitmap-add-bitmap_copy_le.patch
+usb-add-association.h.patch
+wusb-add-usb-specific-wusb-include-files.patch
+wusb-add-the-uwb-include-files.patch
+uwb-add-the-uwb-stack.patch
+wusb-add-whc-rc-radio-control-driver.patch
+.dotest/patch:494: space before tab in indent.
+ 	whcrc->umc_dev = umc_dev;
+.dotest/patch:507: space before tab in indent.
+ 	result = whcrc_setup_rc_umc(whcrc);
+.dotest/patch:509: space before tab in indent.
+ 		dev_err(dev, "Can't setup RC UMC interface: %d\n", result);
+.dotest/patch:514: space before tab in indent.
+ 		dev_err(dev, "Can't setup RC interface: %d\n", result);
+.dotest/patch:576: space before tab in indent.
+ 	.probe = whcrc_probe,
+warning: squelched 1 whitespace error
+warning: 6 lines add whitespace errors.
+wusb-add-hwa-rc-radio-controller-driver.patch
+wusb-add-uwb-core-for-wimedia-link-protocol.patch
+wusb-add-the-i1480-driver.patch
+.dotest/patch:969: space before tab in indent.
+ 	const struct firmware *fw;
+.dotest/patch:1329: space before tab in indent.
+ 	const struct firmware *fw;
+.dotest/patch:3487: space before tab in indent.
+    				"Dropping\n", untd_hdr->reserved1);
+.dotest/patch:4783: space before tab in indent.
+ 	/*
+warning: 4 lines add whitespace errors.
+wusb-add-the-usb-wireless-core-code.patch
+wusb-add-the-usb-wusb-cbaf-driver.patch
+wusb-add-the-wire-adapter-core.patch
+wusb-add-hwa-hc-wireless-host-controller-driver.patch
+usb-gotemp.patch
+Importing device-mapper based on v2.6.25-3562-g3dc5063
+$ git branch -D quilt/device-mapper
+Deleted branch quilt/device-mapper.
+$ git checkout -b quilt/device-mapper v2.6.25-3562-g3dc5063
+Switched to a new branch "quilt/device-mapper"
+$ git quiltimport --patches ../quilt/device-mapper
+Importing i2c based on 2.6.25-git15
+$ git branch -D quilt/i2c
+Deleted branch quilt/i2c.
+$ git checkout -b quilt/i2c 0ff5ce7f30b45cc2014cec465c0e96c16877116e
+Switched to a new branch "quilt/i2c"
+$ git quiltimport --patches ../quilt/i2c
+i2c-new-co-maintainer.patch
+i2c-davinci-01-clock-between-7-12-mhz.patch
+i2c-davinci-03-remove-useless-ivr-read.patch
+i2c-davinci-05-initialize-cmd_complete-sooner.patch
+i2c-acpi-check-conflict.patch
+Importing kernel-doc based on 2.6.25-git13
+$ git branch -D quilt/kernel-doc
+Deleted branch quilt/kernel-doc.
+$ git checkout -b quilt/kernel-doc a01e035ebb552223c03f2d9138ffc73f2d4d3965
+Switched to a new branch "quilt/kernel-doc"
+$ git quiltimport --patches ../quilt/kernel-doc
+kconfig_allconfig_docv2.patch
+doc-move-initrd-txt.patch
+Importing ide based on commit c9a3f6d6f541915bd7451fc7e9cb23a8b33a3ab8
+$ git branch -D quilt/ide
+Deleted branch quilt/ide.
+$ git checkout -b quilt/ide c9a3f6d6f541915bd7451fc7e9cb23a8b33a3ab8
+Switched to a new branch "quilt/ide"
+$ git quiltimport --patches ../quilt/ide
+ide-remove-obsoleted-idebus-kernel-parameter.patch
+ide-remove-obsoleted-hdx-kernel-parameters.patch
+ide-cleanup-init_ide_data.patch
+ide-remove-obsoleted-ide-parameters.patch
+ide-make-32-bit-io-support-for-ide-vlb-available-only-when-it-makes-sense.patch
+Importing m68k based on 3dc5063786b273f1aee545844f6bd4e9651ebffe
+$ git branch -D quilt/m68k
+Deleted branch quilt/m68k.
+$ git checkout -b quilt/m68k 3dc5063786b273f1aee545844f6bd4e9651ebffe
+Switched to a new branch "quilt/m68k"
+$ git quiltimport --patches ../quilt/m68k
+m68k-convert-access_ok-to-inline-func.diff
+m68k-kill-CONFIG_FB_DAFB.diff
+m68k-correct-FB_HP300-dependencies.diff
+m68k-whippet-serial-no-longer-exists.diff
+m68k-vme_scc-globals.diff
+m68k-silence-BUG-can-return-warnings.diff
+m68k-hp300-breaks-multi-platform.diff
+m68k-macide-breaks-multi-platform.diff
+m68k-dnfb-breaks-multi-platform.diff
+m68k-net-drivers-break-multiplatform.diff
+m68k-input-drivers-break-multiplatform.diff
+m68k-initcalls-should-return-ENODEV-if-device-not-found.diff
+m68k-q40-floppy-is-broken.diff
+m68k-update-defconfig.diff
+m68k-add-multi_defconfig.diff
+drivers-input-serio-hp_sdc.c-needs-linux-semaphore.h.diff
+Importing ldp based on quilt/usb
+$ git branch -D quilt/ldp
+Deleted branch quilt/ldp.
+$ git checkout -b quilt/ldp quilt/usb
+Switched to a new branch "quilt/ldp"
+$ git quiltimport --patches ../quilt/ldp
+usb-add-sensoray-2255-v4l-driver.patch
+dvb-add-firesat-driver.patch
+usb-add-option-hso-driver.patch
+video-add-the-go7007-driver.patch
+.dotest/patch:1838: space before tab in indent.
+				 					0xd3),
+.dotest/patch:1853: space before tab in indent.
+				  			GO7007_SENSOR_TV) &&
+.dotest/patch:1857: space before tab in indent.
+				  			GO7007_SENSOR_TV) &&
+.dotest/patch:2067: space before tab in indent.
+		 			(1 << 14) | (1 << 9) : 0) |
+.dotest/patch:2070: space before tab in indent.
+			 	GO7007_SENSOR_CONFIG_MASK),
+warning: 5 lines add whitespace errors.
+net-add-alacritech-slicoss-driver.patch
+.dotest/patch:8518: trailing whitespace.
+obj-$(CONFIG_SLICOSS) += slicoss.o
+.dotest/patch:24297: space before tab in indent.
+ 	ushort		DramRomFn;		// 14 Dram/Rom function
+warning: 2 lines add whitespace errors.
+input-add-appleir-driver.patch
+add-me4000-pci-data-collection-driver.patch
+novfs-add-the-novell-filesystem-client-kernel-module.patch
+aectc-add-the-aectc-driver.patch
+net-add-et131x-driver.patch
+.dotest/patch:2669: space before tab in indent.
+		    	/* bits 1:0 are equal to 1 */
+.dotest/patch:2724: space before tab in indent.
+			    	/* I2C write complete */
+.dotest/patch:7720: space before tab in indent.
+	    		pRxLocal->local_psr_full.bits.psr_full_wrap) {
+.dotest/patch:11895: space before tab in indent.
+ 	 * I need to call this function twice to get my card in a
+warning: 4 lines add whitespace errors.
