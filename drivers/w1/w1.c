@@ -214,7 +214,7 @@ struct device_driver w1_master_driver = {
 struct device w1_master_device = {
 	.parent = NULL,
 	.bus = &w1_bus_type,
-	.bus_id = "w1 bus master",
+	.init_name = "w1 bus master",
 	.driver = &w1_master_driver,
 	.release = &w1_master_release
 };
@@ -228,7 +228,7 @@ static struct device_driver w1_slave_driver = {
 struct device w1_slave_device = {
 	.parent = NULL,
 	.bus = &w1_bus_type,
-	.bus_id = "w1 bus slave",
+	.init_name = "w1 bus slave",
 	.driver = &w1_slave_driver,
 	.release = &w1_slave_release
 };
@@ -449,8 +449,7 @@ static int __w1_attach_slave_device(struct w1_slave *sl)
 	sl->dev.bus = &w1_bus_type;
 	sl->dev.release = &w1_slave_release;
 
-	snprintf(&sl->dev.bus_id[0], sizeof(sl->dev.bus_id),
-		 "%02x-%012llx",
+	dev_set_name(&sl->dev, "%02x-%012llx",
 		 (unsigned int) sl->reg_num.family,
 		 (unsigned long long) sl->reg_num.id);
 	snprintf(&sl->name[0], sizeof(sl->name),
