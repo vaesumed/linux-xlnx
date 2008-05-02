@@ -109,6 +109,9 @@ static void device_release(struct kobject *kobj)
 {
 	struct device *dev = to_dev(kobj);
 
+	/* possibly clean init_name, in case we did not add the device */
+	dev_set_name(dev, NULL);
+
 	if (dev->release)
 		dev->release(dev);
 	else if (dev->type && dev->type->release)
@@ -809,6 +812,47 @@ static void device_remove_sys_dev_entry(struct device *dev)
 	}
 }
 
+static int dev_set_name_vargs(struct device *dev,
+			      const char *fmt, va_list vargs)
+{
+	if (dev->init_name_is_set) {
+		kfree(dev->init_name);
+		dev->init_name_is_set = 0;
+	}
+
+	dev->init_name = NULL;
+
+	if (!fmt)
+		return 0;
+
+	dev->init_name = kvasprintf(GFP_KERNEL, fmt, vargs);
+	if (!dev->init_name)
+		return -ENOMEM;
+
+	dev->init_name_is_set = 1;
+	return 0;
+}
+
+/**
+ * dev_set_name - allocate temporary name for device
+ * @dev: device
+ *
+ * A temporary name is assigned to a device. The memory will be
+ * released with any call to device_add(), after successful
+ * registration the name available from the kobject with dev_name().
+ */
+int dev_set_name(struct device *dev, const char *fmt, ...)
+{
+	va_list vargs;
+	int err;
+
+	va_start(vargs, fmt);
+	err = dev_set_name_vargs(dev, fmt, vargs);
+	va_end(vargs);
+	return err;
+}
+EXPORT_SYMBOL_GPL(dev_set_name);
+
 /**
  * device_add - add device to device hierarchy.
  * @dev: device.
@@ -827,12 +871,22 @@ int device_add(struct device *dev)
 	int error;
 
 	dev = get_device(dev);
-	if (!dev || !strlen(dev->bus_id)) {
+	if (!dev) {
 		error = -EINVAL;
 		goto Done;
 	}
 
-	pr_debug("device: '%s': %s\n", dev->bus_id, __func__);
+	/* support bus_id until everything is converted, and it is removed */
+	if (!dev->init_name)
+		dev->init_name = dev->bus_id;
+
+	if (strlen(dev->init_name) == 0) {
+		printk(KERN_ERR "device (%p) does not have a name\n", dev);
+		error = -EINVAL;
+		goto Done;
+	}
+
+	pr_debug("device: '%s': %s\n", dev->init_name, __func__);
 
 	parent = get_device(dev->parent);
 	setup_parent(dev, parent);
@@ -841,16 +895,16 @@ int device_add(struct device *dev)
 	if (parent)
 		set_dev_node(dev, dev_to_node(parent));
 
-	/* first, register with generic layer. */
-	error = kobject_add(&dev->kobj, dev->kobj.parent, "%s", dev->bus_id);
+	error = kobject_add(&dev->kobj, dev->kobj.parent, "%s", dev->init_name);
+	/* possibly free and clear any init_name, so nobody can misuse it */
+	dev_set_name(dev, NULL);
 	if (error)
 		goto Error;
 
-	/* notify platform of device entry */
 	if (platform_notify)
 		platform_notify(dev);
 
-	/* notify clients of device entry (new way) */
+	/* notify clients of device entry */
 	if (dev->bus)
 		blocking_notifier_call_chain(&dev->bus->p->bus_notifier,
 					     BUS_NOTIFY_ADD_DEVICE, dev);
@@ -900,6 +954,7 @@ int device_add(struct device *dev)
  Done:
 	put_device(dev);
 	return error;
+
  PMError:
 	bus_remove_device(dev);
  BusError:
@@ -1184,7 +1239,7 @@ static void device_create_release(struct device *dev)
 struct device *device_create(struct class *class, struct device *parent,
 			     dev_t devt, const char *fmt, ...)
 {
-	va_list args;
+	va_list vargs;
 	struct device *dev = NULL;
 	int retval = -ENODEV;
 
@@ -1202,9 +1257,12 @@ struct device *device_create(struct class *class, struct device *parent,
 	dev->parent = parent;
 	dev->release = device_create_release;
 
-	va_start(args, fmt);
-	vsnprintf(dev->bus_id, BUS_ID_SIZE, fmt, args);
-	va_end(args);
+	va_start(vargs, fmt);
+	retval = dev_set_name_vargs(dev, fmt, vargs);
+	va_end(vargs);
+	if (retval)
+		goto error;
+
 	retval = device_register(dev);
 	if (retval)
 		goto error;
@@ -1212,6 +1270,7 @@ struct device *device_create(struct class *class, struct device *parent,
 	return dev;
 
 error:
+	kfree(dev->init_name);
 	kfree(dev);
 	return ERR_PTR(retval);
 }
