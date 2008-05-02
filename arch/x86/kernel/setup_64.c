@@ -70,6 +70,7 @@
 #include <asm/ds.h>
 #include <asm/topology.h>
 #include <asm/trampoline.h>
+#include <asm/mmconfig.h>
 
 #include <mach_apic.h>
 #ifdef CONFIG_PARAVIRT
@@ -289,18 +290,6 @@ static void __init parse_setup_data(void)
 		early_iounmap(data, PAGE_SIZE);
 	}
 }
-
-#ifdef CONFIG_PCI_MMCONFIG
-extern void __cpuinit fam10h_check_enable_mmcfg(void);
-extern void __init check_enable_amd_mmconf_dmi(void);
-#else
-void __cpuinit fam10h_check_enable_mmcfg(void)
-{
-}
-void __init check_enable_amd_mmconf_dmi(void)
-{
-}
-#endif
 
 /*
  * setup_arch - architecture-specific boot-time initializations
