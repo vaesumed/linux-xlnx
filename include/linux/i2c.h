@@ -174,7 +174,7 @@ struct i2c_client {
 	struct i2c_driver *driver;	/* and our access routines	*/
 	struct device dev;		/* the device structure		*/
 	int irq;			/* irq issued by device (or -1) */
-	char driver_name[KOBJ_NAME_LEN];
+	char driver_name[20];
 	struct list_head list;		/* DEPRECATED */
 	struct completion released;
 };
@@ -220,7 +220,7 @@ static inline void i2c_set_clientdata (struct i2c_client *dev, void *data)
  * with the adapter already known.
  */
 struct i2c_board_info {
-	char		driver_name[KOBJ_NAME_LEN];
+	char		driver_name[20];
 	char		type[I2C_NAME_SIZE];
 	unsigned short	flags;
 	unsigned short	addr;
