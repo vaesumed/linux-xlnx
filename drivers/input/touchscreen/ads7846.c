@@ -538,7 +538,7 @@ static void ads7846_rx(void *ads)
 	if (ts->tc.ignore || Rt > ts->pressure_max) {
 #ifdef VERBOSE
 		pr_debug("%s: ignored %d pressure %d\n",
-			ts->spi->dev.bus_id, ts->tc.ignore, Rt);
+			dev_name(&ts->spi->dev), ts->tc.ignore, Rt);
 #endif
 		hrtimer_start(&ts->timer, ktime_set(0, TS_POLL_PERIOD),
 			      HRTIMER_MODE_REL);
@@ -901,7 +901,7 @@ static int __devinit ads7846_probe(struct spi_device *spi)
 		ts->penirq_recheck_delay_usecs =
 				pdata->penirq_recheck_delay_usecs;
 
-	snprintf(ts->phys, sizeof(ts->phys), "%s/input0", spi->dev.bus_id);
+	snprintf(ts->phys, sizeof(ts->phys), "%s/input0", dev_name(&spi->dev));
 
 	input_dev->name = "ADS784x Touchscreen";
 	input_dev->phys = ts->phys;

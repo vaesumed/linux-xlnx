@@ -71,7 +71,7 @@ int device_pm_add(struct device *dev)
 	if ((dev->parent && dev->parent->power.sleeping) || all_sleeping) {
 		if (dev->parent->power.sleeping)
 			dev_warn(dev, "parent %s is sleeping\n",
-				dev->parent->bus_id);
+				 dev_name(dev->parent));
 		else
 			dev_warn(dev, "all devices are sleeping\n");
 		WARN_ON(true);

@@ -119,7 +119,7 @@ static void device_release(struct kobject *kobj)
 	else {
 		printk(KERN_ERR "Device '%s' does not have a release() "
 			"function, it is broken and must be fixed.\n",
-			dev->bus_id);
+			dev_name(dev));
 		WARN_ON(1);
 	}
 }
@@ -211,7 +211,7 @@ static int dev_uevent(struct kset *kset, struct kobject *kobj,
 		retval = dev->bus->uevent(dev, env);
 		if (retval)
 			pr_debug("device: '%s': %s: bus uevent() returned %d\n",
-				 dev->bus_id, __func__, retval);
+				 dev_name(dev), __func__, retval);
 	}
 
 	/* have the class specific function add its stuff */
@@ -219,7 +219,7 @@ static int dev_uevent(struct kset *kset, struct kobject *kobj,
 		retval = dev->class->dev_uevent(dev, env);
 		if (retval)
 			pr_debug("device: '%s': %s: class uevent() "
-				 "returned %d\n", dev->bus_id,
+				 "returned %d\n", dev_name(dev),
 				 __func__, retval);
 	}
 
@@ -228,7 +228,7 @@ static int dev_uevent(struct kset *kset, struct kobject *kobj,
 		retval = dev->type->uevent(dev, env);
 		if (retval)
 			pr_debug("device: '%s': %s: dev_type uevent() "
-				 "returned %d\n", dev->bus_id,
+				 "returned %d\n", dev_name(dev),
 				 __func__, retval);
 	}
 
@@ -410,7 +410,6 @@ static void device_remove_attrs(struct device *dev)
 	if (class)
 		device_remove_attributes(dev, class->dev_attrs);
 }
-
 
 static ssize_t show_dev(struct device *dev, struct device_attribute *attr,
 			char *buf)
@@ -669,7 +668,7 @@ static int device_add_class_symlinks(struct device *dev)
 	if (dev->kobj.parent != &dev->class->p->class_subsys.kobj &&
 	    device_is_not_partition(dev)) {
 		error = sysfs_create_link(&dev->class->p->class_subsys.kobj,
-					  &dev->kobj, dev->bus_id);
+					  &dev->kobj, dev_name(dev));
 		if (error)
 			goto out_subsys;
 	}
@@ -709,11 +708,11 @@ out_busid:
 	if (dev->kobj.parent != &dev->class->p->class_subsys.kobj &&
 	    device_is_not_partition(dev))
 		sysfs_remove_link(&dev->class->p->class_subsys.kobj,
-				  dev->bus_id);
+				  dev_name(dev));
 #else
 	/* link in the class directory pointing to the device */
 	error = sysfs_create_link(&dev->class->p->class_subsys.kobj,
-				  &dev->kobj, dev->bus_id);
+				  &dev->kobj, dev_name(dev));
 	if (error)
 		goto out_subsys;
 
@@ -726,7 +725,7 @@ out_busid:
 	return 0;
 
 out_busid:
-	sysfs_remove_link(&dev->class->p->class_subsys.kobj, dev->bus_id);
+	sysfs_remove_link(&dev->class->p->class_subsys.kobj, dev_name(dev));
 #endif
 
 out_subsys:
@@ -755,12 +754,12 @@ static void device_remove_class_symlinks(struct device *dev)
 	if (dev->kobj.parent != &dev->class->p->class_subsys.kobj &&
 	    device_is_not_partition(dev))
 		sysfs_remove_link(&dev->class->p->class_subsys.kobj,
-				  dev->bus_id);
+				  dev_name(dev));
 #else
 	if (dev->parent && device_is_not_partition(dev))
 		sysfs_remove_link(&dev->kobj, "device");
 
-	sysfs_remove_link(&dev->class->p->class_subsys.kobj, dev->bus_id);
+	sysfs_remove_link(&dev->class->p->class_subsys.kobj, dev_name(dev));
 #endif
 
 	sysfs_remove_link(&dev->kobj, "subsystem");
@@ -852,7 +851,7 @@ int device_add(struct device *dev)
 		goto Done;
 	}
 
-	pr_debug("device: '%s': %s\n", dev->bus_id, __func__);
+	pr_debug("device: '%s': %s\n", dev_name(dev), __func__);
 
 	parent = get_device(dev->parent);
 	setup_parent(dev, parent);
@@ -862,7 +861,7 @@ int device_add(struct device *dev)
 		set_dev_node(dev, dev_to_node(parent));
 
 	/* first, register with generic layer. */
-	error = kobject_add(&dev->kobj, dev->kobj.parent, "%s", dev->bus_id);
+	error = kobject_add(&dev->kobj, dev->kobj.parent, "%s", dev_name(dev));
 	if (error)
 		goto Error;
 
@@ -1065,7 +1064,7 @@ void device_del(struct device *dev)
  */
 void device_unregister(struct device *dev)
 {
-	pr_debug("device: '%s': %s\n", dev->bus_id, __func__);
+	pr_debug("device: '%s': %s\n", dev_name(dev), __func__);
 	device_del(dev);
 	put_device(dev);
 }
@@ -1178,7 +1177,7 @@ EXPORT_SYMBOL_GPL(device_remove_file);
 
 static void device_create_release(struct device *dev)
 {
-	pr_debug("device: '%s': %s\n", dev->bus_id, __func__);
+	pr_debug("device: '%s': %s\n", dev_name(dev), __func__);
 	kfree(dev);
 }
 
@@ -1326,7 +1325,7 @@ int device_rename(struct device *dev, char *new_name)
 	if (!dev)
 		return -EINVAL;
 
-	pr_debug("device: '%s': %s: renaming to '%s'\n", dev->bus_id,
+	pr_debug("device: '%s': %s: renaming to '%s'\n", dev_name(dev),
 		 __func__, new_name);
 
 #ifdef CONFIG_SYSFS_DEPRECATED
@@ -1339,7 +1338,7 @@ int device_rename(struct device *dev, char *new_name)
 		error = -ENOMEM;
 		goto out;
 	}
-	strlcpy(old_device_name, dev->bus_id, BUS_ID_SIZE);
+	strlcpy(old_device_name, dev_name(dev), BUS_ID_SIZE);
 	strlcpy(dev->bus_id, new_name, BUS_ID_SIZE);
 
 	error = kobject_rename(&dev->kobj, new_name);
@@ -1362,7 +1361,7 @@ int device_rename(struct device *dev, char *new_name)
 #else
 	if (dev->class) {
 		error = sysfs_create_link(&dev->class->p->class_subsys.kobj,
-					  &dev->kobj, dev->bus_id);
+					  &dev->kobj, dev_name(dev));
 		if (error)
 			goto out;
 		sysfs_remove_link(&dev->class->p->class_subsys.kobj,
@@ -1440,8 +1439,8 @@ int device_move(struct device *dev, struct device *new_parent)
 	new_parent = get_device(new_parent);
 	new_parent_kobj = get_device_parent(dev, new_parent);
 
-	pr_debug("device: '%s': %s: moving to '%s'\n", dev->bus_id,
-		 __func__, new_parent ? new_parent->bus_id : "<NULL>");
+	pr_debug("device: '%s': %s: moving to '%s'\n", dev_name(dev),
+		 __func__, new_parent ? dev_name(new_parent) : "<NULL>");
 	error = kobject_move(&dev->kobj, new_parent_kobj);
 	if (error) {
 		cleanup_glue_dir(dev, new_parent_kobj);
