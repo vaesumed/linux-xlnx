@@ -222,7 +222,7 @@ static void report_error_detected(struct pci_dev *dev, void *data)
 			 * its hw state.
 			 */
 			printk(KERN_DEBUG "Device ID[%s] has %s\n",
-					dev->dev.bus_id, (dev->driver) ?
+					dev_name(&dev->dev), (dev->driver) ?
 					"no AER-aware driver" : "no driver");
 		}
 		return;
@@ -405,8 +405,7 @@ static pci_ers_result_t reset_link(struct pcie_device *aerdev,
 				to_service_driver(aerdev->device.driver);
 		} else {
 			printk(KERN_DEBUG "No link-reset support to Device ID"
-				"[%s]\n",
-				dev->dev.bus_id);
+				"[%s]\n", dev_name(&dev->dev));
 			return PCI_ERS_RESULT_DISCONNECT;
 		}
 	}
@@ -414,8 +413,7 @@ static pci_ers_result_t reset_link(struct pcie_device *aerdev,
 	status = data.aer_driver->reset_link(udev);
 	if (status != PCI_ERS_RESULT_RECOVERED) {
 		printk(KERN_DEBUG "Link reset at upstream Device ID"
-			"[%s] failed\n",
-			udev->dev.bus_id);
+			"[%s] failed\n", dev_name(&udev->dev));
 		return PCI_ERS_RESULT_DISCONNECT;
 	}
 

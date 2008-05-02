@@ -359,7 +359,7 @@ static int __devinit virtio_pci_probe(struct pci_dev *pci_dev,
 
 	/* register a handler for the queue with the PCI device's interrupt */
 	err = request_irq(vp_dev->pci_dev->irq, vp_interrupt, IRQF_SHARED,
-			  vp_dev->vdev.dev.bus_id, vp_dev);
+			  dev_name(&vp_dev->vdev.dev), vp_dev);
 	if (err)
 		goto out_set_drvdata;
 

@@ -78,7 +78,7 @@ int device_pm_add(struct device *dev)
 	if (dev->parent) {
 		if (dev->parent->power.status >= DPM_SUSPENDING) {
 			dev_warn(dev, "parent %s is sleeping, will not add\n",
-				dev->parent->bus_id);
+				 dev_name(dev->parent));
 			WARN_ON(true);
 		}
 	} else if (transition_started) {

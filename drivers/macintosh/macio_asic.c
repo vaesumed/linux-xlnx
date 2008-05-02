@@ -240,7 +240,7 @@ static void macio_create_fixup_irq(struct macio_dev *dev, int index,
 	if (irq != NO_IRQ) {
 		dev->interrupt[index].start = irq;
 		dev->interrupt[index].flags = IORESOURCE_IRQ;
-		dev->interrupt[index].name = dev->ofdev.dev.bus_id;
+		dev->interrupt[index].name = dev_name(&dev->ofdev.dev);
 	}
 	if (dev->n_interrupts <= index)
 		dev->n_interrupts = index + 1;
@@ -303,7 +303,7 @@ static void macio_setup_interrupts(struct macio_dev *dev)
 			break;
 		res->start = irq;
 		res->flags = IORESOURCE_IRQ;
-		res->name = dev->ofdev.dev.bus_id;
+		res->name = dev_name(&dev->ofdev.dev);
 		if (macio_resource_quirks(np, res, i - 1)) {
 			memset(res, 0, sizeof(struct resource));
 			continue;
@@ -325,7 +325,7 @@ static void macio_setup_resources(struct macio_dev *dev,
 		if (index >= MACIO_DEV_COUNT_RESOURCES)
 			break;
 		*res = r;
-		res->name = dev->ofdev.dev.bus_id;
+		res->name = dev_name(&dev->ofdev.dev);
 
 		if (macio_resource_quirks(np, res, index)) {
 			memset(res, 0, sizeof(struct resource));
@@ -338,7 +338,7 @@ static void macio_setup_resources(struct macio_dev *dev,
 		if (insert_resource(parent_res, res)) {
 			printk(KERN_WARNING "Can't request resource "
 			       "%d for MacIO device %s\n",
-			       index, dev->ofdev.dev.bus_id);
+			       index, dev_name(&dev->ofdev.dev));
 		}
 	}
 	dev->n_resources = index;
