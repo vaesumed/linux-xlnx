@@ -229,7 +229,7 @@ static int i2o_device_add(struct i2o_controller *c, i2o_lct_entry *entry)
 
 	i2o_dev->lct_data = *entry;
 
-	snprintf(i2o_dev->device.bus_id, BUS_ID_SIZE, "%d:%03x", c->unit,
+	dev_set_name(&i2o_dev->device, "%d:%03x", c->unit,
 		 i2o_dev->lct_data.tid);
 
 	i2o_dev->iop = c;

@@ -305,8 +305,7 @@ void hci_conn_add_sysfs(struct hci_conn *conn)
 
 	conn->dev.release = bt_release;
 
-	snprintf(conn->dev.bus_id, BUS_ID_SIZE,
-			"%s%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X",
+	dev_set_name(&conn->dev, "%s%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X",
 			conn->type == ACL_LINK ? "acl" : "sco",
 			ba->b[5], ba->b[4], ba->b[3],
 			ba->b[2], ba->b[1], ba->b[0]);
@@ -373,7 +372,7 @@ int hci_register_sysfs(struct hci_dev *hdev)
 	dev->bus = &bt_bus;
 	dev->parent = hdev->parent;
 
-	strlcpy(dev->bus_id, hdev->name, BUS_ID_SIZE);
+	dev_set_name(dev, hdev->name);
 
 	dev->release = bt_release;
 

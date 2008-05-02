@@ -853,13 +853,11 @@ static struct node_entry *nodemgr_create_node(octlet_t guid, struct csr1212_csr 
 	memcpy(&ne->device, &nodemgr_dev_template_ne,
 	       sizeof(ne->device));
 	ne->device.parent = &host->device;
-	snprintf(ne->device.bus_id, BUS_ID_SIZE, "%016Lx",
-		 (unsigned long long)(ne->guid));
+	dev_set_name(&ne->device, "%016Lx", (unsigned long long)(ne->guid));
 
 	ne->node_dev.parent = &ne->device;
 	ne->node_dev.class = &nodemgr_ne_class;
-	snprintf(ne->node_dev.bus_id, BUS_ID_SIZE, "%016Lx",
-		(unsigned long long)(ne->guid));
+	dev_set_name(&ne->node_dev, "%016Lx", (unsigned long long)(ne->guid));
 
 	if (device_register(&ne->device))
 		goto fail_devreg;
@@ -961,13 +959,11 @@ static void nodemgr_register_device(struct node_entry *ne,
 
 	ud->device.parent = parent;
 
-	snprintf(ud->device.bus_id, BUS_ID_SIZE, "%s-%u",
-		 dev_name(&ne->device), ud->id);
+	dev_set_name(&ud->device, "%s-%u", dev_name(&ne->device), ud->id);
 
 	ud->unit_dev.parent = &ud->device;
 	ud->unit_dev.class = &nodemgr_ud_class;
-	snprintf(ud->unit_dev.bus_id, BUS_ID_SIZE, "%s-%u",
-		 dev_name(&ne->device), ud->id);
+	dev_set_name(&ud->unit_dev, "%s-%u", dev_name(&ne->device), ud->id);
 
 	if (device_register(&ud->device))
 		goto fail_devreg;
