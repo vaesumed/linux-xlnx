@@ -2503,7 +2503,7 @@ fc_rport_create(struct Scsi_Host *shost, int channel,
 	device_initialize(dev);			/* takes self reference */
 	dev->parent = get_device(&shost->shost_gendev); /* parent reference */
 	dev->release = fc_rport_dev_release;
-	sprintf(dev->bus_id, "rport-%d:%d-%d",
+	dev_set_name(dev, "rport-%d:%d-%d",
 		shost->host_no, channel, rport->number);
 	transport_setup_device(dev);
 
@@ -3172,7 +3172,7 @@ fc_vport_create(struct Scsi_Host *shost, int channel, struct device *pdev,
 	device_initialize(dev);			/* takes self reference */
 	dev->parent = get_device(pdev);		/* takes parent reference */
 	dev->release = fc_vport_dev_release;
-	sprintf(dev->bus_id, "vport-%d:%d-%d",
+	dev_set_name(dev, "vport-%d:%d-%d",
 		shost->host_no, channel, vport->number);
 	transport_setup_device(dev);
 

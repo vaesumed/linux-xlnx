@@ -389,8 +389,8 @@ int rfkill_register(struct rfkill *rfkill)
 	if (rfkill->type >= RFKILL_TYPE_MAX)
 		return -EINVAL;
 
-	snprintf(dev->bus_id, sizeof(dev->bus_id),
-		 "rfkill%ld", (long)atomic_inc_return(&rfkill_no) - 1);
+	dev_set_name(dev, "rfkill%ld",
+		     (long)atomic_inc_return(&rfkill_no) - 1);
 
 	rfkill_led_trigger_register(rfkill);
 

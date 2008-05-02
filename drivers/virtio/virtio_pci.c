@@ -75,7 +75,7 @@ MODULE_DEVICE_TABLE(pci, virtio_pci_id_table);
  * would make more sense for virtio to not insist on having it's own device. */
 static struct device virtio_pci_root = {
 	.parent		= NULL,
-	.bus_id		= "virtio-pci",
+	.init_name	= "virtio-pci",
 };
 
 /* Convert a generic virtio device to our structure */

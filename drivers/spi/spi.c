@@ -231,9 +231,8 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	proxy->irq = chip->irq;
 	proxy->modalias = chip->modalias;
 
-	snprintf(proxy->dev.bus_id, sizeof proxy->dev.bus_id,
-			"%s.%u", dev_name(&master->dev),
-			chip->chip_select);
+	dev_set_name(&proxy->dev, "%s.%u",
+		     dev_name(&master->dev), chip->chip_select);
 	proxy->dev.parent = dev;
 	proxy->dev.bus = &spi_bus_type;
 	proxy->dev.platform_data = (void *) chip->platform_data;
@@ -433,8 +432,7 @@ int spi_register_master(struct spi_master *master)
 	/* register the device, then userspace will see it.
 	 * registration fails if the bus ID is in use.
 	 */
-	snprintf(master->dev.bus_id, sizeof master->dev.bus_id,
-		"spi%u", master->bus_num);
+	dev_set_name(&master->dev, "spi%u", master->bus_num);
 	status = device_add(&master->dev);
 	if (status < 0)
 		goto done;

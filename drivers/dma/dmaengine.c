@@ -379,7 +379,7 @@ int dma_async_device_register(struct dma_device *device)
 		chan->chan_id = chancnt++;
 		chan->dev.class = &dma_devclass;
 		chan->dev.parent = NULL;
-		snprintf(chan->dev.bus_id, BUS_ID_SIZE, "dma%dchan%d",
+		dev_set_name(&chan->dev, "dma%dchan%d",
 		         device->dev_id, chan->chan_id);
 
 		rc = device_register(&chan->dev);
