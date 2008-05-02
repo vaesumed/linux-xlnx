@@ -351,7 +351,9 @@ struct device {
 	struct kobject kobj;
 	char	bus_id[20];	/* will be removed */
 	struct device_type	*type;
-	unsigned		uevent_suppress:1;
+	const char		*init_name;
+	unsigned int		init_name_is_set:1;
+	unsigned int		uevent_suppress:1;
 
 	struct semaphore	sem;	/* semaphore to synchronize calls to
 					 * its driver.
@@ -400,9 +402,17 @@ struct device {
 
 static inline const char *dev_name(struct device *dev)
 {
-	/* will be changed into kobject_name(&dev->kobj) in the near future */
+	/* return sensible value between dev_set_name() and device_add() */
+	if (dev->init_name)
+		return dev->init_name;
+	/* support bus_id until everything is converted, and it is removed */
+	if (kobject_name(&dev->kobj))
+		return kobject_name(&dev->kobj);
 	return dev->bus_id;
 }
+
+extern int dev_set_name(struct device *dev, const char *name, ...)
+			    __attribute__((format(printf, 2, 3)));
 
 #ifdef CONFIG_NUMA
 static inline int dev_to_node(struct device *dev)
