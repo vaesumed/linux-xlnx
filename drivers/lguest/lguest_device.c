@@ -314,7 +314,7 @@ static struct virtio_config_ops lguest_config_ops = {
  * /sys/devices/lguest/0,1,2 not /sys/devices/0,1,2. */
 static struct device lguest_root = {
 	.parent = NULL,
-	.bus_id = "lguest",
+	.init_name = "lguest",
 };
 
 /*D:120 This is the core of the lguest bus: actually adding a new device.
