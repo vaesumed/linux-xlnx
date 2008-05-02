@@ -870,7 +870,7 @@ struct zfcp_data {
 	struct semaphore        config_sema;        /* serialises configuration
 						       changes */
 	atomic_t		loglevel;            /* current loglevel */
-	char                    init_busid[BUS_ID_SIZE];
+	char                    init_busid[20];
 	wwn_t                   init_wwpn;
 	fcp_lun_t               init_fcp_lun;
 	char 			*driver_version;
