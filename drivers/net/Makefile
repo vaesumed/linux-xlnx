@@ -18,6 +18,7 @@ obj-$(CONFIG_BONDING) += bonding/
 obj-$(CONFIG_ATL1) += atlx/
 obj-$(CONFIG_GIANFAR) += gianfar_driver.o
 obj-$(CONFIG_TEHUTI) += tehuti.o
+obj-$(CONFIG_ET131X) += et131x/
 
 gianfar_driver-objs := gianfar.o \
 		gianfar_ethtool.o \
@@ -222,6 +223,7 @@ obj-$(CONFIG_PASEMI_MAC) += pasemi_mac_driver.o
 pasemi_mac_driver-objs := pasemi_mac.o pasemi_mac_ethtool.o
 obj-$(CONFIG_MLX4_CORE) += mlx4/
 obj-$(CONFIG_ENC28J60) += enc28j60.o
+obj-$(CONFIG_SLICOSS) += slicoss/
 
 obj-$(CONFIG_MACB) += macb.o
 
