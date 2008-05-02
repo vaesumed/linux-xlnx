@@ -1826,7 +1826,7 @@ static struct pxa2xx_udc memory = {
 		.ep0		= &memory.ep[0].ep,
 		.name		= driver_name,
 		.dev = {
-			.bus_id		= "gadget",
+			.init_name		= "gadget",
 			.release	= nop_release,
 		},
 	},

@@ -573,8 +573,7 @@ static int spidev_probe(struct spi_device *spi)
 		spidev->dev.parent = &spi->dev;
 		spidev->dev.class = &spidev_class;
 		spidev->dev.devt = MKDEV(SPIDEV_MAJOR, minor);
-		snprintf(spidev->dev.bus_id, sizeof spidev->dev.bus_id,
-				"spidev%d.%d",
+		dev_set_name(&spidev->dev, "spidev%d.%d",
 				spi->master->bus_num, spi->chip_select);
 		status = device_register(&spidev->dev);
 	} else {
