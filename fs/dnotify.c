@@ -21,6 +21,7 @@
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/file.h>
+#include <linux/fdtable.h>
 
 int dir_notify_enable __read_mostly = 1;
 
