@@ -997,7 +997,7 @@ static int scsi_probe_and_add_lun(struct scsi_target *starget,
 		if (rescan || sdev->sdev_state != SDEV_CREATED) {
 			SCSI_LOG_SCAN_BUS(3, printk(KERN_INFO
 				"scsi scan: device exists on %s\n",
-				sdev->sdev_gendev.bus_id));
+				dev_name(&sdev->sdev_gendev)));
 			if (sdevp)
 				*sdevp = sdev;
 			else
@@ -1135,7 +1135,7 @@ static void scsi_sequential_lun_scan(struct scsi_target *starget,
 	struct Scsi_Host *shost = dev_to_shost(starget->dev.parent);
 
 	SCSI_LOG_SCAN_BUS(3, printk(KERN_INFO "scsi scan: Sequential scan of"
-				    "%s\n", starget->dev.bus_id));
+				    "%s\n", dev_name(&starget->dev)));
 
 	max_dev_lun = min(max_scsi_luns, shost->max_lun);
 	/*
