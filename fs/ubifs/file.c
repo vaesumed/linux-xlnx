@@ -783,6 +783,10 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 		goto out_unlock;
 	}
 
+	err = update_mctime(c, inode);
+	if (err)
+		goto out_unlock;
+
 	if (!PagePrivate(page)) {
 		struct ubifs_budget_req req;
 
