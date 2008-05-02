@@ -73,9 +73,7 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 	if (err)
 		goto free;
 
-	snprintf(host->class_dev.bus_id, BUS_ID_SIZE,
-		 "mmc%d", host->index);
-
+	dev_set_name(&host->class_dev, "mmc%d", host->index);
 	host->parent = dev;
 	host->class_dev.parent = dev;
 	host->class_dev.class = &mmc_host_class;
