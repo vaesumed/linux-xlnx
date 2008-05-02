@@ -271,7 +271,7 @@ struct task_group {
 	struct sched_entity **se;
 	/* runqueue "owned" by this group on each cpu */
 	struct cfs_rq **cfs_rq;
-	unsigned long shares;
+	unsigned long weight;
 #endif
 
 #ifdef CONFIG_RT_GROUP_SCHED
@@ -377,16 +377,32 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu) { }
 
 #endif	/* CONFIG_GROUP_SCHED */
 
+struct cfs_root_rq {
+	u64 min_vruntime;
+
+	struct rb_root tasks_timeline;
+	struct rb_node *left_timeline;
+
+	struct sched_entity *next;
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	struct rb_root tasks_deadline;
+	struct rb_node *left_deadline;
+
+	s64 avg_vruntime;
+#endif
+	unsigned long nr_queued;
+
+#ifdef CONFIG_SCHEDSTATS
+	unsigned long nr_spread_over;
+	u64 exec_clock;
+#endif
+};
+
 /* CFS-related fields in a runqueue */
 struct cfs_rq {
 	struct load_weight load;
 	unsigned long nr_running;
-
-	u64 exec_clock;
-	u64 min_vruntime;
-
-	struct rb_root tasks_timeline;
-	struct rb_node *rb_leftmost;
 
 	struct list_head tasks;
 	struct list_head *balance_iterator;
@@ -395,9 +411,7 @@ struct cfs_rq {
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
-	struct sched_entity *curr, *next;
-
-	unsigned long nr_spread_over;
+	struct sched_entity *curr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	struct rq *rq;	/* cpu runqueue to which this cfs_rq is attached */
@@ -542,6 +556,7 @@ struct rq {
 	unsigned long nr_load_updates;
 	u64 nr_switches;
 
+	struct cfs_root_rq cfs_root;
 	struct cfs_rq cfs;
 	struct rt_rq rt;
 
@@ -726,6 +741,8 @@ static void update_rq_clock(struct rq *rq)
 #define this_rq()		(&__get_cpu_var(runqueues))
 #define task_rq(p)		cpu_rq(task_cpu(p))
 #define cpu_curr(cpu)		(cpu_rq(cpu)->curr)
+
+#include "sched_trace.h"
 
 /*
  * Tunables that become constants when CONFIG_SCHED_DEBUG is off:
@@ -1511,6 +1528,15 @@ static void __resched_task(struct task_struct *p, int tif_bit)
 }
 #endif
 
+/*
+ * We keep the prio_to_weight and its inverse in base WEIGHT_SHIFT
+ */
+#define WEIGHT_SHIFT 		10
+#define WEIGHT_LOAD_SHIFT	(SCHED_LOAD_SHIFT - WEIGHT_SHIFT)
+
+#define WLS(x)		((x) << WEIGHT_LOAD_SHIFT)
+#define inv_WLS(x)	((x) >> WEIGHT_LOAD_SHIFT)
+
 #if BITS_PER_LONG == 32
 # define WMULT_CONST	(~0UL)
 #else
@@ -1533,10 +1559,13 @@ calc_delta_mine(unsigned long delta_exec, unsigned long weight,
 {
 	u64 tmp;
 
-	if (unlikely(!lw->inv_weight))
-		lw->inv_weight = (WMULT_CONST-lw->weight/2) / (lw->weight+1);
+	if (unlikely(!lw->inv_weight)) {
+		unsigned long inv_wls = inv_WLS(lw->weight);
 
-	tmp = (u64)delta_exec * weight;
+		lw->inv_weight = 1 + (WMULT_CONST-inv_wls/2) / (inv_wls+1);
+	}
+
+	tmp = inv_WLS((u64)delta_exec * weight);
 	/*
 	 * Check whether we'd overflow the 64-bit multiplication:
 	 */
@@ -1763,8 +1792,8 @@ void aggregate_group_shares(struct task_group *tg, struct sched_domain *sd)
 	for_each_cpu_mask(i, sd->span)
 		shares += tg->cfs_rq[i]->shares;
 
-	if ((!shares && aggregate(tg, sd)->rq_weight) || shares > tg->shares)
-		shares = tg->shares;
+	if ((!shares && aggregate(tg, sd)->rq_weight) || shares > tg->weight)
+		shares = tg->weight;
 
 	aggregate(tg, sd)->shares = shares;
 }
@@ -2014,7 +2043,7 @@ static void dec_nr_running(struct rq *rq)
 static void set_load_weight(struct task_struct *p)
 {
 	if (task_has_rt_policy(p)) {
-		p->se.load.weight = prio_to_weight[0] * 2;
+		p->se.load.weight = WLS(prio_to_weight[0] * 2);
 		p->se.load.inv_weight = prio_to_wmult[0] >> 1;
 		return;
 	}
@@ -2023,12 +2052,12 @@ static void set_load_weight(struct task_struct *p)
 	 * SCHED_IDLE tasks get minimal weight:
 	 */
 	if (p->policy == SCHED_IDLE) {
-		p->se.load.weight = WEIGHT_IDLEPRIO;
+		p->se.load.weight = WLS(WEIGHT_IDLEPRIO);
 		p->se.load.inv_weight = WMULT_IDLEPRIO;
 		return;
 	}
 
-	p->se.load.weight = prio_to_weight[p->static_prio - MAX_RT_PRIO];
+	p->se.load.weight = WLS(prio_to_weight[p->static_prio - MAX_RT_PRIO]);
 	p->se.load.inv_weight = prio_to_wmult[p->static_prio - MAX_RT_PRIO];
 }
 
@@ -2125,7 +2154,7 @@ inline int task_curr(const struct task_struct *p)
 }
 
 /* Used instead of source_load when we know the type == 0 */
-unsigned long weighted_cpuload(const int cpu)
+static unsigned long weighted_cpuload(const int cpu)
 {
 	return cpu_rq(cpu)->load.weight;
 }
@@ -2169,7 +2198,8 @@ task_hot(struct task_struct *p, u64 now, struct sched_domain *sd)
 	/*
 	 * Buddy candidates are cache hot:
 	 */
-	if (sched_feat(CACHE_HOT_BUDDY) && (&p->se == cfs_rq_of(&p->se)->next))
+	if (sched_feat(CACHE_HOT_BUDDY) &&
+			(&p->se == task_rq(p)->cfs_root.next))
 		return 1;
 
 	if (p->sched_class != &fair_sched_class)
@@ -2190,8 +2220,8 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 {
 	int old_cpu = task_cpu(p);
 	struct rq *old_rq = cpu_rq(old_cpu), *new_rq = cpu_rq(new_cpu);
-	struct cfs_rq *old_cfsrq = task_cfs_rq(p),
-		      *new_cfsrq = cpu_cfs_rq(old_cfsrq, new_cpu);
+	struct cfs_root_rq *old_cfs_r_rq = &old_rq->cfs_root,
+			   *new_cfs_r_rq = &new_rq->cfs_root;
 	u64 clock_offset;
 
 	clock_offset = old_rq->clock - new_rq->clock;
@@ -2209,8 +2239,8 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 			schedstat_inc(p, se.nr_forced2_migrations);
 	}
 #endif
-	p->se.vruntime -= old_cfsrq->min_vruntime -
-					 new_cfsrq->min_vruntime;
+	p->se.vruntime -= old_cfs_r_rq->min_vruntime -
+			  new_cfs_r_rq->min_vruntime;
 
 	__set_task_cpu(p, new_cpu);
 }
@@ -2294,6 +2324,7 @@ void wait_task_inactive(struct task_struct *p)
 		 * just go back and repeat.
 		 */
 		rq = task_rq_lock(p, &flags);
+		trace_kernel_sched_wait(p);
 		running = task_running(rq, p);
 		on_rq = p->se.on_rq;
 		task_rq_unlock(rq, &flags);
@@ -2637,7 +2668,7 @@ out_activate:
 	success = 1;
 
 out_running:
-	ftrace_wake_up_task(rq, p, rq->curr);
+	trace_kernel_sched_wakeup(rq, p);
 	check_preempt_curr(rq, p);
 
 	p->state = TASK_RUNNING;
@@ -2768,7 +2799,7 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 		p->sched_class->task_new(rq, p);
 		inc_nr_running(rq);
 	}
-	ftrace_wake_up_task(rq, p, rq->curr);
+	trace_kernel_sched_wakeup_new(rq, p);
 	check_preempt_curr(rq, p);
 #ifdef CONFIG_SMP
 	if (p->sched_class->task_wake_up)
@@ -2941,7 +2972,8 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	struct mm_struct *mm, *oldmm;
 
 	prepare_task_switch(rq, prev, next);
-	ftrace_ctx_switch(rq, prev, next);
+
+	trace_kernel_sched_switch(rq, prev, next);
 	mm = next->mm;
 	oldmm = prev->active_mm;
 	/*
@@ -3174,6 +3206,7 @@ static void sched_migrate_task(struct task_struct *p, int dest_cpu)
 	    || unlikely(cpu_is_offline(dest_cpu)))
 		goto out;
 
+	trace_kernel_sched_migrate_task(p, cpu_of(rq), dest_cpu);
 	/* force the process onto the specified CPU */
 	if (migrate_task(p, dest_cpu, &req)) {
 		/* Need to wait for migration thread (might exit: take ref). */
@@ -5634,6 +5667,9 @@ asmlinkage long sys_sched_setaffinity(pid_t pid, unsigned int len,
 cpumask_t cpu_present_map __read_mostly;
 EXPORT_SYMBOL(cpu_present_map);
 
+cpumask_t cpu_system_map __read_mostly = CPU_MASK_ALL;
+EXPORT_SYMBOL(cpu_system_map);
+
 #ifndef CONFIG_SMP
 cpumask_t cpu_online_map __read_mostly = CPU_MASK_ALL;
 EXPORT_SYMBOL(cpu_online_map);
@@ -7000,24 +7036,6 @@ cpu_attach_domain(struct sched_domain *sd, struct root_domain *rd, int cpu)
 	rcu_assign_pointer(rq->sd, sd);
 }
 
-/* cpus with isolated domains */
-static cpumask_t cpu_isolated_map = CPU_MASK_NONE;
-
-/* Setup the mask of cpus configured for isolated domains */
-static int __init isolated_cpu_setup(char *str)
-{
-	int ints[NR_CPUS], i;
-
-	str = get_options(str, ARRAY_SIZE(ints), ints);
-	cpus_clear(cpu_isolated_map);
-	for (i = 1; i <= ints[0]; i++)
-		if (ints[i] < NR_CPUS)
-			cpu_set(ints[i], cpu_isolated_map);
-	return 1;
-}
-
-__setup("isolcpus=", isolated_cpu_setup);
-
 /*
  * init_sched_build_groups takes the cpumask we wish to span, and a pointer
  * to a function which identifies what group(along with sched group) a CPU
@@ -7804,7 +7822,7 @@ static int arch_init_sched_domains(const cpumask_t *cpu_map)
 	doms_cur = kmalloc(sizeof(cpumask_t), GFP_KERNEL);
 	if (!doms_cur)
 		doms_cur = &fallback_doms;
-	cpus_andnot(*doms_cur, *cpu_map, cpu_isolated_map);
+	*doms_cur = *cpu_map;
 	dattr_cur = NULL;
 	err = build_sched_domains(doms_cur);
 	register_sched_domain_sysctl();
@@ -7885,7 +7903,7 @@ void partition_sched_domains(int ndoms_new, cpumask_t *doms_new,
 	if (doms_new == NULL) {
 		ndoms_new = 1;
 		doms_new = &fallback_doms;
-		cpus_andnot(doms_new[0], cpu_online_map, cpu_isolated_map);
+		doms_new[0] = cpu_online_map;
 		dattr_new = NULL;
 	}
 
@@ -8058,7 +8076,7 @@ void __init sched_init_smp(void)
 	get_online_cpus();
 	mutex_lock(&sched_domains_mutex);
 	arch_init_sched_domains(&cpu_online_map);
-	cpus_andnot(non_isolated_cpus, cpu_possible_map, cpu_isolated_map);
+	non_isolated_cpus = cpu_possible_map;
 	if (cpus_empty(non_isolated_cpus))
 		cpu_set(smp_processor_id(), non_isolated_cpus);
 	mutex_unlock(&sched_domains_mutex);
@@ -8086,14 +8104,21 @@ int in_sched_functions(unsigned long addr)
 		&& addr < (unsigned long)__sched_text_end);
 }
 
+static void init_cfs_root_rq(struct cfs_root_rq *cfs_r_rq)
+{
+	cfs_r_rq->tasks_timeline = RB_ROOT;
+	cfs_r_rq->min_vruntime = (u64)(-(1LL << 20));
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	cfs_r_rq->tasks_deadline = RB_ROOT;
+#endif
+}
+
 static void init_cfs_rq(struct cfs_rq *cfs_rq, struct rq *rq)
 {
-	cfs_rq->tasks_timeline = RB_ROOT;
 	INIT_LIST_HEAD(&cfs_rq->tasks);
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	cfs_rq->rq = rq;
 #endif
-	cfs_rq->min_vruntime = (u64)(-(1LL << 20));
 }
 
 static void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq)
@@ -8153,8 +8178,8 @@ static void init_tg_cfs_entry(struct task_group *tg, struct cfs_rq *cfs_rq,
 		se->cfs_rq = parent->my_q;
 
 	se->my_q = cfs_rq;
-	se->load.weight = tg->shares;
-	se->load.inv_weight = div64_u64(1ULL<<32, se->load.weight);
+	se->load.weight = tg->weight;
+	se->load.inv_weight = 0;
 	se->parent = parent;
 }
 #endif
@@ -8280,10 +8305,11 @@ void __init sched_init(void)
 		rq->nr_running = 0;
 		rq->clock = 1;
 		update_last_tick_seen(rq);
+		init_cfs_root_rq(&rq->cfs_root);
 		init_cfs_rq(&rq->cfs, rq);
 		init_rt_rq(&rq->rt, rq);
 #ifdef CONFIG_FAIR_GROUP_SCHED
-		init_task_group.shares = init_task_group_load;
+		init_task_group.weight = init_task_group_load;
 		INIT_LIST_HEAD(&rq->leaf_cfs_rq_list);
 #ifdef CONFIG_CGROUP_SCHED
 		/*
@@ -8307,7 +8333,7 @@ void __init sched_init(void)
 		 */
 		init_tg_cfs_entry(&init_task_group, &rq->cfs, NULL, i, 1, NULL);
 #elif defined CONFIG_USER_SCHED
-		root_task_group.shares = NICE_0_LOAD;
+		root_task_group.weight = NICE_0_LOAD;
 		init_tg_cfs_entry(&root_task_group, &rq->cfs, NULL, i, 0, NULL);
 		/*
 		 * In case of task-groups formed thr' the user id of tasks,
@@ -8555,7 +8581,7 @@ int alloc_fair_sched_group(struct task_group *tg, struct task_group *parent)
 	if (!tg->se)
 		goto err;
 
-	tg->shares = NICE_0_LOAD;
+	tg->weight = NICE_0_LOAD;
 
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
@@ -8796,11 +8822,6 @@ void sched_move_task(struct task_struct *tsk)
 
 	set_task_rq(tsk, task_cpu(tsk));
 
-#ifdef CONFIG_FAIR_GROUP_SCHED
-	if (tsk->sched_class->moved_group)
-		tsk->sched_class->moved_group(tsk);
-#endif
-
 	if (unlikely(running))
 		tsk->sched_class->set_curr_task(rq);
 	if (on_rq)
@@ -8821,7 +8842,7 @@ static void __set_se_shares(struct sched_entity *se, unsigned long shares)
 		dequeue_entity(cfs_rq, se, 0);
 
 	se->load.weight = shares;
-	se->load.inv_weight = div64_u64((1ULL<<32), shares);
+	se->load.inv_weight = 0;
 
 	if (on_rq)
 		enqueue_entity(cfs_rq, se, 0);
@@ -8851,13 +8872,15 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	if (!tg->se[0])
 		return -EINVAL;
 
+	shares = WLS(shares);
+
 	if (shares < MIN_SHARES)
 		shares = MIN_SHARES;
 	else if (shares > MAX_SHARES)
 		shares = MAX_SHARES;
 
 	mutex_lock(&shares_mutex);
-	if (tg->shares == shares)
+	if (tg->weight == shares)
 		goto done;
 
 	spin_lock_irqsave(&task_group_lock, flags);
@@ -8873,7 +8896,7 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	 * Now we are free to modify the group's share on each cpu
 	 * w/o tripping rebalance_share or load_balance_fair.
 	 */
-	tg->shares = shares;
+	tg->weight = shares;
 	for_each_possible_cpu(i) {
 		/*
 		 * force a rebalance
@@ -8898,7 +8921,7 @@ done:
 
 unsigned long sched_group_shares(struct task_group *tg)
 {
-	return tg->shares;
+	return inv_WLS(tg->weight);
 }
 #endif
 
@@ -9191,9 +9214,7 @@ static int cpu_shares_write_u64(struct cgroup *cgrp, struct cftype *cftype,
 
 static u64 cpu_shares_read_u64(struct cgroup *cgrp, struct cftype *cft)
 {
-	struct task_group *tg = cgroup_tg(cgrp);
-
-	return (u64) tg->shares;
+	return (u64) sched_group_shares(cgroup_tg(cgrp));
 }
 #endif
 
