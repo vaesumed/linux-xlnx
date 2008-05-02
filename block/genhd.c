@@ -681,7 +681,7 @@ static int match_id(struct device *dev, void *data)
 {
 	struct find_block *find = data;
 
-	if (strcmp(dev->bus_id, find->name) == 0) {
+	if (strcmp(dev_name(dev), find->name) == 0) {
 		struct gendisk *disk = dev_to_disk(dev);
 		if (find->part < disk->minors)
 			return 1;
