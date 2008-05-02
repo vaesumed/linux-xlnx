@@ -454,8 +454,7 @@ static int ssb_devices_register(struct ssb_bus *bus)
 
 		dev->release = ssb_release_dev;
 		dev->bus = &ssb_bustype;
-		snprintf(dev->bus_id, sizeof(dev->bus_id),
-			 "ssb%u:%d", bus->busnumber, dev_idx);
+		dev_set_name(dev, "ssb%u:%d", bus->busnumber, dev_idx);
 
 		switch (bus->bustype) {
 		case SSB_BUSTYPE_PCI:

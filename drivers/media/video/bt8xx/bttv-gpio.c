@@ -91,8 +91,7 @@ int bttv_sub_add_device(struct bttv_core *core, char *name)
 	sub->dev.parent  = &core->pci->dev;
 	sub->dev.bus     = &bttv_sub_bus_type;
 	sub->dev.release = release_sub_device;
-	snprintf(sub->dev.bus_id,sizeof(sub->dev.bus_id),"%s%d",
-		 name, core->nr);
+	dev_set_name(&sub->dev,"%s%d", name, core->nr);
 
 	err = device_register(&sub->dev);
 	if (0 != err) {
