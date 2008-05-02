@@ -368,9 +368,9 @@ static int hdpu_platform_notify(struct device *dev)
 	struct platform_device *pdev;
 	int i;
 
-	if (dev && dev->bus_id)
+	if (dev && dev_name(dev))
 		for (i = 0; i < ARRAY_SIZE(dev_map); i++)
-			if (!strncmp(dev->bus_id, dev_map[i].bus_id,
+			if (!strncmp(dev_name(dev), dev_map[i].bus_id,
 				     BUS_ID_SIZE)) {
 
 				pdev = container_of(dev,

@@ -165,7 +165,7 @@ static int pcmcia_report_error(struct pcmcia_device *p_dev, error_info_t *err)
 	if (!p_dev)
 		printk(KERN_NOTICE);
 	else
-		printk(KERN_NOTICE "%s: ", p_dev->dev.bus_id);
+		printk(KERN_NOTICE "%s: ", dev_name(&p_dev->dev));
 
 	for (i = 0; i < ARRAY_SIZE(service_table); i++)
 		if (service_table[i].key == err->func)
@@ -392,7 +392,7 @@ static void pcmcia_release_function(struct kref *ref)
 static void pcmcia_release_dev(struct device *dev)
 {
 	struct pcmcia_device *p_dev = to_pcmcia_dev(dev);
-	ds_dbg(1, "releasing device %s\n", p_dev->dev.bus_id);
+	ds_dbg(1, "releasing device %s\n", dev_name(&p_dev->dev));
 	pcmcia_put_socket(p_dev->socket);
 	kfree(p_dev->devname);
 	kref_put(&p_dev->function_config->ref, pcmcia_release_function);
@@ -428,7 +428,7 @@ static int pcmcia_device_probe(struct device * dev)
 	p_drv = to_pcmcia_drv(dev->driver);
 	s = p_dev->socket;
 
-	ds_dbg(1, "trying to bind %s to %s\n", p_dev->dev.bus_id,
+	ds_dbg(1, "trying to bind %s to %s\n", dev_name(&p_dev->dev),
 	       p_drv->drv.name);
 
 	if ((!p_drv->probe) || (!p_dev->function_config) ||
@@ -452,7 +452,7 @@ static int pcmcia_device_probe(struct device * dev)
 	ret = p_drv->probe(p_dev);
 	if (ret) {
 		ds_dbg(1, "binding %s to %s failed with %d\n",
-		       p_dev->dev.bus_id, p_drv->drv.name, ret);
+		       dev_name(&p_dev->dev), p_drv->drv.name, ret);
 		goto put_module;
 	}
 
@@ -504,7 +504,7 @@ static void pcmcia_card_remove(struct pcmcia_socket *s, struct pcmcia_device *le
 		p_dev->_removed=1;
 		spin_unlock_irqrestore(&pcmcia_dev_list_lock, flags);
 
-		ds_dbg(2, "unregistering device %s\n", p_dev->dev.bus_id);
+		ds_dbg(2, "unregistering device %s\n", dev_name(&p_dev->dev));
 		device_unregister(&p_dev->dev);
 	}
 
@@ -521,7 +521,7 @@ static int pcmcia_device_remove(struct device * dev)
 	p_dev = to_pcmcia_dev(dev);
 	p_drv = to_pcmcia_drv(dev->driver);
 
-	ds_dbg(1, "removing device %s\n", p_dev->dev.bus_id);
+	ds_dbg(1, "removing device %s\n", dev_name(&p_dev->dev));
 
 	/* If we're removing the primary module driving a
 	 * pseudo multi-function card, we need to unbind
@@ -680,7 +680,7 @@ struct pcmcia_device * pcmcia_device_add(struct pcmcia_socket *s, unsigned int f
 	p_dev->devname = kmalloc(6 + bus_id_len + 1, GFP_KERNEL);
 	if (!p_dev->devname)
 		goto err_free;
-	sprintf (p_dev->devname, "pcmcia%s", p_dev->dev.bus_id);
+	sprintf (p_dev->devname, "pcmcia%s", dev_name(&p_dev->dev));
 	ds_dbg(3, "devname is %s\n", p_dev->devname);
 
 	spin_lock_irqsave(&pcmcia_dev_list_lock, flags);
@@ -702,7 +702,7 @@ struct pcmcia_device * pcmcia_device_add(struct pcmcia_socket *s, unsigned int f
 	spin_unlock_irqrestore(&pcmcia_dev_list_lock, flags);
 
 	if (!p_dev->function_config) {
-		ds_dbg(3, "creating config_t for %s\n", p_dev->dev.bus_id);
+		ds_dbg(3, "creating config_t for %s\n", dev_name(&p_dev->dev));
 		p_dev->function_config = kzalloc(sizeof(struct config_t),
 						 GFP_KERNEL);
 		if (!p_dev->function_config)
@@ -791,7 +791,7 @@ static int pcmcia_requery(struct device *dev, void * _data)
 	struct pcmcia_device *p_dev = to_pcmcia_dev(dev);
 	if (!p_dev->dev.driver) {
 		ds_dbg(1, "update device information for %s\n",
-		       p_dev->dev.bus_id);
+		       dev_name(&p_dev->dev));
 		pcmcia_device_query(p_dev);
 	}
 
@@ -996,13 +996,13 @@ static inline int pcmcia_devmatch(struct pcmcia_device *dev,
 		 * with a prod_id/manf_id/card_id match.
 		 */
 		ds_dbg(0, "skipping FUNC_ID match for %s until userspace "
-		       "interaction\n", dev->dev.bus_id);
+		       "interaction\n", dev_name(&dev->dev));
 		if (!dev->allow_func_id_match)
 			return 0;
 	}
 
 	if (did->match_flags & PCMCIA_DEV_ID_MATCH_FAKE_CIS) {
-		ds_dbg(0, "device %s needs a fake CIS\n", dev->dev.bus_id);
+		ds_dbg(0, "device %s needs a fake CIS\n", dev_name(&dev->dev));
 		if (!dev->socket->fake_cis)
 			pcmcia_load_firmware(dev, did->cisfile);
 
@@ -1034,10 +1034,10 @@ static int pcmcia_bus_match(struct device * dev, struct device_driver * drv) {
 	/* match dynamic devices first */
 	spin_lock(&p_drv->dynids.lock);
 	list_for_each_entry(dynid, &p_drv->dynids.list, node) {
-		ds_dbg(3, "trying to match %s to %s\n", dev->bus_id,
+		ds_dbg(3, "trying to match %s to %s\n", dev_name(dev),
 		       drv->name);
 		if (pcmcia_devmatch(p_dev, &dynid->id)) {
-			ds_dbg(0, "matched %s to %s\n", dev->bus_id,
+			ds_dbg(0, "matched %s to %s\n", dev_name(dev),
 			       drv->name);
 			spin_unlock(&p_drv->dynids.lock);
 			return 1;
@@ -1048,17 +1048,17 @@ static int pcmcia_bus_match(struct device * dev, struct device_driver * drv) {
 #ifdef CONFIG_PCMCIA_IOCTL
 	/* matching by cardmgr */
 	if (p_dev->cardmgr == p_drv) {
-		ds_dbg(0, "cardmgr matched %s to %s\n", dev->bus_id,
+		ds_dbg(0, "cardmgr matched %s to %s\n", dev_name(dev),
 		       drv->name);
 		return 1;
 	}
 #endif
 
 	while (did && did->match_flags) {
-		ds_dbg(3, "trying to match %s to %s\n", dev->bus_id,
+		ds_dbg(3, "trying to match %s to %s\n", dev_name(dev),
 		       drv->name);
 		if (pcmcia_devmatch(p_dev, did)) {
-			ds_dbg(0, "matched %s to %s\n", dev->bus_id,
+			ds_dbg(0, "matched %s to %s\n", dev_name(dev),
 			       drv->name);
 			return 1;
 		}
@@ -1265,7 +1265,7 @@ static int pcmcia_dev_suspend(struct device * dev, pm_message_t state)
 	if (p_dev->suspended)
 		return 0;
 
-	ds_dbg(2, "suspending %s\n", dev->bus_id);
+	ds_dbg(2, "suspending %s\n", dev_name(dev));
 
 	if (dev->driver)
 		p_drv = to_pcmcia_drv(dev->driver);
@@ -1284,7 +1284,7 @@ static int pcmcia_dev_suspend(struct device * dev, pm_message_t state)
 	}
 
 	if (p_dev->device_no == p_dev->func) {
-		ds_dbg(2, "releasing configuration for %s\n", dev->bus_id);
+		ds_dbg(2, "releasing configuration for %s\n", dev_name(dev));
 		pcmcia_release_configuration(p_dev);
 	}
 
@@ -1304,7 +1304,7 @@ static int pcmcia_dev_resume(struct device * dev)
 	if (!p_dev->suspended)
 		return 0;
 
-	ds_dbg(2, "resuming %s\n", dev->bus_id);
+	ds_dbg(2, "resuming %s\n", dev_name(dev));
 
 	if (dev->driver)
 		p_drv = to_pcmcia_drv(dev->driver);
@@ -1313,7 +1313,7 @@ static int pcmcia_dev_resume(struct device * dev)
 		goto out;
 
 	if (p_dev->device_no == p_dev->func) {
-		ds_dbg(2, "requesting configuration for %s\n", dev->bus_id);
+		ds_dbg(2, "requesting configuration for %s\n", dev_name(dev));
 		ret = pcmcia_request_configuration(p_dev, &p_dev->conf);
 		if (ret)
 			goto out;

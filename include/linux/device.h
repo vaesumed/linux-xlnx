@@ -349,7 +349,7 @@ struct device {
 	struct device		*parent;
 
 	struct kobject kobj;
-	char	bus_id[BUS_ID_SIZE];	/* position on parent bus */
+	char	bus_id[20];	/* will be removed */
 	struct device_type	*type;
 	const char		*init_name;
 	unsigned int		init_name_is_set:1;

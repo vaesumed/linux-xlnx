@@ -417,7 +417,7 @@ static int w1_uevent(struct device *dev, struct kobj_uevent_env *env)
 	}
 
 	dev_dbg(dev, "Hotplug event for %s %s, bus_id=%s.\n",
-			event_owner, name, dev->bus_id);
+			event_owner, name, dev_name(dev));
 
 	if (dev->driver != &w1_slave_driver || !sl)
 		return 0;
@@ -459,13 +459,13 @@ static int __w1_attach_slave_device(struct w1_slave *sl)
 		 (unsigned long long) sl->reg_num.id);
 
 	dev_dbg(&sl->dev, "%s: registering %s as %p.\n", __func__,
-		&sl->dev.bus_id[0], sl);
+		dev_name(&sl->dev), sl);
 
 	err = device_register(&sl->dev);
 	if (err < 0) {
 		dev_err(&sl->dev,
 			"Device registration [%s] failed. err=%d\n",
-			sl->dev.bus_id, err);
+			dev_name(&sl->dev), err);
 		return err;
 	}
 
@@ -474,7 +474,7 @@ static int __w1_attach_slave_device(struct w1_slave *sl)
 	if (err < 0) {
 		dev_err(&sl->dev,
 			"sysfs file creation for [%s] failed. err=%d\n",
-			sl->dev.bus_id, err);
+			dev_name(&sl->dev), err);
 		goto out_unreg;
 	}
 
@@ -483,7 +483,7 @@ static int __w1_attach_slave_device(struct w1_slave *sl)
 	if (err < 0) {
 		dev_err(&sl->dev,
 			"sysfs file creation for [%s] failed. err=%d\n",
-			sl->dev.bus_id, err);
+			dev_name(&sl->dev), err);
 		goto out_rem1;
 	}
 
@@ -492,7 +492,7 @@ static int __w1_attach_slave_device(struct w1_slave *sl)
 	    ((err = sl->family->fops->add_slave(sl)) < 0)) {
 		dev_err(&sl->dev,
 			"sysfs file creation for [%s] failed. err=%d\n",
-			sl->dev.bus_id, err);
+			dev_name(&sl->dev), err);
 		goto out_rem2;
 	}
 
