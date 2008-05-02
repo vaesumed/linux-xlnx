@@ -411,8 +411,7 @@ static struct scsi_target *scsi_alloc_target(struct device *parent,
 	device_initialize(dev);
 	starget->reap_ref = 1;
 	dev->parent = get_device(parent);
-	sprintf(dev->bus_id, "target%d:%d:%d",
-		shost->host_no, channel, id);
+	dev_set_name(dev, "target%d:%d:%d", shost->host_no, channel, id);
 #ifndef CONFIG_SYSFS_DEPRECATED
 	dev->bus = &scsi_bus_type;
 #endif

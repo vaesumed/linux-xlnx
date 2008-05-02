@@ -1546,7 +1546,6 @@ static __init void udc_init_data(struct pxa_udc *dev)
 	INIT_LIST_HEAD(&dev->gadget.ep0->ep_list);
 	dev->udc_usb_ep[0].pxa_ep = &dev->pxa_ep[0];
 	ep0_idle(dev);
-	strcpy(dev->dev->bus_id, "");
 
 	/* PXA endpoints init */
 	for (i = 0; i < NR_PXA_ENDPOINTS; i++) {
@@ -2167,7 +2166,7 @@ static struct pxa_udc memory = {
 		.ep0		= &memory.udc_usb_ep[0].usb_ep,
 		.name		= driver_name,
 		.dev = {
-			.bus_id		= "gadget",
+			.init_name	= "gadget",
 		},
 	},
 

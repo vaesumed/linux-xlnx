@@ -612,8 +612,8 @@ static void create_units(struct fw_device *device)
 		unit->device.bus = &fw_bus_type;
 		unit->device.type = &fw_unit_type;
 		unit->device.parent = &device->device;
-		snprintf(unit->device.bus_id, sizeof(unit->device.bus_id),
-			 "%s.%d", dev_name(&device->device), i++);
+		dev_set_name(&unit->device, "%s.%d",
+			     dev_name(&device->device), i++);
 
 		init_fw_attribute_group(&unit->device,
 					fw_unit_attributes,
@@ -736,8 +736,7 @@ static void fw_device_init(struct work_struct *work)
 	device->device.type = &fw_device_type;
 	device->device.parent = device->card->device;
 	device->device.devt = MKDEV(fw_cdev_major, minor);
-	snprintf(device->device.bus_id, sizeof(device->device.bus_id),
-		 "fw%d", minor);
+	dev_set_name(&device->device, "fw%d", minor);
 
 	init_fw_attribute_group(&device->device,
 				fw_device_attributes,
