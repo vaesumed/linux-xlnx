@@ -663,7 +663,7 @@ dev_t blk_lookup_devt(const char *name)
 
 	mutex_lock(&block_class_lock);
 	list_for_each_entry(dev, &block_class.devices, node) {
-		if (strcmp(dev->bus_id, name) == 0) {
+		if (strcmp(dev_name(dev), name) == 0) {
 			devt = dev->devt;
 			break;
 		}
