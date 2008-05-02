@@ -266,7 +266,6 @@ out_release:
 	else
 		ubifs_release_budget(c, &req);
 	return err;
-
 }
 
 static int ubifs_write_end(struct file *file, struct address_space *mapping,
@@ -286,7 +285,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 
 	if (unlikely(copied < len && len == PAGE_CACHE_SIZE)) {
 		/*
-		 * VFS copied less data to the page that it indented and
+		 * VFS copied less data to the page that it intended and
 		 * declared in its '->write_begin()' call via the @len
 		 * argument. If the page was not up-to-date, and @len was
 		 * @PAGE_CACHE_SIZE, the 'ubifs_write_begin()' function did
@@ -729,12 +728,15 @@ static ssize_t ubifs_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 static int ubifs_set_page_dirty(struct page *page)
 {
+	int ret;
+
+	ret = __set_page_dirty_nobuffers(page);
 	/*
 	 * An attempt to dirty a page without budgeting for it - should not
 	 * happen.
 	 */
-	ubifs_assert(0);
-	return __set_page_dirty_nobuffers(page);
+	ubifs_assert(ret == 0);
+	return ret;
 }
 
 static int ubifs_releasepage(struct page *page, gfp_t unused_gfp_flags)
@@ -751,6 +753,71 @@ static int ubifs_releasepage(struct page *page, gfp_t unused_gfp_flags)
 	ClearPagePrivate(page);
 	ClearPageChecked(page);
 	return 1;
+}
+
+/*
+ * mmap()d file has taken write protection fault and is being made
+ * writable. UBIFS must ensure page is budgeted for.
+ */
+static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
+{
+	struct inode *inode = vma->vm_file->f_path.dentry->d_inode;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	loff_t i_size;
+	int err = 0;
+
+	dbg_gen("ino %lu, pg %lu, i_size %lld",	inode->i_ino, page->index,
+		i_size_read(inode));
+	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
+	dbg_eat_memory();
+
+	if (unlikely(c->ro_media))
+		return -EINVAL;
+
+	lock_page(page);
+	i_size = i_size_read(inode);
+	if ((page->mapping != inode->i_mapping) ||
+	    (page_offset(page) > i_size)) {
+		/* page got truncated out from underneath us */
+		err = -EINVAL;
+		goto out_unlock;
+	}
+
+	if (!PagePrivate(page)) {
+		struct ubifs_budget_req req;
+
+		memset(&req, 0, sizeof(struct ubifs_budget_req));
+		if (PageChecked(page))
+			req.new_page = 1;
+		else
+			req.dirtied_page = 1;
+		err = ubifs_budget_space(c, &req);
+		if (unlikely(err))
+			goto out_unlock;
+		SetPagePrivate(page);
+		atomic_long_inc(&c->dirty_pg_cnt);
+		__set_page_dirty_nobuffers(page);
+	}
+
+out_unlock:
+	unlock_page(page);
+	return err;
+}
+
+struct vm_operations_struct ubifs_file_vm_ops = {
+	.fault        = filemap_fault,
+	.page_mkwrite = ubifs_vm_page_mkwrite,
+};
+
+static int ubifs_file_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	int err;
+
+	err = generic_file_mmap(file, vma);
+	if (err)
+		return err;
+	vma->vm_ops = &ubifs_file_vm_ops;
+	return 0;
 }
 
 struct address_space_operations ubifs_file_address_operations = {
@@ -787,7 +854,7 @@ struct file_operations ubifs_file_operations = {
 	.write     = ubifs_write,
 	.aio_read  = generic_file_aio_read,
 	.aio_write = ubifs_aio_write,
-	.mmap      = generic_file_mmap,
+	.mmap      = ubifs_file_mmap,
 	.fsync     = ubifs_fsync,
 	.ioctl     = ubifs_ioctl,
 #ifdef CONFIG_COMPAT
