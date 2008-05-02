@@ -207,7 +207,7 @@ static int sas_bsg_initialize(struct Scsi_Host *shost, struct sas_rphy *rphy)
 	struct request_queue *q;
 	int error;
 	struct device *dev;
-	char namebuf[BUS_ID_SIZE];
+	char namebuf[20];
 	const char *name;
 	void (*release)(struct device *);
 
@@ -219,7 +219,7 @@ static int sas_bsg_initialize(struct Scsi_Host *shost, struct sas_rphy *rphy)
 	if (rphy) {
 		q = blk_init_queue(sas_non_host_smp_request, NULL);
 		dev = &rphy->dev;
-		name = dev->bus_id;
+		name = dev_name(dev);
 		release = NULL;
 	} else {
 		q = blk_init_queue(sas_host_smp_request, NULL);
@@ -770,7 +770,7 @@ static void sas_port_create_link(struct sas_port *port,
 	int res;
 
 	res = sysfs_create_link(&port->dev.kobj, &phy->dev.kobj,
-				phy->dev.bus_id);
+				dev_name(&phy->dev));
 	if (res)
 		goto err;
 	res = sysfs_create_link(&phy->dev.kobj, &port->dev.kobj, "port");
@@ -785,7 +785,7 @@ err:
 static void sas_port_delete_link(struct sas_port *port,
 				 struct sas_phy *phy)
 {
-	sysfs_remove_link(&port->dev.kobj, phy->dev.bus_id);
+	sysfs_remove_link(&port->dev.kobj, dev_name(&phy->dev));
 	sysfs_remove_link(&phy->dev.kobj, "port");
 }
 
@@ -935,7 +935,7 @@ void sas_port_delete(struct sas_port *port)
 	if (port->is_backlink) {
 		struct device *parent = port->dev.parent;
 
-		sysfs_remove_link(&port->dev.kobj, parent->bus_id);
+		sysfs_remove_link(&port->dev.kobj, dev_name(parent));
 		port->is_backlink = 0;
 	}
 
@@ -984,7 +984,9 @@ void sas_port_add_phy(struct sas_port *port, struct sas_phy *phy)
 		/* If this trips, you added a phy that was already
 		 * part of a different port */
 		if (unlikely(tmp != phy)) {
-			dev_printk(KERN_ERR, &port->dev, "trying to add phy %s fails: it's already part of another port\n", phy->dev.bus_id);
+			dev_printk(KERN_ERR, &port->dev, "trying to add phy %s fails: "
+				   "it's already part of another port\n",
+				   dev_name(&phy->dev));
 			BUG();
 		}
 	} else {
@@ -1023,7 +1025,7 @@ void sas_port_mark_backlink(struct sas_port *port)
 		return;
 	port->is_backlink = 1;
 	res = sysfs_create_link(&port->dev.kobj, &parent->kobj,
-				parent->bus_id);
+				dev_name(parent));
 	if (res)
 		goto err;
 	return;
@@ -1445,7 +1447,7 @@ int sas_rphy_add(struct sas_rphy *rphy)
 	transport_add_device(&rphy->dev);
 	transport_configure_device(&rphy->dev);
 	if (sas_bsg_initialize(shost, rphy))
-		printk("fail to a bsg device %s\n", rphy->dev.bus_id);
+		printk("fail to a bsg device %s\n", dev_name(&rphy->dev));
 
 
 	mutex_lock(&sas_host->lock);

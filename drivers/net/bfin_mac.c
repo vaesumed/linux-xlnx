@@ -416,10 +416,10 @@ static int mii_probe(struct net_device *dev)
 	}
 
 #if defined(CONFIG_BFIN_MAC_RMII)
-	phydev = phy_connect(dev, phydev->dev.bus_id, &bfin_mac_adjust_link, 0,
+	phydev = phy_connect(dev, dev_name(&phydev->dev), &bfin_mac_adjust_link, 0,
 			PHY_INTERFACE_MODE_RMII);
 #else
-	phydev = phy_connect(dev, phydev->dev.bus_id, &bfin_mac_adjust_link, 0,
+	phydev = phy_connect(dev, dev_name(&phydev->dev), &bfin_mac_adjust_link, 0,
 			PHY_INTERFACE_MODE_MII);
 #endif
 
@@ -448,7 +448,7 @@ static int mii_probe(struct net_device *dev)
 	printk(KERN_INFO "%s: attached PHY driver [%s] "
 	       "(mii_bus:phy_addr=%s, irq=%d, mdc_clk=%dHz(mdc_div=%d)"
 	       "@sclk=%dMHz)\n",
-	       DRV_NAME, phydev->drv->name, phydev->dev.bus_id, phydev->irq,
+	       DRV_NAME, phydev->drv->name, dev_name(&phydev->dev), phydev->irq,
 	       MDC_CLK, mdc_div, sclk/1000000);
 
 	return 0;
@@ -489,7 +489,7 @@ static void bfin_mac_ethtool_getdrvinfo(struct net_device *dev,
 	strcpy(info->driver, DRV_NAME);
 	strcpy(info->version, DRV_VERSION);
 	strcpy(info->fw_version, "N/A");
-	strcpy(info->bus_info, dev->dev.bus_id);
+	strcpy(info->bus_info, dev_name(&dev->dev));
 }
 
 static struct ethtool_ops bfin_mac_ethtool_ops = {

@@ -327,7 +327,7 @@ void hci_conn_add_sysfs(struct hci_conn *conn)
  */
 static int __match_tty(struct device *dev, void *data)
 {
-	return !strncmp(dev->bus_id, "rfcomm", 6);
+	return !strncmp(dev_name(dev), "rfcomm", 6);
 }
 
 static void del_conn(struct work_struct *work)

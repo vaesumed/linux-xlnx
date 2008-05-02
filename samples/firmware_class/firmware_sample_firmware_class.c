@@ -120,7 +120,7 @@ static int fw_setup_class_device(struct class_device *class_dev,
 	strncpy(fw_priv->fw_id, fw_name, FIRMWARE_NAME_MAX);
 	fw_priv->fw_id[FIRMWARE_NAME_MAX-1] = '\0';
 
-	strncpy(class_dev->class_id, device->bus_id, BUS_ID_SIZE);
+	strncpy(class_dev->class_id, dev_name(device), BUS_ID_SIZE);
 	class_dev->class_id[BUS_ID_SIZE-1] = '\0';
 	class_dev->dev = device;
 

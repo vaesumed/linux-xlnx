@@ -51,7 +51,7 @@ int aer_osc_setup(struct pcie_device *pciedev)
 
 	if (ACPI_FAILURE(status)) {
 		printk(KERN_DEBUG "AER service couldn't init device %s - %s\n",
-		    pciedev->device.bus_id,
+		    dev_name(&pciedev->device),
 		    (status == AE_SUPPORT || status == AE_NOT_FOUND) ?
 		    "no _OSC support" : "Run ACPI _OSC fails");
 		return -1;

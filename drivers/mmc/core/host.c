@@ -121,7 +121,7 @@ int mmc_add_host(struct mmc_host *host)
 	WARN_ON((host->caps & MMC_CAP_SDIO_IRQ) &&
 		!host->ops->enable_sdio_irq);
 
-	led_trigger_register_simple(host->class_dev.bus_id, &host->led);
+	led_trigger_register_simple(dev_name(&host->class_dev), &host->led);
 
 	err = device_add(&host->class_dev);
 	if (err)

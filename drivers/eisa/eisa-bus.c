@@ -301,7 +301,7 @@ static int __init eisa_probe (struct eisa_root_device *root)
 	struct eisa_device *edev;
 
         printk (KERN_INFO "EISA: Probing bus %d at %s\n",
-		root->bus_nr, root->dev->bus_id);
+		root->bus_nr, dev_name(root->dev));
 
 	/* First try to get hold of slot 0. If there is no device
 	 * here, simply fail, unless root->force_probe is set. */

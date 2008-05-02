@@ -226,7 +226,7 @@ int ssb_devices_freeze(struct ssb_bus *bus)
 		err = drv->suspend(dev, state);
 		if (err) {
 			ssb_printk(KERN_ERR PFX "Failed to freeze device %s\n",
-				   dev->dev->bus_id);
+				   dev_name(dev->dev));
 			goto err_unwind;
 		}
 	}
@@ -269,7 +269,7 @@ int ssb_devices_thaw(struct ssb_bus *bus)
 		err = drv->resume(dev);
 		if (err) {
 			ssb_printk(KERN_ERR PFX "Failed to thaw device %s\n",
-				   dev->dev->bus_id);
+				   dev_name(dev->dev));
 		}
 	}
 
@@ -482,7 +482,7 @@ static int ssb_devices_register(struct ssb_bus *bus)
 		if (err) {
 			ssb_printk(KERN_ERR PFX
 				   "Could not register %s\n",
-				   dev->bus_id);
+				   dev_name(dev));
 			/* Set dev to NULL to not unregister
 			 * dev on error unwinding. */
 			sdev->dev = NULL;
@@ -798,7 +798,7 @@ int ssb_bus_pcibus_register(struct ssb_bus *bus,
 	err = ssb_bus_register(bus, ssb_pci_get_invariants, 0);
 	if (!err) {
 		ssb_printk(KERN_INFO PFX "Sonics Silicon Backplane found on "
-			   "PCI device %s\n", host_pci->dev.bus_id);
+			   "PCI device %s\n", dev_name(&host_pci->dev));
 	}
 
 	return err;

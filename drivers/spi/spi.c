@@ -232,7 +232,7 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	proxy->modalias = chip->modalias;
 
 	snprintf(proxy->dev.bus_id, sizeof proxy->dev.bus_id,
-			"%s.%u", master->dev.bus_id,
+			"%s.%u", dev_name(&master->dev),
 			chip->chip_select);
 	proxy->dev.parent = dev;
 	proxy->dev.bus = &spi_bus_type;
@@ -245,7 +245,7 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	status = master->setup(proxy);
 	if (status < 0) {
 		dev_err(dev, "can't %s %s, status %d\n",
-				"setup", proxy->dev.bus_id, status);
+				"setup", dev_name(&proxy->dev), status);
 		goto fail;
 	}
 
@@ -255,10 +255,10 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	status = device_register(&proxy->dev);
 	if (status < 0) {
 		dev_err(dev, "can't %s %s, status %d\n",
-				"add", proxy->dev.bus_id, status);
+				"add", dev_name(&proxy->dev), status);
 		goto fail;
 	}
-	dev_dbg(dev, "registered child %s\n", proxy->dev.bus_id);
+	dev_dbg(dev, "registered child %s\n", dev_name(&proxy->dev));
 	return proxy;
 
 fail:
@@ -438,7 +438,7 @@ int spi_register_master(struct spi_master *master)
 	status = device_add(&master->dev);
 	if (status < 0)
 		goto done;
-	dev_dbg(dev, "registered master %s%s\n", master->dev.bus_id,
+	dev_dbg(dev, "registered master %s%s\n", dev_name(&master->dev),
 			dynamic ? " (dynamic)" : "");
 
 	/* populate children from any spi device tables */

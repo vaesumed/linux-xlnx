@@ -962,12 +962,12 @@ static void nodemgr_register_device(struct node_entry *ne,
 	ud->device.parent = parent;
 
 	snprintf(ud->device.bus_id, BUS_ID_SIZE, "%s-%u",
-		 ne->device.bus_id, ud->id);
+		 dev_name(&ne->device), ud->id);
 
 	ud->unit_dev.parent = &ud->device;
 	ud->unit_dev.class = &nodemgr_ud_class;
 	snprintf(ud->unit_dev.bus_id, BUS_ID_SIZE, "%s-%u",
-		 ne->device.bus_id, ud->id);
+		 dev_name(&ne->device), ud->id);
 
 	if (device_register(&ud->device))
 		goto fail_devreg;
@@ -982,7 +982,7 @@ static void nodemgr_register_device(struct node_entry *ne,
 fail_classdevreg:
 	device_unregister(&ud->device);
 fail_devreg:
-	HPSB_ERR("Failed to create unit %s", ud->device.bus_id);
+	HPSB_ERR("Failed to create unit %s", dev_name(&ud->device));
 }	
 
 
