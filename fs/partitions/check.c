@@ -362,12 +362,12 @@ void add_partition(struct gendisk *disk, int part, sector_t start, sector_t len,
 	p->partno = part;
 	p->policy = disk->policy;
 
-	if (isdigit(disk->dev.bus_id[strlen(disk->dev.bus_id)-1]))
+	if (isdigit(dev_name(&disk->dev)[strlen(dev_name(&disk->dev))-1]))
 		snprintf(p->dev.bus_id, BUS_ID_SIZE,
-		"%sp%d", disk->dev.bus_id, part);
+		"%sp%d", dev_name(&disk->dev), part);
 	else
 		snprintf(p->dev.bus_id, BUS_ID_SIZE,
-			 "%s%d", disk->dev.bus_id, part);
+			 "%s%d", dev_name(&disk->dev), part);
 
 	device_initialize(&p->dev);
 	p->dev.devt = MKDEV(disk->major, disk->first_minor + part);
@@ -537,7 +537,7 @@ void del_gendisk(struct gendisk *disk)
 	kobject_put(disk->slave_dir);
 	disk->driverfs_dev = NULL;
 #ifndef CONFIG_SYSFS_DEPRECATED
-	sysfs_remove_link(block_depr, disk->dev.bus_id);
+	sysfs_remove_link(block_depr, dev_name(&disk->dev));
 #endif
 	device_del(&disk->dev);
 }
