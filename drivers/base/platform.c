@@ -24,7 +24,7 @@
 				 driver))
 
 struct device platform_bus = {
-	.bus_id		= "platform",
+	.init_name	= "platform",
 };
 EXPORT_SYMBOL_GPL(platform_bus);
 
@@ -246,10 +246,9 @@ int platform_device_add(struct platform_device *pdev)
 	pdev->dev.bus = &platform_bus_type;
 
 	if (pdev->id != -1)
-		snprintf(pdev->dev.bus_id, BUS_ID_SIZE, "%s.%d", pdev->name,
-			 pdev->id);
+		dev_set_name(&pdev->dev, "%s.%d", pdev->name, pdev->id);
 	else
-		strlcpy(pdev->dev.bus_id, pdev->name, BUS_ID_SIZE);
+		dev_set_name(&pdev->dev, pdev->name);
 
 	for (i = 0; i < pdev->num_resources; i++) {
 		struct resource *p, *r = &pdev->resource[i];
