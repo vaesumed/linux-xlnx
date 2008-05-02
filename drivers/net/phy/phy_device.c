@@ -58,7 +58,7 @@ static DEFINE_MUTEX(phy_fixup_lock);
 
 /*
  * Creates a new phy_fixup and adds it to the list
- * @bus_id: A string which matches phydev->dev.bus_id (or PHY_ANY_ID)
+ * @bus_id: A string which matches dev_name(&phydev->dev) (or PHY_ANY_ID)
  * @phy_uid: Used to match against phydev->phy_id (the UID of the PHY)
  * 	It can also be PHY_ANY_UID
  * @phy_uid_mask: Applied to phydev->phy_id and fixup->phy_uid before
@@ -74,7 +74,7 @@ int phy_register_fixup(const char *bus_id, u32 phy_uid, u32 phy_uid_mask,
 	if (!fixup)
 		return -ENOMEM;
 
-	strncpy(fixup->bus_id, bus_id, BUS_ID_SIZE);
+	strncpy(fixup->bus_id, bus_id, sizeof(fixup->bus_id));
 	fixup->phy_uid = phy_uid;
 	fixup->phy_uid_mask = phy_uid_mask;
 	fixup->run = run;
@@ -109,7 +109,7 @@ EXPORT_SYMBOL(phy_register_fixup_for_id);
  */
 static int phy_needs_fixup(struct phy_device *phydev, struct phy_fixup *fixup)
 {
-	if (strcmp(fixup->bus_id, phydev->dev.bus_id) != 0)
+	if (strcmp(fixup->bus_id, dev_name(&phydev->dev)) != 0)
 		if (strcmp(fixup->bus_id, PHY_ANY_ID) != 0)
 			return 0;
 

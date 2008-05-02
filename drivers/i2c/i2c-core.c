@@ -811,7 +811,7 @@ int i2c_attach_client(struct i2c_client *client)
 	mutex_unlock(&adapter->clist_lock);
 
 	dev_dbg(&adapter->dev, "client [%s] registered with bus id %s\n",
-		client->name, client->dev.bus_id);
+		client->name, dev_name(&client->dev));
 
 	if (adapter->client_register)  {
 		if (adapter->client_register(client)) {

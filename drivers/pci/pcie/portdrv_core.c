@@ -36,7 +36,7 @@ static int pcie_port_probe_service(struct device *dev)
 	status = driver->probe(pciedev, driver->id_table);
 	if (!status) {
 		printk(KERN_DEBUG "Load service driver %s on pcie device %s\n",
-			driver->name, dev->bus_id);
+			driver->name, dev_name(dev));
 		get_device(dev);
 	}
 	return status;
@@ -54,7 +54,7 @@ static int pcie_port_remove_service(struct device *dev)
  	driver = to_service_driver(dev->driver);
 	if (driver && driver->remove) { 
 		printk(KERN_DEBUG "Unload service driver %s on pcie device %s\n",
-			driver->name, dev->bus_id);
+			driver->name, dev_name(dev));
 		driver->remove(pciedev);
 		put_device(dev);
 	}
@@ -103,7 +103,7 @@ static int pcie_port_resume_service(struct device *dev)
  */
 static void release_pcie_device(struct device *dev)
 {
-	printk(KERN_DEBUG "Free Port Service[%s]\n", dev->bus_id);
+	printk(KERN_DEBUG "Free Port Service[%s]\n", dev_name(dev));
 	kfree(to_pcie_device(dev));			
 }
 
@@ -252,7 +252,8 @@ static struct pcie_device* alloc_pcie_device(struct pci_dev *parent,
 		return NULL;
 
 	pcie_device_init(parent, device, port_type, service_type, irq,irq_mode);
-	printk(KERN_DEBUG "Allocate Port Service[%s]\n", device->device.bus_id);
+	printk(KERN_DEBUG "Allocate Port Service[%s]\n",
+	       dev_name(&device->device));
 	return device;
 }
 

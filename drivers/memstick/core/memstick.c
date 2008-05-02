@@ -383,7 +383,7 @@ static struct memstick_dev *memstick_alloc_card(struct memstick_host *host)
 	if (card) {
 		card->host = host;
 		snprintf(card->dev.bus_id, sizeof(card->dev.bus_id),
-			 "%s", host->dev.bus_id);
+			 "%s", dev_name(&host->dev));
 		card->dev.parent = &host->dev;
 		card->dev.bus = &memstick_bus_type;
 		card->dev.release = memstick_free_card;

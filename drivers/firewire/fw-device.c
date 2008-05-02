@@ -613,7 +613,7 @@ static void create_units(struct fw_device *device)
 		unit->device.type = &fw_unit_type;
 		unit->device.parent = &device->device;
 		snprintf(unit->device.bus_id, sizeof(unit->device.bus_id),
-			 "%s.%d", device->device.bus_id, i++);
+			 "%s.%d", dev_name(&device->device), i++);
 
 		init_fw_attribute_group(&unit->device,
 					fw_unit_attributes,
@@ -766,13 +766,13 @@ static void fw_device_init(struct work_struct *work)
 		if (device->config_rom_retries)
 			fw_notify("created device %s: GUID %08x%08x, S%d00, "
 				  "%d config ROM retries\n",
-				  device->device.bus_id,
+				  dev_name(&device->device),
 				  device->config_rom[3], device->config_rom[4],
 				  1 << device->max_speed,
 				  device->config_rom_retries);
 		else
 			fw_notify("created device %s: GUID %08x%08x, S%d00\n",
-				  device->device.bus_id,
+				  dev_name(&device->device),
 				  device->config_rom[3], device->config_rom[4],
 				  1 << device->max_speed);
 		device->config_rom_retries = 0;
@@ -908,12 +908,13 @@ static void fw_device_refresh(struct work_struct *work)
 		    FW_DEVICE_RUNNING) == FW_DEVICE_SHUTDOWN)
 		goto gone;
 
-	fw_notify("refreshed device %s\n", device->device.bus_id);
+	fw_notify("refreshed device %s\n", dev_name(&device->device));
 	device->config_rom_retries = 0;
 	goto out;
 
  give_up:
-	fw_notify("giving up on refresh of device %s\n", device->device.bus_id);
+	fw_notify("giving up on refresh of device %s\n",
+		  dev_name(&device->device));
  gone:
 	atomic_set(&device->state, FW_DEVICE_SHUTDOWN);
 	fw_device_shutdown(work);
