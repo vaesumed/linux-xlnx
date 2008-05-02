@@ -597,11 +597,11 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 	/* Needed by 'ubifs_pack_lsave()' */
 	c->main_first = c->leb_cnt - *main_lebs;
 
+	lsave = kmalloc(sizeof(int) * c->lsave_cnt, GFP_KERNEL);
 	pnode = kzalloc(sizeof(struct ubifs_pnode), GFP_KERNEL);
 	nnode = kzalloc(sizeof(struct ubifs_nnode), GFP_KERNEL);
 	buf = vmalloc(c->leb_size);
 	ltab = vmalloc(sizeof(struct ubifs_lpt_lprops) * c->lpt_lebs);
-	lsave = kmalloc(sizeof(int) * c->lsave_cnt, GFP_KERNEL);
 	if (!pnode || !nnode || !buf || !ltab || !lsave) {
 		err = -ENOMEM;
 		goto out;
