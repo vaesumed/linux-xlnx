@@ -731,7 +731,7 @@ struct ubifs_compressor {
  * @dd_growth: how much data that makes other data dirty the operation will
  *             supposedly add
  *
- * @idx_groqth, @data_growth and @dd_growth are not used in budget request. The
+ * @idx_growth, @data_growth and @dd_growth are not used in budget request. The
  * budgeting subsystem caches index and data growth values there to avoid
  * re-calculating them when the budget is released. However, if @idx_growth is
  * %-1, it is calculated by the release function using other fields.
