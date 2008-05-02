@@ -2001,21 +2001,21 @@ qdio_handle_activate_check(struct ccw_device *cdev, unsigned long intparm,
 	irq_ptr = cdev->private->qdio_data;
 
 	QDIO_DBF_TEXT2(1, trace, "ick2");
-	sprintf(dbf_text,"%s", cdev->dev.bus_id);
+	sprintf(dbf_text,"%s", dev_name(&cdev->dev));
 	QDIO_DBF_TEXT2(1,trace,dbf_text);
 	QDIO_DBF_HEX2(0,trace,&intparm,sizeof(int));
 	QDIO_DBF_HEX2(0,trace,&dstat,sizeof(int));
 	QDIO_DBF_HEX2(0,trace,&cstat,sizeof(int));
 	QDIO_PRINT_ERR("received check condition on activate " \
 		       "queues on device %s (cs=x%x, ds=x%x).\n",
-		       cdev->dev.bus_id, cstat, dstat);
+		       dev_name(&cdev->dev), cstat, dstat);
 	if (irq_ptr->no_input_qs) {
 		q=irq_ptr->input_qs[0];
 	} else if (irq_ptr->no_output_qs) {
 		q=irq_ptr->output_qs[0];
 	} else {
 		QDIO_PRINT_ERR("oops... no queue registered for device %s!?\n",
-			       cdev->dev.bus_id);
+			       dev_name(&cdev->dev));
 		goto omit_handler_call;
 	}
 	q->handler(q->cdev,QDIO_STATUS_ACTIVATE_CHECK_CONDITION|
@@ -2045,7 +2045,7 @@ qdio_timeout_handler(struct ccw_device *cdev)
 	char dbf_text[15];
 
 	QDIO_DBF_TEXT2(0, trace, "qtoh");
-	sprintf(dbf_text, "%s", cdev->dev.bus_id);
+	sprintf(dbf_text, "%s", dev_name(&cdev->dev));
 	QDIO_DBF_TEXT2(0, trace, dbf_text);
 
 	irq_ptr = cdev->private->qdio_data;
@@ -2095,23 +2095,23 @@ qdio_handler(struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 
 #ifdef CONFIG_QDIO_DEBUG
 	QDIO_DBF_TEXT4(0, trace, "qint");
-	sprintf(dbf_text, "%s", cdev->dev.bus_id);
+	sprintf(dbf_text, "%s", dev_name(&cdev->dev));
 	QDIO_DBF_TEXT4(0, trace, dbf_text);
 #endif /* CONFIG_QDIO_DEBUG */
 	
 	if (!intparm) {
 		QDIO_PRINT_ERR("got unsolicited interrupt in qdio " \
-				  "handler, device %s\n", cdev->dev.bus_id);
+				  "handler, device %s\n", dev_name(&cdev->dev));
 		return;
 	}
 
 	irq_ptr = cdev->private->qdio_data;
 	if (!irq_ptr) {
 		QDIO_DBF_TEXT2(1, trace, "uint");
-		sprintf(dbf_text,"%s", cdev->dev.bus_id);
+		sprintf(dbf_text,"%s", dev_name(&cdev->dev));
 		QDIO_DBF_TEXT2(1,trace,dbf_text);
 		QDIO_PRINT_ERR("received interrupt on unused device %s!\n",
-			       cdev->dev.bus_id);
+			       dev_name(&cdev->dev));
 		return;
 	}
 
@@ -2120,14 +2120,14 @@ qdio_handler(struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 		switch (PTR_ERR(irb)) {
 		case -EIO:
 			QDIO_PRINT_ERR("i/o error on device %s\n",
-				       cdev->dev.bus_id);
+				       dev_name(&cdev->dev));
 			return;
 		case -ETIMEDOUT:
 			qdio_timeout_handler(cdev);
 			return;
 		default:
 			QDIO_PRINT_ERR("unknown error state %ld on device %s\n",
-				       PTR_ERR(irb), cdev->dev.bus_id);
+				       PTR_ERR(irb), dev_name(&cdev->dev));
 			return;
 		}
 	}
@@ -2165,7 +2165,7 @@ qdio_handler(struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 	default:
 		QDIO_PRINT_ERR("got interrupt for queues in state %d on " \
 			       "device %s?!\n",
-			       irq_ptr->state, cdev->dev.bus_id);
+			       irq_ptr->state, dev_name(&cdev->dev));
 	}
 	wake_up(&cdev->private->wait_q);
 
@@ -2675,7 +2675,7 @@ qdio_shutdown(struct ccw_device *cdev, int how)
 			   irq_ptr->state == QDIO_IRQ_STATE_ERR);
 	} else {
 		QDIO_PRINT_INFO("ccw_device_{halt,clear} returned %d for "
-				"device %s\n", result, cdev->dev.bus_id);
+				"device %s\n", result, dev_name(&cdev->dev));
 		spin_unlock_irqrestore(get_ccwdev_lock(cdev), flags);
 		result = rc;
 		goto out;
