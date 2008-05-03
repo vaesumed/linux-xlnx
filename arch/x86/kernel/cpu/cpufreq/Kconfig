@@ -149,26 +149,6 @@ config X86_SPEEDSTEP_SMI
 
 	  If in doubt, say N.
 
-config X86_P4_CLOCKMOD
-	tristate "Intel Pentium 4 clock modulation"
-	select CPU_FREQ_TABLE
-	help
-	  This adds the CPUFreq driver for Intel Pentium 4 / XEON
-	  processors.  When enabled it will lower CPU temperature by skipping
-	  clocks.
-
-	  This driver should be only used in exceptional
-	  circumstances when very low power is needed because it causes severe
-	  slowdowns and noticeable latencies.  Normally Speedstep should be used
-	  instead.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called p4-clockmod.
-
-	  For details, take a look at <file:Documentation/cpu-freq/>.
-
-	  Unless you are absolutely sure say N.
-
 config X86_CPUFREQ_NFORCE2
 	tristate "nVidia nForce2 FSB changing"
 	depends on X86_32 && EXPERIMENTAL
