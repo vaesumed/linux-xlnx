@@ -69,6 +69,7 @@ config SPARC
 	select HAVE_IDE
 	select HAVE_OPROFILE
 	select HAVE_ARCH_KGDB if !SMP
+	select HAVE_STABLE_CLOCK
 
 # Identify this as a Sparc32 build
 config SPARC32
