@@ -1074,8 +1074,6 @@ static struct rq *this_rq_lock(void)
 	return rq;
 }
 
-	WARN_ON(!irqs_disabled());
-	WARN_ON(!irqs_disabled());
 static void __resched_task(struct task_struct *p, int tif_bit);
 
 static inline void resched_task(struct task_struct *p)

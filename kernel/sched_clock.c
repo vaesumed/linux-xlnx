@@ -33,12 +33,18 @@
 #ifndef CONFIG_HAVE_STABLE_CLOCK
 
 struct sched_clock_data {
-	spinlock_t lock;
-	unsigned long prev_jiffies;
-	u64 prev_raw;
-	u64 tick_raw;
-	u64 tick_gtod;
-	u64 clock;
+	/*
+	 * Raw spinlock - this is a special case: this might be called
+	 * from within instrumentation code so we dont want to do any
+	 * instrumentation ourselves.
+	 */
+	raw_spinlock_t		lock;
+
+	unsigned long		prev_jiffies;
+	u64			prev_raw;
+	u64			tick_raw;
+	u64			tick_gtod;
+	u64			clock;
 };
 
 static DEFINE_PER_CPU_SHARED_ALIGNED(struct sched_clock_data, sched_clock_data);
@@ -62,7 +68,7 @@ void sched_clock_init(void)
 	for_each_possible_cpu(cpu) {
 		struct sched_clock_data *scd = cpu_sdc(cpu);
 
-		spin_lock_init(&scd->lock);
+		scd->lock = (raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
 		scd->prev_jiffies = jiffies;
 		scd->prev_raw = now;
 		scd->tick_raw = now;
@@ -116,11 +122,11 @@ static void lock_double_clock(struct sched_clock_data *data1,
 			      struct sched_clock_data *data2)
 {
 	if (data1 < data2) {
-		spin_lock(&data1->lock);
-		spin_lock_nested(&data2->lock, SINGLE_DEPTH_NESTING);
+		__raw_spin_lock(&data1->lock);
+		__raw_spin_lock(&data2->lock);
 	} else {
-		spin_lock(&data2->lock);
-		spin_lock_nested(&data1->lock, SINGLE_DEPTH_NESTING);
+		__raw_spin_lock(&data2->lock);
+		__raw_spin_lock(&data1->lock);
 	}
 }
 
@@ -147,14 +153,14 @@ u64 sched_clock_cpu(int cpu)
 		now -= my_scd->tick_gtod;
 		now += scd->tick_gtod;
 
-		spin_unlock(&my_scd->lock);
+		__raw_spin_unlock(&my_scd->lock);
 	} else
-		spin_lock(&scd->lock);
+		__raw_spin_lock(&scd->lock);
 
 	__update_sched_clock(scd, now);
 	clock = scd->clock;
 
-	spin_unlock(&scd->lock);
+	__raw_spin_unlock(&scd->lock);
 
 	return clock;
 }
@@ -164,7 +170,7 @@ void sched_clock_tick(void)
 	struct sched_clock_data *scd = this_scd();
 	u64 now;
 
-	spin_lock(&scd->lock);
+	__raw_spin_lock(&scd->lock);
 	now = sched_clock();
 	__update_sched_clock(scd, now);
 	/*
@@ -174,7 +180,7 @@ void sched_clock_tick(void)
 	 */
 	scd->tick_raw = now;
 	scd->tick_gtod = ktime_to_ns(ktime_get()); // XXX get from regular tick
-	spin_unlock(&scd->lock);
+	__raw_spin_unlock(&scd->lock);
 }
 
 /*
@@ -199,10 +205,10 @@ void sched_clock_idle_wakeup_event(u64 delta_ns)
 	 * and use the PM-provided delta_ns to advance the
 	 * rq clock:
 	 */
-	spin_lock(&scd->lock);
+	__raw_spin_lock(&scd->lock);
 	scd->prev_raw = sched_clock();
 	scd->clock += delta_ns;
-	spin_unlock(&scd->lock);
+	__raw_spin_unlock(&scd->lock);
 
 	touch_softlockup_watchdog();
 }
