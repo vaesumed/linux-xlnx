@@ -24,6 +24,7 @@
 #include <asm/byteorder.h>
 #include <linux/io.h>
 #include <linux/usb/c67x00.h>
+#include <linux/jiffies.h>
 #include "c67x00.h"
 
 #define COMM_REGS 14
