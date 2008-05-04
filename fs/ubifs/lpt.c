@@ -2045,7 +2045,7 @@ out:
 	return err;
 }
 
-#if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS)
+#ifdef CONFIG_UBIFS_FS_DEBUG
 
 /**
  * dbg_chk_pnode - check a pnode.
@@ -2190,6 +2190,9 @@ int dbg_check_lpt_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
 	struct ubifs_cnode *cn;
 	int num, iip = 0, err;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_LPROPS))
+		return 0;
+
 	while (cnode) {
 		ubifs_assert(row >= 0);
 		nnode = cnode->parent;
@@ -2237,4 +2240,4 @@ int dbg_check_lpt_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
 	return 0;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS */
+#endif /* CONFIG_UBIFS_FS_DEBUG */
