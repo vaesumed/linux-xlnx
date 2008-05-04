@@ -938,9 +938,11 @@ struct sched_entity {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	struct rb_node		deadline_node;
 	u64			deadline;
+	u64			min_deadline;
+	unsigned int		eligible;
 #endif
-	struct list_head	group_node;
 	unsigned int		on_rq;
+	struct list_head	group_node;
 
 	u64			exec_start;
 	u64			sum_exec_runtime;
