@@ -375,7 +375,7 @@ static int layout_in_gaps(struct ubifs_info *c, int cnt)
 		if (written < 0) {
 			err = written;
 			if (err == -ENOSPC) {
-				if (!force_in_the_gaps_enabled) {
+				if (!dbg_force_in_the_gaps_enabled) {
 					/*
 					 * Do not print scary warnings if the
 					 * debugging option which forces
