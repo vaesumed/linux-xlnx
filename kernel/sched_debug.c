@@ -146,6 +146,11 @@ void print_cfs_root(struct seq_file *m, int cpu)
 	SEQ_printf(m, "  .%-30s: %Ld.%06ld\n", "spread0",
 			SPLIT_NS(spread0));
 
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	SEQ_printf(m, "  .%-30s: %Ld.%06ld\n", "avg_vruntime",
+			SPLIT_NS(avg_vruntime(cfs_r_rq)));
+#endif
+
 #ifdef CONFIG_SCHEDSTATS
 	SEQ_printf(m, "  .%-30s: %Ld.%06ld\n", "exec_clock",
 			SPLIT_NS(cfs_r_rq->exec_clock));
