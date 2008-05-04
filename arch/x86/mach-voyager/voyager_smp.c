@@ -74,7 +74,7 @@ EXPORT_SYMBOL(cpu_online_map);
 
 /* Bitmask of CPUs present in the system - exported by i386_syms.c, used
  * by scheduler but indexed physically */
-cpumask_t phys_cpu_present_map = CPU_MASK_NONE;
+extern cpumask_t phys_cpu_present_map;
 
 /* The internal functions */
 static void send_CPI(__u32 cpuset, __u8 cpi);
