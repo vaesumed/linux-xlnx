@@ -61,7 +61,7 @@ struct irq_cfg {
 };
 
 /* irq_cfg is indexed by the sum of all RTEs in all I/O APICs. */
-struct irq_cfg irq_cfg[NR_IRQS] __read_mostly = {
+static struct irq_cfg irq_cfg[NR_IRQS] __read_mostly = {
 	[0]  = { .domain = CPU_MASK_ALL, .vector = IRQ0_VECTOR,  },
 	[1]  = { .domain = CPU_MASK_ALL, .vector = IRQ1_VECTOR,  },
 	[2]  = { .domain = CPU_MASK_ALL, .vector = IRQ2_VECTOR,  },
@@ -81,6 +81,10 @@ struct irq_cfg irq_cfg[NR_IRQS] __read_mostly = {
 };
 
 static int assign_irq_vector(int irq, cpumask_t mask);
+
+int first_system_vector = 0xfe;
+
+char system_vectors[NR_VECTORS] = { [0 ... NR_VECTORS-1] = SYS_VECTOR_FREE};
 
 #define __apicdebuginit  __init
 
@@ -730,7 +734,7 @@ static int __assign_irq_vector(int irq, cpumask_t mask)
 		offset = current_offset;
 next:
 		vector += 8;
-		if (vector >= FIRST_SYSTEM_VECTOR) {
+		if (vector >= first_system_vector) {
 			/* If we run out of vectors on large boxen, must share them. */
 			offset = (offset + 1) % 8;
 			vector = FIRST_DEVICE_VECTOR + offset;
