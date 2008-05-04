@@ -28,12 +28,6 @@
 #include <linux/crc16.h>
 #include "ubifs.h"
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS
-static int dbg_check_ltab(struct ubifs_info *c);
-#else
-#define dbg_check_ltab(c) 0
-#endif
-
 /**
  * first_dirty_cnode - find first dirty cnode.
  * @c: UBIFS file-system description object
@@ -1395,7 +1389,7 @@ void ubifs_lpt_free(struct ubifs_info *c, int wr_only)
 	kfree(c->lpt_nod_buf);
 }
 
-#if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS)
+#ifdef CONFIG_UBIFS_FS_DEBUG
 
 /**
  * dbg_is_all_ff - determine if a buffer contains only 0xff bytes.
@@ -1592,9 +1586,12 @@ static int dbg_check_ltab_lnum(struct ubifs_info *c, int lnum)
  *
  * This function returns %0 on success and a negative error code on failure.
  */
-static int dbg_check_ltab(struct ubifs_info *c)
+int dbg_check_ltab(struct ubifs_info *c)
 {
 	int lnum, err, i, cnt;
+
+	if (!(ubifs_chk_flags & UBIFS_CHK_LPROPS))
+		return 0;
 
 	/* Bring the entire tree into memory */
 	cnt = DIV_ROUND_UP(c->main_lebs, UBIFS_LPT_FANOUT);
@@ -1625,4 +1622,4 @@ static int dbg_check_ltab(struct ubifs_info *c)
 	return 0;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS */
+#endif /* CONFIG_UBIFS_FS_DEBUG */

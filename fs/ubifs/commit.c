@@ -470,7 +470,7 @@ int ubifs_gc_should_commit(struct ubifs_info *c)
 	return ret;
 }
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OLD_IDX
+#ifdef CONFIG_UBIFS_FS_DEBUG
 
 /**
  * struct idx_node - hold index nodes during index tree traversal.
@@ -705,4 +705,4 @@ out_free:
 	return err;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_OLD_IDX */
+#endif /* CONFIG_UBIFS_FS_DEBUG */

@@ -30,14 +30,6 @@
 
 #include "ubifs.h"
 
-#if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS) || \
-    defined(CONFIG_UBIFS_FS_DEBUG_CHK_OTHER)
-static void dbg_check_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap,
-			   int cat, int add_pos);
-#else
-#define dbg_check_heap(c, heap, cat, add_pos) ({})
-#endif
-
 /**
  * get_heap_comp_val - get the LEB properties value for heap comparisons.
  * @lprops: LEB properties
@@ -878,8 +870,7 @@ const struct ubifs_lprops *ubifs_fast_find_frdi_idx(struct ubifs_info *c)
 	return lprops;
 }
 
-#if defined(CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS) || \
-    defined(CONFIG_UBIFS_FS_DEBUG_CHK_OTHER)
+#ifdef CONFIG_UBIFS_FS_DEBUG
 
 /**
  * dbg_check_cats - check category heaps and lists.
@@ -892,6 +883,9 @@ int dbg_check_cats(struct ubifs_info *c)
 	struct ubifs_lprops *lprops;
 	struct list_head *pos;
 	int i, cat;
+
+	if (!(ubifs_chk_flags & (UBIFS_CHK_GEN | UBIFS_CHK_LPROPS)))
+		return 0;
 
 	list_for_each_entry(lprops, &c->empty_list, list) {
 		if (lprops->free != c->leb_size) {
@@ -983,10 +977,13 @@ int dbg_check_cats(struct ubifs_info *c)
 	return 0;
 }
 
-static void dbg_check_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap,
-			   int cat, int add_pos)
+void dbg_check_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat,
+		    int add_pos)
 {
 	int i = 0, j, err = 0;
+
+	if (!(ubifs_chk_flags & (UBIFS_CHK_GEN | UBIFS_CHK_LPROPS)))
+		return;
 
 	for (i = 0; i < heap->cnt; i++) {
 		struct ubifs_lprops *lprops = heap->arr[i];
@@ -1032,10 +1029,6 @@ out:
 		dbg_dump_heap(c, heap, cat);
 	}
 }
-
-#endif
-
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS
 
 /**
  * struct scan_check_data - data provided to scan callback function.
@@ -1297,6 +1290,9 @@ int dbg_check_lprops(struct ubifs_info *c)
 	struct scan_check_data data;
 	struct ubifs_lp_stats *lst = &data.lst;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_LPROPS))
+		return 0;
+
 	/*
 	 * As we are going to scan the media, the write buffers have to be
 	 * synchronized.
@@ -1354,4 +1350,4 @@ out:
 	return err;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_LPROPS */
+#endif /* CONFIG_UBIFS_FS_DEBUG */

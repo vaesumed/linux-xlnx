@@ -29,7 +29,7 @@
 
 #include "ubifs.h"
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+#ifdef CONFIG_UBIFS_FS_DEBUG
 static int dbg_check_bud_bytes(struct ubifs_info *c);
 #else
 #define dbg_check_bud_bytes(c) 0
@@ -768,7 +768,7 @@ out_free:
 	return err;
 }
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+#ifdef CONFIG_UBIFS_FS_DEBUG
 
 /**
  * dbg_check_bud_bytes - make sure bud bytes calculation are all right.
@@ -799,4 +799,4 @@ static int dbg_check_bud_bytes(struct ubifs_info *c)
 	return err;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_OTHER */
+#endif /* CONFIG_UBIFS_FS_DEBUG */

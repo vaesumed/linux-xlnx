@@ -52,7 +52,7 @@
  * than the maximum number of orphans allowed.
  */
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_ORPH
+#ifdef CONFIG_UBIFS_FS_DEBUG
 static int dbg_check_orphans(struct ubifs_info *c);
 #else
 #define dbg_check_orphans(c) 0
@@ -717,7 +717,7 @@ int ubifs_mount_orphans(struct ubifs_info *c, int unclean)
 	return err;
 }
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_ORPH
+#ifdef CONFIG_UBIFS_FS_DEBUG
 
 struct check_orphan {
 	struct rb_node rb;
@@ -949,4 +949,4 @@ out:
 	return err;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_ORPH */
+#endif /* CONFIG_UBIFS_FS_DEBUG */
