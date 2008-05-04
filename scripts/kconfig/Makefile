@@ -18,11 +18,8 @@ menuconfig: $(obj)/mconf
 config: $(obj)/conf
 	$< $(Kconfig)
 
-oldconfig: $(obj)/conf
+oldconfig silentoldconfig: $(obj)/conf
 	$< -o $(Kconfig)
-
-silentoldconfig: $(obj)/conf
-	$< -s $(Kconfig)
 
 # Create new linux.pot file
 # Adjust charset to UTF-8 in .po file to accept UTF-8 in Kconfig files
