@@ -164,7 +164,8 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	return inode;
 }
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
+#ifdef CONFIG_UBIFS_FS_DEBUG
+
 static int dbg_check_name(struct ubifs_dent_node *dent, struct qstr *nm)
 {
 	if (le16_to_cpu(dent->nlen) != nm->len)
@@ -173,8 +174,11 @@ static int dbg_check_name(struct ubifs_dent_node *dent, struct qstr *nm)
 		return -EINVAL;
 	return 0;
 }
+
 #else
+
 #define dbg_check_name(dent, nm) 0
+
 #endif
 
 static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,

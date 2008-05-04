@@ -31,6 +31,8 @@
 #define UBIFS_DBG_PRESERVE_UBI
 
 #include "ubifs.h"
+#include <linux/module.h>
+#include <linux/moduleparam.h>
 
 #ifdef CONFIG_UBIFS_FS_DEBUG
 
@@ -40,6 +42,105 @@ static char dbg_get_key_dump_dump_buf[100];
 
 static size_t km_alloc_cnt;
 static size_t vm_alloc_cnt;
+
+unsigned int ubifs_msg_flags = UBIFS_MSG_FLAGS_DEFAULT;
+unsigned int ubifs_chk_flags = UBIFS_CHK_FLAGS_DEFAULT;
+unsigned int ubifs_tst_flags;
+
+/* Debugging message type names (positions must match enum in debug.h). */
+static char *msg_type_names[] = {
+	"General messages",
+	"Journal messages",
+	"Mount messages",
+	"Commit messages",
+	"LEB search messages",
+	"Budgeting messages",
+	"Garbage collection messages",
+	"Tree Node Cache (TNC) messages",
+	"LEB properties (lprops) messages",
+	"Input/output messages",
+	"Log messages",
+	"Scan messages",
+};
+
+/* Debugging check names (positions must match enum in debug.h). */
+static char *chk_names[] = {
+	"General checks",
+	"Check Tree Node Cache (TNC)",
+	"Check indexing tree size",
+	"Check orphan area",
+	"Check old indexing tree",
+	"Check LEB properties (lprops)",
+};
+
+/* Special testing names (positions must match enum in debug.h). */
+static char *tst_names[] = {
+	"Create memory pressure",
+	"Force in-the-gaps method",
+	"Failure mode for recovery testing",
+};
+
+static int param_get_debug_msgs(char *buffer, struct kernel_param *kp)
+{
+	int i, result = 0;
+
+	result = sprintf(buffer, "%-40s\tHex           Set\n","Message Type");
+	for (i = 0; i < ARRAY_SIZE(msg_type_names); i++) {
+		unsigned int flg = 1 << i;
+
+		result += sprintf(buffer + result, "%-40s\t0x%08x    [%c]\n",
+				  msg_type_names[i], flg,
+				  (ubifs_msg_flags & flg) ? '*' : ' ');
+	}
+	result += sprintf(buffer + result, "--\ndebug_msgs = 0x%08x "
+			  "( * = enabled )\n", ubifs_msg_flags);
+	return result;
+}
+
+static int param_get_debug_chks(char *buffer, struct kernel_param *kp)
+{
+	int i, result = 0;
+
+	result = sprintf(buffer, "%-40s\tHex           Set\n","Description");
+	for (i = 0; i < ARRAY_SIZE(chk_names); i++) {
+		unsigned int flg = 1 << i;
+
+		result += sprintf(buffer + result, "%-40s\t0x%08x    [%c]\n",
+				  chk_names[i], flg,
+				  (ubifs_chk_flags & flg) ? '*' : ' ');
+	}
+	result += sprintf(buffer + result, "--\ndebug_chks = 0x%08x "
+			  "( * = enabled )\n", ubifs_chk_flags);
+	return result;
+}
+
+static int param_get_debug_tsts(char *buffer, struct kernel_param *kp)
+{
+	int i, result = 0;
+
+	result = sprintf(buffer, "%-40s\tHex           Set\n","Description");
+	for (i = 0; i < ARRAY_SIZE(tst_names); i++) {
+		unsigned int flg = 1 << i;
+
+		result += sprintf(buffer + result, "%-40s\t0x%08x    [%c]\n",
+				  tst_names[i], flg,
+				  (ubifs_tst_flags & flg) ? '*' : ' ');
+	}
+	result += sprintf(buffer + result, "--\ndebug_tsts = 0x%08x "
+			  "( * = enabled )\n", ubifs_tst_flags);
+	return result;
+}
+
+module_param_call(debug_msgs, param_set_uint, param_get_debug_msgs,
+		  &ubifs_msg_flags, S_IRUGO | S_IWUSR);
+module_param_call(debug_chks, param_set_uint, param_get_debug_chks,
+		  &ubifs_msg_flags, S_IRUGO | S_IWUSR);
+module_param_call(debug_tsts, param_set_uint, param_get_debug_tsts,
+		  &ubifs_msg_flags, S_IRUGO | S_IWUSR);
+
+MODULE_PARM_DESC(debug_msgs, "Debug message type flags");
+MODULE_PARM_DESC(debug_chks, "Debug check flags");
+MODULE_PARM_DESC(debug_tsts, "Debug special test flags");
 
 static const char *get_key_fmt(int fmt)
 {
@@ -744,8 +845,6 @@ void dbg_dump_tnc(struct ubifs_info *c)
 	printk(KERN_DEBUG "\n");
 }
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_OTHER
-
 /*
  * dbg_check_dir - check directory inode size.
  * @c: UBIFS file-system description object
@@ -800,10 +899,6 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 
 	return 0;
 }
-
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_OTHER */
-
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_TNC
 
 /**
  * dbg_check_key_order - make sure that colliding keys are properly ordered.
@@ -1106,6 +1201,9 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 	long clean_cnt = 0, dirty_cnt = 0;
 	int err, last;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_TNC))
+		return 0;
+
 	ubifs_assert(mutex_is_locked(&c->tnc_mutex));
 	if (!c->zroot.znode)
 		return 0;
@@ -1177,10 +1275,6 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 	return 0;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_TNC */
-
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_IDX_SZ
-
 static int dbg_add_size(struct ubifs_info *c, struct ubifs_znode *znode,
 			void *priv)
 {
@@ -1216,19 +1310,15 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 	return 0;
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_IDX_SZ */
-
-#ifdef  CONFIG_UBIFS_FS_DEBUG_FORCE_IN_THE_GAPS
-
 static int invocation_cnt;
 
 int dbg_force_in_the_gaps(void)
 {
+	if (!dbg_force_in_the_gaps_enabled)
+		return 0;
 	/* Force in-the-gaps every 8th commit */
 	return !((invocation_cnt ++) & 0x7);
 }
-
-#endif
 
 void *dbg_kmalloc(size_t size, gfp_t flags)
 {
@@ -1299,8 +1389,6 @@ void dbg_leak_report(void)
 	spin_unlock(&dbg_lock);
 }
 
-#ifdef CONFIG_UBIFS_FS_DEBUG_CHK_MEMPRESS
-
 /*
  * The below debugging stuff helps to make fake Linux memory pressure in order
  * to make UBIFS shrinker be invoked. Useful for testing.
@@ -1326,6 +1414,9 @@ static DEFINE_SPINLOCK(eaten_lock);
 void dbg_eat_memory(void)
 {
 	struct eaten_memory *em;
+
+	if (!(ubifs_tst_flags & UBIFS_TST_MEMPRESS))
+		return;
 
 	em = kmalloc(sizeof(struct eaten_memory), GFP_NOFS);
 	if (!em) {
@@ -1391,9 +1482,7 @@ void dbg_mempressure_exit(void)
 	return_eaten_memory(-1);
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_CHK_MEMPRESS */
-
-#ifdef CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY
+/* Failure mode for recovery testing */
 
 #define chance(n, d) (simple_rand() <= (n) * 32768LL / (d))
 
@@ -1472,7 +1561,7 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 {
 	struct ubifs_info *c = dbg_find_info(desc);
 
-	if (!c)
+	if (!c || !dbg_failure_mode)
 		return 0;
 	if (c->failure_mode)
 		return 1;
@@ -1610,5 +1699,4 @@ int dbg_is_mapped(struct ubi_volume_desc *desc, int lnum)
 	return ubi_is_mapped(desc, lnum);
 }
 
-#endif /* CONFIG_UBIFS_FS_DEBUG_TEST_RCVRY */
 #endif /* CONFIG_UBIFS_FS_DEBUG */
