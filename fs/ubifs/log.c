@@ -784,6 +784,9 @@ static int dbg_check_bud_bytes(struct ubifs_info *c)
 	struct ubifs_bud *bud;
 	long long bud_bytes = 0;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
+		return 0;
+
 	spin_lock(&c->buds_lock);
 	for (i = 0; i < c->jhead_cnt; i++)
 		list_for_each_entry(bud, &c->jheads[i].buds_list, list)
