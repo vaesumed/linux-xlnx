@@ -528,10 +528,12 @@ int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req)
 	int err, idx_growth, data_growth, dd_growth;
 	struct retries_info ri;
 
-	memset(&ri, 0, sizeof(struct retries_info));
-	idx_growth = calc_idx_growth(c, req);
 	data_growth = calc_data_growth(c, req);
 	dd_growth = calc_dd_growth(c, req);
+	if (!data_growth && !dd_growth)
+		return 0;
+	idx_growth = calc_idx_growth(c, req);
+	memset(&ri, 0, sizeof(struct retries_info));
 
 again:
 	spin_lock(&c->space_lock);
@@ -588,7 +590,7 @@ make_space:
  */
 void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
 {
-	if (req->data_growth + req->dd_growth == 0)
+	if (!req->data_growth && !req->dd_growth)
 		return;
 
 	if (req->idx_growth == -1)
@@ -669,6 +671,11 @@ again:
 	if (req->dirtied_ino > old)
 		req->dirtied_ino_d += ui->data_len;
 
+	/*
+	 * Note, if the budget request does not actually request anything
+	 * (i.e., @req contains only zeroes), 'ubifs_budget_space()' will
+	 * return almost straight away.
+	 */
 	err = ubifs_budget_space(c, req);
 	if (unlikely(err))
 		return err;
