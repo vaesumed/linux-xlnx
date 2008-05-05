@@ -667,7 +667,7 @@ again:
 	 */
 	req->dirtied_ino += !ui->dirty;
 	if (req->dirtied_ino > old)
-		req->dirtied_ino_d = ui->data_len;
+		req->dirtied_ino_d += ui->data_len;
 
 	err = ubifs_budget_space(c, req);
 	if (unlikely(err))
