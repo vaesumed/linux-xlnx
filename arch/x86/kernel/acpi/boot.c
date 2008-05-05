@@ -331,8 +331,6 @@ acpi_parse_lapic_nmi(struct acpi_subtable_header * header, const unsigned long e
 
 #ifdef CONFIG_X86_IO_APIC
 
-struct mp_ioapic_routing mp_ioapic_routing[MAX_IO_APICS];
-
 static int __init
 acpi_parse_ioapic(struct acpi_subtable_header * header, const unsigned long end)
 {
@@ -507,8 +505,6 @@ int acpi_register_gsi(u32 gsi, int triggering, int polarity)
 	 * Make sure all (legacy) PCI IRQs are set as level-triggered.
 	 */
 	if (acpi_irq_model == ACPI_IRQ_MODEL_PIC) {
-		extern void eisa_set_level_irq(unsigned int irq);
-
 		if (triggering == ACPI_LEVEL_SENSITIVE)
 			eisa_set_level_irq(gsi);
 	}
