@@ -176,12 +176,6 @@ enum {
 	UBIFS_CHK_LPROPS  = 0x20,
 };
 
-/* Debugging check flags for each default check level */
-#define UBIFS_CHK_LVL_0 0
-#define UBIFS_CHK_LVL_1 0x1
-#define UBIFS_CHK_LVL_2 0xf
-#define UBIFS_CHK_LVL_3 0xfff
-
 /*
  * Special testing flags (must match tst_names in debug.c).
  *
@@ -205,14 +199,10 @@ enum {
 #define UBIFS_MSG_FLAGS_DEFAULT UBIFS_MSG_LVL_0
 #endif
 
-#if CONFIG_UBIFS_FS_DEBUG_CHK_LVL == 1
-#define UBIFS_CHK_FLAGS_DEFAULT UBIFS_CHK_LVL_1
-#elif CONFIG_UBIFS_FS_DEBUG_CHK_LVL == 2
-#define UBIFS_CHK_FLAGS_DEFAULT UBIFS_CHK_LVL_2
-#elif CONFIG_UBIFS_FS_DEBUG_CHK_LVL == 3
-#define UBIFS_CHK_FLAGS_DEFAULT UBIFS_CHK_LVL_3
+#if CONFIG_UBIFS_FS_DEBUG_CHKS
+#define UBIFS_CHK_FLAGS_DEFAULT 0xffffffff
 #else
-#define UBIFS_CHK_FLAGS_DEFAULT UBIFS_CHK_LVL_0
+#define UBIFS_CHK_FLAGS_DEFAULT 0
 #endif
 
 extern spinlock_t dbg_lock;
