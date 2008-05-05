@@ -1,0 +1,217 @@
+Importing driver-core based on 2.6.25-git17
+$ git branch -D quilt/driver-core
+Deleted branch quilt/driver-core.
+$ git checkout -b quilt/driver-core e4c576b911e364737b1bf4f5bfdab1c440713f26
+Checking out files:  19% (235/1190)   Checking out files:  20% (238/1190)   Checking out files:  21% (250/1190)   Checking out files:  22% (262/1190)   Checking out files:  23% (274/1190)   Checking out files:  24% (286/1190)   Checking out files:  25% (298/1190)   Checking out files:  26% (310/1190)   Checking out files:  27% (322/1190)   Checking out files:  28% (334/1190)   Checking out files:  29% (346/1190)   Checking out files:  30% (357/1190)   Checking out files:  31% (369/1190)   Checking out files:  32% (381/1190)   Checking out files:  33% (393/1190)   Checking out files:  34% (405/1190)   Checking out files:  35% (417/1190)   Checking out files:  36% (429/1190)   Checking out files:  37% (441/1190)   Checking out files:  38% (453/1190)   Checking out files:  39% (465/1190)   Checking out files:  40% (476/1190)   Checking out files:  41% (488/1190)   Checking out files:  42% (500/1190)   Checking out files:  43% (512/1190)   Checking out files:  43% (515/1190)   Checking out files:  44% (524/1190)   Checking out files:  45% (536/1190)   Checking out files:  46% (548/1190)   Checking out files:  47% (560/1190)   Checking out files:  48% (572/1190)   Checking out files:  49% (584/1190)   Checking out files:  50% (595/1190)   Checking out files:  51% (607/1190)   Checking out files:  52% (619/1190)   Checking out files:  53% (631/1190)   Checking out files:  54% (643/1190)   Checking out files:  55% (655/1190)   Checking out files:  56% (667/1190)   Checking out files:  57% (679/1190)   Checking out files:  58% (691/1190)   Checking out files:  59% (703/1190)   Checking out files:  60% (714/1190)   Checking out files:  61% (726/1190)   Checking out files:  62% (738/1190)   Checking out files:  63% (750/1190)   Checking out files:  64% (762/1190)   Checking out files:  65% (774/1190)   Checking out files:  66% (786/1190)   Checking out files:  67% (798/1190)   Checking out files:  68% (810/1190)   Checking out files:  69% (822/1190)   Checking out files:  70% (833/1190)   Checking out files:  71% (845/1190)   Checking out files:  72% (857/1190)   Checking out files:  73% (869/1190)   Checking out files:  74% (881/1190)   Checking out files:  75% (893/1190)   Checking out files:  76% (905/1190)   Checking out files:  77% (917/1190)   Checking out files:  78% (929/1190)   Checking out files:  79% (941/1190)   Checking out files:  80% (952/1190)   Checking out files:  81% (964/1190)   Checking out files:  82% (976/1190)   Checking out files:  83% (988/1190)   Checking out files:  84% (1000/1190)   Checking out files:  85% (1012/1190)   Checking out files:  86% (1024/1190)   Checking out files:  87% (1036/1190)   Checking out files:  88% (1048/1190)   Checking out files:  89% (1060/1190)   Checking out files:  90% (1071/1190)   Checking out files:  91% (1083/1190)   Checking out files:  92% (1095/1190)   Checking out files:  93% (1107/1190)   Checking out files:  94% (1119/1190)   Checking out files:  95% (1131/1190)   Checking out files:  96% (1143/1190)   Checking out files:  97% (1155/1190)   Checking out files:  98% (1167/1190)   Checking out files:  99% (1179/1190)   Checking out files: 100% (1190/1190)   Checking out files: 100% (1190/1190), done.
+Switched to a new branch "quilt/driver-core"
+$ git quiltimport --patches ../quilt/driver-core
+sysfs-add-sys-dev-char-block-to-lookup-sysfs-path-by-major-minor.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+pm-introduce-new-top-level-suspend-and-hibernation-callbacks.patch
+pm-new-suspend-and-hibernation-callbacks-for-platform-bus-type.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git branch -D quilt/usb
+Deleted branch quilt/usb.
+$ git checkout -b quilt/usb quilt/driver-core
+Switched to a new branch "quilt/usb"
+$ git quiltimport --patches ../quilt/usb
+usb-isp1760-hcd-driver.patch
+usb-ldusb-ld_usb-semaphore-to-mutex.patch
+usb-storage-fix-build-failure-in-onetouch-driver.patch
+usb-storage-onetouch.c-make-a-function-static.patch
+usb-storage-add-unusual_devs-entry-for-samsung-yp-u3.patch
+usb-libusual-kthread_run-called-with-wrong-format.patch
+ub-fix-timeouts.patch
+ub-tune-retries.patch
+ub-ignore-bad-residue.patch
+ub-cosmetics.patch
+usb-usbtest-displays-diagnostics-again.patch
+usb-mos7840-test-and-propagate-set_uart_reg-return-value.patch
+usb-intova-pixtreme-camera-mass-storage-device.patch
+usb-pxa27x_udc-driver.patch
+usb-serial-gadget-cdc-acm-fixes.patch
+usb-gadget-zero-style-fixups.patch
+usb-gadget-zero-timer-init-fix.patch
+usb-fix-cannot-work-usb-storage-when-using-ohci-sm501.patch
+usb-add-more-ftdi-device-ids.patch
+usb-add-the-usb-2.0-extension-descriptor.patch
+usb-storage-unusual_devs-for-pandigital-picture-frame.patch
+usb-storage-update-mailling-list-address.patch
+usb-airprime-unlock-mutex-instead-of-trying-to-lock-it-again.patch
+c67x00-1-lowlevel.patch
+c67x00-2-core.patch
+c67x00-3-hcd.patch
+usb-ohci-work-around-bogus-compiler-warning.patch
+usb-uhci-disable-remote-wakeup-when-it-s-not-needed.patch
+usb-remove-redundant-dependencies-on-usb_atm.patch
+usb_serial-some-coding-style-fixes.patch
+ti_usb-kick-firmware-into-user-space.patch
+usb-add-new-routine-for-checking-port-resume-type.patch
+usb-debounce-before-unregistering.patch
+usb-simplify-hub_restart-logic.patch
+usb-try-to-salvage-lost-power-sessions.patch
+usb-optimize-port-debouncing-during-hub-activation.patch
+usb-combine-hub_activate-and-hub_restart.patch
+usb-combine-hub_quiesce-and-hub_stop.patch
+usb-gadget-peripheral-g_file_storage-bulk-only-transport-compliance.patch
+usb-gadget-peripheral-g_file_storage-bulk-only-transport-compliance-clear-feature-ignore.patch
+usb-create-attributes-before-sending-uevent.patch
+usb-add-usb_dev_reset_delayed.patch
+wusb-documentation.patch
+bitmap-add-bitmap_copy_le.patch
+usb-add-association.h.patch
+wusb-add-usb-specific-wusb-include-files.patch
+wusb-add-the-uwb-include-files.patch
+uwb-add-the-uwb-stack.patch
+wusb-add-whc-rc-radio-control-driver.patch
+.dotest/patch:494: space before tab in indent.
+ 	whcrc->umc_dev = umc_dev;
+.dotest/patch:507: space before tab in indent.
+ 	result = whcrc_setup_rc_umc(whcrc);
+.dotest/patch:509: space before tab in indent.
+ 		dev_err(dev, "Can't setup RC UMC interface: %d\n", result);
+.dotest/patch:514: space before tab in indent.
+ 		dev_err(dev, "Can't setup RC interface: %d\n", result);
+.dotest/patch:576: space before tab in indent.
+ 	.probe = whcrc_probe,
+warning: squelched 1 whitespace error
+warning: 6 lines add whitespace errors.
+wusb-add-hwa-rc-radio-controller-driver.patch
+wusb-add-uwb-core-for-wimedia-link-protocol.patch
+wusb-add-the-i1480-driver.patch
+.dotest/patch:969: space before tab in indent.
+ 	const struct firmware *fw;
+.dotest/patch:1329: space before tab in indent.
+ 	const struct firmware *fw;
+.dotest/patch:3487: space before tab in indent.
+    				"Dropping\n", untd_hdr->reserved1);
+.dotest/patch:4783: space before tab in indent.
+ 	/*
+warning: 4 lines add whitespace errors.
+wusb-add-the-usb-wireless-core-code.patch
+wusb-add-the-usb-wusb-cbaf-driver.patch
+wusb-add-the-wire-adapter-core.patch
+wusb-add-hwa-hc-wireless-host-controller-driver.patch
+usb-gotemp.patch
+Importing device-mapper based on v2.6.25-3562-g3dc5063
+$ git branch -D quilt/device-mapper
+Deleted branch quilt/device-mapper.
+$ git checkout -b quilt/device-mapper v2.6.25-3562-g3dc5063
+Checking out files:  23% (1040/4412)   Checking out files:  24% (1059/4412)   Checking out files:  25% (1103/4412)   Checking out files:  26% (1148/4412)   Checking out files:  27% (1192/4412)   Checking out files:  28% (1236/4412)   Checking out files:  29% (1280/4412)   Checking out files:  30% (1324/4412)   Checking out files:  31% (1368/4412)   Checking out files:  32% (1412/4412)   Checking out files:  33% (1456/4412)   Checking out files:  34% (1501/4412)   Checking out files:  35% (1545/4412)   Checking out files:  35% (1573/4412)   Checking out files:  36% (1589/4412)   Checking out files:  37% (1633/4412)   Checking out files:  38% (1677/4412)   Checking out files:  39% (1721/4412)   Checking out files:  40% (1765/4412)   Checking out files:  41% (1809/4412)   Checking out files:  42% (1854/4412)   Checking out files:  43% (1898/4412)   Checking out files:  44% (1942/4412)   Checking out files:  45% (1986/4412)   Checking out files:  46% (2030/4412)   Checking out files:  47% (2074/4412)   Checking out files:  48% (2118/4412)   Checking out files:  49% (2162/4412)   Checking out files:  50% (2206/4412)   Checking out files:  51% (2251/4412)   Checking out files:  51% (2262/4412)   Checking out files:  52% (2295/4412)   Checking out files:  53% (2339/4412)   Checking out files:  54% (2383/4412)   Checking out files:  55% (2427/4412)   Checking out files:  56% (2471/4412)   Checking out files:  57% (2515/4412)   Checking out files:  58% (2559/4412)   Checking out files:  59% (2604/4412)   Checking out files:  60% (2648/4412)   Checking out files:  61% (2692/4412)   Checking out files:  61% (2730/4412)   Checking out files:  62% (2736/4412)   Checking out files:  63% (2780/4412)   Checking out files:  64% (2824/4412)   Checking out files:  65% (2868/4412)   Checking out files:  66% (2912/4412)   Checking out files:  67% (2957/4412)   Checking out files:  68% (3001/4412)   Checking out files:  69% (3045/4412)   Checking out files:  70% (3089/4412)   Checking out files:  71% (3133/4412)   Checking out files:  72% (3177/4412)   Checking out files:  73% (3221/4412)   Checking out files:  73% (3237/4412)   Checking out files:  74% (3265/4412)   Checking out files:  75% (3309/4412)   Checking out files:  76% (3354/4412)   Checking out files:  76% (3378/4412)   Checking out files:  77% (3398/4412)   Checking out files:  78% (3442/4412)   Checking out files:  79% (3486/4412)   Checking out files:  80% (3530/4412)   Checking out files:  81% (3574/4412)   Checking out files:  82% (3618/4412)   Checking out files:  83% (3662/4412)   Checking out files:  84% (3707/4412)   Checking out files:  85% (3751/4412)   Checking out files:  86% (3795/4412)   Checking out files:  86% (3824/4412)   Checking out files:  87% (3839/4412)   Checking out files:  88% (3883/4412)   Checking out files:  89% (3927/4412)   Checking out files:  90% (3971/4412)   Checking out files:  91% (4015/4412)   Checking out files:  92% (4060/4412)   Checking out files:  93% (4104/4412)   Checking out files:  93% (4107/4412)   Checking out files:  93% (4147/4412)   Checking out files:  94% (4148/4412)   Checking out files:  95% (4192/4412)   Checking out files:  96% (4236/4412)   Checking out files:  96% (4271/4412)   Checking out files:  97% (4280/4412)   Checking out files:  98% (4324/4412)   Checking out files:  98% (4351/4412)   Checking out files:  99% (4368/4412)   Checking out files: 100% (4412/4412)   Checking out files: 100% (4412/4412), done.
+Switched to a new branch "quilt/device-mapper"
+$ git quiltimport --patches ../quilt/device-mapper
+Importing i2c based on 2.6.25-git18
+$ git branch -D quilt/i2c
+Deleted branch quilt/i2c.
+$ git checkout -b quilt/i2c 886c35fbcf6fb2eee15687efc2d64d99b6ad9a4a
+Checking out files:  28% (1240/4387)   Checking out files:  29% (1273/4387)   Checking out files:  30% (1317/4387)   Checking out files:  31% (1360/4387)   Checking out files:  32% (1404/4387)   Checking out files:  33% (1448/4387)   Checking out files:  34% (1492/4387)   Checking out files:  35% (1536/4387)   Checking out files:  36% (1580/4387)   Checking out files:  37% (1624/4387)   Checking out files:  38% (1668/4387)   Checking out files:  39% (1711/4387)   Checking out files:  40% (1755/4387)   Checking out files:  41% (1799/4387)   Checking out files:  42% (1843/4387)   Checking out files:  42% (1848/4387)   Checking out files:  43% (1887/4387)   Checking out files:  44% (1931/4387)   Checking out files:  45% (1975/4387)   Checking out files:  46% (2019/4387)   Checking out files:  47% (2062/4387)   Checking out files:  48% (2106/4387)   Checking out files:  49% (2150/4387)   Checking out files:  50% (2194/4387)   Checking out files:  51% (2238/4387)   Checking out files:  52% (2282/4387)   Checking out files:  53% (2326/4387)   Checking out files:  54% (2369/4387)   Checking out files:  55% (2413/4387)   Checking out files:  56% (2457/4387)   Checking out files:  57% (2501/4387)   Checking out files:  58% (2545/4387)   Checking out files:  59% (2589/4387)   Checking out files:  60% (2633/4387)   Checking out files:  61% (2677/4387)   Checking out files:  62% (2720/4387)   Checking out files:  63% (2764/4387)   Checking out files:  64% (2808/4387)   Checking out files:  65% (2852/4387)   Checking out files:  66% (2896/4387)   Checking out files:  67% (2940/4387)   Checking out files:  68% (2984/4387)   Checking out files:  69% (3028/4387)   Checking out files:  70% (3071/4387)   Checking out files:  71% (3115/4387)   Checking out files:  72% (3159/4387)   Checking out files:  73% (3203/4387)   Checking out files:  74% (3247/4387)   Checking out files:  75% (3291/4387)   Checking out files:  76% (3335/4387)   Checking out files:  77% (3378/4387)   Checking out files:  78% (3422/4387)   Checking out files:  78% (3429/4387)   Checking out files:  79% (3466/4387)   Checking out files:  80% (3510/4387)   Checking out files:  81% (3554/4387)   Checking out files:  82% (3598/4387)   Checking out files:  83% (3642/4387)   Checking out files:  84% (3686/4387)   Checking out files:  85% (3729/4387)   Checking out files:  86% (3773/4387)   Checking out files:  87% (3817/4387)   Checking out files:  88% (3861/4387)   Checking out files:  89% (3905/4387)   Checking out files:  90% (3949/4387)   Checking out files:  91% (3993/4387)   Checking out files:  92% (4037/4387)   Checking out files:  93% (4080/4387)   Checking out files:  94% (4124/4387)   Checking out files:  95% (4168/4387)   Checking out files:  96% (4212/4387)   Checking out files:  97% (4256/4387)   Checking out files:  98% (4300/4387)   Checking out files:  99% (4344/4387)   Checking out files: 100% (4387/4387)   Checking out files: 100% (4387/4387), done.
+Switched to a new branch "quilt/i2c"
+$ git quiltimport --patches ../quilt/i2c
+i2c-new-co-maintainer.patch
+i2c-mpc-compare-to-NO_IRQ-instead-of-zero.patch
+i2c-davinci-01-clock-between-7-12-mhz.patch
+i2c-davinci-02-move-dev_dbg-statement-for-more-output.patch
+i2c-davinci-03-remove-useless-ivr-read.patch
+i2c-davinci-04-fix-signal-handling-bug.patch
+i2c-davinci-05-initialize-cmd_complete-sooner.patch
+i2c-acpi-check-conflict.patch
+Importing kernel-doc based on 2.6.25-git13
+$ git branch -D quilt/kernel-doc
+Deleted branch quilt/kernel-doc.
+$ git checkout -b quilt/kernel-doc a01e035ebb552223c03f2d9138ffc73f2d4d3965
+Switched to a new branch "quilt/kernel-doc"
+$ git quiltimport --patches ../quilt/kernel-doc
+kconfig_allconfig_docv2.patch
+doc-move-initrd-txt.patch
+Importing ide based on commit b66e1f11ebc429569a3784aaf64123633d9e3ed1
+$ git branch -D quilt/ide
+Deleted branch quilt/ide.
+$ git checkout -b quilt/ide b66e1f11ebc429569a3784aaf64123633d9e3ed1
+Checking out files:  23% (485/2107)   Checking out files:  24% (506/2107)   Checking out files:  25% (527/2107)   Checking out files:  26% (548/2107)   Checking out files:  27% (569/2107)   Checking out files:  28% (590/2107)   Checking out files:  28% (608/2107)   Checking out files:  29% (612/2107)   Checking out files:  30% (633/2107)   Checking out files:  31% (654/2107)   Checking out files:  32% (675/2107)   Checking out files:  33% (696/2107)   Checking out files:  34% (717/2107)   Checking out files:  35% (738/2107)   Checking out files:  36% (759/2107)   Checking out files:  37% (780/2107)   Checking out files:  38% (801/2107)   Checking out files:  39% (822/2107)   Checking out files:  40% (843/2107)   Checking out files:  41% (864/2107)   Checking out files:  42% (885/2107)   Checking out files:  43% (907/2107)   Checking out files:  44% (928/2107)   Checking out files:  45% (949/2107)   Checking out files:  46% (970/2107)   Checking out files:  47% (991/2107)   Checking out files:  48% (1012/2107)   Checking out files:  49% (1033/2107)   Checking out files:  50% (1054/2107)   Checking out files:  51% (1075/2107)   Checking out files:  52% (1096/2107)   Checking out files:  53% (1117/2107)   Checking out files:  54% (1138/2107)   Checking out files:  55% (1159/2107)   Checking out files:  56% (1180/2107)   Checking out files:  57% (1201/2107)   Checking out files:  58% (1223/2107)   Checking out files:  59% (1244/2107)   Checking out files:  60% (1265/2107)   Checking out files:  60% (1272/2107)   Checking out files:  61% (1286/2107)   Checking out files:  62% (1307/2107)   Checking out files:  63% (1328/2107)   Checking out files:  64% (1349/2107)   Checking out files:  65% (1370/2107)   Checking out files:  66% (1391/2107)   Checking out files:  67% (1412/2107)   Checking out files:  68% (1433/2107)   Checking out files:  68% (1451/2107)   Checking out files:  69% (1454/2107)   Checking out files:  70% (1475/2107)   Checking out files:  71% (1496/2107)   Checking out files:  72% (1518/2107)   Checking out files:  73% (1539/2107)   Checking out files:  74% (1560/2107)   Checking out files:  75% (1581/2107)   Checking out files:  76% (1602/2107)   Checking out files:  77% (1623/2107)   Checking out files:  78% (1644/2107)   Checking out files:  79% (1665/2107)   Checking out files:  80% (1686/2107)   Checking out files:  81% (1707/2107)   Checking out files:  82% (1728/2107)   Checking out files:  83% (1749/2107)   Checking out files:  84% (1770/2107)   Checking out files:  85% (1791/2107)   Checking out files:  86% (1813/2107)   Checking out files:  87% (1834/2107)   Checking out files:  88% (1855/2107)   Checking out files:  89% (1876/2107)   Checking out files:  90% (1897/2107)   Checking out files:  91% (1918/2107)   Checking out files:  92% (1939/2107)   Checking out files:  93% (1960/2107)   Checking out files:  94% (1981/2107)   Checking out files:  95% (2002/2107)   Checking out files:  96% (2023/2107)   Checking out files:  97% (2044/2107)   Checking out files:  98% (2065/2107)   Checking out files:  98% (2084/2107)   Checking out files:  99% (2086/2107)   Checking out files: 100% (2107/2107)   Checking out files: 100% (2107/2107), done.
+Switched to a new branch "quilt/ide"
+$ git quiltimport --patches ../quilt/ide
+ide-remove-obsoleted-idebus-kernel-parameter.patch
+ide-remove-obsoleted-hdx-kernel-parameters.patch
+ide-cleanup-init_ide_data.patch
+ide-remove-obsoleted-ide-parameters.patch
+ide-eliminate-fit-macro.patch
+ide-tape-use-clamp_t-rather-than-nested-min_t-_max_t.patch
+ide-use-get_unaligned_-helpers.patch
+ide-set-req_preempt-request-flag-in-ide_do_drive_cmd-users.patch
+ide-set-req_nomerge-request-flag-in-ide_do_drive_cmd.patch
+ide-use-__generic_unplug_device-in-ide_do_drive_cmd.patch
+ide-cd-convert-ide_cd_queue_pc-to-use-blk_execute_rq.patch
+ide-cd-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-disk-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-floppy-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-taskfile-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-tape-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-remove-ide_wait_head_wait-path-in-ide_do_drive_cmd.patch
+ide-remove-ide_init_drive_cmd.patch
+ide-cd-remove-ide_cd_init_rq.patch
+Importing m68k based on e4c576b911e364737b1bf4f5bfdab1c440713f26
+$ git branch -D quilt/m68k
+Deleted branch quilt/m68k.
+$ git checkout -b quilt/m68k e4c576b911e364737b1bf4f5bfdab1c440713f26
+Switched to a new branch "quilt/m68k"
+$ git quiltimport --patches ../quilt/m68k
+m68k-convert-access_ok-to-inline-func.diff
+m68k-kill-CONFIG_FB_DAFB.diff
+m68k-correct-FB_HP300-dependencies.diff
+m68k-whippet-serial-no-longer-exists.diff
+m68k-vme_scc-globals.diff
+m68k-silence-BUG-can-return-warnings.diff
+m68k-hp300-breaks-multi-platform.diff
+m68k-macide-breaks-multi-platform.diff
+m68k-dnfb-breaks-multi-platform.diff
+m68k-net-drivers-break-multiplatform.diff
+m68k-input-drivers-break-multiplatform.diff
+m68k-initcalls-should-return-ENODEV-if-device-not-found.diff
+m68k-q40-floppy-is-broken.diff
+m68k-update-defconfig.diff
+m68k-add-multi_defconfig.diff
+Importing ldp based on quilt/usb
+$ git branch -D quilt/ldp
+Deleted branch quilt/ldp.
+$ git checkout -b quilt/ldp quilt/usb
+Switched to a new branch "quilt/ldp"
+$ git quiltimport --patches ../quilt/ldp
+usb-add-sensoray-2255-v4l-driver.patch
+dvb-add-firesat-driver.patch
+usb-add-option-hso-driver.patch
+video-add-the-go7007-driver.patch
+.dotest/patch:1838: space before tab in indent.
+				 					0xd3),
+.dotest/patch:1853: space before tab in indent.
+				  			GO7007_SENSOR_TV) &&
+.dotest/patch:1857: space before tab in indent.
+				  			GO7007_SENSOR_TV) &&
+.dotest/patch:2067: space before tab in indent.
+		 			(1 << 14) | (1 << 9) : 0) |
+.dotest/patch:2070: space before tab in indent.
+			 	GO7007_SENSOR_CONFIG_MASK),
+warning: 5 lines add whitespace errors.
+net-add-alacritech-slicoss-driver.patch
+.dotest/patch:8518: trailing whitespace.
+obj-$(CONFIG_SLICOSS) += slicoss.o
+.dotest/patch:24297: space before tab in indent.
+ 	ushort		DramRomFn;		// 14 Dram/Rom function
+warning: 2 lines add whitespace errors.
+input-add-appleir-driver.patch
+add-me4000-pci-data-collection-driver.patch
+novfs-add-the-novell-filesystem-client-kernel-module.patch
+aectc-add-the-aectc-driver.patch
+net-add-et131x-driver.patch
+.dotest/patch:2669: space before tab in indent.
+		    	/* bits 1:0 are equal to 1 */
+.dotest/patch:2724: space before tab in indent.
+			    	/* I2C write complete */
+.dotest/patch:7720: space before tab in indent.
+	    		pRxLocal->local_psr_full.bits.psr_full_wrap) {
+.dotest/patch:11895: space before tab in indent.
+ 	 * I need to call this function twice to get my card in a
+warning: 4 lines add whitespace errors.
