@@ -412,7 +412,6 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 	dbg_gen("ino %lu, pg %lu, pg flags %#lx",
 		inode->i_ino, page->index, page->flags);
 	ubifs_assert(PagePrivate(page));
-	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
 
 	/* Is the page fully inside i_size? */
 	if (page->index < end_index)

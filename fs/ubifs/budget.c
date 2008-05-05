@@ -784,7 +784,6 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 	ubifs_assert(req->idx_growth >= 0);
 	ubifs_assert(req->data_growth >= 0);
 	ubifs_assert(req->dd_growth >= 0);
-
 	ubifs_assert(!req->dirtied_page);
 	ubifs_assert(!req->new_page);
 	UBIFS_DBG(ui->budgeted = 0);

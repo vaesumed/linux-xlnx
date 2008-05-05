@@ -62,8 +62,6 @@ static int do_commit(struct ubifs_info *c)
 	struct ubifs_lp_stats lst;
 
 	dbg_cmt("start");
-	ubifs_assert(!(c->vfs_sb->s_flags & MS_RDONLY));
-
 	if (c->ro_media) {
 		err = -EROFS;
 		goto out_up;

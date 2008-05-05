@@ -213,10 +213,6 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 	struct ubifs_bud *bud;
 	struct ubifs_ref_node *ref;
 
-	ubifs_assert(lnum > 0);
-	ubifs_assert(offs >= 0 && offs < c->leb_size);
-	ubifs_assert(jhead >= 0 && jhead < c->jhead_cnt);
-
 	bud = kmalloc(sizeof(struct ubifs_bud), GFP_NOFS);
 	if (!bud)
 		return -ENOMEM;
@@ -422,7 +418,6 @@ int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum)
 		int lnum = c->jheads[i].wbuf.lnum;
 		int offs = c->jheads[i].wbuf.offs;
 
-		ubifs_assert(offs <= c->leb_size);
 		if (lnum == -1 || offs == c->leb_size)
 			continue;
 
@@ -437,7 +432,6 @@ int ubifs_log_start_commit(struct ubifs_info *c, int *ltail_lnum)
 		len += UBIFS_REF_NODE_SZ;
 	}
 
-	ubifs_assert(len <= c->leb_size);
 	ubifs_pad(c, buf + len, ALIGN(len, c->min_io_size) - len);
 
 	/* Switch to the next log LEB */
