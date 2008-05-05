@@ -685,8 +685,8 @@ int ubifs_consolidate_log(struct ubifs_info *c)
 	int lnum, err, first = 1, write_lnum, offs = 0;
 	void *buf;
 
-	dbg_mnt("log tail LEB %d, log head LEB %d", c->ltail_lnum,
-		c->lhead_lnum);
+	dbg_rcvry("log tail LEB %d, log head LEB %d", c->ltail_lnum,
+		  c->lhead_lnum);
 	buf = vmalloc(c->leb_size);
 	if (!buf)
 		return -ENOMEM;
@@ -757,7 +757,7 @@ int ubifs_consolidate_log(struct ubifs_info *c)
 	} while (lnum != c->lhead_lnum);
 	c->lhead_lnum = write_lnum;
 	c->lhead_offs = offs;
-	dbg_mnt("new log head at %d:%d", c->lhead_lnum, c->lhead_offs);
+	dbg_rcvry("new log head at %d:%d", c->lhead_lnum, c->lhead_offs);
 	return 0;
 
 out_scan:
