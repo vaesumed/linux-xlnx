@@ -67,7 +67,6 @@ static int do_readpage(struct page *page)
 
 	dbg_gen("ino %lu, pg %lu, i_size %lld, flags %#lx",
 		inode->i_ino, page->index, i_size, page->flags);
-	ubifs_assert(PageLocked(page));
 	ubifs_assert(!PageChecked(page));
 	ubifs_assert(!PagePrivate(page));
 
@@ -157,7 +156,6 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	int uninitialized_var(err);
 	struct page *page;
 
-	ubifs_assert(mutex_is_locked(&inode->i_mutex));
 	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
 	dbg_eat_memory();
 
@@ -279,9 +277,6 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 
 	dbg_gen("ino %lu, pos %llu, pg %lu, len %u, copied %d, i_size %lld",
 		inode->i_ino, pos, page->index, len, copied, i_size);
-	ubifs_assert(PageUptodate(page));
-	ubifs_assert(mutex_is_locked(&inode->i_mutex));
-	ubifs_assert(copied <= len);
 
 	if (unlikely(copied < len && len == PAGE_CACHE_SIZE)) {
 		/*
@@ -416,8 +411,6 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 
 	dbg_gen("ino %lu, pg %lu, pg flags %#lx",
 		inode->i_ino, page->index, page->flags);
-	ubifs_assert(PageUptodate(page));
-	ubifs_assert(!PageWriteback(page));
 	ubifs_assert(PagePrivate(page));
 	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
 
@@ -454,8 +447,6 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 
 	dbg_gen("ino %lu, size %lld -> %lld",
 		inode->i_ino, inode->i_size, new_size);
-	ubifs_assert(mutex_is_locked(&inode->i_mutex));
-
 	old_size = inode->i_size;
 
 	err = vmtruncate(inode, new_size);
@@ -476,8 +467,6 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 			page = find_lock_page(inode->i_mapping, index);
 			if (page) {
 				if (PageDirty(page)) {
-					ubifs_assert(PageUptodate(page));
-					ubifs_assert(!PageWriteback(page));
 					ubifs_assert(PagePrivate(page));
 
 					clear_page_dirty_for_io(page);
@@ -516,8 +505,6 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	int truncation, err = 0;
 
 	dbg_gen("ino %lu, ia_valid %#x", inode->i_ino, ia_valid);
-	ubifs_assert(mutex_is_locked(&inode->i_mutex));
-
 	err = inode_change_ok(inode, attr);
 	if (err)
 		return err;
@@ -628,7 +615,6 @@ int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync)
 	int err;
 
 	dbg_gen("syncing inode %lu", inode->i_ino);
-	ubifs_assert(mutex_is_locked(&inode->i_mutex));
 
 	/* Synchronize the inode and dirty pages */
 	err = write_inode_now(inode, 1);
@@ -763,7 +749,6 @@ static int ubifs_releasepage(struct page *page, gfp_t unused_gfp_flags)
 	 * An attempt to release a dirty page without budgeting for it - should
 	 * not happen.
 	 */
-	ubifs_assert(PageLocked(page));
 	if (PageWriteback(page))
 		return 0;
 	ubifs_assert(PagePrivate(page));
