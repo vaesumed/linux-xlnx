@@ -78,7 +78,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
  */
 #define DBGKEY(key) dbg_key_str0(c, (key))
 #define DBGKEY1(key) dbg_key_str1(c, (key))
-			 
+
 /* General messages */
 #define dbg_gen(fmt, ...)        dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
 
@@ -90,7 +90,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
 
 /* Additional lprops messages */
 #define dbg_lp(fmt, ...)         dbg_do_msg(UBIFS_MSG_LP, fmt, ##__VA_ARGS__)
-	
+
 /* Additional LEB find messages */
 #define dbg_find(fmt, ...)       dbg_do_msg(UBIFS_MSG_FIND, fmt, ##__VA_ARGS__)
 
@@ -327,7 +327,7 @@ int dbg_leb_change(struct ubi_volume_desc *desc, int lnum, const void *buf,
 int dbg_leb_erase(struct ubi_volume_desc *desc, int lnum);
 int dbg_leb_unmap(struct ubi_volume_desc *desc, int lnum);
 int dbg_is_mapped(struct ubi_volume_desc *desc, int lnum);
-	
+
 static inline int dbg_read(struct ubi_volume_desc *desc, int lnum, char *buf,
 			   int offset, int len)
 {
@@ -397,7 +397,7 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_check_cats(c)                          0
 
 #define dbg_check_ltab(c)                          0
-	
+
 #define dbg_check_dir_size(c, dir)                 0
 
 #define dbg_check_tnc(c, x)                        0
