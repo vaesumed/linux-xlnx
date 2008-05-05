@@ -68,6 +68,8 @@ struct bus_type {
 	int (*resume_early)(struct device *dev);
 	int (*resume)(struct device *dev);
 
+	struct pm_ext_ops *pm;
+
 	struct bus_type_private *p;
 };
 
@@ -131,6 +133,8 @@ struct device_driver {
 	int (*resume) (struct device *dev);
 	struct attribute_group **groups;
 
+	struct pm_ops *pm;
+
 	struct driver_private *p;
 };
 
@@ -190,6 +194,7 @@ struct class {
 	struct semaphore	sem; /* locks children, devices, interfaces */
 	struct class_attribute		*class_attrs;
 	struct device_attribute		*dev_attrs;
+	struct kobject			*dev_kobj;
 
 	int (*dev_uevent)(struct device *dev, struct kobj_uevent_env *env);
 
@@ -198,8 +203,12 @@ struct class {
 
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
+
+	struct pm_ops *pm;
 };
 
+extern struct kobject *sysfs_dev_block_kobj;
+extern struct kobject *sysfs_dev_char_kobj;
 extern int __must_check class_register(struct class *class);
 extern void class_unregister(struct class *class);
 extern int class_for_each_device(struct class *class, void *data,
@@ -249,8 +258,11 @@ struct device_type {
 	struct attribute_group **groups;
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	void (*release)(struct device *dev);
+
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
+
+	struct pm_ops *pm;
 };
 
 /* interface for exporting device attributes */
