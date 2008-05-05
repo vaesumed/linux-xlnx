@@ -13,6 +13,7 @@ lkc_defs.h
 # configuration programs
 #
 conf
+aconf
 mconf
 qconf
 gconf

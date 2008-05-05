@@ -47,30 +47,38 @@ update-po-config: $(obj)/kxgettext $(obj)/gconf.glade.h
 	$(Q)rm -f arch/um/Kconfig.arch
 	$(Q)rm -f $(obj)/config.pot
 
-PHONY += randconfig allyesconfig allnoconfig allmodconfig defconfig
+#####
+#
+# aconf support
+#
+aconf-targets := allnoconfig allyesconfig allmodconfig alldefconfig randconfig
+PHONY += $(aconf-targets) defconfig
 
-randconfig: $(obj)/conf
-	$< -r $(Kconfig)
+# Optional base file for aconf
+# K= have precedence over KCONFIG_ALLCONFIG
+aconf-file := $(if $(KCONFIG_ALLCONFIG),-b $(KCONFIG_ALLCONFIG))
+aconf-file := $(if $(K),-b $(K), $(aconf-file))
+$(aconf-targets): $(obj)/aconf
+	$< $@ $(aconf-file) $(Kconfig)
 
-allyesconfig: $(obj)/conf
-	$< -y $(Kconfig)
+# Targets named *_defconfig may be located in arch/.../configs/
+# but try current dir first and always fallback to current dir
+archdef = $(srctree)/arch/$(SRCARCH)/configs/$@
+aconf-archdef = \
+$(if $(wildcard $(archdef)), $(if $(wildcard $@),$@,$(archdef)),$@)
+%_defconfig: $(obj)/aconf
+	$< alldefconfig -b $(aconf-archdef) $(Kconfig)
 
-allnoconfig: $(obj)/conf
-	$< -n $(Kconfig)
+# An arch may use KBUILD_DEFCONFIG to specify defconfig file
+# fallback to arch/$ARCH/defconfig
+defconfig-file := $(if $(KBUILD_DEFCONFIG),                       \
+        $(srctree)/arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG),   \
+        $(srctree)/arch/$(SRCARCH)/defconfig)
+defconfig-file := $(strip $(defconfig-file))
 
-allmodconfig: $(obj)/conf
-	$< -m $(Kconfig)
+defconfig: $(obj)/aconf
+	$< alldefconfig -b $(defconfig-file) $(Kconfig)
 
-defconfig: $(obj)/conf
-ifeq ($(KBUILD_DEFCONFIG),)
-	$< -d $(Kconfig)
-else
-	@echo "*** Default configuration is based on '$(KBUILD_DEFCONFIG)'"
-	$(Q)$< -D arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG) $(Kconfig)
-endif
-
-%_defconfig: $(obj)/conf
-	$(Q)$< -D arch/$(SRCARCH)/configs/$@ $(Kconfig)
 
 # Help text used by make help
 help:
@@ -78,13 +86,14 @@ help:
 	@echo  '  menuconfig	  - Update current config utilising a menu based program'
 	@echo  '  xconfig	  - Update current config utilising a QT based front-end'
 	@echo  '  gconfig	  - Update current config utilising a GTK based front-end'
-	@echo  '  oldconfig	  - Update current config utilising a provided .config as base'
-	@echo  '  silentoldconfig - Same as oldconfig, but quietly'
-	@echo  '  randconfig	  - New config with random answer to all options'
-	@echo  '  defconfig	  - New config with default answer to all options'
-	@echo  '  allmodconfig	  - New config selecting modules when possible'
-	@echo  '  allyesconfig	  - New config where all options are accepted with yes'
-	@echo  '  allnoconfig	  - New config where all options are answered with no'
+	@echo  '  oldconfig	  - Update current config utilising .config as base'
+	@echo  '  defconfig	  - New config based on arch specific base configuration'
+	@echo  '  randconfig	  - New config with random values for all symbols'
+	@echo  '  allnoconfig	  - New config where all values are set to no'
+	@echo  '  allyesconfig	  - New config where all values are set to yes'
+	@echo  '  allmodconfig	  - New config where all values are set to module'
+	@echo  '  alldefconfig	  - New config where all values has their default value'
+	@echo  '  For randconfig and all*config targets use K=file to specify a base configuration'
 
 # lxdialog stuff
 check-lxdialog  := $(srctree)/$(src)/lxdialog/check-lxdialog.sh
@@ -100,6 +109,7 @@ HOST_EXTRACFLAGS += -DLOCALE
 # ===========================================================================
 # Shared Makefile for the various kconfig executables:
 # conf:	  Used for defconfig, oldconfig and related targets
+# aconf:  Generate simple configurations (all*config, etc)
 # mconf:  Used for the mconfig target.
 #         Utilizes the lxdialog package
 # qconf:  Used for the xconfig target
@@ -112,10 +122,11 @@ lxdialog := lxdialog/checklist.o lxdialog/util.o lxdialog/inputbox.o
 lxdialog += lxdialog/textbox.o lxdialog/yesno.o lxdialog/menubox.o
 
 conf-objs	:= conf.o  zconf.tab.o
+aconf-objs	:= aconf.o zconf.tab.o
 mconf-objs	:= mconf.o zconf.tab.o $(lxdialog)
 kxgettext-objs	:= kxgettext.o zconf.tab.o
 
-hostprogs-y := conf qconf gconf kxgettext
+hostprogs-y := conf aconf qconf gconf kxgettext
 
 ifeq ($(MAKECMDGOALS),menuconfig)
 	hostprogs-y += mconf

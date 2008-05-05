@@ -171,11 +171,9 @@ CONFIGURING the kernel:
 	"make oldconfig"   Default all questions based on the contents of
 			   your existing ./.config file and asking about
 			   new config symbols.
-	"make silentoldconfig"
-			   Like above, but avoids cluttering the screen
-			   with questions already answered.
-	"make defconfig"   Create a ./.config file by using the default
-			   symbol values from arch/$ARCH/defconfig.
+	"make defconfig"   Create a ./.config file by using the base
+			   configuration found in the file specified by
+			   the environment variable KBUILD_DEFCONFIG.
 	"make allyesconfig"
 			   Create a ./.config file by setting symbol
 			   values to 'y' as much as possible.
@@ -184,17 +182,21 @@ CONFIGURING the kernel:
 			   values to 'm' as much as possible.
 	"make allnoconfig" Create a ./.config file by setting symbol
 			   values to 'n' as much as possible.
+	"make alldefconfig"
+			   Create a configuration with default values.
 	"make randconfig"  Create a ./.config file by setting symbol
 			   values to random values.
 
-   The allyesconfig/allmodconfig/allnoconfig/randconfig variants can
-   also use the environment variable KCONFIG_ALLCONFIG to specify a
-   filename that contains config options that the user requires to be
-   set to a specific value.  If KCONFIG_ALLCONFIG=filename is not used,
-   "make *config" checks for a file named "all{yes/mod/no/random}.config"
-   for symbol values that are to be forced.  If this file is not found,
-   it checks for a file named "all.config" to contain forced values.
-   
+   The allyesconfig/allmodconfig/allnoconfig/alldefconfig/randconfig
+   variants can be tweaked using a base confguration that can be
+   set either using the syntax:
+
+	make K=base-config allnoconfig
+
+   Or using the environment variable KCONFIG_ALLCONFIG.
+   K= in the example is also used as an environment variable and an
+   assignment to K takes precendence over a KCONFIG_ALLCONFIG assignment.
+
 	NOTES on "make config":
 	- having unnecessary drivers will make the kernel bigger, and can
 	  under some circumstances lead to problems: probing for a
