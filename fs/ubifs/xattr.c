@@ -297,7 +297,6 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 
 	dbg_gen("xattr '%s', host ino %lu ('%.*s'), size %d", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
-	ubifs_assert(mutex_is_locked(&host->i_mutex));
 	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);

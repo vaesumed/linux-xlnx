@@ -72,8 +72,6 @@ int ubifs_scan_a_node(const struct ubifs_info *c, void *buf, int len, int lnum,
 	struct ubifs_ch *ch = buf;
 	uint32_t magic;
 
-	ubifs_assert(len >= 4);
-
 	magic = le32_to_cpu(ch->magic);
 
 	if (magic == 0xFFFFFFFF) {
@@ -140,10 +138,6 @@ struct ubifs_scan_leb *ubifs_start_scan(const struct ubifs_info *c, int lnum,
 {
 	struct ubifs_scan_leb *sleb;
 	int err;
-
-	ubifs_assert(lnum >= 0 && lnum < c->leb_cnt);
-	ubifs_assert((offs & 7) == 0);
-	ubifs_assert(offs % c->min_io_size == 0);
 
 	dbg_scan("scan LEB %d:%d", lnum, offs);
 
