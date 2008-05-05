@@ -80,40 +80,43 @@ const char *dbg_key_str1(const struct ubifs_info *c,
 #define DBGKEY1(key) dbg_key_str1(c, (key))
 			 
 /* General messages */
-#define dbg_gen(fmt, ...)         dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
+#define dbg_gen(fmt, ...)        dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
 
 /* Additional journal messages */
-#define dbg_jrn(fmt, ...)         dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
+#define dbg_jrn(fmt, ...)        dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
 
 /* Additional TNC messages */
-#define dbg_tnc(fmt, ...)         dbg_do_msg(UBIFS_MSG_TNC, fmt, ##__VA_ARGS__)
+#define dbg_tnc(fmt, ...)        dbg_do_msg(UBIFS_MSG_TNC, fmt, ##__VA_ARGS__)
 
 /* Additional lprops messages */
-#define dbg_lp(fmt, ...)          dbg_do_msg(UBIFS_MSG_LP, fmt, ##__VA_ARGS__)
+#define dbg_lp(fmt, ...)         dbg_do_msg(UBIFS_MSG_LP, fmt, ##__VA_ARGS__)
 	
 /* Additional LEB find messages */
-#define dbg_find(fmt, ...)        dbg_do_msg(UBIFS_MSG_FIND, fmt, ##__VA_ARGS__)
+#define dbg_find(fmt, ...)       dbg_do_msg(UBIFS_MSG_FIND, fmt, ##__VA_ARGS__)
 
 /* Additional mount messages */
-#define dbg_mnt(fmt, ...)         dbg_do_msg(UBIFS_MSG_MNT, fmt, ##__VA_ARGS__)
+#define dbg_mnt(fmt, ...)        dbg_do_msg(UBIFS_MSG_MNT, fmt, ##__VA_ARGS__)
 
 /* Additional I/O messages */
-#define dbg_io(fmt, ...)          dbg_do_msg(UBIFS_MSG_IO, fmt, ##__VA_ARGS__)
+#define dbg_io(fmt, ...)         dbg_do_msg(UBIFS_MSG_IO, fmt, ##__VA_ARGS__)
 
 /* Additional commit messages */
-#define dbg_cmt(fmt, ...)         dbg_do_msg(UBIFS_MSG_CMT, fmt, ##__VA_ARGS__)
+#define dbg_cmt(fmt, ...)        dbg_do_msg(UBIFS_MSG_CMT, fmt, ##__VA_ARGS__)
 
 /* Additional budgeting messages */
-#define dbg_budg(fmt, ...)        dbg_do_msg(UBIFS_MSG_BUDG, fmt, ##__VA_ARGS__)
+#define dbg_budg(fmt, ...)       dbg_do_msg(UBIFS_MSG_BUDG, fmt, ##__VA_ARGS__)
 
 /* Additional log messages */
-#define dbg_log(fmt, ...)         dbg_do_msg(UBIFS_MSG_LOG, fmt, ##__VA_ARGS__)
+#define dbg_log(fmt, ...)        dbg_do_msg(UBIFS_MSG_LOG, fmt, ##__VA_ARGS__)
 
 /* Additional gc messages */
-#define dbg_gc(fmt, ...)          dbg_do_msg(UBIFS_MSG_GC, fmt, ##__VA_ARGS__)
+#define dbg_gc(fmt, ...)         dbg_do_msg(UBIFS_MSG_GC, fmt, ##__VA_ARGS__)
 
 /* Additional scan messages */
-#define dbg_scan(fmt, ...)        dbg_do_msg(UBIFS_MSG_SCAN, fmt, ##__VA_ARGS__)
+#define dbg_scan(fmt, ...)       dbg_do_msg(UBIFS_MSG_SCAN, fmt, ##__VA_ARGS__)
+
+/* Additional recovery messages */
+#define dbg_rcvry(fmt, ...)      dbg_do_msg(UBIFS_MSG_RCVRY, fmt, ##__VA_ARGS__)
 
 /*
  * Debugging message type flags (must match msg_type_names in debug.c).
@@ -130,6 +133,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
  * UBIFS_MSG_IO: I/O messages
  * UBIFS_MSG_LOG: log messages
  * UBIFS_MSG_SCAN: scan messages
+ * UBIFS_MSG_RCVRY: recovery messages
  */
 enum {
 	UBIFS_MSG_GEN   = 0x1,
@@ -144,13 +148,14 @@ enum {
 	UBIFS_MSG_IO    = 0x200,
 	UBIFS_MSG_LOG   = 0x400,
 	UBIFS_MSG_SCAN  = 0x800,
+	UBIFS_MSG_RCVRY = 0x1000,
 };
 
 /* Debugging message type flags for each default debug message level */
 #define UBIFS_MSG_LVL_0 0
 #define UBIFS_MSG_LVL_1 0x1
 #define UBIFS_MSG_LVL_2 0x7f
-#define UBIFS_MSG_LVL_3 0xfff
+#define UBIFS_MSG_LVL_3 0xffff
 
 /*
  * Debugging check flags (must match chk_names in debug.c).
@@ -373,6 +378,7 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_log(fmt, ...)                          ({})
 #define dbg_gc(fmt, ...)                           ({})
 #define dbg_scan(fmt, ...)                         ({})
+#define dbg_rcvry(fmt, ...)                        ({})
 
 #define dbg_ntype(type)                            ""
 #define dbg_cstate(cmt_state)                      ""
