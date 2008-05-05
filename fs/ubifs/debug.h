@@ -48,22 +48,11 @@
 		dump_stack();                                                  \
 } while (0)
 
-#define dbg_err(fmt, ...) ubifs_err(fmt, ##__VA_ARGS__)
-
-/* Generic debugging message */
+/* Generic debugging messages */
 #define dbg_msg(fmt, ...) do {                                                 \
 	spin_lock(&dbg_lock);                                                  \
 	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt "\n", current->pid,   \
 	       __func__, ##__VA_ARGS__);                                       \
-	spin_unlock(&dbg_lock);                                                \
-} while (0)
-
-/* Debugging message which prints UBIFS key */
-#define dbg_key(c, key, fmt, ...) do {                                         \
-	spin_lock(&dbg_lock);                                                  \
-	printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt " %s\n",              \
-	       current->pid, __func__,  ##__VA_ARGS__,                         \
-	       dbg_get_key_dump(c, key));                                      \
 	spin_unlock(&dbg_lock);                                                \
 } while (0)
 
@@ -72,51 +61,59 @@
 		dbg_msg(fmt, ##__VA_ARGS__);                                   \
 } while (0)
 
-#define dbg_do_key(typ, c, key, fmt, ...) do {                                 \
-	if (ubifs_msg_flags & typ)                                             \
-		dbg_key(c, key, fmt, ##__VA_ARGS__);                           \
+#define dbg_err(fmt, ...) do {                                                 \
+	spin_lock(&dbg_lock);                                                  \
+	ubifs_err(fmt, ##__VA_ARGS__);                                         \
+	spin_unlock(&dbg_lock);                                                \
 } while (0)
 
+const char *dbg_key_str0(const struct ubifs_info *c,
+			 const union ubifs_key *key);
+const char *dbg_key_str1(const struct ubifs_info *c,
+			 const union ubifs_key *key);
+
+/*
+ * DBGKEY macros require dbg_lock to be held, which it is in the dbg message
+ * macros.
+ */
+#define DBGKEY(key) dbg_key_str0(c, (key))
+#define DBGKEY1(key) dbg_key_str1(c, (key))
+			 
 /* General messages */
-#define dbg_gen(fmt, ...)             dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
-#define dbg_gen_key(c, key, fmt, ...) dbg_do_key(UBIFS_MSG_GEN, c, key, fmt, ##__VA_ARGS__)
+#define dbg_gen(fmt, ...)         dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
 
 /* Additional journal messages */
-#define dbg_jrn(fmt, ...)             dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
-#define dbg_jrn_key(c, key, fmt, ...) dbg_do_key(UBIFS_MSG_JRN, c, key, fmt, ##__VA_ARGS__)
+#define dbg_jrn(fmt, ...)         dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
 
 /* Additional TNC messages */
-#define dbg_tnc(fmt, ...)             dbg_do_msg(UBIFS_MSG_TNC, fmt, ##__VA_ARGS__)
-#define dbg_tnc_key(c, key, fmt, ...) dbg_do_key(UBIFS_MSG_TNC, c, key, fmt, ##__VA_ARGS__)
+#define dbg_tnc(fmt, ...)         dbg_do_msg(UBIFS_MSG_TNC, fmt, ##__VA_ARGS__)
 
 /* Additional lprops messages */
-#define dbg_lp(fmt, ...)              dbg_do_msg(UBIFS_MSG_LP, fmt, ##__VA_ARGS__)
+#define dbg_lp(fmt, ...)          dbg_do_msg(UBIFS_MSG_LP, fmt, ##__VA_ARGS__)
 	
 /* Additional LEB find messages */
-#define dbg_find(fmt, ...)            dbg_do_msg(UBIFS_MSG_FIND, fmt, ##__VA_ARGS__)
+#define dbg_find(fmt, ...)        dbg_do_msg(UBIFS_MSG_FIND, fmt, ##__VA_ARGS__)
 
 /* Additional mount messages */
-#define dbg_mnt(fmt, ...)             dbg_do_msg(UBIFS_MSG_MNT, fmt, ##__VA_ARGS__)
-#define dbg_mnt_key(c, key, fmt, ...) dbg_do_key(UBIFS_MSG_MNT, c, key, fmt, ##__VA_ARGS__)
+#define dbg_mnt(fmt, ...)         dbg_do_msg(UBIFS_MSG_MNT, fmt, ##__VA_ARGS__)
 
 /* Additional I/O messages */
-#define dbg_io(fmt, ...)              dbg_do_msg(UBIFS_MSG_IO, fmt, ##__VA_ARGS__)
+#define dbg_io(fmt, ...)          dbg_do_msg(UBIFS_MSG_IO, fmt, ##__VA_ARGS__)
 
 /* Additional commit messages */
-#define dbg_cmt(fmt, ...)             dbg_do_msg(UBIFS_MSG_CMT, fmt, ##__VA_ARGS__)
+#define dbg_cmt(fmt, ...)         dbg_do_msg(UBIFS_MSG_CMT, fmt, ##__VA_ARGS__)
 
 /* Additional budgeting messages */
-#define dbg_budg(fmt, ...)            dbg_do_msg(UBIFS_MSG_BUDG, fmt, ##__VA_ARGS__)
+#define dbg_budg(fmt, ...)        dbg_do_msg(UBIFS_MSG_BUDG, fmt, ##__VA_ARGS__)
 
 /* Additional log messages */
-#define dbg_log(fmt, ...)             dbg_do_msg(UBIFS_MSG_LOG, fmt, ##__VA_ARGS__)
+#define dbg_log(fmt, ...)         dbg_do_msg(UBIFS_MSG_LOG, fmt, ##__VA_ARGS__)
 
 /* Additional gc messages */
-#define dbg_gc(fmt, ...)              dbg_do_msg(UBIFS_MSG_GC, fmt, ##__VA_ARGS__)
-#define dbg_gc_key(c, key, fmt, ...)  dbg_do_key(UBIFS_MSG_GC, c, key, fmt, ##__VA_ARGS__)
+#define dbg_gc(fmt, ...)          dbg_do_msg(UBIFS_MSG_GC, fmt, ##__VA_ARGS__)
 
 /* Additional scan messages */
-#define dbg_scan(fmt, ...)            dbg_do_msg(UBIFS_MSG_SCAN, fmt, ##__VA_ARGS__)
+#define dbg_scan(fmt, ...)        dbg_do_msg(UBIFS_MSG_SCAN, fmt, ##__VA_ARGS__)
 
 /*
  * Debugging message type flags (must match msg_type_names in debug.c).
@@ -365,32 +362,16 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_key(c, key, fmt, ...)                  ({})
 
 #define dbg_gen(fmt, ...)                          ({})
-#define dbg_gen_key(c, key, fmt, ...)              ({})
-
 #define dbg_jrn(fmt, ...)                          ({})
-#define dbg_jrn_key(c, key, fmt, ...)              ({})
-
 #define dbg_tnc(fmt, ...)                          ({})
-#define dbg_tnc_key(c, key, fmt, ...)              ({})
-
 #define dbg_lp(fmt, ...)                           ({})
-
 #define dbg_find(fmt, ...)                         ({})
-
 #define dbg_mnt(fmt, ...)                          ({})
-#define dbg_mnt_key(c, key, fmt, ...)              ({})
-
 #define dbg_io(fmt, ...)                           ({})
-
 #define dbg_cmt(fmt, ...)                          ({})
-
 #define dbg_budg(fmt, ...)                         ({})
-
 #define dbg_log(fmt, ...)                          ({})
-
 #define dbg_gc(fmt, ...)                           ({})
-#define dbg_gc_key(c, key, fmt, ...)               ({})
-
 #define dbg_scan(fmt, ...)                         ({})
 
 #define dbg_ntype(type)                            ""

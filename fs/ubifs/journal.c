@@ -646,8 +646,8 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	const struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_data_node *data;
 
-	dbg_jrn_key(c, key, "ino %lu, blk %u, len %d, key ",
-		    key_ino(c, key), key_block(c, key), len);
+	dbg_jrn("ino %lu, blk %u, len %d, key %s", key_ino(c, key),
+		key_block(c, key), len, DBGKEY(key));
 	ubifs_assert(len <= UBIFS_BLOCK_SIZE);
 
 	data = kmalloc(dlen, GFP_NOFS);
@@ -1016,7 +1016,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		dn = (void *)trun + ALIGN(UBIFS_TRUN_NODE_SZ, 8);
 		blk = new_size / UBIFS_BLOCK_SIZE;
 		data_key_init(c, &key, inum, blk);
-		dbg_jrn_key(c, &key, "key");
+		dbg_jrn("last block key %s", DBGKEY(&key));
 		err = ubifs_tnc_lookup(c, &key, dn);
 		if (err == -ENOENT)
 			dlen = 0; /* Not found (so it is a hole) */
