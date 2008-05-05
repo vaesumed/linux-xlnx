@@ -375,6 +375,11 @@ struct cfs_root_rq {
 
 	struct sched_entity *next;
 
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	s64 avg_vruntime;
+#endif
+	unsigned long nr_queued;
+
 #ifdef CONFIG_SCHEDSTATS
 	unsigned long nr_spread_over;
 	u64 exec_clock;

@@ -222,6 +222,86 @@ s64 entity_key(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 	return se->vruntime - cfs_r_rq->min_vruntime;
 }
 
+#ifdef CONFIG_FAIR_GROUP_SCHED
+static inline
+void avg_vruntime_add(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	s64 key = entity_key(cfs_r_rq, se);
+	cfs_r_rq->avg_vruntime += key;
+	cfs_r_rq->nr_queued++;
+}
+
+static inline
+void avg_vruntime_sub(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	s64 key = entity_key(cfs_r_rq, se);
+	cfs_r_rq->avg_vruntime -= key;
+	cfs_r_rq->nr_queued--;
+}
+
+static inline
+void avg_vruntime_update(struct cfs_root_rq *cfs_r_rq, s64 delta)
+{
+	cfs_r_rq->avg_vruntime -= cfs_r_rq->nr_queued * delta;
+}
+
+static inline
+u64 avg_vruntime(struct cfs_root_rq *cfs_r_rq)
+{
+	s64 avg = cfs_r_rq->avg_vruntime;
+	int sign = 0;
+
+	if (avg < 0) {
+		sign = 1;
+		avg = -avg;
+	}
+
+	if (cfs_r_rq->nr_queued)
+		do_div(avg, cfs_r_rq->nr_queued);
+
+	if (sign)
+		avg = -avg;
+
+	return cfs_r_rq->min_vruntime + avg;
+}
+
+#else /* CONFIG_FAIR_GROUP_SCHED */
+
+static inline
+void avg_vruntime_add(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	cfs_r_rq->nr_queued++;
+}
+
+static inline
+void avg_vruntime_sub(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	cfs_r_rq->nr_queued--;
+}
+
+static inline
+void avg_vruntime_update(struct cfs_root_rq *cfs_r_rq, s64 delta)
+{
+}
+#endif /* CONFIG_FAIR_GROUP_SCHED */
+
+/*
+ * maintain cfs_rq->min_vruntime to be a monotonic increasing
+ * value tracking the leftmost vruntime in the tree.
+ */
+static void
+update_min_vruntime(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	/*
+	 * open coded max_vruntime() to allow updating avg_vruntime
+	 */
+	s64 delta = (s64)(se->vruntime - cfs_r_rq->min_vruntime);
+	if (delta > 0) {
+		avg_vruntime_update(cfs_r_rq, delta);
+		cfs_r_rq->min_vruntime = se->vruntime;
+	}
+}
+
 static void
 __enqueue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
@@ -257,12 +337,7 @@ __enqueue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 	 */
 	if (leftmost) {
 		cfs_r_rq->rb_leftmost = &se->run_node;
-		/*
-		 * maintain cfs_rq->min_vruntime to be a monotonic increasing
-		 * value tracking the leftmost vruntime in the tree.
-		 */
-		cfs_r_rq->min_vruntime =
-			max_vruntime(cfs_r_rq->min_vruntime, se->vruntime);
+		update_min_vruntime(cfs_r_rq, se);
 	}
 
 	rb_link_node(&se->run_node, parent, link);
@@ -274,17 +349,13 @@ __dequeue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
 	if (cfs_r_rq->rb_leftmost == &se->run_node) {
 		struct rb_node *next_node;
-		struct sched_entity *next;
 
 		next_node = rb_next(&se->run_node);
 		cfs_r_rq->rb_leftmost = next_node;
 
 		if (next_node) {
-			next = rb_entry(next_node,
-					struct sched_entity, run_node);
-			cfs_r_rq->min_vruntime =
-				max_vruntime(cfs_r_rq->min_vruntime,
-					     next->vruntime);
+			update_min_vruntime(cfs_r_rq, rb_entry(next_node,
+						struct sched_entity, run_node));
 		}
 	}
 
@@ -293,7 +364,6 @@ __dequeue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 
 	rb_erase(&se->run_node, &cfs_r_rq->tasks_timeline);
 }
-
 
 /*
  * Enqueue an entity into the rb-tree:
@@ -306,6 +376,7 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	if (se == cfs_rq->curr)
 		return;
 
+	avg_vruntime_add(&rq_of(cfs_rq)->cfs_root, se);
 	__enqueue_timeline(&rq_of(cfs_rq)->cfs_root, se);
 }
 
@@ -318,6 +389,7 @@ static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		return;
 
 	__dequeue_timeline(&rq_of(cfs_rq)->cfs_root, se);
+	avg_vruntime_sub(&rq_of(cfs_rq)->cfs_root, se);
 }
 
 static inline struct rb_node *first_fair(struct cfs_root_rq *cfs_r_rq)
@@ -964,7 +1036,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Are we the only task in the tree?
 	 */
-	if (unlikely(rq->load.weight == curr->se.load.weight))
+	if (unlikely(!rq->cfs_root.nr_queued))
 		return;
 
 	if (likely(!sysctl_sched_compat_yield) && curr->policy != SCHED_BATCH) {
