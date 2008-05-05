@@ -1603,6 +1603,8 @@ int ide_do_drive_cmd (ide_drive_t *drive, struct request *rq, ide_action_t actio
 	if (action == ide_preempt || action == ide_head_wait)
 		where = ELEVATOR_INSERT_FRONT;
 
+	rq->cmd_flags |= REQ_NOMERGE;
+
 	spin_lock_irqsave(&ide_lock, flags);
 	if (action == ide_preempt)
 		hwgroup->rq = NULL;
