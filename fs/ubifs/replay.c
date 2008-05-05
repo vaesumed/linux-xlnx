@@ -177,8 +177,8 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 {
 	int err, deletion = ((r->flags & REPLAY_DELETION) != 0);
 
-	dbg_mnt_key(c, &r->key, "LEB %d:%d len %d flgs %d sqnum %llu", r->lnum,
-		    r->offs, r->len, r->flags, r->sqnum);
+	dbg_mnt("LEB %d:%d len %d flgs %d sqnum %llu %s", r->lnum,
+		r->offs, r->len, r->flags, r->sqnum, DBGKEY(&r->key));
 	/*
 	 * Set c->replay_sqnum to help 'fallible_read_node()' identify dangling
 	 * branches.
@@ -312,7 +312,7 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
 	if (key_ino(c, key) >= c->highest_inum)
 		c->highest_inum = key_ino(c, key);
 
-	dbg_mnt_key(c, key, "add LEB %d:%d, key ", lnum, offs);
+	dbg_mnt("add LEB %d:%d, key %s", lnum, offs, DBGKEY(key));
 	while (*p) {
 		parent = *p;
 		r = rb_entry(parent, struct replay_entry, rb);
@@ -378,7 +378,7 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 	if (key_ino(c, key) >= c->highest_inum)
 		c->highest_inum = key_ino(c, key);
 
-	dbg_mnt_key(c, key, "add LEB %d:%d, key ", lnum, offs);
+	dbg_mnt("add LEB %d:%d, key %s", lnum, offs, DBGKEY(key));
 	while (*p) {
 		parent = *p;
 		r = rb_entry(parent, struct replay_entry, rb);
