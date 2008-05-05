@@ -56,3 +56,6 @@ config HZ
 
 config SCHED_HRTICK
 	def_bool HIGH_RES_TIMERS && X86
+
+config HAVE_STABLE_CLOCK
+	boolean
