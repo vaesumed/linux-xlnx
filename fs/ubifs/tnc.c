@@ -78,9 +78,6 @@ static int insert_old_idx(struct ubifs_info *c, int lnum, int offs)
 	struct ubifs_old_idx *old_idx, *o;
 	struct rb_node **p, *parent = NULL;
 
-	ubifs_assert(lnum >= c->main_first && lnum < c->leb_cnt);
-	ubifs_assert(offs >= 0 && offs < c->leb_size);
-
 	old_idx = kmalloc(sizeof(struct ubifs_old_idx), GFP_NOFS);
 	if (!old_idx)
 		return -ENOMEM;
@@ -690,10 +687,6 @@ static int try_read_node(const struct ubifs_info *c, void *buf, int type,
 	uint32_t crc, node_crc;
 
 	dbg_io("LEB %d:%d, %s, length %d", lnum, offs, dbg_ntype(type), len);
-	ubifs_assert(lnum >= 0 && lnum < c->leb_cnt && offs >= 0);
-	ubifs_assert(len >= UBIFS_CH_SZ && offs + len <= c->leb_size);
-	ubifs_assert(!(offs & 7) && offs < c->leb_size);
-	ubifs_assert(type >= 0 && type < UBIFS_NODE_TYPES_CNT);
 
 	err = ubi_read(c->ubi, lnum, buf, offs, len);
 	if (err) {
