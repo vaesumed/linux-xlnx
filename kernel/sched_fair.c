@@ -437,6 +437,8 @@ static struct sched_entity *__pick_next_eevdf(struct cfs_root_rq *cfs_r_rq)
 	}
 
 	BUG();
+
+	return NULL;
 }
 
 static struct sched_entity *__pick_next_entity(struct cfs_root_rq *cfs_r_rq)
