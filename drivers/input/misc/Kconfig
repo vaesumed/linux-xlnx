@@ -149,6 +149,18 @@ config INPUT_KEYSPAN_REMOTE
 	  To compile this driver as a module, choose M here: the module will
 	  be called keyspan_remote.
 
+config INPUT_APPLEIR
+	tristate "Apple Mac Mini USB IR receiver (built in)"
+	depends on USB_ARCH_HAS_HCD
+	select USB
+	help
+	  Say Y here if you want to use a Apple USB remote control.  This
+	  device is traditionally inside an Intel Apple Mac Mini, but might
+	  show up in other places.
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called appleir.
+
 config INPUT_POWERMATE
 	tristate "Griffin PowerMate and Contour Jog support"
 	depends on USB_ARCH_HAS_HCD
