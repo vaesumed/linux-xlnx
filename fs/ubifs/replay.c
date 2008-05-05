@@ -559,9 +559,6 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 	if (!bud)
 		BUG();
 
-	ubifs_assert(bud->lnum == lnum);
-	ubifs_assert(bud->start == offs);
-	ubifs_assert(bud->jhead == jhead);
 	ubifs_assert(sleb->endpt - offs >= used);
 	ubifs_assert(sleb->endpt % c->min_io_size == 0);
 

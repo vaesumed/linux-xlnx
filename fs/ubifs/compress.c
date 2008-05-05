@@ -107,9 +107,6 @@ void ubifs_compress(const void *in_buf, int in_len, void *out_buf, int *out_len,
 	if (in_len < UBIFS_MIN_COMPR_LEN)
 		goto no_compr;
 
-	ubifs_assert(compr->capi_name);
-	ubifs_assert(in_len > 0);
-
 	if (compr->comp_mutex)
 		mutex_lock(compr->comp_mutex);
 	err = crypto_comp_compress(compr->cc, in_buf, in_len, out_buf,
@@ -122,8 +119,6 @@ void ubifs_compress(const void *in_buf, int in_len, void *out_buf, int *out_len,
 			   in_len, compr->name, err);
 		 goto no_compr;
 	}
-
-	ubifs_assert(*out_len > 0);
 
 	/*
 	 * Presently, we just require that compression results in less data,

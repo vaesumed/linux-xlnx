@@ -939,7 +939,6 @@ void ubifs_remount_ro(struct ubifs_info *c)
 	int i, err;
 
 	ubifs_assert(!c->need_recovery);
-
 	commit_on_unmount(c);
 
 	mutex_lock(&c->umount_mutex);
