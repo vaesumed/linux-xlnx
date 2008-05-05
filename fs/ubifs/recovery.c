@@ -408,7 +408,6 @@ static void clean_buf(const struct ubifs_info *c, void **buf, int lnum,
 	}
 
 	ubifs_assert(!(*offs & 7));
-
 	empty_offs = ALIGN(*offs, c->min_io_size);
 	pad_len = empty_offs - *offs;
 	ubifs_pad(c, *buf, pad_len);

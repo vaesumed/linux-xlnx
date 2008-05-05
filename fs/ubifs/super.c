@@ -333,9 +333,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	struct ubifs_budget_req req = {.dd_growth = c->inode_budget,
 				       .dirtied_ino_d = ui->data_len};
 
-	ubifs_assert(!(c->vfs_sb->s_flags & MS_RDONLY));
 	ubifs_assert(!ui->xattr);
-
 	if (is_bad_inode(inode))
 		return 0;
 
@@ -426,9 +424,7 @@ static void ubifs_dirty_inode(struct inode *inode)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
 	ubifs_assert(mutex_is_locked(&ui->budg_mutex));
-
 	if (!ui->dirty) {
 		struct ubifs_info *c = inode->i_sb->s_fs_info;
 
