@@ -1539,23 +1539,6 @@ irqreturn_t ide_intr (int irq, void *dev_id)
 }
 
 /**
- *	ide_init_drive_cmd	-	initialize a drive command request
- *	@rq: request object
- *
- *	Initialize a request before we fill it in and send it down to
- *	ide_do_drive_cmd. Commands must be set up by this function. Right
- *	now it doesn't do a lot, but if that changes abusers will have a
- *	nasty surprise.
- */
-
-void ide_init_drive_cmd (struct request *rq)
-{
-	blk_rq_init(NULL, rq);
-}
-
-EXPORT_SYMBOL(ide_init_drive_cmd);
-
-/**
  *	ide_do_drive_cmd	-	issue IDE special command
  *	@drive: device to issue command
  *	@rq: request to issue
@@ -1584,43 +1567,23 @@ int ide_do_drive_cmd (ide_drive_t *drive, struct request *rq, ide_action_t actio
 {
 	unsigned long flags;
 	ide_hwgroup_t *hwgroup = HWGROUP(drive);
-	DECLARE_COMPLETION_ONSTACK(wait);
-	int where = ELEVATOR_INSERT_BACK, err;
-	int must_wait = (action == ide_wait || action == ide_head_wait);
+	int where = ELEVATOR_INSERT_BACK;
 
 	rq->errors = 0;
 
-	/*
-	 * we need to hold an extra reference to request for safe inspection
-	 * after completion
-	 */
-	if (must_wait) {
-		rq->ref_count++;
-		rq->end_io_data = &wait;
-		rq->end_io = blk_end_sync_rq;
-	}
+	if (action == ide_preempt)
+		where = ELEVATOR_INSERT_FRONT;
+
+	rq->cmd_flags |= REQ_NOMERGE;
 
 	spin_lock_irqsave(&ide_lock, flags);
 	if (action == ide_preempt)
 		hwgroup->rq = NULL;
-	if (action == ide_preempt || action == ide_head_wait) {
-		where = ELEVATOR_INSERT_FRONT;
-		rq->cmd_flags |= REQ_PREEMPT;
-	}
-	__elv_add_request(drive->queue, rq, where, 0);
-	ide_do_request(hwgroup, IDE_NO_IRQ);
+	__elv_add_request(drive->queue, rq, where, 1);
+	__generic_unplug_device(drive->queue);
 	spin_unlock_irqrestore(&ide_lock, flags);
 
-	err = 0;
-	if (must_wait) {
-		wait_for_completion(&wait);
-		if (rq->errors)
-			err = -EIO;
-
-		blk_put_request(rq);
-	}
-
-	return err;
+	return 0;
 }
 
 EXPORT_SYMBOL(ide_do_drive_cmd);
