@@ -162,7 +162,7 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	dbg_eat_memory();
 
 	if (unlikely(c->ro_media))
-		return -EINVAL;
+		return -EROFS;
 
 	/*
 	 * We are about to have a page of data written and we have to budget for
@@ -647,6 +647,24 @@ int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync)
 }
 
 /**
+ * mctime_update_needed - check if mtime or ctime update is needed.
+ * @inode: the inode to do the check for
+ * @now: current time
+ *
+ * This helper function checks if the inode mtime/ctime should be updated or
+ * not. If current values of the time-stamps are within the UBIFS inode time
+ * granularity, they are not updated. This is an optimization.
+ */
+static inline int mctime_update_needed(const struct inode *inode,
+				       const struct timespec *now)
+{
+	if (!timespec_equal(&inode->i_mtime, now) ||
+	    !timespec_equal(&inode->i_ctime, now))
+		return 1;
+	return 0;
+}
+
+/**
  * update_ctime - update mtime and ctime of an inode.
  * @c: UBIFS file-system description object
  * @inode: inode to update
@@ -659,8 +677,7 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 {
 	struct timespec now = ubifs_current_time(inode);
 
-	if (!timespec_equal(&inode->i_mtime, &now) ||
-	    !timespec_equal(&inode->i_ctime, &now)) {
+	if (mctime_update_needed(inode, &now)) {
 		struct ubifs_budget_req req;
 		int err;
 
@@ -764,8 +781,10 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 {
 	struct inode *inode = vma->vm_file->f_path.dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	loff_t i_size;
-	int err = 0;
+	loff_t i_size = i_size_read(inode);
+	struct timespec now = ubifs_current_time(inode);
+	struct ubifs_budget_req req = { .new_page = 1 };
+	int err, update_time;
 
 	dbg_gen("ino %lu, pg %lu, i_size %lld",	inode->i_ino, page->index,
 		i_size_read(inode));
@@ -773,39 +792,73 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 	dbg_eat_memory();
 
 	if (unlikely(c->ro_media))
-		return -EINVAL;
+		return -EROFS;
+
+	/*
+	 * We have not locked @page so far so we may budget for changing the
+	 * page. Note, we cannot do this after we locked the page, because
+	 * budgeting may cause write-back which would cause deadlock.
+	 *
+	 * At the moment we do not know whether the page is dirty or not, so we
+	 * assume that it is not and budget for a new page. We could look at
+	 * the @PG_private flag and figure this out, but we may race with write
+	 * back and the page state may change by the time we lock it, so this
+	 * would need additional care. We do not bother with this at the
+	 * moment, although it might be good idea to do. Instead, we allocate
+	 * budget for a new page and amend it later on if the page was in fact
+	 * dirty.
+	 *
+	 * The budgeting-related logic of this function is similar to what we
+	 * do in 'ubifs_write_begin()' and 'ubifs_write_end()'. Glance there
+	 * for more comments.
+	 */
+	if (mctime_update_needed(inode, &now)) {
+		/*
+		 * We have to change inode time stamp which requires extra
+		 * budgeting.
+		 */
+		update_time = 1;
+		err = ubifs_budget_inode_op(c, inode, &req);
+	} else {
+		update_time = 0;
+		err = ubifs_budget_space(c, &req);
+	}
+	if (unlikely(err))
+		return err;
 
 	lock_page(page);
-	i_size = i_size_read(inode);
-	if ((page->mapping != inode->i_mapping) ||
-	    (page_offset(page) > i_size)) {
-		/* page got truncated out from underneath us */
+	if (unlikely(page->mapping != inode->i_mapping ||
+		     page_offset(page) > i_size)) {
+		/* Page got truncated out from underneath us */
 		err = -EINVAL;
 		goto out_unlock;
 	}
 
-	err = update_mctime(c, inode);
-	if (err)
-		goto out_unlock;
-
-	if (!PagePrivate(page)) {
-		struct ubifs_budget_req req;
-
-		memset(&req, 0, sizeof(struct ubifs_budget_req));
-		if (PageChecked(page))
-			req.new_page = 1;
-		else
-			req.dirtied_page = 1;
-		err = ubifs_budget_space(c, &req);
-		if (unlikely(err))
-			goto out_unlock;
+	if (PagePrivate(page))
+		ubifs_release_new_page_budget(c);
+	else {
+		if (!PageChecked(page))
+			ubifs_convert_page_budget(c);
 		SetPagePrivate(page);
 		atomic_long_inc(&c->dirty_pg_cnt);
 		__set_page_dirty_nobuffers(page);
 	}
 
+	if (update_time) {
+		inode->i_mtime = inode->i_ctime = now;
+		mark_inode_dirty_sync(inode);
+		mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+	}
+
+	unlock_page(page);
+	return 0;
+
 out_unlock:
 	unlock_page(page);
+	if (update_time)
+		ubifs_cancel_ino_op(c, inode, &req);
+	else
+		ubifs_release_budget(c, &req);
 	return err;
 }
 
