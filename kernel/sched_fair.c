@@ -226,12 +226,22 @@ static inline s64 entity_key(struct cfs_rq *cfs_rq, struct sched_entity *se)
  */
 static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	struct rb_node **link = &cfs_rq->tasks_timeline.rb_node;
+	struct rb_node **link;
 	struct rb_node *parent = NULL;
 	struct sched_entity *entry;
-	s64 key = entity_key(cfs_rq, se);
+	s64 key;
 	int leftmost = 1;
 
+	if (!entity_is_task(se))
+		return;
+
+	if (se == cfs_rq->curr)
+		return;
+
+	cfs_rq = &rq_of(cfs_rq)->cfs;
+
+	link = &cfs_rq->tasks_timeline.rb_node;
+	key = entity_key(cfs_rq, se);
 	/*
 	 * Find the right place in the rbtree:
 	 */
@@ -467,6 +477,11 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	if (unlikely(!curr))
 		return;
 
+	if (!entity_is_task(curr))
+		return;
+
+	cfs_rq = &rq_of(cfs_rq)->cfs;
+
 	/*
 	 * Get the amount of time the current task was running
 	 * since the last time we changed load (this cannot
@@ -691,8 +706,7 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int wakeup)
 
 	update_stats_enqueue(cfs_rq, se);
 	check_spread(cfs_rq, se);
-	if (se != cfs_rq->curr)
-		__enqueue_entity(cfs_rq, se);
+	__enqueue_entity(cfs_rq, se);
 }
 
 static void update_avg(u64 *avg, u64 sample)
@@ -733,8 +747,7 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int sleep)
 #endif
 	}
 
-	if (se != cfs_rq->curr)
-		__dequeue_entity(cfs_rq, se);
+	__dequeue_entity(cfs_rq, se);
 	account_entity_dequeue(cfs_rq, se);
 }
 
@@ -763,6 +776,8 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		 * runqueue.
 		 */
 		update_stats_wait_end(cfs_rq, se);
+		if (WARN_ON_ONCE(cfs_rq->curr))
+			cfs_rq->curr = NULL;
 		__dequeue_entity(cfs_rq, se);
 	}
 
@@ -785,31 +800,6 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static int
 wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se);
 
-static struct sched_entity *
-pick_next(struct cfs_rq *cfs_rq, struct sched_entity *se)
-{
-	if (!cfs_rq->next)
-		return se;
-
-	if (wakeup_preempt_entity(cfs_rq->next, se) != 0)
-		return se;
-
-	return cfs_rq->next;
-}
-
-static struct sched_entity *pick_next_entity(struct cfs_rq *cfs_rq)
-{
-	struct sched_entity *se = NULL;
-
-	if (first_fair(cfs_rq)) {
-		se = __pick_next_entity(cfs_rq);
-		se = pick_next(cfs_rq, se);
-		set_next_entity(cfs_rq, se);
-	}
-
-	return se;
-}
-
 static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 {
 	/*
@@ -820,12 +810,12 @@ static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 		update_curr(cfs_rq);
 
 	check_spread(cfs_rq, prev);
+	cfs_rq->curr = NULL;
 	if (prev->on_rq) {
 		update_stats_wait_start(cfs_rq, prev);
 		/* Put 'current' back into the tree. */
 		__enqueue_entity(cfs_rq, prev);
 	}
-	cfs_rq->curr = NULL;
 }
 
 static void
@@ -835,6 +825,9 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	 * Update run-time statistics of the 'current'.
 	 */
 	update_curr(cfs_rq);
+
+	if (!entity_is_task(curr))
+		return;
 
 #ifdef CONFIG_SCHED_HRTICK
 	/*
@@ -853,7 +846,8 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 		return;
 #endif
 
-	if (cfs_rq->nr_running > 1 || !sched_feat(WAKEUP_PREEMPT))
+	if (rq_of(cfs_rq)->load.weight != curr->load.weight ||
+			!sched_feat(WAKEUP_PREEMPT))
 		check_preempt_tick(cfs_rq, curr);
 }
 
@@ -955,7 +949,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Are we the only task in the tree?
 	 */
-	if (unlikely(cfs_rq->nr_running == 1))
+	if (unlikely(rq->load.weight == curr->se.load.weight))
 		return;
 
 	if (likely(!sysctl_sched_compat_yield) && curr->policy != SCHED_BATCH) {
@@ -970,7 +964,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Find the rightmost entry in the rbtree:
 	 */
-	rightmost = __pick_last_entity(cfs_rq);
+	rightmost = __pick_last_entity(&rq->cfs);
 	/*
 	 * Already in the rightmost position?
 	 */
@@ -1201,17 +1195,6 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 	return 0;
 }
 
-/* return depth at which a sched entity is present in the hierarchy */
-static inline int depth_se(struct sched_entity *se)
-{
-	int depth = 0;
-
-	for_each_sched_entity(se)
-		depth++;
-
-	return depth;
-}
-
 /*
  * Preempt the current task with a newly woken task if needed:
  */
@@ -1220,7 +1203,6 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	struct task_struct *curr = rq->curr;
 	struct cfs_rq *cfs_rq = task_cfs_rq(curr);
 	struct sched_entity *se = &curr->se, *pse = &p->se;
-	int se_depth, pse_depth;
 
 	if (unlikely(rt_prio(p->prio))) {
 		update_rq_clock(rq);
@@ -1233,7 +1215,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	if (unlikely(se == pse))
 		return;
 
-	cfs_rq_of(pse)->next = pse;
+	rq->cfs.next = pse;
 
 	/*
 	 * Batch tasks do not preempt (their preemption is driven by
@@ -1245,51 +1227,40 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	if (!sched_feat(WAKEUP_PREEMPT))
 		return;
 
-	/*
-	 * preemption test can be made between sibling entities who are in the
-	 * same cfs_rq i.e who have a common parent. Walk up the hierarchy of
-	 * both tasks until we find their ancestors who are siblings of common
-	 * parent.
-	 */
-
-	/* First walk up until both entities are at same depth */
-	se_depth = depth_se(se);
-	pse_depth = depth_se(pse);
-
-	while (se_depth > pse_depth) {
-		se_depth--;
-		se = parent_entity(se);
-	}
-
-	while (pse_depth > se_depth) {
-		pse_depth--;
-		pse = parent_entity(pse);
-	}
-
-	while (!is_same_group(se, pse)) {
-		se = parent_entity(se);
-		pse = parent_entity(pse);
-	}
-
 	if (wakeup_preempt_entity(se, pse) == 1)
 		resched_task(curr);
+}
+
+static struct sched_entity *
+pick_next_entity(struct cfs_rq *cfs_rq)
+{
+	struct sched_entity *se = __pick_next_entity(cfs_rq);
+
+	if (!cfs_rq->next)
+		return se;
+
+	if (wakeup_preempt_entity(cfs_rq->next, se))
+		return se;
+
+	return cfs_rq->next;
 }
 
 static struct task_struct *pick_next_task_fair(struct rq *rq)
 {
 	struct task_struct *p;
 	struct cfs_rq *cfs_rq = &rq->cfs;
-	struct sched_entity *se;
+	struct sched_entity *se, *next;
 
-	if (unlikely(!cfs_rq->nr_running))
+	if (!first_fair(cfs_rq))
 		return NULL;
 
-	do {
-		se = pick_next_entity(cfs_rq);
-		cfs_rq = group_cfs_rq(se);
-	} while (cfs_rq);
+	next = se = pick_next_entity(cfs_rq);
+	for_each_sched_entity(se) {
+		cfs_rq = cfs_rq_of(se);
+		set_next_entity(cfs_rq, se);
+	}
 
-	p = task_of(se);
+	p = task_of(next);
 	hrtick_start_fair(rq, p);
 
 	return p;
