@@ -371,11 +371,14 @@ struct cfs_root_rq {
 	u64 min_vruntime;
 
 	struct rb_root tasks_timeline;
-	struct rb_node *rb_leftmost;
+	struct rb_node *left_timeline;
 
 	struct sched_entity *next;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	struct rb_root tasks_deadline;
+	struct rb_node *left_deadline;
+
 	s64 avg_vruntime;
 #endif
 	unsigned long nr_queued;
@@ -7965,6 +7968,9 @@ static void init_cfs_root_rq(struct cfs_root_rq *cfs_r_rq)
 {
 	cfs_r_rq->tasks_timeline = RB_ROOT;
 	cfs_r_rq->min_vruntime = (u64)(-(1LL << 20));
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	cfs_r_rq->tasks_deadline = RB_ROOT;
+#endif
 }
 
 static void init_cfs_rq(struct cfs_rq *cfs_rq, struct rq *rq)

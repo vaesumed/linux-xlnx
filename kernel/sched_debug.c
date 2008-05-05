@@ -123,9 +123,9 @@ void print_cfs_root(struct seq_file *m, int cpu)
 	SEQ_printf(m, "\ncfs_root_rq\n");
 
 	spin_lock_irqsave(&rq->lock, flags);
-	if (cfs_r_rq->rb_leftmost)
-		MIN_vruntime = (__pick_next_entity(cfs_r_rq))->vruntime;
-	last = __pick_last_entity(cfs_r_rq);
+	if (cfs_r_rq->left_timeline)
+		MIN_vruntime = (__pick_next_timeline(cfs_r_rq))->vruntime;
+	last = __pick_last_timeline(cfs_r_rq);
 	if (last)
 		max_vruntime = last->vruntime;
 	min_vruntime = cfs_r_rq->min_vruntime;
