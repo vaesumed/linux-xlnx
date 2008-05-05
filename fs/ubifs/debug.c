@@ -136,9 +136,9 @@ static int param_get_debug_tsts(char *buffer, struct kernel_param *kp)
 module_param_call(debug_msgs, param_set_uint, param_get_debug_msgs,
 		  &ubifs_msg_flags, S_IRUGO | S_IWUSR);
 module_param_call(debug_chks, param_set_uint, param_get_debug_chks,
-		  &ubifs_msg_flags, S_IRUGO | S_IWUSR);
+		  &ubifs_chk_flags, S_IRUGO | S_IWUSR);
 module_param_call(debug_tsts, param_set_uint, param_get_debug_tsts,
-		  &ubifs_msg_flags, S_IRUGO | S_IWUSR);
+		  &ubifs_tst_flags, S_IRUGO | S_IWUSR);
 
 MODULE_PARM_DESC(debug_msgs, "Debug message type flags");
 MODULE_PARM_DESC(debug_chks, "Debug check flags");
