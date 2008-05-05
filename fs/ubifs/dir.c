@@ -168,6 +168,8 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 
 static int dbg_check_name(struct ubifs_dent_node *dent, struct qstr *nm)
 {
+	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
+		return 0;
 	if (le16_to_cpu(dent->nlen) != nm->len)
 		return -EINVAL;
 	if (memcmp(dent->name, nm->name, nm->len))
