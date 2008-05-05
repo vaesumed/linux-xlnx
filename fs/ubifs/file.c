@@ -296,7 +296,8 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		dbg_gen("copied %d instead of %d, read page and repeat",
 			copied, len);
 
-		if (pos > inode->i_size)
+		if (pos + len > i_size)
+			/* See a comment below about this hacky unlock */
 			mutex_unlock(&ui->budg_mutex);
 
 		copied = do_readpage(page);
