@@ -873,6 +873,9 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 	struct qstr nm = { .name = NULL };
 	loff_t size = UBIFS_INO_NODE_SZ;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
+		return 0;
+
 	if (!S_ISDIR(dir->i_mode))
 		return 0;
 
@@ -1301,6 +1304,8 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 	int err;
 	long long calc = 0;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_IDX_SZ))
+		return 0;
 
 	err = dbg_walk_index(c, NULL, dbg_add_size, &calc);
 	if (err) {
