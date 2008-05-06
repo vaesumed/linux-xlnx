@@ -516,7 +516,8 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	 * re-written.
 	 */
 	truncation = (ia_valid & ATTR_SIZE) && attr->ia_size != inode->i_size;
-	if (truncation && (attr->ia_size & (UBIFS_BLOCK_SIZE - 1)))
+	if (truncation && attr->ia_size < inode->i_size &&
+	    (attr->ia_size & (UBIFS_BLOCK_SIZE - 1)))
 		req.dirtied_page = 1;
 
 	err = ubifs_budget_inode_op(c, inode, &req);
