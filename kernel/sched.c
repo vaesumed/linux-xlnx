@@ -2039,7 +2039,7 @@ task_hot(struct task_struct *p, u64 now, struct sched_domain *sd)
 	/*
 	 * Buddy candidates are cache hot:
 	 */
-	if (sched_feat(CACHE_HOT_BUDDY) && (&p->se == cfs_rq_of(&p->se)->next))
+	if (sched_feat(CACHE_HOT_BUDDY) && (&p->se == task_rq(p)->cfs.next))
 		return 1;
 
 	if (p->sched_class != &fair_sched_class)
