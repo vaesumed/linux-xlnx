@@ -2151,7 +2151,7 @@ static void gelic_wl_disconnect_event(struct gelic_wl_info *wl,
 	 * As it waits with timeout, just leave assoc_done
 	 * uncompleted, then it terminates with timeout
 	 */
-	if (down_trylock(&wl->assoc_stat_lock)) {
+	if (!down_nowait(&wl->assoc_stat_lock)) {
 		pr_debug("%s: already locked\n", __func__);
 		lock = 0;
 	} else {
