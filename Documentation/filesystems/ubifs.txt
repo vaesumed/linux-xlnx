@@ -148,7 +148,6 @@ debug_tsts	Selects a mode of testing, as follows:
 
 		Test mode				Flag value
 
-		Create memory pressure			1
 		Force in-the-gaps method		2
 		Failure mode for recovery testing	4
 

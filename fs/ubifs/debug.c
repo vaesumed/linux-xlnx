@@ -27,7 +27,6 @@
  * various local functions of those subsystems.
  */
 
-#define UBIFS_DBG_PRESERVE_KMALLOC
 #define UBIFS_DBG_PRESERVE_UBI
 
 #include "ubifs.h"
@@ -40,9 +39,6 @@ DEFINE_SPINLOCK(dbg_lock);
 
 static char dbg_key_buf0[128];
 static char dbg_key_buf1[128];
-
-static size_t km_alloc_cnt;
-static size_t vm_alloc_cnt;
 
 unsigned int ubifs_msg_flags = UBIFS_MSG_FLAGS_DEFAULT;
 unsigned int ubifs_chk_flags = UBIFS_CHK_FLAGS_DEFAULT;
@@ -807,12 +803,12 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 		nm.name = dent->name;
 		nm.len = le16_to_cpu(dent->nlen);
 		size += CALC_DENT_SIZE(nm.len);
-		dbg_kfree(pdent); /* kfree via debug function */
+		kfree(pdent);
 		pdent = dent;
 		key_read(c, &dent->key, &key);
 	}
 
-	dbg_kfree(pdent); /* kfree via debug function */
+	kfree(pdent);
 
 	if (i_size_read(dir) != size) {
 		ubifs_err("bad directory dir %lu size %llu, "
@@ -1245,168 +1241,6 @@ int dbg_force_in_the_gaps(void)
 		return 0;
 	/* Force in-the-gaps every 8th commit */
 	return !((invocation_cnt ++) & 0x7);
-}
-
-void *dbg_kmalloc(size_t size, gfp_t flags)
-{
-	void *addr;
-
-	addr = kmalloc(size, flags);
-	if (addr != NULL) {
-		spin_lock(&dbg_lock);
-		km_alloc_cnt += 1;
-		spin_unlock(&dbg_lock);
-	}
-	return addr;
-}
-
-void *dbg_kzalloc(size_t size, gfp_t flags)
-{
-	void *addr;
-
-	addr = kzalloc(size, flags);
-	if (addr != NULL) {
-		spin_lock(&dbg_lock);
-		km_alloc_cnt += 1;
-		spin_unlock(&dbg_lock);
-	}
-	return addr;
-}
-
-void dbg_kfree(const void *addr)
-{
-	if (addr != NULL) {
-		spin_lock(&dbg_lock);
-		km_alloc_cnt -= 1;
-		spin_unlock(&dbg_lock);
-		kfree(addr);
-	}
-}
-
-void *dbg_vmalloc(size_t size)
-{
-	void *addr;
-
-	addr = vmalloc(size);
-	if (addr != NULL) {
-		spin_lock(&dbg_lock);
-		vm_alloc_cnt += 1;
-		spin_unlock(&dbg_lock);
-	}
-	return addr;
-}
-
-void dbg_vfree(void *addr)
-{
-	if (addr != NULL) {
-		spin_lock(&dbg_lock);
-		vm_alloc_cnt -= 1;
-		spin_unlock(&dbg_lock);
-		vfree(addr);
-	}
-}
-
-void dbg_leak_report(void)
-{
-	spin_lock(&dbg_lock);
-	if (km_alloc_cnt || vm_alloc_cnt) {
-		ubifs_err("kmalloc: leak count %zd", km_alloc_cnt);
-		ubifs_err("vmalloc: leak count %zd", vm_alloc_cnt);
-	}
-	spin_unlock(&dbg_lock);
-}
-
-/*
- * The below debugging stuff helps to make fake Linux memory pressure in order
- * to make UBIFS shrinker be invoked. Useful for testing.
- */
-
-/*
- * struct eaten_memory - memory object eaten by UBIFS to cause memory pressure.
- * @list: link in the list of eaten memory objects
- * @pad: just pads to memory page size
- */
-struct eaten_memory {
-	struct list_head list;
-	uint8_t pad[PAGE_CACHE_SIZE - sizeof(struct list_head)];
-};
-
-/* List of eaten memory pages */
-static LIST_HEAD(eaten_list);
-/* Count of allocated 'struct eaten_memory' objects */
-static unsigned long eaten_cnt;
-/* Protects 'eaten_list' and 'eaten_cnt' */
-static DEFINE_SPINLOCK(eaten_lock);
-
-void dbg_eat_memory(void)
-{
-	struct eaten_memory *em;
-
-	if (!(ubifs_tst_flags & UBIFS_TST_MEMPRESS))
-		return;
-
-	em = kmalloc(sizeof(struct eaten_memory), GFP_NOFS);
-	if (!em) {
-		ubifs_err("cannot allocate eaten memory structure");
-		return;
-	}
-
-	spin_lock(&eaten_lock);
-	list_add_tail(&em->list, &eaten_list);
-	eaten_cnt += 1;
-	spin_unlock(&eaten_lock);
-}
-
-static int return_eaten_memory(int nr)
-{
-	int free_all = 0, freed = 0;
-	struct eaten_memory *em;
-
-	if (nr == 0)
-		return eaten_cnt;
-
-	if (nr == -1)
-		free_all = 1;
-
-	while (nr > 0 || free_all) {
-		spin_lock(&eaten_lock);
-		if (eaten_cnt == 0) {
-			spin_unlock(&eaten_lock);
-			break;
-		}
-
-		em = list_entry(eaten_list.next, struct eaten_memory, list);
-		list_del(&em->list);
-		eaten_cnt -= 1;
-		spin_unlock(&eaten_lock);
-
-		kfree(em);
-		nr -= 1;
-		freed += 1;
-	}
-
-	return freed;
-}
-
-static int dbg_shrinker(int nr, gfp_t gfp_mask)
-{
-	return return_eaten_memory(nr);
-}
-
-static struct shrinker dbg_shrinker_info = {
-	.shrink = dbg_shrinker,
-	.seeks = DEFAULT_SEEKS,
-};
-
-void __init dbg_mempressure_init(void)
-{
-	register_shrinker(&dbg_shrinker_info);
-}
-
-void dbg_mempressure_exit(void)
-{
-	unregister_shrinker(&dbg_shrinker_info);
-	return_eaten_memory(-1);
 }
 
 /* Failure mode for recovery testing */
