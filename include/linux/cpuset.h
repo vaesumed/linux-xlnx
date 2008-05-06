@@ -78,6 +78,8 @@ extern void cpuset_track_online_nodes(void);
 
 extern int current_cpuset_is_being_rebound(void);
 
+extern struct blocking_notifier_head system_map_notifier;
+
 #else /* !CONFIG_CPUSETS */
 
 static inline int cpuset_init_early(void) { return 0; }

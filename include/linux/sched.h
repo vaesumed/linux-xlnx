@@ -134,7 +134,6 @@ extern unsigned long nr_running(void);
 extern unsigned long nr_uninterruptible(void);
 extern unsigned long nr_active(void);
 extern unsigned long nr_iowait(void);
-extern unsigned long weighted_cpuload(const int cpu);
 
 struct seq_file;
 struct cfs_rq;
@@ -296,10 +295,11 @@ extern void softlockup_tick(void);
 extern void spawn_softlockup_task(void);
 extern void touch_softlockup_watchdog(void);
 extern void touch_all_softlockup_watchdogs(void);
-extern unsigned long  softlockup_thresh;
+extern unsigned int  softlockup_panic;
 extern unsigned long sysctl_hung_task_check_count;
 extern unsigned long sysctl_hung_task_timeout_secs;
 extern unsigned long sysctl_hung_task_warnings;
+extern int softlockup_thresh;
 #else
 static inline void softlockup_tick(void)
 {
@@ -826,23 +826,6 @@ extern int arch_reinit_sched_domains(void);
 
 #endif	/* CONFIG_SMP */
 
-/*
- * A runqueue laden with a single nice 0 task scores a weighted_cpuload of
- * SCHED_LOAD_SCALE. This function returns 1 if any cpu is laden with a
- * task of nice 0 or enough lower priority tasks to bring up the
- * weighted_cpuload
- */
-static inline int above_background_load(void)
-{
-	unsigned long cpu;
-
-	for_each_online_cpu(cpu) {
-		if (weighted_cpuload(cpu) >= SCHED_LOAD_SCALE)
-			return 1;
-	}
-	return 0;
-}
-
 struct io_context;			/* See blkdev.h */
 #define NGROUPS_SMALL		32
 #define NGROUPS_PER_BLOCK	((unsigned int)(PAGE_SIZE / sizeof(gid_t)))
@@ -933,10 +916,6 @@ struct sched_class {
 			     int running);
 	void (*prio_changed) (struct rq *this_rq, struct task_struct *task,
 			     int oldprio, int running);
-
-#ifdef CONFIG_FAIR_GROUP_SCHED
-	void (*moved_group) (struct task_struct *p);
-#endif
 };
 
 struct load_weight {
@@ -955,9 +934,15 @@ struct load_weight {
  */
 struct sched_entity {
 	struct load_weight	load;		/* for load-balancing */
-	struct rb_node		run_node;
-	struct list_head	group_node;
+	struct rb_node		timeline_node;
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	struct rb_node		deadline_node;
+	u64			deadline;
+	u64			min_deadline;
+	unsigned int		eligible;
+#endif
 	unsigned int		on_rq;
+	struct list_head	group_node;
 
 	u64			exec_start;
 	u64			sum_exec_runtime;
@@ -2135,38 +2120,6 @@ __trace_special(void *__tr, void *__data,
 static inline void
 __trace_special(void *__tr, void *__data,
 		unsigned long arg1, unsigned long arg2, unsigned long arg3)
-{
-}
-#endif
-
-#ifdef CONFIG_CONTEXT_SWITCH_TRACER
-extern void
-ftrace_ctx_switch(void *rq, struct task_struct *prev, struct task_struct *next);
-extern void
-ftrace_wake_up_task(void *rq, struct task_struct *wakee,
-		    struct task_struct *curr);
-extern void ftrace_all_fair_tasks(void *__rq, void *__tr, void *__data);
-extern void
-ftrace_special(unsigned long arg1, unsigned long arg2, unsigned long arg3);
-#else
-static inline void
-ftrace_ctx_switch(void *rq, struct task_struct *prev, struct task_struct *next)
-{
-}
-static inline void
-sched_trace_special(unsigned long p1, unsigned long p2, unsigned long p3)
-{
-}
-static inline void
-ftrace_wake_up_task(void *rq, struct task_struct *wakee,
-		    struct task_struct *curr)
-{
-}
-static inline void ftrace_all_fair_tasks(void *__rq, void *__tr, void *__data)
-{
-}
-static inline void
-ftrace_special(unsigned long arg1, unsigned long arg2, unsigned long arg3)
 {
 }
 #endif

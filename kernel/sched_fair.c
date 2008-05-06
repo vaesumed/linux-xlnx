@@ -216,33 +216,432 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 	return min_vruntime;
 }
 
-static inline s64 entity_key(struct cfs_rq *cfs_rq, struct sched_entity *se)
+static inline
+s64 entity_timeline_key(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
-	return se->vruntime - cfs_rq->min_vruntime;
+	return se->vruntime - cfs_r_rq->min_vruntime;
 }
 
-/*
- * Enqueue an entity into the rb-tree:
- */
-static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+static inline struct rb_node *first_fair(struct cfs_root_rq *cfs_r_rq)
 {
-	struct rb_node **link = &cfs_rq->tasks_timeline.rb_node;
+	return cfs_r_rq->left_timeline;
+}
+
+static struct sched_entity *__pick_next_timeline(struct cfs_root_rq *cfs_r_rq)
+{
+	return rb_entry(first_fair(cfs_r_rq),
+			struct sched_entity, timeline_node);
+}
+
+static inline
+struct sched_entity *__pick_last_timeline(struct cfs_root_rq *cfs_r_rq)
+{
+	struct rb_node *last = rb_last(&cfs_r_rq->tasks_timeline);
+
+	if (!last)
+		return NULL;
+
+	return rb_entry(last, struct sched_entity, timeline_node);
+}
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+static inline
+void avg_vruntime_add(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	s64 key = entity_timeline_key(cfs_r_rq, se);
+	cfs_r_rq->avg_vruntime += key;
+	cfs_r_rq->nr_queued++;
+}
+
+static inline
+void avg_vruntime_sub(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	s64 key = entity_timeline_key(cfs_r_rq, se);
+	cfs_r_rq->avg_vruntime -= key;
+	cfs_r_rq->nr_queued--;
+}
+
+static inline
+void avg_vruntime_update(struct cfs_root_rq *cfs_r_rq, s64 delta)
+{
+	cfs_r_rq->avg_vruntime -= cfs_r_rq->nr_queued * delta;
+}
+
+static inline
+u64 avg_vruntime(struct cfs_root_rq *cfs_r_rq)
+{
+	s64 avg = cfs_r_rq->avg_vruntime;
+	int sign = 0;
+
+	if (avg < 0) {
+		sign = 1;
+		avg = -avg;
+	}
+
+	if (cfs_r_rq->nr_queued)
+		do_div(avg, cfs_r_rq->nr_queued);
+
+	if (sign)
+		avg = -avg;
+
+	return cfs_r_rq->min_vruntime + avg;
+}
+
+static inline
+int entity_eligible(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	s64 vruntime = entity_timeline_key(cfs_r_rq, se);
+
+	return (vruntime * cfs_r_rq->nr_queued) <= cfs_r_rq->avg_vruntime;
+}
+
+static inline
+s64 entity_deadline_key(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rq *rq = container_of(cfs_r_rq, struct rq, cfs_root);
+
+	return se->deadline - rq->clock;
+}
+
+static inline
+int entity_expired(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	return entity_deadline_key(cfs_r_rq, se) <= 0;
+}
+
+static u64 sched_vslice_add(struct cfs_rq *cfs_rq, struct sched_entity *se);
+
+static u64 sched_se_period(struct sched_entity *se)
+{
+	return sched_vslice_add(cfs_rq_of(se), se);
+}
+
+static void sched_calc_deadline(struct cfs_root_rq *cfs_r_rq,
+				struct sched_entity *se)
+{
+	struct rq *rq = container_of(cfs_r_rq, struct rq, cfs_root);
+
+	se->deadline = rq->clock + sched_se_period(se);
+}
+
+static void
+__enqueue_deadline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node **link;
 	struct rb_node *parent = NULL;
 	struct sched_entity *entry;
-	s64 key = entity_key(cfs_rq, se);
+	s64 key, entry_key;
 	int leftmost = 1;
 
+	sched_calc_deadline(cfs_r_rq, se);
+
+	link = &cfs_r_rq->tasks_deadline.rb_node;
+	key = entity_deadline_key(cfs_r_rq, se);
 	/*
 	 * Find the right place in the rbtree:
 	 */
 	while (*link) {
 		parent = *link;
-		entry = rb_entry(parent, struct sched_entity, run_node);
+		entry = rb_entry(parent, struct sched_entity, deadline_node);
+		/*
+		 * Prefer shorter latency tasks over higher.
+		 */
+		entry_key = entity_deadline_key(cfs_r_rq, entry);
+		if (key < entry_key || (key == entry_key &&
+				sched_se_period(se) < sched_se_period(entry))) {
+
+			link = &parent->rb_left;
+
+		} else {
+			link = &parent->rb_right;
+			leftmost = 0;
+		}
+	}
+
+	/*
+	 * Maintain a cache of leftmost tree entries (it is frequently
+	 * used):
+	 */
+	if (leftmost)
+		cfs_r_rq->left_deadline = &se->deadline_node;
+
+	rb_link_node(&se->deadline_node, parent, link);
+	rb_insert_color(&se->deadline_node, &cfs_r_rq->tasks_deadline);
+}
+
+static void
+__dequeue_deadline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	if (cfs_r_rq->left_deadline == &se->deadline_node)
+		cfs_r_rq->left_deadline = rb_next(&se->deadline_node);
+
+	rb_erase(&se->deadline_node, &cfs_r_rq->tasks_deadline);
+}
+
+static inline struct rb_node *first_deadline(struct cfs_root_rq *cfs_r_rq)
+{
+	return cfs_r_rq->left_deadline;
+}
+
+static struct sched_entity *__pick_next_deadline(struct cfs_root_rq *cfs_r_rq)
+{
+	return rb_entry(first_deadline(cfs_r_rq),
+			struct sched_entity, deadline_node);
+}
+
+static inline struct sched_entity *se_of(struct rb_node *node)
+{
+	return rb_entry(node, struct sched_entity, timeline_node);
+}
+
+#define deadline_gt(cfs_r_rq, field, lnode, rnode)			\
+({									\
+ 	struct rq *rq = container_of(cfs_r_rq, struct rq, cfs_root);	\
+ 	s64 l = se_of(lnode)->field - rq->clock;			\
+	s64 r = se_of(rnode)->field - rq->clock;			\
+	l > r;								\
+})
+
+static struct sched_entity *__pick_next_eevdf(struct cfs_root_rq *cfs_r_rq)
+{
+	struct rb_node *node = cfs_r_rq->tasks_timeline.rb_node;
+	struct rb_node *tree = NULL, *path = NULL;
+
+	while (node) {
+		if (entity_eligible(cfs_r_rq, se_of(node))) {
+			if (!path || deadline_gt(cfs_r_rq, deadline, path, node))
+				path = node;
+
+			if (!tree || (node->rb_left &&
+				      deadline_gt(cfs_r_rq, min_deadline, tree,
+					          node->rb_left)))
+				tree = node->rb_left;
+
+			node = node->rb_right;
+		} else
+			node = node->rb_left;
+	}
+
+	if (!tree || deadline_gt(cfs_r_rq, min_deadline, tree, path))
+		return se_of(path);
+
+	for (node = tree; node; ) {
+		if (se_of(tree)->min_deadline == se_of(node)->min_deadline)
+			return se_of(node);
+
+		if (node->rb_left && (se_of(node)->min_deadline ==
+				      se_of(node->rb_left)->min_deadline))
+			node = node->rb_left;
+		else
+			node = node->rb_right;
+	}
+
+	BUG();
+
+	return NULL;
+}
+
+static struct sched_entity *__pick_next_entity(struct cfs_root_rq *cfs_r_rq)
+{
+	struct sched_entity *next;
+
+	if (sched_feat(EEVDF)) {
+		next = __pick_next_eevdf(cfs_r_rq);
+		next->eligible = 1;
+
+	} else if (sched_feat(DEADLINE)) {
+		next = __pick_next_deadline(cfs_r_rq);
+
+		next->eligible = entity_eligible(cfs_r_rq, next);
+		if (next->eligible || entity_expired(cfs_r_rq, next))
+			return next;
+	}
+
+	next = __pick_next_timeline(cfs_r_rq);
+	next->eligible = 1;
+
+	return next;
+}
+
+static void update_min_deadline(struct cfs_root_rq *cfs_r_rq,
+		struct sched_entity *se, struct rb_node *node)
+{
+	if (node) {
+		struct sched_entity *child = rb_entry(node,
+				struct sched_entity, timeline_node);
+		struct rq *rq = container_of(cfs_r_rq, struct rq, cfs_root);
+
+		if ((se->min_deadline - rq->clock) >
+				(child->min_deadline - rq->clock))
+			se->min_deadline = child->min_deadline;
+	}
+}
+
+static void update_node(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+	struct sched_entity *se = rb_entry(node,
+			struct sched_entity, timeline_node);
+
+	se->min_deadline = se->deadline;
+	update_min_deadline(cfs_r_rq, se, node->rb_right);
+	update_min_deadline(cfs_r_rq, se, node->rb_left);
+}
+
+static void update_tree(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+	struct rb_node *parent;
+up:
+	update_node(cfs_r_rq, node);
+
+	parent = rb_parent(node);
+	if (!parent)
+		return;
+
+	if (node == parent->rb_left && parent->rb_right)
+		update_node(cfs_r_rq, parent->rb_right);
+	else if (parent->rb_left)
+		update_node(cfs_r_rq, parent->rb_left);
+
+	node = parent;
+	goto up;
+}
+
+static void
+update_tree_enqueue(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node *node = &se->timeline_node;
+
+	if (node->rb_left)
+		node = node->rb_left;
+	else if (node->rb_right)
+		node = node->rb_right;
+
+	update_tree(cfs_r_rq, node);
+}
+
+static struct rb_node *
+update_tree_dequeue_begin(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node *deepest;
+	struct rb_node *node = &se->timeline_node;
+
+	if (!node->rb_right && !node->rb_left)
+		deepest = rb_parent(node);
+	else if (!node->rb_right)
+		deepest = node->rb_left;
+	else if (!node->rb_left)
+		deepest = node->rb_right;
+	else {
+		deepest = rb_next(node);
+		if (deepest->rb_right)
+			deepest = deepest->rb_right;
+		else if (rb_parent(deepest) != node)
+			deepest = rb_parent(deepest);
+	}
+
+	return deepest;
+}
+
+static void
+update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+	if (node)
+		update_tree(cfs_r_rq, node);
+}
+
+#else /* CONFIG_FAIR_GROUP_SCHED */
+
+struct cfs_root_rq;
+
+static inline
+void avg_vruntime_add(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	cfs_r_rq->nr_queued++;
+}
+
+static inline
+void avg_vruntime_sub(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	cfs_r_rq->nr_queued--;
+}
+
+static inline
+void avg_vruntime_update(struct cfs_root_rq *cfs_r_rq, s64 delta)
+{
+}
+
+static inline
+void __enqueue_deadline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+}
+
+static inline
+void __dequeue_deadline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+}
+
+static inline
+void update_tree_enqueue(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+}
+
+static struct rb_node *
+update_tree_dequeue_begin(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	return NULL;
+}
+
+static void
+update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+}
+
+static inline
+struct sched_entity *__pick_next_entity(struct cfs_root_rq *cfs_r_rq)
+{
+	return __pick_next_timeline(cfs_r_rq);
+}
+#endif /* CONFIG_FAIR_GROUP_SCHED */
+
+/*
+ * maintain cfs_rq->min_vruntime to be a monotonic increasing
+ * value tracking the leftmost vruntime in the tree.
+ */
+static void
+update_min_vruntime(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	/*
+	 * open coded max_vruntime() to allow updating avg_vruntime
+	 */
+	s64 delta = (s64)(se->vruntime - cfs_r_rq->min_vruntime);
+	if (delta > 0) {
+		avg_vruntime_update(cfs_r_rq, delta);
+		cfs_r_rq->min_vruntime = se->vruntime;
+	}
+}
+
+static void
+__enqueue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node **link;
+	struct rb_node *parent = NULL;
+	struct sched_entity *entry;
+	s64 key;
+	int leftmost = 1;
+
+	link = &cfs_r_rq->tasks_timeline.rb_node;
+	key = entity_timeline_key(cfs_r_rq, se);
+	/*
+	 * Find the right place in the rbtree:
+	 */
+	while (*link) {
+		parent = *link;
+		entry = rb_entry(parent, struct sched_entity, timeline_node);
 		/*
 		 * We dont care about collisions. Nodes with
 		 * the same key stay together.
 		 */
-		if (key < entity_key(cfs_rq, entry)) {
+		if (key < entity_timeline_key(cfs_r_rq, entry)) {
 			link = &parent->rb_left;
 		} else {
 			link = &parent->rb_right;
@@ -255,61 +654,68 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 * used):
 	 */
 	if (leftmost) {
-		cfs_rq->rb_leftmost = &se->run_node;
-		/*
-		 * maintain cfs_rq->min_vruntime to be a monotonic increasing
-		 * value tracking the leftmost vruntime in the tree.
-		 */
-		cfs_rq->min_vruntime =
-			max_vruntime(cfs_rq->min_vruntime, se->vruntime);
+		cfs_r_rq->left_timeline = &se->timeline_node;
+		update_min_vruntime(cfs_r_rq, se);
 	}
 
-	rb_link_node(&se->run_node, parent, link);
-	rb_insert_color(&se->run_node, &cfs_rq->tasks_timeline);
+	rb_link_node(&se->timeline_node, parent, link);
+	rb_insert_color(&se->timeline_node, &cfs_r_rq->tasks_timeline);
+
+	update_tree_enqueue(cfs_r_rq, se);
+}
+
+static void
+__dequeue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node *node = update_tree_dequeue_begin(cfs_r_rq, se);
+
+	if (cfs_r_rq->left_timeline == &se->timeline_node) {
+		struct rb_node *next_node;
+
+		next_node = rb_next(&se->timeline_node);
+		cfs_r_rq->left_timeline = next_node;
+
+		if (next_node) {
+			update_min_vruntime(cfs_r_rq, rb_entry(next_node,
+					struct sched_entity, timeline_node));
+		}
+	}
+
+	if (cfs_r_rq->next == se)
+		cfs_r_rq->next = NULL;
+
+	rb_erase(&se->timeline_node, &cfs_r_rq->tasks_timeline);
+
+	update_tree_dequeue_end(cfs_r_rq, node);
+}
+
+/*
+ * Enqueue an entity into the rb-tree:
+ */
+static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+{
+	if (!entity_is_task(se))
+		return;
+
+	if (se == cfs_rq->curr)
+		return;
+
+	avg_vruntime_add(&rq_of(cfs_rq)->cfs_root, se);
+	__enqueue_timeline(&rq_of(cfs_rq)->cfs_root, se);
+	__enqueue_deadline(&rq_of(cfs_rq)->cfs_root, se);
 }
 
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	if (cfs_rq->rb_leftmost == &se->run_node) {
-		struct rb_node *next_node;
-		struct sched_entity *next;
+	if (!entity_is_task(se))
+		return;
 
-		next_node = rb_next(&se->run_node);
-		cfs_rq->rb_leftmost = next_node;
+	if (se == cfs_rq->curr)
+		return;
 
-		if (next_node) {
-			next = rb_entry(next_node,
-					struct sched_entity, run_node);
-			cfs_rq->min_vruntime =
-				max_vruntime(cfs_rq->min_vruntime,
-					     next->vruntime);
-		}
-	}
-
-	if (cfs_rq->next == se)
-		cfs_rq->next = NULL;
-
-	rb_erase(&se->run_node, &cfs_rq->tasks_timeline);
-}
-
-static inline struct rb_node *first_fair(struct cfs_rq *cfs_rq)
-{
-	return cfs_rq->rb_leftmost;
-}
-
-static struct sched_entity *__pick_next_entity(struct cfs_rq *cfs_rq)
-{
-	return rb_entry(first_fair(cfs_rq), struct sched_entity, run_node);
-}
-
-static inline struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq)
-{
-	struct rb_node *last = rb_last(&cfs_rq->tasks_timeline);
-
-	if (!last)
-		return NULL;
-
-	return rb_entry(last, struct sched_entity, run_node);
+	__dequeue_timeline(&rq_of(cfs_rq)->cfs_root, se);
+	__dequeue_deadline(&rq_of(cfs_rq)->cfs_root, se);
+	avg_vruntime_sub(&rq_of(cfs_rq)->cfs_root, se);
 }
 
 /**************************************************************
@@ -369,7 +775,7 @@ calc_delta_fair(unsigned long delta, struct sched_entity *se)
  *
  * p = (nr <= nl) ? l : l*nr/nl
  */
-static u64 __sched_period(unsigned long nr_running)
+static inline u64 __sched_period(unsigned long nr_running)
 {
 	u64 period = sysctl_sched_latency;
 	unsigned long nr_latency = sched_nr_latency;
@@ -390,7 +796,23 @@ static u64 __sched_period(unsigned long nr_running)
  */
 static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	return calc_delta_weight(__sched_period(cfs_rq->nr_running), se);
+	u64 slice = calc_delta_weight(__sched_period(cfs_rq->nr_running), se);
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	/*
+	 * Limit the max slice length when there is contention (strictly
+	 * speaking we only need to do this when there are tasks of more
+	 * than a single group). This avoids very longs slices of a lightly
+	 * loaded group delaying tasks from another group.
+	 */
+	if (rq_of(cfs_rq)->cfs_root.nr_queued)
+		slice = min_t(u64, slice, sysctl_sched_min_granularity);
+
+	if (!se->eligible)
+		slice /= 2;
+#endif
+
+	return slice;
 }
 
 /*
@@ -448,14 +870,11 @@ static inline void
 __update_curr(struct cfs_rq *cfs_rq, struct sched_entity *curr,
 	      unsigned long delta_exec)
 {
-	unsigned long delta_exec_weighted;
-
 	schedstat_set(curr->exec_max, max((u64)delta_exec, curr->exec_max));
 
 	curr->sum_exec_runtime += delta_exec;
-	schedstat_add(cfs_rq, exec_clock, delta_exec);
-	delta_exec_weighted = calc_delta_fair(delta_exec, curr);
-	curr->vruntime += delta_exec_weighted;
+	schedstat_add(&rq_of(cfs_rq)->cfs_root, exec_clock, delta_exec);
+	curr->vruntime += calc_delta_fair(delta_exec, curr);
 }
 
 static void update_curr(struct cfs_rq *cfs_rq)
@@ -467,6 +886,11 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	if (unlikely(!curr))
 		return;
 
+	if (!entity_is_task(curr))
+		return;
+
+	cfs_rq = &rq_of(cfs_rq)->cfs;
+
 	/*
 	 * Get the amount of time the current task was running
 	 * since the last time we changed load (this cannot
@@ -477,11 +901,8 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	__update_curr(cfs_rq, curr, delta_exec);
 	curr->exec_start = now;
 
-	if (entity_is_task(curr)) {
-		struct task_struct *curtask = task_of(curr);
-
-		cpuacct_charge(curtask, delta_exec);
-	}
+	if (entity_is_task(curr))
+		cpuacct_charge(task_of(curr), delta_exec);
 }
 
 static inline void
@@ -616,11 +1037,8 @@ static void enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		 * get a milliseconds-range estimation of the amount of
 		 * time that the task spent sleeping:
 		 */
-		if (unlikely(prof_on == SLEEP_PROFILING)) {
-
-			profile_hits(SLEEP_PROFILING, (void *)get_wchan(tsk),
+		profile_hits(SLEEP_PROFILING, (void *)get_wchan(task_of(se)),
 				     delta >> 20);
-		}
 		account_scheduler_latency(tsk, delta >> 10, 0);
 	}
 #endif
@@ -629,26 +1047,28 @@ static void enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static void check_spread(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 #ifdef CONFIG_SCHED_DEBUG
-	s64 d = se->vruntime - cfs_rq->min_vruntime;
+	struct cfs_root_rq *cfs_r_rq = &rq_of(cfs_rq)->cfs_root;
+	s64 d = se->vruntime - cfs_r_rq->min_vruntime;
 
 	if (d < 0)
 		d = -d;
 
 	if (d > 3*sysctl_sched_latency)
-		schedstat_inc(cfs_rq, nr_spread_over);
+		schedstat_inc(cfs_r_rq, nr_spread_over);
 #endif
 }
 
 static void
 place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
+	struct cfs_root_rq *cfs_r_rq = &rq_of(cfs_rq)->cfs_root;
 	u64 vruntime;
 
-	if (first_fair(cfs_rq)) {
-		vruntime = min_vruntime(cfs_rq->min_vruntime,
-				__pick_next_entity(cfs_rq)->vruntime);
+	if (first_fair(cfs_r_rq)) {
+		vruntime = min_vruntime(cfs_r_rq->min_vruntime,
+				__pick_next_timeline(cfs_r_rq)->vruntime);
 	} else
-		vruntime = cfs_rq->min_vruntime;
+		vruntime = cfs_r_rq->min_vruntime;
 
 	/*
 	 * The 'current' period is already promised to the current tasks,
@@ -691,8 +1111,7 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int wakeup)
 
 	update_stats_enqueue(cfs_rq, se);
 	check_spread(cfs_rq, se);
-	if (se != cfs_rq->curr)
-		__enqueue_entity(cfs_rq, se);
+	__enqueue_entity(cfs_rq, se);
 }
 
 static void update_avg(u64 *avg, u64 sample)
@@ -733,8 +1152,7 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int sleep)
 #endif
 	}
 
-	if (se != cfs_rq->curr)
-		__dequeue_entity(cfs_rq, se);
+	__dequeue_entity(cfs_rq, se);
 	account_entity_dequeue(cfs_rq, se);
 }
 
@@ -763,6 +1181,8 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		 * runqueue.
 		 */
 		update_stats_wait_end(cfs_rq, se);
+		if (WARN_ON_ONCE(cfs_rq->curr))
+			cfs_rq->curr = NULL;
 		__dequeue_entity(cfs_rq, se);
 	}
 
@@ -785,31 +1205,6 @@ set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static int
 wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se);
 
-static struct sched_entity *
-pick_next(struct cfs_rq *cfs_rq, struct sched_entity *se)
-{
-	if (!cfs_rq->next)
-		return se;
-
-	if (wakeup_preempt_entity(cfs_rq->next, se) != 0)
-		return se;
-
-	return cfs_rq->next;
-}
-
-static struct sched_entity *pick_next_entity(struct cfs_rq *cfs_rq)
-{
-	struct sched_entity *se = NULL;
-
-	if (first_fair(cfs_rq)) {
-		se = __pick_next_entity(cfs_rq);
-		se = pick_next(cfs_rq, se);
-		set_next_entity(cfs_rq, se);
-	}
-
-	return se;
-}
-
 static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 {
 	/*
@@ -820,12 +1215,12 @@ static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 		update_curr(cfs_rq);
 
 	check_spread(cfs_rq, prev);
+	cfs_rq->curr = NULL;
 	if (prev->on_rq) {
 		update_stats_wait_start(cfs_rq, prev);
 		/* Put 'current' back into the tree. */
 		__enqueue_entity(cfs_rq, prev);
 	}
-	cfs_rq->curr = NULL;
 }
 
 static void
@@ -835,6 +1230,9 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	 * Update run-time statistics of the 'current'.
 	 */
 	update_curr(cfs_rq);
+
+	if (!entity_is_task(curr))
+		return;
 
 #ifdef CONFIG_SCHED_HRTICK
 	/*
@@ -853,7 +1251,8 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 		return;
 #endif
 
-	if (cfs_rq->nr_running > 1 || !sched_feat(WAKEUP_PREEMPT))
+	if (rq_of(cfs_rq)->load.weight != curr->load.weight ||
+			!sched_feat(WAKEUP_PREEMPT))
 		check_preempt_tick(cfs_rq, curr);
 }
 
@@ -955,7 +1354,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Are we the only task in the tree?
 	 */
-	if (unlikely(cfs_rq->nr_running == 1))
+	if (unlikely(!rq->cfs_root.nr_queued))
 		return;
 
 	if (likely(!sysctl_sched_compat_yield) && curr->policy != SCHED_BATCH) {
@@ -970,7 +1369,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Find the rightmost entry in the rbtree:
 	 */
-	rightmost = __pick_last_entity(cfs_rq);
+	rightmost = __pick_last_timeline(&rq->cfs_root);
 	/*
 	 * Already in the rightmost position?
 	 */
@@ -1017,7 +1416,7 @@ static int wake_idle(int cpu, struct task_struct *p)
 		    || ((sd->flags & SD_WAKE_IDLE_FAR)
 			&& !task_hot(p, task_rq(p)->clock, sd))) {
 			cpus_and(tmp, sd->span, p->cpus_allowed);
-			for_each_cpu_mask(i, tmp) {
+			for_each_cpu_mask_nr(i, tmp) {
 				if (idle_cpu(i)) {
 					if (i != task_cpu(p)) {
 						schedstat_inc(p,
@@ -1201,17 +1600,6 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 	return 0;
 }
 
-/* return depth at which a sched entity is present in the hierarchy */
-static inline int depth_se(struct sched_entity *se)
-{
-	int depth = 0;
-
-	for_each_sched_entity(se)
-		depth++;
-
-	return depth;
-}
-
 /*
  * Preempt the current task with a newly woken task if needed:
  */
@@ -1220,7 +1608,6 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	struct task_struct *curr = rq->curr;
 	struct cfs_rq *cfs_rq = task_cfs_rq(curr);
 	struct sched_entity *se = &curr->se, *pse = &p->se;
-	int se_depth, pse_depth;
 
 	if (unlikely(rt_prio(p->prio))) {
 		update_rq_clock(rq);
@@ -1233,7 +1620,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	if (unlikely(se == pse))
 		return;
 
-	cfs_rq_of(pse)->next = pse;
+	rq->cfs_root.next = pse;
 
 	/*
 	 * Batch tasks do not preempt (their preemption is driven by
@@ -1245,51 +1632,40 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	if (!sched_feat(WAKEUP_PREEMPT))
 		return;
 
-	/*
-	 * preemption test can be made between sibling entities who are in the
-	 * same cfs_rq i.e who have a common parent. Walk up the hierarchy of
-	 * both tasks until we find their ancestors who are siblings of common
-	 * parent.
-	 */
-
-	/* First walk up until both entities are at same depth */
-	se_depth = depth_se(se);
-	pse_depth = depth_se(pse);
-
-	while (se_depth > pse_depth) {
-		se_depth--;
-		se = parent_entity(se);
-	}
-
-	while (pse_depth > se_depth) {
-		pse_depth--;
-		pse = parent_entity(pse);
-	}
-
-	while (!is_same_group(se, pse)) {
-		se = parent_entity(se);
-		pse = parent_entity(pse);
-	}
-
 	if (wakeup_preempt_entity(se, pse) == 1)
 		resched_task(curr);
+}
+
+static struct sched_entity *
+pick_next_entity(struct cfs_root_rq *cfs_r_rq)
+{
+	struct sched_entity *se = __pick_next_entity(cfs_r_rq);
+
+	if (!cfs_r_rq->next)
+		return se;
+
+	if (wakeup_preempt_entity(cfs_r_rq->next, se))
+		return se;
+
+	return cfs_r_rq->next;
 }
 
 static struct task_struct *pick_next_task_fair(struct rq *rq)
 {
 	struct task_struct *p;
-	struct cfs_rq *cfs_rq = &rq->cfs;
-	struct sched_entity *se;
+	struct cfs_root_rq *cfs_r_rq = &rq->cfs_root;
+	struct sched_entity *se, *next;
 
-	if (unlikely(!cfs_rq->nr_running))
+	if (!first_fair(cfs_r_rq))
 		return NULL;
 
-	do {
-		se = pick_next_entity(cfs_rq);
-		cfs_rq = group_cfs_rq(se);
-	} while (cfs_rq);
+	next = se = pick_next_entity(cfs_r_rq);
+	for_each_sched_entity(se) {
+		struct cfs_rq *cfs_rq = cfs_rq_of(se);
+		set_next_entity(cfs_rq, se);
+	}
 
-	p = task_of(se);
+	p = task_of(next);
 	hrtick_start_fair(rq, p);
 
 	return p;
@@ -1301,12 +1677,9 @@ static struct task_struct *pick_next_task_fair(struct rq *rq)
 static void put_prev_task_fair(struct rq *rq, struct task_struct *prev)
 {
 	struct sched_entity *se = &prev->se;
-	struct cfs_rq *cfs_rq;
 
-	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
-		put_prev_entity(cfs_rq, se);
-	}
+	for_each_sched_entity(se)
+		put_prev_entity(cfs_rq_of(se), se);
 }
 
 #ifdef CONFIG_SMP
@@ -1568,16 +1941,6 @@ static void set_curr_task_fair(struct rq *rq)
 		set_next_entity(cfs_rq_of(se), se);
 }
 
-#ifdef CONFIG_FAIR_GROUP_SCHED
-static void moved_group_fair(struct task_struct *p)
-{
-	struct cfs_rq *cfs_rq = task_cfs_rq(p);
-
-	update_curr(cfs_rq);
-	place_entity(cfs_rq, &p->se, 1);
-}
-#endif
-
 /*
  * All the scheduling class methods:
  */
@@ -1606,10 +1969,6 @@ static const struct sched_class fair_sched_class = {
 
 	.prio_changed		= prio_changed_fair,
 	.switched_to		= switched_to_fair,
-
-#ifdef CONFIG_FAIR_GROUP_SCHED
-	.moved_group		= moved_group_fair,
-#endif
 };
 
 #ifdef CONFIG_SCHED_DEBUG
