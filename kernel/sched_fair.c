@@ -389,17 +389,162 @@ static struct sched_entity *__pick_next_deadline(struct cfs_root_rq *cfs_r_rq)
 			struct sched_entity, deadline_node);
 }
 
-static struct sched_entity *__pick_next_entity(struct cfs_root_rq *cfs_r_rq)
+static inline struct sched_entity *se_of(struct rb_node *node)
 {
-	if (sched_feat(DEADLINE)) {
-		struct sched_entity *deadline = __pick_next_deadline(cfs_r_rq);
+	return rb_entry(node, struct sched_entity, timeline_node);
+}
 
-		if (entity_eligible(cfs_r_rq, deadline) ||
-		    entity_expired(cfs_r_rq, deadline))
-			return deadline;
+#define deadline_gt(cfs_r_rq, field, lnode, rnode)			\
+({									\
+ 	struct rq *rq = container_of(cfs_r_rq, struct rq, cfs_root);	\
+ 	s64 l = se_of(lnode)->field - rq->clock;			\
+	s64 r = se_of(rnode)->field - rq->clock;			\
+	l > r;								\
+})
+
+static struct sched_entity *__pick_next_eevdf(struct cfs_root_rq *cfs_r_rq)
+{
+	struct rb_node *node = cfs_r_rq->tasks_timeline.rb_node;
+	struct rb_node *tree = NULL, *path = NULL;
+
+	while (node) {
+		if (entity_eligible(cfs_r_rq, se_of(node))) {
+			if (!path || deadline_gt(cfs_r_rq, deadline, path, node))
+				path = node;
+
+			if (!tree || (node->rb_left &&
+				      deadline_gt(cfs_r_rq, min_deadline, tree,
+					          node->rb_left)))
+				tree = node->rb_left;
+
+			node = node->rb_right;
+		} else
+			node = node->rb_left;
 	}
 
-	return __pick_next_timeline(cfs_r_rq);
+	if (!tree || deadline_gt(cfs_r_rq, min_deadline, tree, path))
+		return se_of(path);
+
+	for (node = tree; node; ) {
+		if (se_of(tree)->min_deadline == se_of(node)->min_deadline)
+			return se_of(node);
+
+		if (node->rb_left && (se_of(node)->min_deadline ==
+				      se_of(node->rb_left)->min_deadline))
+			node = node->rb_left;
+		else
+			node = node->rb_right;
+	}
+
+	BUG();
+}
+
+static struct sched_entity *__pick_next_entity(struct cfs_root_rq *cfs_r_rq)
+{
+	struct sched_entity *next;
+
+	if (sched_feat(EEVDF)) {
+		next = __pick_next_eevdf(cfs_r_rq);
+		next->eligible = 1;
+
+	} else if (sched_feat(DEADLINE)) {
+		next = __pick_next_deadline(cfs_r_rq);
+
+		next->eligible = entity_eligible(cfs_r_rq, next);
+		if (next->eligible || entity_expired(cfs_r_rq, next))
+			return next;
+	}
+
+	next = __pick_next_timeline(cfs_r_rq);
+	next->eligible = 1;
+
+	return next;
+}
+
+static void update_min_deadline(struct cfs_root_rq *cfs_r_rq,
+		struct sched_entity *se, struct rb_node *node)
+{
+	if (node) {
+		struct sched_entity *child = rb_entry(node,
+				struct sched_entity, timeline_node);
+		struct rq *rq = container_of(cfs_r_rq, struct rq, cfs_root);
+
+		if ((se->min_deadline - rq->clock) >
+				(child->min_deadline - rq->clock))
+			se->min_deadline = child->min_deadline;
+	}
+}
+
+static void update_node(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+	struct sched_entity *se = rb_entry(node,
+			struct sched_entity, timeline_node);
+
+	se->min_deadline = se->deadline;
+	update_min_deadline(cfs_r_rq, se, node->rb_right);
+	update_min_deadline(cfs_r_rq, se, node->rb_left);
+}
+
+static void update_tree(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+	struct rb_node *parent;
+up:
+	update_node(cfs_r_rq, node);
+
+	parent = rb_parent(node);
+	if (!parent)
+		return;
+
+	if (node == parent->rb_left && parent->rb_right)
+		update_node(cfs_r_rq, parent->rb_right);
+	else if (parent->rb_left)
+		update_node(cfs_r_rq, parent->rb_left);
+
+	node = parent;
+	goto up;
+}
+
+static void
+update_tree_enqueue(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node *node = &se->timeline_node;
+
+	if (node->rb_left)
+		node = node->rb_left;
+	else if (node->rb_right)
+		node = node->rb_right;
+
+	update_tree(cfs_r_rq, node);
+}
+
+static struct rb_node *
+update_tree_dequeue_begin(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	struct rb_node *deepest;
+	struct rb_node *node = &se->timeline_node;
+
+	if (!node->rb_right && !node->rb_left)
+		deepest = rb_parent(node);
+	else if (!node->rb_right)
+		deepest = node->rb_left;
+	else if (!node->rb_left)
+		deepest = node->rb_right;
+	else {
+		deepest = rb_next(node);
+		if (deepest->rb_right)
+			deepest = deepest->rb_right;
+		else if (rb_parent(deepest) != node)
+			deepest = rb_parent(deepest);
+	}
+
+	return deepest;
+}
+
+static void
+update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, struct rb_node *node)
+{
+	if (node)
+		update_tree(cfs_r_rq, node);
 }
 
 #else /* CONFIG_FAIR_GROUP_SCHED */
@@ -428,6 +573,22 @@ void __enqueue_deadline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 
 static inline
 void __dequeue_deadline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+}
+
+static inline
+void update_tree_enqueue(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+}
+
+static rb_node *
+update_tree_dequeue_begin(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
+{
+	return NULL;
+}
+
+static void
+update_tree_dequeue_end(struct cfs_root_rq *cfs_r_rq, rb_node *node)
 {
 }
 
@@ -495,11 +656,15 @@ __enqueue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 
 	rb_link_node(&se->timeline_node, parent, link);
 	rb_insert_color(&se->timeline_node, &cfs_r_rq->tasks_timeline);
+
+	update_tree_enqueue(cfs_r_rq, se);
 }
 
 static void
 __dequeue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
+	struct rb_node *node = update_tree_dequeue_begin(cfs_r_rq, se);
+
 	if (cfs_r_rq->left_timeline == &se->timeline_node) {
 		struct rb_node *next_node;
 
@@ -516,6 +681,8 @@ __dequeue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 		cfs_r_rq->next = NULL;
 
 	rb_erase(&se->timeline_node, &cfs_r_rq->tasks_timeline);
+
+	update_tree_dequeue_end(cfs_r_rq, node);
 }
 
 /*
@@ -637,6 +804,9 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	if (rq_of(cfs_rq)->cfs_root.nr_queued)
 		slice = min_t(u64, slice, sysctl_sched_min_granularity);
 #endif
+
+	if (!se->eligible)
+		slice /= 2;
 
 	return slice;
 }
