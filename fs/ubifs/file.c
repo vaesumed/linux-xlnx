@@ -157,7 +157,6 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	struct page *page;
 
 	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
-	dbg_eat_memory();
 
 	if (unlikely(c->ro_media))
 		return -EROFS;
@@ -772,7 +771,6 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 	dbg_gen("ino %lu, pg %lu, i_size %lld",	inode->i_ino, page->index,
 		i_size_read(inode));
 	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
-	dbg_eat_memory();
 
 	if (unlikely(c->ro_media))
 		return -EROFS;
