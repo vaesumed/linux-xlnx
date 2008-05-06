@@ -1336,7 +1336,6 @@ static int __init ubifs_init(void)
 		goto out_reg;
 
 	register_shrinker(&ubifs_shrinker_info);
-	dbg_mempressure_init();
 
 	err = ubifs_compressors_init();
 	if (err)
@@ -1345,7 +1344,6 @@ static int __init ubifs_init(void)
 	return 0;
 
 out_compr:
-	dbg_mempressure_exit();
 	unregister_shrinker(&ubifs_shrinker_info);
 	kmem_cache_destroy(ubifs_inode_slab);
 out_reg:
@@ -1363,12 +1361,10 @@ static void __exit ubifs_exit(void)
 	ubifs_assert(atomic_long_read(&ubifs_clean_zn_cnt) == 0);
 
 	ubifs_compressors_exit();
-	dbg_mempressure_exit();
 	unregister_shrinker(&ubifs_shrinker_info);
 	kmem_cache_destroy(ubifs_inode_slab);
 	unregister_filesystem(&ubifs_fs_type);
 	bdi_destroy(&ubifs_backing_dev_info);
-	dbg_leak_report();
 }
 module_exit(ubifs_exit);
 

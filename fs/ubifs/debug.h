@@ -179,12 +179,10 @@ enum {
 /*
  * Special testing flags (must match tst_names in debug.c).
  *
- * UBIFS_TST_MEMPRESS: create memory pressure for shrinker testing
  * UBIFS_TST_FORCE_IN_THE_GAPS: force the use of in-the-gaps method
  * UBIFS_TST_RCVRY: failure mode for recovery testing
  */
 enum {
-	UBIFS_TST_MEMPRESS          = 0x1,
 	UBIFS_TST_FORCE_IN_THE_GAPS = 0x2,
 	UBIFS_TST_RCVRY             = 0x4,
 };
@@ -232,25 +230,6 @@ void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
 		    struct ubifs_nnode *parent, int iip);
 void dbg_dump_tnc(struct ubifs_info *c);
 
-/* Memory leak checking */
-
-#ifndef UBIFS_DBG_PRESERVE_KMALLOC
-
-#define kmalloc dbg_kmalloc
-#define kzalloc dbg_kzalloc
-#define kfree   dbg_kfree
-#define vmalloc dbg_vmalloc
-#define vfree   dbg_vfree
-
-#endif
-
-void *dbg_kmalloc(size_t size, gfp_t flags);
-void *dbg_kzalloc(size_t size, gfp_t flags);
-void dbg_kfree(const void *addr);
-void *dbg_vmalloc(size_t size);
-void dbg_vfree(void *addr);
-void dbg_leak_report(void);
-
 /* Checking helper functions */
 
 typedef int (*dbg_leaf_callback)(struct ubifs_info *c,
@@ -286,12 +265,6 @@ void dbg_check_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat,
 int dbg_check_lprops(struct ubifs_info *c);
 int dbg_check_lpt_nodes(struct ubifs_info *c, struct ubifs_cnode *cnode,
 			int row, int col);
-
-/* Create memory pressure for shrinker testing */
-
-void dbg_eat_memory(void);
-void __init dbg_mempressure_init(void);
-void dbg_mempressure_exit(void);
 
 /* Force the use of in-the-gaps method for testing */
 
@@ -386,8 +359,6 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_dump_pnode(c, pnode, parent, iip)      ({})
 #define dbg_dump_tnc(c)                            ({})
 
-#define dbg_leak_report()                          ({})
-
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
 #define dbg_read_leaf_nolock(c, zbr, node)         0
 
@@ -408,10 +379,6 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 
 #define dbg_check_lprops(c)                        0
 #define dbg_check_lpt_nodes(c, cnode, row, col)    0
-
-#define dbg_eat_memory()                           ({})
-#define dbg_mempressure_init()                     ({})
-#define dbg_mempressure_exit()                     ({})
 
 #define dbg_force_in_the_gaps_enabled              0
 #define dbg_force_in_the_gaps()                    0
