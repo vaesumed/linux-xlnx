@@ -1031,7 +1031,8 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
  * if xentry/direntry referred by @zbr does not exist on the media. A negative
  * error code is returned in case of failure.
  */
-static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+static int fallible_matches_name(struct ubifs_info *c,
+				 struct ubifs_zbranch *zbr,
 				 const struct qstr *nm)
 {
 	struct ubifs_dent_node *dent;
@@ -1044,8 +1045,8 @@ static int fallible_matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr
 			return -ENOMEM;
 
 		/*
-		 * In this case we end up allocating another dent object in lnc_add(),
-		 * although it could have just inserted this dent.
+		 * In this case we end up allocating another dent object in
+		 * lnc_add(), although it could have just inserted this dent.
 		 */
 		err = fallible_read_node(c, &zbr->key, zbr, dent);
 		if (err < 0)
@@ -1283,9 +1284,8 @@ static int resolve_collision_directly(struct ubifs_info *c,
 			return 0;
 		*zn = znode;
 		*n = nn;
-		if (matches_position(&znode->zbranch[nn], lnum, offs)) {
+		if (matches_position(&znode->zbranch[nn], lnum, offs))
 			return 1;
-		}
 	}
 }
 
