@@ -61,9 +61,18 @@ print_task(struct seq_file *m, struct rq *rq, struct task_struct *p)
 	else
 		SEQ_printf(m, " ");
 
-	SEQ_printf(m, "%15s %5d %9Ld.%06ld %9Ld %5d ",
+	SEQ_printf(m, "%15s %5d %9Ld.%06ld%c %9Ld.%06ld%c %9Ld %5d ",
 		p->comm, p->pid,
 		SPLIT_NS(p->se.vruntime),
+#ifdef CONFIG_FAIR_GROUP_SCHED
+		entity_eligible(&rq->cfs_root, &p->se) ? 'e' : ' ',
+		SPLIT_NS(p->se.deadline),
+		entity_expired(&rq->cfs_root, &p->se) ? 'x' : ' ',
+#else
+		' ',
+		SPLIT_NS(0ULL),
+		' ',
+#endif
 		(long long)(p->nvcsw + p->nivcsw),
 		p->prio);
 #ifdef CONFIG_SCHEDSTATS
@@ -94,10 +103,12 @@ static void print_rq(struct seq_file *m, struct rq *rq, int rq_cpu)
 
 	SEQ_printf(m,
 	"\nrunnable tasks:\n"
-	"            task   PID         tree-key  switches  prio"
-	"     exec-runtime         sum-exec        sum-sleep\n"
-	"------------------------------------------------------"
-	"----------------------------------------------------\n");
+	"            task   PID     timeline-key      deadline-key "
+	"  switches  prio     exec-runtime         sum-exec"
+	"        sum-sleep\n"
+	"----------------------------------------------------------"
+	"--------------------------------------------------"
+	"-----------------\n");
 
 	read_lock_irqsave(&tasklist_lock, flags);
 
