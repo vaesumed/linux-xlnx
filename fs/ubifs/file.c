@@ -469,6 +469,7 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 
 					clear_page_dirty_for_io(page);
 					err = do_writepage(page, offset);
+					page_cache_release(page);
 					if (err)
 						return err;
 					/*
