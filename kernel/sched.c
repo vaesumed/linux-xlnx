@@ -8656,11 +8656,6 @@ void sched_move_task(struct task_struct *tsk)
 
 	set_task_rq(tsk, task_cpu(tsk));
 
-#ifdef CONFIG_FAIR_GROUP_SCHED
-	if (tsk->sched_class->moved_group)
-		tsk->sched_class->moved_group(tsk);
-#endif
-
 	if (unlikely(running))
 		tsk->sched_class->set_curr_task(rq);
 	if (on_rq)
