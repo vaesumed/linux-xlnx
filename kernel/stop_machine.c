@@ -213,7 +213,7 @@ struct task_struct *__stop_machine_run(int (*fn)(void *), void *data,
 	return p;
 }
 
-int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu)
+int stop_machine_run_notype(int (*fn)(void *), void *data, unsigned int cpu)
 {
 	struct task_struct *p;
 	int ret;
@@ -229,4 +229,4 @@ int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(stop_machine_run);
+EXPORT_SYMBOL_GPL(stop_machine_run_notype);
