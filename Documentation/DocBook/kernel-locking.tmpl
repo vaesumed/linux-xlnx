@@ -1906,7 +1906,7 @@ machines due to caching.
       <function>down()</function>
       </para>
       <para>
-       There is a <function>down_trylock()</function> which can be
+       There is a <function>down_nowait()</function> which can be
        used inside interrupt context, as it will not sleep.
        <function>up()</function> will also never sleep.
       </para>
