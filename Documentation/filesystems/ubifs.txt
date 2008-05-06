@@ -12,16 +12,16 @@ file-system of this class is JFFS2.
 To make it more clear, here is a small comparison of MTD devices and
 block devices.
 
-1 MTD devices represent flash device and they consist of eraseblocks of
+1 MTD devices represent flash devices and they consist of eraseblocks of
   rather large size, typically about 128KiB. Block devices consist of
   small blocks, typically 512 bytes.
-2 MTD devices support 3 main operations - read from some offset withing
-  eraseblock, write to some offset within eraseblock, and erase whole
-  eraseblock. Block  devices support 2 main operations - read whole
-  block and write whole block.
-3 Whole eraseblock has to be erased before it becomes possible to
+2 MTD devices support 3 main operations - read from some offset within an
+  eraseblock, write to some offset within an eraseblock, and erase a whole
+  eraseblock. Block  devices support 2 main operations - read a whole
+  block and write a whole block.
+3 The whole eraseblock has to be erased before it becomes possible to
   re-write its contents. Blocks may be just re-written.
-4 Eraseblocks become worn out after some amount of erase cycles -
+4 Eraseblocks become worn out after some number of erase cycles -
   typically 100K-1G for SLC NAND and NOR flashes, and 1K-10K for MLC
   NAND flashes. Blocks do not have the wear-out property.
 5 Eraseblocks may become bad (only on NAND flashes) and software should
@@ -29,16 +29,16 @@ block devices.
   because hardware has mechanisms to substitute bad blocks, at least in
   modern LBA disks.
 
-I should be quite obvious why UBIFS is very different to traditional
+It should be quite obvious why UBIFS is very different to traditional
 file-systems.
 
 UBIFS works on top of UBI. UBI is a separate software layer which may be
 found in drivers/mtd/ubi. UBI is basically a volume management and
-wear-leveling layer. It provides so called UBI volumes which is higher
-level abstraction than MTD device. The programming model of UBI devices
+wear-leveling layer. It provides so called UBI volumes which is a higher
+level abstraction than a MTD device. The programming model of UBI devices
 is very similar to MTD devices - they still consist of large eraseblocks,
 they have read/write/erase operations, but UBI devices are devoid of
-some limitations wear and bad blocks (items 4 and 5 in the above list).
+limitations like wear and bad blocks (items 4 and 5 in the above list).
 
 In a sense, UBIFS is a next generation of JFFS2 file-system, but it is
 very different and incompatible to JFFS2. The following are the main
@@ -56,10 +56,10 @@ differences.
 Similarly to JFFS2, UBIFS supports on-the-flight compression which makes
 it possible to fit quite a lot of data to the flash.
 
-Similarly to JFFS2, UBIFS is tolerant to unclean reboots and power-cuts.
+Similarly to JFFS2, UBIFS is tolerant of unclean reboots and power-cuts.
 It does not need stuff like ckfs.ext2. UBIFS automatically replays its
-journal and recovers form crashes, maintaining the on-flash data
-structures consistent.
+journal and recovers from crashes, ensuring that the on-flash data
+structures are consistent.
 
 UBIFS scales logarithmically (most of the data structures it uses are
 trees), so the mount time and memory consumption do not linearly depend
@@ -69,8 +69,9 @@ UBI, which scales linearly. So overall UBI/UBIFS stack scales linearly.
 Nevertheless, UBI/UBIFS scales considerably better than JFFS2.
 
 The authors of UBIFS believe, that it is possible to develop UBI2 which
-would scale logarithmically as well. UBI2 would be incompatible to UBI,
-though. The nice side of this is that UBIFS would stay intact.
+would scale logarithmically as well. UBI2 would support the same API as UBI,
+but it would be binary incompatible to UBI. So UBIFS would not need to be
+changed to use UBI2
 
 
 Mount options
@@ -82,9 +83,10 @@ norm_unmount (*)	commit on unmount; the journal is committed
 			when the file-system is unmounted so that the
 			next mount does not have to replay the journal
 			and it becomes very fast;
-fast_umount		do not commit on unmount; this option makes
+fast_unmount		do not commit on unmount; this option makes
 			unmount faster, but the next mount slower
 			because of the need to replay the journal.
+
 
 Quick usage instructions
 ========================
@@ -103,6 +105,55 @@ $ mount -t ubifs ubi0:rootfs /mnt/ubifs
 The following is an example of the kernel boot arguments to attach mtd0
 to UBI and mount volume "rootfs":
 ubi.mtd=0 root=ubi0:rootfs rootfstype=ubifs
+
+
+Module Parameters for Debugging
+===============================
+
+When UBIFS has been compiled with debugging enabled, there are 3 module
+parameters that are available to control aspects of testing and debugging.
+The parameters are unsigned integers where each bit controls an option.
+The parameters are:
+
+debug_msgs	Selects which debug messages to display, as follows:
+
+		Message Type				Flag value
+
+		General messages			1
+		Journal messages			2
+		Mount messages				4
+		Commit messages				8
+		LEB search messages			16
+		Budgeting messages			32
+		Garbage collection messages		64
+		Tree Node Cache (TNC) messages		128
+		LEB properties (lprops) messages	256
+		Input/output messages			512
+		Log messages				1024
+		Scan messages				2048
+		Recovery messages			4096
+
+debug_chks	Selects extra checks that UBIFS can do while running:
+
+		Check					Flag value
+
+		General checks				1
+		Check Tree Node Cache (TNC)		2
+		Check indexing tree size		4
+		Check orphan area			8
+		Check old indexing tree			16
+		Check LEB properties (lprops)		32
+
+debug_tsts	Selects a mode of testing, as follows:
+
+		Test mode				Flag value
+
+		Create memory pressure			1
+		Force in-the-gaps method		2
+		Failure mode for recovery testing	4
+
+For example, set debug_msgs to 5 to display General messages and Mount
+messages.
 
 
 References
