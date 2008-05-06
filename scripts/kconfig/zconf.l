@@ -269,17 +269,13 @@ FILE *zconf_fopen(const char *name)
 	char *env, fullname[PATH_MAX+1];
 	FILE *f;
 
-	if (strcmp(name, "-")) {
-		f = fopen(name, "r");
-		if (!f && name != NULL && name[0] != '/') {
-			env = getenv(SRCTREE);
-			if (env) {
-				sprintf(fullname, "%s/%s", env, name);
-				f = fopen(fullname, "r");
-			}
+	f = fopen(name, "r");
+	if (!f && name != NULL && name[0] != '/') {
+		env = getenv(SRCTREE);
+		if (env) {
+			sprintf(fullname, "%s/%s", env, name);
+			f = fopen(fullname, "r");
 		}
-	} else {
-		f = stdin;
 	}
 	return f;
 }

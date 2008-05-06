@@ -248,7 +248,6 @@ static void usage(void)
 
 int main(int ac, char **av)
 {
-	char *config_filename;
 	char *config_file = NULL;
 	char *kconfig_file = NULL;
 	struct stat tmpstat;
@@ -288,26 +287,19 @@ int main(int ac, char **av)
 	}
 	conf_parse(kconfig_file);
 	/* debug: zconfdump(stdout); */
-	if (strcmp(config_file, "-")) {
-		if (config_file && stat(config_file, &tmpstat)) {
-			fprintf(stderr, _("%s: failed to open %s\n"),
-			        av[0], config_file);
-			exit(1);
-		}
-		config_filename = config_file;
-	} else {
-		config_filename = "stdin";
+	if (config_file && stat(config_file, &tmpstat)) {
+		fprintf(stderr, _("%s: failed to open %s\n"),
+		        av[0], config_file);
+		exit(1);
 	}
-
 	if (config_file && conf_read_simple(config_file, S_DEF_USER)) {
 		fprintf(stderr, _("%s: failed to read %s\n"),
-		        av[0], config_filename);
+		        av[0], config_file);
 		exit(1);
 	}
 	if (config_file) {
 		printf("#\n");
-		printf(_("# configuration is based on '%s'\n"),
-		       config_filename);
+		printf(_("# configuration is based on '%s'\n"), config_file);
 	}
 	/* generate the config */
 	do {
