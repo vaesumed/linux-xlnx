@@ -1399,13 +1399,6 @@ static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
 	while (1) {
 		struct ubifs_zbranch *zbr;
 
-		/*
-		 * The below is a debugging hack to make UBIFS eat RAM and
-		 * cause fake memory pressure. It is compiled out if it is not
-		 * enabled in kernel configuration.
-		 */
-		dbg_eat_memory();
-
 		exact = ubifs_search_zbranch(c, znode, key, n);
 
 		if (znode->level == 0)
@@ -1544,13 +1537,6 @@ static int lookup_level0_dirty(struct ubifs_info *c, const union ubifs_key *key,
 
 	while (1) {
 		struct ubifs_zbranch *zbr;
-
-		/*
-		 * The below is a debugging hack to make UBIFS eat RAM and
-		 * cause fake memory pressure. It is compiled out if it is not
-		 * enabled in kernel configuration.
-		 */
-		dbg_eat_memory();
 
 		exact = ubifs_search_zbranch(c, znode, key, n);
 
