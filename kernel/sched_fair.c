@@ -216,15 +216,14 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 	return min_vruntime;
 }
 
-static inline s64 entity_key(struct cfs_rq *cfs_rq, struct sched_entity *se)
+static inline
+s64 entity_key(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
-	return se->vruntime - cfs_rq->min_vruntime;
+	return se->vruntime - cfs_r_rq->min_vruntime;
 }
 
-/*
- * Enqueue an entity into the rb-tree:
- */
-static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+static void
+__enqueue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
 	struct rb_node **link;
 	struct rb_node *parent = NULL;
@@ -232,16 +231,8 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	s64 key;
 	int leftmost = 1;
 
-	if (!entity_is_task(se))
-		return;
-
-	if (se == cfs_rq->curr)
-		return;
-
-	cfs_rq = &rq_of(cfs_rq)->cfs;
-
-	link = &cfs_rq->tasks_timeline.rb_node;
-	key = entity_key(cfs_rq, se);
+	link = &cfs_r_rq->tasks_timeline.rb_node;
+	key = entity_key(cfs_r_rq, se);
 	/*
 	 * Find the right place in the rbtree:
 	 */
@@ -252,7 +243,7 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		 * We dont care about collisions. Nodes with
 		 * the same key stay together.
 		 */
-		if (key < entity_key(cfs_rq, entry)) {
+		if (key < entity_key(cfs_r_rq, entry)) {
 			link = &parent->rb_left;
 		} else {
 			link = &parent->rb_right;
@@ -265,56 +256,84 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 * used):
 	 */
 	if (leftmost) {
-		cfs_rq->rb_leftmost = &se->run_node;
+		cfs_r_rq->rb_leftmost = &se->run_node;
 		/*
 		 * maintain cfs_rq->min_vruntime to be a monotonic increasing
 		 * value tracking the leftmost vruntime in the tree.
 		 */
-		cfs_rq->min_vruntime =
-			max_vruntime(cfs_rq->min_vruntime, se->vruntime);
+		cfs_r_rq->min_vruntime =
+			max_vruntime(cfs_r_rq->min_vruntime, se->vruntime);
 	}
 
 	rb_link_node(&se->run_node, parent, link);
-	rb_insert_color(&se->run_node, &cfs_rq->tasks_timeline);
+	rb_insert_color(&se->run_node, &cfs_r_rq->tasks_timeline);
 }
 
-static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+static void
+__dequeue_timeline(struct cfs_root_rq *cfs_r_rq, struct sched_entity *se)
 {
-	if (cfs_rq->rb_leftmost == &se->run_node) {
+	if (cfs_r_rq->rb_leftmost == &se->run_node) {
 		struct rb_node *next_node;
 		struct sched_entity *next;
 
 		next_node = rb_next(&se->run_node);
-		cfs_rq->rb_leftmost = next_node;
+		cfs_r_rq->rb_leftmost = next_node;
 
 		if (next_node) {
 			next = rb_entry(next_node,
 					struct sched_entity, run_node);
-			cfs_rq->min_vruntime =
-				max_vruntime(cfs_rq->min_vruntime,
+			cfs_r_rq->min_vruntime =
+				max_vruntime(cfs_r_rq->min_vruntime,
 					     next->vruntime);
 		}
 	}
 
-	if (cfs_rq->next == se)
-		cfs_rq->next = NULL;
+	if (cfs_r_rq->next == se)
+		cfs_r_rq->next = NULL;
 
-	rb_erase(&se->run_node, &cfs_rq->tasks_timeline);
+	rb_erase(&se->run_node, &cfs_r_rq->tasks_timeline);
 }
 
-static inline struct rb_node *first_fair(struct cfs_rq *cfs_rq)
+
+/*
+ * Enqueue an entity into the rb-tree:
+ */
+static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	return cfs_rq->rb_leftmost;
+	if (!entity_is_task(se))
+		return;
+
+	if (se == cfs_rq->curr)
+		return;
+
+	__enqueue_timeline(&rq_of(cfs_rq)->cfs_root, se);
 }
 
-static struct sched_entity *__pick_next_entity(struct cfs_rq *cfs_rq)
+static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	return rb_entry(first_fair(cfs_rq), struct sched_entity, run_node);
+	if (!entity_is_task(se))
+		return;
+
+	if (se == cfs_rq->curr)
+		return;
+
+	__dequeue_timeline(&rq_of(cfs_rq)->cfs_root, se);
 }
 
-static inline struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq)
+static inline struct rb_node *first_fair(struct cfs_root_rq *cfs_r_rq)
 {
-	struct rb_node *last = rb_last(&cfs_rq->tasks_timeline);
+	return cfs_r_rq->rb_leftmost;
+}
+
+static struct sched_entity *__pick_next_entity(struct cfs_root_rq *cfs_r_rq)
+{
+	return rb_entry(first_fair(cfs_r_rq), struct sched_entity, run_node);
+}
+
+static inline
+struct sched_entity *__pick_last_entity(struct cfs_root_rq *cfs_r_rq)
+{
+	struct rb_node *last = rb_last(&cfs_r_rq->tasks_timeline);
 
 	if (!last)
 		return NULL;
@@ -458,14 +477,11 @@ static inline void
 __update_curr(struct cfs_rq *cfs_rq, struct sched_entity *curr,
 	      unsigned long delta_exec)
 {
-	unsigned long delta_exec_weighted;
-
 	schedstat_set(curr->exec_max, max((u64)delta_exec, curr->exec_max));
 
 	curr->sum_exec_runtime += delta_exec;
-	schedstat_add(cfs_rq, exec_clock, delta_exec);
-	delta_exec_weighted = calc_delta_fair(delta_exec, curr);
-	curr->vruntime += delta_exec_weighted;
+	schedstat_add(&rq_of(cfs_rq)->cfs_root, exec_clock, delta_exec);
+	curr->vruntime += calc_delta_fair(delta_exec, curr);
 }
 
 static void update_curr(struct cfs_rq *cfs_rq)
@@ -492,11 +508,8 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	__update_curr(cfs_rq, curr, delta_exec);
 	curr->exec_start = now;
 
-	if (entity_is_task(curr)) {
-		struct task_struct *curtask = task_of(curr);
-
-		cpuacct_charge(curtask, delta_exec);
-	}
+	if (entity_is_task(curr))
+		cpuacct_charge(task_of(curr), delta_exec);
 }
 
 static inline void
@@ -644,26 +657,28 @@ static void enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static void check_spread(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 #ifdef CONFIG_SCHED_DEBUG
-	s64 d = se->vruntime - cfs_rq->min_vruntime;
+	struct cfs_root_rq *cfs_r_rq = &rq_of(cfs_rq)->cfs_root;
+	s64 d = se->vruntime - cfs_r_rq->min_vruntime;
 
 	if (d < 0)
 		d = -d;
 
 	if (d > 3*sysctl_sched_latency)
-		schedstat_inc(cfs_rq, nr_spread_over);
+		schedstat_inc(cfs_r_rq, nr_spread_over);
 #endif
 }
 
 static void
 place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
+	struct cfs_root_rq *cfs_r_rq = &rq_of(cfs_rq)->cfs_root;
 	u64 vruntime;
 
-	if (first_fair(cfs_rq)) {
-		vruntime = min_vruntime(cfs_rq->min_vruntime,
-				__pick_next_entity(cfs_rq)->vruntime);
+	if (first_fair(cfs_r_rq)) {
+		vruntime = min_vruntime(cfs_r_rq->min_vruntime,
+				__pick_next_entity(cfs_r_rq)->vruntime);
 	} else
-		vruntime = cfs_rq->min_vruntime;
+		vruntime = cfs_r_rq->min_vruntime;
 
 	/*
 	 * The 'current' period is already promised to the current tasks,
@@ -964,7 +979,7 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Find the rightmost entry in the rbtree:
 	 */
-	rightmost = __pick_last_entity(&rq->cfs);
+	rightmost = __pick_last_entity(&rq->cfs_root);
 	/*
 	 * Already in the rightmost position?
 	 */
@@ -1215,7 +1230,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 	if (unlikely(se == pse))
 		return;
 
-	rq->cfs.next = pse;
+	rq->cfs_root.next = pse;
 
 	/*
 	 * Batch tasks do not preempt (their preemption is driven by
@@ -1232,31 +1247,31 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p)
 }
 
 static struct sched_entity *
-pick_next_entity(struct cfs_rq *cfs_rq)
+pick_next_entity(struct cfs_root_rq *cfs_r_rq)
 {
-	struct sched_entity *se = __pick_next_entity(cfs_rq);
+	struct sched_entity *se = __pick_next_entity(cfs_r_rq);
 
-	if (!cfs_rq->next)
+	if (!cfs_r_rq->next)
 		return se;
 
-	if (wakeup_preempt_entity(cfs_rq->next, se))
+	if (wakeup_preempt_entity(cfs_r_rq->next, se))
 		return se;
 
-	return cfs_rq->next;
+	return cfs_r_rq->next;
 }
 
 static struct task_struct *pick_next_task_fair(struct rq *rq)
 {
 	struct task_struct *p;
-	struct cfs_rq *cfs_rq = &rq->cfs;
+	struct cfs_root_rq *cfs_r_rq = &rq->cfs_root;
 	struct sched_entity *se, *next;
 
-	if (!first_fair(cfs_rq))
+	if (!first_fair(cfs_r_rq))
 		return NULL;
 
-	next = se = pick_next_entity(cfs_rq);
+	next = se = pick_next_entity(cfs_r_rq);
 	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
+		struct cfs_rq *cfs_rq = cfs_rq_of(se);
 		set_next_entity(cfs_rq, se);
 	}
 
@@ -1272,12 +1287,9 @@ static struct task_struct *pick_next_task_fair(struct rq *rq)
 static void put_prev_task_fair(struct rq *rq, struct task_struct *prev)
 {
 	struct sched_entity *se = &prev->se;
-	struct cfs_rq *cfs_rq;
 
-	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
-		put_prev_entity(cfs_rq, se);
-	}
+	for_each_sched_entity(se)
+		put_prev_entity(cfs_rq_of(se), se);
 }
 
 #ifdef CONFIG_SMP
