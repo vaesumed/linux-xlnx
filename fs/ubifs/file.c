@@ -765,7 +765,6 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 {
 	struct inode *inode = vma->vm_file->f_path.dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	loff_t i_size = i_size_read(inode);
 	struct timespec now = ubifs_current_time(inode);
 	struct ubifs_budget_req req = { .new_page = 1 };
 	int err, update_time;
@@ -812,7 +811,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 
 	lock_page(page);
 	if (unlikely(page->mapping != inode->i_mapping ||
-		     page_offset(page) > i_size)) {
+		     page_offset(page) > i_size_read(inode))) {
 		/* Page got truncated out from underneath us */
 		err = -EINVAL;
 		goto out_unlock;
