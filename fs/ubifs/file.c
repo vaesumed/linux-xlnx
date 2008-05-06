@@ -806,8 +806,12 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,struct page *page)
 		update_time = 0;
 		err = ubifs_budget_space(c, &req);
 	}
-	if (unlikely(err))
+	if (unlikely(err)) {
+		if (err == -ENOSPC)
+			ubifs_warn("out of space for mmapped file "
+				   "(inode number %lu)", inode->i_ino);
 		return err;
+	}
 
 	lock_page(page);
 	if (unlikely(page->mapping != inode->i_mapping ||
