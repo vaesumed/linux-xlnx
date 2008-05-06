@@ -402,7 +402,6 @@ config DEBUG_SPINLOCK_SLEEP
 
 config STACKTRACE
 	bool
-	depends on DEBUG_KERNEL
 	depends on STACKTRACE_SUPPORT
 
 config DEBUG_KOBJECT
