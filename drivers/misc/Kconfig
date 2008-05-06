@@ -391,4 +391,17 @@ config SGI_XP
 	  this feature will allow for direct communication between SSIs
 	  based on a network adapter and DMA messaging.
 
+config ME4000
+	tristate "me4000 driver"
+	default n
+	help
+	  FIXME!
+
+config AECTC
+	tristate "AETC video timestamp device"
+	depends on PCI
+	default n
+	help
+	  Provides support for something that needs to be documented here.
+
 endif # MISC_DEVICES
