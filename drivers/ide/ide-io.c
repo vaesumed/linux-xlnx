@@ -1606,8 +1606,8 @@ int ide_do_drive_cmd (ide_drive_t *drive, struct request *rq, ide_action_t actio
 	spin_lock_irqsave(&ide_lock, flags);
 	if (action == ide_preempt)
 		hwgroup->rq = NULL;
-	__elv_add_request(drive->queue, rq, where, 0);
-	ide_do_request(hwgroup, IDE_NO_IRQ);
+	__elv_add_request(drive->queue, rq, where, 1);
+	__generic_unplug_device(drive->queue);
 	spin_unlock_irqrestore(&ide_lock, flags);
 
 	err = 0;
