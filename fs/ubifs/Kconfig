@@ -9,14 +9,12 @@ config UBIFS_FS
 config UBIFS_FS_XATTR
 	bool "Extended attributes support"
 	depends on UBIFS_FS
-	default n
 	help
 	  This option enables support of extended attributes.
 
 config UBIFS_FS_ADVANCED_COMPR
 	bool "Advanced compression options"
 	depends on UBIFS_FS
-	default n
 	help
 	  This option allows to explicitly choose which compressions, if any,
 	  are enabled in UBIFS. Removing compressors means inbility to read
@@ -46,7 +44,6 @@ config UBIFS_FS_ZLIB
 # Debugging-related stuff
 config UBIFS_FS_DEBUG
 	bool "Enable debugging"
-	default n
 	depends on UBIFS_FS
 	select DEBUG_FS
 	select KALLSYMS_ALL
