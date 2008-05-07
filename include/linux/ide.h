@@ -798,10 +798,6 @@ int generic_ide_ioctl(ide_drive_t *, struct file *, struct block_device *, unsig
 #ifndef _IDE_C
 extern	ide_hwif_t	ide_hwifs[];		/* master data repository */
 #endif
-extern int ide_noacpi;
-extern int ide_acpigtf;
-extern int ide_acpionboot;
-extern int noautodma;
 
 extern int ide_vlb_clk;
 extern int ide_pci_clk;
@@ -841,8 +837,6 @@ extern void ide_fixstring(u8 *, const int, const int);
 int ide_wait_stat(ide_startstop_t *, ide_drive_t *, u8, u8, unsigned long);
 
 extern ide_startstop_t ide_do_reset (ide_drive_t *);
-
-extern void ide_init_drive_cmd (struct request *rq);
 
 /*
  * "action" parameter type for ide_do_drive_cmd() below.
@@ -965,7 +959,6 @@ typedef struct ide_task_s {
 void ide_tf_dump(const char *, struct ide_taskfile *);
 
 extern void SELECT_DRIVE(ide_drive_t *);
-extern void SELECT_MASK(ide_drive_t *, int);
 
 extern int drive_is_ready(ide_drive_t *);
 
@@ -981,8 +974,6 @@ int ide_no_data_taskfile(ide_drive_t *, ide_task_t *);
 int ide_taskfile_ioctl(ide_drive_t *, unsigned int, unsigned long);
 int ide_cmd_ioctl(ide_drive_t *, unsigned int, unsigned long);
 int ide_task_ioctl(ide_drive_t *, unsigned int, unsigned long);
-
-extern int system_bus_clock(void);
 
 extern int ide_driveid_update(ide_drive_t *);
 extern int ide_config_drive_speed(ide_drive_t *, u8);
