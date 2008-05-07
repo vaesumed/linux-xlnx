@@ -102,9 +102,9 @@ static int to_debug = 0;
 // global variables
 //----------------------------------------------------------------------------
 static struct mutex sem_hpcaccess;	// lock access to HPC
-static struct semaphore semOperations;	// lock all operations and
+static struct mutex mtx_operations;	// lock all operations and
 					// access to data structures
-static struct semaphore sem_exit;	// make sure polling thread goes away
+static struct completion exit_cmplt;	// make sure polling thread goes away
 static struct task_struct *ibmphp_poll_thread;
 //----------------------------------------------------------------------------
 // local function prototypes
@@ -132,8 +132,8 @@ void __init ibmphp_hpc_initvars (void)
 	debug ("%s - Entry\n", __func__);
 
 	mutex_init(&sem_hpcaccess);
-	init_MUTEX (&semOperations);
-	init_MUTEX_LOCKED (&sem_exit);
+	mutex_init(&mtx_operations);
+	init_completion(&exit_cmplt);
 	to_debug = 0;
 
 	debug ("%s - Exit\n", __func__);
@@ -794,7 +794,7 @@ void free_hpc_access (void)
 *---------------------------------------------------------------------*/
 void ibmphp_lock_operations (void)
 {
-	down (&semOperations);
+	mutex_lock(&mtx_operations);
 	to_debug = 1;
 }
 
@@ -804,7 +804,7 @@ void ibmphp_lock_operations (void)
 void ibmphp_unlock_operations (void)
 {
 	debug ("%s - Entry\n", __func__);
-	up (&semOperations);
+	mutex_unlock(&mtx_operations);
 	to_debug = 0;
 	debug ("%s - Exit\n", __func__);
 }
@@ -831,7 +831,7 @@ static int poll_hpc(void *data)
 
 	while (!kthread_should_stop()) {
 		/* try to get the lock to do some kind of hardware access */
-		down (&semOperations);
+		mutex_lock(&mtx_operations);
 
 		switch (poll_state) {
 		case POLL_LATCH_REGISTER: 
@@ -886,13 +886,13 @@ static int poll_hpc(void *data)
 			break;
 		case POLL_SLEEP:
 			/* don't sleep with a lock on the hardware */
-			up (&semOperations);
+			mutex_unlock(&mtx_operations);
 			msleep(POLL_INTERVAL_SEC * 1000);
 
 			if (kthread_should_stop())
 				break;
 			
-			down (&semOperations);
+			mutex_lock(&mtx_operations);
 			
 			if (poll_count >= POLL_LATCH_CNT) {
 				poll_count = 0;
@@ -902,11 +902,11 @@ static int poll_hpc(void *data)
 			break;
 		}	
 		/* give up the hardware semaphore */
-		up (&semOperations);
+		mutex_unlock(&mtx_operations);
 		/* sleep for a short time just for good measure */
 		msleep(100);
 	}
-	up (&sem_exit);
+	complete(&exit_cmplt);
 	debug ("%s - Exit\n", __func__);
 	return 0;
 }
@@ -1075,9 +1075,9 @@ void __exit ibmphp_hpc_stop_poll_thread (void)
 	debug ("after locking operations \n");
 	
 	// wait for poll thread to exit
-	debug ("before sem_exit down \n");
-	down (&sem_exit);
-	debug ("after sem_exit down \n");
+	debug ("before sem_cmplt\n");
+	wait_for_completion(&exit_cmplt);
+	debug ("after sem_cmplt\n");
 
 	// cleanup
 	debug ("before free_hpc_access \n");
@@ -1085,8 +1085,6 @@ void __exit ibmphp_hpc_stop_poll_thread (void)
 	debug ("after free_hpc_access \n");
 	ibmphp_unlock_operations ();
 	debug ("after unlock operations \n");
-	up (&sem_exit);
-	debug ("after sem exit up\n");
 
 	debug ("%s - Exit\n", __func__);
 }
