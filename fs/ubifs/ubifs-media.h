@@ -274,7 +274,7 @@ enum {
 #define UBIFS_FL_MASK 0x0000001F
 
 /*
- * UBIFS compression types.
+ * UBIFS compression algorithms.
  *
  * UBIFS_COMPR_NONE: no compression
  * UBIFS_COMPR_LZO: LZO compression
@@ -548,7 +548,7 @@ struct ubifs_pad_node {
  * @fanout: tree fanout (max. number of links per indexing node)
  * @lsave_cnt: number of LEB numbers in LPT's save table
  * @fmt_vers: UBIFS on-flash format version
- * @default_compr: default compression
+ * @default_compr: default compression algorithm (%UBIFS_COMPR_LZO, etc)
  * @padding1: reserved for future, zeroes
  * @rp_uid: reserve pool UID
  * @rp_gid: reserve pool GID

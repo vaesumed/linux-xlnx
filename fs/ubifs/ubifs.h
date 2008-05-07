@@ -856,7 +856,7 @@ struct ubifs_mount_opts {
  * @main_lebs: count of LEBs in the main area
  * @main_first: first LEB of the main area
  * @main_bytes: main area size in bytes
- * @default_compr: default compression type
+ * @default_compr: default compression algorighm (%UBIFS_COMPR_LZO, etc)
  *
  * @key_hash_type: type of the key hash
  * @key_hash: direntry key hash function
