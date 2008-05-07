@@ -627,11 +627,6 @@ static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 	r->flags = REPLAY_REF;
 	r->free = free;
 	r->dirty = dirty;
-	/*
-	 * @r->key is not used for reference nodes, so set it up just for the
-	 * sake of not leaving it uninitialized.
-	 */
-	highest_ino_key(c, &r->key, -1);
 
 	rb_link_node(&r->rb, parent, p);
 	rb_insert_color(&r->rb, &c->replay_tree);
