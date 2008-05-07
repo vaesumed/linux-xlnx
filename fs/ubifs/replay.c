@@ -297,9 +297,12 @@ static int apply_replay_tree(struct ubifs_info *c)
  * @old_size: truncation old size
  * @new_size: truncation new size
  *
- * This function inserts a scanned non-direntry node to the replay tree.
- * Returns zero in case of success and a negative error code in case of
- * failure.
+ * This function inserts a scanned non-direntry node to the replay tree. The
+ * replay tree is an RB-tree containing @struct replay_entry elements which are
+ * indexed by the sequence number. The replay tree is applied at the very end
+ * of the replay process. Since the tree is sorted in sequence number order,
+ * the older modifications are applied first. This function returns zero in
+ * case of success and a negative error code in case of failure.
  */
 static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
 		       union ubifs_key *key, unsigned long long sqnum,
@@ -582,28 +585,27 @@ out_dump:
 }
 
 /**
- * insert_ref_node - insert a ref node to the replay tree.
+ * insert_ref_node - insert a reference node to the replay tree.
  * @c: UBIFS file-system description object
  * @lnum: node logical eraseblock number
  * @offs: node offset
  * @sqnum: sequence number
  * @free: amount of free space in bud
  * @dirty: amount of dirty space from padding and deletion nodes
+ *
+ * This function inserts a reference node to the replay tree and returns zero
+ * in case of success ort a negative error code in case of failure.
  */
 static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 			   unsigned long long sqnum, int free, int dirty)
 {
 	struct rb_node **p = &c->replay_tree.rb_node, *parent = NULL;
 	struct replay_entry *r;
-	union ubifs_key key;
-	int cmp;
 
 	dbg_mnt("add ref LEB %d:%d", lnum, offs);
-	highest_ino_key(c, &key, -1);
 	while (*p) {
 		parent = *p;
 		r = rb_entry(parent, struct replay_entry, rb);
-		cmp = keys_cmp(c, &key, &r->key);
 		if (sqnum < r->sqnum) {
 			p = &(*p)->rb_left;
 			continue;
@@ -611,7 +613,7 @@ static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 			p = &(*p)->rb_right;
 			continue;
 		}
-		ubifs_err("duplicate sqnum in r");
+		ubifs_err("duplicate sqnum in replay tree");
 		return -EINVAL;
 	}
 
@@ -625,7 +627,11 @@ static int insert_ref_node(struct ubifs_info *c, int lnum, int offs,
 	r->flags = REPLAY_REF;
 	r->free = free;
 	r->dirty = dirty;
-	key_copy(c, &key, &r->key);
+	/*
+	 * @r->key is not used for reference nodes, so set it up just for the
+	 * sake of not leaving it uninitialized.
+	 */
+	highest_ino_key(c, &r->key, -1);
 
 	rb_link_node(&r->rb, parent, p);
 	rb_insert_color(&r->rb, &c->replay_tree);
