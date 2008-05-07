@@ -6,6 +6,14 @@ extra-y                := head_$(BITS).o head$(BITS).o init_task.o vmlinux.lds
 
 CPPFLAGS_vmlinux.lds += -U$(UTS_MACHINE)
 
+ifdef CONFIG_FTRACE
+# Do not profile debug utilities
+ORIG_CFLAGS := $(KBUILD_CFLAGS)
+KBUILD_CFLAGS = $(if $(filter-out tsc_64 tsc_32 rtc,$(basename $(notdir $@))), \
+	$(ORIG_CFLAGS), \
+	$(subst -pg,,$(ORIG_CFLAGS)))
+endif
+
 #
 # vsyscalls (which work on the user stack) should have
 # no stack-protector checks:
@@ -67,6 +75,7 @@ obj-y				+= vsmp_64.o
 obj-$(CONFIG_KPROBES)		+= kprobes.o
 obj-$(CONFIG_MODULES)		+= module_$(BITS).o
 obj-$(CONFIG_ACPI_SRAT) 	+= srat_32.o
+obj-$(CONFIG_IMMEDIATE)		+= immediate.o
 obj-$(CONFIG_EFI) 		+= efi.o efi_$(BITS).o efi_stub_$(BITS).o
 obj-$(CONFIG_DOUBLEFAULT) 	+= doublefault_32.o
 obj-$(CONFIG_KGDB)		+= kgdb.o
