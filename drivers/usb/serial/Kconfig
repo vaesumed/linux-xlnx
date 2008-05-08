@@ -447,6 +447,15 @@ config USB_SERIAL_MOS7840
 	  To compile this driver as a module, choose M here: the
 	  module will be called mos7840.  If unsure, choose N.
 
+config USB_SERIAL_MOTOROLA
+	tristate "USB Motorola Phone modem driver"
+	---help---
+	  Say Y here if you want to use a Motorola phone with a USB
+	  connector as a modem link.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called moto_modem.  If unsure, choose N.
+
 config USB_SERIAL_NAVMAN
 	tristate "USB Navman GPS device"
 	help
@@ -513,6 +522,14 @@ config USB_SERIAL_TI
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_usb_3410_5052.
+
+config USB_SERIAL_TI_FIRMWARE
+	bool "USB TI 3410/5052 Firmware"
+	depends on USB_SERIAL_TI
+	help
+	  say Y to include the firmware into the kernel for compatibility
+	  with older setups. Say N if you have the firmware files installed
+	  in /etc/firmware.
 
 config USB_SERIAL_CYBERJACK
 	tristate "USB REINER SCT cyberJack pinpad/e-com chipcard reader"
