@@ -2,7 +2,7 @@
  *  drivers/s390/cio/cio.c
  *   S/390 common I/O routines -- low level i/o calls
  *
- *    Copyright (C) IBM Corp. 1999,2006
+ *    Copyright IBM Corp. 1999,2008
  *    Author(s): Ingo Adlung (adlung@de.ibm.com)
  *		 Cornelia Huck (cornelia.huck@de.ibm.com)
  *		 Arnd Bergmann (arndb@de.ibm.com)
@@ -38,23 +38,6 @@
 debug_info_t *cio_debug_msg_id;
 debug_info_t *cio_debug_trace_id;
 debug_info_t *cio_debug_crw_id;
-
-int cio_show_msg;
-
-static int __init
-cio_setup (char *parm)
-{
-	if (!strcmp (parm, "yes"))
-		cio_show_msg = 1;
-	else if (!strcmp (parm, "no"))
-		cio_show_msg = 0;
-	else
-		printk(KERN_ERR "cio: cio_setup: "
-		       "invalid cio_msg parameter '%s'", parm);
-	return 1;
-}
-
-__setup ("cio_msg=", cio_setup);
 
 /*
  * Function: cio_debug_init
@@ -166,7 +149,7 @@ cio_start_handle_notoper(struct subchannel *sch, __u8 lpm)
 
 	stsch (sch->schid, &sch->schib);
 
-	CIO_MSG_EVENT(0, "cio_start: 'not oper' status for "
+	CIO_MSG_EVENT(2, "cio_start: 'not oper' status for "
 		      "subchannel 0.%x.%04x!\n", sch->schid.ssid,
 		      sch->schid.sch_no);
 	sprintf(dbf_text, "no%s", dev_name(&sch->dev));
@@ -404,8 +387,10 @@ cio_modify (struct subchannel *sch)
 	return ret;
 }
 
-/*
- * Enable subchannel.
+/**
+ * cio_enable_subchannel - enable a subchannel.
+ * @sch: subchannel to be enabled
+ * @intparm: interruption parameter to set
  */
 int cio_enable_subchannel(struct subchannel *sch, u32 intparm)
 {
@@ -451,12 +436,13 @@ int cio_enable_subchannel(struct subchannel *sch, u32 intparm)
 	CIO_TRACE_EVENT (2, dbf_txt);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(cio_enable_subchannel);
 
-/*
- * Disable subchannel.
+/**
+ * cio_disable_subchannel - disable a subchannel.
+ * @sch: subchannel to disable
  */
-int
-cio_disable_subchannel (struct subchannel *sch)
+int cio_disable_subchannel(struct subchannel *sch)
 {
 	char dbf_txt[15];
 	int ccode;
@@ -501,6 +487,7 @@ cio_disable_subchannel (struct subchannel *sch)
 	CIO_TRACE_EVENT (2, dbf_txt);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(cio_disable_subchannel);
 
 int cio_create_sch_lock(struct subchannel *sch)
 {
@@ -511,27 +498,61 @@ int cio_create_sch_lock(struct subchannel *sch)
 	return 0;
 }
 
-/*
- * cio_validate_subchannel()
+static int cio_check_devno_blacklisted(struct subchannel *sch)
+{
+	if (is_blacklisted(sch->schid.ssid, sch->schib.pmcw.dev)) {
+		/*
+		 * This device must not be known to Linux. So we simply
+		 * say that there is no device and return ENODEV.
+		 */
+		CIO_MSG_EVENT(6, "Blacklisted device detected "
+			      "at devno %04X, subchannel set %x\n",
+			      sch->schib.pmcw.dev, sch->schid.ssid);
+		return -ENODEV;
+	}
+	return 0;
+}
+
+static int cio_validate_io_subchannel(struct subchannel *sch)
+{
+	/* Initialization for io subchannels. */
+	if (!css_sch_is_valid(&sch->schib))
+		return -ENODEV;
+
+	/* Devno is valid. */
+	return cio_check_devno_blacklisted(sch);
+}
+
+static int cio_validate_msg_subchannel(struct subchannel *sch)
+{
+	/* Initialization for message subchannels. */
+	if (!css_sch_is_valid(&sch->schib))
+		return -ENODEV;
+
+	/* Devno is valid. */
+	return cio_check_devno_blacklisted(sch);
+}
+
+/**
+ * cio_validate_subchannel - basic validation of subchannel
+ * @sch: subchannel structure to be filled out
+ * @schid: subchannel id
  *
  * Find out subchannel type and initialize struct subchannel.
  * Return codes:
- *   SUBCHANNEL_TYPE_IO for a normal io subchannel
- *   SUBCHANNEL_TYPE_CHSC for a chsc subchannel
- *   SUBCHANNEL_TYPE_MESSAGE for a messaging subchannel
- *   SUBCHANNEL_TYPE_ADM for a adm(?) subchannel
+ *   0 on success
  *   -ENXIO for non-defined subchannels
- *   -ENODEV for subchannels with invalid device number or blacklisted devices
+ *   -ENODEV for invalid subchannels or blacklisted devices
+ *   -EIO for subchannels in an invalid subchannel set
  */
-int
-cio_validate_subchannel (struct subchannel *sch, struct subchannel_id schid)
+int cio_validate_subchannel(struct subchannel *sch, struct subchannel_id schid)
 {
 	char dbf_txt[15];
 	int ccode;
 	int err;
 
-	sprintf (dbf_txt, "valsch%x", schid.sch_no);
-	CIO_TRACE_EVENT (4, dbf_txt);
+	sprintf(dbf_txt, "valsch%x", schid.sch_no);
+	CIO_TRACE_EVENT(4, dbf_txt);
 
 	/* Nuke all fields. */
 	memset(sch, 0, sizeof(struct subchannel));
@@ -563,67 +584,21 @@ cio_validate_subchannel (struct subchannel *sch, struct subchannel_id schid)
 	/* Copy subchannel type from path management control word. */
 	sch->st = sch->schib.pmcw.st;
 
-	/*
-	 * ... just being curious we check for non I/O subchannels
-	 */
-	if (sch->st != 0) {
-		CIO_DEBUG(KERN_INFO, 0,
-			  "Subchannel 0.%x.%04x reports "
-			  "non-I/O subchannel type %04X\n",
-			  sch->schid.ssid, sch->schid.sch_no, sch->st);
-		/* We stop here for non-io subchannels. */
-		err = sch->st;
-		goto out;
+	switch (sch->st) {
+	case SUBCHANNEL_TYPE_IO:
+		err = cio_validate_io_subchannel(sch);
+		break;
+	case SUBCHANNEL_TYPE_MSG:
+		err = cio_validate_msg_subchannel(sch);
+		break;
+	default:
+		err = 0;
 	}
-
-	/* Initialization for io subchannels. */
-	if (!css_sch_is_valid(&sch->schib)) {
-		err = -ENODEV;
+	if (err)
 		goto out;
-	}
 
-	/* Devno is valid. */
-	if (is_blacklisted (sch->schid.ssid, sch->schib.pmcw.dev)) {
-		/*
-		 * This device must not be known to Linux. So we simply
-		 * say that there is no device and return ENODEV.
-		 */
-		CIO_MSG_EVENT(4, "Blacklisted device detected "
-			      "at devno %04X, subchannel set %x\n",
-			      sch->schib.pmcw.dev, sch->schid.ssid);
-		err = -ENODEV;
-		goto out;
-	}
-	if (cio_is_console(sch->schid))
-		sch->opm = 0xff;
-	else
-		sch->opm = chp_get_sch_opm(sch);
-	sch->lpm = sch->schib.pmcw.pam & sch->opm;
-	sch->isc = 3;
-
-	CIO_DEBUG(KERN_INFO, 0,
-		  "Detected device %04x on subchannel 0.%x.%04X"
-		  " - PIM = %02X, PAM = %02X, POM = %02X\n",
-		  sch->schib.pmcw.dev, sch->schid.ssid,
-		  sch->schid.sch_no, sch->schib.pmcw.pim,
-		  sch->schib.pmcw.pam, sch->schib.pmcw.pom);
-
-	/*
-	 * We now have to initially ...
-	 *  ... enable "concurrent sense"
-	 *  ... enable "multipath mode" if more than one
-	 *	  CHPID is available. This is done regardless
-	 *	  whether multiple paths are available for us.
-	 */
-	sch->schib.pmcw.csense = 1;	/* concurrent sense */
-	sch->schib.pmcw.ena = 0;
-	if ((sch->lpm & (sch->lpm - 1)) != 0)
-		sch->schib.pmcw.mp = 1;	/* multipath mode */
-	/* clean up possible residual cmf stuff */
-	sch->schib.pmcw.mme = 0;
-	sch->schib.pmcw.mbfc = 0;
-	sch->schib.pmcw.mbi = 0;
-	sch->schib.mba = 0;
+	CIO_MSG_EVENT(4, "Subchannel 0.%x.%04x reports subchannel type %04X\n",
+		      sch->schid.ssid, sch->schid.sch_no, sch->st);
 	return 0;
 out:
 	if (!cio_is_console(schid))
@@ -810,7 +785,6 @@ cio_probe_console(void)
 	 * enable console I/O-interrupt subclass 7
 	 */
 	ctl_set_bit(6, 24);
-	console_subchannel.isc = 7;
 	console_subchannel.schib.pmcw.isc = 7;
 	console_subchannel.schib.pmcw.intparm =
 		(u32)(addr_t)&console_subchannel;
@@ -881,7 +855,7 @@ static void udelay_reset(unsigned long usecs)
 }
 
 static int
-__clear_subchannel_easy(struct subchannel_id schid)
+__clear_io_subchannel_easy(struct subchannel_id schid)
 {
 	int retry;
 
@@ -938,11 +912,19 @@ static int __shutdown_subchannel_easy(struct subchannel_id schid, void *data)
 	case -ENODEV:
 		break;
 	default: /* -EBUSY */
-		if (__clear_subchannel_easy(schid))
-			break; /* give up... */
+		switch (schib.pmcw.st) {
+		case SUBCHANNEL_TYPE_IO:
+			if (__clear_io_subchannel_easy(schid))
+				goto out; /* give up... */
+			break;
+		default:
+			/* No default clear strategy */
+			break;
+		}
 		stsch(schid, &schib);
 		__disable_subchannel_easy(schid, &schib);
 	}
+out:
 	return 0;
 }
 

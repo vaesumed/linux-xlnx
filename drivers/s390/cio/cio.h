@@ -3,6 +3,7 @@
 
 #include <linux/mutex.h>
 #include <linux/device.h>
+#include <linux/mod_devicetable.h>
 #include <asm/chpid.h>
 #include "chsc.h"
 #include "schid.h"
@@ -13,7 +14,7 @@
 struct pmcw {
 	u32 intparm;		/* interruption parameter */
 	u32 qf	 : 1;		/* qdio facility */
-	u32 res0 : 1;		/* reserved zeros */
+	u32 w	 : 1;
 	u32 isc  : 3;		/* interruption sublass */
 	u32 res5 : 3;		/* reserved zeros */
 	u32 ena  : 1;		/* enabled */
@@ -117,7 +118,5 @@ extern void *cio_get_console_priv(void);
 #define cio_get_console_lock() NULL
 #define cio_get_console_priv() NULL
 #endif
-
-extern int cio_show_msg;
 
 #endif
