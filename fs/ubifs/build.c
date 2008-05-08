@@ -1308,14 +1308,19 @@ static int __init ubifs_init(void)
 	BUILD_BUG_ON(UBIFS_MAX_DATA_NODE_SZ > UBIFS_MAX_NODE_SZ);
 	BUILD_BUG_ON(UBIFS_MAX_INO_NODE_SZ  > UBIFS_MAX_NODE_SZ);
 
-	/* We do not support multiple pages per block ATM */
-	BUILD_BUG_ON(UBIFS_BLOCK_SIZE != PAGE_CACHE_SIZE);
-
 	/* Defined node sizes */
 	BUILD_BUG_ON(UBIFS_SB_NODE_SZ  != 4096);
 	BUILD_BUG_ON(UBIFS_MST_NODE_SZ != 512);
 	BUILD_BUG_ON(UBIFS_INO_NODE_SZ != 160);
 	BUILD_BUG_ON(UBIFS_REF_NODE_SZ != 64);
+
+	/* We do not support multiple pages per block ATM */
+	if (UBIFS_BLOCK_SIZE != PAGE_CACHE_SIZE) {
+		ubifs_err("RAM page size is %u bytes, but UBIFS currently works"
+			  "only on systems with 4096 bytes RAM page size",
+			  (unsigned int)PAGE_CACHE_SIZE);
+		return err;
+	}
 
 	err  = bdi_init(&ubifs_backing_dev_info);
 	if (err)

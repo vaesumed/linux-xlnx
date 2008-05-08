@@ -97,7 +97,7 @@ static int shrink_liability(struct ubifs_info *c, int nr_to_write)
 		.nr_to_write = nr_to_write,
 	};
 
-	writeback_inodes_sb(c->vfs_sb, &wbc);
+	generic_sync_sb_inodes(c->vfs_sb, &wbc);
 	dbg_budg("%ld pages were written back", nr_to_write - wbc.nr_to_write);
 	return nr_to_write - wbc.nr_to_write;
 }
