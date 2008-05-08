@@ -41,7 +41,7 @@ static int __init find_i2c_driver(struct device_node *node,
 		if (!of_device_is_compatible(node, i2c_devices[i].of_device))
 			continue;
 		if (strlcpy(info->driver_name, i2c_devices[i].i2c_driver,
-			    KOBJ_NAME_LEN) >= KOBJ_NAME_LEN ||
+			    sizeof(info->driver_name)) >= sizeof(info->driver_name) ||
 		    strlcpy(info->type, i2c_devices[i].i2c_type,
 			    I2C_NAME_SIZE) >= I2C_NAME_SIZE)
 			return -ENOMEM;

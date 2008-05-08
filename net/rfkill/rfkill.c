@@ -355,7 +355,7 @@ static void rfkill_led_trigger_register(struct rfkill *rfkill)
 #ifdef CONFIG_RFKILL_LEDS
 	int error;
 
-	rfkill->led_trigger.name = rfkill->dev.bus_id;
+	rfkill->led_trigger.name = dev_name(&rfkill->dev);
 	error = led_trigger_register(&rfkill->led_trigger);
 	if (error)
 		rfkill->led_trigger.name = NULL;
@@ -389,8 +389,8 @@ int rfkill_register(struct rfkill *rfkill)
 	if (rfkill->type >= RFKILL_TYPE_MAX)
 		return -EINVAL;
 
-	snprintf(dev->bus_id, sizeof(dev->bus_id),
-		 "rfkill%ld", (long)atomic_inc_return(&rfkill_no) - 1);
+	dev_set_name(dev, "rfkill%ld",
+		     (long)atomic_inc_return(&rfkill_no) - 1);
 
 	rfkill_led_trigger_register(rfkill);
 
