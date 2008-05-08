@@ -86,9 +86,11 @@ static u32 kvm_get_features(struct virtio_device *vdev)
 	struct kvm_device_desc *desc = to_kvmdev(vdev)->desc;
 	u8 *in_features = kvm_vq_features(desc);
 
+	/* We do this the slow but generic way. */
 	for (i = 0; i < min(desc->feature_len * 8, 32); i++)
 		if (in_features[i / 8] & (1 << (i % 8)))
 			features |= (1 << i);
+
 	return features;
 }
 
