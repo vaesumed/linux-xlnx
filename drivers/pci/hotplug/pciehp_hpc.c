@@ -247,23 +247,15 @@ static inline void pciehp_free_irq(struct controller *ctrl)
 		free_irq(ctrl->pci_dev->irq, ctrl);
 }
 
-static inline int pcie_wait_cmd(struct controller *ctrl)
+static inline void pcie_wait_cmd(struct controller *ctrl)
 {
-	int retval = 0;
 	unsigned int msecs = pciehp_poll_mode ? 2500 : 1000;
 	unsigned long timeout = msecs_to_jiffies(msecs);
 	int rc;
 
-	rc = wait_event_interruptible_timeout(ctrl->queue,
-					      !ctrl->cmd_busy, timeout);
+	rc = wait_event_timeout(ctrl->queue, !ctrl->cmd_busy, timeout);
 	if (!rc)
 		dbg("Command not completed in 1000 msec\n");
-	else if (rc < 0) {
-		retval = -EINTR;
-		info("Command was interrupted by a signal\n");
-	}
-
-	return retval;
 }
 
 /**
@@ -316,7 +308,7 @@ static int pcie_write_cmd(struct controller *ctrl, u16 cmd, u16 mask)
 	 * Wait for command completion.
 	 */
 	if (!retval)
-		retval = pcie_wait_cmd(ctrl);
+		pcie_wait_cmd(ctrl);
  out:
 	mutex_unlock(&ctrl->ctrl_lock);
 	return retval;
@@ -753,7 +745,7 @@ static irqreturn_t pcie_isr(int irq, void *dev_id)
 	if (intr_loc & CMD_COMPLETED) {
 		ctrl->cmd_busy = 0;
 		smp_mb();
-		wake_up_interruptible(&ctrl->queue);
+		wake_up(&ctrl->queue);
 	}
 
 	/* Check MRL Sensor Changed */
