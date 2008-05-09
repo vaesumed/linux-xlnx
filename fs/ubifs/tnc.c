@@ -1003,6 +1003,10 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 				 * znode za at slot n = 1.  But that is invalid
 				 * according to the parent's keys.  Key2 must
 				 * be inserted into znode zb.
+				 *
+				 * Note, this problem is not relevant for the
+				 * case when we go right, because
+				 * 'tnc_insert()' would correct the parent key.
 				 */
 				if (*n == (*zn)->child_cnt - 1) {
 					err = tnc_next(c, zn, n);
