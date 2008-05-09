@@ -50,6 +50,8 @@
 #include <linux/init.h>
 #include <linux/i2c.h>
 #include <linux/delay.h>
+#include <linux/dmi.h>
+#include <linux/acpi.h>
 #include <asm/io.h>
 
 MODULE_LICENSE("GPL");
@@ -109,7 +111,33 @@ struct nforce2_smbus {
 /* Misc definitions */
 #define MAX_TIMEOUT	100
 
+/* We disable the second SMBus channel on these boards */
+static struct dmi_system_id __devinitdata nforce2_dmi_blacklist2[] = {
+	{
+		.ident = "DFI Lanparty NF4 Expert",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "DFI Corp,LTD"),
+			DMI_MATCH(DMI_BOARD_NAME, "LP UT NF4 Expert"),
+		},
+	},
+	{ }
+};
+
 static struct pci_driver nforce2_driver;
+
+/* For multiplexing support, we need a global reference to the 1st
+   SMBus channel */
+#if defined CONFIG_I2C_NFORCE2_S4985 || defined CONFIG_I2C_NFORCE2_S4985_MODULE
+struct i2c_adapter *nforce2_smbus;
+EXPORT_SYMBOL_GPL(nforce2_smbus);
+
+static void nforce2_set_reference(struct i2c_adapter *adap)
+{
+	nforce2_smbus = adap;
+}
+#else
+static inline void nforce2_set_reference(struct i2c_adapter *adap) { }
+#endif
 
 static void nforce2_abort(struct i2c_adapter *adap)
 {
@@ -315,6 +343,11 @@ static int __devinit nforce2_probe_smb (struct pci_dev *dev, int bar,
 		smbus->size = 64;
 	}
 
+	error = acpi_check_region(smbus->base, smbus->size,
+				  nforce2_driver.name);
+	if (error)
+		return -1;
+
 	if (!request_region(smbus->base, smbus->size, nforce2_driver.name)) {
 		dev_err(&smbus->adapter.dev, "Error requesting region %02x .. %02X for %s\n",
 			smbus->base, smbus->base+smbus->size-1, name);
@@ -367,10 +400,17 @@ static int __devinit nforce2_probe(struct pci_dev *dev, const struct pci_device_
 		smbuses[0].base = 0;	/* to have a check value */
 	}
 	/* SMBus adapter 2 */
-	res2 = nforce2_probe_smb(dev, 5, NFORCE_PCI_SMB2, &smbuses[1], "SMB2");
-	if (res2 < 0) {
-		dev_err(&dev->dev, "Error probing SMB2.\n");
-		smbuses[1].base = 0;	/* to have a check value */
+	if (dmi_check_system(nforce2_dmi_blacklist2)) {
+		dev_err(&dev->dev, "Disabling SMB2 for safety reasons.\n");
+		res2 = -EPERM;
+		smbuses[1].base = 0;
+	} else {
+		res2 = nforce2_probe_smb(dev, 5, NFORCE_PCI_SMB2, &smbuses[1],
+					 "SMB2");
+		if (res2 < 0) {
+			dev_err(&dev->dev, "Error probing SMB2.\n");
+			smbuses[1].base = 0;	/* to have a check value */
+		}
 	}
 	if ((res1 < 0) && (res2 < 0)) {
 		/* we did not find even one of the SMBuses, so we give up */
@@ -378,6 +418,7 @@ static int __devinit nforce2_probe(struct pci_dev *dev, const struct pci_device_
 		return -ENODEV;
 	}
 
+	nforce2_set_reference(&smbuses[0].adapter);
 	return 0;
 }
 
@@ -386,6 +427,7 @@ static void __devexit nforce2_remove(struct pci_dev *dev)
 {
 	struct nforce2_smbus *smbuses = (void*) pci_get_drvdata(dev);
 
+	nforce2_set_reference(NULL);
 	if (smbuses[0].base) {
 		i2c_del_adapter(&smbuses[0].adapter);
 		release_region(smbuses[0].base, smbuses[0].size);
