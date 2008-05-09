@@ -295,7 +295,7 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 	union ubifs_key key;
 	int err, type;
 
-	dbg_gen("xattr '%s', host ino %lu ('%.*s'), size %d", name,
+	dbg_gen("xattr '%s', host ino %lu ('%.*s'), size %zd", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
 	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
@@ -363,7 +363,7 @@ ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
 	union ubifs_key key;
 	int err;
 
-	dbg_gen("xattr '%s', ino %lu ('%.*s'), buf size %d", name,
+	dbg_gen("xattr '%s', ino %lu ('%.*s'), buf size %zd", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
 	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
 	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
@@ -401,7 +401,7 @@ ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
 	if (buf) {
 		/* If @buf is %NULL we are supposed to return the length */
 		if (ui->data_len > size) {
-			dbg_err("buffer size %d, xattr len %d",
+			dbg_err("buffer size %zd, xattr len %d",
 				size, ui->data_len);
 			err = -ERANGE;
 			goto out_iput;
