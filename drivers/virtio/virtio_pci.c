@@ -91,10 +91,14 @@ static struct virtio_pci_device *to_vp_device(struct virtio_device *vdev)
 static u32 vp_get_features(struct virtio_device *vdev)
 {
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
+	u32 features;
 
 	/* When someone needs more than 32 feature bits, we'll need to
 	 * steal a bit to indicate that the rest are somewhere else. */
-	return ioread32(vp_dev->ioaddr + VIRTIO_PCI_HOST_FEATURES);
+	features = ioread32(vp_dev->ioaddr + VIRTIO_PCI_HOST_FEATURES);
+
+	/* Vring may want to play with the bits it's offered. */
+	return vring_transport_features(features);
 }
 
 /* virtio config->set_features() implementation */

@@ -5,14 +5,19 @@
    (and more).  So the "read" side to such a lock is anything which
    diables preeempt. */
 #include <linux/cpu.h>
+#include <linux/compiler.h>
 #include <asm/system.h>
 
-#if defined(CONFIG_STOP_MACHINE) && defined(CONFIG_SMP)
+#define ALL_CPUS ~0U
+
 /**
  * stop_machine_run: freeze the machine on all CPUs and run this function
  * @fn: the function to run
  * @data: the data ptr for the @fn()
- * @cpu: the cpu to run @fn() on (or any, if @cpu == NR_CPUS.
+ * @cpu: if @cpu == n, run @fn() on cpu n
+ *       if @cpu == NR_CPUS, run @fn() on any cpu
+ *       if @cpu == ALL_CPUS, run @fn() first on the calling cpu, and then
+ *       concurrently on all the other cpus
  *
  * Description: This causes a thread to be scheduled on every other cpu,
  * each of which disables interrupts, and finally interrupts are disabled
@@ -21,7 +26,11 @@
  *
  * This can be thought of as a very heavy write lock, equivalent to
  * grabbing every spinlock in the kernel. */
-int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu);
+#define stop_machine_run(fn, data, cpu)					\
+	stop_machine_run_notype(typesafe_cb(int, (fn), (data)), (data), (cpu))
+
+#if defined(CONFIG_STOP_MACHINE) && defined(CONFIG_SMP)
+int stop_machine_run_notype(int (*fn)(void *), void *data, unsigned int cpu);
 
 /**
  * __stop_machine_run: freeze the machine on all CPUs and run this function
@@ -38,8 +47,8 @@ struct task_struct *__stop_machine_run(int (*fn)(void *), void *data,
 
 #else
 
-static inline int stop_machine_run(int (*fn)(void *), void *data,
-				   unsigned int cpu)
+static inline int stop_machine_run_notype(int (*fn)(void *), void *data,
+					  unsigned int cpu)
 {
 	int ret;
 	local_irq_disable();
