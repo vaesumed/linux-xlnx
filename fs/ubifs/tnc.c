@@ -978,8 +978,46 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 			}
 			if (err < 0)
 				return err;
-			if (keys_cmp(c, &(*zn)->zbranch[*n].key, key))
+			if (keys_cmp(c, &(*zn)->zbranch[*n].key, key)) {
+				/*
+				 * We have found the branch after which we would
+				 * like to insert, but inserting in this znode
+				 * may still be wrong. Consider the following 3
+				 * znodes, in the case where we are resolving a
+				 * collsion with Key2.
+				 *
+				 *                  znode zp
+				 *            ----------------------
+				 * level 1     |  Key0  |  Key1  |
+				 *            -----------------------
+				 *                 |            |
+				 *       znode za  |            |  znode zb
+				 *          ------------      ------------
+				 * level 0  |  Key0  |        |  Key2  |
+				 *          ------------      ------------
+				 *
+				 * The lookup finds Key2 in znode zb. Lets say
+				 * there is no match and the name is greater so
+				 * we look left. When we find Key0, we end up
+				 * here. If we return now, we will insert into
+				 * znode za at slot n = 1.  But that is invalid
+				 * according to the parent's keys.  Key2 must
+				 * be inserted into znode zb.
+				 */
+				if (*n == (*zn)->child_cnt - 1) {
+					err = tnc_next(c, zn, n);
+					if (err) {
+						/* Should be impossible */
+						ubifs_assert(0);
+						if (err == -ENOENT)
+							err = -EINVAL;
+						return err;
+					}
+					ubifs_assert(*n == 0);
+					*n = -1;
+				}
 				return 0;
+			}
 			err = matches_name(c, &(*zn)->zbranch[*n], nm);
 			if (err < 0)
 				return err;
@@ -1095,6 +1133,7 @@ out_free:
  * @zn: znode is returned here
  * @n: zbranch number is passed and returned here
  * @nm: name of directory entry
+ * @adding: indicates caller is adding a key to the TNC
  *
  * This is a "fallible" version of the 'resolve_collision()' function which
  * does not panic if one of the nodes referred to by TNC does not exist on the
@@ -1118,7 +1157,7 @@ out_free:
 static int fallible_resolve_collision(struct ubifs_info *c,
 				      const union ubifs_key *key,
 				      struct ubifs_znode **zn, int *n,
-				      const struct qstr *nm)
+				      const struct qstr *nm, int adding)
 {
 	struct ubifs_znode *o_znode = NULL, *znode = *zn;
 	int uninitialized_var(o_n), err, cmp, unsure = 0, nn = *n;
@@ -1153,8 +1192,22 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			}
 			if (err < 0)
 				return err;
-			if (keys_cmp(c, &(*zn)->zbranch[*n].key, key))
+			if (keys_cmp(c, &(*zn)->zbranch[*n].key, key)) {
+				/* See comments in 'resolve_collision()' */
+				if (*n == (*zn)->child_cnt - 1) {
+					err = tnc_next(c, zn, n);
+					if (err) {
+						/* Should be impossible */
+						ubifs_assert(0);
+						if (err == -ENOENT)
+							err = -EINVAL;
+						return err;
+					}
+					ubifs_assert(*n == 0);
+					*n = -1;
+				}
 				break;
+			}
 			err = fallible_matches_name(c, &(*zn)->zbranch[*n], nm);
 			if (err < 0)
 				return err;
@@ -1198,7 +1251,8 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 		}
 	}
 
-	if (!o_znode)
+	/* Never match a dangling link when adding */
+	if (adding || !o_znode)
 		return 0;
 
 	dbg_mnt("dangling match LEB %d:%d len %d %s",
@@ -2215,7 +2269,7 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 	if (found == 1) {
 		if (c->replaying)
 			found = fallible_resolve_collision(c, key, &znode, &n,
-							   nm);
+							   nm, 1);
 		else
 			found = resolve_collision(c, key, &znode, &n, nm);
 		dbg_tnc("rc returned %d, znode %p, n %d", found, znode, n);
@@ -2431,7 +2485,7 @@ int ubifs_tnc_remove_nm(struct ubifs_info *c, const union ubifs_key *key,
 	if (err) {
 		if (c->replaying)
 			err = fallible_resolve_collision(c, key, &znode, &n,
-							 nm);
+							 nm, 0);
 		else
 			err = resolve_collision(c, key, &znode, &n, nm);
 		dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
