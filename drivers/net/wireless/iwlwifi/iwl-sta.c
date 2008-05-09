@@ -28,15 +28,48 @@
  *****************************************************************************/
 
 #include <net/mac80211.h>
+#include <linux/etherdevice.h>
 
 #include "iwl-eeprom.h"
-#include "iwl-4965.h"
+#include "iwl-dev.h"
 #include "iwl-core.h"
 #include "iwl-sta.h"
 #include "iwl-io.h"
 #include "iwl-helpers.h"
-#include "iwl-4965.h"
-#include "iwl-sta.h"
+
+u8 iwl_find_station(struct iwl_priv *priv, const u8 *addr)
+{
+	int i;
+	int start = 0;
+	int ret = IWL_INVALID_STATION;
+	unsigned long flags;
+	DECLARE_MAC_BUF(mac);
+
+	if ((priv->iw_mode == IEEE80211_IF_TYPE_IBSS) ||
+	    (priv->iw_mode == IEEE80211_IF_TYPE_AP))
+		start = IWL_STA_ID;
+
+	if (is_broadcast_ether_addr(addr))
+		return priv->hw_params.bcast_sta_id;
+
+	spin_lock_irqsave(&priv->sta_lock, flags);
+	for (i = start; i < priv->hw_params.max_stations; i++)
+		if (priv->stations[i].used &&
+		    (!compare_ether_addr(priv->stations[i].sta.sta.addr,
+					 addr))) {
+			ret = i;
+			goto out;
+		}
+
+	IWL_DEBUG_ASSOC_LIMIT("can not find STA %s total %d\n",
+			      print_mac(mac, addr), priv->num_stations);
+
+ out:
+	spin_unlock_irqrestore(&priv->sta_lock, flags);
+	return ret;
+}
+EXPORT_SYMBOL(iwl_find_station);
+
 
 int iwl_get_free_ucode_key_index(struct iwl_priv *priv)
 {
@@ -172,10 +205,14 @@ static int iwl_set_wep_dynamic_key_info(struct iwl_priv *priv,
 	memcpy(&priv->stations[sta_id].sta.key.key[3],
 				keyconf->key, keyconf->keylen);
 
-	priv->stations[sta_id].sta.key.key_offset =
+	if ((priv->stations[sta_id].sta.key.key_flags & STA_KEY_FLG_ENCRYPT_MSK)
+			== STA_KEY_FLG_NO_ENC)
+		priv->stations[sta_id].sta.key.key_offset =
 				 iwl_get_free_ucode_key_index(priv);
-	priv->stations[sta_id].sta.key.key_flags = key_flags;
+	/* else, we are overriding an existing key => no need to allocated room
+	 * in uCode. */
 
+	priv->stations[sta_id].sta.key.key_flags = key_flags;
 	priv->stations[sta_id].sta.sta.modify_mask = STA_MODIFY_KEY_MASK;
 	priv->stations[sta_id].sta.mode = STA_CONTROL_MODIFY_MSK;
 
@@ -214,8 +251,13 @@ static int iwl_set_ccmp_dynamic_key_info(struct iwl_priv *priv,
 	memcpy(priv->stations[sta_id].sta.key.key, keyconf->key,
 	       keyconf->keylen);
 
-	priv->stations[sta_id].sta.key.key_offset =
-				iwl_get_free_ucode_key_index(priv);
+	if ((priv->stations[sta_id].sta.key.key_flags & STA_KEY_FLG_ENCRYPT_MSK)
+			== STA_KEY_FLG_NO_ENC)
+		priv->stations[sta_id].sta.key.key_offset =
+				 iwl_get_free_ucode_key_index(priv);
+	/* else, we are overriding an existing key => no need to allocated room
+	 * in uCode. */
+
 	priv->stations[sta_id].sta.key.key_flags = key_flags;
 	priv->stations[sta_id].sta.sta.modify_mask = STA_MODIFY_KEY_MASK;
 	priv->stations[sta_id].sta.mode = STA_CONTROL_MODIFY_MSK;
@@ -243,8 +285,13 @@ static int iwl_set_tkip_dynamic_key_info(struct iwl_priv *priv,
 	priv->stations[sta_id].keyinfo.alg = keyconf->alg;
 	priv->stations[sta_id].keyinfo.conf = keyconf;
 	priv->stations[sta_id].keyinfo.keylen = 16;
-	priv->stations[sta_id].sta.key.key_offset =
+
+	if ((priv->stations[sta_id].sta.key.key_flags & STA_KEY_FLG_ENCRYPT_MSK)
+			== STA_KEY_FLG_NO_ENC)
+		priv->stations[sta_id].sta.key.key_offset =
 				 iwl_get_free_ucode_key_index(priv);
+	/* else, we are overriding an existing key => no need to allocated room
+	 * in uCode. */
 
 	/* This copy is acutally not needed: we get the key with each TX */
 	memcpy(priv->stations[sta_id].keyinfo.key, keyconf->key, 16);
@@ -256,13 +303,31 @@ static int iwl_set_tkip_dynamic_key_info(struct iwl_priv *priv,
 	return ret;
 }
 
-int iwl_remove_dynamic_key(struct iwl_priv *priv, u8 sta_id)
+int iwl_remove_dynamic_key(struct iwl_priv *priv,
+				struct ieee80211_key_conf *keyconf,
+				u8 sta_id)
 {
 	unsigned long flags;
+	int ret = 0;
+	u16 key_flags;
+	u8 keyidx;
 
 	priv->key_mapping_key = 0;
 
 	spin_lock_irqsave(&priv->sta_lock, flags);
+	key_flags = le16_to_cpu(priv->stations[sta_id].sta.key.key_flags);
+	keyidx = (key_flags >> STA_KEY_FLG_KEYID_POS) & 0x3;
+
+	if (keyconf->keyidx != keyidx) {
+		/* We need to remove a key with index different that the one
+		 * in the uCode. This means that the key we need to remove has
+		 * been replaced by another one with different index.
+		 * Don't do anything and return ok
+		 */
+		spin_unlock_irqrestore(&priv->sta_lock, flags);
+		return 0;
+	}
+
 	if (!test_and_clear_bit(priv->stations[sta_id].sta.key.key_offset,
 		&priv->ucode_key_table))
 		IWL_ERROR("index %d not used in uCode key table.\n",
@@ -271,13 +336,16 @@ int iwl_remove_dynamic_key(struct iwl_priv *priv, u8 sta_id)
 					sizeof(struct iwl4965_hw_key));
 	memset(&priv->stations[sta_id].sta.key, 0,
 					sizeof(struct iwl4965_keyinfo));
-	priv->stations[sta_id].sta.key.key_flags = STA_KEY_FLG_NO_ENC;
+	priv->stations[sta_id].sta.key.key_flags =
+			STA_KEY_FLG_NO_ENC | STA_KEY_FLG_INVALID;
+	priv->stations[sta_id].sta.key.key_offset = WEP_INVALID_OFFSET;
 	priv->stations[sta_id].sta.sta.modify_mask = STA_MODIFY_KEY_MASK;
 	priv->stations[sta_id].sta.mode = STA_CONTROL_MODIFY_MSK;
-	spin_unlock_irqrestore(&priv->sta_lock, flags);
 
 	IWL_DEBUG_INFO("hwcrypto: clear ucode station key info\n");
-	return iwl4965_send_add_station(priv, &priv->stations[sta_id].sta, 0);
+	ret =  iwl4965_send_add_station(priv, &priv->stations[sta_id].sta, 0);
+	spin_unlock_irqrestore(&priv->sta_lock, flags);
+	return ret;
 }
 
 int iwl_set_dynamic_key(struct iwl_priv *priv,
