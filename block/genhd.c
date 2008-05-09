@@ -368,7 +368,10 @@ static struct kobject *base_probe(dev_t devt, int *part, void *data)
 
 static int __init genhd_device_init(void)
 {
-	int error = class_register(&block_class);
+	int error;
+
+	block_class.dev_kobj = sysfs_dev_block_kobj;
+	error = class_register(&block_class);
 	if (unlikely(error))
 		return error;
 	bdev_map = kobj_map_init(base_probe, &block_class_lock);
@@ -660,7 +663,7 @@ dev_t blk_lookup_devt(const char *name, int part)
 
 	mutex_lock(&block_class_lock);
 	list_for_each_entry(dev, &block_class.devices, node) {
-		if (strcmp(dev->bus_id, name) == 0) {
+		if (strcmp(dev_name(dev), name) == 0) {
 			struct gendisk *disk = dev_to_disk(dev);
 
 			if (part < disk->minors)

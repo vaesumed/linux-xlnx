@@ -389,7 +389,7 @@ struct pci_driver {
 	int  (*resume_early) (struct pci_dev *dev);
 	int  (*resume) (struct pci_dev *dev);	                /* Device woken up */
 	void (*shutdown) (struct pci_dev *dev);
-
+	struct pm_ext_ops *pm;
 	struct pci_error_handlers *err_handler;
 	struct device_driver	driver;
 	struct pci_dynids dynids;
@@ -976,9 +976,9 @@ static inline void pci_set_drvdata(struct pci_dev *pdev, void *data)
 /* If you want to know what to call your pci_dev, ask this function.
  * Again, it's a wrapper around the generic device.
  */
-static inline char *pci_name(struct pci_dev *pdev)
+static inline const char *pci_name(struct pci_dev *pdev)
 {
-	return pdev->dev.bus_id;
+	return dev_name(&pdev->dev);
 }
 
 

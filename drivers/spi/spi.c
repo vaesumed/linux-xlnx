@@ -232,7 +232,7 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	proxy->modalias = chip->modalias;
 
 	snprintf(proxy->dev.bus_id, sizeof proxy->dev.bus_id,
-			"%s.%u", master->dev.bus_id,
+			"%s.%u", dev_name(&master->dev),
 			chip->chip_select);
 	proxy->dev.parent = dev;
 	proxy->dev.bus = &spi_bus_type;
