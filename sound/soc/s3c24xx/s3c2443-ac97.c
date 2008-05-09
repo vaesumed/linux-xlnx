@@ -23,6 +23,7 @@
 #include <linux/wait.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
+#include <linux/mutex.h>
 
 #include <sound/core.h>
 #include <sound/pcm.h>
@@ -49,7 +50,7 @@ static struct s3c24xx_ac97_info s3c24xx_ac97;
 
 static DECLARE_COMPLETION(ac97_completion);
 static u32 codec_ready;
-static DECLARE_MUTEX(ac97_mutex);
+static DEFINE_MUTEX(ac97_mutex);
 
 static unsigned short s3c2443_ac97_read(struct snd_ac97 *ac97,
 	unsigned short reg)
@@ -58,7 +59,7 @@ static unsigned short s3c2443_ac97_read(struct snd_ac97 *ac97,
 	u32 ac_codec_cmd;
 	u32 stat, addr, data;
 
-	down(&ac97_mutex);
+	mutex_lock(&ac97_mutex);
 
 	codec_ready = S3C_AC97_GLBSTAT_CODECREADY;
 	ac_codec_cmd = readl(s3c24xx_ac97.regs + S3C_AC97_CODEC_CMD);
@@ -81,7 +82,7 @@ static unsigned short s3c2443_ac97_read(struct snd_ac97 *ac97,
 		printk(KERN_ERR "s3c24xx-ac97: req addr = %02x,"
 				" rep addr = %02x\n", reg, addr);
 
-	up(&ac97_mutex);
+	mutex_unlock(&ac97_mutex);
 
 	return (unsigned short)data;
 }
@@ -92,7 +93,7 @@ static void s3c2443_ac97_write(struct snd_ac97 *ac97, unsigned short reg,
 	u32 ac_glbctrl;
 	u32 ac_codec_cmd;
 
-	down(&ac97_mutex);
+	mutex_lock(&ac97_mutex);
 
 	codec_ready = S3C_AC97_GLBSTAT_CODECREADY;
 	ac_codec_cmd = readl(s3c24xx_ac97.regs + S3C_AC97_CODEC_CMD);
@@ -111,7 +112,7 @@ static void s3c2443_ac97_write(struct snd_ac97 *ac97, unsigned short reg,
 	ac_codec_cmd |= S3C_AC97_CODEC_CMD_READ;
 	writel(ac_codec_cmd, s3c24xx_ac97.regs + S3C_AC97_CODEC_CMD);
 
-	up(&ac97_mutex);
+	mutex_unlock(&ac97_mutex);
 
 }
 
