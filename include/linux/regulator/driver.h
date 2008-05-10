@@ -49,6 +49,19 @@ struct regulator_ops {
 	/* get most efficient regulator operating mode for load */
 	unsigned int (*get_optimum_mode) (struct regulator_dev *, int input_uV,
 					  int output_uV, int load_uA);
+
+	/* the operations below are for configuration of regulator state when
+	 * it's parent PMIC enters a global STANBY/HIBERNATE state */
+
+	/* set regulator suspend voltage */
+	int (*set_suspend_voltage) (struct regulator_dev *, int uV);
+
+	/* enable/disable regulator in suspend state */
+	int (*set_suspend_enable) (struct regulator_dev *);
+	int (*set_suspend_disable) (struct regulator_dev *);
+
+	/* set regulator suspend operating mode (defined in regulator.h) */
+	int (*set_suspend_mode) (struct regulator_dev *, unsigned int mode);
 };
 
 /*

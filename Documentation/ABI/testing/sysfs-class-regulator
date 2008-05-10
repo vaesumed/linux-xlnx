@@ -185,3 +185,131 @@ Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
 Description:
 		Some regulator directories will contain a link called parent.
 		This points to the parent or supply regulator if one exists.
+
+What:		/sys/class/regulator/.../suspend_mem_microvolts
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_mem_microvolts. This holds the regulator output
+		voltage setting for this domain measured in microvolts when
+		the system is suspended to memory.
+
+		NOTE: this will return the string 'not defined' if
+		the power domain has no suspend to memory voltage defined by
+		platform code.
+
+What:		/sys/class/regulator/.../suspend_disk_microvolts
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_disk_microvolts. This holds the regulator output
+		voltage setting for this domain measured in microvolts when
+		the system is suspended to disk.
+
+		NOTE: this will return the string 'not defined' if
+		the power domain has no suspend to disk voltage defined by
+		platform code.
+
+What:		/sys/class/regulator/.../suspend_standby_microvolts
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_standby_microvolts. This holds the regulator output
+		voltage setting for this domain measured in microvolts when
+		the system is suspended to standby.
+
+		NOTE: this will return the string 'not defined' if
+		the power domain has no suspend to standby voltage defined by
+		platform code.
+
+What:		/sys/class/regulator/.../suspend_mem_mode
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_mem_mode. This holds the regulator operating mode
+		setting for this domain when the system is suspended to
+		memory.
+
+		NOTE: this will return the string 'not defined' if
+		the power domain has no suspend to memory mode defined by
+		platform code.
+
+What:		/sys/class/regulator/.../suspend_disk_mode
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_disk_mode. This holds the regulator operating mode
+		setting for this domain when the system is suspended to disk.
+
+		NOTE: this will return the string 'not defined' if
+		the power domain has no suspend to disk mode defined by
+		platform code.
+
+What:		/sys/class/regulator/.../suspend_standby_mode
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_standby_mode. This holds the regulator operating mode
+		setting for this domain when the system is suspended to
+		standby.
+
+		NOTE: this will return the string 'not defined' if
+		the power domain has no suspend to standby mode defined by
+		platform code.
+
+What:		/sys/class/regulator/.../suspend_mem_state
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_mem_state. This holds the regulator operating state
+		when suspended to memory.
+
+		This will be one of the following strings:
+
+		'enabled'
+		'disabled'
+		'not defined'
+
+What:		/sys/class/regulator/.../suspend_disk_state
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_disk_state. This holds the regulator operating state
+		when suspended to disk.
+
+		This will be one of the following strings:
+
+		'enabled'
+		'disabled'
+		'not defined'
+
+What:		/sys/class/regulator/.../suspend_standby_state
+Date:		May 2008
+KernelVersion:	2.6.26
+Contact:	Liam Girdwood <lg@opensource.wolfsonmicro.com>
+Description:
+		Each regulator directory will contain a field called
+		suspend_standby_state. This holds the regulator operating
+		state when suspended to standby.
+
+		This will be one of the following strings:
+
+		'enabled'
+		'disabled'
+		'not defined'

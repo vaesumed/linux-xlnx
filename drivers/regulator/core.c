@@ -338,7 +338,7 @@ static ssize_t regulator_total_uA_show(struct device *dev,
 }
 
 static ssize_t regulator_num_users_show(struct device *dev,
-				       struct device_attribute *attr, char *buf)
+				      struct device_attribute *attr, char *buf)
 {
 	struct regulator_dev *rdev = to_rdev(dev);
 	return sprintf(buf, "%d\n", rdev->use_count);
@@ -358,6 +358,126 @@ static ssize_t regulator_type_show(struct device *dev,
 	return sprintf(buf, "unknown\n");
 }
 
+static ssize_t regulator_suspend_mem_uV_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+	return sprintf(buf, "%d\n", rdev->constraints->state_mem.uV);
+}
+
+static ssize_t regulator_suspend_disk_uV_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+	return sprintf(buf, "%d\n", rdev->constraints->state_disk.uV);
+}
+
+static ssize_t regulator_suspend_standby_uV_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+	return sprintf(buf, "%d\n", rdev->constraints->state_standby.uV);
+}
+
+static ssize_t suspend_opmode_show(struct regulator_dev *rdev,
+	unsigned int mode, char *buf)
+{
+	switch (mode) {
+	case REGULATOR_MODE_FAST:
+		return sprintf(buf, "fast\n");
+	case REGULATOR_MODE_NORMAL:
+		return sprintf(buf, "normal\n");
+	case REGULATOR_MODE_IDLE:
+		return sprintf(buf, "idle\n");
+	case REGULATOR_MODE_STANDBY:
+		return sprintf(buf, "standby\n");
+	}
+	return sprintf(buf, "unknown\n");
+}
+
+static ssize_t regulator_suspend_mem_mode_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+	return suspend_opmode_show(rdev,
+		rdev->constraints->state_mem.mode, buf);
+}
+
+static ssize_t regulator_suspend_disk_mode_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+	return suspend_opmode_show(rdev,
+		rdev->constraints->state_disk.mode, buf);
+}
+
+static ssize_t regulator_suspend_standby_mode_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+	return suspend_opmode_show(rdev,
+		rdev->constraints->state_standby.mode, buf);
+}
+
+static ssize_t regulator_suspend_mem_state_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+
+	if (rdev->constraints->state_mem.enabled)
+		return sprintf(buf, "enabled\n");
+	else
+		return sprintf(buf, "disabled\n");
+}
+
+static ssize_t regulator_suspend_disk_state_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+
+	if (rdev->constraints->state_disk.enabled)
+		return sprintf(buf, "enabled\n");
+	else
+		return sprintf(buf, "disabled\n");
+}
+
+static ssize_t regulator_suspend_standby_state_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = to_rdev(dev);
+
+	if (!rdev->constraints)
+		return sprintf(buf, "not defined\n");
+
+	if (rdev->constraints->state_standby.enabled)
+		return sprintf(buf, "enabled\n");
+	else
+		return sprintf(buf, "disabled\n");
+}
 static struct device_attribute regulator_dev_attrs[] = {
 	__ATTR(microvolts, 0444, regulator_uV_show, NULL),
 	__ATTR(microamps, 0444, regulator_uA_show, NULL),
@@ -370,6 +490,24 @@ static struct device_attribute regulator_dev_attrs[] = {
 	__ATTR(requested_microamps, 0444, regulator_total_uA_show, NULL),
 	__ATTR(num_users, 0444, regulator_num_users_show, NULL),
 	__ATTR(type, 0444, regulator_type_show, NULL),
+	__ATTR(suspend_mem_microvolts, 0444,
+		regulator_suspend_mem_uV_show, NULL),
+	__ATTR(suspend_disk_microvolts, 0444,
+		regulator_suspend_disk_uV_show, NULL),
+	__ATTR(suspend_standby_microvolts, 0444,
+		regulator_suspend_standby_uV_show, NULL),
+	__ATTR(suspend_mem_mode, 0444,
+		regulator_suspend_mem_mode_show, NULL),
+	__ATTR(suspend_disk_mode, 0444,
+		regulator_suspend_disk_mode_show, NULL),
+	__ATTR(suspend_standby_mode, 0444,
+		regulator_suspend_standby_mode_show, NULL),
+	__ATTR(suspend_mem_state, 0444,
+		regulator_suspend_mem_state_show, NULL),
+	__ATTR(suspend_disk_state, 0444,
+		regulator_suspend_disk_state_show, NULL),
+	__ATTR(suspend_standby_state, 0444,
+		regulator_suspend_standby_state_show, NULL),
 	__ATTR_NULL,
 };
 
