@@ -793,7 +793,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 	case VIDIOCSAUDIO:
 		if (check_mode(t, "VIDIOCSAUDIO") == -EINVAL)
 			return 0;
-		if (check_v4l2(t) == EINVAL)
+		if (check_v4l2(t) == -EINVAL)
 			return 0;
 
 		/* Should be implemented, since bttv calls it */
@@ -811,7 +811,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 			};
 			struct video_channel *vc = arg;
 
-			if (check_v4l2(t) == EINVAL)
+			if (check_v4l2(t) == -EINVAL)
 				return 0;
 
 			if (set_mode(client,t,V4L2_TUNER_ANALOG_TV, "VIDIOCSCHAN")==-EINVAL)
@@ -830,7 +830,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 
 			if (check_mode(t, "VIDIOCSFREQ") == -EINVAL)
 				return 0;
-			if (check_v4l2(t) == EINVAL)
+			if (check_v4l2(t) == -EINVAL)
 				return 0;
 
 			set_freq(client, *v);
@@ -842,7 +842,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 
 			if (check_mode(t, "VIDIOCGTUNER") == -EINVAL)
 				return 0;
-			if (check_v4l2(t) == EINVAL)
+			if (check_v4l2(t) == -EINVAL)
 				return 0;
 
 			if (V4L2_TUNER_RADIO == t->mode) {
@@ -886,7 +886,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 
 			if (check_mode(t, "VIDIOCGAUDIO") == -EINVAL)
 				return 0;
-			if (check_v4l2(t) == EINVAL)
+			if (check_v4l2(t) == -EINVAL)
 				return 0;
 
 			if (V4L2_TUNER_RADIO == t->mode) {
