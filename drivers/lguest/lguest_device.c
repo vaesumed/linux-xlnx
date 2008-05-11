@@ -98,7 +98,8 @@ static u32 lg_get_features(struct virtio_device *vdev)
 		if (in_features[i / 8] & (1 << (i % 8)))
 			features |= (1 << i);
 
-	return features;
+	/* Vring may want to play with the bits it's offered. */
+	return vring_transport_features(features);
 }
 
 static void lg_set_features(struct virtio_device *vdev, u32 features)
