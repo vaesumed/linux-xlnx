@@ -33,7 +33,6 @@
 #include <linux/elfcore.h>
 
 #include <asm/mipsregs.h>
-#include <asm/namei.h>
 #include <asm/prctl.h>
 #include <asm/uaccess.h>
 
@@ -433,6 +432,7 @@ static int verify_binary(struct elfhdr *ehp, struct linux_binprm *bprm)
 	return 0;
 }
 
+#define IRIX_EMUL	"/usr/gnemul/irix/"
 /*
  * This is where the detailed check is performed. Irix binaries
  * use interpreters with 'libc.so' in the name, so this function
