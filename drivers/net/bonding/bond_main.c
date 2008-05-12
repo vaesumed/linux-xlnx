@@ -38,6 +38,7 @@
 #include <linux/types.h>
 #include <linux/fcntl.h>
 #include <linux/interrupt.h>
+#include <linux/mutex.h>
 #include <linux/ptrace.h>
 #include <linux/ioport.h>
 #include <linux/in.h>
@@ -147,7 +148,7 @@ LIST_HEAD(bond_dev_list);
 static struct proc_dir_entry *bond_proc_dir = NULL;
 #endif
 
-extern struct rw_semaphore bonding_rwsem;
+extern struct mutex bonding_mutex;
 static __be32 arp_target[BOND_MAX_ARP_TARGETS] = { 0, } ;
 static int arp_ip_count	= 0;
 static int bond_mode	= BOND_MODE_ROUNDROBIN;
@@ -3374,10 +3375,10 @@ static int bond_event_changename(struct bonding *bond)
 	bond_remove_proc_entry(bond);
 	bond_create_proc_entry(bond);
 #endif
-	down_write(&(bonding_rwsem));
+	mutex_lock(&bonding_mutex);
         bond_destroy_sysfs_entry(bond);
         bond_create_sysfs_entry(bond);
-	up_write(&(bonding_rwsem));
+	mutex_unlock(&bonding_mutex);
 	return NOTIFY_DONE;
 }
 
@@ -3887,7 +3888,7 @@ static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd
 		return -EPERM;
 	}
 
-	down_write(&(bonding_rwsem));
+	mutex_lock(&bonding_mutex);
 	slave_dev = dev_get_by_name(&init_net, ifr->ifr_slave);
 
 	dprintk("slave_dev=%p: \n", slave_dev);
@@ -3920,7 +3921,7 @@ static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd
 		dev_put(slave_dev);
 	}
 
-	up_write(&(bonding_rwsem));
+	mutex_unlock(&bonding_mutex);
 	return res;
 }
 
@@ -4878,7 +4879,7 @@ int bond_create(char *name, struct bond_params *params, struct bonding **newbond
 	int res;
 
 	rtnl_lock();
-	down_write(&bonding_rwsem);
+	mutex_lock(&bonding_mutex);
 
 	/* Check to see if the bond already exists. */
 	if (name) {
@@ -4930,12 +4931,12 @@ int bond_create(char *name, struct bond_params *params, struct bonding **newbond
 
 	netif_carrier_off(bond_dev);
 
-	up_write(&bonding_rwsem);
+	mutex_unlock(&bonding_mutex);
 	rtnl_unlock(); /* allows sysfs registration of net device */
 	res = bond_create_sysfs_entry(bond_dev->priv);
 	if (res < 0) {
 		rtnl_lock();
-		down_write(&bonding_rwsem);
+		mutex_lock(&bonding_mutex);
 		bond_deinit(bond_dev);
 		unregister_netdevice(bond_dev);
 		goto out_rtnl;
@@ -4948,7 +4949,7 @@ out_bond:
 out_netdev:
 	free_netdev(bond_dev);
 out_rtnl:
-	up_write(&bonding_rwsem);
+	mutex_unlock(&bonding_mutex);
 	rtnl_unlock();
 	return res;
 }
@@ -4970,7 +4971,7 @@ static int __init bonding_init(void)
 	bond_create_proc_dir();
 #endif
 
-	init_rwsem(&bonding_rwsem);
+	mutex_init(&bonding_mutex);
 
 	for (i = 0; i < max_bonds; i++) {
 		res = bond_create(NULL, &bonding_defaults, NULL);
