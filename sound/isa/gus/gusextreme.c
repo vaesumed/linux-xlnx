@@ -107,7 +107,7 @@ static int __devinit snd_gusextreme_es1688_create(struct snd_card *card,
 		irq[n] = snd_legacy_find_free_irq(possible_irqs);
 		if (irq[n] < 0) {
 			snd_printk(KERN_ERR "%s: unable to find a free IRQ "
-				"for ES1688\n", dev->bus_id);
+				"for ES1688\n", dev_name(dev));
 			return -EBUSY;
 		}
 	}
@@ -115,7 +115,7 @@ static int __devinit snd_gusextreme_es1688_create(struct snd_card *card,
 		dma8[n] = snd_legacy_find_free_dma(possible_dmas);
 		if (dma8[n] < 0) {
 			snd_printk(KERN_ERR "%s: unable to find a free DMA "
-				"for ES1688\n", dev->bus_id);
+				"for ES1688\n", dev_name(dev));
 			return -EBUSY;
 		}
 	}
@@ -144,7 +144,7 @@ static int __devinit snd_gusextreme_gus_card_create(struct snd_card *card,
 		gf1_irq[n] = snd_legacy_find_free_irq(possible_irqs);
 		if (gf1_irq[n] < 0) {
 			snd_printk(KERN_ERR "%s: unable to find a free IRQ "
-				"for GF1\n", dev->bus_id);
+				"for GF1\n", dev_name(dev));
 			return -EBUSY;
 		}
 	}
@@ -152,7 +152,7 @@ static int __devinit snd_gusextreme_gus_card_create(struct snd_card *card,
 		dma1[n] = snd_legacy_find_free_dma(possible_dmas);
 		if (dma1[n] < 0) {
 			snd_printk(KERN_ERR "%s: unable to find a free DMA "
-				"for GF1\n", dev->bus_id);
+				"for GF1\n", dev_name(dev));
 			return -EBUSY;
 		}
 	}
@@ -279,7 +279,7 @@ static int __devinit snd_gusextreme_probe(struct device *dev, unsigned int n)
 	error = -ENODEV;
 	if (!gus->ess_flag) {
 		snd_printk(KERN_ERR "%s: GUS Extreme soundcard was not "
-			"detected at 0x%lx\n", dev->bus_id, gus->gf1.port);
+			"detected at 0x%lx\n", dev_name(dev), gus->gf1.port);
 		goto out;
 	}
 	gus->codec_flag = 1;
@@ -311,7 +311,7 @@ static int __devinit snd_gusextreme_probe(struct device *dev, unsigned int n)
 	if (snd_opl3_create(card, es1688->port, es1688->port + 2,
 			OPL3_HW_OPL3, 0, &opl3) < 0)
 		printk(KERN_ERR "%s: opl3 not detected at 0x%lx\n",
-			dev->bus_id, es1688->port);
+			dev_name(dev), es1688->port);
 	else {
 		error = snd_opl3_hwdep_new(opl3, 0, 2, NULL);
 		if (error < 0)
