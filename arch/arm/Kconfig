@@ -22,6 +22,9 @@ config ARM
 	  Europe.  There is an ARM Linux project with a web page at
 	  <http://www.arm.linux.org.uk/>.
 
+config HAVE_PWM
+	bool
+
 config SYS_SUPPORTS_APM_EMULATION
 	bool
 
@@ -231,13 +234,6 @@ config ARCH_CLPS711X
 	bool "Cirrus Logic CLPS711x/EP721x-based"
 	help
 	  Support for Cirrus Logic 711x/721x based boards.
-
-config ARCH_CO285
-	bool "Co-EBSA285"
-	select FOOTBRIDGE
-	select FOOTBRIDGE_ADDIN
-	help
-	  Support for Intel's EBSA285 companion chip.
 
 config ARCH_EBSA110
 	bool "EBSA-110"
@@ -703,27 +699,6 @@ config PREEMPT
 	  Say Y here if you are building a kernel for a desktop, embedded
 	  or real-time system.  Say N if you are unsure.
 
-config NO_IDLE_HZ
-	bool "Dynamic tick timer"
-	depends on !GENERIC_CLOCKEVENTS
-	help
-	  Select this option if you want to disable continuous timer ticks
-	  and have them programmed to occur as required. This option saves
-	  power as the system can remain in idle state for longer.
-
-	  By default dynamic tick is disabled during the boot, and can be
-	  manually enabled with:
-
-	    echo 1 > /sys/devices/system/timer/timer0/dyn_tick
-
-	  Alternatively, if you want dynamic tick automatically enabled
-	  during boot, pass "dyntick=enable" via the kernel command string.
-
-	  Please note that dynamic tick may affect the accuracy of
-	  timekeeping on some platforms depending on the implementation.
-	  Currently at least OMAP, PXA2xx and SA11x0 platforms are known
-	  to have accurate timekeeping with dynamic tick.
-
 config HZ
 	int
 	default 128 if ARCH_L7200
@@ -789,7 +764,7 @@ source "mm/Kconfig"
 
 config LEDS
 	bool "Timer and CPU usage LEDs"
-	depends on ARCH_CDB89712 || ARCH_CO285 || ARCH_EBSA110 || \
+	depends on ARCH_CDB89712 || ARCH_EBSA110 || \
 		   ARCH_EBSA285 || ARCH_IMX || ARCH_INTEGRATOR || \
 		   ARCH_LUBBOCK || MACH_MAINSTONE || ARCH_NETWINDER || \
 		   ARCH_OMAP || ARCH_P720T || ARCH_PXA_IDP || \
