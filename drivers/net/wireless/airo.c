@@ -2138,7 +2138,7 @@ static int airo_start_xmit(struct sk_buff *skb, struct net_device *dev) {
 	fids[i] |= (len << 16);
 	priv->xmit.skb = skb;
 	priv->xmit.fid = i;
-	if (down_trylock(&priv->sem) != 0) {
+	if (!down_nowait(&priv->sem)) {
 		set_bit(FLAG_PENDING_XMIT, &priv->flags);
 		netif_stop_queue(dev);
 		set_bit(JOB_XMIT, &priv->jobs);
@@ -2209,7 +2209,7 @@ static int airo_start_xmit11(struct sk_buff *skb, struct net_device *dev) {
 	fids[i] |= (len << 16);
 	priv->xmit11.skb = skb;
 	priv->xmit11.fid = i;
-	if (down_trylock(&priv->sem) != 0) {
+	if (!down_nowait(&priv->sem)) {
 		set_bit(FLAG_PENDING_XMIT11, &priv->flags);
 		netif_stop_queue(dev);
 		set_bit(JOB_XMIT11, &priv->jobs);
@@ -2257,7 +2257,7 @@ static struct net_device_stats *airo_get_stats(struct net_device *dev)
 
 	if (!test_bit(JOB_STATS, &local->jobs)) {
 		/* Get stats out of the card if available */
-		if (down_trylock(&local->sem) != 0) {
+		if (!down_nowait(&local->sem)) {
 			set_bit(JOB_STATS, &local->jobs);
 			wake_up_interruptible(&local->thr_wait);
 		} else
@@ -2284,7 +2284,7 @@ static void airo_set_multicast_list(struct net_device *dev) {
 
 	if ((dev->flags ^ ai->flags) & IFF_PROMISC) {
 		change_bit(FLAG_PROMISC, &ai->flags);
-		if (down_trylock(&ai->sem) != 0) {
+		if (!down_nowait(&ai->sem)) {
 			set_bit(JOB_PROMISC, &ai->jobs);
 			wake_up_interruptible(&ai->thr_wait);
 		} else
@@ -3211,7 +3211,7 @@ static irqreturn_t airo_interrupt(int irq, void *dev_id)
 				set_bit(FLAG_UPDATE_UNI, &apriv->flags);
 				set_bit(FLAG_UPDATE_MULTI, &apriv->flags);
 
-				if (down_trylock(&apriv->sem) != 0) {
+				if (!down_nowait(&apriv->sem)) {
 					set_bit(JOB_EVENT, &apriv->jobs);
 					wake_up_interruptible(&apriv->thr_wait);
 				} else
@@ -7658,7 +7658,7 @@ static struct iw_statistics *airo_get_wireless_stats(struct net_device *dev)
 
 	if (!test_bit(JOB_WSTATS, &local->jobs)) {
 		/* Get stats out of the card if available */
-		if (down_trylock(&local->sem) != 0) {
+		if (!down_nowait(&local->sem)) {
 			set_bit(JOB_WSTATS, &local->jobs);
 			wake_up_interruptible(&local->thr_wait);
 		} else
