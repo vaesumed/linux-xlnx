@@ -2726,9 +2726,7 @@ int acornscsi_abort(struct scsi_cmnd *SCpnt)
 //#if (DEBUG & DEBUG_ABORT)
 		printk("success\n");
 //#endif
-		SCpnt->result = DID_ABORT << 16;
-		SCpnt->scsi_done(SCpnt);
-		result = SCSI_ABORT_SUCCESS;
+		result = SUCCESS;
 		break;
 
 	/*
@@ -2740,7 +2738,7 @@ int acornscsi_abort(struct scsi_cmnd *SCpnt)
 //#if (DEBUG & DEBUG_ABORT)
 		printk("snooze\n");
 //#endif
-		result = SCSI_ABORT_SNOOZE;
+		result = FAILED;
 		break;
 
 	/*
@@ -2750,11 +2748,7 @@ int acornscsi_abort(struct scsi_cmnd *SCpnt)
 	default:
 	case res_not_running:
 		acornscsi_dumplog(host, SCpnt->device->id);
-#if (DEBUG & DEBUG_ABORT)
-		result = SCSI_ABORT_SNOOZE;
-#else
-		result = SCSI_ABORT_NOT_RUNNING;
-#endif
+		result = FAILED;
 //#if (DEBUG & DEBUG_ABORT)
 		printk("not running\n");
 //#endif
@@ -2765,13 +2759,12 @@ int acornscsi_abort(struct scsi_cmnd *SCpnt)
 }
 
 /*
- * Prototype: int acornscsi_reset(struct scsi_cmnd *SCpnt, unsigned int reset_flags)
+ * Prototype: int acornscsi_reset(struct scsi_cmnd *SCpnt)
  * Purpose  : reset a command on this host/reset this host
  * Params   : SCpnt  - command causing reset
- *	      result - what type of reset to perform
  * Returns  : one of SCSI_RESET_ macros
  */
-int acornscsi_reset(struct scsi_cmnd *SCpnt, unsigned int reset_flags)
+int acornscsi_bus_reset(struct scsi_cmnd *SCpnt)
 {
 	AS_Host *host = (AS_Host *)SCpnt->device->host->hostdata;
 	struct scsi_cmnd *SCptr;
@@ -2793,28 +2786,16 @@ int acornscsi_reset(struct scsi_cmnd *SCpnt, unsigned int reset_flags)
 
     acornscsi_dma_stop(host);
 
-    SCptr = host->SCpnt;
-
     /*
      * do hard reset.  This resets all devices on this host, and so we
      * must set the reset status on all commands.
      */
     acornscsi_resetcard(host);
 
-    /*
-     * report reset on commands current connected/disconnected
-     */
-    acornscsi_reportstatus(&host->SCpnt, &SCptr, DID_RESET);
-
     while ((SCptr = queue_remove(&host->queues.disconnected)) != NULL)
-	acornscsi_reportstatus(&SCptr, &SCpnt, DID_RESET);
+	;
 
-    if (SCpnt) {
-	SCpnt->result = DID_RESET << 16;
-	SCpnt->scsi_done(SCpnt);
-    }
-
-    return SCSI_RESET_BUS_RESET | SCSI_RESET_HOST_RESET | SCSI_RESET_SUCCESS;
+    return SUCCESS;
 }
 
 /*==============================================================================================
@@ -2971,9 +2952,8 @@ static struct scsi_host_template acornscsi_template = {
 	.name			= "AcornSCSI",
 	.info			= acornscsi_info,
 	.queuecommand		= acornscsi_queuecmd,
-#warning fixme
-	.abort			= acornscsi_abort,
-	.reset			= acornscsi_reset,
+	.eh_abort_handler	= acornscsi_abort,
+	.eh_bus_reset_handler	= acornscsi_bus_reset,
 	.can_queue		= 16,
 	.this_id		= 7,
 	.sg_tablesize		= SG_ALL,
