@@ -3406,3 +3406,86 @@ int usb_reset_composite_device(struct usb_device *udev,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(usb_reset_composite_device);
+
+/* Support for delayed resets */
+struct usb_dev_reset_ctx {
+	struct work_struct ws;
+	struct usb_device  *usb_dev;
+};
+
+/*
+ * We need to lock the device before resetting, but we may already have the
+ * lock. So we try to lock the device, if it fails (returns < 0) then we
+ * cannot proceed. If it returned 1 then we acquired the lock here and need
+ * to release the lock. If it returned 0 then we already have the lock and
+ * we leave it to the piece that acquired the lock to release it.
+ */
+static void usb_dev_reset_delayed_task(struct work_struct *ws)
+{
+	struct usb_dev_reset_ctx *reset_ctx =
+		container_of(ws, struct usb_dev_reset_ctx, ws);
+	struct usb_device *usb_dev = reset_ctx->usb_dev;
+	struct device *dev = &usb_dev->dev;
+	int had_to_lock;
+	int result = 0;
+
+	had_to_lock = usb_lock_device_for_reset(usb_dev, NULL);
+	if (had_to_lock < 0) {
+		if (had_to_lock != -ENODEV)	/* ignore dissapearance */
+			dev_err(dev, "Cannot lock device for reset: %d\n",
+				had_to_lock);
+	} else {
+		result = usb_reset_device(usb_dev);
+		if (result < 0 && result != -ENODEV)
+			dev_err(dev, "Unable to reset device: %d\n", result);
+		if (had_to_lock)
+			usb_unlock_device(usb_dev);
+	}
+	usb_dev->delayed_reset = 0;
+	usb_put_dev(usb_dev);
+	module_put(THIS_MODULE);
+	kfree(reset_ctx);
+}
+
+/**
+ * usb_dev_reset_delayed: Schedule a delayed USB device reset
+ * @usb_dev: USB device that needs to be reset. We assume you have a valid
+ * reference on it (so it won't dissapear) until we take another one that
+ * we'll own.
+ *
+ * Allocates a context structure containing a workqueue struct with
+ * all the pertinent info; gets a reference to @usb_dev and schedules
+ * the call that will be executed later on.
+ *
+ * NOTE: for use in atomic contexts
+ */
+void usb_dev_reset_delayed(struct usb_device *usb_dev)
+{
+	struct usb_dev_reset_ctx *reset_ctx;
+	struct device *dev = &usb_dev->dev;
+	reset_ctx = kmalloc(sizeof(*reset_ctx), GFP_ATOMIC);
+	if (reset_ctx == NULL) {
+		if (printk_ratelimit())
+			dev_err(dev, "USB: cannot allocate memory for "
+				"delayed device reset\n");
+		return;
+	}
+	if (try_module_get(THIS_MODULE) == 0)
+		goto error_module_get;
+	usb_get_dev(usb_dev);
+	if (usb_dev->delayed_reset)
+		goto error_pending;
+	usb_dev->delayed_reset = 1;
+	reset_ctx->usb_dev = usb_dev;
+	INIT_WORK(&reset_ctx->ws, usb_dev_reset_delayed_task);
+	schedule_work(&reset_ctx->ws);
+	return;
+
+error_pending:
+	usb_put_dev(usb_dev);
+	module_put(THIS_MODULE);
+error_module_get:
+	kfree(reset_ctx);
+	return;
+}
+EXPORT_SYMBOL_GPL(usb_dev_reset_delayed);
