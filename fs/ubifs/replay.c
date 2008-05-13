@@ -806,7 +806,8 @@ static int replay_log_leb(struct ubifs_info *c, int lnum, int offs, void *sbuf)
 		if (le64_to_cpu(node->cmt_no) != c->cmt_no) {
 			dbg_err("first CS node at LEB %d:%d has wrong "
 				"commit number %llu expected %llu",
-				lnum, offs, le64_to_cpu(node->cmt_no),
+				lnum, offs,
+				(unsigned long long)le64_to_cpu(node->cmt_no),
 				c->cmt_no);
 			goto out_dump;
 		}
