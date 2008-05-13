@@ -376,6 +376,7 @@ struct usb_tt;
  *	FIXME -- complete doc
  * @authenticated: Crypto authentication passed
  * @wusb: device is Wireless USB
+ * @delayed_reset: delayed reset is in progress, or not
  * @string_langid: language ID for strings
  * @product: iProduct string, if present (static)
  * @manufacturer: iManufacturer string, if present (static)
@@ -443,6 +444,7 @@ struct usb_device {
 	unsigned authorized:1;
  	unsigned authenticated:1;
 	unsigned wusb:1;
+	unsigned delayed_reset:1;
 	int string_langid;
 
 	/* static strings from the device */
@@ -498,6 +500,7 @@ extern int usb_lock_device_for_reset(struct usb_device *udev,
 
 /* USB port reset for device reinitialization */
 extern int usb_reset_device(struct usb_device *dev);
+extern void usb_dev_reset_delayed(struct usb_device *usb_dev);
 
 extern struct usb_device *usb_find_device(u16 vendor_id, u16 product_id);
 
