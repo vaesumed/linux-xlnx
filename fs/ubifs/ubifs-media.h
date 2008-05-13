@@ -96,7 +96,7 @@
 #define UBIFS_MAX_INODE_SZ 0x3FFFFFFFFFFFFFFFULL /* 62 bits */
 
 /* Maximum amount of data attached to an inode in bytes */
-#define UBIFS_MAX_INO_DATA 4096
+#define UBIFS_MAX_INO_DATA UBIFS_BLOCK_SIZE
 
 /* LEB Properties Tree fanout (must be power of 2) and fanout shift */
 #define UBIFS_LPT_FANOUT 4
