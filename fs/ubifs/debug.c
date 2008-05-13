@@ -213,7 +213,8 @@ static void dump_ch(const struct ubifs_ch *ch)
 	       dbg_ntype(ch->node_type));
 	printk(KERN_DEBUG "\tgroup_type     %d (%s)\n", ch->group_type,
 	       dbg_gtype(ch->group_type));
-	printk(KERN_DEBUG "\tsqnum          %llu\n", le64_to_cpu(ch->sqnum));
+	printk(KERN_DEBUG "\tsqnum          %llu\n",
+	       (unsigned long long)le64_to_cpu(ch->sqnum));
 	printk(KERN_DEBUG "\tlen            %u\n", le32_to_cpu(ch->len));
 }
 
@@ -222,7 +223,8 @@ void dbg_dump_inode(const struct ubifs_info *c, const struct inode *inode)
 	const struct ubifs_inode *ui = ubifs_inode(inode);
 
 	printk(KERN_DEBUG "inode      %lu\n", inode->i_ino);
-	printk(KERN_DEBUG "size       %llu\n", i_size_read(inode));
+	printk(KERN_DEBUG "size       %llu\n",
+	       (unsigned long long)i_size_read(inode));
 	printk(KERN_DEBUG "nlink      %u\n", inode->i_nlink);
 	printk(KERN_DEBUG "uid        %u\n", (unsigned int)inode->i_uid);
 	printk(KERN_DEBUG "gid        %u\n", (unsigned int)inode->i_gid);
@@ -296,7 +298,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tmax_leb_cnt    %u\n",
 		       le32_to_cpu(sup->max_leb_cnt));
 		printk(KERN_DEBUG "\tmax_bud_bytes  %llu\n",
-		       le64_to_cpu(sup->max_bud_bytes));
+		       (unsigned long long)le64_to_cpu(sup->max_bud_bytes));
 		printk(KERN_DEBUG "\tlog_lebs       %u\n",
 		       le32_to_cpu(sup->log_lebs));
 		printk(KERN_DEBUG "\tlpt_lebs       %u\n",
@@ -312,7 +314,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tdefault_compr  %u\n",
 		       (int)le16_to_cpu(sup->default_compr));
 		printk(KERN_DEBUG "\trp_size        %llu\n",
-		       le64_to_cpu(sup->rp_size));
+		       (unsigned long long)le64_to_cpu(sup->rp_size));
 		printk(KERN_DEBUG "\trp_uid         %u\n",
 		       le32_to_cpu(sup->rp_uid));
 		printk(KERN_DEBUG "\trp_gid         %u\n",
@@ -328,9 +330,9 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_mst_node *mst = node;
 
 		printk(KERN_DEBUG "\thighest_inum   %llu\n",
-		       le64_to_cpu(mst->highest_inum));
+		       (unsigned long long)le64_to_cpu(mst->highest_inum));
 		printk(KERN_DEBUG "\tcommit number  %llu\n",
-		       le64_to_cpu(mst->cmt_no));
+		       (unsigned long long)le64_to_cpu(mst->cmt_no));
 		printk(KERN_DEBUG "\tflags          %#x\n",
 		       le32_to_cpu(mst->flags));
 		printk(KERN_DEBUG "\tlog_lnum       %u\n",
@@ -374,15 +376,15 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tidx_lebs       %u\n",
 		       le32_to_cpu(mst->idx_lebs));
 		printk(KERN_DEBUG "\ttotal_free     %llu\n",
-		       le64_to_cpu(mst->total_free));
+		       (unsigned long long)le64_to_cpu(mst->total_free));
 		printk(KERN_DEBUG "\ttotal_dirty    %llu\n",
-		       le64_to_cpu(mst->total_dirty));
+		       (unsigned long long)le64_to_cpu(mst->total_dirty));
 		printk(KERN_DEBUG "\ttotal_used     %llu\n",
-		       le64_to_cpu(mst->total_used));
+		       (unsigned long long)le64_to_cpu(mst->total_used));
 		printk(KERN_DEBUG "\ttotal_dead     %llu\n",
-		       le64_to_cpu(mst->total_dead));
+		       (unsigned long long)le64_to_cpu(mst->total_dead));
 		printk(KERN_DEBUG "\ttotal_dark     %llu\n",
-		       le64_to_cpu(mst->total_dark));
+		       (unsigned long long)le64_to_cpu(mst->total_dark));
 		break;
 	}
 	case UBIFS_REF_NODE:
@@ -404,7 +406,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		key_read(c, &ino->key, &key);
 		printk(KERN_DEBUG "\tkey            %s\n", DBGKEY(&key));
 		printk(KERN_DEBUG "\tsize           %llu\n",
-		       le64_to_cpu(ino->size));
+		       (unsigned long long)le64_to_cpu(ino->size));
 		printk(KERN_DEBUG "\tnlink          %u\n",
 		       le32_to_cpu(ino->nlink));
 		printk(KERN_DEBUG "\tatime          %lld.%u\n",
@@ -427,7 +429,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\txattr_cnt      %u\n",
 		       le32_to_cpu(ino->xattr_cnt));
 		printk(KERN_DEBUG "\txattr_size     %llu\n",
-		       le64_to_cpu(ino->xattr_size));
+		       (unsigned long long)le64_to_cpu(ino->xattr_size));
 		printk(KERN_DEBUG "\txattr_names    %u\n",
 		       le32_to_cpu(ino->xattr_names));
 		printk(KERN_DEBUG "\tcompr_type     %#x\n",
@@ -445,7 +447,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		key_read(c, &dent->key, &key);
 		printk(KERN_DEBUG "\tkey            %s\n", DBGKEY(&key));
 		printk(KERN_DEBUG "\tinum           %llu\n",
-		       le64_to_cpu(dent->inum));
+		       (unsigned long long)le64_to_cpu(dent->inum));
 		printk(KERN_DEBUG "\ttype           %d\n", (int)dent->type);
 		printk(KERN_DEBUG "\tnlen           %d\n", nlen);
 		printk(KERN_DEBUG "\tname           ");
@@ -486,9 +488,9 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		key_read(c, &trun->key, &key);
 		printk(KERN_DEBUG "\tkey            %s\n", DBGKEY(&key));
 		printk(KERN_DEBUG "\told_size       %llu\n",
-		       le64_to_cpu(trun->old_size));
+		       (unsigned long long)le64_to_cpu(trun->old_size));
 		printk(KERN_DEBUG "\tnew_size       %llu\n",
-		       le64_to_cpu(trun->new_size));
+		       (unsigned long long)le64_to_cpu(trun->new_size));
 		break;
 	}
 	case UBIFS_IDX_NODE:
@@ -519,9 +521,9 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_orph_node *orph = node;
 
 		printk(KERN_DEBUG "\tcommit number  %llu\n",
-		       le64_to_cpu(orph->cmt_no) & LLONG_MAX);
+		       (unsigned long long)le64_to_cpu(orph->cmt_no) & LLONG_MAX);
 		printk(KERN_DEBUG "\tlast node flag %llu\n",
-		       le64_to_cpu(orph->cmt_no) >> 63);
+		       (unsigned long long)(le64_to_cpu(orph->cmt_no)) >> 63);
 		n = (le32_to_cpu(ch->len) - UBIFS_ORPH_NODE_SZ) >> 3;
 		printk(KERN_DEBUG "\t%d orphan inode numbers:\n", n);
 		for (i = 0; i < n; i++)
@@ -813,7 +815,8 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 	if (i_size_read(dir) != size) {
 		ubifs_err("bad directory dir %lu size %llu, "
 			  "calculated %llu", dir->i_ino,
-			  i_size_read(dir), size);
+			  (unsigned long long)i_size_read(dir),
+			  (unsigned long long)size);
 		dump_stack();
 		return -EINVAL;
 	}
