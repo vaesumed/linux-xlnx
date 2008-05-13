@@ -87,17 +87,26 @@ struct iwl_hcmd_ops {
 };
 struct iwl_hcmd_utils_ops {
 	int (*enqueue_hcmd)(struct iwl_priv *priv, struct iwl_host_cmd *cmd);
+#ifdef CONFIG_IWLWIFI_RUN_TIME_CALIB
+	void (*gain_computation)(struct iwl_priv *priv,
+			u32 *average_noise,
+			u16 min_average_noise_antennat_i,
+			u32 min_average_noise);
+	void (*chain_noise_reset)(struct iwl_priv *priv);
+#endif
 };
 
 struct iwl_lib_ops {
-	/* iwlwifi driver (priv) init */
-	int (*init_drv)(struct iwl_priv *priv);
 	/* set hw dependant perameters */
 	int (*set_hw_params)(struct iwl_priv *priv);
-
+	/* ucode shared memory */
+	int (*alloc_shared_mem)(struct iwl_priv *priv);
+	void (*free_shared_mem)(struct iwl_priv *priv);
 	void (*txq_update_byte_cnt_tbl)(struct iwl_priv *priv,
 					struct iwl4965_tx_queue *txq,
 					u16 byte_cnt);
+	/* setup Rx handler */
+	void (*rx_handler_setup)(struct iwl_priv *priv);
 	/* nic init */
 	int (*hw_nic_init)(struct iwl_priv *priv);
 	/* alive notification */
@@ -108,6 +117,15 @@ struct iwl_lib_ops {
 	int (*load_ucode)(struct iwl_priv *priv);
 	/* rfkill */
 	void (*radio_kill_sw)(struct iwl_priv *priv, int disable_radio);
+	 /* power management */
+	struct {
+		int (*init)(struct iwl_priv *priv);
+		void (*config)(struct iwl_priv *priv);
+		int (*set_pwr_src)(struct iwl_priv *priv, enum iwl_pwr_src src);
+	} apm_ops;
+	/* power */
+	int (*set_power)(struct iwl_priv *priv, void *cmd);
+	void (*update_chain_flags)(struct iwl_priv *priv);
 	/* eeprom operations (as defined in iwl-eeprom.h) */
 	struct iwl_eeprom_ops eeprom_ops;
 };
@@ -133,6 +151,7 @@ struct iwl_cfg {
 	const char *name;
 	const char *fw_name;
 	unsigned int sku;
+	int eeprom_size;
 	const struct iwl_ops *ops;
 	const struct iwl_mod_params *mod_params;
 };
@@ -143,13 +162,15 @@ struct iwl_cfg {
 
 struct ieee80211_hw *iwl_alloc_all(struct iwl_cfg *cfg,
 		struct ieee80211_ops *hw_ops);
+void iwl_hw_detect(struct iwl_priv *priv);
 
 void iwlcore_clear_stations_table(struct iwl_priv *priv);
-void iwlcore_reset_qos(struct iwl_priv *priv);
-int iwlcore_set_rxon_channel(struct iwl_priv *priv,
+void iwl_reset_qos(struct iwl_priv *priv);
+void iwl_set_rxon_chain(struct iwl_priv *priv);
+int iwl_set_rxon_channel(struct iwl_priv *priv,
 				enum ieee80211_band band,
 				u16 channel);
-
+void iwlcore_free_geos(struct iwl_priv *priv);
 int iwl_setup(struct iwl_priv *priv);
 
 /*****************************************************
@@ -235,6 +256,7 @@ enum iwlcore_card_notify {
 int iwlcore_low_level_notify(struct iwl_priv *priv,
 			     enum iwlcore_card_notify notify);
 extern int iwl_send_statistics_request(struct iwl_priv *priv, u8 flags);
+extern int iwl_verify_ucode(struct iwl_priv *priv);
 int iwl_send_lq_cmd(struct iwl_priv *priv,
 		    struct iwl_link_quality_cmd *lq, u8 flags);
 

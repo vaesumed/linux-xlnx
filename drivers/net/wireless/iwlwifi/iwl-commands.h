@@ -61,9 +61,9 @@
  *
  *****************************************************************************/
 /*
- * Please use this file (iwl-4965-commands.h) only for uCode API definitions.
+ * Please use this file (iwl-commands.h) only for uCode API definitions.
  * Please use iwl-4965-hw.h for hardware-related definitions.
- * Please use iwl-4965.h for driver implementation definitions.
+ * Please use iwl-dev.h for driver implementation definitions.
  */
 
 #ifndef __iwl4965_commands_h__
@@ -269,10 +269,11 @@ struct iwl_cmd_header {
  *          10 B active, A inactive
  *          11 Both active
  */
-#define RATE_MCS_ANT_POS       14
-#define RATE_MCS_ANT_A_MSK     0x04000
-#define RATE_MCS_ANT_B_MSK     0x08000
-#define RATE_MCS_ANT_AB_MSK    0x0C000
+#define RATE_MCS_ANT_POS      14
+#define RATE_MCS_ANT_A_MSK    0x04000
+#define RATE_MCS_ANT_B_MSK    0x08000
+#define RATE_MCS_ANT_C_MSK    0x10000
+#define RATE_MCS_ANT_ABC_MSK  0x1C000
 
 
 /**
@@ -711,6 +712,8 @@ struct iwl4965_qosparam_cmd {
 #define	IWL_STA_ID		2
 #define IWL4965_BROADCAST_ID	31
 #define	IWL4965_STATION_COUNT	32
+#define IWL5000_BROADCAST_ID	15
+#define	IWL5000_STATION_COUNT	16
 
 #define	IWL_STATION_COUNT	32 	/* MAX(3945,4965)*/
 #define	IWL_INVALID_STATION 	255
@@ -1098,6 +1101,14 @@ struct iwl4965_rx_mpdu_res_start {
 #define TX_CMD_SEC_MSK		0x03
 #define TX_CMD_SEC_SHIFT	6
 #define TX_CMD_SEC_KEY128	0x08
+
+/*
+ * security overhead sizes
+ */
+#define WEP_IV_LEN 4
+#define WEP_ICV_LEN 4
+#define CCMP_MIC_LEN 8
+#define TKIP_ICV_LEN 4
 
 /*
  * 4965 uCode updates these Tx attempt count values in host DRAM.
@@ -1853,6 +1864,7 @@ struct iwl4965_spectrum_notification {
 #define IWL_POWER_DRIVER_ALLOW_SLEEP_MSK	__constant_cpu_to_le16(1 << 0)
 #define IWL_POWER_SLEEP_OVER_DTIM_MSK		__constant_cpu_to_le16(1 << 2)
 #define IWL_POWER_PCI_PM_MSK			__constant_cpu_to_le16(1 << 3)
+#define IWL_POWER_FAST_PD			__constant_cpu_to_le16(1 << 4)
 
 struct iwl4965_powertable_cmd {
 	__le16 flags;
@@ -2559,7 +2571,7 @@ struct iwl4965_missed_beacon_notif {
  */
 
 /*
- * Table entries in SENSITIVITY_CMD (struct iwl4965_sensitivity_cmd)
+ * Table entries in SENSITIVITY_CMD (struct iwl_sensitivity_cmd)
  */
 #define HD_TABLE_SIZE  (11)	/* number of entries */
 #define HD_MIN_ENERGY_CCK_DET_INDEX                 (0)	/* table indexes */
@@ -2574,18 +2586,18 @@ struct iwl4965_missed_beacon_notif {
 #define HD_AUTO_CORR40_X4_TH_ADD_MIN_INDEX          (9)
 #define HD_OFDM_ENERGY_TH_IN_INDEX                  (10)
 
-/* Control field in struct iwl4965_sensitivity_cmd */
+/* Control field in struct iwl_sensitivity_cmd */
 #define SENSITIVITY_CMD_CONTROL_DEFAULT_TABLE	__constant_cpu_to_le16(0)
 #define SENSITIVITY_CMD_CONTROL_WORK_TABLE	__constant_cpu_to_le16(1)
 
 /**
- * struct iwl4965_sensitivity_cmd
+ * struct iwl_sensitivity_cmd
  * @control:  (1) updates working table, (0) updates default table
  * @table:  energy threshold values, use HD_* as index into table
  *
  * Always use "1" in "control" to update uCode's working table and DSP.
  */
-struct iwl4965_sensitivity_cmd {
+struct iwl_sensitivity_cmd {
 	__le16 control;			/* always use "1" */
 	__le16 table[HD_TABLE_SIZE];	/* use HD_* as index */
 } __attribute__ ((packed));
@@ -2657,6 +2669,37 @@ struct iwl4965_calibration_cmd {
 	s8 diff_gain_b;
 	s8 diff_gain_c;
 	u8 reserved1;
+} __attribute__ ((packed));
+
+/* Phy calibration command for 5000 series */
+
+enum {
+	IWL5000_PHY_CALIBRATE_DC_CMD		= 8,
+	IWL5000_PHY_CALIBRATE_LO_CMD		= 9,
+	IWL5000_PHY_CALIBRATE_RX_BB_CMD		= 10,
+	IWL5000_PHY_CALIBRATE_TX_IQ_CMD		= 11,
+	IWL5000_PHY_CALIBRATE_RX_IQ_CMD		= 12,
+	IWL5000_PHY_CALIBRATION_NOISE_CMD	= 13,
+	IWL5000_PHY_CALIBRATE_AGC_TABLE_CMD	= 14,
+	IWL5000_PHY_CALIBRATE_CRYSTAL_FRQ_CMD	= 15,
+	IWL5000_PHY_CALIBRATE_BASE_BAND_CMD	= 16,
+	IWL5000_PHY_CALIBRATE_CHAIN_NOISE_RESET_CMD = 18,
+	IWL5000_PHY_CALIBRATE_CHAIN_NOISE_GAIN_CMD = 19,
+};
+
+struct iwl5000_calibration_chain_noise_reset_cmd {
+	u8 op_code;	/* IWL5000_PHY_CALIBRATE_CHAIN_NOISE_RESET_CMD */
+	u8 flags;	/* not used */
+	__le16 reserved;
+} __attribute__ ((packed));
+
+struct iwl5000_calibration_chain_noise_gain_cmd {
+	u8 op_code;	/* IWL5000_PHY_CALIBRATE_CHAIN_NOISE_GAIN_CMD */
+	u8 flags;	/* not used */
+	__le16 reserved;
+	u8 delta_gain_1;
+	u8 delta_gain_2;
+	__le16 reserved1;
 } __attribute__ ((packed));
 
 /******************************************************************************
