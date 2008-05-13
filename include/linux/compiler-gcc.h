@@ -61,3 +61,22 @@
 #define  noinline			__attribute__((noinline))
 #define __attribute_const__		__attribute__((__const__))
 #define __maybe_unused			__attribute__((unused))
+
+/**
+ * cast_if_type - allow an alternate type
+ * @expr: the expression to optionally cast
+ * @oktype: the type to allow.
+ * @desttype: the type to cast to.
+ *
+ * This is used to accept a particular alternate type for an expression:
+ * because any other types will not be cast, they will cause a warning as
+ * normal.
+ *
+ * Note that the unnecessary trinary forces functions to devolve into
+ * function pointers as users expect, but means @expr must be a pointer or
+ * integer.
+ */
+#define cast_if_type(expr, oktype, desttype)				\
+  __builtin_choose_expr(__builtin_types_compatible_p(typeof(1?(expr):0),\
+						     oktype),		\
+			(desttype)(expr), (expr))

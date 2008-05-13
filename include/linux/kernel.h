@@ -496,4 +496,39 @@ struct sysinfo {
 #define NUMA_BUILD 0
 #endif
 
+/* If fn is of type ok1 or ok2, cast to desttype */
+#define __typesafe_cb(desttype, fn, ok1, ok2) \
+	cast_if_type(cast_if_type((fn), ok1, desttype), ok2, desttype)
+
+/**
+ * typesafe_cb - cast a callback function if it matches the arg
+ * @rettype: the return type of the callback function
+ * @fn: the callback function to cast
+ * @arg: the (pointer) argument to hand to the callback function.
+ *
+ * If a callback function takes a single argument, this macro does
+ * appropriate casts to a function which takes a single void * argument if the
+ * callback provided matches the @arg (or a const or volatile version).
+ *
+ * It is assumed that @arg is of pointer type: usually @arg is passed
+ * or assigned to a void * elsewhere anyway.
+ */
+#define typesafe_cb(rettype, fn, arg)					\
+	__typesafe_cb(rettype (*)(void *), (fn),			\
+		      rettype (*)(const typeof(arg)),			\
+		      rettype (*)(typeof(arg)))
+
+/**
+ * typesafe_cb_preargs - cast a callback function if it matches the arg
+ * @rettype: the return type of the callback function
+ * @fn: the callback function to cast
+ * @arg: the (pointer) argument to hand to the callback function.
+ *
+ * This is a version of typesafe_cb() for callbacks that take other arguments
+ * before the @arg.
+ */
+#define typesafe_cb_preargs(rettype, fn, arg, ...)			\
+	__typesafe_cb(rettype (*)(__VA_ARGS__, void *), (fn),		\
+		      rettype (*)(__VA_ARGS__, const typeof(arg)),	\
+		      rettype (*)(__VA_ARGS__, typeof(arg)))
 #endif
