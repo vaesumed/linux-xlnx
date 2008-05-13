@@ -179,7 +179,7 @@ static void ar7_wdt_disable_wdt(void)
 static int ar7_wdt_open(struct inode *inode, struct file *file)
 {
 	/* only allow one at a time */
-	if (down_trylock(&open_semaphore))
+	if (!down_nowait(&open_semaphore))
 		return -EBUSY;
 	ar7_wdt_enable_wdt();
 	expect_close = 0;
