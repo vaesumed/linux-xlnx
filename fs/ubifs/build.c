@@ -1319,7 +1319,7 @@ static int __init ubifs_init(void)
 		ubifs_err("RAM page size is %u bytes, but UBIFS currently works"
 			  "only on systems with 4096 bytes RAM page size",
 			  (unsigned int)PAGE_CACHE_SIZE);
-		return err;
+		return -EINVAL;
 	}
 
 	err  = bdi_init(&ubifs_backing_dev_info);
