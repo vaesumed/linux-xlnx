@@ -27,8 +27,6 @@
 
 void dlm_print_one_mle(struct dlm_master_list_entry *mle);
 
-#ifdef CONFIG_DEBUG_FS
-
 struct dlm_debug_ctxt {
 	struct kref debug_refcnt;
 	struct dentry *debug_state_dentry;
@@ -58,29 +56,4 @@ void dlm_destroy_debugfs_subroot(struct dlm_ctxt *dlm);
 int dlm_create_debugfs_root(void);
 void dlm_destroy_debugfs_root(void);
 
-#else
-
-static int dlm_debug_init(struct dlm_ctxt *dlm)
-{
-	return 0;
-}
-static void dlm_debug_shutdown(struct dlm_ctxt *dlm)
-{
-}
-static int dlm_create_debugfs_subroot(struct dlm_ctxt *dlm)
-{
-	return 0;
-}
-static void dlm_destroy_debugfs_subroot(struct dlm_ctxt *dlm)
-{
-}
-static int dlm_create_debugfs_root(void)
-{
-	return 0;
-}
-static void dlm_destroy_debugfs_root(void)
-{
-}
-
-#endif	/* CONFIG_DEBUG_FS */
 #endif	/* DLMDEBUG_H */
