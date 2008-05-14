@@ -996,3 +996,23 @@ int bitmap_allocate_region(unsigned long *bitmap, int pos, int order)
 	return 0;
 }
 EXPORT_SYMBOL(bitmap_allocate_region);
+
+/**
+ * bitmap_copy_le - copy a bitmap, putting the bits into little-endian order.
+ * @dst:   destination bitmap.
+ * @src:   bitmap to copy.
+ * @nbits: number of bits in the bitmap.
+ *
+ * Require nbits % BITS_PER_LONG == 0.
+ */
+void bitmap_copy_le(unsigned long *dst, const unsigned long *src, int nbits)
+{
+	int i;
+
+	for (i = 0; i < nbits/BITS_PER_LONG; i++)
+		if (BITS_PER_LONG == 64)
+			dst[i] = cpu_to_le64(src[i]);
+		else
+			dst[i] = cpu_to_le32(src[i]);
+}
+EXPORT_SYMBOL(bitmap_copy_le);
