@@ -87,6 +87,7 @@ static int ieee80211_sta_start_scan(struct net_device *dev,
 				    u8 *ssid, size_t ssid_len);
 static int ieee80211_sta_config_auth(struct net_device *dev,
 				     struct ieee80211_if_sta *ifsta);
+static void sta_rx_agg_session_timer_expired(unsigned long data);
 
 
 void ieee802_11_parse_elems(u8 *start, size_t len,
@@ -256,19 +257,8 @@ static void ieee80211_sta_def_wmm_params(struct net_device *dev,
 		qparam.cw_max = 1023;
 		qparam.txop = 0;
 
-		for (i = IEEE80211_TX_QUEUE_DATA0; i < NUM_TX_DATA_QUEUES; i++)
-			local->ops->conf_tx(local_to_hw(local),
-					   i + IEEE80211_TX_QUEUE_DATA0,
-					   &qparam);
-
-		if (ibss) {
-			/* IBSS uses different parameters for Beacon sending */
-			qparam.cw_min++;
-			qparam.cw_min *= 2;
-			qparam.cw_min--;
-			local->ops->conf_tx(local_to_hw(local),
-					   IEEE80211_TX_QUEUE_BEACON, &qparam);
-		}
+		for (i = 0; i < local_to_hw(local)->queues; i++)
+			local->ops->conf_tx(local_to_hw(local), i, &qparam);
 	}
 }
 
@@ -305,29 +295,25 @@ static void ieee80211_sta_wmm_params(struct net_device *dev,
 
 		switch (aci) {
 		case 1:
-			queue = IEEE80211_TX_QUEUE_DATA3;
-			if (acm) {
+			queue = 3;
+			if (acm)
 				local->wmm_acm |= BIT(0) | BIT(3);
-			}
 			break;
 		case 2:
-			queue = IEEE80211_TX_QUEUE_DATA1;
-			if (acm) {
+			queue = 1;
+			if (acm)
 				local->wmm_acm |= BIT(4) | BIT(5);
-			}
 			break;
 		case 3:
-			queue = IEEE80211_TX_QUEUE_DATA0;
-			if (acm) {
+			queue = 0;
+			if (acm)
 				local->wmm_acm |= BIT(6) | BIT(7);
-			}
 			break;
 		case 0:
 		default:
-			queue = IEEE80211_TX_QUEUE_DATA2;
-			if (acm) {
+			queue = 2;
+			if (acm)
 				local->wmm_acm |= BIT(1) | BIT(2);
-			}
 			break;
 		}
 
@@ -727,9 +713,8 @@ static void ieee80211_send_assoc(struct net_device *dev,
 	if (bss) {
 		if (bss->capability & WLAN_CAPABILITY_PRIVACY)
 			capab |= WLAN_CAPABILITY_PRIVACY;
-		if (bss->wmm_ie) {
+		if (bss->wmm_ie)
 			wmm = 1;
-		}
 		ieee80211_rx_bss_put(dev, bss);
 	}
 
@@ -1134,8 +1119,8 @@ static void ieee80211_send_addba_resp(struct net_device *dev, u8 *da, u16 tid,
 	struct ieee80211_mgmt *mgmt;
 	u16 capab;
 
-	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom + 1 +
-					sizeof(mgmt->u.action.u.addba_resp));
+	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom);
+
 	if (!skb) {
 		printk(KERN_DEBUG "%s: failed to allocate buffer "
 		       "for addba resp frame\n", dev->name);
@@ -1183,9 +1168,7 @@ void ieee80211_send_addba_request(struct net_device *dev, const u8 *da,
 	struct ieee80211_mgmt *mgmt;
 	u16 capab;
 
-	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom + 1 +
-				sizeof(mgmt->u.action.u.addba_req));
-
+	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom);
 
 	if (!skb) {
 		printk(KERN_ERR "%s: failed to allocate buffer "
@@ -1447,8 +1430,7 @@ void ieee80211_send_delba(struct net_device *dev, const u8 *da, u16 tid,
 	struct ieee80211_mgmt *mgmt;
 	u16 params;
 
-	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom + 1 +
-					sizeof(mgmt->u.action.u.delba));
+	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom);
 
 	if (!skb) {
 		printk(KERN_ERR "%s: failed to allocate buffer "
@@ -1652,7 +1634,7 @@ timer_expired_exit:
  * resetting it after each frame that arrives from the originator.
  * if this timer expires ieee80211_sta_stop_rx_ba_session will be executed.
  */
-void sta_rx_agg_session_timer_expired(unsigned long data)
+static void sta_rx_agg_session_timer_expired(unsigned long data)
 {
 	/* not an elegant detour, but there is no choice as the timer passes
 	 * only one argument, and verious sta_info are needed here, so init
@@ -1841,9 +1823,8 @@ static void ieee80211_rx_mgmt_deauth(struct net_device *dev,
 	       " (reason=%d)\n",
 	       dev->name, print_mac(mac, mgmt->sa), reason_code);
 
-	if (ifsta->flags & IEEE80211_STA_AUTHENTICATED) {
+	if (ifsta->flags & IEEE80211_STA_AUTHENTICATED)
 		printk(KERN_DEBUG "%s: deauthenticated\n", dev->name);
-	}
 
 	if (ifsta->state == IEEE80211_AUTHENTICATE ||
 	    ifsta->state == IEEE80211_ASSOCIATE ||
@@ -3553,10 +3534,12 @@ static int ieee80211_sta_create_ibss(struct net_device *dev,
 	bss->beacon_int = local->hw.conf.beacon_int;
 	bss->last_update = jiffies;
 	bss->capability = WLAN_CAPABILITY_IBSS;
-	if (sdata->default_key) {
+
+	if (sdata->default_key)
 		bss->capability |= WLAN_CAPABILITY_PRIVACY;
-	} else
+	else
 		sdata->drop_unencrypted = 0;
+
 	bss->supp_rates_len = sband->n_bitrates;
 	pos = bss->supp_rates;
 	for (i = 0; i < sband->n_bitrates; i++) {
@@ -4239,6 +4222,7 @@ int ieee80211_sta_set_extra_ie(struct net_device *dev, char *ie, size_t len)
 {
 	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 	struct ieee80211_if_sta *ifsta = &sdata->u.sta;
+
 	kfree(ifsta->extra_ie);
 	if (len == 0) {
 		ifsta->extra_ie = NULL;
@@ -4256,9 +4240,9 @@ int ieee80211_sta_set_extra_ie(struct net_device *dev, char *ie, size_t len)
 }
 
 
-struct sta_info * ieee80211_ibss_add_sta(struct net_device *dev,
-					 struct sk_buff *skb, u8 *bssid,
-					 u8 *addr)
+struct sta_info *ieee80211_ibss_add_sta(struct net_device *dev,
+					struct sk_buff *skb, u8 *bssid,
+					u8 *addr)
 {
 	struct ieee80211_local *local = wdev_priv(dev->ieee80211_ptr);
 	struct sta_info *sta;
