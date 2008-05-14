@@ -152,9 +152,6 @@ struct virtqueue
 	/* The actual ring of buffers. */
 	struct vring vring;
 
-	/* Last available index we saw. */
-	u16 last_avail_idx;
-
 	/* The routine to call when the Guest pings us. */
 	void (*handle_output)(int fd, struct virtqueue *me);
 };
@@ -658,19 +655,22 @@ static unsigned get_vq_desc(struct virtqueue *vq,
 			    unsigned int *out_num, unsigned int *in_num)
 {
 	unsigned int i, head;
+	u16 last_avail;
 
 	/* Check it isn't doing very strange things with descriptor numbers. */
-	if ((u16)(vq->vring.avail->idx - vq->last_avail_idx) > vq->vring.num)
+	last_avail = vring_last_avail(&vq->vring);
+	if ((u16)(vq->vring.avail->idx - last_avail) > vq->vring.num)
 		errx(1, "Guest moved used index from %u to %u",
-		     vq->last_avail_idx, vq->vring.avail->idx);
+		     last_avail, vq->vring.avail->idx);
 
 	/* If there's nothing new since last we looked, return invalid. */
-	if (vq->vring.avail->idx == vq->last_avail_idx)
+	if (vq->vring.avail->idx == last_avail)
 		return vq->vring.num;
 
 	/* Grab the next descriptor number they're advertising, and increment
 	 * the index we've seen. */
-	head = vq->vring.avail->ring[vq->last_avail_idx++ % vq->vring.num];
+	head = vq->vring.avail->ring[last_avail % vq->vring.num];
+	vring_last_avail(&vq->vring)++;
 
 	/* If their number is silly, that's a fatal mistake. */
 	if (head >= vq->vring.num)
@@ -945,7 +945,7 @@ static void update_device_status(struct device *dev)
 		for (vq = dev->vq; vq; vq = vq->next) {
 			memset(vq->vring.desc, 0,
 			       vring_size(vq->config.num, getpagesize()));
-			vq->last_avail_idx = 0;
+			vring_last_avail(&vq->vring) = 0;
 		}
 	} else if (dev->desc->status & VIRTIO_CONFIG_S_FAILED) {
 		warnx("Device %s configuration FAILED", dev->name);
@@ -1105,7 +1105,6 @@ static void add_virtqueue(struct device *dev, unsigned int num_descs,
 
 	/* Initialize the virtqueue */
 	vq->next = NULL;
-	vq->last_avail_idx = 0;
 	vq->dev = dev;
 
 	/* Initialize the configuration. */
@@ -1161,6 +1160,10 @@ static void add_feature(struct device *dev, unsigned bit)
  * how we use it. */
 static void set_config(struct device *dev, unsigned len, const void *conf)
 {
+	/* We always set the VIRTIO_RING_F_PUBLISH_INDICES feature
+	 * bit, so now is a good time to do that. */
+	add_feature(dev, VIRTIO_RING_F_PUBLISH_INDICES);
+
 	/* Check we haven't overflowed our single page. */
 	if (device_config(dev) + len > devices.descpage + getpagesize())
 		errx(1, "Too many devices");
@@ -1235,6 +1238,8 @@ static void setup_console(void)
 	add_virtqueue(dev, VIRTQUEUE_NUM, enable_fd);
 	add_virtqueue(dev, VIRTQUEUE_NUM, handle_console_output);
 
+	/* Every device should set this bit. */
+	add_feature(dev, VIRTIO_RING_F_PUBLISH_INDICES);
 	verbose("device %u: console\n", devices.device_num++);
 }
 /*:*/
