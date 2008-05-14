@@ -1247,7 +1247,7 @@ OldOpenRetry:
 	} else {
 	/* BB verify if wct == 15 */
 
-/*		*pOplock = pSMBr->OplockLevel; */  /* BB take from action field BB */
+/*		*pOplock = pSMBr->OplockLevel; */ /* BB take from action field*/
 
 		*netfid = pSMBr->Fid;   /* cifs fid stays in le */
 		/* Let caller know file was created so we can set the mode. */
@@ -1767,7 +1767,7 @@ CIFSSMBPosixLock(const int xid, struct cifsTconInfo *tcon,
 	cFYI(1, ("Posix Lock"));
 
 	if (pLockData == NULL)
-		return EINVAL;
+		return -EINVAL;
 
 	rc = small_smb_init(SMB_COM_TRANSACTION2, 15, tcon, (void **) &pSMB);
 
@@ -1944,7 +1944,7 @@ renameRetry:
 	/* protocol requires ASCII signature byte on Unicode string */
 		pSMB->OldFileName[name_len + 1] = 0x00;
 		name_len2 =
-		    cifsConvertToUCS((__le16 *) &pSMB->OldFileName[name_len + 2],
+		    cifsConvertToUCS((__le16 *)&pSMB->OldFileName[name_len + 2],
 				     toName, PATH_MAX, nls_codepage, remap);
 		name_len2 += 1 /* trailing null */  + 1 /* Signature word */ ;
 		name_len2 *= 2;	/* convert to bytes */
@@ -2925,7 +2925,8 @@ setAclRetry:
 	}
 	params = 6 + name_len;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000); /* BB find max SMB size from sess */
+	/* BB find max SMB size from sess */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -3322,7 +3323,8 @@ QPathInfoRetry:
 	params = 2 /* level */ + 4 /* reserved */ + name_len /* includes NUL */;
 	pSMB->TotalDataCount = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(4000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(4000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -3388,7 +3390,7 @@ QPathInfoRetry:
 int
 CIFSSMBUnixQPathInfo(const int xid, struct cifsTconInfo *tcon,
 		     const unsigned char *searchName,
-		     FILE_UNIX_BASIC_INFO * pFindData,
+		     FILE_UNIX_BASIC_INFO *pFindData,
 		     const struct nls_table *nls_codepage, int remap)
 {
 /* SMB_QUERY_FILE_UNIX_BASIC */
@@ -3679,6 +3681,7 @@ int CIFSFindNext(const int xid, struct cifsTconInfo *tcon,
 	if (rc) {
 		if (rc == -EBADF) {
 			psrch_inf->endOfSearch = true;
+			cifs_buf_release(pSMB);
 			rc = 0; /* search probably was closed at end of search*/
 		} else
 			cFYI(1, ("FindNext returned = %d", rc));
@@ -3921,7 +3924,8 @@ getDFSRetry:
 	pSMB->DataCount = 0;
 	pSMB->DataOffset = 0;
 	pSMB->MaxParameterCount = 0;
-	pSMB->MaxDataCount = cpu_to_le16(4000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(4000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -4229,7 +4233,8 @@ QFSAttributeRetry:
 	params = 2;	/* level */
 	pSMB->TotalDataCount = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -4298,7 +4303,8 @@ QFSDeviceRetry:
 	params = 2;	/* level */
 	pSMB->TotalDataCount = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -4369,7 +4375,8 @@ QFSUnixRetry:
 	pSMB->DataCount = 0;
 	pSMB->DataOffset = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(100);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(100);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -4444,7 +4451,8 @@ SETFSUnixRetry:
 	offset = param_offset + params;
 
 	pSMB->MaxParameterCount = cpu_to_le16(4);
-	pSMB->MaxDataCount = cpu_to_le16(100);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(100);
 	pSMB->SetupCount = 1;
 	pSMB->Reserved3 = 0;
 	pSMB->SubCommand = cpu_to_le16(TRANS2_SET_FS_INFORMATION);
@@ -4512,7 +4520,8 @@ QFSPosixRetry:
 	pSMB->DataCount = 0;
 	pSMB->DataOffset = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(100);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(100);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -4702,7 +4711,8 @@ CIFSSMBSetFileSize(const int xid, struct cifsTconInfo *tcon, __u64 size,
 
 	count = sizeof(struct file_end_of_file_info);
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find max SMB PDU from sess */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->SetupCount = 1;
 	pSMB->Reserved3 = 0;
 	pSMB->SubCommand = cpu_to_le16(TRANS2_SET_FILE_INFORMATION);
@@ -4789,7 +4799,8 @@ CIFSSMBSetFileTimes(const int xid, struct cifsTconInfo *tcon,
 
 	count = sizeof(FILE_BASIC_INFO);
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find max SMB PDU from sess */
+	/* BB find max SMB PDU from sess */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->SetupCount = 1;
 	pSMB->Reserved3 = 0;
 	pSMB->SubCommand = cpu_to_le16(TRANS2_SET_FILE_INFORMATION);
@@ -4856,7 +4867,8 @@ SetTimesRetry:
 	params = 6 + name_len;
 	count = sizeof(FILE_BASIC_INFO);
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -4986,7 +4998,8 @@ setPermsRetry:
 	params = 6 + name_len;
 	count = sizeof(FILE_UNIX_BASIC_INFO);
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -5169,7 +5182,8 @@ QAllEAsRetry:
 	params = 2 /* level */ + 4 /* reserved */ + name_len /* includes NUL */;
 	pSMB->TotalDataCount = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(4000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(4000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -5317,7 +5331,8 @@ QEARetry:
 	params = 2 /* level */ + 4 /* reserved */ + name_len /* includes NUL */;
 	pSMB->TotalDataCount = 0;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(4000);	/* BB find exact max SMB PDU from sess structure BB */
+	/* BB find exact max SMB PDU from sess structure BB */
+	pSMB->MaxDataCount = cpu_to_le16(4000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
@@ -5475,7 +5490,8 @@ SetEARetry:
 
 	count = sizeof(*parm_data) + ea_value_len + name_len;
 	pSMB->MaxParameterCount = cpu_to_le16(2);
-	pSMB->MaxDataCount = cpu_to_le16(1000);	/* BB find max SMB size from sess */
+	/* BB find max SMB PDU from sess */
+	pSMB->MaxDataCount = cpu_to_le16(1000);
 	pSMB->MaxSetupCount = 0;
 	pSMB->Reserved = 0;
 	pSMB->Flags = 0;
