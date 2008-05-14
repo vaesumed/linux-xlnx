@@ -36,12 +36,13 @@
 #define CX18_DSP0_INTERRUPT_MASK     	0xd0004C
 
 static struct file_operations cx18_v4l2_enc_fops = {
-      .owner = THIS_MODULE,
-      .read = cx18_v4l2_read,
-      .open = cx18_v4l2_open,
-      .ioctl = cx18_v4l2_ioctl,
-      .release = cx18_v4l2_close,
-      .poll = cx18_v4l2_enc_poll,
+	.owner = THIS_MODULE,
+	.read = cx18_v4l2_read,
+	.open = cx18_v4l2_open,
+	.ioctl = cx18_v4l2_ioctl,
+	.compat_ioctl = v4l_compat_ioctl32,
+	.release = cx18_v4l2_close,
+	.poll = cx18_v4l2_enc_poll,
 };
 
 /* offset from 0 to register ts v4l2 minors on */
@@ -218,7 +219,7 @@ int cx18_streams_setup(struct cx18 *cx)
 		return 0;
 
 	/* One or more streams could not be initialized. Clean 'em all up. */
-	cx18_streams_cleanup(cx);
+	cx18_streams_cleanup(cx, 0);
 	return -ENOMEM;
 }
 
@@ -296,12 +297,12 @@ int cx18_streams_register(struct cx18 *cx)
 		return 0;
 
 	/* One or more streams could not be initialized. Clean 'em all up. */
-	cx18_streams_cleanup(cx);
+	cx18_streams_cleanup(cx, 1);
 	return -ENOMEM;
 }
 
 /* Unregister v4l2 devices */
-void cx18_streams_cleanup(struct cx18 *cx)
+void cx18_streams_cleanup(struct cx18 *cx, int unregister)
 {
 	struct video_device *vdev;
 	int type;
@@ -319,8 +320,11 @@ void cx18_streams_cleanup(struct cx18 *cx)
 
 		cx18_stream_free(&cx->streams[type]);
 
-		/* Unregister device */
-		video_unregister_device(vdev);
+		/* Unregister or release device */
+		if (unregister)
+			video_unregister_device(vdev);
+		else
+			video_device_release(vdev);
 	}
 }
 
