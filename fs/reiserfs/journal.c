@@ -1412,7 +1412,7 @@ static int flush_journal_list(struct super_block *s,
 	/* if flushall == 0, the lock is already held */
 	if (flushall) {
 		down(&journal->j_flush_sem);
-	} else if (!down_trylock(&journal->j_flush_sem)) {
+	} else if (down_nowait(&journal->j_flush_sem)) {
 		BUG();
 	}
 
