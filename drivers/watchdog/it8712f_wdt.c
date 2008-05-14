@@ -306,7 +306,7 @@ static int
 it8712f_wdt_open(struct inode *inode, struct file *file)
 {
 	/* only allow one at a time */
-	if (down_trylock(&it8712f_wdt_sem))
+	if (!down_nowait(&it8712f_wdt_sem))
 		return -EBUSY;
 	it8712f_wdt_enable();
 

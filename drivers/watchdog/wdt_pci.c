@@ -426,7 +426,7 @@ static int wdtpci_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 
 static int wdtpci_open(struct inode *inode, struct file *file)
 {
-	if (down_trylock(&open_sem))
+	if (!down_nowait(&open_sem))
 		return -EBUSY;
 
 	if (nowayout) {

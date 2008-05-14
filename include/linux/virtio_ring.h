@@ -24,6 +24,9 @@
  * optimization.  */
 #define VRING_AVAIL_F_NO_INTERRUPT	1
 
+/* We publish our last-seen used index at the end of the avail ring. */
+#define VIRTIO_RING_F_PUBLISH_INDICES	24
+
 /* Virtio ring descriptors: 16 bytes.  These can chain together via "next". */
 struct vring_desc
 {
@@ -82,6 +85,7 @@ struct vring {
  *	__u16 avail_flags;
  *	__u16 avail_idx;
  *	__u16 available[num];
+ *	__u16 last_used_idx;
  *
  *	// Padding to the next page boundary.
  *	char pad[];
@@ -90,6 +94,7 @@ struct vring {
  *	__u16 used_flags;
  *	__u16 used_idx;
  *	struct vring_used_elem used[num];
+ *	__u16 last_avail_idx;
  * };
  */
 static inline void vring_init(struct vring *vr, unsigned int num, void *p,
@@ -106,8 +111,13 @@ static inline unsigned vring_size(unsigned int num, unsigned long pagesize)
 {
 	return ((sizeof(struct vring_desc) * num + sizeof(__u16) * (2 + num)
 		 + pagesize - 1) & ~(pagesize - 1))
-		+ sizeof(__u16) * 2 + sizeof(struct vring_used_elem) * num;
+		+ sizeof(__u16) * 2 + sizeof(struct vring_used_elem) * num + 2;
 }
+
+/* We publish the last-seen used index at the end of the available ring, and
+ * vice-versa.  These are at the end for backwards compatibility. */
+#define vring_last_used(vr) ((vr)->avail->ring[(vr)->num])
+#define vring_last_avail(vr) (*(__u16 *)&(vr)->used->ring[(vr)->num])
 
 #ifdef __KERNEL__
 #include <linux/irqreturn.h>
@@ -120,6 +130,9 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 				      void (*notify)(struct virtqueue *vq),
 				      void (*callback)(struct virtqueue *vq));
 void vring_del_virtqueue(struct virtqueue *vq);
+
+/* Filter out unsupported transport-specific feature bits. */
+u32 vring_transport_features(u32 features);
 
 irqreturn_t vring_interrupt(int irq, void *_vq);
 #endif /* __KERNEL__ */

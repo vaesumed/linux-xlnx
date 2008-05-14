@@ -576,7 +576,7 @@ static int mc32_command_nowait(struct net_device *dev, u16 cmd, void *data, int 
 	int ioaddr = dev->base_addr;
 	int ret = -1;
 
-	if (down_trylock(&lp->cmd_mutex) == 0)
+	if (down_nowait(&lp->cmd_mutex))
 	{
 		lp->cmd_nonblocking=1;
 		lp->exec_box->mbox=0;
