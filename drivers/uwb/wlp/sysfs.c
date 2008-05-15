@@ -125,8 +125,8 @@ ssize_t wlp_wss_neighborhood_print_remove(struct wlp *wlp, char *buf,
 
 out:
 	mutex_unlock(&wlp->nbmutex);
-	return used;
 	d_fnend(6, dev, "wlp %p\n", wlp);
+	return used;
 }
 
 
