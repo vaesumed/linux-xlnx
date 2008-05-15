@@ -228,13 +228,14 @@ static int idescsi_check_condition(ide_drive_t *drive,
 		kfree(pc);
 		return -ENOMEM;
 	}
-	ide_init_drive_cmd(rq);
+	blk_rq_init(NULL, rq);
 	rq->special = (char *) pc;
 	pc->rq = rq;
 	pc->buf = buf;
 	pc->c[0] = REQUEST_SENSE;
 	pc->c[4] = pc->req_xfer = pc->buf_size = SCSI_SENSE_BUFFERSIZE;
 	rq->cmd_type = REQ_TYPE_SENSE;
+	rq->cmd_flags |= REQ_PREEMPT;
 	pc->timeout = jiffies + WAIT_READY;
 	/* NOTE! Save the failed packet command in "rq->buffer" */
 	rq->buffer = (void *) failed_cmd->special;
@@ -256,7 +257,7 @@ idescsi_atapi_error(ide_drive_t *drive, struct request *rq, u8 stat, u8 err)
 
 	if (ide_read_status(drive) & (BUSY_STAT | DRQ_STAT))
 		/* force an abort */
-		hwif->OUTBSYNC(drive, WIN_IDLEIMMEDIATE,
+		hwif->OUTBSYNC(hwif, WIN_IDLEIMMEDIATE,
 			       hwif->io_ports.command_addr);
 
 	rq->errors++;
@@ -563,7 +564,7 @@ static ide_startstop_t idescsi_issue_pc(ide_drive_t *drive,
 		hwif->sg_mapped = 0;
 	}
 
-	ide_pktcmd_tf_load(drive, IDE_TFLAG_NO_SELECT_MASK, bcount, dma);
+	ide_pktcmd_tf_load(drive, 0, bcount, dma);
 
 	if (dma)
 		pc->flags |= PC_FLAG_DMA_OK;
@@ -785,7 +786,7 @@ static int idescsi_queue (struct scsi_cmnd *cmd,
 		}
 	}
 
-	ide_init_drive_cmd (rq);
+	blk_rq_init(NULL, rq);
 	rq->special = (char *) pc;
 	rq->cmd_type = REQ_TYPE_SPECIAL;
 	spin_unlock_irq(host->host_lock);
