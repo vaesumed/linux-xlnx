@@ -553,6 +553,9 @@ static void __ei_poll(struct net_device *dev)
 static void ei_tx_err(struct net_device *dev)
 {
 	unsigned long e8390_base = dev->base_addr;
+#ifdef CONFIG_M68K
+	struct ei_device *ei_local = (struct ei_device *) netdev_priv(dev);
+#endif
 	unsigned char txsr = ei_inb_p(e8390_base+EN0_TSR);
 	unsigned char tx_was_aborted = txsr & (ENTSR_ABT+ENTSR_FU);
 
@@ -815,6 +818,9 @@ static void ei_rx_overrun(struct net_device *dev)
 {
 	unsigned long e8390_base = dev->base_addr;
 	unsigned char was_txing, must_resend = 0;
+#ifdef CONFIG_M68K
+	struct ei_device *ei_local = (struct ei_device *) netdev_priv(dev);
+#endif
 
 	/*
 	 * Record whether a Tx was in progress and then issue the
