@@ -511,4 +511,17 @@ static inline int is_hash_key(const struct ubifs_info *c,
 	return type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY;
 }
 
+/**
+ * key_max_inode_size - get maximum file size allowed by current key format.
+ * @c: UBIFS file-system description object
+ */
+static inline unsigned long long key_max_inode_size(const struct ubifs_info *c)
+{
+	switch (c->key_fmt) {
+	case UBIFS_SIMPLE_KEY_FMT:
+		return (1ULL << UBIFS_S_KEY_BLOCK_BITS) * UBIFS_BLOCK_SIZE;
+	default:
+		return 0;
+	}
+}
 #endif /* !__UBIFS_KEY_H__ */

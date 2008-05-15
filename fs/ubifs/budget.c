@@ -812,7 +812,7 @@ void ubifs_release_new_page_budget(struct ubifs_info *c)
 {
 	struct ubifs_budget_req req = { .new_page = 1,
 					.idx_growth = -1,
-					.data_growth = c->page_budget};
+					.data_growth = c->page_budget };
 
 	ubifs_release_budget(c, &req);
 }
