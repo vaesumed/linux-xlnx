@@ -257,15 +257,16 @@ static int usb_unbind_interface(struct device *dev)
 	udev = interface_to_usbdev(intf);
 	error = usb_autoresume_device(udev);
 
-	/* release all urbs for this interface */
-	usb_disable_interface(interface_to_usbdev(intf), intf);
+	/* Terminate all URBs for this interface unless the driver
+	 * supports "soft" unbinding.
+	 */
+	if (!driver->soft_unbind)
+		usb_disable_interface(udev, intf);
 
 	driver->disconnect(intf);
 
 	/* reset other interface state */
-	usb_set_interface(interface_to_usbdev(intf),
-			intf->altsetting[0].desc.bInterfaceNumber,
-			0);
+	usb_set_interface(udev, intf->altsetting[0].desc.bInterfaceNumber, 0);
 	usb_set_intfdata(intf, NULL);
 
 	intf->condition = USB_INTERFACE_UNBOUND;
@@ -805,8 +806,6 @@ static int usb_resume_device(struct usb_device *udev)
 
 	if (udev->state == USB_STATE_NOTATTACHED)
 		goto done;
-	if (udev->state != USB_STATE_SUSPENDED && !udev->reset_resume)
-		goto done;
 
 	/* Can't resume it if it doesn't have a driver. */
 	if (udev->dev.driver == NULL) {
@@ -1173,11 +1172,8 @@ static int usb_resume_both(struct usb_device *udev)
 			 * then we're stuck. */
 			status = usb_resume_device(udev);
 		}
-	} else {
-
-		/* Needed for reset-resume */
+	} else if (udev->reset_resume)
 		status = usb_resume_device(udev);
-	}
 
 	if (status == 0 && udev->actconfig) {
 		for (i = 0; i < udev->actconfig->desc.bNumInterfaces; i++) {
@@ -1542,14 +1538,11 @@ static int usb_resume(struct device *dev)
 	udev = to_usb_device(dev);
 
 	/* If udev->skip_sys_resume is set then udev was already suspended
-	 * when the system suspend started, so we don't want to resume
-	 * udev during this system wakeup.  However a reset-resume counts
-	 * as a wakeup event, so allow a reset-resume to occur if remote
-	 * wakeup is enabled. */
-	if (udev->skip_sys_resume) {
-		if (!(udev->reset_resume && udev->do_remote_wakeup))
-			return -EHOSTUNREACH;
-	}
+	 * when the system sleep started, so we don't want to resume it
+	 * during this system wakeup.
+	 */
+	if (udev->skip_sys_resume)
+		return 0;
 	return usb_external_resume_device(udev);
 }
 
