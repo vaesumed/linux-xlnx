@@ -1163,7 +1163,7 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 		 * of the next znode (collision), then check order of the keys.
 		 */
 		last = prev->child_cnt - 1;
-		if (prev->level == 0 && znode->level == 0 &&
+		if (prev->level == 0 && znode->level == 0 && !c->replaying &&
 		    !keys_cmp(c, &prev->zbranch[last].key,
 			      &znode->zbranch[0].key))
 		{
