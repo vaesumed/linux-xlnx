@@ -24,8 +24,8 @@
  *
  *****************************************************************************/
 /*
- * Please use this file (iwl-4965.h) for driver implementation definitions.
- * Please use iwl-4965-commands.h for uCode API definitions.
+ * Please use this file (iwl-dev.h) for driver implementation definitions.
+ * Please use iwl-commands.h for uCode API definitions.
  * Please use iwl-4965-hw.h for hardware-related definitions.
  */
 
@@ -44,9 +44,13 @@
 #include "iwl-prph.h"
 #include "iwl-debug.h"
 #include "iwl-led.h"
+#include "iwl-power.h"
 
 /* configuration for the iwl4965 */
 extern struct iwl_cfg iwl4965_agn_cfg;
+extern struct iwl_cfg iwl5300_agn_cfg;
+extern struct iwl_cfg iwl5100_agn_cfg;
+extern struct iwl_cfg iwl5350_agn_cfg;
 
 /* Change firmware file name, using "-" and incrementing number,
  *   *only* when uCode interface or architecture changes so that it
@@ -54,6 +58,8 @@ extern struct iwl_cfg iwl4965_agn_cfg;
  * This number will also appear in << 8 position of 1st dword of uCode file */
 #define IWL4965_UCODE_API "-1"
 
+/* CT-KILL constants */
+#define CT_KILL_THRESHOLD	110 /* in Celsius */
 
 /* Default noise level to report when noise measurement is not available.
  *   This may be because we're:
@@ -67,12 +73,6 @@ extern struct iwl_cfg iwl4965_agn_cfg;
  *   always negative ... using a negative value as the default keeps all
  *   averages within an s8's (used in some apps) range of negative values. */
 #define IWL_NOISE_MEAS_NOT_AVAILABLE (-127)
-
-enum iwl4965_antenna {
-	IWL_ANTENNA_DIVERSITY,
-	IWL_ANTENNA_MAIN,
-	IWL_ANTENNA_AUX
-};
 
 /*
  * RTS threshold here is total size [2347] minus 4 FCS bytes
@@ -199,9 +199,9 @@ enum {
 struct iwl_channel_info {
 	struct iwl4965_channel_tgd_info tgd;
 	struct iwl4965_channel_tgh_info tgh;
-	struct iwl4965_eeprom_channel eeprom;	  /* EEPROM regulatory limit */
-	struct iwl4965_eeprom_channel fat_eeprom; /* EEPROM regulatory limit for
-						   * FAT channel */
+	struct iwl_eeprom_channel eeprom;	/* EEPROM regulatory limit */
+	struct iwl_eeprom_channel fat_eeprom;	/* EEPROM regulatory limit for
+						 * FAT channel */
 
 	u8 channel;	  /* channel number */
 	u8 flags;	  /* flags copied from EEPROM */
@@ -252,29 +252,9 @@ struct iwl4965_clip_group {
 
 /* Power management (not Tx power) structures */
 
-struct iwl4965_power_vec_entry {
-	struct iwl4965_powertable_cmd cmd;
-	u8 no_dtim;
-};
-#define IWL_POWER_RANGE_0  (0)
-#define IWL_POWER_RANGE_1  (1)
-
-#define IWL_POWER_MODE_CAM	0x00	/* Continuously Aware Mode, always on */
-#define IWL_POWER_INDEX_3	0x03
-#define IWL_POWER_INDEX_5	0x05
-#define IWL_POWER_AC		0x06
-#define IWL_POWER_BATTERY	0x07
-#define IWL_POWER_LIMIT		0x07
-#define IWL_POWER_MASK		0x0F
-#define IWL_POWER_ENABLED	0x10
-#define IWL_POWER_LEVEL(x)	((x) & IWL_POWER_MASK)
-
-struct iwl4965_power_mgr {
-	spinlock_t lock;
-	struct iwl4965_power_vec_entry pwr_range_0[IWL_POWER_AC];
-	struct iwl4965_power_vec_entry pwr_range_1[IWL_POWER_AC];
-	u8 active_index;
-	u32 dtim_val;
+enum iwl_pwr_src {
+	IWL_PWR_SRC_VMAIN,
+	IWL_PWR_SRC_VAUX,
 };
 
 #define IEEE80211_DATA_LEN              2304
@@ -566,16 +546,49 @@ struct iwl4965_ibss_seq {
 	struct list_head list;
 };
 
+struct iwl_sensitivity_ranges {
+	u16 min_nrg_cck;
+	u16 max_nrg_cck;
+
+	u16 nrg_th_cck;
+	u16 nrg_th_ofdm;
+
+	u16 auto_corr_min_ofdm;
+	u16 auto_corr_min_ofdm_mrc;
+	u16 auto_corr_min_ofdm_x1;
+	u16 auto_corr_min_ofdm_mrc_x1;
+
+	u16 auto_corr_max_ofdm;
+	u16 auto_corr_max_ofdm_mrc;
+	u16 auto_corr_max_ofdm_x1;
+	u16 auto_corr_max_ofdm_mrc_x1;
+
+	u16 auto_corr_max_cck;
+	u16 auto_corr_max_cck_mrc;
+	u16 auto_corr_min_cck;
+	u16 auto_corr_min_cck_mrc;
+};
+
+
+#define IWL_FAT_CHANNEL_52 BIT(IEEE80211_BAND_5GHZ)
+
 /**
  * struct iwl_hw_params
  * @max_txq_num: Max # Tx queues supported
  * @tx_cmd_len: Size of Tx command (but not including frame itself)
- * @tx_ant_num: Number of TX antennas
+ * @tx/rx_chains_num: Number of TX/RX chains
+ * @valid_tx/rx_ant: usable antennas
  * @max_rxq_size: Max # Rx frames in Rx queue (must be power-of-2)
- * @rx_buffer_size:
  * @max_rxq_log: Log-base-2 of max_rxq_size
+ * @rx_buf_size: Rx buffer size
  * @max_stations:
  * @bcast_sta_id:
+ * @fat_channel: is 40MHz width possible in band 2.4
+ * BIT(IEEE80211_BAND_5GHZ) BIT(IEEE80211_BAND_5GHZ)
+ * @sw_crypto: 0 for hw, 1 for sw
+ * @max_xxx_size: for ucode uses
+ * @ct_kill_threshold: temperature threshold
+ * @struct iwl_sensitivity_ranges: range of sensitivity values
  */
 struct iwl_hw_params {
 	u16 max_txq_num;
@@ -590,10 +603,19 @@ struct iwl_hw_params {
 	u32 max_pkt_size;
 	u8  max_stations;
 	u8  bcast_sta_id;
+	u8 fat_channel;
+	u8 sw_crypto;
+	u32 max_inst_size;
+	u32 max_data_size;
+	u32 max_bsm_size;
+	u32 ct_kill_threshold; /* value in hw-dependent units */
+#ifdef CONFIG_IWLWIFI_RUN_TIME_CALIB
+	const struct iwl_sensitivity_ranges *sens;
+#endif
 };
 
-#define HT_SHORT_GI_20MHZ_ONLY          (1 << 0)
-#define HT_SHORT_GI_40MHZ_ONLY          (1 << 1)
+#define HT_SHORT_GI_20MHZ_ONLY	(1 << 0)
+#define HT_SHORT_GI_40MHZ_ONLY	(1 << 1)
 
 
 #define IWL_RX_HDR(x) ((struct iwl4965_rx_frame_hdr *)(\
@@ -641,10 +663,10 @@ extern unsigned int iwl4965_fill_beacon_frame(struct iwl_priv *priv,
 					const u8 *dest, int left);
 extern int iwl4965_rx_queue_update_write_ptr(struct iwl_priv *priv,
 					 struct iwl4965_rx_queue *q);
-extern void iwl4965_set_decrypted_flag(struct iwl_priv *priv, struct sk_buff *skb,
-				   u32 decrypt_res,
-				   struct ieee80211_rx_status *stats);
 extern __le16 *ieee80211_get_qos_ctrl(struct ieee80211_hdr *hdr);
+extern void iwl4965_update_chain_flags(struct iwl_priv *priv);
+int iwl4965_set_pwr_src(struct iwl_priv *priv, enum iwl_pwr_src src);
+
 int iwl4965_init_geos(struct iwl_priv *priv);
 void iwl4965_free_geos(struct iwl_priv *priv);
 
@@ -674,7 +696,6 @@ extern u8 iwl4965_sync_station(struct iwl_priv *priv, int sta_id,
  * iwl4965_mac_     <-- mac80211 callback
  *
  ****************************************************************************/
-extern void iwl4965_hw_rx_handler_setup(struct iwl_priv *priv);
 extern void iwl4965_hw_setup_deferred_work(struct iwl_priv *priv);
 extern void iwl4965_hw_cancel_deferred_work(struct iwl_priv *priv);
 extern int iwl4965_hw_rxq_stop(struct iwl_priv *priv);
@@ -706,14 +727,14 @@ extern void iwl4965_disable_events(struct iwl_priv *priv);
 extern int iwl4965_get_temperature(const struct iwl_priv *priv);
 
 /**
- * iwl4965_hw_find_station - Find station id for a given BSSID
+ * iwl_find_station - Find station id for a given BSSID
  * @bssid: MAC address of station ID to find
  *
  * NOTE:  This should not be hardware specific but the code has
  * not yet been merged into a single common layer for managing the
  * station tables.
  */
-extern u8 iwl4965_hw_find_station(struct iwl_priv *priv, const u8 *bssid);
+extern u8 iwl_find_station(struct iwl_priv *priv, const u8 *bssid);
 
 extern int iwl4965_hw_channel_switch(struct iwl_priv *priv, u16 channel);
 extern int iwl4965_tx_queue_reclaim(struct iwl_priv *priv, int txq_id, int index);
@@ -729,21 +750,17 @@ extern int iwl4965_tx_queue_update_wr_ptr(struct iwl_priv *priv,
 					  u16 byte_cnt);
 extern void iwl4965_add_station(struct iwl_priv *priv, const u8 *addr,
 				int is_ap);
-extern void iwl4965_set_rxon_chain(struct iwl_priv *priv);
 extern int iwl4965_alive_notify(struct iwl_priv *priv);
 extern void iwl4965_update_rate_scaling(struct iwl_priv *priv, u8 mode);
-extern void iwl4965_chain_noise_reset(struct iwl_priv *priv);
-extern void iwl4965_init_sensitivity(struct iwl_priv *priv, u8 flags,
-				     u8 force);
 extern void iwl4965_rf_kill_ct_config(struct iwl_priv *priv);
 extern void iwl4965_hwrate_to_tx_control(struct iwl_priv *priv,
 					 u32 rate_n_flags,
 					 struct ieee80211_tx_control *control);
 
 #ifdef CONFIG_IWL4965_HT
-void iwl4965_init_ht_hw_capab(struct iwl_priv *priv,
-			      struct ieee80211_ht_info *ht_info,
-			      enum ieee80211_band band);
+extern void iwl4965_init_ht_hw_capab(const struct iwl_priv *priv,
+				struct ieee80211_ht_info *ht_info,
+				enum ieee80211_band band);
 void iwl4965_set_rxon_ht(struct iwl_priv *priv,
 			 struct iwl_ht_info *ht_info);
 void iwl4965_set_ht_add_station(struct iwl_priv *priv, u8 index,
@@ -754,7 +771,7 @@ int iwl4965_mac_ampdu_action(struct ieee80211_hw *hw,
 int iwl4965_check_empty_hw_queue(struct iwl_priv *priv, int sta_id,
 					u8 tid, int txq_id);
 #else
-static inline void iwl4965_init_ht_hw_capab(struct iwl_priv *priv,
+static inline void iwl4965_init_ht_hw_capab(const struct iwl_priv *priv,
 					    struct ieee80211_ht_info *ht_info,
 					    enum ieee80211_band band) {}
 
@@ -787,8 +804,8 @@ struct iwl4965_kw {
 #define IWL_EXT_CHANNEL_OFFSET_RESERVE1  2
 #define IWL_EXT_CHANNEL_OFFSET_BELOW     3
 
-#define NRG_NUM_PREV_STAT_L     20
-#define NUM_RX_CHAINS           (3)
+#define IWL_TX_CRC_SIZE 4
+#define IWL_TX_DELIMITER_SIZE 4
 
 #define TX_POWER_IWL_ILLEGAL_VOLTAGE -10000
 
@@ -818,23 +835,8 @@ struct iwl4965_lq_mngr {
 #define MAX_FA_CCK   50
 #define MIN_FA_CCK   5
 
-#define NRG_MIN_CCK  97
-#define NRG_MAX_CCK  0
-
-#define AUTO_CORR_MIN_OFDM        85
-#define AUTO_CORR_MIN_OFDM_MRC    170
-#define AUTO_CORR_MIN_OFDM_X1     105
-#define AUTO_CORR_MIN_OFDM_MRC_X1 220
-#define AUTO_CORR_MAX_OFDM        120
-#define AUTO_CORR_MAX_OFDM_MRC    210
-#define AUTO_CORR_MAX_OFDM_X1     140
-#define AUTO_CORR_MAX_OFDM_MRC_X1 270
 #define AUTO_CORR_STEP_OFDM       1
 
-#define AUTO_CORR_MIN_CCK      (125)
-#define AUTO_CORR_MAX_CCK      (200)
-#define AUTO_CORR_MIN_CCK_MRC  200
-#define AUTO_CORR_MAX_CCK_MRC  400
 #define AUTO_CORR_STEP_CCK     3
 #define AUTO_CORR_MAX_TH_CCK   160
 
@@ -853,6 +855,9 @@ struct iwl4965_lq_mngr {
 #define IN_BAND_FILTER			0xFF
 #define MIN_AVERAGE_NOISE_MAX_VALUE	0xFFFFFFFF
 
+#define NRG_NUM_PREV_STAT_L     20
+#define NUM_RX_CHAINS           3
+
 enum iwl4965_false_alarm_state {
 	IWL_FA_TOO_MANY = 0,
 	IWL_FA_TOO_FEW = 1,
@@ -863,11 +868,6 @@ enum iwl4965_chain_noise_state {
 	IWL_CHAIN_NOISE_ALIVE = 0,  /* must be 0 */
 	IWL_CHAIN_NOISE_ACCUMULATE = 1,
 	IWL_CHAIN_NOISE_CALIBRATED = 2,
-};
-
-enum iwl4965_sensitivity_state {
-	IWL_SENS_CALIB_ALLOWED = 0,
-	IWL_SENS_CALIB_NEED_REINIT = 1,
 };
 
 enum iwl4965_calib_enabled_state {
@@ -884,8 +884,9 @@ struct statistics_general_data {
 	u32 beacon_energy_c;
 };
 
+#ifdef CONFIG_IWLWIFI_RUN_TIME_CALIB
 /* Sensitivity calib data */
-struct iwl4965_sensitivity_data {
+struct iwl_sensitivity_data {
 	u32 auto_corr_ofdm;
 	u32 auto_corr_ofdm_mrc;
 	u32 auto_corr_ofdm_x1;
@@ -909,12 +910,10 @@ struct iwl4965_sensitivity_data {
 	s32 nrg_auto_corr_silence_diff;
 	u32 num_in_cck_no_fa;
 	u32 nrg_th_ofdm;
-
-	u8 state;
 };
 
 /* Chain noise (differential Rx gain) calib data */
-struct iwl4965_chain_noise_data {
+struct iwl_chain_noise_data {
 	u8 state;
 	u16 beacon_count;
 	u32 chain_noise_a;
@@ -927,6 +926,7 @@ struct iwl4965_chain_noise_data {
 	u8 delta_gain_code[NUM_RX_CHAINS];
 	u8 radio_write;
 };
+#endif /* CONFIG_IWLWIFI_RUN_TIME_CALIB */
 
 #define	EEPROM_SEM_TIMEOUT 10		/* milliseconds */
 #define EEPROM_SEM_RETRY_LIMIT 1000	/* number of attempts (not time) */
@@ -1007,6 +1007,9 @@ struct iwl_priv {
 
 	/* pci hardware address support */
 	void __iomem *hw_base;
+	u32  hw_rev;
+	u32  hw_wa_rev;
+	u8   rev_id;
 
 	/* uCode images, save to reload in case of failure */
 	struct fw_desc ucode_code;	/* runtime inst */
@@ -1050,13 +1053,12 @@ struct iwl_priv {
 
 	u8 assoc_station_added;
 	u8 use_ant_b_for_management_frame;	/* Tx antenna selection */
-	u8 valid_antenna;	/* Bit mask of antennas actually connected */
-#ifdef CONFIG_IWL4965_SENSITIVITY
-	struct iwl4965_sensitivity_data sensitivity_data;
-	struct iwl4965_chain_noise_data chain_noise_data;
 	u8 start_calib;
+#ifdef CONFIG_IWLWIFI_RUN_TIME_CALIB
+	struct iwl_sensitivity_data sensitivity_data;
+	struct iwl_chain_noise_data chain_noise_data;
 	__le16 sensitivity_tbl[HD_TABLE_SIZE];
-#endif /*CONFIG_IWL4965_SENSITIVITY*/
+#endif /*CONFIG_IWLWIFI_RUN_TIME_CALIB*/
 
 #ifdef CONFIG_IWL4965_HT
 	struct iwl_ht_info current_ht_config;
@@ -1092,7 +1094,7 @@ struct iwl_priv {
 		u64 bytes;
 	} tx_stats[3], rx_stats[3];
 
-	struct iwl4965_power_mgr power_data;
+	struct iwl_power_mgr power_data;
 
 	struct iwl4965_notif_statistics statistics;
 	unsigned long last_statistics_time;
@@ -1137,7 +1139,8 @@ struct iwl_priv {
 	struct list_head ibss_mac_hash[IWL_IBSS_MAC_HASH_SIZE];
 
 	/* eeprom */
-	struct iwl4965_eeprom eeprom;
+	u8 *eeprom;
+	struct iwl_eeprom_calib_info *calib_info;
 
 	enum ieee80211_if_types iw_mode;
 
@@ -1206,7 +1209,7 @@ struct iwl_priv {
 #endif /* CONFIG_IWLWIFI_DEBUG */
 
 	struct work_struct txpower_work;
-#ifdef CONFIG_IWL4965_SENSITIVITY
+#ifdef CONFIG_IWL4965_RUN_TIME_CALIB
 	struct work_struct sensitivity_work;
 #endif
 	struct timer_list statistics_periodic;
@@ -1222,11 +1225,6 @@ static inline int is_channel_valid(const struct iwl_channel_info *ch_info)
 	if (ch_info == NULL)
 		return 0;
 	return (ch_info->flags & EEPROM_CHANNEL_VALID) ? 1 : 0;
-}
-
-static inline int is_channel_narrow(const struct iwl_channel_info *ch_info)
-{
-	return (ch_info->flags & EEPROM_CHANNEL_NARROW) ? 1 : 0;
 }
 
 static inline int is_channel_radar(const struct iwl_channel_info *ch_info)

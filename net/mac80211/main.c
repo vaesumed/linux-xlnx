@@ -385,8 +385,8 @@ static int ieee80211_open(struct net_device *dev)
 	 * yet be effective. Trigger execution of ieee80211_sta_work
 	 * to fix this.
 	 */
-	if(sdata->vif.type == IEEE80211_IF_TYPE_STA ||
-	   sdata->vif.type == IEEE80211_IF_TYPE_IBSS) {
+	if (sdata->vif.type == IEEE80211_IF_TYPE_STA ||
+	    sdata->vif.type == IEEE80211_IF_TYPE_IBSS) {
 		struct ieee80211_if_sta *ifsta = &sdata->u.sta;
 		queue_work(local->hw.workqueue, &ifsta->work);
 	}
@@ -1482,7 +1482,7 @@ void ieee80211_tx_status(struct ieee80211_hw *hw, struct sk_buff *skb,
 		return;
 	}
 
-	rthdr = (struct ieee80211_tx_status_rtap_hdr*)
+	rthdr = (struct ieee80211_tx_status_rtap_hdr *)
 				skb_push(skb, sizeof(*rthdr));
 
 	memset(rthdr, 0, sizeof(*rthdr));
@@ -1744,6 +1744,11 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 		       wiphy_name(local->hw.wiphy));
 		goto fail_wep;
 	}
+
+	if (hw->queues > IEEE80211_MAX_QUEUES)
+		hw->queues = IEEE80211_MAX_QUEUES;
+	if (hw->ampdu_queues > IEEE80211_MAX_AMPDU_QUEUES)
+		hw->ampdu_queues = IEEE80211_MAX_AMPDU_QUEUES;
 
 	ieee80211_install_qdisc(local->mdev);
 
