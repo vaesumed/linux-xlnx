@@ -28,30 +28,28 @@
  *
  */
 
-#include <linux/errno.h>
-#include <linux/file.h>
-#include <linux/idr.h>
-#include <linux/inet.h>
 #include <linux/in.h>
-#include <linux/ipv6.h>
-#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/net.h>
-#include <linux/parser.h>
-#include <linux/scatterlist.h>
-#include <linux/spinlock.h>
-#include <linux/uaccess.h>
+#include <linux/ipv6.h>
+#include <linux/errno.h>
+#include <linux/kernel.h>
 #include <linux/un.h>
-#include <linux/virtio_9p.h>
-#include <linux/virtio.h>
-
+#include <linux/uaccess.h>
+#include <linux/inet.h>
+#include <linux/idr.h>
+#include <linux/file.h>
 #include <net/9p/9p.h>
+#include <linux/parser.h>
 #include <net/9p/transport.h>
+#include <linux/scatterlist.h>
+#include <linux/virtio.h>
+#include <linux/virtio_9p.h>
 
 #define VIRTQUEUE_NUM	128
 
-/* a single lock to manage channel initialization and attachment */
-static DEFINE_SPINLOCK(virtio_9p_lock);
+/* a single mutex to manage channel initialization and attachment */
+static DECLARE_MUTEX(virtio_9p_lock);
 /* global which tracks highest initialized channel */
 static int chan_index;
 
@@ -146,9 +144,9 @@ static void p9_virtio_close(struct p9_trans *trans)
 	chan->max_tag = 0;
 	spin_unlock_irqrestore(&chan->lock, flags);
 
-	spin_lock(&virtio_9p_lock);
+	down(&virtio_9p_lock);
 	chan->inuse = false;
-	spin_unlock(&virtio_9p_lock);
+	up(&virtio_9p_lock);
 
 	kfree(trans);
 }
@@ -271,10 +269,10 @@ static int p9_virtio_probe(struct virtio_device *vdev)
 	struct virtio_chan *chan;
 	int index;
 
-	spin_lock(&virtio_9p_lock);
+	down(&virtio_9p_lock);
 	index = chan_index++;
 	chan = &channels[index];
-	spin_unlock(&virtio_9p_lock);
+	up(&virtio_9p_lock);
 
 	if (chan_index > MAX_9P_CHAN) {
 		printk(KERN_ERR "9p: virtio: Maximum channels exceeded\n");
@@ -303,9 +301,9 @@ static int p9_virtio_probe(struct virtio_device *vdev)
 out_free_vq:
 	vdev->config->del_vq(chan->vq);
 fail:
-	spin_lock(&virtio_9p_lock);
+	down(&virtio_9p_lock);
 	chan_index--;
-	spin_unlock(&virtio_9p_lock);
+	up(&virtio_9p_lock);
 	return err;
 }
 
@@ -322,7 +320,7 @@ p9_virtio_create(const char *devname, char *args, int msize,
 	struct virtio_chan *chan = channels;
 	int index = 0;
 
-	spin_lock(&virtio_9p_lock);
+	down(&virtio_9p_lock);
 	while (index < MAX_9P_CHAN) {
 		if (chan->initialized && !chan->inuse) {
 			chan->inuse = true;
@@ -332,7 +330,7 @@ p9_virtio_create(const char *devname, char *args, int msize,
 			chan = &channels[index];
 		}
 	}
-	spin_unlock(&virtio_9p_lock);
+	up(&virtio_9p_lock);
 
 	if (index >= MAX_9P_CHAN) {
 		printk(KERN_ERR "9p: no channels available\n");
