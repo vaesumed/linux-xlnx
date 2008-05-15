@@ -336,6 +336,10 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
 	dbg_gen("dir ino %lu, f_pos %#llx", dir->i_ino, filp->f_pos);
 
+	if (filp->f_pos > UBIFS_S_KEY_HASH_MASK)
+		/* The directory was seek'ed to a senseless position */
+		return 0;
+
 	saved = filp->private_data;
 	if (saved)
 		if (filp->f_pos != key_hash_flash(c, &saved->key)) {
@@ -937,7 +941,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 
 	size = ALIGN(size, UBIFS_BLOCK_SIZE);
 	/*
-	 * Note, userspace expects 512-byte blocks count irrespectively of what
+	 * Note, user-space expects 512-byte blocks count irrespectively of what
 	 * was reported in @stat->size.
 	 */
 	stat->blocks = size >> 9;
