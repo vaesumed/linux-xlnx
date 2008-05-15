@@ -173,6 +173,15 @@ enum {
 };
 
 /*
+ * The simple key format uses 29 bits for storing UBIFS block number and hash
+ * value.
+ */
+#define UBIFS_S_KEY_BLOCK_BITS 29
+#define UBIFS_S_KEY_BLOCK_MASK 0x01FFFFFF
+#define UBIFS_S_KEY_HASH_BITS  UBIFS_S_KEY_BLOCK_BITS
+#define UBIFS_S_KEY_HASH_MASK  UBIFS_S_KEY_BLOCK_MASK
+
+/*
  * Key types.
  *
  * UBIFS_INO_KEY: inode node key
