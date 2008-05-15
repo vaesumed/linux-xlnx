@@ -92,9 +92,6 @@
 /* Maximum number of levels in UBIFS indexing B-tree */
 #define UBIFS_MAX_LEVELS 512
 
-/* Maximum possible inode size in bytes */
-#define UBIFS_MAX_INODE_SZ 0x3FFFFFFFFFFFFFFFULL /* 62 bits */
-
 /* Maximum amount of data attached to an inode in bytes */
 #define UBIFS_MAX_INO_DATA UBIFS_BLOCK_SIZE
 
