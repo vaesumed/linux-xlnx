@@ -32,6 +32,7 @@
 #include <linux/idr.h>
 #include <linux/compat.h>
 #include <linux/firewire-cdev.h>
+#include <linux/smp_lock.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
 #include "fw-transaction.h"
@@ -108,15 +109,20 @@ static int fw_device_op_open(struct inode *inode, struct file *file)
 	struct fw_device *device;
 	struct client *client;
 	unsigned long flags;
+	int ret = 0;
 
+	lock_kernel();
 	device = fw_device_get_by_devt(inode->i_rdev);
-	if (device == NULL)
-		return -ENODEV;
+	if (device == NULL) {
+		ret = -ENODEV;
+		goto out;
+	}
 
 	client = kzalloc(sizeof(*client), GFP_KERNEL);
 	if (client == NULL) {
 		fw_device_put(device);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	client->device = device;
@@ -131,7 +137,9 @@ static int fw_device_op_open(struct inode *inode, struct file *file)
 	list_add_tail(&client->link, &device->client_list);
 	spin_unlock_irqrestore(&device->card->lock, flags);
 
-	return 0;
+out:
+	unlock_kernel();
+	return ret;
 }
 
 static void queue_event(struct client *client, struct event *event,
