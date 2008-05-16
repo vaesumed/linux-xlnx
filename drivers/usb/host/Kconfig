@@ -305,3 +305,18 @@ config SUPERH_ON_CHIP_R8A66597
 	help
 	   Renesas SuperH processor has USB like the R8A66597.
 	   This driver supported processor is SH7366.
+
+config USB_HWA_HCD
+	tristate "Wireless USB host controller driver for WUSB-compliant USB dongles (HWA)"
+	depends on USB
+	select USB_WUSB
+	select UWB_HWA
+	help
+	  This driver enables you to connect Wireless USB devices to
+	  your system using a Host Wire Adaptor USB dongle. This is an
+	  UWB Radio Controller and WUSB Host Controller connected to
+	  your machine via USB (specified in WUSB1.0).
+
+	  To compile this driver select Y (built in) or M (module). It
+	  is safe to select any even if you don't have the hardware.
+
