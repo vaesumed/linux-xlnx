@@ -20,8 +20,7 @@ endmenu
 
 endif
 
-choice
-	prompt "Select target board"
+menu "Select target boards"
 
 config ARCH_GUMSTIX
 	bool "Gumstix XScale boards"
@@ -41,6 +40,7 @@ config MACH_LOGICPD_PXA270
 config MACH_MAINSTONE
 	bool "Intel HCDDBBVA0 Development Platform"
 	select PXA27x
+	select HAVE_PWM
 
 config ARCH_PXA_IDP
 	bool "Accelent Xscale IDP"
@@ -116,6 +116,7 @@ config MACH_COLIBRI
 config MACH_ZYLONITE
 	bool "PXA3xx Development Platform"
 	select PXA3xx
+	select HAVE_PWM
 
 config MACH_LITTLETON
 	bool "PXA3xx Form Factor Platform (aka Littleton)"
@@ -138,7 +139,7 @@ config MACH_PCM027
 	select PXA27x
 	select IWMMXT
 
-endchoice
+endmenu
 
 choice
 	prompt "Used baseboard"
@@ -273,4 +274,10 @@ config PXA_SSP
 	tristate
 	help
 	  Enable support for PXA2xx SSP ports
+
+config PXA_PWM
+	tristate
+	default BACKLIGHT_PWM
+	help
+	  Enable support for PXA2xx/PXA3xx PWM controllers
 endif
