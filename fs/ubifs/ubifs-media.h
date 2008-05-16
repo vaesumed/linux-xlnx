@@ -434,8 +434,8 @@ union ubifs_dev_desc {
  * happens if compression type is changed while the inode already has data
  * nodes. But @compr_type will be use for further writes to the inode.
  *
- * Note, do not forget to amend 'zero_ino_unused()' function when changing the
- * padding fields.
+ * Note, do not forget to amend 'zero_ino_node_unused()' function when changing
+ * the padding fields.
  */
 struct ubifs_ino_node {
 	struct ubifs_ch ch;
@@ -458,7 +458,7 @@ struct ubifs_ino_node {
 	__le64 xattr_size;
 	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding[26];
+	__u8 padding[26]; /* Watch 'zero_ino_node_unused()' if changing! */
 	__u8 data[];
 } __attribute__ ((packed));
 
@@ -473,8 +473,8 @@ struct ubifs_ino_node {
  * @padding2: reserved for future, zeroes
  * @name: zero-terminated name
  *
- * Note, do not forget to amend 'zero_dent_unused()' function when changing the
- * padding fields.
+ * Note, do not forget to amend 'zero_dent_node_unused()' function when
+ * changing the padding fields.
  */
 struct ubifs_dent_node {
 	struct ubifs_ch ch;
@@ -483,7 +483,7 @@ struct ubifs_dent_node {
 	__u8 padding1;
 	__u8 type;
 	__le16 nlen;
-	__u8 padding2[4];
+	__u8 padding2[4]; /* Watch 'zero_dent_node_unused()' if changing! */
 	__u8 name[];
 } __attribute__ ((packed));
 
@@ -496,15 +496,15 @@ struct ubifs_dent_node {
  * @padding: reserved for future, zeroes
  * @data: data
  *
- * Note, do not forget to amend 'zero_data_unused()' function when changing the
- * padding fields.
+ * Note, do not forget to amend 'zero_data_node_unused()' function when
+ * changing the padding fields.
  */
 struct ubifs_data_node {
 	struct ubifs_ch ch;
 	__u8 key[UBIFS_MAX_KEY_LEN];
 	__le32 size;
 	__le16 compr_type;
-	__u8 padding[2];
+	__u8 padding[2]; /* Watch 'zero_data_node_unused()' if changing! */
 	__u8 data[];
 } __attribute__ ((packed));
 
