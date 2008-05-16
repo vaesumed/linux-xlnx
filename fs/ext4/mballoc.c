@@ -1730,10 +1730,6 @@ ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
 		ac->ac_g_ex.fe_start = sbi->s_mb_last_start;
 		spin_unlock(&sbi->s_md_lock);
 	}
-
-	/* searching for the right group start from the goal value specified */
-	group = ac->ac_g_ex.fe_group;
-
 	/* Let's just scan groups to find more-less suitable blocks */
 	cr = ac->ac_2order ? 0 : 1;
 	/*
@@ -1743,6 +1739,12 @@ ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
 repeat:
 	for (; cr < 4 && ac->ac_status == AC_STATUS_CONTINUE; cr++) {
 		ac->ac_criteria = cr;
+		/*
+		 * searching for the right group start
+		 * from the goal value specified
+		 */
+		group = ac->ac_g_ex.fe_group;
+
 		for (i = 0; i < EXT4_SB(sb)->s_groups_count; group++, i++) {
 			struct ext4_group_info *grp;
 			struct ext4_group_desc *desc;
@@ -2575,25 +2577,24 @@ ext4_mb_free_committed_blocks(struct super_block *sb)
 
 
 
-#define MB_PROC_VALUE_READ(name)				\
-static int ext4_mb_read_##name(char *page, char **start,	\
-		off_t off, int count, int *eof, void *data)	\
+#define MB_PROC_FOPS(name)					\
+static int ext4_mb_##name##_proc_show(struct seq_file *m, void *v)	\
 {								\
-	struct ext4_sb_info *sbi = data;			\
-	int len;						\
-	*eof = 1;						\
-	if (off != 0)						\
-		return 0;					\
-	len = sprintf(page, "%ld\n", sbi->s_mb_##name);		\
-	*start = page;						\
-	return len;						\
-}
-
-#define MB_PROC_VALUE_WRITE(name)				\
-static int ext4_mb_write_##name(struct file *file,		\
-		const char __user *buf, unsigned long cnt, void *data)	\
+	struct ext4_sb_info *sbi = m->private;			\
+								\
+	seq_printf(m, "%ld\n", sbi->s_mb_##name);		\
+	return 0;						\
+}								\
+								\
+static int ext4_mb_##name##_proc_open(struct inode *inode, struct file *file)\
 {								\
-	struct ext4_sb_info *sbi = data;			\
+	return single_open(file, ext4_mb_##name##_proc_show, PDE(inode)->data);\
+}								\
+								\
+static ssize_t ext4_mb_##name##_proc_write(struct file *file,	\
+		const char __user *buf, size_t cnt, loff_t *ppos)	\
+{								\
+	struct ext4_sb_info *sbi = PDE(file->f_path.dentry->d_inode)->data;\
 	char str[32];						\
 	long value;						\
 	if (cnt >= sizeof(str))					\
@@ -2605,31 +2606,32 @@ static int ext4_mb_write_##name(struct file *file,		\
 		return -ERANGE;					\
 	sbi->s_mb_##name = value;				\
 	return cnt;						\
-}
+}								\
+								\
+static const struct file_operations ext4_mb_##name##_proc_fops = {	\
+	.owner		= THIS_MODULE,				\
+	.open		= ext4_mb_##name##_proc_open,		\
+	.read		= seq_read,				\
+	.llseek		= seq_lseek,				\
+	.release	= single_release,			\
+	.write		= ext4_mb_##name##_proc_write,		\
+};
 
-MB_PROC_VALUE_READ(stats);
-MB_PROC_VALUE_WRITE(stats);
-MB_PROC_VALUE_READ(max_to_scan);
-MB_PROC_VALUE_WRITE(max_to_scan);
-MB_PROC_VALUE_READ(min_to_scan);
-MB_PROC_VALUE_WRITE(min_to_scan);
-MB_PROC_VALUE_READ(order2_reqs);
-MB_PROC_VALUE_WRITE(order2_reqs);
-MB_PROC_VALUE_READ(stream_request);
-MB_PROC_VALUE_WRITE(stream_request);
-MB_PROC_VALUE_READ(group_prealloc);
-MB_PROC_VALUE_WRITE(group_prealloc);
+MB_PROC_FOPS(stats);
+MB_PROC_FOPS(max_to_scan);
+MB_PROC_FOPS(min_to_scan);
+MB_PROC_FOPS(order2_reqs);
+MB_PROC_FOPS(stream_request);
+MB_PROC_FOPS(group_prealloc);
 
 #define	MB_PROC_HANDLER(name, var)					\
 do {									\
-	proc = create_proc_entry(name, mode, sbi->s_mb_proc);		\
+	proc = proc_create_data(name, mode, sbi->s_mb_proc,		\
+				&ext4_mb_##var##_proc_fops, sbi);	\
 	if (proc == NULL) {						\
 		printk(KERN_ERR "EXT4-fs: can't to create %s\n", name);	\
 		goto err_out;						\
 	}								\
-	proc->data = sbi;						\
-	proc->read_proc  = ext4_mb_read_##var ;				\
-	proc->write_proc = ext4_mb_write_##var;				\
 } while (0)
 
 static int ext4_mb_init_per_dev_proc(struct super_block *sb)
@@ -2736,7 +2738,7 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 	struct ext4_sb_info *sbi;
 	struct super_block *sb;
 	ext4_fsblk_t block;
-	int err;
+	int err, len;
 
 	BUG_ON(ac->ac_status != AC_STATUS_FOUND);
 	BUG_ON(ac->ac_b_ex.fe_len <= 0);
@@ -2770,14 +2772,27 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 		+ ac->ac_b_ex.fe_start
 		+ le32_to_cpu(es->s_first_data_block);
 
-	if (block == ext4_block_bitmap(sb, gdp) ||
-			block == ext4_inode_bitmap(sb, gdp) ||
-			in_range(block, ext4_inode_table(sb, gdp),
-				EXT4_SB(sb)->s_itb_per_group)) {
-
+	len = ac->ac_b_ex.fe_len;
+	if (in_range(ext4_block_bitmap(sb, gdp), block, len) ||
+	    in_range(ext4_inode_bitmap(sb, gdp), block, len) ||
+	    in_range(block, ext4_inode_table(sb, gdp),
+		     EXT4_SB(sb)->s_itb_per_group) ||
+	    in_range(block + len - 1, ext4_inode_table(sb, gdp),
+		     EXT4_SB(sb)->s_itb_per_group)) {
 		ext4_error(sb, __func__,
 			   "Allocating block in system zone - block = %llu",
 			   block);
+		/* File system mounted not to panic on error
+		 * Fix the bitmap and repeat the block allocation
+		 * We leak some of the blocks here.
+		 */
+		mb_set_bits(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group),
+				bitmap_bh->b_data, ac->ac_b_ex.fe_start,
+				ac->ac_b_ex.fe_len);
+		err = ext4_journal_dirty_metadata(handle, bitmap_bh);
+		if (!err)
+			err = -EAGAIN;
+		goto out_err;
 	}
 #ifdef AGGRESSIVE_CHECK
 	{
@@ -2880,12 +2895,11 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
 	if (size < i_size_read(ac->ac_inode))
 		size = i_size_read(ac->ac_inode);
 
-	/* max available blocks in a free group */
-	max = EXT4_BLOCKS_PER_GROUP(ac->ac_sb) - 1 - 1 -
-				EXT4_SB(ac->ac_sb)->s_itb_per_group;
+	/* max size of free chunks */
+	max = 2 << bsbits;
 
-#define NRL_CHECK_SIZE(req, size, max,bits)	\
-		(req <= (size) || max <= ((size) >> bits))
+#define NRL_CHECK_SIZE(req, size, max, chunk_size)	\
+		(req <= (size) || max <= (chunk_size))
 
 	/* first, try to predict filesize */
 	/* XXX: should this table be tunable? */
@@ -2904,16 +2918,16 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
 		size = 512 * 1024;
 	} else if (size <= 1024 * 1024) {
 		size = 1024 * 1024;
-	} else if (NRL_CHECK_SIZE(size, 4 * 1024 * 1024, max, bsbits)) {
+	} else if (NRL_CHECK_SIZE(size, 4 * 1024 * 1024, max, 2 * 1024)) {
 		start_off = ((loff_t)ac->ac_o_ex.fe_logical >>
-						(20 - bsbits)) << 20;
-		size = 1024 * 1024;
-	} else if (NRL_CHECK_SIZE(size, 8 * 1024 * 1024, max, bsbits)) {
+						(21 - bsbits)) << 21;
+		size = 2 * 1024 * 1024;
+	} else if (NRL_CHECK_SIZE(size, 8 * 1024 * 1024, max, 4 * 1024)) {
 		start_off = ((loff_t)ac->ac_o_ex.fe_logical >>
 							(22 - bsbits)) << 22;
 		size = 4 * 1024 * 1024;
 	} else if (NRL_CHECK_SIZE(ac->ac_o_ex.fe_len,
-					(8<<20)>>bsbits, max, bsbits)) {
+					(8<<20)>>bsbits, max, 8 * 1024)) {
 		start_off = ((loff_t)ac->ac_o_ex.fe_logical >>
 							(23 - bsbits)) << 23;
 		size = 8 * 1024 * 1024;
@@ -4033,7 +4047,6 @@ ext4_fsblk_t ext4_mb_new_blocks(handle_t *handle,
 
 		ac->ac_op = EXT4_MB_HISTORY_ALLOC;
 		ext4_mb_normalize_request(ac, ar);
-
 repeat:
 		/* allocate space in core */
 		ext4_mb_regular_allocator(ac);
@@ -4047,10 +4060,21 @@ repeat:
 	}
 
 	if (likely(ac->ac_status == AC_STATUS_FOUND)) {
-		ext4_mb_mark_diskspace_used(ac, handle);
-		*errp = 0;
-		block = ext4_grp_offs_to_block(sb, &ac->ac_b_ex);
-		ar->len = ac->ac_b_ex.fe_len;
+		*errp = ext4_mb_mark_diskspace_used(ac, handle);
+		if (*errp ==  -EAGAIN) {
+			ac->ac_b_ex.fe_group = 0;
+			ac->ac_b_ex.fe_start = 0;
+			ac->ac_b_ex.fe_len = 0;
+			ac->ac_status = AC_STATUS_CONTINUE;
+			goto repeat;
+		} else if (*errp) {
+			ac->ac_b_ex.fe_len = 0;
+			ar->len = 0;
+			ext4_mb_show_ac(ac);
+		} else {
+			block = ext4_grp_offs_to_block(sb, &ac->ac_b_ex);
+			ar->len = ac->ac_b_ex.fe_len;
+		}
 	} else {
 		freed  = ext4_mb_discard_preallocations(sb, ac->ac_o_ex.fe_len);
 		if (freed)
@@ -4237,6 +4261,8 @@ do_more:
 		ext4_error(sb, __func__,
 			   "Freeing blocks in system zone - "
 			   "Block = %lu, count = %lu", block, count);
+		/* err = 0. ext4_std_error should be a no op */
+		goto error_return;
 	}
 
 	BUFFER_TRACE(bitmap_bh, "getting write access");
