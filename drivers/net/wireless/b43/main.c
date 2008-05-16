@@ -1182,10 +1182,10 @@ static void handle_irq_noise(struct b43_wldev *dev)
 	/* Get the noise samples. */
 	B43_WARN_ON(dev->noisecalc.nr_samples >= 8);
 	i = dev->noisecalc.nr_samples;
-	noise[0] = limit_value(noise[0], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
-	noise[1] = limit_value(noise[1], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
-	noise[2] = limit_value(noise[2], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
-	noise[3] = limit_value(noise[3], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[0] = clamp_val(noise[0], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[1] = clamp_val(noise[1], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[2] = clamp_val(noise[2], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[3] = clamp_val(noise[3], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
 	dev->noisecalc.samples[i][0] = phy->nrssi_lt[noise[0]];
 	dev->noisecalc.samples[i][1] = phy->nrssi_lt[noise[1]];
 	dev->noisecalc.samples[i][2] = phy->nrssi_lt[noise[2]];
@@ -2308,7 +2308,7 @@ static void b43_gpio_cleanup(struct b43_wldev *dev)
 }
 
 /* http://bcm-specs.sipsolutions.net/EnableMac */
-static void b43_mac_enable(struct b43_wldev *dev)
+void b43_mac_enable(struct b43_wldev *dev)
 {
 	dev->mac_suspended--;
 	B43_WARN_ON(dev->mac_suspended < 0);
@@ -2322,16 +2322,11 @@ static void b43_mac_enable(struct b43_wldev *dev)
 		b43_read32(dev, B43_MMIO_MACCTL);
 		b43_read32(dev, B43_MMIO_GEN_IRQ_REASON);
 		b43_power_saving_ctl_bits(dev, 0);
-
-		/* Re-enable IRQs. */
-		spin_lock_irq(&dev->wl->irq_lock);
-		b43_interrupt_enable(dev, dev->irq_savedstate);
-		spin_unlock_irq(&dev->wl->irq_lock);
 	}
 }
 
 /* http://bcm-specs.sipsolutions.net/SuspendMAC */
-static void b43_mac_suspend(struct b43_wldev *dev)
+void b43_mac_suspend(struct b43_wldev *dev)
 {
 	int i;
 	u32 tmp;
@@ -2340,14 +2335,6 @@ static void b43_mac_suspend(struct b43_wldev *dev)
 	B43_WARN_ON(dev->mac_suspended < 0);
 
 	if (dev->mac_suspended == 0) {
-		/* Mask IRQs before suspending MAC. Otherwise
-		 * the MAC stays busy and won't suspend. */
-		spin_lock_irq(&dev->wl->irq_lock);
-		tmp = b43_interrupt_disable(dev, B43_IRQ_ALL);
-		spin_unlock_irq(&dev->wl->irq_lock);
-		b43_synchronize_irq(dev);
-		dev->irq_savedstate = tmp;
-
 		b43_power_saving_ctl_bits(dev, B43_PS_AWAKE);
 		b43_write32(dev, B43_MMIO_MACCTL,
 			    b43_read32(dev, B43_MMIO_MACCTL)
@@ -2503,6 +2490,7 @@ static void b43_chip_exit(struct b43_wldev *dev)
 {
 	b43_radio_turn_off(dev, 1);
 	b43_gpio_cleanup(dev);
+	b43_lo_g_cleanup(dev);
 	/* firmware is released later */
 }
 
@@ -2609,28 +2597,12 @@ err_gpio_clean:
 	return err;
 }
 
-static void b43_periodic_every120sec(struct b43_wldev *dev)
-{
-	struct b43_phy *phy = &dev->phy;
-
-	if (phy->type != B43_PHYTYPE_G || phy->rev < 2)
-		return;
-
-	b43_mac_suspend(dev);
-	b43_lo_g_measure(dev);
-	b43_mac_enable(dev);
-	if (b43_has_hardware_pctl(phy))
-		b43_lo_g_ctl_mark_all_unused(dev);
-}
-
 static void b43_periodic_every60sec(struct b43_wldev *dev)
 {
 	struct b43_phy *phy = &dev->phy;
 
 	if (phy->type != B43_PHYTYPE_G)
 		return;
-	if (!b43_has_hardware_pctl(phy))
-		b43_lo_g_ctl_mark_all_unused(dev);
 	if (dev->dev->bus->sprom.boardflags_lo & B43_BFL_RSSI) {
 		b43_mac_suspend(dev);
 		b43_calc_nrssi_slope(dev);
@@ -2682,6 +2654,7 @@ static void b43_periodic_every15sec(struct b43_wldev *dev)
 		}
 	}
 	b43_phy_xmitpower(dev);	//FIXME: unless scanning?
+	b43_lo_g_maintanance_work(dev);
 	//TODO for APHY (temperature?)
 
 	atomic_set(&phy->txerr_cnt, B43_PHY_TX_BADNESS_LIMIT);
@@ -2693,8 +2666,6 @@ static void do_periodic_work(struct b43_wldev *dev)
 	unsigned int state;
 
 	state = dev->periodic_state;
-	if (state % 8 == 0)
-		b43_periodic_every120sec(dev);
 	if (state % 4 == 0)
 		b43_periodic_every60sec(dev);
 	if (state % 2 == 0)
@@ -3025,8 +2996,7 @@ static void b43_qos_update_work(struct work_struct *work)
 	mutex_unlock(&wl->mutex);
 }
 
-static int b43_op_conf_tx(struct ieee80211_hw *hw,
-			  int _queue,
+static int b43_op_conf_tx(struct ieee80211_hw *hw, u16 _queue,
 			  const struct ieee80211_tx_queue_params *params)
 {
 	struct b43_wl *wl = hw_to_b43_wl(hw);
@@ -3668,8 +3638,8 @@ static void setup_struct_phy_for_init(struct b43_wldev *dev,
 	lo = phy->lo_control;
 	if (lo) {
 		memset(lo, 0, sizeof(*(phy->lo_control)));
-		lo->rebuild = 1;
 		lo->tx_bias = 0xFF;
+		INIT_LIST_HEAD(&lo->calib_list);
 	}
 	phy->max_lb_gain = 0;
 	phy->trsw_rx_gain = 0;
@@ -4496,10 +4466,10 @@ static int b43_wireless_init(struct ssb_device *dev)
 
 	/* fill hw info */
 	hw->flags = IEEE80211_HW_HOST_GEN_BEACON_TEMPLATE |
-		    IEEE80211_HW_RX_INCLUDES_FCS;
-	hw->max_signal = 100;
-	hw->max_rssi = -110;
-	hw->max_noise = -110;
+		    IEEE80211_HW_RX_INCLUDES_FCS |
+		    IEEE80211_HW_SIGNAL_DBM |
+		    IEEE80211_HW_NOISE_DBM;
+
 	hw->queues = b43_modparam_qos ? 4 : 1;
 	SET_IEEE80211_DEV(hw, dev->dev);
 	if (is_valid_ether_addr(sprom->et1mac))
