@@ -122,36 +122,6 @@ config X86_GX_SUSPMOD
 
 	 If in doubt, say N.
 
-config X86_SPEEDSTEP_CENTRINO
-	tristate "Intel Enhanced SpeedStep (deprecated)"
-	select CPU_FREQ_TABLE
-	select X86_SPEEDSTEP_CENTRINO_TABLE if X86_32
-	depends on X86_32 || (X86_64 && ACPI_PROCESSOR)
-	help
-	  This is deprecated and this functionality is now merged into
-	  acpi_cpufreq (X86_ACPI_CPUFREQ). Use that driver instead of
-	  speedstep_centrino.
-	  This adds the CPUFreq driver for Enhanced SpeedStep enabled
-	  mobile CPUs.  This means Intel Pentium M (Centrino) CPUs
-	  or 64bit enabled Intel Xeons.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called speedstep-centrino.
-
-	  For details, take a look at <file:Documentation/cpu-freq/>.
-
-	  If in doubt, say N.
-
-config X86_SPEEDSTEP_CENTRINO_TABLE
-	bool "Built-in tables for Banias CPUs"
-	depends on X86_32 && X86_SPEEDSTEP_CENTRINO
-	default y
-	help
-	  Use built-in tables for Banias CPUs if ACPI encoding
-	  is not available.
-
-	  If in doubt, say N.
-
 config X86_SPEEDSTEP_ICH
 	tristate "Intel Speedstep on ICH-M chipsets (ioport interface)"
 	select CPU_FREQ_TABLE
@@ -178,26 +148,6 @@ config X86_SPEEDSTEP_SMI
 	  For details, take a look at <file:Documentation/cpu-freq/>.
 
 	  If in doubt, say N.
-
-config X86_P4_CLOCKMOD
-	tristate "Intel Pentium 4 clock modulation"
-	select CPU_FREQ_TABLE
-	help
-	  This adds the CPUFreq driver for Intel Pentium 4 / XEON
-	  processors.  When enabled it will lower CPU temperature by skipping
-	  clocks.
-
-	  This driver should be only used in exceptional
-	  circumstances when very low power is needed because it causes severe
-	  slowdowns and noticeable latencies.  Normally Speedstep should be used
-	  instead.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called p4-clockmod.
-
-	  For details, take a look at <file:Documentation/cpu-freq/>.
-
-	  Unless you are absolutely sure say N.
 
 config X86_CPUFREQ_NFORCE2
 	tristate "nVidia nForce2 FSB changing"
