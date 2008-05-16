@@ -880,13 +880,13 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 
 		ubifs_wbuf_add_ino_nolock(wbuf, new_dir->i_ino);
 		ubifs_wbuf_add_ino_nolock(wbuf, old_dir->i_ino);
+		if (new_inode)
+			ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
+						  new_inode->i_ino);
 	}
 	release_head(c, BASEHD);
 	if (err)
 		goto out_ro;
-	if (new_inode)
-		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
-					  new_inode->i_ino);
 
 	dent_key_init(c, &key, new_dir->i_ino, &new_dentry->d_name);
 	err = ubifs_tnc_add_nm(c, &key, lnum, offs, dlen1, &new_dentry->d_name);
