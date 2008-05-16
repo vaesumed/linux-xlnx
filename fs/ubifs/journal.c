@@ -66,7 +66,7 @@
  */
 static inline void zero_ino_node_unused(struct ubifs_ino_node *ino)
 {
-	memset(ino->padding, 0, 38);
+	memset(ino->padding, 0, 26);
 }
 
 /**
