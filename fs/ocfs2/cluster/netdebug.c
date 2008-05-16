@@ -24,8 +24,6 @@
  *
  */
 
-#ifdef CONFIG_DEBUG_FS
-
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/slab.h>
@@ -42,6 +40,8 @@
 #include "masklog.h"
 
 #include "tcp_internal.h"
+
+#ifdef CONFIG_DEBUG_FS
 
 #define O2NET_DEBUG_DIR		"o2net"
 #define SC_DEBUG_NAME		"sock_containers"
@@ -436,6 +436,33 @@ void o2net_debugfs_exit(void)
 		debugfs_remove(nst_dentry);
 	if (o2net_dentry)
 		debugfs_remove(o2net_dentry);
+}
+
+#else
+
+int o2net_debugfs_init(void)
+{
+	return 0;
+}
+
+void o2net_debugfs_exit(void)
+{
+}
+
+void o2net_debug_add_nst(struct o2net_send_tracking *nst)
+{
+}
+
+void o2net_debug_del_nst(struct o2net_send_tracking *nst)
+{
+}
+
+void o2net_debug_add_sc(struct o2net_sock_container *sc)
+{
+}
+
+void o2net_debug_del_sc(struct o2net_sock_container *sc)
+{
 }
 
 #endif	/* CONFIG_DEBUG_FS */
