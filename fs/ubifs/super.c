@@ -131,6 +131,9 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	if (err)
 		goto out_invalid;
 
+	/* Disable readahead */
+	inode->i_mapping->backing_dev_info = &ubifs_backing_dev_info;
+
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
 		inode->i_mapping->a_ops = &ubifs_file_address_operations;
