@@ -211,7 +211,7 @@ static int s3c2410wdt_set_heartbeat(int timeout)
 
 static int s3c2410wdt_open(struct inode *inode, struct file *file)
 {
-	if(down_trylock(&open_lock))
+	if(!down_nowait(&open_lock))
 		return -EBUSY;
 
 	if (nowayout)

@@ -27,7 +27,7 @@ static unsigned int dev_index;
  * __iomem to quieten sparse. */
 static inline void *lguest_map(unsigned long phys_addr, unsigned long pages)
 {
-	return (__force void *)ioremap(phys_addr, PAGE_SIZE*pages);
+	return (__force void *)ioremap_cache(phys_addr, PAGE_SIZE*pages);
 }
 
 static inline void lguest_unmap(void *addr)
@@ -98,7 +98,8 @@ static u32 lg_get_features(struct virtio_device *vdev)
 		if (in_features[i / 8] & (1 << (i % 8)))
 			features |= (1 << i);
 
-	return features;
+	/* Vring may want to play with the bits it's offered. */
+	return vring_transport_features(features);
 }
 
 static void lg_set_features(struct virtio_device *vdev, u32 features)

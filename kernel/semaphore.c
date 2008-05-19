@@ -14,7 +14,7 @@
  * Some notes on the implementation:
  *
  * The spinlock controls access to the other members of the semaphore.
- * down_trylock() and up() can be called from interrupt context, so we
+ * down_nowait() and up() can be called from interrupt context, so we
  * have to disable interrupts when taking the lock.  It turns out various
  * parts of the kernel expect to be able to use down() on a semaphore in
  * interrupt context when they know it will succeed, so we have to use
@@ -116,19 +116,18 @@ int down_killable(struct semaphore *sem)
 EXPORT_SYMBOL(down_killable);
 
 /**
- * down_trylock - try to acquire the semaphore, without waiting
+ * down_nowait - try to acquire the semaphore, without waiting
  * @sem: the semaphore to be acquired
  *
- * Try to acquire the semaphore atomically.  Returns 0 if the mutex has
- * been acquired successfully or 1 if it it cannot be acquired.
+ * Try to acquire the semaphore atomically.  Returns true if the mutex has
+ * been acquired successfully or 0 if it it cannot be acquired.
  *
- * NOTE: This return value is inverted from both spin_trylock and
- * mutex_trylock!  Be careful about this when converting code.
+ * NOTE: This replaces down_trylock() which returned the reverse.
  *
  * Unlike mutex_trylock, this function can be used from interrupt context,
  * and the semaphore can be released by any task or interrupt.
  */
-int down_trylock(struct semaphore *sem)
+int down_nowait(struct semaphore *sem)
 {
 	unsigned long flags;
 	int count;
@@ -139,9 +138,9 @@ int down_trylock(struct semaphore *sem)
 		sem->count = count;
 	spin_unlock_irqrestore(&sem->lock, flags);
 
-	return (count < 0);
+	return (count >= 0);
 }
-EXPORT_SYMBOL(down_trylock);
+EXPORT_SYMBOL(down_nowait);
 
 /**
  * down_timeout - acquire the semaphore within a specified time
