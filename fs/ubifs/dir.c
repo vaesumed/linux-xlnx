@@ -340,7 +340,6 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		/* The directory was seek'ed to a senseless position */
 		return 0;
 
-	saved = filp->private_data;
 	if (saved)
 		if (filp->f_pos != key_hash_flash(c, &saved->key)) {
 			/* The directory was seek'ed */
@@ -402,6 +401,10 @@ static int ubifs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			nm.name = saved->name;
 			nm.len = le16_to_cpu(saved->nlen);
 		} else {
+			/*
+			 * The directory was seek'ed to @filp->f_pos and is now
+			 * readdir'ed.
+			 */
 			dent_key_init_hash(c, &key, dir->i_ino, filp->f_pos);
 			nm.name = NULL;
 		}
