@@ -185,7 +185,10 @@ void cpu_idle(void)
 
 			local_irq_disable();
 			__get_cpu_var(irq_stat).idle_timestamp = jiffies;
+			/* Don't trace irqs off for idle */
+			stop_critical_timings();
 			idle();
+			start_critical_timings();
 		}
 		tick_nohz_restart_sched_tick();
 		preempt_enable_no_resched();
@@ -194,7 +197,7 @@ void cpu_idle(void)
 	}
 }
 
-void __show_registers(struct pt_regs *regs, int all)
+void __show_regs(struct pt_regs *regs, int all)
 {
 	unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L;
 	unsigned long d0, d1, d2, d3, d6, d7;
@@ -255,7 +258,7 @@ void __show_registers(struct pt_regs *regs, int all)
 
 void show_regs(struct pt_regs *regs)
 {
-	__show_registers(regs, 1);
+	__show_regs(regs, 1);
 	show_trace(NULL, regs, &regs->sp, regs->bp);
 }
 
@@ -316,6 +319,14 @@ void exit_thread(void)
 		tss->x86_tss.io_bitmap_base = INVALID_IO_BITMAP_OFFSET;
 		put_cpu();
 	}
+#ifdef CONFIG_X86_DS
+	/* Free any DS contexts that have not been properly released. */
+	if (unlikely(current->thread.ds_ctx)) {
+		/* we clear debugctl to make sure DS is not used. */
+		update_debugctlmsr(0);
+		ds_free(current->thread.ds_ctx);
+	}
+#endif /* CONFIG_X86_DS */
 }
 
 void flush_thread(void)
@@ -476,6 +487,35 @@ int set_tsc_mode(unsigned int val)
 	return 0;
 }
 
+#ifdef CONFIG_X86_DS
+static int update_debugctl(struct thread_struct *prev,
+			struct thread_struct *next, unsigned long debugctl)
+{
+	unsigned long ds_prev = 0;
+	unsigned long ds_next = 0;
+
+	if (prev->ds_ctx)
+		ds_prev = (unsigned long)prev->ds_ctx->ds;
+	if (next->ds_ctx)
+		ds_next = (unsigned long)next->ds_ctx->ds;
+
+	if (ds_next != ds_prev) {
+		/* we clear debugctl to make sure DS
+		 * is not in use when we change it */
+		debugctl = 0;
+		update_debugctlmsr(0);
+		wrmsr(MSR_IA32_DS_AREA, ds_next, 0);
+	}
+	return debugctl;
+}
+#else
+static int update_debugctl(struct thread_struct *prev,
+			struct thread_struct *next, unsigned long debugctl)
+{
+	return debugctl;
+}
+#endif /* CONFIG_X86_DS */
+
 static noinline void
 __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p,
 		 struct tss_struct *tss)
@@ -486,14 +526,7 @@ __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p,
 	prev = &prev_p->thread;
 	next = &next_p->thread;
 
-	debugctl = prev->debugctlmsr;
-	if (next->ds_area_msr != prev->ds_area_msr) {
-		/* we clear debugctl to make sure DS
-		 * is not in use when we change it */
-		debugctl = 0;
-		update_debugctlmsr(0);
-		wrmsr(MSR_IA32_DS_AREA, next->ds_area_msr, 0);
-	}
+	debugctl = update_debugctl(prev, next, prev->debugctlmsr);
 
 	if (next->debugctlmsr != debugctl)
 		update_debugctlmsr(next->debugctlmsr);
@@ -517,13 +550,13 @@ __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p,
 			hard_enable_TSC();
 	}
 
-#ifdef X86_BTS
+#ifdef CONFIG_X86_PTRACE_BTS
 	if (test_tsk_thread_flag(prev_p, TIF_BTS_TRACE_TS))
 		ptrace_bts_take_timestamp(prev_p, BTS_TASK_DEPARTS);
 
 	if (test_tsk_thread_flag(next_p, TIF_BTS_TRACE_TS))
 		ptrace_bts_take_timestamp(next_p, BTS_TASK_ARRIVES);
-#endif
+#endif /* CONFIG_X86_PTRACE_BTS */
 
 
 	if (!test_tsk_thread_flag(next_p, TIF_IO_BITMAP)) {

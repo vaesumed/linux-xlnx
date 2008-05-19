@@ -10,6 +10,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/ptrace.h>
+#include <linux/mmiotrace.h>
 #include <linux/mman.h>
 #include <linux/mm.h>
 #include <linux/smp.h>
@@ -25,6 +26,7 @@
 #include <linux/kprobes.h>
 #include <linux/uaccess.h>
 #include <linux/kdebug.h>
+#include <linux/magic.h>
 
 #include <asm/system.h>
 #include <asm/desc.h>
@@ -33,6 +35,7 @@
 #include <asm/smp.h>
 #include <asm/tlbflush.h>
 #include <asm/proto.h>
+#include <asm/kmemcheck.h>
 #include <asm-generic/sections.h>
 
 /*
@@ -48,6 +51,16 @@
 #define PF_USER		(1<<2)
 #define PF_RSVD		(1<<3)
 #define PF_INSTR	(1<<4)
+
+static inline int kmmio_fault(struct pt_regs *regs, unsigned long addr)
+{
+#ifdef CONFIG_MMIOTRACE_HOOKS
+	if (unlikely(is_kmmio_active()))
+		if (kmmio_handler(regs, addr) == 1)
+			return -1;
+#endif
+	return 0;
+}
 
 static inline int notify_page_fault(struct pt_regs *regs)
 {
@@ -497,6 +510,11 @@ static int vmalloc_fault(unsigned long address)
 	unsigned long pgd_paddr;
 	pmd_t *pmd_k;
 	pte_t *pte_k;
+
+	/* Make sure we are in vmalloc area */
+	if (!(address >= VMALLOC_START && address < VMALLOC_END))
+		return -1;
+
 	/*
 	 * Synchronize this task's top level page-table
 	 * with the 'reference' page table.
@@ -508,11 +526,13 @@ static int vmalloc_fault(unsigned long address)
 	pmd_k = vmalloc_sync_one(__va(pgd_paddr), address);
 	if (!pmd_k)
 		return -1;
+
 	pte_k = pte_offset_kernel(pmd_k, address);
 	if (!pte_present(*pte_k))
 		return -1;
 	return 0;
 #else
+	unsigned long pgd_paddr;
 	pgd_t *pgd, *pgd_ref;
 	pud_t *pud, *pud_ref;
 	pmd_t *pmd, *pmd_ref;
@@ -526,7 +546,8 @@ static int vmalloc_fault(unsigned long address)
 	   happen within a race in page table update. In the later
 	   case just flush. */
 
-	pgd = pgd_offset(current->mm ?: &init_mm, address);
+	pgd_paddr = read_cr3();
+	pgd = __va(pgd_paddr) + pgd_index(address);
 	pgd_ref = pgd_offset_k(address);
 	if (pgd_none(*pgd_ref))
 		return -1;
@@ -563,6 +584,29 @@ static int vmalloc_fault(unsigned long address)
 #endif
 }
 
+static bool kmemcheck_fault(struct pt_regs *regs, unsigned long address,
+	unsigned long error_code)
+{
+	pte_t *pte;
+	unsigned int level;
+
+	pte = lookup_address(address, &level);
+	if (!pte)
+		return false;
+	if (level != PG_LEVEL_4K)
+		return false;
+	if (!pte_hidden(*pte))
+		return false;
+
+	if (error_code & 2)
+		kmemcheck_access(regs, address, KMEMCHECK_WRITE);
+	else
+		kmemcheck_access(regs, address, KMEMCHECK_READ);
+
+	kmemcheck_show(regs);
+	return true;
+}
+
 int show_unhandled_signals = 1;
 
 /*
@@ -581,6 +625,8 @@ void __kprobes do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	unsigned long address;
 	int write, si_code;
 	int fault;
+	unsigned long *stackend;
+
 #ifdef CONFIG_X86_64
 	unsigned long flags;
 #endif
@@ -597,9 +643,18 @@ void __kprobes do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	/* get the address */
 	address = read_cr2();
 
+	/*
+	 * Detect and handle instructions that would cause a page fault for
+	 * both a tracked kernel page and a userspace page.
+	 */
+	if (kmemcheck_active(regs))
+		kmemcheck_hide(regs);
+
 	si_code = SEGV_MAPERR;
 
 	if (notify_page_fault(regs))
+		return;
+	if (unlikely(kmmio_fault(regs, address)))
 		return;
 
 	/*
@@ -622,6 +677,9 @@ void __kprobes do_page_fault(struct pt_regs *regs, unsigned long error_code)
 #endif
 		if (!(error_code & (PF_RSVD|PF_USER|PF_PROT)) &&
 		    vmalloc_fault(address) >= 0)
+			return;
+
+		if (kmemcheck_fault(regs, address, error_code))
 			return;
 
 		/* Can handle a stale RO->RW TLB */
@@ -849,6 +907,10 @@ no_context:
 #endif
 
 	show_fault_oops(regs, error_code, address);
+
+ 	stackend = end_of_stack(tsk);
+	if (*stackend != STACK_END_MAGIC)
+		printk(KERN_ALERT "Thread overran stack, or stack corrupted\n");
 
 	tsk->thread.cr2 = address;
 	tsk->thread.trap_no = 14;

@@ -53,6 +53,7 @@
 #include <asm/proto.h>
 #include <asm/nmi.h>
 #include <asm/stacktrace.h>
+#include <asm/kmemcheck.h>
 
 asmlinkage void divide_error(void);
 asmlinkage void debug(void);
@@ -71,7 +72,6 @@ asmlinkage void general_protection(void);
 asmlinkage void page_fault(void);
 asmlinkage void coprocessor_error(void);
 asmlinkage void simd_coprocessor_error(void);
-asmlinkage void reserved(void);
 asmlinkage void alignment_check(void);
 asmlinkage void machine_check(void);
 asmlinkage void spurious_interrupt_bug(void);
@@ -470,7 +470,7 @@ void show_registers(struct pt_regs *regs)
 	sp = regs->sp;
 	ip = (u8 *) regs->ip - code_prologue;
 	printk("CPU %d ", cpu);
-	__show_regs(regs);
+	__show_regs(regs, 1);
 	printk("Process %s (pid: %d, threadinfo %p, task %p)\n",
 		cur->comm, cur->pid, task_thread_info(cur), cur);
 
@@ -555,6 +555,10 @@ void __kprobes oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 		oops_exit();
 		return;
 	}
+	if (in_nmi())
+		panic("Fatal exception in non-maskable interrupt");
+	if (in_interrupt())
+		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
 	oops_exit();
@@ -703,12 +707,10 @@ DO_ERROR_INFO( 0, SIGFPE,  "divide error", divide_error, FPE_INTDIV, regs->ip)
 DO_ERROR( 4, SIGSEGV, "overflow", overflow)
 DO_ERROR( 5, SIGSEGV, "bounds", bounds)
 DO_ERROR_INFO( 6, SIGILL,  "invalid opcode", invalid_op, ILL_ILLOPN, regs->ip)
-DO_ERROR( 7, SIGSEGV, "device not available", device_not_available)
 DO_ERROR( 9, SIGFPE,  "coprocessor segment overrun", coprocessor_segment_overrun)
 DO_ERROR(10, SIGSEGV, "invalid TSS", invalid_TSS)
 DO_ERROR(11, SIGBUS,  "segment not present", segment_not_present)
 DO_ERROR_INFO(17, SIGBUS, "alignment check", alignment_check, BUS_ADRALN, 0)
-DO_ERROR(18, SIGSEGV, "reserved", reserved)
 
 /* Runs on IST stack */
 asmlinkage void do_stack_segment(struct pt_regs *regs, long error_code)
@@ -900,6 +902,9 @@ asmlinkage __kprobes struct pt_regs *sync_regs(struct pt_regs *eregs)
 	return regs;
 }
 
+extern void ia32_sysenter_target(void);
+extern void x86_debug(void);
+
 /* runs on IST stack. */
 asmlinkage void __kprobes do_debug(struct pt_regs * regs,
 				   unsigned long error_code)
@@ -911,6 +916,14 @@ asmlinkage void __kprobes do_debug(struct pt_regs * regs,
 	trace_hardirqs_fixup();
 
 	get_debugreg(condition, 6);
+
+	/* Catch kmemcheck conditions first of all! */
+	if (condition & DR_STEP) {
+		if (kmemcheck_active(regs)) {
+			kmemcheck_hide(regs);
+			return;
+		}
+	}
 
 	/*
 	 * The processor cleared BTF, so don't mark that we need it set.
@@ -1151,7 +1164,7 @@ EXPORT_SYMBOL_GPL(math_state_restore);
 void __init trap_init(void)
 {
 	set_intr_gate(0,&divide_error);
-	set_intr_gate_ist(1,&debug,DEBUG_STACK);
+	set_intr_gate_ist(1,&x86_debug,DEBUG_STACK);
 	set_intr_gate_ist(2,&nmi,NMI_STACK);
  	set_system_gate_ist(3,&int3,DEBUG_STACK); /* int3 can be called from all */
 	set_system_gate(4,&overflow);	/* int4 can be called from all */

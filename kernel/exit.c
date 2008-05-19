@@ -45,6 +45,7 @@
 #include <linux/resource.h>
 #include <linux/blkdev.h>
 #include <linux/task_io_accounting_ops.h>
+#include <linux/marker.h>
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -143,6 +144,8 @@ static void __exit_signal(struct task_struct *tsk)
 
 static void delayed_put_task_struct(struct rcu_head *rhp)
 {
+	trace_mark(kernel_process_free, "pid %d",
+		container_of(rhp, struct task_struct, rcu)->pid);
 	put_task_struct(container_of(rhp, struct task_struct, rcu));
 }
 
@@ -894,12 +897,9 @@ static void check_stack_usage(void)
 {
 	static DEFINE_SPINLOCK(low_water_lock);
 	static int lowest_to_date = THREAD_SIZE;
-	unsigned long *n = end_of_stack(current);
 	unsigned long free;
 
-	while (*n == 0)
-		n++;
-	free = (unsigned long)n - (unsigned long)end_of_stack(current);
+	free = stack_not_used(current);
 
 	if (free >= lowest_to_date)
 		return;
@@ -1037,6 +1037,9 @@ NORET_TYPE void do_exit(long code)
 
 	if (group_dead)
 		acct_process();
+
+	trace_mark(kernel_process_exit, "pid %d", tsk->pid);
+
 	exit_sem(tsk);
 	exit_files(tsk);
 	exit_fs(tsk);
@@ -1520,6 +1523,8 @@ static long do_wait(enum pid_type type, struct pid *pid, int options,
 	DECLARE_WAITQUEUE(wait, current);
 	struct task_struct *tsk;
 	int flag, retval;
+
+	trace_mark(kernel_process_wait, "pid %d", pid_nr(pid));
 
 	add_wait_queue(&current->signal->wait_chldexit,&wait);
 repeat:

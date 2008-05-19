@@ -12,6 +12,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#include <linux/mmiotrace.h>
 
 #include <asm/cacheflush.h>
 #include <asm/e820.h>
@@ -122,10 +123,13 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 {
 	unsigned long pfn, offset, vaddr;
 	resource_size_t last_addr;
+	const resource_size_t unaligned_phys_addr = phys_addr;
+	const unsigned long unaligned_size = size;
 	struct vm_struct *area;
 	unsigned long new_prot_val;
 	pgprot_t prot;
 	int retval;
+	void __iomem *ret_addr;
 
 	/* Don't allow wraparound or zero size */
 	last_addr = phys_addr + size - 1;
@@ -233,7 +237,10 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 		return NULL;
 	}
 
-	return (void __iomem *) (vaddr + offset);
+	ret_addr = (void __iomem *) (vaddr + offset);
+	mmiotrace_ioremap(unaligned_phys_addr, unaligned_size, ret_addr);
+
+	return ret_addr;
 }
 
 /**
@@ -318,12 +325,14 @@ void iounmap(volatile void __iomem *addr)
 	 * vm_area and by simply returning an address into the kernel mapping
 	 * of ISA space.   So handle that here.
 	 */
-	if (addr >= phys_to_virt(ISA_START_ADDRESS) &&
-	    addr < phys_to_virt(ISA_END_ADDRESS))
+	if ((void __force *)addr >= phys_to_virt(ISA_START_ADDRESS) &&
+	    (void __force *)addr < phys_to_virt(ISA_END_ADDRESS))
 		return;
 
 	addr = (volatile void __iomem *)
 		(PAGE_MASK & (unsigned long __force)addr);
+
+	mmiotrace_iounmap(addr);
 
 	/* Use the vm area unlocked, assuming the caller
 	   ensures there isn't another iounmap for the same address
@@ -332,7 +341,7 @@ void iounmap(volatile void __iomem *addr)
 	   cpa takes care of the direct mappings. */
 	read_lock(&vmlist_lock);
 	for (p = vmlist; p; p = p->next) {
-		if (p->addr == addr)
+		if (p->addr == (void __force *)addr)
 			break;
 	}
 	read_unlock(&vmlist_lock);
@@ -346,7 +355,7 @@ void iounmap(volatile void __iomem *addr)
 	free_memtype(p->phys_addr, p->phys_addr + get_vm_area_size(p));
 
 	/* Finally remove it */
-	o = remove_vm_area((void *)addr);
+	o = remove_vm_area((void __force *)addr);
 	BUG_ON(p != o || o == NULL);
 	kfree(p);
 }
@@ -365,7 +374,7 @@ void *xlate_dev_mem_ptr(unsigned long phys)
 	if (page_is_ram(start >> PAGE_SHIFT))
 		return __va(phys);
 
-	addr = (void *)ioremap(start, PAGE_SIZE);
+	addr = (void __force *)ioremap(start, PAGE_SIZE);
 	if (addr)
 		addr = (void *)((unsigned long)addr | (phys & ~PAGE_MASK));
 

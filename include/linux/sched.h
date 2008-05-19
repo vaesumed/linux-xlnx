@@ -134,7 +134,6 @@ extern unsigned long nr_running(void);
 extern unsigned long nr_uninterruptible(void);
 extern unsigned long nr_active(void);
 extern unsigned long nr_iowait(void);
-extern unsigned long weighted_cpuload(const int cpu);
 
 struct seq_file;
 struct cfs_rq;
@@ -246,6 +245,8 @@ extern asmlinkage void schedule_tail(struct task_struct *prev);
 extern void init_idle(struct task_struct *idle, int cpu);
 extern void init_idle_bootup_task(struct task_struct *idle);
 
+extern int runqueue_is_locked(void);
+
 extern cpumask_t nohz_cpu_mask;
 #if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ)
 extern int select_nohz_load_balancer(int cpu);
@@ -294,10 +295,11 @@ extern void softlockup_tick(void);
 extern void spawn_softlockup_task(void);
 extern void touch_softlockup_watchdog(void);
 extern void touch_all_softlockup_watchdogs(void);
-extern unsigned long  softlockup_thresh;
+extern unsigned int  softlockup_panic;
 extern unsigned long sysctl_hung_task_check_count;
 extern unsigned long sysctl_hung_task_timeout_secs;
 extern unsigned long sysctl_hung_task_warnings;
+extern int softlockup_thresh;
 #else
 static inline void softlockup_tick(void)
 {
@@ -824,23 +826,6 @@ extern int arch_reinit_sched_domains(void);
 
 #endif	/* CONFIG_SMP */
 
-/*
- * A runqueue laden with a single nice 0 task scores a weighted_cpuload of
- * SCHED_LOAD_SCALE. This function returns 1 if any cpu is laden with a
- * task of nice 0 or enough lower priority tasks to bring up the
- * weighted_cpuload
- */
-static inline int above_background_load(void)
-{
-	unsigned long cpu;
-
-	for_each_online_cpu(cpu) {
-		if (weighted_cpuload(cpu) >= SCHED_LOAD_SCALE)
-			return 1;
-	}
-	return 0;
-}
-
 struct io_context;			/* See blkdev.h */
 #define NGROUPS_SMALL		32
 #define NGROUPS_PER_BLOCK	((unsigned int)(PAGE_SIZE / sizeof(gid_t)))
@@ -1040,6 +1025,7 @@ struct task_struct {
 #endif
 
 	int prio, static_prio, normal_prio;
+	unsigned int rt_priority;
 	const struct sched_class *sched_class;
 	struct sched_entity se;
 	struct sched_rt_entity rt;
@@ -1096,10 +1082,9 @@ struct task_struct {
 	pid_t pid;
 	pid_t tgid;
 
-#ifdef CONFIG_CC_STACKPROTECTOR
 	/* Canary value for the -fstack-protector gcc feature */
 	unsigned long stack_canary;
-#endif
+
 	/* 
 	 * pointers to (original) parent process, youngest child, younger sibling,
 	 * older sibling, respectively.  (p->father can be replaced with 
@@ -1123,7 +1108,6 @@ struct task_struct {
 	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */
 	int __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
 
-	unsigned int rt_priority;
 	cputime_t utime, stime, utimescaled, stimescaled;
 	cputime_t gtime;
 	cputime_t prev_utime, prev_stime;
@@ -1142,12 +1126,12 @@ struct task_struct {
 	gid_t gid,egid,sgid,fsgid;
 	struct group_info *group_info;
 	kernel_cap_t   cap_effective, cap_inheritable, cap_permitted, cap_bset;
-	unsigned securebits;
 	struct user_struct *user;
+	unsigned securebits;
 #ifdef CONFIG_KEYS
+	unsigned char jit_keyring;	/* default keyring to attach requested keys to */
 	struct key *request_key_auth;	/* assumed request_key authority */
 	struct key *thread_keyring;	/* keyring private to this thread */
-	unsigned char jit_keyring;	/* default keyring to attach requested keys to */
 #endif
 	char comm[TASK_COMM_LEN]; /* executable name excluding path
 				     - access with [gs]et_task_comm (which lock
@@ -1234,8 +1218,8 @@ struct task_struct {
 # define MAX_LOCK_DEPTH 48UL
 	u64 curr_chain_key;
 	int lockdep_depth;
-	struct held_lock held_locks[MAX_LOCK_DEPTH];
 	unsigned int lockdep_recursion;
+	struct held_lock held_locks[MAX_LOCK_DEPTH];
 #endif
 
 /* journalling filesystem info */
@@ -1263,10 +1247,6 @@ struct task_struct {
 	u64 acct_vm_mem1;	/* accumulated virtual memory usage */
 	cputime_t acct_stimexpd;/* stime since last update */
 #endif
-#ifdef CONFIG_NUMA
-  	struct mempolicy *mempolicy;
-	short il_next;
-#endif
 #ifdef CONFIG_CPUSETS
 	nodemask_t mems_allowed;
 	int cpuset_mems_generation;
@@ -1285,6 +1265,10 @@ struct task_struct {
 #endif
 	struct list_head pi_state_list;
 	struct futex_pi_state *pi_state_cache;
+#endif
+#ifdef CONFIG_NUMA
+	struct mempolicy *mempolicy;
+	short il_next;
 #endif
 	atomic_t fs_excl;	/* holding fs exclusive resources */
 	struct rcu_head rcu;
@@ -1970,6 +1954,19 @@ static inline unsigned long *end_of_stack(struct task_struct *p)
 
 extern void thread_info_cache_init(void);
 
+#ifdef CONFIG_DEBUG_STACK_USAGE
+static inline unsigned long stack_not_used(struct task_struct *p)
+{
+	unsigned long *n = end_of_stack(p);
+
+	do { 	/* Skip over canary */
+		n++;
+	} while (!*n);
+
+	return (unsigned long)n - (unsigned long)end_of_stack(p);
+}
+#endif
+
 /* set thread flags in other task's structures
  * - see asm/thread_info.h for TIF_xxxx flags available
  */
@@ -2117,6 +2114,18 @@ static inline void arch_pick_mmap_layout(struct mm_struct *mm)
 }
 #endif
 
+#ifdef CONFIG_TRACING
+extern void
+__trace_special(void *__tr, void *__data,
+		unsigned long arg1, unsigned long arg2, unsigned long arg3);
+#else
+static inline void
+__trace_special(void *__tr, void *__data,
+		unsigned long arg1, unsigned long arg2, unsigned long arg3)
+{
+}
+#endif
+
 extern long sched_setaffinity(pid_t pid, const cpumask_t *new_mask);
 extern long sched_getaffinity(pid_t pid, cpumask_t *mask);
 
@@ -2210,6 +2219,8 @@ static inline void mm_init_owner(struct mm_struct *mm, struct task_struct *p)
 {
 }
 #endif /* CONFIG_MM_OWNER */
+
+#define TASK_STATE_TO_CHAR_STR "RSDTtZX"
 
 #endif /* __KERNEL__ */
 
