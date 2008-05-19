@@ -2723,38 +2723,40 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 			goto out_free;
 	}
 
-again:
 	/* Now find next entry */
-	err = tnc_next(c, &znode, &n);
-	if (err)
-		goto out_free;
+	while (1) {
+		err = tnc_next(c, &znode, &n);
+		if (err)
+			goto out_free;
 
-	dkey = &znode->zbranch[n].key;
-	zbr = &znode->zbranch[n];
+		dkey = &znode->zbranch[n].key;
+		zbr = &znode->zbranch[n];
 
-	if (key_ino(c, dkey) != key_ino(c, key) ||
-	    key_type(c, dkey) != type) {
-		err = -ENOENT;
-		goto out_free;
-	}
-
-	if (!dent || dlen < zbr->len) {
-		kfree(dent);
-		dlen = zbr->len;
-		dent = kmalloc(dlen, GFP_NOFS);
-		if (!dent) {
-			err = -ENOMEM;
+		if (key_ino(c, dkey) != key_ino(c, key) ||
+		    key_type(c, dkey) != type) {
+			err = -ENOENT;
 			goto out_free;
 		}
-	}
 
-	err = tnc_read_node(c, zbr, dent);
-	if (unlikely(err))
-		goto out_free;
+		if (!dent || dlen < zbr->len) {
+			kfree(dent);
+			dlen = zbr->len;
+			dent = kmalloc(dlen, GFP_NOFS);
+			if (!dent) {
+				err = -ENOMEM;
+				goto out_free;
+			}
+		}
 
-	if (dent->inum == 0)
+		err = tnc_read_node(c, zbr, dent);
+		if (unlikely(err))
+			goto out_free;
+
+		if (dent->inum != 0)
+			break;
+
 		/* This is a deletion entry, skip it */
-		goto again;
+	}
 
 	mutex_unlock(&c->tnc_mutex);
 	return dent;
