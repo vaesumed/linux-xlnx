@@ -286,11 +286,12 @@ static void idefloppy_queue_pc_head(ide_drive_t *drive, struct ide_atapi_pc *pc,
 {
 	struct ide_floppy_obj *floppy = drive->driver_data;
 
-	ide_init_drive_cmd(rq);
+	blk_rq_init(NULL, rq);
 	rq->buffer = (char *) pc;
 	rq->cmd_type = REQ_TYPE_SPECIAL;
+	rq->cmd_flags |= REQ_PREEMPT;
 	rq->rq_disk = floppy->disk;
-	(void) ide_do_drive_cmd(drive, rq, ide_preempt);
+	ide_do_drive_cmd(drive, rq);
 }
 
 static struct ide_atapi_pc *idefloppy_next_pc_storage(ide_drive_t *drive)
@@ -666,8 +667,7 @@ static ide_startstop_t idefloppy_issue_pc(ide_drive_t *drive,
 	if ((pc->flags & PC_FLAG_DMA_RECOMMENDED) && drive->using_dma)
 		dma = !hwif->dma_ops->dma_setup(drive);
 
-	ide_pktcmd_tf_load(drive, IDE_TFLAG_NO_SELECT_MASK |
-			   IDE_TFLAG_OUT_DEVICE, bcount, dma);
+	ide_pktcmd_tf_load(drive, IDE_TFLAG_OUT_DEVICE, bcount, dma);
 
 	if (dma) {
 		/* Begin DMA, if necessary */
@@ -886,14 +886,16 @@ static ide_startstop_t idefloppy_do_request(ide_drive_t *drive,
 static int idefloppy_queue_pc_tail(ide_drive_t *drive, struct ide_atapi_pc *pc)
 {
 	struct ide_floppy_obj *floppy = drive->driver_data;
-	struct request rq;
+	struct request *rq;
+	int error;
 
-	ide_init_drive_cmd(&rq);
-	rq.buffer = (char *) pc;
-	rq.cmd_type = REQ_TYPE_SPECIAL;
-	rq.rq_disk = floppy->disk;
+	rq = blk_get_request(drive->queue, READ, __GFP_WAIT);
+	rq->buffer = (char *) pc;
+	rq->cmd_type = REQ_TYPE_SPECIAL;
+	error = blk_execute_rq(drive->queue, floppy->disk, rq, 0);
+	blk_put_request(rq);
 
-	return ide_do_drive_cmd(drive, &rq, ide_wait);
+	return error;
 }
 
 /*
