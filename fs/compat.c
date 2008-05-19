@@ -1407,7 +1407,7 @@ int compat_do_execve(char * filename,
 		/* execve success */
 		security_bprm_free(bprm);
 		acct_update_integrals(current);
-		kfree(bprm);
+		free_bprm(bprm);
 		return retval;
 	}
 
@@ -1426,7 +1426,7 @@ out_file:
 	}
 
 out_kfree:
-	kfree(bprm);
+	free_bprm(bprm);
 
 out_ret:
 	return retval;
