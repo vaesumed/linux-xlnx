@@ -336,6 +336,9 @@ static int pci_legacy_suspend(struct device *dev, pm_message_t state)
 	} else {
 		pci_default_pm_suspend(pci_dev);
 	}
+
+	pci_fixup_device(pci_fixup_suspend, pci_dev);
+
 	return i;
 }
 
@@ -362,6 +365,7 @@ static int pci_legacy_resume(struct device *dev)
 		error = drv->resume(pci_dev);
 	else
 		error = pci_default_pm_resume(pci_dev);
+	pci_fixup_device(pci_fixup_resume, pci_dev);
 	return error;
 }
 
@@ -371,7 +375,7 @@ static int pci_legacy_resume_early(struct device *dev)
 	struct pci_dev * pci_dev = to_pci_dev(dev);
 	struct pci_driver * drv = pci_dev->driver;
 
-	pci_fixup_device(pci_fixup_resume, pci_dev);
+	pci_fixup_device(pci_fixup_resume_early, pci_dev);
 
 	if (drv && drv->resume_early)
 		error = drv->resume_early(pci_dev);
