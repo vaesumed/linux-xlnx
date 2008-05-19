@@ -41,6 +41,7 @@
 #include <asm/uaccess.h>
 #include <asm/atomic.h>
 #include <linux/compat.h>
+#include <linux/smp_lock.h>
 
 #include "csr1212.h"
 #include "highlevel.h"
@@ -2778,6 +2779,7 @@ static int raw1394_open(struct inode *inode, struct file *file)
 	if (!fi)
 		return -ENOMEM;
 
+	lock_kernel();
 	fi->notification = (u8) RAW1394_NOTIFY_ON;	/* busreset notification */
 
 	INIT_LIST_HEAD(&fi->list);
@@ -2790,6 +2792,7 @@ static int raw1394_open(struct inode *inode, struct file *file)
 
 	file->private_data = fi;
 
+	unlock_kernel();
 	return 0;
 }
 
