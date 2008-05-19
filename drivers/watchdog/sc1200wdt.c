@@ -151,7 +151,7 @@ static inline int sc1200wdt_status(void)
 static int sc1200wdt_open(struct inode *inode, struct file *file)
 {
 	/* allow one at a time */
-	if (down_trylock(&open_sem))
+	if (!down_nowait(&open_sem))
 		return -EBUSY;
 
 	if (timeout > MAX_TIMEOUT)
