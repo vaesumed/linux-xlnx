@@ -26,6 +26,7 @@
 
 #include <linux/compat.h>
 #include <linux/smp_lock.h>
+#include <linux/mount.h>
 #include "ubifs.h"
 
 /**
@@ -107,7 +108,6 @@ static int setflags(struct inode *inode, int flags)
 	int oldflags, err;
 
 	mutex_lock(&inode->i_mutex);
-
 	memset(&req, 0 , sizeof(struct ubifs_budget_req));
 	err = ubifs_budget_inode_op(c, inode, &req);
 	if (err)
@@ -135,7 +135,6 @@ static int setflags(struct inode *inode, int flags)
 
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
-
 	mutex_unlock(&inode->i_mutex);
 	return err;
 
@@ -150,7 +149,7 @@ out:
 int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 		unsigned long arg)
 {
-	int flags;
+	int flags, err;
 
 	switch (cmd) {
 	case FS_IOC_GETFLAGS:
@@ -171,7 +170,16 @@ int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 		if (!S_ISDIR(inode->i_mode))
 			flags &= ~FS_DIRSYNC_FL;
 
-		return setflags(inode, flags);
+		/*
+		 * Make sure the file-system is read-write and make sure it
+		 * will not become read-only while we are changing the flags.
+		 */
+		err = mnt_want_write(filp->f_path.mnt);
+		if (err)
+			return err;
+		err = setflags(inode, flags);
+		mnt_drop_write(filp->f_path.mnt);
+		return err;
 	}
 
 	default:
