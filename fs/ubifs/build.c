@@ -1250,6 +1250,10 @@ static void ubifs_kill_sb(struct super_block *sb)
 {
 	struct ubifs_info *c = sb->s_fs_info;
 
+	/*
+	 * We do 'commit_on_unmount()' here instead of 'ubifs_put_super()'
+	 * in order to be outside BKL.
+	 */
 	if (sb->s_root != NULL && !(sb->s_flags & MS_RDONLY))
 		commit_on_unmount(c);
 	/* The un-mount routine is actually done in put_super() */
