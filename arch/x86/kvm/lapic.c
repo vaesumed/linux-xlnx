@@ -572,6 +572,8 @@ static u32 __apic_read(struct kvm_lapic *apic, unsigned int offset)
 {
 	u32 val = 0;
 
+	KVMTRACE_1D(APIC_ACCESS, apic->vcpu, (u32)offset, handler);
+
 	if (offset >= LAPIC_MMIO_LENGTH)
 		return 0;
 
@@ -694,6 +696,8 @@ static void apic_mmio_write(struct kvm_io_device *this,
 			   "0x%x\n", __func__, offset, len, val);
 
 	offset &= 0xff0;
+
+	KVMTRACE_1D(APIC_ACCESS, apic->vcpu, (u32)offset, handler);
 
 	switch (offset) {
 	case APIC_ID:		/* Local APIC ID */
@@ -957,7 +961,7 @@ int apic_has_pending_timer(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *lapic = vcpu->arch.apic;
 
-	if (lapic)
+	if (lapic && apic_enabled(lapic) && apic_lvt_enabled(lapic, APIC_LVTT))
 		return atomic_read(&lapic->timer.pending);
 
 	return 0;
