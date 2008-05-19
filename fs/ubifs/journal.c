@@ -535,6 +535,11 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 	if (!dent)
 		return -ENOMEM;
 
+	/* Make reservation before allocating sequence numbers */
+	err = make_reservation(c, BASEHD, len);
+	if (err)
+		goto out_free;
+
 	if (!xent) {
 		dent->ch.node_type = UBIFS_DENT_NODE;
 		dent_key_init(c, &dent_key, dir->i_ino, nm);
@@ -557,10 +562,6 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 
 	ino = (void *)ino + aligned_ilen;
 	pack_inode(c, ino, dir, 1, 0);
-
-	err = make_reservation(c, BASEHD, len);
-	if (err)
-		goto out_free;
 
 	if (last_reference) {
 		err = ubifs_add_orphan(c, inode->i_ino);
@@ -672,6 +673,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	dlen = UBIFS_DATA_NODE_SZ + out_len;
 	data->compr_type = cpu_to_le16(compr_type);
 
+	/* Make reservation before allocating sequence numbers */
 	err = make_reservation(c, DATAHD, dlen);
 	if (err)
 		goto out_free;
@@ -729,11 +731,13 @@ int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
 	ino = kmalloc(len, GFP_NOFS);
 	if (!ino)
 		return -ENOMEM;
-	pack_inode(c, ino, inode, 1, last_reference);
 
+	/* Make reservation before allocating sequence numbers */
 	err = make_reservation(c, BASEHD, len);
 	if (err)
 		goto out_free;
+
+	pack_inode(c, ino, inode, 1, last_reference);
 
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
 	if (!sync && !err)
@@ -823,6 +827,11 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 	if (!dent)
 		return -ENOMEM;
 
+	/* Make reservation before allocating sequence numbers */
+	err = make_reservation(c, BASEHD, len);
+	if (err)
+		goto out_free;
+
 	/* Make new dent */
 	dent->ch.node_type = UBIFS_DENT_NODE;
 	dent_key_init_flash(c, &dent->key, new_dir->i_ino, &new_dentry->d_name);
@@ -861,10 +870,6 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 		p += ALIGN(plen, 8);
 		pack_inode(c, p, new_dir, 1, 0);
 	}
-
-	err = make_reservation(c, BASEHD, len);
-	if (err)
-		goto out_free;
 
 	if (last_reference) {
 		err = ubifs_add_orphan(c, new_inode->i_ino);
@@ -992,7 +997,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 {
 	union ubifs_key key, to_key;
 	struct ubifs_trun_node *trun;
-	struct ubifs_data_node *dn;
+	struct ubifs_data_node *uninitialized_var(dn);
 	int err, dlen, len, lnum, offs, bit, sz;
 	unsigned int blk;
 
@@ -1007,7 +1012,6 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	trun_key_init_flash(c, &trun->key, inum);
 	trun->old_size = cpu_to_le64(old_size);
 	trun->new_size = cpu_to_le64(new_size);
-	ubifs_prepare_node(c, trun, UBIFS_TRUN_NODE_SZ, 0);
 
 	dlen = new_size & (UBIFS_BLOCK_SIZE - 1);
 
@@ -1037,7 +1041,6 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 					dlen += UBIFS_DATA_NODE_SZ;
 				}
 				zero_data_node_unused(dn);
-				ubifs_prepare_node(c, dn, dlen, 0);
 			}
 		}
 	}
@@ -1047,9 +1050,14 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	else
 		len = UBIFS_TRUN_NODE_SZ;
 
+	/* Must make reservation before allocating sequence numbers */
 	err = make_reservation(c, BASEHD, len);
 	if (err)
 		goto out_free;
+
+	ubifs_prepare_node(c, trun, UBIFS_TRUN_NODE_SZ, 0);
+	if (dlen)
+		ubifs_prepare_node(c, dn, dlen, 0);
 
 	err = write_head(c, BASEHD, trun, len, &lnum, &offs, 0);
 	if (!err)
@@ -1124,6 +1132,13 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	if (!xent)
 		return -ENOMEM;
 
+	/* Make reservation before allocating sequence numbers */
+	err = make_reservation(c, BASEHD, len);
+	if (err) {
+		kfree(xent);
+		return err;
+	}
+
 	xent->ch.node_type = UBIFS_XENT_NODE;
 	xent_key_init(c, &xent_key, host->i_ino, nm);
 	key_write(c, &xent_key, xent->key);
@@ -1140,12 +1155,6 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 
 	ino = (void *)ino + UBIFS_INO_NODE_SZ;
 	pack_inode(c, ino, host, 1, 0);
-
-	err = make_reservation(c, BASEHD, len);
-	if (err) {
-		kfree(xent);
-		return err;
-	}
 
 	err = write_head(c, BASEHD, xent, len, &lnum, &xent_offs, sync);
 	if (!sync && !err)
@@ -1221,12 +1230,14 @@ int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 	ino = kmalloc(aligned_len, GFP_NOFS);
 	if (!ino)
 		return -ENOMEM;
-	pack_inode(c, ino, inode1, 0, 0);
-	pack_inode(c, (void *)ino + aligned_len1, inode2, 1, 0);
 
+	/* Make reservation before allocating sequence numbers */
 	err = make_reservation(c, BASEHD, aligned_len);
 	if (err)
 		goto out_free;
+
+	pack_inode(c, ino, inode1, 0, 0);
+	pack_inode(c, (void *)ino + aligned_len1, inode2, 1, 0);
 
 	err = write_head(c, BASEHD, ino, aligned_len, &lnum, &offs, 0);
 	if (!sync && !err) {
