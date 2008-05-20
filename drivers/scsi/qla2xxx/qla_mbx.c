@@ -2810,9 +2810,9 @@ qla24xx_control_vp(scsi_qla_host_t *vha, int cmd)
 	 */
 	map = (vp_index - 1) / 8;
 	pos = (vp_index - 1) & 7;
-	mutex_lock(&ha->vport_mutex);
+	down(&ha->vport_sem);
 	vce->vp_idx_map[map] |= 1 << pos;
-	mutex_unlock(&ha->vport_mutex);
+	up(&ha->vport_sem);
 
 	rval = qla2x00_issue_iocb(ha, vce, vce_dma, 0);
 	if (rval != QLA_SUCCESS) {
