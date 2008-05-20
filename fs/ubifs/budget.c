@@ -462,7 +462,8 @@ static int calc_idx_growth(const struct ubifs_info *c,
 {
 	int znodes;
 
-	znodes = req->new_ino + req->new_page + req->new_dent;
+	znodes = req->new_ino + (req->new_page << UBIFS_BLOCKS_PER_PAGE_SHIFT) +
+		 req->new_dent;
 	return znodes * c->max_idx_node_sz;
 }
 
@@ -622,7 +623,7 @@ void ubifs_convert_page_budget(struct ubifs_info *c)
 {
 	spin_lock(&c->space_lock);
 	/* Release the index growth reservation */
-	c->budg_idx_growth -= c->max_idx_node_sz;
+	c->budg_idx_growth -= c->max_idx_node_sz << UBIFS_BLOCKS_PER_PAGE_SHIFT;
 	/* Release the data growth reservation */
 	c->budg_data_growth -= c->page_budget;
 	/* Increase the dirty data growth reservation instead */
@@ -727,7 +728,8 @@ void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
 		req->dd_growth -= c->page_budget;
 		ubifs_assert(req->new_page == 0);
 	} else if (req->new_page) {
-		req->idx_growth -= c->max_idx_node_sz;
+		req->idx_growth -=
+			c->max_idx_node_sz << UBIFS_BLOCKS_PER_PAGE_SHIFT;
 		req->data_growth -= c->page_budget;
 		ubifs_assert(req->dirtied_page == 0);
 	}

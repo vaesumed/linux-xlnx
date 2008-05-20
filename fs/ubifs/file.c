@@ -54,16 +54,61 @@
 #include "ubifs.h"
 #include <linux/mount.h>
 
+static int read_block(struct inode *inode, void *addr, unsigned int block,
+		      struct ubifs_data_node *dn)
+{
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	int err, len, out_len;
+	union ubifs_key key;
+	unsigned int dlen;
+
+	data_key_init(c, &key, inode->i_ino, block);
+	err = ubifs_tnc_lookup(c, &key, dn);
+	if (err) {
+		if (err == -ENOENT)
+			/* Not found, so it must be a hole */
+			memset(addr, 0, UBIFS_BLOCK_SIZE);
+		return err;
+	}
+
+	ubifs_assert(dn->ch.sqnum > ubifs_inode(inode)->creat_sqnum);
+
+	len = le32_to_cpu(dn->size);
+	if (len <= 0 || len > UBIFS_BLOCK_SIZE)
+		goto dump;
+
+	dlen = le32_to_cpu(dn->ch.len) - UBIFS_DATA_NODE_SZ;
+	out_len = UBIFS_BLOCK_SIZE;
+	err = ubifs_decompress(&dn->data, dlen, addr, &out_len,
+			       le16_to_cpu(dn->compr_type));
+	if (err || len != out_len)
+		goto dump;
+
+	/*
+	 * Data length can be less than a full block, even for blocks that are
+	 * not the last in the file (e.g., as a result of making a hole and
+	 * appending data). Ensure that the remainder is zeroed out.
+	 */
+	if (len < UBIFS_BLOCK_SIZE)
+		memset(addr + len, 0, UBIFS_BLOCK_SIZE - len);
+
+	return 0;
+
+dump:
+	ubifs_err("bad data node (block %u, inode %lu)",
+		  block, inode->i_ino);
+	dbg_dump_node(c, dn);
+	return -EINVAL;
+}
+
 static int do_readpage(struct page *page)
 {
 	void *addr;
-	int err, len, out_len;
-	union ubifs_key key;
+	int err = 0, i;
+	unsigned int block, beyond;
 	struct ubifs_data_node *dn;
 	struct inode *inode = page->mapping->host;
-	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	unsigned int dlen;
-	loff_t i_size =  i_size_read(inode);
+	loff_t i_size = i_size_read(inode);
 
 	dbg_gen("ino %lu, pg %lu, i_size %lld, flags %#lx",
 		inode->i_ino, page->index, i_size, page->flags);
@@ -72,7 +117,9 @@ static int do_readpage(struct page *page)
 
 	addr = kmap(page);
 
-	if (((loff_t)page->index << PAGE_CACHE_SHIFT) >= i_size) {
+	block = page->index << UBIFS_BLOCKS_PER_PAGE_SHIFT;
+	beyond = (i_size + UBIFS_BLOCK_SIZE - 1) >> UBIFS_BLOCK_SHIFT;
+	if (block >= beyond) {
 		/* Reading beyond inode */
 		SetPageChecked(page);
 		memset(addr, 0, PAGE_CACHE_SIZE);
@@ -85,13 +132,31 @@ static int do_readpage(struct page *page)
 		goto error;
 	}
 
-	data_key_init(c, &key, inode->i_ino, page->index);
-	err = ubifs_tnc_lookup(c, &key, dn);
+	i = 0;
+	while (1) {
+		int ret;
+
+		if (block >= beyond) {
+			/* Reading beyond inode */
+			err = -ENOENT;
+			memset(addr, 0, UBIFS_BLOCK_SIZE);
+		} else {
+			ret = read_block(inode, addr, block, dn);
+			if (ret) {
+				err = ret;
+				if (err != -ENOENT)
+					break;
+			}
+		}
+		if (++i >= UBIFS_BLOCKS_PER_PAGE)
+			break;
+		block += 1;
+		addr += UBIFS_BLOCK_SIZE;
+	}
 	if (err) {
 		if (err == -ENOENT) {
 			/* Not found, so it must be a hole */
 			SetPageChecked(page);
-			memset(addr, 0, PAGE_CACHE_SIZE);
 			dbg_gen("hole");
 			goto out_free;
 		}
@@ -99,27 +164,6 @@ static int do_readpage(struct page *page)
 			  page->index, inode->i_ino, err);
 		goto error;
 	}
-
-	ubifs_assert(dn->ch.sqnum > ubifs_inode(inode)->creat_sqnum);
-
-	len = le32_to_cpu(dn->size);
-	if (len <= 0 || len > PAGE_CACHE_SIZE)
-		goto dump;
-
-	dlen = le32_to_cpu(dn->ch.len) - UBIFS_DATA_NODE_SZ;
-	out_len = PAGE_CACHE_SIZE;
-	err = ubifs_decompress(&dn->data, dlen, addr, &out_len,
-			       le16_to_cpu(dn->compr_type));
-	if (err || len != out_len)
-		goto dump;
-
-	/*
-	 * Data length can be less than a full page, even for blocks that are
-	 * not the last in the file (e.g., as a result of making a hole and
-	 * appending data). Ensure that the remainder is zeroed out.
-	 */
-	if (len < PAGE_CACHE_SIZE)
-		memset(addr + len, 0, PAGE_CACHE_SIZE - len);
 
 out_free:
 	kfree(dn);
@@ -130,11 +174,6 @@ out:
 	kunmap(page);
 	return 0;
 
-dump:
-	err = -EINVAL;
-	ubifs_err("bad data node (page %lu, inode %lu)",
-		  page->index, inode->i_ino);
-	dbg_dump_node(c, dn);
 error:
 	kfree(dn);
 	ClearPageUptodate(page);
@@ -362,7 +401,8 @@ static void release_existing_page_budget(struct ubifs_info *c)
 
 static int do_writepage(struct page *page, int len)
 {
-	int err;
+	int err = 0, i, blen;
+	unsigned int block;
 	void *addr;
 	union ubifs_key key;
 	struct inode *inode = page->mapping->host;
@@ -371,11 +411,22 @@ static int do_writepage(struct page *page, int len)
 	/* Update radix tree tags */
 	set_page_writeback(page);
 
-	/* One page cache page is one UBIFS block */
-	data_key_init(c, &key, inode->i_ino, page->index);
 	addr = kmap(page);
 
-	err = ubifs_jrn_write_data(c, inode, &key, addr, len);
+	block = page->index << UBIFS_BLOCKS_PER_PAGE_SHIFT;
+	i = 0;
+	while (len) {
+		blen = min_t(int, len, UBIFS_BLOCK_SIZE);
+		data_key_init(c, &key, inode->i_ino, block);
+		err = ubifs_jrn_write_data(c, inode, &key, addr, blen);
+		if (err)
+			break;
+		if (++i >= UBIFS_BLOCKS_PER_PAGE)
+			break;
+		block += 1;
+		addr += blen;
+		len -= blen;
+	}
 	if (err) {
 		SetPageError(page);
 		ubifs_err("cannot write page %lu of inode %lu, error %d",
@@ -468,6 +519,9 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 					ubifs_assert(PagePrivate(page));
 
 					clear_page_dirty_for_io(page);
+					if (UBIFS_BLOCKS_PER_PAGE_SHIFT)
+						offset = new_size &
+							 (PAGE_CACHE_SIZE - 1);
 					err = do_writepage(page, offset);
 					page_cache_release(page);
 					if (err)
