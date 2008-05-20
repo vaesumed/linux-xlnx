@@ -58,8 +58,7 @@ static inline uint32_t key_r5_hash(const char *s, int len)
 
 	/*
 	 * We use hash values as offset in directories, so values %0 and %1 are
-	 * reserved for "." and "..". Value %2 is also reserved for purposes of
-	 * 'ubifs_readdir()'.
+	 * reserved for "." and "..". %2 is reserved for possible future use.
 	 */
 	if (unlikely(a >= 0 && a <= 2))
 		a += 3;

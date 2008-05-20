@@ -984,7 +984,7 @@ static int resolve_collision(struct ubifs_info *c, const union ubifs_key *key,
 				 * like to insert, but inserting in this znode
 				 * may still be wrong. Consider the following 3
 				 * znodes, in the case where we are resolving a
-				 * collsion with Key2.
+				 * collision with Key2.
 				 *
 				 *                  znode zp
 				 *            ----------------------
@@ -1426,9 +1426,9 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
  * cases:
  *   o exact match, i.e. the found zero-level znode contains key @key, then %1
  *     is returned and slot number of the matched branch is stored in @n;
- *   o not exact match, which means that zero-level znode does not contain @key
- *     then %0 is returned and slot number of the closed branch is stored in
- *     @n;
+ *   o not exact match, which means that zero-level znode does not contain
+ *     @key, then %0 is returned and slot number of the closed branch is stored
+ *     in  @n;
  *   o @key is so small that it is even less than the lowest key of the
  *     leftmost zero-level node, then %0 is returned and %0 is stored in @n.
  *
@@ -2689,21 +2689,29 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
  * @nm: name of last entry found or %NULL
  *
  * This function finds and reads the next directory or extended attribute entry
- * after the given key (@key) if there is one. @name is used to resolve
- * collisions. If the fist entry has to be found, @key has to contain the
- * lowest possible key value for this inode and @name has to be %NULL.
+ * after the given key (@key) if there is one. @nm is used to resolve
+ * collisions.
+ *
+ * If the name of the current entry is not known and only the key is known,
+ * @nm->name has to be %NULL. In this case the semantics of this function is a
+ * little bit different and it returns the entry corresponding to this key, not
+ * the next one. If the key was not found, the closest "right" entry is
+ * returned.
+ *
+ * If the fist entry has to be found, @key has to contain the lowest possible
+ * key value for this inode and @name has to be %NULL.
  *
  * This function returns the found directory or extended attribute entry node
- * in case of success, %-ENOENT is returned if no entry is found, or a negative
- * error code in case of failure.
+ * in case of success, %-ENOENT is returned if no entry was found, and a negative
+ * error code is returned in case of failure.
  */
 struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
 					   const struct qstr *nm)
 {
-	int n, err, type = key_type(c, key), dlen = 0;
+	int n, err, type = key_type(c, key);
 	struct ubifs_znode *znode;
-	struct ubifs_dent_node *dent = NULL;
+	struct ubifs_dent_node *dent;
 	struct ubifs_zbranch *zbr;
 	union ubifs_key *dkey;
 
@@ -2713,56 +2721,67 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	mutex_lock(&c->tnc_mutex);
 	err = lookup_level0(c, key, &znode, &n);
 	if (unlikely(err < 0))
-		goto out_free;
+		goto out_unlock;
 
-	/* Handle collisions */
-	if (err) {
-		err = resolve_collision(c, key, &znode, &n, nm);
-		dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
-		if (unlikely(err < 0))
-			goto out_free;
-	}
+	if (nm->name) {
+		if (err) {
+			/* Handle collisions */
+			err = resolve_collision(c, key, &znode, &n, nm);
+			dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
+			if (unlikely(err < 0))
+				goto out_unlock;
+		}
 
-	/* Now find next entry */
-	while (1) {
+		/* Now find next entry */
 		err = tnc_next(c, &znode, &n);
-		if (err)
-			goto out_free;
-
-		dkey = &znode->zbranch[n].key;
-		zbr = &znode->zbranch[n];
-
-		if (key_ino(c, dkey) != key_ino(c, key) ||
-		    key_type(c, dkey) != type) {
-			err = -ENOENT;
-			goto out_free;
-		}
-
-		if (!dent || dlen < zbr->len) {
-			kfree(dent);
-			dlen = zbr->len;
-			dent = kmalloc(dlen, GFP_NOFS);
-			if (!dent) {
-				err = -ENOMEM;
-				goto out_free;
-			}
-		}
-
-		err = tnc_read_node(c, zbr, dent);
 		if (unlikely(err))
-			goto out_free;
-
-		if (dent->inum != 0)
-			break;
-
-		/* This is a deletion entry, skip it */
+			goto out_unlock;
+	} else {
+		/*
+		 * The full name of the entry was not given, in which case the
+		 * behavior of this function is a little different and it
+		 * returns current entry, not the next one.
+		 */
+		if (!err) {
+			/*
+			 * However, the given key does not exist in the TNC
+			 * tree and @znode/@n variables contain the closest
+			 * "preceding" element. Switch to the next one.
+			 */
+			err = tnc_next(c, &znode, &n);
+			if (err)
+				goto out_unlock;
+		}
 	}
+
+	zbr = &znode->zbranch[n];
+	dent = kmalloc(zbr->len, GFP_NOFS);
+	if (unlikely(!dent)) {
+		err = -ENOMEM;
+		goto out_unlock;
+	}
+
+	/*
+	 * The above 'tnc_next()' call could lead us to the next inode, check
+	 * this.
+	 */
+	dkey = &zbr->key;
+	if (key_ino(c, dkey) != key_ino(c, key) ||
+	    key_type(c, dkey) != type) {
+		err = -ENOENT;
+		goto out_free;
+	}
+
+	err = tnc_read_node(c, zbr, dent);
+	if (unlikely(err))
+		goto out_free;
 
 	mutex_unlock(&c->tnc_mutex);
 	return dent;
 
 out_free:
 	kfree(dent);
+out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return ERR_PTR(err);
 }
