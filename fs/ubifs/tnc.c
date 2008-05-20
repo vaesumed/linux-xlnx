@@ -742,21 +742,11 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 		/* All nodes have key in the same place */
 		key_read(c, &dent->key, &node_key);
 		if (keys_cmp(c, key, &node_key) == 0) {
-			/*
-			 * If the node sequence number is greater than the
-			 * current replay sequence number, then the node should
-			 * not yet be in the index, so this must be a dangling
-			 * branch.
-			 */
-			if (le64_to_cpu(dent->ch.sqnum) > c->replay_sqnum)
-				ret = 0;
-			else {
-				/* Add the node to the leaf node cache */
-				int err = lnc_add(c, zbr, node);
+			/* Add the node to the leaf node cache */
+			int err = lnc_add(c, zbr, node);
 
-				if (err)
-					return err;
-			}
+			if (err)
+				return err;
 		} else
 			ret = 0;
 	}
@@ -1133,30 +1123,24 @@ out_free:
 /**
  * fallible_resolve_collision - resolve a collision even if nodes are missing.
  * @c: UBIFS file-system description object
- * @key: key of directory entry
+ * @key: key
  * @zn: znode is returned here
- * @n: zbranch number is passed and returned here
+ * @n: branch number is passed and returned here
  * @nm: name of directory entry
  * @adding: indicates caller is adding a key to the TNC
  *
  * This is a "fallible" version of the 'resolve_collision()' function which
  * does not panic if one of the nodes referred to by TNC does not exist on the
  * media. This may happen when replaying the journal if a deleted node was
- * Garbage-collected and the commit was not done. The following are return
- * codes:
+ * Garbage-collected and the commit was not done. A branch that refers to a node
+ * that is not present is called a dangling branch. The following are the return
+ * codes for this function:
  *  o if @nm was found, %1 is returned and @zn and @n are set to the found
- *    entry;
- *  o if @nm was not found, but there is a dangling zbranch, which is a zbranch
- *    referring an entry which does not exist, %1 is returned as well and @zn
- *    and @n are set to the dangling entry; this is needed during replay and
- *    basically means that we assume that the dangling entry is the entry we
- *    are looking for; to put it differently, this function is used by the
- *    replay code, and when the replay code hits a deletion entry, it either
- *    deletes an existing entry in the TNC, or a dangling entry, assuming the
- *    corresponding node has just been GC'ed;
- * o if @nm was not found, and no dangling entries were found, %-1 is returned
- *   @zn and @n are set to the previous entry;
- * o a negative error code is returned in case of failure.
+ *    branch;
+ *  o if we are @adding and @nm was not found, %0 is returned;
+ *  o if we are not @adding and @nm was not found, but a dangling branch was
+ *    found, then %1 is returned and @zn and @n are set to the dangling branch;
+ *  o a negative error code is returned in case of failure.
  */
 static int fallible_resolve_collision(struct ubifs_info *c,
 				      const union ubifs_key *key,
@@ -1175,15 +1159,13 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 		o_znode = znode;
 		o_n = nn;
 		/*
-		 * We are unlucky and hit a dangling zbranch straight away. Now
-		 * we do not really know where to go to find the needed key -
-		 * to the left or to the right. Well, let's try left.
+		 * We are unlucky and hit a dangling branch straight away.
+		 * Now we do not really know where to go to find the needed
+		 * branch - to the left or to the right. Well, let's try left.
 		 */
-		dbg_mnt("first dangling match LEB %d:%d len %d %s",
-			znode->zbranch[nn].lnum, znode->zbranch[nn].offs,
-			znode->zbranch[nn].len, DBGKEY(key));
 		unsure = 1;
-	}
+	} else if (!adding)
+		unsure = 1; /* Remove a dangling branch wherever it is */
 
 	if (cmp == NAME_GREATER || unsure) {
 		/* Look left */
@@ -1215,14 +1197,18 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 			err = fallible_matches_name(c, &(*zn)->zbranch[*n], nm);
 			if (err < 0)
 				return err;
-			if (err == NAME_LESS)
-				break;
 			if (err == NAME_MATCHES)
 				return 1;
 			if (err == NOT_ON_MEDIA) {
 				o_znode = *zn;
 				o_n = *n;
-			} else
+				continue;
+			}
+			if (!adding)
+				continue;
+			if (err == NAME_LESS)
+				break;
+			else
 				unsure = 0;
 		}
 	}
@@ -1255,7 +1241,7 @@ static int fallible_resolve_collision(struct ubifs_info *c,
 		}
 	}
 
-	/* Never match a dangling link when adding */
+	/* Never match a dangling branch when adding */
 	if (adding || !o_znode)
 		return 0;
 
@@ -2312,6 +2298,26 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		zbr.len = len;
 		key_copy(c, key, &zbr.key);
 		err = tnc_insert(c, znode, &zbr, n + 1);
+		if (err)
+			goto out_unlock;
+		if (c->replaying && c->replay_sqnum < c->cs_sqnum) {
+			/*
+			 * This node was moved by garbage collection. We can
+			 * tell because it is in the journal but it has a
+			 * sequence number earlier than the last commit-start.
+			 * We did not find it in the index so there may be a
+			 * dangling branch still in the index. So we remove it
+			 * by passing 'ubifs_tnc_remove_nm()' the same key but
+			 * an unmatchable name.
+			 */
+			struct qstr noname = { .len = 0, .name = "" };
+
+			err = dbg_check_tnc(c, 0);
+			mutex_unlock(&c->tnc_mutex);
+			if (err)
+				return err;
+			return ubifs_tnc_remove_nm(c, key, &noname);
+		}
 	}
 
 out_unlock:
