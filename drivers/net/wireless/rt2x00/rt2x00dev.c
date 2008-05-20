@@ -525,9 +525,6 @@ void rt2x00lib_txdone(struct queue_entry *entry,
 			rt2x00dev->low_level_stats.dot11ACKFailureCount++;
 	}
 
-	tx_status.queue_length = entry->queue->limit;
-	tx_status.queue_number = tx_status.control.queue;
-
 	if (tx_status.control.flags & IEEE80211_TXCTL_USE_RTS_CTS) {
 		if (success)
 			rt2x00dev->low_level_stats.dot11RTSSuccessCount++;
@@ -603,9 +600,9 @@ void rt2x00lib_rxdone(struct queue_entry *entry,
 	rt2x00dev->link.qual.rx_success++;
 
 	rx_status->rate_idx = idx;
-	rx_status->signal =
+	rx_status->qual =
 	    rt2x00lib_calculate_link_signal(rt2x00dev, rxdesc->rssi);
-	rx_status->ssi = rxdesc->rssi;
+	rx_status->signal = rxdesc->rssi;
 	rx_status->flag = rxdesc->flags;
 	rx_status->antenna = rt2x00dev->link.ant.active.rx;
 
@@ -687,8 +684,7 @@ void rt2x00lib_write_tx_desc(struct rt2x00_dev *rt2x00dev,
 	 * Beacons and probe responses require the tsf timestamp
 	 * to be inserted into the frame.
 	 */
-	if (control->queue == RT2X00_BCN_QUEUE_BEACON ||
-	    is_probe_resp(frame_control))
+	if (txdesc.queue == QID_BEACON || is_probe_resp(frame_control))
 		__set_bit(ENTRY_TXD_REQ_TIMESTAMP, &txdesc.flags);
 
 	/*

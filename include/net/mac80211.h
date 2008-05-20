@@ -98,6 +98,18 @@ struct ieee80211_ht_bss_info {
 };
 
 /**
+ * enum ieee80211_max_queues - maximum number of queues
+ *
+ * @IEEE80211_MAX_QUEUES: Maximum number of regular device queues.
+ * @IEEE80211_MAX_AMPDU_QUEUES: Maximum number of queues usable
+ *	for A-MPDU operation.
+ */
+enum ieee80211_max_queues {
+	IEEE80211_MAX_QUEUES =		16,
+	IEEE80211_MAX_AMPDU_QUEUES =	16,
+};
+
+/**
  * struct ieee80211_tx_queue_params - transmit queue configuration
  *
  * The information provided in this structure is required for QoS
@@ -117,56 +129,16 @@ struct ieee80211_tx_queue_params {
 };
 
 /**
- * struct ieee80211_tx_queue_stats_data - transmit queue statistics
+ * struct ieee80211_tx_queue_stats - transmit queue statistics
  *
  * @len: number of packets in queue
  * @limit: queue length limit
  * @count: number of frames sent
  */
-struct ieee80211_tx_queue_stats_data {
+struct ieee80211_tx_queue_stats {
 	unsigned int len;
 	unsigned int limit;
 	unsigned int count;
-};
-
-/**
- * enum ieee80211_tx_queue - transmit queue number
- *
- * These constants are used with some callbacks that take a
- * queue number to set parameters for a queue.
- *
- * @IEEE80211_TX_QUEUE_DATA0: data queue 0
- * @IEEE80211_TX_QUEUE_DATA1: data queue 1
- * @IEEE80211_TX_QUEUE_DATA2: data queue 2
- * @IEEE80211_TX_QUEUE_DATA3: data queue 3
- * @IEEE80211_TX_QUEUE_DATA4: data queue 4
- * @IEEE80211_TX_QUEUE_SVP: ??
- * @NUM_TX_DATA_QUEUES: number of data queues
- * @IEEE80211_TX_QUEUE_AFTER_BEACON: transmit queue for frames to be
- *	sent after a beacon
- * @IEEE80211_TX_QUEUE_BEACON: transmit queue for beacon frames
- * @NUM_TX_DATA_QUEUES_AMPDU: adding more queues for A-MPDU
- */
-enum ieee80211_tx_queue {
-	IEEE80211_TX_QUEUE_DATA0,
-	IEEE80211_TX_QUEUE_DATA1,
-	IEEE80211_TX_QUEUE_DATA2,
-	IEEE80211_TX_QUEUE_DATA3,
-	IEEE80211_TX_QUEUE_DATA4,
-	IEEE80211_TX_QUEUE_SVP,
-
-	NUM_TX_DATA_QUEUES,
-
-/* due to stupidity in the sub-ioctl userspace interface, the items in
- * this struct need to have fixed values. As soon as it is removed, we can
- * fix these entries. */
-	IEEE80211_TX_QUEUE_AFTER_BEACON = 6,
-	IEEE80211_TX_QUEUE_BEACON = 7,
-	NUM_TX_DATA_QUEUES_AMPDU = 16
-};
-
-struct ieee80211_tx_queue_stats {
-	struct ieee80211_tx_queue_stats_data data[NUM_TX_DATA_QUEUES_AMPDU];
 };
 
 struct ieee80211_low_level_stats {
@@ -286,8 +258,17 @@ enum mac80211_tx_control_flags {
 
 /* Transmit control fields. This data structure is passed to low-level driver
  * with each TX frame. The low-level driver is responsible for configuring
- * the hardware to use given values (depending on what is supported). */
-
+ * the hardware to use given values (depending on what is supported).
+ *
+ * NOTE: Be careful with using the pointers outside of the ieee80211_ops->tx()
+ * context (i.e. when defering the work to a workqueue).
+ * The vif pointer is valid until the it has been removed with the
+ * ieee80211_ops->remove_interface() callback funtion.
+ * The hw_key pointer is valid until it has been removed with the
+ * ieee80211_ops->set_key() callback function.
+ * The tx_rate and alt_retry_rate pointers are valid until the phy is
+ * deregistered.
+ */
 struct ieee80211_tx_control {
 	struct ieee80211_vif *vif;
 	struct ieee80211_rate *tx_rate;
@@ -298,9 +279,11 @@ struct ieee80211_tx_control {
 	/* retry rate for the last retries */
 	struct ieee80211_rate *alt_retry_rate;
 
+	/* Key used for hardware encryption
+	 * NULL if IEEE80211_TXCTL_DO_NOT_ENCRYPT is set */
+	struct ieee80211_key_conf *hw_key;
+
 	u32 flags;		/* tx control flags defined above */
-	u8 key_idx;		/* keyidx from hw->set_key(), undefined if
-				 * IEEE80211_TXCTL_DO_NOT_ENCRYPT is set */
 	u8 retry_limit;		/* 1 = only first attempt, 2 = one retry, ..
 				 * This could be used when set_retry_limit
 				 * is not implemented by the driver */
@@ -308,7 +291,7 @@ struct ieee80211_tx_control {
 				 * position represents antenna number used */
 	u8 icv_len;		/* length of the ICV/MIC field in octets */
 	u8 iv_len;		/* length of the IV field in octets */
-	u8 queue;		/* hardware queue to use for this frame;
+	u16 queue;		/* hardware queue to use for this frame;
 				 * 0 = highest, hw->queues-1 = lowest */
 	u16 aid;		/* Station AID */
 	int type;	/* internal */
@@ -353,13 +336,16 @@ enum mac80211_rx_flags {
  * The low-level driver should provide this information (the subset
  * supported by hardware) to the 802.11 code with each received
  * frame.
+ *
  * @mactime: value in microseconds of the 64-bit Time Synchronization Function
  * 	(TSF) timer when the first data symbol (MPDU) arrived at the hardware.
  * @band: the active band when this frame was received
  * @freq: frequency the radio was tuned to when receiving this frame, in MHz
- * @ssi: signal strength when receiving this frame
- * @signal: used as 'qual' in statistics reporting
- * @noise: PHY noise when receiving this frame
+ * @signal: signal strength when receiving this frame, either in dBm, in dB or
+ *	unspecified depending on the hardware capabilities flags
+ *	@IEEE80211_HW_SIGNAL_*
+ * @noise: noise when receiving this frame, in dBm.
+ * @qual: overall signal quality indication, in percent (0-100).
  * @antenna: antenna used
  * @rate_idx: index of data rate into band's supported rates
  * @flag: %RX_FLAG_*
@@ -368,9 +354,9 @@ struct ieee80211_rx_status {
 	u64 mactime;
 	enum ieee80211_band band;
 	int freq;
-	int ssi;
 	int signal;
 	int noise;
+	int qual;
 	int antenna;
 	int rate_idx;
 	int flag;
@@ -409,9 +395,8 @@ enum ieee80211_tx_status_flags {
  * 	relevant only if IEEE80211_TX_STATUS_AMPDU was set.
  * @ampdu_ack_map: block ack bit map for the aggregation.
  * 	relevant only if IEEE80211_TX_STATUS_AMPDU was set.
- * @ack_signal: signal strength of the ACK frame
- * @queue_length: ?? REMOVE
- * @queue_number: ?? REMOVE
+ * @ack_signal: signal strength of the ACK frame either in dBm, dB or unspec
+ *	depending on hardware capabilites flags @IEEE80211_HW_SIGNAL_*
  */
 struct ieee80211_tx_status {
 	struct ieee80211_tx_control control;
@@ -421,8 +406,6 @@ struct ieee80211_tx_status {
 	u8 ampdu_ack_len;
 	u64 ampdu_ack_map;
 	int ack_signal;
-	int queue_length;
-	int queue_number;
 };
 
 /**
@@ -610,11 +593,14 @@ enum ieee80211_key_alg {
  * @IEEE80211_KEY_FLAG_GENERATE_MMIC: This flag should be set by
  *	the driver for a TKIP key if it requires Michael MIC
  *	generation in software.
+ * @IEEE80211_KEY_FLAG_PAIRWISE: Set by mac80211, this flag indicates
+ *	that the key is pairwise rather then a shared key.
  */
 enum ieee80211_key_flags {
 	IEEE80211_KEY_FLAG_WMM_STA	= 1<<0,
 	IEEE80211_KEY_FLAG_GENERATE_IV	= 1<<1,
 	IEEE80211_KEY_FLAG_GENERATE_MMIC= 1<<2,
+	IEEE80211_KEY_FLAG_PAIRWISE	= 1<<3,
 };
 
 /**
@@ -721,6 +707,25 @@ enum ieee80211_tkip_key_type {
  * @IEEE80211_HW_2GHZ_SHORT_PREAMBLE_INCAPABLE:
  *	Hardware is not capable of receiving frames with short preamble on
  *	the 2.4 GHz band.
+ *
+ * @IEEE80211_HW_SIGNAL_UNSPEC:
+ *	Hardware can provide signal values but we don't know its units. We
+ *	expect values between 0 and @max_signal.
+ *	If possible please provide dB or dBm instead.
+ *
+ * @IEEE80211_HW_SIGNAL_DB:
+ *	Hardware gives signal values in dB, decibel difference from an
+ *	arbitrary, fixed reference. We expect values between 0 and @max_signal.
+ *	If possible please provide dBm instead.
+ *
+ * @IEEE80211_HW_SIGNAL_DBM:
+ *	Hardware gives signal values in dBm, decibel difference from
+ *	one milliwatt. This is the preferred method since it is standardized
+ *	between different devices. @max_signal does not need to be set.
+ *
+ * @IEEE80211_HW_NOISE_DBM:
+ *	Hardware can provide noise (radio interference) values in units dBm,
+ *      decibel difference from one milliwatt.
  */
 enum ieee80211_hw_flags {
 	IEEE80211_HW_HOST_GEN_BEACON_TEMPLATE		= 1<<0,
@@ -728,6 +733,10 @@ enum ieee80211_hw_flags {
 	IEEE80211_HW_HOST_BROADCAST_PS_BUFFERING	= 1<<2,
 	IEEE80211_HW_2GHZ_SHORT_SLOT_INCAPABLE		= 1<<3,
 	IEEE80211_HW_2GHZ_SHORT_PREAMBLE_INCAPABLE	= 1<<4,
+	IEEE80211_HW_SIGNAL_UNSPEC			= 1<<5,
+	IEEE80211_HW_SIGNAL_DB				= 1<<6,
+	IEEE80211_HW_SIGNAL_DBM				= 1<<7,
+	IEEE80211_HW_NOISE_DBM				= 1<<8,
 };
 
 /**
@@ -758,15 +767,18 @@ enum ieee80211_hw_flags {
  *
  * @channel_change_time: time (in microseconds) it takes to change channels.
  *
- * @max_rssi: Maximum value for ssi in RX information, use
- *	negative numbers for dBm and 0 to indicate no support.
- *
- * @max_signal: like @max_rssi, but for the signal value.
- *
- * @max_noise: like @max_rssi, but for the noise value.
+ * @max_signal: Maximum value for signal (rssi) in RX information, used
+ *     only when @IEEE80211_HW_SIGNAL_UNSPEC or @IEEE80211_HW_SIGNAL_DB
  *
  * @queues: number of available hardware transmit queues for
- *	data packets. WMM/QoS requires at least four.
+ *	data packets. WMM/QoS requires at least four, these
+ *	queues need to have configurable access parameters.
+ *
+ * @ampdu_queues: number of available hardware transmit queues
+ *	for A-MPDU packets, these have no access parameters
+ *	because they're used only for A-MPDU frames. Note that
+ *	mac80211 will not currently use any of the regular queues
+ *	for aggregation.
  *
  * @rate_control_algorithm: rate control algorithm for this hardware.
  *	If unset (NULL), the default algorithm will be used. Must be
@@ -785,10 +797,8 @@ struct ieee80211_hw {
 	unsigned int extra_tx_headroom;
 	int channel_change_time;
 	int vif_data_size;
-	u8 queues;
-	s8 max_rssi;
+	u16 queues, ampdu_queues;
 	s8 max_signal;
-	s8 max_noise;
 };
 
 /**
@@ -1063,15 +1073,13 @@ enum ieee80211_ampdu_mlme_action {
  *	of assocaited station or AP.
  *
  * @conf_tx: Configure TX queue parameters (EDCF (aifs, cw_min, cw_max),
- *	bursting) for a hardware TX queue. The @queue parameter uses the
- *	%IEEE80211_TX_QUEUE_* constants. Must be atomic.
+ *	bursting) for a hardware TX queue. Must be atomic.
  *
  * @get_tx_stats: Get statistics of the current TX queue status. This is used
  *	to get number of currently queued packets (queue length), maximum queue
  *	size (limit), and total number of packets sent using each TX queue
- *	(count). This information is used for WMM to find out which TX
- *	queues have room for more packets and by hostapd to provide
- *	statistics about the current queueing state to external programs.
+ *	(count). The 'stats' pointer points to an array that has hw->queues +
+ *	hw->ampdu_queues items.
  *
  * @get_tsf: Get the current TSF timer value from firmware/hardware. Currently,
  *	this is only used for IBSS mode debugging and, as such, is not a
@@ -1145,7 +1153,7 @@ struct ieee80211_ops {
 			       u32 short_retry, u32 long_retr);
 	void (*sta_notify)(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			enum sta_notify_cmd, const u8 *addr);
-	int (*conf_tx)(struct ieee80211_hw *hw, int queue,
+	int (*conf_tx)(struct ieee80211_hw *hw, u16 queue,
 		       const struct ieee80211_tx_queue_params *params);
 	int (*get_tx_stats)(struct ieee80211_hw *hw,
 			    struct ieee80211_tx_queue_stats *stats);
