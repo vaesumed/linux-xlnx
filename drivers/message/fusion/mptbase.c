@@ -2062,7 +2062,8 @@ mpt_do_ioc_recovery(MPT_ADAPTER *ioc, u32 reason, int sleepFlag)
 	if ((ret == 0) && (reason == MPT_HOSTEVENT_IOC_BRINGUP)) {
 		ioc->pci_irq = -1;
 		if (ioc->pcidev->irq) {
-			if (ioc->msi_enable && !pci_enable_msi(ioc->pcidev))
+			if (ioc->msi_enable == 1 &&
+					!pci_enable_msi(ioc->pcidev))
 				printk(MYIOC_s_INFO_FMT "PCI-MSI enabled\n",
 				    ioc->name);
 			else
@@ -2072,7 +2073,7 @@ mpt_do_ioc_recovery(MPT_ADAPTER *ioc, u32 reason, int sleepFlag)
 			if (rc < 0) {
 				printk(MYIOC_s_ERR_FMT "Unable to allocate "
 				    "interrupt %d!\n", ioc->name, ioc->pcidev->irq);
-				if (ioc->msi_enable)
+				if (ioc->msi_enable == 1)
 					pci_disable_msi(ioc->pcidev);
 				return -EBUSY;
 			}
@@ -2268,7 +2269,7 @@ mpt_do_ioc_recovery(MPT_ADAPTER *ioc, u32 reason, int sleepFlag)
  out:
 	if ((ret != 0) && irq_allocated) {
 		free_irq(ioc->pci_irq, ioc);
-		if (ioc->msi_enable)
+		if (ioc->msi_enable == 1)
 			pci_disable_msi(ioc->pcidev);
 	}
 	return ret;
@@ -2450,7 +2451,7 @@ mpt_adapter_dispose(MPT_ADAPTER *ioc)
 
 	if (ioc->pci_irq != -1) {
 		free_irq(ioc->pci_irq, ioc);
-		if (ioc->msi_enable)
+		if (ioc->msi_enable == 1)
 			pci_disable_msi(ioc->pcidev);
 		ioc->pci_irq = -1;
 	}
