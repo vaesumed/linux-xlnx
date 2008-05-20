@@ -608,7 +608,7 @@ static void *ubifs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	return NULL;
 }
 
-int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync)
+int ubifs_fsync(struct file *file, struct dentry *dentry, int datasync)
 {
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
@@ -680,19 +680,19 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 	return 0;
 }
 
-static ssize_t ubifs_write(struct file *filp, const char __user *buf,
+static ssize_t ubifs_write(struct file *file, const char __user *buf,
 			   size_t len, loff_t *ppos)
 {
 	int err;
 	ssize_t ret;
-	struct inode *inode = filp->f_mapping->host;
+	struct inode *inode = file->f_mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 
 	err = update_mctime(c, inode);
 	if (err)
 		return err;
 
-	ret = do_sync_write(filp, buf, len, ppos);
+	ret = do_sync_write(file, buf, len, ppos);
 	if (ret < 0)
 		return ret;
 
