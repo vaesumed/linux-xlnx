@@ -146,7 +146,7 @@ out:
 	return err;
 }
 
-int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
+int ubifs_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		unsigned long arg)
 {
 	int flags, err;
@@ -174,11 +174,11 @@ int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
 		 * Make sure the file-system is read-write and make sure it
 		 * will not become read-only while we are changing the flags.
 		 */
-		err = mnt_want_write(filp->f_path.mnt);
+		err = mnt_want_write(file->f_path.mnt);
 		if (err)
 			return err;
 		err = setflags(inode, flags);
-		mnt_drop_write(filp->f_path.mnt);
+		mnt_drop_write(file->f_path.mnt);
 		return err;
 	}
 

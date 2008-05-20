@@ -1505,7 +1505,7 @@ const struct ubifs_lprops *ubifs_fast_find_freeable(struct ubifs_info *c);
 const struct ubifs_lprops *ubifs_fast_find_frdi_idx(struct ubifs_info *c);
 
 /* file.c */
-int ubifs_fsync(struct file *filp, struct dentry *dentry, int datasync);
+int ubifs_fsync(struct file *file, struct dentry *dentry, int datasync);
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
 
 /* dir.c */
@@ -1541,7 +1541,7 @@ int ubifs_recover_size(struct ubifs_info *c);
 void ubifs_destroy_size_tree(struct ubifs_info *c);
 
 /* ioctl.c */
-int ubifs_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
+int ubifs_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		unsigned long arg);
 #ifdef CONFIG_COMPAT
 long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
