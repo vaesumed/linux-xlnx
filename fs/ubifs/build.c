@@ -234,10 +234,8 @@ static int init_constants_late(struct ubifs_info *c)
 	 *
 	 * Note, data, which may be stored in inodes is budgeted separately, so
 	 * it is not included into 'c->inode_budget'.
-	 *
-	 * c->page_budget is PAGE_CACHE_SIZE + UBIFS_CH_SZ * blocks_per_page
 	 */
-	c->page_budget = PAGE_CACHE_SIZE + UBIFS_CH_SZ;
+	c->page_budget = UBIFS_MAX_DATA_NODE_SZ * UBIFS_BLOCKS_PER_PAGE;
 	c->inode_budget = UBIFS_INO_NODE_SZ;
 	c->dent_budget = UBIFS_MAX_DENT_NODE_SZ;
 
@@ -1319,10 +1317,13 @@ static int __init ubifs_init(void)
 	BUILD_BUG_ON(UBIFS_INO_NODE_SZ != 160);
 	BUILD_BUG_ON(UBIFS_REF_NODE_SZ != 64);
 
-	/* We do not support multiple pages per block ATM */
-	if (UBIFS_BLOCK_SIZE != PAGE_CACHE_SIZE) {
-		ubifs_err("RAM page size is %u bytes, but UBIFS currently works"
-			  "only on systems with 4096 bytes RAM page size",
+	/*
+	 * We require that PAGE_CACHE_SIZE is greater-than-or-equal-to
+	 * UBIFS_BLOCK_SIZE. It is assumed that both are powers of 2.
+	 */
+	if (PAGE_CACHE_SIZE < UBIFS_BLOCK_SIZE) {
+		ubifs_err("VFS page cache size is %u bytes, but UBIFS requires"
+			  " at least 4096 bytes",
 			  (unsigned int)PAGE_CACHE_SIZE);
 		return -EINVAL;
 	}
