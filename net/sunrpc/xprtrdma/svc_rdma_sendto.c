@@ -84,10 +84,7 @@ static struct ib_sge *xdr_to_sge(struct svcxprt_rdma *xprt,
 	sge_no = 1;
 
 	/* Head SGE */
-	sge[sge_no].addr = ib_dma_map_single(xprt->sc_cm_id->device,
-					     xdr->head[0].iov_base,
-					     xdr->head[0].iov_len,
-					     DMA_TO_DEVICE);
+	sge[sge_no].addr = (unsigned long)xdr->head[0].iov_base;
 	sge_bytes = min_t(u32, byte_count, xdr->head[0].iov_len);
 	byte_count -= sge_bytes;
 	sge[sge_no].length = sge_bytes;
@@ -99,11 +96,9 @@ static struct ib_sge *xdr_to_sge(struct svcxprt_rdma *xprt,
 	page_bytes = xdr->page_len;
 	page_off = xdr->page_base;
 	while (byte_count && page_bytes) {
+		sge[sge_no].addr = (unsigned long)
+			page_address(xdr->pages[page_no]) + page_off;
 		sge_bytes = min_t(u32, byte_count, (PAGE_SIZE-page_off));
-		sge[sge_no].addr =
-			ib_dma_map_page(xprt->sc_cm_id->device,
-					xdr->pages[page_no], page_off,
-					sge_bytes, DMA_TO_DEVICE);
 		sge_bytes = min(sge_bytes, page_bytes);
 		byte_count -= sge_bytes;
 		page_bytes -= sge_bytes;
@@ -117,11 +112,7 @@ static struct ib_sge *xdr_to_sge(struct svcxprt_rdma *xprt,
 
 	/* Tail SGE */
 	if (byte_count && xdr->tail[0].iov_len) {
-		sge[sge_no].addr =
-			ib_dma_map_single(xprt->sc_cm_id->device,
-					  xdr->tail[0].iov_base,
-					  xdr->tail[0].iov_len,
-					  DMA_TO_DEVICE);
+		sge[sge_no].addr = (unsigned long)xdr->tail[0].iov_base;
 		sge_bytes = min_t(u32, byte_count, xdr->tail[0].iov_len);
 		byte_count -= sge_bytes;
 		sge[sge_no].length = sge_bytes;
@@ -145,7 +136,6 @@ static int send_write(struct svcxprt_rdma *xprt, struct svc_rqst *rqstp,
 		      u32 xdr_off, int write_len,
 		      struct ib_sge *xdr_sge, int sge_count)
 {
-	struct svc_rdma_op_ctxt *tmp_sge_ctxt;
 	struct ib_send_wr write_wr;
 	struct ib_sge *sge;
 	int xdr_sge_no;
@@ -163,9 +153,8 @@ static int send_write(struct svcxprt_rdma *xprt, struct svc_rqst *rqstp,
 		write_len, xdr_sge, sge_count);
 
 	ctxt = svc_rdma_get_context(xprt);
-	ctxt->count = 0;
-	tmp_sge_ctxt = svc_rdma_get_context(xprt);
-	sge = tmp_sge_ctxt->sge;
+	ctxt->direction = DMA_TO_DEVICE;
+	sge = ctxt->sge;
 
 	/* Find the SGE associated with xdr_off */
 	for (bc = xdr_off, xdr_sge_no = 1; bc && xdr_sge_no < sge_count;
@@ -181,14 +170,21 @@ static int send_write(struct svcxprt_rdma *xprt, struct svc_rqst *rqstp,
 
 	/* Copy the remaining SGE */
 	while (bc != 0 && xdr_sge_no < sge_count) {
-		sge[sge_no].addr = xdr_sge[xdr_sge_no].addr + sge_off;
 		sge[sge_no].lkey = xdr_sge[xdr_sge_no].lkey;
 		sge_bytes = min((size_t)bc,
 				(size_t)(xdr_sge[xdr_sge_no].length-sge_off));
 		sge[sge_no].length = sge_bytes;
-
+		atomic_inc(&xprt->sc_dma_used);
+		sge[sge_no].addr =
+			ib_dma_map_single(xprt->sc_cm_id->device,
+					  (void *)
+					  xdr_sge[xdr_sge_no].addr + sge_off,
+					  sge_bytes, DMA_TO_DEVICE);
+		if (dma_mapping_error(sge[sge_no].addr))
+			return -EINVAL;
 		sge_off = 0;
 		sge_no++;
+		ctxt->count++;
 		xdr_sge_no++;
 		bc -= sge_bytes;
 	}
@@ -210,11 +206,10 @@ static int send_write(struct svcxprt_rdma *xprt, struct svc_rqst *rqstp,
 	/* Post It */
 	atomic_inc(&rdma_stat_write);
 	if (svc_rdma_send(xprt, &write_wr)) {
-		svc_rdma_put_context(ctxt, 1);
+		svc_rdma_put_context(ctxt, 0);
 		/* Fatal error, close transport */
 		ret = -EIO;
 	}
-	svc_rdma_put_context(tmp_sge_ctxt, 0);
 	return ret;
 }
 
@@ -389,11 +384,23 @@ static int send_reply(struct svcxprt_rdma *rdma,
 	int page_no;
 	int ret;
 
+	/* Post a recv buffer to handle another request. */
+	ret = svc_rdma_post_recv(rdma);
+	if (ret) {
+		printk(KERN_INFO
+		       "svcrdma: could not post a receive buffer, err=%d."
+		       "Closing transport %p.\n", ret, rdma);
+		set_bit(XPT_CLOSE, &rdma->sc_xprt.xpt_flags);
+		svc_rdma_put_context(ctxt, 0);
+		return -ENOTCONN;
+	}
+
 	/* Prepare the context */
 	ctxt->pages[0] = page;
 	ctxt->count = 1;
 
 	/* Prepare the SGE for the RPCRDMA Header */
+	atomic_inc(&rdma->sc_dma_used);
 	ctxt->sge[0].addr =
 		ib_dma_map_page(rdma->sc_cm_id->device,
 				page, 0, PAGE_SIZE, DMA_TO_DEVICE);
@@ -406,6 +413,12 @@ static int send_reply(struct svcxprt_rdma *rdma,
 		sge_bytes = min((size_t)ctxt->sge[sge_no].length,
 				(size_t)byte_count);
 		byte_count -= sge_bytes;
+		atomic_inc(&rdma->sc_dma_used);
+		ctxt->sge[sge_no].addr =
+			ib_dma_map_single(rdma->sc_cm_id->device,
+					  (void *)
+					  ctxt->sge[sge_no].addr,
+					  sge_bytes, DMA_TO_DEVICE);
 	}
 	BUG_ON(byte_count != 0);
 
@@ -417,8 +430,9 @@ static int send_reply(struct svcxprt_rdma *rdma,
 		ctxt->pages[page_no+1] = rqstp->rq_respages[page_no];
 		ctxt->count++;
 		rqstp->rq_respages[page_no] = NULL;
+		if (page_no+1 >= sge_no)
+			ctxt->sge[page_no+1].length = 0;
 	}
-
 	BUG_ON(sge_no > rdma->sc_max_sge);
 	memset(&send_wr, 0, sizeof send_wr);
 	ctxt->wr_op = IB_WR_SEND;
