@@ -92,7 +92,7 @@ static void scx200_wdt_disable(void)
 static int scx200_wdt_open(struct inode *inode, struct file *file)
 {
 	/* only allow one at a time */
-	if (down_trylock(&open_semaphore))
+	if (!down_nowait(&open_semaphore))
 		return -EBUSY;
 	scx200_wdt_enable();
 

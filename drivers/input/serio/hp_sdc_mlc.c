@@ -148,7 +148,7 @@ static int hp_sdc_mlc_in(hil_mlc *mlc, suseconds_t timeout)
 	priv = mlc->priv;
 
 	/* Try to down the semaphore */
-	if (down_trylock(&mlc->isem)) {
+	if (!down_nowait(&mlc->isem)) {
 		struct timeval tv;
 		if (priv->emtestmode) {
 			mlc->ipacket[0] =
@@ -186,13 +186,13 @@ static int hp_sdc_mlc_cts(hil_mlc *mlc)
 	priv = mlc->priv;
 
 	/* Try to down the semaphores -- they should be up. */
-	BUG_ON(down_trylock(&mlc->isem));
-	BUG_ON(down_trylock(&mlc->osem));
+	BUG_ON(!down_nowait(&mlc->isem));
+	BUG_ON(!down_nowait(&mlc->osem));
 
 	up(&mlc->isem);
 	up(&mlc->osem);
 
-	if (down_trylock(&mlc->csem)) {
+	if (!down_nowait(&mlc->csem)) {
 		if (priv->trans.act.semaphore != &mlc->csem)
 			goto poll;
 		else
@@ -229,7 +229,7 @@ static void hp_sdc_mlc_out(hil_mlc *mlc)
 	priv = mlc->priv;
 
 	/* Try to down the semaphore -- it should be up. */
-	BUG_ON(down_trylock(&mlc->osem));
+	BUG_ON(!down_nowait(&mlc->osem));
 
 	if (mlc->opacket & HIL_DO_ALTER_CTRL)
 		goto do_control;
@@ -240,7 +240,7 @@ static void hp_sdc_mlc_out(hil_mlc *mlc)
 		return;
 	}
 	/* Shouldn't be sending commands when loop may be busy */
-	BUG_ON(down_trylock(&mlc->csem));
+	BUG_ON(!down_nowait(&mlc->csem));
 	up(&mlc->csem);
 
 	priv->trans.actidx = 0;
@@ -296,7 +296,7 @@ static void hp_sdc_mlc_out(hil_mlc *mlc)
 	priv->tseq[3] = 0;
 	if (mlc->opacket & HIL_CTRL_APE) {
 		priv->tseq[3] |= HP_SDC_LPC_APE_IPF;
-		down_trylock(&mlc->csem);
+		down_nowait(&mlc->csem);
 	}
  enqueue:
 	hp_sdc_enqueue_transaction(&priv->trans);

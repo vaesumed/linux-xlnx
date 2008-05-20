@@ -25,12 +25,22 @@ struct timer_list {
 
 extern struct tvec_base boot_tvec_bases;
 
-#define TIMER_INITIALIZER(_function, _expires, _data) {		\
-		.entry = { .prev = TIMER_ENTRY_STATIC },	\
-		.function = (_function),			\
-		.expires = (_expires),				\
-		.data = (_data),				\
-		.base = &boot_tvec_bases,			\
+/*
+ * For historic reasons the timer function takes an unsigned long, so
+ * we use this variant of typesafe_cb.  data is converted to an unsigned long
+ * if it is another integer type, by adding 0UL.
+ */
+#define typesafe_timerfn(fn, data)				\
+	__typesafe_cb(void (*)(unsigned long), (fn),		\
+		      void (*)(const typeof((data)+0UL)),	\
+		      void (*)(typeof((data)+0UL)))
+
+#define TIMER_INITIALIZER(_function, _expires, _data) {			\
+		.entry = { .prev = TIMER_ENTRY_STATIC },		\
+		.function = typesafe_timerfn((_function), (_data)),	\
+		.expires = (_expires),					\
+		.data = (unsigned long)(_data),				\
+		.base = &boot_tvec_bases,				\
 	}
 
 #define DEFINE_TIMER(_name, _function, _expires, _data)		\
@@ -51,9 +61,13 @@ static inline void init_timer_on_stack(struct timer_list *timer)
 }
 #endif
 
-static inline void setup_timer(struct timer_list * timer,
-				void (*function)(unsigned long),
-				unsigned long data)
+#define setup_timer(timer, function, data)				\
+	__setup_timer((timer), typesafe_timerfn((function), (data)),	\
+		      (unsigned long)(data))
+
+static inline void __setup_timer(struct timer_list *timer,
+				 void (*function)(unsigned long),
+				 unsigned long data)
 {
 	timer->function = function;
 	timer->data = data;

@@ -298,7 +298,7 @@ get_ready_ep (unsigned f_flags, struct ep_data *epdata)
 	int	val;
 
 	if (f_flags & O_NONBLOCK) {
-		if (down_trylock (&epdata->lock) != 0)
+		if (!down_nowait (&epdata->lock))
 			goto nonblock;
 		if (epdata->state != STATE_EP_ENABLED) {
 			up (&epdata->lock);
