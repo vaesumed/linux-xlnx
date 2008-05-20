@@ -16,6 +16,7 @@
 #include <linux/poll.h>
 #include <linux/proc_fs.h>
 #include <linux/miscdevice.h>
+#include <linux/smp_lock.h>
 #include <linux/spinlock.h>
 #include <linux/capability.h>
 #include <linux/device.h>
@@ -282,6 +283,7 @@ static int rtc_open(struct inode *inode, struct file *file)
 {
 	int ret;
 
+	lock_kernel();
 	mutex_lock(&rtc_mutex);
 
 	if (rtc_inuse) {
@@ -301,6 +303,7 @@ static int rtc_open(struct inode *inode, struct file *file)
 		}
 	}
 	mutex_unlock(&rtc_mutex);
+	unlock_kernel();
 
 	return ret;
 }
