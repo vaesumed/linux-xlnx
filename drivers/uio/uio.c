@@ -541,7 +541,7 @@ static const struct file_operations uio_fops = {
 	.read		= uio_read,
 	.mmap		= uio_mmap,
 	.poll		= uio_poll,
-	.unlocked_fasync = uio_fasync,
+	.fasync		= uio_fasync,
 };
 
 static int uio_major_init(void)
