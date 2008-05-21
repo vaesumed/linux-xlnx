@@ -147,7 +147,7 @@ ep_choose(struct usb_gadget *g, struct usb_endpoint_descriptor *hs,
 	return fs;
 }
 
-#define	MAX_CONFIG_INTERFACES		8	/* arbitrary; max 255 */
+#define	MAX_CONFIG_INTERFACES		16	/* arbitrary; max 255 */
 
 /**
  * struct usb_configuration - represents one gadget configuration
