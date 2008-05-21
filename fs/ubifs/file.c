@@ -418,7 +418,7 @@ static int do_writepage(struct page *page, int len)
 	while (len) {
 		blen = min_t(int, len, UBIFS_BLOCK_SIZE);
 		data_key_init(c, &key, inode->i_ino, block);
-		err = ubifs_jrn_write_data(c, inode, &key, addr, blen);
+		err = ubifs_jnl_write_data(c, inode, &key, addr, blen);
 		if (err)
 			break;
 		if (++i >= UBIFS_BLOCKS_PER_PAGE)
@@ -527,13 +527,13 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 					if (err)
 						return err;
 					/*
-					 * We could now tell ubifs_jrn_truncate
+					 * We could now tell ubifs_jnl_truncate
 					 * not to read the last block.
 					 */
 				} else {
 					/*
 					 * We could 'kmap()' the page and
-					 * pass the data to ubifs_jrn_truncate
+					 * pass the data to ubifs_jnl_truncate
 					 * to save it from having to read it.
 					 */
 					unlock_page(page);
@@ -541,7 +541,7 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 				}
 			}
 		}
-		err = ubifs_jrn_truncate(c, inode->i_ino, old_size, new_size);
+		err = ubifs_jnl_truncate(c, inode->i_ino, old_size, new_size);
 		if (err)
 			return err;
 	}
