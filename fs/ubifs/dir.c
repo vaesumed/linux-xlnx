@@ -232,7 +232,12 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 
 done:
 	kfree(dent);
-	return d_splice_alias(inode, dentry);
+	/*
+	 * Note, d_splice_alias() would be required instead if we supported
+	 * NFS.
+	 */
+	d_add(dentry, inode);
+	return NULL;
 
 out:
 	kfree(dent);
@@ -323,6 +328,9 @@ static unsigned int vfs_dent_type(uint8_t type)
  * collisions. But UBIFS guarantees that consecutive 'readdir()' calls work
  * properly by means of saving full directory entry name in the private field
  * of the file description object.
+ *
+ * This means that UBIFS cannot support NFS which requires full
+ * 'seekdir()'/'telldir()' support.
  */
 static int ubifs_readdir(struct file *file, void *dirent, filldir_t filldir)
 {
