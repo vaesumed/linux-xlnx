@@ -188,9 +188,9 @@ static int show_file_hash(unsigned int value)
 static int show_dev_hash(unsigned int value)
 {
 	int match = 0;
-	struct list_head *entry = dpm_list.prev;
+	struct list_head * entry = dpm_active.prev;
 
-	while (entry != &dpm_list) {
+	while (entry != &dpm_active) {
 		struct device * dev = to_device(entry);
 		unsigned int hash = hash_string(DEVSEED, dev->bus_id, DEVHASH);
 		if (hash == value) {

@@ -193,7 +193,6 @@ static int create_image(int platform_mode)
 	if (error)
 		return error;
 
-	device_pm_lock();
 	local_irq_disable();
 	/* At this point, device_suspend() has been called, but *not*
 	 * device_power_down(). We *must* call device_power_down() now.
@@ -225,11 +224,9 @@ static int create_image(int platform_mode)
 	/* NOTE:  device_power_up() is just a resume() for devices
 	 * that suspended with irqs off ... no overall powerup.
 	 */
-	device_power_up(in_suspend ?
-		(error ? PMSG_RECOVER : PMSG_THAW) : PMSG_RESTORE);
+	device_power_up();
  Enable_irqs:
 	local_irq_enable();
-	device_pm_unlock();
 	return error;
 }
 
@@ -283,8 +280,7 @@ int hibernation_snapshot(int platform_mode)
  Finish:
 	platform_finish(platform_mode);
  Resume_devices:
-	device_resume(in_suspend ?
-		(error ? PMSG_RECOVER : PMSG_THAW) : PMSG_RESTORE);
+	device_resume();
  Resume_console:
 	resume_console();
  Close:
@@ -304,9 +300,8 @@ static int resume_target_kernel(void)
 {
 	int error;
 
-	device_pm_lock();
 	local_irq_disable();
-	error = device_power_down(PMSG_QUIESCE);
+	error = device_power_down(PMSG_PRETHAW);
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to power down, "
 			"aborting resume\n");
@@ -334,10 +329,9 @@ static int resume_target_kernel(void)
 	swsusp_free();
 	restore_processor_state();
 	touch_softlockup_watchdog();
-	device_power_up(PMSG_RECOVER);
+	device_power_up();
  Enable_irqs:
 	local_irq_enable();
-	device_pm_unlock();
 	return error;
 }
 
@@ -356,7 +350,7 @@ int hibernation_restore(int platform_mode)
 
 	pm_prepare_console();
 	suspend_console();
-	error = device_suspend(PMSG_QUIESCE);
+	error = device_suspend(PMSG_PRETHAW);
 	if (error)
 		goto Finish;
 
@@ -368,7 +362,7 @@ int hibernation_restore(int platform_mode)
 		enable_nonboot_cpus();
 	}
 	platform_restore_cleanup(platform_mode);
-	device_resume(PMSG_RECOVER);
+	device_resume();
  Finish:
 	resume_console();
 	pm_restore_console();
@@ -409,7 +403,6 @@ int hibernation_platform_enter(void)
 	if (error)
 		goto Finish;
 
-	device_pm_lock();
 	local_irq_disable();
 	error = device_power_down(PMSG_HIBERNATE);
 	if (!error) {
@@ -418,7 +411,6 @@ int hibernation_platform_enter(void)
 		while (1);
 	}
 	local_irq_enable();
-	device_pm_unlock();
 
 	/*
 	 * We don't need to reenable the nonboot CPUs or resume consoles, since
@@ -427,7 +419,7 @@ int hibernation_platform_enter(void)
  Finish:
 	hibernation_ops->finish();
  Resume_devices:
-	device_resume(PMSG_RESTORE);
+	device_resume();
  Resume_console:
 	resume_console();
  Close:
