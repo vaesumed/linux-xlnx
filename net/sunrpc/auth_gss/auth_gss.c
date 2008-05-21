@@ -65,7 +65,7 @@ static const struct rpc_credops gss_nullops;
 
 #define NFS_NGROUPS	16
 
-#define GSS_CRED_SLACK		1024		/* XXX: unused */
+#define GSS_CRED_SLACK		(RPC_MAX_AUTH_SIZE * 2)
 /* length of a krb5 verifier (48), plus data added before arguments when
  * using integrity (two 4-byte integers): */
 #define GSS_VERF_SLACK		100
@@ -1137,15 +1137,21 @@ gss_wrap_req_priv(struct rpc_cred *cred, struct gss_cl_ctx *ctx,
 	inpages = snd_buf->pages + first;
 	snd_buf->pages = rqstp->rq_enc_pages;
 	snd_buf->page_base -= first << PAGE_CACHE_SHIFT;
-	/* Give the tail its own page, in case we need extra space in the
-	 * head when wrapping: */
+	/*
+	 * Give the tail its own page, in case we need extra space in the
+	 * head when wrapping:
+	 *
+	 * call_allocate() allocates twice the slack space required
+	 * by the authentication flavor to rq_callsize.
+	 * For GSS, slack is GSS_CRED_SLACK.
+	 */
 	if (snd_buf->page_len || snd_buf->tail[0].iov_len) {
 		tmp = page_address(rqstp->rq_enc_pages[rqstp->rq_enc_pages_num - 1]);
 		memcpy(tmp, snd_buf->tail[0].iov_base, snd_buf->tail[0].iov_len);
 		snd_buf->tail[0].iov_base = tmp;
 	}
 	maj_stat = gss_wrap(ctx->gc_gss_ctx, offset, snd_buf, inpages);
-	/* RPC_SLACK_SPACE should prevent this ever happening: */
+	/* slack space should prevent this ever happening: */
 	BUG_ON(snd_buf->len > snd_buf->buflen);
 	status = -EIO;
 	/* We're assuming that when GSS_S_CONTEXT_EXPIRED, the encryption was
