@@ -737,9 +737,6 @@ static int alloc_wbufs(struct ubifs_info *c)
 	c->jheads[GCHD].wbuf.dtype = UBI_LONGTERM;
 	c->jheads[GCHD].wbuf.timeout = 0;
 
-	sprintf(c->bgt_name, "%s%d_%d", SYNCER_BG_NAME,
-		c->vi.ubi_num, c->vi.vol_id);
-
 	return 0;
 }
 
@@ -1004,6 +1001,8 @@ static int mount_ubifs(struct ubifs_info *c)
 			return err;
 
 		/* Create background thread */
+		sprintf(c->bgt_name, BGT_NAME_PATTERN, c->vi.ubi_num,
+			c->vi.vol_id);
 		c->bgt = kthread_create(ubifs_bg_thread, c, c->bgt_name);
 		if (!c->bgt)
 			c->bgt = ERR_PTR(-EINVAL);
