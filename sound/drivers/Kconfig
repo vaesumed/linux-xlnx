@@ -21,6 +21,7 @@ config SND_AC97_CODEC
 	tristate
 	select SND_PCM
 	select AC97_BUS
+	select SND_VMASTER
 
 menuconfig SND_DRIVERS
 	bool "Generic sound devices"
