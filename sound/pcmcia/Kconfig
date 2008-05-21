@@ -1,7 +1,7 @@
 # ALSA PCMCIA drivers
 
 menuconfig SND_PCMCIA
-	bool "PCMCIA sound devices"
+	tristate "PCMCIA sound devices"
 	depends on PCMCIA
 	default y
 	help
