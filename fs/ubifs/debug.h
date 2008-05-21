@@ -83,7 +83,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
 #define dbg_gen(fmt, ...)        dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
 
 /* Additional journal messages */
-#define dbg_jnl(fmt, ...)        dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
+#define dbg_jnl(fmt, ...)        dbg_do_msg(UBIFS_MSG_JNL, fmt, ##__VA_ARGS__)
 
 /* Additional TNC messages */
 #define dbg_tnc(fmt, ...)        dbg_do_msg(UBIFS_MSG_TNC, fmt, ##__VA_ARGS__)
@@ -122,7 +122,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
  * Debugging message type flags (must match msg_type_names in debug.c).
  *
  * UBIFS_MSG_GEN: general messages
- * UBIFS_MSG_JRN: journal messages
+ * UBIFS_MSG_JNL: journal messages
  * UBIFS_MSG_MNT: mount messages
  * UBIFS_MSG_CMT: commit messages
  * UBIFS_MSG_FIND: LEB find messages
@@ -137,7 +137,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
  */
 enum {
 	UBIFS_MSG_GEN   = 0x1,
-	UBIFS_MSG_JRN   = 0x2,
+	UBIFS_MSG_JNL   = 0x2,
 	UBIFS_MSG_MNT   = 0x4,
 	UBIFS_MSG_CMT   = 0x8,
 	UBIFS_MSG_FIND  = 0x10,

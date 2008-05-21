@@ -32,10 +32,10 @@
  * Default journal size in logical eraseblocks as a percent of total
  * flash size.
  */
-#define DEFAULT_JRN_PERCENT 5
+#define DEFAULT_JNL_PERCENT 5
 
 /* Default maximum journal size in bytes */
-#define DEFAULT_MAX_JRN (32*1024*1024)
+#define DEFAULT_MAX_JNL (32*1024*1024)
 
 /* Default indexing tree fanout */
 #define DEFAULT_FANOUT 8
@@ -95,16 +95,16 @@ static int create_default_filesystem(struct ubifs_info *c)
 	 * log size, journal size, etc.
 	 */
 	c->max_leb_cnt = c->leb_cnt;
-	if (c->leb_cnt < 0x7FFFFFFF / DEFAULT_JRN_PERCENT)
+	if (c->leb_cnt < 0x7FFFFFFF / DEFAULT_JNL_PERCENT)
 		/* We can first multiply then divide and have no overflow */
-		jnl_lebs = c->leb_cnt * DEFAULT_JRN_PERCENT / 100;
+		jnl_lebs = c->leb_cnt * DEFAULT_JNL_PERCENT / 100;
 	else
-		jnl_lebs = (c->leb_cnt / 100) * DEFAULT_JRN_PERCENT;
+		jnl_lebs = (c->leb_cnt / 100) * DEFAULT_JNL_PERCENT;
 
-	if (jnl_lebs < UBIFS_MIN_JRN_LEBS)
-		jnl_lebs = UBIFS_MIN_JRN_LEBS;
-	if (jnl_lebs * c->leb_size > DEFAULT_MAX_JRN)
-		jnl_lebs = DEFAULT_MAX_JRN / c->leb_size;
+	if (jnl_lebs < UBIFS_MIN_JNL_LEBS)
+		jnl_lebs = UBIFS_MIN_JNL_LEBS;
+	if (jnl_lebs * c->leb_size > DEFAULT_MAX_JNL)
+		jnl_lebs = DEFAULT_MAX_JNL / c->leb_size;
 
 	/*
 	 * The log should be large enough to fit reference nodes for all bud
