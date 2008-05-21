@@ -83,8 +83,11 @@
 /* Maximum number of entries in each LPT (LEB category) heap */
 #define LPT_HEAP_SZ 256
 
-/* Background thread name */
-#define SYNCER_BG_NAME "ubifs_bg_thread"
+/*
+ * Background thread name pattern. The numbers are UBI device and volume
+ * numbers.
+ */
+#define BGT_NAME_PATTERN "ubifs_bgt%d_%d"
 
 /* Default write-buffer synchronization timeout (5 secs) */
 #define DEFAULT_WBUF_TIMEOUT (5 * HZ)
@@ -1156,7 +1159,7 @@ struct ubifs_info {
 	int no_orphs;
 
 	struct task_struct *bgt;
-	char bgt_name[sizeof(SYNCER_BG_NAME) + 18];
+	char bgt_name[sizeof(BGT_NAME_PATTERN) + 9];
 	int need_bgt;
 	int need_wbuf_sync;
 
