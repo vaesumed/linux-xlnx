@@ -15,6 +15,13 @@
 /* We've given up on this device. */
 #define VIRTIO_CONFIG_S_FAILED		0x80
 
+/* Some virtio feature bits (currently bits 24 through 31) are reserved for the
+ * transport being used (eg. virtio_ring), the rest are per-device feature
+ * bits. */
+#define VIRTIO_TRANSPORT_F_START	24
+#define VIRTIO_TRANSPORT_F_END		32
+#define VIRTIO_TRANSPORT_F_MASK		0xFF000000
+
 #ifdef __KERNEL__
 #include <linux/virtio.h>
 
