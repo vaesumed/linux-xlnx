@@ -502,9 +502,6 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 	if (err)
 		return err;
 
-	if (!S_ISREG(inode->i_mode))
-		return 0;
-
 	if (new_size < old_size) {
 		struct ubifs_info *c = inode->i_sb->s_fs_info;
 		int offset = new_size & (UBIFS_BLOCK_SIZE - 1);
