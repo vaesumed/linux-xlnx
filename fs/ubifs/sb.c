@@ -83,7 +83,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	struct ubifs_ino_node *ino;
 	struct ubifs_cs_node *cs;
 	union ubifs_key key;
-	int err, tmp, jrn_lebs, log_lebs, max_buds, main_lebs, main_first;
+	int err, tmp, jnl_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste, sup_flags = 0;
 	uint64_t tmp64, main_bytes;
 
@@ -97,14 +97,14 @@ static int create_default_filesystem(struct ubifs_info *c)
 	c->max_leb_cnt = c->leb_cnt;
 	if (c->leb_cnt < 0x7FFFFFFF / DEFAULT_JRN_PERCENT)
 		/* We can first multiply then divide and have no overflow */
-		jrn_lebs = c->leb_cnt * DEFAULT_JRN_PERCENT / 100;
+		jnl_lebs = c->leb_cnt * DEFAULT_JRN_PERCENT / 100;
 	else
-		jrn_lebs = (c->leb_cnt / 100) * DEFAULT_JRN_PERCENT;
+		jnl_lebs = (c->leb_cnt / 100) * DEFAULT_JRN_PERCENT;
 
-	if (jrn_lebs < UBIFS_MIN_JRN_LEBS)
-		jrn_lebs = UBIFS_MIN_JRN_LEBS;
-	if (jrn_lebs * c->leb_size > DEFAULT_MAX_JRN)
-		jrn_lebs = DEFAULT_MAX_JRN / c->leb_size;
+	if (jnl_lebs < UBIFS_MIN_JRN_LEBS)
+		jnl_lebs = UBIFS_MIN_JRN_LEBS;
+	if (jnl_lebs * c->leb_size > DEFAULT_MAX_JRN)
+		jnl_lebs = DEFAULT_MAX_JRN / c->leb_size;
 
 	/*
 	 * The log should be large enough to fit reference nodes for all bud
@@ -112,14 +112,14 @@ static int create_default_filesystem(struct ubifs_info *c)
 	 * (half of the LEB may contain committed data), the log should
 	 * generally be larger, make it twice as large.
 	 */
-	tmp = 2 * (c->ref_node_alsz * jrn_lebs) + c->leb_size - 1;
+	tmp = 2 * (c->ref_node_alsz * jnl_lebs) + c->leb_size - 1;
 	log_lebs = tmp / c->leb_size;
 	/* Plus one LEB reserved for commit */
 	log_lebs += 1;
 	/* And some extra space to allow writes while committing */
 	log_lebs += 1;
 
-	max_buds = jrn_lebs - log_lebs;
+	max_buds = jnl_lebs - log_lebs;
 	if (max_buds < UBIFS_MIN_BUD_LEBS)
 		max_buds = UBIFS_MIN_BUD_LEBS;
 
