@@ -373,8 +373,8 @@ static inline int __mutex_trylock_slowpath(atomic_t *lock_count)
  * Try to acquire the mutex atomically. Returns 1 if the mutex
  * has been acquired successfully, and 0 on contention.
  *
- * NOTE: this function follows the spin_trylock() convention, so
- * it is negated to the down_trylock() return values! Be careful
+ * NOTE: this function follows the spin_trylock()/down_nowait() convention,
+ * so it is negated to the old down_trylock() return values! Be careful
  * about this when converting semaphore users to mutexes.
  *
  * This function must not be used in interrupt context. The
