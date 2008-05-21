@@ -214,7 +214,7 @@ enum {
 /* Minimum number of bud logical eraseblocks */
 #define UBIFS_MIN_BUD_LEBS 2
 /* Minimum number of journal logical eraseblocks */
-#define UBIFS_MIN_JRN_LEBS (UBIFS_MIN_LOG_LEBS + UBIFS_MIN_BUD_LEBS)
+#define UBIFS_MIN_JNL_LEBS (UBIFS_MIN_LOG_LEBS + UBIFS_MIN_BUD_LEBS)
 /* Minimum number of LPT area logical eraseblocks */
 #define UBIFS_MIN_LPT_LEBS 2
 /* Minimum number of orphan area logical eraseblocks */
