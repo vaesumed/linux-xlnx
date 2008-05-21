@@ -1417,12 +1417,6 @@ void ubifs_recovery_commit(struct ubifs_info *c);
 int ubifs_gc_should_commit(struct ubifs_info *c);
 void ubifs_wait_for_commit(struct ubifs_info *c);
 
-/* build.c */
-void ubifs_umount(struct ubifs_info *c);
-int ubifs_remount_rw(struct ubifs_info *c);
-void ubifs_remount_ro(struct ubifs_info *c);
-int ubifs_parse_options(struct ubifs_info *c, char *options, int is_remount);
-
 /* master.c */
 int ubifs_read_master(struct ubifs_info *c);
 int ubifs_write_master(struct ubifs_info *c);
