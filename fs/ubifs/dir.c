@@ -265,7 +265,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
@@ -476,7 +476,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	inode->i_ctime = dir->i_mtime = dir->i_ctime =
 			 ubifs_current_time(inode);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
@@ -520,7 +520,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	inode->i_ctime = dir->i_ctime;
 	drop_nlink(inode);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
@@ -599,7 +599,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	inode->i_ctime = dir->i_ctime;
 	clear_nlink(inode);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 1,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_budg;
@@ -646,7 +646,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	dir->i_size += sz_change;
 	inc_nlink(dir);
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err) {
 		ubifs_err("cannot create directory, error %d", err);
@@ -711,7 +711,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_inode;
@@ -776,7 +776,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	dir->i_size += sz_change;
 
-	err = ubifs_jrn_update(c, dir, &dentry->d_name, inode, 0,
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
 		goto out_dir;
@@ -882,7 +882,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	} else
 		new_dir->i_size += new_sz;
 
-	err = ubifs_jrn_rename(c, old_dir, old_dentry, new_dir, new_dentry,
+	err = ubifs_jnl_rename(c, old_dir, old_dentry, new_dir, new_dentry,
 			       dirsync);
 	if (err)
 		goto out_inode;

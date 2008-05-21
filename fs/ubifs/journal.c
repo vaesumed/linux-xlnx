@@ -52,7 +52,7 @@
  * longer it takes to mount UBIFS (scanning the journal) and the more memory it
  * takes (indexing in the TNC).
  *
- * Note, all the journal write operations like 'ubifs_jrn_update()' here, which
+ * Note, all the journal write operations like 'ubifs_jnl_update()' here, which
  * write multiple UBIFS nodes to the journal at one go, are atomic with respect
  * to unclean reboots. Should the unclean reboot happen, the recovery code drops
  * all the nodes.
@@ -143,7 +143,7 @@ again:
 	 * some. But the write-buffer mutex has to be unlocked because
 	 * GC have to sync write buffers, which may lead a deadlock.
 	 */
-	dbg_jrn("no free space  jhead %d, run GC", jhead);
+	dbg_jnl("no free space  jhead %d, run GC", jhead);
 	mutex_unlock(&wbuf->io_mutex);
 
 	lnum = ubifs_garbage_collect(c, 0);
@@ -158,18 +158,18 @@ again:
 		 * because we dropped the 'io_mutex', so try once
 		 * again.
 		 */
-		dbg_jrn("GC couldn't make a free LEB for jhead %d", jhead);
+		dbg_jnl("GC couldn't make a free LEB for jhead %d", jhead);
 		if (retries++ < 2) {
-			dbg_jrn("retry (%d)", retries);
+			dbg_jnl("retry (%d)", retries);
 			goto again;
 		}
 
-		dbg_jrn("return -ENOSPC");
+		dbg_jnl("return -ENOSPC");
 		return err;
 	}
 
 	mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
-	dbg_jrn("got LEB %d for jhead %d", lnum, jhead);
+	dbg_jnl("got LEB %d for jhead %d", lnum, jhead);
 	avail = c->leb_size - wbuf->offs - wbuf->used;
 
 	if (wbuf->lnum != -1 && avail >= len) {
@@ -178,7 +178,7 @@ again:
 		 * enough space now. This happens when more then one process is
 		 * trying to write to the same journal head at the same time.
 		 */
-		dbg_jrn("return LEB %d back, already have LEB %d:%d",
+		dbg_jnl("return LEB %d back, already have LEB %d:%d",
 			lnum, wbuf->lnum, wbuf->offs + wbuf->used);
 		err = ubifs_return_leb(c, lnum);
 		if (err)
@@ -240,7 +240,7 @@ static int write_node(struct ubifs_info *c, int jhead, void *node, int len,
 	*lnum = c->jheads[jhead].wbuf.lnum;
 	*offs = c->jheads[jhead].wbuf.offs + c->jheads[jhead].wbuf.used;
 
-	dbg_jrn("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
+	dbg_jnl("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
 	ubifs_prepare_node(c, node, len, 0);
 
 	return ubifs_wbuf_write_nolock(wbuf, node, len);
@@ -270,7 +270,7 @@ static int write_head(struct ubifs_info *c, int jhead, void *buf, int len,
 
 	*lnum = c->jheads[jhead].wbuf.lnum;
 	*offs = c->jheads[jhead].wbuf.offs + c->jheads[jhead].wbuf.used;
-	dbg_jrn("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
+	dbg_jnl("jhead %d, LEB %d:%d, len %d", jhead, *lnum, *offs, len);
 
 	err = ubifs_wbuf_write_nolock(wbuf, buf, len);
 	if (err)
@@ -317,7 +317,7 @@ again:
 		 * will commit and re-try.
 		 */
 		if (nospc_retries++ < 2) {
-			dbg_jrn("no space, retry");
+			dbg_jnl("no space, retry");
 			err = -EAGAIN;
 		}
 
@@ -348,7 +348,7 @@ again:
 		ubifs_warn("too many space allocation re-tries (%d)",
 			   cmt_retries);
 
-	dbg_jrn("-EAGAIN, commit and retry (retried %d times)",
+	dbg_jnl("-EAGAIN, commit and retry (retried %d times)",
 		cmt_retries);
 	cmt_retries += 1;
 
@@ -477,7 +477,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 }
 
 /**
- * ubifs_jrn_update - update inode.
+ * ubifs_jnl_update - update inode.
  * @c: UBIFS file-system description object
  * @dir: parent inode or host inode in case of extended attributes
  * @nm: directory entry name
@@ -500,7 +500,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  *
  * This function returns %0 on success and a negative error code on failure.
  */
-int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
+int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
 		     int deletion, int sync, int xent)
 {
@@ -511,7 +511,7 @@ int ubifs_jrn_update(struct ubifs_info *c, const struct inode *dir,
 	struct ubifs_ino_node *ino;
 	union ubifs_key dent_key, ino_key;
 
-	dbg_jrn("ino %lu, dent '%.*s', data len %d in dir ino %lu",
+	dbg_jnl("ino %lu, dent '%.*s', data len %d in dir ino %lu",
 		inode->i_ino, nm->len, nm->name, ubifs_inode(inode)->data_len,
 		dir->i_ino);
 	ubifs_assert(ubifs_inode(dir)->data_len == 0);
@@ -629,7 +629,7 @@ out_ro:
 }
 
 /**
- * ubifs_jrn_write_data - write a data node to the journal.
+ * ubifs_jnl_write_data - write a data node to the journal.
  * @c: UBIFS file-system description object
  * @inode: inode the data node belongs to
  * @key: node key
@@ -639,7 +639,7 @@ out_ro:
  * This function writes a data node to the journal. Returns %0 if the data node
  * was successfully written, and a negative error code in case of failure.
  */
-int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
+int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 			 const union ubifs_key *key, const void *buf, int len)
 {
 	int err, lnum, offs, compr_type, out_len;
@@ -647,7 +647,7 @@ int ubifs_jrn_write_data(struct ubifs_info *c, const struct inode *inode,
 	const struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_data_node *data;
 
-	dbg_jrn("ino %lu, blk %u, len %d, key %s", key_ino(c, key),
+	dbg_jnl("ino %lu, blk %u, len %d, key %s", key_ino(c, key),
 		key_block(c, key), len, DBGKEY(key));
 	ubifs_assert(len <= UBIFS_BLOCK_SIZE);
 
@@ -703,7 +703,7 @@ out_free:
 }
 
 /**
- * ubifs_jrn_write_inode - flush inode to the journal.
+ * ubifs_jnl_write_inode - flush inode to the journal.
  * @c: UBIFS file-system description object
  * @inode: inode to flush
  * @last_reference: inode has been deleted
@@ -712,14 +712,14 @@ out_free:
  * This function writes inode @inode to the journal (to the base head). Returns
  * zero in case of success and a negative error code in case of failure.
  */
-int ubifs_jrn_write_inode(struct ubifs_info *c, const struct inode *inode,
+int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 			  int last_reference, int sync)
 {
 	int err, len, lnum, offs;
 	struct ubifs_ino_node *ino;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	dbg_jrn("ino %lu%s", inode->i_ino,
+	dbg_jnl("ino %lu%s", inode->i_ino,
 		last_reference ? " (last reference)" : "");
 	if (last_reference)
 		ubifs_assert(inode->i_nlink == 0);
@@ -775,7 +775,7 @@ out_free:
 }
 
 /**
- * ubifs_jrn_rename - rename a directory entry.
+ * ubifs_jnl_rename - rename a directory entry.
  * @c: UBIFS file-system description object
  * @old_dir: parent inode of directory entry to rename
  * @old_dentry: directory entry to rename
@@ -785,7 +785,7 @@ out_free:
  *
  * Returns zero in case of success and a negative error code in case of failure.
  */
-int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
+int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 		     const struct dentry *old_dentry,
 		     const struct inode *new_dir,
 		     const struct dentry *new_dentry, int sync)
@@ -799,7 +799,7 @@ int ubifs_jrn_rename(struct ubifs_info *c, const struct inode *old_dir,
 	void *p;
 	union ubifs_key key;
 
-	dbg_jrn("dent '%.*s' in dir ino %lu to dent '%.*s' in dir ino %lu",
+	dbg_jnl("dent '%.*s' in dir ino %lu to dent '%.*s' in dir ino %lu",
 		old_dentry->d_name.len, old_dentry->d_name.name,
 		old_dir->i_ino, new_dentry->d_name.len,
 		new_dentry->d_name.name, new_dir->i_ino);
@@ -979,7 +979,7 @@ out:
 }
 
 /**
- * ubifs_jrn_truncate - update the journal for a truncation.
+ * ubifs_jnl_truncate - update the journal for a truncation.
  * @c: UBIFS file-system description object
  * @inum: inode number of inode being truncated
  * @old_size: old size
@@ -992,7 +992,7 @@ out:
  * This function returns %0 in the case of success, and a negative error code in
  * case of failure.
  */
-int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
+int ubifs_jnl_truncate(struct ubifs_info *c, ino_t inum,
 		       loff_t old_size, loff_t new_size)
 {
 	union ubifs_key key, to_key;
@@ -1001,7 +1001,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 	int err, dlen, len, lnum, offs, bit, sz;
 	unsigned int blk;
 
-	dbg_jrn("ino %lu, size %lld -> %lld", inum, old_size, new_size);
+	dbg_jnl("ino %lu, size %lld -> %lld", inum, old_size, new_size);
 
 	sz = UBIFS_TRUN_NODE_SZ + UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
 	trun = kmalloc(sz, GFP_NOFS);
@@ -1020,7 +1020,7 @@ int ubifs_jrn_truncate(struct ubifs_info *c, ino_t inum,
 		dn = (void *)trun + ALIGN(UBIFS_TRUN_NODE_SZ, 8);
 		blk = new_size / UBIFS_BLOCK_SIZE;
 		data_key_init(c, &key, inum, blk);
-		dbg_jrn("last block key %s", DBGKEY(&key));
+		dbg_jnl("last block key %s", DBGKEY(&key));
 		err = ubifs_tnc_lookup(c, &key, dn);
 		if (err == -ENOENT)
 			dlen = 0; /* Not found (so it is a hole) */
@@ -1105,7 +1105,7 @@ out_free:
 
 #ifdef CONFIG_UBIFS_FS_XATTR
 
-int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
+int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 			   const struct inode *inode, const struct qstr *nm,
 			   int sync)
 {
@@ -1114,7 +1114,7 @@ int ubifs_jrn_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	struct ubifs_ino_node *ino;
 	union ubifs_key xent_key, key1, key2;
 
-	dbg_jrn("host %lu, xattr ino %lu, name '%s', data len %d",
+	dbg_jnl("host %lu, xattr ino %lu, name '%s', data len %d",
 		host->i_ino, inode->i_ino, nm->name,
 		ubifs_inode(inode)->data_len);
 	ubifs_assert(inode->i_nlink == 0);
@@ -1201,7 +1201,7 @@ out_ro:
 }
 
 /**
- * ubifs_jrn_write_2_inodes - write 2 inodes to the journal.
+ * ubifs_jnl_write_2_inodes - write 2 inodes to the journal.
  * @c: UBIFS file-system description object
  * @inode1: first inode to write
  * @inode2: second inode to write
@@ -1211,14 +1211,14 @@ out_ro:
  * base head - first @inode1, then @inode2). Returns zero in case of success
  * and a negative error code in case of failure.
  */
-int ubifs_jrn_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
+int ubifs_jnl_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 			     const struct inode *inode2, int sync)
 {
 	int err, len1, len2, aligned_len, aligned_len1, lnum, offs;
 	struct ubifs_ino_node *ino;
 	union ubifs_key key;
 
-	dbg_jrn("ino %lu, ino %lu", inode1->i_ino, inode2->i_ino);
+	dbg_jnl("ino %lu, ino %lu", inode1->i_ino, inode2->i_ino);
 	ubifs_assert(inode1->i_nlink > 0);
 	ubifs_assert(inode2->i_nlink > 0);
 

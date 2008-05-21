@@ -83,7 +83,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
 #define dbg_gen(fmt, ...)        dbg_do_msg(UBIFS_MSG_GEN, fmt, ##__VA_ARGS__)
 
 /* Additional journal messages */
-#define dbg_jrn(fmt, ...)        dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
+#define dbg_jnl(fmt, ...)        dbg_do_msg(UBIFS_MSG_JRN, fmt, ##__VA_ARGS__)
 
 /* Additional TNC messages */
 #define dbg_tnc(fmt, ...)        dbg_do_msg(UBIFS_MSG_TNC, fmt, ##__VA_ARGS__)
@@ -330,7 +330,7 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_key(c, key, fmt, ...)                  ({})
 
 #define dbg_gen(fmt, ...)                          ({})
-#define dbg_jrn(fmt, ...)                          ({})
+#define dbg_jnl(fmt, ...)                          ({})
 #define dbg_tnc(fmt, ...)                          ({})
 #define dbg_lp(fmt, ...)                           ({})
 #define dbg_find(fmt, ...)                         ({})
