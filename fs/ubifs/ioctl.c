@@ -146,10 +146,10 @@ out:
 	return err;
 }
 
-int ubifs_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
-		unsigned long arg)
+long ubifs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int flags, err;
+	struct inode *inode = file->f_path.dentry->d_inode;
 
 	switch (cmd) {
 	case FS_IOC_GETFLAGS:

@@ -946,15 +946,15 @@ struct inode_operations ubifs_symlink_inode_operations = {
 };
 
 struct file_operations ubifs_file_operations = {
-	.llseek    = generic_file_llseek,
-	.read      = do_sync_read,
-	.write     = ubifs_write,
-	.aio_read  = generic_file_aio_read,
-	.aio_write = ubifs_aio_write,
-	.mmap      = ubifs_file_mmap,
-	.fsync     = ubifs_fsync,
-	.ioctl     = ubifs_ioctl,
+	.llseek         = generic_file_llseek,
+	.read           = do_sync_read,
+	.write          = ubifs_write,
+	.aio_read       = generic_file_aio_read,
+	.aio_write      = ubifs_aio_write,
+	.mmap           = ubifs_file_mmap,
+	.fsync          = ubifs_fsync,
+	.unlocked_ioctl = ubifs_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl     = ubifs_compat_ioctl,
+	.compat_ioctl   = ubifs_compat_ioctl,
 #endif
 };

@@ -1539,12 +1539,11 @@ int ubifs_recover_size(struct ubifs_info *c);
 void ubifs_destroy_size_tree(struct ubifs_info *c);
 
 /* ioctl.c */
-int ubifs_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
-		unsigned long arg);
+long ubifs_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+void ubifs_set_inode_flags(struct inode *inode);
 #ifdef CONFIG_COMPAT
 long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 #endif
-void ubifs_set_inode_flags(struct inode *inode);
 
 /* compressor.c */
 int __init ubifs_compressors_init(void);

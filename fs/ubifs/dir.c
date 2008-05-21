@@ -975,13 +975,13 @@ struct inode_operations ubifs_dir_inode_operations = {
 };
 
 struct file_operations ubifs_dir_operations = {
-	.llseek  = ubifs_dir_llseek,
-	.release = ubifs_dir_release,
-	.read    = generic_read_dir,
-	.readdir = ubifs_readdir,
-	.fsync   = ubifs_fsync,
-	.ioctl   = ubifs_ioctl,
+	.llseek         = ubifs_dir_llseek,
+	.release        = ubifs_dir_release,
+	.read           = generic_read_dir,
+	.readdir        = ubifs_readdir,
+	.fsync          = ubifs_fsync,
+	.unlocked_ioctl = ubifs_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl     = ubifs_compat_ioctl,
+	.compat_ioctl   = ubifs_compat_ioctl,
 #endif
 };
