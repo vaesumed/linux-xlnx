@@ -493,33 +493,6 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
 }
 
 /**
- * lnc_lookup - lookup the leaf-node-cache.
- * @c: UBIFS file-system description object
- * @zbr: zbranch of leaf node
- * @node: leaf node
- *
- * Leaf nodes are non-index nodes like dent (directory entry) nodes or data
- * nodes.  The purpose of the leaf-node-cache is to save re-reading the same
- * leaf node over and over again.  Most things are cached by VFS, however the
- * file system must cache directory entries for readdir and for resolving hash
- * collisions.  The present implementation of the leaf-node-cache is extremely
- * simple, and allows for error returns that are not used but that may be needed
- * if a more complex implementation is created.
- *
- * This function returns %1 if the leaf node is in the cache, %0 if it is not,
- * and a negative error code otherwise.
- */
-static int lnc_lookup(struct ubifs_info *c, struct ubifs_zbranch *zbr,
-		      void *node)
-{
-	if (zbr->leaf == NULL)
-		return 0;
-	ubifs_assert(zbr->len != 0);
-	memcpy(node, zbr->leaf, zbr->len);
-	return 1;
-}
-
-/**
  * ubifs_validate_entry - validate directory or extended attribute entry node.
  * @c: UBIFS file-system description object
  * @dent: the node to validate
@@ -552,13 +525,24 @@ int ubifs_validate_entry(struct ubifs_info *c,
 }
 
 /**
- * lnc_add - add a leaf node to the leaf-node-cache.
+ * lnc_add - add a leaf node to the leaf node cache.
  * @c: UBIFS file-system description object
  * @zbr: zbranch of leaf node
  * @node: leaf node
  *
- * This function returns %0 to indicate success and a negative error code
- * otherwise.
+ * Leaf nodes are non-index nodes directory entry nodes or data nodes. The
+ * purpose of the leaf node cache is to save re-reading the same leaf node over
+ * and over again. Most things are cached by VFS, however the file system must
+ * cache directory entries for readdir and for resolving hash collisions. The
+ * present implementation of the leaf node cache is extremely simple, and
+ * allows for error returns that are not used but that may be needed if a more
+ * complex implementation is created.
+ *
+ * Note, this function does not add the @node object to LNC directly, but
+ * allocates a copy of the object and adds the copy to LNC. The reason for this
+ * is that @node has been allocated outside of the TNC subsystem and will be
+ * used with @c->tnc_mutex unlock upon return from the TNC subsystem. But LNC
+ * may be changed at any time, e.g. freed by the shrinker.
  */
 static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		   const void *node)
@@ -569,13 +553,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	ubifs_assert(zbr->leaf == NULL);
 	ubifs_assert(zbr->len != 0);
-
-	/*
-	 * Add only directory entries and extended attribute entries, but
-	 * nothing else.
-	 */
-	if (!is_hash_key(c, &zbr->key))
-		return 0;
+	ubifs_assert(is_hash_key(c, &zbr->key));
 
 	err = ubifs_validate_entry(c, dent);
 	if (err) {
@@ -585,20 +563,45 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	lnc_node = kmalloc(zbr->len, GFP_NOFS);
 	if (!lnc_node)
-		return 0; /* We don't have to have the cache, so no error */
+		/* We don't have to have the cache, so no error */
+		return 0;
 
 	memcpy(lnc_node, node, zbr->len);
 	zbr->leaf = lnc_node;
 	return 0;
 }
 
-/**
- * lnc_free - remove a leaf node from the leaf-node-cache.
+ /**
+ * lnc_add_directly - add a leaf node to the leaf-node-cache.
+ * @c: UBIFS file-system description object
  * @zbr: zbranch of leaf node
  * @node: leaf node
  *
- * This function returns %0 to indicate success and a negative error code
- * otherwise.
+ * This function is similar to 'lnc_add()', but it does not create a copy of
+ * @node but inserts @node to TNC directly.
+ */
+static int lnc_add_directly(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			    void *node)
+{
+	int err;
+
+	ubifs_assert(zbr->leaf == NULL);
+	ubifs_assert(zbr->len != 0);
+
+	err = ubifs_validate_entry(c, node);
+	if (err) {
+		dbg_dump_node(c, node);
+		return err;
+	}
+
+	zbr->leaf = node;
+	return 0;
+}
+
+/**
+ * lnc_free - remove a leaf node from the leaf node cache.
+ * @zbr: zbranch of leaf node
+ * @node: leaf node
  */
 static void lnc_free(struct ubifs_zbranch *zbr)
 {
@@ -609,13 +612,14 @@ static void lnc_free(struct ubifs_zbranch *zbr)
 }
 
 /**
- * tnc_read_node - read a leaf node.
+ * tnc_read_node - read a leaf node from the flash media.
  * @c: UBIFS file-system description object
- * @zbr:  key and position of node
- * @node: node returned
+ * @zbr: key and position of the node
+ * @node: node is returned here
  *
- * This function reads leaf defined node by @zbr and returns zero in case of
- * success or a negative negative error code in case of failure.
+ * This function reads a node defined by @zbr from the flash media. Returns
+ * zero in case of success or a negative negative error code in case of
+ * failure.
  */
 static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			 void *node)
@@ -624,8 +628,8 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	int err, type = key_type(c, key);
 	struct ubifs_wbuf *wbuf;
 
-	if (lnc_lookup(c, zbr, node))
-		return 0; /* Read from the leaf-node-cache */
+	ubifs_assert(!zbr->leaf);
+
 	/*
 	 * 'zbr' has to point to on-flash node. The node may sit in a bud and
 	 * may even be in a write buffer, so we have to take care about this.
@@ -651,10 +655,42 @@ static int tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		dbg_tnc("looked for key %s found node's key %s",
 			DBGKEY(key), DBGKEY1(&key1));
 		dbg_dump_node(c, node);
-		return err;
+		return -EINVAL;
 	}
 
-	/* Consider adding the node to the leaf node cache */
+	return 0;
+}
+
+/**
+ * tnc_read_node_nm - read a "hashed" leaf node.
+ * @c: UBIFS file-system description object
+ * @zbr: key and position of the node
+ * @node: node is returned here
+ *
+ * This function reads a "hashed" node defined by @zbr from the leaf node cache
+ * (in it is there) or from the hash media, in which case the node is also
+ * added to LNC. Returns zero in case of success or a negative negative error
+ * code in case of failure.
+ */
+static int tnc_read_node_nm(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			    void *node)
+{
+	int err;
+
+	ubifs_assert(is_hash_key(c, &zbr->key));
+
+	if (zbr->leaf) {
+		/* Read from the leaf node cache */
+		ubifs_assert(zbr->len != 0);
+		memcpy(node, zbr->leaf, zbr->len);
+		return 0;
+	}
+
+	err = tnc_read_node(c, zbr, node);
+	if (err)
+		return err;
+
+	/* Add the node to the leaf node cache */
 	err = lnc_add(c, zbr, node);
 	return err;
 }
@@ -726,9 +762,6 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 
 	dbg_tnc("LEB %d:%d, key %s", zbr->lnum, zbr->offs, DBGKEY(key));
 
-	if (lnc_lookup(c, zbr, node))
-		return 0; /* Read from the leaf-node-cache */
-
 	ret = try_read_node(c, node, key_type(c, key), zbr->len, zbr->lnum,
 			    zbr->offs);
 	if (ret == 1) {
@@ -737,13 +770,7 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 
 		/* All nodes have key in the same place */
 		key_read(c, &dent->key, &node_key);
-		if (keys_cmp(c, key, &node_key) == 0) {
-			/* Add the node to the leaf node cache */
-			int err = lnc_add(c, zbr, node);
-
-			if (err)
-				return err;
-		} else
+		if (keys_cmp(c, key, &node_key) != 0)
 			ret = 0;
 	}
 	if (ret == 0)
@@ -770,24 +797,23 @@ static int matches_name(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	struct ubifs_dent_node *dent;
 	int nlen, err;
 
-	/* If possible, match against the dent in the leaf-node-cache */
+	/* If possible, match against the dent in the leaf node cache */
 	if (!zbr->leaf) {
 		dent = kmalloc(zbr->len, GFP_NOFS);
 		if (!dent)
 			return -ENOMEM;
 
-		/*
-		 * In this case we end up allocating another dent object in
-		 * lnc_add(), although it could have just inserted this dent.
-		 */
 		err = tnc_read_node(c, zbr, dent);
 		if (err)
 			goto out_free;
 
-		kfree(dent);
-	}
+		/* Add the node to the leaf node cache */
+		err = lnc_add_directly(c, zbr, dent);
+		if (err)
+			goto out_free;
+	} else
+		dent = zbr->leaf;
 
-	dent = zbr->leaf;
 	nlen = le16_to_cpu(dent->nlen);
 	err = memcmp(dent->name, nm->name, min_t(int, nlen, nm->len));
 	if (err == 0) {
@@ -1059,16 +1085,12 @@ static int fallible_matches_name(struct ubifs_info *c,
 	struct ubifs_dent_node *dent;
 	int nlen, err;
 
-	/* If possible, match against the dent in the leaf-node-cache */
+	/* If possible, match against the dent in the leaf node cache */
 	if (!zbr->leaf) {
 		dent = kmalloc(zbr->len, GFP_NOFS);
 		if (!dent)
 			return -ENOMEM;
 
-		/*
-		 * In this case we end up allocating another dent object in
-		 * lnc_add(), although it could have just inserted this dent.
-		 */
 		err = fallible_read_node(c, &zbr->key, zbr, dent);
 		if (err < 0)
 			goto out_free;
@@ -1077,12 +1099,14 @@ static int fallible_matches_name(struct ubifs_info *c,
 			err = NOT_ON_MEDIA;
 			goto out_free;
 		}
-
 		ubifs_assert(err == 1);
-		kfree(dent);
-	}
 
-	dent = zbr->leaf;
+		err = lnc_add_directly(c, zbr, dent);
+		if (err)
+			goto out_free;
+	} else
+		dent = zbr->leaf;
+
 	nlen = le16_to_cpu(dent->nlen);
 	err = memcmp(dent->name, nm->name, min_t(int, nlen, nm->len));
 	if (err == 0) {
@@ -1655,10 +1679,10 @@ int ubifs_tnc_lookup(struct ubifs_info *c, const union ubifs_key *key,
 	zt = &znode->zbranch[n];
 	if (is_hash_key(c, key)) {
 		/*
-		 * In this case the leaf-node-cache gets used, so we pass the
+		 * In this case the leaf node cache gets used, so we pass the
 		 * address of the zbranch and keep the mutex locked
 		 */
-		err = tnc_read_node(c, zt, node);
+		err = tnc_read_node_nm(c, zt, node);
 		goto out;
 	}
 	zbr = znode->zbranch[n];
@@ -1702,12 +1726,12 @@ int ubifs_tnc_locate(struct ubifs_info *c, const union ubifs_key *key,
 	zt = &znode->zbranch[n];
 	if (is_hash_key(c, key)) {
 		/*
-		 * In this case the leaf-node-cache gets used, so we pass the
+		 * In this case the leaf node cache gets used, so we pass the
 		 * address of the zbranch and keep the mutex locked
 		 */
 		*lnum = zt->lnum;
 		*offs = zt->offs;
-		err = tnc_read_node(c, zt, node);
+		err = tnc_read_node_nm(c, zt, node);
 		goto out;
 	}
 	zbr = znode->zbranch[n];
@@ -1770,7 +1794,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 	zbr = znode->zbranch[n];
 	mutex_unlock(&c->tnc_mutex);
 
-	err = tnc_read_node(c, &zbr, node);
+	err = tnc_read_node_nm(c, &zbr, node);
 	return err;
 
 out_unlock:
@@ -2760,7 +2784,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 		goto out_free;
 	}
 
-	err = tnc_read_node(c, zbr, dent);
+	err = tnc_read_node_nm(c, zbr, dent);
 	if (unlikely(err))
 		goto out_free;
 
@@ -3301,6 +3325,8 @@ int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			 void *node)
 {
 	ubifs_assert(mutex_is_locked(&c->tnc_mutex));
+	if (is_hash_key(c, &zbr->key))
+		return tnc_read_node_nm(c, zbr, node);
 	return tnc_read_node(c, zbr, node);
 }
 
