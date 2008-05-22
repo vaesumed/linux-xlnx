@@ -1065,7 +1065,7 @@ static int dbg_check_znode(struct ubifs_info *c, struct ubifs_zbranch *zbr)
 	}
 
 	for (n = 0; n < znode->child_cnt; n++) {
-		if (znode->zbranch[n].znode == NULL &&
+		if (!znode->zbranch[n].znode &&
 		    (znode->zbranch[n].lnum == 0 ||
 		     znode->zbranch[n].len == 0)) {
 			err = 16;
@@ -1358,7 +1358,7 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 			return 0;
 		dbg_rcvry("failing in index head LEB %d", lnum);
 	} else if (write && !RB_EMPTY_ROOT(&c->buds) &&
-		   ubifs_search_bud(c, lnum) == NULL) {
+		   !ubifs_search_bud(c, lnum)) {
 		if (chance(19, 20))
 			return 0;
 		dbg_rcvry("failing in non-bud LEB %d", lnum);

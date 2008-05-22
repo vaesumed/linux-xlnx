@@ -421,7 +421,7 @@ static int layout_in_empty_space(struct ubifs_info *c)
 	int wlen, blen, err;
 
 	cnext = c->enext;
-	if (cnext == NULL)
+	if (!cnext)
 		return 0;
 
 	lnum = c->ihead_lnum;
