@@ -490,7 +490,7 @@ int aac_fib_send(u16 command, struct fib *fibptr, unsigned long size,
 			 * hardware failure has occurred.
 			 */
 			unsigned long count = 36000000L; /* 3 minutes */
-			while (down_trylock(&fibptr->event_wait)) {
+			while (!down_nowait(&fibptr->event_wait)) {
 				int blink;
 				if (--count == 0) {
 					struct aac_queue * q = &dev->queues->queue[AdapNormCmdQueue];

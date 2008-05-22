@@ -538,7 +538,7 @@ found:
 	 * if this does not work then we need to drop the
 	 * spinlock and do a hard attempt on the semaphore.
 	 */
-	if (down_trylock(&bp->b_sema)) {
+	if (!down_nowait(&bp->b_sema)) {
 		if (!(flags & XBF_TRYLOCK)) {
 			/* wait for buffer ownership */
 			XB_TRACE(bp, "get_lock", 0);
@@ -882,7 +882,7 @@ xfs_buf_cond_lock(
 {
 	int			locked;
 
-	locked = down_trylock(&bp->b_sema) == 0;
+	locked = down_nowait(&bp->b_sema);
 	if (locked) {
 		XB_SET_OWNER(bp);
 	}
