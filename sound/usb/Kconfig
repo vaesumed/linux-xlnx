@@ -7,7 +7,7 @@ menuconfig SND_USB
 	help
 	  Support for sound devices connected via the USB bus.
 
-if SND_USB
+if SND_USB && USB
 
 config SND_USB_AUDIO
 	tristate "USB Audio/MIDI driver"

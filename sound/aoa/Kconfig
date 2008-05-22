@@ -1,6 +1,6 @@
 menuconfig SND_AOA
 	tristate "Apple Onboard Audio driver"
-	depends PPC_PMAC
+	depends on PPC_PMAC
 	select SND_PCM
 	---help---
 	This option enables the new driver for the various

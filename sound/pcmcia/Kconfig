@@ -1,13 +1,13 @@
 # ALSA PCMCIA drivers
 
 menuconfig SND_PCMCIA
-	tristate "PCMCIA sound devices"
+	bool "PCMCIA sound devices"
 	depends on PCMCIA
 	default y
 	help
 	  Support for sound devices connected via the PCMCIA bus.
 
-if SND_PCMCIA
+if SND_PCMCIA && PCMCIA
 
 config SND_VXPOCKET
 	tristate "Digigram VXpocket"
