@@ -146,10 +146,10 @@ void p54_parse_firmware(struct ieee80211_hw *dev, const struct firmware *fw)
 
 	if (priv->fw_var >= 0x300) {
 		/* Firmware supports QoS, use it! */
-		priv->tx_stats.data[0].limit = 3;
-		priv->tx_stats.data[1].limit = 4;
-		priv->tx_stats.data[2].limit = 3;
-		priv->tx_stats.data[3].limit = 1;
+		priv->tx_stats[0].limit = 3;
+		priv->tx_stats[1].limit = 4;
+		priv->tx_stats[2].limit = 3;
+		priv->tx_stats[3].limit = 1;
 		dev->queues = 4;
 	}
 }
@@ -355,7 +355,7 @@ static void p54_rx_data(struct ieee80211_hw *dev, struct sk_buff *skb)
 	struct ieee80211_rx_status rx_status = {0};
 	u16 freq = le16_to_cpu(hdr->freq);
 
-	rx_status.ssi = hdr->rssi;
+	rx_status.signal = hdr->rssi;
 	/* XX correct? */
 	rx_status.rate_idx = hdr->rate & 0xf;
 	rx_status.freq = freq;
@@ -379,7 +379,7 @@ static void inline p54_wake_free_queues(struct ieee80211_hw *dev)
 	 * But, what if some are full? */
 
 	for (i = 0; i < dev->queues; i++)
-		if (priv->tx_stats.data[i].len < priv->tx_stats.data[i].limit)
+		if (priv->tx_stats[i].len < priv->tx_stats[i].limit)
 			ieee80211_wake_queue(dev, i);
 }
 
@@ -417,8 +417,7 @@ static void p54_rx_frame_sent(struct ieee80211_hw *dev, struct sk_buff *skb)
 			memcpy(&status.control, range->control,
 			       sizeof(status.control));
 			kfree(range->control);
-			priv->tx_stats.data[status.control.queue].len--;
-
+			priv->tx_stats[status.control.queue].len--;
 			entry_hdr = (struct p54_control_hdr *) entry->data;
 			entry_data = (struct p54_tx_control_allocdata *) entry_hdr->data;
 			if ((entry_hdr->magic1 & cpu_to_le16(0x4000)) != 0)
@@ -555,7 +554,7 @@ static void p54_assign_address(struct ieee80211_hw *dev, struct sk_buff *skb,
 static int p54_tx(struct ieee80211_hw *dev, struct sk_buff *skb,
 		  struct ieee80211_tx_control *control)
 {
-	struct ieee80211_tx_queue_stats_data *current_queue;
+	struct ieee80211_tx_queue_stats *current_queue;
 	struct p54_common *priv = dev->priv;
 	struct p54_control_hdr *hdr;
 	struct p54_tx_control_allocdata *txhdr;
@@ -563,7 +562,7 @@ static int p54_tx(struct ieee80211_hw *dev, struct sk_buff *skb,
 	size_t padding, len;
 	u8 rate;
 
-	current_queue = &priv->tx_stats.data[control->queue];
+	current_queue = &priv->tx_stats[control->queue];
 	if (unlikely(current_queue->len > current_queue->limit))
 		return NETDEV_TX_BUSY;
 	current_queue->len++;
@@ -936,7 +935,7 @@ static void p54_configure_filter(struct ieee80211_hw *dev,
 	}
 }
 
-static int p54_conf_tx(struct ieee80211_hw *dev, int queue,
+static int p54_conf_tx(struct ieee80211_hw *dev, u16 queue,
 		       const struct ieee80211_tx_queue_params *params)
 {
 	struct p54_common *priv = dev->priv;
@@ -945,7 +944,7 @@ static int p54_conf_tx(struct ieee80211_hw *dev, int queue,
 	vdcf = (struct p54_tx_control_vdcf *)(((struct p54_control_hdr *)
 		((void *)priv->cached_vdcf + priv->tx_hdr_len))->data);
 
-	if ((params) && !((queue < 0) || (queue > 4))) {
+	if ((params) && !(queue > 4)) {
 		P54_SET_QUEUE(vdcf->queue[queue], params->aifs,
 			params->cw_min, params->cw_max, params->txop);
 	} else
@@ -967,11 +966,8 @@ static int p54_get_tx_stats(struct ieee80211_hw *dev,
 			    struct ieee80211_tx_queue_stats *stats)
 {
 	struct p54_common *priv = dev->priv;
-	unsigned int i;
 
-	for (i = 0; i < dev->queues; i++)
-		memcpy(&stats->data[i], &priv->tx_stats.data[i],
-			sizeof(stats->data[i]));
+	memcpy(stats, &priv->tx_stats, sizeof(stats[0]) * dev->queues);
 
 	return 0;
 }
@@ -1004,11 +1000,12 @@ struct ieee80211_hw *p54_init_common(size_t priv_data_len)
 	skb_queue_head_init(&priv->tx_queue);
 	dev->wiphy->bands[IEEE80211_BAND_2GHZ] = &band_2GHz;
 	dev->flags = IEEE80211_HW_HOST_BROADCAST_PS_BUFFERING | /* not sure */
-		    IEEE80211_HW_RX_INCLUDES_FCS;
+		     IEEE80211_HW_RX_INCLUDES_FCS |
+		     IEEE80211_HW_SIGNAL_UNSPEC;
 	dev->channel_change_time = 1000;	/* TODO: find actual value */
-	dev->max_rssi = 127;
+	dev->max_signal = 127;
 
-	priv->tx_stats.data[0].limit = 5;
+	priv->tx_stats[0].limit = 5;
 	dev->queues = 1;
 
 	dev->extra_tx_headroom = sizeof(struct p54_control_hdr) + 4 +

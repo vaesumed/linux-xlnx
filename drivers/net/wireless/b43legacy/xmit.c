@@ -232,7 +232,7 @@ static int generate_txhdr_fw3(struct b43legacy_wldev *dev,
 
 	plcp_fragment_len = fragment_len + FCS_LEN;
 	if (use_encryption) {
-		u8 key_idx = (u16)(txctl->key_idx);
+		u8 key_idx = txctl->hw_key->hw_key_idx;
 		struct b43legacy_key *key;
 		int wlhdr_len;
 		size_t iv_len;
@@ -532,12 +532,12 @@ void b43legacy_rx(struct b43legacy_wldev *dev,
 		}
 	}
 
-	status.ssi = b43legacy_rssi_postprocess(dev, jssi,
+	status.signal = b43legacy_rssi_postprocess(dev, jssi,
 				      (phystat0 & B43legacy_RX_PHYST0_OFDM),
 				      (phystat0 & B43legacy_RX_PHYST0_GAINCTL),
 				      (phystat3 & B43legacy_RX_PHYST3_TRSTATE));
 	status.noise = dev->stats.link_noise;
-	status.signal = (jssi * 100) / B43legacy_RX_MAX_SSI;
+	status.qual = (jssi * 100) / B43legacy_RX_MAX_SSI;
 	/* change to support A PHY */
 	if (phystat0 & B43legacy_RX_PHYST0_OFDM)
 		status.rate_idx = b43legacy_plcp_get_bitrate_idx_ofdm(plcp, false);

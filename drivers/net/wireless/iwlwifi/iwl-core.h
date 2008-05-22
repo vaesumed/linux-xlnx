@@ -87,19 +87,32 @@ struct iwl_hcmd_ops {
 };
 struct iwl_hcmd_utils_ops {
 	int (*enqueue_hcmd)(struct iwl_priv *priv, struct iwl_host_cmd *cmd);
+	u16 (*build_addsta_hcmd)(const struct iwl_addsta_cmd *cmd, u8 *data);
+#ifdef CONFIG_IWLWIFI_RUN_TIME_CALIB
+	void (*gain_computation)(struct iwl_priv *priv,
+			u32 *average_noise,
+			u16 min_average_noise_antennat_i,
+			u32 min_average_noise);
+	void (*chain_noise_reset)(struct iwl_priv *priv);
+#endif
 };
 
 struct iwl_lib_ops {
-	/* iwlwifi driver (priv) init */
-	int (*init_drv)(struct iwl_priv *priv);
 	/* set hw dependant perameters */
 	int (*set_hw_params)(struct iwl_priv *priv);
-
+	/* ucode shared memory */
+	int (*alloc_shared_mem)(struct iwl_priv *priv);
+	void (*free_shared_mem)(struct iwl_priv *priv);
+	int (*shared_mem_rx_idx)(struct iwl_priv *priv);
 	void (*txq_update_byte_cnt_tbl)(struct iwl_priv *priv,
-					struct iwl4965_tx_queue *txq,
+					struct iwl_tx_queue *txq,
 					u16 byte_cnt);
-	/* nic init */
-	int (*hw_nic_init)(struct iwl_priv *priv);
+	/* setup Rx handler */
+	void (*rx_handler_setup)(struct iwl_priv *priv);
+	/* nic Tx fifo handling */
+	int (*disable_tx_fifo)(struct iwl_priv *priv);
+	/* alive notification after init uCode load */
+	void (*init_alive_start)(struct iwl_priv *priv);
 	/* alive notification */
 	int (*alive_notify)(struct iwl_priv *priv);
 	/* check validity of rtc data address */
@@ -108,6 +121,15 @@ struct iwl_lib_ops {
 	int (*load_ucode)(struct iwl_priv *priv);
 	/* rfkill */
 	void (*radio_kill_sw)(struct iwl_priv *priv, int disable_radio);
+	 /* power management */
+	struct {
+		int (*init)(struct iwl_priv *priv);
+		void (*config)(struct iwl_priv *priv);
+		int (*set_pwr_src)(struct iwl_priv *priv, enum iwl_pwr_src src);
+	} apm_ops;
+	/* power */
+	int (*set_power)(struct iwl_priv *priv, void *cmd);
+	void (*update_chain_flags)(struct iwl_priv *priv);
 	/* eeprom operations (as defined in iwl-eeprom.h) */
 	struct iwl_eeprom_ops eeprom_ops;
 };
@@ -127,12 +149,14 @@ struct iwl_mod_params {
 	int enable_qos;		/* def: 1 = use quality of service */
 	int amsdu_size_8K;	/* def: 1 = enable 8K amsdu size */
 	int antenna;  		/* def: 0 = both antennas (use diversity) */
+	int restart_fw;		/* def: 1 = restart firmware */
 };
 
 struct iwl_cfg {
 	const char *name;
 	const char *fw_name;
 	unsigned int sku;
+	int eeprom_size;
 	const struct iwl_ops *ops;
 	const struct iwl_mod_params *mod_params;
 };
@@ -143,14 +167,49 @@ struct iwl_cfg {
 
 struct ieee80211_hw *iwl_alloc_all(struct iwl_cfg *cfg,
 		struct ieee80211_ops *hw_ops);
+void iwl_hw_detect(struct iwl_priv *priv);
 
 void iwlcore_clear_stations_table(struct iwl_priv *priv);
-void iwlcore_reset_qos(struct iwl_priv *priv);
-int iwlcore_set_rxon_channel(struct iwl_priv *priv,
+void iwl_reset_qos(struct iwl_priv *priv);
+void iwl_set_rxon_chain(struct iwl_priv *priv);
+int iwl_set_rxon_channel(struct iwl_priv *priv,
 				enum ieee80211_band band,
 				u16 channel);
-
+void iwlcore_free_geos(struct iwl_priv *priv);
 int iwl_setup(struct iwl_priv *priv);
+void iwl_set_rxon_ht(struct iwl_priv *priv, struct iwl_ht_info *ht_info);
+u8 iwl_is_fat_tx_allowed(struct iwl_priv *priv,
+			 struct ieee80211_ht_info *sta_ht_inf);
+int iwl_hw_nic_init(struct iwl_priv *priv);
+
+/* "keep warm" functions */
+int iwl_kw_init(struct iwl_priv *priv);
+int iwl_kw_alloc(struct iwl_priv *priv);
+void iwl_kw_free(struct iwl_priv *priv);
+
+/*****************************************************
+* RX
+******************************************************/
+void iwl_rx_queue_free(struct iwl_priv *priv, struct iwl_rx_queue *rxq);
+int iwl_rx_queue_alloc(struct iwl_priv *priv);
+void iwl_rx_handle(struct iwl_priv *priv);
+int iwl_rx_queue_update_write_ptr(struct iwl_priv *priv,
+				  struct iwl_rx_queue *q);
+void iwl_rx_queue_reset(struct iwl_priv *priv, struct iwl_rx_queue *rxq);
+void iwl_rx_replenish(struct iwl_priv *priv);
+int iwl_rx_init(struct iwl_priv *priv, struct iwl_rx_queue *rxq);
+/* FIXME: remove when TX is moved to iwl core */
+int iwl_rx_queue_restock(struct iwl_priv *priv);
+int iwl_rx_queue_space(const struct iwl_rx_queue *q);
+void iwl_rx_allocate(struct iwl_priv *priv);
+
+/*****************************************************
+* TX
+******************************************************/
+int iwl_txq_ctx_reset(struct iwl_priv *priv);
+/* FIXME: remove when free Tx is fully merged into iwlcore */
+int iwl_hw_txq_free_tfd(struct iwl_priv *priv, struct iwl_tx_queue *txq);
+void iwl_hw_txq_ctx_free(struct iwl_priv *priv);
 
 /*****************************************************
  *   S e n d i n g     H o s t     C o m m a n d s   *
@@ -235,6 +294,7 @@ enum iwlcore_card_notify {
 int iwlcore_low_level_notify(struct iwl_priv *priv,
 			     enum iwlcore_card_notify notify);
 extern int iwl_send_statistics_request(struct iwl_priv *priv, u8 flags);
+extern int iwl_verify_ucode(struct iwl_priv *priv);
 int iwl_send_lq_cmd(struct iwl_priv *priv,
 		    struct iwl_link_quality_cmd *lq, u8 flags);
 
@@ -242,5 +302,6 @@ static inline int iwl_send_rxon_assoc(struct iwl_priv *priv)
 {
 	return priv->cfg->ops->hcmd->rxon_assoc(priv);
 }
+
 
 #endif /* __iwl_core_h__ */
