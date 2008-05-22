@@ -1576,7 +1576,6 @@ struct super_operations ubifs_super_operations = {
 
 /**
  * open_ubi - parse UBI device name string and open the UBI device.
- * @c: UBIFS file-system description object
  * @name: UBI volume name
  * @mode: UBI volume open mode
  *
@@ -1588,76 +1587,51 @@ struct super_operations ubifs_super_operations = {
  *
  * Alternative '!' separator may be used instead of ':' (because some shells
  * like busybox may interpret ':' as an NFS host name separator). This function
- * returns zero in case of success and a negative error code in case of
- * failure.
+ * returns ubi volume object in case of success and a negative error code in
+ * case of failure.
  */
-static int open_ubi(struct ubifs_info *c, const char *name, int mode)
+static struct ubi_volume_desc *open_ubi(const char *name, int mode)
 {
 	int dev, vol;
 	char *endptr;
 
 	if (name[0] != 'u' || name[1] != 'b' || name[2] != 'i')
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 
-	if ((name[3] == ':' || name[3] == '!') && name[4] != '\0') {
-		/* ubi:NAME method */
-		c->ubi = ubi_open_volume_nm(0, name + 4, mode);
-		if (IS_ERR(c->ubi))
-			return PTR_ERR(c->ubi);
-	} else if (isdigit(name[3])) {
-		dev = simple_strtoul(name + 3, &endptr, 0);
-		if (*endptr == '\0') {
-			/* ubiY method */
-			c->ubi = ubi_open_volume(0, dev, mode);
-			if (IS_ERR(c->ubi))
-				return PTR_ERR(c->ubi);
-		} else if (*endptr == '_' && isdigit(endptr[1])) {
-			/* ubiX_Y method */
-			vol = simple_strtoul(endptr + 1, &endptr, 0);
-			if (*endptr != '\0')
-				return -EINVAL;
-			c->ubi = ubi_open_volume(dev, vol, mode);
-			if (IS_ERR(c->ubi))
-				return PTR_ERR(c->ubi);
-		} else if ((*endptr == ':' || *endptr == '!') &&
-			   endptr[1] != '\0') {
-			/* ubiX:NAME method */
-			c->ubi = ubi_open_volume_nm(dev, ++endptr, mode);
-			if (IS_ERR(c->ubi))
-				return PTR_ERR(c->ubi);
-		}
+	/* ubi:NAME method */
+	if ((name[3] == ':' || name[3] == '!') && name[4] != '\0')
+		return ubi_open_volume_nm(0, name + 4, mode);
+
+	if (!isdigit(name[3]))
+		return ERR_PTR(-EINVAL);
+
+	dev = simple_strtoul(name + 3, &endptr, 0);
+
+	/* ubiY method */
+	if (*endptr == '\0')
+		return ubi_open_volume(0, dev, mode);
+
+	/* ubiX_Y method */
+	if (*endptr == '_' && isdigit(endptr[1])) {
+		vol = simple_strtoul(endptr + 1, &endptr, 0);
+		if (*endptr != '\0')
+			return ERR_PTR(-EINVAL);
+		return ubi_open_volume(dev, vol, mode);
 	}
 
-	if (!c->ubi)
-		return -EINVAL;
+	/* ubiX:NAME method */
+	if ((*endptr == ':' || *endptr == '!') && endptr[1] != '\0')
+		return ubi_open_volume_nm(dev, ++endptr, mode);
 
-	ubi_get_volume_info(c->ubi, &c->vi);
-	ubi_get_device_info(c->vi.ubi_num, &c->di);
-	return 0;
+	return ERR_PTR(-EINVAL);
 }
 
-static int sb_test(struct super_block *sb, void *data)
+static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 {
-	dev_t *dev = data;
-
-	return sb->s_dev == *dev;
-}
-
-static int sb_set(struct super_block *sb, void *data)
-{
-	return 0;
-}
-
-static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
-			const char *name, void *data, struct vfsmount *mnt)
-{
-	int err;
-	struct super_block *sb;
+	struct ubi_volume_desc *ubi = sb->s_fs_info;
 	struct ubifs_info *c;
 	struct inode *root;
-	struct ubi_volume_desc *ubi;
-
-	dbg_gen("name %s, flags %#x", name, flags);
+	int err;
 
 	c = kzalloc(sizeof(struct ubifs_info), GFP_KERNEL);
 	if (!c)
@@ -1696,50 +1670,22 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	get_random_bytes(&c->vfs_gen, sizeof(int));
 	c->lhead_lnum = c->ltail_lnum = UBIFS_LOG_LNUM;
 
-	err = ubifs_parse_options(c, data, 0);
-	if (err)
-		goto out_free;
-
-	/*
-	 * Get UBI device number and volume ID. Mount it read-only so far
-	 * because this might be a new mount point, and UBI allows only one
-	 * read-write user at a time.
-	 */
-	err = open_ubi(c, name, UBI_READONLY);
-	if (err) {
-		ubifs_err("cannot open \"%s\", error %d", name, err);
-		goto out_free;
-	}
-
-	dbg_gen("opened ubi%d_%d", c->vi.ubi_num, c->vi.vol_id);
-
-	sb = sget(fs_type, &sb_test, &sb_set, &c->vi.cdev);
-	if (IS_ERR(sb)) {
-		err = PTR_ERR(sb);
-		goto out_close;
-	}
-
-	if (sb->s_root) {
-		/* A new mount point for already mounted UBIFS */
-		dbg_gen("this ubi volume is already mounted");
-		if ((flags ^ sb->s_flags) & MS_RDONLY) {
-			err = -EBUSY;
-			goto out_deact;
-		}
-		err = simple_set_mnt(mnt, sb);
-		goto out_close;
-	}
+	ubi_get_volume_info(ubi, &c->vi);
+	ubi_get_device_info(c->vi.ubi_num, &c->di);
 
 	/* Re-open the UBI device in read-write mode */
-	ubi = ubi_open_volume(c->vi.ubi_num, c->vi.vol_id, UBI_READWRITE);
-	if (IS_ERR(ubi)) {
-		err = PTR_ERR(ubi);
-		goto out_deact;
+	c->ubi = ubi_open_volume(c->vi.ubi_num, c->vi.vol_id, UBI_READWRITE);
+	if (IS_ERR(c->ubi)) {
+		err = PTR_ERR(c->ubi);
+		goto out_free;
 	}
-	ubi_close_volume(c->ubi);
-	c->ubi = ubi;
+
+	err = ubifs_parse_options(c, data, 0);
+	if (err)
+		goto out_close;
 
 	c->vfs_sb = sb;
+
 	sb->s_fs_info = c;
 	sb->s_magic = UBIFS_SUPER_MAGIC;
 	sb->s_blocksize = UBIFS_BLOCK_SIZE;
@@ -1749,7 +1695,6 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 	if (c->max_inode_sz > MAX_LFS_FILESIZE)
 		sb->s_maxbytes = c->max_inode_sz = MAX_LFS_FILESIZE;
 	sb->s_op = &ubifs_super_operations;
-	sb->s_flags = flags;
 
 	mutex_lock(&c->umount_mutex);
 	err = mount_ubifs(c);
@@ -1771,9 +1716,7 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 
 	mutex_unlock(&c->umount_mutex);
 
-	/* We do not support atime */
-	sb->s_flags |= MS_ACTIVE | MS_NOATIME;
-	return simple_set_mnt(mnt, sb);
+	return 0;
 
 out_iput:
 	iput(root);
@@ -1784,13 +1727,90 @@ out_umount:
 	ubifs_umount(c);
 out_unlock:
 	mutex_unlock(&c->umount_mutex);
-out_deact:
-	up_write(&sb->s_umount);
-	deactivate_super(sb);
 out_close:
 	ubi_close_volume(c->ubi);
 out_free:
 	kfree(c);
+	return err;
+}
+
+static int sb_test(struct super_block *sb, void *data)
+{
+	dev_t *dev = data;
+
+	return sb->s_dev == *dev;
+}
+
+static int sb_set(struct super_block *sb, void *data)
+{
+	dev_t *dev = data;
+
+	sb->s_dev = *dev;
+	return 0;
+}
+
+static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
+			const char *name, void *data, struct vfsmount *mnt)
+{
+	struct ubi_volume_desc *ubi;
+	struct ubi_volume_info vi;
+	struct super_block *sb;
+	int err;
+
+	dbg_gen("name %s, flags %#x", name, flags);
+
+	/*
+	 * Get UBI device number and volume ID. Mount it read-only so far
+	 * because this might be a new mount point, and UBI allows only one
+	 * read-write user at a time.
+	 */
+	ubi = open_ubi(name, UBI_READONLY);
+	if (IS_ERR(ubi)) {
+		ubifs_err("cannot open \"%s\", error %d",
+			  name, (int)PTR_ERR(ubi));
+		return PTR_ERR(ubi);
+	}
+	ubi_get_volume_info(ubi, &vi);
+
+	dbg_gen("opened ubi%d_%d", vi.ubi_num, vi.vol_id);
+
+	sb = sget(fs_type, &sb_test, &sb_set, &vi.cdev);
+	if (IS_ERR(sb)) {
+		err = PTR_ERR(sb);
+		goto out_close;
+	}
+
+	if (sb->s_root) {
+		/* A new mount point for already mounted UBIFS */
+		dbg_gen("this ubi volume is already mounted");
+		if ((flags ^ sb->s_flags) & MS_RDONLY) {
+			err = -EBUSY;
+			goto out_deact;
+		}
+	} else {
+		sb->s_flags = flags;
+		/*
+		 * Pass 'ubi' to 'fill_super()' in sb->s_fs_info where it is
+		 * replaced by 'c'.
+		 */
+		sb->s_fs_info = ubi;
+		err = ubifs_fill_super(sb, data, flags & MS_SILENT ? 1 : 0);
+		if (err)
+			goto out_deact;
+		/* We do not support atime */
+		sb->s_flags |= MS_ACTIVE | MS_NOATIME;
+	}
+
+	/* 'fill_super()' opens ubi again so we must close it here */
+	ubi_close_volume(ubi);
+
+	return simple_set_mnt(mnt, sb);
+
+out_deact:
+	up_write(&sb->s_umount);
+	deactivate_super(sb);
+out_close:
+	ubi_close_volume(ubi);
 	return err;
 }
 
