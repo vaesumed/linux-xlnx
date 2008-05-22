@@ -1034,4 +1034,34 @@ void dlm_destroy_debugfs_root(void)
 	if (dlm_debugfs_root)
 		debugfs_remove(dlm_debugfs_root);
 }
+
+#else
+
+int dlm_debug_init(struct dlm_ctxt *dlm)
+{
+	return 0;
+}
+
+void dlm_debug_shutdown(struct dlm_ctxt *dlm)
+{
+}
+
+int dlm_create_debugfs_subroot(struct dlm_ctxt *dlm)
+{
+	return 0;
+}
+
+void dlm_destroy_debugfs_subroot(struct dlm_ctxt *dlm)
+{
+}
+
+int dlm_create_debugfs_root(void)
+{
+	return 0;
+}
+
+void dlm_destroy_debugfs_root(void)
+{
+}
+
 #endif	/* CONFIG_DEBUG_FS */
