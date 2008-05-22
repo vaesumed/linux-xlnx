@@ -530,27 +530,20 @@ static int lnc_lookup(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 int ubifs_validate_entry(struct ubifs_info *c,
 			 const struct ubifs_dent_node *dent)
 {
-	int key_type, nlen = le16_to_cpu(dent->nlen);
+	int key_type = key_type_flash(c, dent->key);
+	int nlen = le16_to_cpu(dent->nlen);
 
 	if (le32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
 	    dent->type >= UBIFS_ITYPES_CNT ||
 	    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
 	    strnlen(dent->name, nlen) != nlen ||
 	    le64_to_cpu(dent->inum) > MAX_INUM) {
-		const char *node_type;
-
-		if (key_type_flash(c, dent->key) == UBIFS_DENT_KEY)
-			node_type = "directory entry";
-		else
-			node_type = "extended attribute entry";
-
-		ubifs_err("bad %s node", node_type);
+		ubifs_err("bad %s node", key_type == UBIFS_DENT_KEY ?
+			  "directory entry" : "extended attribute entry");
 		return -EINVAL;
 	}
 
-	key_type = key_type_flash(c, dent->key);
-	if (key_type_flash(c, dent->key) != UBIFS_DENT_KEY &&
-	    key_type_flash(c, dent->key) != UBIFS_XENT_KEY) {
+	if (key_type != UBIFS_DENT_KEY && key_type != UBIFS_XENT_KEY) {
 		ubifs_err("bad key type %d", key_type);
 		return -EINVAL;
 	}
@@ -570,7 +563,7 @@ int ubifs_validate_entry(struct ubifs_info *c,
 static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		   const void *node)
 {
-	int err, type;
+	int err;
 	void *lnc_node;
 	const struct ubifs_dent_node *dent = node;
 
@@ -581,8 +574,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	 * Add only directory entries and extended attribute entries, but
 	 * nothing else.
 	 */
-	type = key_type(c, &zbr->key);
-	if (type != UBIFS_DENT_KEY && type != UBIFS_XENT_KEY)
+	if (!is_hash_key(c, &zbr->key))
 		return 0;
 
 	err = ubifs_validate_entry(c, dent);
@@ -2712,7 +2704,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	union ubifs_key *dkey;
 
 	dbg_tnc("%s %s", nm->name ? (char *)nm->name : "(lowest)", DBGKEY(key));
-	ubifs_assert(type == UBIFS_DENT_KEY || type == UBIFS_XENT_KEY);
+	ubifs_assert(is_hash_key(c, key));
 
 	mutex_lock(&c->tnc_mutex);
 	err = lookup_level0(c, key, &znode, &n);
