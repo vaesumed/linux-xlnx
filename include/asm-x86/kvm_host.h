@@ -242,6 +242,7 @@ struct kvm_vcpu_arch {
 	gfn_t last_pt_write_gfn;
 	int   last_pt_write_count;
 	u64  *last_pte_updated;
+	gfn_t last_pte_gfn;
 
 	struct {
 		gfn_t gfn;	/* presumed gfn during guest pte update */
@@ -285,6 +286,8 @@ struct kvm_vcpu_arch {
 	struct kvm_vcpu_time_info hv_clock;
 	unsigned int time_offset;
 	struct page *time_page;
+
+	bool nmi_pending;
 };
 
 struct kvm_mem_alias {
@@ -342,6 +345,7 @@ struct kvm_vcpu_stat {
 	u32 mmio_exits;
 	u32 signal_exits;
 	u32 irq_window_exits;
+	u32 nmi_window_exits;
 	u32 halt_exits;
 	u32 halt_wakeup;
 	u32 request_irq_exits;
@@ -377,7 +381,6 @@ struct kvm_x86_ops {
 	void (*prepare_guest_switch)(struct kvm_vcpu *vcpu);
 	void (*vcpu_load)(struct kvm_vcpu *vcpu, int cpu);
 	void (*vcpu_put)(struct kvm_vcpu *vcpu);
-	void (*vcpu_decache)(struct kvm_vcpu *vcpu);
 
 	int (*set_guest_debug)(struct kvm_vcpu *vcpu,
 			       struct kvm_debug_guest *dbg);
@@ -512,6 +515,8 @@ void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
 void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, u32 error_code);
 void kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long cr2,
 			   u32 error_code);
+
+void kvm_inject_nmi(struct kvm_vcpu *vcpu);
 
 void fx_init(struct kvm_vcpu *vcpu);
 
@@ -688,5 +693,29 @@ enum {
 #define KVMTRACE_0D(evt, vcpu, name) \
 	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
 						vcpu, 0, 0, 0, 0, 0, 0)
+
+#ifdef CONFIG_64BIT
+#define KVM_EX_ENTRY ".quad"
+#else
+#define KVM_EX_ENTRY ".long"
+#endif
+
+/*
+ * Hardware virtualization extension instructions may fault if a
+ * reboot turns off virtualization while processes are running.
+ * Trap the fault and ignore the instruction if that happens.
+ */
+asmlinkage void kvm_handle_fault_on_reboot(void);
+
+#define __kvm_handle_fault_on_reboot(insn) \
+	"666: " insn "\n\t" \
+	".pushsection .text.fixup, \"ax\" \n" \
+	"667: \n\t" \
+	"push $666b \n\t" \
+	"jmp kvm_handle_fault_on_reboot \n\t" \
+	".popsection \n\t" \
+	".pushsection __ex_table, \"a\" \n\t" \
+	KVM_EX_ENTRY " 666b, 667b \n\t" \
+	".popsection"
 
 #endif
