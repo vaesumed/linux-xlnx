@@ -551,7 +551,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	void *lnc_node;
 	const struct ubifs_dent_node *dent = node;
 
-	ubifs_assert(zbr->leaf == NULL);
+	ubifs_assert(!zbr->leaf);
 	ubifs_assert(zbr->len != 0);
 	ubifs_assert(is_hash_key(c, &zbr->key));
 
@@ -585,7 +585,7 @@ static int lnc_add_directly(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 {
 	int err;
 
-	ubifs_assert(zbr->leaf == NULL);
+	ubifs_assert(!zbr->leaf);
 	ubifs_assert(zbr->len != 0);
 
 	err = ubifs_validate_entry(c, node);
@@ -605,7 +605,7 @@ static int lnc_add_directly(struct ubifs_info *c, struct ubifs_zbranch *zbr,
  */
 static void lnc_free(struct ubifs_zbranch *zbr)
 {
-	if (zbr->leaf == NULL)
+	if (!zbr->leaf)
 		return;
 	kfree(zbr->leaf);
 	zbr->leaf = NULL;
@@ -1355,8 +1355,8 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 	struct ubifs_znode *zp;
 	int *path = c->bottom_up_buf, p = 0;
 
-	ubifs_assert(c->zroot.znode != NULL);
-	ubifs_assert(znode != NULL);
+	ubifs_assert(c->zroot.znode);
+	ubifs_assert(znode);
 	if (c->zroot.znode->level > BOTTOM_UP_HEIGHT) {
 		kfree(c->bottom_up_buf);
 		c->bottom_up_buf = kmalloc(c->zroot.znode->level * sizeof(int),
@@ -2410,7 +2410,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 	 * If this is the root and it has only 1 child then
 	 * collapse the tree.
 	 */
-	if (znode->parent == NULL) {
+	if (!znode->parent) {
 		while (znode->child_cnt == 1 && znode->level != 0) {
 			zp = znode;
 			zbr = &znode->zbranch[0];
@@ -2818,7 +2818,7 @@ static void tnc_destroy_cnext(struct ubifs_info *c)
 		cnext = cnext->cnext;
 		if (test_bit(OBSOLETE_ZNODE, &znode->flags))
 			kfree(znode);
-	} while (cnext != NULL && cnext != c->cnext);
+	} while (cnext && cnext != c->cnext);
 }
 
 /**
@@ -3009,7 +3009,7 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 			n -= 1;
 		else {
 			znode = left_znode(c, znode);
-			if (znode == NULL)
+			if (!znode)
 				break;
 			if (IS_ERR(znode))
 				return znode;
@@ -3031,7 +3031,7 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 		/* Move one branch to the right */
 		if (++n >= znode->child_cnt) {
 			znode = right_znode(c, znode);
-			if (znode == NULL)
+			if (!znode)
 				break;
 			if (IS_ERR(znode))
 				return znode;
@@ -3071,7 +3071,7 @@ int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
 	struct ubifs_znode *znode;
 
 	znode = lookup_znode(c, key, level, lnum, offs);
-	if (znode == NULL)
+	if (!znode)
 		return 0;
 	if (IS_ERR(znode))
 		return PTR_ERR(znode);

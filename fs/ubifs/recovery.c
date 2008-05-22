@@ -1386,8 +1386,7 @@ int ubifs_recover_size(struct ubifs_info *c)
 			}
 		}
 		if (e->exists && e->i_size < e->d_size) {
-			if (e->inode == NULL &&
-			    (c->vfs_sb->s_flags & MS_RDONLY)) {
+			if (!e->inode && (c->vfs_sb->s_flags & MS_RDONLY)) {
 				/* Fix the inode size and pin it in memory */
 				struct inode *inode;
 

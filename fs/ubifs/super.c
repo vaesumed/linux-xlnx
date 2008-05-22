@@ -878,7 +878,7 @@ static int ubifs_parse_options(struct ubifs_info *c, char *options,
 	if (!options)
 		return 0;
 
-	while ((p = strsep(&options, ",")) != NULL) {
+	while ((p = strsep(&options, ","))) {
 		int token;
 
 		if (!*p)
@@ -1754,7 +1754,7 @@ static void ubifs_kill_sb(struct super_block *sb)
 	 * We do 'commit_on_unmount()' here instead of 'ubifs_put_super()'
 	 * in order to be outside BKL.
 	 */
-	if (sb->s_root != NULL && !(sb->s_flags & MS_RDONLY))
+	if (sb->s_root && !(sb->s_flags & MS_RDONLY))
 		commit_on_unmount(c);
 	/* The un-mount routine is actually done in put_super() */
 	generic_shutdown_super(sb);

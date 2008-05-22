@@ -959,7 +959,7 @@ int dbg_check_cats(struct ubifs_info *c)
 
 		for (i = 0; i < heap->cnt; i++) {
 			lprops = heap->arr[i];
-			if (lprops == NULL) {
+			if (!lprops) {
 				ubifs_err("null ptr in LPT heap cat %d", cat);
 				return -EINVAL;
 			}
