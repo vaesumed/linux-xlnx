@@ -249,7 +249,7 @@ static void destroy_replay_tree(struct ubifs_info *c)
 			else
 				this->rb_right = NULL;
 		}
-		if (key_type(c, &r->key) == UBIFS_DENT_KEY)
+		if (is_hash_key(c, &r->key))
 			kfree(r->nm.name);
 		kfree(r);
 	}
