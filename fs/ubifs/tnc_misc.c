@@ -25,7 +25,7 @@
  * different files. This file does not form any logically separate TNC
  * sub-system. The file was created because there is a lot of TNC code and
  * putting it all in one file would make that file too big and unreadable.
- * Nonetheless, this contains m ore or less "generic" code which may be used for
+ * Nonetheless, this contains more or less "generic" code which may be used for
  * more then one specific task.
  */
 
