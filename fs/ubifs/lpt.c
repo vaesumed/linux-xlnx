@@ -607,7 +607,7 @@ int ubifs_create_dflt_lpt(struct ubifs_info *c, int *main_lebs, int lpt_first,
 		goto out;
 	}
 
-	ubifs_assert(c->ltab == NULL);
+	ubifs_assert(!c->ltab);
 	c->ltab = ltab; /* Needed by set_ltab */
 
 	/* Initialize LPT's own lprops */
