@@ -570,15 +570,19 @@ int ubifs_validate_entry(struct ubifs_info *c,
 static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		   const void *node)
 {
-	int err;
+	int err, type;
 	void *lnc_node;
 	const struct ubifs_dent_node *dent = node;
 
 	ubifs_assert(zbr->leaf == NULL);
 	ubifs_assert(zbr->len != 0);
 
-	/* Add all dents, but nothing else */
-	if (key_type(c, &zbr->key) != UBIFS_DENT_KEY)
+	/*
+	 * Add only directory entries and extended attribute entries, but
+	 * nothing else.
+	 */
+	type = key_type(c, &zbr->key);
+	if (type != UBIFS_DENT_KEY && type != UBIFS_XENT_KEY)
 		return 0;
 
 	err = ubifs_validate_entry(c, dent);
