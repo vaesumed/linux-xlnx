@@ -949,19 +949,27 @@ static int dbg_check_znode(struct ubifs_info *c, struct ubifs_zbranch *zbr)
 			goto out;
 		}
 
-	if (ubifs_zn_dirty(znode))
-		/* If znode is dirty, its parent has to be dirty as well */
-		if (zp && !ubifs_zn_dirty(zp))
+	if (ubifs_zn_dirty(znode)) {
+		/*
+		 * If znode is dirty, its parent has to be dirty as well. The
+		 * order of the operation is important, so we have to have
+		 * memory barriers.
+		 */
+		smp_mb();
+		if (zp && !ubifs_zn_dirty(zp)) {
 			/*
 			 * The dirty flag is atomic and is cleared outside the
 			 * TNC mutex, so znode's dirty flag may now have
 			 * been cleared. The child is always cleared before the
 			 * parent, so we just need to check again.
 			 */
+			smp_mb();
 			if (ubifs_zn_dirty(znode)) {
 				err = 5;
 				goto out;
 			}
+		}
+	}
 
 	if (zp) {
 		const union ubifs_key *min, *max;
