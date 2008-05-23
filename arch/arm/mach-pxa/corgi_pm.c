@@ -26,6 +26,7 @@
 #include <asm/arch/sharpsl.h>
 #include <asm/arch/corgi.h>
 #include <asm/arch/pxa-regs.h>
+#include <asm/arch/pxa2xx-regs.h>
 #include <asm/arch/pxa2xx-gpio.h>
 #include "sharpsl.h"
 
@@ -204,7 +205,9 @@ static struct sharpsl_charger_machinfo corgi_pm_machinfo = {
 	.read_devdata    = corgipm_read_devdata,
 	.charger_wakeup  = corgi_charger_wakeup,
 	.should_wakeup   = corgi_should_wakeup,
+#ifdef CONFIG_BACKLIGHT_CORGI
 	.backlight_limit = corgibl_limit_intensity,
+#endif
 	.charge_on_volt	  = SHARPSL_CHARGE_ON_VOLT,
 	.charge_on_temp	  = SHARPSL_CHARGE_ON_TEMP,
 	.charge_acin_high = SHARPSL_CHARGE_ON_ACIN_HIGH,
