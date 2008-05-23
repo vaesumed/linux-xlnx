@@ -65,6 +65,8 @@ struct dentry *kvm_debugfs_dir;
 static long kvm_vcpu_ioctl(struct file *file, unsigned int ioctl,
 			   unsigned long arg);
 
+bool kvm_rebooting;
+
 static inline int valid_vcpu(int n)
 {
 	return likely(n >= 0 && n < KVM_MAX_VCPUS);
@@ -532,6 +534,7 @@ pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 	struct page *page[1];
 	unsigned long addr;
 	int npages;
+	pfn_t pfn;
 
 	might_sleep();
 
@@ -544,19 +547,38 @@ pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 	npages = get_user_pages(current, current->mm, addr, 1, 1, 1, page,
 				NULL);
 
-	if (npages != 1) {
-		get_page(bad_page);
-		return page_to_pfn(bad_page);
-	}
+	if (unlikely(npages != 1)) {
+		struct vm_area_struct *vma;
 
-	return page_to_pfn(page[0]);
+		vma = find_vma(current->mm, addr);
+		if (vma == NULL || addr < vma->vm_start ||
+		    !(vma->vm_flags & VM_PFNMAP)) {
+			get_page(bad_page);
+			return page_to_pfn(bad_page);
+		}
+
+		pfn = ((addr - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
+		BUG_ON(pfn_valid(pfn));
+	} else
+		pfn = page_to_pfn(page[0]);
+
+	return pfn;
 }
 
 EXPORT_SYMBOL_GPL(gfn_to_pfn);
 
 struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 {
-	return pfn_to_page(gfn_to_pfn(kvm, gfn));
+	pfn_t pfn;
+
+	pfn = gfn_to_pfn(kvm, gfn);
+	if (pfn_valid(pfn))
+		return pfn_to_page(pfn);
+
+	WARN_ON(!pfn_valid(pfn));
+
+	get_page(bad_page);
+	return bad_page;
 }
 
 EXPORT_SYMBOL_GPL(gfn_to_page);
@@ -569,7 +591,8 @@ EXPORT_SYMBOL_GPL(kvm_release_page_clean);
 
 void kvm_release_pfn_clean(pfn_t pfn)
 {
-	put_page(pfn_to_page(pfn));
+	if (pfn_valid(pfn))
+		put_page(pfn_to_page(pfn));
 }
 EXPORT_SYMBOL_GPL(kvm_release_pfn_clean);
 
@@ -594,21 +617,25 @@ EXPORT_SYMBOL_GPL(kvm_set_page_dirty);
 
 void kvm_set_pfn_dirty(pfn_t pfn)
 {
-	struct page *page = pfn_to_page(pfn);
-	if (!PageReserved(page))
-		SetPageDirty(page);
+	if (pfn_valid(pfn)) {
+		struct page *page = pfn_to_page(pfn);
+		if (!PageReserved(page))
+			SetPageDirty(page);
+	}
 }
 EXPORT_SYMBOL_GPL(kvm_set_pfn_dirty);
 
 void kvm_set_pfn_accessed(pfn_t pfn)
 {
-	mark_page_accessed(pfn_to_page(pfn));
+	if (pfn_valid(pfn))
+		mark_page_accessed(pfn_to_page(pfn));
 }
 EXPORT_SYMBOL_GPL(kvm_set_pfn_accessed);
 
 void kvm_get_pfn(pfn_t pfn)
 {
-	get_page(pfn_to_page(pfn));
+	if (pfn_valid(pfn))
+		get_page(pfn_to_page(pfn));
 }
 EXPORT_SYMBOL_GPL(kvm_get_pfn);
 
@@ -1179,7 +1206,6 @@ static int kvm_dev_ioctl_create_vm(void)
 static long kvm_dev_ioctl(struct file *filp,
 			  unsigned int ioctl, unsigned long arg)
 {
-	void __user *argp = (void __user *)arg;
 	long r = -EINVAL;
 
 	switch (ioctl) {
@@ -1196,7 +1222,7 @@ static long kvm_dev_ioctl(struct file *filp,
 		r = kvm_dev_ioctl_create_vm();
 		break;
 	case KVM_CHECK_EXTENSION:
-		r = kvm_dev_ioctl_check_extension((long)argp);
+		r = kvm_dev_ioctl_check_extension(arg);
 		break;
 	case KVM_GET_VCPU_MMAP_SIZE:
 		r = -EINVAL;
@@ -1247,7 +1273,6 @@ static void hardware_disable(void *junk)
 	if (!cpu_isset(cpu, cpus_hardware_enabled))
 		return;
 	cpu_clear(cpu, cpus_hardware_enabled);
-	decache_vcpus_on_cpu(cpu);
 	kvm_arch_hardware_disable(NULL);
 }
 
@@ -1277,6 +1302,18 @@ static int kvm_cpu_hotplug(struct notifier_block *notifier, unsigned long val,
 	return NOTIFY_OK;
 }
 
+
+asmlinkage void kvm_handle_fault_on_reboot(void)
+{
+	if (kvm_rebooting)
+		/* spin while reset goes on */
+		while (true)
+			;
+	/* Fault while not rebooting.  We want the trace. */
+	BUG();
+}
+EXPORT_SYMBOL_GPL(kvm_handle_fault_on_reboot);
+
 static int kvm_reboot(struct notifier_block *notifier, unsigned long val,
 		      void *v)
 {
@@ -1286,6 +1323,7 @@ static int kvm_reboot(struct notifier_block *notifier, unsigned long val,
 		 * in vmx root mode.
 		 */
 		printk(KERN_INFO "kvm: exiting hardware virtualization\n");
+		kvm_rebooting = true;
 		on_each_cpu(hardware_disable, NULL, 0, 1);
 	}
 	return NOTIFY_OK;
