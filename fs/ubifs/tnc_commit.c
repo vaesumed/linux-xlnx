@@ -911,6 +911,14 @@ static int write_index(struct ubifs_info *c)
 		ubifs_assert(ubifs_zn_dirty(znode));
 		ubifs_assert(test_bit(COW_ZNODE, &znode->flags));
 
+		/*
+		 * It is important that other threads should see %DIRTY_ZNODE
+		 * flag cleared before %COW_ZNODE. Specifically, it matters in
+		 * the 'dirty_cow_znode()' function. This is the reason for the
+		 * first barrier. Also, we want the bit changes to be seen to
+		 * other threads ASAP, to avoid unnecesarry copying, which is
+		 * the reason for the second barrier.
+		 */
 		clear_bit(DIRTY_ZNODE, &znode->flags);
 		smp_mb__before_clear_bit();
 		clear_bit(COW_ZNODE, &znode->flags);
