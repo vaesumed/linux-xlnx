@@ -79,7 +79,7 @@ static int insert_old_idx(struct ubifs_info *c, int lnum, int offs)
 	struct rb_node **p, *parent = NULL;
 
 	old_idx = kmalloc(sizeof(struct ubifs_old_idx), GFP_NOFS);
-	if (!old_idx)
+	if (unlikely(!old_idx))
 		return -ENOMEM;
 	old_idx->lnum = lnum;
 	old_idx->offs = offs;
@@ -398,7 +398,7 @@ static struct ubifs_znode *copy_znode(struct ubifs_info *c,
 	struct ubifs_znode *zn;
 
 	zn = kmalloc(c->max_znode_sz, GFP_NOFS);
-	if (!zn)
+	if (unlikely(!zn))
 		return ERR_PTR(-ENOMEM);
 
 	memcpy(zn, znode, c->max_znode_sz);
@@ -461,21 +461,20 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
 			atomic_long_dec(&c->clean_zn_cnt);
 			atomic_long_dec(&ubifs_clean_zn_cnt);
 			err = add_idx_dirt(c, zbr->lnum, zbr->len);
-			if (err)
+			if (unlikely(err))
 				return ERR_PTR(err);
 		}
 		return znode;
 	}
 
 	zn = copy_znode(c, znode);
-	if (IS_ERR(zn))
+	if (unlikely(IS_ERR(zn)))
 		return zn;
 
 	if (zbr->len) {
 		err = insert_old_idx(c, zbr->lnum, zbr->offs);
-		if (err)
+		if (unlikely(err))
 			return ERR_PTR(err);
-
 		err = add_idx_dirt(c, zbr->lnum, zbr->len);
 	} else
 		err = 0;
@@ -485,9 +484,8 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
 	zbr->offs = 0;
 	zbr->len = 0;
 
-	if (err)
+	if (unlikely(err))
 		return ERR_PTR(err);
-
 	return zn;
 }
 
