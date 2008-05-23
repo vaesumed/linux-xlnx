@@ -312,6 +312,7 @@ static void virtblk_remove(struct virtio_device *vdev)
 	vdev->config->reset(vdev);
 
 	blk_cleanup_queue(vblk->disk->queue);
+	del_gendisk(vblk->disk);
 	put_disk(vblk->disk);
 	mempool_destroy(vblk->pool);
 	vdev->config->del_vq(vblk->vq);
