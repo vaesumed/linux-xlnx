@@ -66,6 +66,25 @@ typedef enum {
 	_XBF_PAGES = (1 << 18),	    /* backed by refcounted pages	   */
 	_XBF_RUN_QUEUES = (1 << 19),/* run block device task queue	   */
 	_XBF_DELWRI_Q = (1 << 21),   /* buffer on delwri queue		   */
+
+	/*
+	 * Special flag for supporting metadata blocks smaller than a FSB.
+	 *
+	 * In this case we can have multiple xfs_buf_t on a single page and
+	 * need to lock out concurrent xfs_buf_t readers as they only
+	 * serialise access to the buffer.
+	 *
+	 * If the FSB size >= PAGE_CACHE_SIZE case, we have no serialisation
+	 * between reads of the page. Hence we can have one thread read the
+	 * page and modify it, but then race with another thread that thinks
+	 * the page is not up-to-date and hence reads it again.
+	 *
+	 * The result is that the first modifcation to the page is lost.
+	 * This sort of AGF/AGI reading race can happen when unlinking inodes
+	 * that require truncation and results in the AGI unlinked list
+	 * modifications being lost.
+	 */
+	_XBF_PAGE_LOCKED = (1 << 22),
 } xfs_buf_flags_t;
 
 typedef enum {
@@ -410,7 +429,7 @@ static inline void xfs_bdwrite(void *mp, xfs_buf_t *bp)
  *	Handling of buftargs.
  */
 extern xfs_buftarg_t *xfs_alloc_buftarg(struct block_device *, int);
-extern void xfs_free_buftarg(xfs_buftarg_t *, int);
+extern void xfs_free_buftarg(xfs_buftarg_t *);
 extern void xfs_wait_buftarg(xfs_buftarg_t *);
 extern int xfs_setsize_buftarg(xfs_buftarg_t *, unsigned int, unsigned int);
 extern int xfs_flush_buftarg(xfs_buftarg_t *, int);

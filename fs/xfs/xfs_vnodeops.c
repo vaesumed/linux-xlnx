@@ -444,7 +444,13 @@ xfs_setattr(
 		code = 0;
 		if ((vap->va_size > ip->i_size) &&
 		    (flags & ATTR_NOSIZETOK) == 0) {
-			code = xfs_igrow_start(ip, vap->va_size, credp);
+			/*
+			 * Do the first part of growing a file: zero any data
+			 * in the last block that is beyond the old EOF.  We
+			 * need to do this before the inode is joined to the
+			 * transaction to modify the i_size.
+			 */
+			code = xfs_zero_eof(ip, vap->va_size, ip->i_size);
 		}
 		xfs_iunlock(ip, XFS_ILOCK_EXCL);
 
@@ -512,8 +518,11 @@ xfs_setattr(
 			timeflags |= XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG;
 
 		if (vap->va_size > ip->i_size) {
-			xfs_igrow_finish(tp, ip, vap->va_size,
-			    !(flags & ATTR_DMI));
+			ip->i_d.di_size = vap->va_size;
+			ip->i_size = vap->va_size;
+			if (!(flags & ATTR_DMI))
+				xfs_ichgtime(ip, XFS_ICHGTIME_CHG);
+			xfs_trans_log_inode(tp, ip, XFS_ILOG_CORE);
 		} else if ((vap->va_size <= ip->i_size) ||
 			   ((vap->va_size == 0) && ip->i_d.di_nextents)) {
 			/*
@@ -856,18 +865,14 @@ xfs_readlink(
 /*
  * xfs_fsync
  *
- * This is called to sync the inode and its data out to disk.
- * We need to hold the I/O lock while flushing the data, and
- * the inode lock while flushing the inode.  The inode lock CANNOT
- * be held while flushing the data, so acquire after we're done
- * with that.
+ * This is called to sync the inode and its data out to disk.  We need to hold
+ * the I/O lock while flushing the data, and the inode lock while flushing the
+ * inode.  The inode lock CANNOT be held while flushing the data, so acquire
+ * after we're done with that.
  */
 int
 xfs_fsync(
-	xfs_inode_t	*ip,
-	int		flag,
-	xfs_off_t	start,
-	xfs_off_t	stop)
+	xfs_inode_t	*ip)
 {
 	xfs_trans_t	*tp;
 	int		error;
@@ -875,103 +880,79 @@ xfs_fsync(
 
 	xfs_itrace_entry(ip);
 
-	ASSERT(start >= 0 && stop >= -1);
-
 	if (XFS_FORCED_SHUTDOWN(ip->i_mount))
 		return XFS_ERROR(EIO);
 
-	if (flag & FSYNC_DATA)
-		filemap_fdatawait(vn_to_inode(XFS_ITOV(ip))->i_mapping);
+	/* capture size updates in I/O completion before writing the inode. */
+	error = filemap_fdatawait(vn_to_inode(XFS_ITOV(ip))->i_mapping);
+	if (error)
+		return XFS_ERROR(error);
 
 	/*
-	 * We always need to make sure that the required inode state
-	 * is safe on disk.  The vnode might be clean but because
-	 * of committed transactions that haven't hit the disk yet.
-	 * Likewise, there could be unflushed non-transactional
-	 * changes to the inode core that have to go to disk.
+	 * We always need to make sure that the required inode state is safe on
+	 * disk.  The vnode might be clean but we still might need to force the
+	 * log because of committed transactions that haven't hit the disk yet.
+	 * Likewise, there could be unflushed non-transactional changes to the
+	 * inode core that have to go to disk and this requires us to issue
+	 * a synchronous transaction to capture these changes correctly.
 	 *
-	 * The following code depends on one assumption:  that
-	 * any transaction that changes an inode logs the core
-	 * because it has to change some field in the inode core
-	 * (typically nextents or nblocks).  That assumption
-	 * implies that any transactions against an inode will
-	 * catch any non-transactional updates.  If inode-altering
-	 * transactions exist that violate this assumption, the
-	 * code breaks.  Right now, it figures that if the involved
-	 * update_* field is clear and the inode is unpinned, the
-	 * inode is clean.  Either it's been flushed or it's been
-	 * committed and the commit has hit the disk unpinning the inode.
-	 * (Note that xfs_inode_item_format() called at commit clears
-	 * the update_* fields.)
+	 * This code relies on the assumption that if the update_* fields
+	 * of the inode are clear and the inode is unpinned then it is clean
+	 * and no action is required.
 	 */
 	xfs_ilock(ip, XFS_ILOCK_SHARED);
 
-	/* If we are flushing data then we care about update_size
-	 * being set, otherwise we care about update_core
-	 */
-	if ((flag & FSYNC_DATA) ?
-			(ip->i_update_size == 0) :
-			(ip->i_update_core == 0)) {
+	if (!(ip->i_update_size || ip->i_update_core)) {
 		/*
-		 * Timestamps/size haven't changed since last inode
-		 * flush or inode transaction commit.  That means
-		 * either nothing got written or a transaction
-		 * committed which caught the updates.	If the
-		 * latter happened and the transaction hasn't
-		 * hit the disk yet, the inode will be still
-		 * be pinned.  If it is, force the log.
+		 * Timestamps/size haven't changed since last inode flush or
+		 * inode transaction commit.  That means either nothing got
+		 * written or a transaction committed which caught the updates.
+		 * If the latter happened and the transaction hasn't hit the
+		 * disk yet, the inode will be still be pinned.  If it is,
+		 * force the log.
 		 */
 
 		xfs_iunlock(ip, XFS_ILOCK_SHARED);
 
 		if (xfs_ipincount(ip)) {
-			_xfs_log_force(ip->i_mount, (xfs_lsn_t)0,
-				      XFS_LOG_FORCE |
-				      ((flag & FSYNC_WAIT)
-				       ? XFS_LOG_SYNC : 0),
+			error = _xfs_log_force(ip->i_mount, (xfs_lsn_t)0,
+				      XFS_LOG_FORCE | XFS_LOG_SYNC,
 				      &log_flushed);
 		} else {
 			/*
-			 * If the inode is not pinned and nothing
-			 * has changed we don't need to flush the
-			 * cache.
+			 * If the inode is not pinned and nothing has changed
+			 * we don't need to flush the cache.
 			 */
 			changed = 0;
 		}
-		error = 0;
 	} else	{
 		/*
-		 * Kick off a transaction to log the inode
-		 * core to get the updates.  Make it
-		 * sync if FSYNC_WAIT is passed in (which
-		 * is done by everybody but specfs).  The
-		 * sync transaction will also force the log.
+		 * Kick off a transaction to log the inode core to get the
+		 * updates.  The sync transaction will also force the log.
 		 */
 		xfs_iunlock(ip, XFS_ILOCK_SHARED);
 		tp = xfs_trans_alloc(ip->i_mount, XFS_TRANS_FSYNC_TS);
-		if ((error = xfs_trans_reserve(tp, 0,
-				XFS_FSYNC_TS_LOG_RES(ip->i_mount),
-				0, 0, 0)))  {
+		error = xfs_trans_reserve(tp, 0,
+				XFS_FSYNC_TS_LOG_RES(ip->i_mount), 0, 0, 0);
+		if (error) {
 			xfs_trans_cancel(tp, 0);
 			return error;
 		}
 		xfs_ilock(ip, XFS_ILOCK_EXCL);
 
 		/*
-		 * Note - it's possible that we might have pushed
-		 * ourselves out of the way during trans_reserve
-		 * which would flush the inode.	 But there's no
-		 * guarantee that the inode buffer has actually
-		 * gone out yet (it's delwri).	Plus the buffer
-		 * could be pinned anyway if it's part of an
-		 * inode in another recent transaction.	 So we
-		 * play it safe and fire off the transaction anyway.
+		 * Note - it's possible that we might have pushed ourselves out
+		 * of the way during trans_reserve which would flush the inode.
+		 * But there's no guarantee that the inode buffer has actually
+		 * gone out yet (it's delwri).	Plus the buffer could be pinned
+		 * anyway if it's part of an inode in another recent
+		 * transaction.	 So we play it safe and fire off the
+		 * transaction anyway.
 		 */
 		xfs_trans_ijoin(tp, ip, XFS_ILOCK_EXCL);
 		xfs_trans_ihold(tp, ip);
 		xfs_trans_log_inode(tp, ip, XFS_ILOG_CORE);
-		if (flag & FSYNC_WAIT)
-			xfs_trans_set_sync(tp);
+		xfs_trans_set_sync(tp);
 		error = _xfs_trans_commit(tp, 0, &log_flushed);
 
 		xfs_iunlock(ip, XFS_ILOCK_EXCL);
@@ -1629,12 +1610,18 @@ xfs_inactive(
 	return VN_INACTIVE_CACHE;
 }
 
-
+/*
+ * Lookups up an inode from "name". If ci_name is not NULL, then a CI match
+ * is allowed, otherwise it has to be an exact match. If a CI match is found,
+ * ci_name->name will point to a the actual name (caller must free) or
+ * will be set to NULL if an exact match is found.
+ */
 int
 xfs_lookup(
 	xfs_inode_t		*dp,
 	struct xfs_name		*name,
-	xfs_inode_t		**ipp)
+	xfs_inode_t		**ipp,
+	struct xfs_name		*ci_name)
 {
 	xfs_ino_t		inum;
 	int			error;
@@ -1646,7 +1633,7 @@ xfs_lookup(
 		return XFS_ERROR(EIO);
 
 	lock_mode = xfs_ilock_map_shared(dp);
-	error = xfs_dir_lookup(NULL, dp, name, &inum);
+	error = xfs_dir_lookup(NULL, dp, name, &inum, ci_name);
 	xfs_iunlock_map_shared(dp, lock_mode);
 
 	if (error)
@@ -1654,12 +1641,15 @@ xfs_lookup(
 
 	error = xfs_iget(dp->i_mount, NULL, inum, 0, 0, ipp, 0);
 	if (error)
-		goto out;
+		goto out_free_name;
 
 	xfs_itrace_ref(*ipp);
 	return 0;
 
- out:
+out_free_name:
+	if (ci_name)
+		kmem_free(ci_name->name);
+out:
 	*ipp = NULL;
 	return error;
 }

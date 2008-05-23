@@ -52,6 +52,7 @@
 #include "xfs_version.h"
 #include "xfs_log_priv.h"
 #include "xfs_trans_priv.h"
+#include "xfs_filestream.h"
 
 #include <linux/namei.h>
 #include <linux/init.h>
@@ -74,7 +75,10 @@ xfs_args_allocate(
 {
 	struct xfs_mount_args	*args;
 
-	args = kmem_zalloc(sizeof(struct xfs_mount_args), KM_SLEEP);
+	args = kzalloc(sizeof(struct xfs_mount_args), GFP_KERNEL);
+	if (!args)
+		return NULL;
+
 	args->logbufs = args->logbufsize = -1;
 	strncpy(args->fsname, sb->s_id, MAXNAMELEN);
 
@@ -314,6 +318,7 @@ xfs_parseargs(
 			args->flags |= XFSMNT_ATTR2;
 		} else if (!strcmp(this_char, MNTOPT_NOATTR2)) {
 			args->flags &= ~XFSMNT_ATTR2;
+			args->flags |= XFSMNT_NOATTR2;
 		} else if (!strcmp(this_char, MNTOPT_FILESTREAM)) {
 			args->flags2 |= XFSMNT2_FILESTREAMS;
 		} else if (!strcmp(this_char, MNTOPT_NOQUOTA)) {
@@ -564,7 +569,10 @@ xfs_set_inodeops(
 		inode->i_mapping->a_ops = &xfs_address_space_operations;
 		break;
 	case S_IFDIR:
-		inode->i_op = &xfs_dir_inode_operations;
+		if (xfs_sb_version_hasasciici(&XFS_M(inode->i_sb)->m_sb))
+			inode->i_op = &xfs_dir_ci_inode_operations;
+		else
+			inode->i_op = &xfs_dir_inode_operations;
 		inode->i_fop = &xfs_dir_file_operations;
 		break;
 	case S_IFLNK:
@@ -762,6 +770,137 @@ xfs_blkdev_issue_flush(
 	xfs_buftarg_t		*buftarg)
 {
 	blkdev_issue_flush(buftarg->bt_bdev, NULL);
+}
+
+STATIC void
+xfs_close_devices(
+	struct xfs_mount	*mp)
+{
+	if (mp->m_logdev_targp && mp->m_logdev_targp != mp->m_ddev_targp) {
+		xfs_free_buftarg(mp->m_logdev_targp);
+		xfs_blkdev_put(mp->m_logdev_targp->bt_bdev);
+	}
+	if (mp->m_rtdev_targp) {
+		xfs_free_buftarg(mp->m_rtdev_targp);
+		xfs_blkdev_put(mp->m_rtdev_targp->bt_bdev);
+	}
+	xfs_free_buftarg(mp->m_ddev_targp);
+}
+
+/*
+ * The file system configurations are:
+ *	(1) device (partition) with data and internal log
+ *	(2) logical volume with data and log subvolumes.
+ *	(3) logical volume with data, log, and realtime subvolumes.
+ *
+ * We only have to handle opening the log and realtime volumes here if
+ * they are present.  The data subvolume has already been opened by
+ * get_sb_bdev() and is stored in sb->s_bdev.
+ */
+STATIC int
+xfs_open_devices(
+	struct xfs_mount	*mp,
+	struct xfs_mount_args	*args)
+{
+	struct block_device	*ddev = mp->m_super->s_bdev;
+	struct block_device	*logdev = NULL, *rtdev = NULL;
+	int			error;
+
+	/*
+	 * Open real time and log devices - order is important.
+	 */
+	if (args->logname[0]) {
+		error = xfs_blkdev_get(mp, args->logname, &logdev);
+		if (error)
+			goto out;
+	}
+
+	if (args->rtname[0]) {
+		error = xfs_blkdev_get(mp, args->rtname, &rtdev);
+		if (error)
+			goto out_close_logdev;
+
+		if (rtdev == ddev || rtdev == logdev) {
+			cmn_err(CE_WARN,
+	"XFS: Cannot mount filesystem with identical rtdev and ddev/logdev.");
+			error = EINVAL;
+			goto out_close_rtdev;
+		}
+	}
+
+	/*
+	 * Setup xfs_mount buffer target pointers
+	 */
+	error = ENOMEM;
+	mp->m_ddev_targp = xfs_alloc_buftarg(ddev, 0);
+	if (!mp->m_ddev_targp)
+		goto out_close_rtdev;
+
+	if (rtdev) {
+		mp->m_rtdev_targp = xfs_alloc_buftarg(rtdev, 1);
+		if (!mp->m_rtdev_targp)
+			goto out_free_ddev_targ;
+	}
+
+	if (logdev && logdev != ddev) {
+		mp->m_logdev_targp = xfs_alloc_buftarg(logdev, 1);
+		if (!mp->m_logdev_targp)
+			goto out_free_rtdev_targ;
+	} else {
+		mp->m_logdev_targp = mp->m_ddev_targp;
+	}
+
+	return 0;
+
+ out_free_rtdev_targ:
+	if (mp->m_rtdev_targp)
+		xfs_free_buftarg(mp->m_rtdev_targp);
+ out_free_ddev_targ:
+	xfs_free_buftarg(mp->m_ddev_targp);
+ out_close_rtdev:
+	if (rtdev)
+		xfs_blkdev_put(rtdev);
+ out_close_logdev:
+	if (logdev && logdev != ddev)
+		xfs_blkdev_put(logdev);
+ out:
+	return error;
+}
+
+/*
+ * Setup xfs_mount buffer target pointers based on superblock
+ */
+STATIC int
+xfs_setup_devices(
+	struct xfs_mount	*mp)
+{
+	int			error;
+
+	error = xfs_setsize_buftarg(mp->m_ddev_targp, mp->m_sb.sb_blocksize,
+				    mp->m_sb.sb_sectsize);
+	if (error)
+		return error;
+
+	if (mp->m_logdev_targp && mp->m_logdev_targp != mp->m_ddev_targp) {
+		unsigned int	log_sector_size = BBSIZE;
+
+		if (xfs_sb_version_hassector(&mp->m_sb))
+			log_sector_size = mp->m_sb.sb_logsectsize;
+		error = xfs_setsize_buftarg(mp->m_logdev_targp,
+					    mp->m_sb.sb_blocksize,
+					    log_sector_size);
+		if (error)
+			return error;
+	}
+	if (mp->m_rtdev_targp) {
+		error = xfs_setsize_buftarg(mp->m_rtdev_targp,
+					    mp->m_sb.sb_blocksize,
+					    mp->m_sb.sb_sectsize);
+		if (error)
+			return error;
+	}
+
+	return 0;
 }
 
 /*
@@ -1074,7 +1213,7 @@ xfssyncd(
 			list_del(&work->w_list);
 			if (work == &mp->m_sync_work)
 				continue;
-			kmem_free(work, sizeof(struct bhv_vfs_sync_work));
+			kmem_free(work);
 		}
 	}
 
@@ -1086,14 +1225,63 @@ xfs_fs_put_super(
 	struct super_block	*sb)
 {
 	struct xfs_mount	*mp = XFS_M(sb);
+	struct xfs_inode	*rip = mp->m_rootip;
+	int			unmount_event_flags = 0;
 	int			error;
 
 	kthread_stop(mp->m_sync_task);
 
 	xfs_sync(mp, SYNC_ATTR | SYNC_DELWRI);
-	error = xfs_unmount(mp, 0, NULL);
-	if (error)
-		printk("XFS: unmount got error=%d\n", error);
+
+#ifdef HAVE_DMAPI
+	if (mp->m_flags & XFS_MOUNT_DMAPI) {
+		unmount_event_flags =
+			(mp->m_dmevmask & (1 << DM_EVENT_UNMOUNT)) ?
+				0 : DM_FLAGS_UNWANTED;
+		/*
+		 * Ignore error from dmapi here, first unmount is not allowed
+		 * to fail anyway, and second we wouldn't want to fail a
+		 * unmount because of dmapi.
+		 */
+		XFS_SEND_PREUNMOUNT(mp, rip, DM_RIGHT_NULL, rip, DM_RIGHT_NULL,
+				NULL, NULL, 0, 0, unmount_event_flags);
+	}
+#endif
+
+	/*
+	 * Blow away any referenced inode in the filestreams cache.
+	 * This can and will cause log traffic as inodes go inactive
+	 * here.
+	 */
+	xfs_filestream_unmount(mp);
+
+	XFS_bflush(mp->m_ddev_targp);
+	error = xfs_unmount_flush(mp, 0);
+	WARN_ON(error);
+
+	IRELE(rip);
+
+	/*
+	 * If we're forcing a shutdown, typically because of a media error,
+	 * we want to make sure we invalidate dirty pages that belong to
+	 * referenced vnodes as well.
+	 */
+	if (XFS_FORCED_SHUTDOWN(mp)) {
+		error = xfs_sync(mp, SYNC_WAIT | SYNC_CLOSE);
+		ASSERT(error != EFSCORRUPTED);
+	}
+
+	if (mp->m_flags & XFS_MOUNT_DMAPI) {
+		XFS_SEND_UNMOUNT(mp, rip, DM_RIGHT_NULL, 0, 0,
+				unmount_event_flags);
+	}
+
+	xfs_unmountfs(mp);
+	xfs_icsb_destroy_counters(mp);
+	xfs_close_devices(mp);
+	xfs_qmops_put(mp);
+	xfs_dmops_put(mp);
+	kfree(mp);
 }
 
 STATIC void
@@ -1216,13 +1404,35 @@ xfs_fs_remount(
 	char			*options)
 {
 	struct xfs_mount	*mp = XFS_M(sb);
-	struct xfs_mount_args	*args = xfs_args_allocate(sb, 0);
+	struct xfs_mount_args	*args;
 	int			error;
 
+	args = xfs_args_allocate(sb, 0);
+	if (!args)
+		return -ENOMEM;
+
 	error = xfs_parseargs(mp, options, args, 1);
-	if (!error)
-		error = xfs_mntupdate(mp, flags, args);
-	kmem_free(args, sizeof(*args));
+	if (error)
+		goto out_free_args;
+
+	if (!(*flags & MS_RDONLY)) {			/* rw/ro -> rw */
+		if (mp->m_flags & XFS_MOUNT_RDONLY)
+		mp->m_flags &= ~XFS_MOUNT_RDONLY;
+		if (args->flags & XFSMNT_BARRIER) {
+			mp->m_flags |= XFS_MOUNT_BARRIER;
+			xfs_mountfs_check_barriers(mp);
+		} else {
+			mp->m_flags &= ~XFS_MOUNT_BARRIER;
+		}
+	} else if (!(mp->m_flags & XFS_MOUNT_RDONLY)) {	/* rw -> ro */
+		xfs_filestream_flush(mp);
+		xfs_sync(mp, SYNC_DATA_QUIESCE);
+		xfs_attr_quiesce(mp);
+		mp->m_flags |= XFS_MOUNT_RDONLY;
+	}
+
+ out_free_args:
+	kfree(args);
 	return -error;
 }
 
@@ -1300,6 +1510,225 @@ xfs_fs_setxquota(
 				   Q_XSETPQLIM), id, (caddr_t)fdq);
 }
 
+/*
+ * This function fills in xfs_mount_t fields based on mount args.
+ * Note: the superblock has _not_ yet been read in.
+ */
+STATIC int
+xfs_start_flags(
+	struct xfs_mount_args	*ap,
+	struct xfs_mount	*mp)
+{
+	/* Values are in BBs */
+	if ((ap->flags & XFSMNT_NOALIGN) != XFSMNT_NOALIGN) {
+		/*
+		 * At this point the superblock has not been read
+		 * in, therefore we do not know the block size.
+		 * Before the mount call ends we will convert
+		 * these to FSBs.
+		 */
+		mp->m_dalign = ap->sunit;
+		mp->m_swidth = ap->swidth;
+	}
+
+	if (ap->logbufs != -1 &&
+	    ap->logbufs != 0 &&
+	    (ap->logbufs < XLOG_MIN_ICLOGS ||
+	     ap->logbufs > XLOG_MAX_ICLOGS)) {
+		cmn_err(CE_WARN,
+			"XFS: invalid logbufs value: %d [not %d-%d]",
+			ap->logbufs, XLOG_MIN_ICLOGS, XLOG_MAX_ICLOGS);
+		return XFS_ERROR(EINVAL);
+	}
+	mp->m_logbufs = ap->logbufs;
+	if (ap->logbufsize != -1 &&
+	    ap->logbufsize !=  0 &&
+	    (ap->logbufsize < XLOG_MIN_RECORD_BSIZE ||
+	     ap->logbufsize > XLOG_MAX_RECORD_BSIZE ||
+	     !is_power_of_2(ap->logbufsize))) {
+		cmn_err(CE_WARN,
+	"XFS: invalid logbufsize: %d [not 16k,32k,64k,128k or 256k]",
+			ap->logbufsize);
+		return XFS_ERROR(EINVAL);
+	}
+	mp->m_logbsize = ap->logbufsize;
+	mp->m_fsname_len = strlen(ap->fsname) + 1;
+	mp->m_fsname = kmem_alloc(mp->m_fsname_len, KM_SLEEP);
+	strcpy(mp->m_fsname, ap->fsname);
+	if (ap->rtname[0]) {
+		mp->m_rtname = kmem_alloc(strlen(ap->rtname) + 1, KM_SLEEP);
+		strcpy(mp->m_rtname, ap->rtname);
+	}
+	if (ap->logname[0]) {
+		mp->m_logname = kmem_alloc(strlen(ap->logname) + 1, KM_SLEEP);
+		strcpy(mp->m_logname, ap->logname);
+	}
+
+	if (ap->flags & XFSMNT_WSYNC)
+		mp->m_flags |= XFS_MOUNT_WSYNC;
+#if XFS_BIG_INUMS
+	if (ap->flags & XFSMNT_INO64) {
+		mp->m_flags |= XFS_MOUNT_INO64;
+		mp->m_inoadd = XFS_INO64_OFFSET;
+	}
+#endif
+	if (ap->flags & XFSMNT_RETERR)
+		mp->m_flags |= XFS_MOUNT_RETERR;
+	if (ap->flags & XFSMNT_NOALIGN)
+		mp->m_flags |= XFS_MOUNT_NOALIGN;
+	if (ap->flags & XFSMNT_SWALLOC)
+		mp->m_flags |= XFS_MOUNT_SWALLOC;
+	if (ap->flags & XFSMNT_OSYNCISOSYNC)
+		mp->m_flags |= XFS_MOUNT_OSYNCISOSYNC;
+	if (ap->flags & XFSMNT_32BITINODES)
+		mp->m_flags |= XFS_MOUNT_32BITINODES;
+
+	if (ap->flags & XFSMNT_IOSIZE) {
+		if (ap->iosizelog > XFS_MAX_IO_LOG ||
+		    ap->iosizelog < XFS_MIN_IO_LOG) {
+			cmn_err(CE_WARN,
+		"XFS: invalid log iosize: %d [not %d-%d]",
+				ap->iosizelog, XFS_MIN_IO_LOG,
+				XFS_MAX_IO_LOG);
+			return XFS_ERROR(EINVAL);
+		}
+
+		mp->m_flags |= XFS_MOUNT_DFLT_IOSIZE;
+		mp->m_readio_log = mp->m_writeio_log = ap->iosizelog;
+	}
+
+	if (ap->flags & XFSMNT_IKEEP)
+		mp->m_flags |= XFS_MOUNT_IKEEP;
+	if (ap->flags & XFSMNT_DIRSYNC)
+		mp->m_flags |= XFS_MOUNT_DIRSYNC;
+	if (ap->flags & XFSMNT_ATTR2)
+		mp->m_flags |= XFS_MOUNT_ATTR2;
+	if (ap->flags & XFSMNT_NOATTR2)
+		mp->m_flags |= XFS_MOUNT_NOATTR2;
+
+	if (ap->flags2 & XFSMNT2_COMPAT_IOSIZE)
+		mp->m_flags |= XFS_MOUNT_COMPAT_IOSIZE;
+
+	/*
+	 * no recovery flag requires a read-only mount
+	 */
+	if (ap->flags & XFSMNT_NORECOVERY) {
+		if (!(mp->m_flags & XFS_MOUNT_RDONLY)) {
+			cmn_err(CE_WARN,
+	"XFS: tried to mount a FS read-write without recovery!");
+			return XFS_ERROR(EINVAL);
+		}
+		mp->m_flags |= XFS_MOUNT_NORECOVERY;
+	}
+
+	if (ap->flags & XFSMNT_NOUUID)
+		mp->m_flags |= XFS_MOUNT_NOUUID;
+	if (ap->flags & XFSMNT_BARRIER)
+		mp->m_flags |= XFS_MOUNT_BARRIER;
+	else
+		mp->m_flags &= ~XFS_MOUNT_BARRIER;
+
+	if (ap->flags2 & XFSMNT2_FILESTREAMS)
+		mp->m_flags |= XFS_MOUNT_FILESTREAMS;
+
+	if (ap->flags & XFSMNT_DMAPI)
+		mp->m_flags |= XFS_MOUNT_DMAPI;
+	return 0;
+}
+
+/*
+ * This function fills in xfs_mount_t fields based on mount args.
+ * Note: the superblock _has_ now been read in.
+ */
+STATIC int
+xfs_finish_flags(
+	struct xfs_mount_args	*ap,
+	struct xfs_mount	*mp)
+{
+	int			ronly = (mp->m_flags & XFS_MOUNT_RDONLY);
+
+	/* Fail a mount where the logbuf is smaller then the log stripe */
+	if (xfs_sb_version_haslogv2(&mp->m_sb)) {
+		if ((ap->logbufsize <= 0) &&
+		    (mp->m_sb.sb_logsunit > XLOG_BIG_RECORD_BSIZE)) {
+			mp->m_logbsize = mp->m_sb.sb_logsunit;
+		} else if (ap->logbufsize > 0 &&
+			   ap->logbufsize < mp->m_sb.sb_logsunit) {
+			cmn_err(CE_WARN,
+	"XFS: logbuf size must be greater than or equal to log stripe size");
+			return XFS_ERROR(EINVAL);
+		}
+	} else {
+		/* Fail a mount if the logbuf is larger than 32K */
+		if (ap->logbufsize > XLOG_BIG_RECORD_BSIZE) {
+			cmn_err(CE_WARN,
+	"XFS: logbuf size for version 1 logs must be 16K or 32K");
+			return XFS_ERROR(EINVAL);
+		}
+	}
+
+	/*
+	 * mkfs'ed attr2 will turn on attr2 mount unless explicitly
+	 * told by noattr2 to turn it off
+	 */
+	if (xfs_sb_version_hasattr2(&mp->m_sb) &&
+	    !(ap->flags & XFSMNT_NOATTR2))
+		mp->m_flags |= XFS_MOUNT_ATTR2;
+
+	/*
+	 * prohibit r/w mounts of read-only filesystems
+	 */
+	if ((mp->m_sb.sb_flags & XFS_SBF_READONLY) && !ronly) {
+		cmn_err(CE_WARN,
+	"XFS: cannot mount a read-only filesystem as read-write");
+		return XFS_ERROR(EROFS);
+	}
+
+	/*
+	 * check for shared mount.
+	 */
+	if (ap->flags & XFSMNT_SHARED) {
+		if (!xfs_sb_version_hasshared(&mp->m_sb))
+			return XFS_ERROR(EINVAL);
+
+		/*
+		 * For IRIX 6.5, shared mounts must have the shared
+		 * version bit set, have the persistent readonly
+		 * field set, must be version 0 and can only be mounted
+		 * read-only.
+		 */
+		if (!ronly || !(mp->m_sb.sb_flags & XFS_SBF_READONLY) ||
+		     (mp->m_sb.sb_shared_vn != 0))
+			return XFS_ERROR(EINVAL);
+
+		mp->m_flags |= XFS_MOUNT_SHARED;
+
+		/*
+		 * Shared XFS V0 can't deal with DMI.  Return EINVAL.
+		 */
+		if (mp->m_sb.sb_shared_vn == 0 && (ap->flags & XFSMNT_DMAPI))
+			return XFS_ERROR(EINVAL);
+	}
+
+	if (ap->flags & XFSMNT_UQUOTA) {
+		mp->m_qflags |= (XFS_UQUOTA_ACCT | XFS_UQUOTA_ACTIVE);
+		if (ap->flags & XFSMNT_UQUOTAENF)
+			mp->m_qflags |= XFS_UQUOTA_ENFD;
+	}
+
+	if (ap->flags & XFSMNT_GQUOTA) {
+		mp->m_qflags |= (XFS_GQUOTA_ACCT | XFS_GQUOTA_ACTIVE);
+		if (ap->flags & XFSMNT_GQUOTAENF)
+			mp->m_qflags |= XFS_OQUOTA_ENFD;
+	} else if (ap->flags & XFSMNT_PQUOTA) {
+		mp->m_qflags |= (XFS_PQUOTA_ACCT | XFS_PQUOTA_ACTIVE);
+		if (ap->flags & XFSMNT_PQUOTAENF)
+			mp->m_qflags |= XFS_OQUOTA_ENFD;
+	}
+
+	return 0;
+}
+
 STATIC int
 xfs_fs_fill_super(
 	struct super_block	*sb,
@@ -1308,11 +1737,21 @@ xfs_fs_fill_super(
 {
 	struct inode		*root;
 	struct xfs_mount	*mp = NULL;
-	struct xfs_mount_args	*args = xfs_args_allocate(sb, silent);
-	int			error;
+	struct xfs_mount_args	*args;
+	int			flags = 0, error = ENOMEM;
 
-	mp = xfs_mount_init();
+	args = xfs_args_allocate(sb, silent);
+	if (!args)
+		return -ENOMEM;
 
+	mp = kzalloc(sizeof(struct xfs_mount), GFP_KERNEL);
+	if (!mp)
+		goto out_free_args;
+
+	spin_lock_init(&mp->m_sb_lock);
+	mutex_init(&mp->m_ilock);
+	mutex_init(&mp->m_growlock);
+	atomic_set(&mp->m_active_trans, 0);
 	INIT_LIST_HEAD(&mp->m_sync_list);
 	spin_lock_init(&mp->m_sync_lock);
 	init_waitqueue_head(&mp->m_wait_single_sync_task);
@@ -1325,16 +1764,59 @@ xfs_fs_fill_super(
 
 	error = xfs_parseargs(mp, (char *)data, args, 0);
 	if (error)
-		goto fail_vfsop;
+		goto out_free_mp;
 
 	sb_min_blocksize(sb, BBSIZE);
 	sb->s_export_op = &xfs_export_operations;
 	sb->s_qcop = &xfs_quotactl_operations;
 	sb->s_op = &xfs_super_operations;
 
-	error = xfs_mount(mp, args, NULL);
+	error = xfs_dmops_get(mp, args);
 	if (error)
-		goto fail_vfsop;
+		goto out_free_mp;
+	error = xfs_qmops_get(mp, args);
+	if (error)
+		goto out_put_dmops;
+
+	if (args->flags & XFSMNT_QUIET)
+		flags |= XFS_MFSI_QUIET;
+
+	error = xfs_open_devices(mp, args);
+	if (error)
+		goto out_put_qmops;
+
+	if (xfs_icsb_init_counters(mp))
+		mp->m_flags |= XFS_MOUNT_NO_PERCPU_SB;
+
+	/*
+	 * Setup flags based on mount(2) options and then the superblock
+	 */
+	error = xfs_start_flags(args, mp);
+	if (error)
+		goto out_destroy_counters;
+	error = xfs_readsb(mp, flags);
+	if (error)
+		goto out_destroy_counters;
+	error = xfs_finish_flags(args, mp);
+	if (error)
+		goto out_free_sb;
+
+	error = xfs_setup_devices(mp);
+	if (error)
+		goto out_free_sb;
+
+	if (mp->m_flags & XFS_MOUNT_BARRIER)
+		xfs_mountfs_check_barriers(mp);
+
+	error = xfs_filestream_mount(mp);
+	if (error)
+		goto out_free_sb;
+
+	error = xfs_mountfs(mp, flags);
+	if (error)
+		goto out_filestream_unmount;
+
+	XFS_SEND_MOUNT(mp, DM_RIGHT_NULL, args->mtpt, args->fsname);
 
 	sb->s_dirt = 1;
 	sb->s_magic = XFS_SB_MAGIC;
@@ -1369,10 +1851,27 @@ xfs_fs_fill_super(
 
 	xfs_itrace_exit(XFS_I(sb->s_root->d_inode));
 
-	kmem_free(args, sizeof(*args));
+	kfree(args);
 	return 0;
 
-fail_vnrele:
+ out_filestream_unmount:
+	xfs_filestream_unmount(mp);
+ out_free_sb:
+	xfs_freesb(mp);
+ out_destroy_counters:
+	xfs_icsb_destroy_counters(mp);
+	xfs_close_devices(mp);
+ out_put_qmops:
+	xfs_qmops_put(mp);
+ out_put_dmops:
+	xfs_dmops_put(mp);
+ out_free_mp:
+	kfree(mp);
+ out_free_args:
+	kfree(args);
+	return -error;
+
+ fail_vnrele:
 	if (sb->s_root) {
 		dput(sb->s_root);
 		sb->s_root = NULL;
@@ -1380,12 +1879,22 @@ fail_vnrele:
 		iput(root);
 	}
 
-fail_unmount:
-	xfs_unmount(mp, 0, NULL);
+ fail_unmount:
+	/*
+	 * Blow away any referenced inode in the filestreams cache.
+	 * This can and will cause log traffic as inodes go inactive
+	 * here.
+	 */
+	xfs_filestream_unmount(mp);
 
-fail_vfsop:
-	kmem_free(args, sizeof(*args));
-	return -error;
+	XFS_bflush(mp->m_ddev_targp);
+	error = xfs_unmount_flush(mp, 0);
+	WARN_ON(error);
+
+	IRELE(mp->m_rootip);
+
+	xfs_unmountfs(mp);
+	goto out_destroy_counters;
 }
 
 STATIC int
@@ -1396,8 +1905,17 @@ xfs_fs_get_sb(
 	void			*data,
 	struct vfsmount		*mnt)
 {
-	return get_sb_bdev(fs_type, flags, dev_name, data, xfs_fs_fill_super,
+	int			error;
+
+	error = get_sb_bdev(fs_type, flags, dev_name, data, xfs_fs_fill_super,
 			   mnt);
+	if (!error) {
+		xfs_mount_t	*mp = XFS_M(mnt->mnt_sb);
+
+		mp->m_vfsmount = mnt;
+	}
+
+	return error;
 }
 
 static struct super_operations xfs_super_operations = {
