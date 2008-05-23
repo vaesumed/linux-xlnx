@@ -1462,11 +1462,14 @@ static struct ubifs_nnode *dirty_cow_nnode(struct ubifs_info *c,
 	}
 
 	/* nnode is being committed, so copy it */
-	n = kzalloc(sizeof(struct ubifs_nnode), GFP_NOFS);
-	if (!n)
+	n = kmalloc(sizeof(struct ubifs_nnode), GFP_NOFS);
+	if (unlikely(!n))
 		return ERR_PTR(-ENOMEM);
 
 	memcpy(n, nnode, sizeof(struct ubifs_nnode));
+	n->cnext = NULL;
+	set_bit(DIRTY_CNODE, &n->flags);
+	clear_bit(COW_CNODE, &n->flags);
 
 	/* The children now have new parent */
 	for (i = 0; i < UBIFS_LPT_FANOUT; i++) {
@@ -1479,16 +1482,12 @@ static struct ubifs_nnode *dirty_cow_nnode(struct ubifs_info *c,
 	ubifs_assert(!test_bit(OBSOLETE_CNODE, &nnode->flags));
 	set_bit(OBSOLETE_CNODE, &nnode->flags);
 
-	n->cnext = NULL;
-	set_bit(DIRTY_CNODE, &n->flags);
-	clear_bit(COW_CNODE, &n->flags);
 	c->dirty_nn_cnt += 1;
 	ubifs_add_nnode_dirt(c, nnode);
 	if (nnode->parent)
 		nnode->parent->nbranch[n->iip].nnode = n;
 	else
 		c->nroot = n;
-
 	return n;
 }
 
@@ -1514,23 +1513,22 @@ static struct ubifs_pnode *dirty_cow_pnode(struct ubifs_info *c,
 	}
 
 	/* pnode is being committed, so copy it */
-	p = kzalloc(sizeof(struct ubifs_pnode), GFP_NOFS);
-	if (!p)
+	p = kmalloc(sizeof(struct ubifs_pnode), GFP_NOFS);
+	if (unlikely(!p))
 		return ERR_PTR(-ENOMEM);
 
 	memcpy(p, pnode, sizeof(struct ubifs_pnode));
+	p->cnext = NULL;
+	set_bit(DIRTY_CNODE, &p->flags);
+	clear_bit(COW_CNODE, &p->flags);
 	replace_cats(c, pnode, p);
 
 	ubifs_assert(!test_bit(OBSOLETE_CNODE, &pnode->flags));
 	set_bit(OBSOLETE_CNODE, &pnode->flags);
 
-	p->cnext = NULL;
-	set_bit(DIRTY_CNODE, &p->flags);
-	clear_bit(COW_CNODE, &p->flags);
 	c->dirty_pn_cnt += 1;
 	add_pnode_dirt(c, pnode);
 	pnode->parent->nbranch[p->iip].pnode = p;
-
 	return p;
 }
 
