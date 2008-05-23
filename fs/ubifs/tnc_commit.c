@@ -89,8 +89,8 @@ static int make_idx_node(struct ubifs_info *c, struct ubifs_idx_node *idx,
 	ubifs_assert(ubifs_zn_dirty(znode));
 	ubifs_assert(test_bit(COW_ZNODE, &znode->flags));
 
-	clear_bit(DIRTY_ZNODE, &znode->flags);
-	clear_bit(COW_ZNODE, &znode->flags);
+	__clear_bit(DIRTY_ZNODE, &znode->flags);
+	__clear_bit(COW_ZNODE, &znode->flags);
 
 	return err;
 }
@@ -664,7 +664,7 @@ static int get_znodes_to_commit(struct ubifs_info *c)
 	cnt += 1;
 	while (1) {
 		ubifs_assert(!test_bit(COW_ZNODE, &znode->flags));
-		set_bit(COW_ZNODE, &znode->flags);
+		__set_bit(COW_ZNODE, &znode->flags);
 		znode->alt = 0;
 		cnext = find_next_dirty(znode);
 		if (!cnext) {
