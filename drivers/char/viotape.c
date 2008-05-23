@@ -361,7 +361,7 @@ static ssize_t viotap_write(struct file *file, const char *buf,
 	 * semaphore
 	 */
 	if (noblock) {
-		if (down_trylock(&reqSem)) {
+		if (!down_try(&reqSem)) {
 			ret = -EWOULDBLOCK;
 			goto free_op;
 		}
@@ -451,7 +451,7 @@ static ssize_t viotap_read(struct file *file, char *buf, size_t count,
 	 * semaphore
 	 */
 	if (noblock) {
-		if (down_trylock(&reqSem)) {
+		if (!down_try(&reqSem)) {
 			ret = -EWOULDBLOCK;
 			goto free_op;
 		}
