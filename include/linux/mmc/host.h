@@ -55,6 +55,9 @@ struct mmc_host_ops {
 	 * Avoid calling these three functions too often or in a "fast path",
 	 * since underlaying controller might implement them in an expensive
 	 * and/or slow way.
+	 *
+	 * .get_ro and .get_cd should return >= 0 for their logical values,
+	 * or negative errno value in case of error.
 	 */
 	void	(*set_ios)(struct mmc_host *host, struct mmc_ios *ios);
 	int	(*get_ro)(struct mmc_host *host);
