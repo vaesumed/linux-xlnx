@@ -226,6 +226,9 @@ out:
  * o when a write-buffer timer expires it synchronizes the appropriate
  *   write-buffer;
  * o when the journal is about to be full, it starts in-advance commit.
+ *
+ * Note, other stuff like background garbage collection may be added here in
+ * future.
  */
 int ubifs_bg_thread(void *info)
 {
@@ -234,8 +237,6 @@ int ubifs_bg_thread(void *info)
 
 	ubifs_msg("background thread \"%s\" started, PID %d",
 		  c->bgt_name, current->pid);
-
-	set_user_nice(current, 0);
 	set_freezable();
 
 	while (1) {
