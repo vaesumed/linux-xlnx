@@ -403,11 +403,11 @@ static struct ubifs_znode *copy_znode(struct ubifs_info *c,
 
 	memcpy(zn, znode, c->max_znode_sz);
 	zn->cnext = NULL;
-	set_bit(DIRTY_ZNODE, &zn->flags);
-	clear_bit(COW_ZNODE, &zn->flags);
+	__set_bit(DIRTY_ZNODE, &zn->flags);
+	__clear_bit(COW_ZNODE, &zn->flags);
 
 	ubifs_assert(!test_bit(OBSOLETE_ZNODE, &znode->flags));
-	set_bit(OBSOLETE_ZNODE, &znode->flags);
+	__set_bit(OBSOLETE_ZNODE, &znode->flags);
 
 	if (znode->level != 0) {
 		int i;
@@ -2019,7 +2019,7 @@ again:
 			zbr->znode->parent = zn;
 	}
 
-	set_bit(DIRTY_ZNODE, &zn->flags);
+	__set_bit(DIRTY_ZNODE, &zn->flags);
 	atomic_long_inc(&c->dirty_zn_cnt);
 
 	zn->child_cnt = move;
@@ -2075,7 +2075,7 @@ again:
 	zi->child_cnt = 2;
 	zi->level = znode->level + 1;
 
-	set_bit(DIRTY_ZNODE, &zi->flags);
+	__set_bit(DIRTY_ZNODE, &zi->flags);
 	atomic_long_inc(&c->dirty_zn_cnt);
 
 	zi->zbranch[0].key = znode->zbranch[0].key;
@@ -2386,7 +2386,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 			return err;
 
 		if (znode->cnext) {
-			set_bit(OBSOLETE_ZNODE, &znode->flags);
+			__set_bit(OBSOLETE_ZNODE, &znode->flags);
 			atomic_long_inc(&c->clean_zn_cnt);
 			atomic_long_inc(&ubifs_clean_zn_cnt);
 		} else
@@ -2435,7 +2435,7 @@ static int tnc_delete(struct ubifs_info *c, struct ubifs_znode *znode, int n)
 			atomic_long_dec(&c->dirty_zn_cnt);
 
 			if (zp->cnext) {
-				set_bit(OBSOLETE_ZNODE, &zp->flags);
+				__set_bit(OBSOLETE_ZNODE, &zp->flags);
 				atomic_long_inc(&c->clean_zn_cnt);
 				atomic_long_inc(&ubifs_clean_zn_cnt);
 			} else
