@@ -190,7 +190,6 @@ long ubifs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 #ifdef CONFIG_COMPAT
 long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
 	int err;
 
 	switch (cmd) {
@@ -205,7 +204,7 @@ long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 
 	lock_kernel();
-	err = ubifs_ioctl(inode, file, cmd, (unsigned long)compat_ptr(arg));
+	err = ubifs_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 	unlock_kernel();
 
 	return err;
