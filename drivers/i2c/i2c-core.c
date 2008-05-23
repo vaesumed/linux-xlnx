@@ -693,7 +693,7 @@ int i2c_register_driver(struct module *owner, struct i2c_driver *driver)
 
 	/* legacy drivers scan i2c busses directly */
 	if (driver->attach_adapter)
-		class_for_each_device(&i2c_adapter_class, driver,
+		class_for_each_device(&i2c_adapter_class, NULL, driver,
 				      __attach_adapter);
 
 	mutex_unlock(&core_lock);
@@ -745,7 +745,7 @@ void i2c_del_driver(struct i2c_driver *driver)
 
 	/* legacy driver? */
 	if (!is_newstyle_driver(driver))
-		class_for_each_device(&i2c_adapter_class, driver,
+		class_for_each_device(&i2c_adapter_class, NULL, driver,
 				      __detach_adapter);
 
 	driver_unregister(&driver->driver);
