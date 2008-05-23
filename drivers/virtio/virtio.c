@@ -117,6 +117,11 @@ static int virtio_dev_probe(struct device *_d)
 			set_bit(f, dev->features);
 	}
 
+	/* Transport features are always preserved to pass to set_features. */
+	for (i = VIRTIO_TRANSPORT_F_START; i < VIRTIO_TRANSPORT_F_END; i++)
+		if (device_features & (1 << i))
+			set_bit(i, dev->features);
+
 	err = drv->probe(dev);
 	if (err)
 		add_status(dev, VIRTIO_CONFIG_S_FAILED);
@@ -166,7 +171,6 @@ int register_virtio_device(struct virtio_device *dev)
 	int err;
 
 	dev->dev.bus = &virtio_bus;
-	sprintf(dev->dev.bus_id, "%u", dev->index);
 
 	/* We always start by resetting the device, in case a previous
 	 * driver messed it up.  This also tests that code path a little. */

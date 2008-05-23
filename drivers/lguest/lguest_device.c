@@ -27,7 +27,7 @@ static unsigned int dev_index;
  * __iomem to quieten sparse. */
 static inline void *lguest_map(unsigned long phys_addr, unsigned long pages)
 {
-	return (__force void *)ioremap(phys_addr, PAGE_SIZE*pages);
+	return (__force void *)ioremap_cache(phys_addr, PAGE_SIZE*pages);
 }
 
 static inline void lguest_unmap(void *addr)
@@ -98,7 +98,8 @@ static u32 lg_get_features(struct virtio_device *vdev)
 		if (in_features[i / 8] & (1 << (i % 8)))
 			features |= (1 << i);
 
-	return features;
+	/* Vring may want to play with the bits it's offered. */
+	return vring_transport_features(features);
 }
 
 static void lg_set_features(struct virtio_device *vdev, u32 features)
@@ -343,6 +344,9 @@ static void add_lguest_device(struct lguest_device_desc *d)
 	ldev->vdev.dev.parent = &lguest_root;
 	/* We have a unique device index thanks to the dev_index counter. */
 	ldev->vdev.index = dev_index++;
+	/* Set the name of the device (eg. shown in /proc/interrupts). */
+	snprintf(ldev->vdev.dev.bus_id, BUS_ID_SIZE, "virtio%d",
+		 ldev->vdev.index);
 	/* The device type comes straight from the descriptor.  There's also a
 	 * device vendor field in the virtio_device struct, which we leave as
 	 * 0. */

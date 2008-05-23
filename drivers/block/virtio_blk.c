@@ -260,6 +260,10 @@ static int virtblk_probe(struct virtio_device *vdev)
 	if (virtio_has_feature(vdev, VIRTIO_BLK_F_BARRIER))
 		blk_queue_ordered(vblk->disk->queue, QUEUE_ORDERED_TAG, NULL);
 
+	/* If disk is read-only in the host, the guest should obey */
+	if (virtio_has_feature(vdev, VIRTIO_BLK_F_RO))
+		set_disk_ro(vblk->disk, 1);
+
 	/* Host must always specify the capacity. */
 	vdev->config->get(vdev, offsetof(struct virtio_blk_config, capacity),
 			  &cap, sizeof(cap));
@@ -312,6 +316,7 @@ static void virtblk_remove(struct virtio_device *vdev)
 	vdev->config->reset(vdev);
 
 	blk_cleanup_queue(vblk->disk->queue);
+	del_gendisk(vblk->disk);
 	put_disk(vblk->disk);
 	mempool_destroy(vblk->pool);
 	vdev->config->del_vq(vblk->vq);
@@ -325,7 +330,7 @@ static struct virtio_device_id id_table[] = {
 
 static unsigned int features[] = {
 	VIRTIO_BLK_F_BARRIER, VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX,
-	VIRTIO_BLK_F_GEOMETRY,
+	VIRTIO_BLK_F_GEOMETRY, VIRTIO_BLK_F_RO,
 };
 
 static struct virtio_driver virtio_blk = {
