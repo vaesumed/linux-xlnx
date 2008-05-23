@@ -263,6 +263,8 @@ static void add_kvm_device(struct kvm_device_desc *d)
 
 	kdev->vdev.dev.parent = &kvm_root;
 	kdev->vdev.index = dev_index++;
+	snprintf(kdev->vdev.dev.bus_id, BUS_ID_SIZE, "virtio%d",
+		 kdev->vdev.index);
 	kdev->vdev.id.device = d->type;
 	kdev->vdev.config = &kvm_vq_configspace_ops;
 	kdev->desc = d;
