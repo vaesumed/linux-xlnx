@@ -397,11 +397,14 @@ static struct ubifs_znode *copy_znode(struct ubifs_info *c,
 {
 	struct ubifs_znode *zn;
 
-	zn = kzalloc(c->max_znode_sz, GFP_NOFS);
+	zn = kmalloc(c->max_znode_sz, GFP_NOFS);
 	if (!zn)
 		return ERR_PTR(-ENOMEM);
 
 	memcpy(zn, znode, c->max_znode_sz);
+	zn->cnext = NULL;
+	set_bit(DIRTY_ZNODE, &zn->flags);
+	clear_bit(COW_ZNODE, &zn->flags);
 
 	ubifs_assert(!test_bit(OBSOLETE_ZNODE, &znode->flags));
 	set_bit(OBSOLETE_ZNODE, &znode->flags);
@@ -419,11 +422,7 @@ static struct ubifs_znode *copy_znode(struct ubifs_info *c,
 		}
 	}
 
-	zn->cnext = NULL;
-	set_bit(DIRTY_ZNODE, &zn->flags);
-	clear_bit(COW_ZNODE, &zn->flags);
 	atomic_long_inc(&c->dirty_zn_cnt);
-
 	return zn;
 }
 
