@@ -27,6 +27,9 @@
 
 int (*platform_notify)(struct device *dev) = NULL;
 int (*platform_notify_remove)(struct device *dev) = NULL;
+static struct kobject *dev_kobj;
+struct kobject *sysfs_dev_char_kobj;
+struct kobject *sysfs_dev_block_kobj;
 
 #ifdef CONFIG_BLOCK
 static inline int device_is_not_partition(struct device *dev)
@@ -465,6 +468,7 @@ EXPORT_SYMBOL_GPL(device_create_bin_file);
  */
 void device_remove_bin_file(struct device *dev, struct bin_attribute *attr)
 {
+	/* might_sleep(); */
 	if (dev)
 		sysfs_remove_bin_file(&dev->kobj, attr);
 }
@@ -760,6 +764,54 @@ static void device_remove_class_symlinks(struct device *dev)
 }
 
 /**
+ * device_to_dev_kobj - select a /sys/dev/ directory for the device
+ * @dev: device
+ *
+ * By default we select char/ for new entries.  Setting class->dev_obj
+ * to NULL prevents an entry from being created.  class->dev_kobj must
+ * be set (or cleared) before any devices are registered to the class
+ * otherwise device_create_sys_dev_entry() and
+ * device_remove_sys_dev_entry() will disagree about the the presence
+ * of the link.
+ */
+static struct kobject *device_to_dev_kobj(struct device *dev)
+{
+	struct kobject *kobj;
+
+	if (dev->class)
+		kobj = dev->class->dev_kobj;
+	else
+		kobj = sysfs_dev_char_kobj;
+
+	return kobj;
+}
+
+static int device_create_sys_dev_entry(struct device *dev)
+{
+	struct kobject *kobj = device_to_dev_kobj(dev);
+	int error = 0;
+	char devt_str[15];
+
+	if (kobj) {
+		format_dev_t(devt_str, dev->devt);
+		error = sysfs_create_link(kobj, &dev->kobj, devt_str);
+	}
+
+	return error;
+}
+
+static void device_remove_sys_dev_entry(struct device *dev)
+{
+	struct kobject *kobj = device_to_dev_kobj(dev);
+	char devt_str[15];
+
+	if (kobj) {
+		format_dev_t(devt_str, dev->devt);
+		sysfs_remove_link(kobj, devt_str);
+	}
+}
+
+/**
  * device_add - add device to device hierarchy.
  * @dev: device.
  *
@@ -813,6 +865,10 @@ int device_add(struct device *dev)
 		error = device_create_file(dev, &devt_attr);
 		if (error)
 			goto ueventattrError;
+
+		error = device_create_sys_dev_entry(dev);
+		if (error)
+			goto devtattrError;
 	}
 
 	error = device_add_class_symlinks(dev);
@@ -856,6 +912,9 @@ int device_add(struct device *dev)
  AttrsError:
 	device_remove_class_symlinks(dev);
  SymlinkError:
+	if (MAJOR(dev->devt))
+		device_remove_sys_dev_entry(dev);
+ devtattrError:
 	if (MAJOR(dev->devt))
 		device_remove_file(dev, &devt_attr);
  ueventattrError:
@@ -932,8 +991,10 @@ void device_del(struct device *dev)
 	device_pm_remove(dev);
 	if (parent)
 		klist_del(&dev->knode_parent);
-	if (MAJOR(dev->devt))
+	if (MAJOR(dev->devt)) {
+		device_remove_sys_dev_entry(dev);
 		device_remove_file(dev, &devt_attr);
+	}
 	if (dev->class) {
 		device_remove_class_symlinks(dev);
 
@@ -1058,7 +1119,25 @@ int __init devices_init(void)
 	devices_kset = kset_create_and_add("devices", &device_uevent_ops, NULL);
 	if (!devices_kset)
 		return -ENOMEM;
+	dev_kobj = kobject_create_and_add("dev", NULL);
+	if (!dev_kobj)
+		goto dev_kobj_err;
+	sysfs_dev_block_kobj = kobject_create_and_add("block", dev_kobj);
+	if (!sysfs_dev_block_kobj)
+		goto block_kobj_err;
+	sysfs_dev_char_kobj = kobject_create_and_add("char", dev_kobj);
+	if (!sysfs_dev_char_kobj)
+		goto char_kobj_err;
+
 	return 0;
+
+ char_kobj_err:
+	kobject_put(sysfs_dev_block_kobj);
+ block_kobj_err:
+	kobject_put(dev_kobj);
+ dev_kobj_err:
+	kset_unregister(devices_kset);
+	return -ENOMEM;
 }
 
 EXPORT_SYMBOL_GPL(device_for_each_child);
@@ -1179,40 +1258,6 @@ struct device *device_create_drvdata(struct class *class,
 }
 EXPORT_SYMBOL_GPL(device_create_drvdata);
 
-/**
- * device_create - creates a device and registers it with sysfs
- * @class: pointer to the struct class that this device should be registered to
- * @parent: pointer to the parent struct device of this new device, if any
- * @devt: the dev_t for the char device to be added
- * @fmt: string for the device's name
- *
- * This function can be used by char device classes.  A struct device
- * will be created in sysfs, registered to the specified class.
- *
- * A "dev" file will be created, showing the dev_t for the device, if
- * the dev_t is not 0,0.
- * If a pointer to a parent struct device is passed in, the newly created
- * struct device will be a child of that device in sysfs.
- * The pointer to the struct device will be returned from the call.
- * Any further sysfs files that might be required can be created using this
- * pointer.
- *
- * Note: the struct class passed to this function must have previously
- * been created with a call to class_create().
- */
-struct device *device_create(struct class *class, struct device *parent,
-			     dev_t devt, const char *fmt, ...)
-{
-	va_list vargs;
-	struct device *dev;
-
-	va_start(vargs, fmt);
-	dev = device_create_vargs(class, parent, devt, NULL, fmt, vargs);
-	va_end(vargs);
-	return dev;
-}
-EXPORT_SYMBOL_GPL(device_create);
-
 static int __match_devt(struct device *dev, void *data)
 {
 	dev_t *devt = data;
@@ -1232,7 +1277,7 @@ void device_destroy(struct class *class, dev_t devt)
 {
 	struct device *dev;
 
-	dev = class_find_device(class, &devt, __match_devt);
+	dev = class_find_device(class, NULL, &devt, __match_devt);
 	if (dev) {
 		put_device(dev);
 		device_unregister(dev);
@@ -1436,4 +1481,7 @@ void device_shutdown(void)
 			dev->driver->shutdown(dev);
 		}
 	}
+	kobject_put(sysfs_dev_char_kobj);
+	kobject_put(sysfs_dev_block_kobj);
+	kobject_put(dev_kobj);
 }
