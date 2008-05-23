@@ -343,6 +343,9 @@ static void add_lguest_device(struct lguest_device_desc *d)
 	ldev->vdev.dev.parent = &lguest_root;
 	/* We have a unique device index thanks to the dev_index counter. */
 	ldev->vdev.index = dev_index++;
+	/* Set the name of the device (eg. shown in /proc/interrupts). */
+	snprintf(ldev->vdev.dev.bus_id, BUS_ID_SIZE, "virtio%d",
+		 ldev->vdev.index);
 	/* The device type comes straight from the descriptor.  There's also a
 	 * device vendor field in the virtio_device struct, which we leave as
 	 * 0. */
