@@ -258,8 +258,6 @@ int ubifs_bg_thread(void *info)
 		if (!c->need_bgt && !kthread_should_stop())
 			schedule();
 		__set_current_state(TASK_RUNNING);
-
-		cond_resched();
 	}
 
 	dbg_msg("background thread \"%s\" stops", c->bgt_name);
