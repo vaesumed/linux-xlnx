@@ -110,7 +110,7 @@ static int get_cnodes_to_commit(struct ubifs_info *c)
 	cnt += 1;
 	while (1) {
 		ubifs_assert(!test_bit(COW_ZNODE, &cnode->flags));
-		set_bit(COW_ZNODE, &cnode->flags);
+		__set_bit(COW_ZNODE, &cnode->flags);
 		cnext = next_dirty_cnode(cnode);
 		if (!cnext) {
 			cnode->cnext = c->lpt_cnext;
@@ -424,6 +424,12 @@ static int write_cnodes(struct ubifs_info *c)
 		else
 			ubifs_pack_pnode(c, buf + offs,
 					 (struct ubifs_pnode *)cnode);
+		/*
+		 * The reason for the barriers is the same as in case of TNC.
+		 * See comment in 'write_index()'. 'dirty_cow_nnode()' and
+		 * 'dirty_cow_pnode()' are the functions for which this is
+		 * important.
+		 */
 		clear_bit(DIRTY_CNODE, &cnode->flags);
 		smp_mb__before_clear_bit();
 		clear_bit(COW_ZNODE, &cnode->flags);
