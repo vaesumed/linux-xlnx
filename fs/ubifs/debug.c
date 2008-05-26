@@ -1337,34 +1337,46 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 		return 0;
 	if (c->failure_mode)
 		return 1;
-	if (lnum == UBIFS_SB_LNUM)
-		return 0;
-	else if (lnum == UBIFS_MST_LNUM || lnum == UBIFS_MST_LNUM + 1) {
+	if (lnum == UBIFS_SB_LNUM) {
+		if (write) {
+			if (chance(10, 20))
+				return 0;
+		} else if (chance(19, 20))
+			return 0;
+		dbg_rcvry("failing in super block LEB %d", lnum);
+	} else if (lnum == UBIFS_MST_LNUM || lnum == UBIFS_MST_LNUM + 1) {
 		if (chance(19, 20))
 			return 0;
 		dbg_rcvry("failing in master LEB %d", lnum);
 	} else if (lnum >= UBIFS_LOG_LNUM && lnum <= c->log_last) {
-		if (write && chance(99, 100))
-			return 0;
-		else if (chance(399, 400))
+		if (write) {
+			if (chance(99, 100))
+				return 0;
+		} else if (chance(399, 400))
 			return 0;
 		dbg_rcvry("failing in log LEB %d", lnum);
 	} else if (lnum >= c->lpt_first && lnum <= c->lpt_last) {
-		if (write && chance(99, 100))
-			return 0;
-		else if (chance(399, 400))
+		if (write) {
+			if (chance(99, 100))
+				return 0;
+		} else if (chance(399, 400))
 			return 0;
 		dbg_rcvry("failing in LPT LEB %d", lnum);
 	} else if (lnum >= c->orph_first && lnum <= c->orph_last) {
-		if (write && chance(9, 10))
-			return 0;
-		else if (chance(39, 40))
+		if (write) {
+			if (chance(9, 10))
+				return 0;
+		} else if (chance(39, 40))
 			return 0;
 		dbg_rcvry("failing in orphan LEB %d", lnum);
 	} else if (lnum == c->ihead_lnum) {
 		if (chance(99, 100))
 			return 0;
 		dbg_rcvry("failing in index head LEB %d", lnum);
+	} else if (c->jheads && lnum == c->jheads[GCHD].wbuf.lnum) {
+		if (chance(99, 100))
+			return 0;		
+		dbg_rcvry("failing in GC head LEB %d", lnum);
 	} else if (write && !RB_EMPTY_ROOT(&c->buds) &&
 		   !ubifs_search_bud(c, lnum)) {
 		if (chance(19, 20))
@@ -1380,7 +1392,7 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 			return 0;
 		dbg_rcvry("failing in bud LEB %d commit not running", lnum);
 	}
-	ubifs_err("*** SETTING FAILURE MODE ON ***");
+	ubifs_err("*** SETTING FAILURE MODE ON (LEB %d) ***", lnum);
 	c->failure_mode = 1;
 	dump_stack();
 	return 1;

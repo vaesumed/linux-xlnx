@@ -1089,15 +1089,16 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (!mounted_read_only) {
 		int lnum;
 
+		err = ubifs_mount_orphans(c, c->need_recovery);
+		if (err)
+			goto out_journal;
+
 		if (c->need_recovery)
 			err = ubifs_recover_gc_lnum(c);
 		else
 			err = care_about_gc_lnum(c);
 		if (err)
-			goto out_journal;
-		err = ubifs_mount_orphans(c, c->need_recovery);
-		if (err)
-			goto out_journal;
+			goto out_orphans;
 
 		/* Check for enough log space */
 		lnum = c->lhead_lnum + 1;

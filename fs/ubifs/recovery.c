@@ -1070,18 +1070,88 @@ int ubifs_clean_lebs(const struct ubifs_info *c, void *sbuf)
  * written to the master node on unmounting. In the case of an unclean unmount
  * the value of gc_lnum recorded in the master node is out of date and cannot
  * be used. Instead, recovery must allocate an empty LEB for this purpose.
+ * However, there may not be enough empty space, in which case it must be
+ * possible to GC the dirtiest LEB into the GC head LEB.
  *
  * This function returns %0 on success and a negative error code on failure.
  */
 int ubifs_recover_gc_lnum(struct ubifs_info *c)
 {
+	struct ubifs_wbuf *wbuf = &c->jheads[GCHD].wbuf;
+	struct ubifs_lprops lp;
 	int lnum, err;
 
 	c->gc_lnum = -1;
-	/* Call 'ubifs_find_free_leb_for_idx()' so GC is not run */
+	if (wbuf->lnum == -1) {
+		dbg_rcvry("no GC head LEB");
+		goto find_free;
+	}
+	/*
+	 * See whether the used space in the dirtiest LEB fits in the GC head
+	 * LEB.
+	 */
+	err = ubifs_find_dirty_leb(c, &lp, c->dead_wm, 2);
+	if (err) {
+		if (err == -ENOSPC)
+			dbg_err("could not find a dirty LEB");
+		return err;
+	}
+	ubifs_assert(!(lp.flags & LPROPS_INDEX));
+	lnum = lp.lnum;
+	if (lp.free + lp.dirty == c->leb_size) {
+		/* An empty LEB was returned */
+		if (lp.free != c->leb_size) {
+			err = ubifs_change_one_lp(c, lnum, c->leb_size,
+						  0, 0, 0, 0);
+			if (err)
+				return err;
+		}
+		err = ubifs_leb_unmap(c, lnum);
+		if (err)
+			return err;
+		c->gc_lnum = lnum;
+		dbg_rcvry("allocated LEB %d for GC", lnum);
+		return 0;
+	}
+	/*
+	 * There was no empty LEB so the used space in the dirtiest LEB must fit
+	 * in the GC head LEB.
+	 */
+	if (lp.free + lp.dirty < wbuf->offs) {
+		dbg_rcvry("LEB %d doesn't fit in GC head LEB %d:%d",
+			  lnum, wbuf->lnum, wbuf->offs);
+		err = ubifs_return_leb(c, lnum);
+		if (err)
+			return err;
+		goto find_free;
+	}
+	/* It fits, so GC it */
+	dbg_rcvry("GC'ing LEB %d", lnum);
+	err = ubifs_garbage_collect_leb(c, &lp);
+	if (err < 0) {
+		dbg_err("GC failed, error %d", err);
+		if (err == -EAGAIN)
+			err = -EINVAL;
+		return err;
+	}
+	if (err != LEB_RETAINED) {
+		dbg_err("GC returned %d", err);
+		return -EINVAL;
+	}
+	dbg_rcvry("allocated LEB %d for GC", lnum);
+	return 0;
+
+find_free:
+	/*
+	 * There is no GC head LEB or the free space in the GC head LEB is too
+	 * small. Allocate gc_lnum by calling 'ubifs_find_free_leb_for_idx()' so
+	 * GC is not run.
+	 */
 	lnum = ubifs_find_free_leb_for_idx(c);
-	if (lnum < 0)
+	if (lnum < 0) {
+		dbg_err("could not find an empty LEB");
 		return lnum;
+	}
 	/* And reset the index flag */
 	err = ubifs_change_one_lp(c, lnum, -1, -1, 0, LPROPS_INDEX, 0);
 	if (err)
