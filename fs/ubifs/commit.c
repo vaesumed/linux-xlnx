@@ -246,25 +246,20 @@ int ubifs_bg_thread(void *info)
 		if (try_to_freeze())
 			continue;
 
+		set_current_state(TASK_INTERRUPTIBLE);
+		/* Check if there is something to do */
 		if (!c->need_bgt) {
-			set_current_state(TASK_INTERRUPTIBLE);
 			/*
-			 * Check for the second time to make sure we have not
-			 * missed a wake_up event.
+			 * Nothing prevents us from going sleep now and
+			 * be never woken up and block the task which
+			 * could wait in 'kthread_stop()' forever.
 			 */
-			if (!c->need_bgt) {
-				/*
-				 * Nothing prevents us from going sleep now and
-				 * be never woken up and block the task which
-				 * could wait in 'kthread_stop()' forever.
-				 */
-				if (kthread_should_stop())
-					break;
-				schedule();
-				continue;
-			} else
-				__set_current_state(TASK_RUNNING);
-		}
+			if (kthread_should_stop())
+				break;
+			schedule();
+			continue;
+		} else
+			__set_current_state(TASK_RUNNING);
 
 		c->need_bgt = 0;
 		err = ubifs_bg_wbufs_sync(c);
