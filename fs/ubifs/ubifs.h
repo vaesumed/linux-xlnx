@@ -209,6 +209,18 @@ enum {
 	LSAVE_DIRTY = 2,
 };
 
+/*
+ * Return codes used by the garbage collector.
+ * @LEB_FREED: the logical eraseblock was freed and is ready to use
+ * @LEB_FREED_IDX: indexing LEB was freed and can be used only after the commit
+ * @LEB_RETAINED: the logical eraseblock was freed and retained for GC purposes
+ */
+enum {
+	LEB_FREED,
+	LEB_FREED_IDX,
+	LEB_RETAINED,
+};
+
 /**
  * struct ubifs_old_idx - index node obsoleted since last commit start.
  * @rb: rb-tree node
@@ -1438,6 +1450,7 @@ int ubifs_gc_start_commit(struct ubifs_info *c);
 int ubifs_gc_end_commit(struct ubifs_info *c);
 void ubifs_destroy_idx_gc(struct ubifs_info *c);
 int ubifs_get_idx_gc_leb(struct ubifs_info *c);
+int ubifs_garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp);
 
 /* orphan.c */
 int ubifs_add_orphan(struct ubifs_info *c, ino_t inum);
