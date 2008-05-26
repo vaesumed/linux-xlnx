@@ -1,0 +1,340 @@
+Importing driver-core.current based on 2.6.26-rc3-git6
+$ git branch -D quilt/driver-core.current
+Deleted branch quilt/driver-core.current.
+$ git checkout -b quilt/driver-core.current cbff290491cd97bcd449b14f672d98992ddad5cb
+Switched to a new branch "quilt/driver-core.current"
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+kobject-fix-kobject_rename-and-config_sysfs.patch
+Importing usb.current based on quilt/driver-core.current
+$ git branch -D quilt/usb.current
+Deleted branch quilt/usb.current.
+$ git checkout -b quilt/usb.current quilt/driver-core.current
+Switched to a new branch "quilt/usb.current"
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-ftdi_sio-add-support-for-matrix-orbital-pid-range.patch
+usb-firmware-loader-driver-for-usb-apple-isight-camera.patch
+usb-fix-possible-deadlock-involving-sysfs-attributes.patch
+usb-add-all-configs-to-the-descriptors-attribute.patch
+usb-ehci-fix-up-root-hub-tt-mess.patch
+usb-ehci-suppress-unwanted-error-messages.patch
+usb-ehci-fix-remote-wakeup-regression.patch
+usb-ehci-fix-bug-in-iso-scheduling.patch
+usb-ehci-fix-performance-regression.patch
+usb-usb-storage-unusual_devs-update-for-cypress-atacb.patch
+Importing driver-core based on quilt/usb.current
+$ git branch -D quilt/driver-core
+Deleted branch quilt/driver-core.
+$ git checkout -b quilt/driver-core quilt/usb.current
+Switched to a new branch "quilt/driver-core"
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+sysfs-add-sys-dev-char-block-to-lookup-sysfs-path-by-major-minor.patch
+kobject-replace-with-in-name.patch
+debugfs-add-a-reference-to-the-debugfs-api-documentation.patch
+firmware-fix-typo-in-example-code.patch
+device-create-block-convert-device_create-to-device_create_drvdata.patch
+device-create-char-convert-device_create-to-device_create_drvdata.patch
+device-create-coda-convert-device_create-to-device_create_drvdata.patch
+device-create-dca-convert-device_create-to-device_create_drvdata.patch
+device-create-dvb-convert-device_create-to-device_create_drvdata.patch
+device-create-framebuffer-convert-device_create-to-device_create_drvdata.patch
+device-create-hid-convert-device_create-to-device_create_drvdata.patch
+device-create-hwmon-convert-device_create-to-device_create_drvdata.patch
+device-create-i2c-convert-device_create-to-device_create_drvdata.patch
+device-create-ide-convert-device_create-to-device_create_drvdata.patch
+device-create-ieee1394-convert-device_create-to-device_create_drvdata.patch
+device-create-infiniband-convert-device_create-to-device_create_drvdata.patch
+device-create-isdn-convert-device_create-to-device_create_drvdata.patch
+device-create-macintosh-convert-device_create-to-device_create_drvdata.patch
+device-create-mips-convert-device_create-to-device_create_drvdata.patch
+device-create-misc-convert-device_create-to-device_create_drvdata.patch
+device-create-mtd-convert-device_create-to-device_create_drvdata.patch
+device-create-net-convert-device_create-to-device_create_drvdata.patch
+device-create-s390-convert-device_create-to-device_create_drvdata.patch
+device-create-scsi-convert-device_create-to-device_create_drvdata.patch
+device-create-sound-convert-device_create-to-device_create_drvdata.patch
+device-create-usb-convert-device_create-to-device_create_drvdata.patch
+device-create-x86-convert-device_create-to-device_create_drvdata.patch
+driver-core-remove-device_create.patch
+driver-core-add-ability-for-class_for_each_device-to-start-in-middle-of-list.patch
+driver-core-add-ability-for-class_find_device-to-start-in-middle-of-list.patch
+block-fix-compiler-warning-in-genhd.c.patch
+block-make-printk_partition-use-the-class-iterator-function.patch
+block-make-blk_lookup_devt-use-the-class-iterator-function.patch
+block-make-proc-files-seq_start-use-the-class_find_device.patch
+block-move-header-for-proc-partitions-to-seq_start.patch
+block-make-proc-partitions-and-proc-diskstats-use-class_find_device.patch
+i2c-use-class_for_each_device.patch
+driver-core-remove-kobj_name_len-define.patch
+driver-core-remove-device_name_size-define.patch
+driver-core-remove-device_id_size-define.patch
+driver-core-fix-a-lot-of-printk-usages-of-bus_id.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git branch -D quilt/usb
+Deleted branch quilt/usb.
+$ git checkout -b quilt/usb quilt/driver-core
+Switched to a new branch "quilt/usb"
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-use-get_unaligned_-helpers-for-kl5kusb105-driver.patch
+ti_usb-kick-firmware-into-user-space.patch
+usb-add-new-routine-for-checking-port-resume-type.patch
+usb-debounce-before-unregistering.patch
+usb-simplify-hub_restart-logic.patch
+usb-try-to-salvage-lost-power-sessions.patch
+usb-optimize-port-debouncing-during-hub-activation.patch
+usb-combine-hub_activate-and-hub_restart.patch
+usb-combine-hub_quiesce-and-hub_stop.patch
+usb-io_ti-first-cut-at-a-big-clean-up.patch
+usb-storage-separate-dynamic-flags-from-fixed-flags.patch
+usb-storage-change-remaining-semaphore-to-completion.patch
+usb-isp1760-hcd.c-make-2-functions-static.patch
+usb-implement-soft-unbinding.patch
+usb-storage-implement-soft-unbinding.patch
+usb-remove-cvs-keywords.patch
+usb-remove-documentation-usb-uhci.txt.patch
+usb-serial-gadget-modular-tty-glue.patch
+usb-serial-gadget-use-new-tty-glue.patch
+usb-rndis-switch-to-seq_files.patch
+bitmap-add-bitmap_copy_le.patch
+add-linux-byteorder-bitfields.h.patch
+usb-add-usb_dev_reset_delayed.patch
+uwb-documentation.patch
+uwb-add-the-uwb-include-files.patch
+uwb-stack-core.patch
+uwb-stack-urci.patch
+uwb-stack-mlme.patch
+uwb-stack-reservation-manager.patch
+uwb-stack-debug.patch
+uwb-stack-build-system.patch
+uwb-add-umc-bus.patch
+uwb-add-whci-enumerator.patch
+uwb-add-whc-rc-radio-control-driver.patch
+uwb-add-hwa-rc-radio-controller-driver.patch
+uwb-add-wimedia-llc-protocol-core.patch
+uwb-wlp-messages.patch
+uwb-wlp-wss.patch
+uwb-wlp-build-system.patch
+uwb-i1480-driver.patch
+uwb-i1480-wlp-driver.patch
+wusb-add-usb-specific-wusb-include-files.patch
+wusb-core.patch
+wusb-protocol.patch
+wusb-security.patch
+wusb-build-system.patch
+wusb-add-the-usb-wusb-cbaf-driver.patch
+wusb-whci-hcd-driver.patch
+wusb-add-the-wire-adapter-core.patch
+wusb-add-hwa-hc-wireless-host-controller-driver.patch
+wusb-fix-error-path-for-wusb_set_dev_addr.patch
+uwb-disable-command-event-filtering-for-DUB-1210.patch
+usb-gotemp.patch
+Importing device-mapper based on v2.6.25-rc2
+$ git branch -D quilt/device-mapper
+Deleted branch quilt/device-mapper.
+$ git checkout -b quilt/device-mapper v2.6.25-rc2
+Switched to a new branch "quilt/device-mapper"
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+Importing i2c based on 2.6.26-rc3-git3
+$ git branch -D quilt/i2c
+Deleted branch quilt/i2c.
+$ git checkout -b quilt/i2c d40ace0c7b4a329f7d869d0fbf27435543bb2acc
+Switched to a new branch "quilt/i2c"
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-tuner-do-not-alter-i2c_client-name.patch
+i2c-align-i2c_device_id.patch
+i2c-davinci-01-clock-between-7-12-mhz.patch
+i2c-davinci-02-move-dev_dbg-statement-for-more-output.patch
+i2c-davinci-03-remove-useless-ivr-read.patch
+i2c-davinci-04-fix-signal-handling-bug.patch
+i2c-davinci-05-initialize-cmd_complete-sooner.patch
+i2c-nforce2-add-tyan-s4985-spport.patch
+i2c-remove-3-deprecated-bus-drivers.patch
+i2c-bfin-twi-update-dependencies.patch
+i2c-document-standard-fault-codes.patch
+i2c-core-remove-useless-include.patch
+i2c-core-return-proper-error-codes.patch
+i2c-group-bus-drivers.patch
+i2c-delete-i2c_smbus_write_quick.patch
+i2c-update-refs-to-smbus_access.patch
+i2c-kerneldoc-for-most-i-o-calls.patch
+i2c-i2c_use_client-defends-against-null.patch
+i2c-adapters-return-proper-error-codes.patch
+i2c-piix4-more-cleanups.patch
+i2c-bus-fix-handling-of-unsupported-transactions.patch
+i2c-use-class_for_each_device.patch
+i2c-pca-algo-fix-errorcode.patch
+i2c-pca-platform-fix-errorcode.patch
+i2c-core-use-list_for_each_entry_safe.patch
+i2c-simplify-i2c_del_driver.patch
+i2c-add-intel-sch-i2c-smbus-support.patch
+i2c-acpi-check-conflict.patch
+Importing kernel-doc based on 2.6.25-git13
+$ git branch -D quilt/kernel-doc
+Deleted branch quilt/kernel-doc.
+$ git checkout -b quilt/kernel-doc a01e035ebb552223c03f2d9138ffc73f2d4d3965
+Switched to a new branch "quilt/kernel-doc"
+$ git quiltimport --author Randy Dunlap <randy.dunlap@oracle.com> --patches ../quilt/kernel-doc
+doc-move-initrd-txt.patch
+Importing ide based on commit f26a3988917913b3d11b2bd741601a2c64ab9204
+$ git branch -D quilt/ide
+Deleted branch quilt/ide.
+$ git checkout -b quilt/ide f26a3988917913b3d11b2bd741601a2c64ab9204
+Switched to a new branch "quilt/ide"
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-remove-obsoleted-idebus-kernel-parameter.patch
+ide-remove-obsoleted-hdx-kernel-parameters.patch
+ide-cleanup-init_ide_data.patch
+ide-remove-obsoleted-ide-parameters.patch
+ide-eliminate-fit-macro.patch
+ide-tape-use-clamp_t-rather-than-nested-min_t-_max_t.patch
+ide-use-get_unaligned_-helpers.patch
+ide-set-req_preempt-request-flag-in-ide_do_drive_cmd-users.patch
+ide-use-__generic_unplug_device-in-ide_do_drive_cmd.patch
+ide-cd-convert-ide_cd_queue_pc-to-use-blk_execute_rq.patch
+ide-cd-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-disk-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-floppy-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-taskfile-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-tape-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-convert-ide_do_drive_cmd-path-to-use-blk_execute_rq.patch
+ide-remove-ide_wait_head_wait-path-in-ide_do_drive_cmd.patch
+ide-remove-ide_init_drive_cmd.patch
+ide-cd-remove-ide_cd_init_rq.patch
+block-convert-pd_special_command-to-use-blk_execute_rq.patch
+block-remove-the-checking-for-null-queue-in-blk_put_request.patch
+block-unexport-blk_end_sync_rq.patch
+ide-remove-try_to_flush_leftover_data.patch
+sgiioc4-use-extra_base-instead-of-dma_status-for-dma_handle.patch
+ide-remove-commented-out-code-from-ide_config_drive_speed.patch
+ide-fix-do_probe-to-use-select_drive.patch
+ide-remove-ide_tflag_no_select_mask-taskfile-flag.patch
+ide-move-irq-unmasking-out-from-tf_load-method.patch
+ide-remove-mmio-flag-from-ide_hwif_t.patch
+ide-pass-hwif-instead-of-drive-to-outbsync-method.patch
+ide-use-outbsync-in-init_irq.patch
+ide-use-outbsync-in-ide_set_irq.patch
+ide-remove-drive-ctl.patch
+ide-scsi-replace-ide_do_drive_cmd-with-blk_execute_rq_nowait.patch
+ide-remove-action-argument-in-ide_do_drive_cmd.patch
+ide-scsi-fix-race-in-idescsi_transfer_pc.patch
+ide-scsi-fix-drq-checking-for-dma-transfers-in-idescsi_pc_intr.patch
+ide-scsi-fix-handling-of-dma-errors-in-idescsi_pc_intr.patch
+ide-scsi-fix-interrupt-reason-checking-in-idescsi_pc_intr.patch
+ide-scsi-merge-idescsi_input_buffers-and-idescsi_output_buffers.patch
+ide-scsi-remove-superfluous-bug_on-from-idescsi_transfer_pc.patch
+ide-scsi-add-debug_log-macro.patch
+ide-tape-idetape_pc_intr-should-use-local_irq_enable_in_hardirq.patch
+ide-tape-remove-superfluous-error-message-from-idetape_pc_intr.patch
+ide-tape-remove-superfluous-warning-message-from-idetape_issue_pc.patch
+ide-tape-remove-unneeded-config_blk_dev_idedma-ifdef.patch
+ide-tape-remove-stale-comments-from-idetape_pc_intr.patch
+ide-tape-remove-simulate_errors-debug-code.patch
+ide-floppy-merge-idefloppy_transfer_pc-and-idefloppy_transfer_pc1.patch
+ide-floppy-tape-scsi-log-device-name-instead-of-driver-name.patch
+ide-tape-make-idetape_retry_pc-void.patch
+ide-tape-merge-callbacks.patch
+ide-tape-make-pc-idetape_callback-void.patch
+ide-floppy-merge-callbacks.patch
+ide-floppy-tape-merge-pc-idefloppy_callback-and-pc-idetape_callback.patch
+ide-floppy-tape-pc_flag_dma_recommended-to-pc_flag_dma_ok.patch
+ide-floppy-start-dma-engine-in-idefloppy_transfer_pc1.patch
+ide-tape-set-pc_flag_dma_in_progress-flag-in-idetape_transfer_pc.patch
+ide-tape-factor-out-waiting-for-good-ireason-from-idetape_transfer_pc.patch
+ide-add-pc_flag_zip_drive-pc-flag.patch
+ide-cd-floppy-tape-remove-checking-for-drive-scsi.patch
+ide-scsi-set-drive-scsi-flag-for-devices-handled-by-the-driver.patch
+ide-add-ide_transfer_pc-helper.patch
+ide-scsi-move-idescsi_map_sg-call-out-from-idescsi_issue_pc.patch
+ide-add-pc_flag_drq_interrupt-pc-flag.patch
+ide-add-ide_issue_pc-helper.patch
+ide-floppy-tape-move-checking-of-failed_pc-to-callback.patch
+ide-tape-factor-out-dsc-handling-from-idetape_pc_intr.patch
+ide-tape-add-ide_tape_io_buffers-helper.patch
+ide-tape-always-log-debug-info-in-idetape_pc_intr-if-debugging-is-enabled.patch
+ide-floppy-add-more-debugging-to-idefloppy_pc_intr.patch
+ide-scsi-use-pc-callback.patch
+ide-scsi-add-more-debugging-to-idescsi_pc_intr.patch
+ide-floppy-scsi-read-status-register-before-stopping-dma-engine.patch
+ide-add-ide_pc_intr-helper.patch
+ide-remove-the-ide_etrax100-chipset-type.patch
+maintainers-remove-sis-5513-ide-entry.patch
+ide-tape-unify-idetape_create_read-write_cmd.patch
+Importing m68k based on 78b58e549a3098a8c1408d0214bd25e5d5e7a3a3
+$ git branch -D quilt/m68k
+Deleted branch quilt/m68k.
+$ git checkout -b quilt/m68k 78b58e549a3098a8c1408d0214bd25e5d5e7a3a3
+Switched to a new branch "quilt/m68k"
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-remove-CVS-keywords.diff
+Importing rr based on v2.6.26-rc3-416-geb90d81
+$ git branch -D quilt/rr
+Deleted branch quilt/rr.
+$ git checkout -b quilt/rr v2.6.26-rc3-416-geb90d81
+Switched to a new branch "quilt/rr"
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+lguest:ioremap_cache.patch
+virtio:net-fix-last-xmit.patch
+virtio:net-fix-dangling-packets.patch
+virtio:net_free_transmit_skbs_in_a_timer.patch
+virtio:net-use_skb_queue_purge.patch
+virtio:fix_crash_in_blk_during_modprobe_rmmod_modprobe.patch
+virtio:bus_id-should-contain-virtio-name.patch
+virtio:pci-should-not-set-bus_id.patch
+virtio:common-index-counters.patch
+lguest:fix-proc-interrupts-lguest-null.patch
+virtio:blk_allow_read_only_disks.patch
+virtio:entropy-device.patch
+lguest:rng.patch
+virtio:net_add_ethtool_ops_for_sg_gso.patch
+virtio:net_allow_receiving_sg_packets.patch
+virtio:net-recycle-unused-pages.patch
+virtio:transport-features.patch
+virtio:vring-enhance.patch
+lguest:publish-indices.patch
+misc:add_all_cpus_option_to_stop_machine_run.patch
+stop_machine:simplify.patch
+misc:kernel-locking-doc-remove-semaphores.patch
+.dotest/patch:61: trailing whitespace.
+       and <function>mutex_unlock()</function> to release it.  There is also a 
+.dotest/patch:62: trailing whitespace.
+       <function>mutex_lock()</function>, which should be avoided, because it 
+.dotest/patch:68: trailing whitespace.
+       Example: <filename>net/netfilter/nf_sockopt.c</filename> allows 
+warning: 3 lines add whitespace errors.
+misc:kthread-printf-attribute.patch
+misc:cast_if_type.patch
+misc:typesafe_cb.patch
+misc:stop_machine-typesafe.patch
+misc:kthread-typesafe.patch
+misc:timer-typesafe.patch
+misc:introduce-down_nowait.patch
+misc:down_nowait.patch
+misc:down_nowait-documentation.patch
+misc:down_nowait-arch_ia64_kernel_salinfo.patch
+misc:down_nowait-drivers_char_snsc.patch
+misc:down_nowait-drivers_char_viotape.patch
+misc:down_nowait-drivers_infiniband_core_user_mad.patch
+misc:down_nowait-drivers_input_serio_hil_mlc.patch
+misc:down_nowait-drivers_input_serio_hp_sdc_mlc.patch
+misc:down_nowait-drivers_md_dm-raid1.patch
+misc:down_nowait-drivers_net_3c527.patch
+misc:down_nowait-drivers_net_irda_sir_dev.patch
+misc:down_nowait-drivers_net_wireless_airo.patch
+misc:down_nowait-drivers_scsi_aacraid_commsup.patch
+misc:down_nowait-drivers_usb_core_usb.patch
+misc:down_nowait-drivers_usb_gadget_inode.patch
+misc:down_nowait-fs_reiserfs_journal.patch
+misc:down_nowait-xfs.patch
+misc:down_nowait-kernel_printk.patch
+Importing ldp.next based on quilt/usb
+$ git branch -D quilt/ldp.next
+Deleted branch quilt/ldp.next.
+$ git checkout -b quilt/ldp.next quilt/usb
+Switched to a new branch "quilt/ldp.next"
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/ldp.next
+usb-add-option-hso-driver.patch
+usb-add-sensoray-2255-v4l-driver.patch
+input-add-appleir-driver.patch
