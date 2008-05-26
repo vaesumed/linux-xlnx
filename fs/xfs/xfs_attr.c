@@ -241,8 +241,7 @@ xfs_attr_set_int(xfs_inode_t *dp, struct xfs_name *name,
 	args.firstblock = &firstblock;
 	args.flist = &flist;
 	args.whichfork = XFS_ATTR_FORK;
-	args.addname = 1;
-	args.oknoent = 1;
+	args.op_flags = XFS_DA_OP_ADDNAME | XFS_DA_OP_OKNOENT;
 
 	/*
 	 * Determine space new attribute will use, and if it would be
@@ -974,7 +973,7 @@ xfs_attr_leaf_addname(xfs_da_args_t *args)
 			xfs_da_brelse(args->trans, bp);
 			return(retval);
 		}
-		args->rename = 1;			/* an atomic rename */
+		args->op_flags |= XFS_DA_OP_RENAME;	/* an atomic rename */
 		args->blkno2 = args->blkno;		/* set 2nd entry info*/
 		args->index2 = args->index;
 		args->rmtblkno2 = args->rmtblkno;
@@ -1054,7 +1053,7 @@ xfs_attr_leaf_addname(xfs_da_args_t *args)
 	 * so that one disappears and one appears atomically.  Then we
 	 * must remove the "old" attribute/value pair.
 	 */
-	if (args->rename) {
+	if (args->op_flags & XFS_DA_OP_RENAME) {
 		/*
 		 * In a separate transaction, set the incomplete flag on the
 		 * "old" attr and clear the incomplete flag on the "new" attr.
@@ -1307,7 +1306,7 @@ restart:
 	} else if (retval == EEXIST) {
 		if (args->flags & ATTR_CREATE)
 			goto out;
-		args->rename = 1;			/* atomic rename op */
+		args->op_flags |= XFS_DA_OP_RENAME;	/* atomic rename op */
 		args->blkno2 = args->blkno;		/* set 2nd entry info*/
 		args->index2 = args->index;
 		args->rmtblkno2 = args->rmtblkno;
@@ -1425,7 +1424,7 @@ restart:
 	 * so that one disappears and one appears atomically.  Then we
 	 * must remove the "old" attribute/value pair.
 	 */
-	if (args->rename) {
+	if (args->op_flags & XFS_DA_OP_RENAME) {
 		/*
 		 * In a separate transaction, set the incomplete flag on the
 		 * "old" attr and clear the incomplete flag on the "new" attr.
@@ -2300,23 +2299,7 @@ xfs_attr_rmtval_remove(xfs_da_args_t *args)
 void
 xfs_attr_trace_l_c(char *where, struct xfs_attr_list_context *context)
 {
-	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_C, where,
-		(__psunsigned_t)context->dp,
-		(__psunsigned_t)context->cursor->hashval,
-		(__psunsigned_t)context->cursor->blkno,
-		(__psunsigned_t)context->cursor->offset,
-		(__psunsigned_t)context->alist,
-		(__psunsigned_t)context->bufsize,
-		(__psunsigned_t)context->count,
-		(__psunsigned_t)context->firstu,
-		(__psunsigned_t)
-			((context->count > 0) &&
-			!(context->flags & (ATTR_KERNAMELS|ATTR_KERNOVAL)))
-				? (ATTR_ENTRY(context->alist,
-					      context->count-1)->a_valuelen)
-				: 0,
-		(__psunsigned_t)context->dupcnt,
-		(__psunsigned_t)context->flags,
+	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_C, where, context,
 		(__psunsigned_t)NULL,
 		(__psunsigned_t)NULL,
 		(__psunsigned_t)NULL);
@@ -2329,23 +2312,7 @@ void
 xfs_attr_trace_l_cn(char *where, struct xfs_attr_list_context *context,
 			 struct xfs_da_intnode *node)
 {
-	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_CN, where,
-		(__psunsigned_t)context->dp,
-		(__psunsigned_t)context->cursor->hashval,
-		(__psunsigned_t)context->cursor->blkno,
-		(__psunsigned_t)context->cursor->offset,
-		(__psunsigned_t)context->alist,
-		(__psunsigned_t)context->bufsize,
-		(__psunsigned_t)context->count,
-		(__psunsigned_t)context->firstu,
-		(__psunsigned_t)
-			((context->count > 0) &&
-			!(context->flags & (ATTR_KERNAMELS|ATTR_KERNOVAL)))
-				? (ATTR_ENTRY(context->alist,
-					      context->count-1)->a_valuelen)
-				: 0,
-		(__psunsigned_t)context->dupcnt,
-		(__psunsigned_t)context->flags,
+	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_CN, where, context,
 		(__psunsigned_t)be16_to_cpu(node->hdr.count),
 		(__psunsigned_t)be32_to_cpu(node->btree[0].hashval),
 		(__psunsigned_t)be32_to_cpu(node->btree[
@@ -2359,23 +2326,7 @@ void
 xfs_attr_trace_l_cb(char *where, struct xfs_attr_list_context *context,
 			  struct xfs_da_node_entry *btree)
 {
-	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_CB, where,
-		(__psunsigned_t)context->dp,
-		(__psunsigned_t)context->cursor->hashval,
-		(__psunsigned_t)context->cursor->blkno,
-		(__psunsigned_t)context->cursor->offset,
-		(__psunsigned_t)context->alist,
-		(__psunsigned_t)context->bufsize,
-		(__psunsigned_t)context->count,
-		(__psunsigned_t)context->firstu,
-		(__psunsigned_t)
-			((context->count > 0) &&
-			!(context->flags & (ATTR_KERNAMELS|ATTR_KERNOVAL)))
-				? (ATTR_ENTRY(context->alist,
-					      context->count-1)->a_valuelen)
-				: 0,
-		(__psunsigned_t)context->dupcnt,
-		(__psunsigned_t)context->flags,
+	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_CB, where, context,
 		(__psunsigned_t)be32_to_cpu(btree->hashval),
 		(__psunsigned_t)be32_to_cpu(btree->before),
 		(__psunsigned_t)NULL);
@@ -2388,23 +2339,7 @@ void
 xfs_attr_trace_l_cl(char *where, struct xfs_attr_list_context *context,
 			      struct xfs_attr_leafblock *leaf)
 {
-	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_CL, where,
-		(__psunsigned_t)context->dp,
-		(__psunsigned_t)context->cursor->hashval,
-		(__psunsigned_t)context->cursor->blkno,
-		(__psunsigned_t)context->cursor->offset,
-		(__psunsigned_t)context->alist,
-		(__psunsigned_t)context->bufsize,
-		(__psunsigned_t)context->count,
-		(__psunsigned_t)context->firstu,
-		(__psunsigned_t)
-			((context->count > 0) &&
-			!(context->flags & (ATTR_KERNAMELS|ATTR_KERNOVAL)))
-				? (ATTR_ENTRY(context->alist,
-					      context->count-1)->a_valuelen)
-				: 0,
-		(__psunsigned_t)context->dupcnt,
-		(__psunsigned_t)context->flags,
+	xfs_attr_trace_enter(XFS_ATTR_KTRACE_L_CL, where, context,
 		(__psunsigned_t)be16_to_cpu(leaf->hdr.count),
 		(__psunsigned_t)be32_to_cpu(leaf->entries[0].hashval),
 		(__psunsigned_t)be32_to_cpu(leaf->entries[
@@ -2417,22 +2352,30 @@ xfs_attr_trace_l_cl(char *where, struct xfs_attr_list_context *context,
  */
 void
 xfs_attr_trace_enter(int type, char *where,
-			 __psunsigned_t a2, __psunsigned_t a3,
-			 __psunsigned_t a4, __psunsigned_t a5,
-			 __psunsigned_t a6, __psunsigned_t a7,
-			 __psunsigned_t a8, __psunsigned_t a9,
-			 __psunsigned_t a10, __psunsigned_t a11,
-			 __psunsigned_t a12, __psunsigned_t a13,
-			 __psunsigned_t a14, __psunsigned_t a15)
+			 struct xfs_attr_list_context *context,
+			 __psunsigned_t a13, __psunsigned_t a14,
+			 __psunsigned_t a15)
 {
 	ASSERT(xfs_attr_trace_buf);
 	ktrace_enter(xfs_attr_trace_buf, (void *)((__psunsigned_t)type),
-					 (void *)where,
-					 (void *)a2,  (void *)a3,  (void *)a4,
-					 (void *)a5,  (void *)a6,  (void *)a7,
-					 (void *)a8,  (void *)a9,  (void *)a10,
-					 (void *)a11, (void *)a12, (void *)a13,
-					 (void *)a14, (void *)a15);
+		(void *)((__psunsigned_t)where),
+		(void *)((__psunsigned_t)context->dp),
+		(void *)((__psunsigned_t)context->cursor->hashval),
+		(void *)((__psunsigned_t)context->cursor->blkno),
+		(void *)((__psunsigned_t)context->cursor->offset),
+		(void *)((__psunsigned_t)context->alist),
+		(void *)((__psunsigned_t)context->bufsize),
+		(void *)((__psunsigned_t)context->count),
+		(void *)((__psunsigned_t)context->firstu),
+		(void *)((__psunsigned_t)
+			(((context->count > 0) &&
+			!(context->flags & (ATTR_KERNAMELS|ATTR_KERNOVAL)))
+				? (ATTR_ENTRY(context->alist,
+					      context->count-1)->a_valuelen)
+				: 0)),
+		(void *)((__psunsigned_t)context->dupcnt),
+		(void *)((__psunsigned_t)context->flags),
+		(void *)a13, (void *)a14, (void *)a15);
 }
 #endif	/* XFS_ATTR_TRACE */
 
@@ -2622,43 +2565,6 @@ attr_lookup_namespace(
 	return NULL;
 }
 
-/*
- * Some checks to prevent people abusing EAs to get over quota:
- * - Don't allow modifying user EAs on devices/symlinks;
- * - Don't allow modifying user EAs if sticky bit set;
- */
-STATIC int
-attr_user_capable(
-	bhv_vnode_t	*vp,
-	cred_t		*cred)
-{
-	struct inode	*inode = vn_to_inode(vp);
-
-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
-		return -EPERM;
-	if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode) &&
-	    !capable(CAP_SYS_ADMIN))
-		return -EPERM;
-	if (S_ISDIR(inode->i_mode) && (inode->i_mode & S_ISVTX) &&
-	    (current_fsuid(cred) != inode->i_uid) && !capable(CAP_FOWNER))
-		return -EPERM;
-	return 0;
-}
-
-STATIC int
-attr_trusted_capable(
-	bhv_vnode_t	*vp,
-	cred_t		*cred)
-{
-	struct inode	*inode = vn_to_inode(vp);
-
-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
-		return -EPERM;
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
-	return 0;
-}
-
 STATIC int
 attr_system_set(
 	bhv_vnode_t *vp, char *name, void *data, size_t size, int xflags)
@@ -2709,7 +2615,6 @@ struct attrnames attr_system = {
 	.attr_get	= attr_system_get,
 	.attr_set	= attr_system_set,
 	.attr_remove	= attr_system_remove,
-	.attr_capable	= (attrcapable_t)fs_noerr,
 };
 
 struct attrnames attr_trusted = {
@@ -2719,7 +2624,6 @@ struct attrnames attr_trusted = {
 	.attr_get	= attr_generic_get,
 	.attr_set	= attr_generic_set,
 	.attr_remove	= attr_generic_remove,
-	.attr_capable	= attr_trusted_capable,
 };
 
 struct attrnames attr_secure = {
@@ -2729,7 +2633,6 @@ struct attrnames attr_secure = {
 	.attr_get	= attr_generic_get,
 	.attr_set	= attr_generic_set,
 	.attr_remove	= attr_generic_remove,
-	.attr_capable	= (attrcapable_t)fs_noerr,
 };
 
 struct attrnames attr_user = {
@@ -2738,7 +2641,6 @@ struct attrnames attr_user = {
 	.attr_get	= attr_generic_get,
 	.attr_set	= attr_generic_set,
 	.attr_remove	= attr_generic_remove,
-	.attr_capable	= attr_user_capable,
 };
 
 struct attrnames *attr_namespaces[] =
