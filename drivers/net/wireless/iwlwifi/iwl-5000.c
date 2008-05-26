@@ -46,6 +46,16 @@
 
 #define IWL5000_UCODE_API  "-1"
 
+static const u16 iwl5000_default_queue_to_tx_fifo[] = {
+	IWL_TX_FIFO_AC3,
+	IWL_TX_FIFO_AC2,
+	IWL_TX_FIFO_AC1,
+	IWL_TX_FIFO_AC0,
+	IWL50_CMD_FIFO_NUM,
+	IWL_TX_FIFO_HCCA_1,
+	IWL_TX_FIFO_HCCA_2
+};
+
 static int iwl5000_apm_init(struct iwl_priv *priv)
 {
 	int ret = 0;
@@ -287,6 +297,296 @@ static const u8 *iwl5000_eeprom_query_addr(const struct iwl_priv *priv,
 	return &priv->eeprom[address];
 }
 
+/*
+ * ucode
+ */
+static int iwl5000_load_section(struct iwl_priv *priv,
+				struct fw_desc *image,
+				u32 dst_addr)
+{
+	int ret = 0;
+	unsigned long flags;
+
+	dma_addr_t phy_addr = image->p_addr;
+	u32 byte_cnt = image->len;
+
+	spin_lock_irqsave(&priv->lock, flags);
+	ret = iwl_grab_nic_access(priv);
+	if (ret) {
+		spin_unlock_irqrestore(&priv->lock, flags);
+		return ret;
+	}
+
+	iwl_write_direct32(priv,
+		FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+		FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+
+	iwl_write_direct32(priv,
+		FH_SRVC_CHNL_SRAM_ADDR_REG(FH_SRVC_CHNL), dst_addr);
+
+	iwl_write_direct32(priv,
+		FH_TFDIB_CTRL0_REG(FH_SRVC_CHNL),
+		phy_addr & FH_MEM_TFDIB_DRAM_ADDR_LSB_MSK);
+
+	/* FIME: write the MSB of the phy_addr in CTRL1
+	 * iwl_write_direct32(priv,
+		IWL_FH_TFDIB_CTRL1_REG(IWL_FH_SRVC_CHNL),
+		((phy_addr & MSB_MSK)
+			<< FH_MEM_TFDIB_REG1_ADDR_BITSHIFT) | byte_count);
+	 */
+	iwl_write_direct32(priv,
+		FH_TFDIB_CTRL1_REG(FH_SRVC_CHNL), byte_cnt);
+	iwl_write_direct32(priv,
+		FH_TCSR_CHNL_TX_BUF_STS_REG(FH_SRVC_CHNL),
+		1 << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM |
+		1 << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX |
+		FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID);
+
+	iwl_write_direct32(priv,
+		FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+		FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_ENABLE	|
+		FH_TCSR_TX_CONFIG_REG_VAL_DMA_CREDIT_DISABLE_VAL |
+		FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_HOST_ENDTFD);
+
+	iwl_release_nic_access(priv);
+	spin_unlock_irqrestore(&priv->lock, flags);
+	return 0;
+}
+
+static int iwl5000_load_given_ucode(struct iwl_priv *priv,
+		struct fw_desc *inst_image,
+		struct fw_desc *data_image)
+{
+	int ret = 0;
+
+	ret = iwl5000_load_section(
+		priv, inst_image, RTC_INST_LOWER_BOUND);
+	if (ret)
+		return ret;
+
+	IWL_DEBUG_INFO("INST uCode section being loaded...\n");
+	ret = wait_event_interruptible_timeout(priv->wait_command_queue,
+				priv->ucode_write_complete, 5 * HZ);
+	if (ret == -ERESTARTSYS) {
+		IWL_ERROR("Could not load the INST uCode section due "
+			"to interrupt\n");
+		return ret;
+	}
+	if (!ret) {
+		IWL_ERROR("Could not load the INST uCode section\n");
+		return -ETIMEDOUT;
+	}
+
+	priv->ucode_write_complete = 0;
+
+	ret = iwl5000_load_section(
+		priv, data_image, RTC_DATA_LOWER_BOUND);
+	if (ret)
+		return ret;
+
+	IWL_DEBUG_INFO("DATA uCode section being loaded...\n");
+
+	ret = wait_event_interruptible_timeout(priv->wait_command_queue,
+				priv->ucode_write_complete, 5 * HZ);
+	if (ret == -ERESTARTSYS) {
+		IWL_ERROR("Could not load the INST uCode section due "
+			"to interrupt\n");
+		return ret;
+	} else if (!ret) {
+		IWL_ERROR("Could not load the DATA uCode section\n");
+		return -ETIMEDOUT;
+	} else
+		ret = 0;
+
+	priv->ucode_write_complete = 0;
+
+	return ret;
+}
+
+static int iwl5000_load_ucode(struct iwl_priv *priv)
+{
+	int ret = 0;
+
+	/* check whether init ucode should be loaded, or rather runtime ucode */
+	if (priv->ucode_init.len && (priv->ucode_type == UCODE_NONE)) {
+		IWL_DEBUG_INFO("Init ucode found. Loading init ucode...\n");
+		ret = iwl5000_load_given_ucode(priv,
+			&priv->ucode_init, &priv->ucode_init_data);
+		if (!ret) {
+			IWL_DEBUG_INFO("Init ucode load complete.\n");
+			priv->ucode_type = UCODE_INIT;
+		}
+	} else {
+		IWL_DEBUG_INFO("Init ucode not found, or already loaded. "
+			"Loading runtime ucode...\n");
+		ret = iwl5000_load_given_ucode(priv,
+			&priv->ucode_code, &priv->ucode_data);
+		if (!ret) {
+			IWL_DEBUG_INFO("Runtime ucode load complete.\n");
+			priv->ucode_type = UCODE_RT;
+		}
+	}
+
+	return ret;
+}
+
+static void iwl5000_init_alive_start(struct iwl_priv *priv)
+{
+	int ret = 0;
+
+	/* Check alive response for "valid" sign from uCode */
+	if (priv->card_alive_init.is_valid != UCODE_VALID_OK) {
+		/* We had an error bringing up the hardware, so take it
+		 * all the way back down so we can try again */
+		IWL_DEBUG_INFO("Initialize Alive failed.\n");
+		goto restart;
+	}
+
+	/* initialize uCode was loaded... verify inst image.
+	 * This is a paranoid check, because we would not have gotten the
+	 * "initialize" alive if code weren't properly loaded.  */
+	if (iwl_verify_ucode(priv)) {
+		/* Runtime instruction load was bad;
+		 * take it all the way back down so we can try again */
+		IWL_DEBUG_INFO("Bad \"initialize\" uCode load.\n");
+		goto restart;
+	}
+
+	iwlcore_clear_stations_table(priv);
+	ret = priv->cfg->ops->lib->alive_notify(priv);
+	if (ret) {
+		IWL_WARNING("Could not complete ALIVE transition: %d\n", ret);
+		goto restart;
+	}
+
+	return;
+
+restart:
+	/* real restart (first load init_ucode) */
+	queue_work(priv->workqueue, &priv->restart);
+}
+
+static void iwl5000_set_wr_ptrs(struct iwl_priv *priv,
+				int txq_id, u32 index)
+{
+	iwl_write_direct32(priv, HBUS_TARG_WRPTR,
+			(index & 0xff) | (txq_id << 8));
+	iwl_write_prph(priv, IWL50_SCD_QUEUE_RDPTR(txq_id), index);
+}
+
+static void iwl5000_tx_queue_set_status(struct iwl_priv *priv,
+					struct iwl_tx_queue *txq,
+					int tx_fifo_id, int scd_retry)
+{
+	int txq_id = txq->q.id;
+	int active = test_bit(txq_id, &priv->txq_ctx_active_msk)?1:0;
+
+	iwl_write_prph(priv, IWL50_SCD_QUEUE_STATUS_BITS(txq_id),
+			(active << IWL50_SCD_QUEUE_STTS_REG_POS_ACTIVE) |
+			(tx_fifo_id << IWL50_SCD_QUEUE_STTS_REG_POS_TXF) |
+			(1 << IWL50_SCD_QUEUE_STTS_REG_POS_WSL) |
+			IWL50_SCD_QUEUE_STTS_REG_MSK);
+
+	txq->sched_retry = scd_retry;
+
+	IWL_DEBUG_INFO("%s %s Queue %d on AC %d\n",
+		       active ? "Activate" : "Deactivate",
+		       scd_retry ? "BA" : "AC", txq_id, tx_fifo_id);
+}
+
+static int iwl5000_send_wimax_coex(struct iwl_priv *priv)
+{
+	struct iwl_wimax_coex_cmd coex_cmd;
+
+	memset(&coex_cmd, 0, sizeof(coex_cmd));
+
+	return iwl_send_cmd_pdu(priv, COEX_PRIORITY_TABLE_CMD,
+				sizeof(coex_cmd), &coex_cmd);
+}
+
+static int iwl5000_alive_notify(struct iwl_priv *priv)
+{
+	u32 a;
+	int i = 0;
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&priv->lock, flags);
+
+	ret = iwl_grab_nic_access(priv);
+	if (ret) {
+		spin_unlock_irqrestore(&priv->lock, flags);
+		return ret;
+	}
+
+	priv->scd_base_addr = iwl_read_prph(priv, IWL50_SCD_SRAM_BASE_ADDR);
+	a = priv->scd_base_addr + IWL50_SCD_CONTEXT_DATA_OFFSET;
+	for (; a < priv->scd_base_addr + IWL50_SCD_TX_STTS_BITMAP_OFFSET;
+		a += 4)
+		iwl_write_targ_mem(priv, a, 0);
+	for (; a < priv->scd_base_addr + IWL50_SCD_TRANSLATE_TBL_OFFSET;
+		a += 4)
+		iwl_write_targ_mem(priv, a, 0);
+	for (; a < sizeof(u16) * priv->hw_params.max_txq_num; a += 4)
+		iwl_write_targ_mem(priv, a, 0);
+
+	iwl_write_prph(priv, IWL50_SCD_DRAM_BASE_ADDR,
+		(priv->shared_phys +
+		 offsetof(struct iwl5000_shared, queues_byte_cnt_tbls)) >> 10);
+	iwl_write_prph(priv, IWL50_SCD_QUEUECHAIN_SEL,
+		IWL50_SCD_QUEUECHAIN_SEL_ALL(
+			priv->hw_params.max_txq_num));
+	iwl_write_prph(priv, IWL50_SCD_AGGR_SEL, 0);
+
+	/* initiate the queues */
+	for (i = 0; i < priv->hw_params.max_txq_num; i++) {
+		iwl_write_prph(priv, IWL50_SCD_QUEUE_RDPTR(i), 0);
+		iwl_write_direct32(priv, HBUS_TARG_WRPTR, 0 | (i << 8));
+		iwl_write_targ_mem(priv, priv->scd_base_addr +
+				IWL50_SCD_CONTEXT_QUEUE_OFFSET(i), 0);
+		iwl_write_targ_mem(priv, priv->scd_base_addr +
+				IWL50_SCD_CONTEXT_QUEUE_OFFSET(i) +
+				sizeof(u32),
+				((SCD_WIN_SIZE <<
+				IWL50_SCD_QUEUE_CTX_REG2_WIN_SIZE_POS) &
+				IWL50_SCD_QUEUE_CTX_REG2_WIN_SIZE_MSK) |
+				((SCD_FRAME_LIMIT <<
+				IWL50_SCD_QUEUE_CTX_REG2_FRAME_LIMIT_POS) &
+				IWL50_SCD_QUEUE_CTX_REG2_FRAME_LIMIT_MSK));
+	}
+
+	iwl_write_prph(priv, IWL50_SCD_INTERRUPT_MASK,
+				 (1 << priv->hw_params.max_txq_num) - 1);
+
+	iwl_write_prph(priv, IWL50_SCD_TXFACT,
+				 SCD_TXFACT_REG_TXFIFO_MASK(0, 7));
+
+	iwl5000_set_wr_ptrs(priv, IWL_CMD_QUEUE_NUM, 0);
+	/* map qos queues to fifos one-to-one */
+	for (i = 0; i < ARRAY_SIZE(iwl5000_default_queue_to_tx_fifo); i++) {
+		int ac = iwl5000_default_queue_to_tx_fifo[i];
+		iwl_txq_ctx_activate(priv, i);
+		iwl5000_tx_queue_set_status(priv, &priv->txq[i], ac, 0);
+	}
+	/* TODO - need to initialize those FIFOs inside the loop above,
+	 * not only mark them as active */
+	iwl_txq_ctx_activate(priv, 4);
+	iwl_txq_ctx_activate(priv, 7);
+	iwl_txq_ctx_activate(priv, 8);
+	iwl_txq_ctx_activate(priv, 9);
+
+	iwl_release_nic_access(priv);
+	spin_unlock_irqrestore(&priv->lock, flags);
+
+	iwl5000_send_wimax_coex(priv);
+
+	/* Ask for statistics now, the uCode will send notification
+	 * periodically after association */
+	iwl_send_statistics_request(priv, CMD_ASYNC);
+
+	return 0;
+}
+
 static int iwl5000_hw_set_hw_params(struct iwl_priv *priv)
 {
 	if ((priv->cfg->mod_params->num_of_queues > IWL50_NUM_QUEUES) ||
@@ -298,7 +598,6 @@ static int iwl5000_hw_set_hw_params(struct iwl_priv *priv)
 
 	priv->hw_params.max_txq_num = priv->cfg->mod_params->num_of_queues;
 	priv->hw_params.sw_crypto = priv->cfg->mod_params->sw_crypto;
-	priv->hw_params.tx_cmd_len = sizeof(struct iwl4965_tx_cmd);
 	priv->hw_params.max_rxq_size = RX_QUEUE_SIZE;
 	priv->hw_params.max_rxq_log = RX_QUEUE_SIZE_LOG;
 	if (priv->cfg->mod_params->amsdu_size_8K)
@@ -459,10 +758,21 @@ static int iwl5000_disable_tx_fifo(struct iwl_priv *priv)
 	return 0;
 }
 
+/* Currently 5000 is the supperset of everything */
+static u16 iwl5000_get_hcmd_size(u8 cmd_id, u16 len)
+{
+	return len;
+}
+
+static void iwl5000_rx_handler_setup(struct iwl_priv *priv)
+{
+}
+
 static struct iwl_hcmd_ops iwl5000_hcmd = {
 };
 
 static struct iwl_hcmd_utils_ops iwl5000_hcmd_utils = {
+	.get_hcmd_size = iwl5000_get_hcmd_size,
 	.build_addsta_hcmd = iwl5000_build_addsta_hcmd,
 #ifdef CONFIG_IWL5000_RUN_TIME_CALIB
 	.gain_computation = iwl5000_gain_computation,
@@ -477,6 +787,10 @@ static struct iwl_lib_ops iwl5000_lib = {
 	.shared_mem_rx_idx = iwl5000_shared_mem_rx_idx,
 	.txq_update_byte_cnt_tbl = iwl5000_txq_update_byte_cnt_tbl,
 	.disable_tx_fifo = iwl5000_disable_tx_fifo,
+	.rx_handler_setup = iwl5000_rx_handler_setup,
+	.load_ucode = iwl5000_load_ucode,
+	.init_alive_start = iwl5000_init_alive_start,
+	.alive_notify = iwl5000_alive_notify,
 	.apm_ops = {
 		.init =	iwl5000_apm_init,
 		.config = iwl5000_nic_config,
