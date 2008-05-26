@@ -78,9 +78,6 @@ static struct device virtio_pci_root = {
 	.bus_id		= "virtio-pci",
 };
 
-/* Unique numbering for devices under the kvm root */
-static unsigned int dev_index;
-
 /* Convert a generic virtio device to our structure */
 static struct virtio_pci_device *to_vp_device(struct virtio_device *vdev)
 {
@@ -91,10 +88,14 @@ static struct virtio_pci_device *to_vp_device(struct virtio_device *vdev)
 static u32 vp_get_features(struct virtio_device *vdev)
 {
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
+	u32 features;
 
 	/* When someone needs more than 32 feature bits, we'll need to
 	 * steal a bit to indicate that the rest are somewhere else. */
-	return ioread32(vp_dev->ioaddr + VIRTIO_PCI_HOST_FEATURES);
+	features = ioread32(vp_dev->ioaddr + VIRTIO_PCI_HOST_FEATURES);
+
+	/* Vring may want to play with the bits it's offered. */
+	return vring_transport_features(features);
 }
 
 /* virtio config->set_features() implementation */
@@ -324,10 +325,6 @@ static int __devinit virtio_pci_probe(struct pci_dev *pci_dev,
 	vp_dev = kzalloc(sizeof(struct virtio_pci_device), GFP_KERNEL);
 	if (vp_dev == NULL)
 		return -ENOMEM;
-
-	snprintf(vp_dev->vdev.dev.bus_id, BUS_ID_SIZE, "virtio%d", dev_index);
-	vp_dev->vdev.index = dev_index;
-	dev_index++;
 
 	vp_dev->vdev.dev.parent = &virtio_pci_root;
 	vp_dev->vdev.config = &virtio_pci_config_ops;
