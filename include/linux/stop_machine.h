@@ -17,8 +17,7 @@
  * @data: the data ptr for the @fn()
  * @cpu: if @cpu == n, run @fn() on cpu n
  *       if @cpu == NR_CPUS, run @fn() on any cpu
- *       if @cpu == ALL_CPUS, run @fn() first on the calling cpu, and then
- *       concurrently on all the other cpus
+ *       if @cpu == ALL_CPUS, run @fn() on every online CPU.
  *
  * Description: This causes a thread to be scheduled on every other cpu,
  * each of which disables interrupts, and finally interrupts are disabled
@@ -35,13 +34,10 @@ int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu);
  * @data: the data ptr for the @fn
  * @cpu: the cpu to run @fn on (or any, if @cpu == NR_CPUS.
  *
- * Description: This is a special version of the above, which returns the
- * thread which has run @fn(): kthread_stop will return the return value
- * of @fn().  Used by hotplug cpu.
+ * Description: This is a special version of the above, which assumes cpus
+ * won't come or go while it's being called.  Used by hotplug cpu.
  */
-struct task_struct *__stop_machine_run(int (*fn)(void *), void *data,
-				       unsigned int cpu);
-
+int __stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu);
 #else
 
 static inline int stop_machine_run(int (*fn)(void *), void *data,
