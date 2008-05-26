@@ -1013,6 +1013,7 @@ static int mount_ubifs(struct ubifs_info *c)
 				  c->bgt_name, err);
 			return err;
 		}
+		wake_up_process(c->bgt);
 	}
 
 	err = ubifs_read_master(c);
@@ -1301,6 +1302,7 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 			  c->bgt_name, err);
 		return err;
 	}
+	wake_up_process(c->bgt);
 
 	if (c->need_recovery)
 		err = ubifs_recover_gc_lnum(c);
