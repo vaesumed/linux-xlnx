@@ -521,7 +521,8 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		const struct ubifs_orph_node *orph = node;
 
 		printk(KERN_DEBUG "\tcommit number  %llu\n",
-		       (unsigned long long)le64_to_cpu(orph->cmt_no) & LLONG_MAX);
+		       (unsigned long long)
+				le64_to_cpu(orph->cmt_no) & LLONG_MAX);
 		printk(KERN_DEBUG "\tlast node flag %llu\n",
 		       (unsigned long long)(le64_to_cpu(orph->cmt_no)) >> 63);
 		n = (le32_to_cpu(ch->len) - UBIFS_ORPH_NODE_SZ) >> 3;
@@ -1173,8 +1174,7 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 		last = prev->child_cnt - 1;
 		if (prev->level == 0 && znode->level == 0 && !c->replaying &&
 		    !keys_cmp(c, &prev->zbranch[last].key,
-			      &znode->zbranch[0].key))
-		{
+			      &znode->zbranch[0].key)) {
 			err = dbg_check_key_order(c, &prev->zbranch[last],
 						  &znode->zbranch[0]);
 			if (err < 0)
@@ -1251,7 +1251,7 @@ int dbg_force_in_the_gaps(void)
 	if (!dbg_force_in_the_gaps_enabled)
 		return 0;
 	/* Force in-the-gaps every 8th commit */
-	return !((invocation_cnt ++) & 0x7);
+	return !((invocation_cnt++) & 0x7);
 }
 
 /* Failure mode for recovery testing */
@@ -1375,7 +1375,7 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 		dbg_rcvry("failing in index head LEB %d", lnum);
 	} else if (c->jheads && lnum == c->jheads[GCHD].wbuf.lnum) {
 		if (chance(99, 100))
-			return 0;		
+			return 0;
 		dbg_rcvry("failing in GC head LEB %d", lnum);
 	} else if (write && !RB_EMPTY_ROOT(&c->buds) &&
 		   !ubifs_search_bud(c, lnum)) {
