@@ -9,6 +9,8 @@ fwabs := $(addprefix $(srctree)/,$(filter-out /%,$(fwdir)))$(filter /%,$(fwdir))
 
 fw-external-y := $(subst ",,$(CONFIG_EXTRA_FIRMWARE))
 
+fw-shipped-$(CONFIG_SND_KORG1212) += korg/k1212.dsp
+
 # If CONFIG_FIRMWARE_IN_KERNEL is not set, then don't include any firmware
 ifneq ($(CONFIG_FIRMWARE_IN_KERNEL),y)
 fw-shipped-y :=
