@@ -537,7 +537,7 @@ static void set_addr(struct i2c_client *c, struct tuner_setup *tun_setup)
 static inline int check_mode(struct tuner *t, char *cmd)
 {
 	if ((1 << t->mode & t->mode_mask) == 0) {
-		return EINVAL;
+		return -EINVAL;
 	}
 
 	switch (t->mode) {
@@ -731,11 +731,11 @@ static inline int set_mode(struct i2c_client *client, struct tuner *t, int mode,
 
 	t->mode = mode;
 
-	if (check_mode(t, cmd) == EINVAL) {
+	if (check_mode(t, cmd) == -EINVAL) {
 		t->mode = T_STANDBY;
 		if (analog_ops->standby)
 			analog_ops->standby(&t->fe);
-		return EINVAL;
+		return -EINVAL;
 	}
 	return 0;
 }
@@ -777,13 +777,13 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		break;
 	case AUDC_SET_RADIO:
 		if (set_mode(client, t, V4L2_TUNER_RADIO, "AUDC_SET_RADIO")
-				== EINVAL)
+				== -EINVAL)
 			return 0;
 		if (t->radio_freq)
 			set_freq(client, t->radio_freq);
 		break;
 	case TUNER_SET_STANDBY:
-		if (check_mode(t, "TUNER_SET_STANDBY") == EINVAL)
+		if (check_mode(t, "TUNER_SET_STANDBY") == -EINVAL)
 			return 0;
 		t->mode = T_STANDBY;
 		if (analog_ops->standby)
@@ -791,7 +791,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		break;
 #ifdef CONFIG_VIDEO_ALLOW_V4L1
 	case VIDIOCSAUDIO:
-		if (check_mode(t, "VIDIOCSAUDIO") == EINVAL)
+		if (check_mode(t, "VIDIOCSAUDIO") == -EINVAL)
 			return 0;
 		if (check_v4l2(t) == EINVAL)
 			return 0;
@@ -814,7 +814,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 			if (check_v4l2(t) == EINVAL)
 				return 0;
 
-			if (set_mode(client,t,V4L2_TUNER_ANALOG_TV, "VIDIOCSCHAN")==EINVAL)
+			if (set_mode(client,t,V4L2_TUNER_ANALOG_TV, "VIDIOCSCHAN")==-EINVAL)
 				return 0;
 
 			if (vc->norm < ARRAY_SIZE(map))
@@ -828,7 +828,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		{
 			unsigned long *v = arg;
 
-			if (check_mode(t, "VIDIOCSFREQ") == EINVAL)
+			if (check_mode(t, "VIDIOCSFREQ") == -EINVAL)
 				return 0;
 			if (check_v4l2(t) == EINVAL)
 				return 0;
@@ -840,7 +840,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		{
 			struct video_tuner *vt = arg;
 
-			if (check_mode(t, "VIDIOCGTUNER") == EINVAL)
+			if (check_mode(t, "VIDIOCGTUNER") == -EINVAL)
 				return 0;
 			if (check_v4l2(t) == EINVAL)
 				return 0;
@@ -884,7 +884,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		{
 			struct video_audio *va = arg;
 
-			if (check_mode(t, "VIDIOCGAUDIO") == EINVAL)
+			if (check_mode(t, "VIDIOCGAUDIO") == -EINVAL)
 				return 0;
 			if (check_v4l2(t) == EINVAL)
 				return 0;
@@ -926,7 +926,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 			v4l2_std_id *id = arg;
 
 			if (set_mode (client, t, V4L2_TUNER_ANALOG_TV, "VIDIOC_S_STD")
-					== EINVAL)
+					== -EINVAL)
 				return 0;
 
 			switch_v4l2();
@@ -942,7 +942,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 			struct v4l2_frequency *f = arg;
 
 			if (set_mode (client, t, f->type, "VIDIOC_S_FREQUENCY")
-					== EINVAL)
+					== -EINVAL)
 				return 0;
 			switch_v4l2();
 			set_freq(client,f->frequency);
@@ -953,7 +953,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		{
 			struct v4l2_frequency *f = arg;
 
-			if (check_mode(t, "VIDIOC_G_FREQUENCY") == EINVAL)
+			if (check_mode(t, "VIDIOC_G_FREQUENCY") == -EINVAL)
 				return 0;
 			switch_v4l2();
 			f->type = t->mode;
@@ -974,7 +974,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		{
 			struct v4l2_tuner *tuner = arg;
 
-			if (check_mode(t, "VIDIOC_G_TUNER") == EINVAL)
+			if (check_mode(t, "VIDIOC_G_TUNER") == -EINVAL)
 				return 0;
 			switch_v4l2();
 
@@ -1021,7 +1021,7 @@ static int tuner_command(struct i2c_client *client, unsigned int cmd, void *arg)
 		{
 			struct v4l2_tuner *tuner = arg;
 
-			if (check_mode(t, "VIDIOC_S_TUNER") == EINVAL)
+			if (check_mode(t, "VIDIOC_S_TUNER") == -EINVAL)
 				return 0;
 
 			switch_v4l2();
