@@ -2831,7 +2831,6 @@ void ubifs_tnc_close(struct ubifs_info *c)
 		clean_freed = ubifs_destroy_tnc_subtree(c->zroot.znode);
 		atomic_long_sub(clean_freed, &ubifs_clean_zn_cnt);
 	}
-	kfree(c->cbuf);
 	kfree(c->gap_lebs);
 	kfree(c->ilebs);
 	destroy_old_idx(c);
