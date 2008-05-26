@@ -2711,8 +2711,8 @@ int ubifs_tnc_remove_ino(struct ubifs_info *c, ino_t inum)
  * key value for this inode and @name has to be %NULL.
  *
  * This function returns the found directory or extended attribute entry node
- * in case of success, %-ENOENT is returned if no entry was found, and a negative
- * error code is returned in case of failure.
+ * in case of success, %-ENOENT is returned if no entry was found, and a
+ * negative error code is returned in case of failure.
  */
 struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 					   union ubifs_key *key,
@@ -2736,7 +2736,8 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 		if (err) {
 			/* Handle collisions */
 			err = resolve_collision(c, key, &znode, &n, nm);
-			dbg_tnc("rc returned %d, znode %p, n %d", err, znode, n);
+			dbg_tnc("rc returned %d, znode %p, n %d",
+				err, znode, n);
 			if (unlikely(err < 0))
 				goto out_unlock;
 		}
