@@ -81,7 +81,7 @@ static int inherit_flags(const struct inode *dir, int mode)
 		 */
 		return 0;
 
-	flags = ui->flags & UBIFS_COMPR_FL & UBIFS_SYNC_FL & UBIFS_DIRSYNC_FL;
+	flags = ui->flags & (UBIFS_COMPR_FL | UBIFS_SYNC_FL | UBIFS_DIRSYNC_FL);
 	if (!S_ISDIR(mode))
 		/* The "DIRSYNC" flag only applies to directories */
 		flags &= ~UBIFS_DIRSYNC_FL;
