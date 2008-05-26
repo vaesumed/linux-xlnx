@@ -31,7 +31,7 @@
 	if (unlikely(!(expr))) {                                               \
 		printk(KERN_CRIT "UBIFS assert failed in %s at %u (pid %d)\n", \
 		       __func__, __LINE__, current->pid);                      \
-		dbg_dump_stack();                                                  \
+		dbg_dump_stack();                                              \
 	}                                                                      \
 } while (0)
 
