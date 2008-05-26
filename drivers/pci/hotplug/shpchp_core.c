@@ -39,7 +39,7 @@
 int shpchp_debug;
 int shpchp_poll_mode;
 int shpchp_poll_time;
-int shpchp_slot_with_bus;
+static int shpchp_slot_with_bus;
 struct workqueue_struct *shpchp_wq;
 
 #define DRIVER_VERSION	"0.4"
@@ -326,13 +326,14 @@ static int get_cur_bus_speed (struct hotplug_slot *hotplug_slot, enum pci_bus_sp
 
 static int is_shpc_capable(struct pci_dev *dev)
 {
-       if ((dev->vendor == PCI_VENDOR_ID_AMD) || (dev->device ==
-                               PCI_DEVICE_ID_AMD_GOLAM_7450))
-               return 1;
-       if (pci_find_capability(dev, PCI_CAP_ID_SHPC))
-               return 1;
-
-       return 0;
+	if ((dev->vendor == PCI_VENDOR_ID_AMD) || (dev->device ==
+						PCI_DEVICE_ID_AMD_GOLAM_7450))
+		return 1;
+	if (!pci_find_capability(dev, PCI_CAP_ID_SHPC))
+		return 0;
+	if (get_hp_hw_control_from_firmware(dev))
+		return 0;
+	return 1;
 }
 
 static int shpc_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
