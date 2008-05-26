@@ -56,6 +56,40 @@ struct backing_dev_info ubifs_backing_dev_info = {
 };
 
 /**
+ * inherit_flags - inherit flags of the parent inode.
+ * @dir: parent inode
+ * @mode: new inode mode flags
+ *
+ * This is a helper function for 'ubifs_new_inode()' which inherits flag of the
+ * parent directory inode @dir. UBIFS inodes inherit the following flags:
+ * o %UBIFS_COMPR_FL, which is useful to switch compression on/of on
+ *   sub-directory basis;
+ * o %UBIFS_SYNC_FL - useful for the same reasons;
+ * o %UBIFS_DIRSYNC_FL - similar, but relevant only to directories.
+ *
+ * This function returns the inherited flags.
+ */
+static int inherit_flags(const struct inode *dir, int mode)
+{
+	int flags;
+	const struct ubifs_inode *ui = ubifs_inode(dir);
+
+	if (!S_ISDIR(dir->i_mode))
+		/*
+		 * The parent is not a directory, which means that an extended
+		 * attribute inode is being created. No flags.
+		 */
+		return 0;
+
+	flags = ui->flags & UBIFS_COMPR_FL & UBIFS_SYNC_FL & UBIFS_DIRSYNC_FL;
+	if (!S_ISDIR(mode))
+		/* The "DIRSYNC" flag only applies to directories */
+		flags &= ~UBIFS_DIRSYNC_FL;
+
+	return flags;
+}
+
+/**
  * ubifs_new_inode - allocate new UBIFS inode object.
  * @c: UBIFS file-system description object
  * @dir: parent directory inode
@@ -122,12 +156,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	}
 
 	ui = ubifs_inode(inode);
-	ui->flags = ubifs_inode(dir)->flags;
-	if (S_ISLNK(mode))
-		ui->flags &= ~(UBIFS_IMMUTABLE_FL | UBIFS_APPEND_FL);
-	if (!S_ISDIR(mode))
-		/* The "DIRSYNC" flag only applies to directories */
-		ui->flags &= ~UBIFS_DIRSYNC_FL;
+	ui->flags = inherit_flags(dir, mode);
 	ubifs_set_inode_flags(inode);
 
 	if (S_ISREG(mode))
