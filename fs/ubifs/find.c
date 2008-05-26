@@ -201,7 +201,7 @@ static const struct ubifs_lprops *scan_for_dirty(struct ubifs_info *c,
  * @ret_lp: LEB properties are returned here on exit
  * @min_space: minimum amount free plus dirty space the returned LEB has to
  *             have
- * @pick_free: if it is ok to return a free or freeable LEB;
+ * @pick_free: controls whether it is OK to pick empty or index LEBs
  *
  * This function tries to find a dirty logical eraseblock which has at least
  * @min_space free and dirty space. It prefers to take an LEB from the dirty or
@@ -218,21 +218,21 @@ static const struct ubifs_lprops *scan_for_dirty(struct ubifs_info *c,
  * "taken".
  *
  * The additional @pick_free argument controls if this function has to return a
- * free or freeable LEB if one is present. E.g., is convenient for GC to set it
- * to %1, when GC is called from the journal space reservation function - it
- * has to produce find an LEB as soon as possible. Which means, if a free or
- * freeable LEB come in the middle of garbage collection, it has to be erased
- * and used.
+ * free or freeable LEB if one is present. For example, GC must to set it to %1,
+ * when called from the journal space reservation function, because the
+ * appearance of free space may coincide with the loss of enough dirty space
+ * for GC to succeed anyway.
  *
- * In opposite, if the Garbage Collector is called from the budgeting, it
- * should just make free space, not retuning LEBs which are already free (or
- * freeable, which is basically the same, but freeable will become available
- * only after the commit).
+ * In contrast, if the Garbage Collector is called from budgeting, it should
+ * just make free space, not return LEBs which are already free or freeable.
+ *
+ * In addition @pick_free is set to %2 by the recovery process in order to
+ * recover gc_lnum in which case an index LEB must not be returned.
  */
 int ubifs_find_dirty_leb(struct ubifs_info *c, struct ubifs_lprops *ret_lp,
 			 int min_space, int pick_free)
 {
-	int err = 0, sum, exclude_index = 0;
+	int err = 0, sum, exclude_index = pick_free == 2 ? 1 : 0;
 	const struct ubifs_lprops *lp = NULL, *idx_lp = NULL;
 	struct ubifs_lpt_heap *heap, *idx_heap;
 
@@ -246,11 +246,10 @@ int ubifs_find_dirty_leb(struct ubifs_info *c, struct ubifs_lprops *ret_lp,
 		lebs += c->freeable_cnt - c->lst.taken_empty_lebs;
 
 		/*
-		 * Note, the index may consume more LEBs than it has been
-		 * reserved for it. It is OK because it might be consolidated
-		 * by this "in-the-gaps" index commit method if needed. But if
-		 * the index takes fewer LEBs than it is reserved for it, this
-		 * function should anyway avoid picking those reserved LEBs.
+		 * Note, the index may consume more LEBs than have been reserved
+		 * for it. It is OK because it might be consolidated by GC.
+		 * But if the index takes fewer LEBs than it is reserved for it,
+		 * this function must avoid picking those reserved LEBs.
 		 */
 		if (c->min_idx_lebs >= c->lst.idx_lebs) {
 			rsvd_idx_lebs = c->min_idx_lebs -  c->lst.idx_lebs;

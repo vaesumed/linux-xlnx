@@ -52,18 +52,6 @@
 #define SOFT_LEBS_LIMIT 4
 #define HARD_LEBS_LIMIT 32
 
-/*
- * Return codes used by the garbage collector.
- * @LEB_FREED: the logical eraseblock was freed and is ready to use
- * @LEB_FREED_IDX: indexing LEB was freed and can be used only after the commit
- * @LEB_RETAINED: the logical eraseblock was freed and retained for GC purposes
- */
-enum {
-	LEB_FREED,
-	LEB_FREED_IDX,
-	LEB_RETAINED,
-};
-
 /**
  * switch_gc_head - switch the garbage collection journal head.
  * @c: UBIFS file-system description object
@@ -270,7 +258,7 @@ static int gc_sync_wbufs(struct ubifs_info *c)
 }
 
 /**
- * garbage_collect_leb - garbage-collect a logical eraseblock.
+ * ubifs_garbage_collect_leb - garbage-collect a logical eraseblock.
  * @c: UBIFS file-system description object
  * @lp: describes the LEB to garbage collect
  *
@@ -278,7 +266,7 @@ static int gc_sync_wbufs(struct ubifs_info *c)
  * @LEB_RETAINED, etc positive codes in case of success, %-EAGAIN if commit is
  * required, and other negative error codes in case of failures.
  */
-static int garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
+int ubifs_garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 {
 	struct ubifs_scan_leb *sleb;
 	struct ubifs_scan_node *snod;
@@ -466,7 +454,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 		 * continuing to GC dirty LEBs. Hence we request
 		 * 'ubifs_find_dirty_leb()' to return an empty LEB if it can.
 		 */
-		ret = ubifs_find_dirty_leb(c, &lp, min_space, !anyway);
+		ret = ubifs_find_dirty_leb(c, &lp, min_space, anyway ? 0 : 1);
 		if (ret) {
 			if (ret == -ENOSPC)
 				dbg_gc("no more dirty LEBs");
@@ -512,7 +500,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 		if (wbuf->lnum == -1)
 			space_before = 0;
 
-		ret = garbage_collect_leb(c, &lp);
+		ret = ubifs_garbage_collect_leb(c, &lp);
 		if (ret < 0) {
 			if (ret == -EAGAIN || ret == -ENOSPC) {
 				/*
