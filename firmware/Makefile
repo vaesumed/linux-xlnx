@@ -8,6 +8,7 @@ fwdir := $(subst ",,$(CONFIG_BUILTIN_FIRMWARE_DIR))
 fwabs := $(addprefix $(srctree)/,$(filter-out /%,$(fwdir)))$(filter /%,$(fwdir))
 
 fw-external-y := $(subst ",,$(CONFIG_BUILTIN_FIRMWARE))
+fw-shipped-$(CONFIG_SND_KORG1212_FIRMWARE_IN_KERNEL) += korg/k1212.dsp
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
