@@ -1033,6 +1033,10 @@ struct ubifs_mount_opts {
  * @old_zroot_level: old index root level - used by 'dbg_check_old_index()'
  * @old_zroot_sqnum: old index root sqnum - used by 'dbg_check_old_index()'
  * @failure_mode: failure mode for recovery testing
+ * @fail_delay: 0=>don't delay, 1=>delay a time, 2=>delay a number of calls
+ * @fail_timeout: time in jiffies when delay of failure mode expires
+ * @fail_cnt: current number of calls to failure mode I/O functions
+ * @fail_cnt_max: number of calls by which to delay failure mode
  */
 struct ubifs_info {
 	struct super_block *vfs_sb;
@@ -1257,6 +1261,10 @@ struct ubifs_info {
 	int old_zroot_level;
 	unsigned long long old_zroot_sqnum;
 	int failure_mode;
+	int fail_delay;
+	unsigned long fail_timeout;
+	unsigned int fail_cnt;
+	unsigned int fail_cnt_max;
 #endif
 };
 

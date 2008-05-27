@@ -273,7 +273,8 @@ int ubifs_garbage_collect_leb(struct ubifs_info *c, struct ubifs_lprops *lp)
 	struct ubifs_wbuf *wbuf = &c->jheads[GCHD].wbuf;
 	int err = 0, lnum = lp->lnum;
 
-	ubifs_assert(c->gc_lnum != -1 || wbuf->offs + wbuf->used == 0);
+	ubifs_assert(c->gc_lnum != -1 || wbuf->offs + wbuf->used == 0 ||
+		     c->need_recovery);
 	ubifs_assert(c->gc_lnum != lnum);
 	ubifs_assert(wbuf->lnum != lnum);
 
