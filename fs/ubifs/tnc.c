@@ -490,38 +490,6 @@ static struct ubifs_znode *dirty_cow_znode(struct ubifs_info *c,
 }
 
 /**
- * ubifs_validate_entry - validate directory or extended attribute entry node.
- * @c: UBIFS file-system description object
- * @dent: the node to validate
- *
- * This function validates directory or extended attribute entry node @dent.
- * Returns zero if the node is all right and a %-EINVAL if not.
- */
-int ubifs_validate_entry(struct ubifs_info *c,
-			 const struct ubifs_dent_node *dent)
-{
-	int key_type = key_type_flash(c, dent->key);
-	int nlen = le16_to_cpu(dent->nlen);
-
-	if (le32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
-	    dent->type >= UBIFS_ITYPES_CNT ||
-	    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
-	    strnlen(dent->name, nlen) != nlen ||
-	    le64_to_cpu(dent->inum) > MAX_INUM) {
-		ubifs_err("bad %s node", key_type == UBIFS_DENT_KEY ?
-			  "directory entry" : "extended attribute entry");
-		return -EINVAL;
-	}
-
-	if (key_type != UBIFS_DENT_KEY && key_type != UBIFS_XENT_KEY) {
-		ubifs_err("bad key type %d", key_type);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-/**
  * lnc_add - add a leaf node to the leaf node cache.
  * @c: UBIFS file-system description object
  * @zbr: zbranch of leaf node

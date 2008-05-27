@@ -1398,8 +1398,6 @@ int ubifs_tnc_has_node(struct ubifs_info *c, union ubifs_key *key, int level,
 		       int lnum, int offs, int is_idx);
 int ubifs_dirty_idx_node(struct ubifs_info *c, union ubifs_key *key, int level,
 			 int lnum, int offs);
-int ubifs_validate_entry(struct ubifs_info *c,
-			 const struct ubifs_dent_node *dent);
 /* Shared by tnc.c for tnc_commit.c */
 void destroy_old_idx(struct ubifs_info *c);
 int is_idx_node_in_tnc(struct ubifs_info *c, union ubifs_key *key, int level,
@@ -1442,6 +1440,8 @@ struct ubifs_sb_node *ubifs_read_sb_node(struct ubifs_info *c);
 int ubifs_write_sb_node(struct ubifs_info *c, struct ubifs_sb_node *sup);
 
 /* replay.c */
+int ubifs_validate_entry(struct ubifs_info *c,
+			 const struct ubifs_dent_node *dent);
 int ubifs_replay_journal(struct ubifs_info *c);
 
 /* gc.c */
