@@ -72,6 +72,7 @@ struct kvm_stats_debugfs_item debugfs_entries[] = {
 	{ "mmio_exits", VCPU_STAT(mmio_exits) },
 	{ "signal_exits", VCPU_STAT(signal_exits) },
 	{ "irq_window", VCPU_STAT(irq_window_exits) },
+	{ "nmi_window", VCPU_STAT(nmi_window_exits) },
 	{ "halt_exits", VCPU_STAT(halt_exits) },
 	{ "halt_wakeup", VCPU_STAT(halt_wakeup) },
 	{ "hypercalls", VCPU_STAT(hypercalls) },
@@ -172,6 +173,12 @@ void kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long addr,
 	vcpu->arch.cr2 = addr;
 	kvm_queue_exception_e(vcpu, PF_VECTOR, error_code);
 }
+
+void kvm_inject_nmi(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.nmi_pending = 1;
+}
+EXPORT_SYMBOL_GPL(kvm_inject_nmi);
 
 void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, u32 error_code)
 {
@@ -766,41 +773,6 @@ out_free:
 	vfree(entries);
 out:
 	return r;
-}
-
-/*
- * Make sure that a cpu that is being hot-unplugged does not have any vcpus
- * cached on it.
- */
-void decache_vcpus_on_cpu(int cpu)
-{
-	struct kvm *vm;
-	struct kvm_vcpu *vcpu;
-	int i;
-
-	spin_lock(&kvm_lock);
-	list_for_each_entry(vm, &vm_list, vm_list)
-		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
-			vcpu = vm->vcpus[i];
-			if (!vcpu)
-				continue;
-			/*
-			 * If the vcpu is locked, then it is running on some
-			 * other cpu and therefore it is not cached on the
-			 * cpu in question.
-			 *
-			 * If it's not locked, check the last cpu it executed
-			 * on.
-			 */
-			if (mutex_trylock(&vcpu->mutex)) {
-				if (vcpu->cpu == cpu) {
-					kvm_x86_ops->vcpu_decache(vcpu);
-					vcpu->cpu = -1;
-				}
-				mutex_unlock(&vcpu->mutex);
-			}
-		}
-	spin_unlock(&kvm_lock);
 }
 
 int kvm_dev_ioctl_check_extension(long ext)
@@ -1971,6 +1943,7 @@ int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 
 int emulate_clts(struct kvm_vcpu *vcpu)
 {
+	KVMTRACE_0D(CLTS, vcpu, handler);
 	kvm_x86_ops->set_cr0(vcpu, vcpu->arch.cr0 & ~X86_CR0_TS);
 	return X86EMUL_CONTINUE;
 }
@@ -2282,7 +2255,6 @@ int kvm_emulate_pio(struct kvm_vcpu *vcpu, struct kvm_run *run, int in,
 
 	kvm_x86_ops->cache_regs(vcpu);
 	memcpy(vcpu->arch.pio_data, &vcpu->arch.regs[VCPU_REGS_RAX], 4);
-	kvm_x86_ops->decache_regs(vcpu);
 
 	kvm_x86_ops->skip_emulated_instruction(vcpu);
 
@@ -2551,27 +2523,41 @@ void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
 
 unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr)
 {
+	unsigned long value;
+
 	kvm_x86_ops->decache_cr4_guest_bits(vcpu);
 	switch (cr) {
 	case 0:
-		return vcpu->arch.cr0;
+		value = vcpu->arch.cr0;
+		break;
 	case 2:
-		return vcpu->arch.cr2;
+		value = vcpu->arch.cr2;
+		break;
 	case 3:
-		return vcpu->arch.cr3;
+		value = vcpu->arch.cr3;
+		break;
 	case 4:
-		return vcpu->arch.cr4;
+		value = vcpu->arch.cr4;
+		break;
 	case 8:
-		return kvm_get_cr8(vcpu);
+		value = kvm_get_cr8(vcpu);
+		break;
 	default:
 		vcpu_printf(vcpu, "%s: unexpected cr %u\n", __func__, cr);
 		return 0;
 	}
+	KVMTRACE_3D(CR_READ, vcpu, (u32)cr, (u32)value,
+		    (u32)((u64)value >> 32), handler);
+
+	return value;
 }
 
 void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 		     unsigned long *rflags)
 {
+	KVMTRACE_3D(CR_WRITE, vcpu, (u32)cr, (u32)val,
+		    (u32)((u64)val >> 32), handler);
+
 	switch (cr) {
 	case 0:
 		kvm_set_cr0(vcpu, mk_cr_64(vcpu->arch.cr0, val));
@@ -3408,7 +3394,7 @@ static int load_state_from_tss16(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
-int kvm_task_switch_16(struct kvm_vcpu *vcpu, u16 tss_selector,
+static int kvm_task_switch_16(struct kvm_vcpu *vcpu, u16 tss_selector,
 		       struct desc_struct *cseg_desc,
 		       struct desc_struct *nseg_desc)
 {
@@ -3431,7 +3417,7 @@ out:
 	return ret;
 }
 
-int kvm_task_switch_32(struct kvm_vcpu *vcpu, u16 tss_selector,
+static int kvm_task_switch_32(struct kvm_vcpu *vcpu, u16 tss_selector,
 		       struct desc_struct *cseg_desc,
 		       struct desc_struct *nseg_desc)
 {
