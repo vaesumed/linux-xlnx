@@ -320,7 +320,7 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\trp_gid         %u\n",
 		       le32_to_cpu(sup->rp_gid));
 		printk(KERN_DEBUG "\tfmt_vers       %u\n",
-		       le32_to_cpu(sup->fmt_vers));
+		       le32_to_cpu(sup->fmt_version));
 		printk(KERN_DEBUG "\ttime_gran      %u\n",
 		       le32_to_cpu(sup->time_gran));
 		break;
