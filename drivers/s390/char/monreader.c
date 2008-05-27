@@ -18,6 +18,7 @@
 #include <linux/ctype.h>
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
+#include <linux/smp_lock.h>
 #include <asm/uaccess.h>
 #include <asm/ebcdic.h>
 #include <asm/extmem.h>
@@ -340,6 +341,7 @@ static int mon_open(struct inode *inode, struct file *filp)
 	/*
 	 * only one user allowed
 	 */
+	lock_kernel();
 	rc = -EBUSY;
 	if (test_and_set_bit(MON_IN_USE, &mon_in_use))
 		goto out;
@@ -377,6 +379,7 @@ static int mon_open(struct inode *inode, struct file *filp)
 	}
 	P_INFO("open, established connection to *MONITOR service\n\n");
 	filp->private_data = monpriv;
+	unlock_kernel();
 	return nonseekable_open(inode, filp);
 
 out_path:
@@ -386,6 +389,7 @@ out_priv:
 out_use:
 	clear_bit(MON_IN_USE, &mon_in_use);
 out:
+	unlock_kernel();
 	return rc;
 }
 
