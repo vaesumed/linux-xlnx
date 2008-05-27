@@ -93,6 +93,11 @@ enum {
 	REPLY_LEDS_CMD = 0x48,
 	REPLY_TX_LINK_QUALITY_CMD = 0x4e, /* 4965 only */
 
+	/* WiMAX coexistence */
+	COEX_PRIORITY_TABLE_CMD = 0x5a,	/*5000 only */
+	COEX_MEDIUM_NOTIFICATION = 0x5b,
+	COEX_EVENT_CMD = 0x5c,
+
 	/* 802.11h related */
 	RADAR_NOTIFICATION = 0x70,	/* not used */
 	REPLY_QUIET_CMD = 0x71,		/* not used */
@@ -599,6 +604,32 @@ struct iwl4965_rxon_cmd {
 	u8 ofdm_ht_single_stream_basic_rates;
 	u8 ofdm_ht_dual_stream_basic_rates;
 } __attribute__ ((packed));
+
+/* 5000 HW just extend this cmmand */
+struct iwl_rxon_cmd {
+	u8 node_addr[6];
+	__le16 reserved1;
+	u8 bssid_addr[6];
+	__le16 reserved2;
+	u8 wlap_bssid_addr[6];
+	__le16 reserved3;
+	u8 dev_type;
+	u8 air_propagation;
+	__le16 rx_chain;
+	u8 ofdm_basic_rates;
+	u8 cck_basic_rates;
+	__le16 assoc_id;
+	__le32 flags;
+	__le32 filter_flags;
+	__le16 channel;
+	u8 ofdm_ht_single_stream_basic_rates;
+	u8 ofdm_ht_dual_stream_basic_rates;
+	u8 ofdm_ht_triple_stream_basic_rates;
+	u8 reserved5;
+	__le16 acquisition_data;
+	__le16 reserved6;
+} __attribute__ ((packed));
+
 
 /*
  * REPLY_RXON_ASSOC = 0x11 (command, has simple generic response)
@@ -1170,7 +1201,7 @@ struct iwl4965_dram_scratch {
 /*
  * REPLY_TX = 0x1c (command)
  */
-struct iwl4965_tx_cmd {
+struct iwl_tx_cmd {
 	/*
 	 * MPDU byte count:
 	 * MAC header (24/26/30/32 bytes) + 2 bytes pad if 26/30 header size,
@@ -2109,7 +2140,7 @@ struct iwl4965_scan_cmd {
 
 	/* For active scans (set to all-0s for passive scans).
 	 * Does not include payload.  Must specify Tx rate; no rate scaling. */
-	struct iwl4965_tx_cmd tx_cmd;
+	struct iwl_tx_cmd tx_cmd;
 
 	/* For directed active scans (set to all-0s otherwise) */
 	struct iwl4965_ssid_ie direct_scan[PROBE_OPTION_MAX];
@@ -2206,7 +2237,7 @@ struct iwl4965_beacon_notif {
  * REPLY_TX_BEACON = 0x91 (command, has simple generic response)
  */
 struct iwl4965_tx_beacon_cmd {
-	struct iwl4965_tx_cmd tx;
+	struct iwl_tx_cmd tx;
 	__le16 tim_idx;
 	u8 tim_size;
 	u8 reserved1;
@@ -2769,6 +2800,55 @@ struct iwl4965_led_cmd {
 	u8 on;			/* # intervals on while blinking;
 				 * "0", regardless of "off", turns LED off */
 	u8 reserved;
+} __attribute__ ((packed));
+
+/*
+ * Coexistence WIFI/WIMAX  Command
+ * COEX_PRIORITY_TABLE_CMD = 0x5a
+ *
+ */
+enum {
+	COEX_UNASSOC_IDLE		= 0,
+	COEX_UNASSOC_MANUAL_SCAN	= 1,
+	COEX_UNASSOC_AUTO_SCAN		= 2,
+	COEX_CALIBRATION		= 3,
+	COEX_PERIODIC_CALIBRATION	= 4,
+	COEX_CONNECTION_ESTAB		= 5,
+	COEX_ASSOCIATED_IDLE		= 6,
+	COEX_ASSOC_MANUAL_SCAN		= 7,
+	COEX_ASSOC_AUTO_SCAN		= 8,
+	COEX_ASSOC_ACTIVE_LEVEL		= 9,
+	COEX_RF_ON			= 10,
+	COEX_RF_OFF			= 11,
+	COEX_STAND_ALONE_DEBUG		= 12,
+	COEX_IPAN_ASSOC_LEVEL		= 13,
+	COEX_RSRVD1			= 14,
+	COEX_RSRVD2			= 15,
+	COEX_NUM_OF_EVENTS		= 16
+};
+
+struct iwl_wimax_coex_event_entry {
+	u8 request_prio;
+	u8 win_medium_prio;
+	u8 reserved;
+	u8 flags;
+} __attribute__ ((packed));
+
+/* COEX flag masks */
+
+/* Staion table is valid */
+#define COEX_FLAGS_STA_TABLE_VALID_MSK      (0x1)
+/* UnMask wakeup src at unassociated sleep */
+#define COEX_FLAGS_UNASSOC_WA_UNMASK_MSK    (0x4)
+/* UnMask wakeup src at associated sleep */
+#define COEX_FLAGS_ASSOC_WA_UNMASK_MSK      (0x8)
+/* Enable CoEx feature. */
+#define COEX_FLAGS_COEX_ENABLE_MSK          (0x80)
+
+struct iwl_wimax_coex_cmd {
+	u8 flags;
+	u8 reserved[3];
+	struct iwl_wimax_coex_event_entry sta_prio[COEX_NUM_OF_EVENTS];
 } __attribute__ ((packed));
 
 /******************************************************************************
