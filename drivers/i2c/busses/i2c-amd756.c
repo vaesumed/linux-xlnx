@@ -45,6 +45,7 @@
 #include <linux/ioport.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
+#include <linux/acpi.h>
 #include <asm/io.h>
 
 /* AMD756 SMBus address offsets */
@@ -151,17 +152,17 @@ static int amd756_transaction(struct i2c_adapter *adap)
 	}
 
 	if (temp & GS_PRERR_STS) {
-		result = -1;
+		result = -ENXIO;
 		dev_dbg(&adap->dev, "SMBus Protocol error (no response)!\n");
 	}
 
 	if (temp & GS_COL_STS) {
-		result = -1;
+		result = -EIO;
 		dev_warn(&adap->dev, "SMBus collision!\n");
 	}
 
 	if (temp & GS_TO_STS) {
-		result = -1;
+		result = -ETIMEDOUT;
 		dev_dbg(&adap->dev, "SMBus protocol timeout!\n");
 	}
 
@@ -189,22 +190,18 @@ static int amd756_transaction(struct i2c_adapter *adap)
 	outw_p(inw(SMB_GLOBAL_ENABLE) | GE_ABORT, SMB_GLOBAL_ENABLE);
 	msleep(100);
 	outw_p(GS_CLEAR_STS, SMB_GLOBAL_STATUS);
-	return -1;
+	return -EIO;
 }
 
-/* Return -1 on error. */
+/* Return negative errno on error. */
 static s32 amd756_access(struct i2c_adapter * adap, u16 addr,
 		  unsigned short flags, char read_write,
 		  u8 command, int size, union i2c_smbus_data * data)
 {
 	int i, len;
+	int status;
 
-	/** TODO: Should I supporte the 10-bit transfers? */
 	switch (size) {
-	case I2C_SMBUS_PROC_CALL:
-		dev_dbg(&adap->dev, "I2C_SMBUS_PROC_CALL not supported!\n");
-		/* TODO: Well... It is supported, I'm just not sure what to do here... */
-		return -1;
 	case I2C_SMBUS_QUICK:
 		outw_p(((addr & 0x7f) << 1) | (read_write & 0x01),
 		       SMB_HOST_ADDRESS);
@@ -251,13 +248,17 @@ static s32 amd756_access(struct i2c_adapter * adap, u16 addr,
 		}
 		size = AMD756_BLOCK_DATA;
 		break;
+	default:
+		dev_warn(&adap->dev, "Unsupported transaction %d\n", size);
+		return -EOPNOTSUPP;
 	}
 
 	/* How about enabling interrupts... */
 	outw_p(size & GE_CYC_TYPE_MASK, SMB_GLOBAL_ENABLE);
 
-	if (amd756_transaction(adap))	/* Error in transaction */
-		return -1;
+	status = amd756_transaction(adap);
+	if (status)
+		return status;
 
 	if ((read_write == I2C_SMBUS_WRITE) || (size == AMD756_QUICK))
 		return 0;
@@ -367,6 +368,11 @@ static int __devinit amd756_probe(struct pci_dev *pdev,
 		amd756_ioport &= 0xff00;
 		amd756_ioport += SMB_ADDR_OFFSET;
 	}
+
+	error = acpi_check_region(amd756_ioport, SMB_IOSIZE,
+				  amd756_driver.name);
+	if (error)
+		return error;
 
 	if (!request_region(amd756_ioport, SMB_IOSIZE, amd756_driver.name)) {
 		dev_err(&pdev->dev, "SMB region 0x%x already in use!\n",
