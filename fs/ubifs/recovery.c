@@ -1125,9 +1125,17 @@ int ubifs_recover_gc_lnum(struct ubifs_info *c)
 			return err;
 		goto find_free;
 	}
-	/* It fits, so GC it */
+	/* It fits, so GC it - use locking to keep 'ubifs_assert()' happy */
 	dbg_rcvry("GC'ing LEB %d", lnum);
+	mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
 	err = ubifs_garbage_collect_leb(c, &lp);
+	if (err >= 0) {
+		int err2 = ubifs_wbuf_sync_nolock(wbuf);
+
+		if (err2)
+			err = err2;
+	}
+	mutex_unlock(&wbuf->io_mutex);
 	if (err < 0) {
 		dbg_err("GC failed, error %d", err);
 		if (err == -EAGAIN)
@@ -1138,6 +1146,9 @@ int ubifs_recover_gc_lnum(struct ubifs_info *c)
 		dbg_err("GC returned %d", err);
 		return -EINVAL;
 	}
+	err = ubifs_leb_unmap(c, c->gc_lnum);
+	if (err)
+		return err;
 	dbg_rcvry("allocated LEB %d for GC", lnum);
 	return 0;
 

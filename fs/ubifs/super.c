@@ -1345,6 +1345,10 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	}
 	wake_up_process(c->bgt);
 
+	err = ubifs_mount_orphans(c, c->need_recovery);
+	if (err)
+		goto out;
+
 	if (c->need_recovery)
 		err = ubifs_recover_gc_lnum(c);
 	else
@@ -1352,9 +1356,6 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	if (err)
 		goto out;
 
-	err = ubifs_mount_orphans(c, c->need_recovery);
-	if (err)
-		goto out;
 	/* Check for enough log space */
 	lnum = c->lhead_lnum + 1;
 	if (lnum >= UBIFS_LOG_LNUM + c->log_lebs)
