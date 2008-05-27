@@ -986,7 +986,7 @@ EXPORT_SYMBOL(acquire_console_sem);
 
 int try_acquire_console_sem(void)
 {
-	if (down_trylock(&console_sem))
+	if (!down_try(&console_sem))
 		return -1;
 	console_locked = 1;
 	console_may_schedule = 0;
@@ -1085,7 +1085,7 @@ void console_unblank(void)
 	 * oops_in_progress is set to 1..
 	 */
 	if (oops_in_progress) {
-		if (down_trylock(&console_sem) != 0)
+		if (!down_try(&console_sem))
 			return;
 	} else
 		acquire_console_sem();
