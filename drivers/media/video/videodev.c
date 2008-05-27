@@ -890,8 +890,8 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 				ret=vfd->vidioc_enum_fmt_vbi(file, fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
-			if (vfd->vidioc_enum_fmt_vbi_output)
-				ret=vfd->vidioc_enum_fmt_vbi_output(file,
+			if (vfd->vidioc_enum_fmt_sliced_vbi_output)
+				ret = vfd->vidioc_enum_fmt_sliced_vbi_output(file,
 								fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
@@ -955,8 +955,8 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 				ret=vfd->vidioc_g_fmt_vbi(file, fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
-			if (vfd->vidioc_g_fmt_vbi_output)
-				ret=vfd->vidioc_g_fmt_vbi_output(file, fh, f);
+			if (vfd->vidioc_g_fmt_sliced_vbi_output)
+				ret = vfd->vidioc_g_fmt_sliced_vbi_output(file, fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
 			if (vfd->vidioc_g_fmt_vbi_capture)
@@ -1007,8 +1007,8 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 				ret=vfd->vidioc_s_fmt_vbi(file, fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
-			if (vfd->vidioc_s_fmt_vbi_output)
-				ret=vfd->vidioc_s_fmt_vbi_output(file, fh, f);
+			if (vfd->vidioc_s_fmt_sliced_vbi_output)
+				ret = vfd->vidioc_s_fmt_sliced_vbi_output(file, fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
 			if (vfd->vidioc_s_fmt_vbi_capture)
@@ -1059,8 +1059,8 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 				ret=vfd->vidioc_try_fmt_vbi(file, fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
-			if (vfd->vidioc_try_fmt_vbi_output)
-				ret=vfd->vidioc_try_fmt_vbi_output(file,
+			if (vfd->vidioc_try_fmt_sliced_vbi_output)
+				ret = vfd->vidioc_try_fmt_sliced_vbi_output(file,
 								fh, f);
 			break;
 		case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
@@ -1402,6 +1402,25 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 	}
 
 	/* ------ output switching ---------- */
+	case VIDIOC_ENUMOUTPUT:
+	{
+		struct v4l2_output *p = arg;
+		int i = p->index;
+
+		if (!vfd->vidioc_enum_output)
+			break;
+		memset(p, 0, sizeof(*p));
+		p->index = i;
+
+		ret = vfd->vidioc_enum_output(file, fh, p);
+		if (!ret)
+			dbgarg(cmd, "index=%d, name=%s, type=%d, "
+				"audioset=%d, "
+				"modulator=%d, std=%08Lx\n",
+				p->index, p->name, p->type, p->audioset,
+				p->modulator, (unsigned long long)p->std);
+		break;
+	}
 	case VIDIOC_G_OUTPUT:
 	{
 		unsigned int *i = arg;
