@@ -293,7 +293,7 @@ static int actual_try_to_identify (ide_drive_t *drive, u8 cmd)
 		hwif->OUTB(0, io_ports->feature_addr);
 
 	/* ask drive for ID */
-	hwif->OUTBSYNC(drive, cmd, io_ports->command_addr);
+	hwif->OUTBSYNC(hwif, cmd, hwif->io_ports.command_addr);
 
 	timeout = ((cmd == WIN_IDENTIFY) ? WAIT_WORSTCASE : WAIT_PIDENTIFY) / 2;
 	timeout += jiffies;
@@ -478,9 +478,9 @@ static int do_probe (ide_drive_t *drive, u8 cmd)
 			printk(KERN_ERR "%s: no response (status = 0x%02x), "
 					"resetting drive\n", drive->name, stat);
 			msleep(50);
-			hwif->OUTB(drive->select.all, io_ports->device_addr);
+			SELECT_DRIVE(drive);
 			msleep(50);
-			hwif->OUTBSYNC(drive, WIN_SRST, io_ports->command_addr);
+			hwif->OUTBSYNC(hwif, WIN_SRST, io_ports->command_addr);
 			(void)ide_busy_sleep(hwif);
 			rc = try_to_identify(drive, cmd);
 		}
@@ -516,7 +516,7 @@ static void enable_nest (ide_drive_t *drive)
 	printk("%s: enabling %s -- ", hwif->name, drive->id->model);
 	SELECT_DRIVE(drive);
 	msleep(50);
-	hwif->OUTBSYNC(drive, EXABYTE_ENABLE_NEST, hwif->io_ports.command_addr);
+	hwif->OUTBSYNC(hwif, EXABYTE_ENABLE_NEST, hwif->io_ports.command_addr);
 
 	if (ide_busy_sleep(hwif)) {
 		printk(KERN_CONT "failed (timeout)\n");
@@ -1067,7 +1067,7 @@ static int init_irq (ide_hwif_t *hwif)
 
 		if (io_ports->ctl_addr)
 			/* clear nIEN */
-			hwif->OUTB(0x08, io_ports->ctl_addr);
+			hwif->OUTBSYNC(hwif, ATA_DEVCTL_OBS, io_ports->ctl_addr);
 
 		if (request_irq(hwif->irq,&ide_intr,sa,hwif->name,hwgroup))
 	       		goto out_unlink;
@@ -1333,8 +1333,7 @@ static void ide_port_init_devices(ide_hwif_t *hwif)
 static void ide_init_port(ide_hwif_t *hwif, unsigned int port,
 			  const struct ide_port_info *d)
 {
-	if (d->chipset != ide_etrax100)
-		hwif->channel = port;
+	hwif->channel = port;
 
 	if (d->chipset)
 		hwif->chipset = d->chipset;
@@ -1519,7 +1518,7 @@ int ide_device_add_all(u8 *idx, const struct ide_port_info *d)
 			continue;
 		}
 
-		if (d->chipset != ide_etrax100 && (i & 1) && mate) {
+		if ((i & 1) && mate) {
 			hwif->mate = mate;
 			mate->mate = hwif;
 		}
