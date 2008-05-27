@@ -553,7 +553,7 @@ struct ubifs_pad_node {
  * @jhead_cnt: count of journal heads
  * @fanout: tree fanout (max. number of links per indexing node)
  * @lsave_cnt: number of LEB numbers in LPT's save table
- * @fmt_vers: UBIFS on-flash format version
+ * @fmt_version: UBIFS on-flash format version
  * @default_compr: default compression algorithm (%UBIFS_COMPR_LZO, etc)
  * @padding1: reserved for future, zeroes
  * @rp_uid: reserve pool UID
@@ -579,7 +579,7 @@ struct ubifs_sb_node {
 	__le32 jhead_cnt;
 	__le32 fanout;
 	__le32 lsave_cnt;
-	__le32 fmt_vers;
+	__le32 fmt_version;
 	__le16 default_compr;
 	__u8 padding1[2];
 	__le32 rp_uid;

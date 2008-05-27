@@ -170,7 +170,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->jhead_cnt     = cpu_to_le32(DEFAULT_JHEADS_CNT);
 	sup->fanout        = cpu_to_le32(DEFAULT_FANOUT);
 	sup->lsave_cnt     = cpu_to_le32(c->lsave_cnt);
-	sup->fmt_vers      = cpu_to_le32(UBIFS_FORMAT_VERSION);
+	sup->fmt_version   = cpu_to_le32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_le16(UBIFS_COMPR_LZO);
 	sup->time_gran     = cpu_to_le32(DEFAULT_TIME_GRAN);
 
@@ -515,16 +515,16 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	 * The software supports all previous versions but not future versions,
 	 * due to the unavailability of time-travelling equipment.
 	 */
-	c->fmt_vers = le32_to_cpu(sup->fmt_vers);
-	if (c->fmt_vers > UBIFS_FORMAT_VERSION) {
+	c->fmt_version = le32_to_cpu(sup->fmt_version);
+	if (c->fmt_version > UBIFS_FORMAT_VERSION) {
 		ubifs_err("on-flash format version is %d, but software only "
-			  "supports up to version %d", c->fmt_vers,
+			  "supports up to version %d", c->fmt_version,
 			  UBIFS_FORMAT_VERSION);
 		err = -EINVAL;
 		goto out;
 	}
 
-	if (c->fmt_vers == 1) {
+	if (c->fmt_version == 1) {
 		ubifs_err("this on-flash format is not supported");
 		err = -EINVAL;
 		goto out;
