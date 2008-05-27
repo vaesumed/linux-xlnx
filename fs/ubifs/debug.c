@@ -1337,9 +1337,34 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 		return 0;
 	if (c->failure_mode)
 		return 1;
+	if (!c->fail_cnt) {
+		/* First call - decide delay to failure */
+		if (chance(1, 2)) {
+			unsigned int delay = 1 << (simple_rand() >> 11);
+
+			if (chance(1, 2)) {
+				c->fail_delay = 1;
+				c->fail_timeout = jiffies +
+						  msecs_to_jiffies(delay);
+				dbg_rcvry("failing after %ums", delay);
+			} else {
+				c->fail_delay = 2;
+				c->fail_cnt_max = delay;
+				dbg_rcvry("failing after %u calls", delay);
+			}
+		}
+		c->fail_cnt += 1;
+	}
+	/* Determine if failure delay has expired */
+	if (c->fail_delay == 1) {
+		if (time_before(jiffies, c->fail_timeout))
+			return 0;
+	} else if (c->fail_delay == 2)
+		if (c->fail_cnt++ < c->fail_cnt_max)
+			return 0;
 	if (lnum == UBIFS_SB_LNUM) {
 		if (write) {
-			if (chance(10, 20))
+			if (chance(1, 2))
 				return 0;
 		} else if (chance(19, 20))
 			return 0;
@@ -1357,16 +1382,16 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 		dbg_rcvry("failing in log LEB %d", lnum);
 	} else if (lnum >= c->lpt_first && lnum <= c->lpt_last) {
 		if (write) {
-			if (chance(99, 100))
+			if (chance(7, 8))
 				return 0;
-		} else if (chance(399, 400))
+		} else if (chance(19, 20))
 			return 0;
 		dbg_rcvry("failing in LPT LEB %d", lnum);
 	} else if (lnum >= c->orph_first && lnum <= c->orph_last) {
 		if (write) {
-			if (chance(9, 10))
+			if (chance(1, 2))
 				return 0;
-		} else if (chance(39, 40))
+		} else if (chance(9, 10))
 			return 0;
 		dbg_rcvry("failing in orphan LEB %d", lnum);
 	} else if (lnum == c->ihead_lnum) {
@@ -1374,7 +1399,7 @@ static int do_fail(struct ubi_volume_desc *desc, int lnum, int write)
 			return 0;
 		dbg_rcvry("failing in index head LEB %d", lnum);
 	} else if (c->jheads && lnum == c->jheads[GCHD].wbuf.lnum) {
-		if (chance(99, 100))
+		if (chance(9, 10))
 			return 0;
 		dbg_rcvry("failing in GC head LEB %d", lnum);
 	} else if (write && !RB_EMPTY_ROOT(&c->buds) &&
