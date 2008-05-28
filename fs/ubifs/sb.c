@@ -524,7 +524,7 @@ int ubifs_read_superblock(struct ubifs_info *c)
 		goto out;
 	}
 
-	if (c->fmt_version == 1) {
+	if (c->fmt_version <= 2) {
 		ubifs_err("on-flash format version %d is not supported",
 			  c->fmt_version);
 		err = -EINVAL;
