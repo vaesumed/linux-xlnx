@@ -196,9 +196,9 @@ static int create_default_filesystem(struct ubifs_info *c)
 	mst->ch.node_type = UBIFS_MST_NODE;
 	mst->log_lnum     = cpu_to_le32(UBIFS_LOG_LNUM);
 	mst->highest_inum = cpu_to_le64(UBIFS_FIRST_INO);
-	mst->cmt_no       = cpu_to_le64(0);
+	mst->cmt_no       = 0;
 	mst->root_lnum    = cpu_to_le32(main_first + DEFAULT_IDX_LEB);
-	mst->root_offs    = cpu_to_le32(0);
+	mst->root_offs    = 0;
 	tmp = ubifs_idx_node_sz(c, 1);
 	mst->root_len     = cpu_to_le32(tmp);
 	mst->gc_lnum      = cpu_to_le32(main_first + DEFAULT_GC_LEB);

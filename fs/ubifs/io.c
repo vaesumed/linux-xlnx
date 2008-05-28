@@ -161,7 +161,7 @@ void ubifs_pad(const struct ubifs_info *c, void *buf, int pad)
 		ch->node_type = UBIFS_PAD_NODE;
 		ch->group_type = UBIFS_NO_NODE_GROUP;
 		ch->padding[0] = ch->padding[1] = 0;
-		ch->sqnum = cpu_to_le64(0);
+		ch->sqnum = 0;
 		ch->len = cpu_to_le32(UBIFS_PAD_NODE_SZ);
 		pad -= UBIFS_PAD_NODE_SZ;
 		pad_node->pad_len = cpu_to_le32(pad);
