@@ -849,7 +849,7 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	dent2->ch.node_type = UBIFS_DENT_NODE;
 	dent_key_init_flash(c, &dent2->key, old_dir->i_ino,
 			    &old_dentry->d_name);
-	dent2->inum = cpu_to_le64(0);
+	dent2->inum = 0;
 	dent2->type = DT_UNKNOWN;
 	dent2->nlen = cpu_to_le16(old_dentry->d_name.len);
 	memcpy(dent2->name, old_dentry->d_name.name, old_dentry->d_name.len);
