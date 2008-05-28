@@ -10,6 +10,8 @@
  * published by the Free Software Foundation.
  */
 
+#ifndef __ASM_ARCH_IRQS_H
+#define __ASM_ARCH_IRQS_H
 
 #define PXA_IRQ(x)	(x)
 
@@ -83,119 +85,25 @@
 #define IRQ_TO_GPIO(i)	(((i) < IRQ_GPIO(2)) ? ((i) - IRQ_GPIO0) : IRQ_TO_GPIO_2_x(i))
 
 /*
- * The next 16 interrupts are for board specific purposes.  Since
- * the kernel can only run on one machine at a time, we can re-use
- * these.  If you need more, increase IRQ_BOARD_END, but keep it
- * within sensible limits.
- */
-#define IRQ_BOARD_START		(PXA_GPIO_IRQ_BASE + PXA_GPIO_IRQ_NUM)
-#define IRQ_BOARD_END		(IRQ_BOARD_START + 16)
-
-#define IRQ_SA1111_START	(IRQ_BOARD_END)
-#define IRQ_GPAIN0		(IRQ_BOARD_END + 0)
-#define IRQ_GPAIN1		(IRQ_BOARD_END + 1)
-#define IRQ_GPAIN2		(IRQ_BOARD_END + 2)
-#define IRQ_GPAIN3		(IRQ_BOARD_END + 3)
-#define IRQ_GPBIN0		(IRQ_BOARD_END + 4)
-#define IRQ_GPBIN1		(IRQ_BOARD_END + 5)
-#define IRQ_GPBIN2		(IRQ_BOARD_END + 6)
-#define IRQ_GPBIN3		(IRQ_BOARD_END + 7)
-#define IRQ_GPBIN4		(IRQ_BOARD_END + 8)
-#define IRQ_GPBIN5		(IRQ_BOARD_END + 9)
-#define IRQ_GPCIN0		(IRQ_BOARD_END + 10)
-#define IRQ_GPCIN1		(IRQ_BOARD_END + 11)
-#define IRQ_GPCIN2		(IRQ_BOARD_END + 12)
-#define IRQ_GPCIN3		(IRQ_BOARD_END + 13)
-#define IRQ_GPCIN4		(IRQ_BOARD_END + 14)
-#define IRQ_GPCIN5		(IRQ_BOARD_END + 15)
-#define IRQ_GPCIN6		(IRQ_BOARD_END + 16)
-#define IRQ_GPCIN7		(IRQ_BOARD_END + 17)
-#define IRQ_MSTXINT		(IRQ_BOARD_END + 18)
-#define IRQ_MSRXINT		(IRQ_BOARD_END + 19)
-#define IRQ_MSSTOPERRINT	(IRQ_BOARD_END + 20)
-#define IRQ_TPTXINT		(IRQ_BOARD_END + 21)
-#define IRQ_TPRXINT		(IRQ_BOARD_END + 22)
-#define IRQ_TPSTOPERRINT	(IRQ_BOARD_END + 23)
-#define SSPXMTINT		(IRQ_BOARD_END + 24)
-#define SSPRCVINT		(IRQ_BOARD_END + 25)
-#define SSPROR			(IRQ_BOARD_END + 26)
-#define AUDXMTDMADONEA		(IRQ_BOARD_END + 32)
-#define AUDRCVDMADONEA		(IRQ_BOARD_END + 33)
-#define AUDXMTDMADONEB		(IRQ_BOARD_END + 34)
-#define AUDRCVDMADONEB		(IRQ_BOARD_END + 35)
-#define AUDTFSR			(IRQ_BOARD_END + 36)
-#define AUDRFSR			(IRQ_BOARD_END + 37)
-#define AUDTUR			(IRQ_BOARD_END + 38)
-#define AUDROR			(IRQ_BOARD_END + 39)
-#define AUDDTS			(IRQ_BOARD_END + 40)
-#define AUDRDD			(IRQ_BOARD_END + 41)
-#define AUDSTO			(IRQ_BOARD_END + 42)
-#define IRQ_USBPWR		(IRQ_BOARD_END + 43)
-#define IRQ_HCIM		(IRQ_BOARD_END + 44)
-#define IRQ_HCIBUFFACC		(IRQ_BOARD_END + 45)
-#define IRQ_HCIRMTWKP		(IRQ_BOARD_END + 46)
-#define IRQ_NHCIMFCIR		(IRQ_BOARD_END + 47)
-#define IRQ_USB_PORT_RESUME	(IRQ_BOARD_END + 48)
-#define IRQ_S0_READY_NINT	(IRQ_BOARD_END + 49)
-#define IRQ_S1_READY_NINT	(IRQ_BOARD_END + 50)
-#define IRQ_S0_CD_VALID		(IRQ_BOARD_END + 51)
-#define IRQ_S1_CD_VALID		(IRQ_BOARD_END + 52)
-#define IRQ_S0_BVD1_STSCHG	(IRQ_BOARD_END + 53)
-#define IRQ_S1_BVD1_STSCHG	(IRQ_BOARD_END + 54)
-
-#define IRQ_LOCOMO_START	(IRQ_BOARD_END)
-#define IRQ_LOCOMO_KEY		(IRQ_BOARD_END + 0)
-#define IRQ_LOCOMO_GPIO0	(IRQ_BOARD_END + 1)
-#define IRQ_LOCOMO_GPIO1	(IRQ_BOARD_END + 2)
-#define IRQ_LOCOMO_GPIO2	(IRQ_BOARD_END + 3)
-#define IRQ_LOCOMO_GPIO3	(IRQ_BOARD_END + 4)
-#define IRQ_LOCOMO_GPIO4	(IRQ_BOARD_END + 5)
-#define IRQ_LOCOMO_GPIO5	(IRQ_BOARD_END + 6)
-#define IRQ_LOCOMO_GPIO6	(IRQ_BOARD_END + 7)
-#define IRQ_LOCOMO_GPIO7	(IRQ_BOARD_END + 8)
-#define IRQ_LOCOMO_GPIO8	(IRQ_BOARD_END + 9)
-#define IRQ_LOCOMO_GPIO9	(IRQ_BOARD_END + 10)
-#define IRQ_LOCOMO_GPIO10	(IRQ_BOARD_END + 11)
-#define IRQ_LOCOMO_GPIO11	(IRQ_BOARD_END + 12)
-#define IRQ_LOCOMO_GPIO12	(IRQ_BOARD_END + 13)
-#define IRQ_LOCOMO_GPIO13	(IRQ_BOARD_END + 14)
-#define IRQ_LOCOMO_GPIO14	(IRQ_BOARD_END + 15)
-#define IRQ_LOCOMO_GPIO15	(IRQ_BOARD_END + 16)
-#define IRQ_LOCOMO_LT		(IRQ_BOARD_END + 17)
-#define IRQ_LOCOMO_SPI_RFR	(IRQ_BOARD_END + 18)
-#define IRQ_LOCOMO_SPI_RFW	(IRQ_BOARD_END + 19)
-#define IRQ_LOCOMO_SPI_OVRN	(IRQ_BOARD_END + 20)
-#define IRQ_LOCOMO_SPI_TEND	(IRQ_BOARD_END + 21)
-
-/*
- * Figure out the MAX IRQ number.
+ * Board IRQs start from the last built-in GPIO IRQ, since the kernel
+ * can only run on one machine at a time, these numbers can be reused.
+ * The end of board IRQ (PXA_BOARD_IRQ_END) is maintained to be the
+ * largest one of all the selected boards.
  *
- * If we have an SA1111, the max IRQ is S1_BVD1_STSCHG+1.
- * If we have an LoCoMo, the max IRQ is IRQ_LOCOMO_SPI_TEND+1
- * Otherwise, we have the standard IRQs only.
+ * NOTE: PXA_BOARD_IRQ_END by default leaves 16 IRQs for backward
+ * compatibility
  */
-#ifdef CONFIG_SA1111
-#define NR_IRQS			(IRQ_S1_BVD1_STSCHG + 1)
-#elif defined(CONFIG_SHARP_LOCOMO)
-#define NR_IRQS			(IRQ_LOCOMO_SPI_TEND + 1)
-#elif defined(CONFIG_ARCH_LUBBOCK) || \
-      defined(CONFIG_MACH_LOGICPD_PXA270) || \
-      defined(CONFIG_MACH_TOSA) || \
-      defined(CONFIG_MACH_MAINSTONE) || \
-      defined(CONFIG_MACH_PCM027) || \
-      defined(CONFIG_MACH_MAGICIAN)
-#define NR_IRQS			(IRQ_BOARD_END)
-#elif defined(CONFIG_MACH_ZYLONITE)
-#define NR_IRQS			(IRQ_BOARD_START + 32)
-#else
-#define NR_IRQS			(IRQ_BOARD_START)
-#endif
+#define PXA_BOARD_IRQ_START	(PXA_GPIO_IRQ_BASE + PXA_GPIO_IRQ_NUM)
+#define PXA_BOARD_IRQ_END	(PXA_BOARD_IRQ_START + 16)
+#define PXA_BOARD_IRQ(x)	(PXA_BOARD_IRQ_START + (x))
 
-/*
- * Board specific IRQs.  Define them here.
- * Do not surround them with ifdefs.
- */
-#define LUBBOCK_IRQ(x)		(IRQ_BOARD_START + (x))
+/* the macros below are kept here for backward compatibility */
+#define IRQ_BOARD_START		PXA_BOARD_IRQ_START
+#define IRQ_BOARD_END		PXA_BOARD_IRQ_END
+
+#define LUBBOCK_IRQ(x)		PXA_BOARD_IRQ(x)
+
+#ifdef CONFIG_ARCH_LUBBOCK
 #define LUBBOCK_SD_IRQ		LUBBOCK_IRQ(0)
 #define LUBBOCK_SA1111_IRQ	LUBBOCK_IRQ(1)
 #define LUBBOCK_USB_IRQ		LUBBOCK_IRQ(2)  /* usb connect */
@@ -205,12 +113,15 @@
 #define LUBBOCK_USB_DISC_IRQ	LUBBOCK_IRQ(6)  /* usb disconnect */
 #define LUBBOCK_LAST_IRQ	LUBBOCK_IRQ(6)
 
-#define LPD270_IRQ(x)		(IRQ_BOARD_START + (x))
-#define LPD270_USBC_IRQ		LPD270_IRQ(2)
-#define LPD270_ETHERNET_IRQ	LPD270_IRQ(3)
-#define LPD270_AC97_IRQ		LPD270_IRQ(4)
+#if PXA_BOARD_IRQ_END < LUBBOCK_LAST_IRQ
+#undef  PXA_BOARD_IRQ_END
+#define PXA_BOARD_IRQ_END	LUBBOCK_LAST_IRQ
+#endif
+#endif /* CONFIG_ARCH_LUBBOCK */
 
-#define MAINSTONE_IRQ(x)	(IRQ_BOARD_START + (x))
+#define MAINSTONE_IRQ(x)	PXA_BOARD_IRQ(x)
+
+#ifdef CONFIG_MACH_MAINSTONE
 #define MAINSTONE_MMC_IRQ	MAINSTONE_IRQ(0)
 #define MAINSTONE_USIM_IRQ	MAINSTONE_IRQ(1)
 #define MAINSTONE_USBC_IRQ	MAINSTONE_IRQ(2)
@@ -225,24 +136,166 @@
 #define MAINSTONE_S1_CD_IRQ	MAINSTONE_IRQ(13)
 #define MAINSTONE_S1_STSCHG_IRQ	MAINSTONE_IRQ(14)
 #define MAINSTONE_S1_IRQ	MAINSTONE_IRQ(15)
+#define MAINSTONE_LAST_IRQ	MAINSTONE_S1_IRQ
 
-/* LoCoMo Interrupts (CONFIG_SHARP_LOCOMO) */
-#define IRQ_LOCOMO_KEY_BASE	(IRQ_BOARD_START + 0)
-#define IRQ_LOCOMO_GPIO_BASE	(IRQ_BOARD_START + 1)
-#define IRQ_LOCOMO_LT_BASE	(IRQ_BOARD_START + 2)
-#define IRQ_LOCOMO_SPI_BASE	(IRQ_BOARD_START + 3)
+#if PXA_BOARD_IRQ_END < MAINSTONE_LAST_IRQ
+#undef  PXA_BOARD_IRQ_END
+#define PXA_BOARD_IRQ_END	MAINSTONE_LAST_IRQ
+#endif
+#endif /* CONFIG_MACH_MAINSTONE */
 
-/* phyCORE-PXA270 (PCM027) Interrupts */
-#define PCM027_IRQ(x)          (IRQ_BOARD_START + (x))
-#define PCM027_BTDET_IRQ       PCM027_IRQ(0)
-#define PCM027_FF_RI_IRQ       PCM027_IRQ(1)
-#define PCM027_MMCDET_IRQ      PCM027_IRQ(2)
-#define PCM027_PM_5V_IRQ       PCM027_IRQ(3)
+#ifdef CONFIG_MACH_ZYLONITE
+/*
+ * Zylonite has 2 GPIO expanders each with 16 GPIOs,
+ * reserve 32 IRQs for them
+ */
+#define ZYLONITE_LAST_IRQ      PXA_BOARD_IRQ(31)
 
+#if PXA_BOARD_IRQ_END < ZYLONITE_LAST_IRQ
+#undef  PXA_BOARD_IRQ_END
+#define PXA_BOARD_IRQ_END      ZYLONITE_LAST_IRQ
+#endif
+#endif /* CONFIG_MACH_ZYLONITE */
+
+#define LPD270_IRQ(x)		PXA_BOARD_IRQ(x)
+
+#ifdef CONFIG_MACH_LOGICPD_PXA270
+#define LPD270_USBC_IRQ		LPD270_IRQ(2)
+#define LPD270_ETHERNET_IRQ	LPD270_IRQ(3)
+#define LPD270_AC97_IRQ		LPD270_IRQ(4)
+#define LPD270_LAST_IRQ		LPD270_AC97_IRQ
+
+#if PXA_BOARD_IRQ_END < LPD270_LAST_IRQ
+#undef  PXA_BOARD_IRQ_END
+#define PXA_BOARD_IRQ_END	LPD270_LAST_IRQ
+#endif
+#endif /* CONFIG_MACH_LOGICPD_PXA270 */
+
+#define PCM027_IRQ(x)		PXA_BOARD_IRQ(x)
+
+#ifdef CONFIG_MACH_PCM027
+#define PCM027_BTDET_IRQ	PCM027_IRQ(0)
+#define PCM027_FF_RI_IRQ	PCM027_IRQ(1)
+#define PCM027_MMCDET_IRQ	PCM027_IRQ(2)
+#define PCM027_PM_5V_IRQ	PCM027_IRQ(3)
+#define PCM027_LAST_IRQ		PCM027_PM_5V_IRQ
+
+#if PXA_BOARD_IRQ_END < PCM027_LAST_IRQ
+#undef  PXA_BOARD_IRQ_END
+#define PXA_BOARD_IRQ_END	PCM027_LAST_IRQ
+#endif
+#endif /* CONFIG_MACH_PCM027 */
+
+/*
+ * Extended IRQs for companion chips start from the last board-specific IRQ.
+ * NOTE: unlike board specific IRQs, the number space for these IRQs cannot
+ * be reused, since there could be multiple companion chips on a same plat-
+ * form. So the IRQ numbers are arranged here one chip by one, if selected.
+ *
+ * To add IRQ numbers for a new chip, follow the LAST_CHIP_IRQ_LAST
+ * The total IRQ number will be the (LAST_CHIP_IRQ + 1)
+ */
+#define PXA_EXT_IRQ_START	(PXA_BOARD_IRQ_END + 1)
+
+#define SA1111_IRQ(x)		(PXA_BOARD_IRQ_END + 1 + (x))
+
+#ifdef CONFIG_SA1111
+#define IRQ_SA1111_START	SA1111_IRQ(0)
+#define IRQ_GPAIN0		SA1111_IRQ(0)
+#define IRQ_GPAIN1		SA1111_IRQ(1)
+#define IRQ_GPAIN2		SA1111_IRQ(2)
+#define IRQ_GPAIN3		SA1111_IRQ(3)
+#define IRQ_GPBIN0		SA1111_IRQ(4)
+#define IRQ_GPBIN1		SA1111_IRQ(5)
+#define IRQ_GPBIN2		SA1111_IRQ(6)
+#define IRQ_GPBIN3		SA1111_IRQ(7)
+#define IRQ_GPBIN4		SA1111_IRQ(8)
+#define IRQ_GPBIN5		SA1111_IRQ(9)
+#define IRQ_GPCIN0		SA1111_IRQ(10)
+#define IRQ_GPCIN1		SA1111_IRQ(11)
+#define IRQ_GPCIN2		SA1111_IRQ(12)
+#define IRQ_GPCIN3		SA1111_IRQ(13)
+#define IRQ_GPCIN4		SA1111_IRQ(14)
+#define IRQ_GPCIN5		SA1111_IRQ(15)
+#define IRQ_GPCIN6		SA1111_IRQ(16)
+#define IRQ_GPCIN7		SA1111_IRQ(17)
+#define IRQ_MSTXINT		SA1111_IRQ(18)
+#define IRQ_MSRXINT		SA1111_IRQ(19)
+#define IRQ_MSSTOPERRINT	SA1111_IRQ(20)
+#define IRQ_TPTXINT		SA1111_IRQ(21)
+#define IRQ_TPRXINT		SA1111_IRQ(22)
+#define IRQ_TPSTOPERRINT	SA1111_IRQ(23)
+#define SSPXMTINT		SA1111_IRQ(24)
+#define SSPRCVINT		SA1111_IRQ(25)
+#define SSPROR			SA1111_IRQ(26)
+#define AUDXMTDMADONEA		SA1111_IRQ(32)
+#define AUDRCVDMADONEA		SA1111_IRQ(33)
+#define AUDXMTDMADONEB		SA1111_IRQ(34)
+#define AUDRCVDMADONEB		SA1111_IRQ(35)
+#define AUDTFSR			SA1111_IRQ(36)
+#define AUDRFSR			SA1111_IRQ(37)
+#define AUDTUR			SA1111_IRQ(38)
+#define AUDROR			SA1111_IRQ(39)
+#define AUDDTS			SA1111_IRQ(40)
+#define AUDRDD			SA1111_IRQ(41)
+#define AUDSTO			SA1111_IRQ(42)
+#define IRQ_USBPWR		SA1111_IRQ(43)
+#define IRQ_HCIM		SA1111_IRQ(44)
+#define IRQ_HCIBUFFACC		SA1111_IRQ(45)
+#define IRQ_HCIRMTWKP		SA1111_IRQ(46)
+#define IRQ_NHCIMFCIR		SA1111_IRQ(47)
+#define IRQ_USB_PORT_RESUME	SA1111_IRQ(48)
+#define IRQ_S0_READY_NINT	SA1111_IRQ(49)
+#define IRQ_S1_READY_NINT	SA1111_IRQ(50)
+#define IRQ_S0_CD_VALID		SA1111_IRQ(51)
+#define IRQ_S1_CD_VALID		SA1111_IRQ(52)
+#define IRQ_S0_BVD1_STSCHG	SA1111_IRQ(53)
+#define IRQ_S1_BVD1_STSCHG	SA1111_IRQ(54)
+
+#define SA1111_LAST_IRQ		IRQ_S1_BVD1_STSCHG
+#else
+#define SA1111_LAST_IRQ		SA1111_IRQ(-1)
+#endif /* CONFIG_SA1111 */
+
+#define LOCOMO_IRQ(x)		(SA1111_LAST_IRQ + 1 + (x))
+
+#ifdef CONFIG_SHARP_LOCOMO
+
+#define IRQ_LOCOMO_KEY		LOCOMO_IRQ(0)
+#define IRQ_LOCOMO_GPIO0	LOCOMO_IRQ(1)
+#define IRQ_LOCOMO_GPIO1	LOCOMO_IRQ(2)
+#define IRQ_LOCOMO_GPIO2	LOCOMO_IRQ(3)
+#define IRQ_LOCOMO_GPIO3	LOCOMO_IRQ(4)
+#define IRQ_LOCOMO_GPIO4	LOCOMO_IRQ(5)
+#define IRQ_LOCOMO_GPIO5	LOCOMO_IRQ(6)
+#define IRQ_LOCOMO_GPIO6	LOCOMO_IRQ(7)
+#define IRQ_LOCOMO_GPIO7	LOCOMO_IRQ(8)
+#define IRQ_LOCOMO_GPIO8	LOCOMO_IRQ(9)
+#define IRQ_LOCOMO_GPIO9	LOCOMO_IRQ(10)
+#define IRQ_LOCOMO_GPIO10	LOCOMO_IRQ(11)
+#define IRQ_LOCOMO_GPIO11	LOCOMO_IRQ(12)
+#define IRQ_LOCOMO_GPIO12	LOCOMO_IRQ(13)
+#define IRQ_LOCOMO_GPIO13	LOCOMO_IRQ(14)
+#define IRQ_LOCOMO_GPIO14	LOCOMO_IRQ(15)
+#define IRQ_LOCOMO_GPIO15	LOCOMO_IRQ(16)
+#define IRQ_LOCOMO_LT		LOCOMO_IRQ(17)
+#define IRQ_LOCOMO_SPI_RFR	LOCOMO_IRQ(18)
+#define IRQ_LOCOMO_SPI_RFW	LOCOMO_IRQ(19)
+#define IRQ_LOCOMO_SPI_OVRN	LOCOMO_IRQ(20)
+#define IRQ_LOCOMO_SPI_TEND	LOCOMO_IRQ(21)
+
+#define LOCOMO_LAST_IRQ		IRQ_LOCOMO_SPI_TEND
+#else
+#define LOCOMO_LAST_IRQ		LOCOMO_IRQ(-1)
+#endif
+
+#define IT8152_IRQ(x)		(LOCOMO_LAST_IRQ + 1 + (x))
+
+#ifdef CONFIG_PCI_HOST_ITE8152
+#endif
 /* ITE8152 irqs */
 /* add IT8152 IRQs beyond BOARD_END */
 #ifdef CONFIG_PCI_HOST_ITE8152
-#define IT8152_IRQ(x)   (IRQ_BOARD_END + (x))
 
 /* IRQ-sources in 3 groups - local devices, LPC (serial), and external PCI */
 #define IT8152_LD_IRQ_COUNT     9
@@ -255,10 +308,10 @@
 #define IT8152_LD_IRQ(i)        (IT8152_IRQ(i) + IT8152_PD_IRQ_COUNT + IT8152_LP_IRQ_COUNT)
 
 #define IT8152_LAST_IRQ         IT8152_LD_IRQ(IT8152_LD_IRQ_COUNT - 1)
-
-#if NR_IRQS < (IT8152_LAST_IRQ+1)
-#undef NR_IRQS
-#define NR_IRQS (IT8152_LAST_IRQ+1)
+#else
+#define IT8152_LAST_IRQ		IT8152_IRQ(-1)
 #endif
 
-#endif /* CONFIG_PCI_HOST_ITE8152 */
+#define NR_IRQS (IT8152_LAST_IRQ + 1)
+
+#endif /* __ASM_ARCH_IRQS_H */
