@@ -37,7 +37,7 @@
 #define UBIFS_NODE_MAGIC  0x06101831
 
 /* UBIFS on-flash format version */
-#define UBIFS_FORMAT_VERSION 2
+#define UBIFS_FORMAT_VERSION 3
 
 /* Minimum logical eraseblock size in bytes */
 #define UBIFS_MIN_LEB_SZ (15*1024)
@@ -174,7 +174,7 @@ enum {
  * value.
  */
 #define UBIFS_S_KEY_BLOCK_BITS 29
-#define UBIFS_S_KEY_BLOCK_MASK 0x01FFFFFF
+#define UBIFS_S_KEY_BLOCK_MASK 0x1FFFFFFF
 #define UBIFS_S_KEY_HASH_BITS  UBIFS_S_KEY_BLOCK_BITS
 #define UBIFS_S_KEY_HASH_MASK  UBIFS_S_KEY_BLOCK_MASK
 
