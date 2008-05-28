@@ -29,13 +29,11 @@
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/idr.h>
-#include <linux/seq_file.h>
 #include <linux/platform_device.h>
 #include <linux/mutex.h>
 #include <linux/completion.h>
 #include <linux/hardirq.h>
 #include <linux/irqflags.h>
-#include <linux/semaphore.h>
 #include <asm/uaccess.h>
 
 #include "i2c-core.h"
@@ -582,8 +580,7 @@ static int i2c_do_del_adapter(struct device_driver *d, void *data)
  */
 int i2c_del_adapter(struct i2c_adapter *adap)
 {
-	struct list_head  *item, *_n;
-	struct i2c_client *client;
+	struct i2c_client *client, *_n;
 	int res = 0;
 
 	mutex_lock(&core_lock);
@@ -604,10 +601,9 @@ int i2c_del_adapter(struct i2c_adapter *adap)
 
 	/* detach any active clients. This must be done first, because
 	 * it can fail; in which case we give up. */
-	list_for_each_safe(item, _n, &adap->clients) {
+	list_for_each_entry_safe(client, _n, &adap->clients, list) {
 		struct i2c_driver	*driver;
 
-		client = list_entry(item, struct i2c_client, list);
 		driver = client->driver;
 
 		/* new style, follow standard driver model */
@@ -646,12 +642,13 @@ EXPORT_SYMBOL(i2c_del_adapter);
 
 /* ------------------------------------------------------------------------- */
 
-static int attach_device(struct device *dev, void *data)
+static int __attach_adapter(struct device *dev, void *data)
 {
 	struct i2c_adapter *adapter = to_i2c_adapter(dev);
 	struct i2c_driver *driver = data;
 
 	driver->attach_adapter(adapter);
+
 	return 0;
 }
 
@@ -696,48 +693,44 @@ int i2c_register_driver(struct module *owner, struct i2c_driver *driver)
 
 	/* legacy drivers scan i2c busses directly */
 	if (driver->attach_adapter)
-		class_for_each_device(&i2c_adapter_class, NULL,
-				     (void *)driver, attach_device);
+		class_for_each_device(&i2c_adapter_class, NULL, driver,
+				      __attach_adapter);
 
 	mutex_unlock(&core_lock);
 	return 0;
 }
 EXPORT_SYMBOL(i2c_register_driver);
 
-static int detach_device(struct device *dev, void *data)
+static int __detach_adapter(struct device *dev, void *data)
 {
 	struct i2c_adapter *adapter = to_i2c_adapter(dev);
 	struct i2c_driver *driver = data;
-	struct list_head *item2;
-	struct list_head *_n;
-	struct i2c_client *client;
 
 	/* Have a look at each adapter, if clients of this driver are still
 	 * attached. If so, detach them to be able to kill the driver
 	 * afterwards.
 	 */
 	if (driver->detach_adapter) {
-		if (driver->detach_adapter(adapter)) {
-			dev_err(&adapter->dev, "detach_adapter failed "
-				"for driver [%s]\n",
+		if (driver->detach_adapter(adapter))
+			dev_err(&adapter->dev,
+				"detach_adapter failed for driver [%s]\n",
 				driver->driver.name);
-		}
 	} else {
-		list_for_each_safe(item2, _n, &adapter->clients) {
-			client = list_entry(item2, struct i2c_client, list);
+		struct i2c_client *client, *_n;
+
+		list_for_each_entry_safe(client, _n, &adapter->clients, list) {
 			if (client->driver != driver)
 				continue;
-			dev_dbg(&adapter->dev, "detaching client [%s] "
-				"at 0x%02x\n", client->name,
-				client->addr);
-			if (driver->detach_client(client)) {
+			dev_dbg(&adapter->dev,
+				"detaching client [%s] at 0x%02x\n",
+				client->name, client->addr);
+			if (driver->detach_client(client))
 				dev_err(&adapter->dev, "detach_client "
-					"failed for client [%s] at "
-					"0x%02x\n", client->name,
-					client->addr);
-			}
+					"failed for client [%s] at 0x%02x\n",
+					client->name, client->addr);
 		}
 	}
+
 	return 0;
 }
 
@@ -750,15 +743,11 @@ void i2c_del_driver(struct i2c_driver *driver)
 {
 	mutex_lock(&core_lock);
 
-	/* new-style driver? */
-	if (is_newstyle_driver(driver))
-		goto unregister;
+	/* legacy driver? */
+	if (!is_newstyle_driver(driver))
+		class_for_each_device(&i2c_adapter_class, NULL, driver,
+				      __detach_adapter);
 
-	/* old-style driver, do it by hand */
-	class_for_each_device(&i2c_adapter_class, NULL, (void *)driver,
-			      detach_device);
-
- unregister:
 	driver_unregister(&driver->driver);
 	pr_debug("i2c-core: driver [%s] unregistered\n", driver->driver.name);
 
@@ -871,8 +860,9 @@ EXPORT_SYMBOL(i2c_detach_client);
  */
 struct i2c_client *i2c_use_client(struct i2c_client *client)
 {
-	get_device(&client->dev);
-	return client;
+	if (client && get_device(&client->dev))
+		return client;
+	return NULL;
 }
 EXPORT_SYMBOL(i2c_use_client);
 
@@ -884,7 +874,8 @@ EXPORT_SYMBOL(i2c_use_client);
  */
 void i2c_release_client(struct i2c_client *client)
 {
-	put_device(&client->dev);
+	if (client)
+		put_device(&client->dev);
 }
 EXPORT_SYMBOL(i2c_release_client);
 
@@ -950,9 +941,38 @@ module_exit(i2c_exit);
  * ----------------------------------------------------
  */
 
+/**
+ * i2c_transfer - execute a single or combined I2C message
+ * @adap: Handle to I2C bus
+ * @msgs: One or more messages to execute before STOP is issued to
+ *	terminate the operation; each message begins with a START.
+ * @num: Number of messages to be executed.
+ *
+ * Returns negative errno, else the number of messages executed.
+ *
+ * Note that there is no requirement that each message be sent to
+ * the same slave address, although that is the most common model.
+ */
 int i2c_transfer(struct i2c_adapter * adap, struct i2c_msg *msgs, int num)
 {
 	int ret;
+
+	/* REVISIT the fault reporting model here is weak:
+	 *
+	 *  - When we get an error after receiving N bytes from a slave,
+	 *    there is no way to report "N".
+	 *
+	 *  - When we get a NAK after transmitting N bytes to a slave,
+	 *    there is no way to report "N" ... or to let the master
+	 *    continue executing the rest of this combined message, if
+	 *    that's the appropriate response.
+	 *
+	 *  - When for example "num" is two and we successfully complete
+	 *    the first message but get an error part way through the
+	 *    second, it's unclear whether that should be reported as
+	 *    one (discarding status on the second message) or errno
+	 *    (discarding status on the first one).
+	 */
 
 	if (adap->algo->master_xfer) {
 #ifdef DEBUG
@@ -979,11 +999,19 @@ int i2c_transfer(struct i2c_adapter * adap, struct i2c_msg *msgs, int num)
 		return ret;
 	} else {
 		dev_dbg(&adap->dev, "I2C level transfers not supported\n");
-		return -ENOSYS;
+		return -EOPNOTSUPP;
 	}
 }
 EXPORT_SYMBOL(i2c_transfer);
 
+/**
+ * i2c_master_send - issue a single I2C message in master transmit mode
+ * @client: Handle to slave device
+ * @buf: Data that will be written to the slave
+ * @count: How many bytes to write
+ *
+ * Returns negative errno, or else the number of bytes written.
+ */
 int i2c_master_send(struct i2c_client *client,const char *buf ,int count)
 {
 	int ret;
@@ -1003,6 +1031,14 @@ int i2c_master_send(struct i2c_client *client,const char *buf ,int count)
 }
 EXPORT_SYMBOL(i2c_master_send);
 
+/**
+ * i2c_master_recv - issue a single I2C message in master receive mode
+ * @client: Handle to slave device
+ * @buf: Where to store data read from slave
+ * @count: How many bytes to read
+ *
+ * Returns negative errno, or else the number of bytes read.
+ */
 int i2c_master_recv(struct i2c_client *client, char *buf ,int count)
 {
 	struct i2c_adapter *adap=client->adapter;
@@ -1111,7 +1147,7 @@ int i2c_probe(struct i2c_adapter *adapter,
 
 		dev_warn(&adapter->dev, "SMBus Quick command not supported, "
 			 "can't probe for chips\n");
-		return -1;
+		return -EOPNOTSUPP;
 	}
 
 	/* Probe entries are done second, and are not affected by ignore
@@ -1303,29 +1339,38 @@ static int i2c_smbus_check_pec(u8 cpec, struct i2c_msg *msg)
 	if (rpec != cpec) {
 		pr_debug("i2c-core: Bad PEC 0x%02x vs. 0x%02x\n",
 			rpec, cpec);
-		return -1;
+		return -EBADMSG;
 	}
 	return 0;
 }
 
-s32 i2c_smbus_write_quick(struct i2c_client *client, u8 value)
-{
-	return i2c_smbus_xfer(client->adapter,client->addr,client->flags,
-	                      value,0,I2C_SMBUS_QUICK,NULL);
-}
-EXPORT_SYMBOL(i2c_smbus_write_quick);
-
+/**
+ * i2c_smbus_read_byte - SMBus "receive byte" protocol
+ * @client: Handle to slave device
+ *
+ * This executes the SMBus "receive byte" protocol, returning negative errno
+ * else the byte received from the device.
+ */
 s32 i2c_smbus_read_byte(struct i2c_client *client)
 {
 	union i2c_smbus_data data;
-	if (i2c_smbus_xfer(client->adapter,client->addr,client->flags,
-	                   I2C_SMBUS_READ,0,I2C_SMBUS_BYTE, &data))
-		return -1;
-	else
-		return data.byte;
+	int status;
+
+	status = i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+				I2C_SMBUS_READ, 0,
+				I2C_SMBUS_BYTE, &data);
+	return (status < 0) ? status : data.byte;
 }
 EXPORT_SYMBOL(i2c_smbus_read_byte);
 
+/**
+ * i2c_smbus_write_byte - SMBus "send byte" protocol
+ * @client: Handle to slave device
+ * @value: Byte to be sent
+ *
+ * This executes the SMBus "send byte" protocol, returning negative errno
+ * else zero on success.
+ */
 s32 i2c_smbus_write_byte(struct i2c_client *client, u8 value)
 {
 	return i2c_smbus_xfer(client->adapter,client->addr,client->flags,
@@ -1333,17 +1378,35 @@ s32 i2c_smbus_write_byte(struct i2c_client *client, u8 value)
 }
 EXPORT_SYMBOL(i2c_smbus_write_byte);
 
+/**
+ * i2c_smbus_read_byte_data - SMBus "read byte" protocol
+ * @client: Handle to slave device
+ * @command: Byte interpreted by slave
+ *
+ * This executes the SMBus "read byte" protocol, returning negative errno
+ * else a data byte received from the device.
+ */
 s32 i2c_smbus_read_byte_data(struct i2c_client *client, u8 command)
 {
 	union i2c_smbus_data data;
-	if (i2c_smbus_xfer(client->adapter,client->addr,client->flags,
-	                   I2C_SMBUS_READ,command, I2C_SMBUS_BYTE_DATA,&data))
-		return -1;
-	else
-		return data.byte;
+	int status;
+
+	status = i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+				I2C_SMBUS_READ, command,
+				I2C_SMBUS_BYTE_DATA, &data);
+	return (status < 0) ? status : data.byte;
 }
 EXPORT_SYMBOL(i2c_smbus_read_byte_data);
 
+/**
+ * i2c_smbus_write_byte_data - SMBus "write byte" protocol
+ * @client: Handle to slave device
+ * @command: Byte interpreted by slave
+ * @value: Byte being written
+ *
+ * This executes the SMBus "write byte" protocol, returning negative errno
+ * else zero on success.
+ */
 s32 i2c_smbus_write_byte_data(struct i2c_client *client, u8 command, u8 value)
 {
 	union i2c_smbus_data data;
@@ -1354,17 +1417,35 @@ s32 i2c_smbus_write_byte_data(struct i2c_client *client, u8 command, u8 value)
 }
 EXPORT_SYMBOL(i2c_smbus_write_byte_data);
 
+/**
+ * i2c_smbus_read_word_data - SMBus "read word" protocol
+ * @client: Handle to slave device
+ * @command: Byte interpreted by slave
+ *
+ * This executes the SMBus "read word" protocol, returning negative errno
+ * else a 16-bit unsigned "word" received from the device.
+ */
 s32 i2c_smbus_read_word_data(struct i2c_client *client, u8 command)
 {
 	union i2c_smbus_data data;
-	if (i2c_smbus_xfer(client->adapter,client->addr,client->flags,
-	                   I2C_SMBUS_READ,command, I2C_SMBUS_WORD_DATA, &data))
-		return -1;
-	else
-		return data.word;
+	int status;
+
+	status = i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+				I2C_SMBUS_READ, command,
+				I2C_SMBUS_WORD_DATA, &data);
+	return (status < 0) ? status : data.word;
 }
 EXPORT_SYMBOL(i2c_smbus_read_word_data);
 
+/**
+ * i2c_smbus_write_word_data - SMBus "write word" protocol
+ * @client: Handle to slave device
+ * @command: Byte interpreted by slave
+ * @value: 16-bit "word" being written
+ *
+ * This executes the SMBus "write word" protocol, returning negative errno
+ * else zero on success.
+ */
 s32 i2c_smbus_write_word_data(struct i2c_client *client, u8 command, u16 value)
 {
 	union i2c_smbus_data data;
@@ -1376,15 +1457,14 @@ s32 i2c_smbus_write_word_data(struct i2c_client *client, u8 command, u16 value)
 EXPORT_SYMBOL(i2c_smbus_write_word_data);
 
 /**
- * i2c_smbus_read_block_data - SMBus block read request
+ * i2c_smbus_read_block_data - SMBus "block read" protocol
  * @client: Handle to slave device
- * @command: Command byte issued to let the slave know what data should
- *	be returned
+ * @command: Byte interpreted by slave
  * @values: Byte array into which data will be read; big enough to hold
  *	the data returned by the slave.  SMBus allows at most 32 bytes.
  *
- * Returns the number of bytes read in the slave's response, else a
- * negative number to indicate some kind of error.
+ * This executes the SMBus "block read" protocol, returning negative errno
+ * else the number of data bytes in the slave's response.
  *
  * Note that using this function requires that the client's adapter support
  * the I2C_FUNC_SMBUS_READ_BLOCK_DATA functionality.  Not all adapter drivers
@@ -1395,17 +1475,29 @@ s32 i2c_smbus_read_block_data(struct i2c_client *client, u8 command,
 			      u8 *values)
 {
 	union i2c_smbus_data data;
+	int status;
 
-	if (i2c_smbus_xfer(client->adapter, client->addr, client->flags,
-	                   I2C_SMBUS_READ, command,
-	                   I2C_SMBUS_BLOCK_DATA, &data))
-		return -1;
+	status = i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+				I2C_SMBUS_READ, command,
+				I2C_SMBUS_BLOCK_DATA, &data);
+	if (status)
+		return status;
 
 	memcpy(values, &data.block[1], data.block[0]);
 	return data.block[0];
 }
 EXPORT_SYMBOL(i2c_smbus_read_block_data);
 
+/**
+ * i2c_smbus_write_block_data - SMBus "block write" protocol
+ * @client: Handle to slave device
+ * @command: Byte interpreted by slave
+ * @length: Size of data block; SMBus allows at most 32 bytes
+ * @values: Byte array which will be written.
+ *
+ * This executes the SMBus "block write" protocol, returning negative errno
+ * else zero on success.
+ */
 s32 i2c_smbus_write_block_data(struct i2c_client *client, u8 command,
 			       u8 length, const u8 *values)
 {
@@ -1426,14 +1518,16 @@ s32 i2c_smbus_read_i2c_block_data(struct i2c_client *client, u8 command,
 				  u8 length, u8 *values)
 {
 	union i2c_smbus_data data;
+	int status;
 
 	if (length > I2C_SMBUS_BLOCK_MAX)
 		length = I2C_SMBUS_BLOCK_MAX;
 	data.block[0] = length;
-	if (i2c_smbus_xfer(client->adapter,client->addr,client->flags,
-	                      I2C_SMBUS_READ,command,
-	                      I2C_SMBUS_I2C_BLOCK_DATA,&data))
-		return -1;
+	status = i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+				I2C_SMBUS_READ, command,
+				I2C_SMBUS_I2C_BLOCK_DATA, &data);
+	if (status < 0)
+		return status;
 
 	memcpy(values, &data.block[1], data.block[0]);
 	return data.block[0];
@@ -1474,6 +1568,7 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 	                        };
 	int i;
 	u8 partial_pec = 0;
+	int status;
 
 	msgbuf0[0] = command;
 	switch(size) {
@@ -1523,10 +1618,10 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 		} else {
 			msg[0].len = data->block[0] + 2;
 			if (msg[0].len > I2C_SMBUS_BLOCK_MAX + 2) {
-				dev_err(&adapter->dev, "smbus_access called with "
-				       "invalid block write size (%d)\n",
-				       data->block[0]);
-				return -1;
+				dev_err(&adapter->dev,
+					"Invalid block write size %d\n",
+					data->block[0]);
+				return -EINVAL;
 			}
 			for (i = 1; i < msg[0].len; i++)
 				msgbuf0[i] = data->block[i-1];
@@ -1536,10 +1631,10 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 		num = 2; /* Another special case */
 		read_write = I2C_SMBUS_READ;
 		if (data->block[0] > I2C_SMBUS_BLOCK_MAX) {
-			dev_err(&adapter->dev, "%s called with invalid "
-				"block proc call size (%d)\n", __func__,
+			dev_err(&adapter->dev,
+				"Invalid block write size %d\n",
 				data->block[0]);
-			return -1;
+			return -EINVAL;
 		}
 		msg[0].len = data->block[0] + 2;
 		for (i = 1; i < msg[0].len; i++)
@@ -1554,19 +1649,18 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 		} else {
 			msg[0].len = data->block[0] + 1;
 			if (msg[0].len > I2C_SMBUS_BLOCK_MAX + 1) {
-				dev_err(&adapter->dev, "i2c_smbus_xfer_emulated called with "
-				       "invalid block write size (%d)\n",
-				       data->block[0]);
-				return -1;
+				dev_err(&adapter->dev,
+					"Invalid block write size %d\n",
+					data->block[0]);
+				return -EINVAL;
 			}
 			for (i = 1; i <= data->block[0]; i++)
 				msgbuf0[i] = data->block[i];
 		}
 		break;
 	default:
-		dev_err(&adapter->dev, "smbus_access called with invalid size (%d)\n",
-		       size);
-		return -1;
+		dev_err(&adapter->dev, "Unsupported transaction %d\n", size);
+		return -EOPNOTSUPP;
 	}
 
 	i = ((flags & I2C_CLIENT_PEC) && size != I2C_SMBUS_QUICK
@@ -1584,13 +1678,15 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 			msg[num-1].len++;
 	}
 
-	if (i2c_transfer(adapter, msg, num) < 0)
-		return -1;
+	status = i2c_transfer(adapter, msg, num);
+	if (status < 0)
+		return status;
 
 	/* Check PEC if last message is a read */
 	if (i && (msg[num-1].flags & I2C_M_RD)) {
-		if (i2c_smbus_check_pec(partial_pec, &msg[num-1]) < 0)
-			return -1;
+		status = i2c_smbus_check_pec(partial_pec, &msg[num-1]);
+		if (status < 0)
+			return status;
 	}
 
 	if (read_write == I2C_SMBUS_READ)
@@ -1618,9 +1714,21 @@ static s32 i2c_smbus_xfer_emulated(struct i2c_adapter * adapter, u16 addr,
 	return 0;
 }
 
-
+/**
+ * i2c_smbus_xfer - execute SMBus protocol operations
+ * @adapter: Handle to I2C bus
+ * @addr: Address of SMBus slave on that bus
+ * @flags: I2C_CLIENT_* flags (usually zero or I2C_CLIENT_PEC)
+ * @read_write: I2C_SMBUS_READ or I2C_SMBUS_WRITE
+ * @command: Byte interpreted by slave, for protocols which use such bytes
+ * @protocol: SMBus protocol operation to execute, such as I2C_SMBUS_PROC_CALL
+ * @data: Data to be read or written
+ *
+ * This executes an SMBus protocol operation, and returns a negative
+ * errno code else zero on success.
+ */
 s32 i2c_smbus_xfer(struct i2c_adapter * adapter, u16 addr, unsigned short flags,
-                   char read_write, u8 command, int size,
+		   char read_write, u8 command, int protocol,
                    union i2c_smbus_data * data)
 {
 	s32 res;
@@ -1630,11 +1738,11 @@ s32 i2c_smbus_xfer(struct i2c_adapter * adapter, u16 addr, unsigned short flags,
 	if (adapter->algo->smbus_xfer) {
 		mutex_lock(&adapter->bus_lock);
 		res = adapter->algo->smbus_xfer(adapter,addr,flags,read_write,
-		                                command,size,data);
+						command, protocol, data);
 		mutex_unlock(&adapter->bus_lock);
 	} else
 		res = i2c_smbus_xfer_emulated(adapter,addr,flags,read_write,
-	                                      command,size,data);
+					      command, protocol, data);
 
 	return res;
 }
