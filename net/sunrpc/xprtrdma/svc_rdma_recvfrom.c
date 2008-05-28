@@ -156,7 +156,7 @@ static int rdma_rcl_to_sge(struct svcxprt_rdma *xprt,
 	head->arg.head[0] = rqstp->rq_arg.head[0];
 	head->arg.tail[0] = rqstp->rq_arg.tail[0];
 	head->arg.pages = &head->pages[head->count];
-	head->sge[0].length = head->count; /* save count of hdr pages */
+	head->hdr_count = head->count; /* save count of hdr pages */
 	head->arg.page_base = 0;
 	head->arg.page_len = ch_bytes;
 	head->arg.len = rqstp->rq_arg.len + ch_bytes;
@@ -164,12 +164,9 @@ static int rdma_rcl_to_sge(struct svcxprt_rdma *xprt,
 	head->count++;
 	ch_sge_ary[0].start = 0;
 	while (byte_count) {
+		sge[sge_no].addr = (unsigned long)
+			page_address(rqstp->rq_arg.pages[page_no]) + page_off;
 		sge_bytes = min_t(int, PAGE_SIZE-page_off, ch_bytes);
-		sge[sge_no].addr =
-			ib_dma_map_page(xprt->sc_cm_id->device,
-					rqstp->rq_arg.pages[page_no],
-					page_off, sge_bytes,
-					DMA_FROM_DEVICE);
 		sge[sge_no].length = sge_bytes;
 		sge[sge_no].lkey = xprt->sc_phys_mr->lkey;
 		/*
@@ -220,7 +217,8 @@ static int rdma_rcl_to_sge(struct svcxprt_rdma *xprt,
 	return sge_no;
 }
 
-static void rdma_set_ctxt_sge(struct svc_rdma_op_ctxt *ctxt,
+static void rdma_set_ctxt_sge(struct svcxprt_rdma *xprt,
+			      struct svc_rdma_op_ctxt *ctxt,
 			      struct ib_sge *sge,
 			      u64 *sgl_offset,
 			      int count)
@@ -228,9 +226,15 @@ static void rdma_set_ctxt_sge(struct svc_rdma_op_ctxt *ctxt,
 	int i;
 
 	ctxt->count = count;
+	ctxt->direction = DMA_FROM_DEVICE;
 	for (i = 0; i < count; i++) {
-		ctxt->sge[i].addr = sge[i].addr;
+		atomic_inc(&xprt->sc_dma_used);
+		ctxt->sge[i].addr = (unsigned long)
+			ib_dma_map_single(xprt->sc_cm_id->device,
+					  (void*)sge[i].addr, sge[i].length,
+					  DMA_FROM_DEVICE);
 		ctxt->sge[i].length = sge[i].length;
+		ctxt->sge[i].lkey = sge[i].lkey;
 		*sgl_offset = *sgl_offset + sge[i].length;
 	}
 }
@@ -331,10 +335,10 @@ next_sge:
 		read_wr.wr.rdma.remote_addr =
 			get_unaligned(&(ch->rc_target.rs_offset)) +
 			sgl_offset;
-		read_wr.sg_list = &sge[ch_sge_ary[ch_no].start];
+		read_wr.sg_list = ctxt->sge;
 		read_wr.num_sge =
 			rdma_read_max_sge(xprt, ch_sge_ary[ch_no].count);
-		rdma_set_ctxt_sge(ctxt, &sge[ch_sge_ary[ch_no].start],
+		rdma_set_ctxt_sge(xprt, ctxt, &sge[ch_sge_ary[ch_no].start],
 				  &sgl_offset,
 				  read_wr.num_sge);
 		if (((ch+1)->rc_discrim == 0) &&
@@ -399,7 +403,7 @@ static int rdma_read_complete(struct svc_rqst *rqstp,
 		rqstp->rq_pages[page_no] = head->pages[page_no];
 	}
 	/* Point rq_arg.pages past header */
-	rqstp->rq_arg.pages = &rqstp->rq_pages[head->sge[0].length];
+	rqstp->rq_arg.pages = &rqstp->rq_pages[head->hdr_count];
 	rqstp->rq_arg.page_len = head->arg.page_len;
 	rqstp->rq_arg.page_base = head->arg.page_base;
 

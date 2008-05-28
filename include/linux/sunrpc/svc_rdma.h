@@ -72,6 +72,7 @@ extern atomic_t rdma_stat_sq_prod;
  */
 struct svc_rdma_op_ctxt {
 	struct svc_rdma_op_ctxt *read_hdr;
+	int hdr_count;
 	struct list_head free_list;
 	struct xdr_buf arg;
 	struct list_head dto_q;
@@ -93,7 +94,6 @@ struct svcxprt_rdma {
 	struct rdma_cm_id    *sc_cm_id;		/* RDMA connection id */
 	struct list_head     sc_accept_q;	/* Conn. waiting accept */
 	int		     sc_ord;		/* RDMA read limit */
-	wait_queue_head_t    sc_read_wait;
 	int                  sc_max_sge;
 
 	int                  sc_sq_depth;	/* Depth of SQ */
@@ -104,6 +104,7 @@ struct svcxprt_rdma {
 
 	struct ib_pd         *sc_pd;
 
+	atomic_t	     sc_dma_used;
 	atomic_t	     sc_ctxt_used;
 	struct list_head     sc_ctxt_free;
 	int		     sc_ctxt_cnt;
