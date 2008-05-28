@@ -372,7 +372,7 @@ static int ubifs_readdir(struct file *file, void *dirent, filldir_t filldir)
 
 	dbg_gen("dir ino %lu, f_pos %#llx", dir->i_ino, file->f_pos);
 
-	if (file->f_pos > UBIFS_S_KEY_HASH_MASK || file->f_pos == -1)
+	if (file->f_pos > UBIFS_S_KEY_HASH_MASK || file->f_pos == 2)
 		/*
 		 * The directory was seek'ed to a senseless position or there
 		 * are no more entries.
@@ -462,7 +462,7 @@ out:
 
 	kfree(file->private_data);
 	file->private_data = NULL;
-	file->f_pos = -1;
+	file->f_pos = 2;
 	return 0;
 }
 
