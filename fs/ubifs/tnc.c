@@ -522,6 +522,7 @@ static int lnc_add(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	err = ubifs_validate_entry(c, dent);
 	if (err) {
+		dbg_dump_stack();
 		dbg_dump_node(c, dent);
 		return err;
 	}
@@ -555,6 +556,7 @@ static int lnc_add_directly(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 	err = ubifs_validate_entry(c, node);
 	if (err) {
+		dbg_dump_stack();
 		dbg_dump_node(c, node);
 		return err;
 	}
