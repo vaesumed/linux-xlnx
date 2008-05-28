@@ -524,7 +524,7 @@ int ubifs_read_superblock(struct ubifs_info *c)
 		goto out;
 	}
 
-	if (c->fmt_version <= 2) {
+	if (c->fmt_version == 1) {
 		ubifs_err("on-flash format version %d is not supported",
 			  c->fmt_version);
 		err = -EINVAL;
@@ -533,7 +533,11 @@ int ubifs_read_superblock(struct ubifs_info *c)
 
 	switch (sup->key_hash) {
 	case UBIFS_KEY_HASH_R5:
-		c->key_hash = key_r5_hash;
+		/* TODO: this should die soon */
+		if (c->fmt_version == 2)
+			c->key_hash = tmp_key_r5_hash;
+		else
+			c->key_hash = key_r5_hash;
 		c->key_hash_type = UBIFS_KEY_HASH_R5;
 		break;
 
