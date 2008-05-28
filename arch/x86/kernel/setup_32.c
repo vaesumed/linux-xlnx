@@ -573,28 +573,38 @@ static void __init relocate_initrd(void)
 
 void __init setup_bootmem_allocator(void)
 {
-	unsigned long bootmap_size, bootmap;
+	unsigned long bootmap_size;
 	/*
 	 * Initialize the boot-time allocator (with low memory only):
 	 */
-	bootmap_size = bootmem_bootmap_pages(max_low_pfn)<<PAGE_SHIFT;
-	bootmap = find_e820_area(min_low_pfn<<PAGE_SHIFT,
-				 max_low_pfn<<PAGE_SHIFT, bootmap_size,
-				 PAGE_SIZE);
-	if (bootmap == -1L)
-		panic("Cannot find bootmem map of size %ld\n", bootmap_size);
-	reserve_early(bootmap, bootmap + bootmap_size, "BOOTMAP");
-#ifdef CONFIG_BLK_DEV_INITRD
-	reserve_initrd();
-#endif
-	bootmap_size = init_bootmem(bootmap >> PAGE_SHIFT, max_low_pfn);
-	printk(KERN_INFO "  low ram: %08lx - %08lx\n",
-		 min_low_pfn<<PAGE_SHIFT, max_low_pfn<<PAGE_SHIFT);
-	printk(KERN_INFO "  bootmap %08lx - %08lx\n",
-		 bootmap, bootmap + bootmap_size);
-	register_bootmem_low_pages(max_low_pfn);
-	early_res_to_bootmem(0, max_low_pfn<<PAGE_SHIFT);
+	bootmap_size = init_bootmem(min_low_pfn, max_low_pfn);
 
+	register_bootmem_low_pages(max_low_pfn);
+
+	/*
+	 * Reserve the bootmem bitmap itself as well. We do this in two
+	 * steps (first step was init_bootmem()) because this catches
+	 * the (very unlikely) case of us accidentally initializing the
+	 * bootmem allocator with an invalid RAM area.
+	 */
+	reserve_bootmem(__pa_symbol(_text), (PFN_PHYS(min_low_pfn) +
+			 bootmap_size + PAGE_SIZE-1) - __pa_symbol(_text),
+			 BOOTMEM_DEFAULT);
+
+	/*
+	 * reserve physical page 0 - it's a special BIOS page on many boxes,
+	 * enabling clean reboots, SMP operation, laptop functions.
+	 */
+	reserve_bootmem(0, PAGE_SIZE, BOOTMEM_DEFAULT);
+
+#ifdef CONFIG_SMP
+	/*
+	 * But first pinch a few for the stack/trampoline stuff
+	 * FIXME: Don't need the extra page at 4K, but need to fix
+	 * trampoline before removing it. (see the GDT stuff)
+	 */
+	reserve_bootmem(PAGE_SIZE, PAGE_SIZE, BOOTMEM_DEFAULT);
+#endif
 #ifdef CONFIG_ACPI_SLEEP
 	/*
 	 * Reserve low memory region for sleep support.
@@ -606,6 +616,9 @@ void __init setup_bootmem_allocator(void)
 	 * Find and reserve possible boot-time SMP configuration:
 	 */
 	find_smp_config();
+#endif
+#ifdef CONFIG_BLK_DEV_INITRD
+	reserve_initrd();
 #endif
 	numa_kva_reserve();
 	reserve_crashkernel();
