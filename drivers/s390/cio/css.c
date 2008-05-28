@@ -2,8 +2,7 @@
  *  drivers/s390/cio/css.c
  *  driver for channel subsystem
  *
- *    Copyright (C) 2002 IBM Deutschland Entwicklung GmbH,
- *			 IBM Corporation
+ *    Copyright IBM Corp. 2002,2008
  *    Author(s): Arnd Bergmann (arndb@de.ibm.com)
  *		 Cornelia Huck (cornelia.huck@de.ibm.com)
  */
@@ -15,6 +14,7 @@
 #include <linux/list.h>
 #include <linux/reboot.h>
 
+#include "../s390mach.h"
 #include "css.h"
 #include "cio.h"
 #include "cio_debug.h"
@@ -121,25 +121,6 @@ css_alloc_subchannel(struct subchannel_id schid)
 		kfree(sch);
 		return ERR_PTR(ret);
 	}
-
-	if (sch->st != SUBCHANNEL_TYPE_IO) {
-		/* For now we ignore all non-io subchannels. */
-		kfree(sch);
-		return ERR_PTR(-EINVAL);
-	}
-
-	/* 
-	 * Set intparm to subchannel address.
-	 * This is fine even on 64bit since the subchannel is always located
-	 * under 2G.
-	 */
-	sch->schib.pmcw.intparm = (u32)(addr_t)sch;
-	ret = cio_modify(sch);
-	if (ret) {
-		kfree(sch->lock);
-		kfree(sch);
-		return ERR_PTR(ret);
-	}
 	return sch;
 }
 
@@ -177,12 +158,17 @@ static int css_sch_device_register(struct subchannel *sch)
 	return ret;
 }
 
+/**
+ * css_sch_device_unregister - unregister a subchannel
+ * @sch: subchannel to be unregistered
+ */
 void css_sch_device_unregister(struct subchannel *sch)
 {
 	mutex_lock(&sch->reg_mutex);
 	device_unregister(&sch->dev);
 	mutex_unlock(&sch->reg_mutex);
 }
+EXPORT_SYMBOL_GPL(css_sch_device_unregister);
 
 static void ssd_from_pmcw(struct chsc_ssd_info *ssd, struct pmcw *pmcw)
 {
@@ -229,6 +215,41 @@ void css_update_ssd_info(struct subchannel *sch)
 	}
 }
 
+static ssize_t type_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	struct subchannel *sch = to_subchannel(dev);
+
+	return sprintf(buf, "%01x\n", sch->st);
+}
+
+static DEVICE_ATTR(type, 0444, type_show, NULL);
+
+static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
+			     char *buf)
+{
+	struct subchannel *sch = to_subchannel(dev);
+
+	return sprintf(buf, "css:t%01X\n", sch->st);
+}
+
+static DEVICE_ATTR(modalias, 0444, modalias_show, NULL);
+
+static struct attribute *subch_attrs[] = {
+	&dev_attr_type.attr,
+	&dev_attr_modalias.attr,
+	NULL,
+};
+
+static struct attribute_group subch_attr_group = {
+	.attrs = subch_attrs,
+};
+
+static struct attribute_group *default_subch_attr_groups[] = {
+	&subch_attr_group,
+	NULL,
+};
+
 static int css_register_subchannel(struct subchannel *sch)
 {
 	int ret;
@@ -237,16 +258,17 @@ static int css_register_subchannel(struct subchannel *sch)
 	sch->dev.parent = &channel_subsystems[0]->device;
 	sch->dev.bus = &css_bus_type;
 	sch->dev.release = &css_subchannel_release;
-	sch->dev.groups = subch_attr_groups;
+	sch->dev.groups = default_subch_attr_groups;
 	/*
 	 * We don't want to generate uevents for I/O subchannels that don't
 	 * have a working ccw device behind them since they will be
 	 * unregistered before they can be used anyway, so we delay the add
 	 * uevent until after device recognition was successful.
+	 * Note that we suppress the uevent for all subchannel types;
+	 * the subchannel driver can decide itself when it wants to inform
+	 * userspace of its existence.
 	 */
-	if (!cio_is_console(sch->schid))
-		/* Console is special, no need to suppress. */
-		sch->dev.uevent_suppress = 1;
+	sch->dev.uevent_suppress = 1;
 	css_update_ssd_info(sch);
 	/* make it known to the system */
 	ret = css_sch_device_register(sch);
@@ -255,10 +277,19 @@ static int css_register_subchannel(struct subchannel *sch)
 			      sch->schid.ssid, sch->schid.sch_no, ret);
 		return ret;
 	}
+	if (!sch->driver) {
+		/*
+		 * No driver matched. Generate the uevent now so that
+		 * a fitting driver module may be loaded based on the
+		 * modalias.
+		 */
+		sch->dev.uevent_suppress = 0;
+		kobject_uevent(&sch->dev.kobj, KOBJ_ADD);
+	}
 	return ret;
 }
 
-static int css_probe_device(struct subchannel_id schid)
+int css_probe_device(struct subchannel_id schid)
 {
 	int ret;
 	struct subchannel *sch;
@@ -301,115 +332,11 @@ int css_sch_is_valid(struct schib *schib)
 {
 	if ((schib->pmcw.st == SUBCHANNEL_TYPE_IO) && !schib->pmcw.dnv)
 		return 0;
+	if ((schib->pmcw.st == SUBCHANNEL_TYPE_MSG) && !schib->pmcw.w)
+		return 0;
 	return 1;
 }
 EXPORT_SYMBOL_GPL(css_sch_is_valid);
-
-static int css_get_subchannel_status(struct subchannel *sch)
-{
-	struct schib schib;
-
-	if (stsch(sch->schid, &schib))
-		return CIO_GONE;
-	if (!css_sch_is_valid(&schib))
-		return CIO_GONE;
-	if (sch->schib.pmcw.dnv && (schib.pmcw.dev != sch->schib.pmcw.dev))
-		return CIO_REVALIDATE;
-	if (!sch->lpm)
-		return CIO_NO_PATH;
-	return CIO_OPER;
-}
-
-static int css_evaluate_known_subchannel(struct subchannel *sch, int slow)
-{
-	int event, ret, disc;
-	unsigned long flags;
-	enum { NONE, UNREGISTER, UNREGISTER_PROBE, REPROBE } action;
-
-	spin_lock_irqsave(sch->lock, flags);
-	disc = device_is_disconnected(sch);
-	if (disc && slow) {
-		/* Disconnected devices are evaluated directly only.*/
-		spin_unlock_irqrestore(sch->lock, flags);
-		return 0;
-	}
-	/* No interrupt after machine check - kill pending timers. */
-	device_kill_pending_timer(sch);
-	if (!disc && !slow) {
-		/* Non-disconnected devices are evaluated on the slow path. */
-		spin_unlock_irqrestore(sch->lock, flags);
-		return -EAGAIN;
-	}
-	event = css_get_subchannel_status(sch);
-	CIO_MSG_EVENT(4, "Evaluating schid 0.%x.%04x, event %d, %s, %s path.\n",
-		      sch->schid.ssid, sch->schid.sch_no, event,
-		      disc ? "disconnected" : "normal",
-		      slow ? "slow" : "fast");
-	/* Analyze subchannel status. */
-	action = NONE;
-	switch (event) {
-	case CIO_NO_PATH:
-		if (disc) {
-			/* Check if paths have become available. */
-			action = REPROBE;
-			break;
-		}
-		/* fall through */
-	case CIO_GONE:
-		/* Prevent unwanted effects when opening lock. */
-		cio_disable_subchannel(sch);
-		device_set_disconnected(sch);
-		/* Ask driver what to do with device. */
-		action = UNREGISTER;
-		if (sch->driver && sch->driver->notify) {
-			spin_unlock_irqrestore(sch->lock, flags);
-			ret = sch->driver->notify(sch, event);
-			spin_lock_irqsave(sch->lock, flags);
-			if (ret)
-				action = NONE;
-		}
-		break;
-	case CIO_REVALIDATE:
-		/* Device will be removed, so no notify necessary. */
-		if (disc)
-			/* Reprobe because immediate unregister might block. */
-			action = REPROBE;
-		else
-			action = UNREGISTER_PROBE;
-		break;
-	case CIO_OPER:
-		if (disc)
-			/* Get device operational again. */
-			action = REPROBE;
-		break;
-	}
-	/* Perform action. */
-	ret = 0;
-	switch (action) {
-	case UNREGISTER:
-	case UNREGISTER_PROBE:
-		/* Unregister device (will use subchannel lock). */
-		spin_unlock_irqrestore(sch->lock, flags);
-		css_sch_device_unregister(sch);
-		spin_lock_irqsave(sch->lock, flags);
-
-		/* Reset intparm to zeroes. */
-		sch->schib.pmcw.intparm = 0;
-		cio_modify(sch);
-		break;
-	case REPROBE:
-		device_trigger_reprobe(sch);
-		break;
-	default:
-		break;
-	}
-	spin_unlock_irqrestore(sch->lock, flags);
-	/* Probe if necessary. */
-	if (action == UNREGISTER_PROBE)
-		ret = css_probe_device(sch->schid);
-
-	return ret;
-}
 
 static int css_evaluate_new_subchannel(struct subchannel_id schid, int slow)
 {
@@ -427,6 +354,21 @@ static int css_evaluate_new_subchannel(struct subchannel_id schid, int slow)
 			 "slow path.\n", schid.ssid, schid.sch_no, CIO_OPER);
 
 	return css_probe_device(schid);
+}
+
+static int css_evaluate_known_subchannel(struct subchannel *sch, int slow)
+{
+	int ret = 0;
+
+	if (sch->driver) {
+		if (sch->driver->sch_event)
+			ret = sch->driver->sch_event(sch, slow);
+		else
+			dev_dbg(&sch->dev,
+				"Got subchannel machine check but "
+				"no sch_event handler provided.\n");
+	}
+	return ret;
 }
 
 static void css_evaluate_subchannel(struct subchannel_id schid, int slow)
@@ -596,18 +538,29 @@ EXPORT_SYMBOL_GPL(css_schedule_reprobe);
 /*
  * Called from the machine check handler for subchannel report words.
  */
-void css_process_crw(int rsid1, int rsid2)
+static void css_process_crw(struct crw *crw0, struct crw *crw1, int overflow)
 {
 	struct subchannel_id mchk_schid;
 
-	CIO_CRW_EVENT(2, "source is subchannel %04X, subsystem id %x\n",
-		      rsid1, rsid2);
+	if (overflow) {
+		css_schedule_eval_all();
+		return;
+	}
+	CIO_CRW_EVENT(2, "CRW0 reports slct=%d, oflw=%d, "
+		      "chn=%d, rsc=%X, anc=%d, erc=%X, rsid=%X\n",
+		      crw0->slct, crw0->oflw, crw0->chn, crw0->rsc, crw0->anc,
+		      crw0->erc, crw0->rsid);
+	if (crw1)
+		CIO_CRW_EVENT(2, "CRW1 reports slct=%d, oflw=%d, "
+			      "chn=%d, rsc=%X, anc=%d, erc=%X, rsid=%X\n",
+			      crw1->slct, crw1->oflw, crw1->chn, crw1->rsc,
+			      crw1->anc, crw1->erc, crw1->rsid);
 	init_subchannel_id(&mchk_schid);
-	mchk_schid.sch_no = rsid1;
-	if (rsid2 != 0)
-		mchk_schid.ssid = (rsid2 >> 8) & 3;
+	mchk_schid.sch_no = crw0->rsid;
+	if (crw1)
+		mchk_schid.ssid = (crw1->rsid >> 8) & 3;
 
-	/* 
+	/*
 	 * Since we are always presented with IPI in the CRW, we have to
 	 * use stsch() to find out if the subchannel in question has come
 	 * or gone.
@@ -806,6 +759,10 @@ init_channel_subsystem (void)
 	if (ret)
 		goto out;
 
+	ret = s390_register_crw_handler(CRW_RSC_SCH, css_process_crw);
+	if (ret)
+		goto out;
+
 	if ((ret = bus_register(&css_bus_type)))
 		goto out;
 
@@ -883,6 +840,7 @@ out_unregister:
 out_bus:
 	bus_unregister(&css_bus_type);
 out:
+	s390_unregister_crw_handler(CRW_RSC_CSS);
 	chsc_free_sei_area();
 	kfree(slow_subchannel_set);
 	printk(KERN_WARNING"cio: failed to initialize css driver (%d)!\n",
@@ -945,12 +903,25 @@ static void css_shutdown(struct device *dev)
 		sch->driver->shutdown(sch);
 }
 
+static int css_uevent(struct device *dev, struct kobj_uevent_env *env)
+{
+	struct subchannel *sch = to_subchannel(dev);
+	int ret;
+
+	ret = add_uevent_var(env, "ST=%01X", sch->st);
+	if (ret)
+		return ret;
+	ret = add_uevent_var(env, "MODALIAS=css:t%01X", sch->st);
+	return ret;
+}
+
 struct bus_type css_bus_type = {
 	.name     = "css",
 	.match    = css_bus_match,
 	.probe    = css_probe,
 	.remove   = css_remove,
 	.shutdown = css_shutdown,
+	.uevent   = css_uevent,
 };
 
 /**
