@@ -1159,6 +1159,8 @@ static int mount_ubifs(struct ubifs_info *c)
 		  c->jhead_cnt - NONDATA_JHEADS_CNT);
 	ubifs_msg("default compressor:      %s",
 		  ubifs_compr_name(c->default_compr));
+	ubifs_msg("media format %d, latest format %d",
+		  c->fmt_version, UBIFS_FORMAT_VERSION);
 
 	dbg_msg("compiled on:            " __DATE__ " at " __TIME__);
 	dbg_msg("fast unmount:           %d", c->fast_unmount);
