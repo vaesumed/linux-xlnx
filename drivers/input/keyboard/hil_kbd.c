@@ -38,6 +38,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/pci_ids.h>
 #include <linux/semaphore.h>
 
 #define PREFIX "HIL KEYB: "
