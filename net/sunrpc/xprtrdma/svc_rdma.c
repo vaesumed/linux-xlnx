@@ -69,8 +69,9 @@ atomic_t rdma_stat_rq_prod;
 atomic_t rdma_stat_sq_poll;
 atomic_t rdma_stat_sq_prod;
 
-/* Temporary NFS request map cache */
+/* Temporary NFS request map and context caches */
 struct kmem_cache *svc_rdma_map_cachep = NULL;
+struct kmem_cache *svc_rdma_ctxt_cachep = NULL;
 
 /*
  * This function implements reading and resetting an atomic_t stat
@@ -247,6 +248,8 @@ void svc_rdma_cleanup(void)
 	svc_unreg_xprt_class(&svc_rdma_class);
 	if (svc_rdma_map_cachep)
 		kmem_cache_destroy(svc_rdma_map_cachep);
+	if (svc_rdma_ctxt_cachep)
+		kmem_cache_destroy(svc_rdma_ctxt_cachep);
 }
 
 int svc_rdma_init(void)
@@ -269,14 +272,27 @@ int svc_rdma_init(void)
 						NULL);
 	if (!svc_rdma_map_cachep) {
 		printk(KERN_INFO "Could not allocate map cache.\n");
-		goto err;
+		goto err0;
+	}
+
+	/* Create the temporary context cache */
+	svc_rdma_ctxt_cachep =
+		kmem_cache_create("svc_rdma_ctxt_cache",
+				  sizeof(struct svc_rdma_op_ctxt),
+				  0,
+				  SLAB_HWCACHE_ALIGN,
+				  NULL);
+	if (!svc_rdma_ctxt_cachep) {
+		printk(KERN_INFO "Could not allocate WR ctxt cache.\n");
+		goto err1;
 	}
 
 	/* Register RDMA with the SVC transport switch */
 	svc_reg_xprt_class(&svc_rdma_class);
 	return 0;
-
- err:
+ err1:
+	kmem_cache_destroy(svc_rdma_map_cachep);
+ err0:
 	if (svcrdma_table_header) {
 		unregister_sysctl_table(svcrdma_table_header);
 		svcrdma_table_header = NULL;
