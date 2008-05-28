@@ -44,7 +44,7 @@
 /*
  * Module information.
  */
-#define DRV_VERSION	"2.1.4"
+#define DRV_VERSION	"2.1.5"
 #define DRV_PROJECT	"http://rt2x00.serialmonkey.com"
 
 /*
@@ -404,7 +404,7 @@ static inline struct rt2x00_intf* vif_to_intf(struct ieee80211_vif *vif)
  * @supported_rates: Rate types which are supported (CCK, OFDM).
  * @num_channels: Number of supported channels. This is used as array size
  *	for @tx_power_a, @tx_power_bg and @channels.
- * channels: Device/chipset specific channel values (See &struct rf_channel).
+ * @channels: Device/chipset specific channel values (See &struct rf_channel).
  * @tx_power_a: TX power values for all 5.2GHz channels (may be NULL).
  * @tx_power_bg: TX power values for all 2.4GHz channels (may be NULL).
  * @tx_power_default: Default TX power value to use when either
@@ -548,7 +548,7 @@ struct rt2x00lib_ops {
 	int (*get_tx_data_len) (struct rt2x00_dev *rt2x00dev,
 				struct sk_buff *skb);
 	void (*kick_tx_queue) (struct rt2x00_dev *rt2x00dev,
-			       const unsigned int queue);
+			       const enum data_queue_qid queue);
 
 	/*
 	 * RX control handlers
@@ -621,7 +621,6 @@ enum rt2x00_flags {
 	/*
 	 * Driver features
 	 */
-	DRIVER_SUPPORT_MIXED_INTERFACES,
 	DRIVER_REQUIRE_FIRMWARE,
 	DRIVER_REQUIRE_BEACON_GUARD,
 	DRIVER_REQUIRE_ATIM_QUEUE,
@@ -928,17 +927,16 @@ static inline u16 get_duration_res(const unsigned int size, const u8 rate)
 }
 
 /**
- * rt2x00queue_get_queue - Convert mac80211 queue index to rt2x00 queue
+ * rt2x00queue_get_queue - Convert queue index to queue pointer
  * @rt2x00dev: Pointer to &struct rt2x00_dev.
- * @queue: mac80211/rt2x00 queue index
- *	(see &enum ieee80211_tx_queue and &enum rt2x00_bcn_queue).
+ * @queue: rt2x00 queue index (see &enum data_queue_qid).
  */
 struct data_queue *rt2x00queue_get_queue(struct rt2x00_dev *rt2x00dev,
-					 const unsigned int queue);
+					 const enum data_queue_qid queue);
 
 /**
  * rt2x00queue_get_entry - Get queue entry where the given index points to.
- * @rt2x00dev: Pointer to &struct rt2x00_dev.
+ * @queue: Pointer to &struct data_queue from where we obtain the entry.
  * @index: Index identifier for obtaining the correct index.
  */
 struct queue_entry *rt2x00queue_get_entry(struct data_queue *queue,
@@ -947,7 +945,7 @@ struct queue_entry *rt2x00queue_get_entry(struct data_queue *queue,
 /**
  * rt2x00queue_index_inc - Index incrementation function
  * @queue: Queue (&struct data_queue) to perform the action on.
- * @action: Index type (&enum queue_index) to perform the action on.
+ * @index: Index type (&enum queue_index) to perform the action on.
  *
  * This function will increase the requested index on the queue,
  * it will grab the appropriate locks and handle queue overflow events by
@@ -999,7 +997,7 @@ void rt2x00mac_bss_info_changed(struct ieee80211_hw *hw,
 				struct ieee80211_vif *vif,
 				struct ieee80211_bss_conf *bss_conf,
 				u32 changes);
-int rt2x00mac_conf_tx(struct ieee80211_hw *hw, int queue,
+int rt2x00mac_conf_tx(struct ieee80211_hw *hw, u16 queue,
 		      const struct ieee80211_tx_queue_params *params);
 
 /*

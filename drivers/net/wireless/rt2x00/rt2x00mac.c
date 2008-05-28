@@ -81,6 +81,7 @@ int rt2x00mac_tx(struct ieee80211_hw *hw, struct sk_buff *skb,
 {
 	struct rt2x00_dev *rt2x00dev = hw->priv;
 	struct ieee80211_hdr *ieee80211hdr = (struct ieee80211_hdr *)skb->data;
+	enum data_queue_qid qid = mac80211_queue_to_qid(control->queue);
 	struct data_queue *queue;
 	struct skb_frame_desc *skbdesc;
 	u16 frame_control;
@@ -101,14 +102,13 @@ int rt2x00mac_tx(struct ieee80211_hw *hw, struct sk_buff *skb,
 	 */
 	if (control->flags & IEEE80211_TXCTL_SEND_AFTER_DTIM &&
 	    test_bit(DRIVER_REQUIRE_ATIM_QUEUE, &rt2x00dev->flags))
-		queue = rt2x00queue_get_queue(rt2x00dev, RT2X00_BCN_QUEUE_ATIM);
+		queue = rt2x00queue_get_queue(rt2x00dev, QID_ATIM);
 	else
-		queue = rt2x00queue_get_queue(rt2x00dev, control->queue);
+		queue = rt2x00queue_get_queue(rt2x00dev, qid);
 	if (unlikely(!queue)) {
 		ERROR(rt2x00dev,
 		      "Attempt to send packet over invalid queue %d.\n"
-		      "Please file bug report to %s.\n",
-		      control->queue, DRV_PROJECT);
+		      "Please file bug report to %s.\n", qid, DRV_PROJECT);
 		dev_kfree_skb_any(skb);
 		return NETDEV_TX_OK;
 	}
@@ -118,11 +118,16 @@ int rt2x00mac_tx(struct ieee80211_hw *hw, struct sk_buff *skb,
 	 * create and queue that frame first. But make sure we have
 	 * at least enough entries available to send this CTS/RTS
 	 * frame as well as the data frame.
+	 * Note that when the driver has set the set_rts_threshold()
+	 * callback function it doesn't need software generation of
+	 * neither RTS or CTS-to-self frames and handles everything
+	 * inside the hardware.
 	 */
 	frame_control = le16_to_cpu(ieee80211hdr->frame_control);
 	if (!is_rts_frame(frame_control) && !is_cts_frame(frame_control) &&
 	    (control->flags & (IEEE80211_TXCTL_USE_RTS_CTS |
-			       IEEE80211_TXCTL_USE_CTS_PROTECT))) {
+			       IEEE80211_TXCTL_USE_CTS_PROTECT)) &&
+	    !rt2x00dev->ops->hw->set_rts_threshold) {
 		if (rt2x00queue_available(queue) <= 1) {
 			ieee80211_stop_queue(rt2x00dev->hw, control->queue);
 			return NETDEV_TX_BUSY;
@@ -149,7 +154,7 @@ int rt2x00mac_tx(struct ieee80211_hw *hw, struct sk_buff *skb,
 		ieee80211_stop_queue(rt2x00dev->hw, control->queue);
 
 	if (rt2x00dev->ops->lib->kick_tx_queue)
-		rt2x00dev->ops->lib->kick_tx_queue(rt2x00dev, control->queue);
+		rt2x00dev->ops->lib->kick_tx_queue(rt2x00dev, qid);
 
 	return NETDEV_TX_OK;
 }
@@ -182,8 +187,7 @@ int rt2x00mac_add_interface(struct ieee80211_hw *hw,
 {
 	struct rt2x00_dev *rt2x00dev = hw->priv;
 	struct rt2x00_intf *intf = vif_to_intf(conf->vif);
-	struct data_queue *queue =
-	    rt2x00queue_get_queue(rt2x00dev, RT2X00_BCN_QUEUE_BEACON);
+	struct data_queue *queue = rt2x00queue_get_queue(rt2x00dev, QID_BEACON);
 	struct queue_entry *entry = NULL;
 	unsigned int i;
 
@@ -196,13 +200,12 @@ int rt2x00mac_add_interface(struct ieee80211_hw *hw,
 		return -ENODEV;
 
 	/*
-	 * When we don't support mixed interfaces (a combination
-	 * of sta and ap virtual interfaces) then we can only
-	 * add this interface when the rival interface count is 0.
+	 * We don't support mixed combinations of sta and ap virtual
+	 * interfaces. We can only add this interface when the rival
+	 * interface count is 0.
 	 */
-	if (!test_bit(DRIVER_SUPPORT_MIXED_INTERFACES, &rt2x00dev->flags) &&
-	    ((conf->type == IEEE80211_IF_TYPE_AP && rt2x00dev->intf_sta_count) ||
-	     (conf->type != IEEE80211_IF_TYPE_AP && rt2x00dev->intf_ap_count)))
+	if ((conf->type == IEEE80211_IF_TYPE_AP && rt2x00dev->intf_sta_count) ||
+	    (conf->type != IEEE80211_IF_TYPE_AP && rt2x00dev->intf_ap_count))
 		return -ENOBUFS;
 
 	/*
@@ -454,9 +457,9 @@ int rt2x00mac_get_tx_stats(struct ieee80211_hw *hw,
 	unsigned int i;
 
 	for (i = 0; i < hw->queues; i++) {
-		stats->data[i].len = rt2x00dev->tx[i].length;
-		stats->data[i].limit = rt2x00dev->tx[i].limit;
-		stats->data[i].count = rt2x00dev->tx[i].count;
+		stats[i].len = rt2x00dev->tx[i].length;
+		stats[i].limit = rt2x00dev->tx[i].limit;
+		stats[i].count = rt2x00dev->tx[i].count;
 	}
 
 	return 0;
@@ -514,7 +517,7 @@ void rt2x00mac_bss_info_changed(struct ieee80211_hw *hw,
 }
 EXPORT_SYMBOL_GPL(rt2x00mac_bss_info_changed);
 
-int rt2x00mac_conf_tx(struct ieee80211_hw *hw, int queue_idx,
+int rt2x00mac_conf_tx(struct ieee80211_hw *hw, u16 queue_idx,
 		      const struct ieee80211_tx_queue_params *params)
 {
 	struct rt2x00_dev *rt2x00dev = hw->priv;
