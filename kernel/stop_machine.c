@@ -169,7 +169,7 @@ kill_threads:
 	return err;
 }
 
-int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu)
+int stop_machine_run_notype(int (*fn)(void *), void *data, unsigned int cpu)
 {
 	int ret;
 
@@ -180,4 +180,4 @@ int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(stop_machine_run);
+EXPORT_SYMBOL_GPL(stop_machine_run_notype);
