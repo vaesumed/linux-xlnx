@@ -204,7 +204,7 @@ static int empress_s_input(struct file *file, void *priv, unsigned int i)
 	return 0;
 }
 
-static int empress_enum_fmt_cap(struct file *file, void  *priv,
+static int empress_enum_fmt_vid_cap(struct file *file, void  *priv,
 					struct v4l2_fmtdesc *f)
 {
 	if (f->index != 0)
@@ -216,7 +216,7 @@ static int empress_enum_fmt_cap(struct file *file, void  *priv,
 	return 0;
 }
 
-static int empress_g_fmt_cap(struct file *file, void *priv,
+static int empress_g_fmt_vid_cap(struct file *file, void *priv,
 				struct v4l2_format *f)
 {
 	struct saa7134_fh *fh = priv;
@@ -230,7 +230,7 @@ static int empress_g_fmt_cap(struct file *file, void *priv,
 	return 0;
 }
 
-static int empress_s_fmt_cap(struct file *file, void *priv,
+static int empress_s_fmt_vid_cap(struct file *file, void *priv,
 				struct v4l2_format *f)
 {
 	struct saa7134_fh *fh = priv;
@@ -354,9 +354,9 @@ static struct video_device saa7134_empress_template =
 	.minor	       = -1,
 
 	.vidioc_querycap		= empress_querycap,
-	.vidioc_enum_fmt_cap		= empress_enum_fmt_cap,
-	.vidioc_s_fmt_cap		= empress_s_fmt_cap,
-	.vidioc_g_fmt_cap		= empress_g_fmt_cap,
+	.vidioc_enum_fmt_vid_cap	= empress_enum_fmt_vid_cap,
+	.vidioc_s_fmt_vid_cap		= empress_s_fmt_vid_cap,
+	.vidioc_g_fmt_vid_cap		= empress_g_fmt_vid_cap,
 	.vidioc_reqbufs			= empress_reqbufs,
 	.vidioc_querybuf		= empress_querybuf,
 	.vidioc_qbuf			= empress_qbuf,
