@@ -268,9 +268,8 @@ completed:
 	return timeout;
 }
 
-static inline int pcie_wait_cmd(struct controller *ctrl, int poll)
+static inline void pcie_wait_cmd(struct controller *ctrl, int poll)
 {
-	int retval = 0;
 	unsigned int msecs = pciehp_poll_mode ? 2500 : 1000;
 	unsigned long timeout = msecs_to_jiffies(msecs);
 	int rc;
@@ -278,16 +277,9 @@ static inline int pcie_wait_cmd(struct controller *ctrl, int poll)
 	if (poll)
 		rc = pcie_poll_cmd(ctrl);
 	else
-		rc = wait_event_interruptible_timeout(ctrl->queue,
-					      !ctrl->cmd_busy, timeout);
+		rc = wait_event_timeout(ctrl->queue, !ctrl->cmd_busy, timeout);
 	if (!rc)
 		dbg("Command not completed in 1000 msec\n");
-	else if (rc < 0) {
-		retval = -EINTR;
-		info("Command was interrupted by a signal\n");
-	}
-
-	return retval;
 }
 
 /**
@@ -365,7 +357,7 @@ static int pcie_write_cmd(struct controller *ctrl, u16 cmd, u16 mask)
 		if (!(slot_ctrl & HP_INTR_ENABLE) ||
 		    !(slot_ctrl & CMD_CMPL_INTR_ENABLE))
 			poll = 1;
-                retval = pcie_wait_cmd(ctrl, poll);
+                pcie_wait_cmd(ctrl, poll);
 	}
  out:
 	mutex_unlock(&ctrl->ctrl_lock);
@@ -797,7 +789,7 @@ static irqreturn_t pcie_isr(int irq, void *dev_id)
 	if (intr_loc & CMD_COMPLETED) {
 		ctrl->cmd_busy = 0;
 		smp_mb();
-		wake_up_interruptible(&ctrl->queue);
+		wake_up(&ctrl->queue);
 	}
 
 	if (!(intr_loc & ~CMD_COMPLETED))
@@ -1017,75 +1009,6 @@ static struct hpc_ops pciehp_hpc_ops = {
 	.check_lnk_status		= hpc_check_lnk_status,
 };
 
-#ifdef CONFIG_ACPI
-static int pciehp_acpi_get_hp_hw_control_from_firmware(struct pci_dev *dev)
-{
-	acpi_status status;
-	acpi_handle chandle, handle = DEVICE_ACPI_HANDLE(&(dev->dev));
-	struct pci_dev *pdev = dev;
-	struct pci_bus *parent;
-	struct acpi_buffer string = { ACPI_ALLOCATE_BUFFER, NULL };
-
-	/*
-	 * Per PCI firmware specification, we should run the ACPI _OSC
-	 * method to get control of hotplug hardware before using it.
-	 * If an _OSC is missing, we look for an OSHP to do the same thing.
-	 * To handle different BIOS behavior, we look for _OSC and OSHP
-	 * within the scope of the hotplug controller and its parents, upto
-	 * the host bridge under which this controller exists.
-	 */
-	while (!handle) {
-		/*
-		 * This hotplug controller was not listed in the ACPI name
-		 * space at all. Try to get acpi handle of parent pci bus.
-		 */
-		if (!pdev || !pdev->bus->parent)
-			break;
-		parent = pdev->bus->parent;
-		dbg("Could not find %s in acpi namespace, trying parent\n",
-				pci_name(pdev));
-		if (!parent->self)
-			/* Parent must be a host bridge */
-			handle = acpi_get_pci_rootbridge_handle(
-					pci_domain_nr(parent),
-					parent->number);
-		else
-			handle = DEVICE_ACPI_HANDLE(
-					&(parent->self->dev));
-		pdev = parent->self;
-	}
-
-	while (handle) {
-		acpi_get_name(handle, ACPI_FULL_PATHNAME, &string);
-		dbg("Trying to get hotplug control for %s \n",
-			(char *)string.pointer);
-		status = pci_osc_control_set(handle,
-				OSC_PCI_EXPRESS_CAP_STRUCTURE_CONTROL |
-				OSC_PCI_EXPRESS_NATIVE_HP_CONTROL);
-		if (status == AE_NOT_FOUND)
-			status = acpi_run_oshp(handle);
-		if (ACPI_SUCCESS(status)) {
-			dbg("Gained control for hotplug HW for pci %s (%s)\n",
-				pci_name(dev), (char *)string.pointer);
-			kfree(string.pointer);
-			return 0;
-		}
-		if (acpi_root_bridge(handle))
-			break;
-		chandle = handle;
-		status = acpi_get_parent(chandle, &handle);
-		if (ACPI_FAILURE(status))
-			break;
-	}
-
-	dbg("Cannot get control of hotplug hardware for pci %s\n",
-			pci_name(dev));
-
-	kfree(string.pointer);
-	return -1;
-}
-#endif
-
 static int pcie_init_hardware_part1(struct controller *ctrl,
 				    struct pcie_device *dev)
 {
@@ -1122,23 +1045,10 @@ int pcie_init_hardware_part2(struct controller *ctrl, struct pcie_device *dev)
 
 	if (pcie_write_cmd(ctrl, cmd, mask)) {
 		err("%s: Cannot enable software notification\n", __func__);
-		goto abort;
+		return -1;
 	}
 
-	if (pciehp_force)
-		dbg("Bypassing BIOS check for pciehp use on %s\n",
-				pci_name(ctrl->pci_dev));
-	else if (pciehp_get_hp_hw_control_from_firmware(ctrl->pci_dev))
-		goto abort_disable_intr;
-
 	return 0;
-
-	/* We end up here for the many possible ways to fail this API. */
-abort_disable_intr:
-	if (pcie_write_cmd(ctrl, 0, HP_INTR_ENABLE))
-		err("%s : disabling interrupts failed\n", __func__);
-abort:
-	return -1;
 }
 
 static inline void dbg_ctrl(struct controller *ctrl)
