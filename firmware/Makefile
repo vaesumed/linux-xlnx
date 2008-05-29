@@ -14,6 +14,9 @@ fw-shipped-$(CONFIG_SND_MAESTRO3_FIRMWARE_IN_KERNEL) += \
 fw-shipped-$(CONFIG_SND_YMFPCI_FIRMWARE_IN_KERNEL) += yamaha/ds1_ctrl.fw \
 		yamaha/ds1_dsp.fw yamaha/ds1e_ctrl.fw
 fw-shipped-$(CONFIG_SMCTR_FIRMWARE) += tr_smctr.bin
+fw-shipped-$(CONFIG_USB_KAWETH_FIRMWARE) += kaweth/new_code.bin \
+		kaweth/new_code_fix.bin kaweth/trigger_code.bin \
+		kaweth/trigger_code_fix.bin
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
