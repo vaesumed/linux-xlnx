@@ -263,7 +263,7 @@ static struct virtqueue *lg_find_vq(struct virtio_device *vdev,
 	 * the interrupt as a source of randomness: it'd be nice to have that
 	 * back.. */
 	err = request_irq(lvq->config.irq, vring_interrupt, IRQF_SHARED,
-			  vdev->dev.bus_id, vq);
+			  dev_name(&vdev->dev), vq);
 	if (err)
 		goto destroy_vring;
 
@@ -314,7 +314,7 @@ static struct virtio_config_ops lguest_config_ops = {
  * /sys/devices/lguest/0,1,2 not /sys/devices/0,1,2. */
 static struct device lguest_root = {
 	.parent = NULL,
-	.bus_id = "lguest",
+	.init_name = "lguest",
 };
 
 /*D:120 This is the core of the lguest bus: actually adding a new device.

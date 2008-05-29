@@ -1422,7 +1422,7 @@ static ssize_t user_write(struct device *dev, struct device_attribute *attr,
 	    (ndev->flags & (IFF_UP | IFF_RUNNING))) {
 		/* username changed while the interface is active. */
 		PRINT_WARN("netiucv: device %s active, connected to %s\n",
-			   dev->bus_id, priv->conn->userid);
+			   dev_name(dev), priv->conn->userid);
 		PRINT_WARN("netiucv: user cannot be updated\n");
 		IUCV_DBF_TEXT(setup, 2, "user_write: device active\n");
 		return -EBUSY;

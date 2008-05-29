@@ -214,7 +214,7 @@ static int dasd_state_known_to_basic(struct dasd_device *device)
 			return rc;
 	}
 	/* register 'device' debug area, used for all DBF_DEV_XXX calls */
-	device->debug_area = debug_register(device->cdev->dev.bus_id, 1, 1,
+	device->debug_area = debug_register(dev_name(&device->cdev->dev), 1, 1,
 					    8 * sizeof(long));
 	debug_register_view(device->debug_area, &debug_sprintf_view);
 	debug_set_level(device->debug_area, DBF_WARNING);
@@ -932,7 +932,7 @@ static void dasd_handle_killed_request(struct ccw_device *cdev,
 		MESSAGE(KERN_DEBUG,
 			"invalid status in handle_killed_request: "
 			"bus_id %s, status %02x",
-			cdev->dev.bus_id, cqr->status);
+			dev_name(&cdev->dev), cqr->status);
 		return;
 	}
 
@@ -941,7 +941,7 @@ static void dasd_handle_killed_request(struct ccw_device *cdev,
 	    device != dasd_device_from_cdev_locked(cdev) ||
 	    strncmp(device->discipline->ebcname, (char *) &cqr->magic, 4)) {
 		MESSAGE(KERN_DEBUG, "invalid device in request: bus_id %s",
-			cdev->dev.bus_id);
+			dev_name(&cdev->dev));
 		return;
 	}
 
@@ -981,11 +981,11 @@ void dasd_int_handler(struct ccw_device *cdev, unsigned long intparm,
 			break;
 		case -ETIMEDOUT:
 			printk(KERN_WARNING"%s(%s): request timed out\n",
-			       __func__, cdev->dev.bus_id);
+			       __func__, dev_name(&cdev->dev));
 			break;
 		default:
 			printk(KERN_WARNING"%s(%s): unknown error %ld\n",
-			       __func__, cdev->dev.bus_id, PTR_ERR(irb));
+			       __func__, dev_name(&cdev->dev), PTR_ERR(irb));
 		}
 		dasd_handle_killed_request(cdev, intparm);
 		return;
@@ -994,7 +994,7 @@ void dasd_int_handler(struct ccw_device *cdev, unsigned long intparm,
 	now = get_clock();
 
 	DBF_EVENT(DBF_ERR, "Interrupt: bus_id %s CS/DS %04x ip %08x",
-		  cdev->dev.bus_id, ((irb->scsw.cstat<<8)|irb->scsw.dstat),
+		  dev_name(&cdev->dev), ((irb->scsw.cstat<<8)|irb->scsw.dstat),
 		  (unsigned int) intparm);
 
 	/* check for unsolicited interrupts */
@@ -1018,7 +1018,7 @@ void dasd_int_handler(struct ccw_device *cdev, unsigned long intparm,
 	if (!device ||
 	    strncmp(device->discipline->ebcname, (char *) &cqr->magic, 4)) {
 		MESSAGE(KERN_DEBUG, "invalid device in request: bus_id %s",
-			cdev->dev.bus_id);
+			dev_name(&cdev->dev));
 		return;
 	}
 
@@ -1036,7 +1036,7 @@ void dasd_int_handler(struct ccw_device *cdev, unsigned long intparm,
 	if (cqr->status != DASD_CQR_IN_IO) {
 		MESSAGE(KERN_DEBUG,
 			"invalid status: bus_id %s, status %02x",
-			cdev->dev.bus_id, cqr->status);
+			dev_name(&cdev->dev), cqr->status);
 		return;
 	}
 	DBF_DEV_EVENT(DBF_DEBUG, device, "Int: CS/DS 0x%04x for cqr %p",
@@ -2135,14 +2135,14 @@ int dasd_generic_probe(struct ccw_device *cdev,
 	if (ret) {
 		printk(KERN_WARNING
 		       "dasd_generic_probe: could not set ccw-device options "
-		       "for %s\n", cdev->dev.bus_id);
+		       "for %s\n", dev_name(&cdev->dev));
 		return ret;
 	}
 	ret = dasd_add_sysfs_files(cdev);
 	if (ret) {
 		printk(KERN_WARNING
 		       "dasd_generic_probe: could not add sysfs entries "
-		       "for %s\n", cdev->dev.bus_id);
+		       "for %s\n", dev_name(&cdev->dev));
 		return ret;
 	}
 	cdev->handler = &dasd_int_handler;
@@ -2153,13 +2153,13 @@ int dasd_generic_probe(struct ccw_device *cdev,
 	 * initial probe.
 	 */
 	if ((dasd_get_feature(cdev, DASD_FEATURE_INITIAL_ONLINE) > 0 ) ||
-	    (dasd_autodetect && dasd_busid_known(cdev->dev.bus_id) != 0))
+	    (dasd_autodetect && dasd_busid_known(dev_name(&cdev->dev)) != 0))
 		ret = ccw_device_set_online(cdev);
 	if (ret)
 		printk(KERN_WARNING
 		       "dasd_generic_probe: could not initially "
 		       "online ccw-device %s; return code: %d\n",
-		       cdev->dev.bus_id, ret);
+		       dev_name(&cdev->dev), ret);
 	return 0;
 }
 
@@ -2225,7 +2225,7 @@ int dasd_generic_set_online(struct ccw_device *cdev,
 		        printk (KERN_WARNING
 				"dasd_generic couldn't online device %s "
 				"- discipline DIAG not available\n",
-				cdev->dev.bus_id);
+				dev_name(&cdev->dev));
 			dasd_delete_device(device);
 			return -ENODEV;
 		}
@@ -2249,7 +2249,7 @@ int dasd_generic_set_online(struct ccw_device *cdev,
 		printk (KERN_WARNING
 			"dasd_generic couldn't online device %s "
 			"with discipline %s rc=%i\n",
-			cdev->dev.bus_id, discipline->name, rc);
+			dev_name(&cdev->dev), discipline->name, rc);
 		module_put(discipline->owner);
 		module_put(base_discipline->owner);
 		dasd_delete_device(device);
@@ -2260,7 +2260,7 @@ int dasd_generic_set_online(struct ccw_device *cdev,
 	if (device->state <= DASD_STATE_KNOWN) {
 		printk (KERN_WARNING
 			"dasd_generic discipline not found for %s\n",
-			cdev->dev.bus_id);
+			dev_name(&cdev->dev));
 		rc = -ENODEV;
 		dasd_set_target_state(device, DASD_STATE_NEW);
 		if (device->block)
@@ -2268,7 +2268,7 @@ int dasd_generic_set_online(struct ccw_device *cdev,
 		dasd_delete_device(device);
 	} else
 		pr_debug("dasd_generic device %s found\n",
-				cdev->dev.bus_id);
+				dev_name(&cdev->dev));
 
 	/* FIXME: we have to wait for the root device but we don't want
 	 * to wait for each single device but for all at once. */
