@@ -995,6 +995,15 @@ depend dep:
 	@echo '*** Warning: make $@ is unnecessary now.'
 
 # ---------------------------------------------------------------------------
+# Firmware install
+INSTALL_FW_PATH=$(objtree)/usr/lib/firmware
+export INSTALL_FW_PATH
+
+PHONY += firmware_install
+firmware_install: FORCE
+	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.fwinst obj=firmware __fw_install
+
+# ---------------------------------------------------------------------------
 # Kernel headers
 INSTALL_HDR_PATH=$(objtree)/usr
 export INSTALL_HDR_PATH
