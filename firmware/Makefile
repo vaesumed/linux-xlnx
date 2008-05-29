@@ -17,6 +17,7 @@ fw-shipped-$(CONFIG_SMCTR_FIRMWARE) += tr_smctr.bin
 fw-shipped-$(CONFIG_USB_KAWETH_FIRMWARE) += kaweth/new_code.bin \
 		kaweth/new_code_fix.bin kaweth/trigger_code.bin \
 		kaweth/trigger_code_fix.bin
+fw-shipped-$(CONFIG_DVB_TTUSB_BUDGET_FIRMWARE) += ttusb-budget/dspbootcode.bin
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
