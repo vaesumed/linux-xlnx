@@ -126,7 +126,7 @@ static int scan_for_dirty_cb(struct ubifs_info *c,
  * @c: the UBIFS file-system description object
  * @min_space: minimum amount free plus dirty space the returned LEB has to
  *             have
- * @pick_free: if it is ok to return a free or freeable LEB
+ * @pick_free: if it is OK to return a free or freeable LEB
  * @exclude_index: whether to exclude index LEBs
  *
  * This function returns a pointer to the LEB properties found or a negative
@@ -501,6 +501,7 @@ int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
 		rsvd_idx_lebs = 0;
 	lebs = c->lst.empty_lebs + c->freeable_cnt + c->idx_gc_cnt -
 	       c->lst.taken_empty_lebs;
+	ubifs_assert(lebs + c->lst.idx_lebs >= c->min_idx_lebs);
 	if (rsvd_idx_lebs < lebs)
 		/*
 		 * OK to allocate an empty LEB, but we still don't want to go
@@ -511,7 +512,21 @@ int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
 			/*
 			 * Because we release the space lock, we must account
 			 * for this allocation here. After the LEB properties
-			 * flags have been updated, we subtract one.
+			 * flags have been updated, we subtract one. Note, the
+			 * result of this is that lprops also decreases
+			 * @taken_empty_lebs in 'ubifs_change_lp()', so it is
+			 * off by one for a short period of time which may
+			 * introduce a small disturbance to budgeting
+			 * calculations, but this is harmless because at the
+			 * worst case this would make the budgeting subsystem
+			 * be more pessimistic than needed.
+			 *
+			 * Fundamentally, this is about serialization of the
+			 * budgeting and lprops subsystems. We could make the
+			 * @space_lock a mutex and avoid dropping it before
+			 * calling 'ubifs_change_lp()', but mutex is more
+			 * heavy-weight, and we want budgeting to be as fast as
+			 * possible.
 			 */
 			c->lst.taken_empty_lebs += 1;
 		}

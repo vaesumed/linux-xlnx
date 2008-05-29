@@ -410,22 +410,25 @@ static int do_budget_space(struct ubifs_info *c)
 	/*
 	 * The number of LEBs that are available to be used by the index is:
 	 *
-	 *     c->lst.empty_lebs + c->freeable_cnt + c->idx_gc_cnt -
-	 *     c->lst.taken_empty_lebs
+	 *    @c->lst.empty_lebs + @c->freeable_cnt + @c->idx_gc_cnt -
+	 *    @c->lst.taken_empty_lebs
 	 *
-	 * empty_lebs are available because they are empty. freeable_cnt are
+	 * @empty_lebs are available because they are empty. @freeable_cnt are
 	 * available because they contain only free and dirty space and the
 	 * index allocation always occurs after wbufs are synch'ed.
-	 * idx_gc_cnt are available because they are index LEBs that have been
+	 * @idx_gc_cnt are available because they are index LEBs that have been
 	 * garbage collected (including trivial GC) and are awaiting the commit
 	 * before they can be unmapped - note that the in-the-gaps method will
-	 * grab these if it needs them. taken_empty_lebs are empty_lebs that
+	 * grab these if it needs them. @taken_empty_lebs are empty_lebs that
 	 * have already been allocated for some purpose (also includes those
-	 * LEBs on the idx_gc list).
+	 * LEBs on the @idx_gc list).
+	 *
+	 * Note, @taken_empty_lebs may temporarily be higher by one because of
+	 * the way we serialize LEB allocations and budgeting. See a comment in
+	 * 'ubifs_find_free_space()'.
 	 */
 	lebs = c->lst.empty_lebs + c->freeable_cnt + c->idx_gc_cnt -
 	       c->lst.taken_empty_lebs;
-	ubifs_assert(lebs + c->lst.idx_lebs >= c->min_idx_lebs);
 	if (unlikely(rsvd_idx_lebs > lebs)) {
 		dbg_budg("out of indexing space: min_idx_lebs %d (old %d), "
 			 "rsvd_idx_lebs %d", min_idx_lebs, c->min_idx_lebs,
