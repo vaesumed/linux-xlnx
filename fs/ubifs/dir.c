@@ -254,7 +254,8 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 		 * checking.
 		 */
 		err = PTR_ERR(inode);
-		ubifs_err("dead directory entry, error %d", err);
+		ubifs_err("dead directory entry '%.*s', error %d",
+			  dentry->d_name.len, dentry->d_name.name, err);
 		ubifs_ro_mode(c, err);
 		goto out;
 	}
