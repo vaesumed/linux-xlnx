@@ -13,6 +13,7 @@ fw-shipped-$(CONFIG_SND_MAESTRO3_FIRMWARE_IN_KERNEL) += \
 		ess/maestro3_assp_kernel.fw ess/maestro3_assp_minisrc.fw
 fw-shipped-$(CONFIG_SND_YMFPCI_FIRMWARE_IN_KERNEL) += yamaha/ds1_ctrl.fw \
 		yamaha/ds1_dsp.fw yamaha/ds1e_ctrl.fw
+fw-shipped-$(CONFIG_SMCTR_FIRMWARE) += tr_smctr.bin
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))

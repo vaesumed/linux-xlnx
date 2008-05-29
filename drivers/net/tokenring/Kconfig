@@ -168,6 +168,7 @@ config MADGEMC
 
 config SMCTR
 	tristate "SMC ISA/MCA adapter support"
+	select FW_LOADER
 	depends on (ISA || MCA_LEGACY) && (BROKEN || !64BIT)
 	---help---
 	  This is support for the ISA and MCA SMC Token Ring cards,
@@ -182,4 +183,12 @@ config SMCTR
 	  To compile this driver as a module, choose M here: the module will be
 	  called smctr.
 
+config SMCTR_FIRMWARE
+	bool "SMC ISA/MCA adapter firmware"
+	depends on SMCTR
+	---help---
+	  Build firmware for SMCTR into the kernel instead of obtaining it
+	  through udev. Say 'N'.
+	  
+       
 endif # TR
