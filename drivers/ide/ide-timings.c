@@ -1,6 +1,3 @@
-#ifndef _IDE_TIMING_H
-#define _IDE_TIMING_H
-
 /*
  *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
@@ -25,6 +22,7 @@
 
 #include <linux/kernel.h>
 #include <linux/hdreg.h>
+#include <linux/ide.h>
 
 /*
  * PIO 0-5, MWDMA 0-2 and UDMA 0-6 timings (in nanoseconds).
@@ -65,6 +63,16 @@ static struct ide_timing ide_timing[] = {
 	{ 0xff }
 };
 
+struct ide_timing *ide_timing_find_mode(u8 speed)
+{
+	struct ide_timing *t;
+
+	for (t = ide_timing; t->mode != speed; t++)
+		if (t->mode == 0xff)
+			return NULL;
+	return t;
+}
+
 #define ENOUGH(v, unit)		(((v) - 1) / (unit) + 1)
 #define EZ(v, unit)		((v) ? ENOUGH(v, unit) : 0)
 
@@ -81,8 +89,8 @@ static void ide_timing_quantize(struct ide_timing *t, struct ide_timing *q,
 	q->udma    = EZ(t->udma    * 1000, UT);
 }
 
-static void ide_timing_merge(struct ide_timing *a, struct ide_timing *b,
-			     struct ide_timing *m, unsigned int what)
+void ide_timing_merge(struct ide_timing *a, struct ide_timing *b,
+		      struct ide_timing *m, unsigned int what)
 {
 	if (what & IDE_TIMING_SETUP)
 		m->setup   = max(a->setup,   b->setup);
@@ -102,18 +110,8 @@ static void ide_timing_merge(struct ide_timing *a, struct ide_timing *b,
 		m->udma    = max(a->udma,    b->udma);
 }
 
-static struct ide_timing *ide_timing_find_mode(u8 speed)
-{
-	struct ide_timing *t;
-
-	for (t = ide_timing; t->mode != speed; t++)
-		if (t->mode == 0xff)
-			return NULL;
-	return t;
-}
-
-static int ide_timing_compute(ide_drive_t *drive, u8 speed,
-			      struct ide_timing *t, int T, int UT)
+int ide_timing_compute(ide_drive_t *drive, u8 speed,
+		       struct ide_timing *t, int T, int UT)
 {
 	struct hd_driveid *id = drive->id;
 	struct ide_timing *s, p;
@@ -179,5 +177,3 @@ static int ide_timing_compute(ide_drive_t *drive, u8 speed,
 
 	return 0;
 }
-
-#endif
