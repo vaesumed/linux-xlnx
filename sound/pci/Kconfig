@@ -934,7 +934,7 @@ config SND_VX222
 config SND_YMFPCI
 	tristate "Yamaha YMF724/740/744/754"
 	depends on SND
-	select FW_LOADER if !SND_YMFPCI_FIRMWARE_IN_KERNEL
+	select FW_LOADER
 	select SND_OPL3_LIB
 	select SND_MPU401_UART
 	select SND_AC97_CODEC
@@ -948,7 +948,7 @@ config SND_YMFPCI
 config SND_YMFPCI_FIRMWARE_IN_KERNEL
 	bool "In-kernel firmware for YMFPCI driver"
 	depends on SND_YMFPCI
-	default y
+	default n
 	help
 	  Say Y here to include the static firmware built in the kernel
 	  for the YMFPCI driver.  If you choose N here, you need to
