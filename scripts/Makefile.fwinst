@@ -1,0 +1,26 @@
+# ==========================================================================
+# Installing firmware
+#
+# We don't include the .config, so all firmware files are in $(fw-shipped-)
+# rather than in $(fw-shipped-y) or $(fw-shipped-n).
+# ==========================================================================
+
+INSTALL := install
+
+include scripts/Kbuild.include 
+include $(srctree)/$(obj)/Makefile
+
+installed-fw := $(addprefix $(INSTALL_FW_PATH)/,$(fw-shipped-))
+installed-fw-dirs := $(sort $(dir $(installed-fw)))
+
+quiet_cmd_install = INSTALL $(subst $(srctree)/,,$@)
+      cmd_install = $(INSTALL) -m0644 $< $@
+
+$(installed-fw-dirs):
+	$(call cmd,mkdir)
+
+$(installed-fw): $(INSTALL_FW_PATH)/%: $(obj)/% | $(INSTALL_FW_PATH)/$$(dir %)/
+	$(call cmd,install)
+
+.PHONY: __fw_install
+__fw_install: $(installed-fw)
