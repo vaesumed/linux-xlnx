@@ -4,6 +4,7 @@
   */
 
 #include <net/iw_handler.h>
+#include <net/ieee80211.h>
 #include <linux/kfifo.h>
 #include "host.h"
 #include "hostcmd.h"
@@ -746,28 +747,6 @@ out:
 	return ret;
 }
 
-static int lbs_cmd_mac_multicast_adr(struct lbs_private *priv,
-				      struct cmd_ds_command *cmd,
-				      u16 cmd_action)
-{
-	struct cmd_ds_mac_multicast_adr *pMCastAdr = &cmd->params.madr;
-
-	lbs_deb_enter(LBS_DEB_CMD);
-	cmd->size = cpu_to_le16(sizeof(struct cmd_ds_mac_multicast_adr) +
-			     S_DS_GEN);
-	cmd->command = cpu_to_le16(CMD_MAC_MULTICAST_ADR);
-
-	lbs_deb_cmd("MULTICAST_ADR: setting %d addresses\n", pMCastAdr->nr_of_adrs);
-	pMCastAdr->action = cpu_to_le16(cmd_action);
-	pMCastAdr->nr_of_adrs =
-	    cpu_to_le16((u16) priv->nr_of_multicastmacaddr);
-	memcpy(pMCastAdr->maclist, priv->multicastlist,
-	       priv->nr_of_multicastmacaddr * ETH_ALEN);
-
-	lbs_deb_leave(LBS_DEB_CMD);
-	return 0;
-}
-
 /**
  *  @brief Get the radio channel
  *
@@ -1020,24 +999,69 @@ int lbs_mesh_access(struct lbs_private *priv, uint16_t cmd_action,
 	return ret;
 }
 
-int lbs_mesh_config(struct lbs_private *priv, uint16_t enable, uint16_t chan)
+int lbs_mesh_config_send(struct lbs_private *priv,
+			 struct cmd_ds_mesh_config *cmd,
+			 uint16_t action, uint16_t type)
+{
+	int ret;
+
+	lbs_deb_enter(LBS_DEB_CMD);
+
+	cmd->hdr.command = cpu_to_le16(CMD_MESH_CONFIG);
+	cmd->hdr.size = cpu_to_le16(sizeof(struct cmd_ds_mesh_config));
+	cmd->hdr.result = 0;
+
+	cmd->type = cpu_to_le16(type);
+	cmd->action = cpu_to_le16(action);
+
+	ret = lbs_cmd_with_response(priv, CMD_MESH_CONFIG, cmd);
+
+	lbs_deb_leave(LBS_DEB_CMD);
+	return ret;
+}
+
+/* This function is the CMD_MESH_CONFIG legacy function.  It only handles the
+ * START and STOP actions.  The extended actions supported by CMD_MESH_CONFIG
+ * are all handled by preparing a struct cmd_ds_mesh_config and passing it to
+ * lbs_mesh_config_send.
+ */
+int lbs_mesh_config(struct lbs_private *priv, uint16_t action, uint16_t chan)
 {
 	struct cmd_ds_mesh_config cmd;
+	struct mrvl_meshie *ie;
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.action = cpu_to_le16(enable);
 	cmd.channel = cpu_to_le16(chan);
-	cmd.type = cpu_to_le16(priv->mesh_tlv);
-	cmd.hdr.size = cpu_to_le16(sizeof(cmd));
+	ie = (struct mrvl_meshie *)cmd.data;
 
-	if (enable) {
-		cmd.length = cpu_to_le16(priv->mesh_ssid_len);
-		memcpy(cmd.data, priv->mesh_ssid, priv->mesh_ssid_len);
+	switch (action) {
+	case CMD_ACT_MESH_CONFIG_START:
+		ie->hdr.id = MFIE_TYPE_GENERIC;
+		ie->val.oui[0] = 0x00;
+		ie->val.oui[1] = 0x50;
+		ie->val.oui[2] = 0x43;
+		ie->val.type = MARVELL_MESH_IE_TYPE;
+		ie->val.subtype = MARVELL_MESH_IE_SUBTYPE;
+		ie->val.version = MARVELL_MESH_IE_VERSION;
+		ie->val.active_protocol_id = MARVELL_MESH_PROTO_ID_HWMP;
+		ie->val.active_metric_id = MARVELL_MESH_METRIC_ID;
+		ie->val.mesh_capability = MARVELL_MESH_CAPABILITY;
+		ie->val.mesh_id_len = priv->mesh_ssid_len;
+		memcpy(ie->val.mesh_id, priv->mesh_ssid, priv->mesh_ssid_len);
+		ie->hdr.len = sizeof(struct mrvl_meshie_val) -
+			IW_ESSID_MAX_SIZE + priv->mesh_ssid_len;
+		cmd.length = cpu_to_le16(sizeof(struct mrvl_meshie_val));
+		break;
+	case CMD_ACT_MESH_CONFIG_STOP:
+		break;
+	default:
+		return -1;
 	}
-	lbs_deb_cmd("mesh config enable %d TLV %x channel %d SSID %s\n",
-		    enable, priv->mesh_tlv, chan,
+	lbs_deb_cmd("mesh config action %d type %x channel %d SSID %s\n",
+		    action, priv->mesh_tlv, chan,
 		    escape_essid(priv->mesh_ssid, priv->mesh_ssid_len));
-	return lbs_cmd_with_response(priv, CMD_MESH_CONFIG, &cmd);
+
+	return lbs_mesh_config_send(priv, &cmd, action, priv->mesh_tlv);
 }
 
 static int lbs_cmd_bcn_ctrl(struct lbs_private * priv,
@@ -1112,7 +1136,7 @@ static void lbs_submit_command(struct lbs_private *priv,
 	struct cmd_header *cmd;
 	uint16_t cmdsize;
 	uint16_t command;
-	int timeo = 5 * HZ;
+	int timeo = 3 * HZ;
 	int ret;
 
 	lbs_deb_enter(LBS_DEB_HOST);
@@ -1130,7 +1154,7 @@ static void lbs_submit_command(struct lbs_private *priv,
 	/* These commands take longer */
 	if (command == CMD_802_11_SCAN || command == CMD_802_11_ASSOCIATE ||
 	    command == CMD_802_11_AUTHENTICATE)
-		timeo = 10 * HZ;
+		timeo = 5 * HZ;
 
 	lbs_deb_cmd("DNLD_CMD: command 0x%04x, seq %d, size %d\n",
 		     command, le16_to_cpu(cmd->seqnum), cmdsize);
@@ -1142,7 +1166,7 @@ static void lbs_submit_command(struct lbs_private *priv,
 		lbs_pr_info("DNLD_CMD: hw_host_to_card failed: %d\n", ret);
 		/* Let the timer kick in and retry, and potentially reset
 		   the whole thing if the condition persists */
-		timeo = HZ;
+		timeo = HZ/4;
 	}
 
 	/* Setup the timer after transmit command */
@@ -1247,8 +1271,7 @@ void lbs_set_mac_control(struct lbs_private *priv)
 	cmd.action = cpu_to_le16(priv->mac_control);
 	cmd.reserved = 0;
 
-	lbs_cmd_async(priv, CMD_MAC_CONTROL,
-		&cmd.hdr, sizeof(cmd));
+	lbs_cmd_async(priv, CMD_MAC_CONTROL, &cmd.hdr, sizeof(cmd));
 
 	lbs_deb_leave(LBS_DEB_CMD);
 }
@@ -1360,10 +1383,6 @@ int lbs_prepare_and_send_command(struct lbs_private *priv,
 							 cmdptr, cmd_action);
 		break;
 
-	case CMD_MAC_MULTICAST_ADR:
-		ret = lbs_cmd_mac_multicast_adr(priv, cmdptr, cmd_action);
-		break;
-
 	case CMD_802_11_MONITOR_MODE:
 		ret = lbs_cmd_802_11_monitor_mode(cmdptr,
 				          cmd_action, pdata_buf);
@@ -1452,7 +1471,7 @@ int lbs_prepare_and_send_command(struct lbs_private *priv,
 		ret = lbs_cmd_bcn_ctrl(priv, cmdptr, cmd_action);
 		break;
 	default:
-		lbs_deb_host("PREP_CMD: unknown command 0x%04x\n", cmd_no);
+		lbs_pr_err("PREP_CMD: unknown command 0x%04x\n", cmd_no);
 		ret = -1;
 		break;
 	}
