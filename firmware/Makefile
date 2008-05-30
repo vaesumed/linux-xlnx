@@ -36,6 +36,9 @@ fw-shipped-$(CONFIG_USB_EMI26_FIRMWARE) += emi26/loader.fw emi26/firmware.fw \
 		emi26/bitstream.fw
 fw-shipped-$(CONFIG_USB_EMI62_FIRMWARE) += emi62/loader.fw emi62/bitstream.fw \
 		emi62/spdif.fw emi62/midi.fw
+fw-shipped-$(CONFIG_USB_TI_3410_FIRMWARE) += ti_3410.fw
+fw-shipped-$(CONFIG_USB_TI_5052_FIRMWARE) += ti_5052.fw
+
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
 
