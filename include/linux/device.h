@@ -350,6 +350,7 @@ struct device {
 
 	struct kobject kobj;
 	char	bus_id[20];	/* will be removed */
+	const char *init_name;
 	struct device_type	*type;
 	unsigned		uevent_suppress:1;
 
