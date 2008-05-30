@@ -30,6 +30,8 @@ fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA28XB) += keyspan/usa28xb.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA28X) += keyspan/usa28x.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA49W) += keyspan/usa49w.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA49WLC) += keyspan/usa49wlc.fw
+fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_PDA_FIRMWARE) += keyspan_pda/keyspan_pda.fw
+fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM_FIRMWARE) += keyspan_pda/xircom_pgs.fw
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
