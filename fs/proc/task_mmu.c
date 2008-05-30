@@ -210,7 +210,7 @@ static int show_map(struct seq_file *m, void *v)
 	dev_t dev = 0;
 	int len;
 
-	if (maps_protect && !ptrace_may_attach(task))
+	if (maps_protect && !ptrace_may_access(task, PTRACE_MODE_READ))
 		return -EACCES;
 
 	if (file) {
@@ -629,7 +629,7 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 		goto out;
 
 	ret = -EACCES;
-	if (!ptrace_may_attach(task))
+	if (!ptrace_may_access(task, PTRACE_MODE_READ))
 		goto out_task;
 
 	ret = -EINVAL;
@@ -667,7 +667,7 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 	pm.out = buf;
 	pm.end = buf + count;
 
-	if (!ptrace_may_attach(task)) {
+	if (!ptrace_may_access(task, PTRACE_MODE_READ)) {
 		ret = -EIO;
 	} else {
 		unsigned long src = *ppos;
@@ -726,7 +726,7 @@ static int show_numa_map_checked(struct seq_file *m, void *v)
 	struct proc_maps_private *priv = m->private;
 	struct task_struct *task = priv->task;
 
-	if (maps_protect && !ptrace_may_attach(task))
+	if (maps_protect && !ptrace_may_access(task, PTRACE_MODE_READ))
 		return -EACCES;
 
 	return show_numa_map(m, v);
