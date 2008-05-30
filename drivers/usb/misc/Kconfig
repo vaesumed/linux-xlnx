@@ -6,6 +6,7 @@ comment "USB Miscellaneous drivers"
 
 config USB_EMI62
 	tristate "EMI 6|2m USB Audio interface support"
+	select FW_LOADER
 	depends on USB
 	---help---
 	  This driver loads firmware to Emagic EMI 6|2m low latency USB
@@ -18,6 +19,13 @@ config USB_EMI62
 	  inserted in and removed from the running kernel whenever you want).
 	  The module will be called audio. If you want to compile it as a
 	  module, say M here and read <file:Documentation/kbuild/modules.txt>.
+
+config USB_EMI62_FIRMWARE
+	bool "Firmware for EMI 6|2m USB Audio interface"
+	depends on USB_EMI62
+	---help---
+	  Includes firmware for the EMI 6|2m USB audio interface in the
+	  kernel, instead of having it loaded normally by udev. Say 'N'.
 
 config USB_EMI26
 	tristate "EMI 2|6 USB Audio interface support"
