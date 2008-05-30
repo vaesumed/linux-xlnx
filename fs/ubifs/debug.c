@@ -405,6 +405,8 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 
 		key_read(c, &ino->key, &key);
 		printk(KERN_DEBUG "\tkey            %s\n", DBGKEY(&key));
+		printk(KERN_DEBUG "\tcreat_sqnum    %llu\n",
+		       (unsigned long long)le64_to_cpu(ino->creat_sqnum));
 		printk(KERN_DEBUG "\tsize           %llu\n",
 		       (unsigned long long)le64_to_cpu(ino->size));
 		printk(KERN_DEBUG "\tnlink          %u\n",
