@@ -67,8 +67,6 @@ static int do_commit(struct ubifs_info *c)
 		goto out_up;
 	}
 
-	c->recovery_needs_commit = 0;
-
 	/* Sync all write buffers (necessary for recovery) */
 	for (i = 0; i < c->jhead_cnt; i++) {
 		err = ubifs_wbuf_sync(&c->jheads[i].wbuf);
@@ -409,45 +407,6 @@ out_cmt_unlock:
 out:
 	spin_unlock(&c->cs_lock);
 	return err;
-}
-
-/**
- * ubifs_recovery_commit - if needed, ensure a commit has run since recovery.
- * @c: UBIFS file-system description object
- *
- * This function ensures that a commit has been run since recovery and before
- * unmounting cleanly.  Errors are ignored because in that case a subsequent
- * unmount will not be clean.
- *
- * The recovery needs a commit when it updates TNC directly without there being
- * a corresponding record of the change in the journal.  In that case, if UBIFS
- * were to unmount cleanly without having run a commit, the TNC changes would
- * be lost.
- */
-void ubifs_recovery_commit(struct ubifs_info *c)
-{
-	spin_lock(&c->cs_lock);
-	if (!c->recovery_needs_commit ||
-	    c->cmt_state == COMMIT_BROKEN ||
-	    c->cmt_state == COMMIT_RUNNING_BACKGROUND ||
-	    c->cmt_state == COMMIT_RUNNING_REQUIRED) {
-		spin_unlock(&c->cs_lock);
-		return;
-	}
-	spin_unlock(&c->cs_lock);
-	down_write(&c->commit_sem);
-	spin_lock(&c->cs_lock);
-	if (!c->recovery_needs_commit ||
-	    c->cmt_state == COMMIT_BROKEN ||
-	    c->cmt_state == COMMIT_RUNNING_BACKGROUND ||
-	    c->cmt_state == COMMIT_RUNNING_REQUIRED) {
-		spin_unlock(&c->cs_lock);
-		up_write(&c->commit_sem);
-		return;
-	}
-	c->cmt_state = COMMIT_RUNNING_REQUIRED;
-	spin_unlock(&c->cs_lock);
-	do_commit(c);
 }
 
 /**

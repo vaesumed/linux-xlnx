@@ -673,7 +673,7 @@ static int init_constants_late(struct ubifs_info *c)
 }
 
 /**
- * care_about_gc_lnum - take care about reserved GC LEB.
+ * take_gc_lnum - reserve GC LEB.
  * @c: UBIFS file-system description object
  *
  * This function ensures that the LEB reserved for garbage collection is
@@ -683,7 +683,7 @@ static int init_constants_late(struct ubifs_info *c)
  * This function returns zero in case of success and a negative error code in
  * case of failure.
  */
-static int care_about_gc_lnum(struct ubifs_info *c)
+static int take_gc_lnum(struct ubifs_info *c)
 {
 	int err;
 
@@ -1093,12 +1093,12 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (!mounted_read_only) {
 		int lnum;
 
-		if (c->need_recovery)
-			err = ubifs_recover_gc_lnum(c);
-		else
-			err = care_about_gc_lnum(c);
-		if (err)
+		/* Check for enough free space */
+		if (ubifs_calc_available(c) <= 0) {
+			ubifs_err("insufficient available space");
+			err = -EINVAL;
 			goto out_orphans;
+		}
 
 		/* Check for enough log space */
 		lnum = c->lhead_lnum + 1;
@@ -1110,19 +1110,20 @@ static int mount_ubifs(struct ubifs_info *c)
 				goto out_orphans;
 		}
 
-		/* Check for enough free space */
-		if (ubifs_calc_available(c) <= 0) {
-			ubifs_err("insufficient available space");
-			err = -EINVAL;
+		if (c->need_recovery) {
+			err = ubifs_recover_size(c);
+			if (err)
+				goto out_orphans;
+			err = ubifs_rcvry_gc_commit(c);
+		} else
+			err = take_gc_lnum(c);
+		if (err)
 			goto out_orphans;
-		}
 
 		err = dbg_check_lprops(c);
 		if (err)
 			goto out_orphans;
-	}
-
-	if (c->need_recovery) {
+	} else if (c->need_recovery) {
 		err = ubifs_recover_size(c);
 		if (err)
 			goto out_orphans;
@@ -1351,13 +1352,6 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	if (!c->orph_buf)
 		return -ENOMEM;
 
-	if (c->need_recovery)
-		err = ubifs_recover_gc_lnum(c);
-	else
-		err = care_about_gc_lnum(c);
-	if (err)
-		goto out;
-
 	/* Check for enough log space */
 	lnum = c->lhead_lnum + 1;
 	if (lnum >= UBIFS_LOG_LNUM + c->log_lebs)
@@ -1367,6 +1361,13 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 		if (err)
 			goto out;
 	}
+
+	if (c->need_recovery)
+		err = ubifs_rcvry_gc_commit(c);
+	else
+		err = take_gc_lnum(c);
+	if (err)
+		goto out;
 
 	if (c->need_recovery) {
 		c->need_recovery = 0;
@@ -1417,9 +1418,6 @@ static void commit_on_unmount(struct ubifs_info *c)
 		if (bud_bytes > c->leb_size)
 			ubifs_run_commit(c);
 	}
-
-	if (c->recovery_needs_commit)
-		ubifs_recovery_commit(c);
 }
 
 /**
