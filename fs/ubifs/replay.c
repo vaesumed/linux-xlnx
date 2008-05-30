@@ -980,7 +980,7 @@ static int take_ihead(struct ubifs_info *c)
 
 	free = lp->free;
 
-	lp = ubifs_change_lp(c, lp, -1, -1, lp->flags | LPROPS_TAKEN, 0);
+	lp = ubifs_change_lp(c, lp, NC, NC, lp->flags | LPROPS_TAKEN, 0);
 	if (IS_ERR(lp)) {
 		err = PTR_ERR(lp);
 		goto out;

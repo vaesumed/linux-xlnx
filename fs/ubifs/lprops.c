@@ -532,7 +532,7 @@ static int is_lprops_dirty(struct ubifs_info *c, struct ubifs_lprops *lprops)
  * @idx_gc_cnt: change to the count of idx_gc list
  *
  * This function changes LEB properties. This function does not change a LEB
- * property (@free, @dirty or @flag) if the value passed is %-1.
+ * property (@free, @dirty or @flag) if the value passed is NC.
  *
  * This function returns a pointer to the updated LEB properties on success
  * and a negative error code on failure. N.B. the LEB properties may have had to
@@ -563,6 +563,8 @@ const struct ubifs_lprops *ubifs_change_lp(struct ubifs_info *c,
 	ubifs_assert(!(c->lst.total_free & 7) && !(c->lst.total_dirty & 7));
 	ubifs_assert(!(c->lst.total_dead & 7) && !(c->lst.total_dark & 7));
 	ubifs_assert(!(c->lst.total_used & 7));
+	ubifs_assert(free == NC || free >= 0);
+	ubifs_assert(dirty == NC || dirty >= 0);
 
 	if (!is_lprops_dirty(c, lprops)) {
 		lprops = ubifs_lpt_lookup_dirty(c, lprops->lnum);
@@ -590,7 +592,7 @@ const struct ubifs_lprops *ubifs_change_lp(struct ubifs_info *c,
 		c->lst.total_used -= c->leb_size - old_spc;
 	}
 
-	if (free != -1) {
+	if (free != NC) {
 		free = ALIGN(free, 8);
 		c->lst.total_free += free - lprops->free;
 
@@ -603,13 +605,13 @@ const struct ubifs_lprops *ubifs_change_lp(struct ubifs_info *c,
 		lprops->free = free;
 	}
 
-	if (dirty != -1) {
+	if (dirty != NC) {
 		dirty = ALIGN(dirty, 8);
 		c->lst.total_dirty += dirty - lprops->dirty;
 		lprops->dirty = dirty;
 	}
 
-	if (flags != -1) {
+	if (flags != NC) {
 		/* Take care about indexing LEBs counter if needed */
 		if ((lprops->flags & LPROPS_INDEX)) {
 			if (!(flags & LPROPS_INDEX))
