@@ -452,13 +452,13 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		printk(KERN_DEBUG "\tnlen           %d\n", nlen);
 		printk(KERN_DEBUG "\tname           ");
 
-		if (nlen > UBIFS_MAX_NLEN) {
-			nlen = UBIFS_MAX_NLEN;
-			printk(KERN_DEBUG "\tWarning! Node is corrupted\n");
+		if (nlen > UBIFS_MAX_NLEN)
+			printk(KERN_DEBUG "(bad name length, not printing, "
+					  "bad or corrupted node)");
+		else {
+			for (i = 0; i < nlen && dent->name[i]; i++)
+				printk("%c", dent->name[i]);
 		}
-
-		for (i = 0; i < nlen && dent->name[i]; i++)
-			printk("%c", dent->name[i]);
 		printk("\n");
 
 		break;
