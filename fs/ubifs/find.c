@@ -111,10 +111,11 @@ static int scan_for_dirty_cb(struct ubifs_info *c,
 	if (data->exclude_index && lprops->flags & LPROPS_INDEX)
 		return ret;
 	/* If specified, exclude empty or freeable LEBs */
-	if (!data->pick_free && lprops->free + lprops->dirty == c->leb_size)
-		return ret;
+	if (lprops->free + lprops->dirty == c->leb_size) {
+		if (!data->pick_free)
+			return ret;
 	/* Exclude LEBs with too little dirty space (unless it is empty) */
-	if (lprops->dirty < c->dead_wm && lprops->free != c->leb_size)
+	} else if (lprops->dirty < c->dead_wm)
 		return ret;
 	/* Finally we found space */
 	data->lnum = lprops->lnum;
@@ -189,7 +190,9 @@ static const struct ubifs_lprops *scan_for_dirty(struct ubifs_info *c,
 		return lprops;
 	ubifs_assert(lprops->lnum == data.lnum);
 	ubifs_assert(lprops->free + lprops->dirty >= min_space);
-	ubifs_assert(lprops->dirty >= c->dead_wm);
+	ubifs_assert(lprops->dirty >= c->dead_wm ||
+		     (pick_free &&
+		      lprops->free + lprops->dirty == c->leb_size));
 	ubifs_assert(!(lprops->flags & LPROPS_TAKEN));
 	ubifs_assert(!(lprops->flags & LPROPS_INDEX));
 	return lprops;
@@ -320,7 +323,8 @@ int ubifs_find_dirty_leb(struct ubifs_info *c, struct ubifs_lprops *ret_lp,
 		err = PTR_ERR(lp);
 		goto out;
 	}
-	ubifs_assert(lp->dirty >= c->dead_wm);
+	ubifs_assert(lp->dirty >= c->dead_wm ||
+		     (pick_free && lp->free + lp->dirty == c->leb_size));
 
 found:
 	dbg_find("found LEB %d, free %d, dirty %d, flags %#x",
