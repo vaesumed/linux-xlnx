@@ -212,7 +212,7 @@ static inline int ubifs_encode_dev(union ubifs_dev_desc *dev, dev_t rdev)
  */
 static inline int ubifs_add_dirt(struct ubifs_info *c, int lnum, int dirty)
 {
-	return ubifs_update_one_lp(c, lnum, -1, dirty, 0, 0);
+	return ubifs_update_one_lp(c, lnum, NC, dirty, 0, 0);
 }
 
 /**
@@ -226,7 +226,7 @@ static inline int ubifs_add_dirt(struct ubifs_info *c, int lnum, int dirty)
  */
 static inline int ubifs_return_leb(struct ubifs_info *c, int lnum)
 {
-	return ubifs_change_one_lp(c, lnum, -1, -1, 0, LPROPS_TAKEN, 0);
+	return ubifs_change_one_lp(c, lnum, NC, NC, 0, LPROPS_TAKEN, 0);
 }
 
 /**

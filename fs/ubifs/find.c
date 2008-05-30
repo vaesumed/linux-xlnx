@@ -326,7 +326,7 @@ found:
 	dbg_find("found LEB %d, free %d, dirty %d, flags %#x",
 		 lp->lnum, lp->free, lp->dirty, lp->flags);
 
-	lp = ubifs_change_lp(c, lp, -1, -1, lp->flags | LPROPS_TAKEN, 0);
+	lp = ubifs_change_lp(c, lp, NC, NC, lp->flags | LPROPS_TAKEN, 0);
 	if (IS_ERR(lp)) {
 		err = PTR_ERR(lp);
 		goto out;
@@ -541,7 +541,7 @@ int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
 	lnum = lprops->lnum;
 	flags = lprops->flags | LPROPS_TAKEN;
 
-	lprops = ubifs_change_lp(c, lprops, -1, -1, flags, 0);
+	lprops = ubifs_change_lp(c, lprops, NC, NC, flags, 0);
 	if (IS_ERR(lprops)) {
 		err = PTR_ERR(lprops);
 		goto out;
@@ -713,7 +713,7 @@ int ubifs_find_free_leb_for_idx(struct ubifs_info *c)
 	 */
 	err = ubifs_leb_unmap(c, lnum);
 	if (err) {
-		ubifs_change_one_lp(c, lnum, -1, -1, 0,
+		ubifs_change_one_lp(c, lnum, NC, NC, 0,
 				    LPROPS_TAKEN | LPROPS_INDEX, 0);
 		return err;
 	}
@@ -870,7 +870,7 @@ found:
 	dbg_find("found dirty LEB %d, free %d, dirty %d, flags %#x",
 		 lprops->lnum, lprops->free, lprops->dirty, lprops->flags);
 
-	lprops = ubifs_change_lp(c, lprops, -1, -1,
+	lprops = ubifs_change_lp(c, lprops, NC, NC,
 				 lprops->flags | LPROPS_TAKEN, 0);
 	if (IS_ERR(lprops))
 		return PTR_ERR(lprops);
@@ -898,7 +898,7 @@ static int get_idx_gc_leb(struct ubifs_info *c)
 	lp = ubifs_lpt_lookup_dirty(c, lnum);
 	if (unlikely(IS_ERR(lp)))
 		return PTR_ERR(lp);
-	lp = ubifs_change_lp(c, lp, -1, -1, lp->flags | LPROPS_INDEX, -1);
+	lp = ubifs_change_lp(c, lp, NC, NC, lp->flags | LPROPS_INDEX, -1);
 	if (unlikely(IS_ERR(lp)))
 		return PTR_ERR(lp);
 	dbg_find("LEB %d, dirty %d and free %d flags %#x",
@@ -925,7 +925,7 @@ static int find_dirtiest_idx_leb(struct ubifs_info *c)
 			return PTR_ERR(lp);
 		if ((lp->flags & LPROPS_TAKEN) || !(lp->flags & LPROPS_INDEX))
 			continue;
-		lp = ubifs_change_lp(c, lp, -1, -1,
+		lp = ubifs_change_lp(c, lp, NC, NC,
 				     lp->flags | LPROPS_TAKEN, 0);
 		if (IS_ERR(lp))
 			return PTR_ERR(lp);
