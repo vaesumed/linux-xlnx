@@ -24,6 +24,7 @@
 #include <linux/kernel.h>
 #include <linux/hdreg.h>
 #include <linux/ide.h>
+#include <linux/module.h>
 
 /*
  * PIO 0-5, MWDMA 0-2 and UDMA 0-6 timings (in nanoseconds).
@@ -73,6 +74,7 @@ struct ide_timing *ide_timing_find_mode(u8 speed)
 			return NULL;
 	return t;
 }
+EXPORT_SYMBOL(ide_timing_find_mode);
 
 u16 ide_pio_cycle_time(ide_drive_t *drive, u8 pio)
 {
@@ -131,6 +133,7 @@ void ide_timing_merge(struct ide_timing *a, struct ide_timing *b,
 	if (what & IDE_TIMING_UDMA)
 		m->udma    = max(a->udma,    b->udma);
 }
+EXPORT_SYMBOL(ide_timing_merge);
 
 int ide_timing_compute(ide_drive_t *drive, u8 speed,
 		       struct ide_timing *t, int T, int UT)
@@ -199,3 +202,4 @@ int ide_timing_compute(ide_drive_t *drive, u8 speed,
 
 	return 0;
 }
+EXPORT_SYMBOL(ide_timing_compute);
