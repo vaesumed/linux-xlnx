@@ -32,6 +32,8 @@ fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA49W) += keyspan/usa49w.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA49WLC) += keyspan/usa49wlc.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_PDA_FIRMWARE) += keyspan_pda/keyspan_pda.fw
 fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM_FIRMWARE) += keyspan_pda/xircom_pgs.fw
+fw-shipped-$(CONFIG_USB_EMI26_FIRMWARE) += emi26/loader.fw emi26/firmware.fw \
+		emi26/bitstream.fw
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
