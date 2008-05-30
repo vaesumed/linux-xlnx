@@ -730,7 +730,7 @@ static int free_unused_idx_lebs(struct ubifs_info *c)
 	for (i = c->ileb_nxt; i < c->ileb_cnt; i++) {
 		lnum = c->ilebs[i];
 		dbg_cmt("LEB %d", lnum);
-		er = ubifs_change_one_lp(c, lnum, -1, -1, 0,
+		er = ubifs_change_one_lp(c, lnum, NC, NC, 0,
 					 LPROPS_INDEX | LPROPS_TAKEN, 0);
 		if (!err)
 			err = er;
@@ -854,7 +854,7 @@ static int write_index(struct ubifs_info *c)
 	/* Ensure there is enough room for first write */
 	next_len = ubifs_idx_node_sz(c, cnext->child_cnt);
 	if (buf_offs + next_len > c->leb_size) {
-		err = ubifs_update_one_lp(c, lnum, -1, -1, 0, LPROPS_TAKEN);
+		err = ubifs_update_one_lp(c, lnum, NC, 0, 0, LPROPS_TAKEN);
 		if (err)
 			return err;
 		lnum = -1;
@@ -954,8 +954,8 @@ static int write_index(struct ubifs_info *c)
 				used = 0;
 				avail = buf_len;
 				if (buf_offs + next_len > c->leb_size) {
-					err = ubifs_update_one_lp(c, lnum, -1,
-								  -1, 0,
+					err = ubifs_update_one_lp(c, lnum, NC,
+								  0, 0,
 								  LPROPS_TAKEN);
 					if (err)
 						return err;
@@ -987,8 +987,8 @@ static int write_index(struct ubifs_info *c)
 			buf_offs += blen;
 			if (next_len) {
 				if (nxt_offs > c->leb_size) {
-					err = ubifs_update_one_lp(c, lnum, -1,
-								  -1, 0,
+					err = ubifs_update_one_lp(c, lnum, NC,
+								  0, 0,
 								  LPROPS_TAKEN);
 					if (err)
 						return err;
@@ -1058,7 +1058,7 @@ static int return_gap_lebs(struct ubifs_info *c)
 
 	dbg_cmt("");
 	for (p = c->gap_lebs; *p != -1; p++) {
-		err = ubifs_change_one_lp(c, *p, -1, -1, 0, LPROPS_TAKEN, 0);
+		err = ubifs_change_one_lp(c, *p, NC, NC, 0, LPROPS_TAKEN, 0);
 		if (err)
 			return err;
 	}
