@@ -104,6 +104,7 @@
 #include <asm/pgtable.h>
 #include <asm/page.h>
 #include <linux/sched.h>
+#include <linux/smp_lock.h>
 #include <linux/types.h>
 #include <linux/vmalloc.h>
 #include <linux/string.h>
@@ -1781,6 +1782,7 @@ static int dv1394_open(struct inode *inode, struct file *file)
 {
 	struct video_card *video = NULL;
 
+	lock_kernel();
 	if (file->private_data) {
 		video = (struct video_card*) file->private_data;
 
@@ -1802,12 +1804,14 @@ static int dv1394_open(struct inode *inode, struct file *file)
 
 		if (!video) {
 			debug_printk("dv1394: OHCI card %d not found", ieee1394_file_to_instance(file));
+			unlock_kernel();
 			return -ENODEV;
 		}
 
 		file->private_data = (void*) video;
 	}
-
+	unlock_kernel();
+	
 #ifndef DV1394_ALLOW_MORE_THAN_ONE_OPEN
 
 	if ( test_and_set_bit(0, &video->open) ) {
