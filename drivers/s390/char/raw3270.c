@@ -372,17 +372,17 @@ raw3270_irq (struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 
 	if (IS_ERR(irb))
 		rc = RAW3270_IO_RETRY;
-	else if (irb->scsw.fctl & SCSW_FCTL_HALT_FUNC) {
+	else if (irb->scsw.cmd.fctl & SCSW_FCTL_HALT_FUNC) {
 		rq->rc = -EIO;
 		rc = RAW3270_IO_DONE;
-	} else if (irb->scsw.dstat ==  (DEV_STAT_CHN_END | DEV_STAT_DEV_END |
-					DEV_STAT_UNIT_EXCEP)) {
+	} else if (irb->scsw.cmd.dstat == (DEV_STAT_CHN_END | DEV_STAT_DEV_END |
+					   DEV_STAT_UNIT_EXCEP)) {
 		/* Handle CE-DE-UE and subsequent UDE */
 		set_bit(RAW3270_FLAGS_BUSY, &rp->flags);
 		rc = RAW3270_IO_BUSY;
 	} else if (test_bit(RAW3270_FLAGS_BUSY, &rp->flags)) {
 		/* Wait for UDE if busy flag is set. */
-		if (irb->scsw.dstat & DEV_STAT_DEV_END) {
+		if (irb->scsw.cmd.dstat & DEV_STAT_DEV_END) {
 			clear_bit(RAW3270_FLAGS_BUSY, &rp->flags);
 			/* Got it, now retry. */
 			rc = RAW3270_IO_RETRY;
@@ -497,7 +497,7 @@ raw3270_init_irq(struct raw3270_view *view, struct raw3270_request *rq,
 	 * Unit-Check Processing:
 	 * Expect Command Reject or Intervention Required.
 	 */
-	if (irb->scsw.dstat & DEV_STAT_UNIT_CHECK) {
+	if (irb->scsw.cmd.dstat & DEV_STAT_UNIT_CHECK) {
 		/* Request finished abnormally. */
 		if (irb->ecw[0] & SNS0_INTERVENTION_REQ) {
 			set_bit(RAW3270_FLAGS_BUSY, &view->dev->flags);
@@ -505,16 +505,16 @@ raw3270_init_irq(struct raw3270_view *view, struct raw3270_request *rq,
 		}
 	}
 	if (rq) {
-		if (irb->scsw.dstat & DEV_STAT_UNIT_CHECK) {
+		if (irb->scsw.cmd.dstat & DEV_STAT_UNIT_CHECK) {
 			if (irb->ecw[0] & SNS0_CMD_REJECT)
 				rq->rc = -EOPNOTSUPP;
 			else
 				rq->rc = -EIO;
 		} else
 			/* Request finished normally. Copy residual count. */
-			rq->rescnt = irb->scsw.count;
+			rq->rescnt = irb->scsw.cmd.count;
 	}
-	if (irb->scsw.dstat & DEV_STAT_ATTENTION) {
+	if (irb->scsw.cmd.dstat & DEV_STAT_ATTENTION) {
 		set_bit(RAW3270_FLAGS_ATTN, &view->dev->flags);
 		wake_up(&raw3270_wait_queue);
 	}
@@ -549,7 +549,6 @@ raw3270_start_init(struct raw3270 *rp, struct raw3270_view *view,
 		   struct raw3270_request *rq)
 {
 	unsigned long flags;
-	wait_queue_head_t wq;
 	int rc;
 
 #ifdef CONFIG_TN3270_CONSOLE
@@ -566,20 +565,20 @@ raw3270_start_init(struct raw3270 *rp, struct raw3270_view *view,
 		return rq->rc;
 	}
 #endif
-	init_waitqueue_head(&wq);
 	rq->callback = raw3270_wake_init;
-	rq->callback_data = &wq;
+	rq->callback_data = &raw3270_wait_queue;
 	spin_lock_irqsave(get_ccwdev_lock(view->dev->cdev), flags);
 	rc = __raw3270_start(rp, view, rq);
 	spin_unlock_irqrestore(get_ccwdev_lock(view->dev->cdev), flags);
 	if (rc)
 		return rc;
 	/* Now wait for the completion. */
-	rc = wait_event_interruptible(wq, raw3270_request_final(rq));
+	rc = wait_event_interruptible(raw3270_wait_queue,
+				      raw3270_request_final(rq));
 	if (rc == -ERESTARTSYS) {	/* Interrupted by a signal. */
 		raw3270_halt_io(view->dev, rq);
 		/* No wait for the halt to complete. */
-		wait_event(wq, raw3270_request_final(rq));
+		wait_event(raw3270_wait_queue, raw3270_request_final(rq));
 		return -ERESTARTSYS;
 	}
 	return rq->rc;
