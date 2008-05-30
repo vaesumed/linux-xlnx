@@ -105,6 +105,9 @@
 /* First "general purpose" journal head */
 #define DATAHD 2
 
+/* 'No change' value for 'ubifs_change_lp()' */
+#define NC 0x80000001
+
 /*
  * How much a directory entry/extended attribute entry adds to the parent/host
  * inode.

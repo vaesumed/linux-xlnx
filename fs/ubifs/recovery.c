@@ -1181,7 +1181,7 @@ find_free:
 		return lnum;
 	}
 	/* And reset the index flag */
-	err = ubifs_change_one_lp(c, lnum, -1, -1, 0, LPROPS_INDEX, 0);
+	err = ubifs_change_one_lp(c, lnum, NC, NC, 0, LPROPS_INDEX, 0);
 	if (err)
 		return err;
 	c->gc_lnum = lnum;
