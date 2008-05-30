@@ -766,6 +766,25 @@ void dbg_dump_tnc(struct ubifs_info *c)
 	printk(KERN_DEBUG "\n");
 }
 
+static int dump_znode(struct ubifs_info *c, struct ubifs_znode *znode,
+		      void *priv)
+{
+	dbg_dump_znode(c, znode);
+	return 0;
+}
+
+/**
+ * dbg_dump_index - dump the on-flash index.
+ * @c: UBIFS file-system description object
+ *
+ * This function dumps whold UBIFS indexing B-tree, unlike 'dbg_dump_tnc()'
+ * which dumps only in-memory znodes and does not read znodes which from flash.
+ */
+void dbg_dump_index(struct ubifs_info *c)
+{
+	dbg_walk_index(c, NULL, dump_znode, NULL);
+}
+
 /*
  * dbg_check_dir - check directory inode size.
  * @c: UBIFS file-system description object
@@ -1207,8 +1226,7 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 	return 0;
 }
 
-static int dbg_add_size(struct ubifs_info *c, struct ubifs_znode *znode,
-			void *priv)
+static int add_size(struct ubifs_info *c, struct ubifs_znode *znode, void *priv)
 {
 	long long *idx_size = priv;
 	int add;
@@ -1227,7 +1245,7 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 	if (!(ubifs_chk_flags & UBIFS_CHK_IDX_SZ))
 		return 0;
 
-	err = dbg_walk_index(c, NULL, dbg_add_size, &calc);
+	err = dbg_walk_index(c, NULL, add_size, &calc);
 	if (err) {
 		ubifs_err("error %d while walking the index", err);
 		return err;

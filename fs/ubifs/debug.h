@@ -229,6 +229,7 @@ void dbg_dump_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat);
 void dbg_dump_pnode(struct ubifs_info *c, struct ubifs_pnode *pnode,
 		    struct ubifs_nnode *parent, int iip);
 void dbg_dump_tnc(struct ubifs_info *c);
+void dbg_dump_index(struct ubifs_info *c);
 
 /* Checking helper functions */
 
@@ -358,6 +359,7 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_dump_heap(c, heap, cat)                ({})
 #define dbg_dump_pnode(c, pnode, parent, iip)      ({})
 #define dbg_dump_tnc(c)                            ({})
+#define dbg_dump_index(c)                          ({})
 
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
 #define dbg_read_leaf_nolock(c, zbr, node)         0
