@@ -694,8 +694,6 @@ void dbg_dump_znode(const struct ubifs_info *c,
 
 	printk(KERN_DEBUG "zbranches:\n");
 	for (n = 0; n < znode->child_cnt; n++) {
-		cond_resched();
-
 		zbr = &znode->zbranch[n];
 		if (znode->level > 0)
 			printk(KERN_DEBUG "\t%d: znode %p LEB %d:%d len %d key "
