@@ -21,6 +21,7 @@ config USB_EMI62
 
 config USB_EMI26
 	tristate "EMI 2|6 USB Audio interface support"
+	select FW_LOADER
 	depends on USB
 	---help---
 	  This driver loads firmware to Emagic EMI 2|6 low latency USB
