@@ -21,6 +21,7 @@ config USB_EMI62
 
 config USB_EMI26
 	tristate "EMI 2|6 USB Audio interface support"
+	select FW_LOADER
 	depends on USB
 	---help---
 	  This driver loads firmware to Emagic EMI 2|6 low latency USB
@@ -31,6 +32,13 @@ config USB_EMI26
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called emi26.
+
+config USB_EMI26_FIRMWARE
+	bool "Firmware for EMI 2|6 USB Audio interface"
+	depends on USB_EMI26
+	---help---
+	  Includes firmware for the EMI 2|6 USB audio interface in the
+	  kernel, instead of having it loaded normally by udev. Say 'N'.
 
 config USB_ADUTUX
 	tristate "ADU devices from Ontrak Control Systems"
