@@ -118,11 +118,36 @@ static int set_bud_lprops(struct ubifs_info *c, struct replay_entry *r)
 
 	dirty = lp->dirty;
 	if (r->offs == 0 && (lp->free != c->leb_size || lp->dirty != 0)) {
+		/*
+		 * The LEB was added to the journal with a starting offset of
+		 * zero which means the LEB must have been empty. The LEB
+		 * property values should be lp->free == c->leb_size and
+		 * lp->dirty == 0, but that is not the case. The reason is that
+		 * the LEB was garbage collected. The garbage collector resets
+		 * the free and dirty space without recording it anywhere except
+		 * lprops, so if there is not a commit then lprops does not have
+		 * that information next time the file system is mounted.
+		 *
+		 * We do not need to adjust free space because the scan has told
+		 * us the exact value which is recorded in the replay entry as
+		 * r->free.
+		 *
+		 * However we do need to subtract from the dirty space the
+		 * amount of space that the garbage collector reclaimed, which
+		 * is the whole LEB minus the amount of space that was free.
+		 */
 		dbg_mnt("bud LEB %d was GC'd (%d free, %d dirty)", r->lnum,
 			lp->free, lp->dirty);
 		dbg_gc("bud LEB %d was GC'd (%d free, %d dirty)", r->lnum,
 			lp->free, lp->dirty);
 		dirty -= c->leb_size - lp->free;
+		/*
+		 * If the replay order was perfect the dirty space would now be
+		 * zero. The order is not perfect because the the journal heads
+		 * race with eachother. This is not a problem but is does mean
+		 * that the dirty space may temporarily exceed c->leb_size
+		 * during the replay.
+		 */
 		if (dirty != 0)
 			dbg_msg("LEB %d lp: %d free %d dirty "
 				"replay: %d free %d dirty", r->lnum, lp->free,
