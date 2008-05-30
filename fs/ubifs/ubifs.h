@@ -1465,7 +1465,7 @@ int ubifs_add_orphan(struct ubifs_info *c, ino_t inum);
 void ubifs_delete_orphan(struct ubifs_info *c, ino_t inum);
 int ubifs_orphan_start_commit(struct ubifs_info *c);
 int ubifs_orphan_end_commit(struct ubifs_info *c);
-int ubifs_mount_orphans(struct ubifs_info *c, int unclean);
+int ubifs_mount_orphans(struct ubifs_info *c, int unclean, int read_only);
 
 /* lpt.c */
 int ubifs_calc_lpt_geom(struct ubifs_info *c);
