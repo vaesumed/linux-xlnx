@@ -216,7 +216,7 @@ static int __devinit mpc85xx_pci_err_probe(struct platform_device *pdev)
 	pci->dev = &pdev->dev;
 	pci->mod_name = EDAC_MOD_STR;
 	pci->ctl_name = pdata->name;
-	pci->dev_name = pdev->dev.bus_id;
+	pci->dev_name = dev_name(&pdev->dev);
 
 	if (edac_op_state == EDAC_OPSTATE_POLL)
 		pci->edac_check = mpc85xx_pci_check;

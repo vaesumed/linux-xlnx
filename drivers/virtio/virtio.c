@@ -166,7 +166,7 @@ int register_virtio_device(struct virtio_device *dev)
 	int err;
 
 	dev->dev.bus = &virtio_bus;
-	sprintf(dev->dev.bus_id, "%u", dev->index);
+	dev_set_name(&dev->dev, "%u", dev->index);
 
 	/* We always start by resetting the device, in case a previous
 	 * driver messed it up.  This also tests that code path a little. */
