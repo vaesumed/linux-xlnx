@@ -91,7 +91,7 @@ static void pit_set_gate(struct kvm *kvm, int channel, u32 val)
 	c->gate = val;
 }
 
-int pit_get_gate(struct kvm *kvm, int channel)
+static int pit_get_gate(struct kvm *kvm, int channel)
 {
 	WARN_ON(!mutex_is_locked(&kvm->arch.vpit->pit_state.lock));
 
@@ -193,14 +193,13 @@ static void pit_latch_status(struct kvm *kvm, int channel)
 	}
 }
 
-int __pit_timer_fn(struct kvm_kpit_state *ps)
+static int __pit_timer_fn(struct kvm_kpit_state *ps)
 {
 	struct kvm_vcpu *vcpu0 = ps->pit->kvm->vcpus[0];
 	struct kvm_kpit_timer *pt = &ps->pit_timer;
 
 	atomic_inc(&pt->pending);
 	smp_mb__after_atomic_inc();
-	/* FIXME: handle case where the guest is in guest mode */
 	if (vcpu0 && waitqueue_active(&vcpu0->wq)) {
 		vcpu0->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 		wake_up_interruptible(&vcpu0->wq);
@@ -235,6 +234,19 @@ static enum hrtimer_restart pit_timer_fn(struct hrtimer *data)
 		return HRTIMER_RESTART;
 	else
 		return HRTIMER_NORESTART;
+}
+
+void __kvm_migrate_pit_timer(struct kvm_vcpu *vcpu)
+{
+	struct kvm_pit *pit = vcpu->kvm->arch.vpit;
+	struct hrtimer *timer;
+
+	if (vcpu->vcpu_id != 0 || !pit)
+		return;
+
+	timer = &pit->pit_state.pit_timer.timer;
+	if (hrtimer_cancel(timer))
+		hrtimer_start(timer, timer->expires, HRTIMER_MODE_ABS);
 }
 
 static void destroy_pit_timer(struct kvm_kpit_timer *pt)
@@ -293,6 +305,7 @@ static void pit_load_count(struct kvm *kvm, int channel, u32 val)
 		create_pit_timer(&ps->pit_timer, val, 0);
 		break;
 	case 2:
+	case 3:
 		create_pit_timer(&ps->pit_timer, val, 1);
 		break;
 	default:
@@ -560,7 +573,7 @@ void kvm_free_pit(struct kvm *kvm)
 	}
 }
 
-void __inject_pit_timer_intr(struct kvm *kvm)
+static void __inject_pit_timer_intr(struct kvm *kvm)
 {
 	mutex_lock(&kvm->lock);
 	kvm_ioapic_set_irq(kvm->arch.vioapic, 0, 1);
