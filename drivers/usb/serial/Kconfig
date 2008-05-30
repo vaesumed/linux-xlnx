@@ -279,6 +279,7 @@ config USB_SERIAL_IUU
 
 config USB_SERIAL_KEYSPAN_PDA
 	tristate "USB Keyspan PDA Single Port Serial Driver"
+	select FW_LOADER
 	select USB_EZUSB
 	help
 	  Say Y here if you want to use a Keyspan PDA single port USB to
@@ -538,6 +539,7 @@ config USB_SERIAL_CYBERJACK
 
 config USB_SERIAL_XIRCOM
 	tristate "USB Xircom / Entregra Single Port Serial Driver"
+	select FW_LOADER
 	select USB_EZUSB
 	help
 	  Say Y here if you want to use a Xircom or Entregra single port USB to
