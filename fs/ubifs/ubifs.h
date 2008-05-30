@@ -1024,7 +1024,6 @@ struct ubifs_mount_opts {
  * @unclean_leb_list: LEBs to recover when mounting ro to rw
  * @rcvrd_mst_node: recovered master node to write when mounting ro to rw
  * @size_tree: inode size information for recovery
- * @recovery_needs_commit: a commit must be done before unmounting
  * @remounting_rw: set while remounting from ro to rw (sb flags have MS_RDONLY)
  * @mount_opts: UBIFS-specific mount options
  *
@@ -1251,7 +1250,6 @@ struct ubifs_info {
 	struct list_head unclean_leb_list;
 	struct ubifs_mst_node *rcvrd_mst_node;
 	struct rb_root size_tree;
-	int recovery_needs_commit;
 	int remounting_rw;
 	struct ubifs_mount_opts mount_opts;
 
@@ -1556,7 +1554,7 @@ struct ubifs_scan_leb *ubifs_recover_log_leb(struct ubifs_info *c, int lnum,
 					     int offs, void *sbuf);
 int ubifs_recover_inl_heads(const struct ubifs_info *c, void *sbuf);
 int ubifs_clean_lebs(const struct ubifs_info *c, void *sbuf);
-int ubifs_recover_gc_lnum(struct ubifs_info *c);
+int ubifs_rcvry_gc_commit(struct ubifs_info *c);
 int ubifs_recover_size_accum(struct ubifs_info *c, union ubifs_key *key,
 			     int deletion, loff_t new_size);
 int ubifs_recover_size(struct ubifs_info *c);

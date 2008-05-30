@@ -1062,7 +1062,7 @@ int ubifs_clean_lebs(const struct ubifs_info *c, void *sbuf)
 }
 
 /**
- * ubifs_recover_gc_lnum - recover the GC LEB number.
+ * ubifs_rcvry_gc_commit - recover the GC LEB number and run the commit.
  * @c: UBIFS file-system description object
  *
  * Out-of-place garbage collection requires always one empty LEB with which to
@@ -1073,9 +1073,13 @@ int ubifs_clean_lebs(const struct ubifs_info *c, void *sbuf)
  * However, there may not be enough empty space, in which case it must be
  * possible to GC the dirtiest LEB into the GC head LEB.
  *
+ * This function also runs the commit which causes the TNC updates from
+ * size-recovery and orphans to be written to the flash. That is important to
+ * ensure correct replay order for subsequent mounts.
+ *
  * This function returns %0 on success and a negative error code on failure.
  */
-int ubifs_recover_gc_lnum(struct ubifs_info *c)
+int ubifs_rcvry_gc_commit(struct ubifs_info *c)
 {
 	struct ubifs_wbuf *wbuf = &c->jheads[GCHD].wbuf;
 	struct ubifs_lprops lp;
@@ -1111,7 +1115,9 @@ int ubifs_recover_gc_lnum(struct ubifs_info *c)
 			return err;
 		c->gc_lnum = lnum;
 		dbg_rcvry("allocated LEB %d for GC", lnum);
-		return 0;
+		/* Run the commit */
+		dbg_rcvry("committing");
+		return ubifs_run_commit(c);
 	}
 	/*
 	 * There was no empty LEB so the used space in the dirtiest LEB must fit
@@ -1125,7 +1131,18 @@ int ubifs_recover_gc_lnum(struct ubifs_info *c)
 			return err;
 		goto find_free;
 	}
-	/* It fits, so GC it - use locking to keep 'ubifs_assert()' happy */
+	/*
+	 * We run the commit before garbage collection otherwise subsequent
+	 * mounts will see the GC and orphan deletion in a different order.
+	 */
+	dbg_rcvry("committing");
+	err = ubifs_run_commit(c);
+	if (err)
+		return err;
+	/*
+	 * The data in the dirtiest LEB fits in the GC head LEB, so do the GC
+	 * - use locking to keep 'ubifs_assert()' happy.
+	 */
 	dbg_rcvry("GC'ing LEB %d", lnum);
 	mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
 	err = ubifs_garbage_collect_leb(c, &lp);
@@ -1169,7 +1186,9 @@ find_free:
 		return err;
 	c->gc_lnum = lnum;
 	dbg_rcvry("allocated LEB %d for GC", lnum);
-	return 0;
+	/* Run the commit */
+	dbg_rcvry("committing");
+	return ubifs_run_commit(c);
 }
 
 /**
@@ -1452,13 +1471,6 @@ int ubifs_recover_size(struct ubifs_info *c)
 				err = ubifs_tnc_remove_ino(c, e->inum);
 				if (err)
 					return err;
-				/*
-				 * If we later unmount cleanly without
-				 * committing, the TNC changes will be lost,
-				 * hence we set a flag to ensure a commit is
-				 * done.
-				 */
-				c->recovery_needs_commit = 1;
 			} else {
 				struct ubifs_ino_node *ino = c->sbuf;
 
