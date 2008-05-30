@@ -1086,12 +1086,12 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (err)
 		goto out_journal;
 
+	err = ubifs_mount_orphans(c, c->need_recovery, mounted_read_only);
+	if (err)
+		goto out_journal;
+
 	if (!mounted_read_only) {
 		int lnum;
-
-		err = ubifs_mount_orphans(c, c->need_recovery);
-		if (err)
-			goto out_journal;
 
 		if (c->need_recovery)
 			err = ubifs_recover_gc_lnum(c);
@@ -1347,9 +1347,9 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	}
 	wake_up_process(c->bgt);
 
-	err = ubifs_mount_orphans(c, c->need_recovery);
-	if (err)
-		goto out;
+	c->orph_buf = vmalloc(c->leb_size);
+	if (!c->orph_buf)
+		return -ENOMEM;
 
 	if (c->need_recovery)
 		err = ubifs_recover_gc_lnum(c);
@@ -1380,7 +1380,8 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	return 0;
 
 out:
-	free_orphans(c);
+	vfree(c->orph_buf);
+	c->orph_buf = NULL;
 	if (c->bgt) {
 		kthread_stop(c->bgt);
 		c->bgt = NULL;
@@ -1457,7 +1458,8 @@ static void ubifs_remount_ro(struct ubifs_info *c)
 
 	ubifs_destroy_idx_gc(c);
 	free_wbufs(c);
-	free_orphans(c);
+	vfree(c->orph_buf);
+	c->orph_buf = NULL;
 	vfree(c->ileb_buf);
 	c->ileb_buf = NULL;
 	ubifs_lpt_free(c, 1);
