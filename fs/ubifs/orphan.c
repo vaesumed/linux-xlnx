@@ -693,25 +693,28 @@ static int kill_orphans(struct ubifs_info *c)
 /**
  * ubifs_mount_orphans - delete orphan inodes and erase LEBs that recorded them.
  * @c: UBIFS file-system description object
- * @unclean: %1 => recover from unclean unmount
+ * @unclean: indicates recovery from unclean unmount
+ * @read_only: indicates read only mount
  *
  * This function is called when mounting to erase orphans from the previous
  * session. If UBIFS was not unmounted cleanly, then the inodes recorded as
  * orphans are deleted.
  */
-int ubifs_mount_orphans(struct ubifs_info *c, int unclean)
+int ubifs_mount_orphans(struct ubifs_info *c, int unclean, int read_only)
 {
 	int err = 0;
 
 	c->max_orphans = tot_avail_orphs(c);
 
-	c->orph_buf = vmalloc(c->leb_size);
-	if (!c->orph_buf)
-		return -ENOMEM;
+	if (!read_only) {
+		c->orph_buf = vmalloc(c->leb_size);
+		if (!c->orph_buf)
+			return -ENOMEM;
+	}
 
 	if (unclean)
 		err = kill_orphans(c);
-	else
+	else if (!read_only)
 		err = clear_orphans(c);
 
 	return err;
