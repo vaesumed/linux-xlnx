@@ -9,6 +9,7 @@
 
 #include <linux/types.h>
 #include <linux/firmware.h>
+#include <linux/device.h>
 
 struct ihex_binrec {
 	__be32 addr;
@@ -39,6 +40,29 @@ static inline int ihex_validate_fw(const struct firmware *fw)
 			return -EINVAL;
 		rec = ihex_next_binrec(rec);
 	}
+	return 0;
+}
+
+/* Request firmware and validate it so that we can trust we won't
+ * run off the end while reading records... */
+static inline int request_ihex_firmware(const struct firmware **fw,
+					const char *fw_name,
+					struct device *dev)
+{
+	const struct firmware *lfw;
+	int ret;
+
+	ret = request_firmware(&lfw, fw_name, dev);
+	if (ret)
+		return ret;
+	ret = ihex_validate_fw(lfw);
+	if (ret) {
+		dev_err(dev, "Firmware \"%s\" not valid IHEX records\n",
+			fw_name);
+		release_firmware(lfw);
+		return ret;
+	}
+	*fw = lfw;
 	return 0;
 }
 #endif /* __LINUX_IHEX_H__ */
