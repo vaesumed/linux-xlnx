@@ -6,9 +6,12 @@
 # ==========================================================================
 
 INSTALL := install
+src := $(obj)
 
 include scripts/Kbuild.include 
 include $(srctree)/$(obj)/Makefile
+
+include scripts/Makefile.host
 
 installed-fw := $(addprefix $(INSTALL_FW_PATH)/,$(fw-shipped-))
 installed-fw-dirs := $(sort $(dir $(installed-fw)))
@@ -22,5 +25,7 @@ $(installed-fw-dirs):
 $(installed-fw): $(INSTALL_FW_PATH)/%: $(obj)/% | $(INSTALL_FW_PATH)/$$(dir %)/
 	$(call cmd,install)
 
-.PHONY: __fw_install
+.PHONY: __fw_install FORCE
 __fw_install: $(installed-fw)
+
+FORCE:
