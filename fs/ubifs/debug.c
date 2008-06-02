@@ -874,14 +874,14 @@ static int dbg_check_key_order(struct ubifs_info *c, struct ubifs_zbranch *zbr1,
 		goto out_free;
 	}
 
-	err = dbg_read_leaf_nolock(c, zbr1, dent1);
+	err = ubifs_tnc_read_node(c, zbr1, dent1);
 	if (err)
 		goto out_free;
 	err = ubifs_validate_entry(c, dent1);
 	if (err)
 		goto out_free;
 
-	err = dbg_read_leaf_nolock(c, zbr2, dent2);
+	err = ubifs_tnc_read_node(c, zbr2, dent2);
 	if (err)
 		goto out_free;
 	err = ubifs_validate_entry(c, dent2);
