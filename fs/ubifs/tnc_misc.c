@@ -444,3 +444,53 @@ out:
 	kfree(znode);
 	return ERR_PTR(err);
 }
+
+/**
+ * ubifs_tnc_read_node - read a leaf node from the flash media.
+ * @c: UBIFS file-system description object
+ * @zbr: key and position of the node
+ * @node: node is returned here
+ *
+ * This function reads a node defined by @zbr from the flash media. Returns
+ * zero in case of success or a negative negative error code in case of
+ * failure.
+ */
+int ubifs_tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			void *node)
+{
+	union ubifs_key key1, *key = &zbr->key;
+	int err, type = key_type(c, key);
+	struct ubifs_wbuf *wbuf;
+
+	ubifs_assert(!zbr->leaf);
+
+	/*
+	 * 'zbr' has to point to on-flash node. The node may sit in a bud and
+	 * may even be in a write buffer, so we have to take care about this.
+	 */
+	wbuf = ubifs_get_wbuf(c, zbr->lnum);
+	if (wbuf)
+		err = ubifs_read_node_wbuf(wbuf, node, type, zbr->len,
+					   zbr->lnum, zbr->offs);
+	else
+		err = ubifs_read_node(c, node, type, zbr->len, zbr->lnum,
+				      zbr->offs);
+
+	if (err) {
+		dbg_tnc("key %s", DBGKEY(key));
+		return err;
+	}
+
+	/* Make sure the key of the read node is correct */
+	key_read(c, key, &key1);
+	if (memcmp(node + UBIFS_KEY_OFFSET, &key1, c->key_len)) {
+		ubifs_err("bad key in node at LEB %d:%d",
+			  zbr->lnum, zbr->offs);
+		dbg_tnc("looked for key %s found node's key %s",
+			DBGKEY(key), DBGKEY1(&key1));
+		dbg_dump_node(c, node);
+		return -EINVAL;
+	}
+
+	return 0;
+}

@@ -1425,6 +1425,8 @@ long ubifs_destroy_tnc_subtree(struct ubifs_znode *zr);
 struct ubifs_znode *ubifs_load_znode(struct ubifs_info *c,
 				     struct ubifs_zbranch *zbr,
 				     struct ubifs_znode *parent, int iip);
+int ubifs_tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+			void *node);
 
 /* tnc_commit.c */
 int ubifs_tnc_start_commit(struct ubifs_info *c, struct ubifs_zbranch *zroot);

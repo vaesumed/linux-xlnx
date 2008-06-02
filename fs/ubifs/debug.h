@@ -240,8 +240,6 @@ typedef int (*dbg_znode_callback)(struct ubifs_info *c,
 
 int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 		   dbg_znode_callback znode_cb, void *priv);
-int dbg_read_leaf_nolock(struct ubifs_info *c, struct ubifs_zbranch *zbr,
-			 void *node);
 
 /* Checking functions */
 
@@ -362,7 +360,6 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_dump_index(c)                          ({})
 
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
-#define dbg_read_leaf_nolock(c, zbr, node)         0
 
 #define dbg_old_index_check_init(c, zroot)         0
 #define dbg_check_old_index(c, zroot)              0
