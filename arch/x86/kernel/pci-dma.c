@@ -42,7 +42,7 @@ EXPORT_SYMBOL(bad_dma_address);
    be probably a smaller DMA mask, but this is bug-to-bug compatible
    to older i386. */
 struct device fallback_dev = {
-	.bus_id = "fallback device",
+	.init_name = "fallback device",
 	.coherent_dma_mask = DMA_32BIT_MASK,
 	.dma_mask = &fallback_dev.coherent_dma_mask,
 };
@@ -319,8 +319,7 @@ int dma_supported(struct device *dev, u64 mask)
 {
 #ifdef CONFIG_PCI
 	if (mask > 0xffffffff && forbid_dac > 0) {
-		printk(KERN_INFO "PCI: Disallowing DAC for device %s\n",
-				 dev->bus_id);
+		dev_info(dev, "PCI: Disallowing DAC for device\n");
 		return 0;
 	}
 #endif
@@ -347,8 +346,7 @@ int dma_supported(struct device *dev, u64 mask)
 	   type. Normally this doesn't make any difference, but gives
 	   more gentle handling of IOMMU overflow. */
 	if (iommu_sac_force && (mask >= DMA_40BIT_MASK)) {
-		printk(KERN_INFO "%s: Force SAC with mask %Lx\n",
-				 dev->bus_id, mask);
+		dev_info(dev, "Force SAC with mask %Lx\n", mask);
 		return 0;
 	}
 

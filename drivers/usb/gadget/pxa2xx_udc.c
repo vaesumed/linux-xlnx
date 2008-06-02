@@ -1813,7 +1813,7 @@ pxa2xx_udc_irq(int irq, void *_dev)
 
 static void nop_release (struct device *dev)
 {
-	DMSG("%s %s\n", __func__, dev->bus_id);
+	DMSG("%s %s\n", __func__, dev_name(dev));
 }
 
 /* this uses load-time allocation and initialization (instead of
@@ -1826,7 +1826,7 @@ static struct pxa2xx_udc memory = {
 		.ep0		= &memory.ep[0].ep,
 		.name		= driver_name,
 		.dev = {
-			.bus_id		= "gadget",
+			.init_name		= "gadget",
 			.release	= nop_release,
 		},
 	},
