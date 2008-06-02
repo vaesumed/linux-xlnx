@@ -1094,7 +1094,11 @@ int ubifs_rcvry_gc_commit(struct ubifs_info *c)
 	 * See whether the used space in the dirtiest LEB fits in the GC head
 	 * LEB.
 	 */
-	err = ubifs_find_dirty_leb(c, &lp, c->dead_wm, 2);
+	if (wbuf->offs == c->leb_size) {
+		dbg_rcvry("no room in GC head LEB");
+		goto find_free;
+	}
+	err = ubifs_find_dirty_leb(c, &lp, wbuf->offs, 2);
 	if (err) {
 		if (err == -ENOSPC)
 			dbg_err("could not find a dirty LEB");
