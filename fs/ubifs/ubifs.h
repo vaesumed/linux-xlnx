@@ -1422,6 +1422,9 @@ int ubifs_search_zbranch(const struct ubifs_info *c,
 struct ubifs_znode *ubifs_tnc_postorder_first(struct ubifs_znode *znode);
 struct ubifs_znode *ubifs_tnc_postorder_next(struct ubifs_znode *znode);
 long ubifs_destroy_tnc_subtree(struct ubifs_znode *zr);
+struct ubifs_znode *ubifs_load_znode(struct ubifs_info *c,
+				     struct ubifs_zbranch *zbr,
+				     struct ubifs_znode *parent, int iip);
 
 /* tnc_commit.c */
 int ubifs_tnc_start_commit(struct ubifs_info *c, struct ubifs_zbranch *zroot);

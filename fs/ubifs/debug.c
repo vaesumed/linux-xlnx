@@ -1226,6 +1226,126 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 	return 0;
 }
 
+/**
+ * dbg_walk_index - walk the on-flash index.
+ * @c: UBIFS file-system description object
+ * @leaf_cb: called for each leaf node
+ * @znode_cb: called for each indexing node
+ * @priv: private date which is passed to callbacks
+ *
+ * This function walks the UBIFS index and calls the @leaf_cb for each leaf
+ * node and @znode_cb for each indexing node. Returns zero in case of success
+ * and a negative error code in case of failure.
+ *
+ * It would be better if this function removed every znode it pulled to into
+ * the TNC, so that the behavior more closely matched the non-debugging
+ * behavior.
+ */
+int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
+		   dbg_znode_callback znode_cb, void *priv)
+{
+	int err;
+	struct ubifs_zbranch *zbr;
+	struct ubifs_znode *znode, *child;
+
+	mutex_lock(&c->tnc_mutex);
+	/* If the root indexing node is not in TNC - pull it */
+	if (!c->zroot.znode) {
+		c->zroot.znode = ubifs_load_znode(c, &c->zroot, NULL, 0);
+		if (IS_ERR(c->zroot.znode)) {
+			err = PTR_ERR(c->zroot.znode);
+			c->zroot.znode = NULL;
+			goto out_unlock;
+		}
+	}
+
+	/*
+	 * We are going to traverse the indexing tree in the postorder manner.
+	 * Go down and find the leftmost indexing node where we are going to
+	 * start from.
+	 */
+	znode = c->zroot.znode;
+	while (znode->level > 0) {
+		zbr = &znode->zbranch[0];
+		child = zbr->znode;
+		if (!child) {
+			child = ubifs_load_znode(c, zbr, znode, 0);
+			if (IS_ERR(child)) {
+				err = PTR_ERR(child);
+				goto out_unlock;
+			}
+			zbr->znode = child;
+		}
+
+		znode = child;
+	}
+
+	/* Iterate over all indexing nodes */
+	while (1) {
+		int idx;
+
+		cond_resched();
+
+		if (znode_cb) {
+			err = znode_cb(c, znode, priv);
+			if (err)
+				goto out_unlock;
+		}
+		if (leaf_cb && znode->level == 0) {
+			for (idx = 0; idx < znode->child_cnt; idx++) {
+				err = leaf_cb(c, &znode->zbranch[idx], priv);
+				if (err)
+					goto out_unlock;
+			}
+		}
+
+		if (!znode->parent)
+			break;
+
+		idx = znode->iip + 1;
+		znode = znode->parent;
+		if (idx < znode->child_cnt) {
+			/* Switch to the next index in the parent */
+			zbr = &znode->zbranch[idx];
+			child = zbr->znode;
+			if (!child) {
+				child = ubifs_load_znode(c, zbr, znode, idx);
+				if (IS_ERR(child)) {
+					err = PTR_ERR(child);
+					goto out_unlock;
+				}
+				zbr->znode = child;
+			}
+			znode = child;
+		} else
+			/*
+			 * This is the last child, switch to the parent and
+			 * continue.
+			 */
+			continue;
+
+		/* Go to the lowest leftmost znode in the new sub-tree */
+		while (znode->level > 0) {
+			zbr = &znode->zbranch[0];
+			child = zbr->znode;
+			if (!child) {
+				child = ubifs_load_znode(c, zbr, znode, 0);
+				if (IS_ERR(child)) {
+					err = PTR_ERR(child);
+					goto out_unlock;
+				}
+				zbr->znode = child;
+			}
+			znode = child;
+		}
+	}
+
+	err = 0;
+out_unlock:
+	mutex_unlock(&c->tnc_mutex);
+	return err;
+}
+
 static int add_size(struct ubifs_info *c, struct ubifs_znode *znode, void *priv)
 {
 	long long *idx_size = priv;

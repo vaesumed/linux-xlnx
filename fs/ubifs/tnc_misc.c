@@ -25,8 +25,6 @@
  * different files. This file does not form any logically separate TNC
  * sub-system. The file was created because there is a lot of TNC code and
  * putting it all in one file would make that file too big and unreadable.
- * Nonetheless, this contains more or less "generic" code which may be used for
- * more then one specific task.
  */
 
 #include "ubifs.h"
@@ -257,3 +255,186 @@ long ubifs_destroy_tnc_subtree(struct ubifs_znode *znode)
 		zn = ubifs_tnc_postorder_next(zn);
 	}
 }
+
+/**
+ * read_znode - read an indexing node from flash and fill znode.
+ * @c: UBIFS file-system description object
+ * @lnum: LEB of the indexing node to read
+ * @offs: node offset
+ * @len: node length
+ * @znode: znode to read to
+ *
+ * This function reads an indexing node from the flash media and fills znode
+ * with the read data. Returns zero in case of success and a negative error
+ * code in case of failure. The read indexing node is validated and if anything
+ * is wrong with it, this function prints complaint messages and returns
+ * %-EINVAL.
+ */
+static int read_znode(struct ubifs_info *c, int lnum, int offs, int len,
+		      struct ubifs_znode *znode)
+{
+	int i, err, type, cmp;
+	struct ubifs_idx_node *idx;
+
+	idx = kmalloc(c->max_idx_node_sz, GFP_NOFS);
+	if (!idx)
+		return -ENOMEM;
+
+	err = ubifs_read_node(c, idx, UBIFS_IDX_NODE, len, lnum, offs);
+	if (err < 0) {
+		kfree(idx);
+		return err;
+	}
+
+	znode->child_cnt = le16_to_cpu(idx->child_cnt);
+	znode->level = le16_to_cpu(idx->level);
+
+	dbg_tnc("LEB %d:%d, level %d, %d branch",
+		lnum, offs, znode->level, znode->child_cnt);
+
+	if (znode->child_cnt > c->fanout || znode->level > UBIFS_MAX_LEVELS) {
+		dbg_err("current fanout %d, branch count %d",
+			c->fanout, znode->child_cnt);
+		dbg_err("max levels %d, znode level %d",
+			UBIFS_MAX_LEVELS, znode->level);
+		goto out_dump;
+	}
+
+	for (i = 0; i < znode->child_cnt; i++) {
+		const struct ubifs_branch *br = ubifs_idx_branch(c, idx, i);
+		struct ubifs_zbranch *zbr = &znode->zbranch[i];
+
+		key_read(c, &br->key, &zbr->key);
+		zbr->lnum = le32_to_cpu(br->lnum);
+		zbr->offs = le32_to_cpu(br->offs);
+		zbr->len  = le32_to_cpu(br->len);
+		zbr->znode = NULL;
+
+		/* Validate branch */
+
+		if (zbr->lnum < c->main_first ||
+		    zbr->lnum >= c->leb_cnt || zbr->offs < 0 ||
+		    zbr->offs + zbr->len > c->leb_size || zbr->offs & 7) {
+			dbg_err("bad branch %d", i);
+			goto out_dump;
+		}
+
+		switch (key_type(c, &zbr->key)) {
+		case UBIFS_INO_KEY:
+		case UBIFS_DATA_KEY:
+		case UBIFS_DENT_KEY:
+		case UBIFS_XENT_KEY:
+			break;
+		default:
+			dbg_msg("bad key type at slot %d: %s", i,
+				DBGKEY(&zbr->key));
+			goto out_dump;
+		}
+
+		if (znode->level)
+			continue;
+
+		type = key_type(c, &zbr->key);
+		if (c->ranges[type].max_len == 0) {
+			if (zbr->len != c->ranges[type].len) {
+				dbg_err("bad target node (type %d) length (%d)",
+					type, zbr->len);
+				dbg_err("have to be %d", c->ranges[type].len);
+				goto out_dump;
+			}
+		} else if (zbr->len < c->ranges[type].min_len ||
+			   zbr->len > c->ranges[type].max_len) {
+			dbg_err("bad target node (type %d) length (%d)",
+				type, zbr->len);
+			dbg_err("have to be in range of %d-%d",
+				c->ranges[type].min_len,
+				c->ranges[type].max_len);
+			goto out_dump;
+		}
+	}
+
+	/*
+	 * Ensure that the next key is greater or equivalent to the
+	 * previous one.
+	 */
+	for (i = 0; i < znode->child_cnt - 1; i++) {
+		const union ubifs_key *key1, *key2;
+
+		key1 = &znode->zbranch[i].key;
+		key2 = &znode->zbranch[i + 1].key;
+
+		cmp = keys_cmp(c, key1, key2);
+		if (cmp > 0) {
+			dbg_err("bad key order (keys %d and %d)", i, i + 1);
+			goto out_dump;
+		} else if (cmp == 0 && !is_hash_key(c, key1)) {
+			/* These can only be keys with colliding hash */
+			dbg_err("keys %d and %d are not hashed but equivalent",
+				i, i + 1);
+			goto out_dump;
+		}
+	}
+
+	kfree(idx);
+	return 0;
+
+out_dump:
+	ubifs_err("bad indexing node at LEB %d:%d", lnum, offs);
+	dbg_dump_node(c, idx);
+	kfree(idx);
+	return -EINVAL;
+}
+
+/**
+ * ubifs_load_znode - load znode to TNC cache.
+ * @c: UBIFS file-system description object
+ * @zbr: znode branch
+ * @parent: znode's parent
+ * @iip: index in parent
+ *
+ * This function loads znode pointed to by @zbr into the TNC cache and
+ * returns pointer to it in case of success and a negative error code in case
+ * of failure.
+ */
+struct ubifs_znode *ubifs_load_znode(struct ubifs_info *c,
+				     struct ubifs_zbranch *zbr,
+				     struct ubifs_znode *parent, int iip)
+{
+	int err;
+	struct ubifs_znode *znode;
+
+	ubifs_assert(!zbr->znode);
+	/*
+	 * A slab cache is not presently used for znodes because the znode size
+	 * depends on the fanout which is stored in the superblock.
+	 */
+	znode = kzalloc(c->max_znode_sz, GFP_NOFS);
+	if (!znode)
+		return ERR_PTR(-ENOMEM);
+
+	err = read_znode(c, zbr->lnum, zbr->offs, zbr->len, znode);
+	if (err)
+		goto out;
+
+	atomic_long_inc(&c->clean_zn_cnt);
+
+	/*
+	 * Increment the global clean znode counter as well. It is OK that
+	 * global and per-FS clean znode counters may be inconsistent for some
+	 * short time (because we might be preempted at this point), the global
+	 * one is only used in shrinker.
+	 */
+	atomic_long_inc(&ubifs_clean_zn_cnt);
+
+	zbr->znode = znode;
+	znode->parent = parent;
+	znode->time = get_seconds();
+	znode->iip = iip;
+
+	return znode;
+
+out:
+	kfree(znode);
+	return ERR_PTR(err);
+}
+
