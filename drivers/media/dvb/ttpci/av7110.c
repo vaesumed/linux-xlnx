@@ -2786,7 +2786,7 @@ static void av7110_irq(struct saa7146_dev* dev, u32 *isr)
 		 * we must do it here even though saa7146_core did it already),
 		 * and b) that if we were to disable an edge triggered irq
 		 * (like the gpio irqs sadly are) temporarily we would likely
-		 * loose some. This sucks :-(
+		 * lose some. This sucks :-(
 		 */
 		SAA7146_IER_DISABLE(av7110->dev, MASK_19);
 		SAA7146_ISR_CLEAR(av7110->dev, MASK_19);
