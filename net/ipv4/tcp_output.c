@@ -470,12 +470,12 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			    gfp_t gfp_mask)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
+	struct tcp_md5sig_key *md5 = NULL;
 	struct inet_sock *inet;
 	struct tcp_sock *tp;
 	struct tcp_skb_cb *tcb;
 	int tcp_header_size;
 #ifdef CONFIG_TCP_MD5SIG
-	struct tcp_md5sig_key *md5;
 	__u8 *md5_hash_location;
 #endif
 	struct tcphdr *th;
@@ -504,6 +504,15 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	tcb = TCP_SKB_CB(skb);
 	tcp_header_size = tp->tcp_header_len;
 
+#ifdef CONFIG_TCP_MD5SIG
+	/* Are we doing MD5 on this segment? If so - make
+	 * room for it.
+	 */
+	md5 = tp->af_specific->md5_lookup(sk, sk);
+	if (md5)
+		tcp_header_size += TCPOLEN_MD5SIG_ALIGNED;
+#endif
+
 #define SYSCTL_FLAG_TSTAMPS	0x1
 #define SYSCTL_FLAG_WSCALE	0x2
 #define SYSCTL_FLAG_SACK	0x4
@@ -519,12 +528,16 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			tcp_header_size += TCPOLEN_WSCALE_ALIGNED;
 			sysctl_flags |= SYSCTL_FLAG_WSCALE;
 		}
-		if (sysctl_tcp_sack) {
+		/* We don't include SACK options if we are going to
+		 * include an MD5 signature because they can't fit
+		 * in the options space.
+		 */
+		if (sysctl_tcp_sack && !md5) {
 			sysctl_flags |= SYSCTL_FLAG_SACK;
 			if (!(sysctl_flags & SYSCTL_FLAG_TSTAMPS))
 				tcp_header_size += TCPOLEN_SACKPERM_ALIGNED;
 		}
-	} else if (unlikely(tp->rx_opt.eff_sacks)) {
+	} else if (unlikely(tp->rx_opt.eff_sacks && !md5)) {
 		/* A SACK is 2 pad bytes, a 2 byte header, plus
 		 * 2 32-bit sequence numbers for each SACK block.
 		 */
@@ -535,16 +548,6 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 
 	if (tcp_packets_in_flight(tp) == 0)
 		tcp_ca_event(sk, CA_EVENT_TX_START);
-
-#ifdef CONFIG_TCP_MD5SIG
-	/*
-	 * Are we doing MD5 on this segment? If so - make
-	 * room for it.
-	 */
-	md5 = tp->af_specific->md5_lookup(sk, sk);
-	if (md5)
-		tcp_header_size += TCPOLEN_MD5SIG_ALIGNED;
-#endif
 
 	skb_push(skb, tcp_header_size);
 	skb_reset_transport_header(skb);
