@@ -494,8 +494,8 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 	{
 		const struct ubifs_trun_node *trun = node;
 
-		key_read(c, &trun->key, &key);
-		printk(KERN_DEBUG "\tkey            %s\n", DBGKEY(&key));
+		printk(KERN_DEBUG "\tinum           %u\n",
+		       le32_to_cpu(trun->inum));
 		printk(KERN_DEBUG "\told_size       %llu\n",
 		       (unsigned long long)le64_to_cpu(trun->old_size));
 		printk(KERN_DEBUG "\tnew_size       %llu\n",

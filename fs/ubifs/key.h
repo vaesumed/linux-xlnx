@@ -314,28 +314,15 @@ static inline void data_key_init_flash(const struct ubifs_info *c, void *k,
  * @c: UBIFS file-system description object
  * @key: key to initialize
  * @inum: inode number
+ *
+ * Note, UBIFS does not have truncation keys on the media and this function is
+ * only used for purposes of replay.
  */
 static inline void trun_key_init(const struct ubifs_info *c,
 				 union ubifs_key *key, ino_t inum)
 {
 	key->u32[0] = inum;
 	key->u32[1] = UBIFS_TRUN_KEY << UBIFS_S_KEY_BLOCK_BITS;
-}
-
-/**
- * trun_key_init_flash - initialize on-flash truncation node key.
- * @c: UBIFS file-system description object
- * @k: key to initialize
- * @inum: inode number
- */
-static inline void trun_key_init_flash(const struct ubifs_info *c, void *k,
-				       ino_t inum)
-{
-	union ubifs_key *key = k;
-
-	key->j32[0] = cpu_to_le32(inum);
-	key->j32[1] = cpu_to_le32(UBIFS_TRUN_KEY << UBIFS_S_KEY_BLOCK_BITS);
-	memset(k + 8, 0, UBIFS_MAX_KEY_LEN - 8);
 }
 
 /**

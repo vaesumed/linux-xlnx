@@ -590,6 +590,7 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 			struct ubifs_trun_node *trun = snod->node;
 			loff_t old_size = le64_to_cpu(trun->old_size);
 			loff_t new_size = le64_to_cpu(trun->new_size);
+			union ubifs_key key;
 
 			/* Validate truncation node */
 			if (old_size < 0 || old_size > c->max_inode_sz ||
@@ -599,8 +600,13 @@ static int replay_bud(struct ubifs_info *c, int lnum, int offs, int jhead,
 				goto out_dump;
 			}
 
+			/*
+			 * Create a fake truncation key just to use the same
+			 * functions which expect nodes to have keys.
+			 */
+			trun_key_init(c, &key, le32_to_cpu(trun->inum));
 			err = insert_node(c, lnum, snod->offs, snod->len,
-					  &snod->key, snod->sqnum, 1, &used,
+					  &key, snod->sqnum, 1, &used,
 					  old_size, new_size);
 			break;
 		}
@@ -1004,6 +1010,8 @@ int ubifs_replay_journal(struct ubifs_info *c)
 {
 	int err, i, lnum, offs, free;
 	void *sbuf = NULL;
+
+	BUILD_BUG_ON(UBIFS_TRUN_KEY > 5);
 
 	/* Update the status of the index head in lprops to 'taken' */
 	free = take_ihead(c);
