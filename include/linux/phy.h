@@ -76,10 +76,10 @@ typedef enum {
 #define PHY_ID_FMT "%s:%02x"
 
 /*
- * Need to be a little smaller than phydev->dev.bus_id to leave room
+ * Need to be a little smaller than dev_name(&phydev->dev) to leave room
  * for the ":%02x"
  */
-#define MII_BUS_ID_SIZE	(BUS_ID_SIZE - 3)
+#define MII_BUS_ID_SIZE	(20 - 3)
 
 /*
  * The Bus class for PHYs.  Devices which provide access to
@@ -385,7 +385,7 @@ struct phy_driver {
 /* A Structure for boards to register fixups with the PHY Lib */
 struct phy_fixup {
 	struct list_head list;
-	char bus_id[BUS_ID_SIZE];
+	char bus_id[20];
 	u32 phy_uid;
 	u32 phy_uid_mask;
 	int (*run)(struct phy_device *phydev);

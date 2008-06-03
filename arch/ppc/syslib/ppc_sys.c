@@ -151,22 +151,22 @@ void platform_notify_map(const struct platform_notify_dev_map *map,
 	const char *s;
 
 	/* do nothing if no device or no bus_id */
-	if (!dev || !dev->bus_id)
+	if (!dev || !dev_name(dev))
 		return;
 
 	/* call per device map */
 	while (map->bus_id != NULL) {
 		idx = -1;
-		s = strrchr(dev->bus_id, '.');
+		s = strrchr(dev_name(dev), '.');
 		if (s != NULL) {
 			idx = (int)simple_strtol(s + 1, NULL, 10);
-			len = s - dev->bus_id;
+			len = s - dev_name(dev);
 		} else {
-			s = dev->bus_id;
-			len = strlen(dev->bus_id);
+			s = dev_name(dev);
+			len = strlen(dev_name(dev));
 		}
 
-		if (!strncmp(dev->bus_id, map->bus_id, len)) {
+		if (!strncmp(dev_name(dev), map->bus_id, len)) {
 			pdev = container_of(dev, struct platform_device, dev);
 			map->rtn(pdev, idx);
 		}

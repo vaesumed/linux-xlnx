@@ -355,7 +355,7 @@ static int mii_probe (struct net_device *dev)
 	BUG_ON(!phydev);
 	BUG_ON(phydev->attached_dev);
 
-	phydev = phy_connect(dev, phydev->dev.bus_id, &au1000_adjust_link, 0,
+	phydev = phy_connect(dev, dev_name(&phydev->dev), &au1000_adjust_link, 0,
 			PHY_INTERFACE_MODE_MII);
 
 	if (IS_ERR(phydev)) {
@@ -382,7 +382,7 @@ static int mii_probe (struct net_device *dev)
 
 	printk(KERN_INFO "%s: attached PHY driver [%s] "
 	       "(mii_bus:phy_addr=%s, irq=%d)\n",
-	       dev->name, phydev->drv->name, phydev->dev.bus_id, phydev->irq);
+	       dev->name, phydev->drv->name, dev_name(&phydev->dev), phydev->irq);
 
 	return 0;
 }

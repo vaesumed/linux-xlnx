@@ -429,7 +429,7 @@ void rio_dev_put(struct rio_dev *);
  */
 static inline char *rio_name(struct rio_dev *rdev)
 {
-	return rdev->dev.bus_id;
+	return dev_name(&rdev->dev);
 }
 
 /**
