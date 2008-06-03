@@ -777,7 +777,7 @@ static int dump_znode(struct ubifs_info *c, struct ubifs_znode *znode,
  * dbg_dump_index - dump the on-flash index.
  * @c: UBIFS file-system description object
  *
- * This function dumps whold UBIFS indexing B-tree, unlike 'dbg_dump_tnc()'
+ * This function dumps whole UBIFS indexing B-tree, unlike 'dbg_dump_tnc()'
  * which dumps only in-memory znodes and does not read znodes which from flash.
  */
 void dbg_dump_index(struct ubifs_info *c)
@@ -1288,14 +1288,24 @@ int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 
 		if (znode_cb) {
 			err = znode_cb(c, znode, priv);
-			if (err)
-				goto out_unlock;
+			if (err) {
+				ubifs_err("znode checking function returned "
+					  "error %d", err);
+				dbg_dump_znode(c, znode);
+				goto out_dump;
+			}
 		}
 		if (leaf_cb && znode->level == 0) {
 			for (idx = 0; idx < znode->child_cnt; idx++) {
-				err = leaf_cb(c, &znode->zbranch[idx], priv);
-				if (err)
-					goto out_unlock;
+				zbr = &znode->zbranch[idx];
+				err = leaf_cb(c, zbr, priv);
+				if (err) {
+					ubifs_err("leaf checking function "
+						  "returned error %d, for leaf "
+						  "at LEB %d:%d",
+						  err, zbr->lnum, zbr->offs);
+					goto out_dump;
+				}
 			}
 		}
 
@@ -1340,12 +1350,31 @@ int dbg_walk_index(struct ubifs_info *c, dbg_leaf_callback leaf_cb,
 		}
 	}
 
-	err = 0;
+	mutex_unlock(&c->tnc_mutex);
+	return 0;
+
+out_dump:
+	if (znode->parent)
+		zbr = &znode->parent->zbranch[znode->iip];
+	else
+		zbr = &c->zroot;
+	ubifs_msg("dump of znode at LEB %d:%d", zbr->lnum, zbr->offs);
+	dbg_dump_znode(c, znode);
 out_unlock:
 	mutex_unlock(&c->tnc_mutex);
 	return err;
 }
 
+/**
+ * add_size - add znode size to partially calculated index size.
+ * @c: UBIFS file-system description object
+ * @znode: znode to add size for
+ * @priv: partially calculated index size
+ *
+ * This is a helper function for 'dbg_check_idx_size()' which is called for
+ * every indexing node and adds its size to the 'long long' variable pointed to
+ * by @priv.
+ */
 static int add_size(struct ubifs_info *c, struct ubifs_znode *znode, void *priv)
 {
 	long long *idx_size = priv;
@@ -1357,6 +1386,15 @@ static int add_size(struct ubifs_info *c, struct ubifs_znode *znode, void *priv)
 	return 0;
 }
 
+/**
+ * dbg_check_idx_size - check index size.
+ * @c: UBIFS file-system description object
+ * @idx_size: size to check
+ *
+ * This function walks the UBIFS index, calculates its size and checks that the
+ * size is equivalent to @idx_size. Returns zero in case of success and a
+ * negative error code in case of failure.
+ */
 int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 {
 	int err;
@@ -1372,14 +1410,521 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 	}
 
 	if (calc != idx_size) {
-		ubifs_err("index size check failed");
-		ubifs_err("calculated size is %lld, should be %lld",
-			  calc, idx_size);
+		ubifs_err("index size check failed: calculated size is %lld, "
+			  "should be %lld", calc, idx_size);
 		dump_stack();
 		return -EINVAL;
 	}
 
 	return 0;
+}
+
+/**
+ * fsck_inode - information about an inode used when checking the file-system.
+ * @rb: link in the RB-tree of inodes
+ * @inum: inode number
+ * @mode: inode type, permissions, etc
+ * @nlink: inode link count
+ * @xatt_cnt: count of extended attributes
+ * @references: how many directory/xattr entries refer this inode (calculated
+ *              while walking the index)
+ * @calc_cnt: for directory inode count of child directories, for regular files
+ *            count of extended attributes
+ * @size: inode size (read from on-flash inode)
+ * @xattr_sz: summary size of all extended attributes (read from on-flash
+ *            inode)
+ * @calc_sz: for directories calculated directory size, for regular files
+ *           calculated summary size of all extended attributes
+ */
+struct fsck_inode {
+	struct rb_node rb;
+	ino_t inum;
+	umode_t mode;
+	int nlink;
+	int xattr_cnt;
+	int references;
+	int calc_cnt;
+	long long size;
+	long long xattr_sz;
+	long long calc_sz;
+};
+
+/**
+ * fsck_data - private FS checking information.
+ * @inodes: RB-tree of all inodes (contains @struct fsck_inode objects)
+ */
+struct fsck_data {
+	struct rb_root inodes;
+};
+
+/**
+ * add_inode - add inode information to RB-tree of inodes.
+ * @c: UBIFS file-system description object
+ * @fsckd: FS checking information
+ * @ino: raw UBIFS inode to add
+ *
+ * This is a helper function for 'check_leaf()' which adds information about
+ * inode @ino to the RB-tree of inodes. Returns inode information pointer in
+ * case of success and a negative error code in case of failure.
+ */
+static struct fsck_inode *add_inode(struct ubifs_info *c,
+				    struct fsck_data *fsckd,
+				    struct ubifs_ino_node *ino)
+{
+	struct rb_node **p, *parent = NULL;
+	struct fsck_inode *fscki;
+	ino_t inum = key_ino_flash(c, &ino->key);
+
+	p = &fsckd->inodes.rb_node;
+	while (*p) {
+		parent = *p;
+		fscki = rb_entry(parent, struct fsck_inode, rb);
+		if (inum < fscki->inum)
+			p = &(*p)->rb_left;
+		else if (inum > fscki->inum)
+			p = &(*p)->rb_right;
+		else
+			return fscki;
+	}
+
+	fscki = kzalloc(sizeof(struct fsck_inode), GFP_NOFS);
+	if (!fscki)
+		return ERR_PTR(-ENOMEM);
+
+	fscki->inum = inum;
+	fscki->nlink = le32_to_cpu(ino->nlink);
+	fscki->size = le64_to_cpu(ino->size);
+	fscki->xattr_cnt = le32_to_cpu(ino->xattr_cnt);
+	fscki->xattr_sz = le64_to_cpu(ino->xattr_size);
+	fscki->mode = le32_to_cpu(ino->mode);
+	if (S_ISDIR(fscki->mode)) {
+		fscki->calc_sz = UBIFS_INO_NODE_SZ;
+		fscki->calc_cnt = 2;
+	}
+	rb_link_node(&fscki->rb, parent, p);
+	rb_insert_color(&fscki->rb, &fsckd->inodes);
+	return fscki;
+}
+
+/**
+ * search_inode - search inode in the RB-tree of inodes.
+ * @fsckd: FS checking information
+ * @inum: inode number to search
+ *
+ * This is a helper function for 'check_leaf()' which searches inode @inum in
+ * the RB-tree of inodes and returns an inode information pointer or %NULL if
+ * the inode was not found.
+ */
+static struct fsck_inode *search_inode(struct fsck_data *fsckd, ino_t inum)
+{
+	struct rb_node *p;
+	struct fsck_inode *fscki;
+
+	p = fsckd->inodes.rb_node;
+	while (p) {
+		fscki = rb_entry(p, struct fsck_inode, rb);
+		if (inum < fscki->inum)
+			p = p->rb_left;
+		else if (inum > fscki->inum)
+			p = p->rb_right;
+		else
+			return fscki;
+	}
+	return NULL;
+}
+
+/**
+ * read_add_inode - read inode node and add it to RB-tree of inodes.
+ * @c: UBIFS file-system description object
+ * @fsckd: FS checking information
+ * @inum: inode number to read
+ *
+ * This is a helper function for 'check_leaf()' which finds inode node @inum in
+ * the index, reads it, and adds it to the RB-tree of inodes. Returns inode
+ * information pointer in case of success and a negative error code in case of
+ * failure.
+ */
+static struct fsck_inode *read_add_inode(struct ubifs_info *c,
+					 struct fsck_data *fsckd, ino_t inum)
+{
+	int n, err;
+	union ubifs_key key;
+	struct ubifs_znode *znode;
+	struct ubifs_zbranch *zbr;
+	struct ubifs_ino_node *ino;
+	struct fsck_inode *fscki;
+
+	fscki = search_inode(fsckd, inum);
+	if (fscki)
+		return fscki;
+
+	ino_key_init(c, &key, inum);
+	err = ubifs_lookup_level0(c, &key, &znode, &n);
+	if (!err) {
+		ubifs_err("inode %lu not found in index", inum);
+		return ERR_PTR(-ENOENT);
+	} else if (err < 0) {
+		ubifs_err("error %d while looking up inode %lu", err, inum);
+		return ERR_PTR(err);
+	}
+
+	zbr = &znode->zbranch[n];
+	if (zbr->len < UBIFS_INO_NODE_SZ) {
+		ubifs_err("bad node %lu node length %d", inum, zbr->len);
+		return ERR_PTR(-EINVAL);
+	}
+
+	ino = kmalloc(zbr->len, GFP_NOFS);
+	if (!ino)
+		return ERR_PTR(-ENOMEM);
+
+	err = ubifs_tnc_read_node(c, zbr, ino);
+	if (err) {
+		ubifs_err("cannot read inode node at LEB %d:%d, error %d",
+			  zbr->lnum, zbr->offs, err);
+		kfree(ino);
+		return ERR_PTR(err);
+	}
+
+	fscki = add_inode(c, fsckd, ino);
+	kfree(ino);
+	if (IS_ERR(fscki)) {
+		ubifs_err("error %ld while adding inode %lu node",
+			  PTR_ERR(fscki), inum);
+		return fscki;
+	}
+
+	return fscki;
+}
+
+/**
+ * check_leaf - check leaf node.
+ * @c: UBIFS file-system description object
+ * @zbr: zbranch of the leaf node to check
+ * @priv: FS checking information
+ *
+ * This is a helper function for 'dbg_check_filesystem()' which is called for
+ * every single leaf node while walking the indexing tree. It checks that the
+ * leaf node referred from the indexing tree exists, has correct CRC, and does
+ * some other basic validation. This function is also responsible for building
+ * an RB-tree of inodes - it adds all inodes into the RB-tree. It also
+ * calculates reference count, size, etc for each inode in order to later
+ * compare them to the information stored inside the inodes and detect possible
+ * inconsistencies. Returns zero in case of success and a negative error code
+ * in case of failure.
+ */
+static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
+		      void *priv)
+{
+	ino_t inum;
+	void *node;
+	int err, type = key_type(c, &zbr->key);
+	struct fsck_inode *fscki;
+
+	if (zbr->len < UBIFS_CH_SZ) {
+		ubifs_err("bad leaf length %d (LEB %d:%d)",
+			  zbr->len, zbr->lnum, zbr->offs);
+		return -EINVAL;
+	}
+
+	node = kmalloc(zbr->len, GFP_NOFS);
+	if (!node)
+		return -ENOMEM;
+
+	err = ubifs_tnc_read_node(c, zbr, node);
+	if (err) {
+		ubifs_err("cannot read leaf node at LEB %d:%d, error %d",
+			  zbr->lnum, zbr->offs, err);
+		goto out_free;
+	}
+
+	/* If this is an inode node, add it to RB-tree of inodes */
+	if (type == UBIFS_INO_KEY) {
+		fscki = add_inode(c, priv, node);
+		if (IS_ERR(fscki)) {
+			err = PTR_ERR(fscki);
+			ubifs_err("error %d while adding inode node", err);
+			goto out_dump;
+		}
+		goto out;
+	}
+
+	if (type != UBIFS_DENT_KEY && type != UBIFS_XENT_KEY &&
+	    type != UBIFS_DATA_KEY) {
+		ubifs_err("unexpected node type %d at LEB %d:%d",
+			  type, zbr->lnum, zbr->offs);
+		err = -EINVAL;
+		goto out_free;
+	}
+
+	if (type == UBIFS_DATA_KEY) {
+		long long blk_offs;
+		struct ubifs_data_node *dn = node;
+
+		/*
+		 * Search the inode node this data node belongs to and insert
+		 * it to the RB-tree of inodes.
+		 */
+		inum = key_ino_flash(c, &dn->key);
+		fscki = read_add_inode(c, priv, inum);
+		if (IS_ERR(fscki)) {
+			err = PTR_ERR(fscki);
+			ubifs_err("error %d while processing data node and "
+				  "trying to find inode node %lu", err, inum);
+			goto out_dump;
+		}
+
+		/* Make sure the data node is within inode size */
+		blk_offs = (key_block_flash(c, &dn->key) << UBIFS_BLOCK_SHIFT);
+		blk_offs += le32_to_cpu(dn->size);
+		if (blk_offs > fscki->size) {
+			ubifs_err("data node at LEB %d:%d is not within inode "
+				  "size %lld", zbr->lnum, zbr->offs, fscki->size);
+			err = -EINVAL;
+			goto out_dump;
+		}
+	} else {
+		int nlen;
+		struct ubifs_dent_node *dent = node;
+		struct fsck_inode *fscki1;
+
+		err = ubifs_validate_entry(c, dent);
+		if (err)
+			goto out_dump;
+
+		/*
+		 * Search the inode node this entry refers to and the parent
+		 * inode node and insert them to the RB-tree of inodes.
+		 */
+		inum = le64_to_cpu(dent->inum);
+		fscki = read_add_inode(c, priv, inum);
+		if (IS_ERR(fscki)) {
+			err = PTR_ERR(fscki);
+			ubifs_err("error %d while processing entry node and "
+				  "trying to find inode node %lu", err, inum);
+			goto out_dump;
+		}
+
+		/* Count how many direntries or xentries refers this inode */
+		fscki->references += 1;
+
+		inum = key_ino_flash(c, &dent->key);
+		fscki1 = read_add_inode(c, priv, inum);
+		if (IS_ERR(fscki1)) {
+			err = PTR_ERR(fscki);
+			ubifs_err("error %d while processing entry node and "
+				  "trying to find parent inode node %lu",
+				  err, inum);
+			goto out_dump;
+		}
+
+		nlen = le16_to_cpu(dent->nlen);
+		if (type == UBIFS_XENT_KEY) {
+			fscki1->calc_cnt += 1;
+			fscki1->calc_sz += CALC_DENT_SIZE(nlen);
+			fscki1->calc_sz += CALC_XATTR_BYTES(fscki->size);
+		} else {
+			fscki1->calc_sz += CALC_DENT_SIZE(nlen);
+			if (dent->type == UBIFS_ITYPE_DIR)
+				fscki1->calc_cnt += 1;
+		}
+	}
+
+out:
+	kfree(node);
+	return 0;
+
+out_dump:
+	ubifs_msg("dump of node at LEB %d:%d", zbr->lnum, zbr->offs);
+	dbg_dump_node(c, node);
+out_free:
+	kfree(node);
+	return err;
+}
+
+/**
+ * free_inodes - free RB-tree of inodes.
+ * @fsckd: FS checking information
+ */
+static void free_inodes(struct fsck_data *fsckd)
+{
+	struct rb_node *this = fsckd->inodes.rb_node;
+	struct fsck_inode *fscki;
+
+	while (this) {
+		if (this->rb_left)
+			this = this->rb_left;
+		else if (this->rb_right)
+			this = this->rb_right;
+		else {
+			fscki = rb_entry(this, struct fsck_inode, rb);
+			this = rb_parent(this);
+			if (this) {
+				if (this->rb_left == &fscki->rb)
+					this->rb_left = NULL;
+				else
+					this->rb_right = NULL;
+			}
+			kfree(fscki);
+		}
+	}
+}
+
+/**
+ * check_inodes - checks all inodes.
+ * @c: UBIFS file-system description object
+ * @fsckd: FS checking information
+ *
+ * This is a helper function for 'dbg_check_filesystem()' which walks the
+ * RB-tree of inodes after the index scan has been finished, and checks that
+ * inode nlink, size, etc are correct. Returns zero if inodes are fine,
+ * %-EINVAL if not, and a negative error code in case of failure.
+ */
+static int check_inodes(struct ubifs_info *c, struct fsck_data *fsckd)
+{
+	int n, err;
+	union ubifs_key key;
+	struct ubifs_znode *znode;
+	struct ubifs_zbranch *zbr;
+	struct ubifs_ino_node *ino;
+	struct fsck_inode *fscki;
+	struct rb_node *this = rb_first(&fsckd->inodes);
+
+	while (this) {
+		fscki = rb_entry(this, struct fsck_inode, rb);
+		this = rb_next(this);
+
+		if (S_ISDIR(fscki->mode)) {
+			/*
+			 * Directories have to have exactly one reference (they
+			 * cannot have hardlinks), although root inode is an
+			 * exception.
+			 */
+			if (fscki->inum != UBIFS_ROOT_INO &&
+			    fscki->references != 1) {
+				ubifs_err("directory inode %lu has %d "
+					  "direntries which refer it, but "
+					  "should be 1", fscki->inum,
+					  fscki->references);
+				goto out_dump;
+			}
+			if (fscki->inum == UBIFS_ROOT_INO &&
+			    fscki->references != 0) {
+				ubifs_err("root inode %lu has non-zero (%d) "
+					  "direntries which refer it",
+					  fscki->inum, fscki->references);
+				goto out_dump;
+			}
+			if (fscki->calc_sz != fscki->size) {
+				ubifs_err("directory inode %lu size is %lld, "
+					  "but calculated size is %lld",
+					  fscki->inum, fscki->size,
+					  fscki->calc_sz);
+				goto out_dump;
+			}
+			if (fscki->calc_cnt != fscki->nlink) {
+				ubifs_err("directory inode %lu nlink is %d, "
+					  "but calculated nlink is %d",
+					  fscki->inum, fscki->nlink,
+					  fscki->calc_cnt);
+				goto out_dump;
+			}
+		} else {
+			if (fscki->references != fscki->nlink) {
+				ubifs_err("inode %lu nlink is %d, but "
+					  "calculated nlink is %d", fscki->inum,
+					  fscki->nlink, fscki->references);
+				goto out_dump;
+			}
+			if (fscki->xattr_sz != fscki->calc_sz) {
+				ubifs_err("inode %lu has xattr size %lld, but "
+					  "calculated size is %lld",
+					  fscki->inum, fscki->xattr_sz,
+					  fscki->calc_sz);
+				goto out_dump;
+			}
+			if (fscki->xattr_cnt != fscki->calc_cnt) {
+				ubifs_err("inode %lu has %d xattrs, but "
+					  "calculated count is %d", fscki->inum,
+					  fscki->xattr_cnt, fscki->calc_cnt);
+				goto out_dump;
+			}
+		}
+	}
+
+	return 0;
+
+out_dump:
+	/* Read the bad inode and dump it */
+	ino_key_init(c, &key, fscki->inum);
+	err = ubifs_lookup_level0(c, &key, &znode, &n);
+	if (!err) {
+		ubifs_err("inode %lu not found in index", fscki->inum);
+		return -ENOENT;
+	} else if (err < 0) {
+		ubifs_err("error %d while looking up inode %lu",
+			  err, fscki->inum);
+		return err;
+	}
+
+	zbr = &znode->zbranch[n];
+	ino = kmalloc(zbr->len, GFP_NOFS);
+	if (!ino)
+		return -ENOMEM;
+
+	err = ubifs_tnc_read_node(c, zbr, ino);
+	if (err) {
+		ubifs_err("cannot read inode node at LEB %d:%d, error %d",
+			  zbr->lnum, zbr->offs, err);
+		kfree(ino);
+		return err;
+	}
+
+	ubifs_msg("dump of the inode %lu sitting in LEB %d:%d",
+		  fscki->inum, zbr->lnum, zbr->offs);
+	dbg_dump_node(c, ino);
+	kfree(ino);
+	return -EINVAL;
+}
+
+/**
+ * dbg_check_filesystem - check the file-system.
+ * @c: UBIFS file-system description object
+ *
+ * This function checks the file system, namely:
+ * o makes sure that all leaf nodes exist and their CRCs are correct;
+ * o makes sure inode nlink, size, xattr size/count are correct (for all
+ *   inodes).
+ *
+ * The function reads whole indexing tree and all nodes, so it is pretty
+ * heavy-weight. Returns zero if the file-system is consistent, %-EINVAL if
+ * not, and a negative error code in case of failure.
+ */
+int dbg_check_filesystem(struct ubifs_info *c)
+{
+	int err;
+	struct fsck_data fsckd;
+
+	if (!(ubifs_chk_flags & UBIFS_CHK_FS))
+		return 0;
+
+	fsckd.inodes = RB_ROOT;
+	err = dbg_walk_index(c, check_leaf, NULL, &fsckd);
+	if (err)
+		goto out_free;
+
+	err = check_inodes(c, &fsckd);
+	if (err)
+		goto out_free;
+
+	free_inodes(&fsckd);
+	return 0;
+
+out_free:
+	ubifs_err("file-system check failed with error %d", err);
+	dump_stack();
+	free_inodes(&fsckd);
+	return err;
 }
 
 static int invocation_cnt;
