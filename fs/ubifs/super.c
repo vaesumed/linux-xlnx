@@ -1076,7 +1076,7 @@ static int mount_ubifs(struct ubifs_info *c)
 
 	err = ubifs_lpt_init(c, 1, !mounted_read_only);
 	if (err)
-		goto out_master;
+		goto out_lpt;
 
 	err = dbg_check_idx_size(c, c->old_idx_sz);
 	if (err)
