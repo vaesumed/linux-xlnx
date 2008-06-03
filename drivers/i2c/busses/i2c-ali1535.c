@@ -61,6 +61,7 @@
 #include <linux/ioport.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
+#include <linux/acpi.h>
 #include <asm/io.h>
 
 
@@ -158,6 +159,11 @@ static int ali1535_setup(struct pci_dev *dev)
 			"ALI1535_smb region uninitialized - upgrade BIOS?\n");
 		goto exit;
 	}
+
+	retval = acpi_check_region(ali1535_smba, ALI1535_SMB_IOSIZE,
+				   ali1535_driver.name);
+	if (retval)
+		goto exit;
 
 	if (!request_region(ali1535_smba, ALI1535_SMB_IOSIZE,
 			    ali1535_driver.name)) {
@@ -259,7 +265,7 @@ static int ali1535_transaction(struct i2c_adapter *adap)
 			dev_err(&adap->dev,
 				"SMBus reset failed! (0x%02x) - controller or "
 				"device on bus is probably hung\n", temp);
-			return -1;
+			return -EBUSY;
 		}
 	} else {
 		/* check and clear done bit */
@@ -281,12 +287,12 @@ static int ali1535_transaction(struct i2c_adapter *adap)
 
 	/* If the SMBus is still busy, we give up */
 	if (timeout >= MAX_TIMEOUT) {
-		result = -1;
+		result = -ETIMEDOUT;
 		dev_err(&adap->dev, "SMBus Timeout!\n");
 	}
 
 	if (temp & ALI1535_STS_FAIL) {
-		result = -1;
+		result = -EIO;
 		dev_dbg(&adap->dev, "Error: Failed bus transaction\n");
 	}
 
@@ -295,7 +301,7 @@ static int ali1535_transaction(struct i2c_adapter *adap)
 	 * do a printk.  This means that bus collisions go unreported.
 	 */
 	if (temp & ALI1535_STS_BUSERR) {
-		result = -1;
+		result = -ENXIO;
 		dev_dbg(&adap->dev,
 			"Error: no response or bus collision ADD=%02x\n",
 			inb_p(SMBHSTADD));
@@ -303,13 +309,13 @@ static int ali1535_transaction(struct i2c_adapter *adap)
 
 	/* haven't ever seen this */
 	if (temp & ALI1535_STS_DEV) {
-		result = -1;
+		result = -EIO;
 		dev_err(&adap->dev, "Error: device error\n");
 	}
 
 	/* check to see if the "command complete" indication is set */
 	if (!(temp & ALI1535_STS_DONE)) {
-		result = -1;
+		result = -ETIMEDOUT;
 		dev_err(&adap->dev, "Error: command never completed\n");
 	}
 
@@ -332,7 +338,7 @@ static int ali1535_transaction(struct i2c_adapter *adap)
 	return result;
 }
 
-/* Return -1 on error. */
+/* Return negative errno on error. */
 static s32 ali1535_access(struct i2c_adapter *adap, u16 addr,
 			  unsigned short flags, char read_write, u8 command,
 			  int size, union i2c_smbus_data *data)
@@ -357,10 +363,6 @@ static s32 ali1535_access(struct i2c_adapter *adap, u16 addr,
 	outb_p(0xFF, SMBHSTSTS);
 
 	switch (size) {
-	case I2C_SMBUS_PROC_CALL:
-		dev_err(&adap->dev, "I2C_SMBUS_PROC_CALL not supported!\n");
-		result = -1;
-		goto EXIT;
 	case I2C_SMBUS_QUICK:
 		outb_p(((addr & 0x7f) << 1) | (read_write & 0x01),
 		       SMBHSTADD);
@@ -418,13 +420,15 @@ static s32 ali1535_access(struct i2c_adapter *adap, u16 addr,
 				outb_p(data->block[i], SMBBLKDAT);
 		}
 		break;
-	}
-
-	if (ali1535_transaction(adap)) {
-		/* Error in transaction */
-		result = -1;
+	default:
+		dev_warn(&adap->dev, "Unsupported transaction %d\n", size);
+		result = -EOPNOTSUPP;
 		goto EXIT;
 	}
+
+	result = ali1535_transaction(adap);
+	if (result)
+		goto EXIT;
 
 	if ((read_write == I2C_SMBUS_WRITE) || (size == ALI1535_QUICK)) {
 		result = 0;
