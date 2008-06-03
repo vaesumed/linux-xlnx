@@ -174,13 +174,7 @@ enum {
  * value.
  */
 #define UBIFS_S_KEY_BLOCK_BITS 29
-/*
- * TODO: this is a temporary hach which was added to support old format and to
- * avoid breaking binary compatibility. It is temporaty and should go. The
- * define should be
- * #define UBIFS_S_KEY_BLOCK_MASK 0x1FFFFFFF
- */
-#define UBIFS_S_KEY_BLOCK_MASK (c->fmt_version == 2 ? 0x01FFFFFF : 0x1FFFFFFF)
+#define UBIFS_S_KEY_BLOCK_MASK 0x1FFFFFFF
 #define UBIFS_S_KEY_HASH_BITS  UBIFS_S_KEY_BLOCK_BITS
 #define UBIFS_S_KEY_HASH_MASK  UBIFS_S_KEY_BLOCK_MASK
 
