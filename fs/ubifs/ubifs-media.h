@@ -37,7 +37,7 @@
 #define UBIFS_NODE_MAGIC  0x06101831
 
 /* UBIFS on-flash format version */
-#define UBIFS_FORMAT_VERSION 3
+#define UBIFS_FORMAT_VERSION 4
 
 /* Minimum logical eraseblock size in bytes */
 #define UBIFS_MIN_LEB_SZ (15*1024)
@@ -185,7 +185,6 @@ enum {
  * UBIFS_DATA_KEY: data node key
  * UBIFS_DENT_KEY: directory entry node key
  * UBIFS_XENT_KEY: extended attribute entry key
- * UBIFS_TRUN_KEY: truncation node key
  * UBIFS_KEY_TYPES_CNT: number of supported key types
  */
 enum {
@@ -193,7 +192,6 @@ enum {
 	UBIFS_DATA_KEY,
 	UBIFS_DENT_KEY,
 	UBIFS_XENT_KEY,
-	UBIFS_TRUN_KEY,
 	UBIFS_KEY_TYPES_CNT,
 };
 
@@ -511,15 +509,19 @@ struct ubifs_data_node {
 /**
  * struct ubifs_trun_node - truncation node.
  * @ch: common header
- * @key: truncation node key
+ * @inum: truncated inode number
+ * @padding: reserved for future, zeroes
  * @old_size: size before truncation
  * @new_size: size after truncation
  *
- * This node exists only in the journal and never goes to the main area.
+ * This node exists only in the journal and never goes to the main area. Note,
+ * do not forget to amend 'zero_trun_node_unused()' function when changing the
+ * padding fields.
  */
 struct ubifs_trun_node {
 	struct ubifs_ch ch;
-	__u8 key[UBIFS_MAX_KEY_LEN];
+	__le32 inum;
+	__u8 padding[12]; /* Watch 'zero_trun_node_unused()' if changing! */
 	__le64 old_size;
 	__le64 new_size;
 } __attribute__ ((packed));
