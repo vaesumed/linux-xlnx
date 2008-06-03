@@ -1239,6 +1239,10 @@ static void ubifs_umount(struct ubifs_info *c)
 	dbg_gen("un-mounting UBI device %d, volume %d", c->vi.ubi_num,
 		c->vi.vol_id);
 
+	spin_lock(&ubifs_infos_lock);
+	list_del(&c->infos_list);
+	spin_unlock(&ubifs_infos_lock);
+
 	if (c->bgt)
 		kthread_stop(c->bgt);
 
@@ -1488,11 +1492,6 @@ static void ubifs_put_super(struct super_block *sb)
 	 * the mutex is locked.
 	 */
 	mutex_lock(&c->umount_mutex);
-
-	spin_lock(&ubifs_infos_lock);
-	list_del(&c->infos_list);
-	spin_unlock(&ubifs_infos_lock);
-
 	if (!(c->vfs_sb->s_flags & MS_RDONLY)) {
 		/*
 		 * First of all kill the background thread to make sure it does
@@ -1725,9 +1724,6 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 out_iput:
 	iput(root);
 out_umount:
-	spin_lock(&ubifs_infos_lock);
-	list_del(&c->infos_list);
-	spin_unlock(&ubifs_infos_lock);
 	ubifs_umount(c);
 out_unlock:
 	mutex_unlock(&c->umount_mutex);
