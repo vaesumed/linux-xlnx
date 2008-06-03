@@ -453,6 +453,19 @@ static inline unsigned int key_block(const struct ubifs_info *c,
 }
 
 /**
+ * key_block_flash - get data block number from an on-flash formatted key.
+ * @c: UBIFS file-system description object
+ * @k: the key to get the block number from
+ */
+static inline unsigned int key_block_flash(const struct ubifs_info *c,
+					   const void *k)
+{
+	const union ubifs_key *key = k;
+
+	return le32_to_cpu(key->u32[1]) & UBIFS_S_KEY_BLOCK_MASK;
+}
+
+/**
  * key_read - transform a key to in-memory format.
  * @c: UBIFS file-system description object
  * @from: the key to transform

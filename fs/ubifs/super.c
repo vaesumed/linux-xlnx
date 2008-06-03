@@ -1142,6 +1142,10 @@ static int mount_ubifs(struct ubifs_info *c)
 		}
 	}
 
+	err = dbg_check_filesystem(c);
+	if (err)
+		goto out_infos;
+
 	ubifs_msg("mounted UBI device %d, volume %d", c->vi.ubi_num,
 		  c->vi.vol_id);
 	if (mounted_read_only)
@@ -1199,6 +1203,10 @@ static int mount_ubifs(struct ubifs_info *c)
 
 	return 0;
 
+out_infos:
+	spin_lock(&ubifs_infos_lock);
+	list_del(&c->infos_list);
+	spin_unlock(&ubifs_infos_lock);
 out_orphans:
 	free_orphans(c);
 out_journal:

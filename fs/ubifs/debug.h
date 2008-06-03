@@ -166,6 +166,7 @@ enum {
  * UBIFS_CHK_ORPH: check orphans
  * UBIFS_CHK_OLD_IDX: check the old index
  * UBIFS_CHK_LPROPS: check lprops
+ * UBIFS_CHK_FS: check the file-system
  */
 enum {
 	UBIFS_CHK_GEN     = 0x1,
@@ -174,6 +175,7 @@ enum {
 	UBIFS_CHK_ORPH    = 0x8,
 	UBIFS_CHK_OLD_IDX = 0x10,
 	UBIFS_CHK_LPROPS  = 0x20,
+	UBIFS_CHK_FS      = 0x40,
 };
 
 /*
@@ -257,6 +259,8 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir);
 int dbg_check_tnc(struct ubifs_info *c, int extra);
 
 int dbg_check_idx_size(struct ubifs_info *c, long long idx_size);
+
+int dbg_check_filesystem(struct ubifs_info *c);
 
 void dbg_check_heap(struct ubifs_info *c, struct ubifs_lpt_heap *heap, int cat,
 		    int add_pos);
@@ -373,6 +377,7 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #define dbg_check_tnc(c, x)                        0
 
 #define dbg_check_idx_size(c, idx_size)            0
+#define dbg_check_filesystem(c)                    0
 
 #define dbg_check_heap(c, heap, cat, add_pos)      ({})
 
