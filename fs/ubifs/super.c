@@ -1088,7 +1088,7 @@ static int mount_ubifs(struct ubifs_info *c)
 
 	err = ubifs_mount_orphans(c, c->need_recovery, mounted_read_only);
 	if (err)
-		goto out_journal;
+		goto out_orphans;
 
 	if (!mounted_read_only) {
 		int lnum;
