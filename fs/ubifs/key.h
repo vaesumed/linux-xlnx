@@ -54,43 +54,12 @@ static inline uint32_t key_r5_hash(const char *s, int len)
 		str++;
 	}
 
-	/* TODO: change this to
-	 * a &= UBIFS_S_KEY_HASH_MASK; */
-	a &= 0x1FFFFFFF;
+	a &= UBIFS_S_KEY_HASH_MASK;
 
 	/*
 	 * We use hash values as offset in directories, so values %0 and %1 are
 	 * reserved for "." and "..". %2 is reserved for "end of readdir"
 	 * marker.
-	 */
-	if (unlikely(a >= 0 && a <= 2))
-		a += 3;
-	return a;
-}
-
-/**
- * tmp_key_r5_hash - R5 hash function (borrowed from reiserfs).
- * @s: direntry name
- * @len: name length
- * TODO: this should die soon
- */
-static inline uint32_t tmp_key_r5_hash(const char *s, int len)
-{
-	uint32_t a = 0;
-	const signed char *str = (const signed char *)s;
-
-	while (*str) {
-		a += *str << 4;
-		a += *str >> 4;
-		a *= 11;
-		str++;
-	}
-
-	a &= 0x01FFFFFF;
-
-	/*
-	 * We use hash values as offset in directories, so values %0 and %1 are
-	 * reserved for "." and "..". %2 is reserved for possible future use.
 	 */
 	if (unlikely(a >= 0 && a <= 2))
 		a += 3;
@@ -108,9 +77,7 @@ static inline uint32_t key_test_hash(const char *str, int len)
 
 	len = min_t(uint32_t, len, 4);
 	memcpy(&a, str, len);
-	/* TODO: change this to
-	 * a &= UBIFS_S_KEY_HASH_MASK; */
-	a &= 0x1FFFFFFF;
+	a &= UBIFS_S_KEY_HASH_MASK;
 	if (unlikely(a >= 0 && a <= 2))
 		a += 3;
 	return a;
