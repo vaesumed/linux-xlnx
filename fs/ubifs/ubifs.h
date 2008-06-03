@@ -109,6 +109,14 @@
 #define NC 0x80000001
 
 /*
+ * There is no notion of truncation key because truncation nodes do not exist
+ * in TNC. However, when replaying, it is handy to introduce fake "truncation"
+ * keys for truncation nodes because the code becomes simpler. So we define
+ * %UBIFS_TRUN_KEY type.
+ */
+#define UBIFS_TRUN_KEY UBIFS_KEY_TYPES_CNT
+
+/*
  * How much a directory entry/extended attribute entry adds to the parent/host
  * inode.
  */

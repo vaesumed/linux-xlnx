@@ -71,7 +71,7 @@ static inline void zero_ino_node_unused(struct ubifs_ino_node *ino)
 
 /**
  * zero_dent_node_unused - zero out unused fields of an on-flash directory
- *                          entry node.
+ *                         entry node.
  * @ino: the directory entry to zero out
  */
 static inline void zero_dent_node_unused(struct ubifs_dent_node *dent)
@@ -87,6 +87,16 @@ static inline void zero_dent_node_unused(struct ubifs_dent_node *dent)
 static inline void zero_data_node_unused(struct ubifs_data_node *data)
 {
 	memset(data->padding, 0, 2);
+}
+
+/**
+ * zero_trun_node_unused - zero out unused fields of an on-flash truncation
+ *                         node.
+ * @ino: the truncation node to zero out
+ */
+static inline void zero_trun_node_unused(struct ubifs_trun_node *trun)
+{
+	memset(trun->padding, 0, 12);
 }
 
 /**
@@ -1009,9 +1019,10 @@ int ubifs_jnl_truncate(struct ubifs_info *c, ino_t inum,
 		return -ENOMEM;
 
 	trun->ch.node_type = UBIFS_TRUN_NODE;
-	trun_key_init_flash(c, &trun->key, inum);
+	trun->inum = cpu_to_le32(inum);
 	trun->old_size = cpu_to_le64(old_size);
 	trun->new_size = cpu_to_le64(new_size);
+	zero_trun_node_unused(trun);
 
 	dlen = new_size & (UBIFS_BLOCK_SIZE - 1);
 
