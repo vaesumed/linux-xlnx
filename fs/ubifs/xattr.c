@@ -503,6 +503,7 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 	host->i_ctime = ubifs_current_time(host);
 	host_ui->xattr_cnt -= 1;
 	spin_lock(&host->i_lock);
+	host_ui->xattr_size -= CALC_DENT_SIZE(nm->len);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);
 	spin_unlock(&host->i_lock);
 	host_ui->xattr_names -= nm->len;
@@ -518,6 +519,7 @@ out_cancel:
 	ubifs_cancel_ino_op(c, host, &req);
 	host_ui->xattr_cnt += 1;
 	spin_lock(&host->i_lock);
+	host_ui->xattr_size += CALC_DENT_SIZE(nm->len);
 	host_ui->xattr_size += CALC_XATTR_BYTES(ui->data_len);
 	spin_unlock(&host->i_lock);
 	make_bad_inode(inode);
