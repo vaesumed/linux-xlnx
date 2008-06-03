@@ -521,21 +521,23 @@ static void program_drive_counts(ide_drive_t *drive, unsigned int index)
 static void cmd640_set_mode(ide_drive_t *drive, unsigned int index,
 			    u8 pio_mode, unsigned int cycle_time)
 {
+	struct ide_timing *t;
 	int setup_time, active_time, recovery_time, clock_time;
 	u8 setup_count, active_count, recovery_count, recovery_count2, cycle_count;
 	int bus_speed;
 
-	if (cmd640_vlb && ide_vlb_clk)
-		bus_speed = ide_vlb_clk;
-	else if (!cmd640_vlb && ide_pci_clk)
-		bus_speed = ide_pci_clk;
+	if (cmd640_vlb)
+		bus_speed = ide_vlb_clk ? ide_vlb_clk : 50;
 	else
-		bus_speed = system_bus_clock();
+		bus_speed = ide_pci_clk ? ide_pci_clk : 33;
 
 	if (pio_mode > 5)
 		pio_mode = 5;
-	setup_time  = ide_pio_timings[pio_mode].setup_time;
-	active_time = ide_pio_timings[pio_mode].active_time;
+
+	t = ide_timing_find_mode(XFER_PIO_0 + pio_mode);
+	setup_time  = t->setup;
+	active_time = t->active;
+
 	recovery_time = cycle_time - (setup_time + active_time);
 	clock_time = 1000 / bus_speed;
 	cycle_count = DIV_ROUND_UP(cycle_time, clock_time);
