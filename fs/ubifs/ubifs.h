@@ -818,6 +818,7 @@ struct ubifs_mount_opts {
  * @cmt_no: commit number (last successfully completed commit)
  * @cnt_lock: protects @highest_inum, @vfs_gen, and @max_sqnum counters
  * @fmt_version: UBIFS on-flash format version
+ * @uuid: UUID from super block
  *
  * @lhead_lnum: log head logical eraseblock number
  * @lhead_offs: log head offset
@@ -1052,6 +1053,7 @@ struct ubifs_info {
 	unsigned long long cmt_no;
 	spinlock_t cnt_lock;
 	int fmt_version;
+	unsigned char uuid[16];
 
 	int lhead_lnum;
 	int lhead_offs;

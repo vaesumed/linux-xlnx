@@ -1168,6 +1168,12 @@ static int mount_ubifs(struct ubifs_info *c)
 		  c->fmt_version, UBIFS_FORMAT_VERSION);
 
 	dbg_msg("compiled on:            " __DATE__ " at " __TIME__);
+	dbg_msg("UUID:                   %02X%02X%02X%02X-%02X%02X"
+	       "-%02X%02X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+	       c->uuid[0], c->uuid[1], c->uuid[2], c->uuid[3],
+	       c->uuid[4], c->uuid[5], c->uuid[6], c->uuid[7],
+	       c->uuid[8], c->uuid[9], c->uuid[10], c->uuid[11],
+	       c->uuid[12], c->uuid[13], c->uuid[14], c->uuid[15]);
 	dbg_msg("fast unmount:           %d", c->fast_unmount);
 	dbg_msg("big_lpt                 %d", c->big_lpt);
 	dbg_msg("log LEBs:               %d (%d - %d)",
