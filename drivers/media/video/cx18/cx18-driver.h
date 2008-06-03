@@ -380,7 +380,8 @@ struct cx18 {
 	int stream_buf_size[CX18_MAX_STREAMS]; /* Stream buffer size */
 	struct cx18_stream streams[CX18_MAX_STREAMS]; 	/* Stream data */
 	unsigned long i_flags;  /* global cx18 flags */
-	atomic_t capturing;	/* count number of active capture streams */
+	atomic_t ana_capturing;	/* count number of active analog capture streams */
+	atomic_t tot_capturing;	/* total count number of active capture streams */
 	spinlock_t lock;        /* lock access to this struct */
 	int search_pack_header;
 
@@ -422,6 +423,10 @@ struct cx18 {
 	struct i2c_client i2c_client[2];
 	struct mutex i2c_bus_lock[2];
 	struct i2c_client *i2c_clients[I2C_CLIENTS_MAX];
+
+	/* gpio */
+	u32 gpio_dir;
+	u32 gpio_val;
 
 	/* v4l2 and User settings */
 
