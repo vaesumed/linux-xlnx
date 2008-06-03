@@ -114,6 +114,9 @@
  */
 #define CALC_DENT_SIZE(name_len) ALIGN(UBIFS_DENT_NODE_SZ + (name_len) + 1, 8)
 
+/* How much an extended attribute adds to the host inode */
+#define CALC_XATTR_BYTES(data_len) ALIGN(UBIFS_INO_NODE_SZ + (data_len) + 1, 8)
+
 /*
  * Znodes which were not touched for 'OLD_ZNODE_AGE' seconds are considered
  * "old", and znode which were touched last 'YOUNG_ZNODE_AGE' seconds ago are
@@ -1381,12 +1384,14 @@ int ubifs_find_dirty_idx_leb(struct ubifs_info *c);
 int ubifs_save_dirty_idx_lnums(struct ubifs_info *c);
 
 /* tnc.c */
+int ubifs_lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
+			struct ubifs_znode **zn, int *n);
 int ubifs_tnc_lookup(struct ubifs_info *c, const union ubifs_key *key,
 		     void *node);
-int ubifs_tnc_locate(struct ubifs_info *c, const union ubifs_key *key,
-		     void *node, int *lnum, int *offs);
 int ubifs_tnc_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 			void *node, const struct qstr *nm);
+int ubifs_tnc_locate(struct ubifs_info *c, const union ubifs_key *key,
+		     void *node, int *lnum, int *offs);
 int ubifs_tnc_add(struct ubifs_info *c, const union ubifs_key *key, int lnum,
 		  int offs, int len);
 int ubifs_tnc_replace(struct ubifs_info *c, const union ubifs_key *key,

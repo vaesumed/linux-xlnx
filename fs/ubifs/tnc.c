@@ -1140,7 +1140,7 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
 }
 
 /**
- * lookup_level0 - search for zero-level znode.
+ * ubifs_lookup_level0 - search for zero-level znode.
  * @c: UBIFS file-system description object
  * @key:  key to lookup
  * @zn: znode is returned here
@@ -1161,8 +1161,8 @@ static struct ubifs_znode *dirty_cow_bottom_up(struct ubifs_info *c,
  * function reads corresponding indexing nodes and inserts them to TNC. In
  * case of failure, a negative error code is returned.
  */
-static int lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
-			 struct ubifs_znode **zn, int *n)
+int ubifs_lookup_level0(struct ubifs_info *c, const union ubifs_key *key,
+			struct ubifs_znode **zn, int *n)
 {
 	int err, exact;
 	struct ubifs_znode *znode;
@@ -1401,7 +1401,7 @@ int ubifs_tnc_lookup(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_zbranch zbr, *zt;
 
 	mutex_lock(&c->tnc_mutex);
-	found = lookup_level0(c, key, &znode, &n);
+	found = ubifs_lookup_level0(c, key, &znode, &n);
 	if (!found) {
 		err = -ENOENT;
 		goto out;
@@ -1448,7 +1448,7 @@ int ubifs_tnc_locate(struct ubifs_info *c, const union ubifs_key *key,
 	struct ubifs_zbranch zbr, *zt;
 
 	mutex_lock(&c->tnc_mutex);
-	found = lookup_level0(c, key, &znode, &n);
+	found = ubifs_lookup_level0(c, key, &znode, &n);
 	if (!found) {
 		err = -ENOENT;
 		goto out;
@@ -1504,7 +1504,7 @@ static int do_lookup_nm(struct ubifs_info *c, const union ubifs_key *key,
 
 	dbg_tnc("name '%.*s' key %s", nm->len, nm->name, DBGKEY(key));
 	mutex_lock(&c->tnc_mutex);
-	found = lookup_level0(c, key, &znode, &n);
+	found = ubifs_lookup_level0(c, key, &znode, &n);
 	if (!found) {
 		err = -ENOENT;
 		goto out_unlock;
@@ -2299,7 +2299,7 @@ int ubifs_tnc_remove_range(struct ubifs_info *c, union ubifs_key *from_key,
 	mutex_lock(&c->tnc_mutex);
 	while (1) {
 		/* Find first level 0 znode that contains keys to remove */
-		err = lookup_level0(c, from_key, &znode, &n);
+		err = ubifs_lookup_level0(c, from_key, &znode, &n);
 		if (err < 0)
 			goto out_unlock;
 
@@ -2464,7 +2464,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	ubifs_assert(is_hash_key(c, key));
 
 	mutex_lock(&c->tnc_mutex);
-	err = lookup_level0(c, key, &znode, &n);
+	err = ubifs_lookup_level0(c, key, &znode, &n);
 	if (unlikely(err < 0))
 		goto out_unlock;
 
@@ -2705,9 +2705,9 @@ static struct ubifs_znode *lookup_znode(struct ubifs_info *c,
 			 * We reached a znode where the leftmost key is greater
 			 * than the key we are searching for. This is the same
 			 * situation as the one described in a huge comment at
-			 * the end of the 'lookup_level0()' function. And for
-			 * exactly the same reasons we have to try to look left
-			 * before giving up.
+			 * the end of the 'ubifs_lookup_level0()' function. And
+			 * for exactly the same reasons we have to try to look
+			 * left before giving up.
 			 */
 			znode = left_znode(c, znode);
 			if (!znode)
@@ -2833,7 +2833,7 @@ static int is_leaf_node_in_tnc(struct ubifs_info *c, union ubifs_key *key,
 	int n, found, err, nn;
 	const int unique = !is_hash_key(c, key);
 
-	found = lookup_level0(c, key, &znode, &n);
+	found = ubifs_lookup_level0(c, key, &znode, &n);
 	if (found < 0)
 		return found; /* Error code */
 	if (!found)

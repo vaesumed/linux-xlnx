@@ -59,9 +59,6 @@
 #include <linux/posix_acl_xattr.h>
 #include "ubifs.h"
 
-/* How many bytes an extended attribute adds to the host inode */
-#define CALC_XATTR_BYTES(data_len) ALIGN(UBIFS_INO_NODE_SZ + (data_len) + 1, 8)
-
 /*
  * Extended attribute type constants.
  *
