@@ -9,6 +9,7 @@
  *
  */
 
+#include <linux/smp_lock.h>
 #include <linux/suspend.h>
 #include <linux/syscalls.h>
 #include <linux/reboot.h>
@@ -69,15 +70,20 @@ static int snapshot_open(struct inode *inode, struct file *filp)
 	struct snapshot_data *data;
 	int error;
 
-	if (!atomic_add_unless(&snapshot_device_available, -1, 0))
+	lock_kernel();
+	if (!atomic_add_unless(&snapshot_device_available, -1, 0)) {
+		unlock_kernel();
 		return -EBUSY;
+	}
 
 	if ((filp->f_flags & O_ACCMODE) == O_RDWR) {
 		atomic_inc(&snapshot_device_available);
+		unlock_kernel();
 		return -ENOSYS;
 	}
 	if(create_basic_memory_bitmaps()) {
 		atomic_inc(&snapshot_device_available);
+		unlock_kernel();
 		return -ENOMEM;
 	}
 	nonseekable_open(inode, filp);
@@ -100,11 +106,13 @@ static int snapshot_open(struct inode *inode, struct file *filp)
 	}
 	if (error) {
 		atomic_inc(&snapshot_device_available);
+		unlock_kernel();
 		return error;
 	}
 	data->frozen = 0;
 	data->ready = 0;
 	data->platform_support = 0;
+	unlock_kernel();
 
 	return 0;
 }
