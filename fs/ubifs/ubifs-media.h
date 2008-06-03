@@ -567,6 +567,7 @@ struct ubifs_pad_node {
  * @rp_size: size of the reserved pool in bytes
  * @padding2: reserved for future, zeroes
  * @time_gran: time granularity in nanoseconds
+ * @uuid: UUID generated when the file system image was created
  */
 struct ubifs_sb_node {
 	struct ubifs_ch ch;
@@ -592,7 +593,8 @@ struct ubifs_sb_node {
 	__le32 rp_gid;
 	__le64 rp_size;
 	__le32 time_gran;
-	__u8 padding2[3988];
+	__u8 uuid[16];
+	__u8 padding2[3972];
 } __attribute__ ((packed));
 
 /**

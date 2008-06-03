@@ -27,6 +27,7 @@
  */
 
 #include "ubifs.h"
+#include <linux/random.h>
 
 /*
  * Default journal size in logical eraseblocks as a percent of total
@@ -173,6 +174,8 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->fmt_version   = cpu_to_le32(UBIFS_FORMAT_VERSION);
 	sup->default_compr = cpu_to_le16(UBIFS_COMPR_LZO);
 	sup->time_gran     = cpu_to_le32(DEFAULT_TIME_GRAN);
+
+	generate_random_uuid(sup->uuid);
 
 	main_bytes = (uint64_t)main_lebs * c->leb_size;
 	tmp64 = main_bytes * DEFAULT_RP_PERCENT;
@@ -575,6 +578,8 @@ int ubifs_read_superblock(struct ubifs_info *c)
 	sup_flags        = le32_to_cpu(sup->flags);
 
 	c->vfs_sb->s_time_gran = le32_to_cpu(sup->time_gran);
+
+	memcpy(&c->uuid, &sup->uuid, 16);
 
 	c->big_lpt = !!(sup_flags & UBIFS_FLG_BIGLPT);
 
