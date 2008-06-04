@@ -209,7 +209,7 @@ static int i2c_tiny_usb_probe(struct usb_interface *interface,
 
 	/* setup i2c adapter description */
 	dev->adapter.owner = THIS_MODULE;
-	dev->adapter.class = I2C_CLASS_HWMON;
+	dev->adapter.class = I2C_CLASS_HWMON | I2C_CLASS_SPD;
 	dev->adapter.algo = &usb_algorithm;
 	dev->adapter.algo_data = dev;
 	snprintf(dev->adapter.name, sizeof(dev->adapter.name),
