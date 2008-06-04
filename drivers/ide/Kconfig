@@ -426,6 +426,7 @@ config BLK_DEV_GENERIC
 config BLK_DEV_OPTI621
 	tristate "OPTi 82C621 chipset enhanced support (EXPERIMENTAL)"
 	depends on EXPERIMENTAL
+	select IDE_TIMINGS
 	select BLK_DEV_IDEPCI
 	help
 	  This is a driver for the OPTi 82C621 EIDE controller.
