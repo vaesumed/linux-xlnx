@@ -183,7 +183,7 @@ static int trun_remove_range(struct ubifs_info *c, struct replay_entry *r)
 	if ((r->old_size & (UBIFS_BLOCK_SIZE - 1)) == 0)
 		max_blk -= 1;
 
-	ino = key_ino(c, &r->key);
+	ino = key_inum(c, &r->key);
 
 	data_key_init(c, &min_key, ino, min_blk);
 	data_key_init(c, &max_key, ino, max_blk);
@@ -221,7 +221,7 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 			switch (key_type(c, &r->key)) {
 			case UBIFS_INO_KEY:
 			{
-				ino_t inum = key_ino(c, &r->key);
+				ino_t inum = key_inum(c, &r->key);
 
 				err = ubifs_tnc_remove_ino(c, inum);
 				break;
@@ -336,8 +336,8 @@ static int insert_node(struct ubifs_info *c, int lnum, int offs, int len,
 	struct rb_node **p = &c->replay_tree.rb_node, *parent = NULL;
 	struct replay_entry *r;
 
-	if (key_ino(c, key) >= c->highest_inum)
-		c->highest_inum = key_ino(c, key);
+	if (key_inum(c, key) >= c->highest_inum)
+		c->highest_inum = key_inum(c, key);
 
 	dbg_mnt("add LEB %d:%d, key %s", lnum, offs, DBGKEY(key));
 	while (*p) {
@@ -402,8 +402,8 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 	struct replay_entry *r;
 	char *nbuf;
 
-	if (key_ino(c, key) >= c->highest_inum)
-		c->highest_inum = key_ino(c, key);
+	if (key_inum(c, key) >= c->highest_inum)
+		c->highest_inum = key_inum(c, key);
 
 	dbg_mnt("add LEB %d:%d, key %s", lnum, offs, DBGKEY(key));
 	while (*p) {

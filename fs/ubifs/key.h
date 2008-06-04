@@ -349,11 +349,11 @@ static inline int key_type_flash(const struct ubifs_info *c, const void *k)
 }
 
 /**
- * key_ino - fetch inode number from key.
+ * key_inum - fetch inode number from key.
  * @c: UBIFS file-system description object
  * @k: key to fetch inode number from
  */
-static inline ino_t key_ino(const struct ubifs_info *c, const void *k)
+static inline ino_t key_inum(const struct ubifs_info *c, const void *k)
 {
 	const union ubifs_key *key = k;
 
@@ -361,11 +361,11 @@ static inline ino_t key_ino(const struct ubifs_info *c, const void *k)
 }
 
 /**
- * key_ino_flash - fetch inode number from an on-flash formatted key.
+ * key_inum_flash - fetch inode number from an on-flash formatted key.
  * @c: UBIFS file-system description object
  * @k: key to fetch inode number from
  */
-static inline ino_t key_ino_flash(const struct ubifs_info *c, const void *k)
+static inline ino_t key_inum_flash(const struct ubifs_info *c, const void *k)
 {
 	const union ubifs_key *key = k;
 

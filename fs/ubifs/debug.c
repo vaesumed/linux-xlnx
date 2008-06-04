@@ -101,21 +101,21 @@ static void sprintf_key(const struct ubifs_info *c, const union ubifs_key *key,
 	if (c->key_fmt == UBIFS_SIMPLE_KEY_FMT) {
 		switch (type) {
 		case UBIFS_INO_KEY:
-			sprintf(p, "(%lu, %s)", key_ino(c, key),
+			sprintf(p, "(%lu, %s)", key_inum(c, key),
 			       get_key_type(type));
 			break;
 		case UBIFS_DENT_KEY:
 		case UBIFS_XENT_KEY:
-			sprintf(p, "(%lu, %s, %#08x)", key_ino(c, key),
+			sprintf(p, "(%lu, %s, %#08x)", key_inum(c, key),
 				get_key_type(type), key_hash(c, key));
 			break;
 		case UBIFS_DATA_KEY:
-			sprintf(p, "(%lu, %s, %u)", key_ino(c, key),
+			sprintf(p, "(%lu, %s, %u)", key_inum(c, key),
 				get_key_type(type), key_block(c, key));
 			break;
 		case UBIFS_TRUN_KEY:
 			sprintf(p, "(%lu, %s)",
-				key_ino(c, key), get_key_type(type));
+				key_inum(c, key), get_key_type(type));
 			break;
 		default:
 			sprintf(p, "(bad key type: %#08x, %#08x)",
@@ -1489,7 +1489,7 @@ static struct fsck_inode *add_inode(struct ubifs_info *c,
 {
 	struct rb_node **p, *parent = NULL;
 	struct fsck_inode *fscki;
-	ino_t inum = key_ino_flash(c, &ino->key);
+	ino_t inum = key_inum_flash(c, &ino->key);
 
 	p = &fsckd->inodes.rb_node;
 	while (*p) {
@@ -1681,7 +1681,7 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		 * Search the inode node this data node belongs to and insert
 		 * it to the RB-tree of inodes.
 		 */
-		inum = key_ino_flash(c, &dn->key);
+		inum = key_inum_flash(c, &dn->key);
 		fscki = read_add_inode(c, priv, inum);
 		if (IS_ERR(fscki)) {
 			err = PTR_ERR(fscki);
@@ -1724,7 +1724,7 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		/* Count how many direntries or xentries refers this inode */
 		fscki->references += 1;
 
-		inum = key_ino_flash(c, &dent->key);
+		inum = key_inum_flash(c, &dent->key);
 		fscki1 = read_add_inode(c, priv, inum);
 		if (IS_ERR(fscki1)) {
 			err = PTR_ERR(fscki);

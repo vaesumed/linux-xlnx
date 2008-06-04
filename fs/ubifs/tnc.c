@@ -1722,7 +1722,7 @@ again:
 		 * zbranches of consecutive data nodes anyway.
 		 */
 		key1 = &znode->zbranch[n - 1].key;
-		if (key_ino(c, key1) == key_ino(c, key) &&
+		if (key_inum(c, key1) == key_inum(c, key) &&
 		    key_type(c, key1) == UBIFS_DATA_KEY &&
 		    key_block(c, key1) == key_block(c, key) - 1)
 			appending = 1;
@@ -2512,7 +2512,7 @@ struct ubifs_dent_node *ubifs_tnc_next_ent(struct ubifs_info *c,
 	 * this.
 	 */
 	dkey = &zbr->key;
-	if (key_ino(c, dkey) != key_ino(c, key) ||
+	if (key_inum(c, dkey) != key_inum(c, key) ||
 	    key_type(c, dkey) != type) {
 		err = -ENOENT;
 		goto out_free;
