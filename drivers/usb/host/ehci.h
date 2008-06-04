@@ -189,14 +189,10 @@ timer_action (struct ehci_hcd *ehci, enum ehci_timer_action action)
 			break;
 		// case TIMER_ASYNC_SHRINK:
 		default:
-			t = EHCI_SHRINK_JIFFIES;
+			t = DIV_ROUND_UP(EHCI_SHRINK_FRAMES * HZ, 1000);
 			break;
 		}
 		t += jiffies;
-		// all timings except IAA watchdog can be overridden.
-		// async queue SHRINK often precedes IAA.  while it's ready
-		// to go OFF neither can matter, and afterwards the IO
-		// watchdog stops unless there's still periodic traffic.
 		if (time_before_eq(t, ehci->watchdog.expires)
 				&& timer_pending (&ehci->watchdog))
 			return;
