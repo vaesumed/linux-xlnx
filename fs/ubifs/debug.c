@@ -793,19 +793,21 @@ void dbg_dump_index(struct ubifs_info *c)
 }
 
 /*
- * dbg_check_dir - check directory inode size.
+ * dbg_check_dir - check directory inode size and link count.
  * @c: UBIFS file-system description object
  * @dir: the directory to calculate size for
  * @size: the result is returned here
  *
- * This function makes sure that directory size is correct. Returns zero
- * in case of success and a negative error code in case of failure.
+ * This function makes sure that directory size and link count are correct.
+ * Returns zero in case of success and a negative error code in case of
+ * failure.
  *
  * Note, it is good idea to make sure the @dir->i_mutex is locked before
  * calling this function.
  */
 int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 {
+	unsigned int nlink = 2;
 	union ubifs_key key;
 	struct ubifs_dent_node *dent, *pdent = NULL;
 	struct qstr nm = { .name = NULL };
@@ -832,18 +834,25 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
 		nm.name = dent->name;
 		nm.len = le16_to_cpu(dent->nlen);
 		size += CALC_DENT_SIZE(nm.len);
+		if (dent->type == UBIFS_ITYPE_DIR)
+			nlink += 1;
 		kfree(pdent);
 		pdent = dent;
 		key_read(c, &dent->key, &key);
 	}
-
 	kfree(pdent);
 
 	if (i_size_read(dir) != size) {
-		ubifs_err("bad directory dir %lu size %llu, "
-			  "calculated %llu", dir->i_ino,
+		ubifs_err("directory inode %lu has size %llu, "
+			  "but calculated size is %llu", dir->i_ino,
 			  (unsigned long long)i_size_read(dir),
 			  (unsigned long long)size);
+		dump_stack();
+		return -EINVAL;
+	}
+	if (dir->i_nlink != nlink) {
+		ubifs_err("directory inode %lu has nlink %u, but calculated "
+			  "nlink is %u", dir->i_ino, dir->i_nlink, nlink);
 		dump_stack();
 		return -EINVAL;
 	}
