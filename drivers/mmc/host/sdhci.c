@@ -15,7 +15,7 @@
 
 #include <linux/delay.h>
 #include <linux/highmem.h>
-#include <linux/pci.h>
+#include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
 
@@ -31,120 +31,6 @@
 	pr_debug(DRIVER_NAME " [%s()]: " f, __func__,## x)
 
 static unsigned int debug_quirks = 0;
-
-/*
- * Different quirks to handle when the hardware deviates from a strict
- * interpretation of the SDHCI specification.
- */
-
-/* Controller doesn't honor resets unless we touch the clock register */
-#define SDHCI_QUIRK_CLOCK_BEFORE_RESET			(1<<0)
-/* Controller has bad caps bits, but really supports DMA */
-#define SDHCI_QUIRK_FORCE_DMA				(1<<1)
-/* Controller doesn't like to be reset when there is no card inserted. */
-#define SDHCI_QUIRK_NO_CARD_NO_RESET			(1<<2)
-/* Controller doesn't like clearing the power reg before a change */
-#define SDHCI_QUIRK_SINGLE_POWER_WRITE			(1<<3)
-/* Controller has flaky internal state so reset it on each ios change */
-#define SDHCI_QUIRK_RESET_CMD_DATA_ON_IOS		(1<<4)
-/* Controller has an unusable DMA engine */
-#define SDHCI_QUIRK_BROKEN_DMA				(1<<5)
-/* Controller can only DMA from 32-bit aligned addresses */
-#define SDHCI_QUIRK_32BIT_DMA_ADDR			(1<<6)
-/* Controller can only DMA chunk sizes that are a multiple of 32 bits */
-#define SDHCI_QUIRK_32BIT_DMA_SIZE			(1<<7)
-/* Controller needs to be reset after each request to stay stable */
-#define SDHCI_QUIRK_RESET_AFTER_REQUEST			(1<<8)
-
-static const struct pci_device_id pci_ids[] __devinitdata = {
-	{
-		.vendor		= PCI_VENDOR_ID_RICOH,
-		.device		= PCI_DEVICE_ID_RICOH_R5C822,
-		.subvendor	= PCI_VENDOR_ID_IBM,
-		.subdevice	= PCI_ANY_ID,
-		.driver_data	= SDHCI_QUIRK_CLOCK_BEFORE_RESET |
-				  SDHCI_QUIRK_FORCE_DMA,
-	},
-
-	{
-		.vendor		= PCI_VENDOR_ID_RICOH,
-		.device		= PCI_DEVICE_ID_RICOH_R5C822,
-		.subvendor	= PCI_VENDOR_ID_SAMSUNG,
-		.subdevice	= PCI_ANY_ID,
-		.driver_data	= SDHCI_QUIRK_FORCE_DMA |
-				  SDHCI_QUIRK_NO_CARD_NO_RESET,
-	},
-
-	{
-		.vendor		= PCI_VENDOR_ID_RICOH,
-		.device		= PCI_DEVICE_ID_RICOH_R5C822,
-		.subvendor	= PCI_ANY_ID,
-		.subdevice	= PCI_ANY_ID,
-		.driver_data	= SDHCI_QUIRK_FORCE_DMA,
-	},
-
-	{
-		.vendor		= PCI_VENDOR_ID_TI,
-		.device		= PCI_DEVICE_ID_TI_XX21_XX11_SD,
-		.subvendor	= PCI_ANY_ID,
-		.subdevice	= PCI_ANY_ID,
-		.driver_data	= SDHCI_QUIRK_FORCE_DMA,
-	},
-
-	{
-		.vendor		= PCI_VENDOR_ID_ENE,
-		.device		= PCI_DEVICE_ID_ENE_CB712_SD,
-		.subvendor	= PCI_ANY_ID,
-		.subdevice	= PCI_ANY_ID,
-		.driver_data	= SDHCI_QUIRK_SINGLE_POWER_WRITE |
-				  SDHCI_QUIRK_BROKEN_DMA,
-	},
-
-	{
-		.vendor		= PCI_VENDOR_ID_ENE,
-		.device		= PCI_DEVICE_ID_ENE_CB712_SD_2,
-		.subvendor	= PCI_ANY_ID,
-		.subdevice	= PCI_ANY_ID,
-		.driver_data	= SDHCI_QUIRK_SINGLE_POWER_WRITE |
-				  SDHCI_QUIRK_BROKEN_DMA,
-	},
-
-	{
-		.vendor         = PCI_VENDOR_ID_ENE,
-		.device         = PCI_DEVICE_ID_ENE_CB714_SD,
-		.subvendor      = PCI_ANY_ID,
-		.subdevice      = PCI_ANY_ID,
-		.driver_data    = SDHCI_QUIRK_SINGLE_POWER_WRITE |
-				  SDHCI_QUIRK_RESET_CMD_DATA_ON_IOS,
-	},
-
-	{
-		.vendor         = PCI_VENDOR_ID_ENE,
-		.device         = PCI_DEVICE_ID_ENE_CB714_SD_2,
-		.subvendor      = PCI_ANY_ID,
-		.subdevice      = PCI_ANY_ID,
-		.driver_data    = SDHCI_QUIRK_SINGLE_POWER_WRITE |
-				  SDHCI_QUIRK_RESET_CMD_DATA_ON_IOS,
-	},
-
-	{
-		.vendor         = PCI_VENDOR_ID_JMICRON,
-		.device         = PCI_DEVICE_ID_JMICRON_JMB38X_SD,
-		.subvendor      = PCI_ANY_ID,
-		.subdevice      = PCI_ANY_ID,
-		.driver_data    = SDHCI_QUIRK_32BIT_DMA_ADDR |
-				  SDHCI_QUIRK_32BIT_DMA_SIZE |
-				  SDHCI_QUIRK_RESET_AFTER_REQUEST,
-	},
-
-	{	/* Generic SD host controller */
-		PCI_DEVICE_CLASS((PCI_CLASS_SYSTEM_SDHCI << 8), 0xFFFF00)
-	},
-
-	{ /* end: all zeroes */ },
-};
-
-MODULE_DEVICE_TABLE(pci, pci_ids);
 
 static void sdhci_prepare_data(struct sdhci_host *, struct mmc_data *);
 static void sdhci_finish_data(struct sdhci_host *);
@@ -200,7 +86,7 @@ static void sdhci_reset(struct sdhci_host *host, u8 mask)
 {
 	unsigned long timeout;
 
-	if (host->chip->quirks & SDHCI_QUIRK_NO_CARD_NO_RESET) {
+	if (host->quirks & SDHCI_QUIRK_NO_CARD_NO_RESET) {
 		if (!(readl(host->ioaddr + SDHCI_PRESENT_STATE) &
 			SDHCI_CARD_PRESENT))
 			return;
@@ -481,7 +367,7 @@ static void sdhci_prepare_data(struct sdhci_host *host, struct mmc_data *data)
 		host->flags |= SDHCI_REQ_USE_DMA;
 
 	if (unlikely((host->flags & SDHCI_REQ_USE_DMA) &&
-		(host->chip->quirks & SDHCI_QUIRK_32BIT_DMA_SIZE) &&
+		(host->quirks & SDHCI_QUIRK_32BIT_DMA_SIZE) &&
 		((data->blksz * data->blocks) & 0x3))) {
 		DBG("Reverting to PIO because of transfer size (%d)\n",
 			data->blksz * data->blocks);
@@ -493,20 +379,17 @@ static void sdhci_prepare_data(struct sdhci_host *host, struct mmc_data *data)
 	 * translation to device address space.
 	 */
 	if (unlikely((host->flags & SDHCI_REQ_USE_DMA) &&
-		(host->chip->quirks & SDHCI_QUIRK_32BIT_DMA_ADDR) &&
+		(host->quirks & SDHCI_QUIRK_32BIT_DMA_ADDR) &&
 		(data->sg->offset & 0x3))) {
 		DBG("Reverting to PIO because of bad alignment\n");
 		host->flags &= ~SDHCI_REQ_USE_DMA;
 	}
 
 	if (host->flags & SDHCI_REQ_USE_DMA) {
-		int count;
+		u32 addr;
 
-		count = pci_map_sg(host->chip->pdev, data->sg, data->sg_len,
-			(data->flags & MMC_DATA_READ)?PCI_DMA_FROMDEVICE:PCI_DMA_TODEVICE);
-		BUG_ON(count != 1);
-
-		writel(sg_dma_address(data->sg), host->ioaddr + SDHCI_DMA_ADDRESS);
+		addr = host->ops->map_sg(host, data);
+		writel(addr, host->ioaddr + SDHCI_DMA_ADDRESS);
 	} else {
 		host->cur_sg = data->sg;
 		host->num_sg = data->sg_len;
@@ -545,33 +428,26 @@ static void sdhci_set_transfer_mode(struct sdhci_host *host,
 static void sdhci_finish_data(struct sdhci_host *host)
 {
 	struct mmc_data *data;
-	u16 blocks;
 
 	BUG_ON(!host->data);
 
 	data = host->data;
 	host->data = NULL;
 
-	if (host->flags & SDHCI_REQ_USE_DMA) {
-		pci_unmap_sg(host->chip->pdev, data->sg, data->sg_len,
-			(data->flags & MMC_DATA_READ)?PCI_DMA_FROMDEVICE:PCI_DMA_TODEVICE);
-	}
+	if (host->flags & SDHCI_REQ_USE_DMA)
+		host->ops->unmap_sg(host, data);
 
 	/*
-	 * Controller doesn't count down when in single block mode.
+	 * The specification states that the block count register must
+	 * be updated, but it does not specify at what point in the
+	 * data flow. That makes the register entirely useless to read
+	 * back so we have to assume that nothing made it to the card
+	 * in the event of an error.
 	 */
-	if (data->blocks == 1)
-		blocks = (data->error == 0) ? 0 : 1;
+	if (data->error)
+		data->bytes_xfered = 0;
 	else
-		blocks = readw(host->ioaddr + SDHCI_BLOCK_COUNT);
-	data->bytes_xfered = data->blksz * (data->blocks - blocks);
-
-	if (!data->error && blocks) {
-		printk(KERN_ERR "%s: Controller signalled completion even "
-			"though there were blocks left.\n",
-			mmc_hostname(host->mmc));
-		data->error = -EIO;
-	}
+		data->bytes_xfered = data->blksz * data->blocks;
 
 	if (data->stop) {
 		/*
@@ -753,7 +629,7 @@ static void sdhci_set_power(struct sdhci_host *host, unsigned short power)
 	 * Spec says that we should clear the power reg before setting
 	 * a new value. Some controllers don't seem to like this though.
 	 */
-	if (!(host->chip->quirks & SDHCI_QUIRK_SINGLE_POWER_WRITE))
+	if (!(host->quirks & SDHCI_QUIRK_SINGLE_POWER_WRITE))
 		writeb(0, host->ioaddr + SDHCI_POWER_CONTROL);
 
 	pwr = SDHCI_POWER_ON;
@@ -803,7 +679,8 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	host->mrq = mrq;
 
-	if (!(readl(host->ioaddr + SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)) {
+	if (!(readl(host->ioaddr + SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)
+		|| (host->flags & SDHCI_DEVICE_DEAD)) {
 		host->mrq->cmd->error = -ENOMEDIUM;
 		tasklet_schedule(&host->finish_tasklet);
 	} else
@@ -822,6 +699,9 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	host = mmc_priv(mmc);
 
 	spin_lock_irqsave(&host->lock, flags);
+
+	if (host->flags & SDHCI_DEVICE_DEAD)
+		goto out;
 
 	/*
 	 * Reset the chip on each power off.
@@ -858,9 +738,10 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	 * signalling timeout and CRC errors even on CMD0. Resetting
 	 * it on each ios seems to solve the problem.
 	 */
-	if(host->chip->quirks & SDHCI_QUIRK_RESET_CMD_DATA_ON_IOS)
+	if(host->quirks & SDHCI_QUIRK_RESET_CMD_DATA_ON_IOS)
 		sdhci_reset(host, SDHCI_RESET_CMD | SDHCI_RESET_DATA);
 
+out:
 	mmiowb();
 	spin_unlock_irqrestore(&host->lock, flags);
 }
@@ -875,7 +756,10 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 
 	spin_lock_irqsave(&host->lock, flags);
 
-	present = readl(host->ioaddr + SDHCI_PRESENT_STATE);
+	if (host->flags & SDHCI_DEVICE_DEAD)
+		present = 0;
+	else
+		present = readl(host->ioaddr + SDHCI_PRESENT_STATE);
 
 	spin_unlock_irqrestore(&host->lock, flags);
 
@@ -892,6 +776,9 @@ static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 
 	spin_lock_irqsave(&host->lock, flags);
 
+	if (host->flags & SDHCI_DEVICE_DEAD)
+		goto out;
+
 	ier = readl(host->ioaddr + SDHCI_INT_ENABLE);
 
 	ier &= ~SDHCI_INT_CARD_INT;
@@ -901,6 +788,7 @@ static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 	writel(ier, host->ioaddr + SDHCI_INT_ENABLE);
 	writel(ier, host->ioaddr + SDHCI_SIGNAL_ENABLE);
 
+out:
 	mmiowb();
 
 	spin_unlock_irqrestore(&host->lock, flags);
@@ -966,13 +854,14 @@ static void sdhci_tasklet_finish(unsigned long param)
 	 * The controller needs a reset of internal state machines
 	 * upon error conditions.
 	 */
-	if (mrq->cmd->error ||
-		(mrq->data && (mrq->data->error ||
-		(mrq->data->stop && mrq->data->stop->error))) ||
-		(host->chip->quirks & SDHCI_QUIRK_RESET_AFTER_REQUEST)) {
+	if (!(host->flags & SDHCI_DEVICE_DEAD) &&
+		(mrq->cmd->error ||
+		 (mrq->data && (mrq->data->error ||
+		  (mrq->data->stop && mrq->data->stop->error))) ||
+		   (host->quirks & SDHCI_QUIRK_RESET_AFTER_REQUEST))) {
 
 		/* Some controllers need this kick or reset won't work here */
-		if (host->chip->quirks & SDHCI_QUIRK_CLOCK_BEFORE_RESET) {
+		if (host->quirks & SDHCI_QUIRK_CLOCK_BEFORE_RESET) {
 			unsigned int clock;
 
 			/* This is to force an update */
@@ -1204,165 +1093,90 @@ out:
 
 #ifdef CONFIG_PM
 
-static int sdhci_suspend (struct pci_dev *pdev, pm_message_t state)
+int sdhci_suspend_host(struct sdhci_host *host, pm_message_t state)
 {
-	struct sdhci_chip *chip;
-	int i, ret;
+	int ret;
 
-	chip = pci_get_drvdata(pdev);
-	if (!chip)
-		return 0;
-
-	DBG("Suspending...\n");
-
-	for (i = 0;i < chip->num_slots;i++) {
-		if (!chip->hosts[i])
-			continue;
-		ret = mmc_suspend_host(chip->hosts[i]->mmc, state);
-		if (ret) {
-			for (i--;i >= 0;i--)
-				mmc_resume_host(chip->hosts[i]->mmc);
-			return ret;
-		}
-	}
-
-	pci_save_state(pdev);
-	pci_enable_wake(pdev, pci_choose_state(pdev, state), 0);
-
-	for (i = 0;i < chip->num_slots;i++) {
-		if (!chip->hosts[i])
-			continue;
-		free_irq(chip->hosts[i]->irq, chip->hosts[i]);
-	}
-
-	pci_disable_device(pdev);
-	pci_set_power_state(pdev, pci_choose_state(pdev, state));
-
-	return 0;
-}
-
-static int sdhci_resume (struct pci_dev *pdev)
-{
-	struct sdhci_chip *chip;
-	int i, ret;
-
-	chip = pci_get_drvdata(pdev);
-	if (!chip)
-		return 0;
-
-	DBG("Resuming...\n");
-
-	pci_set_power_state(pdev, PCI_D0);
-	pci_restore_state(pdev);
-	ret = pci_enable_device(pdev);
+	ret = mmc_suspend_host(host->mmc, state);
 	if (ret)
 		return ret;
 
-	for (i = 0;i < chip->num_slots;i++) {
-		if (!chip->hosts[i])
-			continue;
-		if (chip->hosts[i]->flags & SDHCI_USE_DMA)
-			pci_set_master(pdev);
-		ret = request_irq(chip->hosts[i]->irq, sdhci_irq,
-			IRQF_SHARED, mmc_hostname(chip->hosts[i]->mmc),
-			chip->hosts[i]);
-		if (ret)
-			return ret;
-		sdhci_init(chip->hosts[i]);
-		mmiowb();
-		ret = mmc_resume_host(chip->hosts[i]->mmc);
-		if (ret)
-			return ret;
-	}
+	free_irq(host->irq, host);
 
 	return 0;
 }
 
-#else /* CONFIG_PM */
+EXPORT_SYMBOL_GPL(sdhci_suspend_host);
 
-#define sdhci_suspend NULL
-#define sdhci_resume NULL
+int sdhci_resume_host(struct sdhci_host *host)
+{
+	int ret;
+
+	if (host->flags & SDHCI_USE_DMA) {
+		if (host->ops->enable_dma)
+			host->ops->enable_dma(host);
+	}
+
+	ret = request_irq(host->irq, sdhci_irq, IRQF_SHARED,
+			  mmc_hostname(host->mmc), host);
+	if (ret)
+		return ret;
+
+	sdhci_init(host);
+	mmiowb();
+
+	ret = mmc_resume_host(host->mmc);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+EXPORT_SYMBOL_GPL(sdhci_resume_host);
 
 #endif /* CONFIG_PM */
 
 /*****************************************************************************\
  *                                                                           *
- * Device probing/removal                                                    *
+ * Device allocation/registration                                            *
  *                                                                           *
 \*****************************************************************************/
 
-static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
+struct sdhci_host *sdhci_alloc_host(struct device *dev,
+	size_t priv_size)
 {
-	int ret;
-	unsigned int version;
-	struct sdhci_chip *chip;
 	struct mmc_host *mmc;
 	struct sdhci_host *host;
 
-	u8 first_bar;
-	unsigned int caps;
+	WARN_ON(dev == NULL);
 
-	chip = pci_get_drvdata(pdev);
-	BUG_ON(!chip);
-
-	ret = pci_read_config_byte(pdev, PCI_SLOT_INFO, &first_bar);
-	if (ret)
-		return ret;
-
-	first_bar &= PCI_SLOT_INFO_FIRST_BAR_MASK;
-
-	if (first_bar > 5) {
-		printk(KERN_ERR DRIVER_NAME ": Invalid first BAR. Aborting.\n");
-		return -ENODEV;
-	}
-
-	if (!(pci_resource_flags(pdev, first_bar + slot) & IORESOURCE_MEM)) {
-		printk(KERN_ERR DRIVER_NAME ": BAR is not iomem. Aborting.\n");
-		return -ENODEV;
-	}
-
-	if (pci_resource_len(pdev, first_bar + slot) != 0x100) {
-		printk(KERN_ERR DRIVER_NAME ": Invalid iomem size. "
-			"You may experience problems.\n");
-	}
-
-	if ((pdev->class & 0x0000FF) == PCI_SDHCI_IFVENDOR) {
-		printk(KERN_ERR DRIVER_NAME ": Vendor specific interface. Aborting.\n");
-		return -ENODEV;
-	}
-
-	if ((pdev->class & 0x0000FF) > PCI_SDHCI_IFVENDOR) {
-		printk(KERN_ERR DRIVER_NAME ": Unknown interface. Aborting.\n");
-		return -ENODEV;
-	}
-
-	mmc = mmc_alloc_host(sizeof(struct sdhci_host), &pdev->dev);
+	mmc = mmc_alloc_host(sizeof(struct sdhci_host) + priv_size, dev);
 	if (!mmc)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	host = mmc_priv(mmc);
 	host->mmc = mmc;
 
-	host->chip = chip;
-	chip->hosts[slot] = host;
+	return host;
+}
 
-	host->bar = first_bar + slot;
+EXPORT_SYMBOL_GPL(sdhci_alloc_host);
 
-	host->addr = pci_resource_start(pdev, host->bar);
-	host->irq = pdev->irq;
+int sdhci_add_host(struct sdhci_host *host)
+{
+	struct mmc_host *mmc;
+	unsigned int caps;
+	unsigned int version;
+	int ret;
 
-	DBG("slot %d at 0x%08lx, irq %d\n", slot, host->addr, host->irq);
+	WARN_ON(host == NULL);
+	if (host == NULL)
+		return -EINVAL;
 
-	ret = pci_request_region(pdev, host->bar, mmc_hostname(mmc));
-	if (ret)
-		goto free;
+	mmc = host->mmc;
 
-	host->ioaddr = ioremap_nocache(host->addr,
-		pci_resource_len(pdev, host->bar));
-	if (!host->ioaddr) {
-		ret = -ENOMEM;
-		goto release;
-	}
+	if (debug_quirks)
+		host->quirks = debug_quirks;
 
 	sdhci_reset(host, SDHCI_RESET_ALL);
 
@@ -1376,46 +1190,40 @@ static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
 
 	caps = readl(host->ioaddr + SDHCI_CAPABILITIES);
 
-	if (chip->quirks & SDHCI_QUIRK_FORCE_DMA)
+	if (host->quirks & SDHCI_QUIRK_FORCE_DMA)
 		host->flags |= SDHCI_USE_DMA;
 	else if (!(caps & SDHCI_CAN_DO_DMA))
 		DBG("Controller doesn't have DMA capability\n");
 	else
 		host->flags |= SDHCI_USE_DMA;
 
-	if ((chip->quirks & SDHCI_QUIRK_BROKEN_DMA) &&
+	if ((host->quirks & SDHCI_QUIRK_BROKEN_DMA) &&
 		(host->flags & SDHCI_USE_DMA)) {
 		DBG("Disabling DMA as it is marked broken\n");
 		host->flags &= ~SDHCI_USE_DMA;
 	}
 
-	if (((pdev->class & 0x0000FF) != PCI_SDHCI_IFDMA) &&
-		(host->flags & SDHCI_USE_DMA)) {
-		printk(KERN_WARNING "%s: Will use DMA "
-			"mode even though HW doesn't fully "
-			"claim to support it.\n", mmc_hostname(mmc));
-	}
-
 	if (host->flags & SDHCI_USE_DMA) {
-		if (pci_set_dma_mask(pdev, DMA_32BIT_MASK)) {
-			printk(KERN_WARNING "%s: No suitable DMA available. "
-				"Falling back to PIO.\n", mmc_hostname(mmc));
-			host->flags &= ~SDHCI_USE_DMA;
+		if (host->ops->enable_dma) {
+			if (host->ops->enable_dma(host)) {
+				printk(KERN_WARNING "%s: No suitable DMA "
+					"available. Falling back to PIO.\n",
+					mmc_hostname(mmc));
+				host->flags &= ~SDHCI_USE_DMA;
+			}
 		}
 	}
 
-	if (host->flags & SDHCI_USE_DMA)
-		pci_set_master(pdev);
-	else /* XXX: Hack to get MMC layer to avoid highmem */
-		pdev->dma_mask = 0;
+	/* XXX: Hack to get MMC layer to avoid highmem */
+	if (!(host->flags & SDHCI_USE_DMA))
+		mmc_dev(host->mmc)->dma_mask = 0;
 
 	host->max_clk =
 		(caps & SDHCI_CLOCK_BASE_MASK) >> SDHCI_CLOCK_BASE_SHIFT;
 	if (host->max_clk == 0) {
 		printk(KERN_ERR "%s: Hardware doesn't specify base clock "
 			"frequency.\n", mmc_hostname(mmc));
-		ret = -ENODEV;
-		goto unmap;
+		return -ENODEV;
 	}
 	host->max_clk *= 1000000;
 
@@ -1424,8 +1232,7 @@ static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
 	if (host->timeout_clk == 0) {
 		printk(KERN_ERR "%s: Hardware doesn't specify timeout clock "
 			"frequency.\n", mmc_hostname(mmc));
-		ret = -ENODEV;
-		goto unmap;
+		return -ENODEV;
 	}
 	if (caps & SDHCI_TIMEOUT_CLK_UNIT)
 		host->timeout_clk *= 1000;
@@ -1436,7 +1243,7 @@ static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
 	mmc->ops = &sdhci_ops;
 	mmc->f_min = host->max_clk / 256;
 	mmc->f_max = host->max_clk;
-	mmc->caps = MMC_CAP_4_BIT_DATA | MMC_CAP_MULTIWRITE | MMC_CAP_SDIO_IRQ;
+	mmc->caps = MMC_CAP_4_BIT_DATA | MMC_CAP_SDIO_IRQ;
 
 	if (caps & SDHCI_CAN_DO_HISPD)
 		mmc->caps |= MMC_CAP_SD_HIGHSPEED;
@@ -1452,8 +1259,7 @@ static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
 	if (mmc->ocr_avail == 0) {
 		printk(KERN_ERR "%s: Hardware doesn't report any "
 			"support voltages.\n", mmc_hostname(mmc));
-		ret = -ENODEV;
-		goto unmap;
+		return -ENODEV;
 	}
 
 	spin_lock_init(&host->lock);
@@ -1523,7 +1329,7 @@ static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
 	host->led.default_trigger = mmc_hostname(mmc);
 	host->led.brightness_set = sdhci_led_control;
 
-	ret = led_classdev_register(&pdev->dev, &host->led);
+	ret = led_classdev_register(mmc_dev(mmc), &host->led);
 	if (ret)
 		goto reset;
 #endif
@@ -1532,8 +1338,8 @@ static int __devinit sdhci_probe_slot(struct pci_dev *pdev, int slot)
 
 	mmc_add_host(mmc);
 
-	printk(KERN_INFO "%s: SDHCI at 0x%08lx irq %d %s\n",
-		mmc_hostname(mmc), host->addr, host->irq,
+	printk(KERN_INFO "%s: SDHCI controller on %s [%s] using %s\n",
+		mmc_hostname(mmc), host->hw_name, mmc_dev(mmc)->bus_id,
 		(host->flags & SDHCI_USE_DMA)?"DMA":"PIO");
 
 	return 0;
@@ -1546,35 +1352,40 @@ reset:
 untasklet:
 	tasklet_kill(&host->card_tasklet);
 	tasklet_kill(&host->finish_tasklet);
-unmap:
-	iounmap(host->ioaddr);
-release:
-	pci_release_region(pdev, host->bar);
-free:
-	mmc_free_host(mmc);
 
 	return ret;
 }
 
-static void sdhci_remove_slot(struct pci_dev *pdev, int slot)
+EXPORT_SYMBOL_GPL(sdhci_add_host);
+
+void sdhci_remove_host(struct sdhci_host *host, int dead)
 {
-	struct sdhci_chip *chip;
-	struct mmc_host *mmc;
-	struct sdhci_host *host;
+	unsigned long flags;
 
-	chip = pci_get_drvdata(pdev);
-	host = chip->hosts[slot];
-	mmc = host->mmc;
+	if (dead) {
+		spin_lock_irqsave(&host->lock, flags);
 
-	chip->hosts[slot] = NULL;
+		host->flags |= SDHCI_DEVICE_DEAD;
 
-	mmc_remove_host(mmc);
+		if (host->mrq) {
+			printk(KERN_ERR "%s: Controller removed during "
+				" transfer!\n", mmc_hostname(host->mmc));
+
+			host->mrq->cmd->error = -ENOMEDIUM;
+			tasklet_schedule(&host->finish_tasklet);
+		}
+
+		spin_unlock_irqrestore(&host->lock, flags);
+	}
+
+	mmc_remove_host(host->mmc);
 
 #ifdef CONFIG_LEDS_CLASS
 	led_classdev_unregister(&host->led);
 #endif
 
-	sdhci_reset(host, SDHCI_RESET_ALL);
+	if (!dead)
+		sdhci_reset(host, SDHCI_RESET_ALL);
 
 	free_irq(host->irq, host);
 
@@ -1582,107 +1393,16 @@ static void sdhci_remove_slot(struct pci_dev *pdev, int slot)
 
 	tasklet_kill(&host->card_tasklet);
 	tasklet_kill(&host->finish_tasklet);
-
-	iounmap(host->ioaddr);
-
-	pci_release_region(pdev, host->bar);
-
-	mmc_free_host(mmc);
 }
 
-static int __devinit sdhci_probe(struct pci_dev *pdev,
-	const struct pci_device_id *ent)
+EXPORT_SYMBOL_GPL(sdhci_remove_host);
+
+void sdhci_free_host(struct sdhci_host *host)
 {
-	int ret, i;
-	u8 slots, rev;
-	struct sdhci_chip *chip;
-
-	BUG_ON(pdev == NULL);
-	BUG_ON(ent == NULL);
-
-	pci_read_config_byte(pdev, PCI_CLASS_REVISION, &rev);
-
-	printk(KERN_INFO DRIVER_NAME
-		": SDHCI controller found at %s [%04x:%04x] (rev %x)\n",
-		pci_name(pdev), (int)pdev->vendor, (int)pdev->device,
-		(int)rev);
-
-	ret = pci_read_config_byte(pdev, PCI_SLOT_INFO, &slots);
-	if (ret)
-		return ret;
-
-	slots = PCI_SLOT_INFO_SLOTS(slots) + 1;
-	DBG("found %d slot(s)\n", slots);
-	if (slots == 0)
-		return -ENODEV;
-
-	ret = pci_enable_device(pdev);
-	if (ret)
-		return ret;
-
-	chip = kzalloc(sizeof(struct sdhci_chip) +
-		sizeof(struct sdhci_host*) * slots, GFP_KERNEL);
-	if (!chip) {
-		ret = -ENOMEM;
-		goto err;
-	}
-
-	chip->pdev = pdev;
-	chip->quirks = ent->driver_data;
-
-	if (debug_quirks)
-		chip->quirks = debug_quirks;
-
-	chip->num_slots = slots;
-	pci_set_drvdata(pdev, chip);
-
-	for (i = 0;i < slots;i++) {
-		ret = sdhci_probe_slot(pdev, i);
-		if (ret) {
-			for (i--;i >= 0;i--)
-				sdhci_remove_slot(pdev, i);
-			goto free;
-		}
-	}
-
-	return 0;
-
-free:
-	pci_set_drvdata(pdev, NULL);
-	kfree(chip);
-
-err:
-	pci_disable_device(pdev);
-	return ret;
+	mmc_free_host(host->mmc);
 }
 
-static void __devexit sdhci_remove(struct pci_dev *pdev)
-{
-	int i;
-	struct sdhci_chip *chip;
-
-	chip = pci_get_drvdata(pdev);
-
-	if (chip) {
-		for (i = 0;i < chip->num_slots;i++)
-			sdhci_remove_slot(pdev, i);
-
-		pci_set_drvdata(pdev, NULL);
-
-		kfree(chip);
-	}
-
-	pci_disable_device(pdev);
-}
-
-static struct pci_driver sdhci_driver = {
-	.name = 	DRIVER_NAME,
-	.id_table =	pci_ids,
-	.probe = 	sdhci_probe,
-	.remove =	__devexit_p(sdhci_remove),
-	.suspend =	sdhci_suspend,
-	.resume	=	sdhci_resume,
-};
+EXPORT_SYMBOL_GPL(sdhci_free_host);
 
 /*****************************************************************************\
  *                                                                           *
@@ -1696,14 +1416,11 @@ static int __init sdhci_drv_init(void)
 		": Secure Digital Host Controller Interface driver\n");
 	printk(KERN_INFO DRIVER_NAME ": Copyright(c) Pierre Ossman\n");
 
-	return pci_register_driver(&sdhci_driver);
+	return 0;
 }
 
 static void __exit sdhci_drv_exit(void)
 {
-	DBG("Exiting\n");
-
-	pci_unregister_driver(&sdhci_driver);
 }
 
 module_init(sdhci_drv_init);
@@ -1712,7 +1429,7 @@ module_exit(sdhci_drv_exit);
 module_param(debug_quirks, uint, 0444);
 
 MODULE_AUTHOR("Pierre Ossman <drzeus@drzeus.cx>");
-MODULE_DESCRIPTION("Secure Digital Host Controller Interface driver");
+MODULE_DESCRIPTION("Secure Digital Host Controller Interface core driver");
 MODULE_LICENSE("GPL");
 
 MODULE_PARM_DESC(debug_quirks, "Force certain quirks.");
