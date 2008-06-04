@@ -419,9 +419,11 @@ static int kaweth_download_firmware(struct kaweth_device *kaweth,
 	dbg("High: %i, Low:%i", kaweth->firmware_buf[3],
 		   kaweth->firmware_buf[2]);
 
+#if 0
 	dbg("Downloading firmware at %p to kaweth device at %p",
 	    data,
 	    kaweth);
+#endif
 	dbg("Firmware length: %d", data_len);
 
 	return kaweth_control(kaweth,
