@@ -797,7 +797,7 @@ static int at91_mci_get_ro(struct mmc_host *mmc)
 	struct at91mci_host *host = mmc_priv(mmc);
 
 	if (host->board->wp_pin) {
-		read_only = gpio_get_value(host->board->wp_pin);
+		read_only = !!gpio_get_value(host->board->wp_pin);
 		printk(KERN_WARNING "%s: card is %s\n", mmc_hostname(mmc),
 				(read_only ? "read-only" : "read-write") );
 	}
