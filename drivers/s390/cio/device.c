@@ -1051,8 +1051,11 @@ io_subchannel_recog(struct ccw_device *cdev, struct subchannel *sch)
 	init_timer(&priv->timer);
 
 	/* Set an initial name for the device. */
-	snprintf (cdev->dev.bus_id, BUS_ID_SIZE, "0.%x.%04x",
-		  sch->schid.ssid, sch->schib.pmcw.dev);
+	if (cio_is_console(sch->schid))
+		cdev->dev.init_name = cio_get_console_cdev_name(sch);
+	else
+		dev_set_name(&cdev->dev, "0.%x.%04x",
+			     sch->schid.ssid, sch->schib.pmcw.dev);
 
 	/* Increase counter of devices currently in recognition. */
 	atomic_inc(&ccw_device_init_count);
@@ -1287,6 +1290,7 @@ io_subchannel_shutdown(struct subchannel *sch)
 
 #ifdef CONFIG_CCW_CONSOLE
 static struct ccw_device console_cdev;
+static char console_cdev_name[10] = "0.x.xxxx";
 static struct ccw_device_private console_private;
 static int console_cdev_in_use;
 
@@ -1354,6 +1358,14 @@ ccw_device_probe_console(void)
 	}
 	console_cdev.online = 1;
 	return &console_cdev;
+}
+
+
+const char *cio_get_console_cdev_name(struct subchannel *sch)
+{
+	snprintf(console_cdev_name, 10, "0.%x.%04x",
+		 sch->schid.ssid, sch->schib.pmcw.dev);
+	return (const char *)console_cdev_name;
 }
 #endif
 
