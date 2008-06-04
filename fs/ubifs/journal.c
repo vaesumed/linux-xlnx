@@ -657,7 +657,7 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 	const struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_data_node *data;
 
-	dbg_jnl("ino %lu, blk %u, len %d, key %s", key_ino(c, key),
+	dbg_jnl("ino %lu, blk %u, len %d, key %s", key_inum(c, key),
 		key_block(c, key), len, DBGKEY(key));
 	ubifs_assert(len <= UBIFS_BLOCK_SIZE);
 
@@ -691,7 +691,7 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 	err = write_node(c, DATAHD, data, dlen, &lnum, &offs);
 	if (!err)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf,
-					  key_ino(c, key));
+					  key_inum(c, key));
 	release_head(c, DATAHD);
 	if (err)
 		goto out_ro;
