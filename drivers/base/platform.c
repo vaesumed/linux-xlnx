@@ -24,7 +24,7 @@
 				 driver))
 
 struct device platform_bus = {
-	.bus_id		= "platform",
+	.init_name	= "platform",
 };
 EXPORT_SYMBOL_GPL(platform_bus);
 
@@ -246,16 +246,15 @@ int platform_device_add(struct platform_device *pdev)
 	pdev->dev.bus = &platform_bus_type;
 
 	if (pdev->id != -1)
-		snprintf(pdev->dev.bus_id, BUS_ID_SIZE, "%s.%d", pdev->name,
-			 pdev->id);
+		dev_set_name(&pdev->dev, "%s.%d", pdev->name, pdev->id);
 	else
-		strlcpy(pdev->dev.bus_id, pdev->name, BUS_ID_SIZE);
+		dev_set_name(&pdev->dev, pdev->name);
 
 	for (i = 0; i < pdev->num_resources; i++) {
 		struct resource *p, *r = &pdev->resource[i];
 
 		if (r->name == NULL)
-			r->name = pdev->dev.bus_id;
+			r->name = dev_name(&pdev->dev);
 
 		p = r->parent;
 		if (!p) {
@@ -266,16 +265,15 @@ int platform_device_add(struct platform_device *pdev)
 		}
 
 		if (p && insert_resource(p, r)) {
-			printk(KERN_ERR
-			       "%s: failed to claim resource %d\n",
-			       pdev->dev.bus_id, i);
+			printk(KERN_ERR "%s: failed to claim resource %d\n",
+			       dev_name(&pdev->dev), i);
 			ret = -EBUSY;
 			goto failed;
 		}
 	}
 
 	pr_debug("Registering platform device '%s'. Parent at %s\n",
-		 pdev->dev.bus_id, pdev->dev.parent->bus_id);
+		 dev_name(&pdev->dev), dev_name(pdev->dev.parent));
 
 	ret = device_add(&pdev->dev);
 	if (ret == 0)
@@ -557,7 +555,7 @@ static int platform_match(struct device *dev, struct device_driver *drv)
 	struct platform_device *pdev;
 
 	pdev = container_of(dev, struct platform_device, dev);
-	return (strncmp(pdev->name, drv->name, BUS_ID_SIZE) == 0);
+	return (strcmp(pdev->name, drv->name) == 0);
 }
 
 static int platform_suspend(struct device *dev, pm_message_t mesg)
