@@ -836,7 +836,7 @@ static int dbg_orphan_check(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	ino_t inum;
 	int err;
 
-	inum = key_ino(c, &zbr->key);
+	inum = key_inum(c, &zbr->key);
 	if (inum != ci->last_ino) {
 		/* Lowest node type is the inode node, so it comes first */
 		if (key_type(c, &zbr->key) != UBIFS_INO_KEY)
