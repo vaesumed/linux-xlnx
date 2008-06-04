@@ -462,8 +462,6 @@ int ubifs_tnc_read_node(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 	int err, type = key_type(c, key);
 	struct ubifs_wbuf *wbuf;
 
-	ubifs_assert(!zbr->leaf);
-
 	/*
 	 * 'zbr' has to point to on-flash node. The node may sit in a bud and
 	 * may even be in a write buffer, so we have to take care about this.
