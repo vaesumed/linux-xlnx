@@ -344,7 +344,8 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 		available -= subtract_lebs * c->dark_wm;
 	}
 
-	return available;
+	/* The calculations are rough and may end up with a negative number */
+	return available > 0 ? available : 0;
 }
 
 /**
