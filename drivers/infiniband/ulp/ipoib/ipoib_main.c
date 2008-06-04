@@ -30,8 +30,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id: ipoib_main.c 1377 2004-12-23 19:57:12Z roland $
  */
 
 #include "ipoib.h"
@@ -1303,6 +1301,12 @@ static int __init ipoib_init_module(void)
 #ifdef CONFIG_INFINIBAND_IPOIB_CM
 	ipoib_max_conn_qp = min(ipoib_max_conn_qp, IPOIB_CM_MAX_CONN_QP);
 #endif
+
+	/*
+	 * When copying small received packets, we only copy from the
+	 * linear data part of the SKB, so we rely on this condition.
+	 */
+	BUILD_BUG_ON(IPOIB_CM_COPYBREAK > IPOIB_CM_HEAD_SIZE);
 
 	ret = ipoib_register_debugfs();
 	if (ret)
