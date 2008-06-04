@@ -30,6 +30,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
