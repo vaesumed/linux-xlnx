@@ -707,8 +707,8 @@ int ubifs_gc_end_commit(struct ubifs_info *c)
 			err = ubifs_leb_unmap(c, idx_gc->lnum);
 			if (err)
 				goto out;
-			err = ubifs_change_one_lp(c, idx_gc->lnum, NC, NC, 0,
-					LPROPS_TAKEN, -1);
+			err = ubifs_change_one_lp(c, idx_gc->lnum, LPROPS_NC,
+					  LPROPS_NC, 0, LPROPS_TAKEN, -1);
 			if (err)
 				goto out;
 			list_del(&idx_gc->list);

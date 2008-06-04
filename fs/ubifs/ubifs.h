@@ -106,7 +106,7 @@
 #define DATAHD 2
 
 /* 'No change' value for 'ubifs_change_lp()' */
-#define NC 0x80000001
+#define LPROPS_NC 0x80000001
 
 /*
  * There is no notion of truncation key because truncation nodes do not exist
