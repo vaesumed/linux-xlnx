@@ -1349,7 +1349,7 @@ void ubifs_destroy_size_tree(struct ubifs_info *c)
 int ubifs_recover_size_accum(struct ubifs_info *c, union ubifs_key *key,
 			     int deletion, loff_t new_size)
 {
-	ino_t inum = key_ino(c, key);
+	ino_t inum = key_inum(c, key);
 	struct size_entry *e;
 	int err;
 
