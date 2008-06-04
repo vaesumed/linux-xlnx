@@ -1054,7 +1054,7 @@ static int mount_ubifs(struct ubifs_info *c)
 
 	err = ubifs_read_master(c);
 	if (err)
-		goto out_stop;
+		goto out_master;
 
 	if ((c->mst_node->flags & cpu_to_le32(UBIFS_MST_DIRTY)) != 0) {
 		ubifs_msg("recovery needed");
@@ -1223,7 +1223,6 @@ out_lpt:
 out_master:
 	kfree(c->mst_node);
 	kfree(c->rcvrd_mst_node);
-out_stop:
 	if (c->bgt)
 		kthread_stop(c->bgt);
 out_wbufs:
