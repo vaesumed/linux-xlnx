@@ -752,7 +752,7 @@ int ubi_eba_write_leb_st(struct ubi_device *ubi, struct ubi_volume *vol,
 		/* If this is the last LEB @len may be unaligned */
 		len = ALIGN(data_size, ubi->min_io_size);
 	else
-		ubi_assert(len % ubi->min_io_size == 0);
+		ubi_assert(!(len & (ubi->min_io_size - 1)));
 
 	vid_hdr = ubi_zalloc_vid_hdr(ubi, GFP_NOFS);
 	if (!vid_hdr)
@@ -1232,21 +1232,4 @@ out_free:
 		kfree(ubi->volumes[i]->eba_tbl);
 	}
 	return err;
-}
-
-/**
- * ubi_eba_close - close EBA unit.
- * @ubi: UBI device description object
- */
-void ubi_eba_close(const struct ubi_device *ubi)
-{
-	int i, num_volumes = ubi->vtbl_slots + UBI_INT_VOL_COUNT;
-
-	dbg_eba("close EBA unit");
-
-	for (i = 0; i < num_volumes; i++) {
-		if (!ubi->volumes[i])
-			continue;
-		kfree(ubi->volumes[i]->eba_tbl);
-	}
 }
