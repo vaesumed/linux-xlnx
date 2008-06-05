@@ -246,6 +246,7 @@ struct v4l2_capability
 #define V4L2_CAP_SLICED_VBI_OUTPUT	0x00000080  /* Is a sliced VBI output device */
 #define V4L2_CAP_RDS_CAPTURE		0x00000100  /* RDS data capture */
 #define V4L2_CAP_VIDEO_OUTPUT_OVERLAY	0x00000200  /* Can do video output overlay */
+#define V4L2_CAP_HW_FREQ_SEEK		0x00000400  /* Can do hardware frequency seek  */
 
 #define V4L2_CAP_TUNER			0x00010000  /* has a tuner */
 #define V4L2_CAP_AUDIO			0x00020000  /* has audio support */
@@ -865,9 +866,9 @@ struct v4l2_querymenu
 #define V4L2_CID_HFLIP			(V4L2_CID_BASE+20)
 #define V4L2_CID_VFLIP			(V4L2_CID_BASE+21)
 
-/* Deprecated, use V4L2_CID_PAN_RESET and V4L2_CID_TILT_RESET */
-#define V4L2_CID_HCENTER_DEPRECATED	(V4L2_CID_BASE+22)
-#define V4L2_CID_VCENTER_DEPRECATED	(V4L2_CID_BASE+23)
+/* Deprecated; use V4L2_CID_PAN_RESET and V4L2_CID_TILT_RESET */
+#define V4L2_CID_HCENTER		(V4L2_CID_BASE+22)
+#define V4L2_CID_VCENTER		(V4L2_CID_BASE+23)
 
 #define V4L2_CID_POWER_LINE_FREQUENCY	(V4L2_CID_BASE+24)
 enum v4l2_power_line_frequency {
@@ -1156,6 +1157,14 @@ struct v4l2_frequency
 	__u32		      reserved[8];
 };
 
+struct v4l2_hw_freq_seek {
+	__u32		      tuner;
+	enum v4l2_tuner_type  type;
+	__u32		      seek_upward;
+	__u32		      wrap_around;
+	__u32		      reserved[8];
+};
+
 /*
  *	A U D I O
  */
@@ -1441,6 +1450,7 @@ struct v4l2_chip_ident {
 
 #define VIDIOC_G_CHIP_IDENT     _IOWR ('V', 81, struct v4l2_chip_ident)
 #endif
+#define VIDIOC_S_HW_FREQ_SEEK	_IOW  ('V', 82, struct v4l2_hw_freq_seek)
 
 #ifdef __OLD_VIDIOC_
 /* for compatibility, will go away some day */

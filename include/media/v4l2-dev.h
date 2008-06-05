@@ -40,7 +40,6 @@
 #define VFL_TYPE_VTX		3
 
 /*  Video standard functions  */
-extern unsigned int v4l2_video_std_fps(struct v4l2_standard *vs);
 extern char *v4l2_norm_to_name(v4l2_std_id id);
 extern int v4l2_video_std_construct(struct v4l2_standard *vs,
 				    int id, char *name);
@@ -119,74 +118,76 @@ struct video_device
 				    enum v4l2_priority p);
 
 	/* VIDIOC_ENUM_FMT handlers */
-	int (*vidioc_enum_fmt_cap)         (struct file *file, void *fh,
+	int (*vidioc_enum_fmt_vid_cap)     (struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
-	int (*vidioc_enum_fmt_overlay)     (struct file *file, void *fh,
+	int (*vidioc_enum_fmt_vid_overlay) (struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
-	int (*vidioc_enum_fmt_vbi)         (struct file *file, void *fh,
+	int (*vidioc_enum_fmt_vid_out)     (struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
-	int (*vidioc_enum_fmt_vbi_capture) (struct file *file, void *fh,
+#if 1
+	/* deprecated, will be removed in 2.6.28 */
+	int (*vidioc_enum_fmt_vbi_cap)     (struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
-	int (*vidioc_enum_fmt_video_output)(struct file *file, void *fh,
-					    struct v4l2_fmtdesc *f);
-	int (*vidioc_enum_fmt_output_overlay) (struct file *file, void *fh,
-					    struct v4l2_fmtdesc *f);
-	int (*vidioc_enum_fmt_vbi_output)  (struct file *file, void *fh,
-					    struct v4l2_fmtdesc *f);
+#endif
 	int (*vidioc_enum_fmt_type_private)(struct file *file, void *fh,
 					    struct v4l2_fmtdesc *f);
 
 	/* VIDIOC_G_FMT handlers */
-	int (*vidioc_g_fmt_cap)        (struct file *file, void *fh,
+	int (*vidioc_g_fmt_vid_cap)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_g_fmt_overlay)    (struct file *file, void *fh,
+	int (*vidioc_g_fmt_vid_overlay)(struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_g_fmt_vbi)        (struct file *file, void *fh,
+	int (*vidioc_g_fmt_vid_out)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_g_fmt_vbi_output) (struct file *file, void *fh,
+	int (*vidioc_g_fmt_vid_out_overlay)(struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_g_fmt_vbi_capture)(struct file *file, void *fh,
+	int (*vidioc_g_fmt_vbi_cap)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_g_fmt_video_output)(struct file *file, void *fh,
+	int (*vidioc_g_fmt_vbi_out)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_g_fmt_output_overlay) (struct file *file, void *fh,
+	int (*vidioc_g_fmt_sliced_vbi_cap)(struct file *file, void *fh,
+					struct v4l2_format *f);
+	int (*vidioc_g_fmt_sliced_vbi_out)(struct file *file, void *fh,
 					struct v4l2_format *f);
 	int (*vidioc_g_fmt_type_private)(struct file *file, void *fh,
 					struct v4l2_format *f);
 
 	/* VIDIOC_S_FMT handlers */
-	int (*vidioc_s_fmt_cap)        (struct file *file, void *fh,
+	int (*vidioc_s_fmt_vid_cap)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-
-	int (*vidioc_s_fmt_overlay)    (struct file *file, void *fh,
+	int (*vidioc_s_fmt_vid_overlay)(struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_s_fmt_vbi)        (struct file *file, void *fh,
+	int (*vidioc_s_fmt_vid_out)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_s_fmt_vbi_output) (struct file *file, void *fh,
+	int (*vidioc_s_fmt_vid_out_overlay)(struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_s_fmt_vbi_capture)(struct file *file, void *fh,
+	int (*vidioc_s_fmt_vbi_cap)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_s_fmt_video_output)(struct file *file, void *fh,
+	int (*vidioc_s_fmt_vbi_out)    (struct file *file, void *fh,
 					struct v4l2_format *f);
-	int (*vidioc_s_fmt_output_overlay) (struct file *file, void *fh,
+	int (*vidioc_s_fmt_sliced_vbi_cap)(struct file *file, void *fh,
+					struct v4l2_format *f);
+	int (*vidioc_s_fmt_sliced_vbi_out)(struct file *file, void *fh,
 					struct v4l2_format *f);
 	int (*vidioc_s_fmt_type_private)(struct file *file, void *fh,
 					struct v4l2_format *f);
 
 	/* VIDIOC_TRY_FMT handlers */
-	int (*vidioc_try_fmt_cap)        (struct file *file, void *fh,
+	int (*vidioc_try_fmt_vid_cap)    (struct file *file, void *fh,
 					  struct v4l2_format *f);
-	int (*vidioc_try_fmt_overlay)    (struct file *file, void *fh,
+	int (*vidioc_try_fmt_vid_overlay)(struct file *file, void *fh,
 					  struct v4l2_format *f);
-	int (*vidioc_try_fmt_vbi)        (struct file *file, void *fh,
+	int (*vidioc_try_fmt_vid_out)    (struct file *file, void *fh,
 					  struct v4l2_format *f);
-	int (*vidioc_try_fmt_vbi_output) (struct file *file, void *fh,
+	int (*vidioc_try_fmt_vid_out_overlay)(struct file *file, void *fh,
 					  struct v4l2_format *f);
-	int (*vidioc_try_fmt_vbi_capture)(struct file *file, void *fh,
+	int (*vidioc_try_fmt_vbi_cap)    (struct file *file, void *fh,
 					  struct v4l2_format *f);
-	int (*vidioc_try_fmt_video_output)(struct file *file, void *fh,
+	int (*vidioc_try_fmt_vbi_out)    (struct file *file, void *fh,
 					  struct v4l2_format *f);
-	int (*vidioc_try_fmt_output_overlay)(struct file *file, void *fh,
+	int (*vidioc_try_fmt_sliced_vbi_cap)(struct file *file, void *fh,
+					  struct v4l2_format *f);
+	int (*vidioc_try_fmt_sliced_vbi_out)(struct file *file, void *fh,
 					  struct v4l2_format *f);
 	int (*vidioc_try_fmt_type_private)(struct file *file, void *fh,
 					  struct v4l2_format *f);
@@ -213,8 +214,9 @@ struct video_device
 	int (*vidioc_streamoff)(struct file *file, void *fh, enum v4l2_buf_type i);
 
 		/* Standard handling
-			G_STD and ENUMSTD are handled by videodev.c
+			ENUMSTD is handled by videodev.c
 		 */
+	int (*vidioc_g_std) (struct file *file, void *fh, v4l2_std_id *norm);
 	int (*vidioc_s_std) (struct file *file, void *fh, v4l2_std_id *norm);
 	int (*vidioc_querystd) (struct file *file, void *fh, v4l2_std_id *a);
 
@@ -225,7 +227,7 @@ struct video_device
 	int (*vidioc_s_input)   (struct file *file, void *fh, unsigned int i);
 
 		/* Output handling */
-	int (*vidioc_enumoutput) (struct file *file, void *fh,
+	int (*vidioc_enum_output) (struct file *file, void *fh,
 				  struct v4l2_output *a);
 	int (*vidioc_g_output)   (struct file *file, void *fh, unsigned int *i);
 	int (*vidioc_s_output)   (struct file *file, void *fh, unsigned int i);
@@ -307,6 +309,8 @@ struct video_device
 	/* Log status ioctl */
 	int (*vidioc_log_status)       (struct file *file, void *fh);
 
+	int (*vidioc_s_hw_freq_seek)   (struct file *file, void *fh,
+					struct v4l2_hw_freq_seek *a);
 
 	/* Debugging ioctls */
 #ifdef CONFIG_VIDEO_ADV_DEBUG
