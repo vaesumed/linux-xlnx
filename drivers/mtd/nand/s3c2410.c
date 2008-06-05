@@ -1,26 +1,10 @@
 /* linux/drivers/mtd/nand/s3c2410.c
  *
- * Copyright (c) 2004,2005 Simtec Electronics
- *	http://www.simtec.co.uk/products/SWLINUX/
+ * Copyright © 2004-2008 Simtec Electronics
+ *	http://armlinux.simtec.co.uk/
  *	Ben Dooks <ben@simtec.co.uk>
  *
- * Samsung S3C2410/S3C240 NAND driver
- *
- * Changelog:
- *	21-Sep-2004  BJD  Initial version
- *	23-Sep-2004  BJD  Multiple device support
- *	28-Sep-2004  BJD  Fixed ECC placement for Hardware mode
- *	12-Oct-2004  BJD  Fixed errors in use of platform data
- *	18-Feb-2005  BJD  Fix sparse errors
- *	14-Mar-2005  BJD  Applied tglx's code reduction patch
- *	02-May-2005  BJD  Fixed s3c2440 support
- *	02-May-2005  BJD  Reduced hwcontrol decode
- *	20-Jun-2005  BJD  Updated s3c2440 support, fixed timing bug
- *	08-Jul-2005  BJD  Fix OOPS when no platform data supplied
- *	20-Oct-2005  BJD  Fix timing calculation bug
- *	14-Jan-2006  BJD  Allow clock to be stopped when idle
- *
- * $Id: s3c2410.c,v 1.23 2006/04/01 18:06:29 bjd Exp $
+ * Samsung S3C2410/S3C2440/S3C2412 NAND driver
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -691,7 +675,8 @@ static void s3c2410_nand_update_chip(struct s3c2410_nand_info *info,
 {
 	struct nand_chip *chip = &nmtd->chip;
 
-	printk("%s: chip %p: %d\n", __func__, chip, chip->page_shift);
+	dev_dbg(info->device, "chip %p => page shift %d\n",
+		chip, chip->page_shift);
 
 	if (hardware_ecc) {
 		/* change the behaviour depending on wether we are using
