@@ -1002,13 +1002,14 @@ out:
  * This function returns %0 in the case of success, and a negative error code in
  * case of failure.
  */
-int ubifs_jnl_truncate(struct ubifs_info *c, ino_t inum,
+int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		       loff_t old_size, loff_t new_size)
 {
 	union ubifs_key key, to_key;
 	struct ubifs_trun_node *trun;
 	struct ubifs_data_node *uninitialized_var(dn);
 	int err, dlen, len, lnum, offs, bit, sz;
+	ino_t inum = inode->i_ino;
 	unsigned int blk;
 
 	dbg_jnl("ino %lu, size %lld -> %lld", inum, old_size, new_size);

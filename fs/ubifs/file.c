@@ -538,7 +538,7 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 				}
 			}
 		}
-		err = ubifs_jnl_truncate(c, inode->i_ino, old_size, new_size);
+		err = ubifs_jnl_truncate(c, inode, old_size, new_size);
 		if (err)
 			return err;
 	}
