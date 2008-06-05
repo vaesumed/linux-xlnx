@@ -1001,7 +1001,8 @@ out:
  *
  * When the size of a file decreases due to truncation, a truncation node is
  * written, the journal tree is updated, and the last data block is re-written
- * if it has been affected.
+ * if it has been affected. The inode is also updated in order to synchronize
+ * the new inode size.
  *
  * This function returns %0 in the case of success, and a negative error code in
  * case of failure.
@@ -1010,6 +1011,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		       loff_t old_size, loff_t new_size)
 {
 	union ubifs_key key, to_key;
+	struct ubifs_ino_node *ino;
 	struct ubifs_trun_node *trun;
 	struct ubifs_data_node *uninitialized_var(dn);
 	int err, dlen, len, lnum, offs, bit, sz;
@@ -1017,12 +1019,16 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	unsigned int blk;
 
 	dbg_jnl("ino %lu, size %lld -> %lld", inum, old_size, new_size);
+	ubifs_assert(!ubifs_inode(inode)->data_len);
+	ubifs_assert(S_ISREG(inode->i_mode));
 
-	sz = UBIFS_TRUN_NODE_SZ + UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
-	trun = kmalloc(sz, GFP_NOFS);
-	if (!trun)
+	sz = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ;
+	sz += UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
+	ino = kmalloc(sz, GFP_NOFS);
+	if (!ino)
 		return -ENOMEM;
 
+	trun = (void *)ino + UBIFS_INO_NODE_SZ;
 	trun->ch.node_type = UBIFS_TRUN_NODE;
 	trun->inum = cpu_to_le32(inum);
 	trun->old_size = cpu_to_le64(old_size);
@@ -1030,7 +1036,6 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	zero_trun_node_unused(trun);
 
 	dlen = new_size & (UBIFS_BLOCK_SIZE - 1);
-
 	if (dlen) {
 		/* Get last data block so it can be truncated */
 		dn = (void *)trun + UBIFS_TRUN_NODE_SZ;
@@ -1061,21 +1066,20 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		}
 	}
 
-	if (dlen)
-		len = UBIFS_TRUN_NODE_SZ + dlen;
-	else
-		len = UBIFS_TRUN_NODE_SZ;
-
 	/* Must make reservation before allocating sequence numbers */
+	len = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ;
+	if (dlen)
+		len += dlen;
 	err = make_reservation(c, BASEHD, len);
 	if (err)
 		goto out_free;
 
-	ubifs_prepare_node(c, trun, UBIFS_TRUN_NODE_SZ, 0);
+	pack_inode(c, ino, inode, 0, 0);
 	if (dlen)
-		ubifs_prepare_node(c, dn, dlen, 0);
+		ubifs_prep_grp_node(c, dn, dlen, 0);
+	ubifs_prep_grp_node(c, trun, UBIFS_TRUN_NODE_SZ, 1);
 
-	err = write_head(c, BASEHD, trun, len, &lnum, &offs, 0);
+	err = write_head(c, BASEHD, ino, len, &lnum, &offs, 0);
 	if (!err)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
 	release_head(c, BASEHD);
@@ -1083,23 +1087,26 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	if (dlen) {
-		offs += UBIFS_TRUN_NODE_SZ;
-		err = ubifs_tnc_add(c, &key, lnum, offs, dlen);
+		sz = offs + UBIFS_INO_NODE_SZ + UBIFS_TRUN_NODE_SZ;
+		err = ubifs_tnc_add(c, &key, lnum, sz, dlen);
 		if (err)
 			goto out_ro;
 	}
+
+	ino_key_init(c, &key, inum);
+	err = ubifs_tnc_add(c, &key, lnum, offs, UBIFS_INO_NODE_SZ);
+	if (err)
+		goto out_ro;
 
 	err = ubifs_add_dirt(c, lnum, UBIFS_TRUN_NODE_SZ);
 	if (err)
 		goto out_ro;
 
 	bit = new_size & (UBIFS_BLOCK_SIZE - 1);
-
 	blk = new_size / UBIFS_BLOCK_SIZE + (bit ? 1 : 0);
 	data_key_init(c, &key, inum, blk);
 
 	bit = old_size & (UBIFS_BLOCK_SIZE - 1);
-
 	blk = old_size / UBIFS_BLOCK_SIZE - (bit ? 0: 1);
 	data_key_init(c, &to_key, inum, blk);
 
@@ -1108,14 +1115,14 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
-	kfree(trun);
+	kfree(ino);
 	return 0;
 
 out_ro:
 	ubifs_ro_mode(c, err);
 	finish_reservation(c);
 out_free:
-	kfree(trun);
+	kfree(ino);
 	return err;
 }
 

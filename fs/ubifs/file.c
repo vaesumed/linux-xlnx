@@ -606,22 +606,22 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 		inode->i_mode = mode;
 	}
 
-	mark_inode_dirty_sync(inode);
-	ubifs_release_ino_dirty(c, inode, &req);
-
-	if (req.dirtied_page) {
+	if (truncation) {
 		/*
-		 * Truncation code does not make the reenacted page dirty, it
-		 * just changes it on journal level, so we have to release page
-		 * change budget.
+		 * Truncation synchronized the inode, so full budget has to be
+		 * released and the inode has to be marked as clean (@ui->dirty
+		 * has to be set to %0). Note, if we have budgeted for dirty
+		 * inode (@req.dirtied_page == 1), this budget is released as
+		 * well (because truncation code does not make the reenacted
+		 * page dirty, it just changes it on journal level).
 		 */
-		memset(&req, 0, sizeof(struct ubifs_budget_req));
-		req.dd_growth = c->page_budget;
-		ubifs_release_budget(c, &req);
+		ubifs_release_ino_clean(c, inode, &req);
+	} else {
+		mark_inode_dirty_sync(inode);
+		ubifs_release_ino_dirty(c, inode, &req);
+		if (IS_SYNC(inode))
+			err = write_inode_now(inode, 1);
 	}
-
-	if (IS_SYNC(inode))
-		err = write_inode_now(inode, 1);
 
 	return err;
 }
