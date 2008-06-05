@@ -245,6 +245,7 @@ config ATM_IDT77252_USE_SUNI
 
 config ATM_AMBASSADOR
 	tristate "Madge Ambassador (Collage PCI 155 Server)"
+	select FW_LOADER
 	depends on PCI && VIRT_TO_BUS
 	select BITREVERSE
 	help
