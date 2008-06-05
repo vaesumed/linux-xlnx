@@ -300,6 +300,7 @@ struct sctp_sock {
 
 	/* The default SACK delay timeout for new associations. */
 	__u32 sackdelay;
+	__u32 sackfreq;
 
 	/* Flags controlling Heartbeat, SACK delay, and Path MTU Discovery. */
 	__u32 param_flags;
@@ -946,6 +947,7 @@ struct sctp_transport {
 
 	/* SACK delay timeout */
 	unsigned long sackdelay;
+	__u32 sackfreq;
 
 	/* When was the last time (in jiffies) that we heard from this
 	 * transport?  We use this to pick new active and retran paths.
@@ -1553,6 +1555,7 @@ struct sctp_association {
 		 *             : SACK's are not delayed (see Section 6).
 		 */
 		__u8    sack_needed;     /* Do we need to sack the peer? */
+		__u32	sack_cnt;
 
 		/* These are capabilities which our peer advertised.  */
 		__u8	ecn_capable;	 /* Can peer do ECN? */
@@ -1662,6 +1665,7 @@ struct sctp_association {
 
 	/* SACK delay timeout */
 	unsigned long sackdelay;
+	__u32 sackfreq;
 
 
 	unsigned long timeouts[SCTP_NUM_TIMEOUT_TYPES];

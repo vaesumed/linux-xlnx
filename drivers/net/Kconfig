@@ -1670,7 +1670,7 @@ config SUNDANCE_MMIO
 
 config TLAN
 	tristate "TI ThunderLAN support"
-	depends on NET_PCI && (PCI || EISA) && !64BIT
+	depends on NET_PCI && (PCI || EISA)
 	---help---
 	  If you have a PCI Ethernet network card based on the ThunderLAN chip
 	  which is supported by this driver, say Y and read the
@@ -2227,6 +2227,7 @@ config VIA_VELOCITY
 config TIGON3
 	tristate "Broadcom Tigon3 support"
 	depends on PCI
+	select PHYLIB
 	help
 	  This driver supports Broadcom Tigon3 based gigabit Ethernet cards.
 
@@ -2406,8 +2407,9 @@ config CHELSIO_T1_NAPI
 
 config CHELSIO_T3
 	tristate "Chelsio Communications T3 10Gb Ethernet support"
-	depends on PCI
+	depends on PCI && INET
 	select FW_LOADER
+	select INET_LRO
 	help
 	  This driver supports Chelsio T3-based gigabit and 10Gb Ethernet
 	  adapters.

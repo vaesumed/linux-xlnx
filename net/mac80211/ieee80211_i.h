@@ -82,7 +82,7 @@ struct ieee80211_sta_bss {
 	u16 capability; /* host byte order */
 	enum ieee80211_band band;
 	int freq;
-	int rssi, signal, noise;
+	int signal, noise, qual;
 	u8 *wpa_ie;
 	size_t wpa_ie_len;
 	u8 *rsn_ie;
@@ -610,8 +610,8 @@ struct ieee80211_local {
 	struct sta_info *sta_hash[STA_HASH_SIZE];
 	struct timer_list sta_cleanup;
 
-	unsigned long state[NUM_TX_DATA_QUEUES_AMPDU];
-	struct ieee80211_tx_stored_packet pending_packet[NUM_TX_DATA_QUEUES_AMPDU];
+	unsigned long state[IEEE80211_MAX_QUEUES + IEEE80211_MAX_AMPDU_QUEUES];
+	struct ieee80211_tx_stored_packet pending_packet[IEEE80211_MAX_QUEUES + IEEE80211_MAX_AMPDU_QUEUES];
 	struct tasklet_struct tx_pending_tasklet;
 
 	/* number of interfaces with corresponding IFF_ flags */
@@ -705,8 +705,6 @@ struct ieee80211_local {
 	unsigned int rx_expand_skb_head2;
 	unsigned int rx_handlers_fragments;
 	unsigned int tx_status_drop;
-	unsigned int wme_rx_queue[NUM_RX_DATA_QUEUES];
-	unsigned int wme_tx_queue[NUM_RX_DATA_QUEUES];
 #define I802_DEBUG_INC(c) (c)++
 #else /* CONFIG_MAC80211_DEBUG_COUNTERS */
 #define I802_DEBUG_INC(c) do { } while (0)
@@ -764,8 +762,6 @@ struct ieee80211_local {
 			struct dentry *rx_expand_skb_head2;
 			struct dentry *rx_handlers_fragments;
 			struct dentry *tx_status_drop;
-			struct dentry *wme_tx_queue;
-			struct dentry *wme_rx_queue;
 #endif
 			struct dentry *dot11ACKFailureCount;
 			struct dentry *dot11RTSFailureCount;
@@ -919,9 +915,9 @@ ieee80211_rx_result ieee80211_sta_rx_scan(
 void ieee80211_rx_bss_list_init(struct net_device *dev);
 void ieee80211_rx_bss_list_deinit(struct net_device *dev);
 int ieee80211_sta_set_extra_ie(struct net_device *dev, char *ie, size_t len);
-struct sta_info * ieee80211_ibss_add_sta(struct net_device *dev,
-					 struct sk_buff *skb, u8 *bssid,
-					 u8 *addr);
+struct sta_info *ieee80211_ibss_add_sta(struct net_device *dev,
+					struct sk_buff *skb, u8 *bssid,
+					u8 *addr);
 int ieee80211_sta_deauthenticate(struct net_device *dev, u16 reason);
 int ieee80211_sta_disassociate(struct net_device *dev, u16 reason);
 void ieee80211_bss_info_change_notify(struct ieee80211_sub_if_data *sdata,
@@ -940,7 +936,6 @@ void ieee80211_send_delba(struct net_device *dev, const u8 *da, u16 tid,
 
 void ieee80211_sta_stop_rx_ba_session(struct net_device *dev, u8 *da,
 				u16 tid, u16 initiator, u16 reason);
-void sta_rx_agg_session_timer_expired(unsigned long data);
 void sta_addba_resp_timer_expired(unsigned long data);
 void ieee80211_sta_tear_down_BA_sessions(struct net_device *dev, u8 *addr);
 u64 ieee80211_sta_get_rates(struct ieee80211_local *local,
