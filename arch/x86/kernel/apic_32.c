@@ -29,6 +29,7 @@
 #include <linux/module.h>
 #include <linux/dmi.h>
 
+#include <asm/io_apic.h>
 #include <asm/atomic.h>
 #include <asm/smp.h>
 #include <asm/mtrr.h>
@@ -552,7 +553,9 @@ void __init setup_boot_APIC_clock(void)
 		} else {
 			printk(KERN_WARNING "APIC timer registered as dummy,"
 			       " due to nmi_watchdog=1!\n");
+#ifdef CONFIG_X86_IO_APIC
 			timer_through_8259 = 1;
+#endif
 		}
 	}
 
