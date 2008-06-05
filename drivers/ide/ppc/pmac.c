@@ -1144,8 +1144,6 @@ pmac_ide_macio_attach(struct macio_dev *mdev, const struct of_device_id *match)
 	base = ioremap(macio_resource_start(mdev, 0), 0x400);
 	regbase = (unsigned long) base;
 
-	hwif->dev = &mdev->bus->pdev->dev;
-
 	pmif->mdev = mdev;
 	pmif->node = mdev->ofdev.node;
 	pmif->regbase = regbase;
@@ -1167,7 +1165,8 @@ pmac_ide_macio_attach(struct macio_dev *mdev, const struct of_device_id *match)
 	memset(&hw, 0, sizeof(hw));
 	pmac_ide_init_ports(&hw, pmif->regbase);
 	hw.irq = irq;
-	hw.dev = &mdev->ofdev.dev;
+	hw.dev = &mdev->bus->pdev->dev;
+	hw.parent = &mdev->ofdev.dev;
 
 	rc = pmac_ide_setup_device(pmif, hwif, &hw);
 	if (rc != 0) {
@@ -1267,7 +1266,6 @@ pmac_ide_pci_attach(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto out_free_pmif;
 	}
 
-	hwif->dev = &pdev->dev;
 	pmif->mdev = NULL;
 	pmif->node = np;
 
