@@ -225,7 +225,7 @@ static int __devinit at91_i2c_probe(struct platform_device *pdev)
 	}
 	sprintf(adapter->name, "AT91");
 	adapter->algo = &at91_algorithm;
-	adapter->class = I2C_CLASS_HWMON;
+	adapter->class = I2C_CLASS_HWMON | I2C_CLASS_SPD;
 	adapter->dev.parent = &pdev->dev;
 	/* adapter->id == 0 ... only one TWI controller for now */
 
