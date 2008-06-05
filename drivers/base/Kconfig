@@ -34,6 +34,39 @@ config FW_LOADER
 	  require userspace firmware loading support, but a module built outside
 	  the kernel tree does.
 
+config BUILTIN_FIRMWARE
+	string "Firmware blobs to build into the kernel binary"
+	depends on FW_LOADER
+	help
+	  This option allows firmware to be built into the kernel, for the
+	  cases where the user either cannot or doesn't want to provide it from
+	  userspace at runtime (for example, when the firmware in question is
+	  required for accessing the boot device, and the user doesn't want to
+	  use an initrd).
+
+	  This option is a string, and takes the (space-separated) names of the
+	  firmware files -- the same names which appear in MODULE_FIRMWARE()
+	  and request_firmware() in the source. These files should exist under
+	  the directory specified by the BUILTIN_FIRMWARE_DIR option, which is
+	  by default the firmware/ subdirectory of the kernel source tree.
+
+	  So, for example, you might set CONFIG_BUILTIN_FIRMWARE="usb8388.bin",
+	  copy the usb8388.bin file into the firmware/ directory, and build the
+	  kernel. Then any request_firmware("usb8388.bin") will be
+	  satisfied internally without needing to call out to userspace.
+
+config BUILTIN_FIRMWARE_DIR
+	string "Firmware blobs root directory"
+	depends on BUILTIN_FIRMWARE != ""
+	default "firmware"
+	help
+	  This option controls the directory in which the kernel build system
+	  looks for the firmware files listed in the BUILTIN_FIRMWARE option.
+	  The default is the firmware/ directory in the kernel source tree,
+	  but by changing this option you can point it elsewhere, such as
+	  the /lib/firmware/ directory or another separate directory
+	  containing firmware files.
+
 config DEBUG_DRIVER
 	bool "Driver Core verbose debug messages"
 	depends on DEBUG_KERNEL
