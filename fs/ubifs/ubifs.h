@@ -322,6 +322,10 @@ struct ubifs_gced_idx_leb {
  * @xattr: non-zero if this is an extended attribute inode
  * @budgeted: non-zero if the inode has been budgeted (used for debugging)
  * @budg_mutex: serializes inode budgeting and write-back
+ * @synced_i_size: synchronized size of inode, i.e. the value of inode size
+ *                 currently stored on the flash; used only for regular file
+ *                 inodes
+ * @size_lock: protects synced_i_size
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
@@ -353,6 +357,8 @@ struct ubifs_inode {
 	unsigned int budgeted:1;
 #endif
 	struct mutex budg_mutex;
+	loff_t synced_i_size;
+	spinlock_t size_lock;
 	int flags;
 	int compr_type;
 	int data_len;

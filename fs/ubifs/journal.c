@@ -451,11 +451,12 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 {
 	int data_len = 0;
 	struct ubifs_inode *ui = ubifs_inode(inode);
+	loff_t size = cpu_to_le64(i_size_read(inode));
 
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
 	ino->creat_sqnum = cpu_to_le64(ui->creat_sqnum);
-	ino->size  = cpu_to_le64(i_size_read(inode));
+	ino->size = size;
 	ino->nlink = cpu_to_le32(inode->i_nlink);
 	ino->atime_sec  = cpu_to_le64(inode->i_atime.tv_sec);
 	ino->atime_nsec = cpu_to_le32(inode->i_atime.tv_nsec);
@@ -472,6 +473,9 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
 	ino->xattr_names = cpu_to_le32(ui->xattr_names);
 	ino->data_len    = cpu_to_le32(ui->data_len);
+	spin_lock(&ui->size_lock);
+	ui->synced_i_size = size;
+	spin_unlock(&ui->size_lock);
 	zero_ino_node_unused(ino);
 
 	/*
