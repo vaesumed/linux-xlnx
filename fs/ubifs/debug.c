@@ -792,6 +792,35 @@ void dbg_dump_index(struct ubifs_info *c)
 	dbg_walk_index(c, NULL, dump_znode, NULL);
 }
 
+/**
+ * dbg_check_inode_dirty - check inode dirty flag.
+ * @ui: UBIFS inode description object
+ *
+ * If current inode size is not equivalent to the inode size which has been
+ * written to the media last time, the inode must be dirty. This function
+ * checks that and returns 0 if it is true, and %-EINVAL if not.
+ */
+int dbg_check_inode_dirty(struct ubifs_inode *ui)
+{
+	int err = 0;
+	loff_t i_size, synced_i_size;
+
+	mutex_lock(&ui->budg_mutex);
+	spin_lock(&ui->size_lock);
+	i_size = i_size_read(&ui->vfs_inode);
+	synced_i_size = ui->synced_i_size;
+	if (i_size != synced_i_size && !ui->dirty) {
+		ubifs_err("inode size is %lld, synchronized inode size is %lld,"
+			  " but inode is not dirty", i_size, synced_i_size);
+		dump_stack();
+		err = -EINVAL;
+	}
+	spin_unlock(&ui->size_lock);
+	mutex_unlock(&ui->budg_mutex);
+
+	return err;
+}
+
 /*
  * dbg_check_dir - check directory inode size and link count.
  * @c: UBIFS file-system description object
