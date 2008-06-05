@@ -451,17 +451,50 @@ static int do_writepage(struct page *page, int len)
 	return err;
 }
 
+/*
+ * When writing-back dirty inodes, VFS first writes-back pages belonging to the
+ * inode, then the inode itself. For UBIFS this may cause a problem. Consider a
+ * situation when a we have an inode with size 0, then a megabyte of data is
+ * appended to the inode, then write-back starts and flushes some amount of the
+ * dirty pages, the journal becomes full, commit happens and finishes, and then
+ * an unclean reboot happens. When the file system is mounted next time, the
+ * inode size would still be 0, but there would be many pages which are beyond
+ * the inode size, they would be indexed and consume flash space. Because the
+ * journal has been committed, the replay would not be able to detect this
+ * situation and correct the inode size. This means UBIFS would have to scan
+ * whold index and correct all inode sizes, which is long an unacceptible.
+ *
+ * To prevend situations like this, UBIFS writes pages back only if they are
+ * within last synchronized inode size, i.e. the the size which has been
+ * written to the flash media last time. Otherwise, UBIFS forces inode
+ * write-back, thus making sure the on-flash inode contains current inode size,
+ * and then keeps writing pages back.
+ */
 static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 {
 	struct inode *inode = page->mapping->host;
-	loff_t i_size =  i_size_read(inode);
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	loff_t i_size =  i_size_read(inode), synced_i_size;
 	pgoff_t end_index = i_size >> PAGE_CACHE_SHIFT;
-	int len;
+	int err, len = i_size & (PAGE_CACHE_SIZE - 1);
 	void *kaddr;
 
 	dbg_gen("ino %lu, pg %lu, pg flags %#lx",
 		inode->i_ino, page->index, page->flags);
 	ubifs_assert(PagePrivate(page));
+
+	err = dbg_check_inode_dirty(ui);
+	if (err < 0)
+		return err;
+
+	spin_lock(&ui->size_lock);
+	synced_i_size = ui->synced_i_size;
+	spin_unlock(&ui->size_lock);
+	if (end_index + len > synced_i_size) {
+		err = inode->i_sb->s_op->write_inode(inode, 1);
+		if (err < 0)
+			return err;
+	}
 
 	/* Is the page fully inside i_size? */
 	if (page->index < end_index)
