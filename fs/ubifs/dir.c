@@ -158,11 +158,11 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	ui = ubifs_inode(inode);
 	ui->flags = inherit_flags(dir, mode);
 	ubifs_set_inode_flags(inode);
-
 	if (S_ISREG(mode))
 		ui->compr_type = c->default_compr;
 	else
 		ui->compr_type = UBIFS_COMPR_NONE;
+	ui->synced_i_size = 0;
 
 	spin_lock(&c->cnt_lock);
 	/* Inode number overflow is currently not supported */

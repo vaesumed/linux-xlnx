@@ -135,8 +135,8 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	inode->i_mtime.tv_nsec = le32_to_cpu(ino->mtime_nsec);
 	inode->i_ctime.tv_sec  = (int64_t)le64_to_cpu(ino->ctime_sec);
 	inode->i_ctime.tv_nsec = le32_to_cpu(ino->ctime_nsec);
-	inode->i_mode  = le32_to_cpu(ino->mode);
-	inode->i_size  = le64_to_cpu(ino->size);
+	inode->i_mode = le32_to_cpu(ino->mode);
+	inode->i_size = ui->synced_i_size = le64_to_cpu(ino->size);
 
 	ui->data_len    = le32_to_cpu(ino->data_len);
 	ui->flags       = le32_to_cpu(ino->flags);
@@ -254,6 +254,7 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 	memset((void *)ui + sizeof(struct inode), 0,
 	       sizeof(struct ubifs_inode) - sizeof(struct inode));
 	mutex_init(&ui->budg_mutex);
+	spin_lock_init(&ui->size_lock);
 	return &ui->vfs_inode;
 };
 
@@ -1854,8 +1855,8 @@ static struct file_system_type ubifs_fs_type = {
  */
 static void inode_slab_ctor(struct kmem_cache *cachep, void *obj)
 {
-	struct ubifs_inode *inode = obj;
-	inode_init_once(&inode->vfs_inode);
+	struct ubifs_inode *ui = obj;
+	inode_init_once(&ui->vfs_inode);
 }
 
 static int __init ubifs_init(void)
