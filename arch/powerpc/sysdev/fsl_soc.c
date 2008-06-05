@@ -433,6 +433,7 @@ static struct i2c_driver_device i2c_devices[] __initdata = {
 	{"dallas,ds1340",  "ds1340"},
 	{"stm,m41t00",     "m41t00"},
 	{"dallas,ds1374",  "rtc-ds1374"},
+	{"cirrus,cs4270",  "cs4270"},
 };
 
 static int __init of_find_i2c_driver(struct device_node *node,
@@ -448,6 +449,10 @@ static int __init of_find_i2c_driver(struct device_node *node,
 			return -ENOMEM;
 		return 0;
 	}
+
+	pr_warning("fsl_soc.c: unrecognized i2c node %s\n",
+		(const char *) of_get_property(node, "compatible", NULL));
+
 	return -ENODEV;
 }
 
@@ -491,6 +496,8 @@ static int __init fsl_i2c_of_init(void)
 		struct resource r[2];
 		struct fsl_i2c_platform_data i2c_data;
 		const unsigned char *flags = NULL;
+		int idx;
+		const u32 *iprop;
 
 		memset(&r, 0, sizeof(r));
 		memset(&i2c_data, 0, sizeof(i2c_data));
@@ -501,7 +508,10 @@ static int __init fsl_i2c_of_init(void)
 
 		of_irq_to_resource(np, 0, &r[1]);
 
-		i2c_dev = platform_device_register_simple("fsl-i2c", i, r, 2);
+		iprop = of_get_property(np, "cell-index", NULL);
+		idx = iprop ? *iprop : i;
+
+		i2c_dev = platform_device_register_simple("fsl-i2c", idx, r, 2);
 		if (IS_ERR(i2c_dev)) {
 			ret = PTR_ERR(i2c_dev);
 			goto err;
@@ -523,7 +533,8 @@ static int __init fsl_i2c_of_init(void)
 		if (ret)
 			goto unreg;
 
-		of_register_i2c_devices(np, i++);
+		of_register_i2c_devices(np, idx);
+		i++;
 	}
 
 	return 0;
