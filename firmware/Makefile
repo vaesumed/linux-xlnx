@@ -40,6 +40,7 @@ fw-shipped-$(CONFIG_USB_TI_3410_FIRMWARE) += ti_3410.fw
 fw-shipped-$(CONFIG_USB_TI_5052_FIRMWARE) += ti_5052.fw
 fw-shipped-$(CONFIG_USB_SERIAL_WHITEHEAT_FIRMWARE) += whiteheat_loader.fw \
 		whiteheat.fw # whiteheat_loader_debug.fw
+fw-shipped-$(CONFIG_ATM_AMBASSADOR_FIRMWARE) += atmsar11.fw
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
