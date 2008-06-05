@@ -89,7 +89,7 @@ static int __devinit snd_es1688_legacy_create(struct snd_card *card,
 		irq[n] = snd_legacy_find_free_irq(possible_irqs);
 		if (irq[n] < 0) {
 			snd_printk(KERN_ERR "%s: unable to find a free IRQ\n",
-				dev->bus_id);
+				dev_name(dev));
 			return -EBUSY;
 		}
 	}
@@ -97,7 +97,7 @@ static int __devinit snd_es1688_legacy_create(struct snd_card *card,
 		dma8[n] = snd_legacy_find_free_dma(possible_dmas);
 		if (dma8[n] < 0) {
 			snd_printk(KERN_ERR "%s: unable to find a free DMA\n",
-				dev->bus_id);
+				dev_name(dev));
 			return -EBUSY;
 		}
 	}
@@ -148,7 +148,7 @@ static int __devinit snd_es1688_probe(struct device *dev, unsigned int n)
 	if (snd_opl3_create(card, chip->port, chip->port + 2,
 			OPL3_HW_OPL3, 0, &opl3) < 0)
 		printk(KERN_WARNING "%s: opl3 not detected at 0x%lx\n",
-			dev->bus_id, chip->port);
+			dev_name(dev), chip->port);
 	else {
 		error =	snd_opl3_hwdep_new(opl3, 0, 1, NULL);
 		if (error < 0)

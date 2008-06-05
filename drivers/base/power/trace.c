@@ -140,7 +140,7 @@ static unsigned int hash_string(unsigned int seed, const char *data, unsigned in
 
 void set_trace_device(struct device *dev)
 {
-	dev_hash_value = hash_string(DEVSEED, dev->bus_id, DEVHASH);
+	dev_hash_value = hash_string(DEVSEED, dev_name(dev), DEVHASH);
 }
 EXPORT_SYMBOL(set_trace_device);
 
@@ -192,9 +192,9 @@ static int show_dev_hash(unsigned int value)
 
 	while (entry != &dpm_active) {
 		struct device * dev = to_device(entry);
-		unsigned int hash = hash_string(DEVSEED, dev->bus_id, DEVHASH);
+		unsigned int hash = hash_string(DEVSEED, dev_name(dev), DEVHASH);
 		if (hash == value) {
-			printk("  hash matches device %s\n", dev->bus_id);
+			dev_info(dev, "hash matches\n");
 			match++;
 		}
 		entry = entry->prev;
