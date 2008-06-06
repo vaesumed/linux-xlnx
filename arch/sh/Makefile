@@ -41,6 +41,8 @@ cflags-$(CONFIG_CPU_SH5)		:= $(call cc-option,-m5-32media-nofpu,)
 cflags-$(CONFIG_CPU_BIG_ENDIAN)		+= -mb
 cflags-$(CONFIG_CPU_LITTLE_ENDIAN)	+= -ml
 
+cflags-y	+= $(call cc-option,-mno-fdpic)
+
 #
 # -Wa,-isa= tuning implies -Wa,-dsp for the versions of binutils that
 # support it, while -Wa,-dsp by itself limits the range of usable opcodes
@@ -119,6 +121,7 @@ machdir-$(CONFIG_SH_HIGHLANDER)			+= renesas/r7780rp
 machdir-$(CONFIG_SH_MIGOR)			+= renesas/migor
 machdir-$(CONFIG_SH_SDK7780)			+= renesas/sdk7780
 machdir-$(CONFIG_SH_X3PROTO)			+= renesas/x3proto
+machdir-$(CONFIG_SH_RSK7203)			+= renesas/rsk7203
 machdir-$(CONFIG_SH_SH4202_MICRODEV)		+= superh/microdev
 machdir-$(CONFIG_SH_LANDISK)			+= landisk
 machdir-$(CONFIG_SH_TITAN)			+= titan
