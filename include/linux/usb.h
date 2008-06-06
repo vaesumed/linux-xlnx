@@ -375,6 +375,7 @@ struct usb_tt;
  *	FIXME -- complete doc
  * @authenticated: Crypto authentication passed
  * @wusb: device is Wireless USB
+ * @delayed_reset: delayed reset is in progress, or not
  * @string_langid: language ID for strings
  * @product: iProduct string, if present (static)
  * @manufacturer: iManufacturer string, if present (static)
@@ -442,6 +443,7 @@ struct usb_device {
 	unsigned authorized:1;
  	unsigned authenticated:1;
 	unsigned wusb:1;
+	unsigned delayed_reset:1;
 	int string_langid;
 
 	/* static strings from the device */
@@ -499,6 +501,7 @@ extern int usb_lock_device_for_reset(struct usb_device *udev,
 extern int usb_reset_device(struct usb_device *dev);
 extern int usb_reset_composite_device(struct usb_device *dev,
 		struct usb_interface *iface);
+extern void usb_dev_reset_delayed(struct usb_device *usb_dev);
 
 extern struct usb_device *usb_find_device(u16 vendor_id, u16 product_id);
 
@@ -972,6 +975,8 @@ struct usbdrv_wrap {
  *	added to this driver by preventing the sysfs file from being created.
  * @supports_autosuspend: if set to 0, the USB core will not allow autosuspend
  *	for interfaces bound to this driver.
+ * @soft_unbind: if set to 1, the USB core will not kill URBs and disable
+ *	endpoints before calling the driver's disconnect method.
  *
  * USB interface drivers must provide a name, probe() and disconnect()
  * methods, and an id_table.  Other driver fields are optional.
@@ -1012,6 +1017,7 @@ struct usb_driver {
 	struct usbdrv_wrap drvwrap;
 	unsigned int no_dynamic_id:1;
 	unsigned int supports_autosuspend:1;
+	unsigned int soft_unbind:1;
 };
 #define	to_usb_driver(d) container_of(d, struct usb_driver, drvwrap.driver)
 
