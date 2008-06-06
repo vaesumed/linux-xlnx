@@ -886,6 +886,7 @@ struct iwl3945_priv {
 	struct work_struct report_work;
 	struct work_struct request_scan;
 	struct work_struct beacon_update;
+	struct work_struct set_monitor;
 
 	struct tasklet_struct irq_tasklet;
 
@@ -922,11 +923,6 @@ static inline int is_channel_valid(const struct iwl3945_channel_info *ch_info)
 	if (ch_info == NULL)
 		return 0;
 	return (ch_info->flags & EEPROM_CHANNEL_VALID) ? 1 : 0;
-}
-
-static inline int is_channel_narrow(const struct iwl3945_channel_info *ch_info)
-{
-	return (ch_info->flags & EEPROM_CHANNEL_NARROW) ? 1 : 0;
 }
 
 static inline int is_channel_radar(const struct iwl3945_channel_info *ch_info)

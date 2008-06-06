@@ -702,7 +702,7 @@ static int lbs_thread(void *data)
 
 		if (shouldsleep) {
 			lbs_deb_thread("sleeping, connect_status %d, "
-				"ps_mode %d, ps_state %d\n",
+				"psmode %d, psstate %d\n",
 				priv->connect_status,
 				priv->psmode, priv->psstate);
 			spin_unlock_irq(&priv->driver_lock);
@@ -890,7 +890,7 @@ int lbs_suspend(struct lbs_private *priv)
 }
 EXPORT_SYMBOL_GPL(lbs_suspend);
 
-int lbs_resume(struct lbs_private *priv)
+void lbs_resume(struct lbs_private *priv)
 {
 	lbs_deb_enter(LBS_DEB_FW);
 
@@ -906,7 +906,6 @@ int lbs_resume(struct lbs_private *priv)
 		netif_device_attach(priv->mesh_dev);
 
 	lbs_deb_leave(LBS_DEB_FW);
-	return 0;
 }
 EXPORT_SYMBOL_GPL(lbs_resume);
 
@@ -929,20 +928,10 @@ static int lbs_setup_firmware(struct lbs_private *priv)
 	 */
 	memset(priv->current_addr, 0xff, ETH_ALEN);
 	ret = lbs_update_hw_spec(priv);
-	if (ret) {
-		ret = -1;
+	if (ret)
 		goto done;
-	}
 
 	lbs_set_mac_control(priv);
-
-	ret = lbs_get_data_rate(priv);
-	if (ret < 0) {
-		ret = -1;
-		goto done;
-	}
-
-	ret = 0;
 done:
 	lbs_deb_leave_args(LBS_DEB_FW, "ret %d", ret);
 	return ret;
@@ -1156,7 +1145,7 @@ done:
 EXPORT_SYMBOL_GPL(lbs_add_card);
 
 
-int lbs_remove_card(struct lbs_private *priv)
+void lbs_remove_card(struct lbs_private *priv)
 {
 	struct net_device *dev = priv->dev;
 	union iwreq_data wrqu;
@@ -1168,8 +1157,8 @@ int lbs_remove_card(struct lbs_private *priv)
 
 	dev = priv->dev;
 
-	cancel_delayed_work(&priv->scan_work);
-	cancel_delayed_work(&priv->assoc_work);
+	cancel_delayed_work_sync(&priv->scan_work);
+	cancel_delayed_work_sync(&priv->assoc_work);
 	destroy_workqueue(priv->work_thread);
 
 	if (priv->psmode == LBS802_11POWERMODEMAX_PSP) {
@@ -1191,7 +1180,6 @@ int lbs_remove_card(struct lbs_private *priv)
 	free_netdev(dev);
 
 	lbs_deb_leave(LBS_DEB_MAIN);
-	return 0;
 }
 EXPORT_SYMBOL_GPL(lbs_remove_card);
 
@@ -1262,14 +1250,16 @@ done:
 EXPORT_SYMBOL_GPL(lbs_start_card);
 
 
-int lbs_stop_card(struct lbs_private *priv)
+void lbs_stop_card(struct lbs_private *priv)
 {
 	struct net_device *dev = priv->dev;
-	int ret = -1;
 	struct cmd_ctrl_node *cmdnode;
 	unsigned long flags;
 
 	lbs_deb_enter(LBS_DEB_MAIN);
+
+	if (!priv)
+		goto out;
 
 	netif_stop_queue(priv->dev);
 	netif_carrier_off(priv->dev);
@@ -1280,6 +1270,7 @@ int lbs_stop_card(struct lbs_private *priv)
 		device_remove_file(&dev->dev, &dev_attr_lbs_mesh);
 
 	/* Flush pending command nodes */
+	del_timer_sync(&priv->command_timer);
 	spin_lock_irqsave(&priv->driver_lock, flags);
 	list_for_each_entry(cmdnode, &priv->cmdpendingq, list) {
 		cmdnode->result = -ENOENT;
@@ -1290,8 +1281,8 @@ int lbs_stop_card(struct lbs_private *priv)
 
 	unregister_netdev(dev);
 
-	lbs_deb_leave_args(LBS_DEB_MAIN, "ret %d", ret);
-	return ret;
+out:
+	lbs_deb_leave(LBS_DEB_MAIN);
 }
 EXPORT_SYMBOL_GPL(lbs_stop_card);
 
@@ -1533,10 +1524,11 @@ static void lbs_remove_rtap(struct lbs_private *priv)
 {
 	lbs_deb_enter(LBS_DEB_MAIN);
 	if (priv->rtap_net_dev == NULL)
-		return;
+		goto out;
 	unregister_netdev(priv->rtap_net_dev);
 	free_netdev(priv->rtap_net_dev);
 	priv->rtap_net_dev = NULL;
+out:
 	lbs_deb_leave(LBS_DEB_MAIN);
 }
 

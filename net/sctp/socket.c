@@ -956,7 +956,8 @@ out:
  */
 static int __sctp_connect(struct sock* sk,
 			  struct sockaddr *kaddrs,
-			  int addrs_size)
+			  int addrs_size,
+			  sctp_assoc_t *assoc_id)
 {
 	struct sctp_sock *sp;
 	struct sctp_endpoint *ep;
@@ -1111,6 +1112,8 @@ static int __sctp_connect(struct sock* sk,
 	timeo = sock_sndtimeo(sk, f_flags & O_NONBLOCK);
 
 	err = sctp_wait_for_connect(asoc, &timeo);
+	if (!err && assoc_id)
+		*assoc_id = asoc->assoc_id;
 
 	/* Don't free association on exit. */
 	asoc = NULL;
@@ -1128,7 +1131,8 @@ out_free:
 /* Helper for tunneling sctp_connectx() requests through sctp_setsockopt()
  *
  * API 8.9
- * int sctp_connectx(int sd, struct sockaddr *addrs, int addrcnt);
+ * int sctp_connectx(int sd, struct sockaddr *addrs, int addrcnt,
+ * 			sctp_assoc_t *asoc);
  *
  * If sd is an IPv4 socket, the addresses passed must be IPv4 addresses.
  * If the sd is an IPv6 socket, the addresses passed can either be IPv4
@@ -1144,8 +1148,10 @@ out_free:
  * representation is termed a "packed array" of addresses). The caller
  * specifies the number of addresses in the array with addrcnt.
  *
- * On success, sctp_connectx() returns 0. On failure, sctp_connectx() returns
- * -1, and sets errno to the appropriate error code.
+ * On success, sctp_connectx() returns 0. It also sets the assoc_id to
+ * the association id of the new association.  On failure, sctp_connectx()
+ * returns -1, and sets errno to the appropriate error code.  The assoc_id
+ * is not touched by the kernel.
  *
  * For SCTP, the port given in each socket address must be the same, or
  * sctp_connectx() will fail, setting errno to EINVAL.
@@ -1182,11 +1188,12 @@ out_free:
  * addrs     The pointer to the addresses in user land
  * addrssize Size of the addrs buffer
  *
- * Returns 0 if ok, <0 errno code on error.
+ * Returns >=0 if ok, <0 errno code on error.
  */
-SCTP_STATIC int sctp_setsockopt_connectx(struct sock* sk,
+SCTP_STATIC int __sctp_setsockopt_connectx(struct sock* sk,
 				      struct sockaddr __user *addrs,
-				      int addrs_size)
+				      int addrs_size,
+				      sctp_assoc_t *assoc_id)
 {
 	int err = 0;
 	struct sockaddr *kaddrs;
@@ -1209,11 +1216,44 @@ SCTP_STATIC int sctp_setsockopt_connectx(struct sock* sk,
 	if (__copy_from_user(kaddrs, addrs, addrs_size)) {
 		err = -EFAULT;
 	} else {
-		err = __sctp_connect(sk, kaddrs, addrs_size);
+		err = __sctp_connect(sk, kaddrs, addrs_size, assoc_id);
 	}
 
 	kfree(kaddrs);
+
 	return err;
+}
+
+/*
+ * This is an older interface.  It's kept for backward compatibility
+ * to the option that doesn't provide association id.
+ */
+SCTP_STATIC int sctp_setsockopt_connectx_old(struct sock* sk,
+				      struct sockaddr __user *addrs,
+				      int addrs_size)
+{
+	return __sctp_setsockopt_connectx(sk, addrs, addrs_size, NULL);
+}
+
+/*
+ * New interface for the API.  The since the API is done with a socket
+ * option, to make it simple we feed back the association id is as a return
+ * indication to the call.  Error is always negative and association id is
+ * always positive.
+ */
+SCTP_STATIC int sctp_setsockopt_connectx(struct sock* sk,
+				      struct sockaddr __user *addrs,
+				      int addrs_size)
+{
+	sctp_assoc_t assoc_id = 0;
+	int err = 0;
+
+	err = __sctp_setsockopt_connectx(sk, addrs, addrs_size, &assoc_id);
+
+	if (err)
+		return err;
+	else
+		return assoc_id;
 }
 
 /* API 3.1.4 close() - UDP Style Syntax
@@ -2305,74 +2345,98 @@ static int sctp_setsockopt_peer_addr_params(struct sock *sk,
 	return 0;
 }
 
-/* 7.1.23. Delayed Ack Timer (SCTP_DELAYED_ACK_TIME)
+/*
+ * 7.1.23.  Get or set delayed ack timer (SCTP_DELAYED_SACK)
  *
- *   This options will get or set the delayed ack timer.  The time is set
- *   in milliseconds.  If the assoc_id is 0, then this sets or gets the
- *   endpoints default delayed ack timer value.  If the assoc_id field is
- *   non-zero, then the set or get effects the specified association.
+ * This option will effect the way delayed acks are performed.  This
+ * option allows you to get or set the delayed ack time, in
+ * milliseconds.  It also allows changing the delayed ack frequency.
+ * Changing the frequency to 1 disables the delayed sack algorithm.  If
+ * the assoc_id is 0, then this sets or gets the endpoints default
+ * values.  If the assoc_id field is non-zero, then the set or get
+ * effects the specified association for the one to many model (the
+ * assoc_id field is ignored by the one to one model).  Note that if
+ * sack_delay or sack_freq are 0 when setting this option, then the
+ * current values will remain unchanged.
  *
- *   struct sctp_assoc_value {
- *       sctp_assoc_t            assoc_id;
- *       uint32_t                assoc_value;
- *   };
+ * struct sctp_sack_info {
+ *     sctp_assoc_t            sack_assoc_id;
+ *     uint32_t                sack_delay;
+ *     uint32_t                sack_freq;
+ * };
  *
- *     assoc_id    - This parameter, indicates which association the
- *                   user is preforming an action upon. Note that if
- *                   this field's value is zero then the endpoints
- *                   default value is changed (effecting future
- *                   associations only).
+ * sack_assoc_id -  This parameter, indicates which association the user
+ *    is performing an action upon.  Note that if this field's value is
+ *    zero then the endpoints default value is changed (effecting future
+ *    associations only).
  *
- *     assoc_value - This parameter contains the number of milliseconds
- *                   that the user is requesting the delayed ACK timer
- *                   be set to. Note that this value is defined in
- *                   the standard to be between 200 and 500 milliseconds.
+ * sack_delay -  This parameter contains the number of milliseconds that
+ *    the user is requesting the delayed ACK timer be set to.  Note that
+ *    this value is defined in the standard to be between 200 and 500
+ *    milliseconds.
  *
- *                   Note: a value of zero will leave the value alone,
- *                   but disable SACK delay. A non-zero value will also
- *                   enable SACK delay.
+ * sack_freq -  This parameter contains the number of packets that must
+ *    be received before a sack is sent without waiting for the delay
+ *    timer to expire.  The default value for this is 2, setting this
+ *    value to 1 will disable the delayed sack algorithm.
  */
 
-static int sctp_setsockopt_delayed_ack_time(struct sock *sk,
+static int sctp_setsockopt_delayed_ack(struct sock *sk,
 					    char __user *optval, int optlen)
 {
-	struct sctp_assoc_value  params;
+	struct sctp_sack_info    params;
 	struct sctp_transport   *trans = NULL;
 	struct sctp_association *asoc = NULL;
 	struct sctp_sock        *sp = sctp_sk(sk);
 
-	if (optlen != sizeof(struct sctp_assoc_value))
+	if (optlen == sizeof(struct sctp_sack_info)) {
+		if (copy_from_user(&params, optval, optlen))
+			return -EFAULT;
+
+		if (params.sack_delay == 0 && params.sack_freq == 0)
+			return 0;
+	} else if (optlen == sizeof(struct sctp_assoc_value)) {
+		printk(KERN_WARNING "SCTP: Use of struct sctp_sack_info "
+		       "in delayed_ack socket option deprecated\n");
+		printk(KERN_WARNING "SCTP: struct sctp_sack_info instead\n");
+		if (copy_from_user(&params, optval, optlen))
+			return -EFAULT;
+
+		if (params.sack_delay == 0)
+			params.sack_freq = 1;
+		else
+			params.sack_freq = 0;
+	} else
 		return - EINVAL;
 
-	if (copy_from_user(&params, optval, optlen))
-		return -EFAULT;
-
 	/* Validate value parameter. */
-	if (params.assoc_value > 500)
+	if (params.sack_delay > 500)
 		return -EINVAL;
 
-	/* Get association, if assoc_id != 0 and the socket is a one
+	/* Get association, if sack_assoc_id != 0 and the socket is a one
 	 * to many style socket, and an association was not found, then
 	 * the id was invalid.
 	 */
-	asoc = sctp_id2assoc(sk, params.assoc_id);
-	if (!asoc && params.assoc_id && sctp_style(sk, UDP))
+	asoc = sctp_id2assoc(sk, params.sack_assoc_id);
+	if (!asoc && params.sack_assoc_id && sctp_style(sk, UDP))
 		return -EINVAL;
 
-	if (params.assoc_value) {
+	if (params.sack_delay) {
 		if (asoc) {
 			asoc->sackdelay =
-				msecs_to_jiffies(params.assoc_value);
+				msecs_to_jiffies(params.sack_delay);
 			asoc->param_flags =
 				(asoc->param_flags & ~SPP_SACKDELAY) |
 				SPP_SACKDELAY_ENABLE;
 		} else {
-			sp->sackdelay = params.assoc_value;
+			sp->sackdelay = params.sack_delay;
 			sp->param_flags =
 				(sp->param_flags & ~SPP_SACKDELAY) |
 				SPP_SACKDELAY_ENABLE;
 		}
-	} else {
+	}
+
+	if (params.sack_freq == 1) {
 		if (asoc) {
 			asoc->param_flags =
 				(asoc->param_flags & ~SPP_SACKDELAY) |
@@ -2381,6 +2445,18 @@ static int sctp_setsockopt_delayed_ack_time(struct sock *sk,
 			sp->param_flags =
 				(sp->param_flags & ~SPP_SACKDELAY) |
 				SPP_SACKDELAY_DISABLE;
+		}
+	} else if (params.sack_freq > 1) {
+		if (asoc) {
+			asoc->sackfreq = params.sack_freq;
+			asoc->param_flags =
+				(asoc->param_flags & ~SPP_SACKDELAY) |
+				SPP_SACKDELAY_ENABLE;
+		} else {
+			sp->sackfreq = params.sack_freq;
+			sp->param_flags =
+				(sp->param_flags & ~SPP_SACKDELAY) |
+				SPP_SACKDELAY_ENABLE;
 		}
 	}
 
@@ -2388,16 +2464,22 @@ static int sctp_setsockopt_delayed_ack_time(struct sock *sk,
 	if (asoc) {
 		list_for_each_entry(trans, &asoc->peer.transport_addr_list,
 				transports) {
-			if (params.assoc_value) {
+			if (params.sack_delay) {
 				trans->sackdelay =
-					msecs_to_jiffies(params.assoc_value);
+					msecs_to_jiffies(params.sack_delay);
 				trans->param_flags =
 					(trans->param_flags & ~SPP_SACKDELAY) |
 					SPP_SACKDELAY_ENABLE;
-			} else {
+			}
+			if (params.sack_delay == 1) {
 				trans->param_flags =
 					(trans->param_flags & ~SPP_SACKDELAY) |
 					SPP_SACKDELAY_DISABLE;
+			} else if (params.sack_freq > 1) {
+				trans->sackfreq = params.sack_freq;
+				trans->param_flags =
+					(trans->param_flags & ~SPP_SACKDELAY) |
+					SPP_SACKDELAY_ENABLE;
 			}
 		}
 	}
@@ -3164,10 +3246,18 @@ SCTP_STATIC int sctp_setsockopt(struct sock *sk, int level, int optname,
 					       optlen, SCTP_BINDX_REM_ADDR);
 		break;
 
+	case SCTP_SOCKOPT_CONNECTX_OLD:
+		/* 'optlen' is the size of the addresses buffer. */
+		retval = sctp_setsockopt_connectx_old(sk,
+					    (struct sockaddr __user *)optval,
+					    optlen);
+		break;
+
 	case SCTP_SOCKOPT_CONNECTX:
 		/* 'optlen' is the size of the addresses buffer. */
-		retval = sctp_setsockopt_connectx(sk, (struct sockaddr __user *)optval,
-					       optlen);
+		retval = sctp_setsockopt_connectx(sk,
+					    (struct sockaddr __user *)optval,
+					    optlen);
 		break;
 
 	case SCTP_DISABLE_FRAGMENTS:
@@ -3186,8 +3276,8 @@ SCTP_STATIC int sctp_setsockopt(struct sock *sk, int level, int optname,
 		retval = sctp_setsockopt_peer_addr_params(sk, optval, optlen);
 		break;
 
-	case SCTP_DELAYED_ACK_TIME:
-		retval = sctp_setsockopt_delayed_ack_time(sk, optval, optlen);
+	case SCTP_DELAYED_ACK:
+		retval = sctp_setsockopt_delayed_ack(sk, optval, optlen);
 		break;
 	case SCTP_PARTIAL_DELIVERY_POINT:
 		retval = sctp_setsockopt_partial_delivery_point(sk, optval, optlen);
@@ -3294,7 +3384,7 @@ SCTP_STATIC int sctp_connect(struct sock *sk, struct sockaddr *addr,
 		/* Pass correct addr len to common routine (so it knows there
 		 * is only one address being passed.
 		 */
-		err = __sctp_connect(sk, addr, af->sockaddr_len);
+		err = __sctp_connect(sk, addr, af->sockaddr_len, NULL);
 	}
 
 	sctp_release_sock(sk);
@@ -3446,6 +3536,7 @@ SCTP_STATIC int sctp_init_sock(struct sock *sk)
 	sp->pathmaxrxt  = sctp_max_retrans_path;
 	sp->pathmtu     = 0; // allow default discovery
 	sp->sackdelay   = sctp_sack_timeout;
+	sp->sackfreq	= 3;
 	sp->param_flags = SPP_HB_ENABLE |
 			  SPP_PMTUD_ENABLE |
 			  SPP_SACKDELAY_ENABLE;
@@ -3999,70 +4090,91 @@ static int sctp_getsockopt_peer_addr_params(struct sock *sk, int len,
 	return 0;
 }
 
-/* 7.1.23. Delayed Ack Timer (SCTP_DELAYED_ACK_TIME)
+/*
+ * 7.1.23.  Get or set delayed ack timer (SCTP_DELAYED_SACK)
  *
- *   This options will get or set the delayed ack timer.  The time is set
- *   in milliseconds.  If the assoc_id is 0, then this sets or gets the
- *   endpoints default delayed ack timer value.  If the assoc_id field is
- *   non-zero, then the set or get effects the specified association.
+ * This option will effect the way delayed acks are performed.  This
+ * option allows you to get or set the delayed ack time, in
+ * milliseconds.  It also allows changing the delayed ack frequency.
+ * Changing the frequency to 1 disables the delayed sack algorithm.  If
+ * the assoc_id is 0, then this sets or gets the endpoints default
+ * values.  If the assoc_id field is non-zero, then the set or get
+ * effects the specified association for the one to many model (the
+ * assoc_id field is ignored by the one to one model).  Note that if
+ * sack_delay or sack_freq are 0 when setting this option, then the
+ * current values will remain unchanged.
  *
- *   struct sctp_assoc_value {
- *       sctp_assoc_t            assoc_id;
- *       uint32_t                assoc_value;
- *   };
+ * struct sctp_sack_info {
+ *     sctp_assoc_t            sack_assoc_id;
+ *     uint32_t                sack_delay;
+ *     uint32_t                sack_freq;
+ * };
  *
- *     assoc_id    - This parameter, indicates which association the
- *                   user is preforming an action upon. Note that if
- *                   this field's value is zero then the endpoints
- *                   default value is changed (effecting future
- *                   associations only).
+ * sack_assoc_id -  This parameter, indicates which association the user
+ *    is performing an action upon.  Note that if this field's value is
+ *    zero then the endpoints default value is changed (effecting future
+ *    associations only).
  *
- *     assoc_value - This parameter contains the number of milliseconds
- *                   that the user is requesting the delayed ACK timer
- *                   be set to. Note that this value is defined in
- *                   the standard to be between 200 and 500 milliseconds.
+ * sack_delay -  This parameter contains the number of milliseconds that
+ *    the user is requesting the delayed ACK timer be set to.  Note that
+ *    this value is defined in the standard to be between 200 and 500
+ *    milliseconds.
  *
- *                   Note: a value of zero will leave the value alone,
- *                   but disable SACK delay. A non-zero value will also
- *                   enable SACK delay.
+ * sack_freq -  This parameter contains the number of packets that must
+ *    be received before a sack is sent without waiting for the delay
+ *    timer to expire.  The default value for this is 2, setting this
+ *    value to 1 will disable the delayed sack algorithm.
  */
-static int sctp_getsockopt_delayed_ack_time(struct sock *sk, int len,
+static int sctp_getsockopt_delayed_ack(struct sock *sk, int len,
 					    char __user *optval,
 					    int __user *optlen)
 {
-	struct sctp_assoc_value  params;
+	struct sctp_sack_info    params;
 	struct sctp_association *asoc = NULL;
 	struct sctp_sock        *sp = sctp_sk(sk);
 
-	if (len < sizeof(struct sctp_assoc_value))
+	if (len >= sizeof(struct sctp_sack_info)) {
+		len = sizeof(struct sctp_sack_info);
+
+		if (copy_from_user(&params, optval, len))
+			return -EFAULT;
+	} else if (len == sizeof(struct sctp_assoc_value)) {
+		printk(KERN_WARNING "SCTP: Use of struct sctp_sack_info "
+		       "in delayed_ack socket option deprecated\n");
+		printk(KERN_WARNING "SCTP: struct sctp_sack_info instead\n");
+		if (copy_from_user(&params, optval, len))
+			return -EFAULT;
+	} else
 		return - EINVAL;
 
-	len = sizeof(struct sctp_assoc_value);
-
-	if (copy_from_user(&params, optval, len))
-		return -EFAULT;
-
-	/* Get association, if assoc_id != 0 and the socket is a one
+	/* Get association, if sack_assoc_id != 0 and the socket is a one
 	 * to many style socket, and an association was not found, then
 	 * the id was invalid.
 	 */
-	asoc = sctp_id2assoc(sk, params.assoc_id);
-	if (!asoc && params.assoc_id && sctp_style(sk, UDP))
+	asoc = sctp_id2assoc(sk, params.sack_assoc_id);
+	if (!asoc && params.sack_assoc_id && sctp_style(sk, UDP))
 		return -EINVAL;
 
 	if (asoc) {
 		/* Fetch association values. */
-		if (asoc->param_flags & SPP_SACKDELAY_ENABLE)
-			params.assoc_value = jiffies_to_msecs(
+		if (asoc->param_flags & SPP_SACKDELAY_ENABLE) {
+			params.sack_delay = jiffies_to_msecs(
 				asoc->sackdelay);
-		else
-			params.assoc_value = 0;
+			params.sack_freq = asoc->sackfreq;
+
+		} else {
+			params.sack_delay = 0;
+			params.sack_freq = 1;
+		}
 	} else {
 		/* Fetch socket values. */
-		if (sp->param_flags & SPP_SACKDELAY_ENABLE)
-			params.assoc_value  = sp->sackdelay;
-		else
-			params.assoc_value  = 0;
+		if (sp->param_flags & SPP_SACKDELAY_ENABLE) {
+			params.sack_delay  = sp->sackdelay;
+			params.sack_freq = sp->sackfreq;
+		} else {
+			params.sack_delay  = 0;
+			params.sack_freq = 1;
+		}
 	}
 
 	if (copy_to_user(optval, &params, len))
@@ -5218,8 +5330,8 @@ SCTP_STATIC int sctp_getsockopt(struct sock *sk, int level, int optname,
 		retval = sctp_getsockopt_peer_addr_params(sk, len, optval,
 							  optlen);
 		break;
-	case SCTP_DELAYED_ACK_TIME:
-		retval = sctp_getsockopt_delayed_ack_time(sk, len, optval,
+	case SCTP_DELAYED_ACK:
+		retval = sctp_getsockopt_delayed_ack(sk, len, optval,
 							  optlen);
 		break;
 	case SCTP_INITMSG:
