@@ -24,6 +24,7 @@
 #include <linux/gpio_keys.h>
 #include <linux/input.h>
 #include <linux/gpio.h>
+#include <linux/reboot.h>
 
 #include <asm/setup.h>
 #include <asm/memory.h>
@@ -129,24 +130,24 @@ static unsigned long tosa_pin_config[] = {
 	GPIO47_STUART_TXD,
 
 	/* Keybd */
-	GPIO58_GPIO,
-	GPIO59_GPIO,
-	GPIO60_GPIO,
-	GPIO61_GPIO,
-	GPIO62_GPIO,
-	GPIO63_GPIO,
-	GPIO64_GPIO,
-	GPIO65_GPIO,
-	GPIO66_GPIO,
-	GPIO67_GPIO,
-	GPIO68_GPIO,
-	GPIO69_GPIO,
-	GPIO70_GPIO,
-	GPIO71_GPIO,
-	GPIO72_GPIO,
-	GPIO73_GPIO,
-	GPIO74_GPIO,
-	GPIO75_GPIO,
+	GPIO58_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO59_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO60_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO61_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO62_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO63_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO64_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO65_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO66_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO67_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO68_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO69_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO70_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO71_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO72_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO73_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO74_GPIO | MFP_LPM_DRIVE_LOW,
+	GPIO75_GPIO | MFP_LPM_DRIVE_LOW,
 
 	/* SPI */
 	GPIO81_SSP2_CLK_OUT,
@@ -467,11 +468,7 @@ static struct platform_device *devices[] __initdata = {
 
 static void tosa_poweroff(void)
 {
-	gpio_direction_output(TOSA_GPIO_ON_RESET, 0);
-	gpio_set_value(TOSA_GPIO_ON_RESET, 1);
-
-	mdelay(1000);
-	arm_machine_restart('h');
+	arm_machine_restart('g');
 }
 
 static void tosa_restart(char mode)
@@ -488,6 +485,8 @@ static void __init tosa_init(void)
 	pxa2xx_mfp_config(ARRAY_AND_SIZE(tosa_pin_config));
 	gpio_set_wake(MFP_PIN_GPIO1, 1);
 	/* We can't pass to gpio-keys since it will drop the Reset altfunc */
+
+	init_gpio_reset(TOSA_GPIO_ON_RESET);
 
 	pm_power_off = tosa_poweroff;
 	arm_pm_restart = tosa_restart;
