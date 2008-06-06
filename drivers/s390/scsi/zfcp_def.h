@@ -136,7 +136,6 @@ zfcp_address_to_sg(void *address, struct scatterlist *list, unsigned int size)
 #define ZFCP_QTCB_VERSION	FSF_QTCB_CURRENT_VERSION
 /* ATTENTION: value must not be used by hardware */
 #define FSF_QTCB_UNSOLICITED_STATUS		0x6305
-#define ZFCP_STATUS_READ_FAILED_THRESHOLD	3
 #define ZFCP_STATUS_READS_RECOM		        FSF_STATUS_READS_RECOM
 
 /* Do 1st retry in 1 second, then double the timeout for each following retry */
@@ -708,6 +707,24 @@ struct zfcp_erp_action {
 	struct timer_list timer;
 };
 
+struct fsf_latency_record {
+	u32 min;
+	u32 max;
+	u64 sum;
+};
+
+struct latency_cont {
+	struct fsf_latency_record channel;
+	struct fsf_latency_record fabric;
+	u64 counter;
+};
+
+struct zfcp_latencies {
+	struct latency_cont read;
+	struct latency_cont write;
+	struct latency_cont cmd;
+	spinlock_t lock;
+};
 
 struct zfcp_adapter {
 	struct list_head	list;              /* list of adapters */
@@ -723,6 +740,7 @@ struct zfcp_adapter {
 	u32			adapter_features;  /* FCP channel features */
 	u32			connection_features; /* host connection features */
         u32			hardware_version;  /* of FCP channel */
+	u16			timer_ticks;       /* time int for a tick */
 	struct Scsi_Host	*scsi_host;	   /* Pointer to mid-layer */
 	struct list_head	port_list_head;	   /* remote port list */
 	struct list_head        port_remove_lh;    /* head of ports to be
@@ -740,7 +758,8 @@ struct zfcp_adapter {
 	rwlock_t		abort_lock;        /* Protects against SCSI
 						      stack abort/command
 						      completion races */
-	u16			status_read_failed; /* # failed status reads */
+	atomic_t		stat_miss;	   /* # missing status reads*/
+	struct work_struct	stat_work;
 	atomic_t		status;	           /* status of this adapter */
 	struct list_head	erp_ready_head;	   /* error recovery for this
 						      adapter/devices */
@@ -822,6 +841,7 @@ struct zfcp_unit {
         struct scsi_device     *device;        /* scsi device struct pointer */
 	struct zfcp_erp_action erp_action;     /* pending error recovery */
         atomic_t               erp_counter;
+	struct zfcp_latencies	latencies;
 };
 
 /* FSF request */
@@ -831,12 +851,12 @@ struct zfcp_fsf_req {
 	struct zfcp_adapter    *adapter;       /* adapter request belongs to */
 	u8		       sbal_number;    /* nr of SBALs free for use */
 	u8		       sbal_first;     /* first SBAL for this request */
-	u8		       sbal_last;      /* last possible SBAL for
+	u8		       sbal_last;      /* last SBAL for this request */
+	u8		       sbal_limit;      /* last possible SBAL for
 						  this reuest */
-	u8		       sbal_curr;      /* current SBAL during creation
-						  of request */
 	u8		       sbale_curr;     /* current SBALE during creation
 						  of request */
+	u8			sbal_response;	/* SBAL used in interrupt */
 	wait_queue_head_t      completion_wq;  /* can be used by a routine
 						  to wait for completion */
 	volatile u32	       status;	       /* status of this request */

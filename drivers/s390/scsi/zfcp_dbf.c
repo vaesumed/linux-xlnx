@@ -186,8 +186,8 @@ void zfcp_hba_dbf_event_fsf_response(struct zfcp_fsf_req *fsf_req)
 	       fsf_status_qual, FSF_STATUS_QUALIFIER_SIZE);
 	response->fsf_req_status = fsf_req->status;
 	response->sbal_first = fsf_req->sbal_first;
-	response->sbal_curr = fsf_req->sbal_curr;
 	response->sbal_last = fsf_req->sbal_last;
+	response->sbal_response = fsf_req->sbal_response;
 	response->pool = fsf_req->pool != NULL;
 	response->erp_action = (unsigned long)fsf_req->erp_action;
 
@@ -268,7 +268,7 @@ void zfcp_hba_dbf_event_fsf_unsol(const char *tag, struct zfcp_adapter *adapter,
 	strncpy(rec->tag, "stat", ZFCP_DBF_TAG_SIZE);
 	strncpy(rec->tag2, tag, ZFCP_DBF_TAG_SIZE);
 
-	rec->u.status.failed = adapter->status_read_failed;
+	rec->u.status.failed = atomic_read(&adapter->stat_miss);
 	if (status_buffer != NULL) {
 		rec->u.status.status_type = status_buffer->status_type;
 		rec->u.status.status_subtype = status_buffer->status_subtype;
@@ -355,8 +355,8 @@ static void zfcp_hba_dbf_view_response(char **p,
 		      FSF_STATUS_QUALIFIER_SIZE, 0, FSF_STATUS_QUALIFIER_SIZE);
 	zfcp_dbf_out(p, "fsf_req_status", "0x%08x", r->fsf_req_status);
 	zfcp_dbf_out(p, "sbal_first", "0x%02x", r->sbal_first);
-	zfcp_dbf_out(p, "sbal_curr", "0x%02x", r->sbal_curr);
 	zfcp_dbf_out(p, "sbal_last", "0x%02x", r->sbal_last);
+	zfcp_dbf_out(p, "sbal_response", "0x%02x", r->sbal_response);
 	zfcp_dbf_out(p, "pool", "0x%02x", r->pool);
 
 	switch (r->fsf_command) {
@@ -670,24 +670,20 @@ static struct debug_view zfcp_rec_dbf_view = {
  * zfcp_rec_dbf_event_thread - trace event related to recovery thread operation
  * @id2: identifier for event
  * @adapter: adapter
- * @lock: non-zero value indicates that erp_lock has not yet been acquired
+ * This function assumes that the caller is holding erp_lock.
  */
-void zfcp_rec_dbf_event_thread(u8 id2, struct zfcp_adapter *adapter, int lock)
+void zfcp_rec_dbf_event_thread(u8 id2, struct zfcp_adapter *adapter)
 {
 	struct zfcp_rec_dbf_record *r = &adapter->rec_dbf_buf;
 	unsigned long flags = 0;
 	struct list_head *entry;
 	unsigned ready = 0, running = 0, total;
 
-	if (lock)
-		read_lock_irqsave(&adapter->erp_lock, flags);
 	list_for_each(entry, &adapter->erp_ready_head)
 		ready++;
 	list_for_each(entry, &adapter->erp_running_head)
 		running++;
 	total = adapter->erp_total_count;
-	if (lock)
-		read_unlock_irqrestore(&adapter->erp_lock, flags);
 
 	spin_lock_irqsave(&adapter->rec_dbf_lock, flags);
 	memset(r, 0, sizeof(*r));
@@ -696,8 +692,23 @@ void zfcp_rec_dbf_event_thread(u8 id2, struct zfcp_adapter *adapter, int lock)
 	r->u.thread.total = total;
 	r->u.thread.ready = ready;
 	r->u.thread.running = running;
-	debug_event(adapter->rec_dbf, 5, r, sizeof(*r));
+	debug_event(adapter->rec_dbf, 6, r, sizeof(*r));
 	spin_unlock_irqrestore(&adapter->rec_dbf_lock, flags);
+}
+
+/**
+ * zfcp_rec_dbf_event_thread - trace event related to recovery thread operation
+ * @id2: identifier for event
+ * @adapter: adapter
+ * This function assumes that the caller does not hold erp_lock.
+ */
+void zfcp_rec_dbf_event_thread_lock(u8 id2, struct zfcp_adapter *adapter)
+{
+	unsigned long flags;
+
+	read_lock_irqsave(&adapter->erp_lock, flags);
+	zfcp_rec_dbf_event_thread(id2, adapter);
+	read_unlock_irqrestore(&adapter->erp_lock, flags);
 }
 
 static void zfcp_rec_dbf_event_target(u8 id2, void *ref,
@@ -823,7 +834,7 @@ void zfcp_rec_dbf_event_action(u8 id2, struct zfcp_erp_action *erp_action)
 	r->u.action.status = erp_action->status;
 	r->u.action.step = erp_action->step;
 	r->u.action.fsf_req = (unsigned long)erp_action->fsf_req;
-	debug_event(adapter->rec_dbf, 4, r, sizeof(*r));
+	debug_event(adapter->rec_dbf, 5, r, sizeof(*r));
 	spin_unlock_irqrestore(&adapter->rec_dbf_lock, flags);
 }
 
