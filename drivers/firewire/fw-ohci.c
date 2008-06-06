@@ -2442,7 +2442,7 @@ pci_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 
 	ohci->version = reg_read(ohci, OHCI1394_Version) & 0x00ff00ff;
 	fw_notify("Added fw-ohci device %s, OHCI version %x.%x\n",
-		  dev->dev.bus_id, ohci->version >> 16, ohci->version & 0xff);
+		  dev_name(&dev->dev), ohci->version >> 16, ohci->version & 0xff);
 	return 0;
 
  fail_self_id:

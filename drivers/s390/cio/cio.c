@@ -152,7 +152,7 @@ cio_start_handle_notoper(struct subchannel *sch, __u8 lpm)
 	CIO_MSG_EVENT(2, "cio_start: 'not oper' status for "
 		      "subchannel 0.%x.%04x!\n", sch->schid.ssid,
 		      sch->schid.sch_no);
-	sprintf(dbf_text, "no%s", sch->dev.bus_id);
+	sprintf(dbf_text, "no%s", dev_name(&sch->dev));
 	CIO_TRACE_EVENT(0, dbf_text);
 	CIO_HEX_EVENT(0, &sch->schib, sizeof (struct schib));
 
@@ -170,7 +170,7 @@ cio_start_key (struct subchannel *sch,	/* subchannel structure */
 	struct orb *orb;
 
 	CIO_TRACE_EVENT(4, "stIO");
-	CIO_TRACE_EVENT(4, sch->dev.bus_id);
+	CIO_TRACE_EVENT(4, dev_name(&sch->dev));
 
 	orb = &to_io_private(sch)->orb;
 	/* sch is always under 2G. */
@@ -228,7 +228,7 @@ cio_resume (struct subchannel *sch)
 	int ccode;
 
 	CIO_TRACE_EVENT (4, "resIO");
-	CIO_TRACE_EVENT (4, sch->dev.bus_id);
+	CIO_TRACE_EVENT (4, dev_name(&sch->dev));
 
 	ccode = rsch (sch->schid);
 
@@ -265,7 +265,7 @@ cio_halt(struct subchannel *sch)
 		return -ENODEV;
 
 	CIO_TRACE_EVENT (2, "haltIO");
-	CIO_TRACE_EVENT (2, sch->dev.bus_id);
+	CIO_TRACE_EVENT (2, dev_name(&sch->dev));
 
 	/*
 	 * Issue "Halt subchannel" and process condition code
@@ -300,7 +300,7 @@ cio_clear(struct subchannel *sch)
 		return -ENODEV;
 
 	CIO_TRACE_EVENT (2, "clearIO");
-	CIO_TRACE_EVENT (2, sch->dev.bus_id);
+	CIO_TRACE_EVENT (2, dev_name(&sch->dev));
 
 	/*
 	 * Issue "Clear subchannel" and process condition code
@@ -336,7 +336,7 @@ cio_cancel (struct subchannel *sch)
 		return -ENODEV;
 
 	CIO_TRACE_EVENT (2, "cancelIO");
-	CIO_TRACE_EVENT (2, sch->dev.bus_id);
+	CIO_TRACE_EVENT (2, dev_name(&sch->dev));
 
 	ccode = xsch (sch->schid);
 
@@ -398,7 +398,7 @@ int cio_enable_subchannel(struct subchannel *sch, u32 intparm)
 	int ret;
 
 	CIO_TRACE_EVENT (2, "ensch");
-	CIO_TRACE_EVENT (2, sch->dev.bus_id);
+	CIO_TRACE_EVENT (2, dev_name(&sch->dev));
 
 	if (sch_is_pseudo_sch(sch))
 		return -EINVAL;
@@ -447,7 +447,7 @@ cio_disable_subchannel (struct subchannel *sch)
 	int ret;
 
 	CIO_TRACE_EVENT (2, "dissch");
-	CIO_TRACE_EVENT (2, sch->dev.bus_id);
+	CIO_TRACE_EVENT (2, dev_name(&sch->dev));
 
 	if (sch_is_pseudo_sch(sch))
 		return 0;
@@ -529,8 +529,10 @@ cio_validate_subchannel (struct subchannel *sch, struct subchannel_id schid)
 	}
 	mutex_init(&sch->reg_mutex);
 	/* Set a name for the subchannel */
-	snprintf (sch->dev.bus_id, BUS_ID_SIZE, "0.%x.%04x", schid.ssid,
-		  schid.sch_no);
+	if (cio_is_console(schid))
+		sch->dev.init_name = cio_get_console_sch_name(schid);
+	else
+		dev_set_name(&sch->dev, "0.%x.%04x", schid.ssid, schid.sch_no);
 
 	/*
 	 * The first subchannel that is not-operational (ccode==3)
@@ -679,6 +681,7 @@ do_IRQ (struct pt_regs *regs)
 
 #ifdef CONFIG_CCW_CONSOLE
 static struct subchannel console_subchannel;
+static char console_sch_name[10] = "0.x.xxxx";
 static struct io_subchannel_private console_priv;
 static int console_subchannel_in_use;
 
@@ -827,6 +830,12 @@ cio_get_console_subchannel(void)
 	if (!console_subchannel_in_use)
 		return NULL;
 	return &console_subchannel;
+}
+
+const char *cio_get_console_sch_name(struct subchannel_id schid)
+{
+	snprintf(console_sch_name, 10, "0.%x.%04x", schid.ssid, schid.sch_no);
+	return (const char *)console_sch_name;
 }
 
 #endif

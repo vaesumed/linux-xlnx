@@ -220,7 +220,7 @@ static int __devinit aer_probe (struct pcie_device *dev,
 	/* Alloc rpc data structure */
 	if (!(rpc = aer_alloc_rpc(dev))) {
 		printk(KERN_DEBUG "%s: Alloc rpc fails on PCIE device[%s]\n",
-			__func__, device->bus_id);
+			__func__, dev_name(device));
 		aer_remove(dev);
 		return -ENOMEM;
 	}
@@ -229,7 +229,7 @@ static int __devinit aer_probe (struct pcie_device *dev,
 	if ((status = request_irq(dev->irq, aer_irq, IRQF_SHARED, "aerdrv",
 				dev))) {
 		printk(KERN_DEBUG "%s: Request ISR fails on PCIE device[%s]\n",
-			__func__, device->bus_id);
+			__func__, dev_name(device));
 		aer_remove(dev);
 		return status;
 	}
@@ -273,7 +273,7 @@ static pci_ers_result_t aer_root_reset(struct pci_dev *dev)
 	 * to issue Configuration Requests to those devices.
 	 */
 	msleep(200);
-	printk(KERN_DEBUG "Complete link reset at Root[%s]\n", dev->dev.bus_id);
+	printk(KERN_DEBUG "Complete link reset at Root[%s]\n", dev_name(&dev->dev));
 
 	/* Enable Root Port's interrupt in response to error messages */
 	pci_read_config_dword(dev, pos + PCI_ERR_ROOT_STATUS, &status);

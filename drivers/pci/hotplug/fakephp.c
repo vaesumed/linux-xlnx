@@ -89,6 +89,7 @@ static void dummy_release(struct hotplug_slot *slot)
 	struct dummy_slot *dslot = slot->private;
 
 	list_del(&dslot->node);
+	kfree(dslot->slot->name);
 	kfree(dslot->slot->info);
 	kfree(dslot->slot);
 	pci_dev_put(dslot->dev);
@@ -113,12 +114,14 @@ static int add_slot(struct pci_dev *dev)
 	slot->info->max_bus_speed = PCI_SPEED_UNKNOWN;
 	slot->info->cur_bus_speed = PCI_SPEED_UNKNOWN;
 
-	slot->name = &dev->dev.bus_id[0];
+	slot->name = kstrdup(dev_name(&dev->dev), GFP_KERNEL);
+	if (!slot->name)
+		goto error_info;
 	dbg("slot->name = %s\n", slot->name);
 
 	dslot = kzalloc(sizeof(struct dummy_slot), GFP_KERNEL);
 	if (!dslot)
-		goto error_info;
+		goto error_name;
 
 	slot->ops = &dummy_hotplug_slot_ops;
 	slot->release = &dummy_release;
@@ -137,6 +140,8 @@ static int add_slot(struct pci_dev *dev)
 
 error_dslot:
 	kfree(dslot);
+error_name:
+	kfree(slot->name);
 error_info:
 	kfree(slot->info);
 error_slot:

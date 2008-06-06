@@ -100,7 +100,7 @@ struct pasemi_mac {
 	int	duplex;
 
 	unsigned int	msg_enable;
-	char	phy_id[BUS_ID_SIZE];
+	char	phy_id[20];
 };
 
 /* Software status descriptor (ring_info) */

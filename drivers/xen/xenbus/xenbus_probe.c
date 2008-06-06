@@ -674,7 +674,7 @@ static int suspend_dev(struct device *dev, void *data)
 		err = drv->suspend(xdev);
 	if (err)
 		printk(KERN_WARNING
-		       "xenbus: suspend %s failed: %i\n", dev->bus_id, err);
+		       "xenbus: suspend %s failed: %i\n", dev_name(dev), err);
 	return 0;
 }
 
@@ -695,7 +695,7 @@ static int suspend_cancel_dev(struct device *dev, void *data)
 	if (err)
 		printk(KERN_WARNING
 		       "xenbus: suspend_cancel %s failed: %i\n",
-		       dev->bus_id, err);
+		       dev_name(dev), err);
 	return 0;
 }
 
@@ -717,7 +717,7 @@ static int resume_dev(struct device *dev, void *data)
 	if (err) {
 		printk(KERN_WARNING
 		       "xenbus: resume (talk_to_otherend) %s failed: %i\n",
-		       dev->bus_id, err);
+		       dev_name(dev), err);
 		return err;
 	}
 
@@ -728,7 +728,7 @@ static int resume_dev(struct device *dev, void *data)
 		if (err) {
 			printk(KERN_WARNING
 			       "xenbus: resume %s failed: %i\n",
-			       dev->bus_id, err);
+			       dev_name(dev), err);
 			return err;
 		}
 	}
@@ -737,7 +737,7 @@ static int resume_dev(struct device *dev, void *data)
 	if (err) {
 		printk(KERN_WARNING
 		       "xenbus_probe: resume (watch_otherend) %s failed: "
-		       "%d.\n", dev->bus_id, err);
+		       "%d.\n", dev_name(dev), err);
 		return err;
 	}
 
