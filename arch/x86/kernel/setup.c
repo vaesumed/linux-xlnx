@@ -385,6 +385,7 @@ cpumask_t *_node_to_cpumask_ptr(int node)
 		dump_stack();
 		return &cpu_online_map;
 	}
+	BUG_ON(node >= nr_node_ids);
 	return &node_to_cpumask_map[node];
 }
 EXPORT_SYMBOL(_node_to_cpumask_ptr);
@@ -400,6 +401,7 @@ cpumask_t node_to_cpumask(int node)
 		dump_stack();
 		return cpu_online_map;
 	}
+	BUG_ON(node >= nr_node_ids);
 	return node_to_cpumask_map[node];
 }
 EXPORT_SYMBOL(node_to_cpumask);
