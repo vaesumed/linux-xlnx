@@ -356,7 +356,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 * inode has dirty pages), this has been done in
 		 * '__set_page_dirty_nobuffers()'.
 		 */
-		mark_inode_dirty_sync(inode);
+		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
 
 		/*
 		 * The inode has been marked dirty, unlock it. This is a bit
