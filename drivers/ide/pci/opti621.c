@@ -208,15 +208,15 @@ typedef struct pio_clocks_s {
 static void compute_clocks(int pio, pio_clocks_t *clks)
 {
 	if (pio != PIO_NOT_EXIST) {
-		int adr_setup, data_pls;
+		struct ide_timing *t = ide_timing_find_mode(XFER_PIO_0 + pio);
+		int adr_setup = t->setup, data_pls = t->active;
 		int bus_speed = ide_pci_clk ? ide_pci_clk : 33;
 
-		adr_setup = ide_pio_timings[pio].setup_time;
-		data_pls = ide_pio_timings[pio].active_time;
 		clks->address_time = cmpt_clk(adr_setup, bus_speed);
 		clks->data_time = cmpt_clk(data_pls, bus_speed);
-		clks->recovery_time = cmpt_clk(ide_pio_timings[pio].cycle_time
-			- adr_setup-data_pls, bus_speed);
+		clks->recovery_time = cmpt_clk(t->cycle	- adr_setup - data_pls,
+					       bus_speed);
+
 		if (clks->address_time < 1)
 			clks->address_time = 1;
 		if (clks->address_time > 4)
