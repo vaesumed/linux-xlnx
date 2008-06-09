@@ -81,8 +81,7 @@ EXPORT_SYMBOL_GPL(uwb_notifs_deregister);
 /*
  * Notify all event handlers of a given event on @rc
  *
- * We are called with a valid reference to the device. Obtain another
- * reference before handing off to callback, release on return.
+ * We are called with a valid reference to the device.
  */
 void uwb_notify(struct uwb_rc *rc, struct uwb_dev *uwb_dev, enum uwb_notifs event)
 {
@@ -90,12 +89,9 @@ void uwb_notify(struct uwb_rc *rc, struct uwb_dev *uwb_dev, enum uwb_notifs even
 	if (mutex_lock_interruptible(&rc->notifs_chain.mutex))
 		return;
 	if (!list_empty(&rc->notifs_chain.list)) {
-		uwb_dev_get(uwb_dev);
-		list_for_each_entry(handler, &rc->notifs_chain.list,
-				    list_node) {
+		list_for_each_entry(handler, &rc->notifs_chain.list, list_node) {
 			handler->cb(handler->data, uwb_dev, event);
 		}
-		uwb_dev_put(uwb_dev);
 	}
 	mutex_unlock(&rc->notifs_chain.mutex);
 }
