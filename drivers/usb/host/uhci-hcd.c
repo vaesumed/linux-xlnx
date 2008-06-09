@@ -42,6 +42,7 @@
 #include <linux/dmi.h>
 
 #include <asm/uaccess.h>
+#include <asm/unaligned.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/system.h>
