@@ -437,14 +437,13 @@ int __uwb_dev_offair(struct uwb_dev *uwb_dev, struct uwb_rc *rc)
  */
 void uwbd_dev_offair(struct uwb_beca_e *bce)
 {
-	struct uwb_rc *rc;
 	struct uwb_dev *uwb_dev;
 
 	uwb_dev = bce->uwb_dev;
-	rc = uwb_dev->rc;
-
-	uwb_notify(rc, uwb_dev, UWB_NOTIF_OFFAIR);
-	__uwb_dev_offair(uwb_dev, rc);
+	if (uwb_dev) {
+		uwb_notify(uwb_dev->rc, uwb_dev, UWB_NOTIF_OFFAIR);
+		__uwb_dev_offair(uwb_dev, uwb_dev->rc);
+	}
 }
 
 
