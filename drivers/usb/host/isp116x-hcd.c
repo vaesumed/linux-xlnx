@@ -68,6 +68,7 @@
 
 #include <asm/io.h>
 #include <asm/irq.h>
+#include <asm/unaligned.h>
 #include <asm/system.h>
 #include <asm/byteorder.h>
 
@@ -1024,7 +1025,7 @@ static int isp116x_hub_control(struct usb_hcd *hcd,
 		break;
 	case GetHubStatus:
 		DBG("GetHubStatus\n");
-		*(__le32 *) buf = 0;
+		put_unaligned_le32(0, buf);
 		break;
 	case GetPortStatus:
 		DBG("GetPortStatus\n");
@@ -1033,7 +1034,7 @@ static int isp116x_hub_control(struct usb_hcd *hcd,
 		spin_lock_irqsave(&isp116x->lock, flags);
 		tmp = isp116x_read_reg32(isp116x, (--wIndex) ? HCRHPORT2 : HCRHPORT1);
 		spin_unlock_irqrestore(&isp116x->lock, flags);
-		*(__le32 *) buf = cpu_to_le32(tmp);
+		put_unaligned_le32(tmp, buf);
 		DBG("GetPortStatus: port[%d]  %08x\n", wIndex + 1, tmp);
 		break;
 	case ClearPortFeature:
