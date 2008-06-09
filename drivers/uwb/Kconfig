@@ -44,6 +44,7 @@ config UWB_HWA
 config UWB_WHCI
         tristate "UWB Radio Control driver for WHCI-compliant cards"
         depends on PCI
+	depends on UWB_HWA
         help
           This driver enables the radio controller for WHCI cards.
 
