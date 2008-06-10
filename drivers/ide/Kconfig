@@ -98,6 +98,12 @@ if BLK_DEV_IDE
 
 comment "Please see Documentation/ide/ide.txt for help/info on IDE drives"
 
+config IDE_TIMINGS
+	bool
+
+config IDE_ATAPI
+	bool
+
 config BLK_DEV_IDE_SATA
 	bool "Support for SATA (deprecated; conflicts with libata SATA driver)"
 	default n
@@ -201,6 +207,7 @@ config BLK_DEV_IDECD_VERBOSE_ERRORS
 
 config BLK_DEV_IDETAPE
 	tristate "Include IDE/ATAPI TAPE support"
+	select IDE_ATAPI
 	help
 	  If you have an IDE tape drive using the ATAPI protocol, say Y.
 	  ATAPI is a newer protocol used by IDE tape and CD-ROM drives,
@@ -223,6 +230,7 @@ config BLK_DEV_IDETAPE
 
 config BLK_DEV_IDEFLOPPY
 	tristate "Include IDE/ATAPI FLOPPY support"
+	select IDE_ATAPI
 	---help---
 	  If you have an IDE floppy drive which uses the ATAPI protocol,
 	  answer Y.  ATAPI is a newer protocol used by IDE CD-ROM/tape/floppy
@@ -246,6 +254,7 @@ config BLK_DEV_IDEFLOPPY
 config BLK_DEV_IDESCSI
 	tristate "SCSI emulation support"
 	depends on SCSI
+	select IDE_ATAPI
 	---help---
 	  WARNING: ide-scsi is no longer needed for cd writing applications!
 	  The 2.6 kernel supports direct writing to ide-cd, which eliminates
@@ -320,6 +329,7 @@ config BLK_DEV_PLATFORM
 config BLK_DEV_CMD640
 	tristate "CMD640 chipset bugfix/support"
 	depends on X86
+	select IDE_TIMINGS
 	---help---
 	  The CMD-Technologies CMD640 IDE chip is used on many common 486 and
 	  Pentium motherboards, usually in combination with a "Neptune" or
@@ -416,6 +426,7 @@ config BLK_DEV_GENERIC
 config BLK_DEV_OPTI621
 	tristate "OPTi 82C621 chipset enhanced support (EXPERIMENTAL)"
 	depends on EXPERIMENTAL
+	select IDE_TIMINGS
 	select BLK_DEV_IDEPCI
 	help
 	  This is a driver for the OPTi 82C621 EIDE controller.
@@ -449,6 +460,7 @@ config BLK_DEV_AEC62XX
 
 config BLK_DEV_ALI15X3
 	tristate "ALI M15x3 chipset support"
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_PCI
 	help
 	  This driver ensures (U)DMA support for ALI 1533, 1543 and 1543C
@@ -463,6 +475,7 @@ config BLK_DEV_ALI15X3
 config BLK_DEV_AMD74XX
 	tristate "AMD and nVidia IDE support"
 	depends on !ARM
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_PCI
 	help
 	  This driver adds explicit support for AMD-7xx and AMD-8111 chips
@@ -483,6 +496,7 @@ config BLK_DEV_ATIIXP
 
 config BLK_DEV_CMD64X
 	tristate "CMD64{3|6|8|9} chipset support"
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_PCI
 	help
 	  Say Y here if you have an IDE controller which uses any of these
@@ -497,6 +511,7 @@ config BLK_DEV_TRIFLEX
 
 config BLK_DEV_CY82C693
 	tristate "CY82C693 chipset support"
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_PCI
 	help
 	  This driver adds detection and support for the CY82C693 chipset
@@ -689,6 +704,7 @@ config BLK_DEV_SIS5513
 config BLK_DEV_SL82C105
 	tristate "Winbond SL82c105 support"
 	depends on (PPC || ARM)
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_PCI
 	help
 	  If you have a Winbond SL82c105 IDE controller, say Y here to enable
@@ -719,6 +735,7 @@ config BLK_DEV_TRM290
 
 config BLK_DEV_VIA82CXXX
 	tristate "VIA82CXXX chipset support"
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_PCI
 	help
 	  This driver adds explicit support for VIA BusMastering IDE chips.
@@ -745,6 +762,7 @@ endif
 config BLK_DEV_IDE_PMAC
 	tristate "PowerMac on-board IDE support"
 	depends on PPC_PMAC && IDE=y && BLK_DEV_IDE=y
+	select IDE_TIMINGS
 	help
 	  This driver provides support for the on-board IDE controller on
 	  most of the recent Apple Power Macintoshes and PowerBooks.
@@ -913,6 +931,7 @@ config BLK_DEV_Q40IDE
 config BLK_DEV_PALMCHIP_BK3710
 	tristate "Palmchip bk3710 IDE controller support"
 	depends on ARCH_DAVINCI
+	select IDE_TIMINGS
 	select BLK_DEV_IDEDMA_SFF
 	help
 	  Say Y here if you want to support the onchip IDE controller on the
@@ -975,6 +994,7 @@ config BLK_DEV_4DRIVES
 
 config BLK_DEV_ALI14XX
 	tristate "ALI M14xx support"
+	select IDE_TIMINGS
 	help
 	  This driver is enabled at runtime using the "ali14xx.probe" kernel
 	  boot parameter.  It enables support for the secondary IDE interface
@@ -994,6 +1014,7 @@ config BLK_DEV_DTC2278
 
 config BLK_DEV_HT6560B
 	tristate "Holtek HT6560B support"
+	select IDE_TIMINGS
 	help
 	  This driver is enabled at runtime using the "ht6560b.probe" kernel
 	  boot parameter. It enables support for the secondary IDE interface
@@ -1003,6 +1024,7 @@ config BLK_DEV_HT6560B
 
 config BLK_DEV_QD65XX
 	tristate "QDI QD65xx support"
+	select IDE_TIMINGS
 	help
 	  This driver is enabled at runtime using the "qd65xx.probe" kernel
 	  boot parameter.  It permits faster I/O speeds to be set.  See the
