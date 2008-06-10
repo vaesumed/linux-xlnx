@@ -231,9 +231,8 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	proxy->irq = chip->irq;
 	proxy->modalias = chip->modalias;
 
-	snprintf(proxy->dev.bus_id, sizeof proxy->dev.bus_id,
-			"%s.%u", master->dev.bus_id,
-			chip->chip_select);
+	dev_set_name(&proxy->dev, "%s.%u",
+		     dev_name(&master->dev), chip->chip_select);
 	proxy->dev.parent = dev;
 	proxy->dev.bus = &spi_bus_type;
 	proxy->dev.platform_data = (void *) chip->platform_data;
@@ -245,7 +244,7 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	status = master->setup(proxy);
 	if (status < 0) {
 		dev_err(dev, "can't %s %s, status %d\n",
-				"setup", proxy->dev.bus_id, status);
+				"setup", dev_name(&proxy->dev), status);
 		goto fail;
 	}
 
@@ -255,10 +254,10 @@ struct spi_device *spi_new_device(struct spi_master *master,
 	status = device_register(&proxy->dev);
 	if (status < 0) {
 		dev_err(dev, "can't %s %s, status %d\n",
-				"add", proxy->dev.bus_id, status);
+				"add", dev_name(&proxy->dev), status);
 		goto fail;
 	}
-	dev_dbg(dev, "registered child %s\n", proxy->dev.bus_id);
+	dev_dbg(dev, "registered child %s\n", dev_name(&proxy->dev));
 	return proxy;
 
 fail:
@@ -433,12 +432,11 @@ int spi_register_master(struct spi_master *master)
 	/* register the device, then userspace will see it.
 	 * registration fails if the bus ID is in use.
 	 */
-	snprintf(master->dev.bus_id, sizeof master->dev.bus_id,
-		"spi%u", master->bus_num);
+	dev_set_name(&master->dev, "spi%u", master->bus_num);
 	status = device_add(&master->dev);
 	if (status < 0)
 		goto done;
-	dev_dbg(dev, "registered master %s%s\n", master->dev.bus_id,
+	dev_dbg(dev, "registered master %s%s\n", dev_name(&master->dev),
 			dynamic ? " (dynamic)" : "");
 
 	/* populate children from any spi device tables */
@@ -502,7 +500,7 @@ struct spi_master *spi_busnum_to_master(u16 bus_num)
 	struct device		*dev;
 	struct spi_master	*master = NULL;
 
-	dev = class_find_device(&spi_master_class, &bus_num,
+	dev = class_find_device(&spi_master_class, NULL, &bus_num,
 				__spi_master_match);
 	if (dev)
 		master = container_of(dev, struct spi_master, dev);

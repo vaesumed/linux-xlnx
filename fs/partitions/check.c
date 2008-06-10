@@ -362,12 +362,10 @@ void add_partition(struct gendisk *disk, int part, sector_t start, sector_t len,
 	p->partno = part;
 	p->policy = disk->policy;
 
-	if (isdigit(disk->dev.bus_id[strlen(disk->dev.bus_id)-1]))
-		snprintf(p->dev.bus_id, BUS_ID_SIZE,
-		"%sp%d", disk->dev.bus_id, part);
+	if (isdigit(dev_name(&disk->dev)[strlen(dev_name(&disk->dev))-1]))
+		dev_set_name(&p->dev, "%sp%d", dev_name(&disk->dev), part);
 	else
-		snprintf(p->dev.bus_id, BUS_ID_SIZE,
-			 "%s%d", disk->dev.bus_id, part);
+		dev_set_name(&p->dev, "%s%d", dev_name(&disk->dev), part);
 
 	device_initialize(&p->dev);
 	p->dev.devt = MKDEV(disk->major, disk->first_minor + part);
@@ -393,6 +391,7 @@ void add_partition(struct gendisk *disk, int part, sector_t start, sector_t len,
 void register_disk(struct gendisk *disk)
 {
 	struct block_device *bdev;
+	char name[32];
 	char *s;
 	int i;
 	struct hd_struct *p;
@@ -401,11 +400,12 @@ void register_disk(struct gendisk *disk)
 	disk->dev.parent = disk->driverfs_dev;
 	disk->dev.devt = MKDEV(disk->major, disk->first_minor);
 
-	strlcpy(disk->dev.bus_id, disk->disk_name, KOBJ_NAME_LEN);
+	strlcpy(name, disk->disk_name, sizeof(name));
 	/* ewww... some of these buggers have / in the name... */
-	s = strchr(disk->dev.bus_id, '/');
+	s = strchr(name, '/');
 	if (s)
 		*s = '!';
+	dev_set_name(&disk->dev, name);
 
 	/* delay uevents, until we scanned partition table */
 	disk->dev.uevent_suppress = 1;
@@ -537,7 +537,7 @@ void del_gendisk(struct gendisk *disk)
 	kobject_put(disk->slave_dir);
 	disk->driverfs_dev = NULL;
 #ifndef CONFIG_SYSFS_DEPRECATED
-	sysfs_remove_link(block_depr, disk->dev.bus_id);
+	sysfs_remove_link(block_depr, dev_name(&disk->dev));
 #endif
 	device_del(&disk->dev);
 }
