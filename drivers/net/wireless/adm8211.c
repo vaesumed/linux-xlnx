@@ -306,11 +306,10 @@ static int adm8211_get_tx_stats(struct ieee80211_hw *dev,
 				struct ieee80211_tx_queue_stats *stats)
 {
 	struct adm8211_priv *priv = dev->priv;
-	struct ieee80211_tx_queue_stats_data *data = &stats->data[0];
 
-	data->len = priv->cur_tx - priv->dirty_tx;
-	data->limit = priv->tx_ring_size - 2;
-	data->count = priv->dirty_tx;
+	stats[0].len = priv->cur_tx - priv->dirty_tx;
+	stats[0].limit = priv->tx_ring_size - 2;
+	stats[0].count = priv->dirty_tx;
 
 	return 0;
 }
@@ -446,9 +445,9 @@ static void adm8211_interrupt_rci(struct ieee80211_hw *dev)
 			struct ieee80211_rx_status rx_status = {0};
 
 			if (priv->pdev->revision < ADM8211_REV_CA)
-				rx_status.ssi = rssi;
+				rx_status.signal = rssi;
 			else
-				rx_status.ssi = 100 - rssi;
+				rx_status.signal = 100 - rssi;
 
 			rx_status.rate_idx = rate;
 
@@ -1894,9 +1893,10 @@ static int __devinit adm8211_probe(struct pci_dev *pdev,
 
 	dev->extra_tx_headroom = sizeof(struct adm8211_tx_hdr);
 	/* dev->flags = IEEE80211_HW_RX_INCLUDES_FCS in promisc mode */
+	dev->flags = IEEE80211_HW_SIGNAL_UNSPEC;
 
 	dev->channel_change_time = 1000;
-	dev->max_rssi = 100;	/* FIXME: find better value */
+	dev->max_signal = 100;    /* FIXME: find better value */
 
 	dev->queues = 1; /* ADM8211C supports more, maybe ADM8211B too */
 
