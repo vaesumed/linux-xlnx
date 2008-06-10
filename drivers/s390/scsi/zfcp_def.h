@@ -922,7 +922,7 @@ extern void _zfcp_hex_dump(char *, int);
 			_zfcp_hex_dump(addr, count); \
 		}
 
-#define zfcp_get_busid_by_adapter(adapter) (adapter->ccw_device->dev.bus_id)
+#define zfcp_get_busid_by_adapter(adapter) (dev_name(&adapter->ccw_device->dev))
 #define zfcp_get_busid_by_port(port) (zfcp_get_busid_by_adapter(port->adapter))
 #define zfcp_get_busid_by_unit(unit) (zfcp_get_busid_by_port(unit->port))
 
