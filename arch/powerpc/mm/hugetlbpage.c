@@ -458,7 +458,8 @@ int hash_huge_page(struct mm_struct *mm, unsigned long access,
 		old_pte = pte_val(*ptep);
 		if (old_pte & _PAGE_BUSY)
 			goto out;
-		new_pte = old_pte | _PAGE_BUSY | _PAGE_ACCESSED;
+		new_pte = old_pte | _PAGE_BUSY |
+			_PAGE_ACCESSED | _PAGE_HASHPTE;
 	} while(old_pte != __cmpxchg_u64((unsigned long *)ptep,
 					 old_pte, new_pte));
 
@@ -498,7 +499,7 @@ repeat:
 			      HPTES_PER_GROUP) & ~0x7UL;
 
 		/* clear HPTE slot informations in new PTE */
-		new_pte = (new_pte & ~_PAGE_HPTEFLAGS) | _PAGE_HUGE_HPTE;
+		new_pte = (new_pte & ~_PAGE_HPTEFLAGS) | _PAGE_HASHPTE;
 
 		/* Add in WIMG bits */
 		/* XXX We should store these in the pte */
