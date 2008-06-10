@@ -1573,9 +1573,16 @@ static __init void udc_init_data(struct pxa_udc *dev)
  */
 static void udc_enable(struct pxa_udc *udc)
 {
+	u32 up2ocr;
+
 	udc_writel(udc, UDCICR0, 0);
 	udc_writel(udc, UDCICR1, 0);
-	udc_writel(udc, UP2OCR, UP2OCR_HXOE);
+	/*
+	 * UP2OCR : set HXOE=1, HXS=0, SEOS=0 => non-OTG client
+	 */
+	up2ocr = udc_readl(udc, UP2OCR);
+	up2ocr = (up2ocr & ~(UP2OCR_HXS - 1)) | UP2OCR_HXOE;
+	udc_writel(udc, UP2OCR, up2ocr);
 	udc_clear_mask_UDCCR(udc, UDCCR_UDE);
 
 	clk_enable(udc->clk);
