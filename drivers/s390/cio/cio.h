@@ -5,6 +5,7 @@
 #include <linux/device.h>
 #include <linux/mod_devicetable.h>
 #include <asm/chpid.h>
+#include <asm/cio.h>
 #include "chsc.h"
 #include "schid.h"
 
@@ -48,7 +49,7 @@ struct pmcw {
  */
 struct schib {
 	struct pmcw pmcw;	 /* path management control word */
-	struct scsw scsw;	 /* subchannel status word */
+	union scsw scsw;	 /* subchannel status word */
 	__u64 mba;               /* measurement block address */
 	__u8 mda[4];		 /* model dependent area */
 } __attribute__ ((packed,aligned(4)));
