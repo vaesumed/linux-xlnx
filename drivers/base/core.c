@@ -762,6 +762,7 @@ static void device_remove_class_symlinks(struct device *dev)
 /**
  * dev_set_name - set a device name
  * @dev: device
+ * @fmt: format string for the device's name
  */
 int dev_set_name(struct device *dev, const char *fmt, ...)
 {
@@ -1259,6 +1260,11 @@ EXPORT_SYMBOL_GPL(device_destroy);
  * device_rename - renames a device
  * @dev: the pointer to the struct device to be renamed
  * @new_name: the new name of the device
+ *
+ * It is the responsibility of the caller to provide mutual
+ * exclusion between two different calls of device_rename
+ * on the same device to ensure that new_name is valid and
+ * won't conflict with other devices.
  */
 int device_rename(struct device *dev, char *new_name)
 {
