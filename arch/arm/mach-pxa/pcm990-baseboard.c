@@ -33,6 +33,7 @@
 #include <asm/mach/map.h>
 #include <asm/arch/pxa-regs.h>
 #include <asm/arch/pxa2xx-gpio.h>
+#include <asm/arch/audio.h>
 #include <asm/arch/mmc.h>
 #include <asm/arch/ohci.h>
 #include <asm/arch/pcm990_baseboard.h>
@@ -333,36 +334,6 @@ static struct i2c_board_info __initdata pcm990_i2c_devices[] = {
 #endif /* CONFIG_VIDEO_PXA27x ||CONFIG_VIDEO_PXA27x_MODULE */
 
 /*
- * AC97 support
- * Note: The connected AC97 mixer also reports interrupts at PCM990_AC97_IRQ
- */
-static struct resource pxa27x_ac97_resources[] = {
-	[0] = {
-		.start  = 0x40500000,
-		.end	= 0x40500000 + 0xfff,
-		.flags  = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start  = IRQ_AC97,
-		.end    = IRQ_AC97,
-		.flags  = IORESOURCE_IRQ,
-	},
-};
-
-static u64 pxa_ac97_dmamask = 0xffffffffUL;
-
-static struct platform_device pxa27x_device_ac97 = {
-	.name           = "pxa2xx-ac97",
-	.id             = -1,
-	.dev            = {
-		.dma_mask = &pxa_ac97_dmamask,
-		.coherent_dma_mask = 0xffffffff,
-	},
-	.num_resources  = ARRAY_SIZE(pxa27x_ac97_resources),
-	.resource       = pxa27x_ac97_resources,
-};
-
-/*
  * enable generic access to the base board control CPLDs U6 and U7
  */
 static struct map_desc pcm990_io_desc[] __initdata = {
@@ -393,8 +364,6 @@ void __init pcm990_baseboard_init(void)
 	/* register CPLD's IRQ controller */
 	pcm990_init_irq();
 
-	platform_device_register(&pxa27x_device_ac97);
-
 	/* MMC */
 	pxa_set_mci_info(&pcm990_mci_platform_data);
 
@@ -402,6 +371,7 @@ void __init pcm990_baseboard_init(void)
 	pxa_set_ohci_info(&pcm990_ohci_platform_data);
 
 	pxa_set_i2c_info(NULL);
+	pxa_set_ac97_info(NULL);
 
 #if defined(CONFIG_VIDEO_PXA27x) || defined(CONFIG_VIDEO_PXA27x_MODULE)
 	pxa_set_camera_info(&pcm990_pxacamera_platform_data);
