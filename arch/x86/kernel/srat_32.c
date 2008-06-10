@@ -269,7 +269,7 @@ int __init get_memcfg_from_srat(void)
 	struct acpi_table_header *header = NULL;
 	struct acpi_table_rsdp *rsdp = NULL;
 	struct acpi_table_rsdt *rsdt = NULL;
-	acpi_native_uint rsdp_address = 0;
+	u32 rsdp_address = 0;
 	struct acpi_static_rsdt saved_rsdt;
 	int tables = 0;
 	int i = 0;
