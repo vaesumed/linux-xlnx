@@ -257,7 +257,7 @@ firmware_data_write(struct kobject *kobj, struct bin_attribute *bin_attr,
 	if (retval)
 		goto out;
 
-	memcpy(fw->data + offset, buffer, count);
+	memcpy((u8 *)fw->data + offset, buffer, count);
 
 	fw->size = max_t(size_t, offset + count, fw->size);
 	retval = count;
@@ -290,12 +290,6 @@ firmware_class_timeout(u_long data)
 	fw_load_abort(fw_priv);
 }
 
-static inline void fw_setup_device_id(struct device *f_dev, struct device *dev)
-{
-	/* XXX warning we should watch out for name collisions */
-	strlcpy(f_dev->bus_id, dev->bus_id, BUS_ID_SIZE);
-}
-
 static int fw_register_device(struct device **dev_p, const char *fw_name,
 			      struct device *device)
 {
@@ -320,7 +314,7 @@ static int fw_register_device(struct device **dev_p, const char *fw_name,
 	fw_priv->timeout.data = (u_long) fw_priv;
 	init_timer(&fw_priv->timeout);
 
-	fw_setup_device_id(f_dev, device);
+	dev_set_name(f_dev, dev_name(device));
 	f_dev->parent = device;
 	f_dev->class = &firmware_class;
 	dev_set_drvdata(f_dev, fw_priv);

@@ -52,7 +52,7 @@ struct xen_bus_type
 {
 	char *root;
 	unsigned int levels;
-	int (*get_bus_id)(char bus_id[BUS_ID_SIZE], const char *nodename);
+	int (*get_bus_id)(char bus_id[20], const char *nodename);
 	int (*probe)(const char *type, const char *dir);
 	struct bus_type bus;
 };

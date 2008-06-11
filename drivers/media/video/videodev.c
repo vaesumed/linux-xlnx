@@ -2069,7 +2069,7 @@ int video_register_device(struct video_device *vfd, int type, int nr)
 		vfd->class_dev.parent = vfd->dev;
 	vfd->class_dev.class       = &video_class;
 	vfd->class_dev.devt        = MKDEV(VIDEO_MAJOR, vfd->minor);
-	sprintf(vfd->class_dev.bus_id, "%s%d", name_base, i - base);
+	dev_set_name(&vfd->class_dev, "%s%d", name_base, i - base);
 	ret = device_register(&vfd->class_dev);
 	if (ret < 0) {
 		printk(KERN_ERR "%s: device_register failed\n",
