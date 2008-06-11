@@ -121,6 +121,13 @@ config COMPUTONE
 	  To compile this driver as modules, choose M here: the
 	  modules will be called ip2 and ip2main.
 
+config COMPUTONE_FIRMWARE
+	bool "Firmware for Computone IntelliPort Plus serial devices"
+	depends on COMPUTONE
+	---help---
+	  This builds the firmware for the Intelliport Plus devices into the
+	  kernel image. Say 'N' and let it get loaded by udev.
+
 config ROCKETPORT
 	tristate "Comtrol RocketPort support"
 	depends on SERIAL_NONSTANDARD && (ISA || EISA || PCI)
