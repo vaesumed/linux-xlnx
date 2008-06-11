@@ -25,12 +25,23 @@ routines, and should be zero-initialized except for fields with data you
 provide.  A client structure holds device-specific information like the
 driver model device node, and its I2C address.
 
+/* iff driver uses driver model ("new style") binding model: */
+
+static struct i2c_device_id foo_idtable[] = {
+	{ "foo", my_id_for_foo },
+	{ "bar", my_id_for_bar },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(i2c, foo_idtable);
+
 static struct i2c_driver foo_driver = {
 	.driver = {
 		.name	= "foo",
 	},
 
 	/* iff driver uses driver model ("new style") binding model: */
+	.id_table	= foo_ids,
 	.probe		= foo_probe,
 	.remove		= foo_remove,
 
@@ -173,10 +184,9 @@ handle may be used during foo_probe().  If foo_probe() reports success
 (zero not a negative status code) it may save the handle and use it until
 foo_remove() returns.  That binding model is used by most Linux drivers.
 
-Drivers match devices when i2c_client.driver_name and the driver name are
-the same; this approach is used in several other busses that don't have
-device typing support in the hardware.  The driver and module name should
-match, so hotplug/coldplug mechanisms will modprobe the driver.
+The probe function is called when an entry in the id_table name field
+matches the device's name. It is passed the entry that was matched so
+the driver knows which one in the table matched.
 
 
 Device Creation (Standard driver model)
@@ -559,7 +569,6 @@ SMBus communication
   in terms of it. Never use this function directly!
 
 
-  extern s32 i2c_smbus_write_quick(struct i2c_client * client, u8 value);
   extern s32 i2c_smbus_read_byte(struct i2c_client * client);
   extern s32 i2c_smbus_write_byte(struct i2c_client * client, u8 value);
   extern s32 i2c_smbus_read_byte_data(struct i2c_client * client, u8 command);
@@ -568,30 +577,31 @@ SMBus communication
   extern s32 i2c_smbus_read_word_data(struct i2c_client * client, u8 command);
   extern s32 i2c_smbus_write_word_data(struct i2c_client * client,
                                        u8 command, u16 value);
+  extern s32 i2c_smbus_read_block_data(struct i2c_client * client,
+                                       u8 command, u8 *values);
   extern s32 i2c_smbus_write_block_data(struct i2c_client * client,
                                         u8 command, u8 length,
                                         u8 *values);
   extern s32 i2c_smbus_read_i2c_block_data(struct i2c_client * client,
                                            u8 command, u8 length, u8 *values);
-
-These ones were removed in Linux 2.6.10 because they had no users, but could
-be added back later if needed:
-
-  extern s32 i2c_smbus_read_block_data(struct i2c_client * client,
-                                       u8 command, u8 *values);
   extern s32 i2c_smbus_write_i2c_block_data(struct i2c_client * client,
                                             u8 command, u8 length,
                                             u8 *values);
+
+These ones were removed from i2c-core because they had no users, but could
+be added back later if needed:
+
+  extern s32 i2c_smbus_write_quick(struct i2c_client * client, u8 value);
   extern s32 i2c_smbus_process_call(struct i2c_client * client,
                                     u8 command, u16 value);
   extern s32 i2c_smbus_block_process_call(struct i2c_client *client,
                                           u8 command, u8 length,
                                           u8 *values)
 
-All these transactions return -1 on failure. The 'write' transactions 
-return 0 on success; the 'read' transactions return the read value, except 
-for read_block, which returns the number of values read. The block buffers 
-need not be longer than 32 bytes.
+All these transactions return a negative errno value on failure. The 'write'
+transactions return 0 on success; the 'read' transactions return the read
+value, except for block transactions, which return the number of values
+read. The block buffers need not be longer than 32 bytes.
 
 You can read the file `smbus-protocol' for more information about the
 actual SMBus protocol.
