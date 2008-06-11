@@ -87,7 +87,7 @@ unsigned long ide_pci_dma_base(ide_hwif_t *hwif, const struct ide_port_info *d)
 	unsigned long dma_base = 0;
 	u8 dma_stat = 0;
 
-	if (hwif->mmio)
+	if (hwif->host_flags & IDE_HFLAG_MMIO)
 		return hwif->dma_base;
 
 	if (hwif->mate && hwif->mate->dma_base) {
@@ -319,16 +319,16 @@ static ide_hwif_t *ide_hwif_configure(struct pci_dev *dev,
 
 		ctl  = pci_resource_start(dev, 2*port+1);
 		base = pci_resource_start(dev, 2*port);
-		if ((ctl && !base) || (base && !ctl)) {
-			printk(KERN_ERR "%s: inconsistent baseregs (BIOS) "
-				"for port %d, skipping\n", d->name, port);
-			return NULL;
-		}
-	}
-	if (!ctl) {
+	} else {
 		/* Use default values */
 		ctl = port ? 0x374 : 0x3f4;
 		base = port ? 0x170 : 0x1f0;
+	}
+
+	if (!base || !ctl) {
+		printk(KERN_ERR "%s: bad PCI BARs for port %d, skipping\n",
+				d->name, port);
+		return NULL;
 	}
 
 	hwif = ide_find_port_slot(d);
@@ -345,8 +345,6 @@ static ide_hwif_t *ide_hwif_configure(struct pci_dev *dev,
 	ide_std_init_ports(&hw, base, ctl | 2);
 
 	ide_init_port_hw(hwif, &hw);
-
-	hwif->dev = &dev->dev;
 
 	return hwif;
 }
@@ -374,7 +372,7 @@ int ide_hwif_setup_dma(ide_hwif_t *hwif, const struct ide_port_info *d)
 		if (base == 0 || ide_pci_set_master(dev, d->name) < 0)
 			return -1;
 
-		if (hwif->mmio)
+		if (hwif->host_flags & IDE_HFLAG_MMIO)
 			printk(KERN_INFO "    %s: MMIO-DMA\n", hwif->name);
 		else
 			printk(KERN_INFO "    %s: BM-DMA at 0x%04lx-0x%04lx\n",
