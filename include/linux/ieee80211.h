@@ -306,20 +306,32 @@ struct ieee80211_ht_addt_info {
 #define IEEE80211_HT_CAP_SGI_40			0x0040
 #define IEEE80211_HT_CAP_DELAY_BA		0x0400
 #define IEEE80211_HT_CAP_MAX_AMSDU		0x0800
+/* 802.11n HT capability AMPDU settings */
 #define IEEE80211_HT_CAP_AMPDU_FACTOR		0x03
 #define IEEE80211_HT_CAP_AMPDU_DENSITY		0x1C
+/* 802.11n HT capability MSC set */
+#define IEEE80211_SUPP_MCS_SET_UEQM		4
+#define IEEE80211_HT_CAP_MAX_STREAMS		4
+#define IEEE80211_SUPP_MCS_SET_LEN		10
+/* maximum streams the spec allows */
+#define IEEE80211_HT_CAP_MCS_TX_DEFINED		0x01
+#define IEEE80211_HT_CAP_MCS_TX_RX_DIFF		0x02
+#define IEEE80211_HT_CAP_MCS_TX_STREAMS		0x0C
+#define IEEE80211_HT_CAP_MCS_TX_UEQM		0x10
 /* 802.11n HT IE masks */
 #define IEEE80211_HT_IE_CHA_SEC_OFFSET		0x03
+#define IEEE80211_HT_IE_CHA_SEC_ABOVE 		0x01
+#define IEEE80211_HT_IE_CHA_SEC_BELOW 		0x03
 #define IEEE80211_HT_IE_CHA_WIDTH		0x04
 #define IEEE80211_HT_IE_HT_PROTECTION		0x0003
 #define IEEE80211_HT_IE_NON_GF_STA_PRSNT	0x0004
 #define IEEE80211_HT_IE_NON_HT_STA_PRSNT	0x0010
 
 /* MIMO Power Save Modes */
-#define WLAN_HT_CAP_MIMO_PS_STATIC         0
-#define WLAN_HT_CAP_MIMO_PS_DYNAMIC        1
-#define WLAN_HT_CAP_MIMO_PS_INVALID        2
-#define WLAN_HT_CAP_MIMO_PS_DISABLED       3
+#define WLAN_HT_CAP_MIMO_PS_STATIC	0
+#define WLAN_HT_CAP_MIMO_PS_DYNAMIC	1
+#define WLAN_HT_CAP_MIMO_PS_INVALID	2
+#define WLAN_HT_CAP_MIMO_PS_DISABLED	3
 
 /* Authentication algorithms */
 #define WLAN_AUTH_OPEN 0
@@ -552,16 +564,17 @@ enum ieee80211_back_parties {
  */
 static inline u8 *ieee80211_get_SA(struct ieee80211_hdr *hdr)
 {
-	u8 *raw = (u8 *) hdr;
-	u8 tofrom = (*(raw+1)) & 3; /* get the TODS and FROMDS bits */
+	__le16 fc = hdr->frame_control;
+	fc &= cpu_to_le16(IEEE80211_FCTL_TODS | IEEE80211_FCTL_FROMDS);
 
-	switch (tofrom) {
-		case 2:
-			return hdr->addr3;
-		case 3:
-			return hdr->addr4;
+	switch (fc) {
+	case __constant_cpu_to_le16(IEEE80211_FCTL_FROMDS):
+		return hdr->addr3;
+	case __constant_cpu_to_le16(IEEE80211_FCTL_TODS|IEEE80211_FCTL_FROMDS):
+		return hdr->addr4;
+	default:
+		return hdr->addr2;
 	}
-	return hdr->addr2;
 }
 
 /**
@@ -577,12 +590,13 @@ static inline u8 *ieee80211_get_SA(struct ieee80211_hdr *hdr)
  */
 static inline u8 *ieee80211_get_DA(struct ieee80211_hdr *hdr)
 {
-	u8 *raw = (u8 *) hdr;
-	u8 to_ds = (*(raw+1)) & 1; /* get the TODS bit */
+	__le16 fc = hdr->frame_control;
+	fc &= cpu_to_le16(IEEE80211_FCTL_TODS);
 
-	if (to_ds)
+	if (fc)
 		return hdr->addr3;
-	return hdr->addr1;
+	else
+		return hdr->addr1;
 }
 
 /**
@@ -595,8 +609,8 @@ static inline u8 *ieee80211_get_DA(struct ieee80211_hdr *hdr)
  */
 static inline int ieee80211_get_morefrag(struct ieee80211_hdr *hdr)
 {
-	return (le16_to_cpu(hdr->frame_control) &
-		IEEE80211_FCTL_MOREFRAGS) != 0;
+	__le16 fc = hdr->frame_control;
+	return !!(fc & cpu_to_le16(IEEE80211_FCTL_MOREFRAGS));
 }
 
 #endif /* IEEE80211_H */
