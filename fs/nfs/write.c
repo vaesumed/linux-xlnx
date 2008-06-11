@@ -142,7 +142,9 @@ static void nfs_grow_file(struct page *page, unsigned int offset, unsigned int c
 	if (i_size >= end)
 		return;
 	nfs_inc_stats(inode, NFSIOS_EXTENDWRITE);
+	spin_lock(&inode->i_lock);
 	i_size_write(inode, end);
+	spin_unlock(&inode->i_lock);
 }
 
 /* A writeback failed: mark the page as bad, and invalidate the page cache */
