@@ -24,6 +24,7 @@
 #include <linux/spinlock.h>
 #include <linux/mutex.h>
 #include <linux/mm.h>
+#include <linux/smp_lock.h>
 
 #include <asm/openprom.h>
 #include <asm/oplib.h>
@@ -179,14 +180,17 @@ static int vfc_open(struct inode *inode, struct file *file)
 {
 	struct vfc_dev *dev;
 
+	lock_kernel();
 	spin_lock(&vfc_dev_lock);
 	dev = vfc_get_dev_ptr(iminor(inode));
 	if (dev == NULL) {
 		spin_unlock(&vfc_dev_lock);
+		unlock_kernel();
 		return -ENODEV;
 	}
 	if (dev->busy) {
 		spin_unlock(&vfc_dev_lock);
+		unlock_kernel();
 		return -EBUSY;
 	}
 
@@ -203,6 +207,7 @@ static int vfc_open(struct inode *inode, struct file *file)
 	vfc_captstat_reset(dev);
 	
 	vfc_unlock_device(dev);
+	unlock_kernel();
 	return 0;
 }
 
