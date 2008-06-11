@@ -929,23 +929,34 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	 */
 	old_inode->i_ctime = time;
 
-	/*
-	 * If we moved a directory to another parent directory, decrement
-	 * @i_nlink of the old parent. Also, update @i_size of the old parent
-	 * as well as its [mc]time.
-	 */
-	if (is_dir && move)
-		drop_nlink(old_dir);
+	/* We must adjust parent link count when renaming directories */
+	if (is_dir) {
+		if (move) {
+			/*
+			 * @old_dir loses a link because we are moving
+			 * @old_inode to a different directory.
+			 */
+			drop_nlink(old_dir);
+			/*
+			 * @new_dir only gains a link if we are not also
+			 * overwriting an existing directory.
+			 */
+			if (!unlink)
+				inc_nlink(new_dir);
+		} else {
+			/*
+			 * @old_inode is not moving to a different directory,
+			 * but @old_dir still loses a link if we are
+			 * overwriting an existing directory.
+			 */
+			if (unlink)
+				drop_nlink(old_dir);
+		}
+	}
+
 	old_dir->i_size -= old_sz;
 	old_dir->i_mtime = old_dir->i_ctime = time;
 	new_dir->i_mtime = new_dir->i_ctime = time;
-
-	/*
-	 * If we moved a directory object to new directory, parent's @i_nlink
-	 * should be adjusted.
-	 */
-	if (move && is_dir)
-		inc_nlink(new_dir);
 
 	/*
 	 * And finally, if we unlinked a direntry which happened to have the
