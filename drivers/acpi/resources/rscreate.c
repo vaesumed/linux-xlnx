@@ -315,8 +315,8 @@ acpi_rs_create_pci_routing_table(union acpi_operand_object *package_object,
 					ACPI_ERROR((AE_INFO,
 						    "(PRT[%X].Source) Need name, found reference op %X",
 						    index,
-						    obj_desc->reference.
-						    opcode));
+						    obj_desc->
+						    reference.opcode));
 					return_ACPI_STATUS(AE_BAD_DATA);
 				}
 

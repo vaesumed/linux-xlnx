@@ -491,4 +491,4 @@ typedef enum {
 #define AML_METHOD_RESERVED1        0x02
 #define AML_METHOD_RESERVED2        0x04
 
-#endif				/* __AMLCODE_H__ */
+#endif /* __AMLCODE_H__ */

@@ -65,7 +65,7 @@ ACPI_MODULE_NAME("tbfind")
  ******************************************************************************/
 acpi_status
 acpi_tb_find_table(char *signature,
-		   char *oem_id, char *oem_table_id, u32 *table_index)
+		   char *oem_id, char *oem_table_id, u32 * table_index)
 {
 	u32 i;
 	acpi_status status;
@@ -98,8 +98,8 @@ acpi_tb_find_table(char *signature,
 			/* Table is not currently mapped, map it */
 
 			status =
-			    acpi_tb_verify_table(&acpi_gbl_root_table_list.
-						 tables[i]);
+			    acpi_tb_verify_table
+			    (&acpi_gbl_root_table_list.tables[i]);
 			if (ACPI_FAILURE(status)) {
 				return_ACPI_STATUS(status);
 			}
@@ -116,14 +116,13 @@ acpi_tb_find_table(char *signature,
 		     header.signature, ACPI_NAME_SIZE) && (!oem_id[0]
 							   ||
 							   !ACPI_MEMCMP
-							   (acpi_gbl_root_table_list.
-							    tables[i].pointer->
-							    oem_id,
+							   (acpi_gbl_root_table_list.tables
+							    [i].pointer->oem_id,
 							    header.oem_id,
 							    ACPI_OEM_ID_SIZE))
 		    && (!oem_table_id[0]
-			|| !ACPI_MEMCMP(acpi_gbl_root_table_list.tables[i].
-					pointer->oem_table_id,
+			|| !ACPI_MEMCMP(acpi_gbl_root_table_list.
+					tables[i].pointer->oem_table_id,
 					header.oem_table_id,
 					ACPI_OEM_TABLE_ID_SIZE))) {
 			*table_index = i;

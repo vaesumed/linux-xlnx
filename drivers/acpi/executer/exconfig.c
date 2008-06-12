@@ -411,7 +411,7 @@ acpi_ex_load_op(union acpi_operand_object *obj_desc,
 					     acpi_gbl_table_handler_context);
 	}
 
-      cleanup:
+cleanup:
 	if (ACPI_FAILURE(status)) {
 
 		/* Delete allocated buffer or mapping */

@@ -438,4 +438,4 @@ void
 acpi_dm_check_resource_reference(union acpi_parse_object *op,
 				 struct acpi_walk_state *walk_state);
 
-#endif				/* __ACDISASM_H__ */
+#endif /* __ACDISASM_H__ */

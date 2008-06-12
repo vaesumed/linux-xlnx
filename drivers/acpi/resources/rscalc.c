@@ -268,9 +268,8 @@ acpi_rs_get_aml_length(struct acpi_resource * resource, acpi_size * size_needed)
 			 */
 			total_size = (acpi_rs_length)
 			    (total_size +
-			     acpi_rs_struct_option_length(&resource->data.
-							  address16.
-							  resource_source));
+			     acpi_rs_struct_option_length(&resource->
+							  data.address16.resource_source));
 			break;
 
 		case ACPI_RESOURCE_TYPE_ADDRESS32:
@@ -280,9 +279,8 @@ acpi_rs_get_aml_length(struct acpi_resource * resource, acpi_size * size_needed)
 			 */
 			total_size = (acpi_rs_length)
 			    (total_size +
-			     acpi_rs_struct_option_length(&resource->data.
-							  address32.
-							  resource_source));
+			     acpi_rs_struct_option_length(&resource->
+							  data.address32.resource_source));
 			break;
 
 		case ACPI_RESOURCE_TYPE_ADDRESS64:
@@ -292,9 +290,8 @@ acpi_rs_get_aml_length(struct acpi_resource * resource, acpi_size * size_needed)
 			 */
 			total_size = (acpi_rs_length)
 			    (total_size +
-			     acpi_rs_struct_option_length(&resource->data.
-							  address64.
-							  resource_source));
+			     acpi_rs_struct_option_length(&resource->
+							  data.address64.resource_source));
 			break;
 
 		case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:
@@ -308,9 +305,8 @@ acpi_rs_get_aml_length(struct acpi_resource * resource, acpi_size * size_needed)
 			     ((resource->data.extended_irq.interrupt_count -
 			       1) * 4) +
 			     /* Add the size of the optional resource_source info */
-			     acpi_rs_struct_option_length(&resource->data.
-							  extended_irq.
-							  resource_source));
+			     acpi_rs_struct_option_length(&resource->
+							  data.extended_irq.resource_source));
 			break;
 
 		default:
@@ -582,8 +578,8 @@ acpi_rs_get_pci_routing_table_length(union acpi_operand_object *package_object,
 				 * terminating NULL, add 1
 				 */
 				temp_size_needed += ((acpi_size)
-						     (*sub_object_list)->string.
-						     length + 1);
+						     (*sub_object_list)->
+						     string.length + 1);
 			} else {
 				temp_size_needed +=
 				    acpi_ns_get_pathname_length((*sub_object_list)->reference.node);

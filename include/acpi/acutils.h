@@ -199,7 +199,7 @@ extern const u8 _acpi_ctype[];
 #define ACPI_IS_PRINT(c)  (_acpi_ctype[(unsigned char)(c)] & (_ACPI_LO | _ACPI_UP | _ACPI_DI | _ACPI_SP | _ACPI_PU))
 #define ACPI_IS_ALPHA(c)  (_acpi_ctype[(unsigned char)(c)] & (_ACPI_LO | _ACPI_UP))
 
-#endif				/* ACPI_USE_SYSTEM_CLIBRARY */
+#endif /* ACPI_USE_SYSTEM_CLIBRARY */
 
 /*
  * utcopy - Object construction and conversion interfaces
@@ -283,7 +283,7 @@ acpi_ut_value_exit(u32 line_number,
 void
 acpi_ut_ptr_exit(u32 line_number,
 		 const char *function_name,
-		 const char *module_name, u32 component_id, u8 *ptr);
+		 const char *module_name, u32 component_id, u8 * ptr);
 
 void acpi_ut_dump_buffer(u8 * buffer, u32 count, u32 display, u32 component_id);
 
@@ -440,7 +440,7 @@ acpi_ut_create_pkg_state_and_push(void *internal_object,
 				  void *external_object,
 				  u16 index,
 				  union acpi_generic_state **state_list);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 union acpi_generic_state *acpi_ut_create_control_state(void);
 
@@ -570,7 +570,7 @@ acpi_ut_free_and_track(void *address,
 
 #ifdef	ACPI_FUTURE_USAGE
 void acpi_ut_dump_allocation_info(void);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 void acpi_ut_dump_allocations(u32 component, const char *module);
 
@@ -580,4 +580,4 @@ acpi_ut_create_list(char *list_name,
 
 #endif
 
-#endif				/* _ACUTILS_H */
+#endif /* _ACUTILS_H */

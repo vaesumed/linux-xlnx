@@ -98,7 +98,7 @@ void acpi_free(void *address);
  */
 acpi_status acpi_reallocate_root_table(void);
 
-acpi_status acpi_find_root_pointer(acpi_size *rsdp_address);
+acpi_status acpi_find_root_pointer(acpi_size * rsdp_address);
 
 acpi_status acpi_load_tables(void);
 
@@ -108,19 +108,16 @@ acpi_status acpi_unload_table_id(acpi_owner_id id);
 
 acpi_status
 acpi_get_table_header(acpi_string signature,
-		      u32 instance,
-		      struct acpi_table_header *out_table_header);
+		      u32 instance, struct acpi_table_header *out_table_header);
 
 acpi_status
 acpi_get_table(acpi_string signature,
 	       u32 instance, struct acpi_table_header **out_table);
 
 acpi_status
-acpi_get_table_by_index(u32 table_index,
-			struct acpi_table_header **out_table);
+acpi_get_table_by_index(u32 table_index, struct acpi_table_header **out_table);
 
-acpi_status
-acpi_install_table_handler(acpi_tbl_handler handler, void *context);
+acpi_status acpi_install_table_handler(acpi_tbl_handler handler, void *context);
 
 acpi_status acpi_remove_table_handler(acpi_tbl_handler handler);
 
@@ -250,7 +247,7 @@ acpi_status acpi_clear_event(u32 event);
 
 #ifdef ACPI_FUTURE_USAGE
 acpi_status acpi_get_event_status(u32 event, acpi_event_status * event_status);
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 
 acpi_status acpi_set_gpe_type(acpi_handle gpe_device, u32 gpe_number, u8 type);
 
@@ -265,7 +262,7 @@ acpi_status
 acpi_get_gpe_status(acpi_handle gpe_device,
 		    u32 gpe_number,
 		    u32 flags, acpi_event_status * event_status);
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 
 acpi_status
 acpi_install_gpe_block(acpi_handle gpe_device,
@@ -319,7 +316,7 @@ acpi_resource_to_address64(struct acpi_resource *resource,
  */
 acpi_status acpi_get_register(u32 register_id, u32 * return_value);
 
-acpi_status acpi_get_register_unlocked(u32 register_id, u32 *return_value);
+acpi_status acpi_get_register_unlocked(u32 register_id, u32 * return_value);
 
 acpi_status acpi_set_register(u32 register_id, u32 value);
 
@@ -344,4 +341,4 @@ acpi_status acpi_leave_sleep_state_prep(u8 sleep_state);
 
 acpi_status acpi_leave_sleep_state(u8 sleep_state);
 
-#endif				/* __ACXFACE_H__ */
+#endif /* __ACXFACE_H__ */

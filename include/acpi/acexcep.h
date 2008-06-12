@@ -304,6 +304,6 @@ char const *acpi_gbl_exception_names_ctrl[] = {
 	"AE_CTRL_PARSE_PENDING"
 };
 
-#endif				/* ACPI GLOBALS */
+#endif /* ACPI GLOBALS */
 
-#endif				/* __ACEXCEP_H__ */
+#endif /* __ACEXCEP_H__ */

@@ -49,7 +49,7 @@
 #define _COMPONENT          ACPI_DISPATCHER
 ACPI_MODULE_NAME("dswstate")
 
-  /* Local prototypes */
+    /* Local prototypes */
 static acpi_status acpi_ds_result_stack_push(struct acpi_walk_state *ws);
 static acpi_status acpi_ds_result_stack_pop(struct acpi_walk_state *ws);
 
@@ -672,8 +672,9 @@ acpi_ds_init_aml_walk(struct acpi_walk_state *walk_state,
 
 			status =
 			    acpi_ds_scope_stack_push(parser_state->start_node,
-						     parser_state->start_node->
-						     type, walk_state);
+						     parser_state->
+						     start_node->type,
+						     walk_state);
 			if (ACPI_FAILURE(status)) {
 				return_ACPI_STATUS(status);
 			}

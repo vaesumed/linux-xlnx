@@ -330,10 +330,10 @@ acpi_ex_do_concatenate(union acpi_operand_object *operand0,
 		/* Result of two Strings is a String */
 
 		return_desc = acpi_ut_create_string_object(((acpi_size)
-							    operand0->string.
-							    length +
-							    local_operand1->
-							    string.length));
+							    operand0->
+							    string.length +
+							    local_operand1->string.
+							    length));
 		if (!return_desc) {
 			status = AE_NO_MEMORY;
 			goto cleanup;
@@ -353,10 +353,10 @@ acpi_ex_do_concatenate(union acpi_operand_object *operand0,
 		/* Result of two Buffers is a Buffer */
 
 		return_desc = acpi_ut_create_buffer_object(((acpi_size)
-							    operand0->buffer.
-							    length +
-							    local_operand1->
-							    buffer.length));
+							    operand0->
+							    buffer.length +
+							    local_operand1->buffer.
+							    length));
 		if (!return_desc) {
 			status = AE_NO_MEMORY;
 			goto cleanup;
@@ -385,7 +385,7 @@ acpi_ex_do_concatenate(union acpi_operand_object *operand0,
 
 	*actual_return_desc = return_desc;
 
-      cleanup:
+cleanup:
 	if (local_operand1 != operand1) {
 		acpi_ut_remove_reference(local_operand1);
 	}
@@ -710,7 +710,7 @@ acpi_ex_do_logical_op(u16 opcode,
 		}
 	}
 
-      cleanup:
+cleanup:
 
 	/* New object was created if implicit conversion performed - delete */
 

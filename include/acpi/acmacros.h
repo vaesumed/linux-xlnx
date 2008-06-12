@@ -548,7 +548,7 @@ struct acpi_integer_overlay {
 											register u32 _s = (u32) (s); \
 											acpi_ut_value_exit (ACPI_DEBUG_PARAMETERS, (acpi_integer) _s); \
 											return (_s); })
-#else				/* Use original less-safe macros */
+#else /* Use original less-safe macros */
 
 #define return_ACPI_STATUS(s)           ACPI_DO_WHILE0 ({ \
 											acpi_ut_status_exit (ACPI_DEBUG_PARAMETERS, (s)); \
@@ -562,7 +562,7 @@ struct acpi_integer_overlay {
 #define return_UINT8(s)                 return_VALUE(s)
 #define return_UINT32(s)                return_VALUE(s)
 
-#endif				/* ACPI_SIMPLE_RETURN_MACROS */
+#endif /* ACPI_SIMPLE_RETURN_MACROS */
 
 #else /* !CONFIG_ACPI_DEBUG_FUNC_TRACE */
 
@@ -701,6 +701,6 @@ struct acpi_integer_overlay {
 #define ACPI_FREE(a)                acpi_ut_free_and_track(a,_COMPONENT,_acpi_module_name,__LINE__)
 #define ACPI_MEM_TRACKING(a)        a
 
-#endif				/* ACPI_DBG_TRACK_ALLOCATIONS */
+#endif /* ACPI_DBG_TRACK_ALLOCATIONS */
 
-#endif				/* ACMACROS_H */
+#endif /* ACMACROS_H */

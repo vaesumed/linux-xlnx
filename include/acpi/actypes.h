@@ -776,8 +776,7 @@ acpi_status(*acpi_exception_handler) (acpi_status aml_status,
 
 /* Table Event handler (Load, load_table etc) and types */
 
-typedef
-acpi_status(*acpi_tbl_handler) (u32 event, void *table, void *context);
+typedef acpi_status(*acpi_tbl_handler) (u32 event, void *table, void *context);
 
 /* Address Spaces (For Operation Regions) */
 
@@ -1239,4 +1238,4 @@ struct acpi_pci_routing_table {
 	char source[4];		/* pad to 64 bits so sizeof() works in all cases */
 };
 
-#endif				/* __ACTYPES_H__ */
+#endif /* __ACTYPES_H__ */

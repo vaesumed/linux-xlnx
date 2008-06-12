@@ -415,8 +415,8 @@ acpi_ex_dump_object(union acpi_operand_object *obj_desc,
 
 			acpi_ex_out_string("Opcode",
 					   (acpi_ps_get_opcode_info
-					    (obj_desc->reference.opcode))->
-					   name);
+					    (obj_desc->reference.
+					     opcode))->name);
 			acpi_ex_dump_reference_obj(obj_desc);
 			break;
 
@@ -518,10 +518,9 @@ void acpi_ex_dump_operand(union acpi_operand_object *obj_desc, u32 depth)
 				       obj_desc->reference.object,
 				       acpi_ut_get_type_name(((union
 							       acpi_operand_object
-							       *)obj_desc->
-							      reference.
-							      object)->common.
-							     type));
+							       *)
+							      obj_desc->reference.object)->
+							     common.type));
 			break;
 
 		case AML_ARG_OP:
@@ -534,9 +533,8 @@ void acpi_ex_dump_operand(union acpi_operand_object *obj_desc, u32 depth)
 				/* Value is an Integer */
 
 				acpi_os_printf(" value is [%8.8X%8.8x]",
-					       ACPI_FORMAT_UINT64(obj_desc->
-								  integer.
-								  value));
+					       ACPI_FORMAT_UINT64
+					       (obj_desc->integer.value));
 			}
 
 			acpi_os_printf("\n");
@@ -552,9 +550,8 @@ void acpi_ex_dump_operand(union acpi_operand_object *obj_desc, u32 depth)
 				/* Value is an Integer */
 
 				acpi_os_printf(" value is [%8.8X%8.8x]",
-					       ACPI_FORMAT_UINT64(obj_desc->
-								  integer.
-								  value));
+					       ACPI_FORMAT_UINT64
+					       (obj_desc->integer.value));
 			}
 
 			acpi_os_printf("\n");
@@ -619,8 +616,8 @@ void acpi_ex_dump_operand(union acpi_operand_object *obj_desc, u32 depth)
 		    obj_desc->package.elements && acpi_dbg_level > 1) {
 			for (index = 0; index < obj_desc->package.count;
 			     index++) {
-				acpi_ex_dump_operand(obj_desc->package.
-						     elements[index],
+				acpi_ex_dump_operand(obj_desc->
+						     package.elements[index],
 						     depth + 1);
 			}
 		}
@@ -629,8 +626,8 @@ void acpi_ex_dump_operand(union acpi_operand_object *obj_desc, u32 depth)
 	case ACPI_TYPE_REGION:
 
 		acpi_os_printf("Region %s (%X)",
-			       acpi_ut_get_region_name(obj_desc->region.
-						       space_id),
+			       acpi_ut_get_region_name(obj_desc->
+						       region.space_id),
 			       obj_desc->region.space_id);
 
 		/*
@@ -641,8 +638,8 @@ void acpi_ex_dump_operand(union acpi_operand_object *obj_desc, u32 depth)
 			acpi_os_printf("\n");
 		} else {
 			acpi_os_printf(" base %8.8X%8.8X Length %X\n",
-				       ACPI_FORMAT_NATIVE_UINT(obj_desc->region.
-							       address),
+				       ACPI_FORMAT_NATIVE_UINT(obj_desc->
+							       region.address),
 				       obj_desc->region.length);
 		}
 		break;
@@ -893,11 +890,7 @@ static void acpi_ex_dump_reference_obj(union acpi_operand_object *obj_desc)
 					       acpi_ut_get_type_name(((union
 								       acpi_operand_object
 								       *)
-								      obj_desc->
-								      reference.
-								      object)->
-								     common.
-								     type));
+								      obj_desc->reference.object)->common.type));
 			}
 		} else {
 			acpi_os_printf(" Target: %p\n",
@@ -1034,8 +1027,8 @@ acpi_ex_dump_object_descriptor(union acpi_operand_object *obj_desc, u32 flags)
 					    obj_desc, flags);
 
 		acpi_os_printf("\nAttached Object (%p):\n",
-			       ((struct acpi_namespace_node *)obj_desc)->
-			       object);
+			       ((struct acpi_namespace_node *)
+				obj_desc)->object);
 
 		acpi_ex_dump_object_descriptor(((struct acpi_namespace_node *)
 						obj_desc)->object, flags);

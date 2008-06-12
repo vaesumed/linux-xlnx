@@ -151,7 +151,7 @@ int acpi_ns_compare_names(char *name1, char *name2);
  */
 #ifdef	ACPI_FUTURE_USAGE
 void acpi_ns_dump_tables(acpi_handle search_base, u32 max_depth);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 void acpi_ns_dump_entry(acpi_handle handle, u32 debug_level);
 
@@ -170,7 +170,7 @@ acpi_ns_dump_objects(acpi_object_type type,
 		     u8 display_type,
 		     u32 max_depth,
 		     acpi_owner_id owner_id, acpi_handle start_handle);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 /*
  * nseval - Namespace evaluation functions
@@ -302,4 +302,4 @@ struct acpi_namespace_node *acpi_ns_get_next_valid_node(struct
 							acpi_namespace_node
 							*node);
 
-#endif				/* __ACNAMESP_H__ */
+#endif /* __ACNAMESP_H__ */

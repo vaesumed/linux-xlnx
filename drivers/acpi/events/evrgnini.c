@@ -87,10 +87,9 @@ acpi_ev_system_memory_region_setup(acpi_handle handle,
 			/* Delete a cached mapping if present */
 
 			if (local_region_context->mapped_length) {
-				acpi_os_unmap_memory(local_region_context->
-						     mapped_logical_address,
-						     local_region_context->
-						     mapped_length);
+				acpi_os_unmap_memory
+				    (local_region_context->mapped_logical_address,
+				     local_region_context->mapped_length);
 			}
 			ACPI_FREE(local_region_context);
 			*region_context = NULL;

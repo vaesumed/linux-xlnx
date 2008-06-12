@@ -427,8 +427,9 @@ acpi_status acpi_ev_acquire_global_lock(u16 timeout)
 	 * Only one thread can acquire the GL at a time, the global_lock_mutex
 	 * enforces this. This interface releases the interpreter if we must wait.
 	 */
-	status = acpi_ex_system_wait_mutex(
-			acpi_gbl_global_lock_mutex->mutex.os_mutex, 0);
+	status =
+	    acpi_ex_system_wait_mutex(acpi_gbl_global_lock_mutex->mutex.
+				      os_mutex, 0);
 	if (status == AE_TIME) {
 		if (acpi_ev_global_lock_thread_id == acpi_os_get_thread_id()) {
 			acpi_ev_global_lock_acquired++;
@@ -437,9 +438,9 @@ acpi_status acpi_ev_acquire_global_lock(u16 timeout)
 	}
 
 	if (ACPI_FAILURE(status)) {
-		status = acpi_ex_system_wait_mutex(
-				acpi_gbl_global_lock_mutex->mutex.os_mutex,
-				timeout);
+		status =
+		    acpi_ex_system_wait_mutex(acpi_gbl_global_lock_mutex->mutex.
+					      os_mutex, timeout);
 	}
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);

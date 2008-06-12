@@ -244,8 +244,8 @@ acpi_ex_convert_to_buffer(union acpi_operand_object *obj_desc,
 		 * buffer.
 		 */
 		return_desc = acpi_ut_create_buffer_object((acpi_size)
-							   obj_desc->string.
-							   length + 1);
+							   obj_desc->
+							   string.length + 1);
 		if (!return_desc) {
 			return_ACPI_STATUS(AE_NO_MEMORY);
 		}
@@ -526,9 +526,9 @@ acpi_ex_convert_to_string(union acpi_operand_object * obj_desc,
 		 */
 		for (i = 0; i < obj_desc->buffer.length; i++) {
 			new_buf += acpi_ex_convert_to_ascii((acpi_integer)
-							    obj_desc->buffer.
-							    pointer[i], base,
-							    new_buf, 1);
+							    obj_desc->
+							    buffer.pointer[i],
+							    base, new_buf, 1);
 			*new_buf++ = separator;	/* each separated by a comma or space */
 		}
 
@@ -662,8 +662,8 @@ acpi_ex_convert_to_target_type(acpi_object_type destination_type,
 	default:
 		ACPI_ERROR((AE_INFO,
 			    "Unknown Target type ID 0x%X AmlOpcode %X DestType %s",
-			    GET_CURRENT_ARG_TYPE(walk_state->op_info->
-						 runtime_args),
+			    GET_CURRENT_ARG_TYPE(walk_state->
+						 op_info->runtime_args),
 			    walk_state->opcode,
 			    acpi_ut_get_type_name(destination_type)));
 		status = AE_AML_INTERNAL;

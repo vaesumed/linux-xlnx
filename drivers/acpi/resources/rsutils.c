@@ -216,8 +216,9 @@ acpi_rs_set_resource_length(acpi_rsdesc_size total_length,
 		aml->small_header.descriptor_type = (u8)
 
 		    /* Clear any existing length, preserving descriptor type bits */
-		    ((aml->small_header.
-		      descriptor_type & ~ACPI_RESOURCE_NAME_SMALL_LENGTH_MASK)
+		    ((aml->
+		      small_header.descriptor_type &
+		      ~ACPI_RESOURCE_NAME_SMALL_LENGTH_MASK)
 
 		     | resource_length);
 	}
@@ -585,7 +586,7 @@ acpi_rs_get_prs_method_data(struct acpi_namespace_node *node,
 	acpi_ut_remove_reference(obj_desc);
 	return_ACPI_STATUS(status);
 }
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 
 /*******************************************************************************
  *
@@ -720,7 +721,7 @@ acpi_rs_set_srs_method_data(struct acpi_namespace_node *node,
 
 	acpi_ut_remove_reference(args[0]);
 
-      cleanup:
+cleanup:
 	ACPI_FREE(info);
 	return_ACPI_STATUS(status);
 }
