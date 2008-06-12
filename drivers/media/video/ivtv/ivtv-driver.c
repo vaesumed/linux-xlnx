@@ -191,6 +191,7 @@ MODULE_PARM_DESC(cardtype,
 		 "\t\t\t23 = AverMedia PVR-150 Plus\n"
 		 "\t\t\t24 = AverMedia EZMaker PCI Deluxe\n"
 		 "\t\t\t25 = AverMedia M104 (not yet working)\n"
+		 "\t\t\t26 = Buffalo PC-MV5L/PCI\n"
 		 "\t\t\t 0 = Autodetect (default)\n"
 		 "\t\t\t-1 = Ignore this card\n\t\t");
 MODULE_PARM_DESC(pal, "Set PAL standard: BGH, DK, I, M, N, Nc, 60");
@@ -1019,7 +1020,7 @@ static int __devinit ivtv_probe(struct pci_dev *dev,
 	ivtv_cards[ivtv_cards_active] = itv;
 	itv->dev = dev;
 	itv->num = ivtv_cards_active++;
-	snprintf(itv->name, sizeof(itv->name) - 1, "ivtv%d", itv->num);
+	snprintf(itv->name, sizeof(itv->name), "ivtv%d", itv->num);
 	IVTV_INFO("Initializing card #%d\n", itv->num);
 
 	spin_unlock(&ivtv_cards_lock);
