@@ -56,8 +56,8 @@
 
 #define DRV_MODULE_NAME		"bnx2"
 #define PFX DRV_MODULE_NAME	": "
-#define DRV_MODULE_VERSION	"1.7.5"
-#define DRV_MODULE_RELDATE	"April 29, 2008"
+#define DRV_MODULE_VERSION	"1.7.6"
+#define DRV_MODULE_RELDATE	"May 16, 2008"
 
 #define RUN_AT(x) (jiffies + (x))
 
@@ -1875,7 +1875,7 @@ bnx2_setup_phy(struct bnx2 *bp, u8 port)
 }
 
 static int
-bnx2_init_5709s_phy(struct bnx2 *bp)
+bnx2_init_5709s_phy(struct bnx2 *bp, int reset_phy)
 {
 	u32 val;
 
@@ -1890,7 +1890,8 @@ bnx2_init_5709s_phy(struct bnx2 *bp)
 	bnx2_write_phy(bp, MII_BNX2_AER_AER, MII_BNX2_AER_AER_AN_MMD);
 
 	bnx2_write_phy(bp, MII_BNX2_BLK_ADDR, MII_BNX2_BLK_ADDR_COMBO_IEEEB0);
-	bnx2_reset_phy(bp);
+	if (reset_phy)
+		bnx2_reset_phy(bp);
 
 	bnx2_write_phy(bp, MII_BNX2_BLK_ADDR, MII_BNX2_BLK_ADDR_SERDES_DIG);
 
@@ -1924,11 +1925,12 @@ bnx2_init_5709s_phy(struct bnx2 *bp)
 }
 
 static int
-bnx2_init_5708s_phy(struct bnx2 *bp)
+bnx2_init_5708s_phy(struct bnx2 *bp, int reset_phy)
 {
 	u32 val;
 
-	bnx2_reset_phy(bp);
+	if (reset_phy)
+		bnx2_reset_phy(bp);
 
 	bp->mii_up1 = BCM5708S_UP1;
 
@@ -1981,9 +1983,10 @@ bnx2_init_5708s_phy(struct bnx2 *bp)
 }
 
 static int
-bnx2_init_5706s_phy(struct bnx2 *bp)
+bnx2_init_5706s_phy(struct bnx2 *bp, int reset_phy)
 {
-	bnx2_reset_phy(bp);
+	if (reset_phy)
+		bnx2_reset_phy(bp);
 
 	bp->phy_flags &= ~BNX2_PHY_FLAG_PARALLEL_DETECT;
 
@@ -2018,11 +2021,12 @@ bnx2_init_5706s_phy(struct bnx2 *bp)
 }
 
 static int
-bnx2_init_copper_phy(struct bnx2 *bp)
+bnx2_init_copper_phy(struct bnx2 *bp, int reset_phy)
 {
 	u32 val;
 
-	bnx2_reset_phy(bp);
+	if (reset_phy)
+		bnx2_reset_phy(bp);
 
 	if (bp->phy_flags & BNX2_PHY_FLAG_CRC_FIX) {
 		bnx2_write_phy(bp, 0x18, 0x0c00);
@@ -2070,7 +2074,7 @@ bnx2_init_copper_phy(struct bnx2 *bp)
 
 
 static int
-bnx2_init_phy(struct bnx2 *bp)
+bnx2_init_phy(struct bnx2 *bp, int reset_phy)
 {
 	u32 val;
 	int rc = 0;
@@ -2096,14 +2100,14 @@ bnx2_init_phy(struct bnx2 *bp)
 
 	if (bp->phy_flags & BNX2_PHY_FLAG_SERDES) {
 		if (CHIP_NUM(bp) == CHIP_NUM_5706)
-			rc = bnx2_init_5706s_phy(bp);
+			rc = bnx2_init_5706s_phy(bp, reset_phy);
 		else if (CHIP_NUM(bp) == CHIP_NUM_5708)
-			rc = bnx2_init_5708s_phy(bp);
+			rc = bnx2_init_5708s_phy(bp, reset_phy);
 		else if (CHIP_NUM(bp) == CHIP_NUM_5709)
-			rc = bnx2_init_5709s_phy(bp);
+			rc = bnx2_init_5709s_phy(bp, reset_phy);
 	}
 	else {
-		rc = bnx2_init_copper_phy(bp);
+		rc = bnx2_init_copper_phy(bp, reset_phy);
 	}
 
 setup_phy:
@@ -2620,7 +2624,7 @@ bnx2_reuse_rx_skb(struct bnx2 *bp, struct bnx2_napi *bnapi, struct sk_buff *skb,
 
 	pci_dma_sync_single_for_device(bp->pdev,
 		pci_unmap_addr(cons_rx_buf, mapping),
-		bp->rx_offset + RX_COPY_THRESH, PCI_DMA_FROMDEVICE);
+		BNX2_RX_OFFSET + BNX2_RX_COPY_THRESH, PCI_DMA_FROMDEVICE);
 
 	bnapi->rx_prod_bseq += bp->rx_buf_use_size;
 
@@ -2658,7 +2662,7 @@ bnx2_rx_skb(struct bnx2 *bp, struct bnx2_napi *bnapi, struct sk_buff *skb,
 		return err;
 	}
 
-	skb_reserve(skb, bp->rx_offset);
+	skb_reserve(skb, BNX2_RX_OFFSET);
 	pci_unmap_single(bp->pdev, dma_addr, bp->rx_buf_use_size,
 			 PCI_DMA_FROMDEVICE);
 
@@ -2773,7 +2777,8 @@ bnx2_rx_int(struct bnx2 *bp, struct bnx2_napi *bnapi, int budget)
 		dma_addr = pci_unmap_addr(rx_buf, mapping);
 
 		pci_dma_sync_single_for_cpu(bp->pdev, dma_addr,
-			bp->rx_offset + RX_COPY_THRESH, PCI_DMA_FROMDEVICE);
+			BNX2_RX_OFFSET + BNX2_RX_COPY_THRESH,
+			PCI_DMA_FROMDEVICE);
 
 		rx_hdr = (struct l2_fhdr *) skb->data;
 		len = rx_hdr->l2_fhdr_pkt_len;
@@ -2811,7 +2816,8 @@ bnx2_rx_int(struct bnx2 *bp, struct bnx2_napi *bnapi, int budget)
 			}
 
 			/* aligned copy */
-			skb_copy_from_linear_data_offset(skb, bp->rx_offset - 2,
+			skb_copy_from_linear_data_offset(skb,
+							 BNX2_RX_OFFSET - 2,
 				      new_skb->data, len + 2);
 			skb_reserve(new_skb, 2);
 			skb_put(new_skb, len);
@@ -3213,7 +3219,7 @@ load_rv2p_fw(struct bnx2 *bp, __le32 *rv2p_code, u32 rv2p_code_len,
 }
 
 static int
-load_cpu_fw(struct bnx2 *bp, struct cpu_reg *cpu_reg, struct fw_info *fw)
+load_cpu_fw(struct bnx2 *bp, const struct cpu_reg *cpu_reg, struct fw_info *fw)
 {
 	u32 offset;
 	u32 val;
@@ -3297,7 +3303,6 @@ load_cpu_fw(struct bnx2 *bp, struct cpu_reg *cpu_reg, struct fw_info *fw)
 static int
 bnx2_init_cpus(struct bnx2 *bp)
 {
-	struct cpu_reg cpu_reg;
 	struct fw_info *fw;
 	int rc, rv2p_len;
 	void *text, *rv2p;
@@ -3333,122 +3338,57 @@ bnx2_init_cpus(struct bnx2 *bp)
 	load_rv2p_fw(bp, text, rc /* == len */, RV2P_PROC2);
 
 	/* Initialize the RX Processor. */
-	cpu_reg.mode = BNX2_RXP_CPU_MODE;
-	cpu_reg.mode_value_halt = BNX2_RXP_CPU_MODE_SOFT_HALT;
-	cpu_reg.mode_value_sstep = BNX2_RXP_CPU_MODE_STEP_ENA;
-	cpu_reg.state = BNX2_RXP_CPU_STATE;
-	cpu_reg.state_value_clear = 0xffffff;
-	cpu_reg.gpr0 = BNX2_RXP_CPU_REG_FILE;
-	cpu_reg.evmask = BNX2_RXP_CPU_EVENT_MASK;
-	cpu_reg.pc = BNX2_RXP_CPU_PROGRAM_COUNTER;
-	cpu_reg.inst = BNX2_RXP_CPU_INSTRUCTION;
-	cpu_reg.bp = BNX2_RXP_CPU_HW_BREAKPOINT;
-	cpu_reg.spad_base = BNX2_RXP_SCRATCH;
-	cpu_reg.mips_view_base = 0x8000000;
-
 	if (CHIP_NUM(bp) == CHIP_NUM_5709)
 		fw = &bnx2_rxp_fw_09;
 	else
 		fw = &bnx2_rxp_fw_06;
 
 	fw->text = text;
-	rc = load_cpu_fw(bp, &cpu_reg, fw);
+	rc = load_cpu_fw(bp, &cpu_reg_rxp, fw);
 	if (rc)
 		goto init_cpu_err;
 
 	/* Initialize the TX Processor. */
-	cpu_reg.mode = BNX2_TXP_CPU_MODE;
-	cpu_reg.mode_value_halt = BNX2_TXP_CPU_MODE_SOFT_HALT;
-	cpu_reg.mode_value_sstep = BNX2_TXP_CPU_MODE_STEP_ENA;
-	cpu_reg.state = BNX2_TXP_CPU_STATE;
-	cpu_reg.state_value_clear = 0xffffff;
-	cpu_reg.gpr0 = BNX2_TXP_CPU_REG_FILE;
-	cpu_reg.evmask = BNX2_TXP_CPU_EVENT_MASK;
-	cpu_reg.pc = BNX2_TXP_CPU_PROGRAM_COUNTER;
-	cpu_reg.inst = BNX2_TXP_CPU_INSTRUCTION;
-	cpu_reg.bp = BNX2_TXP_CPU_HW_BREAKPOINT;
-	cpu_reg.spad_base = BNX2_TXP_SCRATCH;
-	cpu_reg.mips_view_base = 0x8000000;
-
 	if (CHIP_NUM(bp) == CHIP_NUM_5709)
 		fw = &bnx2_txp_fw_09;
 	else
 		fw = &bnx2_txp_fw_06;
 
 	fw->text = text;
-	rc = load_cpu_fw(bp, &cpu_reg, fw);
+	rc = load_cpu_fw(bp, &cpu_reg_txp, fw);
 	if (rc)
 		goto init_cpu_err;
 
 	/* Initialize the TX Patch-up Processor. */
-	cpu_reg.mode = BNX2_TPAT_CPU_MODE;
-	cpu_reg.mode_value_halt = BNX2_TPAT_CPU_MODE_SOFT_HALT;
-	cpu_reg.mode_value_sstep = BNX2_TPAT_CPU_MODE_STEP_ENA;
-	cpu_reg.state = BNX2_TPAT_CPU_STATE;
-	cpu_reg.state_value_clear = 0xffffff;
-	cpu_reg.gpr0 = BNX2_TPAT_CPU_REG_FILE;
-	cpu_reg.evmask = BNX2_TPAT_CPU_EVENT_MASK;
-	cpu_reg.pc = BNX2_TPAT_CPU_PROGRAM_COUNTER;
-	cpu_reg.inst = BNX2_TPAT_CPU_INSTRUCTION;
-	cpu_reg.bp = BNX2_TPAT_CPU_HW_BREAKPOINT;
-	cpu_reg.spad_base = BNX2_TPAT_SCRATCH;
-	cpu_reg.mips_view_base = 0x8000000;
-
 	if (CHIP_NUM(bp) == CHIP_NUM_5709)
 		fw = &bnx2_tpat_fw_09;
 	else
 		fw = &bnx2_tpat_fw_06;
 
 	fw->text = text;
-	rc = load_cpu_fw(bp, &cpu_reg, fw);
+	rc = load_cpu_fw(bp, &cpu_reg_tpat, fw);
 	if (rc)
 		goto init_cpu_err;
 
 	/* Initialize the Completion Processor. */
-	cpu_reg.mode = BNX2_COM_CPU_MODE;
-	cpu_reg.mode_value_halt = BNX2_COM_CPU_MODE_SOFT_HALT;
-	cpu_reg.mode_value_sstep = BNX2_COM_CPU_MODE_STEP_ENA;
-	cpu_reg.state = BNX2_COM_CPU_STATE;
-	cpu_reg.state_value_clear = 0xffffff;
-	cpu_reg.gpr0 = BNX2_COM_CPU_REG_FILE;
-	cpu_reg.evmask = BNX2_COM_CPU_EVENT_MASK;
-	cpu_reg.pc = BNX2_COM_CPU_PROGRAM_COUNTER;
-	cpu_reg.inst = BNX2_COM_CPU_INSTRUCTION;
-	cpu_reg.bp = BNX2_COM_CPU_HW_BREAKPOINT;
-	cpu_reg.spad_base = BNX2_COM_SCRATCH;
-	cpu_reg.mips_view_base = 0x8000000;
-
 	if (CHIP_NUM(bp) == CHIP_NUM_5709)
 		fw = &bnx2_com_fw_09;
 	else
 		fw = &bnx2_com_fw_06;
 
 	fw->text = text;
-	rc = load_cpu_fw(bp, &cpu_reg, fw);
+	rc = load_cpu_fw(bp, &cpu_reg_com, fw);
 	if (rc)
 		goto init_cpu_err;
 
 	/* Initialize the Command Processor. */
-	cpu_reg.mode = BNX2_CP_CPU_MODE;
-	cpu_reg.mode_value_halt = BNX2_CP_CPU_MODE_SOFT_HALT;
-	cpu_reg.mode_value_sstep = BNX2_CP_CPU_MODE_STEP_ENA;
-	cpu_reg.state = BNX2_CP_CPU_STATE;
-	cpu_reg.state_value_clear = 0xffffff;
-	cpu_reg.gpr0 = BNX2_CP_CPU_REG_FILE;
-	cpu_reg.evmask = BNX2_CP_CPU_EVENT_MASK;
-	cpu_reg.pc = BNX2_CP_CPU_PROGRAM_COUNTER;
-	cpu_reg.inst = BNX2_CP_CPU_INSTRUCTION;
-	cpu_reg.bp = BNX2_CP_CPU_HW_BREAKPOINT;
-	cpu_reg.spad_base = BNX2_CP_SCRATCH;
-	cpu_reg.mips_view_base = 0x8000000;
-
 	if (CHIP_NUM(bp) == CHIP_NUM_5709)
 		fw = &bnx2_cp_fw_09;
 	else
 		fw = &bnx2_cp_fw_06;
 
 	fw->text = text;
-	rc = load_cpu_fw(bp, &cpu_reg, fw);
+	rc = load_cpu_fw(bp, &cpu_reg_cp, fw);
 
 init_cpu_err:
 	vfree(text);
@@ -4750,12 +4690,12 @@ bnx2_set_rx_ring_size(struct bnx2 *bp, u32 size)
 	u32 rx_size, rx_space, jumbo_size;
 
 	/* 8 for CRC and VLAN */
-	rx_size = bp->dev->mtu + ETH_HLEN + bp->rx_offset + 8;
+	rx_size = bp->dev->mtu + ETH_HLEN + BNX2_RX_OFFSET + 8;
 
 	rx_space = SKB_DATA_ALIGN(rx_size + BNX2_RX_ALIGN) + NET_SKB_PAD +
 		sizeof(struct skb_shared_info);
 
-	bp->rx_copy_thresh = RX_COPY_THRESH;
+	bp->rx_copy_thresh = BNX2_RX_COPY_THRESH;
 	bp->rx_pg_ring_size = 0;
 	bp->rx_max_pg_ring = 0;
 	bp->rx_max_pg_ring_idx = 0;
@@ -4770,14 +4710,14 @@ bnx2_set_rx_ring_size(struct bnx2 *bp, u32 size)
 		bp->rx_max_pg_ring = bnx2_find_max_ring(jumbo_size,
 							MAX_RX_PG_RINGS);
 		bp->rx_max_pg_ring_idx = (bp->rx_max_pg_ring * RX_DESC_CNT) - 1;
-		rx_size = RX_COPY_THRESH + bp->rx_offset;
+		rx_size = BNX2_RX_COPY_THRESH + BNX2_RX_OFFSET;
 		bp->rx_copy_thresh = 0;
 	}
 
 	bp->rx_buf_use_size = rx_size;
 	/* hw alignment */
 	bp->rx_buf_size = bp->rx_buf_use_size + BNX2_RX_ALIGN;
-	bp->rx_jumbo_thresh = rx_size - bp->rx_offset;
+	bp->rx_jumbo_thresh = rx_size - BNX2_RX_OFFSET;
 	bp->rx_ring_size = size;
 	bp->rx_max_ring = bnx2_find_max_ring(size, MAX_RX_RINGS);
 	bp->rx_max_ring_idx = (bp->rx_max_ring * RX_DESC_CNT) - 1;
@@ -4873,7 +4813,7 @@ bnx2_reset_nic(struct bnx2 *bp, u32 reset_code)
 }
 
 static int
-bnx2_init_nic(struct bnx2 *bp)
+bnx2_init_nic(struct bnx2 *bp, int reset_phy)
 {
 	int rc;
 
@@ -4881,7 +4821,7 @@ bnx2_init_nic(struct bnx2 *bp)
 		return rc;
 
 	spin_lock_bh(&bp->phy_lock);
-	bnx2_init_phy(bp);
+	bnx2_init_phy(bp, reset_phy);
 	bnx2_set_link(bp);
 	if (bp->phy_flags & BNX2_PHY_FLAG_REMOTE_PHY_CAP)
 		bnx2_remote_phy_event(bp);
@@ -5221,7 +5161,7 @@ bnx2_run_loopback(struct bnx2 *bp, int loopback_mode)
 	rx_skb = rx_buf->skb;
 
 	rx_hdr = (struct l2_fhdr *) rx_skb->data;
-	skb_reserve(rx_skb, bp->rx_offset);
+	skb_reserve(rx_skb, BNX2_RX_OFFSET);
 
 	pci_dma_sync_single_for_cpu(bp->pdev,
 		pci_unmap_addr(rx_buf, mapping),
@@ -5269,7 +5209,7 @@ bnx2_test_loopback(struct bnx2 *bp)
 
 	bnx2_reset_nic(bp, BNX2_DRV_MSG_CODE_RESET);
 	spin_lock_bh(&bp->phy_lock);
-	bnx2_init_phy(bp);
+	bnx2_init_phy(bp, 1);
 	spin_unlock_bh(&bp->phy_lock);
 	if (bnx2_run_loopback(bp, BNX2_MAC_LOOPBACK))
 		rc |= BNX2_MAC_LOOPBACK_FAILED;
@@ -5659,7 +5599,7 @@ bnx2_open(struct net_device *dev)
 		return rc;
 	}
 
-	rc = bnx2_init_nic(bp);
+	rc = bnx2_init_nic(bp, 1);
 
 	if (rc) {
 		bnx2_napi_disable(bp);
@@ -5691,7 +5631,7 @@ bnx2_open(struct net_device *dev)
 
 			bnx2_setup_int_mode(bp, 1);
 
-			rc = bnx2_init_nic(bp);
+			rc = bnx2_init_nic(bp, 0);
 
 			if (!rc)
 				rc = bnx2_request_irq(bp);
@@ -5727,7 +5667,7 @@ bnx2_reset_task(struct work_struct *work)
 	bp->in_reset_task = 1;
 	bnx2_netif_stop(bp);
 
-	bnx2_init_nic(bp);
+	bnx2_init_nic(bp, 1);
 
 	atomic_set(&bp->intr_sem, 1);
 	bnx2_netif_start(bp);
@@ -6421,7 +6361,7 @@ bnx2_set_coalesce(struct net_device *dev, struct ethtool_coalesce *coal)
 
 	if (netif_running(bp->dev)) {
 		bnx2_netif_stop(bp);
-		bnx2_init_nic(bp);
+		bnx2_init_nic(bp, 0);
 		bnx2_netif_start(bp);
 	}
 
@@ -6464,7 +6404,7 @@ bnx2_change_ring_size(struct bnx2 *bp, u32 rx, u32 tx)
 		rc = bnx2_alloc_mem(bp);
 		if (rc)
 			return rc;
-		bnx2_init_nic(bp);
+		bnx2_init_nic(bp, 0);
 		bnx2_netif_start(bp);
 	}
 	return 0;
@@ -6732,7 +6672,7 @@ bnx2_self_test(struct net_device *dev, struct ethtool_test *etest, u64 *buf)
 			bnx2_reset_chip(bp, BNX2_DRV_MSG_CODE_RESET);
 		}
 		else {
-			bnx2_init_nic(bp);
+			bnx2_init_nic(bp, 1);
 			bnx2_netif_start(bp);
 		}
 
@@ -7115,6 +7055,7 @@ bnx2_init_board(struct pci_dev *pdev, struct net_device *dev)
 	}
 
 	pci_set_master(pdev);
+	pci_save_state(pdev);
 
 	bp->pm_cap = pci_find_capability(pdev, PCI_CAP_ID_PM);
 	if (bp->pm_cap == 0) {
@@ -7300,8 +7241,6 @@ bnx2_init_board(struct pci_dev *pdev, struct net_device *dev)
 	bp->mac_addr[3] = (u8) (reg >> 16);
 	bp->mac_addr[4] = (u8) (reg >> 8);
 	bp->mac_addr[5] = (u8) reg;
-
-	bp->rx_offset = sizeof(struct l2_fhdr) + 2;
 
 	bp->tx_ring_size = MAX_TX_DESC_CNT;
 	bnx2_set_rx_ring_size(bp, 255);
@@ -7619,10 +7558,96 @@ bnx2_resume(struct pci_dev *pdev)
 
 	bnx2_set_power_state(bp, PCI_D0);
 	netif_device_attach(dev);
-	bnx2_init_nic(bp);
+	bnx2_init_nic(bp, 1);
 	bnx2_netif_start(bp);
 	return 0;
 }
+
+/**
+ * bnx2_io_error_detected - called when PCI error is detected
+ * @pdev: Pointer to PCI device
+ * @state: The current pci connection state
+ *
+ * This function is called after a PCI bus error affecting
+ * this device has been detected.
+ */
+static pci_ers_result_t bnx2_io_error_detected(struct pci_dev *pdev,
+					       pci_channel_state_t state)
+{
+	struct net_device *dev = pci_get_drvdata(pdev);
+	struct bnx2 *bp = netdev_priv(dev);
+
+	rtnl_lock();
+	netif_device_detach(dev);
+
+	if (netif_running(dev)) {
+		bnx2_netif_stop(bp);
+		del_timer_sync(&bp->timer);
+		bnx2_reset_nic(bp, BNX2_DRV_MSG_CODE_RESET);
+	}
+
+	pci_disable_device(pdev);
+	rtnl_unlock();
+
+	/* Request a slot slot reset. */
+	return PCI_ERS_RESULT_NEED_RESET;
+}
+
+/**
+ * bnx2_io_slot_reset - called after the pci bus has been reset.
+ * @pdev: Pointer to PCI device
+ *
+ * Restart the card from scratch, as if from a cold-boot.
+ */
+static pci_ers_result_t bnx2_io_slot_reset(struct pci_dev *pdev)
+{
+	struct net_device *dev = pci_get_drvdata(pdev);
+	struct bnx2 *bp = netdev_priv(dev);
+
+	rtnl_lock();
+	if (pci_enable_device(pdev)) {
+		dev_err(&pdev->dev,
+			"Cannot re-enable PCI device after reset.\n");
+		rtnl_unlock();
+		return PCI_ERS_RESULT_DISCONNECT;
+	}
+	pci_set_master(pdev);
+	pci_restore_state(pdev);
+
+	if (netif_running(dev)) {
+		bnx2_set_power_state(bp, PCI_D0);
+		bnx2_init_nic(bp, 1);
+	}
+
+	rtnl_unlock();
+	return PCI_ERS_RESULT_RECOVERED;
+}
+
+/**
+ * bnx2_io_resume - called when traffic can start flowing again.
+ * @pdev: Pointer to PCI device
+ *
+ * This callback is called when the error recovery driver tells us that
+ * its OK to resume normal operation.
+ */
+static void bnx2_io_resume(struct pci_dev *pdev)
+{
+	struct net_device *dev = pci_get_drvdata(pdev);
+	struct bnx2 *bp = netdev_priv(dev);
+
+	rtnl_lock();
+	if (netif_running(dev))
+		bnx2_netif_start(bp);
+
+	netif_device_attach(dev);
+	rtnl_unlock();
+}
+
+static struct pci_error_handlers bnx2_err_handler = {
+	.error_detected	= bnx2_io_error_detected,
+	.slot_reset	= bnx2_io_slot_reset,
+	.resume		= bnx2_io_resume,
+};
 
 static struct pci_driver bnx2_pci_driver = {
 	.name		= DRV_MODULE_NAME,
@@ -7631,6 +7656,7 @@ static struct pci_driver bnx2_pci_driver = {
 	.remove		= __devexit_p(bnx2_remove_one),
 	.suspend	= bnx2_suspend,
 	.resume		= bnx2_resume,
+	.err_handler	= &bnx2_err_handler,
 };
 
 static int __init bnx2_init(void)
