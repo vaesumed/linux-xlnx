@@ -228,21 +228,21 @@ ACPI BATTERY DRIVERS
 P:	Alexey Starikovskiy
 M:	astarikovskiy@suse.de
 L:	linux-acpi@vger.kernel.org
-W:	http://acpi.sourceforge.net/
+W:	http://www.lesswatts.org/projects/acpi/
 S:	Supported
 
 ACPI EC DRIVER
 P:	Alexey Starikovskiy
 M:	astarikovskiy@suse.de
 L:	linux-acpi@vger.kernel.org
-W:	http://acpi.sourceforge.net/
+W:	http://www.lesswatts.org/projects/acpi/
 S:	Supported
 
 ACPI FAN DRIVER
 P:	Len Brown
 M:	len.brown@intel.com
 L:	linux-acpi@vger.kernel.org
-W:	http://acpi.sourceforge.net/
+W:	http://www.lesswatts.org/projects/acpi/
 S:	Supported
 
 ACPI PCI HOTPLUG DRIVER
@@ -255,14 +255,14 @@ ACPI THERMAL DRIVER
 P:	Len Brown
 M:	len.brown@intel.com
 L:	linux-acpi@vger.kernel.org
-W:	http://acpi.sourceforge.net/
+W:	http://www.lesswatts.org/projects/acpi/
 S:	Supported
 
 ACPI VIDEO DRIVER
 P:	Rui Zhang
 M:	rui.zhang@intel.com
 L:	linux-acpi@vger.kernel.org
-W:	http://acpi.sourceforge.net/
+W:	http://www.lesswatts.org/projects/acpi/
 S:	Supported
 
 ACPI WMI DRIVER
@@ -1150,6 +1150,11 @@ M:	scottm@somanetworks.com
 M:	scott@spiteful.org
 L:	linux-pci@vger.kernel.org
 S:	Supported
+
+COMPAL LAPTOP SUPPORT
+P:	Cezary Jackiewicz
+M:	cezary.jackiewicz@gmail.com
+S:	Maintained
 
 COMPUTONE INTELLIPORT MULTIPORT CARD
 P:	Michael H. Warfield
