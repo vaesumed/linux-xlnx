@@ -319,14 +319,13 @@ static void opti621_set_pio_mode(ide_drive_t *drive, const u8 pio)
 	spin_unlock_irqrestore(&opti621_lock, flags);
 }
 
-static void __devinit opti621_port_init_devs(ide_hwif_t *hwif)
+static void __devinit opti621_init_dev(ide_drive_t *drive)
 {
-	hwif->drives[0].drive_data = PIO_DONT_KNOW;
-	hwif->drives[1].drive_data = PIO_DONT_KNOW;
+	drive->drive_data = PIO_DONT_KNOW;
 }
 
 static const struct ide_port_ops opti621_port_ops = {
-	.port_init_devs		= opti621_port_init_devs,
+	.init_dev		= opti621_init_dev,
 	.set_pio_mode		= opti621_set_pio_mode,
 };
 
