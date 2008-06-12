@@ -119,8 +119,8 @@ acpi_ex_do_debug_object(union acpi_operand_object *source_desc,
 		ACPI_DEBUG_PRINT_RAW((ACPI_DB_DEBUG_OBJECT, "%s: %p\n",
 				      acpi_ut_get_type_name(((struct
 							      acpi_namespace_node
-							      *)source_desc)->
-							    type),
+							      *)
+							     source_desc)->type),
 				      source_desc));
 		return_VOID;
 	} else {
@@ -136,14 +136,13 @@ acpi_ex_do_debug_object(union acpi_operand_object *source_desc,
 
 		if (acpi_gbl_integer_byte_width == 4) {
 			ACPI_DEBUG_PRINT_RAW((ACPI_DB_DEBUG_OBJECT, "0x%8.8X\n",
-					      (u32) source_desc->integer.
-					      value));
+					      (u32) source_desc->
+					      integer.value));
 		} else {
 			ACPI_DEBUG_PRINT_RAW((ACPI_DB_DEBUG_OBJECT,
 					      "0x%8.8X%8.8X\n",
-					      ACPI_FORMAT_UINT64(source_desc->
-								 integer.
-								 value)));
+					      ACPI_FORMAT_UINT64
+					      (source_desc->integer.value)));
 		}
 		break;
 
@@ -172,8 +171,9 @@ acpi_ex_do_debug_object(union acpi_operand_object *source_desc,
 		/* Output the entire contents of the package */
 
 		for (i = 0; i < source_desc->package.count; i++) {
-			acpi_ex_do_debug_object(source_desc->package.
-						elements[i], level + 4, i + 1);
+			acpi_ex_do_debug_object(source_desc->
+						package.elements[i], level + 4,
+						i + 1);
 		}
 		break;
 
@@ -208,15 +208,16 @@ acpi_ex_do_debug_object(union acpi_operand_object *source_desc,
 			    ACPI_DESC_TYPE_NAMED) {
 				ACPI_DEBUG_PRINT_RAW((ACPI_DB_DEBUG_OBJECT,
 						      " %p - Not a valid namespace node\n",
-						      source_desc->reference.
-						      node));
+						      source_desc->
+						      reference.node));
 			} else {
 				ACPI_DEBUG_PRINT_RAW((ACPI_DB_DEBUG_OBJECT,
 						      "Node %p [%4.4s] ",
-						      source_desc->reference.
-						      node,
-						      (source_desc->reference.
-						       node)->name.ascii));
+						      source_desc->
+						      reference.node,
+						      (source_desc->
+						       reference.node)->name.
+						      ascii));
 
 				switch ((source_desc->reference.node)->type) {
 
@@ -231,10 +232,7 @@ acpi_ex_do_debug_object(union acpi_operand_object *source_desc,
 					break;
 
 				default:
-					acpi_ex_do_debug_object((source_desc->
-								 reference.
-								 node)->object,
-								level + 4, 0);
+					acpi_ex_do_debug_object((source_desc->reference.node)->object, level + 4, 0);
 					break;
 				}
 			}
@@ -244,12 +242,13 @@ acpi_ex_do_debug_object(union acpi_operand_object *source_desc,
 			    ACPI_DESC_TYPE_NAMED) {
 				acpi_ex_do_debug_object(((struct
 							  acpi_namespace_node *)
-							 source_desc->reference.
-							 object)->object,
-							level + 4, 0);
-			} else {
-				acpi_ex_do_debug_object(source_desc->reference.
+							 source_desc->
+							 reference.object)->
 							object, level + 4, 0);
+			} else {
+				acpi_ex_do_debug_object(source_desc->
+							reference.object,
+							level + 4, 0);
 			}
 		}
 		break;
@@ -360,8 +359,9 @@ acpi_ex_store(union acpi_operand_object *source_desc,
 		/* Storing an object into a Name "container" */
 
 		status = acpi_ex_store_object_to_node(source_desc,
-						      ref_desc->reference.
-						      object, walk_state,
+						      ref_desc->
+						      reference.object,
+						      walk_state,
 						      ACPI_IMPLICIT_CONVERSION);
 		break;
 
@@ -481,8 +481,8 @@ acpi_ex_store_object_to_index(union acpi_operand_object *source_desc,
 			/* Decrement reference count by the ref count of the parent package */
 
 			for (i = 0; i < ((union acpi_operand_object *)
-					 index_desc->reference.object)->common.
-			     reference_count; i++) {
+					 index_desc->reference.object)->
+			     common.reference_count; i++) {
 				acpi_ut_remove_reference(obj_desc);
 			}
 		}
@@ -492,8 +492,8 @@ acpi_ex_store_object_to_index(union acpi_operand_object *source_desc,
 		/* Increment ref count by the ref count of the parent package-1 */
 
 		for (i = 1; i < ((union acpi_operand_object *)
-				 index_desc->reference.object)->common.
-		     reference_count; i++) {
+				 index_desc->reference.object)->
+		     common.reference_count; i++) {
 			acpi_ut_add_reference(new_desc);
 		}
 

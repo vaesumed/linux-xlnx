@@ -382,6 +382,6 @@ ACPI_EXTERN u32 acpi_gbl_size_of_method_trees;
 ACPI_EXTERN u32 acpi_gbl_size_of_node_entries;
 ACPI_EXTERN u32 acpi_gbl_size_of_acpi_objects;
 
-#endif				/* ACPI_DEBUGGER */
+#endif /* ACPI_DEBUGGER */
 
-#endif				/* __ACGLOBAL_H__ */
+#endif /* __ACGLOBAL_H__ */

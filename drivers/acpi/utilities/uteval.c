@@ -197,10 +197,10 @@ acpi_status acpi_osi_invalidate(char *interface)
  ******************************************************************************/
 
 acpi_status
-acpi_ut_evaluate_object(struct acpi_namespace_node *prefix_node,
+acpi_ut_evaluate_object(struct acpi_namespace_node * prefix_node,
 			char *path,
 			u32 expected_return_btypes,
-			union acpi_operand_object **return_desc)
+			union acpi_operand_object ** return_desc)
 {
 	struct acpi_evaluate_info *info;
 	acpi_status status;
@@ -305,7 +305,7 @@ acpi_ut_evaluate_object(struct acpi_namespace_node *prefix_node,
 
 	*return_desc = info->return_object;
 
-      cleanup:
+cleanup:
 	ACPI_FREE(info);
 	return_ACPI_STATUS(status);
 }
@@ -563,8 +563,8 @@ acpi_ut_execute_CID(struct acpi_namespace_node * device_node,
 
 		for (i = 0; i < count; i++) {
 			status =
-			    acpi_ut_translate_one_cid(obj_desc->package.
-						      elements[i],
+			    acpi_ut_translate_one_cid(obj_desc->
+						      package.elements[i],
 						      &cid_list->id[i]);
 			if (ACPI_FAILURE(status)) {
 				break;

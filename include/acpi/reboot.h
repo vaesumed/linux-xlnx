@@ -6,4 +6,3 @@
 #ifndef acpi_reboot
 # define acpi_reboot() do { } while (0)
 #endif
-

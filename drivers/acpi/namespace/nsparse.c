@@ -65,11 +65,11 @@ ACPI_MODULE_NAME("nsparse")
 acpi_status
 acpi_ns_one_complete_parse(u32 pass_number,
 			   u32 table_index,
-			   struct acpi_namespace_node *start_node)
+			   struct acpi_namespace_node * start_node)
 {
 	union acpi_parse_object *parse_root;
 	acpi_status status;
-       u32 aml_length;
+	u32 aml_length;
 	u8 *aml_start;
 	struct acpi_walk_state *walk_state;
 	struct acpi_table_header *table;
@@ -139,7 +139,7 @@ acpi_ns_one_complete_parse(u32 pass_number,
 			  (unsigned)pass_number));
 	status = acpi_ps_parse_aml(walk_state);
 
-      cleanup:
+cleanup:
 	acpi_ps_delete_parse_tree(parse_root);
 	return_ACPI_STATUS(status);
 }

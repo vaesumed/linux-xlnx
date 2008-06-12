@@ -194,8 +194,8 @@ acpi_ps_build_named_op(struct acpi_walk_state *walk_state,
 		status =
 		    acpi_ps_get_next_arg(walk_state,
 					 &(walk_state->parser_state),
-					 GET_CURRENT_ARG_TYPE(walk_state->
-							      arg_types), &arg);
+					 GET_CURRENT_ARG_TYPE
+					 (walk_state->arg_types), &arg);
 		if (ACPI_FAILURE(status)) {
 			return_ACPI_STATUS(status);
 		}
@@ -402,9 +402,8 @@ acpi_ps_get_arguments(struct acpi_walk_state *walk_state,
 		/* Fill in constant or string argument directly */
 
 		acpi_ps_get_next_simple_arg(&(walk_state->parser_state),
-					    GET_CURRENT_ARG_TYPE(walk_state->
-								 arg_types),
-					    op);
+					    GET_CURRENT_ARG_TYPE
+					    (walk_state->arg_types), op);
 		break;
 
 	case AML_INT_NAMEPATH_OP:	/* AML_NAMESTRING_ARG */
@@ -428,8 +427,8 @@ acpi_ps_get_arguments(struct acpi_walk_state *walk_state,
 		       && !walk_state->arg_count) {
 			walk_state->aml_offset =
 			    (u32) ACPI_PTR_DIFF(walk_state->parser_state.aml,
-						walk_state->parser_state.
-						aml_start);
+						walk_state->
+						parser_state.aml_start);
 
 			status =
 			    acpi_ps_get_next_arg(walk_state,
@@ -758,8 +757,8 @@ acpi_ps_complete_final_op(struct acpi_walk_state *walk_state,
 			if (walk_state->ascending_callback != NULL) {
 				walk_state->op = op;
 				walk_state->op_info =
-				    acpi_ps_get_opcode_info(op->common.
-							    aml_opcode);
+				    acpi_ps_get_opcode_info(op->
+							    common.aml_opcode);
 				walk_state->opcode = op->common.aml_opcode;
 
 				status =
@@ -793,13 +792,10 @@ acpi_ps_complete_final_op(struct acpi_walk_state *walk_state,
 						}
 
 						acpi_ps_pop_scope(&
-								  (walk_state->
-								   parser_state),
+								  (walk_state->parser_state),
 								  &op,
-								  &walk_state->
-								  arg_types,
-								  &walk_state->
-								  arg_count);
+								  &walk_state->arg_types,
+								  &walk_state->arg_count);
 
 					} while (op);
 
@@ -873,10 +869,10 @@ acpi_status acpi_ps_parse_loop(struct acpi_walk_state *walk_state)
 			 * was just completed
 			 */
 			if ((parser_state->scope->parse_scope.op) &&
-			    ((parser_state->scope->parse_scope.op->common.
-			      aml_opcode == AML_IF_OP)
-			     || (parser_state->scope->parse_scope.op->common.
-				 aml_opcode == AML_WHILE_OP))
+			    ((parser_state->scope->parse_scope.op->
+			      common.aml_opcode == AML_IF_OP)
+			     || (parser_state->scope->parse_scope.op->
+				 common.aml_opcode == AML_WHILE_OP))
 			    && (walk_state->control_state)
 			    && (walk_state->control_state->common.state ==
 				ACPI_CONTROL_PREDICATE_EXECUTING)) {

@@ -96,8 +96,9 @@ acpi_ds_method_error(acpi_status status, struct acpi_walk_state *walk_state)
 		 */
 		status = acpi_gbl_exception_handler(status,
 						    walk_state->method_node ?
-						    walk_state->method_node->
-						    name.integer : 0,
+						    walk_state->
+						    method_node->name.
+						    integer : 0,
 						    walk_state->opcode,
 						    walk_state->aml_offset,
 						    NULL);
@@ -239,8 +240,8 @@ acpi_ds_begin_method_execution(struct acpi_namespace_node *method_node,
 			 * block (and reacquires it before it returns)
 			 */
 			status =
-			    acpi_ex_system_wait_mutex(obj_desc->method.mutex->
-						      mutex.os_mutex,
+			    acpi_ex_system_wait_mutex(obj_desc->method.
+						      mutex->mutex.os_mutex,
 						      ACPI_WAIT_FOREVER);
 			if (ACPI_FAILURE(status)) {
 				return_ACPI_STATUS(status);
@@ -249,8 +250,8 @@ acpi_ds_begin_method_execution(struct acpi_namespace_node *method_node,
 			/* Update the mutex and walk info and save the original sync_level */
 
 			if (walk_state) {
-				obj_desc->method.mutex->mutex.
-				    original_sync_level =
+				obj_desc->method.mutex->
+				    mutex.original_sync_level =
 				    walk_state->thread->current_sync_level;
 
 				obj_desc->method.mutex->mutex.thread_id =
@@ -258,8 +259,8 @@ acpi_ds_begin_method_execution(struct acpi_namespace_node *method_node,
 				walk_state->thread->current_sync_level =
 				    obj_desc->method.sync_level;
 			} else {
-				obj_desc->method.mutex->mutex.
-				    original_sync_level =
+				obj_desc->method.mutex->
+				    mutex.original_sync_level =
 				    obj_desc->method.mutex->mutex.sync_level;
 			}
 		}
@@ -288,7 +289,7 @@ acpi_ds_begin_method_execution(struct acpi_namespace_node *method_node,
 	obj_desc->method.thread_count++;
 	return_ACPI_STATUS(status);
 
-      cleanup:
+cleanup:
 	/* On error, must release the method mutex (if present) */
 
 	if (obj_desc->method.mutex) {
@@ -413,7 +414,7 @@ acpi_ds_call_control_method(struct acpi_thread_state *thread,
 
 	return_ACPI_STATUS(status);
 
-      cleanup:
+cleanup:
 
 	/* On error, we must terminate the method properly */
 
@@ -559,12 +560,14 @@ acpi_ds_terminate_control_method(union acpi_operand_object *method_desc,
 			method_desc->method.mutex->mutex.acquisition_depth--;
 			if (!method_desc->method.mutex->mutex.acquisition_depth) {
 				walk_state->thread->current_sync_level =
-				    method_desc->method.mutex->mutex.
-				    original_sync_level;
+				    method_desc->method.mutex->
+				    mutex.original_sync_level;
 
-				acpi_os_release_mutex(method_desc->method.
-						      mutex->mutex.os_mutex);
-				method_desc->method.mutex->mutex.thread_id = NULL;
+				acpi_os_release_mutex(method_desc->
+						      method.mutex->mutex.
+						      os_mutex);
+				method_desc->method.mutex->mutex.thread_id =
+				    NULL;
 			}
 		}
 

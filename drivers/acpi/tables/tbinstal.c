@@ -107,7 +107,7 @@ acpi_status acpi_tb_verify_table(struct acpi_table_desc *table_desc)
  ******************************************************************************/
 
 acpi_status
-acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
+acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 * table_index)
 {
 	u32 i;
 	u32 length;
@@ -137,8 +137,8 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 	for (i = 0; i < acpi_gbl_root_table_list.count; ++i) {
 		if (!acpi_gbl_root_table_list.tables[i].pointer) {
 			status =
-			    acpi_tb_verify_table(&acpi_gbl_root_table_list.
-						 tables[i]);
+			    acpi_tb_verify_table
+			    (&acpi_gbl_root_table_list.tables[i]);
 			if (ACPI_FAILURE(status)
 			    || !acpi_gbl_root_table_list.tables[i].pointer) {
 				continue;
@@ -173,7 +173,7 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 
 	acpi_tb_print_table_header(table_desc->address, table_desc->pointer);
 
-      release:
+release:
 	(void)acpi_ut_release_mutex(ACPI_MTX_TABLES);
 	return_ACPI_STATUS(status);
 }
@@ -206,9 +206,10 @@ acpi_status acpi_tb_resize_root_table_list(void)
 
 	/* Increase the Table Array size */
 
-	tables = ACPI_ALLOCATE_ZEROED(((acpi_size) acpi_gbl_root_table_list.
-				       size + ACPI_ROOT_TABLE_SIZE_INCREMENT)
-				      * sizeof(struct acpi_table_desc));
+	tables =
+	    ACPI_ALLOCATE_ZEROED(((acpi_size) acpi_gbl_root_table_list.size +
+				  ACPI_ROOT_TABLE_SIZE_INCREMENT)
+				 * sizeof(struct acpi_table_desc));
 	if (!tables) {
 		ACPI_ERROR((AE_INFO,
 			    "Could not allocate new root table array"));
@@ -252,7 +253,7 @@ acpi_status acpi_tb_resize_root_table_list(void)
 acpi_status
 acpi_tb_store_table(acpi_physical_address address,
 		    struct acpi_table_header *table,
-		    u32 length, u8 flags, u32 *table_index)
+		    u32 length, u8 flags, u32 * table_index)
 {
 	acpi_status status = AE_OK;
 
@@ -267,20 +268,20 @@ acpi_tb_store_table(acpi_physical_address address,
 
 	/* Initialize added table */
 
-	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.count].
-	    address = address;
-	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.count].
-	    pointer = table;
+	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.
+					count].address = address;
+	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.
+					count].pointer = table;
 	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.count].length =
 	    length;
-	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.count].
-	    owner_id = 0;
+	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.
+					count].owner_id = 0;
 	acpi_gbl_root_table_list.tables[acpi_gbl_root_table_list.count].flags =
 	    flags;
 
 	ACPI_MOVE_32_TO_32(&
-			   (acpi_gbl_root_table_list.
-			    tables[acpi_gbl_root_table_list.count].signature),
+			   (acpi_gbl_root_table_list.tables
+			    [acpi_gbl_root_table_list.count].signature),
 			   table->signature);
 
 	*table_index = acpi_gbl_root_table_list.count;
@@ -439,8 +440,8 @@ acpi_status acpi_tb_release_owner_id(u32 table_index)
 	(void)acpi_ut_acquire_mutex(ACPI_MTX_TABLES);
 	if (table_index < acpi_gbl_root_table_list.count) {
 		acpi_ut_release_owner_id(&
-					 (acpi_gbl_root_table_list.
-					  tables[table_index].owner_id));
+					 (acpi_gbl_root_table_list.tables
+					  [table_index].owner_id));
 		status = AE_OK;
 	}
 
@@ -461,7 +462,7 @@ acpi_status acpi_tb_release_owner_id(u32 table_index)
  *
  ******************************************************************************/
 
-acpi_status acpi_tb_get_owner_id(u32 table_index, acpi_owner_id *owner_id)
+acpi_status acpi_tb_get_owner_id(u32 table_index, acpi_owner_id * owner_id)
 {
 	acpi_status status = AE_BAD_PARAMETER;
 
@@ -495,8 +496,8 @@ u8 acpi_tb_is_table_loaded(u32 table_index)
 	(void)acpi_ut_acquire_mutex(ACPI_MTX_TABLES);
 	if (table_index < acpi_gbl_root_table_list.count) {
 		is_loaded = (u8)
-		    (acpi_gbl_root_table_list.tables[table_index].
-		     flags & ACPI_TABLE_IS_LOADED);
+		    (acpi_gbl_root_table_list.
+		     tables[table_index].flags & ACPI_TABLE_IS_LOADED);
 	}
 
 	(void)acpi_ut_release_mutex(ACPI_MTX_TABLES);

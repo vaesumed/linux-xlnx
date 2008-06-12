@@ -373,7 +373,7 @@ void
 acpi_ex_dump_object_descriptor(union acpi_operand_object *object, u32 flags);
 
 void acpi_ex_dump_namespace_node(struct acpi_namespace_node *node, u32 flags);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 /*
  * exnames - AML namestring support
@@ -526,4 +526,4 @@ acpi_ex_data_table_space_handler(u32 function,
 				 acpi_integer * value,
 				 void *handler_context, void *region_context);
 
-#endif				/* __INTERP_H__ */
+#endif /* __INTERP_H__ */

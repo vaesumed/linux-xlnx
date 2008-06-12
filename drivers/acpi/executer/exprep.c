@@ -203,7 +203,7 @@ acpi_ex_generate_access(u32 field_bit_offset,
 			  "Cannot access field in one operation, using width 8\n"));
 	return_VALUE(8);
 }
-#endif				/* ACPI_UNDER_DEVELOPMENT */
+#endif /* ACPI_UNDER_DEVELOPMENT */
 
 /*******************************************************************************
  *
@@ -237,8 +237,8 @@ acpi_ex_decode_field_access(union acpi_operand_object *obj_desc,
 
 #ifdef ACPI_UNDER_DEVELOPMENT
 		byte_alignment =
-		    acpi_ex_generate_access(obj_desc->common_field.
-					    start_field_bit_offset,
+		    acpi_ex_generate_access(obj_desc->
+					    common_field.start_field_bit_offset,
 					    obj_desc->common_field.bit_length,
 					    0xFFFFFFFF
 					    /* Temp until we pass region_length as parameter */
@@ -552,8 +552,8 @@ acpi_status acpi_ex_prep_field_value(struct acpi_create_field_info *info)
 		 */
 		obj_desc->index_field.value =
 		    (u32) ACPI_ROUND_DOWN(ACPI_DIV_8(info->field_bit_position),
-					  obj_desc->index_field.
-					  access_byte_width);
+					  obj_desc->
+					  index_field.access_byte_width);
 
 		ACPI_DEBUG_PRINT((ACPI_DB_BFIELD,
 				  "IndexField: BitOff %X, Off %X, Value %X, Gran %X, Index %p, Data %p\n",

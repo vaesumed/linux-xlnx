@@ -143,8 +143,7 @@ void acpi_os_release_mutex(acpi_mutex handle);
  */
 void *acpi_os_allocate(acpi_size size);
 
-void __iomem *acpi_os_map_memory(acpi_physical_address where,
-				acpi_size length);
+void __iomem *acpi_os_map_memory(acpi_physical_address where, acpi_size length);
 
 void acpi_os_unmap_memory(void __iomem * logical_address, acpi_size size);
 
@@ -222,7 +221,7 @@ acpi_os_write_memory(acpi_physical_address address, u32 value, u32 width);
  */
 acpi_status
 acpi_os_read_pci_configuration(struct acpi_pci_id *pci_id,
-			       u32 reg, u32 *value, u32 width);
+			       u32 reg, u32 * value, u32 width);
 
 acpi_status
 acpi_os_write_pci_configuration(struct acpi_pci_id *pci_id,
@@ -239,7 +238,7 @@ acpi_os_derive_pci_id(acpi_handle rhandle,
  * Miscellaneous
  */
 acpi_status acpi_os_validate_interface(char *interface);
-acpi_status acpi_osi_invalidate(char* interface);
+acpi_status acpi_osi_invalidate(char *interface);
 
 acpi_status
 acpi_os_validate_address(u8 space_id, acpi_physical_address address,
@@ -280,4 +279,4 @@ char *acpi_os_get_next_filename(void *dir_handle);
 
 void acpi_os_close_directory(void *dir_handle);
 
-#endif				/* __ACPIOSXF_H__ */
+#endif /* __ACPIOSXF_H__ */

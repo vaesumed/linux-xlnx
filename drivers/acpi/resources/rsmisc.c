@@ -293,7 +293,7 @@ acpi_rs_convert_aml_to_resource(struct acpi_resource *resource,
 		info++;
 	}
 
-      exit:
+exit:
 	if (!flags_mode) {
 
 		/* Round the resource struct length up to the next boundary (32 or 64) */
@@ -461,8 +461,7 @@ acpi_rs_convert_resource_to_aml(struct acpi_resource *resource,
 			temp16 = acpi_rs_encode_bitmask(source,
 							*ACPI_ADD_PTR(u8,
 								      resource,
-								      info->
-								      value));
+								      info->value));
 			ACPI_MOVE_16_TO_16(destination, &temp16);
 			break;
 
@@ -518,7 +517,7 @@ acpi_rs_convert_resource_to_aml(struct acpi_resource *resource,
 		info++;
 	}
 
-      exit:
+exit:
 	return_ACPI_STATUS(AE_OK);
 }
 

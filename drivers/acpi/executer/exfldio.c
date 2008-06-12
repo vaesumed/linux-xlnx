@@ -156,10 +156,10 @@ acpi_ex_setup_region(union acpi_operand_object *obj_desc,
 			 * access width boundary. acpi_size cast for 64-bit compile.
 			 */
 			if (ACPI_ROUND_UP(rgn_desc->region.length,
-					  obj_desc->common_field.
-					  access_byte_width) >=
-			    ((acpi_size) obj_desc->common_field.
-			     base_byte_offset +
+					  obj_desc->
+					  common_field.access_byte_width) >=
+			    ((acpi_size) obj_desc->
+			     common_field.base_byte_offset +
 			     obj_desc->common_field.access_byte_width +
 			     field_datum_byte_offset)) {
 				return_ACPI_STATUS(AE_OK);
@@ -175,11 +175,11 @@ acpi_ex_setup_region(union acpi_operand_object *obj_desc,
 			 */
 			ACPI_ERROR((AE_INFO,
 				    "Field [%4.4s] access width (%d bytes) too large for region [%4.4s] (length %X)",
-				    acpi_ut_get_node_name(obj_desc->
-							  common_field.node),
+				    acpi_ut_get_node_name
+				    (obj_desc->common_field.node),
 				    obj_desc->common_field.access_byte_width,
-				    acpi_ut_get_node_name(rgn_desc->region.
-							  node),
+				    acpi_ut_get_node_name(rgn_desc->
+							  region.node),
 				    rgn_desc->region.length));
 		}
 
@@ -259,8 +259,8 @@ acpi_ex_access_region(union acpi_operand_object *obj_desc,
 
 	ACPI_DEBUG_PRINT_RAW((ACPI_DB_BFIELD,
 			      " Region [%s:%X], Width %X, ByteBase %X, Offset %X at %p\n",
-			      acpi_ut_get_region_name(rgn_desc->region.
-						      space_id),
+			      acpi_ut_get_region_name(rgn_desc->
+						      region.space_id),
 			      rgn_desc->region.space_id,
 			      obj_desc->common_field.access_byte_width,
 			      obj_desc->common_field.base_byte_offset,
@@ -271,23 +271,22 @@ acpi_ex_access_region(union acpi_operand_object *obj_desc,
 
 	status = acpi_ev_address_space_dispatch(rgn_desc, function,
 						address,
-						ACPI_MUL_8(obj_desc->
-							   common_field.
-							   access_byte_width),
+						ACPI_MUL_8
+						(obj_desc->common_field.access_byte_width),
 						value);
 
 	if (ACPI_FAILURE(status)) {
 		if (status == AE_NOT_IMPLEMENTED) {
 			ACPI_ERROR((AE_INFO,
 				    "Region %s(%X) not implemented",
-				    acpi_ut_get_region_name(rgn_desc->region.
-							    space_id),
+				    acpi_ut_get_region_name(rgn_desc->
+							    region.space_id),
 				    rgn_desc->region.space_id));
 		} else if (status == AE_NOT_EXIST) {
 			ACPI_ERROR((AE_INFO,
 				    "Region %s(%X) has no handler",
-				    acpi_ut_get_region_name(rgn_desc->region.
-							    space_id),
+				    acpi_ut_get_region_name(rgn_desc->
+							    region.space_id),
 				    rgn_desc->region.space_id));
 		}
 	}
@@ -408,8 +407,8 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 			 * Length is the field width in bytes.
 			 */
 			ACPI_MEMCPY(value,
-				    (obj_desc->buffer_field.buffer_obj)->buffer.
-				    pointer +
+				    (obj_desc->buffer_field.buffer_obj)->
+				    buffer.pointer +
 				    obj_desc->buffer_field.base_byte_offset +
 				    field_datum_byte_offset,
 				    obj_desc->common_field.access_byte_width);
@@ -418,8 +417,8 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 			 * Copy the data to the target buffer.
 			 * Length is the field width in bytes.
 			 */
-			ACPI_MEMCPY((obj_desc->buffer_field.buffer_obj)->buffer.
-				    pointer +
+			ACPI_MEMCPY((obj_desc->buffer_field.buffer_obj)->
+				    buffer.pointer +
 				    obj_desc->buffer_field.base_byte_offset +
 				    field_datum_byte_offset, value,
 				    obj_desc->common_field.access_byte_width);
@@ -435,8 +434,8 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 		 * the register
 		 */
 		if (acpi_ex_register_overflow(obj_desc->bank_field.bank_obj,
-					      (acpi_integer) obj_desc->
-					      bank_field.value)) {
+					      (acpi_integer)
+					      obj_desc->bank_field.value)) {
 			return_ACPI_STATUS(AE_AML_REGISTER_LIMIT);
 		}
 
@@ -447,8 +446,8 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 		status =
 		    acpi_ex_insert_into_field(obj_desc->bank_field.bank_obj,
 					      &obj_desc->bank_field.value,
-					      sizeof(obj_desc->bank_field.
-						     value));
+					      sizeof(obj_desc->
+						     bank_field.value));
 		if (ACPI_FAILURE(status)) {
 			return_ACPI_STATUS(status);
 		}
@@ -477,8 +476,8 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 		 * the register
 		 */
 		if (acpi_ex_register_overflow(obj_desc->index_field.index_obj,
-					      (acpi_integer) obj_desc->
-					      index_field.value)) {
+					      (acpi_integer)
+					      obj_desc->index_field.value)) {
 			return_ACPI_STATUS(AE_AML_REGISTER_LIMIT);
 		}
 
@@ -507,15 +506,17 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 			/* Read the datum from the data_register */
 
 			status =
-			    acpi_ex_extract_from_field(obj_desc->index_field.
-						       data_obj, value,
+			    acpi_ex_extract_from_field(obj_desc->
+						       index_field.data_obj,
+						       value,
 						       sizeof(acpi_integer));
 		} else {
 			/* Write the datum to the data_register */
 
 			status =
-			    acpi_ex_insert_into_field(obj_desc->index_field.
-						      data_obj, value,
+			    acpi_ex_insert_into_field(obj_desc->
+						      index_field.data_obj,
+						      value,
 						      sizeof(acpi_integer));
 		}
 		break;
@@ -533,14 +534,14 @@ acpi_ex_field_datum_io(union acpi_operand_object *obj_desc,
 			ACPI_DEBUG_PRINT((ACPI_DB_BFIELD,
 					  "Value Read %8.8X%8.8X, Width %d\n",
 					  ACPI_FORMAT_UINT64(*value),
-					  obj_desc->common_field.
-					  access_byte_width));
+					  obj_desc->
+					  common_field.access_byte_width));
 		} else {
 			ACPI_DEBUG_PRINT((ACPI_DB_BFIELD,
 					  "Value Written %8.8X%8.8X, Width %d\n",
 					  ACPI_FORMAT_UINT64(*value),
-					  obj_desc->common_field.
-					  access_byte_width));
+					  obj_desc->
+					  common_field.access_byte_width));
 		}
 	}
 
@@ -584,16 +585,17 @@ acpi_ex_write_with_update_rule(union acpi_operand_object *obj_desc,
 
 		/* Decode the update rule */
 
-		switch (obj_desc->common_field.
-			field_flags & AML_FIELD_UPDATE_RULE_MASK) {
+		switch (obj_desc->
+			common_field.field_flags & AML_FIELD_UPDATE_RULE_MASK) {
 		case AML_FIELD_UPDATE_PRESERVE:
 			/*
 			 * Check if update rule needs to be applied (not if mask is all
 			 * ones)  The left shift drops the bits we want to ignore.
 			 */
 			if ((~mask << (ACPI_MUL_8(sizeof(mask)) -
-				       ACPI_MUL_8(obj_desc->common_field.
-						  access_byte_width))) != 0) {
+				       ACPI_MUL_8(obj_desc->
+						  common_field.access_byte_width)))
+			    != 0) {
 				/*
 				 * Read the current contents of the byte/word/dword containing
 				 * the field, and merge with the new field value.
@@ -629,8 +631,7 @@ acpi_ex_write_with_update_rule(union acpi_operand_object *obj_desc,
 
 			ACPI_ERROR((AE_INFO,
 				    "Unknown UpdateRule value: %X",
-				    (obj_desc->common_field.
-				     field_flags &
+				    (obj_desc->common_field.field_flags &
 				     AML_FIELD_UPDATE_RULE_MASK)));
 			return_ACPI_STATUS(AE_AML_OPERAND_VALUE);
 		}
@@ -699,10 +700,10 @@ acpi_ex_extract_from_field(union acpi_operand_object *obj_desc,
 	datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length,
 				       obj_desc->common_field.access_bit_width);
 	field_datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length +
-					     obj_desc->common_field.
-					     start_field_bit_offset,
-					     obj_desc->common_field.
-					     access_bit_width);
+					     obj_desc->
+					     common_field.start_field_bit_offset,
+					     obj_desc->
+					     common_field.access_bit_width);
 
 	/* Priming read from the field */
 
@@ -740,10 +741,10 @@ acpi_ex_extract_from_field(union acpi_operand_object *obj_desc,
 		     obj_desc->common_field.start_field_bit_offset) <
 		    ACPI_INTEGER_BIT_SIZE) {
 			merged_datum |=
-			    raw_datum << (obj_desc->common_field.
-					  access_bit_width -
-					  obj_desc->common_field.
-					  start_field_bit_offset);
+			    raw_datum << (obj_desc->
+					  common_field.access_bit_width -
+					  obj_desc->
+					  common_field.start_field_bit_offset);
 		}
 
 		if (i == datum_count) {
@@ -851,8 +852,8 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 		width_mask = ACPI_INTEGER_MAX;
 	} else {
 		width_mask =
-		    ACPI_MASK_BITS_ABOVE(obj_desc->common_field.
-					 access_bit_width);
+		    ACPI_MASK_BITS_ABOVE(obj_desc->
+					 common_field.access_bit_width);
 	}
 
 	mask = width_mask &
@@ -864,10 +865,10 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 				       obj_desc->common_field.access_bit_width);
 
 	field_datum_count = ACPI_ROUND_UP_TO(obj_desc->common_field.bit_length +
-					     obj_desc->common_field.
-					     start_field_bit_offset,
-					     obj_desc->common_field.
-					     access_bit_width);
+					     obj_desc->
+					     common_field.start_field_bit_offset,
+					     obj_desc->
+					     common_field.access_bit_width);
 
 	/* Get initial Datum from the input buffer */
 
@@ -907,10 +908,10 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 		     obj_desc->common_field.start_field_bit_offset) <
 		    ACPI_INTEGER_BIT_SIZE) {
 			merged_datum =
-			    raw_datum >> (obj_desc->common_field.
-					  access_bit_width -
-					  obj_desc->common_field.
-					  start_field_bit_offset);
+			    raw_datum >> (obj_desc->
+					  common_field.access_bit_width -
+					  obj_desc->
+					  common_field.start_field_bit_offset);
 		} else {
 			merged_datum = 0;
 		}
@@ -947,7 +948,7 @@ acpi_ex_insert_into_field(union acpi_operand_object *obj_desc,
 						mask, merged_datum,
 						field_offset);
 
-      exit:
+exit:
 	/* Free temporary buffer if we used one */
 
 	if (new_buffer) {

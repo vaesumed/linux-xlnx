@@ -45,7 +45,6 @@
 #include <acpi/amlcode.h>
 #include <acpi/acnamesp.h>
 
-
 #define _COMPONENT          ACPI_UTILITIES
 ACPI_MODULE_NAME("utcopy")
 
@@ -546,7 +545,7 @@ acpi_ut_copy_esimple_to_isimple(union acpi_object *external_object,
 	*ret_internal_object = internal_object;
 	return_ACPI_STATUS(AE_OK);
 
-      error_exit:
+error_exit:
 	acpi_ut_remove_reference(internal_object);
 	return_ACPI_STATUS(AE_NO_MEMORY);
 }
@@ -860,7 +859,7 @@ acpi_ut_copy_ielement_to_ielement(u8 object_type,
 
 	return (status);
 
-      error_exit:
+error_exit:
 	acpi_ut_remove_reference(target_object);
 	return (status);
 }

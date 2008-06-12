@@ -496,7 +496,7 @@ ACPI_EXPORT_SYMBOL(acpi_ut_value_exit)
 void
 acpi_ut_ptr_exit(u32 line_number,
 		 const char *function_name,
-		 const char *module_name, u32 component_id, u8 *ptr)
+		 const char *module_name, u32 component_id, u8 * ptr)
 {
 
 	acpi_ut_debug_print(ACPI_LV_FUNCTIONS,

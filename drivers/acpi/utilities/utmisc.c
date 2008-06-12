@@ -246,7 +246,7 @@ acpi_status acpi_ut_allocate_owner_id(acpi_owner_id * owner_id)
 	ACPI_ERROR((AE_INFO,
 		    "Could not allocate new OwnerId (255 max), AE_OWNER_ID_LIMIT"));
 
-      exit:
+exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_CACHES);
 	return_ACPI_STATUS(status);
 }
@@ -653,7 +653,7 @@ u8 acpi_ut_valid_acpi_name(u32 name)
 
 acpi_name acpi_ut_repair_name(char *name)
 {
-       u32 i;
+	u32 i;
 	char new_name[ACPI_NAME_SIZE];
 
 	for (i = 0; i < ACPI_NAME_SIZE; i++) {
@@ -829,7 +829,7 @@ acpi_ut_strtoul64(char *string, u32 base, acpi_integer * ret_integer)
 
 	/* All done, normal exit */
 
-      all_done:
+all_done:
 
 	ACPI_DEBUG_PRINT((ACPI_DB_EXEC, "Converted value: %8.8X%8.8X\n",
 			  ACPI_FORMAT_UINT64(return_value)));
@@ -837,7 +837,7 @@ acpi_ut_strtoul64(char *string, u32 base, acpi_integer * ret_integer)
 	*ret_integer = return_value;
 	return_ACPI_STATUS(AE_OK);
 
-      error_exit:
+error_exit:
 	/* Base was set/validated above */
 
 	if (base == 10) {
@@ -992,8 +992,9 @@ acpi_ut_walk_package_tree(union acpi_operand_object * source_object,
 			 */
 			acpi_ut_push_generic_state(&state_list, state);
 			state = acpi_ut_create_pkg_state(this_source_obj,
-							 state->pkg.
-							 this_target_obj, 0);
+							 state->
+							 pkg.this_target_obj,
+							 0);
 			if (!state) {
 				return_ACPI_STATUS(AE_NO_MEMORY);
 			}

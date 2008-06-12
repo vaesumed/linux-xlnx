@@ -66,4 +66,4 @@
 #include "achware.h"		/* Hardware defines and interfaces */
 #include "acutils.h"		/* Utility interfaces */
 
-#endif				/* __ACPI_H__ */
+#endif /* __ACPI_H__ */

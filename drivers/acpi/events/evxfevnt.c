@@ -165,8 +165,8 @@ acpi_status acpi_enable_event(u32 event, u32 flags)
 	 * enable register bit)
 	 */
 	status =
-	    acpi_set_register(acpi_gbl_fixed_event_info[event].
-			      enable_register_id, 1);
+	    acpi_set_register(acpi_gbl_fixed_event_info
+			      [event].enable_register_id, 1);
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
 	}
@@ -174,8 +174,8 @@ acpi_status acpi_enable_event(u32 event, u32 flags)
 	/* Make sure that the hardware responded */
 
 	status =
-	    acpi_get_register(acpi_gbl_fixed_event_info[event].
-			      enable_register_id, &value);
+	    acpi_get_register(acpi_gbl_fixed_event_info
+			      [event].enable_register_id, &value);
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
 	}
@@ -228,7 +228,7 @@ acpi_status acpi_set_gpe_type(acpi_handle gpe_device, u32 gpe_number, u8 type)
 
 	status = acpi_ev_set_gpe_type(gpe_event_info, type);
 
-      unlock_and_exit:
+unlock_and_exit:
 	return_ACPI_STATUS(status);
 }
 
@@ -276,7 +276,7 @@ acpi_status acpi_enable_gpe(acpi_handle gpe_device, u32 gpe_number, u32 flags)
 
 	status = acpi_ev_enable_gpe(gpe_event_info, TRUE);
 
-      unlock_and_exit:
+unlock_and_exit:
 	if (flags & ACPI_NOT_ISR) {
 		(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	}
@@ -325,7 +325,7 @@ acpi_status acpi_disable_gpe(acpi_handle gpe_device, u32 gpe_number, u32 flags)
 
 	status = acpi_ev_disable_gpe(gpe_event_info);
 
-      unlock_and_exit:
+unlock_and_exit:
 	if (flags & ACPI_NOT_ISR) {
 		(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	}
@@ -364,15 +364,15 @@ acpi_status acpi_disable_event(u32 event, u32 flags)
 	 * enable register bit)
 	 */
 	status =
-	    acpi_set_register(acpi_gbl_fixed_event_info[event].
-			      enable_register_id, 0);
+	    acpi_set_register(acpi_gbl_fixed_event_info
+			      [event].enable_register_id, 0);
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
 	}
 
 	status =
-	    acpi_get_register(acpi_gbl_fixed_event_info[event].
-			      enable_register_id, &value);
+	    acpi_get_register(acpi_gbl_fixed_event_info
+			      [event].enable_register_id, &value);
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
 	}
@@ -417,8 +417,8 @@ acpi_status acpi_clear_event(u32 event)
 	 * status register bit)
 	 */
 	status =
-	    acpi_set_register(acpi_gbl_fixed_event_info[event].
-			      status_register_id, 1);
+	    acpi_set_register(acpi_gbl_fixed_event_info
+			      [event].status_register_id, 1);
 
 	return_ACPI_STATUS(status);
 }
@@ -464,7 +464,7 @@ acpi_status acpi_clear_gpe(acpi_handle gpe_device, u32 gpe_number, u32 flags)
 
 	status = acpi_hw_clear_gpe(gpe_event_info);
 
-      unlock_and_exit:
+unlock_and_exit:
 	if (flags & ACPI_NOT_ISR) {
 		(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	}
@@ -505,8 +505,8 @@ acpi_status acpi_get_event_status(u32 event, acpi_event_status * event_status)
 	/* Get the status of the requested fixed event */
 
 	status =
-	    acpi_get_register(acpi_gbl_fixed_event_info[event].
-			      status_register_id, event_status);
+	    acpi_get_register(acpi_gbl_fixed_event_info
+			      [event].status_register_id, event_status);
 
 	return_ACPI_STATUS(status);
 }
@@ -558,7 +558,7 @@ acpi_get_gpe_status(acpi_handle gpe_device,
 
 	status = acpi_hw_get_gpe_status(gpe_event_info, event_status);
 
-      unlock_and_exit:
+unlock_and_exit:
 	if (flags & ACPI_NOT_ISR) {
 		(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	}
@@ -566,7 +566,7 @@ acpi_get_gpe_status(acpi_handle gpe_device,
 }
 
 ACPI_EXPORT_SYMBOL(acpi_get_gpe_status)
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 /*******************************************************************************
  *
  * FUNCTION:    acpi_install_gpe_block
@@ -655,7 +655,7 @@ acpi_install_gpe_block(acpi_handle gpe_device,
 
 	obj_desc->device.gpe_block = gpe_block;
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return_ACPI_STATUS(status);
 }
@@ -710,7 +710,7 @@ acpi_status acpi_remove_gpe_block(acpi_handle gpe_device)
 		obj_desc->device.gpe_block = NULL;
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return_ACPI_STATUS(status);
 }

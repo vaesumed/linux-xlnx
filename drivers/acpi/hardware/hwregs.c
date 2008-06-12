@@ -96,7 +96,7 @@ acpi_status acpi_hw_clear_acpi_status(void)
 
 	status = acpi_ev_walk_gpe_list(acpi_hw_clear_gpe_block);
 
-      unlock_and_exit:
+unlock_and_exit:
 	acpi_os_release_lock(acpi_gbl_hardware_lock, lock_flags);
 	return_ACPI_STATUS(status);
 }
@@ -189,10 +189,12 @@ acpi_get_sleep_type_data(u8 sleep_state, u8 * sleep_type_a, u8 * sleep_type_b)
 		  != ACPI_TYPE_INTEGER)) {
 		ACPI_ERROR((AE_INFO,
 			    "Sleep State return package elements are not both Integers (%s, %s)",
-			    acpi_ut_get_object_type_name(info->return_object->
-							 package.elements[0]),
-			    acpi_ut_get_object_type_name(info->return_object->
-							 package.elements[1])));
+			    acpi_ut_get_object_type_name(info->
+							 return_object->package.
+							 elements[0]),
+			    acpi_ut_get_object_type_name(info->
+							 return_object->package.
+							 elements[1])));
 		status = AE_AML_OPERAND_TYPE;
 	} else {
 		/* Valid _Sx_ package size, type, and value */
@@ -207,13 +209,13 @@ acpi_get_sleep_type_data(u8 sleep_state, u8 * sleep_type_a, u8 * sleep_type_b)
 		ACPI_EXCEPTION((AE_INFO, status,
 				"While evaluating SleepState [%s], bad Sleep object %p type %s",
 				info->pathname, info->return_object,
-				acpi_ut_get_object_type_name(info->
-							     return_object)));
+				acpi_ut_get_object_type_name
+				(info->return_object)));
 	}
 
 	acpi_ut_remove_reference(info->return_object);
 
-      cleanup:
+cleanup:
 	ACPI_FREE(info);
 	return_ACPI_STATUS(status);
 }
@@ -367,11 +369,11 @@ acpi_status acpi_set_register(u32 register_id, u32 value)
 		 */
 		value = ACPI_REGISTER_PREPARE_BITS(value,
 						   bit_reg_info->bit_position,
-						   bit_reg_info->
-						   access_bit_mask);
+						   bit_reg_info->access_bit_mask);
 		if (value) {
-			status = acpi_hw_register_write(ACPI_REGISTER_PM1_STATUS,
-							(u16) value);
+			status =
+			    acpi_hw_register_write(ACPI_REGISTER_PM1_STATUS,
+						   (u16) value);
 			register_value = 0;
 		}
 		break;
@@ -417,9 +419,8 @@ acpi_status acpi_set_register(u32 register_id, u32 value)
 		ACPI_DEBUG_PRINT((ACPI_DB_IO,
 				  "PM2 control: Read %X from %8.8X%8.8X\n",
 				  register_value,
-				  ACPI_FORMAT_UINT64(acpi_gbl_FADT.
-						     xpm2_control_block.
-						     address)));
+				  ACPI_FORMAT_UINT64
+				  (acpi_gbl_FADT.xpm2_control_block.address)));
 
 		ACPI_REGISTER_INSERT_VALUE(register_value,
 					   bit_reg_info->bit_position,
@@ -429,9 +430,8 @@ acpi_status acpi_set_register(u32 register_id, u32 value)
 		ACPI_DEBUG_PRINT((ACPI_DB_IO,
 				  "About to write %4.4X to %8.8X%8.8X\n",
 				  register_value,
-				  ACPI_FORMAT_UINT64(acpi_gbl_FADT.
-						     xpm2_control_block.
-						     address)));
+				  ACPI_FORMAT_UINT64
+				  (acpi_gbl_FADT.xpm2_control_block.address)));
 
 		status = acpi_hw_register_write(ACPI_REGISTER_PM2_CONTROL,
 						(u8) (register_value));
@@ -441,7 +441,7 @@ acpi_status acpi_set_register(u32 register_id, u32 value)
 		break;
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 
 	acpi_os_release_lock(acpi_gbl_hardware_lock, lock_flags);
 
@@ -471,8 +471,7 @@ ACPI_EXPORT_SYMBOL(acpi_set_register)
  * DESCRIPTION: Read from the specified ACPI register
  *
  ******************************************************************************/
-acpi_status
-acpi_hw_register_read(u32 register_id, u32 * return_value)
+acpi_status acpi_hw_register_read(u32 register_id, u32 * return_value)
 {
 	u32 value1 = 0;
 	u32 value2 = 0;
@@ -554,7 +553,7 @@ acpi_hw_register_read(u32 register_id, u32 * return_value)
 		break;
 	}
 
-      exit:
+exit:
 
 	if (ACPI_SUCCESS(status)) {
 		*return_value = value1;
@@ -713,7 +712,7 @@ acpi_status acpi_hw_register_write(u32 register_id, u32 value)
 		break;
 	}
 
-      exit:
+exit:
 	return_ACPI_STATUS(status);
 }
 

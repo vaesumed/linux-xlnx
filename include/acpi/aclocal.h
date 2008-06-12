@@ -964,4 +964,4 @@ struct acpi_memory_list {
 #endif
 };
 
-#endif				/* __ACLOCAL_H__ */
+#endif /* __ACLOCAL_H__ */

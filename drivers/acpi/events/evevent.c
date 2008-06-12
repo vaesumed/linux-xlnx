@@ -203,8 +203,8 @@ static acpi_status acpi_ev_fixed_event_initialize(void)
 
 		if (acpi_gbl_fixed_event_info[i].enable_register_id != 0xFF) {
 			status =
-			    acpi_set_register(acpi_gbl_fixed_event_info[i].
-					      enable_register_id, 0);
+			    acpi_set_register(acpi_gbl_fixed_event_info
+					      [i].enable_register_id, 0);
 			if (ACPI_FAILURE(status)) {
 				return (status);
 			}
@@ -253,10 +253,10 @@ u32 acpi_ev_fixed_event_detect(void)
 
 		/* Both the status and enable bits must be on for this event */
 
-		if ((fixed_status & acpi_gbl_fixed_event_info[i].
-		     status_bit_mask)
-		    && (fixed_enable & acpi_gbl_fixed_event_info[i].
-			enable_bit_mask)) {
+		if ((fixed_status &
+		     acpi_gbl_fixed_event_info[i].status_bit_mask)
+		    && (fixed_enable &
+			acpi_gbl_fixed_event_info[i].enable_bit_mask)) {
 
 			/* Found an active (signalled) event */
 			acpi_os_fixed_event_count(i);
@@ -287,16 +287,18 @@ static u32 acpi_ev_fixed_event_dispatch(u32 event)
 
 	/* Clear the status bit */
 
-	(void)acpi_set_register(acpi_gbl_fixed_event_info[event].
-				status_register_id, 1);
+	(void)
+	    acpi_set_register(acpi_gbl_fixed_event_info
+			      [event].status_register_id, 1);
 
 	/*
 	 * Make sure we've got a handler.  If not, report an error.
 	 * The event is disabled to prevent further interrupts.
 	 */
 	if (NULL == acpi_gbl_fixed_event_handlers[event].handler) {
-		(void)acpi_set_register(acpi_gbl_fixed_event_info[event].
-					enable_register_id, 0);
+		(void)
+		    acpi_set_register(acpi_gbl_fixed_event_info
+				      [event].enable_register_id, 0);
 
 		ACPI_ERROR((AE_INFO,
 			    "No installed handler for fixed event [%08X]",
@@ -307,6 +309,6 @@ static u32 acpi_ev_fixed_event_dispatch(u32 event)
 
 	/* Invoke the Fixed Event handler */
 
-	return ((acpi_gbl_fixed_event_handlers[event].
-		 handler) (acpi_gbl_fixed_event_handlers[event].context));
+	return ((acpi_gbl_fixed_event_handlers[event].handler)
+		(acpi_gbl_fixed_event_handlers[event].context));
 }

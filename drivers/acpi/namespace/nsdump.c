@@ -250,8 +250,8 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 				       obj_desc->processor.proc_id,
 				       obj_desc->processor.length,
 				       ACPI_CAST_PTR(void,
-						     obj_desc->processor.
-						     address));
+						     obj_desc->
+						     processor.address));
 			break;
 
 		case ACPI_TYPE_DEVICE:
@@ -270,8 +270,8 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 		case ACPI_TYPE_INTEGER:
 
 			acpi_os_printf("= %8.8X%8.8X\n",
-				       ACPI_FORMAT_UINT64(obj_desc->integer.
-							  value));
+				       ACPI_FORMAT_UINT64(obj_desc->
+							  integer.value));
 			break;
 
 		case ACPI_TYPE_PACKAGE:
@@ -298,8 +298,9 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 					     (i < obj_desc->buffer.length
 					      && i < 12); i++) {
 						acpi_os_printf(" %.2hX",
-							       obj_desc->buffer.
-							       pointer[i]);
+							       obj_desc->
+							       buffer.pointer
+							       [i]);
 					}
 				}
 				acpi_os_printf("\n");
@@ -318,8 +319,8 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 		case ACPI_TYPE_REGION:
 
 			acpi_os_printf("[%s]",
-				       acpi_ut_get_region_name(obj_desc->region.
-							       space_id));
+				       acpi_ut_get_region_name(obj_desc->
+							       region.space_id));
 			if (obj_desc->region.flags & AOPOBJ_DATA_VALID) {
 				acpi_os_printf(" Addr %8.8X%8.8X Len %.4X\n",
 					       ACPI_FORMAT_NATIVE_UINT
@@ -334,9 +335,8 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 		case ACPI_TYPE_LOCAL_REFERENCE:
 
 			acpi_os_printf("[%s]\n",
-				       acpi_ps_get_opcode_name(obj_desc->
-							       reference.
-							       opcode));
+				       acpi_ps_get_opcode_name
+				       (obj_desc->reference.opcode));
 			break;
 
 		case ACPI_TYPE_BUFFER_FIELD:
@@ -344,49 +344,37 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 			if (obj_desc->buffer_field.buffer_obj &&
 			    obj_desc->buffer_field.buffer_obj->buffer.node) {
 				acpi_os_printf("Buf [%4.4s]",
-					       acpi_ut_get_node_name(obj_desc->
-								     buffer_field.
-								     buffer_obj->
-								     buffer.
-								     node));
+					       acpi_ut_get_node_name
+					       (obj_desc->buffer_field.buffer_obj->buffer.node));
 			}
 			break;
 
 		case ACPI_TYPE_LOCAL_REGION_FIELD:
 
 			acpi_os_printf("Rgn [%4.4s]",
-				       acpi_ut_get_node_name(obj_desc->
-							     common_field.
-							     region_obj->region.
-							     node));
+				       acpi_ut_get_node_name
+				       (obj_desc->common_field.region_obj->
+					region.node));
 			break;
 
 		case ACPI_TYPE_LOCAL_BANK_FIELD:
 
 			acpi_os_printf("Rgn [%4.4s] Bnk [%4.4s]",
-				       acpi_ut_get_node_name(obj_desc->
-							     common_field.
-							     region_obj->region.
-							     node),
-				       acpi_ut_get_node_name(obj_desc->
-							     bank_field.
-							     bank_obj->
-							     common_field.
-							     node));
+				       acpi_ut_get_node_name
+				       (obj_desc->common_field.region_obj->
+					region.node),
+				       acpi_ut_get_node_name
+				       (obj_desc->bank_field.bank_obj->common_field.node));
 			break;
 
 		case ACPI_TYPE_LOCAL_INDEX_FIELD:
 
 			acpi_os_printf("Idx [%4.4s] Dat [%4.4s]",
-				       acpi_ut_get_node_name(obj_desc->
-							     index_field.
-							     index_obj->
-							     common_field.node),
-				       acpi_ut_get_node_name(obj_desc->
-							     index_field.
-							     data_obj->
-							     common_field.
-							     node));
+				       acpi_ut_get_node_name
+				       (obj_desc->index_field.index_obj->common_field.
+					node),
+				       acpi_ut_get_node_name
+				       (obj_desc->index_field.data_obj->common_field.node));
 			break;
 
 		case ACPI_TYPE_LOCAL_ALIAS:
@@ -412,14 +400,14 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 		case ACPI_TYPE_LOCAL_INDEX_FIELD:
 
 			acpi_os_printf(" Off %.3X Len %.2X Acc %.2hd\n",
-				       (obj_desc->common_field.
-					base_byte_offset * 8)
+				       (obj_desc->
+					common_field.base_byte_offset * 8)
 				       +
-				       obj_desc->common_field.
-				       start_field_bit_offset,
+				       obj_desc->
+				       common_field.start_field_bit_offset,
 				       obj_desc->common_field.bit_length,
-				       obj_desc->common_field.
-				       access_byte_width);
+				       obj_desc->
+				       common_field.access_byte_width);
 			break;
 
 		default:
@@ -452,8 +440,8 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 		case ACPI_TYPE_INTEGER:
 
 			acpi_os_printf(" I:%8.8X8.8%X\n",
-				       ACPI_FORMAT_UINT64(obj_desc->integer.
-							  value));
+				       ACPI_FORMAT_UINT64(obj_desc->
+							  integer.value));
 			break;
 
 		case ACPI_TYPE_STRING:
@@ -559,8 +547,8 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 
 		case ACPI_TYPE_BUFFER_FIELD:
 			obj_desc =
-			    (union acpi_operand_object *)obj_desc->buffer_field.
-			    buffer_obj;
+			    (union acpi_operand_object *)obj_desc->
+			    buffer_field.buffer_obj;
 			break;
 
 		case ACPI_TYPE_PACKAGE:
@@ -590,7 +578,7 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 		obj_type = ACPI_TYPE_INVALID;	/* Terminate loop after next pass */
 	}
 
-      cleanup:
+cleanup:
 	acpi_os_printf("\n");
 	return (AE_OK);
 }
@@ -635,7 +623,7 @@ acpi_ns_dump_objects(acpi_object_type type,
 				     acpi_ns_dump_one_object, (void *)&info,
 				     NULL);
 }
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 /*******************************************************************************
  *
@@ -707,5 +695,5 @@ void acpi_ns_dump_tables(acpi_handle search_base, u32 max_depth)
 			     ACPI_OWNER_ID_MAX, search_handle);
 	return_VOID;
 }
-#endif				/* _ACPI_ASL_COMPILER */
-#endif				/* defined(ACPI_DEBUG_OUTPUT) || defined(ACPI_DEBUGGER) */
+#endif /* _ACPI_ASL_COMPILER */
+#endif /* defined(ACPI_DEBUG_OUTPUT) || defined(ACPI_DEBUGGER) */

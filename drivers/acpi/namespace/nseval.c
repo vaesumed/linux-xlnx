@@ -162,13 +162,12 @@ acpi_status acpi_ns_evaluate(struct acpi_evaluate_info * info)
 
 		/* Just a warning if too many arguments */
 
-		else if (info->param_count >
-				info->obj_desc->method.param_count) {
+		else if (info->param_count > info->obj_desc->method.param_count) {
 			ACPI_WARNING((AE_INFO,
 				      "Excess arguments - "
 				      "method [%4.4s] needs %d, found %d",
-				      acpi_ut_get_node_name(info->
-							    resolved_node),
+				      acpi_ut_get_node_name
+				      (info->resolved_node),
 				      info->obj_desc->method.param_count,
 				      info->param_count));
 		}
@@ -234,8 +233,8 @@ acpi_status acpi_ns_evaluate(struct acpi_evaluate_info * info)
 			ACPI_DEBUG_PRINT((ACPI_DB_NAMES,
 					  "Returning object %p [%s]\n",
 					  info->return_object,
-					  acpi_ut_get_object_type_name(info->
-								       return_object)));
+					  acpi_ut_get_object_type_name
+					  (info->return_object)));
 		}
 	}
 

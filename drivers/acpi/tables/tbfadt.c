@@ -170,8 +170,8 @@ void acpi_tb_parse_fadt(u32 table_index, u8 flags)
 	length = acpi_gbl_root_table_list.tables[table_index].length;
 
 	table =
-	    acpi_os_map_memory(acpi_gbl_root_table_list.tables[table_index].
-			       address, length);
+	    acpi_os_map_memory(acpi_gbl_root_table_list.
+			       tables[table_index].address, length);
 	if (!table) {
 		return;
 	}
@@ -331,8 +331,7 @@ static void acpi_tb_convert_fadt(void)
 						     (u64) * ACPI_ADD_PTR(u32,
 									  &acpi_gbl_FADT,
 									  fadt_info_table
-									  [i].
-									  source));
+									  [i].source));
 		}
 	}
 
@@ -362,8 +361,9 @@ static void acpi_tb_convert_fadt(void)
 	if (acpi_gbl_FADT.xpm1b_event_block.address) {
 		acpi_tb_init_generic_address(&acpi_gbl_xpm1b_enable,
 					     pm1_register_length,
-					     (acpi_gbl_FADT.xpm1b_event_block.
-					      address + pm1_register_length));
+					     (acpi_gbl_FADT.
+					      xpm1b_event_block.address +
+					      pm1_register_length));
 		/* Don't forget to copy space_id of the GAS */
 		acpi_gbl_xpm1b_enable.space_id =
 		    acpi_gbl_FADT.xpm1a_event_block.space_id;
@@ -423,9 +423,8 @@ static void acpi_tb_validate_fadt(void)
 				ACPI_ERROR((AE_INFO,
 					    "Required field \"%s\" has zero address and/or length: %8.8X%8.8X/%X",
 					    fadt_info_table[i].name,
-					    ACPI_FORMAT_UINT64(address64->
-							       address),
-					    length));
+					    ACPI_FORMAT_UINT64
+					    (address64->address), length));
 			}
 		} else if (fadt_info_table[i].type & ACPI_FADT_SEPARATE_LENGTH) {
 			/*
@@ -437,9 +436,8 @@ static void acpi_tb_validate_fadt(void)
 				ACPI_WARNING((AE_INFO,
 					      "Optional field \"%s\" has zero address or length: %8.8X%8.8X/%X",
 					      fadt_info_table[i].name,
-					      ACPI_FORMAT_UINT64(address64->
-								 address),
-					      length));
+					      ACPI_FORMAT_UINT64
+					      (address64->address), length));
 			}
 		}
 
