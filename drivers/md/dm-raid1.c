@@ -587,7 +587,7 @@ static void rh_recovery_prepare(struct region_hash *rh)
 	/* Extra reference to avoid race with rh_stop_recovery */
 	atomic_inc(&rh->recovery_in_flight);
 
-	while (!down_trylock(&rh->recovery_count)) {
+	while (down_try(&rh->recovery_count)) {
 		atomic_inc(&rh->recovery_in_flight);
 		if (__rh_recovery_prepare(rh) <= 0) {
 			atomic_dec(&rh->recovery_in_flight);
