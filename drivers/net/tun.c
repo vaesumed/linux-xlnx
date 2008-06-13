@@ -733,7 +733,13 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 #endif
 
 	case TUNSETFEATURES:
-		return set_features(tun->dev, arg);
+	{
+		int ret;
+		rtnl_lock();
+		ret = set_features(tun->dev, arg);
+		rtnl_unlock();
+		return ret;
+	}
 
 	case SIOCGIFFLAGS:
 		ifr.ifr_flags = tun->if_flags;
