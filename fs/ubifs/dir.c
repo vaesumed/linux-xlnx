@@ -992,9 +992,15 @@ out_inode:
 	} else
 		new_dir->i_size -= new_sz;
 	old_dir->i_size += old_sz;
-	if (is_dir && move) {
-		drop_nlink(new_dir);
-		inc_nlink(old_dir);
+	if (is_dir) {
+		if (move) {
+			inc_nlink(old_dir);
+			if (!unlink)
+				drop_nlink(new_dir);
+		} else {
+			if (unlink)
+				inc_nlink(old_dir);
+		}
 	}
 	ubifs_cancel_ino_op(c, old_dir, &req);
 	return err;
