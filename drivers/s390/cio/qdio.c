@@ -3898,6 +3898,7 @@ init_QDIO(void)
 					    qdio_mempool_alloc,
 					    qdio_mempool_free, NULL);
 
+	isc_register(QDIO_AIRQ_ISC);
 	if (tiqdio_check_chsc_availability())
 		QDIO_PRINT_ERR("Not all CHSCs supported. Continuing.\n");
 
@@ -3910,6 +3911,7 @@ static void __exit
 cleanup_QDIO(void)
 {
 	tiqdio_unregister_thinints();
+	isc_unregister(QDIO_AIRQ_ISC);
 	qdio_remove_procfs_entry();
 	qdio_release_qdio_memory();
 	qdio_unregister_dbf_views();
