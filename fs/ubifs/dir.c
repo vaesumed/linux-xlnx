@@ -513,6 +513,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 		return err;
 
 	inc_nlink(inode);
+	atomic_inc(&inode->i_count);
 	inode->i_ctime = ubifs_current_time(inode);
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
@@ -521,7 +522,6 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		goto out_budg;
 
-	atomic_inc(&inode->i_count);
 	d_instantiate(dentry, inode);
 	ubifs_release_ino_clean(c, dir, &req);
 	return 0;
