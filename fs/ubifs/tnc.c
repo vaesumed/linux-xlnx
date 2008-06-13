@@ -2039,11 +2039,8 @@ int ubifs_tnc_add_nm(struct ubifs_info *c, const union ubifs_key *key,
 		err = tnc_insert(c, znode, &zbr, n + 1);
 		if (err)
 			goto out_unlock;
-		if (c->replaying && c->replay_sqnum < c->cs_sqnum) {
+		if (c->replaying) {
 			/*
-			 * This node was moved by garbage collection. We can
-			 * tell because it is in the journal but it has a
-			 * sequence number earlier than the last commit-start.
 			 * We did not find it in the index so there may be a
 			 * dangling branch still in the index. So we remove it
 			 * by passing 'ubifs_tnc_remove_nm()' the same key but
