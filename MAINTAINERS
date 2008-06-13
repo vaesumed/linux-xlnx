@@ -1151,6 +1151,11 @@ M:	scott@spiteful.org
 L:	linux-pci@vger.kernel.org
 S:	Supported
 
+COMPAL LAPTOP SUPPORT
+P:	Cezary Jackiewicz
+M:	cezary.jackiewicz@gmail.com
+S:	Maintained
+
 COMPUTONE INTELLIPORT MULTIPORT CARD
 P:	Michael H. Warfield
 M:	mhw@wittsend.com
