@@ -34,9 +34,8 @@
 /*
  * Local function declarations
  */
-static struct nfs_page * nfs_update_request(struct nfs_open_context*,
-					    struct page *,
-					    unsigned int, unsigned int);
+static struct nfs_page * nfs_setup_write_request(struct nfs_open_context *ctx,
+		struct page *page, unsigned int offset, unsigned int bytes);
 static void nfs_pageio_init_write(struct nfs_pageio_descriptor *desc,
 				  struct inode *inode, int ioflags);
 static void nfs_redirty_request(struct nfs_page *req);
@@ -176,7 +175,7 @@ static int nfs_writepage_setup(struct nfs_open_context *ctx, struct page *page,
 	int ret;
 
 	for (;;) {
-		req = nfs_update_request(ctx, page, offset, count);
+		req = nfs_setup_write_request(ctx, page, offset, count);
 		if (!IS_ERR(req))
 			break;
 		ret = PTR_ERR(req);
@@ -564,6 +563,41 @@ static inline int nfs_scan_commit(struct inode *inode, struct list_head *dst, pg
 }
 #endif
 
+static int nfs_try_to_update_request(struct nfs_page *req,
+		unsigned int offset,
+		unsigned int end)
+{
+	unsigned int rqend;
+
+	rqend = req->wb_offset + req->wb_bytes;
+
+	/*
+	 * If the page doesn't match, or the offsets
+	 * are non-contiguous, tell the caller to
+	 * wait on the conflicting request.
+	 */
+	if (req->wb_page == NULL
+	    || !nfs_dirty_request(req)
+	    || offset > rqend
+	    || end < req->wb_offset)
+		return -EBUSY;
+
+	if (!nfs_set_page_tag_locked(req))
+		return -EAGAIN;
+
+	/* Okay, the request matches. Update the region */
+	if (offset < req->wb_offset) {
+		req->wb_offset = offset;
+		req->wb_pgbase = offset;
+	}
+	if (end > rqend)
+		req->wb_bytes = end - req->wb_offset;
+	else
+		req->wb_bytes = rqend - req->wb_offset;
+
+	return 0;
+}
+
 /*
  * Try to update any existing write request, or create one if there is none.
  * In order to match, the request's credentials must match those of
@@ -571,16 +605,15 @@ static inline int nfs_scan_commit(struct inode *inode, struct list_head *dst, pg
  *
  * Note: Should always be called with the Page Lock held!
  */
-static struct nfs_page * nfs_update_request(struct nfs_open_context* ctx,
+static struct nfs_page * nfs_setup_write_request(struct nfs_open_context* ctx,
 		struct page *page, unsigned int offset, unsigned int bytes)
 {
-	struct address_space *mapping = page->mapping;
-	struct inode *inode = mapping->host;
+	struct inode *inode = page->mapping->host;
 	struct nfs_page		*req, *new = NULL;
-	pgoff_t		rqend, end;
+	unsigned int end;
+	int error;
 
 	end = offset + bytes;
-
 	for (;;) {
 		/* Loop over all inode entries and see if we find
 		 * A request for the page we wish to update
@@ -588,26 +621,16 @@ static struct nfs_page * nfs_update_request(struct nfs_open_context* ctx,
 		spin_lock(&inode->i_lock);
 		req = nfs_page_find_request_locked(page);
 		if (req) {
-			if (!nfs_set_page_tag_locked(req)) {
-				int error;
-
-				spin_unlock(&inode->i_lock);
-				error = nfs_wait_on_request(req);
-				nfs_release_request(req);
-				if (error < 0) {
-					if (new) {
-						radix_tree_preload_end();
-						nfs_release_request(new);
-					}
-					return ERR_PTR(error);
-				}
-				continue;
-			}
+			error = nfs_try_to_update_request(req, offset, end);
 			spin_unlock(&inode->i_lock);
-			if (new) {
-				radix_tree_preload_end();
-				nfs_release_request(new);
-			}
+			if (error == 0)
+				break;
+			if (error == -EAGAIN)
+				error = nfs_wait_on_request(req);
+			nfs_release_request(req);
+			if (error == 0)
+				continue;
+			req = ERR_PTR(error);
 			break;
 		}
 
@@ -630,32 +653,10 @@ static struct nfs_page * nfs_update_request(struct nfs_open_context* ctx,
 		}
 	}
 
-	/* We have a request for our page.
-	 * If the creds don't match, or the
-	 * page addresses don't match,
-	 * tell the caller to wait on the conflicting
-	 * request.
-	 */
-	rqend = req->wb_offset + req->wb_bytes;
-	if (req->wb_context != ctx
-	    || req->wb_page != page
-	    || !nfs_dirty_request(req)
-	    || offset > rqend || end < req->wb_offset) {
-		nfs_clear_page_tag_locked(req);
-		return ERR_PTR(-EBUSY);
+	if (new) {
+		radix_tree_preload_end();
+		nfs_release_request(new);
 	}
-
-	/* Okay, the request matches. Update the region */
-	if (offset < req->wb_offset) {
-		req->wb_offset = offset;
-		req->wb_pgbase = offset;
-		req->wb_bytes = max(end, rqend) - req->wb_offset;
-		goto out;
-	}
-
-	if (end > rqend)
-		req->wb_bytes = end - req->wb_offset;
-
 out:
 	return req;
 }
