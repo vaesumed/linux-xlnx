@@ -36,17 +36,15 @@ typedef struct semaphore sema_t;
 
 static inline int issemalocked(sema_t *sp)
 {
-	return down_trylock(sp) || (up(sp), 0);
+	return !down_try(sp) || (up(sp), 0);
 }
 
 /*
- * Map cpsema (try to get the sema) to down_trylock. We need to switch
- * the return values since cpsema returns 1 (acquired) 0 (failed) and
- * down_trylock returns the reverse 0 (acquired) 1 (failed).
+ * Map cpsema (try to get the sema) to down_try.
  */
 static inline int cpsema(sema_t *sp)
 {
-	return down_trylock(sp) ? 0 : 1;
+	return down_try(sp);
 }
 
 #endif /* __XFS_SUPPORT_SEMA_H__ */
