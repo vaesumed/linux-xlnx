@@ -1285,6 +1285,19 @@ static u32 str2ip(const char *ipaddr)
 	return (byte[0] << 24) | (byte[1] << 16) | (byte[2] << 8) | byte[3];
 }
 
+static void str2mac(const char *macaddr, unsigned char mac[6])
+{
+	unsigned int m[6];
+	sscanf(macaddr, "%02x:%02x:%02x:%02x:%02x:%02x",
+	       &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]);
+	mac[0] = m[0];
+	mac[1] = m[1];
+	mac[2] = m[2];
+	mac[3] = m[3];
+	mac[4] = m[4];
+	mac[5] = m[5];
+}
+
 /* This code is "adapted" from libbridge: it attaches the Host end of the
  * network device to the bridge device specified by the command line.
  *
@@ -1303,6 +1316,7 @@ static void add_to_bridge(int fd, const char *if_name, const char *br_name)
 		errx(1, "interface %s does not exist!", if_name);
 
 	strncpy(ifr.ifr_name, br_name, IFNAMSIZ);
+	ifr.ifr_name[IFNAMSIZ-1] = '\0';
 	ifr.ifr_ifindex = ifidx;
 	if (ioctl(fd, SIOCBRADDIF, &ifr) < 0)
 		err(1, "can't add %s to bridge %s", if_name, br_name);
@@ -1311,29 +1325,28 @@ static void add_to_bridge(int fd, const char *if_name, const char *br_name)
 /* This sets up the Host end of the network device with an IP address, brings
  * it up so packets will flow, the copies the MAC address into the hwaddr
  * pointer. */
-static void configure_device(int fd, const char *devname, u32 ipaddr,
-			     unsigned char hwaddr[6])
+static void configure_device(int fd, struct ifreq *ifr, u32 ipaddr)
 {
-	struct ifreq ifr;
-	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr.ifr_addr;
+	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr->ifr_addr;
 
 	/* Don't read these incantations.  Just cut & paste them like I did! */
-	memset(&ifr, 0, sizeof(ifr));
-	strcpy(ifr.ifr_name, devname);
 	sin->sin_family = AF_INET;
 	sin->sin_addr.s_addr = htonl(ipaddr);
-	if (ioctl(fd, SIOCSIFADDR, &ifr) != 0)
-		err(1, "Setting %s interface address", devname);
-	ifr.ifr_flags = IFF_UP;
-	if (ioctl(fd, SIOCSIFFLAGS, &ifr) != 0)
-		err(1, "Bringing interface %s up", devname);
+	if (ioctl(fd, SIOCSIFADDR, ifr) != 0)
+		err(1, "Setting %s interface address", ifr->ifr_name);
+	ifr->ifr_flags = IFF_UP;
+	if (ioctl(fd, SIOCSIFFLAGS, ifr) != 0)
+		err(1, "Bringing interface %s up", ifr->ifr_name);
+}
 
+static void get_mac(int fd, struct ifreq *ifr, unsigned char hwaddr[6])
+{
 	/* SIOC stands for Socket I/O Control.  G means Get (vs S for Set
 	 * above).  IF means Interface, and HWADDR is hardware address.
 	 * Simple! */
-	if (ioctl(fd, SIOCGIFHWADDR, &ifr) != 0)
-		err(1, "getting hw address for %s", devname);
-	memcpy(hwaddr, ifr.ifr_hwaddr.sa_data, 6);
+	if (ioctl(fd, SIOCGIFHWADDR, ifr) != 0)
+		err(1, "getting hw address for %s", ifr->ifr_name);
+	memcpy(hwaddr, ifr->ifr_hwaddr.sa_data, 6);
 }
 
 /*L:195 Our network is a Host<->Guest network.  This can either use bridging or
@@ -1345,8 +1358,10 @@ static void setup_tun_net(const char *arg)
 	struct device *dev;
 	struct ifreq ifr;
 	int netfd, ipfd;
-	u32 ip;
-	const char *br_name = NULL;
+	u32 ip = INADDR_ANY;
+	int bridging = 0;
+	char name_or_ip[IFNAMSIZ];
+	const char *p;
 	struct virtio_net_config conf;
 
 	/* We open the /dev/net/tun device and tell it we want a tap device.  A
@@ -1379,14 +1394,30 @@ static void setup_tun_net(const char *arg)
 
 	/* If the command line was --tunnet=bridge:<name> do bridging. */
 	if (!strncmp(BRIDGE_PFX, arg, strlen(BRIDGE_PFX))) {
-		ip = INADDR_ANY;
-		br_name = arg + strlen(BRIDGE_PFX);
-		add_to_bridge(ipfd, ifr.ifr_name, br_name);
-	} else /* It is an IP address to set up the device with */
-		ip = str2ip(arg);
+		arg += strlen(BRIDGE_PFX);
+		bridging = 1;
+	}
 
-	/* Set up the tun device, and get the mac address for the interface. */
-	configure_device(ipfd, ifr.ifr_name, ip, conf.mac);
+	/* A mac address may follow the bridge name or IP address */
+	if ((p = strchr(arg, ':')))
+		str2mac(p+1, conf.mac);
+	else {
+		p = arg + strlen(arg);
+		/* None supplied; query the randomly assigned mac. */
+		get_mac(ipfd, &ifr, conf.mac);
+	}
+
+	/* arg is now either an IP address or a bridge name */
+	strncpy(name_or_ip, arg, p-arg);
+	name_or_ip[p-arg] = '\0';
+
+	if (bridging)
+		add_to_bridge(ipfd, ifr.ifr_name, name_or_ip);
+	else
+		ip = str2ip(name_or_ip);
+
+	/* Set up the tun device. */
+	configure_device(ipfd, &ifr, ip);
 
 	/* Tell Guest what MAC address to use. */
 	add_feature(dev, VIRTIO_NET_F_MAC);
@@ -1396,11 +1427,14 @@ static void setup_tun_net(const char *arg)
 	/* We don't need the socket any more; setup is done. */
 	close(ipfd);
 
-	verbose("device %u: tun net %u.%u.%u.%u\n",
-		devices.device_num++,
-		(u8)(ip>>24),(u8)(ip>>16),(u8)(ip>>8),(u8)ip);
-	if (br_name)
-		verbose("attached to bridge: %s\n", br_name);
+	devices.device_num++;
+
+	if (bridging)
+		verbose("device %u: tun net attached to bridge: %s\n",
+			devices.device_num, name_or_ip);
+	else
+		verbose("device %u: tun net: %s\n",
+			devices.device_num, name_or_ip);
 }
 
 /* Our block (disk) device should be really simple: the Guest asks for a block
@@ -1712,7 +1746,7 @@ static struct option opts[] = {
 static void usage(void)
 {
 	errx(1, "Usage: lguest [--verbose] "
-	     "[--tunnet=(<ipaddr>|bridge:<bridgename>)\n"
+	     "[--tunnet=(<ipaddr>:<macaddr>|bridge:<bridgename>:<macaddr>)\n"
 	     "|--block=<filename>|--initrd=<filename>]...\n"
 	     "<mem-in-mb> vmlinux [args...]");
 }
