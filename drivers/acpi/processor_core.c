@@ -79,6 +79,10 @@ MODULE_AUTHOR("Paul Diefenbaugh");
 MODULE_DESCRIPTION("ACPI Processor Driver");
 MODULE_LICENSE("GPL");
 
+static int idle_nomwait;
+module_param_named(idle, idle_nomwait, int, 0);
+MODULE_PARM_DESC(idle, "Disable the mwait for CPU idle");
+
 static int acpi_processor_add(struct acpi_device *device);
 static int acpi_processor_start(struct acpi_device *device);
 static int acpi_processor_remove(struct acpi_device *device, int type);
@@ -261,11 +265,21 @@ static int acpi_processor_set_pdc(struct acpi_processor *pr)
 {
 	struct acpi_object_list *pdc_in = pr->pdc;
 	acpi_status status = AE_OK;
+	u32 *buffer = NULL;
+	union acpi_object *obj;
 
 
 	if (!pdc_in)
 		return status;
-
+	if (idle_nomwait) {
+		/*
+		 * If mwait is not used for cpu C-states, the C2C3_FFH
+		 * will be disabled in the paramter of _PDC object.
+		 */
+		obj = pdc_in->pointer;
+		buffer = (u32 *) (obj->buffer.pointer);
+		buffer[2] &= ~ACPI_PDC_C_C2C3_FFH;
+	}
 	status = acpi_evaluate_object(pr->handle, "_PDC", pdc_in, NULL);
 
 	if (ACPI_FAILURE(status))
