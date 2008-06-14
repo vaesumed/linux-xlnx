@@ -236,3 +236,27 @@ Licence: Unknown
 Found in hex form in kernel source.
 
 --------------------------------------------------------------------------
+
+Driver: e100 -- Intel PRO/100 Ethernet NIC
+
+File: e100/d101m_ucode.bin
+File: e100/d101s_ucode.bin
+File: e100/d102e_ucode.bin
+
+Licence: Unknown
+
+Found in hex form in kernel source.
+
+--------------------------------------------------------------------------
+
+Driver: acenic -- Alteon AceNIC Gigabit Ethernet card
+
+File: acenic/tg1.bin
+File: acenic/tg2.bin
+
+Licence: Unknown
+
+Found in hex form in kernel source, but source allegedly available at
+http://alteon.shareable.org/
+
+--------------------------------------------------------------------------

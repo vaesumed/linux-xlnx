@@ -20,9 +20,18 @@ fw-external-y := $(subst ",,$(CONFIG_EXTRA_FIRMWARE))
 # accurate. In the latter case it doesn't matter -- it'll use $(fw-shipped-all).
 # But be aware that the config file might not be included at all.
 
+ifdef CONFIG_ACENIC_OMIT_TIGON_I
+acenic-objs := acenic/tg2.bin
+fw-shipped- += acenic/tg1.bin
+else
+acenic-objs := acenic/tg1.bin acenic/tg2.bin
+endif
+fw-shipped-$(CONFIG_ACENIC) += $(acenic-objs)
 fw-shipped-$(CONFIG_ATM_AMBASSADOR) += atmsar11.fw
 fw-shipped-$(CONFIG_COMPUTONE) += intelliport2.bin
 fw-shipped-$(CONFIG_DVB_TTUSB_BUDGET) += ttusb-budget/dspbootcode.bin
+fw-shipped-$(CONFIG_E100) += e100/d101m_ucode.bin e100/d101s_ucode.bin \
+			     e100/d102e_ucode.bin
 fw-shipped-$(CONFIG_SMCTR) += tr_smctr.bin
 fw-shipped-$(CONFIG_SND_KORG1212) += korg/k1212.dsp
 fw-shipped-$(CONFIG_SND_MAESTRO3) += ess/maestro3_assp_kernel.fw \
