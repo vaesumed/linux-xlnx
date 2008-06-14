@@ -221,7 +221,7 @@ acpi_ds_method_error(acpi_status status, struct acpi_walk_state *walk_state);
  * dsinit
  */
 acpi_status
-acpi_ds_initialize_objects(acpi_native_uint table_index,
+acpi_ds_initialize_objects(u32 table_index,
 			   struct acpi_namespace_node *start_node);
 
 /*
@@ -342,4 +342,4 @@ acpi_status
 acpi_ds_result_push(union acpi_operand_object *object,
 		    struct acpi_walk_state *walk_state);
 
-#endif				/* _ACDISPAT_H_ */
+#endif /* _ACDISPAT_H_ */

@@ -121,9 +121,9 @@ acpi_status acpi_os_purge_cache(struct acpi_memory_list * cache)
 		/* Delete and unlink one cached state object */
 
 		next = *(ACPI_CAST_INDIRECT_PTR(char,
-						&(((char *)cache->
-						   list_head)[cache->
-							      link_offset])));
+						&(((char *)
+						   cache->list_head)
+						  [cache->link_offset])));
 		ACPI_FREE(cache->list_head);
 
 		cache->list_head = next;
@@ -213,8 +213,8 @@ acpi_os_release_object(struct acpi_memory_list * cache, void *object)
 		/* Put the object at the head of the cache list */
 
 		*(ACPI_CAST_INDIRECT_PTR(char,
-					 &(((char *)object)[cache->
-							    link_offset]))) =
+					 &(((char *)
+					    object)[cache->link_offset]))) =
 		    cache->list_head;
 		cache->list_head = object;
 		cache->current_depth++;
@@ -265,8 +265,8 @@ void *acpi_os_acquire_object(struct acpi_memory_list *cache)
 		object = cache->list_head;
 		cache->list_head = *(ACPI_CAST_INDIRECT_PTR(char,
 							    &(((char *)
-							       object)[cache->
-								       link_offset])));
+							       object)
+							      [cache->link_offset])));
 
 		cache->current_depth--;
 
@@ -311,4 +311,4 @@ void *acpi_os_acquire_object(struct acpi_memory_list *cache)
 
 	return (object);
 }
-#endif				/* ACPI_USE_LOCAL_CACHE */
+#endif /* ACPI_USE_LOCAL_CACHE */

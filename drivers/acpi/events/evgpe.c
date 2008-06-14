@@ -305,7 +305,7 @@ struct acpi_gpe_event_info *acpi_ev_get_gpe_event_info(acpi_handle gpe_device,
 {
 	union acpi_operand_object *obj_desc;
 	struct acpi_gpe_block_info *gpe_block;
-	acpi_native_uint i;
+	u32 i;
 
 	ACPI_FUNCTION_ENTRY();
 
@@ -322,10 +322,9 @@ struct acpi_gpe_event_info *acpi_ev_get_gpe_event_info(acpi_handle gpe_device,
 				    && (gpe_number <
 					gpe_block->block_base_number +
 					(gpe_block->register_count * 8))) {
-					return (&gpe_block->
-						event_info[gpe_number -
-							   gpe_block->
-							   block_base_number]);
+					return (&gpe_block->event_info
+						[gpe_number -
+						 gpe_block->block_base_number]);
 				}
 			}
 		}
@@ -348,8 +347,8 @@ struct acpi_gpe_event_info *acpi_ev_get_gpe_event_info(acpi_handle gpe_device,
 	if ((gpe_number >= gpe_block->block_base_number) &&
 	    (gpe_number <
 	     gpe_block->block_base_number + (gpe_block->register_count * 8))) {
-		return (&gpe_block->
-			event_info[gpe_number - gpe_block->block_base_number]);
+		return (&gpe_block->event_info
+			[gpe_number - gpe_block->block_base_number]);
 	}
 
 	return (NULL);
@@ -379,8 +378,8 @@ u32 acpi_ev_gpe_detect(struct acpi_gpe_xrupt_info * gpe_xrupt_list)
 	u32 status_reg;
 	u32 enable_reg;
 	acpi_cpu_flags flags;
-	acpi_native_uint i;
-	acpi_native_uint j;
+	u32 i;
+	u32 j;
 
 	ACPI_FUNCTION_NAME(ev_gpe_detect);
 
@@ -417,8 +416,7 @@ u32 acpi_ev_gpe_detect(struct acpi_gpe_xrupt_info * gpe_xrupt_list)
 			status =
 			    acpi_hw_low_level_read(ACPI_GPE_REGISTER_WIDTH,
 						   &status_reg,
-						   &gpe_register_info->
-						   status_address);
+						   &gpe_register_info->status_address);
 			if (ACPI_FAILURE(status)) {
 				goto unlock_and_exit;
 			}
@@ -428,8 +426,7 @@ u32 acpi_ev_gpe_detect(struct acpi_gpe_xrupt_info * gpe_xrupt_list)
 			status =
 			    acpi_hw_low_level_read(ACPI_GPE_REGISTER_WIDTH,
 						   &enable_reg,
-						   &gpe_register_info->
-						   enable_address);
+						   &gpe_register_info->enable_address);
 			if (ACPI_FAILURE(status)) {
 				goto unlock_and_exit;
 			}
@@ -461,14 +458,13 @@ u32 acpi_ev_gpe_detect(struct acpi_gpe_xrupt_info * gpe_xrupt_list)
 					 * or method.
 					 */
 					int_status |=
-					    acpi_ev_gpe_dispatch(&gpe_block->
-								 event_info[(i *
-									     ACPI_GPE_REGISTER_WIDTH)
-									    +
-									    j],
-								 (u32) j +
-								 gpe_register_info->
-								 base_gpe_number);
+					    acpi_ev_gpe_dispatch
+					    (&gpe_block->event_info
+					     [((acpi_size) i *
+					       ACPI_GPE_REGISTER_WIDTH) + j],
+					     j +
+					     gpe_register_info->
+					     base_gpe_number);
 				}
 			}
 		}
@@ -476,7 +472,7 @@ u32 acpi_ev_gpe_detect(struct acpi_gpe_xrupt_info * gpe_xrupt_list)
 		gpe_block = gpe_block->next;
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 
 	acpi_os_release_lock(acpi_gbl_gpe_lock, flags);
 	return (int_status);
@@ -555,10 +551,6 @@ static void ACPI_SYSTEM_XFACE acpi_ev_asynch_execute_gpe_method(void *context)
 			 */
 			info->prefix_node =
 			    local_gpe_event_info.dispatch.method_node;
-			info->parameters =
-			    ACPI_CAST_PTR(union acpi_operand_object *,
-					  gpe_event_info);
-			info->parameter_type = ACPI_PARAM_GPE;
 			info->flags = ACPI_IGNORE_RETURN_VALUE;
 
 			status = acpi_ns_evaluate(info);
@@ -569,13 +561,13 @@ static void ACPI_SYSTEM_XFACE acpi_ev_asynch_execute_gpe_method(void *context)
 			ACPI_EXCEPTION((AE_INFO, status,
 					"while evaluating GPE method [%4.4s]",
 					acpi_ut_get_node_name
-					(local_gpe_event_info.dispatch.
-					 method_node)));
+					(local_gpe_event_info.
+					 dispatch.method_node)));
 		}
 	}
 	/* Defer enabling of GPE until all notify handlers are done */
 	acpi_os_execute(OSL_NOTIFY_HANDLER, acpi_ev_asynch_enable_gpe,
-				gpe_event_info);
+			gpe_event_info);
 	return_VOID;
 }
 
@@ -654,10 +646,8 @@ acpi_ev_gpe_dispatch(struct acpi_gpe_event_info *gpe_event_info, u32 gpe_number)
 		 * Invoke the installed handler (at interrupt level)
 		 * Ignore return status for now.  TBD: leave GPE disabled on error?
 		 */
-		(void)gpe_event_info->dispatch.handler->address(gpe_event_info->
-								dispatch.
-								handler->
-								context);
+		(void)gpe_event_info->dispatch.handler->
+		    address(gpe_event_info->dispatch.handler->context);
 
 		/* It is now safe to clear level-triggered events. */
 

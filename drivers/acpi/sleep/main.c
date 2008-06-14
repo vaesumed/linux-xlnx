@@ -45,7 +45,7 @@ static int acpi_sleep_prepare(u32 acpi_state)
 	acpi_enable_wakeup_device_prep(acpi_state);
 #endif
 	printk(KERN_INFO PREFIX "Preparing to enter system sleep state S%d\n",
-		acpi_state);
+	       acpi_state);
 	acpi_enter_sleep_state_prep(acpi_state);
 	return 0;
 }
@@ -76,7 +76,7 @@ static int acpi_suspend_begin(suspend_state_t pm_state)
 		acpi_target_sleep_state = acpi_state;
 	} else {
 		printk(KERN_ERR "ACPI does not support this state: %d\n",
-			pm_state);
+		       pm_state);
 		error = -ENOSYS;
 	}
 	return error;
@@ -98,7 +98,7 @@ static int acpi_suspend_prepare(void)
 		return error;
 	}
 
-	return ACPI_SUCCESS(acpi_hw_disable_all_gpes()) ? 0 : -EFAULT;
+	return ACPI_SUCCESS(acpi_hw_disable_all_gpes())? 0 : -EFAULT;
 }
 
 /**
@@ -242,7 +242,7 @@ static int acpi_hibernation_prepare(void)
 		return error;
 	}
 
-	return ACPI_SUCCESS(acpi_hw_disable_all_gpes()) ? 0 : -EFAULT;
+	return ACPI_SUCCESS(acpi_hw_disable_all_gpes())? 0 : -EFAULT;
 }
 
 static int acpi_hibernation_enter(void)
@@ -319,7 +319,7 @@ static struct platform_hibernation_ops acpi_hibernation_ops = {
 	.pre_restore = acpi_hibernation_pre_restore,
 	.restore_cleanup = acpi_hibernation_restore_cleanup,
 };
-#endif				/* CONFIG_HIBERNATION */
+#endif /* CONFIG_HIBERNATION */
 
 int acpi_suspend(u32 acpi_state)
 {
@@ -404,13 +404,13 @@ int acpi_pm_device_sleep_state(struct device *dev, int *d_min_p)
 
 		acpi_method[3] = 'W';
 		status = acpi_evaluate_integer(handle, acpi_method, NULL,
-						&d_max);
+					       &d_max);
 		if (ACPI_FAILURE(status)) {
 			d_max = d_min;
 		} else if (d_max < d_min) {
 			/* Warn the user of the broken DSDT */
 			printk(KERN_WARNING "ACPI: Wrong value from %s\n",
-				acpi_method);
+			       acpi_method);
 			/* Sanitize it */
 			d_min = d_max;
 		}
