@@ -96,7 +96,7 @@ acpi_ex_add_table(u32 table_index,
 
 	/* Install the new table into the local data structures */
 
-	obj_desc->reference.object = ACPI_CAST_PTR(void, table_index);
+	obj_desc->reference.object = ACPI_TO_POINTER(table_index);
 
 	/* Add the table to the namespace */
 
