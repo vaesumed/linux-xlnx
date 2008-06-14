@@ -79,6 +79,27 @@ MODULE_AUTHOR("Paul Diefenbaugh");
 MODULE_DESCRIPTION("ACPI Processor Driver");
 MODULE_LICENSE("GPL");
 
+static int idle_nomwait;
+module_param_named(idle, idle_nomwait, int, 0);
+MODULE_PARM_DESC(idle, "Disable the mwait for CPU idle");
+
+static int set_no_mwait(const struct dmi_system_id *id)
+{
+	printk(KERN_NOTICE PREFIX "%s detected - "
+		"disable mwait for CPU C-stetes", id->ident);
+	idle_nomwait = 1;
+	return 0;
+}
+static struct dmi_system_id __cpuinitdata processor_idle_dmi_table[] = {
+	{
+	set_no_mwait, "IFL91 board", {
+	DMI_MATCH(DMI_BIOS_VENDOR, "COMPAL"),
+	DMI_MATCH(DMI_SYS_VENDOR, "ZEPTO"),
+	DMI_MATCH(DMI_PRODUCT_VERSION, "3215W"),
+	DMI_MATCH(DMI_BOARD_NAME, "IFL91") }, NULL},
+	{},
+};
+
 static int acpi_processor_add(struct acpi_device *device);
 static int acpi_processor_start(struct acpi_device *device);
 static int acpi_processor_remove(struct acpi_device *device, int type);
@@ -261,11 +282,21 @@ static int acpi_processor_set_pdc(struct acpi_processor *pr)
 {
 	struct acpi_object_list *pdc_in = pr->pdc;
 	acpi_status status = AE_OK;
+	u32 *buffer = NULL;
+	union acpi_object *obj;
 
 
 	if (!pdc_in)
 		return status;
-
+	if (idle_nomwait) {
+		/*
+		 * If mwait is not used for cpu C-states, the C2C3_FFH
+		 * will be disabled in the paramter of _PDC object.
+		 */
+		obj = pdc_in->pointer;
+		buffer = (u32 *) (obj->buffer.pointer);
+		buffer[2] &= ~ACPI_PDC_C_C2C3_FFH;
+	}
 	status = acpi_evaluate_object(pr->handle, "_PDC", pdc_in, NULL);
 
 	if (ACPI_FAILURE(status))
@@ -1087,6 +1118,11 @@ static int __init acpi_processor_init(void)
 		return -ENOMEM;
 	acpi_processor_dir->owner = THIS_MODULE;
 
+	/*
+	 * Check whether the system is DMI table. If yes, OSPM
+	 * should not use mwait for CPU-states.
+	 */
+	dmi_check_system(processor_idle_dmi_table);
 	result = cpuidle_register_driver(&acpi_idle_driver);
 	if (result < 0)
 		goto out_proc;

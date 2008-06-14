@@ -1617,6 +1617,10 @@ and is between 256 and 4096 characters. It is defined in the file
 			Ignore the _CST method to determine C-states,
 			instead using the legacy FADT method
 
+	processor.idle=	[HW,ACPI]
+			{ 1 } disable MWait for CPU C-states even when MWAIT
+			is supported
+
 	prompt_ramdisk=	[RAM] List of RAM disks to prompt for floppy disk
 			before loading.
 			See Documentation/ramdisk.txt.
