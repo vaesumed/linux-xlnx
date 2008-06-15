@@ -695,6 +695,10 @@ struct ace_private
 #endif
 	struct net_device_stats stats;
 	int			pci_using_dac;
+	u8			firmware_major;
+	u8			firmware_minor;
+	u8			firmware_fix;
+	u32			firmware_start;
 };
 
 
