@@ -248,3 +248,14 @@ Licence: Unknown
 Found in hex form in kernel source.
 
 --------------------------------------------------------------------------
+
+Driver: acenic -- Alteon AceNIC Gigabit Ethernet card
+
+File: acenic_tg1.bin
+File: acenic_tg2.bin
+
+Licence: Unknown
+
+Found in hex form in kernel source.
+
+--------------------------------------------------------------------------
