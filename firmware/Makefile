@@ -9,6 +9,10 @@ fwabs := $(addprefix $(srctree)/,$(filter-out /%,$(fwdir)))$(filter /%,$(fwdir))
 
 fw-external-y := $(subst ",,$(CONFIG_EXTRA_FIRMWARE))
 
+ifneq ($(CONFIG_ACENIC_OMIT_TIGON_I),y)
+fw-shipped-$(CONFIG_ACENIC) += acenic/tg1.bin
+endif
+fw-shipped-$(CONFIG_ACENIC) += acenic/tg2.bin
 fw-shipped-$(CONFIG_ATM_AMBASSADOR) += atmsar11.fw
 fw-shipped-$(CONFIG_COMPUTONE) += intelliport2.bin
 fw-shipped-$(CONFIG_DVB_TTUSB_BUDGET) += ttusb-budget/dspbootcode.bin
