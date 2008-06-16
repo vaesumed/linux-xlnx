@@ -41,6 +41,7 @@
 #include "linux/virtio_net.h"
 #include "linux/virtio_blk.h"
 #include "linux/virtio_console.h"
+#include "linux/virtio_rng.h"
 #include "linux/virtio_ring.h"
 #include "asm-x86/bootparam.h"
 /*L:110 We can ignore the 39 include files we need for this program, but I do
@@ -152,9 +153,6 @@ struct virtqueue
 	/* The actual ring of buffers. */
 	struct vring vring;
 
-	/* Last available index we saw. */
-	u16 last_avail_idx;
-
 	/* The routine to call when the Guest pings us. */
 	void (*handle_output)(int fd, struct virtqueue *me);
 
@@ -198,6 +196,33 @@ static void *_convert(struct iovec *iov, size_t size, size_t align,
 #define le16_to_cpu(v16) (v16)
 #define le32_to_cpu(v32) (v32)
 #define le64_to_cpu(v64) (v64)
+
+/* Is this iovec empty? */
+static bool iov_empty(const struct iovec iov[], unsigned int num_iov)
+{
+	unsigned int i;
+
+	for (i = 0; i < num_iov; i++)
+		if (iov[i].iov_len)
+			return false;
+	return true;
+}
+
+/* Take len bytes from the front of this iovec. */
+static void iov_consume(struct iovec iov[], unsigned num_iov, unsigned len)
+{
+	unsigned int i;
+
+	for (i = 0; i < num_iov; i++) {
+		unsigned int used;
+
+		used = iov[i].iov_len < len ? iov[i].iov_len : len;
+		iov[i].iov_base += used;
+		iov[i].iov_len -= used;
+		len -= used;
+	}
+	assert(len == 0);
+}
 
 /* The device virtqueue descriptors are followed by feature bitmasks. */
 static u8 *get_feature_bits(struct device *dev)
@@ -254,6 +279,7 @@ static void *map_zeroed_pages(unsigned int num)
 		    PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE, fd, 0);
 	if (addr == MAP_FAILED)
 		err(1, "Mmaping %u pages of /dev/zero", num);
+	close(fd);
 
 	return addr;
 }
@@ -661,19 +687,22 @@ static unsigned get_vq_desc(struct virtqueue *vq,
 			    unsigned int *out_num, unsigned int *in_num)
 {
 	unsigned int i, head;
+	u16 last_avail;
 
 	/* Check it isn't doing very strange things with descriptor numbers. */
-	if ((u16)(vq->vring.avail->idx - vq->last_avail_idx) > vq->vring.num)
+	last_avail = vring_last_avail(&vq->vring);
+	if ((u16)(vq->vring.avail->idx - last_avail) > vq->vring.num)
 		errx(1, "Guest moved used index from %u to %u",
-		     vq->last_avail_idx, vq->vring.avail->idx);
+		     last_avail, vq->vring.avail->idx);
 
 	/* If there's nothing new since last we looked, return invalid. */
-	if (vq->vring.avail->idx == vq->last_avail_idx)
+	if (vq->vring.avail->idx == last_avail)
 		return vq->vring.num;
 
 	/* Grab the next descriptor number they're advertising, and increment
 	 * the index we've seen. */
-	head = vq->vring.avail->ring[vq->last_avail_idx++ % vq->vring.num];
+	head = vq->vring.avail->ring[last_avail % vq->vring.num];
+	vring_last_avail(&vq->vring)++;
 
 	/* If their number is silly, that's a fatal mistake. */
 	if (head >= vq->vring.num)
@@ -951,7 +980,7 @@ static void update_device_status(struct device *dev)
 		for (vq = dev->vq; vq; vq = vq->next) {
 			memset(vq->vring.desc, 0,
 			       vring_size(vq->config.num, getpagesize()));
-			vq->last_avail_idx = 0;
+			vring_last_avail(&vq->vring) = 0;
 		}
 	} else if (dev->desc->status & VIRTIO_CONFIG_S_FAILED) {
 		warnx("Device %s configuration FAILED", dev->name);
@@ -1111,7 +1140,6 @@ static void add_virtqueue(struct device *dev, unsigned int num_descs,
 
 	/* Initialize the virtqueue */
 	vq->next = NULL;
-	vq->last_avail_idx = 0;
 	vq->dev = dev;
 	vq->inflight = 0;
 
@@ -1168,6 +1196,10 @@ static void add_feature(struct device *dev, unsigned bit)
  * how we use it. */
 static void set_config(struct device *dev, unsigned len, const void *conf)
 {
+	/* We always set the VIRTIO_RING_F_PUBLISH_INDICES feature
+	 * bit, so now is a good time to do that. */
+	add_feature(dev, VIRTIO_RING_F_PUBLISH_INDICES);
+
 	/* Check we haven't overflowed our single page. */
 	if (device_config(dev) + len > devices.descpage + getpagesize())
 		errx(1, "Too many devices");
@@ -1242,6 +1274,8 @@ static void setup_console(void)
 	add_virtqueue(dev, VIRTQUEUE_NUM, enable_fd);
 	add_virtqueue(dev, VIRTQUEUE_NUM, handle_console_output);
 
+	/* Every device should set this bit. */
+	add_feature(dev, VIRTIO_RING_F_PUBLISH_INDICES);
 	verbose("device %u: console\n", devices.device_num++);
 }
 /*:*/
@@ -1264,10 +1298,25 @@ static void setup_console(void)
 
 static u32 str2ip(const char *ipaddr)
 {
-	unsigned int byte[4];
+	unsigned int b[4];
 
-	sscanf(ipaddr, "%u.%u.%u.%u", &byte[0], &byte[1], &byte[2], &byte[3]);
-	return (byte[0] << 24) | (byte[1] << 16) | (byte[2] << 8) | byte[3];
+	if (sscanf(ipaddr, "%u.%u.%u.%u", &b[0], &b[1], &b[2], &b[3]) != 4)
+		errx(1, "Failed to parse IP address '%s'", ipaddr);
+	return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
+}
+
+static void str2mac(const char *macaddr, unsigned char mac[6])
+{
+	unsigned int m[6];
+	if (sscanf(macaddr, "%02x:%02x:%02x:%02x:%02x:%02x",
+		   &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) != 6)
+		errx(1, "Failed to parse mac address '%s'", mac);
+	mac[0] = m[0];
+	mac[1] = m[1];
+	mac[2] = m[2];
+	mac[3] = m[3];
+	mac[4] = m[4];
+	mac[5] = m[5];
 }
 
 /* This code is "adapted" from libbridge: it attaches the Host end of the
@@ -1288,6 +1337,7 @@ static void add_to_bridge(int fd, const char *if_name, const char *br_name)
 		errx(1, "interface %s does not exist!", if_name);
 
 	strncpy(ifr.ifr_name, br_name, IFNAMSIZ);
+	ifr.ifr_name[IFNAMSIZ-1] = '\0';
 	ifr.ifr_ifindex = ifidx;
 	if (ioctl(fd, SIOCBRADDIF, &ifr) < 0)
 		err(1, "can't add %s to bridge %s", if_name, br_name);
@@ -1296,57 +1346,79 @@ static void add_to_bridge(int fd, const char *if_name, const char *br_name)
 /* This sets up the Host end of the network device with an IP address, brings
  * it up so packets will flow, the copies the MAC address into the hwaddr
  * pointer. */
-static void configure_device(int fd, const char *devname, u32 ipaddr,
-			     unsigned char hwaddr[6])
+static void configure_device(int fd, const char *tapif, u32 ipaddr)
 {
 	struct ifreq ifr;
 	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr.ifr_addr;
 
-	/* Don't read these incantations.  Just cut & paste them like I did! */
 	memset(&ifr, 0, sizeof(ifr));
-	strcpy(ifr.ifr_name, devname);
+	strcpy(ifr.ifr_name, tapif);
+
+	/* Don't read these incantations.  Just cut & paste them like I did! */
 	sin->sin_family = AF_INET;
 	sin->sin_addr.s_addr = htonl(ipaddr);
 	if (ioctl(fd, SIOCSIFADDR, &ifr) != 0)
-		err(1, "Setting %s interface address", devname);
+		err(1, "Setting %s interface address", tapif);
 	ifr.ifr_flags = IFF_UP;
 	if (ioctl(fd, SIOCSIFFLAGS, &ifr) != 0)
-		err(1, "Bringing interface %s up", devname);
+		err(1, "Bringing interface %s up", tapif);
+}
+
+static void get_mac(int fd, const char *tapif, unsigned char hwaddr[6])
+{
+	struct ifreq ifr;
+
+	memset(&ifr, 0, sizeof(ifr));
+	strcpy(ifr.ifr_name, tapif);
 
 	/* SIOC stands for Socket I/O Control.  G means Get (vs S for Set
 	 * above).  IF means Interface, and HWADDR is hardware address.
 	 * Simple! */
 	if (ioctl(fd, SIOCGIFHWADDR, &ifr) != 0)
-		err(1, "getting hw address for %s", devname);
+		err(1, "getting hw address for %s", tapif);
 	memcpy(hwaddr, ifr.ifr_hwaddr.sa_data, 6);
 }
 
-/*L:195 Our network is a Host<->Guest network.  This can either use bridging or
- * routing, but the principle is the same: it uses the "tun" device to inject
- * packets into the Host as if they came in from a normal network card.  We
- * just shunt packets between the Guest and the tun device. */
-static void setup_tun_net(const char *arg)
+static int get_tun_device(char tapif[IFNAMSIZ])
 {
-	struct device *dev;
 	struct ifreq ifr;
-	int netfd, ipfd;
-	u32 ip;
-	const char *br_name = NULL;
-	struct virtio_net_config conf;
+	int netfd;
+
+	/* Start with this zeroed.  Messy but sure. */
+	memset(&ifr, 0, sizeof(ifr));
 
 	/* We open the /dev/net/tun device and tell it we want a tap device.  A
 	 * tap device is like a tun device, only somehow different.  To tell
 	 * the truth, I completely blundered my way through this code, but it
 	 * works now! */
 	netfd = open_or_die("/dev/net/tun", O_RDWR);
-	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
 	strcpy(ifr.ifr_name, "tap%d");
 	if (ioctl(netfd, TUNSETIFF, &ifr) != 0)
 		err(1, "configuring /dev/net/tun");
+
 	/* We don't need checksums calculated for packets coming in this
 	 * device: trust us! */
 	ioctl(netfd, TUNSETNOCSUM, 1);
+
+	memcpy(tapif, ifr.ifr_name, IFNAMSIZ);
+	return netfd;
+}
+
+/*L:195 Our network is a Host<->Guest network.  This can either use bridging or
+ * routing, but the principle is the same: it uses the "tun" device to inject
+ * packets into the Host as if they came in from a normal network card.  We
+ * just shunt packets between the Guest and the tun device. */
+static void setup_tun_net(char *arg)
+{
+	struct device *dev;
+	int netfd, ipfd;
+	u32 ip = INADDR_ANY;
+	bool bridging = false;
+	char tapif[IFNAMSIZ], *p;
+	struct virtio_net_config conf;
+
+	netfd = get_tun_device(tapif);
 
 	/* First we create a new network device. */
 	dev = new_device("net", VIRTIO_ID_NET, netfd, handle_tun_input);
@@ -1364,14 +1436,29 @@ static void setup_tun_net(const char *arg)
 
 	/* If the command line was --tunnet=bridge:<name> do bridging. */
 	if (!strncmp(BRIDGE_PFX, arg, strlen(BRIDGE_PFX))) {
-		ip = INADDR_ANY;
-		br_name = arg + strlen(BRIDGE_PFX);
-		add_to_bridge(ipfd, ifr.ifr_name, br_name);
-	} else /* It is an IP address to set up the device with */
+		arg += strlen(BRIDGE_PFX);
+		bridging = true;
+	}
+
+	/* A mac address may follow the bridge name or IP address */
+	p = strchr(arg, ':');
+	if (p) {
+		str2mac(p+1, conf.mac);
+		*p = '\0';
+	} else {
+		p = arg + strlen(arg);
+		/* None supplied; query the randomly assigned mac. */
+		get_mac(ipfd, tapif, conf.mac);
+	}
+
+	/* arg is now either an IP address or a bridge name */
+	if (bridging)
+		add_to_bridge(ipfd, tapif, arg);
+	else
 		ip = str2ip(arg);
 
-	/* Set up the tun device, and get the mac address for the interface. */
-	configure_device(ipfd, ifr.ifr_name, ip, conf.mac);
+	/* Set up the tun device. */
+	configure_device(ipfd, tapif, ip);
 
 	/* Tell Guest what MAC address to use. */
 	add_feature(dev, VIRTIO_NET_F_MAC);
@@ -1381,11 +1468,14 @@ static void setup_tun_net(const char *arg)
 	/* We don't need the socket any more; setup is done. */
 	close(ipfd);
 
-	verbose("device %u: tun net %u.%u.%u.%u\n",
-		devices.device_num++,
-		(u8)(ip>>24),(u8)(ip>>16),(u8)(ip>>8),(u8)ip);
-	if (br_name)
-		verbose("attached to bridge: %s\n", br_name);
+	devices.device_num++;
+
+	if (bridging)
+		verbose("device %u: tun %s attached to bridge: %s\n",
+			devices.device_num, tapif, arg);
+	else
+		verbose("device %u: tun %s: %s\n",
+			devices.device_num, tapif, arg);
 }
 
 /* Our block (disk) device should be really simple: the Guest asks for a block
@@ -1621,6 +1711,64 @@ static void setup_block_file(const char *filename)
 	verbose("device %u: virtblock %llu sectors\n",
 		devices.device_num, le64_to_cpu(conf.capacity));
 }
+
+/* Our random number generator device reads from /dev/random into the Guest's
+ * input buffers.  The usual case is that the Guest doesn't want random numbers
+ * and so has no buffers although /dev/random is still readable, whereas
+ * console is the reverse.
+ *
+ * The same logic applies, however. */
+static bool handle_rng_input(int fd, struct device *dev)
+{
+	int len;
+	unsigned int head, in_num, out_num, totlen = 0;
+	struct iovec iov[dev->vq->vring.num];
+
+	/* First we need a buffer from the Guests's virtqueue. */
+	head = get_vq_desc(dev->vq, iov, &out_num, &in_num);
+
+	/* If they're not ready for input, stop listening to this file
+	 * descriptor.  We'll start again once they add an input buffer. */
+	if (head == dev->vq->vring.num)
+		return false;
+
+	if (out_num)
+		errx(1, "Output buffers in rng?");
+
+	/* This is why we convert to iovecs: the readv() call uses them, and so
+	 * it reads straight into the Guest's buffer.  We loop to make sure we
+	 * fill it. */
+	while (!iov_empty(iov, in_num)) {
+		len = readv(dev->fd, iov, in_num);
+		if (len <= 0)
+			err(1, "Read from /dev/random gave %i", len);
+		iov_consume(iov, in_num, len);
+		totlen += len;
+	}
+
+	/* Tell the Guest about the new input. */
+	add_used_and_trigger(fd, dev->vq, head, totlen);
+
+	/* Everything went OK! */
+	return true;
+}
+
+/* And this creates a "hardware" random number device for the Guest. */
+static void setup_rng(void)
+{
+	struct device *dev;
+	int fd;
+
+	fd = open_or_die("/dev/random", O_RDONLY);
+
+	/* The device responds to return from I/O thread. */
+	dev = new_device("rng", VIRTIO_ID_RNG, fd, handle_rng_input);
+
+	/* The device has one virtqueue, where the Guest places inbufs. */
+	add_virtqueue(dev, VIRTQUEUE_NUM, enable_fd);
+
+	verbose("device %u: rng\n", devices.device_num++);
+}
 /* That's the end of device setup. */
 
 /*L:230 Reboot is pretty easy: clean up and exec() the Launcher afresh. */
@@ -1691,13 +1839,14 @@ static struct option opts[] = {
 	{ "verbose", 0, NULL, 'v' },
 	{ "tunnet", 1, NULL, 't' },
 	{ "block", 1, NULL, 'b' },
+	{ "rng", 0, NULL, 'r' },
 	{ "initrd", 1, NULL, 'i' },
 	{ NULL },
 };
 static void usage(void)
 {
 	errx(1, "Usage: lguest [--verbose] "
-	     "[--tunnet=(<ipaddr>|bridge:<bridgename>)\n"
+	     "[--tunnet=(<ipaddr>:<macaddr>|bridge:<bridgename>:<macaddr>)\n"
 	     "|--block=<filename>|--initrd=<filename>]...\n"
 	     "<mem-in-mb> vmlinux [args...]");
 }
@@ -1764,6 +1913,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'b':
 			setup_block_file(optarg);
+			break;
+		case 'r':
+			setup_rng();
 			break;
 		case 'i':
 			initrd_name = optarg;
