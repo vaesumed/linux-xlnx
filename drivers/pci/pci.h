@@ -6,8 +6,7 @@ extern void pci_remove_sysfs_dev_files(struct pci_dev *pdev);
 extern void pci_cleanup_rom(struct pci_dev *dev);
 
 /* Firmware callbacks */
-extern pci_power_t (*platform_pci_choose_state)(struct pci_dev *dev,
-						pm_message_t state);
+extern pci_power_t (*platform_pci_choose_state)(struct pci_dev *dev);
 extern int (*platform_pci_set_power_state)(struct pci_dev *dev,
 						pci_power_t state);
 
@@ -106,3 +105,16 @@ pci_match_one_device(const struct pci_device_id *id, const struct pci_dev *dev)
 }
 
 struct pci_dev *pci_find_upstream_pcie_bridge(struct pci_dev *pdev);
+
+/* PCI slot sysfs helper code */
+#define to_pci_slot(s) container_of(s, struct pci_slot, kobj)
+
+extern struct kset *pci_slots_kset;
+
+struct pci_slot_attribute {
+	struct attribute attr;
+	ssize_t (*show)(struct pci_slot *, char *);
+	ssize_t (*store)(struct pci_slot *, const char *, size_t);
+};
+#define to_pci_slot_attr(s) container_of(s, struct pci_slot_attribute, attr)
+
