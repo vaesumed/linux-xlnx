@@ -548,6 +548,11 @@ static __le32 *handle_ar_packet(struct ar_context *ctx, __le32 *buffer)
 		p.header_length = 12;
 		p.payload_length = 0;
 		break;
+
+	default:
+		/* FIXME: Stop context, discard everything, and restart? */
+		p.header_length = 0;
+		p.payload_length = 0;
 	}
 
 	p.payload = (void *) buffer + p.header_length;
@@ -1468,6 +1473,9 @@ static int ohci_enable(struct fw_card *card, u32 *config_rom, size_t length)
 	reg_write(ohci, OHCI1394_HCControlClear,
 		  OHCI1394_HCControl_noByteSwapData);
 
+	reg_write(ohci, OHCI1394_SelfIDBuffer, ohci->self_id_bus);
+	reg_write(ohci, OHCI1394_LinkControlClear,
+		  OHCI1394_LinkControl_rcvPhyPkt);
 	reg_write(ohci, OHCI1394_LinkControlSet,
 		  OHCI1394_LinkControl_rcvSelfID |
 		  OHCI1394_LinkControl_cycleTimerEnable |
@@ -1481,7 +1489,6 @@ static int ohci_enable(struct fw_card *card, u32 *config_rom, size_t length)
 	ar_context_run(&ohci->ar_request_ctx);
 	ar_context_run(&ohci->ar_response_ctx);
 
-	reg_write(ohci, OHCI1394_SelfIDBuffer, ohci->self_id_bus);
 	reg_write(ohci, OHCI1394_PhyUpperBound, 0x00010000);
 	reg_write(ohci, OHCI1394_IntEventClear, ~0);
 	reg_write(ohci, OHCI1394_IntMaskClear, ~0);
@@ -2290,7 +2297,6 @@ ohci_queue_iso(struct fw_iso_context *base,
 }
 
 static const struct fw_card_driver ohci_driver = {
-	.name			= ohci_driver_name,
 	.enable			= ohci_enable,
 	.update_phy_reg		= ohci_update_phy_reg,
 	.set_config_rom		= ohci_set_config_rom,
