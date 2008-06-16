@@ -923,7 +923,7 @@ static int pmac_ide_do_resume(pmac_ide_hwif_t *pmif)
 static u8 pmac_ide_cable_detect(ide_hwif_t *hwif)
 {
 	pmac_ide_hwif_t *pmif =
-		(pmac_ide_hwif_t *)drv_get_drvdata(hwif->gendev.parent);
+		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
 	struct device_node *np = pmif->node;
 	const char *cable = of_get_property(np, "cable-type", NULL);
 
@@ -947,7 +947,7 @@ static void pmac_ide_init_dev(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	pmac_ide_hwif_t *pmif =
-		(pmac_ide_hwif_t *)drv_get_drvdata(hwif->gendev.parent);
+		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
 
 	if (pmif->mediabay) {
 #ifdef CONFIG_PMAC_MEDIABAY
@@ -1076,10 +1076,10 @@ static int __devinit pmac_ide_setup_device(pmac_ide_hwif_t *pmif, hw_regs_t *hw)
 		msleep(jiffies_to_msecs(IDE_WAKEUP_DELAY));
 	}
 
-	printk(KERN_INFO DRV_NAME ": Found Apple %s controller (%s), "
-			 "bus ID %d%s, irq %d\n", model_name[pmif->kind],
-			 pmif->mdev ? "MacIO" : "PCI", pmif->aapl_bus_id,
-			 pmif->mediabay ? " (mediabay)" : "", hw.irq);
+//	printk(KERN_INFO DRV_NAME ": Found Apple %s controller (%s), "
+//			 "bus ID %d%s, irq %d\n", model_name[pmif->kind],
+//			 pmif->mdev ? "MacIO" : "PCI", pmif->aapl_bus_id,
+//			 pmif->mediabay ? " (mediabay)" : "", hw.irq);
 
 	hwif = ide_find_port_slot(&d);
 	if (hwif == NULL)
@@ -1318,7 +1318,7 @@ pmac_ide_pci_suspend(struct pci_dev *pdev, pm_message_t mesg)
 
 	if (mesg.event != pdev->dev.power.power_state.event
 			&& (mesg.event & PM_EVENT_SLEEP)) {
-		rc = pmac_ide_do_suspend(hwif);
+		rc = pmac_ide_do_suspend(pmif);
 		if (rc == 0)
 			pdev->dev.power.power_state = mesg;
 	}
@@ -1333,7 +1333,7 @@ pmac_ide_pci_resume(struct pci_dev *pdev)
 	int rc = 0;
 
 	if (pdev->dev.power.power_state.event != PM_EVENT_ON) {
-		rc = pmac_ide_do_resume(hwif);
+		rc = pmac_ide_do_resume(pmif);
 		if (rc == 0)
 			pdev->dev.power.power_state = PMSG_ON;
 	}
