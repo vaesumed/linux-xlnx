@@ -60,7 +60,6 @@ struct ath5k_buf {
 	dma_addr_t		daddr;	/* physical addr of desc */
 	struct sk_buff		*skb;	/* skbuff for buf */
 	dma_addr_t		skbaddr;/* physical addr of skb data */
-	struct ieee80211_tx_control ctl;
 };
 
 /*
@@ -92,7 +91,8 @@ struct ath5k_softc {
 	struct pci_dev		*pdev;		/* for dma mapping */
 	void __iomem		*iobase;	/* address of the device */
 	struct mutex		lock;		/* dev-level lock */
-	struct ieee80211_tx_queue_stats tx_stats;
+	/* FIXME: how many does it really need? */
+	struct ieee80211_tx_queue_stats tx_stats[16];
 	struct ieee80211_low_level_stats ll_stats;
 	struct ieee80211_hw	*hw;		/* IEEE 802.11 common */
 	struct ieee80211_supported_band sbands[IEEE80211_NUM_BANDS];

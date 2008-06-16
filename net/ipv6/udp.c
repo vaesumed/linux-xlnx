@@ -7,8 +7,6 @@
  *
  *	Based on linux/ipv4/udp.c
  *
- *	$Id: udp.c,v 1.65 2002/02/01 22:01:04 davem Exp $
- *
  *	Fixes:
  *	Hideaki YOSHIFUJI	:	sin6_scope_id support
  *	YOSHIFUJI Hideaki @USAGI and:	Support IPV6_V6ONLY socket option, which
@@ -881,15 +879,13 @@ do_confirm:
 	goto out;
 }
 
-int udpv6_destroy_sock(struct sock *sk)
+void udpv6_destroy_sock(struct sock *sk)
 {
 	lock_sock(sk);
 	udp_v6_flush_pending_frames(sk);
 	release_sock(sk);
 
 	inet6_destroy_sock(sk);
-
-	return 0;
 }
 
 /*
