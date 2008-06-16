@@ -69,9 +69,8 @@ extern s32 i2c_smbus_xfer (struct i2c_adapter * adapter, u16 addr,
                            union i2c_smbus_data * data);
 
 /* Now follow the 'nice' access routines. These also document the calling
-   conventions of smbus_access. */
+   conventions of i2c_smbus_xfer. */
 
-extern s32 i2c_smbus_write_quick(struct i2c_client * client, u8 value);
 extern s32 i2c_smbus_read_byte(struct i2c_client * client);
 extern s32 i2c_smbus_write_byte(struct i2c_client * client, u8 value);
 extern s32 i2c_smbus_read_byte_data(struct i2c_client * client, u8 command);
@@ -350,10 +349,11 @@ static inline void i2c_set_adapdata (struct i2c_adapter *dev, void *data)
 #define I2C_CLASS_HWMON		(1<<0)	/* lm_sensors, ... */
 #define I2C_CLASS_TV_ANALOG	(1<<1)	/* bttv + friends */
 #define I2C_CLASS_TV_DIGITAL	(1<<2)	/* dvb cards */
-#define I2C_CLASS_DDC		(1<<3)	/* i2c-matroxfb ? */
+#define I2C_CLASS_DDC		(1<<3)	/* DDC bus on graphics adapters */
 #define I2C_CLASS_CAM_ANALOG	(1<<4)	/* camera with analog CCD */
 #define I2C_CLASS_CAM_DIGITAL	(1<<5)	/* most webcams */
 #define I2C_CLASS_SOUND		(1<<6)	/* sound devices */
+#define I2C_CLASS_SPD		(1<<7)	/* SPD EEPROMs and similar */
 #define I2C_CLASS_ALL		(UINT_MAX) /* all of the above */
 
 /* i2c_client_address_data is the struct for holding default client
@@ -537,7 +537,7 @@ union i2c_smbus_data {
 	                       /* and one more for user-space compatibility */
 };
 
-/* smbus_access read or write markers */
+/* i2c_smbus_xfer read or write markers */
 #define I2C_SMBUS_READ	1
 #define I2C_SMBUS_WRITE	0
 
