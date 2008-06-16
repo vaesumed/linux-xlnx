@@ -224,12 +224,6 @@ void __init setup_arch(char **cmdline_p)
 	if(!strcmp(&cputypval,"sun4e")) { sparc_cpu_model=sun4e; }
 	if(!strcmp(&cputypval,"sun4u")) { sparc_cpu_model=sun4u; }
 
-#ifdef CONFIG_SUN4
-	if (sparc_cpu_model != sun4) {
-		prom_printf("This kernel is for Sun4 architecture only.\n");
-		prom_halt();
-	}
-#endif
 	printk("ARCH: ");
 	switch(sparc_cpu_model) {
 	case sun4:

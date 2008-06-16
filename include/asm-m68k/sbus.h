@@ -15,8 +15,6 @@ struct sbus_dev {
 extern void *sparc_alloc_io (u32, void *, int, char *, u32, int);
 #define sparc_alloc_io(a,b,c,d,e,f)	(a)
 
-#define ARCH_SUN4  0
-
 /* sbus IO functions stolen from include/asm-sparc/io.h for the serial driver */
 /* No SBUS on the Sun3, kludge -- sam */
 
