@@ -1455,6 +1455,7 @@ config E100
 	tristate "Intel(R) PRO/100+ support"
 	depends on NET_PCI && PCI
 	select MII
+	select FW_LOADER
 	---help---
 	  This driver supports Intel(R) PRO/100 family of adapters.
 	  To verify that your adapter is supported, find the board ID number 
@@ -1476,6 +1477,13 @@ config E100
 
 	  To compile this driver as a module, choose M here. The module
 	  will be called e100.
+
+config E100_FIRMWARE
+	bool "Include firmware for Intel(R) PRO/100+"
+	depends on E100
+	---help---
+	  This includes firmware for the Intel(R) PRO/100 family of adapters.
+	  Say 'N' and let it get loaded from userspace on demand.
 
 config LNE390
 	tristate "Mylex EISA LNE390A/B support (EXPERIMENTAL)"
