@@ -81,7 +81,7 @@ acpi_ev_install_handler(acpi_handle obj_handle,
 acpi_status acpi_ev_install_region_handlers(void)
 {
 	acpi_status status;
-	acpi_native_uint i;
+	u32 i;
 
 	ACPI_FUNCTION_TRACE(ev_install_region_handlers);
 
@@ -130,7 +130,7 @@ acpi_status acpi_ev_install_region_handlers(void)
 		}
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return_ACPI_STATUS(status);
 }
@@ -151,7 +151,7 @@ acpi_status acpi_ev_install_region_handlers(void)
 acpi_status acpi_ev_initialize_op_regions(void)
 {
 	acpi_status status;
-	acpi_native_uint i;
+	u32 i;
 
 	ACPI_FUNCTION_TRACE(ev_initialize_op_regions);
 
@@ -219,7 +219,6 @@ acpi_ev_execute_reg_method(union acpi_operand_object *region_obj, u32 function)
 	info->prefix_node = region_obj2->extra.method_REG;
 	info->pathname = NULL;
 	info->parameters = args;
-	info->parameter_type = ACPI_PARAM_ARGS;
 	info->flags = ACPI_IGNORE_RETURN_VALUE;
 
 	/*
@@ -258,10 +257,10 @@ acpi_ev_execute_reg_method(union acpi_operand_object *region_obj, u32 function)
 	status = acpi_ns_evaluate(info);
 	acpi_ut_remove_reference(args[1]);
 
-      cleanup2:
+cleanup2:
 	acpi_ut_remove_reference(args[0]);
 
-      cleanup1:
+cleanup1:
 	ACPI_FREE(info);
 	return_ACPI_STATUS(status);
 }
@@ -312,8 +311,8 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 			    "No handler for Region [%4.4s] (%p) [%s]",
 			    acpi_ut_get_node_name(region_obj->region.node),
 			    region_obj,
-			    acpi_ut_get_region_name(region_obj->region.
-						    space_id)));
+			    acpi_ut_get_region_name(region_obj->
+						    region.space_id)));
 
 		return_ACPI_STATUS(AE_NOT_EXIST);
 	}
@@ -334,8 +333,8 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 			ACPI_ERROR((AE_INFO,
 				    "No init routine for region(%p) [%s]",
 				    region_obj,
-				    acpi_ut_get_region_name(region_obj->region.
-							    space_id)));
+				    acpi_ut_get_region_name(region_obj->
+							    region.space_id)));
 			return_ACPI_STATUS(AE_NOT_EXIST);
 		}
 
@@ -359,9 +358,8 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 		if (ACPI_FAILURE(status)) {
 			ACPI_EXCEPTION((AE_INFO, status,
 					"During region initialization: [%s]",
-					acpi_ut_get_region_name(region_obj->
-								region.
-								space_id)));
+					acpi_ut_get_region_name
+					(region_obj->region.space_id)));
 			return_ACPI_STATUS(status);
 		}
 
@@ -395,8 +393,8 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 			  "Handler %p (@%p) Address %8.8X%8.8X [%s]\n",
 			  &region_obj->region.handler->address_space, handler,
 			  ACPI_FORMAT_NATIVE_UINT(address),
-			  acpi_ut_get_region_name(region_obj->region.
-						  space_id)));
+			  acpi_ut_get_region_name(region_obj->
+						  region.space_id)));
 
 	if (!(handler_desc->address_space.handler_flags &
 	      ACPI_ADDR_HANDLER_DEFAULT_INSTALLED)) {
@@ -416,8 +414,8 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 
 	if (ACPI_FAILURE(status)) {
 		ACPI_EXCEPTION((AE_INFO, status, "Returned by Handler for [%s]",
-				acpi_ut_get_region_name(region_obj->region.
-							space_id)));
+				acpi_ut_get_region_name(region_obj->
+							region.space_id)));
 	}
 
 	if (!(handler_desc->address_space.handler_flags &
@@ -530,8 +528,9 @@ acpi_ev_detach_region(union acpi_operand_object *region_obj,
 				status =
 				    region_setup(region_obj,
 						 ACPI_REGION_DEACTIVATE,
-						 handler_obj->address_space.
-						 context, region_context);
+						 handler_obj->
+						 address_space.context,
+						 region_context);
 
 				/* Init routine may fail, Just ignore errors */
 
@@ -539,8 +538,8 @@ acpi_ev_detach_region(union acpi_operand_object *region_obj,
 					ACPI_EXCEPTION((AE_INFO, status,
 							"from region handler - deactivate, [%s]",
 							acpi_ut_get_region_name
-							(region_obj->region.
-							 space_id)));
+							(region_obj->
+							 region.space_id)));
 				}
 
 				region_obj->region.flags &=
@@ -604,8 +603,8 @@ acpi_ev_attach_region(union acpi_operand_object *handler_obj,
 			  "Adding Region [%4.4s] %p to address handler %p [%s]\n",
 			  acpi_ut_get_node_name(region_obj->region.node),
 			  region_obj, handler_obj,
-			  acpi_ut_get_region_name(region_obj->region.
-						  space_id)));
+			  acpi_ut_get_region_name(region_obj->
+						  region.space_id)));
 
 	/* Link this region to the front of the handler's list */
 
@@ -703,9 +702,9 @@ acpi_ev_install_handler(acpi_handle obj_handle,
 				ACPI_DEBUG_PRINT((ACPI_DB_OPREGION,
 						  "Found handler for region [%s] in device %p(%p) handler %p\n",
 						  acpi_ut_get_region_name
-						  (handler_obj->address_space.
-						   space_id), obj_desc,
-						  next_handler_obj,
+						  (handler_obj->
+						   address_space.space_id),
+						  obj_desc, next_handler_obj,
 						  handler_obj));
 
 				/*
@@ -974,7 +973,7 @@ acpi_ev_install_space_handler(struct acpi_namespace_node * node,
 					acpi_ev_install_handler, handler_obj,
 					NULL);
 
-      unlock_and_exit:
+unlock_and_exit:
 	return_ACPI_STATUS(status);
 }
 

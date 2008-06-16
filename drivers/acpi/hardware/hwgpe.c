@@ -119,8 +119,8 @@ acpi_status acpi_hw_clear_gpe(struct acpi_gpe_event_info * gpe_event_info)
 	 * clear this GPE.
 	 */
 	status = acpi_hw_low_level_write(8, register_bit,
-					 &gpe_event_info->register_info->
-					 status_address);
+					 &gpe_event_info->
+					 register_info->status_address);
 
 	return (status);
 }
@@ -195,10 +195,10 @@ acpi_hw_get_gpe_status(struct acpi_gpe_event_info * gpe_event_info,
 
 	(*event_status) = local_event_status;
 
-      unlock_and_exit:
+unlock_and_exit:
 	return (status);
 }
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 
 /******************************************************************************
  *
@@ -227,8 +227,9 @@ acpi_hw_disable_gpe_block(struct acpi_gpe_xrupt_info * gpe_xrupt_info,
 		/* Disable all GPEs in this register */
 
 		status = acpi_hw_low_level_write(8, 0x00,
-						 &gpe_block->register_info[i].
-						 enable_address);
+						 &gpe_block->
+						 register_info
+						 [i].enable_address);
 		if (ACPI_FAILURE(status)) {
 			return (status);
 		}
@@ -264,8 +265,9 @@ acpi_hw_clear_gpe_block(struct acpi_gpe_xrupt_info * gpe_xrupt_info,
 		/* Clear status on all GPEs in this register */
 
 		status = acpi_hw_low_level_write(8, 0xFF,
-						 &gpe_block->register_info[i].
-						 status_address);
+						 &gpe_block->
+						 register_info
+						 [i].status_address);
 		if (ACPI_FAILURE(status)) {
 			return (status);
 		}
@@ -308,10 +310,10 @@ acpi_hw_enable_runtime_gpe_block(struct acpi_gpe_xrupt_info * gpe_xrupt_info,
 
 		status =
 		    acpi_hw_low_level_write(8,
-					    gpe_block->register_info[i].
-					    enable_for_run,
-					    &gpe_block->register_info[i].
-					    enable_address);
+					    gpe_block->
+					    register_info[i].enable_for_run,
+					    &gpe_block->
+					    register_info[i].enable_address);
 		if (ACPI_FAILURE(status)) {
 			return (status);
 		}
@@ -351,10 +353,12 @@ acpi_hw_enable_wakeup_gpe_block(struct acpi_gpe_xrupt_info *gpe_xrupt_info,
 		/* Enable all "wake" GPEs in this register */
 
 		status = acpi_hw_low_level_write(8,
-						 gpe_block->register_info[i].
-						 enable_for_wake,
-						 &gpe_block->register_info[i].
-						 enable_address);
+						 gpe_block->
+						 register_info
+						 [i].enable_for_wake,
+						 &gpe_block->
+						 register_info
+						 [i].enable_address);
 		if (ACPI_FAILURE(status)) {
 			return (status);
 		}

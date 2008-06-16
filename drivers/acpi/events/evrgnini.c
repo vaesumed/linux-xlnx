@@ -87,10 +87,9 @@ acpi_ev_system_memory_region_setup(acpi_handle handle,
 			/* Delete a cached mapping if present */
 
 			if (local_region_context->mapped_length) {
-				acpi_os_unmap_memory(local_region_context->
-						     mapped_logical_address,
-						     local_region_context->
-						     mapped_length);
+				acpi_os_unmap_memory
+				    (local_region_context->mapped_logical_address,
+				     local_region_context->mapped_length);
 			}
 			ACPI_FREE(local_region_context);
 			*region_context = NULL;
@@ -380,7 +379,7 @@ static u8 acpi_ev_is_pci_root_bridge(struct acpi_namespace_node *node)
 	acpi_status status;
 	struct acpica_device_id hid;
 	struct acpi_compatible_id_list *cid;
-	acpi_native_uint i;
+	u32 i;
 
 	/*
 	 * Get the _HID and check for a PCI Root Bridge

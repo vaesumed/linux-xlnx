@@ -148,13 +148,13 @@ void acpi_ds_method_data_delete_all(struct acpi_walk_state *walk_state)
 		if (walk_state->local_variables[index].object) {
 			ACPI_DEBUG_PRINT((ACPI_DB_EXEC, "Deleting Local%d=%p\n",
 					  index,
-					  walk_state->local_variables[index].
-					  object));
+					  walk_state->
+					  local_variables[index].object));
 
 			/* Detach object (if present) and remove a reference */
 
-			acpi_ns_detach_object(&walk_state->
-					      local_variables[index]);
+			acpi_ns_detach_object(&walk_state->local_variables
+					      [index]);
 		}
 	}
 
@@ -625,9 +625,7 @@ acpi_ds_store_object_to_local(u16 opcode,
 				 */
 				status =
 				    acpi_ex_store_object_to_node(new_obj_desc,
-								 current_obj_desc->
-								 reference.
-								 object,
+								 current_obj_desc->reference.object,
 								 walk_state,
 								 ACPI_NO_IMPLICIT_CONVERSION);
 
