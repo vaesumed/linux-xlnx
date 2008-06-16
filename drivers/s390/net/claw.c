@@ -704,7 +704,8 @@ claw_irq_handler(struct ccw_device *cdev,
 	if (!cdev->dev.driver_data) {
                 printk(KERN_WARNING "claw: unsolicited interrupt for device:"
 		 	"%s received c-%02x d-%02x\n",
-                        dev_name(&cdev->dev),irb->scsw.cstat, irb->scsw.dstat);
+                       dev_name(&cdev->dev), irb->scsw.cmd.cstat,
+		       irb->scsw.cmd.dstat);
 #ifdef FUNCTRACE
                 printk(KERN_INFO "claw: %s() "
 			"exit on line %d\n",__func__,__LINE__);
@@ -733,22 +734,23 @@ claw_irq_handler(struct ccw_device *cdev,
 #ifdef IOTRACE
         printk(KERN_INFO "%s: interrupt for device: %04x "
 		"received c-%02x d-%02x state-%02x\n",
-                dev->name, p_ch->devno, irb->scsw.cstat,
-		irb->scsw.dstat, p_ch->claw_state);
+	       dev->name, p_ch->devno, irb->scsw.cmd.cstat,
+	       irb->scsw.cmd.dstat, p_ch->claw_state);
 #endif
 
 	/* Copy interruption response block. */
 	memcpy(p_ch->irb, irb, sizeof(struct irb));
 
         /* Check for good subchannel return code, otherwise error message */
-        if (irb->scsw.cstat  &&  !(irb->scsw.cstat & SCHN_STAT_PCI)) {
+	if (irb->scsw.cmd.cstat && !(irb->scsw.cmd.cstat & SCHN_STAT_PCI)) {
                 printk(KERN_INFO "%s: subchannel check for device: %04x -"
 			" Sch Stat %02x  Dev Stat %02x CPA - %04x\n",
                         dev->name, p_ch->devno,
-			irb->scsw.cstat, irb->scsw.dstat,irb->scsw.cpa);
+			irb->scsw.cmd.cstat, irb->scsw.cmd.dstat,
+			irb->scsw.cmd.cpa);
 #ifdef IOTRACE
 		dumpit((char *)irb,sizeof(struct irb));
-		dumpit((char *)(unsigned long)irb->scsw.cpa,
+		dumpit((char *)(unsigned long)irb->scsw.cmd.cpa,
 			sizeof(struct ccw1));
 #endif
 #ifdef FUNCTRACE
@@ -760,22 +762,24 @@ claw_irq_handler(struct ccw_device *cdev,
         }
 
         /* Check the reason-code of a unit check */
-        if (irb->scsw.dstat & DEV_STAT_UNIT_CHECK) {
+	if (irb->scsw.cmd.dstat & DEV_STAT_UNIT_CHECK)
                 ccw_check_unit_check(p_ch, irb->ecw[0]);
-        }
 
         /* State machine to bring the connection up, down and to restart */
-        p_ch->last_dstat = irb->scsw.dstat;
+	p_ch->last_dstat = irb->scsw.cmd.dstat;
 
         switch (p_ch->claw_state) {
                 case CLAW_STOP:/* HALT_IO by claw_release (halt sequence) */
 #ifdef DEBUGMSG
                         printk(KERN_INFO "%s: CLAW_STOP enter\n", dev->name);
 #endif
-                        if (!((p_ch->irb->scsw.stctl & SCSW_STCTL_SEC_STATUS) ||
-	    		(p_ch->irb->scsw.stctl == SCSW_STCTL_STATUS_PEND) ||
-	    		(p_ch->irb->scsw.stctl ==
-	     		(SCSW_STCTL_ALERT_STATUS | SCSW_STCTL_STATUS_PEND)))) {
+			if (!((p_ch->irb->scsw.cmd.stctl &
+			       SCSW_STCTL_SEC_STATUS) ||
+			    (p_ch->irb->scsw.cmd.stctl ==
+				SCSW_STCTL_STATUS_PEND) ||
+			    (p_ch->irb->scsw.cmd.stctl ==
+				(SCSW_STCTL_ALERT_STATUS |
+				 SCSW_STCTL_STATUS_PEND)))) {
 #ifdef FUNCTRACE
                                 printk(KERN_INFO "%s:%s Exit on line %d\n",
 					dev->name,__func__,__LINE__);
@@ -799,10 +803,13 @@ claw_irq_handler(struct ccw_device *cdev,
                         printk(KERN_INFO "%s: process CLAW_STAT_HALT_IO\n",
 				dev->name);
 #endif
-                        if (!((p_ch->irb->scsw.stctl & SCSW_STCTL_SEC_STATUS) ||
-	    		(p_ch->irb->scsw.stctl == SCSW_STCTL_STATUS_PEND) ||
-	    		(p_ch->irb->scsw.stctl ==
-	     		(SCSW_STCTL_ALERT_STATUS | SCSW_STCTL_STATUS_PEND)))) {
+			if (!((p_ch->irb->scsw.cmd.stctl &
+			       SCSW_STCTL_SEC_STATUS) ||
+			    (p_ch->irb->scsw.cmd.stctl ==
+			     SCSW_STCTL_STATUS_PEND) ||
+			    (p_ch->irb->scsw.cmd.stctl ==
+			     (SCSW_STCTL_ALERT_STATUS |
+			      SCSW_STCTL_STATUS_PEND)))) {
 #ifdef FUNCTRACE
 				printk(KERN_INFO "%s:%s Exit on line %d\n",
 					dev->name,__func__,__LINE__);
@@ -829,8 +836,8 @@ claw_irq_handler(struct ccw_device *cdev,
 					"interrupt for device:"
 				 	"%s received c-%02x d-%02x\n",
 					dev_name(&cdev->dev),
-					irb->scsw.cstat,
-					irb->scsw.dstat);
+					irb->scsw.cmd.cstat,
+					irb->scsw.cmd.dstat);
 				return;
 				}
 #ifdef DEBUGMSG
@@ -845,7 +852,7 @@ claw_irq_handler(struct ccw_device *cdev,
                         return;
                 case CLAW_START_READ:
 			CLAW_DBF_TEXT(4,trace,"ReadIRQ");
-                        if (p_ch->irb->scsw.dstat & DEV_STAT_UNIT_CHECK) {
+			if (p_ch->irb->scsw.cmd.dstat & DEV_STAT_UNIT_CHECK) {
                                 clear_bit(0, (void *)&p_ch->IO_active);
                                 if ((p_ch->irb->ecw[0] & 0x41) == 0x41 ||
                                     (p_ch->irb->ecw[0] & 0x40) == 0x40 ||
@@ -864,8 +871,8 @@ claw_irq_handler(struct ccw_device *cdev,
 					CLAW_DBF_TEXT(4,trace,"notrdy");
                                         return;
                         }
-                        if ((p_ch->irb->scsw.cstat & SCHN_STAT_PCI) &&
-			    (p_ch->irb->scsw.dstat==0)) {
+			if ((p_ch->irb->scsw.cmd.cstat & SCHN_STAT_PCI) &&
+			    (p_ch->irb->scsw.cmd.dstat == 0)) {
                                 if (test_and_set_bit(CLAW_BH_ACTIVE,
 					(void *)&p_ch->flag_a) == 0) {
 					tasklet_schedule(&p_ch->tasklet);
@@ -880,10 +887,13 @@ claw_irq_handler(struct ccw_device *cdev,
 				CLAW_DBF_TEXT(4,trace,"PCI_read");
                                 return;
                         }
-                        if(!((p_ch->irb->scsw.stctl & SCSW_STCTL_SEC_STATUS) ||
-	    		 (p_ch->irb->scsw.stctl == SCSW_STCTL_STATUS_PEND) ||
-	    		 (p_ch->irb->scsw.stctl ==
-	     		 (SCSW_STCTL_ALERT_STATUS | SCSW_STCTL_STATUS_PEND)))) {
+			if (!((p_ch->irb->scsw.cmd.stctl &
+			       SCSW_STCTL_SEC_STATUS) ||
+			     (p_ch->irb->scsw.cmd.stctl ==
+			      SCSW_STCTL_STATUS_PEND) ||
+			     (p_ch->irb->scsw.cmd.stctl ==
+			      (SCSW_STCTL_ALERT_STATUS |
+			       SCSW_STCTL_STATUS_PEND)))) {
 #ifdef FUNCTRACE
 				printk(KERN_INFO "%s:%s Exit on line %d\n",
 					dev->name,__func__,__LINE__);
@@ -912,7 +922,7 @@ claw_irq_handler(struct ccw_device *cdev,
 			CLAW_DBF_TEXT(4,trace,"RdIRQXit");
                         return;
                 case CLAW_START_WRITE:
-                        if (p_ch->irb->scsw.dstat & DEV_STAT_UNIT_CHECK) {
+			if (p_ch->irb->scsw.cmd.dstat & DEV_STAT_UNIT_CHECK) {
                                 printk(KERN_INFO "%s: Unit Check Occured in "
 					"write channel\n",dev->name);
                                 clear_bit(0, (void *)&p_ch->IO_active);
@@ -935,16 +945,19 @@ claw_irq_handler(struct ccw_device *cdev,
 				CLAW_DBF_TEXT(4,trace,"rstrtwrt");
                                 return;
                         }
-                        if (p_ch->irb->scsw.dstat & DEV_STAT_UNIT_EXCEP) {
+			if (p_ch->irb->scsw.cmd.dstat & DEV_STAT_UNIT_EXCEP) {
                                         clear_bit(0, (void *)&p_ch->IO_active);
                                         printk(KERN_INFO "%s: Unit Exception "
 						"Occured in write channel\n",
 						dev->name);
                         }
-                        if(!((p_ch->irb->scsw.stctl & SCSW_STCTL_SEC_STATUS) ||
-	    		(p_ch->irb->scsw.stctl == SCSW_STCTL_STATUS_PEND) ||
-	    		(p_ch->irb->scsw.stctl ==
-	     		(SCSW_STCTL_ALERT_STATUS | SCSW_STCTL_STATUS_PEND)))) {
+			if (!((p_ch->irb->scsw.cmd.stctl &
+			       SCSW_STCTL_SEC_STATUS) ||
+			     (p_ch->irb->scsw.cmd.stctl ==
+			      SCSW_STCTL_STATUS_PEND) ||
+			     (p_ch->irb->scsw.cmd.stctl ==
+			      (SCSW_STCTL_ALERT_STATUS |
+			       SCSW_STCTL_STATUS_PEND)))) {
 #ifdef FUNCTRACE
 				printk(KERN_INFO "%s:%s Exit on line %d\n",
 					dev->name,__func__,__LINE__);

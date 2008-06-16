@@ -2139,8 +2139,8 @@ qdio_handler(struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 	QDIO_DBF_TEXT4(0, trace, dbf_text);
 #endif /* CONFIG_QDIO_DEBUG */
 
-        cstat = irb->scsw.cstat;
-        dstat = irb->scsw.dstat;
+	cstat = irb->scsw.cmd.cstat;
+	dstat = irb->scsw.cmd.dstat;
 
 	switch (irq_ptr->state) {
 	case QDIO_IRQ_STATE_INACTIVE:
@@ -2352,9 +2352,6 @@ static unsigned int
 tiqdio_check_chsc_availability(void)
 {
 	char dbf_text[15];
-
-	if (!css_characteristics_avail)
-		return -EIO;
 
 	/* Check for bit 41. */
 	if (!css_general_characteristics.aif) {
@@ -3722,7 +3719,8 @@ tiqdio_register_thinints(void)
 	char dbf_text[20];
 
 	tiqdio_ind =
-		s390_register_adapter_interrupt(&tiqdio_thinint_handler, NULL);
+		s390_register_adapter_interrupt(&tiqdio_thinint_handler, NULL,
+						TIQDIO_THININT_ISC);
 	if (IS_ERR(tiqdio_ind)) {
 		sprintf(dbf_text, "regthn%lx", PTR_ERR(tiqdio_ind));
 		QDIO_DBF_TEXT0(0,setup,dbf_text);
@@ -3738,7 +3736,8 @@ static void
 tiqdio_unregister_thinints(void)
 {
 	if (tiqdio_ind)
-		s390_unregister_adapter_interrupt(tiqdio_ind);
+		s390_unregister_adapter_interrupt(tiqdio_ind,
+						  TIQDIO_THININT_ISC);
 }
 
 static int
@@ -3899,6 +3898,7 @@ init_QDIO(void)
 					    qdio_mempool_alloc,
 					    qdio_mempool_free, NULL);
 
+	isc_register(QDIO_AIRQ_ISC);
 	if (tiqdio_check_chsc_availability())
 		QDIO_PRINT_ERR("Not all CHSCs supported. Continuing.\n");
 
@@ -3911,6 +3911,7 @@ static void __exit
 cleanup_QDIO(void)
 {
 	tiqdio_unregister_thinints();
+	isc_unregister(QDIO_AIRQ_ISC);
 	qdio_remove_procfs_entry();
 	qdio_release_qdio_memory();
 	qdio_unregister_dbf_views();
