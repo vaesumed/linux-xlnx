@@ -1098,7 +1098,7 @@ static int mount_ubifs(struct ubifs_info *c)
 		int lnum;
 
 		/* Check for enough free space */
-		if (ubifs_calc_available(c) <= 0) {
+		if (ubifs_calc_available(c, c->min_idx_lebs) <= 0) {
 			ubifs_err("insufficient available space");
 			err = -EINVAL;
 			goto out_orphans;
@@ -1297,7 +1297,7 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	c->remounting_rw = 1;
 
 	/* Check for enough free space */
-	if (ubifs_calc_available(c) <= 0) {
+	if (ubifs_calc_available(c, c->min_idx_lebs) <= 0) {
 		ubifs_err("insufficient available space");
 		err = -EINVAL;
 		goto out;

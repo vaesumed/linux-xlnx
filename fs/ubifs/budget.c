@@ -287,10 +287,11 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 /**
  * ubifs_calc_available - calculate available FS space.
  * @c: UBIFS file-system description object
+ * @min_idx_lebs: minimum number of LEBs reserved for the index
  *
  * This function calculates and returns amount of FS space available for use.
  */
-long long ubifs_calc_available(const struct ubifs_info *c)
+long long ubifs_calc_available(const struct ubifs_info *c, int min_idx_lebs)
 {
 	long long available, subtract_lebs;
 
@@ -313,7 +314,7 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 	 * assuming there is no index, so we have to subtract the space which
 	 * is reserved for the index.
 	 */
-	subtract_lebs = c->min_idx_lebs;
+	subtract_lebs = min_idx_lebs;
 
 	/* Take into account that GC reserves one LEB for its own needs */
 	subtract_lebs += 1;
@@ -343,12 +344,12 @@ long long ubifs_calc_available(const struct ubifs_info *c)
 
 	/*
 	 * However, there is more dark space. The index may be bigger than
-	 * min_idx_lebs. Those extra LEBs are assumed to be available, but
+	 * @min_idx_lebs. Those extra LEBs are assumed to be available, but
 	 * their dark space is not included in total_dark, so it is subtracted
 	 * here.
 	 */
-	if (c->lst.idx_lebs > c->min_idx_lebs) {
-		subtract_lebs = c->lst.idx_lebs - c->min_idx_lebs;
+	if (c->lst.idx_lebs > min_idx_lebs) {
+		subtract_lebs = c->lst.idx_lebs - min_idx_lebs;
 		available -= subtract_lebs * c->dark_wm;
 	}
 
@@ -445,7 +446,7 @@ static int do_budget_space(struct ubifs_info *c)
 		return -ENOSPC;
 	}
 
-	available = ubifs_calc_available(c);
+	available = ubifs_calc_available(c, min_idx_lebs);
 	outstanding = c->budg_data_growth + c->budg_dd_growth;
 
 	if (unlikely(available < outstanding)) {
@@ -1004,9 +1005,9 @@ long long ubifs_budg_get_free_space(struct ubifs_info *c)
 		return 0;
 	}
 
-	c->min_idx_lebs = min_idx_lebs;
-	available = ubifs_calc_available(c);
+	available = ubifs_calc_available(c, min_idx_lebs);
 	outstanding = c->budg_data_growth + c->budg_dd_growth;
+	c->min_idx_lebs = min_idx_lebs;
 	spin_unlock(&c->space_lock);
 
 	if (available > outstanding)
