@@ -310,8 +310,6 @@ static int make_reservation(struct ubifs_info *c, int jhead, int len)
 {
 	int err, cmt_retries = 0, nospc_retries = 0;
 
-	ubifs_assert(len <= c->dark_wm);
-
 again:
 	down_read(&c->commit_sem);
 	err = reserve_space(c, jhead, len);
