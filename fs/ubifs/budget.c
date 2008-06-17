@@ -51,6 +51,14 @@
  */
 #define NR_TO_WRITE 16
 
+/*
+ * ui->budg_mutex nesting subclasses for the lock validator.
+ */
+enum {
+	UI_PARENT,
+	UI_CHILD,
+};
+
 /**
  * struct retries_info - information about re-tries while making free space.
  * @prev_liability: previous liability
@@ -659,7 +667,7 @@ void ubifs_convert_page_budget(struct ubifs_info *c)
  * be called to unlock it.
  */
 int ubifs_budget_inode_op(struct ubifs_info *c, struct inode *inode,
-			      struct ubifs_budget_req *req)
+			  struct ubifs_budget_req *req)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	int err, old = req->dirtied_ino;
@@ -686,7 +694,6 @@ again:
 		return err;
 
 	mutex_lock(&ui->budg_mutex);
-
 	if (req->dirtied_ino != old + !ui->dirty) {
 		/* The inode has probably been written back meanwhile */
 		ubifs_release_budget(c, req);
@@ -697,6 +704,96 @@ again:
 	}
 
 	UBIFS_DBG(ui->budgeted = 1);
+	return 0;
+}
+
+/**
+ * lock_two_inodes - lock two inodes.
+ * @ui1: first inode
+ * @ui2: second inode
+ *
+ * This is a helper function for 'ubifs_budget_2inode_op()' and it is very
+ * similar to the VFS 'inode_double_lock()' function. It locks two inodes
+ * that do not have a parent/child relationship simultaneously.
+ */
+static void lock_two_inodes(struct ubifs_inode *ui1, struct ubifs_inode *ui2)
+{
+	if (ui1 == ui2) {
+		mutex_lock(&ui1->budg_mutex);
+		return;
+	}
+
+	if (ui1 < ui2) {
+		mutex_lock_nested(&ui1->budg_mutex, UI_PARENT);
+		mutex_lock_nested(&ui2->budg_mutex, UI_CHILD);
+	} else {
+		mutex_lock_nested(&ui2->budg_mutex, UI_PARENT);
+		mutex_lock_nested(&ui1->budg_mutex, UI_CHILD);
+	}
+}
+
+/**
+ * unlock_two_inodes - unlock two inodes.
+ * @ui1: first inode
+ * @ui2: second inode
+ *
+ * This is a helper function for 'ubifs_budget_2inode_op()' and it unlocks two
+ * inodes which were locked with the 'lock_two_inodes()' function.
+ */
+static void unlock_two_inodes(struct ubifs_inode *ui1, struct ubifs_inode *ui2)
+{
+	mutex_unlock(&ui1->budg_mutex);
+	if (ui1 != ui2)
+		mutex_unlock(&ui2->budg_mutex);
+}
+
+/**
+ * ubifs_budget_2inode_op - budget an operation on 2 inodes.
+ * @c: UBIFS file-system description object
+ * @inode1: first VFS inode which will be made dirty by the operation
+ * @inode2: second VFS inode which will be made dirty by the operation
+ * @req: budget request of the operation
+ *
+ * This function is the same as the 'ubifs_budget_inode_op()' function but it
+ * is a little bit more complex and assumes that the operation may make dirty 2
+ * inodes which do not necessarily have parent-child relationship. The only
+ * user of this function at the moment is 'ubifs_rename()' which dirties old
+ * and new parent directory inodes.
+ *
+ * Note, upon exit, this function leaves the inodes locked, and the
+ * 'ubifs_release_2ino_clean()' function has to be called to unlock them.
+ */
+int ubifs_budget_2inode_op(struct ubifs_info *c, struct inode *inode1,
+			   struct inode *inode2, struct ubifs_budget_req *req)
+{
+	struct ubifs_inode *ui1 = ubifs_inode(inode1);
+	struct ubifs_inode *ui2 = ubifs_inode(inode2);
+	int err, old = req->dirtied_ino;
+
+	ubifs_assert(req->dirtied_ino <= 2);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 2);
+
+again:
+	req->dirtied_ino += !ui1->dirty;
+	req->dirtied_ino += !ui2->dirty;
+	if (req->dirtied_ino > old)
+		req->dirtied_ino_d += ui1->data_len + ui2->data_len;
+
+	err = ubifs_budget_space(c, req);
+	if (unlikely(err))
+		return err;
+
+	lock_two_inodes(ui1, ui2);
+	if (req->dirtied_ino != old + !ui1->dirty + !ui2->dirty) {
+		ubifs_release_budget(c, req);
+		unlock_two_inodes(ui1, ui2);
+		req->dirtied_ino = old;
+		req->dirtied_ino_d -= ui1->data_len + ui2->data_len;
+		goto again;
+	}
+
+	UBIFS_DBG(ui1->budgeted = 1);
+	UBIFS_DBG(ui2->budgeted = 1);
 	return 0;
 }
 
@@ -768,6 +865,29 @@ void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
 }
 
 /**
+ * ubifs_cancel_2ino_op - cancel budget of an operation on 2 inodes.
+ * @c: UBIFS file-system description object
+ * @inode1: first VFS inode the operation worked on
+ * @inode1: second VFS inode the operation worked on
+ * @req: budget to release
+ *
+ * This function is the same as 'ubifs_cancel_ino_op()', but is is used to
+ * release inodes locked with 'ubifs_budget_2inode_op()'.
+ */
+void ubifs_cancel_2ino_op(struct ubifs_info *c, struct inode *inode1,
+			  struct inode *inode2, struct ubifs_budget_req *req)
+{
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
+	ubifs_assert(req->idx_growth >= 0);
+	ubifs_assert(req->data_growth >= 0);
+	ubifs_assert(req->dd_growth >= 0);
+
+	ubifs_release_budget(c, req);
+	unlock_two_inodes(ubifs_inode(inode1), ubifs_inode(inode2));
+}
+
+/**
  * ubifs_release_ino_clean - release budget of a "cleaning" operation.
  * @c: UBIFS file-system description object
  * @inode: VFS inode the operation worked on
@@ -802,7 +922,44 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 		 */
 		atomic_long_dec(&c->dirty_ino_cnt);
 	}
-	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+	mutex_unlock(&ui->budg_mutex);
+}
+
+/**
+ * ubifs_release_2ino_clean - release budget of a "cleaning" operation.
+ * @c: UBIFS file-system description object
+ * @inode1: first VFS inode the operation worked on
+ * @inode2: first VFS inode the operation worked on
+ * @req: budget to release
+ *
+ * This function is the same as 'ubifs_release_ino_clean()', but is is used to
+ * release inodes locked with 'ubifs_budget_2inode_op()'.
+ */
+void ubifs_release_2ino_clean(struct ubifs_info *c, struct inode *inode1,
+			      struct inode *inode2,
+			      struct ubifs_budget_req *req)
+{
+	struct ubifs_inode *ui1 = ubifs_inode(inode1);
+	struct ubifs_inode *ui2 = ubifs_inode(inode2);
+
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
+	ubifs_assert(req->idx_growth >= 0);
+	ubifs_assert(req->data_growth >= 0);
+	ubifs_assert(req->dd_growth >= 0);
+	UBIFS_DBG(ui1->budgeted = 0);
+	UBIFS_DBG(ui2->budgeted = 0);
+
+	ubifs_release_budget(c, req);
+	if (ui1->dirty) {
+		ui1->dirty = 0;
+		atomic_long_dec(&c->dirty_ino_cnt);
+	}
+	if (ui2->dirty) {
+		ui2->dirty = 0;
+		atomic_long_dec(&c->dirty_ino_cnt);
+	}
+	unlock_two_inodes(ui1, ui2);
 }
 
 /**

@@ -876,13 +876,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			return err;
 	}
 
-	/*
-	 * Note, rename may write @new_dir inode if the directory entry is
-	 * moved there. And if the @new_dir is dirty, we do not bother to make
-	 * it clean. It could be done, but requires extra coding which does not
-	 * seem to be really worth it.
-	 */
-	err = ubifs_budget_inode_op(c, old_dir, &req);
+	err = ubifs_budget_2inode_op(c, old_dir, new_dir, &req);
 	if (err)
 		return err;
 
@@ -944,7 +938,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (err)
 		goto out_inode;
 
-	ubifs_release_ino_clean(c, old_dir, &req);
+	ubifs_release_2ino_clean(c, old_dir, new_dir, &req);
 	return 0;
 
 out_inode:
@@ -965,7 +959,7 @@ out_inode:
 				inc_nlink(old_dir);
 		}
 	}
-	ubifs_cancel_ino_op(c, old_dir, &req);
+	ubifs_cancel_2ino_op(c, old_dir, new_dir, &req);
 	return err;
 }
 
