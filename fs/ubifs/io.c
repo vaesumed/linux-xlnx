@@ -702,16 +702,16 @@ int ubifs_read_node_wbuf(struct ubifs_wbuf *wbuf, void *buf, int type, int len,
 		}
 	}
 
-	err = ubifs_check_node(c, buf, lnum, offs, 0);
-	if (err) {
-		ubifs_err("expected node type %d", type);
-		return err;
-	}
-
 	if (type != ch->node_type) {
 		ubifs_err("bad node type (%d but expected %d)",
 			  ch->node_type, type);
 		goto out;
+	}
+
+	err = ubifs_check_node(c, buf, lnum, offs, 0);
+	if (err) {
+		ubifs_err("expected node type %d", type);
+		return err;
 	}
 
 	rlen = le32_to_cpu(ch->len);
@@ -761,16 +761,16 @@ int ubifs_read_node(const struct ubifs_info *c, void *buf, int type, int len,
 		return err;
 	}
 
-	err = ubifs_check_node(c, buf, lnum, offs, 0);
-	if (err) {
-		ubifs_err("expected node type %d", type);
-		return err;
-	}
-
 	if (type != ch->node_type) {
 		ubifs_err("bad node type (%d but expected %d)",
 			  ch->node_type, type);
 		goto out;
+	}
+
+	err = ubifs_check_node(c, buf, lnum, offs, 0);
+	if (err) {
+		ubifs_err("expected node type %d", type);
+		return err;
 	}
 
 	l = le32_to_cpu(ch->len);
