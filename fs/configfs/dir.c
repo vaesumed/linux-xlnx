@@ -1099,7 +1099,7 @@ static int configfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	struct configfs_subsystem *subsys;
 	struct configfs_dirent *sd;
 	struct config_item_type *type;
-	struct module *owner = NULL;
+	struct module *subsys_owner = NULL, *new_item_owner = NULL;
 	char *name;
 
 	if (dentry->d_parent == configfs_sb->s_root) {
@@ -1136,10 +1136,25 @@ static int configfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		goto out_put;
 	}
 
+	/*
+	 * The subsystem may belong to a different module than the item
+	 * being created.  We don't want to safely pin the new item but
+	 * fail to pin the subsystem it sits under.
+	 */
+	if (!subsys->su_group.cg_item.ci_type) {
+		ret = -EINVAL;
+		goto out_put;
+	}
+	subsys_owner = subsys->su_group.cg_item.ci_type->ct_owner;
+	if (!try_module_get(subsys_owner)) {
+		ret = -EINVAL;
+		goto out_put;
+	}
+
 	name = kmalloc(dentry->d_name.len + 1, GFP_KERNEL);
 	if (!name) {
 		ret = -ENOMEM;
-		goto out_put;
+		goto out_subsys_put;
 	}
 
 	snprintf(name, dentry->d_name.len + 1, "%s", dentry->d_name.name);
@@ -1166,7 +1181,7 @@ static int configfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		 * If ret != 0, then link_obj() was never called.
 		 * There are no extra references to clean up.
 		 */
-		goto out_put;
+		goto out_subsys_put;
 	}
 
 	/*
@@ -1180,8 +1195,8 @@ static int configfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		goto out_unlink;
 	}
 
-	owner = type->ct_owner;
-	if (!try_module_get(owner)) {
+	new_item_owner = type->ct_owner;
+	if (!try_module_get(new_item_owner)) {
 		ret = -EINVAL;
 		goto out_unlink;
 	}
@@ -1230,8 +1245,12 @@ out_unlink:
 		mutex_unlock(&subsys->su_mutex);
 
 		if (module_got)
-			module_put(owner);
+			module_put(new_item_owner);
 	}
+
+out_subsys_put:
+	if (ret)
+		module_put(subsys_owner);
 
 out_put:
 	/*
@@ -1251,7 +1270,7 @@ static int configfs_rmdir(struct inode *dir, struct dentry *dentry)
 	struct config_item *item;
 	struct configfs_subsystem *subsys;
 	struct configfs_dirent *sd;
-	struct module *owner = NULL;
+	struct module *subsys_owner = NULL, *dead_item_owner = NULL;
 	int ret;
 
 	if (dentry->d_parent == configfs_sb->s_root)
@@ -1277,6 +1296,10 @@ static int configfs_rmdir(struct inode *dir, struct dentry *dentry)
 		config_item_put(parent_item);
 		return -EINVAL;
 	}
+
+	/* configfs_mkdir() shouldn't have allowed this */
+	BUG_ON(!subsys->su_group.cg_item.ci_type);
+	subsys_owner = subsys->su_group.cg_item.ci_type->ct_owner;
 
 	/*
 	 * Ensure that no racing symlink() will make detach_prep() fail while
@@ -1315,7 +1338,7 @@ static int configfs_rmdir(struct inode *dir, struct dentry *dentry)
 	config_item_put(parent_item);
 
 	if (item->ci_type)
-		owner = item->ci_type->ct_owner;
+		dead_item_owner = item->ci_type->ct_owner;
 
 	if (sd->s_type & CONFIGFS_USET_DIR) {
 		configfs_detach_group(item);
@@ -1337,7 +1360,8 @@ static int configfs_rmdir(struct inode *dir, struct dentry *dentry)
 	/* Drop our reference from above */
 	config_item_put(item);
 
-	module_put(owner);
+	module_put(dead_item_owner);
+	module_put(subsys_owner);
 
 	return 0;
 }
