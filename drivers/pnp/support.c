@@ -2,6 +2,8 @@
  * support.c - standard functions for the use of pnp protocol drivers
  *
  * Copyright 2003 Adam Belay <ambx1@neo.rr.com>
+ * Copyright (C) 2008 Hewlett-Packard Development Company, L.P.
+ *	Bjorn Helgaas <bjorn.helgaas@hp.com>
  */
 
 #include <linux/module.h>
@@ -108,5 +110,82 @@ void dbg_pnp_show_resources(struct pnp_dev *dev, char *desc)
 		}
 		printk("\n");
 	}
+#endif
+}
+
+char *pnp_option_priority_name(struct pnp_option *option)
+{
+	switch (pnp_option_priority(option)) {
+	case PNP_RES_PRIORITY_PREFERRED:
+		return "preferred";
+	case PNP_RES_PRIORITY_ACCEPTABLE:
+		return "acceptable";
+	case PNP_RES_PRIORITY_FUNCTIONAL:
+		return "functional";
+	}
+	return "invalid";
+}
+
+void dbg_pnp_show_option(struct pnp_dev *dev, struct pnp_option *option)
+{
+#ifdef DEBUG
+	struct pnp_port *port;
+	struct pnp_mem *mem;
+	struct pnp_irq *irq;
+	struct pnp_dma *dma;
+	int i;
+
+	if (pnp_option_is_dependent(option))
+		dev_dbg(&dev->dev, "  dependent set %d (%s) ",
+			pnp_option_set(option),
+			pnp_option_priority_name(option));
+	else
+		dev_dbg(&dev->dev, "  independent ");
+
+	switch (option->type) {
+	case IORESOURCE_IO:
+		port = &option->u.port;
+		printk("io  min %#llx max %#llx align %lld size %lld flags %#x",
+			(unsigned long long) port->min,
+			(unsigned long long) port->max,
+			(unsigned long long) port->align,
+			(unsigned long long) port->size, port->flags);
+		break;
+	case IORESOURCE_MEM:
+		mem = &option->u.mem;
+		printk("mem min %#llx max %#llx align %lld size %lld flags %#x",
+		       (unsigned long long) mem->min,
+		       (unsigned long long) mem->max,
+		       (unsigned long long) mem->align,
+		       (unsigned long long) mem->size, mem->flags);
+		break;
+	case IORESOURCE_IRQ:
+		irq = &option->u.irq;
+		printk("irq");
+		if (bitmap_empty(irq->map.bits, PNP_IRQ_NR))
+			printk(" <none>");
+		else {
+			for (i = 0; i < PNP_IRQ_NR; i++)
+				if (test_bit(i, irq->map.bits))
+					printk(" %d", i);
+		}
+		printk(" flags %#x", irq->flags);
+		if (irq->flags & IORESOURCE_IRQ_OPTIONAL)
+			printk(" (optional)");
+		break;
+	case IORESOURCE_DMA:
+		dma = &option->u.dma;
+		printk("dma");
+		if (!dma->map)
+			printk(" <none>");
+		else {
+			for (i = 0; i < 8; i++)
+				if (dma->map & (1 << i))
+					printk(" %d", i);
+		}
+		printk(" (bitmask %#x) flags %#x", dma->map, dma->flags);
+		break;
+	}
+	printk("\n");
 #endif
 }
