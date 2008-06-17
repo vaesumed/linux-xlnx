@@ -103,9 +103,8 @@ u8 acpi_ev_valid_gpe_event(struct acpi_gpe_event_info *gpe_event_info)
 
 		while (gpe_block) {
 			if ((&gpe_block->event_info[0] <= gpe_event_info) &&
-			    (&gpe_block->
-			     event_info[((acpi_size) gpe_block->
-					 register_count) * 8] >
+			    (&gpe_block->event_info
+			     [((acpi_size) gpe_block->register_count) * 8] >
 			     gpe_event_info)) {
 				return (TRUE);
 			}
@@ -165,7 +164,7 @@ acpi_status acpi_ev_walk_gpe_list(acpi_gpe_callback gpe_walk_callback)
 		gpe_xrupt_info = gpe_xrupt_info->next;
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 	acpi_os_release_lock(acpi_gbl_gpe_lock, flags);
 	return_ACPI_STATUS(status);
 }
@@ -189,8 +188,8 @@ acpi_ev_delete_gpe_handlers(struct acpi_gpe_xrupt_info *gpe_xrupt_info,
 			    struct acpi_gpe_block_info *gpe_block)
 {
 	struct acpi_gpe_event_info *gpe_event_info;
-	acpi_native_uint i;
-	acpi_native_uint j;
+	u32 i;
+	u32 j;
 
 	ACPI_FUNCTION_TRACE(ev_delete_gpe_handlers);
 
@@ -202,8 +201,9 @@ acpi_ev_delete_gpe_handlers(struct acpi_gpe_xrupt_info *gpe_xrupt_info,
 
 		for (j = 0; j < ACPI_GPE_REGISTER_WIDTH; j++) {
 			gpe_event_info =
-			    &gpe_block->
-			    event_info[(i * ACPI_GPE_REGISTER_WIDTH) + j];
+			    &gpe_block->event_info[((acpi_size) i *
+						    ACPI_GPE_REGISTER_WIDTH) +
+						   j];
 
 			if ((gpe_event_info->flags & ACPI_GPE_DISPATCH_MASK) ==
 			    ACPI_GPE_DISPATCH_HANDLER) {
@@ -259,8 +259,8 @@ acpi_ev_save_method_info(acpi_handle obj_handle,
 	 * 1) Extract the name from the object and convert to a string
 	 */
 	ACPI_MOVE_32_TO_32(name,
-			   &((struct acpi_namespace_node *)obj_handle)->name.
-			   integer);
+			   &((struct acpi_namespace_node *)obj_handle)->
+			   name.integer);
 	name[ACPI_NAME_SIZE] = 0;
 
 	/*
@@ -461,7 +461,7 @@ acpi_ev_match_prw_and_gpe(acpi_handle obj_handle,
 						    ACPI_GPE_DISABLE);
 	}
 
-      cleanup:
+cleanup:
 	acpi_ut_remove_reference(pkg_desc);
 	return_ACPI_STATUS(AE_OK);
 }
@@ -656,7 +656,7 @@ acpi_ev_install_gpe_block(struct acpi_gpe_block_info *gpe_block,
 	gpe_block->xrupt_block = gpe_xrupt_block;
 	acpi_os_release_lock(acpi_gbl_gpe_lock, flags);
 
-      unlock_and_exit:
+unlock_and_exit:
 	status = acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	return_ACPI_STATUS(status);
 }
@@ -720,7 +720,7 @@ acpi_status acpi_ev_delete_gpe_block(struct acpi_gpe_block_info *gpe_block)
 	ACPI_FREE(gpe_block->event_info);
 	ACPI_FREE(gpe_block);
 
-      unlock_and_exit:
+unlock_and_exit:
 	status = acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	return_ACPI_STATUS(status);
 }
@@ -744,18 +744,17 @@ acpi_ev_create_gpe_info_blocks(struct acpi_gpe_block_info *gpe_block)
 	struct acpi_gpe_event_info *gpe_event_info = NULL;
 	struct acpi_gpe_event_info *this_event;
 	struct acpi_gpe_register_info *this_register;
-	acpi_native_uint i;
-	acpi_native_uint j;
+	u32 i;
+	u32 j;
 	acpi_status status;
 
 	ACPI_FUNCTION_TRACE(ev_create_gpe_info_blocks);
 
 	/* Allocate the GPE register information block */
 
-	gpe_register_info = ACPI_ALLOCATE_ZEROED((acpi_size) gpe_block->
-						 register_count *
-						 sizeof(struct
-							acpi_gpe_register_info));
+	gpe_register_info =
+	    ACPI_ALLOCATE_ZEROED((acpi_size) gpe_block->register_count *
+				 sizeof(struct acpi_gpe_register_info));
 	if (!gpe_register_info) {
 		ACPI_ERROR((AE_INFO,
 			    "Could not allocate the GpeRegisterInfo table"));
@@ -766,11 +765,10 @@ acpi_ev_create_gpe_info_blocks(struct acpi_gpe_block_info *gpe_block)
 	 * Allocate the GPE event_info block. There are eight distinct GPEs
 	 * per register. Initialization to zeros is sufficient.
 	 */
-	gpe_event_info = ACPI_ALLOCATE_ZEROED(((acpi_size) gpe_block->
-					       register_count *
-					       ACPI_GPE_REGISTER_WIDTH) *
-					      sizeof(struct
-						     acpi_gpe_event_info));
+	gpe_event_info =
+	    ACPI_ALLOCATE_ZEROED(((acpi_size) gpe_block->register_count *
+				  ACPI_GPE_REGISTER_WIDTH) *
+				 sizeof(struct acpi_gpe_event_info));
 	if (!gpe_event_info) {
 		ACPI_ERROR((AE_INFO,
 			    "Could not allocate the GpeEventInfo table"));
@@ -832,8 +830,7 @@ acpi_ev_create_gpe_info_blocks(struct acpi_gpe_block_info *gpe_block)
 		/* Disable all GPEs within this register */
 
 		status = acpi_hw_low_level_write(ACPI_GPE_REGISTER_WIDTH, 0x00,
-						 &this_register->
-						 enable_address);
+						 &this_register->enable_address);
 		if (ACPI_FAILURE(status)) {
 			goto error_exit;
 		}
@@ -841,8 +838,7 @@ acpi_ev_create_gpe_info_blocks(struct acpi_gpe_block_info *gpe_block)
 		/* Clear any pending GPE events within this register */
 
 		status = acpi_hw_low_level_write(ACPI_GPE_REGISTER_WIDTH, 0xFF,
-						 &this_register->
-						 status_address);
+						 &this_register->status_address);
 		if (ACPI_FAILURE(status)) {
 			goto error_exit;
 		}
@@ -852,7 +848,7 @@ acpi_ev_create_gpe_info_blocks(struct acpi_gpe_block_info *gpe_block)
 
 	return_ACPI_STATUS(AE_OK);
 
-      error_exit:
+error_exit:
 	if (gpe_register_info) {
 		ACPI_FREE(gpe_register_info);
 	}
@@ -983,8 +979,8 @@ acpi_ev_initialize_gpe_block(struct acpi_namespace_node *gpe_device,
 	struct acpi_gpe_walk_info gpe_info;
 	u32 wake_gpe_count;
 	u32 gpe_enabled_count;
-	acpi_native_uint i;
-	acpi_native_uint j;
+	u32 i;
+	u32 j;
 
 	ACPI_FUNCTION_TRACE(ev_initialize_gpe_block);
 
@@ -1032,8 +1028,9 @@ acpi_ev_initialize_gpe_block(struct acpi_namespace_node *gpe_device,
 			/* Get the info block for this particular GPE */
 
 			gpe_event_info =
-			    &gpe_block->
-			    event_info[(i * ACPI_GPE_REGISTER_WIDTH) + j];
+			    &gpe_block->event_info[((acpi_size) i *
+						    ACPI_GPE_REGISTER_WIDTH) +
+						   j];
 
 			if (((gpe_event_info->flags & ACPI_GPE_DISPATCH_MASK) ==
 			     ACPI_GPE_DISPATCH_METHOD)
@@ -1166,8 +1163,7 @@ acpi_status acpi_ev_gpe_initialize(void)
 						     &acpi_gbl_FADT.xgpe1_block,
 						     register_count1,
 						     acpi_gbl_FADT.gpe1_base,
-						     acpi_gbl_FADT.
-						     sci_interrupt,
+						     acpi_gbl_FADT.sci_interrupt,
 						     &acpi_gbl_gpe_fadt_blocks
 						     [1]);
 
@@ -1207,7 +1203,7 @@ acpi_status acpi_ev_gpe_initialize(void)
 		goto cleanup;
 	}
 
-      cleanup:
+cleanup:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return_ACPI_STATUS(AE_OK);
 }

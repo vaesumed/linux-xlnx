@@ -124,8 +124,8 @@ acpi_evaluate_object_typed(acpi_handle handle,
 
 	ACPI_ERROR((AE_INFO,
 		    "Incorrect return type [%s] requested [%s]",
-		    acpi_ut_get_type_name(((union acpi_object *)return_buffer->
-					   pointer)->type),
+		    acpi_ut_get_type_name(((union acpi_object *)
+					   return_buffer->pointer)->type),
 		    acpi_ut_get_type_name(return_type)));
 
 	if (must_free) {
@@ -141,7 +141,7 @@ acpi_evaluate_object_typed(acpi_handle handle,
 }
 
 ACPI_EXPORT_SYMBOL(acpi_evaluate_object_typed)
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 /*******************************************************************************
  *
  * FUNCTION:    acpi_evaluate_object
@@ -182,7 +182,6 @@ acpi_evaluate_object(acpi_handle handle,
 	}
 
 	info->pathname = pathname;
-	info->parameter_type = ACPI_PARAM_ARGS;
 
 	/* Convert and validate the device handle */
 
@@ -202,9 +201,8 @@ acpi_evaluate_object(acpi_handle handle,
 		 * Add 1 to count to allow for null terminated internal list
 		 */
 		info->parameters = ACPI_ALLOCATE_ZEROED(((acpi_size)
-							 external_params->
-							 count +
-							 1) * sizeof(void *));
+							 external_params->count
+							 + 1) * sizeof(void *));
 		if (!info->parameters) {
 			status = AE_NO_MEMORY;
 			goto cleanup;
@@ -214,10 +212,9 @@ acpi_evaluate_object(acpi_handle handle,
 
 		for (i = 0; i < external_params->count; i++) {
 			status =
-			    acpi_ut_copy_eobject_to_iobject(&external_params->
-							    pointer[i],
-							    &info->
-							    parameters[i]);
+			    acpi_ut_copy_eobject_to_iobject
+			    (&external_params->pointer[i],
+			     &info->parameters[i]);
 			if (ACPI_FAILURE(status)) {
 				goto cleanup;
 			}
@@ -334,7 +331,7 @@ acpi_evaluate_object(acpi_handle handle,
 		acpi_ex_exit_interpreter();
 	}
 
-      cleanup:
+cleanup:
 
 	/* Free the input parameter list (if we created one) */
 
@@ -442,7 +439,7 @@ acpi_ns_get_device_callback(acpi_handle obj_handle,
 	u32 flags;
 	struct acpica_device_id hid;
 	struct acpi_compatible_id_list *cid;
-	acpi_native_uint i;
+	u32 i;
 	int found;
 
 	status = acpi_ut_acquire_mutex(ACPI_MTX_NAMESPACE);
@@ -633,7 +630,7 @@ acpi_attach_data(acpi_handle obj_handle,
 
 	status = acpi_ns_attach_data(node, handler, data);
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return (status);
 }
@@ -679,7 +676,7 @@ acpi_detach_data(acpi_handle obj_handle, acpi_object_handler handler)
 
 	status = acpi_ns_detach_data(node, handler);
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return (status);
 }
@@ -726,7 +723,7 @@ acpi_get_data(acpi_handle obj_handle, acpi_object_handler handler, void **data)
 
 	status = acpi_ns_get_attached_data(node, handler, data);
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return (status);
 }

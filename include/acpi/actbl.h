@@ -293,4 +293,4 @@ enum acpi_prefered_pm_profiles {
 
 #include <acpi/actbl1.h>
 
-#endif				/* __ACTBL_H__ */
+#endif /* __ACTBL_H__ */
