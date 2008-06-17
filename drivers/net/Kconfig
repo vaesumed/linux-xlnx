@@ -1455,6 +1455,7 @@ config E100
 	tristate "Intel(R) PRO/100+ support"
 	depends on NET_PCI && PCI
 	select MII
+	select FW_LOADER
 	---help---
 	  This driver supports Intel(R) PRO/100 family of adapters.
 	  To verify that your adapter is supported, find the board ID number 
@@ -1476,6 +1477,13 @@ config E100
 
 	  To compile this driver as a module, choose M here. The module
 	  will be called e100.
+
+config E100_FIRMWARE
+	bool "Include firmware for Intel(R) PRO/100+"
+	depends on E100
+	---help---
+	  This includes firmware for the Intel(R) PRO/100 family of adapters.
+	  Say 'N' and let it get loaded from userspace on demand.
 
 config LNE390
 	tristate "Mylex EISA LNE390A/B support (EXPERIMENTAL)"
@@ -1924,6 +1932,7 @@ if NETDEV_1000
 config ACENIC
 	tristate "Alteon AceNIC/3Com 3C985/NetGear GA620 Gigabit support"
 	depends on PCI
+	select FW_LOADER
 	---help---
 	  Say Y here if you have an Alteon AceNIC, 3Com 3C985(B), NetGear
 	  GA620, SGI Gigabit or Farallon PN9000-SX PCI Gigabit Ethernet
@@ -1947,6 +1956,23 @@ config ACENIC_OMIT_TIGON_I
 	  Tigon II, say N here.
 
 	  The safe and default value for this is N.
+
+config ACENIC_TG1_FIRMWARE
+	bool "Include firmware for old Tigon I based AceNICs (tg1)"
+	depends on ACENIC && !ACENIC_OMIT_TIGON_I
+	---help---
+	  This includes firmware for the original Alteon AceNIC and 3Com 3C985
+	  (non B version) in the kernel image.
+	  Say 'N' and let it get loaded from userspace on demand.
+
+config ACENIC_TG2_FIRMWARE
+	bool "Include firmware for Alteon AceNIC/3Com 3C985/NetGear GA620 (tg2)"
+	depends on ACENIC
+	---help---
+	  This includes firmware for later Alteon AceNIC, 3Com 3C985B,
+	  NetGear GA620, SGI Gigabit or Farallon PN9000-SX PCI Gigabit
+	  Ethernet adapter.
+	  Say 'N' and let it get loaded from userspace on demand.
 
 config DL2K
 	tristate "DL2000/TC902x-based Gigabit Ethernet support"
