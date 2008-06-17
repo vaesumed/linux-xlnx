@@ -1191,12 +1191,14 @@ static int scan_check_cb(struct ubifs_info *c,
 	if (lp->free + lp->dirty == c->leb_size &&
 	    free + dirty == c->leb_size)
 		if ((is_idx && !(lp->flags & LPROPS_INDEX)) ||
-		    (!is_idx && free == c->leb_size)) {
+		    (!is_idx && free == c->leb_size) ||
+		    lp->free == c->leb_size) {
 			/*
 			 * Empty or freeable LEBs could contain index
 			 * nodes from an uncompleted commit due to an
 			 * unclean unmount. Or they could be empty for
-			 * the same reason.
+			 * the same reason. Or it may simply not have been
+			 * unmapped.
 			 */
 			free = lp->free;
 			dirty = lp->dirty;
