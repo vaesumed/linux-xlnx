@@ -143,6 +143,7 @@ debug_chks	Selects extra checks that UBIFS can do while running:
 		Check orphan area			8
 		Check old indexing tree			16
 		Check LEB properties (lprops)		32
+		Check leaf nodes and inodes		64
 
 debug_tsts	Selects a mode of testing, as follows:
 
