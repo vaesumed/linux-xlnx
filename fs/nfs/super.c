@@ -47,6 +47,7 @@
 #include <linux/inet.h>
 #include <linux/in6.h>
 #include <net/ipv6.h>
+#include <linux/netdevice.h>
 #include <linux/nfs_xdr.h>
 #include <linux/magic.h>
 #include <linux/parser.h>
@@ -67,6 +68,9 @@
 #endif
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN	(48)
+#endif
+#ifndef SCOPE_DELIMITER
+#define SCOPE_DELIMITER		'%'
 #endif
 
 enum {
@@ -732,11 +736,45 @@ static void nfs_parse_ipv4_address(char *string, size_t str_len,
 	*addr_len = 0;
 }
 
+static void nfs_parse_ipv6_scope_id(const char *string, const size_t str_len,
+				    const char *delim,
+				    struct sockaddr_in6 *sin6)
+{
+	char *p;
+	size_t len;
+
+	if (!(ipv6_addr_type(&sin6->sin6_addr) & IPV6_ADDR_LINKLOCAL))
+		return ;
+	if (*delim != SCOPE_DELIMITER)
+		return;
+
+	len = (string + str_len) - delim - 1;
+	p = kstrndup(delim + 1, len, GFP_KERNEL);
+	if (p) {
+		unsigned long scope_id = 0;
+		struct net_device *dev;
+
+		dev = dev_get_by_name(&init_net, p);
+		if (dev != NULL) {
+			scope_id = dev->ifindex;
+			dev_put(dev);
+		} else {
+			/* scope_id is set to zero on error */
+			strict_strtoul(p, 10, &scope_id);
+		}
+
+		kfree(p);
+		sin6->sin6_scope_id = scope_id;
+		dfprintk(MOUNT, "NFS: IPv6 scope ID = %lu\n", scope_id);
+	}
+}
+
 static void nfs_parse_ipv6_address(char *string, size_t str_len,
 				   struct sockaddr *sap, size_t *addr_len)
 {
 	struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sap;
 	u8 *addr = (u8 *)&sin6->sin6_addr.in6_u;
+	const char *delim;
 
 	dfprintk(MOUNT, "NFS: parsing IPv6 address %*s\n",
 			str_len, string);
@@ -744,8 +782,10 @@ static void nfs_parse_ipv6_address(char *string, size_t str_len,
 	if (str_len <= INET6_ADDRSTRLEN) {
 		sin6->sin6_family = AF_INET6;
 		*addr_len = sizeof(*sin6);
-		if (in6_pton(string, str_len, addr, '\0', NULL))
+		if (in6_pton(string, str_len, addr, SCOPE_DELIMITER, &delim)) {
+			nfs_parse_ipv6_scope_id(string, str_len, delim, sin6);
 			return;
+		}
 	}
 
 	sap->sa_family = AF_UNSPEC;
