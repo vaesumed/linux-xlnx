@@ -23,6 +23,7 @@
 #include <linux/errno.h>
 #include <asm/debugreg.h>
 #include <linux/mmiotrace.h>
+#include <linux/rculist.h>
 
 #define KMMIO_PAGE_HASH_BITS 4
 #define KMMIO_PAGE_TABLE_SIZE (1 << KMMIO_PAGE_HASH_BITS)
