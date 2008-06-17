@@ -464,7 +464,7 @@ static int do_writepage(struct page *page, int len)
  * situation and correct the inode size. This means UBIFS would have to scan
  * whold index and correct all inode sizes, which is long an unacceptible.
  *
- * To prevend situations like this, UBIFS writes pages back only if they are
+ * To prevent situations like this, UBIFS writes pages back only if they are
  * within last synchronized inode size, i.e. the the size which has been
  * written to the flash media last time. Otherwise, UBIFS forces inode
  * write-back, thus making sure the on-flash inode contains current inode size,
@@ -483,6 +483,12 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 		inode->i_ino, page->index, page->flags);
 	ubifs_assert(PagePrivate(page));
 
+	/* Is the page fully outside i_size? (truncate in progress) */
+	if (page->index > end_index || (page->index == end_index && !len)) {
+		unlock_page(page);
+		return 0;
+	}
+
 	err = dbg_check_inode_dirty(ui);
 	if (err < 0)
 		return err;
@@ -490,21 +496,15 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 	spin_lock(&ui->size_lock);
 	synced_i_size = ui->synced_i_size;
 	spin_unlock(&ui->size_lock);
-	if (end_index + len > synced_i_size) {
-		err = inode->i_sb->s_op->write_inode(inode, 1);
-		if (err < 0)
-			return err;
-	}
 
 	/* Is the page fully inside i_size? */
-	if (page->index < end_index)
+	if (page->index < end_index) {
+		if (page->index >= synced_i_size >> PAGE_CACHE_SHIFT) {
+			err = inode->i_sb->s_op->write_inode(inode, 1);
+			if (err < 0)
+				return err;
+		}
 		return do_writepage(page, PAGE_CACHE_SIZE);
-
-	/* Is the page fully outside i_size? (truncate in progress) */
-	len = i_size & (PAGE_CACHE_SIZE - 1);
-	if (page->index >= end_index + 1 || !len) {
-		unlock_page(page);
-		return 0;
 	}
 
 	/*
@@ -518,6 +518,12 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 	memset(kaddr + len, 0, PAGE_CACHE_SIZE - len);
 	flush_dcache_page(page);
 	kunmap_atomic(kaddr, KM_USER0);
+
+	if (i_size > synced_i_size) {
+		err = inode->i_sb->s_op->write_inode(inode, 1);
+		if (err < 0)
+			return err;
+	}
 
 	return do_writepage(page, len);
 }
@@ -585,7 +591,7 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_budget_req req;
-	int truncation, err = 0;
+	int truncation, err = 0, writing_inode_now = 0;
 
 	dbg_gen("ino %lu, ia_valid %#x", inode->i_ino, ia_valid);
 	err = inode_change_ok(inode, attr);
@@ -596,41 +602,46 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 
 	truncation = (ia_valid & ATTR_SIZE) && attr->ia_size != inode->i_size;
 	if (truncation) {
-		/*
-		 * If this is truncation, and we do not truncate on a block
-		 * boundary, budget for changing one data block, because the
-		 * last block will be re-written.
-		 */
-		if (attr->ia_size & (UBIFS_BLOCK_SIZE - 1))
-			req.dirtied_page = 1;
-
-		/*
-		 * Truncation operation writes the inode, so we have to budget
-		 * for it. Normally, we would use 'ubifs_budget_inode_op()'
-		 * which acquires budget only if the inode is not dirty
-		 * (otherwise it has already budgeted). However, we cannot use
-		 * this function because it may deadlock with
-		 * 'ubifs_writepage()'. Indeed, it would take the
-		 * @ui->budg_mutex, then we would call 'vmtruncate()' which
-		 * invokes 'truncate_inode_pages_range()' which invalidates all
-		 * truncated pages and locks them (using
-		 * 'TestSetPageLocked()'). At the same time, write-back may be
-		 * may be working and holding page lock, and then trying to
-		 * write the inode (see 'ubifs_writepage()' for explanation
-		 * why) which needs @ui->budg_mutex. So truncation and
-		 * write-back would take page lock and @ui->budg_mutex in
-		 * reverse order and deadlock.
-		 */
-		req.dirtied_ino = 1;
-		/* A funny way to budget for truncation node */
-		req.dirtied_ino_d = UBIFS_TRUN_NODE_SZ;
-		err = ubifs_budget_space(c, &req);
-		if (err)
-			return err;
-
+		if (attr->ia_size < inode->i_size) {
+			/*
+			 * If this is truncation to a smaller size, and we do
+			 * not truncate on a block boundary, budget for changing
+			 * one data block, because the last block will be
+			 * re-written.
+			 */
+			if (attr->ia_size & (UBIFS_BLOCK_SIZE - 1))
+				req.dirtied_page = 1;
+			/*
+			 * Truncation operation writes the inode, so we have to
+			 * budget for it. Normally, we would use
+			 * 'ubifs_budget_inode_op()' which acquires budget only
+			 * if the inode is not dirty (otherwise it has already
+			 * budgeted). However, we cannot use this function
+			 * because it may deadlock with 'ubifs_writepage()'.
+			 * Indeed, it would take the @ui->budg_mutex, then we
+			 * would call 'vmtruncate()' which invokes
+			 * 'truncate_inode_pages_range()' which invalidates all
+			 * truncated pages and locks them (using
+			 * 'TestSetPageLocked()'). At the same time, write-back
+			 * may be working and holding page lock, and then trying
+			 * to write the inode (see 'ubifs_writepage()' for
+			 * explanation why) which needs @ui->budg_mutex. So
+			 * truncation and write-back would take page lock and
+			 * @ui->budg_mutex in reverse order and deadlock.
+			 */
+			writing_inode_now = 1;
+			req.dirtied_ino = 1;
+			/* A funny way to budget for truncation node */
+			req.dirtied_ino_d = UBIFS_TRUN_NODE_SZ;
+			err = ubifs_budget_space(c, &req);
+			if (err)
+				return err;
+		}
 		/* Truncation changes inode time */
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
-	} else {
+	}
+
+	if (!writing_inode_now) {
 		err = ubifs_budget_inode_op(c, inode, &req);
 		if (err)
 			return err;
@@ -658,13 +669,15 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 
 	if (truncation) {
-		struct ubifs_inode *ui = ubifs_inode(inode);
-
 		err = ubifs_trunc(inode, attr->ia_size);
 		if (err) {
 			ubifs_release_budget(c, &req);
 			return err;
 		}
+	}
+
+	if (writing_inode_now) {
+		struct ubifs_inode *ui = ubifs_inode(inode);
 
 		/* Release the budget we allocated */
 		ubifs_release_budget(c, &req);

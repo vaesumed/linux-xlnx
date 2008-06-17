@@ -805,6 +805,9 @@ int dbg_check_inode_dirty(struct ubifs_inode *ui)
 	int err = 0;
 	loff_t i_size, synced_i_size;
 
+	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
+		return 0;
+
 	mutex_lock(&ui->budg_mutex);
 	spin_lock(&ui->size_lock);
 	i_size = i_size_read(&ui->vfs_inode);

@@ -443,13 +443,16 @@ static int get_dent_type(int mode)
  * @inode: inode to pack
  * @last: indicates the last node of the group
  * @last_reference: non-zero if this is a deletion inode
+ *
+ * Because we write all inodes to the base head and we hold the base head mutex,
+ * this function will not be called simultaneously with the same inode number.
  */
 static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 		       const struct inode *inode, int last, int last_reference)
 {
 	int data_len = 0;
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	loff_t size = cpu_to_le64(i_size_read(inode));
+	__u64 size = cpu_to_le64(i_size_read(inode));
 
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
@@ -1020,8 +1023,8 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	ubifs_assert(!ubifs_inode(inode)->data_len);
 	ubifs_assert(S_ISREG(inode->i_mode));
 
-	sz = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ;
-	sz += UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
+	sz = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ +
+	     UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
 	ino = kmalloc(sz, GFP_NOFS);
 	if (!ino)
 		return -ENOMEM;
@@ -1073,9 +1076,9 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_free;
 
 	pack_inode(c, ino, inode, 0, 0);
+	ubifs_prep_grp_node(c, trun, UBIFS_TRUN_NODE_SZ, dlen ? 0 : 1);
 	if (dlen)
-		ubifs_prep_grp_node(c, dn, dlen, 0);
-	ubifs_prep_grp_node(c, trun, UBIFS_TRUN_NODE_SZ, 1);
+		ubifs_prep_grp_node(c, dn, dlen, 1);
 
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, 0);
 	if (!err)
