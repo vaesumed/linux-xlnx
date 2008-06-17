@@ -485,13 +485,13 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 
 	/* Is the page fully outside i_size? (truncate in progress) */
 	if (page->index > end_index || (page->index == end_index && !len)) {
-		unlock_page(page);
-		return 0;
+		err = 0;
+		goto out_unlock;
 	}
 
 	err = dbg_check_inode_dirty(ui);
-	if (err < 0)
-		return err;
+	if (err)
+		goto out_unlock;
 
 	spin_lock(&ui->size_lock);
 	synced_i_size = ui->synced_i_size;
@@ -501,8 +501,8 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 	if (page->index < end_index) {
 		if (page->index >= synced_i_size >> PAGE_CACHE_SHIFT) {
 			err = inode->i_sb->s_op->write_inode(inode, 1);
-			if (err < 0)
-				return err;
+			if (err)
+				goto out_unlock;
 		}
 		return do_writepage(page, PAGE_CACHE_SIZE);
 	}
@@ -521,11 +521,15 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 
 	if (i_size > synced_i_size) {
 		err = inode->i_sb->s_op->write_inode(inode, 1);
-		if (err < 0)
-			return err;
+		if (err)
+			goto out_unlock;
 	}
 
 	return do_writepage(page, len);
+
+out_unlock:
+	unlock_page(page);
+	return err;
 }
 
 static int ubifs_trunc(struct inode *inode, loff_t new_size)
