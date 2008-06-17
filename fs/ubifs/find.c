@@ -494,8 +494,6 @@ int ubifs_find_free_space(struct ubifs_info *c, int min_space, int *free,
 	int lebs, rsvd_idx_lebs, pick_free = 0, err, lnum, flags;
 
 	dbg_find("min_space %d", min_space);
-	ubifs_assert(min_space > 0 && min_space <= c->dark_wm);
-
 	ubifs_get_lprops(c);
 
 	/* Check if there are enough empty LEBs for commit */
