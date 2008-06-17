@@ -812,6 +812,15 @@ int pcmcia_request_irq(struct pcmcia_device *p_dev, irq_req_t *req)
 		type = IRQF_SHARED;
 
 #ifdef CONFIG_PCMCIA_PROBE
+
+#ifdef IRQ_NOAUTOEN
+	/* if the underlying IRQ infrastructure allows for it, only allocate
+	 * the IRQ, but do not enable it
+	 */
+	if (!(req->Attributes & IRQ_HANDLE_PRESENT))
+		type |= IRQ_NOAUTOEN;
+#endif /* IRQ_NOAUTOEN */
+
 	if (s->irq.AssignedIRQ != 0) {
 		/* If the interrupt is already assigned, it must be the same */
 		irq = s->irq.AssignedIRQ;
@@ -966,7 +975,7 @@ void pcmcia_disable_device(struct pcmcia_device *p_dev) {
 	pcmcia_release_configuration(p_dev);
 	pcmcia_release_io(p_dev, &p_dev->io);
 	pcmcia_release_irq(p_dev, &p_dev->irq);
-	if (&p_dev->win)
+	if (p_dev->win)
 		pcmcia_release_window(p_dev->win);
 }
 EXPORT_SYMBOL(pcmcia_disable_device);
