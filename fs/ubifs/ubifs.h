@@ -1382,14 +1382,21 @@ int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req);
 void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req);
 int ubifs_budget_inode_op(struct ubifs_info *c, struct inode *inode,
 			  struct ubifs_budget_req *req);
+int ubifs_budget_2inode_op(struct ubifs_info *c, struct inode *inode1,
+			   struct inode *inode2, struct ubifs_budget_req *req);
 void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
 				struct ubifs_budget_req *req);
 void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
 			 struct ubifs_budget_req *req);
+void ubifs_cancel_2ino_op(struct ubifs_info *c, struct inode *inode1,
+			  struct inode *inode2, struct ubifs_budget_req *req);
 int ubifs_budget_ino_cleaning(struct ubifs_info *c, struct inode *inode,
 			      struct ubifs_budget_req *req);
 void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 			     struct ubifs_budget_req *req);
+void ubifs_release_2ino_clean(struct ubifs_info *c, struct inode *inode1,
+			      struct inode *inode2,
+			      struct ubifs_budget_req *req);
 long long ubifs_budg_get_free_space(struct ubifs_info *c);
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c);
 void ubifs_convert_page_budget(struct ubifs_info *c);
