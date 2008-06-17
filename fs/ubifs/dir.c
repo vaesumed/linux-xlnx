@@ -279,8 +279,14 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 {
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
+					.dirtied_ino = 1 };
+
+	/*
+	 * Budget request settings: new inode, new direntry, and changing the
+	 * parent inode (because @i_size is changing).
+	 */
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
@@ -294,7 +300,6 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 		goto out;
 
 	dir->i_size += sz_change;
-
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -488,10 +493,15 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = old_dentry->d_inode;
-	struct ubifs_inode *ui = ubifs_inode(inode);
-	struct ubifs_budget_req req = { .new_dent = 1, .dirtied_ino = 1,
-					.dirtied_ino_d = ui->data_len };
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
+	struct ubifs_budget_req req = { .new_dent = 1, .dirtied_ino = 2,
+			.dirtied_ino_d = ubifs_inode(inode)->data_len };
+
+	/*
+	 * Budget request settings: new direntry, changing the target inode
+	 * (because @i_nlink is is increasing), and changing the parent inode
+	 * (because @i_size, @i_mtime and @i_ctime are changing).
+	 */
 
 	dbg_gen("dent '%.*s' to ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
@@ -503,9 +513,8 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 
 	inc_nlink(inode);
 	dir->i_size += sz_change;
-	inode->i_ctime = dir->i_mtime = dir->i_ctime =
-			 ubifs_current_time(inode);
-
+	inode->i_ctime = ubifs_current_time(inode);
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -528,9 +537,18 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = dentry->d_inode;
-	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 1 };
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 1;
+	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2,
+				.dirtied_ino_d = ubifs_inode(inode)->data_len };
+
+	/*
+	 * Budget request settings: deletion direntry and deletion inode
+	 * (@mod_dent and @dirtied_ino), and changing the parent inode (because
+	 * @i_size, @i_mtime and @i_ctime are changing). But if budgeting
+	 * fails, go ahead anyway because we have extra space reserved for
+	 * deletions.
+	 */
 
 	dbg_gen("dent '%.*s' from ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
@@ -546,10 +564,8 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 
 	dir->i_size -= sz_change;
 	dir->i_mtime = dir->i_ctime = ubifs_current_time(dir);
-
 	inode->i_ctime = dir->i_ctime;
 	drop_nlink(inode);
-
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -602,9 +618,17 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = dentry->d_inode;
-	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 1 };
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
-	int err, budgeted = 0;
+	int err, budgeted = 1;
+	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2 };
+
+	/*
+	 * Budget request settings: deletion direntry and deletion inode
+	 * (@mod_dent and @dirtied_ino), and changing the parent inode (because
+	 * @i_size, @i_mtime and @i_ctime are changing). But if budgeting
+	 * fails, go ahead anyway because we have extra space reserved for
+	 * deletions.
+	 */
 
 	dbg_gen("directory '%.*s', ino %lu in dir ino %lu", dentry->d_name.len,
 		dentry->d_name.name, inode->i_ino, dir->i_ino);
@@ -613,7 +637,6 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (err)
 		return err;
 
-	budgeted = 1;
 	err = ubifs_budget_inode_op(c, dir, &req);
 	if (err) {
 		if (err != -ENOSPC)
@@ -624,11 +647,9 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	dir->i_size -= sz_change;
 	dir->i_mtime = dir->i_ctime = ubifs_current_time(dir);
 	drop_nlink(dir);
-
 	inode->i_size = 0;
 	inode->i_ctime = dir->i_ctime;
 	clear_nlink(inode);
-
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -653,8 +674,14 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
+					.dirtied_ino = 1 };
+
+	/*
+	 * Budget request settings: new inode, new direntry, and changing the
+	 * parent inode (because @i_size, @i_mtime and @i_ctima are changing).
+	 */
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
@@ -671,11 +698,9 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	insert_inode_hash(inode);
 	inc_nlink(inode);
-
 	dir->i_mtime = dir->i_ctime = ubifs_current_time(dir);
 	dir->i_size += sz_change;
 	inc_nlink(dir);
-
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err) {
@@ -702,10 +727,16 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 {
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
 	union ubifs_dev_desc *dev = NULL;
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, devlen = 0;
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
+					.new_ino_d = devlen, .dirtied_ino = 1 };
+
+	/*
+	 * Budget request settings: new inode, new direntry, and changing the
+	 * parent inode (because @i_size is changing).
+	 */
 
 	dbg_gen("dent '%.*s' in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, dir->i_ino);
@@ -734,13 +765,10 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	}
 
 	init_special_inode(inode, inode->i_mode, rdev);
-
 	inode->i_size = devlen;
 	ubifs_inode(inode)->data = dev;
 	ubifs_inode(inode)->data_len = devlen;
-
 	dir->i_size += sz_change;
-
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -769,7 +797,12 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	int err, len = strlen(symname);
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
-					.new_ino_d = len };
+					.new_ino_d = len, .dirtied_ino = 1 };
+
+	/*
+	 * Budget request settings: new inode, new direntry, and changing the
+	 * parent inode (because @i_size is changing).
+	 */
 
 	dbg_gen("dent '%.*s', target '%s' in dir ino %lu", dentry->d_name.len,
 		dentry->d_name.name, symname, dir->i_ino);
@@ -802,10 +835,9 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	 * data length is @len, not @len + %1.
 	 */
 	ui->data_len = len;
+
 	inode->i_size = len;
-
 	dir->i_size += sz_change;
-
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -838,8 +870,16 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int dirsync = (IS_DIRSYNC(old_dir) || IS_DIRSYNC(new_dir));
 	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
-	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1 };
 	struct timespec time = ubifs_current_time(old_dir);
+	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
+			.dirtied_ino = 1,
+			.dirtied_ino_d = ubifs_inode(old_inode)->data_len };
+
+	/*
+	 * Budget request settings: deletion direntry, new direntry, and
+	 * changing the inode which is being renamed (because @i_ctime of
+	 * @old_inode is changing).
+	 */
 
 	dbg_gen("dent '%.*s' ino %lu in dir ino %lu to dent '%.*s' in "
 		"dir ino %lu", old_dentry->d_name.len, old_dentry->d_name.name,
@@ -853,11 +893,22 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	if (move) {
-		req.dirtied_ino = 1;
-		if (unlink) {
-			req.dirtied_ino += 2;
-			req.dirtied_ino_d = ubifs_inode(new_inode)->data_len;
-		}
+		/*
+		 * We move to a different directory, which means that at least
+		 * @i_mtime and @i_ctime of both directories (@old_dir and
+		 * @new_dir) will change - this needs budgeting.
+		 */
+		req.dirtied_ino += 2;
+	}
+
+	if (unlink) {
+		/*
+		 * There is already an old inode with this name and it has to
+		 * be unlinked. We have already included data budget for
+		 * @old_inode, so include data budget for @new_inode as well.
+		 */
+		req.dirtied_ino_d += 1;
+		req.dirtied_ino_d += ubifs_inode(new_inode)->data_len;
 	}
 
 	/*
@@ -871,14 +922,14 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return err;
 
 	/*
-	 * Like most other Unix systems, set the ctime for inodes on a
+	 * Like most other Unix systems, set the @i_ctime for inodes on a
 	 * rename.
 	 */
 	old_inode->i_ctime = time;
 
 	/*
 	 * If we moved a directory to another parent directory, decrement
-	 * 'i_nlink' of the old parent. Also, update 'i_size' of the old parent
+	 * @i_nlink of the old parent. Also, update @i_size of the old parent
 	 * as well as its [mc]time.
 	 */
 	if (is_dir && move)
@@ -888,7 +939,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	new_dir->i_mtime = new_dir->i_ctime = time;
 
 	/*
-	 * If we moved a directory object to new directory, parent's 'i_nlink'
+	 * If we moved a directory object to new directory, parent's @i_nlink
 	 * should be adjusted.
 	 */
 	if (move && is_dir)
@@ -896,14 +947,14 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	/*
 	 * And finally, if we unlinked a direntry which happened to have the
-	 * same name as the moved direntry, we have to decrement 'i_nlink' of
+	 * same name as the moved direntry, we have to decrement @i_nlink of
 	 * the unlinked inode and change its ctime.
 	 */
 	if (unlink) {
 		/*
 		 * Directories cannot have hard-links, so if this is a
-		 * directory, decrement its 'i_nlink' twice because an empty
-		 * directory has 'i_nlink' 2.
+		 * directory, decrement its @i_nlink twice because an empty
+		 * directory has @i_nlink 2.
 		 */
 		if (is_dir)
 			drop_nlink(new_inode);
