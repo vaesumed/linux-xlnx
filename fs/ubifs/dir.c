@@ -285,7 +285,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	/*
 	 * Budget request settings: new inode, new direntry, and changing the
-	 * parent inode (because @i_size is changing).
+	 * parent inode (because @i_size, @i_mtime and @i_ctime are changing).
 	 */
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
@@ -300,6 +300,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 		goto out;
 
 	dir->i_size += sz_change;
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -512,8 +513,8 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 		return err;
 
 	inc_nlink(inode);
-	dir->i_size += sz_change;
 	inode->i_ctime = ubifs_current_time(inode);
+	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
@@ -562,10 +563,10 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
-	dir->i_size -= sz_change;
-	dir->i_mtime = dir->i_ctime = ubifs_current_time(dir);
-	inode->i_ctime = dir->i_ctime;
+	inode->i_ctime = ubifs_current_time(dir);
 	drop_nlink(inode);
+	dir->i_size -= sz_change;
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -644,12 +645,12 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
-	dir->i_size -= sz_change;
-	dir->i_mtime = dir->i_ctime = ubifs_current_time(dir);
-	drop_nlink(dir);
 	inode->i_size = 0;
-	inode->i_ctime = dir->i_ctime;
+	inode->i_ctime = ubifs_current_time(dir);
 	clear_nlink(inode);
+	drop_nlink(dir);
+	dir->i_size -= sz_change;
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -680,7 +681,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	/*
 	 * Budget request settings: new inode, new direntry, and changing the
-	 * parent inode (because @i_size, @i_mtime and @i_ctima are changing).
+	 * parent inode (because @i_size, @i_mtime and @i_ctime are changing).
 	 */
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
@@ -698,9 +699,9 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	insert_inode_hash(inode);
 	inc_nlink(inode);
-	dir->i_mtime = dir->i_ctime = ubifs_current_time(dir);
-	dir->i_size += sz_change;
 	inc_nlink(dir);
+	dir->i_size += sz_change;
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err) {
@@ -735,7 +736,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	/*
 	 * Budget request settings: new inode, new direntry, and changing the
-	 * parent inode (because @i_size is changing).
+	 * parent inode (because @i_size, @i_mtime and @i_ctime are changing).
 	 */
 
 	dbg_gen("dent '%.*s' in dir ino %lu",
@@ -769,6 +770,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	ubifs_inode(inode)->data = dev;
 	ubifs_inode(inode)->data_len = devlen;
 	dir->i_size += sz_change;
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
@@ -801,7 +803,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	/*
 	 * Budget request settings: new inode, new direntry, and changing the
-	 * parent inode (because @i_size is changing).
+	 * parent inode (because @i_size, @i_mtime and @i_ctime are changing).
 	 */
 
 	dbg_gen("dent '%.*s', target '%s' in dir ino %lu", dentry->d_name.len,
@@ -835,9 +837,9 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	 * data length is @len, not @len + %1.
 	 */
 	ui->data_len = len;
-
 	inode->i_size = len;
 	dir->i_size += sz_change;
+	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
 			       IS_DIRSYNC(dir), 0);
 	if (err)
