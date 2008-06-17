@@ -16,6 +16,10 @@
  */
 int pnp_is_active(struct pnp_dev *dev)
 {
+	/*
+	 * I don't think this is very reliable because pnp_disable_dev()
+	 * only clears out auto-assigned resources.
+	 */
 	if (!pnp_port_start(dev, 0) && pnp_port_len(dev, 0) <= 1 &&
 	    !pnp_mem_start(dev, 0) && pnp_mem_len(dev, 0) <= 1 &&
 	    pnp_irq(dev, 0) == -1 && pnp_dma(dev, 0) == -1)
@@ -70,54 +74,34 @@ char *pnp_resource_type_name(struct resource *res)
 void dbg_pnp_show_resources(struct pnp_dev *dev, char *desc)
 {
 #ifdef DEBUG
+	struct pnp_resource *pnp_res;
 	struct resource *res;
-	int i;
 
 	dev_dbg(&dev->dev, "current resources: %s\n", desc);
+	list_for_each_entry(pnp_res, &dev->resources, list) {
+		res = &pnp_res->res;
 
-	for (i = 0; i < PNP_MAX_IRQ; i++) {
-		res = pnp_get_resource(dev, IORESOURCE_IRQ, i);
-		if (res && !(res->flags & IORESOURCE_UNSET))
-			dev_dbg(&dev->dev, "  irq %lld flags %#lx%s%s\n",
-				(unsigned long long) res->start, res->flags,
-				res->flags & IORESOURCE_DISABLED ?
-					" DISABLED" : "",
-				res->flags & IORESOURCE_AUTO ?
-					" AUTO" : "");
-	}
-	for (i = 0; i < PNP_MAX_DMA; i++) {
-		res = pnp_get_resource(dev, IORESOURCE_DMA, i);
-		if (res && !(res->flags & IORESOURCE_UNSET))
-			dev_dbg(&dev->dev, "  dma %lld flags %#lx%s%s\n",
-				(unsigned long long) res->start, res->flags,
-				res->flags & IORESOURCE_DISABLED ?
-					" DISABLED" : "",
-				res->flags & IORESOURCE_AUTO ?
-					" AUTO" : "");
-	}
-	for (i = 0; i < PNP_MAX_PORT; i++) {
-		res = pnp_get_resource(dev, IORESOURCE_IO, i);
-		if (res && !(res->flags & IORESOURCE_UNSET))
-			dev_dbg(&dev->dev, "  io  %#llx-%#llx flags %#lx"
-				"%s%s\n",
-				(unsigned long long) res->start,
-				(unsigned long long) res->end, res->flags,
-				res->flags & IORESOURCE_DISABLED ?
-					" DISABLED" : "",
-				res->flags & IORESOURCE_AUTO ?
-					" AUTO" : "");
-	}
-	for (i = 0; i < PNP_MAX_MEM; i++) {
-		res = pnp_get_resource(dev, IORESOURCE_MEM, i);
-		if (res && !(res->flags & IORESOURCE_UNSET))
-			dev_dbg(&dev->dev, "  mem %#llx-%#llx flags %#lx"
-				"%s%s\n",
-				(unsigned long long) res->start,
-				(unsigned long long) res->end, res->flags,
-				res->flags & IORESOURCE_DISABLED ?
-					" DISABLED" : "",
-				res->flags & IORESOURCE_AUTO ?
-					" AUTO" : "");
+		dev_dbg(&dev->dev, "  %-3s ", pnp_resource_type_name(res));
+
+		if (res->flags & IORESOURCE_DISABLED) {
+			printk("disabled\n");
+			continue;
+		}
+
+		switch (pnp_resource_type(res)) {
+		case IORESOURCE_IO:
+		case IORESOURCE_MEM:
+			printk("%#llx-%#llx flags %#lx",
+			       (unsigned long long) res->start,
+			       (unsigned long long) res->end, res->flags);
+			break;
+		case IORESOURCE_IRQ:
+		case IORESOURCE_DMA:
+			printk("%lld flags %#lx",
+			       (unsigned long long) res->start, res->flags);
+			break;
+		}
+		printk("\n");
 	}
 #endif
 }
