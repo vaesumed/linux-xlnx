@@ -5,8 +5,6 @@
  *
  *		The User Datagram Protocol (UDP).
  *
- * Version:	$Id: udp.c,v 1.102 2002/02/01 22:01:04 davem Exp $
- *
  * Authors:	Ross Biro
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *		Arnt Gulbrandsen, <agulbra@nvg.unit.no>
@@ -1255,12 +1253,11 @@ int udp_rcv(struct sk_buff *skb)
 	return __udp4_lib_rcv(skb, udp_hash, IPPROTO_UDP);
 }
 
-int udp_destroy_sock(struct sock *sk)
+void udp_destroy_sock(struct sock *sk)
 {
 	lock_sock(sk);
 	udp_flush_pending_frames(sk);
 	release_sock(sk);
-	return 0;
 }
 
 /*
