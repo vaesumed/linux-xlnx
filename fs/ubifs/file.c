@@ -462,7 +462,7 @@ static int do_writepage(struct page *page, int len)
  * the inode size, they would be indexed and consume flash space. Because the
  * journal has been committed, the replay would not be able to detect this
  * situation and correct the inode size. This means UBIFS would have to scan
- * whold index and correct all inode sizes, which is long an unacceptible.
+ * whole index and correct all inode sizes, which is long an unacceptable.
  *
  * To prevent situations like this, UBIFS writes pages back only if they are
  * within last synchronized inode size, i.e. the the size which has been
@@ -562,12 +562,12 @@ static void do_attr_changes(struct inode *inode, const struct iattr *attr)
 }
 
 /**
- * do_truncation - trucate an inode.
+ * do_truncation - truncate an inode.
  * @c: UBIFS file-system description object
  * @inode: inode to truncate
  * @attr: inode attribute changes description
  *
- * This function implementes VFS '->setattr()' call when the inode is truncated
+ * This function implements VFS '->setattr()' call when the inode is truncated
  * to a smaller size. Returns zero in case of success and a negative error code
  * in case of failure.
  */
@@ -691,7 +691,7 @@ out_budg:
  * @inode: inode to change attributes for
  * @attr: inode attribute changes description
  *
- * This function implementes VFS '->setattr()' call for all cases except
+ * This function implements VFS '->setattr()' call for all cases except
  * truncations to smaller size. Returns zero in case of success and a negative
  * error code in case of failure.
  */
