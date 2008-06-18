@@ -524,7 +524,7 @@ struct proto {
 	int			(*ioctl)(struct sock *sk, int cmd,
 					 unsigned long arg);
 	int			(*init)(struct sock *sk);
-	int			(*destroy)(struct sock *sk);
+	void			(*destroy)(struct sock *sk);
 	void			(*shutdown)(struct sock *sk, int how);
 	int			(*setsockopt)(struct sock *sk, int level, 
 					int optname, char __user *optval,
@@ -1330,30 +1330,6 @@ extern int net_msg_warn;
 
 #define LIMIT_NETDEBUG(fmt, args...) \
 	do { if (net_msg_warn && net_ratelimit()) printk(fmt,##args); } while(0)
-
-/*
- * Macros for sleeping on a socket. Use them like this:
- *
- * SOCK_SLEEP_PRE(sk)
- * if (condition)
- * 	schedule();
- * SOCK_SLEEP_POST(sk)
- *
- * N.B. These are now obsolete and were, afaik, only ever used in DECnet
- * and when the last use of them in DECnet has gone, I'm intending to
- * remove them.
- */
-
-#define SOCK_SLEEP_PRE(sk) 	{ struct task_struct *tsk = current; \
-				DECLARE_WAITQUEUE(wait, tsk); \
-				tsk->state = TASK_INTERRUPTIBLE; \
-				add_wait_queue((sk)->sk_sleep, &wait); \
-				release_sock(sk);
-
-#define SOCK_SLEEP_POST(sk)	tsk->state = TASK_RUNNING; \
-				remove_wait_queue((sk)->sk_sleep, &wait); \
-				lock_sock(sk); \
-				}
 
 extern __u32 sysctl_wmem_max;
 extern __u32 sysctl_rmem_max;

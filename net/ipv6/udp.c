@@ -7,8 +7,6 @@
  *
  *	Based on linux/ipv4/udp.c
  *
- *	$Id: udp.c,v 1.65 2002/02/01 22:01:04 davem Exp $
- *
  *	Fixes:
  *	Hideaki YOSHIFUJI	:	sin6_scope_id support
  *	YOSHIFUJI Hideaki @USAGI and:	Support IPV6_V6ONLY socket option, which
@@ -67,7 +65,7 @@ static struct sock *__udp6_lib_lookup(struct net *net,
 	int badness = -1;
 
 	read_lock(&udp_hash_lock);
-	sk_for_each(sk, node, &udptable[hnum & (UDP_HTABLE_SIZE - 1)]) {
+	sk_for_each(sk, node, &udptable[udp_hashfn(net, hnum)]) {
 		struct inet_sock *inet = inet_sk(sk);
 
 		if (net_eq(sock_net(sk), net) && sk->sk_hash == hnum &&
@@ -355,15 +353,16 @@ static struct sock *udp_v6_mcast_next(struct sock *sk,
  * Note: called only from the BH handler context,
  * so we don't need to lock the hashes.
  */
-static int __udp6_lib_mcast_deliver(struct sk_buff *skb, struct in6_addr *saddr,
-			   struct in6_addr *daddr, struct hlist_head udptable[])
+static int __udp6_lib_mcast_deliver(struct net *net, struct sk_buff *skb,
+		struct in6_addr *saddr, struct in6_addr *daddr,
+		struct hlist_head udptable[])
 {
 	struct sock *sk, *sk2;
 	const struct udphdr *uh = udp_hdr(skb);
 	int dif;
 
 	read_lock(&udp_hash_lock);
-	sk = sk_head(&udptable[ntohs(uh->dest) & (UDP_HTABLE_SIZE - 1)]);
+	sk = sk_head(&udptable[udp_hashfn(net, ntohs(uh->dest))]);
 	dif = inet6_iif(skb);
 	sk = udp_v6_mcast_next(sk, uh->dest, daddr, uh->source, saddr, dif);
 	if (!sk) {
@@ -437,6 +436,7 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct hlist_head udptable[],
 	struct net_device *dev = skb->dev;
 	struct in6_addr *saddr, *daddr;
 	u32 ulen = 0;
+	struct net *net;
 
 	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 		goto short_packet;
@@ -471,11 +471,13 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct hlist_head udptable[],
 	if (udp6_csum_init(skb, uh, proto))
 		goto discard;
 
+	net = dev_net(skb->dev);
 	/*
 	 *	Multicast receive code
 	 */
 	if (ipv6_addr_is_multicast(daddr))
-		return __udp6_lib_mcast_deliver(skb, saddr, daddr, udptable);
+		return __udp6_lib_mcast_deliver(net, skb,
+				saddr, daddr, udptable);
 
 	/* Unicast */
 
@@ -483,7 +485,7 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct hlist_head udptable[],
 	 * check socket cache ... must talk to Alan about his plans
 	 * for sock caches... i'll skip this for now.
 	 */
-	sk = __udp6_lib_lookup(dev_net(skb->dev), saddr, uh->source,
+	sk = __udp6_lib_lookup(net, saddr, uh->source,
 			       daddr, uh->dest, inet6_iif(skb), udptable);
 
 	if (sk == NULL) {
@@ -881,15 +883,13 @@ do_confirm:
 	goto out;
 }
 
-int udpv6_destroy_sock(struct sock *sk)
+void udpv6_destroy_sock(struct sock *sk)
 {
 	lock_sock(sk);
 	udp_v6_flush_pending_frames(sk);
 	release_sock(sk);
 
 	inet6_destroy_sock(sk);
-
-	return 0;
 }
 
 /*
