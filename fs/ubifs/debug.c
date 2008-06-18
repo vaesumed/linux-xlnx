@@ -815,7 +815,7 @@ int dbg_check_inode_dirty(struct ubifs_inode *ui)
 	if (i_size != synced_i_size && !ui->dirty) {
 		ubifs_err("inode size is %lld, synchronized inode size is %lld,"
 			  " but inode is not dirty", i_size, synced_i_size);
-		dump_stack();
+		dbg_dump_stack();
 		err = -EINVAL;
 	}
 	spin_unlock(&ui->size_lock);

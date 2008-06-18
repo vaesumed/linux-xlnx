@@ -412,6 +412,12 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 		return -EAGAIN;
 
 	mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
+
+	if (c->ro_media) {
+		ret = -EROFS;
+		goto out_unlock;
+	}
+
 	/* We expect the write-buffer to be empty on entry */
 	ubifs_assert(!wbuf->used);
 
@@ -591,6 +597,7 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 		err = ubifs_leb_unmap(c, c->gc_lnum);
 	if (err)
 		ret = err;
+out_unlock:
 	mutex_unlock(&wbuf->io_mutex);
 	return ret;
 

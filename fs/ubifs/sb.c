@@ -488,7 +488,7 @@ int ubifs_write_sb_node(struct ubifs_info *c, struct ubifs_sb_node *sup)
 	int len = ALIGN(UBIFS_SB_NODE_SZ, c->min_io_size);
 
 	ubifs_prepare_node(c, sup, UBIFS_SB_NODE_SZ, 1);
-	return ubi_leb_change(c->ubi, UBIFS_SB_LNUM, sup, len, UBI_LONGTERM);
+	return ubifs_leb_change(c, UBIFS_SB_LNUM, sup, len, UBI_LONGTERM);
 }
 
 /**

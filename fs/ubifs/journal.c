@@ -124,8 +124,13 @@ static int reserve_space(struct ubifs_info *c, int jhead, int len)
 	squeeze = (jhead == BASEHD);
 again:
 	mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
-	avail = c->leb_size - wbuf->offs - wbuf->used;
 
+	if (c->ro_media) {
+		err = -EROFS;
+		goto out_unlock;
+	}
+
+	avail = c->leb_size - wbuf->offs - wbuf->used;
 	if (wbuf->lnum != -1 && avail >= len)
 		return 0;
 
