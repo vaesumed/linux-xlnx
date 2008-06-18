@@ -36,8 +36,6 @@ struct channel_path_desc {
 
 struct channel_path;
 
-extern void chsc_process_crw(void);
-
 struct css_general_char {
 	u64 : 41;
 	u32 aif : 1;     /* bit 41 */
@@ -51,7 +49,9 @@ struct css_general_char {
 	u32 qebsm : 1;   /* bit 58 */
 	u32 : 8;
 	u32 aif_osa : 1; /* bit 67 */
-	u32 : 28;
+	u32 : 20;
+	u32 fcx : 1;	 /* bit 88 */
+	u32 : 7;
 }__attribute__((packed));
 
 struct css_chsc_char {
@@ -78,7 +78,6 @@ struct chsc_ssd_info {
 extern int chsc_get_ssd_info(struct subchannel_id schid,
 			     struct chsc_ssd_info *ssd);
 extern int chsc_determine_css_characteristics(void);
-extern int css_characteristics_avail;
 extern int chsc_alloc_sei_area(void);
 extern void chsc_free_sei_area(void);
 
