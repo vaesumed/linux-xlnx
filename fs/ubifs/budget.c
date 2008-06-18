@@ -52,7 +52,7 @@
 #define NR_TO_WRITE 16
 
 /*
- * ui->budg_mutex nesting subclasses for the lock validator.
+ * ui->ui_mutex nesting subclasses for the lock validator.
  */
 enum {
 	UI_PARENT,
@@ -694,11 +694,11 @@ again:
 	if (unlikely(err))
 		return err;
 
-	mutex_lock(&ui->budg_mutex);
+	mutex_lock(&ui->ui_mutex);
 	if (req->dirtied_ino != old + !ui->dirty) {
 		/* The inode has probably been written back meanwhile */
 		ubifs_release_budget(c, req);
-		mutex_unlock(&ui->budg_mutex);
+		mutex_unlock(&ui->ui_mutex);
 		req->dirtied_ino = old;
 		req->dirtied_ino_d -= ui->data_len;
 		goto again;
@@ -720,16 +720,16 @@ again:
 static void lock_two_inodes(struct ubifs_inode *ui1, struct ubifs_inode *ui2)
 {
 	if (ui1 == ui2) {
-		mutex_lock(&ui1->budg_mutex);
+		mutex_lock(&ui1->ui_mutex);
 		return;
 	}
 
 	if (ui1 < ui2) {
-		mutex_lock_nested(&ui1->budg_mutex, UI_PARENT);
-		mutex_lock_nested(&ui2->budg_mutex, UI_CHILD);
+		mutex_lock_nested(&ui1->ui_mutex, UI_PARENT);
+		mutex_lock_nested(&ui2->ui_mutex, UI_CHILD);
 	} else {
-		mutex_lock_nested(&ui2->budg_mutex, UI_PARENT);
-		mutex_lock_nested(&ui1->budg_mutex, UI_CHILD);
+		mutex_lock_nested(&ui2->ui_mutex, UI_PARENT);
+		mutex_lock_nested(&ui1->ui_mutex, UI_CHILD);
 	}
 }
 
@@ -743,9 +743,9 @@ static void lock_two_inodes(struct ubifs_inode *ui1, struct ubifs_inode *ui2)
  */
 static void unlock_two_inodes(struct ubifs_inode *ui1, struct ubifs_inode *ui2)
 {
-	mutex_unlock(&ui1->budg_mutex);
+	mutex_unlock(&ui1->ui_mutex);
 	if (ui1 != ui2)
-		mutex_unlock(&ui2->budg_mutex);
+		mutex_unlock(&ui2->ui_mutex);
 }
 
 /**
@@ -838,7 +838,7 @@ void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
 
 	ubifs_assert(req->dd_growth >= 0);
 	ubifs_release_budget(c, req);
-	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+	mutex_unlock(&ubifs_inode(inode)->ui_mutex);
 }
 
 /**
@@ -862,7 +862,7 @@ void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
 	ubifs_assert(req->dd_growth >= 0);
 
 	ubifs_release_budget(c, req);
-	mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+	mutex_unlock(&ubifs_inode(inode)->ui_mutex);
 }
 
 /**
@@ -923,7 +923,7 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 		 */
 		atomic_long_dec(&c->dirty_ino_cnt);
 	}
-	mutex_unlock(&ui->budg_mutex);
+	mutex_unlock(&ui->ui_mutex);
 }
 
 /**

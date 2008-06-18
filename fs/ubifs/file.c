@@ -220,7 +220,7 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		 *
 		 * Note, if the inode is already dirty,
 		 * 'ubifs_budget_inode_op()' will not allocate any budget,
-		 * but will just lock the @budg_mutex of the inode to prevent
+		 * but will just lock the @ui_mutex of the inode to prevent
 		 * it from becoming clean before we have changed its size,
 		 * which is going to happen in 'ubifs_write_end()'.
 		 */
@@ -331,7 +331,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 
 		if (pos + len > i_size)
 			/* See a comment below about this hacky unlock */
-			mutex_unlock(&ui->budg_mutex);
+			mutex_unlock(&ui->ui_mutex);
 
 		copied = do_readpage(page);
 
@@ -367,7 +367,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 * 'ubifs_write_inode()', so just unlock the inode here for
 		 * optimization.
 		 */
-		mutex_unlock(&ui->budg_mutex);
+		mutex_unlock(&ui->ui_mutex);
 	}
 
 out:
@@ -597,13 +597,13 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	 * budget only if the inode is not dirty (otherwise it has already
 	 * budgeted). However, we cannot use this function because it may
 	 * deadlock with 'ubifs_writepage()'. Indeed, it would take the
-	 * @ui->budg_mutex, then we would call 'vmtruncate()' which invokes
+	 * @ui->ui_mutex, then we would call 'vmtruncate()' which invokes
 	 * 'truncate_inode_pages_range()' which invalidates all truncated pages
 	 * and locks them (using 'TestSetPageLocked()'). At the same time,
 	 * write-back may be working and holding page lock, and then trying to
 	 * write the inode (see 'ubifs_writepage()' for explanation why) which
-	 * needs @ui->budg_mutex. So truncation and write-back would take page
-	 * lock and @ui->budg_mutex in reverse order and deadlock.
+	 * needs @ui->ui_mutex. So truncation and write-back would take page
+	 * lock and @ui->ui_mutex in reverse order and deadlock.
 	 */
 	req.dirtied_ino = 1;
 	/* A funny way to budget for truncation node */
@@ -665,7 +665,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	 * 'ubifs_trunc()' has flushed the inode, so we should mark it as clean
 	 * and release its budget if it is dirty.
 	 */
-	mutex_lock(&ui->budg_mutex);
+	mutex_lock(&ui->ui_mutex);
 	if (ui->dirty) {
 		memset(&req, 0, sizeof(struct ubifs_budget_req));
 		req.dd_growth = c->inode_budget;
@@ -676,7 +676,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 		ui->dirty = 0;
 		atomic_long_dec(&c->dirty_ino_cnt);
 	}
-	mutex_unlock(&ui->budg_mutex);
+	mutex_unlock(&ui->ui_mutex);
 
 	return err;
 
@@ -848,7 +848,7 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 
 		inode->i_mtime = inode->i_ctime = now;
 		mark_inode_dirty_sync(inode);
-		mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+		mutex_unlock(&ubifs_inode(inode)->ui_mutex);
 	}
 
 	return 0;
@@ -1008,7 +1008,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 	if (update_time) {
 		inode->i_mtime = inode->i_ctime = now;
 		mark_inode_dirty_sync(inode);
-		mutex_unlock(&ubifs_inode(inode)->budg_mutex);
+		mutex_unlock(&ubifs_inode(inode)->ui_mutex);
 	}
 
 	unlock_page(page);
