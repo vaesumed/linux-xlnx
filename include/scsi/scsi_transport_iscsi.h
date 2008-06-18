@@ -208,7 +208,7 @@ struct iscsi_host {
 	atomic_t nr_scans;
 	struct mutex mutex;
 	struct workqueue_struct *scan_workq;
-	char scan_workq_name[KOBJ_NAME_LEN];
+	char scan_workq_name[20];
 };
 
 /*
