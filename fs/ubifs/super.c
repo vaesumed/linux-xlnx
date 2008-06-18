@@ -289,10 +289,9 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	/*
 	 * Due to races between write-back forced by budgeting
 	 * (see 'sync_some_inodes()') and pdflush write-back, the inode may
-	 * have already been synchronized, do not do this again.
-	 *
-	 * This might also happen if it was synchronized in e.g. ubifs_link()',
-	 * etc.
+	 * have already been synchronized, do not do this again. This might
+	 * also happen if it was synchronized in an VFS operation, e.g.
+	 * 'ubifs_link()'.
 	 */
 	if (!ui->dirty) {
 		mutex_unlock(&ui->ui_mutex);
