@@ -317,12 +317,10 @@ static int layout_leb_in_gaps(struct ubifs_info *c, int *p)
 				  0, 0, 0);
 	if (err)
 		return err;
-	err = ubi_leb_change(c->ubi, lnum, c->ileb_buf, c->ileb_len,
-			     UBI_SHORTTERM);
-	if (err) {
-		ubifs_err("ubi_leb_change failed, error %d", err);
+	err = ubifs_leb_change(c, lnum, c->ileb_buf, c->ileb_len,
+			       UBI_SHORTTERM);
+	if (err)
 		return err;
-	}
 	dbg_gc("LEB %d wrote %d index nodes", lnum, tot_written);
 	return tot_written;
 }

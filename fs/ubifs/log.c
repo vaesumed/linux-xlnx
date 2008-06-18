@@ -223,6 +223,12 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 	}
 
 	mutex_lock(&c->log_mutex);
+
+	if (c->ro_media) {
+		err = -EROFS;
+		goto out_unlock;
+	}
+
 	/* Make sure we have enough space in the log */
 	if (empty_log_bytes(c) - c->ref_node_alsz < c->min_log_bytes) {
 		dbg_log("not enough log space - %lld, required %d",
@@ -299,9 +305,10 @@ int ubifs_add_bud_to_log(struct ubifs_info *c, int jhead, int lnum, int offs)
 		c->lhead_lnum, c->lhead_offs);
 	err = ubifs_write_node(c, ref, UBIFS_REF_NODE_SZ, c->lhead_lnum,
 			       c->lhead_offs, UBI_SHORTTERM);
-	c->lhead_offs += c->ref_node_alsz;
 	if (err)
 		goto out_unlock;
+
+	c->lhead_offs += c->ref_node_alsz;
 
 	ubifs_add_bud(c, bud);
 
@@ -650,7 +657,7 @@ static int add_node(struct ubifs_info *c, void *buf, int *lnum, int *offs,
 		int sz = ALIGN(*offs, c->min_io_size), err;
 
 		ubifs_pad(c, buf + *offs, sz - *offs);
-		err = ubi_leb_change(c->ubi, *lnum, buf, sz, UBI_SHORTTERM);
+		err = ubifs_leb_change(c, *lnum, buf, sz, UBI_SHORTTERM);
 		if (err)
 			return err;
 		*lnum = next_log_lnum(c, *lnum);
@@ -729,8 +736,7 @@ int ubifs_consolidate_log(struct ubifs_info *c)
 		int sz = ALIGN(offs, c->min_io_size);
 
 		ubifs_pad(c, buf + offs, sz - offs);
-		err = ubi_leb_change(c->ubi, write_lnum, buf, sz,
-				     UBI_SHORTTERM);
+		err = ubifs_leb_change(c, write_lnum, buf, sz, UBI_SHORTTERM);
 		if (err)
 			goto out_free;
 		offs = ALIGN(offs, c->min_io_size);
