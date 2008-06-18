@@ -448,21 +448,18 @@ static int get_dent_type(int mode)
  * @inode: inode to pack
  * @last: indicates the last node of the group
  * @last_reference: non-zero if this is a deletion inode
- *
- * Because we write all inodes to the base head and we hold the base head mutex,
- * this function will not be called simultaneously with the same inode number.
  */
 static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 		       const struct inode *inode, int last, int last_reference)
 {
 	int data_len = 0;
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	__u64 size = cpu_to_le64(i_size_read(inode));
+	loff_t size = i_size_read(inode);
 
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
 	ino->creat_sqnum = cpu_to_le64(ui->creat_sqnum);
-	ino->size = size;
+	ino->size = cpu_to_le64(size);
 	ino->nlink = cpu_to_le32(inode->i_nlink);
 	ino->atime_sec  = cpu_to_le64(inode->i_atime.tv_sec);
 	ino->atime_nsec = cpu_to_le32(inode->i_atime.tv_nsec);
@@ -470,10 +467,10 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->ctime_nsec = cpu_to_le32(inode->i_ctime.tv_nsec);
 	ino->mtime_sec  = cpu_to_le64(inode->i_mtime.tv_sec);
 	ino->mtime_nsec = cpu_to_le32(inode->i_mtime.tv_nsec);
-	ino->uid   = cpu_to_le32(inode->i_uid);
-	ino->gid   = cpu_to_le32(inode->i_gid);
-	ino->mode  = cpu_to_le32(inode->i_mode);
-	ino->flags = cpu_to_le32(ui->flags);
+	ino->uid    = cpu_to_le32(inode->i_uid);
+	ino->gid    = cpu_to_le32(inode->i_gid);
+	ino->mode   = cpu_to_le32(inode->i_mode);
+	ino->flags  = cpu_to_le32(ui->flags);
 	ino->compr_type  = cpu_to_le16(ui->compr_type);
 	ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
 	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
