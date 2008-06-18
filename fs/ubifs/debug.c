@@ -1488,7 +1488,7 @@ struct fsck_inode {
 	struct rb_node rb;
 	ino_t inum;
 	umode_t mode;
-	int nlink;
+	unsigned int nlink;
 	int xattr_cnt;
 	int references;
 	int calc_cnt;
