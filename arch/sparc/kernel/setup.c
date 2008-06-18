@@ -67,7 +67,7 @@ struct screen_info screen_info = {
 extern unsigned long trapbase;
 
 /* Pretty sick eh? */
-void prom_sync_me(void)
+static void prom_sync_me(void)
 {
 	unsigned long prom_tbr, flags;
 
@@ -97,7 +97,7 @@ void prom_sync_me(void)
 	return;
 }
 
-unsigned int boot_flags __initdata = 0;
+static unsigned int boot_flags __initdata = 0;
 #define BOOTME_DEBUG  0x1
 
 /* Exported for mm/init.c:paging_init. */
@@ -224,12 +224,6 @@ void __init setup_arch(char **cmdline_p)
 	if(!strcmp(&cputypval,"sun4e")) { sparc_cpu_model=sun4e; }
 	if(!strcmp(&cputypval,"sun4u")) { sparc_cpu_model=sun4u; }
 
-#ifdef CONFIG_SUN4
-	if (sparc_cpu_model != sun4) {
-		prom_printf("This kernel is for Sun4 architecture only.\n");
-		prom_halt();
-	}
-#endif
 	printk("ARCH: ");
 	switch(sparc_cpu_model) {
 	case sun4:

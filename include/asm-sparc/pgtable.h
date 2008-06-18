@@ -8,23 +8,19 @@
  *  Copyright (C) 1998 Jakub Jelinek (jj@sunsite.mff.cuni.cz)
  */
 
+#ifndef __ASSEMBLY__
 #include <asm-generic/4level-fixup.h>
 
 #include <linux/spinlock.h>
 #include <linux/swap.h>
 #include <asm/types.h>
-#ifdef CONFIG_SUN4
-#include <asm/pgtsun4.h>
-#else
 #include <asm/pgtsun4c.h>
-#endif
 #include <asm/pgtsrmmu.h>
 #include <asm/vac-ops.h>
 #include <asm/oplib.h>
 #include <asm/btfixup.h>
 #include <asm/system.h>
 
-#ifndef __ASSEMBLY__
 
 struct vm_area_struct;
 struct page;
@@ -463,6 +459,11 @@ extern int io_remap_pfn_range(struct vm_area_struct *vma,
 #include <asm-generic/pgtable.h>
 
 #endif /* !(__ASSEMBLY__) */
+
+#define VMALLOC_START           0xfe600000
+/* XXX Alter this when I get around to fixing sun4c - Anton */
+#define VMALLOC_END             0xffc00000
+
 
 /* We provide our own get_unmapped_area to cope with VA holes for userland */
 #define HAVE_ARCH_UNMAPPED_AREA

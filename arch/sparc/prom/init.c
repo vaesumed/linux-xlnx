@@ -34,10 +34,6 @@ extern void prom_ranges_init(void);
 
 void __init prom_init(struct linux_romvec *rp)
 {
-#ifdef CONFIG_SUN4
-	extern struct linux_romvec *sun4_prom_init(void);
-	rp = sun4_prom_init();
-#endif
 	romvec = rp;
 
 	switch(romvec->pv_romvers) {
@@ -49,9 +45,6 @@ void __init prom_init(struct linux_romvec *rp)
 		break;
 	case 3:
 		prom_vers = PROM_V3;
-		break;
-	case 40:
-		prom_vers = PROM_SUN4;
 		break;
 	default:
 		prom_printf("PROMLIB: Bad PROM version %d\n",
@@ -76,11 +69,8 @@ void __init prom_init(struct linux_romvec *rp)
 
 	prom_ranges_init();
 
-#ifndef CONFIG_SUN4
-	/* SUN4 prints this in sun4_prom_init */
 	printk("PROMLIB: Sun Boot Prom Version %d Revision %d\n",
 	       romvec->pv_romvers, prom_rev);
-#endif
 
 	/* Initialization successful. */
 	return;

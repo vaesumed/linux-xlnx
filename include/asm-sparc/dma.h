@@ -86,13 +86,10 @@ struct sbus_dma {
 extern struct sbus_dma *dma_chain;
 
 /* Broken hardware... */
-#ifdef CONFIG_SUN4
 /* Have to sort this out. Does rev0 work fine on sun4[cmd] without isbroken?
  * Or is rev0 present only on sun4 boxes? -jj */
-#define DMA_ISBROKEN(dma)    ((dma)->revision == dvmarev0 || (dma)->revision == dvmarev1)
-#else
 #define DMA_ISBROKEN(dma)    ((dma)->revision == dvmarev1)
-#endif
+
 #define DMA_ISESC1(dma)      ((dma)->revision == dvmaesc1)
 
 /* Main routines in dma.c */
