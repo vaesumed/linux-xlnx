@@ -72,7 +72,7 @@
 /* Full namespace pathname length limit - arbitrary */
 #define ACPI_PATHNAME_MAX              256
 
-#else				/* !__KERNEL__ */
+#else /* !__KERNEL__ */
 
 #include <stdarg.h>
 #include <string.h>
@@ -96,7 +96,7 @@
 #endif
 
 #define ACPI_FLUSH_CPU_CACHE()
-#endif				/* __KERNEL__ */
+#endif /* __KERNEL__ */
 
 /* Linux uses GCC */
 
@@ -122,6 +122,7 @@ static inline void *acpi_os_allocate(acpi_size size)
 {
 	return kmalloc(size, irqs_disabled()? GFP_ATOMIC : GFP_KERNEL);
 }
+
 static inline void *acpi_os_allocate_zeroed(acpi_size size)
 {
 	return kzalloc(size, irqs_disabled()? GFP_ATOMIC : GFP_KERNEL);
@@ -137,4 +138,4 @@ static inline void *acpi_os_acquire_object(acpi_cache_t * cache)
 #define ACPI_ALLOCATE_ZEROED(a)	acpi_os_allocate_zeroed(a)
 #define ACPI_FREE(a)		kfree(a)
 
-#endif				/* __ACLINUX_H__ */
+#endif /* __ACLINUX_H__ */

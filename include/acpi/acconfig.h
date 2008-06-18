@@ -63,7 +63,7 @@
 
 /* Current ACPICA subsystem version in YYYYMMDD format */
 
-#define ACPI_CA_VERSION                 0x20080321
+#define ACPI_CA_VERSION                 0x20080609
 
 /*
  * OS name, used for the _OS object.  The _OS object is essentially obsolete,
@@ -214,4 +214,4 @@
 #define ACPI_DEBUGGER_COMMAND_PROMPT    '-'
 #define ACPI_DEBUGGER_EXECUTE_PROMPT    '%'
 
-#endif				/* _ACCONFIG_H */
+#endif /* _ACCONFIG_H */
