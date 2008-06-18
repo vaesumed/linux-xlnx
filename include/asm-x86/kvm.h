@@ -1,5 +1,5 @@
-#ifndef __LINUX_KVM_X86_H
-#define __LINUX_KVM_X86_H
+#ifndef ASM_X86__KVM_H
+#define ASM_X86__KVM_H
 
 /*
  * KVM x86 specific structures and definitions
@@ -229,4 +229,4 @@ struct kvm_pit_state {
 #define KVM_TRC_LMSW             (KVM_TRC_HANDLER + 0x13)
 #define KVM_TRC_APIC_ACCESS      (KVM_TRC_HANDLER + 0x14)
 
-#endif
+#endif /* ASM_X86__KVM_H */

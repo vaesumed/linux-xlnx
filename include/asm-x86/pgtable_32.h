@@ -1,5 +1,5 @@
-#ifndef _I386_PGTABLE_H
-#define _I386_PGTABLE_H
+#ifndef ASM_X86__PGTABLE_32_H
+#define ASM_X86__PGTABLE_32_H
 
 
 /*
@@ -201,4 +201,4 @@ static inline void __init paravirt_pagetable_setup_done(pgd_t *base)
 #define io_remap_pfn_range(vma, vaddr, pfn, size, prot)	\
 	remap_pfn_range(vma, vaddr, pfn, size, prot)
 
-#endif /* _I386_PGTABLE_H */
+#endif /* ASM_X86__PGTABLE_32_H */
