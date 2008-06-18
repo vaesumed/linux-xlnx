@@ -2254,11 +2254,19 @@ config VIA_VELOCITY
 config TIGON3
 	tristate "Broadcom Tigon3 support"
 	depends on PCI
+	select FW_LOADER
 	help
 	  This driver supports Broadcom Tigon3 based gigabit Ethernet cards.
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called tg3.  This is recommended.
+
+config TIGON3_FIRMWARE
+	bool "Include firmware for Broadcom Tigon3"
+	depends on TIGON3
+	---help---
+	  This includes firmware for Broadcom Tigon3 based gigabit Ethernet.
+	  Say 'N' and let it get loaded from userspace on demand.
 
 config BNX2
 	tristate "Broadcom NetXtremeII support"

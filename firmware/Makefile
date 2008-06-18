@@ -22,6 +22,8 @@ fw-shipped-$(CONFIG_E100_FIRMWARE) += e100/d101m_ucode.bin \
 		e100/d101s_ucode.bin e100/d102e_ucode.bin
 fw-shipped-$(CONFIG_ACENIC_TG1_FIRMWARE) += acenic/tg1.bin
 fw-shipped-$(CONFIG_ACENIC_TG2_FIRMWARE) += acenic/tg2.bin
+fw-shipped-$(CONFIG_TIGON3_FIRMWARE) += tigon/tg3.bin tigon/tg3_tso.bin \
+		tigon/tg3_tso5.bin
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_MPR) += keyspan/mpr.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA18X) += keyspan/usa18x.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_USA19) += keyspan/usa19.fw
