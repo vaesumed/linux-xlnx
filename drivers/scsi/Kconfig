@@ -1741,7 +1741,7 @@ config SCSI_SUNESP
 	  chipset is present in most SPARC SBUS-based computers.
 
 	  To compile this driver as a module, choose M here: the
-	  module will be called esp.
+	  module will be called sun_esp.
 
 config ZFCP
 	tristate "FCP host bus adapter driver for IBM eServer zSeries"
