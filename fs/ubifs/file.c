@@ -537,7 +537,7 @@ out_unlock:
  * @inode: inode to change attributes for
  * @attr: describes attributes to change
  */
-static void do_attr_changes(struct inode *inode, struct iattr *attr)
+static void do_attr_changes(struct inode *inode, const struct iattr *attr)
 {
 	if (attr->ia_valid & ATTR_UID)
 		inode->i_uid = attr->ia_uid;
@@ -561,164 +561,190 @@ static void do_attr_changes(struct inode *inode, struct iattr *attr)
 	}
 }
 
-static int do_truncation(struct inode *inode, loff_t new_size)
+/**
+ * do_truncation - trucate an inode.
+ * @c: UBIFS file-system description object
+ * @inode: inode to truncate
+ * @attr: inode attribute changes description
+ *
+ * This function implementes VFS '->setattr()' call when the inode is truncated
+ * to a smaller size. Returns zero in case of success and a negative error code
+ * in case of failure.
+ */
+static int do_truncation(struct ubifs_info *c, struct inode *inode,
+			 const struct iattr *attr)
 {
-	loff_t old_size;
 	int err;
+	struct ubifs_budget_req req;
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	loff_t old_size = inode->i_size, new_size = attr->ia_size;
+	int offset = new_size & (UBIFS_BLOCK_SIZE - 1);
 
-	dbg_gen("ino %lu, size %lld -> %lld",
-		inode->i_ino, inode->i_size, new_size);
-	old_size = inode->i_size;
+	dbg_gen("ino %lu, size %lld -> %lld", inode->i_ino, old_size, new_size);
+	memset(&req, 0, sizeof(struct ubifs_budget_req));
 
-	err = vmtruncate(inode, new_size);
+	/*
+	 * If this is truncation to a smaller size, and we do not truncate on a
+	 * block boundary, budget for changing one data block, because the last
+	 * block will be re-written.
+	 */
+	if (new_size & (UBIFS_BLOCK_SIZE - 1))
+		req.dirtied_page = 1;
+
+	/*
+	 * Truncation operation writes the inode, so we have to budget for it.
+	 * Normally, we would use 'ubifs_budget_inode_op()' which acquires
+	 * budget only if the inode is not dirty (otherwise it has already
+	 * budgeted). However, we cannot use this function because it may
+	 * deadlock with 'ubifs_writepage()'. Indeed, it would take the
+	 * @ui->budg_mutex, then we would call 'vmtruncate()' which invokes
+	 * 'truncate_inode_pages_range()' which invalidates all truncated pages
+	 * and locks them (using 'TestSetPageLocked()'). At the same time,
+	 * write-back may be working and holding page lock, and then trying to
+	 * write the inode (see 'ubifs_writepage()' for explanation why) which
+	 * needs @ui->budg_mutex. So truncation and write-back would take page
+	 * lock and @ui->budg_mutex in reverse order and deadlock.
+	 */
+	req.dirtied_ino = 1;
+	/* A funny way to budget for truncation node */
+	req.dirtied_ino_d = UBIFS_TRUN_NODE_SZ;
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
-	if (new_size < old_size) {
-		struct ubifs_info *c = inode->i_sb->s_fs_info;
-		int offset = new_size & (UBIFS_BLOCK_SIZE - 1);
+	/* Truncation changes inode [mc]time */
+	inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
+	/* The other attributes may be changed at the same time as well */
+	do_attr_changes(inode, attr);
 
-		if (offset) {
-			pgoff_t index = new_size >> PAGE_CACHE_SHIFT;
-			struct page *page;
+	err = vmtruncate(inode, new_size);
+	if (err)
+		goto out_budg;
 
-			page = find_lock_page(inode->i_mapping, index);
-			if (page) {
-				if (PageDirty(page)) {
-					ubifs_assert(PagePrivate(page));
+	if (offset) {
+		pgoff_t index = new_size >> PAGE_CACHE_SHIFT;
+		struct page *page;
 
-					clear_page_dirty_for_io(page);
-					if (UBIFS_BLOCKS_PER_PAGE_SHIFT)
-						offset = new_size &
-							 (PAGE_CACHE_SIZE - 1);
-					err = do_writepage(page, offset);
-					page_cache_release(page);
-					if (err)
-						return err;
-					/*
-					 * We could now tell ubifs_jnl_truncate
-					 * not to read the last block.
-					 */
-				} else {
-					/*
-					 * We could 'kmap()' the page and
-					 * pass the data to ubifs_jnl_truncate
-					 * to save it from having to read it.
-					 */
-					unlock_page(page);
-					page_cache_release(page);
-				}
+		page = find_lock_page(inode->i_mapping, index);
+		if (page) {
+			if (PageDirty(page)) {
+				ubifs_assert(PagePrivate(page));
+
+				clear_page_dirty_for_io(page);
+				if (UBIFS_BLOCKS_PER_PAGE_SHIFT)
+					offset = new_size &
+						 (PAGE_CACHE_SIZE - 1);
+				err = do_writepage(page, offset);
+				page_cache_release(page);
+				if (err)
+					goto out_budg;
+				/*
+				 * We could now tell 'ubifs_jnl_truncate()' not
+				 * to read the last block.
+				 */
+			} else {
+				/*
+				 * We could 'kmap()' the page and pass the data
+				 * to 'ubifs_jnl_truncate()' to save it from
+				 * having to read it.
+				 */
+				unlock_page(page);
+				page_cache_release(page);
 			}
 		}
-		err = ubifs_jnl_truncate(c, inode, old_size, new_size);
-		if (err)
-			return err;
 	}
 
-	return 0;
+	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
+	if (err)
+		goto out_budg;
+
+	/* Release the budget we allocated */
+	ubifs_release_budget(c, &req);
+
+	/*
+	 * 'ubifs_trunc()' has flushed the inode, so we should mark it as clean
+	 * and release its budget if it is dirty.
+	 */
+	mutex_lock(&ui->budg_mutex);
+	if (ui->dirty) {
+		memset(&req, 0, sizeof(struct ubifs_budget_req));
+		req.dd_growth = c->inode_budget;
+		req.dirtied_ino_d = ui->data_len;
+		ubifs_release_budget(c, &req);
+
+		UBIFS_DBG(ui->budgeted = 0);
+		ui->dirty = 0;
+		atomic_long_dec(&c->dirty_ino_cnt);
+	}
+	mutex_unlock(&ui->budg_mutex);
+
+	return err;
+
+out_budg:
+	ubifs_release_budget(c, &req);
+	return err;
+}
+
+/**
+ * do_setattr - change inode attributes.
+ * @c: UBIFS file-system description object
+ * @inode: inode to change attributes for
+ * @attr: inode attribute changes description
+ *
+ * This function implementes VFS '->setattr()' call for all cases except
+ * truncations to smaller size. Returns zero in case of success and a negative
+ * error code in case of failure.
+ */
+static int do_setattr(struct ubifs_info *c, struct inode *inode,
+		      const struct iattr *attr)
+{
+	int err;
+	struct ubifs_budget_req req;
+	loff_t old_size = inode->i_size, new_size = attr->ia_size;
+
+	memset(&req, 0, sizeof(struct ubifs_budget_req));
+	err = ubifs_budget_inode_op(c, inode, &req);
+	if (err)
+		return err;
+
+	if (attr->ia_valid & ATTR_SIZE) {
+		dbg_gen("size %lld -> %lld", old_size, new_size);
+		/* Truncation changes inode [mc]time */
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
+		err = vmtruncate(inode, new_size);
+		if (err)
+			goto out_budg;
+	}
+
+	do_attr_changes(inode, attr);
+	mark_inode_dirty_sync(inode);
+	ubifs_release_ino_dirty(c, inode, &req);
+	if (IS_SYNC(inode))
+		err = write_inode_now(inode, 1);
+
+	return err;
+
+out_budg:
+	ubifs_cancel_ino_op(c, inode, &req);
+	return err;
 }
 
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 {
+	int err;
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	struct ubifs_budget_req req;
-	int truncation, err = 0, writing_inode_now = 0;
 
 	dbg_gen("ino %lu, ia_valid %#x", inode->i_ino, attr->ia_valid);
 	err = inode_change_ok(inode, attr);
 	if (err)
 		return err;
 
-	memset(&req, 0, sizeof(struct ubifs_budget_req));
-
-	if ((attr->ia_valid & ATTR_SIZE) && attr->ia_size != inode->i_size)
-		truncation = 1;
-
-	if (truncation) {
-		if (attr->ia_size < inode->i_size) {
-			/*
-			 * If this is truncation to a smaller size, and we do
-			 * not truncate on a block boundary, budget for changing
-			 * one data block, because the last block will be
-			 * re-written.
-			 */
-			if (attr->ia_size & (UBIFS_BLOCK_SIZE - 1))
-				req.dirtied_page = 1;
-			/*
-			 * Truncation operation writes the inode, so we have to
-			 * budget for it. Normally, we would use
-			 * 'ubifs_budget_inode_op()' which acquires budget only
-			 * if the inode is not dirty (otherwise it has already
-			 * budgeted). However, we cannot use this function
-			 * because it may deadlock with 'ubifs_writepage()'.
-			 * Indeed, it would take the @ui->budg_mutex, then we
-			 * would call 'vmtruncate()' which invokes
-			 * 'truncate_inode_pages_range()' which invalidates all
-			 * truncated pages and locks them (using
-			 * 'TestSetPageLocked()'). At the same time, write-back
-			 * may be working and holding page lock, and then trying
-			 * to write the inode (see 'ubifs_writepage()' for
-			 * explanation why) which needs @ui->budg_mutex. So
-			 * truncation and write-back would take page lock and
-			 * @ui->budg_mutex in reverse order and deadlock.
-			 */
-			writing_inode_now = 1;
-			req.dirtied_ino = 1;
-			/* A funny way to budget for truncation node */
-			req.dirtied_ino_d = UBIFS_TRUN_NODE_SZ;
-			err = ubifs_budget_space(c, &req);
-			if (err)
-				return err;
-		}
-		/* Truncation changes inode time */
-		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
-	}
-
-	if (!writing_inode_now) {
-		err = ubifs_budget_inode_op(c, inode, &req);
-		if (err)
-			return err;
-	}
-
-	do_attr_changes(inode, attr);
-
-	if (truncation) {
-		err = do_truncation(inode, attr->ia_size);
-		if (err) {
-			ubifs_release_budget(c, &req);
-			return err;
-		}
-	}
-
-	if (writing_inode_now) {
-		struct ubifs_inode *ui = ubifs_inode(inode);
-
-		/* Release the budget we allocated */
-		ubifs_release_budget(c, &req);
-
-		/*
-		 * 'ubifs_trunc()' has flushed the inode, so we should mark it
-		 * as clean and release its budget if it is dirty.
-		 */
-		mutex_lock(&ui->budg_mutex);
-		if (ui->dirty) {
-			memset(&req, 0, sizeof(struct ubifs_budget_req));
-			req.dd_growth = c->inode_budget;
-			req.dirtied_ino_d = ui->data_len;
-			ubifs_release_budget(c, &req);
-
-			UBIFS_DBG(ui->budgeted = 0);
-			ui->dirty = 0;
-			atomic_long_dec(&c->dirty_ino_cnt);
-		}
-		mutex_unlock(&ui->budg_mutex);
-	} else {
-		mark_inode_dirty_sync(inode);
-		ubifs_release_ino_dirty(c, inode, &req);
-		if (IS_SYNC(inode))
-			err = write_inode_now(inode, 1);
-	}
+	if ((attr->ia_valid & ATTR_SIZE) && attr->ia_size < inode->i_size)
+		/* Truncation to a smaller size */
+		err = do_truncation(c, inode, attr);
+	else
+		err = do_setattr(c, inode, attr);
 
 	return err;
 }
