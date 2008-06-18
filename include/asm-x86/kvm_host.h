@@ -8,8 +8,8 @@
  *
  */
 
-#ifndef ASM_KVM_HOST_H
-#define ASM_KVM_HOST_H
+#ifndef ASM_X86__KVM_HOST_H
+#define ASM_X86__KVM_HOST_H
 
 #include <linux/types.h>
 #include <linux/mm.h>
@@ -691,4 +691,4 @@ enum {
 	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
 						vcpu, 0, 0, 0, 0, 0, 0)
 
-#endif
+#endif /* ASM_X86__KVM_HOST_H */
