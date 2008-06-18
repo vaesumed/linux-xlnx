@@ -756,14 +756,14 @@ struct ubifs_compressor {
 /**
  * struct ubifs_budget_req - budget requirements of an operation.
  *
- * @new_ino: non-zero if the operation adds a new inode
- * @dirtied_ino: how many inodes the operation makes dirty
  * @new_page: non-zero if the operation adds a new page
  * @dirtied_page: non-zero if the operation makes a page dirty
  * @new_dent: non-zero if the operation adds a new directory entry
  * @mod_dent: non-zero if the operation removes or modifies an existing
  *            directory entry
+ * @new_ino: non-zero if the operation adds a new inode
  * @new_ino_d: now much data newly created inode contains
+ * @dirtied_ino: how many inodes the operation makes dirty
  * @dirtied_ino_d: now much data dirtied inode contains
  * @idx_growth: how much the index will supposedly grow
  * @data_growth: how much new data the operation will supposedly add
@@ -780,14 +780,20 @@ struct ubifs_compressor {
  * dirty by the re-name operation.
  */
 struct ubifs_budget_req {
-	unsigned int new_ino:1;
-	unsigned int dirtied_ino:4;
 	unsigned int new_page:1;
 	unsigned int dirtied_page:1;
 	unsigned int new_dent:1;
 	unsigned int mod_dent:1;
+	unsigned int new_ino:1;
 	unsigned int new_ino_d:13;
+#ifndef UBIFS_DEBUG
+	unsigned int dirtied_ino:4;
 	unsigned int dirtied_ino_d:15;
+#else
+	/* Not bit-fileds to check for overflows */
+	unsigned int dirtied_ino;
+	unsigned int dirtied_ino_d;
+#endif
 	int idx_growth;
 	int data_growth;
 	int dd_growth;
