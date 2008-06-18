@@ -532,7 +532,36 @@ out_unlock:
 	return err;
 }
 
-static int ubifs_trunc(struct inode *inode, loff_t new_size)
+/**
+ * do_attr_changes - change inode attributes.
+ * @inode: inode to change attributes for
+ * @attr: describes attributes to change
+ */
+static void do_attr_changes(struct inode *inode, struct iattr *attr)
+{
+	if (attr->ia_valid & ATTR_UID)
+		inode->i_uid = attr->ia_uid;
+	if (attr->ia_valid & ATTR_GID)
+		inode->i_gid = attr->ia_gid;
+	if (attr->ia_valid & ATTR_ATIME)
+		inode->i_atime = timespec_trunc(attr->ia_atime,
+						inode->i_sb->s_time_gran);
+	if (attr->ia_valid & ATTR_MTIME)
+		inode->i_mtime = timespec_trunc(attr->ia_mtime,
+						inode->i_sb->s_time_gran);
+	if (attr->ia_valid & ATTR_CTIME)
+		inode->i_ctime = timespec_trunc(attr->ia_ctime,
+						inode->i_sb->s_time_gran);
+	if (attr->ia_valid & ATTR_MODE) {
+		umode_t mode = attr->ia_mode;
+
+		if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+			mode &= ~S_ISGID;
+		inode->i_mode = mode;
+	}
+}
+
+static int do_truncation(struct inode *inode, loff_t new_size)
 {
 	loff_t old_size;
 	int err;
@@ -591,20 +620,21 @@ static int ubifs_trunc(struct inode *inode, loff_t new_size)
 
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 {
-	unsigned int ia_valid = attr->ia_valid;
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_budget_req req;
 	int truncation, err = 0, writing_inode_now = 0;
 
-	dbg_gen("ino %lu, ia_valid %#x", inode->i_ino, ia_valid);
+	dbg_gen("ino %lu, ia_valid %#x", inode->i_ino, attr->ia_valid);
 	err = inode_change_ok(inode, attr);
 	if (err)
 		return err;
 
 	memset(&req, 0, sizeof(struct ubifs_budget_req));
 
-	truncation = (ia_valid & ATTR_SIZE) && attr->ia_size != inode->i_size;
+	if ((attr->ia_valid & ATTR_SIZE) && attr->ia_size != inode->i_size)
+		truncation = 1;
+
 	if (truncation) {
 		if (attr->ia_size < inode->i_size) {
 			/*
@@ -651,29 +681,10 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 			return err;
 	}
 
-	if (ia_valid & ATTR_UID)
-		inode->i_uid = attr->ia_uid;
-	if (ia_valid & ATTR_GID)
-		inode->i_gid = attr->ia_gid;
-	if (ia_valid & ATTR_ATIME)
-		inode->i_atime = timespec_trunc(attr->ia_atime,
-						inode->i_sb->s_time_gran);
-	if (ia_valid & ATTR_MTIME)
-		inode->i_mtime = timespec_trunc(attr->ia_mtime,
-						inode->i_sb->s_time_gran);
-	if (ia_valid & ATTR_CTIME)
-		inode->i_ctime = timespec_trunc(attr->ia_ctime,
-						inode->i_sb->s_time_gran);
-	if (ia_valid & ATTR_MODE) {
-		umode_t mode = attr->ia_mode;
-
-		if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
-			mode &= ~S_ISGID;
-		inode->i_mode = mode;
-	}
+	do_attr_changes(inode, attr);
 
 	if (truncation) {
-		err = ubifs_trunc(inode, attr->ia_size);
+		err = do_truncation(inode, attr->ia_size);
 		if (err) {
 			ubifs_release_budget(c, &req);
 			return err;
