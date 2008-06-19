@@ -121,7 +121,7 @@ static u16 opcode_table[256] = {
 	0, 0, 0, DstReg | SrcMem32 | ModRM | Mov /* movsxd (x86/64) */ ,
 	0, 0, 0, 0,
 	/* 0x68 - 0x6F */
-	0, 0, ImplicitOps | Mov | Stack, 0,
+	SrcImm | Mov | Stack, 0, SrcImmByte | Mov | Stack, 0,
 	SrcNone  | ByteOp  | ImplicitOps, SrcNone  | ImplicitOps, /* insb, insw/insd */
 	SrcNone  | ByteOp  | ImplicitOps, SrcNone  | ImplicitOps, /* outsb, outsw/outsd */
 	/* 0x70 - 0x77 */
@@ -138,9 +138,11 @@ static u16 opcode_table[256] = {
 	/* 0x88 - 0x8F */
 	ByteOp | DstMem | SrcReg | ModRM | Mov, DstMem | SrcReg | ModRM | Mov,
 	ByteOp | DstReg | SrcMem | ModRM | Mov, DstReg | SrcMem | ModRM | Mov,
-	0, ModRM | DstReg, 0, Group | Group1A,
-	/* 0x90 - 0x9F */
-	0, 0, 0, 0, 0, 0, 0, 0,
+	DstMem | SrcReg | ModRM | Mov, ModRM | DstReg,
+	DstReg | SrcMem | ModRM | Mov, Group | Group1A,
+	/* 0x90 - 0x97 */
+	DstReg, DstReg, DstReg, DstReg,	DstReg, DstReg, DstReg, DstReg,
+	/* 0x98 - 0x9F */
 	0, 0, 0, 0, ImplicitOps | Stack, ImplicitOps | Stack, 0, 0,
 	/* 0xA0 - 0xA7 */
 	ByteOp | DstReg | SrcMem | Mov | MemAbs, DstReg | SrcMem | Mov | MemAbs,
@@ -152,7 +154,8 @@ static u16 opcode_table[256] = {
 	ByteOp | ImplicitOps | Mov | String, ImplicitOps | Mov | String,
 	ByteOp | ImplicitOps | String, ImplicitOps | String,
 	/* 0xB0 - 0xBF */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	DstReg | SrcImm | Mov, 0, 0, 0, 0, 0, 0, 0,
 	/* 0xC0 - 0xC7 */
 	ByteOp | DstMem | SrcImm | ModRM, DstMem | SrcImmByte | ModRM,
 	0, ImplicitOps | Stack, 0, 0,
@@ -168,7 +171,8 @@ static u16 opcode_table[256] = {
 	/* 0xE0 - 0xE7 */
 	0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0xE8 - 0xEF */
-	ImplicitOps | Stack, SrcImm|ImplicitOps, 0, SrcImmByte|ImplicitOps,
+	ImplicitOps | Stack, SrcImm | ImplicitOps,
+	ImplicitOps, SrcImmByte | ImplicitOps,
 	0, 0, 0, 0,
 	/* 0xF0 - 0xF7 */
 	0, 0, 0, 0,
@@ -660,7 +664,7 @@ static int decode_modrm(struct x86_emulate_ctxt *ctxt,
 {
 	struct decode_cache *c = &ctxt->decode;
 	u8 sib;
-	int index_reg = 0, base_reg = 0, scale, rip_relative = 0;
+	int index_reg = 0, base_reg = 0, scale;
 	int rc = 0;
 
 	if (c->rex_prefix) {
@@ -736,42 +740,23 @@ static int decode_modrm(struct x86_emulate_ctxt *ctxt,
 		c->modrm_ea = (u16)c->modrm_ea;
 	} else {
 		/* 32/64-bit ModR/M decode. */
-		switch (c->modrm_rm) {
-		case 4:
-		case 12:
+		if ((c->modrm_rm & 7) == 4) {
 			sib = insn_fetch(u8, 1, c->eip);
 			index_reg |= (sib >> 3) & 7;
 			base_reg |= sib & 7;
 			scale = sib >> 6;
 
-			switch (base_reg) {
-			case 5:
-				if (c->modrm_mod != 0)
-					c->modrm_ea += c->regs[base_reg];
-				else
-					c->modrm_ea +=
-						insn_fetch(s32, 4, c->eip);
-				break;
-			default:
+			if ((base_reg & 7) == 5 && c->modrm_mod == 0)
+				c->modrm_ea += insn_fetch(s32, 4, c->eip);
+			else
 				c->modrm_ea += c->regs[base_reg];
-			}
-			switch (index_reg) {
-			case 4:
-				break;
-			default:
+			if (index_reg != 4)
 				c->modrm_ea += c->regs[index_reg] << scale;
-			}
-			break;
-		case 5:
-			if (c->modrm_mod != 0)
-				c->modrm_ea += c->regs[c->modrm_rm];
-			else if (ctxt->mode == X86EMUL_MODE_PROT64)
-				rip_relative = 1;
-			break;
-		default:
+		} else if ((c->modrm_rm & 7) == 5 && c->modrm_mod == 0) {
+			if (ctxt->mode == X86EMUL_MODE_PROT64)
+				c->rip_relative = 1;
+		} else
 			c->modrm_ea += c->regs[c->modrm_rm];
-			break;
-		}
 		switch (c->modrm_mod) {
 		case 0:
 			if (c->modrm_rm == 5)
@@ -783,22 +768,6 @@ static int decode_modrm(struct x86_emulate_ctxt *ctxt,
 		case 2:
 			c->modrm_ea += insn_fetch(s32, 4, c->eip);
 			break;
-		}
-	}
-	if (rip_relative) {
-		c->modrm_ea += c->eip;
-		switch (c->d & SrcMask) {
-		case SrcImmByte:
-			c->modrm_ea += 1;
-			break;
-		case SrcImm:
-			if (c->d & ByteOp)
-				c->modrm_ea += 1;
-			else
-				if (c->op_bytes == 8)
-					c->modrm_ea += 4;
-				else
-					c->modrm_ea += c->op_bytes;
 		}
 	}
 done:
@@ -971,7 +940,7 @@ done_prefixes:
 	    c->override_base != &ctxt->gs_base)
 		c->override_base = NULL;
 
-	if (c->override_base)
+	if (c->override_base && !(!c->twobyte && c->b == 0x8d))
 		c->modrm_ea += *c->override_base;
 
 	if (c->ad_bytes != 8)
@@ -1049,6 +1018,7 @@ done_prefixes:
 		break;
 	case DstMem:
 		if ((c->d & ModRM) && c->modrm_mod == 3) {
+			c->dst.bytes = (c->d & ByteOp) ? 1 : c->op_bytes;
 			c->dst.type = OP_REG;
 			c->dst.val = c->dst.orig_val = c->modrm_val;
 			c->dst.ptr = c->modrm_ptr;
@@ -1057,6 +1027,9 @@ done_prefixes:
 		c->dst.type = OP_MEM;
 		break;
 	}
+
+	if (c->rip_relative)
+		c->modrm_ea += c->eip;
 
 done:
 	return (rc == X86EMUL_UNHANDLEABLE) ? -1 : 0;
@@ -1420,9 +1393,8 @@ special_insn:
 			goto cannot_emulate;
 		c->dst.val = (s32) c->src.val;
 		break;
+	case 0x68: /* push imm */
 	case 0x6a: /* push imm8 */
-		c->src.val = 0L;
-		c->src.val = insn_fetch(s8, 1, c->eip);
 		emulate_push(ctxt);
 		break;
 	case 0x6c:		/* insb */
@@ -1490,6 +1462,7 @@ special_insn:
 		emulate_2op_SrcV("test", c->src, c->dst, ctxt->eflags);
 		break;
 	case 0x86 ... 0x87:	/* xchg */
+	xchg:
 		/* Write back the register source. */
 		switch (c->dst.bytes) {
 		case 1:
@@ -1514,14 +1487,60 @@ special_insn:
 		break;
 	case 0x88 ... 0x8b:	/* mov */
 		goto mov;
+	case 0x8c: { /* mov r/m, sreg */
+		struct kvm_segment segreg;
+
+		if (c->modrm_reg <= 5)
+			kvm_get_segment(ctxt->vcpu, &segreg, c->modrm_reg);
+		else {
+			printk(KERN_INFO "0x8c: Invalid segreg in modrm byte 0x%02x\n",
+			       c->modrm);
+			goto cannot_emulate;
+		}
+		c->dst.val = segreg.selector;
+		break;
+	}
 	case 0x8d: /* lea r16/r32, m */
 		c->dst.val = c->modrm_ea;
 		break;
+	case 0x8e: { /* mov seg, r/m16 */
+		uint16_t sel;
+		int type_bits;
+		int err;
+
+		sel = c->src.val;
+		if (c->modrm_reg <= 5) {
+			type_bits = (c->modrm_reg == 1) ? 9 : 1;
+			err = kvm_load_segment_descriptor(ctxt->vcpu, sel,
+							  type_bits, c->modrm_reg);
+		} else {
+			printk(KERN_INFO "Invalid segreg in modrm byte 0x%02x\n",
+					c->modrm);
+			goto cannot_emulate;
+		}
+
+		if (err < 0)
+			goto cannot_emulate;
+
+		c->dst.type = OP_NONE;  /* Disable writeback. */
+		break;
+	}
 	case 0x8f:		/* pop (sole member of Grp1a) */
 		rc = emulate_grp1a(ctxt, ops);
 		if (rc != 0)
 			goto done;
 		break;
+	case 0x90: /* nop / xchg r8,rax */
+		if (!(c->rex_prefix & 1)) { /* nop */
+			c->dst.type = OP_NONE;
+			break;
+		}
+	case 0x91 ... 0x97: /* xchg reg,rax */
+		c->src.type = c->dst.type = OP_REG;
+		c->src.bytes = c->dst.bytes = c->op_bytes;
+		c->src.ptr = (unsigned long *) &c->regs[VCPU_REGS_RAX];
+		c->src.val = *(c->src.ptr);
+		goto xchg;
 	case 0x9c: /* pushf */
 		c->src.val =  (unsigned long) ctxt->eflags;
 		emulate_push(ctxt);
@@ -1622,6 +1641,8 @@ special_insn:
 	case 0xae ... 0xaf:	/* scas */
 		DPRINTF("Urk! I don't handle SCAS.\n");
 		goto cannot_emulate;
+	case 0xb8: /* mov r, imm */
+		goto mov;
 	case 0xc0 ... 0xc1:
 		emulate_grp2(ctxt);
 		break;
@@ -1660,7 +1681,33 @@ special_insn:
 		break;
 	}
 	case 0xe9: /* jmp rel */
-	case 0xeb: /* jmp rel short */
+		goto jmp;
+	case 0xea: /* jmp far */ {
+		uint32_t eip;
+		uint16_t sel;
+
+		switch (c->op_bytes) {
+		case 2:
+			eip = insn_fetch(u16, 2, c->eip);
+			break;
+		case 4:
+			eip = insn_fetch(u32, 4, c->eip);
+			break;
+		default:
+			DPRINTF("jmp far: Invalid op_bytes\n");
+			goto cannot_emulate;
+		}
+		sel = insn_fetch(u16, 2, c->eip);
+		if (kvm_load_segment_descriptor(ctxt->vcpu, sel, 9, VCPU_SREG_CS) < 0) {
+			DPRINTF("jmp far: Failed to load CS descriptor\n");
+			goto cannot_emulate;
+		}
+
+		c->eip = eip;
+		break;
+	}
+	case 0xeb:
+	      jmp:		/* jmp rel short */
 		jmp_rel(c, c->src.val);
 		c->dst.type = OP_NONE; /* Disable writeback. */
 		break;
