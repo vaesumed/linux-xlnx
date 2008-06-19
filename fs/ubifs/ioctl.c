@@ -129,12 +129,12 @@ static int setflags(struct inode *inode, int flags)
 	ubifs_set_inode_flags(inode);
 	inode->i_ctime = ubifs_current_time(inode);
 
-	mutex_lock(&ui->ui_mutex);
+	mutex_lock(&ui->wb_mutex);
 	if (ui->dirty)
 		ubifs_release_budget(c, &req);
 	else
 		mark_inode_dirty_sync(inode);
-	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&ui->wb_mutex);
 
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);

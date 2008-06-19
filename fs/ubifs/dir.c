@@ -290,13 +290,13 @@ out:
 void ubifs_clean_inode(struct ubifs_info *c, struct ubifs_inode *ui)
 {
 	ubifs_assert(mutex_is_locked(&ui->vfs_inode.i_mutex));
-	mutex_lock(&ui->ui_mutex);
+	mutex_lock(&ui->wb_mutex);
 	if (ui->dirty) {
 		ubifs_release_dirty_inode_budget(c, ui);
 		ui->dirty = 0;
 		atomic_long_dec(&c->dirty_ino_cnt);
 	}
-	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&ui->wb_mutex);
 }
 
 static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
@@ -1001,12 +1001,12 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (unlink)
 		ubifs_clean_inode(c, ubifs_inode(old_inode));
 
-	mutex_lock(&old_ui->ui_mutex);
+	mutex_lock(&old_ui->wb_mutex);
 	if (old_ui->dirty)
 		ubifs_release_budget(c, &ino_req);
 	else
 		mark_inode_dirty_sync(old_inode);
-	mutex_unlock(&old_ui->ui_mutex);
+	mutex_unlock(&old_ui->wb_mutex);
 	return 0;
 
 out_inode:
