@@ -51,14 +51,6 @@
  */
 #define NR_TO_WRITE 16
 
-/*
- * ui->ui_mutex nesting subclasses for the lock validator.
- */
-enum {
-	UI_PARENT,
-	UI_CHILD,
-};
-
 /**
  * struct retries_info - information about re-tries while making free space.
  * @prev_liability: previous liability

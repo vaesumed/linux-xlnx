@@ -243,8 +243,6 @@ out:
 	return ERR_PTR(err);
 }
 
-static struct lock_class_key ui_mutex_key;
-
 static struct inode *ubifs_alloc_inode(struct super_block *sb)
 {
 	struct ubifs_inode *ui;
@@ -256,7 +254,6 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 	memset((void *)ui + sizeof(struct inode), 0,
 	       sizeof(struct ubifs_inode) - sizeof(struct inode));
 	mutex_init(&ui->ui_mutex);
-	lockdep_set_class(&ui->ui_mutex, &ui_mutex_key);
 	spin_lock_init(&ui->size_lock);
 	return &ui->vfs_inode;
 };
