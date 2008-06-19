@@ -30,4 +30,4 @@
 					 ACPI_PDC_C_C1_FFH  | \
 					 ACPI_PDC_C_C2C3_FFH)
 
-#endif				/* __PDC_INTEL_H__ */
+#endif /* __PDC_INTEL_H__ */

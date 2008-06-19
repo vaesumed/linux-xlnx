@@ -261,8 +261,8 @@ acpi_ex_system_wait_event(union acpi_operand_object *time_desc,
 	if (obj_desc) {
 		status =
 		    acpi_ex_system_wait_semaphore(obj_desc->event.os_semaphore,
-						  (u16) time_desc->integer.
-						  value);
+						  (u16) time_desc->
+						  integer.value);
 	}
 
 	return_ACPI_STATUS(status);
