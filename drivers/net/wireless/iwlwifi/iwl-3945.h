@@ -124,7 +124,6 @@ int iwl3945_x2_queue_used(const struct iwl3945_queue *q, int i);
 
 /* One for each TFD */
 struct iwl3945_tx_info {
-	struct ieee80211_tx_status status;
 	struct sk_buff *skb[MAX_NUM_OF_TBS];
 };
 
@@ -645,7 +644,7 @@ extern unsigned int iwl3945_hw_get_beacon_cmd(struct iwl3945_priv *priv,
 extern int iwl3945_hw_get_rx_read(struct iwl3945_priv *priv);
 extern void iwl3945_hw_build_tx_cmd_rate(struct iwl3945_priv *priv,
 				     struct iwl3945_cmd *cmd,
-				     struct ieee80211_tx_control *ctrl,
+				     struct ieee80211_tx_info *info,
 				     struct ieee80211_hdr *hdr,
 				     int sta_id, int tx_id);
 extern int iwl3945_hw_reg_send_txpower(struct iwl3945_priv *priv);
@@ -836,8 +835,6 @@ struct iwl3945_priv {
 
 	u8 mac80211_registered;
 
-	u32 notif_missed_beacons;
-
 	/* Rx'd packet timing information */
 	u32 last_beacon_time;
 	u64 last_tsf;
@@ -886,6 +883,7 @@ struct iwl3945_priv {
 	struct work_struct report_work;
 	struct work_struct request_scan;
 	struct work_struct beacon_update;
+	struct work_struct set_monitor;
 
 	struct tasklet_struct irq_tasklet;
 
@@ -922,11 +920,6 @@ static inline int is_channel_valid(const struct iwl3945_channel_info *ch_info)
 	if (ch_info == NULL)
 		return 0;
 	return (ch_info->flags & EEPROM_CHANNEL_VALID) ? 1 : 0;
-}
-
-static inline int is_channel_narrow(const struct iwl3945_channel_info *ch_info)
-{
-	return (ch_info->flags & EEPROM_CHANNEL_NARROW) ? 1 : 0;
 }
 
 static inline int is_channel_radar(const struct iwl3945_channel_info *ch_info)
