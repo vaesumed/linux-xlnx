@@ -656,6 +656,24 @@ void ubifs_convert_page_budget(struct ubifs_info *c)
 }
 
 /**
+ * ubifs_release_dirty_inode_budget - release dirty inode budget.
+ * @c: UBIFS file-system description object
+ * @ui: UBIFS inode to release the budget for
+ *
+ * This function releases budget corresponding to a dirty inode. It is usually
+ * called when after the inode has been written to the media and marked as
+ * clean.
+ */
+void ubifs_release_dirty_inode_budget(struct ubifs_info *c,
+				      struct ubifs_inode *ui)
+{
+	struct ubifs_budget_req req = {.dd_growth = c->inode_budget,
+				       .dirtied_ino_d = ui->data_len};
+
+	ubifs_release_budget(c, &req);
+}
+
+/**
  * ubifs_budget_inode_op - budget an operation on inode.
  * @c: UBIFS file-system description object
  * @inode: VFS inode which will be made dirty by the operation

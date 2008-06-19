@@ -1376,6 +1376,8 @@ int ubifs_jnl_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 /* budget.c */
 int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req);
 void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req);
+void ubifs_release_dirty_inode_budget(struct ubifs_info *c,
+				      struct ubifs_inode *ui);
 int ubifs_budget_inode_op(struct ubifs_info *c, struct inode *inode,
 			  struct ubifs_budget_req *req);
 void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
