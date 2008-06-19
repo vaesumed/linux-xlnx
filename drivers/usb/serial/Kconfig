@@ -102,6 +102,7 @@ config USB_SERIAL_CH341
 
 config USB_SERIAL_WHITEHEAT
 	tristate "USB ConnectTech WhiteHEAT Serial Driver"
+	select FW_LOADER
 	select USB_EZUSB
 	help
 	  Say Y here if you want to use a ConnectTech WhiteHEAT 4 port
@@ -109,6 +110,13 @@ config USB_SERIAL_WHITEHEAT
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called whiteheat.
+
+config USB_SERIAL_WHITEHEAT_FIRMWARE
+	bool "Firmware for USB ConnectTech WhiteHEAT Serial Driver"
+	depends on USB_SERIAL_WHITEHEAT
+	help
+	  Builds firmware into the kernel instead of loading it normally
+	  via udev. Say 'N'.
 
 config USB_SERIAL_DIGI_ACCELEPORT
 	tristate "USB Digi International AccelePort USB Serial Driver"
@@ -279,6 +287,7 @@ config USB_SERIAL_IUU
 
 config USB_SERIAL_KEYSPAN_PDA
 	tristate "USB Keyspan PDA Single Port Serial Driver"
+	select FW_LOADER
 	select USB_EZUSB
 	help
 	  Say Y here if you want to use a Keyspan PDA single port USB to
@@ -288,8 +297,16 @@ config USB_SERIAL_KEYSPAN_PDA
 	  To compile this driver as a module, choose M here: the
 	  module will be called keyspan_pda.
 
+config USB_SERIAL_KEYSPAN_PDA_FIRMWARE
+	bool "Include Keyspan PDA firmware in kernel"
+	help
+	  This option allows you to build the required firmware for the
+	  Keyspan PDA serial port into the kernel. Say 'N' and let it
+	  get loaded by udev instead.
+
 config USB_SERIAL_KEYSPAN
 	tristate "USB Keyspan USA-xxx Serial Driver"
+	select FW_LOADER
 	select USB_EZUSB
 	---help---
 	  Say Y here if you want to use Keyspan USB to serial converter
@@ -516,6 +533,7 @@ config USB_SERIAL_SIERRAWIRELESS
 
 config USB_SERIAL_TI
 	tristate "USB TI 3410/5052 Serial Driver"
+	select FW_LOADER
 	help
 	  Say Y here if you want to use the TI USB 3410 or 5052
 	  serial devices.
@@ -523,13 +541,21 @@ config USB_SERIAL_TI
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_usb_3410_5052.
 
-config USB_SERIAL_TI_FIRMWARE
-	bool "USB TI 3410/5052 Firmware"
+config USB_SERIAL_TI_3410_FIRMWARE
+	bool "Include USB TI 3410 firmware in kernel"
 	depends on USB_SERIAL_TI
 	help
-	  say Y to include the firmware into the kernel for compatibility
-	  with older setups. Say N if you have the firmware files installed
-	  in /etc/firmware.
+	  This option allows you to build the required firmware for the
+	  USB TI 3410 devices into the kernel. Say 'N' and let it
+	  get loaded by udev instead.
+
+config USB_SERIAL_TI_5052_FIRMWARE
+	bool "Include USB TI 5052 firmware in kernel"
+	depends on USB_SERIAL_TI
+	help
+	  This option allows you to build the required firmware for the
+	  USB TI 5052 devices into the kernel. Say 'N' and let it
+	  get loaded by udev instead.
 
 config USB_SERIAL_CYBERJACK
 	tristate "USB REINER SCT cyberJack pinpad/e-com chipcard reader"
@@ -545,6 +571,7 @@ config USB_SERIAL_CYBERJACK
 
 config USB_SERIAL_XIRCOM
 	tristate "USB Xircom / Entregra Single Port Serial Driver"
+	select FW_LOADER
 	select USB_EZUSB
 	help
 	  Say Y here if you want to use a Xircom or Entregra single port USB to
@@ -553,6 +580,14 @@ config USB_SERIAL_XIRCOM
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called keyspan_pda.
+
+config USB_SERIAL_XIRCOM_FIRMWARE
+	bool "Include Xircom / Entregra firmware in kernel"
+	help
+	  This option allows you to build the required firmware for the
+	  Xircom / Entregra serial port into the kernel. Say 'N' and let
+	  it get loaded by udev instead.
+
 
 config USB_SERIAL_OPTION
 	tristate "USB driver for GSM and CDMA modems"
