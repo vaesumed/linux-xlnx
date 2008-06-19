@@ -888,13 +888,13 @@ out_budg:
 	return err;
 }
 
-/* TODO: the target inode has to be marked as dirty */
 static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			struct inode *new_dir, struct dentry *new_dentry)
 {
 	struct ubifs_info *c = old_dir->i_sb->s_fs_info;
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
+	struct ubifs_inode *old_ui = ubifs_inode(old_inode);
 	int err, move = (new_dir != old_dir);
 	int is_dir = S_ISDIR(old_inode->i_mode);
 	int unlink = !!new_inode;
@@ -903,13 +903,17 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
 	struct timespec time = ubifs_current_time(old_dir);
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
-			.dirtied_ino = 4,
-			.dirtied_ino_d = ubifs_inode(old_inode)->data_len };
+					.dirtied_ino = 3 };
+	struct ubifs_budget_req ino_req = {.dirtied_ino = 1,
+					   .dirtied_ino_d = old_ui->data_len };
 
 	/*
-	 * Budget request settings: deletion direntry, new direntry, changing
-	 * the inode which is being renamed, removing the old inode, and
-	 * changing old and new parent directory inodes.
+	 * Budget request settings: deletion direntry, new direntry, removing
+	 * the old inode, and changing old and new parent directory inodes.
+	 *
+	 * However, this operation also marks the target inode as dirty and
+	 * does not write it, so we allocate budget for the target inode
+	 * separately.
 	 */
 
 	dbg_gen("dent '%.*s' ino %lu in dir ino %lu to dent '%.*s' in "
@@ -926,6 +930,11 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
+	err = ubifs_budget_space(c, &ino_req);
+	if (err) {
+		ubifs_release_budget(c, &req);
+		return err;
+	}
 
 	/*
 	 * Like most other Unix systems, set the @i_ctime for inodes on a
@@ -991,6 +1000,13 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		ubifs_clean_inode(c, ubifs_inode(new_dir));
 	if (unlink)
 		ubifs_clean_inode(c, ubifs_inode(old_inode));
+
+	mutex_lock(&old_ui->ui_mutex);
+	if (old_ui->dirty)
+		ubifs_release_budget(c, &ino_req);
+	else
+		mark_inode_dirty_sync(old_inode);
+	mutex_unlock(&old_ui->ui_mutex);
 	return 0;
 
 out_inode:
@@ -1011,6 +1027,7 @@ out_inode:
 				inc_nlink(old_dir);
 		}
 	}
+	ubifs_release_budget(c, &ino_req);
 	ubifs_release_budget(c, &req);
 	return err;
 }

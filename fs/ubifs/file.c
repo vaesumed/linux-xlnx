@@ -679,7 +679,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 
 	mutex_lock(&ui->ui_mutex);
 	if (ui->dirty)
-		ubifs_release_dirty_inode_budget(c, ui);
+		ubifs_release_budget(c, &req);
 	else
 		mark_inode_dirty_sync(inode);
 
@@ -822,7 +822,7 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 		inode->i_mtime = inode->i_ctime = now;
 		mutex_lock(&ui->ui_mutex);
 		if (ui->dirty)
-			ubifs_release_dirty_inode_budget(c, ui);
+			ubifs_release_budget(c, &req);
 		else
 			mark_inode_dirty_sync(inode);
 		mutex_unlock(&ui->ui_mutex);
