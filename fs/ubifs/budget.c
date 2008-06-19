@@ -542,6 +542,9 @@ int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req)
 	int err, idx_growth, data_growth, dd_growth;
 	struct retries_info ri;
 
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
+
 	data_growth = calc_data_growth(c, req);
 	dd_growth = calc_dd_growth(c, req);
 	if (!data_growth && !dd_growth)
@@ -604,6 +607,12 @@ make_space:
  */
 void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
 {
+	ubifs_assert(req->dirtied_ino <= 4);
+	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
+	ubifs_assert(req->idx_growth == -1 || req->idx_growth >= 0);
+	ubifs_assert(req->data_growth >= 0);
+	ubifs_assert(req->dd_growth >= 0);
+
 	if (!req->data_growth && !req->dd_growth)
 		return;
 
@@ -628,9 +637,9 @@ void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
  * @c: UBIFS file-system description object
  *
  * This function converts budget which was allocated for a new page of data to
- * the budget of changing an existing page of data. The latter is not larger
- * then the former, so this function only does simple re-calculation and does
- * not involve any write-back.
+ * the budget of changing an existing page of data. The latter is smaller then
+ * the former, so this function only does simple re-calculation and does not
+ * involve any write-back.
  */
 void ubifs_convert_page_budget(struct ubifs_info *c)
 {
@@ -672,9 +681,6 @@ int ubifs_budget_inode_op(struct ubifs_info *c, struct inode *inode,
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	int err, old = req->dirtied_ino;
-
-	ubifs_assert(req->dirtied_ino <= 3);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 3);
 
 again:
 	/*
@@ -771,9 +777,6 @@ int ubifs_budget_2inode_op(struct ubifs_info *c, struct inode *inode1,
 	struct ubifs_inode *ui2 = ubifs_inode(inode2);
 	int err, old = req->dirtied_ino;
 
-	ubifs_assert(req->dirtied_ino <= 2);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 2);
-
 again:
 	req->dirtied_ino += !ui1->dirty;
 	req->dirtied_ino += !ui2->dirty;
@@ -815,12 +818,6 @@ again:
 void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
 				struct ubifs_budget_req *req)
 {
-	ubifs_assert(req->dirtied_ino <= 4);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
-	ubifs_assert(req->idx_growth >= 0);
-	ubifs_assert(req->data_growth >= 0);
-	ubifs_assert(req->dd_growth >= 0);
-
 	if (req->dirtied_ino) {
 		req->dd_growth -= c->inode_budget;
 		req->dd_growth -= req->dirtied_ino_d;
@@ -855,12 +852,6 @@ void ubifs_release_ino_dirty(struct ubifs_info *c, struct inode *inode,
 void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
 			 struct ubifs_budget_req *req)
 {
-	ubifs_assert(req->dirtied_ino <= 4);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
-	ubifs_assert(req->idx_growth >= 0);
-	ubifs_assert(req->data_growth >= 0);
-	ubifs_assert(req->dd_growth >= 0);
-
 	ubifs_release_budget(c, req);
 	mutex_unlock(&ubifs_inode(inode)->ui_mutex);
 }
@@ -878,12 +869,6 @@ void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
 void ubifs_cancel_2ino_op(struct ubifs_info *c, struct inode *inode1,
 			  struct inode *inode2, struct ubifs_budget_req *req)
 {
-	ubifs_assert(req->dirtied_ino <= 4);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
-	ubifs_assert(req->idx_growth >= 0);
-	ubifs_assert(req->data_growth >= 0);
-	ubifs_assert(req->dd_growth >= 0);
-
 	ubifs_release_budget(c, req);
 	unlock_two_inodes(ubifs_inode(inode1), ubifs_inode(inode2));
 }
@@ -906,13 +891,7 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	ubifs_assert(req->dirtied_ino <= 4);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
-	ubifs_assert(req->idx_growth >= 0);
-	ubifs_assert(req->data_growth >= 0);
-	ubifs_assert(req->dd_growth >= 0);
 	UBIFS_DBG(ui->budgeted = 0);
-
 	ubifs_release_budget(c, req);
 	if (ui->dirty) {
 		ui->dirty = 0;
@@ -943,11 +922,6 @@ void ubifs_release_2ino_clean(struct ubifs_info *c, struct inode *inode1,
 	struct ubifs_inode *ui1 = ubifs_inode(inode1);
 	struct ubifs_inode *ui2 = ubifs_inode(inode2);
 
-	ubifs_assert(req->dirtied_ino <= 4);
-	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
-	ubifs_assert(req->idx_growth >= 0);
-	ubifs_assert(req->data_growth >= 0);
-	ubifs_assert(req->dd_growth >= 0);
 	UBIFS_DBG(ui1->budgeted = 0);
 	UBIFS_DBG(ui2->budgeted = 0);
 
