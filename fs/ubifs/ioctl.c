@@ -131,7 +131,7 @@ static int setflags(struct inode *inode, int flags)
 
 	mutex_lock(&ui->ui_mutex);
 	if (ui->dirty)
-		ubifs_release_dirty_inode_budget(c, ui);
+		ubifs_release_budget(c, &req);
 	else
 		mark_inode_dirty_sync(inode);
 	mutex_unlock(&ui->ui_mutex);
