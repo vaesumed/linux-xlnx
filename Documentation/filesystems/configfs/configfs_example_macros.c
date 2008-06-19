@@ -1,8 +1,9 @@
 /*
  * vim: noexpandtab ts=8 sts=0 sw=8:
  *
- * configfs_example.c - This file is a demonstration module containing
- *      a number of configfs subsystems.
+ * configfs_example_macros.c - This file is a demonstration module
+ *      containing a number of configfs subsystems.  It uses the helper
+ *      macros defined by configfs.h
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -51,16 +52,16 @@ struct childless {
 	int storeme;
 };
 
-struct childless_attribute {
-	struct configfs_attribute attr;
-	ssize_t (*show)(struct childless *, char *);
-	ssize_t (*store)(struct childless *, const char *, size_t);
-};
-
 static inline struct childless *to_childless(struct config_item *item)
 {
 	return item ? container_of(to_configfs_subsystem(to_config_group(item)), struct childless, subsys) : NULL;
 }
+
+CONFIGFS_ATTR_STRUCT(childless);
+#define CHILDLESS_ATTR(_name, _mode, _show, _store)	\
+struct childless_attribute childless_attr_##_name = __CONFIGFS_ATTR(_name, _mode, _show, _store)
+#define CHILDLESS_ATTR_RO(_name, _show)	\
+struct childless_attribute childless_attr_##_name = __CONFIGFS_ATTR_RO(_name, _show);
 
 static ssize_t childless_showme_read(struct childless *childless,
 				     char *page)
@@ -110,19 +111,10 @@ static ssize_t childless_description_read(struct childless *childless,
 "than a directory in /proc.\n");
 }
 
-static struct childless_attribute childless_attr_showme = {
-	.attr	= { .ca_owner = THIS_MODULE, .ca_name = "showme", .ca_mode = S_IRUGO },
-	.show	= childless_showme_read,
-};
-static struct childless_attribute childless_attr_storeme = {
-	.attr	= { .ca_owner = THIS_MODULE, .ca_name = "storeme", .ca_mode = S_IRUGO | S_IWUSR },
-	.show	= childless_storeme_read,
-	.store	= childless_storeme_write,
-};
-static struct childless_attribute childless_attr_description = {
-	.attr = { .ca_owner = THIS_MODULE, .ca_name = "description", .ca_mode = S_IRUGO },
-	.show = childless_description_read,
-};
+CHILDLESS_ATTR_RO(showme, childless_showme_read);
+CHILDLESS_ATTR(storeme, S_IRUGO | S_IWUSR, childless_storeme_read,
+	       childless_storeme_write);
+CHILDLESS_ATTR_RO(description, childless_description_read);
 
 static struct configfs_attribute *childless_attrs[] = {
 	&childless_attr_showme.attr,
@@ -131,34 +123,7 @@ static struct configfs_attribute *childless_attrs[] = {
 	NULL,
 };
 
-static ssize_t childless_attr_show(struct config_item *item,
-				   struct configfs_attribute *attr,
-				   char *page)
-{
-	struct childless *childless = to_childless(item);
-	struct childless_attribute *childless_attr =
-		container_of(attr, struct childless_attribute, attr);
-	ssize_t ret = 0;
-
-	if (childless_attr->show)
-		ret = childless_attr->show(childless, page);
-	return ret;
-}
-
-static ssize_t childless_attr_store(struct config_item *item,
-				    struct configfs_attribute *attr,
-				    const char *page, size_t count)
-{
-	struct childless *childless = to_childless(item);
-	struct childless_attribute *childless_attr =
-		container_of(attr, struct childless_attribute, attr);
-	ssize_t ret = -EINVAL;
-
-	if (childless_attr->store)
-		ret = childless_attr->store(childless, page, count);
-	return ret;
-}
-
+CONFIGFS_ATTR_OPS(childless);
 static struct configfs_item_operations childless_item_ops = {
 	.show_attribute		= childless_attr_show,
 	.store_attribute	= childless_attr_store,
@@ -303,8 +268,8 @@ static struct configfs_attribute *simple_children_attrs[] = {
 };
 
 static ssize_t simple_children_attr_show(struct config_item *item,
-			   		 struct configfs_attribute *attr,
-			   		 char *page)
+					 struct configfs_attribute *attr,
+					 char *page)
 {
 	return sprintf(page,
 "[02-simple-children]\n"
@@ -319,7 +284,7 @@ static void simple_children_release(struct config_item *item)
 }
 
 static struct configfs_item_operations simple_children_item_ops = {
-	.release 	= simple_children_release,
+	.release	= simple_children_release,
 	.show_attribute	= simple_children_attr_show,
 };
 
@@ -389,8 +354,8 @@ static struct configfs_attribute *group_children_attrs[] = {
 };
 
 static ssize_t group_children_attr_show(struct config_item *item,
-			   		struct configfs_attribute *attr,
-			   		char *page)
+					struct configfs_attribute *attr,
+					char *page)
 {
 	return sprintf(page,
 "[03-group-children]\n"
