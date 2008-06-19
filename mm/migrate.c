@@ -530,7 +530,7 @@ static int writeout(struct address_space *mapping, struct page *page)
 	/*
 	 * A dirty page may imply that the underlying filesystem has
 	 * the page on some queue. So the page must be clean for
-	 * migration. Writeout may mean we loose the lock and the
+	 * migration. Writeout may mean we lose the lock and the
 	 * page state is no longer what we checked for earlier.
 	 * At this point we know that the migration attempt cannot
 	 * be successful.
