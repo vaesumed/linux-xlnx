@@ -444,7 +444,13 @@ xfs_setattr(
 		code = 0;
 		if ((vap->va_size > ip->i_size) &&
 		    (flags & ATTR_NOSIZETOK) == 0) {
-			code = xfs_igrow_start(ip, vap->va_size, credp);
+			/*
+			 * Do the first part of growing a file: zero any data
+			 * in the last block that is beyond the old EOF.  We
+			 * need to do this before the inode is joined to the
+			 * transaction to modify the i_size.
+			 */
+			code = xfs_zero_eof(ip, vap->va_size, ip->i_size);
 		}
 		xfs_iunlock(ip, XFS_ILOCK_EXCL);
 
@@ -512,8 +518,11 @@ xfs_setattr(
 			timeflags |= XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG;
 
 		if (vap->va_size > ip->i_size) {
-			xfs_igrow_finish(tp, ip, vap->va_size,
-			    !(flags & ATTR_DMI));
+			ip->i_d.di_size = vap->va_size;
+			ip->i_size = vap->va_size;
+			if (!(flags & ATTR_DMI))
+				xfs_ichgtime(ip, XFS_ICHGTIME_CHG);
+			xfs_trans_log_inode(tp, ip, XFS_ILOG_CORE);
 		} else if ((vap->va_size <= ip->i_size) ||
 			   ((vap->va_size == 0) && ip->i_d.di_nextents)) {
 			/*
@@ -1601,12 +1610,18 @@ xfs_inactive(
 	return VN_INACTIVE_CACHE;
 }
 
-
+/*
+ * Lookups up an inode from "name". If ci_name is not NULL, then a CI match
+ * is allowed, otherwise it has to be an exact match. If a CI match is found,
+ * ci_name->name will point to a the actual name (caller must free) or
+ * will be set to NULL if an exact match is found.
+ */
 int
 xfs_lookup(
 	xfs_inode_t		*dp,
 	struct xfs_name		*name,
-	xfs_inode_t		**ipp)
+	xfs_inode_t		**ipp,
+	struct xfs_name		*ci_name)
 {
 	xfs_ino_t		inum;
 	int			error;
@@ -1618,7 +1633,7 @@ xfs_lookup(
 		return XFS_ERROR(EIO);
 
 	lock_mode = xfs_ilock_map_shared(dp);
-	error = xfs_dir_lookup(NULL, dp, name, &inum);
+	error = xfs_dir_lookup(NULL, dp, name, &inum, ci_name);
 	xfs_iunlock_map_shared(dp, lock_mode);
 
 	if (error)
@@ -1626,12 +1641,15 @@ xfs_lookup(
 
 	error = xfs_iget(dp->i_mount, NULL, inum, 0, 0, ipp, 0);
 	if (error)
-		goto out;
+		goto out_free_name;
 
 	xfs_itrace_ref(*ipp);
 	return 0;
 
- out:
+out_free_name:
+	if (ci_name)
+		kmem_free(ci_name->name);
+out:
 	*ipp = NULL;
 	return error;
 }
