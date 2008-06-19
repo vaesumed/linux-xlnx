@@ -47,6 +47,7 @@
 #include <linux/mm.h>
 #include <linux/compat.h>
 #include <linux/cdev.h>
+#include <linux/smp_lock.h>
 
 #include "dma.h"
 #include "highlevel.h"
@@ -1219,18 +1220,23 @@ static unsigned int video1394_poll(struct file *file, poll_table *pt)
 
 static int video1394_open(struct inode *inode, struct file *file)
 {
-	int i = ieee1394_file_to_instance(file);
+	int i, ret = 0;
 	struct ti_ohci *ohci;
 	struct file_ctx *ctx;
 
+	lock_kernel();
+	i = ieee1394_file_to_instance(file);
 	ohci = hpsb_get_hostinfo_bykey(&video1394_highlevel, i);
-        if (ohci == NULL)
-                return -EIO;
+        if (ohci == NULL) {
+                ret = -EIO;
+		goto out;
+	}
 
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)  {
 		PRINT(KERN_ERR, ohci->host->id, "Cannot malloc file_ctx");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	ctx->ohci = ohci;
@@ -1238,7 +1244,9 @@ static int video1394_open(struct inode *inode, struct file *file)
 	ctx->current_ctx = NULL;
 	file->private_data = ctx;
 
-	return 0;
+out:
+	unlock_kernel();
+	return ret;
 }
 
 static int video1394_release(struct inode *inode, struct file *file)
