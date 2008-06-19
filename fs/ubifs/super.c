@@ -253,7 +253,7 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 
 	memset((void *)ui + sizeof(struct inode), 0,
 	       sizeof(struct ubifs_inode) - sizeof(struct inode));
-	mutex_init(&ui->ui_mutex);
+	mutex_init(&ui->wb_mutex);
 	spin_lock_init(&ui->size_lock);
 	return &ui->vfs_inode;
 };
@@ -279,7 +279,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	if (is_bad_inode(inode))
 		return 0;
 
-	mutex_lock(&ui->ui_mutex);
+	mutex_lock(&ui->wb_mutex);
 	/*
 	 * Due to races between write-back forced by budgeting
 	 * (see 'sync_some_inodes()') and pdflush write-back, the inode may
@@ -288,7 +288,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	 * 'ubifs_link()'.
 	 */
 	if (!ui->dirty) {
-		mutex_unlock(&ui->ui_mutex);
+		mutex_unlock(&ui->wb_mutex);
 		return 0;
 	}
 
@@ -300,7 +300,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	ui->dirty = 0;
 	atomic_long_dec(&c->dirty_ino_cnt);
 	ubifs_release_dirty_inode_budget(c, ui);
-	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&ui->wb_mutex);
 
 	return err;
 }
@@ -331,7 +331,7 @@ static void ubifs_delete_inode(struct inode *inode)
 	if (is_bad_inode(inode))
 		goto out;
 
-	mutex_lock(&ui->ui_mutex);
+	mutex_lock(&ui->wb_mutex);
 	inode->i_size = 0;
 	err = ubifs_jnl_write_inode(c, inode, 1, IS_SYNC(inode));
 	if (err)
@@ -346,7 +346,7 @@ static void ubifs_delete_inode(struct inode *inode)
 		ui->dirty = 0;
 		ubifs_release_budget(c, &req);
 	}
-	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&ui->wb_mutex);
 out:
 	clear_inode(inode);
 }
@@ -355,7 +355,7 @@ static void ubifs_dirty_inode(struct inode *inode)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	ubifs_assert(mutex_is_locked(&ui->ui_mutex));
+	ubifs_assert(mutex_is_locked(&ui->wb_mutex));
 	if (!ui->dirty) {
 		struct ubifs_info *c = inode->i_sb->s_fs_info;
 

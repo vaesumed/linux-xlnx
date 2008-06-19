@@ -808,7 +808,7 @@ int dbg_check_inode_dirty(struct ubifs_inode *ui)
 	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
 		return 0;
 
-	mutex_lock(&ui->ui_mutex);
+	mutex_lock(&ui->wb_mutex);
 	spin_lock(&ui->size_lock);
 	i_size = i_size_read(&ui->vfs_inode);
 	synced_i_size = ui->synced_i_size;
@@ -819,7 +819,7 @@ int dbg_check_inode_dirty(struct ubifs_inode *ui)
 		err = -EINVAL;
 	}
 	spin_unlock(&ui->size_lock);
-	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&ui->wb_mutex);
 
 	return err;
 }
