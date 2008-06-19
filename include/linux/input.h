@@ -373,6 +373,8 @@ struct input_absinfo {
 
 #define KEY_WIMAX		246
 
+/* Range 248 - 255 is reserved for special needs of AT keyboard driver */
+
 #define BTN_MISC		0x100
 #define BTN_0			0x100
 #define BTN_1			0x101
@@ -1214,11 +1216,6 @@ struct input_handle {
 	struct list_head	d_node;
 	struct list_head	h_node;
 };
-
-#define to_dev(n) container_of(n, struct input_dev, node)
-#define to_handler(n) container_of(n, struct input_handler, node)
-#define to_handle(n) container_of(n, struct input_handle, d_node)
-#define to_handle_h(n) container_of(n, struct input_handle, h_node)
 
 struct input_dev *input_allocate_device(void);
 void input_free_device(struct input_dev *dev);
