@@ -277,8 +277,6 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	int err;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	struct ubifs_budget_req req = {.dd_growth = c->inode_budget,
-				       .dirtied_ino_d = ui->data_len};
 
 	ubifs_assert(!ui->xattr);
 	if (is_bad_inode(inode))
@@ -304,7 +302,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 
 	ui->dirty = 0;
 	atomic_long_dec(&c->dirty_ino_cnt);
-	ubifs_release_budget(c, &req);
+	ubifs_release_dirty_inode_budget(c, ui);
 	mutex_unlock(&ui->ui_mutex);
 
 	return err;
