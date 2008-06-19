@@ -93,11 +93,12 @@ static struct file_operations none_file_operations;
 static int create_xattr(struct ubifs_info *c, struct inode *host,
 			const struct qstr *nm, const void *value, int size)
 {
+	int err;
+	struct inode *inode;
 	struct ubifs_inode *ui, *host_ui = ubifs_inode(host);
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
-					.new_ino_d = size };
-	struct inode *inode;
-	int err;
+					.new_ino_d = size, .dirtied_ino = 1,
+					.dirtied_ino_d = host_ui->data_len};
 
 	/*
 	 * Linux limits the maximum size of the extended attribute names list
@@ -109,7 +110,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 					nm->len + 1 > XATTR_LIST_MAX)
 		return -ENOSPC;
 
-	err = ubifs_budget_inode_op(c, host, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -159,7 +160,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	if (err)
 		goto out_cancel;
 
-	ubifs_release_ino_clean(c, host, &req);
+	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
 	iput(inode);
 	return 0;
@@ -174,7 +175,7 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_cancel_ino_op(c, host, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -193,15 +194,14 @@ out_budg:
 static int change_xattr(struct ubifs_info *c, struct inode *host,
 			struct inode *inode, const void *value, int size)
 {
+	int err;
 	struct ubifs_inode *host_ui = ubifs_inode(host);
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	struct ubifs_budget_req req = { .dirtied_ino = 1,
-					.dirtied_ino_d = ui->data_len };
-	int err;
+	struct ubifs_budget_req req = { .dirtied_ino = 2,
+				.dirtied_ino_d = size + host_ui->data_len };
 
 	ubifs_assert(ui->data_len == inode->i_size);
-
-	err = ubifs_budget_inode_op(c, host, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -232,7 +232,7 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 	if (err)
 		goto out_cancel;
 
-	ubifs_release_ino_clean(c, host, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_cancel:
@@ -242,7 +242,7 @@ out_cancel:
 	spin_unlock(&host->i_lock);
 	make_bad_inode(inode);
 out_budg:
-	ubifs_cancel_ino_op(c, host, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -418,10 +418,10 @@ out_unlock:
 
 ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
+	union ubifs_key key;
 	struct inode *host = dentry->d_inode;
 	struct ubifs_info *c = host->i_sb->s_fs_info;
 	struct ubifs_inode *host_ui = ubifs_inode(host);
-	union ubifs_key key;
 	struct ubifs_dent_node *xent, *pxent = NULL;
 	int err, len, written = 0;
 	struct qstr nm = { .name = NULL };
@@ -489,14 +489,16 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 static int remove_xattr(struct ubifs_info *c, struct inode *host,
 			struct inode *inode, const struct qstr *nm)
 {
+	int err;
 	struct ubifs_inode *host_ui = ubifs_inode(host);
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	struct ubifs_budget_req req = { .dirtied_ino = 1, .mod_dent = 1 };
-	int err;
+	struct ubifs_budget_req req = { .dirtied_ino = 1, .mod_dent = 1,
+					.dirtied_ino = 1,
+					.dirtied_ino_d = host_ui->data_len };
 
 	ubifs_assert(ui->data_len == inode->i_size);
 
-	err = ubifs_budget_inode_op(c, host, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -512,11 +514,11 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 	if (err)
 		goto out_cancel;
 
-	ubifs_release_ino_clean(c, host, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_cancel:
-	ubifs_cancel_ino_op(c, host, &req);
+	ubifs_release_budget(c, &req);
 	host_ui->xattr_cnt += 1;
 	spin_lock(&host->i_lock);
 	host_ui->xattr_size += CALC_DENT_SIZE(nm->len);

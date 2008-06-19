@@ -32,12 +32,13 @@
  * not what users are usually ready to get. UBIFS budgeting subsystem has some
  * space reserved for these purposes.
  *
- * All operations in this file change the parent inode, e.g., 'ubifs_link()'
- * changes ctime and nlink of the parent inode. The parent inode is written to
- * the media straight away - it is not marked as dirty and there is no
- * write-back for it. This was done to simplify file-system recovery which
- * would otherwise be very difficult to do. So instead of marking the parent
- * inode dirty, the operations mark it clean.
+ * All operations in this file write all inodes which they change straight
+ * away, instead of marking them dirty. For example, 'ubifs_link()' changes
+ * @i_size of the parent inode and writes the parent inode together with the
+ * target inode. This was done to simplify file-system recovery which would
+ * otherwise be very difficult to do. The only exception is rename which marks
+ * the re-named inode dirty (because its @i_ctime is updated) but does not
+ * write it, but just marks it as dirty.
  */
 
 #include "ubifs.h"
@@ -280,11 +281,12 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
-	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
+					.dirtied_ino = 1 };
 
 	/*
-	 * Budget request settings: new inode, new direntry. Note, the parent
-	 * directory change will be budgeted in 'ubifs_budget_inode_op()'.
+	 * Budget request settings: new inode, new direntry, changing the
+	 * parent directory inode.
 	 */
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
@@ -294,7 +296,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		goto out;
 
@@ -307,12 +309,12 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_ino_clean(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_budg:
 	dir->i_size -= sz_change;
-	ubifs_cancel_ino_op(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	ubifs_err("cannot create regular file, error %d", err);
 out:
 	make_bad_inode(inode);
@@ -493,19 +495,21 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = old_dentry->d_inode;
+	struct ubifs_inode *ui = ubifs_inode(inode);
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
-	struct ubifs_budget_req req = { .new_dent = 1, .dirtied_ino = 1 };
+	struct ubifs_budget_req req = { .new_dent = 1, .dirtied_ino = 2,
+					.dirtied_ino_d = ui->data_len };
 
 	/*
-	 * Budget request settings: new direntry, changing the target inode
-	 * (because @i_nlink is is increasing).
+	 * Budget request settings: new direntry, changing the target inode,
+	 * changing the parent inode.
 	 */
 
 	dbg_gen("dent '%.*s' to ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
 		inode->i_nlink, dir->i_ino);
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -520,12 +524,12 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 		goto out_budg;
 
 	d_instantiate(dentry, inode);
-	ubifs_release_ino_clean(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_budg:
 	dir->i_size -= sz_change;
-	ubifs_cancel_ino_op(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	drop_nlink(inode);
 	iput(inode);
 	return err;
@@ -537,19 +541,20 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = dentry->d_inode;
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 1;
-	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 1 };
+	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2 };
 
 	/*
-	 * Budget request settings: deletion direntry and deletion inode
-	 * (@mod_dent and @dirtied_ino). But if budgeting fails, go ahead
-	 * anyway because we have extra space reserved for deletions.
+	 * Budget request settings: deletion direntry, deletion inode (+1 for
+	 * @dirtied_ino), changing the parent directory inode. If budgeting
+	 * fails, go ahead anyway because we have extra space reserved for
+	 * deletions.
 	 */
 
 	dbg_gen("dent '%.*s' from ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
 		inode->i_nlink, dir->i_ino);
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err) {
 		if (err != -ENOSPC)
 			return err;
@@ -567,7 +572,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		goto out_budg;
 
 	if (budgeted)
-		ubifs_release_ino_clean(c, dir, &req);
+		ubifs_release_budget(c, &req);
 
 	return 0;
 
@@ -575,7 +580,7 @@ out_budg:
 	dir->i_size += sz_change;
 	inc_nlink(inode);
 	if (budgeted)
-		ubifs_cancel_ino_op(c, dir, &req);
+		ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -615,12 +620,12 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = dentry->d_inode;
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 1;
-	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 1 };
+	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2 };
 
 	/*
-	 * Budget request settings: deletion direntry and deletion inode. But
-	 * if budgeting fails, go ahead anyway because we have extra space
-	 * reserved for deletions.
+	 * Budget request settings: deletion direntry, deletion inode and
+	 * changing the parent inode. If budgeting fails, go ahead anyway
+	 * because we have extra space reserved for deletions.
 	 */
 
 	dbg_gen("directory '%.*s', ino %lu in dir ino %lu", dentry->d_name.len,
@@ -630,7 +635,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (err)
 		return err;
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err) {
 		if (err != -ENOSPC)
 			return err;
@@ -649,7 +654,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 		goto out_budg;
 
 	if (budgeted)
-		ubifs_release_ino_clean(c, dir, &req);
+		ubifs_release_budget(c, &req);
 
 	return 0;
 
@@ -659,7 +664,7 @@ out_budg:
 	inc_nlink(inode);
 	inc_nlink(inode);
 	if (budgeted)
-		ubifs_cancel_ino_op(c, dir, &req);
+		ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -668,14 +673,18 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	struct inode *inode;
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
-	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1 };
+	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
+					.dirtied_ino_d = 1 };
 
-	/* Budget request settings: new inode, new direntry */
+	/*
+	 * Budget request settings: new inode, new direntry and changing parent
+	 * directory inode.
+	 */
 
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -698,7 +707,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	}
 
 	d_instantiate(dentry, inode);
-	ubifs_release_ino_clean(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_inode:
@@ -707,7 +716,7 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_cancel_ino_op(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -720,9 +729,12 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, devlen = 0;
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
-					.new_ino_d = devlen };
+					.new_ino_d = devlen, .dirtied_ino = 1 };
 
-	/* Budget request settings: new inode, new direntry */
+	/*
+	 * Budget request settings: new inode, new direntry and changing parent
+	 * directory inode.
+	 */
 
 	dbg_gen("dent '%.*s' in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, dir->i_ino);
@@ -737,7 +749,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 		devlen = ubifs_encode_dev(dev, rdev);
 	}
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err) {
 		kfree(dev);
 		return err;
@@ -763,7 +775,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_ino_clean(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_inode:
@@ -771,7 +783,7 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_cancel_ino_op(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -784,9 +796,12 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	int err, len = strlen(symname);
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
-					.new_ino_d = len };
+					.new_ino_d = len, .dirtied_ino = 1 };
 
-	/* Budget request settings: new inode, new direntry */
+	/*
+	 * Budget request settings: new inode, new direntry and changing parent
+	 * directory inode.
+	 */
 
 	dbg_gen("dent '%.*s', target '%s' in dir ino %lu", dentry->d_name.len,
 		dentry->d_name.name, symname, dir->i_ino);
@@ -794,7 +809,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	if (len > UBIFS_MAX_INO_DATA)
 		return -ENAMETOOLONG;
 
-	err = ubifs_budget_inode_op(c, dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -829,7 +844,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_ino_clean(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_dir:
@@ -838,10 +853,11 @@ out_inode:
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
-	ubifs_cancel_ino_op(c, dir, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
+/* TODO: the target inode has to be marked as dirty */
 static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			struct inode *new_dir, struct dentry *new_dentry)
 {
@@ -856,13 +872,13 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
 	struct timespec time = ubifs_current_time(old_dir);
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
-			.dirtied_ino = 1,
+			.dirtied_ino = 4,
 			.dirtied_ino_d = ubifs_inode(old_inode)->data_len };
 
 	/*
-	 * Budget request settings: deletion direntry, new direntry, and
-	 * changing the inode which is being renamed (because @i_ctime of
-	 * @old_inode is changing).
+	 * Budget request settings: deletion direntry, new direntry, changing
+	 * the inode which is being renamed, removing the old inode, and
+	 * changing old and new parent directory inodes.
 	 */
 
 	dbg_gen("dent '%.*s' ino %lu in dir ino %lu to dent '%.*s' in "
@@ -876,7 +892,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			return err;
 	}
 
-	err = ubifs_budget_2inode_op(c, old_dir, new_dir, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -938,7 +954,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (err)
 		goto out_inode;
 
-	ubifs_release_2ino_clean(c, old_dir, new_dir, &req);
+	ubifs_release_budget(c, &req);
 	return 0;
 
 out_inode:
@@ -959,7 +975,7 @@ out_inode:
 				inc_nlink(old_dir);
 		}
 	}
-	ubifs_cancel_2ino_op(c, old_dir, new_dir, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
