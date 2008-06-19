@@ -102,21 +102,21 @@ static int ubifs2ioctl(int ubifs_flags)
 
 static int setflags(struct inode *inode, int flags)
 {
+	int oldflags, err;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	struct ubifs_budget_req req;
-	int oldflags, err;
+	struct ubifs_budget_req req = { .dirtied_ino = 1,
+					.dirtied_ino_d = ui->data_len };
 
-	mutex_lock(&inode->i_mutex);
-	memset(&req, 0 , sizeof(struct ubifs_budget_req));
-	err = ubifs_budget_inode_op(c, inode, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
-		goto out;
+		return err;
 
 	/*
 	 * The IMMUTABLE and APPEND_ONLY flags can only be changed by
 	 * the relevant capability.
 	 */
+	mutex_lock(&inode->i_mutex);
 	oldflags = ubifs2ioctl(ui->flags);
 	if ((flags ^ oldflags) & (FS_APPEND_FL | FS_IMMUTABLE_FL)) {
 		if (!capable(CAP_LINUX_IMMUTABLE)) {
@@ -127,11 +127,14 @@ static int setflags(struct inode *inode, int flags)
 
 	ui->flags = ioctl2ubifs(flags);
 	ubifs_set_inode_flags(inode);
-
 	inode->i_ctime = ubifs_current_time(inode);
-	mark_inode_dirty_sync(inode);
 
-	ubifs_release_ino_dirty(c, inode, &req);
+	mutex_lock(&ui->ui_mutex);
+	if (ui->dirty)
+		ubifs_release_dirty_inode_budget(c, ui);
+	else
+		mark_inode_dirty_sync(inode);
+	mutex_unlock(&ui->ui_mutex);
 
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
@@ -139,9 +142,8 @@ static int setflags(struct inode *inode, int flags)
 	return err;
 
 out_budg:
-	ubifs_cancel_ino_op(c, inode, &req);
-out:
 	ubifs_err("can't modify inode %lu attributes", inode->i_ino);
+	ubifs_release_budget(c, &req);
 	mutex_unlock(&inode->i_mutex);
 	return err;
 }

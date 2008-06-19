@@ -217,20 +217,10 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		 * We are writing beyond the file which means we are going to
 		 * change inode size and make the inode dirty. And in turn,
 		 * this means we have to budget for making the inode dirty.
-		 *
-		 * Note, if the inode is already dirty,
-		 * 'ubifs_budget_inode_op()' will not allocate any budget,
-		 * but will just lock the @ui_mutex of the inode to prevent
-		 * it from becoming clean before we have changed its size,
-		 * which is going to happen in 'ubifs_write_end()'.
 		 */
-		err = ubifs_budget_inode_op(c, inode, &req);
-	else
-		/*
-		 * The inode is not going to be marked as dirty by this write
-		 * operation, do not budget for this.
-		 */
-		err = ubifs_budget_space(c, &req);
+		req.dirtied_ino = 1;
+
+	err = ubifs_budget_space(c, &req);
 	if (unlikely(err))
 		return err;
 
@@ -297,10 +287,7 @@ out_unlock:
 	unlock_page(page);
 	page_cache_release(page);
 out_release:
-	if (pos + len > i_size)
-		ubifs_cancel_ino_op(c, inode, &req);
-	else
-		ubifs_release_budget(c, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -330,8 +317,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 			copied, len);
 
 		if (pos + len > i_size)
-			/* See a comment below about this hacky unlock */
-			mutex_unlock(&ui->ui_mutex);
+			ubifs_release_dirty_inode_budget(c, ui);
 
 		copied = do_readpage(page);
 
@@ -351,22 +337,21 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	if (pos + len > i_size) {
 		i_size_write(inode, pos + len);
 
+		mutex_lock(&ui->ui_mutex);
+		/*
+		 * We are going to mark the inode dirty and we have allocated
+		 * budget for this. However, the inode may already be dirty, in
+		 * which case we have to free the budget.
+		 */
+		if (ui->dirty)
+			ubifs_release_dirty_inode_budget(c, ui);
+
 		/*
 		 * Note, we do not set @I_DIRTY_PAGES (which means that the
 		 * inode has dirty pages), this has been done in
 		 * '__set_page_dirty_nobuffers()'.
 		 */
 		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
-
-		/*
-		 * The inode has been marked dirty, unlock it. This is a bit
-		 * hacky because normally we would have to call
-		 * 'ubifs_release_ino_dirty()'. But we know there is nothing
-		 * to release because page's budget will be released in
-		 * 'ubifs_write_page()' and inode's budget will be released in
-		 * 'ubifs_write_inode()', so just unlock the inode here for
-		 * optimization.
-		 */
 		mutex_unlock(&ui->ui_mutex);
 	}
 
@@ -591,20 +576,6 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	if (new_size & (UBIFS_BLOCK_SIZE - 1))
 		req.dirtied_page = 1;
 
-	/*
-	 * Truncation operation writes the inode, so we have to budget for it.
-	 * Normally, we would use 'ubifs_budget_inode_op()' which acquires
-	 * budget only if the inode is not dirty (otherwise it has already
-	 * budgeted). However, we cannot use this function because it may
-	 * deadlock with 'ubifs_writepage()'. Indeed, it would take the
-	 * @ui->ui_mutex, then we would call 'vmtruncate()' which invokes
-	 * 'truncate_inode_pages_range()' which invalidates all truncated pages
-	 * and locks them (using 'TestSetPageLocked()'). At the same time,
-	 * write-back may be working and holding page lock, and then trying to
-	 * write the inode (see 'ubifs_writepage()' for explanation why) which
-	 * needs @ui->ui_mutex. So truncation and write-back would take page
-	 * lock and @ui->ui_mutex in reverse order and deadlock.
-	 */
 	req.dirtied_ino = 1;
 	/* A funny way to budget for truncation node */
 	req.dirtied_ino_d = UBIFS_TRUN_NODE_SZ;
@@ -664,13 +635,12 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	/*
 	 * 'ubifs_trunc()' has flushed the inode, so we should mark it as clean
 	 * and release its budget if it is dirty.
+	 * TODO: make this a separate function and do the same in sync
+	 * operations.
 	 */
 	mutex_lock(&ui->ui_mutex);
 	if (ui->dirty) {
-		memset(&req, 0, sizeof(struct ubifs_budget_req));
-		req.dd_growth = c->inode_budget;
-		req.dirtied_ino_d = ui->data_len;
-		ubifs_release_budget(c, &req);
+		ubifs_release_dirty_inode_budget(c, ui);
 		ui->dirty = 0;
 		atomic_long_dec(&c->dirty_ino_cnt);
 	}
@@ -697,11 +667,12 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 		      const struct iattr *attr)
 {
 	int err;
-	struct ubifs_budget_req req;
 	loff_t old_size = inode->i_size, new_size = attr->ia_size;
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_budget_req req = { .dirtied_ino = 1,
+					.dirtied_ino_d = ui->data_len };
 
-	memset(&req, 0, sizeof(struct ubifs_budget_req));
-	err = ubifs_budget_inode_op(c, inode, &req);
+	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
@@ -715,15 +686,28 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	}
 
 	do_attr_changes(inode, attr);
-	mark_inode_dirty_sync(inode);
-	ubifs_release_ino_dirty(c, inode, &req);
+
+	mutex_lock(&ui->ui_mutex);
+	if (ui->dirty)
+		ubifs_release_dirty_inode_budget(c, ui);
+	else
+		mark_inode_dirty_sync(inode);
+
+	if (attr->ia_valid & ATTR_SIZE)
+		/*
+		 * Inode length changed, so we have to make sure
+		 * @I_DIRTY_DATASYNC is set.
+		 */
+		 __mark_inode_dirty(inode, I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+	mutex_unlock(&ui->ui_mutex);
+
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
 
 	return err;
 
 out_budg:
-	ubifs_cancel_ino_op(c, inode, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
@@ -834,19 +818,24 @@ static inline int mctime_update_needed(const struct inode *inode,
 static int update_mctime(struct ubifs_info *c, struct inode *inode)
 {
 	struct timespec now = ubifs_current_time(inode);
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	if (mctime_update_needed(inode, &now)) {
-		struct ubifs_budget_req req;
 		int err;
+		struct ubifs_budget_req req = { .dirtied_ino = 1,
+						.dirtied_ino_d = ui->data_len };
 
-		memset(&req, 0, sizeof(struct ubifs_budget_req));
-		err = ubifs_budget_inode_op(c, inode, &req);
+		err = ubifs_budget_space(c, &req);
 		if (err)
 			return err;
 
 		inode->i_mtime = inode->i_ctime = now;
-		mark_inode_dirty_sync(inode);
-		mutex_unlock(&ubifs_inode(inode)->ui_mutex);
+		mutex_lock(&ui->ui_mutex);
+		if (ui->dirty)
+			ubifs_release_dirty_inode_budget(c, ui);
+		else
+			mark_inode_dirty_sync(inode);
+		mutex_unlock(&ui->ui_mutex);
 	}
 
 	return 0;
@@ -967,17 +956,15 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 	 * do in 'ubifs_write_begin()' and 'ubifs_write_end()'. Glance there
 	 * for more comments.
 	 */
-	if (mctime_update_needed(inode, &now)) {
+	update_time = !!mctime_update_needed(inode, &now);
+	if (update_time)
 		/*
 		 * We have to change inode time stamp which requires extra
 		 * budgeting.
 		 */
-		update_time = 1;
-		err = ubifs_budget_inode_op(c, inode, &req);
-	} else {
-		update_time = 0;
-		err = ubifs_budget_space(c, &req);
-	}
+		req.dirtied_ino = 1;
+
+	err = ubifs_budget_space(c, &req);
 	if (unlikely(err)) {
 		if (err == -ENOSPC)
 			ubifs_warn("out of space for mmapped file "
@@ -1004,9 +991,15 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 	}
 
 	if (update_time) {
+		struct ubifs_inode *ui = ubifs_inode(inode);
+
 		inode->i_mtime = inode->i_ctime = now;
-		mark_inode_dirty_sync(inode);
-		mutex_unlock(&ubifs_inode(inode)->ui_mutex);
+		mutex_lock(&ui->ui_mutex);
+		if (ui->dirty)
+			ubifs_release_dirty_inode_budget(c, ui);
+		else
+			mark_inode_dirty_sync(inode);
+		mutex_unlock(&ui->ui_mutex);
 	}
 
 	unlock_page(page);
@@ -1014,10 +1007,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 
 out_unlock:
 	unlock_page(page);
-	if (update_time)
-		ubifs_cancel_ino_op(c, inode, &req);
-	else
-		ubifs_release_budget(c, &req);
+	ubifs_release_budget(c, &req);
 	return err;
 }
 
