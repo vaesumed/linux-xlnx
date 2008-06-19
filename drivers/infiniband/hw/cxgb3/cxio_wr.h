@@ -72,7 +72,8 @@ enum t3_wr_opcode {
 	T3_WR_BIND = FW_WROPCODE_RI_BIND_MW,
 	T3_WR_RCV = FW_WROPCODE_RI_RECEIVE,
 	T3_WR_INIT = FW_WROPCODE_RI_RDMA_INIT,
-	T3_WR_QP_MOD = FW_WROPCODE_RI_MODIFY_QP
+	T3_WR_QP_MOD = FW_WROPCODE_RI_MODIFY_QP,
+	T3_WR_FASTREG = FW_WROPCODE_RI_FASTREGISTER_MR
 } __attribute__ ((packed));
 
 enum t3_rdma_opcode {
@@ -89,7 +90,8 @@ enum t3_rdma_opcode {
 	T3_FAST_REGISTER,
 	T3_LOCAL_INV,
 	T3_QP_MOD,
-	T3_BYPASS
+	T3_BYPASS,
+	T3_RDMA_READ_REQ_WITH_INV,
 } __attribute__ ((packed));
 
 static inline enum t3_rdma_opcode wr2opcode(enum t3_wr_opcode wrop)
@@ -170,11 +172,45 @@ struct t3_send_wr {
 	struct t3_sge sgl[T3_MAX_SGE];	/* 4+ */
 };
 
+#define T3_MAX_FASTREG_DEPTH 24
+
+struct t3_fastreg_wr {
+	struct fw_riwrh wrh;	/* 0 */
+	union t3_wrid wrid;	/* 1 */
+	__be32 stag;		/* 2 */
+	__be32 len;
+	__be32 va_base_hi;	/* 3 */
+	__be32 va_base_lo_fbo;
+	__be32 page_type_perms; /* 4 */
+	__be32 reserved1;
+	__be64 pbl_addrs[0];	/* 5+ */
+};
+
+#define S_FR_PAGE_COUNT		24
+#define M_FR_PAGE_COUNT		0xff
+#define V_FR_PAGE_COUNT(x)	((x) << S_FR_PAGE_COUNT)
+#define G_FR_PAGE_COUNT(x)	((((x) >> S_FR_PAGE_COUNT)) & M_FR_PAGE_COUNT)
+
+#define S_FR_PAGE_SIZE		16
+#define M_FR_PAGE_SIZE		0x1f
+#define V_FR_PAGE_SIZE(x)	((x) << S_FR_PAGE_SIZE)
+#define G_FR_PAGE_SIZE(x)	((((x) >> S_FR_PAGE_SIZE)) & M_FR_PAGE_SIZE)
+
+#define S_FR_TYPE		8
+#define M_FR_TYPE		0x1
+#define V_FR_TYPE(x)		((x) << S_FR_TYPE)
+#define G_FR_TYPE(x)		((((x) >> S_FR_TYPE)) & M_FR_TYPE)
+
+#define S_FR_PERMS		0
+#define M_FR_PERMS		0xff
+#define V_FR_PERMS(x)		((x) << S_FR_PERMS)
+#define G_FR_PERMS(x)		((((x) >> S_FR_PERMS)) & M_FR_PERMS)
+
 struct t3_local_inv_wr {
 	struct fw_riwrh wrh;	/* 0 */
 	union t3_wrid wrid;	/* 1 */
 	__be32 stag;		/* 2 */
-	__be32 reserved3;
+	__be32 reserved;
 };
 
 struct t3_rdma_write_wr {
@@ -200,18 +236,6 @@ struct t3_rdma_read_wr {
 	__be32 local_len;
 	__be64 local_to;	/* 5 */
 };
-
-enum t3_addr_type {
-	T3_VA_BASED_TO = 0x0,
-	T3_ZERO_BASED_TO = 0x1
-} __attribute__ ((packed));
-
-enum t3_mem_perms {
-	T3_MEM_ACCESS_LOCAL_READ = 0x1,
-	T3_MEM_ACCESS_LOCAL_WRITE = 0x2,
-	T3_MEM_ACCESS_REM_READ = 0x4,
-	T3_MEM_ACCESS_REM_WRITE = 0x8
-} __attribute__ ((packed));
 
 struct t3_bind_mw_wr {
 	struct fw_riwrh wrh;	/* 0 */
@@ -346,6 +370,7 @@ union t3_wr {
 	struct t3_rdma_write_wr write;
 	struct t3_rdma_read_wr read;
 	struct t3_receive_wr recv;
+	struct t3_fastreg_wr fastreg;
 	struct t3_local_inv_wr local_inv;
 	struct t3_bind_mw_wr bind;
 	struct t3_bypass_wr bypass;
@@ -368,10 +393,10 @@ static inline enum t3_wr_opcode fw_riwrh_opcode(struct fw_riwrh *wqe)
 
 static inline void build_fw_riwrh(struct fw_riwrh *wqe, enum t3_wr_opcode op,
 				  enum t3_wr_flags flags, u8 genbit, u32 tid,
-				  u8 len)
+				  u8 len, u8 sopeop)
 {
 	wqe->op_seop_flags = cpu_to_be32(V_FW_RIWR_OP(op) |
-					 V_FW_RIWR_SOPEOP(M_FW_RIWR_SOPEOP) |
+					 V_FW_RIWR_SOPEOP(sopeop) |
 					 V_FW_RIWR_FLAGS(flags));
 	wmb();
 	wqe->gen_tid_len = cpu_to_be32(V_FW_RIWR_GEN(genbit) |
@@ -404,6 +429,7 @@ enum tpt_addr_type {
 };
 
 enum tpt_mem_perm {
+	TPT_MW_BIND = 0x10,
 	TPT_LOCAL_READ = 0x8,
 	TPT_LOCAL_WRITE = 0x4,
 	TPT_REMOTE_READ = 0x2,
