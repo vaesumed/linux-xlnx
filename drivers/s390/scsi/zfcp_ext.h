@@ -92,8 +92,10 @@ extern void zfcp_fsf_start_timer(struct zfcp_fsf_req *, unsigned long);
 extern void zfcp_erp_start_timer(struct zfcp_fsf_req *);
 extern void zfcp_fsf_req_dismiss_all(struct zfcp_adapter *);
 extern int  zfcp_fsf_status_read(struct zfcp_adapter *, int);
+extern int zfcp_status_read_refill(struct zfcp_adapter *adapter);
 extern int zfcp_fsf_req_create(struct zfcp_adapter *, u32, int, mempool_t *,
-			       unsigned long *, struct zfcp_fsf_req **);
+			       unsigned long *, struct zfcp_fsf_req **)
+	__acquires(adapter->request_queue.queue_lock);
 extern int zfcp_fsf_send_ct(struct zfcp_send_ct *, mempool_t *,
 			    struct zfcp_erp_action *);
 extern int zfcp_fsf_send_els(struct zfcp_send_els *);
@@ -167,8 +169,8 @@ extern void zfcp_erp_port_access_changed(struct zfcp_port *, u8, void *);
 extern void zfcp_erp_unit_access_changed(struct zfcp_unit *, u8, void *);
 
 /******************************** AUX ****************************************/
-extern void zfcp_rec_dbf_event_thread(u8 id, struct zfcp_adapter *adapter,
-				      int lock);
+extern void zfcp_rec_dbf_event_thread(u8 id, struct zfcp_adapter *adapter);
+extern void zfcp_rec_dbf_event_thread_lock(u8 id, struct zfcp_adapter *adapter);
 extern void zfcp_rec_dbf_event_adapter(u8 id, void *ref, struct zfcp_adapter *);
 extern void zfcp_rec_dbf_event_port(u8 id, void *ref, struct zfcp_port *port);
 extern void zfcp_rec_dbf_event_unit(u8 id, void *ref, struct zfcp_unit *unit);
