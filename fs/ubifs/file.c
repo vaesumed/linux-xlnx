@@ -561,7 +561,6 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 {
 	int err;
 	struct ubifs_budget_req req;
-	struct ubifs_inode *ui = ubifs_inode(inode);
 	loff_t old_size = inode->i_size, new_size = attr->ia_size;
 	int offset = new_size & (UBIFS_BLOCK_SIZE - 1);
 
@@ -635,17 +634,8 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	/*
 	 * 'ubifs_trunc()' has flushed the inode, so we should mark it as clean
 	 * and release its budget if it is dirty.
-	 * TODO: make this a separate function and do the same in sync
-	 * operations.
 	 */
-	mutex_lock(&ui->ui_mutex);
-	if (ui->dirty) {
-		ubifs_release_dirty_inode_budget(c, ui);
-		ui->dirty = 0;
-		atomic_long_dec(&c->dirty_ino_cnt);
-	}
-	mutex_unlock(&ui->ui_mutex);
-
+	ubifs_clean_inode(c, ubifs_inode(inode));
 	return err;
 
 out_budg:
