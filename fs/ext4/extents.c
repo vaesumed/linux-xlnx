@@ -2768,6 +2768,9 @@ void ext4_ext_truncate(struct inode *inode)
 	if (inode->i_size & (sb->s_blocksize - 1))
 		ext4_block_truncate_page(handle, mapping, inode->i_size);
 
+	if (ext4_orphan_add(handle, inode))
+		goto out_stop;
+
 	down_write(&EXT4_I(inode)->i_data_sem);
 	ext4_ext_invalidate_cache(inode);
 
@@ -2778,8 +2781,6 @@ void ext4_ext_truncate(struct inode *inode)
 	 * Probably we need not scan at all,
 	 * because page truncation is enough.
 	 */
-	if (ext4_orphan_add(handle, inode))
-		goto out_stop;
 
 	/* we have to know where to truncate from in crash case */
 	EXT4_I(inode)->i_disksize = inode->i_size;
