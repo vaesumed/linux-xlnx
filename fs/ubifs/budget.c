@@ -710,7 +710,6 @@ again:
 		goto again;
 	}
 
-	UBIFS_DBG(ui->budgeted = 1);
 	return 0;
 }
 
@@ -796,8 +795,6 @@ again:
 		goto again;
 	}
 
-	UBIFS_DBG(ui1->budgeted = 1);
-	UBIFS_DBG(ui2->budgeted = 1);
 	return 0;
 }
 
@@ -891,7 +888,6 @@ void ubifs_release_ino_clean(struct ubifs_info *c, struct inode *inode,
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	UBIFS_DBG(ui->budgeted = 0);
 	ubifs_release_budget(c, req);
 	if (ui->dirty) {
 		ui->dirty = 0;
@@ -921,9 +917,6 @@ void ubifs_release_2ino_clean(struct ubifs_info *c, struct inode *inode1,
 {
 	struct ubifs_inode *ui1 = ubifs_inode(inode1);
 	struct ubifs_inode *ui2 = ubifs_inode(inode2);
-
-	UBIFS_DBG(ui1->budgeted = 0);
-	UBIFS_DBG(ui2->budgeted = 0);
 
 	ubifs_release_budget(c, req);
 	if (ui1->dirty) {

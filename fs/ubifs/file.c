@@ -671,8 +671,6 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 		req.dd_growth = c->inode_budget;
 		req.dirtied_ino_d = ui->data_len;
 		ubifs_release_budget(c, &req);
-
-		UBIFS_DBG(ui->budgeted = 0);
 		ui->dirty = 0;
 		atomic_long_dec(&c->dirty_ino_cnt);
 	}

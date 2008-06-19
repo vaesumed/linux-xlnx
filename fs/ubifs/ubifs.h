@@ -320,7 +320,6 @@ struct ubifs_gced_idx_leb {
  *               this inode
  * @dirty: non-zero if the inode is dirty
  * @xattr: non-zero if this is an extended attribute inode
- * @budgeted: non-zero if the inode has been budgeted (used for debugging)
  * @ui_mutex: serializes inode budgeting and write-back
  * @synced_i_size: synchronized size of inode, i.e. the value of inode size
  *                 currently stored on the flash; used only for regular file
@@ -353,9 +352,6 @@ struct ubifs_inode {
 	int xattr_names;
 	unsigned int dirty:1;
 	unsigned int xattr:1;
-#ifdef CONFIG_UBIFS_FS_DEBUG
-	unsigned int budgeted:1;
-#endif
 	struct mutex ui_mutex;
 	loff_t synced_i_size;
 	spinlock_t size_lock;

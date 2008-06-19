@@ -285,7 +285,6 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 		return 0;
 
 	mutex_lock(&ui->ui_mutex);
-
 	/*
 	 * Due to races between write-back forced by budgeting
 	 * (see 'sync_some_inodes()') and pdflush write-back, the inode may
@@ -298,17 +297,13 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 		return 0;
 	}
 
-	ubifs_assert(ui->budgeted);
 	dbg_gen("inode %lu", inode->i_ino);
-
 	err = ubifs_jnl_write_inode(c, inode, 0, IS_SYNC(inode));
 	if (err)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
 	ui->dirty = 0;
-	UBIFS_DBG(ui->budgeted = 0);
 	atomic_long_dec(&c->dirty_ino_cnt);
-
 	ubifs_release_budget(c, &req);
 	mutex_unlock(&ui->ui_mutex);
 
@@ -352,10 +347,8 @@ static void ubifs_delete_inode(struct inode *inode)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
 	if (ui->dirty) {
-		ubifs_assert(ui->budgeted);
 		atomic_long_dec(&c->dirty_ino_cnt);
 		ui->dirty = 0;
-		UBIFS_DBG(ui->budgeted = 0);
 		ubifs_release_budget(c, &req);
 	}
 	mutex_unlock(&ui->ui_mutex);
