@@ -70,9 +70,12 @@ static u8 tda10023_readreg (struct tda10023_state* state, u8 reg)
 	int ret;
 
 	ret = i2c_transfer (state->i2c, msg, 2);
-	if (ret != 2)
-		printk("DVB: TDA10023: %s: readreg error (ret == %i)\n",
-				 __func__, ret);
+	if (ret != 2) {
+		int num = state->frontend.dvb ? state->frontend.dvb->num : -1;
+		printk(KERN_ERR "DVB: TDA10023(%d): %s: readreg error "
+			"(reg == 0x%02x, ret == %i)\n",
+			num, __func__, reg, ret);
+	}
 	return b1[0];
 }
 
@@ -83,11 +86,12 @@ static int tda10023_writereg (struct tda10023_state* state, u8 reg, u8 data)
 	int ret;
 
 	ret = i2c_transfer (state->i2c, &msg, 1);
-	if (ret != 1)
-		printk("DVB: TDA10023(%d): %s, writereg error "
+	if (ret != 1) {
+		int num = state->frontend.dvb ? state->frontend.dvb->num : -1;
+		printk(KERN_ERR "DVB: TDA10023(%d): %s, writereg error "
 			"(reg == 0x%02x, val == 0x%02x, ret == %i)\n",
-			state->frontend.dvb->num, __func__, reg, data, ret);
-
+			num, __func__, reg, data, ret);
+	}
 	return (ret != 1) ? -EREMOTEIO : 0;
 }
 
@@ -481,7 +485,7 @@ struct dvb_frontend *tda10023_attach(const struct tda10023_config *config,
 	struct tda10023_state* state = NULL;
 
 	/* allocate memory for the internal state */
-	state = kmalloc(sizeof(struct tda10023_state), GFP_KERNEL);
+	state = kzalloc(sizeof(struct tda10023_state), GFP_KERNEL);
 	if (state == NULL) goto error;
 
 	/* setup the state */
