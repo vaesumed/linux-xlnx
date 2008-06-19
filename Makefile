@@ -1000,36 +1000,47 @@ depend dep:
 
 # ---------------------------------------------------------------------------
 # Kernel headers
-INSTALL_HDR_PATH=$(objtree)/usr
-export INSTALL_HDR_PATH
 
-HDRFILTER=generic i386 x86_64
-HDRARCHES=$(filter-out $(HDRFILTER),$(patsubst $(srctree)/include/asm-%/Kbuild,%,$(wildcard $(srctree)/include/asm-*/Kbuild)))
+#Default location for installed headers
+export INSTALL_HDR_PATH = $(objtree)/usr
+
+hdr-filter := generic um ppc sparc64 cris
+hdr-archs  := $(filter-out $(hdr-filter),                           \
+                  $(patsubst $(srctree)/include/asm-%/Kbuild,%,     \
+                      $(wildcard $(srctree)/include/asm-*/Kbuild)))
+hdr-inst := -rR -f $(srctree)/scripts/Makefile.headersinst obj
+
+PHONY += __headers
+__headers: include/linux/version.h scripts_basic FORCE
+	$(Q)$(MAKE) $(build)=scripts scripts/unifdef
 
 PHONY += headers_install_all
-headers_install_all: include/linux/version.h scripts_basic FORCE
-	$(Q)$(MAKE) $(build)=scripts scripts/unifdef
-	$(Q)for arch in $(HDRARCHES); do \
-	 $(MAKE) ARCH=$$arch -f $(srctree)/scripts/Makefile.headersinst obj=include BIASMDIR=-bi-$$arch ;\
+headers_install_all: __headers
+	$(Q)$(MAKE) $(hdr-inst)=include
+	$(Q)set -e; for arch in $(hdr-archs); do \
+	 $(MAKE) $(hdr-inst)=include/asm-$$arch   \
+	         SRCARCH=$$arch dst=include/asm-$$arch;  \
 	 done
 
 PHONY += headers_install
-headers_install: include/linux/version.h scripts_basic FORCE
-	@if [ ! -r $(srctree)/include/asm-$(SRCARCH)/Kbuild ]; then \
-	  echo '*** Error: Headers not exportable for this architecture ($(SRCARCH))'; \
-	  exit 1 ; fi
-	$(Q)$(MAKE) $(build)=scripts scripts/unifdef
-	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.headersinst ARCH=$(SRCARCH) obj=include
+headers_install: __headers
+	$(if $(wildcard $(srctree)/include/asm-$(SRCARCH)/Kbuild),, \
+	$(error Headers not exportable for this architecture ($(SRCARCH))))
+	$(Q)$(MAKE) $(hdr-inst)=include
+	$(Q)$(MAKE) $(hdr-inst)=include/asm-$(SRCARCH) dst=include/asm
 
 PHONY += headers_check_all
 headers_check_all: headers_install_all
-	$(Q)for arch in $(HDRARCHES); do \
-	 $(MAKE) ARCH=$$arch -f $(srctree)/scripts/Makefile.headersinst obj=include BIASMDIR=-bi-$$arch HDRCHECK=1 ;\
+	$(Q)$(MAKE) $(hdr-inst)=include HDRCHECK=1
+	$(Q)set -e; for arch in $(hdr-archs); do \
+	 $(MAKE) SRCARCH=$$arch $(hdr-inst)=include/asm-$$arch HDRCHECK=1 ;\
 	 done
 
 PHONY += headers_check
 headers_check: headers_install
-	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.headersinst ARCH=$(SRCARCH) obj=include HDRCHECK=1
+	$(Q)$(MAKE) $(hdr-inst)=include HDRCHECK=1
+	$(Q)$(MAKE) $(hdr-inst)=include/asm-$(SRCARCH) \
+	            dst=include/asm HDRCHECK=1
 
 # ---------------------------------------------------------------------------
 # Modules
@@ -1137,7 +1148,8 @@ clean: archclean $(clean-dirs)
 	@find . $(RCS_FIND_IGNORE) \
 		\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' \
 		-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \
-		-o -name '*.symtypes' -o -name 'modules.order' \) \
+		-o -name '*.symtypes' -o -name 'modules.order'	\
+		-o -name '*.o.*' \) \
 		-type f -print | xargs rm -f
 
 # mrproper - Delete all generated files, including .config
