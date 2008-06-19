@@ -12,6 +12,7 @@
 #include <asm/hardware.h>
 #include <asm/arch/clocks.h>
 #include <linux/err.h>
+#include <linux/spinlock.h>
 
 struct module;
 struct icst525_params;
@@ -80,14 +81,14 @@ unsigned int pclkfreq_get (void)
 /* ----- */
 
 static LIST_HEAD(clocks);
-static DECLARE_MUTEX(clocks_sem);
+static DEFINE_SPINLOCK(clocks_lock);
 
 struct clk *clk_get (struct device *dev, const char *id)
 {
 	struct clk *p;
 	struct clk *clk = ERR_PTR(-ENOENT);
 
-	down (&clocks_sem);
+	spin_lock(&clocks_lock);
 	list_for_each_entry (p, &clocks, node) {
 		if (strcmp (id, p->name) == 0
 		    && try_module_get(p->owner)) {
@@ -95,7 +96,7 @@ struct clk *clk_get (struct device *dev, const char *id)
 			break;
 		}
 	}
-	up (&clocks_sem);
+	spin_unlock(&clocks_lock);
 
 	return clk;
 }
@@ -175,18 +176,18 @@ static struct clk clcd_clk = {
 
 int clk_register (struct clk *clk)
 {
-	down (&clocks_sem);
+	spin_lock(&clocks_lock);
 	list_add (&clk->node, &clocks);
-	up (&clocks_sem);
+	spin_unlock(&clocks_lock);
 	return 0;
 }
 EXPORT_SYMBOL(clk_register);
 
 void clk_unregister (struct clk *clk)
 {
-	down (&clocks_sem);
+	spin_lock(&clocks_lock);
 	list_del (&clk->node);
-	up (&clocks_sem);
+	spin_unlock(&clocks_lock);
 }
 EXPORT_SYMBOL(clk_unregister);
 
