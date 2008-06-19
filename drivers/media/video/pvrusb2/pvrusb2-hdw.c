@@ -1,6 +1,5 @@
 /*
  *
- *  $Id$
  *
  *  Copyright (C) 2005 Mike Isely <isely@pobox.com>
  *
@@ -40,6 +39,23 @@
 #define TV_MIN_FREQ     55250000L
 #define TV_MAX_FREQ    850000000L
 
+/* This defines a minimum interval that the decoder must remain quiet
+   before we are allowed to start it running. */
+#define TIME_MSEC_DECODER_WAIT 50
+
+/* This defines a minimum interval that the encoder must remain quiet
+   before we are allowed to configure it.  I had this originally set to
+   50msec, but Martin Dauskardt <martin.dauskardt@gmx.de> reports that
+   things work better when it's set to 100msec. */
+#define TIME_MSEC_ENCODER_WAIT 100
+
+/* This defines the minimum interval that the encoder must successfully run
+   before we consider that the encoder has run at least once since its
+   firmware has been loaded.  This measurement is in important for cases
+   where we can't do something until we know that the encoder has been run
+   at least once. */
+#define TIME_MSEC_ENCODER_OK 250
+
 static struct pvr2_hdw *unit_pointers[PVR_NUM] = {[ 0 ... PVR_NUM-1 ] = NULL};
 static DEFINE_MUTEX(pvr2_unit_mtx);
 
@@ -66,6 +82,16 @@ module_param_array(video_std,    int, NULL, 0444);
 MODULE_PARM_DESC(video_std,"specify initial video standard");
 module_param_array(tolerance,    int, NULL, 0444);
 MODULE_PARM_DESC(tolerance,"specify stream error tolerance");
+
+/* US Broadcast channel 7 (175.25 MHz) */
+static int default_tv_freq    = 175250000L;
+/* 104.3 MHz, a usable FM station for my area */
+static int default_radio_freq = 104300000L;
+
+module_param_named(tv_freq, default_tv_freq, int, 0444);
+MODULE_PARM_DESC(tv_freq, "specify initial television frequency");
+module_param_named(radio_freq, default_radio_freq, int, 0444);
+MODULE_PARM_DESC(radio_freq, "specify initial radio frequency");
 
 #define PVR2_CTL_WRITE_ENDPOINT  0x01
 #define PVR2_CTL_READ_ENDPOINT   0x81
@@ -1701,10 +1727,8 @@ static void pvr2_hdw_setup_low(struct pvr2_hdw *hdw)
 	   are, but I set them to something usable in the Chicago area just
 	   to make driver testing a little easier. */
 
-	/* US Broadcast channel 7 (175.25 MHz) */
-	hdw->freqValTelevision = 175250000L;
-	/* 104.3 MHz, a usable FM station for my area */
-	hdw->freqValRadio = 104300000L;
+	hdw->freqValTelevision = default_tv_freq;
+	hdw->freqValRadio = default_radio_freq;
 
 	// Do not use pvr2_reset_ctl_endpoints() here.  It is not
 	// thread-safe against the normal pvr2_send_request() mechanism.
@@ -3421,7 +3445,7 @@ static void pvr2_hdw_cmd_modeswitch(struct pvr2_hdw *hdw,int digitalFl)
 }
 
 
-void pvr2_led_ctrl_hauppauge(struct pvr2_hdw *hdw, int onoff)
+static void pvr2_led_ctrl_hauppauge(struct pvr2_hdw *hdw, int onoff)
 {
 	/* change some GPIO data
 	 *
@@ -3601,7 +3625,9 @@ static int state_eval_encoder_config(struct pvr2_hdw *hdw)
 				   the encoder. */
 				if (!hdw->state_encoder_waitok) {
 					hdw->encoder_wait_timer.expires =
-						jiffies + (HZ*50/1000);
+						jiffies +
+						(HZ * TIME_MSEC_ENCODER_WAIT
+						 / 1000);
 					add_timer(&hdw->encoder_wait_timer);
 				}
 			}
@@ -3725,7 +3751,7 @@ static int state_eval_encoder_run(struct pvr2_hdw *hdw)
 		hdw->state_encoder_run = !0;
 		if (!hdw->state_encoder_runok) {
 			hdw->encoder_run_timer.expires =
-				jiffies + (HZ*250/1000);
+				jiffies + (HZ * TIME_MSEC_ENCODER_OK / 1000);
 			add_timer(&hdw->encoder_run_timer);
 		}
 	}
@@ -3800,7 +3826,9 @@ static int state_eval_decoder_run(struct pvr2_hdw *hdw)
 				   but before we did the pending check. */
 				if (!hdw->state_decoder_quiescent) {
 					hdw->quiescent_timer.expires =
-						jiffies + (HZ*50/1000);
+						jiffies +
+						(HZ * TIME_MSEC_DECODER_WAIT
+						 / 1000);
 					add_timer(&hdw->quiescent_timer);
 				}
 			}
