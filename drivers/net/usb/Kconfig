@@ -29,6 +29,7 @@ config USB_CATC
 
 config USB_KAWETH
 	tristate "USB KLSI KL5USB101-based ethernet device support"
+	select FW_LOADER
 	---help---
 	  Say Y here if you want to use one of the following 10Mbps only
 	  USB Ethernet adapters based on the KLSI KL5KUSB101B chipset:
@@ -65,6 +66,14 @@ config USB_KAWETH
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called kaweth.
+
+config USB_KAWETH_FIRMWARE
+	bool "Include firmware for USB KLSI KL5USB101-based ethernet devices"
+	depends on USB_KAWETH
+	---help---
+	  This includes firmware for the "kaweth" devices in the kernel
+	  image directly, so that it doesn't need to be provided by
+	  the firmware loader. Say 'N'.
 
 config USB_PEGASUS
 	tristate "USB Pegasus/Pegasus-II based ethernet device support"
