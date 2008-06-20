@@ -2,8 +2,7 @@
  *  drivers/s390/cio/chsc.c
  *   S/390 common I/O routines -- channel subsystem call
  *
- *    Copyright (C) 1999-2002 IBM Deutschland Entwicklung GmbH,
- *			      IBM Corporation
+ *    Copyright IBM Corp. 1999,2008
  *    Author(s): Ingo Adlung (adlung@de.ibm.com)
  *		 Cornelia Huck (cornelia.huck@de.ibm.com)
  *		 Arnd Bergmann (arndb@de.ibm.com)
@@ -17,6 +16,7 @@
 #include <asm/cio.h>
 #include <asm/chpid.h>
 
+#include "../s390mach.h"
 #include "css.h"
 #include "cio.h"
 #include "cio_debug.h"
@@ -127,77 +127,12 @@ out_free:
 	return ret;
 }
 
-static int check_for_io_on_path(struct subchannel *sch, int mask)
-{
-	int cc;
-
-	cc = stsch(sch->schid, &sch->schib);
-	if (cc)
-		return 0;
-	if (sch->schib.scsw.actl && sch->schib.pmcw.lpum == mask)
-		return 1;
-	return 0;
-}
-
-static void terminate_internal_io(struct subchannel *sch)
-{
-	if (cio_clear(sch)) {
-		/* Recheck device in case clear failed. */
-		sch->lpm = 0;
-		if (device_trigger_verify(sch) != 0)
-			css_schedule_eval(sch->schid);
-		return;
-	}
-	/* Request retry of internal operation. */
-	device_set_intretry(sch);
-	/* Call handler. */
-	if (sch->driver && sch->driver->termination)
-		sch->driver->termination(sch);
-}
-
 static int s390_subchannel_remove_chpid(struct subchannel *sch, void *data)
 {
-	int j;
-	int mask;
-	struct chp_id *chpid = data;
-	struct schib schib;
-
-	for (j = 0; j < 8; j++) {
-		mask = 0x80 >> j;
-		if ((sch->schib.pmcw.pim & mask) &&
-		    (sch->schib.pmcw.chpid[j] == chpid->id))
-			break;
-	}
-	if (j >= 8)
-		return 0;
-
 	spin_lock_irq(sch->lock);
-
-	stsch(sch->schid, &schib);
-	if (!css_sch_is_valid(&schib))
-		goto out_unreg;
-	memcpy(&sch->schib, &schib, sizeof(struct schib));
-	/* Check for single path devices. */
-	if (sch->schib.pmcw.pim == 0x80)
-		goto out_unreg;
-
-	if (check_for_io_on_path(sch, mask)) {
-		if (device_is_online(sch))
-			device_kill_io(sch);
-		else {
-			terminate_internal_io(sch);
-			/* Re-start path verification. */
-			if (sch->driver && sch->driver->verify)
-				sch->driver->verify(sch);
-		}
-	} else {
-		/* trigger path verification. */
-		if (sch->driver && sch->driver->verify)
-			sch->driver->verify(sch);
-		else if (sch->lpm == mask)
+	if (sch->driver && sch->driver->chp_event)
+		if (sch->driver->chp_event(sch, data, CHP_OFFLINE) != 0)
 			goto out_unreg;
-	}
-
 	spin_unlock_irq(sch->lock);
 	return 0;
 
@@ -211,15 +146,18 @@ out_unreg:
 void chsc_chp_offline(struct chp_id chpid)
 {
 	char dbf_txt[15];
+	struct chp_link link;
 
 	sprintf(dbf_txt, "chpr%x.%02x", chpid.cssid, chpid.id);
 	CIO_TRACE_EVENT(2, dbf_txt);
 
 	if (chp_get_status(chpid) <= 0)
 		return;
+	memset(&link, 0, sizeof(struct chp_link));
+	link.chpid = chpid;
 	/* Wait until previous actions have settled. */
 	css_wait_for_slow_path();
-	for_each_subchannel_staged(s390_subchannel_remove_chpid, NULL, &chpid);
+	for_each_subchannel_staged(s390_subchannel_remove_chpid, NULL, &link);
 }
 
 static int s390_process_res_acc_new_sch(struct subchannel_id schid, void *data)
@@ -242,67 +180,25 @@ static int s390_process_res_acc_new_sch(struct subchannel_id schid, void *data)
 	return 0;
 }
 
-struct res_acc_data {
-	struct chp_id chpid;
-	u32 fla_mask;
-	u16 fla;
-};
-
-static int get_res_chpid_mask(struct chsc_ssd_info *ssd,
-			      struct res_acc_data *data)
-{
-	int i;
-	int mask;
-
-	for (i = 0; i < 8; i++) {
-		mask = 0x80 >> i;
-		if (!(ssd->path_mask & mask))
-			continue;
-		if (!chp_id_is_equal(&ssd->chpid[i], &data->chpid))
-			continue;
-		if ((ssd->fla_valid_mask & mask) &&
-		    ((ssd->fla[i] & data->fla_mask) != data->fla))
-			continue;
-		return mask;
-	}
-	return 0;
-}
-
 static int __s390_process_res_acc(struct subchannel *sch, void *data)
 {
-	int chp_mask, old_lpm;
-	struct res_acc_data *res_data = data;
-
 	spin_lock_irq(sch->lock);
-	chp_mask = get_res_chpid_mask(&sch->ssd_info, res_data);
-	if (chp_mask == 0)
-		goto out;
-	if (stsch(sch->schid, &sch->schib))
-		goto out;
-	old_lpm = sch->lpm;
-	sch->lpm = ((sch->schib.pmcw.pim &
-		     sch->schib.pmcw.pam &
-		     sch->schib.pmcw.pom)
-		    | chp_mask) & sch->opm;
-	if (!old_lpm && sch->lpm)
-		device_trigger_reprobe(sch);
-	else if (sch->driver && sch->driver->verify)
-		sch->driver->verify(sch);
-out:
+	if (sch->driver && sch->driver->chp_event)
+		sch->driver->chp_event(sch, data, CHP_ONLINE);
 	spin_unlock_irq(sch->lock);
 
 	return 0;
 }
 
-static void s390_process_res_acc (struct res_acc_data *res_data)
+static void s390_process_res_acc(struct chp_link *link)
 {
 	char dbf_txt[15];
 
-	sprintf(dbf_txt, "accpr%x.%02x", res_data->chpid.cssid,
-		res_data->chpid.id);
+	sprintf(dbf_txt, "accpr%x.%02x", link->chpid.cssid,
+		link->chpid.id);
 	CIO_TRACE_EVENT( 2, dbf_txt);
-	if (res_data->fla != 0) {
-		sprintf(dbf_txt, "fla%x", res_data->fla);
+	if (link->fla != 0) {
+		sprintf(dbf_txt, "fla%x", link->fla);
 		CIO_TRACE_EVENT( 2, dbf_txt);
 	}
 	/* Wait until previous actions have settled. */
@@ -315,7 +211,7 @@ static void s390_process_res_acc (struct res_acc_data *res_data)
 	 * will we have to do.
 	 */
 	for_each_subchannel_staged(__s390_process_res_acc,
-				   s390_process_res_acc_new_sch, res_data);
+				   s390_process_res_acc_new_sch, link);
 }
 
 static int
@@ -388,7 +284,7 @@ static void chsc_process_sei_link_incident(struct chsc_sei_area *sei_area)
 
 static void chsc_process_sei_res_acc(struct chsc_sei_area *sei_area)
 {
-	struct res_acc_data res_data;
+	struct chp_link link;
 	struct chp_id chpid;
 	int status;
 
@@ -404,18 +300,18 @@ static void chsc_process_sei_res_acc(struct chsc_sei_area *sei_area)
 		chp_new(chpid);
 	else if (!status)
 		return;
-	memset(&res_data, 0, sizeof(struct res_acc_data));
-	res_data.chpid = chpid;
+	memset(&link, 0, sizeof(struct chp_link));
+	link.chpid = chpid;
 	if ((sei_area->vf & 0xc0) != 0) {
-		res_data.fla = sei_area->fla;
+		link.fla = sei_area->fla;
 		if ((sei_area->vf & 0xc0) == 0xc0)
 			/* full link address */
-			res_data.fla_mask = 0xffff;
+			link.fla_mask = 0xffff;
 		else
 			/* link address */
-			res_data.fla_mask = 0xff00;
+			link.fla_mask = 0xff00;
 	}
-	s390_process_res_acc(&res_data);
+	s390_process_res_acc(&link);
 }
 
 struct chp_config_data {
@@ -480,17 +376,25 @@ static void chsc_process_sei(struct chsc_sei_area *sei_area)
 	}
 }
 
-void chsc_process_crw(void)
+static void chsc_process_crw(struct crw *crw0, struct crw *crw1, int overflow)
 {
 	struct chsc_sei_area *sei_area;
 
+	if (overflow) {
+		css_schedule_eval_all();
+		return;
+	}
+	CIO_CRW_EVENT(2, "CRW reports slct=%d, oflw=%d, "
+		      "chn=%d, rsc=%X, anc=%d, erc=%X, rsid=%X\n",
+		      crw0->slct, crw0->oflw, crw0->chn, crw0->rsc, crw0->anc,
+		      crw0->erc, crw0->rsid);
 	if (!sei_page)
 		return;
 	/* Access to sei_page is serialized through machine check handler
 	 * thread, so no need for locking. */
 	sei_area = sei_page;
 
-	CIO_TRACE_EVENT( 2, "prcss");
+	CIO_TRACE_EVENT(2, "prcss");
 	do {
 		memset(sei_area, 0, sizeof(*sei_area));
 		sei_area->request.length = 0x0010;
@@ -509,114 +413,36 @@ void chsc_process_crw(void)
 	} while (sei_area->flags & 0x80);
 }
 
-static int __chp_add_new_sch(struct subchannel_id schid, void *data)
-{
-	struct schib schib;
-
-	if (stsch_err(schid, &schib))
-		/* We're through */
-		return -ENXIO;
-
-	/* Put it on the slow path. */
-	css_schedule_eval(schid);
-	return 0;
-}
-
-
-static int __chp_add(struct subchannel *sch, void *data)
-{
-	int i, mask;
-	struct chp_id *chpid = data;
-
-	spin_lock_irq(sch->lock);
-	for (i=0; i<8; i++) {
-		mask = 0x80 >> i;
-		if ((sch->schib.pmcw.pim & mask) &&
-		    (sch->schib.pmcw.chpid[i] == chpid->id))
-			break;
-	}
-	if (i==8) {
-		spin_unlock_irq(sch->lock);
-		return 0;
-	}
-	if (stsch(sch->schid, &sch->schib)) {
-		spin_unlock_irq(sch->lock);
-		css_schedule_eval(sch->schid);
-		return 0;
-	}
-	sch->lpm = ((sch->schib.pmcw.pim &
-		     sch->schib.pmcw.pam &
-		     sch->schib.pmcw.pom)
-		    | mask) & sch->opm;
-
-	if (sch->driver && sch->driver->verify)
-		sch->driver->verify(sch);
-
-	spin_unlock_irq(sch->lock);
-
-	return 0;
-}
-
 void chsc_chp_online(struct chp_id chpid)
 {
 	char dbf_txt[15];
+	struct chp_link link;
 
 	sprintf(dbf_txt, "cadd%x.%02x", chpid.cssid, chpid.id);
 	CIO_TRACE_EVENT(2, dbf_txt);
 
 	if (chp_get_status(chpid) != 0) {
+		memset(&link, 0, sizeof(struct chp_link));
+		link.chpid = chpid;
 		/* Wait until previous actions have settled. */
 		css_wait_for_slow_path();
-		for_each_subchannel_staged(__chp_add, __chp_add_new_sch,
-					   &chpid);
+		for_each_subchannel_staged(__s390_process_res_acc, NULL,
+					   &link);
 	}
 }
 
 static void __s390_subchannel_vary_chpid(struct subchannel *sch,
 					 struct chp_id chpid, int on)
 {
-	int chp, old_lpm;
-	int mask;
 	unsigned long flags;
+	struct chp_link link;
 
+	memset(&link, 0, sizeof(struct chp_link));
+	link.chpid = chpid;
 	spin_lock_irqsave(sch->lock, flags);
-	old_lpm = sch->lpm;
-	for (chp = 0; chp < 8; chp++) {
-		mask = 0x80 >> chp;
-		if (!(sch->ssd_info.path_mask & mask))
-			continue;
-		if (!chp_id_is_equal(&sch->ssd_info.chpid[chp], &chpid))
-			continue;
-
-		if (on) {
-			sch->opm |= mask;
-			sch->lpm |= mask;
-			if (!old_lpm)
-				device_trigger_reprobe(sch);
-			else if (sch->driver && sch->driver->verify)
-				sch->driver->verify(sch);
-			break;
-		}
-		sch->opm &= ~mask;
-		sch->lpm &= ~mask;
-		if (check_for_io_on_path(sch, mask)) {
-			if (device_is_online(sch))
-				/* Path verification is done after killing. */
-				device_kill_io(sch);
-			else {
-				/* Kill and retry internal I/O. */
-				terminate_internal_io(sch);
-				/* Re-start path verification. */
-				if (sch->driver && sch->driver->verify)
-					sch->driver->verify(sch);
-			}
-		} else if (!sch->lpm) {
-			if (device_trigger_verify(sch) != 0)
-				css_schedule_eval(sch->schid);
-		} else if (sch->driver && sch->driver->verify)
-			sch->driver->verify(sch);
-		break;
-	}
+	if (sch->driver && sch->driver->chp_event)
+		sch->driver->chp_event(sch, &link,
+				       on ? CHP_VARY_ON : CHP_VARY_OFF);
 	spin_unlock_irqrestore(sch->lock, flags);
 }
 
@@ -656,6 +482,10 @@ __s390_vary_chpid_on(struct subchannel_id schid, void *data)
  */
 int chsc_chp_vary(struct chp_id chpid, int on)
 {
+	struct chp_link link;
+
+	memset(&link, 0, sizeof(struct chp_link));
+	link.chpid = chpid;
 	/* Wait until previous actions have settled. */
 	css_wait_for_slow_path();
 	/*
@@ -664,10 +494,10 @@ int chsc_chp_vary(struct chp_id chpid, int on)
 
 	if (on)
 		for_each_subchannel_staged(s390_subchannel_vary_chpid_on,
-					   __s390_vary_chpid_on, &chpid);
+					   __s390_vary_chpid_on, &link);
 	else
 		for_each_subchannel_staged(s390_subchannel_vary_chpid_off,
-					   NULL, &chpid);
+					   NULL, &link);
 
 	return 0;
 }
@@ -937,15 +767,23 @@ out:
 
 int __init chsc_alloc_sei_area(void)
 {
+	int ret;
+
 	sei_page = (void *)get_zeroed_page(GFP_KERNEL | GFP_DMA);
-	if (!sei_page)
+	if (!sei_page) {
 		CIO_MSG_EVENT(0, "Can't allocate page for processing of "
 			      "chsc machine checks!\n");
-	return (sei_page ? 0 : -ENOMEM);
+		return -ENOMEM;
+	}
+	ret = s390_register_crw_handler(CRW_RSC_CSS, chsc_process_crw);
+	if (ret)
+		kfree(sei_page);
+	return ret;
 }
 
 void __init chsc_free_sei_area(void)
 {
+	s390_unregister_crw_handler(CRW_RSC_CSS);
 	kfree(sei_page);
 }
 
@@ -1043,3 +881,52 @@ exit:
 
 EXPORT_SYMBOL_GPL(css_general_characteristics);
 EXPORT_SYMBOL_GPL(css_chsc_characteristics);
+
+int chsc_sstpc(void *page, unsigned int op, u16 ctrl)
+{
+	struct {
+		struct chsc_header request;
+		unsigned int rsvd0;
+		unsigned int op : 8;
+		unsigned int rsvd1 : 8;
+		unsigned int ctrl : 16;
+		unsigned int rsvd2[5];
+		struct chsc_header response;
+		unsigned int rsvd3[7];
+	} __attribute__ ((packed)) *rr;
+	int rc;
+
+	memset(page, 0, PAGE_SIZE);
+	rr = page;
+	rr->request.length = 0x0020;
+	rr->request.code = 0x0033;
+	rr->op = op;
+	rr->ctrl = ctrl;
+	rc = chsc(rr);
+	if (rc)
+		return -EIO;
+	rc = (rr->response.code == 0x0001) ? 0 : -EIO;
+	return rc;
+}
+
+int chsc_sstpi(void *page, void *result, size_t size)
+{
+	struct {
+		struct chsc_header request;
+		unsigned int rsvd0[3];
+		struct chsc_header response;
+		char data[size];
+	} __attribute__ ((packed)) *rr;
+	int rc;
+
+	memset(page, 0, PAGE_SIZE);
+	rr = page;
+	rr->request.length = 0x0010;
+	rr->request.code = 0x0038;
+	rc = chsc(rr);
+	if (rc)
+		return -EIO;
+	memcpy(result, &rr->data, size);
+	return (rr->response.code == 0x0001) ? 0 : -EIO;
+}
+
