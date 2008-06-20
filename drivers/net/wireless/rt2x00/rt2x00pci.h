@@ -87,44 +87,29 @@ rt2x00pci_register_multiwrite(struct rt2x00_dev *rt2x00dev,
 	memcpy_toio(rt2x00dev->csr.base + offset, value, length);
 }
 
-/*
- * TX data handlers.
- */
-int rt2x00pci_write_tx_data(struct rt2x00_dev *rt2x00dev,
-			    struct data_queue *queue, struct sk_buff *skb,
-			    struct ieee80211_tx_control *control);
-
 /**
- * struct queue_entry_priv_pci_rx: Per RX entry PCI specific information
+ * rt2x00pci_write_tx_data - Initialize data for TX operation
+ * @entry: The entry where the frame is located
  *
- * @desc: Pointer to device descriptor.
- * @data: Pointer to device's entry memory.
- * @dma: DMA pointer to &data.
+ * This function will initialize the DMA and skb descriptor
+ * to prepare the entry for the actual TX operation.
  */
-struct queue_entry_priv_pci_rx {
-	__le32 *desc;
-	dma_addr_t desc_dma;
-
-	void *data;
-	dma_addr_t data_dma;
-};
+int rt2x00pci_write_tx_data(struct queue_entry *entry);
 
 /**
- * struct queue_entry_priv_pci_tx: Per TX entry PCI specific information
+ * struct queue_entry_priv_pci: Per entry PCI specific information
  *
  * @desc: Pointer to device descriptor
+ * @desc_dma: DMA pointer to &desc.
  * @data: Pointer to device's entry memory.
- * @dma: DMA pointer to &data.
- * @control: mac80211 control structure used to transmit data.
+ * @data_dma: DMA pointer to &data.
  */
-struct queue_entry_priv_pci_tx {
+struct queue_entry_priv_pci {
 	__le32 *desc;
 	dma_addr_t desc_dma;
 
 	void *data;
 	dma_addr_t data_dma;
-
-	struct ieee80211_tx_control control;
 };
 
 /**
