@@ -432,14 +432,7 @@ acpi_status acpi_ds_load1_end_op(struct acpi_walk_state *walk_state)
 			status =
 			    acpi_ex_create_region(op->named.data,
 						  op->named.length,
-						  (acpi_adr_space_type) ((op->
-									  common.
-									  value.
-									  arg)->
-									 common.
-									 value.
-									 integer),
-						  walk_state);
+						  (acpi_adr_space_type) ((op->common.value.arg)->common.value.integer), walk_state);
 			if (ACPI_FAILURE(status)) {
 				return_ACPI_STATUS(status);
 			}
@@ -461,11 +454,10 @@ acpi_status acpi_ds_load1_end_op(struct acpi_walk_state *walk_state)
 		/* For Name opcode, get the object type from the argument */
 
 		if (op->common.value.arg) {
-			object_type = (acpi_ps_get_opcode_info((op->common.
-								value.arg)->
-							       common.
-							       aml_opcode))->
-			    object_type;
+			object_type =
+			    (acpi_ps_get_opcode_info
+			     ((op->common.value.
+			       arg)->common.aml_opcode))->object_type;
 
 			/* Set node type if we have a namespace node */
 
@@ -500,14 +492,14 @@ acpi_status acpi_ds_load1_end_op(struct acpi_walk_state *walk_state)
 
 				status =
 				    acpi_ds_create_operands(walk_state,
-							    op->common.value.
-							    arg);
+							    op->common.
+							    value.arg);
 				if (ACPI_SUCCESS(status)) {
 					status =
-					    acpi_ex_create_method(op->named.
-								  data,
-								  op->named.
-								  length,
+					    acpi_ex_create_method(op->
+								  named.data,
+								  op->
+								  named.length,
 								  walk_state);
 				}
 
@@ -967,8 +959,9 @@ acpi_status acpi_ds_load2_end_op(struct acpi_walk_state *walk_state)
 
 			status =
 			    acpi_ds_create_index_field(op,
-						       (acpi_handle) arg->
-						       common.node, walk_state);
+						       (acpi_handle)
+						       arg->common.node,
+						       walk_state);
 			break;
 
 		case AML_BANK_FIELD_OP:
@@ -1039,7 +1032,7 @@ acpi_status acpi_ds_load2_end_op(struct acpi_walk_state *walk_state)
 		}
 
 		break;
-#endif				/* ACPI_NO_METHOD_EXECUTION */
+#endif /* ACPI_NO_METHOD_EXECUTION */
 
 	case AML_TYPE_NAMED_COMPLEX:
 
@@ -1050,8 +1043,8 @@ acpi_status acpi_ds_load2_end_op(struct acpi_walk_state *walk_state)
 
 			if (op->common.aml_opcode == AML_REGION_OP) {
 				region_space = (acpi_adr_space_type)
-				    ((op->common.value.arg)->common.value.
-				     integer);
+				    ((op->common.value.arg)->common.
+				     value.integer);
 			} else {
 				region_space = REGION_DATA_TABLE;
 			}
@@ -1120,14 +1113,14 @@ acpi_status acpi_ds_load2_end_op(struct acpi_walk_state *walk_state)
 
 				status =
 				    acpi_ds_create_operands(walk_state,
-							    op->common.value.
-							    arg);
+							    op->common.
+							    value.arg);
 				if (ACPI_SUCCESS(status)) {
 					status =
-					    acpi_ex_create_method(op->named.
-								  data,
-								  op->named.
-								  length,
+					    acpi_ex_create_method(op->
+								  named.data,
+								  op->
+								  named.length,
 								  walk_state);
 				}
 				walk_state->operands[0] = NULL;
@@ -1139,7 +1132,7 @@ acpi_status acpi_ds_load2_end_op(struct acpi_walk_state *walk_state)
 			}
 			break;
 
-#endif				/* ACPI_NO_METHOD_EXECUTION */
+#endif /* ACPI_NO_METHOD_EXECUTION */
 
 		default:
 			/* All NAMED_COMPLEX opcodes must be handled above */
@@ -1192,7 +1185,7 @@ acpi_status acpi_ds_load2_end_op(struct acpi_walk_state *walk_state)
 		break;
 	}
 
-      cleanup:
+cleanup:
 
 	/* Remove the Node pushed at the very beginning */
 

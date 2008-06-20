@@ -333,4 +333,4 @@ extern struct acpi_rsdump_info acpi_rs_dump_ext_irq[];
 extern struct acpi_rsdump_info acpi_rs_dump_generic_reg[];
 #endif
 
-#endif				/* __ACRESRC_H__ */
+#endif /* __ACRESRC_H__ */

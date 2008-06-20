@@ -48,7 +48,6 @@
 
 #define _COMPONENT          ACPI_UTILITIES
 ACPI_MODULE_NAME("utxface")
-
 #ifndef ACPI_ASL_COMPILER
 /*******************************************************************************
  *
@@ -291,7 +290,6 @@ acpi_status acpi_initialize_objects(u32 flags)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_initialize_objects)
-
 #endif
 /*******************************************************************************
  *
@@ -468,7 +466,7 @@ acpi_install_initialization_handler(acpi_init_handler handler, u32 function)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_install_initialization_handler)
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 /*****************************************************************************
  *
  * FUNCTION:    acpi_purge_cached_objects
