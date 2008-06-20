@@ -140,7 +140,7 @@ ACPI_EXTERN u32 acpi_gbl_trace_flags;
  */
 ACPI_EXTERN struct acpi_internal_rsdt acpi_gbl_root_table_list;
 ACPI_EXTERN struct acpi_table_fadt acpi_gbl_FADT;
-extern acpi_native_uint acpi_gbl_permanent_mmap;
+extern u8 acpi_gbl_permanent_mmap;
 
 /* These addresses are calculated from FADT address values */
 
@@ -382,6 +382,6 @@ ACPI_EXTERN u32 acpi_gbl_size_of_method_trees;
 ACPI_EXTERN u32 acpi_gbl_size_of_node_entries;
 ACPI_EXTERN u32 acpi_gbl_size_of_acpi_objects;
 
-#endif				/* ACPI_DEBUGGER */
+#endif /* ACPI_DEBUGGER */
 
-#endif				/* __ACGLOBAL_H__ */
+#endif /* __ACGLOBAL_H__ */

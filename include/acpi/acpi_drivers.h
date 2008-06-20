@@ -126,19 +126,23 @@ static inline int is_dock_device(acpi_handle handle)
 {
 	return 0;
 }
+
 static inline int register_dock_notifier(struct notifier_block *nb)
 {
 	return -ENODEV;
 }
+
 static inline void unregister_dock_notifier(struct notifier_block *nb)
 {
 }
+
 static inline int register_hotplug_dock_device(acpi_handle handle,
 					       acpi_notify_handler handler,
 					       void *context)
 {
 	return -ENODEV;
 }
+
 static inline void unregister_hotplug_dock_device(acpi_handle handle)
 {
 }

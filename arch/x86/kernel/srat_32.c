@@ -126,9 +126,8 @@ static void __init parse_memory_affinity_structure (char *sratp)
 
 	num_memory_chunks++;
 
-	printk("Memory range 0x%lX to 0x%lX (type 0x%X) in proximity domain 0x%02X %s\n",
+	printk("Memory range 0x%lX to 0x%lX in proximity domain 0x%02X %s\n",
 		start_pfn, end_pfn,
-		memory_affinity->memory_type,
 		pxm,
 		((memory_affinity->flags & ACPI_SRAT_MEM_HOT_PLUGGABLE) ?
 		 "enabled and removable" : "enabled" ) );
@@ -269,7 +268,7 @@ int __init get_memcfg_from_srat(void)
 	struct acpi_table_header *header = NULL;
 	struct acpi_table_rsdp *rsdp = NULL;
 	struct acpi_table_rsdt *rsdt = NULL;
-	acpi_native_uint rsdp_address = 0;
+	u32 rsdp_address = 0;
 	struct acpi_static_rsdt saved_rsdt;
 	int tables = 0;
 	int i = 0;

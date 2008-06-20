@@ -82,7 +82,7 @@ acpi_rs_convert_aml_to_resource(struct acpi_resource *resource,
 
 	ACPI_FUNCTION_TRACE(rs_convert_aml_to_resource);
 
-	if (((acpi_native_uint) resource) & 0x3) {
+	if (((acpi_size) resource) & 0x3) {
 
 		/* Each internal resource struct is expected to be 32-bit aligned */
 
@@ -293,7 +293,7 @@ acpi_rs_convert_aml_to_resource(struct acpi_resource *resource,
 		info++;
 	}
 
-      exit:
+exit:
 	if (!flags_mode) {
 
 		/* Round the resource struct length up to the next boundary (32 or 64) */
@@ -461,8 +461,7 @@ acpi_rs_convert_resource_to_aml(struct acpi_resource *resource,
 			temp16 = acpi_rs_encode_bitmask(source,
 							*ACPI_ADD_PTR(u8,
 								      resource,
-								      info->
-								      value));
+								      info->value));
 			ACPI_MOVE_16_TO_16(destination, &temp16);
 			break;
 
@@ -518,7 +517,7 @@ acpi_rs_convert_resource_to_aml(struct acpi_resource *resource,
 		info++;
 	}
 
-      exit:
+exit:
 	return_ACPI_STATUS(AE_OK);
 }
 

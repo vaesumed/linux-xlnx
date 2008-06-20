@@ -169,7 +169,7 @@ acpi_ds_execute_arguments(struct acpi_namespace_node *node,
 	walk_state->deferred_node = node;
 	status = acpi_ps_parse_aml(walk_state);
 
-      cleanup:
+cleanup:
 	acpi_ps_delete_parse_tree(op);
 	return_ACPI_STATUS(status);
 }
@@ -616,7 +616,7 @@ acpi_ds_init_buffer_field(u16 aml_opcode,
 	    (buffer_desc->common.reference_count +
 	     obj_desc->common.reference_count);
 
-      cleanup:
+cleanup:
 
 	/* Always delete the operands */
 
@@ -691,12 +691,6 @@ acpi_ds_eval_buffer_field_operands(struct acpi_walk_state *walk_state,
 
 	status = acpi_ex_resolve_operands(op->common.aml_opcode,
 					  ACPI_WALK_OPERANDS, walk_state);
-
-	ACPI_DUMP_OPERANDS(ACPI_WALK_OPERANDS, ACPI_IMODE_EXECUTE,
-			   acpi_ps_get_opcode_name(op->common.aml_opcode),
-			   walk_state->num_operands,
-			   "after AcpiExResolveOperands");
-
 	if (ACPI_FAILURE(status)) {
 		ACPI_ERROR((AE_INFO, "(%s) bad operand(s) (%X)",
 			    acpi_ps_get_opcode_name(op->common.aml_opcode),
@@ -785,10 +779,6 @@ acpi_ds_eval_region_operands(struct acpi_walk_state *walk_state,
 		return_ACPI_STATUS(status);
 	}
 
-	ACPI_DUMP_OPERANDS(ACPI_WALK_OPERANDS, ACPI_IMODE_EXECUTE,
-			   acpi_ps_get_opcode_name(op->common.aml_opcode),
-			   1, "after AcpiExResolveOperands");
-
 	obj_desc = acpi_ns_get_attached_object(node);
 	if (!obj_desc) {
 		return_ACPI_STATUS(AE_NOT_EXIST);
@@ -848,7 +838,7 @@ acpi_ds_eval_table_region_operands(struct acpi_walk_state *walk_state,
 	union acpi_operand_object **operand;
 	struct acpi_namespace_node *node;
 	union acpi_parse_object *next_op;
-	acpi_native_uint table_index;
+	u32 table_index;
 	struct acpi_table_header *table;
 
 	ACPI_FUNCTION_TRACE_PTR(ds_eval_table_region_operands, op);
@@ -881,10 +871,6 @@ acpi_ds_eval_table_region_operands(struct acpi_walk_state *walk_state,
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
 	}
-
-	ACPI_DUMP_OPERANDS(ACPI_WALK_OPERANDS, ACPI_IMODE_EXECUTE,
-			   acpi_ps_get_opcode_name(op->common.aml_opcode),
-			   1, "after AcpiExResolveOperands");
 
 	operand = &walk_state->operands[0];
 
@@ -967,9 +953,9 @@ acpi_ds_eval_data_object_operands(struct acpi_walk_state *walk_state,
 	}
 
 	status = acpi_ex_resolve_operands(walk_state->opcode,
-					  &(walk_state->
-					    operands[walk_state->num_operands -
-						     1]), walk_state);
+					  &(walk_state->operands
+					    [walk_state->num_operands - 1]),
+					  walk_state);
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
 	}
@@ -1091,10 +1077,8 @@ acpi_ds_eval_bank_field_operands(struct acpi_walk_state *walk_state,
 		return_ACPI_STATUS(status);
 	}
 
-	ACPI_DUMP_OPERANDS(ACPI_WALK_OPERANDS, ACPI_IMODE_EXECUTE,
-			   acpi_ps_get_opcode_name(op->common.aml_opcode),
-			   1, "after AcpiExResolveOperands");
-
+	ACPI_DUMP_OPERANDS(ACPI_WALK_OPERANDS,
+			   acpi_ps_get_opcode_name(op->common.aml_opcode), 1);
 	/*
 	 * Get the bank_value operand and save it
 	 * (at Top of stack)
@@ -1345,13 +1329,13 @@ acpi_ds_exec_end_control_op(struct acpi_walk_state * walk_state,
 			    (ACPI_GET_OBJECT_TYPE
 			     (walk_state->results->results.obj_desc[0]) ==
 			     ACPI_TYPE_LOCAL_REFERENCE)
-			    && ((walk_state->results->results.obj_desc[0])->
-				reference.opcode != AML_INDEX_OP)) {
+			    &&
+			    ((walk_state->results->results.
+			      obj_desc[0])->reference.opcode != AML_INDEX_OP)) {
 				status =
-				    acpi_ex_resolve_to_value(&walk_state->
-							     results->results.
-							     obj_desc[0],
-							     walk_state);
+				    acpi_ex_resolve_to_value
+				    (&walk_state->results->results.obj_desc[0],
+				     walk_state);
 				if (ACPI_FAILURE(status)) {
 					return (status);
 				}
@@ -1363,8 +1347,8 @@ acpi_ds_exec_end_control_op(struct acpi_walk_state * walk_state,
 			/* No return operand */
 
 			if (walk_state->num_operands) {
-				acpi_ut_remove_reference(walk_state->
-							 operands[0]);
+				acpi_ut_remove_reference(walk_state->operands
+							 [0]);
 			}
 
 			walk_state->operands[0] = NULL;
@@ -1407,8 +1391,8 @@ acpi_ds_exec_end_control_op(struct acpi_walk_state * walk_state,
 		       (walk_state->control_state->control.opcode !=
 			AML_WHILE_OP)) {
 			control_state =
-			    acpi_ut_pop_generic_state(&walk_state->
-						      control_state);
+			    acpi_ut_pop_generic_state
+			    (&walk_state->control_state);
 			acpi_ut_delete_generic_state(control_state);
 		}
 

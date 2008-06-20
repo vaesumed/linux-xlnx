@@ -70,8 +70,7 @@ u32 acpi_hw_get_mode(void);
  */
 struct acpi_bit_register_info *acpi_hw_get_bit_register_info(u32 register_id);
 
-acpi_status
-acpi_hw_register_read(u32 register_id, u32 * return_value);
+acpi_status acpi_hw_register_read(u32 register_id, u32 * return_value);
 
 acpi_status acpi_hw_register_write(u32 register_id, u32 value);
 
@@ -104,7 +103,7 @@ acpi_hw_clear_gpe_block(struct acpi_gpe_xrupt_info *gpe_xrupt_info,
 acpi_status
 acpi_hw_get_gpe_status(struct acpi_gpe_event_info *gpe_event_info,
 		       acpi_event_status * event_status);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
 acpi_status acpi_hw_disable_all_gpes(void);
 
@@ -126,6 +125,6 @@ acpi_status acpi_get_timer(u32 * ticks);
 
 acpi_status
 acpi_get_timer_duration(u32 start_ticks, u32 end_ticks, u32 * time_elapsed);
-#endif				/* ACPI_FUTURE_USAGE */
+#endif /* ACPI_FUTURE_USAGE */
 
-#endif				/* __ACHWARE_H__ */
+#endif /* __ACHWARE_H__ */
