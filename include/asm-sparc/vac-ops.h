@@ -76,11 +76,7 @@
  * cacheable bit in the pte's of all such pages.
  */
 
-#ifdef CONFIG_SUN4
-#define S4CVAC_BADBITS     0x0001e000
-#else
 #define S4CVAC_BADBITS    0x0000f000
-#endif
 
 /* The following is true if vaddr1 and vaddr2 would cause
  * a 'bad alias'.

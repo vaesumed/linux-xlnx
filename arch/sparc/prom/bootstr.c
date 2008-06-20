@@ -28,7 +28,6 @@ prom_getbootargs(void)
 
 	switch(prom_vers) {
 	case PROM_V0:
-	case PROM_SUN4:
 		cp = barg_buf;
 		/* Start from 1 and go over fd(0,0,0)kernel */
 		for(iter = 1; iter < 8; iter++) {
