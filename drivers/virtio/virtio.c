@@ -71,13 +71,6 @@ static int virtio_uevent(struct device *_dv, struct kobj_uevent_env *env)
 			      dev->id.device, dev->id.vendor);
 }
 
-static struct bus_type virtio_bus = {
-	.name  = "virtio",
-	.match = virtio_dev_match,
-	.dev_attrs = virtio_dev_attrs,
-	.uevent = virtio_uevent,
-};
-
 static void add_status(struct virtio_device *dev, unsigned status)
 {
 	dev->config->set_status(dev, dev->config->get_status(dev) | status);
@@ -120,6 +113,11 @@ static int virtio_dev_probe(struct device *_d)
 			set_bit(f, dev->features);
 	}
 
+	/* Transport features are always preserved to pass to set_features. */
+	for (i = VIRTIO_TRANSPORT_F_START; i < VIRTIO_TRANSPORT_F_END; i++)
+		if (device_features & (1 << i))
+			set_bit(i, dev->features);
+
 	err = drv->probe(dev);
 	if (err)
 		add_status(dev, VIRTIO_CONFIG_S_FAILED);
@@ -147,13 +145,20 @@ static int virtio_dev_remove(struct device *_d)
 	return 0;
 }
 
+static struct bus_type virtio_bus = {
+	.name  = "virtio",
+	.match = virtio_dev_match,
+	.dev_attrs = virtio_dev_attrs,
+	.uevent = virtio_uevent,
+	.probe = virtio_dev_probe,
+	.remove = virtio_dev_remove,
+};
+
 int register_virtio_driver(struct virtio_driver *driver)
 {
 	/* Catch this early. */
 	BUG_ON(driver->feature_table_size && !driver->feature_table);
 	driver->driver.bus = &virtio_bus;
-	driver->driver.probe = virtio_dev_probe;
-	driver->driver.remove = virtio_dev_remove;
 	return driver_register(&driver->driver);
 }
 EXPORT_SYMBOL_GPL(register_virtio_driver);
