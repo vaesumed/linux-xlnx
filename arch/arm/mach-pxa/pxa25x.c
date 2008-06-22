@@ -261,7 +261,7 @@ void __init pxa25x_init_irq(void)
 }
 
 static struct platform_device *pxa25x_devices[] __initdata = {
-	&pxa_device_udc,
+	&pxa25x_device_udc,
 	&pxa_device_ffuart,
 	&pxa_device_btuart,
 	&pxa_device_stuart,
