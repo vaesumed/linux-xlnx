@@ -839,7 +839,7 @@ zfcp_unit_enqueue(struct zfcp_port *port, fcp_lun_t fcp_lun)
 	unit->fcp_lun = fcp_lun;
 
 	/* setup for sysfs registration */
-	snprintf(unit->sysfs_device.bus_id, BUS_ID_SIZE, "0x%016llx", fcp_lun);
+	dev_set_name(&unit->sysfs_device, "0x%016llx", fcp_lun);
 	unit->sysfs_device.parent = &port->sysfs_device;
 	unit->sysfs_device.release = zfcp_sysfs_unit_release;
 	dev_set_drvdata(&unit->sysfs_device, unit);
@@ -1066,8 +1066,7 @@ zfcp_adapter_enqueue(struct ccw_device *ccw_device)
 
 	adapter->generic_services.parent = &adapter->ccw_device->dev;
 	adapter->generic_services.release = zfcp_dummy_release;
-	snprintf(adapter->generic_services.bus_id, BUS_ID_SIZE,
-		 "generic_services");
+	dev_set_name(&adapter->generic_services, "generic_services");
 
 	if (device_register(&adapter->generic_services))
 		goto generic_services_failed;
@@ -1218,24 +1217,19 @@ zfcp_port_enqueue(struct zfcp_adapter *adapter, wwn_t wwpn, u32 status,
 	if (status & ZFCP_STATUS_PORT_WKA) {
 		switch (d_id) {
 		case ZFCP_DID_DIRECTORY_SERVICE:
-			snprintf(port->sysfs_device.bus_id, BUS_ID_SIZE,
-				 "directory");
+			dev_set_name(&port->sysfs_device, "directory");
 			break;
 		case ZFCP_DID_MANAGEMENT_SERVICE:
-			snprintf(port->sysfs_device.bus_id, BUS_ID_SIZE,
-				 "management");
+			dev_set_name(&port->sysfs_device, "management");
 			break;
 		case ZFCP_DID_KEY_DISTRIBUTION_SERVICE:
-			snprintf(port->sysfs_device.bus_id, BUS_ID_SIZE,
-				 "key_distribution");
+			dev_set_name(&port->sysfs_device, "key_distribution");
 			break;
 		case ZFCP_DID_ALIAS_SERVICE:
-			snprintf(port->sysfs_device.bus_id, BUS_ID_SIZE,
-				 "alias");
+			dev_set_name(&port->sysfs_device, "alias");
 			break;
 		case ZFCP_DID_TIME_SERVICE:
-			snprintf(port->sysfs_device.bus_id, BUS_ID_SIZE,
-				 "time");
+			dev_set_name(&port->sysfs_device, "time");
 			break;
 		default:
 			kfree(port);
@@ -1244,8 +1238,7 @@ zfcp_port_enqueue(struct zfcp_adapter *adapter, wwn_t wwpn, u32 status,
 		port->d_id = d_id;
 		port->sysfs_device.parent = &adapter->generic_services;
 	} else {
-		snprintf(port->sysfs_device.bus_id,
-			 BUS_ID_SIZE, "0x%016llx", wwpn);
+		dev_set_name(&port->sysfs_device, "0x%016llx", wwpn);
 		port->sysfs_device.parent = &adapter->ccw_device->dev;
 	}
 	port->sysfs_device.release = zfcp_sysfs_port_release;
