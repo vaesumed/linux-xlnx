@@ -18,6 +18,7 @@ fw-shipped-$(CONFIG_USB_KAWETH_FIRMWARE) += kaweth/new_code.bin \
 		kaweth/new_code_fix.bin kaweth/trigger_code.bin \
 		kaweth/trigger_code_fix.bin
 fw-shipped-$(CONFIG_DVB_TTUSB_BUDGET_FIRMWARE) += ttusb-budget/dspbootcode.bin
+fw-shipped-$(CONFIG_DVB_AV7110_BOOTCODE) += av7110/bootcode.bin
 fw-shipped-$(CONFIG_E100_FIRMWARE) += e100/d101m_ucode.bin \
 		e100/d101s_ucode.bin e100/d102e_ucode.bin
 fw-shipped-$(CONFIG_ACENIC_TG1_FIRMWARE) += acenic/tg1.bin

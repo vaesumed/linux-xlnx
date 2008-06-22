@@ -6,7 +6,7 @@ config DVB_AV7110
 	tristate "AV7110 cards"
 	depends on DVB_CORE && PCI && I2C
 	depends on HOTPLUG
-	select FW_LOADER if !DVB_AV7110_FIRMWARE
+	select FW_LOADER
 	select TTPCI_EEPROM
 	select VIDEO_SAA7146_VV
 	depends on VIDEO_DEV	# dependencies of VIDEO_SAA7146_VV
@@ -31,6 +31,13 @@ config DVB_AV7110
 	  or /lib/firmware (depending on configuration of firmware hotplug).
 
 	  Say Y if you own such a card and want to use it.
+
+config DVB_AV7110_BOOTCODE
+	bool "Compile AV7110 bootcode into the kernel"
+	depends on DVB_AV7110
+	help
+	  This includes boot code for the AV7110 DVB cards in the kernel
+	  image. Say 'N' and let it get loaded from userspace on demand.
 
 config DVB_AV7110_FIRMWARE
 	bool "Compile AV7110 firmware into the driver"
