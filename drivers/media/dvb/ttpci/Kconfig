@@ -6,7 +6,6 @@ config DVB_AV7110
 	tristate "AV7110 cards"
 	depends on DVB_CORE && PCI && I2C
 	depends on HOTPLUG
-	select FW_LOADER if !DVB_AV7110_FIRMWARE
 	select TTPCI_EEPROM
 	select VIDEO_SAA7146_VV
 	depends on VIDEO_DEV	# dependencies of VIDEO_SAA7146_VV
