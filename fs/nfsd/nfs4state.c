@@ -1579,8 +1579,8 @@ nfs4_upgrade_open(struct svc_rqst *rqstp, struct svc_fh *cur_fh, struct nfs4_sta
 	}
 	/* remember the open */
 	filp->f_mode |= open->op_share_access;
-	set_bit(open->op_share_access, &stp->st_access_bmap);
-	set_bit(open->op_share_deny, &stp->st_deny_bmap);
+	__set_bit(open->op_share_access, &stp->st_access_bmap);
+	__set_bit(open->op_share_deny, &stp->st_deny_bmap);
 
 	return nfs_ok;
 }
@@ -1722,9 +1722,9 @@ nfsd4_process_open2(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nf
 		/* Stateid was not found, this is a new OPEN */
 		int flags = 0;
 		if (open->op_share_access & NFS4_SHARE_ACCESS_READ)
-			flags |= MAY_READ;
+			flags |= NFSD_MAY_READ;
 		if (open->op_share_access & NFS4_SHARE_ACCESS_WRITE)
-			flags |= MAY_WRITE;
+			flags |= NFSD_MAY_WRITE;
 		status = nfs4_new_open(rqstp, &stp, dp, current_fh, flags);
 		if (status)
 			goto out;
@@ -2610,7 +2610,7 @@ nfsd4_lock(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		 return nfserr_inval;
 
 	if ((status = fh_verify(rqstp, &cstate->current_fh,
-				S_IFREG, MAY_LOCK))) {
+				S_IFREG, NFSD_MAY_LOCK))) {
 		dprintk("NFSD: nfsd4_lock: permission denied!\n");
 		return status;
 	}
@@ -3249,12 +3249,14 @@ nfs4_state_shutdown(void)
 	nfs4_unlock_state();
 }
 
+/*
+ * user_recovery_dirname is protected by the nfsd_mutex since it's only
+ * accessed when nfsd is starting.
+ */
 static void
 nfs4_set_recdir(char *recdir)
 {
-	nfs4_lock_state();
 	strcpy(user_recovery_dirname, recdir);
-	nfs4_unlock_state();
 }
 
 /*
@@ -3278,6 +3280,12 @@ nfs4_reset_recoverydir(char *recdir)
 	return status;
 }
 
+char *
+nfs4_recoverydir(void)
+{
+	return user_recovery_dirname;
+}
+
 /*
  * Called when leasetime is changed.
  *
@@ -3286,11 +3294,12 @@ nfs4_reset_recoverydir(char *recdir)
  * we start to register any changes in lease time.  If the administrator
  * really wants to change the lease time *now*, they can go ahead and bring
  * nfsd down and then back up again after changing the lease time.
+ *
+ * user_lease_time is protected by nfsd_mutex since it's only really accessed
+ * when nfsd is starting
  */
 void
 nfs4_reset_lease(time_t leasetime)
 {
-	lock_kernel();
 	user_lease_time = leasetime;
-	unlock_kernel();
 }
