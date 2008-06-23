@@ -179,8 +179,6 @@ ia64/
 	- directory with info about Linux on Intel 64 bit architecture.
 infiniband/
 	- directory with documents concerning Linux InfiniBand support.
-initrd.txt
-	- how to use the RAM disk as an initial/temporary root filesystem.
 input/
 	- info on Linux input device support.
 io_ordering.txt
