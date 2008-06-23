@@ -162,6 +162,7 @@ extern struct acpi_dmtable_info acpi_dm_table_info_dmar_hdr[];
 extern struct acpi_dmtable_info acpi_dm_table_info_dmar_scope[];
 extern struct acpi_dmtable_info acpi_dm_table_info_dmar0[];
 extern struct acpi_dmtable_info acpi_dm_table_info_dmar1[];
+extern struct acpi_dmtable_info acpi_dm_table_info_dmar2[];
 extern struct acpi_dmtable_info acpi_dm_table_info_ecdt[];
 extern struct acpi_dmtable_info acpi_dm_table_info_einj[];
 extern struct acpi_dmtable_info acpi_dm_table_info_einj0[];
@@ -437,4 +438,4 @@ void
 acpi_dm_check_resource_reference(union acpi_parse_object *op,
 				 struct acpi_walk_state *walk_state);
 
-#endif				/* __ACDISASM_H__ */
+#endif /* __ACDISASM_H__ */

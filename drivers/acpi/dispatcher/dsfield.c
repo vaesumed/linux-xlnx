@@ -187,7 +187,7 @@ acpi_ds_create_buffer_field(union acpi_parse_object *op,
 		goto cleanup;
 	}
 
-      cleanup:
+cleanup:
 
 	/* Remove local reference to the object */
 
@@ -259,9 +259,8 @@ acpi_ds_get_field_names(struct acpi_create_field_info *info,
 			 * ACCESS_TYPE bits
 			 */
 			info->field_flags = (u8)
-			    ((info->
-			      field_flags & ~(AML_FIELD_ACCESS_TYPE_MASK)) |
-			     ((u8) ((u32) arg->common.value.integer >> 8)));
+			    ((info->field_flags & ~(AML_FIELD_ACCESS_TYPE_MASK))
+			     | ((u8) ((u32) arg->common.value.integer >> 8)));
 
 			info->attribute = (u8) (arg->common.value.integer);
 			break;
@@ -308,8 +307,8 @@ acpi_ds_get_field_names(struct acpi_create_field_info *info,
 				ACPI_ERROR((AE_INFO,
 					    "Field [%4.4s] bit offset too large (> 0xFFFFFFFF)",
 					    ACPI_CAST_PTR(char,
-							  &info->field_node->
-							  name)));
+							  &info->
+							  field_node->name)));
 				return_ACPI_STATUS(AE_SUPPORT);
 			}
 

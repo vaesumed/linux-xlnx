@@ -115,7 +115,7 @@ acpi_status acpi_ex_opcode_0A_0T_1R(struct acpi_walk_state *walk_state)
 		break;
 	}
 
-      cleanup:
+cleanup:
 
 	/* Delete return object on error */
 
@@ -234,7 +234,7 @@ acpi_status acpi_ex_opcode_1A_1T_0R(struct acpi_walk_state *walk_state)
 		goto cleanup;
 	}
 
-      cleanup:
+cleanup:
 
 	return_ACPI_STATUS(status);
 }
@@ -399,8 +399,9 @@ acpi_status acpi_ex_opcode_1A_1T_1R(struct acpi_walk_state *walk_state)
 			if (digit > 0) {
 				ACPI_ERROR((AE_INFO,
 					    "Integer too large to convert to BCD: %8.8X%8.8X",
-					    ACPI_FORMAT_UINT64(operand[0]->
-							       integer.value)));
+					    ACPI_FORMAT_UINT64(operand
+							       [0]->integer.
+							       value)));
 				status = AE_AML_NUMERIC_OVERFLOW;
 				goto cleanup;
 			}
@@ -552,7 +553,7 @@ acpi_status acpi_ex_opcode_1A_1T_1R(struct acpi_walk_state *walk_state)
 		status = acpi_ex_store(return_desc, operand[1], walk_state);
 	}
 
-      cleanup:
+cleanup:
 
 	/* Delete return object on error */
 
@@ -652,8 +653,8 @@ acpi_status acpi_ex_opcode_1A_0T_1R(struct acpi_walk_state *walk_state)
 		if (ACPI_FAILURE(status)) {
 			ACPI_EXCEPTION((AE_INFO, status,
 					"While resolving operands for [%s]",
-					acpi_ps_get_opcode_name(walk_state->
-								opcode)));
+					acpi_ps_get_opcode_name
+					(walk_state->opcode)));
 
 			goto cleanup;
 		}
@@ -887,8 +888,8 @@ acpi_status acpi_ex_opcode_1A_0T_1R(struct acpi_walk_state *walk_state)
 				 *    Field, so we need to resolve the node to a value.
 				 */
 				status =
-				    acpi_ns_get_node(walk_state->scope_info->
-						     scope.node,
+				    acpi_ns_get_node(walk_state->
+						     scope_info->scope.node,
 						     operand[0]->string.pointer,
 						     ACPI_NS_SEARCH_PARENT,
 						     ACPI_CAST_INDIRECT_PTR
@@ -963,9 +964,9 @@ acpi_status acpi_ex_opcode_1A_0T_1R(struct acpi_walk_state *walk_state)
 					 * reference to the buffer itself.
 					 */
 					return_desc->integer.value =
-					    temp_desc->buffer.
-					    pointer[operand[0]->reference.
-						    offset];
+					    temp_desc->
+					    buffer.pointer[operand[0]->
+							   reference.offset];
 					break;
 
 				case ACPI_TYPE_PACKAGE:
@@ -986,8 +987,9 @@ acpi_status acpi_ex_opcode_1A_0T_1R(struct acpi_walk_state *walk_state)
 
 					ACPI_ERROR((AE_INFO,
 						    "Unknown Index TargetType %X in obj %p",
-						    operand[0]->reference.
-						    target_type, operand[0]));
+						    operand[0]->
+						    reference.target_type,
+						    operand[0]));
 					status = AE_AML_OPERAND_TYPE;
 					goto cleanup;
 				}
@@ -1031,7 +1033,7 @@ acpi_status acpi_ex_opcode_1A_0T_1R(struct acpi_walk_state *walk_state)
 		goto cleanup;
 	}
 
-      cleanup:
+cleanup:
 
 	/* Delete return object on error */
 
