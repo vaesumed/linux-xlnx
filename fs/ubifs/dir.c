@@ -998,7 +998,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (move)
 		ubifs_clean_inode(c, ubifs_inode(new_dir));
 	if (unlink)
-		ubifs_clean_inode(c, ubifs_inode(old_inode));
+		ubifs_clean_inode(c, ubifs_inode(new_inode));
 
 	mutex_lock(&old_ui->wb_mutex);
 	if (old_ui->dirty)
