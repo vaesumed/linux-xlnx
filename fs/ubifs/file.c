@@ -488,6 +488,14 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 			err = inode->i_sb->s_op->write_inode(inode, 1);
 			if (err)
 				goto out_unlock;
+			/*
+			 * The inode has been written, but the write-buffer has
+			 * not been synchronized, so in case of an unclean
+			 * reboot we may end up with some pages beyond inode
+			 * size, but they would be in the journal (because commit
+			 * flushes write buffers) and recovery would deal with
+			 * this.
+			 */
 		}
 		return do_writepage(page, PAGE_CACHE_SIZE);
 	}
