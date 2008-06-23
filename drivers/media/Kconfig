@@ -125,6 +125,7 @@ if DAB
 config USB_DABUSB
 	tristate "DABUSB driver"
 	depends on USB
+	select FW_LOADER
 	---help---
 	  A Digital Audio Broadcasting (DAB) Receiver for USB and Linux
 	  brought to you by the DAB-Team
@@ -135,6 +136,7 @@ config USB_DABUSB
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called dabusb.
+
 endif # DAB
 
 endmenu
