@@ -328,7 +328,8 @@ AFLAGS_KERNEL	=
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
 LINUXINCLUDE    := -Iinclude \
-                   $(if $(KBUILD_SRC),-Iinclude2 -I$(srctree)/include) \
+                   $(if $(KBUILD_SRC),                                 \
+                        -Iinclude2 -Iinclude3 -I$(srctree)/include)    \
                    -I$(srctree)/arch/$(hdr-arch)/include               \
                    -include include/linux/autoconf.h
 
@@ -913,6 +914,7 @@ PHONY += prepare archprepare prepare0 prepare1 prepare2 prepare3
 # and if so do:
 # 1) Check that make has not been executed in the kernel src $(srctree)
 # 2) Create the include2 directory, used for the second asm symlink
+# 3) Create the include3 directory, used for the third asm symlink
 prepare3: include/config/kernel.release
 ifneq ($(KBUILD_SRC),)
 	@echo '  Using $(srctree) as source for kernel'
@@ -924,6 +926,10 @@ ifneq ($(KBUILD_SRC),)
 	$(Q)if [ ! -d include2 ]; then mkdir -p include2; fi;
 	$(Q)if [ -e $(srctree)/include/asm-$(SRCARCH)/system.h ]; then  \
 	    ln -fsn $(srctree)/include/asm-$(SRCARCH) include2/asm;     \
+	    fi
+	$(Q)if [ ! -d include3 ]; then mkdir -p include3; fi;
+	$(Q)if [ -e $(srctree)/include/asm-$(SRCARCH)/system.h ]; then  \
+	    ln -fsn ../include/asm-$(SRCARCH) include3/asm;                \
 	    fi
 endif
 
