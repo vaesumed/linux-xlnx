@@ -51,6 +51,7 @@ fw-shipped-$(CONFIG_USB_SERIAL_WHITEHEAT) += whiteheat_loader.fw whiteheat.fw \
 					   # whiteheat_loader_debug.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_PDA) += keyspan_pda/keyspan_pda.fw
 fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM) += keyspan_pda/xircom_pgs.fw
+fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 
 # If CONFIG_FIRMWARE_IN_KERNEL is not set, then don't include any firmware
 ifneq ($(CONFIG_FIRMWARE_IN_KERNEL),y)
