@@ -298,7 +298,6 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
 	ui->dirty = 0;
-	atomic_long_dec(&c->dirty_ino_cnt);
 	ubifs_release_dirty_inode_budget(c, ui);
 	mutex_unlock(&ui->wb_mutex);
 
@@ -342,7 +341,6 @@ static void ubifs_delete_inode(struct inode *inode)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
 	if (ui->dirty) {
-		atomic_long_dec(&c->dirty_ino_cnt);
 		ui->dirty = 0;
 		ubifs_release_budget(c, &req);
 	}
@@ -357,10 +355,7 @@ static void ubifs_dirty_inode(struct inode *inode)
 
 	ubifs_assert(mutex_is_locked(&ui->wb_mutex));
 	if (!ui->dirty) {
-		struct ubifs_info *c = inode->i_sb->s_fs_info;
-
 		ui->dirty = 1;
-		atomic_long_inc(&c->dirty_ino_cnt);
 		dbg_gen("inode %lu",  inode->i_ino);
 	}
 }
@@ -1482,7 +1477,6 @@ static void ubifs_put_super(struct super_block *sb)
 	 * to write them back because of I/O errors.
 	 */
 	ubifs_assert(atomic_long_read(&c->dirty_pg_cnt) == 0);
-	ubifs_assert(atomic_long_read(&c->dirty_ino_cnt) == 0);
 	ubifs_assert(c->budg_idx_growth == 0);
 	ubifs_assert(c->budg_data_growth == 0);
 
