@@ -49,6 +49,7 @@ fw-shipped-$(CONFIG_USB_SERIAL_WHITEHEAT_FIRMWARE) += whiteheat_loader.fw \
 		whiteheat.fw # whiteheat_loader_debug.fw
 fw-shipped-$(CONFIG_ATM_AMBASSADOR_FIRMWARE) += atmsar11.fw
 fw-shipped-$(CONFIG_COMPUTONE_FIRMWARE) += intelliport2.bin
+fw-shipped-$(CONFIG_VIDEO_CPIA2_FIRMWARE) += cpia2/stv0672_vp4.bin
 
 firmware-y    := $(fw-external-y) $(fw-shipped-y)
 firmware-dirs := $(sort $(patsubst %,$(objtree)/$(obj)/%/,$(dir $(firmware-y))))
