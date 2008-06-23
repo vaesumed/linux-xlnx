@@ -916,7 +916,6 @@ struct ubifs_mount_opts {
  * @ro_media: the underlying UBI volume is read-only
  *
  * @dirty_pg_cnt: number of dirty pages (not used)
- * @dirty_ino_cnt: number of dirty inodes (not used)
  * @dirty_zn_cnt: number of dirty znodes
  * @clean_zn_cnt: number of clean znodes
  *
@@ -1149,7 +1148,6 @@ struct ubifs_info {
 	int ro_media;
 
 	atomic_long_t dirty_pg_cnt;
-	atomic_long_t dirty_ino_cnt;
 	atomic_long_t dirty_zn_cnt;
 	atomic_long_t clean_zn_cnt;
 

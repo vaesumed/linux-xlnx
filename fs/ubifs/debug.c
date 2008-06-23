@@ -597,10 +597,8 @@ void dbg_dump_budg(struct ubifs_info *c)
 	printk(KERN_DEBUG "\tmin_idx_lebs %d, old_idx_sz %lld, "
 	       "calc_idx_sz %lld, idx_gc_cnt %d\n", c->min_idx_lebs,
 	       c->old_idx_sz, c->calc_idx_sz, c->idx_gc_cnt);
-	printk(KERN_DEBUG "\tdirty_pg_cnt %ld, dirty_ino_cnt %ld, "
-	       "dirty_zn_cnt %ld, clean_zn_cnt %ld\n",
-	       atomic_long_read(&c->dirty_pg_cnt),
-	       atomic_long_read(&c->dirty_ino_cnt),
+	printk(KERN_DEBUG "\tdirty_pg_cnt %ld, dirty_zn_cnt %ld, "
+	       "clean_zn_cnt %ld\n", atomic_long_read(&c->dirty_pg_cnt),
 	       atomic_long_read(&c->dirty_zn_cnt),
 	       atomic_long_read(&c->clean_zn_cnt));
 	printk(KERN_DEBUG "\tdark_wm %d, dead_wm %d, max_idx_node_sz %d\n",

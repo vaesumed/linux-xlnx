@@ -294,7 +294,6 @@ void ubifs_clean_inode(struct ubifs_info *c, struct ubifs_inode *ui)
 	if (ui->dirty) {
 		ubifs_release_dirty_inode_budget(c, ui);
 		ui->dirty = 0;
-		atomic_long_dec(&c->dirty_ino_cnt);
 	}
 	mutex_unlock(&ui->wb_mutex);
 }
