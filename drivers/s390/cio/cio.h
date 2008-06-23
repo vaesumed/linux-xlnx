@@ -6,8 +6,8 @@
 #include <linux/mod_devicetable.h>
 #include <asm/chpid.h>
 #include <asm/fcx.h>
+#include <asm/schid.h>
 #include "chsc.h"
-#include "schid.h"
 
 /*
  * path management control word
