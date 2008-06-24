@@ -153,10 +153,10 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 
 	/*
 	 * Note, it is important that 'ubifs_jnl_update()' writes the @host
-	 * inode last, so when it gets synchronized and the write-buffer is
-	 * flushed, the extended attribute is flushed as well.
+	 * inode last, so when it gets synchronized (by 'fsync())and the
+	 * write-buffer is flushed, the extended attribute is flushed as well.
 	 */
-	err = ubifs_jnl_update(c, host, nm, inode, 0, IS_DIRSYNC(host), 1);
+	err = ubifs_jnl_update(c, host, nm, inode, 0, 1);
 	if (err)
 		goto out_cancel;
 

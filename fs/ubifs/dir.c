@@ -1,5 +1,4 @@
-/*
- * This file is part of UBIFS.
+/* * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
  * Copyright (C) 2006, 2007 University of Szeged, Hungary
@@ -325,8 +324,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_budg;
 
@@ -542,8 +540,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	inode->i_ctime = ubifs_current_time(inode);
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_budg;
 
@@ -592,8 +589,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	drop_nlink(inode);
 	dir->i_size -= sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_budg;
 
@@ -674,8 +670,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	drop_nlink(dir);
 	dir->i_size -= sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_budg;
 
@@ -726,8 +721,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	inc_nlink(dir);
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err) {
 		ubifs_err("cannot create directory, error %d", err);
 		goto out_inode;
@@ -796,8 +790,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	ubifs_inode(inode)->data_len = devlen;
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_inode;
 
@@ -866,8 +859,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	inode->i_size = len;
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
-	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0,
-			       IS_DIRSYNC(dir), 0);
+	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_dir;
 
