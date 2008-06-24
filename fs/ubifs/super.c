@@ -293,7 +293,7 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	}
 
 	dbg_gen("inode %lu", inode->i_ino);
-	err = ubifs_jnl_write_inode(c, inode, 0, IS_SYNC(inode));
+	err = ubifs_jnl_write_inode(c, inode, 0);
 	if (err)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
@@ -332,7 +332,7 @@ static void ubifs_delete_inode(struct inode *inode)
 
 	mutex_lock(&ui->wb_mutex);
 	inode->i_size = 0;
-	err = ubifs_jnl_write_inode(c, inode, 1, IS_SYNC(inode));
+	err = ubifs_jnl_write_inode(c, inode, 1);
 	if (err)
 		/*
 		 * Worst case we have a lost orphan inode wasting space, so a
