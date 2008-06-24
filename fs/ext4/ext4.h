@@ -22,7 +22,7 @@
 #include "ext4_i.h"
 
 /*
- * The second extended filesystem constants/structures
+ * The fourth extended filesystem constants/structures
  */
 
 /*
@@ -168,6 +168,15 @@ struct ext4_group_desc
 	__le16	bg_used_dirs_count_hi;	/* Directories count MSB */
 	__le16	bg_itable_unused_hi;	/* Unused inodes count MSB */
 	__u32	bg_reserved2[3];
+};
+
+/*
+ * Structure of a flex block group info
+ */
+
+struct flex_groups {
+	__u32 free_inodes;
+	__u32 free_blocks;
 };
 
 #define EXT4_BG_INODE_UNINIT	0x0001 /* Inode table/bitmap not in use */
@@ -647,7 +656,10 @@ struct ext4_super_block {
 	__le16  s_mmp_interval;         /* # seconds to wait in MMP checking */
 	__le64  s_mmp_block;            /* Block for multi-mount protection */
 	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
-	__u32   s_reserved[163];        /* Padding to the end of the block */
+	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
+	__u8	s_reserved_char_pad2;
+	__le16  s_reserved_pad;
+	__u32   s_reserved[162];        /* Padding to the end of the block */
 };
 
 #ifdef __KERNEL__
@@ -958,12 +970,17 @@ extern ext4_grpblk_t ext4_block_group_offset(struct super_block *sb,
 extern int ext4_bg_has_super(struct super_block *sb, ext4_group_t group);
 extern unsigned long ext4_bg_num_gdb(struct super_block *sb,
 			ext4_group_t group);
-extern ext4_fsblk_t ext4_new_block (handle_t *handle, struct inode *inode,
+extern ext4_fsblk_t ext4_new_meta_block(handle_t *handle, struct inode *inode,
 			ext4_fsblk_t goal, int *errp);
-extern ext4_fsblk_t ext4_new_blocks (handle_t *handle, struct inode *inode,
+extern ext4_fsblk_t ext4_new_meta_blocks(handle_t *handle, struct inode *inode,
 			ext4_fsblk_t goal, unsigned long *count, int *errp);
-extern ext4_fsblk_t ext4_new_blocks_old(handle_t *handle, struct inode *inode,
+extern ext4_fsblk_t ext4_new_blocks(handle_t *handle, struct inode *inode,
+					ext4_lblk_t iblock, ext4_fsblk_t goal,
+					unsigned long *count, int *errp);
+extern ext4_fsblk_t ext4_old_new_blocks(handle_t *handle, struct inode *inode,
 			ext4_fsblk_t goal, unsigned long *count, int *errp);
+extern ext4_fsblk_t ext4_has_free_blocks(struct ext4_sb_info *sbi,
+						ext4_fsblk_t nblocks);
 extern void ext4_free_blocks (handle_t *handle, struct inode *inode,
 			ext4_fsblk_t block, unsigned long count, int metadata);
 extern void ext4_free_blocks_sb (handle_t *handle, struct super_block *sb,
@@ -1158,6 +1175,17 @@ struct ext4_group_info *ext4_get_group_info(struct super_block *sb,
 	 return grp_info[indexv][indexh];
 }
 
+
+static inline ext4_group_t ext4_flex_group(struct ext4_sb_info *sbi,
+					     ext4_group_t block_group)
+{
+	return block_group >> sbi->s_log_groups_per_flex;
+}
+
+static inline unsigned int ext4_flex_bg_size(struct ext4_sb_info *sbi)
+{
+	return 1 << sbi->s_log_groups_per_flex;
+}
 
 #define ext4_std_error(sb, errno)				\
 do {								\
