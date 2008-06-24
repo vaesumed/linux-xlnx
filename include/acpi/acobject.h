@@ -420,4 +420,4 @@ union acpi_descriptor {
 
 #pragma pack()
 
-#endif				/* _ACOBJECT_H */
+#endif /* _ACOBJECT_H */

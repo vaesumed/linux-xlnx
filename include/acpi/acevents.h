@@ -213,4 +213,4 @@ u32 acpi_ev_initialize_sCI(u32 program_sCI);
 
 void acpi_ev_terminate(void);
 
-#endif				/* __ACEVENTS_H__  */
+#endif /* __ACEVENTS_H__  */

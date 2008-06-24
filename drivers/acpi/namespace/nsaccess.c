@@ -198,8 +198,8 @@ acpi_status acpi_ns_root_initialize(void)
 				/* Create a mutex */
 
 				status =
-				    acpi_os_create_mutex(&obj_desc->mutex.
-							 os_mutex);
+				    acpi_os_create_mutex(&obj_desc->
+							 mutex.os_mutex);
 				if (ACPI_FAILURE(status)) {
 					acpi_ut_remove_reference(obj_desc);
 					goto unlock_and_exit;
@@ -245,7 +245,7 @@ acpi_status acpi_ns_root_initialize(void)
 		}
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 
 	/* Save a handle to "_GPE", it is always present */
@@ -592,8 +592,8 @@ acpi_ns_lookup(union acpi_generic_state *scope_info,
 			 */
 			if (this_node->type == ACPI_TYPE_LOCAL_ALIAS) {
 				if (acpi_ns_opens_scope
-				    (((struct acpi_namespace_node *)this_node->
-				      object)->type)) {
+				    (((struct acpi_namespace_node *)
+				      this_node->object)->type)) {
 					this_node =
 					    (struct acpi_namespace_node *)
 					    this_node->object;
@@ -629,8 +629,8 @@ acpi_ns_lookup(union acpi_generic_state *scope_info,
 				ACPI_WARNING((AE_INFO,
 					      "NsLookup: Type mismatch on %4.4s (%s), searching for (%s)",
 					      ACPI_CAST_PTR(char, &simple_name),
-					      acpi_ut_get_type_name(this_node->
-								    type),
+					      acpi_ut_get_type_name
+					      (this_node->type),
 					      acpi_ut_get_type_name
 					      (type_to_check_for)));
 			}

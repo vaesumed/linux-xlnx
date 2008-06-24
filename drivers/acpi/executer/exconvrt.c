@@ -244,8 +244,8 @@ acpi_ex_convert_to_buffer(union acpi_operand_object *obj_desc,
 		 * buffer.
 		 */
 		return_desc = acpi_ut_create_buffer_object((acpi_size)
-							   obj_desc->string.
-							   length + 1);
+							   obj_desc->
+							   string.length + 1);
 		if (!return_desc) {
 			return_ACPI_STATUS(AE_NO_MEMORY);
 		}
@@ -288,11 +288,11 @@ acpi_ex_convert_to_ascii(acpi_integer integer,
 			 u16 base, u8 * string, u8 data_width)
 {
 	acpi_integer digit;
-	acpi_native_uint i;
-	acpi_native_uint j;
-	acpi_native_uint k = 0;
-	acpi_native_uint hex_length;
-	acpi_native_uint decimal_length;
+	u32 i;
+	u32 j;
+	u32 k = 0;
+	u32 hex_length;
+	u32 decimal_length;
 	u32 remainder;
 	u8 supress_zeros;
 
@@ -348,7 +348,7 @@ acpi_ex_convert_to_ascii(acpi_integer integer,
 
 		/* hex_length: 2 ascii hex chars per data byte */
 
-		hex_length = (acpi_native_uint) ACPI_MUL_2(data_width);
+		hex_length = ACPI_MUL_2(data_width);
 		for (i = 0, j = (hex_length - 1); i < hex_length; i++, j--) {
 
 			/* Get one hex digit, most significant digits first */
@@ -526,9 +526,9 @@ acpi_ex_convert_to_string(union acpi_operand_object * obj_desc,
 		 */
 		for (i = 0; i < obj_desc->buffer.length; i++) {
 			new_buf += acpi_ex_convert_to_ascii((acpi_integer)
-							    obj_desc->buffer.
-							    pointer[i], base,
-							    new_buf, 1);
+							    obj_desc->
+							    buffer.pointer[i],
+							    base, new_buf, 1);
 			*new_buf++ = separator;	/* each separated by a comma or space */
 		}
 
@@ -662,8 +662,8 @@ acpi_ex_convert_to_target_type(acpi_object_type destination_type,
 	default:
 		ACPI_ERROR((AE_INFO,
 			    "Unknown Target type ID 0x%X AmlOpcode %X DestType %s",
-			    GET_CURRENT_ARG_TYPE(walk_state->op_info->
-						 runtime_args),
+			    GET_CURRENT_ARG_TYPE(walk_state->
+						 op_info->runtime_args),
 			    walk_state->opcode,
 			    acpi_ut_get_type_name(destination_type)));
 		status = AE_AML_INTERNAL;

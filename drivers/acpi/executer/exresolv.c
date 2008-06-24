@@ -163,8 +163,8 @@ acpi_ex_resolve_object_to_value(union acpi_operand_object **stack_ptr,
 			 * Note: this increments the local's object reference count
 			 */
 			status = acpi_ds_method_data_get_value(opcode,
-							       stack_desc->
-							       reference.offset,
+							       stack_desc->reference.
+							       offset,
 							       walk_state,
 							       &obj_desc);
 			if (ACPI_FAILURE(status)) {
@@ -465,28 +465,20 @@ acpi_ex_resolve_multiple(struct acpi_walk_state *walk_state,
 
 			if (return_desc) {
 				status =
-				    acpi_ds_method_data_get_value(obj_desc->
-								  reference.
-								  opcode,
-								  obj_desc->
-								  reference.
-								  offset,
-								  walk_state,
-								  &obj_desc);
+				    acpi_ds_method_data_get_value
+				    (obj_desc->reference.opcode,
+				     obj_desc->reference.offset, walk_state,
+				     &obj_desc);
 				if (ACPI_FAILURE(status)) {
 					return_ACPI_STATUS(status);
 				}
 				acpi_ut_remove_reference(obj_desc);
 			} else {
 				status =
-				    acpi_ds_method_data_get_node(obj_desc->
-								 reference.
-								 opcode,
-								 obj_desc->
-								 reference.
-								 offset,
-								 walk_state,
-								 &node);
+				    acpi_ds_method_data_get_node
+				    (obj_desc->reference.opcode,
+				     obj_desc->reference.offset, walk_state,
+				     &node);
 				if (ACPI_FAILURE(status)) {
 					return_ACPI_STATUS(status);
 				}
@@ -521,7 +513,7 @@ acpi_ex_resolve_multiple(struct acpi_walk_state *walk_state,
 	 */
 	type = ACPI_GET_OBJECT_TYPE(obj_desc);
 
-      exit:
+exit:
 	/* Convert internal types to external types */
 
 	switch (type) {
