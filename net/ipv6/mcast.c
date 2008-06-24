@@ -5,8 +5,6 @@
  *	Authors:
  *	Pedro Roque		<roque@di.fc.ul.pt>
  *
- *	$Id: mcast.c,v 1.40 2002/02/08 03:57:19 davem Exp $
- *
  *	Based on linux/ipv4/igmp.c and linux/ipv4/ip_sockglue.c
  *
  *	This program is free software; you can redistribute it and/or
@@ -164,7 +162,6 @@ static int ip6_mc_leave_src(struct sock *sk, struct ipv6_mc_socklist *iml,
 	((MLDV2_MASK(value, nbmant) | (1<<(nbmant))) << \
 	(MLDV2_MASK((value) >> (nbmant), nbexp) + (nbexp))))
 
-#define MLDV2_QQIC(value) MLDV2_EXP(0x80, 4, 3, value)
 #define MLDV2_MRC(value) MLDV2_EXP(0x8000, 12, 3, value)
 
 #define IPV6_MLD_MAX_MSF	64

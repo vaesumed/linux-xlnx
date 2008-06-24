@@ -309,6 +309,7 @@ struct l2_fhdr {
 #endif
 };
 
+#define BNX2_RX_OFFSET		(sizeof(struct l2_fhdr) + 2)
 
 /*
  *  l2_context definition
@@ -4157,6 +4158,23 @@ struct l2_fhdr {
 
 
 /*
+ *  rlup_reg definition
+ *  offset: 0x2000
+ */
+#define BNX2_RLUP_RSS_CONFIG				0x0000201c
+#define BNX2_RLUP_RSS_CONFIG_IPV4_RSS_TYPE_XI		 (0x3L<<0)
+#define BNX2_RLUP_RSS_CONFIG_IPV4_RSS_TYPE_OFF_XI	 (0L<<0)
+#define BNX2_RLUP_RSS_CONFIG_IPV4_RSS_TYPE_ALL_XI	 (1L<<0)
+#define BNX2_RLUP_RSS_CONFIG_IPV4_RSS_TYPE_IP_ONLY_XI	 (2L<<0)
+#define BNX2_RLUP_RSS_CONFIG_IPV4_RSS_TYPE_RES_XI	 (3L<<0)
+#define BNX2_RLUP_RSS_CONFIG_IPV6_RSS_TYPE_XI		 (0x3L<<2)
+#define BNX2_RLUP_RSS_CONFIG_IPV6_RSS_TYPE_OFF_XI	 (0L<<2)
+#define BNX2_RLUP_RSS_CONFIG_IPV6_RSS_TYPE_ALL_XI	 (1L<<2)
+#define BNX2_RLUP_RSS_CONFIG_IPV6_RSS_TYPE_IP_ONLY_XI	 (2L<<2)
+#define BNX2_RLUP_RSS_CONFIG_IPV6_RSS_TYPE_RES_XI	 (3L<<2)
+
+
+/*
  *  rbuf_reg definition
  *  offset: 0x200000
  */
@@ -5527,6 +5545,9 @@ struct l2_fhdr {
 #define BNX2_HC_TX_QUICK_CONS_TRIP_OFF	(BNX2_HC_TX_QUICK_CONS_TRIP_1 -	\
 					 BNX2_HC_SB_CONFIG_1)
 #define BNX2_HC_TX_TICKS_OFF	(BNX2_HC_TX_TICKS_1 - BNX2_HC_SB_CONFIG_1)
+#define BNX2_HC_RX_QUICK_CONS_TRIP_OFF	(BNX2_HC_RX_QUICK_CONS_TRIP_1 - \
+					 BNX2_HC_SB_CONFIG_1)
+#define BNX2_HC_RX_TICKS_OFF	(BNX2_HC_RX_TICKS_1 - BNX2_HC_SB_CONFIG_1)
 
 
 /*
@@ -5855,6 +5876,9 @@ struct l2_fhdr {
 #define BNX2_RXP_FTQ_CTL_CUR_DEPTH			 (0x3ffL<<22)
 
 #define BNX2_RXP_SCRATCH				0x000e0000
+#define BNX2_RXP_SCRATCH_RSS_TBL_SZ			 0x000e0038
+#define BNX2_RXP_SCRATCH_RSS_TBL			 0x000e003c
+#define BNX2_RXP_SCRATCH_RSS_TBL_MAX_ENTRIES		 128
 
 
 /*
@@ -6412,7 +6436,7 @@ struct l2_fhdr {
 #define MAX_ETHERNET_PACKET_SIZE	1514
 #define MAX_ETHERNET_JUMBO_PACKET_SIZE	9014
 
-#define RX_COPY_THRESH			128
+#define BNX2_RX_COPY_THRESH		128
 
 #define BNX2_MISC_ENABLE_DEFAULT	0x17ffffff
 
@@ -6478,6 +6502,8 @@ struct l2_fhdr {
 #define TX_CID		16
 #define TX_TSS_CID	32
 #define RX_CID		0
+#define RX_RSS_CID	4
+#define RX_MAX_RSS_RINGS	7
 
 #define MB_TX_CID_ADDR	MB_GET_CID_ADDR(TX_CID)
 #define MB_RX_CID_ADDR	MB_GET_CID_ADDR(RX_CID)
@@ -6556,7 +6582,7 @@ struct flash_spec {
 };
 
 #define BNX2_MAX_MSIX_HW_VEC	9
-#define BNX2_MAX_MSIX_VEC	2
+#define BNX2_MAX_MSIX_VEC	9
 #define BNX2_BASE_VEC		0
 #define BNX2_TX_VEC		1
 #define BNX2_TX_INT_NUM	(BNX2_TX_VEC << BNX2_PCICFG_INT_ACK_CMD_INT_NUM_SHIFT)
@@ -6568,24 +6594,56 @@ struct bnx2_irq {
 	char		name[16];
 };
 
-struct bnx2_napi {
-	struct napi_struct	napi		____cacheline_aligned;
-	struct bnx2		*bp;
-	struct status_block	*status_blk;
-	struct status_block_msix	*status_blk_msix;
-	u32 			last_status_idx;
-	u32			int_num;
+struct bnx2_tx_ring_info {
+	u32			tx_prod_bseq;
+	u16			tx_prod;
+	u32			tx_bidx_addr;
+	u32			tx_bseq_addr;
+
+	struct tx_bd		*tx_desc_ring;
+	struct sw_bd		*tx_buf_ring;
 
 	u16			tx_cons;
 	u16			hw_tx_cons;
 
+	dma_addr_t		tx_desc_mapping;
+};
+
+struct bnx2_rx_ring_info {
 	u32			rx_prod_bseq;
 	u16			rx_prod;
 	u16			rx_cons;
 
+	u32			rx_bidx_addr;
+	u32			rx_bseq_addr;
+	u32			rx_pg_bidx_addr;
+
 	u16			rx_pg_prod;
 	u16			rx_pg_cons;
 
+	struct sw_bd		*rx_buf_ring;
+	struct rx_bd		*rx_desc_ring[MAX_RX_RINGS];
+	struct sw_pg		*rx_pg_ring;
+	struct rx_bd		*rx_pg_desc_ring[MAX_RX_PG_RINGS];
+
+	dma_addr_t		rx_desc_mapping[MAX_RX_RINGS];
+	dma_addr_t		rx_pg_desc_mapping[MAX_RX_PG_RINGS];
+};
+
+struct bnx2_napi {
+	struct napi_struct	napi		____cacheline_aligned;
+	struct bnx2		*bp;
+	union {
+		struct status_block		*msi;
+		struct status_block_msix	*msix;
+	} status_blk;
+	u16			*hw_tx_cons_ptr;
+	u16			*hw_rx_cons_ptr;
+	u32 			last_status_idx;
+	u32			int_num;
+
+	struct bnx2_rx_ring_info	rx_ring;
+	struct bnx2_tx_ring_info	tx_ring;
 };
 
 struct bnx2 {
@@ -6613,21 +6671,12 @@ struct bnx2 {
 					 BNX2_FLAG_USING_MSIX)
 #define BNX2_FLAG_JUMBO_BROKEN		0x00000800
 
-	/* Put tx producer and consumer fields in separate cache lines. */
-
-	u32		tx_prod_bseq __attribute__((aligned(L1_CACHE_BYTES)));
-	u16		tx_prod;
-	u8		tx_vec;
-	u32		tx_bidx_addr;
-	u32		tx_bseq_addr;
-
 	struct bnx2_napi	bnx2_napi[BNX2_MAX_MSIX_VEC];
 
 #ifdef BCM_VLAN
 	struct			vlan_group *vlgrp;
 #endif
 
-	u32			rx_offset;
 	u32			rx_buf_use_size;	/* useable size */
 	u32			rx_buf_size;		/* with alignment */
 	u32			rx_copy_thresh;
@@ -6637,14 +6686,7 @@ struct bnx2 {
 
 	u32			rx_csum;
 
-	struct sw_bd		*rx_buf_ring;
-	struct rx_bd		*rx_desc_ring[MAX_RX_RINGS];
-	struct sw_pg		*rx_pg_ring;
-	struct rx_bd		*rx_pg_desc_ring[MAX_RX_PG_RINGS];
-
 	/* TX constants */
-	struct tx_bd	*tx_desc_ring;
-	struct sw_bd	*tx_buf_ring;
 	int		tx_ring_size;
 	u32		tx_wake_thresh;
 
@@ -6722,16 +6764,11 @@ struct bnx2 {
 	u16			fw_wr_seq;
 	u16			fw_drv_pulse_wr_seq;
 
-	dma_addr_t		tx_desc_mapping;
-
-
 	int			rx_max_ring;
 	int			rx_ring_size;
-	dma_addr_t		rx_desc_mapping[MAX_RX_RINGS];
 
 	int			rx_max_pg_ring;
 	int			rx_pg_ring_size;
-	dma_addr_t		rx_pg_desc_mapping[MAX_RX_PG_RINGS];
 
 	u16			tx_quick_cons_trip;
 	u16			tx_quick_cons_trip_int;
@@ -6750,7 +6787,6 @@ struct bnx2 {
 
 	u32			stats_ticks;
 
-	struct status_block	*status_blk;
 	dma_addr_t		status_blk_mapping;
 
 	struct statistics_block	*stats_blk;
@@ -6812,6 +6848,9 @@ struct bnx2 {
 
 	struct bnx2_irq		irq_tbl[BNX2_MAX_MSIX_VEC];
 	int			irq_nvecs;
+
+	u8			num_tx_rings;
+	u8			num_rx_rings;
 };
 
 #define REG_RD(bp, offset)					\

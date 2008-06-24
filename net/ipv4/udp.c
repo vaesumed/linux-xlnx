@@ -5,8 +5,6 @@
  *
  *		The User Datagram Protocol (UDP).
  *
- * Version:	$Id: udp.c,v 1.102 2002/02/01 22:01:04 davem Exp $
- *
  * Authors:	Ross Biro
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *		Arnt Gulbrandsen, <agulbra@nvg.unit.no>
@@ -136,7 +134,7 @@ static inline int __udp_lib_lport_inuse(struct net *net, __u16 num,
 	struct sock *sk;
 	struct hlist_node *node;
 
-	sk_for_each(sk, node, &udptable[num & (UDP_HTABLE_SIZE - 1)])
+	sk_for_each(sk, node, &udptable[udp_hashfn(net, num)])
 		if (net_eq(sock_net(sk), net) && sk->sk_hash == num)
 			return 1;
 	return 0;
@@ -176,7 +174,7 @@ int udp_lib_get_port(struct sock *sk, unsigned short snum,
 		for (i = 0; i < UDP_HTABLE_SIZE; i++) {
 			int size = 0;
 
-			head = &udptable[rover & (UDP_HTABLE_SIZE - 1)];
+			head = &udptable[udp_hashfn(net, rover)];
 			if (hlist_empty(head))
 				goto gotit;
 
@@ -213,7 +211,7 @@ int udp_lib_get_port(struct sock *sk, unsigned short snum,
 gotit:
 		snum = rover;
 	} else {
-		head = &udptable[snum & (UDP_HTABLE_SIZE - 1)];
+		head = &udptable[udp_hashfn(net, snum)];
 
 		sk_for_each(sk2, node, head)
 			if (sk2->sk_hash == snum                             &&
@@ -229,7 +227,7 @@ gotit:
 	inet_sk(sk)->num = snum;
 	sk->sk_hash = snum;
 	if (sk_unhashed(sk)) {
-		head = &udptable[snum & (UDP_HTABLE_SIZE - 1)];
+		head = &udptable[udp_hashfn(net, snum)];
 		sk_add_node(sk, head);
 		sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 	}
@@ -266,7 +264,7 @@ static struct sock *__udp4_lib_lookup(struct net *net, __be32 saddr,
 	int badness = -1;
 
 	read_lock(&udp_hash_lock);
-	sk_for_each(sk, node, &udptable[hnum & (UDP_HTABLE_SIZE - 1)]) {
+	sk_for_each(sk, node, &udptable[udp_hashfn(net, hnum)]) {
 		struct inet_sock *inet = inet_sk(sk);
 
 		if (net_eq(sock_net(sk), net) && sk->sk_hash == hnum &&
@@ -1042,8 +1040,10 @@ int udp_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 
 	if ((rc = sock_queue_rcv_skb(sk,skb)) < 0) {
 		/* Note that an ENOMEM error is charged twice */
-		if (rc == -ENOMEM)
+		if (rc == -ENOMEM) {
 			UDP_INC_STATS_BH(UDP_MIB_RCVBUFERRORS, is_udplite);
+			atomic_inc(&sk->sk_drops);
+		}
 		goto drop;
 	}
 
@@ -1061,7 +1061,7 @@ drop:
  *	Note: called only from the BH handler context,
  *	so we don't need to lock the hashes.
  */
-static int __udp4_lib_mcast_deliver(struct sk_buff *skb,
+static int __udp4_lib_mcast_deliver(struct net *net, struct sk_buff *skb,
 				    struct udphdr  *uh,
 				    __be32 saddr, __be32 daddr,
 				    struct hlist_head udptable[])
@@ -1070,7 +1070,7 @@ static int __udp4_lib_mcast_deliver(struct sk_buff *skb,
 	int dif;
 
 	read_lock(&udp_hash_lock);
-	sk = sk_head(&udptable[ntohs(uh->dest) & (UDP_HTABLE_SIZE - 1)]);
+	sk = sk_head(&udptable[udp_hashfn(net, ntohs(uh->dest))]);
 	dif = skb->dev->ifindex;
 	sk = udp_v4_mcast_next(sk, uh->dest, daddr, uh->source, saddr, dif);
 	if (sk) {
@@ -1158,6 +1158,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct hlist_head udptable[],
 	struct rtable *rt = (struct rtable*)skb->dst;
 	__be32 saddr = ip_hdr(skb)->saddr;
 	__be32 daddr = ip_hdr(skb)->daddr;
+	struct net *net;
 
 	/*
 	 *  Validate the packet.
@@ -1179,10 +1180,12 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct hlist_head udptable[],
 	if (udp4_csum_init(skb, uh, proto))
 		goto csum_error;
 
+	net = dev_net(skb->dev);
 	if (rt->rt_flags & (RTCF_BROADCAST|RTCF_MULTICAST))
-		return __udp4_lib_mcast_deliver(skb, uh, saddr, daddr, udptable);
+		return __udp4_lib_mcast_deliver(net, skb, uh,
+				saddr, daddr, udptable);
 
-	sk = __udp4_lib_lookup(dev_net(skb->dev), saddr, uh->source, daddr,
+	sk = __udp4_lib_lookup(net, saddr, uh->source, daddr,
 			uh->dest, inet_iif(skb), udptable);
 
 	if (sk != NULL) {
@@ -1255,12 +1258,11 @@ int udp_rcv(struct sk_buff *skb)
 	return __udp4_lib_rcv(skb, udp_hash, IPPROTO_UDP);
 }
 
-int udp_destroy_sock(struct sock *sk)
+void udp_destroy_sock(struct sock *sk)
 {
 	lock_sock(sk);
 	udp_flush_pending_frames(sk);
 	release_sock(sk);
-	return 0;
 }
 
 /*
@@ -1629,12 +1631,13 @@ static void udp4_format_sock(struct sock *sp, struct seq_file *f,
 	__u16 srcp	  = ntohs(inet->sport);
 
 	seq_printf(f, "%4d: %08X:%04X %08X:%04X"
-		" %02X %08X:%08X %02X:%08lX %08X %5d %8d %lu %d %p%n",
+		" %02X %08X:%08X %02X:%08lX %08X %5d %8d %lu %d %p %d%n",
 		bucket, src, srcp, dest, destp, sp->sk_state,
 		atomic_read(&sp->sk_wmem_alloc),
 		atomic_read(&sp->sk_rmem_alloc),
 		0, 0L, 0, sock_i_uid(sp), 0, sock_i_ino(sp),
-		atomic_read(&sp->sk_refcnt), sp, len);
+		atomic_read(&sp->sk_refcnt), sp,
+		atomic_read(&sp->sk_drops), len);
 }
 
 int udp4_seq_show(struct seq_file *seq, void *v)
@@ -1643,7 +1646,7 @@ int udp4_seq_show(struct seq_file *seq, void *v)
 		seq_printf(seq, "%-127s\n",
 			   "  sl  local_address rem_address   st tx_queue "
 			   "rx_queue tr tm->when retrnsmt   uid  timeout "
-			   "inode");
+			   "inode ref pointer drops");
 	else {
 		struct udp_iter_state *state = seq->private;
 		int len;
