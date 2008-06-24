@@ -1517,7 +1517,6 @@ nfsd_symlink(struct svc_rqst *rqstp, struct svc_fh *fhp,
 	struct dentry	*dentry, *dnew;
 	__be32		err, cerr;
 	int		host_err;
-	umode_t		mode;
 
 	err = nfserr_noent;
 	if (!flen || !plen)
@@ -1536,11 +1535,6 @@ nfsd_symlink(struct svc_rqst *rqstp, struct svc_fh *fhp,
 	if (IS_ERR(dnew))
 		goto out_nfserr;
 
-	mode = S_IALLUGO;
-	/* Only the MODE ATTRibute is even vaguely meaningful */
-	if (iap && (iap->ia_valid & ATTR_MODE))
-		mode = iap->ia_mode & S_IALLUGO;
-
 	host_err = mnt_want_write(fhp->fh_export->ex_path.mnt);
 	if (host_err)
 		goto out_nfserr;
@@ -1552,11 +1546,11 @@ nfsd_symlink(struct svc_rqst *rqstp, struct svc_fh *fhp,
 		else {
 			strncpy(path_alloced, path, plen);
 			path_alloced[plen] = 0;
-			host_err = vfs_symlink(dentry->d_inode, dnew, path_alloced, mode);
+			host_err = vfs_symlink(dentry->d_inode, dnew, path_alloced);
 			kfree(path_alloced);
 		}
 	} else
-		host_err = vfs_symlink(dentry->d_inode, dnew, path, mode);
+		host_err = vfs_symlink(dentry->d_inode, dnew, path);
 
 	if (!host_err) {
 		if (EX_ISSYNC(fhp->fh_export))
