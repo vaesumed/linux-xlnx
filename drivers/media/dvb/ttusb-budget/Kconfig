@@ -1,5 +1,6 @@
 config DVB_TTUSB_BUDGET
 	tristate "Technotrend/Hauppauge Nova-USB devices"
+	select FW_LOADER
 	depends on DVB_CORE && USB && I2C
 	select DVB_CX22700 if !DVB_FE_CUSTOMISE
 	select DVB_TDA1004X if !DVB_FE_CUSTOMISE
@@ -16,3 +17,11 @@ config DVB_TTUSB_BUDGET
 	  an external software decoder to watch TV.
 
 	  Say Y if you own such a device and want to use it.
+
+config DVB_TTUSB_BUDGET_FIRMWARE
+	bool "Firmware for Technotrend/Hauppauge Nova-USB devices"
+	depends on DVB_TTUSB_BUDGET
+	help
+	  Include DSP bootcode for the device within the kernel image,
+	  instead of having it provided from userspace by the firmware
+	  loader. Say 'N'.
