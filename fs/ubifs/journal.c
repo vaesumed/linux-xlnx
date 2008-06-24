@@ -39,7 +39,7 @@
  * journal heads, although at present only one data head is used.
  *
  * For recovery reasons, the base head contains all inode nodes, all directory
- * entry nodes and all truncate nodes.  This means that the other heads contain
+ * entry nodes and all truncate nodes. This means that the other heads contain
  * only data nodes.
  *
  * Bud LEBs may be half-indexed. For example, if the bud was not full at the
@@ -52,9 +52,9 @@
  * longer it takes to mount UBIFS (scanning the journal) and the more memory it
  * takes (indexing in the TNC).
  *
- * Note, all the journal write operations like 'ubifs_jnl_update()' here, which
- * write multiple UBIFS nodes to the journal at one go, are atomic with respect
- * to unclean reboots. Should the unclean reboot happen, the recovery code drops
+ * All the journal write operations like 'ubifs_jnl_update()' here, which write
+ * multiple UBIFS nodes to the journal at one go, are atomic with respect to
+ * unclean reboots. Should the unclean reboot happen, the recovery code drops
  * all the nodes.
  */
 
@@ -156,7 +156,7 @@ again:
 	/*
 	 * No free space, we have to run garbage collector to make
 	 * some. But the write-buffer mutex has to be unlocked because
-	 * GC have to sync write buffers, which may lead a deadlock.
+	 * GC also takes it.
 	 */
 	dbg_jnl("no free space  jhead %d, run GC", jhead);
 	mutex_unlock(&wbuf->io_mutex);
@@ -170,7 +170,7 @@ again:
 		/*
 		 * GC could not make a free LEB. But someone else may
 		 * have allocated new bud for this journal head,
-		 * because we dropped the 'io_mutex', so try once
+		 * because we dropped @wbuf->io_mutex, so try once
 		 * again.
 		 */
 		dbg_jnl("GC couldn't make a free LEB for jhead %d", jhead);
@@ -223,9 +223,9 @@ out_return:
 	err1 = ubifs_return_leb(c, lnum);
 	if (err1 && err == -EAGAIN)
 		/*
-		 * Return original error code 'err' only if it is not
-		 * '-EAGAIN', which is not really an error. Otherwise, return
-		 * the error code of 'ubifs_return_leb()'.
+		 * Return original error code only if it is not %-EAGAIN,
+		 * which is not really an error. Otherwise, return the error
+		 * code of 'ubifs_return_leb()'.
 		 */
 		err = err1;
 	mutex_unlock(&wbuf->io_mutex);
@@ -384,7 +384,6 @@ out:
 		cmt_retries = dbg_check_lprops(c);
 		up_write(&c->commit_sem);
 	}
-
 	return err;
 }
 
@@ -500,7 +499,6 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * @nm: directory entry name
  * @inode: inode
  * @deletion: indicates a directory entry deletion i.e unlink or rmdir
- * @sync: non-zero if the write-buffer has to be synchronized
  * @xent: non-zero if the directory entry is an extended attribute entry
  *
  * This function updates an inode by writing a directory entry (or extended
@@ -509,20 +507,23 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  *
  * The function writes the host inode @dir last, which is important in case of
  * extended attributes. Indeed, then we guarantee that if the host inode gets
- * synchronized, and the write-buffer it sits in gets flushed, the extended
- * attribute inode gets flushed too. And this is exactly what the user expects -
- * synchronizing the host inode synchronizes its extended attributes.
- * Similarly, this guarantees that if @dir is synchronized, its directory entry
- * corresponding to @nm gets synchronized too.
+ * synchronized (with 'fsync()'), and the write-buffer it sits in gets flushed,
+ * the extended attribute inode gets flushed too. And this is exactly what the
+ * user expects - synchronizing the host inode synchronizes its extended
+ * attributes. Similarly, this guarantees that if @dir is synchronized, its
+ * directory entry corresponding to @nm gets synchronized too.
+ *
+ * If the inode (@inode) or the parent directory (@dir) are synchronous, this
+ * function synchronizes the write-buffer.
  *
  * This function returns %0 on success and a negative error code on failure.
  */
 int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
-		     int deletion, int sync, int xent)
+		     int deletion, int xent)
 {
 	int err, dlen, ilen, len, lnum, ino_offs, dent_offs;
-	int aligned_dlen, aligned_ilen;
+	int aligned_dlen, aligned_ilen, sync = IS_DIRSYNC(dir);
 	int last_reference = !!(deletion && inode->i_nlink == 0);
 	struct ubifs_dent_node *dent;
 	struct ubifs_ino_node *ino;
@@ -537,17 +538,19 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	ilen = UBIFS_INO_NODE_SZ;
 
 	/*
-	 * If the last reference to the inode is being deleted, then there is no
-	 * need to attach and write inode data, it is being deleted anyway.
+	 * If the last reference to the inode is being deleted, then there is
+	 * no need to attach and write inode data, it is being deleted anyway.
+	 * And if the inode is being deleted, no need to synchronize
+	 * write-buffer even if the inode is synchronous.
 	 */
-	if (!last_reference)
+	if (!last_reference) {
 		ilen += ubifs_inode(inode)->data_len;
+		sync |= IS_SYNC(inode);
+	}
 
 	aligned_dlen = ALIGN(dlen, 8);
 	aligned_ilen = ALIGN(ilen, 8);
-
 	len = aligned_dlen + aligned_ilen + UBIFS_INO_NODE_SZ;
-
 	dent = kmalloc(len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
@@ -576,7 +579,6 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 
 	ino = (void *)dent + aligned_dlen;
 	pack_inode(c, ino, inode, 0, last_reference);
-
 	ino = (void *)ino + aligned_ilen;
 	pack_inode(c, ino, dir, 1, 0);
 
