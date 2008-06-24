@@ -39,6 +39,7 @@ static struct file_operations cx18_v4l2_enc_fops = {
 	.owner = THIS_MODULE,
 	.read = cx18_v4l2_read,
 	.open = cx18_v4l2_open,
+	/* FIXME change to video_ioctl2 if serialization lock can be removed */
 	.ioctl = cx18_v4l2_ioctl,
 	.compat_ioctl = v4l_compat_ioctl32,
 	.release = cx18_v4l2_close,
@@ -189,14 +190,15 @@ static int cx18_prep_dev(struct cx18 *cx, int type)
 	s->v4l2dev->type =
 		VID_TYPE_CAPTURE | VID_TYPE_TUNER | VID_TYPE_TELETEXT |
 		VID_TYPE_CLIPPING | VID_TYPE_SCALES | VID_TYPE_MPEG_ENCODER;
-	snprintf(s->v4l2dev->name, sizeof(s->v4l2dev->name), "cx18%d %s",
-			cx->num, s->name);
+	snprintf(s->v4l2dev->name, sizeof(s->v4l2dev->name), "cx18-%d",
+			cx->num);
 
 	s->v4l2dev->minor = minor;
 	s->v4l2dev->dev = &cx->dev->dev;
 	s->v4l2dev->fops = cx18_stream_info[type].fops;
 	s->v4l2dev->release = video_device_release;
-
+	s->v4l2dev->tvnorms = V4L2_STD_ALL;
+	cx18_set_funcs(s->v4l2dev);
 	return 0;
 }
 

@@ -53,8 +53,32 @@ static void gpio_write(struct cx18 *cx)
 	write_reg(((dir & 0xffff) << 16) | (val & 0xffff),
 			CX18_REG_GPIO_OUT1);
 	write_reg(dir & 0xffff0000, CX18_REG_GPIO_DIR2);
-	write_reg((dir & 0xffff0000) | ((val & 0xffff0000) >> 16),
+	write_reg_sync((dir & 0xffff0000) | ((val & 0xffff0000) >> 16),
 			CX18_REG_GPIO_OUT2);
+}
+
+void cx18_reset_i2c_slaves_gpio(struct cx18 *cx)
+{
+	const struct cx18_gpio_i2c_slave_reset *p;
+
+	p = &cx->card->gpio_i2c_slave_reset;
+
+	if ((p->active_lo_mask | p->active_hi_mask) == 0)
+		return;
+
+	/* Assuming that the masks are a subset of the bits in gpio_dir */
+
+	/* Assert */
+	cx->gpio_val =
+		(cx->gpio_val | p->active_hi_mask) & ~(p->active_lo_mask);
+	gpio_write(cx);
+	schedule_timeout_uninterruptible(msecs_to_jiffies(p->msecs_asserted));
+
+	/* Deassert */
+	cx->gpio_val =
+		(cx->gpio_val | p->active_lo_mask) & ~(p->active_hi_mask);
+	gpio_write(cx);
+	schedule_timeout_uninterruptible(msecs_to_jiffies(p->msecs_recovery));
 }
 
 void cx18_gpio_init(struct cx18 *cx)
@@ -96,5 +120,39 @@ int cx18_reset_tuner_gpio(void *dev, int cmd, int value)
 	cx->gpio_val |= 1 << cx->card->xceive_pin;
 	gpio_write(cx);
 	schedule_timeout_interruptible(msecs_to_jiffies(1));
+	return 0;
+}
+
+int cx18_gpio(struct cx18 *cx, unsigned int command, void *arg)
+{
+	struct v4l2_routing *route = arg;
+	u32 mask, data;
+
+	switch (command) {
+	case VIDIOC_INT_S_AUDIO_ROUTING:
+		if (route->input > 2)
+			return -EINVAL;
+		mask = cx->card->gpio_audio_input.mask;
+		switch (route->input) {
+		case 0:
+			data = cx->card->gpio_audio_input.tuner;
+			break;
+		case 1:
+			data = cx->card->gpio_audio_input.linein;
+			break;
+		case 2:
+		default:
+			data = cx->card->gpio_audio_input.radio;
+			break;
+		}
+		break;
+
+	default:
+		return -EINVAL;
+	}
+	if (mask) {
+		cx->gpio_val = (cx->gpio_val & ~mask) | (data & mask);
+		gpio_write(cx);
+	}
 	return 0;
 }
