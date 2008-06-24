@@ -726,15 +726,15 @@ out_free:
  * @c: UBIFS file-system description object
  * @inode: inode to flush
  * @last_reference: inode has been deleted
- * @sync: non-zero if the write-buffer has to be synchronized
  *
- * This function writes inode @inode to the journal (to the base head). Returns
- * zero in case of success and a negative error code in case of failure.
+ * This function writes inode @inode to the journal. If the inode is
+ * synchronous, it also synchronizes the write-buffer. Returns zero in case of
+ * success and a negative error code in case of failure.
  */
 int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
-			  int last_reference, int sync)
+			  int last_reference)
 {
-	int err, len, lnum, offs;
+	int err, len, lnum, offs, sync = 0;
 	struct ubifs_ino_node *ino;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
@@ -743,10 +743,15 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	if (last_reference)
 		ubifs_assert(inode->i_nlink == 0);
 
-	/* If the inode is deleted, do not write the attached data */
 	len = UBIFS_INO_NODE_SZ;
-	if (!last_reference)
+	/*
+	 * If the inode is being deleted, do not write the attached data. No
+	 * need to synchronize the write-buffer either.
+	 */
+	if (!last_reference) {
 		len += ui->data_len;
+		sync = IS_SYNC(inode);
+	}
 	ino = kmalloc(len, GFP_NOFS);
 	if (!ino)
 		return -ENOMEM;
