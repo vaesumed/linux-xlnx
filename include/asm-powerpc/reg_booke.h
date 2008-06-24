@@ -61,6 +61,8 @@
 #define SPRN_SPEFSCR	0x200	/* SPE & Embedded FP Status & Control */
 #define SPRN_BBEAR	0x201	/* Branch Buffer Entry Address Register */
 #define SPRN_BBTAR	0x202	/* Branch Buffer Target Address Register */
+#define SPRN_L1CFG0	0x203	/* L1 Cache Configure Register 0 */
+#define SPRN_L1CFG1	0x203	/* L1 Cache Configure Register 1 */
 #define SPRN_ATB	0x20E	/* Alternate Time Base */
 #define SPRN_ATBL	0x20E	/* Alternate Time Base Lower */
 #define SPRN_ATBU	0x20F	/* Alternate Time Base Upper */
@@ -78,6 +80,7 @@
 #define SPRN_DSRR1	0x23F	/* Debug Save and Restore Register 1 */
 #define SPRN_SPRG8	0x25C	/* Special Purpose Register General 8 */
 #define SPRN_SPRG9	0x25D	/* Special Purpose Register General 9 */
+#define SPRN_L1CSR2	0x25E	/* L1 Cache Control and Status Register 2 */
 #define SPRN_MAS0	0x270	/* MMU Assist Register 0 */
 #define SPRN_MAS1	0x271	/* MMU Assist Register 1 */
 #define SPRN_MAS2	0x272	/* MMU Assist Register 2 */
@@ -108,6 +111,8 @@
 #define SPRN_L1CSR1	0x3F3	/* L1 Cache Control and Status Register 1 */
 #define SPRN_PIT	0x3DB	/* Programmable Interval Timer */
 #define SPRN_BUCSR	0x3F5	/* Branch Unit Control and Status */
+#define SPRN_L2CSR0	0x3F9	/* L2 Data Cache Control and Status Register 0 */
+#define SPRN_L2CSR1	0x3FA	/* L2 Data Cache Control and Status Register 1 */
 #define SPRN_DCCR	0x3FA	/* Data Cache Cacheability Register */
 #define SPRN_ICCR	0x3FB	/* Instruction Cache Cacheability Register */
 #define SPRN_SVR	0x3FF	/* System Version Register */
@@ -390,6 +395,20 @@
 #define L1CSR1_ICLFR	0x00000100	/* Instr Cache Lock Bits Flash Reset */
 #define L1CSR1_ICFI	0x00000002	/* Instr Cache Flash Invalidate */
 #define L1CSR1_ICE	0x00000001	/* Instr Cache Enable */
+
+/* Bit definitions for L2CSR0. */
+#define L2CSR0_L2E	0x80000000	/* L2 Cache Enable */
+#define L2CSR0_L2PE	0x40000000	/* L2 Cache Parity/ECC Enable */
+#define L2CSR0_L2WP	0x1c000000	/* L2 I/D Way Partioning */
+#define L2CSR0_L2CM	0x03000000	/* L2 Cache Coherency Mode */
+#define L2CSR0_L2FI	0x00200000	/* L2 Cache Flash Invalidate */
+#define L2CSR0_L2IO	0x00100000	/* L2 Cache Instruction Only */
+#define L2CSR0_L2DO	0x00010000	/* L2 Cache Data Only */
+#define L2CSR0_L2REP	0x00003000	/* L2 Line Replacement Algo */
+#define L2CSR0_L2FL	0x00000800	/* L2 Cache Flush */
+#define L2CSR0_L2LFC	0x00000400	/* L2 Cache Lock Flash Clear */
+#define L2CSR0_L2LOA	0x00000080	/* L2 Cache Lock Overflow Allocate */
+#define L2CSR0_L2LO	0x00000020	/* L2 Cache Lock Overflow */
 
 /* Bit definitions for SGR. */
 #define SGR_NORMAL	0		/* Speculative fetching allowed. */
