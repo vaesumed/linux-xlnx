@@ -342,6 +342,8 @@ source "sound/Kconfig"
 
 source "drivers/usb/Kconfig"
 
+source "drivers/uwb/Kconfig"
+
 source "arch/v850/Kconfig.debug"
 
 source "security/Kconfig"
