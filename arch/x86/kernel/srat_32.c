@@ -155,9 +155,8 @@ acpi_numa_memory_affinity_init(struct acpi_srat_mem_affinity *memory_affinity)
 
 	num_memory_chunks++;
 
-	printk("Memory range 0x%lX to 0x%lX (type 0x%X) in proximity domain 0x%02X %s\n",
+	printk("Memory range 0x%lX to 0x%lX in proximity domain 0x%02X %s\n",
 		start_pfn, end_pfn,
-		memory_affinity->memory_type,
 		pxm,
 		((memory_affinity->flags & ACPI_SRAT_MEM_HOT_PLUGGABLE) ?
 		 "enabled and removable" : "enabled" ) );

@@ -255,8 +255,8 @@ acpi_ex_resolve_node_to_value(struct acpi_namespace_node **object_ptr,
 			ACPI_ERROR((AE_INFO,
 				    "Unsupported Reference opcode %X (%s)",
 				    source_desc->reference.opcode,
-				    acpi_ps_get_opcode_name(source_desc->
-							    reference.opcode)));
+				    acpi_ps_get_opcode_name
+				    (source_desc->reference.opcode)));
 
 			return_ACPI_STATUS(AE_AML_OPERAND_TYPE);
 		}

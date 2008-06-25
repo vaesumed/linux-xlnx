@@ -184,7 +184,7 @@ acpi_status acpi_ns_initialize_devices(void)
 
 	return_ACPI_STATUS(status);
 
-      error_exit:
+error_exit:
 	ACPI_EXCEPTION((AE_INFO, status, "During device initialization"));
 	return_ACPI_STATUS(status);
 }
@@ -542,7 +542,6 @@ acpi_ns_init_one_device(acpi_handle obj_handle,
 	info->prefix_node = device_node;
 	info->pathname = METHOD_NAME__INI;
 	info->parameters = NULL;
-	info->parameter_type = ACPI_PARAM_ARGS;
 	info->flags = ACPI_IGNORE_RETURN_VALUE;
 
 	/*

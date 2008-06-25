@@ -45,7 +45,6 @@
 #include <acpi/amlcode.h>
 #include <acpi/acnamesp.h>
 
-
 #define _COMPONENT          ACPI_UTILITIES
 ACPI_MODULE_NAME("utcopy")
 
@@ -546,7 +545,7 @@ acpi_ut_copy_esimple_to_isimple(union acpi_object *external_object,
 	*ret_internal_object = internal_object;
 	return_ACPI_STATUS(AE_OK);
 
-      error_exit:
+error_exit:
 	acpi_ut_remove_reference(internal_object);
 	return_ACPI_STATUS(AE_NO_MEMORY);
 }
@@ -572,7 +571,7 @@ acpi_ut_copy_epackage_to_ipackage(union acpi_object *external_object,
 	acpi_status status = AE_OK;
 	union acpi_operand_object *package_object;
 	union acpi_operand_object **package_elements;
-	acpi_native_uint i;
+	u32 i;
 
 	ACPI_FUNCTION_TRACE(ut_copy_epackage_to_ipackage);
 
@@ -599,7 +598,7 @@ acpi_ut_copy_epackage_to_ipackage(union acpi_object *external_object,
 
 			/* Truncate package and delete it */
 
-			package_object->package.count = (u32) i;
+			package_object->package.count = i;
 			package_elements[i] = NULL;
 			acpi_ut_remove_reference(package_object);
 			return_ACPI_STATUS(status);
@@ -860,7 +859,7 @@ acpi_ut_copy_ielement_to_ielement(u8 object_type,
 
 	return (status);
 
-      error_exit:
+error_exit:
 	acpi_ut_remove_reference(target_object);
 	return (status);
 }
