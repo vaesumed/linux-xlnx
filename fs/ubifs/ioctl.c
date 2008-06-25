@@ -102,7 +102,7 @@ static int ubifs2ioctl(int ubifs_flags)
 
 static int setflags(struct inode *inode, int flags)
 {
-	int oldflags, err;
+	int oldflags, err, release;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_budget_req req = { .dirtied_ino = 1,
@@ -130,11 +130,11 @@ static int setflags(struct inode *inode, int flags)
 	inode->i_ctime = ubifs_current_time(inode);
 
 	mutex_lock(&ui->wb_mutex);
-	if (ui->dirty)
-		ubifs_release_budget(c, &req);
-	else
-		mark_inode_dirty_sync(inode);
+	release = ui->dirty;
+	mark_inode_dirty_sync(inode);
 	mutex_unlock(&ui->wb_mutex);
+	if (release)
+		ubifs_release_budget(c, &req);
 
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
