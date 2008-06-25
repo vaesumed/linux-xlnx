@@ -474,10 +474,6 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 		goto out_unlock;
 	}
 
-	err = dbg_check_inode_dirty(ui);
-	if (err)
-		goto out_unlock;
-
 	spin_lock(&ui->size_lock);
 	synced_i_size = ui->synced_i_size;
 	spin_unlock(&ui->size_lock);
@@ -717,6 +713,10 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 
 	dbg_gen("ino %lu, ia_valid %#x", inode->i_ino, attr->ia_valid);
 	err = inode_change_ok(inode, attr);
+	if (err)
+		return err;
+
+	err = dbg_check_synced_i_size(inode);
 	if (err)
 		return err;
 

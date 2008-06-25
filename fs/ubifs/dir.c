@@ -530,6 +530,9 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	dbg_gen("dent '%.*s' to ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
 		inode->i_nlink, dir->i_ino);
+	err = dbg_check_synced_i_size(inode);
+	if (err)
+		return err;
 
 	err = ubifs_budget_space(c, &req);
 	if (err)
@@ -576,6 +579,9 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	dbg_gen("dent '%.*s' from ino %lu (nlink %d) in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, inode->i_ino,
 		inode->i_nlink, dir->i_ino);
+	err = dbg_check_synced_i_size(inode);
+	if (err)
+		return err;
 
 	err = ubifs_budget_space(c, &req);
 	if (err) {
