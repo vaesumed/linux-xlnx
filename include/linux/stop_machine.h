@@ -5,9 +5,8 @@
    (and more).  So the "read" side to such a lock is anything which
    diables preeempt. */
 #include <linux/cpu.h>
+#include <linux/compiler.h>
 #include <asm/system.h>
-
-#if defined(CONFIG_STOP_MACHINE) && defined(CONFIG_SMP)
 
 #define ALL_CPUS ~0U
 
@@ -26,7 +25,11 @@
  *
  * This can be thought of as a very heavy write lock, equivalent to
  * grabbing every spinlock in the kernel. */
-int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu);
+#define stop_machine_run(fn, data, cpu)					\
+	stop_machine_run_notype(typesafe_cb(int, (fn), (data)), (data), (cpu))
+
+#if defined(CONFIG_STOP_MACHINE) && defined(CONFIG_SMP)
+int stop_machine_run_notype(int (*fn)(void *), void *data, unsigned int cpu);
 
 /**
  * __stop_machine_run: freeze the machine on all CPUs and run this function
@@ -40,8 +43,8 @@ int stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu);
 int __stop_machine_run(int (*fn)(void *), void *data, unsigned int cpu);
 #else
 
-static inline int stop_machine_run(int (*fn)(void *), void *data,
-				   unsigned int cpu)
+static inline int stop_machine_run_notype(int (*fn)(void *), void *data,
+					  unsigned int cpu)
 {
 	int ret;
 	local_irq_disable();
