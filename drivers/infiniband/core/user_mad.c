@@ -890,7 +890,7 @@ static int ib_umad_sm_open(struct inode *inode, struct file *filp)
 		return -ENXIO;
 
 	if (filp->f_flags & O_NONBLOCK) {
-		if (down_trylock(&port->sm_sem)) {
+		if (!down_try(&port->sm_sem)) {
 			ret = -EAGAIN;
 			goto fail;
 		}
