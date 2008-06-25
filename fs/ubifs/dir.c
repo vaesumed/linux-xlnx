@@ -892,7 +892,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
 	struct ubifs_inode *old_ui = ubifs_inode(old_inode);
-	int err, sync, move = (new_dir != old_dir);
+	int err, sync = 0, move = (new_dir != old_dir);
 	int is_dir = S_ISDIR(old_inode->i_mode);
 	int unlink = !!new_inode;
 	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
@@ -985,9 +985,16 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	} else
 		new_dir->i_size += new_sz;
 
-	sync = IS_DIRSYNC(old_dir) || IS_DIRSYNC(new_dir);
-	if (unlink && IS_SYNC(new_inode))
-		sync = 1;
+	/*
+	 * Do not ask 'ubifs_jnl_rename()' to flush write-buffer if @old_inode
+	 * is dirty, because this will be done later on at the end of
+	 * 'ubifs_rename()'.
+	 */
+	if (IS_SYNC(old_inode)) {
+		sync = IS_DIRSYNC(old_dir) || IS_DIRSYNC(new_dir);
+		if (unlink && IS_SYNC(new_inode))
+			sync = 1;
+	}
 	err = ubifs_jnl_rename(c, old_dir, old_dentry, new_dir, new_dentry,
 			       sync);
 	if (err)
@@ -1008,7 +1015,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	mutex_unlock(&old_ui->wb_mutex);
 
 	if (IS_SYNC(old_inode))
-		err = write_inode_now(old_inode, 1);
+		err = old_inode->i_sb->s_op->write_inode(old_inode, 1);
 	return err;
 
 out_inode:

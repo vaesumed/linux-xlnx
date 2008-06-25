@@ -690,7 +690,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	mutex_unlock(&ui->wb_mutex);
 
 	if (IS_SYNC(inode))
-		err = write_inode_now(inode, 1);
+		err = inode->i_sb->s_op->write_inode(inode, 1);
 	return err;
 
 out_budg:
