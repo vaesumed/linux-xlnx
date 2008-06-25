@@ -159,6 +159,7 @@ static int hidraw_open(struct inode *inode, struct file *file)
 	struct hidraw_list *list;
 	int err = 0;
 
+	lock_kernel();
 	if (!(list = kzalloc(sizeof(struct hidraw_list), GFP_KERNEL))) {
 		err = -ENOMEM;
 		goto out;
@@ -185,6 +186,7 @@ static int hidraw_open(struct inode *inode, struct file *file)
 out_unlock:
 	spin_unlock(&minors_lock);
 out:
+	unlock_kernel();
 	return err;
 
 }
