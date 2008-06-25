@@ -706,7 +706,7 @@ static inline void v4l_print_ext_ctrls(unsigned int cmd,
 	printk(KERN_CONT "\n");
 };
 
-static inline int check_ext_ctrls(struct v4l2_ext_controls *c)
+static inline int check_ext_ctrls(struct v4l2_ext_controls *c, int allow_priv)
 {
 	__u32 i;
 
@@ -717,8 +717,11 @@ static inline int check_ext_ctrls(struct v4l2_ext_controls *c)
 		c->controls[i].reserved2[1] = 0;
 	}
 	/* V4L2_CID_PRIVATE_BASE cannot be used as control class
-	 * when using extended controls. */
-	if (c->ctrl_class == V4L2_CID_PRIVATE_BASE)
+	   when using extended controls.
+	   Only when passed in through VIDIOC_G_CTRL and VIDIOC_S_CTRL
+	   is it allowed for backwards compatibility.
+	 */
+	if (!allow_priv && c->ctrl_class == V4L2_CID_PRIVATE_BASE)
 		return 0;
 	/* Check that all controls are from the same control class. */
 	for (i = 0; i < c->count; i++) {
@@ -1422,7 +1425,7 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 			ctrls.controls = &ctrl;
 			ctrl.id = p->id;
 			ctrl.value = p->value;
-			if (check_ext_ctrls(&ctrls)) {
+			if (check_ext_ctrls(&ctrls, 1)) {
 				ret = vfd->vidioc_g_ext_ctrls(file, fh, &ctrls);
 				if (ret == 0)
 					p->value = ctrl.value;
@@ -1458,7 +1461,7 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 		ctrls.controls = &ctrl;
 		ctrl.id = p->id;
 		ctrl.value = p->value;
-		if (check_ext_ctrls(&ctrls))
+		if (check_ext_ctrls(&ctrls, 1))
 			ret = vfd->vidioc_s_ext_ctrls(file, fh, &ctrls);
 		break;
 	}
@@ -1469,7 +1472,7 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 		p->error_idx = p->count;
 		if (!vfd->vidioc_g_ext_ctrls)
 			break;
-		if (check_ext_ctrls(p))
+		if (check_ext_ctrls(p, 0))
 			ret = vfd->vidioc_g_ext_ctrls(file, fh, p);
 		v4l_print_ext_ctrls(cmd, vfd, p, !ret);
 		break;
@@ -1482,7 +1485,7 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 		if (!vfd->vidioc_s_ext_ctrls)
 			break;
 		v4l_print_ext_ctrls(cmd, vfd, p, 1);
-		if (check_ext_ctrls(p))
+		if (check_ext_ctrls(p, 0))
 			ret = vfd->vidioc_s_ext_ctrls(file, fh, p);
 		break;
 	}
@@ -1494,7 +1497,7 @@ static int __video_do_ioctl(struct inode *inode, struct file *file,
 		if (!vfd->vidioc_try_ext_ctrls)
 			break;
 		v4l_print_ext_ctrls(cmd, vfd, p, 1);
-		if (check_ext_ctrls(p))
+		if (check_ext_ctrls(p, 0))
 			ret = vfd->vidioc_try_ext_ctrls(file, fh, p);
 		break;
 	}
