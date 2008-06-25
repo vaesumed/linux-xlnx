@@ -272,31 +272,6 @@ out:
 	return ERR_PTR(err);
 }
 
-/**
- * ubifs_clean_inode - mark UBIFS inode as clean.
- * @c: UBIFS file-system description object
- * @ui: UBIFS inode to mark as clean
- *
- * This function marks UBIFS inode @ui as clean by cleaning the @ui->dirty flag
- * and releasing its budget. Note, VFS may still treat the inode as dirty and
- * try to write it back, but 'ubifs_write_inode()' would just do nothing.
- *
- * This function is used by the operations which write the inodes to mark them
- * clean after they have been written. It relies on the fact that the inode
- * mutex (@i_mutex) is locked for the inode so races with other tasks which may
- * try to mark inode dirty are impossible.
- */
-void ubifs_clean_inode(struct ubifs_info *c, struct ubifs_inode *ui)
-{
-	ubifs_assert(mutex_is_locked(&ui->vfs_inode.i_mutex));
-	mutex_lock(&ui->wb_mutex);
-	if (ui->dirty) {
-		ubifs_release_dirty_inode_budget(c, ui);
-		ui->dirty = 0;
-	}
-	mutex_unlock(&ui->wb_mutex);
-}
-
 static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 			struct nameidata *nd)
 {
@@ -331,7 +306,6 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_budg:
@@ -549,8 +523,6 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ui);
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_budg:
@@ -601,8 +573,6 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(inode));
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_budg:
@@ -682,8 +652,6 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(inode));
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_budg:
@@ -735,7 +703,6 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_inode:
@@ -803,7 +770,6 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_inode:
@@ -872,7 +838,6 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(dir));
 	return 0;
 
 out_dir:
@@ -1001,12 +966,6 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto out_inode;
 
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(old_dir));
-	if (move)
-		ubifs_clean_inode(c, ubifs_inode(new_dir));
-	if (unlink)
-		ubifs_clean_inode(c, ubifs_inode(new_inode));
-
 	mutex_lock(&old_ui->wb_mutex);
 	release = old_ui->dirty;
 	mark_inode_dirty_sync(old_inode);
@@ -1060,6 +1019,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	stat->blksize = UBIFS_BLOCK_SIZE;
 	stat->size = i_size_read(inode);
 
+	/* TODO: do not use i_lock */
 	spin_lock(&inode->i_lock);
 	size = ubifs_inode(inode)->xattr_size;
 	spin_unlock(&inode->i_lock);

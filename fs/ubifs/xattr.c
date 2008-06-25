@@ -137,6 +137,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	memcpy(ui->data, value, size);
 	host->i_ctime = ubifs_current_time(host);
 	host_ui->xattr_cnt += 1;
+	/* TODO: locking i_lock is bullshit */
 	spin_lock(&host->i_lock);
 	host_ui->xattr_size += CALC_DENT_SIZE(nm->len);
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);

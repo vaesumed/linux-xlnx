@@ -1558,7 +1558,6 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
 /* dir.c */
 struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			      int mode);
-void ubifs_clean_inode(struct ubifs_info *c, struct ubifs_inode *ui);
 int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		  struct kstat *stat);
 
