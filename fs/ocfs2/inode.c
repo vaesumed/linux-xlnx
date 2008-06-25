@@ -1062,10 +1062,6 @@ void ocfs2_clear_inode(struct inode *inode)
 			(unsigned long long)oi->ip_blkno);
 	mutex_unlock(&oi->ip_io_mutex);
 
-	/*
-	 * down_trylock() returns 0, down_write_trylock() returns 1
-	 * kernel 1, world 0
-	 */
 	mlog_bug_on_msg(!down_write_trylock(&oi->ip_alloc_sem),
 			"Clear inode of %llu, alloc_sem is locked\n",
 			(unsigned long long)oi->ip_blkno);
