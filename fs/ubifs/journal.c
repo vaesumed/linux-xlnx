@@ -499,9 +499,9 @@ static void update_synced_i_size(const struct inode *inode)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	spin_lock(&ui->size_lock);
+	spin_lock(&ui->ui_lock);
 	ui->synced_i_size = inode->i_size;
-	spin_unlock(&ui->size_lock);
+	spin_unlock(&ui->ui_lock);
 }
 
 /**
