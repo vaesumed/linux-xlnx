@@ -1003,8 +1003,9 @@ out_inode:
 int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		  struct kstat *stat)
 {
-	struct inode *inode = dentry->d_inode;
 	loff_t size;
+	struct inode *inode = dentry->d_inode;
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	stat->dev = inode->i_sb->s_dev;
 	stat->ino = inode->i_ino;
@@ -1019,11 +1020,6 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	stat->blksize = UBIFS_BLOCK_SIZE;
 	stat->size = i_size_read(inode);
 
-	/* TODO: do not use i_lock */
-	spin_lock(&inode->i_lock);
-	size = ubifs_inode(inode)->xattr_size;
-	spin_unlock(&inode->i_lock);
-
 	/*
 	 * Unfortunately, the 'stat()' system call was designed for block
 	 * device based file systems, and it is not appropriate for UBIFS,
@@ -1036,15 +1032,20 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	 * but regular files, which makes more sense than reporting completely
 	 * wrong sizes.
 	 */
-	if (S_ISREG(inode->i_mode))
-		size += stat->size;
+	if (S_ISREG(inode->i_mode)) {
+		spin_lock(&ui->ui_lock);
+		size = ubifs_inode(inode)->xattr_size;
+		spin_unlock(&ui->ui_lock);
 
-	size = ALIGN(size, UBIFS_BLOCK_SIZE);
-	/*
-	 * Note, user-space expects 512-byte blocks count irrespectively of what
-	 * was reported in @stat->size.
-	 */
-	stat->blocks = size >> 9;
+		size += stat->size;
+		size = ALIGN(size, UBIFS_BLOCK_SIZE);
+		/*
+		 * Note, user-space expects 512-byte blocks count irrespectively of what
+		 * was reported in @stat->size.
+		 */
+		stat->blocks = size >> 9;
+	} else
+		stat->blocks = 0;
 	return 0;
 }
 

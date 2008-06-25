@@ -313,8 +313,7 @@ struct ubifs_gced_idx_leb {
  * struct ubifs_inode - UBIFS in-memory inode description.
  * @vfs_inode: VFS inode description object
  * @creat_sqnum: sequence number at time of creation
- * @xattr_size: summarized size of all extended attributes in bytes, protected
- *              by @inode->i_lock
+ * @xattr_size: summarized size of all extended attributes in bytes
  * @xattr_cnt: count of extended attributes this inode has
  * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
@@ -326,7 +325,7 @@ struct ubifs_gced_idx_leb {
  *                 inodes
  * @wb_i_size: inode size which should be used by write-back
  * @wb_i_nlink: number of inode links which should be used by write-back
- * @ui_lock: protects @synced_i_size, @wb_i_size, and @wb_i_nlink
+ * @ui_lock: protects @synced_i_size, @wb_i_size, @wb_i_nlink, and @xattr_size
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
