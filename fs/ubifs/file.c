@@ -476,9 +476,9 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 		goto out_unlock;
 	}
 
-	spin_lock(&ui->size_lock);
+	spin_lock(&ui->ui_lock);
 	synced_i_size = ui->synced_i_size;
-	spin_unlock(&ui->size_lock);
+	spin_unlock(&ui->ui_lock);
 
 	/* Is the page fully inside i_size? */
 	if (page->index < end_index) {
