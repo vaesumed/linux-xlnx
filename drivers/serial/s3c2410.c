@@ -1,36 +1,13 @@
-/*
- * linux/drivers/serial/s3c2410.c
+/* linux/drivers/serial/s3c2410.c
  *
- * Driver for onboard UARTs on the Samsung S3C24XX
+ * Driver for Samsung SoC onboard UARTs.
  *
- * Based on drivers/char/serial.c and drivers/char/21285.c
+ * Ben Dooks, Copyright (c) 2003-2005 Simtec Electronics
+ *	http://armlinux.simtec.co.uk/
  *
- * Ben Dooks, (c) 2003-2005 Simtec Electronics
- *	http://www.simtec.co.uk/products/SWLINUX/
- *
- * Changelog:
- *
- * 22-Jul-2004  BJD  Finished off device rewrite
- *
- * 21-Jul-2004  BJD  Thanks to <herbet@13thfloor.at> for pointing out
- *                   problems with baud rate and loss of IR settings. Update
- *                   to add configuration via platform_device structure
- *
- * 28-Sep-2004  BJD  Re-write for the following items
- *		     - S3C2410 and S3C2440 serial support
- *		     - Power Management support
- *		     - Fix console via IrDA devices
- *		     - SysReq (Herbert Pötzl)
- *		     - Break character handling (Herbert Pötzl)
- *		     - spin-lock initialisation (Dimitry Andric)
- *		     - added clock control
- *		     - updated init code to use platform_device info
- *
- * 06-Mar-2005  BJD  Add s3c2440 fclk clock source
- *
- * 09-Mar-2005  BJD  Add s3c2400 support
- *
- * 10-Mar-2005  LCVR Changed S3C2410_VA_UART to S3C24XX_VA_UART
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
 */
 
 /* Note on 2440 fclk clock source handling
@@ -1935,7 +1912,7 @@ console_initcall(s3c24xx_serial_initconsole);
 
 #endif /* CONFIG_SERIAL_S3C2410_CONSOLE */
 
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Ben Dooks <ben@simtec.co.uk>");
 MODULE_DESCRIPTION("Samsung S3C2410/S3C2440/S3C2412 Serial port driver");
 MODULE_ALIAS("platform:s3c2400-uart");
