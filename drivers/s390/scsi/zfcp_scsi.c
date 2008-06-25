@@ -1,25 +1,10 @@
 /*
- * This file is part of the zfcp device driver for
- * FCP adapters for IBM System z9 and zSeries.
+ * zfcp device driver
  *
- * (C) Copyright IBM Corp. 2002, 2006
+ * Interface to Linux SCSI midlayer.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Copyright IBM Corporation 2002, 2008
  */
-
-#define ZFCP_LOG_AREA			ZFCP_LOG_AREA_SCSI
 
 #include "zfcp_ext.h"
 #include <asm/atomic.h>
@@ -44,7 +29,7 @@ static struct device_attribute *zfcp_a_stats_attrs[];
 
 struct zfcp_data zfcp_data = {
 	.scsi_host_template = {
-		.name			= ZFCP_NAME,
+		.name			= "zfcp",
 		.module			= THIS_MODULE,
 		.proc_name		= "zfcp",
 		.slave_alloc		= zfcp_scsi_slave_alloc,
@@ -64,7 +49,6 @@ struct zfcp_data zfcp_data = {
 		.max_sectors		= ZFCP_MAX_SECTORS,
 		.shost_attrs		= zfcp_a_stats_attrs,
 	},
-	.driver_version = ZFCP_VERSION,
 };
 
 /* Find start of Response Information in FCP response unit*/
@@ -181,16 +165,14 @@ zfcp_scsi_slave_alloc(struct scsi_device *sdp)
 static void zfcp_scsi_slave_destroy(struct scsi_device *sdpnt)
 {
 	struct zfcp_unit *unit = (struct zfcp_unit *) sdpnt->hostdata;
-
+	WARN_ON(!unit);
 	if (unit) {
 		atomic_clear_mask(ZFCP_STATUS_UNIT_REGISTERED, &unit->status);
 		sdpnt->hostdata = NULL;
 		unit->device = NULL;
 		zfcp_erp_unit_failed(unit, 12, NULL);
 		zfcp_unit_put(unit);
-	} else
-		ZFCP_LOG_NORMAL("bug: no unit associated with SCSI device at "
-				"address %p\n", sdpnt);
+	}
 }
 
 /*
@@ -253,10 +235,6 @@ zfcp_scsi_command_async(struct zfcp_adapter *adapter, struct zfcp_unit *unit,
 	if (unlikely(
 	      atomic_test_mask(ZFCP_STATUS_COMMON_ERP_FAILED, &unit->status) ||
 	     !atomic_test_mask(ZFCP_STATUS_COMMON_RUNNING, &unit->status))) {
-		ZFCP_LOG_DEBUG("stopping SCSI I/O on unit 0x%016Lx on port "
-			       "0x%016Lx on adapter %s\n",
-			       unit->fcp_lun, unit->port->wwpn,
-			       zfcp_get_busid_by_adapter(adapter));
 		zfcp_scsi_command_fail(scpnt, DID_ERROR);
 		goto out;
 	}
@@ -264,18 +242,12 @@ zfcp_scsi_command_async(struct zfcp_adapter *adapter, struct zfcp_unit *unit,
 	tmp = zfcp_fsf_send_fcp_command_task(adapter, unit, scpnt, use_timer,
 					     ZFCP_REQ_AUTO_CLEANUP);
 	if (unlikely(tmp == -EBUSY)) {
-		ZFCP_LOG_DEBUG("adapter %s not ready or unit 0x%016Lx "
-			       "on port 0x%016Lx in recovery\n",
-			       zfcp_get_busid_by_unit(unit),
-			       unit->fcp_lun, unit->port->wwpn);
 		zfcp_scsi_command_fail(scpnt, DID_NO_CONNECT);
 		goto out;
 	}
 
-	if (unlikely(tmp < 0)) {
-		ZFCP_LOG_DEBUG("error: initiation of Send FCP Cmnd failed\n");
+	if (unlikely(tmp < 0))
 		retval = SCSI_MLQUEUE_HOST_BUSY;
-	}
 
 out:
 	return retval;
@@ -394,9 +366,6 @@ static int zfcp_scsi_eh_abort_handler(struct scsi_cmnd *scpnt)
 	adapter = (struct zfcp_adapter *) scsi_host->hostdata[0];
 	unit = (struct zfcp_unit *) scpnt->device->hostdata;
 
-	ZFCP_LOG_INFO("aborting scsi_cmnd=%p on adapter %s\n",
-		      scpnt, zfcp_get_busid_by_adapter(adapter));
-
 	/* avoid race condition between late normal completion and abort */
 	write_lock_irqsave(&adapter->abort_lock, flags);
 
@@ -420,7 +389,6 @@ static int zfcp_scsi_eh_abort_handler(struct scsi_cmnd *scpnt)
 
 	fsf_req = zfcp_fsf_abort_fcp_command(old_req_id, adapter, unit, 0);
 	if (!fsf_req) {
-		ZFCP_LOG_INFO("error: initiation of Abort FCP Cmnd failed\n");
 		zfcp_scsi_dbf_event_abort("nres", adapter, scpnt, NULL,
 					  old_req_id);
 		retval = FAILED;
@@ -485,10 +453,6 @@ zfcp_task_management_function(struct zfcp_unit *unit, u8 tm_flags,
 	fsf_req = zfcp_fsf_send_fcp_command_task_management
 		(adapter, unit, tm_flags, 0);
 	if (!fsf_req) {
-		ZFCP_LOG_INFO("error: creation of task management request "
-			      "failed for unit 0x%016Lx on port 0x%016Lx on  "
-			      "adapter %s\n", unit->fcp_lun, unit->port->wwpn,
-			      zfcp_get_busid_by_adapter(adapter));
 		zfcp_scsi_dbf_event_devreset("nres", tm_flags, unit, scpnt);
 		retval = -ENOMEM;
 		goto out;
@@ -524,12 +488,6 @@ static int zfcp_scsi_eh_host_reset_handler(struct scsi_cmnd *scpnt)
 
 	unit = (struct zfcp_unit*) scpnt->device->hostdata;
 	adapter = unit->port->adapter;
-
-	ZFCP_LOG_NORMAL("host reset because of problems with "
-		"unit 0x%016Lx on port 0x%016Lx, adapter %s\n",
-		unit->fcp_lun, unit->port->wwpn,
-		zfcp_get_busid_by_adapter(unit->port->adapter));
-
 	zfcp_erp_adapter_reopen(adapter, 0, 141, scpnt);
 	zfcp_erp_wait(adapter);
 
@@ -549,13 +507,11 @@ zfcp_adapter_scsi_register(struct zfcp_adapter *adapter)
 	adapter->scsi_host = scsi_host_alloc(&zfcp_data.scsi_host_template,
 					     sizeof (struct zfcp_adapter *));
 	if (!adapter->scsi_host) {
-		ZFCP_LOG_NORMAL("error: registration with SCSI stack failed "
-				"for adapter %s ",
-				zfcp_get_busid_by_adapter(adapter));
+		dev_err(&adapter->ccw_device->dev,
+			"registration with SCSI stack failed.");
 		retval = -EIO;
 		goto out;
 	}
-	ZFCP_LOG_DEBUG("host registered, scsi_host=%p\n", adapter->scsi_host);
 
 	/* tell the SCSI stack some characteristics of this adapter */
 	adapter->scsi_host->max_id = 1;
@@ -748,6 +704,23 @@ zfcp_reset_fc_host_stats(struct Scsi_Host *shost)
 	}
 }
 
+static void zfcp_get_host_port_state(struct Scsi_Host *shost)
+{
+	struct zfcp_adapter *adapter =
+		(struct zfcp_adapter *)shost->hostdata[0];
+	int status = atomic_read(&adapter->status);
+
+	if ((status & ZFCP_STATUS_COMMON_RUNNING) &&
+	    !(status & ZFCP_STATUS_ADAPTER_LINK_UNPLUGGED))
+		fc_host_port_state(shost) = FC_PORTSTATE_ONLINE;
+	else if (status & ZFCP_STATUS_ADAPTER_LINK_UNPLUGGED)
+		fc_host_port_state(shost) = FC_PORTSTATE_LINKDOWN;
+	else if (status & ZFCP_STATUS_COMMON_ERP_FAILED)
+		fc_host_port_state(shost) = FC_PORTSTATE_ERROR;
+	else
+		fc_host_port_state(shost) = FC_PORTSTATE_UNKNOWN;
+}
+
 static void zfcp_set_rport_dev_loss_tmo(struct fc_rport *rport, u32 timeout)
 {
 	rport->dev_loss_tmo = timeout;
@@ -770,6 +743,8 @@ struct fc_function_template zfcp_transport_functions = {
 	.get_fc_host_stats = zfcp_get_fc_host_stats,
 	.reset_fc_host_stats = zfcp_reset_fc_host_stats,
 	.set_rport_dev_loss_tmo = zfcp_set_rport_dev_loss_tmo,
+	.get_host_port_state = zfcp_get_host_port_state,
+	.show_host_port_state = 1,
 	/* no functions registered for following dynamic attributes but
 	   directly set by LLDD */
 	.show_host_port_type = 1,
@@ -777,6 +752,68 @@ struct fc_function_template zfcp_transport_functions = {
 	.show_host_port_id = 1,
 	.disable_target_scan = 1,
 };
+
+#define ZFCP_DEFINE_LATENCY_ATTR(_name) 				\
+static ssize_t								\
+zfcp_sysfs_unit_##_name##_latency_show(struct device *dev,		\
+				       struct device_attribute *attr,	\
+				       char *buf) {			\
+	struct scsi_device *sdev = to_scsi_device(dev);			\
+	struct zfcp_unit *unit = sdev->hostdata;			\
+	struct zfcp_latencies *lat = &unit->latencies;			\
+	struct zfcp_adapter *adapter = unit->port->adapter;		\
+	unsigned long flags;						\
+	unsigned long long fsum, fmin, fmax, csum, cmin, cmax, cc;	\
+									\
+	spin_lock_irqsave(&lat->lock, flags);				\
+	fsum = lat->_name.fabric.sum * adapter->timer_ticks;		\
+	fmin = lat->_name.fabric.min * adapter->timer_ticks;		\
+	fmax = lat->_name.fabric.max * adapter->timer_ticks;		\
+	csum = lat->_name.channel.sum * adapter->timer_ticks;		\
+	cmin = lat->_name.channel.min * adapter->timer_ticks;		\
+	cmax = lat->_name.channel.max * adapter->timer_ticks;		\
+	cc  = lat->_name.counter;					\
+	spin_unlock_irqrestore(&lat->lock, flags);			\
+									\
+	do_div(fsum, 1000);						\
+	do_div(fmin, 1000);						\
+	do_div(fmax, 1000);						\
+	do_div(csum, 1000);						\
+	do_div(cmin, 1000);						\
+	do_div(cmax, 1000);						\
+									\
+	return sprintf(buf, "%llu %llu %llu %llu %llu %llu %llu\n",	\
+		       fmin, fmax, fsum, cmin, cmax, csum, cc); 	\
+}									\
+static ssize_t								\
+zfcp_sysfs_unit_##_name##_latency_store(struct device *dev,		\
+					struct device_attribute *attr,	\
+					const char *buf, size_t count)	\
+{									\
+	struct scsi_device *sdev = to_scsi_device(dev);			\
+	struct zfcp_unit *unit = sdev->hostdata;			\
+	struct zfcp_latencies *lat = &unit->latencies;			\
+	unsigned long flags;						\
+									\
+	spin_lock_irqsave(&lat->lock, flags);				\
+	lat->_name.fabric.sum = 0;					\
+	lat->_name.fabric.min = 0xFFFFFFFF;				\
+	lat->_name.fabric.max = 0;					\
+	lat->_name.channel.sum = 0;					\
+	lat->_name.channel.min = 0xFFFFFFFF;				\
+	lat->_name.channel.max = 0;					\
+	lat->_name.counter = 0;						\
+	spin_unlock_irqrestore(&lat->lock, flags);			\
+									\
+	return (ssize_t) count;						\
+}									\
+static DEVICE_ATTR(_name##_latency, S_IWUSR | S_IRUGO,			\
+		   zfcp_sysfs_unit_##_name##_latency_show,		\
+		   zfcp_sysfs_unit_##_name##_latency_store);
+
+ZFCP_DEFINE_LATENCY_ATTR(read);
+ZFCP_DEFINE_LATENCY_ATTR(write);
+ZFCP_DEFINE_LATENCY_ATTR(cmd);
 
 /**
  * ZFCP_DEFINE_SCSI_ATTR
@@ -808,6 +845,9 @@ static struct device_attribute *zfcp_sysfs_sdev_attrs[] = {
 	&dev_attr_fcp_lun,
 	&dev_attr_wwpn,
 	&dev_attr_hba_id,
+	&dev_attr_read_latency,
+	&dev_attr_write_latency,
+	&dev_attr_cmd_latency,
 	NULL
 };
 
@@ -922,5 +962,3 @@ static struct device_attribute *zfcp_a_stats_attrs[] = {
 	&dev_attr_seconds_active,
 	NULL
 };
-
-#undef ZFCP_LOG_AREA
