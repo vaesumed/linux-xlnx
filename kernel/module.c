@@ -2076,9 +2076,9 @@ static struct module *load_module(void __user *umod,
 #ifdef CONFIG_MODVERSIONS
 	if ((mod->num_syms && !crcindex) ||
 	    (mod->num_gpl_syms && !gplcrcindex) ||
-	    (mod->num_gpl_future_syms && !gplfuturecrcindex) ||
+	    (mod->num_gpl_future_syms && !gplfuturecrcindex)
 #ifdef CONFIG_UNUSED_SYMBOLS
-	    (mod->num_unused_syms && !unusedcrcindex) ||
+	    || (mod->num_unused_syms && !unusedcrcindex) ||
 	    (mod->num_unused_gpl_syms && !unusedgplcrcindex)
 #endif
 		) {
