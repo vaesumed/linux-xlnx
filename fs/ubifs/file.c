@@ -662,7 +662,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 		      const struct iattr *attr)
 {
 	int err, release;
-	loff_t old_size = inode->i_size, new_size = attr->ia_size;
+	loff_t new_size = attr->ia_size;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_budget_req req = { .dirtied_ino = 1,
 					.dirtied_ino_d = ui->data_len };
@@ -672,7 +672,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 		return err;
 
 	if (attr->ia_valid & ATTR_SIZE) {
-		dbg_gen("size %lld -> %lld", old_size, new_size);
+		dbg_gen("size %lld -> %lld", inode->i_size, new_size);
 		/* Truncation changes inode [mc]time */
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		err = vmtruncate(inode, new_size);
