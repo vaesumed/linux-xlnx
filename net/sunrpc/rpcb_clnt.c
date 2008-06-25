@@ -593,16 +593,6 @@ static struct rpc_procinfo rpcb_procedures4[] = {
 };
 
 static struct rpcb_info rpcb_next_version[] = {
-#ifdef CONFIG_SUNRPC_BIND34
-	{
-		.rpc_vers	= RPCBVERS_4,
-		.rpc_proc	= &rpcb_procedures4[RPCBPROC_GETADDR],
-	},
-	{
-		.rpc_vers	= RPCBVERS_3,
-		.rpc_proc	= &rpcb_procedures3[RPCBPROC_GETADDR],
-	},
-#endif
 	{
 		.rpc_vers	= RPCBVERS_2,
 		.rpc_proc	= &rpcb_procedures2[RPCBPROC_GETPORT],
@@ -613,7 +603,6 @@ static struct rpcb_info rpcb_next_version[] = {
 };
 
 static struct rpcb_info rpcb_next_version6[] = {
-#ifdef CONFIG_SUNRPC_BIND34
 	{
 		.rpc_vers	= RPCBVERS_4,
 		.rpc_proc	= &rpcb_procedures4[RPCBPROC_GETADDR],
@@ -622,7 +611,6 @@ static struct rpcb_info rpcb_next_version6[] = {
 		.rpc_vers	= RPCBVERS_3,
 		.rpc_proc	= &rpcb_procedures3[RPCBPROC_GETADDR],
 	},
-#endif
 	{
 		.rpc_proc	= NULL,
 	},
