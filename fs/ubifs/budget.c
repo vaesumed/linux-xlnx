@@ -127,7 +127,6 @@ static int run_gc(struct ubifs_info *c)
 	err = ubifs_return_leb(c, lnum);
 	if (err)
 		return err;
-
 	return 0;
 }
 
@@ -231,7 +230,6 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
 			return err;
 		return -EAGAIN;
 	}
-
 	return -ENOSPC;
 }
 
@@ -366,7 +364,6 @@ static int rp_can_write(struct ubifs_info *c, long long avail)
 	    capable(CAP_SYS_RESOURCE) ||
 	    (c->rp_gid != 0 && in_group_p(c->rp_gid)))
 		return 1;
-
 	return 0;
 }
 
@@ -489,7 +486,6 @@ static int calc_data_growth(const struct ubifs_info *c,
 	if (req->new_dent)
 		data_growth += c->dent_budget;
 	data_growth += req->new_ino_d;
-
 	return data_growth;
 }
 
@@ -511,7 +507,6 @@ static int calc_dd_growth(const struct ubifs_info *c,
 	if (req->mod_dent)
 		dd_growth += c->dent_budget;
 	dd_growth += req->dirtied_ino_d;
-
 	return dd_growth;
 }
 
@@ -569,7 +564,6 @@ again:
 	req->data_growth = data_growth;
 	req->dd_growth = dd_growth;
 	spin_unlock(&c->space_lock);
-
 	return 0;
 
 make_space:
@@ -582,7 +576,6 @@ make_space:
 		dbg_budg("FS is full, -ENOSPC");
 	else
 		ubifs_err("cannot budget space, error %d", err);
-
 	return err;
 }
 
@@ -716,6 +709,5 @@ long long ubifs_budg_get_free_space(struct ubifs_info *c)
 		free = ubifs_reported_space(c, available - outstanding);
 	else
 		free = 0;
-
 	return free;
 }

@@ -306,21 +306,16 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 
 static void ubifs_delete_inode(struct inode *inode)
 {
-	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	struct ubifs_inode *ui = ubifs_inode(inode);
-	struct ubifs_budget_req req = {.dd_growth = c->inode_budget,
-				       .dirtied_ino_d = ui->data_len};
 	int err;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
 
-	if (ui->xattr) {
+	if (ubifs_inode(inode)->xattr)
 		/*
 		 * Extended attribute inode deletions are fully handled in
 		 * 'ubifs_removexattr()'. These inodes are special and have
 		 * limited usage, so there is nothing to do here.
 		 */
-		ubifs_assert(!ui->dirty);
 		goto out;
-	}
 
 	dbg_gen("inode %lu", inode->i_ino);
 	ubifs_assert(!atomic_read(&inode->i_count));
@@ -330,7 +325,6 @@ static void ubifs_delete_inode(struct inode *inode)
 	if (is_bad_inode(inode))
 		goto out;
 
-	mutex_lock(&ui->wb_mutex);
 	inode->i_size = 0;
 	err = ubifs_jnl_write_inode(c, inode, 1);
 	if (err)
@@ -339,12 +333,6 @@ static void ubifs_delete_inode(struct inode *inode)
 		 * simple error message is ok here.
 		 */
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
-
-	if (ui->dirty) {
-		ui->dirty = 0;
-		ubifs_release_budget(c, &req);
-	}
-	mutex_unlock(&ui->wb_mutex);
 out:
 	clear_inode(inode);
 }

@@ -45,7 +45,7 @@
  * Similarly, 'i_mutex' does not have to be locked in readpage(), e.g.,
  * readahead path does not have it locked ("sys_read -> generic_file_aio_read
  * -> ondemand_readahead -> readpage"). In case of readahead, 'I_LOCK' flag is
- * not set as well.
+ * not set as well. However, UBIFS disables readahead.
  *
  * This, for example means that there might be 2 concurrent '->writepage()'
  * calls for the same inode, but different inode dirty pages.
@@ -633,9 +633,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
 	if (err)
 		goto out_budg;
-
 	ubifs_release_budget(c, &req);
-	ubifs_clean_inode(c, ubifs_inode(inode));
 	return err;
 
 out_budg:

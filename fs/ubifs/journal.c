@@ -445,21 +445,23 @@ static int get_dent_type(int mode)
  * @c: UBIFS file-system description object
  * @ino: buffer in which to pack inode node
  * @inode: inode to pack
+ * @size: inode size
+ * @nlink: number of links
  * @last: indicates the last node of the group
  * @last_reference: non-zero if this is a deletion inode
  */
 static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
-		       const struct inode *inode, int last, int last_reference)
+		       const struct inode *inode, loff_t size,
+		       unsigned int nlink, int last, int last_reference)
 {
 	int data_len = 0;
 	struct ubifs_inode *ui = ubifs_inode(inode);
-	loff_t size = i_size_read(inode);
 
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
 	ino->creat_sqnum = cpu_to_le64(ui->creat_sqnum);
 	ino->size = cpu_to_le64(size);
-	ino->nlink = cpu_to_le32(inode->i_nlink);
+	ino->nlink = cpu_to_le32(nlink);
 	ino->atime_sec  = cpu_to_le64(inode->i_atime.tv_sec);
 	ino->atime_nsec = cpu_to_le32(inode->i_atime.tv_nsec);
 	ino->ctime_sec  = cpu_to_le64(inode->i_ctime.tv_sec);
@@ -475,9 +477,6 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
 	ino->xattr_names = cpu_to_le32(ui->xattr_names);
 	ino->data_len    = cpu_to_le32(ui->data_len);
-	spin_lock(&ui->size_lock);
-	ui->synced_i_size = size;
-	spin_unlock(&ui->size_lock);
 	zero_ino_node_unused(ino);
 
 	/*
@@ -493,11 +492,49 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 }
 
 /**
+ * update_synced_i_size - update synchronized inode size.
+ * @inode: inode to update
+ */
+static void update_synced_i_size(const struct inode *inode)
+{
+	struct ubifs_inode *ui = ubifs_inode(inode);
+
+	spin_lock(&ui->size_lock);
+	ui->synced_i_size = inode->i_size;
+	spin_unlock(&ui->size_lock);
+}
+
+/**
+ * mark_inode_clean - mark UBIFS inode as clean.
+ * @c: UBIFS file-system description object
+ * @ui: UBIFS inode to mark as clean
+ *
+ * This function marks UBIFS inode @ui as clean by cleaning the @ui->dirty flag
+ * and releasing its budget. Note, VFS may still treat the inode as dirty and
+ * try to write it back, but 'ubifs_write_inode()' would just do nothing.
+ *
+ * This function relies on the fact that the inode mutex (@i_mutex) is locked
+ * for the inode so races with other tasks which may try to mark inode dirty
+ * are impossible.
+ */
+static void mark_inode_clean(struct ubifs_info *c, struct ubifs_inode *ui)
+{
+	int release;
+
+	mutex_lock(&ui->wb_mutex);
+	release = ui->dirty;
+	ui->dirty = 0;
+	mutex_unlock(&ui->wb_mutex);
+	if (release)
+		ubifs_release_dirty_inode_budget(c, ui);
+}
+
+/**
  * ubifs_jnl_update - update inode.
  * @c: UBIFS file-system description object
  * @dir: parent inode or host inode in case of extended attributes
  * @nm: directory entry name
- * @inode: inode
+ * @inode: inode to update
  * @deletion: indicates a directory entry deletion i.e unlink or rmdir
  * @xent: non-zero if the directory entry is an extended attribute entry
  *
@@ -516,7 +553,8 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * If the inode (@inode) or the parent directory (@dir) are synchronous, this
  * function synchronizes the write-buffer.
  *
- * This function returns %0 on success and a negative error code on failure.
+ * This functrion marks the @dir and @inode inodes as clean and returns zero on
+ * success. In case of failure, a negative error code is returned.
  */
 int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		     const struct qstr *nm, const struct inode *inode,
@@ -578,9 +616,10 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	ubifs_prep_grp_node(c, dent, dlen, 0);
 
 	ino = (void *)dent + aligned_dlen;
-	pack_inode(c, ino, inode, 0, last_reference);
+	pack_inode(c, ino, inode, inode->i_size, inode->i_nlink, 0,
+		   last_reference);
 	ino = (void *)ino + aligned_ilen;
-	pack_inode(c, ino, dir, 1, 0);
+	pack_inode(c, ino, dir, dir->i_size, dir->i_nlink, 1, 0);
 
 	if (last_reference) {
 		err = ubifs_add_orphan(c, inode->i_ino);
@@ -591,16 +630,18 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	}
 
 	err = write_head(c, BASEHD, dent, len, &lnum, &dent_offs, sync);
-	if (!sync && !err) {
+	if (err)
+		goto out_release;
+	if (!sync) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
 
 		ubifs_wbuf_add_ino_nolock(wbuf, inode->i_ino);
 		ubifs_wbuf_add_ino_nolock(wbuf, dir->i_ino);
 	}
+
+	update_synced_i_size(inode);
 	release_head(c, BASEHD);
 	kfree(dent);
-	if (err)
-		goto out_ro;
 
 	if (deletion) {
 		err = ubifs_tnc_remove_nm(c, &dent_key, nm);
@@ -631,6 +672,8 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		goto out_ro;
 
 	finish_reservation(c);
+	mark_inode_clean(c, ubifs_inode(inode));
+	mark_inode_clean(c, ubifs_inode(dir));
 	return 0;
 
 out_finish:
@@ -639,6 +682,8 @@ out_free:
 	kfree(dent);
 	return err;
 
+out_release:
+	release_head(c, BASEHD);
 out_ro:
 	ubifs_ro_mode(c, err);
 	if (last_reference)
@@ -661,10 +706,10 @@ out_ro:
 int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 			 const union ubifs_key *key, const void *buf, int len)
 {
+	struct ubifs_data_node *data;
 	int err, lnum, offs, compr_type, out_len;
 	int dlen = UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE * WORST_COMPR_FACTOR;
 	const struct ubifs_inode *ui = ubifs_inode(inode);
-	struct ubifs_data_node *data;
 
 	dbg_jnl("ino %lu, blk %u, len %d, key %s", key_inum(c, key),
 		key_block(c, key), len, DBGKEY(key));
@@ -679,6 +724,8 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 	data->size = cpu_to_le32(len);
 	zero_data_node_unused(data);
 
+	/* TODO: can this race with compression flags/type changes and cause
+	 * problems? */
 	if (!(ui->flags && UBIFS_COMPR_FL))
 		/* Compression is disabled for this inode */
 		compr_type = UBIFS_COMPR_NONE;
@@ -736,6 +783,8 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 {
 	int err, len, lnum, offs, sync = 0;
 	struct ubifs_ino_node *ino;
+	loff_t i_size = i_size_read(inode);
+	unsigned int i_nlink = inode->i_nlink;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	dbg_jnl("ino %lu%s", inode->i_ino,
@@ -761,15 +810,15 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, 1, last_reference);
-
+	pack_inode(c, ino, inode, i_size, i_nlink, 1, last_reference);
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
-	if (!sync && !err)
+	if (err)
+		goto out_release;
+	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 					  inode->i_ino);
+	update_synced_i_size(inode);
 	release_head(c, BASEHD);
-	if (err)
-		goto out_ro;
 
 	if (last_reference) {
 		err = ubifs_tnc_remove_ino(c, inode->i_ino);
@@ -790,6 +839,8 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	kfree(ino);
 	return 0;
 
+out_release:
+	release_head(c, BASEHD);
 out_ro:
 	ubifs_ro_mode(c, err);
 	finish_reservation(c);
@@ -807,27 +858,30 @@ out_free:
  * @new_dentry: new directory entry (or directory entry to replace)
  * @sync: non-zero if the write-buffer has to be synchronized
  *
- * Returns zero in case of success and a negative error code in case of failure.
+ * This function implements the re-name operation which may involve writing up
+ * to 3 inodes and 2 directory entries. It marks the written inodes as clean
+ * and returns zero on success. In case of failure, a negative error code is
+ * returned.
  */
 int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 		     const struct dentry *old_dentry,
 		     const struct inode *new_dir,
 		     const struct dentry *new_dentry, int sync)
 {
-	const struct inode *old_inode = old_dentry->d_inode;
-	const struct inode *new_inode = new_dentry->d_inode;
-	int err, dlen1, dlen2, ilen, lnum, offs, len;
-	int aligned_dlen1, aligned_dlen2, plen = UBIFS_INO_NODE_SZ;
-	int last_reference = !!(new_inode && new_inode->i_nlink == 0);
-	struct ubifs_dent_node *dent, *dent2;
 	void *p;
 	union ubifs_key key;
+	struct ubifs_dent_node *dent, *dent2;
+	int err, dlen1, dlen2, ilen, lnum, offs, len;
+	const struct inode *old_inode = old_dentry->d_inode;
+	const struct inode *new_inode = new_dentry->d_inode;
+	int aligned_dlen1, aligned_dlen2, plen = UBIFS_INO_NODE_SZ;
+	int last_reference = !!(new_inode && new_inode->i_nlink == 0);
+	int move = (old_dir != new_dir);
 
 	dbg_jnl("dent '%.*s' in dir ino %lu to dent '%.*s' in dir ino %lu",
 		old_dentry->d_name.len, old_dentry->d_name.name,
 		old_dir->i_ino, new_dentry->d_name.len,
 		new_dentry->d_name.name, new_dir->i_ino);
-
 	ubifs_assert(ubifs_inode(old_dir)->data_len == 0);
 	ubifs_assert(ubifs_inode(new_dir)->data_len == 0);
 
@@ -842,11 +896,9 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 
 	aligned_dlen1 = ALIGN(dlen1, 8);
 	aligned_dlen2 = ALIGN(dlen2, 8);
-
 	len = aligned_dlen1 + aligned_dlen2 + ALIGN(ilen, 8) + ALIGN(plen, 8);
 	if (old_dir != new_dir)
 		len += plen;
-
 	dent = kmalloc(len, GFP_NOFS);
 	if (!dent)
 		return -ENOMEM;
@@ -867,9 +919,8 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	zero_dent_node_unused(dent);
 	ubifs_prep_grp_node(c, dent, dlen1, 0);
 
-	dent2 = (void *)dent + aligned_dlen1;
-
 	/* Make deletion dent */
+	dent2 = (void *)dent + aligned_dlen1;
 	dent2->ch.node_type = UBIFS_DENT_NODE;
 	dent_key_init_flash(c, &dent2->key, old_dir->i_ino,
 			    &old_dentry->d_name);
@@ -883,16 +934,20 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 
 	p = (void *)dent2 + aligned_dlen2;
 	if (new_inode) {
-		pack_inode(c, p, new_inode, 0, last_reference);
+		pack_inode(c, p, new_inode, new_inode->i_size,
+			   new_inode->i_nlink, 0, last_reference);
 		p += ALIGN(ilen, 8);
 	}
 
-	if (old_dir == new_dir)
-		pack_inode(c, p, old_dir, 1, 0);
+	if (!move)
+		pack_inode(c, p, old_dir, old_dir->i_size,
+			   old_dir->i_nlink, 1, 0);
 	else {
-		pack_inode(c, p, old_dir, 0, 0);
+		pack_inode(c, p, old_dir, old_dir->i_size,
+			   old_dir->i_nlink, 0, 0);
 		p += ALIGN(plen, 8);
-		pack_inode(c, p, new_dir, 1, 0);
+		pack_inode(c, p, new_dir, new_dir->i_size,
+			   new_dir->i_nlink, 1, 0);
 	}
 
 	if (last_reference) {
@@ -904,7 +959,9 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	}
 
 	err = write_head(c, BASEHD, dent, len, &lnum, &offs, sync);
-	if (!sync && !err) {
+	if (err)
+		goto out_release;
+	if (!sync) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
 
 		ubifs_wbuf_add_ino_nolock(wbuf, new_dir->i_ino);
@@ -913,9 +970,10 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 			ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 						  new_inode->i_ino);
 	}
+
+	if (new_inode)
+		update_synced_i_size(new_inode);
 	release_head(c, BASEHD);
-	if (err)
-		goto out_ro;
 
 	dent_key_init(c, &key, new_dir->i_ino, &new_dentry->d_name);
 	err = ubifs_tnc_add_nm(c, &key, lnum, offs, dlen1, &new_dentry->d_name);
@@ -954,9 +1012,16 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	}
 
 	finish_reservation(c);
+	if (new_inode)
+		mark_inode_clean(c, ubifs_inode(new_inode));
+	if (move)
+		mark_inode_clean(c, ubifs_inode(new_dir));
+	mark_inode_clean(c, ubifs_inode(old_dir));
 	kfree(dent);
 	return 0;
 
+out_release:
+	release_head(c, BASEHD);
 out_ro:
 	ubifs_ro_mode(c, err);
 	if (last_reference)
@@ -1014,8 +1079,8 @@ out:
  * if it has been affected. The inode is also updated in order to synchronize
  * the new inode size.
  *
- * This function returns %0 in the case of success, and a negative error code in
- * case of failure.
+ * This functrion marks the inode as clean and returns zero on success. In case
+ * of failure, a negative error code is returned.
  */
 int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		       loff_t old_size, loff_t new_size)
@@ -1084,14 +1149,18 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, 0, 0);
+	pack_inode(c, ino, inode, inode->i_size, inode->i_nlink, 0, 0);
 	ubifs_prep_grp_node(c, trun, UBIFS_TRUN_NODE_SZ, dlen ? 0 : 1);
 	if (dlen)
 		ubifs_prep_grp_node(c, dn, dlen, 1);
 
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
-	if (!sync && !err)
+	if (err)
+		goto out_release;
+	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
+
+	update_synced_i_size(inode);
 	release_head(c, BASEHD);
 	if (err)
 		goto out_ro;
@@ -1125,9 +1194,12 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
+	mark_inode_clean(c, ubifs_inode(inode));
 	kfree(ino);
 	return 0;
 
+out_release:
+	release_head(c, BASEHD);
 out_ro:
 	ubifs_ro_mode(c, err);
 	finish_reservation(c);
@@ -1138,6 +1210,7 @@ out_free:
 
 #ifdef CONFIG_UBIFS_FS_XATTR
 
+/* TODO: xattr operations should mark host inode as clean, etc as well */
 int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 			   const struct inode *inode, const struct qstr *nm,
 			   int sync)
@@ -1184,10 +1257,9 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	ubifs_prep_grp_node(c, xent, xlen, 0);
 
 	ino = (void *)xent + aligned_xlen;
-	pack_inode(c, ino, inode, 0, 1);
-
+	pack_inode(c, ino, inode, inode->i_size, inode->i_nlink, 0, 1);
 	ino = (void *)ino + UBIFS_INO_NODE_SZ;
-	pack_inode(c, ino, host, 1, 0);
+	pack_inode(c, ino, host, host->i_size, inode->i_nlink, 1, 0);
 
 	err = write_head(c, BASEHD, xent, len, &lnum, &xent_offs, sync);
 	if (!sync && !err)
@@ -1269,8 +1341,9 @@ int ubifs_jnl_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode1, 0, 0);
-	pack_inode(c, (void *)ino + aligned_len1, inode2, 1, 0);
+	pack_inode(c, ino, inode1, inode1->i_size, inode1->i_nlink, 0, 0);
+	pack_inode(c, (void *)ino + aligned_len1, inode2, inode2->i_size,
+		   inode2->i_nlink, 1, 0);
 
 	err = write_head(c, BASEHD, ino, aligned_len, &lnum, &offs, 0);
 	if (!sync && !err) {
