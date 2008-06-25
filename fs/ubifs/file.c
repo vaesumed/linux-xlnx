@@ -338,6 +338,12 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		int release;
 
 		i_size_write(inode, pos + len);
+
+		/* Update inode size for write-back */
+		spin_lock(&ui->ui_lock);
+		ui->wb_i_size = pos + len;
+		spin_unlock(&ui->ui_lock);
+
 		mutex_lock(&ui->wb_mutex);
 		release = ui->dirty;
 		/*
@@ -347,10 +353,11 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 */
 		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
 		mutex_unlock(&ui->wb_mutex);
+
 		/*
 		 * We've marked the inode as dirty and we have allocated budget
 		 * for this. However, the inode may had already be be dirty
-		 * befor, in which case we have to free the budget.
+		 * before, in which case we have to free the budget.
 		 */
 		if (release)
 			ubifs_release_dirty_inode_budget(c, ui);

@@ -492,15 +492,27 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 }
 
 /**
- * update_synced_i_size - update synchronized inode size.
+ * update_ubifs_inode - update various UBIFS inode fields.
  * @inode: inode to update
+ *
+ * This helper function is called after the inode has been written to the flash
+ * media and updates synchronized inode size (@synced_i_size), inode size for
+ * write-back (@wb_i_size) and inode link count for write-back (@wb_nlink). It
+ * is essential to call this function while having the base head locked,
+ * because it prevents write-back (which may be running at the same time) from
+ * writing an inode node with older @i_nlink and @i_size to the flash media.
+ *
+ * This function also assumes that thie @inode->i_mutex is locked so no one
+ * may be changing this inode at the same time.
  */
-static void update_synced_i_size(const struct inode *inode)
+static void update_ubifs_inode(const struct inode *inode)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	spin_lock(&ui->ui_lock);
 	ui->synced_i_size = inode->i_size;
+	ui->wb_i_size = inode->i_size;
+	ui->wb_i_nlink = inode->i_nlink;
 	spin_unlock(&ui->ui_lock);
 }
 
@@ -553,7 +565,7 @@ static void mark_inode_clean(struct ubifs_info *c, struct ubifs_inode *ui)
  * If the inode (@inode) or the parent directory (@dir) are synchronous, this
  * function synchronizes the write-buffer.
  *
- * This functrion marks the @dir and @inode inodes as clean and returns zero on
+ * This function marks the @dir and @inode inodes as clean and returns zero on
  * success. In case of failure, a negative error code is returned.
  */
 int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
@@ -639,7 +651,8 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		ubifs_wbuf_add_ino_nolock(wbuf, dir->i_ino);
 	}
 
-	update_synced_i_size(inode);
+	update_ubifs_inode(inode);
+	update_ubifs_inode(dir);
 	release_head(c, BASEHD);
 	kfree(dent);
 
@@ -772,24 +785,22 @@ out_free:
  * ubifs_jnl_write_inode - flush inode to the journal.
  * @c: UBIFS file-system description object
  * @inode: inode to flush
- * @last_reference: inode has been deleted
+ * @deletion: inode has been deleted
  *
  * This function writes inode @inode to the journal. If the inode is
  * synchronous, it also synchronizes the write-buffer. Returns zero in case of
  * success and a negative error code in case of failure.
  */
 int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
-			  int last_reference)
+			  int deletion)
 {
 	int err, len, lnum, offs, sync = 0;
 	struct ubifs_ino_node *ino;
-	loff_t i_size = i_size_read(inode);
-	unsigned int i_nlink = inode->i_nlink;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	dbg_jnl("ino %lu%s", inode->i_ino,
-		last_reference ? " (last reference)" : "");
-	if (last_reference)
+		deletion ? " (last reference)" : "");
+	if (deletion)
 		ubifs_assert(inode->i_nlink == 0);
 
 	len = UBIFS_INO_NODE_SZ;
@@ -797,7 +808,7 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	 * If the inode is being deleted, do not write the attached data. No
 	 * need to synchronize the write-buffer either.
 	 */
-	if (!last_reference) {
+	if (!deletion) {
 		len += ui->data_len;
 		sync = IS_SYNC(inode);
 	}
@@ -810,17 +821,19 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, i_size, i_nlink, 1, last_reference);
+	pack_inode(c, ino, inode, ui->wb_i_size, ui->wb_i_nlink, 1, deletion);
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
 	if (err)
 		goto out_release;
 	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 					  inode->i_ino);
-	update_synced_i_size(inode);
+	spin_lock(&ui->ui_lock);
+	ui->synced_i_size = ui->wb_i_size;
+	spin_unlock(&ui->ui_lock);
 	release_head(c, BASEHD);
 
-	if (last_reference) {
+	if (deletion) {
 		err = ubifs_tnc_remove_ino(c, inode->i_ino);
 		if (err)
 			goto out_ro;
@@ -971,8 +984,11 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 						  new_inode->i_ino);
 	}
 
+	update_ubifs_inode(old_dir);
+	if (move)
+		update_ubifs_inode(new_dir);
 	if (new_inode)
-		update_synced_i_size(new_inode);
+		update_ubifs_inode(new_inode);
 	release_head(c, BASEHD);
 
 	dent_key_init(c, &key, new_dir->i_ino, &new_dentry->d_name);
@@ -1079,7 +1095,7 @@ out:
  * if it has been affected. The inode is also updated in order to synchronize
  * the new inode size.
  *
- * This functrion marks the inode as clean and returns zero on success. In case
+ * This function marks the inode as clean and returns zero on success. In case
  * of failure, a negative error code is returned.
  */
 int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
@@ -1160,7 +1176,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
 
-	update_synced_i_size(inode);
+	update_ubifs_inode(inode);
 	release_head(c, BASEHD);
 	if (err)
 		goto out_ro;
