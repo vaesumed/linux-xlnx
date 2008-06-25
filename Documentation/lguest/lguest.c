@@ -1279,17 +1279,19 @@ static void setup_console(void)
 
 static u32 str2ip(const char *ipaddr)
 {
-	unsigned int byte[4];
+	unsigned int b[4];
 
-	sscanf(ipaddr, "%u.%u.%u.%u", &byte[0], &byte[1], &byte[2], &byte[3]);
-	return (byte[0] << 24) | (byte[1] << 16) | (byte[2] << 8) | byte[3];
+	if (sscanf(ipaddr, "%u.%u.%u.%u", &b[0], &b[1], &b[2], &b[3]) != 4)
+		errx(1, "Failed to parse IP address '%s'", ipaddr);
+	return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
 }
 
 static void str2mac(const char *macaddr, unsigned char mac[6])
 {
 	unsigned int m[6];
-	sscanf(macaddr, "%02x:%02x:%02x:%02x:%02x:%02x",
-	       &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]);
+	if (sscanf(macaddr, "%02x:%02x:%02x:%02x:%02x:%02x",
+		   &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) != 6)
+		errx(1, "Failed to parse mac address '%s'", mac);
 	mac[0] = m[0];
 	mac[1] = m[1];
 	mac[2] = m[2];
@@ -1325,58 +1327,79 @@ static void add_to_bridge(int fd, const char *if_name, const char *br_name)
 /* This sets up the Host end of the network device with an IP address, brings
  * it up so packets will flow, the copies the MAC address into the hwaddr
  * pointer. */
-static void configure_device(int fd, struct ifreq *ifr, u32 ipaddr)
+static void configure_device(int fd, const char *tapif, u32 ipaddr)
 {
-	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr->ifr_addr;
+	struct ifreq ifr;
+	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr.ifr_addr;
+
+	memset(&ifr, 0, sizeof(ifr));
+	strcpy(ifr.ifr_name, tapif);
 
 	/* Don't read these incantations.  Just cut & paste them like I did! */
 	sin->sin_family = AF_INET;
 	sin->sin_addr.s_addr = htonl(ipaddr);
-	if (ioctl(fd, SIOCSIFADDR, ifr) != 0)
-		err(1, "Setting %s interface address", ifr->ifr_name);
-	ifr->ifr_flags = IFF_UP;
-	if (ioctl(fd, SIOCSIFFLAGS, ifr) != 0)
-		err(1, "Bringing interface %s up", ifr->ifr_name);
+	if (ioctl(fd, SIOCSIFADDR, &ifr) != 0)
+		err(1, "Setting %s interface address", tapif);
+	ifr.ifr_flags = IFF_UP;
+	if (ioctl(fd, SIOCSIFFLAGS, &ifr) != 0)
+		err(1, "Bringing interface %s up", tapif);
 }
 
-static void get_mac(int fd, struct ifreq *ifr, unsigned char hwaddr[6])
+static void get_mac(int fd, const char *tapif, unsigned char hwaddr[6])
 {
+	struct ifreq ifr;
+
+	memset(&ifr, 0, sizeof(ifr));
+	strcpy(ifr.ifr_name, tapif);
+
 	/* SIOC stands for Socket I/O Control.  G means Get (vs S for Set
 	 * above).  IF means Interface, and HWADDR is hardware address.
 	 * Simple! */
-	if (ioctl(fd, SIOCGIFHWADDR, ifr) != 0)
-		err(1, "getting hw address for %s", ifr->ifr_name);
-	memcpy(hwaddr, ifr->ifr_hwaddr.sa_data, 6);
+	if (ioctl(fd, SIOCGIFHWADDR, &ifr) != 0)
+		err(1, "getting hw address for %s", tapif);
+	memcpy(hwaddr, ifr.ifr_hwaddr.sa_data, 6);
 }
 
-/*L:195 Our network is a Host<->Guest network.  This can either use bridging or
- * routing, but the principle is the same: it uses the "tun" device to inject
- * packets into the Host as if they came in from a normal network card.  We
- * just shunt packets between the Guest and the tun device. */
-static void setup_tun_net(const char *arg)
+static int get_tun_device(char tapif[IFNAMSIZ])
 {
-	struct device *dev;
 	struct ifreq ifr;
-	int netfd, ipfd;
-	u32 ip = INADDR_ANY;
-	int bridging = 0;
-	char name_or_ip[IFNAMSIZ];
-	const char *p;
-	struct virtio_net_config conf;
+	int netfd;
+
+	/* Start with this zeroed.  Messy but sure. */
+	memset(&ifr, 0, sizeof(ifr));
 
 	/* We open the /dev/net/tun device and tell it we want a tap device.  A
 	 * tap device is like a tun device, only somehow different.  To tell
 	 * the truth, I completely blundered my way through this code, but it
 	 * works now! */
 	netfd = open_or_die("/dev/net/tun", O_RDWR);
-	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
 	strcpy(ifr.ifr_name, "tap%d");
 	if (ioctl(netfd, TUNSETIFF, &ifr) != 0)
 		err(1, "configuring /dev/net/tun");
+
 	/* We don't need checksums calculated for packets coming in this
 	 * device: trust us! */
 	ioctl(netfd, TUNSETNOCSUM, 1);
+
+	memcpy(tapif, ifr.ifr_name, IFNAMSIZ);
+	return netfd;
+}
+
+/*L:195 Our network is a Host<->Guest network.  This can either use bridging or
+ * routing, but the principle is the same: it uses the "tun" device to inject
+ * packets into the Host as if they came in from a normal network card.  We
+ * just shunt packets between the Guest and the tun device. */
+static void setup_tun_net(char *arg)
+{
+	struct device *dev;
+	int netfd, ipfd;
+	u32 ip = INADDR_ANY;
+	bool bridging = false;
+	char tapif[IFNAMSIZ], *p;
+	struct virtio_net_config conf;
+
+	netfd = get_tun_device(tapif);
 
 	/* First we create a new network device. */
 	dev = new_device("net", VIRTIO_ID_NET, netfd, handle_tun_input);
@@ -1395,29 +1418,28 @@ static void setup_tun_net(const char *arg)
 	/* If the command line was --tunnet=bridge:<name> do bridging. */
 	if (!strncmp(BRIDGE_PFX, arg, strlen(BRIDGE_PFX))) {
 		arg += strlen(BRIDGE_PFX);
-		bridging = 1;
+		bridging = true;
 	}
 
 	/* A mac address may follow the bridge name or IP address */
-	if ((p = strchr(arg, ':')))
+	p = strchr(arg, ':');
+	if (p) {
 		str2mac(p+1, conf.mac);
-	else {
+		*p = '\0';
+	} else {
 		p = arg + strlen(arg);
 		/* None supplied; query the randomly assigned mac. */
-		get_mac(ipfd, &ifr, conf.mac);
+		get_mac(ipfd, tapif, conf.mac);
 	}
 
 	/* arg is now either an IP address or a bridge name */
-	strncpy(name_or_ip, arg, p-arg);
-	name_or_ip[p-arg] = '\0';
-
 	if (bridging)
-		add_to_bridge(ipfd, ifr.ifr_name, name_or_ip);
+		add_to_bridge(ipfd, tapif, arg);
 	else
-		ip = str2ip(name_or_ip);
+		ip = str2ip(arg);
 
 	/* Set up the tun device. */
-	configure_device(ipfd, &ifr, ip);
+	configure_device(ipfd, tapif, ip);
 
 	/* Tell Guest what MAC address to use. */
 	add_feature(dev, VIRTIO_NET_F_MAC);
@@ -1430,11 +1452,11 @@ static void setup_tun_net(const char *arg)
 	devices.device_num++;
 
 	if (bridging)
-		verbose("device %u: tun net attached to bridge: %s\n",
-			devices.device_num, name_or_ip);
+		verbose("device %u: tun %s attached to bridge: %s\n",
+			devices.device_num, tapif, arg);
 	else
-		verbose("device %u: tun net: %s\n",
-			devices.device_num, name_or_ip);
+		verbose("device %u: tun %s: %s\n",
+			devices.device_num, tapif, arg);
 }
 
 /* Our block (disk) device should be really simple: the Guest asks for a block
