@@ -476,6 +476,10 @@ config SH_RTS7751R2D
 	  Select RTS7751R2D if configuring for a Renesas Technology
 	  Sales SH-Graphics board.
 
+config SH_RSK7203
+	bool "RSK7203"
+	depends on CPU_SUBTYPE_SH7203
+
 config SH_SDK7780
 	bool "SDK7780R3"
 	depends on CPU_SUBTYPE_SH7780
@@ -496,6 +500,20 @@ config SH_MIGOR
 	help
 	  Select Migo-R if configuring for the SH7722 Migo-R platform
           by Renesas System Solutions Asia Pte. Ltd.
+
+config SH_AP325RXA
+	bool "AP-325RXA"
+	depends on CPU_SUBTYPE_SH7723
+	help
+	  Renesas "AP-325RXA" support.
+	  Compatible with ALGO SYSTEM CO.,LTD. "AP-320A"
+
+config SH_SH7763RDP
+	bool "SH7763RDP"
+	depends on CPU_SUBTYPE_SH7763
+	help
+	  Select SH7763RDP if configuring for a Renesas SH7763
+	  evaluation board.
 
 config SH_EDOSK7705
 	bool "EDOSK7705"
