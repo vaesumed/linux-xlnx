@@ -47,6 +47,7 @@
 #include <linux/inet.h>
 #include <linux/in6.h>
 #include <net/ipv6.h>
+#include <linux/netdevice.h>
 #include <linux/nfs_xdr.h>
 #include <linux/magic.h>
 #include <linux/parser.h>
@@ -65,7 +66,6 @@
 enum {
 	/* Mount options that take no arguments */
 	Opt_soft, Opt_hard,
-	Opt_intr, Opt_nointr,
 	Opt_posix, Opt_noposix,
 	Opt_cto, Opt_nocto,
 	Opt_ac, Opt_noac,
@@ -101,10 +101,12 @@ enum {
 static match_table_t nfs_mount_option_tokens = {
 	{ Opt_userspace, "bg" },
 	{ Opt_userspace, "fg" },
+	{ Opt_userspace, "retry=%s" },
+
 	{ Opt_soft, "soft" },
 	{ Opt_hard, "hard" },
-	{ Opt_intr, "intr" },
-	{ Opt_nointr, "nointr" },
+	{ Opt_deprecated, "intr" },
+	{ Opt_deprecated, "nointr" },
 	{ Opt_posix, "posix" },
 	{ Opt_noposix, "noposix" },
 	{ Opt_cto, "cto" },
@@ -136,7 +138,6 @@ static match_table_t nfs_mount_option_tokens = {
 	{ Opt_acdirmin, "acdirmin=%u" },
 	{ Opt_acdirmax, "acdirmax=%u" },
 	{ Opt_actimeo, "actimeo=%u" },
-	{ Opt_userspace, "retry=%u" },
 	{ Opt_namelen, "namlen=%u" },
 	{ Opt_mountport, "mountport=%u" },
 	{ Opt_mountvers, "mountvers=%u" },
@@ -207,6 +208,7 @@ static int nfs_xdev_get_sb(struct file_system_type *fs_type,
 		int flags, const char *dev_name, void *raw_data, struct vfsmount *mnt);
 static void nfs_kill_super(struct super_block *);
 static void nfs_put_super(struct super_block *);
+static int nfs_remount(struct super_block *sb, int *flags, char *raw_data);
 
 static struct file_system_type nfs_fs_type = {
 	.owner		= THIS_MODULE,
@@ -234,6 +236,7 @@ static const struct super_operations nfs_sops = {
 	.umount_begin	= nfs_umount_begin,
 	.show_options	= nfs_show_options,
 	.show_stats	= nfs_show_stats,
+	.remount_fs	= nfs_remount,
 };
 
 #ifdef CONFIG_NFS_V4
@@ -278,6 +281,7 @@ static const struct super_operations nfs4_sops = {
 	.umount_begin	= nfs_umount_begin,
 	.show_options	= nfs_show_options,
 	.show_stats	= nfs_show_stats,
+	.remount_fs	= nfs_remount,
 };
 #endif
 
@@ -368,8 +372,6 @@ static int nfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	};
 	int error;
 
-	lock_kernel();
-
 	error = server->nfs_client->rpc_ops->statfs(server, fh, &res);
 	if (error < 0)
 		goto out_err;
@@ -401,12 +403,10 @@ static int nfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 	buf->f_namelen = server->namelen;
 
-	unlock_kernel();
 	return 0;
 
  out_err:
 	dprintk("%s: statfs error = %d\n", __func__, -error);
-	unlock_kernel();
 	return error;
 }
 
@@ -702,38 +702,114 @@ static int nfs_verify_server_address(struct sockaddr *addr)
 	return 0;
 }
 
-/*
- * Parse string addresses passed in via a mount option,
- * and construct a sockaddr based on the result.
- *
- * If address parsing fails, set the sockaddr's address
- * family to AF_UNSPEC to force nfs_verify_server_address()
- * to punt the mount.
- */
-static void nfs_parse_server_address(char *value,
-				     struct sockaddr *sap,
-				     size_t *len)
+static void nfs_parse_ipv4_address(char *string, size_t str_len,
+				   struct sockaddr *sap, size_t *addr_len)
 {
-	if (strchr(value, ':')) {
-		struct sockaddr_in6 *ap = (struct sockaddr_in6 *)sap;
-		u8 *addr = (u8 *)&ap->sin6_addr.in6_u;
+	struct sockaddr_in *sin = (struct sockaddr_in *)sap;
+	u8 *addr = (u8 *)&sin->sin_addr.s_addr;
 
-		ap->sin6_family = AF_INET6;
-		*len = sizeof(*ap);
-		if (in6_pton(value, -1, addr, '\0', NULL))
-			return;
-	} else {
-		struct sockaddr_in *ap = (struct sockaddr_in *)sap;
-		u8 *addr = (u8 *)&ap->sin_addr.s_addr;
+	if (str_len <= INET_ADDRSTRLEN) {
+		dfprintk(MOUNT, "NFS: parsing IPv4 address %*s\n",
+				(int)str_len, string);
 
-		ap->sin_family = AF_INET;
-		*len = sizeof(*ap);
-		if (in4_pton(value, -1, addr, '\0', NULL))
+		sin->sin_family = AF_INET;
+		*addr_len = sizeof(*sin);
+		if (in4_pton(string, str_len, addr, '\0', NULL))
 			return;
 	}
 
 	sap->sa_family = AF_UNSPEC;
-	*len = 0;
+	*addr_len = 0;
+}
+
+#define IPV6_SCOPE_DELIMITER	'%'
+
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+static void nfs_parse_ipv6_scope_id(const char *string, const size_t str_len,
+				    const char *delim,
+				    struct sockaddr_in6 *sin6)
+{
+	char *p;
+	size_t len;
+
+	if (!(ipv6_addr_type(&sin6->sin6_addr) & IPV6_ADDR_LINKLOCAL))
+		return ;
+	if (*delim != IPV6_SCOPE_DELIMITER)
+		return;
+
+	len = (string + str_len) - delim - 1;
+	p = kstrndup(delim + 1, len, GFP_KERNEL);
+	if (p) {
+		unsigned long scope_id = 0;
+		struct net_device *dev;
+
+		dev = dev_get_by_name(&init_net, p);
+		if (dev != NULL) {
+			scope_id = dev->ifindex;
+			dev_put(dev);
+		} else {
+			/* scope_id is set to zero on error */
+			strict_strtoul(p, 10, &scope_id);
+		}
+
+		kfree(p);
+		sin6->sin6_scope_id = scope_id;
+		dfprintk(MOUNT, "NFS: IPv6 scope ID = %lu\n", scope_id);
+	}
+}
+
+static void nfs_parse_ipv6_address(char *string, size_t str_len,
+				   struct sockaddr *sap, size_t *addr_len)
+{
+	struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sap;
+	u8 *addr = (u8 *)&sin6->sin6_addr.in6_u;
+	const char *delim;
+
+	if (str_len <= INET6_ADDRSTRLEN) {
+		dfprintk(MOUNT, "NFS: parsing IPv6 address %*s\n",
+				(int)str_len, string);
+
+		sin6->sin6_family = AF_INET6;
+		*addr_len = sizeof(*sin6);
+		if (in6_pton(string, str_len, addr, IPV6_SCOPE_DELIMITER, &delim)) {
+			nfs_parse_ipv6_scope_id(string, str_len, delim, sin6);
+			return;
+		}
+	}
+
+	sap->sa_family = AF_UNSPEC;
+	*addr_len = 0;
+}
+#else
+static void nfs_parse_ipv6_address(char *string, size_t str_len,
+				   struct sockaddr *sap, size_t *addr_len)
+{
+	sap->sa_family = AF_UNSPEC;
+	*addr_len = 0;
+}
+#endif
+
+/*
+ * Construct a sockaddr based on the contents of a string that contains
+ * an IP address in presentation format.
+ *
+ * If there is a problem constructing the new sockaddr, set the address
+ * family to AF_UNSPEC.
+ */
+static void nfs_parse_ip_address(char *string, size_t str_len,
+				 struct sockaddr *sap, size_t *addr_len)
+{
+	unsigned int i, colons;
+
+	colons = 0;
+	for (i = 0; i < str_len; i++)
+		if (string[i] == ':')
+			colons++;
+
+	if (colons >= 2)
+		nfs_parse_ipv6_address(string, str_len, sap, addr_len);
+	else
+		nfs_parse_ipv4_address(string, str_len, sap, addr_len);
 }
 
 /*
@@ -782,9 +858,6 @@ static int nfs_parse_mount_options(char *raw,
 			break;
 		case Opt_hard:
 			mnt->flags &= ~NFS_MOUNT_SOFT;
-			break;
-		case Opt_intr:
-		case Opt_nointr:
 			break;
 		case Opt_posix:
 			mnt->flags |= NFS_MOUNT_POSIX;
@@ -1070,9 +1143,10 @@ static int nfs_parse_mount_options(char *raw,
 			string = match_strdup(args);
 			if (string == NULL)
 				goto out_nomem;
-			nfs_parse_server_address(string, (struct sockaddr *)
-						 &mnt->nfs_server.address,
-						 &mnt->nfs_server.addrlen);
+			nfs_parse_ip_address(string, strlen(string),
+					     (struct sockaddr *)
+						&mnt->nfs_server.address,
+					     &mnt->nfs_server.addrlen);
 			kfree(string);
 			break;
 		case Opt_clientaddr:
@@ -1093,14 +1167,17 @@ static int nfs_parse_mount_options(char *raw,
 			string = match_strdup(args);
 			if (string == NULL)
 				goto out_nomem;
-			nfs_parse_server_address(string, (struct sockaddr *)
-						 &mnt->mount_server.address,
-						 &mnt->mount_server.addrlen);
+			nfs_parse_ip_address(string, strlen(string),
+					     (struct sockaddr *)
+						&mnt->mount_server.address,
+					     &mnt->mount_server.addrlen);
 			kfree(string);
 			break;
 
 		case Opt_userspace:
 		case Opt_deprecated:
+			dfprintk(MOUNT, "NFS:   ignoring mount option "
+					"'%s'\n", p);
 			break;
 
 		default:
@@ -1188,9 +1265,144 @@ static int nfs_try_mount(struct nfs_parsed_mount_data *args,
 	if (status == 0)
 		return 0;
 
-	dfprintk(MOUNT, "NFS: unable to mount server %s, error %d",
+	dfprintk(MOUNT, "NFS: unable to mount server %s, error %d\n",
 			hostname, status);
 	return status;
+}
+
+static int nfs_parse_simple_hostname(const char *dev_name,
+				     char **hostname, size_t maxnamlen,
+				     char **export_path, size_t maxpathlen)
+{
+	size_t len;
+	char *colon, *comma;
+
+	colon = strchr(dev_name, ':');
+	if (colon == NULL)
+		goto out_bad_devname;
+
+	len = colon - dev_name;
+	if (len > maxnamlen)
+		goto out_hostname;
+
+	/* N.B. caller will free nfs_server.hostname in all cases */
+	*hostname = kstrndup(dev_name, len, GFP_KERNEL);
+	if (!*hostname)
+		goto out_nomem;
+
+	/* kill possible hostname list: not supported */
+	comma = strchr(*hostname, ',');
+	if (comma != NULL) {
+		if (comma == *hostname)
+			goto out_bad_devname;
+		*comma = '\0';
+	}
+
+	colon++;
+	len = strlen(colon);
+	if (len > maxpathlen)
+		goto out_path;
+	*export_path = kstrndup(colon, len, GFP_KERNEL);
+	if (!*export_path)
+		goto out_nomem;
+
+	dfprintk(MOUNT, "NFS: MNTPATH: '%s'\n", *export_path);
+	return 0;
+
+out_bad_devname:
+	dfprintk(MOUNT, "NFS: device name not in host:path format\n");
+	return -EINVAL;
+
+out_nomem:
+	dfprintk(MOUNT, "NFS: not enough memory to parse device name\n");
+	return -ENOMEM;
+
+out_hostname:
+	dfprintk(MOUNT, "NFS: server hostname too long\n");
+	return -ENAMETOOLONG;
+
+out_path:
+	dfprintk(MOUNT, "NFS: export pathname too long\n");
+	return -ENAMETOOLONG;
+}
+
+/*
+ * Hostname has square brackets around it because it contains one or
+ * more colons.  We look for the first closing square bracket, and a
+ * colon must follow it.
+ */
+static int nfs_parse_protected_hostname(const char *dev_name,
+					char **hostname, size_t maxnamlen,
+					char **export_path, size_t maxpathlen)
+{
+	size_t len;
+	char *start, *end;
+
+	start = (char *)(dev_name + 1);
+
+	end = strchr(start, ']');
+	if (end == NULL)
+		goto out_bad_devname;
+	if (*(end + 1) != ':')
+		goto out_bad_devname;
+
+	len = end - start;
+	if (len > maxnamlen)
+		goto out_hostname;
+
+	/* N.B. caller will free nfs_server.hostname in all cases */
+	*hostname = kstrndup(start, len, GFP_KERNEL);
+	if (*hostname == NULL)
+		goto out_nomem;
+
+	end += 2;
+	len = strlen(end);
+	if (len > maxpathlen)
+		goto out_path;
+	*export_path = kstrndup(end, len, GFP_KERNEL);
+	if (!*export_path)
+		goto out_nomem;
+
+	return 0;
+
+out_bad_devname:
+	dfprintk(MOUNT, "NFS: device name not in host:path format\n");
+	return -EINVAL;
+
+out_nomem:
+	dfprintk(MOUNT, "NFS: not enough memory to parse device name\n");
+	return -ENOMEM;
+
+out_hostname:
+	dfprintk(MOUNT, "NFS: server hostname too long\n");
+	return -ENAMETOOLONG;
+
+out_path:
+	dfprintk(MOUNT, "NFS: export pathname too long\n");
+	return -ENAMETOOLONG;
+}
+
+/*
+ * Split "dev_name" into "hostname:export_path".
+ *
+ * The leftmost colon demarks the split between the server's hostname
+ * and the export path.  If the hostname starts with a left square
+ * bracket, then it may contain colons.
+ *
+ * Note: caller frees hostname and export path, even on error.
+ */
+static int nfs_parse_devname(const char *dev_name,
+			     char **hostname, size_t maxnamlen,
+			     char **export_path, size_t maxpathlen)
+{
+	if (*dev_name == '[')
+		return nfs_parse_protected_hostname(dev_name,
+						    hostname, maxnamlen,
+						    export_path, maxpathlen);
+
+	return nfs_parse_simple_hostname(dev_name,
+					 hostname, maxnamlen,
+					 export_path, maxpathlen);
 }
 
 /*
@@ -1321,8 +1533,6 @@ static int nfs_validate_mount_data(void *options,
 
 		break;
 	default: {
-		unsigned int len;
-		char *c;
 		int status;
 
 		if (nfs_parse_mount_options((char *)options, args) == 0)
@@ -1332,21 +1542,17 @@ static int nfs_validate_mount_data(void *options,
 						&args->nfs_server.address))
 			goto out_no_address;
 
-		c = strchr(dev_name, ':');
-		if (c == NULL)
-			return -EINVAL;
-		len = c - dev_name;
-		/* N.B. caller will free nfs_server.hostname in all cases */
-		args->nfs_server.hostname = kstrndup(dev_name, len, GFP_KERNEL);
-		if (!args->nfs_server.hostname)
-			goto out_nomem;
+		status = nfs_parse_devname(dev_name,
+					   &args->nfs_server.hostname,
+					   PAGE_SIZE,
+					   &args->nfs_server.export_path,
+					   NFS_MAXPATHLEN);
+		if (!status)
+			status = nfs_try_mount(args, mntfh);
 
-		c++;
-		if (strlen(c) > NFS_MAXPATHLEN)
-			return -ENAMETOOLONG;
-		args->nfs_server.export_path = c;
+		kfree(args->nfs_server.export_path);
+		args->nfs_server.export_path = NULL;
 
-		status = nfs_try_mount(args, mntfh);
 		if (status)
 			return status;
 
@@ -1394,6 +1600,80 @@ out_no_address:
 out_invalid_fh:
 	dfprintk(MOUNT, "NFS: invalid root filehandle\n");
 	return -EINVAL;
+}
+
+static int
+nfs_compare_remount_data(struct nfs_server *nfss,
+			 struct nfs_parsed_mount_data *data)
+{
+	if (data->flags != nfss->flags ||
+	    data->rsize != nfss->rsize ||
+	    data->wsize != nfss->wsize ||
+	    data->retrans != nfss->client->cl_timeout->to_retries ||
+	    data->auth_flavors[0] != nfss->client->cl_auth->au_flavor ||
+	    data->acregmin != nfss->acregmin / HZ ||
+	    data->acregmax != nfss->acregmax / HZ ||
+	    data->acdirmin != nfss->acdirmin / HZ ||
+	    data->acdirmax != nfss->acdirmax / HZ ||
+	    data->timeo != (10U * nfss->client->cl_timeout->to_initval / HZ) ||
+	    data->nfs_server.addrlen != nfss->nfs_client->cl_addrlen ||
+	    memcmp(&data->nfs_server.address, &nfss->nfs_client->cl_addr,
+		   data->nfs_server.addrlen) != 0)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int
+nfs_remount(struct super_block *sb, int *flags, char *raw_data)
+{
+	int error;
+	struct nfs_server *nfss = sb->s_fs_info;
+	struct nfs_parsed_mount_data *data;
+	struct nfs_mount_data *options = (struct nfs_mount_data *)raw_data;
+	struct nfs4_mount_data *options4 = (struct nfs4_mount_data *)raw_data;
+	u32 nfsvers = nfss->nfs_client->rpc_ops->version;
+
+	/*
+	 * Userspace mount programs that send binary options generally send
+	 * them populated with default values. We have no way to know which
+	 * ones were explicitly specified. Fall back to legacy behavior and
+	 * just return success.
+	 */
+	if ((nfsvers == 4 && options4->version == 1) ||
+	    (nfsvers <= 3 && options->version >= 1 &&
+	     options->version <= 6))
+		return 0;
+
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
+	if (data == NULL)
+		return -ENOMEM;
+
+	/* fill out struct with values from existing mount */
+	data->flags = nfss->flags;
+	data->rsize = nfss->rsize;
+	data->wsize = nfss->wsize;
+	data->retrans = nfss->client->cl_timeout->to_retries;
+	data->auth_flavors[0] = nfss->client->cl_auth->au_flavor;
+	data->acregmin = nfss->acregmin / HZ;
+	data->acregmax = nfss->acregmax / HZ;
+	data->acdirmin = nfss->acdirmin / HZ;
+	data->acdirmax = nfss->acdirmax / HZ;
+	data->timeo = 10U * nfss->client->cl_timeout->to_initval / HZ;
+	data->nfs_server.addrlen = nfss->nfs_client->cl_addrlen;
+	memcpy(&data->nfs_server.address, &nfss->nfs_client->cl_addr,
+		data->nfs_server.addrlen);
+
+	/* overwrite those values with any that were specified */
+	error = nfs_parse_mount_options((char *)options, data);
+	if (error < 0)
+		goto out;
+
+	/* compare new mount options with old ones */
+	error = nfs_compare_remount_data(nfss, data);
+out:
+	kfree(data);
+	return error;
 }
 
 /*
@@ -1882,7 +2162,7 @@ static int nfs4_validate_mount_data(void *options,
 
 		break;
 	default: {
-		unsigned int len;
+		int status;
 
 		if (nfs_parse_mount_options((char *)options, args) == 0)
 			return -EINVAL;
@@ -1901,33 +2181,16 @@ static int nfs4_validate_mount_data(void *options,
 			goto out_inval_auth;
 		}
 
-		/*
-		 * Split "dev_name" into "hostname:mntpath".
-		 */
-		c = strchr(dev_name, ':');
-		if (c == NULL)
-			return -EINVAL;
-		/* while calculating len, pretend ':' is '\0' */
-		len = c - dev_name;
-		if (len > NFS4_MAXNAMLEN)
-			return -ENAMETOOLONG;
-		/* N.B. caller will free nfs_server.hostname in all cases */
-		args->nfs_server.hostname = kstrndup(dev_name, len, GFP_KERNEL);
-		if (!args->nfs_server.hostname)
-			goto out_nomem;
-
-		c++;			/* step over the ':' */
-		len = strlen(c);
-		if (len > NFS4_MAXPATHLEN)
-			return -ENAMETOOLONG;
-		args->nfs_server.export_path = kstrndup(c, len, GFP_KERNEL);
-		if (!args->nfs_server.export_path)
-			goto out_nomem;
-
-		dprintk("NFS: MNTPATH: '%s'\n", args->nfs_server.export_path);
-
 		if (args->client_address == NULL)
 			goto out_no_client_address;
+
+		status = nfs_parse_devname(dev_name,
+					   &args->nfs_server.hostname,
+					   NFS4_MAXNAMLEN,
+					   &args->nfs_server.export_path,
+					   NFS4_MAXPATHLEN);
+		if (status < 0)
+			return status;
 
 		break;
 		}
@@ -1943,10 +2206,6 @@ out_inval_auth:
 	dfprintk(MOUNT, "NFS4: Invalid number of RPC auth flavours %d\n",
 		 data->auth_flavourlen);
 	return -EINVAL;
-
-out_nomem:
-	dfprintk(MOUNT, "NFS4: not enough memory to handle mount options\n");
-	return -ENOMEM;
 
 out_no_address:
 	dfprintk(MOUNT, "NFS4: mount program didn't pass remote address\n");
