@@ -632,13 +632,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		goto out_budg;
 
-	/* Release the budget we allocated */
 	ubifs_release_budget(c, &req);
-
-	/*
-	 * 'ubifs_trunc()' has flushed the inode, so we should mark it as clean
-	 * and release its budget if it is dirty.
-	 */
 	ubifs_clean_inode(c, ubifs_inode(inode));
 	return err;
 
@@ -697,7 +691,6 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
-
 	return err;
 
 out_budg:

@@ -1024,7 +1024,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	struct ubifs_ino_node *ino;
 	struct ubifs_trun_node *trun;
 	struct ubifs_data_node *uninitialized_var(dn);
-	int err, dlen, len, lnum, offs, bit, sz;
+	int err, dlen, len, lnum, offs, bit, sz, sync = IS_SYNC(inode);
 	ino_t inum = inode->i_ino;
 	unsigned int blk;
 
@@ -1089,8 +1089,8 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	if (dlen)
 		ubifs_prep_grp_node(c, dn, dlen, 1);
 
-	err = write_head(c, BASEHD, ino, len, &lnum, &offs, 0);
-	if (!err)
+	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
+	if (!sync && !err)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
 	release_head(c, BASEHD);
 	if (err)
