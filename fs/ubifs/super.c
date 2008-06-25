@@ -298,8 +298,8 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
 
 	ui->dirty = 0;
-	ubifs_release_dirty_inode_budget(c, ui);
 	mutex_unlock(&ui->wb_mutex);
+	ubifs_release_dirty_inode_budget(c, ui);
 
 	return err;
 }
