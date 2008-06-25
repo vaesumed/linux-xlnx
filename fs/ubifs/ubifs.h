@@ -324,7 +324,9 @@ struct ubifs_gced_idx_leb {
  * @synced_i_size: synchronized size of inode, i.e. the value of inode size
  *                 currently stored on the flash; used only for regular file
  *                 inodes
- * @size_lock: protects synced_i_size
+ * @wb_i_size: inode size which should be used by write-back
+ * @wb_i_nlink: number of inode links which should be used by write-back
+ * @size_lock: protects @synced_i_size, @wb_i_size, and @wb_i_nlink
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
@@ -354,6 +356,8 @@ struct ubifs_inode {
 	unsigned int xattr:1;
 	struct mutex wb_mutex;
 	loff_t synced_i_size;
+	loff_t wb_i_size;
+	unsigned int wb_i_nlink;
 	spinlock_t size_lock;
 	int flags;
 	int compr_type;

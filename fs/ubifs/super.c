@@ -136,7 +136,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	inode->i_ctime.tv_sec  = (int64_t)le64_to_cpu(ino->ctime_sec);
 	inode->i_ctime.tv_nsec = le32_to_cpu(ino->ctime_nsec);
 	inode->i_mode = le32_to_cpu(ino->mode);
-	inode->i_size = ui->synced_i_size = le64_to_cpu(ino->size);
+	inode->i_size = le64_to_cpu(ino->size);
 
 	ui->data_len    = le32_to_cpu(ino->data_len);
 	ui->flags       = le32_to_cpu(ino->flags);
@@ -145,6 +145,8 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
+	ui->wb_i_size   = ui->synced_i_size = inode->i_size;
+	ui->wb_i_nlink  = inode->i_nlink;
 
 	err = validate_inode(c, inode);
 	if (err)
