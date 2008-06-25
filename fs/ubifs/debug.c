@@ -791,17 +791,19 @@ void dbg_dump_index(struct ubifs_info *c)
 }
 
 /**
- * dbg_check_inode_dirty - check inode dirty flag.
+ * dbg_check_synced_i_size - check synchronized inode size.
  * @ui: UBIFS inode description object
  *
- * If current inode size is not equivalent to the inode size which has been
- * written to the media last time, the inode must be dirty. This function
- * checks that and returns 0 if it is true, and %-EINVAL if not.
+ * If inode is clean, synchronized inode size has to be equivalent to current
+ * inode size. This function has to be called only for locked inodes (@i_mutex
+ * has to be locked). Returns %0 if synchronized inode size if correct, and
+ * %-EINVAL if not.
  */
-int dbg_check_inode_dirty(struct ubifs_inode *ui)
+int dbg_check_synced_i_size(struct inode *inode)
 {
 	int err = 0;
 	loff_t i_size, synced_i_size;
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
 		return 0;
@@ -811,8 +813,9 @@ int dbg_check_inode_dirty(struct ubifs_inode *ui)
 	i_size = i_size_read(&ui->vfs_inode);
 	synced_i_size = ui->synced_i_size;
 	if (i_size != synced_i_size && !ui->dirty) {
-		ubifs_err("inode size is %lld, synchronized inode size is %lld,"
-			  " but inode is not dirty", i_size, synced_i_size);
+		ubifs_err("inode %lu size is %lld, synchronized size is %lld,"
+			  " but inode is clean", inode->i_ino, i_size,
+			  synced_i_size);
 		dbg_dump_stack();
 		err = -EINVAL;
 	}

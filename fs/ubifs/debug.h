@@ -254,7 +254,7 @@ int dbg_check_cats(struct ubifs_info *c);
 
 int dbg_check_ltab(struct ubifs_info *c);
 
-int dbg_check_inode_dirty(struct ubifs_inode *ui);
+int dbg_check_synced_i_size(struct inode *inode);
 
 int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir);
 
@@ -374,7 +374,7 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 
 #define dbg_check_ltab(c)                          0
 
-#define dbg_check_inode_dirty(ui)                  0
+#define dbg_check_synced_i_size(inode)             0
 
 #define dbg_check_dir_size(c, dir)                 0
 
