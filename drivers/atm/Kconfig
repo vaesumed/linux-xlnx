@@ -245,12 +245,20 @@ config ATM_IDT77252_USE_SUNI
 
 config ATM_AMBASSADOR
 	tristate "Madge Ambassador (Collage PCI 155 Server)"
+	select FW_LOADER
 	depends on PCI && VIRT_TO_BUS
 	select BITREVERSE
 	help
 	  This is a driver for ATMizer based ATM card produced by Madge
 	  Networks Ltd. Say Y (or M to compile as a module named ambassador)
 	  here if you have one of these cards.
+
+config ATM_AMBASSADOR_FIRMWARE
+	bool "Firmware for Madge Ambassador (Collage PCI 155 Server)"
+	depends on ATM_AMBASSADOR
+	help
+	  This allows you to build the firmware for the ATMizer based ATM
+	  card into the kernel. Say 'N' and let it get loaded from userspace.
 
 config ATM_AMBASSADOR_DEBUG
 	bool "Enable debugging messages"
