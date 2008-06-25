@@ -82,6 +82,7 @@ char * __acpi_map_table (unsigned long phys_addr, unsigned long size);
 int early_acpi_boot_init(void);
 int acpi_boot_init (void);
 int acpi_boot_table_init (void);
+int acpi_mps_check (void);
 int acpi_numa_init (void);
 
 int acpi_table_init (void);
@@ -93,7 +94,7 @@ int acpi_parse_mcfg (struct acpi_table_header *header);
 void acpi_table_print_madt_entry (struct acpi_subtable_header *madt);
 
 /* the following four functions are architecture-dependent */
-#ifdef CONFIG_HAVE_ARCH_PARSE_SRAT
+#if defined(CONFIG_HAVE_ARCH_PARSE_SRAT) && !defined(NR_NODE_MEMBLKS)
 #define NR_NODE_MEMBLKS MAX_NUMNODES
 #define acpi_numa_slit_init(slit) do {} while (0)
 #define acpi_numa_processor_affinity_init(pa) do {} while (0)
@@ -246,6 +247,11 @@ static inline int acpi_boot_init(void)
 }
 
 static inline int acpi_boot_table_init(void)
+{
+	return 0;
+}
+
+static inline int acpi_mps_check(void)
 {
 	return 0;
 }
