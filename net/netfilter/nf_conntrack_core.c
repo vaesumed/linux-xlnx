@@ -847,6 +847,25 @@ acct:
 }
 EXPORT_SYMBOL_GPL(__nf_ct_refresh_acct);
 
+void __nf_ct_kill_acct(struct nf_conn *ct,
+		enum ip_conntrack_info ctinfo,
+		const struct sk_buff *skb,
+		int do_acct)
+{
+#ifdef CONFIG_NF_CT_ACCT
+	if (do_acct) {
+		spin_lock_bh(&nf_conntrack_lock);
+		ct->counters[CTINFO2DIR(ctinfo)].packets++;
+		ct->counters[CTINFO2DIR(ctinfo)].bytes +=
+			skb->len - skb_network_offset(skb);
+		spin_unlock_bh(&nf_conntrack_lock);
+	}
+#endif
+	if (del_timer(&ct->timeout))
+		ct->timeout.function((unsigned long)ct);
+}
+EXPORT_SYMBOL_GPL(__nf_ct_kill_acct);
+
 #if defined(CONFIG_NF_CT_NETLINK) || defined(CONFIG_NF_CT_NETLINK_MODULE)
 
 #include <linux/netfilter/nfnetlink.h>
