@@ -105,11 +105,8 @@ typedef struct {
 #define ELF_DATA	ELFDATA2MSB
 
 #define USE_ELF_CORE_DUMP
-#ifndef CONFIG_SUN4
+
 #define ELF_EXEC_PAGESIZE	4096
-#else
-#define ELF_EXEC_PAGESIZE	8192
-#endif
 
 
 /* This is the location that an ET_DYN program is loaded if exec'ed.  Typical

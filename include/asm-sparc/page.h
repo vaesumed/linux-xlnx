@@ -8,11 +8,8 @@
 #ifndef _SPARC_PAGE_H
 #define _SPARC_PAGE_H
 
-#ifdef CONFIG_SUN4
-#define PAGE_SHIFT   13
-#else
 #define PAGE_SHIFT   12
-#endif
+
 #ifndef __ASSEMBLY__
 /* I have my suspicions... -DaveM */
 #define PAGE_SIZE    (1UL << PAGE_SHIFT)
@@ -57,8 +54,6 @@ struct cache_palias {
 	unsigned long vaddr;
 	int context;
 };
-
-extern struct cache_palias *sparc_aliases;
 
 /* passing structs on the Sparc slow us down tremendously... */
 
