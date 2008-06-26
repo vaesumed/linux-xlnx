@@ -138,8 +138,8 @@ static void acpi_ut_delete_internal_obj(union acpi_operand_object *object)
 	case ACPI_TYPE_DEVICE:
 
 		if (object->device.gpe_block) {
-			(void)acpi_ev_delete_gpe_block(object->device.
-						       gpe_block);
+			(void)acpi_ev_delete_gpe_block(object->
+						       device.gpe_block);
 		}
 
 		/* Walk the handler list for this device */
@@ -193,8 +193,8 @@ static void acpi_ut_delete_internal_obj(union acpi_operand_object *object)
 		/* Delete the method mutex if it exists */
 
 		if (object->method.mutex) {
-			acpi_os_delete_mutex(object->method.mutex->mutex.
-					     os_mutex);
+			acpi_os_delete_mutex(object->method.mutex->
+					     mutex.os_mutex);
 			acpi_ut_delete_object_desc(object->method.mutex);
 			object->method.mutex = NULL;
 		}
@@ -220,15 +220,12 @@ static void acpi_ut_delete_internal_obj(union acpi_operand_object *object)
 					/* Deactivate region and free region context */
 
 					if (handler_desc->address_space.setup) {
-						(void)handler_desc->
-						    address_space.setup(object,
-									ACPI_REGION_DEACTIVATE,
-									handler_desc->
-									address_space.
-									context,
-									&second_desc->
-									extra.
-									region_context);
+						(void)
+						    handler_desc->address_space.
+						    setup(object,
+							  ACPI_REGION_DEACTIVATE,
+							  handler_desc->address_space.context,
+							  &second_desc->extra.region_context);
 					}
 				}
 
@@ -442,7 +439,7 @@ acpi_ut_update_object_reference(union acpi_operand_object *object, u16 action)
 	union acpi_generic_state *state_list = NULL;
 	union acpi_operand_object *next_object = NULL;
 	union acpi_generic_state *state;
-	acpi_native_uint i;
+	u32 i;
 
 	ACPI_FUNCTION_TRACE_PTR(ut_update_object_reference, object);
 
@@ -468,10 +465,12 @@ acpi_ut_update_object_reference(union acpi_operand_object *object, u16 action)
 
 			/* Update the notify objects for these types (if present) */
 
-			acpi_ut_update_ref_count(object->common_notify.
-						 system_notify, action);
-			acpi_ut_update_ref_count(object->common_notify.
-						 device_notify, action);
+			acpi_ut_update_ref_count(object->
+						 common_notify.system_notify,
+						 action);
+			acpi_ut_update_ref_count(object->
+						 common_notify.device_notify,
+						 action);
 			break;
 
 		case ACPI_TYPE_PACKAGE:
@@ -509,11 +508,9 @@ acpi_ut_update_object_reference(union acpi_operand_object *object, u16 action)
 
 			next_object = object->bank_field.bank_obj;
 			status =
-			    acpi_ut_create_update_state_and_push(object->
-								 bank_field.
-								 region_obj,
-								 action,
-								 &state_list);
+			    acpi_ut_create_update_state_and_push
+			    (object->bank_field.region_obj, action,
+			     &state_list);
 			if (ACPI_FAILURE(status)) {
 				goto error_exit;
 			}
@@ -523,11 +520,8 @@ acpi_ut_update_object_reference(union acpi_operand_object *object, u16 action)
 
 			next_object = object->index_field.index_obj;
 			status =
-			    acpi_ut_create_update_state_and_push(object->
-								 index_field.
-								 data_obj,
-								 action,
-								 &state_list);
+			    acpi_ut_create_update_state_and_push
+			    (object->index_field.data_obj, action, &state_list);
 			if (ACPI_FAILURE(status)) {
 				goto error_exit;
 			}
@@ -572,7 +566,7 @@ acpi_ut_update_object_reference(union acpi_operand_object *object, u16 action)
 
 	return_ACPI_STATUS(AE_OK);
 
-      error_exit:
+error_exit:
 
 	ACPI_EXCEPTION((AE_INFO, status,
 			"Could not update object reference count"));

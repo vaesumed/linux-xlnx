@@ -166,7 +166,7 @@ acpi_ds_get_predicate_value(struct acpi_walk_state *walk_state,
 		status = AE_CTRL_FALSE;
 	}
 
-      cleanup:
+cleanup:
 
 	ACPI_DEBUG_PRINT((ACPI_DB_EXEC, "Completed a predicate eval=%X Op=%p\n",
 			  walk_state->control_state->common.value,
@@ -231,9 +231,8 @@ acpi_ds_exec_begin_op(struct acpi_walk_state *walk_state,
 		if (acpi_ns_opens_scope(walk_state->op_info->object_type)) {
 			ACPI_DEBUG_PRINT((ACPI_DB_DISPATCH,
 					  "(%s) Popping scope for Op %p\n",
-					  acpi_ut_get_type_name(walk_state->
-								op_info->
-								object_type),
+					  acpi_ut_get_type_name
+					  (walk_state->op_info->object_type),
 					  op));
 
 			status = acpi_ds_scope_stack_pop(walk_state);
@@ -315,7 +314,7 @@ acpi_ds_exec_begin_op(struct acpi_walk_state *walk_state,
 
 	return_ACPI_STATUS(status);
 
-      error_exit:
+error_exit:
 	status = acpi_ds_method_error(status, walk_state);
 	return_ACPI_STATUS(status);
 }
@@ -403,19 +402,9 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 			/* Resolve all operands */
 
 			status = acpi_ex_resolve_operands(walk_state->opcode,
-							  &(walk_state->
-							    operands
-							    [walk_state->
-							     num_operands - 1]),
-							  walk_state);
-			if (ACPI_SUCCESS(status)) {
-				ACPI_DUMP_OPERANDS(ACPI_WALK_OPERANDS,
-						   ACPI_IMODE_EXECUTE,
-						   acpi_ps_get_opcode_name
-						   (walk_state->opcode),
-						   walk_state->num_operands,
-						   "after ExResolveOperands");
-			}
+							  &(walk_state->operands
+							    [walk_state->num_operands
+							     - 1]), walk_state);
 		}
 
 		if (ACPI_SUCCESS(status)) {
@@ -492,10 +481,10 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 						  op));
 
 				op->common.node =
-				    (struct acpi_namespace_node *)op->asl.value.
-				    arg->asl.node;
-				acpi_ut_add_reference(op->asl.value.arg->asl.
-						      node->object);
+				    (struct acpi_namespace_node *)op->asl.
+				    value.arg->asl.node;
+				acpi_ut_add_reference(op->asl.value.arg->
+						      asl.node->object);
 				return_ACPI_STATUS(AE_OK);
 			}
 
@@ -581,8 +570,9 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 				walk_state->num_operands = 1;
 
 				status = acpi_ds_create_node(walk_state,
-							     op->common.parent->
-							     common.node,
+							     op->common.
+							     parent->common.
+							     node,
 							     op->common.parent);
 				if (ACPI_FAILURE(status)) {
 					break;
@@ -596,9 +586,9 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 				status =
 				    acpi_ds_eval_data_object_operands
 				    (walk_state, op,
-				     acpi_ns_get_attached_object(op->common.
-								 parent->common.
-								 node));
+				     acpi_ns_get_attached_object(op->
+								 common.parent->
+								 common.node));
 				break;
 
 			default:
@@ -712,7 +702,7 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 		walk_state->result_obj = NULL;
 	}
 
-      cleanup:
+cleanup:
 
 	if (walk_state->result_obj) {
 
