@@ -23,7 +23,6 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/pci.h>
-#include <linux/mutex.h>
 
 #include <sound/core.h>
 #include "hda_codec.h"
@@ -64,7 +63,6 @@ struct ad198x_spec {
 	/* PCM information */
 	struct hda_pcm pcm_rec[3];	/* used in alc_build_pcms() */
 
-	struct mutex amp_mutex;	/* PCM volume/mute control mutex */
 	unsigned int spdif_route;
 
 	/* dynamic controls, init_verbs and input_mux */
@@ -2623,7 +2621,7 @@ static int ad1988_auto_create_extra_out(struct hda_codec *codec, hda_nid_t pin,
 {
 	struct ad198x_spec *spec = codec->spec;
 	hda_nid_t nid;
-	int idx, err;
+	int i, idx, err;
 	char name[32];
 
 	if (! pin)
@@ -2631,16 +2629,26 @@ static int ad1988_auto_create_extra_out(struct hda_codec *codec, hda_nid_t pin,
 
 	idx = ad1988_pin_idx(pin);
 	nid = ad1988_idx_to_dac(codec, idx);
-	/* specify the DAC as the extra output */
-	if (! spec->multiout.hp_nid)
-		spec->multiout.hp_nid = nid;
-	else
-		spec->multiout.extra_out_nid[0] = nid;
-	/* control HP volume/switch on the output mixer amp */
-	sprintf(name, "%s Playback Volume", pfx);
-	if ((err = add_control(spec, AD_CTL_WIDGET_VOL, name,
-			       HDA_COMPOSE_AMP_VAL(nid, 3, 0, HDA_OUTPUT))) < 0)
-		return err;
+	/* check whether the corresponding DAC was already taken */
+	for (i = 0; i < spec->autocfg.line_outs; i++) {
+		hda_nid_t pin = spec->autocfg.line_out_pins[i];
+		hda_nid_t dac = ad1988_idx_to_dac(codec, ad1988_pin_idx(pin));
+		if (dac == nid)
+			break;
+	}
+	if (i >= spec->autocfg.line_outs) {
+		/* specify the DAC as the extra output */
+		if (!spec->multiout.hp_nid)
+			spec->multiout.hp_nid = nid;
+		else
+			spec->multiout.extra_out_nid[0] = nid;
+		/* control HP volume/switch on the output mixer amp */
+		sprintf(name, "%s Playback Volume", pfx);
+		err = add_control(spec, AD_CTL_WIDGET_VOL, name,
+				  HDA_COMPOSE_AMP_VAL(nid, 3, 0, HDA_OUTPUT));
+		if (err < 0)
+			return err;
+	}
 	nid = ad1988_mixer_nids[idx];
 	sprintf(name, "%s Playback Switch", pfx);
 	if ((err = add_control(spec, AD_CTL_BIND_MUTE, name,
@@ -3177,7 +3185,6 @@ static int patch_ad1884(struct hda_codec *codec)
 	if (spec == NULL)
 		return -ENOMEM;
 
-	mutex_init(&spec->amp_mutex);
 	codec->spec = spec;
 
 	spec->multiout.max_channels = 2;
@@ -3847,7 +3854,6 @@ static int patch_ad1884a(struct hda_codec *codec)
 	if (spec == NULL)
 		return -ENOMEM;
 
-	mutex_init(&spec->amp_mutex);
 	codec->spec = spec;
 
 	spec->multiout.max_channels = 2;
@@ -4152,7 +4158,6 @@ static int patch_ad1882(struct hda_codec *codec)
 	if (spec == NULL)
 		return -ENOMEM;
 
-	mutex_init(&spec->amp_mutex);
 	codec->spec = spec;
 
 	spec->multiout.max_channels = 6;
