@@ -243,6 +243,11 @@ void __init setup_arch(char **cmdline_p)
 		clear_cpu_cap(&boot_cpu_data, X86_FEATURE_APIC);
 	}
 
+#ifdef CONFIG_PCI
+	if (pci_early_dump_regs)
+		early_dump_pci_devices();
+#endif
+
 #ifdef CONFIG_PROVIDE_OHCI1394_DMA_INIT
 	if (init_ohci1394_dma_early)
 		init_ohci1394_dma_on_all_controllers();
