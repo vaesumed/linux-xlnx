@@ -286,7 +286,7 @@ int sirdev_schedule_request(struct sir_dev *dev, int initial_state, unsigned par
 
 	IRDA_DEBUG(2, "%s - state=0x%04x / param=%u\n", __FUNCTION__, initial_state, param);
 
-	if (down_trylock(&fsm->sem)) {
+	if (!down_try(&fsm->sem)) {
 		if (in_interrupt()  ||  in_atomic()  ||  irqs_disabled()) {
 			IRDA_DEBUG(1, "%s(), state machine busy!\n", __FUNCTION__);
 			return -EWOULDBLOCK;
