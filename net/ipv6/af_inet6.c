@@ -7,8 +7,6 @@
  *
  *	Adapted from linux/net/ipv4/af_inet.c
  *
- *	$Id: af_inet6.c,v 1.66 2002/02/01 22:01:04 davem Exp $
- *
  * 	Fixes:
  *	piggy, Karl Knutson	:	Socket protocol table
  * 	Hideaki YOSHIFUJI	:	sin6_scope_id support
@@ -373,7 +371,7 @@ int inet6_release(struct socket *sock)
 
 EXPORT_SYMBOL(inet6_release);
 
-int inet6_destroy_sock(struct sock *sk)
+void inet6_destroy_sock(struct sock *sk)
 {
 	struct ipv6_pinfo *np = inet6_sk(sk);
 	struct sk_buff *skb;
@@ -391,8 +389,6 @@ int inet6_destroy_sock(struct sock *sk)
 
 	if ((opt = xchg(&np->opt, NULL)) != NULL)
 		sock_kfree_s(sk, opt, opt->tot_len);
-
-	return 0;
 }
 
 EXPORT_SYMBOL_GPL(inet6_destroy_sock);
