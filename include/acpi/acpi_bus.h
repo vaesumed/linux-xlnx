@@ -131,7 +131,7 @@ struct acpi_device_ops {
 struct acpi_driver {
 	char name[80];
 	char class[80];
-	const struct acpi_device_id *ids; /* Supported Hardware IDs */
+	const struct acpi_device_id *ids;	/* Supported Hardware IDs */
 	struct acpi_device_ops ops;
 	struct device_driver drv;
 	struct module *owner;
@@ -320,7 +320,7 @@ struct acpi_bus_event {
 };
 
 extern struct kobject *acpi_kobj;
-extern int acpi_bus_generate_netlink_event(const char*, const char*, u8, int);
+extern int acpi_bus_generate_netlink_event(const char *, const char *, u8, int);
 void acpi_bus_private_data_handler(acpi_handle, u32, void *);
 int acpi_bus_get_private_data(acpi_handle, void **);
 extern int acpi_notifier_call_chain(struct acpi_device *, u32, u32);
@@ -337,11 +337,15 @@ int acpi_bus_get_power(acpi_handle handle, int *state);
 int acpi_bus_set_power(acpi_handle handle, int state);
 #ifdef CONFIG_ACPI_PROC_EVENT
 int acpi_bus_generate_proc_event(struct acpi_device *device, u8 type, int data);
-int acpi_bus_generate_proc_event4(const char *class, const char *bid, u8 type, int data);
+int acpi_bus_generate_proc_event4(const char *class, const char *bid, u8 type,
+				  int data);
 int acpi_bus_receive_event(struct acpi_bus_event *event);
 #else
-static inline int acpi_bus_generate_proc_event(struct acpi_device *device, u8 type, int data)
-	{ return 0; }
+static inline int acpi_bus_generate_proc_event(struct acpi_device *device,
+					       u8 type, int data)
+{
+	return 0;
+}
 #endif
 int acpi_bus_register_driver(struct acpi_driver *driver);
 void acpi_bus_unregister_driver(struct acpi_driver *driver);
@@ -376,9 +380,9 @@ acpi_handle acpi_get_pci_rootbridge_handle(unsigned int, unsigned int);
 #define DEVICE_ACPI_HANDLE(dev) ((acpi_handle)((dev)->archdata.acpi_handle))
 
 #ifdef CONFIG_PM_SLEEP
-int acpi_pm_device_sleep_state(struct device *, int, int *);
+int acpi_pm_device_sleep_state(struct device *, int *);
 #else /* !CONFIG_PM_SLEEP */
-static inline int acpi_pm_device_sleep_state(struct device *d, int w, int *p)
+static inline int acpi_pm_device_sleep_state(struct device *d, int *p)
 {
 	if (p)
 		*p = ACPI_STATE_D0;
@@ -386,6 +390,6 @@ static inline int acpi_pm_device_sleep_state(struct device *d, int w, int *p)
 }
 #endif /* !CONFIG_PM_SLEEP */
 
-#endif				/* CONFIG_ACPI */
+#endif /* CONFIG_ACPI */
 
 #endif /*__ACPI_BUS_H__*/

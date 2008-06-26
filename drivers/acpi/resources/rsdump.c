@@ -431,16 +431,16 @@ acpi_rs_dump_descriptor(void *resource, struct acpi_rsdump_info *table)
 
 		case ACPI_RSD_1BITFLAG:
 			acpi_rs_out_string(name, ACPI_CAST_PTR(char,
-							       table->
-							       pointer[*target &
-								       0x01]));
+							       table->pointer
+							       [*target &
+								0x01]));
 			break;
 
 		case ACPI_RSD_2BITFLAG:
 			acpi_rs_out_string(name, ACPI_CAST_PTR(char,
-							       table->
-							       pointer[*target &
-								       0x03]));
+							       table->pointer
+							       [*target &
+								0x03]));
 			break;
 
 		case ACPI_RSD_SHORTLIST:

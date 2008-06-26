@@ -74,8 +74,8 @@ void acpi_ds_scope_stack_clear(struct acpi_walk_state *walk_state)
 
 		ACPI_DEBUG_PRINT((ACPI_DB_EXEC,
 				  "Popped object type (%s)\n",
-				  acpi_ut_get_type_name(scope_info->common.
-							value)));
+				  acpi_ut_get_type_name(scope_info->
+							common.value)));
 		acpi_ut_delete_generic_state(scope_info);
 	}
 }
@@ -142,10 +142,10 @@ acpi_ds_scope_stack_push(struct acpi_namespace_node *node,
 	if (old_scope_info) {
 		ACPI_DEBUG_PRINT_RAW((ACPI_DB_EXEC,
 				      "[%4.4s] (%s)",
-				      acpi_ut_get_node_name(old_scope_info->
-							    scope.node),
-				      acpi_ut_get_type_name(old_scope_info->
-							    common.value)));
+				      acpi_ut_get_node_name
+				      (old_scope_info->scope.node),
+				      acpi_ut_get_type_name
+				      (old_scope_info->common.value)));
 	} else {
 		ACPI_DEBUG_PRINT_RAW((ACPI_DB_EXEC, "[\\___] (%s)", "ROOT"));
 	}
@@ -200,10 +200,10 @@ acpi_status acpi_ds_scope_stack_pop(struct acpi_walk_state *walk_state)
 	if (new_scope_info) {
 		ACPI_DEBUG_PRINT_RAW((ACPI_DB_EXEC,
 				      "[%4.4s] (%s)\n",
-				      acpi_ut_get_node_name(new_scope_info->
-							    scope.node),
-				      acpi_ut_get_type_name(new_scope_info->
-							    common.value)));
+				      acpi_ut_get_node_name
+				      (new_scope_info->scope.node),
+				      acpi_ut_get_type_name
+				      (new_scope_info->common.value)));
 	} else {
 		ACPI_DEBUG_PRINT_RAW((ACPI_DB_EXEC, "[\\___] (ROOT)\n"));
 	}

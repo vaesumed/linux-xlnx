@@ -99,9 +99,8 @@ acpi_ds_build_internal_object(struct acpi_walk_state *walk_state,
 						ACPI_NS_DONT_OPEN_SCOPE, NULL,
 						ACPI_CAST_INDIRECT_PTR(struct
 								       acpi_namespace_node,
-								       &(op->
-									 common.
-									 node)));
+								       &
+								       (op->common.node)));
 			if (ACPI_FAILURE(status)) {
 
 				/* Check if we are resolving a named reference within a package */
@@ -124,14 +123,15 @@ acpi_ds_build_internal_object(struct acpi_walk_state *walk_state,
 					 */
 					ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 							  "Ignoring unresolved reference in package [%4.4s]\n",
-							  walk_state->
-							  scope_info->scope.
-							  node->name.ascii));
+							  walk_state->scope_info->
+							  scope.node->name.
+							  ascii));
 
 					return_ACPI_STATUS(AE_OK);
 				} else {
-					ACPI_ERROR_NAMESPACE(op->common.value.
-							     string, status);
+					ACPI_ERROR_NAMESPACE(op->common.
+							     value.string,
+							     status);
 				}
 
 				return_ACPI_STATUS(status);
@@ -211,8 +211,8 @@ acpi_ds_build_internal_object(struct acpi_walk_state *walk_state,
 	/* Create and init a new internal ACPI object */
 
 	obj_desc = acpi_ut_create_internal_object((acpi_ps_get_opcode_info
-						   (op->common.aml_opcode))->
-						  object_type);
+						   (op->common.
+						    aml_opcode))->object_type);
 	if (!obj_desc) {
 		return_ACPI_STATUS(AE_NO_MEMORY);
 	}
@@ -225,7 +225,7 @@ acpi_ds_build_internal_object(struct acpi_walk_state *walk_state,
 		return_ACPI_STATUS(status);
 	}
 
-      exit:
+exit:
 	*obj_desc_ptr = obj_desc;
 	return_ACPI_STATUS(status);
 }
@@ -437,9 +437,8 @@ acpi_ds_build_internal_package_obj(struct acpi_walk_state *walk_state,
 				status =
 				    acpi_ds_build_internal_object(walk_state,
 								  arg,
-								  &obj_desc->
-								  package.
-								  elements[i]);
+								  &obj_desc->package.elements
+								  [i]);
 			} else {
 				/* This package element is already built, just get it */
 
@@ -449,9 +448,8 @@ acpi_ds_build_internal_package_obj(struct acpi_walk_state *walk_state,
 			}
 		} else {
 			status = acpi_ds_build_internal_object(walk_state, arg,
-							       &obj_desc->
-							       package.
-							       elements[i]);
+							       &obj_desc->package.elements
+							       [i]);
 		}
 
 		if (*obj_desc_ptr) {
@@ -466,9 +464,7 @@ acpi_ds_build_internal_package_obj(struct acpi_walk_state *walk_state,
 
 				for (index = 0; index < (reference_count - 1);
 				     index++) {
-					acpi_ut_add_reference((obj_desc->
-							       package.
-							       elements[i]));
+					acpi_ut_add_reference((obj_desc->package.elements[i]));
 				}
 			}
 		}
@@ -576,7 +572,7 @@ acpi_ds_create_node(struct acpi_walk_state *walk_state,
 	return_ACPI_STATUS(status);
 }
 
-#endif				/* ACPI_NO_METHOD_EXECUTION */
+#endif /* ACPI_NO_METHOD_EXECUTION */
 
 /*******************************************************************************
  *
@@ -738,13 +734,14 @@ acpi_ds_init_object_from_op(struct acpi_walk_state *walk_state,
 
 #ifndef ACPI_NO_METHOD_EXECUTION
 			status = acpi_ds_method_data_get_node(AML_LOCAL_OP,
-							      obj_desc->
-							      reference.offset,
+							      obj_desc->reference.
+							      offset,
 							      walk_state,
 							      (struct
 							       acpi_namespace_node
-							       **)&obj_desc->
-							      reference.object);
+							       **)
+							      &obj_desc->reference.
+							      object);
 #endif
 			break;
 
@@ -757,13 +754,14 @@ acpi_ds_init_object_from_op(struct acpi_walk_state *walk_state,
 
 #ifndef ACPI_NO_METHOD_EXECUTION
 			status = acpi_ds_method_data_get_node(AML_ARG_OP,
-							      obj_desc->
-							      reference.offset,
+							      obj_desc->reference.
+							      offset,
 							      walk_state,
 							      (struct
 							       acpi_namespace_node
-							       **)&obj_desc->
-							      reference.object);
+							       **)
+							      &obj_desc->reference.
+							      object);
 #endif
 			break;
 

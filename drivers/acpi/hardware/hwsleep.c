@@ -393,8 +393,7 @@ acpi_status asmlinkage acpi_enter_sleep_state(u8 sleep_state)
 		acpi_os_stall(10000000);
 
 		status = acpi_hw_register_write(ACPI_REGISTER_PM1_CONTROL,
-						sleep_enable_reg_info->
-						access_bit_mask);
+						sleep_enable_reg_info->access_bit_mask);
 		if (ACPI_FAILURE(status)) {
 			return_ACPI_STATUS(status);
 		}
@@ -528,18 +527,17 @@ acpi_status acpi_leave_sleep_state_prep(u8 sleep_state)
 			/* Clear SLP_EN and SLP_TYP fields */
 
 			PM1Acontrol &= ~(sleep_type_reg_info->access_bit_mask |
-					 sleep_enable_reg_info->
-					 access_bit_mask);
+					 sleep_enable_reg_info->access_bit_mask);
 			PM1Bcontrol = PM1Acontrol;
 
 			/* Insert SLP_TYP bits */
 
 			PM1Acontrol |=
-			    (acpi_gbl_sleep_type_a << sleep_type_reg_info->
-			     bit_position);
+			    (acpi_gbl_sleep_type_a <<
+			     sleep_type_reg_info->bit_position);
 			PM1Bcontrol |=
-			    (acpi_gbl_sleep_type_b << sleep_type_reg_info->
-			     bit_position);
+			    (acpi_gbl_sleep_type_b <<
+			     sleep_type_reg_info->bit_position);
 
 			/* Just ignore any errors */
 

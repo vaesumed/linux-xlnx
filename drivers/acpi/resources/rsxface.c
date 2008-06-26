@@ -259,7 +259,7 @@ acpi_get_possible_resources(acpi_handle device_handle,
 }
 
 ACPI_EXPORT_SYMBOL(acpi_get_possible_resources)
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 /*******************************************************************************
  *
  * FUNCTION:    acpi_set_current_resources

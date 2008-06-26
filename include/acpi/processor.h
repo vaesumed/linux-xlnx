@@ -255,7 +255,7 @@ extern void acpi_processor_unregister_performance(struct
 int acpi_processor_notify_smm(struct module *calling_module);
 
 /* for communication between multiple parts of the processor kernel module */
-extern struct acpi_processor *processors[NR_CPUS];
+DECLARE_PER_CPU(struct acpi_processor *, processors);
 extern struct acpi_processor_errata errata;
 
 void arch_acpi_processor_init_pdc(struct acpi_processor *pr);
@@ -275,6 +275,7 @@ static inline void acpi_processor_power_init_bm_check(struct
 	flags->bm_check = 1;
 	return;
 }
+
 static inline int acpi_processor_ffh_cstate_probe(unsigned int cpu,
 						  struct acpi_processor_cx *cx,
 						  struct acpi_power_register
@@ -282,6 +283,7 @@ static inline int acpi_processor_ffh_cstate_probe(unsigned int cpu,
 {
 	return -1;
 }
+
 static inline void acpi_processor_ffh_cstate_enter(struct acpi_processor_cx
 						   *cstate)
 {
@@ -300,10 +302,12 @@ static inline void acpi_processor_ppc_init(void)
 {
 	return;
 }
+
 static inline void acpi_processor_ppc_exit(void)
 {
 	return;
 }
+
 static inline int acpi_processor_ppc_has_changed(struct acpi_processor *pr)
 {
 	static unsigned int printout = 1;
@@ -316,7 +320,7 @@ static inline int acpi_processor_ppc_has_changed(struct acpi_processor *pr)
 	}
 	return 0;
 }
-#endif				/* CONFIG_CPU_FREQ */
+#endif /* CONFIG_CPU_FREQ */
 
 /* in processor_throttling.c */
 int acpi_processor_tstate_has_changed(struct acpi_processor *pr);
@@ -330,8 +334,8 @@ int acpi_processor_power_init(struct acpi_processor *pr,
 int acpi_processor_cst_has_changed(struct acpi_processor *pr);
 int acpi_processor_power_exit(struct acpi_processor *pr,
 			      struct acpi_device *device);
-int acpi_processor_suspend(struct acpi_device * device, pm_message_t state);
-int acpi_processor_resume(struct acpi_device * device);
+int acpi_processor_suspend(struct acpi_device *device, pm_message_t state);
+int acpi_processor_resume(struct acpi_device *device);
 extern struct cpuidle_driver acpi_idle_driver;
 
 /* in processor_thermal.c */
@@ -346,6 +350,7 @@ static inline void acpi_thermal_cpufreq_init(void)
 {
 	return;
 }
+
 static inline void acpi_thermal_cpufreq_exit(void)
 {
 	return;

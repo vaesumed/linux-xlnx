@@ -207,8 +207,8 @@ acpi_ds_is_result_used(union acpi_parse_object * op,
 
 		ACPI_DEBUG_PRINT((ACPI_DB_DISPATCH,
 				  "At Method level, result of [%s] not used\n",
-				  acpi_ps_get_opcode_name(op->common.
-							  aml_opcode)));
+				  acpi_ps_get_opcode_name(op->
+							  common.aml_opcode)));
 		return_UINT8(FALSE);
 	}
 
@@ -246,8 +246,8 @@ acpi_ds_is_result_used(union acpi_parse_object * op,
 			 */
 			if ((walk_state->control_state->common.state ==
 			     ACPI_CONTROL_PREDICATE_EXECUTING)
-			    && (walk_state->control_state->control.
-				predicate_op == op)) {
+			    && (walk_state->control_state->
+				control.predicate_op == op)) {
 				goto result_used;
 			}
 			break;
@@ -299,21 +299,21 @@ acpi_ds_is_result_used(union acpi_parse_object * op,
 		goto result_used;
 	}
 
-      result_used:
+result_used:
 	ACPI_DEBUG_PRINT((ACPI_DB_DISPATCH,
 			  "Result of [%s] used by Parent [%s] Op=%p\n",
 			  acpi_ps_get_opcode_name(op->common.aml_opcode),
-			  acpi_ps_get_opcode_name(op->common.parent->common.
-						  aml_opcode), op));
+			  acpi_ps_get_opcode_name(op->common.parent->
+						  common.aml_opcode), op));
 
 	return_UINT8(TRUE);
 
-      result_not_used:
+result_not_used:
 	ACPI_DEBUG_PRINT((ACPI_DB_DISPATCH,
 			  "Result of [%s] not used by Parent [%s] Op=%p\n",
 			  acpi_ps_get_opcode_name(op->common.aml_opcode),
-			  acpi_ps_get_opcode_name(op->common.parent->common.
-						  aml_opcode), op));
+			  acpi_ps_get_opcode_name(op->common.parent->
+						  common.aml_opcode), op));
 
 	return_UINT8(FALSE);
 }
@@ -520,8 +520,8 @@ acpi_ds_create_operand(struct acpi_walk_state *walk_state,
 			 */
 			parent_op = arg->common.parent;
 			op_info =
-			    acpi_ps_get_opcode_info(parent_op->common.
-						    aml_opcode);
+			    acpi_ps_get_opcode_info(parent_op->
+						    common.aml_opcode);
 			if ((op_info->flags & AML_NSNODE)
 			    && (parent_op->common.aml_opcode !=
 				AML_INT_METHODCALL_OP)
@@ -627,9 +627,9 @@ acpi_ds_create_operand(struct acpi_walk_state *walk_state,
 					  "Argument previously created, already stacked\n"));
 
 			ACPI_DEBUGGER_EXEC(acpi_db_display_argument_object
-					   (walk_state->
-					    operands[walk_state->num_operands -
-						     1], walk_state));
+					   (walk_state->operands
+					    [walk_state->num_operands - 1],
+					    walk_state));
 
 			/*
 			 * Use value that was already previously returned
@@ -649,8 +649,8 @@ acpi_ds_create_operand(struct acpi_walk_state *walk_state,
 			/* Create an ACPI_INTERNAL_OBJECT for the argument */
 
 			obj_desc =
-			    acpi_ut_create_internal_object(op_info->
-							   object_type);
+			    acpi_ut_create_internal_object
+			    (op_info->object_type);
 			if (!obj_desc) {
 				return_ACPI_STATUS(AE_NO_MEMORY);
 			}
@@ -751,7 +751,7 @@ acpi_ds_create_operands(struct acpi_walk_state *walk_state,
 
 	return_ACPI_STATUS(status);
 
-      cleanup:
+cleanup:
 	/*
 	 * We must undo everything done above; meaning that we must
 	 * pop everything off of the operand stack and delete those
@@ -850,7 +850,7 @@ acpi_status acpi_ds_evaluate_name_path(struct acpi_walk_state *walk_state)
 		goto exit;
 	}
 
-      push_result:
+push_result:
 
 	walk_state->result_obj = new_obj_desc;
 
@@ -862,7 +862,7 @@ acpi_status acpi_ds_evaluate_name_path(struct acpi_walk_state *walk_state)
 		op->common.flags |= ACPI_PARSEOP_IN_STACK;
 	}
 
-      exit:
+exit:
 
 	return_ACPI_STATUS(status);
 }
