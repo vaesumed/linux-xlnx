@@ -1215,9 +1215,6 @@ static int nfs_parse_mount_options(char *raw,
 		}
 	}
 
-	nfs_set_port((struct sockaddr *)&mnt->nfs_server.address,
-				mnt->nfs_server.port);
-
 	return 1;
 
 out_nomem:
@@ -1567,6 +1564,9 @@ static int nfs_validate_mount_data(void *options,
 		if (!nfs_verify_server_address((struct sockaddr *)
 						&args->nfs_server.address))
 			goto out_no_address;
+
+		nfs_set_port((struct sockaddr *)&args->nfs_server.address,
+				args->nfs_server.port);
 
 		nfs_set_transport_defaults(args);
 
@@ -2195,6 +2195,9 @@ static int nfs4_validate_mount_data(void *options,
 		if (!nfs_verify_server_address((struct sockaddr *)
 						&args->nfs_server.address))
 			return -EINVAL;
+
+		nfs_set_port((struct sockaddr *)&args->nfs_server.address,
+				args->nfs_server.port);
 
 		nfs_set_transport_defaults(args);
 
