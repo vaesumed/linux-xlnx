@@ -28,8 +28,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id$
  */
 
 #include <rdma/ib_cm.h>
@@ -210,21 +208,13 @@ static void ipoib_cm_start_rx_drain(struct ipoib_dev_priv *priv)
 	struct ib_send_wr *bad_wr;
 	struct ipoib_cm_rx *p;
 
-	/* We only reserved 1 extra slot in CQ for drain WRs, so
-	 * make sure we have at most 1 outstanding WR. */
-	if (list_empty(&priv->cm.rx_flush_list) ||
-	    !list_empty(&priv->cm.rx_drain_list))
-		return;
-
 	/*
 	 * QPs on flush list are error state.  This way, a "flush
 	 * error" WC will be immediately generated for each WR we post.
 	 */
-	p = list_entry(priv->cm.rx_flush_list.next, typeof(*p), list);
+	p = list_first_entry(&priv->cm.rx_flush_list, typeof(*p), list);
 	if (ib_post_send(p->qp, &ipoib_cm_rx_drain_wr, &bad_wr))
 		ipoib_warn(priv, "failed to post drain wr\n");
-
-	list_splice_init(&priv->cm.rx_flush_list, &priv->cm.rx_drain_list);
 }
 
 static void ipoib_cm_rx_event_handler(struct ib_event *event, void *ctx)
@@ -237,9 +227,15 @@ static void ipoib_cm_rx_event_handler(struct ib_event *event, void *ctx)
 		return;
 
 	spin_lock_irqsave(&priv->lock, flags);
-	list_move(&p->list, &priv->cm.rx_flush_list);
+
+	list_move_tail(&p->list, &priv->cm.rx_flush_list);
 	p->state = IPOIB_CM_RX_FLUSH;
-	ipoib_cm_start_rx_drain(priv);
+
+	/* We only reserved 1 extra slot in CQ for drain WRs, so
+	 * make sure we have at most 1 outstanding WR. */
+	if (list_is_singular(&priv->cm.rx_flush_list))
+		ipoib_cm_start_rx_drain(priv);
+
 	spin_unlock_irqrestore(&priv->lock, flags);
 }
 
@@ -525,6 +521,7 @@ void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 	u64 mapping[IPOIB_CM_RX_SG];
 	int frags;
 	int has_srq;
+	struct sk_buff *small_skb;
 
 	ipoib_dbg_data(priv, "cm recv completion: id %d, status: %d\n",
 		       wr_id, wc->status);
@@ -532,8 +529,9 @@ void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 	if (unlikely(wr_id >= ipoib_recvq_size)) {
 		if (wr_id == (IPOIB_CM_RX_DRAIN_WRID & ~(IPOIB_OP_CM | IPOIB_OP_RECV))) {
 			spin_lock_irqsave(&priv->lock, flags);
-			list_splice_init(&priv->cm.rx_drain_list, &priv->cm.rx_reap_list);
-			ipoib_cm_start_rx_drain(priv);
+			list_move(&priv->cm.rx_flush_list, &priv->cm.rx_reap_list);
+			if (!list_empty(&priv->cm.rx_flush_list))
+				ipoib_cm_start_rx_drain(priv);
 			queue_work(ipoib_workqueue, &priv->cm.rx_reap_task);
 			spin_unlock_irqrestore(&priv->lock, flags);
 		} else
@@ -579,6 +577,23 @@ void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 		}
 	}
 
+	if (wc->byte_len < IPOIB_CM_COPYBREAK) {
+		int dlen = wc->byte_len;
+
+		small_skb = dev_alloc_skb(dlen + 12);
+		if (small_skb) {
+			skb_reserve(small_skb, 12);
+			ib_dma_sync_single_for_cpu(priv->ca, rx_ring[wr_id].mapping[0],
+						   dlen, DMA_FROM_DEVICE);
+			skb_copy_from_linear_data(skb, small_skb->data, dlen);
+			ib_dma_sync_single_for_device(priv->ca, rx_ring[wr_id].mapping[0],
+						      dlen, DMA_FROM_DEVICE);
+			skb_put(small_skb, dlen);
+			skb = small_skb;
+			goto copied;
+		}
+	}
+
 	frags = PAGE_ALIGN(wc->byte_len - min(wc->byte_len,
 					      (unsigned)IPOIB_CM_HEAD_SIZE)) / PAGE_SIZE;
 
@@ -601,6 +616,7 @@ void ipoib_cm_handle_rx_wc(struct net_device *dev, struct ib_wc *wc)
 
 	skb_put_frags(skb, IPOIB_CM_HEAD_SIZE, wc->byte_len, newskb);
 
+copied:
 	skb->protocol = ((struct ipoib_header *) skb->data)->proto;
 	skb_reset_mac_header(skb);
 	skb_pull(skb, IPOIB_ENCAP_LEN);
@@ -850,8 +866,7 @@ void ipoib_cm_dev_stop(struct net_device *dev)
 	begin = jiffies;
 
 	while (!list_empty(&priv->cm.rx_error_list) ||
-	       !list_empty(&priv->cm.rx_flush_list) ||
-	       !list_empty(&priv->cm.rx_drain_list)) {
+	       !list_empty(&priv->cm.rx_flush_list)) {
 		if (time_after(jiffies, begin + 5 * HZ)) {
 			ipoib_warn(priv, "RX drain timing out\n");
 
@@ -861,8 +876,6 @@ void ipoib_cm_dev_stop(struct net_device *dev)
 			list_splice_init(&priv->cm.rx_flush_list,
 					 &priv->cm.rx_reap_list);
 			list_splice_init(&priv->cm.rx_error_list,
-					 &priv->cm.rx_reap_list);
-			list_splice_init(&priv->cm.rx_drain_list,
 					 &priv->cm.rx_reap_list);
 			break;
 		}
@@ -1455,7 +1468,6 @@ int ipoib_cm_dev_init(struct net_device *dev)
 	INIT_LIST_HEAD(&priv->cm.start_list);
 	INIT_LIST_HEAD(&priv->cm.rx_error_list);
 	INIT_LIST_HEAD(&priv->cm.rx_flush_list);
-	INIT_LIST_HEAD(&priv->cm.rx_drain_list);
 	INIT_LIST_HEAD(&priv->cm.rx_reap_list);
 	INIT_WORK(&priv->cm.start_task, ipoib_cm_tx_start);
 	INIT_WORK(&priv->cm.reap_task, ipoib_cm_tx_reap);

@@ -129,9 +129,10 @@ static void stamp_send_wqe(struct mlx4_ib_qp *qp, int n, int size)
 	int ind;
 	void *buf;
 	__be32 stamp;
+	struct mlx4_wqe_ctrl_seg *ctrl;
 
-	s = roundup(size, 1U << qp->sq.wqe_shift);
 	if (qp->sq_max_wqes_per_wr > 1) {
+		s = roundup(size, 1U << qp->sq.wqe_shift);
 		for (i = 0; i < s; i += 64) {
 			ind = (i >> qp->sq.wqe_shift) + n;
 			stamp = ind & qp->sq.wqe_cnt ? cpu_to_be32(0x7fffffff) :
@@ -141,7 +142,8 @@ static void stamp_send_wqe(struct mlx4_ib_qp *qp, int n, int size)
 			*wqe = stamp;
 		}
 	} else {
-		buf = get_send_wqe(qp, n & (qp->sq.wqe_cnt - 1));
+		ctrl = buf = get_send_wqe(qp, n & (qp->sq.wqe_cnt - 1));
+		s = (ctrl->fence_size & 0x3f) << 4;
 		for (i = 64; i < s; i += 64) {
 			wqe = buf + i;
 			*wqe = cpu_to_be32(0xffffffff);
@@ -906,7 +908,8 @@ static int __mlx4_ib_modify_qp(struct ib_qp *ibqp,
 			       attr->path_mtu);
 			goto out;
 		}
-		context->mtu_msgmax = (attr->path_mtu << 5) | 31;
+		context->mtu_msgmax = (attr->path_mtu << 5) |
+			ilog2(dev->dev->caps.max_msg_sz);
 	}
 
 	if (qp->rq.wqe_cnt)
@@ -1063,6 +1066,8 @@ static int __mlx4_ib_modify_qp(struct ib_qp *ibqp,
 		for (i = 0; i < qp->sq.wqe_cnt; ++i) {
 			ctrl = get_send_wqe(qp, i);
 			ctrl->owner_opcode = cpu_to_be32(1 << 31);
+			if (qp->sq_max_wqes_per_wr == 1)
+				ctrl->fence_size = 1 << (qp->sq.wqe_shift - 4);
 
 			stamp_send_wqe(qp, i, 1 << qp->sq.wqe_shift);
 		}
@@ -1127,23 +1132,6 @@ out:
 	return err;
 }
 
-static const struct ib_qp_attr mlx4_ib_qp_attr = { .port_num = 1 };
-static const int mlx4_ib_qp_attr_mask_table[IB_QPT_UD + 1] = {
-		[IB_QPT_UD]  = (IB_QP_PKEY_INDEX		|
-				IB_QP_PORT			|
-				IB_QP_QKEY),
-		[IB_QPT_UC]  = (IB_QP_PKEY_INDEX		|
-				IB_QP_PORT			|
-				IB_QP_ACCESS_FLAGS),
-		[IB_QPT_RC]  = (IB_QP_PKEY_INDEX		|
-				IB_QP_PORT			|
-				IB_QP_ACCESS_FLAGS),
-		[IB_QPT_SMI] = (IB_QP_PKEY_INDEX		|
-				IB_QP_QKEY),
-		[IB_QPT_GSI] = (IB_QP_PKEY_INDEX		|
-				IB_QP_QKEY),
-};
-
 int mlx4_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 		      int attr_mask, struct ib_udata *udata)
 {
@@ -1184,15 +1172,6 @@ int mlx4_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 	if (cur_state == new_state && cur_state == IB_QPS_RESET) {
 		err = 0;
 		goto out;
-	}
-
-	if (cur_state == IB_QPS_RESET && new_state == IB_QPS_ERR) {
-		err = __mlx4_ib_modify_qp(ibqp, &mlx4_ib_qp_attr,
-					  mlx4_ib_qp_attr_mask_table[ibqp->qp_type],
-					  IB_QPS_RESET, IB_QPS_INIT);
-		if (err)
-			goto out;
-		cur_state = IB_QPS_INIT;
 	}
 
 	err = __mlx4_ib_modify_qp(ibqp, attr, attr_mask, cur_state, new_state);

@@ -30,8 +30,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id: ipoib.h 1358 2004-12-17 22:00:11Z roland $
  */
 
 #ifndef _IPOIB_H
@@ -97,6 +95,7 @@ enum {
 	IPOIB_MCAST_FLAG_ATTACHED = 3,
 
 	MAX_SEND_CQE		  = 16,
+	IPOIB_CM_COPYBREAK	  = 256,
 };
 
 #define	IPOIB_OP_RECV   (1ul << 31)
@@ -225,8 +224,7 @@ struct ipoib_cm_dev_priv {
 	struct ib_cm_id	       *id;
 	struct list_head	passive_ids;   /* state: LIVE */
 	struct list_head	rx_error_list; /* state: ERROR */
-	struct list_head	rx_flush_list; /* state: FLUSH, drain not started */
-	struct list_head	rx_drain_list; /* state: FLUSH, drain started */
+	struct list_head	rx_flush_list; /* state: FLUSHING or waiting for FLUSH */
 	struct list_head	rx_reap_list;  /* state: FLUSH, drain done */
 	struct work_struct      start_task;
 	struct work_struct      reap_task;
