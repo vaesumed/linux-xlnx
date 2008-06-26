@@ -1371,8 +1371,8 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 			   const struct inode *inode, const struct qstr *nm,
 			   int sync);
-int ubifs_jnl_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
-			     const struct inode *inode2, int sync);
+int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode1,
+			   const struct inode *inode2, int sync);
 
 /* budget.c */
 int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req);

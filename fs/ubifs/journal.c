@@ -1322,29 +1322,32 @@ out_ro:
 }
 
 /**
- * ubifs_jnl_write_2_inodes - write 2 inodes to the journal.
+ * ubifs_jnl_change_xattr - change an extended attribute.
  * @c: UBIFS file-system description object
- * @inode1: first inode to write
- * @inode2: second inode to write
+ * @inode: extended attribute inode
+ * @host: host inode
  * @sync: non-zero if the write-buffer has to be synchronized
  *
- * This function writes 2 inodes @inode1 and @inode2 to the journal (to the
- * base head - first @inode1, then @inode2). Returns zero in case of success
- * and a negative error code in case of failure.
+ * This function writes the updated version of an extended attribute inode and
+ * the host inode tho the journal (to the base head). The host inode is written
+ * after the extended attribute inode in order to guarantee that the extended
+ * attribute will be flushed when the inode is synchronized by 'fsync()' and
+ * concequently, the write-buffer is synchronized. This function returns zero
+ * in case of success and a negative error code in case of failure.
  */
-int ubifs_jnl_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
-			     const struct inode *inode2, int sync)
+int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
+			   const struct inode *host, int sync)
 {
 	int err, len1, len2, aligned_len, aligned_len1, lnum, offs;
 	struct ubifs_ino_node *ino;
 	union ubifs_key key;
 
-	dbg_jnl("ino %lu, ino %lu", inode1->i_ino, inode2->i_ino);
-	ubifs_assert(inode1->i_nlink > 0);
-	ubifs_assert(inode2->i_nlink > 0);
+	dbg_jnl("ino %lu, ino %lu", host->i_ino, inode->i_ino);
+	ubifs_assert(host->i_nlink > 0);
+	ubifs_assert(inode->i_nlink > 0);
 
-	len1 = UBIFS_INO_NODE_SZ + ubifs_inode(inode1)->data_len;
-	len2 = UBIFS_INO_NODE_SZ + ubifs_inode(inode2)->data_len;
+	len1 = UBIFS_INO_NODE_SZ + ubifs_inode(host)->data_len;
+	len2 = UBIFS_INO_NODE_SZ + ubifs_inode(inode)->data_len;
 	aligned_len1 = ALIGN(len1, 8);
 	aligned_len = aligned_len1 + ALIGN(len2, 8);
 
@@ -1357,27 +1360,27 @@ int ubifs_jnl_write_2_inodes(struct ubifs_info *c, const struct inode *inode1,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode1, inode1->i_size, inode1->i_nlink, 0, 0);
-	pack_inode(c, (void *)ino + aligned_len1, inode2, inode2->i_size,
-		   inode2->i_nlink, 1, 0);
+	pack_inode(c, ino, host, host->i_size, host->i_nlink, 0, 0);
+	pack_inode(c, (void *)ino + aligned_len1, inode, inode->i_size,
+		   inode->i_nlink, 1, 0);
 
 	err = write_head(c, BASEHD, ino, aligned_len, &lnum, &offs, 0);
 	if (!sync && !err) {
 		struct ubifs_wbuf *wbuf = &c->jheads[BASEHD].wbuf;
 
-		ubifs_wbuf_add_ino_nolock(wbuf, inode1->i_ino);
-		ubifs_wbuf_add_ino_nolock(wbuf, inode2->i_ino);
+		ubifs_wbuf_add_ino_nolock(wbuf, host->i_ino);
+		ubifs_wbuf_add_ino_nolock(wbuf, inode->i_ino);
 	}
 	release_head(c, BASEHD);
 	if (err)
 		goto out_ro;
 
-	ino_key_init(c, &key, inode1->i_ino);
+	ino_key_init(c, &key, host->i_ino);
 	err = ubifs_tnc_add(c, &key, lnum, offs, len1);
 	if (err)
 		goto out_ro;
 
-	ino_key_init(c, &key, inode2->i_ino);
+	ino_key_init(c, &key, inode->i_ino);
 	err = ubifs_tnc_add(c, &key, lnum, offs + aligned_len1, len2);
 	if (err)
 		goto out_ro;

@@ -150,12 +150,6 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	 */
 	inode->i_size = size;
 	ui->data_len = size;
-
-	/*
-	 * Note, it is important that 'ubifs_jnl_update()' writes the @host
-	 * inode last, so when it gets synchronized (by 'fsync())and the
-	 * write-buffer is flushed, the extended attribute is flushed as well.
-	 */
 	err = ubifs_jnl_update(c, host, nm, inode, 0, 1);
 	if (err)
 		goto out_cancel;
@@ -224,11 +218,11 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 
 	/*
 	 * It is important to write the host inode after the xattr inode
-	 * because if the host inode gets synchronized, then the extended
-	 * attribute inode gets synchronized, because it goes before the host
-	 * inode in the write-buffer.
+	 * because if the host inode gets synchronized (via 'fsync()'), then
+	 * the extended attribute inode gets synchronized, because it goes
+	 * before the host inode in the write-buffer.
 	 */
-	err = ubifs_jnl_write_2_inodes(c, inode, host, IS_DIRSYNC(host));
+	err = ubifs_jnl_change_xattr(c, inode, host, IS_DIRSYNC(host));
 	if (err)
 		goto out_cancel;
 
