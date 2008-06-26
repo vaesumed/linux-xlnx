@@ -502,7 +502,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * because it prevents write-back (which may be running at the same time) from
  * writing an inode node with older @i_nlink and @i_size to the flash media.
  *
- * This function also assumes that thie @inode->i_mutex is locked so no one
+ * This function also assumes that the @inode->i_mutex is locked so no one
  * may be changing this inode at the same time.
  */
 static void update_ubifs_inode(const struct inode *inode)
@@ -1227,14 +1227,26 @@ out_free:
 #ifdef CONFIG_UBIFS_FS_XATTR
 
 /* TODO: xattr operations should mark host inode as clean, etc as well */
+/**
+ * ubifs_jnl_delete_xattr - delete an extended attribute.
+ * @c: UBIFS file-system description object
+ * @host: host inode
+ * @inode: extended attribute inode
+ * @nm: extended attribute entry name
+ *
+ * This function delete an extended attribute which is very similar to
+ * un-linking regular files - it writes a deletion xentry, a deletion inode and
+ * updates the target inode. Returns zero in case of success and a negative
+ * error code in case of failure.
+ */
 int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
-			   const struct inode *inode, const struct qstr *nm,
-			   int sync)
+			   const struct inode *inode, const struct qstr *nm)
 {
 	int err, xlen, hlen, len, lnum, xent_offs, aligned_xlen;
 	struct ubifs_dent_node *xent;
 	struct ubifs_ino_node *ino;
 	union ubifs_key xent_key, key1, key2;
+	int sync = IS_DIRSYNC(host);
 
 	dbg_jnl("host %lu, xattr ino %lu, name '%s', data len %d",
 		host->i_ino, inode->i_ino, nm->name,
@@ -1326,21 +1338,21 @@ out_ro:
  * @c: UBIFS file-system description object
  * @inode: extended attribute inode
  * @host: host inode
- * @sync: non-zero if the write-buffer has to be synchronized
  *
  * This function writes the updated version of an extended attribute inode and
  * the host inode tho the journal (to the base head). The host inode is written
  * after the extended attribute inode in order to guarantee that the extended
  * attribute will be flushed when the inode is synchronized by 'fsync()' and
- * concequently, the write-buffer is synchronized. This function returns zero
+ * consequently, the write-buffer is synchronized. This function returns zero
  * in case of success and a negative error code in case of failure.
  */
 int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
-			   const struct inode *host, int sync)
+			   const struct inode *host)
 {
 	int err, len1, len2, aligned_len, aligned_len1, lnum, offs;
 	struct ubifs_ino_node *ino;
 	union ubifs_key key;
+	int sync = IS_DIRSYNC(host);
 
 	dbg_jnl("ino %lu, ino %lu", host->i_ino, inode->i_ino);
 	ubifs_assert(host->i_nlink > 0);

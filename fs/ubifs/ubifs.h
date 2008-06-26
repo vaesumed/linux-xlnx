@@ -1369,10 +1369,9 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		       loff_t old_size, loff_t new_size);
 int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
-			   const struct inode *inode, const struct qstr *nm,
-			   int sync);
+			   const struct inode *inode, const struct qstr *nm);
 int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode1,
-			   const struct inode *inode2, int sync);
+			   const struct inode *inode2);
 
 /* budget.c */
 int ubifs_budget_space(struct ubifs_info *c, struct ubifs_budget_req *req);
