@@ -1454,6 +1454,7 @@ config E100
 	tristate "Intel(R) PRO/100+ support"
 	depends on NET_PCI && PCI
 	select MII
+	select FW_LOADER
 	---help---
 	  This driver supports Intel(R) PRO/100 family of adapters.
 	  To verify that your adapter is supported, find the board ID number 
@@ -1923,6 +1924,7 @@ if NETDEV_1000
 config ACENIC
 	tristate "Alteon AceNIC/3Com 3C985/NetGear GA620 Gigabit support"
 	depends on PCI
+	select FW_LOADER
 	---help---
 	  Say Y here if you have an Alteon AceNIC, 3Com 3C985(B), NetGear
 	  GA620, SGI Gigabit or Farallon PN9000-SX PCI Gigabit Ethernet
@@ -2239,6 +2241,7 @@ config TIGON3
 	tristate "Broadcom Tigon3 support"
 	depends on PCI
 	select PHYLIB
+	select FW_LOADER
 	help
 	  This driver supports Broadcom Tigon3 based gigabit Ethernet cards.
 
