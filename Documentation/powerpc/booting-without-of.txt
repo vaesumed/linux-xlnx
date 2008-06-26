@@ -61,7 +61,8 @@ Table of Contents
       r) Freescale Display Interface Unit
       s) Freescale on board FPGA
       t) Freescael MSI interrupt controller
-      u) MDIO on GPIOs
+      u) Freescale General-purpose Timers Module
+      v) MDIO on GPIOs
 
   VII - Marvell Discovery mv64[345]6x System Controller chips
     1) The /system-controller node
@@ -1736,6 +1737,33 @@ platforms are moved over to use the flattened-device-tree model.
 			......
 		};
 
+   Note that "par_io" nodes are obsolete, and should not be used for
+   the new device trees. Instead, each Par I/O bank should be represented
+   via its own gpio-controller node:
+
+   Required properties:
+   - #gpio-cells : should be "2".
+   - compatible : should be "fsl,<chip>-qe-pario-bank",
+     "fsl,mpc8323-qe-pario-bank".
+   - reg : offset to the register set and its length.
+   - gpio-controller : node to identify gpio controllers.
+
+   Example:
+	qe_pio_a: gpio-controller@1400 {
+		#gpio-cells = <2>;
+		compatible = "fsl,mpc8360-qe-pario-bank",
+			     "fsl,mpc8323-qe-pario-bank";
+		reg = <0x1400 0x18>;
+		gpio-controller;
+	};
+
+	qe_pio_e: gpio-controller@1460 {
+		#gpio-cells = <2>;
+		compatible = "fsl,mpc8360-qe-pario-bank",
+			     "fsl,mpc8323-qe-pario-bank";
+		reg = <0x1460 0x18>;
+		gpio-controller;
+	};
 
    vi) Pin configuration nodes
 
@@ -2908,7 +2936,39 @@ platforms are moved over to use the flattened-device-tree model.
 		interrupt-parent = <&mpic>;
 	};
 
-   u) MDIO on GPIOs
+    v) Freescale General-purpose Timers Module
+
+    Required properties:
+      - compatible : should be
+        "fsl,<chip>-gtm", "fsl,gtm" for SOC GTMs
+        "fsl,<chip>-qe-gtm", "fsl,qe-gtm", "fsl,gtm" for QE GTMs
+        "fsl,<chip>-cpm2-gtm", "fsl,cpm2-gtm", "fsl,gtm" for CPM2 GTMs
+      - reg : should contain gtm registers location and length (0x40).
+      - interrupts : should contain four interrupts.
+      - interrupt-parent : interrupt source phandle.
+      - clock-frequency : specifies the frequency driving the timer.
+
+    Example:
+
+    timer@500 {
+	compatible = "fsl,mpc8360-gtm", "fsl,gtm";
+	reg = <0x500 0x40>;
+	interrupts = <90 8 78 8 84 8 72 8>;
+	interrupt-parent = <&ipic>;
+	/* filled by u-boot */
+	clock-frequency = <0>;
+    };
+
+    timer@440 {
+	compatible = "fsl,mpc8360-qe-gtm", "fsl,qe-gtm", "fsl,gtm";
+	reg = <0x440 0x40>;
+	interrupts = <12 13 14 15>;
+	interrupt-parent = <&qeic>;
+	/* filled by u-boot */
+	clock-frequency = <0>;
+    };
+
+   v) MDIO on GPIOs
 
    Currently defined compatibles:
    - virtual,gpio-mdio
