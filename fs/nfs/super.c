@@ -817,6 +817,44 @@ static void nfs_parse_ip_address(char *string, size_t str_len,
 }
 
 /*
+ * Time-out and mount transport default settings are based on the
+ * specified NFS transport.  For legacy mounts, these are set by
+ * the mount command before mount(2) is invoked.  For text-based
+ * mounts, the kernel must take care to set these.
+ */
+static void nfs_set_transport_defaults(struct nfs_parsed_mount_data *mnt)
+{
+	switch (mnt->nfs_server.protocol) {
+	case XPRT_TRANSPORT_UDP:
+		if (mnt->mount_server.protocol == 0)
+			mnt->mount_server.protocol = XPRT_TRANSPORT_UDP;
+		if (mnt->timeo == 0)
+			mnt->timeo = NFS_DEF_UDP_TIMEO;
+		if (mnt->retrans == 0)
+			mnt->retrans = NFS_DEF_UDP_RETRANS;
+		break;
+	case XPRT_TRANSPORT_TCP:
+	case XPRT_TRANSPORT_RDMA:
+		if (mnt->mount_server.protocol == 0)
+			mnt->mount_server.protocol = XPRT_TRANSPORT_TCP;
+		if (mnt->timeo == 0)
+			mnt->timeo = NFS_DEF_TCP_TIMEO;
+		if (mnt->retrans == 0)
+			mnt->retrans = NFS_DEF_TCP_RETRANS;
+		break;
+	default:
+		mnt->nfs_server.protocol = XPRT_TRANSPORT_TCP;
+		if (mnt->mount_server.protocol == 0)
+			mnt->mount_server.protocol = XPRT_TRANSPORT_UDP;
+		if (mnt->timeo == 0)
+			mnt->timeo = NFS_DEF_TCP_TIMEO;
+		if (mnt->retrans == 0)
+			mnt->retrans = NFS_DEF_TCP_RETRANS;
+		break;
+	}
+}
+
+/*
  * Error-check and convert a string of mount options from user space into
  * a data structure
  */
@@ -896,20 +934,14 @@ static int nfs_parse_mount_options(char *raw,
 		case Opt_udp:
 			mnt->flags &= ~NFS_MOUNT_TCP;
 			mnt->nfs_server.protocol = XPRT_TRANSPORT_UDP;
-			mnt->timeo = 7;
-			mnt->retrans = 5;
 			break;
 		case Opt_tcp:
 			mnt->flags |= NFS_MOUNT_TCP;
 			mnt->nfs_server.protocol = XPRT_TRANSPORT_TCP;
-			mnt->timeo = 600;
-			mnt->retrans = 2;
 			break;
 		case Opt_rdma:
 			mnt->flags |= NFS_MOUNT_TCP; /* for side protocols */
 			mnt->nfs_server.protocol = XPRT_TRANSPORT_RDMA;
-			mnt->timeo = 600;
-			mnt->retrans = 2;
 			break;
 		case Opt_acl:
 			mnt->flags &= ~NFS_MOUNT_NOACL;
@@ -1103,21 +1135,15 @@ static int nfs_parse_mount_options(char *raw,
 			case Opt_xprt_udp:
 				mnt->flags &= ~NFS_MOUNT_TCP;
 				mnt->nfs_server.protocol = XPRT_TRANSPORT_UDP;
-				mnt->timeo = 7;
-				mnt->retrans = 5;
 				break;
 			case Opt_xprt_tcp:
 				mnt->flags |= NFS_MOUNT_TCP;
 				mnt->nfs_server.protocol = XPRT_TRANSPORT_TCP;
-				mnt->timeo = 600;
-				mnt->retrans = 2;
 				break;
 			case Opt_xprt_rdma:
 				/* vector side protocols to TCP */
 				mnt->flags |= NFS_MOUNT_TCP;
 				mnt->nfs_server.protocol = XPRT_TRANSPORT_RDMA;
-				mnt->timeo = 600;
-				mnt->retrans = 2;
 				break;
 			default:
 				goto out_unrec_xprt;
@@ -1438,16 +1464,12 @@ static int nfs_validate_mount_data(void *options,
 	args->flags		= (NFS_MOUNT_VER3 | NFS_MOUNT_TCP);
 	args->rsize		= NFS_MAX_FILE_IO_SIZE;
 	args->wsize		= NFS_MAX_FILE_IO_SIZE;
-	args->timeo		= 600;
-	args->retrans		= 2;
 	args->acregmin		= 3;
 	args->acregmax		= 60;
 	args->acdirmin		= 30;
 	args->acdirmax		= 60;
 	args->mount_server.port	= 0;	/* autobind unless user sets port */
-	args->mount_server.protocol = XPRT_TRANSPORT_UDP;
 	args->nfs_server.port	= 0;	/* autobind unless user sets port */
-	args->nfs_server.protocol = XPRT_TRANSPORT_TCP;
 
 	switch (data->version) {
 	case 1:
@@ -1545,6 +1567,8 @@ static int nfs_validate_mount_data(void *options,
 		if (!nfs_verify_server_address((struct sockaddr *)
 						&args->nfs_server.address))
 			goto out_no_address;
+
+		nfs_set_transport_defaults(args);
 
 		status = nfs_parse_devname(dev_name,
 					   &args->nfs_server.hostname,
@@ -2095,14 +2119,11 @@ static int nfs4_validate_mount_data(void *options,
 
 	args->rsize		= NFS_MAX_FILE_IO_SIZE;
 	args->wsize		= NFS_MAX_FILE_IO_SIZE;
-	args->timeo		= 600;
-	args->retrans		= 2;
 	args->acregmin		= 3;
 	args->acregmax		= 60;
 	args->acdirmin		= 30;
 	args->acdirmax		= 60;
 	args->nfs_server.port	= NFS_PORT; /* 2049 unless user set port= */
-	args->nfs_server.protocol = XPRT_TRANSPORT_TCP;
 
 	switch (data->version) {
 	case 1:
@@ -2174,6 +2195,8 @@ static int nfs4_validate_mount_data(void *options,
 		if (!nfs_verify_server_address((struct sockaddr *)
 						&args->nfs_server.address))
 			return -EINVAL;
+
+		nfs_set_transport_defaults(args);
 
 		switch (args->auth_flavor_len) {
 		case 0:
