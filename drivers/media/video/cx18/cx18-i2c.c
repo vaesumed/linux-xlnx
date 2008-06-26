@@ -311,8 +311,12 @@ int cx18_i2c_hw(struct cx18 *cx, u32 hw, unsigned int cmd, void *arg)
 {
 	int addr;
 
-	if (hw == CX18_HW_GPIO || hw == 0)
+	if (hw == 0)
 		return 0;
+
+	if (hw == CX18_HW_GPIO)
+		return cx18_gpio(cx, cmd, arg);
+
 	if (hw == CX18_HW_CX23418)
 		return cx18_av_cmd(cx, cmd, arg);
 
@@ -350,6 +354,8 @@ void cx18_call_i2c_clients(struct cx18 *cx, unsigned int cmd, void *arg)
 	cx18_av_cmd(cx, cmd, arg);
 	i2c_clients_command(&cx->i2c_adap[0], cmd, arg);
 	i2c_clients_command(&cx->i2c_adap[1], cmd, arg);
+	if (cx->hw_flags & CX18_HW_GPIO)
+		cx18_gpio(cx, cmd, arg);
 }
 
 /* init + register i2c algo-bit adapter */
@@ -357,6 +363,18 @@ int init_cx18_i2c(struct cx18 *cx)
 {
 	int i;
 	CX18_DEBUG_I2C("i2c init\n");
+
+	/* Sanity checks for the I2C hardware arrays. They must be the
+	 * same size and GPIO/CX23418 must be the last entries.
+	 */
+	if (ARRAY_SIZE(hw_driverids) != ARRAY_SIZE(hw_addrs) ||
+	    ARRAY_SIZE(hw_devicenames) != ARRAY_SIZE(hw_addrs) ||
+	    CX18_HW_GPIO != (1 << (ARRAY_SIZE(hw_addrs) - 2)) ||
+	    CX18_HW_CX23418 != (1 << (ARRAY_SIZE(hw_addrs) - 1)) ||
+	    hw_driverids[ARRAY_SIZE(hw_addrs) - 1]) {
+		CX18_ERR("Mismatched I2C hardware arrays\n");
+		return -ENODEV;
+	}
 
 	for (i = 0; i < 2; i++) {
 		memcpy(&cx->i2c_adap[i], &cx18_i2c_adap_template,
@@ -404,6 +422,8 @@ int init_cx18_i2c(struct cx18 *cx)
 	write_reg_sync(0x00021c0f & ~4, CX18_REG_I2C_2_WR);
 	cx18_setscl(&cx->i2c_algo_cb_data[1], 1);
 	cx18_setsda(&cx->i2c_algo_cb_data[1], 1);
+
+	cx18_reset_i2c_slaves_gpio(cx);
 
 	return i2c_bit_add_bus(&cx->i2c_adap[0]) ||
 		i2c_bit_add_bus(&cx->i2c_adap[1]);
