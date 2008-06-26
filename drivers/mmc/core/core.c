@@ -30,6 +30,7 @@
 #include "bus.h"
 #include "host.h"
 #include "sdio_bus.h"
+#include "lock.h"
 
 #include "mmc_ops.h"
 #include "sd_ops.h"
@@ -638,6 +639,9 @@ void mmc_rescan(struct work_struct *work)
 		 */
 		mmc_bus_put(host);
 
+		if (host->ops->get_cd && host->ops->get_cd(host) == 0)
+			goto out;
+
 		mmc_claim_host(host);
 
 		mmc_power_up(host);
@@ -652,7 +656,7 @@ void mmc_rescan(struct work_struct *work)
 		if (!err) {
 			if (mmc_attach_sdio(host, ocr))
 				mmc_power_off(host);
-			return;
+			goto out;
 		}
 
 		/*
@@ -662,7 +666,7 @@ void mmc_rescan(struct work_struct *work)
 		if (!err) {
 			if (mmc_attach_sd(host, ocr))
 				mmc_power_off(host);
-			return;
+			goto out;
 		}
 
 		/*
@@ -672,7 +676,7 @@ void mmc_rescan(struct work_struct *work)
 		if (!err) {
 			if (mmc_attach_mmc(host, ocr))
 				mmc_power_off(host);
-			return;
+			goto out;
 		}
 
 		mmc_release_host(host);
@@ -683,6 +687,9 @@ void mmc_rescan(struct work_struct *work)
 
 		mmc_bus_put(host);
 	}
+out:
+	if (host->caps & MMC_CAP_NEEDS_POLL)
+		mmc_schedule_delayed_work(&host->detect, HZ);
 }
 
 void mmc_start_host(struct mmc_host *host)
@@ -798,8 +805,14 @@ static int __init mmc_init(void)
 	if (ret)
 		goto unregister_host_class;
 
+	ret = mmc_register_key_type();
+	if (ret)
+		goto unregister_sdio;
+
 	return 0;
 
+unregister_sdio:
+	sdio_unregister_bus();
 unregister_host_class:
 	mmc_unregister_host_class();
 unregister_bus:
@@ -812,6 +825,7 @@ destroy_workqueue:
 
 static void __exit mmc_exit(void)
 {
+	mmc_unregister_key_type();
 	sdio_unregister_bus();
 	mmc_unregister_host_class();
 	mmc_unregister_bus();
