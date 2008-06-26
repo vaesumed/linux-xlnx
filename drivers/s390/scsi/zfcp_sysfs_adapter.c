@@ -1,27 +1,12 @@
 /*
- * This file is part of the zfcp device driver for
- * FCP adapters for IBM System z9 and zSeries.
+ * zfcp device driver
  *
- * (C) Copyright IBM Corp. 2002, 2006
+ * sysfs attributes for CCW device.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Copyright IBM Corporation 2002, 2008
  */
 
 #include "zfcp_ext.h"
-
-#define ZFCP_LOG_AREA                   ZFCP_LOG_AREA_CONFIG
 
 /**
  * ZFCP_DEFINE_ADAPTER_ATTR
@@ -55,49 +40,28 @@ ZFCP_DEFINE_ADAPTER_ATTR(in_recovery, "%d\n", atomic_test_mask
 			 (ZFCP_STATUS_COMMON_ERP_INUSE, &adapter->status));
 
 /**
- * zfcp_sysfs_port_add_store - add a port to sysfs tree
+ * zfcp_sysfs_port_rescan - trigger manual port rescan
  * @dev: pointer to belonging device
+ * @attr: pointer to struct device_attribute
  * @buf: pointer to input buffer
  * @count: number of bytes in buffer
- *
- * Store function of the "port_add" attribute of an adapter.
  */
-static ssize_t
-zfcp_sysfs_port_add_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t zfcp_sysfs_port_rescan_store(struct device *dev,
+					    struct device_attribute *attr,
+					    const char *buf, size_t count)
 {
-	wwn_t wwpn;
-	char *endp;
 	struct zfcp_adapter *adapter;
-	struct zfcp_port *port;
-	int retval = -EINVAL;
-
-	down(&zfcp_data.config_sema);
+	int ret;
 
 	adapter = dev_get_drvdata(dev);
-	if (atomic_test_mask(ZFCP_STATUS_COMMON_REMOVE, &adapter->status)) {
-		retval = -EBUSY;
-		goto out;
-	}
+	if (atomic_test_mask(ZFCP_STATUS_COMMON_REMOVE, &adapter->status))
+		return -EBUSY;
 
-	wwpn = simple_strtoull(buf, &endp, 0);
-	if ((endp + 1) < (buf + count))
-		goto out;
+	ret = zfcp_scan_ports(adapter);
 
-	port = zfcp_port_enqueue(adapter, wwpn, 0, 0);
-	if (!port)
-		goto out;
-
-	retval = 0;
-
-	zfcp_erp_port_reopen(port, 0, 91, NULL);
-	zfcp_erp_wait(port->adapter);
-	zfcp_port_put(port);
- out:
-	up(&zfcp_data.config_sema);
-	return retval ? retval : (ssize_t) count;
+	return ret ? ret : (ssize_t) count;
 }
-
-static DEVICE_ATTR(port_add, S_IWUSR, NULL, zfcp_sysfs_port_add_store);
+static DEVICE_ATTR(port_rescan, S_IWUSR, NULL, zfcp_sysfs_port_rescan_store);
 
 /**
  * zfcp_sysfs_port_remove_store - remove a port from sysfs tree
@@ -228,7 +192,7 @@ static struct attribute *zfcp_adapter_attrs[] = {
 	&dev_attr_failed.attr,
 	&dev_attr_in_recovery.attr,
 	&dev_attr_port_remove.attr,
-	&dev_attr_port_add.attr,
+	&dev_attr_port_rescan.attr,
 	&dev_attr_peer_wwnn.attr,
 	&dev_attr_peer_wwpn.attr,
 	&dev_attr_peer_d_id.attr,
@@ -266,5 +230,3 @@ zfcp_sysfs_adapter_remove_files(struct device *dev)
 {
 	sysfs_remove_group(&dev->kobj, &zfcp_adapter_attr_group);
 }
-
-#undef ZFCP_LOG_AREA
