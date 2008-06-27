@@ -9,6 +9,10 @@
 #define NR_IRQS			(NR_INTERNAL_IRQS)
 #endif
 
+#ifndef NO_IRQ
+#define NO_IRQ	((unsigned int)(-1))
+#endif
+
 #define irq_canonicalize(i)	(i)
 
 #ifndef __ASSEMBLER__
