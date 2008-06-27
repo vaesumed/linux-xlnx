@@ -29,6 +29,7 @@ config USB_CATC
 
 config USB_KAWETH
 	tristate "USB KLSI KL5USB101-based ethernet device support"
+	select FW_LOADER
 	---help---
 	  Say Y here if you want to use one of the following 10Mbps only
 	  USB Ethernet adapters based on the KLSI KL5KUSB101B chipset:
