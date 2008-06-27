@@ -150,9 +150,6 @@ struct gendisk {
 	struct disk_stats dkstats;
 #endif
 	struct work_struct async_notify;
-#ifdef  CONFIG_BLK_DEV_INTEGRITY
-	struct blk_integrity *integrity;
-#endif
 };
 
 /* 
