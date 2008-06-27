@@ -323,27 +323,37 @@ struct ubifs_gced_idx_leb {
  * @synced_i_size: synchronized size of inode, i.e. the value of inode size
  *                 currently stored on the flash; used only for regular file
  *                 inodes
- * @wb_i_size: inode size which should be used by write-back
- * @wb_i_nlink: number of inode links which should be used by write-back
- * @ui_lock: protects @synced_i_size, @wb_i_size, @wb_i_nlink, and @xattr_size
+ * @wb_i_size: inode size for write-back
+ * @wb_xattr_size: summarized size of all extended attributes for write-back
+ * @wb_i_nlink: number of inode links for write-back
+ * @wb_xattr_cnt: count of extended attributes for write-back
+ * @wb_xattr_names: sum of extended attribute lengths for write-back
+ * @ui_lock: protects @synced_i_size, @wb_i_size, @wb_i_nlink, @xattr_size,
+ *           @wb_xattr_size, @wb_i_nlink, @wb_xattr_cnt and @wb_xattr_names
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
  * @data: inode's data
  *
- * UBIFS has its own inode mutex, besides the VFS 'i_mutex'. The reason for
+ * UBIFS has its own inode mutex, besides the VFS @i_mutex. The reason for
  * this is budgeting - UBIFS has to budget each operation. So, if an operation
  * is going to mark an inode dirty, it has to allocate budget for this. It
  * cannot just mark it dirty because there is no guarantee there will be enough
  * flash space when it is time to write the inode back. This means that UBIFS
  * has to have full control over "clean <-> dirty" transitions of inodes (and
- * pages actually, but it is easy for pages, because we have
- * 'ubifs_prepare_write()' which is called _before_ every page change). But
- * unfortunately, VFS marks inodes dirty in many places, and it does not ask
- * the file-system if it is allowed to do so (there is a notifier, but it is
- * not enough), i.e., there is no mechanism to synchronize with this. So we
- * introduce our own dirty flag to UBIFS inodes and our own inode mutex to
+ * pages actually). But unfortunately, VFS marks inodes dirty in many places,
+ * and it does not ask the file-system if it is allowed to do so (there is a
+ * notifier, but it is not enough), i.e., there is no mechanism to synchronize
+ * with it. So UBIFS has its own inode dirty flag its own inode mutex to
  * serialize "clean <-> dirty" transitions.
+ *
+ * The fields like @wb_i_size are used to keep inode values consistent. The
+ * problem is that write-back may happen at any point, even when the inode is
+ * in the middle of an VFS operation (e.g., in the middle of re-naming). This
+ * means that write-back may write the inode while it is in an inconsistent
+ * state (e.g., directory @i_nlink has been changed, while @i_size has not yet
+ * been changed, etc.). This is why write-back uses the "wb_"-prefixed fields,
+ * which are consistent.
  */
 struct ubifs_inode {
 	struct inode vfs_inode;
@@ -356,7 +366,10 @@ struct ubifs_inode {
 	struct mutex wb_mutex;
 	loff_t synced_i_size;
 	loff_t wb_i_size;
+	loff_t wb_xattr_size;
 	unsigned int wb_i_nlink;
+	int wb_xattr_cnt;
+	int wb_xattr_names;
 	spinlock_t ui_lock;
 	int flags;
 	int compr_type;
@@ -789,7 +802,7 @@ struct ubifs_budget_req {
 	unsigned int dirtied_ino:4;
 	unsigned int dirtied_ino_d:15;
 #else
-	/* Not bit-fileds to check for overflows */
+	/* Not bit-fields to check for overflows */
 	unsigned int dirtied_ino;
 	unsigned int dirtied_ino_d;
 #endif
@@ -901,7 +914,7 @@ struct ubifs_mount_opts {
  * @main_lebs: count of LEBs in the main area
  * @main_first: first LEB of the main area
  * @main_bytes: main area size in bytes
- * @default_compr: default compression algorighm (%UBIFS_COMPR_LZO, etc)
+ * @default_compr: default compression algorithm (%UBIFS_COMPR_LZO, etc)
  *
  * @key_hash_type: type of the key hash
  * @key_hash: direntry key hash function
@@ -915,7 +928,7 @@ struct ubifs_mount_opts {
  * @half_leb_size: half LEB size
  * @leb_cnt: count of logical eraseblocks
  * @max_leb_cnt: maximum count of logical eraseblocks
- * @old_leb_cnt: count of logical eraseblocks before resize
+ * @old_leb_cnt: count of logical eraseblocks before re-size
  * @ro_media: the underlying UBI volume is read-only
  *
  * @dirty_pg_cnt: number of dirty pages (not used)
@@ -1034,7 +1047,7 @@ struct ubifs_mount_opts {
  * @lscan_lnum: LEB number of last LPT scan
  *
  * @rp_size: size of the reserved pool in bytes
- * @report_rp_size: size of the reserved pool reported to userspace
+ * @report_rp_size: size of the reserved pool reported to user-space
  * @rp_uid: reserved pool user ID
  * @rp_gid: reserved pool group ID
  *
