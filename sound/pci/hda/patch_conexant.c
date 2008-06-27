@@ -82,7 +82,6 @@ struct conexant_spec {
 	/* PCM information */
 	struct hda_pcm pcm_rec[2];	/* used in build_pcms() */
 
-	struct mutex amp_mutex;	/* PCM volume/mute control mutex */
 	unsigned int spdif_route;
 
 	/* dynamic controls, init_verbs and input_mux */
@@ -928,7 +927,6 @@ static int patch_cxt5045(struct hda_codec *codec)
 	spec = kzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
-	mutex_init(&spec->amp_mutex);
 	codec->spec = spec;
 
 	spec->multiout.max_channels = 2;
@@ -1007,15 +1005,19 @@ static int patch_cxt5045(struct hda_codec *codec)
 #endif	
 	}
 
-	/*
-	 * Fix max PCM level to 0 dB
-	 * (originall it has 0x2b steps with 0dB offset 0x14)
-	 */
-	snd_hda_override_amp_caps(codec, 0x17, HDA_INPUT,
-				  (0x14 << AC_AMPCAP_OFFSET_SHIFT) |
-				  (0x14 << AC_AMPCAP_NUM_STEPS_SHIFT) |
-				  (0x05 << AC_AMPCAP_STEP_SIZE_SHIFT) |
-				  (1 << AC_AMPCAP_MUTE_SHIFT));
+	switch (codec->subsystem_id >> 16) {
+	case 0x103c:
+		/* HP laptop has a really bad sound over 0dB on NID 0x17.
+		 * Fix max PCM level to 0 dB
+		 * (originall it has 0x2b steps with 0dB offset 0x14)
+		 */
+		snd_hda_override_amp_caps(codec, 0x17, HDA_INPUT,
+					  (0x14 << AC_AMPCAP_OFFSET_SHIFT) |
+					  (0x14 << AC_AMPCAP_NUM_STEPS_SHIFT) |
+					  (0x05 << AC_AMPCAP_STEP_SIZE_SHIFT) |
+					  (1 << AC_AMPCAP_MUTE_SHIFT));
+		break;
+	}
 
 	return 0;
 }
@@ -1477,7 +1479,6 @@ static int patch_cxt5047(struct hda_codec *codec)
 	spec = kzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
-	mutex_init(&spec->amp_mutex);
 	codec->spec = spec;
 
 	spec->multiout.max_channels = 2;
@@ -1736,7 +1737,6 @@ static int patch_cxt5051(struct hda_codec *codec)
 	spec = kzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
-	mutex_init(&spec->amp_mutex);
 	codec->spec = spec;
 
 	codec->patch_ops = conexant_patch_ops;
