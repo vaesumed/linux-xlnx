@@ -28,6 +28,7 @@ static struct gdlm_ls *init_gdlm(lm_callback_t cb, struct gfs2_sbd *sdp,
 	spin_lock_init(&ls->async_lock);
 	INIT_LIST_HEAD(&ls->delayed);
 	INIT_LIST_HEAD(&ls->submit);
+	INIT_LIST_HEAD(&ls->all_locks);
 	init_waitqueue_head(&ls->thread_wait);
 	init_waitqueue_head(&ls->wait_control);
 	ls->jid = -1;
@@ -172,6 +173,7 @@ out:
 static void gdlm_unmount(void *lockspace)
 {
 	struct gdlm_ls *ls = lockspace;
+	int rv;
 
 	log_debug("unmount flags %lx", ls->flags);
 
@@ -185,7 +187,9 @@ static void gdlm_unmount(void *lockspace)
 	gdlm_kobject_release(ls);
 	dlm_release_lockspace(ls->dlm_lockspace, 2);
 	gdlm_release_threads(ls);
-	BUG_ON(ls->all_locks_count);
+	rv = gdlm_release_all_locks(ls);
+	if (rv)
+		log_info("gdlm_unmount: %d stray locks freed", rv);
 out:
 	kfree(ls);
 }
