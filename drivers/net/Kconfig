@@ -524,6 +524,18 @@ config STNIC
 
 	  If unsure, say N.
 
+config SH_ETH
+	tristate "Renesas SuperH Ethernet support"
+	depends on SUPERH && \
+		(CPU_SUBTYPE_SH7710 || CPU_SUBTYPE_SH7712)
+	select CRC32
+	select MII
+	select MDIO_BITBANG
+	select PHYLIB
+	help
+	  Renesas SuperH Ethernet device driver.
+	  This driver support SH7710 and SH7712.
+
 config SUNLANCE
 	tristate "Sun LANCE support"
 	depends on SBUS
@@ -955,7 +967,7 @@ config SMC911X
 	tristate "SMSC LAN911[5678] support"
 	select CRC32
 	select MII
-	depends on ARCH_PXA || SH_MAGIC_PANEL_R2
+	depends on ARCH_PXA || SUPERH
 	help
 	  This is a driver for SMSC's LAN911x series of Ethernet chipsets
 	  including the new LAN9115, LAN9116, LAN9117, and LAN9118.
@@ -1243,7 +1255,6 @@ config IBMVETH
 	  To compile this driver as a module, choose M here. The module will
 	  be called ibmveth.
 
-source "drivers/net/ibm_emac/Kconfig"
 source "drivers/net/ibm_newemac/Kconfig"
 
 config NET_PCI
@@ -1670,7 +1681,7 @@ config SUNDANCE_MMIO
 
 config TLAN
 	tristate "TI ThunderLAN support"
-	depends on NET_PCI && (PCI || EISA) && !64BIT
+	depends on NET_PCI && (PCI || EISA)
 	---help---
 	  If you have a PCI Ethernet network card based on the ThunderLAN chip
 	  which is supported by this driver, say Y and read the
@@ -2227,6 +2238,7 @@ config VIA_VELOCITY
 config TIGON3
 	tristate "Broadcom Tigon3 support"
 	depends on PCI
+	select PHYLIB
 	help
 	  This driver supports Broadcom Tigon3 based gigabit Ethernet cards.
 
@@ -2281,6 +2293,19 @@ config GELIC_WIRELESS
 	  use wireless feature, disabling this option saves memory.  As
 	  the driver automatically distinguishes the models, you can
 	  safely enable this option even if you have a wireless-less model.
+
+config GELIC_WIRELESS_OLD_PSK_INTERFACE
+       bool "PS3 Wireless private PSK interface (OBSOLETE)"
+       depends on GELIC_WIRELESS
+       help
+          This option retains the obsolete private interface to pass
+          the PSK from user space programs to the driver.  The PSK
+          stands for 'Pre Shared Key' and is used for WPA[2]-PSK
+          (WPA-Personal) environment.
+          If WPA[2]-PSK is used and you need to use old programs that
+          support only this old interface, say Y.  Otherwise N.
+
+          If unsure, say N.
 
 config GIANFAR
 	tristate "Gianfar Ethernet"
@@ -2406,8 +2431,9 @@ config CHELSIO_T1_NAPI
 
 config CHELSIO_T3
 	tristate "Chelsio Communications T3 10Gb Ethernet support"
-	depends on PCI
+	depends on PCI && INET
 	select FW_LOADER
+	select INET_LRO
 	help
 	  This driver supports Chelsio T3-based gigabit and 10Gb Ethernet
 	  adapters.
@@ -2573,6 +2599,7 @@ config BNX2X
 	tristate "Broadcom NetXtremeII 10Gb support"
 	depends on PCI
 	select ZLIB_INFLATE
+	select LIBCRC32C
 	help
 	  This driver supports Broadcom NetXtremeII 10 gigabit Ethernet cards.
 	  To compile this driver as a module, choose M here: the module
