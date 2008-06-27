@@ -445,14 +445,13 @@ static int get_dent_type(int mode)
  * @c: UBIFS file-system description object
  * @ino: buffer in which to pack inode node
  * @inode: inode to pack
- * @size: inode size
- * @nlink: number of links
+ * @wb: non-zero if called by write-back
  * @last: indicates the last node of the group
  * @last_reference: non-zero if this is a deletion inode
  */
 static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
-		       const struct inode *inode, loff_t size,
-		       unsigned int nlink, int last, int last_reference)
+		       const struct inode *inode, int wb, int last,
+		       int last_reference)
 {
 	int data_len = 0;
 	struct ubifs_inode *ui = ubifs_inode(inode);
@@ -460,8 +459,6 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->ch.node_type = UBIFS_INO_NODE;
 	ino_key_init_flash(c, &ino->key, inode->i_ino);
 	ino->creat_sqnum = cpu_to_le64(ui->creat_sqnum);
-	ino->size = cpu_to_le64(size);
-	ino->nlink = cpu_to_le32(nlink);
 	ino->atime_sec  = cpu_to_le64(inode->i_atime.tv_sec);
 	ino->atime_nsec = cpu_to_le32(inode->i_atime.tv_nsec);
 	ino->ctime_sec  = cpu_to_le64(inode->i_ctime.tv_sec);
@@ -473,10 +470,21 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->mode  = cpu_to_le32(inode->i_mode);
 	ino->flags = cpu_to_le32(ui->flags);
 	ino->compr_type  = cpu_to_le16(ui->compr_type);
-	ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
-	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
-	ino->xattr_names = cpu_to_le32(ui->xattr_names);
 	ino->data_len    = cpu_to_le32(ui->data_len);
+
+	if (wb) {
+		ino->size  = cpu_to_le64(ui->wb_i_size);
+		ino->nlink = cpu_to_le32(ui->wb_i_nlink);
+		ino->xattr_cnt   = cpu_to_le32(ui->wb_xattr_cnt);
+		ino->xattr_size  = cpu_to_le64(ui->wb_xattr_size);
+		ino->xattr_names = cpu_to_le32(ui->wb_xattr_names);
+	} else {
+		ino->size  = cpu_to_le64(inode->i_size);
+		ino->nlink = cpu_to_le32(inode->i_nlink);
+		ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
+		ino->xattr_size  = cpu_to_le64(ui->xattr_size);
+		ino->xattr_names = cpu_to_le32(ui->xattr_names);
+	}
 	zero_ino_node_unused(ino);
 
 	/*
@@ -496,11 +504,11 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
  * @inode: inode to update
  *
  * This helper function is called after the inode has been written to the flash
- * media and updates synchronized inode size (@synced_i_size), inode size for
- * write-back (@wb_i_size) and inode link count for write-back (@wb_nlink). It
- * is essential to call this function while having the base head locked,
- * because it prevents write-back (which may be running at the same time) from
- * writing an inode node with older @i_nlink and @i_size to the flash media.
+ * media and updates fields used by inode write-back and synchronized inode
+ * size (@synced_i_size). It is essential to call this function while having
+ * the base head locked, because it prevents write-back (which may be running
+ * at the same time) from writing an inode node with older @i_nlink and @i_size
+ * to the flash media.
  *
  * This function also assumes that the @inode->i_mutex is locked so no one
  * may be changing this inode at the same time.
@@ -509,10 +517,14 @@ static void update_ubifs_inode(const struct inode *inode)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
+	ui->wb_i_nlink     = inode->i_nlink;
+	ui->wb_xattr_cnt   = ui->xattr_cnt;
+	ui->wb_xattr_names = ui->xattr_names;
+
 	spin_lock(&ui->ui_lock);
-	ui->synced_i_size = inode->i_size;
-	ui->wb_i_size = inode->i_size;
-	ui->wb_i_nlink = inode->i_nlink;
+	ui->synced_i_size  = inode->i_size;
+	ui->wb_i_size      = inode->i_size;
+	ui->wb_xattr_size  = ui->xattr_size;
 	spin_unlock(&ui->ui_lock);
 }
 
@@ -628,10 +640,9 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	ubifs_prep_grp_node(c, dent, dlen, 0);
 
 	ino = (void *)dent + aligned_dlen;
-	pack_inode(c, ino, inode, inode->i_size, inode->i_nlink, 0,
-		   last_reference);
+	pack_inode(c, ino, inode, 0, 0, last_reference);
 	ino = (void *)ino + aligned_ilen;
-	pack_inode(c, ino, dir, dir->i_size, dir->i_nlink, 1, 0);
+	pack_inode(c, ino, dir, 0, 1, 0);
 
 	if (last_reference) {
 		err = ubifs_add_orphan(c, inode->i_ino);
@@ -737,8 +748,6 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 	data->size = cpu_to_le32(len);
 	zero_data_node_unused(data);
 
-	/* TODO: can this race with compression flags/type changes and cause
-	 * problems? */
 	if (!(ui->flags && UBIFS_COMPR_FL))
 		/* Compression is disabled for this inode */
 		compr_type = UBIFS_COMPR_NONE;
@@ -821,7 +830,7 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, ui->wb_i_size, ui->wb_i_nlink, 1, deletion);
+	pack_inode(c, ino, inode, 1, 1, deletion);
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
 	if (err)
 		goto out_release;
@@ -947,20 +956,16 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 
 	p = (void *)dent2 + aligned_dlen2;
 	if (new_inode) {
-		pack_inode(c, p, new_inode, new_inode->i_size,
-			   new_inode->i_nlink, 0, last_reference);
+		pack_inode(c, p, new_inode, 0, 0, last_reference);
 		p += ALIGN(ilen, 8);
 	}
 
 	if (!move)
-		pack_inode(c, p, old_dir, old_dir->i_size,
-			   old_dir->i_nlink, 1, 0);
+		pack_inode(c, p, old_dir, 0, 1, 0);
 	else {
-		pack_inode(c, p, old_dir, old_dir->i_size,
-			   old_dir->i_nlink, 0, 0);
+		pack_inode(c, p, old_dir, 0, 0, 0);
 		p += ALIGN(plen, 8);
-		pack_inode(c, p, new_dir, new_dir->i_size,
-			   new_dir->i_nlink, 1, 0);
+		pack_inode(c, p, new_dir, 0, 1, 0);
 	}
 
 	if (last_reference) {
@@ -1165,7 +1170,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, inode->i_size, inode->i_nlink, 0, 0);
+	pack_inode(c, ino, inode, 0, 0, 0);
 	ubifs_prep_grp_node(c, trun, UBIFS_TRUN_NODE_SZ, dlen ? 0 : 1);
 	if (dlen)
 		ubifs_prep_grp_node(c, dn, dlen, 1);
@@ -1226,7 +1231,6 @@ out_free:
 
 #ifdef CONFIG_UBIFS_FS_XATTR
 
-/* TODO: xattr operations should mark host inode as clean, etc as well */
 /**
  * ubifs_jnl_delete_xattr - delete an extended attribute.
  * @c: UBIFS file-system description object
@@ -1285,9 +1289,9 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	ubifs_prep_grp_node(c, xent, xlen, 0);
 
 	ino = (void *)xent + aligned_xlen;
-	pack_inode(c, ino, inode, inode->i_size, inode->i_nlink, 0, 1);
+	pack_inode(c, ino, inode, 0, 0, 1);
 	ino = (void *)ino + UBIFS_INO_NODE_SZ;
-	pack_inode(c, ino, host, host->i_size, inode->i_nlink, 1, 0);
+	pack_inode(c, ino, host, 0, 1, 0);
 
 	err = write_head(c, BASEHD, xent, len, &lnum, &xent_offs, sync);
 	if (!sync && !err)
@@ -1325,6 +1329,7 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 		goto out_ro;
 
 	finish_reservation(c);
+	mark_inode_clean(c, ubifs_inode(host));
 	return 0;
 
 out_ro:
@@ -1372,9 +1377,8 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, host, host->i_size, host->i_nlink, 0, 0);
-	pack_inode(c, (void *)ino + aligned_len1, inode, inode->i_size,
-		   inode->i_nlink, 1, 0);
+	pack_inode(c, ino, host, 0, 0, 0);
+	pack_inode(c, (void *)ino + aligned_len1, inode, 0, 1, 0);
 
 	err = write_head(c, BASEHD, ino, aligned_len, &lnum, &offs, 0);
 	if (!sync && !err) {
@@ -1398,6 +1402,7 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
+	mark_inode_clean(c, ubifs_inode(host));
 	kfree(ino);
 	return 0;
 

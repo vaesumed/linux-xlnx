@@ -145,8 +145,12 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
-	ui->wb_i_size   = ui->synced_i_size = inode->i_size;
-	ui->wb_i_nlink  = inode->i_nlink;
+
+	ui->wb_i_size  = ui->synced_i_size = inode->i_size;
+	ui->wb_i_nlink = inode->i_nlink;
+	ui->wb_xattr_cnt   = ui->xattr_cnt;
+	ui->wb_xattr_size  = ui->xattr_size;
+	ui->wb_xattr_names = ui->xattr_names;
 
 	err = validate_inode(c, inode);
 	if (err)
