@@ -867,6 +867,7 @@ void kblockd_flush_work(struct work_struct *work);
 #define MODULE_ALIAS_BLOCKDEV_MAJOR(major) \
 	MODULE_ALIAS("block-major-" __stringify(major) "-*")
 
+
 #if defined(CONFIG_BLK_DEV_INTEGRITY)
 
 #define INTEGRITY_FLAG_READ	1	/* verify data integrity on read */
@@ -951,6 +952,8 @@ static inline int bdev_integrity_enabled(struct block_device *bdev, int rw)
 
 static inline int blk_integrity_rq(struct request *rq)
 {
+	BUG_ON(rq->bio == NULL);
+
 	return bio_integrity(rq->bio);
 }
 
@@ -966,6 +969,7 @@ static inline int blk_integrity_rq(struct request *rq)
 #define blk_integrity_unregister(a)		do { } while (0);
 
 #endif /* CONFIG_BLK_DEV_INTEGRITY */
+
 
 #else /* CONFIG_BLOCK */
 /*
