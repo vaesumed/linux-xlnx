@@ -84,13 +84,13 @@ acpi_status acpi_install_exception_handler(acpi_exception_handler handler)
 
 	acpi_gbl_exception_handler = handler;
 
-      cleanup:
+cleanup:
 	(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	return_ACPI_STATUS(status);
 }
 
 ACPI_EXPORT_SYMBOL(acpi_install_exception_handler)
-#endif				/*  ACPI_FUTURE_USAGE  */
+#endif /*  ACPI_FUTURE_USAGE  */
 /*******************************************************************************
  *
  * FUNCTION:    acpi_install_fixed_event_handler
@@ -113,6 +113,8 @@ acpi_install_fixed_event_handler(u32 event,
 	acpi_status status;
 
 	ACPI_FUNCTION_TRACE(acpi_install_fixed_event_handler);
+
+	WARN_ON(acpi_disabled);
 
 	/* Parameter validation */
 
@@ -154,7 +156,7 @@ acpi_install_fixed_event_handler(u32 event,
 				  handler));
 	}
 
-      cleanup:
+cleanup:
 	(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	return_ACPI_STATUS(status);
 }
@@ -375,7 +377,7 @@ acpi_install_notify_handler(acpi_handle device,
 		}
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return_ACPI_STATUS(status);
 }
@@ -537,9 +539,9 @@ acpi_remove_notify_handler(acpi_handle device,
 		}
 	}
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
-      exit:
+exit:
 	if (ACPI_FAILURE(status))
 		ACPI_EXCEPTION((AE_INFO, status, "Removing notify handler"));
 	return_ACPI_STATUS(status);
@@ -635,9 +637,9 @@ acpi_install_gpe_handler(acpi_handle gpe_device,
 
 	acpi_os_release_lock(acpi_gbl_gpe_lock, flags);
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
-      exit:
+exit:
 	if (ACPI_FAILURE(status))
 		ACPI_EXCEPTION((AE_INFO, status,
 				"Installing notify handler failed"));
@@ -739,7 +741,7 @@ acpi_remove_gpe_handler(acpi_handle gpe_device,
 
 	ACPI_FREE(handler);
 
-      unlock_and_exit:
+unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_EVENTS);
 	return_ACPI_STATUS(status);
 }

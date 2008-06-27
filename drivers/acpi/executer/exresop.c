@@ -90,8 +90,8 @@ acpi_ex_check_object_type(acpi_object_type type_needed,
 		 * specification, a store to a constant is a noop.)
 		 */
 		if ((this_type == ACPI_TYPE_INTEGER) &&
-		    (((union acpi_operand_object *)object)->common.
-		     flags & AOPOBJ_AML_CONSTANT)) {
+		    (((union acpi_operand_object *)object)->
+		     common.flags & AOPOBJ_AML_CONSTANT)) {
 			return (AE_OK);
 		}
 	}
@@ -202,8 +202,8 @@ acpi_ex_resolve_operands(u16 opcode,
 								 *)obj_desc);
 				*stack_ptr = obj_desc;
 				object_type =
-				    ((struct acpi_namespace_node *)obj_desc)->
-				    type;
+				    ((struct acpi_namespace_node *)
+				     obj_desc)->type;
 			}
 			break;
 
@@ -249,17 +249,14 @@ acpi_ex_resolve_operands(u16 opcode,
 								((ACPI_DB_EXEC,
 								  "Operand is a Reference, RefOpcode [%s]\n",
 								  (acpi_ps_get_opcode_info
-								   (obj_desc->
-								    reference.
-								    opcode))->
-								  name)));
+								   (obj_desc->reference.opcode))->name)));
 					break;
 
 				default:
 					ACPI_ERROR((AE_INFO,
 						    "Operand is a Reference, Unknown Reference Opcode: %X",
-						    obj_desc->reference.
-						    opcode));
+						    obj_desc->
+						    reference.opcode));
 
 					return_ACPI_STATUS(AE_AML_OPERAND_TYPE);
 				}
@@ -688,7 +685,7 @@ acpi_ex_resolve_operands(u16 opcode,
 			return_ACPI_STATUS(status);
 		}
 
-	      next_operand:
+next_operand:
 		/*
 		 * If more operands needed, decrement stack_ptr to point
 		 * to next operand on stack
@@ -697,6 +694,10 @@ acpi_ex_resolve_operands(u16 opcode,
 			stack_ptr--;
 		}
 	}
+
+	ACPI_DUMP_OPERANDS(walk_state->operands,
+			   acpi_ps_get_opcode_name(opcode),
+			   walk_state->num_operands);
 
 	return_ACPI_STATUS(status);
 }

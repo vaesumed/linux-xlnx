@@ -135,8 +135,8 @@ acpi_status acpi_ex_opcode_2A_0T_0R(struct acpi_walk_state *walk_state)
 		 */
 		if (value == 2) {	/* device_wake */
 			status =
-			    acpi_ev_check_for_wake_only_gpe(walk_state->
-							    gpe_event_info);
+			    acpi_ev_check_for_wake_only_gpe
+			    (walk_state->gpe_event_info);
 			if (ACPI_FAILURE(status)) {
 
 				/* AE_WAKE_ONLY_GPE only error, means ignore this notify */
@@ -241,7 +241,7 @@ acpi_status acpi_ex_opcode_2A_2T_1R(struct acpi_walk_state *walk_state)
 		goto cleanup;
 	}
 
-      cleanup:
+cleanup:
 	/*
 	 * Since the remainder is not returned indirectly, remove a reference to
 	 * it. Only the quotient is returned indirectly.
@@ -469,7 +469,7 @@ acpi_status acpi_ex_opcode_2A_1T_1R(struct acpi_walk_state *walk_state)
 		break;
 	}
 
-      store_result_to_target:
+store_result_to_target:
 
 	if (ACPI_SUCCESS(status)) {
 		/*
@@ -486,7 +486,7 @@ acpi_status acpi_ex_opcode_2A_1T_1R(struct acpi_walk_state *walk_state)
 		}
 	}
 
-      cleanup:
+cleanup:
 
 	/* Delete return object on error */
 
@@ -535,10 +535,11 @@ acpi_status acpi_ex_opcode_2A_0T_1R(struct acpi_walk_state *walk_state)
 		/* logical_op (Operand0, Operand1) */
 
 		status = acpi_ex_do_logical_numeric_op(walk_state->opcode,
-						       operand[0]->integer.
-						       value,
-						       operand[1]->integer.
-						       value, &logical_result);
+						       operand[0]->
+						       integer.value,
+						       operand[1]->
+						       integer.value,
+						       &logical_result);
 		goto store_logical_result;
 	} else if (walk_state->op_info->flags & AML_LOGICAL) {
 
@@ -577,7 +578,7 @@ acpi_status acpi_ex_opcode_2A_0T_1R(struct acpi_walk_state *walk_state)
 		goto cleanup;
 	}
 
-      store_logical_result:
+store_logical_result:
 	/*
 	 * Set return value to according to logical_result. logical TRUE (all ones)
 	 * Default is FALSE (zero)
@@ -586,7 +587,7 @@ acpi_status acpi_ex_opcode_2A_0T_1R(struct acpi_walk_state *walk_state)
 		return_desc->integer.value = ACPI_INTEGER_MAX;
 	}
 
-      cleanup:
+cleanup:
 
 	/* Delete return object on error */
 

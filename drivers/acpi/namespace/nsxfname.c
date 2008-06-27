@@ -197,7 +197,7 @@ acpi_get_name(acpi_handle handle, u32 name_type, struct acpi_buffer * buffer)
 	((char *)buffer->pointer)[ACPI_NAME_SIZE] = 0;
 	status = AE_OK;
 
-      unlock_and_exit:
+unlock_and_exit:
 
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 	return (status);
@@ -343,7 +343,7 @@ acpi_get_object_info(acpi_handle handle, struct acpi_buffer * buffer)
 			    cid_list->size);
 	}
 
-      cleanup:
+cleanup:
 	ACPI_FREE(info);
 	if (cid_list) {
 		ACPI_FREE(cid_list);
