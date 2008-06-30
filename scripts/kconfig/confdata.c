@@ -510,7 +510,7 @@ int conf_write(const char *name)
 			case S_HEX:
 				str = sym_get_string_value(sym);
 				if (str[0] != '0' || (str[1] != 'x' && str[1] != 'X')) {
-					fprintf(out, "CONFIG_%s=%s\n", sym->name, str);
+					fprintf(out, "CONFIG_%s=0x%s\n", sym->name, str);
 					break;
 				}
 			case S_INT:
