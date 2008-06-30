@@ -74,8 +74,6 @@ struct palm_bk3710_udmatiming {
 #define BK3710_IORDYTMP		0x78
 #define BK3710_IORDYTMS		0x7C
 
-#include "../ide-timing.h"
-
 static long ide_palm_clk;
 
 static const struct palm_bk3710_udmatiming palm_bk3710_udmatimings[6] = {
@@ -320,15 +318,14 @@ static u8 __devinit palm_bk3710_cable_detect(ide_hwif_t *hwif)
 static int __devinit palm_bk3710_init_dma(ide_hwif_t *hwif,
 					  const struct ide_port_info *d)
 {
-	unsigned long base =
-		hwif->io_ports.data_addr - IDE_PALM_ATA_PRI_REG_OFFSET;
-
 	printk(KERN_INFO "    %s: MMIO-DMA\n", hwif->name);
 
 	if (ide_allocate_dma_engine(hwif))
 		return -1;
 
-	ide_setup_dma(hwif, base);
+	hwif->dma_base = hwif->io_ports.data_addr - IDE_PALM_ATA_PRI_REG_OFFSET;
+
+	hwif->dma_ops = &sff_dma_ops;
 
 	return 0;
 }
@@ -352,11 +349,10 @@ static int __devinit palm_bk3710_probe(struct platform_device *pdev)
 {
 	struct clk *clkp;
 	struct resource *mem, *irq;
-	ide_hwif_t *hwif;
+	struct ide_host *host;
 	unsigned long base;
 	int i;
-	hw_regs_t hw;
-	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
+	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
 
 	clkp = clk_get(NULL, "IDECLK");
 	if (IS_ERR(clkp))
@@ -398,21 +394,11 @@ static int __devinit palm_bk3710_probe(struct platform_device *pdev)
 	hw.irq = irq->start;
 	hw.chipset = ide_palm3710;
 
-	hwif = ide_find_port();
-	if (hwif == NULL)
+	host = ide_host_alloc(&palm_bk3710_port_info, hws);
+	if (host == NULL)
 		goto out;
 
-	i = hwif->index;
-
-	ide_init_port_data(hwif, i);
-	ide_init_port_hw(hwif, &hw);
-
-	hwif->mmio = 1;
-	default_hwif_mmiops(hwif);
-
-	idx[0] = i;
-
-	ide_device_add(idx, &palm_bk3710_port_info);
+	ide_host_register(host, &palm_bk3710_port_info, hws);
 
 	return 0;
 out:
