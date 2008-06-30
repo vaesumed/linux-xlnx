@@ -81,6 +81,7 @@ extern int compat_log;
 extern int maps_protect;
 extern int sysctl_stat_interval;
 extern int latencytop_enabled;
+extern int sysctl_nr_open_min, sysctl_nr_open_max;
 
 /* Constants used for minimum and  maximum */
 #if defined(CONFIG_DETECT_SOFTLOCKUP) || defined(CONFIG_HIGHMEM)
@@ -130,8 +131,6 @@ extern int sysctl_ieee_emulation_warnings;
 extern int sysctl_userprocess_debug;
 extern int spin_retry;
 #endif
-
-extern int sysctl_hz_timer;
 
 #ifdef CONFIG_BSD_PROCESS_ACCT
 extern int acct_parm[];
@@ -560,16 +559,6 @@ static struct ctl_table kern_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= &proc_dointvec,
-	},
-#endif
-#ifdef CONFIG_NO_IDLE_HZ
-	{
-		.ctl_name       = KERN_HZ_TIMER,
-		.procname       = "hz_timer",
-		.data           = &sysctl_hz_timer,
-		.maxlen         = sizeof(int),
-		.mode           = 0644,
-		.proc_handler   = &proc_dointvec,
 	},
 #endif
 	{
@@ -1190,7 +1179,9 @@ static struct ctl_table fs_table[] = {
 		.data		= &sysctl_nr_open,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dointvec,
+		.proc_handler	= &proc_dointvec_minmax,
+		.extra1		= &sysctl_nr_open_min,
+		.extra2		= &sysctl_nr_open_max,
 	},
 	{
 		.ctl_name	= FS_DENTRY,
