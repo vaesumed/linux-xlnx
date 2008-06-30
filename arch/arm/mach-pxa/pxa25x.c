@@ -118,6 +118,10 @@ static struct clk pxa25x_hwuart_clk =
 	INIT_CKEN("UARTCLK", HWUART, 14745600, 1, &pxa_device_hwuart.dev)
 ;
 
+/*
+ * PXA 2xx clock declarations. Order is important (see aliases below)
+ * Please be careful not to disrupt the ordering.
+ */
 static struct clk pxa25x_clks[] = {
 	INIT_CK("LCDCLK", LCD, &clk_pxa25x_lcd_ops, &pxa_device_fb.dev),
 	INIT_CKEN("UARTCLK", FFUART, 14745600, 1, &pxa_device_ffuart.dev),
@@ -140,6 +144,8 @@ static struct clk pxa25x_clks[] = {
 	*/
 	INIT_CKEN("FICPCLK", FICP, 47923000, 0, NULL),
 };
+
+static struct clk gpio7_clk = INIT_CKOTHER("GPIO7_CK", &pxa25x_clks[4], NULL);
 
 #ifdef CONFIG_PM
 
@@ -313,6 +319,8 @@ static int __init pxa25x_init(void)
 	/* Only add HWUART for PXA255/26x; PXA210/250/27x do not have it. */
 	if (cpu_is_pxa25x())
 		ret = platform_device_register(&pxa_device_hwuart);
+
+	clks_register(&gpio7_clk);
 
 	return ret;
 }
