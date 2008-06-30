@@ -65,7 +65,7 @@
 
 static struct scc_ports {
 	unsigned long ctl, dma;
-	struct ide_host *host;	/* for removing port from system */
+	ide_hwif_t *hwif;  /* for removing port from system */
 } scc_ports[MAX_HWIFS];
 
 /* PIO transfer mode  table */
@@ -586,9 +586,14 @@ static int scc_ide_setup_pci_device(struct pci_dev *dev,
 				    const struct ide_port_info *d)
 {
 	struct scc_ports *ports = pci_get_drvdata(dev);
-	struct ide_host *host;
+	ide_hwif_t *hwif = NULL;
 	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 	int i;
+
+	hwif = ide_find_port_slot(d);
+	if (hwif == NULL)
+		return -ENOMEM;
 
 	memset(&hw, 0, sizeof(hw));
 	for (i = 0; i <= 8; i++)
@@ -597,13 +602,9 @@ static int scc_ide_setup_pci_device(struct pci_dev *dev,
 	hw.dev = &dev->dev;
 	hw.chipset = ide_pci;
 
-	host = ide_host_alloc(d, hws);
-	if (host == NULL)
-		return -ENOMEM;
+	idx[0] = hwif->index;
 
-	ide_host_register(host, d, hws);
-
-	ports->host = host;
+	ide_device_add(idx, d, hws);
 
 	return 0;
 }
@@ -847,6 +848,8 @@ static void __devinit init_hwif_scc(ide_hwif_t *hwif)
 {
 	struct scc_ports *ports = ide_get_hwifdata(hwif);
 
+	ports->hwif = hwif;
+
 	/* PTERADD */
 	out_be32((void __iomem *)(hwif->dma_base + 0x018), hwif->dmatable_dma);
 
@@ -929,8 +932,7 @@ static int __devinit scc_init_one(struct pci_dev *dev, const struct pci_device_i
 static void __devexit scc_remove(struct pci_dev *dev)
 {
 	struct scc_ports *ports = pci_get_drvdata(dev);
-	struct ide_host *host = ports->host;
-	ide_hwif_t *hwif = host->ports[0];
+	ide_hwif_t *hwif = ports->hwif;
 
 	if (hwif->dmatable_cpu) {
 		pci_free_consistent(dev, PRD_ENTRIES * PRD_BYTES,
@@ -938,7 +940,7 @@ static void __devexit scc_remove(struct pci_dev *dev)
 		hwif->dmatable_cpu = NULL;
 	}
 
-	ide_host_remove(host);
+	ide_unregister(hwif);
 
 	iounmap((void*)ports->dma);
 	iounmap((void*)ports->ctl);

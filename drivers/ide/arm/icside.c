@@ -72,7 +72,7 @@ struct icside_state {
 	void __iomem *ioc_base;
 	unsigned int sel;
 	unsigned int type;
-	struct ide_host *host;
+	ide_hwif_t *hwif[2];
 };
 
 #define ICS_TYPE_A3IN	0
@@ -442,9 +442,10 @@ static void icside_setup_ports(hw_regs_t *hw, void __iomem *base,
 static int __init
 icside_register_v5(struct icside_state *state, struct expansion_card *ec)
 {
+	ide_hwif_t *hwif;
 	void __iomem *base;
-	struct ide_host *host;
 	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 
 	base = ecardm_iomap(ec, ECARD_RES_MEMC, 0, 0);
 	if (!base)
@@ -464,15 +465,17 @@ icside_register_v5(struct icside_state *state, struct expansion_card *ec)
 
 	icside_setup_ports(&hw, base, &icside_cardinfo_v5, ec);
 
-	host = ide_host_alloc(NULL, hws);
-	if (host == NULL)
+	hwif = ide_find_port();
+	if (!hwif)
 		return -ENODEV;
 
-	state->host = host;
+	state->hwif[0] = hwif;
 
 	ecard_set_drvdata(ec, state);
 
-	ide_host_register(host, NULL, hws);
+	idx[0] = hwif->index;
+
+	ide_device_add(idx, NULL, hws);
 
 	return 0;
 }
@@ -489,11 +492,12 @@ static const struct ide_port_info icside_v6_port_info __initdata = {
 static int __init
 icside_register_v6(struct icside_state *state, struct expansion_card *ec)
 {
+	ide_hwif_t *hwif, *mate;
 	void __iomem *ioc_base, *easi_base;
-	struct ide_host *host;
 	unsigned int sel = 0;
 	int ret;
 	hw_regs_t hw[2], *hws[] = { &hw[0], NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 	struct ide_port_info d = icside_v6_port_info;
 
 	ioc_base = ecardm_iomap(ec, ECARD_RES_IOCFAST, 0, 0);
@@ -533,11 +537,25 @@ icside_register_v6(struct icside_state *state, struct expansion_card *ec)
 	icside_setup_ports(&hw[0], easi_base, &icside_cardinfo_v6_1, ec);
 	icside_setup_ports(&hw[1], easi_base, &icside_cardinfo_v6_2, ec);
 
-	host = ide_host_alloc(&d, hws);
-	if (host == NULL)
+	/*
+	 * Find and register the interfaces.
+	 */
+	hwif = ide_find_port();
+	if (hwif == NULL)
 		return -ENODEV;
 
-	state->host = host;
+	hwif->chipset = ide_acorn;
+
+	idx[0] = hwif->index;
+
+	mate = ide_find_port();
+	if (mate) {
+		hws[1] = &hw[1];
+		idx[1] = mate->index;
+	}
+
+	state->hwif[0]    = hwif;
+	state->hwif[1]    = mate;
 
 	ecard_set_drvdata(ec, state);
 
@@ -547,7 +565,7 @@ icside_register_v6(struct icside_state *state, struct expansion_card *ec)
 		d.dma_ops = NULL;
 	}
 
-	ide_host_register(host, &d, hws);
+	ide_device_add(idx, &d, hws);
 
 	return 0;
 

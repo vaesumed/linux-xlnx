@@ -349,10 +349,11 @@ static int __devinit palm_bk3710_probe(struct platform_device *pdev)
 {
 	struct clk *clkp;
 	struct resource *mem, *irq;
-	struct ide_host *host;
+	ide_hwif_t *hwif;
 	unsigned long base;
 	int i;
 	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 
 	clkp = clk_get(NULL, "IDECLK");
 	if (IS_ERR(clkp))
@@ -394,11 +395,15 @@ static int __devinit palm_bk3710_probe(struct platform_device *pdev)
 	hw.irq = irq->start;
 	hw.chipset = ide_palm3710;
 
-	host = ide_host_alloc(&palm_bk3710_port_info, hws);
-	if (host == NULL)
+	hwif = ide_find_port();
+	if (hwif == NULL)
 		goto out;
 
-	ide_host_register(host, &palm_bk3710_port_info, hws);
+	i = hwif->index;
+
+	idx[0] = i;
+
+	ide_device_add(idx, &palm_bk3710_port_info, hws);
 
 	return 0;
 out:

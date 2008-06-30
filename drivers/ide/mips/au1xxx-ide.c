@@ -563,10 +563,11 @@ static int au_ide_probe(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	_auide_hwif *ahwif = &auide_hwif;
+	ide_hwif_t *hwif;
 	struct resource *res;
-	struct ide_host *host;
 	int ret = 0;
 	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 
 #if defined(CONFIG_BLK_DEV_IDE_AU1XXX_MDMA2_DBDMA)
 	char *mode = "MWDMA2";
@@ -603,23 +604,25 @@ static int au_ide_probe(struct device *dev)
 		goto out;
 	}
 
+	hwif = ide_find_port();
+	if (hwif == NULL) {
+		ret = -ENOENT;
+		goto out;
+	}
+
 	memset(&hw, 0, sizeof(hw));
 	auide_setup_ports(&hw, ahwif);
 	hw.irq = ahwif->irq;
 	hw.dev = dev;
 	hw.chipset = ide_au1xxx;
 
-	host = ide_host_alloc(&au1xxx_port_info, hws);
-	if (host == NULL) {
-		ret = -ENOENT;
-		goto out;
-	}
+	auide_hwif.hwif                 = hwif;
 
-	ide_host_register(host, &au1xxx_port_info, hws);
+	idx[0] = hwif->index;
 
-	auide_hwif.hwif = host->ports[0];
+	ide_device_add(idx, &au1xxx_port_info, hws);
 
-	dev_set_drvdata(dev, host);
+	dev_set_drvdata(dev, hwif);
 
 	printk(KERN_INFO "Au1xxx IDE(builtin) configured for %s\n", mode );
 
@@ -631,10 +634,10 @@ static int au_ide_remove(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct resource *res;
-	struct ide_host *host = dev_get_drvdata(dev);
+	ide_hwif_t *hwif = dev_get_drvdata(dev);
 	_auide_hwif *ahwif = &auide_hwif;
 
-	ide_host_remove(host);
+	ide_unregister(hwif);
 
 	iounmap((void *)ahwif->regbase);
 

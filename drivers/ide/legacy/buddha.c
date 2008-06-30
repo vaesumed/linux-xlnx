@@ -150,15 +150,18 @@ static void __init buddha_setup_ports(hw_regs_t *hw, unsigned long base,
 
 static int __init buddha_init(void)
 {
+	ide_hwif_t *hwif;
+	int i;
+
 	struct zorro_dev *z = NULL;
-	struct ide_host *host;
 	u_long buddha_board = 0;
 	BuddhaType type;
-	int buddha_num_hwifs, i;
+	int buddha_num_hwifs;
 
 	while ((z = zorro_find_device(ZORRO_WILDCARD, z))) {
 		unsigned long board;
 		hw_regs_t hw[MAX_NUM_HWIFS], *hws[] = { NULL, NULL, NULL, NULL };
+		u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 
 		if (z->id == ZORRO_PROD_INDIVIDUAL_COMPUTERS_BUDDHA) {
 			buddha_num_hwifs = BUDDHA_NUM_HWIFS;
@@ -223,12 +226,16 @@ fail_base2:
 			buddha_setup_ports(&hw[i], base, ctl, irq_port,
 					   ack_intr);
 
-			hws[i] = &hw[i];
+			hwif = ide_find_port();
+			if (hwif) {
+				hwif->chipset = ide_generic;
+
+				hws[i] = &hw[i];
+				idx[i] = hwif->index;
+			}
 		}
 
-		host = ide_host_alloc(NULL, hws);
-		if (host)
-			ide_host_register(host, NULL, hws);
+		ide_device_add(idx, NULL, hws);
 	}
 
 	return 0;

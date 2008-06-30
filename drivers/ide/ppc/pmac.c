@@ -1037,9 +1037,9 @@ static int __devinit pmac_ide_setup_device(pmac_ide_hwif_t *pmif, hw_regs_t *hw)
 {
 	struct device_node *np = pmif->node;
 	const int *bidp;
-	struct ide_host *host;
 	ide_hwif_t *hwif;
 	hw_regs_t *hws[] = { hw, NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 	struct ide_port_info d = pmac_port_info;
 
 	pmif->broken_dma = pmif->broken_dma_warn = 0;
@@ -1112,13 +1112,13 @@ static int __devinit pmac_ide_setup_device(pmac_ide_hwif_t *pmif, hw_regs_t *hw)
 			 pmif->mdev ? "macio" : "PCI", pmif->aapl_bus_id,
 			 pmif->mediabay ? " (mediabay)" : "", hw->irq);
 
-	host = ide_alloc_host(&d, hws);
-	if (host == NULL)
+	hwif = ide_find_port_slot(&d);
+	if (hwif == NULL)
 		return -ENOENT;
 
-	ide_host_register(host, &d, hws);
+	idx[0] = hwif->index;
 
-	hwif = host->ports[0];
+	ide_device_add(idx, &d, hws);
 
 	if (pmif->mediabay) {
 		hwif->drives[0].noprobe = 0;

@@ -32,10 +32,11 @@ static void rapide_setup_ports(hw_regs_t *hw, void __iomem *base,
 static int __devinit
 rapide_probe(struct expansion_card *ec, const struct ecard_id *id)
 {
+	ide_hwif_t *hwif;
 	void __iomem *base;
-	struct ide_host *host;
 	int ret;
 	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
+	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 
 	ret = ecard_request_resources(ec);
 	if (ret)
@@ -52,15 +53,17 @@ rapide_probe(struct expansion_card *ec, const struct ecard_id *id)
 	hw.chipset = ide_generic;
 	hw.dev = &ec->dev;
 
-	host = ide_host_alloc(&rapide_port_info, hws);
-	if (host == NULL) {
+	hwif = ide_find_port();
+	if (hwif == NULL) {
 		ret = -ENOENT;
 		goto release;
 	}
 
-	ide_host_register(host, &rapide_port_info, hws);
+	idx[0] = hwif->index;
 
-	ecard_set_drvdata(ec, host);
+	ide_device_add(idx, &rapide_port_info, hws);
+
+	ecard_set_drvdata(ec, hwif);
 	goto out;
 
  release:
@@ -71,11 +74,11 @@ rapide_probe(struct expansion_card *ec, const struct ecard_id *id)
 
 static void __devexit rapide_remove(struct expansion_card *ec)
 {
-	struct ide_host *host = ecard_get_drvdata(ec);
+	ide_hwif_t *hwif = ecard_get_drvdata(ec);
 
 	ecard_set_drvdata(ec, NULL);
 
-	ide_host_remove(host);
+	ide_unregister(hwif);
 
 	ecard_release_resources(ec);
 }

@@ -29,7 +29,7 @@ static struct pnp_device_id idepnp_devices[] = {
 
 static int idepnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 {
-	struct ide_host *host;
+	ide_hwif_t *hwif;
 	unsigned long base, ctl;
 	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
 
@@ -59,11 +59,14 @@ static int idepnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 	hw.irq = pnp_irq(dev, 0);
 	hw.chipset = ide_generic;
 
-	host = ide_host_alloc(NULL, hws);
-	if (host) {
-		pnp_set_drvdata(dev, host);
+	hwif = ide_find_port();
+	if (hwif) {
+		u8 index = hwif->index;
+		u8 idx[4] = { index, 0xff, 0xff, 0xff };
 
-		ide_host_register(host, NULL, hws);
+		pnp_set_drvdata(dev, hwif);
+
+		ide_device_add(idx, NULL, hws);
 
 		return 0;
 	}
@@ -76,9 +79,9 @@ static int idepnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
 
 static void idepnp_remove(struct pnp_dev *dev)
 {
-	struct ide_host *host = pnp_get_drvdata(dev);
+	ide_hwif_t *hwif = pnp_get_drvdata(dev);
 
-	ide_host_remove(host);
+	ide_unregister(hwif);
 
 	release_region(pnp_port_start(dev, 1), 1);
 	release_region(pnp_port_start(dev, 0), 8);
