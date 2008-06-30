@@ -341,12 +341,12 @@ static int cmf_copy_block(struct ccw_device *cdev)
 	if (stsch(sch->schid, &sch->schib))
 		return -ENODEV;
 
-	if (sch->schib.scsw.fctl & SCSW_FCTL_START_FUNC) {
+	if (scsw_fctl(&sch->schib.scsw) & SCSW_FCTL_START_FUNC) {
 		/* Don't copy if a start function is in progress. */
-		if ((!(sch->schib.scsw.actl & SCSW_ACTL_SUSPENDED)) &&
-		    (sch->schib.scsw.actl &
+		if ((!(scsw_actl(&sch->schib.scsw) & SCSW_ACTL_SUSPENDED)) &&
+		    (scsw_actl(&sch->schib.scsw) &
 		     (SCSW_ACTL_DEVACT | SCSW_ACTL_SCHACT)) &&
-		    (!(sch->schib.scsw.stctl & SCSW_STCTL_SEC_STATUS)))
+		    (!(scsw_stctl(&sch->schib.scsw) & SCSW_STCTL_SEC_STATUS)))
 			return -EBUSY;
 	}
 	cmb_data = cdev->private->cmb;
@@ -1344,8 +1344,7 @@ static int __init init_cmf(void)
 	 * to basic mode.
 	 */
 	if (format == CMF_AUTODETECT) {
-		if (!css_characteristics_avail ||
-		    !css_general_characteristics.ext_mb) {
+		if (!css_general_characteristics.ext_mb) {
 			format = CMF_BASIC;
 		} else {
 			format = CMF_EXTENDED;
