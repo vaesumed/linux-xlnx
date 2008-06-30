@@ -433,21 +433,6 @@ int check_media_bay(struct device_node *which_bay, int what)
 }
 EXPORT_SYMBOL(check_media_bay);
 
-int check_media_bay_by_base(unsigned long base, int what)
-{
-	int	i;
-
-	for (i=0; i<media_bay_count; i++)
-		if (media_bays[i].mdev && base == (unsigned long) media_bays[i].cd_base) {
-			if ((what == media_bays[i].content_id) && media_bays[i].state == mb_up)
-				return 0;
-			media_bays[i].cd_index = -1;
-			return -EINVAL;
-		} 
-
-	return -ENODEV;
-}
-
 int media_bay_set_ide_infos(struct device_node* which_bay, unsigned long base,
 			    int irq, ide_hwif_t *hwif)
 {
@@ -457,8 +442,6 @@ int media_bay_set_ide_infos(struct device_node* which_bay, unsigned long base,
 		struct media_bay_info* bay = &media_bays[i];
 
 		if (bay->mdev && which_bay == bay->mdev->ofdev.node) {
-			int timeout = 5000, index = hwif->index;
-			
 			down(&bay->lock);
 
 			bay->cd_port	= hwif;
@@ -469,18 +452,12 @@ int media_bay_set_ide_infos(struct device_node* which_bay, unsigned long base,
 				up(&bay->lock);
 				return 0;
 			}
-			printk(KERN_DEBUG "Registered ide%d for media bay %d\n", index, i);
-			do {
-				if (MB_IDE_READY(i)) {
-					bay->cd_index	= index;
-					up(&bay->lock);
-					return 0;
-				}
-				mdelay(1);
-			} while(--timeout);
-			printk(KERN_DEBUG "Timeount waiting IDE in bay %d\n", i);
+
+			/* let probing thread do the rest */
+			bay->state = mb_ide_resetting;
+
 			up(&bay->lock);
-			return -ENODEV;
+			return 0;
 		}
 	}
 
