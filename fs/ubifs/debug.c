@@ -1724,7 +1724,8 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		}
 
 		/* Make sure the data node is within inode size */
-		blk_offs = (key_block_flash(c, &dn->key) << UBIFS_BLOCK_SHIFT);
+		blk_offs = key_block_flash(c, &dn->key);
+		blk_offs <<= UBIFS_BLOCK_SHIFT;
 		blk_offs += le32_to_cpu(dn->size);
 		if (blk_offs > fscki->size) {
 			ubifs_err("data node at LEB %d:%d is not within inode "

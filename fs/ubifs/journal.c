@@ -1135,7 +1135,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	if (dlen) {
 		/* Get last data block so it can be truncated */
 		dn = (void *)trun + UBIFS_TRUN_NODE_SZ;
-		blk = new_size / UBIFS_BLOCK_SIZE;
+		blk = new_size >> UBIFS_BLOCK_SHIFT;
 		data_key_init(c, &key, inum, blk);
 		dbg_jnl("last block key %s", DBGKEY(&key));
 		err = ubifs_tnc_lookup(c, &key, dn);
@@ -1203,11 +1203,11 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	bit = new_size & (UBIFS_BLOCK_SIZE - 1);
-	blk = new_size / UBIFS_BLOCK_SIZE + (bit ? 1 : 0);
+	blk = (new_size >> UBIFS_BLOCK_SHIFT) + (bit ? 1 : 0);
 	data_key_init(c, &key, inum, blk);
 
 	bit = old_size & (UBIFS_BLOCK_SIZE - 1);
-	blk = old_size / UBIFS_BLOCK_SIZE - (bit ? 0: 1);
+	blk = (old_size >> UBIFS_BLOCK_SHIFT) - (bit ? 0: 1);
 	data_key_init(c, &to_key, inum, blk);
 
 	err = ubifs_tnc_remove_range(c, &key, &to_key);

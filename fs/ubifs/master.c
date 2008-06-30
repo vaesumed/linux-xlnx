@@ -90,7 +90,7 @@ out:
  */
 static int validate_master(const struct ubifs_info *c)
 {
-	unsigned long long main_sz;
+	long long main_sz;
 	int err;
 
 	if (c->max_sqnum >= SQNUM_WATERMARK) {
@@ -140,7 +140,7 @@ static int validate_master(const struct ubifs_info *c)
 		goto out;
 	}
 
-	main_sz = c->main_lebs * (unsigned long long)c->leb_size;
+	main_sz = (long long)c->main_lebs * c->leb_size;
 	if (c->old_idx_sz & 7 || c->old_idx_sz >= main_sz) {
 		err = 9;
 		goto out;
