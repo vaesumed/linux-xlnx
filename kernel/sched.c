@@ -365,6 +365,10 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
 #else
 
 static inline void set_task_rq(struct task_struct *p, unsigned int cpu) { }
+static inline struct task_group *task_group(struct task_struct *p)
+{
+	return NULL;
+}
 
 #endif	/* CONFIG_GROUP_SCHED */
 
@@ -375,6 +379,7 @@ struct cfs_rq {
 
 	u64 exec_clock;
 	u64 min_vruntime;
+	u64 pair_start;
 
 	struct rb_root tasks_timeline;
 	struct rb_node *rb_leftmost;
@@ -403,6 +408,31 @@ struct cfs_rq {
 	 */
 	struct list_head leaf_cfs_rq_list;
 	struct task_group *tg;	/* group that "owns" this runqueue */
+
+#ifdef CONFIG_SMP
+	/*
+	 * the part of load.weight contributed by tasks
+	 */
+	unsigned long task_weight;
+
+	/*
+	 *   h_load = weight * f(tg)
+	 *
+	 * Where f(tg) is the recursive weight fraction assigned to
+	 * this group.
+	 */
+	unsigned long h_load;
+
+	/*
+	 * this cpu's part of tg->shares
+	 */
+	unsigned long shares;
+
+	/*
+	 * load.weight at the time we set shares
+	 */
+	unsigned long rq_weight;
+#endif
 #endif
 };
 
@@ -532,6 +562,8 @@ struct rq {
 	/* cpu of this runqueue: */
 	int cpu;
 	int online;
+
+	unsigned long avg_load_per_task;
 
 	struct task_struct *migration_thread;
 	struct list_head migration_queue;
@@ -755,6 +787,12 @@ late_initcall(sched_init_debug);
 const_debug unsigned int sysctl_sched_nr_migrate = 32;
 
 /*
+ * ratelimit for updating the group shares.
+ * default: 0.5ms
+ */
+const_debug unsigned int sysctl_sched_shares_ratelimit = 500000;
+
+/*
  * period over which we measure -rt task cpu usage in us.
  * default: 1s
  */
@@ -780,82 +818,6 @@ static inline u64 global_rt_runtime(void)
 
 	return (u64)sysctl_sched_rt_runtime * NSEC_PER_USEC;
 }
-
-unsigned long long time_sync_thresh = 100000;
-
-static DEFINE_PER_CPU(unsigned long long, time_offset);
-static DEFINE_PER_CPU(unsigned long long, prev_cpu_time);
-
-/*
- * Global lock which we take every now and then to synchronize
- * the CPUs time. This method is not warp-safe, but it's good
- * enough to synchronize slowly diverging time sources and thus
- * it's good enough for tracing:
- */
-static DEFINE_SPINLOCK(time_sync_lock);
-static unsigned long long prev_global_time;
-
-static unsigned long long __sync_cpu_clock(unsigned long long time, int cpu)
-{
-	/*
-	 * We want this inlined, to not get tracer function calls
-	 * in this critical section:
-	 */
-	spin_acquire(&time_sync_lock.dep_map, 0, 0, _THIS_IP_);
-	__raw_spin_lock(&time_sync_lock.raw_lock);
-
-	if (time < prev_global_time) {
-		per_cpu(time_offset, cpu) += prev_global_time - time;
-		time = prev_global_time;
-	} else {
-		prev_global_time = time;
-	}
-
-	__raw_spin_unlock(&time_sync_lock.raw_lock);
-	spin_release(&time_sync_lock.dep_map, 1, _THIS_IP_);
-
-	return time;
-}
-
-static unsigned long long __cpu_clock(int cpu)
-{
-	unsigned long long now;
-
-	/*
-	 * Only call sched_clock() if the scheduler has already been
-	 * initialized (some code might call cpu_clock() very early):
-	 */
-	if (unlikely(!scheduler_running))
-		return 0;
-
-	now = sched_clock_cpu(cpu);
-
-	return now;
-}
-
-/*
- * For kernel-internal use: high-speed (but slightly incorrect) per-cpu
- * clock constructed from sched_clock():
- */
-unsigned long long cpu_clock(int cpu)
-{
-	unsigned long long prev_cpu_time, time, delta_time;
-	unsigned long flags;
-
-	local_irq_save(flags);
-	prev_cpu_time = per_cpu(prev_cpu_time, cpu);
-	time = __cpu_clock(cpu) + per_cpu(time_offset, cpu);
-	delta_time = time-prev_cpu_time;
-
-	if (unlikely(delta_time > time_sync_thresh)) {
-		time = __sync_cpu_clock(time, cpu);
-		per_cpu(prev_cpu_time, cpu) = time;
-	}
-	local_irq_restore(flags);
-
-	return time;
-}
-EXPORT_SYMBOL_GPL(cpu_clock);
 
 #ifndef prepare_arch_switch
 # define prepare_arch_switch(next)	do { } while (0)
@@ -1342,6 +1304,9 @@ static void __resched_task(struct task_struct *p, int tif_bit)
  */
 #define SRR(x, y) (((x) + (1UL << ((y) - 1))) >> (y))
 
+/*
+ * delta *= weight / lw
+ */
 static unsigned long
 calc_delta_mine(unsigned long delta_exec, unsigned long weight,
 		struct load_weight *lw)
@@ -1367,12 +1332,6 @@ calc_delta_mine(unsigned long delta_exec, unsigned long weight,
 		tmp = SRR(tmp * lw->inv_weight, WMULT_SHIFT);
 
 	return (unsigned long)min(tmp, (u64)(unsigned long)LONG_MAX);
-}
-
-static inline unsigned long
-calc_delta_fair(unsigned long delta_exec, struct load_weight *lw)
-{
-	return calc_delta_mine(delta_exec, NICE_0_LOAD, lw);
 }
 
 static inline void update_load_add(struct load_weight *lw, unsigned long inc)
@@ -1485,8 +1444,210 @@ static inline void dec_cpu_load(struct rq *rq, unsigned long load)
 #ifdef CONFIG_SMP
 static unsigned long source_load(int cpu, int type);
 static unsigned long target_load(int cpu, int type);
-static unsigned long cpu_avg_load_per_task(int cpu);
 static int task_hot(struct task_struct *p, u64 now, struct sched_domain *sd);
+
+static unsigned long cpu_avg_load_per_task(int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	if (rq->nr_running)
+		rq->avg_load_per_task = rq->load.weight / rq->nr_running;
+
+	return rq->avg_load_per_task;
+}
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+
+typedef void (*tg_visitor)(struct task_group *, int, struct sched_domain *);
+
+/*
+ * Iterate the full tree, calling @down when first entering a node and @up when
+ * leaving it for the final time.
+ */
+static void
+walk_tg_tree(tg_visitor down, tg_visitor up, int cpu, struct sched_domain *sd)
+{
+	struct task_group *parent, *child;
+
+	rcu_read_lock();
+	parent = &root_task_group;
+down:
+	(*down)(parent, cpu, sd);
+	list_for_each_entry_rcu(child, &parent->children, siblings) {
+		parent = child;
+		goto down;
+
+up:
+		continue;
+	}
+	(*up)(parent, cpu, sd);
+
+	child = parent;
+	parent = parent->parent;
+	if (parent)
+		goto up;
+	rcu_read_unlock();
+}
+
+static void __set_se_shares(struct sched_entity *se, unsigned long shares);
+
+/*
+ * Calculate and set the cpu's group shares.
+ */
+static void
+__update_group_shares_cpu(struct task_group *tg, int cpu,
+			  unsigned long sd_shares, unsigned long sd_rq_weight)
+{
+	int boost = 0;
+	unsigned long shares;
+	unsigned long rq_weight;
+
+	if (!tg->se[cpu])
+		return;
+
+	rq_weight = tg->cfs_rq[cpu]->load.weight;
+
+	/*
+	 * If there are currently no tasks on the cpu pretend there is one of
+	 * average load so that when a new task gets to run here it will not
+	 * get delayed by group starvation.
+	 */
+	if (!rq_weight) {
+		boost = 1;
+		rq_weight = NICE_0_LOAD;
+	}
+
+	if (unlikely(rq_weight > sd_rq_weight))
+		rq_weight = sd_rq_weight;
+
+	/*
+	 *           \Sum shares * rq_weight
+	 * shares =  -----------------------
+	 *               \Sum rq_weight
+	 *
+	 */
+	shares = (sd_shares * rq_weight) / (sd_rq_weight + 1);
+
+	/*
+	 * record the actual number of shares, not the boosted amount.
+	 */
+	tg->cfs_rq[cpu]->shares = boost ? 0 : shares;
+	tg->cfs_rq[cpu]->rq_weight = rq_weight;
+
+	if (shares < MIN_SHARES)
+		shares = MIN_SHARES;
+	else if (shares > MAX_SHARES)
+		shares = MAX_SHARES;
+
+	__set_se_shares(tg->se[cpu], shares);
+}
+
+/*
+ * Re-compute the task group their per cpu shares over the given domain.
+ * This needs to be done in a bottom-up fashion because the rq weight of a
+ * parent group depends on the shares of its child groups.
+ */
+static void
+tg_shares_up(struct task_group *tg, int cpu, struct sched_domain *sd)
+{
+	unsigned long rq_weight = 0;
+	unsigned long shares = 0;
+	int i;
+
+	for_each_cpu_mask(i, sd->span) {
+		rq_weight += tg->cfs_rq[i]->load.weight;
+		shares += tg->cfs_rq[i]->shares;
+	}
+
+	if ((!shares && rq_weight) || shares > tg->shares)
+		shares = tg->shares;
+
+	if (!sd->parent || !(sd->parent->flags & SD_LOAD_BALANCE))
+		shares = tg->shares;
+
+	if (!rq_weight)
+		rq_weight = cpus_weight(sd->span) * NICE_0_LOAD;
+
+	for_each_cpu_mask(i, sd->span) {
+		struct rq *rq = cpu_rq(i);
+		unsigned long flags;
+
+		spin_lock_irqsave(&rq->lock, flags);
+		__update_group_shares_cpu(tg, i, shares, rq_weight);
+		spin_unlock_irqrestore(&rq->lock, flags);
+	}
+}
+
+/*
+ * Compute the cpu's hierarchical load factor for each task group.
+ * This needs to be done in a top-down fashion because the load of a child
+ * group is a fraction of its parents load.
+ */
+static void
+tg_load_down(struct task_group *tg, int cpu, struct sched_domain *sd)
+{
+	unsigned long load;
+
+	if (!tg->parent) {
+		load = cpu_rq(cpu)->load.weight;
+	} else {
+		load = tg->parent->cfs_rq[cpu]->h_load;
+		load *= tg->cfs_rq[cpu]->shares;
+		load /= tg->parent->cfs_rq[cpu]->load.weight + 1;
+	}
+
+	tg->cfs_rq[cpu]->h_load = load;
+}
+
+static void
+tg_nop(struct task_group *tg, int cpu, struct sched_domain *sd)
+{
+}
+
+static void update_shares(struct sched_domain *sd)
+{
+	u64 now = cpu_clock(raw_smp_processor_id());
+	s64 elapsed = now - sd->last_update;
+
+	if (elapsed >= (s64)(u64)sysctl_sched_shares_ratelimit) {
+		sd->last_update = now;
+		walk_tg_tree(tg_nop, tg_shares_up, 0, sd);
+	}
+}
+
+static void update_shares_locked(struct rq *rq, struct sched_domain *sd)
+{
+	spin_unlock(&rq->lock);
+	update_shares(sd);
+	spin_lock(&rq->lock);
+}
+
+static void update_h_load(int cpu)
+{
+	walk_tg_tree(tg_load_down, tg_nop, cpu, NULL);
+}
+
+#else
+
+static inline void update_shares(struct sched_domain *sd)
+{
+}
+
+static inline void update_shares_locked(struct rq *rq, struct sched_domain *sd)
+{
+}
+
+#endif
+
+#endif
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+static void cfs_rq_set_shares(struct cfs_rq *cfs_rq, unsigned long shares)
+{
+#ifdef CONFIG_SMP
+	cfs_rq->shares = shares;
+#endif
+}
 #endif
 
 #include "sched_stats.h"
@@ -1501,26 +1662,14 @@ static int task_hot(struct task_struct *p, u64 now, struct sched_domain *sd);
 #define for_each_class(class) \
    for (class = sched_class_highest; class; class = class->next)
 
-static inline void inc_load(struct rq *rq, const struct task_struct *p)
-{
-	update_load_add(&rq->load, p->se.load.weight);
-}
-
-static inline void dec_load(struct rq *rq, const struct task_struct *p)
-{
-	update_load_sub(&rq->load, p->se.load.weight);
-}
-
-static void inc_nr_running(struct task_struct *p, struct rq *rq)
+static void inc_nr_running(struct rq *rq)
 {
 	rq->nr_running++;
-	inc_load(rq, p);
 }
 
-static void dec_nr_running(struct task_struct *p, struct rq *rq)
+static void dec_nr_running(struct rq *rq)
 {
 	rq->nr_running--;
-	dec_load(rq, p);
 }
 
 static void set_load_weight(struct task_struct *p)
@@ -1612,7 +1761,7 @@ static void activate_task(struct rq *rq, struct task_struct *p, int wakeup)
 		rq->nr_uninterruptible--;
 
 	enqueue_task(rq, p, wakeup);
-	inc_nr_running(p, rq);
+	inc_nr_running(rq);
 }
 
 /*
@@ -1624,7 +1773,7 @@ static void deactivate_task(struct rq *rq, struct task_struct *p, int sleep)
 		rq->nr_uninterruptible++;
 
 	dequeue_task(rq, p, sleep);
-	dec_nr_running(p, rq);
+	dec_nr_running(rq);
 }
 
 /**
@@ -1880,7 +2029,7 @@ static unsigned long source_load(int cpu, int type)
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long total = weighted_cpuload(cpu);
 
-	if (type == 0)
+	if (type == 0 || !sched_feat(LB_BIAS))
 		return total;
 
 	return min(rq->cpu_load[type-1], total);
@@ -1895,22 +2044,10 @@ static unsigned long target_load(int cpu, int type)
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long total = weighted_cpuload(cpu);
 
-	if (type == 0)
+	if (type == 0 || !sched_feat(LB_BIAS))
 		return total;
 
 	return max(rq->cpu_load[type-1], total);
-}
-
-/*
- * Return the average load per task on the cpu's run queue
- */
-static unsigned long cpu_avg_load_per_task(int cpu)
-{
-	struct rq *rq = cpu_rq(cpu);
-	unsigned long total = weighted_cpuload(cpu);
-	unsigned long n = rq->nr_running;
-
-	return n ? total / n : SCHED_LOAD_SCALE;
 }
 
 /*
@@ -2019,6 +2156,9 @@ static int sched_balance_self(int cpu, int flag)
 			sd = tmp;
 	}
 
+	if (sd)
+		update_shares(sd);
+
 	while (sd) {
 		cpumask_t span, tmpmask;
 		struct sched_group *group;
@@ -2084,6 +2224,22 @@ static int try_to_wake_up(struct task_struct *p, unsigned int state, int sync)
 
 	if (!sched_feat(SYNC_WAKEUPS))
 		sync = 0;
+
+#ifdef CONFIG_SMP
+	if (sched_feat(LB_WAKEUP_UPDATE)) {
+		struct sched_domain *sd;
+
+		this_cpu = raw_smp_processor_id();
+		cpu = task_cpu(p);
+
+		for_each_domain(this_cpu, sd) {
+			if (cpu_isset(cpu, sd->span)) {
+				update_shares(sd);
+				break;
+			}
+		}
+	}
+#endif
 
 	smp_wmb();
 	rq = task_rq_lock(p, &flags);
@@ -2277,7 +2433,7 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 		 * management (if any):
 		 */
 		p->sched_class->task_new(rq, p);
-		inc_nr_running(p, rq);
+		inc_nr_running(rq);
 	}
 	check_preempt_curr(rq, p);
 #ifdef CONFIG_SMP
@@ -2785,7 +2941,7 @@ balance_tasks(struct rq *this_rq, int this_cpu, struct rq *busiest,
 	      enum cpu_idle_type idle, int *all_pinned,
 	      int *this_best_prio, struct rq_iterator *iterator)
 {
-	int loops = 0, pulled = 0, pinned = 0, skip_for_load;
+	int loops = 0, pulled = 0, pinned = 0;
 	struct task_struct *p;
 	long rem_load_move = max_load_move;
 
@@ -2801,14 +2957,8 @@ balance_tasks(struct rq *this_rq, int this_cpu, struct rq *busiest,
 next:
 	if (!p || loops++ > sysctl_sched_nr_migrate)
 		goto out;
-	/*
-	 * To help distribute high priority tasks across CPUs we don't
-	 * skip a task if it will be the highest priority task (i.e. smallest
-	 * prio value) on its new queue regardless of its load weight
-	 */
-	skip_for_load = (p->se.load.weight >> 1) > rem_load_move +
-							 SCHED_LOAD_SCALE_FUZZ;
-	if ((skip_for_load && p->prio >= *this_best_prio) ||
+
+	if ((p->se.load.weight >> 1) > rem_load_move ||
 	    !can_migrate_task(p, busiest, this_cpu, sd, idle, &pinned)) {
 		p = iterator->next(iterator->arg);
 		goto next;
@@ -2939,6 +3089,7 @@ find_busiest_group(struct sched_domain *sd, int this_cpu,
 	max_load = this_load = total_load = total_pwr = 0;
 	busiest_load_per_task = busiest_nr_running = 0;
 	this_load_per_task = this_nr_running = 0;
+
 	if (idle == CPU_NOT_IDLE)
 		load_idx = sd->busy_idx;
 	else if (idle == CPU_NEWLY_IDLE)
@@ -2953,6 +3104,8 @@ find_busiest_group(struct sched_domain *sd, int this_cpu,
 		int __group_imb = 0;
 		unsigned int balance_cpu = -1, first_idle_cpu = 0;
 		unsigned long sum_nr_running, sum_weighted_load;
+		unsigned long sum_avg_load_per_task;
+		unsigned long avg_load_per_task;
 
 		local_group = cpu_isset(this_cpu, group->cpumask);
 
@@ -2961,6 +3114,8 @@ find_busiest_group(struct sched_domain *sd, int this_cpu,
 
 		/* Tally up the load of all CPUs in the group */
 		sum_weighted_load = sum_nr_running = avg_load = 0;
+		sum_avg_load_per_task = avg_load_per_task = 0;
+
 		max_cpu_load = 0;
 		min_cpu_load = ~0UL;
 
@@ -2994,6 +3149,8 @@ find_busiest_group(struct sched_domain *sd, int this_cpu,
 			avg_load += load;
 			sum_nr_running += rq->nr_running;
 			sum_weighted_load += weighted_cpuload(i);
+
+			sum_avg_load_per_task += cpu_avg_load_per_task(i);
 		}
 
 		/*
@@ -3015,7 +3172,20 @@ find_busiest_group(struct sched_domain *sd, int this_cpu,
 		avg_load = sg_div_cpu_power(group,
 				avg_load * SCHED_LOAD_SCALE);
 
-		if ((max_cpu_load - min_cpu_load) > SCHED_LOAD_SCALE)
+
+		/*
+		 * Consider the group unbalanced when the imbalance is larger
+		 * than the average weight of two tasks.
+		 *
+		 * APZ: with cgroup the avg task weight can vary wildly and
+		 *      might not be a suitable number - should we keep a
+		 *      normalized nr_running number somewhere that negates
+		 *      the hierarchy?
+		 */
+		avg_load_per_task = sg_div_cpu_power(group,
+				sum_avg_load_per_task * SCHED_LOAD_SCALE);
+
+		if ((max_cpu_load - min_cpu_load) > 2*avg_load_per_task)
 			__group_imb = 1;
 
 		group_capacity = group->__cpu_power / SCHED_LOAD_SCALE;
@@ -3156,9 +3326,9 @@ small_imbalance:
 			if (busiest_load_per_task > this_load_per_task)
 				imbn = 1;
 		} else
-			this_load_per_task = SCHED_LOAD_SCALE;
+			this_load_per_task = cpu_avg_load_per_task(this_cpu);
 
-		if (max_load - this_load + SCHED_LOAD_SCALE_FUZZ >=
+		if (max_load - this_load + 2*busiest_load_per_task >=
 					busiest_load_per_task * imbn) {
 			*imbalance = busiest_load_per_task;
 			return busiest;
@@ -3284,6 +3454,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 	schedstat_inc(sd, lb_count[idle]);
 
 redo:
+	update_shares(sd);
 	group = find_busiest_group(sd, this_cpu, &imbalance, idle, &sd_idle,
 				   cpus, balance);
 
@@ -3386,8 +3557,9 @@ redo:
 
 	if (!ld_moved && !sd_idle && sd->flags & SD_SHARE_CPUPOWER &&
 	    !test_sd_parent(sd, SD_POWERSAVINGS_BALANCE))
-		return -1;
-	return ld_moved;
+		ld_moved = -1;
+
+	goto out;
 
 out_balanced:
 	schedstat_inc(sd, lb_balanced[idle]);
@@ -3402,8 +3574,13 @@ out_one_pinned:
 
 	if (!sd_idle && sd->flags & SD_SHARE_CPUPOWER &&
 	    !test_sd_parent(sd, SD_POWERSAVINGS_BALANCE))
-		return -1;
-	return 0;
+		ld_moved = -1;
+	else
+		ld_moved = 0;
+out:
+	if (ld_moved)
+		update_shares(sd);
+	return ld_moved;
 }
 
 /*
@@ -3438,6 +3615,7 @@ load_balance_newidle(int this_cpu, struct rq *this_rq, struct sched_domain *sd,
 
 	schedstat_inc(sd, lb_count[CPU_NEWLY_IDLE]);
 redo:
+	update_shares_locked(this_rq, sd);
 	group = find_busiest_group(sd, this_cpu, &imbalance, CPU_NEWLY_IDLE,
 				   &sd_idle, cpus, NULL);
 	if (!group) {
@@ -3481,6 +3659,7 @@ redo:
 	} else
 		sd->nr_balance_failed = 0;
 
+	update_shares_locked(this_rq, sd);
 	return ld_moved;
 
 out_balanced:
@@ -4591,10 +4770,8 @@ void set_user_nice(struct task_struct *p, long nice)
 		goto out_unlock;
 	}
 	on_rq = p->se.on_rq;
-	if (on_rq) {
+	if (on_rq)
 		dequeue_task(rq, p, 0);
-		dec_load(rq, p);
-	}
 
 	p->static_prio = NICE_TO_PRIO(nice);
 	set_load_weight(p);
@@ -4604,7 +4781,6 @@ void set_user_nice(struct task_struct *p, long nice)
 
 	if (on_rq) {
 		enqueue_task(rq, p, 0);
-		inc_load(rq, p);
 		/*
 		 * If the task increased its priority or is running and
 		 * lowered its priority, then reschedule its CPU:
@@ -8350,13 +8526,10 @@ void sched_move_task(struct task_struct *tsk)
 #endif /* CONFIG_GROUP_SCHED */
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
-static void set_se_shares(struct sched_entity *se, unsigned long shares)
+static void __set_se_shares(struct sched_entity *se, unsigned long shares)
 {
 	struct cfs_rq *cfs_rq = se->cfs_rq;
-	struct rq *rq = cfs_rq->rq;
 	int on_rq;
-
-	spin_lock_irq(&rq->lock);
 
 	on_rq = se->on_rq;
 	if (on_rq)
@@ -8367,8 +8540,17 @@ static void set_se_shares(struct sched_entity *se, unsigned long shares)
 
 	if (on_rq)
 		enqueue_entity(cfs_rq, se, 0);
+}
 
-	spin_unlock_irq(&rq->lock);
+static void set_se_shares(struct sched_entity *se, unsigned long shares)
+{
+	struct cfs_rq *cfs_rq = se->cfs_rq;
+	struct rq *rq = cfs_rq->rq;
+	unsigned long flags;
+
+	spin_lock_irqsave(&rq->lock, flags);
+	__set_se_shares(se, shares);
+	spin_unlock_irqrestore(&rq->lock, flags);
 }
 
 static DEFINE_MUTEX(shares_mutex);
@@ -8407,8 +8589,13 @@ int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	 * w/o tripping rebalance_share or load_balance_fair.
 	 */
 	tg->shares = shares;
-	for_each_possible_cpu(i)
+	for_each_possible_cpu(i) {
+		/*
+		 * force a rebalance
+		 */
+		cfs_rq_set_shares(tg->cfs_rq[i], 0);
 		set_se_shares(tg->se[i], shares);
+	}
 
 	/*
 	 * Enable load balance activity on this group, by inserting it back on

@@ -161,7 +161,7 @@ static inline struct rt_bandwidth *sched_rt_bandwidth(struct rt_rq *rt_rq)
 	return &rt_rq->tg->rt_bandwidth;
 }
 
-#else
+#else /* !CONFIG_RT_GROUP_SCHED */
 
 static inline u64 sched_rt_runtime(struct rt_rq *rt_rq)
 {
@@ -226,7 +226,7 @@ static inline struct rt_bandwidth *sched_rt_bandwidth(struct rt_rq *rt_rq)
 	return &def_rt_bandwidth;
 }
 
-#endif
+#endif /* CONFIG_RT_GROUP_SCHED */
 
 #ifdef CONFIG_SMP
 static int do_balance_runtime(struct rt_rq *rt_rq)
@@ -336,7 +336,6 @@ static void disable_runtime(struct rq *rq)
 
 static void __enable_runtime(struct rq *rq)
 {
-	struct root_domain *rd = rq->rd;
 	struct rt_rq *rt_rq;
 
 	if (unlikely(!scheduler_running))
@@ -375,12 +374,12 @@ static int balance_runtime(struct rt_rq *rt_rq)
 
 	return more;
 }
-#else
+#else /* !CONFIG_SMP */
 static inline int balance_runtime(struct rt_rq *rt_rq)
 {
 	return 0;
 }
-#endif
+#endif /* CONFIG_SMP */
 
 static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 {
@@ -671,6 +670,8 @@ static void enqueue_task_rt(struct rq *rq, struct task_struct *p, int wakeup)
 		rt_se->timeout = 0;
 
 	enqueue_rt_entity(rt_se);
+
+	inc_cpu_load(rq, p->se.load.weight);
 }
 
 static void dequeue_task_rt(struct rq *rq, struct task_struct *p, int sleep)
@@ -679,6 +680,8 @@ static void dequeue_task_rt(struct rq *rq, struct task_struct *p, int sleep)
 
 	update_curr_rt(rq);
 	dequeue_rt_entity(rt_se);
+
+	dec_cpu_load(rq, p->se.load.weight);
 }
 
 /*
@@ -689,7 +692,6 @@ static
 void requeue_rt_entity(struct rt_rq *rt_rq, struct sched_rt_entity *rt_se)
 {
 	struct rt_prio_array *array = &rt_rq->active;
-	struct list_head *queue = array->queue + rt_se_prio(rt_se);
 
 	if (on_rt_rq(rt_se)) {
 		list_del_init(&rt_se->run_list);
@@ -1470,4 +1472,4 @@ static void print_rt_stats(struct seq_file *m, int cpu)
 		print_rt_rq(m, cpu, rt_rq);
 	rcu_read_unlock();
 }
-#endif
+#endif /* CONFIG_SCHED_DEBUG */
