@@ -16,7 +16,7 @@
 
 struct sbus_dma *dma_chain;
 
-void __init init_one_dvma(struct sbus_dma *dma, int num_dma)
+static void __init init_one_dvma(struct sbus_dma *dma, int num_dma)
 {
 	printk("dma%d: ", num_dma);
 	
@@ -101,36 +101,3 @@ void __init dvma_init(struct sbus_bus *sbus)
 		init_one_dvma(dma, num_dma++);
 	}
 }
-
-#ifdef CONFIG_SUN4
-
-#include <asm/sun4paddr.h>
-
-void __init sun4_dvma_init(void)
-{
-	struct sbus_dma *dma;
-	struct resource r;
-
-	if(sun4_dma_physaddr) {
-		dma = kmalloc(sizeof(struct sbus_dma), GFP_ATOMIC);
-
-		/* No SBUS */
-		dma->sdev = NULL;
-
-		/* Only one DMA device */
-		dma_chain = dma;
-
-		memset(&r, 0, sizeof(r));
-		r.start = sun4_dma_physaddr;
-		dma->regs = sbus_ioremap(&r, 0, PAGE_SIZE, "dma");
-
-		/* No prom node */
-		dma->node = 0x0;
-
-		init_one_dvma(dma, 0);
-	} else {
-	  	dma_chain = NULL;
-	}
-}
-
-#endif

@@ -30,7 +30,6 @@ prom_nbgetchar(void)
 	spin_lock_irqsave(&prom_lock, flags);
 	switch(prom_vers) {
 	case PROM_V0:
-	case PROM_SUN4:
 		i = (*(romvec->pv_nbgetchar))();
 		break;
 	case PROM_V2:
@@ -63,7 +62,6 @@ prom_nbputchar(char c)
 	spin_lock_irqsave(&prom_lock, flags);
 	switch(prom_vers) {
 	case PROM_V0:
-	case PROM_SUN4:
 		i = (*(romvec->pv_nbputchar))(c);
 		break;
 	case PROM_V2:
