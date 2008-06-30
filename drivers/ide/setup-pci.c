@@ -288,6 +288,7 @@ static int ide_pci_check_iomem(struct pci_dev *dev, const struct ide_port_info *
  *	@d: IDE port info
  *	@port: port number
  *	@irq: PCI IRQ
+ *	@hw: hw_regs_t instance corresponding to this port
  *
  *	Perform the initial set up for the hardware interface structure. This
  *	is done per interface port rather than per PCI device. There may be
@@ -298,11 +299,11 @@ static int ide_pci_check_iomem(struct pci_dev *dev, const struct ide_port_info *
 
 static ide_hwif_t *ide_hwif_configure(struct pci_dev *dev,
 				      const struct ide_port_info *d,
-				      unsigned int port, int irq)
+				      unsigned int port, int irq,
+				      hw_regs_t *hw)
 {
 	unsigned long ctl = 0, base = 0;
 	ide_hwif_t *hwif;
-	struct hw_regs_s hw;
 
 	if ((d->host_flags & IDE_HFLAG_ISA_PORTS) == 0) {
 		if (ide_pci_check_iomem(dev, d, 2 * port) ||
@@ -326,17 +327,17 @@ static ide_hwif_t *ide_hwif_configure(struct pci_dev *dev,
 		return NULL;
 	}
 
+	memset(hw, 0, sizeof(*hw));
+	hw->irq = irq;
+	hw->dev = &dev->dev;
+	hw->chipset = d->chipset ? d->chipset : ide_pci;
+	ide_std_init_ports(hw, base, ctl | 2);
+
 	hwif = ide_find_port_slot(d);
 	if (hwif == NULL)
 		return NULL;
 
-	memset(&hw, 0, sizeof(hw));
-	hw.irq = irq;
-	hw.dev = &dev->dev;
-	hw.chipset = d->chipset ? d->chipset : ide_pci;
-	ide_std_init_ports(&hw, base, ctl | 2);
-
-	ide_init_port_hw(hwif, &hw);
+	hwif->chipset = hw->chipset;
 
 	return hwif;
 }
@@ -429,6 +430,8 @@ out:
  *	@d: IDE port info
  *	@pciirq: IRQ line
  *	@idx: ATA index table to update
+ *	@hw: hw_regs_t instances corresponding to this PCI IDE device
+ *	@hws: hw_regs_t pointers table to update
  *
  *	Scan the interfaces attached to this device and do any
  *	necessary per port setup. Attach the devices and ask the
@@ -439,7 +442,8 @@ out:
  *	where the chipset setup is not the default PCI IDE one.
  */
 
-void ide_pci_setup_ports(struct pci_dev *dev, const struct ide_port_info *d, int pciirq, u8 *idx)
+void ide_pci_setup_ports(struct pci_dev *dev, const struct ide_port_info *d,
+			 int pciirq, u8 *idx, hw_regs_t *hw, hw_regs_t **hws)
 {
 	int channels = (d->host_flags & IDE_HFLAG_SINGLE) ? 1 : 2, port;
 	ide_hwif_t *hwif;
@@ -458,10 +462,11 @@ void ide_pci_setup_ports(struct pci_dev *dev, const struct ide_port_info *d, int
 			continue;	/* port not enabled */
 		}
 
-		hwif = ide_hwif_configure(dev, d, port, pciirq);
+		hwif = ide_hwif_configure(dev, d, port, pciirq, hw + port);
 		if (hwif == NULL)
 			continue;
 
+		*(hws + port) = hw + port;
 		*(idx + port) = hwif->index;
 	}
 }
@@ -536,15 +541,16 @@ out:
 int ide_setup_pci_device(struct pci_dev *dev, const struct ide_port_info *d)
 {
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
+	hw_regs_t hw[4], *hws[] = { NULL, NULL, NULL, NULL };
 	int ret;
 
 	ret = do_ide_setup_pci_device(dev, d, 1);
 
 	if (ret >= 0) {
 		/* FIXME: silent failure can happen */
-		ide_pci_setup_ports(dev, d, ret, &idx[0]);
+		ide_pci_setup_ports(dev, d, ret, &idx[0], &hw[0], &hws[0]);
 
-		ide_device_add(idx, d);
+		ide_device_add(idx, d, hws);
 	}
 
 	return ret;
@@ -556,6 +562,7 @@ int ide_setup_pci_devices(struct pci_dev *dev1, struct pci_dev *dev2,
 {
 	struct pci_dev *pdev[] = { dev1, dev2 };
 	int ret, i;
+	hw_regs_t hw[4], *hws[] = { NULL, NULL, NULL, NULL };
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 
 	for (i = 0; i < 2; i++) {
@@ -569,10 +576,11 @@ int ide_setup_pci_devices(struct pci_dev *dev1, struct pci_dev *dev2,
 			goto out;
 
 		/* FIXME: silent failure can happen */
-		ide_pci_setup_ports(pdev[i], d, ret, &idx[i*2]);
+		ide_pci_setup_ports(pdev[i], d, ret, &idx[i*2], &hw[i*2],
+				    &hws[i*2]);
 	}
 
-	ide_device_add(idx, d);
+	ide_device_add(idx, d, hws);
 out:
 	return ret;
 }
