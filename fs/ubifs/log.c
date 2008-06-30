@@ -121,8 +121,8 @@ static inline long long empty_log_bytes(const struct ubifs_info *c)
 {
 	long long h, t;
 
-	h = c->lhead_lnum * c->leb_size + c->lhead_offs;
-	t = c->ltail_lnum * c->leb_size;
+	h = (long long)c->lhead_lnum * c->leb_size + c->lhead_offs;
+	t = (long long)c->ltail_lnum * c->leb_size;
 
 	if (h >= t)
 		return c->log_bytes - h + t;

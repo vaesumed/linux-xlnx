@@ -555,8 +555,7 @@ static int init_constants_late(struct ubifs_info *c)
 	int tmp, err;
 	uint64_t tmp64;
 
-	c->main_bytes = c->main_lebs * c->leb_size;
-
+	c->main_bytes = (long long)c->main_lebs * c->leb_size;
 	c->max_znode_sz = sizeof(struct ubifs_znode) +
 				c->fanout * sizeof(struct ubifs_zbranch);
 
@@ -642,7 +641,7 @@ static int init_constants_late(struct ubifs_info *c)
 	 * Review 'ubifs_calc_available()' if changing this calculation.
 	 */
 	tmp64 = c->main_lebs - 2;
-	tmp64 *= c->leb_size - c->dark_wm;
+	tmp64 *= (uint64_t)c->leb_size - c->dark_wm;
 	tmp64 = ubifs_reported_space(c, tmp64);
 	c->block_cnt = tmp64 >> UBIFS_BLOCK_SHIFT;
 
@@ -925,7 +924,7 @@ static int mount_ubifs(struct ubifs_info *c)
 {
 	struct super_block *sb = c->vfs_sb;
 	int err, mounted_read_only = (sb->s_flags & MS_RDONLY);
-	unsigned long long x;
+	long long x;
 	size_t sz;
 
 	err = init_constants_early(c);
@@ -1130,10 +1129,10 @@ static int mount_ubifs(struct ubifs_info *c)
 	ubifs_msg("minimal I/O unit size:   %d bytes", c->min_io_size);
 	ubifs_msg("logical eraseblock size: %d bytes (%d KiB)",
 		  c->leb_size, c->leb_size / 1024);
-	x = (unsigned long long)c->main_lebs * c->leb_size;
+	x = (long long)c->main_lebs * c->leb_size;
 	ubifs_msg("file system size:        %lld bytes (%lld KiB, %lld MiB, "
 		  "%d LEBs)", x, x >> 10, x >> 20, c->main_lebs);
-	x = (unsigned long long)c->log_lebs * c->leb_size + c->max_bud_bytes;
+	x = (long long)c->log_lebs * c->leb_size + c->max_bud_bytes;
 	ubifs_msg("journal size:            %lld bytes (%lld KiB, %lld MiB, "
 		  "%d LEBs)", x, x >> 10, x >> 20,
 		  c->log_lebs + c->max_bud_cnt);
@@ -1170,7 +1169,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	dbg_msg("first main LEB:         %d", c->main_first);
 	dbg_msg("dead watermark:         %d", c->dead_wm);
 	dbg_msg("dark watermark:         %d", c->dark_wm);
-	x = c->main_lebs * c->dark_wm;
+	x = (long long)c->main_lebs * c->dark_wm;
 	dbg_msg("max. dark space:        %lld (%lld KiB, %lld MiB)",
 		x, x >> 10, x >> 20);
 	dbg_msg("maximum bud bytes:      %lld (%lld KiB, %lld MiB)",

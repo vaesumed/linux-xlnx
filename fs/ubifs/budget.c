@@ -283,7 +283,8 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
  */
 long long ubifs_calc_available(const struct ubifs_info *c, int min_idx_lebs)
 {
-	long long available, subtract_lebs;
+	int subtract_lebs;
+	long long available;
 
 	/*
 	 * Force the amount available to the total size reported if the used
@@ -319,7 +320,7 @@ long long ubifs_calc_available(const struct ubifs_info *c, int min_idx_lebs)
 	/* We also reserve one LEB for deletions, which bypass budgeting */
 	subtract_lebs += 1;
 
-	available -= subtract_lebs * c->leb_size;
+	available -= (long long)subtract_lebs * c->leb_size;
 
 	/* Subtract the dead space which is not available for use */
 	available -= c->lst.total_dead;
