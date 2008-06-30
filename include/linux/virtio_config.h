@@ -15,6 +15,12 @@
 /* We've given up on this device. */
 #define VIRTIO_CONFIG_S_FAILED		0x80
 
+/* Some virtio feature bits (currently bits 28 through 31) are reserved for the
+ * transport being used (eg. virtio_ring), the rest are per-device feature
+ * bits. */
+#define VIRTIO_TRANSPORT_F_START	28
+#define VIRTIO_TRANSPORT_F_END		32
+
 /* Do we get callbacks when the ring is completely used, even if we've
  * suppressed them? */
 #define VIRTIO_F_NOTIFY_ON_EMPTY	24
@@ -52,9 +58,10 @@
  * @get_features: get the array of feature bits for this device.
  *	vdev: the virtio_device
  *	Returns the first 32 feature bits (all we currently need).
- * @set_features: confirm what device features we'll be using.
+ * @finalize_features: confirm what device features we'll be using.
  *	vdev: the virtio_device
- *	feature: the first 32 feature bits
+ *	This gives the final feature bits for the device: it can change
+ *	the dev->feature bits if it wants.
  */
 struct virtio_config_ops
 {
@@ -70,7 +77,7 @@ struct virtio_config_ops
 				     void (*callback)(struct virtqueue *));
 	void (*del_vq)(struct virtqueue *vq);
 	u32 (*get_features)(struct virtio_device *vdev);
-	void (*set_features)(struct virtio_device *vdev, u32 features);
+	void (*finalize_features)(struct virtio_device *vdev);
 };
 
 /* If driver didn't advertise the feature, it will never appear. */
