@@ -5,8 +5,6 @@
  *	Authors:
  *	Pedro Roque		<roque@di.fc.ul.pt>
  *
- *	$Id: ip6_output.c,v 1.34 2002/02/01 22:01:04 davem Exp $
- *
  *	Based on linux/net/ipv4/ip_output.c
  *
  *	This program is free software; you can redistribute it and/or
@@ -408,6 +406,9 @@ int ip6_forward(struct sk_buff *skb)
 
 	if (ipv6_devconf.forwarding == 0)
 		goto error;
+
+	if (skb_warn_if_lro(skb))
+		goto drop;
 
 	if (!xfrm6_policy_check(NULL, XFRM_POLICY_FWD, skb)) {
 		IP6_INC_STATS(ip6_dst_idev(dst), IPSTATS_MIB_INDISCARDS);
