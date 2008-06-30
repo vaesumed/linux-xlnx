@@ -1030,10 +1030,6 @@ pmac_ide_setup_device(pmac_ide_hwif_t *pmif, ide_hwif_t *hwif, hw_regs_t *hw)
 	/* XXX FIXME: Media bay stuff need re-organizing */
 	if (np->parent && np->parent->name
 	    && strcasecmp(np->parent->name, "media-bay") == 0) {
-#ifdef CONFIG_PMAC_MEDIABAY
-		media_bay_set_ide_infos(np->parent, pmif->regbase, pmif->irq,
-					hwif);
-#endif /* CONFIG_PMAC_MEDIABAY */
 		pmif->mediabay = 1;
 		if (!bidp)
 			pmif->aapl_bus_id = 1;
@@ -1067,7 +1063,7 @@ pmac_ide_setup_device(pmac_ide_hwif_t *pmif, ide_hwif_t *hwif, hw_regs_t *hw)
 
 	if (pmif->mediabay) {
 #ifdef CONFIG_PMAC_MEDIABAY
-		if (check_media_bay_by_base(pmif->regbase, MB_CD)) {
+		if (check_media_bay(np->parent, MB_CD) != -ENODEV) {
 #else
 		if (1) {
 #endif
@@ -1079,6 +1075,15 @@ pmac_ide_setup_device(pmac_ide_hwif_t *pmif, ide_hwif_t *hwif, hw_regs_t *hw)
 	idx[0] = hwif->index;
 
 	ide_device_add(idx, &d);
+
+	if (pmif->mediabay) {
+		hwif->drives[0].noprobe = 0;
+		hwif->drives[1].noprobe = 0;
+#ifdef CONFIG_PMAC_MEDIABAY
+		media_bay_set_ide_infos(np->parent, pmif->regbase, pmif->irq,
+					hwif);
+#endif
+	}
 
 	return 0;
 }
