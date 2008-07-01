@@ -607,7 +607,7 @@ static inline void hilse_setup_input(hil_mlc *mlc, const struct hilse_node *node
 	do_gettimeofday(&(mlc->instart));
 	mlc->icount = 15;
 	memset(mlc->ipacket, 0, 16 * sizeof(hil_packet));
-	BUG_ON(down_trylock(&mlc->isem));
+	BUG_ON(!down_try(&mlc->isem));
 }
 
 #ifdef HIL_MLC_DEBUG
@@ -694,7 +694,7 @@ static int hilse_donode(hil_mlc *mlc)
 	out2:
 		write_unlock_irqrestore(&mlc->lock, flags);
 
-		if (down_trylock(&mlc->osem)) {
+		if (!down_try(&mlc->osem)) {
 			nextidx = HILSEN_DOZE;
 			break;
 		}
