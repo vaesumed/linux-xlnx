@@ -89,6 +89,10 @@ static long setup_sigcontext(struct sigcontext __user *sc, struct pt_regs *regs,
 #endif
 	unsigned long msr = regs->msr;
 	long err = 0;
+#ifdef CONFIG_VSX
+	double buf[FP_REGS_SIZE];
+	int i;
+#endif
 
 	flush_fp_to_thread(current);
 
@@ -112,11 +116,37 @@ static long setup_sigcontext(struct sigcontext __user *sc, struct pt_regs *regs,
 #else /* CONFIG_ALTIVEC */
 	err |= __put_user(0, &sc->v_regs);
 #endif /* CONFIG_ALTIVEC */
+	flush_fp_to_thread(current);
+#ifdef CONFIG_VSX
+	/* Copy FP to local buffer then write that out */
+	for (i = 0; i < 32 ; i++)
+		buf[i] = current->thread.TS_FPR(i);
+	memcpy(&buf[i], &current->thread.fpscr, sizeof(double));
+	err |= __copy_to_user(&sc->fp_regs, buf, FP_REGS_SIZE);
+	/*
+	 * Copy VSX low doubleword to local buffer for formatting,
+	 * then out to userspace.  Update v_regs to point after the
+	 * VMX data.
+	 */
+	if (current->thread.used_vsr) {
+		flush_vsx_to_thread(current);
+		v_regs += ELF_NVRREG;
+		for (i = 0; i < 32 ; i++)
+			buf[i] = current->thread.fpr[i][TS_VSRLOWOFFSET];
+		err |= __copy_to_user(v_regs, buf, 32 * sizeof(double));
+		/* set MSR_VSX in the MSR value in the frame to
+		 * indicate that sc->vs_reg) contains valid data.
+		 */
+		msr |= MSR_VSX;
+	}
+#else /* CONFIG_VSX */
+	/* copy fpr regs and fpscr */
+	err |= __copy_to_user(&sc->fp_regs, &current->thread.fpr, FP_REGS_SIZE);
+#endif /* CONFIG_VSX */
 	err |= __put_user(&sc->gp_regs, &sc->regs);
 	WARN_ON(!FULL_REGS(regs));
 	err |= __copy_to_user(&sc->gp_regs, regs, GP_REGS_SIZE);
 	err |= __put_user(msr, &sc->gp_regs[PT_MSR]);
-	err |= __copy_to_user(&sc->fp_regs, &current->thread.fpr, FP_REGS_SIZE);
 	err |= __put_user(signr, &sc->signal);
 	err |= __put_user(handler, &sc->handler);
 	if (set != NULL)
@@ -135,31 +165,34 @@ static long restore_sigcontext(struct pt_regs *regs, sigset_t *set, int sig,
 #ifdef CONFIG_ALTIVEC
 	elf_vrreg_t __user *v_regs;
 #endif
+#ifdef CONFIG_VSX
+	double buf[FP_REGS_SIZE];
+#endif
 	unsigned long err = 0;
 	unsigned long save_r13 = 0;
-	elf_greg_t *gregs = (elf_greg_t *)regs;
 	unsigned long msr;
-	int i;
 
 	/* If this is not a signal return, we preserve the TLS in r13 */
 	if (!sig)
 		save_r13 = regs->gpr[13];
 
-	/* copy everything before MSR */
-	err |= __copy_from_user(regs, &sc->gp_regs,
-				PT_MSR*sizeof(unsigned long));
-
+	/* copy the GPRs */
+	err |= __copy_from_user(regs->gpr, sc->gp_regs, sizeof(regs->gpr));
+	err |= __get_user(regs->nip, &sc->gp_regs[PT_NIP]);
 	/* get MSR separately, transfer the LE bit if doing signal return */
 	err |= __get_user(msr, &sc->gp_regs[PT_MSR]);
 	if (sig)
 		regs->msr = (regs->msr & ~MSR_LE) | (msr & MSR_LE);
-
+	err |= __get_user(regs->orig_gpr3, &sc->gp_regs[PT_ORIG_R3]);
+	err |= __get_user(regs->ctr, &sc->gp_regs[PT_CTR]);
+	err |= __get_user(regs->link, &sc->gp_regs[PT_LNK]);
+	err |= __get_user(regs->xer, &sc->gp_regs[PT_XER]);
+	err |= __get_user(regs->ccr, &sc->gp_regs[PT_CCR]);
 	/* skip SOFTE */
-	for (i = PT_MSR+1; i <= PT_RESULT; i++) {
-		if (i == PT_SOFTE)
-			continue;
-		err |= __get_user(gregs[i], &sc->gp_regs[i]);
-	}
+	err |= __get_user(regs->trap, &sc->gp_regs[PT_TRAP]);
+	err |= __get_user(regs->dar, &sc->gp_regs[PT_DAR]);
+	err |= __get_user(regs->dsisr, &sc->gp_regs[PT_DSISR]);
+	err |= __get_user(regs->result, &sc->gp_regs[PT_RESULT]);
 
 	if (!sig)
 		regs->gpr[13] = save_r13;
@@ -180,9 +213,7 @@ static long restore_sigcontext(struct pt_regs *regs, sigset_t *set, int sig,
 	 * This has to be done before copying stuff into current->thread.fpr/vr
 	 * for the reasons explained in the previous comment.
 	 */
-	regs->msr &= ~(MSR_FP | MSR_FE0 | MSR_FE1 | MSR_VEC);
-
-	err |= __copy_from_user(&current->thread.fpr, &sc->fp_regs, FP_REGS_SIZE);
+	regs->msr &= ~(MSR_FP | MSR_FE0 | MSR_FE1 | MSR_VEC | MSR_VSX);
 
 #ifdef CONFIG_ALTIVEC
 	err |= __get_user(v_regs, &sc->v_regs);
@@ -202,7 +233,31 @@ static long restore_sigcontext(struct pt_regs *regs, sigset_t *set, int sig,
 	else
 		current->thread.vrsave = 0;
 #endif /* CONFIG_ALTIVEC */
+#ifdef CONFIG_VSX
+	/* restore floating point */
+	err |= __copy_from_user(buf, &sc->fp_regs, FP_REGS_SIZE);
+	if (err)
+		return err;
+	for (i = 0; i < 32 ; i++)
+		current->thread.TS_FPR(i) = buf[i];
+	memcpy(&current->thread.fpscr, &buf[i], sizeof(double));
 
+	/*
+	 * Get additional VSX data. Update v_regs to point after the
+	 * VMX data.  Copy VSX low doubleword from userspace to local
+	 * buffer for formatting, then into the taskstruct.
+	 */
+	v_regs += ELF_NVRREG;
+	if ((msr & MSR_VSX) != 0)
+		err |= __copy_from_user(buf, v_regs, 32 * sizeof(double));
+	else
+		memset(buf, 0, 32 * sizeof(double));
+
+	for (i = 0; i < 32 ; i++)
+		current->thread.fpr[i][TS_VSRLOWOFFSET] = buf[i];
+#else
+	err |= __copy_from_user(&current->thread.fpr, &sc->fp_regs, FP_REGS_SIZE);
+#endif
 	return err;
 }
 

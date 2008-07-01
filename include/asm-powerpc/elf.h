@@ -109,6 +109,7 @@ typedef elf_gregset_t32 compat_elf_gregset_t;
 #ifdef __powerpc64__
 # define ELF_NVRREG32	33	/* includes vscr & vrsave stuffed together */
 # define ELF_NVRREG	34	/* includes vscr & vrsave in split vectors */
+# define ELF_NVSRHALFREG 32	/* Half the vsx registers */
 # define ELF_GREG_TYPE	elf_greg_t64
 #else
 # define ELF_NEVRREG	34	/* includes acc (as 2) */
@@ -158,6 +159,7 @@ typedef __vector128 elf_vrreg_t;
 typedef elf_vrreg_t elf_vrregset_t[ELF_NVRREG];
 #ifdef __powerpc64__
 typedef elf_vrreg_t elf_vrregset_t32[ELF_NVRREG32];
+typedef elf_fpreg_t elf_vsrreghalf_t32[ELF_NVSRHALFREG];
 #endif
 
 #ifdef __KERNEL__
@@ -219,12 +221,10 @@ extern int dump_task_fpu(struct task_struct *, elf_fpregset_t *);
 typedef elf_vrregset_t elf_fpxregset_t;
 
 #ifdef CONFIG_ALTIVEC
-extern int dump_task_altivec(struct task_struct *, elf_vrregset_t *vrregs);
-#define ELF_CORE_COPY_XFPREGS(tsk, regs) dump_task_altivec(tsk, regs)
+extern int dump_task_vector(struct task_struct *, elf_vrregset_t *vrregs);
+#define ELF_CORE_COPY_XFPREGS(tsk, regs) dump_task_vector(tsk, regs)
 #define ELF_CORE_XFPREG_TYPE NT_PPC_VMX
 #endif
-
-#endif /* __KERNEL__ */
 
 /* ELF_HWCAP yields a mask that user programs can use to figure out what
    instruction set this cpu supports.  This could be done in userspace,
@@ -242,8 +242,6 @@ extern int dump_task_altivec(struct task_struct *, elf_vrregset_t *vrregs);
 	_r->gpr[2] = load_addr; 		\
 } while (0)
 #endif /* __powerpc64__ */
-
-#ifdef __KERNEL__
 
 #ifdef __powerpc64__
 # define SET_PERSONALITY(ex, ibcs2)				\
@@ -272,8 +270,6 @@ do {								\
 # define SET_PERSONALITY(ex, ibcs2) set_personality((ibcs2)?PER_SVR4:PER_LINUX)
 #endif /* __powerpc64__ */
 
-#endif /* __KERNEL__ */
-
 extern int dcache_bsize;
 extern int icache_bsize;
 extern int ucache_bsize;
@@ -284,6 +280,8 @@ struct linux_binprm;
 extern int arch_setup_additional_pages(struct linux_binprm *bprm,
 				       int executable_stack);
 #define VDSO_AUX_ENT(a,b) NEW_AUX_ENT(a,b);
+
+#endif /* __KERNEL__ */
 
 /*
  * The requirements here are:
@@ -422,6 +420,8 @@ do {									\
 /* Keep this the last entry.  */
 #define R_PPC64_NUM		107
 
+#ifdef  __KERNEL__
+
 #ifdef CONFIG_SPU_BASE
 /* Notes used in ET_CORE. Note name is "SPU/<fd>/<filename>". */
 #define NT_SPU		1
@@ -429,5 +429,7 @@ do {									\
 #define ARCH_HAVE_EXTRA_ELF_NOTES
 
 #endif /* CONFIG_SPU_BASE */
+
+#endif /* __KERNEL */
 
 #endif /* _ASM_POWERPC_ELF_H */
