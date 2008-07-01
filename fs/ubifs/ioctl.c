@@ -192,8 +192,6 @@ long ubifs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 #ifdef CONFIG_COMPAT
 long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	int err;
-
 	switch (cmd) {
 	case FS_IOC32_GETFLAGS:
 		cmd = FS_IOC_GETFLAGS;
@@ -204,11 +202,6 @@ long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	default:
 		return -ENOIOCTLCMD;
 	}
-
-	lock_kernel();
-	err = ubifs_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
-	unlock_kernel();
-
-	return err;
+	return ubifs_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif
