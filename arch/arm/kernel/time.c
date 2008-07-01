@@ -130,7 +130,9 @@ static const struct leds_evt_name evt_names[] = {
 	{ "red",   led_red_on,   led_red_off   },
 };
 
-static ssize_t leds_store(struct sys_device *dev, const char *buf, size_t size)
+static ssize_t leds_store(struct sys_device *dev,
+			struct sysdev_attribute *attr,
+			const char *buf, size_t size)
 {
 	int ret = -EINVAL, len = strcspn(buf, " ");
 
@@ -432,13 +434,15 @@ void timer_dyn_reprogram(void)
 	spin_unlock_irqrestore(&dyn_tick->lock, flags);
 }
 
-static ssize_t timer_show_dyn_tick(struct sys_device *dev, char *buf)
+static ssize_t timer_show_dyn_tick(struct sys_device *dev,
+			struct sysdev_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%i\n",
 		       (system_timer->dyn_tick->state & DYN_TICK_ENABLED) >> 1);
 }
 
-static ssize_t timer_set_dyn_tick(struct sys_device *dev, const char *buf,
+static ssize_t timer_set_dyn_tick(struct sys_device *dev,
+			struct sysdev_attribute *attr, const char *buf,
 				  size_t count)
 {
 	unsigned int enable = simple_strtoul(buf, NULL, 2);
