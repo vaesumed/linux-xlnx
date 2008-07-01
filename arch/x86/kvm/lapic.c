@@ -32,6 +32,7 @@
 #include <asm/current.h>
 #include <asm/apicdef.h>
 #include <asm/atomic.h>
+#include "kvm_cache_regs.h"
 #include "irq.h"
 
 #define PRId64 "d"
@@ -356,8 +357,9 @@ static int __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
 	case APIC_DM_SMI:
 		printk(KERN_DEBUG "Ignoring guest SMI\n");
 		break;
+
 	case APIC_DM_NMI:
-		printk(KERN_DEBUG "Ignoring guest NMI\n");
+		kvm_inject_nmi(vcpu);
 		break;
 
 	case APIC_DM_INIT:
@@ -557,8 +559,7 @@ static void __report_tpr_access(struct kvm_lapic *apic, bool write)
 	struct kvm_run *run = vcpu->run;
 
 	set_bit(KVM_REQ_REPORT_TPR_ACCESS, &vcpu->requests);
-	kvm_x86_ops->cache_regs(vcpu);
-	run->tpr_access.rip = vcpu->arch.rip;
+	run->tpr_access.rip = kvm_rip_read(vcpu);
 	run->tpr_access.is_write = write;
 }
 
@@ -571,6 +572,8 @@ static inline void report_tpr_access(struct kvm_lapic *apic, bool write)
 static u32 __apic_read(struct kvm_lapic *apic, unsigned int offset)
 {
 	u32 val = 0;
+
+	KVMTRACE_1D(APIC_ACCESS, apic->vcpu, (u32)offset, handler);
 
 	if (offset >= LAPIC_MMIO_LENGTH)
 		return 0;
@@ -695,6 +698,8 @@ static void apic_mmio_write(struct kvm_io_device *this,
 
 	offset &= 0xff0;
 
+	KVMTRACE_1D(APIC_ACCESS, apic->vcpu, (u32)offset, handler);
+
 	switch (offset) {
 	case APIC_ID:		/* Local APIC ID */
 		apic_set_reg(apic, APIC_ID, val);
@@ -780,7 +785,8 @@ static void apic_mmio_write(struct kvm_io_device *this,
 
 }
 
-static int apic_mmio_range(struct kvm_io_device *this, gpa_t addr)
+static int apic_mmio_range(struct kvm_io_device *this, gpa_t addr,
+			   int len, int size)
 {
 	struct kvm_lapic *apic = (struct kvm_lapic *)this->private;
 	int ret = 0;
@@ -939,8 +945,8 @@ static int __apic_timer_fn(struct kvm_lapic *apic)
 	int result = 0;
 	wait_queue_head_t *q = &apic->vcpu->wq;
 
-	atomic_inc(&apic->timer.pending);
-	set_bit(KVM_REQ_PENDING_TIMER, &apic->vcpu->requests);
+	if(!atomic_inc_and_test(&apic->timer.pending))
+		set_bit(KVM_REQ_PENDING_TIMER, &apic->vcpu->requests);
 	if (waitqueue_active(q)) {
 		apic->vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 		wake_up_interruptible(q);
