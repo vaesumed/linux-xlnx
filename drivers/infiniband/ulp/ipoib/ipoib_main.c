@@ -30,8 +30,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id: ipoib_main.c 1377 2004-12-23 19:57:12Z roland $
  */
 
 #include "ipoib.h"
@@ -61,6 +59,15 @@ module_param_named(send_queue_size, ipoib_sendq_size, int, 0444);
 MODULE_PARM_DESC(send_queue_size, "Number of descriptors in send queue");
 module_param_named(recv_queue_size, ipoib_recvq_size, int, 0444);
 MODULE_PARM_DESC(recv_queue_size, "Number of descriptors in receive queue");
+
+static int ipoib_use_lro;
+module_param_named(ipoib_use_lro, ipoib_use_lro, bool, 0444);
+MODULE_PARM_DESC(ipoib_use_lro,  "Enable LRO (Large Receive Offload)");
+
+static int ipoib_lro_max_aggr = IPOIB_LRO_MAX_AGGR;
+module_param_named(ipoib_lro_max_aggr, ipoib_lro_max_aggr, int, 0644);
+MODULE_PARM_DESC(ipoib_lro_max_aggr, "LRO: Max packets to be aggregated "
+		"(default = 64)");
 
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
 int ipoib_debug_level;
@@ -938,6 +945,54 @@ static const struct header_ops ipoib_header_ops = {
 	.create	= ipoib_hard_header,
 };
 
+static int get_skb_hdr(struct sk_buff *skb, void **iphdr,
+		       void **tcph, u64 *hdr_flags, void *priv)
+{
+	unsigned int ip_len;
+	struct iphdr *iph;
+
+	if (unlikely(skb->protocol != htons(ETH_P_IP)))
+		return -1;
+
+	/*
+	 * In the future we may add an else clause that verifies the
+	 * checksum and allows devices which do not calculate checksum
+	 * to use LRO.
+	 */
+	if (unlikely(skb->ip_summed != CHECKSUM_UNNECESSARY))
+		return -1;
+
+	/* Check for non-TCP packet */
+	skb_reset_network_header(skb);
+	iph = ip_hdr(skb);
+	if (iph->protocol != IPPROTO_TCP)
+		return -1;
+
+	ip_len = ip_hdrlen(skb);
+	skb_set_transport_header(skb, ip_len);
+	*tcph = tcp_hdr(skb);
+
+	/* check if IP header and TCP header are complete */
+	if (be16_to_cpu(iph->tot_len) < ip_len + tcp_hdrlen(skb))
+		return -1;
+
+	*hdr_flags = LRO_IPV4 | LRO_TCP;
+	*iphdr = iph;
+
+	return 0;
+}
+
+static void ipoib_lro_setup(struct ipoib_dev_priv *priv)
+{
+	priv->lro.lro_mgr.max_aggr	 = ipoib_lro_max_aggr;
+	priv->lro.lro_mgr.max_desc	 = IPOIB_MAX_LRO_DESCRIPTORS;
+	priv->lro.lro_mgr.lro_arr	 = priv->lro.lro_desc;
+	priv->lro.lro_mgr.get_skb_header = get_skb_hdr;
+	priv->lro.lro_mgr.features	 = LRO_F_NAPI;
+	priv->lro.lro_mgr.dev		 = priv->dev;
+	priv->lro.lro_mgr.ip_summed_aggr = CHECKSUM_UNNECESSARY;
+}
+
 static void ipoib_setup(struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = netdev_priv(dev);
@@ -976,6 +1031,8 @@ static void ipoib_setup(struct net_device *dev)
 	netif_carrier_off(dev);
 
 	priv->dev = dev;
+
+	ipoib_lro_setup(priv);
 
 	spin_lock_init(&priv->lock);
 	spin_lock_init(&priv->tx_lock);
@@ -1154,6 +1211,9 @@ static struct net_device *ipoib_add_port(const char *format,
 		priv->dev->features |= NETIF_F_SG | NETIF_F_IP_CSUM;
 	}
 
+	if (ipoib_use_lro)
+		priv->dev->features |= NETIF_F_LRO;
+
 	/*
 	 * Set the full membership bit, so that we join the right
 	 * broadcast group, etc.
@@ -1303,6 +1363,12 @@ static int __init ipoib_init_module(void)
 #ifdef CONFIG_INFINIBAND_IPOIB_CM
 	ipoib_max_conn_qp = min(ipoib_max_conn_qp, IPOIB_CM_MAX_CONN_QP);
 #endif
+
+	/*
+	 * When copying small received packets, we only copy from the
+	 * linear data part of the SKB, so we rely on this condition.
+	 */
+	BUILD_BUG_ON(IPOIB_CM_COPYBREAK > IPOIB_CM_HEAD_SIZE);
 
 	ret = ipoib_register_debugfs();
 	if (ret)

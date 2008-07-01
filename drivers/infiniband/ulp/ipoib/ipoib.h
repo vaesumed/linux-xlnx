@@ -30,8 +30,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id: ipoib.h 1358 2004-12-17 22:00:11Z roland $
  */
 
 #ifndef _IPOIB_H
@@ -52,6 +50,7 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_pack.h>
 #include <rdma/ib_sa.h>
+#include <linux/inet_lro.h>
 
 /* constants */
 
@@ -96,7 +95,11 @@ enum {
 	IPOIB_MCAST_FLAG_BUSY	  = 2,	/* joining or already joined */
 	IPOIB_MCAST_FLAG_ATTACHED = 3,
 
+	IPOIB_MAX_LRO_DESCRIPTORS = 8,
+	IPOIB_LRO_MAX_AGGR 	  = 64,
+
 	MAX_SEND_CQE		  = 16,
+	IPOIB_CM_COPYBREAK	  = 256,
 };
 
 #define	IPOIB_OP_RECV   (1ul << 31)
@@ -249,6 +252,11 @@ struct ipoib_ethtool_st {
 	u16     max_coalesced_frames;
 };
 
+struct ipoib_lro {
+	struct net_lro_mgr lro_mgr;
+	struct net_lro_desc lro_desc[IPOIB_MAX_LRO_DESCRIPTORS];
+};
+
 /*
  * Device private locking: tx_lock protects members used in TX fast
  * path (and we use LLTX so upper layers don't do extra locking).
@@ -335,6 +343,8 @@ struct ipoib_dev_priv {
 	int	hca_caps;
 	struct ipoib_ethtool_st ethtool;
 	struct timer_list poll_timer;
+
+	struct ipoib_lro lro;
 };
 
 struct ipoib_ah {
