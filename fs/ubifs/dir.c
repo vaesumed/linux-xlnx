@@ -233,7 +233,15 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 
 	err = ubifs_tnc_lookup_nm(c, &key, dent, &dentry->d_name);
 	if (err) {
-		if (err == -ENOENT) {
+		/*
+		 * Do not hash the direntry if parent 'i_nlink' is zero, because
+		 * this has side-effects - '->delete_inode()' call will not be
+		 * called for the parent orphan inode, because 'd_count' of its
+		 * direntry will stay 1 (it'll be negative direntry I guess)
+		 * and prevent 'iput_final()' until the dentry is destroyed due
+		 * to unmount or memory pressure.
+		 */
+		if (err == -ENOENT && dir->i_nlink != 0) {
 			dbg_gen("not found");
 			goto done;
 		}
