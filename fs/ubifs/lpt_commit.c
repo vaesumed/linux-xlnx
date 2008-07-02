@@ -784,6 +784,8 @@ static void populate_lsave(struct ubifs_info *c)
 		c->lsave[cnt++] = c->main_first;
 }
 
+static int lpt_gc(struct ubifs_info *c);
+
 /**
  * ubifs_lpt_start_commit - UBIFS commit starts.
  * @c: the UBIFS file-system description object
@@ -804,6 +806,23 @@ int ubifs_lpt_start_commit(struct ubifs_info *c)
 	err = dbg_check_ltab(c);
 	if (err)
 		goto out;
+
+	if (c->check_lpt_free) {
+		/*
+		 * We ensure there is enough free space in
+		 * ubifs_lpt_post_commit() by marking nodes dirty. That
+		 * information is lost when we unmount, so we also need
+		 * to check free space once after mounting also.
+		 */
+		c->check_lpt_free = 0;
+		while (need_write_all(c)) {
+			mutex_unlock(&c->lp_mutex);
+			err = lpt_gc(c);
+			if (err)
+				return err;
+			mutex_lock(&c->lp_mutex);
+		}
+	}
 
 	lpt_tgc_start(c);
 
