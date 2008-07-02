@@ -849,13 +849,11 @@ static void mpage_put_bnr_to_bhs(struct mpage_da_data *mpd, sector_t logical,
 			do {
 				if (cur_logical >= logical + blocks)
 					break;
-
 				if (buffer_delay(bh)) {
 					bh->b_blocknr = pblock;
 					clear_buffer_delay(bh);
-				} else if (buffer_mapped(bh)) {
+				} else if (buffer_mapped(bh))
 					BUG_ON(bh->b_blocknr != pblock);
-				}
 
 				cur_logical++;
 				pblock++;
@@ -930,10 +928,10 @@ static void mpage_da_map_blocks(struct mpage_da_data *mpd)
 		if (buffer_delay(lbh))
 			mpage_put_bnr_to_bhs(mpd, next, &new);
 
-			/* go for the remaining blocks */
-			next += new.b_size >> mpd->inode->i_blkbits;
-			remain -= new.b_size;
-		}
+		/* go for the remaining blocks */
+		next += new.b_size >> mpd->inode->i_blkbits;
+		remain -= new.b_size;
+	}
 }
 
 #define BH_FLAGS ((1 << BH_Uptodate) | (1 << BH_Mapped) | (1 << BH_Delay))
