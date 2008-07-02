@@ -1170,8 +1170,6 @@ svcauth_gss_accept(struct svc_rqst *rqstp, __be32 *authp)
 		goto out;
 	}
 garbage_args:
-	/* Restore write pointer to its original value: */
-	xdr_ressize_check(rqstp, reject_stat);
 	ret = SVC_GARBAGE;
 	goto out;
 auth_err:
