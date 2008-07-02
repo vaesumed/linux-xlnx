@@ -546,6 +546,12 @@ again:
 	ubifs_assert(c->budg_data_growth >= 0);
 	ubifs_assert(c->budg_dd_growth >= 0);
 
+	if (unlikely(c->nospace)) {
+		dbg_budg("no space flag is set");
+		spin_unlock(&c->space_lock);
+		return -ENOSPC;
+	}
+
 	c->budg_idx_growth += idx_growth;
 	c->budg_data_growth += data_growth;
 	c->budg_dd_growth += dd_growth;
@@ -573,9 +579,11 @@ make_space:
 		dbg_budg("try again");
 		cond_resched();
 		goto again;
-	} else if (err == -ENOSPC)
+	} else if (err == -ENOSPC) {
 		dbg_budg("FS is full, -ENOSPC");
-	else
+		c->nospace = 1;
+		smp_wmb();
+	} else
 		ubifs_err("cannot budget space, error %d", err);
 	return err;
 }
@@ -601,6 +609,9 @@ void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
 
 	if (!req->data_growth && !req->dd_growth)
 		return;
+
+	c->nospace = 0;
+	smp_wmb();
 
 	if (req->idx_growth == -1)
 		req->idx_growth = calc_idx_growth(c, req);
