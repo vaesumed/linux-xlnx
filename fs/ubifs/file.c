@@ -191,7 +191,6 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	struct ubifs_budget_req req = { .new_page = 1 };
-	loff_t i_size =  i_size_read(inode);
 	int uninitialized_var(err);
 	struct page *page;
 
@@ -212,7 +211,7 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	 * data in the inode). Later the budget will be amended if this is not
 	 * true.
 	 */
-	if (pos + len > i_size)
+	if (pos + len > inode->i_size)
 		/*
 		 * We are writing beyond the file which means we are going to
 		 * change inode size and make the inode dirty. And in turn,
@@ -298,10 +297,10 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	struct inode *inode = mapping->host;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	loff_t i_size =  i_size_read(inode);
+	loff_t end_pos = pos + len;
 
 	dbg_gen("ino %lu, pos %llu, pg %lu, len %u, copied %d, i_size %lld",
-		inode->i_ino, pos, page->index, len, copied, i_size);
+		inode->i_ino, pos, page->index, len, copied, inode->i_size);
 
 	if (unlikely(copied < len && len == PAGE_CACHE_SIZE)) {
 		/*
@@ -316,7 +315,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		dbg_gen("copied %d instead of %d, read page and repeat",
 			copied, len);
 
-		if (pos + len > i_size)
+		if (end_pos > inode->i_size)
 			ubifs_release_dirty_inode_budget(c, ui);
 
 		copied = do_readpage(page);
@@ -334,14 +333,14 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		__set_page_dirty_nobuffers(page);
 	}
 
-	if (pos + len > i_size) {
+	if (end_pos > inode->i_size) {
 		int release;
 
-		i_size_write(inode, pos + len);
+		i_size_write(inode, end_pos);
 
 		/* Update inode size for write-back */
 		spin_lock(&ui->ui_lock);
-		ui->wb_i_size = pos + len;
+		ui->wb_i_size = end_pos;
 		spin_unlock(&ui->ui_lock);
 
 		mutex_lock(&ui->wb_mutex);
