@@ -349,20 +349,17 @@ long long ubifs_calc_available(const struct ubifs_info *c, int min_idx_lebs)
 }
 
 /**
- * rp_can_write - check whether the user is allowed to write.
+ * can_use_rp - check whether the user is allowed to use reserved pool.
  * @c: UBIFS file-system description object
- * @avail: available space on FS
  *
  * UBIFS has so-called "reserved pool" which is flash space reserved
  * for the superuser and for uses whose UID/GID is recorded in UBIFS superblock.
- * This function checks whether current user is allowed to write
- * to the file-system - it returns %1 if there is plenty of space or the user
- * is eligible to use the reserved pool and %0 otherwise.
+ * This function checks whether current user is allowed to use reserved pool.
+ * Returns %1  current user is allowed to use reserved pool and %0 otherwise.
  */
-static int rp_can_write(struct ubifs_info *c, long long avail)
+static int can_use_rp(struct ubifs_info *c)
 {
-	if (avail > c->rp_size || current->fsuid == c->rp_uid ||
-	    capable(CAP_SYS_RESOURCE) ||
+	if (current->fsuid == c->rp_uid || capable(CAP_SYS_RESOURCE) ||
 	    (c->rp_gid != 0 && in_group_p(c->rp_gid)))
 		return 1;
 	return 0;
@@ -445,7 +442,7 @@ static int do_budget_space(struct ubifs_info *c)
 		return -ENOSPC;
 	}
 
-	if (!rp_can_write(c, available - outstanding))
+	if (available - outstanding <= c->rp_size && !can_use_rp(c))
 		return -ENOSPC;
 
 	c->min_idx_lebs = min_idx_lebs;
@@ -546,10 +543,13 @@ again:
 	ubifs_assert(c->budg_data_growth >= 0);
 	ubifs_assert(c->budg_dd_growth >= 0);
 
-	if (unlikely(c->nospace)) {
-		dbg_budg("no space flag is set");
-		spin_unlock(&c->space_lock);
-		return -ENOSPC;
+	if (unlikely(c->nospace && !can_use_rp(c))) {
+		err = -ENOSPC;
+		goto out_nospace;
+	}
+	if (unlikely(c->nospace_rp)) {
+		err = -ENOSPC;
+		goto out_nospace;
 	}
 
 	c->budg_idx_growth += idx_growth;
@@ -581,10 +581,18 @@ make_space:
 		goto again;
 	} else if (err == -ENOSPC) {
 		dbg_budg("FS is full, -ENOSPC");
-		c->nospace = 1;
+		if (can_use_rp(c))
+			c->nospace_rp = 1;
+		else
+			c->nospace = 1;
 		smp_wmb();
 	} else
 		ubifs_err("cannot budget space, error %d", err);
+	return err;
+
+out_nospace:
+	dbg_budg("no space");
+	spin_unlock(&c->space_lock);
 	return err;
 }
 
@@ -610,7 +618,7 @@ void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
 	if (!req->data_growth && !req->dd_growth)
 		return;
 
-	c->nospace = 0;
+	c->nospace = c->nospace_rp = 0;
 	smp_wmb();
 
 	if (req->idx_growth == -1)
