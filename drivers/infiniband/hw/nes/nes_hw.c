@@ -1591,8 +1591,6 @@ int nes_init_nic_qp(struct nes_device *nesdev, struct net_device *netdev)
 				cpu_to_le32((u32)((u64)nesvnic->nic.frag_paddr[counter] >> 32));
 	}
 
-	nesvnic->get_cqp_request = nes_get_cqp_request;
-	nesvnic->post_cqp_request = nes_post_cqp_request;
 	nesvnic->mcrq_mcast_filter = NULL;
 
 	spin_lock_init(&nesvnic->nic.sq_lock);
