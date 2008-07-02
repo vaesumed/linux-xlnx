@@ -53,6 +53,7 @@ extern unsigned long _get_SP(void);
 #ifndef CONFIG_SMP
 struct task_struct *last_task_used_math = NULL;
 struct task_struct *last_task_used_altivec = NULL;
+struct task_struct *last_task_used_vsx = NULL;
 struct task_struct *last_task_used_spe = NULL;
 #endif
 
@@ -106,11 +107,23 @@ EXPORT_SYMBOL(enable_kernel_fp);
 
 int dump_task_fpu(struct task_struct *tsk, elf_fpregset_t *fpregs)
 {
+#ifdef CONFIG_VSX
+	int i;
+	elf_fpreg_t *reg;
+#endif
+
 	if (!tsk->thread.regs)
 		return 0;
 	flush_fp_to_thread(current);
 
-	memcpy(fpregs, &tsk->thread.fpr[0], sizeof(*fpregs));
+#ifdef CONFIG_VSX
+	reg = (elf_fpreg_t *)fpregs;
+	for (i = 0; i < ELF_NFPREG - 1; i++, reg++)
+		*reg = tsk->thread.TS_FPR(i);
+	memcpy(reg, &tsk->thread.fpscr, sizeof(elf_fpreg_t));
+#else
+	memcpy(fpregs, &tsk->thread.TS_FPR(0), sizeof(*fpregs));
+#endif
 
 	return 1;
 }
@@ -179,6 +192,63 @@ int dump_task_altivec(struct task_struct *tsk, elf_vrregset_t *vrregs)
 }
 #endif /* CONFIG_ALTIVEC */
 
+#ifdef CONFIG_VSX
+#if 0
+/* not currently used, but some crazy RAID module might want to later */
+void enable_kernel_vsx(void)
+{
+	WARN_ON(preemptible());
+
+#ifdef CONFIG_SMP
+	if (current->thread.regs && (current->thread.regs->msr & MSR_VSX))
+		giveup_vsx(current);
+	else
+		giveup_vsx(NULL);	/* just enable vsx for kernel - force */
+#else
+	giveup_vsx(last_task_used_vsx);
+#endif /* CONFIG_SMP */
+}
+EXPORT_SYMBOL(enable_kernel_vsx);
+#endif
+
+void flush_vsx_to_thread(struct task_struct *tsk)
+{
+	if (tsk->thread.regs) {
+		preempt_disable();
+		if (tsk->thread.regs->msr & MSR_VSX) {
+#ifdef CONFIG_SMP
+			BUG_ON(tsk != current);
+#endif
+			giveup_vsx(tsk);
+		}
+		preempt_enable();
+	}
+}
+
+/*
+ * This dumps the lower half 64bits of the first 32 VSX registers.
+ * This needs to be called with dump_task_fp and dump_task_altivec to
+ * get all the VSX state.
+ */
+int dump_task_vsx(struct task_struct *tsk, elf_vrreg_t *vrregs)
+{
+	elf_vrreg_t *reg;
+	double buf[32];
+	int i;
+
+	if (tsk == current)
+		flush_vsx_to_thread(tsk);
+
+	reg = (elf_vrreg_t *)vrregs;
+
+	for (i = 0; i < 32 ; i++)
+		buf[i] = current->thread.fpr[i][TS_VSRLOWOFFSET];
+	memcpy(reg, buf, sizeof(buf));
+
+	return 1;
+}
+#endif /* CONFIG_VSX */
+
 #ifdef CONFIG_SPE
 
 void enable_kernel_spe(void)
@@ -233,6 +303,10 @@ void discard_lazy_cpu_state(void)
 	if (last_task_used_altivec == current)
 		last_task_used_altivec = NULL;
 #endif /* CONFIG_ALTIVEC */
+#ifdef CONFIG_VSX
+	if (last_task_used_vsx == current)
+		last_task_used_vsx = NULL;
+#endif /* CONFIG_VSX */
 #ifdef CONFIG_SPE
 	if (last_task_used_spe == current)
 		last_task_used_spe = NULL;
@@ -297,6 +371,10 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	if (prev->thread.regs && (prev->thread.regs->msr & MSR_VEC))
 		giveup_altivec(prev);
 #endif /* CONFIG_ALTIVEC */
+#ifdef CONFIG_VSX
+	if (prev->thread.regs && (prev->thread.regs->msr & MSR_VSX))
+		giveup_vsx(prev);
+#endif /* CONFIG_VSX */
 #ifdef CONFIG_SPE
 	/*
 	 * If the previous thread used spe in the last quantum
@@ -317,6 +395,10 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	if (new->thread.regs && last_task_used_altivec == new)
 		new->thread.regs->msr |= MSR_VEC;
 #endif /* CONFIG_ALTIVEC */
+#ifdef CONFIG_VSX
+	if (new->thread.regs && last_task_used_vsx == new)
+		new->thread.regs->msr |= MSR_VSX;
+#endif /* CONFIG_VSX */
 #ifdef CONFIG_SPE
 	/* Avoid the trap.  On smp this this never happens since
 	 * we don't set last_task_used_spe
@@ -417,6 +499,8 @@ static struct regbit {
 	{MSR_EE,	"EE"},
 	{MSR_PR,	"PR"},
 	{MSR_FP,	"FP"},
+	{MSR_VEC,	"VEC"},
+	{MSR_VSX,	"VSX"},
 	{MSR_ME,	"ME"},
 	{MSR_IR,	"IR"},
 	{MSR_DR,	"DR"},
@@ -534,6 +618,7 @@ void prepare_to_copy(struct task_struct *tsk)
 {
 	flush_fp_to_thread(current);
 	flush_altivec_to_thread(current);
+	flush_vsx_to_thread(current);
 	flush_spe_to_thread(current);
 }
 
@@ -689,6 +774,9 @@ void start_thread(struct pt_regs *regs, unsigned long start, unsigned long sp)
 #endif
 
 	discard_lazy_cpu_state();
+#ifdef CONFIG_VSX
+	current->thread.used_vsr = 0;
+#endif
 	memset(current->thread.fpr, 0, sizeof(current->thread.fpr));
 	current->thread.fpscr.val = 0;
 #ifdef CONFIG_ALTIVEC

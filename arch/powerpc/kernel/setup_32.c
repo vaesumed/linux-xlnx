@@ -127,6 +127,11 @@ notrace void __init machine_init(unsigned long dt_ptr, unsigned long phys)
 		ppc_md.power_save = ppc6xx_idle;
 #endif
 
+#ifdef CONFIG_E500
+	if (cpu_has_feature(CPU_FTR_CAN_DOZE) ||
+	    cpu_has_feature(CPU_FTR_CAN_NAP))
+		ppc_md.power_save = e500_idle;
+#endif
 	if (ppc_md.progress)
 		ppc_md.progress("id mach(): done", 0x200);
 }
@@ -248,6 +253,28 @@ static void __init irqstack_early_init(void)
 #define irqstack_early_init()
 #endif
 
+#if defined(CONFIG_BOOKE) || defined(CONFIG_40x)
+static void __init exc_lvl_early_init(void)
+{
+	unsigned int i;
+
+	/* interrupt stacks must be in lowmem, we get that for free on ppc32
+	 * as the lmb is limited to lowmem by LMB_REAL_LIMIT */
+	for_each_possible_cpu(i) {
+		critirq_ctx[i] = (struct thread_info *)
+			__va(lmb_alloc(THREAD_SIZE, THREAD_SIZE));
+#ifdef CONFIG_BOOKE
+		dbgirq_ctx[i] = (struct thread_info *)
+			__va(lmb_alloc(THREAD_SIZE, THREAD_SIZE));
+		mcheckirq_ctx[i] = (struct thread_info *)
+			__va(lmb_alloc(THREAD_SIZE, THREAD_SIZE));
+#endif
+	}
+}
+#else
+#define exc_lvl_early_init()
+#endif
+
 /* Warning, IO base is not yet inited */
 void __init setup_arch(char **cmdline_p)
 {
@@ -304,6 +331,8 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.end_code = (unsigned long) _etext;
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = klimit;
+
+	exc_lvl_early_init();
 
 	irqstack_early_init();
 
