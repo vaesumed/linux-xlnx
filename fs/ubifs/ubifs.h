@@ -878,6 +878,8 @@ struct ubifs_mount_opts {
  * @cmt_wq: wait queue to sleep on if the log is full and a commit is running
  * @fast_unmount: do not run journal commit before unmounting
  * @big_lpt: flag that LPT is too big to write whole during commit
+ * @nospace: non-zero if the file-system does not have flash space (used as
+ *           optimization)
  *
  * @tnc_mutex: protects the Tree Node Cache (TNC), @zroot, @cnext, @enext, and
  *             @calc_idx_sz
@@ -1109,6 +1111,7 @@ struct ubifs_info {
 	wait_queue_head_t cmt_wq;
 	unsigned int fast_unmount:1;
 	unsigned int big_lpt:1;
+	unsigned int nospace:1;
 
 	struct mutex tnc_mutex;
 	struct ubifs_zbranch zroot;
