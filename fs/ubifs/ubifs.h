@@ -882,6 +882,8 @@ struct ubifs_mount_opts {
  * @check_lpt_free: flag that indicates LPT GC may be needed
  * @nospace: non-zero if the file-system does not have flash space (used as
  *           optimization)
+ * @nospace_rp: the same as @nospace, but additionally means that even reserved
+ *              pool is full
  *
  * @tnc_mutex: protects the Tree Node Cache (TNC), @zroot, @cnext, @enext, and
  *             @calc_idx_sz
@@ -1114,8 +1116,9 @@ struct ubifs_info {
 	wait_queue_head_t cmt_wq;
 	unsigned int fast_unmount:1;
 	unsigned int big_lpt:1;
-	unsigned int nospace:1;
 	unsigned int check_lpt_free:1;
+	unsigned int nospace:1;
+	unsigned int nospace_rp:1;
 
 	struct mutex tnc_mutex;
 	struct ubifs_zbranch zroot;
