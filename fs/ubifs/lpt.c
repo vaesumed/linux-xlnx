@@ -154,6 +154,8 @@ int ubifs_calc_lpt_geom(struct ubifs_info *c)
 		return -EINVAL;
 	}
 
+	c->check_lpt_free = c->big_lpt;
+
 	return 0;
 }
 
