@@ -26,6 +26,7 @@
 #include <asm/hardware.h>
 #include <asm/arch/irqs.h>
 #include <asm/arch/pxa-regs.h>
+#include <asm/arch/pxa2xx-regs.h>
 #include <asm/arch/mfp-pxa25x.h>
 #include <asm/arch/pm.h>
 #include <asm/arch/dma.h>
@@ -117,6 +118,10 @@ static struct clk pxa25x_hwuart_clk =
 	INIT_CKEN("UARTCLK", HWUART, 14745600, 1, &pxa_device_hwuart.dev)
 ;
 
+/*
+ * PXA 2xx clock declarations. Order is important (see aliases below)
+ * Please be careful not to disrupt the ordering.
+ */
 static struct clk pxa25x_clks[] = {
 	INIT_CK("LCDCLK", LCD, &clk_pxa25x_lcd_ops, &pxa_device_fb.dev),
 	INIT_CKEN("UARTCLK", FFUART, 14745600, 1, &pxa_device_ffuart.dev),
@@ -129,16 +134,18 @@ static struct clk pxa25x_clks[] = {
 	INIT_CKEN("SSPCLK",  SSP, 3686400, 0, &pxa25x_device_ssp.dev),
 	INIT_CKEN("SSPCLK", NSSP, 3686400, 0, &pxa25x_device_nssp.dev),
 	INIT_CKEN("SSPCLK", ASSP, 3686400, 0, &pxa25x_device_assp.dev),
+	INIT_CKEN("PWMCLK", PWM0, 3686400, 0, &pxa25x_device_pwm0.dev),
+	INIT_CKEN("PWMCLK", PWM1, 3686400, 0, &pxa25x_device_pwm1.dev),
 
 	INIT_CKEN("AC97CLK",     AC97,     24576000, 0, NULL),
 
 	/*
-	INIT_CKEN("PWMCLK",  PWM0, 3686400,  0, NULL),
-	INIT_CKEN("PWMCLK",  PWM0, 3686400,  0, NULL),
 	INIT_CKEN("I2SCLK",  I2S,  14745600, 0, NULL),
 	*/
 	INIT_CKEN("FICPCLK", FICP, 47923000, 0, NULL),
 };
+
+static struct clk gpio7_clk = INIT_CKOTHER("GPIO7_CK", &pxa25x_clks[4], NULL);
 
 #ifdef CONFIG_PM
 
@@ -260,7 +267,7 @@ void __init pxa25x_init_irq(void)
 }
 
 static struct platform_device *pxa25x_devices[] __initdata = {
-	&pxa_device_udc,
+	&pxa25x_device_udc,
 	&pxa_device_ffuart,
 	&pxa_device_btuart,
 	&pxa_device_stuart,
@@ -269,6 +276,8 @@ static struct platform_device *pxa25x_devices[] __initdata = {
 	&pxa25x_device_ssp,
 	&pxa25x_device_nssp,
 	&pxa25x_device_assp,
+	&pxa25x_device_pwm0,
+	&pxa25x_device_pwm1,
 };
 
 static struct sys_device pxa25x_sysdev[] = {
@@ -310,6 +319,8 @@ static int __init pxa25x_init(void)
 	/* Only add HWUART for PXA255/26x; PXA210/250/27x do not have it. */
 	if (cpu_is_pxa25x())
 		ret = platform_device_register(&pxa_device_hwuart);
+
+	clks_register(&gpio7_clk);
 
 	return ret;
 }
