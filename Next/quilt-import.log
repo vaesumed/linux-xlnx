@@ -1,0 +1,405 @@
+Importing driver-core.current based on 2.6.26-rc8-git2
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard e1441b9a41c33aa9236008a7cfe49a8e723fb397
+HEAD is now at e1441b9 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/dtor/input
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+kobject-fix-kobject_rename-and-config_sysfs.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 8aea325759ec52649d442b64c5f20d16fe6ded44
+HEAD is now at 8aea325 kobject: Fix kobject_rename and !CONFIG_SYSFS
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+ohci-fix-problem-if-sm501-and-another-platform-driver-is-selected.patch
+usb-fix-cdc-acm-resume.patch
+usb-ehci-fix-timer-regression.patch
+usb-ohci-record-data-toggle-after-unlink.patch
+usb-mass-storage-new-id-for-us_sc_cyp_atacb.patch
+sisusbvga-fix-oops-on-disconnect.patch
+usb-new-device-id-for-ftdi_sio-driver.patch
+usb-fix-interrupt-disabling-for-hcds-with-shared-interrupt-handlers.patch
+usb-don-t-lose-disconnections-during-suspend.patch
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 61a1b8ddc568c45e898ff6a2cc99d982faca302f
+HEAD is now at 61a1b8d USB: don't lose disconnections during suspend
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+sysfs-add-sys-dev-char-block-to-lookup-sysfs-path-by-major-minor.patch
+kobject-replace-with-in-name.patch
+debugfs-add-a-reference-to-the-debugfs-api-documentation.patch
+firmware-fix-typo-in-example-code.patch
+device-create-block-convert-device_create-to-device_create_drvdata.patch
+device-create-char-convert-device_create-to-device_create_drvdata.patch
+device-create-coda-convert-device_create-to-device_create_drvdata.patch
+device-create-dca-convert-device_create-to-device_create_drvdata.patch
+device-create-dvb-convert-device_create-to-device_create_drvdata.patch
+device-create-framebuffer-convert-device_create-to-device_create_drvdata.patch
+device-create-hid-convert-device_create-to-device_create_drvdata.patch
+device-create-hwmon-convert-device_create-to-device_create_drvdata.patch
+device-create-i2c-convert-device_create-to-device_create_drvdata.patch
+device-create-ide-convert-device_create-to-device_create_drvdata.patch
+device-create-ieee1394-convert-device_create-to-device_create_drvdata.patch
+device-create-infiniband-convert-device_create-to-device_create_drvdata.patch
+device-create-isdn-convert-device_create-to-device_create_drvdata.patch
+device-create-macintosh-convert-device_create-to-device_create_drvdata.patch
+device-create-mips-convert-device_create-to-device_create_drvdata.patch
+device-create-misc-convert-device_create-to-device_create_drvdata.patch
+device-create-mtd-convert-device_create-to-device_create_drvdata.patch
+device-create-net-convert-device_create-to-device_create_drvdata.patch
+device-create-s390-convert-device_create-to-device_create_drvdata.patch
+device-create-scsi-convert-device_create-to-device_create_drvdata.patch
+device-create-sound-convert-device_create-to-device_create_drvdata.patch
+device-create-spi-convert-device_create-to-device_create_drvdata.patch
+device-create-usb-convert-device_create-to-device_create_drvdata.patch
+device-create-x86-convert-device_create-to-device_create_drvdata.patch
+driver-core-remove-device_create.patch
+driver-core-add-ability-for-class_for_each_device-to-start-in-middle-of-list.patch
+driver-core-add-ability-for-class_find_device-to-start-in-middle-of-list.patch
+block-fix-compiler-warning-in-genhd.c.patch
+block-make-printk_partition-use-the-class-iterator-function.patch
+block-make-blk_lookup_devt-use-the-class-iterator-function.patch
+block-make-proc-diskstats-only-build-if-config_proc_fs-is-enabled.patch
+block-make-proc-files-seq_start-use-the-class_find_device.patch
+block-move-header-for-proc-partitions-to-seq_start.patch
+block-make-proc-partitions-and-proc-diskstats-use-class_find_device.patch
+i2c-use-class_for_each_device.patch
+infiniband-rename-device-to-ib_device-in-cm_device.patch
+infiniband-make-cm_device-use-a-struct-device-and-not-a-kobject.patch
+bluetooth-remove-improper-bluetooth-class-symlinks.patch
+class-move-driver-core-specific-parts-to-a-private-structure.patch
+class-rename-devices-to-class_devices-in-internal-class-structure.patch
+class-rename-interfaces-to-class_interfaces-in-internal-class-structure.patch
+class-rename-subsys-to-class_subsys-in-internal-class-structure.patch
+class-rename-sem-to-class_sem-in-internal-class-structure.patch
+class-fix-docbook-comments-for-class_private-structure.patch
+class-add-lockdep-infrastructure.patch
+class-change-internal-semaphore-to-a-mutex.patch
+driver-core-remove-kobj_name_len-define.patch
+driver-core-remove-device_name_size-define.patch
+driver-core-remove-device_id_size-define.patch
+driver-core-fix-a-lot-of-printk-usages-of-bus_id.patch
+pnp-add-acpi-modalias-entries.patch
+uio-fix-uio-kconfig-dependancies.patch
+uio-add-write-function-to-allow-irq-masking.patch
+uio-add-generic-uio-platform-driver.patch
+uio-minor-style-and-comment-fixes.patch
+kobject-reorder-kobject-to-save-space-on-64-bit-builds.patch
+kobject-should-use-kobject_put-in-kset-example.patch
+sysdev-fix-debugging-statements-in-registration-code.patch
+sysfs-don-t-call-notify_change.patch
+uio-howto.tmpl-use-standard-copyright-legal-markings.patch
+uio-howto.tmpl-use-unique-output-names.patch
+always-enable-fw_loader-unless-embedded-y.patch
+howto-change-email-addresses-of-james-in-howto.patch
+pci-make-pci_name-use-dev_name.patch
+sparc64-fix-up-bus_id-changes-in-sparc-core-code.patch
+s390-bus_id-dev_name-conversions.patch
+s390-bus_id-dev_set_name-changes.patch
+s390-more-bus_id-dev_name-conversions.patch
+s390-use-s390_root_dev_-in-kvm_virtio.patch
+arm-bus_id-dev_name-and-dev_set_name-conversions.patch
+libertas-treat-firmware-data-as-const.patch
+bluetooth-treat-firmware-data-as-const.patch
+cyclades-treat-firmware-data-as-const.patch
+cx25840-treat-firmware-data-as-const.patch
+myri10ge-treat-firmware-data-as-const.patch
+vx222-treat-firmware-data-as-const.patch
+riptide-treat-firmware-data-as-const.patch
+pcxhr-treat-firmware-data-as-const.patch
+vx-treat-firmware-data-as-const.patch
+ueagle-atm-treat-firmware-data-as-const.patch
+cxacru-treat-firmware-data-as-const.patch
+aic94xx-treat-firmware-data-as-const.patch
+zd1201-treat-firmware-data-as-const.patch
+rt2x00-treat-firmware-data-as-const.patch
+p54-treat-firmware-data-as-const.patch
+atmel-treat-firmware-data-as-const.patch
+irda-usb-treat-firmware-data-as-const.patch
+cxgb3-treat-firmware-data-as-const.patch
+bt8xx-treat-firmware-data-as-const.patch
+ttusb-dec-treat-firmware-data-as-const.patch
+dvb-frontends-treat-firmware-data-as-const.patch
+cxusb-treat-firmware-data-as-const.patch
+gp8psk-treat-firmware-data-as-const.patch
+tuners-treat-firmware-data-as-const.patch
+maestro3-treat-firmware-data-as-const.patch
+ymfpci-treat-firmware-data-as-const.patch
+isight-firmware-data-is-const.patch
+dell_rbu-firmware-data-is-const.patch
+x86-microcode-firmware-data-is-const.patch
+firmware-make-fw-data-const.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 07b3a01a75d991481c115d9a7817f6d1e7827f7f
+HEAD is now at 07b3a01 sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-revert-don-t-lose-disconnections-during-suspend.patch
+usb-make-bus_id-const-in-struct-usb_bus.patch
+usb-usb-dev_name-instead-of-dev-bus_id.patch
+usb-usb-dev_set_name-instead-of-dev-bus_id.patch
+usb-use-get_unaligned_-helpers-for-kl5kusb105-driver.patch
+ti_usb-kick-firmware-into-user-space.patch
+usb-add-new-routine-for-checking-port-resume-type.patch
+usb-debounce-before-unregistering.patch
+usb-revert-don-t-use-reset-resume-if-drivers-don-t-support-it.patch
+usb-simplify-hub_restart-logic.patch
+usb-try-to-salvage-lost-power-sessions.patch
+usb-optimize-port-debouncing-during-hub-activation.patch
+usb-combine-hub_activate-and-hub_restart.patch
+usb-combine-hub_quiesce-and-hub_stop.patch
+usb-io_ti-first-cut-at-a-big-clean-up.patch
+usb-storage-separate-dynamic-flags-from-fixed-flags.patch
+usb-storage-change-remaining-semaphore-to-completion.patch
+usb-isp1760-hcd.c-make-2-functions-static.patch
+usb-implement-soft-unbinding.patch
+usb-storage-implement-soft-unbinding.patch
+usb-remove-cvs-keywords.patch
+usb-remove-documentation-usb-uhci.txt.patch
+usb-rndis-switch-to-seq_files.patch
+usb-at91_udc-updated-fifo-sizes.patch
+usb-gadget-split-out-serial-core.patch
+usb-gadget-use-new-serial-core.patch
+usb-gadget-descriptor-copying-support.patch
+usb-gadget-composite-gadget-core.patch
+usb-gadget-zero-split-out-source-sink-config.patch
+usb-gadget-zero-split-out-loopback-config.patch
+usb-gadget-zero-use-composite-gadget-framework.patch
+usb-gadget-serial-split-out-cdc-acm-function.patch
+usb-gadget-serial-split-out-generic-serial-function.patch
+usb-gadget-serial-use-composite-gadget-framework.patch
+usb-gadget-rndis-cleanups.patch
+usb-ethernet-gadget-split-out-network-core.patch
+usb-ethernet-gadget-split-cdc-subset-function.patch
+usb-ethernet-gadget-split-cdc-ethernet-function.patch
+usb-ethernet-gadget-split-rndis-function.patch
+usb-gadget-new-cdc-composite-gadget-driver.patch
+usb-ethernet-gadget-use-composite-gadget-framework.patch
+usb-gadget-push-bkl-down-into-drivers.patch
+usb-ftdi_usb-eliminate-ioctl-and-bkl-ioctl-use.patch
+usb-usblcd-push-down-bkl-into-driver.patch
+usb-iowarrior-push-down-bkl.patch
+usb-auerwald-push-down-the-bkl-into-the-driver.patch
+usb-rio100-push-down-the-bkl.patch
+usb-sisusb-push-down-the-bkl.patch
+usb-ohci-ppc-of-use-linux-of_platform.h-instead-of-asm.patch
+usb-digi_accelport.c-trivial-sparse-lock-annotation.patch
+usb-cp2101.c-fix-sparse-signedness-mismatch-warnings.patch
+usb-speedtch.c-fix-sparse-shadowed-variable-warning.patch
+usb-missing-usb_put_hcd-to-ohci-at91.patch
+usb-make-sa1111-ohci-driver-sa11x0-specific.patch
+usb-ohci_hcd-hang-submit-vs.-rmmod-race.patch
+usb-hub-add-check-for-unsupported-bus-topology.patch
+usb-ehci-hcd-unlink-speedups.patch
+usb-irda-cleanup-on-ir-usb-module.patch
+usb-gadget-documentation-update.patch
+usb-host-mark-const-variable-tables-as-const.patch
+usb-uhci-mark-root_hub_hub_des-as-const.patch
+usb-usbmon-use-simple_read_from_buffer.patch
+usb-delete-airprime-driver.patch
+usb-cdc-wdm-cleanup.patch
+usb-drivers-usb-host-isp1760-hcd.c-processor-flags-have-type-unsigned-long.patch
+usb-accessrunner-avoid-unnecessary-memset.patch
+usb-remove-interface-parameter-of-usb_reset_composite_device.patch
+usb-use-standard-sg-iterator-in-the-scatter-gather-library.patch
+usb-fix-comment-of-usb_set_configuration.patch
+usb-isp1760-support-board-specific-hardware-configurations.patch
+usb-usb-serial-fix-a-sparse-warning-about-different-signedness.patch
+usb-fix-usb_reset_device-and-usb_reset_composite_device.patch
+usb-r8a66597-hcd-fix-interrupt-trigger.patch
+usb-r8a66597-hcd-fix-iinterval-for-full-low-speed-device.patch
+usb-fix-uninitialized-variable-warning-in-keyspan_pda.patch
+usb-keyspan-remove-duplicate-device-entries.patch
+usb-additional-power-savings-for-cdc-acm-devices-that-support-remote-wakeup.patch
+usb-autosuspend-for-cdc-wdm.patch
+usb-fix-usb-serial-pm-counter-decrement-for-disconnected-interfaces.patch
+usb-fix-disconnect-bug-in-cdc-acm.patch
+usb-debug-port-converter-does-not-accept-more-than-8-byte-packets.patch
+usb-ohci-pnx4008-i2c-cleanups-and-fixes.patch
+usb-force-unbinding-of-drivers-lacking-reset_resume-or-other-methods.patch
+usbfs-send-disconnect-signals-when-device-is-unregistered.patch
+usbfs-simplify-the-lookup-by-minor-routines.patch
+usbfs-fix-race-between-open-and-unregister.patch
+usbfs-don-t-store-bad-pointers-in-registration.patch
+usb-au1xxx-usb-clean-up-ohci-ehci-bus-glue-sources.patch
+usb-au1xxx-usb-suspend-resume-support.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Importing ttydev based on 55b50ebb424c5c4168077335f3909e3a925a6948
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard 55b50ebb424c5c4168077335f3909e3a925a6948
+HEAD is now at 55b50eb Add linux-next specific files
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+01-ldisc-ref
+.dotest/patch:104: trailing whitespace.
+	pCh->pTTY->ldisc.ops->receive_buf( pCh->pTTY, 
+.dotest/patch:109: trailing whitespace.
+		pCh->pTTY->ldisc.ops->receive_buf( pCh->pTTY, 
+.dotest/patch:127: trailing whitespace.
+		if ( tty->ldisc.ops->flush_buffer )  
+.dotest/patch:382: trailing whitespace.
+	
+.dotest/patch:493: trailing whitespace.
+	
+warning: squelched 29 whitespace errors
+warning: 34 lines add whitespace errors.
+02-rio_vcs
+03-serial_vcs
+04-tty-introduce-tty_port
+.dotest/patch:72: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+05-tty.h-cleanup
+06-epca-use-tty_port
+07-esp-use-tty_port
+08-gs-use-tty_port
+.dotest/patch:41: trailing whitespace.
+	            (port->port.flags & GS_TX_INTEN)?"enabled": "disabled"); 
+.dotest/patch:384: trailing whitespace.
+	if (port->port.tty) 
+warning: 2 lines add whitespace errors.
+09-riscom8-use-tty_port
+10-riscom-tty-remove-dud-checks
+11-isicom-use-tty_port
+12-istallion-use-tty_port
+13-moxa-use-tty_port
+14-mxser-use-tty_port
+15-rocketport-use-tty_port
+.dotest/patch:157: trailing whitespace.
+	 * this loop, info->port.count is dropped by one, so that rp_close() knows when to free things.  
+.dotest/patch:256: trailing whitespace.
+ *  Exception handler that closes a serial port. info->port.count is considered critical. 
+.dotest/patch:336: trailing whitespace.
+	if (info->port.count) 
+warning: 3 lines add whitespace errors.
+16-serial-core-use-tty_port
+17-stallion-use-tty_port
+18-synclink-use-tty_port
+.dotest/patch:67: trailing whitespace.
+		if ( (info->port.flags & ASYNC_CHECK_CD) && 
+.dotest/patch:86: trailing whitespace.
+		if ( (info->port.flags & ASYNC_CTS_FLOW) && 
+.dotest/patch:125: space before tab in indent.
+ 	struct tty_struct *tty = info->port.tty;
+.dotest/patch:153: space before tab in indent.
+  		if (capable(CAP_SYS_ADMIN) && info->port.tty)
+.dotest/patch:186: space before tab in indent.
+ 	if (!info->port.tty || info->port.tty->termios->c_cflag & HUPCL) {
+warning: squelched 19 whitespace errors
+warning: 24 lines add whitespace errors.
+19-cleanup-tiocmset
+20-cyclades-use-tty_port
+21-termios-arch-laggards
+22-more-tty_port-fields
+23-usb-serial-api-change
+.dotest/patch:1358: trailing whitespace.
+static void digi_set_termios(struct tty_struct *tty, 
+.dotest/patch:3220: trailing whitespace.
+static void edge_set_termios(struct tty_struct *tty, 
+.dotest/patch:4167: space before tab in indent.
+       	struct tty_struct *tty = port->port.tty;
+.dotest/patch:4577: trailing whitespace.
+static int  kobil_write (struct tty_struct *tty, struct usb_serial_port *port, 
+.dotest/patch:4592: trailing whitespace.
+static void kobil_set_termios(struct tty_struct *tty, 
+warning: squelched 6 whitespace errors
+warning: 11 lines add whitespace errors.
+24-whiteheat-coding-style
+25-whiteheat-fix-termios
+26-tty-belkin_sa-cleanup
+27-tty-tidy-usb-serial-bus
+28-tty-tidy-usb-console
+29-tty-usb-console-fix-termios
+.dotest/patch:15: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+30-tty-tidy-usb-cp2101
+31-tty-tidy-usb-cyberjack
+32-tty-tidy-usb-cypress
+33-tty-usb-cypress-charsize
+34-tty-tidy-usb-digi-acceleport
+.dotest/patch:258: trailing whitespace.
+ * 
+.dotest/patch:268: trailing whitespace.
+ * 
+.dotest/patch:279: trailing whitespace.
+ * 
+.dotest/patch:281: trailing whitespace.
+ *    -- Fixed close so that 
+warning: 4 lines add whitespace errors.
+35-tty-tidy-usb-empeg
+36-tty-tidy-usb-ftdi-sio
+37-tty-tidy-usb-funsoft
+38-tty-tidy-usb-garmin-gps
+39-tty-tidy-usb-generic
+40-tty-tidy-usb-hp4x
+41-tty-tidy-usb-visor
+42-tty-tidy-usb-io-edgeport
+43-tty-usb-io-edgeport-returns
+44-tty-tidy-usb-serial
+45-tty-tidy-usb-io-ti
+46-tty-tidy-usb-ipaq
+47-tty-tidy-usb-ipw
+.dotest/patch:362: space before tab in indent.
+			 		USB_RECIP_INTERFACE | USB_DIR_OUT,
+.dotest/patch:385: space before tab in indent.
+			 		USB_RECIP_INTERFACE | USB_DIR_OUT,
+warning: 2 lines add whitespace errors.
+48-tty-tidy-usb-iuu-phoenix
+49-tty-tidy-usb-keyspan
+50-tty-usb-keyspan-flipstr
+51-tty-tidy-usb-keyspan-pda
+52-tty-tidy-usb-kl5kusb105
+53-tty-usb-keyspan-pda-flip
+54-tty-tidy-usb-kobil-sct
+55-tty-usb-kobil-sct-ioctl
+56-tty-tidy-usb-mct-u232
+57-tty-usb-mct-u232-flip
+58-tty-tidy-usb-pl2303
+59-tty-tidy-usb-sierra
+60-tty-tidy-usb-spcp8x5
+61-tty-tidy-usb-ti-usb
+62-tty-tidy-usb-safe-serial
+63-tty-tidy-usb-oti6858
+64-tty-tidy-usb-option
+65-tty-tidy-usb-omninet
+66-tty-usb-omninet-flip
+67-tty-tidy-usb-mos7840
+68-tty-tidy-usb-mos7720
+69-tty-split-ldisc
+.dotest/patch:20: trailing whitespace.
+obj-y	 += mem.o random.o tty_io.o n_tty.o tty_ioctl.o tty_ldisc.o 
+.dotest/patch:857: trailing whitespace.
+	
+.dotest/patch:950: trailing whitespace.
+	
+.dotest/patch:1270: trailing whitespace.
+	
+warning: 4 lines add whitespace errors.
+70-serial-add-flush-buffer
+71-serial-atmel-flush-buffer
+72-tty-specialix-tidy
+73-tty-specialix-code-tidy
+74-tty-epca-fixes
+75-tty-mxser-deadbrk
+76-tty-mark-broken-brk
+77-tty-break-errorhandler
+78-tty-epca-restore
+79-tty-isi-restore
+80-tty-riscom8-restore
+81-tty-specialix-restore
+82-tty-ppc-fixes
+83-tty-moxa-warning
+84-strip-maint-entry
