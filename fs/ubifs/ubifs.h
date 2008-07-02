@@ -843,6 +843,7 @@ struct ubifs_mount_opts {
  * struct ubifs_info - UBIFS file-system description data structure
  * (per-superblock).
  * @vfs_sb: VFS @struct super_block object
+ * @bdi: backing device info object to make VFS happy and disable readahead
  *
  * @highest_inum: highest used inode number
  * @vfs_gen: VFS inode generation counter
@@ -1079,6 +1080,7 @@ struct ubifs_mount_opts {
  */
 struct ubifs_info {
 	struct super_block *vfs_sb;
+	struct backing_dev_info bdi;
 
 	ino_t highest_inum;
 	unsigned int vfs_gen;
