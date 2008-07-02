@@ -49,12 +49,15 @@
 
 #define mmu_inval_dma_area(p, l)	/* Anton pulled it out for 2.4.0-xx */
 
-struct resource *_sparc_find_resource(struct resource *r, unsigned long);
+static struct resource *_sparc_find_resource(struct resource *r,
+					     unsigned long);
 
 static void __iomem *_sparc_ioremap(struct resource *res, u32 bus, u32 pa, int sz);
 static void __iomem *_sparc_alloc_io(unsigned int busno, unsigned long phys,
     unsigned long size, char *name);
 static void _sparc_free_io(struct resource *res);
+
+static void register_proc_sparc_ioport(void);
 
 /* This points to the next to use virtual memory for DVMA mappings */
 static struct resource _sparc_dvma = {
@@ -507,7 +510,6 @@ void __init sbus_arch_bus_ranges_init(struct device_node *pn, struct sbus_bus *s
 
 void __init sbus_setup_iommu(struct sbus_bus *sbus, struct device_node *dp)
 {
-#ifndef CONFIG_SUN4
 	struct device_node *parent = dp->parent;
 
 	if (sparc_cpu_model != sun4d &&
@@ -524,7 +526,6 @@ void __init sbus_setup_iommu(struct sbus_bus *sbus, struct device_node *dp)
 
 		iounit_init(dp->node, parent->node, sbus);
 	}
-#endif
 }
 
 void __init sbus_setup_arch_props(struct sbus_bus *sbus, struct device_node *dp)
@@ -539,19 +540,9 @@ void __init sbus_setup_arch_props(struct sbus_bus *sbus, struct device_node *dp)
 
 int __init sbus_arch_preinit(void)
 {
-	extern void register_proc_sparc_ioport(void);
-
 	register_proc_sparc_ioport();
 
-#ifdef CONFIG_SUN4
-	{
-		extern void sun4_dvma_init(void);
-		sun4_dvma_init();
-	}
-	return 1;
-#else
 	return 0;
-#endif
 }
 
 void __init sbus_arch_postinit(void)
@@ -853,8 +844,8 @@ _sparc_io_get_info(char *buf, char **start, off_t fpos, int length, int *eof,
  * XXX Too slow. Can have 8192 DVMA pages on sun4m in the worst case.
  * This probably warrants some sort of hashing.
  */
-struct resource *
-_sparc_find_resource(struct resource *root, unsigned long hit)
+static struct resource *_sparc_find_resource(struct resource *root,
+					     unsigned long hit)
 {
         struct resource *tmp;
 
@@ -865,7 +856,7 @@ _sparc_find_resource(struct resource *root, unsigned long hit)
 	return NULL;
 }
 
-void register_proc_sparc_ioport(void)
+static void register_proc_sparc_ioport(void)
 {
 #ifdef CONFIG_PROC_FS
 	create_proc_read_entry("io_map",0,NULL,_sparc_io_get_info,&sparc_iomap);
