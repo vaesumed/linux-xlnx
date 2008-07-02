@@ -784,133 +784,6 @@ static void populate_lsave(struct ubifs_info *c)
 		c->lsave[cnt++] = c->main_first;
 }
 
-static int lpt_gc(struct ubifs_info *c);
-
-/**
- * ubifs_lpt_start_commit - UBIFS commit starts.
- * @c: the UBIFS file-system description object
- *
- * This function has to be called when UBIFS starts the commit operation.
- * This function "freezes" all currently dirty LEB properties and does not
- * change them anymore. Further changes are saved and tracked separately
- * because they are not part of this commit. This function returns zero in case
- * of success and a negative error code in case of failure.
- */
-int ubifs_lpt_start_commit(struct ubifs_info *c)
-{
-	int err, cnt;
-
-	dbg_lp("");
-
-	mutex_lock(&c->lp_mutex);
-	err = dbg_check_ltab(c);
-	if (err)
-		goto out;
-
-	if (c->check_lpt_free) {
-		/*
-		 * We ensure there is enough free space in
-		 * ubifs_lpt_post_commit() by marking nodes dirty. That
-		 * information is lost when we unmount, so we also need
-		 * to check free space once after mounting also.
-		 */
-		c->check_lpt_free = 0;
-		while (need_write_all(c)) {
-			mutex_unlock(&c->lp_mutex);
-			err = lpt_gc(c);
-			if (err)
-				return err;
-			mutex_lock(&c->lp_mutex);
-		}
-	}
-
-	lpt_tgc_start(c);
-
-	if (!c->dirty_pn_cnt) {
-		dbg_cmt("no cnodes to commit");
-		err = 0;
-		goto out;
-	}
-
-	if (!c->big_lpt && need_write_all(c)) {
-		/* If needed, write everything */
-		err = make_tree_dirty(c);
-		if (err)
-			goto out;
-		lpt_tgc_start(c);
-	}
-
-	if (c->big_lpt)
-		populate_lsave(c);
-
-	cnt = get_cnodes_to_commit(c);
-	ubifs_assert(cnt != 0);
-
-	err = layout_cnodes(c);
-	if (err)
-		goto out;
-
-	/* Copy the LPT's own lprops for end commit to write */
-	memcpy(c->ltab_cmt, c->ltab,
-	       sizeof(struct ubifs_lpt_lprops) * c->lpt_lebs);
-	c->lpt_drty_flgs &= ~(LTAB_DIRTY | LSAVE_DIRTY);
-
-out:
-	mutex_unlock(&c->lp_mutex);
-	return err;
-}
-
-/**
- * free_obsolete_cnodes - free obsolete cnodes for commit end.
- * @c: UBIFS file-system description object
- */
-static void free_obsolete_cnodes(struct ubifs_info *c)
-{
-	struct ubifs_cnode *cnode, *cnext;
-
-	cnext = c->lpt_cnext;
-	if (!cnext)
-		return;
-	do {
-		cnode = cnext;
-		cnext = cnode->cnext;
-		if (test_bit(OBSOLETE_CNODE, &cnode->flags))
-			kfree(cnode);
-		else
-			cnode->cnext = NULL;
-	} while (cnext != c->lpt_cnext);
-	c->lpt_cnext = NULL;
-}
-
-/**
- * ubifs_lpt_end_commit - finish the commit operation.
- * @c: the UBIFS file-system description object
- *
- * This function has to be called when the commit operation finishes. It
- * flushes the changes which were "frozen" by 'ubifs_lprops_start_commit()' to
- * the media. Returns zero in case of success and a negative error code in case
- * of failure.
- */
-int ubifs_lpt_end_commit(struct ubifs_info *c)
-{
-	int err;
-
-	dbg_lp("");
-
-	if (!c->lpt_cnext)
-		return 0;
-
-	err = write_cnodes(c);
-	if (err)
-		return err;
-
-	mutex_lock(&c->lp_mutex);
-	free_obsolete_cnodes(c);
-	mutex_unlock(&c->lp_mutex);
-
-	return 0;
-}
-
 /**
  * nnode_lookup - lookup a nnode in the LPT.
  * @c: UBIFS file-system description object
@@ -1264,6 +1137,131 @@ static int lpt_gc(struct ubifs_info *c)
 	if (lnum == -1)
 		return -ENOSPC;
 	return lpt_gc_lnum(c, lnum);
+}
+
+/**
+ * ubifs_lpt_start_commit - UBIFS commit starts.
+ * @c: the UBIFS file-system description object
+ *
+ * This function has to be called when UBIFS starts the commit operation.
+ * This function "freezes" all currently dirty LEB properties and does not
+ * change them anymore. Further changes are saved and tracked separately
+ * because they are not part of this commit. This function returns zero in case
+ * of success and a negative error code in case of failure.
+ */
+int ubifs_lpt_start_commit(struct ubifs_info *c)
+{
+	int err, cnt;
+
+	dbg_lp("");
+
+	mutex_lock(&c->lp_mutex);
+	err = dbg_check_ltab(c);
+	if (err)
+		goto out;
+
+	if (c->check_lpt_free) {
+		/*
+		 * We ensure there is enough free space in
+		 * ubifs_lpt_post_commit() by marking nodes dirty. That
+		 * information is lost when we unmount, so we also need
+		 * to check free space once after mounting also.
+		 */
+		c->check_lpt_free = 0;
+		while (need_write_all(c)) {
+			mutex_unlock(&c->lp_mutex);
+			err = lpt_gc(c);
+			if (err)
+				return err;
+			mutex_lock(&c->lp_mutex);
+		}
+	}
+
+	lpt_tgc_start(c);
+
+	if (!c->dirty_pn_cnt) {
+		dbg_cmt("no cnodes to commit");
+		err = 0;
+		goto out;
+	}
+
+	if (!c->big_lpt && need_write_all(c)) {
+		/* If needed, write everything */
+		err = make_tree_dirty(c);
+		if (err)
+			goto out;
+		lpt_tgc_start(c);
+	}
+
+	if (c->big_lpt)
+		populate_lsave(c);
+
+	cnt = get_cnodes_to_commit(c);
+	ubifs_assert(cnt != 0);
+
+	err = layout_cnodes(c);
+	if (err)
+		goto out;
+
+	/* Copy the LPT's own lprops for end commit to write */
+	memcpy(c->ltab_cmt, c->ltab,
+	       sizeof(struct ubifs_lpt_lprops) * c->lpt_lebs);
+	c->lpt_drty_flgs &= ~(LTAB_DIRTY | LSAVE_DIRTY);
+
+out:
+	mutex_unlock(&c->lp_mutex);
+	return err;
+}
+
+/**
+ * free_obsolete_cnodes - free obsolete cnodes for commit end.
+ * @c: UBIFS file-system description object
+ */
+static void free_obsolete_cnodes(struct ubifs_info *c)
+{
+	struct ubifs_cnode *cnode, *cnext;
+
+	cnext = c->lpt_cnext;
+	if (!cnext)
+		return;
+	do {
+		cnode = cnext;
+		cnext = cnode->cnext;
+		if (test_bit(OBSOLETE_CNODE, &cnode->flags))
+			kfree(cnode);
+		else
+			cnode->cnext = NULL;
+	} while (cnext != c->lpt_cnext);
+	c->lpt_cnext = NULL;
+}
+
+/**
+ * ubifs_lpt_end_commit - finish the commit operation.
+ * @c: the UBIFS file-system description object
+ *
+ * This function has to be called when the commit operation finishes. It
+ * flushes the changes which were "frozen" by 'ubifs_lprops_start_commit()' to
+ * the media. Returns zero in case of success and a negative error code in case
+ * of failure.
+ */
+int ubifs_lpt_end_commit(struct ubifs_info *c)
+{
+	int err;
+
+	dbg_lp("");
+
+	if (!c->lpt_cnext)
+		return 0;
+
+	err = write_cnodes(c);
+	if (err)
+		return err;
+
+	mutex_lock(&c->lp_mutex);
+	free_obsolete_cnodes(c);
+	mutex_unlock(&c->lp_mutex);
+
+	return 0;
 }
 
 /**
