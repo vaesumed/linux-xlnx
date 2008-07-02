@@ -22,7 +22,7 @@ int xfs_fsync(struct xfs_inode *ip);
 int xfs_release(struct xfs_inode *ip);
 int xfs_inactive(struct xfs_inode *ip);
 int xfs_lookup(struct xfs_inode *dp, struct xfs_name *name,
-		struct xfs_inode **ipp);
+		struct xfs_inode **ipp, struct xfs_name *ci_name);
 int xfs_create(struct xfs_inode *dp, struct xfs_name *name, mode_t mode,
 		xfs_dev_t rdev, struct xfs_inode **ipp, struct cred *credp);
 int xfs_remove(struct xfs_inode *dp, struct xfs_name *name,
@@ -31,8 +31,6 @@ int xfs_link(struct xfs_inode *tdp, struct xfs_inode *sip,
 		struct xfs_name *target_name);
 int xfs_mkdir(struct xfs_inode *dp, struct xfs_name *dir_name,
 		mode_t mode, struct xfs_inode **ipp, struct cred *credp);
-int xfs_rmdir(struct xfs_inode *dp, struct xfs_name *name,
-		struct xfs_inode *cdp);
 int xfs_readdir(struct xfs_inode	*dp, void *dirent, size_t bufsize,
 		       xfs_off_t *offset, filldir_t filldir);
 int xfs_symlink(struct xfs_inode *dp, struct xfs_name *link_name,
