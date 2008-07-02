@@ -810,7 +810,7 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	dbg_jnl("ino %lu%s", inode->i_ino,
 		deletion ? " (last reference)" : "");
 	if (deletion)
-		ubifs_assert(inode->i_nlink == 0);
+		ubifs_assert(inode->i_nlink == 0 && ui->wb_i_nlink == 0);
 
 	len = UBIFS_INO_NODE_SZ;
 	/*
