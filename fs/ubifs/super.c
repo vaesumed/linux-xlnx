@@ -157,7 +157,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		goto out_invalid;
 
 	/* Disable readahead */
-	inode->i_mapping->backing_dev_info = &ubifs_backing_dev_info;
+	inode->i_mapping->backing_dev_info = &c->bdi;
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFREG:
@@ -1525,6 +1525,7 @@ static void ubifs_put_super(struct super_block *sb)
 	}
 
 	ubifs_umount(c);
+	bdi_destroy(&c->bdi);
 	ubi_close_volume(c->ubi);
 	mutex_unlock(&c->umount_mutex);
 	kfree(c);
@@ -1671,9 +1672,23 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_free;
 	}
 
-	err = ubifs_parse_options(c, data, 0);
+	/*
+	 * UBIFS provids 'backing_dev_info' in order to disable readahead. For
+	 * UBIFS, I/O is not deferred, it is done immediately in readpage,
+	 * which means the user would have to wait not just for their own I/O
+	 * but the readahead I/O as well i.e. completely pointless.
+	 *
+	 * Read-ahead will be disabled because @c->bdi.ra_pages is 0.
+	 */
+	c->bdi.capabilities = BDI_CAP_MAP_COPY;
+	c->bdi.unplug_io_fn = default_unplug_io_fn;
+	err  = bdi_init(&c->bdi);
 	if (err)
 		goto out_close;
+
+	err = ubifs_parse_options(c, data, 0);
+	if (err)
+		goto out_bdi;
 
 	c->vfs_sb = sb;
 
@@ -1715,6 +1730,8 @@ out_umount:
 	ubifs_umount(c);
 out_unlock:
 	mutex_unlock(&c->umount_mutex);
+out_bdi:
+	bdi_destroy(&c->bdi);
 out_close:
 	ubi_close_volume(c->ubi);
 out_free:
@@ -1886,14 +1903,10 @@ static int __init ubifs_init(void)
 		return -EINVAL;
 	}
 
-	err  = bdi_init(&ubifs_backing_dev_info);
-	if (err)
-		return err;
-
 	err = register_filesystem(&ubifs_fs_type);
 	if (err) {
 		ubifs_err("cannot register file system, error %d", err);
-		goto out;
+		return err;
 	}
 
 	err = -ENOMEM;
@@ -1917,8 +1930,6 @@ out_compr:
 	kmem_cache_destroy(ubifs_inode_slab);
 out_reg:
 	unregister_filesystem(&ubifs_fs_type);
-out:
-	bdi_destroy(&ubifs_backing_dev_info);
 	return err;
 }
 /* late_initcall to let compressors initialize first */
@@ -1933,7 +1944,6 @@ static void __exit ubifs_exit(void)
 	unregister_shrinker(&ubifs_shrinker_info);
 	kmem_cache_destroy(ubifs_inode_slab);
 	unregister_filesystem(&ubifs_fs_type);
-	bdi_destroy(&ubifs_backing_dev_info);
 }
 module_exit(ubifs_exit);
 

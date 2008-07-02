@@ -42,19 +42,6 @@
 
 #include "ubifs.h"
 
-/*
- * Provide backing_dev_info in order to disable readahead. For UBIFS, I/O is
- * not deferred, it is done immediately in readpage, which means the user would
- * have to wait not just for their own I/O but the readahead I/O as well i.e.
- * completely pointless.
- */
-struct backing_dev_info ubifs_backing_dev_info = {
-	.ra_pages	= 0, /* Set to zero to disable readahead */
-	.state		= 0,
-	.capabilities	= BDI_CAP_MAP_COPY,
-	.unplug_io_fn	= default_unplug_io_fn,
-};
-
 /**
  * inherit_flags - inherit flags of the parent inode.
  * @dir: parent inode
@@ -128,7 +115,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			 ubifs_current_time(inode);
 	inode->i_mapping->nrpages = 0;
 	/* Disable readahead */
-	inode->i_mapping->backing_dev_info = &ubifs_backing_dev_info;
+	inode->i_mapping->backing_dev_info = &c->bdi;
 
 	switch (mode & S_IFMT) {
 	case S_IFREG:
