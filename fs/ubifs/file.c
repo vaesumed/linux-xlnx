@@ -838,31 +838,6 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 	return 0;
 }
 
-static ssize_t ubifs_write(struct file *file, const char __user *buf,
-			   size_t len, loff_t *ppos)
-{
-	int err;
-	ssize_t ret;
-	struct inode *inode = file->f_mapping->host;
-	struct ubifs_info *c = inode->i_sb->s_fs_info;
-
-	err = update_mctime(c, inode);
-	if (err)
-		return err;
-
-	ret = do_sync_write(file, buf, len, ppos);
-	if (ret < 0)
-		return ret;
-
-	if (ret > 0 && IS_SYNC(inode)) {
-		err = ubifs_sync_wbufs_by_inodes(c, &inode, 1);
-		if (err)
-			return err;
-	}
-
-	return ret;
-}
-
 static ssize_t ubifs_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			       unsigned long nr_segs, loff_t pos)
 {
@@ -1057,7 +1032,7 @@ struct inode_operations ubifs_symlink_inode_operations = {
 struct file_operations ubifs_file_operations = {
 	.llseek         = generic_file_llseek,
 	.read           = do_sync_read,
-	.write          = ubifs_write,
+	.write          = do_sync_write,
 	.aio_read       = generic_file_aio_read,
 	.aio_write      = ubifs_aio_write,
 	.mmap           = ubifs_file_mmap,
