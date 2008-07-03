@@ -76,7 +76,6 @@
  * function pointers as users expect, but means @expr must be a pointer or
  * integer.
  */
-#define cast_if_type(expr, oktype, desttype)				\
-  __builtin_choose_expr(__builtin_types_compatible_p(typeof(1?(expr):0),\
-						     oktype),		\
-			(desttype)(expr), (expr))
+#define cast_if_type(expr, oktype, desttype)	__builtin_choose_expr(	\
+	__builtin_types_compatible_p(typeof(1?(expr):(expr)), oktype),	\
+	(desttype)(expr), (expr))
