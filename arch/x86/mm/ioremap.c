@@ -390,8 +390,6 @@ void unxlate_dev_mem_ptr(unsigned long phys, void *addr)
 	return;
 }
 
-#ifdef CONFIG_X86_32
-
 int __initdata early_ioremap_debug;
 
 static int __init early_ioremap_debug_setup(char *str)
@@ -492,10 +490,11 @@ static void __init __early_set_fixmap(enum fixed_addresses idx,
 		return;
 	}
 	pte = early_ioremap_pte(addr);
+
 	if (pgprot_val(flags))
 		set_pte(pte, pfn_pte(phys >> PAGE_SHIFT, flags));
 	else
-		pte_clear(NULL, addr, pte);
+		pte_clear(&init_mm, addr, pte);
 	__flush_tlb_one(addr);
 }
 
@@ -633,5 +632,3 @@ void __this_fixmap_does_not_exist(void)
 {
 	WARN_ON(1);
 }
-
-#endif /* CONFIG_X86_32 */
