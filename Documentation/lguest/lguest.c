@@ -156,8 +156,8 @@ struct virtqueue
 	/* The actual ring of buffers. */
 	struct vring vring;
 
-	/* The routine to call when the Guest pings us. */
-	void (*handle_output)(int fd, struct virtqueue *me);
+	/* The routine to call when the Guest pings us, or timeout. */
+	void (*handle_output)(int fd, struct virtqueue *me, bool timeout);
 
 	/* Outstanding buffers */
 	unsigned int inflight;
@@ -879,7 +879,7 @@ static bool handle_console_input(int fd, struct device *dev)
 
 /* Handling output for console is simple: we just get all the output buffers
  * and write them to stdout. */
-static void handle_console_output(int fd, struct virtqueue *vq)
+static void handle_console_output(int fd, struct virtqueue *vq, bool timeout)
 {
 	unsigned int head, out, in;
 	int len;
@@ -916,7 +916,7 @@ static void block_vq(struct virtqueue *vq)
  * and write them (ignoring the first element) to this device's file descriptor
  * (/dev/net/tun).
  */
-static void handle_net_output(int fd, struct virtqueue *vq)
+static void handle_net_output(int fd, struct virtqueue *vq, bool timeout)
 {
 	unsigned int head, out, in, num = 0;
 	int len;
@@ -936,7 +936,7 @@ static void handle_net_output(int fd, struct virtqueue *vq)
 	}
 
 	/* Block further kicks, and set up a timer if we saw anything. */
-	if (num)
+	if (!timeout && num)
 		block_vq(vq);
 }
 
@@ -984,14 +984,14 @@ static bool handle_tun_input(int fd, struct device *dev)
 /*L:215 This is the callback attached to the network and console input
  * virtqueues: it ensures we try again, in case we stopped console or net
  * delivery because Guest didn't have any buffers. */
-static void enable_fd(int fd, struct virtqueue *vq)
+static void enable_fd(int fd, struct virtqueue *vq, bool timeout)
 {
 	add_device_fd(vq->dev->fd);
 	/* Tell waker to listen to it again */
 	write(waker_fd, &vq->dev->fd, sizeof(vq->dev->fd));
 }
 
-static void net_enable_fd(int fd, struct virtqueue *vq)
+static void net_enable_fd(int fd, struct virtqueue *vq, bool timeout)
 {
 	/* We don't need to know again when Guest refills receive buffer. */
 	vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
@@ -1067,7 +1067,7 @@ static void handle_output(int fd, unsigned long addr)
 			if (strcmp(vq->dev->name, "console") != 0)
 				verbose("Output to %s\n", vq->dev->name);
 			if (vq->handle_output)
-				vq->handle_output(fd, vq);
+				vq->handle_output(fd, vq, false);
 			return;
 		}
 	}
@@ -1099,7 +1099,7 @@ static void handle_timeout(int fd)
 			vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
 			vq->blocked = false;
 			if (vq->handle_output)
-				vq->handle_output(fd, vq);
+				vq->handle_output(fd, vq, true);
 		}
 	}
 }
@@ -1197,7 +1197,7 @@ static struct lguest_device_desc *new_dev_desc(u16 type)
 /* Each device descriptor is followed by the description of its virtqueues.  We
  * specify how many descriptors the virtqueue is to have. */
 static void add_virtqueue(struct device *dev, unsigned int num_descs,
-			  void (*handle_output)(int fd, struct virtqueue *me))
+			  void (*handle_output)(int, struct virtqueue *, bool))
 {
 	unsigned int pages;
 	struct virtqueue **i, *vq = malloc(sizeof(*vq));
@@ -1744,7 +1744,7 @@ static bool handle_io_finish(int fd, struct device *dev)
 }
 
 /* When the Guest submits some I/O, we just need to wake the I/O thread. */
-static void handle_virtblk_output(int fd, struct virtqueue *vq)
+static void handle_virtblk_output(int fd, struct virtqueue *vq, bool timeout)
 {
 	struct vblk_info *vblk = vq->dev->priv;
 	char c = 0;
