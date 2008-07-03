@@ -76,7 +76,7 @@ static int proc_ide_read_mate
 	ide_hwif_t	*hwif = (ide_hwif_t *) data;
 	int		len;
 
-	if (hwif && hwif->mate && hwif->mate->present)
+	if (hwif && hwif->mate)
 		len = sprintf(page, "%s\n", hwif->mate->name);
 	else
 		len = sprintf(page, "(none)\n");
@@ -345,7 +345,7 @@ static int set_xfer_rate (ide_drive_t *drive, int arg)
 	ide_task_t task;
 	int err;
 
-	if (arg < 0 || arg > 70)
+	if (arg < XFER_PIO_0 || arg > XFER_UDMA_6)
 		return -EINVAL;
 
 	memset(&task, 0, sizeof(task));
@@ -357,7 +357,7 @@ static int set_xfer_rate (ide_drive_t *drive, int arg)
 
 	err = ide_no_data_taskfile(drive, &task);
 
-	if (!err && arg) {
+	if (!err) {
 		ide_set_xfer_rate(drive, (u8) arg);
 		ide_driveid_update(drive);
 	}
