@@ -13,6 +13,8 @@ obj-$(CONFIG_MMIOTRACE)		+= mmiotrace.o
 mmiotrace-y			:= pf_in.o mmio-mod.o
 obj-$(CONFIG_MMIOTRACE_TEST)	+= testmmiotrace.o
 
+obj-$(CONFIG_KMEMCHECK)		+= kmemcheck/
+
 ifeq ($(CONFIG_X86_32),y)
 obj-$(CONFIG_NUMA)		+= discontig_32.o
 else
