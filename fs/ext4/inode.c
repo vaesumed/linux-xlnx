@@ -46,6 +46,8 @@ static inline int ext4_begin_ordered_truncate(struct inode *inode,
 						   new_size);
 }
 
+static void ext4_invalidatepage(struct page *page, unsigned long offset);
+
 /*
  * Test whether an inode is a fast symlink.
  */
@@ -1408,6 +1410,267 @@ static int ext4_journalled_write_end(struct file *file,
 }
 
 /*
+ * this is a special callback for ->write_begin() only
+ * it's intention is to return mapped block or reserve space
+ */
+static int ext4_da_get_block_prep(struct inode *inode, sector_t iblock,
+				  struct buffer_head *bh_result, int create)
+{
+	int ret = 0;
+
+	BUG_ON(create == 0);
+	BUG_ON(bh_result->b_size != inode->i_sb->s_blocksize);
+
+	/*
+	 * first, we need to know whether the block is allocated already
+	 * preallocated blocks are unmapped but should treated
+	 * the same as allocated blocks.
+	 */
+	ret = ext4_get_blocks_wrap(NULL, inode, iblock, 1,  bh_result, 0, 0);
+	if (ret == 0) {
+		/* the block isn't allocated yet, let's reserve space */
+		/* XXX: call reservation here */
+		/*
+		 * XXX: __block_prepare_write() unmaps passed block,
+		 * is it OK?
+		 */
+		map_bh(bh_result, inode->i_sb, 0);
+		set_buffer_new(bh_result);
+		set_buffer_delay(bh_result);
+	} else if (ret > 0) {
+		bh_result->b_size = (ret << inode->i_blkbits);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+static int ext4_da_get_block_write(struct inode *inode, sector_t iblock,
+				   struct buffer_head *bh_result, int create)
+{
+	int ret, needed_blocks = ext4_writepage_trans_blocks(inode);
+	unsigned max_blocks = bh_result->b_size >> inode->i_blkbits;
+	loff_t disksize = EXT4_I(inode)->i_disksize;
+	handle_t *handle = NULL;
+
+	if (create) {
+		handle = ext4_journal_start(inode, needed_blocks);
+		if (IS_ERR(handle)) {
+			ret = PTR_ERR(handle);
+			goto out;
+		}
+	}
+
+	ret = ext4_get_blocks_wrap(handle, inode, iblock, max_blocks,
+				   bh_result, create, 0);
+	if (ret > 0) {
+		bh_result->b_size = (ret << inode->i_blkbits);
+
+		/*
+		 * Update on-disk size along with block allocation
+		 * we don't use 'extend_disksize' as size may change
+		 * within already allocated block -bzzz
+		 */
+		disksize = ((loff_t) iblock + ret) << inode->i_blkbits;
+		if (disksize > i_size_read(inode))
+			disksize = i_size_read(inode);
+		if (disksize > EXT4_I(inode)->i_disksize) {
+			/*
+			 * XXX: replace with spinlock if seen contended -bzzz
+			 */
+			down_write(&EXT4_I(inode)->i_data_sem);
+			if (disksize > EXT4_I(inode)->i_disksize)
+				EXT4_I(inode)->i_disksize = disksize;
+			up_write(&EXT4_I(inode)->i_data_sem);
+
+			if (EXT4_I(inode)->i_disksize == disksize) {
+				if (handle == NULL)
+					handle = ext4_journal_start(inode, 1);
+				if (!IS_ERR(handle))
+					ext4_mark_inode_dirty(handle, inode);
+			}
+		}
+
+		ret = 0;
+	}
+
+out:
+	if (handle && !IS_ERR(handle))
+		ext4_journal_stop(handle);
+
+	return ret;
+}
+/* FIXME!! only support data=writeback mode */
+static int ext4_da_writepage(struct page *page,
+				struct writeback_control *wbc)
+{
+	struct inode *inode = page->mapping->host;
+	handle_t *handle = NULL;
+	int ret = 0;
+	int err;
+
+	if (ext4_journal_current_handle())
+		goto out_fail;
+
+	handle = ext4_journal_start(inode, ext4_writepage_trans_blocks(inode));
+	if (IS_ERR(handle)) {
+		ret = PTR_ERR(handle);
+		goto out_fail;
+	}
+
+	if (test_opt(inode->i_sb, NOBH) && ext4_should_writeback_data(inode))
+		ret = nobh_writepage(page, ext4_get_block, wbc);
+	else
+		ret = block_write_full_page(page, ext4_get_block, wbc);
+
+	if (!ret && inode->i_size > EXT4_I(inode)->i_disksize) {
+		EXT4_I(inode)->i_disksize = inode->i_size;
+		ext4_mark_inode_dirty(handle, inode);
+	}
+
+	err = ext4_journal_stop(handle);
+	if (!ret)
+		ret = err;
+	return ret;
+
+out_fail:
+	redirty_page_for_writepage(wbc, page);
+	unlock_page(page);
+	return ret;
+}
+
+static int ext4_da_writepages(struct address_space *mapping,
+				struct writeback_control *wbc)
+{
+	return mpage_da_writepages(mapping, wbc, ext4_da_get_block_write);
+}
+
+static int ext4_da_write_begin(struct file *file, struct address_space *mapping,
+				loff_t pos, unsigned len, unsigned flags,
+				struct page **pagep, void **fsdata)
+{
+	int ret;
+	struct page *page;
+	pgoff_t index;
+	unsigned from, to;
+	struct inode *inode = mapping->host;
+	handle_t *handle;
+
+	index = pos >> PAGE_CACHE_SHIFT;
+	from = pos & (PAGE_CACHE_SIZE - 1);
+	to = from + len;
+
+	/*
+	 * With delayed allocation, we don't log the i_disksize update
+	 * if there is delayed block allocation. But we still need
+	 * to journalling the i_disksize update if writes to the end
+	 * of file which has an already mapped buffer.
+	 */
+	handle = ext4_journal_start(inode, 1);
+	if (IS_ERR(handle)) {
+		ret = PTR_ERR(handle);
+		goto out;
+	}
+
+	page = __grab_cache_page(mapping, index);
+	if (!page)
+		return -ENOMEM;
+	*pagep = page;
+
+	ret = block_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
+							ext4_da_get_block_prep);
+	if (ret < 0) {
+		unlock_page(page);
+		ext4_journal_stop(handle);
+		page_cache_release(page);
+	}
+
+out:
+	return ret;
+}
+
+static int ext4_bh_unmapped_or_delay(handle_t *handle, struct buffer_head *bh)
+{
+	return !buffer_mapped(bh) || buffer_delay(bh);
+}
+
+static int ext4_da_write_end(struct file *file,
+				struct address_space *mapping,
+				loff_t pos, unsigned len, unsigned copied,
+				struct page *page, void *fsdata)
+{
+	struct inode *inode = mapping->host;
+	int ret = 0, ret2;
+	handle_t *handle = ext4_journal_current_handle();
+	loff_t new_i_size;
+
+	/*
+	 * generic_write_end() will run mark_inode_dirty() if i_size
+	 * changes.  So let's piggyback the i_disksize mark_inode_dirty
+	 * into that.
+	 */
+
+	new_i_size = pos + copied;
+	if (new_i_size > EXT4_I(inode)->i_disksize)
+		if (!walk_page_buffers(NULL, page_buffers(page),
+				       0, len, NULL, ext4_bh_unmapped_or_delay)){
+			/*
+			 * Updating i_disksize when extending file without
+			 * needing block allocation
+			 */
+			if (ext4_should_order_data(inode))
+				ret = ext4_jbd2_file_inode(handle, inode);
+
+			EXT4_I(inode)->i_disksize = new_i_size;
+		}
+	ret2 = generic_write_end(file, mapping, pos, len, copied,
+							page, fsdata);
+	copied = ret2;
+	if (ret2 < 0)
+		ret = ret2;
+	ret2 = ext4_journal_stop(handle);
+	if (!ret)
+		ret = ret2;
+
+	return ret ? ret : copied;
+}
+
+static void ext4_da_invalidatepage(struct page *page, unsigned long offset)
+{
+	struct buffer_head *head, *bh;
+	unsigned int curr_off = 0;
+
+	/*
+	 * Drop reserved blocks
+	 */
+	BUG_ON(!PageLocked(page));
+	if (!page_has_buffers(page))
+		goto out;
+
+	head = page_buffers(page);
+	bh = head;
+	do {
+		unsigned int next_off = curr_off + bh->b_size;
+
+		/*
+		 * is this block fully invalidated?
+		 */
+		if (offset <= curr_off && buffer_delay(bh)) {
+			clear_buffer_delay(bh);
+			/* XXX: add real stuff here */
+		}
+		curr_off = next_off;
+		bh = bh->b_this_page;
+	} while (bh != head);
+
+out:
+	ext4_invalidatepage(page, offset);
+
+	return;
+}
+
+
+/*
  * bmap() is special.  It gets used by applications such as lilo and by
  * the swapper to find the on-disk block of a specific piece of data.
  *
@@ -1426,6 +1689,16 @@ static sector_t ext4_bmap(struct address_space *mapping, sector_t block)
 	struct inode *inode = mapping->host;
 	journal_t *journal;
 	int err;
+
+	if (mapping_tagged(mapping, PAGECACHE_TAG_DIRTY) &&
+			test_opt(inode->i_sb, DELALLOC)) {
+		/*
+		 * With delalloc we want to sync the file
+		 * so that we can make sure we allocate
+		 * blocks for file
+		 */
+		filemap_write_and_wait(mapping);
+	}
 
 	if (EXT4_I(inode)->i_state & EXT4_STATE_JDATA) {
 		/*
@@ -1469,11 +1742,6 @@ static int bput_one(handle_t *handle, struct buffer_head *bh)
 {
 	put_bh(bh);
 	return 0;
-}
-
-static int ext4_bh_unmapped_or_delay(handle_t *handle, struct buffer_head *bh)
-{
-	return !buffer_mapped(bh) || buffer_delay(bh);
 }
 
 /*
@@ -1832,10 +2100,28 @@ static const struct address_space_operations ext4_journalled_aops = {
 	.releasepage	= ext4_releasepage,
 };
 
+static const struct address_space_operations ext4_da_aops = {
+	.readpage	= ext4_readpage,
+	.readpages	= ext4_readpages,
+	.writepage	= ext4_da_writepage,
+	.writepages	= ext4_da_writepages,
+	.sync_page	= block_sync_page,
+	.write_begin	= ext4_da_write_begin,
+	.write_end	= ext4_da_write_end,
+	.bmap		= ext4_bmap,
+	.invalidatepage	= ext4_da_invalidatepage,
+	.releasepage	= ext4_releasepage,
+	.direct_IO	= ext4_direct_IO,
+	.migratepage	= buffer_migrate_page,
+};
+
 void ext4_set_aops(struct inode *inode)
 {
 	if (ext4_should_order_data(inode))
 		inode->i_mapping->a_ops = &ext4_ordered_aops;
+	else if (ext4_should_writeback_data(inode) &&
+		 test_opt(inode->i_sb, DELALLOC))
+		inode->i_mapping->a_ops = &ext4_da_aops;
 	else if (ext4_should_writeback_data(inode))
 		inode->i_mapping->a_ops = &ext4_writeback_aops;
 	else
