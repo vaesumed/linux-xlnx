@@ -117,11 +117,13 @@ obj-$(CONFIG_USB_SN9C102)       += sn9c102/
 obj-$(CONFIG_USB_ET61X251)      += et61x251/
 obj-$(CONFIG_USB_PWC)           += pwc/
 obj-$(CONFIG_USB_ZC0301)        += zc0301/
+obj-$(CONFIG_USB_GSPCA)         += gspca/
 
 obj-$(CONFIG_USB_IBMCAM)        += usbvideo/
 obj-$(CONFIG_USB_KONICAWC)      += usbvideo/
 obj-$(CONFIG_USB_VICAM)         += usbvideo/
 obj-$(CONFIG_USB_QUICKCAM_MESSENGER)	+= usbvideo/
+obj-$(CONFIG_USB_S2255)		+= s2255drv.o
 
 obj-$(CONFIG_VIDEO_IVTV) += ivtv/
 obj-$(CONFIG_VIDEO_CX18) += cx18/
@@ -135,6 +137,8 @@ obj-$(CONFIG_SOC_CAMERA_MT9M001)	+= mt9m001.o
 obj-$(CONFIG_SOC_CAMERA_MT9V022)	+= mt9v022.o
 
 obj-$(CONFIG_VIDEO_AU0828) += au0828/
+
+obj-$(CONFIG_USB_VIDEO_CLASS)	+= uvc/
 
 EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core
 EXTRA_CFLAGS += -Idrivers/media/dvb/frontends
