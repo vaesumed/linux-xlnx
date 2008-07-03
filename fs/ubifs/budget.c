@@ -543,11 +543,7 @@ again:
 	ubifs_assert(c->budg_data_growth >= 0);
 	ubifs_assert(c->budg_dd_growth >= 0);
 
-	if (unlikely(c->nospace && !can_use_rp(c))) {
-		err = -ENOSPC;
-		goto out_nospace;
-	}
-	if (unlikely(c->nospace_rp)) {
+	if (unlikely(c->nospace) && (c->nospace_rp || !can_use_rp(c))) {
 		err = -ENOSPC;
 		goto out_nospace;
 	}
@@ -581,10 +577,9 @@ make_space:
 		goto again;
 	} else if (err == -ENOSPC) {
 		dbg_budg("FS is full, -ENOSPC");
-		if (can_use_rp(c))
+		c->nospace = 1;
+		if (can_use_rp(c) || c->rp_size == 0)
 			c->nospace_rp = 1;
-		else
-			c->nospace = 1;
 		smp_wmb();
 	} else
 		ubifs_err("cannot budget space, error %d", err);
