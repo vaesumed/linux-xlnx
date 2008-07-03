@@ -280,6 +280,7 @@ int hvc_instantiate(uint32_t vtermno, int index, struct hv_ops *ops)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(hvc_instantiate);
 
 /* Wake the sleeping khvcd */
 void hvc_kick(void)
@@ -287,6 +288,7 @@ void hvc_kick(void)
 	hvc_kicked = 1;
 	wake_up_process(hvc_task);
 }
+EXPORT_SYMBOL_GPL(hvc_kick);
 
 static void hvc_unthrottle(struct tty_struct *tty)
 {
@@ -629,6 +631,7 @@ int hvc_poll(struct hvc_struct *hp)
 
 	return poll_mask;
 }
+EXPORT_SYMBOL_GPL(hvc_poll);
 
 #if defined(CONFIG_XMON) && defined(CONFIG_SMP)
 extern cpumask_t cpus_in_xmon;
@@ -745,6 +748,7 @@ struct hvc_struct __devinit *hvc_alloc(uint32_t vtermno, int data,
 
 	return hp;
 }
+EXPORT_SYMBOL_GPL(hvc_alloc);
 
 int __devexit hvc_remove(struct hvc_struct *hp)
 {
