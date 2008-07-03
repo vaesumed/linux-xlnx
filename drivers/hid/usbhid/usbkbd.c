@@ -43,7 +43,7 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE(DRIVER_LICENSE);
 
-static unsigned char usb_kbd_keycode[256] = {
+static const unsigned char usb_kbd_keycode[256] = {
 	  0,  0,  0,  0, 30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38,
 	 50, 49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44,  2,  3,
 	  4,  5,  6,  7,  8,  9, 10, 11, 28,  1, 14, 15, 57, 12, 13, 26,
@@ -233,7 +233,7 @@ static int usb_kbd_probe(struct usb_interface *iface,
 	if (!usb_endpoint_is_int_in(endpoint))
 		return -ENODEV;
 
-#ifdef CONFIG_USB_HID
+#ifdef CONFIG_USB_HID_MODULE
 	if (usbhid_lookup_quirk(le16_to_cpu(dev->descriptor.idVendor),
 				le16_to_cpu(dev->descriptor.idProduct))
 			& HID_QUIRK_IGNORE) {
