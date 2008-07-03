@@ -284,32 +284,34 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	dbg_gen("dent '%.*s', mode %#x in dir ino %lu",
 		dentry->d_name.len, dentry->d_name.name, mode, dir->i_ino);
 
-	inode = ubifs_new_inode(c, dir, mode);
-	if (IS_ERR(inode))
-		return PTR_ERR(inode);
-
 	err = ubifs_budget_space(c, &req);
 	if (err)
-		goto out;
+		return err;
+
+	inode = ubifs_new_inode(c, dir, mode);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto out_budg;
+	}
 
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
-		goto out_budg;
+		goto out;
 
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
 	return 0;
 
-out_budg:
-	dir->i_size -= sz_change;
-	ubifs_release_budget(c, &req);
-	ubifs_err("cannot create regular file, error %d", err);
 out:
+	dir->i_size -= sz_change;
 	make_bad_inode(inode);
 	iput(inode);
+out_budg:
+	ubifs_release_budget(c, &req);
+	ubifs_err("cannot create regular file, error %d", err);
 	return err;
 }
 
@@ -857,7 +859,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int unlink = !!new_inode;
 	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
-	struct timespec time = ubifs_current_time(old_dir);
+	struct timespec time;
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
 					.dirtied_ino = 3 };
 	struct ubifs_budget_req ino_req = {.dirtied_ino = 1,
@@ -896,6 +898,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	 * Like most other Unix systems, set the @i_ctime for inodes on a
 	 * rename.
 	 */
+	time = ubifs_current_time(old_dir);
 	old_inode->i_ctime = time;
 
 	/* We must adjust parent link count when renaming directories */
