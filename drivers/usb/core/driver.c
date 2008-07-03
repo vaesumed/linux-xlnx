@@ -862,7 +862,7 @@ static void do_unbind_rebind(struct usb_device *udev, int action)
 	 * complete() callback.  Until that is implemented, we have to
 	 * use this hack.
 	 */
-					intf->dev.power.sleeping = 0;
+//					intf->dev.power.sleeping = 0;
 
 					usb_rebind_intf(intf);
 				}
