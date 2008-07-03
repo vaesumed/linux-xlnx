@@ -88,7 +88,7 @@ static void klsi_105_set_termios(struct tty_struct *tty,
 			struct usb_serial_port *port, struct ktermios *old);
 static void klsi_105_throttle(struct tty_struct *tty);
 static void klsi_105_unthrottle(struct tty_struct *tty);
-static int  klsi_105_tiocmget((struct tty_struct *tty, struct file *file);
+static int  klsi_105_tiocmget(struct tty_struct *tty, struct file *file);
 static int  klsi_105_tiocmset(struct tty_struct *tty, struct file *file,
 			unsigned int set, unsigned int clear);
 
@@ -433,7 +433,7 @@ static int  klsi_105_open(struct tty_struct *tty,
 	if (rc >= 0) {
 		spin_lock_irqsave(&priv->lock, flags);
 		priv->line_state = line_state;
-		spin_unlock_irqrestore*&priv->lock, flags);
+		spin_unlock_irqrestore(&priv->lock, flags);
 		dbg("%s - read line state 0x%lx", __func__, line_state);
 		retval = 0;
 	} else
