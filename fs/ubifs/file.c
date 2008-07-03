@@ -826,7 +826,7 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 		if (err)
 			return err;
 
-		inode->i_mtime = inode->i_ctime = now;
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		mutex_lock(&ui->wb_mutex);
 		release = ui->dirty;
 		mark_inode_dirty_sync(inode);
@@ -928,7 +928,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 	 * do in 'ubifs_write_begin()' and 'ubifs_write_end()'. Glance there
 	 * for more comments.
 	 */
-	update_time = !!mctime_update_needed(inode, &now);
+	update_time = mctime_update_needed(inode, &now);
 	if (update_time)
 		/*
 		 * We have to change inode time stamp which requires extra
@@ -966,7 +966,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 		int release;
 		struct ubifs_inode *ui = ubifs_inode(inode);
 
-		inode->i_mtime = inode->i_ctime = now;
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		mutex_lock(&ui->wb_mutex);
 		release = ui->dirty;
 		mark_inode_dirty_sync(inode);
