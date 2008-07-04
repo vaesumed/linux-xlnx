@@ -718,13 +718,13 @@ static int moxa_load_code(struct moxa_board_conf *brd, const void *ptr,
 
 static int moxa_load_fw(struct moxa_board_conf *brd, const struct firmware *fw)
 {
-	void *ptr = fw->data;
+	const void *ptr = fw->data;
 	char rsn[64];
 	u16 lens[5];
 	size_t len;
 	unsigned int a, lenp, lencnt;
 	int ret = -EINVAL;
-	struct {
+	const struct {
 		__le32 magic;	/* 0x34303430 */
 		u8 reserved1[2];
 		u8 type;	/* UNIX = 3 */
