@@ -846,10 +846,10 @@ static void handle_irq_noise(struct b43legacy_wldev *dev)
 	/* Get the noise samples. */
 	B43legacy_WARN_ON(dev->noisecalc.nr_samples >= 8);
 	i = dev->noisecalc.nr_samples;
-	noise[0] = limit_value(noise[0], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
-	noise[1] = limit_value(noise[1], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
-	noise[2] = limit_value(noise[2], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
-	noise[3] = limit_value(noise[3], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[0] = clamp_val(noise[0], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[1] = clamp_val(noise[1], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[2] = clamp_val(noise[2], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
+	noise[3] = clamp_val(noise[3], 0, ARRAY_SIZE(phy->nrssi_lt) - 1);
 	dev->noisecalc.samples[i][0] = phy->nrssi_lt[noise[0]];
 	dev->noisecalc.samples[i][1] = phy->nrssi_lt[noise[1]];
 	dev->noisecalc.samples[i][2] = phy->nrssi_lt[noise[2]];
@@ -2358,8 +2358,7 @@ static int b43legacy_rng_init(struct b43legacy_wl *wl)
 }
 
 static int b43legacy_op_tx(struct ieee80211_hw *hw,
-			   struct sk_buff *skb,
-			   struct ieee80211_tx_control *ctl)
+			   struct sk_buff *skb)
 {
 	struct b43legacy_wl *wl = hw_to_b43legacy_wl(hw);
 	struct b43legacy_wldev *dev = wl->current_dev;
@@ -2373,10 +2372,10 @@ static int b43legacy_op_tx(struct ieee80211_hw *hw,
 	/* DMA-TX is done without a global lock. */
 	if (b43legacy_using_pio(dev)) {
 		spin_lock_irqsave(&wl->irq_lock, flags);
-		err = b43legacy_pio_tx(dev, skb, ctl);
+		err = b43legacy_pio_tx(dev, skb);
 		spin_unlock_irqrestore(&wl->irq_lock, flags);
 	} else
-		err = b43legacy_dma_tx(dev, skb, ctl);
+		err = b43legacy_dma_tx(dev, skb);
 out:
 	if (unlikely(err)) {
 		/* Drop the packet. */
@@ -2385,8 +2384,7 @@ out:
 	return NETDEV_TX_OK;
 }
 
-static int b43legacy_op_conf_tx(struct ieee80211_hw *hw,
-				int queue,
+static int b43legacy_op_conf_tx(struct ieee80211_hw *hw, u16 queue,
 				const struct ieee80211_tx_queue_params *params)
 {
 	return 0;
@@ -2797,7 +2795,6 @@ static int b43legacy_wireless_core_start(struct b43legacy_wldev *dev)
 	/* Start data flow (TX/RX) */
 	b43legacy_mac_enable(dev);
 	b43legacy_interrupt_enable(dev, dev->irq_savedstate);
-	ieee80211_start_queues(dev->wl->hw);
 
 	/* Start maintenance work */
 	b43legacy_periodic_tasks_setup(dev);
@@ -3406,7 +3403,7 @@ static int b43legacy_op_beacon_set_tim(struct ieee80211_hw *hw,
 	 * field, but that would probably require resizing and moving of data
 	 * within the beacon template. Simply request a new beacon and let
 	 * mac80211 do the hard work. */
-	beacon = ieee80211_beacon_get(hw, wl->vif, NULL);
+	beacon = ieee80211_beacon_get(hw, wl->vif);
 	if (unlikely(!beacon))
 		return -ENOMEM;
 	spin_lock_irqsave(&wl->irq_lock, flags);
@@ -3417,8 +3414,7 @@ static int b43legacy_op_beacon_set_tim(struct ieee80211_hw *hw,
 }
 
 static int b43legacy_op_ibss_beacon_update(struct ieee80211_hw *hw,
-					   struct sk_buff *beacon,
-					   struct ieee80211_tx_control *ctl)
+					   struct sk_buff *beacon)
 {
 	struct b43legacy_wl *wl = hw_to_b43legacy_wl(hw);
 	unsigned long flags;
@@ -3718,10 +3714,9 @@ static int b43legacy_wireless_init(struct ssb_device *dev)
 
 	/* fill hw info */
 	hw->flags = IEEE80211_HW_HOST_GEN_BEACON_TEMPLATE |
-		    IEEE80211_HW_RX_INCLUDES_FCS;
-	hw->max_signal = 100;
-	hw->max_rssi = -110;
-	hw->max_noise = -110;
+		    IEEE80211_HW_RX_INCLUDES_FCS |
+		    IEEE80211_HW_SIGNAL_DBM |
+		    IEEE80211_HW_NOISE_DBM;
 	hw->queues = 1; /* FIXME: hardware has more queues */
 	SET_IEEE80211_DEV(hw, dev->dev);
 	if (is_valid_ether_addr(sprom->et1mac))
