@@ -802,26 +802,25 @@ void dbg_dump_index(struct ubifs_info *c)
 int dbg_check_synced_i_size(struct inode *inode)
 {
 	int err = 0;
-	loff_t i_size, synced_i_size;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	if (!(ubifs_chk_flags & UBIFS_CHK_GEN))
 		return 0;
+	if (!S_ISREG(inode->i_mode))
+		return 0;
 
 	mutex_lock(&ui->wb_mutex);
 	spin_lock(&ui->synced_i_size_lock);
-	i_size = i_size_read(&ui->vfs_inode);
-	synced_i_size = ui->synced_i_size;
-	if (i_size != synced_i_size && !ui->dirty) {
-		ubifs_err("inode %lu size is %lld, synchronized size is %lld,"
-			  " but inode is clean", inode->i_ino, i_size,
-			  synced_i_size);
+	if (ui->ui_size != ui->synced_i_size && !ui->dirty) {
+		ubifs_err("ui_size is %lld, synced_i_size is %lld, but inode "
+			  "is clean", ui->ui_size, ui->synced_i_size);
+		ubifs_err("i_ino %lu, i_mode %#x, i_size %lld", inode->i_ino,
+			  inode->i_mode, i_size_read(inode));
 		dbg_dump_stack();
 		err = -EINVAL;
 	}
 	spin_unlock(&ui->synced_i_size_lock);
 	mutex_unlock(&ui->wb_mutex);
-
 	return err;
 }
 

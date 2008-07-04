@@ -147,7 +147,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	 * are holding host @host->i_mutex - every xattr operation for this
 	 * inode is serialized by it.
 	 */
-	inode->i_size = size;
+	inode->i_size = ui->ui_size = size;
 	ui->data_len = size;
 	err = ubifs_jnl_update(c, host, nm, inode, 0, 1);
 	if (err)
@@ -211,7 +211,7 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 	}
 
 	memcpy(ui->data, value, size);
-	inode->i_size = size;
+	inode->i_size = ui->ui_size = size;
 	ui->data_len = size;
 
 	/*

@@ -145,7 +145,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
-	ui->synced_i_size = inode->i_size;
+	ui->synced_i_size = ui->ui_size = inode->i_size;
 
 	err = validate_inode(c, inode);
 	if (err)
@@ -326,7 +326,7 @@ static void ubifs_delete_inode(struct inode *inode)
 	if (is_bad_inode(inode))
 		goto out;
 
-	inode->i_size = 0;
+	ubifs_inode(inode)->ui_size = inode->i_size = 0;
 	err = ubifs_jnl_write_inode(c, inode, 1);
 	if (err)
 		/*
