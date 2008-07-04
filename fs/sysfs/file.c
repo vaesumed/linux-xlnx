@@ -578,8 +578,8 @@ EXPORT_SYMBOL_GPL(sysfs_add_file_to_group);
 int sysfs_chmod_file(struct kobject *kobj, struct attribute *attr, mode_t mode)
 {
 	struct sysfs_dirent *victim_sd = NULL;
-	struct dentry *victim = NULL;
-	struct inode * inode;
+	struct super_block *sb;
+	struct inode * inode = NULL;
 	struct iattr newattrs;
 	int rc;
 
@@ -588,31 +588,42 @@ int sysfs_chmod_file(struct kobject *kobj, struct attribute *attr, mode_t mode)
 	if (!victim_sd)
 		goto out;
 
+	rc = -ENOENT;
+	mutex_lock(&sysfs_mutex);
+	inode = sysfs_get_inode(victim_sd);
+	mutex_unlock(&sysfs_mutex);
+	if (!inode)
+ 		goto out;
+
 	mutex_lock(&sysfs_rename_mutex);
-	victim = sysfs_get_dentry(sysfs_sb, victim_sd);
-	mutex_unlock(&sysfs_rename_mutex);
-	if (IS_ERR(victim)) {
-		rc = PTR_ERR(victim);
-		victim = NULL;
-		goto out;
-	}
-
-	inode = victim->d_inode;
-
+	sysfs_grab_supers();
 	mutex_lock(&inode->i_mutex);
 
 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 	newattrs.ia_ctime = current_fs_time(inode->i_sb);
 	rc = sysfs_sd_setattr(victim_sd, inode, &newattrs);
+	if (rc)
+		goto out_unlock;
 
-	if (rc == 0) {
+	list_for_each_entry(sb, &sysfs_fs_type.fs_supers, s_instances) {
+		/* Ignore it when the dentry does not exist on the
+		 * target superblock.
+		 */
+		struct dentry *	victim = sysfs_get_dentry(sb, victim_sd);
+		if (IS_ERR(victim))
+			continue;
+
 		fsnotify_change(victim, newattrs.ia_valid);
+		dput(victim);
 	}
 
+ out_unlock:
 	mutex_unlock(&inode->i_mutex);
+	sysfs_release_supers();
+	mutex_unlock(&sysfs_rename_mutex);
  out:
-	dput(victim);
+	iput(inode);
 	sysfs_put(victim_sd);
 	return rc;
 }
