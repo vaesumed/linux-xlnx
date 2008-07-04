@@ -170,6 +170,7 @@ config GENERIC_PENDING_IRQ
 config X86_SMP
 	bool
 	depends on SMP && ((X86_32 && !X86_VOYAGER) || X86_64)
+	select USE_GENERIC_SMP_HELPERS
 	default y
 
 config X86_32_SMP
@@ -437,6 +438,13 @@ config PARAVIRT_CLOCK
 
 endif
 
+config PARAVIRT_DEBUG
+       bool "paravirt-ops debugging"
+       depends on PARAVIRT && DEBUG_KERNEL
+       help
+         Enable to debug paravirt_ops internals.  Specifically, BUG if
+	 a paravirt_op is missing when it is called.
+
 config MEMTEST
 	bool "Memtest"
 	depends on X86_64
@@ -552,6 +560,13 @@ config CALGARY_IOMMU_ENABLED_BY_DEFAULT
 	  used even if it exists. If you choose 'n' and would like to use
 	  Calgary anyway, pass 'iommu=calgary' on the kernel command line.
 	  If unsure, say Y.
+
+config AMD_IOMMU
+	bool "AMD IOMMU support"
+	select SWIOTLB
+	depends on X86_64 && PCI && ACPI
+	help
+	  Select this to get support for AMD IOMMU hardware in your system.
 
 # need this always selected by IOMMU for the VIA workaround
 config SWIOTLB
