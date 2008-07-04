@@ -396,9 +396,9 @@ static int do_writepage(struct page *page, int len)
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 
 #ifdef UBIFS_DEBUG
-	spin_lock(&ui->synced_i_size_lock);
+	spin_lock(&ui->ui_lock);
 	ubifs_assert(page->index <= ui->synced_i_size << PAGE_CACHE_SIZE);
-	spin_unlock(&ui->synced_i_size_lock);
+	spin_unlock(&ui->ui_lock);
 #endif
 
 	/* Update radix tree tags */
@@ -503,9 +503,9 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 		goto out_unlock;
 	}
 
-	spin_lock(&ui->synced_i_size_lock);
+	spin_lock(&ui->ui_lock);
 	synced_i_size = ui->synced_i_size;
-	spin_unlock(&ui->synced_i_size_lock);
+	spin_unlock(&ui->ui_lock);
 
 	/* Is the page fully inside @i_size? */
 	if (page->index < end_index) {

@@ -810,7 +810,7 @@ int dbg_check_synced_i_size(struct inode *inode)
 		return 0;
 
 	mutex_lock(&ui->ui_mutex);
-	spin_lock(&ui->synced_i_size_lock);
+	spin_lock(&ui->ui_lock);
 	if (ui->ui_size != ui->synced_i_size && !ui->dirty) {
 		ubifs_err("ui_size is %lld, synced_i_size is %lld, but inode "
 			  "is clean", ui->ui_size, ui->synced_i_size);
@@ -819,7 +819,7 @@ int dbg_check_synced_i_size(struct inode *inode)
 		dbg_dump_stack();
 		err = -EINVAL;
 	}
-	spin_unlock(&ui->synced_i_size_lock);
+	spin_unlock(&ui->ui_lock);
 	mutex_unlock(&ui->ui_mutex);
 	return err;
 }

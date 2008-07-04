@@ -648,9 +648,9 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		goto out_ro;
 
 	finish_reservation(c);
-	spin_lock(&ui->synced_i_size_lock);
+	spin_lock(&ui->ui_lock);
 	ui->synced_i_size = ui->ui_size;
-	spin_unlock(&ui->synced_i_size_lock);
+	spin_unlock(&ui->ui_lock);
 	mark_inode_clean(c, ui);
 	mark_inode_clean(c, dir_ui);
 	return 0;
@@ -810,9 +810,9 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
-	spin_lock(&ui->synced_i_size_lock);
+	spin_lock(&ui->ui_lock);
 	ui->synced_i_size = ui->ui_size;
-	spin_unlock(&ui->synced_i_size_lock);
+	spin_unlock(&ui->ui_lock);
 	kfree(ino);
 	return 0;
 
@@ -989,9 +989,9 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	finish_reservation(c);
 	if (new_inode) {
 		mark_inode_clean(c, new_ui);
-		spin_lock(&new_ui->synced_i_size_lock);
+		spin_lock(&new_ui->ui_lock);
 		new_ui->synced_i_size = new_ui->ui_size;
-		spin_unlock(&new_ui->synced_i_size_lock);
+		spin_unlock(&new_ui->ui_lock);
 	}
 	mark_inode_clean(c, ubifs_inode(old_dir));
 	if (move)
@@ -1171,9 +1171,9 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
-	spin_lock(&ui->synced_i_size_lock);
+	spin_lock(&ui->ui_lock);
 	ui->synced_i_size = ui->ui_size;
-	spin_unlock(&ui->synced_i_size_lock);
+	spin_unlock(&ui->ui_lock);
 	mark_inode_clean(c, ui);
 	kfree(ino);
 	return 0;
@@ -1290,9 +1290,9 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 		goto out_ro;
 
 	finish_reservation(c);
-	spin_lock(&host_ui->synced_i_size_lock);
+	spin_lock(&host_ui->ui_lock);
 	host_ui->synced_i_size = host_ui->ui_size;
-	spin_unlock(&host_ui->synced_i_size_lock);
+	spin_unlock(&host_ui->ui_lock);
 	mark_inode_clean(c, host_ui);
 	return 0;
 
@@ -1368,9 +1368,9 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
-	spin_lock(&host_ui->synced_i_size_lock);
+	spin_lock(&host_ui->ui_lock);
 	host_ui->synced_i_size = host_ui->ui_size;
-	spin_unlock(&host_ui->synced_i_size_lock);
+	spin_unlock(&host_ui->ui_lock);
 	mark_inode_clean(c, host_ui);
 	kfree(ino);
 	return 0;
