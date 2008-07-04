@@ -506,6 +506,7 @@ static void ext4_put_super (struct super_block * sb)
 	ext4_ext_release(sb);
 	ext4_xattr_put_super(sb);
 	jbd2_journal_destroy(sbi->s_journal);
+	sbi->s_journal = NULL;
 	if (!(sb->s_flags & MS_RDONLY)) {
 		EXT4_CLEAR_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_RECOVER);
 		es->s_state = cpu_to_le16(sbi->s_mount_state);
@@ -517,6 +518,7 @@ static void ext4_put_super (struct super_block * sb)
 	for (i = 0; i < sbi->s_gdb_count; i++)
 		brelse(sbi->s_group_desc[i]);
 	kfree(sbi->s_group_desc);
+	kfree(sbi->s_flex_groups);
 	percpu_counter_destroy(&sbi->s_freeblocks_counter);
 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
 	percpu_counter_destroy(&sbi->s_dirs_counter);
@@ -671,7 +673,6 @@ static int ext4_show_options(struct seq_file *seq, struct vfsmount *vfs)
 	unsigned long def_mount_opts;
 	struct super_block *sb = vfs->mnt_sb;
 	struct ext4_sb_info *sbi = EXT4_SB(sb);
-	journal_t *journal = sbi->s_journal;
 	struct ext4_super_block *es = sbi->s_es;
 
 	def_mount_opts = le32_to_cpu(es->s_default_mount_opts);
@@ -1443,6 +1444,54 @@ static int ext4_setup_super(struct super_block *sb, struct ext4_super_block *es,
 	return res;
 }
 
+static int ext4_fill_flex_info(struct super_block *sb)
+{
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
+	struct ext4_group_desc *gdp = NULL;
+	struct buffer_head *bh;
+	ext4_group_t flex_group_count;
+	ext4_group_t flex_group;
+	int groups_per_flex = 0;
+	__u64 block_bitmap = 0;
+	int i;
+
+	if (!sbi->s_es->s_log_groups_per_flex) {
+		sbi->s_log_groups_per_flex = 0;
+		return 1;
+	}
+
+	sbi->s_log_groups_per_flex = sbi->s_es->s_log_groups_per_flex;
+	groups_per_flex = 1 << sbi->s_log_groups_per_flex;
+
+	flex_group_count = (sbi->s_groups_count + groups_per_flex - 1) /
+		groups_per_flex;
+	sbi->s_flex_groups = kmalloc(flex_group_count *
+				     sizeof(struct flex_groups), GFP_KERNEL);
+	if (sbi->s_flex_groups == NULL) {
+		printk(KERN_ERR "EXT4-fs: not enough memory\n");
+		goto failed;
+	}
+	memset(sbi->s_flex_groups, 0, flex_group_count *
+	       sizeof(struct flex_groups));
+
+	gdp = ext4_get_group_desc(sb, 1, &bh);
+	block_bitmap = ext4_block_bitmap(sb, gdp) - 1;
+
+	for (i = 0; i < sbi->s_groups_count; i++) {
+		gdp = ext4_get_group_desc(sb, i, &bh);
+
+		flex_group = ext4_flex_group(sbi, i);
+		sbi->s_flex_groups[flex_group].free_inodes +=
+			le16_to_cpu(gdp->bg_free_inodes_count);
+		sbi->s_flex_groups[flex_group].free_blocks +=
+			le16_to_cpu(gdp->bg_free_blocks_count);
+	}
+
+	return 1;
+failed:
+	return 0;
+}
+
 __le16 ext4_group_desc_csum(struct ext4_sb_info *sbi, __u32 block_group,
 			    struct ext4_group_desc *gdp)
 {
@@ -1810,8 +1859,8 @@ static unsigned long ext4_get_stripe_size(struct ext4_sb_info *sbi)
 }
 
 static int ext4_fill_super (struct super_block *sb, void *data, int silent)
-				__releases(kernel_sem)
-				__acquires(kernel_sem)
+				__releases(kernel_lock)
+				__acquires(kernel_lock)
 
 {
 	struct buffer_head * bh;
@@ -1848,11 +1897,6 @@ static int ext4_fill_super (struct super_block *sb, void *data, int silent)
 	blocksize = sb_min_blocksize(sb, EXT4_MIN_BLOCK_SIZE);
 	if (!blocksize) {
 		printk(KERN_ERR "EXT4-fs: unable to set blocksize\n");
-		goto out_fail;
-	}
-
-	if (!sb_set_blocksize(sb, blocksize)) {
-		printk(KERN_ERR "EXT4-fs: bad blocksize %d.\n", blocksize);
 		goto out_fail;
 	}
 
@@ -2138,6 +2182,14 @@ static int ext4_fill_super (struct super_block *sb, void *data, int silent)
 		printk(KERN_ERR "EXT4-fs: group descriptors corrupted!\n");
 		goto failed_mount2;
 	}
+	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_FLEX_BG))
+		if (!ext4_fill_flex_info(sb)) {
+			printk(KERN_ERR
+			       "EXT4-fs: unable to initialize "
+			       "flex_bg meta info!\n");
+			goto failed_mount2;
+		}
+
 	sbi->s_gdb_count = db_count;
 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
 	spin_lock_init(&sbi->s_next_gen_lock);
@@ -2372,6 +2424,7 @@ cantfind_ext4:
 
 failed_mount4:
 	jbd2_journal_destroy(sbi->s_journal);
+	sbi->s_journal = NULL;
 failed_mount3:
 	percpu_counter_destroy(&sbi->s_freeblocks_counter);
 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
