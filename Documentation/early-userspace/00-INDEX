@@ -1,0 +1,8 @@
+00-INDEX
+	- this file
+README
+	- explains what early userspace is
+buffer_format.txt
+	- documents the initramfs buffer format
+initrd.txt
+	- how to use the RAM disk as an initial/temporary root filesystem.
