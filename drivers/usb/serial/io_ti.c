@@ -2401,7 +2401,7 @@ static void change_port_settings(struct tty_struct *tty,
 	return;
 }
 
-static void edge_set_termios(struct tty_struct *tty, 
+static void edge_set_termios(struct tty_struct *tty,
 		struct usb_serial_port *port, struct ktermios *old_termios)
 {
 	struct edgeport_port *edge_port = usb_get_serial_port_data(port);
@@ -2770,7 +2770,7 @@ static unsigned int edge_buf_data_avail(struct edge_buf *eb)
 {
 	if (eb == NULL)
 		return 0;
-	return ((eb->buf_size + eb->buf_put - eb->buf_get) % eb->buf_size);
+	return (eb->buf_size + eb->buf_put - eb->buf_get) % eb->buf_size;
 }
 
 
@@ -2785,7 +2785,7 @@ static unsigned int edge_buf_space_avail(struct edge_buf *eb)
 {
 	if (eb == NULL)
 		return 0;
-	return ((eb->buf_size + eb->buf_get - eb->buf_put - 1) % eb->buf_size);
+	return (eb->buf_size + eb->buf_get - eb->buf_put - 1) % eb->buf_size;
 }
 
 
