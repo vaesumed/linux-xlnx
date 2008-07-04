@@ -460,6 +460,29 @@ static int do_writepage(struct page *page, int len)
  * written to the flash media last time. Otherwise, UBIFS forces inode
  * write-back, thus making sure the on-flash inode contains current inode size,
  * and then keeps writing pages back.
+ *
+ * Some locking issues explanation. 'ubifs_writepage()' first is called with
+ * the page locked, and it locks @wb_mutex. However, write-back does take inode
+ * @i_mutex, which means other VFS operations may be run on this inode at the
+ * same time. And the problematic one is truncation to smaller size, from where
+ * we have to call 'vmtruncate()', which first changes @inode->i_size, then
+ * drops the truncated pages. And while dropping the pages, it takes the page
+ * lock. This means that 'do_truncation()' cannot call 'vmtruncate()' with
+ * @wb_mutex locked, because it would deadlock with 'ubifs_writepage()'. This
+ * means that @inode->i_size is changed while @wb_mutex is unlocked.
+ *
+ * But in 'ubifs_writepage()' we have to guarantee that we do not write beyond
+ * inode size. How do we do this if @inode->i_size may became smaller while we
+ * are in the middle of 'ubifs_writepage()'? The UBIFS solution is the
+ * @ui->ui_isize "shadow" field which UBIFS uses instead of @inode->i_size
+ * internally and updates it under @wb_mutex.
+ *
+ * Q: why we do not worry that if we race with truncation, we may end up with a
+ * situation when the inode is truncated while we are in the middle of
+ * 'do_writepage()', so we do write beyond inode size?
+ * A: If we are in the middle of 'do_writepage()', truncation would be locked
+ * on the page lock and it would not write the truncated inode node to the
+ * journal before we have finished.
  */
 static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 {
