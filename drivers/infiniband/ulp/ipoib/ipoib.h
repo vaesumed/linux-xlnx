@@ -30,8 +30,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id: ipoib.h 1358 2004-12-17 22:00:11Z roland $
  */
 
 #ifndef _IPOIB_H
@@ -52,8 +50,15 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_pack.h>
 #include <rdma/ib_sa.h>
+#include <linux/inet_lro.h>
 
 /* constants */
+
+enum ipoib_flush_level {
+	IPOIB_FLUSH_LIGHT,
+	IPOIB_FLUSH_NORMAL,
+	IPOIB_FLUSH_HEAVY
+};
 
 enum {
 	IPOIB_ENCAP_LEN		  = 4,
@@ -96,7 +101,11 @@ enum {
 	IPOIB_MCAST_FLAG_BUSY	  = 2,	/* joining or already joined */
 	IPOIB_MCAST_FLAG_ATTACHED = 3,
 
+	IPOIB_MAX_LRO_DESCRIPTORS = 8,
+	IPOIB_LRO_MAX_AGGR 	  = 64,
+
 	MAX_SEND_CQE		  = 16,
+	IPOIB_CM_COPYBREAK	  = 256,
 };
 
 #define	IPOIB_OP_RECV   (1ul << 31)
@@ -225,8 +234,7 @@ struct ipoib_cm_dev_priv {
 	struct ib_cm_id	       *id;
 	struct list_head	passive_ids;   /* state: LIVE */
 	struct list_head	rx_error_list; /* state: ERROR */
-	struct list_head	rx_flush_list; /* state: FLUSH, drain not started */
-	struct list_head	rx_drain_list; /* state: FLUSH, drain started */
+	struct list_head	rx_flush_list; /* state: FLUSHING or waiting for FLUSH */
 	struct list_head	rx_reap_list;  /* state: FLUSH, drain done */
 	struct work_struct      start_task;
 	struct work_struct      reap_task;
@@ -247,6 +255,11 @@ struct ipoib_cm_dev_priv {
 struct ipoib_ethtool_st {
 	u16     coalesce_usecs;
 	u16     max_coalesced_frames;
+};
+
+struct ipoib_lro {
+	struct net_lro_mgr lro_mgr;
+	struct net_lro_desc lro_desc[IPOIB_MAX_LRO_DESCRIPTORS];
 };
 
 /*
@@ -276,10 +289,11 @@ struct ipoib_dev_priv {
 
 	struct delayed_work pkey_poll_task;
 	struct delayed_work mcast_task;
-	struct work_struct flush_task;
+	struct work_struct flush_light;
+	struct work_struct flush_normal;
+	struct work_struct flush_heavy;
 	struct work_struct restart_task;
 	struct delayed_work ah_reap_task;
-	struct work_struct pkey_event_task;
 
 	struct ib_device *ca;
 	u8		  port;
@@ -335,6 +349,8 @@ struct ipoib_dev_priv {
 	int	hca_caps;
 	struct ipoib_ethtool_st ethtool;
 	struct timer_list poll_timer;
+
+	struct ipoib_lro lro;
 };
 
 struct ipoib_ah {
@@ -359,6 +375,7 @@ struct ipoib_path {
 
 	struct rb_node	      rb_node;
 	struct list_head      list;
+	int  		      valid;
 };
 
 struct ipoib_neigh {
@@ -423,11 +440,14 @@ void ipoib_send(struct net_device *dev, struct sk_buff *skb,
 		struct ipoib_ah *address, u32 qpn);
 void ipoib_reap_ah(struct work_struct *work);
 
+void ipoib_mark_paths_invalid(struct net_device *dev);
 void ipoib_flush_paths(struct net_device *dev);
 struct ipoib_dev_priv *ipoib_intf_alloc(const char *format);
 
 int ipoib_ib_dev_init(struct net_device *dev, struct ib_device *ca, int port);
-void ipoib_ib_dev_flush(struct work_struct *work);
+void ipoib_ib_dev_flush_light(struct work_struct *work);
+void ipoib_ib_dev_flush_normal(struct work_struct *work);
+void ipoib_ib_dev_flush_heavy(struct work_struct *work);
 void ipoib_pkey_event(struct work_struct *work);
 void ipoib_ib_dev_cleanup(struct net_device *dev);
 

@@ -29,8 +29,6 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * $Id: ipoib_verbs.c 1349 2004-12-16 21:09:43Z roland $
  */
 
 #include "ipoib.h"
@@ -201,7 +199,10 @@ int ipoib_transport_dev_init(struct net_device *dev, struct ib_device *ca)
 	init_attr.recv_cq = priv->recv_cq;
 
 	if (priv->hca_caps & IB_DEVICE_UD_TSO)
-		init_attr.create_flags = IB_QP_CREATE_IPOIB_UD_LSO;
+		init_attr.create_flags |= IB_QP_CREATE_IPOIB_UD_LSO;
+
+	if (priv->hca_caps & IB_DEVICE_BLOCK_MULTICAST_LOOPBACK)
+		init_attr.create_flags |= IB_QP_CREATE_BLOCK_MULTICAST_LOOPBACK;
 
 	if (dev->features & NETIF_F_SG)
 		init_attr.cap.max_send_sge = MAX_SKB_FRAGS + 1;
@@ -289,15 +290,17 @@ void ipoib_event(struct ib_event_handler *handler,
 	if (record->element.port_num != priv->port)
 		return;
 
-	if (record->event == IB_EVENT_PORT_ERR    ||
-	    record->event == IB_EVENT_PORT_ACTIVE ||
-	    record->event == IB_EVENT_LID_CHANGE  ||
-	    record->event == IB_EVENT_SM_CHANGE   ||
+	ipoib_dbg(priv, "Event %d on device %s port %d\n", record->event,
+		  record->device->name, record->element.port_num);
+
+	if (record->event == IB_EVENT_SM_CHANGE ||
 	    record->event == IB_EVENT_CLIENT_REREGISTER) {
-		ipoib_dbg(priv, "Port state change event\n");
-		queue_work(ipoib_workqueue, &priv->flush_task);
+		queue_work(ipoib_workqueue, &priv->flush_light);
+	} else if (record->event == IB_EVENT_PORT_ERR ||
+		   record->event == IB_EVENT_PORT_ACTIVE ||
+		   record->event == IB_EVENT_LID_CHANGE) {
+		queue_work(ipoib_workqueue, &priv->flush_normal);
 	} else if (record->event == IB_EVENT_PKEY_CHANGE) {
-		ipoib_dbg(priv, "P_Key change event on port:%d\n", priv->port);
-		queue_work(ipoib_workqueue, &priv->pkey_event_task);
+		queue_work(ipoib_workqueue, &priv->flush_heavy);
 	}
 }
