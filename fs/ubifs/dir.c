@@ -646,7 +646,7 @@ static void lock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
 
 	if (dir1 == dir2)
 		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR1);
-	else if (dir1->i_ino > dir2->i_ino) {
+	else if (dir1->i_ino < dir2->i_ino) {
 		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR1);
 		mutex_lock_nested(&dir_ui2->ui_mutex, WB_MUTEX_DIR2);
 	} else {
@@ -1104,6 +1104,9 @@ out_cancel:
 				inc_nlink(old_dir);
 		}
 	}
+	unlock_2_dir_inodes(old_dir, new_dir);
+	if (new_inode)
+		mutex_unlock(&new_inode_ui->ui_mutex);
 	ubifs_release_budget(c, &ino_req);
 	ubifs_release_budget(c, &req);
 	return err;
