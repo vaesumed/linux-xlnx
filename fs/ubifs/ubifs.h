@@ -145,6 +145,24 @@
 #define BOTTOM_UP_HEIGHT 64
 
 /*
+ * Lockdep classes for UBIFS inode @wb_mutex.
+ *
+ * @WB_MUTEX_FILE: regular file
+ * @WB_MUTEX_DIR1: first locked directory
+ * @WB_MUTEX_DIR2: second locked directory
+ *
+ * UBIFS locks @wb_mutex for several inodes simultaneously. It may lock one
+ * directory inode and one regular file inode, in which case the directory
+ * inode is locked first. UBIFS may lock 2 directory inodes sumultaneously, in
+ * which case the one with smaller inode number goes first.
+ */
+enum {
+	WB_MUTEX_FILE = 0,
+	WB_MUTEX_DIR1 = 1,
+	WB_MUTEX_DIR2 = 2,
+};
+
+/*
  * Znode flags (actually, bit numbers which store the flags).
  *
  * DIRTY_ZNODE: znode is dirty
@@ -157,7 +175,7 @@
 enum {
 	DIRTY_ZNODE    = 0,
 	COW_ZNODE      = 1,
-	OBSOLETE_ZNODE = 2
+	OBSOLETE_ZNODE = 2,
 };
 
 /*
@@ -319,41 +337,33 @@ struct ubifs_gced_idx_leb {
  *               this inode
  * @dirty: non-zero if the inode is dirty
  * @xattr: non-zero if this is an extended attribute inode
- * @wb_mutex: serializes inode write-back with the rest of VFS operations
+ * @wb_mutex: serializes inode write-back with the rest of VFS operations,
+ *            serializes "clean <-> dirty" state changes, protects @dirty
+ * @synced_i_size_lock: protects @synced_i_size
  * @synced_i_size: synchronized size of inode, i.e. the value of inode size
  *                 currently stored on the flash; used only for regular file
  *                 inodes
- * @wb_i_size: inode size for write-back
- * @wb_xattr_size: summarized size of all extended attributes for write-back
- * @wb_i_nlink: number of inode links for write-back
- * @wb_xattr_cnt: count of extended attributes for write-back
- * @wb_xattr_names: sum of extended attribute lengths for write-back
- * @ui_lock: protects @synced_i_size, @wb_i_size, @wb_i_nlink, @xattr_size,
- *           @wb_xattr_size, @wb_i_nlink, @wb_xattr_cnt and @wb_xattr_names
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
  * @data: inode's data
  *
- * UBIFS has its own inode mutex, besides the VFS @i_mutex. The reason for
- * this is budgeting - UBIFS has to budget each operation. So, if an operation
- * is going to mark an inode dirty, it has to allocate budget for this. It
- * cannot just mark it dirty because there is no guarantee there will be enough
- * flash space when it is time to write the inode back. This means that UBIFS
- * has to have full control over "clean <-> dirty" transitions of inodes (and
- * pages actually). But unfortunately, VFS marks inodes dirty in many places,
- * and it does not ask the file-system if it is allowed to do so (there is a
- * notifier, but it is not enough), i.e., there is no mechanism to synchronize
- * with it. So UBIFS has its own inode dirty flag its own inode mutex to
- * serialize "clean <-> dirty" transitions.
+ * @wb_mutex exists for two main reasons. At first it prevents inodes from
+ * being written back while UBIFS changing them, being in the middle of an VFS
+ * operation. This way UBIFS makes sure the inode fields are consistent. For
+ * exmple, in 'ubifs_rename()' we change 3 inodes simultaneously, and
+ * write-back must not write any of them before we have finished.
  *
- * The fields like @wb_i_size are used to keep inode values consistent. The
- * problem is that write-back may happen at any point, even when the inode is
- * in the middle of an VFS operation (e.g., in the middle of re-naming). This
- * means that write-back may write the inode while it is in an inconsistent
- * state (e.g., directory @i_nlink has been changed, while @i_size has not yet
- * been changed, etc.). This is why write-back uses the "wb_"-prefixed fields,
- * which are consistent.
+ * The second reason is budgeting - UBIFS has to budget all operations. If an
+ * operation is going to mark an inode dirty, it has to allocate budget for
+ * this. It cannot just mark it dirty because there is no guarantee there will
+ * be enough flash space to writei the inode back later. This means UBIFS has
+ * to have full control over inode "clean <-> dirty" transitions (and pages
+ * actually). But unfortunately, VFS marks inodes dirty in many places, and it
+ * does not ask the file-system if it is allowed to do so (there is a notifier,
+ * but it is not enough), i.e., there is no mechanism to synchronize with this.
+ * So UBIFS has its own inode dirty flag and its own mutex to serialize
+ * "clean <-> dirty" transitions.
  */
 struct ubifs_inode {
 	struct inode vfs_inode;
@@ -364,13 +374,8 @@ struct ubifs_inode {
 	unsigned int dirty:1;
 	unsigned int xattr:1;
 	struct mutex wb_mutex;
+	spinlock_t synced_i_size_lock;
 	loff_t synced_i_size;
-	loff_t wb_i_size;
-	loff_t wb_xattr_size;
-	unsigned int wb_i_nlink;
-	int wb_xattr_cnt;
-	int wb_xattr_names;
-	spinlock_t ui_lock;
 	int flags;
 	int compr_type;
 	int data_len;
@@ -614,11 +619,11 @@ typedef int (*ubifs_lpt_scan_callback)(struct ubifs_info *c,
  * @dtype: type of data stored in this LEB (%UBI_LONGTERM, %UBI_SHORTTERM,
  * %UBI_UNKNOWN)
  * @jhead: journal head the mutex belongs to (note, needed only to shut lockdep
- * up by 'mutex_lock_nested()).
+ *         up by 'mutex_lock_nested()).
  * @sync_callback: write-buffer synchronization callback
  * @io_mutex: serializes write-buffer I/O
  * @lock: serializes @buf, @lnum, @offs, @avail, @used, @next_ino and @inodes
- * fields
+ *        fields
  * @timer: write-buffer timer
  * @timeout: timer expire interval in jiffies
  * @need_sync: it is set if its timer expired and needs sync

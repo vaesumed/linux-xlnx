@@ -145,12 +145,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
 	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
-
-	ui->wb_i_size  = ui->synced_i_size = inode->i_size;
-	ui->wb_i_nlink = inode->i_nlink;
-	ui->wb_xattr_cnt   = ui->xattr_cnt;
-	ui->wb_xattr_size  = ui->xattr_size;
-	ui->wb_xattr_names = ui->xattr_names;
+	ui->synced_i_size = inode->i_size;
 
 	err = validate_inode(c, inode);
 	if (err)
@@ -260,7 +255,7 @@ static struct inode *ubifs_alloc_inode(struct super_block *sb)
 	memset((void *)ui + sizeof(struct inode), 0,
 	       sizeof(struct ubifs_inode) - sizeof(struct inode));
 	mutex_init(&ui->wb_mutex);
-	spin_lock_init(&ui->ui_lock);
+	spin_lock_init(&ui->synced_i_size_lock);
 	return &ui->vfs_inode;
 };
 

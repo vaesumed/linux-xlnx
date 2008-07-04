@@ -275,6 +275,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
 					.dirtied_ino = 1 };
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 
 	/*
 	 * Budget request settings: new inode, new direntry, changing the
@@ -294,19 +295,22 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 		goto out_budg;
 	}
 
+	mutex_lock(&dir_ui->wb_mutex);
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
-		goto out;
+		goto out_cancel;
+	mutex_unlock(&dir_ui->wb_mutex);
 
+	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
 	return 0;
 
-out:
+out_cancel:
 	dir->i_size -= sz_change;
+	mutex_unlock(&dir_ui->wb_mutex);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -489,6 +493,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = old_dentry->d_inode;
 	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_dent = 1, .dirtied_ino = 2,
 					.dirtied_ino_d = ui->data_len };
@@ -509,6 +514,8 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		return err;
 
+	mutex_lock_nested(&dir_ui->wb_mutex, WB_MUTEX_DIR1);
+	mutex_lock_nested(&ui->wb_mutex, WB_MUTEX_FILE);
 	inc_nlink(inode);
 	atomic_inc(&inode->i_count);
 	inode->i_ctime = ubifs_current_time(inode);
@@ -516,16 +523,20 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
-		goto out_budg;
+		goto out_cancel;
+	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&dir_ui->wb_mutex);
 
-	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
+	d_instantiate(dentry, inode);
 	return 0;
 
-out_budg:
+out_cancel:
 	dir->i_size -= sz_change;
-	ubifs_release_budget(c, &req);
 	drop_nlink(inode);
+	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&dir_ui->wb_mutex);
+	ubifs_release_budget(c, &req);
 	iput(inode);
 	return err;
 }
@@ -534,6 +545,8 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = dentry->d_inode;
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 1;
 	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2 };
@@ -560,21 +573,27 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
+	mutex_lock_nested(&dir_ui->wb_mutex, WB_MUTEX_DIR1);
+	mutex_lock_nested(&ui->wb_mutex, WB_MUTEX_FILE);
 	inode->i_ctime = ubifs_current_time(dir);
 	drop_nlink(inode);
 	dir->i_size -= sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
-		goto out_budg;
+		goto out_cancel;
+	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&dir_ui->wb_mutex);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return 0;
 
-out_budg:
+out_cancel:
 	dir->i_size += sz_change;
 	inc_nlink(inode);
+	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&dir_ui->wb_mutex);
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return err;
@@ -609,6 +628,45 @@ static int check_dir_empty(struct ubifs_info *c, struct inode *dir)
 	return err;
 }
 
+/**
+ * lock_2_dir_inodes - lock two directory inodes.
+ * @dir1: first inode
+ * @dir2: second inode
+ */
+static void lock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
+{
+	struct ubifs_inode *dir_ui1 = ubifs_inode(dir1);
+	struct ubifs_inode *dir_ui2 = ubifs_inode(dir2);
+
+	if (dir1 == dir2)
+		mutex_lock_nested(&dir_ui1->wb_mutex, WB_MUTEX_DIR1);
+	else if (dir1->i_ino > dir2->i_ino) {
+		mutex_lock_nested(&dir_ui1->wb_mutex, WB_MUTEX_DIR1);
+		mutex_lock_nested(&dir_ui2->wb_mutex, WB_MUTEX_DIR2);
+	} else {
+		mutex_lock_nested(&dir_ui2->wb_mutex, WB_MUTEX_DIR1);
+		mutex_lock_nested(&dir_ui1->wb_mutex, WB_MUTEX_DIR2);
+	}
+}
+
+/**
+ * unlock_2_dir_inodes - unlock two directory inodes.
+ * @dir1: first inode
+ * @dir2: second inode
+ */
+static void unlock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
+{
+	struct ubifs_inode *dir_ui1 = ubifs_inode(dir1);
+	struct ubifs_inode *dir_ui2 = ubifs_inode(dir2);
+
+	if (dir1 == dir2)
+		mutex_unlock(&dir_ui1->wb_mutex);
+	else {
+		mutex_unlock(&dir_ui1->wb_mutex);
+		mutex_unlock(&dir_ui2->wb_mutex);
+	}
+}
+
 static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
@@ -637,6 +695,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
+	lock_2_dir_inodes(dir, inode);
 	inode->i_size = 0;
 	inode->i_ctime = ubifs_current_time(dir);
 	clear_nlink(inode);
@@ -645,17 +704,19 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
-		goto out_budg;
+		goto out_cancel;
+	unlock_2_dir_inodes(dir, inode);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return 0;
 
-out_budg:
+out_cancel:
 	dir->i_size += sz_change;
 	inc_nlink(dir);
 	inc_nlink(inode);
 	inc_nlink(inode);
+	unlock_2_dir_inodes(dir, inode);
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return err;
@@ -664,6 +725,7 @@ out_budg:
 static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct inode *inode;
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	int err, sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
@@ -687,6 +749,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		goto out_budg;
 	}
 
+	mutex_lock(&dir_ui->wb_mutex);
 	insert_inode_hash(inode);
 	inc_nlink(inode);
 	inc_nlink(dir);
@@ -695,16 +758,18 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err) {
 		ubifs_err("cannot create directory, error %d", err);
-		goto out_inode;
+		goto out_cancel;
 	}
+	mutex_unlock(&dir_ui->wb_mutex);
 
-	d_instantiate(dentry, inode);
 	ubifs_release_budget(c, &req);
+	d_instantiate(dentry, inode);
 	return 0;
 
-out_inode:
+out_cancel:
 	dir->i_size -= sz_change;
 	drop_nlink(dir);
+	mutex_unlock(&dir_ui->wb_mutex);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -716,6 +781,8 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 		       int mode, dev_t rdev)
 {
 	struct inode *inode;
+	struct ubifs_inode *ui;
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	union ubifs_dev_desc *dev = NULL;
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
@@ -756,21 +823,26 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 
 	init_special_inode(inode, inode->i_mode, rdev);
 	inode->i_size = devlen;
-	ubifs_inode(inode)->data = dev;
-	ubifs_inode(inode)->data_len = devlen;
+	ui = ubifs_inode(inode);
+	ui->data = dev;
+	ui->data_len = devlen;
+
+	mutex_lock(&dir_ui->wb_mutex);
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
-		goto out_inode;
+		goto out_cancel;
+	mutex_unlock(&dir_ui->wb_mutex);
 
+	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
 	return 0;
 
-out_inode:
+out_cancel:
 	dir->i_size -= sz_change;
+	mutex_unlock(&dir_ui->wb_mutex);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -783,6 +855,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 {
 	struct inode *inode;
 	struct ubifs_inode *ui;
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	int err, len = strlen(symname);
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
@@ -826,19 +899,23 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	 */
 	ui->data_len = len;
 	inode->i_size = len;
+
+	mutex_lock(&dir_ui->wb_mutex);
 	dir->i_size += sz_change;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
-		goto out_dir;
+		goto out_cancel;
+	mutex_unlock(&dir_ui->wb_mutex);
 
+	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
 	d_instantiate(dentry, inode);
-	ubifs_release_budget(c, &req);
 	return 0;
 
-out_dir:
+out_cancel:
 	dir->i_size -= sz_change;
+	mutex_unlock(&dir_ui->wb_mutex);
 out_inode:
 	make_bad_inode(inode);
 	iput(inode);
@@ -853,17 +930,18 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct ubifs_info *c = old_dir->i_sb->s_fs_info;
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	struct ubifs_inode *old_ui = ubifs_inode(old_inode);
+	struct ubifs_inode *old_inode_ui = ubifs_inode(old_inode);
 	int err, release, sync = 0, move = (new_dir != old_dir);
 	int is_dir = S_ISDIR(old_inode->i_mode);
 	int unlink = !!new_inode;
 	int new_sz = CALC_DENT_SIZE(new_dentry->d_name.len);
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
-	struct timespec time;
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
 					.dirtied_ino = 3 };
 	struct ubifs_budget_req ino_req = {.dirtied_ino = 1,
-					   .dirtied_ino_d = old_ui->data_len };
+					   .dirtied_ino_d = old_inode_ui->data_len };
+	struct timespec time;
+	struct ubifs_inode *uninitialized_var(new_inode_ui);
 
 	/*
 	 * Budget request settings: deletion direntry, new direntry, removing
@@ -892,6 +970,12 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (err) {
 		ubifs_release_budget(c, &req);
 		return err;
+	}
+
+	lock_2_dir_inodes(old_dir, new_dir);
+	if (new_inode) {
+		new_inode_ui = ubifs_inode(new_inode);
+		mutex_lock_nested(&new_inode_ui->wb_mutex, WB_MUTEX_FILE);
 	}
 
 	/*
@@ -961,21 +1045,26 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	err = ubifs_jnl_rename(c, old_dir, old_dentry, new_dir, new_dentry,
 			       sync);
 	if (err)
-		goto out_inode;
+		goto out_cancel;
+
+	unlock_2_dir_inodes(old_dir, new_dir);
+	if (new_inode)
+		mutex_unlock(&new_inode_ui->wb_mutex);
 
 	ubifs_release_budget(c, &req);
-	mutex_lock(&old_ui->wb_mutex);
-	release = old_ui->dirty;
+
+	mutex_lock(&old_inode_ui->wb_mutex);
+	release = old_inode_ui->dirty;
 	mark_inode_dirty_sync(old_inode);
-	mutex_unlock(&old_ui->wb_mutex);
+	mutex_unlock(&old_inode_ui->wb_mutex);
+
 	if (release)
 		ubifs_release_budget(c, &ino_req);
-
 	if (IS_SYNC(old_inode))
 		err = old_inode->i_sb->s_op->write_inode(old_inode, 1);
 	return err;
 
-out_inode:
+out_cancel:
 	if (unlink) {
 		if (is_dir)
 			inc_nlink(new_inode);
@@ -1031,9 +1120,9 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	 * wrong sizes.
 	 */
 	if (S_ISREG(inode->i_mode)) {
-		spin_lock(&ui->ui_lock);
-		size = ubifs_inode(inode)->xattr_size;
-		spin_unlock(&ui->ui_lock);
+		spin_lock(&ui->synced_i_size_lock);
+		size = ui->xattr_size;
+		spin_unlock(&ui->synced_i_size_lock);
 
 		size += stat->size;
 		size = ALIGN(size, UBIFS_BLOCK_SIZE);

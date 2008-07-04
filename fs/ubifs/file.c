@@ -194,8 +194,6 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	int uninitialized_var(err);
 	struct page *page;
 
-	ubifs_assert(!(inode->i_sb->s_flags & MS_RDONLY));
-
 	if (unlikely(c->ro_media))
 		return -EROFS;
 
@@ -336,14 +334,8 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	if (end_pos > inode->i_size) {
 		int release;
 
-		i_size_write(inode, end_pos);
-
-		/* Update inode size for write-back */
-		spin_lock(&ui->ui_lock);
-		ui->wb_i_size = end_pos;
-		spin_unlock(&ui->ui_lock);
-
 		mutex_lock(&ui->wb_mutex);
+		i_size_write(inode, end_pos);
 		release = ui->dirty;
 		/*
 		 * Note, we do not set @I_DIRTY_PAGES (which means that the
@@ -401,11 +393,16 @@ static int do_writepage(struct page *page, int len)
 	struct inode *inode = page->mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 
+#ifdef UBIFS_DEBUG
+	spin_lock(&ui->synced_i_size_lock);
+	ubifs_assert(page->index <= ui->synced_i_size << PAGE_CACHE_SIZE);
+	spin_unlock(&ui->synced_i_size_lock);
+#endif
+
 	/* Update radix tree tags */
 	set_page_writeback(page);
 
 	addr = kmap(page);
-
 	block = page->index << UBIFS_BLOCKS_PER_PAGE_SHIFT;
 	i = 0;
 	while (len) {
@@ -440,7 +437,6 @@ static int do_writepage(struct page *page, int len)
 	kunmap(page);
 	unlock_page(page);
 	end_page_writeback(page);
-
 	return err;
 }
 
@@ -476,17 +472,17 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 		inode->i_ino, page->index, page->flags);
 	ubifs_assert(PagePrivate(page));
 
-	/* Is the page fully outside i_size? (truncate in progress) */
+	/* Is the page fully outside @i_size? (truncate in progress) */
 	if (page->index > end_index || (page->index == end_index && !len)) {
 		err = 0;
 		goto out_unlock;
 	}
 
-	spin_lock(&ui->ui_lock);
+	spin_lock(&ui->synced_i_size_lock);
 	synced_i_size = ui->synced_i_size;
-	spin_unlock(&ui->ui_lock);
+	spin_unlock(&ui->synced_i_size_lock);
 
-	/* Is the page fully inside i_size? */
+	/* Is the page fully inside @i_size? */
 	if (page->index < end_index) {
 		if (page->index >= synced_i_size >> PAGE_CACHE_SHIFT) {
 			err = inode->i_sb->s_op->write_inode(inode, 1);
@@ -505,7 +501,7 @@ static int ubifs_writepage(struct page *page, struct writeback_control *wbc)
 	}
 
 	/*
-	 * The page straddles i_size. It must be zeroed out on each and every
+	 * The page straddles @i_size. It must be zeroed out on each and every
 	 * writepage invocation because it may be mmapped. "A file is mapped
 	 * in multiples of the page size. For a file that is not a multiple of
 	 * the page size, the remaining memory is zeroed when mapped, and
@@ -575,6 +571,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	struct ubifs_budget_req req;
 	loff_t old_size = inode->i_size, new_size = attr->ia_size;
 	int offset = new_size & (UBIFS_BLOCK_SIZE - 1);
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	dbg_gen("ino %lu, size %lld -> %lld", inode->i_ino, old_size, new_size);
 	memset(&req, 0, sizeof(struct ubifs_budget_req));
@@ -594,6 +591,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		return err;
 
+	mutex_lock(&ui->wb_mutex);
 	/* Truncation changes inode [mc]time */
 	inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 	/* The other attributes may be changed at the same time as well */
@@ -601,7 +599,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 
 	err = vmtruncate(inode, new_size);
 	if (err)
-		goto out_budg;
+		goto out_unlock;
 
 	if (offset) {
 		pgoff_t index = new_size >> PAGE_CACHE_SHIFT;
@@ -619,7 +617,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 				err = do_writepage(page, offset);
 				page_cache_release(page);
 				if (err)
-					goto out_budg;
+					goto out_unlock;
 				/*
 				 * We could now tell 'ubifs_jnl_truncate()' not
 				 * to read the last block.
@@ -638,11 +636,13 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 
 	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
 	if (err)
-		goto out_budg;
+		goto out_unlock;
+	mutex_unlock(&ui->wb_mutex);
 	ubifs_release_budget(c, &req);
 	return err;
 
-out_budg:
+out_unlock:
+	mutex_unlock(&ui->wb_mutex);
 	ubifs_release_budget(c, &req);
 	return err;
 }
@@ -670,18 +670,18 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		return err;
 
+	mutex_lock(&ui->wb_mutex);
 	if (attr->ia_valid & ATTR_SIZE) {
 		dbg_gen("size %lld -> %lld", inode->i_size, new_size);
 		/* Truncation changes inode [mc]time */
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		err = vmtruncate(inode, new_size);
 		if (err)
-			goto out_budg;
+			goto out_unlock;
 	}
 
 	do_attr_changes(inode, attr);
 
-	mutex_lock(&ui->wb_mutex);
 	release = ui->dirty;
 	if (attr->ia_valid & ATTR_SIZE)
 		/*
@@ -699,7 +699,8 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 		err = inode->i_sb->s_op->write_inode(inode, 1);
 	return err;
 
-out_budg:
+out_unlock:
+	mutex_unlock(&ui->wb_mutex);
 	ubifs_release_budget(c, &req);
 	return err;
 }
@@ -826,8 +827,8 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 		if (err)
 			return err;
 
-		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		mutex_lock(&ui->wb_mutex);
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		release = ui->dirty;
 		mark_inode_dirty_sync(inode);
 		mutex_unlock(&ui->wb_mutex);
@@ -966,8 +967,8 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 		int release;
 		struct ubifs_inode *ui = ubifs_inode(inode);
 
-		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		mutex_lock(&ui->wb_mutex);
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		release = ui->dirty;
 		mark_inode_dirty_sync(inode);
 		mutex_unlock(&ui->wb_mutex);

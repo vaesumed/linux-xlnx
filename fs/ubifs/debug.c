@@ -809,7 +809,7 @@ int dbg_check_synced_i_size(struct inode *inode)
 		return 0;
 
 	mutex_lock(&ui->wb_mutex);
-	spin_lock(&ui->ui_lock);
+	spin_lock(&ui->synced_i_size_lock);
 	i_size = i_size_read(&ui->vfs_inode);
 	synced_i_size = ui->synced_i_size;
 	if (i_size != synced_i_size && !ui->dirty) {
@@ -819,7 +819,7 @@ int dbg_check_synced_i_size(struct inode *inode)
 		dbg_dump_stack();
 		err = -EINVAL;
 	}
-	spin_unlock(&ui->ui_lock);
+	spin_unlock(&ui->synced_i_size_lock);
 	mutex_unlock(&ui->wb_mutex);
 
 	return err;

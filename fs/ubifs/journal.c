@@ -445,12 +445,11 @@ static int get_dent_type(int mode)
  * @c: UBIFS file-system description object
  * @ino: buffer in which to pack inode node
  * @inode: inode to pack
- * @wb: non-zero if called by write-back
  * @last: indicates the last node of the group
  * @last_reference: non-zero if this is a deletion inode
  */
 static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
-		       const struct inode *inode, int wb, int last,
+		       const struct inode *inode, int last,
 		       int last_reference)
 {
 	int data_len = 0;
@@ -469,22 +468,13 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->gid   = cpu_to_le32(inode->i_gid);
 	ino->mode  = cpu_to_le32(inode->i_mode);
 	ino->flags = cpu_to_le32(ui->flags);
+	ino->size  = cpu_to_le64(inode->i_size);
+	ino->nlink = cpu_to_le32(inode->i_nlink);
 	ino->compr_type  = cpu_to_le16(ui->compr_type);
 	ino->data_len    = cpu_to_le32(ui->data_len);
-
-	if (wb) {
-		ino->size  = cpu_to_le64(ui->wb_i_size);
-		ino->nlink = cpu_to_le32(ui->wb_i_nlink);
-		ino->xattr_cnt   = cpu_to_le32(ui->wb_xattr_cnt);
-		ino->xattr_size  = cpu_to_le64(ui->wb_xattr_size);
-		ino->xattr_names = cpu_to_le32(ui->wb_xattr_names);
-	} else {
-		ino->size  = cpu_to_le64(inode->i_size);
-		ino->nlink = cpu_to_le32(inode->i_nlink);
-		ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
-		ino->xattr_size  = cpu_to_le64(ui->xattr_size);
-		ino->xattr_names = cpu_to_le32(ui->xattr_names);
-	}
+	ino->xattr_cnt   = cpu_to_le32(ui->xattr_cnt);
+	ino->xattr_size  = cpu_to_le64(ui->xattr_size);
+	ino->xattr_names = cpu_to_le32(ui->xattr_names);
 	zero_ino_node_unused(ino);
 
 	/*
@@ -500,57 +490,20 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 }
 
 /**
- * update_ubifs_inode - update various UBIFS inode fields.
- * @inode: inode to update
- *
- * This helper function is called after the inode has been written to the flash
- * media and updates fields used by inode write-back and synchronized inode
- * size (@synced_i_size). It is essential to call this function while having
- * the base head locked, because it prevents write-back (which may be running
- * at the same time) from writing an inode node with older @i_nlink and @i_size
- * to the flash media.
- *
- * This function also assumes that the @inode->i_mutex is locked so no one
- * may be changing this inode at the same time.
- */
-static void update_ubifs_inode(const struct inode *inode)
-{
-	struct ubifs_inode *ui = ubifs_inode(inode);
-
-	ui->wb_i_nlink     = inode->i_nlink;
-	ui->wb_xattr_cnt   = ui->xattr_cnt;
-	ui->wb_xattr_names = ui->xattr_names;
-
-	spin_lock(&ui->ui_lock);
-	ui->synced_i_size  = inode->i_size;
-	ui->wb_i_size      = inode->i_size;
-	ui->wb_xattr_size  = ui->xattr_size;
-	spin_unlock(&ui->ui_lock);
-}
-
-/**
  * mark_inode_clean - mark UBIFS inode as clean.
  * @c: UBIFS file-system description object
  * @ui: UBIFS inode to mark as clean
  *
- * This function marks UBIFS inode @ui as clean by cleaning the @ui->dirty flag
- * and releasing its budget. Note, VFS may still treat the inode as dirty and
- * try to write it back, but 'ubifs_write_inode()' would just do nothing.
- *
- * This function relies on the fact that the inode mutex (@i_mutex) is locked
- * for the inode so races with other tasks which may try to mark inode dirty
- * are impossible.
+ * This helper function marks UBIFS inode @ui as clean by cleaning the
+ * @ui->dirty flag and releasing its budget. Note, VFS may still treat the
+ * inode as dirty and try to write it back, but 'ubifs_write_inode()' would
+ * just do nothing.
  */
 static void mark_inode_clean(struct ubifs_info *c, struct ubifs_inode *ui)
 {
-	int release;
-
-	mutex_lock(&ui->wb_mutex);
-	release = ui->dirty;
-	ui->dirty = 0;
-	mutex_unlock(&ui->wb_mutex);
-	if (release)
+	if (ui->dirty)
 		ubifs_release_dirty_inode_budget(c, ui);
+	ui->dirty = 0;
 }
 
 /**
@@ -587,14 +540,16 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	int err, dlen, ilen, len, lnum, ino_offs, dent_offs;
 	int aligned_dlen, aligned_ilen, sync = IS_DIRSYNC(dir);
 	int last_reference = !!(deletion && inode->i_nlink == 0);
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	struct ubifs_dent_node *dent;
 	struct ubifs_ino_node *ino;
 	union ubifs_key dent_key, ino_key;
 
 	dbg_jnl("ino %lu, dent '%.*s', data len %d in dir ino %lu",
-		inode->i_ino, nm->len, nm->name, ubifs_inode(inode)->data_len,
-		dir->i_ino);
-	ubifs_assert(ubifs_inode(dir)->data_len == 0);
+		inode->i_ino, nm->len, nm->name, ui->data_len, dir->i_ino);
+	ubifs_assert(dir_ui->data_len == 0);
+	ubifs_assert(mutex_is_locked(&dir_ui->wb_mutex));
 
 	dlen = UBIFS_DENT_NODE_SZ + nm->len + 1;
 	ilen = UBIFS_INO_NODE_SZ;
@@ -606,7 +561,7 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	 * write-buffer even if the inode is synchronous.
 	 */
 	if (!last_reference) {
-		ilen += ubifs_inode(inode)->data_len;
+		ilen += ui->data_len;
 		sync |= IS_SYNC(inode);
 	}
 
@@ -640,9 +595,9 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	ubifs_prep_grp_node(c, dent, dlen, 0);
 
 	ino = (void *)dent + aligned_dlen;
-	pack_inode(c, ino, inode, 0, 0, last_reference);
+	pack_inode(c, ino, inode, 0, last_reference);
 	ino = (void *)ino + aligned_ilen;
-	pack_inode(c, ino, dir, 0, 1, 0);
+	pack_inode(c, ino, dir, 1, 0);
 
 	if (last_reference) {
 		err = ubifs_add_orphan(c, inode->i_ino);
@@ -661,9 +616,6 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		ubifs_wbuf_add_ino_nolock(wbuf, inode->i_ino);
 		ubifs_wbuf_add_ino_nolock(wbuf, dir->i_ino);
 	}
-
-	update_ubifs_inode(inode);
-	update_ubifs_inode(dir);
 	release_head(c, BASEHD);
 	kfree(dent);
 
@@ -696,8 +648,11 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 		goto out_ro;
 
 	finish_reservation(c);
-	mark_inode_clean(c, ubifs_inode(inode));
-	mark_inode_clean(c, ubifs_inode(dir));
+	spin_lock(&ui->synced_i_size_lock);
+	ui->synced_i_size = inode->i_size;
+	spin_unlock(&ui->synced_i_size_lock);
+	mark_inode_clean(c, ui);
+	mark_inode_clean(c, dir_ui);
 	return 0;
 
 out_finish:
@@ -733,7 +688,7 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 	struct ubifs_data_node *data;
 	int err, lnum, offs, compr_type, out_len;
 	int dlen = UBIFS_DATA_NODE_SZ + UBIFS_BLOCK_SIZE * WORST_COMPR_FACTOR;
-	const struct ubifs_inode *ui = ubifs_inode(inode);
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
 	dbg_jnl("ino %lu, blk %u, len %d, key %s", key_inum(c, key),
 		key_block(c, key), len, DBGKEY(key));
@@ -767,12 +722,10 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 		goto out_free;
 
 	err = write_node(c, DATAHD, data, dlen, &lnum, &offs);
-	if (!err)
-		ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf,
-					  key_inum(c, key));
-	release_head(c, DATAHD);
 	if (err)
-		goto out_ro;
+		goto out_release;
+	ubifs_wbuf_add_ino_nolock(&c->jheads[DATAHD].wbuf, key_inum(c, key));
+	release_head(c, DATAHD);
 
 	err = ubifs_tnc_add(c, key, lnum, offs, dlen);
 	if (err)
@@ -782,6 +735,8 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 	kfree(data);
 	return 0;
 
+out_release:
+	release_head(c, DATAHD);
 out_ro:
 	ubifs_ro_mode(c, err);
 	finish_reservation(c);
@@ -810,7 +765,7 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	dbg_jnl("ino %lu%s", inode->i_ino,
 		deletion ? " (last reference)" : "");
 	if (deletion)
-		ubifs_assert(inode->i_nlink == 0 && ui->wb_i_nlink == 0);
+		ubifs_assert(inode->i_nlink == 0);
 
 	len = UBIFS_INO_NODE_SZ;
 	/*
@@ -830,16 +785,13 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, 1, 1, deletion);
+	pack_inode(c, ino, inode, 1, deletion);
 	err = write_head(c, BASEHD, ino, len, &lnum, &offs, sync);
 	if (err)
 		goto out_release;
 	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 					  inode->i_ino);
-	spin_lock(&ui->ui_lock);
-	ui->synced_i_size = ui->wb_i_size;
-	spin_unlock(&ui->ui_lock);
 	release_head(c, BASEHD);
 
 	if (deletion) {
@@ -858,6 +810,9 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
+	spin_lock(&ui->synced_i_size_lock);
+	ui->synced_i_size = inode->i_size;
+	spin_unlock(&ui->synced_i_size_lock);
 	kfree(ino);
 	return 0;
 
@@ -899,6 +854,7 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	int aligned_dlen1, aligned_dlen2, plen = UBIFS_INO_NODE_SZ;
 	int last_reference = !!(new_inode && new_inode->i_nlink == 0);
 	int move = (old_dir != new_dir);
+	struct ubifs_inode *uninitialized_var(new_ui);
 
 	dbg_jnl("dent '%.*s' in dir ino %lu to dent '%.*s' in dir ino %lu",
 		old_dentry->d_name.len, old_dentry->d_name.name,
@@ -906,13 +862,17 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 		new_dentry->d_name.name, new_dir->i_ino);
 	ubifs_assert(ubifs_inode(old_dir)->data_len == 0);
 	ubifs_assert(ubifs_inode(new_dir)->data_len == 0);
+	ubifs_assert(mutex_is_locked(&ubifs_inode(old_dir)->wb_mutex));
+	ubifs_assert(mutex_is_locked(&ubifs_inode(new_dir)->wb_mutex));
 
 	dlen1 = UBIFS_DENT_NODE_SZ + new_dentry->d_name.len + 1;
 	dlen2 = UBIFS_DENT_NODE_SZ + old_dentry->d_name.len + 1;
 	if (new_inode) {
+		new_ui = ubifs_inode(new_inode);
+		ubifs_assert(mutex_is_locked(&new_ui->wb_mutex));
 		ilen = UBIFS_INO_NODE_SZ;
 		if (!last_reference)
-			ilen += ubifs_inode(new_inode)->data_len;
+			ilen += new_ui->data_len;
 	} else
 		ilen = 0;
 
@@ -956,16 +916,16 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 
 	p = (void *)dent2 + aligned_dlen2;
 	if (new_inode) {
-		pack_inode(c, p, new_inode, 0, 0, last_reference);
+		pack_inode(c, p, new_inode, 0, last_reference);
 		p += ALIGN(ilen, 8);
 	}
 
 	if (!move)
-		pack_inode(c, p, old_dir, 0, 1, 0);
+		pack_inode(c, p, old_dir, 1, 0);
 	else {
-		pack_inode(c, p, old_dir, 0, 0, 0);
+		pack_inode(c, p, old_dir, 0, 0);
 		p += ALIGN(plen, 8);
-		pack_inode(c, p, new_dir, 0, 1, 0);
+		pack_inode(c, p, new_dir, 1, 0);
 	}
 
 	if (last_reference) {
@@ -988,12 +948,6 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 			ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf,
 						  new_inode->i_ino);
 	}
-
-	update_ubifs_inode(old_dir);
-	if (move)
-		update_ubifs_inode(new_dir);
-	if (new_inode)
-		update_ubifs_inode(new_inode);
 	release_head(c, BASEHD);
 
 	dent_key_init(c, &key, new_dir->i_ino, &new_dentry->d_name);
@@ -1033,11 +987,15 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	}
 
 	finish_reservation(c);
-	if (new_inode)
-		mark_inode_clean(c, ubifs_inode(new_inode));
+	if (new_inode) {
+		mark_inode_clean(c, new_ui);
+		spin_lock(&new_ui->synced_i_size_lock);
+		new_ui->synced_i_size = new_inode->i_size;
+		spin_unlock(&new_ui->synced_i_size_lock);
+	}
+	mark_inode_clean(c, ubifs_inode(old_dir));
 	if (move)
 		mark_inode_clean(c, ubifs_inode(new_dir));
-	mark_inode_clean(c, ubifs_inode(old_dir));
 	kfree(dent);
 	return 0;
 
@@ -1111,12 +1069,14 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	struct ubifs_trun_node *trun;
 	struct ubifs_data_node *uninitialized_var(dn);
 	int err, dlen, len, lnum, offs, bit, sz, sync = IS_SYNC(inode);
+	struct ubifs_inode *ui = ubifs_inode(inode);
 	ino_t inum = inode->i_ino;
 	unsigned int blk;
 
 	dbg_jnl("ino %lu, size %lld -> %lld", inum, old_size, new_size);
-	ubifs_assert(!ubifs_inode(inode)->data_len);
+	ubifs_assert(!ui->data_len);
 	ubifs_assert(S_ISREG(inode->i_mode));
+	ubifs_assert(mutex_is_locked(&ui->wb_mutex));
 
 	sz = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ +
 	     UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
@@ -1170,7 +1130,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, inode, 0, 0, 0);
+	pack_inode(c, ino, inode, 0, 0);
 	ubifs_prep_grp_node(c, trun, UBIFS_TRUN_NODE_SZ, dlen ? 0 : 1);
 	if (dlen)
 		ubifs_prep_grp_node(c, dn, dlen, 1);
@@ -1180,11 +1140,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_release;
 	if (!sync)
 		ubifs_wbuf_add_ino_nolock(&c->jheads[BASEHD].wbuf, inum);
-
-	update_ubifs_inode(inode);
 	release_head(c, BASEHD);
-	if (err)
-		goto out_ro;
 
 	if (dlen) {
 		sz = offs + UBIFS_INO_NODE_SZ + UBIFS_TRUN_NODE_SZ;
@@ -1215,7 +1171,10 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
-	mark_inode_clean(c, ubifs_inode(inode));
+	spin_lock(&ui->synced_i_size_lock);
+	ui->synced_i_size = inode->i_size;
+	spin_unlock(&ui->synced_i_size_lock);
+	mark_inode_clean(c, ui);
 	kfree(ino);
 	return 0;
 
@@ -1251,11 +1210,13 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	struct ubifs_ino_node *ino;
 	union ubifs_key xent_key, key1, key2;
 	int sync = IS_DIRSYNC(host);
+	struct ubifs_inode *host_ui = ubifs_inode(inode);
 
 	dbg_jnl("host %lu, xattr ino %lu, name '%s', data len %d",
 		host->i_ino, inode->i_ino, nm->name,
 		ubifs_inode(inode)->data_len);
 	ubifs_assert(inode->i_nlink == 0);
+	ubifs_assert(mutex_is_locked(&host_ui->wb_mutex));
 
 	/*
 	 * Since we are deleting the inode, we do not bother to attach any data
@@ -1263,7 +1224,7 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	 */
 	xlen = UBIFS_DENT_NODE_SZ + nm->len + 1;
 	aligned_xlen = ALIGN(xlen, 8);
-	hlen = ubifs_inode(host)->data_len + UBIFS_INO_NODE_SZ;
+	hlen = host_ui->data_len + UBIFS_INO_NODE_SZ;
 	len = aligned_xlen + UBIFS_INO_NODE_SZ + ALIGN(hlen, 8);
 
 	xent = kmalloc(len, GFP_NOFS);
@@ -1289,9 +1250,9 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	ubifs_prep_grp_node(c, xent, xlen, 0);
 
 	ino = (void *)xent + aligned_xlen;
-	pack_inode(c, ino, inode, 0, 0, 1);
+	pack_inode(c, ino, inode, 0, 1);
 	ino = (void *)ino + UBIFS_INO_NODE_SZ;
-	pack_inode(c, ino, host, 0, 1, 0);
+	pack_inode(c, ino, host, 1, 0);
 
 	err = write_head(c, BASEHD, xent, len, &lnum, &xent_offs, sync);
 	if (!sync && !err)
@@ -1329,7 +1290,7 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 		goto out_ro;
 
 	finish_reservation(c);
-	mark_inode_clean(c, ubifs_inode(host));
+	mark_inode_clean(c, host_ui);
 	return 0;
 
 out_ro:
@@ -1355,6 +1316,7 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 			   const struct inode *host)
 {
 	int err, len1, len2, aligned_len, aligned_len1, lnum, offs;
+	struct ubifs_inode *host_ui = ubifs_inode(inode);
 	struct ubifs_ino_node *ino;
 	union ubifs_key key;
 	int sync = IS_DIRSYNC(host);
@@ -1362,8 +1324,9 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 	dbg_jnl("ino %lu, ino %lu", host->i_ino, inode->i_ino);
 	ubifs_assert(host->i_nlink > 0);
 	ubifs_assert(inode->i_nlink > 0);
+	ubifs_assert(mutex_is_locked(&host_ui->wb_mutex));
 
-	len1 = UBIFS_INO_NODE_SZ + ubifs_inode(host)->data_len;
+	len1 = UBIFS_INO_NODE_SZ + host_ui->data_len;
 	len2 = UBIFS_INO_NODE_SZ + ubifs_inode(inode)->data_len;
 	aligned_len1 = ALIGN(len1, 8);
 	aligned_len = aligned_len1 + ALIGN(len2, 8);
@@ -1377,8 +1340,8 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 	if (err)
 		goto out_free;
 
-	pack_inode(c, ino, host, 0, 0, 0);
-	pack_inode(c, (void *)ino + aligned_len1, inode, 0, 1, 0);
+	pack_inode(c, ino, host, 0, 0);
+	pack_inode(c, (void *)ino + aligned_len1, inode, 1, 0);
 
 	err = write_head(c, BASEHD, ino, aligned_len, &lnum, &offs, 0);
 	if (!sync && !err) {
@@ -1402,7 +1365,7 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
-	mark_inode_clean(c, ubifs_inode(host));
+	mark_inode_clean(c, host_ui);
 	kfree(ino);
 	return 0;
 
