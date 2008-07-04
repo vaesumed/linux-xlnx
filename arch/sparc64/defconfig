@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux kernel version: 2.6.26-rc2
-# Fri May 16 13:36:07 2008
+# Linux kernel version: 2.6.26-rc6
+# Thu Jun 19 20:39:23 2008
 #
 CONFIG_SPARC=y
 CONFIG_SPARC64=y
@@ -24,8 +24,6 @@ CONFIG_OF=y
 CONFIG_GENERIC_HARDIRQS_NO__DO_IRQ=y
 CONFIG_SPARC64_PAGE_SIZE_8KB=y
 # CONFIG_SPARC64_PAGE_SIZE_64KB is not set
-# CONFIG_SPARC64_PAGE_SIZE_512KB is not set
-# CONFIG_SPARC64_PAGE_SIZE_4MB is not set
 CONFIG_SECCOMP=y
 CONFIG_HZ_100=y
 # CONFIG_HZ_250 is not set
@@ -1167,6 +1165,7 @@ CONFIG_USB_UHCI_HCD=m
 #
 # CONFIG_USB_ACM is not set
 # CONFIG_USB_PRINTER is not set
+# CONFIG_USB_WDM is not set
 
 #
 # NOTE: USB_STORAGE enables SCSI, and 'SCSI disk support'
@@ -1226,6 +1225,7 @@ CONFIG_USB_STORAGE=m
 # CONFIG_USB_TRANCEVIBRATOR is not set
 # CONFIG_USB_IOWARRIOR is not set
 # CONFIG_USB_TEST is not set
+# CONFIG_USB_ISIGHTFW is not set
 # CONFIG_USB_GADGET is not set
 # CONFIG_MMC is not set
 # CONFIG_MEMSTICK is not set
