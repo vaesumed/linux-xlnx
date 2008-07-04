@@ -338,8 +338,8 @@ struct ubifs_gced_idx_leb {
  * @dirty: non-zero if the inode is dirty
  * @xattr: non-zero if this is an extended attribute inode
  * @wb_mutex: serializes inode write-back with the rest of VFS operations,
- *            serializes "clean <-> dirty" state changes, protects @dirty and
- *            @ui_size fields
+ *            serializes "clean <-> dirty" state changes, protects @dirty,
+ *            @ui_size, and @xattr_size
  * @synced_i_size_lock: protects @synced_i_size
  * @synced_i_size: synchronized size of inode, i.e. the value of inode size
  *                 currently stored on the flash; used only for regular file
@@ -371,14 +371,13 @@ struct ubifs_gced_idx_leb {
  * beyond last synchronized inode size. See 'ubifs_writepage()' for more
  * information.
  *
- * The @ui_size is a "shadow" variable for @inode->i_size which is used by
- * inode write-back. This means, inode write-back writes @ui_size instead of
- * @inode->i_size. The reason for this is that UBIFS cannot make sure
- * @inode->i_size is always changed under @wb_mutex, because it cannot call
- * 'vmtruncate()' with @wb_mutex locked, because it would deadlock with
- * 'ubifs_writepage()' (see file.c). All the other inode fields are changed
- * under @wb_mutex, so they do not need "shadow" fields. Note, one could
- * consider to rework locking and base it on "shadow" fields.
+ * The @ui_size is a "shadow" variable for @inode->i_size and UBIFS uses
+ * @ui_size instead of @inode->i_size. The reason for this is that UBIFS cannot
+ * make sure @inode->i_size is always changed under @wb_mutex, because it
+ * cannot call 'vmtruncate()' with @wb_mutex locked, because it would deadlock
+ * with 'ubifs_writepage()' (see file.c). All the other inode fields are
+ * changed under @wb_mutex, so they do not need "shadow" fields. Note, one
+ * could consider to rework locking and base it on "shadow" fields.
  */
 struct ubifs_inode {
 	struct inode vfs_inode;
