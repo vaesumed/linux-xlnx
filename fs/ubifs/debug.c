@@ -809,7 +809,7 @@ int dbg_check_synced_i_size(struct inode *inode)
 	if (!S_ISREG(inode->i_mode))
 		return 0;
 
-	mutex_lock(&ui->wb_mutex);
+	mutex_lock(&ui->ui_mutex);
 	spin_lock(&ui->synced_i_size_lock);
 	if (ui->ui_size != ui->synced_i_size && !ui->dirty) {
 		ubifs_err("ui_size is %lld, synced_i_size is %lld, but inode "
@@ -820,7 +820,7 @@ int dbg_check_synced_i_size(struct inode *inode)
 		err = -EINVAL;
 	}
 	spin_unlock(&ui->synced_i_size_lock);
-	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
 	return err;
 }
 

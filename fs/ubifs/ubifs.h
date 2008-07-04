@@ -145,13 +145,13 @@
 #define BOTTOM_UP_HEIGHT 64
 
 /*
- * Lockdep classes for UBIFS inode @wb_mutex.
+ * Lockdep classes for UBIFS inode @ui_mutex.
  *
  * @WB_MUTEX_FILE: regular file
  * @WB_MUTEX_DIR1: first locked directory
  * @WB_MUTEX_DIR2: second locked directory
  *
- * UBIFS locks @wb_mutex for several inodes simultaneously. It may lock one
+ * UBIFS locks @ui_mutex for several inodes simultaneously. It may lock one
  * directory inode and one regular file inode, in which case the directory
  * inode is locked first. UBIFS may lock 2 directory inodes simultaneously, in
  * which case the one with smaller inode number goes first.
@@ -337,7 +337,7 @@ struct ubifs_gced_idx_leb {
  *               this inode
  * @dirty: non-zero if the inode is dirty
  * @xattr: non-zero if this is an extended attribute inode
- * @wb_mutex: serializes inode write-back with the rest of VFS operations,
+ * @ui_mutex: serializes inode write-back with the rest of VFS operations,
  *            serializes "clean <-> dirty" state changes, protects @dirty,
  *            @ui_size, and @xattr_size
  * @synced_i_size_lock: protects @synced_i_size
@@ -350,7 +350,7 @@ struct ubifs_gced_idx_leb {
  * @data_len: length of the data attached to the inode
  * @data: inode's data
  *
- * @wb_mutex exists for two main reasons. At first it prevents inodes from
+ * @ui_mutex exists for two main reasons. At first it prevents inodes from
  * being written back while UBIFS changing them, being in the middle of an VFS
  * operation. This way UBIFS makes sure the inode fields are consistent. For
  * example, in 'ubifs_rename()' we change 3 inodes simultaneously, and
@@ -373,10 +373,10 @@ struct ubifs_gced_idx_leb {
  *
  * The @ui_size is a "shadow" variable for @inode->i_size and UBIFS uses
  * @ui_size instead of @inode->i_size. The reason for this is that UBIFS cannot
- * make sure @inode->i_size is always changed under @wb_mutex, because it
- * cannot call 'vmtruncate()' with @wb_mutex locked, because it would deadlock
+ * make sure @inode->i_size is always changed under @ui_mutex, because it
+ * cannot call 'vmtruncate()' with @ui_mutex locked, because it would deadlock
  * with 'ubifs_writepage()' (see file.c). All the other inode fields are
- * changed under @wb_mutex, so they do not need "shadow" fields. Note, one
+ * changed under @ui_mutex, so they do not need "shadow" fields. Note, one
  * could consider to rework locking and base it on "shadow" fields.
  */
 struct ubifs_inode {
@@ -387,7 +387,7 @@ struct ubifs_inode {
 	int xattr_names;
 	unsigned int dirty:1;
 	unsigned int xattr:1;
-	struct mutex wb_mutex;
+	struct mutex ui_mutex;
 	spinlock_t synced_i_size_lock;
 	loff_t synced_i_size;
 	loff_t ui_size;

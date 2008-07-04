@@ -335,7 +335,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	if (end_pos > inode->i_size) {
 		int release;
 
-		mutex_lock(&ui->wb_mutex);
+		mutex_lock(&ui->ui_mutex);
 		i_size_write(inode, end_pos);
 		ui->ui_size = end_pos;
 		release = ui->dirty;
@@ -345,7 +345,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 * '__set_page_dirty_nobuffers()'.
 		 */
 		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
-		mutex_unlock(&ui->wb_mutex);
+		mutex_unlock(&ui->ui_mutex);
 
 		/*
 		 * We've marked the inode as dirty and we have allocated budget
@@ -462,20 +462,20 @@ static int do_writepage(struct page *page, int len)
  * and then keeps writing pages back.
  *
  * Some locking issues explanation. 'ubifs_writepage()' first is called with
- * the page locked, and it locks @wb_mutex. However, write-back does take inode
+ * the page locked, and it locks @ui_mutex. However, write-back does take inode
  * @i_mutex, which means other VFS operations may be run on this inode at the
  * same time. And the problematic one is truncation to smaller size, from where
  * we have to call 'vmtruncate()', which first changes @inode->i_size, then
  * drops the truncated pages. And while dropping the pages, it takes the page
  * lock. This means that 'do_truncation()' cannot call 'vmtruncate()' with
- * @wb_mutex locked, because it would deadlock with 'ubifs_writepage()'. This
- * means that @inode->i_size is changed while @wb_mutex is unlocked.
+ * @ui_mutex locked, because it would deadlock with 'ubifs_writepage()'. This
+ * means that @inode->i_size is changed while @ui_mutex is unlocked.
  *
  * But in 'ubifs_writepage()' we have to guarantee that we do not write beyond
  * inode size. How do we do this if @inode->i_size may became smaller while we
  * are in the middle of 'ubifs_writepage()'? The UBIFS solution is the
  * @ui->ui_isize "shadow" field which UBIFS uses instead of @inode->i_size
- * internally and updates it under @wb_mutex.
+ * internally and updates it under @ui_mutex.
  *
  * Q: why we do not worry that if we race with truncation, we may end up with a
  * situation when the inode is truncated while we are in the middle of
@@ -620,7 +620,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		goto out_budg;
 
-	mutex_lock(&ui->wb_mutex);
+	mutex_lock(&ui->ui_mutex);
 	ui->ui_size = inode->i_size;
 	/* Truncation changes inode [mc]time */
 	inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
@@ -663,12 +663,12 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
 	if (err)
 		goto out_unlock;
-	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
 	ubifs_release_budget(c, &req);
 	return err;
 
 out_unlock:
-	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
 out_budg:
 	ubifs_release_budget(c, &req);
 	return err;
@@ -704,7 +704,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 			goto out_unlock;
 	}
 
-	mutex_lock(&ui->wb_mutex);
+	mutex_lock(&ui->ui_mutex);
 	if (attr->ia_valid & ATTR_SIZE) {
 		/* Truncation changes inode [mc]time */
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
@@ -723,7 +723,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 		 __mark_inode_dirty(inode, I_DIRTY_SYNC | I_DIRTY_DATASYNC);
 	else
 		mark_inode_dirty_sync(inode);
-	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
 	if (release)
 		ubifs_release_budget(c, &req);
 
@@ -732,7 +732,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	return err;
 
 out_unlock:
-	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
 	ubifs_release_budget(c, &req);
 	return err;
 }
@@ -859,11 +859,11 @@ static int update_mctime(struct ubifs_info *c, struct inode *inode)
 		if (err)
 			return err;
 
-		mutex_lock(&ui->wb_mutex);
+		mutex_lock(&ui->ui_mutex);
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		release = ui->dirty;
 		mark_inode_dirty_sync(inode);
-		mutex_unlock(&ui->wb_mutex);
+		mutex_unlock(&ui->ui_mutex);
 		if (release)
 			ubifs_release_budget(c, &req);
 	}
@@ -999,11 +999,11 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 		int release;
 		struct ubifs_inode *ui = ubifs_inode(inode);
 
-		mutex_lock(&ui->wb_mutex);
+		mutex_lock(&ui->ui_mutex);
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		release = ui->dirty;
 		mark_inode_dirty_sync(inode);
-		mutex_unlock(&ui->wb_mutex);
+		mutex_unlock(&ui->ui_mutex);
 		if (release)
 			ubifs_release_dirty_inode_budget(c, ui);
 	}
