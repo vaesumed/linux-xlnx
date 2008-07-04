@@ -116,35 +116,32 @@ static int setflags(struct inode *inode, int flags)
 	 * The IMMUTABLE and APPEND_ONLY flags can only be changed by
 	 * the relevant capability.
 	 */
-	mutex_lock(&inode->i_mutex);
+	mutex_lock(&ui->wb_mutex);
 	oldflags = ubifs2ioctl(ui->flags);
 	if ((flags ^ oldflags) & (FS_APPEND_FL | FS_IMMUTABLE_FL)) {
 		if (!capable(CAP_LINUX_IMMUTABLE)) {
 			err = -EPERM;
-			goto out_budg;
+			goto out_unlock;
 		}
 	}
 
 	ui->flags = ioctl2ubifs(flags);
 	ubifs_set_inode_flags(inode);
 	inode->i_ctime = ubifs_current_time(inode);
-
-	mutex_lock(&ui->wb_mutex);
 	release = ui->dirty;
 	mark_inode_dirty_sync(inode);
 	mutex_unlock(&ui->wb_mutex);
+
 	if (release)
 		ubifs_release_budget(c, &req);
-
 	if (IS_SYNC(inode))
 		err = write_inode_now(inode, 1);
-	mutex_unlock(&inode->i_mutex);
 	return err;
 
-out_budg:
+out_unlock:
 	ubifs_err("can't modify inode %lu attributes", inode->i_ino);
+	mutex_unlock(&ui->wb_mutex);
 	ubifs_release_budget(c, &req);
-	mutex_unlock(&inode->i_mutex);
 	return err;
 }
 
