@@ -42,10 +42,9 @@ int __init sysfs_inode_init(void)
 	return bdi_init(&sysfs_backing_dev_info);
 }
 
-int sysfs_setattr(struct dentry * dentry, struct iattr * iattr)
+int sysfs_sd_setattr(struct sysfs_dirent *sd, struct inode *inode,
+			struct iattr * iattr)
 {
-	struct inode * inode = dentry->d_inode;
-	struct sysfs_dirent * sd = dentry->d_fsdata;
 	struct iattr * sd_iattr;
 	unsigned int ia_valid = iattr->ia_valid;
 	int error;
@@ -54,10 +53,6 @@ int sysfs_setattr(struct dentry * dentry, struct iattr * iattr)
 		return -EINVAL;
 
 	sd_iattr = sd->s_iattr;
-
-	error = inode_change_ok(inode, iattr);
-	if (error)
-		return error;
 
 	iattr->ia_valid &= ~ATTR_SIZE; /* ignore size changes */
 
@@ -103,6 +98,20 @@ int sysfs_setattr(struct dentry * dentry, struct iattr * iattr)
 
 	return error;
 }
+
+int sysfs_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode * inode = dentry->d_inode;
+	struct sysfs_dirent * sd = dentry->d_fsdata;
+	int error;
+
+	error = inode_change_ok(inode, iattr);
+	if (error)
+		return error;
+
+	return sysfs_sd_setattr(sd, inode, iattr);
+}
+
 
 static inline void set_default_inode_attr(struct inode * inode, mode_t mode)
 {
