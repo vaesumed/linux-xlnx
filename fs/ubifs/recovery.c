@@ -1496,6 +1496,7 @@ int ubifs_recover_size(struct ubifs_info *c)
 						  e->inum, e->d_size,
 						  inode->i_size);
 					inode->i_size = e->d_size;
+					ubifs_inode(inode)->ui_size = e->d_size;
 					e->inode = inode;
 					this = rb_next(this);
 					continue;

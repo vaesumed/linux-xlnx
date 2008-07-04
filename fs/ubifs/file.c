@@ -209,6 +209,7 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	 * data in the inode). Later the budget will be amended if this is not
 	 * true.
 	 */
+	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
 	if (pos + len > inode->i_size)
 		/*
 		 * We are writing beyond the file which means we are going to
@@ -336,6 +337,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 
 		mutex_lock(&ui->wb_mutex);
 		i_size_write(inode, end_pos);
+		ui->ui_size = end_pos;
 		release = ui->dirty;
 		/*
 		 * Note, we do not set @I_DIRTY_PAGES (which means that the
@@ -591,15 +593,16 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		return err;
 
+	err = vmtruncate(inode, new_size);
+	if (err)
+		goto out_budg;
+
 	mutex_lock(&ui->wb_mutex);
+	ui->ui_size = inode->i_size;
 	/* Truncation changes inode [mc]time */
 	inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 	/* The other attributes may be changed at the same time as well */
 	do_attr_changes(inode, attr);
-
-	err = vmtruncate(inode, new_size);
-	if (err)
-		goto out_unlock;
 
 	if (offset) {
 		pgoff_t index = new_size >> PAGE_CACHE_SHIFT;
@@ -643,6 +646,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 
 out_unlock:
 	mutex_unlock(&ui->wb_mutex);
+out_budg:
 	ubifs_release_budget(c, &req);
 	return err;
 }
@@ -670,14 +674,19 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		return err;
 
-	mutex_lock(&ui->wb_mutex);
 	if (attr->ia_valid & ATTR_SIZE) {
 		dbg_gen("size %lld -> %lld", inode->i_size, new_size);
-		/* Truncation changes inode [mc]time */
-		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		err = vmtruncate(inode, new_size);
 		if (err)
 			goto out_unlock;
+	}
+
+	mutex_lock(&ui->wb_mutex);
+	if (attr->ia_valid & ATTR_SIZE) {
+		/* Truncation changes inode [mc]time */
+		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
+		/* 'vmtruncate()' changed @i_size, update @ui_size */
+		ui->ui_size = inode->i_size;
 	}
 
 	do_attr_changes(inode, attr);

@@ -153,7 +153,7 @@
  *
  * UBIFS locks @wb_mutex for several inodes simultaneously. It may lock one
  * directory inode and one regular file inode, in which case the directory
- * inode is locked first. UBIFS may lock 2 directory inodes sumultaneously, in
+ * inode is locked first. UBIFS may lock 2 directory inodes simultaneously, in
  * which case the one with smaller inode number goes first.
  */
 enum {
@@ -338,11 +338,13 @@ struct ubifs_gced_idx_leb {
  * @dirty: non-zero if the inode is dirty
  * @xattr: non-zero if this is an extended attribute inode
  * @wb_mutex: serializes inode write-back with the rest of VFS operations,
- *            serializes "clean <-> dirty" state changes, protects @dirty
+ *            serializes "clean <-> dirty" state changes, protects @dirty and
+ *            @ui_size fields
  * @synced_i_size_lock: protects @synced_i_size
  * @synced_i_size: synchronized size of inode, i.e. the value of inode size
  *                 currently stored on the flash; used only for regular file
  *                 inodes
+ * @ui_size: inode size used by UBIFS when writing to flash
  * @flags: inode flags (@UBIFS_COMPR_FL, etc)
  * @compr_type: default compression type used for this inode
  * @data_len: length of the data attached to the inode
@@ -351,19 +353,32 @@ struct ubifs_gced_idx_leb {
  * @wb_mutex exists for two main reasons. At first it prevents inodes from
  * being written back while UBIFS changing them, being in the middle of an VFS
  * operation. This way UBIFS makes sure the inode fields are consistent. For
- * exmple, in 'ubifs_rename()' we change 3 inodes simultaneously, and
+ * example, in 'ubifs_rename()' we change 3 inodes simultaneously, and
  * write-back must not write any of them before we have finished.
  *
  * The second reason is budgeting - UBIFS has to budget all operations. If an
  * operation is going to mark an inode dirty, it has to allocate budget for
  * this. It cannot just mark it dirty because there is no guarantee there will
- * be enough flash space to writei the inode back later. This means UBIFS has
+ * be enough flash space to write the inode back later. This means UBIFS has
  * to have full control over inode "clean <-> dirty" transitions (and pages
  * actually). But unfortunately, VFS marks inodes dirty in many places, and it
  * does not ask the file-system if it is allowed to do so (there is a notifier,
  * but it is not enough), i.e., there is no mechanism to synchronize with this.
  * So UBIFS has its own inode dirty flag and its own mutex to serialize
  * "clean <-> dirty" transitions.
+ *
+ * The @synced_i_size field is used to make sure we never write pages which are
+ * beyond last synchronized inode size. See 'ubifs_writepage()' for more
+ * information.
+ *
+ * The @ui_size is a "shadow" variable for @inode->i_size which is used by
+ * inode write-back. This means, inode write-back writes @ui_size instead of
+ * @inode->i_size. The reason for this is that UBIFS cannot make sure
+ * @inode->i_size is always changed under @wb_mutex, because it cannot call
+ * 'vmtruncate()' with @wb_mutex locked, because it would deadlock with
+ * 'ubifs_writepage()' (see file.c). All the other inode fields are changed
+ * under @wb_mutex, so they do not need "shadow" fields. Note, one could
+ * consider to rework locking and base it on "shadow" fields.
  */
 struct ubifs_inode {
 	struct inode vfs_inode;
@@ -376,6 +391,7 @@ struct ubifs_inode {
 	struct mutex wb_mutex;
 	spinlock_t synced_i_size_lock;
 	loff_t synced_i_size;
+	loff_t ui_size;
 	int flags;
 	int compr_type;
 	int data_len;
@@ -882,7 +898,7 @@ struct ubifs_mount_opts {
  * @cmt_state: commit state
  * @cs_lock: commit state lock
  * @cmt_wq: wait queue to sleep on if the log is full and a commit is running
- * @fast_unmount: do not run journal commit before unmounting
+ * @fast_unmount: do not run journal commit before un-mounting
  * @big_lpt: flag that LPT is too big to write whole during commit
  * @check_lpt_free: flag that indicates LPT GC may be needed
  * @nospace: non-zero if the file-system does not have flash space (used as

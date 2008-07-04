@@ -468,7 +468,7 @@ static void pack_inode(struct ubifs_info *c, struct ubifs_ino_node *ino,
 	ino->gid   = cpu_to_le32(inode->i_gid);
 	ino->mode  = cpu_to_le32(inode->i_mode);
 	ino->flags = cpu_to_le32(ui->flags);
-	ino->size  = cpu_to_le64(inode->i_size);
+	ino->size  = cpu_to_le64(ui->ui_size);
 	ino->nlink = cpu_to_le32(inode->i_nlink);
 	ino->compr_type  = cpu_to_le16(ui->compr_type);
 	ino->data_len    = cpu_to_le32(ui->data_len);
@@ -649,7 +649,7 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 
 	finish_reservation(c);
 	spin_lock(&ui->synced_i_size_lock);
-	ui->synced_i_size = inode->i_size;
+	ui->synced_i_size = ui->ui_size;
 	spin_unlock(&ui->synced_i_size_lock);
 	mark_inode_clean(c, ui);
 	mark_inode_clean(c, dir_ui);
@@ -811,7 +811,7 @@ int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode,
 
 	finish_reservation(c);
 	spin_lock(&ui->synced_i_size_lock);
-	ui->synced_i_size = inode->i_size;
+	ui->synced_i_size = ui->ui_size;
 	spin_unlock(&ui->synced_i_size_lock);
 	kfree(ino);
 	return 0;
@@ -990,7 +990,7 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 	if (new_inode) {
 		mark_inode_clean(c, new_ui);
 		spin_lock(&new_ui->synced_i_size_lock);
-		new_ui->synced_i_size = new_inode->i_size;
+		new_ui->synced_i_size = new_ui->ui_size;
 		spin_unlock(&new_ui->synced_i_size_lock);
 	}
 	mark_inode_clean(c, ubifs_inode(old_dir));
@@ -1172,7 +1172,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 
 	finish_reservation(c);
 	spin_lock(&ui->synced_i_size_lock);
-	ui->synced_i_size = inode->i_size;
+	ui->synced_i_size = ui->ui_size;
 	spin_unlock(&ui->synced_i_size_lock);
 	mark_inode_clean(c, ui);
 	kfree(ino);
@@ -1290,6 +1290,9 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 		goto out_ro;
 
 	finish_reservation(c);
+	spin_lock(&host_ui->synced_i_size_lock);
+	host_ui->synced_i_size = host_ui->ui_size;
+	spin_unlock(&host_ui->synced_i_size_lock);
 	mark_inode_clean(c, host_ui);
 	return 0;
 
@@ -1365,6 +1368,9 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 		goto out_ro;
 
 	finish_reservation(c);
+	spin_lock(&host_ui->synced_i_size_lock);
+	host_ui->synced_i_size = host_ui->ui_size;
+	spin_unlock(&host_ui->synced_i_size_lock);
 	mark_inode_clean(c, host_ui);
 	kfree(ino);
 	return 0;
