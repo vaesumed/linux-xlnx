@@ -243,7 +243,7 @@ long sys_sigsuspend(old_sigset_t mask)
 
  	current->state = TASK_INTERRUPTIBLE;
  	schedule();
- 	set_thread_flag(TIF_RESTORE_SIGMASK);
+	set_restore_sigmask();
  	return -ERESTARTNOHAND;
 }
 
@@ -328,6 +328,75 @@ struct rt_sigframe {
 	int			abigap[56];
 };
 
+#ifdef CONFIG_VSX
+unsigned long copy_fpr_to_user(void __user *to,
+			       struct task_struct *task)
+{
+	double buf[ELF_NFPREG];
+	int i;
+
+	/* save FPR copy to local buffer then write to the thread_struct */
+	for (i = 0; i < (ELF_NFPREG - 1) ; i++)
+		buf[i] = task->thread.TS_FPR(i);
+	memcpy(&buf[i], &task->thread.fpscr, sizeof(double));
+	return __copy_to_user(to, buf, ELF_NFPREG * sizeof(double));
+}
+
+unsigned long copy_fpr_from_user(struct task_struct *task,
+				 void __user *from)
+{
+	double buf[ELF_NFPREG];
+	int i;
+
+	if (__copy_from_user(buf, from, ELF_NFPREG * sizeof(double)))
+		return 1;
+	for (i = 0; i < (ELF_NFPREG - 1) ; i++)
+		task->thread.TS_FPR(i) = buf[i];
+	memcpy(&task->thread.fpscr, &buf[i], sizeof(double));
+
+	return 0;
+}
+
+unsigned long copy_vsx_to_user(void __user *to,
+			       struct task_struct *task)
+{
+	double buf[ELF_NVSRHALFREG];
+	int i;
+
+	/* save FPR copy to local buffer then write to the thread_struct */
+	for (i = 0; i < ELF_NVSRHALFREG; i++)
+		buf[i] = task->thread.fpr[i][TS_VSRLOWOFFSET];
+	return __copy_to_user(to, buf, ELF_NVSRHALFREG * sizeof(double));
+}
+
+unsigned long copy_vsx_from_user(struct task_struct *task,
+				 void __user *from)
+{
+	double buf[ELF_NVSRHALFREG];
+	int i;
+
+	if (__copy_from_user(buf, from, ELF_NVSRHALFREG * sizeof(double)))
+		return 1;
+	for (i = 0; i < ELF_NVSRHALFREG ; i++)
+		task->thread.fpr[i][TS_VSRLOWOFFSET] = buf[i];
+	return 0;
+}
+#else
+inline unsigned long copy_fpr_to_user(void __user *to,
+				      struct task_struct *task)
+{
+	return __copy_to_user(to, task->thread.fpr,
+			      ELF_NFPREG * sizeof(double));
+}
+
+inline unsigned long copy_fpr_from_user(struct task_struct *task,
+					void __user *from)
+{
+	return __copy_from_user(task->thread.fpr, from,
+			      ELF_NFPREG * sizeof(double));
+}
+#endif
+
 /*
  * Save the current user registers on the user stack.
  * We only save the altivec/spe registers if the process has used
@@ -336,13 +405,13 @@ struct rt_sigframe {
 static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 		int sigret)
 {
+	unsigned long msr = regs->msr;
+
 	/* Make sure floating point registers are stored in regs */
 	flush_fp_to_thread(current);
 
-	/* save general and floating-point registers */
-	if (save_general_regs(regs, frame) ||
-	    __copy_to_user(&frame->mc_fregs, current->thread.fpr,
-		    ELF_NFPREG * sizeof(double)))
+	/* save general registers */
+	if (save_general_regs(regs, frame))
 		return 1;
 
 #ifdef CONFIG_ALTIVEC
@@ -354,8 +423,7 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 			return 1;
 		/* set MSR_VEC in the saved MSR value to indicate that
 		   frame->mc_vregs contains valid data */
-		if (__put_user(regs->msr | MSR_VEC, &frame->mc_gregs[PT_MSR]))
-			return 1;
+		msr |= MSR_VEC;
 	}
 	/* else assert((regs->msr & MSR_VEC) == 0) */
 
@@ -367,7 +435,22 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 	if (__put_user(current->thread.vrsave, (u32 __user *)&frame->mc_vregs[32]))
 		return 1;
 #endif /* CONFIG_ALTIVEC */
-
+	if (copy_fpr_to_user(&frame->mc_fregs, current))
+		return 1;
+#ifdef CONFIG_VSX
+	/*
+	 * Copy VSR 0-31 upper half from thread_struct to local
+	 * buffer, then write that to userspace.  Also set MSR_VSX in
+	 * the saved MSR value to indicate that frame->mc_vregs
+	 * contains valid data
+	 */
+	if (current->thread.used_vsr) {
+		flush_vsx_to_thread(current);
+		if (copy_vsx_to_user(&frame->mc_vsregs, current))
+			return 1;
+		msr |= MSR_VSX;
+	}
+#endif /* CONFIG_VSX */
 #ifdef CONFIG_SPE
 	/* save spe registers */
 	if (current->thread.used_spe) {
@@ -377,8 +460,7 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 			return 1;
 		/* set MSR_SPE in the saved MSR value to indicate that
 		   frame->mc_vregs contains valid data */
-		if (__put_user(regs->msr | MSR_SPE, &frame->mc_gregs[PT_MSR]))
-			return 1;
+		msr |= MSR_SPE;
 	}
 	/* else assert((regs->msr & MSR_SPE) == 0) */
 
@@ -387,6 +469,8 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 		return 1;
 #endif /* CONFIG_SPE */
 
+	if (__put_user(msr, &frame->mc_gregs[PT_MSR]))
+		return 1;
 	if (sigret) {
 		/* Set up the sigreturn trampoline: li r0,sigret; sc */
 		if (__put_user(0x38000000UL + sigret, &frame->tramp[0])
@@ -409,6 +493,9 @@ static long restore_user_regs(struct pt_regs *regs,
 	long err;
 	unsigned int save_r2 = 0;
 	unsigned long msr;
+#ifdef CONFIG_VSX
+	int i;
+#endif
 
 	/*
 	 * restore general registers but not including MSR or SOFTE. Also
@@ -436,16 +523,11 @@ static long restore_user_regs(struct pt_regs *regs,
 	 */
 	discard_lazy_cpu_state();
 
-	/* force the process to reload the FP registers from
-	   current->thread when it next does FP instructions */
-	regs->msr &= ~(MSR_FP | MSR_FE0 | MSR_FE1);
-	if (__copy_from_user(current->thread.fpr, &sr->mc_fregs,
-			     sizeof(sr->mc_fregs)))
-		return 1;
-
 #ifdef CONFIG_ALTIVEC
-	/* force the process to reload the altivec registers from
-	   current->thread when it next does altivec instructions */
+	/*
+	 * Force the process to reload the altivec registers from
+	 * current->thread when it next does altivec instructions
+	 */
 	regs->msr &= ~MSR_VEC;
 	if (msr & MSR_VEC) {
 		/* restore altivec registers from the stack */
@@ -459,6 +541,31 @@ static long restore_user_regs(struct pt_regs *regs,
 	if (__get_user(current->thread.vrsave, (u32 __user *)&sr->mc_vregs[32]))
 		return 1;
 #endif /* CONFIG_ALTIVEC */
+	if (copy_fpr_from_user(current, &sr->mc_fregs))
+		return 1;
+
+#ifdef CONFIG_VSX
+	/*
+	 * Force the process to reload the VSX registers from
+	 * current->thread when it next does VSX instruction.
+	 */
+	regs->msr &= ~MSR_VSX;
+	if (msr & MSR_VSX) {
+		/*
+		 * Restore altivec registers from the stack to a local
+		 * buffer, then write this out to the thread_struct
+		 */
+		if (copy_vsx_from_user(current, &sr->mc_vsregs))
+			return 1;
+	} else if (current->thread.used_vsr)
+		for (i = 0; i < 32 ; i++)
+			current->thread.fpr[i][TS_VSRLOWOFFSET] = 0;
+#endif /* CONFIG_VSX */
+	/*
+	 * force the process to reload the FP registers from
+	 * current->thread when it next does FP instructions
+	 */
+	regs->msr &= ~(MSR_FP | MSR_FE0 | MSR_FE1);
 
 #ifdef CONFIG_SPE
 	/* force the process to reload the spe registers from
