@@ -549,7 +549,7 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 	dbg_jnl("ino %lu, dent '%.*s', data len %d in dir ino %lu",
 		inode->i_ino, nm->len, nm->name, ui->data_len, dir->i_ino);
 	ubifs_assert(dir_ui->data_len == 0);
-	ubifs_assert(mutex_is_locked(&dir_ui->wb_mutex));
+	ubifs_assert(mutex_is_locked(&dir_ui->ui_mutex));
 
 	dlen = UBIFS_DENT_NODE_SZ + nm->len + 1;
 	ilen = UBIFS_INO_NODE_SZ;
@@ -862,14 +862,14 @@ int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 		new_dentry->d_name.name, new_dir->i_ino);
 	ubifs_assert(ubifs_inode(old_dir)->data_len == 0);
 	ubifs_assert(ubifs_inode(new_dir)->data_len == 0);
-	ubifs_assert(mutex_is_locked(&ubifs_inode(old_dir)->wb_mutex));
-	ubifs_assert(mutex_is_locked(&ubifs_inode(new_dir)->wb_mutex));
+	ubifs_assert(mutex_is_locked(&ubifs_inode(old_dir)->ui_mutex));
+	ubifs_assert(mutex_is_locked(&ubifs_inode(new_dir)->ui_mutex));
 
 	dlen1 = UBIFS_DENT_NODE_SZ + new_dentry->d_name.len + 1;
 	dlen2 = UBIFS_DENT_NODE_SZ + old_dentry->d_name.len + 1;
 	if (new_inode) {
 		new_ui = ubifs_inode(new_inode);
-		ubifs_assert(mutex_is_locked(&new_ui->wb_mutex));
+		ubifs_assert(mutex_is_locked(&new_ui->ui_mutex));
 		ilen = UBIFS_INO_NODE_SZ;
 		if (!last_reference)
 			ilen += new_ui->data_len;
@@ -1076,7 +1076,7 @@ int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 	dbg_jnl("ino %lu, size %lld -> %lld", inum, old_size, new_size);
 	ubifs_assert(!ui->data_len);
 	ubifs_assert(S_ISREG(inode->i_mode));
-	ubifs_assert(mutex_is_locked(&ui->wb_mutex));
+	ubifs_assert(mutex_is_locked(&ui->ui_mutex));
 
 	sz = UBIFS_TRUN_NODE_SZ + UBIFS_INO_NODE_SZ +
 	     UBIFS_MAX_DATA_NODE_SZ * WORST_COMPR_FACTOR;
@@ -1216,7 +1216,7 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 		host->i_ino, inode->i_ino, nm->name,
 		ubifs_inode(inode)->data_len);
 	ubifs_assert(inode->i_nlink == 0);
-	ubifs_assert(mutex_is_locked(&host_ui->wb_mutex));
+	ubifs_assert(mutex_is_locked(&host_ui->ui_mutex));
 
 	/*
 	 * Since we are deleting the inode, we do not bother to attach any data
@@ -1327,7 +1327,7 @@ int ubifs_jnl_change_xattr(struct ubifs_info *c, const struct inode *inode,
 	dbg_jnl("ino %lu, ino %lu", host->i_ino, inode->i_ino);
 	ubifs_assert(host->i_nlink > 0);
 	ubifs_assert(inode->i_nlink > 0);
-	ubifs_assert(mutex_is_locked(&host_ui->wb_mutex));
+	ubifs_assert(mutex_is_locked(&host_ui->ui_mutex));
 
 	len1 = UBIFS_INO_NODE_SZ + host_ui->data_len;
 	len2 = UBIFS_INO_NODE_SZ + ubifs_inode(inode)->data_len;

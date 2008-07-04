@@ -295,14 +295,14 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 		goto out_budg;
 	}
 
-	mutex_lock(&dir_ui->wb_mutex);
+	mutex_lock(&dir_ui->ui_mutex);
 	dir->i_size += sz_change;
 	dir_ui->ui_size = dir->i_size;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
@@ -312,7 +312,7 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, int mode,
 out_cancel:
 	dir->i_size -= sz_change;
 	dir_ui->ui_size = dir->i_size;
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -516,8 +516,8 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		return err;
 
-	mutex_lock_nested(&dir_ui->wb_mutex, WB_MUTEX_DIR1);
-	mutex_lock_nested(&ui->wb_mutex, WB_MUTEX_FILE);
+	mutex_lock_nested(&dir_ui->ui_mutex, WB_MUTEX_DIR1);
+	mutex_lock_nested(&ui->ui_mutex, WB_MUTEX_FILE);
 	inc_nlink(inode);
 	atomic_inc(&inode->i_count);
 	inode->i_ctime = ubifs_current_time(inode);
@@ -527,8 +527,8 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&ui->wb_mutex);
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
 	d_instantiate(dentry, inode);
@@ -538,8 +538,8 @@ out_cancel:
 	dir->i_size -= sz_change;
 	dir_ui->ui_size = dir->i_size;
 	drop_nlink(inode);
-	mutex_unlock(&ui->wb_mutex);
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 	ubifs_release_budget(c, &req);
 	iput(inode);
 	return err;
@@ -577,8 +577,8 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
-	mutex_lock_nested(&dir_ui->wb_mutex, WB_MUTEX_DIR1);
-	mutex_lock_nested(&ui->wb_mutex, WB_MUTEX_FILE);
+	mutex_lock_nested(&dir_ui->ui_mutex, WB_MUTEX_DIR1);
+	mutex_lock_nested(&ui->ui_mutex, WB_MUTEX_FILE);
 	inode->i_ctime = ubifs_current_time(dir);
 	drop_nlink(inode);
 	dir->i_size -= sz_change;
@@ -587,8 +587,8 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&ui->wb_mutex);
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
@@ -598,8 +598,8 @@ out_cancel:
 	dir->i_size += sz_change;
 	dir_ui->ui_size = dir->i_size;
 	inc_nlink(inode);
-	mutex_unlock(&ui->wb_mutex);
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return err;
@@ -645,13 +645,13 @@ static void lock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
 	struct ubifs_inode *dir_ui2 = ubifs_inode(dir2);
 
 	if (dir1 == dir2)
-		mutex_lock_nested(&dir_ui1->wb_mutex, WB_MUTEX_DIR1);
+		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR1);
 	else if (dir1->i_ino > dir2->i_ino) {
-		mutex_lock_nested(&dir_ui1->wb_mutex, WB_MUTEX_DIR1);
-		mutex_lock_nested(&dir_ui2->wb_mutex, WB_MUTEX_DIR2);
+		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR1);
+		mutex_lock_nested(&dir_ui2->ui_mutex, WB_MUTEX_DIR2);
 	} else {
-		mutex_lock_nested(&dir_ui2->wb_mutex, WB_MUTEX_DIR1);
-		mutex_lock_nested(&dir_ui1->wb_mutex, WB_MUTEX_DIR2);
+		mutex_lock_nested(&dir_ui2->ui_mutex, WB_MUTEX_DIR1);
+		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR2);
 	}
 }
 
@@ -666,10 +666,10 @@ static void unlock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
 	struct ubifs_inode *dir_ui2 = ubifs_inode(dir2);
 
 	if (dir1 == dir2)
-		mutex_unlock(&dir_ui1->wb_mutex);
+		mutex_unlock(&dir_ui1->ui_mutex);
 	else {
-		mutex_unlock(&dir_ui1->wb_mutex);
-		mutex_unlock(&dir_ui2->wb_mutex);
+		mutex_unlock(&dir_ui1->ui_mutex);
+		mutex_unlock(&dir_ui2->ui_mutex);
 	}
 }
 
@@ -759,7 +759,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		goto out_budg;
 	}
 
-	mutex_lock(&dir_ui->wb_mutex);
+	mutex_lock(&dir_ui->ui_mutex);
 	insert_inode_hash(inode);
 	inc_nlink(inode);
 	inc_nlink(dir);
@@ -771,7 +771,7 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 		ubifs_err("cannot create directory, error %d", err);
 		goto out_cancel;
 	}
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
 	d_instantiate(dentry, inode);
@@ -781,7 +781,7 @@ out_cancel:
 	dir->i_size -= sz_change;
 	dir_ui->ui_size = dir->i_size;
 	drop_nlink(dir);
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -839,14 +839,14 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 	ui->data = dev;
 	ui->data_len = devlen;
 
-	mutex_lock(&dir_ui->wb_mutex);
+	mutex_lock(&dir_ui->ui_mutex);
 	dir->i_size += sz_change;
 	dir_ui->ui_size = dir->i_size;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
@@ -856,7 +856,7 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 out_cancel:
 	dir->i_size -= sz_change;
 	dir_ui->ui_size = dir->i_size;
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -914,14 +914,14 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	ui->data_len = len;
 	inode->i_size = ubifs_inode(inode)->ui_size = len;
 
-	mutex_lock(&dir_ui->wb_mutex);
+	mutex_lock(&dir_ui->ui_mutex);
 	dir->i_size += sz_change;
 	dir_ui->ui_size = dir->i_size;
 	dir->i_mtime = dir->i_ctime = inode->i_ctime;
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
 	insert_inode_hash(inode);
@@ -931,7 +931,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 out_cancel:
 	dir->i_size -= sz_change;
 	dir_ui->ui_size = dir->i_size;
-	mutex_unlock(&dir_ui->wb_mutex);
+	mutex_unlock(&dir_ui->ui_mutex);
 out_inode:
 	make_bad_inode(inode);
 	iput(inode);
@@ -991,7 +991,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	lock_2_dir_inodes(old_dir, new_dir);
 	if (new_inode) {
 		new_inode_ui = ubifs_inode(new_inode);
-		mutex_lock_nested(&new_inode_ui->wb_mutex, WB_MUTEX_FILE);
+		mutex_lock_nested(&new_inode_ui->ui_mutex, WB_MUTEX_FILE);
 	}
 
 	/*
@@ -1068,14 +1068,14 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	unlock_2_dir_inodes(old_dir, new_dir);
 	if (new_inode)
-		mutex_unlock(&new_inode_ui->wb_mutex);
+		mutex_unlock(&new_inode_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
 
-	mutex_lock(&old_inode_ui->wb_mutex);
+	mutex_lock(&old_inode_ui->ui_mutex);
 	release = old_inode_ui->dirty;
 	mark_inode_dirty_sync(old_inode);
-	mutex_unlock(&old_inode_ui->wb_mutex);
+	mutex_unlock(&old_inode_ui->ui_mutex);
 
 	if (release)
 		ubifs_release_budget(c, &ino_req);
@@ -1116,7 +1116,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	struct inode *inode = dentry->d_inode;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	mutex_lock(&ui->wb_mutex);
+	mutex_lock(&ui->ui_mutex);
 	stat->dev = inode->i_sb->s_dev;
 	stat->ino = inode->i_ino;
 	stat->mode = inode->i_mode;
@@ -1153,7 +1153,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		stat->blocks = size >> 9;
 	} else
 		stat->blocks = 0;
-	mutex_unlock(&ui->wb_mutex);
+	mutex_unlock(&ui->ui_mutex);
 	return 0;
 }
 
