@@ -2037,11 +2037,12 @@ static int ext4_bh_unmapped_or_delay(handle_t *handle, struct buffer_head *bh)
 	return !buffer_mapped(bh) || buffer_delay(bh);
 }
 
-/* FIXME!! only support data=writeback mode */
 /*
  * get called vi ext4_da_writepages after taking page lock
  * We may end up doing block allocation here in case
  * mpage_da_map_blocks failed to allocate blocks.
+ *
+ * We also get called via journal_submit_inode_data_buffers
  */
 static int ext4_da_writepage(struct page *page,
 				struct writeback_control *wbc)
@@ -2060,6 +2061,7 @@ static int ext4_da_writepage(struct page *page,
 		 * ext4_da_writepages() but directly (shrink_page_list).
 		 * We cannot easily start a transaction here so we just skip
 		 * writing the page in case we would have to do so.
+		 * We reach here also via journal_submit_inode_data_buffers
 		 */
 		size = i_size_read(inode);
 
@@ -2075,8 +2077,11 @@ static int ext4_da_writepage(struct page *page,
 			 * We can't do block allocation under
 			 * page lock without a handle . So redirty
 			 * the page and return
+			 * We may reach here when we do a journal commit
+			 * via journal_submit_inode_data_buffers.
+			 * If we don't have mapping block we just ignore
+			 * them
 			 */
-			BUG_ON(wbc->sync_mode != WB_SYNC_NONE);
 			redirty_page_for_writepage(wbc, page);
 			unlock_page(page);
 			return 0;
@@ -2090,7 +2095,6 @@ static int ext4_da_writepage(struct page *page,
 
 	return ret;
 }
-
 
 /*
  * For now just follow the DIO way to estimate the max credits
@@ -2124,7 +2128,7 @@ static int ext4_da_writepages(struct address_space *mapping,
 		return 0;
 
 	/*
-	 *  Estimate the worse case needed credits to write out
+	 * Estimate the worse case needed credits to write out
 	 * EXT4_MAX_BUF_BLOCKS pages
 	 */
 	needed_blocks = EXT4_MAX_WRITEBACK_CREDITS;
@@ -2145,6 +2149,19 @@ static int ext4_da_writepages(struct address_space *mapping,
 		if (IS_ERR(handle)) {
 			ret = PTR_ERR(handle);
 			goto out_writepages;
+		}
+		if (ext4_should_order_data(inode)) {
+			/*
+			 * With ordered mode we need to add
+			 * the inode to the journal handle
+			 * when we do block allocation.
+			 */
+			ret = ext4_jbd2_file_inode(handle, inode);
+			if (ret) {
+				ext4_journal_stop(handle);
+				goto out_writepages;
+			}
+
 		}
 		/*
 		 * set the max dirty pages could be write at a time
@@ -2729,7 +2746,10 @@ static const struct address_space_operations ext4_da_aops = {
 
 void ext4_set_aops(struct inode *inode)
 {
-	if (ext4_should_order_data(inode))
+	if (ext4_should_order_data(inode) &&
+		test_opt(inode->i_sb, DELALLOC))
+		inode->i_mapping->a_ops = &ext4_da_aops;
+	else if (ext4_should_order_data(inode))
 		inode->i_mapping->a_ops = &ext4_ordered_aops;
 	else if (ext4_should_writeback_data(inode) &&
 		 test_opt(inode->i_sb, DELALLOC))
