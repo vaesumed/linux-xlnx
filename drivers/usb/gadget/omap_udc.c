@@ -54,6 +54,7 @@
 
 #include <asm/arch/dma.h>
 #include <asm/arch/usb.h>
+#include <asm/arch/control.h>
 
 #include "omap_udc.h"
 
@@ -2313,7 +2314,7 @@ static int proc_otg_show(struct seq_file *s)
 	tmp = OTG_REV_REG;
 	if (cpu_is_omap24xx()) {
 		ctrl_name = "control_devconf";
-		trans = CONTROL_DEVCONF_REG;
+		trans = omap_ctrl_readl(OMAP2_CONTROL_DEVCONF0);
 	} else {
 		ctrl_name = "tranceiver_ctrl";
 		trans = omap_readw(USB_TRANSCEIVER_CTRL);
