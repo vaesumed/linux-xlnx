@@ -1535,6 +1535,12 @@ static struct fsck_inode *add_inode(struct ubifs_info *c,
 			return fscki;
 	}
 
+	if (inum > c->highest_inum) {
+		ubifs_err("too high inode number, max. is %lu",
+			  c->highest_inum);
+		return ERR_PTR(-EINVAL);
+	}
+
 	fscki = kzalloc(sizeof(struct fsck_inode), GFP_NOFS);
 	if (!fscki)
 		return ERR_PTR(-ENOMEM);
@@ -1666,6 +1672,7 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 {
 	ino_t inum;
 	void *node;
+	struct ubifs_ch *ch;
 	int err, type = key_type(c, &zbr->key);
 	struct fsck_inode *fscki;
 
@@ -1703,6 +1710,14 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 			  type, zbr->lnum, zbr->offs);
 		err = -EINVAL;
 		goto out_free;
+	}
+
+	ch = node;
+	if (le64_to_cpu(ch->sqnum) > c->max_sqnum) {
+		ubifs_err("too high sequence number, max. is %llu",
+			  c->max_sqnum);
+		err = -EINVAL;
+		goto out_dump;
 	}
 
 	if (type == UBIFS_DATA_KEY) {
