@@ -23,7 +23,6 @@ extern int media_bay_count;
 #ifdef CONFIG_BLK_DEV_IDE_PMAC
 #include <linux/ide.h>
 
-int check_media_bay_by_base(unsigned long base, int what);
 /* called by IDE PMAC host driver to register IDE controller for media bay */
 int media_bay_set_ide_infos(struct device_node *which_bay, unsigned long base,
 			    int irq, ide_hwif_t *hwif);
