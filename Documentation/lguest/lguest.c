@@ -162,6 +162,8 @@ struct virtqueue
 	unsigned int inflight;
 };
 
+static unsigned int net_xmit_notify, net_recv_notify;
+
 /* Remember the arguments to the program so we can "reboot" */
 static char **main_args;
 
@@ -825,6 +827,8 @@ static bool handle_console_input(int fd, struct device *dev)
 				/* Just in case waker is blocked in BREAK, send
 				 * unbreak now. */
 				write(fd, args, sizeof(args));
+				printf("network xmit %u recv %u\n",
+				       net_xmit_notify, net_recv_notify);
 				exit(2);
 			}
 			abort->count = 0;
@@ -866,6 +870,8 @@ static void handle_net_output(int fd, struct virtqueue *vq)
 	unsigned int head, out, in;
 	int len;
 	struct iovec iov[vq->vring.num];
+
+	net_xmit_notify++;
 
 	/* Keep getting output buffers from the Guest until we run out. */
 	while ((head = get_vq_desc(vq, iov, &out, &in)) != vq->vring.num) {
@@ -929,6 +935,14 @@ static bool handle_tun_input(int fd, struct device *dev)
  * delivery because Guest didn't have any buffers. */
 static void enable_fd(int fd, struct virtqueue *vq)
 {
+	add_device_fd(vq->dev->fd);
+	/* Tell waker to listen to it again */
+	write(waker_fd, &vq->dev->fd, sizeof(vq->dev->fd));
+}
+
+static void net_enable_fd(int fd, struct virtqueue *vq)
+{
+	net_recv_notify++;
 	add_device_fd(vq->dev->fd);
 	/* Tell waker to listen to it again */
 	write(waker_fd, &vq->dev->fd, sizeof(vq->dev->fd));
@@ -1353,7 +1367,7 @@ static void setup_tun_net(const char *arg)
 
 	/* Network devices need a receive and a send queue, just like
 	 * console. */
-	add_virtqueue(dev, VIRTQUEUE_NUM, enable_fd);
+	add_virtqueue(dev, VIRTQUEUE_NUM, net_enable_fd);
 	add_virtqueue(dev, VIRTQUEUE_NUM, handle_net_output);
 
 	/* We need a socket to perform the magic network ioctls to bring up the
