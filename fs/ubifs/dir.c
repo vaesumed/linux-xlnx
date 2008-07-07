@@ -489,6 +489,45 @@ static int ubifs_dir_release(struct inode *dir, struct file *file)
 	return 0;
 }
 
+/**
+ * lock_2_inodes - lock two UBIFS inodes.
+ * @inode1: first inode
+ * @inode2: second inode
+ */
+static void lock_2_inodes(struct inode *inode1, struct inode *inode2)
+{
+	struct ubifs_inode *ui1 = ubifs_inode(inode1);
+	struct ubifs_inode *ui2 = ubifs_inode(inode2);
+
+	if (inode1 == inode2)
+		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_2);
+	else if (inode1->i_ino < inode2->i_ino) {
+		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_2);
+		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_3);
+	} else {
+		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_2);
+		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_3);
+	}
+}
+
+/**
+ * unlock_2_inodes - unlock two UBIFS inodes inodes.
+ * @inode1: first inode
+ * @inode2: second inode
+ */
+static void unlock_2_inodes(struct inode *inode1, struct inode *inode2)
+{
+	struct ubifs_inode *ui1 = ubifs_inode(inode1);
+	struct ubifs_inode *ui2 = ubifs_inode(inode2);
+
+	if (inode1 == inode2)
+		mutex_unlock(&ui1->ui_mutex);
+	else {
+		mutex_unlock(&ui1->ui_mutex);
+		mutex_unlock(&ui2->ui_mutex);
+	}
+}
+
 static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 		      struct dentry *dentry)
 {
@@ -516,8 +555,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		return err;
 
-	mutex_lock_nested(&dir_ui->ui_mutex, WB_MUTEX_DIR1);
-	mutex_lock_nested(&ui->ui_mutex, WB_MUTEX_FILE);
+	lock_2_inodes(dir, inode);
 	inc_nlink(inode);
 	atomic_inc(&inode->i_count);
 	inode->i_ctime = ubifs_current_time(inode);
@@ -527,8 +565,7 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 0, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&ui->ui_mutex);
-	mutex_unlock(&dir_ui->ui_mutex);
+	unlock_2_inodes(dir, inode);
 
 	ubifs_release_budget(c, &req);
 	d_instantiate(dentry, inode);
@@ -538,8 +575,7 @@ out_cancel:
 	dir->i_size -= sz_change;
 	dir_ui->ui_size = dir->i_size;
 	drop_nlink(inode);
-	mutex_unlock(&ui->ui_mutex);
-	mutex_unlock(&dir_ui->ui_mutex);
+	unlock_2_inodes(dir, inode);
 	ubifs_release_budget(c, &req);
 	iput(inode);
 	return err;
@@ -549,7 +585,6 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	struct inode *inode = dentry->d_inode;
-	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	int sz_change = CALC_DENT_SIZE(dentry->d_name.len);
 	int err, budgeted = 1;
@@ -577,8 +612,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
-	mutex_lock_nested(&dir_ui->ui_mutex, WB_MUTEX_DIR1);
-	mutex_lock_nested(&ui->ui_mutex, WB_MUTEX_FILE);
+	lock_2_inodes(dir, inode);
 	inode->i_ctime = ubifs_current_time(dir);
 	drop_nlink(inode);
 	dir->i_size -= sz_change;
@@ -587,8 +621,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_cancel;
-	mutex_unlock(&ui->ui_mutex);
-	mutex_unlock(&dir_ui->ui_mutex);
+	unlock_2_inodes(dir, inode);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
@@ -598,8 +631,7 @@ out_cancel:
 	dir->i_size += sz_change;
 	dir_ui->ui_size = dir->i_size;
 	inc_nlink(inode);
-	mutex_unlock(&ui->ui_mutex);
-	mutex_unlock(&dir_ui->ui_mutex);
+	unlock_2_inodes(dir, inode);
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return err;
@@ -634,45 +666,6 @@ static int check_dir_empty(struct ubifs_info *c, struct inode *dir)
 	return err;
 }
 
-/**
- * lock_2_dir_inodes - lock two directory inodes.
- * @dir1: first inode
- * @dir2: second inode
- */
-static void lock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
-{
-	struct ubifs_inode *dir_ui1 = ubifs_inode(dir1);
-	struct ubifs_inode *dir_ui2 = ubifs_inode(dir2);
-
-	if (dir1 == dir2)
-		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR1);
-	else if (dir1->i_ino < dir2->i_ino) {
-		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR1);
-		mutex_lock_nested(&dir_ui2->ui_mutex, WB_MUTEX_DIR2);
-	} else {
-		mutex_lock_nested(&dir_ui2->ui_mutex, WB_MUTEX_DIR1);
-		mutex_lock_nested(&dir_ui1->ui_mutex, WB_MUTEX_DIR2);
-	}
-}
-
-/**
- * unlock_2_dir_inodes - unlock two directory inodes.
- * @dir1: first inode
- * @dir2: second inode
- */
-static void unlock_2_dir_inodes(struct inode *dir1, struct inode *dir2)
-{
-	struct ubifs_inode *dir_ui1 = ubifs_inode(dir1);
-	struct ubifs_inode *dir_ui2 = ubifs_inode(dir2);
-
-	if (dir1 == dir2)
-		mutex_unlock(&dir_ui1->ui_mutex);
-	else {
-		mutex_unlock(&dir_ui1->ui_mutex);
-		mutex_unlock(&dir_ui2->ui_mutex);
-	}
-}
-
 static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
@@ -702,7 +695,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 		budgeted = 0;
 	}
 
-	lock_2_dir_inodes(dir, inode);
+	lock_2_inodes(dir, inode);
 	ubifs_inode(inode)->ui_size = 0;
 	inode->i_ctime = ubifs_current_time(dir);
 	clear_nlink(inode);
@@ -713,7 +706,7 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_cancel;
-	unlock_2_dir_inodes(dir, inode);
+	unlock_2_inodes(dir, inode);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
@@ -726,7 +719,7 @@ out_cancel:
 	inc_nlink(dir);
 	inc_nlink(inode);
 	inc_nlink(inode);
-	unlock_2_dir_inodes(dir, inode);
+	unlock_2_inodes(dir, inode);
 	if (budgeted)
 		ubifs_release_budget(c, &req);
 	return err;
@@ -940,6 +933,60 @@ out_budg:
 	return err;
 }
 
+/**
+ * lock_3_inodes - lock three UBIFS inodes.
+ * @inode1: first inode
+ * @inode2: second inode
+ * @inode3: third inode
+ */
+static void lock_3_inodes(struct inode *inode1, struct inode *inode2,
+			  struct inode *inode3)
+{
+	if (!inode3)
+		lock_2_inodes(inode1, inode2);
+	else if (inode1->i_ino < inode2->i_ino &&
+		 inode1->i_ino < inode3->i_ino) {
+		struct ubifs_inode *ui1 = ubifs_inode(inode1);
+
+		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_1);
+		lock_2_inodes(inode2, inode3);
+	} else if (inode2->i_ino < inode1->i_ino &&
+		   inode2->i_ino < inode3->i_ino) {
+		struct ubifs_inode *ui2 = ubifs_inode(inode2);
+
+		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_1);
+		lock_2_inodes(inode1, inode3);
+	} else {
+		struct ubifs_inode *ui3 = ubifs_inode(inode2);
+
+		mutex_lock_nested(&ui3->ui_mutex, WB_MUTEX_1);
+		lock_2_inodes(inode1, inode2);
+	}
+}
+
+/**
+ * unlock_3_inodes - unlock three UBIFS inodes inodes.
+ * @inode1: first inode
+ * @inode2: second inode
+ * @inode3: third inode
+ */
+static void unlock_3_inodes(struct inode *inode1, struct inode *inode2,
+			    struct inode *inode3)
+{
+	if (!inode3) {
+		unlock_2_inodes(inode1, inode2);
+	} else {
+		struct ubifs_inode *ui1 = ubifs_inode(inode1);
+		struct ubifs_inode *ui2 = ubifs_inode(inode2);
+		struct ubifs_inode *ui3 = ubifs_inode(inode2);
+
+		mutex_unlock(&ui1->ui_mutex);
+		if (inode1 != inode2)
+			mutex_unlock(&ui2->ui_mutex);
+		mutex_unlock(&ui3->ui_mutex);
+	}
+}
+
 static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			struct inode *new_dir, struct dentry *new_dentry)
 {
@@ -957,7 +1004,6 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct ubifs_budget_req ino_req = {.dirtied_ino = 1,
 					   .dirtied_ino_d = old_inode_ui->data_len };
 	struct timespec time;
-	struct ubifs_inode *uninitialized_var(new_inode_ui);
 
 	/*
 	 * Budget request settings: deletion direntry, new direntry, removing
@@ -988,11 +1034,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return err;
 	}
 
-	lock_2_dir_inodes(old_dir, new_dir);
-	if (new_inode) {
-		new_inode_ui = ubifs_inode(new_inode);
-		mutex_lock_nested(&new_inode_ui->ui_mutex, WB_MUTEX_FILE);
-	}
+	lock_3_inodes(old_dir, new_dir, new_inode);
 
 	/*
 	 * Like most other Unix systems, set the @i_ctime for inodes on a
@@ -1066,10 +1108,7 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (err)
 		goto out_cancel;
 
-	unlock_2_dir_inodes(old_dir, new_dir);
-	if (new_inode)
-		mutex_unlock(&new_inode_ui->ui_mutex);
-
+	unlock_3_inodes(old_dir, new_dir, new_inode);
 	ubifs_release_budget(c, &req);
 
 	mutex_lock(&old_inode_ui->ui_mutex);
@@ -1104,9 +1143,7 @@ out_cancel:
 				inc_nlink(old_dir);
 		}
 	}
-	unlock_2_dir_inodes(old_dir, new_dir);
-	if (new_inode)
-		mutex_unlock(&new_inode_ui->ui_mutex);
+	unlock_3_inodes(old_dir, new_dir, new_inode);
 	ubifs_release_budget(c, &ino_req);
 	ubifs_release_budget(c, &req);
 	return err;

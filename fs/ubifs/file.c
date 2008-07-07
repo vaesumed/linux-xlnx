@@ -701,7 +701,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 		dbg_gen("size %lld -> %lld", inode->i_size, new_size);
 		err = vmtruncate(inode, new_size);
 		if (err)
-			goto out_unlock;
+			goto out;
 	}
 
 	mutex_lock(&ui->ui_mutex);
@@ -724,15 +724,14 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	else
 		mark_inode_dirty_sync(inode);
 	mutex_unlock(&ui->ui_mutex);
+
 	if (release)
 		ubifs_release_budget(c, &req);
-
 	if (IS_SYNC(inode))
 		err = inode->i_sb->s_op->write_inode(inode, 1);
 	return err;
 
-out_unlock:
-	mutex_unlock(&ui->ui_mutex);
+out:
 	ubifs_release_budget(c, &req);
 	return err;
 }
