@@ -649,7 +649,6 @@ CONFIG_CHELSIO_T3=m
 CONFIG_IXGBE=m
 # CONFIG_IXGB is not set
 CONFIG_S2IO=m
-# CONFIG_S2IO_NAPI is not set
 # CONFIG_MYRI10GE is not set
 # CONFIG_NETXEN_NIC is not set
 # CONFIG_NIU is not set
