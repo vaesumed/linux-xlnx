@@ -301,7 +301,6 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 	ui->dirty = 0;
 	mutex_unlock(&ui->ui_mutex);
 	ubifs_release_dirty_inode_budget(c, ui);
-
 	return err;
 }
 

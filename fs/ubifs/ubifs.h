@@ -146,20 +146,11 @@
 
 /*
  * Lockdep classes for UBIFS inode @ui_mutex.
- *
- * @WB_MUTEX_FILE: regular file
- * @WB_MUTEX_DIR1: first locked directory
- * @WB_MUTEX_DIR2: second locked directory
- *
- * UBIFS locks @ui_mutex for several inodes simultaneously. It may lock one
- * directory inode and one regular file inode, in which case the directory
- * inode is locked first. UBIFS may lock 2 directory inodes simultaneously, in
- * which case the one with smaller inode number goes first.
  */
 enum {
-	WB_MUTEX_FILE = 0,
-	WB_MUTEX_DIR1 = 1,
-	WB_MUTEX_DIR2 = 2,
+	WB_MUTEX_1 = 0,
+	WB_MUTEX_2 = 1,
+	WB_MUTEX_3 = 2,
 };
 
 /*
