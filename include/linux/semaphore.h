@@ -44,22 +44,12 @@ static inline void sema_init(struct semaphore *sem, int val)
 extern void down(struct semaphore *sem);
 extern int __must_check down_interruptible(struct semaphore *sem);
 extern int __must_check down_killable(struct semaphore *sem);
-extern int __must_check down_trylock(struct semaphore *sem);
+extern int __must_check down_try(struct semaphore *sem);
+/* Old down_trylock() returned the opposite of what was expected. */
+static inline int __deprecated down_trylock(struct semaphore *sem)
+{
+	return !down_try(sem);
+}
 extern int __must_check down_timeout(struct semaphore *sem, long jiffies);
 extern void up(struct semaphore *sem);
-
-/**
- * down_try - try to down a semaphore, but don't block
- * @sem: the semaphore
- *
- * This is equivalent to down_trylock(), but has the same return codes as
- * spin_trylock and mutex_trylock: 1 if semaphore acquired, 0 if not.
- *
- * down_trylock() with its confusing return codes will be deprecated
- * soon.  It will not be missed.
- */
-static inline int __must_check down_try(struct semaphore *sem)
-{
-        return !down_trylock(sem);
-}
 #endif /* __LINUX_SEMAPHORE_H */
