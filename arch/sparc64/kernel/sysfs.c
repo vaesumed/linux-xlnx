@@ -14,7 +14,8 @@
 static DEFINE_PER_CPU(struct hv_mmu_statistics, mmu_stats) __attribute__((aligned(64)));
 
 #define SHOW_MMUSTAT_ULONG(NAME) \
-static ssize_t show_##NAME(struct sys_device *dev, char *buf) \
+static ssize_t show_##NAME(struct sys_device *dev, \
+			struct sysdev_attribute *attr, char *buf) \
 { \
 	struct hv_mmu_statistics *p = &per_cpu(mmu_stats, dev->id); \
 	return sprintf(buf, "%lu\n", p->NAME); \

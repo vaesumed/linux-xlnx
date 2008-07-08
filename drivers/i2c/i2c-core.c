@@ -646,6 +646,15 @@ EXPORT_SYMBOL(i2c_del_adapter);
 
 /* ------------------------------------------------------------------------- */
 
+static int attach_device(struct device *dev, void *data)
+{
+	struct i2c_adapter *adapter = to_i2c_adapter(dev);
+	struct i2c_driver *driver = data;
+
+	driver->attach_adapter(adapter);
+	return 0;
+}
+
 /*
  * An i2c_driver is used with one or more i2c_client (device) nodes to access
  * i2c slave chips, on a bus instance associated with some i2c_adapter.  There
@@ -686,21 +695,51 @@ int i2c_register_driver(struct module *owner, struct i2c_driver *driver)
 	pr_debug("i2c-core: driver [%s] registered\n", driver->driver.name);
 
 	/* legacy drivers scan i2c busses directly */
-	if (driver->attach_adapter) {
-		struct i2c_adapter *adapter;
-
-		down(&i2c_adapter_class.sem);
-		list_for_each_entry(adapter, &i2c_adapter_class.devices,
-				    dev.node) {
-			driver->attach_adapter(adapter);
-		}
-		up(&i2c_adapter_class.sem);
-	}
+	if (driver->attach_adapter)
+		class_for_each_device(&i2c_adapter_class, NULL,
+				     (void *)driver, attach_device);
 
 	mutex_unlock(&core_lock);
 	return 0;
 }
 EXPORT_SYMBOL(i2c_register_driver);
+
+static int detach_device(struct device *dev, void *data)
+{
+	struct i2c_adapter *adapter = to_i2c_adapter(dev);
+	struct i2c_driver *driver = data;
+	struct list_head *item2;
+	struct list_head *_n;
+	struct i2c_client *client;
+
+	/* Have a look at each adapter, if clients of this driver are still
+	 * attached. If so, detach them to be able to kill the driver
+	 * afterwards.
+	 */
+	if (driver->detach_adapter) {
+		if (driver->detach_adapter(adapter)) {
+			dev_err(&adapter->dev, "detach_adapter failed "
+				"for driver [%s]\n",
+				driver->driver.name);
+		}
+	} else {
+		list_for_each_safe(item2, _n, &adapter->clients) {
+			client = list_entry(item2, struct i2c_client, list);
+			if (client->driver != driver)
+				continue;
+			dev_dbg(&adapter->dev, "detaching client [%s] "
+				"at 0x%02x\n", client->name,
+				client->addr);
+			if (driver->detach_client(client)) {
+				dev_err(&adapter->dev, "detach_client "
+					"failed for client [%s] at "
+					"0x%02x\n", client->name,
+					client->addr);
+			}
+		}
+	}
+	return 0;
+}
 
 /**
  * i2c_del_driver - unregister I2C driver
@@ -709,46 +748,15 @@ EXPORT_SYMBOL(i2c_register_driver);
  */
 void i2c_del_driver(struct i2c_driver *driver)
 {
-	struct list_head   *item2, *_n;
-	struct i2c_client  *client;
-	struct i2c_adapter *adap;
-
 	mutex_lock(&core_lock);
 
 	/* new-style driver? */
 	if (is_newstyle_driver(driver))
 		goto unregister;
 
-	/* Have a look at each adapter, if clients of this driver are still
-	 * attached. If so, detach them to be able to kill the driver
-	 * afterwards.
-	 */
-	down(&i2c_adapter_class.sem);
-	list_for_each_entry(adap, &i2c_adapter_class.devices, dev.node) {
-		if (driver->detach_adapter) {
-			if (driver->detach_adapter(adap)) {
-				dev_err(&adap->dev, "detach_adapter failed "
-					"for driver [%s]\n",
-					driver->driver.name);
-			}
-		} else {
-			list_for_each_safe(item2, _n, &adap->clients) {
-				client = list_entry(item2, struct i2c_client, list);
-				if (client->driver != driver)
-					continue;
-				dev_dbg(&adap->dev, "detaching client [%s] "
-					"at 0x%02x\n", client->name,
-					client->addr);
-				if (driver->detach_client(client)) {
-					dev_err(&adap->dev, "detach_client "
-						"failed for client [%s] at "
-						"0x%02x\n", client->name,
-						client->addr);
-				}
-			}
-		}
-	}
-	up(&i2c_adapter_class.sem);
+	/* old-style driver, do it by hand */
+	class_for_each_device(&i2c_adapter_class, NULL, (void *)driver,
+			      detach_device);
 
  unregister:
 	driver_unregister(&driver->driver);
