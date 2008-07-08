@@ -1,6 +1,4 @@
 /*
-    eeprom.c - Part of lm_sensors, Linux kernel modules for hardware
-               monitoring
     Copyright (C) 1998, 1999  Frodo Looijaard <frodol@dds.nl> and
 			       Philip Edelbrock <phil@netroedge.com>
     Copyright (C) 2003 Greg Kroah-Hartman <greg@kroah.com>
