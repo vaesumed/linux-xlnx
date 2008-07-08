@@ -41,14 +41,7 @@
 /* Default indexing tree fanout */
 #define DEFAULT_FANOUT 8
 
-/* Default number of LEBs for orphan information */
-#ifdef CONFIG_UBIFS_FS_DEBUG
-#define DEFAULT_ORPHAN_LEBS 2 /* 2 is better for testing */
-#else
-#define DEFAULT_ORPHAN_LEBS 1
-#endif
-
-/* Default number of journal heads */
+/* Default number of data journal heads */
 #define DEFAULT_JHEADS_CNT 1
 
 /* Default positions of different LEBs in the main area */
@@ -86,6 +79,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	union ubifs_key key;
 	int err, tmp, jnl_lebs, log_lebs, max_buds, main_lebs, main_first;
 	int lpt_lebs, lpt_first, orph_lebs, big_lpt, ino_waste, sup_flags = 0;
+	int min_leb_cnt = UBIFS_MIN_LEB_CNT;
 	uint64_t tmp64, main_bytes;
 
 	/* Some functions called from here depend on the @c->key_len filed */
@@ -95,7 +89,6 @@ static int create_default_filesystem(struct ubifs_info *c)
 	 * First of all, we have to calculate default file-system geometry -
 	 * log size, journal size, etc.
 	 */
-	c->max_leb_cnt = c->leb_cnt;
 	if (c->leb_cnt < 0x7FFFFFFF / DEFAULT_JNL_PERCENT)
 		/* We can first multiply then divide and have no overflow */
 		jnl_lebs = c->leb_cnt * DEFAULT_JNL_PERCENT / 100;
@@ -117,8 +110,11 @@ static int create_default_filesystem(struct ubifs_info *c)
 	log_lebs = tmp / c->leb_size;
 	/* Plus one LEB reserved for commit */
 	log_lebs += 1;
-	/* And some extra space to allow writes while committing */
-	log_lebs += 1;
+	if (c->leb_cnt - min_leb_cnt > 8) {
+		/* And some extra space to allow writes while committing */
+		log_lebs += 1;
+		min_leb_cnt += 1;
+	}
 
 	max_buds = jnl_lebs - log_lebs;
 	if (max_buds < UBIFS_MIN_BUD_LEBS)
@@ -130,7 +126,16 @@ static int create_default_filesystem(struct ubifs_info *c)
 	 * orphan node. At some point the nodes are consolidated into one
 	 * orphan node.
 	 */
-	orph_lebs = DEFAULT_ORPHAN_LEBS;
+	orph_lebs = UBIFS_MIN_ORPH_LEBS;
+#ifdef CONFIG_UBIFS_FS_DEBUG
+	if (c->leb_cnt - min_leb_cnt > 1)
+		/*
+		 * For debugging purposes it is better to have at least 2
+		 * orphan LEBs, because the orphan subsystem would need to do
+		 * consolidations and would be stressed more.
+		 */
+		orph_lebs += 1;
+#endif
 
 	main_lebs = c->leb_cnt - UBIFS_SB_LEBS - UBIFS_MST_LEBS - log_lebs;
 	main_lebs -= orph_lebs;
@@ -162,8 +167,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->flags         = cpu_to_le32(sup_flags);
 	sup->min_io_size   = cpu_to_le32(c->min_io_size);
 	sup->leb_size      = cpu_to_le32(c->leb_size);
-	sup->leb_cnt       = cpu_to_le32(c->leb_cnt);
-	sup->max_leb_cnt   = cpu_to_le32(c->max_leb_cnt);
+	sup->max_leb_cnt   = sup->leb_cnt = cpu_to_le32(c->leb_cnt);
 	sup->max_bud_bytes = cpu_to_le64(tmp64);
 	sup->log_lebs      = cpu_to_le32(log_lebs);
 	sup->lpt_lebs      = cpu_to_le32(lpt_lebs);
@@ -344,7 +348,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 {
 	long long max_bytes;
-	int err = 1;
+	int err = 1, min_leb_cnt;
 
 	if (!c->key_hash) {
 		err = 2;
@@ -368,24 +372,32 @@ static int validate_sb(struct ubifs_info *c, struct ubifs_sb_node *sup)
 		goto failed;
 	}
 
-	if (c->leb_cnt < UBIFS_MIN_LEB_CNT || c->leb_cnt > c->vi.size) {
+	if (c->log_lebs < UBIFS_MIN_LOG_LEBS ||
+	    c->lpt_lebs < UBIFS_MIN_LPT_LEBS ||
+	    c->orph_lebs < UBIFS_MIN_ORPH_LEBS ||
+	    c->main_lebs < UBIFS_MIN_MAIN_LEBS) {
+		err = 4;
+		goto failed;
+	}
+
+	/*
+	 * Calculate minimum allowed amount of main area LEBs. This is very
+	 * similar to %UBIFS_MIN_LEB_CNT, but we take into account real what we
+	 * have just read from the superblock.
+	 */
+	min_leb_cnt = UBIFS_SB_LEBS + UBIFS_MST_LEBS + c->log_lebs;
+	min_leb_cnt += c->lpt_lebs + c->orph_lebs + c->jhead_cnt + 6;
+
+	if (c->leb_cnt < min_leb_cnt || c->leb_cnt > c->vi.size) {
 		ubifs_err("bad LEB count: %d in superblock, %d on UBI volume, "
 			  "%d minimum required", c->leb_cnt, c->vi.size,
-			  UBIFS_MIN_LEB_CNT);
+			  min_leb_cnt);
 		goto failed;
 	}
 
 	if (c->max_leb_cnt < c->leb_cnt) {
 		ubifs_err("max. LEB count %d less than LEB count %d",
 			  c->max_leb_cnt, c->leb_cnt);
-		goto failed;
-	}
-
-	if (c->log_lebs < UBIFS_MIN_LOG_LEBS ||
-	    c->lpt_lebs < UBIFS_MIN_LPT_LEBS ||
-	    c->orph_lebs < UBIFS_MIN_ORPH_LEBS ||
-	    c->main_lebs < UBIFS_MIN_MAIN_LEBS) {
-		err = 6;
 		goto failed;
 	}
 

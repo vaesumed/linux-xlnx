@@ -1121,12 +1121,11 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (mounted_read_only)
 		ubifs_msg("mounted read-only");
 	x = (long long)c->main_lebs * c->leb_size;
-	ubifs_msg("file system size: %lld bytes (%lld KiB, %lld MiB, "
-		  "%d LEBs)", x, x >> 10, x >> 20, c->main_lebs);
+	ubifs_msg("file system size: %lld bytes (%lld KiB, %lld MiB, %d LEBs)",
+		  x, x >> 10, x >> 20, c->main_lebs);
 	x = (long long)c->log_lebs * c->leb_size + c->max_bud_bytes;
-	ubifs_msg("journal size: %lld bytes (%lld KiB, %lld MiB, "
-		  "%d LEBs)", x, x >> 10, x >> 20,
-		  c->log_lebs + c->max_bud_cnt);
+	ubifs_msg("journal size: %lld bytes (%lld KiB, %lld MiB, %d LEBs)",
+		  x, x >> 10, x >> 20, c->log_lebs + c->max_bud_cnt);
 	ubifs_msg("default compressor: %s", ubifs_compr_name(c->default_compr));
 	ubifs_msg("media format %d, latest format %d",
 		  c->fmt_version, UBIFS_FORMAT_VERSION);

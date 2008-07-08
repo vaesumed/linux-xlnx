@@ -207,24 +207,36 @@ enum {
 /* First LEB of the log area */
 #define UBIFS_LOG_LNUM (UBIFS_MST_LNUM + UBIFS_MST_LEBS)
 
+/*
+ * The below constants define the absolute minimum values for various UBIFS
+ * media areas. Many of them actually depend of flash geometry and the FS
+ * configuration (number of journal heads, orphan LEBs, etc). This means that
+ * the smallest volume size which can be used for UBIFS cannot be pre-defined
+ * by these constants. The file-system that meets the below limitation will not
+ * necessarily mount. UBIFS does run-time calculations and validates the FS
+ * size.
+ */
+
 /* Minimum number of logical eraseblocks in the log */
 #define UBIFS_MIN_LOG_LEBS 2
-/* Minimum number of bud logical eraseblocks */
-#define UBIFS_MIN_BUD_LEBS 2
+/* Minimum number of bud logical eraseblocks (one for each head) */
+#define UBIFS_MIN_BUD_LEBS 3
 /* Minimum number of journal logical eraseblocks */
 #define UBIFS_MIN_JNL_LEBS (UBIFS_MIN_LOG_LEBS + UBIFS_MIN_BUD_LEBS)
 /* Minimum number of LPT area logical eraseblocks */
 #define UBIFS_MIN_LPT_LEBS 2
 /* Minimum number of orphan area logical eraseblocks */
 #define UBIFS_MIN_ORPH_LEBS 1
-/* Minimum number of main area logical eraseblocks */
-#define UBIFS_MIN_MAIN_LEBS 8
+/*
+ * Minimum number of main area logical eraseblocks (buds, 2 for the index, 1
+ * for GC, 1 for deletions, and at least 1 for committed data).
+ */
+#define UBIFS_MIN_MAIN_LEBS (UBIFS_MIN_BUD_LEBS + 5)
 
 /* Minimum number of logical eraseblocks */
 #define UBIFS_MIN_LEB_CNT (UBIFS_SB_LEBS + UBIFS_MST_LEBS + \
-			   UBIFS_MIN_LOG_LEBS + UBIFS_MIN_BUD_LEBS  + \
-			   UBIFS_MIN_LPT_LEBS + UBIFS_MIN_ORPH_LEBS + \
-			   UBIFS_MIN_MAIN_LEBS)
+			   UBIFS_MIN_LOG_LEBS + UBIFS_MIN_LPT_LEBS + \
+			   UBIFS_MIN_ORPH_LEBS + UBIFS_MIN_MAIN_LEBS)
 
 /* Node sizes (N.B. these are guaranteed to be multiples of 8) */
 #define UBIFS_CH_SZ        sizeof(struct ubifs_ch)
@@ -546,8 +558,8 @@ struct ubifs_pad_node {
  * @flags: file-system flags (%UBIFS_FLG_BIGLPT, etc)
  * @min_io_size: minimal input/output unit size
  * @leb_size: logical eraseblock size in bytes
- * @leb_cnt: count of LEBs used by filesystem
- * @max_leb_cnt: maximum count of LEBs used by filesystem
+ * @leb_cnt: count of LEBs used by file-system
+ * @max_leb_cnt: maximum count of LEBs used by file-system
  * @max_bud_bytes: maximum amount of data stored in buds
  * @log_lebs: log size in logical eraseblocks
  * @lpt_lebs: number of LEBs used for lprops table
@@ -624,7 +636,7 @@ struct ubifs_sb_node {
  * @lscan_lnum: LEB number of last LPT scan
  * @empty_lebs: number of empty logical eraseblocks
  * @idx_lebs: number of indexing logical eraseblocks
- * @leb_cnt: count of LEBs used by filesystem
+ * @leb_cnt: count of LEBs used by file-system
  * @padding: reserved for future, zeroes
  */
 struct ubifs_mst_node {
