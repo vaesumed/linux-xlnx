@@ -175,7 +175,8 @@ kill_threads:
 	return err;
 }
 
-int stop_machine_run(int (*fn)(void *), void *data, const cpumask_t *cpus)
+int stop_machine_run_notype(int (*fn)(void *), void *data,
+			    const cpumask_t *cpus)
 {
 	int ret;
 
@@ -186,4 +187,4 @@ int stop_machine_run(int (*fn)(void *), void *data, const cpumask_t *cpus)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(stop_machine_run);
+EXPORT_SYMBOL_GPL(stop_machine_run_notype);
