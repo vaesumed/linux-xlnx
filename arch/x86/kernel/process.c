@@ -10,6 +10,8 @@
 #include <asm/processor.h>
 #include <linux/clockchips.h>
 
+unsigned long idle_halt;
+EXPORT_SYMBOL(idle_halt);
 unsigned long idle_nomwait;
 EXPORT_SYMBOL(idle_nomwait);
 
@@ -330,9 +332,18 @@ static int __init idle_setup(char *str)
 		pm_idle = poll_idle;
 	} else if (!strcmp(str, "mwait"))
 		force_mwait = 1;
-	else if (!strcmp(str, "halt"))
+	else if (!strcmp(str, "halt")) {
+		/*
+		 * When the boot option of idle=halt is added, halt is
+		 * forced to be used for CPU idle. In such case CPU C2/C3
+		 * won't be used again.
+		 * To continue to load the CPU idle driver, don't touch
+		 * the boot_option_idle_override.
+		 */
 		pm_idle = default_idle;
-	else if (!strcmp(str, "nomwait")) {
+		idle_halt = 1;
+		return 0;
+	} else if (!strcmp(str, "nomwait")) {
 		/*
 		 * If the boot option of "idle=nomwait" is added,
 		 * it means that mwait will be disabled for CPU C2/C3
@@ -341,8 +352,7 @@ static int __init idle_setup(char *str)
 		 */
 		idle_nomwait = 1;
 		return 0;
-	}
-	else
+	} else
 		return -1;
 
 	boot_option_idle_override = 1;

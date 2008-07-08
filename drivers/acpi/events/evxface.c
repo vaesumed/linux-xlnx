@@ -114,6 +114,8 @@ acpi_install_fixed_event_handler(u32 event,
 
 	ACPI_FUNCTION_TRACE(acpi_install_fixed_event_handler);
 
+	WARN_ON(acpi_disabled);
+
 	/* Parameter validation */
 
 	if (event > ACPI_EVENT_MAX) {
