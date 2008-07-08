@@ -2163,9 +2163,12 @@ static int idetape_chrdev_open(struct inode *inode, struct file *filp)
 	if (i >= MAX_HWIFS * MAX_DRIVES)
 		return -ENXIO;
 
+	lock_kernel();
 	tape = ide_tape_chrdev_get(i);
-	if (!tape)
+	if (!tape) {
+		unlock_kernel();
 		return -ENXIO;
+	}
 
 	debug_log(DBG_CHRDEV, "Enter %s\n", __func__);
 
@@ -2224,10 +2227,12 @@ static int idetape_chrdev_open(struct inode *inode, struct file *filp)
 			}
 		}
 	}
+	unlock_kernel();
 	return 0;
 
 out_put_tape:
 	ide_tape_put(tape);
+	unlock_kernel();
 	return retval;
 }
 
