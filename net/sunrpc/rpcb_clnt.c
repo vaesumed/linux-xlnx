@@ -32,6 +32,10 @@
 #define RPCBIND_PROGRAM		(100000u)
 #define RPCBIND_PORT		(111u)
 
+#define RPCBVERS_2		(2u)
+#define RPCBVERS_3		(3u)
+#define RPCBVERS_4		(4u)
+
 enum {
 	RPCBPROC_NULL,
 	RPCBPROC_SET,
@@ -64,6 +68,7 @@ enum {
 #define RPCB_MAXOWNERLEN	sizeof(RPCB_OWNER_STRING)
 
 static void			rpcb_getport_done(struct rpc_task *, void *);
+static void			rpcb_map_release(void *data);
 static struct rpc_program	rpcb_program;
 
 struct rpcbind_args {
@@ -76,26 +81,20 @@ struct rpcbind_args {
 	const char *		r_netid;
 	const char *		r_addr;
 	const char *		r_owner;
+
+	int			r_status;
 };
 
 static struct rpc_procinfo rpcb_procedures2[];
 static struct rpc_procinfo rpcb_procedures3[];
 
 struct rpcb_info {
-	int			rpc_vers;
+	u32			rpc_vers;
 	struct rpc_procinfo *	rpc_proc;
 };
 
 static struct rpcb_info rpcb_next_version[];
 static struct rpcb_info rpcb_next_version6[];
-
-static void rpcb_map_release(void *data)
-{
-	struct rpcbind_args *map = data;
-
-	xprt_put(map->r_xprt);
-	kfree(map);
-}
 
 static const struct rpc_call_ops rpcb_getport_ops = {
 	.rpc_call_done		= rpcb_getport_done,
@@ -106,6 +105,15 @@ static void rpcb_wake_rpcbind_waiters(struct rpc_xprt *xprt, int status)
 {
 	xprt_clear_binding(xprt);
 	rpc_wake_up_status(&xprt->binding, status);
+}
+
+static void rpcb_map_release(void *data)
+{
+	struct rpcbind_args *map = data;
+
+	rpcb_wake_rpcbind_waiters(map->r_xprt, map->r_status);
+	xprt_put(map->r_xprt);
+	kfree(map);
 }
 
 static struct rpc_clnt *rpcb_create(char *hostname, struct sockaddr *srvaddr,
@@ -177,7 +185,7 @@ int rpcb_register(u32 prog, u32 vers, int prot, unsigned short port, int *okay)
 			prog, vers, prot, port);
 
 	rpcb_clnt = rpcb_create("localhost", (struct sockaddr *) &sin,
-				sizeof(sin), XPRT_TRANSPORT_UDP, 2, 1);
+				sizeof(sin), XPRT_TRANSPORT_UDP, RPCBVERS_2, 1);
 	if (IS_ERR(rpcb_clnt))
 		return PTR_ERR(rpcb_clnt);
 
@@ -227,7 +235,7 @@ int rpcb_getport_sync(struct sockaddr_in *sin, u32 prog, u32 vers, int prot)
 		__func__, NIPQUAD(sin->sin_addr.s_addr), prog, vers, prot);
 
 	rpcb_clnt = rpcb_create(NULL, (struct sockaddr *)sin,
-				sizeof(*sin), prot, 2, 0);
+				sizeof(*sin), prot, RPCBVERS_2, 0);
 	if (IS_ERR(rpcb_clnt))
 		return PTR_ERR(rpcb_clnt);
 
@@ -243,10 +251,10 @@ int rpcb_getport_sync(struct sockaddr_in *sin, u32 prog, u32 vers, int prot)
 }
 EXPORT_SYMBOL_GPL(rpcb_getport_sync);
 
-static struct rpc_task *rpcb_call_async(struct rpc_clnt *rpcb_clnt, struct rpcbind_args *map, int version)
+static struct rpc_task *rpcb_call_async(struct rpc_clnt *rpcb_clnt, struct rpcbind_args *map, struct rpc_procinfo *proc)
 {
 	struct rpc_message msg = {
-		.rpc_proc = rpcb_next_version[version].rpc_proc,
+		.rpc_proc = proc,
 		.rpc_argp = map,
 		.rpc_resp = &map->r_port,
 	};
@@ -271,6 +279,7 @@ static struct rpc_task *rpcb_call_async(struct rpc_clnt *rpcb_clnt, struct rpcbi
 void rpcb_getport_async(struct rpc_task *task)
 {
 	struct rpc_clnt *clnt = task->tk_client;
+	struct rpc_procinfo *proc;
 	u32 bind_version;
 	struct rpc_xprt *xprt = task->tk_xprt;
 	struct rpc_clnt	*rpcb_clnt;
@@ -280,7 +289,6 @@ void rpcb_getport_async(struct rpc_task *task)
 	struct sockaddr *sap = (struct sockaddr *)&addr;
 	size_t salen;
 	int status;
-	struct rpcb_info *info;
 
 	dprintk("RPC: %5u %s(%s, %u, %u, %d)\n",
 		task->tk_pid, __func__,
@@ -289,16 +297,15 @@ void rpcb_getport_async(struct rpc_task *task)
 	/* Autobind on cloned rpc clients is discouraged */
 	BUG_ON(clnt->cl_parent != clnt);
 
+	/* Put self on the wait queue to ensure we get notified if
+	 * some other task is already attempting to bind the port */
+	rpc_sleep_on(&xprt->binding, task, NULL);
+
 	if (xprt_test_and_set_binding(xprt)) {
-		status = -EAGAIN;	/* tell caller to check again */
 		dprintk("RPC: %5u %s: waiting for another binder\n",
 			task->tk_pid, __func__);
-		goto bailout_nowake;
+		return;
 	}
-
-	/* Put self on queue before sending rpcbind request, in case
-	 * rpcb_getport_done completes before we return from rpc_run_task */
-	rpc_sleep_on(&xprt->binding, task, NULL);
 
 	/* Someone else may have bound if we slept */
 	if (xprt_bound(xprt)) {
@@ -313,10 +320,12 @@ void rpcb_getport_async(struct rpc_task *task)
 	/* Don't ever use rpcbind v2 for AF_INET6 requests */
 	switch (sap->sa_family) {
 	case AF_INET:
-		info = rpcb_next_version;
+		proc = rpcb_next_version[xprt->bind_index].rpc_proc;
+		bind_version = rpcb_next_version[xprt->bind_index].rpc_vers;
 		break;
 	case AF_INET6:
-		info = rpcb_next_version6;
+		proc = rpcb_next_version6[xprt->bind_index].rpc_proc;
+		bind_version = rpcb_next_version6[xprt->bind_index].rpc_vers;
 		break;
 	default:
 		status = -EAFNOSUPPORT;
@@ -324,14 +333,13 @@ void rpcb_getport_async(struct rpc_task *task)
 				task->tk_pid, __func__);
 		goto bailout_nofree;
 	}
-	if (info[xprt->bind_index].rpc_proc == NULL) {
+	if (proc == NULL) {
 		xprt->bind_index = 0;
 		status = -EPFNOSUPPORT;
 		dprintk("RPC: %5u %s: no more getport versions available\n",
 			task->tk_pid, __func__);
 		goto bailout_nofree;
 	}
-	bind_version = info[xprt->bind_index].rpc_vers;
 
 	dprintk("RPC: %5u %s: trying rpcbind version %u\n",
 		task->tk_pid, __func__, bind_version);
@@ -360,26 +368,23 @@ void rpcb_getport_async(struct rpc_task *task)
 	map->r_netid = rpc_peeraddr2str(clnt, RPC_DISPLAY_NETID);
 	map->r_addr = rpc_peeraddr2str(rpcb_clnt, RPC_DISPLAY_UNIVERSAL_ADDR);
 	map->r_owner = RPCB_OWNER_STRING;	/* ignored for GETADDR */
+	map->r_status = -EIO;
 
-	child = rpcb_call_async(rpcb_clnt, map, xprt->bind_index);
+	child = rpcb_call_async(rpcb_clnt, map, proc);
 	rpc_release_client(rpcb_clnt);
 	if (IS_ERR(child)) {
-		status = -EIO;
+		/* rpcb_map_release() has freed the arguments */
 		dprintk("RPC: %5u %s: rpc_run_task failed\n",
 			task->tk_pid, __func__);
-		goto bailout;
+		return;
 	}
 	rpc_put_task(child);
 
 	task->tk_xprt->stat.bind_count++;
 	return;
 
-bailout:
-	kfree(map);
-	xprt_put(xprt);
 bailout_nofree:
 	rpcb_wake_rpcbind_waiters(xprt, status);
-bailout_nowake:
 	task->tk_status = status;
 }
 EXPORT_SYMBOL_GPL(rpcb_getport_async);
@@ -418,7 +423,7 @@ static void rpcb_getport_done(struct rpc_task *child, void *data)
 	dprintk("RPC: %5u rpcb_getport_done(status %d, port %u)\n",
 			child->tk_pid, status, map->r_port);
 
-	rpcb_wake_rpcbind_waiters(xprt, status);
+	map->r_status = status;
 }
 
 static int rpcb_encode_mapping(struct rpc_rqst *req, __be32 *p,
@@ -439,7 +444,7 @@ static int rpcb_decode_getport(struct rpc_rqst *req, __be32 *p,
 			       unsigned short *portp)
 {
 	*portp = (unsigned short) ntohl(*p++);
-	dprintk("RPC:      rpcb_decode_getport result %u\n",
+	dprintk("RPC:       rpcb_decode_getport result %u\n",
 			*portp);
 	return 0;
 }
@@ -448,8 +453,8 @@ static int rpcb_decode_set(struct rpc_rqst *req, __be32 *p,
 			   unsigned int *boolp)
 {
 	*boolp = (unsigned int) ntohl(*p++);
-	dprintk("RPC:      rpcb_decode_set result %u\n",
-			*boolp);
+	dprintk("RPC:       rpcb_decode_set: call %s\n",
+			(*boolp ? "succeeded" : "failed"));
 	return 0;
 }
 
@@ -572,7 +577,7 @@ out_err:
 static struct rpc_procinfo rpcb_procedures2[] = {
 	PROC(SET,		mapping,	set),
 	PROC(UNSET,		mapping,	set),
-	PROC(GETADDR,		mapping,	getport),
+	PROC(GETPORT,		mapping,	getport),
 };
 
 static struct rpc_procinfo rpcb_procedures3[] = {
@@ -584,40 +589,48 @@ static struct rpc_procinfo rpcb_procedures3[] = {
 static struct rpc_procinfo rpcb_procedures4[] = {
 	PROC(SET,		mapping,	set),
 	PROC(UNSET,		mapping,	set),
+	PROC(GETADDR,		getaddr,	getaddr),
 	PROC(GETVERSADDR,	getaddr,	getaddr),
 };
 
 static struct rpcb_info rpcb_next_version[] = {
-#ifdef CONFIG_SUNRPC_BIND34
-	{ 4, &rpcb_procedures4[RPCBPROC_GETVERSADDR] },
-	{ 3, &rpcb_procedures3[RPCBPROC_GETADDR] },
-#endif
-	{ 2, &rpcb_procedures2[RPCBPROC_GETPORT] },
-	{ 0, NULL },
+	{
+		.rpc_vers	= RPCBVERS_2,
+		.rpc_proc	= &rpcb_procedures2[RPCBPROC_GETPORT],
+	},
+	{
+		.rpc_proc	= NULL,
+	},
 };
 
 static struct rpcb_info rpcb_next_version6[] = {
-#ifdef CONFIG_SUNRPC_BIND34
-	{ 4, &rpcb_procedures4[RPCBPROC_GETVERSADDR] },
-	{ 3, &rpcb_procedures3[RPCBPROC_GETADDR] },
-#endif
-	{ 0, NULL },
+	{
+		.rpc_vers	= RPCBVERS_4,
+		.rpc_proc	= &rpcb_procedures4[RPCBPROC_GETADDR],
+	},
+	{
+		.rpc_vers	= RPCBVERS_3,
+		.rpc_proc	= &rpcb_procedures3[RPCBPROC_GETADDR],
+	},
+	{
+		.rpc_proc	= NULL,
+	},
 };
 
 static struct rpc_version rpcb_version2 = {
-	.number		= 2,
+	.number		= RPCBVERS_2,
 	.nrprocs	= RPCB_HIGHPROC_2,
 	.procs		= rpcb_procedures2
 };
 
 static struct rpc_version rpcb_version3 = {
-	.number		= 3,
+	.number		= RPCBVERS_3,
 	.nrprocs	= RPCB_HIGHPROC_3,
 	.procs		= rpcb_procedures3
 };
 
 static struct rpc_version rpcb_version4 = {
-	.number		= 4,
+	.number		= RPCBVERS_4,
 	.nrprocs	= RPCB_HIGHPROC_4,
 	.procs		= rpcb_procedures4
 };
