@@ -625,6 +625,11 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
+	else {
+		/* We've deleted something - clean the "no space" flags */
+		c->nospace = c->nospace_rp = 0;
+		smp_wmb();
+	}
 	return 0;
 
 out_cancel:
@@ -710,6 +715,11 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
+	else {
+		/* We've deleted something - clean the "no space" flags */
+		c->nospace = c->nospace_rp = 0;
+		smp_wmb();
+	}
 	return 0;
 
 out_cancel:
