@@ -2668,7 +2668,9 @@ qla2x00_request_firmware(scsi_qla_host_t *ha)
 		blob = &qla_fw_blobs[FW_ISP25XX];
 	}
 
-	mutex_lock(&qla_fw_lock);
+	if (mutex_lock_killable(&qla_fw_lock))
+		return NULL;
+
 	if (blob->fw)
 		goto out;
 
