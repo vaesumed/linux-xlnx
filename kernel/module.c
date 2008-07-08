@@ -689,7 +689,7 @@ static int try_stop_module(struct module *mod, int flags, int *forced)
 {
 	struct stopref sref = { mod, flags, forced };
 
-	return stop_machine_run(__try_stop_module, &sref, NR_CPUS);
+	return stop_machine_run(__try_stop_module, &sref, NULL);
 }
 
 unsigned int module_refcount(struct module *mod)
@@ -1421,7 +1421,7 @@ static int __unlink_module(void *_mod)
 static void free_module(struct module *mod)
 {
 	/* Delete from various lists */
-	stop_machine_run(__unlink_module, mod, NR_CPUS);
+	stop_machine_run(__unlink_module, mod, NULL);
 	remove_notes_attrs(mod);
 	remove_sect_attrs(mod);
 	mod_kobject_remove(mod);
@@ -2189,7 +2189,7 @@ static struct module *load_module(void __user *umod,
 	/* Now sew it into the lists so we can get lockdep and oops
          * info during argument parsing.  Noone should access us, since
          * strong_try_module_get() will fail. */
-	stop_machine_run(__link_module, mod, NR_CPUS);
+	stop_machine_run(__link_module, mod, NULL);
 
 	/* Size of section 0 is 0, so this works well if no params */
 	err = parse_args(mod->name, mod->args,
@@ -2223,7 +2223,7 @@ static struct module *load_module(void __user *umod,
 	return mod;
 
  unlink:
-	stop_machine_run(__unlink_module, mod, NR_CPUS);
+	stop_machine_run(__unlink_module, mod, NULL);
 	module_arch_cleanup(mod);
  cleanup:
 	kobject_del(&mod->mkobj.kobj);
