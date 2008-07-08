@@ -1,7 +1,5 @@
 /* linux/net/ipv4/arp.c
  *
- * Version:	$Id: arp.c,v 1.99 2001/08/30 22:55:42 davem Exp $
- *
  * Copyright (C) 1994 by Florian  La Roche
  *
  * This module implements the Address Resolution Protocol ARP (RFC 826),
@@ -1199,7 +1197,7 @@ static int arp_netdev_event(struct notifier_block *this, unsigned long event, vo
 	switch (event) {
 	case NETDEV_CHANGEADDR:
 		neigh_changeaddr(&arp_tbl, dev);
-		rt_cache_flush(0);
+		rt_cache_flush(dev_net(dev), 0);
 		break;
 	default:
 		break;

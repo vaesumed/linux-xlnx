@@ -28,8 +28,7 @@ void vlan_dev_set_ingress_priority(const struct net_device *dev,
 				   u32 skb_prio, short vlan_prio);
 int vlan_dev_set_egress_priority(const struct net_device *dev,
 				 u32 skb_prio, short vlan_prio);
-int vlan_dev_set_vlan_flag(const struct net_device *dev,
-			   u32 flag, short flag_val);
+int vlan_dev_change_flags(const struct net_device *dev, u32 flag, u32 mask);
 void vlan_dev_get_realdev_name(const struct net_device *dev, char *result);
 void vlan_dev_get_vid(const struct net_device *dev, unsigned short *result);
 
@@ -37,6 +36,22 @@ int vlan_check_real_dev(struct net_device *real_dev, unsigned short vlan_id);
 void vlan_setup(struct net_device *dev);
 int register_vlan_dev(struct net_device *dev);
 void unregister_vlan_dev(struct net_device *dev);
+
+#ifdef CONFIG_VLAN_8021Q_GVRP
+extern int vlan_gvrp_request_join(const struct net_device *dev);
+extern void vlan_gvrp_request_leave(const struct net_device *dev);
+extern int vlan_gvrp_init_applicant(struct net_device *dev);
+extern void vlan_gvrp_uninit_applicant(struct net_device *dev);
+extern int vlan_gvrp_init(void);
+extern void vlan_gvrp_uninit(void);
+#else
+static inline int vlan_gvrp_request_join(const struct net_device *dev) { return 0; }
+static inline void vlan_gvrp_request_leave(const struct net_device *dev) {}
+static inline int vlan_gvrp_init_applicant(struct net_device *dev) { return 0; }
+static inline void vlan_gvrp_uninit_applicant(struct net_device *dev) {}
+static inline int vlan_gvrp_init(void) { return 0; }
+static inline void vlan_gvrp_uninit(void) {}
+#endif
 
 int vlan_netlink_init(void);
 void vlan_netlink_fini(void);

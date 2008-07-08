@@ -599,8 +599,8 @@ struct net_device
 	int			uc_promisc;
 	struct dev_addr_list	*mc_list;	/* Multicast mac addresses	*/
 	int			mc_count;	/* Number of installed mcasts	*/
-	int			promiscuity;
-	int			allmulti;
+	unsigned int		promiscuity;
+	unsigned int		allmulti;
 
 
 	/* Protocol specific pointers */
@@ -740,6 +740,8 @@ struct net_device
 	struct net_bridge_port	*br_port;
 	/* macvlan */
 	struct macvlan_port	*macvlan_port;
+	/* GARP */
+	struct garp_port	*garp_port;
 
 	/* class/net/name entry */
 	struct device		dev;
@@ -890,6 +892,7 @@ extern struct net_device	*__dev_get_by_name(struct net *net, const char *name);
 extern int		dev_alloc_name(struct net_device *dev, const char *name);
 extern int		dev_open(struct net_device *dev);
 extern int		dev_close(struct net_device *dev);
+extern void		dev_disable_lro(struct net_device *dev);
 extern int		dev_queue_xmit(struct sk_buff *skb);
 extern int		register_netdevice(struct net_device *dev);
 extern void		unregister_netdevice(struct net_device *dev);
@@ -1480,9 +1483,10 @@ extern int 		__dev_addr_delete(struct dev_addr_list **list, int *count, void *ad
 extern int		__dev_addr_add(struct dev_addr_list **list, int *count, void *addr, int alen, int newonly);
 extern int		__dev_addr_sync(struct dev_addr_list **to, int *to_count, struct dev_addr_list **from, int *from_count);
 extern void		__dev_addr_unsync(struct dev_addr_list **to, int *to_count, struct dev_addr_list **from, int *from_count);
-extern void		dev_set_promiscuity(struct net_device *dev, int inc);
-extern void		dev_set_allmulti(struct net_device *dev, int inc);
+extern int		dev_set_promiscuity(struct net_device *dev, int inc);
+extern int		dev_set_allmulti(struct net_device *dev, int inc);
 extern void		netdev_state_change(struct net_device *dev);
+extern void		netdev_bonding_change(struct net_device *dev);
 extern void		netdev_features_change(struct net_device *dev);
 /* Load a device via the kmod */
 extern void		dev_load(struct net *net, const char *name);
@@ -1508,6 +1512,9 @@ extern void *dev_seq_start(struct seq_file *seq, loff_t *pos);
 extern void *dev_seq_next(struct seq_file *seq, void *v, loff_t *pos);
 extern void dev_seq_stop(struct seq_file *seq, void *v);
 #endif
+
+extern int netdev_class_create_file(struct class_attribute *class_attr);
+extern void netdev_class_remove_file(struct class_attribute *class_attr);
 
 extern void linkwatch_run_queue(void);
 
