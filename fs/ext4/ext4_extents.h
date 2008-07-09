@@ -126,6 +126,7 @@ struct ext4_ext_path {
 
 
 #define EXT_MAX_BLOCK	0xffffffff
+#define EXT_UNSET_BLOCK 1
 
 /*
  * EXT_INIT_MAX_LEN is the maximum number of blocks we can have in an
