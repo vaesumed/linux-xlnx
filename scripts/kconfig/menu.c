@@ -187,46 +187,15 @@ static int menu_range_valid_sym(struct symbol *sym, struct symbol *sym2)
 void sym_check_prop(struct symbol *sym)
 {
 	struct property *prop;
-	struct symbol *sym2, *def_sym;
-	char *str;
-
+	struct symbol *sym2;
 	for (prop = sym->prop; prop; prop = prop->next) {
 		switch (prop->type) {
 		case P_DEFAULT:
-			if (sym->type != S_STRING && sym->type != S_INT &&
-			    sym->type != S_HEX)
-				break;
-			if (prop->expr->type != E_SYMBOL) {
+			if ((sym->type == S_STRING || sym->type == S_INT || sym->type == S_HEX) &&
+			    prop->expr->type != E_SYMBOL)
 				prop_warn(prop,
-					"default for config symbol '%s'"
-					" must be a single symbol", sym->name);
-				break;
-			}
-			def_sym = prop->expr->left.sym;
-			if (def_sym->type == sym->type)
-				/* default is a dynamic value */
-				break;
-			if (def_sym->type != S_UNKNOWN) {
-				prop_warn(prop,
-					"default for config symbol '%s'"
-					" has the wrong type (%s)", sym->name,
-					sym_type_name(def_sym->type));
-				break;
-			}
-			if (!sym_string_valid(sym, def_sym->name)) {
-				prop_warn(prop,
-					"default for config symbol '%s'"
-					" is not valid", sym->name);
-				break;
-			}
-			str = strdup_type(def_sym->name, sym->type);
-			if (strcmp(str, def_sym->name)) {
-				prop_warn(prop,
-					"default for config symbol '%s'"
-					" should be %s", sym->name, str);
-				prop->expr->left.sym = sym_lookup(str, SYMBOL_CONST);
-			}
-			free(str);
+				    "default for config symbol '%'"
+				    " must be a single symbol", sym->name);
 			break;
 		case P_SELECT:
 			sym2 = prop_get_symbol(prop);
