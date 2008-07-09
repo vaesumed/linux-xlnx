@@ -142,6 +142,7 @@ static int create_default_filesystem(struct ubifs_info *c)
 
 	lpt_first = UBIFS_LOG_LNUM + log_lebs;
 	c->lsave_cnt = DEFAULT_LSAVE_CNT;
+	c->max_leb_cnt = c->leb_cnt;
 	err = ubifs_create_dflt_lpt(c, &main_lebs, lpt_first, &lpt_lebs,
 				    &big_lpt);
 	if (err)
@@ -167,7 +168,8 @@ static int create_default_filesystem(struct ubifs_info *c)
 	sup->flags         = cpu_to_le32(sup_flags);
 	sup->min_io_size   = cpu_to_le32(c->min_io_size);
 	sup->leb_size      = cpu_to_le32(c->leb_size);
-	sup->max_leb_cnt   = sup->leb_cnt = cpu_to_le32(c->leb_cnt);
+	sup->leb_cnt       = cpu_to_le32(c->leb_cnt);
+	sup->max_leb_cnt   = cpu_to_le32(c->max_leb_cnt);
 	sup->max_bud_bytes = cpu_to_le64(tmp64);
 	sup->log_lebs      = cpu_to_le32(log_lebs);
 	sup->lpt_lebs      = cpu_to_le32(lpt_lebs);
