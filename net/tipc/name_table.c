@@ -74,7 +74,7 @@ struct sub_seq {
  * @first_free: array index of first unused sub-sequence entry
  * @ns_list: links to adjacent name sequences in hash chain
  * @subscriptions: list of subscriptions for this 'type'
- * @lock: spinlock controlling access to name sequence structure
+ * @lock: spinlock controlling access to publication lists of all sub-sequences
  */
 
 struct name_seq {
@@ -905,6 +905,9 @@ static void nameseq_list(struct name_seq *seq, struct print_buf *buf, u32 depth,
 	struct sub_seq *sseq;
 	char typearea[11];
 
+	if (seq->first_free == 0)
+		return;
+
 	sprintf(typearea, "%-10u", seq->type);
 
 	if (depth == 1) {
@@ -915,7 +918,9 @@ static void nameseq_list(struct name_seq *seq, struct print_buf *buf, u32 depth,
 	for (sseq = seq->sseqs; sseq != &seq->sseqs[seq->first_free]; sseq++) {
 		if ((lowbound <= sseq->upper) && (upbound >= sseq->lower)) {
 			tipc_printf(buf, "%s ", typearea);
+			spin_lock_bh(&seq->lock);
 			subseq_list(sseq, buf, depth, index);
+			spin_unlock_bh(&seq->lock);
 			sprintf(typearea, "%10s", " ");
 		}
 	}
@@ -1050,15 +1055,12 @@ void tipc_nametbl_dump(void)
 
 int tipc_nametbl_init(void)
 {
-	int array_size = sizeof(struct hlist_head) * tipc_nametbl_size;
-
-	table.types = kzalloc(array_size, GFP_ATOMIC);
+	table.types = kcalloc(tipc_nametbl_size, sizeof(struct hlist_head),
+			      GFP_ATOMIC);
 	if (!table.types)
 		return -ENOMEM;
 
-	write_lock_bh(&tipc_nametbl_lock);
 	table.local_publ_count = 0;
-	write_unlock_bh(&tipc_nametbl_lock);
 	return 0;
 }
 

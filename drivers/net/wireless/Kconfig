@@ -14,30 +14,6 @@ config WLAN_PRE80211
 	  This option does not affect the kernel build, it only
 	  lets you choose drivers.
 
-config STRIP
-	tristate "STRIP (Metricom starmode radio IP)"
-	depends on INET && WLAN_PRE80211
-	select WIRELESS_EXT
-	---help---
-	  Say Y if you have a Metricom radio and intend to use Starmode Radio
-	  IP. STRIP is a radio protocol developed for the MosquitoNet project
-	  (on the WWW at <http://mosquitonet.stanford.edu/>) to send Internet
-	  traffic using Metricom radios.  Metricom radios are small, battery
-	  powered, 100kbit/sec packet radio transceivers, about the size and
-	  weight of a cellular telephone. (You may also have heard them called
-	  "Metricom modems" but we avoid the term "modem" because it misleads
-	  many people into thinking that you can plug a Metricom modem into a
-	  phone line and use it as a modem.)
-
-	  You can use STRIP on any Linux machine with a serial port, although
-	  it is obviously most useful for people with laptop computers. If you
-	  think you might get a Metricom radio in the future, there is no harm
-	  in saying Y to STRIP now, except that it makes the kernel a bit
-	  bigger.
-
-	  To compile this as a module, choose M here: the module will be
-	  called strip.
-
 config ARLAN
 	tristate "Aironet Arlan 655 & IC2200 DS support"
 	depends on ISA && !64BIT && WLAN_PRE80211
@@ -635,14 +611,20 @@ config RTL8180
 	  Thanks to Realtek for their support!
 
 config RTL8187
-	tristate "Realtek 8187 USB support"
+	tristate "Realtek 8187 and 8187B USB support"
 	depends on MAC80211 && USB && WLAN_80211 && EXPERIMENTAL
 	select EEPROM_93CX6
 	---help---
-	  This is a driver for RTL8187 based cards.
-	  These are USB based chips found in cards such as:
+	  This is a driver for RTL8187 and RTL8187B based cards.
+	  These are USB based chips found in devices such as:
 
 	  Netgear WG111v2
+	  Level 1 WNC-0301USB
+	  Micronet SP907GK V5
+	  Encore ENUWI-G2
+	  Trendnet TEW-424UB
+	  ASUS P5B Deluxe
+	  Toshiba Satellite Pro series of laptops
 
 	  Thanks to Realtek for their support!
 
@@ -672,6 +654,19 @@ config ADM8211
 	  the Ralink RT2400 (SMC2635W) without a model number change.
 
 	  Thanks to Infineon-ADMtek for their support of this driver.
+
+config MAC80211_HWSIM
+	tristate "Simulated radio testing tool for mac80211"
+	depends on MAC80211 && WLAN_80211
+	---help---
+	  This driver is a developer testing tool that can be used to test
+	  IEEE 802.11 networking stack (mac80211) functionality. This is not
+	  needed for normal wireless LAN usage and is only for testing. See
+	  Documentation/networking/mac80211_hwsim for more information on how
+	  to use this tool.
+
+	  To compile this driver as a module, choose M here: the module will be
+	  called mac80211_hwsim.  If unsure, say N.
 
 source "drivers/net/wireless/p54/Kconfig"
 source "drivers/net/wireless/ath5k/Kconfig"

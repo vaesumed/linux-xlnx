@@ -28,6 +28,7 @@
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
+#include <linux/ethtool.h>
 #include <net/datalink.h>
 #include <net/p8022.h>
 #include <net/arp.h>
@@ -73,11 +74,8 @@ static int vlan_dev_rebuild_header(struct sk_buff *skb)
 static inline struct sk_buff *vlan_check_reorder_header(struct sk_buff *skb)
 {
 	if (vlan_dev_info(skb->dev)->flags & VLAN_FLAG_REORDER_HDR) {
-		if (skb_shared(skb) || skb_cloned(skb)) {
-			struct sk_buff *nskb = skb_copy(skb, GFP_ATOMIC);
-			kfree_skb(skb);
-			skb = nskb;
-		}
+		if (skb_cow(skb, skb_headroom(skb)) < 0)
+			skb = NULL;
 		if (skb) {
 			/* Lifted from Gleb's VLAN code... */
 			memmove(skb->data - ETH_HLEN,
@@ -149,9 +147,9 @@ int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		  struct packet_type *ptype, struct net_device *orig_dev)
 {
 	struct vlan_hdr *vhdr;
-	unsigned short vid;
 	struct net_device_stats *stats;
-	unsigned short vlan_TCI;
+	u16 vlan_id;
+	u16 vlan_tci;
 
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (skb == NULL)
@@ -161,14 +159,14 @@ int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		goto err_free;
 
 	vhdr = (struct vlan_hdr *)skb->data;
-	vlan_TCI = ntohs(vhdr->h_vlan_TCI);
-	vid = (vlan_TCI & VLAN_VID_MASK);
+	vlan_tci = ntohs(vhdr->h_vlan_TCI);
+	vlan_id = vlan_tci & VLAN_VID_MASK;
 
 	rcu_read_lock();
-	skb->dev = __find_vlan_dev(dev, vid);
+	skb->dev = __find_vlan_dev(dev, vlan_id);
 	if (!skb->dev) {
 		pr_debug("%s: ERROR: No net_device for VID: %u on dev: %s\n",
-			 __func__, (unsigned int)vid, dev->name);
+			 __func__, vlan_id, dev->name);
 		goto err_unlock;
 	}
 
@@ -180,11 +178,10 @@ int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 
 	skb_pull_rcsum(skb, VLAN_HLEN);
 
-	skb->priority = vlan_get_ingress_priority(skb->dev,
-						  ntohs(vhdr->h_vlan_TCI));
+	skb->priority = vlan_get_ingress_priority(skb->dev, vlan_tci);
 
 	pr_debug("%s: priority: %u for TCI: %hu\n",
-		 __func__, skb->priority, ntohs(vhdr->h_vlan_TCI));
+		 __func__, skb->priority, vlan_tci);
 
 	switch (skb->pkt_type) {
 	case PACKET_BROADCAST: /* Yeah, stats collect these together.. */
@@ -227,7 +224,7 @@ err_free:
 	return NET_RX_DROP;
 }
 
-static inline unsigned short
+static inline u16
 vlan_dev_get_egress_qos_mask(struct net_device *dev, struct sk_buff *skb)
 {
 	struct vlan_priority_tci_mapping *mp;
@@ -259,14 +256,16 @@ static int vlan_dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 				unsigned int len)
 {
 	struct vlan_hdr *vhdr;
-	unsigned short veth_TCI = 0;
+	u16 vlan_tci = 0;
 	int rc = 0;
 	int build_vlan_header = 0;
-	struct net_device *vdev = dev;
 
 	pr_debug("%s: skb: %p type: %hx len: %u vlan_id: %hx, daddr: %p\n",
 		 __func__, skb, type, len, vlan_dev_info(dev)->vlan_id,
 		 daddr);
+
+	if (WARN_ON(skb_headroom(skb) < dev->hard_header_len))
+		return -ENOSPC;
 
 	/* build vlan header only if re_order_header flag is NOT set.  This
 	 * fixes some programs that get confused when they see a VLAN device
@@ -291,10 +290,10 @@ static int vlan_dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 		 * VLAN ID	 12 bits (low bits)
 		 *
 		 */
-		veth_TCI = vlan_dev_info(dev)->vlan_id;
-		veth_TCI |= vlan_dev_get_egress_qos_mask(dev, skb);
+		vlan_tci = vlan_dev_info(dev)->vlan_id;
+		vlan_tci |= vlan_dev_get_egress_qos_mask(dev, skb);
 
-		vhdr->h_vlan_TCI = htons(veth_TCI);
+		vhdr->h_vlan_TCI = htons(vlan_tci);
 
 		/*
 		 *  Set the protocol type. For a packet of type ETH_P_802_3 we
@@ -308,7 +307,6 @@ static int vlan_dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 			vhdr->h_vlan_encapsulated_proto = htons(len);
 
 		skb->protocol = htons(ETH_P_8021Q);
-		skb_reset_network_header(skb);
 	}
 
 	/* Before delegating work to the lower layer, enter our MAC-address */
@@ -316,29 +314,6 @@ static int vlan_dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 		saddr = dev->dev_addr;
 
 	dev = vlan_dev_info(dev)->real_dev;
-
-	/* MPLS can send us skbuffs w/out enough space.	This check will grow
-	 * the skb if it doesn't have enough headroom. Not a beautiful solution,
-	 * so I'll tick a counter so that users can know it's happening...
-	 * If they care...
-	 */
-
-	/* NOTE: This may still break if the underlying device is not the final
-	 * device (and thus there are more headers to add...) It should work for
-	 * good-ole-ethernet though.
-	 */
-	if (skb_headroom(skb) < dev->hard_header_len) {
-		struct sk_buff *sk_tmp = skb;
-		skb = skb_realloc_headroom(sk_tmp, dev->hard_header_len);
-		kfree_skb(sk_tmp);
-		if (skb == NULL) {
-			struct net_device_stats *stats = &vdev->stats;
-			stats->tx_dropped++;
-			return -ENOMEM;
-		}
-		vlan_dev_info(vdev)->cnt_inc_headroom_on_tx++;
-		pr_debug("%s: %s: had to grow skb\n", __func__, vdev->name);
-	}
 
 	if (build_vlan_header) {
 		/* Now make the underlying real hard header */
@@ -373,7 +348,7 @@ static int vlan_dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (veth->h_vlan_proto != htons(ETH_P_8021Q) ||
 		vlan_dev_info(dev)->flags & VLAN_FLAG_REORDER_HDR) {
 		int orig_headroom = skb_headroom(skb);
-		unsigned short veth_TCI;
+		u16 vlan_tci;
 
 		/* This is not a VLAN frame...but we can fix that! */
 		vlan_dev_info(dev)->cnt_encap_on_xmit++;
@@ -386,10 +361,10 @@ static int vlan_dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		 * CFI		 1 bit
 		 * VLAN ID	 12 bits (low bits)
 		 */
-		veth_TCI = vlan_dev_info(dev)->vlan_id;
-		veth_TCI |= vlan_dev_get_egress_qos_mask(dev, skb);
+		vlan_tci = vlan_dev_info(dev)->vlan_id;
+		vlan_tci |= vlan_dev_get_egress_qos_mask(dev, skb);
 
-		skb = __vlan_put_tag(skb, veth_TCI);
+		skb = __vlan_put_tag(skb, vlan_tci);
 		if (!skb) {
 			stats->tx_dropped++;
 			return 0;
@@ -422,7 +397,7 @@ static int vlan_dev_hwaccel_hard_start_xmit(struct sk_buff *skb,
 					    struct net_device *dev)
 {
 	struct net_device_stats *stats = &dev->stats;
-	unsigned short veth_TCI;
+	u16 vlan_tci;
 
 	/* Construct the second two bytes. This field looks something
 	 * like:
@@ -430,9 +405,9 @@ static int vlan_dev_hwaccel_hard_start_xmit(struct sk_buff *skb,
 	 * CFI		 1 bit
 	 * VLAN ID	 12 bits (low bits)
 	 */
-	veth_TCI = vlan_dev_info(dev)->vlan_id;
-	veth_TCI |= vlan_dev_get_egress_qos_mask(dev, skb);
-	skb = __vlan_hwaccel_put_tag(skb, veth_TCI);
+	vlan_tci = vlan_dev_info(dev)->vlan_id;
+	vlan_tci |= vlan_dev_get_egress_qos_mask(dev, skb);
+	skb = __vlan_hwaccel_put_tag(skb, vlan_tci);
 
 	stats->tx_packets++;
 	stats->tx_bytes += skb->len;
@@ -457,7 +432,7 @@ static int vlan_dev_change_mtu(struct net_device *dev, int new_mtu)
 }
 
 void vlan_dev_set_ingress_priority(const struct net_device *dev,
-				   u32 skb_prio, short vlan_prio)
+				   u32 skb_prio, u16 vlan_prio)
 {
 	struct vlan_dev_info *vlan = vlan_dev_info(dev);
 
@@ -470,7 +445,7 @@ void vlan_dev_set_ingress_priority(const struct net_device *dev,
 }
 
 int vlan_dev_set_egress_priority(const struct net_device *dev,
-				 u32 skb_prio, short vlan_prio)
+				 u32 skb_prio, u16 vlan_prio)
 {
 	struct vlan_dev_info *vlan = vlan_dev_info(dev);
 	struct vlan_priority_tci_mapping *mp = NULL;
@@ -507,28 +482,28 @@ int vlan_dev_set_egress_priority(const struct net_device *dev,
 }
 
 /* Flags are defined in the vlan_flags enum in include/linux/if_vlan.h file. */
-int vlan_dev_set_vlan_flag(const struct net_device *dev,
-			   u32 flag, short flag_val)
+int vlan_dev_change_flags(const struct net_device *dev, u32 flags, u32 mask)
 {
-	/* verify flag is supported */
-	if (flag == VLAN_FLAG_REORDER_HDR) {
-		if (flag_val)
-			vlan_dev_info(dev)->flags |= VLAN_FLAG_REORDER_HDR;
+	struct vlan_dev_info *vlan = vlan_dev_info(dev);
+	u32 old_flags = vlan->flags;
+
+	if (mask & ~(VLAN_FLAG_REORDER_HDR | VLAN_FLAG_GVRP))
+		return -EINVAL;
+
+	vlan->flags = (old_flags & ~mask) | (flags & mask);
+
+	if (netif_running(dev) && (vlan->flags ^ old_flags) & VLAN_FLAG_GVRP) {
+		if (vlan->flags & VLAN_FLAG_GVRP)
+			vlan_gvrp_request_join(dev);
 		else
-			vlan_dev_info(dev)->flags &= ~VLAN_FLAG_REORDER_HDR;
-		return 0;
+			vlan_gvrp_request_leave(dev);
 	}
-	return -EINVAL;
+	return 0;
 }
 
 void vlan_dev_get_realdev_name(const struct net_device *dev, char *result)
 {
 	strncpy(result, vlan_dev_info(dev)->real_dev->name, 23);
-}
-
-void vlan_dev_get_vid(const struct net_device *dev, unsigned short *result)
-{
-	*result = vlan_dev_info(dev)->vlan_id;
 }
 
 static int vlan_dev_open(struct net_device *dev)
@@ -552,12 +527,19 @@ static int vlan_dev_open(struct net_device *dev)
 	if (dev->flags & IFF_PROMISC)
 		dev_set_promiscuity(real_dev, 1);
 
+	if (vlan->flags & VLAN_FLAG_GVRP)
+		vlan_gvrp_request_join(dev);
+
 	return 0;
 }
 
 static int vlan_dev_stop(struct net_device *dev)
 {
-	struct net_device *real_dev = vlan_dev_info(dev)->real_dev;
+	struct vlan_dev_info *vlan = vlan_dev_info(dev);
+	struct net_device *real_dev = vlan->real_dev;
+
+	if (vlan->flags & VLAN_FLAG_GVRP)
+		vlan_gvrp_request_leave(dev);
 
 	dev_mc_unsync(real_dev, dev);
 	dev_unicast_unsync(real_dev, dev);
@@ -683,7 +665,7 @@ static int vlan_dev_init(struct net_device *dev)
 		dev->hard_start_xmit = vlan_dev_hard_start_xmit;
 	}
 
-	if (real_dev->priv_flags & IFF_802_1Q_VLAN)
+	if (is_vlan_dev(real_dev))
 		subclass = 1;
 
 	lockdep_set_class_and_subclass(&dev->_xmit_lock,
@@ -705,6 +687,22 @@ static void vlan_dev_uninit(struct net_device *dev)
 	}
 }
 
+static u32 vlan_ethtool_get_rx_csum(struct net_device *dev)
+{
+	const struct vlan_dev_info *vlan = vlan_dev_info(dev);
+	struct net_device *real_dev = vlan->real_dev;
+
+	if (real_dev->ethtool_ops == NULL ||
+	    real_dev->ethtool_ops->get_rx_csum == NULL)
+		return 0;
+	return real_dev->ethtool_ops->get_rx_csum(real_dev);
+}
+
+static const struct ethtool_ops vlan_ethtool_ops = {
+	.get_link		= ethtool_op_get_link,
+	.get_rx_csum		= vlan_ethtool_get_rx_csum,
+};
+
 void vlan_setup(struct net_device *dev)
 {
 	ether_setup(dev);
@@ -723,6 +721,7 @@ void vlan_setup(struct net_device *dev)
 	dev->change_rx_flags	= vlan_dev_change_rx_flags;
 	dev->do_ioctl		= vlan_dev_ioctl;
 	dev->destructor		= free_netdev;
+	dev->ethtool_ops	= &vlan_ethtool_ops;
 
 	memset(dev->broadcast, 0, ETH_ALEN);
 }

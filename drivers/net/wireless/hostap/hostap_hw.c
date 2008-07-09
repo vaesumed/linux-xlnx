@@ -3204,6 +3204,7 @@ prism2_init_local_data(struct prism2_helper_functions *funcs, int card_idx,
 	local->auth_algs = PRISM2_AUTH_OPEN | PRISM2_AUTH_SHARED_KEY;
 	local->sram_type = -1;
 	local->scan_channel_mask = 0xffff;
+	local->monitor_type = PRISM2_MONITOR_RADIOTAP;
 
 	/* Initialize task queue structures */
 	INIT_WORK(&local->reset_queue, handle_reset_queue);
@@ -3416,7 +3417,7 @@ static void prism2_free_local_data(struct net_device *dev)
 }
 
 
-#ifndef PRISM2_PLX
+#if (defined(PRISM2_PCI) && defined(CONFIG_PM)) || defined(PRISM2_PCCARD)
 static void prism2_suspend(struct net_device *dev)
 {
 	struct hostap_interface *iface;
@@ -3435,7 +3436,7 @@ static void prism2_suspend(struct net_device *dev)
 	/* Disable hardware and firmware */
 	prism2_hw_shutdown(dev, 0);
 }
-#endif /* PRISM2_PLX */
+#endif /* (PRISM2_PCI && CONFIG_PM) || PRISM2_PCCARD */
 
 
 /* These might at some point be compiled separately and used as separate

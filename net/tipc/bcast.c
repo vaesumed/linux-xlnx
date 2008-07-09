@@ -276,7 +276,7 @@ static void bclink_send_nack(struct node *n_ptr)
 	if (buf) {
 		msg = buf_msg(buf);
 		msg_init(msg, BCAST_PROTOCOL, STATE_MSG,
-			 TIPC_OK, INT_H_SIZE, n_ptr->addr);
+			 INT_H_SIZE, n_ptr->addr);
 		msg_set_mc_netid(msg, tipc_net_id);
 		msg_set_bcast_ack(msg, mod(n_ptr->bclink.last_in));
 		msg_set_bcgap_after(msg, n_ptr->bclink.gap_after);
@@ -571,7 +571,7 @@ static int tipc_bcbearer_send(struct sk_buff *buf,
 		assert(tipc_cltr_bcast_nodes.count != 0);
 		bcbuf_set_acks(buf, tipc_cltr_bcast_nodes.count);
 		msg = buf_msg(buf);
-		msg_set_non_seq(msg);
+		msg_set_non_seq(msg, 1);
 		msg_set_mc_netid(msg, tipc_net_id);
 	}
 

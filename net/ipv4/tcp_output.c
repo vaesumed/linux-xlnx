@@ -5,8 +5,6 @@
  *
  *		Implementation of the Transmission Control Protocol(TCP).
  *
- * Version:	$Id: tcp_output.c,v 1.146 2002/02/01 22:01:04 davem Exp $
- *
  * Authors:	Ross Biro
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *		Mark Evans, <evansmp@uhura.aston.ac.uk>
@@ -607,7 +605,6 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 					       md5,
 					       sk, NULL, NULL,
 					       tcp_hdr(skb),
-					       sk->sk_protocol,
 					       skb->len);
 	}
 #endif
@@ -1988,14 +1985,17 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 
 			if (sacked & TCPCB_LOST) {
 				if (!(sacked & (TCPCB_SACKED_ACKED|TCPCB_SACKED_RETRANS))) {
+					int mib_idx;
+
 					if (tcp_retransmit_skb(sk, skb)) {
 						tp->retransmit_skb_hint = NULL;
 						return;
 					}
 					if (icsk->icsk_ca_state != TCP_CA_Loss)
-						NET_INC_STATS_BH(LINUX_MIB_TCPFASTRETRANS);
+						mib_idx = LINUX_MIB_TCPFASTRETRANS;
 					else
-						NET_INC_STATS_BH(LINUX_MIB_TCPSLOWSTARTRETRANS);
+						mib_idx = LINUX_MIB_TCPSLOWSTARTRETRANS;
+					NET_INC_STATS_BH(mib_idx);
 
 					if (skb == tcp_write_queue_head(sk))
 						inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
@@ -2266,7 +2266,7 @@ struct sk_buff *tcp_make_synack(struct sock *sk, struct dst_entry *dst,
 		tp->af_specific->calc_md5_hash(md5_hash_location,
 					       md5,
 					       NULL, dst, req,
-					       tcp_hdr(skb), sk->sk_protocol,
+					       tcp_hdr(skb),
 					       skb->len);
 	}
 #endif
