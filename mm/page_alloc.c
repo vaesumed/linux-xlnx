@@ -2356,7 +2356,7 @@ void build_all_zonelists(void)
 	} else {
 		/* we have to stop all cpus to guarantee there is no user
 		   of zonelist */
-		stop_machine_run(__build_all_zonelists, NULL, NR_CPUS);
+		stop_machine_run(__build_all_zonelists, NULL, NULL);
 		/* cpuset refresh routine should be here */
 	}
 	vm_total_pages = nr_free_pagecache_pages();

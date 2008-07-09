@@ -197,7 +197,7 @@ void __kprobes arch_arm_kprobe(struct kprobe *p)
 	args.new = BREAKPOINT_INSTRUCTION;
 
 	kcb->kprobe_status = KPROBE_SWAP_INST;
-	stop_machine_run(swap_instruction, &args, NR_CPUS);
+	stop_machine_run(swap_instruction, &args, NULL);
 	kcb->kprobe_status = status;
 }
 
@@ -212,7 +212,7 @@ void __kprobes arch_disarm_kprobe(struct kprobe *p)
 	args.new = p->opcode;
 
 	kcb->kprobe_status = KPROBE_SWAP_INST;
-	stop_machine_run(swap_instruction, &args, NR_CPUS);
+	stop_machine_run(swap_instruction, &args, NULL);
 	kcb->kprobe_status = status;
 }
 
