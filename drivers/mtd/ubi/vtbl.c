@@ -127,7 +127,7 @@ static int vtbl_check(const struct ubi_device *ubi,
 		      const struct ubi_vtbl_record *vtbl)
 {
 	int i, n, reserved_pebs, alignment, data_pad, vol_type, name_len;
-	int upd_marker;
+	int upd_marker, err;
 	uint32_t crc;
 	const char *name;
 
@@ -153,7 +153,7 @@ static int vtbl_check(const struct ubi_device *ubi,
 		if (reserved_pebs == 0) {
 			if (memcmp(&vtbl[i], &empty_vtbl_record,
 						UBI_VTBL_RECORD_SIZE)) {
-				dbg_err("bad empty record");
+				err = 2;
 				goto bad;
 			}
 			continue;
@@ -161,56 +161,57 @@ static int vtbl_check(const struct ubi_device *ubi,
 
 		if (reserved_pebs < 0 || alignment < 0 || data_pad < 0 ||
 		    name_len < 0) {
-			dbg_err("negative values");
+			err = 3;
 			goto bad;
 		}
 
 		if (alignment > ubi->leb_size || alignment == 0) {
-			dbg_err("bad alignment");
+			err = 4;
 			goto bad;
 		}
 
-		n = alignment % ubi->min_io_size;
+		n = alignment & (ubi->min_io_size - 1);
 		if (alignment != 1 && n) {
-			dbg_err("alignment is not multiple of min I/O unit");
+			err = 5;
 			goto bad;
 		}
 
 		n = ubi->leb_size % alignment;
 		if (data_pad != n) {
 			dbg_err("bad data_pad, has to be %d", n);
+			err = 6;
 			goto bad;
 		}
 
 		if (vol_type != UBI_VID_DYNAMIC && vol_type != UBI_VID_STATIC) {
-			dbg_err("bad vol_type");
+			err = 7;
 			goto bad;
 		}
 
 		if (upd_marker != 0 && upd_marker != 1) {
-			dbg_err("bad upd_marker");
+			err = 8;
 			goto bad;
 		}
 
 		if (reserved_pebs > ubi->good_peb_count) {
 			dbg_err("too large reserved_pebs, good PEBs %d",
 				ubi->good_peb_count);
+			err = 9;
 			goto bad;
 		}
 
 		if (name_len > UBI_VOL_NAME_MAX) {
-			dbg_err("too long volume name, max %d",
-				UBI_VOL_NAME_MAX);
+			err = 10;
 			goto bad;
 		}
 
 		if (name[0] == '\0') {
-			dbg_err("NULL volume name");
+			err = 11;
 			goto bad;
 		}
 
 		if (name_len != strnlen(name, name_len + 1)) {
-			dbg_err("bad name_len");
+			err = 12;
 			goto bad;
 		}
 	}
@@ -235,7 +236,7 @@ static int vtbl_check(const struct ubi_device *ubi,
 	return 0;
 
 bad:
-	ubi_err("volume table check failed, record %d", i);
+	ubi_err("volume table check failed: record %d, error %d", i, err);
 	ubi_dbg_dump_vtbl_record(&vtbl[i], i);
 	return -EINVAL;
 }
@@ -384,7 +385,16 @@ static struct ubi_vtbl_record *process_lvol(struct ubi_device *ubi,
 		err = ubi_io_read_data(ubi, leb[seb->lnum], seb->pnum, 0,
 				       ubi->vtbl_size);
 		if (err == UBI_IO_BITFLIPS || err == -EBADMSG)
-			/* Scrub the PEB later */
+			/*
+			 * Scrub the PEB later. Note, -EBADMSG indicates an
+			 * uncorrectable ECC error, but we have our own CRC and
+			 * the data will be checked later. If the data is OK,
+			 * the PEB will be scrubbed (because we set
+			 * seb->scrub). If the data is not OK, the contents of
+			 * the PEB will be recovered from the second copy, and
+			 * seb->scrub will be cleared in
+			 * 'ubi_scan_add_used()'.
+			 */
 			seb->scrub = 1;
 		else if (err)
 			goto out_free;
@@ -620,30 +630,32 @@ static int init_volumes(struct ubi_device *ubi, const struct ubi_scan_info *si,
 static int check_sv(const struct ubi_volume *vol,
 		    const struct ubi_scan_volume *sv)
 {
+	int err;
+
 	if (sv->highest_lnum >= vol->reserved_pebs) {
-		dbg_err("bad highest_lnum");
+		err = 1;
 		goto bad;
 	}
 	if (sv->leb_count > vol->reserved_pebs) {
-		dbg_err("bad leb_count");
+		err = 2;
 		goto bad;
 	}
 	if (sv->vol_type != vol->vol_type) {
-		dbg_err("bad vol_type");
+		err = 3;
 		goto bad;
 	}
 	if (sv->used_ebs > vol->reserved_pebs) {
-		dbg_err("bad used_ebs");
+		err = 4;
 		goto bad;
 	}
 	if (sv->data_pad != vol->data_pad) {
-		dbg_err("bad data_pad");
+		err = 5;
 		goto bad;
 	}
 	return 0;
 
 bad:
-	ubi_err("bad scanning information");
+	ubi_err("bad scanning information, error %d", err);
 	ubi_dbg_dump_sv(sv);
 	ubi_dbg_dump_vol_info(vol);
 	return -EINVAL;
@@ -672,13 +684,12 @@ static int check_scanning_info(const struct ubi_device *ubi,
 		return -EINVAL;
 	}
 
-	if (si->highest_vol_id >= ubi->vtbl_slots + UBI_INT_VOL_COUNT&&
+	if (si->highest_vol_id >= ubi->vtbl_slots + UBI_INT_VOL_COUNT &&
 	    si->highest_vol_id < UBI_INTERNAL_VOL_START) {
 		ubi_err("too large volume ID %d found by scanning",
 			si->highest_vol_id);
 		return -EINVAL;
 	}
-
 
 	for (i = 0; i < ubi->vtbl_slots + UBI_INT_VOL_COUNT; i++) {
 		cond_resched();
