@@ -52,14 +52,14 @@
 #include <asm/dwarf2.h>
 #include <asm/processor-flags.h>
 #include <asm/ftrace.h>
-#include "irq_vectors.h"
+#include <asm/irq_vectors.h>
 
 /*
  * We use macros for low-level operations which need to be overridden
  * for paravirtualization.  The following will never clobber any registers:
  *   INTERRUPT_RETURN (aka. "iret")
  *   GET_CR0_INTO_EAX (aka. "movl %cr0, %eax")
- *   ENABLE_INTERRUPTS_SYSCALL_RET (aka "sti; sysexit").
+ *   ENABLE_INTERRUPTS_SYSEXIT (aka "sti; sysexit").
  *
  * For DISABLE_INTERRUPTS/ENABLE_INTERRUPTS (aka "cli"/"sti"), you must
  * specify what registers can be overwritten (CLBR_NONE, CLBR_EAX/EDX/ECX/ANY).
@@ -350,7 +350,7 @@ sysenter_past_esp:
 	xorl %ebp,%ebp
 	TRACE_IRQS_ON
 1:	mov  PT_FS(%esp), %fs
-	ENABLE_INTERRUPTS_SYSCALL_RET
+	ENABLE_INTERRUPTS_SYSEXIT
 	CFI_ENDPROC
 .pushsection .fixup,"ax"
 2:	movl $0,PT_FS(%esp)
@@ -875,10 +875,10 @@ ENTRY(native_iret)
 .previous
 END(native_iret)
 
-ENTRY(native_irq_enable_syscall_ret)
+ENTRY(native_irq_enable_sysexit)
 	sti
 	sysexit
-END(native_irq_enable_syscall_ret)
+END(native_irq_enable_sysexit)
 #endif
 
 KPROBE_ENTRY(int3)
