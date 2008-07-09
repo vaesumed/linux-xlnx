@@ -882,4 +882,9 @@ static unsigned char ti_fw_5052[] = {
 0x00,
 };
 
+static struct firmware fw_5052 = {
+	sizeof(ti_fw_5052),
+	ti_fw_5052
+};
+
 #endif /* ifndef _TI_FW_5052_H_ */
