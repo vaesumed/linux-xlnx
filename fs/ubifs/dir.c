@@ -967,7 +967,7 @@ static void lock_3_inodes(struct inode *inode1, struct inode *inode2,
 		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_1);
 		lock_2_inodes(inode1, inode3);
 	} else {
-		struct ubifs_inode *ui3 = ubifs_inode(inode2);
+		struct ubifs_inode *ui3 = ubifs_inode(inode3);
 
 		mutex_lock_nested(&ui3->ui_mutex, WB_MUTEX_1);
 		lock_2_inodes(inode1, inode2);
