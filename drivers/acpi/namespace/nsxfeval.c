@@ -182,7 +182,6 @@ acpi_evaluate_object(acpi_handle handle,
 	}
 
 	info->pathname = pathname;
-	info->parameter_type = ACPI_PARAM_ARGS;
 
 	/* Convert and validate the device handle */
 
@@ -391,6 +390,8 @@ acpi_walk_namespace(acpi_object_type type,
 
 	ACPI_FUNCTION_TRACE(acpi_walk_namespace);
 
+	WARN_ON(acpi_disabled);
+
 	/* Parameter validation */
 
 	if ((type > ACPI_TYPE_LOCAL_MAX) || (!max_depth) || (!user_function)) {
@@ -442,7 +443,7 @@ acpi_ns_get_device_callback(acpi_handle obj_handle,
 	u32 flags;
 	struct acpica_device_id hid;
 	struct acpi_compatible_id_list *cid;
-	acpi_native_uint i;
+	u32 i;
 	int found;
 
 	status = acpi_ut_acquire_mutex(ACPI_MTX_NAMESPACE);
