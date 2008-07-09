@@ -322,6 +322,16 @@ static inline void huge_ptep_set_wrprotect(struct mm_struct *mm,
 	old = pte_update(mm, addr, ptep, _PAGE_RW, 1);
 }
 
+static inline void huge_ptep_set_wrprotect(struct mm_struct *mm,
+					   unsigned long addr, pte_t *ptep)
+{
+	unsigned long old;
+
+	if ((pte_val(*ptep) & _PAGE_RW) == 0)
+		return;
+	old = pte_update(mm, addr, ptep, _PAGE_RW, 1);
+}
+
 /*
  * We currently remove entries from the hashtable regardless of whether
  * the entry was young or dirty. The generic routines only flush if the
