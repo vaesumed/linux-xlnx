@@ -1505,27 +1505,8 @@ int ubifs_recover_size(struct ubifs_info *c)
 			} else {
 				/* Fix the size in place */
 				err = fix_size_in_place(c, e);
-				if (err) {
-					if (e->inode)
-						/*
-						 * We have changed the inode
-						 * size in memory but failed to
-						 * fix it on flash. Mark it
-						 * dirty without budgeting, and
-						 * hope we don't run out of
-						 * space.
-						 */
-						mark_inode_dirty_sync(e->inode);
-					/*
-					 * We consider that failing to recover
-					 * the size is not fatal, because it
-					 * only affects files that were being
-					 * written without synchronization and
-					 * the only down side is that some space
-					 * may be wasted.
-					 */
-					err = 0;
-				}
+				if (err)
+					return err;
 				if (e->inode)
 					iput(e->inode);
 			}
