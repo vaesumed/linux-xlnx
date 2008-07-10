@@ -868,7 +868,8 @@ int setup_profiling_timer(unsigned int multiplier)
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
-static ssize_t cpu_configure_show(struct sys_device *dev, char *buf)
+static ssize_t cpu_configure_show(struct sys_device *dev,
+				struct sysdev_attribute *attr, char *buf)
 {
 	ssize_t count;
 
@@ -878,8 +879,9 @@ static ssize_t cpu_configure_show(struct sys_device *dev, char *buf)
 	return count;
 }
 
-static ssize_t cpu_configure_store(struct sys_device *dev, const char *buf,
-				   size_t count)
+static ssize_t cpu_configure_store(struct sys_device *dev,
+				  struct sysdev_attribute *attr,
+				  const char *buf, size_t count)
 {
 	int cpu = dev->id;
 	int val, rc;
@@ -926,7 +928,8 @@ out:
 static SYSDEV_ATTR(configure, 0644, cpu_configure_show, cpu_configure_store);
 #endif /* CONFIG_HOTPLUG_CPU */
 
-static ssize_t cpu_polarization_show(struct sys_device *dev, char *buf)
+static ssize_t cpu_polarization_show(struct sys_device *dev,
+				     struct sysdev_attribute *attr, char *buf)
 {
 	int cpu = dev->id;
 	ssize_t count;
@@ -954,7 +957,8 @@ static ssize_t cpu_polarization_show(struct sys_device *dev, char *buf)
 }
 static SYSDEV_ATTR(polarization, 0444, cpu_polarization_show, NULL);
 
-static ssize_t show_cpu_address(struct sys_device *dev, char *buf)
+static ssize_t show_cpu_address(struct sys_device *dev,
+				struct sysdev_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%d\n", __cpu_logical_map[dev->id]);
 }
@@ -974,7 +978,8 @@ static struct attribute_group cpu_common_attr_group = {
 	.attrs = cpu_common_attrs,
 };
 
-static ssize_t show_capability(struct sys_device *dev, char *buf)
+static ssize_t show_capability(struct sys_device *dev,
+				struct sysdev_attribute *attr, char *buf)
 {
 	unsigned int capability;
 	int rc;
@@ -986,7 +991,8 @@ static ssize_t show_capability(struct sys_device *dev, char *buf)
 }
 static SYSDEV_ATTR(capability, 0444, show_capability, NULL);
 
-static ssize_t show_idle_count(struct sys_device *dev, char *buf)
+static ssize_t show_idle_count(struct sys_device *dev,
+				struct sysdev_attribute *attr, char *buf)
 {
 	struct s390_idle_data *idle;
 	unsigned long long idle_count;
@@ -999,7 +1005,8 @@ static ssize_t show_idle_count(struct sys_device *dev, char *buf)
 }
 static SYSDEV_ATTR(idle_count, 0444, show_idle_count, NULL);
 
-static ssize_t show_idle_time(struct sys_device *dev, char *buf)
+static ssize_t show_idle_time(struct sys_device *dev,
+				struct sysdev_attribute *attr, char *buf)
 {
 	struct s390_idle_data *idle;
 	unsigned long long new_time;
@@ -1116,7 +1123,9 @@ out:
 	return rc;
 }
 
-static ssize_t __ref rescan_store(struct sys_device *dev, const char *buf,
+static ssize_t __ref rescan_store(struct sys_device *dev,
+				  struct sysdev_attribute *attr,
+				  const char *buf,
 				  size_t count)
 {
 	int rc;
@@ -1127,7 +1136,9 @@ static ssize_t __ref rescan_store(struct sys_device *dev, const char *buf,
 static SYSDEV_ATTR(rescan, 0200, NULL, rescan_store);
 #endif /* CONFIG_HOTPLUG_CPU */
 
-static ssize_t dispatching_show(struct sys_device *dev, char *buf)
+static ssize_t dispatching_show(struct sys_device *dev,
+				struct sysdev_attribute *attr,
+				char *buf)
 {
 	ssize_t count;
 
@@ -1137,8 +1148,9 @@ static ssize_t dispatching_show(struct sys_device *dev, char *buf)
 	return count;
 }
 
-static ssize_t dispatching_store(struct sys_device *dev, const char *buf,
-				 size_t count)
+static ssize_t dispatching_store(struct sys_device *dev,
+				 struct sysdev_attribute *attr,
+				 const char *buf, size_t count)
 {
 	int val, rc;
 	char delim;
