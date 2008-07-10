@@ -194,7 +194,7 @@ static const struct ubifs_lprops *scan_for_dirty(struct ubifs_info *c,
 		     (pick_free &&
 		      lprops->free + lprops->dirty == c->leb_size));
 	ubifs_assert(!(lprops->flags & LPROPS_TAKEN));
-	ubifs_assert(!(lprops->flags & LPROPS_INDEX));
+	ubifs_assert(!exclude_index || !(lprops->flags & LPROPS_INDEX));
 	return lprops;
 }
 
