@@ -1359,8 +1359,7 @@ void ubifs_pad(const struct ubifs_info *c, void *buf, int pad);
 int ubifs_wbuf_sync_nolock(struct ubifs_wbuf *wbuf);
 int ubifs_bg_wbufs_sync(struct ubifs_info *c);
 void ubifs_wbuf_add_ino_nolock(struct ubifs_wbuf *wbuf, ino_t inum);
-int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
-			       struct inode * const *inodes, int count);
+int ubifs_sync_wbufs_by_inode(struct ubifs_info *c, struct inode *inode);
 
 /* scan.c */
 struct ubifs_scan_leb *ubifs_scan(const struct ubifs_info *c, int lnum,

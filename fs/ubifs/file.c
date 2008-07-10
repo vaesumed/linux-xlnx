@@ -816,7 +816,7 @@ int ubifs_fsync(struct file *file, struct dentry *dentry, int datasync)
 	 * Nodes related to this inode may still sit in a write-buffer. Flush
 	 * them.
 	 */
-	err = ubifs_sync_wbufs_by_inodes(c, &inode, 1);
+	err = ubifs_sync_wbufs_by_inode(c, inode);
 	if (err)
 		return err;
 
@@ -893,7 +893,7 @@ static ssize_t ubifs_aio_write(struct kiocb *iocb, const struct iovec *iov,
 		return ret;
 
 	if (ret > 0 && (IS_SYNC(inode) || iocb->ki_filp->f_flags & O_SYNC)) {
-		err = ubifs_sync_wbufs_by_inodes(c, &inode, 1);
+		err = ubifs_sync_wbufs_by_inode(c, inode);
 		if (err)
 			return err;
 	}

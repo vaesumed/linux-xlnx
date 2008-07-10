@@ -873,22 +873,18 @@ static int wbuf_has_ino(struct ubifs_wbuf *wbuf, ino_t inum)
 }
 
 /**
- * ubifs_sync_wbufs_by_inodes - synchronize write-buffers which have data.
+ * ubifs_sync_wbufs_by_inode - synchronize write-buffers which have data.
  * belonging to specified inodes.
  * @c: UBIFS file-system description object
- * @inodes: array of inodes
- * @count: number of elements in @inodes
+ * @inode: inode to synchronize
  *
  * This function synchronizes write-buffers which contain nodes belonging to
- * any inode specified in @inodes array. Returns zero in case of success and a
- * negative error code in case of failure.
+ * @inode. Returns zero in case of success and a negative error code in case of
+ * failure.
  */
-int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
-			       struct inode * const *inodes, int count)
+int ubifs_sync_wbufs_by_inode(struct ubifs_info *c, struct inode *inode)
 {
-	int i, j, err = 0;
-
-	ubifs_assert(count);
+	int i, err = 0;
 
 	for (i = 0; i < c->jhead_cnt; i++) {
 		struct ubifs_wbuf *wbuf = &c->jheads[i].wbuf;
@@ -902,20 +898,18 @@ int ubifs_sync_wbufs_by_inodes(struct ubifs_info *c,
 			 */
 			continue;
 
-		for (j = 0; j < count && !err; j++)
-			if (wbuf_has_ino(wbuf, inodes[j]->i_ino)) {
-				mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
-				if (wbuf_has_ino(wbuf, inodes[j]->i_ino))
-					err = ubifs_wbuf_sync_nolock(wbuf);
-				mutex_unlock(&wbuf->io_mutex);
-				break;
-			}
+		if (!wbuf_has_ino(wbuf, inode->i_ino))
+			continue;
+
+		mutex_lock_nested(&wbuf->io_mutex, wbuf->jhead);
+		if (wbuf_has_ino(wbuf, inode->i_ino))
+			err = ubifs_wbuf_sync_nolock(wbuf);
+		mutex_unlock(&wbuf->io_mutex);
 
 		if (err) {
 			ubifs_ro_mode(c, err);
-			break;
+			return err;
 		}
 	}
-
-	return err;
+	return 0;
 }
