@@ -6,7 +6,6 @@ obj-$(CONFIG_IPW2100) += ipw2100.o
 
 obj-$(CONFIG_IPW2200) += ipw2200.o
 
-obj-$(CONFIG_STRIP) += strip.o
 obj-$(CONFIG_ARLAN) += arlan.o 
 
 arlan-objs := arlan-main.o arlan-proc.o
@@ -62,3 +61,5 @@ obj-$(CONFIG_RT2X00)	+= rt2x00/
 obj-$(CONFIG_P54_COMMON)	+= p54/
 
 obj-$(CONFIG_ATH5K)	+= ath5k/
+
+obj-$(CONFIG_MAC80211_HWSIM)	+= mac80211_hwsim.o

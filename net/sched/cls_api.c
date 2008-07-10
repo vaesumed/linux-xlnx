@@ -166,7 +166,8 @@ replay:
 
 	/* Find qdisc */
 	if (!parent) {
-		q = dev->qdisc_sleeping;
+		struct netdev_queue *dev_queue = &dev->tx_queue;
+		q = dev_queue->qdisc_sleeping;
 		parent = q->handle;
 	} else {
 		q = qdisc_lookup(dev, TC_H_MAJ(t->tcm_parent));
@@ -334,7 +335,7 @@ static int tcf_fill_node(struct sk_buff *skb, struct tcf_proto *tp,
 	tcm->tcm_family = AF_UNSPEC;
 	tcm->tcm__pad1 = 0;
 	tcm->tcm__pad1 = 0;
-	tcm->tcm_ifindex = tp->q->dev->ifindex;
+	tcm->tcm_ifindex = qdisc_dev(tp->q)->ifindex;
 	tcm->tcm_parent = tp->classid;
 	tcm->tcm_info = TC_H_MAKE(tp->prio, tp->protocol);
 	NLA_PUT_STRING(skb, TCA_KIND, tp->ops->kind);
@@ -390,6 +391,7 @@ static int tcf_node_dump(struct tcf_proto *tp, unsigned long n,
 static int tc_dump_tfilter(struct sk_buff *skb, struct netlink_callback *cb)
 {
 	struct net *net = sock_net(skb->sk);
+	struct netdev_queue *dev_queue;
 	int t;
 	int s_t;
 	struct net_device *dev;
@@ -408,8 +410,9 @@ static int tc_dump_tfilter(struct sk_buff *skb, struct netlink_callback *cb)
 	if ((dev = dev_get_by_index(&init_net, tcm->tcm_ifindex)) == NULL)
 		return skb->len;
 
+	dev_queue = &dev->tx_queue;
 	if (!tcm->tcm_parent)
-		q = dev->qdisc_sleeping;
+		q = dev_queue->qdisc_sleeping;
 	else
 		q = qdisc_lookup(dev, TC_H_MAJ(tcm->tcm_parent));
 	if (!q)
