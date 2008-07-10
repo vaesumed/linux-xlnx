@@ -1013,8 +1013,9 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
 					.dirtied_ino = 3 };
-	struct ubifs_budget_req ino_req = {.dirtied_ino = 1,
-					   .dirtied_ino_d = old_inode_ui->data_len };
+	struct ubifs_budget_req ino_req =
+				{ .dirtied_ino = 1,
+				  .dirtied_ino_d = old_inode_ui->data_len };
 	struct timespec time;
 
 	/*
@@ -1199,8 +1200,8 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		size += stat->size;
 		size = ALIGN(size, UBIFS_BLOCK_SIZE);
 		/*
-		 * Note, user-space expects 512-byte blocks count irrespectively of what
-		 * was reported in @stat->size.
+		 * Note, user-space expects 512-byte blocks count irrespectively
+		 * of what was reported in @stat->size.
 		 */
 		stat->blocks = size >> 9;
 	} else
