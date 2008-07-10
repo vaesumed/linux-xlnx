@@ -144,7 +144,7 @@ static const struct ide_port_info slc90e66_chipset __devinitdata = {
 
 static int __devinit slc90e66_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	return ide_setup_pci_device(dev, &slc90e66_chipset);
+	return ide_pci_init_one(dev, &slc90e66_chipset, NULL);
 }
 
 static const struct pci_device_id slc90e66_pci_tbl[] = {
@@ -157,6 +157,7 @@ static struct pci_driver driver = {
 	.name		= "SLC90e66_IDE",
 	.id_table	= slc90e66_pci_tbl,
 	.probe		= slc90e66_init_one,
+	.remove		= ide_pci_remove,
 };
 
 static int __init slc90e66_ide_init(void)
@@ -164,7 +165,13 @@ static int __init slc90e66_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit slc90e66_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(slc90e66_ide_init);
+module_exit(slc90e66_ide_exit);
 
 MODULE_AUTHOR("Andre Hedrick");
 MODULE_DESCRIPTION("PCI driver module for SLC90E66 IDE");
