@@ -1178,7 +1178,7 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 	stat->mtime = inode->i_mtime;
 	stat->ctime = inode->i_ctime;
 	stat->blksize = UBIFS_BLOCK_SIZE;
-	stat->size = i_size_read(inode);
+	stat->size = ui->ui_size;
 
 	/*
 	 * Unfortunately, the 'stat()' system call was designed for block
