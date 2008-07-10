@@ -15,6 +15,7 @@
 #include <linux/uio.h>
 #include <linux/blkdev.h>
 #include <linux/mm.h>
+#include <linux/mount.h>
 #include <linux/fs.h>
 #include <linux/gfs2_ondisk.h>
 #include <linux/ext2_fs.h>
@@ -220,9 +221,13 @@ static int do_gfs2_set_flags(struct file *filp, u32 reqflags, u32 mask)
 	int error;
 	u32 new_flags, flags;
 
-	error = gfs2_glock_nq_init(ip->i_gl, LM_ST_EXCLUSIVE, 0, &gh);
+	error = mnt_want_write(filp->f_path.mnt);
 	if (error)
 		return error;
+
+	error = gfs2_glock_nq_init(ip->i_gl, LM_ST_EXCLUSIVE, 0, &gh);
+	if (error)
+		goto out_drop_write;
 
 	flags = ip->i_di.di_flags;
 	new_flags = (flags & ~mask) | (reqflags & mask);
@@ -242,7 +247,7 @@ static int do_gfs2_set_flags(struct file *filp, u32 reqflags, u32 mask)
 	    !capable(CAP_LINUX_IMMUTABLE))
 		goto out;
 	if (!IS_IMMUTABLE(inode)) {
-		error = permission(inode, MAY_WRITE, NULL);
+		error = gfs2_permission(inode, MAY_WRITE);
 		if (error)
 			goto out;
 	}
@@ -272,6 +277,8 @@ out_trans_end:
 	gfs2_trans_end(sdp);
 out:
 	gfs2_glock_dq_uninit(&gh);
+out_drop_write:
+	mnt_drop_write(filp->f_path.mnt);
 	return error;
 }
 
@@ -669,8 +676,7 @@ static int do_flock(struct file *file, int cmd, struct file_lock *fl)
 	int error = 0;
 
 	state = (fl->fl_type == F_WRLCK) ? LM_ST_EXCLUSIVE : LM_ST_SHARED;
-	flags = (IS_SETLKW(cmd) ? 0 : LM_FLAG_TRY) | GL_EXACT | GL_NOCACHE 
-		| GL_FLOCK;
+	flags = (IS_SETLKW(cmd) ? 0 : LM_FLAG_TRY) | GL_EXACT | GL_NOCACHE;
 
 	mutex_lock(&fp->f_fl_mutex);
 
@@ -683,9 +689,8 @@ static int do_flock(struct file *file, int cmd, struct file_lock *fl)
 		gfs2_glock_dq_wait(fl_gh);
 		gfs2_holder_reinit(state, flags, fl_gh);
 	} else {
-		error = gfs2_glock_get(GFS2_SB(&ip->i_inode),
-				      ip->i_no_addr, &gfs2_flock_glops,
-				      CREATE, &gl);
+		error = gfs2_glock_get(GFS2_SB(&ip->i_inode), ip->i_no_addr,
+				       &gfs2_flock_glops, CREATE, &gl);
 		if (error)
 			goto out;
 		gfs2_holder_init(gl, state, flags, fl_gh);
