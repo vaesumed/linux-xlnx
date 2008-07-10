@@ -368,7 +368,7 @@ static int __init mod_init(void)
 	 * Use stop_machine_run because IPIs can be blocked by disabling
 	 * interrupts.
 	 */
-	err = stop_machine_run(intel_rng_hw_init, intel_rng_hw, NR_CPUS);
+	err = stop_machine_run(intel_rng_hw_init, intel_rng_hw, NULL);
 	pci_dev_put(dev);
 	iounmap(intel_rng_hw->mem);
 	kfree(intel_rng_hw);
