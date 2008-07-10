@@ -27,6 +27,7 @@
 #define KVM_PRIVATE_MEM_SLOTS 4
 
 #define KVM_PIO_PAGE_OFFSET 1
+#define KVM_COALESCED_MMIO_PAGE_OFFSET 2
 
 #define CR3_PAE_RESERVED_BITS ((X86_CR3_PWT | X86_CR3_PCD) - 1)
 #define CR3_NONPAE_RESERVED_BITS ((PAGE_SIZE-1) & ~(X86_CR3_PWT | X86_CR3_PCD))
@@ -79,6 +80,7 @@
 #define KVM_MIN_FREE_MMU_PAGES 5
 #define KVM_REFILL_PAGES 25
 #define KVM_MAX_CPUID_ENTRIES 40
+#define KVM_NR_VAR_MTRR 8
 
 extern spinlock_t kvm_lock;
 extern struct list_head vm_list;
@@ -86,7 +88,7 @@ extern struct list_head vm_list;
 struct kvm_vcpu;
 struct kvm;
 
-enum {
+enum kvm_reg {
 	VCPU_REGS_RAX = 0,
 	VCPU_REGS_RCX = 1,
 	VCPU_REGS_RDX = 2,
@@ -105,16 +107,17 @@ enum {
 	VCPU_REGS_R14 = 14,
 	VCPU_REGS_R15 = 15,
 #endif
+	VCPU_REGS_RIP,
 	NR_VCPU_REGS
 };
 
 enum {
-	VCPU_SREG_CS,
-	VCPU_SREG_DS,
 	VCPU_SREG_ES,
+	VCPU_SREG_CS,
+	VCPU_SREG_SS,
+	VCPU_SREG_DS,
 	VCPU_SREG_FS,
 	VCPU_SREG_GS,
-	VCPU_SREG_SS,
 	VCPU_SREG_TR,
 	VCPU_SREG_LDTR,
 };
@@ -216,8 +219,13 @@ struct kvm_vcpu_arch {
 	int interrupt_window_open;
 	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */
 	DECLARE_BITMAP(irq_pending, KVM_NR_INTERRUPTS);
-	unsigned long regs[NR_VCPU_REGS]; /* for rsp: vcpu_load_rsp_rip() */
-	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
+	/*
+	 * rip and regs accesses must go through
+	 * kvm_{register,rip}_{read,write} functions.
+	 */
+	unsigned long regs[NR_VCPU_REGS];
+	u32 regs_avail;
+	u32 regs_dirty;
 
 	unsigned long cr0;
 	unsigned long cr2;
@@ -243,6 +251,7 @@ struct kvm_vcpu_arch {
 	gfn_t last_pt_write_gfn;
 	int   last_pt_write_count;
 	u64  *last_pte_updated;
+	gfn_t last_pte_gfn;
 
 	struct {
 		gfn_t gfn;	/* presumed gfn during guest pte update */
@@ -287,6 +296,10 @@ struct kvm_vcpu_arch {
 	unsigned int hv_clock_tsc_khz;
 	unsigned int time_offset;
 	struct page *time_page;
+
+	bool nmi_pending;
+
+	u64 mtrr[0x100];
 };
 
 struct kvm_mem_alias {
@@ -344,6 +357,7 @@ struct kvm_vcpu_stat {
 	u32 mmio_exits;
 	u32 signal_exits;
 	u32 irq_window_exits;
+	u32 nmi_window_exits;
 	u32 halt_exits;
 	u32 halt_wakeup;
 	u32 request_irq_exits;
@@ -379,7 +393,6 @@ struct kvm_x86_ops {
 	void (*prepare_guest_switch)(struct kvm_vcpu *vcpu);
 	void (*vcpu_load)(struct kvm_vcpu *vcpu, int cpu);
 	void (*vcpu_put)(struct kvm_vcpu *vcpu);
-	void (*vcpu_decache)(struct kvm_vcpu *vcpu);
 
 	int (*set_guest_debug)(struct kvm_vcpu *vcpu,
 			       struct kvm_debug_guest *dbg);
@@ -405,8 +418,7 @@ struct kvm_x86_ops {
 	unsigned long (*get_dr)(struct kvm_vcpu *vcpu, int dr);
 	void (*set_dr)(struct kvm_vcpu *vcpu, int dr, unsigned long value,
 		       int *exception);
-	void (*cache_regs)(struct kvm_vcpu *vcpu);
-	void (*decache_regs)(struct kvm_vcpu *vcpu);
+	void (*cache_reg)(struct kvm_vcpu *vcpu, enum kvm_reg reg);
 	unsigned long (*get_rflags)(struct kvm_vcpu *vcpu);
 	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
 
@@ -497,6 +509,10 @@ int emulator_get_dr(struct x86_emulate_ctxt *ctxt, int dr,
 int emulator_set_dr(struct x86_emulate_ctxt *ctxt, int dr,
 		    unsigned long value);
 
+void kvm_get_segment(struct kvm_vcpu *vcpu, struct kvm_segment *var, int seg);
+int kvm_load_segment_descriptor(struct kvm_vcpu *vcpu, u16 selector,
+				int type_bits, int seg);
+
 int kvm_task_switch(struct kvm_vcpu *vcpu, u16 tss_selector, int reason);
 
 void kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
@@ -514,6 +530,8 @@ void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
 void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, u32 error_code);
 void kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long cr2,
 			   u32 error_code);
+
+void kvm_inject_nmi(struct kvm_vcpu *vcpu);
 
 void fx_init(struct kvm_vcpu *vcpu);
 
@@ -672,23 +690,29 @@ enum {
 	TASK_SWITCH_GATE = 3,
 };
 
-#define KVMTRACE_5D(evt, vcpu, d1, d2, d3, d4, d5, name) \
-	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
-						vcpu, 5, d1, d2, d3, d4, d5)
-#define KVMTRACE_4D(evt, vcpu, d1, d2, d3, d4, name) \
-	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
-						vcpu, 4, d1, d2, d3, d4, 0)
-#define KVMTRACE_3D(evt, vcpu, d1, d2, d3, name) \
-	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
-						vcpu, 3, d1, d2, d3, 0, 0)
-#define KVMTRACE_2D(evt, vcpu, d1, d2, name) \
-	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
-						vcpu, 2, d1, d2, 0, 0, 0)
-#define KVMTRACE_1D(evt, vcpu, d1, name) \
-	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
-						vcpu, 1, d1, 0, 0, 0, 0)
-#define KVMTRACE_0D(evt, vcpu, name) \
-	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
-						vcpu, 0, 0, 0, 0, 0, 0)
+
+#ifdef CONFIG_64BIT
+#define KVM_EX_ENTRY ".quad"
+#else
+#define KVM_EX_ENTRY ".long"
+#endif
+
+/*
+ * Hardware virtualization extension instructions may fault if a
+ * reboot turns off virtualization while processes are running.
+ * Trap the fault and ignore the instruction if that happens.
+ */
+asmlinkage void kvm_handle_fault_on_reboot(void);
+
+#define __kvm_handle_fault_on_reboot(insn) \
+	"666: " insn "\n\t" \
+	".pushsection .text.fixup, \"ax\" \n" \
+	"667: \n\t" \
+	"push $666b \n\t" \
+	"jmp kvm_handle_fault_on_reboot \n\t" \
+	".popsection \n\t" \
+	".pushsection __ex_table, \"a\" \n\t" \
+	KVM_EX_ENTRY " 666b, 667b \n\t" \
+	".popsection"
 
 #endif
