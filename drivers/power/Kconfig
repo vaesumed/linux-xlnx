@@ -55,4 +55,11 @@ config BATTERY_PALMTX
 	help
 	  Say Y to enable support for the battery in Palm T|X.
 
+config BATTERY_TOSA
+	tristate "Sharp SL-6000 (tosa) battery"
+	depends on MACH_TOSA && MFD_TC6393XB
+	help
+	  Say Y to enable support for the battery on the Sharp Zaurus
+	  SL-6000 (tosa) models.
+
 endif # POWER_SUPPLY
