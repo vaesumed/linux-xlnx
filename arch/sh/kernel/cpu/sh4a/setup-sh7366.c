@@ -14,6 +14,26 @@
 #include <linux/serial.h>
 #include <linux/serial_sci.h>
 
+static struct resource iic_resources[] = {
+	[0] = {
+		.name	= "IIC",
+		.start  = 0x04470000,
+		.end    = 0x04470017,
+		.flags  = IORESOURCE_MEM,
+	},
+	[1] = {
+		.start  = 96,
+		.end    = 99,
+		.flags  = IORESOURCE_IRQ,
+       },
+};
+
+static struct platform_device iic_device = {
+	.name           = "i2c-sh_mobile",
+	.num_resources  = ARRAY_SIZE(iic_resources),
+	.resource       = iic_resources,
+};
+
 static struct plat_sci_port sci_platform_data[] = {
 	{
 		.mapbase	= 0xffe00000,
@@ -34,6 +54,7 @@ static struct platform_device sci_device = {
 };
 
 static struct platform_device *sh7366_devices[] __initdata = {
+	&iic_device,
 	&sci_device,
 };
 
@@ -163,8 +184,14 @@ static struct intc_sense_reg sense_registers[] __initdata = {
 	  { IRQ0, IRQ1, IRQ2, IRQ3, IRQ4, IRQ5, IRQ6, IRQ7 } },
 };
 
-static DECLARE_INTC_DESC(intc_desc, "sh7366", vectors, groups,
-			 mask_registers, prio_registers, sense_registers);
+static struct intc_mask_reg ack_registers[] __initdata = {
+	{ 0xa4140024, 0, 8, /* INTREQ00 */
+	  { IRQ0, IRQ1, IRQ2, IRQ3, IRQ4, IRQ5, IRQ6, IRQ7 } },
+};
+
+static DECLARE_INTC_DESC_ACK(intc_desc, "sh7366", vectors, groups,
+			     mask_registers, prio_registers, sense_registers,
+			     ack_registers);
 
 void __init plat_irq_setup(void)
 {
