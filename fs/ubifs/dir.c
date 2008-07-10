@@ -496,17 +496,12 @@ static int ubifs_dir_release(struct inode *dir, struct file *file)
  */
 static void lock_2_inodes(struct inode *inode1, struct inode *inode2)
 {
-	struct ubifs_inode *ui1 = ubifs_inode(inode1);
-	struct ubifs_inode *ui2 = ubifs_inode(inode2);
-
-	if (inode1 == inode2)
-		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_2);
-	else if (inode1->i_ino < inode2->i_ino) {
-		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_2);
-		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_3);
+	if (inode1->i_ino < inode2->i_ino) {
+		mutex_lock_nested(&ubifs_inode(inode1)->ui_mutex, WB_MUTEX_2);
+		mutex_lock_nested(&ubifs_inode(inode2)->ui_mutex, WB_MUTEX_3);
 	} else {
-		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_2);
-		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_3);
+		mutex_lock_nested(&ubifs_inode(inode2)->ui_mutex, WB_MUTEX_2);
+		mutex_lock_nested(&ubifs_inode(inode1)->ui_mutex, WB_MUTEX_3);
 	}
 }
 
@@ -517,15 +512,8 @@ static void lock_2_inodes(struct inode *inode1, struct inode *inode2)
  */
 static void unlock_2_inodes(struct inode *inode1, struct inode *inode2)
 {
-	struct ubifs_inode *ui1 = ubifs_inode(inode1);
-	struct ubifs_inode *ui2 = ubifs_inode(inode2);
-
-	if (inode1 == inode2)
-		mutex_unlock(&ui1->ui_mutex);
-	else {
-		mutex_unlock(&ui1->ui_mutex);
-		mutex_unlock(&ui2->ui_mutex);
-	}
+	mutex_unlock(&ubifs_inode(inode1)->ui_mutex);
+	mutex_unlock(&ubifs_inode(inode2)->ui_mutex);
 }
 
 static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
@@ -944,38 +932,59 @@ out_budg:
 }
 
 /**
- * lock_3_inodes - lock three UBIFS inodes.
+ * lock_3_inodes - lock three UBIFS inodes for rename.
  * @inode1: first inode
  * @inode2: second inode
  * @inode3: third inode
+ *
+ * For 'ubifs_rename()', @inode1 may be the same as @inode2 whereas @inode3 may
+ * be null.
  */
 static void lock_3_inodes(struct inode *inode1, struct inode *inode2,
 			  struct inode *inode3)
 {
-	if (!inode3)
-		lock_2_inodes(inode1, inode2);
-	else if (inode1->i_ino < inode2->i_ino &&
-		 inode1->i_ino < inode3->i_ino) {
-		struct ubifs_inode *ui1 = ubifs_inode(inode1);
+	struct inode *i1, *i2, *i3;
 
-		mutex_lock_nested(&ui1->ui_mutex, WB_MUTEX_1);
-		lock_2_inodes(inode2, inode3);
-	} else if (inode2->i_ino < inode1->i_ino &&
-		   inode2->i_ino < inode3->i_ino) {
-		struct ubifs_inode *ui2 = ubifs_inode(inode2);
-
-		mutex_lock_nested(&ui2->ui_mutex, WB_MUTEX_1);
-		lock_2_inodes(inode1, inode3);
-	} else {
-		struct ubifs_inode *ui3 = ubifs_inode(inode3);
-
-		mutex_lock_nested(&ui3->ui_mutex, WB_MUTEX_1);
-		lock_2_inodes(inode1, inode2);
+	if (!inode3) {
+		if (inode1 != inode2) {
+			lock_2_inodes(inode1, inode2);
+			return;
+		}
+		mutex_lock_nested(&ubifs_inode(inode1)->ui_mutex, WB_MUTEX_1);
+		return;
 	}
+
+	if (inode1 == inode2) {
+		lock_2_inodes(inode1, inode3);
+		return;
+	}
+
+	/* 3 different inodes */
+	if (inode1 < inode2) {
+		i3 = inode2;
+		if (inode1 < inode3) {
+			i1 = inode1;
+			i2 = inode3;
+		} else {
+			i1 = inode3;
+			i2 = inode1;
+		}
+	} else {
+		i3 = inode1;
+		if (inode2 < inode3) {
+			i1 = inode2;
+			i2 = inode3;
+		} else {
+			i1 = inode3;
+			i2 = inode2;
+		}
+	}
+	mutex_lock_nested(&ubifs_inode(i1)->ui_mutex, WB_MUTEX_1);
+	lock_2_inodes(i2, i3);
 }
 
 /**
- * unlock_3_inodes - unlock three UBIFS inodes inodes.
+ * unlock_3_inodes - unlock three UBIFS inodes for rename.
  * @inode1: first inode
  * @inode2: second inode
  * @inode3: third inode
@@ -983,18 +992,11 @@ static void lock_3_inodes(struct inode *inode1, struct inode *inode2,
 static void unlock_3_inodes(struct inode *inode1, struct inode *inode2,
 			    struct inode *inode3)
 {
-	if (!inode3) {
-		unlock_2_inodes(inode1, inode2);
-	} else {
-		struct ubifs_inode *ui1 = ubifs_inode(inode1);
-		struct ubifs_inode *ui2 = ubifs_inode(inode2);
-		struct ubifs_inode *ui3 = ubifs_inode(inode2);
-
-		mutex_unlock(&ui1->ui_mutex);
-		if (inode1 != inode2)
-			mutex_unlock(&ui2->ui_mutex);
-		mutex_unlock(&ui3->ui_mutex);
-	}
+	mutex_unlock(&ubifs_inode(inode1)->ui_mutex);
+	if (inode1 != inode2)
+		mutex_unlock(&ubifs_inode(inode2)->ui_mutex);
+	if (inode3)
+		mutex_unlock(&ubifs_inode(inode3)->ui_mutex);
 }
 
 static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
