@@ -126,6 +126,7 @@ struct ext4_ext_path {
 
 
 #define EXT_MAX_BLOCK	0xffffffff
+#define EXT_UNSET_BLOCK 1
 
 /*
  * EXT_INIT_MAX_LEN is the maximum number of blocks we can have in an
@@ -212,6 +213,7 @@ static inline int ext4_ext_get_actual_len(struct ext4_extent *ext)
 		(le16_to_cpu(ext->ee_len) - EXT_INIT_MAX_LEN));
 }
 
+extern int ext4_ext_calc_metadata_amount(struct inode *inode, int blocks);
 extern ext4_fsblk_t idx_pblock(struct ext4_extent_idx *);
 extern void ext4_ext_store_pblock(struct ext4_extent *, ext4_fsblk_t);
 extern int ext4_extent_tree_init(handle_t *, struct inode *);
