@@ -886,7 +886,7 @@ static ssize_t ubifs_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	if (ret < 0)
 		return ret;
 
-	if (ret > 0 && IS_SYNC(inode)) {
+	if (ret > 0 && (IS_SYNC(inode) || iocb->ki_filp->f_flags & O_SYNC)) {
 		err = ubifs_sync_wbufs_by_inodes(c, &inode, 1);
 		if (err)
 			return err;
