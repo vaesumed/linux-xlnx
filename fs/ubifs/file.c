@@ -620,13 +620,6 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	if (err)
 		goto out_budg;
 
-	mutex_lock(&ui->ui_mutex);
-	ui->ui_size = inode->i_size;
-	/* Truncation changes inode [mc]time */
-	inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
-	/* The other attributes may be changed at the same time as well */
-	do_attr_changes(inode, attr);
-
 	if (offset) {
 		pgoff_t index = new_size >> PAGE_CACHE_SHIFT;
 		struct page *page;
@@ -634,6 +627,14 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 		page = find_lock_page(inode->i_mapping, index);
 		if (page) {
 			if (PageDirty(page)) {
+				/*
+				 * 'ubifs_jnl_truncate()' will try to truncate
+				 * the last data node, but it contains
+				 * out-of-date data because the page is dirty.
+				 * Write the page now, so that
+				 * 'ubifs_jnl_truncate()' will see an already
+				 * truncated (and up to date) data node.
+				 */
 				ubifs_assert(PagePrivate(page));
 
 				clear_page_dirty_for_io(page);
@@ -643,7 +644,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 				err = do_writepage(page, offset);
 				page_cache_release(page);
 				if (err)
-					goto out_unlock;
+					goto out_budg;
 				/*
 				 * We could now tell 'ubifs_jnl_truncate()' not
 				 * to read the last block.
@@ -660,14 +661,14 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 		}
 	}
 
-	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
-	if (err)
-		goto out_unlock;
-	mutex_unlock(&ui->ui_mutex);
-	ubifs_release_budget(c, &req);
-	return err;
+	mutex_lock(&ui->ui_mutex);
+	ui->ui_size = inode->i_size;
+	/* Truncation changes inode [mc]time */
+	inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
+	/* The other attributes may be changed at the same time as well */
+	do_attr_changes(inode, attr);
 
-out_unlock:
+	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
 	mutex_unlock(&ui->ui_mutex);
 out_budg:
 	ubifs_release_budget(c, &req);
