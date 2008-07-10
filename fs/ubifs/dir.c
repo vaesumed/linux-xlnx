@@ -689,7 +689,6 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 	}
 
 	lock_2_inodes(dir, inode);
-	ubifs_inode(inode)->ui_size = 0;
 	inode->i_ctime = ubifs_current_time(dir);
 	clear_nlink(inode);
 	drop_nlink(dir);
@@ -713,7 +712,6 @@ static int ubifs_rmdir(struct inode *dir, struct dentry *dentry)
 out_cancel:
 	dir->i_size += sz_change;
 	dir_ui->ui_size = dir->i_size;
-	i_size_write(inode, ubifs_inode(inode)->ui_size);
 	inc_nlink(dir);
 	inc_nlink(inode);
 	inc_nlink(inode);
