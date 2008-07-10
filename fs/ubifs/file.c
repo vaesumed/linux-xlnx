@@ -801,14 +801,19 @@ int ubifs_fsync(struct file *file, struct dentry *dentry, int datasync)
 
 	dbg_gen("syncing inode %lu", inode->i_ino);
 
-	/* Synchronize the inode and dirty pages */
-	err = write_inode_now(inode, 1);
-	if (err)
-		return err;
+	/*
+	 * VFS has already synchronized dirty pages for this inode. Synchronize
+	 * the inode unless this is a 'datasync()' call.
+	 */
+	if (!datasync || (inode->i_state & I_DIRTY_DATASYNC)) {
+		err = inode->i_sb->s_op->write_inode(inode, 1);
+		if (err)
+			return err;
+	}
 
 	/*
-	 * Some data related to this inode may still sit in a write-buffer.
-	 * Flush them.
+	 * Nodes related to this inode may still sit in a write-buffer. Flush
+	 * them.
 	 */
 	err = ubifs_sync_wbufs_by_inodes(c, &inode, 1);
 	if (err)
