@@ -92,7 +92,7 @@ endchoice
 
 config MSP_FLASH_MAP_LIMIT
 	hex
-	default "0x02000000"
+	default "0x2000000"
 	depends on MSP_FLASH_MAP_LIMIT_32M
 
 config MTD_PMC_MSP_RAMROOT
