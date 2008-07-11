@@ -211,40 +211,26 @@ static void release_existing_page_budget(struct ubifs_info *c)
 	ubifs_release_budget(c, &req);
 }
 
-
-static int ubifs_write_begin(struct file *file, struct address_space *mapping,
-			     loff_t pos, unsigned len, unsigned flags,
-			     struct page **pagep, void **fsdata)
+static int write_begin_slow(struct address_space *mapping,
+			    loff_t pos, unsigned len, struct page **pagep)
 {
 	struct inode *inode = mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	struct ubifs_budget_req req = { .new_page = 1 };
-	int uninitialized_var(err);
+	int uninitialized_var(err), appending = !!(pos + len > inode->i_size);
 	struct page *page;
 
-	if (unlikely(c->ro_media))
-		return -EROFS;
-
 	/*
-	 * We are about to have a page of data written and we have to budget for
-	 * this. The very important point here is that we have to budget before
-	 * locking the page, because budgeting may force write-back, which
-	 * would wait on locked pages and deadlock if we had the page locked.
-	 *
-	 * At this point we do not know anything about the page of data we are
-	 * going to change, so assume the biggest budget (i.e., assume that
-	 * this is a new page of data and it does not override an older page of
-	 * data in the inode). Later the budget will be amended if this is not
-	 * true.
+	 * At the slow path we have to budget before locking the page, because
+	 * budgeting may force write-back, which would wait on locked pages and
+	 * deadlock if we had the page locked. At this point we do not know
+	 * anything about the page, so assume that this is a new page which is
+	 * written to a hole. This corresponds to largest budget. Later the
+	 * budget will be amended if this is not true.
 	 */
-	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
-	if (pos + len > inode->i_size)
-		/*
-		 * We are writing beyond the file which means we are going to
-		 * change inode size and make the inode dirty. And in turn,
-		 * this means we have to budget for making the inode dirty.
-		 */
+	if (appending)
+		/* We are appending data, budget for inode change */
 		req.dirtied_ino = 1;
 
 	err = ubifs_budget_space(c, &req);
@@ -258,14 +244,14 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	}
 
 	if (!PageUptodate(page)) {
-		/*
-		 * The page is not loaded from the flash and has to be loaded
-		 * unless we are writing all of it.
-		 */
+		/* The page is not loaded from the flash */
 		if (!(pos & PAGE_CACHE_MASK) && len == PAGE_CACHE_SIZE)
 			/*
-			 * Set the PG_checked flag to make the further code
-			 * assume the page is new.
+			 * We change whole page so no need to load it. But we
+			 * have to set the @PG_checked flag to make the further
+			 * code the page is new. This might be not true, but it
+			 * is better to budget more that to read the page from
+			 * the media.
 			 */
 			SetPageChecked(page);
 		else {
@@ -288,22 +274,14 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		 *
 		 * So what we have to do is to release the page budget we
 		 * allocated.
-		 *
-		 * Note, the page write operation may change the inode length,
-		 * which makes it dirty and means the budget should be
-		 * allocated. This was done above in the "pos + len > i_size"
-		 * case. If this was done, we do not free the the inode budget,
-		 * because we cannot as we are really going to mark it dirty in
-		 * the 'ubifs_write_end()' function.
 		 */
 		release_new_page_budget(c);
 	else if (!PageChecked(page))
 		/*
-		 * The page is not new, which means we are changing the page
-		 * which already exists on the media. This means that changing
-		 * the page does not make the amount of indexing information
-		 * larger, and this part of the budget which we have already
-		 * acquired may be released.
+		 * We are changing a page which already exists on the media.
+		 * This means that changing the page does not make the amount
+		 * of indexing information larger, and this part of the budget
+		 * which we have already acquired may be released.
 		 */
 		ubifs_convert_page_budget(c);
 
@@ -316,6 +294,53 @@ out_unlock:
 out_release:
 	ubifs_release_budget(c, &req);
 	return err;
+}
+
+/*
+ * This function is called when a page of data is going to be written. Since
+ * the page of data will not necessarily go to the flash straight away, UBIFS
+ * has to reserve space on the media for it, which is done by means of
+ * budgeting.
+ *
+ * This is the hot-path of the file-system and we are trying to optimize it as
+ * much as possible. For this reasons it is split on 2 parts - slow and fast.
+ *
+ * There many budgeting cases:
+ *     o a new page is appended - we have to budget for a new page and for
+ *       changing the inode; however, if the inode is already dirty, there is
+ *       no need to budget for it;
+ *     o an existing clean page is changed - we have budget for it; if the page
+ *       does not exist on the media (a hole), we have to budget for a new
+ *       page; otherwise, we may budget for changing an existing page; the
+ *       difference between these cases is that changing an existing page does
+ *       not introduce anything new to the FS indexing information, so it does
+ *       not grow, and smaller budget is acquired in this case;
+ *     o an existing dirty page is changed - no need to budget at all, because
+ *       the page budget has been acquired by earlier, when the page has been
+ *       marked dirty.
+ *
+ * UBIFS budgeting sub-system may force write-back if it thinks there is no
+ * space to reserve. This imposes some locking restrictions and makes it
+ * impossible to take into account the above cases, and makes it impossible to
+ * optimize budgeting.
+ *
+ * The solution for this is that the fast path of 'ubifs_write_begin()' assumes
+ * there is a plenty of flash space and the budget will be acquired quickly,
+ * without forcing write-back. The slow path does not make this assumption.
+ */
+static int ubifs_write_begin(struct file *file, struct address_space *mapping,
+			     loff_t pos, unsigned len, unsigned flags,
+			     struct page **pagep, void **fsdata)
+{
+	struct inode *inode = mapping->host;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+
+	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
+
+	if (unlikely(c->ro_media))
+		return -EROFS;
+
+	return write_begin_slow(mapping, pos, len, pagep);
 }
 
 static int ubifs_write_end(struct file *file, struct address_space *mapping,
