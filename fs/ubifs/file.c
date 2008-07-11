@@ -285,6 +285,14 @@ static int write_begin_slow(struct address_space *mapping,
 		 */
 		ubifs_convert_page_budget(c);
 
+	if (appending)
+		/*
+		 * 'ubifs_write_end()' is optimized from the fast-path part of
+		 * 'ubifs_write_begin()' and expects the @ui_mutex to be locked
+		 * if data is appended. And we should lock it as well.
+		 */
+		mutex_lock(&ubifs_inode(inode)->ui_mutex);
+
 	*pagep = page;
 	return 0;
 
@@ -351,6 +359,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	loff_t end_pos = pos + len;
+	int appending = !!(end_pos > inode->i_size);
 
 	dbg_gen("ino %lu, pos %llu, pg %lu, len %u, copied %d, i_size %lld",
 		inode->i_ino, pos, page->index, len, copied, inode->i_size);
@@ -368,8 +377,10 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		dbg_gen("copied %d instead of %d, read page and repeat",
 			copied, len);
 
-		if (end_pos > inode->i_size)
+		if (appending) {
+			mutex_unlock(&ui->ui_mutex);
 			ubifs_release_dirty_inode_budget(c, ui);
+		}
 
 		copied = do_readpage(page);
 
@@ -386,10 +397,9 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		__set_page_dirty_nobuffers(page);
 	}
 
-	if (end_pos > inode->i_size) {
+	if (appending) {
 		int release;
 
-		mutex_lock(&ui->ui_mutex);
 		i_size_write(inode, end_pos);
 		ui->ui_size = end_pos;
 		release = ui->dirty;
