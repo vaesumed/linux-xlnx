@@ -37,13 +37,12 @@ struct Qdisc
 	u32			parent;
 	atomic_t		refcnt;
 	struct sk_buff_head	q;
-	struct net_device	*dev;
+	struct netdev_queue	*dev_queue;
 	struct list_head	list;
 
 	struct gnet_stats_basic	bstats;
 	struct gnet_stats_queue	qstats;
 	struct gnet_stats_rate_est	rate_est;
-	spinlock_t		*stats_lock;
 	struct rcu_head 	q_rcu;
 	int			(*reshape_fail)(struct sk_buff *skb,
 					struct Qdisc *q);
@@ -155,17 +154,63 @@ struct tcf_proto
 	struct tcf_proto_ops	*ops;
 };
 
+static inline struct net_device *qdisc_dev(struct Qdisc *qdisc)
+{
+	return qdisc->dev_queue->dev;
+}
 
 extern void qdisc_lock_tree(struct net_device *dev);
 extern void qdisc_unlock_tree(struct net_device *dev);
 
-#define sch_tree_lock(q)	qdisc_lock_tree((q)->dev)
-#define sch_tree_unlock(q)	qdisc_unlock_tree((q)->dev)
-#define tcf_tree_lock(tp)	qdisc_lock_tree((tp)->q->dev)
-#define tcf_tree_unlock(tp)	qdisc_unlock_tree((tp)->q->dev)
+#define sch_tree_lock(q)	qdisc_lock_tree(qdisc_dev(q))
+#define sch_tree_unlock(q)	qdisc_unlock_tree(qdisc_dev(q))
+#define tcf_tree_lock(tp)	qdisc_lock_tree(qdisc_dev((tp)->q))
+#define tcf_tree_unlock(tp)	qdisc_unlock_tree(qdisc_dev((tp)->q))
 
 extern struct Qdisc noop_qdisc;
 extern struct Qdisc_ops noop_qdisc_ops;
+
+struct Qdisc_class_common
+{
+	u32			classid;
+	struct hlist_node	hnode;
+};
+
+struct Qdisc_class_hash
+{
+	struct hlist_head	*hash;
+	unsigned int		hashsize;
+	unsigned int		hashmask;
+	unsigned int		hashelems;
+};
+
+static inline unsigned int qdisc_class_hash(u32 id, u32 mask)
+{
+	id ^= id >> 8;
+	id ^= id >> 4;
+	return id & mask;
+}
+
+static inline struct Qdisc_class_common *
+qdisc_class_find(struct Qdisc_class_hash *hash, u32 id)
+{
+	struct Qdisc_class_common *cl;
+	struct hlist_node *n;
+	unsigned int h;
+
+	h = qdisc_class_hash(id, hash->hashmask);
+	hlist_for_each_entry(cl, n, &hash->hash[h], hnode) {
+		if (cl->classid == id)
+			return cl;
+	}
+	return NULL;
+}
+
+extern int qdisc_class_hash_init(struct Qdisc_class_hash *);
+extern void qdisc_class_hash_insert(struct Qdisc_class_hash *, struct Qdisc_class_common *);
+extern void qdisc_class_hash_remove(struct Qdisc_class_hash *, struct Qdisc_class_common *);
+extern void qdisc_class_hash_grow(struct Qdisc *, struct Qdisc_class_hash *);
+extern void qdisc_class_hash_destroy(struct Qdisc_class_hash *);
 
 extern void dev_init_scheduler(struct net_device *dev);
 extern void dev_shutdown(struct net_device *dev);
@@ -174,11 +219,44 @@ extern void dev_deactivate(struct net_device *dev);
 extern void qdisc_reset(struct Qdisc *qdisc);
 extern void qdisc_destroy(struct Qdisc *qdisc);
 extern void qdisc_tree_decrease_qlen(struct Qdisc *qdisc, unsigned int n);
-extern struct Qdisc *qdisc_alloc(struct net_device *dev, struct Qdisc_ops *ops);
+extern struct Qdisc *qdisc_alloc(struct netdev_queue *dev_queue,
+				 struct Qdisc_ops *ops);
 extern struct Qdisc *qdisc_create_dflt(struct net_device *dev,
+				       struct netdev_queue *dev_queue,
 				       struct Qdisc_ops *ops, u32 parentid);
 extern void tcf_destroy(struct tcf_proto *tp);
 extern void tcf_destroy_chain(struct tcf_proto **fl);
+
+/* Reset all TX qdiscs of a device.  */
+static inline void qdisc_reset_all_tx(struct net_device *dev)
+{
+	qdisc_reset(dev->tx_queue.qdisc);
+}
+
+/* Are all TX queues of the device empty?  */
+static inline bool qdisc_all_tx_empty(const struct net_device *dev)
+{
+	const struct netdev_queue *txq = &dev->tx_queue;
+	const struct Qdisc *q = txq->qdisc;
+
+	return (q->q.qlen == 0);
+}
+
+/* Are any of the TX qdiscs changing?  */
+static inline bool qdisc_tx_changing(struct net_device *dev)
+{
+	struct netdev_queue *txq = &dev->tx_queue;
+
+	return (txq->qdisc != txq->qdisc_sleeping);
+}
+
+/* Is the device using the noop qdisc?  */
+static inline bool qdisc_tx_is_noop(const struct net_device *dev)
+{
+	const struct netdev_queue *txq = &dev->tx_queue;
+
+	return (txq->qdisc == &noop_qdisc);
+}
 
 static inline int __qdisc_enqueue_tail(struct sk_buff *skb, struct Qdisc *sch,
 				       struct sk_buff_head *list)
