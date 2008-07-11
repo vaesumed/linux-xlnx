@@ -5,22 +5,22 @@
 //**************************************************************
 
 
-static int IMAGE_SIZE = 12938;
+static const int fw_size = 12938;
 
-struct EDGE_FIRMWARE_VERSION_INFO
+struct fw_revision
 {
 	unsigned char   MajorVersion;
 	unsigned char   MinorVersion;
 	unsigned short  BuildNumber;
 };
 
-static struct EDGE_FIRMWARE_VERSION_INFO IMAGE_VERSION_NAME =
+static const struct fw_revision fw_version =
 {
 	4, 80, 0		// Major, Minor, Build
 
 };
 
-static unsigned char IMAGE_ARRAY_NAME[] = 
+static const unsigned char fw_image[] =
 {
 //  struct ImageHdr
 //  {
@@ -841,7 +841,4 @@ static unsigned char IMAGE_ARRAY_NAME[] =
 0x12, 0x1e, 0x14, 0x22, 0xc2, 0x08, 0x22,
 };
 
-#undef IMAGE_VERSION_NAME
-
-#undef IMAGE_ARRAY_NAME
 
