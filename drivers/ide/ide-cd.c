@@ -1940,7 +1940,6 @@ static ide_driver_t ide_cdrom_driver = {
 	.do_request		= ide_cd_do_request,
 	.end_request		= ide_end_request,
 	.error			= __ide_error,
-	.abort			= __ide_abort,
 #ifdef CONFIG_IDE_PROC_FS
 	.proc			= idecd_proc,
 #endif
