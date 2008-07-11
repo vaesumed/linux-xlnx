@@ -181,38 +181,6 @@ config LEMOTE_FULONG
 	  Lemote Fulong mini-PC board based on the Chinese Loongson-2E CPU and
 	  an FPGA northbridge
 
-config MIPS_ATLAS
-	bool "MIPS Atlas board"
-	select BOOT_ELF32
-	select BOOT_RAW
-	select CEVT_R4K
-	select CSRC_R4K
-	select DMA_NONCOHERENT
-	select SYS_HAS_EARLY_PRINTK
-	select IRQ_CPU
-	select HW_HAS_PCI
-	select MIPS_BOARDS_GEN
-	select MIPS_BONITO64
-	select PCI_GT64XXX_PCI0
-	select MIPS_MSC
-	select RM7000_CPU_SCACHE
-	select SWAP_IO_SPACE
-	select SYS_HAS_CPU_MIPS32_R1
-	select SYS_HAS_CPU_MIPS32_R2
-	select SYS_HAS_CPU_MIPS64_R1
-	select SYS_HAS_CPU_NEVADA
-	select SYS_HAS_CPU_RM7000
-	select SYS_SUPPORTS_32BIT_KERNEL
-	select SYS_SUPPORTS_64BIT_KERNEL
-	select SYS_SUPPORTS_BIG_ENDIAN
-	select SYS_SUPPORTS_LITTLE_ENDIAN
-	select SYS_SUPPORTS_MULTITHREADING if EXPERIMENTAL
-	select SYS_SUPPORTS_SMARTMIPS
-	select GENERIC_HARDIRQS_NO__DO_IRQ
-	help
-	  This enables support for the MIPS Technologies Atlas evaluation
-	  board.
-
 config MIPS_MALTA
 	bool "MIPS Malta board"
 	select ARCH_MAY_HAVE_PC_FDC
@@ -247,26 +215,6 @@ config MIPS_MALTA
 	select SYS_SUPPORTS_SMARTMIPS
 	help
 	  This enables support for the MIPS Technologies Malta evaluation
-	  board.
-
-config MIPS_SEAD
-	bool "MIPS SEAD board"
-	select CEVT_R4K
-	select CSRC_R4K
-	select IRQ_CPU
-	select DMA_NONCOHERENT
-	select SYS_HAS_EARLY_PRINTK
-	select MIPS_BOARDS_GEN
-	select SYS_HAS_CPU_MIPS32_R1
-	select SYS_HAS_CPU_MIPS32_R2
-	select SYS_HAS_CPU_MIPS64_R1
-	select SYS_SUPPORTS_32BIT_KERNEL
-	select SYS_SUPPORTS_64BIT_KERNEL if EXPERIMENTAL
-	select SYS_SUPPORTS_BIG_ENDIAN
-	select SYS_SUPPORTS_LITTLE_ENDIAN
-	select SYS_SUPPORTS_SMARTMIPS
-	help
-	  This enables support for the MIPS Technologies SEAD evaluation
 	  board.
 
 config MIPS_SIM
@@ -2064,10 +2012,6 @@ source "fs/Kconfig.binfmt"
 
 config TRAD_SIGNALS
 	bool
-
-config BINFMT_IRIX
-	bool "Include IRIX binary compatibility"
-	depends on CPU_BIG_ENDIAN && 32BIT && BROKEN
 
 config MIPS32_COMPAT
 	bool "Kernel support for Linux/MIPS 32-bit binary compatibility"

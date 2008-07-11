@@ -197,14 +197,6 @@ void __init kgdb_config(void)
 			while ((c = *++argptr) && ('0' <= c && c <= '9'))
 				speed = speed * 10 + c - '0';
 		}
-#ifdef CONFIG_MIPS_ATLAS
-		if (line == 1) {
-			speed = saa9730_kgdb_hook(speed);
-			generic_putDebugChar = saa9730_putDebugChar;
-			generic_getDebugChar = saa9730_getDebugChar;
-		}
-		else
-#endif
 		{
 			speed = rs_kgdb_hook(line, speed);
 			generic_putDebugChar = rs_putDebugChar;
@@ -260,9 +252,6 @@ void __init prom_init(void)
 
 	mips_display_message("LINUX");
 
-#ifdef CONFIG_MIPS_SEAD
-	set_io_port_base(KSEG1);
-#else
 	/*
 	 * early setup of _pcictrl_bonito so that we can determine
 	 * the system controller on a CORE_EMUL board
@@ -414,7 +403,6 @@ void __init prom_init(void)
 		mips_display_message("SC Error");
 		while (1);   /* We die here... */
 	}
-#endif
 	board_nmi_handler_setup = mips_nmi_setup;
 	board_ejtag_handler_setup = mips_ejtag_setup;
 
