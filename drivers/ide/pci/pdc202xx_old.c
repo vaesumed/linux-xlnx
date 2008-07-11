@@ -206,7 +206,7 @@ static int pdc202xx_dma_test_irq(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	unsigned long high_16	= hwif->extra_base - 16;
-	u8 dma_stat		= inb(hwif->dma_status);
+	u8 dma_stat		= inb(hwif->dma_base + ATA_DMA_STATUS);
 	u8 sc1d			= inb(high_16 + 0x001d);
 
 	if (hwif->channel) {
@@ -312,7 +312,6 @@ static void __devinit pdc202ata4_fixup_irq(struct pci_dev *dev,
 
 #define IDE_HFLAGS_PDC202XX \
 	(IDE_HFLAG_ERROR_STOPS_FIFO | \
-	 IDE_HFLAG_ABUSE_SET_DMA_MODE | \
 	 IDE_HFLAG_OFF_BOARD)
 
 static const struct ide_port_ops pdc20246_port_ops = {
@@ -413,7 +412,7 @@ static int __devinit pdc202xx_init_one(struct pci_dev *dev, const struct pci_dev
 		}
 	}
 
-	return ide_setup_pci_device(dev, d);
+	return ide_pci_init_one(dev, d, NULL);
 }
 
 static const struct pci_device_id pdc202xx_pci_tbl[] = {
@@ -430,6 +429,7 @@ static struct pci_driver driver = {
 	.name		= "Promise_Old_IDE",
 	.id_table	= pdc202xx_pci_tbl,
 	.probe		= pdc202xx_init_one,
+	.remove		= ide_pci_remove,
 };
 
 static int __init pdc202xx_ide_init(void)
@@ -437,7 +437,13 @@ static int __init pdc202xx_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit pdc202xx_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(pdc202xx_ide_init);
+module_exit(pdc202xx_ide_exit);
 
 MODULE_AUTHOR("Andre Hedrick, Frank Tiernan");
 MODULE_DESCRIPTION("PCI driver module for older Promise IDE");
