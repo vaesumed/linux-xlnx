@@ -85,6 +85,9 @@ static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA)
 		return 6;
 
+	if (ui->xattr && (inode->i_mode & S_IFMT) != S_IFREG)
+		return 7;
+
 	if (!ubifs_compr_present(ui->compr_type)) {
 		ubifs_warn("inode %lu uses '%s' compression, but it was not "
 			   "compiled in", inode->i_ino,
@@ -161,7 +164,15 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		inode->i_mapping->a_ops = &ubifs_file_address_operations;
 		inode->i_op = &ubifs_file_inode_operations;
 		inode->i_fop = &ubifs_file_operations;
-		if (!ui->xattr && ui->data_len != 0) {
+		if (ui->xattr) {
+			ui->data = kmalloc(ui->data_len + 1, GFP_NOFS);
+			if (!ui->data) {
+				err = -ENOMEM;
+				goto out_ino;
+			}
+			memcpy(ui->data, ino->data, ui->data_len);
+			((char *)ui->data)[ui->data_len] = '\0';
+		} else if (ui->data_len != 0) {
 			err = 10;
 			goto out_invalid;
 		}
