@@ -373,9 +373,9 @@ struct ubifs_gced_idx_leb {
 struct ubifs_inode {
 	struct inode vfs_inode;
 	unsigned long long creat_sqnum;
-	long long xattr_size;
-	int xattr_cnt;
-	int xattr_names;
+	unsigned int xattr_size;
+	unsigned int xattr_cnt;
+	unsigned int xattr_names;
 	unsigned int dirty:1;
 	unsigned int xattr:1;
 	struct mutex ui_mutex;

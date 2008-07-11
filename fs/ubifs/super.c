@@ -72,21 +72,14 @@ static int validate_inode(struct ubifs_info *c, const struct inode *inode)
 		return 2;
 	}
 
-	if (ui->xattr_cnt < 0)
+	if (ui->xattr_names + ui->xattr_cnt > XATTR_LIST_MAX)
 		return 3;
 
-	if (ui->xattr_size < 0)
+	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA)
 		return 4;
 
-	if (ui->xattr_names < 0 ||
-	    ui->xattr_names + ui->xattr_cnt > XATTR_LIST_MAX)
-		return 5;
-
-	if (ui->data_len < 0 || ui->data_len > UBIFS_MAX_INO_DATA)
-		return 6;
-
 	if (ui->xattr && (inode->i_mode & S_IFMT) != S_IFREG)
-		return 7;
+		return 5;
 
 	if (!ubifs_compr_present(ui->compr_type)) {
 		ubifs_warn("inode %lu uses '%s' compression, but it was not "
@@ -146,7 +139,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->compr_type  = le16_to_cpu(ino->compr_type);
 	ui->creat_sqnum = le64_to_cpu(ino->creat_sqnum);
 	ui->xattr_cnt   = le32_to_cpu(ino->xattr_cnt);
-	ui->xattr_size  = le64_to_cpu(ino->xattr_size);
+	ui->xattr_size  = le32_to_cpu(ino->xattr_size);
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
 	ui->synced_i_size = ui->ui_size = inode->i_size;
 

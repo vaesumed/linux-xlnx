@@ -238,9 +238,9 @@ void dbg_dump_inode(const struct ubifs_info *c, const struct inode *inode)
 	       (unsigned int)inode->i_ctime.tv_sec,
 	       (unsigned int)inode->i_ctime.tv_nsec);
 	printk(KERN_DEBUG "creat_sqnum %llu\n", ui->creat_sqnum);
-	printk(KERN_DEBUG "xattr_size  %lld\n", ui->xattr_size);
-	printk(KERN_DEBUG "xattr_cnt   %d\n", ui->xattr_cnt);
-	printk(KERN_DEBUG "xattr_names %d\n", ui->xattr_names);
+	printk(KERN_DEBUG "xattr_size  %u\n", ui->xattr_size);
+	printk(KERN_DEBUG "xattr_cnt   %u\n", ui->xattr_cnt);
+	printk(KERN_DEBUG "xattr_names %u\n", ui->xattr_names);
 	printk(KERN_DEBUG "dirty       %u\n", ui->dirty);
 	printk(KERN_DEBUG "xattr       %u\n", ui->xattr);
 	printk(KERN_DEBUG "flags       %d\n", ui->flags);
@@ -437,8 +437,8 @@ void dbg_dump_node(const struct ubifs_info *c, const void *node)
 		       le32_to_cpu(ino->flags));
 		printk(KERN_DEBUG "\txattr_cnt      %u\n",
 		       le32_to_cpu(ino->xattr_cnt));
-		printk(KERN_DEBUG "\txattr_size     %llu\n",
-		       (unsigned long long)le64_to_cpu(ino->xattr_size));
+		printk(KERN_DEBUG "\txattr_size     %u\n",
+		       le32_to_cpu(ino->xattr_size));
 		printk(KERN_DEBUG "\txattr_names    %u\n",
 		       le32_to_cpu(ino->xattr_names));
 		printk(KERN_DEBUG "\tcompr_type     %#x\n",
@@ -1549,7 +1549,7 @@ static struct fsck_inode *add_inode(struct ubifs_info *c,
 	fscki->nlink = le32_to_cpu(ino->nlink);
 	fscki->size = le64_to_cpu(ino->size);
 	fscki->xattr_cnt = le32_to_cpu(ino->xattr_cnt);
-	fscki->xattr_sz = le64_to_cpu(ino->xattr_size);
+	fscki->xattr_sz = le32_to_cpu(ino->xattr_size);
 	fscki->mode = le32_to_cpu(ino->mode);
 	if (S_ISDIR(fscki->mode)) {
 		fscki->calc_sz = UBIFS_INO_NODE_SZ;

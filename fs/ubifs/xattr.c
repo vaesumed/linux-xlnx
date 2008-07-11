@@ -60,6 +60,12 @@
 #include "ubifs.h"
 
 /*
+ * Limit the number of extended attributes per inode so that the total size
+ * (xattr_size) is guaranteeded to fit in an 'unsigned int'.
+ */
+#define MAX_XATTRS_PER_INODE 65535
+
+/*
  * Extended attribute type constants.
  *
  * USER_XATTR: user extended attribute ("user.*")
@@ -100,6 +106,8 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 					.new_ino_d = size, .dirtied_ino = 1,
 					.dirtied_ino_d = host_ui->data_len};
 
+	if (host_ui->xattr_cnt >= MAX_XATTRS_PER_INODE)
+		return -ENOSPC;
 	/*
 	 * Linux limits the maximum size of the extended attribute names list
 	 * to %XATTR_LIST_MAX. This means we should not allow creating more*
@@ -304,9 +312,6 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 
 	dbg_gen("xattr '%s', host ino %lu ('%.*s'), size %zd", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
-	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);
 
 	if (size > UBIFS_MAX_INO_DATA)
 		return -ERANGE;
@@ -370,9 +375,6 @@ ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
 
 	dbg_gen("xattr '%s', ino %lu ('%.*s'), buf size %zd", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name, size);
-	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);
 
 	err = check_namespace(&nm);
 	if (err < 0)
@@ -434,9 +436,6 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 
 	dbg_gen("ino %lu ('%.*s'), buffer size %zd", host->i_ino,
 		dentry->d_name.len, dentry->d_name.name, size);
-	ubifs_assert(host_ui->xattr_cnt >= 0);
-	ubifs_assert(host_ui->xattr_size >= 0);
-	ubifs_assert(host_ui->xattr_names >= 0);
 
 	len = host_ui->xattr_names + host_ui->xattr_cnt;
 	if (!buffer)
@@ -545,9 +544,6 @@ int ubifs_removexattr(struct dentry *dentry, const char *name)
 	dbg_gen("xattr '%s', ino %lu ('%.*s')", name,
 		host->i_ino, dentry->d_name.len, dentry->d_name.name);
 	ubifs_assert(mutex_is_locked(&host->i_mutex));
-	ubifs_assert(ubifs_inode(host)->xattr_cnt >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_size >= 0);
-	ubifs_assert(ubifs_inode(host)->xattr_names >= 0);
 
 	err = check_namespace(&nm);
 	if (err < 0)

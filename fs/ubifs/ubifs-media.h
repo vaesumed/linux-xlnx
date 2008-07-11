@@ -435,10 +435,11 @@ union ubifs_dev_desc {
  * @data_len: inode data length
  * @xattr_cnt: count of extended attributes this inode has
  * @xattr_size: summarized size of all extended attributes in bytes
+ * @padding1: reserved for future, zeroes
  * @xattr_names: sum of lengths of all extended attribute names belonging to
  *               this inode
  * @compr_type: compression type used for this inode
- * @padding: reserved for future, zeroes
+ * @padding2: reserved for future, zeroes
  * @data: data attached to the inode
  *
  * Note, even though inode compression type is defined by @compr_type, some
@@ -467,10 +468,11 @@ struct ubifs_ino_node {
 	__le32 flags;
 	__le32 data_len;
 	__le32 xattr_cnt;
-	__le64 xattr_size;
+	__le32 xattr_size;
+	__u8 padding1[4]; /* Watch 'zero_ino_node_unused()' if changing! */
 	__le32 xattr_names;
 	__le16 compr_type;
-	__u8 padding[26]; /* Watch 'zero_ino_node_unused()' if changing! */
+	__u8 padding2[26]; /* Watch 'zero_ino_node_unused()' if changing! */
 	__u8 data[];
 } __attribute__ ((packed));
 
