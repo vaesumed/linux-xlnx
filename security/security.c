@@ -292,6 +292,11 @@ int security_sb_kern_mount(struct super_block *sb, void *data)
 	return security_ops->sb_kern_mount(sb, data);
 }
 
+int security_sb_show_options(struct seq_file *m, struct super_block *sb)
+{
+	return security_ops->sb_show_options(m, sb);
+}
+
 int security_sb_statfs(struct dentry *dentry)
 {
 	return security_ops->sb_statfs(dentry);
@@ -341,12 +346,6 @@ int security_sb_pivotroot(struct path *old_path, struct path *new_path)
 void security_sb_post_pivotroot(struct path *old_path, struct path *new_path)
 {
 	security_ops->sb_post_pivotroot(old_path, new_path);
-}
-
-int security_sb_get_mnt_opts(const struct super_block *sb,
-				struct security_mnt_opts *opts)
-{
-	return security_ops->sb_get_mnt_opts(sb, opts);
 }
 
 int security_sb_set_mnt_opts(struct super_block *sb,

@@ -194,6 +194,11 @@ static int dummy_sb_kern_mount (struct super_block *sb, void *data)
 	return 0;
 }
 
+static int dummy_sb_show_options(struct seq_file *m, struct super_block *sb)
+{
+	return 0;
+}
+
 static int dummy_sb_statfs (struct dentry *dentry)
 {
 	return 0;
@@ -245,13 +250,6 @@ static int dummy_sb_pivotroot (struct path *old_path, struct path *new_path)
 static void dummy_sb_post_pivotroot (struct path *old_path, struct path *new_path)
 {
 	return;
-}
-
-static int dummy_sb_get_mnt_opts(const struct super_block *sb,
-				 struct security_mnt_opts *opts)
-{
-	security_init_mnt_opts(opts);
-	return 0;
 }
 
 static int dummy_sb_set_mnt_opts(struct super_block *sb,
@@ -1088,6 +1086,7 @@ void security_fixup_ops (struct security_operations *ops)
 	set_to_dummy_if_null(ops, sb_free_security);
 	set_to_dummy_if_null(ops, sb_copy_data);
 	set_to_dummy_if_null(ops, sb_kern_mount);
+	set_to_dummy_if_null(ops, sb_show_options);
 	set_to_dummy_if_null(ops, sb_statfs);
 	set_to_dummy_if_null(ops, sb_mount);
 	set_to_dummy_if_null(ops, sb_check_sb);
@@ -1098,7 +1097,6 @@ void security_fixup_ops (struct security_operations *ops)
 	set_to_dummy_if_null(ops, sb_post_addmount);
 	set_to_dummy_if_null(ops, sb_pivotroot);
 	set_to_dummy_if_null(ops, sb_post_pivotroot);
-	set_to_dummy_if_null(ops, sb_get_mnt_opts);
 	set_to_dummy_if_null(ops, sb_set_mnt_opts);
 	set_to_dummy_if_null(ops, sb_clone_mnt_opts);
 	set_to_dummy_if_null(ops, sb_parse_opts_str);
