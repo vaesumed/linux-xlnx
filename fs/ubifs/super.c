@@ -147,6 +147,8 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	ui->xattr_names = le32_to_cpu(ino->xattr_names);
 	ui->synced_i_size = ui->ui_size = inode->i_size;
 
+	ui->xattr = (ui->flags & UBIFS_XATTR_FL) ? 1 : 0;
+
 	err = validate_inode(c, inode);
 	if (err)
 		goto out_invalid;
@@ -159,7 +161,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 		inode->i_mapping->a_ops = &ubifs_file_address_operations;
 		inode->i_op = &ubifs_file_inode_operations;
 		inode->i_fop = &ubifs_file_operations;
-		if (ui->data_len != 0) {
+		if (!ui->xattr && ui->data_len != 0) {
 			err = 10;
 			goto out_invalid;
 		}

@@ -273,6 +273,7 @@ enum {
  * UBIFS_IMMUTABLE_FL: inode is immutable
  * UBIFS_APPEND_FL: writes to the inode may only append data
  * UBIFS_DIRSYNC_FL: I/O on this directory inode has to be synchronous
+ * UBIFS_XATTR_FL: this inode is the inode for an extended attribute value
  *
  * Note, these are on-flash flags which correspond to ioctl flags
  * (@FS_COMPR_FL, etc). They have the same values now, but generally, do not
@@ -284,6 +285,7 @@ enum {
 	UBIFS_IMMUTABLE_FL = 0x04,
 	UBIFS_APPEND_FL    = 0x08,
 	UBIFS_DIRSYNC_FL   = 0x10,
+	UBIFS_XATTR_FL     = 0x20,
 };
 
 /* Inode flag bits used by UBIFS */

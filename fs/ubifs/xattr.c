@@ -129,6 +129,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	inode->i_flags |= S_SYNC | S_NOATIME | S_NOCMTIME | S_NOQUOTA;
 	ui = ubifs_inode(inode);
 	ui->xattr = 1;
+	ui->flags |= UBIFS_XATTR_FL;
 	ui->data = kmalloc(size, GFP_NOFS);
 	if (!ui->data) {
 		err = -ENOMEM;
@@ -274,6 +275,23 @@ static int check_namespace(const struct qstr *nm)
 	return type;
 }
 
+static struct inode *iget_xattr(struct ubifs_info *c, ino_t inum)
+{
+	struct inode *inode;
+
+	inode = ubifs_iget(c->vfs_sb, inum);
+	if (IS_ERR(inode)) {
+		ubifs_err("dead extended attribute entry, error %d",
+			  (int)PTR_ERR(inode));
+		return inode;
+	}
+	if (ubifs_inode(inode)->xattr)
+		return inode;
+	ubifs_err("corrupt extended attribute entry");
+	iput(inode);
+	return ERR_PTR(-EINVAL);
+}
+
 int ubifs_setxattr(struct dentry *dentry, const char *name,
 		   const void *value, size_t size, int flags)
 {
@@ -325,10 +343,8 @@ int ubifs_setxattr(struct dentry *dentry, const char *name,
 		goto out_free;
 	}
 
-	inode = ubifs_iget(c->vfs_sb, le64_to_cpu(xent->inum));
+	inode = iget_xattr(c, le64_to_cpu(xent->inum));
 	if (IS_ERR(inode)) {
-		ubifs_err("dead extended attribute entry, error %d", err);
-		ubifs_ro_mode(c, err);
 		err = PTR_ERR(inode);
 		goto out_free;
 	}
@@ -375,10 +391,8 @@ ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
 		goto out_unlock;
 	}
 
-	inode = ubifs_iget(c->vfs_sb, le64_to_cpu(xent->inum));
+	inode = iget_xattr(c, le64_to_cpu(xent->inum));
 	if (IS_ERR(inode)) {
-		ubifs_err("dead extended attribute entry, error %d", err);
-		ubifs_ro_mode(c, err);
 		err = PTR_ERR(inode);
 		goto out_unlock;
 	}
@@ -551,10 +565,8 @@ int ubifs_removexattr(struct dentry *dentry, const char *name)
 		goto out_free;
 	}
 
-	inode = ubifs_iget(c->vfs_sb, le64_to_cpu(xent->inum));
+	inode = iget_xattr(c, le64_to_cpu(xent->inum));
 	if (IS_ERR(inode)) {
-		ubifs_err("dead extended attribute node entry");
-		ubifs_ro_mode(c, err);
 		err = PTR_ERR(inode);
 		goto out_free;
 	}
