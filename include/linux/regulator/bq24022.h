@@ -11,11 +11,9 @@
  */
 
 /**
- *bq24022_mach_info - platform data for bq24022
- *@gpio_nce: GPIO line connected to the nCE pin,
- *           used to enable / disable charging.
- *@gpio_iset2: GPIO line connected to the ISET2 pin,
- *             used to limit charging current to 100 mA / 500 mA.
+ * bq24022_mach_info - platform data for bq24022
+ * @gpio_nce: GPIO line connected to the nCE pin, used to enable / disable charging
+ * @gpio_iset2: GPIO line connected to the ISET2 pin, used to limit charging current to 100 mA / 500 mA
  */
 struct bq24022_mach_info {
 	int gpio_nce;
