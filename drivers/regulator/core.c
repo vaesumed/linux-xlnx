@@ -17,11 +17,12 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
+#include <linux/suspend.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 
-#define REGULATOR_VERSION "0.4"
+#define REGULATOR_VERSION "0.5"
 
 static DEFINE_MUTEX(regulator_list_mutex);
 static LIST_HEAD(regulator_list);
@@ -561,6 +562,65 @@ static void drms_uA_update(struct regulator_dev *rdev)
 	err = regulator_check_mode(rdev, mode);
 	if (err == 0)
 		rdev->desc->ops->set_mode(rdev, mode);
+}
+
+static int suspend_set_state(struct regulator_dev *rdev,
+	struct regulator_state *rstate)
+{
+	int ret = 0;
+
+	/* enable & disable are mandatory for suspend control */
+	if (!rdev->desc->ops->set_suspend_enable ||
+		!rdev->desc->ops->set_suspend_disable)
+		return -EINVAL;
+
+	if (rstate->enabled)
+		ret = rdev->desc->ops->set_suspend_enable(rdev);
+	else
+		ret = rdev->desc->ops->set_suspend_disable(rdev);
+	if (ret < 0) {
+		printk(KERN_ERR "%s: failed to enabled/disable\n", __func__);
+		return ret;
+	}
+
+	if (rdev->desc->ops->set_suspend_voltage && rstate->uV > 0) {
+		ret = rdev->desc->ops->set_suspend_voltage(rdev, rstate->uV);
+		if (ret < 0) {
+			printk(KERN_ERR "%s: failed to set voltage\n",
+				__func__);
+			return ret;
+		}
+	}
+
+	if (rdev->desc->ops->set_suspend_mode && rstate->mode > 0) {
+		ret = rdev->desc->ops->set_suspend_mode(rdev, rstate->mode);
+		if (ret < 0) {
+			printk(KERN_ERR "%s: failed to set mode\n", __func__);
+			return ret;
+		}
+	}
+	return ret;
+}
+
+/* locks held by caller */
+static int suspend_prepare(struct regulator_dev *rdev, suspend_state_t state)
+{
+	if (!rdev->constraints)
+		return -EINVAL;
+
+	switch (state) {
+	case PM_SUSPEND_STANDBY:
+		return suspend_set_state(rdev,
+			&rdev->constraints->state_standby);
+	case PM_SUSPEND_MEM:
+		return suspend_set_state(rdev,
+			&rdev->constraints->state_mem);
+	case PM_SUSPEND_MAX:
+		return suspend_set_state(rdev,
+			&rdev->constraints->state_disk);
+	default:
+		return -EINVAL;
+	}
 }
 
 static void print_constraints(struct regulator_dev *rdev)
@@ -1705,6 +1765,10 @@ found:
 	if (rdev->constraints->boot_on)
 		rdev->use_count = 1;
 
+	/* do we need to setup our suspend state */
+	if (constraints->initial_state)
+		ret = suspend_prepare(rdev, constraints->initial_state);
+
 	print_constraints(rdev);
 	mutex_unlock(&rdev->mutex);
 
@@ -1748,6 +1812,41 @@ int regulator_set_device_supply(const char *regulator, struct device *dev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(regulator_set_device_supply);
+
+/**
+ * regulator_suspend_prepare: prepare regulators for system wide suspend
+ * @state: system suspend state
+ *
+ * Configure each regulator with it's suspend operating parameters for state.
+ * This will usually be called by machine suspend code prior to supending.
+ */
+int regulator_suspend_prepare(suspend_state_t state)
+{
+	struct regulator_dev *rdev;
+	int ret = 0;
+
+	/* ON is handled by regulator active state */
+	if (state == PM_SUSPEND_ON)
+		return -EINVAL;
+
+	mutex_lock(&regulator_list_mutex);
+	list_for_each_entry(rdev, &regulator_list, list) {
+
+		mutex_lock(&rdev->mutex);
+		ret = suspend_prepare(rdev, state);
+		mutex_unlock(&rdev->mutex);
+
+		if (ret < 0) {
+			printk(KERN_ERR "%s: failed to prepare %s\n",
+				__func__, rdev->desc->name);
+			goto out;
+		}
+	}
+out:
+	mutex_unlock(&regulator_list_mutex);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(regulator_suspend_prepare);
 
 /**
  * rdev_get_drvdata - get rdev regulator driver data

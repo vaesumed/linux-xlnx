@@ -26,9 +26,9 @@ struct regulator;
  * VOLTAGE:  Regulator output voltage can be changed by software on this
  *           board/machine.
  * CURRENT:  Regulator output current can be changed by software on this
- *           board machine.
+ *           board/machine.
  * MODE:     Regulator operating mode can be changed by software on this
- *           board machine.
+ *           board/machine.
  * STATUS:   Regulator can be enabled and disabled.
  * DRMS:     Dynamic Regulator Mode Switching is enabled for this regulator.
  */
@@ -38,6 +38,17 @@ struct regulator;
 #define REGULATOR_CHANGE_MODE		0x4
 #define REGULATOR_CHANGE_STATUS		0x8
 #define REGULATOR_CHANGE_DRMS		0x10
+
+/**
+ * struct regulator_state - regulator state during low power syatem states
+ *
+ * This describes a regulators state during a system wide low power state.
+ */
+struct regulator_state {
+	int uV;	/* suspend voltage */
+	unsigned int mode; /* suspend regulator operating mode */
+	int enabled; /* is regulator enabled in this suspend state */
+};
 
 /**
  * struct regulation_constraints - regulator operating constraints.
@@ -65,6 +76,12 @@ struct regulation_constraints {
 	/* regulator input voltage - only if supply is another regulator */
 	int input_uV;
 
+	/* regulator suspend states for global PMIC STANDBY/HIBERNATE */
+	struct regulator_state state_disk;
+	struct regulator_state state_mem;
+	struct regulator_state state_standby;
+	suspend_state_t initial_state; /* suspend state to set at init */
+
 	/* constriant flags */
 	u32 always_on:1;	/* regulator never off when system is on */
 	u32 boot_on:1;		/* bootloader/firmware enabled regulator */
@@ -80,5 +97,7 @@ int regulator_set_machine_constraints(const char *regulator,
 
 int regulator_set_device_supply(const char *regulator, struct device *dev,
 				const char *supply);
+
+int regulator_suspend_prepare(suspend_state_t state);
 
 #endif
