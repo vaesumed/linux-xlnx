@@ -870,7 +870,7 @@ struct zfcp_data {
 	struct semaphore        config_sema;        /* serialises configuration
 						       changes */
 	atomic_t		loglevel;            /* current loglevel */
-	char                    init_busid[BUS_ID_SIZE];
+	char                    init_busid[20];
 	wwn_t                   init_wwpn;
 	fcp_lun_t               init_fcp_lun;
 	char 			*driver_version;
@@ -922,7 +922,7 @@ extern void _zfcp_hex_dump(char *, int);
 			_zfcp_hex_dump(addr, count); \
 		}
 
-#define zfcp_get_busid_by_adapter(adapter) (adapter->ccw_device->dev.bus_id)
+#define zfcp_get_busid_by_adapter(adapter) (dev_name(&adapter->ccw_device->dev))
 #define zfcp_get_busid_by_port(port) (zfcp_get_busid_by_adapter(port->adapter))
 #define zfcp_get_busid_by_unit(unit) (zfcp_get_busid_by_port(unit->port))
 
