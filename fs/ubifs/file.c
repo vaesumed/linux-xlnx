@@ -285,13 +285,22 @@ static int write_begin_slow(struct address_space *mapping,
 		 */
 		ubifs_convert_page_budget(c);
 
-	if (appending)
+	if (appending) {
+		struct ubifs_inode *ui = ubifs_inode(inode);
+
 		/*
 		 * 'ubifs_write_end()' is optimized from the fast-path part of
 		 * 'ubifs_write_begin()' and expects the @ui_mutex to be locked
-		 * if data is appended. And we should lock it as well.
+		 * if data is appended.
 		 */
-		mutex_lock(&ubifs_inode(inode)->ui_mutex);
+		mutex_lock(&ui->ui_mutex);
+		if (ui->dirty)
+			/*
+			 * The inode is dirty already, so we may free the
+			 * budget we allocated.
+			 */
+			ubifs_release_dirty_inode_budget(c, ui);
+	}
 
 	*pagep = page;
 	return 0;
@@ -377,17 +386,24 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		dbg_gen("copied %d instead of %d, read page and repeat",
 			copied, len);
 
+		/* Cancel the budget */
 		if (appending) {
+			if (!ui->dirty)
+				ubifs_release_dirty_inode_budget(c, ui);
 			mutex_unlock(&ui->ui_mutex);
-			ubifs_release_dirty_inode_budget(c, ui);
 		}
-
-		copied = do_readpage(page);
+		if (!PagePrivate(page)) {
+			if (PageChecked(page))
+				release_new_page_budget(c);
+			else
+				release_existing_page_budget(c);
+		}
 
 		/*
 		 * Return 0 to force VFS to repeat the whole operation, or the
-		 * error code if 'do_readpage()' failed.
+		 * error code if 'do_readpage()' failes.
 		 */
+		copied = do_readpage(page);
 		goto out;
 	}
 
@@ -398,11 +414,8 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	}
 
 	if (appending) {
-		int release;
-
 		i_size_write(inode, end_pos);
 		ui->ui_size = end_pos;
-		release = ui->dirty;
 		/*
 		 * Note, we do not set @I_DIRTY_PAGES (which means that the
 		 * inode has dirty pages), this has been done in
@@ -410,15 +423,6 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 */
 		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
 		mutex_unlock(&ui->ui_mutex);
-
-		/*
-		 * We've marked the inode as dirty and we have allocated budget
-		 * for this. However, the inode may had already be be dirty
-		 * before, in which case we have to free the budget.
-		 */
-		if (release)
-			ubifs_release_dirty_inode_budget(c, ui);
-
 	}
 
 out:
