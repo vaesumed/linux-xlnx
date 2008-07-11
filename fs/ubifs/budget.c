@@ -544,8 +544,9 @@ again:
 	ubifs_assert(c->budg_dd_growth >= 0);
 
 	if (unlikely(c->nospace) && (c->nospace_rp || !can_use_rp(c))) {
-		err = -ENOSPC;
-		goto out_nospace;
+		dbg_budg("no space");
+		spin_unlock(&c->space_lock);
+		return -ENOSPC;
 	}
 
 	c->budg_idx_growth += idx_growth;
@@ -553,23 +554,25 @@ again:
 	c->budg_dd_growth += dd_growth;
 
 	err = do_budget_space(c);
-	if (unlikely(err)) {
-		/* Restore the old values */
-		c->budg_idx_growth -= idx_growth;
-		c->budg_data_growth -= data_growth;
-		c->budg_dd_growth -= dd_growth;
+	if (likely(!err)) {
+		req->idx_growth = idx_growth;
+		req->data_growth = data_growth;
+		req->dd_growth = dd_growth;
 		spin_unlock(&c->space_lock);
-
-		goto make_space;
+		return 0;
 	}
 
-	req->idx_growth = idx_growth;
-	req->data_growth = data_growth;
-	req->dd_growth = dd_growth;
+	/* Restore the old values */
+	c->budg_idx_growth -= idx_growth;
+	c->budg_data_growth -= data_growth;
+	c->budg_dd_growth -= dd_growth;
 	spin_unlock(&c->space_lock);
-	return 0;
 
-make_space:
+	if (req->fast) {
+		dbg_budg("no space for fast budgeting");
+		return err;
+	}
+
 	err = make_free_space(c, &ri);
 	if (err == -EAGAIN) {
 		dbg_budg("try again");
@@ -583,11 +586,6 @@ make_space:
 		smp_wmb();
 	} else
 		ubifs_err("cannot budget space, error %d", err);
-	return err;
-
-out_nospace:
-	dbg_budg("no space");
-	spin_unlock(&c->space_lock);
 	return err;
 }
 

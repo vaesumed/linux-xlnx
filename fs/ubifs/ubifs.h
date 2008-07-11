@@ -779,6 +779,8 @@ struct ubifs_compressor {
 /**
  * struct ubifs_budget_req - budget requirements of an operation.
  *
+ * @fast: non-zero if the budgeting should try to aquire budget quickly and
+ *        should not try to call write-back
  * @new_page: non-zero if the operation adds a new page
  * @dirtied_page: non-zero if the operation makes a page dirty
  * @new_dent: non-zero if the operation adds a new directory entry
@@ -803,6 +805,7 @@ struct ubifs_compressor {
  * dirty by the re-name operation.
  */
 struct ubifs_budget_req {
+	unsigned int fast:1;
 	unsigned int new_page:1;
 	unsigned int dirtied_page:1;
 	unsigned int new_dent:1;
