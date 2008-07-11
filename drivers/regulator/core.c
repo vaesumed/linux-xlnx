@@ -164,15 +164,13 @@ static int regulator_check_current_limit(struct regulator_dev *rdev,
 		return -EPERM;
 	}
 
-	if (*max_uA > rdev->constraints->max_uA ||
-	    *min_uA < rdev->constraints->min_uA) {
-		printk(KERN_ERR "%s: invalid current range %d-%duA for %s\n",
-		       __func__, *min_uA, *max_uA, rdev->desc->name);
-		return -EINVAL;
-	}
+	if (*max_uA > rdev->constraints->max_uA)
+		*max_uA = rdev->constraints->max_uA;
+	if (*min_uA < rdev->constraints->min_uA)
+		*min_uA = rdev->constraints->min_uA;
 
-	*min_uA = max(*min_uA, rdev->constraints->min_uA);
-	*max_uA = min(*max_uA, rdev->constraints->max_uA);
+	if (*min_uA > *max_uA)
+		return -EINVAL;
 
 	return 0;
 }
