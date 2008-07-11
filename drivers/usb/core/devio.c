@@ -575,6 +575,7 @@ static int usbdev_open(struct inode *inode, struct file *file)
 	struct dev_state *ps;
 	int ret;
 
+	lock_kernel();
 	/* Protect against simultaneous removal or release */
 	mutex_lock(&usbfs_mutex);
 
@@ -629,6 +630,7 @@ static int usbdev_open(struct inode *inode, struct file *file)
 		usb_put_dev(dev);
 	}
 	mutex_unlock(&usbfs_mutex);
+	unlock_kernel();
 	return ret;
 }
 
