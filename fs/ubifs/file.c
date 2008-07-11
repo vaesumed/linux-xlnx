@@ -221,6 +221,9 @@ static int write_begin_slow(struct address_space *mapping,
 	int uninitialized_var(err), appending = !!(pos + len > inode->i_size);
 	struct page *page;
 
+	dbg_gen("ino %lu, pos %llu, len %u, i_size %lld",
+		inode->i_ino, pos, len, inode->i_size);
+
 	/*
 	 * At the slow path we have to budget before locking the page, because
 	 * budgeting may force write-back, which would wait on locked pages and
@@ -239,25 +242,20 @@ static int write_begin_slow(struct address_space *mapping,
 
 	page = __grab_cache_page(mapping, index);
 	if (unlikely(!page)) {
-		err = -ENOMEM;
-		goto out_release;
+		ubifs_release_budget(c, &req);
+		return -ENOMEM;
 	}
 
 	if (!PageUptodate(page)) {
-		/* The page is not loaded from the flash */
 		if (!(pos & PAGE_CACHE_MASK) && len == PAGE_CACHE_SIZE)
-			/*
-			 * We change whole page so no need to load it. But we
-			 * have to set the @PG_checked flag to make the further
-			 * code the page is new. This might be not true, but it
-			 * is better to budget more that to read the page from
-			 * the media.
-			 */
 			SetPageChecked(page);
 		else {
 			err = do_readpage(page);
-			if (err)
-				goto out_unlock;
+			if (err) {
+				unlock_page(page);
+				page_cache_release(page);
+				return err;
+			}
 		}
 
 		SetPageUptodate(page);
@@ -304,13 +302,83 @@ static int write_begin_slow(struct address_space *mapping,
 
 	*pagep = page;
 	return 0;
+}
 
-out_unlock:
-	unlock_page(page);
-	page_cache_release(page);
-out_release:
-	ubifs_release_budget(c, &req);
-	return err;
+/**
+ * allocate_budget - cancel budget for 'ubifs_write_begin()'.
+ * @c: UBIFS file-system description object
+ * @page: page to allocate budget for
+ * @ui: UBIFS inode object the page belongs to
+ * @appending: non-zero if the page is appended
+ *
+ * This is a helper function for 'ubifs_write_begin()' which allocates budget
+ * for the operation. The budget is allocated differently depending on whether
+ * this is appending, whether the page is dirty or not, and so on. This
+ * function leaves the @ui->ui_mutex locked in case of appending. Returns zero
+ * in case of success and %-ENOSPC in case of failure.
+ */
+static int allocate_budget(struct ubifs_info *c, struct page *page,
+			   struct ubifs_inode *ui, int appending)
+{
+	struct ubifs_budget_req req = { .fast = 1 };
+
+	if (PagePrivate(page)) {
+		if (!appending)
+			/*
+			 * The page is dirty and we are not appending, which means no
+			 * budget is needed at all.
+			 */
+			return 0;
+
+		mutex_lock(&ui->ui_mutex);
+		if (ui->dirty)
+			/*
+			 * The page is dirty and we are appending, so the inode
+			 * has to be marked as dirty. However, it is already
+			 * dirty, so we do not need any budget. We may return,
+			 * but @ui->ui_mutex hast to be left locked because we
+			 * should prevent write-back from flushing the inode
+			 * and freeing the budget. The lock will be released in
+			 * 'ubifs_write_end()'.
+			 */
+			return 0;
+
+		/*
+		 * The page is dirty, we are appending, the inode is clean, so
+		 * we need to budget the inode change.
+		 */
+		req.dirtied_ino = 1;
+	} else {
+		if (PageChecked(page))
+			/*
+			 * The page corresponds to a hole and does not
+			 * exist on the media. So changing it makes
+			 * make the amount of indexing information
+			 * larger, and we have to budget for a new
+			 * page.
+			 */
+			req.new_page = 1;
+		else
+			/*
+			 * Not a hole, the change will not add any new
+			 * indexing information, budget for page
+			 * change.
+			 */
+			req.dirtied_page = 1;
+
+		if (appending) {
+			mutex_lock(&ui->ui_mutex);
+			if (!ui->dirty)
+				/*
+				 * The inode is clean but we will have to mark
+				 * it as dirty because we are appending. This
+				 * needs a budget.
+				 */
+				req.dirtied_ino = 1;
+		}
+	}
+
+	return ubifs_budget_space(c, &req);
 }
 
 /*
@@ -351,13 +419,101 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 {
 	struct inode *inode = mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	struct ubifs_inode *ui = ubifs_inode(inode);
+	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
+	int uninitialized_var(err), appending = !!(pos + len > inode->i_size);
+	struct page *page;
+
 
 	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
 
 	if (unlikely(c->ro_media))
 		return -EROFS;
 
-	return write_begin_slow(mapping, pos, len, pagep);
+	/* Try out the fast-path part first */
+	page = __grab_cache_page(mapping, index);
+	if (unlikely(!page))
+		return -ENOMEM;
+
+	if (!PageUptodate(page)) {
+		/* The page is not loaded from the flash */
+		if (!(pos & PAGE_CACHE_MASK) && len == PAGE_CACHE_SIZE)
+			/*
+			 * We change whole page so no need to load it. But we
+			 * have to set the @PG_checked flag to make the further
+			 * code the page is new. This might be not true, but it
+			 * is better to budget more that to read the page from
+			 * the media.
+			 */
+			SetPageChecked(page);
+		else {
+			err = do_readpage(page);
+			if (err) {
+				unlock_page(page);
+				page_cache_release(page);
+				return err;
+			}
+		}
+
+		SetPageUptodate(page);
+		ClearPageError(page);
+	}
+
+	err = allocate_budget(c, page, ui, appending);
+	if (unlikely(err)) {
+		ubifs_assert(err == -ENOSPC);
+		/*
+		 * Budgeting failed which means it would have to force
+		 * write-back but didn't, because we set the @fast flag in the
+		 * request. Write-back cannot be done now, while we have the
+		 * page locked, because it would deadlock. Unlock and free
+		 * everything and fall-back to slow-path.
+		 */
+		if (appending) {
+			ubifs_assert(mutex_is_locked(&ui->ui_mutex));
+			mutex_unlock(&ui->ui_mutex);
+		}
+		unlock_page(page);
+		page_cache_release(page);
+
+		return write_begin_slow(mapping, pos, len, pagep);
+	}
+
+	/*
+	 * Whee, we aquired budgeting quickly - without involving
+	 * garbage-collection, committing or forceing write-back. We return
+	 * with @ui->ui_mutex locked if we are appending pages, and unlocked
+	 * otherwise. This is an optimization (slightly hacky though).
+	 */
+	*pagep = page;
+	return 0;
+
+}
+
+/**
+ * cancel_budget - cancel budget.
+ * @c: UBIFS file-system description object
+ * @page: page to cancel budget for
+ * @ui: UBIFS inode object the page belongs to
+ * @appending: non-zero if the page is appended
+ *
+ * This is a helper function for a page write operation. It unlocks the
+ * @ui->ui_mutex in case of appending.
+ */
+static void cancel_budget(struct ubifs_info *c, struct page *page,
+			  struct ubifs_inode *ui, int appending)
+{
+	if (appending) {
+		if (!ui->dirty)
+			ubifs_release_dirty_inode_budget(c, ui);
+		mutex_unlock(&ui->ui_mutex);
+	}
+	if (!PagePrivate(page)) {
+		if (PageChecked(page))
+			release_new_page_budget(c);
+		else
+			release_existing_page_budget(c);
+	}
 }
 
 static int ubifs_write_end(struct file *file, struct address_space *mapping,
@@ -385,19 +541,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 */
 		dbg_gen("copied %d instead of %d, read page and repeat",
 			copied, len);
-
-		/* Cancel the budget */
-		if (appending) {
-			if (!ui->dirty)
-				ubifs_release_dirty_inode_budget(c, ui);
-			mutex_unlock(&ui->ui_mutex);
-		}
-		if (!PagePrivate(page)) {
-			if (PageChecked(page))
-				release_new_page_budget(c);
-			else
-				release_existing_page_budget(c);
-		}
+		cancel_budget(c, page, ui, appending);
 
 		/*
 		 * Return 0 to force VFS to repeat the whole operation, or the
@@ -422,6 +566,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		 * '__set_page_dirty_nobuffers()'.
 		 */
 		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
+		ubifs_assert(mutex_is_locked(&ui->ui_mutex));
 		mutex_unlock(&ui->ui_mutex);
 	}
 
