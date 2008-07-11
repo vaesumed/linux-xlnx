@@ -85,15 +85,13 @@ static int buffer_size;
 /* if overridden by the user, then use the specified number of XBOFs */
 static int xbof = -1;
 
-static int ir_startup(struct usb_serial *serial);
-static int ir_open(struct usb_serial_port *port, struct file *filep);
-static void ir_close(struct usb_serial_port *port, struct file *filep);
-static int ir_write(struct usb_serial_port *port,
-		const unsigned char *buf, int count);
-static void ir_write_bulk_callback(struct urb *urb);
-static void ir_read_bulk_callback(struct urb *urb);
-static void ir_set_termios(struct usb_serial_port *port,
-		struct ktermios *old_termios);
+static int  ir_startup (struct usb_serial *serial);
+static int  ir_open(struct tty_struct *tty, struct usb_serial_port *port, struct file *filep);
+static void ir_close(struct tty_struct *tty, struct usb_serial_port *port, struct file *filep);
+static int  ir_write(struct tty_struct *tty, struct usb_serial_port *port, const unsigned char *buf, int count);
+static void ir_write_bulk_callback (struct urb *urb);
+static void ir_read_bulk_callback (struct urb *urb);
+static void ir_set_termios(struct tty_struct *tty, struct usb_serial_port *port, struct ktermios *old_termios);
 
 /* Not that this lot means you can only have one per system */
 static u8 ir_baud;
@@ -295,7 +293,8 @@ static int ir_startup(struct usb_serial *serial)
 	return 0;
 }
 
-static int ir_open(struct usb_serial_port *port, struct file *filp)
+static int ir_open(struct tty_struct *tty,
+			struct usb_serial_port *port, struct file *filp)
 {
 	char *buffer;
 	int result = 0;
@@ -343,7 +342,8 @@ static int ir_open(struct usb_serial_port *port, struct file *filp)
 	return result;
 }
 
-static void ir_close(struct usb_serial_port *port, struct file *filp)
+static void ir_close(struct tty_struct *tty,
+			struct usb_serial_port *port, struct file * filp)
 {
 	dbg("%s - port %d", __func__, port->number);
 
@@ -351,19 +351,14 @@ static void ir_close(struct usb_serial_port *port, struct file *filp)
 	usb_kill_urb(port->read_urb);
 }
 
-static int ir_write(struct usb_serial_port *port,
-		const unsigned char *buf, int count)
+static int ir_write(struct tty_struct *tty, struct usb_serial_port *port,
+					const unsigned char *buf, int count)
 {
 	unsigned char *transfer_buffer;
 	int result;
 	int transfer_size;
 
 	dbg("%s - port = %d, count = %d", __func__, port->number, count);
-
-	if (!port->tty) {
-		dev_err(&port->dev, "%s - no tty???\n", __func__);
-		return 0;
-	}
 
 	if (count == 0)
 		return 0;
@@ -450,7 +445,7 @@ static void ir_read_bulk_callback(struct urb *urb)
 
 	dbg("%s - port %d", __func__, port->number);
 
-	if (!port->open_count) {
+	if (!port->port.count) {
 		dbg("%s - port closed.", __func__);
 		return;
 	}
@@ -473,11 +468,10 @@ static void ir_read_bulk_callback(struct urb *urb)
 			urb->actual_length,
 			data);
 
-		tty = port->tty;
+		tty = port->port.tty;
 
 		if (tty_buffer_request_room(tty, urb->actual_length - 1)) {
-			tty_insert_flip_string(tty, data + 1,
-					urb->actual_length - 1);
+			tty_insert_flip_string(tty, data+1, urb->actual_length - 1);
 			tty_flip_buffer_push(tty);
 		}
 
@@ -517,8 +511,8 @@ static void ir_read_bulk_callback(struct urb *urb)
 	return;
 }
 
-static void ir_set_termios(struct usb_serial_port *port,
-		struct ktermios *old_termios)
+static void ir_set_termios(struct tty_struct *tty,
+		struct usb_serial_port *port, struct ktermios *old_termios)
 {
 	unsigned char *transfer_buffer;
 	int result;
@@ -527,7 +521,7 @@ static void ir_set_termios(struct usb_serial_port *port,
 
 	dbg("%s - port %d", __func__, port->number);
 
-	baud = tty_get_baud_rate(port->tty);
+	baud = tty_get_baud_rate(tty);
 
 	/*
 	 * FIXME, we should compare the baud request against the
@@ -600,8 +594,8 @@ static void ir_set_termios(struct usb_serial_port *port,
 				__func__, result);
 
 	/* Only speed changes are supported */
-	tty_termios_copy_hw(port->tty->termios, old_termios);
-	tty_encode_baud_rate(port->tty, baud, baud);
+	tty_termios_copy_hw(tty->termios, old_termios);
+	tty_encode_baud_rate(tty, baud, baud);
 }
 
 static int __init ir_init(void)
