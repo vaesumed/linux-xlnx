@@ -1210,7 +1210,7 @@ int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
 	struct ubifs_ino_node *ino;
 	union ubifs_key xent_key, key1, key2;
 	int sync = IS_DIRSYNC(host);
-	struct ubifs_inode *host_ui = ubifs_inode(inode);
+	struct ubifs_inode *host_ui = ubifs_inode(host);
 
 	dbg_jnl("host %lu, xattr ino %lu, name '%s', data len %d",
 		host->i_ino, inode->i_ino, nm->name,
