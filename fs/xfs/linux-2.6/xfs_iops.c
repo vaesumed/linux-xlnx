@@ -181,23 +181,6 @@ xfs_ichgtime_fast(
 		mark_inode_dirty_sync(inode);
 }
 
-
-/*
- * Pull the link count and size up from the xfs inode to the linux inode
- */
-STATIC void
-xfs_validate_fields(
-	struct inode		*inode)
-{
-	struct xfs_inode	*ip = XFS_I(inode);
-	loff_t size;
-
-	/* we're under i_sem so i_size can't change under us */
-	size = XFS_ISIZE(ip);
-	if (i_size_read(inode) != size)
-		i_size_write(inode, size);
-}
-
 /*
  * Hook in SELinux.  This is not quite correct yet, what we really need
  * here (as we do for default ACLs) is a mechanism by which creation of
@@ -245,8 +228,7 @@ STATIC void
 xfs_cleanup_inode(
 	struct inode	*dir,
 	struct inode	*inode,
-	struct dentry	*dentry,
-	int		mode)
+	struct dentry	*dentry)
 {
 	struct xfs_name	teardown;
 
@@ -257,10 +239,7 @@ xfs_cleanup_inode(
 	 */
 	xfs_dentry_to_name(&teardown, dentry);
 
-	if (S_ISDIR(mode))
-		xfs_rmdir(XFS_I(dir), &teardown, XFS_I(inode));
-	else
-		xfs_remove(XFS_I(dir), &teardown, XFS_I(inode));
+	xfs_remove(XFS_I(dir), &teardown, XFS_I(inode));
 	iput(inode);
 }
 
@@ -275,7 +254,7 @@ xfs_vn_mknod(
 	struct xfs_inode *ip = NULL;
 	xfs_acl_t	*default_acl = NULL;
 	struct xfs_name	name;
-	attrexists_t	test_default_acl = _ACL_DEFAULT_EXISTS;
+	int (*test_default_acl)(struct inode *) = _ACL_DEFAULT_EXISTS;
 	int		error;
 
 	/*
@@ -335,14 +314,11 @@ xfs_vn_mknod(
 	}
 
 
-	if (S_ISDIR(mode))
-		xfs_validate_fields(inode);
 	d_instantiate(dentry, inode);
-	xfs_validate_fields(dir);
 	return -error;
 
  out_cleanup_inode:
-	xfs_cleanup_inode(dir, inode, dentry, mode);
+	xfs_cleanup_inode(dir, inode, dentry);
  out_free_acl:
 	if (default_acl)
 		_ACL_FREE(default_acl);
@@ -382,7 +358,7 @@ xfs_vn_lookup(
 		return ERR_PTR(-ENAMETOOLONG);
 
 	xfs_dentry_to_name(&name, dentry);
-	error = xfs_lookup(XFS_I(dir), &name, &cip);
+	error = xfs_lookup(XFS_I(dir), &name, &cip, NULL);
 	if (unlikely(error)) {
 		if (unlikely(error != ENOENT))
 			return ERR_PTR(-error);
@@ -391,6 +367,46 @@ xfs_vn_lookup(
 	}
 
 	return d_splice_alias(cip->i_vnode, dentry);
+}
+
+STATIC struct dentry *
+xfs_vn_ci_lookup(
+	struct inode	*dir,
+	struct dentry	*dentry,
+	struct nameidata *nd)
+{
+	struct xfs_inode *ip;
+	struct xfs_name	xname;
+	struct xfs_name ci_name;
+	struct qstr	dname;
+	int		error;
+
+	if (dentry->d_name.len >= MAXNAMELEN)
+		return ERR_PTR(-ENAMETOOLONG);
+
+	xfs_dentry_to_name(&xname, dentry);
+	error = xfs_lookup(XFS_I(dir), &xname, &ip, &ci_name);
+	if (unlikely(error)) {
+		if (unlikely(error != ENOENT))
+			return ERR_PTR(-error);
+		/*
+		 * call d_add(dentry, NULL) here when d_drop_negative_children
+		 * is called in xfs_vn_mknod (ie. allow negative dentries
+		 * with CI filesystems).
+		 */
+		return NULL;
+	}
+
+	/* if exact match, just splice and exit */
+	if (!ci_name.name)
+		return d_splice_alias(ip->i_vnode, dentry);
+
+	/* else case-insensitive match... */
+	dname.name = ci_name.name;
+	dname.len = ci_name.len;
+	dentry = d_add_ci(ip->i_vnode, dentry, &dname);
+	kmem_free(ci_name.name);
+	return dentry;
 }
 
 STATIC int
@@ -414,7 +430,6 @@ xfs_vn_link(
 	}
 
 	xfs_iflags_set(XFS_I(dir), XFS_IMODIFIED);
-	xfs_validate_fields(inode);
 	d_instantiate(dentry, inode);
 	return 0;
 }
@@ -424,19 +439,23 @@ xfs_vn_unlink(
 	struct inode	*dir,
 	struct dentry	*dentry)
 {
-	struct inode	*inode;
 	struct xfs_name	name;
 	int		error;
 
-	inode = dentry->d_inode;
 	xfs_dentry_to_name(&name, dentry);
 
-	error = xfs_remove(XFS_I(dir), &name, XFS_I(inode));
-	if (likely(!error)) {
-		xfs_validate_fields(dir);	/* size needs update */
-		xfs_validate_fields(inode);
-	}
-	return -error;
+	error = -xfs_remove(XFS_I(dir), &name, XFS_I(dentry->d_inode));
+	if (error)
+		return error;
+
+	/*
+	 * With unlink, the VFS makes the dentry "negative": no inode,
+	 * but still hashed. This is incompatible with case-insensitive
+	 * mode, so invalidate (unhash) the dentry in CI-mode.
+	 */
+	if (xfs_sb_version_hasasciici(&XFS_M(dir->i_sb)->m_sb))
+		d_invalidate(dentry);
+	return 0;
 }
 
 STATIC int
@@ -466,32 +485,11 @@ xfs_vn_symlink(
 		goto out_cleanup_inode;
 
 	d_instantiate(dentry, inode);
-	xfs_validate_fields(dir);
-	xfs_validate_fields(inode);
 	return 0;
 
  out_cleanup_inode:
-	xfs_cleanup_inode(dir, inode, dentry, 0);
+	xfs_cleanup_inode(dir, inode, dentry);
  out:
-	return -error;
-}
-
-STATIC int
-xfs_vn_rmdir(
-	struct inode	*dir,
-	struct dentry	*dentry)
-{
-	struct inode	*inode = dentry->d_inode;
-	struct xfs_name	name;
-	int		error;
-
-	xfs_dentry_to_name(&name, dentry);
-
-	error = xfs_rmdir(XFS_I(dir), &name, XFS_I(inode));
-	if (likely(!error)) {
-		xfs_validate_fields(inode);
-		xfs_validate_fields(dir);
-	}
 	return -error;
 }
 
@@ -505,22 +503,13 @@ xfs_vn_rename(
 	struct inode	*new_inode = ndentry->d_inode;
 	struct xfs_name	oname;
 	struct xfs_name	nname;
-	int		error;
 
 	xfs_dentry_to_name(&oname, odentry);
 	xfs_dentry_to_name(&nname, ndentry);
 
-	error = xfs_rename(XFS_I(odir), &oname, XFS_I(odentry->d_inode),
+	return -xfs_rename(XFS_I(odir), &oname, XFS_I(odentry->d_inode),
 			   XFS_I(ndir), &nname, new_inode ?
 			   			XFS_I(new_inode) : NULL);
-	if (likely(!error)) {
-		if (new_inode)
-			xfs_validate_fields(new_inode);
-		xfs_validate_fields(odir);
-		if (ndir != odir)
-			xfs_validate_fields(ndir);
-	}
-	return -error;
 }
 
 /*
@@ -728,109 +717,6 @@ xfs_vn_truncate(
 	WARN_ON(error);
 }
 
-STATIC int
-xfs_vn_setxattr(
-	struct dentry	*dentry,
-	const char	*name,
-	const void	*data,
-	size_t		size,
-	int		flags)
-{
-	bhv_vnode_t	*vp = vn_from_inode(dentry->d_inode);
-	char		*attr = (char *)name;
-	attrnames_t	*namesp;
-	int		xflags = 0;
-	int		error;
-
-	namesp = attr_lookup_namespace(attr, attr_namespaces, ATTR_NAMECOUNT);
-	if (!namesp)
-		return -EOPNOTSUPP;
-	attr += namesp->attr_namelen;
-	error = namesp->attr_capable(vp, NULL);
-	if (error)
-		return error;
-
-	/* Convert Linux syscall to XFS internal ATTR flags */
-	if (flags & XATTR_CREATE)
-		xflags |= ATTR_CREATE;
-	if (flags & XATTR_REPLACE)
-		xflags |= ATTR_REPLACE;
-	xflags |= namesp->attr_flag;
-	return namesp->attr_set(vp, attr, (void *)data, size, xflags);
-}
-
-STATIC ssize_t
-xfs_vn_getxattr(
-	struct dentry	*dentry,
-	const char	*name,
-	void		*data,
-	size_t		size)
-{
-	bhv_vnode_t	*vp = vn_from_inode(dentry->d_inode);
-	char		*attr = (char *)name;
-	attrnames_t	*namesp;
-	int		xflags = 0;
-	ssize_t		error;
-
-	namesp = attr_lookup_namespace(attr, attr_namespaces, ATTR_NAMECOUNT);
-	if (!namesp)
-		return -EOPNOTSUPP;
-	attr += namesp->attr_namelen;
-	error = namesp->attr_capable(vp, NULL);
-	if (error)
-		return error;
-
-	/* Convert Linux syscall to XFS internal ATTR flags */
-	if (!size) {
-		xflags |= ATTR_KERNOVAL;
-		data = NULL;
-	}
-	xflags |= namesp->attr_flag;
-	return namesp->attr_get(vp, attr, (void *)data, size, xflags);
-}
-
-STATIC ssize_t
-xfs_vn_listxattr(
-	struct dentry		*dentry,
-	char			*data,
-	size_t			size)
-{
-	bhv_vnode_t		*vp = vn_from_inode(dentry->d_inode);
-	int			error, xflags = ATTR_KERNAMELS;
-	ssize_t			result;
-
-	if (!size)
-		xflags |= ATTR_KERNOVAL;
-	xflags |= capable(CAP_SYS_ADMIN) ? ATTR_KERNFULLS : ATTR_KERNORMALS;
-
-	error = attr_generic_list(vp, data, size, xflags, &result);
-	if (error < 0)
-		return error;
-	return result;
-}
-
-STATIC int
-xfs_vn_removexattr(
-	struct dentry	*dentry,
-	const char	*name)
-{
-	bhv_vnode_t	*vp = vn_from_inode(dentry->d_inode);
-	char		*attr = (char *)name;
-	attrnames_t	*namesp;
-	int		xflags = 0;
-	int		error;
-
-	namesp = attr_lookup_namespace(attr, attr_namespaces, ATTR_NAMECOUNT);
-	if (!namesp)
-		return -EOPNOTSUPP;
-	attr += namesp->attr_namelen;
-	error = namesp->attr_capable(vp, NULL);
-	if (error)
-		return error;
-	xflags |= namesp->attr_flag;
-	return namesp->attr_remove(vp, attr, xflags);
-}
-
 STATIC long
 xfs_vn_fallocate(
 	struct inode	*inode,
@@ -878,10 +764,10 @@ const struct inode_operations xfs_inode_operations = {
 	.truncate		= xfs_vn_truncate,
 	.getattr		= xfs_vn_getattr,
 	.setattr		= xfs_vn_setattr,
-	.setxattr		= xfs_vn_setxattr,
-	.getxattr		= xfs_vn_getxattr,
+	.setxattr		= generic_setxattr,
+	.getxattr		= generic_getxattr,
+	.removexattr		= generic_removexattr,
 	.listxattr		= xfs_vn_listxattr,
-	.removexattr		= xfs_vn_removexattr,
 	.fallocate		= xfs_vn_fallocate,
 };
 
@@ -892,16 +778,47 @@ const struct inode_operations xfs_dir_inode_operations = {
 	.unlink			= xfs_vn_unlink,
 	.symlink		= xfs_vn_symlink,
 	.mkdir			= xfs_vn_mkdir,
-	.rmdir			= xfs_vn_rmdir,
+	/*
+	 * Yes, XFS uses the same method for rmdir and unlink.
+	 *
+	 * There are some subtile differences deeper in the code,
+	 * but we use S_ISDIR to check for those.
+	 */
+	.rmdir			= xfs_vn_unlink,
 	.mknod			= xfs_vn_mknod,
 	.rename			= xfs_vn_rename,
 	.permission		= xfs_vn_permission,
 	.getattr		= xfs_vn_getattr,
 	.setattr		= xfs_vn_setattr,
-	.setxattr		= xfs_vn_setxattr,
-	.getxattr		= xfs_vn_getxattr,
+	.setxattr		= generic_setxattr,
+	.getxattr		= generic_getxattr,
+	.removexattr		= generic_removexattr,
 	.listxattr		= xfs_vn_listxattr,
-	.removexattr		= xfs_vn_removexattr,
+};
+
+const struct inode_operations xfs_dir_ci_inode_operations = {
+	.create			= xfs_vn_create,
+	.lookup			= xfs_vn_ci_lookup,
+	.link			= xfs_vn_link,
+	.unlink			= xfs_vn_unlink,
+	.symlink		= xfs_vn_symlink,
+	.mkdir			= xfs_vn_mkdir,
+	/*
+	 * Yes, XFS uses the same method for rmdir and unlink.
+	 *
+	 * There are some subtile differences deeper in the code,
+	 * but we use S_ISDIR to check for those.
+	 */
+	.rmdir			= xfs_vn_unlink,
+	.mknod			= xfs_vn_mknod,
+	.rename			= xfs_vn_rename,
+	.permission		= xfs_vn_permission,
+	.getattr		= xfs_vn_getattr,
+	.setattr		= xfs_vn_setattr,
+	.setxattr		= generic_setxattr,
+	.getxattr		= generic_getxattr,
+	.removexattr		= generic_removexattr,
+	.listxattr		= xfs_vn_listxattr,
 };
 
 const struct inode_operations xfs_symlink_inode_operations = {
@@ -911,8 +828,8 @@ const struct inode_operations xfs_symlink_inode_operations = {
 	.permission		= xfs_vn_permission,
 	.getattr		= xfs_vn_getattr,
 	.setattr		= xfs_vn_setattr,
-	.setxattr		= xfs_vn_setxattr,
-	.getxattr		= xfs_vn_getxattr,
+	.setxattr		= generic_setxattr,
+	.getxattr		= generic_getxattr,
+	.removexattr		= generic_removexattr,
 	.listxattr		= xfs_vn_listxattr,
-	.removexattr		= xfs_vn_removexattr,
 };
