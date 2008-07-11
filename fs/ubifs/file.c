@@ -183,6 +183,35 @@ error:
 	return err;
 }
 
+/**
+ * release_new_page_budget - release budget of a new page.
+ * @c: UBIFS file-system description object
+ *
+ * This is a helper function which releases budget corresponding to the budget
+ * of one new page of data.
+ */
+static void release_new_page_budget(struct ubifs_info *c)
+{
+	struct ubifs_budget_req req = { .recalculate = 1, .new_page = 1 };
+
+	ubifs_release_budget(c, &req);
+}
+
+/**
+ * release_existing_page_budget - release budget of an existing page.
+ * @c: UBIFS file-system description object
+ *
+ * This is a helper function which releases budget corresponding to the budget
+ * of changing one one page of data which already exists on the flash media.
+ */
+static void release_existing_page_budget(struct ubifs_info *c)
+{
+	struct ubifs_budget_req req = { .dd_growth = c->page_budget};
+
+	ubifs_release_budget(c, &req);
+}
+
+
 static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 			     loff_t pos, unsigned len, unsigned flags,
 			     struct page **pagep, void **fsdata)
@@ -267,7 +296,7 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		 * because we cannot as we are really going to mark it dirty in
 		 * the 'ubifs_write_end()' function.
 		 */
-		ubifs_release_new_page_budget(c);
+		release_new_page_budget(c);
 	else if (!PageChecked(page))
 		/*
 		 * The page is not new, which means we are changing the page
@@ -370,22 +399,6 @@ static int ubifs_readpage(struct file *file, struct page *page)
 	return 0;
 }
 
-/**
- * release_existing_page_budget - release budget of an existing page.
- * @c: UBIFS file-system description object
- *
- * This is a helper function which releases budget corresponding to the budget
- * of changing one one page of data which already exists on the flash media.
- *
- * This function was not moved to "budget.c" because there is only one user.
- */
-static void release_existing_page_budget(struct ubifs_info *c)
-{
-	struct ubifs_budget_req req = { .dd_growth = c->page_budget};
-
-	ubifs_release_budget(c, &req);
-}
-
 static int do_writepage(struct page *page, int len)
 {
 	int err = 0, i, blen;
@@ -428,7 +441,7 @@ static int do_writepage(struct page *page, int len)
 
 	ubifs_assert(PagePrivate(page));
 	if (PageChecked(page))
-		ubifs_release_new_page_budget(c);
+		release_new_page_budget(c);
 	else
 		release_existing_page_budget(c);
 
@@ -765,21 +778,16 @@ static void ubifs_invalidatepage(struct page *page, unsigned long offset)
 {
 	struct inode *inode = page->mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
-	struct ubifs_budget_req req;
 
 	ubifs_assert(PagePrivate(page));
 	if (offset)
 		/* Partial page remains dirty */
 		return;
 
-	memset(&req, 0, sizeof(struct ubifs_budget_req));
-	if (PageChecked(page)) {
-		req.new_page = 1;
-		req.idx_growth = -1;
-		req.data_growth = c->page_budget;
-	} else
-		req.dd_growth = c->page_budget;
-	ubifs_release_budget(c, &req);
+	if (PageChecked(page))
+		release_new_page_budget(c);
+	else
+		release_existing_page_budget(c);
 
 	atomic_long_dec(&c->dirty_pg_cnt);
 	ClearPagePrivate(page);
@@ -991,7 +999,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma, struct page *page)
 	}
 
 	if (PagePrivate(page))
-		ubifs_release_new_page_budget(c);
+		release_new_page_budget(c);
 	else {
 		if (!PageChecked(page))
 			ubifs_convert_page_budget(c);

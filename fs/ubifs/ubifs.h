@@ -781,6 +781,8 @@ struct ubifs_compressor {
  *
  * @fast: non-zero if the budgeting should try to aquire budget quickly and
  *        should not try to call write-back
+ * @recalculate: non-zero if @idx_growth, @data_growth, and @dd_growth fields
+ *               have to be re-calculated
  * @new_page: non-zero if the operation adds a new page
  * @dirtied_page: non-zero if the operation makes a page dirty
  * @new_dent: non-zero if the operation adds a new directory entry
@@ -806,6 +808,7 @@ struct ubifs_compressor {
  */
 struct ubifs_budget_req {
 	unsigned int fast:1;
+	unsigned int recalculate:1;
 	unsigned int new_page:1;
 	unsigned int dirtied_page:1;
 	unsigned int new_dent:1;
@@ -1423,7 +1426,6 @@ void ubifs_cancel_ino_op(struct ubifs_info *c, struct inode *inode,
 long long ubifs_budg_get_free_space(struct ubifs_info *c);
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c);
 void ubifs_convert_page_budget(struct ubifs_info *c);
-void ubifs_release_new_page_budget(struct ubifs_info *c);
 long long ubifs_calc_available(const struct ubifs_info *c, int min_idx_lebs);
 
 /* find.c */

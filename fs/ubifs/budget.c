@@ -604,18 +604,23 @@ void ubifs_release_budget(struct ubifs_info *c, struct ubifs_budget_req *req)
 {
 	ubifs_assert(req->dirtied_ino <= 4);
 	ubifs_assert(req->dirtied_ino_d <= UBIFS_MAX_INO_DATA * 4);
-	ubifs_assert(req->idx_growth == -1 || req->idx_growth >= 0);
-	ubifs_assert(req->data_growth >= 0);
-	ubifs_assert(req->dd_growth >= 0);
+	if (!req->recalculate) {
+		ubifs_assert(req->idx_growth >= 0);
+		ubifs_assert(req->data_growth >= 0);
+		ubifs_assert(req->dd_growth >= 0);
+	}
+
+	if (req->recalculate) {
+		req->data_growth = calc_data_growth(c, req);
+		req->dd_growth = calc_dd_growth(c, req);
+		req->idx_growth = calc_idx_growth(c, req);
+	}
 
 	if (!req->data_growth && !req->dd_growth)
 		return;
 
 	c->nospace = c->nospace_rp = 0;
 	smp_wmb();
-
-	if (req->idx_growth == -1)
-		req->idx_growth = calc_idx_growth(c, req);
 
 	spin_lock(&c->space_lock);
 	c->budg_idx_growth -= req->idx_growth;
@@ -651,22 +656,6 @@ void ubifs_convert_page_budget(struct ubifs_info *c)
 	/* And re-calculate the indexing space reservation */
 	c->min_idx_lebs = ubifs_calc_min_idx_lebs(c);
 	spin_unlock(&c->space_lock);
-}
-
-/**
- * ubifs_release_new_page_budget - release budget of a new page.
- * @c: UBIFS file-system description object
- *
- * This is a helper function which releases budget corresponding to the budget
- * of one new page of data.
- */
-void ubifs_release_new_page_budget(struct ubifs_info *c)
-{
-	struct ubifs_budget_req req = { .new_page = 1,
-					.idx_growth = -1,
-					.data_growth = c->page_budget };
-
-	ubifs_release_budget(c, &req);
 }
 
 /**
