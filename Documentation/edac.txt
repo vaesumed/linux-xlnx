@@ -280,7 +280,7 @@ Polling period control file:
 
 	The time period, in milliseconds, for polling for error information.
 	Too small a value wastes resources.  Too large a value might delay
-	necessary handling of errors and might loose valuable information for
+	necessary handling of errors and might lose valuable information for
 	locating the error.  1000 milliseconds (once each second) is the current
 	default. Systems which require all the bandwidth they can get, may
 	increase this.
