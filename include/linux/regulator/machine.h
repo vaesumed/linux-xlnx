@@ -84,9 +84,9 @@ struct regulation_constraints {
 	suspend_state_t initial_state; /* suspend state to set at init */
 
 	/* constriant flags */
-	u32 always_on:1;	/* regulator never off when system is on */
-	u32 boot_on:1;		/* bootloader/firmware enabled regulator */
-	u32 apply_uV:1;		/* apply uV constraint iff min == max */
+	unsigned always_on:1;	/* regulator never off when system is on */
+	unsigned boot_on:1;	/* bootloader/firmware enabled regulator */
+	unsigned apply_uV:1;	/* apply uV constraint iff min == max */
 };
 
 int regulator_set_supply(const char *regulator, const char *regulator_supply);
