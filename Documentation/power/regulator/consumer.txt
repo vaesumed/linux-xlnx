@@ -91,7 +91,7 @@ int regulator_get_voltage(regulator);
 NOTE: get_voltage() will return the configured output voltage whether the
 regulator is enabled or disabled and should NOT be used to determine regulator
 output state. However this can be used in conjunction with is_enabled() to
-determind the regulator physical output voltage.
+determine the regulator physical output voltage.
 
 
 4. Regulator Current Limit Control & Status (dynamic drivers)
