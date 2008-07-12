@@ -50,7 +50,6 @@
 
 unsigned int __VMALLOC_RESERVE = 128 << 20;
 
-unsigned long max_low_pfn_mapped;
 unsigned long max_pfn_mapped;
 
 DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
