@@ -335,27 +335,9 @@ EXPORT_SYMBOL(warn_on_slowpath);
  */
 void __stack_chk_fail(void)
 {
-	if (__stack_check_testing == (unsigned long)&__stack_chk_test_func) {
-		long delta;
-
-		delta = (unsigned long)__builtin_return_address(0) -
-				__stack_check_testing;
-		/*
-		 * The test needs to happen inside the test function, so
-		 * check if the return address is close to that function.
-		 * The function is only 2 dozen bytes long, but keep a wide
-		 * safety margin to avoid panic()s for normal users regardless
-		 * of the quality of the compiler.
-		 */
-		if (delta >= 0 && delta <= 400) {
-			__stack_check_testing = 0;
-			return;
-		}
-	}
 	panic("stack-protector: Kernel stack is corrupted in: %p\n",
 		__builtin_return_address(0));
 }
 EXPORT_SYMBOL(__stack_chk_fail);
 
-late_initcall(__stack_chk_test);
 #endif
