@@ -329,35 +329,6 @@ EXPORT_SYMBOL(warn_on_slowpath);
 #warning You have selected the CONFIG_CC_STACKPROTECTOR option, but the gcc used does not support this.
 #endif
 
-static unsigned long __stack_check_testing;
-
-/*
- * Self test function for the stack-protector feature.
- * This test requires that the local variable absolutely has
- * a stack slot.
- */
-static noinline void __stack_chk_test_func(void)
-{
-	unsigned long dummy_buffer[64]; /* force gcc to use the canary */
-
-	current->stack_canary = ~current->stack_canary;
-	refresh_stack_canary();
-	dummy_buffer[3] = 1; /* fool gcc into keeping the variable */
-}
-
-static int __stack_chk_test(void)
-{
-	printk(KERN_INFO "Testing -fstack-protector-all feature\n");
-	__stack_check_testing = (unsigned long)&__stack_chk_test_func;
-	__stack_chk_test_func();
-	if (__stack_check_testing) {
-		printk(KERN_ERR "-fstack-protector-all test failed\n");
-		WARN_ON(1);
-	};
-	current->stack_canary = ~current->stack_canary;
-	refresh_stack_canary();
-	return 0;
-}
 /*
  * Called when gcc's -fstack-protector feature is used, and
  * gcc detects corruption of the on-stack canary value
