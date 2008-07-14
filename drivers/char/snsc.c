@@ -161,7 +161,7 @@ scdrv_read(struct file *file, char __user *buf, size_t count, loff_t *f_pos)
 	struct subch_data_s *sd = (struct subch_data_s *) file->private_data;
 
 	/* try to get control of the read buffer */
-	if (down_trylock(&sd->sd_rbs)) {
+	if (!down_try(&sd->sd_rbs)) {
 		/* somebody else has it now;
 		 * if we're non-blocking, then exit...
 		 */
@@ -253,7 +253,7 @@ scdrv_write(struct file *file, const char __user *buf,
 	struct subch_data_s *sd = (struct subch_data_s *) file->private_data;
 
 	/* try to get control of the write buffer */
-	if (down_trylock(&sd->sd_wbs)) {
+	if (!down_try(&sd->sd_wbs)) {
 		/* somebody else has it now;
 		 * if we're non-blocking, then exit...
 		 */
