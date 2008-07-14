@@ -43,7 +43,6 @@
 #define I2C_DRIVERID_TDA9850	20	/* audio mixer			*/
 #define I2C_DRIVERID_TDA9855	21	/* audio mixer			*/
 #define I2C_DRIVERID_SAA7110	22	/* video decoder		*/
-#define I2C_DRIVERID_MGATVO	23	/* Matrox TVOut			*/
 #define I2C_DRIVERID_SAA5249	24	/* SAA5249 and compatibles	*/
 #define I2C_DRIVERID_PCF8583	25	/* real time clock		*/
 #define I2C_DRIVERID_SAB3036	26	/* SAB3036 tuner		*/
@@ -91,8 +90,6 @@
 #define I2C_DRIVERID_M52790 	95      /* Mitsubishi M52790SP/FP AV switch */
 #define I2C_DRIVERID_CS5345	96	/* cs5345 audio processor	*/
 
-#define I2C_DRIVERID_I2CDEV	900
-
 #define I2C_DRIVERID_OV7670 1048	/* Omnivision 7670 camera */
 
 /*
@@ -104,14 +101,12 @@
 #define I2C_HW_B_BT848		0x010005 /* BT848 video boards */
 #define I2C_HW_B_VIA		0x010007 /* Via vt82c586b */
 #define I2C_HW_B_HYDRA		0x010008 /* Apple Hydra Mac I/O */
-#define I2C_HW_B_G400		0x010009 /* Matrox G400 */
 #define I2C_HW_B_I810		0x01000a /* Intel I810 */
 #define I2C_HW_B_VOO		0x01000b /* 3dfx Voodoo 3 / Banshee */
 #define I2C_HW_B_SCX200		0x01000e /* Nat'l Semi SCx200 I2C */
 #define I2C_HW_B_RIVA		0x010010 /* Riva based graphics cards */
 #define I2C_HW_B_IOC		0x010011 /* IOC bit-wiggling */
 #define I2C_HW_B_IXP2000	0x010016 /* GPIO on IXP2000 systems */
-#define I2C_HW_B_S3VIA		0x010018 /* S3Via ProSavage adapter */
 #define I2C_HW_B_ZR36067	0x010019 /* Zoran-36057/36067 based boards */
 #define I2C_HW_B_PCILYNX	0x01001a /* TI PCILynx I2C adapter */
 #define I2C_HW_B_CX2388x	0x01001b /* connexant 2388x based tv cards */
