@@ -2271,4 +2271,18 @@ int dbg_is_mapped(struct ubi_volume_desc *desc, int lnum)
 	return ubi_is_mapped(desc, lnum);
 }
 
+int dbg_leb_map(struct ubi_volume_desc *desc, int lnum, int dtype)
+{
+	int err;
+
+	if (do_fail(desc, lnum, 0))
+		return -EIO;
+	err = ubi_leb_map(desc, lnum, dtype);
+	if (err)
+		return err;
+	if (do_fail(desc, lnum, 0))
+		return -EIO;
+	return 0;
+}
+
 #endif /* CONFIG_UBIFS_FS_DEBUG */

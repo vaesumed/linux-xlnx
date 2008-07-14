@@ -293,6 +293,7 @@ void dbg_failure_mode_deregistration(struct ubifs_info *c);
 #define ubi_leb_erase  dbg_leb_erase
 #define ubi_leb_unmap  dbg_leb_unmap
 #define ubi_is_mapped  dbg_is_mapped
+#define ubi_leb_map    dbg_leb_map
 
 #endif
 
@@ -305,6 +306,7 @@ int dbg_leb_change(struct ubi_volume_desc *desc, int lnum, const void *buf,
 int dbg_leb_erase(struct ubi_volume_desc *desc, int lnum);
 int dbg_leb_unmap(struct ubi_volume_desc *desc, int lnum);
 int dbg_is_mapped(struct ubi_volume_desc *desc, int lnum);
+int dbg_leb_map(struct ubi_volume_desc *desc, int lnum, int dtype);
 
 static inline int dbg_read(struct ubi_volume_desc *desc, int lnum, char *buf,
 			   int offset, int len)
