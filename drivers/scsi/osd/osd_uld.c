@@ -127,7 +127,7 @@ static long osd_uld_ioctl(struct file *file, unsigned int cmd,
 	switch (cmd) {
 	case OSD_TEST_ALL:
 		OSD_DEBUG("Kernel test %d: osd_uld_device=%p\n", cmd, oud);
-		ret = 0;
+		ret = do_test_17(&oud->od);
 		break;
 	default:
 		OSD_ERR("Unknown osd_uld_ioctl %d\n", cmd);
