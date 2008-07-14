@@ -1476,25 +1476,32 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
  * @xatt_cnt: count of extended attributes
  * @references: how many directory/xattr entries refer this inode (calculated
  *              while walking the index)
- * @calc_cnt: for directory inode count of child directories, for regular files
- *            count of extended attributes
+ * @calc_cnt: for directory inode count of child directories
  * @size: inode size (read from on-flash inode)
  * @xattr_sz: summary size of all extended attributes (read from on-flash
  *            inode)
- * @calc_sz: for directories calculated directory size, for regular files
- *           calculated summary size of all extended attributes
+ * @calc_sz: for directories calculated directory size
+ * @calc_xcnt: count of extended attributes
+ * @calc_xsz: calculated summary size of all extended attributes
+ * @xattr_nms: sum of lengths of all extended attribute names belonging to this
+ *             inode (read from on-flash inode)
+ * @calc_xnms: calculated sum of lengths of all extended attribute names
  */
 struct fsck_inode {
 	struct rb_node rb;
 	ino_t inum;
 	umode_t mode;
 	unsigned int nlink;
-	int xattr_cnt;
+	unsigned int xattr_cnt;
 	int references;
 	int calc_cnt;
 	long long size;
-	long long xattr_sz;
+	unsigned int xattr_sz;
 	long long calc_sz;
+	long long calc_xcnt;
+	long long calc_xsz;
+	unsigned int xattr_nms;
+	long long calc_xnms;
 };
 
 /**
@@ -1550,6 +1557,7 @@ static struct fsck_inode *add_inode(struct ubifs_info *c,
 	fscki->size = le64_to_cpu(ino->size);
 	fscki->xattr_cnt = le32_to_cpu(ino->xattr_cnt);
 	fscki->xattr_sz = le32_to_cpu(ino->xattr_size);
+	fscki->xattr_nms = le32_to_cpu(ino->xattr_names);
 	fscki->mode = le32_to_cpu(ino->mode);
 	if (S_ISDIR(fscki->mode)) {
 		fscki->calc_sz = UBIFS_INO_NODE_SZ;
@@ -1784,9 +1792,10 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 
 		nlen = le16_to_cpu(dent->nlen);
 		if (type == UBIFS_XENT_KEY) {
-			fscki1->calc_cnt += 1;
-			fscki1->calc_sz += CALC_DENT_SIZE(nlen);
-			fscki1->calc_sz += CALC_XATTR_BYTES(fscki->size);
+			fscki1->calc_xcnt += 1;
+			fscki1->calc_xsz += CALC_DENT_SIZE(nlen);
+			fscki1->calc_xsz += CALC_XATTR_BYTES(fscki->size);
+			fscki1->calc_xnms += nlen;
 		} else {
 			fscki1->calc_sz += CALC_DENT_SIZE(nlen);
 			if (dent->type == UBIFS_ITYPE_DIR)
@@ -1900,19 +1909,26 @@ static int check_inodes(struct ubifs_info *c, struct fsck_data *fsckd)
 					  fscki->nlink, fscki->references);
 				goto out_dump;
 			}
-			if (fscki->xattr_sz != fscki->calc_sz) {
-				ubifs_err("inode %lu has xattr size %lld, but "
-					  "calculated size is %lld",
-					  fscki->inum, fscki->xattr_sz,
-					  fscki->calc_sz);
-				goto out_dump;
-			}
-			if (fscki->xattr_cnt != fscki->calc_cnt) {
-				ubifs_err("inode %lu has %d xattrs, but "
-					  "calculated count is %d", fscki->inum,
-					  fscki->xattr_cnt, fscki->calc_cnt);
-				goto out_dump;
-			}
+		}
+		if (fscki->xattr_sz != fscki->calc_xsz) {
+			ubifs_err("inode %lu has xattr size %u, but "
+				  "calculated size is %lld",
+				  fscki->inum, fscki->xattr_sz,
+				  fscki->calc_xsz);
+			goto out_dump;
+		}
+		if (fscki->xattr_cnt != fscki->calc_xcnt) {
+			ubifs_err("inode %lu has %u xattrs, but "
+				  "calculated count is %lld", fscki->inum,
+				  fscki->xattr_cnt, fscki->calc_xcnt);
+			goto out_dump;
+		}
+		if (fscki->xattr_nms != fscki->calc_xnms) {
+			ubifs_err("inode %lu has xattr names' size %u, but "
+				  "calculated names' size is %lld",
+				  fscki->inum, fscki->xattr_nms,
+				  fscki->calc_xnms);
+			goto out_dump;
 		}
 	}
 
