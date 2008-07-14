@@ -227,9 +227,9 @@ static void piix_dma_clear_irq(ide_drive_t *drive)
 	u8 dma_stat;
 
 	/* clear the INTR & ERROR bits */
-	dma_stat = inb(hwif->dma_status);
+	dma_stat = inb(hwif->dma_base + ATA_DMA_STATUS);
 	/* Should we force the bit as well ? */
-	outb(dma_stat, hwif->dma_status);
+	outb(dma_stat, hwif->dma_base + ATA_DMA_STATUS);
 }
 
 struct ich_laptop {
@@ -394,7 +394,7 @@ static const struct ide_port_info piix_pci_info[] __devinitdata = {
  
 static int __devinit piix_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	return ide_setup_pci_device(dev, &piix_pci_info[id->driver_data]);
+	return ide_pci_init_one(dev, &piix_pci_info[id->driver_data], NULL);
 }
 
 /**
@@ -462,6 +462,7 @@ static struct pci_driver driver = {
 	.name		= "PIIX_IDE",
 	.id_table	= piix_pci_tbl,
 	.probe		= piix_init_one,
+	.remove		= ide_pci_remove,
 };
 
 static int __init piix_ide_init(void)
@@ -470,7 +471,13 @@ static int __init piix_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit piix_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(piix_ide_init);
+module_exit(piix_ide_exit);
 
 MODULE_AUTHOR("Andre Hedrick, Andrzej Krzysztofowicz");
 MODULE_DESCRIPTION("PCI driver module for Intel PIIX IDE");

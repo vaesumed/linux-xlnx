@@ -620,7 +620,8 @@ static u8 hpt3xx_udma_filter(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
-	struct hpt_info *info	= pci_get_drvdata(dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 	u8 mask 		= hwif->ultra_mask;
 
 	switch (info->chip_type) {
@@ -660,7 +661,8 @@ static u8 hpt3xx_mdma_filter(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
-	struct hpt_info *info	= pci_get_drvdata(dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 
 	switch (info->chip_type) {
 	case HPT372 :
@@ -694,8 +696,10 @@ static u32 get_speed_setting(u8 speed, struct hpt_info *info)
 
 static void hpt3xx_set_mode(ide_drive_t *drive, const u8 speed)
 {
-	struct pci_dev  *dev	= to_pci_dev(drive->hwif->dev);
-	struct hpt_info	*info	= pci_get_drvdata(dev);
+	ide_hwif_t *hwif	= drive->hwif;
+	struct pci_dev *dev	= to_pci_dev(hwif->dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 	struct hpt_timings *t	= info->timings;
 	u8  itr_addr		= 0x40 + (drive->dn * 4);
 	u32 old_itr		= 0;
@@ -738,7 +742,8 @@ static void hpt3xx_maskproc(ide_drive_t *drive, int mask)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev	*dev	= to_pci_dev(hwif->dev);
-	struct hpt_info *info	= pci_get_drvdata(dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 
 	if (drive->quirk_list) {
 		if (info->chip_type >= HPT370) {
@@ -759,8 +764,7 @@ static void hpt3xx_maskproc(ide_drive_t *drive, int mask)
 				enable_irq (hwif->irq);
 		}
 	} else
-		outb(mask ? (drive->ctl | 2) : (drive->ctl & ~2),
-		     hwif->io_ports.ctl_addr);
+		outb(ATA_DEVCTL_OBS | (mask ? 2 : 0), hwif->io_ports.ctl_addr);
 }
 
 /*
@@ -802,9 +806,9 @@ static void hpt370_irq_timeout(ide_drive_t *drive)
 	printk(KERN_DEBUG "%s: %d bytes in FIFO\n", drive->name, bfifo & 0x1ff);
 
 	/* get DMA command mode */
-	dma_cmd = inb(hwif->dma_command);
+	dma_cmd = inb(hwif->dma_base + ATA_DMA_CMD);
 	/* stop DMA */
-	outb(dma_cmd & ~0x1, hwif->dma_command);
+	outb(dma_cmd & ~0x1, hwif->dma_base + ATA_DMA_CMD);
 	hpt370_clear_engine(drive);
 }
 
@@ -819,12 +823,12 @@ static void hpt370_dma_start(ide_drive_t *drive)
 static int hpt370_dma_end(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
-	u8  dma_stat		= inb(hwif->dma_status);
+	u8  dma_stat		= inb(hwif->dma_base + ATA_DMA_STATUS);
 
 	if (dma_stat & 0x01) {
 		/* wait a little */
 		udelay(20);
-		dma_stat = inb(hwif->dma_status);
+		dma_stat = inb(hwif->dma_base + ATA_DMA_STATUS);
 		if (dma_stat & 0x01)
 			hpt370_irq_timeout(drive);
 	}
@@ -851,7 +855,7 @@ static int hpt374_dma_test_irq(ide_drive_t *drive)
 		return 0;
 	}
 
-	dma_stat = inb(hwif->dma_status);
+	dma_stat = inb(hwif->dma_base + ATA_DMA_STATUS);
 	/* return 1 if INTR asserted */
 	if (dma_stat & 4)
 		return 1;
@@ -966,22 +970,13 @@ static int __devinit hpt37x_calibrate_dpll(struct pci_dev *dev, u16 f_low, u16 f
 
 static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev, const char *name)
 {
-	struct hpt_info *info	= kmalloc(sizeof(struct hpt_info), GFP_KERNEL);
 	unsigned long io_base	= pci_resource_start(dev, 4);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (&dev->dev == host->dev[1]);
 	u8 pci_clk,  dpll_clk	= 0;	/* PCI and DPLL clock in MHz */
 	u8 chip_type;
 	enum ata_clock	clock;
 
-	if (info == NULL) {
-		printk(KERN_ERR "%s: out of memory!\n", name);
-		return -ENOMEM;
-	}
-
-	/*
-	 * Copy everything from a static "template" structure
-	 * to just allocated per-chip hpt_info structure.
-	 */
-	memcpy(info, pci_get_drvdata(dev), sizeof(struct hpt_info));
 	chip_type = info->chip_type;
 
 	pci_write_config_byte(dev, PCI_CACHE_LINE_SIZE, (L1_CACHE_BYTES / 4));
@@ -1143,7 +1138,6 @@ static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev, const cha
 
 		if (info->timings->clock_table[clock] == NULL) {
 			printk(KERN_ERR "%s: unknown bus timing!\n", name);
-			kfree(info);
 			return -EIO;
 		}
 
@@ -1170,7 +1164,6 @@ static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev, const cha
 		}
 		if (adjust == 8) {
 			printk(KERN_ERR "%s: DPLL did not stabilize!\n", name);
-			kfree(info);
 			return -EIO;
 		}
 
@@ -1186,9 +1179,6 @@ static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev, const cha
 	info->dpll_clk	= dpll_clk;
 	info->pci_clk	= pci_clk;
 	info->clock	= clock;
-
-	/* Point to this chip's own instance of the hpt_info structure. */
-	pci_set_drvdata(dev, info);
 
 	if (chip_type >= HPT370) {
 		u8  mcr1, mcr4;
@@ -1219,7 +1209,8 @@ static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev, const cha
 static u8 __devinit hpt3xx_cable_detect(ide_hwif_t *hwif)
 {
 	struct pci_dev	*dev	= to_pci_dev(hwif->dev);
-	struct hpt_info *info	= pci_get_drvdata(dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 	u8 chip_type		= info->chip_type;
 	u8 scr1 = 0, ata66	= hwif->channel ? 0x01 : 0x02;
 
@@ -1263,7 +1254,8 @@ static u8 __devinit hpt3xx_cable_detect(ide_hwif_t *hwif)
 static void __devinit init_hwif_hpt366(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
-	struct hpt_info *info	= pci_get_drvdata(dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 	int serialize		= HPT_SERIALIZE_IO;
 	u8  chip_type		= info->chip_type;
 	u8  new_mcr, old_mcr	= 0;
@@ -1321,7 +1313,15 @@ static int __devinit init_dma_hpt366(ide_hwif_t *hwif,
 	unsigned long flags, base = ide_pci_dma_base(hwif, d);
 	u8 dma_old, dma_new, masterdma = 0, slavedma = 0;
 
-	if (base == 0 || ide_pci_set_master(dev, d->name) < 0)
+	if (base == 0)
+		return -1;
+
+	hwif->dma_base = base;
+
+	if (ide_pci_check_simplex(hwif, d) < 0)
+		return -1;
+
+	if (ide_pci_set_master(dev, d->name) < 0)
 		return -1;
 
 	dma_old = inb(base + 2);
@@ -1347,7 +1347,7 @@ static int __devinit init_dma_hpt366(ide_hwif_t *hwif,
 	if (ide_allocate_dma_engine(hwif))
 		return -1;
 
-	ide_setup_dma(hwif, base);
+	hwif->dma_ops = &sff_dma_ops;
 
 	return 0;
 }
@@ -1402,7 +1402,6 @@ static int __devinit hpt36x_init(struct pci_dev *dev, struct pci_dev *dev2)
 
 #define IDE_HFLAGS_HPT3XX \
 	(IDE_HFLAG_NO_ATAPI_DMA | \
-	 IDE_HFLAG_ABUSE_SET_DMA_MODE | \
 	 IDE_HFLAG_OFF_BOARD)
 
 static const struct ide_port_ops hpt3xx_port_ops = {
@@ -1536,10 +1535,12 @@ static const struct ide_port_info hpt366_chipsets[] __devinitdata = {
 static int __devinit hpt366_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
 	const struct hpt_info *info = NULL;
+	struct hpt_info *dyn_info;
 	struct pci_dev *dev2 = NULL;
 	struct ide_port_info d;
 	u8 idx = id->driver_data;
 	u8 rev = dev->revision;
+	int ret;
 
 	if ((idx == 0 || idx == 4) && (PCI_FUNC(dev->devfn) & 1))
 		return -ENODEV;
@@ -1585,15 +1586,24 @@ static int __devinit hpt366_init_one(struct pci_dev *dev, const struct pci_devic
 	if (info == &hpt370 || info == &hpt370a)
 		d.dma_ops = &hpt370_dma_ops;
 
-	pci_set_drvdata(dev, (void *)info);
-
 	if (info == &hpt36x || info == &hpt374)
 		dev2 = pci_get_slot(dev->bus, dev->devfn + 1);
 
-	if (dev2) {
-		int ret;
+	dyn_info = kzalloc(sizeof(*dyn_info) * (dev2 ? 2 : 1), GFP_KERNEL);
+	if (dyn_info == NULL) {
+		printk(KERN_ERR "%s: out of memory!\n", d.name);
+		pci_dev_put(dev2);
+		return -ENOMEM;
+	}
 
-		pci_set_drvdata(dev2, (void *)info);
+	/*
+	 * Copy everything from a static "template" structure
+	 * to just allocated per-chip hpt_info structure.
+	 */
+	memcpy(dyn_info, info, sizeof(*dyn_info));
+
+	if (dev2) {
+		memcpy(dyn_info + 1, info, sizeof(*dyn_info));
 
 		if (info == &hpt374)
 			hpt374_init(dev, dev2);
@@ -1602,13 +1612,30 @@ static int __devinit hpt366_init_one(struct pci_dev *dev, const struct pci_devic
 				d.host_flags &= ~IDE_HFLAG_NON_BOOTABLE;
 		}
 
-		ret = ide_setup_pci_devices(dev, dev2, &d);
-		if (ret < 0)
+		ret = ide_pci_init_two(dev, dev2, &d, dyn_info);
+		if (ret < 0) {
 			pci_dev_put(dev2);
+			kfree(dyn_info);
+		}
 		return ret;
 	}
 
-	return ide_setup_pci_device(dev, &d);
+	ret = ide_pci_init_one(dev, &d, dyn_info);
+	if (ret < 0)
+		kfree(dyn_info);
+
+	return ret;
+}
+
+static void __devexit hpt366_remove(struct pci_dev *dev)
+{
+	struct ide_host *host = pci_get_drvdata(dev);
+	struct ide_info *info = host->host_priv;
+	struct pci_dev *dev2 = host->dev[1] ? to_pci_dev(host->dev[1]) : NULL;
+
+	ide_pci_remove(dev);
+	pci_dev_put(dev2);
+	kfree(info);
 }
 
 static const struct pci_device_id hpt366_pci_tbl[] __devinitconst = {
@@ -1626,6 +1653,7 @@ static struct pci_driver driver = {
 	.name		= "HPT366_IDE",
 	.id_table	= hpt366_pci_tbl,
 	.probe		= hpt366_init_one,
+	.remove		= hpt366_remove,
 };
 
 static int __init hpt366_ide_init(void)
@@ -1633,7 +1661,13 @@ static int __init hpt366_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit hpt366_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(hpt366_ide_init);
+module_exit(hpt366_ide_exit);
 
 MODULE_AUTHOR("Andre Hedrick");
 MODULE_DESCRIPTION("PCI driver module for Highpoint HPT366 IDE");

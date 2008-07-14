@@ -59,10 +59,6 @@ static const struct chipset_bus_clock_list_entry aec6xxx_34_base [] = {
 	{	0,		0x00,	0x00	}
 };
 
-#define BUSCLOCK(D)	\
-	((struct chipset_bus_clock_list_entry *) pci_get_drvdata((D)))
-
-
 /*
  * TO DO: active tuning and correction of cards without a bios.
  */
@@ -88,6 +84,8 @@ static void aec6210_set_mode(ide_drive_t *drive, const u8 speed)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct chipset_bus_clock_list_entry *bus_clock = host->host_priv;
 	u16 d_conf		= 0;
 	u8 ultra = 0, ultra_conf = 0;
 	u8 tmp0 = 0, tmp1 = 0, tmp2 = 0;
@@ -96,7 +94,7 @@ static void aec6210_set_mode(ide_drive_t *drive, const u8 speed)
 	local_irq_save(flags);
 	/* 0x40|(2*drive->dn): Active, 0x41|(2*drive->dn): Recovery */
 	pci_read_config_word(dev, 0x40|(2*drive->dn), &d_conf);
-	tmp0 = pci_bus_clock_list(speed, BUSCLOCK(dev));
+	tmp0 = pci_bus_clock_list(speed, bus_clock);
 	d_conf = ((tmp0 & 0xf0) << 4) | (tmp0 & 0xf);
 	pci_write_config_word(dev, 0x40|(2*drive->dn), d_conf);
 
@@ -104,7 +102,7 @@ static void aec6210_set_mode(ide_drive_t *drive, const u8 speed)
 	tmp2 = 0x00;
 	pci_read_config_byte(dev, 0x54, &ultra);
 	tmp1 = ((0x00 << (2*drive->dn)) | (ultra & ~(3 << (2*drive->dn))));
-	ultra_conf = pci_bus_clock_list_ultra(speed, BUSCLOCK(dev));
+	ultra_conf = pci_bus_clock_list_ultra(speed, bus_clock);
 	tmp2 = ((ultra_conf << (2*drive->dn)) | (tmp1 & ~(3 << (2*drive->dn))));
 	pci_write_config_byte(dev, 0x54, tmp2);
 	local_irq_restore(flags);
@@ -114,6 +112,8 @@ static void aec6260_set_mode(ide_drive_t *drive, const u8 speed)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct chipset_bus_clock_list_entry *bus_clock = host->host_priv;
 	u8 unit		= (drive->select.b.unit & 0x01);
 	u8 tmp1 = 0, tmp2 = 0;
 	u8 ultra = 0, drive_conf = 0, ultra_conf = 0;
@@ -122,12 +122,12 @@ static void aec6260_set_mode(ide_drive_t *drive, const u8 speed)
 	local_irq_save(flags);
 	/* high 4-bits: Active, low 4-bits: Recovery */
 	pci_read_config_byte(dev, 0x40|drive->dn, &drive_conf);
-	drive_conf = pci_bus_clock_list(speed, BUSCLOCK(dev));
+	drive_conf = pci_bus_clock_list(speed, bus_clock);
 	pci_write_config_byte(dev, 0x40|drive->dn, drive_conf);
 
 	pci_read_config_byte(dev, (0x44|hwif->channel), &ultra);
 	tmp1 = ((0x00 << (4*unit)) | (ultra & ~(7 << (4*unit))));
-	ultra_conf = pci_bus_clock_list_ultra(speed, BUSCLOCK(dev));
+	ultra_conf = pci_bus_clock_list_ultra(speed, bus_clock);
 	tmp2 = ((ultra_conf << (4*unit)) | (tmp1 & ~(7 << (4*unit))));
 	pci_write_config_byte(dev, (0x44|hwif->channel), tmp2);
 	local_irq_restore(flags);
@@ -140,13 +140,6 @@ static void aec_set_pio_mode(ide_drive_t *drive, const u8 pio)
 
 static unsigned int __devinit init_chipset_aec62xx(struct pci_dev *dev, const char *name)
 {
-	int bus_speed = ide_pci_clk ? ide_pci_clk : system_bus_clock();
-
-	if (bus_speed <= 33)
-		pci_set_drvdata(dev, (void *) aec6xxx_33_base);
-	else
-		pci_set_drvdata(dev, (void *) aec6xxx_34_base);
-
 	/* These are necessary to get AEC6280 Macintosh cards to work */
 	if ((dev->device == PCI_DEVICE_ID_ARTOP_ATP865) ||
 	    (dev->device == PCI_DEVICE_ID_ARTOP_ATP865R)) {
@@ -195,7 +188,6 @@ static const struct ide_port_info aec62xx_chipsets[] __devinitdata = {
 		.host_flags	= IDE_HFLAG_SERIALIZE |
 				  IDE_HFLAG_NO_ATAPI_DMA |
 				  IDE_HFLAG_NO_DSC |
-				  IDE_HFLAG_ABUSE_SET_DMA_MODE |
 				  IDE_HFLAG_OFF_BOARD,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -205,7 +197,6 @@ static const struct ide_port_info aec62xx_chipsets[] __devinitdata = {
 		.init_chipset	= init_chipset_aec62xx,
 		.port_ops	= &atp86x_port_ops,
 		.host_flags	= IDE_HFLAG_NO_ATAPI_DMA | IDE_HFLAG_NO_AUTODMA |
-				  IDE_HFLAG_ABUSE_SET_DMA_MODE |
 				  IDE_HFLAG_OFF_BOARD,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -216,7 +207,6 @@ static const struct ide_port_info aec62xx_chipsets[] __devinitdata = {
 		.enablebits	= {{0x4a,0x02,0x02}, {0x4a,0x04,0x04}},
 		.port_ops	= &atp86x_port_ops,
 		.host_flags	= IDE_HFLAG_NO_ATAPI_DMA |
-				  IDE_HFLAG_ABUSE_SET_DMA_MODE |
 				  IDE_HFLAG_NON_BOOTABLE,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -226,7 +216,6 @@ static const struct ide_port_info aec62xx_chipsets[] __devinitdata = {
 		.init_chipset	= init_chipset_aec62xx,
 		.port_ops	= &atp86x_port_ops,
 		.host_flags	= IDE_HFLAG_NO_ATAPI_DMA |
-				  IDE_HFLAG_ABUSE_SET_DMA_MODE |
 				  IDE_HFLAG_OFF_BOARD,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -237,7 +226,6 @@ static const struct ide_port_info aec62xx_chipsets[] __devinitdata = {
 		.enablebits	= {{0x4a,0x02,0x02}, {0x4a,0x04,0x04}},
 		.port_ops	= &atp86x_port_ops,
 		.host_flags	= IDE_HFLAG_NO_ATAPI_DMA |
-				  IDE_HFLAG_ABUSE_SET_DMA_MODE |
 				  IDE_HFLAG_OFF_BOARD,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
@@ -259,9 +247,16 @@ static const struct ide_port_info aec62xx_chipsets[] __devinitdata = {
 
 static int __devinit aec62xx_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
+	const struct chipset_bus_clock_list_entry *bus_clock;
 	struct ide_port_info d;
 	u8 idx = id->driver_data;
+	int bus_speed = ide_pci_clk ? ide_pci_clk : 33;
 	int err;
+
+	if (bus_speed <= 33)
+		bus_clock = aec6xxx_33_base;
+	else
+		bus_clock = aec6xxx_34_base;
 
 	err = pci_enable_device(dev);
 	if (err)
@@ -278,11 +273,17 @@ static int __devinit aec62xx_init_one(struct pci_dev *dev, const struct pci_devi
 		}
 	}
 
-	err = ide_setup_pci_device(dev, &d);
+	err = ide_pci_init_one(dev, &d, (void *)bus_clock);
 	if (err)
 		pci_disable_device(dev);
 
 	return err;
+}
+
+static void __devexit aec62xx_remove(struct pci_dev *dev)
+{
+	ide_pci_remove(dev);
+	pci_disable_device(dev);
 }
 
 static const struct pci_device_id aec62xx_pci_tbl[] = {
@@ -299,6 +300,7 @@ static struct pci_driver driver = {
 	.name		= "AEC62xx_IDE",
 	.id_table	= aec62xx_pci_tbl,
 	.probe		= aec62xx_init_one,
+	.remove		= aec62xx_remove,
 };
 
 static int __init aec62xx_ide_init(void)
@@ -306,7 +308,13 @@ static int __init aec62xx_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit aec62xx_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(aec62xx_ide_init);
+module_exit(aec62xx_ide_exit);
 
 MODULE_AUTHOR("Andre Hedrick");
 MODULE_DESCRIPTION("PCI driver module for ARTOP AEC62xx IDE");

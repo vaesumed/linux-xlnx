@@ -167,7 +167,7 @@ static const struct ide_port_info atiixp_pci_info[] __devinitdata = {
 
 static int __devinit atiixp_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	return ide_setup_pci_device(dev, &atiixp_pci_info[id->driver_data]);
+	return ide_pci_init_one(dev, &atiixp_pci_info[id->driver_data], NULL);
 }
 
 static const struct pci_device_id atiixp_pci_tbl[] = {
@@ -184,6 +184,7 @@ static struct pci_driver driver = {
 	.name		= "ATIIXP_IDE",
 	.id_table	= atiixp_pci_tbl,
 	.probe		= atiixp_init_one,
+	.remove		= ide_pci_remove,
 };
 
 static int __init atiixp_ide_init(void)
@@ -191,7 +192,13 @@ static int __init atiixp_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit atiixp_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(atiixp_ide_init);
+module_exit(atiixp_ide_exit);
 
 MODULE_AUTHOR("HUI YU");
 MODULE_DESCRIPTION("PCI driver module for ATI IXP IDE");
