@@ -27,7 +27,6 @@ else
 acenic-objs := acenic/tg1.bin acenic/tg2.bin
 endif
 fw-shipped-$(CONFIG_ACENIC) += $(acenic-objs)
-fw-shipped-$(CONFIG_ATARI_DSP56K) += dsp56k/bootstrap.bin
 fw-shipped-$(CONFIG_ATM_AMBASSADOR) += atmsar11.fw
 fw-shipped-$(CONFIG_COMPUTONE) += intelliport2.bin
 fw-shipped-$(CONFIG_DVB_AV7110) += av7110/bootcode.bin
@@ -72,7 +71,6 @@ endif
 fw-shipped-$(CONFIG_USB_SERIAL_TI) += ti_3410.fw ti_5052.fw
 fw-shipped-$(CONFIG_USB_SERIAL_EDGEPORT) += edgeport/boot.fw edgeport/boot2.fw \
 					    edgeport/down.fw edgeport/down2.fw
-fw-shipped-$(CONFIG_USB_SERIAL_EDGEPORT_TI) += edgeport/down3.bin
 fw-shipped-$(CONFIG_USB_SERIAL_WHITEHEAT) += whiteheat_loader.fw whiteheat.fw \
 					   # whiteheat_loader_debug.fw
 fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_PDA) += keyspan_pda/keyspan_pda.fw
