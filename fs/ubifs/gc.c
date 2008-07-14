@@ -596,8 +596,10 @@ int ubifs_garbage_collect(struct ubifs_info *c, int anyway)
 	err = ubifs_wbuf_sync_nolock(wbuf);
 	if (!err)
 		err = ubifs_leb_unmap(c, c->gc_lnum);
-	if (err)
+	if (err) {
 		ret = err;
+		goto out;
+	}
 out_unlock:
 	mutex_unlock(&wbuf->io_mutex);
 	return ret;
@@ -605,6 +607,7 @@ out_unlock:
 out:
 	ubifs_assert(ret < 0);
 	ubifs_assert(ret != -ENOSPC && ret != -EAGAIN);
+	ubifs_ro_mode(c, ret);
 	ubifs_wbuf_sync_nolock(wbuf);
 	mutex_unlock(&wbuf->io_mutex);
 	ubifs_return_leb(c, lp.lnum);
