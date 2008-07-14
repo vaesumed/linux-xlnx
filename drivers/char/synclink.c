@@ -2894,9 +2894,9 @@ static int tiocmset(struct tty_struct *tty, struct file *file,
  *
  * Arguments:		tty		pointer to tty instance data
  *			break_state	-1=set break condition, 0=clear
- * Return Value:	None
+ * Return Value:	error code
  */
-static void mgsl_break(struct tty_struct *tty, int break_state)
+static int mgsl_break(struct tty_struct *tty, int break_state)
 {
 	struct mgsl_struct * info = (struct mgsl_struct *)tty->driver_data;
 	unsigned long flags;
@@ -2906,7 +2906,7 @@ static void mgsl_break(struct tty_struct *tty, int break_state)
 			 __FILE__,__LINE__, info->device_name, break_state);
 			 
 	if (mgsl_paranoia_check(info, tty->name, "mgsl_break"))
-		return;
+		return -EINVAL;
 
 	spin_lock_irqsave(&info->irq_spinlock,flags);
  	if (break_state == -1)
@@ -2914,6 +2914,7 @@ static void mgsl_break(struct tty_struct *tty, int break_state)
 	else 
 		usc_OutReg(info,IOCR,(u16)(usc_InReg(info,IOCR) & ~BIT7));
 	spin_unlock_irqrestore(&info->irq_spinlock,flags);
+	return 0;
 	
 }	/* end of mgsl_break() */
 
