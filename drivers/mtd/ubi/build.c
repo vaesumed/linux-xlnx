@@ -355,15 +355,34 @@ static void kill_volumes(struct ubi_device *ubi)
 }
 
 /**
+ * free_user_volumes - free all user volumes.
+ * @ubi: UBI device description object
+ *
+ * Normally the volumes are freed at the release function of the volume device
+ * objects. However, on error paths the volumes have to be freed before the
+ * device objects have been initialized.
+ */
+static void free_user_volumes(struct ubi_device *ubi)
+{
+	int i;
+
+	for (i = 0; i < ubi->vtbl_slots; i++)
+		if (ubi->volumes[i]) {
+			kfree(ubi->volumes[i]->eba_tbl);
+			kfree(ubi->volumes[i]);
+		}
+}
+
+/**
  * uif_init - initialize user interfaces for an UBI device.
  * @ubi: UBI device description object
  *
  * This function returns zero in case of success and a negative error code in
- * case of failure.
+ * case of failure. Note, this function destroys all volumes if it failes.
  */
 static int uif_init(struct ubi_device *ubi)
 {
-	int i, err;
+	int i, err, do_free = 0;
 	dev_t dev;
 
 	sprintf(ubi->ubi_name, UBI_NAME_STR "%d", ubi->ubi_num);
@@ -410,10 +429,13 @@ static int uif_init(struct ubi_device *ubi)
 
 out_volumes:
 	kill_volumes(ubi);
+	do_free = 0;
 out_sysfs:
 	ubi_sysfs_close(ubi);
 	cdev_del(&ubi->cdev);
 out_unreg:
+	if (do_free)
+		free_user_volumes(ubi);
 	unregister_chrdev_region(ubi->cdev.dev, ubi->vtbl_slots + 1);
 	ubi_err("cannot initialize UBI %s, error %d", ubi->ubi_name, err);
 	return err;
@@ -422,6 +444,10 @@ out_unreg:
 /**
  * uif_close - close user interfaces for an UBI device.
  * @ubi: UBI device description object
+ *
+ * Note, since this function un-registers UBI volume device objects (@vol->dev),
+ * the memory allocated voe the volumes is freed as well (in the release
+ * function).
  */
 static void uif_close(struct ubi_device *ubi)
 {
@@ -429,6 +455,21 @@ static void uif_close(struct ubi_device *ubi)
 	ubi_sysfs_close(ubi);
 	cdev_del(&ubi->cdev);
 	unregister_chrdev_region(ubi->cdev.dev, ubi->vtbl_slots + 1);
+}
+
+/**
+ * free_internal_volumes - free internal volumes.
+ * @ubi: UBI device description object
+ */
+static void free_internal_volumes(struct ubi_device *ubi)
+{
+	int i;
+
+	for (i = ubi->vtbl_slots;
+	     i < ubi->vtbl_slots + UBI_INT_VOL_COUNT; i++) {
+		kfree(ubi->volumes[i]->eba_tbl);
+		kfree(ubi->volumes[i]);
+	}
 }
 
 /**
@@ -475,6 +516,7 @@ static int attach_by_scanning(struct ubi_device *ubi)
 out_wl:
 	ubi_wl_close(ubi);
 out_vtbl:
+	free_internal_volumes(ubi);
 	vfree(ubi->vtbl);
 out_si:
 	ubi_scan_destroy_si(si);
@@ -530,7 +572,11 @@ static int io_init(struct ubi_device *ubi)
 	ubi->min_io_size = ubi->mtd->writesize;
 	ubi->hdrs_min_io_size = ubi->mtd->writesize >> ubi->mtd->subpage_sft;
 
-	/* Make sure minimal I/O unit is power of 2 */
+	/*
+	 * Make sure minimal I/O unit is power of 2. Note, there is no
+	 * fundamental reason for this assumption. It is just an optimization
+	 * which allows us to avoid costly division operations.
+	 */
 	if (!is_power_of_2(ubi->min_io_size)) {
 		ubi_err("min. I/O unit (%d) is not power of 2",
 			ubi->min_io_size);
@@ -581,7 +627,7 @@ static int io_init(struct ubi_device *ubi)
 	if (ubi->vid_hdr_offset < UBI_EC_HDR_SIZE ||
 	    ubi->leb_start < ubi->vid_hdr_offset + UBI_VID_HDR_SIZE ||
 	    ubi->leb_start > ubi->peb_size - UBI_VID_HDR_SIZE ||
-	    ubi->leb_start % ubi->min_io_size) {
+	    ubi->leb_start & (ubi->min_io_size - 1)) {
 		ubi_err("bad VID header (%d) or data offsets (%d)",
 			ubi->vid_hdr_offset, ubi->leb_start);
 		return -EINVAL;
@@ -646,7 +692,7 @@ static int autoresize(struct ubi_device *ubi, int vol_id)
 
 	/*
 	 * Clear the auto-resize flag in the volume in-memory copy of the
-	 * volume table, and 'ubi_resize_volume()' will propogate this change
+	 * volume table, and 'ubi_resize_volume()' will propagate this change
 	 * to the flash.
 	 */
 	ubi->vtbl[vol_id].flags &= ~UBI_VTBL_AUTORESIZE_FLG;
@@ -655,7 +701,7 @@ static int autoresize(struct ubi_device *ubi, int vol_id)
 		struct ubi_vtbl_record vtbl_rec;
 
 		/*
-		 * No avalilable PEBs to re-size the volume, clear the flag on
+		 * No available PEBs to re-size the volume, clear the flag on
 		 * flash and exit.
 		 */
 		memcpy(&vtbl_rec, &ubi->vtbl[vol_id],
@@ -688,7 +734,7 @@ static int autoresize(struct ubi_device *ubi, int vol_id)
  *
  * This function attaches MTD device @mtd_dev to UBI and assign @ubi_num number
  * to the newly created UBI device, unless @ubi_num is %UBI_DEV_NUM_AUTO, in
- * which case this function finds a vacant device nubert and assings it
+ * which case this function finds a vacant device number and assigns it
  * automatically. Returns the new UBI device number in case of success and a
  * negative error code in case of failure.
  *
@@ -698,7 +744,7 @@ static int autoresize(struct ubi_device *ubi, int vol_id)
 int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num, int vid_hdr_offset)
 {
 	struct ubi_device *ubi;
-	int i, err;
+	int i, err, do_free = 1;
 
 	/*
 	 * Check if we already have the same MTD device attached.
@@ -798,7 +844,7 @@ int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num, int vid_hdr_offset)
 
 	err = uif_init(ubi);
 	if (err)
-		goto out_detach;
+		goto out_nofree;
 
 	ubi->bgt_thread = kthread_create(ubi_thread, ubi, ubi->bgt_name);
 	if (IS_ERR(ubi->bgt_thread)) {
@@ -835,9 +881,13 @@ int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num, int vid_hdr_offset)
 
 out_uif:
 	uif_close(ubi);
+out_nofree:
+	do_free = 0;
 out_detach:
-	ubi_eba_close(ubi);
 	ubi_wl_close(ubi);
+	if (do_free)
+		free_user_volumes(ubi);
+	free_internal_volumes(ubi);
 	vfree(ubi->vtbl);
 out_free:
 	vfree(ubi->peb_buf1);
@@ -899,8 +949,8 @@ int ubi_detach_mtd_dev(int ubi_num, int anyway)
 		kthread_stop(ubi->bgt_thread);
 
 	uif_close(ubi);
-	ubi_eba_close(ubi);
 	ubi_wl_close(ubi);
+	free_internal_volumes(ubi);
 	vfree(ubi->vtbl);
 	put_mtd_device(ubi->mtd);
 	vfree(ubi->peb_buf1);
