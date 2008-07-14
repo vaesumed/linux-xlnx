@@ -24,4 +24,8 @@
 
 enum { OSD_TEST_ALL = 17 };
 
+#ifdef __KERNEL__
+extern int do_test_17(struct osd_dev *od);
+#endif /* __KERNEL__ */
+
 #endif /*ndef __OSD_KTESTS_H__*/
