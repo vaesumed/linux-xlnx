@@ -29,5 +29,5 @@ libosd-y := osd_initiator.o
 obj-$(CONFIG_SCSI_OSD_INITIATOR) += libosd.o
 
 # osd.ko - SCSI ULD and char-device
-osd-y := osd_uld.o
+osd-y := osd_uld.o osd_ktests.o
 obj-$(CONFIG_SCSI_OSD_ULD) += osd.o
