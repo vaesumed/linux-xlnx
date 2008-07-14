@@ -80,6 +80,7 @@ struct xfrm_selector;
 struct xfrm_policy;
 struct xfrm_state;
 struct xfrm_user_sec_ctx;
+struct seq_file;
 
 extern int cap_netlink_send(struct sock *sk, struct sk_buff *skb);
 extern int cap_netlink_recv(struct sk_buff *skb, int cap);
@@ -290,10 +291,6 @@ static inline void security_free_mnt_opts(struct security_mnt_opts *opts)
  *	Update module state after a successful pivot.
  *	@old_path contains the path for the old root.
  *	@new_path contains the path for the new root.
- * @sb_get_mnt_opts:
- *	Get the security relevant mount options used for a superblock
- *	@sb the superblock to get security mount options from
- *	@opts binary data structure containing all lsm mount data
  * @sb_set_mnt_opts:
  *	Set the security relevant mount options used for a superblock
  *	@sb the superblock to set security mount options for
@@ -1242,11 +1239,6 @@ static inline void security_free_mnt_opts(struct security_mnt_opts *opts)
  *	@pages contains the number of pages.
  *	Return 0 if permission is granted.
  *
- * @register_security:
- *	allow module stacking.
- *	@name contains the name of the security module being stacked.
- *	@ops contains a pointer to the struct security_operations of the module to stack.
- *
  * @secid_to_secctx:
  *	Convert secid to security context.
  *	@secid contains the security ID.
@@ -1331,6 +1323,7 @@ struct security_operations {
 	void (*sb_free_security) (struct super_block *sb);
 	int (*sb_copy_data) (char *orig, char *copy);
 	int (*sb_kern_mount) (struct super_block *sb, void *data);
+	int (*sb_show_options) (struct seq_file *m, struct super_block *sb);
 	int (*sb_statfs) (struct dentry *dentry);
 	int (*sb_mount) (char *dev_name, struct path *path,
 			 char *type, unsigned long flags, void *data);
@@ -1346,8 +1339,6 @@ struct security_operations {
 			     struct path *new_path);
 	void (*sb_post_pivotroot) (struct path *old_path,
 				   struct path *new_path);
-	int (*sb_get_mnt_opts) (const struct super_block *sb,
-				struct security_mnt_opts *opts);
 	int (*sb_set_mnt_opts) (struct super_block *sb,
 				struct security_mnt_opts *opts);
 	void (*sb_clone_mnt_opts) (const struct super_block *oldsb,
@@ -1475,10 +1466,6 @@ struct security_operations {
 	int (*netlink_send) (struct sock *sk, struct sk_buff *skb);
 	int (*netlink_recv) (struct sk_buff *skb, int cap);
 
-	/* allow module stacking */
-	int (*register_security) (const char *name,
-				  struct security_operations *ops);
-
 	void (*d_instantiate) (struct dentry *dentry, struct inode *inode);
 
 	int (*getprocattr) (struct task_struct *p, char *name, char **value);
@@ -1568,7 +1555,6 @@ struct security_operations {
 extern int security_init(void);
 extern int security_module_enable(struct security_operations *ops);
 extern int register_security(struct security_operations *ops);
-extern int mod_reg_security(const char *name, struct security_operations *ops);
 extern struct dentry *securityfs_create_file(const char *name, mode_t mode,
 					     struct dentry *parent, void *data,
 					     const struct file_operations *fops);
@@ -1610,6 +1596,7 @@ int security_sb_alloc(struct super_block *sb);
 void security_sb_free(struct super_block *sb);
 int security_sb_copy_data(char *orig, char *copy);
 int security_sb_kern_mount(struct super_block *sb, void *data);
+int security_sb_show_options(struct seq_file *m, struct super_block *sb);
 int security_sb_statfs(struct dentry *dentry);
 int security_sb_mount(char *dev_name, struct path *path,
 		      char *type, unsigned long flags, void *data);
@@ -1621,8 +1608,6 @@ void security_sb_post_remount(struct vfsmount *mnt, unsigned long flags, void *d
 void security_sb_post_addmount(struct vfsmount *mnt, struct path *mountpoint);
 int security_sb_pivotroot(struct path *old_path, struct path *new_path);
 void security_sb_post_pivotroot(struct path *old_path, struct path *new_path);
-int security_sb_get_mnt_opts(const struct super_block *sb,
-				struct security_mnt_opts *opts);
 int security_sb_set_mnt_opts(struct super_block *sb, struct security_mnt_opts *opts);
 void security_sb_clone_mnt_opts(const struct super_block *oldsb,
 				struct super_block *newsb);
@@ -1887,6 +1872,12 @@ static inline int security_sb_kern_mount(struct super_block *sb, void *data)
 	return 0;
 }
 
+static inline int security_sb_show_options(struct seq_file *m,
+					   struct super_block *sb)
+{
+	return 0;
+}
+
 static inline int security_sb_statfs(struct dentry *dentry)
 {
 	return 0;
@@ -1933,12 +1924,6 @@ static inline int security_sb_pivotroot(struct path *old_path,
 static inline void security_sb_post_pivotroot(struct path *old_path,
 					      struct path *new_path)
 { }
-static inline int security_sb_get_mnt_opts(const struct super_block *sb,
-					   struct security_mnt_opts *opts)
-{
-	security_init_mnt_opts(opts);
-	return 0;
-}
 
 static inline int security_sb_set_mnt_opts(struct super_block *sb,
 					   struct security_mnt_opts *opts)

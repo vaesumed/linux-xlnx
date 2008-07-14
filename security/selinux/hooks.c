@@ -9,7 +9,8 @@
  *	      James Morris <jmorris@redhat.com>
  *
  *  Copyright (C) 2001,2002 Networks Associates Technology, Inc.
- *  Copyright (C) 2003 Red Hat, Inc., James Morris <jmorris@redhat.com>
+ *  Copyright (C) 2003-2008 Red Hat, Inc., James Morris <jmorris@redhat.com>
+ *					   Eric Paris <eparis@redhat.com>
  *  Copyright (C) 2004-2005 Trusted Computer Solutions, Inc.
  *			    <dgoeddel@trustedcs.com>
  *  Copyright (C) 2006, 2007 Hewlett-Packard Development Company, L.P.
@@ -125,13 +126,11 @@ __setup("selinux=", selinux_enabled_setup);
 int selinux_enabled = 1;
 #endif
 
-/* Original (dummy) security module. */
-static struct security_operations *original_ops;
 
-/* Minimal support for a secondary security module,
-   just to allow the use of the dummy or capability modules.
-   The owlsm module can alternatively be used as a secondary
-   module as long as CONFIG_OWLSM_FD is not enabled. */
+/*
+ * Minimal support for a secondary security module,
+ * just to allow the use of the capability module.
+ */
 static struct security_operations *secondary_ops;
 
 /* Lists of inode and superblock security structures initialized
@@ -967,6 +966,57 @@ out:
 
 out_err:
 	security_free_mnt_opts(&opts);
+	return rc;
+}
+
+void selinux_write_opts(struct seq_file *m, struct security_mnt_opts *opts)
+{
+	int i;
+	char *prefix;
+
+	for (i = 0; i < opts->num_mnt_opts; i++) {
+		char *has_comma = strchr(opts->mnt_opts[i], ',');
+
+		switch (opts->mnt_opts_flags[i]) {
+		case CONTEXT_MNT:
+			prefix = CONTEXT_STR;
+			break;
+		case FSCONTEXT_MNT:
+			prefix = FSCONTEXT_STR;
+			break;
+		case ROOTCONTEXT_MNT:
+			prefix = ROOTCONTEXT_STR;
+			break;
+		case DEFCONTEXT_MNT:
+			prefix = DEFCONTEXT_STR;
+			break;
+		default:
+			BUG();
+		};
+		/* we need a comma before each option */
+		seq_putc(m, ',');
+		seq_puts(m, prefix);
+		if (has_comma)
+			seq_putc(m, '\"');
+		seq_puts(m, opts->mnt_opts[i]);
+		if (has_comma)
+			seq_putc(m, '\"');
+	}
+}
+
+static int selinux_sb_show_options(struct seq_file *m, struct super_block *sb)
+{
+	struct security_mnt_opts opts;
+	int rc;
+
+	rc = selinux_get_mnt_opts(sb, &opts);
+	if (rc)
+		return rc;
+
+	selinux_write_opts(m, &opts);
+
+	security_free_mnt_opts(&opts);
+
 	return rc;
 }
 
@@ -5063,24 +5113,6 @@ static void selinux_ipc_getsecid(struct kern_ipc_perm *ipcp, u32 *secid)
 	*secid = isec->sid;
 }
 
-/* module stacking operations */
-static int selinux_register_security(const char *name, struct security_operations *ops)
-{
-	if (secondary_ops != original_ops) {
-		printk(KERN_ERR "%s:  There is already a secondary security "
-		       "module registered.\n", __func__);
-		return -EINVAL;
-	}
-
-	secondary_ops = ops;
-
-	printk(KERN_INFO "%s:  Registering secondary module %s\n",
-	       __func__,
-	       name);
-
-	return 0;
-}
-
 static void selinux_d_instantiate(struct dentry *dentry, struct inode *inode)
 {
 	if (inode)
@@ -5365,10 +5397,10 @@ static struct security_operations selinux_ops = {
 	.sb_free_security =		selinux_sb_free_security,
 	.sb_copy_data =			selinux_sb_copy_data,
 	.sb_kern_mount =		selinux_sb_kern_mount,
+	.sb_show_options =		selinux_sb_show_options,
 	.sb_statfs =			selinux_sb_statfs,
 	.sb_mount =			selinux_mount,
 	.sb_umount =			selinux_umount,
-	.sb_get_mnt_opts =		selinux_get_mnt_opts,
 	.sb_set_mnt_opts =		selinux_set_mnt_opts,
 	.sb_clone_mnt_opts =		selinux_sb_clone_mnt_opts,
 	.sb_parse_opts_str = 		selinux_parse_opts_str,
@@ -5465,8 +5497,6 @@ static struct security_operations selinux_ops = {
 	.sem_semctl =			selinux_sem_semctl,
 	.sem_semop =			selinux_sem_semop,
 
-	.register_security =		selinux_register_security,
-
 	.d_instantiate =		selinux_d_instantiate,
 
 	.getprocattr =			selinux_getprocattr,
@@ -5560,7 +5590,7 @@ static __init int selinux_init(void)
 					    0, SLAB_PANIC, NULL);
 	avc_init();
 
-	original_ops = secondary_ops = security_ops;
+	secondary_ops = security_ops;
 	if (!secondary_ops)
 		panic("SELinux: No initial security operations\n");
 	if (register_security(&selinux_ops))
