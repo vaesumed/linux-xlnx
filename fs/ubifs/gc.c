@@ -194,9 +194,10 @@ static int move_nodes(struct ubifs_info *c, struct ubifs_scan_leb *sleb)
 
 			new_lnum = wbuf->lnum;
 			new_offs = wbuf->offs + wbuf->used;
-				err = ubifs_wbuf_write_nolock(wbuf, snod->node,
+			err = ubifs_wbuf_write_nolock(wbuf, snod->node,
 						      snod->len);
-
+			if (err)
+				goto out;
 			err = ubifs_tnc_replace(c, &snod->key, sleb->lnum,
 						snod->offs, new_lnum, new_offs,
 						snod->len);
