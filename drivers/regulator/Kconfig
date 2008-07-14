@@ -56,7 +56,4 @@ config REGULATOR_BQ24022
 	  charging select between 100 mA and 500 mA charging current
 	  limit.
 
-source "drivers/regulator/wm8350/Kconfig"
-source "drivers/regulator/wm8400/Kconfig"
-
 endmenu
