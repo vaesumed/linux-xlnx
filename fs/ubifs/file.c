@@ -305,7 +305,7 @@ static int write_begin_slow(struct address_space *mapping,
 }
 
 /**
- * allocate_budget - cancel budget for 'ubifs_write_begin()'.
+ * allocate_budget - allocate budget for 'ubifs_write_begin()'.
  * @c: UBIFS file-system description object
  * @page: page to allocate budget for
  * @ui: UBIFS inode object the page belongs to
