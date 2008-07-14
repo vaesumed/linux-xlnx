@@ -13,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
+#include <linux/smp_lock.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/miscdevice.h>
@@ -367,6 +368,7 @@ static int apm_open(struct inode * inode, struct file * filp)
 {
 	struct apm_user *as;
 
+	lock_kernel();
 	as = kzalloc(sizeof(*as), GFP_KERNEL);
 	if (as) {
 		/*
@@ -386,6 +388,7 @@ static int apm_open(struct inode * inode, struct file * filp)
 
 		filp->private_data = as;
 	}
+	unlock_kernel();
 
 	return as ? 0 : -ENOMEM;
 }
