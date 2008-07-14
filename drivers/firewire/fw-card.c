@@ -403,6 +403,7 @@ fw_card_initialize(struct fw_card *card, const struct fw_card_driver *driver,
 	card->current_tlabel = 0;
 	card->tlabel_mask = 0;
 	card->color = 0;
+	card->broadcast_channel = BROADCAST_CHANNEL_INITIAL;
 
 	INIT_LIST_HEAD(&card->transaction_list);
 	spin_lock_init(&card->lock);
@@ -496,7 +497,6 @@ dummy_enable_phys_dma(struct fw_card *card,
 }
 
 static struct fw_card_driver dummy_driver = {
-	.name            = "dummy",
 	.enable          = dummy_enable,
 	.update_phy_reg  = dummy_update_phy_reg,
 	.set_config_rom  = dummy_set_config_rom,
