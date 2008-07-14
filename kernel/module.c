@@ -303,8 +303,10 @@ static unsigned long find_symbol(const char *name,
 	fsa.warn = warn;
 
 	if (each_symbol(find_symbol_in_section, &fsa)) {
-		*owner = fsa.owner;
-		*crc = fsa.crc;
+		if (owner)
+			*owner = fsa.owner;
+		if (crc)
+			*crc = fsa.crc;
 		return fsa.value;
 	}
 
