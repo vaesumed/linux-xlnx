@@ -363,10 +363,10 @@ static int emulate_multiple(struct pt_regs *regs, unsigned char __user *addr,
  * Only POWER6 has these instructions, and it does true little-endian,
  * so we don't need the address swizzling.
  */
-static int emulate_fp_pair(struct pt_regs *regs, unsigned char __user *addr,
-			   unsigned int reg, unsigned int flags)
+static int emulate_fp_pair(unsigned char __user *addr, unsigned int reg,
+			   unsigned int flags)
 {
-	char *ptr = (char *) &current->thread.fpr[reg];
+	char *ptr = (char *) &current->thread.TS_FPR(reg);
 	int i, ret;
 
 	if (!(flags & F))
@@ -759,7 +759,7 @@ int fix_alignment(struct pt_regs *regs)
 
 	/* Special case for 16-byte FP loads and stores */
 	if (nb == 16)
-		return emulate_fp_pair(regs, addr, reg, flags);
+		return emulate_fp_pair(addr, reg, flags);
 
 	/* If we are loading, get the data from user space, else
 	 * get it from register values
@@ -784,7 +784,7 @@ int fix_alignment(struct pt_regs *regs)
 				return -EFAULT;
 		}
 	} else if (flags & F) {
-		data.dd = current->thread.fpr[reg];
+		data.dd = current->thread.TS_FPR(reg);
 		if (flags & S) {
 			/* Single-precision FP store requires conversion... */
 #ifdef CONFIG_PPC_FPU
@@ -862,7 +862,7 @@ int fix_alignment(struct pt_regs *regs)
 		if (unlikely(ret))
 			return -EFAULT;
 	} else if (flags & F)
-		current->thread.fpr[reg] = data.dd;
+		current->thread.TS_FPR(reg) = data.dd;
 	else
 		regs->gpr[reg] = data.ll;
 
