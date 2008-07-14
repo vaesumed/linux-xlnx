@@ -152,7 +152,7 @@ MAITAINERS 文件里的）发送一个手册页（man-pages）补丁，或者至
 即使在第四步的时候，维护者没有作出回应，也要确认在修改他们的代码的时候
 ，一直将维护者拷贝到CC列表中。
 
-对于小的补丁，你也许会CC到 Adrian Bunk 管理的搜集琐碎补丁的邮件列表
+对于小的补丁，你也许会CC到 Jesper Juhl 管理的搜集琐碎补丁的邮件列表
 (Trivial Patch Monkey)trivial@kernel.org，那里专门收集琐碎的补丁。下面这样
 的补丁会被看作“琐碎的”补丁：
   文档的拼写修正。
@@ -166,7 +166,7 @@ MAITAINERS 文件里的）发送一个手册页（man-pages）补丁，或者至
   人拷贝，只要它是琐碎的）
   任何文件的作者/维护者对该文件的改动（例如 patch monkey 在重传模式下）
 
-URL: <http://www.kernel.org/pub/linux/kernel/people/bunk/trivial/>
+URL: <http://www.kernel.org/pub/linux/kernel/people/juhl/trivial/>
 
 (译注，关于“琐碎补丁”的一些说明：因为原文的这一部分写得比较简单，所以不得不
 违例写一下译注。"trivial"这个英文单词的本意是“琐碎的，不重要的。”但是在这里

@@ -76,7 +76,7 @@ int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma)
 
 /*
  * display a list of all the VMAs the kernel knows about
- * - nommu kernals have a single flat list
+ * - nommu kernels have a single flat list
  */
 static int nommu_vma_list_show(struct seq_file *m, void *v)
 {
