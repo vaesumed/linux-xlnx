@@ -2087,7 +2087,7 @@ static int in_failure_mode(struct ubi_volume_desc *desc)
 {
 	struct ubifs_info *c = dbg_find_info(desc);
 
-	if (c)
+	if (c && dbg_failure_mode)
 		return c->failure_mode;
 	return 0;
 }
