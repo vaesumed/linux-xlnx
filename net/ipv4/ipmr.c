@@ -9,8 +9,6 @@
  *	as published by the Free Software Foundation; either version
  *	2 of the License, or (at your option) any later version.
  *
- *	Version: $Id: ipmr.c,v 1.65 2001/10/31 21:55:54 davem Exp $
- *
  *	Fixes:
  *	Michael Chastain	:	Incorrect size of copying.
  *	Alan Cox		:	Added the cache manager code
@@ -181,17 +179,12 @@ static int reg_vif_num = -1;
 static int reg_vif_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	read_lock(&mrt_lock);
-	((struct net_device_stats*)netdev_priv(dev))->tx_bytes += skb->len;
-	((struct net_device_stats*)netdev_priv(dev))->tx_packets++;
+	dev->stats.tx_bytes += skb->len;
+	dev->stats.tx_packets++;
 	ipmr_cache_report(skb, reg_vif_num, IGMPMSG_WHOLEPKT);
 	read_unlock(&mrt_lock);
 	kfree_skb(skb);
 	return 0;
-}
-
-static struct net_device_stats *reg_vif_get_stats(struct net_device *dev)
-{
-	return (struct net_device_stats*)netdev_priv(dev);
 }
 
 static void reg_vif_setup(struct net_device *dev)
@@ -200,7 +193,6 @@ static void reg_vif_setup(struct net_device *dev)
 	dev->mtu		= ETH_DATA_LEN - sizeof(struct iphdr) - 8;
 	dev->flags		= IFF_NOARP;
 	dev->hard_start_xmit	= reg_vif_xmit;
-	dev->get_stats		= reg_vif_get_stats;
 	dev->destructor		= free_netdev;
 }
 
@@ -209,8 +201,7 @@ static struct net_device *ipmr_reg_vif(void)
 	struct net_device *dev;
 	struct in_device *in_dev;
 
-	dev = alloc_netdev(sizeof(struct net_device_stats), "pimreg",
-			   reg_vif_setup);
+	dev = alloc_netdev(0, "pimreg", reg_vif_setup);
 
 	if (dev == NULL)
 		return NULL;
@@ -1170,8 +1161,8 @@ static void ipmr_queue_xmit(struct sk_buff *skb, struct mfc_cache *c, int vifi)
 	if (vif->flags & VIFF_REGISTER) {
 		vif->pkt_out++;
 		vif->bytes_out+=skb->len;
-		((struct net_device_stats*)netdev_priv(vif->dev))->tx_bytes += skb->len;
-		((struct net_device_stats*)netdev_priv(vif->dev))->tx_packets++;
+		vif->dev->stats.tx_bytes += skb->len;
+		vif->dev->stats.tx_packets++;
 		ipmr_cache_report(skb, vifi, IGMPMSG_WHOLEPKT);
 		kfree_skb(skb);
 		return;
@@ -1230,8 +1221,8 @@ static void ipmr_queue_xmit(struct sk_buff *skb, struct mfc_cache *c, int vifi)
 	if (vif->flags & VIFF_TUNNEL) {
 		ip_encap(skb, vif->local, vif->remote);
 		/* FIXME: extra output firewall step used to be here. --RR */
-		((struct ip_tunnel *)netdev_priv(vif->dev))->stat.tx_packets++;
-		((struct ip_tunnel *)netdev_priv(vif->dev))->stat.tx_bytes+=skb->len;
+		vif->dev->stats.tx_packets++;
+		vif->dev->stats.tx_bytes += skb->len;
 	}
 
 	IPCB(skb)->flags |= IPSKB_FORWARDED;
@@ -1487,8 +1478,8 @@ int pim_rcv_v1(struct sk_buff * skb)
 	skb->pkt_type = PACKET_HOST;
 	dst_release(skb->dst);
 	skb->dst = NULL;
-	((struct net_device_stats*)netdev_priv(reg_dev))->rx_bytes += skb->len;
-	((struct net_device_stats*)netdev_priv(reg_dev))->rx_packets++;
+	reg_dev->stats.rx_bytes += skb->len;
+	reg_dev->stats.rx_packets++;
 	nf_reset(skb);
 	netif_rx(skb);
 	dev_put(reg_dev);
@@ -1542,8 +1533,8 @@ static int pim_rcv(struct sk_buff * skb)
 	skb->ip_summed = 0;
 	skb->pkt_type = PACKET_HOST;
 	dst_release(skb->dst);
-	((struct net_device_stats*)netdev_priv(reg_dev))->rx_bytes += skb->len;
-	((struct net_device_stats*)netdev_priv(reg_dev))->rx_packets++;
+	reg_dev->stats.rx_bytes += skb->len;
+	reg_dev->stats.rx_packets++;
 	skb->dst = NULL;
 	nf_reset(skb);
 	netif_rx(skb);
@@ -1887,16 +1878,36 @@ static struct net_protocol pim_protocol = {
  *	Setup for IP multicast routing
  */
 
-void __init ip_mr_init(void)
+int __init ip_mr_init(void)
 {
+	int err;
+
 	mrt_cachep = kmem_cache_create("ip_mrt_cache",
 				       sizeof(struct mfc_cache),
 				       0, SLAB_HWCACHE_ALIGN|SLAB_PANIC,
 				       NULL);
+	if (!mrt_cachep)
+		return -ENOMEM;
+
 	setup_timer(&ipmr_expire_timer, ipmr_expire_process, 0);
-	register_netdevice_notifier(&ip_mr_notifier);
+	err = register_netdevice_notifier(&ip_mr_notifier);
+	if (err)
+		goto reg_notif_fail;
 #ifdef CONFIG_PROC_FS
-	proc_net_fops_create(&init_net, "ip_mr_vif", 0, &ipmr_vif_fops);
-	proc_net_fops_create(&init_net, "ip_mr_cache", 0, &ipmr_mfc_fops);
+	err = -ENOMEM;
+	if (!proc_net_fops_create(&init_net, "ip_mr_vif", 0, &ipmr_vif_fops))
+		goto proc_vif_fail;
+	if (!proc_net_fops_create(&init_net, "ip_mr_cache", 0, &ipmr_mfc_fops))
+		goto proc_cache_fail;
 #endif
+	return 0;
+reg_notif_fail:
+	kmem_cache_destroy(mrt_cachep);
+#ifdef CONFIG_PROC_FS
+proc_vif_fail:
+	unregister_netdevice_notifier(&ip_mr_notifier);
+proc_cache_fail:
+	proc_net_remove(&init_net, "ip_mr_vif");
+#endif
+	return err;
 }

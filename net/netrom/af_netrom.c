@@ -74,6 +74,16 @@ static const struct proto_ops nr_proto_ops;
  */
 static struct lock_class_key nr_netdev_xmit_lock_key;
 
+static void nr_set_lockdep_one(struct netdev_queue *txq)
+{
+	lockdep_set_class(&txq->_xmit_lock, &nr_netdev_xmit_lock_key);
+}
+
+static void nr_set_lockdep_key(struct net_device *dev)
+{
+	nr_set_lockdep_one(&dev->tx_queue);
+}
+
 /*
  *	Socket removal during an interrupt is now safe.
  */
@@ -475,13 +485,11 @@ static struct sock *nr_make_new(struct sock *osk)
 	sock_init_data(NULL, sk);
 
 	sk->sk_type     = osk->sk_type;
-	sk->sk_socket   = osk->sk_socket;
 	sk->sk_priority = osk->sk_priority;
 	sk->sk_protocol = osk->sk_protocol;
 	sk->sk_rcvbuf   = osk->sk_rcvbuf;
 	sk->sk_sndbuf   = osk->sk_sndbuf;
 	sk->sk_state    = TCP_ESTABLISHED;
-	sk->sk_sleep    = osk->sk_sleep;
 	sock_copy_flags(sk, osk);
 
 	skb_queue_head_init(&nr->ack_queue);
@@ -538,11 +546,9 @@ static int nr_release(struct socket *sock)
 		sk->sk_state_change(sk);
 		sock_orphan(sk);
 		sock_set_flag(sk, SOCK_DESTROY);
-		sk->sk_socket   = NULL;
 		break;
 
 	default:
-		sk->sk_socket = NULL;
 		break;
 	}
 
@@ -810,13 +816,11 @@ static int nr_accept(struct socket *sock, struct socket *newsock, int flags)
 		goto out_release;
 
 	newsk = skb->sk;
-	newsk->sk_socket = newsock;
-	newsk->sk_sleep = &newsock->wait;
+	sock_graft(newsk, newsock);
 
 	/* Now attach up the new socket */
 	kfree_skb(skb);
 	sk_acceptq_removed(sk);
-	newsock->sk = newsk;
 
 out_release:
 	release_sock(sk);
@@ -1436,7 +1440,7 @@ static int __init nr_proto_init(void)
 			free_netdev(dev);
 			goto fail;
 		}
-		lockdep_set_class(&dev->_xmit_lock, &nr_netdev_xmit_lock_key);
+		nr_set_lockdep_key(dev);
 		dev_nr[i] = dev;
 	}
 

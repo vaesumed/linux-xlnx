@@ -90,6 +90,7 @@
 #include <linux/if_ether.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
+#include <linux/ethtool.h>
 #include <linux/notifier.h>
 #include <linux/skbuff.h>
 #include <net/net_namespace.h>
@@ -257,7 +258,7 @@ DEFINE_PER_CPU(struct softnet_data, softnet_data);
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 /*
- * register_netdevice() inits dev->_xmit_lock and sets lockdep class
+ * register_netdevice() inits txq->_xmit_lock and sets lockdep class
  * according to dev->type
  */
 static const unsigned short netdev_lock_type[] =
@@ -961,6 +962,12 @@ void netdev_state_change(struct net_device *dev)
 	}
 }
 
+void netdev_bonding_change(struct net_device *dev)
+{
+	call_netdevice_notifiers(NETDEV_BONDING_FAILOVER, dev);
+}
+EXPORT_SYMBOL(netdev_bonding_change);
+
 /**
  *	dev_load 	- load a network module
  *	@net: the applicable net namespace
@@ -1115,6 +1122,29 @@ int dev_close(struct net_device *dev)
 
 	return 0;
 }
+
+
+/**
+ *	dev_disable_lro - disable Large Receive Offload on a device
+ *	@dev: device
+ *
+ *	Disable Large Receive Offload (LRO) on a net device.  Must be
+ *	called under RTNL.  This is needed if received packets may be
+ *	forwarded to another interface.
+ */
+void dev_disable_lro(struct net_device *dev)
+{
+	if (dev->ethtool_ops && dev->ethtool_ops->get_flags &&
+	    dev->ethtool_ops->set_flags) {
+		u32 flags = dev->ethtool_ops->get_flags(dev);
+		if (flags & ETH_FLAG_LRO) {
+			flags &= ~ETH_FLAG_LRO;
+			dev->ethtool_ops->set_flags(dev, flags);
+		}
+	}
+	WARN_ON(dev->features & NETIF_F_LRO);
+}
+EXPORT_SYMBOL(dev_disable_lro);
 
 
 static int dev_boot_phase = 1;
@@ -1290,16 +1320,18 @@ static void dev_queue_xmit_nit(struct sk_buff *skb, struct net_device *dev)
 }
 
 
-void __netif_schedule(struct net_device *dev)
+void __netif_schedule(struct netdev_queue *txq)
 {
+	struct net_device *dev = txq->dev;
+
 	if (!test_and_set_bit(__LINK_STATE_SCHED, &dev->state)) {
-		unsigned long flags;
 		struct softnet_data *sd;
+		unsigned long flags;
 
 		local_irq_save(flags);
 		sd = &__get_cpu_var(softnet_data);
-		dev->next_sched = sd->output_queue;
-		sd->output_queue = dev;
+		txq->next_sched = sd->output_queue;
+		sd->output_queue = txq;
 		raise_softirq_irqoff(NET_TX_SOFTIRQ);
 		local_irq_restore(flags);
 	}
@@ -1637,6 +1669,7 @@ out_kfree_skb:
 int dev_queue_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
+	struct netdev_queue *txq;
 	struct Qdisc *q;
 	int rc = -ENOMEM;
 
@@ -1669,14 +1702,15 @@ int dev_queue_xmit(struct sk_buff *skb)
 	}
 
 gso:
-	spin_lock_prefetch(&dev->queue_lock);
+	txq = &dev->tx_queue;
+	spin_lock_prefetch(&txq->lock);
 
 	/* Disable soft irqs for various locks below. Also
 	 * stops preemption for RCU.
 	 */
 	rcu_read_lock_bh();
 
-	/* Updates of qdisc are serialized by queue_lock.
+	/* Updates of qdisc are serialized by queue->lock.
 	 * The struct Qdisc which is pointed to by qdisc is now a
 	 * rcu structure - it may be accessed without acquiring
 	 * a lock (but the structure may be stale.) The freeing of the
@@ -1684,29 +1718,29 @@ gso:
 	 * more references to it.
 	 *
 	 * If the qdisc has an enqueue function, we still need to
-	 * hold the queue_lock before calling it, since queue_lock
+	 * hold the queue->lock before calling it, since queue->lock
 	 * also serializes access to the device queue.
 	 */
 
-	q = rcu_dereference(dev->qdisc);
+	q = rcu_dereference(txq->qdisc);
 #ifdef CONFIG_NET_CLS_ACT
 	skb->tc_verd = SET_TC_AT(skb->tc_verd,AT_EGRESS);
 #endif
 	if (q->enqueue) {
 		/* Grab device queue */
-		spin_lock(&dev->queue_lock);
-		q = dev->qdisc;
+		spin_lock(&txq->lock);
+		q = txq->qdisc;
 		if (q->enqueue) {
 			/* reset queue_mapping to zero */
 			skb_set_queue_mapping(skb, 0);
 			rc = q->enqueue(skb, q);
-			qdisc_run(dev);
-			spin_unlock(&dev->queue_lock);
+			qdisc_run(txq);
+			spin_unlock(&txq->lock);
 
 			rc = rc == NET_XMIT_BYPASS ? NET_XMIT_SUCCESS : rc;
 			goto out;
 		}
-		spin_unlock(&dev->queue_lock);
+		spin_unlock(&txq->lock);
 	}
 
 	/* The device has no queue. Common case for software devices:
@@ -1724,19 +1758,19 @@ gso:
 	if (dev->flags & IFF_UP) {
 		int cpu = smp_processor_id(); /* ok because BHs are off */
 
-		if (dev->xmit_lock_owner != cpu) {
+		if (txq->xmit_lock_owner != cpu) {
 
-			HARD_TX_LOCK(dev, cpu);
+			HARD_TX_LOCK(dev, txq, cpu);
 
 			if (!netif_queue_stopped(dev) &&
 			    !netif_subqueue_stopped(dev, skb)) {
 				rc = 0;
 				if (!dev_hard_start_xmit(skb, dev)) {
-					HARD_TX_UNLOCK(dev);
+					HARD_TX_UNLOCK(dev, txq);
 					goto out;
 				}
 			}
-			HARD_TX_UNLOCK(dev);
+			HARD_TX_UNLOCK(dev, txq);
 			if (net_ratelimit())
 				printk(KERN_CRIT "Virtual device %s asks to "
 				       "queue packet!\n", dev->name);
@@ -1880,7 +1914,7 @@ static void net_tx_action(struct softirq_action *h)
 	}
 
 	if (sd->output_queue) {
-		struct net_device *head;
+		struct netdev_queue *head;
 
 		local_irq_disable();
 		head = sd->output_queue;
@@ -1888,17 +1922,18 @@ static void net_tx_action(struct softirq_action *h)
 		local_irq_enable();
 
 		while (head) {
-			struct net_device *dev = head;
+			struct netdev_queue *txq = head;
+			struct net_device *dev = txq->dev;
 			head = head->next_sched;
 
 			smp_mb__before_clear_bit();
 			clear_bit(__LINK_STATE_SCHED, &dev->state);
 
-			if (spin_trylock(&dev->queue_lock)) {
-				qdisc_run(dev);
-				spin_unlock(&dev->queue_lock);
+			if (spin_trylock(&txq->lock)) {
+				qdisc_run(txq);
+				spin_unlock(&txq->lock);
 			} else {
-				netif_schedule(dev);
+				netif_schedule_queue(txq);
 			}
 		}
 	}
@@ -1979,10 +2014,11 @@ static inline struct sk_buff *handle_macvlan(struct sk_buff *skb,
  */
 static int ing_filter(struct sk_buff *skb)
 {
-	struct Qdisc *q;
 	struct net_device *dev = skb->dev;
-	int result = TC_ACT_OK;
 	u32 ttl = G_TC_RTTL(skb->tc_verd);
+	struct netdev_queue *rxq;
+	int result = TC_ACT_OK;
+	struct Qdisc *q;
 
 	if (MAX_RED_LOOP < ttl++) {
 		printk(KERN_WARNING
@@ -1994,10 +2030,12 @@ static int ing_filter(struct sk_buff *skb)
 	skb->tc_verd = SET_TC_RTTL(skb->tc_verd, ttl);
 	skb->tc_verd = SET_TC_AT(skb->tc_verd, AT_INGRESS);
 
-	spin_lock(&dev->ingress_lock);
-	if ((q = dev->qdisc_ingress) != NULL)
+	rxq = &dev->rx_queue;
+
+	spin_lock(&rxq->lock);
+	if ((q = rxq->qdisc) != NULL)
 		result = q->enqueue(skb, q);
-	spin_unlock(&dev->ingress_lock);
+	spin_unlock(&rxq->lock);
 
 	return result;
 }
@@ -2006,7 +2044,7 @@ static inline struct sk_buff *handle_ing(struct sk_buff *skb,
 					 struct packet_type **pt_prev,
 					 int *ret, struct net_device *orig_dev)
 {
-	if (!skb->dev->qdisc_ingress)
+	if (!skb->dev->rx_queue.qdisc)
 		goto out;
 
 	if (*pt_prev) {
@@ -2769,16 +2807,29 @@ int netdev_set_master(struct net_device *slave, struct net_device *master)
 	return 0;
 }
 
-static void __dev_set_promiscuity(struct net_device *dev, int inc)
+static int __dev_set_promiscuity(struct net_device *dev, int inc)
 {
 	unsigned short old_flags = dev->flags;
 
 	ASSERT_RTNL();
 
-	if ((dev->promiscuity += inc) == 0)
-		dev->flags &= ~IFF_PROMISC;
-	else
-		dev->flags |= IFF_PROMISC;
+	dev->flags |= IFF_PROMISC;
+	dev->promiscuity += inc;
+	if (dev->promiscuity == 0) {
+		/*
+		 * Avoid overflow.
+		 * If inc causes overflow, untouch promisc and return error.
+		 */
+		if (inc < 0)
+			dev->flags &= ~IFF_PROMISC;
+		else {
+			dev->promiscuity -= inc;
+			printk(KERN_WARNING "%s: promiscuity touches roof, "
+				"set promiscuity failed, promiscuity feature "
+				"of device might be broken.\n", dev->name);
+			return -EOVERFLOW;
+		}
+	}
 	if (dev->flags != old_flags) {
 		printk(KERN_INFO "device %s %s promiscuous mode\n",
 		       dev->name, (dev->flags & IFF_PROMISC) ? "entered" :
@@ -2796,6 +2847,7 @@ static void __dev_set_promiscuity(struct net_device *dev, int inc)
 		if (dev->change_rx_flags)
 			dev->change_rx_flags(dev, IFF_PROMISC);
 	}
+	return 0;
 }
 
 /**
@@ -2807,14 +2859,19 @@ static void __dev_set_promiscuity(struct net_device *dev, int inc)
  *	remains above zero the interface remains promiscuous. Once it hits zero
  *	the device reverts back to normal filtering operation. A negative inc
  *	value is used to drop promiscuity on the device.
+ *	Return 0 if successful or a negative errno code on error.
  */
-void dev_set_promiscuity(struct net_device *dev, int inc)
+int dev_set_promiscuity(struct net_device *dev, int inc)
 {
 	unsigned short old_flags = dev->flags;
+	int err;
 
-	__dev_set_promiscuity(dev, inc);
+	err = __dev_set_promiscuity(dev, inc);
+	if (err < 0)
+		return err;
 	if (dev->flags != old_flags)
 		dev_set_rx_mode(dev);
+	return err;
 }
 
 /**
@@ -2827,22 +2884,38 @@ void dev_set_promiscuity(struct net_device *dev, int inc)
  *	to all interfaces. Once it hits zero the device reverts back to normal
  *	filtering operation. A negative @inc value is used to drop the counter
  *	when releasing a resource needing all multicasts.
+ *	Return 0 if successful or a negative errno code on error.
  */
 
-void dev_set_allmulti(struct net_device *dev, int inc)
+int dev_set_allmulti(struct net_device *dev, int inc)
 {
 	unsigned short old_flags = dev->flags;
 
 	ASSERT_RTNL();
 
 	dev->flags |= IFF_ALLMULTI;
-	if ((dev->allmulti += inc) == 0)
-		dev->flags &= ~IFF_ALLMULTI;
+	dev->allmulti += inc;
+	if (dev->allmulti == 0) {
+		/*
+		 * Avoid overflow.
+		 * If inc causes overflow, untouch allmulti and return error.
+		 */
+		if (inc < 0)
+			dev->flags &= ~IFF_ALLMULTI;
+		else {
+			dev->allmulti -= inc;
+			printk(KERN_WARNING "%s: allmulti touches roof, "
+				"set allmulti failed, allmulti feature of "
+				"device might be broken.\n", dev->name);
+			return -EOVERFLOW;
+		}
+	}
 	if (dev->flags ^ old_flags) {
 		if (dev->change_rx_flags)
 			dev->change_rx_flags(dev, IFF_ALLMULTI);
 		dev_set_rx_mode(dev);
 	}
+	return 0;
 }
 
 /*
@@ -3688,6 +3761,20 @@ static void rollback_registered(struct net_device *dev)
 	dev_put(dev);
 }
 
+static void __netdev_init_queue_locks_one(struct netdev_queue *dev_queue,
+					  struct net_device *dev)
+{
+	spin_lock_init(&dev_queue->_xmit_lock);
+	netdev_set_lockdep_class(&dev_queue->_xmit_lock, dev->type);
+	dev_queue->xmit_lock_owner = -1;
+}
+
+static void netdev_init_queue_locks(struct net_device *dev)
+{
+	__netdev_init_queue_locks_one(&dev->tx_queue, dev);
+	__netdev_init_queue_locks_one(&dev->rx_queue, dev);
+}
+
 /**
  *	register_netdevice	- register a network device
  *	@dev: device to register
@@ -3722,11 +3809,7 @@ int register_netdevice(struct net_device *dev)
 	BUG_ON(!dev_net(dev));
 	net = dev_net(dev);
 
-	spin_lock_init(&dev->queue_lock);
-	spin_lock_init(&dev->_xmit_lock);
-	netdev_set_lockdep_class(&dev->_xmit_lock, dev->type);
-	dev->xmit_lock_owner = -1;
-	spin_lock_init(&dev->ingress_lock);
+	netdev_init_queue_locks(dev);
 
 	dev->iflink = -1;
 
@@ -4007,6 +4090,19 @@ static struct net_device_stats *internal_stats(struct net_device *dev)
 	return &dev->stats;
 }
 
+static void netdev_init_one_queue(struct net_device *dev,
+				  struct netdev_queue *queue)
+{
+	spin_lock_init(&queue->lock);
+	queue->dev = dev;
+}
+
+static void netdev_init_queues(struct net_device *dev)
+{
+	netdev_init_one_queue(dev, &dev->rx_queue);
+	netdev_init_one_queue(dev, &dev->tx_queue);
+}
+
 /**
  *	alloc_netdev_mq - allocate network device
  *	@sizeof_priv:	size of private data to allocate space for
@@ -4058,6 +4154,8 @@ struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 
 	dev->egress_subqueue_count = queue_count;
 	dev->gso_max_size = GSO_MAX_SIZE;
+
+	netdev_init_queues(dev);
 
 	dev->get_stats = internal_stats;
 	netpoll_netdev_init(dev);
@@ -4260,7 +4358,7 @@ static int dev_cpu_callback(struct notifier_block *nfb,
 			    void *ocpu)
 {
 	struct sk_buff **list_skb;
-	struct net_device **list_net;
+	struct netdev_queue **list_net;
 	struct sk_buff *skb;
 	unsigned int cpu, oldcpu = (unsigned long)ocpu;
 	struct softnet_data *sd, *oldsd;
