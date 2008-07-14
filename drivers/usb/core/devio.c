@@ -1687,9 +1687,13 @@ static int usb_classdev_add(struct usb_device *dev)
 {
 	int minor = ((dev->bus->busnum-1) * 128) + (dev->devnum-1);
 
-	dev->usb_classdev = device_create(usb_classdev_class, &dev->dev,
-				MKDEV(USB_DEVICE_MAJOR, minor),
-				"usbdev%d.%d", dev->bus->busnum, dev->devnum);
+	dev->usb_classdev = device_create_drvdata(usb_classdev_class,
+						  &dev->dev,
+						  MKDEV(USB_DEVICE_MAJOR,
+							minor), NULL,
+						  "usbdev%d.%d",
+						  dev->bus->busnum,
+						  dev->devnum);
 	if (IS_ERR(dev->usb_classdev))
 		return PTR_ERR(dev->usb_classdev);
 
@@ -1748,6 +1752,11 @@ int __init usb_devio_init(void)
 		usb_classdev_class = NULL;
 		goto out;
 	}
+	/* devices of this class shadow the major:minor of their parent
+	 * device, so clear ->dev_kobj to prevent adding duplicate entries
+	 * to /sys/dev
+	 */
+	usb_classdev_class->dev_kobj = NULL;
 
 	usb_register_notify(&usbdev_nb);
 #endif
