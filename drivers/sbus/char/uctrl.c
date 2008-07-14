@@ -194,8 +194,8 @@ struct uctrl_driver {
 
 static struct uctrl_driver drv;
 
-void uctrl_get_event_status(void);
-void uctrl_get_external_status(void);
+static void uctrl_get_event_status(void);
+static void uctrl_get_external_status(void);
 
 static int
 uctrl_ioctl(struct inode *inode, struct file *file,
@@ -263,12 +263,6 @@ static struct miscdevice uctrl_dev = {
   driver->regs->uctrl_stat = UCTRL_STAT_RXNE_STA; \
 }
 
-void uctrl_set_video(int status)
-{
-	struct uctrl_driver *driver = &drv;
-	
-}
-
 static void uctrl_do_txn(struct uctrl_txn *txn)
 {
 	struct uctrl_driver *driver = &drv;
@@ -308,7 +302,7 @@ static void uctrl_do_txn(struct uctrl_txn *txn)
 	}
 }
 
-void uctrl_get_event_status(void)
+static void uctrl_get_event_status(void)
 {
 	struct uctrl_driver *driver = &drv;
 	struct uctrl_txn txn;
@@ -328,7 +322,7 @@ void uctrl_get_event_status(void)
 	dprintk(("ev is %x\n", driver->status.event_status));
 }
 
-void uctrl_get_external_status(void)
+static void uctrl_get_external_status(void)
 {
 	struct uctrl_driver *driver = &drv;
 	struct uctrl_txn txn;
@@ -360,7 +354,7 @@ void uctrl_get_external_status(void)
 static int __init ts102_uctrl_init(void)
 {
 	struct uctrl_driver *driver = &drv;
-	int len, i;
+	int len;
 	struct linux_prom_irqs tmp_irq[2];
         unsigned int vaddr[2] = { 0, 0 };
 	int tmpnode, uctrlnode = prom_getchild(prom_root_node);
