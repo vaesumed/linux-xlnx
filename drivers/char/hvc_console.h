@@ -26,6 +26,7 @@
 
 #ifndef HVC_CONSOLE_H
 #define HVC_CONSOLE_H
+#include <linux/kref.h>
 
 /*
  * This is the max number of console adapters that can/will be found as
