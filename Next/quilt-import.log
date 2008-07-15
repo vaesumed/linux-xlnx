@@ -1,0 +1,154 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.26
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard bce7f793daec3e65ec5c5705d2457b81fe7b5725
+HEAD is now at bce7f79 Linux 2.6.26
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-use-class_for_each_device.patch
+i2c-davinci-01-clock-between-7-12-mhz.patch
+i2c-davinci-02-move-dev_dbg-statement-for-more-output.patch
+i2c-davinci-03-remove-useless-ivr-read.patch
+i2c-davinci-04-fix-signal-handling-bug.patch
+i2c-davinci-05-initialize-cmd_complete-sooner.patch
+i2c-nforce2-add-tyan-s4985-spport.patch
+i2c-remove-3-deprecated-bus-drivers.patch
+i2c-bfin-twi-update-dependencies.patch
+i2c-document-standard-fault-codes.patch
+i2c-core-remove-useless-include.patch
+i2c-core-return-proper-error-codes.patch
+i2c-group-bus-drivers.patch
+i2c-delete-i2c_smbus_write_quick.patch
+i2c-update-refs-to-smbus_access.patch
+i2c-kerneldoc-for-most-i-o-calls.patch
+i2c-i2c_use_client-defends-against-null.patch
+i2c-adapters-return-proper-error-codes.patch
+i2c-piix4-more-cleanups.patch
+i2c-bus-fix-handling-of-unsupported-transactions.patch
+i2c-pca-algo-fix-errorcode.patch
+i2c-pca-platform-fix-errorcode.patch
+i2c-core-use-list_for_each_entry_safe.patch
+i2c-simplify-i2c_del_driver.patch
+i2c-add-intel-sch-i2c-smbus-support.patch
+i2c-push-ioctl-bkl-down-into-the-i2c-code.patch
+i2c-add-support-for-i2c-bus-on-freescale-cpm1-cpm2-controllers.patch
+i2c-cpm-bugfixes.patch
+i2c-add-maintainer-entry-for-i2c-cpm.patch
+i2c-01-fb-drivers-declare-ddc-class.patch
+i2c-02-bus-drivers-declare-spd-class.patch
+i2c-03-eeprom-should-not-probe-all-adapters.patch
+i2c-eeprom-use-word-read-transactions.patch
+i2c-core-simplify-i2c_device_probe.patch
+i2c-ibm_iic-remove-deprecated-ocp-style-part.patch
+i2c-ibm_iic-enable-driver-for-all-ppc4xx-variants-in-arch-powerpc.patch
+i2c-pxa-initialize-early.patch
+i2c-deprecate-the-legacy-gpio-drivers.patch
+i2c-algo-pcf-lab_mdelay.patch
+i2c-algo-pcf-drop-unused-fields.patch
+i2c-i801-01-less-verbose-debug.patch
+i2c-i801-02-report-arbitration-loss.patch
+i2c-i801-03-rename-temp-to-status.patch
+i2c-i801-04-fix-handling-of-error-conditions.patch
+i2c-sibyte-swarm-i2c-board-initialization.patch
+i2c-ocores-basic-pm-support.patch
+i2c-acpi-check-conflict.patch
+i2c-drop-stray-references-to-lm_sensors.patch
+i2c-dev-delete-empty-detach_client-callback.patch
+i2c-au1550-fix-pm-support.patch
+i2c-export-i2c_bus_type.patch
+i2c-at24-new-eeprom-driver.patch
+i2c-ibm_iic-register-child-nodes.patch
+i2c-clean-up-old-chip-drivers.patch
+i2c-call-client_unregister-on-new-style-devices.patch
+i2c-core-add-detection-capability-to-new-style-drivers.patch
+i2c-eeprom-convert-to-new-style.patch
+i2c-pcf8591-convert-to-new-style.patch
+i2c-pcf8574-convert-to-new-style.patch
+i2c-pcf8575-convert-to-new-style.patch
+i2c-pca9539-convert-to-new-style.patch
+i2c-max6875-convert-to-new-style.patch
+i2c-isp1301_omap-convert-to-new-style-part-1.patch
+i2c-isp1301_omap-convert-to-new-style-part-2.patch
+w1-ds2482-convert-to-new-style.patch
+video-matrox-maven-fix-error-path.patch
+video-matrox-clean-up-i2c-templates.patch
+video-matrox-maven-convert-to-new-style.patch
+Context reduced to (1/1) to apply fragment at 45
+hwmon-ad7418-convert-to-new-style.patch
+hwmon-adm1021-convert-to-new-style.patch
+hwmon-adm1025-convert-to-new-style.patch
+hwmon-adm1026-convert-to-new-style.patch
+hwmon-adm1029-convert-to-new-style.patch
+hwmon-adm1031-convert-to-new-style.patch
+hwmon-adm9240-convert-to-new-style.patch
+hwmon-ads7828-convert-to-new-style.patch
+hwmon-adt7470-convert-to-new-style.patch
+hwmon-adt7473-convert-to-new-style.patch
+hwmon-asb100-convert-to-new-style.patch
+hwmon-atxp1-convert-to-new-style.patch
+hwmon-ds1621-convert-to-new-style.patch
+hwmon-f75375s-drop-legacy-driver.patch
+hwmon-fscher-convert-to-new-style.patch
+hwmon-fschmd-convert-to-new-style.patch
+hwmon-fscpos-convert-to-new-style.patch
+hwmon-gl518sm-convert-to-new-style.patch
+hwmon-gl520sm-convert-to-new-style.patch
+hwmon-lm63-convert-to-new-style.patch
+hwmon-lm77-convert-to-new-style.patch
+hwmon-lm80-convert-to-new-style.patch
+hwmon-lm83-convert-to-new-style.patch
+hwmon-lm87-convert-to-new-style.patch
+hwmon-lm90-convert-to-new-style.patch
+hwmon-lm92-convert-to-new-style.patch
+hwmon-lm93-convert-to-new-style.patch
+hwmon-max1619-convert-to-new-style.patch
+hwmon-max6650-convert-to-new-style.patch
+hwmon-smsc47m192-convert-to-new-style.patch
+hwmon-thmc50-convert-to-new-style.patch
+hwmon-w83791d-convert-to-new-style.patch
+hwmon-w83792d-convert-to-new-style.patch
+hwmon-w83793-convert-to-new-style.patch
+hwmon-w83l785ts-convert-to-new-style.patch
+hwmon-w83l786ng-convert-to-new-style.patch
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing m68k based on bce7f793daec3e65ec5c5705d2457b81fe7b5725
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard bce7f793daec3e65ec5c5705d2457b81fe7b5725
+HEAD is now at bce7f79 Linux 2.6.26
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-remove-CVS-keywords.diff
+m68k-ariadne-use-netstats-in-net_device-structure.diff
+m68k-initcalls-should-return-ENODEV-if-device-not-found2.diff
+m68k-vmlinux-std_sun3.lds.S_cleanup_use_PAGE_SIZE_macro.diff
+m68k-allnoconfig.diff
+m68k-remove-traditional.diff
+m68k-make-multi_defconfig-the-default-defconfig.diff
+m68k-remove-AP1000-code.diff
+zorro-replace-deprecated-__initcall-with-equivalent-device_initcall.diff
+zorro-use-memory_read_from_buffer.diff
+amifb-add-ami_modedb-to-modelist.diff
+atafb-add-atafb_modedb-to-modelist.diff
+drivers-video-c2p.c-add-MODULE_LICENSE.diff
+m68k-export-amiga_vblank.diff
+m68k-export-c2p.diff
+m68k-amiga-possible-cleanups.diff
+m68k-atari-debug.c-possible-cleanups.diff
+m68k-mac-possible-cleanups.diff
+m68k-q40-config.c-make-functions-static.diff
+m68k-sun3-possible-cleanups.diff
+m68k-remove-stale-ARCH_SUN4-define.diff
+apollo-missing-bootinfo.diff
+m68k-mac-remove-the-unused-ADB_KEYBOARD-option.diff
+m68k-atari-remove-the-dead-ATARI_SCC-options.diff
+m68k-apollo-remove-the-unused-APOLLO_ELPLUS-option.diff
+m68k-motorola-eliminate-NULL-test-and-memset-after-alloc_bootmem.diff
+m68k-sun3-eliminate-NULL-test-and-memset-after-alloc_bootmem.diff
+m68k-initrd-fix.diff
+Unchanged quilt series rr
+Unchanged quilt series ttydev
