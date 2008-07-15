@@ -452,7 +452,8 @@ static void ioat2_dma_massage_chan_desc(struct ioat_dma_chan *ioat_chan)
  * ioat_dma_alloc_chan_resources - returns the number of allocated descriptors
  * @chan: the channel to be filled out
  */
-static int ioat_dma_alloc_chan_resources(struct dma_chan *chan)
+static int ioat_dma_alloc_chan_resources(struct dma_chan *chan,
+					 struct dma_client *client)
 {
 	struct ioat_dma_chan *ioat_chan = to_ioat_chan(chan);
 	struct ioat_desc_sw *desc;
@@ -756,6 +757,27 @@ static void ioat_dma_cleanup_tasklet(unsigned long data)
 	       chan->reg_base + IOAT_CHANCTRL_OFFSET);
 }
 
+static void
+ioat_dma_unmap(struct ioat_dma_chan *ioat_chan, struct ioat_desc_sw *desc)
+{
+	/*
+	 * yes we are unmapping both _page and _single
+	 * alloc'd regions with unmap_page. Is this
+	 * *really* that bad?
+	 */
+	if (!(desc->async_tx.flags & DMA_COMPL_SKIP_DEST_UNMAP))
+		pci_unmap_page(ioat_chan->device->pdev,
+				pci_unmap_addr(desc, dst),
+				pci_unmap_len(desc, len),
+				PCI_DMA_FROMDEVICE);
+
+	if (!(desc->async_tx.flags & DMA_COMPL_SKIP_SRC_UNMAP))
+		pci_unmap_page(ioat_chan->device->pdev,
+				pci_unmap_addr(desc, src),
+				pci_unmap_len(desc, len),
+				PCI_DMA_TODEVICE);
+}
+
 /**
  * ioat_dma_memcpy_cleanup - cleanup up finished descriptors
  * @chan: ioat channel to be cleaned up
@@ -816,21 +838,7 @@ static void ioat_dma_memcpy_cleanup(struct ioat_dma_chan *ioat_chan)
 			 */
 			if (desc->async_tx.cookie) {
 				cookie = desc->async_tx.cookie;
-
-				/*
-				 * yes we are unmapping both _page and _single
-				 * alloc'd regions with unmap_page. Is this
-				 * *really* that bad?
-				 */
-				pci_unmap_page(ioat_chan->device->pdev,
-						pci_unmap_addr(desc, dst),
-						pci_unmap_len(desc, len),
-						PCI_DMA_FROMDEVICE);
-				pci_unmap_page(ioat_chan->device->pdev,
-						pci_unmap_addr(desc, src),
-						pci_unmap_len(desc, len),
-						PCI_DMA_TODEVICE);
-
+				ioat_dma_unmap(ioat_chan, desc);
 				if (desc->async_tx.callback) {
 					desc->async_tx.callback(desc->async_tx.callback_param);
 					desc->async_tx.callback = NULL;
@@ -889,16 +897,7 @@ static void ioat_dma_memcpy_cleanup(struct ioat_dma_chan *ioat_chan)
 				if (desc->async_tx.cookie) {
 					cookie = desc->async_tx.cookie;
 					desc->async_tx.cookie = 0;
-
-					pci_unmap_page(ioat_chan->device->pdev,
-						      pci_unmap_addr(desc, dst),
-						      pci_unmap_len(desc, len),
-						      PCI_DMA_FROMDEVICE);
-					pci_unmap_page(ioat_chan->device->pdev,
-						      pci_unmap_addr(desc, src),
-						      pci_unmap_len(desc, len),
-						      PCI_DMA_TODEVICE);
-
+					ioat_dma_unmap(ioat_chan, desc);
 					if (desc->async_tx.callback) {
 						desc->async_tx.callback(desc->async_tx.callback_param);
 						desc->async_tx.callback = NULL;
@@ -1049,7 +1048,7 @@ static int ioat_dma_self_test(struct ioatdma_device *device)
 	dma_chan = container_of(device->common.channels.next,
 				struct dma_chan,
 				device_node);
-	if (device->common.device_alloc_chan_resources(dma_chan) < 1) {
+	if (device->common.device_alloc_chan_resources(dma_chan, NULL) < 1) {
 		dev_err(&device->pdev->dev,
 			"selftest cannot allocate chan resource\n");
 		err = -ENODEV;
