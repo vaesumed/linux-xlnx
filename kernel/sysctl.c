@@ -157,12 +157,13 @@ static struct ctl_table root_table[];
 static struct ctl_table_root sysctl_table_root;
 static struct ctl_table_header root_table_header = {
 	.ctl_table = root_table,
-	.ctl_entry = LIST_HEAD_INIT(sysctl_table_root.header_list),
+	.ctl_entry = LIST_HEAD_INIT(sysctl_table_root.default_set.list),
 	.root = &sysctl_table_root,
+	.set = &sysctl_table_root.default_set,
 };
 static struct ctl_table_root sysctl_table_root = {
 	.root_list = LIST_HEAD_INIT(sysctl_table_root.root_list),
-	.header_list = LIST_HEAD_INIT(root_table_header.ctl_entry),
+	.default_set.list = LIST_HEAD_INIT(root_table_header.ctl_entry),
 };
 
 static struct ctl_table kern_table[];
@@ -1369,14 +1370,20 @@ void sysctl_head_finish(struct ctl_table_header *head)
 	spin_unlock(&sysctl_lock);
 }
 
+static struct ctl_table_set *
+lookup_header_set(struct ctl_table_root *root, struct nsproxy *namespaces)
+{
+	struct ctl_table_set *set = &root->default_set;
+	if (root->lookup)
+		set = root->lookup(root, namespaces);
+	return set;
+}
+
 static struct list_head *
 lookup_header_list(struct ctl_table_root *root, struct nsproxy *namespaces)
 {
-	struct list_head *header_list;
-	header_list = &root->header_list;
-	if (root->lookup)
-		header_list = root->lookup(root, namespaces);
-	return header_list;
+	struct ctl_table_set *set = lookup_header_set(root, namespaces);
+	return &set->list;
 }
 
 struct ctl_table_header *__sysctl_head_next(struct nsproxy *namespaces,
@@ -1686,7 +1693,6 @@ struct ctl_table_header *__register_sysctl_paths(
 	struct nsproxy *namespaces,
 	const struct ctl_path *path, struct ctl_table *table)
 {
-	struct list_head *header_list;
 	struct ctl_table_header *header;
 	struct ctl_table *new, **prevp;
 	unsigned int n, npath;
@@ -1738,8 +1744,8 @@ struct ctl_table_header *__register_sysctl_paths(
 	}
 #endif
 	spin_lock(&sysctl_lock);
-	header_list = lookup_header_list(root, namespaces);
-	list_add_tail(&header->ctl_entry, header_list);
+	header->set = lookup_header_set(root, namespaces);
+	list_add_tail(&header->ctl_entry, &header->set->list);
 	spin_unlock(&sysctl_lock);
 
 	return header;
@@ -1796,6 +1802,15 @@ void unregister_sysctl_table(struct ctl_table_header * header)
 	start_unregistering(header);
 	spin_unlock(&sysctl_lock);
 	kfree(header);
+}
+
+void setup_sysctl_set(struct ctl_table_set *p,
+	struct ctl_table_set *parent,
+	int (*is_seen)(struct ctl_table_set *))
+{
+	INIT_LIST_HEAD(&p->list);
+	p->parent = parent ? parent : &sysctl_table_root.default_set;
+	p->is_seen = is_seen;
 }
 
 #else /* !CONFIG_SYSCTL */
@@ -2794,6 +2809,12 @@ int sysctl_ms_jiffies(struct ctl_table *table, int __user *name, int nlen,
 		void __user *newval, size_t newlen)
 {
 	return -ENOSYS;
+}
+
+void setup_sysctl_set(struct ctl_table_set *p,
+	struct ctl_table_set *parent,
+	int (*is_seen)(struct ctl_table_set *))
+{
 }
 
 #endif /* CONFIG_SYSCTL_SYSCALL */

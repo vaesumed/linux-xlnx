@@ -30,10 +30,15 @@
 #include <linux/if_tr.h>
 #endif
 
-static struct list_head *
+static struct ctl_table_set *
 net_ctl_header_lookup(struct ctl_table_root *root, struct nsproxy *namespaces)
 {
-	return &namespaces->net_ns->sysctl_table_headers;
+	return &namespaces->net_ns->sysctls;
+}
+
+static int is_seen(struct ctl_table_set *set)
+{
+	return &current->nsproxy->net_ns->sysctls == set;
 }
 
 static struct ctl_table_root net_sysctl_root = {
@@ -42,13 +47,13 @@ static struct ctl_table_root net_sysctl_root = {
 
 static int sysctl_net_init(struct net *net)
 {
-	INIT_LIST_HEAD(&net->sysctl_table_headers);
+	setup_sysctl_set(&net->sysctls, NULL, is_seen);
 	return 0;
 }
 
 static void sysctl_net_exit(struct net *net)
 {
-	WARN_ON(!list_empty(&net->sysctl_table_headers));
+	WARN_ON(!list_empty(&net->sysctls.list));
 	return;
 }
 
