@@ -1353,12 +1353,41 @@ static void start_unregistering(struct ctl_table_header *p)
 		spin_unlock(&sysctl_lock);
 		wait_for_completion(&wait);
 		spin_lock(&sysctl_lock);
+	} else {
+		/* anything non-NULL; we'll never dereference it */
+		p->unregistering = ERR_PTR(-EINVAL);
 	}
 	/*
 	 * do not remove from the list until nobody holds it; walking the
 	 * list in do_sysctl() relies on that.
 	 */
 	list_del_init(&p->ctl_entry);
+}
+
+void sysctl_head_get(struct ctl_table_header *head)
+{
+	spin_lock(&sysctl_lock);
+	head->count++;
+	spin_unlock(&sysctl_lock);
+}
+
+void sysctl_head_put(struct ctl_table_header *head)
+{
+	spin_lock(&sysctl_lock);
+	if (!--head->count)
+		kfree(head);
+	spin_unlock(&sysctl_lock);
+}
+
+struct ctl_table_header *sysctl_head_grab(struct ctl_table_header *head)
+{
+	if (!head)
+		BUG();
+	spin_lock(&sysctl_lock);
+	if (!use_table(head))
+		head = ERR_PTR(-ENOENT);
+	spin_unlock(&sysctl_lock);
+	return head;
 }
 
 void sysctl_head_finish(struct ctl_table_header *head)
@@ -1737,6 +1766,7 @@ struct ctl_table_header *__register_sysctl_paths(
 	header->unregistering = NULL;
 	header->root = root;
 	sysctl_set_parent(NULL, header->ctl_table);
+	header->count = 1;
 #ifdef CONFIG_SYSCTL_SYSCALL_CHECK
 	if (sysctl_check_table(namespaces, header->ctl_table)) {
 		kfree(header);
@@ -1800,8 +1830,9 @@ void unregister_sysctl_table(struct ctl_table_header * header)
 
 	spin_lock(&sysctl_lock);
 	start_unregistering(header);
+	if (!--header->count)
+		kfree(header);
 	spin_unlock(&sysctl_lock);
-	kfree(header);
 }
 
 void setup_sysctl_set(struct ctl_table_set *p,
