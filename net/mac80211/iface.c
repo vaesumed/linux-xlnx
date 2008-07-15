@@ -33,9 +33,8 @@ static void ieee80211_if_sdata_deinit(struct ieee80211_sub_if_data *sdata)
 {
 	int i;
 
-	for (i = 0; i < IEEE80211_FRAGMENT_MAX; i++) {
+	for (i = 0; i < IEEE80211_FRAGMENT_MAX; i++)
 		__skb_queue_purge(&sdata->fragments[i].skb_list);
-	}
 }
 
 /* Must be called with rtnl lock held. */
@@ -167,9 +166,10 @@ void ieee80211_if_set_type(struct net_device *dev, int type)
 		ifsta->auth_algs = IEEE80211_AUTH_ALG_OPEN |
 			IEEE80211_AUTH_ALG_SHARED_KEY;
 		ifsta->flags |= IEEE80211_STA_CREATE_IBSS |
-			IEEE80211_STA_WMM_ENABLED |
 			IEEE80211_STA_AUTO_BSSID_SEL |
 			IEEE80211_STA_AUTO_CHANNEL_SEL;
+		if (ieee80211_num_regular_queues(&sdata->local->hw) >= 4)
+			ifsta->flags |= IEEE80211_STA_WMM_ENABLED;
 
 		msdata = IEEE80211_DEV_TO_SUB_IF(sdata->local->mdev);
 		sdata->bss = &msdata->u.ap;
@@ -184,9 +184,9 @@ void ieee80211_if_set_type(struct net_device *dev, int type)
 		sdata->u.mntr_flags = MONITOR_FLAG_CONTROL |
 				      MONITOR_FLAG_OTHER_BSS;
 		break;
-	default:
-		printk(KERN_WARNING "%s: %s: Unknown interface type 0x%x",
-		       dev->name, __func__, type);
+	case IEEE80211_IF_TYPE_INVALID:
+		BUG();
+		break;
 	}
 	ieee80211_debugfs_change_if_type(sdata, oldtype);
 }

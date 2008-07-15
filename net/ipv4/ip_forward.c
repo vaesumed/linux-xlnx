@@ -5,8 +5,6 @@
  *
  *		The IP forwarding functionality.
  *
- * Version:	$Id: ip_forward.c,v 1.48 2000/12/13 18:31:48 davem Exp $
- *
  * Authors:	see ip.c
  *
  * Fixes:
@@ -57,6 +55,9 @@ int ip_forward(struct sk_buff *skb)
 	struct iphdr *iph;	/* Our header */
 	struct rtable *rt;	/* Route we use */
 	struct ip_options * opt	= &(IPCB(skb)->opt);
+
+	if (skb_warn_if_lro(skb))
+		goto drop;
 
 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_FWD, skb))
 		goto drop;

@@ -5,8 +5,6 @@
  *	Authors:
  *	Pedro Roque		<roque@di.fc.ul.pt>
  *
- *	$Id: ip6_output.c,v 1.34 2002/02/01 22:01:04 davem Exp $
- *
  *	Based on linux/net/ipv4/ip_output.c
  *
  *	This program is free software; you can redistribute it and/or
@@ -175,6 +173,13 @@ static inline int ip6_skb_dst_mtu(struct sk_buff *skb)
 
 int ip6_output(struct sk_buff *skb)
 {
+	struct inet6_dev *idev = ip6_dst_idev(skb->dst);
+	if (unlikely(idev->cnf.disable_ipv6)) {
+		IP6_INC_STATS(idev, IPSTATS_MIB_OUTDISCARDS);
+		kfree_skb(skb);
+		return 0;
+	}
+
 	if ((skb->len > ip6_skb_dst_mtu(skb) && !skb_is_gso(skb)) ||
 				dst_allfrag(skb->dst))
 		return ip6_fragment(skb, ip6_output2);
@@ -409,6 +414,9 @@ int ip6_forward(struct sk_buff *skb)
 	if (ipv6_devconf.forwarding == 0)
 		goto error;
 
+	if (skb_warn_if_lro(skb))
+		goto drop;
+
 	if (!xfrm6_policy_check(NULL, XFRM_POLICY_FWD, skb)) {
 		IP6_INC_STATS(ip6_dst_idev(dst), IPSTATS_MIB_INDISCARDS);
 		goto drop;
@@ -497,7 +505,8 @@ int ip6_forward(struct sk_buff *skb)
 		int addrtype = ipv6_addr_type(&hdr->saddr);
 
 		/* This check is security critical. */
-		if (addrtype & (IPV6_ADDR_MULTICAST|IPV6_ADDR_LOOPBACK))
+		if (addrtype == IPV6_ADDR_ANY ||
+		    addrtype & (IPV6_ADDR_MULTICAST | IPV6_ADDR_LOOPBACK))
 			goto error;
 		if (addrtype & IPV6_ADDR_LINKLOCAL) {
 			icmpv6_send(skb, ICMPV6_DEST_UNREACH,
