@@ -141,10 +141,6 @@ extern int __must_check mutex_lock_killable(struct mutex *lock);
 # define mutex_lock_killable_nested(lock, subclass) mutex_lock_killable(lock)
 #endif
 
-/*
- * NOTE: mutex_trylock() follows the spin_trylock() convention,
- *       not the down_trylock() convention!
- */
 extern int mutex_trylock(struct mutex *lock);
 extern void mutex_unlock(struct mutex *lock);
 
