@@ -121,7 +121,7 @@ static const struct ide_port_info jmicron_chipset __devinitdata = {
 
 static int __devinit jmicron_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	return ide_setup_pci_device(dev, &jmicron_chipset);
+	return ide_pci_init_one(dev, &jmicron_chipset, NULL);
 }
 
 /* All JMB PATA controllers have and will continue to have the same
@@ -152,6 +152,7 @@ static struct pci_driver driver = {
 	.name		= "JMicron IDE",
 	.id_table	= jmicron_pci_tbl,
 	.probe		= jmicron_init_one,
+	.remove		= ide_pci_remove,
 };
 
 static int __init jmicron_ide_init(void)
@@ -159,7 +160,13 @@ static int __init jmicron_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit jmicron_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(jmicron_ide_init);
+module_exit(jmicron_ide_exit);
 
 MODULE_AUTHOR("Alan Cox");
 MODULE_DESCRIPTION("PCI driver module for the JMicron in legacy modes");

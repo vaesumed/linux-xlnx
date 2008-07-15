@@ -528,8 +528,9 @@ static struct ide_dma_ops it821x_pass_through_dma_ops = {
 static void __devinit init_hwif_it821x(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
-	struct it821x_dev **itdevs = (struct it821x_dev **)pci_get_drvdata(dev);
-	struct it821x_dev *idev = itdevs[hwif->channel];
+	struct ide_host *host = pci_get_drvdata(dev);
+	struct it821x_dev *itdevs = host->host_priv;
+	struct it821x_dev *idev = itdevs + hwif->channel;
 	u8 conf;
 
 	ide_set_hwifdata(hwif, idev);
@@ -642,23 +643,29 @@ static const struct ide_port_info it821x_chipsets[] __devinitdata = {
 
 static int __devinit it821x_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	struct it821x_dev *itdevs[2] = { NULL, NULL} , *itdev;
-	unsigned int i;
+	struct it821x_dev *itdevs;
+	int rc;
 
-	for (i = 0; i < 2; i++) {
-		itdev = kzalloc(sizeof(*itdev), GFP_KERNEL);
-		if (itdev == NULL) {
-			kfree(itdevs[0]);
-			printk(KERN_ERR "it821x: out of memory\n");
-			return -ENOMEM;
-		}
-
-		itdevs[i] = itdev;
+	itdevs = kzalloc(2 * sizeof(*itdevs), GFP_KERNEL);
+	if (itdevs == NULL) {
+		printk(KERN_ERR "it821x: out of memory\n");
+		return -ENOMEM;
 	}
 
-	pci_set_drvdata(dev, itdevs);
+	rc = ide_pci_init_one(dev, &it821x_chipsets[id->driver_data], itdevs);
+	if (rc)
+		kfree(itdevs);
 
-	return ide_setup_pci_device(dev, &it821x_chipsets[id->driver_data]);
+	return rc;
+}
+
+static void __devexit it821x_remove(struct pci_dev *dev)
+{
+	struct ide_host *host = pci_get_drvdata(dev);
+	struct it821x_dev *itdevs = host->host_priv;
+
+	ide_pci_remove(dev);
+	kfree(itdevs);
 }
 
 static const struct pci_device_id it821x_pci_tbl[] = {
@@ -673,6 +680,7 @@ static struct pci_driver driver = {
 	.name		= "ITE821x IDE",
 	.id_table	= it821x_pci_tbl,
 	.probe		= it821x_init_one,
+	.remove		= it821x_remove,
 };
 
 static int __init it821x_ide_init(void)
@@ -680,7 +688,13 @@ static int __init it821x_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit it821x_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(it821x_ide_init);
+module_exit(it821x_ide_exit);
 
 module_param_named(noraid, it8212_noraid, int, S_IRUGO);
 MODULE_PARM_DESC(noraid, "Force card into bypass mode");
