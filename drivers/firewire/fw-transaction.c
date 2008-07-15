@@ -55,6 +55,9 @@
 #define HEADER_GET_DATA_LENGTH(q)	(((q) >> 16) & 0xffff)
 #define HEADER_GET_EXTENDED_TCODE(q)	(((q) >> 0) & 0xffff)
 
+#define HEADER_DESTINATION_IS_BROADCAST(q) \
+	(((q) & HEADER_DESTINATION(0x3f)) == HEADER_DESTINATION(0x3f))
+
 #define PHY_CONFIG_GAP_COUNT(gap_count)	(((gap_count) << 16) | (1 << 22))
 #define PHY_CONFIG_ROOT_ID(node_id)	((((node_id) & 0x3f) << 24) | (1 << 23))
 #define PHY_IDENTIFIER(id)		((id) << 30)
@@ -148,7 +151,7 @@ transmit_complete_callback(struct fw_packet *packet,
 
 static void
 fw_fill_request(struct fw_packet *packet, int tcode, int tlabel,
-		int node_id, int source_id, int generation, int speed,
+		int destination_id, int source_id, int generation, int speed,
 		unsigned long long offset, void *payload, size_t length)
 {
 	int ext_tcode;
@@ -163,7 +166,7 @@ fw_fill_request(struct fw_packet *packet, int tcode, int tlabel,
 		HEADER_RETRY(RETRY_X) |
 		HEADER_TLABEL(tlabel) |
 		HEADER_TCODE(tcode) |
-		HEADER_DESTINATION(node_id);
+		HEADER_DESTINATION(destination_id);
 	packet->header[1] =
 		HEADER_OFFSET_HIGH(offset >> 32) | HEADER_SOURCE(source_id);
 	packet->header[2] =
@@ -249,7 +252,7 @@ fw_send_request(struct fw_card *card, struct fw_transaction *t,
 		fw_transaction_callback_t callback, void *callback_data)
 {
 	unsigned long flags;
-	int tlabel, source;
+	int tlabel;
 
 	/*
 	 * Bump the flush timer up 100ms first of all so we
@@ -265,7 +268,6 @@ fw_send_request(struct fw_card *card, struct fw_transaction *t,
 
 	spin_lock_irqsave(&card->lock, flags);
 
-	source = card->node_id;
 	tlabel = card->current_tlabel;
 	if (card->tlabel_mask & (1 << tlabel)) {
 		spin_unlock_irqrestore(&card->lock, flags);
@@ -276,20 +278,18 @@ fw_send_request(struct fw_card *card, struct fw_transaction *t,
 	card->current_tlabel = (card->current_tlabel + 1) & 0x1f;
 	card->tlabel_mask |= (1 << tlabel);
 
-	list_add_tail(&t->link, &card->transaction_list);
-
-	spin_unlock_irqrestore(&card->lock, flags);
-
-	/* Initialize rest of transaction, fill out packet and send it. */
 	t->node_id = node_id;
 	t->tlabel = tlabel;
 	t->callback = callback;
 	t->callback_data = callback_data;
 
-	fw_fill_request(&t->packet, tcode, t->tlabel,
-			node_id, source, generation,
-			speed, offset, payload, length);
+	fw_fill_request(&t->packet, tcode, t->tlabel, node_id, card->node_id,
+			generation, speed, offset, payload, length);
 	t->packet.callback = transmit_complete_callback;
+
+	list_add_tail(&t->link, &card->transaction_list);
+
+	spin_unlock_irqrestore(&card->lock, flags);
 
 	card->driver->send_request(card, &t->packet);
 }
@@ -624,12 +624,9 @@ allocate_request(struct fw_packet *p)
 void
 fw_send_response(struct fw_card *card, struct fw_request *request, int rcode)
 {
-	/*
-	 * Broadcast packets are reported as ACK_COMPLETE, so this
-	 * check is sufficient to ensure we don't send response to
-	 * broadcast packets or posted writes.
-	 */
-	if (request->ack != ACK_PENDING) {
+	/* unified transaction or broadcast transaction: don't respond */
+	if (request->ack != ACK_PENDING ||
+	    HEADER_DESTINATION_IS_BROADCAST(request->request_header[0])) {
 		kfree(request);
 		return;
 	}
@@ -817,12 +814,13 @@ handle_registers(struct fw_card *card, struct fw_request *request,
 	int reg = offset & ~CSR_REGISTER_BASE;
 	unsigned long long bus_time;
 	__be32 *data = payload;
+	int rcode = RCODE_COMPLETE;
 
 	switch (reg) {
 	case CSR_CYCLE_TIME:
 	case CSR_BUS_TIME:
 		if (!TCODE_IS_READ_REQUEST(tcode) || length != 4) {
-			fw_send_response(card, request, RCODE_TYPE_ERROR);
+			rcode = RCODE_TYPE_ERROR;
 			break;
 		}
 
@@ -831,7 +829,17 @@ handle_registers(struct fw_card *card, struct fw_request *request,
 			*data = cpu_to_be32(bus_time);
 		else
 			*data = cpu_to_be32(bus_time >> 25);
-		fw_send_response(card, request, RCODE_COMPLETE);
+		break;
+
+	case CSR_BROADCAST_CHANNEL:
+		if (tcode == TCODE_READ_QUADLET_REQUEST)
+			*data = cpu_to_be32(card->broadcast_channel);
+		else if (tcode == TCODE_WRITE_QUADLET_REQUEST)
+			card->broadcast_channel =
+			    (be32_to_cpu(*data) & BROADCAST_CHANNEL_VALID) |
+			    BROADCAST_CHANNEL_INITIAL;
+		else
+			rcode = RCODE_TYPE_ERROR;
 		break;
 
 	case CSR_BUS_MANAGER_ID:
@@ -850,10 +858,13 @@ handle_registers(struct fw_card *card, struct fw_request *request,
 
 	case CSR_BUSY_TIMEOUT:
 		/* FIXME: Implement this. */
+
 	default:
-		fw_send_response(card, request, RCODE_ADDRESS_ERROR);
+		rcode = RCODE_ADDRESS_ERROR;
 		break;
 	}
+
+	fw_send_response(card, request, rcode);
 }
 
 static struct fw_address_handler registers = {
