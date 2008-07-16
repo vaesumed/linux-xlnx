@@ -1298,7 +1298,7 @@ done:
 	if (unlikely(err && err != -ENOMEM)) {
 		/*
 		 * Set page error if there is only one ntfs record in the page.
-		 * Otherwise we would loose per-record granularity.
+		 * Otherwise we would lose per-record granularity.
 		 */
 		if (ni->itype.index.block_size == PAGE_CACHE_SIZE)
 			SetPageError(page);
