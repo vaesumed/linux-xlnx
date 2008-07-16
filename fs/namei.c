@@ -24,6 +24,7 @@
 #include <linux/fsnotify.h>
 #include <linux/personality.h>
 #include <linux/security.h>
+#include <linux/integrity.h>
 #include <linux/syscalls.h>
 #include <linux/mount.h>
 #include <linux/audit.h>
@@ -286,7 +287,10 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 	if (retval)
 		return retval;
 
-	return security_inode_permission(inode, mask, nd);
+	retval = security_inode_permission(inode, mask, nd);
+	if (retval)
+		return retval;
+	return integrity_inode_permission(inode, mask, nd);
 }
 
 /**
@@ -462,6 +466,7 @@ static struct dentry * cached_lookup(struct dentry * parent, struct qstr * name,
 static int exec_permission_lite(struct inode *inode,
 				       struct nameidata *nd)
 {
+	int retval;
 	umode_t	mode = inode->i_mode;
 
 	if (inode->i_op && inode->i_op->permission)
@@ -486,7 +491,10 @@ static int exec_permission_lite(struct inode *inode,
 
 	return -EACCES;
 ok:
-	return security_inode_permission(inode, MAY_EXEC, nd);
+	retval =  security_inode_permission(inode, MAY_EXEC, nd);
+	if (retval)
+		return retval;
+	return integrity_inode_permission(inode, MAY_EXEC, nd);
 }
 
 /*
