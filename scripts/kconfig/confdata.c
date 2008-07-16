@@ -132,7 +132,7 @@ static int conf_set_sym_val(struct symbol *sym, int def, int def_flags, char *p)
 	case S_HEX:
 	done:
 		if (sym_string_valid(sym, p)) {
-			sym->def[def].val = strdup_type(p, sym->type);
+			sym->def[def].val = strdup(p);
 			sym->flags |= def_flags;
 		} else {
 			conf_warning("symbol value '%s' invalid for %s", p, sym->name);
