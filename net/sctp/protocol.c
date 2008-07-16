@@ -113,9 +113,13 @@ static __init int sctp_proc_init(void)
 		goto out_eps_proc_init;
 	if (sctp_assocs_proc_init())
 		goto out_assocs_proc_init;
+	if (sctp_remaddr_proc_init())
+		goto out_remaddr_proc_init;
 
 	return 0;
 
+out_remaddr_proc_init:
+	sctp_assocs_proc_exit();
 out_assocs_proc_init:
 	sctp_eps_proc_exit();
 out_eps_proc_init:
@@ -138,6 +142,7 @@ static void sctp_proc_exit(void)
 	sctp_snmp_proc_exit();
 	sctp_eps_proc_exit();
 	sctp_assocs_proc_exit();
+	sctp_remaddr_proc_exit();
 
 	if (proc_net_sctp) {
 		proc_net_sctp = NULL;
