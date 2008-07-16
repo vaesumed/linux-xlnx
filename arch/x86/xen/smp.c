@@ -351,7 +351,7 @@ static void xen_send_IPI_mask(cpumask_t mask, enum ipi_vector vector)
 
 	cpus_and(mask, mask, cpu_online_map);
 
-	for_each_cpu_mask(cpu, mask)
+	for_each_cpu_mask_nr(cpu, mask)
 		xen_send_IPI_one(cpu, vector);
 }
 
