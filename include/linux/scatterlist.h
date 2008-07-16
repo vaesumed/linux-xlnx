@@ -13,6 +13,12 @@ struct sg_table {
 	unsigned int orig_nents;	/* original size of list */
 };
 
+struct sg_iterator {
+	struct scatterlist *sg;		/* current entry */
+	unsigned int nents;		/* number of remaining entries */
+	unsigned int offset;		/* offset within sg */
+};
+
 /*
  * Notes on SG table design.
  *
@@ -212,6 +218,12 @@ void sg_free_table(struct sg_table *);
 int __sg_alloc_table(struct sg_table *, unsigned int, unsigned int, gfp_t,
 		     sg_alloc_fn *);
 int sg_alloc_table(struct sg_table *, unsigned int, gfp_t);
+
+typedef size_t (sg_iter_fn)(void *, size_t, struct page *, void *);
+
+void sg_iter_init(struct sg_iterator *iter, struct scatterlist *sgl,
+		  unsigned int nents);
+size_t sg_iterate(struct sg_iterator *iter, sg_iter_fn *fn, void *priv);
 
 size_t sg_copy_from_buffer(struct scatterlist *sgl, unsigned int nents,
 			   void *buf, size_t buflen);
