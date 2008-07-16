@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004 IBM Corporation
+ * Copyright (C) 2004,2007,2008 IBM Corporation
  *
  * Authors:
  * Leendert van Doorn <leendert@watson.ibm.com>
@@ -29,6 +29,13 @@
 #include <linux/spinlock.h>
 #include <linux/smp_lock.h>
 
+#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/crypto.h>
+#include <linux/fs.h>
+#include <linux/scatterlist.h>
+#include <asm/unaligned.h>
 #include "tpm.h"
 
 enum tpm_const {
@@ -51,6 +58,8 @@ enum tpm_duration {
 static LIST_HEAD(tpm_chip_list);
 static DEFINE_SPINLOCK(driver_lock);
 static DECLARE_BITMAP(dev_mask, TPM_NUM_DEVICES);
+#define TPM_CHIP_NUM_MASK       0x0000ffff
+#define TPM_CHIP_TYPE_SHIFT     16
 
 /*
  * Array with one entry per ordinal defining the maximum amount
@@ -366,8 +375,7 @@ EXPORT_SYMBOL_GPL(tpm_calc_ordinal_duration);
 /*
  * tpm_transmit - internal kernel interface to transmit TPM commands
  */
-static ssize_t tpm_transmit(struct tpm_chip *chip, const char *buf,
-			    size_t bufsiz)
+ssize_t tpm_transmit(struct tpm_chip *chip, char *buf, size_t bufsiz)
 {
 	ssize_t rc;
 	u32 count, ordinal;
@@ -423,6 +431,7 @@ out:
 	mutex_unlock(&chip->tpm_mutex);
 	return rc;
 }
+EXPORT_SYMBOL_GPL(tpm_transmit);
 
 #define TPM_DIGEST_SIZE 20
 #define TPM_ERROR_SIZE 10
@@ -727,6 +736,102 @@ out:
 	return str - buf;
 }
 EXPORT_SYMBOL_GPL(tpm_show_pcrs);
+
+/*
+ * tpm_chip_lookup - return tpm_chip for given chip number and type
+ */
+static struct tpm_chip *tpm_chip_lookup(int chip_num, int chip_typ)
+{
+	struct tpm_chip *pos;
+
+	spin_lock(&driver_lock);
+	list_for_each_entry(pos, &tpm_chip_list, list) {
+		if ((chip_num == TPM_ANY_NUM || pos->dev_num == chip_num)
+		    && (chip_typ == TPM_ANY_TYPE)) {
+			spin_unlock(&driver_lock);
+			return pos;
+		}
+	}
+
+	spin_unlock(&driver_lock);
+	return NULL;
+}
+
+/**
+ * tpm_pcr_read - read a pcr value
+ * @chip_id: 	tpm chip identifier
+ * 		Upper 2 bytes: ANY, HW_ONLY or SW_ONLY
+ * 		Lower 2 bytes: tpm idx # or AN&
+ * @pcr_idx:	pcr idx to retrieve
+ * @res_buf: 	TPM_PCR value
+ * 		size of res_buf is 20 bytes (or NULL if you don't care)
+ */
+int tpm_pcr_read(u32 chip_id, int pcr_idx, u8 *res_buf)
+{
+	u8 data[READ_PCR_RESULT_SIZE];
+	int rc;
+	__be32 index;
+	int chip_num = chip_id & TPM_CHIP_NUM_MASK;
+	struct tpm_chip *chip;
+
+	chip = tpm_chip_lookup(chip_num, chip_id >> TPM_CHIP_TYPE_SHIFT);
+	if (chip == NULL)
+		return -ENODEV;
+	BUILD_BUG_ON(sizeof(pcrread) > READ_PCR_RESULT_SIZE);
+	memcpy(data, pcrread, sizeof(pcrread));
+	index = cpu_to_be32(pcr_idx);
+	memcpy(data + 10, &index, 4);
+	rc = tpm_transmit(chip, data, sizeof(data));
+	if (rc > 0)
+		rc = get_unaligned_be32((__be32 *) (data + 6));
+
+	if (rc == 0 && res_buf)
+		memcpy(res_buf, data + 10, TPM_DIGEST_SIZE);
+
+	return rc;
+
+}
+EXPORT_SYMBOL_GPL(tpm_pcr_read);
+
+#define EXTEND_PCR_SIZE 34
+static const u8 pcrextend[] = {
+	0, 193,			/* TPM_TAG_RQU_COMMAND */
+	0, 0, 0, 34,		/* length */
+	0, 0, 0, 20,		/* TPM_ORD_Extend */
+	0, 0, 0, 0		/* PCR index */
+};
+
+/**
+ * tpm_pcr_extend - extend pcr value with hash
+ * @chip_id: 	tpm chip identifier
+ * 		Upper 2 bytes: ANY, HW_ONLY or SW_ONLY
+ * 		Lower 2 bytes: tpm idx # or AN&
+ * @pcr_idx:	pcr idx to extend
+ * @hash: 	hash value used to extend pcr value
+ */
+int tpm_pcr_extend(u32 chip_id, int pcr_idx, const u8 *hash)
+{
+	u8 data[EXTEND_PCR_SIZE];
+	int rc;
+	__be32 index;
+	int chip_num = chip_id & TPM_CHIP_NUM_MASK;
+	struct tpm_chip *chip;
+
+	chip = tpm_chip_lookup(chip_num, chip_id >> TPM_CHIP_TYPE_SHIFT);
+	if (chip == NULL)
+		return -ENODEV;
+
+	BUILD_BUG_ON(sizeof(pcrextend) > EXTEND_PCR_SIZE);
+	memcpy(data, pcrextend, sizeof(pcrextend));
+	index = cpu_to_be32(pcr_idx);
+	memcpy(data + 10, &index, 4);
+	memcpy(data + 14, hash, TPM_DIGEST_SIZE);
+	rc = tpm_transmit(chip, data, sizeof(data));
+	if (rc > 0)
+		rc = get_unaligned_be32((__be32 *) (data + 6));
+	return rc;
+}
+EXPORT_SYMBOL_GPL(tpm_pcr_extend);
 
 #define  READ_PUBEK_RESULT_SIZE 314
 static const u8 readpubek[] = {
