@@ -1550,8 +1550,10 @@ static int ctcm_new_device(struct ccwgroup_device *cgdev)
 
 	type = get_channel_type(&cgdev->cdev[0]->id);
 
-	snprintf(read_id, CTCM_ID_SIZE, "ch-%s", cgdev->cdev[0]->dev.bus_id);
-	snprintf(write_id, CTCM_ID_SIZE, "ch-%s", cgdev->cdev[1]->dev.bus_id);
+	snprintf(read_id, CTCM_ID_SIZE, "ch-%s",
+		 dev_name(&cgdev->cdev[0]->dev));
+	snprintf(write_id, CTCM_ID_SIZE, "ch-%s",
+		 dev_name(&cgdev->cdev[1]->dev));
 
 	ret = add_channel(cgdev->cdev[0], type, priv);
 	if (ret)
