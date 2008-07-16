@@ -397,8 +397,8 @@ int ubi_leb_write(struct ubi_volume_desc *desc, int lnum, const void *buf,
 		return -EROFS;
 
 	if (lnum < 0 || lnum >= vol->reserved_pebs || offset < 0 || len < 0 ||
-	    offset + len > vol->usable_leb_size || offset % ubi->min_io_size ||
-	    len % ubi->min_io_size)
+	    offset + len > vol->usable_leb_size ||
+	    offset & (ubi->min_io_size - 1) || len & (ubi->min_io_size - 1))
 		return -EINVAL;
 
 	if (dtype != UBI_LONGTERM && dtype != UBI_SHORTTERM &&
@@ -447,7 +447,7 @@ int ubi_leb_change(struct ubi_volume_desc *desc, int lnum, const void *buf,
 		return -EROFS;
 
 	if (lnum < 0 || lnum >= vol->reserved_pebs || len < 0 ||
-	    len > vol->usable_leb_size || len % ubi->min_io_size)
+	    len > vol->usable_leb_size || len & (ubi->min_io_size - 1))
 		return -EINVAL;
 
 	if (dtype != UBI_LONGTERM && dtype != UBI_SHORTTERM &&
@@ -632,3 +632,27 @@ int ubi_is_mapped(struct ubi_volume_desc *desc, int lnum)
 	return vol->eba_tbl[lnum] >= 0;
 }
 EXPORT_SYMBOL_GPL(ubi_is_mapped);
+
+/**
+ * ubi_sync - synchronize UBI device buffers.
+ * @ubi_num: UBI device to synchronize
+ *
+ * The underlying MTD device may cache data in hardware or in software. This
+ * function ensures the caches are flushed. Returns zero in case of success and
+ * a negative error code in case of failure.
+ */
+int ubi_sync(int ubi_num)
+{
+	struct ubi_device *ubi;
+
+	ubi = ubi_get_device(ubi_num);
+	if (!ubi)
+		return -ENODEV;
+
+	if (ubi->mtd->sync)
+		ubi->mtd->sync(ubi->mtd);
+
+	ubi_put_device(ubi);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ubi_sync);

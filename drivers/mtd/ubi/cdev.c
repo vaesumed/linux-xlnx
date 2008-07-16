@@ -295,7 +295,7 @@ static ssize_t vol_cdev_direct_write(struct file *file, const char __user *buf,
 	off = do_div(tmp, vol->usable_leb_size);
 	lnum = tmp;
 
-	if (off % ubi->min_io_size) {
+	if (off & (ubi->min_io_size - 1)) {
 		dbg_err("unaligned position");
 		return -EINVAL;
 	}
@@ -304,7 +304,7 @@ static ssize_t vol_cdev_direct_write(struct file *file, const char __user *buf,
 		count_save = count = vol->used_bytes - *offp;
 
 	/* We can write only in fractions of the minimum I/O unit */
-	if (count % ubi->min_io_size) {
+	if (count & (ubi->min_io_size - 1)) {
 		dbg_err("unaligned write length");
 		return -EINVAL;
 	}
@@ -437,7 +437,8 @@ static int vol_cdev_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 
-		rsvd_bytes = vol->reserved_pebs * (ubi->leb_size-vol->data_pad);
+		rsvd_bytes = (long long)vol->reserved_pebs *
+					ubi->leb_size-vol->data_pad;
 		if (bytes < 0 || bytes > rsvd_bytes) {
 			err = -EINVAL;
 			break;
@@ -564,7 +565,7 @@ static int verify_mkvol_req(const struct ubi_device *ubi,
 	if (req->alignment > ubi->leb_size)
 		goto bad;
 
-	n = req->alignment % ubi->min_io_size;
+	n = req->alignment & (ubi->min_io_size - 1);
 	if (req->alignment != 1 && n)
 		goto bad;
 
@@ -572,6 +573,10 @@ static int verify_mkvol_req(const struct ubi_device *ubi,
 		err = -ENAMETOOLONG;
 		goto bad;
 	}
+
+	n = strnlen(req->name, req->name_len + 1);
+	if (n != req->name_len)
+		goto bad;
 
 	return 0;
 
@@ -628,11 +633,10 @@ static int ubi_cdev_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 
+		req.name[req.name_len] = '\0';
 		err = verify_mkvol_req(ubi, &req);
 		if (err)
 			break;
-
-		req.name[req.name_len] = '\0';
 
 		mutex_lock(&ubi->volumes_mutex);
 		err = ubi_create_volume(ubi, &req);
