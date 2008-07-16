@@ -119,6 +119,14 @@ config LEDS_GPIO
 	  outputs. To be useful the particular board must have LEDs
 	  and they must be connected to the GPIO lines.
 
+config LEDS_OPENFIRMWARE_GPIO
+	tristate "OpenFirmware bindings for GPIO connected LEDs"
+	depends on LEDS_CLASS && OF_GPIO
+	help
+	  This option enables support for the LEDs connected to GPIO
+	  outputs. To be useful the particular board must have LEDs
+	  and they must be connected to the GPIO lines.
+
 config LEDS_CM_X270
 	tristate "LED Support for the CM-X270 LEDs"
 	depends on LEDS_CLASS && MACH_ARMCORE
