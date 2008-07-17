@@ -1,5 +1,5 @@
-#ifndef _I386_PGTABLE_H
-#define _I386_PGTABLE_H
+#ifndef ASM_X86__PGTABLE_32_H
+#define ASM_X86__PGTABLE_32_H
 
 
 /*
@@ -171,21 +171,6 @@ do {						\
  */
 #define update_mmu_cache(vma, address, pte) do { } while (0)
 
-extern void native_pagetable_setup_start(pgd_t *base);
-extern void native_pagetable_setup_done(pgd_t *base);
-
-#ifndef CONFIG_PARAVIRT
-static inline void __init paravirt_pagetable_setup_start(pgd_t *base)
-{
-	native_pagetable_setup_start(base);
-}
-
-static inline void __init paravirt_pagetable_setup_done(pgd_t *base)
-{
-	native_pagetable_setup_done(base);
-}
-#endif	/* !CONFIG_PARAVIRT */
-
 #endif /* !__ASSEMBLY__ */
 
 /*
@@ -201,4 +186,4 @@ static inline void __init paravirt_pagetable_setup_done(pgd_t *base)
 #define io_remap_pfn_range(vma, vaddr, pfn, size, prot)	\
 	remap_pfn_range(vma, vaddr, pfn, size, prot)
 
-#endif /* _I386_PGTABLE_H */
+#endif /* ASM_X86__PGTABLE_32_H */

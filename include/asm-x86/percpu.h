@@ -1,5 +1,5 @@
-#ifndef _ASM_X86_PERCPU_H_
-#define _ASM_X86_PERCPU_H_
+#ifndef ASM_X86__PERCPU_H
+#define ASM_X86__PERCPU_H
 
 #ifdef CONFIG_X86_64
 #include <linux/compiler.h>
@@ -21,6 +21,32 @@
 #include <asm-generic/percpu.h>
 
 DECLARE_PER_CPU(struct x8664_pda, pda);
+
+/*
+ * These are supposed to be implemented as a single instruction which
+ * operates on the per-cpu data base segment.  x86-64 doesn't have
+ * that yet, so this is a fairly inefficient workaround for the
+ * meantime.  The single instruction is atomic with respect to
+ * preemption and interrupts, so we need to explicitly disable
+ * interrupts here to achieve the same effect.  However, because it
+ * can be used from within interrupt-disable/enable, we can't actually
+ * disable interrupts; disabling preemption is enough.
+ */
+#define x86_read_percpu(var)						\
+	({								\
+		typeof(per_cpu_var(var)) __tmp;				\
+		preempt_disable();					\
+		__tmp = __get_cpu_var(var);				\
+		preempt_enable();					\
+		__tmp;							\
+	})
+
+#define x86_write_percpu(var, val)					\
+	do {								\
+		preempt_disable();					\
+		__get_cpu_var(var) = (val);				\
+		preempt_enable();					\
+	} while(0)
 
 #else /* CONFIG_X86_64 */
 
@@ -262,4 +288,4 @@ do {							\
 
 #endif	/* !CONFIG_SMP */
 
-#endif /* _ASM_X86_PERCPU_H_ */
+#endif /* ASM_X86__PERCPU_H */

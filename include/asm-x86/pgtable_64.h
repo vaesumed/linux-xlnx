@@ -1,5 +1,5 @@
-#ifndef _X86_64_PGTABLE_H
-#define _X86_64_PGTABLE_H
+#ifndef ASM_X86__PGTABLE_64_H
+#define ASM_X86__PGTABLE_64_H
 
 #include <linux/const.h>
 #ifndef __ASSEMBLY__
@@ -16,6 +16,8 @@
 extern pud_t level3_kernel_pgt[512];
 extern pud_t level3_ident_pgt[512];
 extern pmd_t level2_kernel_pgt[512];
+extern pmd_t level2_fixmap_pgt[512];
+extern pmd_t level2_ident_pgt[512];
 extern pgd_t init_level4_pgt[];
 
 #define swapper_pg_dir init_level4_pgt
@@ -282,4 +284,4 @@ extern void cleanup_highmap(void);
 #define __HAVE_ARCH_PTE_SAME
 #endif /* !__ASSEMBLY__ */
 
-#endif /* _X86_64_PGTABLE_H */
+#endif /* ASM_X86__PGTABLE_64_H */
