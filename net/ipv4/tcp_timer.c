@@ -5,8 +5,6 @@
  *
  *		Implementation of the Transmission Control Protocol(TCP).
  *
- * Version:	$Id: tcp_timer.c,v 1.88 2002/02/01 22:01:04 davem Exp $
- *
  * Authors:	Ross Biro
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *		Mark Evans, <evansmp@uhura.aston.ac.uk>
@@ -328,24 +326,27 @@ static void tcp_retransmit_timer(struct sock *sk)
 		goto out;
 
 	if (icsk->icsk_retransmits == 0) {
+		int mib_idx;
+
 		if (icsk->icsk_ca_state == TCP_CA_Disorder ||
 		    icsk->icsk_ca_state == TCP_CA_Recovery) {
 			if (tcp_is_sack(tp)) {
 				if (icsk->icsk_ca_state == TCP_CA_Recovery)
-					NET_INC_STATS_BH(LINUX_MIB_TCPSACKRECOVERYFAIL);
+					mib_idx = LINUX_MIB_TCPSACKRECOVERYFAIL;
 				else
-					NET_INC_STATS_BH(LINUX_MIB_TCPSACKFAILURES);
+					mib_idx = LINUX_MIB_TCPSACKFAILURES;
 			} else {
 				if (icsk->icsk_ca_state == TCP_CA_Recovery)
-					NET_INC_STATS_BH(LINUX_MIB_TCPRENORECOVERYFAIL);
+					mib_idx = LINUX_MIB_TCPRENORECOVERYFAIL;
 				else
-					NET_INC_STATS_BH(LINUX_MIB_TCPRENOFAILURES);
+					mib_idx = LINUX_MIB_TCPRENOFAILURES;
 			}
 		} else if (icsk->icsk_ca_state == TCP_CA_Loss) {
-			NET_INC_STATS_BH(LINUX_MIB_TCPLOSSFAILURES);
+			mib_idx = LINUX_MIB_TCPLOSSFAILURES;
 		} else {
-			NET_INC_STATS_BH(LINUX_MIB_TCPTIMEOUTS);
+			mib_idx = LINUX_MIB_TCPTIMEOUTS;
 		}
+		NET_INC_STATS_BH(mib_idx);
 	}
 
 	if (tcp_use_frto(sk)) {
