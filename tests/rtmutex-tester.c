@@ -15,7 +15,7 @@
 #include <linux/timer.h>
 #include <linux/freezer.h>
 
-#include "rtmutex.h"
+#include "../kernel/rtmutex.h"
 
 #define MAX_RT_TEST_THREADS	8
 #define MAX_RT_TEST_MUTEXES	8
