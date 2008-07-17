@@ -1,5 +1,5 @@
-#ifndef ASM_X86__PGTABLE_32_H
-#define ASM_X86__PGTABLE_32_H
+#ifndef _I386_PGTABLE_H
+#define _I386_PGTABLE_H
 
 
 /*
@@ -186,4 +186,4 @@ do {						\
 #define io_remap_pfn_range(vma, vaddr, pfn, size, prot)	\
 	remap_pfn_range(vma, vaddr, pfn, size, prot)
 
-#endif /* ASM_X86__PGTABLE_32_H */
+#endif /* _I386_PGTABLE_H */

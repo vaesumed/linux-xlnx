@@ -1,5 +1,5 @@
-#ifndef ASM_X86__DEVICE_H
-#define ASM_X86__DEVICE_H
+#ifndef _ASM_X86_DEVICE_H
+#define _ASM_X86_DEVICE_H
 
 struct dev_archdata {
 #ifdef CONFIG_ACPI
@@ -10,4 +10,4 @@ struct dev_archdata {
 #endif
 };
 
-#endif /* ASM_X86__DEVICE_H */
+#endif /* _ASM_X86_DEVICE_H */

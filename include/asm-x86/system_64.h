@@ -1,5 +1,5 @@
-#ifndef ASM_X86__SYSTEM_64_H
-#define ASM_X86__SYSTEM_64_H
+#ifndef __ASM_SYSTEM_H
+#define __ASM_SYSTEM_H
 
 #include <asm/segment.h>
 #include <asm/cmpxchg.h>
@@ -19,4 +19,4 @@ static inline void write_cr8(unsigned long val)
 
 #include <linux/irqflags.h>
 
-#endif /* ASM_X86__SYSTEM_64_H */
+#endif

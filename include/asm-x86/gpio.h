@@ -1,6 +1,6 @@
-#ifndef ASM_X86__GPIO_H
-#define ASM_X86__GPIO_H
+#ifndef _ASM_I386_GPIO_H
+#define _ASM_I386_GPIO_H
 
 #include <gpio.h>
 
-#endif /* ASM_X86__GPIO_H */
+#endif /* _ASM_I386_GPIO_H */

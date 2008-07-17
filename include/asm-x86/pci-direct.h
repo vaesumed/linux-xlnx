@@ -1,5 +1,5 @@
-#ifndef ASM_X86__PCI_DIRECT_H
-#define ASM_X86__PCI_DIRECT_H
+#ifndef ASM_PCI_DIRECT_H
+#define ASM_PCI_DIRECT_H 1
 
 #include <linux/types.h>
 
@@ -14,4 +14,4 @@ extern void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val);
 
 extern int early_pci_allowed(void);
 
-#endif /* ASM_X86__PCI_DIRECT_H */
+#endif

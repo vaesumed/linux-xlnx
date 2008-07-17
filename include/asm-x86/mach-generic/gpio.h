@@ -1,5 +1,5 @@
-#ifndef ASM_X86__MACH_GENERIC__GPIO_H
-#define ASM_X86__MACH_GENERIC__GPIO_H
+#ifndef __ASM_MACH_GENERIC_GPIO_H
+#define __ASM_MACH_GENERIC_GPIO_H
 
 int gpio_request(unsigned gpio, const char *label);
 void gpio_free(unsigned gpio);
@@ -12,4 +12,4 @@ int irq_to_gpio(unsigned irq);
 
 #include <asm-generic/gpio.h>           /* cansleep wrappers */
 
-#endif /* ASM_X86__MACH_GENERIC__GPIO_H */
+#endif /* __ASM_MACH_GENERIC_GPIO_H */

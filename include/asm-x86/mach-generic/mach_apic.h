@@ -1,5 +1,5 @@
-#ifndef ASM_X86__MACH_GENERIC__MACH_APIC_H
-#define ASM_X86__MACH_GENERIC__MACH_APIC_H
+#ifndef __ASM_MACH_APIC_H
+#define __ASM_MACH_APIC_H
 
 #include <asm/genapic.h>
 
@@ -29,4 +29,4 @@
 
 extern void generic_bigsmp_probe(void);
 
-#endif /* ASM_X86__MACH_GENERIC__MACH_APIC_H */
+#endif /* __ASM_MACH_APIC_H */

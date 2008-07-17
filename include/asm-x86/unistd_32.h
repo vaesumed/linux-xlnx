@@ -1,5 +1,5 @@
-#ifndef ASM_X86__UNISTD_32_H
-#define ASM_X86__UNISTD_32_H
+#ifndef _ASM_I386_UNISTD_H_
+#define _ASM_I386_UNISTD_H_
 
 /*
  * This file contains the system call numbers.
@@ -370,4 +370,4 @@
 #endif
 
 #endif /* __KERNEL__ */
-#endif /* ASM_X86__UNISTD_32_H */
+#endif /* _ASM_I386_UNISTD_H_ */

@@ -1,5 +1,5 @@
-#ifndef ASM_X86__MACH_SUMMIT__MACH_MPPARSE_H
-#define ASM_X86__MACH_SUMMIT__MACH_MPPARSE_H
+#ifndef __ASM_MACH_MPPARSE_H
+#define __ASM_MACH_MPPARSE_H
 
 #include <mach_apic.h>
 #include <asm/tsc.h>
@@ -107,4 +107,4 @@ static inline int is_WPEG(struct rio_detail *rio){
 		rio->type == LookOutAWPEG || rio->type == LookOutBWPEG);
 }
 
-#endif /* ASM_X86__MACH_SUMMIT__MACH_MPPARSE_H */
+#endif /* __ASM_MACH_MPPARSE_H */
