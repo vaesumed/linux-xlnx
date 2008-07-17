@@ -19,20 +19,20 @@
  */
 
 /*
- * The UBI Eraseblock Association (EBA) unit.
+ * The UBI Eraseblock Association (EBA) sub-system.
  *
- * This unit is responsible for I/O to/from logical eraseblock.
+ * This sub-system is responsible for I/O to/from logical eraseblock.
  *
  * Although in this implementation the EBA table is fully kept and managed in
  * RAM, which assumes poor scalability, it might be (partially) maintained on
  * flash in future implementations.
  *
- * The EBA unit implements per-logical eraseblock locking. Before accessing a
- * logical eraseblock it is locked for reading or writing. The per-logical
- * eraseblock locking is implemented by means of the lock tree. The lock tree
- * is an RB-tree which refers all the currently locked logical eraseblocks. The
- * lock tree elements are &struct ubi_ltree_entry objects. They are indexed by
- * (@vol_id, @lnum) pairs.
+ * The EBA sub-system implements per-logical eraseblock locking. Before
+ * accessing a logical eraseblock it is locked for reading or writing. The
+ * per-logical eraseblock locking is implemented by means of the lock tree. The
+ * lock tree is an RB-tree which refers all the currently locked logical
+ * eraseblocks. The lock tree elements are &struct ubi_ltree_entry objects.
+ * They are indexed by (@vol_id, @lnum) pairs.
  *
  * EBA also maintains the global sequence counter which is incremented each
  * time a logical eraseblock is mapped to a physical eraseblock and it is
@@ -223,22 +223,18 @@ static int leb_read_lock(struct ubi_device *ubi, int vol_id, int lnum)
  */
 static void leb_read_unlock(struct ubi_device *ubi, int vol_id, int lnum)
 {
-	int free = 0;
 	struct ubi_ltree_entry *le;
 
 	spin_lock(&ubi->ltree_lock);
 	le = ltree_lookup(ubi, vol_id, lnum);
 	le->users -= 1;
 	ubi_assert(le->users >= 0);
+	up_read(&le->mutex);
 	if (le->users == 0) {
 		rb_erase(&le->rb, &ubi->ltree);
-		free = 1;
+		kfree(le);
 	}
 	spin_unlock(&ubi->ltree_lock);
-
-	up_read(&le->mutex);
-	if (free)
-		kfree(le);
 }
 
 /**
@@ -274,7 +270,6 @@ static int leb_write_lock(struct ubi_device *ubi, int vol_id, int lnum)
  */
 static int leb_write_trylock(struct ubi_device *ubi, int vol_id, int lnum)
 {
-	int free;
 	struct ubi_ltree_entry *le;
 
 	le = ltree_add_entry(ubi, vol_id, lnum);
@@ -289,12 +284,9 @@ static int leb_write_trylock(struct ubi_device *ubi, int vol_id, int lnum)
 	ubi_assert(le->users >= 0);
 	if (le->users == 0) {
 		rb_erase(&le->rb, &ubi->ltree);
-		free = 1;
-	} else
-		free = 0;
-	spin_unlock(&ubi->ltree_lock);
-	if (free)
 		kfree(le);
+	}
+	spin_unlock(&ubi->ltree_lock);
 
 	return 1;
 }
@@ -307,23 +299,18 @@ static int leb_write_trylock(struct ubi_device *ubi, int vol_id, int lnum)
  */
 static void leb_write_unlock(struct ubi_device *ubi, int vol_id, int lnum)
 {
-	int free;
 	struct ubi_ltree_entry *le;
 
 	spin_lock(&ubi->ltree_lock);
 	le = ltree_lookup(ubi, vol_id, lnum);
 	le->users -= 1;
 	ubi_assert(le->users >= 0);
+	up_write(&le->mutex);
 	if (le->users == 0) {
 		rb_erase(&le->rb, &ubi->ltree);
-		free = 1;
-	} else
-		free = 0;
-	spin_unlock(&ubi->ltree_lock);
-
-	up_write(&le->mutex);
-	if (free)
 		kfree(le);
+	}
+	spin_unlock(&ubi->ltree_lock);
 }
 
 /**
@@ -752,7 +739,7 @@ int ubi_eba_write_leb_st(struct ubi_device *ubi, struct ubi_volume *vol,
 		/* If this is the last LEB @len may be unaligned */
 		len = ALIGN(data_size, ubi->min_io_size);
 	else
-		ubi_assert(len % ubi->min_io_size == 0);
+		ubi_assert(!(len & (ubi->min_io_size - 1)));
 
 	vid_hdr = ubi_zalloc_vid_hdr(ubi, GFP_NOFS);
 	if (!vid_hdr)
@@ -1141,7 +1128,7 @@ out_unlock_leb:
 }
 
 /**
- * ubi_eba_init_scan - initialize the EBA unit using scanning information.
+ * ubi_eba_init_scan - initialize the EBA sub-system using scanning information.
  * @ubi: UBI device description object
  * @si: scanning information
  *
@@ -1156,7 +1143,7 @@ int ubi_eba_init_scan(struct ubi_device *ubi, struct ubi_scan_info *si)
 	struct ubi_scan_leb *seb;
 	struct rb_node *rb;
 
-	dbg_eba("initialize EBA unit");
+	dbg_eba("initialize EBA sub-system");
 
 	spin_lock_init(&ubi->ltree_lock);
 	mutex_init(&ubi->alc_mutex);
@@ -1222,7 +1209,7 @@ int ubi_eba_init_scan(struct ubi_device *ubi, struct ubi_scan_info *si)
 		ubi->rsvd_pebs  += ubi->beb_rsvd_pebs;
 	}
 
-	dbg_eba("EBA unit is initialized");
+	dbg_eba("EBA sub-system is initialized");
 	return 0;
 
 out_free:
@@ -1232,21 +1219,4 @@ out_free:
 		kfree(ubi->volumes[i]->eba_tbl);
 	}
 	return err;
-}
-
-/**
- * ubi_eba_close - close EBA unit.
- * @ubi: UBI device description object
- */
-void ubi_eba_close(const struct ubi_device *ubi)
-{
-	int i, num_volumes = ubi->vtbl_slots + UBI_INT_VOL_COUNT;
-
-	dbg_eba("close EBA unit");
-
-	for (i = 0; i < num_volumes; i++) {
-		if (!ubi->volumes[i])
-			continue;
-		kfree(ubi->volumes[i]->eba_tbl);
-	}
 }
