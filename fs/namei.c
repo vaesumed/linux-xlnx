@@ -286,7 +286,7 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 	if (retval)
 		return retval;
 
-	return security_inode_permission(inode, mask, nd);
+	return security_inode_permission(inode, mask);
 }
 
 /**
@@ -486,7 +486,7 @@ static int exec_permission_lite(struct inode *inode,
 
 	return -EACCES;
 ok:
-	return security_inode_permission(inode, MAY_EXEC, nd);
+	return security_inode_permission(inode, MAY_EXEC);
 }
 
 /*

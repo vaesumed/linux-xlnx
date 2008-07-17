@@ -347,7 +347,7 @@ static int dummy_inode_follow_link (struct dentry *dentry,
 	return 0;
 }
 
-static int dummy_inode_permission (struct inode *inode, int mask, struct nameidata *nd)
+static int dummy_inode_permission (struct inode *inode, int mask)
 {
 	return 0;
 }
