@@ -498,6 +498,7 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 	struct ubifs_inode *host_ui = ubifs_inode(host);
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_budget_req req = { .dirtied_ino = 1, .mod_dent = 1,
+					.dirtied_ino = 1,
 					.dirtied_ino_d = host_ui->data_len };
 
 	ubifs_assert(ui->data_len == inode->i_size);

@@ -21,8 +21,8 @@
  */
 
 /*
- * This file implements the budgeting sub-system which is responsible for UBIFS
- * space management.
+ * This file implements the budgeting unit which is responsible for UBIFS space
+ * management.
  *
  * Factors such as compression, wasted space at the ends of LEBs, space in other
  * journal heads, the effect of updates on the index, and so on, make it

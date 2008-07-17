@@ -513,7 +513,8 @@ static int fallible_read_node(struct ubifs_info *c, const union ubifs_key *key,
 }
 
 /**
- * matches_name - determine if a direntry or xattr entry matches a given name.
+ * matches_name - determine if a directory or extended attribute entry matches
+ *                a given name.
  * @c: UBIFS file-system description object
  * @zbr: zbranch of dent
  * @nm: name to match
@@ -1482,6 +1483,7 @@ out:
 
 /**
  * do_lookup_nm- look up a "hashed" node.
+ * directory entry file-system node.
  * @c: UBIFS file-system description object
  * @key: node key to lookup
  * @node: the node is returned here
@@ -1534,7 +1536,8 @@ out_unlock:
 }
 
 /**
- * ubifs_tnc_lookup_nm - look up a "hashed" node.
+ * ubifs_tnc_lookup_nm- look up a "hashed" node.
+ * directory entry file-system node.
  * @c: UBIFS file-system description object
  * @key: node key to lookup
  * @node: the node is returned here
@@ -1594,7 +1597,6 @@ static void correct_parent_keys(const struct ubifs_info *c,
 	while (keys_cmp(c, key, key1) < 0) {
 		key_copy(c, key, key1);
 		znode = znode->parent;
-		znode->alt = 1;
 		if (!znode->parent || znode->iip)
 			break;
 		key1 = &znode->parent->zbranch[0].key;

@@ -73,7 +73,7 @@ static inline void zero_ino_node_unused(struct ubifs_ino_node *ino)
 /**
  * zero_dent_node_unused - zero out unused fields of an on-flash directory
  *                         entry node.
- * @dent: the directory entry to zero out
+ * @ino: the directory entry to zero out
  */
 static inline void zero_dent_node_unused(struct ubifs_dent_node *dent)
 {
@@ -83,7 +83,7 @@ static inline void zero_dent_node_unused(struct ubifs_dent_node *dent)
 
 /**
  * zero_data_node_unused - zero out unused fields of an on-flash data node.
- * @data: the data node to zero out
+ * @ino: the data node to zero out
  */
 static inline void zero_data_node_unused(struct ubifs_data_node *data)
 {
@@ -93,7 +93,7 @@ static inline void zero_data_node_unused(struct ubifs_data_node *data)
 /**
  * zero_trun_node_unused - zero out unused fields of an on-flash truncation
  *                         node.
- * @trun: the truncation node to zero out
+ * @ino: the truncation node to zero out
  */
 static inline void zero_trun_node_unused(struct ubifs_trun_node *trun)
 {
@@ -1050,7 +1050,7 @@ out:
 /**
  * ubifs_jnl_truncate - update the journal for a truncation.
  * @c: UBIFS file-system description object
- * @inode: inode to truncate
+ * @inum: inode number of inode being truncated
  * @old_size: old size
  * @new_size: new size
  *

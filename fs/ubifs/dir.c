@@ -474,7 +474,7 @@ out:
 }
 
 /* If a directory is seeked, we have to free saved readdir() state */
-static loff_t ubifs_dir_llseek(struct file *file, loff_t offset, int origin)
+loff_t ubifs_dir_llseek(struct file *file, loff_t offset, int origin)
 {
 	kfree(file->private_data);
 	file->private_data = NULL;
@@ -1011,8 +1011,9 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	int old_sz = CALC_DENT_SIZE(old_dentry->d_name.len);
 	struct ubifs_budget_req req = { .new_dent = 1, .mod_dent = 1,
 					.dirtied_ino = 3 };
-	struct ubifs_budget_req ino_req = { .dirtied_ino = 1,
-				.dirtied_ino_d = old_inode_ui->data_len };
+	struct ubifs_budget_req ino_req =
+				{ .dirtied_ino = 1,
+				  .dirtied_ino_d = old_inode_ui->data_len };
 	struct timespec time;
 
 	/*

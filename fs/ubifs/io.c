@@ -873,7 +873,8 @@ static int wbuf_has_ino(struct ubifs_wbuf *wbuf, ino_t inum)
 }
 
 /**
- * ubifs_sync_wbufs_by_inode - synchronize write-buffers for an inode.
+ * ubifs_sync_wbufs_by_inode - synchronize write-buffers which have data.
+ * belonging to specified inodes.
  * @c: UBIFS file-system description object
  * @inode: inode to synchronize
  *

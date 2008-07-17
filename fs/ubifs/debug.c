@@ -792,7 +792,7 @@ void dbg_dump_index(struct ubifs_info *c)
 
 /**
  * dbg_check_synced_i_size - check synchronized inode size.
- * @inode: inode to check
+ * @ui: UBIFS inode description object
  *
  * If inode is clean, synchronized inode size has to be equivalent to current
  * inode size. This function has to be called only for locked inodes (@i_mutex
@@ -896,7 +896,7 @@ int dbg_check_dir_size(struct ubifs_info *c, const struct inode *dir)
  * dbg_check_key_order - make sure that colliding keys are properly ordered.
  * @c: UBIFS file-system description object
  * @zbr1: first zbranch
- * @zbr2: following zbranch
+ * @zbr1: following zbranch
  *
  * In UBIFS indexing B-tree colliding keys has to be sorted in binary order of
  * names of the direntries/xentries which are referred by the keys. This
@@ -1468,12 +1468,12 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 }
 
 /**
- * struct fsck_inode - information about an inode used when checking the file-system.
+ * fsck_inode - information about an inode used when checking the file-system.
  * @rb: link in the RB-tree of inodes
  * @inum: inode number
  * @mode: inode type, permissions, etc
  * @nlink: inode link count
- * @xattr_cnt: count of extended attributes
+ * @xatt_cnt: count of extended attributes
  * @references: how many directory/xattr entries refer this inode (calculated
  *              while walking the index)
  * @calc_cnt: for directory inode count of child directories
@@ -1505,7 +1505,7 @@ struct fsck_inode {
 };
 
 /**
- * struct fsck_data - private FS checking information.
+ * fsck_data - private FS checking information.
  * @inodes: RB-tree of all inodes (contains @struct fsck_inode objects)
  */
 struct fsck_data {
@@ -1751,8 +1751,7 @@ static int check_leaf(struct ubifs_info *c, struct ubifs_zbranch *zbr,
 		blk_offs += le32_to_cpu(dn->size);
 		if (blk_offs > fscki->size) {
 			ubifs_err("data node at LEB %d:%d is not within inode "
-				  "size %lld", zbr->lnum, zbr->offs,
-				  fscki->size);
+				  "size %lld", zbr->lnum, zbr->offs, fscki->size);
 			err = -EINVAL;
 			goto out_dump;
 		}

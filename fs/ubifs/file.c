@@ -325,8 +325,8 @@ static int allocate_budget(struct ubifs_info *c, struct page *page,
 	if (PagePrivate(page)) {
 		if (!appending)
 			/*
-			 * The page is dirty and we are not appending, which
-			 * means no budget is needed at all.
+			 * The page is dirty and we are not appending, which means no
+			 * budget is needed at all.
 			 */
 			return 0;
 
@@ -1214,7 +1214,7 @@ out_unlock:
 	return err;
 }
 
-static struct vm_operations_struct ubifs_file_vm_ops = {
+struct vm_operations_struct ubifs_file_vm_ops = {
 	.fault        = filemap_fault,
 	.page_mkwrite = ubifs_vm_page_mkwrite,
 };

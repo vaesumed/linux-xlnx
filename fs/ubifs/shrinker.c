@@ -162,9 +162,9 @@ static int shrink_tnc_trees(int nr, int age, int *contention)
 	int freed = 0;
 
 	spin_lock(&ubifs_infos_lock);
-	do {
+	do
 		run_no = ++shrinker_run_no;
-	} while (run_no == 0);
+	while (run_no == 0);
 	/* Iterate over all mounted UBIFS file-systems and try to shrink them */
 	p = ubifs_infos.next;
 	while (p != &ubifs_infos) {
