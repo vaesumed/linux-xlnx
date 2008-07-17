@@ -2,8 +2,6 @@
 # Integrity configuration
 #
 
-menu "Integrity options"
-
 config INTEGRITY
 	bool "Enable different integrity models"
 	help
@@ -21,4 +19,5 @@ config INTEGRITY_AUDIT
 	  allows integrity auditing to be disabled at boot.  If this
 	  option is selected, integrity auditing can be disabled with
 	  'integrity_audit=0' on the kernel command line.
-endmenu
+
+source security/integrity/ima/Kconfig
