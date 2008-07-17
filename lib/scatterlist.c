@@ -295,6 +295,117 @@ int sg_alloc_table(struct sg_table *table, unsigned int nents, gfp_t gfp_mask)
 EXPORT_SYMBOL(sg_alloc_table);
 
 /**
+ * sg_iter_init - Initialize/reset an sg iterator structure
+ * @iter:	The sg iterator structure
+ * @sgl:	The sg list to iterate over
+ * @nents:	Number of sg entries
+ *
+ *  Description:
+ *    Sets up the internal state of the sg iterator structure
+ *    to the beginning of the given sg list.
+ */
+void sg_iter_init(struct sg_iterator *iter, struct scatterlist *sgl,
+		  unsigned int nents)
+{
+	memset(iter, 0, sizeof(struct sg_iterator));
+
+	iter->sg = sgl;
+	iter->nents = nents;
+	iter->offset = 0;
+}
+EXPORT_SYMBOL(sg_iter_init);
+
+/**
+ * sg_iterate - Process the next chunk of the sg list
+ * @iter:	The sg iterator structure
+ * @fn:		Function that will process the data
+ * @priv:	Private data passed on to @fn@
+ *
+ *  Description:
+ *    The main worker of sg list iteration. Each invokation will
+ *    call @fn@ with a chunk of data that has been mapped into
+ *    kernel reachable virtual memory. The function must return
+ *    the number of bytes processed, which may be less than the
+ *    total size of the current chunk.
+ *
+ *    It is not required that @fn@ and @priv@ are identical between
+ *    each invokation, allowing separate processing of different
+ *    sections of the sg list.
+ *
+ *    The return value is that given by @fn@, or 0 if the end of
+ *    the sg list has been reached.
+ */
+size_t sg_iterate(struct sg_iterator *iter, sg_iter_fn *fn, void *priv)
+{
+	struct page *page;
+	int n;
+	size_t buflen;
+	unsigned int sg_offset, sg_remain;
+
+	void *buf;
+	size_t result;
+
+	WARN_ON(!irqs_disabled());
+
+	if (iter->nents == 0)
+		return 0;
+
+	sg_offset = iter->sg->offset + iter->offset;
+	sg_remain = iter->sg->length - iter->offset;
+
+	n = sg_offset / PAGE_SIZE;
+	page = nth_page(sg_page(iter->sg), n);
+
+	buflen = PAGE_SIZE - (sg_offset % PAGE_SIZE);
+	if (buflen > sg_remain)
+		buflen = sg_remain;
+
+	buf = kmap_atomic(page, KM_BIO_SRC_IRQ);
+	result = fn(buf, buflen, page, priv);
+	kunmap_atomic(buf, KM_BIO_SRC_IRQ);
+
+	WARN_ON(result > buflen);
+
+	iter->offset += result;
+
+	if (iter->offset == iter->sg->length) {
+		iter->nents--;
+		if (iter->nents)
+			iter->sg = sg_next(iter->sg);
+		iter->offset = 0;
+	}
+
+	return result;
+}
+EXPORT_SYMBOL(sg_iterate);
+
+struct sg_copy_state {
+	void *buf;
+	size_t offset, buflen;
+	int to_buffer;
+};
+
+static size_t sg_copy_worker(void *buf, size_t buflen,
+			     struct page *page, void *priv)
+{
+	struct sg_copy_state *st = priv;
+
+	if (buflen > (st->buflen - st->offset))
+		buflen = st->buflen - st->offset;
+
+	if (st->to_buffer)
+		memcpy(st->buf + st->offset, buf, buflen);
+	else {
+		memcpy(buf, st->buf + st->offset, buflen);
+		flush_kernel_dcache_page(page);
+	}
+
+	st->offset += buflen;
+
+	return buflen;
+}
+
+/**
  * sg_copy_buffer - Copy data between a linear buffer and an SG list
  * @sgl:		 The SG list
  * @nents:		 Number of SG entries
@@ -309,56 +420,19 @@ EXPORT_SYMBOL(sg_alloc_table);
 static size_t sg_copy_buffer(struct scatterlist *sgl, unsigned int nents,
 			     void *buf, size_t buflen, int to_buffer)
 {
-	struct scatterlist *sg;
-	size_t buf_off = 0;
-	int i;
+	struct sg_iterator iter;
+	struct sg_copy_state state;
 
-	WARN_ON(!irqs_disabled());
+	sg_iter_init(&iter, sgl, nents);
 
-	for_each_sg(sgl, sg, nents, i) {
-		struct page *page;
-		int n = 0;
-		unsigned int sg_off = sg->offset;
-		unsigned int sg_copy = sg->length;
+	state.buf = buf;
+	state.offset = 0;
+	state.buflen = buflen;
+	state.to_buffer = to_buffer;
 
-		if (sg_copy > buflen)
-			sg_copy = buflen;
-		buflen -= sg_copy;
+	while (sg_iterate(&iter, sg_copy_worker, &state));
 
-		while (sg_copy > 0) {
-			unsigned int page_copy;
-			void *p;
-
-			page_copy = PAGE_SIZE - sg_off;
-			if (page_copy > sg_copy)
-				page_copy = sg_copy;
-
-			page = nth_page(sg_page(sg), n);
-			p = kmap_atomic(page, KM_BIO_SRC_IRQ);
-
-			if (to_buffer)
-				memcpy(buf + buf_off, p + sg_off, page_copy);
-			else {
-				memcpy(p + sg_off, buf + buf_off, page_copy);
-				flush_kernel_dcache_page(page);
-			}
-
-			kunmap_atomic(p, KM_BIO_SRC_IRQ);
-
-			buf_off += page_copy;
-			sg_off += page_copy;
-			if (sg_off == PAGE_SIZE) {
-				sg_off = 0;
-				n++;
-			}
-			sg_copy -= page_copy;
-		}
-
-		if (!buflen)
-			break;
-	}
-
-	return buf_off;
+	return state.offset;
 }
 
 /**
