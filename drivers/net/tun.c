@@ -895,6 +895,14 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 		rtnl_unlock();
 		return ret;
 
+	case SIOCGIFHWADDR:
+		/* Get hw addres */
+		memcpy(ifr.ifr_hwaddr.sa_data, tun->dev->dev_addr, ETH_ALEN);
+		ifr.ifr_hwaddr.sa_family = tun->dev->type;
+		if (copy_to_user(argp, &ifr, sizeof ifr))
+			return -EFAULT;
+		return 0;
+
 	case TUNSETTXFILTER:
 		/* Can be set only for TAPs */
 		if ((tun->flags & TUN_TYPE_MASK) != TUN_TAP_DEV)
@@ -903,14 +911,6 @@ static int tun_chr_ioctl(struct inode *inode, struct file *file,
 		ret = update_filter(&tun->txflt, (void *) __user arg);
 		rtnl_unlock();
 		return ret;
-
-	case SIOCGIFHWADDR:
-		/* Get hw addres */
-		memcpy(ifr.ifr_hwaddr.sa_data, tun->dev->dev_addr, ETH_ALEN);
-		ifr.ifr_hwaddr.sa_family = tun->dev->type;
-		if (copy_to_user(argp, &ifr, sizeof ifr))
-			return -EFAULT;
-		return 0;
 
 	case SIOCSIFHWADDR:
 		/* Set hw address */
