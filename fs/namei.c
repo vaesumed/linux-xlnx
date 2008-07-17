@@ -185,6 +185,8 @@ int generic_permission(struct inode *inode, int mask,
 {
 	umode_t			mode = inode->i_mode;
 
+	mask &= MAY_READ | MAY_WRITE | MAY_EXEC;
+
 	if (current->fsuid == inode->i_uid)
 		mode >>= 6;
 	else {
@@ -203,7 +205,7 @@ int generic_permission(struct inode *inode, int mask,
 	/*
 	 * If the DACs are ok we don't need any capability check.
 	 */
-	if (((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask))
+	if ((mask & ~mode) == 0)
 		return 0;
 
  check_capabilities:
@@ -228,7 +230,7 @@ int generic_permission(struct inode *inode, int mask,
 
 int permission(struct inode *inode, int mask, struct nameidata *nd)
 {
-	int retval, submask;
+	int retval;
 	struct vfsmount *mnt = NULL;
 
 	if (nd)
@@ -261,9 +263,17 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 	}
 
 	/* Ordinary permission routines do not understand MAY_APPEND. */
-	submask = mask & ~MAY_APPEND;
 	if (inode->i_op && inode->i_op->permission) {
-		retval = inode->i_op->permission(inode, submask, nd);
+		int extra = 0;
+		if (nd) {
+			if (nd->flags & LOOKUP_ACCESS)
+				extra |= MAY_ACCESS;
+			if (nd->flags & LOOKUP_CHDIR)
+				extra |= MAY_CHDIR;
+			if (nd->flags & LOOKUP_OPEN)
+				extra |= MAY_OPEN;
+		}
+		retval = inode->i_op->permission(inode, mask | extra);
 		if (!retval) {
 			/*
 			 * Exec permission on a regular file is denied if none
@@ -277,7 +287,7 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 				return -EACCES;
 		}
 	} else {
-		retval = generic_permission(inode, submask, NULL);
+		retval = generic_permission(inode, mask, NULL);
 	}
 	if (retval)
 		return retval;
@@ -519,7 +529,14 @@ static struct dentry * real_lookup(struct dentry * parent, struct qstr * name, s
 	 */
 	result = d_lookup(parent, name);
 	if (!result) {
-		struct dentry * dentry = d_alloc(parent, name);
+		struct dentry *dentry;
+
+		/* Don't create child dentry for a dead directory. */
+		result = ERR_PTR(-ENOENT);
+		if (IS_DEADDIR(dir))
+			goto out_unlock;
+
+		dentry = d_alloc(parent, name);
 		result = ERR_PTR(-ENOMEM);
 		if (dentry) {
 			result = dir->i_op->lookup(dir, dentry, nd);
@@ -528,6 +545,7 @@ static struct dentry * real_lookup(struct dentry * parent, struct qstr * name, s
 			else
 				result = dentry;
 		}
+out_unlock:
 		mutex_unlock(&dir->i_mutex);
 		return result;
 	}
@@ -1317,7 +1335,14 @@ static struct dentry *__lookup_hash(struct qstr *name,
 
 	dentry = cached_lookup(base, name, nd);
 	if (!dentry) {
-		struct dentry *new = d_alloc(base, name);
+		struct dentry *new;
+
+		/* Don't create child dentry for a dead directory. */
+		dentry = ERR_PTR(-ENOENT);
+		if (IS_DEADDIR(inode))
+			goto out;
+
+		new = d_alloc(base, name);
 		dentry = ERR_PTR(-ENOMEM);
 		if (!new)
 			goto out;
@@ -2408,7 +2433,7 @@ asmlinkage long sys_unlink(const char __user *pathname)
 	return do_unlinkat(AT_FDCWD, pathname);
 }
 
-int vfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname, int mode)
+int vfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname)
 {
 	int error = may_create(dir, dentry, NULL);
 
@@ -2457,7 +2482,7 @@ asmlinkage long sys_symlinkat(const char __user *oldname,
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto out_dput;
-	error = vfs_symlink(nd.path.dentry->d_inode, dentry, from, S_IALLUGO);
+	error = vfs_symlink(nd.path.dentry->d_inode, dentry, from);
 	mnt_drop_write(nd.path.mnt);
 out_dput:
 	dput(dentry);
@@ -2498,19 +2523,19 @@ int vfs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *new_de
 		return -EPERM;
 	if (!dir->i_op || !dir->i_op->link)
 		return -EPERM;
-	if (S_ISDIR(old_dentry->d_inode->i_mode))
+	if (S_ISDIR(inode->i_mode))
 		return -EPERM;
 
 	error = security_inode_link(old_dentry, dir, new_dentry);
 	if (error)
 		return error;
 
-	mutex_lock(&old_dentry->d_inode->i_mutex);
+	mutex_lock(&inode->i_mutex);
 	DQUOT_INIT(dir);
 	error = dir->i_op->link(old_dentry, dir, new_dentry);
-	mutex_unlock(&old_dentry->d_inode->i_mutex);
+	mutex_unlock(&inode->i_mutex);
 	if (!error)
-		fsnotify_link(dir, old_dentry->d_inode, new_dentry);
+		fsnotify_link(dir, inode, new_dentry);
 	return error;
 }
 
