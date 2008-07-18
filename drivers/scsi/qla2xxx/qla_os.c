@@ -1631,7 +1631,7 @@ qla2x00_probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* load the F/W, read paramaters, and init the H/W */
 	ha->instance = num_hosts;
 
-	mutex_init(&ha->vport_mutex);
+	init_MUTEX(&ha->vport_sem);
 	init_completion(&ha->mbx_cmd_comp);
 	complete(&ha->mbx_cmd_comp);
 	init_completion(&ha->mbx_intr_comp);
