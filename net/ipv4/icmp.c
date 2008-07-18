@@ -3,8 +3,6 @@
  *
  *		Alan Cox, <alan@redhat.com>
  *
- *	Version: $Id: icmp.c,v 1.85 2002/02/01 22:01:03 davem Exp $
- *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License
  *	as published by the Free Software Foundation; either version
@@ -298,10 +296,10 @@ out:
 /*
  *	Maintain the counters used in the SNMP statistics for outgoing ICMP
  */
-void icmp_out_count(unsigned char type)
+void icmp_out_count(struct net *net, unsigned char type)
 {
-	ICMPMSGOUT_INC_STATS(type);
-	ICMP_INC_STATS(ICMP_MIB_OUTMSGS);
+	ICMPMSGOUT_INC_STATS(net, type);
+	ICMP_INC_STATS(net, ICMP_MIB_OUTMSGS);
 }
 
 /*
@@ -765,7 +763,7 @@ static void icmp_unreach(struct sk_buff *skb)
 out:
 	return;
 out_err:
-	ICMP_INC_STATS_BH(ICMP_MIB_INERRORS);
+	ICMP_INC_STATS_BH(net, ICMP_MIB_INERRORS);
 	goto out;
 }
 
@@ -805,7 +803,7 @@ static void icmp_redirect(struct sk_buff *skb)
 out:
 	return;
 out_err:
-	ICMP_INC_STATS_BH(ICMP_MIB_INERRORS);
+	ICMP_INC_STATS_BH(dev_net(skb->dev), ICMP_MIB_INERRORS);
 	goto out;
 }
 
@@ -876,7 +874,7 @@ static void icmp_timestamp(struct sk_buff *skb)
 out:
 	return;
 out_err:
-	ICMP_INC_STATS_BH(ICMP_MIB_INERRORS);
+	ICMP_INC_STATS_BH(dev_net(skb->dst->dev), ICMP_MIB_INERRORS);
 	goto out;
 }
 
@@ -975,6 +973,7 @@ int icmp_rcv(struct sk_buff *skb)
 {
 	struct icmphdr *icmph;
 	struct rtable *rt = skb->rtable;
+	struct net *net = dev_net(rt->u.dst.dev);
 
 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 		int nh;
@@ -995,7 +994,7 @@ int icmp_rcv(struct sk_buff *skb)
 		skb_set_network_header(skb, nh);
 	}
 
-	ICMP_INC_STATS_BH(ICMP_MIB_INMSGS);
+	ICMP_INC_STATS_BH(net, ICMP_MIB_INMSGS);
 
 	switch (skb->ip_summed) {
 	case CHECKSUM_COMPLETE:
@@ -1013,7 +1012,7 @@ int icmp_rcv(struct sk_buff *skb)
 
 	icmph = icmp_hdr(skb);
 
-	ICMPMSGIN_INC_STATS_BH(icmph->type);
+	ICMPMSGIN_INC_STATS_BH(net, icmph->type);
 	/*
 	 *	18 is the highest 'known' ICMP type. Anything else is a mystery
 	 *
@@ -1029,9 +1028,6 @@ int icmp_rcv(struct sk_buff *skb)
 	 */
 
 	if (rt->rt_flags & (RTCF_BROADCAST | RTCF_MULTICAST)) {
-		struct net *net;
-
-		net = dev_net(rt->u.dst.dev);
 		/*
 		 *	RFC 1122: 3.2.2.6 An ICMP_ECHO to broadcast MAY be
 		 *	  silently ignored (we let user decide with a sysctl).
@@ -1057,7 +1053,7 @@ drop:
 	kfree_skb(skb);
 	return 0;
 error:
-	ICMP_INC_STATS_BH(ICMP_MIB_INERRORS);
+	ICMP_INC_STATS_BH(net, ICMP_MIB_INERRORS);
 	goto drop;
 }
 
