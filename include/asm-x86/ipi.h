@@ -1,5 +1,5 @@
-#ifndef ASM_X86__IPI_H
-#define ASM_X86__IPI_H
+#ifndef __ASM_IPI_H
+#define __ASM_IPI_H
 
 /*
  * Copyright 2004 James Cleverdon, IBM.
@@ -129,4 +129,4 @@ static inline void send_IPI_mask_sequence(cpumask_t mask, int vector)
 	local_irq_restore(flags);
 }
 
-#endif /* ASM_X86__IPI_H */
+#endif /* __ASM_IPI_H */
