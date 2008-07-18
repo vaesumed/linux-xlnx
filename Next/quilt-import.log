@@ -1,0 +1,228 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.26-3414-g33af79d
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 33af79d12e0fa25545d49e86afc67ea8ad5f2f40
+HEAD is now at 33af79d scsi_dh: Verify "dev" is a sdev before accessing it.
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-free-path-selector-on-invalid-args.patch
+dm-log-make-dm_dirty_log-init-and-exit-static.patch
+dm-io-remove-struct-padding.patch
+dm-mpath-return-parameter-error.patch
+dm-mpath-fix-test-for-reinstate_path.patch
+dm-mpath-use-more-error-codes.patch
+dm-snapshot-track-snapshot-reads.patch
+dm-snapshot-fix-race-during-exception-creation.patch
+dm-snapshot-use-per-device-mempools.patch
+dm-introduce-merge_bvec_fn.patch
+dm-linear-add-merge.patch
+dm-table-remove-merge_bvec-sector-restriction.patch
+dm-crypt-add-merge.patch
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing m68k based on 45158894d4d6704afbb4cefe55e5f6ca279fe12a
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 45158894d4d6704afbb4cefe55e5f6ca279fe12a
+HEAD is now at 4515889 Merge branch 'merge' of git://git.kernel.org/pub/scm/linux/kernel/git/benh/powerpc
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-remove-CVS-keywords.diff
+m68k-ariadne-use-netstats-in-net_device-structure.diff
+m68k-initcalls-should-return-ENODEV-if-device-not-found2.diff
+m68k-vmlinux-std_sun3.lds.S_cleanup_use_PAGE_SIZE_macro.diff
+m68k-allnoconfig.diff
+m68k-remove-traditional.diff
+m68k-make-multi_defconfig-the-default-defconfig.diff
+m68k-remove-AP1000-code.diff
+zorro-replace-deprecated-__initcall-with-equivalent-device_initcall.diff
+zorro-use-memory_read_from_buffer.diff
+amifb-add-ami_modedb-to-modelist.diff
+atafb-add-atafb_modedb-to-modelist.diff
+drivers-video-c2p.c-add-MODULE_LICENSE.diff
+m68k-export-amiga_vblank.diff
+m68k-export-c2p.diff
+m68k-amiga-possible-cleanups.diff
+m68k-atari-debug.c-possible-cleanups.diff
+m68k-mac-possible-cleanups.diff
+m68k-q40-config.c-make-functions-static.diff
+m68k-sun3-possible-cleanups.diff
+m68k-remove-stale-ARCH_SUN4-define.diff
+apollo-missing-bootinfo.diff
+m68k-mac-remove-the-unused-ADB_KEYBOARD-option.diff
+m68k-atari-remove-the-dead-ATARI_SCC-options.diff
+m68k-apollo-remove-the-unused-APOLLO_ELPLUS-option.diff
+m68k-motorola-eliminate-NULL-test-and-memset-after-alloc_bootmem.diff
+m68k-sun3-eliminate-NULL-test-and-memset-after-alloc_bootmem.diff
+dio-use-dio_match_device.diff
+m68k-initrd-fix.diff
+Unchanged quilt series rr
+Importing ttydev based on a3cf859321486f69506326146ab3e2fd15c05c3f
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard a3cf859321486f69506326146ab3e2fd15c05c3f
+HEAD is now at a3cf859 Merge branch 'i2c-for-linus' of git://jdelvare.pck.nerim.net/jdelvare-2.6
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-simserial-fixes
+serial-add-flush-buffer-to-uart_ops
+atmel_serial-implement-flush-buffer-hook
+tty-iscicom-enable-disable-pci
+ldisc-ref
+.dotest/patch:123: trailing whitespace.
+		if ( tty->ldisc.ops->flush_buffer )  
+.dotest/patch:378: trailing whitespace.
+	
+.dotest/patch:489: trailing whitespace.
+	
+.dotest/patch:652: trailing whitespace.
+	
+.dotest/patch:800: trailing whitespace.
+	 
+warning: 5 lines add whitespace errors.
+rio_vcs
+serial_vcs
+tty-introduce-tty_port
+.dotest/patch:72: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+serial-core-use-tty_port
+tty-mn10300-use-tty_port
+tty-sparc-fix
+tty-ppc-fix-zilog
+ioc3_serial-fix-tty-port-breakage
+tty-rest-fix-tty-port-breakage
+tty.h-cleanup
+epca-use-tty_port
+esp-use-tty_port
+gs-use-tty_port
+riscom8-use-tty_port
+riscom-tty-remove-dud-checks
+isicom-use-tty_port
+istallion-use-tty_port
+moxa-use-tty_port
+mxser-use-tty_port
+rocketport-use-tty_port
+atmel_serial-fix-tty_port-breakage
+stallion-use-tty_port
+synclink-use-tty_port
+.dotest/patch:67: trailing whitespace.
+		if ( (info->port.flags & ASYNC_CHECK_CD) && 
+.dotest/patch:86: trailing whitespace.
+		if ( (info->port.flags & ASYNC_CTS_FLOW) && 
+.dotest/patch:125: space before tab in indent.
+ 	struct tty_struct *tty = info->port.tty;
+.dotest/patch:153: space before tab in indent.
+  		if (capable(CAP_SYS_ADMIN) && info->port.tty)
+.dotest/patch:186: space before tab in indent.
+ 	if (!info->port.tty || info->port.tty->termios->c_cflag & HUPCL) {
+warning: squelched 19 whitespace errors
+warning: 24 lines add whitespace errors.
+cleanup-tiocmset
+cyclades-use-tty_port
+termios-arch-laggards
+more-tty_port-fields
+tty-fix-strip
+usb-serial-api-change
+.dotest/patch:1406: trailing whitespace.
+static void digi_set_termios(struct tty_struct *tty, 
+.dotest/patch:3280: trailing whitespace.
+static void edge_set_termios(struct tty_struct *tty, 
+.dotest/patch:3620: space before tab in indent.
+ 		tty = port->port.tty;
+.dotest/patch:3658: trailing whitespace.
+			port->serial->dev, 
+.dotest/patch:4305: space before tab in indent.
+       	struct tty_struct *tty = port->port.tty;
+warning: squelched 8 whitespace errors
+warning: 13 lines add whitespace errors.
+whiteheat-coding-style
+whiteheat-fix-termios
+tty-belkin_sa-cleanup
+tty-tidy-usb-serial-bus
+tty-tidy-usb-console
+tty-usb-console-fix-termios
+.dotest/patch:15: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-tidy-usb-cp2101
+tty-tidy-usb-cyberjack
+tty-tidy-usb-cypress
+tty-usb-cypress-charsize
+tty-tidy-usb-digi-acceleport
+tty-tidy-usb-empeg
+tty-tidy-usb-ftdi-sio
+tty-tidy-usb-funsoft
+tty-tidy-usb-garmin-gps
+tty-tidy-usb-generic
+tty-tidy-usb-hp4x
+tty-tidy-usb-visor
+tty-tidy-usb-serial
+tty-tidy-usb-io-ti
+tty-tidy-usb-ipaq
+tty-tidy-usb-ipw
+.dotest/patch:362: space before tab in indent.
+			 		USB_RECIP_INTERFACE | USB_DIR_OUT,
+.dotest/patch:385: space before tab in indent.
+			 		USB_RECIP_INTERFACE | USB_DIR_OUT,
+warning: 2 lines add whitespace errors.
+tty-tidy-usb-iuu-phoenix
+tty-tidy-usb-keyspan
+tty-usb-keyspan-flipstr
+tty-tidy-usb-keyspan-pda
+tty-usb-keyspan-pda-flip
+tty-tidy-usb-kl5kusb105
+tty-tidy-usb-kobil-sct
+tty-usb-kobil-sct-ioctl
+tty-tidy-usb-mct-u232
+tty-usb-mct-u232-flip
+tty-tidy-usb-pl2303
+tty-tidy-usb-sierra
+tty-tidy-usb-spcp8x5
+tty-tidy-usb-ti-usb
+tty-tidy-usb-safe-serial
+tty-tidy-usb-oti6858
+tty-tidy-usb-option
+tty-tidy-usb-omninet
+tty-usb-omninet-flip
+tty-tidy-usb-mos7840
+tty-tidy-usb-mos7720
+tty-tidy-usb-io-edgeport
+.dotest/patch:442: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+tty-usb-io-edgeport-returns
+tty-split-ldisc
+.dotest/patch:20: trailing whitespace.
+obj-y	 += mem.o random.o tty_io.o n_tty.o tty_ioctl.o tty_ldisc.o 
+.dotest/patch:857: trailing whitespace.
+	
+.dotest/patch:950: trailing whitespace.
+	
+.dotest/patch:1270: trailing whitespace.
+	
+warning: 4 lines add whitespace errors.
+tty-specialix-tidy
+tty-specialix-code-tidy
+tty-epca-fixes
+tty-mxser-deadbrk
+tty-mark-broken-brk
+tty-break-errorhandler
+tty-epca-restore
+tty-isi-restore
+tty-riscom8-restore
+tty-stallion-brk-fixes
+tty-specialix-restore
+tty-ppc-fixes
+tty-mxser-add-cpu-102uf
+tty-epca-setup
+tty-8250-shared-irq
+tty-break-fix-sdio-uart
+tty-n_hdlc-nonblock
+Context reduced to (1/1) to apply fragment at 679
+tty-synclink_gt-bitorder
+tty-synclink_gt-dma-fill
+error: patch failed: drivers/char/synclink_gt.c:3457
+error: drivers/char/synclink_gt.c: patch does not apply
