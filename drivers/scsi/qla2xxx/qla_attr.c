@@ -557,8 +557,10 @@ qla2x00_serial_num_show(struct device *dev, struct device_attribute *attr,
 	scsi_qla_host_t *ha = shost_priv(class_to_shost(dev));
 	uint32_t sn;
 
-	if (IS_FWI2_CAPABLE(ha))
-		return snprintf(buf, PAGE_SIZE, "\n");
+	if (IS_FWI2_CAPABLE(ha)) {
+		qla2xxx_get_vpd_field(ha, "SN", buf, PAGE_SIZE);
+		return snprintf(buf, PAGE_SIZE, "%s\n", buf);
+	}
 
 	sn = ((ha->serial0 & 0x1f) << 16) | (ha->serial2 << 8) | ha->serial1;
 	return snprintf(buf, PAGE_SIZE, "%c%05d\n", 'A' + sn / 100000,
@@ -809,6 +811,16 @@ qla2x00_optrom_fw_version_show(struct device *dev,
 	    ha->fw_revision[3]);
 }
 
+static ssize_t
+qla2x00_total_isp_aborts_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	scsi_qla_host_t *ha = shost_priv(class_to_shost(dev));
+
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+	    ha->qla_stats.total_isp_aborts);
+}
+
 static DEVICE_ATTR(driver_version, S_IRUGO, qla2x00_drvr_version_show, NULL);
 static DEVICE_ATTR(fw_version, S_IRUGO, qla2x00_fw_version_show, NULL);
 static DEVICE_ATTR(serial_num, S_IRUGO, qla2x00_serial_num_show, NULL);
@@ -831,6 +843,8 @@ static DEVICE_ATTR(optrom_fcode_version, S_IRUGO,
 		   qla2x00_optrom_fcode_version_show, NULL);
 static DEVICE_ATTR(optrom_fw_version, S_IRUGO, qla2x00_optrom_fw_version_show,
 		   NULL);
+static DEVICE_ATTR(total_isp_aborts, S_IRUGO, qla2x00_total_isp_aborts_show,
+		   NULL);
 
 struct device_attribute *qla2x00_host_attrs[] = {
 	&dev_attr_driver_version,
@@ -849,6 +863,7 @@ struct device_attribute *qla2x00_host_attrs[] = {
 	&dev_attr_optrom_efi_version,
 	&dev_attr_optrom_fcode_version,
 	&dev_attr_optrom_fw_version,
+	&dev_attr_total_isp_aborts,
 	NULL,
 };
 
@@ -972,26 +987,39 @@ qla2x00_get_starget_port_id(struct scsi_target *starget)
 }
 
 static void
-qla2x00_get_rport_loss_tmo(struct fc_rport *rport)
+qla2x00_set_rport_loss_tmo(struct fc_rport *rport, uint32_t timeout)
 {
-	struct Scsi_Host *host = rport_to_shost(rport);
-	scsi_qla_host_t *ha = shost_priv(host);
-
-	rport->dev_loss_tmo = ha->port_down_retry_count + 5;
+	if (timeout)
+		rport->dev_loss_tmo = timeout;
+	else
+		rport->dev_loss_tmo = 1;
 }
 
 static void
-qla2x00_set_rport_loss_tmo(struct fc_rport *rport, uint32_t timeout)
+qla2x00_dev_loss_tmo_callbk(struct fc_rport *rport)
 {
 	struct Scsi_Host *host = rport_to_shost(rport);
-	scsi_qla_host_t *ha = shost_priv(host);
+	fc_port_t *fcport = *(fc_port_t **)rport->dd_data;
 
-	if (timeout)
-		ha->port_down_retry_count = timeout;
-	else
-		ha->port_down_retry_count = 1;
+	qla2x00_abort_fcport_cmds(fcport);
 
-	rport->dev_loss_tmo = ha->port_down_retry_count + 5;
+	/*
+	 * Transport has effectively 'deleted' the rport, clear
+	 * all local references.
+	 */
+	spin_lock_irq(host->host_lock);
+	fcport->rport = NULL;
+	*((fc_port_t **)rport->dd_data) = NULL;
+	spin_unlock_irq(host->host_lock);
+}
+
+static void
+qla2x00_terminate_rport_io(struct fc_rport *rport)
+{
+	fc_port_t *fcport = *(fc_port_t **)rport->dd_data;
+
+	qla2x00_abort_fcport_cmds(fcport);
+	scsi_target_unblock(&rport->dev);
 }
 
 static int
@@ -1045,6 +1073,7 @@ qla2x00_get_fc_host_stats(struct Scsi_Host *shost)
 	pfc_host_stat->invalid_tx_word_count = stats->inval_xmit_word_cnt;
 	pfc_host_stat->invalid_crc_count = stats->inval_crc_cnt;
 	if (IS_FWI2_CAPABLE(ha)) {
+		pfc_host_stat->lip_count = stats->lip_cnt;
 		pfc_host_stat->tx_frames = stats->tx_frames;
 		pfc_host_stat->rx_frames = stats->rx_frames;
 		pfc_host_stat->dumped_frames = stats->dumped_frames;
@@ -1173,16 +1202,10 @@ vport_create_failed_2:
 static int
 qla24xx_vport_delete(struct fc_vport *fc_vport)
 {
-	scsi_qla_host_t *ha = shost_priv(fc_vport->shost);
 	scsi_qla_host_t *vha = fc_vport->dd_data;
 
 	qla24xx_disable_vp(vha);
 	qla24xx_deallocate_vp_id(vha);
-
-	mutex_lock(&ha->vport_lock);
-	ha->cur_vport_count--;
-	clear_bit(vha->vp_idx, ha->vp_idx_map);
-	mutex_unlock(&ha->vport_lock);
 
 	kfree(vha->node_name);
 	kfree(vha->port_name);
@@ -1248,11 +1271,12 @@ struct fc_function_template qla2xxx_transport_functions = {
 	.get_starget_port_id  = qla2x00_get_starget_port_id,
 	.show_starget_port_id = 1,
 
-	.get_rport_dev_loss_tmo = qla2x00_get_rport_loss_tmo,
 	.set_rport_dev_loss_tmo = qla2x00_set_rport_loss_tmo,
 	.show_rport_dev_loss_tmo = 1,
 
 	.issue_fc_host_lip = qla2x00_issue_lip,
+	.dev_loss_tmo_callbk = qla2x00_dev_loss_tmo_callbk,
+	.terminate_rport_io = qla2x00_terminate_rport_io,
 	.get_fc_host_stats = qla2x00_get_fc_host_stats,
 
 	.vport_create = qla24xx_vport_create,
@@ -1291,11 +1315,12 @@ struct fc_function_template qla2xxx_transport_vport_functions = {
 	.get_starget_port_id  = qla2x00_get_starget_port_id,
 	.show_starget_port_id = 1,
 
-	.get_rport_dev_loss_tmo = qla2x00_get_rport_loss_tmo,
 	.set_rport_dev_loss_tmo = qla2x00_set_rport_loss_tmo,
 	.show_rport_dev_loss_tmo = 1,
 
 	.issue_fc_host_lip = qla2x00_issue_lip,
+	.dev_loss_tmo_callbk = qla2x00_dev_loss_tmo_callbk,
+	.terminate_rport_io = qla2x00_terminate_rport_io,
 	.get_fc_host_stats = qla2x00_get_fc_host_stats,
 };
 
