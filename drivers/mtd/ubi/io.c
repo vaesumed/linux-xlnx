@@ -20,15 +20,15 @@
  */
 
 /*
- * UBI input/output unit.
+ * UBI input/output sub-system.
  *
- * This unit provides a uniform way to work with all kinds of the underlying
- * MTD devices. It also implements handy functions for reading and writing UBI
- * headers.
+ * This sub-system provides a uniform way to work with all kinds of the
+ * underlying MTD devices. It also implements handy functions for reading and
+ * writing UBI headers.
  *
  * We are trying to have a paranoid mindset and not to trust to what we read
- * from the flash media in order to be more secure and robust. So this unit
- * validates every single header it reads from the flash media.
+ * from the flash media in order to be more secure and robust. So this
+ * sub-system validates every single header it reads from the flash media.
  *
  * Some words about how the eraseblock headers are stored.
  *
@@ -79,11 +79,11 @@
  * 512-byte chunks, we have to allocate one more buffer and copy our VID header
  * to offset 448 of this buffer.
  *
- * The I/O unit does the following trick in order to avoid this extra copy.
- * It always allocates a @ubi->vid_hdr_alsize bytes buffer for the VID header
- * and returns a pointer to offset @ubi->vid_hdr_shift of this buffer. When the
- * VID header is being written out, it shifts the VID header pointer back and
- * writes the whole sub-page.
+ * The I/O sub-system does the following trick in order to avoid this extra
+ * copy. It always allocates a @ubi->vid_hdr_alsize bytes buffer for the VID
+ * header and returns a pointer to offset @ubi->vid_hdr_shift of this buffer.
+ * When the VID header is being written out, it shifts the VID header pointer
+ * back and writes the whole sub-page.
  */
 
 #include <linux/crc32.h>
@@ -187,7 +187,7 @@ retry:
 		ubi_assert(len == read);
 
 		if (ubi_dbg_is_bitflip()) {
-			dbg_msg("bit-flip (emulated)");
+			dbg_gen("bit-flip (emulated)");
 			err = UBI_IO_BITFLIPS;
 		}
 	}
@@ -1256,7 +1256,7 @@ static int paranoid_check_all_ff(struct ubi_device *ubi, int pnum, int offset,
 
 fail:
 	ubi_err("paranoid check failed for PEB %d", pnum);
-	dbg_msg("hex dump of the %d-%d region", offset, offset + len);
+	ubi_msg("hex dump of the %d-%d region", offset, offset + len);
 	print_hex_dump(KERN_DEBUG, "", DUMP_PREFIX_OFFSET, 32, 1,
 		       ubi->dbg_peb_buf, len, 1);
 	err = 1;
