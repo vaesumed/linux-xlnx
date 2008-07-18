@@ -60,7 +60,7 @@ static int airprime_send_setup(struct usb_serial_port *port)
 
 	priv = usb_get_serial_port_data(port);
 
-	if (port->tty) {
+	if (port->port.tty) {
 		int val = 0;
 		if (priv->dtr_state)
 			val |= 0x01;
@@ -94,7 +94,7 @@ static void airprime_read_bulk_callback(struct urb *urb)
 	usb_serial_debug_data(debug, &port->dev, __func__,
 						urb->actual_length, data);
 
-	tty = port->tty;
+	tty = port->port.tty;
 	if (tty && urb->actual_length) {
 		tty_insert_flip_string(tty, data, urb->actual_length);
 		tty_flip_buffer_push(tty);
@@ -130,7 +130,8 @@ static void airprime_write_bulk_callback(struct urb *urb)
 	usb_serial_port_softint(port);
 }
 
-static int airprime_open(struct usb_serial_port *port, struct file *filp)
+static int airprime_open(struct tty_struct *tty, struct usb_serial_port *port,
+							struct file *filp)
 {
 	struct airprime_private *priv = usb_get_serial_port_data(port);
 	struct usb_serial *serial = port->serial;
@@ -211,7 +212,8 @@ static int airprime_open(struct usb_serial_port *port, struct file *filp)
 	return result;
 }
 
-static void airprime_close(struct usb_serial_port *port, struct file *filp)
+static void airprime_close(struct tty_struct *tty,
+			struct usb_serial_port *port, struct file *filp)
 {
 	struct airprime_private *priv = usb_get_serial_port_data(port);
 	int i;
@@ -237,7 +239,7 @@ static void airprime_close(struct usb_serial_port *port, struct file *filp)
 	usb_set_serial_port_data(port, NULL);
 }
 
-static int airprime_write(struct usb_serial_port *port,
+static int airprime_write(struct tty_struct *tty, struct usb_serial_port *port,
 			  const unsigned char *buf, int count)
 {
 	struct airprime_private *priv = usb_get_serial_port_data(port);
