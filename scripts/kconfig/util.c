@@ -131,19 +131,3 @@ const char *str_get(struct gstr *gs)
 	return gs->s;
 }
 
-/* duplicate str, but normalize any number according to the symbol type */
-char *strdup_type(const char *str, int type)
-{
-	char buf[64];
-
-	if (type == S_STRING)
-		return strdup(str);
-	if (type == S_HEX) {
-		unsigned int val = strtoul(str, NULL, 16);
-		sprintf(buf, "%#x", val);
-	} else {
-		int val = strtol(str, NULL, 10);
-		sprintf(buf, "%d", val);
-	}
-	return strdup(buf);
-}
