@@ -290,7 +290,7 @@ struct zfcp_unit *zfcp_unit_enqueue(struct zfcp_port *port, fcp_lun_t fcp_lun)
 	unit->port = port;
 	unit->fcp_lun = fcp_lun;
 
-	snprintf(unit->sysfs_device.bus_id, BUS_ID_SIZE, "0x%016llx", fcp_lun);
+	dev_set_name(&unit->sysfs_device, "0x%016llx", fcp_lun);
 	unit->sysfs_device.parent = &port->sysfs_device;
 	unit->sysfs_device.release = zfcp_sysfs_unit_release;
 	dev_set_drvdata(&unit->sysfs_device, unit);
@@ -539,8 +539,7 @@ int zfcp_adapter_enqueue(struct ccw_device *ccw_device)
 
 	adapter->generic_services.parent = &adapter->ccw_device->dev;
 	adapter->generic_services.release = zfcp_dummy_release;
-	snprintf(adapter->generic_services.bus_id, BUS_ID_SIZE,
-		 "generic_services");
+	dev_set_name(&adapter->generic_services, "generic_services");
 
 	if (device_register(&adapter->generic_services))
 		goto generic_services_failed;
@@ -678,11 +677,10 @@ struct zfcp_port *zfcp_port_enqueue(struct zfcp_adapter *adapter, wwn_t wwpn,
 			kfree(port);
 			return ERR_PTR(-EINVAL);
 		}
-		snprintf(port->sysfs_device.bus_id, BUS_ID_SIZE, "%s", bus_id);
+		dev_set_name(&port->sysfs_device, BUS_ID_SIZE, "%s", bus_id);
 		port->sysfs_device.parent = &adapter->generic_services;
 	} else {
-		snprintf(port->sysfs_device.bus_id,
-			 BUS_ID_SIZE, "0x%016llx", wwpn);
+		dev_set_name(&port->sysfs_device, "0x%016llx", wwpn);
 		port->sysfs_device.parent = &adapter->ccw_device->dev;
 	}
 
