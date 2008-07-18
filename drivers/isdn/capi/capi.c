@@ -466,7 +466,7 @@ static int handle_recv_skb(struct capiminor *mp, struct sk_buff *skb)
 	ld = tty_ldisc_ref(mp->tty);
 	if (ld == NULL)
 		return -1;
-	if (ld->receive_buf == NULL) {
+	if (ld->ops->receive_buf == NULL) {
 #if defined(_DEBUG_DATAFLOW) || defined(_DEBUG_TTYFUNCS)
 		printk(KERN_DEBUG "capi: ldisc has no receive_buf function\n");
 #endif
@@ -501,7 +501,7 @@ static int handle_recv_skb(struct capiminor *mp, struct sk_buff *skb)
 	printk(KERN_DEBUG "capi: DATA_B3_RESP %u len=%d => ldisc\n",
 				datahandle, skb->len);
 #endif
-	ld->receive_buf(mp->tty, skb->data, NULL, skb->len);
+	ld->ops->receive_buf(mp->tty, skb->data, NULL, skb->len);
 	kfree_skb(skb);
 	tty_ldisc_deref(ld);
 	return 0;
@@ -1302,11 +1302,12 @@ static void capinc_tty_hangup(struct tty_struct *tty)
 #endif
 }
 
-static void capinc_tty_break_ctl(struct tty_struct *tty, int state)
+static int capinc_tty_break_ctl(struct tty_struct *tty, int state)
 {
 #ifdef _DEBUG_TTYFUNCS
 	printk(KERN_DEBUG "capinc_tty_break_ctl(%d)\n", state);
 #endif
+	return 0;
 }
 
 static void capinc_tty_flush_buffer(struct tty_struct *tty)
