@@ -1,5 +1,5 @@
-#ifndef _ASM_X86_SEGMENT_H_
-#define _ASM_X86_SEGMENT_H_
+#ifndef ASM_X86__SEGMENT_H
+#define ASM_X86__SEGMENT_H
 
 /* Simple and small GDT entries for booting only */
 
@@ -203,4 +203,4 @@ extern const char early_idt_handlers[NUM_EXCEPTION_VECTORS][10];
 #endif
 #endif
 
-#endif
+#endif /* ASM_X86__SEGMENT_H */

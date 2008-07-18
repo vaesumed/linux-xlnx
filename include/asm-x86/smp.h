@@ -1,5 +1,5 @@
-#ifndef _ASM_X86_SMP_H_
-#define _ASM_X86_SMP_H_
+#ifndef ASM_X86__SMP_H
+#define ASM_X86__SMP_H
 #ifndef __ASSEMBLY__
 #include <linux/cpumask.h>
 #include <linux/init.h>
@@ -24,6 +24,8 @@ extern cpumask_t cpu_callin_map;
 
 extern void (*mtrr_hook)(void);
 extern void zap_low_mappings(void);
+
+extern int __cpuinit get_local_pda(int cpu);
 
 extern int smp_num_siblings;
 extern unsigned int num_processors;
@@ -203,4 +205,4 @@ extern void cpu_uninit(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif
+#endif /* ASM_X86__SMP_H */

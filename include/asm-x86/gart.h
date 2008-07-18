@@ -1,8 +1,7 @@
-#ifndef _ASM_X8664_GART_H
-#define _ASM_X8664_GART_H 1
+#ifndef ASM_X86__GART_H
+#define ASM_X86__GART_H
 
 #include <asm/e820.h>
-#include <asm/iommu.h>
 
 extern void set_up_gart_resume(u32, u32);
 
@@ -69,4 +68,4 @@ static inline int aperture_valid(u64 aper_base, u32 aper_size, u32 min_size)
 	return 1;
 }
 
-#endif
+#endif /* ASM_X86__GART_H */

@@ -1,5 +1,5 @@
-#ifndef _ASM_SWIOTLB_H
-#define _ASM_SWIOTLB_H 1
+#ifndef ASM_X86__SWIOTLB_H
+#define ASM_X86__SWIOTLB_H
 
 #include <asm/dma-mapping.h>
 
@@ -45,12 +45,14 @@ extern int swiotlb_force;
 
 #ifdef CONFIG_SWIOTLB
 extern int swiotlb;
+extern void pci_swiotlb_init(void);
 #else
 #define swiotlb 0
+static inline void pci_swiotlb_init(void)
+{
+}
 #endif
-
-extern void pci_swiotlb_init(void);
 
 static inline void dma_mark_clean(void *addr, size_t size) {}
 
-#endif /* _ASM_SWIOTLB_H */
+#endif /* ASM_X86__SWIOTLB_H */
