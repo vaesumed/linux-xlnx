@@ -1,5 +1,5 @@
-#ifndef ASM_X86__PCI_H
-#define ASM_X86__PCI_H
+#ifndef __x86_PCI_H
+#define __x86_PCI_H
 
 #include <linux/mm.h> /* for struct page */
 #include <linux/types.h>
@@ -111,4 +111,4 @@ static inline cpumask_t __pcibus_to_cpumask(struct pci_bus *bus)
 }
 #endif
 
-#endif /* ASM_X86__PCI_H */
+#endif

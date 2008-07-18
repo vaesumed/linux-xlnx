@@ -1,5 +1,5 @@
-#ifndef ASM_X86__I8259_H
-#define ASM_X86__I8259_H
+#ifndef __ASM_I8259_H__
+#define __ASM_I8259_H__
 
 #include <linux/delay.h>
 
@@ -57,4 +57,4 @@ static inline void outb_pic(unsigned char value, unsigned int port)
 
 extern struct irq_chip i8259A_chip;
 
-#endif /* ASM_X86__I8259_H */
+#endif	/* __ASM_I8259_H__ */

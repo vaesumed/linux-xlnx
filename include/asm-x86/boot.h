@@ -1,5 +1,5 @@
-#ifndef ASM_X86__BOOT_H
-#define ASM_X86__BOOT_H
+#ifndef _ASM_BOOT_H
+#define _ASM_BOOT_H
 
 /* Don't touch these, unless you really know what you're doing. */
 #define DEF_INITSEG	0x9000
@@ -25,4 +25,4 @@
 #define BOOT_STACK_SIZE	0x1000
 #endif
 
-#endif /* ASM_X86__BOOT_H */
+#endif /* _ASM_BOOT_H */

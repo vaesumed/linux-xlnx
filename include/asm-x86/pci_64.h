@@ -1,5 +1,5 @@
-#ifndef ASM_X86__PCI_64_H
-#define ASM_X86__PCI_64_H
+#ifndef __x8664_PCI_H
+#define __x8664_PCI_H
 
 #ifdef __KERNEL__
 
@@ -63,4 +63,4 @@ extern void pci_iommu_alloc(void);
 
 #endif /* __KERNEL__ */
 
-#endif /* ASM_X86__PCI_64_H */
+#endif /* __x8664_PCI_H */

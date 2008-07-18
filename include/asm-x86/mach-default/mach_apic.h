@@ -1,5 +1,5 @@
-#ifndef ASM_X86__MACH_DEFAULT__MACH_APIC_H
-#define ASM_X86__MACH_DEFAULT__MACH_APIC_H
+#ifndef __ASM_MACH_APIC_H
+#define __ASM_MACH_APIC_H
 
 #ifdef CONFIG_X86_LOCAL_APIC
 
@@ -138,4 +138,4 @@ static inline void enable_apic_mode(void)
 }
 
 #endif /* CONFIG_X86_LOCAL_APIC */
-#endif /* ASM_X86__MACH_DEFAULT__MACH_APIC_H */
+#endif /* __ASM_MACH_APIC_H */

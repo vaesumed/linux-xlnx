@@ -1,5 +1,5 @@
-#ifndef ASM_X86__PCI_32_H
-#define ASM_X86__PCI_32_H
+#ifndef __i386_PCI_H
+#define __i386_PCI_H
 
 
 #ifdef __KERNEL__
@@ -31,4 +31,4 @@ struct pci_dev;
 #endif /* __KERNEL__ */
 
 
-#endif /* ASM_X86__PCI_32_H */
+#endif /* __i386_PCI_H */
