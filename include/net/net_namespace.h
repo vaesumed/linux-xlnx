@@ -37,7 +37,7 @@ struct net {
 	struct proc_dir_entry 	*proc_net;
 	struct proc_dir_entry 	*proc_net_stat;
 
-	struct list_head	sysctl_table_headers;
+	struct ctl_table_set	sysctls;
 
 	struct net_device       *loopback_dev;          /* The loopback */
 

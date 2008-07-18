@@ -1423,6 +1423,10 @@ static int __init inet_init(void)
 
 	(void)sock_register(&inet_family_ops);
 
+#ifdef CONFIG_SYSCTL
+	ip_static_sysctl_init();
+#endif
+
 	/*
 	 *	Add all the base protocols.
 	 */
