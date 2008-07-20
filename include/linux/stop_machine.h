@@ -64,4 +64,8 @@ static inline int __deprecated stop_machine_run(int (*fn)(void *), void *data,
 		return stop_machine(fn, data, &cpus);
 	}
 }
+
+/* For sysctl to access. */
+extern unsigned long stopmachine_timeout;
+
 #endif /* _LINUX_STOP_MACHINE */
