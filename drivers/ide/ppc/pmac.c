@@ -1010,6 +1010,7 @@ static int __devinit pmac_ide_setup_device(pmac_ide_hwif_t *pmif, hw_regs_t *hw)
 	struct device_node *np = pmif->node;
 	const int *bidp;
 	ide_hwif_t *hwif;
+	hw_regs_t *hws[] = { hw, NULL, NULL, NULL };
 	u8 idx[4] = { 0xff, 0xff, 0xff, 0xff };
 	struct ide_port_info d = pmac_port_info;
 
@@ -1091,11 +1092,9 @@ static int __devinit pmac_ide_setup_device(pmac_ide_hwif_t *pmif, hw_regs_t *hw)
 	default_hwif_mmiops(hwif);
        	hwif->OUTBSYNC = pmac_outbsync;
 
-	ide_init_port_hw(hwif, hw);
-
 	idx[0] = hwif->index;
 
-	ide_device_add(idx, &d);
+	ide_device_add(idx, &d, hws);
 
 	if (pmif->mediabay) {
 #ifdef CONFIG_PMAC_MEDIABAY
