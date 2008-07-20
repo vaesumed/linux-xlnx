@@ -84,6 +84,7 @@ static void *guest_base;
 static unsigned long guest_limit, guest_max;
 /* The pipe for signal hander to write to. */
 static int timeoutpipe[2];
+static unsigned int timeout_usec = 500;
 
 /* a per-cpu variable indicating whose vcpu is currently running */
 static unsigned int __thread cpu_id;
@@ -865,9 +866,9 @@ static bool handle_console_input(int fd, struct device *dev)
 				/* Just in case waker is blocked in BREAK, send
 				 * unbreak now. */
 				write(fd, args, sizeof(args));
-				printf("network xmit %u recv %u timeout %u\n",
+				printf("network xmit %u recv %u timeout %u usec %u\n",
 				       net_xmit_notify, net_recv_notify,
-				       net_timeout);
+				       net_timeout, timeout_usec);
 				exit(2);
 			}
 			abort->count = 0;
@@ -907,7 +908,7 @@ static void block_vq(struct virtqueue *vq)
 	itm.it_interval.tv_sec = 0;
 	itm.it_interval.tv_usec = 0;
 	itm.it_value.tv_sec = 0;
-	itm.it_value.tv_usec = 750;
+	itm.it_value.tv_usec = timeout_usec;
 
 	setitimer(ITIMER_REAL, &itm, NULL);
 }
@@ -924,6 +925,7 @@ static void handle_net_output(int fd, struct virtqueue *vq, bool timeout)
 	unsigned int head, out, in, num = 0;
 	int len;
 	struct iovec iov[vq->vring.num];
+	static int last_timeout_num;
 
 	if (!timeout)
 		net_xmit_notify++;
@@ -944,6 +946,14 @@ static void handle_net_output(int fd, struct virtqueue *vq, bool timeout)
 	/* Block further kicks and set up a timer if we saw anything. */
 	if (!timeout && num)
 		block_vq(vq);
+
+	if (timeout) {
+		if (num < last_timeout_num)
+			timeout_usec += 10;
+		else if (timeout_usec > 1)
+			timeout_usec--;
+		last_timeout_num = num;
+	}
 }
 
 /* This is where we handle a packet coming in from the tun device to our
