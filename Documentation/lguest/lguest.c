@@ -153,9 +153,6 @@ struct virtqueue
 	/* The actual ring of buffers. */
 	struct vring vring;
 
-	/* Last available index we saw. */
-	u16 last_avail_idx;
-
 	/* The routine to call when the Guest pings us. */
 	void (*handle_output)(int fd, struct virtqueue *me);
 
@@ -194,7 +191,7 @@ static void *_convert(struct iovec *iov, size_t size, size_t align,
 }
 
 /* Wrapper for the last available index.  Makes it easier to change. */
-#define lg_last_avail(vq)	((vq)->last_avail_idx)
+#define lg_last_avail(vq)	vring_last_avail(&(vq)->vring)
 
 /* The virtio configuration space is defined to be little-endian.  x86 is
  * little-endian too, but it's nice to be explicit so we have these helpers. */
@@ -1160,7 +1157,6 @@ static void add_virtqueue(struct device *dev, unsigned int num_descs,
 
 	/* Initialize the virtqueue */
 	vq->next = NULL;
-	vq->last_avail_idx = 0;
 	vq->dev = dev;
 	vq->inflight = 0;
 
@@ -1217,6 +1213,10 @@ static void add_feature(struct device *dev, unsigned bit)
  * how we use it. */
 static void set_config(struct device *dev, unsigned len, const void *conf)
 {
+	/* We always set the VIRTIO_RING_F_PUBLISH_INDICES feature
+	 * bit, so now is a good time to do that. */
+	add_feature(dev, VIRTIO_RING_F_PUBLISH_INDICES);
+
 	/* Check we haven't overflowed our single page. */
 	if (device_config(dev) + len > devices.descpage + getpagesize())
 		errx(1, "Too many devices");
@@ -1291,6 +1291,8 @@ static void setup_console(void)
 	add_virtqueue(dev, VIRTQUEUE_NUM, enable_fd);
 	add_virtqueue(dev, VIRTQUEUE_NUM, handle_console_output);
 
+	/* Every device should set this bit. */
+	add_feature(dev, VIRTIO_RING_F_PUBLISH_INDICES);
 	verbose("device %u: console\n", devices.device_num++);
 }
 /*:*/
