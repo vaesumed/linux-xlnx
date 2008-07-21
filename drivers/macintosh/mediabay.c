@@ -157,7 +157,8 @@ enum {
 	mb_ide_resetting,	/* IDE reset bit unser, waiting MB_IDE_WAIT */
 	mb_ide_waiting,		/* Waiting for BUSY bit to go away until MB_IDE_TIMEOUT */
 	mb_up,			/* Media bay full */
-	mb_powering_down	/* Powering down (avoid too fast down/up) */
+	mb_powering_down,	/* Powering down (avoid too fast down/up) */
+	mb_wait_ide_init,	/* Wait for IDE layer to go up */
 };
 
 #define MB_POWER_SOUND		0x08
@@ -434,21 +435,6 @@ int check_media_bay(struct device_node *which_bay, int what)
 }
 EXPORT_SYMBOL(check_media_bay);
 
-int check_media_bay_by_base(unsigned long base, int what)
-{
-	int	i;
-
-	for (i=0; i<media_bay_count; i++)
-		if (media_bays[i].mdev && base == (unsigned long) media_bays[i].cd_base) {
-			if ((what == media_bays[i].content_id) && media_bays[i].state == mb_up)
-				return 0;
-			media_bays[i].cd_index = -1;
-			return -EINVAL;
-		} 
-
-	return -ENODEV;
-}
-
 int media_bay_set_ide_infos(struct device_node* which_bay, unsigned long base,
 			    int irq, ide_hwif_t *hwif)
 {
@@ -458,30 +444,22 @@ int media_bay_set_ide_infos(struct device_node* which_bay, unsigned long base,
 		struct media_bay_info* bay = &media_bays[i];
 
 		if (bay->mdev && which_bay == bay->mdev->ofdev.node) {
-			int timeout = 5000, index = hwif->index;
-			
 			mutex_lock(&bay->lock);
 
 			bay->cd_port	= hwif;
  			bay->cd_base	= (void __iomem *) base;
 			bay->cd_irq	= irq;
 
-			if ((MB_CD != bay->content_id) || bay->state != mb_up) {
+			if ((MB_CD != bay->content_id) || bay->state != mb_wait_ide_init) {
 				mutex_unlock(&bay->lock);
 				return 0;
 			}
-			printk(KERN_DEBUG "Registered ide%d for media bay %d\n", index, i);
-			do {
-				if (MB_IDE_READY(i)) {
-					bay->cd_index	= index;
-					mutex_unlock(&bay->lock);
-					return 0;
-				}
-				mdelay(1);
-			} while(--timeout);
-			printk(KERN_DEBUG "Timeount waiting IDE in bay %d\n", i);
+
+			/* let probing thread do the rest */
+			bay->state = mb_ide_resetting;
+
 			mutex_unlock(&bay->lock);
-			return -ENODEV;
+			return 0;
 		}
 	}
 
@@ -546,8 +524,8 @@ static void media_bay_step(int i)
 	    	break;
 	case mb_ide_waiting:
 		if (bay->cd_base == NULL) {
-			bay->timer = 0;
-			bay->state = mb_up;
+			bay->timer = -1;
+			bay->state = mb_wait_ide_init;
 			MBDBG("mediabay%d: up before IDE init\n", i);
 			break;
 		} else if (MB_IDE_READY(i)) {
@@ -580,6 +558,9 @@ static void media_bay_step(int i)
 			set_mb_power(bay, 0);
 			bay->timer = 0;
 	    	}
+		break;
+	case mb_wait_ide_init:
+		bay->timer = -1;
 		break;
 #endif /* CONFIG_BLK_DEV_IDE_PMAC */
 	case mb_powering_down:
@@ -680,7 +661,8 @@ static int __devinit media_bay_attach(struct macio_dev *mdev, const struct of_de
 		msleep(MB_POLL_DELAY);
 		media_bay_step(i);
 	} while((bay->state != mb_empty) &&
-		(bay->state != mb_up));
+		(bay->state != mb_up) &&
+		(bay->state != mb_wait_ide_init));
 
 	/* Mark us ready by filling our mdev data */
 	macio_set_drvdata(mdev, bay);
