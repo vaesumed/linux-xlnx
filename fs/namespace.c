@@ -1973,7 +1973,7 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 		struct fs_struct *fs)
 {
 	struct mnt_namespace *new_ns;
-	struct vfsmount *rootmnt = NULL, *pwdmnt = NULL, *altrootmnt = NULL;
+	struct vfsmount *rootmnt = NULL, *pwdmnt = NULL;
 	struct vfsmount *p, *q;
 
 	new_ns = kmalloc(sizeof(struct mnt_namespace), GFP_KERNEL);
@@ -2016,10 +2016,6 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 				pwdmnt = p;
 				fs->pwd.mnt = mntget(q);
 			}
-			if (p == fs->altroot.mnt) {
-				altrootmnt = p;
-				fs->altroot.mnt = mntget(q);
-			}
 		}
 		p = next_mnt(p, mnt_ns->root);
 		q = next_mnt(q, new_ns->root);
@@ -2030,8 +2026,6 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 		mntput(rootmnt);
 	if (pwdmnt)
 		mntput(pwdmnt);
-	if (altrootmnt)
-		mntput(altrootmnt);
 
 	return new_ns;
 }
