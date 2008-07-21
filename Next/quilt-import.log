@@ -1,0 +1,440 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Importing ide based on 5b664cb235e97afbf34db9c4d77f08ebd725335e
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 5b664cb235e97afbf34db9c4d77f08ebd725335e
+HEAD is now at 5b664cb Merge branch 'upstream-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/mfasheh/ocfs2
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+pmac-media-bay-support-fixes-take-4.patch
+pmac-store-pmif-instead-of-hwif-in-driver_data-take-2.patch
+pmac-add-init_dev-method-take-4.patch
+pmac-move-ide_find_port-call-to-pmac_ide_setup_device-take-2.patch
+ide-move-ide_pci_setup_ports-call-out-from-do_ide_setup_pci_device.patch
+ide-pass-hw_regs_t-s-to-ide_device_add-all-take-3.patch
+ide-add-read_sff_dma_status-method.patch
+ide-use-io-ops-directly-in-ide-dma-c.patch
+ide-remove-dma_status-command-fields-from-ide_hwif_t.patch
+ide-remove-ide_setup_dma.patch
+ide-factor-out-simplex-handling-from-ide_pci_dma_base.patch
+ide-add-exec_command-method.patch
+ide-add-read_status-method.patch
+ide-add-read_altstatus-method.patch
+ide-add-set_irq-method.patch
+ide-change-order-of-register-access-in-ide_config_drive_speed.patch
+ide-use-tf_load-in-ide_config_drive_speed.patch
+ide-use-tf_load-in-actual_try_to_identify.patch
+ide-use-tf_load-in-select_drive.patch
+ide-use-tf_read-in-ide_read_error.patch
+ide-add-ide_read_device-helper.patch
+ide-add-ide_read_ireason-helper.patch
+ide-add-ide_read_bcount_and_ireason-helper.patch
+ide-remove-inb-outb-and-outbsync-methods.patch
+ide-limit-cy82c693-host-driver-to-alpha.patch
+ide-mark-hpt34x-host-driver-as-broken.patch
+ide-remove-dead-virtual-dma-support.patch
+ide-filter-out-invalid-transfer-mode-values-in-set_xfer_rate.patch
+ide-filter-out-default-transfer-mode-values-in-set_xfer_rate.patch
+gayle-reserve-memory-resources-at-once.patch
+ide-generic-probing-fix.patch
+ide-add-config-field-to-hw_regs_t.patch
+ide-add-struct-ide_tp_ops-take-2.patch
+ide-add-struct-ide_host-take-3.patch
+ide-add-ide_host_add-helper.patch
+ide-fix-ide_host_register-return-value.patch
+ide-fix-ide-port-slots-reservation-and-freeing-take-2.patch
+ide-move-ide_remove_port_from_hwgroup-to-ide-probe-c.patch
+ide-add-ide_ports.patch
+ide-allocate-ide_hwif_t-instances-dynamically.patch
+ide-add-ide_host_free-helper-take-2.patch
+ide-tape-c-remove-double-kfree.patch
+ide-push-pc-callback-pointer-into-the-ide_drive_t-structure.patch
+ide-floppy-use-drive--pc_callback-instead-of-pc--callback.patch
+ide-tape-use-drive--pc_callback-instead-of-pc--callback.patch
+ide-scsi-use-drive--pc_callback-instead-of-pc--callback.patch
+ide-remove-pc--callback-member-from-ide_atapi_pc.patch
+ide-floppy-pass-packet-command-in-rq--cmd.patch
+ide-tape-make-room-for-packet-command-ids-in-rq--cmd.patch
+ide-tape-pass-packet-command-in-rq--cmd.patch
+ide-scsi-pass-packet-command-in-rq--cmd.patch
+ide-use-rq--cmd-instead-of-pc--c-in-atapi-common-code.patch
+ide-add-per-device-flags.patch
+ide-floppy-convert-to-using-the-new-atapi_flags-take-2.patch
+ide-tape-convert-to-using-the-new-atapi_flags.patch
+ide-scsi-convert-to-using-the-new-atapi_flags.patch
+ide-remove-unused-pc_flag_drq_interrupt.patch
+ide-cd-convert-to-using-the-new-atapi_flags.patch
+ide-ide-cd-c-fix-sparse-endianness-warnings.patch
+ide-ide-cd_ioctl-c-fix-sparse-integer-as-null-pointer-warnings.patch
+ide-small-whitespace-fixes.patch
+ide-always-call-init_chipset-method-in-do_ide_setup_pci_device.patch
+ide-respect-dev-irq-in-do_ide_setup_pci_device-also-if-tried_config.patch
+ide-move-ide_setup_pci_controller-call-to-ide_setup_pci_device-s.patch
+ide-call-ide_pci_setup_ports-before-do_ide_setup_pci_device.patch
+ide-add-dev-and-host_priv-fields-to-struct-ide_host.patch
+ide-add-ide_device_get-put-helpers.patch
+aec62xx-convert-to-use-host_priv.patch
+hpt366-convert-to-use-host_priv.patch
+it821x-convert-to-use-host_priv.patch
+sc1200-convert-to-use-host_priv.patch
+siimage-convert-to-use-host_priv.patch
+via82cxxx-convert-to-use-host_priv.patch
+tc86c001-remove-init_chipset-method.patch
+amd74xx-cleanup-init_chipset-method.patch
+cmd64x-cleanup-init_chipset-method.patch
+via82cxxx-cleanup-init_chipset-method.patch
+ide-add-ide_pci_remove-helper.patch
+aec62xx-add-remove-method-and-module_exit.patch
+alim15x3-add-remove-method-and-module_exit.patch
+amd74xx-add-remove-method-and-module_exit.patch
+atiixp-add-remove-method-and-module_exit.patch
+cmd64x-add-remove-method-and-module_exit.patch
+cs5530-add-remove-method-and-module_exit.patch
+cs5535-add-remove-method-and-module_exit.patch
+cy82c693-add-remove-method-and-module_exit.patch
+generic-add-remove-method-and-module_exit.patch
+hpt34x-add-remove-method-and-module_exit.patch
+hpt366-add-remove-method-and-module_exit.patch
+it8213-add-remove-method-and-module_exit.patch
+it821x-add-remove-method-and-module_exit.patch
+jmicron-add-remove-method-and-module_exit.patch
+ns87415-add-remove-method-and-module_exit.patch
+opti621-add-remove-method-and-module_exit.patch
+pdc202xx_new-add-remove-method-and-module_exit.patch
+pdc202xx_old-add-remove-method-and-module_exit.patch
+piix-add-remove-method-and-module_exit.patch
+rz1000-add-remove-method-and-module_exit.patch
+sc1200-add-remove-method-and-module_exit.patch
+serverworks-add-remove-method-and-module_exit.patch
+siimage-add-remove-method-and-module_exit.patch
+sis5513-add-remove-method-and-module_exit.patch
+sl82c105-add-remove-method-and-module_exit.patch
+slc90e66-add-remove-method-and-module_exit.patch
+tc86c001-add-remove-method-and-module_exit.patch
+triflex-add-remove-method-and-module_exit.patch
+trm290-add-remove-method-and-module_exit.patch
+via82cxxx-add-remove-method-and-module_exit.patch
+icside-add-module_exit.patch
+rapide-add-module_exit.patch
+ide-fix-asm-xtensa-ide-h.patch
+ide-generic-fix-ide_default_io_base-for-m32r.patch
+ide-generic-minor-fix-for-mips.patch
+ide-generic-remove-no_pci_devices-quirk-from-ide_default_io_base.patch
+ide-remove-asm-cris-ide-h.patch
+ide-define-max_hwifs-in-linux-ide-h.patch
+ide-generic-remove-broken-ppc_prep-support.patch
+ide-generic-is-no-longer-needed-on-ppc32.patch
+ide-generic-remove-ide_default_io_base-irq-inlines-take-2.patch
+ide-remove-asm-ide-h-for-some-archs.patch
+ide-include-pci-device-name-in-messages-from-ide-pci-host-drivers.patch
+it8213-remove-declare_ite_dev-macro.patch
+it821x-remove-declare_ite_dev-macro.patch
+ide-prefix-messages-from-ide-pci-host-drivers-by-driver-name.patch
+ide-drop-name-parameter-from-init_chipset-method.patch
+ide-ide-tape-c-sparse-annotations-and-unaligned-access-removal.patch
+ide-trivial-sparse-annotations.patch
+Importing m68k based on 5b664cb235e97afbf34db9c4d77f08ebd725335e
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 5b664cb235e97afbf34db9c4d77f08ebd725335e
+HEAD is now at 5b664cb Merge branch 'upstream-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/mfasheh/ocfs2
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-remove-CVS-keywords.diff
+m68k-ariadne-use-netstats-in-net_device-structure.diff
+m68k-initcalls-should-return-ENODEV-if-device-not-found2.diff
+m68k-vmlinux-std_sun3.lds.S_cleanup_use_PAGE_SIZE_macro.diff
+m68k-allnoconfig.diff
+m68k-remove-traditional.diff
+m68k-make-multi_defconfig-the-default-defconfig.diff
+m68k-remove-AP1000-code.diff
+zorro-replace-deprecated-__initcall-with-equivalent-device_initcall.diff
+zorro-use-memory_read_from_buffer.diff
+amifb-add-ami_modedb-to-modelist.diff
+atafb-add-atafb_modedb-to-modelist.diff
+drivers-video-c2p.c-add-MODULE_LICENSE.diff
+m68k-export-amiga_vblank.diff
+m68k-export-c2p.diff
+m68k-amiga-possible-cleanups.diff
+m68k-atari-debug.c-possible-cleanups.diff
+m68k-mac-possible-cleanups.diff
+m68k-q40-config.c-make-functions-static.diff
+m68k-sun3-possible-cleanups.diff
+m68k-remove-stale-ARCH_SUN4-define.diff
+apollo-missing-bootinfo.diff
+m68k-mac-remove-the-unused-ADB_KEYBOARD-option.diff
+m68k-atari-remove-the-dead-ATARI_SCC-options.diff
+m68k-apollo-remove-the-unused-APOLLO_ELPLUS-option.diff
+m68k-motorola-eliminate-NULL-test-and-memset-after-alloc_bootmem.diff
+m68k-sun3-eliminate-NULL-test-and-memset-after-alloc_bootmem.diff
+dio-use-dio_match_device.diff
+m68k-initrd-fix.diff
+Importing rr based on v2.6.26-3465-g5b664cb
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 5b664cb235e97afbf34db9c4d77f08ebd725335e
+HEAD is now at 5b664cb Merge branch 'upstream-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/mfasheh/ocfs2
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+misc:cast_if_type.patch
+misc:typesafe_cb.patch
+misc:kthread-printf-attribute.patch
+misc:kthread-typesafe.patch
+misc:timer-typesafe.patch
+virtio:net_set_net_f_guest_csum_feature.patch
+virtio:fix_net_xmit_of_freed_skb_bug.patch
+virtio:net_add_ethtool_ops_for_sg_gso.patch
+virtio:net_allow_receiving_sg_packets.patch
+virtio:net-recycle-unused-pages.patch
+Context reduced to (2/2) to apply fragment at 213
+lguest:int3-support.patch
+lguest:fix_switcher_page_leak_on_unload.patch
+lguest:network-counters.patch
+lguest:fix-verbose-feature-reporting.patch
+lguest:don_t_leak_dev_zero_fd.patch
+lguest:support_assigning_a_mac_address.patch
+lguest:rng.patch
+lguest:use_cpu_capability_accessors.patch
+Context reduced to (1/1) to apply fragment at 482
+Context reduced to (1/1) to apply fragment at 493
+virtio:clarify-bsd-licensing.patch
+virtio:net-no-notify-on-full.patch
+virtio:use_bus_type_probe_and_remove_methods.patch
+virtio:blk_check_for_hardsector_size_from_host.patch
+module:no-stop_machine-for-O_NONBLOCK.patch
+module:generic-symbol-iterator.patch
+module:reorder_struct_to_save_space_on_64_bit_builds.patch
+module:shrink-struct-module.patch
+module:longs-to-ints.patch
+module:shortcut_for_checking_if_address_in_a_module.patch
+misc:hvc_console_rework_setup_to_replace_irq_functions_with_callbacks.patch
+virtio:console_use_virtqueue_notification_for_hvc_console.patch
+virtio:console-kconfig.patch
+virtio:s390_use_console_for_kvm_on_s390.patch
+misc:tap-features.patch
+misc:tun-gso-csum-features.patch
+misc:tun-gso-header.patch
+virtio:transport-features.patch
+virtio:finalize_features.patch
+virtio:vring-feature-handling.patch
+virtio:ring-publish-indices.patch
+lguest:wrap-last-index-access.patch
+lguest:publish-indices.patch
+lguest:net-no-recv-exit.patch
+lguest:net-defer-kick.patch
+lguest:adaptive-timeout2.patch
+lguest:remove-network-no-buffer-warning.patch
+lguest:gso.patch
+lguest:enlarge-rings.patch
+lguest:waker-as-thread.patch
+module:make_config_kmod_invisible.patch
+module:remove_mention_of_config_kmod_from_documentation.patch
+module:rework_try_then_request_to_do_less_in_non_ar_kernels.patch
+module:remove_config_kmod_from_sparc64.patch
+module:remove_config_kmod_from_lib.patch
+module:remove_config_kmod_from_core_kernel_code.patch
+misc:add_all_cpus_option_to_stop_machine_run.patch
+stop_machine:simplify.patch
+stop_machine:_cpu_down-need-not-check-cpu_online.patch
+stop_machine:use-mask.patch
+stop_machine:use-mask-fixup-callers.patch
+stop_machine:add_stopmachine_timeout.patch
+Context reduced to (2/2) to apply fragment at 823
+misc:stop_machine-typesafe.patch
+misc:kernel-locking-doc-remove-semaphores.patch
+.dotest/patch:61: trailing whitespace.
+       and <function>mutex_unlock()</function> to release it.  There is also a 
+.dotest/patch:62: trailing whitespace.
+       <function>mutex_lock()</function>, which should be avoided, because it 
+.dotest/patch:68: trailing whitespace.
+       Example: <filename>net/netfilter/nf_sockopt.c</filename> allows 
+warning: 3 lines add whitespace errors.
+misc:introduce-down_nowait.patch
+misc:down_nowait.patch
+misc:down_nowait-documentation.patch
+misc:down_nowait-arch_ia64_kernel_salinfo.patch
+misc:down_nowait-drivers_char_snsc.patch
+misc:down_nowait-drivers_char_viotape.patch
+misc:down_nowait-drivers_infiniband_core_user_mad.patch
+misc:down_nowait-drivers_input_serio_hil_mlc.patch
+misc:down_nowait-drivers_input_serio_hp_sdc_mlc.patch
+misc:down_nowait-drivers_md_dm-raid1.patch
+misc:down_nowait-drivers_net_3c527.patch
+misc:down_nowait-drivers_net_irda_sir_dev.patch
+misc:down_nowait-drivers_net_wireless_airo.patch
+misc:down_nowait-drivers_scsi_aacraid_commsup.patch
+misc:down_nowait-drivers_usb_core_usb.patch
+misc:down_nowait-drivers_usb_gadget_inode.patch
+misc:down_nowait-fs_reiserfs_journal.patch
+misc:down_nowait-xfs.patch
+misc:down_nowait-kernel_printk.patch
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard a3cf859321486f69506326146ab3e2fd15c05c3f
+HEAD is now at a3cf859 Merge branch 'i2c-for-linus' of git://jdelvare.pck.nerim.net/jdelvare-2.6
+$ git quiltimport --author "Alan Cox <alan@lxorguk.ukuu.org.uk>" --patches "../quilt/ttydev"
+tty-simserial-fixes
+serial-add-flush-buffer-to-uart_ops
+atmel_serial-implement-flush-buffer-hook
+tty-iscicom-enable-disable-pci
+ldisc-ref
+.dotest/patch:123: trailing whitespace.
+		if ( tty->ldisc.ops->flush_buffer )  
+.dotest/patch:378: trailing whitespace.
+	
+.dotest/patch:489: trailing whitespace.
+	
+.dotest/patch:652: trailing whitespace.
+	
+.dotest/patch:800: trailing whitespace.
+	 
+warning: 5 lines add whitespace errors.
+rio_vcs
+serial_vcs
+tty-introduce-tty_port
+.dotest/patch:72: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+serial-core-use-tty_port
+tty-mn10300-use-tty_port
+tty-sparc-fix
+tty-ppc-fix-zilog
+ioc3_serial-fix-tty-port-breakage
+tty-rest-fix-tty-port-breakage
+tty.h-cleanup
+epca-use-tty_port
+esp-use-tty_port
+gs-use-tty_port
+riscom8-use-tty_port
+riscom-tty-remove-dud-checks
+isicom-use-tty_port
+istallion-use-tty_port
+moxa-use-tty_port
+mxser-use-tty_port
+rocketport-use-tty_port
+atmel_serial-fix-tty_port-breakage
+stallion-use-tty_port
+synclink-use-tty_port
+.dotest/patch:67: trailing whitespace.
+		if ( (info->port.flags & ASYNC_CHECK_CD) && 
+.dotest/patch:86: trailing whitespace.
+		if ( (info->port.flags & ASYNC_CTS_FLOW) && 
+.dotest/patch:125: space before tab in indent.
+ 	struct tty_struct *tty = info->port.tty;
+.dotest/patch:153: space before tab in indent.
+  		if (capable(CAP_SYS_ADMIN) && info->port.tty)
+.dotest/patch:186: space before tab in indent.
+ 	if (!info->port.tty || info->port.tty->termios->c_cflag & HUPCL) {
+warning: squelched 19 whitespace errors
+warning: 24 lines add whitespace errors.
+cleanup-tiocmset
+cyclades-use-tty_port
+termios-arch-laggards
+more-tty_port-fields
+tty-fix-strip
+usb-serial-api-change
+.dotest/patch:1406: trailing whitespace.
+static void digi_set_termios(struct tty_struct *tty, 
+.dotest/patch:3280: trailing whitespace.
+static void edge_set_termios(struct tty_struct *tty, 
+.dotest/patch:3620: space before tab in indent.
+ 		tty = port->port.tty;
+.dotest/patch:3658: trailing whitespace.
+			port->serial->dev, 
+.dotest/patch:4305: space before tab in indent.
+       	struct tty_struct *tty = port->port.tty;
+warning: squelched 8 whitespace errors
+warning: 13 lines add whitespace errors.
+whiteheat-coding-style
+whiteheat-fix-termios
+tty-belkin_sa-cleanup
+tty-tidy-usb-serial-bus
+tty-tidy-usb-console
+tty-usb-console-fix-termios
+.dotest/patch:15: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-tidy-usb-cp2101
+tty-tidy-usb-cyberjack
+tty-tidy-usb-cypress
+tty-usb-cypress-charsize
+tty-tidy-usb-digi-acceleport
+tty-tidy-usb-empeg
+tty-tidy-usb-ftdi-sio
+tty-tidy-usb-funsoft
+tty-tidy-usb-garmin-gps
+tty-tidy-usb-generic
+tty-tidy-usb-hp4x
+tty-tidy-usb-visor
+tty-tidy-usb-serial
+tty-tidy-usb-io-ti
+tty-tidy-usb-ipaq
+tty-tidy-usb-ipw
+.dotest/patch:362: space before tab in indent.
+			 		USB_RECIP_INTERFACE | USB_DIR_OUT,
+.dotest/patch:385: space before tab in indent.
+			 		USB_RECIP_INTERFACE | USB_DIR_OUT,
+warning: 2 lines add whitespace errors.
+tty-tidy-usb-iuu-phoenix
+tty-tidy-usb-keyspan
+tty-usb-keyspan-flipstr
+tty-tidy-usb-keyspan-pda
+tty-usb-keyspan-pda-flip
+tty-tidy-usb-kl5kusb105
+tty-tidy-usb-kobil-sct
+tty-usb-kobil-sct-ioctl
+tty-tidy-usb-mct-u232
+tty-usb-mct-u232-flip
+tty-tidy-usb-pl2303
+tty-tidy-usb-sierra
+tty-tidy-usb-spcp8x5
+tty-tidy-usb-ti-usb
+tty-tidy-usb-safe-serial
+tty-tidy-usb-oti6858
+tty-tidy-usb-option
+tty-tidy-usb-omninet
+tty-usb-omninet-flip
+tty-tidy-usb-mos7840
+tty-tidy-usb-mos7720
+tty-tidy-usb-io-edgeport
+.dotest/patch:442: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+tty-usb-io-edgeport-returns
+tty-split-ldisc
+.dotest/patch:20: trailing whitespace.
+obj-y	 += mem.o random.o tty_io.o n_tty.o tty_ioctl.o tty_ldisc.o 
+.dotest/patch:857: trailing whitespace.
+	
+.dotest/patch:950: trailing whitespace.
+	
+.dotest/patch:1270: trailing whitespace.
+	
+warning: 4 lines add whitespace errors.
+tty-specialix-tidy
+tty-specialix-code-tidy
+tty-epca-fixes
+tty-mxser-deadbrk
+tty-mark-broken-brk
+tty-break-errorhandler
+tty-epca-restore
+tty-isi-restore
+tty-riscom8-restore
+tty-stallion-brk-fixes
+tty-specialix-restore
+tty-ppc-fixes
+tty-mxser-add-cpu-102uf
+tty-epca-setup
+tty-8250-shared-irq
+tty-break-fix-sdio-uart
+tty-gs-remove-break
+n_hdlc-honor-o_nonblock-on-write
+synclink_gt-improve-and-simplify-write-method
+synclink_gt-add-serial-bit-order-control
+synclink_gt-improve-tiocoutq-accuracy
+synclink_gt-leave-transmitter-in-reset-state-after-configuration
+synclink_gt-add-rx-dma-buffer-fill-level-control
+synclink_gt-add-rx-dma-buffer-fill-level-control-fix-locking-in-error-path-of-rx-enable
