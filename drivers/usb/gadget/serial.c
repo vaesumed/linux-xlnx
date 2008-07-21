@@ -884,13 +884,6 @@ static void gs_unthrottle(struct tty_struct *tty)
 }
 
 /*
- * gs_break
- */
-static void gs_break(struct tty_struct *tty, int break_state)
-{
-}
-
-/*
  * gs_ioctl
  */
 static int gs_ioctl(struct tty_struct *tty, struct file *file, unsigned int cmd, unsigned long arg)
@@ -929,7 +922,6 @@ static const struct tty_operations gs_tty_ops = {
 	.set_termios =		gs_set_termios,
 	.throttle =		gs_throttle,
 	.unthrottle =		gs_unthrottle,
-	.break_ctl =		gs_break,
 	.chars_in_buffer =	gs_chars_in_buffer,
 };
 
