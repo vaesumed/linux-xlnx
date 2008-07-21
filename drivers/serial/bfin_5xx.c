@@ -178,7 +178,7 @@ int kgdb_get_debug_char(void)
 #ifdef CONFIG_SERIAL_BFIN_PIO
 static void bfin_serial_rx_chars(struct bfin_serial_port *uart)
 {
-	struct tty_struct *tty = uart->port.info->tty;
+	struct tty_struct *tty = uart->port.info->port.tty;
 	unsigned int status, ch, flg;
 	static struct timeval anomaly_start = { .tv_sec = 0 };
 
@@ -396,7 +396,7 @@ static void bfin_serial_dma_tx_chars(struct bfin_serial_port *uart)
 
 static void bfin_serial_dma_rx_chars(struct bfin_serial_port *uart)
 {
-	struct tty_struct *tty = uart->port.info->tty;
+	struct tty_struct *tty = uart->port.info->port.tty;
 	int i, flg, status;
 
 	status = UART_GET_LSR(uart);
@@ -555,7 +555,7 @@ static void bfin_serial_mctrl_check(struct bfin_serial_port *uart)
 #ifdef CONFIG_SERIAL_BFIN_CTSRTS
 	unsigned int status;
 	struct uart_info *info = uart->port.info;
-	struct tty_struct *tty = info->tty;
+	struct tty_struct *tty = info->port.tty;
 
 	status = bfin_serial_get_mctrl(&uart->port);
 	uart_handle_cts_change(&uart->port, status & TIOCM_CTS);
@@ -817,10 +817,10 @@ static void bfin_serial_set_ldisc(struct uart_port *port)
 	int line = port->line;
 	unsigned short val;
 
-	if (line >= port->info->tty->driver->num)
+	if (line >= port->info->port.tty->driver->num)
 		return;
 
-	switch (port->info->tty->ldisc.num) {
+	switch (port->info->port.tty->ldisc.num) {
 	case N_IRDA:
 		val = UART_GET_GCTL(&bfin_serial_ports[line]);
 		val |= (IREN | RPOLC);

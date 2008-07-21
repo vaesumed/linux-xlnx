@@ -936,7 +936,7 @@ static int serial_polled;
 static int mpsc_rx_intr(struct mpsc_port_info *pi)
 {
 	struct mpsc_rx_desc *rxre;
-	struct tty_struct *tty = pi->port.info->tty;
+	struct tty_struct *tty = pi->port.info->port.tty;
 	u32	cmdstat, bytes_in, i;
 	int	rc = 0;
 	u8	*bp;
@@ -2118,7 +2118,7 @@ static int __init mpsc_drv_init(void)
 {
 	int	rc;
 
-	printk(KERN_INFO "Serial: MPSC driver $Revision: 1.00 $\n");
+	printk(KERN_INFO "Serial: MPSC driver\n");
 
 	memset(mpsc_ports, 0, sizeof(mpsc_ports));
 	memset(&mpsc_shared_regs, 0, sizeof(mpsc_shared_regs));
@@ -2150,7 +2150,7 @@ module_init(mpsc_drv_init);
 module_exit(mpsc_drv_exit);
 
 MODULE_AUTHOR("Mark A. Greer <mgreer@mvista.com>");
-MODULE_DESCRIPTION("Generic Marvell MPSC serial/UART driver $Revision: 1.00 $");
+MODULE_DESCRIPTION("Generic Marvell MPSC serial/UART driver");
 MODULE_VERSION(MPSC_VERSION);
 MODULE_LICENSE("GPL");
 MODULE_ALIAS_CHARDEV_MAJOR(MPSC_MAJOR);
