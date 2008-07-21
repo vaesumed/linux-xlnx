@@ -103,6 +103,9 @@ void sysfs_remove_bin_file(struct kobject *kobj, struct bin_attribute *attr);
 
 int __must_check sysfs_create_link(struct kobject *kobj, struct kobject *target,
 				   const char *name);
+int __must_check sysfs_create_link_nowarn(struct kobject *kobj,
+					  struct kobject *target,
+					  const char *name);
 void sysfs_remove_link(struct kobject *kobj, const char *name);
 
 int __must_check sysfs_create_group(struct kobject *kobj,
@@ -117,6 +120,7 @@ void sysfs_remove_file_from_group(struct kobject *kobj,
 			const struct attribute *attr, const char *group);
 
 void sysfs_notify(struct kobject *kobj, char *dir, char *attr);
+void sysfs_printk_last_file(void);
 
 extern int __must_check sysfs_init(void);
 
@@ -182,6 +186,13 @@ static inline int sysfs_create_link(struct kobject *kobj,
 	return 0;
 }
 
+static inline int sysfs_create_link_nowarn(struct kobject *kobj,
+					   struct kobject *target,
+					   const char *name)
+{
+	return 0;
+}
+
 static inline void sysfs_remove_link(struct kobject *kobj, const char *name)
 {
 }
@@ -221,6 +232,10 @@ static inline void sysfs_notify(struct kobject *kobj, char *dir, char *attr)
 static inline int __must_check sysfs_init(void)
 {
 	return 0;
+}
+
+static inline void sysfs_printk_last_file(void)
+{
 }
 
 #endif /* CONFIG_SYSFS */
