@@ -113,8 +113,6 @@ void str_append(struct gstr *gs, const char *s);
 void str_printf(struct gstr *gs, const char *fmt, ...);
 const char *str_get(struct gstr *gs);
 
-char *strdup_type(const char *str, int type);
-
 /* symbol.c */
 extern struct expr *sym_env_list;
 
