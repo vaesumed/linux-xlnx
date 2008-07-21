@@ -64,14 +64,6 @@ config USB_SERIAL_AIRCABLE
 	    To compile this driver as a module, choose M here: the module
 	    will be called aircable.
 
-config USB_SERIAL_AIRPRIME
-	tristate "USB AirPrime CDMA Wireless Driver"
-	help
-	  Say Y here if you want to use a AirPrime CDMA Wireless PC card.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called airprime.
-
 config USB_SERIAL_ARK3116
 	tristate "USB ARK Micro 3116 USB Serial Driver"
 	help
@@ -522,6 +514,14 @@ config USB_SERIAL_TI
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_usb_3410_5052.
+
+config USB_SERIAL_TI_FIRMWARE
+	bool "USB TI 3410/5052 Firmware"
+	depends on USB_SERIAL_TI
+	help
+	  say Y to include the firmware into the kernel for compatibility
+	  with older setups. Say N if you have the firmware files installed
+	  in /etc/firmware.
 
 config USB_SERIAL_CYBERJACK
 	tristate "USB REINER SCT cyberJack pinpad/e-com chipcard reader"
