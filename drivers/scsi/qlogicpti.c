@@ -634,7 +634,7 @@ static int __devinit qlogicpti_load_firmware(struct qlogicpti *qpti)
 out:
 	spin_unlock_irqrestore(host->host_lock, flags);
 outfirm:
-	release_firwmare(fw);
+	release_firmware(fw);
 	return err;
 }
 
