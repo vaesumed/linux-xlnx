@@ -3427,7 +3427,7 @@ int register_con_driver(const struct consw *csw, int first, int last)
 
 	con_driver->dev = device_create(vtconsole_class, NULL,
 					MKDEV(0, con_driver->node),
-					"vtcon%i", con_driver->node);
+					NULL, "vtcon%i", con_driver->node);
 
 	if (IS_ERR(con_driver->dev)) {
 		printk(KERN_WARNING "Unable to create device for %s; "
@@ -3536,7 +3536,7 @@ static int __init vtconsole_class_init(void)
 
 		if (con->con && !con->dev) {
 			con->dev = device_create(vtconsole_class, NULL,
-						 MKDEV(0, con->node),
+						 MKDEV(0, con->node), NULL,
 						 "vtcon%i", con->node);
 
 			if (IS_ERR(con->dev)) {

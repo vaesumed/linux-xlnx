@@ -14,7 +14,7 @@ int dca_sysfs_add_req(struct dca_provider *dca, struct device *dev, int slot)
 {
 	struct device *cd;
 
-	cd = device_create(dca_class, dca->cd, MKDEV(0, slot + 1),
+	cd = device_create(dca_class, dca->cd, MKDEV(0, slot + 1), NULL,
 			   "requester%d", slot);
 	if (IS_ERR(cd))
 		return PTR_ERR(cd);
@@ -46,7 +46,7 @@ idr_try_again:
 		return err;
 	}
 
-	cd = device_create(dca_class, dev, MKDEV(0, 0), "dca%d", dca->id);
+	cd = device_create(dca_class, dev, MKDEV(0, 0), NULL, "dca%d", dca->id);
 	if (IS_ERR(cd)) {
 		spin_lock(&dca_idr_lock);
 		idr_remove(&dca_idr, dca->id);

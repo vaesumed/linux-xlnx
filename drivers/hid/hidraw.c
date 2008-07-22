@@ -323,7 +323,7 @@ int hidraw_connect(struct hid_device *hid)
 	}
 
 	dev->dev = device_create(hidraw_class, NULL, MKDEV(hidraw_major, minor),
-				"%s%d", "hidraw", minor);
+				 NULL, "%s%d", "hidraw", minor);
 
 	if (IS_ERR(dev->dev)) {
 		spin_lock(&minors_lock);

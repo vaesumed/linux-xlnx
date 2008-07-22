@@ -897,7 +897,7 @@ static int ur_set_online(struct ccw_device *cdev)
 	}
 
 	urd->device = device_create(vmur_class, NULL, urd->char_device->dev,
-					"%s", node_id);
+				    NULL, "%s", node_id);
 	if (IS_ERR(urd->device)) {
 		rc = PTR_ERR(urd->device);
 		TRACE("ur_set_online: device_create rc=%d\n", rc);
