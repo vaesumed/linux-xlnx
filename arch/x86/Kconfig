@@ -916,11 +916,11 @@ endchoice
 
 config PAGE_OFFSET
 	hex
-	default 0xB0000000 if VMSPLIT_3G_OPT
+	default 0xb0000000 if VMSPLIT_3G_OPT
 	default 0x80000000 if VMSPLIT_2G
 	default 0x78000000 if VMSPLIT_2G_OPT
 	default 0x40000000 if VMSPLIT_1G
-	default 0xC0000000
+	default 0xc0000000
 	depends on X86_32
 
 config HIGHMEM

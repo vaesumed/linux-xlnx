@@ -128,7 +128,7 @@ config MSNDCLAS_IRQ
 config MSNDCLAS_MEM
 	hex "MSND Classic memory B0000, C8000, D0000, D8000, E0000, E8000"
 	depends on SOUND_MSNDCLAS=y
-	default "D0000"
+	default "0xd0000"
 	help
 	  Memory-mapped I/O base address for the MultiSound Classic and
 	  related cards.
@@ -136,7 +136,7 @@ config MSNDCLAS_MEM
 config MSNDCLAS_IO
 	hex "MSND Classic I/O 210, 220, 230, 240, 250, 260, 290, 3E0"
 	depends on SOUND_MSNDCLAS=y
-	default "290"
+	default "0x290"
 	help
 	  I/O port address for the MultiSound Classic and related cards.
 
@@ -191,7 +191,7 @@ config MSNDPIN_IRQ
 config MSNDPIN_MEM
 	hex "MSND Pinnacle memory B0000, C8000, D0000, D8000, E0000, E8000"
 	depends on SOUND_MSNDPIN=y
-	default "D0000"
+	default "0xd0000"
 	help
 	  Memory-mapped I/O base address for the primary synthesizer on
 	  MultiSound Pinnacle and Fiji sound cards.
@@ -199,7 +199,7 @@ config MSNDPIN_MEM
 config MSNDPIN_IO
 	hex "MSND Pinnacle I/O 210, 220, 230, 240, 250, 260, 290, 3E0"
 	depends on SOUND_MSNDPIN=y
-	default "290"
+	default "0x290"
 	help
 	  Memory-mapped I/O base address for the primary synthesizer on
 	  MultiSound Pinnacle and Fiji sound cards.
@@ -233,7 +233,7 @@ comment "MSND Pinnacle DSP section will be configured to above parameters."
 config MSNDPIN_CFG
 	hex "MSND Pinnacle config port 250,260,270"
 	depends on MSNDPIN_NONPNP
-	default "250"
+	default "0x250"
 	help
 	  This is the port which the Pinnacle and Fiji uses to configure the
 	  card's resources when not in PnP mode. If your card is in PnP mode,
