@@ -98,7 +98,7 @@ void ima_template_show(struct seq_file *m, void *e,
 extern spinlock_t ima_queue_lock;
 
 struct ima_h_table {
-	atomic_t len;		/* number of stored measurements in the list */
+	atomic_long_t len;	/* number of stored measurements in the list */
 	atomic_long_t violations;
 	unsigned int max_htable_size;
 	struct hlist_head queue[IMA_MEASURE_HTABLE_SIZE];

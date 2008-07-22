@@ -106,7 +106,7 @@ int ima_add_measure_entry(struct ima_measure_entry *entry, int violation)
 	INIT_LIST_HEAD(&qe->later);
 	list_add_tail_rcu(&qe->later, &ima_measurements);
 
-	atomic_inc(&ima_htable.len);
+	atomic_long_inc(&ima_htable.len);
 	if (ima_add_digest_entry(entry)) {
 		error = -ENOMEM;
 		goto out;
