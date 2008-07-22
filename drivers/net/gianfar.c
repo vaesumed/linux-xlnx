@@ -133,7 +133,6 @@ static int gfar_clean_tx_ring(struct net_device *dev);
 static int gfar_process_frame(struct net_device *dev, struct sk_buff *skb, int length);
 static void gfar_vlan_rx_register(struct net_device *netdev,
 		                struct vlan_group *grp);
-static void gfar_halt_nodisable(struct net_device *dev);
 void gfar_halt(struct net_device *dev);
 #ifdef CONFIG_PM
 static void gfar_halt_nodisable(struct net_device *dev);
