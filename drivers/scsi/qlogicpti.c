@@ -52,8 +52,6 @@
 
 #define DEFAULT_LOOP_COUNT	10000
 
-#include "qlogicpti_asm.c"
-
 static struct qlogicpti *qptichain = NULL;
 static DEFINE_SPINLOCK(qptichain_lock);
 
