@@ -47,6 +47,7 @@
 #include <linux/acpi.h>
 #include <linux/reboot.h>
 #include <linux/ftrace.h>
+#include <linux/stop_machine.h>
 
 #include <asm/uaccess.h>
 #include <asm/processor.h>
@@ -111,7 +112,7 @@ static int min_percpu_pagelist_fract = 8;
 
 static int ngroups_max = NGROUPS_MAX;
 
-#ifdef CONFIG_KMOD
+#ifdef CONFIG_MODULES
 extern char modprobe_path[];
 #endif
 #ifdef CONFIG_CHR_DEV_SG
@@ -477,7 +478,7 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= &ftrace_enable_sysctl,
 	},
 #endif
-#ifdef CONFIG_KMOD
+#ifdef CONFIG_MODULES
 	{
 		.ctl_name	= KERN_MODPROBE,
 		.procname	= "modprobe",
@@ -834,6 +835,17 @@ static struct ctl_table kern_table[] = {
 		.procname	= "keys",
 		.mode		= 0555,
 		.child		= key_sysctls,
+	},
+#endif
+#ifdef CONFIG_STOP_MACHINE
+	{
+		.ctl_name       = CTL_UNNUMBERED,
+		.procname       = "stopmachine_timeout",
+		.data           = &stopmachine_timeout,
+		.maxlen         = sizeof(unsigned long),
+		.mode           = 0644,
+		.proc_handler   = &proc_doulongvec_minmax,
+		.strategy       = &sysctl_intvec,
 	},
 #endif
 #ifdef CONFIG_RCU_TORTURE_TEST

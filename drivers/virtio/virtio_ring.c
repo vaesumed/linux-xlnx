@@ -18,6 +18,7 @@
  */
 #include <linux/virtio.h>
 #include <linux/virtio_ring.h>
+#include <linux/virtio_config.h>
 #include <linux/device.h>
 
 #ifdef DEBUG
@@ -52,9 +53,6 @@ struct vring_virtqueue
 	/* Number we've added since last sync. */
 	unsigned int num_added;
 
-	/* Last used index we've seen. */
-	u16 last_used_idx;
-
 	/* How to notify other side. FIXME: commonalize hcalls! */
 	void (*notify)(struct virtqueue *vq);
 
@@ -87,8 +85,11 @@ static int vring_add_buf(struct virtqueue *_vq,
 	if (vq->num_free < out + in) {
 		pr_debug("Can't add buf len %i - avail = %i\n",
 			 out + in, vq->num_free);
-		/* We notify *even if* VRING_USED_F_NO_NOTIFY is set here. */
-		vq->notify(&vq->vq);
+		/* FIXME: for historical reasons, we force a notify here if
+		 * there are outgoing parts to the buffer.  Presumably the
+		 * host should service the ring ASAP. */
+		if (out)
+			vq->notify(&vq->vq);
 		END_USE(vq);
 		return -ENOSPC;
 	}
@@ -173,12 +174,13 @@ static void detach_buf(struct vring_virtqueue *vq, unsigned int head)
 
 static inline bool more_used(const struct vring_virtqueue *vq)
 {
-	return vq->last_used_idx != vq->vring.used->idx;
+	return vring_last_used(&vq->vring) != vq->vring.used->idx;
 }
 
 static void *vring_get_buf(struct virtqueue *_vq, unsigned int *len)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
+	struct vring_used_elem *u;
 	void *ret;
 	unsigned int i;
 
@@ -195,8 +197,11 @@ static void *vring_get_buf(struct virtqueue *_vq, unsigned int *len)
 		return NULL;
 	}
 
-	i = vq->vring.used->ring[vq->last_used_idx%vq->vring.num].id;
-	*len = vq->vring.used->ring[vq->last_used_idx%vq->vring.num].len;
+	u = &vq->vring.used->ring[vring_last_used(&vq->vring) % vq->vring.num];
+	i = u->id;
+	*len = u->len;
+	/* Make sure we don't reload i after doing checks. */
+	rmb();
 
 	if (unlikely(i >= vq->vring.num)) {
 		BAD_RING(vq, "id %u out of range\n", i);
@@ -210,7 +215,7 @@ static void *vring_get_buf(struct virtqueue *_vq, unsigned int *len)
 	/* detach_buf clears data, so grab it now. */
 	ret = vq->data[i];
 	detach_buf(vq, i);
-	vq->last_used_idx++;
+	vring_last_used(&vq->vring)++;
 	END_USE(vq);
 	return ret;
 }
@@ -294,7 +299,6 @@ struct virtqueue *vring_new_virtqueue(unsigned int num,
 	vq->vq.vq_ops = &vring_vq_ops;
 	vq->notify = notify;
 	vq->broken = false;
-	vq->last_used_idx = 0;
 	vq->num_added = 0;
 #ifdef DEBUG
 	vq->in_use = false;
@@ -319,5 +323,22 @@ void vring_del_virtqueue(struct virtqueue *vq)
 	kfree(to_vvq(vq));
 }
 EXPORT_SYMBOL_GPL(vring_del_virtqueue);
+
+/* Manipulates transport-specific feature bits. */
+void vring_transport_features(struct virtio_device *vdev)
+{
+	unsigned int i;
+
+	for (i = VIRTIO_TRANSPORT_F_START; i < VIRTIO_TRANSPORT_F_END; i++) {
+		switch (i) {
+		case VIRTIO_RING_F_PUBLISH_INDICES:
+			break;
+		default:
+			/* We don't understand this bit. */
+			clear_bit(i, vdev->features);
+		}
+	}
+}
+EXPORT_SYMBOL_GPL(vring_transport_features);
 
 MODULE_LICENSE("GPL");
