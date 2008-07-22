@@ -180,12 +180,12 @@ static struct mtd_partition * __init nand_partitions(int size, int *num_partitio
 	return yl9200_nand_partition;
 }
 
-static struct at91_nand_data __initdata yl9200_nand_data = {
-	.ale		= 6,
-	.cle		= 7,
-	// .det_pin	= ... not connected
-	.rdy_pin	= AT91_PIN_PC14,	/* R/!B (Sheet10) */
-	.enable_pin	= AT91_PIN_PC15,	/* !CE  (Sheet10) */
+static struct atmel_nand_data __initdata yl9200_nand_data = {
+	.ale= 6,
+	.cle= 7,
+	/*.det_pin	= AT91_PIN_PCxx,*/   /*we don't have a det pin because NandFlash is fixed to board*/
+	.rdy_pin	= AT91_PIN_PC14,  /*R/!B Sheet10*/
+	.enable_pin	= AT91_PIN_PC15,  /*!CE  Sheet10 */
 	.partition_info	= nand_partitions,
 };
 
