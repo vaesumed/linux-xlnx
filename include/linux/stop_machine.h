@@ -6,9 +6,8 @@
    diables preeempt. */
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
+#include <linux/compiler.h>
 #include <asm/system.h>
-
-#if defined(CONFIG_STOP_MACHINE) && defined(CONFIG_SMP)
 
 /* Deprecated, but useful for transition. */
 #define ALL_CPUS ~0U
@@ -26,8 +25,10 @@
  *
  * This can be thought of as a very heavy write lock, equivalent to
  * grabbing every spinlock in the kernel. */
-int stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus);
+#define stop_machine(fn, data, cpus)					\
+	stop_machine_notype(typesafe_cb(int, (fn), (data)), (data), (cpus))
 
+#if defined(CONFIG_STOP_MACHINE) && defined(CONFIG_SMP)
 /**
  * __stop_machine: freeze the machine on all CPUs and run this function
  * @fn: the function to run
@@ -38,10 +39,12 @@ int stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus);
  * won't come or go while it's being called.  Used by hotplug cpu.
  */
 int __stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus);
+
+int stop_machine_notype(int (*fn)(void *), void *data, const cpumask_t *cpus);
 #else
 
-static inline int stop_machine(int (*fn)(void *), void *data,
-			       const cpumask_t *cpus)
+static inline int stop_machine_notype(int (*fn)(void *), void *data,
+				      const cpumask_t *cpus)
 {
 	int ret;
 	local_irq_disable();
