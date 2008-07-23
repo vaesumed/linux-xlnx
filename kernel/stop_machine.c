@@ -35,10 +35,14 @@ struct stop_machine_data {
 };
 
 /* Like num_online_cpus(), but hotplug cpu uses us, so we need this. */
-static unsigned int num_threads;
+static unsigned num_threads;
 static atomic_t thread_ack;
+static cpumask_t prepared_cpus;
 static struct completion finished;
 static DEFINE_MUTEX(lock);
+
+static unsigned long limit;
+unsigned long stopmachine_timeout = 5; /* secs, arbitrary */
 
 static void set_state(enum stopmachine_state newstate)
 {
@@ -66,6 +70,10 @@ static int stop_cpu(struct stop_machine_data *smdata)
 {
 	enum stopmachine_state curstate = STOPMACHINE_NONE;
 	int uninitialized_var(ret);
+
+	/* If we've been shoved off the normal CPU, abort. */
+	if (cpu_test_and_set(smp_processor_id(), prepared_cpus))
+		do_exit(0);
 
 	/* Simple state machine */
 	do {
@@ -100,6 +108,44 @@ static int chill(void *unused)
 	return 0;
 }
 
+static bool fixup_timeout(struct task_struct **threads, const cpumask_t *cpus)
+{
+	unsigned int i;
+	bool stagger_onwards = true;
+
+	printk(KERN_CRIT "stopmachine: Failed to stop machine in time(%lds).\n",
+			stopmachine_timeout);
+
+	for_each_online_cpu(i) {
+		if (!cpu_isset(i, prepared_cpus) && i != smp_processor_id()) {
+			bool ignore;
+
+			/* If we wanted to run on a particular CPU, and that's
+			 * the one which is stuck, it's a real failure. */
+			ignore = !cpus || !cpu_isset(i, *cpus);
+			printk(KERN_CRIT "stopmachine: cpu#%d seems to be "
+			       "stuck, %s.\n",
+			       i, ignore ? "ignoring" : "FAILING");
+			/* Unbind thread: it will exit when it sees
+			 * that prepared_cpus bit set. */
+			set_cpus_allowed(threads[i], cpu_online_map);
+
+			if (!ignore)
+				stagger_onwards = false;
+
+			/* Pretend this one doesn't exist. */
+			num_threads--;
+		}
+	}
+
+	if (stagger_onwards) {
+		/* Force progress. */
+		set_state(state + 1);
+	}
+
+	return stagger_onwards;
+}
+
 int __stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus)
 {
 	int i, err;
@@ -121,6 +167,7 @@ int __stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus)
 	mutex_lock(&lock);
 	init_completion(&finished);
 	num_threads = num_online_cpus();
+	limit = jiffies + msecs_to_jiffies(stopmachine_timeout * MSEC_PER_SEC);
 	set_state(STOPMACHINE_PREPARE);
 
 	for_each_online_cpu(i) {
@@ -152,9 +199,23 @@ int __stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus)
 
 	/* We've created all the threads.  Wake them all: hold this CPU so one
 	 * doesn't hit this CPU until we're ready. */
+	cpus_clear(prepared_cpus);
 	get_cpu();
 	for_each_online_cpu(i)
 		wake_up_process(threads[i]);
+
+	/* Wait all others come to life */
+	while (cpus_weight(prepared_cpus) != num_online_cpus() - 1) {
+		if (time_is_before_jiffies(limit)) {
+			if (!fixup_timeout(threads, cpus)) {
+				/* Tell them all to exit. */
+				set_state(STOPMACHINE_EXIT);
+				active.fnret = -EIO;
+			}
+			break;
+		}
+		cpu_relax();
+	}
 
 	/* This will release the thread on our CPU. */
 	put_cpu();
