@@ -17,6 +17,57 @@
 #include <linux/module.h>
 #include <linux/stat.h>
 #include <linux/slab.h>
+#include <linux/kallsyms.h>
+#include <asm-generic/sections.h>
+
+#ifdef CONFIG_X86_32
+static int ptr_in_range(void *ptr, void *start, void *end)
+{
+	/*
+	 * This should hopefully get rid of causing warnings
+	 * if the architecture did not set one of the section
+	 * variables up.
+	 */
+	if (start >= end)
+		return 0;
+
+	if ((ptr >= start) && (ptr < end))
+		return 1;
+	return 0;
+}
+
+static void verify_dynamic_kobject_allocation(struct kobject *kobj)
+{
+	char *namebuf;
+	const char *ret;
+
+	namebuf = kzalloc(KSYM_NAME_LEN, GFP_KERNEL);
+	ret = kallsyms_lookup((unsigned long)kobj, NULL, NULL, NULL,
+			namebuf);
+	/*
+	 * This is the X86_32-only part of this function.
+	 * This is here because it is valid to have a kobject
+	 * in an __init section, but only after those
+	 * sections have been freed back to the dynamic pool.
+	 */
+	if (!initmem_now_dynamic &&
+	    ptr_in_range(kobj, __init_begin, __init_end))
+		goto out;
+	if (!ret || !strlen(ret))
+		goto out;
+	pr_debug("---- begin silly warning ----\n");
+	pr_debug("This is a janitorial warning, not a kernel bug.\n");
+	pr_debug("The kobject '%s', at, or inside '%s'@(0x%p) is not "
+		 "dynamically allocated.\n", kobject_name(kobj), namebuf, kobj);
+	pr_debug("kobjects must be dynamically allocated, not static\n");
+	/* dump_stack(); */
+	pr_debug("---- end silly warning ----\n");
+out:
+	kfree(namebuf);
+}
+#else
+static void verify_dynamic_kobject_allocation(struct kobject *kobj) { }
+#endif
 
 /*
  * populate_dir - populate directory with attributes.
@@ -284,6 +335,7 @@ void kobject_init(struct kobject *kobj, struct kobj_type *ktype)
 		       "object, something is seriously wrong.\n", kobj);
 		dump_stack();
 	}
+	verify_dynamic_kobject_allocation(kobj);
 
 	kobject_init_internal(kobj);
 	kobj->ktype = ktype;

@@ -1553,7 +1553,7 @@ static int __init capi_init(void)
 		return PTR_ERR(capi_class);
 	}
 
-	device_create_drvdata(capi_class, NULL, MKDEV(capi_major, 0), NULL,
+	device_create(capi_class, NULL, MKDEV(capi_major, 0), NULL,
 			      "capi");
 
 #ifdef CONFIG_ISDN_CAPI_MIDDLEWARE
