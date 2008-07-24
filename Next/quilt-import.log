@@ -1,0 +1,152 @@
+Importing driver-core.current based on 2.6.26-git10
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard c010b2f76c3032e48097a6eef291d8593d5d79a6
+HEAD is now at c010b2f Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 9e263970972258fdd262ef375bdd83b5e3d9121f
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 9e263970972258fdd262ef375bdd83b5e3d9121f
+HEAD is now at 9e26397 kobject: Fix kobject_rename and !CONFIG_SYSFS
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard bcc4e2d7a85812f876aaa10f153b3ad7c2721d8b
+HEAD is now at bcc4e2d sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-gotemp.patch
+Importing device-mapper based on v2.6.26-5752-g93ded9b
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 93ded9b8fd42abe2c3607097963d8de6ad9117eb
+HEAD is now at 93ded9b Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-use-more-error-codes.patch
+dm-exception-store-introduce-area_location-function.patch
+dm-exception-store-use-chunk_t-for_areas.patch
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Importing ide based on 20b7997e8abdf338dcc27fb4f1333c4973a7f113
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 20b7997e8abdf338dcc27fb4f1333c4973a7f113
+HEAD is now at 20b7997 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/drzeus/mmc
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-always-call-init_chipset-method-in-do_ide_setup_pci_device.patch
+ide-respect-dev-irq-in-do_ide_setup_pci_device-also-if-tried_config.patch
+ide-move-ide_setup_pci_controller-call-to-ide_setup_pci_device-s.patch
+ide-call-ide_pci_setup_ports-before-do_ide_setup_pci_device.patch
+ide-add-dev-and-host_priv-fields-to-struct-ide_host.patch
+ide-add-ide_device_get-put-helpers.patch
+aec62xx-convert-to-use-host_priv.patch
+hpt366-convert-to-use-host_priv.patch
+it821x-convert-to-use-host_priv.patch
+sc1200-convert-to-use-host_priv.patch
+siimage-convert-to-use-host_priv.patch
+via82cxxx-convert-to-use-host_priv.patch
+tc86c001-remove-init_chipset-method.patch
+amd74xx-cleanup-init_chipset-method.patch
+cmd64x-cleanup-init_chipset-method.patch
+via82cxxx-cleanup-init_chipset-method.patch
+ide-add-ide_pci_remove-helper.patch
+aec62xx-add-remove-method-and-module_exit.patch
+alim15x3-add-remove-method-and-module_exit.patch
+amd74xx-add-remove-method-and-module_exit.patch
+atiixp-add-remove-method-and-module_exit.patch
+cmd64x-add-remove-method-and-module_exit.patch
+cs5530-add-remove-method-and-module_exit.patch
+cs5535-add-remove-method-and-module_exit.patch
+cy82c693-add-remove-method-and-module_exit.patch
+generic-add-remove-method-and-module_exit.patch
+hpt34x-add-remove-method-and-module_exit.patch
+hpt366-add-remove-method-and-module_exit.patch
+it8213-add-remove-method-and-module_exit.patch
+it821x-add-remove-method-and-module_exit.patch
+jmicron-add-remove-method-and-module_exit.patch
+ns87415-add-remove-method-and-module_exit.patch
+opti621-add-remove-method-and-module_exit.patch
+pdc202xx_new-add-remove-method-and-module_exit.patch
+pdc202xx_old-add-remove-method-and-module_exit.patch
+piix-add-remove-method-and-module_exit.patch
+rz1000-add-remove-method-and-module_exit.patch
+sc1200-add-remove-method-and-module_exit.patch
+serverworks-add-remove-method-and-module_exit.patch
+siimage-add-remove-method-and-module_exit.patch
+sis5513-add-remove-method-and-module_exit.patch
+sl82c105-add-remove-method-and-module_exit.patch
+slc90e66-add-remove-method-and-module_exit.patch
+tc86c001-add-remove-method-and-module_exit.patch
+triflex-add-remove-method-and-module_exit.patch
+trm290-add-remove-method-and-module_exit.patch
+via82cxxx-add-remove-method-and-module_exit.patch
+icside-add-module_exit.patch
+rapide-add-module_exit.patch
+ide-fix-asm-xtensa-ide-h.patch
+ide-generic-fix-ide_default_io_base-for-m32r.patch
+ide-generic-minor-fix-for-mips.patch
+ide-generic-remove-no_pci_devices-quirk-from-ide_default_io_base.patch
+ide-remove-asm-cris-ide-h.patch
+ide-define-max_hwifs-in-linux-ide-h.patch
+ide-generic-remove-broken-ppc_prep-support.patch
+ide-generic-is-no-longer-needed-on-ppc32.patch
+ide-generic-remove-ide_default_io_base-irq-inlines-take-3.patch
+ide-remove-asm-ide-h-for-some-archs.patch
+ide-include-pci-device-name-in-messages-from-ide-pci-host-drivers.patch
+it8213-remove-declare_ite_dev-macro.patch
+it821x-remove-declare_ite_dev-macro.patch
+ide-prefix-messages-from-ide-pci-host-drivers-by-driver-name.patch
+ide-drop-name-parameter-from-init_chipset-method.patch
+ide-ide-tape-c-sparse-annotations-and-unaligned-access-removal.patch
+ide-trivial-sparse-annotations.patch
+palm_bk3710-add-ultradma_100-support.patch
+gayle-release-resources-on-ide_host_add-failure.patch
+ide-cd-fix-oops-when-using-growisofs.patch
+ht6560b-update-email-address.patch
+ht6560b-remove-old-history.patch
+ide-scsi-remove-kmalloced-struct-request.patch
+ide-enable-local-irqs-in-all-handlers-for-taskfile_no_data-data-phase.patch
+ide-remove-stale-comments-from-drivers-ide-makefile.patch
+ide-fix-for-eata-hba-in-ata-emulating-mode.patch
+ide-use-proper-printk-kern_-levels-in-ide-probe-c.patch
+ata-add-missing-ata_id_-defines-take-2.patch
+ide-fix-pre-eide-swdma-support-on-big-endian.patch
+ide-fix-ide_fix_driveid.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union.patch
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Importing ttydev based on origin/master
+	quilt series is empty
+$ git update-ref refs/heads/quilt/ttydev 20b7997e8abdf338dcc27fb4f1333c4973a7f113
