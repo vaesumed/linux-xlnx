@@ -278,7 +278,7 @@ static void ubifs_destroy_inode(struct inode *inode)
  */
 static int ubifs_write_inode(struct inode *inode, int wait)
 {
-	int err;
+	int err = 0;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
@@ -299,10 +299,18 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 		return 0;
 	}
 
-	dbg_gen("inode %lu", inode->i_ino);
-	err = ubifs_jnl_write_inode(c, inode, 0);
-	if (err)
-		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
+	/*
+	 * As an optimization, do not write orphan inodes to the media just
+	 * because this is not needed.
+	 */
+	dbg_gen("inode %lu, mode %#x, nlink %u",
+		inode->i_ino, (int)inode->i_mode, inode->i_nlink);
+	if (inode->i_nlink) {
+		err = ubifs_jnl_write_inode(c, inode);
+		if (err)
+			ubifs_err("can't write inode %lu, error %d",
+				  inode->i_ino, err);
+	}
 
 	ui->dirty = 0;
 	mutex_unlock(&ui->ui_mutex);
@@ -314,8 +322,9 @@ static void ubifs_delete_inode(struct inode *inode)
 {
 	int err;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	if (ubifs_inode(inode)->xattr)
+	if (ui->xattr)
 		/*
 		 * Extended attribute inode deletions are fully handled in
 		 * 'ubifs_removexattr()'. These inodes are special and have
@@ -323,7 +332,7 @@ static void ubifs_delete_inode(struct inode *inode)
 		 */
 		goto out;
 
-	dbg_gen("inode %lu", inode->i_ino);
+	dbg_gen("inode %lu, mode %#x", inode->i_ino, (int)inode->i_mode);
 	ubifs_assert(!atomic_read(&inode->i_count));
 	ubifs_assert(inode->i_nlink == 0);
 
@@ -331,15 +340,19 @@ static void ubifs_delete_inode(struct inode *inode)
 	if (is_bad_inode(inode))
 		goto out;
 
-	ubifs_inode(inode)->ui_size = inode->i_size = 0;
-	err = ubifs_jnl_write_inode(c, inode, 1);
+	ui->ui_size = inode->i_size = 0;
+	err = ubifs_jnl_delete_inode(c, inode);
 	if (err)
 		/*
 		 * Worst case we have a lost orphan inode wasting space, so a
 		 * simple error message is ok here.
 		 */
-		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
+		ubifs_err("can't delete inode %lu, error %d",
+			  inode->i_ino, err);
+
 out:
+	if (ui->dirty)
+		ubifs_release_dirty_inode_budget(c, ui);
 	clear_inode(inode);
 }
 
@@ -1122,8 +1135,8 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (err)
 		goto out_infos;
 
-	ubifs_msg("mounted UBI device %d, volume %d", c->vi.ubi_num,
-		  c->vi.vol_id);
+	ubifs_msg("mounted UBI device %d, volume %d, name \"%s\"",
+		  c->vi.ubi_num, c->vi.vol_id, c->vi.name);
 	if (mounted_read_only)
 		ubifs_msg("mounted read-only");
 	x = (long long)c->main_lebs * c->leb_size;
@@ -1469,6 +1482,7 @@ static void ubifs_put_super(struct super_block *sb)
 	 */
 	ubifs_assert(atomic_long_read(&c->dirty_pg_cnt) == 0);
 	ubifs_assert(c->budg_idx_growth == 0);
+	ubifs_assert(c->budg_dd_growth == 0);
 	ubifs_assert(c->budg_data_growth == 0);
 
 	/*
