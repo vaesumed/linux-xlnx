@@ -126,7 +126,10 @@ EXPORT_SYMBOL_GPL(do_rw_taskfile);
 static ide_startstop_t set_multmode_intr(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = drive->hwif;
-	u8 stat = hwif->tp_ops->read_status(hwif);
+	u8 stat;
+
+	local_irq_enable_in_hardirq();
+	stat = hwif->tp_ops->read_status(hwif);
 
 	if (OK_STAT(stat, READY_STAT, BAD_STAT))
 		drive->mult_count = drive->mult_req;
@@ -146,6 +149,8 @@ static ide_startstop_t set_geometry_intr(ide_drive_t *drive)
 	ide_hwif_t *hwif = drive->hwif;
 	int retries = 5;
 	u8 stat;
+
+	local_irq_enable_in_hardirq();
 
 	while (1) {
 		stat = hwif->tp_ops->read_status(hwif);
@@ -170,7 +175,10 @@ static ide_startstop_t set_geometry_intr(ide_drive_t *drive)
 static ide_startstop_t recal_intr(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = drive->hwif;
-	u8 stat = hwif->tp_ops->read_status(hwif);
+	u8 stat;
+
+	local_irq_enable_in_hardirq();
+	stat = hwif->tp_ops->read_status(hwif);
 
 	if (!OK_STAT(stat, READY_STAT, BAD_STAT))
 		return ide_error(drive, "recal_intr", stat);
@@ -721,7 +729,7 @@ int ide_cmd_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 	u8 args[4], xfer_rate = 0;
 	ide_task_t tfargs;
 	struct ide_taskfile *tf = &tfargs.tf;
-	struct hd_driveid *id = drive->id;
+	u16 *id = drive->id;
 
 	if (NULL == (void *) arg) {
 		struct request *rq;
@@ -764,7 +772,9 @@ int ide_cmd_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 	if (tf->command == WIN_SETFEATURES &&
 	    tf->feature == SETFEATURES_XFER &&
 	    tf->nsect >= XFER_SW_DMA_0 &&
-	    (id->dma_ultra || id->dma_mword || id->dma_1word)) {
+	    (id[ATA_ID_UDMA_MODES] ||
+	     id[ATA_ID_MWDMA_MODES] ||
+	     id[ATA_ID_SWDMA_MODES])) {
 		xfer_rate = args[1];
 		if (tf->nsect > XFER_UDMA_2 && !eighty_ninty_three(drive)) {
 			printk(KERN_WARNING "%s: UDMA speeds >UDMA33 cannot "

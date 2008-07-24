@@ -38,6 +38,8 @@
 
 #include <asm/io.h>
 
+#define DRV_NAME "serverworks"
+
 #define SVWKS_CSB5_REVISION_NEW	0x92 /* min PCI_REVISION_ID for UDMA5 (A2.0) */
 #define SVWKS_CSB6_REVISION	0xa0 /* min PCI_REVISION_ID for UDMA4 (A1.0) */
 
@@ -55,8 +57,10 @@ static struct pci_dev *isa_dev;
 
 static int check_in_drive_lists (ide_drive_t *drive, const char **list)
 {
+	char *m = (char *)&drive->id[ATA_ID_PROD];
+
 	while (*list)
-		if (!strcmp(*list++, drive->id->model))
+		if (!strcmp(*list++, m))
 			return 1;
 	return 0;
 }
@@ -172,7 +176,7 @@ static void svwks_set_dma_mode(ide_drive_t *drive, const u8 speed)
 	pci_write_config_byte(dev, 0x54, ultra_enable);
 }
 
-static unsigned int __devinit init_chipset_svwks (struct pci_dev *dev, const char *name)
+static unsigned int __devinit init_chipset_svwks(struct pci_dev *dev)
 {
 	unsigned int reg;
 	u8 btr;
@@ -188,7 +192,8 @@ static unsigned int __devinit init_chipset_svwks (struct pci_dev *dev, const cha
 			pci_read_config_dword(isa_dev, 0x64, &reg);
 			reg &= ~0x00002000; /* disable 600ns interrupt mask */
 			if(!(reg & 0x00004000))
-				printk(KERN_DEBUG "%s: UDMA not BIOS enabled.\n", name);
+				printk(KERN_DEBUG DRV_NAME " %s: UDMA not BIOS "
+					"enabled.\n", pci_name(dev));
 			reg |=  0x00004000; /* enable UDMA/33 support */
 			pci_write_config_dword(isa_dev, 0x64, reg);
 		}
@@ -352,40 +357,44 @@ static const struct ide_port_ops svwks_port_ops = {
 #define IDE_HFLAGS_SVWKS IDE_HFLAG_LEGACY_IRQS
 
 static const struct ide_port_info serverworks_chipsets[] __devinitdata = {
-	{	/* 0 */
-		.name		= "SvrWks OSB4",
+	{	/* 0: OSB4 */
+		.name		= DRV_NAME,
 		.init_chipset	= init_chipset_svwks,
 		.port_ops	= &osb4_port_ops,
 		.host_flags	= IDE_HFLAGS_SVWKS,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
 		.udma_mask	= 0x00, /* UDMA is problematic on OSB4 */
-	},{	/* 1 */
-		.name		= "SvrWks CSB5",
+	},
+	{	/* 1: CSB5 */
+		.name		= DRV_NAME,
 		.init_chipset	= init_chipset_svwks,
 		.port_ops	= &svwks_port_ops,
 		.host_flags	= IDE_HFLAGS_SVWKS,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
 		.udma_mask	= ATA_UDMA5,
-	},{	/* 2 */
-		.name		= "SvrWks CSB6",
+	},
+	{	/* 2: CSB6 */
+		.name		= DRV_NAME,
 		.init_chipset	= init_chipset_svwks,
 		.port_ops	= &svwks_port_ops,
 		.host_flags	= IDE_HFLAGS_SVWKS,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
 		.udma_mask	= ATA_UDMA5,
-	},{	/* 3 */
-		.name		= "SvrWks CSB6",
+	},
+	{	/* 3: CSB6-2 */
+		.name		= DRV_NAME,
 		.init_chipset	= init_chipset_svwks,
 		.port_ops	= &svwks_port_ops,
 		.host_flags	= IDE_HFLAGS_SVWKS | IDE_HFLAG_SINGLE,
 		.pio_mask	= ATA_PIO4,
 		.mwdma_mask	= ATA_MWDMA2,
 		.udma_mask	= ATA_UDMA5,
-	},{	/* 4 */
-		.name		= "SvrWks HT1000",
+	},
+	{	/* 4: HT1000 */
+		.name		= DRV_NAME,
 		.init_chipset	= init_chipset_svwks,
 		.port_ops	= &svwks_port_ops,
 		.host_flags	= IDE_HFLAGS_SVWKS | IDE_HFLAG_SINGLE,
@@ -422,7 +431,7 @@ static int __devinit svwks_init_one(struct pci_dev *dev, const struct pci_device
 			d.host_flags &= ~IDE_HFLAG_SINGLE;
 	}
 
-	return ide_setup_pci_device(dev, &d);
+	return ide_pci_init_one(dev, &d, NULL);
 }
 
 static const struct pci_device_id svwks_pci_tbl[] = {
@@ -439,6 +448,7 @@ static struct pci_driver driver = {
 	.name		= "Serverworks_IDE",
 	.id_table	= svwks_pci_tbl,
 	.probe		= svwks_init_one,
+	.remove		= ide_pci_remove,
 };
 
 static int __init svwks_ide_init(void)
@@ -446,7 +456,13 @@ static int __init svwks_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit svwks_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(svwks_ide_init);
+module_exit(svwks_ide_exit);
 
 MODULE_AUTHOR("Michael Aubry. Andrzej Krzysztofowicz, Andre Hedrick");
 MODULE_DESCRIPTION("PCI driver module for Serverworks OSB4/CSB5/CSB6 IDE");

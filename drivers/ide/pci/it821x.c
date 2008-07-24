@@ -67,6 +67,8 @@
 #include <linux/ide.h>
 #include <linux/init.h>
 
+#define DRV_NAME "it821x"
+
 struct it821x_dev
 {
 	unsigned int smart:1,		/* Are we in smart raid mode */
@@ -444,8 +446,7 @@ static u8 __devinit it821x_cable_detect(ide_hwif_t *hwif)
 static void __devinit it821x_quirkproc(ide_drive_t *drive)
 {
 	struct it821x_dev *itdev = ide_get_hwifdata(drive->hwif);
-	struct hd_driveid *id = drive->id;
-	u16 *idbits = (u16 *)drive->id;
+	u16 *id = drive->id;
 
 	if (!itdev->smart) {
 		/*
@@ -464,36 +465,36 @@ static void __devinit it821x_quirkproc(ide_drive_t *drive)
 	 */
 
 		/* Check for RAID v native */
-		if(strstr(id->model, "Integrated Technology Express")) {
+		if (strstr((char *)&id[ATA_ID_PROD],
+			   "Integrated Technology Express")) {
 			/* In raid mode the ident block is slightly buggy
 			   We need to set the bits so that the IDE layer knows
 			   LBA28. LBA48 and DMA ar valid */
-			id->capability |= 3;		/* LBA28, DMA */
-			id->command_set_2 |= 0x0400;	/* LBA48 valid */
-			id->cfs_enable_2 |= 0x0400;	/* LBA48 on */
+			id[ATA_ID_CAPABILITY]    |= (3 << 8); /* LBA28, DMA */
+			id[ATA_ID_COMMAND_SET_2] |= 0x0400;   /* LBA48 valid */
+			id[ATA_ID_CFS_ENABLE_2]  |= 0x0400;   /* LBA48 on */
 			/* Reporting logic */
 			printk(KERN_INFO "%s: IT8212 %sRAID %d volume",
-				drive->name,
-				idbits[147] ? "Bootable ":"",
-				idbits[129]);
-				if(idbits[129] != 1)
-					printk("(%dK stripe)", idbits[146]);
-				printk(".\n");
+				drive->name, id[147] ? "Bootable " : "",
+				id[ATA_ID_CSFO]);
+			if (id[ATA_ID_CSFO] != 1)
+				printk(KERN_CONT "(%dK stripe)", id[146]);
+			printk(KERN_CONT ".\n");
 		} else {
 			/* Non RAID volume. Fixups to stop the core code
 			   doing unsupported things */
-			id->field_valid &= 3;
-			id->queue_depth = 0;
-			id->command_set_1 = 0;
-			id->command_set_2 &= 0xC400;
-			id->cfsse &= 0xC000;
-			id->cfs_enable_1 = 0;
-			id->cfs_enable_2 &= 0xC400;
-			id->csf_default &= 0xC000;
-			id->word127 = 0;
-			id->dlf = 0;
-			id->csfo = 0;
-			id->cfa_power = 0;
+			id[ATA_ID_FIELD_VALID]	 &= 3;
+			id[ATA_ID_QUEUE_DEPTH]	  = 0;
+			id[ATA_ID_COMMAND_SET_1]  = 0;
+			id[ATA_ID_COMMAND_SET_2] &= 0xC400;
+			id[ATA_ID_CFSSE]	 &= 0xC000;
+			id[ATA_ID_CFS_ENABLE_1]	  = 0;
+			id[ATA_ID_CFS_ENABLE_2]	 &= 0xC400;
+			id[ATA_ID_CSF_DEFAULT]	 &= 0xC000;
+			id[127]			  = 0;
+			id[ATA_ID_DLF]		  = 0;
+			id[ATA_ID_CSFO]		  = 0;
+			id[ATA_ID_CFA_POWER]	  = 0;
 			printk(KERN_INFO "%s: Performing identify fixups.\n",
 				drive->name);
 		}
@@ -503,8 +504,8 @@ static void __devinit it821x_quirkproc(ide_drive_t *drive)
 		 * IDE core that DMA is supported (it821x hardware
 		 * takes care of DMA mode programming).
 		 */
-		if (id->capability & 1) {
-			id->dma_mword |= 0x0101;
+		if (ata_id_has_dma(id)) {
+			id[ATA_ID_MWDMA_MODES] |= 0x0101;
 			drive->current_speed = XFER_MW_DMA_0;
 		}
 	}
@@ -534,8 +535,9 @@ static struct ide_dma_ops it821x_pass_through_dma_ops = {
 static void __devinit init_hwif_it821x(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
-	struct it821x_dev **itdevs = (struct it821x_dev **)pci_get_drvdata(dev);
-	struct it821x_dev *idev = itdevs[hwif->channel];
+	struct ide_host *host = pci_get_drvdata(dev);
+	struct it821x_dev *itdevs = host->host_priv;
+	struct it821x_dev *idev = itdevs + hwif->channel;
 	u8 conf;
 
 	ide_set_hwifdata(hwif, idev);
@@ -568,7 +570,8 @@ static void __devinit init_hwif_it821x(ide_hwif_t *hwif)
 		idev->timing10 = 1;
 		hwif->host_flags |= IDE_HFLAG_NO_ATAPI_DMA;
 		if (idev->smart == 0)
-			printk(KERN_WARNING "it821x: Revision 0x10, workarounds activated.\n");
+			printk(KERN_WARNING DRV_NAME " %s: revision 0x10, "
+				"workarounds activated\n", pci_name(dev));
 	}
 
 	if (idev->smart == 0) {
@@ -601,18 +604,20 @@ static void __devinit it8212_disable_raid(struct pci_dev *dev)
 	pci_write_config_byte(dev, PCI_LATENCY_TIMER, 0x20);
 }
 
-static unsigned int __devinit init_chipset_it821x(struct pci_dev *dev, const char *name)
+static unsigned int __devinit init_chipset_it821x(struct pci_dev *dev)
 {
 	u8 conf;
 	static char *mode[2] = { "pass through", "smart" };
 
 	/* Force the card into bypass mode if so requested */
 	if (it8212_noraid) {
-		printk(KERN_INFO "it8212: forcing bypass mode.\n");
+		printk(KERN_INFO DRV_NAME " %s: forcing bypass mode\n",
+			pci_name(dev));
 		it8212_disable_raid(dev);
 	}
 	pci_read_config_byte(dev, 0x50, &conf);
-	printk(KERN_INFO "it821x: controller in %s mode.\n", mode[conf & 1]);
+	printk(KERN_INFO DRV_NAME " %s: controller in %s mode\n",
+		pci_name(dev), mode[conf & 1]);
 	return 0;
 }
 
@@ -624,17 +629,12 @@ static const struct ide_port_ops it821x_port_ops = {
 	.cable_detect		= it821x_cable_detect,
 };
 
-#define DECLARE_ITE_DEV(name_str)			\
-	{						\
-		.name		= name_str,		\
-		.init_chipset	= init_chipset_it821x,	\
-		.init_hwif	= init_hwif_it821x,	\
-		.port_ops	= &it821x_port_ops,	\
-		.pio_mask	= ATA_PIO4,		\
-	}
-
-static const struct ide_port_info it821x_chipsets[] __devinitdata = {
-	/* 0 */ DECLARE_ITE_DEV("IT8212"),
+static const struct ide_port_info it821x_chipset __devinitdata = {
+	.name		= DRV_NAME,
+	.init_chipset	= init_chipset_it821x,
+	.init_hwif	= init_hwif_it821x,
+	.port_ops	= &it821x_port_ops,
+	.pio_mask	= ATA_PIO4,
 };
 
 /**
@@ -648,23 +648,29 @@ static const struct ide_port_info it821x_chipsets[] __devinitdata = {
 
 static int __devinit it821x_init_one(struct pci_dev *dev, const struct pci_device_id *id)
 {
-	struct it821x_dev *itdevs[2] = { NULL, NULL} , *itdev;
-	unsigned int i;
+	struct it821x_dev *itdevs;
+	int rc;
 
-	for (i = 0; i < 2; i++) {
-		itdev = kzalloc(sizeof(*itdev), GFP_KERNEL);
-		if (itdev == NULL) {
-			kfree(itdevs[0]);
-			printk(KERN_ERR "it821x: out of memory\n");
-			return -ENOMEM;
-		}
-
-		itdevs[i] = itdev;
+	itdevs = kzalloc(2 * sizeof(*itdevs), GFP_KERNEL);
+	if (itdevs == NULL) {
+		printk(KERN_ERR DRV_NAME " %s: out of memory\n", pci_name(dev));
+		return -ENOMEM;
 	}
 
-	pci_set_drvdata(dev, itdevs);
+	rc = ide_pci_init_one(dev, &it821x_chipset, itdevs);
+	if (rc)
+		kfree(itdevs);
 
-	return ide_setup_pci_device(dev, &it821x_chipsets[id->driver_data]);
+	return rc;
+}
+
+static void __devexit it821x_remove(struct pci_dev *dev)
+{
+	struct ide_host *host = pci_get_drvdata(dev);
+	struct it821x_dev *itdevs = host->host_priv;
+
+	ide_pci_remove(dev);
+	kfree(itdevs);
 }
 
 static const struct pci_device_id it821x_pci_tbl[] = {
@@ -679,6 +685,7 @@ static struct pci_driver driver = {
 	.name		= "ITE821x IDE",
 	.id_table	= it821x_pci_tbl,
 	.probe		= it821x_init_one,
+	.remove		= it821x_remove,
 };
 
 static int __init it821x_ide_init(void)
@@ -686,7 +693,13 @@ static int __init it821x_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit it821x_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(it821x_ide_init);
+module_exit(it821x_ide_exit);
 
 module_param_named(noraid, it8212_noraid, int, S_IRUGO);
 MODULE_PARM_DESC(noraid, "Force card into bypass mode");

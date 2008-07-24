@@ -265,8 +265,8 @@ static void icside_set_dma_mode(ide_drive_t *drive, const u8 xfer_mode)
 	 * If we're going to be doing MW_DMA_1 or MW_DMA_2, we should
 	 * take care to note the values in the ID...
 	 */
-	if (use_dma_info && drive->id->eide_dma_time > cycle_time)
-		cycle_time = drive->id->eide_dma_time;
+	if (use_dma_info && drive->id[ATA_ID_EIDE_DMA_TIME] > cycle_time)
+		cycle_time = drive->id[ATA_ID_EIDE_DMA_TIME];
 
 	drive->drive_data = cycle_time;
 
@@ -710,8 +710,14 @@ static int __init icside_init(void)
 	return ecard_register_driver(&icside_driver);
 }
 
+static void __exit icside_exit(void);
+{
+	ecard_unregister_driver(&icside_driver);
+}
+
 MODULE_AUTHOR("Russell King <rmk@arm.linux.org.uk>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("ICS IDE driver");
 
 module_init(icside_init);
+module_exit(icside_exit);

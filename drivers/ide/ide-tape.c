@@ -322,23 +322,29 @@ static struct class *idetape_sysfs_class;
 #define ide_tape_g(disk) \
 	container_of((disk)->private_data, struct ide_tape_obj, driver)
 
+static void ide_tape_release(struct kref *);
+
 static struct ide_tape_obj *ide_tape_get(struct gendisk *disk)
 {
 	struct ide_tape_obj *tape = NULL;
 
 	mutex_lock(&idetape_ref_mutex);
 	tape = ide_tape_g(disk);
-	if (tape)
+	if (tape) {
 		kref_get(&tape->kref);
+		if (ide_device_get(tape->drive)) {
+			kref_put(&tape->kref, ide_tape_release);
+			tape = NULL;
+		}
+	}
 	mutex_unlock(&idetape_ref_mutex);
 	return tape;
 }
 
-static void ide_tape_release(struct kref *);
-
 static void ide_tape_put(struct ide_tape_obj *tape)
 {
 	mutex_lock(&idetape_ref_mutex);
+	ide_device_put(tape->drive);
 	kref_put(&tape->kref, ide_tape_release);
 	mutex_unlock(&idetape_ref_mutex);
 }
@@ -649,10 +655,10 @@ static void ide_tape_callback(ide_drive_t *drive)
 			uptodate = 0;
 		} else {
 			debug_log(DBG_SENSE, "Block Location - %u\n",
-					be32_to_cpu(*(u32 *)&readpos[4]));
+					be32_to_cpup((__be32 *)&readpos[4]));
 
 			tape->partition = readpos[1];
-			tape->first_frame = be32_to_cpu(*(u32 *)&readpos[4]);
+			tape->first_frame = be32_to_cpup((__be32 *)&readpos[4]);
 			set_bit(IDE_AFLAG_ADDRESS_VALID, &drive->atapi_flags);
 		}
 	}
@@ -2303,7 +2309,7 @@ static int idetape_identify_device(ide_drive_t *drive)
 	if (drive->id_read == 0)
 		return 1;
 
-	*((unsigned short *) &gcw) = drive->id->config;
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	protocol	=   (gcw[1] & 0xC0) >> 6;
 	device_type	=    gcw[1] & 0x1F;
@@ -2375,23 +2381,23 @@ static void idetape_get_mode_sense_results(ide_drive_t *drive)
 	caps = pc.buf + 4 + pc.buf[3];
 
 	/* convert to host order and save for later use */
-	speed = be16_to_cpu(*(u16 *)&caps[14]);
-	max_speed = be16_to_cpu(*(u16 *)&caps[8]);
+	speed = be16_to_cpup((__be16 *)&caps[14]);
+	max_speed = be16_to_cpup((__be16 *)&caps[8]);
 
-	put_unaligned(max_speed, (u16 *)&caps[8]);
-	put_unaligned(be16_to_cpu(*(u16 *)&caps[12]), (u16 *)&caps[12]);
-	put_unaligned(speed, (u16 *)&caps[14]);
-	put_unaligned(be16_to_cpu(*(u16 *)&caps[16]), (u16 *)&caps[16]);
+	*(u16 *)&caps[8] = max_speed;
+	*(u16 *)&caps[12] = be16_to_cpup((__be16 *)&caps[12]);
+	*(u16 *)&caps[14] = speed;
+	*(u16 *)&caps[16] = be16_to_cpup((__be16 *)&caps[16]);
 
 	if (!speed) {
 		printk(KERN_INFO "ide-tape: %s: invalid tape speed "
 				"(assuming 650KB/sec)\n", drive->name);
-		put_unaligned(650, (u16 *)&caps[14]);
+		*(u16 *)&caps[14] = 650;
 	}
 	if (!max_speed) {
 		printk(KERN_INFO "ide-tape: %s: invalid max_speed "
 				"(assuming 650KB/sec)\n", drive->name);
-		put_unaligned(650, (u16 *)&caps[8]);
+		*(u16 *)&caps[8] = 650;
 	}
 
 	memcpy(&tape->caps, caps, 20);
@@ -2455,7 +2461,7 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 		drive->dsc_overlap = 0;
 	}
 	/* Seagate Travan drives do not support DSC overlap. */
-	if (strstr(drive->id->model, "Seagate STT3401"))
+	if (strstr((char *)&drive->id[ATA_ID_PROD], "Seagate STT3401"))
 		drive->dsc_overlap = 0;
 	tape->minor = minor;
 	tape->name[0] = 'h';
@@ -2463,7 +2469,8 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 	tape->name[2] = '0' + minor;
 	tape->chrdev_dir = IDETAPE_DIR_NONE;
 	tape->pc = tape->pc_stack;
-	*((unsigned short *) &gcw) = drive->id->config;
+
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	/* Command packet DRQ type */
 	if (((gcw[0] & 0x60) >> 5) == 1)

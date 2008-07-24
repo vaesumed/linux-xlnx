@@ -158,23 +158,29 @@ static DEFINE_MUTEX(idefloppy_ref_mutex);
 #define ide_floppy_g(disk) \
 	container_of((disk)->private_data, struct ide_floppy_obj, driver)
 
+static void idefloppy_cleanup_obj(struct kref *);
+
 static struct ide_floppy_obj *ide_floppy_get(struct gendisk *disk)
 {
 	struct ide_floppy_obj *floppy = NULL;
 
 	mutex_lock(&idefloppy_ref_mutex);
 	floppy = ide_floppy_g(disk);
-	if (floppy)
+	if (floppy) {
 		kref_get(&floppy->kref);
+		if (ide_device_get(floppy->drive)) {
+			kref_put(&floppy->kref, idefloppy_cleanup_obj);
+			floppy = NULL;
+		}
+	}
 	mutex_unlock(&idefloppy_ref_mutex);
 	return floppy;
 }
 
-static void idefloppy_cleanup_obj(struct kref *);
-
 static void ide_floppy_put(struct ide_floppy_obj *floppy)
 {
 	mutex_lock(&idefloppy_ref_mutex);
+	ide_device_put(floppy->drive);
 	kref_put(&floppy->kref, idefloppy_cleanup_obj);
 	mutex_unlock(&idefloppy_ref_mutex);
 }
@@ -958,12 +964,12 @@ static sector_t idefloppy_capacity(ide_drive_t *drive)
  * Check whether we can support a drive, based on the ATAPI IDENTIFY command
  * results.
  */
-static int idefloppy_identify_device(ide_drive_t *drive, struct hd_driveid *id)
+static int idefloppy_identify_device(ide_drive_t *drive, u16 *id)
 {
 	u8 gcw[2];
 	u8 device_type, protocol, removable, drq_type, packet_size;
 
-	*((u16 *) &gcw) = id->config;
+	*((u16 *)&gcw) = id[ATA_ID_CONFIG];
 
 	device_type =  gcw[1] & 0x1F;
 	removable   = (gcw[0] & 0x80) >> 7;
@@ -974,7 +980,8 @@ static int idefloppy_identify_device(ide_drive_t *drive, struct hd_driveid *id)
 #ifdef CONFIG_PPC
 	/* kludge for Apple PowerBook internal zip */
 	if (device_type == 5 &&
-	    !strstr(id->model, "CD-ROM") && strstr(id->model, "ZIP"))
+	    !strstr((char *)&id[ATA_ID_PROD], "CD-ROM") &&
+	    strstr((char *)&id[ATA_ID_PROD], "ZIP"))
 		device_type = 0;
 #endif
 
@@ -1017,9 +1024,10 @@ static inline void idefloppy_add_settings(ide_drive_t *drive) { ; }
 
 static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 {
+	u16 *id = drive->id;
 	u8 gcw[2];
 
-	*((u16 *) &gcw) = drive->id->config;
+	*((u16 *)&gcw) = id[ATA_ID_CONFIG];
 	floppy->pc = floppy->pc_stack;
 	drive->pc_callback = ide_floppy_callback;
 
@@ -1034,7 +1042,7 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	 * it. It should be fixed as of version 1.9, but to be on the safe side
 	 * we'll leave the limitation below for the 2.2.x tree.
 	 */
-	if (!strncmp(drive->id->model, "IOMEGA ZIP 100 ATAPI", 20)) {
+	if (!strncmp((char *)&id[ATA_ID_PROD], "IOMEGA ZIP 100 ATAPI", 20)) {
 		drive->atapi_flags |= IDE_AFLAG_ZIP_DRIVE;
 		/* This value will be visible in the /proc/ide/hdx/settings */
 		floppy->ticks = IDEFLOPPY_TICKS_DELAY;
@@ -1045,7 +1053,7 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	 * Guess what? The IOMEGA Clik! drive also needs the above fix. It makes
 	 * nasty clicking noises without it, so please don't remove this.
 	 */
-	if (strncmp(drive->id->model, "IOMEGA Clik!", 11) == 0) {
+	if (strncmp((char *)&id[ATA_ID_PROD], "IOMEGA Clik!", 11) == 0) {
 		blk_queue_max_sectors(drive->queue, 64);
 		drive->atapi_flags |= IDE_AFLAG_CLIK_DRIVE;
 	}
