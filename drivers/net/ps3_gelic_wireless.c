@@ -32,6 +32,7 @@
 #include <linux/wireless.h>
 #include <linux/ctype.h>
 #include <linux/string.h>
+#include <linux/mutex.h>
 #include <net/iw_handler.h>
 #include <net/ieee80211.h>
 
