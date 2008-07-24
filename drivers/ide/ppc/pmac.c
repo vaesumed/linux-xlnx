@@ -686,7 +686,7 @@ set_timings_mdma(ide_drive_t *drive, int intf_type, u32 *timings, u32 *timings2,
 	}
 
 	/* Check if drive provides explicit DMA cycle time */
-	if ((id[ATA_ID_FIELD_VALID] & 2) && id[ATA_ID_EIDE_DMA_TIME)
+	if ((id[ATA_ID_FIELD_VALID] & 2) && id[ATA_ID_EIDE_DMA_TIME])
 		cycleTime = max_t(int, id[ATA_ID_EIDE_DMA_TIME], cycleTime);
 
 	/* OHare limits according to some old Apple sources */	
