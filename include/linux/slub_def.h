@@ -60,7 +60,12 @@ struct kmem_cache_node {
  * given order would contain.
  */
 struct kmem_cache_order_objects {
-	unsigned long x;
+	union {
+		u32 x;
+		struct {
+			u16 order, objects;
+		};
+	};
 };
 
 /*
