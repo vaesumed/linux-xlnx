@@ -112,9 +112,13 @@ struct vfsmount *alloc_vfsmnt(const char *name)
 		int err;
 
 		err = mnt_alloc_id(mnt);
-		if (err) {
-			kmem_cache_free(mnt_cache, mnt);
-			return NULL;
+		if (err)
+			goto out_free_cache;
+
+		if (name) {
+			mnt->mnt_devname = kstrdup(name, GFP_KERNEL);
+			if (!mnt->mnt_devname)
+				goto out_free_id;
 		}
 
 		atomic_set(&mnt->mnt_count, 1);
@@ -127,16 +131,14 @@ struct vfsmount *alloc_vfsmnt(const char *name)
 		INIT_LIST_HEAD(&mnt->mnt_slave_list);
 		INIT_LIST_HEAD(&mnt->mnt_slave);
 		atomic_set(&mnt->__mnt_writers, 0);
-		if (name) {
-			int size = strlen(name) + 1;
-			char *newname = kmalloc(size, GFP_KERNEL);
-			if (newname) {
-				memcpy(newname, name, size);
-				mnt->mnt_devname = newname;
-			}
-		}
 	}
 	return mnt;
+
+out_free_id:
+	mnt_free_id(mnt);
+out_free_cache:
+	kmem_cache_free(mnt_cache, mnt);
+	return NULL;
 }
 
 /*
@@ -1973,7 +1975,7 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 		struct fs_struct *fs)
 {
 	struct mnt_namespace *new_ns;
-	struct vfsmount *rootmnt = NULL, *pwdmnt = NULL, *altrootmnt = NULL;
+	struct vfsmount *rootmnt = NULL, *pwdmnt = NULL;
 	struct vfsmount *p, *q;
 
 	new_ns = kmalloc(sizeof(struct mnt_namespace), GFP_KERNEL);
@@ -2016,10 +2018,6 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 				pwdmnt = p;
 				fs->pwd.mnt = mntget(q);
 			}
-			if (p == fs->altroot.mnt) {
-				altrootmnt = p;
-				fs->altroot.mnt = mntget(q);
-			}
 		}
 		p = next_mnt(p, mnt_ns->root);
 		q = next_mnt(q, new_ns->root);
@@ -2030,8 +2028,6 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 		mntput(rootmnt);
 	if (pwdmnt)
 		mntput(pwdmnt);
-	if (altrootmnt)
-		mntput(altrootmnt);
 
 	return new_ns;
 }
