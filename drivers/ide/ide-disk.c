@@ -92,13 +92,15 @@ static void ide_disk_put(struct ide_disk_obj *idkp)
  *
  * It is called only once for each drive.
  */
-static int lba_capacity_is_ok(struct hd_driveid *id)
+static int lba_capacity_is_ok(u16 *id)
 {
 	unsigned long lba_sects, chs_sects, head, tail;
 
 	/* No non-LBA info .. so valid! */
-	if (id->cyls == 0)
+	if (id[ATA_ID_CYLS] == 0)
 		return 1;
+
+	lba_sects = ata_id_u32(id, ATA_ID_LBA_CAPACITY);
 
 	/*
 	 * The ATA spec tells large drives to return
@@ -106,15 +108,14 @@ static int lba_capacity_is_ok(struct hd_driveid *id)
 	 * Some drives can be jumpered to use 15 heads instead of 16.
 	 * Some drives can be jumpered to use 4092 cyls instead of 16383.
 	 */
-	if ((id->cyls == 16383
-	     || (id->cyls == 4092 && id->cur_cyls == 16383)) &&
-	    id->sectors == 63 &&
-	    (id->heads == 15 || id->heads == 16) &&
-	    (id->lba_capacity >= 16383*63*id->heads))
+	if ((id[ATA_ID_CYLS] == 16383 ||
+	     (id[ATA_ID_CYLS] == 4092 && id[ATA_ID_CUR_CYLS] == 16383)) &&
+	    id[ATA_ID_SECTORS] == 63 &&
+	    (id[ATA_ID_HEADS] == 15 || id[ATA_ID_HEADS] == 16) &&
+	    (lba_sects >= 16383 * 63 * id[ATA_ID_HEADS]))
 		return 1;
 
-	lba_sects   = id->lba_capacity;
-	chs_sects   = id->cyls * id->heads * id->sectors;
+	chs_sects = id[ATA_ID_CYLS] * id[ATA_ID_HEADS] * id[ATA_ID_SECTORS];
 
 	/* perform a rough sanity check on lba_sects:  within 10% is OK */
 	if ((lba_sects - chs_sects) < chs_sects/10)
@@ -125,7 +126,7 @@ static int lba_capacity_is_ok(struct hd_driveid *id)
 	tail = (lba_sects & 0xffff);
 	lba_sects = (head | (tail << 16));
 	if ((lba_sects - chs_sects) < chs_sects/10) {
-		id->lba_capacity = lba_sects;
+		*(__le32 *)&id[ATA_ID_LBA_CAPACITY] = __cpu_to_le32(lba_sects);
 		return 1;	/* lba_capacity is (now) good */
 	}
 
@@ -133,18 +134,18 @@ static int lba_capacity_is_ok(struct hd_driveid *id)
 }
 
 static const u8 ide_rw_cmds[] = {
-	WIN_MULTREAD,
-	WIN_MULTWRITE,
-	WIN_MULTREAD_EXT,
-	WIN_MULTWRITE_EXT,
-	WIN_READ,
-	WIN_WRITE,
-	WIN_READ_EXT,
-	WIN_WRITE_EXT,
-	WIN_READDMA,
-	WIN_WRITEDMA,
-	WIN_READDMA_EXT,
-	WIN_WRITEDMA_EXT,
+	ATA_CMD_READ_MULTI,
+	ATA_CMD_WRITE_MULTI,
+	ATA_CMD_READ_MULTI_EXT,
+	ATA_CMD_WRITE_MULTI_EXT,
+	ATA_CMD_PIO_READ,
+	ATA_CMD_PIO_WRITE,
+	ATA_CMD_PIO_READ_EXT,
+	ATA_CMD_PIO_WRITE_EXT,
+	ATA_CMD_READ,
+	ATA_CMD_WRITE,
+	ATA_CMD_READ_EXT,
+	ATA_CMD_WRITE_EXT,
 };
 
 static const u8 ide_data_phases[] = {
@@ -315,9 +316,9 @@ static u64 idedisk_read_native_max_address(ide_drive_t *drive, int lba48)
 	/* Create IDE/ATA command request structure */
 	memset(&args, 0, sizeof(ide_task_t));
 	if (lba48)
-		tf->command = WIN_READ_NATIVE_MAX_EXT;
+		tf->command = ATA_CMD_READ_NATIVE_MAX_EXT;
 	else
-		tf->command = WIN_READ_NATIVE_MAX;
+		tf->command = ATA_CMD_READ_NATIVE_MAX;
 	tf->device  = ATA_LBA;
 	args.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 	if (lba48)
@@ -352,10 +353,10 @@ static u64 idedisk_set_max_address(ide_drive_t *drive, u64 addr_req, int lba48)
 		tf->hob_lbal = (addr_req >>= 8) & 0xff;
 		tf->hob_lbam = (addr_req >>= 8) & 0xff;
 		tf->hob_lbah = (addr_req >>= 8) & 0xff;
-		tf->command  = WIN_SET_MAX_EXT;
+		tf->command  = ATA_CMD_SET_MAX_EXT;
 	} else {
 		tf->device   = (addr_req >>= 8) & 0x0f;
-		tf->command  = WIN_SET_MAX;
+		tf->command  = ATA_CMD_SET_MAX;
 	}
 	tf->device |= ATA_LBA;
 	args.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
@@ -378,22 +379,13 @@ static unsigned long long sectors_to_MB(unsigned long long n)
 }
 
 /*
- * Bits 10 of command_set_1 and cfs_enable_1 must be equal,
- * so on non-buggy drives we need test only one.
- * However, we should also check whether these fields are valid.
- */
-static inline int idedisk_supports_hpa(const struct hd_driveid *id)
-{
-	return (id->command_set_1 & 0x0400) && (id->cfs_enable_1 & 0x0400);
-}
-
-/*
  * The same here.
  */
-static inline int idedisk_supports_lba48(const struct hd_driveid *id)
+static inline int idedisk_supports_lba48(const u16 *id)
 {
-	return (id->command_set_2 & 0x0400) && (id->cfs_enable_2 & 0x0400)
-	       && id->lba_capacity_2;
+	return (id[ATA_ID_COMMAND_SET_2] & 0x0400) &&
+	       (id[ATA_ID_CFS_ENABLE_2] & 0x0400) &&
+	       ata_id_u64(id, ATA_ID_LBA_CAPACITY_2);
 }
 
 /*
@@ -460,23 +452,23 @@ static void idedisk_check_hpa(ide_drive_t *drive)
  */
 static void init_idedisk_capacity(ide_drive_t *drive)
 {
-	struct hd_driveid *id = drive->id;
+	u16 *id = drive->id;
 	/*
 	 * If this drive supports the Host Protected Area feature set,
 	 * then we may need to change our opinion about the drive's capacity.
 	 */
-	int hpa = idedisk_supports_hpa(id);
+	int hpa = ata_id_hpa_enabled(id);
 
 	if (idedisk_supports_lba48(id)) {
 		/* drive speaks 48-bit LBA */
 		drive->select.b.lba = 1;
-		drive->capacity64 = id->lba_capacity_2;
+		drive->capacity64 = ata_id_u64(id, ATA_ID_LBA_CAPACITY_2);
 		if (hpa)
 			idedisk_check_hpa(drive);
-	} else if ((id->capability & 2) && lba_capacity_is_ok(id)) {
+	} else if (ata_id_has_lba(id) && lba_capacity_is_ok(id)) {
 		/* drive speaks 28-bit LBA */
 		drive->select.b.lba = 1;
-		drive->capacity64 = id->lba_capacity;
+		drive->capacity64 = ata_id_u32(id, ATA_ID_LBA_CAPACITY);
 		if (hpa)
 			idedisk_check_hpa(drive);
 	} else {
@@ -497,10 +489,10 @@ static int smart_enable(ide_drive_t *drive)
 	struct ide_taskfile *tf = &args.tf;
 
 	memset(&args, 0, sizeof(ide_task_t));
-	tf->feature = SMART_ENABLE;
-	tf->lbam    = SMART_LCYL_PASS;
-	tf->lbah    = SMART_HCYL_PASS;
-	tf->command = WIN_SMART;
+	tf->feature = ATA_SMART_ENABLE;
+	tf->lbam    = ATA_SMART_LBAM_PASS;
+	tf->lbah    = ATA_SMART_LBAH_PASS;
+	tf->command = ATA_CMD_SMART;
 	args.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 	return ide_no_data_taskfile(drive, &args);
 }
@@ -513,9 +505,9 @@ static int get_smart_data(ide_drive_t *drive, u8 *buf, u8 sub_cmd)
 	memset(&args, 0, sizeof(ide_task_t));
 	tf->feature = sub_cmd;
 	tf->nsect   = 0x01;
-	tf->lbam    = SMART_LCYL_PASS;
-	tf->lbah    = SMART_HCYL_PASS;
-	tf->command = WIN_SMART;
+	tf->lbam    = ATA_SMART_LBAM_PASS;
+	tf->lbah    = ATA_SMART_LBAH_PASS;
+	tf->command = ATA_CMD_SMART;
 	args.tf_flags	= IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 	args.data_phase	= TASKFILE_IN;
 	(void) smart_enable(drive);
@@ -530,7 +522,7 @@ static int proc_idedisk_read_cache
 	int		len;
 
 	if (drive->id_read)
-		len = sprintf(out, "%i\n", drive->id->buf_size / 2);
+		len = sprintf(out, "%i\n", drive->id[ATA_ID_BUF_SIZE] / 2);
 	else
 		len = sprintf(out, "(none)\n");
 
@@ -573,14 +565,14 @@ static int proc_idedisk_read_sv
 	(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	return proc_idedisk_read_smart(page, start, off, count, eof, data,
-				       SMART_READ_VALUES);
+				       ATA_SMART_READ_VALUES);
 }
 
 static int proc_idedisk_read_st
 	(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	return proc_idedisk_read_smart(page, start, off, count, eof, data,
-				       SMART_READ_THRESHOLDS);
+				       ATA_SMART_READ_THRESHOLDS);
 }
 
 static ide_proc_entry_t idedisk_proc[] = {
@@ -604,9 +596,9 @@ static void idedisk_prepare_flush(struct request_queue *q, struct request *rq)
 	memset(task, 0, sizeof(*task));
 	if (ide_id_has_flush_cache_ext(drive->id) &&
 	    (drive->capacity64 >= (1UL << 28)))
-		task->tf.command = WIN_FLUSH_CACHE_EXT;
+		task->tf.command = ATA_CMD_FLUSH_EXT;
 	else
-		task->tf.command = WIN_FLUSH_CACHE;
+		task->tf.command = ATA_CMD_FLUSH;
 	task->tf_flags	 = IDE_TFLAG_OUT_TF | IDE_TFLAG_OUT_DEVICE |
 			   IDE_TFLAG_DYN;
 	task->data_phase = TASKFILE_NO_DATA;
@@ -625,7 +617,7 @@ static int set_multcount(ide_drive_t *drive, int arg)
 	struct request *rq;
 	int error;
 
-	if (arg < 0 || arg > drive->id->max_multsect)
+	if (arg < 0 || arg > (drive->id[ATA_ID_MAX_MULTSECT] & 0xff))
 		return -EINVAL;
 
 	if (drive->special.b.set_multmode)
@@ -657,7 +649,7 @@ static int set_nowerr(ide_drive_t *drive, int arg)
 
 static void update_ordered(ide_drive_t *drive)
 {
-	struct hd_driveid *id = drive->id;
+	u16 *id = drive->id;
 	unsigned ordered = QUEUE_ORDERED_NONE;
 	prepare_flush_fn *prep_fn = NULL;
 
@@ -701,8 +693,8 @@ static int write_cache(ide_drive_t *drive, int arg)
 	if (ide_id_has_flush_cache(drive->id)) {
 		memset(&args, 0, sizeof(ide_task_t));
 		args.tf.feature = arg ?
-			SETFEATURES_EN_WCACHE : SETFEATURES_DIS_WCACHE;
-		args.tf.command = WIN_SETFEATURES;
+			SETFEATURES_WC_ON : SETFEATURES_WC_OFF;
+		args.tf.command = ATA_CMD_SET_FEATURES;
 		args.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 		err = ide_no_data_taskfile(drive, &args);
 		if (err == 0)
@@ -720,9 +712,9 @@ static int do_idedisk_flushcache(ide_drive_t *drive)
 
 	memset(&args, 0, sizeof(ide_task_t));
 	if (ide_id_has_flush_cache_ext(drive->id))
-		args.tf.command = WIN_FLUSH_CACHE_EXT;
+		args.tf.command = ATA_CMD_FLUSH_EXT;
 	else
-		args.tf.command = WIN_FLUSH_CACHE;
+		args.tf.command = ATA_CMD_FLUSH;
 	args.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 	return ide_no_data_taskfile(drive, &args);
 }
@@ -735,9 +727,9 @@ static int set_acoustic(ide_drive_t *drive, int arg)
 		return -EINVAL;
 
 	memset(&args, 0, sizeof(ide_task_t));
-	args.tf.feature = arg ? SETFEATURES_EN_AAM : SETFEATURES_DIS_AAM;
+	args.tf.feature = arg ? SETFEATURES_AAM_ON : SETFEATURES_AAM_OFF;
 	args.tf.nsect   = arg;
-	args.tf.command = WIN_SETFEATURES;
+	args.tf.command = ATA_CMD_SET_FEATURES;
 	args.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 	ide_no_data_taskfile(drive, &args);
 	drive->acoustic = arg;
@@ -769,8 +761,6 @@ static int set_lba_addressing(ide_drive_t *drive, int arg)
 #ifdef CONFIG_IDE_PROC_FS
 static void idedisk_add_settings(ide_drive_t *drive)
 {
-	struct hd_driveid *id = drive->id;
-
 	ide_add_setting(drive, "bios_cyl", SETTING_RW, TYPE_INT, 0, 65535, 1, 1,
 			&drive->bios_cyl, NULL);
 	ide_add_setting(drive, "bios_head", SETTING_RW, TYPE_BYTE, 0, 255, 1, 1,
@@ -780,8 +770,8 @@ static void idedisk_add_settings(ide_drive_t *drive)
 	ide_add_setting(drive, "address", SETTING_RW, TYPE_BYTE, 0, 2, 1, 1,
 			&drive->addressing, set_lba_addressing);
 	ide_add_setting(drive, "multcount", SETTING_RW, TYPE_BYTE, 0,
-			id->max_multsect, 1, 1, &drive->mult_count,
-			set_multcount);
+			drive->id[ATA_ID_MAX_MULTSECT] & 0xff, 1, 1,
+			&drive->mult_count, set_multcount);
 	ide_add_setting(drive, "nowerr", SETTING_RW, TYPE_BYTE, 0, 1, 1, 1,
 			&drive->nowerr, set_nowerr);
 	ide_add_setting(drive, "lun", SETTING_RW, TYPE_INT, 0, 7, 1, 1,
@@ -802,7 +792,8 @@ static inline void idedisk_add_settings(ide_drive_t *drive) { ; }
 static void idedisk_setup(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = drive->hwif;
-	struct hd_driveid *id = drive->id;
+	u16 *id = drive->id;
+	char *m = (char *)&id[ATA_ID_PROD];
 	unsigned long long capacity;
 
 	idedisk_add_settings(drive);
@@ -814,7 +805,7 @@ static void idedisk_setup(ide_drive_t *drive)
 		/*
 		 * Removable disks (eg. SYQUEST); ignore 'WD' drives
 		 */
-		if (id->model[0] != 'W' || id->model[1] != 'D')
+		if (m[0] != 'W' || m[1] != 'D')
 			drive->doorlocking = 1;
 	}
 
@@ -887,14 +878,14 @@ static void idedisk_setup(ide_drive_t *drive)
 			 drive->name, capacity, sectors_to_MB(capacity));
 
 	/* Only print cache size when it was specified */
-	if (id->buf_size)
-		printk(KERN_CONT " w/%dKiB Cache", id->buf_size / 2);
+	if (id[ATA_ID_BUF_SIZE])
+		printk(KERN_CONT " w/%dKiB Cache", id[ATA_ID_BUF_SIZE] / 2);
 
 	printk(KERN_CONT ", CHS=%d/%d/%d\n",
 			 drive->bios_cyl, drive->bios_head, drive->bios_sect);
 
 	/* write cache enabled? */
-	if ((id->csfo & 1) || (id->cfs_enable_1 & (1 << 5)))
+	if ((id[ATA_ID_CSFO] & 1) || ata_id_wcache_enabled(id))
 		drive->wcache = 1;
 
 	write_cache(drive, 1);
@@ -944,7 +935,7 @@ static int ide_disk_probe(ide_drive_t *drive);
  */
 static void ide_disk_resume(ide_drive_t *drive)
 {
-	if (idedisk_supports_hpa(drive->id))
+	if (ata_id_hpa_enabled(drive->id))
 		init_idedisk_capacity(drive);
 }
 
@@ -1001,7 +992,7 @@ static int idedisk_set_doorlock(ide_drive_t *drive, int on)
 	ide_task_t task;
 
 	memset(&task, 0, sizeof(task));
-	task.tf.command = on ? WIN_DOORLOCK : WIN_DOORUNLOCK;
+	task.tf.command = on ? ATA_CMD_MEDIA_LOCK : ATA_CMD_MEDIA_UNLOCK;
 	task.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 
 	return ide_no_data_taskfile(drive, &task);

@@ -12,14 +12,6 @@
  * "settings" files.  e.g.    "cat /proc/ide0/hda/settings"
  * To write a new value "val" into a specific setting "name", use:
  *   echo "name:val" >/proc/ide/ide0/hda/settings
- *
- * Also useful, "cat /proc/ide0/hda/[identify, smart_values,
- * smart_thresholds, capabilities]" will issue an IDENTIFY /
- * PACKET_IDENTIFY / SMART_READ_VALUES / SMART_READ_THRESHOLDS /
- * SENSE CAPABILITIES command to /dev/hda, and then dump out the
- * returned data as 256 16-bit words.  The "hdparm" utility will
- * be updated someday soon to use this mechanism.
- *
  */
 
 #include <linux/module.h>
@@ -349,7 +341,7 @@ static int set_xfer_rate (ide_drive_t *drive, int arg)
 		return -EINVAL;
 
 	memset(&task, 0, sizeof(task));
-	task.tf.command = WIN_SETFEATURES;
+	task.tf.command = ATA_CMD_SET_FEATURES;
 	task.tf.feature = SETFEATURES_XFER;
 	task.tf.nsect   = (u8)arg;
 	task.tf_flags = IDE_TFLAG_OUT_FEATURE | IDE_TFLAG_OUT_NSECT |
@@ -561,11 +553,10 @@ static int proc_ide_read_dmodel
 	(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	ide_drive_t	*drive = (ide_drive_t *) data;
-	struct hd_driveid *id = drive->id;
+	char		*m = (char *)&drive->id[ATA_ID_PROD];
 	int		len;
 
-	len = sprintf(page, "%.40s\n",
-		(id && id->model[0]) ? (char *)id->model : "(none)");
+	len = sprintf(page, "%.40s\n", m[0] ? m : "(none)");
 	PROC_IDE_READ_RETURN(page, start, off, count, eof, len);
 }
 
