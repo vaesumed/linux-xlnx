@@ -311,21 +311,32 @@ struct kvm_s390_interrupt {
 
 /* This structure represents a single trace buffer record. */
 struct kvm_trace_rec {
-	__u32 event:28;
-	__u32 extra_u32:3;
-	__u32 cycle_in:1;
+	/* variable rec_val
+	 * is split into:
+	 * bits 0 - 27  -> event id
+	 * bits 28 -30  -> number of extra data args of size u32
+	 * bits 31      -> binary indicator for if tsc is in record
+	 */
+	__u32 rec_val;
 	__u32 pid;
 	__u32 vcpu_id;
 	union {
 		struct {
-			__u64 cycle_u64;
+			__u64 timestamp;
 			__u32 extra_u32[KVM_TRC_EXTRA_MAX];
-		} cycle;
+		} timestamp;
 		struct {
 			__u32 extra_u32[KVM_TRC_EXTRA_MAX];
-		} nocycle;
+		} notimestamp;
 	} u;
 } __attribute__((packed));
+
+#define TRACE_REC_EVENT_ID(val) \
+		(0x0fffffff & (val))
+#define TRACE_REC_NUM_DATA_ARGS(val) \
+		(0x70000000 & ((val) << 28))
+#define TRACE_REC_TCS(val) \
+		(0x80000000 & ((val) << 31))
 
 #define KVMIO 0xAE
 
@@ -438,5 +449,30 @@ struct kvm_trace_rec {
 #define KVM_S390_INITIAL_RESET    _IO(KVMIO,  0x97)
 #define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state)
 #define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state)
+
+#define KVM_TRC_INJ_VIRQ         (KVM_TRC_HANDLER + 0x02)
+#define KVM_TRC_REDELIVER_EVT    (KVM_TRC_HANDLER + 0x03)
+#define KVM_TRC_PEND_INTR        (KVM_TRC_HANDLER + 0x04)
+#define KVM_TRC_IO_READ          (KVM_TRC_HANDLER + 0x05)
+#define KVM_TRC_IO_WRITE         (KVM_TRC_HANDLER + 0x06)
+#define KVM_TRC_CR_READ          (KVM_TRC_HANDLER + 0x07)
+#define KVM_TRC_CR_WRITE         (KVM_TRC_HANDLER + 0x08)
+#define KVM_TRC_DR_READ          (KVM_TRC_HANDLER + 0x09)
+#define KVM_TRC_DR_WRITE         (KVM_TRC_HANDLER + 0x0A)
+#define KVM_TRC_MSR_READ         (KVM_TRC_HANDLER + 0x0B)
+#define KVM_TRC_MSR_WRITE        (KVM_TRC_HANDLER + 0x0C)
+#define KVM_TRC_CPUID            (KVM_TRC_HANDLER + 0x0D)
+#define KVM_TRC_INTR             (KVM_TRC_HANDLER + 0x0E)
+#define KVM_TRC_NMI              (KVM_TRC_HANDLER + 0x0F)
+#define KVM_TRC_VMMCALL          (KVM_TRC_HANDLER + 0x10)
+#define KVM_TRC_HLT              (KVM_TRC_HANDLER + 0x11)
+#define KVM_TRC_CLTS             (KVM_TRC_HANDLER + 0x12)
+#define KVM_TRC_LMSW             (KVM_TRC_HANDLER + 0x13)
+#define KVM_TRC_APIC_ACCESS      (KVM_TRC_HANDLER + 0x14)
+#define KVM_TRC_TDP_FAULT        (KVM_TRC_HANDLER + 0x15)
+#define KVM_TRC_GTLB_WRITE       (KVM_TRC_HANDLER + 0x16)
+#define KVM_TRC_STLB_WRITE       (KVM_TRC_HANDLER + 0x17)
+#define KVM_TRC_STLB_INVAL       (KVM_TRC_HANDLER + 0x18)
+#define KVM_TRC_PPC_INSTR        (KVM_TRC_HANDLER + 0x19)
 
 #endif
