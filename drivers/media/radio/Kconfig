@@ -58,7 +58,7 @@ config RADIO_RTRACK
 config RADIO_RTRACK_PORT
 	hex "RadioTrack i/o port (0x20f or 0x30f)"
 	depends on RADIO_RTRACK=y
-	default "20f"
+	default "0x20f"
 	help
 	  Enter either 0x30f or 0x20f here.  The card default is 0x30f, if you
 	  haven't changed the jumper setting on the card.
@@ -81,7 +81,7 @@ config RADIO_RTRACK2
 config RADIO_RTRACK2_PORT
 	hex "RadioTrack II i/o port (0x20c or 0x30c)"
 	depends on RADIO_RTRACK2=y
-	default "30c"
+	default "0x30c"
 	help
 	  Enter either 0x30c or 0x20c here.  The card default is 0x30c, if you
 	  haven't changed the jumper setting on the card.
@@ -104,7 +104,7 @@ config RADIO_AZTECH
 config RADIO_AZTECH_PORT
 	hex "Aztech/Packard Bell I/O port (0x350 or 0x358)"
 	depends on RADIO_AZTECH=y
-	default "350"
+	default "0x350"
 	help
 	  Enter either 0x350 or 0x358 here.  The card default is 0x350, if you
 	  haven't changed the setting of jumper JP3 on the card.  Removing the
@@ -133,7 +133,7 @@ config RADIO_GEMTEK
 config RADIO_GEMTEK_PORT
 	hex "Fixed I/O port (0x20c, 0x30c, 0x24c, 0x34c, 0c24c or 0x28c)"
 	depends on RADIO_GEMTEK=y
-	default "34c"
+	default "0x34c"
 	help
 	  Enter either 0x20c, 0x30c, 0x24c or 0x34c here. The card default is
 	  0x34c, if you haven't changed the jumper setting on the card. On
@@ -250,7 +250,7 @@ config RADIO_TERRATEC
 config RADIO_TERRATEC_PORT
 	hex "Terratec i/o port (normally 0x590)"
 	depends on RADIO_TERRATEC=y
-	default "590"
+	default "0x590"
 	help
 	  Fill in the I/O port of your TerraTec FM radio card. If unsure, go
 	  with the default.
@@ -268,7 +268,7 @@ config RADIO_TRUST
 config RADIO_TRUST_PORT
 	hex "Trust i/o port (usually 0x350 or 0x358)"
 	depends on RADIO_TRUST=y
-	default "350"
+	default "0x350"
 	help
 	  Enter the I/O port of your Trust FM radio card. If unsure, try the
 	  values "0x350" or "0x358".
@@ -301,7 +301,7 @@ config RADIO_TYPHOON_PROC_FS
 config RADIO_TYPHOON_PORT
 	hex "Typhoon I/O port (0x316 or 0x336)"
 	depends on RADIO_TYPHOON=y
-	default "316"
+	default "0x316"
 	help
 	  Enter the I/O port of your Typhoon or EcoRadio radio card.
 
@@ -335,7 +335,7 @@ config RADIO_ZOLTRIX
 config RADIO_ZOLTRIX_PORT
 	hex "ZOLTRIX I/O port (0x20c or 0x30c)"
 	depends on RADIO_ZOLTRIX=y
-	default "20c"
+	default "0x20c"
 	help
 	  Enter the I/O port of your Zoltrix radio card.
 
