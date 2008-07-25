@@ -1,0 +1,40 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.26-5752-g93ded9b
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 93ded9b8fd42abe2c3607097963d8de6ad9117eb
+HEAD is now at 93ded9b Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-use-more-error-codes.patch
+dm-mpath-remove-is_active-from-struct-dm_path.patch
+dm-exception-store-introduce-area_location-function.patch
+dm-exception-store-use-chunk_t-for_areas.patch
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Importing ide based on b5684b83b1e1579bbbc80e703e990c0cccf5892c
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard b5684b83b1e1579bbbc80e703e990c0cccf5892c
+HEAD is now at b5684b8 Merge git://git.kernel.org/pub/scm/linux/kernel/git/bart/ide-2.6
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ata-add-missing-ata_id_-defines-take-2.patch
+ide-fix-pre-eide-swdma-support-on-big-endian.patch
+ide-fix-ide_fix_driveid.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+ata-add-missing-ata_cmd_-defines.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Unchanged quilt series ttydev
