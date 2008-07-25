@@ -31,7 +31,6 @@
 #include <linux/file.h>
 #include <linux/fcntl.h>
 #include <linux/device_cgroup.h>
-#include <asm/namei.h>
 #include <asm/uaccess.h>
 
 #define ACC_MODE(x) ("\000\004\002\006"[(x)&O_ACCMODE])
@@ -185,6 +184,8 @@ int generic_permission(struct inode *inode, int mask,
 {
 	umode_t			mode = inode->i_mode;
 
+	mask &= MAY_READ | MAY_WRITE | MAY_EXEC;
+
 	if (current->fsuid == inode->i_uid)
 		mode >>= 6;
 	else {
@@ -203,7 +204,7 @@ int generic_permission(struct inode *inode, int mask,
 	/*
 	 * If the DACs are ok we don't need any capability check.
 	 */
-	if (((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask))
+	if ((mask & ~mode) == 0)
 		return 0;
 
  check_capabilities:
@@ -228,7 +229,7 @@ int generic_permission(struct inode *inode, int mask,
 
 int permission(struct inode *inode, int mask, struct nameidata *nd)
 {
-	int retval, submask;
+	int retval;
 	struct vfsmount *mnt = NULL;
 
 	if (nd)
@@ -261,9 +262,8 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 	}
 
 	/* Ordinary permission routines do not understand MAY_APPEND. */
-	submask = mask & ~MAY_APPEND;
 	if (inode->i_op && inode->i_op->permission) {
-		retval = inode->i_op->permission(inode, submask, nd);
+		retval = inode->i_op->permission(inode, mask);
 		if (!retval) {
 			/*
 			 * Exec permission on a regular file is denied if none
@@ -277,7 +277,7 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 				return -EACCES;
 		}
 	} else {
-		retval = generic_permission(inode, submask, NULL);
+		retval = generic_permission(inode, mask, NULL);
 	}
 	if (retval)
 		return retval;
@@ -286,7 +286,8 @@ int permission(struct inode *inode, int mask, struct nameidata *nd)
 	if (retval)
 		return retval;
 
-	return security_inode_permission(inode, mask, nd);
+	return security_inode_permission(inode,
+			mask & (MAY_READ|MAY_WRITE|MAY_EXEC));
 }
 
 /**
@@ -459,8 +460,7 @@ static struct dentry * cached_lookup(struct dentry * parent, struct qstr * name,
  * short-cut DAC fails, then call permission() to do more
  * complete permission check.
  */
-static int exec_permission_lite(struct inode *inode,
-				       struct nameidata *nd)
+static int exec_permission_lite(struct inode *inode)
 {
 	umode_t	mode = inode->i_mode;
 
@@ -486,7 +486,7 @@ static int exec_permission_lite(struct inode *inode,
 
 	return -EACCES;
 ok:
-	return security_inode_permission(inode, MAY_EXEC, nd);
+	return security_inode_permission(inode, MAY_EXEC);
 }
 
 /*
@@ -519,7 +519,14 @@ static struct dentry * real_lookup(struct dentry * parent, struct qstr * name, s
 	 */
 	result = d_lookup(parent, name);
 	if (!result) {
-		struct dentry * dentry = d_alloc(parent, name);
+		struct dentry *dentry;
+
+		/* Don't create child dentry for a dead directory. */
+		result = ERR_PTR(-ENOENT);
+		if (IS_DEADDIR(dir))
+			goto out_unlock;
+
+		dentry = d_alloc(parent, name);
 		result = ERR_PTR(-ENOMEM);
 		if (dentry) {
 			result = dir->i_op->lookup(dir, dentry, nd);
@@ -528,6 +535,7 @@ static struct dentry * real_lookup(struct dentry * parent, struct qstr * name, s
 			else
 				result = dentry;
 		}
+out_unlock:
 		mutex_unlock(&dir->i_mutex);
 		return result;
 	}
@@ -545,27 +553,16 @@ static struct dentry * real_lookup(struct dentry * parent, struct qstr * name, s
 	return result;
 }
 
-static int __emul_lookup_dentry(const char *, struct nameidata *);
-
 /* SMP-safe */
-static __always_inline int
+static __always_inline void
 walk_init_root(const char *name, struct nameidata *nd)
 {
 	struct fs_struct *fs = current->fs;
 
 	read_lock(&fs->lock);
-	if (fs->altroot.dentry && !(nd->flags & LOOKUP_NOALT)) {
-		nd->path = fs->altroot;
-		path_get(&fs->altroot);
-		read_unlock(&fs->lock);
-		if (__emul_lookup_dentry(name,nd))
-			return 0;
-		read_lock(&fs->lock);
-	}
 	nd->path = fs->root;
 	path_get(&fs->root);
 	read_unlock(&fs->lock);
-	return 1;
 }
 
 /*
@@ -606,12 +603,9 @@ static __always_inline int __vfs_follow_link(struct nameidata *nd, const char *l
 
 	if (*link == '/') {
 		path_put(&nd->path);
-		if (!walk_init_root(link, nd))
-			/* weird __emul_prefix() stuff did it */
-			goto out;
+		walk_init_root(link, nd);
 	}
 	res = link_path_walk(link, nd);
-out:
 	if (nd->depth || res || nd->last_type!=LAST_NORM)
 		return res;
 	/*
@@ -889,7 +883,7 @@ static int __link_path_walk(const char *name, struct nameidata *nd)
 		unsigned int c;
 
 		nd->flags |= LOOKUP_CONTINUE;
-		err = exec_permission_lite(inode, nd);
+		err = exec_permission_lite(inode);
 		if (err == -EAGAIN)
 			err = vfs_permission(nd, MAY_EXEC);
  		if (err)
@@ -1060,67 +1054,6 @@ static int path_walk(const char *name, struct nameidata *nd)
 	return link_path_walk(name, nd);
 }
 
-/* 
- * SMP-safe: Returns 1 and nd will have valid dentry and mnt, if
- * everything is done. Returns 0 and drops input nd, if lookup failed;
- */
-static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
-{
-	if (path_walk(name, nd))
-		return 0;		/* something went wrong... */
-
-	if (!nd->path.dentry->d_inode ||
-	    S_ISDIR(nd->path.dentry->d_inode->i_mode)) {
-		struct path old_path = nd->path;
-		struct qstr last = nd->last;
-		int last_type = nd->last_type;
-		struct fs_struct *fs = current->fs;
-
-		/*
-		 * NAME was not found in alternate root or it's a directory.
-		 * Try to find it in the normal root:
-		 */
-		nd->last_type = LAST_ROOT;
-		read_lock(&fs->lock);
-		nd->path = fs->root;
-		path_get(&fs->root);
-		read_unlock(&fs->lock);
-		if (path_walk(name, nd) == 0) {
-			if (nd->path.dentry->d_inode) {
-				path_put(&old_path);
-				return 1;
-			}
-			path_put(&nd->path);
-		}
-		nd->path = old_path;
-		nd->last = last;
-		nd->last_type = last_type;
-	}
-	return 1;
-}
-
-void set_fs_altroot(void)
-{
-	char *emul = __emul_prefix();
-	struct nameidata nd;
-	struct path path = {}, old_path;
-	int err;
-	struct fs_struct *fs = current->fs;
-
-	if (!emul)
-		goto set_it;
-	err = path_lookup(emul, LOOKUP_FOLLOW|LOOKUP_DIRECTORY|LOOKUP_NOALT, &nd);
-	if (!err)
-		path = nd.path;
-set_it:
-	write_lock(&fs->lock);
-	old_path = fs->altroot;
-	fs->altroot = path;
-	write_unlock(&fs->lock);
-	if (old_path.dentry)
-		path_put(&old_path);
-}
-
 /* Returns 0 and nd will be valid on success; Retuns error, otherwise. */
 static int do_path_lookup(int dfd, const char *name,
 				unsigned int flags, struct nameidata *nd)
@@ -1136,14 +1069,6 @@ static int do_path_lookup(int dfd, const char *name,
 
 	if (*name=='/') {
 		read_lock(&fs->lock);
-		if (fs->altroot.dentry && !(nd->flags & LOOKUP_NOALT)) {
-			nd->path = fs->altroot;
-			path_get(&fs->altroot);
-			read_unlock(&fs->lock);
-			if (__emul_lookup_dentry(name,nd))
-				goto out; /* found in altroot */
-			read_lock(&fs->lock);
-		}
 		nd->path = fs->root;
 		path_get(&fs->root);
 		read_unlock(&fs->lock);
@@ -1177,7 +1102,6 @@ static int do_path_lookup(int dfd, const char *name,
 	}
 
 	retval = path_walk(name, nd);
-out:
 	if (unlikely(!retval && !audit_dummy_context() && nd->path.dentry &&
 				nd->path.dentry->d_inode))
 		audit_inode(name, nd->path.dentry);
@@ -1317,7 +1241,14 @@ static struct dentry *__lookup_hash(struct qstr *name,
 
 	dentry = cached_lookup(base, name, nd);
 	if (!dentry) {
-		struct dentry *new = d_alloc(base, name);
+		struct dentry *new;
+
+		/* Don't create child dentry for a dead directory. */
+		dentry = ERR_PTR(-ENOENT);
+		if (IS_DEADDIR(inode))
+			goto out;
+
+		new = d_alloc(base, name);
 		dentry = ERR_PTR(-ENOMEM);
 		if (!new)
 			goto out;
@@ -1755,7 +1686,7 @@ struct file *do_filp_open(int dfd, const char *pathname,
 	int will_write;
 	int flag = open_to_namei_flags(open_flag);
 
-	acc_mode = ACC_MODE(flag);
+	acc_mode = MAY_OPEN | ACC_MODE(flag);
 
 	/* O_TRUNC implies we need access checks for write permissions */
 	if (flag & O_TRUNC)
@@ -2408,7 +2339,7 @@ asmlinkage long sys_unlink(const char __user *pathname)
 	return do_unlinkat(AT_FDCWD, pathname);
 }
 
-int vfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname, int mode)
+int vfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname)
 {
 	int error = may_create(dir, dentry, NULL);
 
@@ -2457,7 +2388,7 @@ asmlinkage long sys_symlinkat(const char __user *oldname,
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto out_dput;
-	error = vfs_symlink(nd.path.dentry->d_inode, dentry, from, S_IALLUGO);
+	error = vfs_symlink(nd.path.dentry->d_inode, dentry, from);
 	mnt_drop_write(nd.path.mnt);
 out_dput:
 	dput(dentry);
@@ -2498,19 +2429,19 @@ int vfs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *new_de
 		return -EPERM;
 	if (!dir->i_op || !dir->i_op->link)
 		return -EPERM;
-	if (S_ISDIR(old_dentry->d_inode->i_mode))
+	if (S_ISDIR(inode->i_mode))
 		return -EPERM;
 
 	error = security_inode_link(old_dentry, dir, new_dentry);
 	if (error)
 		return error;
 
-	mutex_lock(&old_dentry->d_inode->i_mutex);
+	mutex_lock(&inode->i_mutex);
 	DQUOT_INIT(dir);
 	error = dir->i_op->link(old_dentry, dir, new_dentry);
-	mutex_unlock(&old_dentry->d_inode->i_mutex);
+	mutex_unlock(&inode->i_mutex);
 	if (!error)
-		fsnotify_link(dir, old_dentry->d_inode, new_dentry);
+		fsnotify_link(dir, inode, new_dentry);
 	return error;
 }
 
