@@ -103,6 +103,7 @@ enum ib_device_cap_flags {
 	 */
 	IB_DEVICE_UD_IP_CSUM		= (1<<18),
 	IB_DEVICE_UD_TSO		= (1<<19),
+	IB_DEVICE_XRC			= (1<<20),
 	IB_DEVICE_MEM_MGT_EXTENSIONS	= (1<<21),
 	IB_DEVICE_BLOCK_MULTICAST_LOOPBACK = (1<<22),
 };
@@ -551,6 +552,7 @@ enum ib_qp_type {
 	IB_QPT_RC,
 	IB_QPT_UC,
 	IB_QPT_UD,
+	IB_QPT_XRC,
 	IB_QPT_RAW_IPV6,
 	IB_QPT_RAW_ETY
 };
@@ -566,6 +568,7 @@ struct ib_qp_init_attr {
 	struct ib_cq	       *send_cq;
 	struct ib_cq	       *recv_cq;
 	struct ib_srq	       *srq;
+	struct ib_xrcd	       *xrcd;	  /* XRC QPs only */
 	struct ib_qp_cap	cap;
 	enum ib_sig_type	sq_sig_type;
 	enum ib_qp_type		qp_type;
@@ -753,6 +756,7 @@ struct ib_send_wr {
 			u32				rkey;
 		} fast_reg;
 	} wr;
+	u32			xrc_remote_srq_num; /* valid for XRC sends only */
 };
 
 struct ib_recv_wr {
@@ -814,6 +818,7 @@ struct ib_ucontext {
 	struct list_head	qp_list;
 	struct list_head	srq_list;
 	struct list_head	ah_list;
+	struct list_head	xrcd_list;
 	int			closing;
 };
 
@@ -841,6 +846,12 @@ struct ib_pd {
 	atomic_t          	usecnt; /* count all resources */
 };
 
+struct ib_xrcd {
+	struct ib_device       *device;
+	struct ib_uobject      *uobject;
+	atomic_t		usecnt; /* count all resources */
+};
+
 struct ib_ah {
 	struct ib_device	*device;
 	struct ib_pd		*pd;
@@ -862,10 +873,13 @@ struct ib_cq {
 struct ib_srq {
 	struct ib_device       *device;
 	struct ib_pd	       *pd;
+	struct ib_cq	       *xrc_cq;
+	struct ib_xrcd	       *xrcd;
 	struct ib_uobject      *uobject;
 	void		      (*event_handler)(struct ib_event *, void *);
 	void		       *srq_context;
 	atomic_t		usecnt;
+	u32			xrc_srq_num;
 };
 
 struct ib_qp {
@@ -874,6 +888,7 @@ struct ib_qp {
 	struct ib_cq	       *send_cq;
 	struct ib_cq	       *recv_cq;
 	struct ib_srq	       *srq;
+	struct ib_xrcd	       *xrcd;  /* XRC QPs only */
 	struct ib_uobject      *uobject;
 	void                  (*event_handler)(struct ib_event *, void *);
 	void		       *qp_context;
@@ -1130,6 +1145,15 @@ struct ib_device {
 						  struct ib_grh *in_grh,
 						  struct ib_mad *in_mad,
 						  struct ib_mad *out_mad);
+	struct ib_srq *		   (*create_xrc_srq)(struct ib_pd *pd,
+						     struct ib_cq *xrc_cq,
+						     struct ib_xrcd *xrcd,
+						     struct ib_srq_init_attr *srq_init_attr,
+						     struct ib_udata *udata);
+	struct ib_xrcd *	   (*alloc_xrcd)(struct ib_device *device,
+						 struct ib_ucontext *context,
+						 struct ib_udata *udata);
+	int			   (*dealloc_xrcd)(struct ib_xrcd *xrcd);
 
 	struct ib_dma_mapping_ops   *dma_ops;
 
@@ -1312,8 +1336,28 @@ int ib_query_ah(struct ib_ah *ah, struct ib_ah_attr *ah_attr);
 int ib_destroy_ah(struct ib_ah *ah);
 
 /**
- * ib_create_srq - Creates a SRQ associated with the specified protection
- *   domain.
+ * ib_create_xrc_srq - Creates an XRC SRQ associated with the specified
+ *   protection domain, completion queue, and XRC domain.
+ * @pd: The protection domain associated with the SRQ.
+ * @xrc_cq: The CQ to be associated with the XRC SRQ.
+ * @xrcd: The XRC domain to be associated with the XRC SRQ.
+ * @srq_init_attr: A list of initial attributes required to create the
+ *   XRC SRQ.  If XRC SRQ creation succeeds, then the attributes are
+ *   updated to the actual capabilities of the created XRC SRQ.
+ *
+ * srq_attr->max_wr and srq_attr->max_sge are read the determine the
+ * requested size of the XRC SRQ, and set to the actual values allocated
+ * on return.  If ib_create_xrc_srq() succeeds, then max_wr and max_sge
+ * will always be at least as large as the requested values.
+ */
+struct ib_srq *ib_create_xrc_srq(struct ib_pd *pd,
+				 struct ib_cq *xrc_cq,
+				 struct ib_xrcd *xrcd,
+				 struct ib_srq_init_attr *srq_init_attr);
+
+/**
+ * ib_create_srq - Creates an SRQ associated with the specified
+ *   protection domain.
  * @pd: The protection domain associated with the SRQ.
  * @srq_init_attr: A list of initial attributes required to create the
  *   SRQ.  If SRQ creation succeeds, then the attributes are updated to
@@ -2030,5 +2074,17 @@ int ib_attach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid);
  * @lid: Multicast group LID in host byte order.
  */
 int ib_detach_mcast(struct ib_qp *qp, union ib_gid *gid, u16 lid);
+
+/**
+ * ib_alloc_xrcd - Allocates an XRC domain.
+ * @device: The device on which to allocate the XRC domain.
+ */
+struct ib_xrcd *ib_alloc_xrcd(struct ib_device *device);
+
+/**
+ * ib_dealloc_xrcd - Deallocates an XRC domain.
+ * @xrcd: The XRC domain to deallocate.
+ */
+int ib_dealloc_xrcd(struct ib_xrcd *xrcd);
 
 #endif /* IB_VERBS_H */
