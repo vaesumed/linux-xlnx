@@ -30,6 +30,7 @@ struct pgpath {
 	struct list_head list;
 
 	struct priority_group *pg;	/* Owning PG */
+	unsigned is_active;		/* Path status */
 	unsigned fail_count;		/* Cumulative failure count */
 
 	struct dm_path path;
@@ -122,7 +123,7 @@ static struct pgpath *alloc_pgpath(void)
 	struct pgpath *pgpath = kzalloc(sizeof(*pgpath), GFP_KERNEL);
 
 	if (pgpath)
-		pgpath->path.is_active = 1;
+		pgpath->is_active = 1;
 
 	return pgpath;
 }
@@ -552,12 +553,12 @@ static struct pgpath *parse_path(struct arg_set *as, struct path_selector *ps,
 	/* we need at least a path arg */
 	if (as->argc < 1) {
 		ti->error = "no device given";
-		return NULL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	p = alloc_pgpath();
 	if (!p)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	r = dm_get_device(ti, shift(as), ti->begin, ti->len,
 			  dm_table_get_mode(ti->table), &p->path.dev);
@@ -576,7 +577,7 @@ static struct pgpath *parse_path(struct arg_set *as, struct path_selector *ps,
 
  bad:
 	free_pgpath(p);
-	return NULL;
+	return ERR_PTR(r);
 }
 
 static struct priority_group *parse_priority_group(struct arg_set *as,
@@ -594,14 +595,14 @@ static struct priority_group *parse_priority_group(struct arg_set *as,
 
 	if (as->argc < 2) {
 		as->argc = 0;
-		ti->error = "not enough priority group aruments";
-		return NULL;
+		ti->error = "not enough priority group arguments";
+		return ERR_PTR(-EINVAL);
 	}
 
 	pg = alloc_priority_group();
 	if (!pg) {
 		ti->error = "couldn't allocate priority group";
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	}
 	pg->m = m;
 
@@ -634,8 +635,10 @@ static struct priority_group *parse_priority_group(struct arg_set *as,
 		path_args.argv = as->argv;
 
 		pgpath = parse_path(&path_args, &pg->ps, ti);
-		if (!pgpath)
+		if (IS_ERR(pgpath)) {
+			r = PTR_ERR(pgpath);
 			goto bad;
+		}
 
 		pgpath->pg = pg;
 		list_add_tail(&pgpath->list, &pg->pgpaths);
@@ -646,7 +649,7 @@ static struct priority_group *parse_priority_group(struct arg_set *as,
 
  bad:
 	free_priority_group(pg, ti);
-	return NULL;
+	return ERR_PTR(r);
 }
 
 static int parse_hw_handler(struct arg_set *as, struct multipath *m)
@@ -765,8 +768,8 @@ static int multipath_ctr(struct dm_target *ti, unsigned int argc,
 		struct priority_group *pg;
 
 		pg = parse_priority_group(&as, m);
-		if (!pg) {
-			r = -EINVAL;
+		if (IS_ERR(pg)) {
+			r = PTR_ERR(pg);
 			goto bad;
 		}
 
@@ -832,13 +835,13 @@ static int fail_path(struct pgpath *pgpath)
 
 	spin_lock_irqsave(&m->lock, flags);
 
-	if (!pgpath->path.is_active)
+	if (!pgpath->is_active)
 		goto out;
 
 	DMWARN("Failing path %s.", pgpath->path.dev->name);
 
 	pgpath->pg->ps.type->fail_path(&pgpath->pg->ps, &pgpath->path);
-	pgpath->path.is_active = 0;
+	pgpath->is_active = 0;
 	pgpath->fail_count++;
 
 	m->nr_valid_paths--;
@@ -868,7 +871,7 @@ static int reinstate_path(struct pgpath *pgpath)
 
 	spin_lock_irqsave(&m->lock, flags);
 
-	if (pgpath->path.is_active)
+	if (pgpath->is_active)
 		goto out;
 
 	if (!pgpath->pg->ps.type->reinstate_path) {
@@ -882,7 +885,7 @@ static int reinstate_path(struct pgpath *pgpath)
 	if (r)
 		goto out;
 
-	pgpath->path.is_active = 1;
+	pgpath->is_active = 1;
 
 	m->current_pgpath = NULL;
 	if (!m->nr_valid_paths++ && m->queue_size)
@@ -1263,7 +1266,7 @@ static int multipath_status(struct dm_target *ti, status_type_t type,
 
 			list_for_each_entry(p, &pg->pgpaths, list) {
 				DMEMIT("%s %s %u ", p->path.dev->name,
-				       p->path.is_active ? "A" : "F",
+				       p->is_active ? "A" : "F",
 				       p->fail_count);
 				if (pg->ps.type->status)
 					sz += pg->ps.type->status(&pg->ps,
