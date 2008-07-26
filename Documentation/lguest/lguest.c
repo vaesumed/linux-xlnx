@@ -36,6 +36,7 @@
 #include <sched.h>
 #include <limits.h>
 #include <stddef.h>
+#include <signal.h>
 #include "linux/lguest_launcher.h"
 #include "linux/virtio_config.h"
 #include "linux/virtio_net.h"
@@ -81,6 +82,8 @@ static int waker_fd;
 static void *guest_base;
 /* The maximum guest physical address allowed, and maximum possible. */
 static unsigned long guest_limit, guest_max;
+/* The pipe for signal hander to write to. */
+static int timeoutpipe[2];
 
 /* a per-cpu variable indicating whose vcpu is currently running */
 static unsigned int __thread cpu_id;
@@ -156,14 +159,17 @@ struct virtqueue
 	/* Last available index we saw. */
 	u16 last_avail_idx;
 
-	/* The routine to call when the Guest pings us. */
-	void (*handle_output)(int fd, struct virtqueue *me);
+	/* The routine to call when the Guest pings us, or timeout. */
+	void (*handle_output)(int fd, struct virtqueue *me, bool timeout);
 
 	/* Outstanding buffers */
 	unsigned int inflight;
+
+	/* Is this blocked awaiting a timer? */
+	bool blocked;
 };
 
-static unsigned int net_xmit_notify, net_recv_notify;
+static unsigned int net_xmit_notify, net_recv_notify, net_timeout;
 
 /* Remember the arguments to the program so we can "reboot" */
 static char **main_args;
@@ -862,8 +868,9 @@ static bool handle_console_input(int fd, struct device *dev)
 				/* Just in case waker is blocked in BREAK, send
 				 * unbreak now. */
 				write(fd, args, sizeof(args));
-				printf("network xmit %u recv %u\n",
-				       net_xmit_notify, net_recv_notify);
+				printf("network xmit %u recv %u timeout %u\n",
+				       net_xmit_notify, net_recv_notify,
+				       net_timeout);
 				exit(2);
 			}
 			abort->count = 0;
@@ -878,7 +885,7 @@ static bool handle_console_input(int fd, struct device *dev)
 
 /* Handling output for console is simple: we just get all the output buffers
  * and write them to stdout. */
-static void handle_console_output(int fd, struct virtqueue *vq)
+static void handle_console_output(int fd, struct virtqueue *vq, bool timeout)
 {
 	unsigned int head, out, in;
 	int len;
@@ -893,6 +900,21 @@ static void handle_console_output(int fd, struct virtqueue *vq)
 	}
 }
 
+static void block_vq(struct virtqueue *vq)
+{
+	struct itimerval itm;
+
+	vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
+	vq->blocked = true;
+
+	itm.it_interval.tv_sec = 0;
+	itm.it_interval.tv_usec = 0;
+	itm.it_value.tv_sec = 0;
+	itm.it_value.tv_usec = 750;
+
+	setitimer(ITIMER_REAL, &itm, NULL);
+}
+
 /*
  * The Network
  *
@@ -900,13 +922,14 @@ static void handle_console_output(int fd, struct virtqueue *vq)
  * and write them (ignoring the first element) to this device's file descriptor
  * (/dev/net/tun).
  */
-static void handle_net_output(int fd, struct virtqueue *vq)
+static void handle_net_output(int fd, struct virtqueue *vq, bool timeout)
 {
-	unsigned int head, out, in;
+	unsigned int head, out, in, num = 0;
 	int len;
 	struct iovec iov[vq->vring.num];
 
-	net_xmit_notify++;
+	if (!timeout)
+		net_xmit_notify++;
 
 	/* Keep getting output buffers from the Guest until we run out. */
 	while ((head = get_vq_desc(vq, iov, &out, &in)) != vq->vring.num) {
@@ -918,7 +941,12 @@ static void handle_net_output(int fd, struct virtqueue *vq)
 		(void)convert(&iov[0], struct virtio_net_hdr);
 		len = writev(vq->dev->fd, iov+1, out-1);
 		add_used_and_trigger(fd, vq, head, len);
+		num++;
 	}
+
+	/* Block further kicks and set up a timer if we saw anything. */
+	if (!timeout && num)
+		block_vq(vq);
 }
 
 /* This is where we handle a packet coming in from the tun device to our
@@ -973,14 +1001,14 @@ static bool handle_tun_input(int fd, struct device *dev)
 /*L:215 This is the callback attached to the network and console input
  * virtqueues: it ensures we try again, in case we stopped console or net
  * delivery because Guest didn't have any buffers. */
-static void enable_fd(int fd, struct virtqueue *vq)
+static void enable_fd(int fd, struct virtqueue *vq, bool timeout)
 {
 	add_device_fd(vq->dev->fd);
 	/* Tell waker to listen to it again */
 	write(waker_fd, &vq->dev->fd, sizeof(vq->dev->fd));
 }
 
-static void net_enable_fd(int fd, struct virtqueue *vq)
+static void net_enable_fd(int fd, struct virtqueue *vq, bool timeout)
 {
 	/* We don't need to know again when Guest refills receive buffer. */
 	vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
@@ -1056,7 +1084,7 @@ static void handle_output(int fd, unsigned long addr)
 			if (strcmp(vq->dev->name, "console") != 0)
 				verbose("Output to %s\n", vq->dev->name);
 			if (vq->handle_output)
-				vq->handle_output(fd, vq);
+				vq->handle_output(fd, vq, false);
 			return;
 		}
 	}
@@ -1070,6 +1098,29 @@ static void handle_output(int fd, unsigned long addr)
 	      strnlen(from_guest_phys(addr), guest_limit - addr));
 }
 
+static void handle_timeout(int fd)
+{
+	char buf[32];
+	struct device *i;
+	struct virtqueue *vq;
+
+	/* Clear the pipe */
+	read(timeoutpipe[0], buf, sizeof(buf));
+
+	/* Check each device and virtqueue: flush blocked ones. */
+	for (i = devices.dev; i; i = i->next) {
+		for (vq = i->vq; vq; vq = vq->next) {
+			if (!vq->blocked)
+				continue;
+
+			vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
+			vq->blocked = false;
+			if (vq->handle_output)
+				vq->handle_output(fd, vq, true);
+		}
+	}
+}
+
 /* This is called when the Waker wakes us up: check for incoming file
  * descriptors. */
 static void handle_input(int fd)
@@ -1080,9 +1131,14 @@ static void handle_input(int fd)
 	for (;;) {
 		struct device *i;
 		fd_set fds = devices.infds;
+		int num;
 
+		num = select(devices.max_infd+1, &fds, NULL, NULL, &poll);
+		/* Could get interrupted */
+		if (num < 0)
+			continue;
 		/* If nothing is ready, we're done. */
-		if (select(devices.max_infd+1, &fds, NULL, NULL, &poll) == 0)
+		if (num == 0)
 			break;
 
 		/* Otherwise, call the device(s) which have readable file
@@ -1106,6 +1162,10 @@ static void handle_input(int fd)
 				write(waker_fd, &dev_fd, sizeof(dev_fd));
 			}
 		}
+
+		/* Is this the timeout fd? */
+		if (FD_ISSET(timeoutpipe[0], &fds))
+			handle_timeout(fd);
 	}
 }
 
@@ -1154,7 +1214,7 @@ static struct lguest_device_desc *new_dev_desc(u16 type)
 /* Each device descriptor is followed by the description of its virtqueues.  We
  * specify how many descriptors the virtqueue is to have. */
 static void add_virtqueue(struct device *dev, unsigned int num_descs,
-			  void (*handle_output)(int fd, struct virtqueue *me))
+			  void (*handle_output)(int, struct virtqueue *, bool))
 {
 	unsigned int pages;
 	struct virtqueue **i, *vq = malloc(sizeof(*vq));
@@ -1170,6 +1230,7 @@ static void add_virtqueue(struct device *dev, unsigned int num_descs,
 	vq->last_avail_idx = 0;
 	vq->dev = dev;
 	vq->inflight = 0;
+	vq->blocked = false;
 
 	/* Initialize the configuration. */
 	vq->config.num = num_descs;
@@ -1301,6 +1362,25 @@ static void setup_console(void)
 	verbose("device %u: console\n", devices.device_num++);
 }
 /*:*/
+
+static void timeout_alarm(int sig)
+{
+	net_timeout++;
+	write(timeoutpipe[1], "", 1);
+}
+
+static void setup_timeout(void)
+{
+	if (pipe(timeoutpipe) != 0)
+		err(1, "Creating timeout pipe");
+
+	if (fcntl(timeoutpipe[1], F_SETFL,
+		  fcntl(timeoutpipe[1], F_GETFL) | O_NONBLOCK) != 0)
+		err(1, "Making timeout pipe nonblocking");
+
+	add_device_fd(timeoutpipe[0]);
+	signal(SIGALRM, timeout_alarm);
+}
 
 /*M:010 Inter-guest networking is an interesting area.  Simplest is to have a
  * --sharenet=<name> option which opens or creates a named pipe.  This can be
@@ -1662,7 +1742,7 @@ static bool handle_io_finish(int fd, struct device *dev)
 }
 
 /* When the Guest submits some I/O, we just need to wake the I/O thread. */
-static void handle_virtblk_output(int fd, struct virtqueue *vq)
+static void handle_virtblk_output(int fd, struct virtqueue *vq, bool timeout)
 {
 	struct vblk_info *vblk = vq->dev->priv;
 	char c = 0;
@@ -1833,7 +1913,7 @@ static void __attribute__((noreturn)) run_guest(int lguest_fd)
 		/* ERESTART means that we need to reboot the guest */
 		} else if (errno == ERESTART) {
 			restart_guest();
-		/* EAGAIN means the Waker wanted us to look at some input.
+		/* EAGAIN means a signal (timeout).
 		 * Anything else means a bug or incompatible change. */
 		} else if (errno != EAGAIN)
 			err(1, "Running guest failed");
@@ -1956,6 +2036,9 @@ int main(int argc, char *argv[])
 
 	/* We always have a console device */
 	setup_console();
+
+	/* We can timeout waiting for Guest network transmit. */
+	setup_timeout();
 
 	/* Now we load the kernel */
 	start = load_kernel(open_or_die(argv[optind+1], O_RDONLY));
