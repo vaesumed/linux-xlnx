@@ -81,7 +81,10 @@ enum {
 	IB_USER_VERBS_CMD_MODIFY_SRQ,
 	IB_USER_VERBS_CMD_QUERY_SRQ,
 	IB_USER_VERBS_CMD_DESTROY_SRQ,
-	IB_USER_VERBS_CMD_POST_SRQ_RECV
+	IB_USER_VERBS_CMD_POST_SRQ_RECV,
+	IB_USER_VERBS_CMD_CREATE_XRC_SRQ,
+	IB_USER_VERBS_CMD_OPEN_XRCD,
+	IB_USER_VERBS_CMD_CLOSE_XRCD
 };
 
 /*
@@ -647,6 +650,18 @@ struct ib_uverbs_create_srq {
 	__u64 driver_data[0];
 };
 
+struct ib_uverbs_create_xrc_srq {
+	__u64 response;
+	__u64 user_handle;
+	__u32 pd_handle;
+	__u32 max_wr;
+	__u32 max_sge;
+	__u32 srq_limit;
+	__u32 xrcd_handle;
+	__u32 xrc_cq;
+	__u64 driver_data[0];
+};
+
 struct ib_uverbs_create_srq_resp {
 	__u32 srq_handle;
 	__u32 max_wr;
@@ -684,6 +699,24 @@ struct ib_uverbs_destroy_srq {
 
 struct ib_uverbs_destroy_srq_resp {
 	__u32 events_reported;
+};
+
+struct ib_uverbs_open_xrcd {
+	__u64 response;
+	__s32 fd;
+	__u32 oflags;
+	__u64 driver_data[0];
+};
+
+struct ib_uverbs_open_xrcd_resp {
+	__u32 xrcd_handle;
+};
+
+struct ib_uverbs_close_xrcd {
+	__u64 response;
+	__u32 xrcd_handle;
+	__u32 reserved;
+	__u64 driver_data[0];
 };
 
 #endif /* IB_USER_VERBS_H */
