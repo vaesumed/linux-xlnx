@@ -758,15 +758,25 @@ int ide_cmd_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 		tf->lbam  = 0x4f;
 		tf->lbah  = 0xc2;
 		tfargs.tf_flags = IDE_TFLAG_OUT_TF | IDE_TFLAG_IN_NSECT;
+
+		/* SMART READ DATA / LOG */
+		if (tf->feature == 0xD0 || tf->feature == 0xD5)
+			tfargs.data_phase = TASKFILE_IN;
+		else
+			tfargs.data_phase = TASKFILE_NO_DATA;
 	} else {
 		tf->nsect = args[1];
 		tfargs.tf_flags = IDE_TFLAG_OUT_FEATURE |
 				  IDE_TFLAG_OUT_NSECT | IDE_TFLAG_IN_NSECT;
+
+		if (args[3])
+			tfargs.data_phase = TASKFILE_IN;
+		else
+			tfargs.data_phase = TASKFILE_NO_DATA;
 	}
 	tf->command = args[0];
-	tfargs.data_phase = args[3] ? TASKFILE_IN : TASKFILE_NO_DATA;
 
-	if (args[3]) {
+	if (tfargs.data_phase == TASKFILE_IN) {
 		tfargs.tf_flags |= IDE_TFLAG_IO_16BIT;
 		bufsize = SECTOR_WORDS * 4 * args[3];
 		buf = kzalloc(bufsize, GFP_KERNEL);
