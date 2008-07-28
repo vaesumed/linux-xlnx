@@ -55,4 +55,20 @@ config RT_MUTEX_TESTER
 	help
 	  This option enables a rt-mutex tester.
 
+config LKDTM
+	tristate "Linux Kernel Dump Test Tool Module"
+	depends on DEBUG_KERNEL
+	depends on KPROBES
+	depends on BLOCK
+	default n
+	help
+	This module enables testing of the different dumping mechanisms by
+	inducing system failures at predefined crash points.
+	If you don't need it: say N
+	Choose M here to compile this code as a module. The module will be
+	called lkdtm.
+
+	Documentation on how to use the module can be found in
+	drivers/misc/lkdtm.c
+
 endif # KERNEL_TESTS
