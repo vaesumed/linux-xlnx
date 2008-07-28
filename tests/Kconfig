@@ -71,4 +71,16 @@ config LKDTM
 	Documentation on how to use the module can be found in
 	drivers/misc/lkdtm.c
 
+config KPROBES_SANITY_TEST
+	bool "Kprobes sanity tests"
+	depends on DEBUG_KERNEL
+	depends on KPROBES
+	default n
+	help
+	  This option provides for testing basic kprobes functionality on
+	  boot. A sample kprobe, jprobe and kretprobe are inserted and
+	  verified for functionality.
+
+	  Say N if you are unsure.
+
 endif # KERNEL_TESTS
