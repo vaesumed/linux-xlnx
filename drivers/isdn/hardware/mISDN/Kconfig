@@ -16,6 +16,7 @@ config MISDN_HFCMULTI
 	tristate "Support for HFC multiport cards (HFC-4S/8S/E1)"
 	depends on PCI
 	depends on MISDN
+	depends on X86
 	help
 	  Enable support for cards with Cologne Chip AG's HFC multiport
 	  chip. There are three types of chips that are quite similar,
