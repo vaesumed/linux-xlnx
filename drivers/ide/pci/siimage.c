@@ -223,7 +223,9 @@ static u8 sil_pata_udma_filter(ide_drive_t *drive)
 
 static u8 sil_sata_udma_filter(ide_drive_t *drive)
 {
-	return strstr(drive->id->model, "Maxtor") ? ATA_UDMA5 : ATA_UDMA6;
+	char *m = (char *)&drive->id[ATA_ID_PROD];
+
+	return strstr(m, "Maxtor") ? ATA_UDMA5 : ATA_UDMA6;
 }
 
 /**
@@ -243,7 +245,7 @@ static void sil_set_pio_mode(ide_drive_t *drive, u8 pio)
 
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
-	ide_drive_t *pair	= ide_get_paired_drive(drive);
+	ide_drive_t *pair	= ide_get_pair_dev(drive);
 	u32 speedt		= 0;
 	u16 speedp		= 0;
 	unsigned long addr	= siimage_seldev(drive, 0x04);
@@ -257,7 +259,7 @@ static void sil_set_pio_mode(ide_drive_t *drive, u8 pio)
 	u8 unit			= drive->select.b.unit;
 
 	/* trim *taskfile* PIO to the slowest of the master/slave */
-	if (pair->present) {
+	if (pair) {
 		u8 pair_pio = ide_get_best_pio_mode(pair, 255, 4);
 
 		if (pair_pio < tf_pio)
@@ -616,8 +618,8 @@ static void __devinit init_mmio_iops_siimage(ide_hwif_t *hwif)
 
 static int is_dev_seagate_sata(ide_drive_t *drive)
 {
-	const char *s	= &drive->id->model[0];
-	unsigned len	= strnlen(s, sizeof(drive->id->model));
+	const char *s	= (const char *)&drive->id[ATA_ID_PROD];
+	unsigned len	= strnlen(s, ATA_ID_PROD_LEN);
 
 	if ((len > 4) && (!memcmp(s, "ST", 2)))
 		if ((!memcmp(s + len - 2, "AS", 2)) ||

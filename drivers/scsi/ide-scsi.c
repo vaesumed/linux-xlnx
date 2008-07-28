@@ -243,9 +243,9 @@ idescsi_atapi_error(ide_drive_t *drive, struct request *rq, u8 stat, u8 err)
 {
 	ide_hwif_t *hwif = drive->hwif;
 
-	if (hwif->tp_ops->read_status(hwif) & (BUSY_STAT | DRQ_STAT))
+	if (hwif->tp_ops->read_status(hwif) & (ATA_BUSY | ATA_DRQ))
 		/* force an abort */
-		hwif->tp_ops->exec_command(hwif, WIN_IDLEIMMEDIATE);
+		hwif->tp_ops->exec_command(hwif, ATA_CMD_IDLEIMMEDIATE);
 
 	rq->errors++;
 
@@ -451,7 +451,7 @@ static inline void idescsi_add_settings(ide_drive_t *drive) { ; }
  */
 static void idescsi_setup (ide_drive_t *drive, idescsi_scsi_t *scsi)
 {
-	if (drive->id && (drive->id->config & 0x0060) == 0x20)
+	if ((drive->id[ATA_ID_CONFIG] & 0x0060) == 0x20)
 		set_bit(IDE_AFLAG_DRQ_INTERRUPT, &drive->atapi_flags);
 	clear_bit(IDESCSI_SG_TRANSFORM, &scsi->transform);
 #if IDESCSI_DEBUG_LOG
@@ -810,6 +810,7 @@ static int ide_scsi_probe(ide_drive_t *drive)
 	struct gendisk *g;
 	static int warned;
 	int err = -ENOMEM;
+	u16 last_lun;
 
 	if (!warned && drive->media == ide_cdrom) {
 		printk(KERN_WARNING "ide-scsi is deprecated for cd burning! Use ide-cd and give dev=/dev/hdX as device\n");
@@ -820,7 +821,6 @@ static int ide_scsi_probe(ide_drive_t *drive)
 		return -ENODEV;
 
 	if (!strstr("ide-scsi", drive->driver_req) ||
-	    !drive->present ||
 	    drive->media == ide_disk ||
 	    !(host = scsi_host_alloc(&idescsi_template,sizeof(idescsi_scsi_t))))
 		return -ENODEV;
@@ -835,12 +835,12 @@ static int ide_scsi_probe(ide_drive_t *drive)
 
 	host->max_id = 1;
 
-	if (drive->id->last_lun)
-		debug_log("%s: id->last_lun=%u\n", drive->name,
-			  drive->id->last_lun);
+	last_lun = drive->id[ATA_ID_LAST_LUN];
+	if (last_lun)
+		debug_log("%s: last_lun=%u\n", drive->name, last_lun);
 
-	if ((drive->id->last_lun & 0x7) != 7)
-		host->max_lun = (drive->id->last_lun & 0x7) + 1;
+	if ((last_lun & 7) != 7)
+		host->max_lun = (last_lun & 7) + 1;
 	else
 		host->max_lun = 1;
 

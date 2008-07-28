@@ -919,8 +919,8 @@ static ide_startstop_t idetape_media_access_finished(ide_drive_t *drive)
 
 	stat = hwif->tp_ops->read_status(hwif);
 
-	if (stat & SEEK_STAT) {
-		if (stat & ERR_STAT) {
+	if (stat & ATA_DSC) {
+		if (stat & ATA_ERR) {
 			/* Error detected */
 			if (pc->c[0] != TEST_UNIT_READY)
 				printk(KERN_ERR "ide-tape: %s: I/O error, ",
@@ -1020,7 +1020,7 @@ static ide_startstop_t idetape_do_request(ide_drive_t *drive,
 	}
 
 	if (!test_and_clear_bit(IDE_AFLAG_IGNORE_DSC, &drive->atapi_flags) &&
-	    (stat & SEEK_STAT) == 0) {
+	    (stat & ATA_DSC) == 0) {
 		if (postponed_rq == NULL) {
 			tape->dsc_polling_start = jiffies;
 			tape->dsc_poll_freq = tape->best_dsc_rw_freq;
@@ -2309,7 +2309,7 @@ static int idetape_identify_device(ide_drive_t *drive)
 	if (drive->id_read == 0)
 		return 1;
 
-	*((unsigned short *) &gcw) = drive->id->config;
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	protocol	=   (gcw[1] & 0xC0) >> 6;
 	device_type	=    gcw[1] & 0x1F;
@@ -2461,7 +2461,7 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 		drive->dsc_overlap = 0;
 	}
 	/* Seagate Travan drives do not support DSC overlap. */
-	if (strstr(drive->id->model, "Seagate STT3401"))
+	if (strstr((char *)&drive->id[ATA_ID_PROD], "Seagate STT3401"))
 		drive->dsc_overlap = 0;
 	tape->minor = minor;
 	tape->name[0] = 'h';
@@ -2469,7 +2469,8 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 	tape->name[2] = '0' + minor;
 	tape->chrdev_dir = IDETAPE_DIR_NONE;
 	tape->pc = tape->pc_stack;
-	*((unsigned short *) &gcw) = drive->id->config;
+
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	/* Command packet DRQ type */
 	if (((gcw[0] & 0x60) >> 5) == 1)
@@ -2644,10 +2645,10 @@ static int ide_tape_probe(ide_drive_t *drive)
 
 	if (!strstr("ide-tape", drive->driver_req))
 		goto failed;
-	if (!drive->present)
-		goto failed;
+
 	if (drive->media != ide_tape)
 		goto failed;
+
 	if (!idetape_identify_device(drive)) {
 		printk(KERN_ERR "ide-tape: %s: not supported by this version of"
 				" the driver\n", drive->name);
