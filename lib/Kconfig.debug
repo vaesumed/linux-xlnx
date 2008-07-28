@@ -738,3 +738,5 @@ config FIREWIRE_OHCI_REMOTE_DMA
 source "samples/Kconfig"
 
 source "lib/Kconfig.kgdb"
+
+source "tests/Kconfig"
