@@ -21,6 +21,7 @@
 #include <linux/mm.h>
 #include <linux/mount.h>
 #include <linux/scatterlist.h>
+#include <linux/namei.h>
 #include "ima.h"
 
 /*

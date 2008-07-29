@@ -24,6 +24,7 @@
 #include <linux/audit.h>
 #include <linux/ima.h>
 #include <linux/mman.h>
+#include <linux/namei.h>
 
 #include "ima.h"
 
