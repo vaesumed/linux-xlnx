@@ -1,0 +1,94 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Importing ide based on b5684b83b1e1579bbbc80e703e990c0cccf5892c
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard b5684b83b1e1579bbbc80e703e990c0cccf5892c
+HEAD is now at b5684b8 Merge git://git.kernel.org/pub/scm/linux/kernel/git/bart/ide-2.6
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ata-add-missing-ata_id_-defines-take-2.patch
+ide-fix-pre-eide-swdma-support-on-big-endian.patch
+ide-fix-ide_fix_driveid.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+ata-add-missing-ata_cmd_-defines.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+ata-add-missing-ata_-defines.patch
+ide-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+ide-remove-no-longer-needed-ide_drive_t-fields.patch
+ide-re-code-ide_fixstring-loop-to-be-less-evil.patch
+ide-cd-use-the-new-object_is_in_stack-helper.patch
+ide-sanitize-struct-ide_port_ops-documentation-take-2.patch
+ide-fix-exabytenest-handling-in-probe_for_drive.patch
+ide-enhance-ide_busy_sleep.patch
+ide-remove-no-longer-needed-bug_on-s-from-init_irq.patch
+ide-remove-ide_chipset_-macros.patch
+ide-remove-unused-_ide_c-and-_ide_disk-defines.patch
+ide-remove-needless-drive-present-checks-from-device-drivers.patch
+ide-check-drive-present-in-ide_get_paired_drive.patch
+ide-remove-config_idedisk_multi_mode.patch
+ide-include-linux-hdreg-h-only-when-needed.patch
+remove-unnecessary-linux-hdreg-h-includes.patch
+ide-call-ide_proc_register_driver-later.patch
+ide-preparations-for-proc-ide-hd_-settings-rework.patch
+ide-proc-ide-hd_-settings-rework.patch
+Unchanged quilt series m68k
+Importing rr based on v2.6.26-8042-g63add2f
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 63add2f2072e69c1eb7a5f6ca8f415122da889b9
+HEAD is now at 63add2f Merge branch 'cpus4096-v2' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+lguest:max_pfn_mapped.patch
+lguest:int3-support.patch
+lguest:fix_switcher_page_leak_on_unload.patch
+lguest:fix-verbose-feature-reporting.patch
+lguest:don_t_leak_dev_zero_fd.patch
+lguest:support_assigning_a_mac_address.patch
+lguest:rng.patch
+lguest:use_cpu_capability_accessors.patch
+lguest:wrap-last-index-access.patch
+lguest:net-no-recv-exit.patch
+lguest:net-defer-kick.patch
+lguest:adaptive-timeout2.patch
+lguest:remove-network-no-buffer-warning.patch
+lguest:gso.patch
+lguest:enlarge-rings.patch
+lguest:waker-as-thread.patch
+misc:cast_if_type.patch
+misc:typesafe_cb.patch
+misc:kthread-typesafe.patch
+misc:timer-typesafe.patch
+misc:stop_machine-typesafe.patch
+misc:introduce-down_nowait.patch
+misc:down_nowait.patch
+misc:down_nowait-documentation.patch
+misc:down_nowait-arch_ia64_kernel_salinfo.patch
+misc:down_nowait-drivers_char_snsc.patch
+misc:down_nowait-drivers_char_viotape.patch
+misc:down_nowait-drivers_infiniband_core_user_mad.patch
+misc:down_nowait-drivers_input_serio_hil_mlc.patch
+misc:down_nowait-drivers_input_serio_hp_sdc_mlc.patch
+misc:down_nowait-drivers_md_dm-raid1.patch
+misc:down_nowait-drivers_net_3c527.patch
+misc:down_nowait-drivers_net_irda_sir_dev.patch
+misc:down_nowait-drivers_net_wireless_airo.patch
+misc:down_nowait-drivers_scsi_aacraid_commsup.patch
+misc:down_nowait-drivers_usb_core_usb.patch
+misc:down_nowait-drivers_usb_gadget_inode.patch
+misc:down_nowait-xfs.patch
+misc:down_nowait-kernel_printk.patch
+Unchanged quilt series ttydev
