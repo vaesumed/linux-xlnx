@@ -35,6 +35,7 @@
 #include <linux/parser.h>
 #include <linux/seq_file.h>
 #include <linux/mount.h>
+#include <linux/exportfs.h>
 #include "ubifs.h"
 
 /* Slab cache for UBIFS inodes */
@@ -149,7 +150,7 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	if (err)
 		goto out_invalid;
 
-	/* Disable readahead */
+	/* Disable read-ahead */
 	inode->i_mapping->backing_dev_info = &c->bdi;
 
 	switch (inode->i_mode & S_IFMT) {
@@ -278,7 +279,7 @@ static void ubifs_destroy_inode(struct inode *inode)
  */
 static int ubifs_write_inode(struct inode *inode, int wait)
 {
-	int err;
+	int err = 0;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
@@ -299,10 +300,18 @@ static int ubifs_write_inode(struct inode *inode, int wait)
 		return 0;
 	}
 
-	dbg_gen("inode %lu", inode->i_ino);
-	err = ubifs_jnl_write_inode(c, inode, 0);
-	if (err)
-		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
+	/*
+	 * As an optimization, do not write orphan inodes to the media just
+	 * because this is not needed.
+	 */
+	dbg_gen("inode %lu, mode %#x, nlink %u",
+		inode->i_ino, (int)inode->i_mode, inode->i_nlink);
+	if (inode->i_nlink) {
+		err = ubifs_jnl_write_inode(c, inode);
+		if (err)
+			ubifs_err("can't write inode %lu, error %d",
+				  inode->i_ino, err);
+	}
 
 	ui->dirty = 0;
 	mutex_unlock(&ui->ui_mutex);
@@ -314,8 +323,9 @@ static void ubifs_delete_inode(struct inode *inode)
 {
 	int err;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	struct ubifs_inode *ui = ubifs_inode(inode);
 
-	if (ubifs_inode(inode)->xattr)
+	if (ui->xattr)
 		/*
 		 * Extended attribute inode deletions are fully handled in
 		 * 'ubifs_removexattr()'. These inodes are special and have
@@ -323,7 +333,7 @@ static void ubifs_delete_inode(struct inode *inode)
 		 */
 		goto out;
 
-	dbg_gen("inode %lu", inode->i_ino);
+	dbg_gen("inode %lu, mode %#x", inode->i_ino, (int)inode->i_mode);
 	ubifs_assert(!atomic_read(&inode->i_count));
 	ubifs_assert(inode->i_nlink == 0);
 
@@ -331,15 +341,19 @@ static void ubifs_delete_inode(struct inode *inode)
 	if (is_bad_inode(inode))
 		goto out;
 
-	ubifs_inode(inode)->ui_size = inode->i_size = 0;
-	err = ubifs_jnl_write_inode(c, inode, 1);
+	ui->ui_size = inode->i_size = 0;
+	err = ubifs_jnl_delete_inode(c, inode);
 	if (err)
 		/*
 		 * Worst case we have a lost orphan inode wasting space, so a
-		 * simple error message is ok here.
+		 * simple error message is OK here.
 		 */
-		ubifs_err("can't write inode %lu, error %d", inode->i_ino, err);
+		ubifs_err("can't delete inode %lu, error %d",
+			  inode->i_ino, err);
+
 out:
+	if (ui->dirty)
+		ubifs_release_dirty_inode_budget(c, ui);
 	clear_inode(inode);
 }
 
@@ -1122,8 +1136,8 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (err)
 		goto out_infos;
 
-	ubifs_msg("mounted UBI device %d, volume %d", c->vi.ubi_num,
-		  c->vi.vol_id);
+	ubifs_msg("mounted UBI device %d, volume %d, name \"%s\"",
+		  c->vi.ubi_num, c->vi.vol_id, c->vi.name);
 	if (mounted_read_only)
 		ubifs_msg("mounted read-only");
 	x = (long long)c->main_lebs * c->leb_size;
@@ -1469,6 +1483,7 @@ static void ubifs_put_super(struct super_block *sb)
 	 */
 	ubifs_assert(atomic_long_read(&c->dirty_pg_cnt) == 0);
 	ubifs_assert(c->budg_idx_growth == 0);
+	ubifs_assert(c->budg_dd_growth == 0);
 	ubifs_assert(c->budg_data_growth == 0);
 
 	/*
@@ -1562,6 +1577,51 @@ struct super_operations ubifs_super_operations = {
 	.remount_fs    = ubifs_remount_fs,
 	.show_options  = ubifs_show_options,
 	.sync_fs       = ubifs_sync_fs,
+};
+
+/*
+ * Note, since UBIFS doesn't re-use inode numbers at the moment, we do not check
+ * the generation number in this function.
+ */
+static struct dentry *ubifs_fh_to_dentry(struct super_block *sb,
+					 struct fid *fid,
+					 int fh_len, int fh_type)
+{
+	ino_t inum;
+	struct inode *inode;
+	struct dentry *dent;
+
+	switch (fh_type) {
+	case FILEID_INO32_GEN:
+	case FILEID_INO32_GEN_PARENT:
+		inum = fid->i32.ino;
+		break;
+	default:
+		dbg_err("unsupported file handle type %d", fh_type);
+		return ERR_PTR(-EINVAL);
+	}
+
+	inode = ubifs_iget(sb, inum);
+	if (IS_ERR(inode)) {
+		if (PTR_ERR(inode) == -ENOENT)
+			return ERR_PTR(-ESTALE);
+		return ERR_CAST(inode);
+	}
+
+	dent = d_alloc_anon(inode);
+	if (!dent) {
+		iput(inode);
+		return ERR_PTR(-ENOMEM);
+	}
+	return dent;
+}
+
+/*
+ * Probably NFS support could be faster if other export operations were
+ * implemented, but '->fh_to_dentry()' is enough.
+ */
+static struct export_operations ubifs_export_ops = {
+	.fh_to_dentry = ubifs_fh_to_dentry,
 };
 
 /**
@@ -1671,10 +1731,10 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	/*
-	 * UBIFS provids 'backing_dev_info' in order to disable readahead. For
+	 * UBIFS provides 'backing_dev_info' in order to disable read-ahead. For
 	 * UBIFS, I/O is not deferred, it is done immediately in readpage,
 	 * which means the user would have to wait not just for their own I/O
-	 * but the readahead I/O as well i.e. completely pointless.
+	 * but the read-ahead I/O as well i.e. completely pointless.
 	 *
 	 * Read-ahead will be disabled because @c->bdi.ra_pages is 0.
 	 */
@@ -1699,6 +1759,7 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 	if (c->max_inode_sz > MAX_LFS_FILESIZE)
 		sb->s_maxbytes = c->max_inode_sz = MAX_LFS_FILESIZE;
 	sb->s_op = &ubifs_super_operations;
+	sb->s_export_op = &ubifs_export_ops;
 
 	mutex_lock(&c->umount_mutex);
 	err = mount_ubifs(c);
@@ -1832,10 +1893,11 @@ static void ubifs_kill_sb(struct super_block *sb)
 }
 
 static struct file_system_type ubifs_fs_type = {
-	.name    = "ubifs",
-	.owner   = THIS_MODULE,
-	.get_sb  = ubifs_get_sb,
-	.kill_sb = ubifs_kill_sb
+	.name     = "ubifs",
+	.owner    = THIS_MODULE,
+	.get_sb   = ubifs_get_sb,
+	.kill_sb  = ubifs_kill_sb,
+	.fs_flags = FS_REQUIRES_DEV,
 };
 
 /*
