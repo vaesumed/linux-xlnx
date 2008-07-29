@@ -26,7 +26,7 @@
 #include <asm/irq.h>
 #include <asm/rtc.h>
 #include <asm/machvec.h>
-#include <asm/mach/sysasic.h>
+#include <mach/sysasic.h>
 
 extern struct hw_interrupt_type systemasic_int;
 extern void aica_time_init(void);
