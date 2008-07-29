@@ -1301,8 +1301,11 @@ static void ap_request_timeout(unsigned long data)
 {
 	struct ap_device *ap_dev = (struct ap_device *) data;
 
-	if (ap_dev->reset == AP_RESET_ARMED)
+	if (ap_dev->reset == AP_RESET_ARMED) {
 		ap_dev->reset = AP_RESET_DO;
+		if (AP_HAS_INTERRUPTS())
+			tasklet_schedule(&ap_tasklet);
+	}
 }
 
 static void ap_reset_domain(void)
