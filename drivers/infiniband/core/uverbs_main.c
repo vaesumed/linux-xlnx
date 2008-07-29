@@ -72,6 +72,7 @@ DEFINE_IDR(ib_uverbs_ah_idr);
 DEFINE_IDR(ib_uverbs_cq_idr);
 DEFINE_IDR(ib_uverbs_qp_idr);
 DEFINE_IDR(ib_uverbs_srq_idr);
+DEFINE_IDR(ib_uverbs_xrcd_idr);
 
 static spinlock_t map_lock;
 static struct ib_uverbs_device *dev_table[IB_UVERBS_MAX_DEVICES];
@@ -108,6 +109,9 @@ static ssize_t (*uverbs_cmd_table[])(struct ib_uverbs_file *file,
 	[IB_USER_VERBS_CMD_MODIFY_SRQ]    	= ib_uverbs_modify_srq,
 	[IB_USER_VERBS_CMD_QUERY_SRQ]     	= ib_uverbs_query_srq,
 	[IB_USER_VERBS_CMD_DESTROY_SRQ]   	= ib_uverbs_destroy_srq,
+	[IB_USER_VERBS_CMD_CREATE_XRC_SRQ]	= ib_uverbs_create_xrc_srq,
+	[IB_USER_VERBS_CMD_OPEN_XRCD]	= ib_uverbs_open_xrcd,
+	[IB_USER_VERBS_CMD_CLOSE_XRCD]	= ib_uverbs_close_xrcd,
 };
 
 static struct vfsmount *uverbs_event_mnt;
@@ -211,17 +215,6 @@ static int ib_uverbs_cleanup_ucontext(struct ib_uverbs_file *file,
 		kfree(uqp);
 	}
 
-	list_for_each_entry_safe(uobj, tmp, &context->cq_list, list) {
-		struct ib_cq *cq = uobj->object;
-		struct ib_uverbs_event_file *ev_file = cq->cq_context;
-		struct ib_ucq_object *ucq =
-			container_of(uobj, struct ib_ucq_object, uobject);
-
-		idr_remove_uobj(&ib_uverbs_cq_idr, uobj);
-		ib_destroy_cq(cq);
-		ib_uverbs_release_ucq(file, ev_file, ucq);
-		kfree(ucq);
-	}
 
 	list_for_each_entry_safe(uobj, tmp, &context->srq_list, list) {
 		struct ib_srq *srq = uobj->object;
@@ -234,6 +227,18 @@ static int ib_uverbs_cleanup_ucontext(struct ib_uverbs_file *file,
 		kfree(uevent);
 	}
 
+	list_for_each_entry_safe(uobj, tmp, &context->cq_list, list) {
+		struct ib_cq *cq = uobj->object;
+		struct ib_uverbs_event_file *ev_file = cq->cq_context;
+		struct ib_ucq_object *ucq =
+			container_of(uobj, struct ib_ucq_object, uobject);
+
+		idr_remove_uobj(&ib_uverbs_cq_idr, uobj);
+		ib_destroy_cq(cq);
+		ib_uverbs_release_ucq(file, ev_file, ucq);
+		kfree(ucq);
+	}
+
 	/* XXX Free MWs */
 
 	list_for_each_entry_safe(uobj, tmp, &context->mr_list, list) {
@@ -241,6 +246,14 @@ static int ib_uverbs_cleanup_ucontext(struct ib_uverbs_file *file,
 
 		idr_remove_uobj(&ib_uverbs_mr_idr, uobj);
 		ib_dereg_mr(mr);
+		kfree(uobj);
+	}
+
+	list_for_each_entry_safe(uobj, tmp, &context->xrcd_list, list) {
+		struct ib_xrcd *xrcd = uobj->object;
+
+		idr_remove_uobj(&ib_uverbs_xrcd_idr, uobj);
+		ib_dealloc_xrcd(xrcd);
 		kfree(uobj);
 	}
 
