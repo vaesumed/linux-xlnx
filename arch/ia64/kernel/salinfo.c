@@ -192,7 +192,7 @@ struct salinfo_platform_oemdata_parms {
 static void
 salinfo_work_to_do(struct salinfo_data *data)
 {
-	down_trylock(&data->mutex);
+	down_try(&data->mutex);
 	up(&data->mutex);
 }
 
@@ -309,7 +309,7 @@ salinfo_event_read(struct file *file, char __user *buffer, size_t count, loff_t 
 	int i, n, cpu = -1;
 
 retry:
-	if (cpus_empty(data->cpu_event) && down_trylock(&data->mutex)) {
+	if (cpus_empty(data->cpu_event) && !down_try(&data->mutex)) {
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
 		if (down_interruptible(&data->mutex))
