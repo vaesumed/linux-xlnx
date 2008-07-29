@@ -339,3 +339,112 @@ Licence: Allegedly GPLv2+, but no source visible. Marked:
 Found in hex form in kernel source.
 
 --------------------------------------------------------------------------
+
+Driver: e100 -- Intel PRO/100 Ethernet NIC
+
+File: e100/d101m_ucode.bin
+File: e100/d101s_ucode.bin
+File: e100/d102e_ucode.bin
+
+Licence: Unknown
+
+Found in hex form in kernel source.
+
+--------------------------------------------------------------------------
+
+Driver: acenic -- Alteon AceNIC Gigabit Ethernet card
+
+File: acenic/tg1.bin
+File: acenic/tg2.bin
+
+Licence: Unknown
+
+Found in hex form in kernel source, but source allegedly available at
+http://alteon.shareable.org/
+
+--------------------------------------------------------------------------
+
+Driver: tigon3 -- Broadcom Tigon3 based gigabit Ethernet cards
+
+File: tigon/tg3.bin
+File: tigon/tg3_tso.bin
+File: tigon/tg3_tso5.bin
+
+Licence:
+ * Firmware is:
+ *	Derived from proprietary unpublished source code,
+ *	Copyright (C) 2000-2003 Broadcom Corporation.
+ *
+ *	Permission is hereby granted for the distribution of this firmware
+ *	data in hexadecimal or equivalent format, provided this copyright
+ *	notice is accompanying it.
+
+Found in hex form in kernel source.
+
+--------------------------------------------------------------------------
+
+Driver: DVB AV7110 -- AV7110 cards
+
+File: av7110/bootcode.bin
+
+Licence: GPLv2 or later
+
+ARM assembly source code available at http://www.linuxtv.org/downloads/firmware/Boot.S
+
+--------------------------------------------------------------------------
+
+Driver: SCSI_QLOGIC_1280 - Qlogic QLA 1240/1x80/1x160 SCSI support
+
+File: qlogic/1040.bin
+File: qlogic/1280.bin
+File: qlogic/12160.bin
+
+Licence: Allegedly GPLv2+, but no source visible. Marked:
+
+                   QLOGIC LINUX SOFTWARE
+  QLogic ISP1280/ device driver for Linux 2.2.x and 2.4.x
+  Copyright (C) 2001 Qlogic Corporation (www.qlogic.com)
+
+--------------------------------------------------------------------------
+
+Driver: SCSI_ADVANSYS - AdvanSys SCSI
+
+File: advansys/mcode.bin
+File: advansys/3550.bin
+File: advansys/38C0800.bin
+File: advansys/38C1600.bin
+
+Licence: Allegedly GPLv2+, but no source visible.
+
+Found in hex form in kernel source.
+
+--------------------------------------------------------------------------
+
+Driver: SCSI_QLOGICPTI - PTI Qlogic, ISP Driver
+
+File: qlogic/isp1000.bin
+
+Licence: Unknown
+
+Found in hex form in kernel source.
+
+--------------------------------------------------------------------------
+
+Driver: ADAPTEC_STARFIRE - Adaptec Starfire/DuraLAN support
+
+File: adaptec/starfire_rx.bin
+File: adaptec/starfire_tx.bin
+
+Licence: Allegedly GPLv2, but no source visible.
+
+Found in hex form in kernel source, with the following notice:
+
+ BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE IT IS LICENSED "AS IS" AND
+ THERE IS NO WARRANTY FOR THE PROGRAM, INCLUDING BUT NOT LIMITED TO THE
+ IMPLIED WARRANTIES OF MERCHANTIBILITY OR FITNESS FOR A PARTICULAR PURPOSE
+ (TO THE EXTENT PERMITTED BY APPLICABLE LAW). USE OF THE PROGRAM IS AT YOUR
+ OWN RISK. IN NO EVENT WILL ADAPTEC OR ITS LICENSORS BE LIABLE TO YOU FOR
+ DAMAGES, INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES
+ ARISING OUT OF THE USE OR INABILITY TO USE THE PROGRAM.
+
+--------------------------------------------------------------------------
