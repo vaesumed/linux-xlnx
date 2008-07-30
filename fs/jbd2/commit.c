@@ -460,8 +460,14 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	 * on the transaction lists.  Data blocks go first.
 	 */
 	err = journal_submit_data_buffers(journal, commit_transaction);
-	if (err)
-		jbd2_journal_abort(journal, err);
+	if (err) {
+		char b[BDEVNAME_SIZE];
+
+		printk(KERN_WARNING
+			"JBD2: Detected IO errors while flushing file data "
+			"on %s\n", bdevname(journal->j_fs_dev, b));
+		err = 0;
+	}
 
 	jbd2_journal_write_revoke_records(journal, commit_transaction);
 
