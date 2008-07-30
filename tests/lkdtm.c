@@ -52,6 +52,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/hrtimer.h>
+#include <linux/ide.h>
 #include <scsi/scsi_cmnd.h>
 
 #define NUM_CPOINTS 8
