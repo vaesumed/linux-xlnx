@@ -1060,6 +1060,8 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	}
 
 	(void) ide_floppy_get_capacity(drive);
+
+	ide_proc_register_driver(drive, floppy->driver);
 	idefloppy_add_settings(drive);
 }
 
@@ -1411,8 +1413,6 @@ static int ide_floppy_probe(ide_drive_t *drive)
 		goto out_free_floppy;
 
 	ide_init_disk(g, drive);
-
-	ide_proc_register_driver(drive, &idefloppy_driver);
 
 	kref_init(&floppy->kref);
 
