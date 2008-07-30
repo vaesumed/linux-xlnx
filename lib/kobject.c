@@ -38,12 +38,10 @@ static int ptr_in_range(void *ptr, void *start, void *end)
 
 static void verify_dynamic_kobject_allocation(struct kobject *kobj)
 {
-	char *namebuf;
+	char namebuf[KSYM_NAME_LEN];
 	const char *ret;
 
-	namebuf = kzalloc(KSYM_NAME_LEN, GFP_KERNEL);
-	ret = kallsyms_lookup((unsigned long)kobj, NULL, NULL, NULL,
-			namebuf);
+	ret = kallsyms_lookup((unsigned long)kobj, NULL, NULL, NULL, namebuf);
 	/*
 	 * This is the X86_32-only part of this function.
 	 * This is here because it is valid to have a kobject
@@ -63,7 +61,7 @@ static void verify_dynamic_kobject_allocation(struct kobject *kobj)
 	/* dump_stack(); */
 	pr_debug("---- end silly warning ----\n");
 out:
-	kfree(namebuf);
+	return;
 }
 #else
 static void verify_dynamic_kobject_allocation(struct kobject *kobj) { }
