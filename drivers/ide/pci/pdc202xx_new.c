@@ -19,7 +19,6 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
-#include <linux/hdreg.h>
 #include <linux/pci.h>
 #include <linux/init.h>
 #include <linux/ide.h>
@@ -203,10 +202,10 @@ static u8 __devinit pdcnew_cable_detect(ide_hwif_t *hwif)
 
 static void pdcnew_quirkproc(ide_drive_t *drive)
 {
-	const char **list, *model = drive->id->model;
+	const char **list, *m = (char *)&drive->id[ATA_ID_PROD];
 
 	for (list = pdc_quirk_drives; *list != NULL; list++)
-		if (strstr(model, *list) != NULL) {
+		if (strstr(m, *list) != NULL) {
 			drive->quirk_list = 2;
 			return;
 		}

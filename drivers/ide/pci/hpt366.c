@@ -122,7 +122,6 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/blkdev.h>
-#include <linux/hdreg.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
 #include <linux/init.h>
@@ -605,10 +604,10 @@ static const struct hpt_info hpt371n __devinitdata = {
 
 static int check_in_drive_list(ide_drive_t *drive, const char **list)
 {
-	struct hd_driveid *id = drive->id;
+	char *m = (char *)&drive->id[ATA_ID_PROD];
 
 	while (*list)
-		if (!strcmp(*list++,id->model))
+		if (!strcmp(*list++, m))
 			return 1;
 	return 0;
 }
@@ -649,7 +648,7 @@ static u8 hpt3xx_udma_filter(ide_drive_t *drive)
 	case HPT372A:
 	case HPT372N:
 	case HPT374 :
-		if (ide_dev_is_sata(drive->id))
+		if (ata_id_is_sata(drive->id))
 			mask &= ~0x0e;
 		/* Fall thru */
 	default:
@@ -671,7 +670,7 @@ static u8 hpt3xx_mdma_filter(ide_drive_t *drive)
 	case HPT372A:
 	case HPT372N:
 	case HPT374 :
-		if (ide_dev_is_sata(drive->id))
+		if (ata_id_is_sata(drive->id))
 			return 0x00;
 		/* Fall thru */
 	default:
@@ -728,11 +727,11 @@ static void hpt3xx_set_pio_mode(ide_drive_t *drive, const u8 pio)
 
 static void hpt3xx_quirkproc(ide_drive_t *drive)
 {
-	struct hd_driveid *id	= drive->id;
+	char *m			= (char *)&drive->id[ATA_ID_PROD];
 	const  char **list	= quirk_drives;
 
 	while (*list)
-		if (strstr(id->model, *list++)) {
+		if (strstr(m, *list++)) {
 			drive->quirk_list = 1;
 			return;
 		}

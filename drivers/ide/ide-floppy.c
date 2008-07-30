@@ -31,6 +31,7 @@
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/ide.h>
+#include <linux/hdreg.h>
 #include <linux/bitops.h>
 #include <linux/mutex.h>
 
@@ -167,11 +168,10 @@ static struct ide_floppy_obj *ide_floppy_get(struct gendisk *disk)
 	mutex_lock(&idefloppy_ref_mutex);
 	floppy = ide_floppy_g(disk);
 	if (floppy) {
-		kref_get(&floppy->kref);
-		if (ide_device_get(floppy->drive)) {
-			kref_put(&floppy->kref, idefloppy_cleanup_obj);
+		if (ide_device_get(floppy->drive))
 			floppy = NULL;
-		}
+		else
+			kref_get(&floppy->kref);
 	}
 	mutex_unlock(&idefloppy_ref_mutex);
 	return floppy;
@@ -180,8 +180,8 @@ static struct ide_floppy_obj *ide_floppy_get(struct gendisk *disk)
 static void ide_floppy_put(struct ide_floppy_obj *floppy)
 {
 	mutex_lock(&idefloppy_ref_mutex);
-	ide_device_put(floppy->drive);
 	kref_put(&floppy->kref, idefloppy_cleanup_obj);
+	ide_device_put(floppy->drive);
 	mutex_unlock(&idefloppy_ref_mutex);
 }
 
@@ -944,7 +944,7 @@ static int idefloppy_get_format_progress(ide_drive_t *drive, int __user *arg)
 		stat = hwif->tp_ops->read_status(hwif);
 		local_irq_restore(flags);
 
-		progress_indication = ((stat & SEEK_STAT) == 0) ? 0 : 0x10000;
+		progress_indication = ((stat & ATA_DSC) == 0) ? 0 : 0x10000;
 	}
 	if (put_user(progress_indication, arg))
 		return (-EFAULT);
@@ -964,12 +964,12 @@ static sector_t idefloppy_capacity(ide_drive_t *drive)
  * Check whether we can support a drive, based on the ATAPI IDENTIFY command
  * results.
  */
-static int idefloppy_identify_device(ide_drive_t *drive, struct hd_driveid *id)
+static int idefloppy_identify_device(ide_drive_t *drive, u16 *id)
 {
 	u8 gcw[2];
 	u8 device_type, protocol, removable, drq_type, packet_size;
 
-	*((u16 *) &gcw) = id->config;
+	*((u16 *)&gcw) = id[ATA_ID_CONFIG];
 
 	device_type =  gcw[1] & 0x1F;
 	removable   = (gcw[0] & 0x80) >> 7;
@@ -980,7 +980,8 @@ static int idefloppy_identify_device(ide_drive_t *drive, struct hd_driveid *id)
 #ifdef CONFIG_PPC
 	/* kludge for Apple PowerBook internal zip */
 	if (device_type == 5 &&
-	    !strstr(id->model, "CD-ROM") && strstr(id->model, "ZIP"))
+	    !strstr((char *)&id[ATA_ID_PROD], "CD-ROM") &&
+	    strstr((char *)&id[ATA_ID_PROD], "ZIP"))
 		device_type = 0;
 #endif
 
@@ -1004,28 +1005,40 @@ static int idefloppy_identify_device(ide_drive_t *drive, struct hd_driveid *id)
 }
 
 #ifdef CONFIG_IDE_PROC_FS
-static void idefloppy_add_settings(ide_drive_t *drive)
+ide_devset_rw(bios_cyl,  0, 1023, bios_cyl);
+ide_devset_rw(bios_head, 0,  255, bios_head);
+ide_devset_rw(bios_sect, 0,   63, bios_sect);
+
+static int get_ticks(ide_drive_t *drive)
 {
 	idefloppy_floppy_t *floppy = drive->driver_data;
-
-	ide_add_setting(drive, "bios_cyl", SETTING_RW, TYPE_INT, 0, 1023, 1, 1,
-			&drive->bios_cyl, NULL);
-	ide_add_setting(drive, "bios_head", SETTING_RW, TYPE_BYTE, 0, 255, 1, 1,
-			&drive->bios_head, NULL);
-	ide_add_setting(drive, "bios_sect", SETTING_RW,	TYPE_BYTE, 0,  63, 1, 1,
-			&drive->bios_sect, NULL);
-	ide_add_setting(drive, "ticks",	   SETTING_RW, TYPE_BYTE, 0, 255, 1, 1,
-			&floppy->ticks,	 NULL);
+	return floppy->ticks;
 }
-#else
-static inline void idefloppy_add_settings(ide_drive_t *drive) { ; }
+
+static int set_ticks(ide_drive_t *drive, int arg)
+{
+	idefloppy_floppy_t *floppy = drive->driver_data;
+	floppy->ticks = arg;
+	return 0;
+}
+
+IDE_DEVSET(ticks, S_RW, 0, 255, get_ticks, set_ticks);
+
+static const struct ide_devset *idefloppy_settings[] = {
+	&ide_devset_bios_cyl,
+	&ide_devset_bios_head,
+	&ide_devset_bios_sect,
+	&ide_devset_ticks,
+	NULL
+};
 #endif
 
 static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 {
+	u16 *id = drive->id;
 	u8 gcw[2];
 
-	*((u16 *) &gcw) = drive->id->config;
+	*((u16 *)&gcw) = id[ATA_ID_CONFIG];
 	floppy->pc = floppy->pc_stack;
 	drive->pc_callback = ide_floppy_callback;
 
@@ -1040,7 +1053,7 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	 * it. It should be fixed as of version 1.9, but to be on the safe side
 	 * we'll leave the limitation below for the 2.2.x tree.
 	 */
-	if (!strncmp(drive->id->model, "IOMEGA ZIP 100 ATAPI", 20)) {
+	if (!strncmp((char *)&id[ATA_ID_PROD], "IOMEGA ZIP 100 ATAPI", 20)) {
 		drive->atapi_flags |= IDE_AFLAG_ZIP_DRIVE;
 		/* This value will be visible in the /proc/ide/hdx/settings */
 		floppy->ticks = IDEFLOPPY_TICKS_DELAY;
@@ -1051,13 +1064,14 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	 * Guess what? The IOMEGA Clik! drive also needs the above fix. It makes
 	 * nasty clicking noises without it, so please don't remove this.
 	 */
-	if (strncmp(drive->id->model, "IOMEGA Clik!", 11) == 0) {
+	if (strncmp((char *)&id[ATA_ID_PROD], "IOMEGA Clik!", 11) == 0) {
 		blk_queue_max_sectors(drive->queue, 64);
 		drive->atapi_flags |= IDE_AFLAG_CLIK_DRIVE;
 	}
 
 	(void) ide_floppy_get_capacity(drive);
-	idefloppy_add_settings(drive);
+
+	ide_proc_register_driver(drive, floppy->driver);
 }
 
 static void ide_floppy_remove(ide_drive_t *drive)
@@ -1114,12 +1128,12 @@ static ide_driver_t idefloppy_driver = {
 	.remove			= ide_floppy_remove,
 	.version		= IDEFLOPPY_VERSION,
 	.media			= ide_floppy,
-	.supports_dsc_overlap	= 0,
 	.do_request		= idefloppy_do_request,
 	.end_request		= idefloppy_end_request,
 	.error			= __ide_error,
 #ifdef CONFIG_IDE_PROC_FS
 	.proc			= idefloppy_proc,
+	.settings		= idefloppy_settings,
 #endif
 };
 
@@ -1387,10 +1401,10 @@ static int ide_floppy_probe(ide_drive_t *drive)
 
 	if (!strstr("ide-floppy", drive->driver_req))
 		goto failed;
-	if (!drive->present)
-		goto failed;
+
 	if (drive->media != ide_floppy)
 		goto failed;
+
 	if (!idefloppy_identify_device(drive, drive->id)) {
 		printk(KERN_ERR "ide-floppy: %s: not supported by this version"
 				" of ide-floppy\n", drive->name);
@@ -1408,8 +1422,6 @@ static int ide_floppy_probe(ide_drive_t *drive)
 		goto out_free_floppy;
 
 	ide_init_disk(g, drive);
-
-	ide_proc_register_driver(drive, &idefloppy_driver);
 
 	kref_init(&floppy->kref);
 

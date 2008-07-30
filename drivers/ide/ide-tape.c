@@ -331,11 +331,10 @@ static struct ide_tape_obj *ide_tape_get(struct gendisk *disk)
 	mutex_lock(&idetape_ref_mutex);
 	tape = ide_tape_g(disk);
 	if (tape) {
-		kref_get(&tape->kref);
-		if (ide_device_get(tape->drive)) {
-			kref_put(&tape->kref, ide_tape_release);
+		if (ide_device_get(tape->drive))
 			tape = NULL;
-		}
+		else
+			kref_get(&tape->kref);
 	}
 	mutex_unlock(&idetape_ref_mutex);
 	return tape;
@@ -344,8 +343,8 @@ static struct ide_tape_obj *ide_tape_get(struct gendisk *disk)
 static void ide_tape_put(struct ide_tape_obj *tape)
 {
 	mutex_lock(&idetape_ref_mutex);
-	ide_device_put(tape->drive);
 	kref_put(&tape->kref, ide_tape_release);
+	ide_device_put(tape->drive);
 	mutex_unlock(&idetape_ref_mutex);
 }
 
@@ -919,8 +918,8 @@ static ide_startstop_t idetape_media_access_finished(ide_drive_t *drive)
 
 	stat = hwif->tp_ops->read_status(hwif);
 
-	if (stat & SEEK_STAT) {
-		if (stat & ERR_STAT) {
+	if (stat & ATA_DSC) {
+		if (stat & ATA_ERR) {
 			/* Error detected */
 			if (pc->c[0] != TEST_UNIT_READY)
 				printk(KERN_ERR "ide-tape: %s: I/O error, ",
@@ -1020,7 +1019,7 @@ static ide_startstop_t idetape_do_request(ide_drive_t *drive,
 	}
 
 	if (!test_and_clear_bit(IDE_AFLAG_IGNORE_DSC, &drive->atapi_flags) &&
-	    (stat & SEEK_STAT) == 0) {
+	    (stat & ATA_DSC) == 0) {
 		if (postponed_rq == NULL) {
 			tape->dsc_polling_start = jiffies;
 			tape->dsc_poll_freq = tape->best_dsc_rw_freq;
@@ -2309,7 +2308,7 @@ static int idetape_identify_device(ide_drive_t *drive)
 	if (drive->id_read == 0)
 		return 1;
 
-	*((unsigned short *) &gcw) = drive->id->config;
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	protocol	=   (gcw[1] & 0xC0) >> 6;
 	device_type	=    gcw[1] & 0x1F;
@@ -2408,28 +2407,56 @@ static void idetape_get_mode_sense_results(ide_drive_t *drive)
 }
 
 #ifdef CONFIG_IDE_PROC_FS
-static void idetape_add_settings(ide_drive_t *drive)
-{
-	idetape_tape_t *tape = drive->driver_data;
-
-	ide_add_setting(drive, "buffer", SETTING_READ, TYPE_SHORT, 0, 0xffff,
-			1, 2, (u16 *)&tape->caps[16], NULL);
-	ide_add_setting(drive, "speed", SETTING_READ, TYPE_SHORT, 0, 0xffff,
-			1, 1, (u16 *)&tape->caps[14], NULL);
-	ide_add_setting(drive, "buffer_size", SETTING_READ, TYPE_INT, 0, 0xffff,
-			1, 1024, &tape->buffer_size, NULL);
-	ide_add_setting(drive, "tdsc", SETTING_RW, TYPE_INT, IDETAPE_DSC_RW_MIN,
-			IDETAPE_DSC_RW_MAX, 1000, HZ, &tape->best_dsc_rw_freq,
-			NULL);
-	ide_add_setting(drive, "dsc_overlap", SETTING_RW, TYPE_BYTE, 0, 1, 1,
-			1, &drive->dsc_overlap, NULL);
-	ide_add_setting(drive, "avg_speed", SETTING_READ, TYPE_INT, 0, 0xffff,
-			1, 1, &tape->avg_speed, NULL);
-	ide_add_setting(drive, "debug_mask", SETTING_RW, TYPE_INT, 0, 0xffff, 1,
-			1, &tape->debug_mask, NULL);
+#define ide_tape_devset_get(name, field) \
+static int get_##name(ide_drive_t *drive) \
+{ \
+	idetape_tape_t *tape = drive->driver_data; \
+	return tape->field; \
 }
-#else
-static inline void idetape_add_settings(ide_drive_t *drive) { ; }
+
+#define ide_tape_devset_set(name, field) \
+static int set_##name(ide_drive_t *drive, int arg) \
+{ \
+	idetape_tape_t *tape = drive->driver_data; \
+	tape->field = arg; \
+	return 0; \
+}
+
+#define ide_tape_devset_rw(_name, _min, _max, _field, _mulf, _divf) \
+ide_tape_devset_get(_name, _field) \
+ide_tape_devset_set(_name, _field) \
+__IDE_DEVSET(_name, S_RW, _min, _max, get_##_name, set_##_name, _mulf, _divf)
+
+#define ide_tape_devset_r(_name, _min, _max, _field, _mulf, _divf) \
+ide_tape_devset_get(_name, _field) \
+__IDE_DEVSET(_name, S_READ, _min, _max, get_##_name, NULL, _mulf, _divf)
+
+static int mulf_tdsc(ide_drive_t *drive)	{ return 1000; }
+static int divf_tdsc(ide_drive_t *drive)	{ return   HZ; }
+static int divf_buffer(ide_drive_t *drive)	{ return    2; }
+static int divf_buffer_size(ide_drive_t *drive)	{ return 1024; }
+
+ide_devset_rw(dsc_overlap,	0,	1, dsc_overlap);
+
+ide_tape_devset_rw(debug_mask,	0, 0xffff, debug_mask,  NULL, NULL);
+ide_tape_devset_rw(tdsc, IDETAPE_DSC_RW_MIN, IDETAPE_DSC_RW_MAX,
+		   best_dsc_rw_freq, mulf_tdsc, divf_tdsc);
+
+ide_tape_devset_r(avg_speed,	0, 0xffff, avg_speed,   NULL, NULL);
+ide_tape_devset_r(speed,	0, 0xffff, caps[14],    NULL, NULL);
+ide_tape_devset_r(buffer,	0, 0xffff, caps[16],    NULL, divf_buffer);
+ide_tape_devset_r(buffer_size,	0, 0xffff, buffer_size, NULL, divf_buffer_size);
+
+static const struct ide_devset *idetape_settings[] = {
+	&ide_devset_avg_speed,
+	&ide_devset_buffer,
+	&ide_devset_buffer_size,
+	&ide_devset_debug_mask,
+	&ide_devset_dsc_overlap,
+	&ide_devset_speed,
+	&ide_devset_tdsc,
+	NULL
+};
 #endif
 
 /*
@@ -2461,7 +2488,7 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 		drive->dsc_overlap = 0;
 	}
 	/* Seagate Travan drives do not support DSC overlap. */
-	if (strstr(drive->id->model, "Seagate STT3401"))
+	if (strstr((char *)&drive->id[ATA_ID_PROD], "Seagate STT3401"))
 		drive->dsc_overlap = 0;
 	tape->minor = minor;
 	tape->name[0] = 'h';
@@ -2469,7 +2496,8 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 	tape->name[2] = '0' + minor;
 	tape->chrdev_dir = IDETAPE_DIR_NONE;
 	tape->pc = tape->pc_stack;
-	*((unsigned short *) &gcw) = drive->id->config;
+
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	/* Command packet DRQ type */
 	if (((gcw[0] & 0x60) >> 5) == 1)
@@ -2511,7 +2539,7 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 		tape->best_dsc_rw_freq * 1000 / HZ,
 		drive->using_dma ? ", DMA":"");
 
-	idetape_add_settings(drive);
+	ide_proc_register_driver(drive, tape->driver);
 }
 
 static void ide_tape_remove(ide_drive_t *drive)
@@ -2576,12 +2604,12 @@ static ide_driver_t idetape_driver = {
 	.remove			= ide_tape_remove,
 	.version		= IDETAPE_VERSION,
 	.media			= ide_tape,
-	.supports_dsc_overlap 	= 1,
 	.do_request		= idetape_do_request,
 	.end_request		= idetape_end_request,
 	.error			= __ide_error,
 #ifdef CONFIG_IDE_PROC_FS
 	.proc			= idetape_proc,
+	.settings		= idetape_settings,
 #endif
 };
 
@@ -2644,10 +2672,10 @@ static int ide_tape_probe(ide_drive_t *drive)
 
 	if (!strstr("ide-tape", drive->driver_req))
 		goto failed;
-	if (!drive->present)
-		goto failed;
+
 	if (drive->media != ide_tape)
 		goto failed;
+
 	if (!idetape_identify_device(drive)) {
 		printk(KERN_ERR "ide-tape: %s: not supported by this version of"
 				" the driver\n", drive->name);
@@ -2665,8 +2693,6 @@ static int ide_tape_probe(ide_drive_t *drive)
 		goto out_free_tape;
 
 	ide_init_disk(g, drive);
-
-	ide_proc_register_driver(drive, &idetape_driver);
 
 	kref_init(&tape->kref);
 

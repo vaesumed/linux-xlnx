@@ -54,10 +54,6 @@
 #include <linux/hrtimer.h>
 #include <scsi/scsi_cmnd.h>
 
-#ifdef CONFIG_IDE
-#include <linux/ide.h>
-#endif
-
 #define NUM_CPOINTS 8
 #define NUM_CPOINT_TYPES 5
 #define DEFAULT_COUNT 10

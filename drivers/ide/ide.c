@@ -44,8 +44,6 @@
  *  inspiration from lots of linux users, esp.  hamish@zot.apana.org.au
  */
 
-#define _IDE_C			/* Tell ide.h it's really us */
-
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/string.h>
@@ -58,6 +56,7 @@
 #include <linux/init.h>
 #include <linux/pci.h>
 #include <linux/ide.h>
+#include <linux/hdreg.h>
 #include <linux/completion.h>
 #include <linux/device.h>
 
@@ -119,7 +118,7 @@ static void ide_port_init_devices_data(ide_hwif_t *hwif)
 		drive->media			= ide_disk;
 		drive->select.all		= (unit<<4)|0xa0;
 		drive->hwif			= hwif;
-		drive->ready_stat		= READY_STAT;
+		drive->ready_stat		= ATA_DRDY;
 		drive->bad_wstat		= BAD_W_STAT;
 		drive->special.b.recalibrate	= 1;
 		drive->special.b.set_geometry	= 1;
@@ -288,6 +287,8 @@ int ide_spin_wait_hwgroup (ide_drive_t *drive)
 
 EXPORT_SYMBOL(ide_spin_wait_hwgroup);
 
+ide_devset_get(io_32bit, io_32bit);
+
 int set_io_32bit(ide_drive_t *drive, int arg)
 {
 	if (drive->no_io_32bit)
@@ -306,7 +307,9 @@ int set_io_32bit(ide_drive_t *drive, int arg)
 	return 0;
 }
 
-static int set_ksettings(ide_drive_t *drive, int arg)
+ide_devset_get(ksettings, keep_settings);
+
+int set_ksettings(ide_drive_t *drive, int arg)
 {
 	if (arg < 0 || arg > 1)
 		return -EINVAL;
@@ -319,6 +322,8 @@ static int set_ksettings(ide_drive_t *drive, int arg)
 	return 0;
 }
 
+ide_devset_get(using_dma, using_dma);
+
 int set_using_dma(ide_drive_t *drive, int arg)
 {
 #ifdef CONFIG_BLK_DEV_IDEDMA
@@ -328,7 +333,7 @@ int set_using_dma(ide_drive_t *drive, int arg)
 	if (arg < 0 || arg > 1)
 		return -EINVAL;
 
-	if (!drive->id || !(drive->id->capability & 1))
+	if (ata_id_has_dma(drive->id) == 0)
 		goto out;
 
 	if (hwif->dma_ops == NULL)
@@ -395,7 +400,9 @@ int set_pio_mode(ide_drive_t *drive, int arg)
 	return 0;
 }
 
-static int set_unmaskirq(ide_drive_t *drive, int arg)
+ide_devset_get(unmaskirq, unmask);
+
+int set_unmaskirq(ide_drive_t *drive, int arg)
 {
 	if (drive->no_unmask)
 		return -EPERM;
@@ -502,20 +509,88 @@ static int generic_drive_reset(ide_drive_t *drive)
 	return ret;
 }
 
+static inline void ide_id_to_hd_driveid(u16 *id)
+{
+#ifdef __BIG_ENDIAN
+	/* accessed in struct hd_driveid as 8-bit values */
+	id[ATA_ID_MAX_MULTSECT]	 = __cpu_to_le16(id[ATA_ID_MAX_MULTSECT]);
+	id[ATA_ID_CAPABILITY]	 = __cpu_to_le16(id[ATA_ID_CAPABILITY]);
+	id[ATA_ID_OLD_PIO_MODES] = __cpu_to_le16(id[ATA_ID_OLD_PIO_MODES]);
+	id[ATA_ID_OLD_DMA_MODES] = __cpu_to_le16(id[ATA_ID_OLD_DMA_MODES]);
+	id[ATA_ID_MULTSECT]	 = __cpu_to_le16(id[ATA_ID_MULTSECT]);
+
+	/* as 32-bit values */
+	*(u32 *)&id[ATA_ID_LBA_CAPACITY] = ata_id_u32(id, ATA_ID_LBA_CAPACITY);
+	*(u32 *)&id[ATA_ID_SPG]		 = ata_id_u32(id, ATA_ID_SPG);
+
+	/* as 64-bit value */
+	*(u64 *)&id[ATA_ID_LBA_CAPACITY_2] =
+		ata_id_u64(id, ATA_ID_LBA_CAPACITY_2);
+#endif
+}
+
+static int ide_get_identity_ioctl(ide_drive_t *drive, unsigned int cmd,
+				  unsigned long arg)
+{
+	u16 *id = NULL;
+	int size = (cmd == HDIO_GET_IDENTITY) ? (ATA_ID_WORDS * 2) : 142;
+	int rc = 0;
+
+	if (drive->id_read == 0) {
+		rc = -ENOMSG;
+		goto out;
+	}
+
+	id = kmalloc(size, GFP_KERNEL);
+	if (id == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	memcpy(id, drive->id, size);
+	ide_id_to_hd_driveid(id);
+
+	if (copy_to_user((void __user *)arg, id, size))
+		rc = -EFAULT;
+
+	kfree(id);
+out:
+	return rc;
+}
+
+static int ide_get_nice_ioctl(ide_drive_t *drive, unsigned long arg)
+{
+	return put_user((drive->dsc_overlap << IDE_NICE_DSC_OVERLAP) |
+			(drive->nice1 << IDE_NICE_1), (long __user *)arg);
+}
+
+static int ide_set_nice_ioctl(ide_drive_t *drive, unsigned long arg)
+{
+	if (arg != (arg & ((1 << IDE_NICE_DSC_OVERLAP) | (1 << IDE_NICE_1))))
+		return -EPERM;
+
+	if (((arg >> IDE_NICE_DSC_OVERLAP) & 1) &&
+	    (drive->media == ide_disk || drive->media == ide_floppy ||
+	     drive->scsi))
+		return -EPERM;
+
+	drive->dsc_overlap = (arg >> IDE_NICE_DSC_OVERLAP) & 1;
+	drive->nice1 = (arg >> IDE_NICE_1) & 1;
+
+	return 0;
+}
+
 int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device *bdev,
 			unsigned int cmd, unsigned long arg)
 {
 	unsigned long flags;
-	ide_driver_t *drv;
-	void __user *p = (void __user *)arg;
-	int err = 0, (*setfunc)(ide_drive_t *, int);
-	u8 *val;
+	int err = 0, (*getfunc)(ide_drive_t *), (*setfunc)(ide_drive_t *, int);
 
 	switch (cmd) {
-	case HDIO_GET_32BIT:	    val = &drive->io_32bit;	 goto read_val;
-	case HDIO_GET_KEEPSETTINGS: val = &drive->keep_settings; goto read_val;
-	case HDIO_GET_UNMASKINTR:   val = &drive->unmask;	 goto read_val;
-	case HDIO_GET_DMA:	    val = &drive->using_dma;	 goto read_val;
+	case HDIO_GET_32BIT:	    getfunc = get_io_32bit;	 goto read_val;
+	case HDIO_GET_KEEPSETTINGS: getfunc = get_ksettings;	 goto read_val;
+	case HDIO_GET_UNMASKINTR:   getfunc = get_unmaskirq;	 goto read_val;
+	case HDIO_GET_DMA:	    getfunc = get_using_dma;	 goto read_val;
 	case HDIO_SET_32BIT:	    setfunc = set_io_32bit;	 goto set_val;
 	case HDIO_SET_KEEPSETTINGS: setfunc = set_ksettings;	 goto set_val;
 	case HDIO_SET_PIO_MODE:	    setfunc = set_pio_mode;	 goto set_val;
@@ -528,17 +603,9 @@ int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device
 		case HDIO_GET_IDENTITY:
 			if (bdev != bdev->bd_contains)
 				return -EINVAL;
-			if (drive->id_read == 0)
-				return -ENOMSG;
-			if (copy_to_user(p, drive->id, (cmd == HDIO_GET_IDENTITY) ? sizeof(*drive->id) : 142))
-				return -EFAULT;
-			return 0;
-
+			return ide_get_identity_ioctl(drive, cmd, arg);
 		case HDIO_GET_NICE:
-			return put_user(drive->dsc_overlap	<<	IDE_NICE_DSC_OVERLAP	|
-					drive->atapi_overlap	<<	IDE_NICE_ATAPI_OVERLAP	|
-					drive->nice1 << IDE_NICE_1,
-					(long __user *) arg);
+			return ide_get_nice_ioctl(drive, arg);
 #ifdef CONFIG_IDE_TASK_IOCTL
 		case HDIO_DRIVE_TASKFILE:
 		        if (!capable(CAP_SYS_ADMIN) || !capable(CAP_SYS_RAWIO))
@@ -561,17 +628,9 @@ int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device
 				return -EACCES;
 			return ide_task_ioctl(drive, cmd, arg);
 		case HDIO_SET_NICE:
-			if (!capable(CAP_SYS_ADMIN)) return -EACCES;
-			if (arg != (arg & ((1 << IDE_NICE_DSC_OVERLAP) | (1 << IDE_NICE_1))))
-				return -EPERM;
-			drive->dsc_overlap = (arg >> IDE_NICE_DSC_OVERLAP) & 1;
-			drv = *(ide_driver_t **)bdev->bd_disk->private_data;
-			if (drive->dsc_overlap && !drv->supports_dsc_overlap) {
-				drive->dsc_overlap = 0;
-				return -EPERM;
-			}
-			drive->nice1 = (arg >> IDE_NICE_1) & 1;
-			return 0;
+			if (!capable(CAP_SYS_ADMIN))
+				return -EACCES;
+			return ide_set_nice_ioctl(drive, arg);
 		case HDIO_DRIVE_RESET:
 			if (!capable(CAP_SYS_ADMIN))
 				return -EACCES;
@@ -596,7 +655,7 @@ int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device
 read_val:
 	mutex_lock(&ide_setting_mtx);
 	spin_lock_irqsave(&ide_lock, flags);
-	err = *val;
+	err = getfunc(drive);
 	spin_unlock_irqrestore(&ide_lock, flags);
 	mutex_unlock(&ide_setting_mtx);
 	return err >= 0 ? put_user(err, (long __user *)arg) : err;
@@ -710,21 +769,21 @@ static ssize_t model_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
 	ide_drive_t *drive = to_ide_device(dev);
-	return sprintf(buf, "%s\n", drive->id->model);
+	return sprintf(buf, "%s\n", (char *)&drive->id[ATA_ID_PROD]);
 }
 
 static ssize_t firmware_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
 	ide_drive_t *drive = to_ide_device(dev);
-	return sprintf(buf, "%s\n", drive->id->fw_rev);
+	return sprintf(buf, "%s\n", (char *)&drive->id[ATA_ID_FW_REV]);
 }
 
 static ssize_t serial_show(struct device *dev, struct device_attribute *attr,
 			   char *buf)
 {
 	ide_drive_t *drive = to_ide_device(dev);
-	return sprintf(buf, "%s\n", drive->id->serial_no);
+	return sprintf(buf, "%s\n", (char *)&drive->id[ATA_ID_SERNO]);
 }
 
 static struct device_attribute ide_dev_attrs[] = {
@@ -841,7 +900,7 @@ MODULE_PARM_DESC(noprobe, "skip probing for a device");
 static unsigned int ide_nowerr;
 
 module_param_call(nowerr, ide_set_dev_param_mask, NULL, &ide_nowerr, 0);
-MODULE_PARM_DESC(nowerr, "ignore the WRERR_STAT bit for a device");
+MODULE_PARM_DESC(nowerr, "ignore the ATA_DF bit for a device");
 
 static unsigned int ide_cdroms;
 
@@ -906,7 +965,7 @@ static void ide_dev_apply_params(ide_drive_t *drive)
 		drive->noprobe = 1;
 	}
 	if (ide_nowerr & (1 << i)) {
-		printk(KERN_INFO "ide: ignoring the WRERR_STAT bit for %s\n",
+		printk(KERN_INFO "ide: ignoring the ATA_DF bit for %s\n",
 				 drive->name);
 		drive->bad_wstat = BAD_R_STAT;
 	}
@@ -927,7 +986,7 @@ static void ide_dev_apply_params(ide_drive_t *drive)
 				 drive->cyl, drive->head, drive->sect);
 		drive->present = 1;
 		drive->media = ide_disk;
-		drive->ready_stat = READY_STAT;
+		drive->ready_stat = ATA_DRDY;
 	}
 }
 
