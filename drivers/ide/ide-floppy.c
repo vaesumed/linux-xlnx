@@ -168,11 +168,10 @@ static struct ide_floppy_obj *ide_floppy_get(struct gendisk *disk)
 	mutex_lock(&idefloppy_ref_mutex);
 	floppy = ide_floppy_g(disk);
 	if (floppy) {
-		kref_get(&floppy->kref);
-		if (ide_device_get(floppy->drive)) {
-			kref_put(&floppy->kref, idefloppy_cleanup_obj);
+		if (ide_device_get(floppy->drive))
 			floppy = NULL;
-		}
+		else
+			kref_get(&floppy->kref);
 	}
 	mutex_unlock(&idefloppy_ref_mutex);
 	return floppy;
@@ -181,8 +180,8 @@ static struct ide_floppy_obj *ide_floppy_get(struct gendisk *disk)
 static void ide_floppy_put(struct ide_floppy_obj *floppy)
 {
 	mutex_lock(&idefloppy_ref_mutex);
-	ide_device_put(floppy->drive);
 	kref_put(&floppy->kref, idefloppy_cleanup_obj);
+	ide_device_put(floppy->drive);
 	mutex_unlock(&idefloppy_ref_mutex);
 }
 
