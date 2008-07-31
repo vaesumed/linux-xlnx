@@ -886,6 +886,8 @@ static void ohci_stop (struct usb_hcd *hcd)
 
 	if (quirk_zfmicro(ohci))
 		del_timer(&ohci->unlink_watchdog);
+	if (quirk_amdiso(ohci))
+		amd_iso_dev_put();
 
 	remove_debug_files (ohci);
 	ohci_mem_cleanup (ohci);

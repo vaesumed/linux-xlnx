@@ -401,6 +401,7 @@ struct ohci_hcd {
 #define	OHCI_QUIRK_NEC		0x40			/* lost interrupts */
 #define	OHCI_QUIRK_FRAME_NO	0x80			/* no big endian frame_no shift */
 #define OHCI_QUIRK_HUB_POWER	0x100			/* distrust firmware power/oc setup */
+#define	OHCI_QUIRK_AMD_ISO	0x200			/* ISO transfers*/
 	// there are also chip quirks/bugs in init logic
 
 	struct work_struct	nec_work;	/* Worker for NEC quirk */
@@ -428,6 +429,12 @@ static inline int quirk_zfmicro(struct ohci_hcd *ohci)
 {
 	return ohci->flags & OHCI_QUIRK_ZFMICRO;
 }
+static inline int quirk_amdiso(struct ohci_hcd *ohci)
+{
+	return ohci->flags & OHCI_QUIRK_AMD_ISO;
+}
+static void quirk_amd_pll(int state);
+static void amd_iso_dev_put(void);
 #else
 static inline int quirk_nec(struct ohci_hcd *ohci)
 {
@@ -436,6 +443,19 @@ static inline int quirk_nec(struct ohci_hcd *ohci)
 static inline int quirk_zfmicro(struct ohci_hcd *ohci)
 {
 	return 0;
+}
+static inline int quirk_amdiso(struct ohci_hcd *ohci)
+{
+	return 0;
+}
+
+static inline void quirk_amd_pll(int state)
+{
+	return;
+}
+static inline void amd_iso_dev_put(void)
+{
+	return;
 }
 #endif
 
