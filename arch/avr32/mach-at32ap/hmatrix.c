@@ -11,8 +11,7 @@
 #include <linux/io.h>
 
 #include <asm/arch/chip.h>
-
-#include "hmatrix.h"
+#include <asm/arch/hmatrix.h>
 
 static inline void __hmatrix_write_reg(unsigned long offset, u32 value)
 {

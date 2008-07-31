@@ -22,13 +22,13 @@
 
 #include <asm/arch/at32ap700x.h>
 #include <asm/arch/board.h>
+#include <asm/arch/hmatrix.h>
 #include <asm/arch/portmux.h>
 #include <asm/arch/sram.h>
 
 #include <video/atmel_lcdc.h>
 
 #include "clock.h"
-#include "hmatrix.h"
 #include "pio.h"
 #include "pm.h"
 
