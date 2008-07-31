@@ -121,6 +121,12 @@ struct kvm {
 	struct kvm_coalesced_mmio_dev *coalesced_mmio_dev;
 	struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
 #endif
+
+#ifdef KVM_ARCH_WANT_MMU_NOTIFIER
+	struct mmu_notifier mmu_notifier;
+	unsigned long mmu_notifier_seq;
+	long mmu_notifier_count;
+#endif
 };
 
 /* The guest did something we don't support. */
@@ -320,6 +326,25 @@ struct kvm_stats_debugfs_item {
 extern struct kvm_stats_debugfs_item debugfs_entries[];
 extern struct dentry *kvm_debugfs_dir;
 
+#define KVMTRACE_5D(evt, vcpu, d1, d2, d3, d4, d5, name) \
+	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
+						vcpu, 5, d1, d2, d3, d4, d5)
+#define KVMTRACE_4D(evt, vcpu, d1, d2, d3, d4, name) \
+	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
+						vcpu, 4, d1, d2, d3, d4, 0)
+#define KVMTRACE_3D(evt, vcpu, d1, d2, d3, name) \
+	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
+						vcpu, 3, d1, d2, d3, 0, 0)
+#define KVMTRACE_2D(evt, vcpu, d1, d2, name) \
+	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
+						vcpu, 2, d1, d2, 0, 0, 0)
+#define KVMTRACE_1D(evt, vcpu, d1, name) \
+	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
+						vcpu, 1, d1, 0, 0, 0, 0)
+#define KVMTRACE_0D(evt, vcpu, name) \
+	trace_mark(kvm_trace_##name, "%u %p %u %u %u %u %u %u", KVM_TRC_##evt, \
+						vcpu, 0, 0, 0, 0, 0, 0)
+
 #ifdef CONFIG_KVM_TRACE
 int kvm_trace_ioctl(unsigned int ioctl, unsigned long arg);
 void kvm_trace_cleanup(void);
@@ -330,6 +355,24 @@ int kvm_trace_ioctl(unsigned int ioctl, unsigned long arg)
 	return -EINVAL;
 }
 #define kvm_trace_cleanup() ((void)0)
+#endif
+
+#ifdef KVM_ARCH_WANT_MMU_NOTIFIER
+static inline int mmu_notifier_retry(struct kvm_vcpu *vcpu, unsigned long mmu_seq)
+{
+	if (unlikely(vcpu->kvm->mmu_notifier_count))
+		return 1;
+	/*
+	 * Both reads happen under the mmu_lock and both values are
+	 * modified under mmu_lock, so there's no need of smb_rmb()
+	 * here in between, otherwise mmu_notifier_count should be
+	 * read before mmu_notifier_seq, see
+	 * mmu_notifier_invalidate_range_end write side.
+	 */
+	if (vcpu->kvm->mmu_notifier_seq != mmu_seq)
+		return 1;
+	return 0;
+}
 #endif
 
 #endif
