@@ -31,7 +31,6 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/pci.h>
-#include <linux/hdreg.h>
 #include <linux/ide.h>
 #include <linux/init.h>
 #include <linux/dmi.h>
@@ -134,8 +133,8 @@ static u8 ali_udma_filter(ide_drive_t *drive)
 	if (m5229_revision > 0x20 && m5229_revision < 0xC2) {
 		if (drive->media != ide_disk)
 			return 0;
-		if (chip_is_1543c_e && strstr(drive->id->model, "WDC ") &&
-		    wdc_udma == 0)
+		if (wdc_udma == 0 && chip_is_1543c_e &&
+		    strstr((char *)&drive->id[ATA_ID_PROD], "WDC "))
 			return 0;
 	}
 
