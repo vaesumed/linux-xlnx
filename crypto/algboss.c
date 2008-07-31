@@ -206,13 +206,29 @@ static struct notifier_block cryptomgr_notifier = {
 
 static int __init cryptomgr_init(void)
 {
-	return crypto_register_notifier(&cryptomgr_notifier);
+	int err;
+
+	err = testmgr_init();
+	if (err)
+		return err;
+
+	err = crypto_register_notifier(&cryptomgr_notifier);
+	if (err)
+		goto free_testmgr;
+
+	return 0;
+
+free_testmgr:
+	testmgr_exit();
+	return err;
 }
 
 static void __exit cryptomgr_exit(void)
 {
 	int err = crypto_unregister_notifier(&cryptomgr_notifier);
 	BUG_ON(err);
+
+	testmgr_exit();
 }
 
 module_init(cryptomgr_init);
