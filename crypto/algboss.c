@@ -45,6 +45,9 @@ struct cryptomgr_param {
 
 	char larval[CRYPTO_MAX_ALG_NAME];
 	char template[CRYPTO_MAX_ALG_NAME];
+
+	u32 otype;
+	u32 omask;
 };
 
 static int cryptomgr_probe(void *data)
@@ -76,8 +79,7 @@ out:
 	module_put_and_exit(0);
 
 err:
-	crypto_larval_error(param->larval, param->type.data.type,
-			    param->type.data.mask);
+	crypto_larval_error(param->larval, param->otype, param->omask);
 	goto out;
 }
 
@@ -173,6 +175,9 @@ static int cryptomgr_schedule_probe(struct crypto_larval *larval)
 	param->type.data.mask = larval->mask;
 	param->tb[0] = &param->type.attr;
 
+	param->otype = larval->alg.cra_flags;
+	param->omask = larval->mask;
+
 	memcpy(param->larval, larval->alg.cra_name, CRYPTO_MAX_ALG_NAME);
 
 	thread = kthread_run(cryptomgr_probe, param, "cryptomgr");
@@ -206,13 +211,29 @@ static struct notifier_block cryptomgr_notifier = {
 
 static int __init cryptomgr_init(void)
 {
-	return crypto_register_notifier(&cryptomgr_notifier);
+	int err;
+
+	err = testmgr_init();
+	if (err)
+		return err;
+
+	err = crypto_register_notifier(&cryptomgr_notifier);
+	if (err)
+		goto free_testmgr;
+
+	return 0;
+
+free_testmgr:
+	testmgr_exit();
+	return err;
 }
 
 static void __exit cryptomgr_exit(void)
 {
 	int err = crypto_unregister_notifier(&cryptomgr_notifier);
 	BUG_ON(err);
+
+	testmgr_exit();
 }
 
 module_init(cryptomgr_init);
