@@ -1,0 +1,80 @@
+Importing driver-core.current based on 2.6.27-rc1-git2
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 94ad374a0751f40d25e22e036c37f7263569d24c
+HEAD is now at 94ad374 Fix off-by-one error in iov_iter_advance()
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+kobject-replace-all-occurrences-of-with-instead-of-only-the-first-one.patch
+japanese-translation-of-documentation-submitchecklist.patch
+drivers-base-driver.c-remove-unused-to_dev-macro.patch
+dev_printk-constify-the-dev-argument.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 87bcefc8b95f182b2499dc9ba18c873699161848
+HEAD is now at 87bcefc kobject: Fix kobject_rename and !CONFIG_SYSFS
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-auerswald-remove-driver.patch
+usb-add-musb-and-tusb-support.patch
+usb-fix-usb-boot-crash-ecm_do_notify-list_add-corruption.-prev-next-should-be-next.patch
+usb-fix-deadlock-in-cdc-acm.patch
+usb-ftdi_sio-add-usb-product-id-for-elv-hs485.patch
+usb-ftdi_sio-add-support-for-luminance-stellaris-evaluation-development-kits.patch
+usb-add-missing-kerneldoc-line-for-needs_binding.patch
+usb-core-driver-fix-warning.patch
+usb-ohci-fix-system-hang-caused-by-earlier-patch.patch
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+usb-usb-storage-quirk-around-v1.11-firmware-on-nikon-d4.patch
+usb-gadget-protect-gadget_chips.h-from-been-included-twice.patch
+usb-serial-don-t-release-unregistered-minors.patch
+usb-fix-interface-unregistration-logic.patch
+usb-storage-automatically-recognize-bad-residues.patch
+usb-move-usb-mon-up-to-misc-options-in-kconfig.patch
+usb-storage-unusual_devs-entries-for-iriver-t10-and-datafab-cf-sm-reader.patch
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 2f0389a175ea05ecbfb05cabf4e596e126ec3881
+HEAD is now at 2f0389a usb-storage: unusual_devs entries for iRiver T10 and Datafab CF+SM reader
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 1bcc91308469ce73bcca1f74e267b4723bfbbf36
+HEAD is now at 1bcc913 sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing m68k based on c9272c4f9fbe2087beb3392f526dc5b19efaa56b
+	quilt series is empty
+$ git update-ref refs/heads/quilt/m68k c9272c4f9fbe2087beb3392f526dc5b19efaa56b
+Unchanged quilt series rr
+Unchanged quilt series ttydev
