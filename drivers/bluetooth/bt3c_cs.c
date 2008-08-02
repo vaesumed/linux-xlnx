@@ -687,7 +687,6 @@ static int bt3c_check_config(struct pcmcia_device *p_dev,
 	if (cf->vpp1.present & (1 << CISTPL_POWER_VNOM))
 		p_dev->conf.Vpp = cf->vpp1.param[CISTPL_POWER_VNOM] / 10000;
 	if ((cf->io.nwin > 0) && (cf->io.win[0].len == 8) && (cf->io.win[0].base != 0)) {
-		p_dev->conf.ConfigIndex = cf->index;
 		p_dev->io.BasePort1 = cf->io.win[0].base;
 		p_dev->io.IOAddrLines = (try == 0) ? 16 : cf->io.flags & CISTPL_IO_LINES_MASK;
 		if (!pcmcia_request_io(p_dev, &p_dev->io))
@@ -704,7 +703,6 @@ static int bt3c_check_config_notpicky(struct pcmcia_device *p_dev,
 	int j;
 
 	if ((cf->io.nwin > 0) && ((cf->io.flags & CISTPL_IO_LINES_MASK) <= 3)) {
-		p_dev->conf.ConfigIndex = cf->index;
 		for (j = 0; j < 5; j++) {
 			p_dev->io.BasePort1 = base[j];
 			p_dev->io.IOAddrLines = base[j] ? 16 : 3;
