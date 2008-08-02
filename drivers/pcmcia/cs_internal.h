@@ -132,7 +132,7 @@ int pccard_register_pcmcia(struct pcmcia_socket *s, struct pcmcia_callback *c);
 
 #define cs_socket_name(skt)	((skt)->dev.bus_id)
 
-#ifdef DEBUG
+#ifdef PCMCIA_DEBUG
 extern int cs_debug_level(int);
 
 #define cs_dbg(skt, lvl, fmt, arg...) do {		\
