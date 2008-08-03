@@ -149,7 +149,7 @@ static int adjust_irq(struct pcmcia_socket *s, adjust_t *adj)
 
 	irq = adj->resource.irq.IRQ;
 	if ((irq < 0) || (irq > 15))
-		return CS_BAD_IRQ;
+		return -EINVAL;
 
 	if (adj->Action != REMOVE_MANAGED_RESOURCE)
 		return 0;
@@ -167,7 +167,7 @@ static int adjust_irq(struct pcmcia_socket *s, adjust_t *adj)
 #else
 
 static inline int adjust_irq(struct pcmcia_socket *s, adjust_t *adj) {
-	return CS_SUCCESS;
+	return 0;
 }
 
 #endif
@@ -175,7 +175,7 @@ static inline int adjust_irq(struct pcmcia_socket *s, adjust_t *adj) {
 static int pcmcia_adjust_resource_info(adjust_t *adj)
 {
 	struct pcmcia_socket *s;
-	int ret = CS_UNSUPPORTED_FUNCTION;
+	int ret = -ENOSYS;
 	unsigned long flags;
 
 	down_read(&pcmcia_socket_list_rwsem);
@@ -248,7 +248,7 @@ static int pccard_get_status(struct pcmcia_socket *s,
 	if (s->state & SOCKET_SUSPEND)
 		status->CardState |= CS_EVENT_PM_SUSPEND;
 	if (!(s->state & SOCKET_PRESENT))
-		return CS_NO_CARD;
+		return -ENODEV;
 
 	c = (p_dev) ? p_dev->function_config : NULL;
 
@@ -274,7 +274,7 @@ static int pccard_get_status(struct pcmcia_socket *s,
 			status->CardState |=
 				(reg & ESR_REQ_ATTN) ? CS_EVENT_REQUEST_ATTENTION : 0;
 		}
-		return CS_SUCCESS;
+		return 0;
 	}
 	status->CardState |=
 		(val & SS_WRPROT) ? CS_EVENT_WRITE_PROTECT : 0;
@@ -284,7 +284,7 @@ static int pccard_get_status(struct pcmcia_socket *s,
 		(val & SS_BATWARN) ? CS_EVENT_BATTERY_LOW : 0;
 	status->CardState |=
 		(val & SS_READY) ? CS_EVENT_READY_CHANGE : 0;
-	return CS_SUCCESS;
+	return 0;
 } /* pccard_get_status */
 
 int pccard_get_configuration_info(struct pcmcia_socket *s,
@@ -294,7 +294,7 @@ int pccard_get_configuration_info(struct pcmcia_socket *s,
 	config_t *c;
 
 	if (!(s->state & SOCKET_PRESENT))
-		return CS_NO_CARD;
+		return -ENODEV;
 
 
 #ifdef CONFIG_CARDBUS
@@ -314,7 +314,7 @@ int pccard_get_configuration_info(struct pcmcia_socket *s,
 				config->NumPorts1 = s->io[0].res->end - config->BasePort1 + 1;
 			}
 		}
-		return CS_SUCCESS;
+		return 0;
 	}
 #endif
 
@@ -330,7 +330,7 @@ int pccard_get_configuration_info(struct pcmcia_socket *s,
 		config->Attributes = 0;
 		config->Vcc = s->socket.Vcc;
 		config->Vpp1 = config->Vpp2 = s->socket.Vpp;
-		return CS_SUCCESS;
+		return 0;
 	}
 
 	config->Attributes = c->Attributes | CONF_VALID_CLIENT;
@@ -354,7 +354,7 @@ int pccard_get_configuration_info(struct pcmcia_socket *s,
 	config->Attributes2 = c->io.Attributes2;
 	config->IOAddrLines = c->io.IOAddrLines;
 
-	return CS_SUCCESS;
+	return 0;
 } /* pccard_get_configuration_info */
 
 
@@ -835,7 +835,7 @@ static int ds_ioctl(struct inode * inode, struct file * file,
     case DS_GET_CONFIGURATION_INFO:
 	if (buf->config.Function &&
 	   (buf->config.Function >= s->functions))
-	    ret = CS_BAD_ARGS;
+	    ret = -EINVAL;
 	else {
 	    struct pcmcia_device *p_dev = get_pcmcia_device(s, buf->config.Function);
 	    ret = pccard_get_configuration_info(s, p_dev, &buf->config);
@@ -866,7 +866,7 @@ static int ds_ioctl(struct inode * inode, struct file * file,
     case DS_GET_STATUS:
 	    if (buf->status.Function &&
 		(buf->status.Function >= s->functions))
-		    ret = CS_BAD_ARGS;
+		    ret = -EINVAL;
 	    else {
 		    struct pcmcia_device *p_dev = get_pcmcia_device(s, buf->status.Function);
 		    ret = pccard_get_status(s, p_dev, &buf->status);
@@ -897,7 +897,7 @@ static int ds_ioctl(struct inode * inode, struct file * file,
 	    goto free_out;
 	}
 
-	ret = CS_BAD_ARGS;
+	ret = -EINVAL;
 
 	if (!(buf->conf_reg.Function &&
 	     (buf->conf_reg.Function >= s->functions))) {
@@ -960,22 +960,19 @@ static int ds_ioctl(struct inode * inode, struct file * file,
 	err = -EINVAL;
     }
 
-    if ((err == 0) && (ret != CS_SUCCESS)) {
+    if ((err == 0) && (ret != 0)) {
 	ds_dbg(2, "ds_ioctl: ret = %d\n", ret);
 	switch (ret) {
-	case CS_BAD_SOCKET: case CS_NO_CARD:
-	    err = -ENODEV; break;
-	case CS_BAD_ARGS: case CS_BAD_ATTRIBUTE: case CS_BAD_IRQ:
-	case CS_BAD_TUPLE:
-	    err = -EINVAL; break;
-	case CS_IN_USE:
-	    err = -EBUSY; break;
-	case CS_OUT_OF_RESOURCE:
+	case -ENODEV:
+	case -EINVAL:
+	case -EBUSY:
+	case -ENOSYS:
+	    err = ret;
+	    break;
+	case -ENOMEM:
 	    err = -ENOSPC; break;
-	case CS_NO_MORE_ITEMS:
+	case -ENOSPC:
 	    err = -ENODATA; break;
-	case CS_UNSUPPORTED_FUNCTION:
-	    err = -ENOSYS; break;
 	default:
 	    err = -EIO; break;
 	}
