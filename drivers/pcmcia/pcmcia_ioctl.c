@@ -969,8 +969,6 @@ static int ds_ioctl(struct inode * inode, struct file * file,
 	case -ENOSYS:
 	    err = ret;
 	    break;
-	case CS_BAD_TUPLE:
-	    err = -EINVAL; break;
 	case -ENOMEM:
 	    err = -ENOSPC; break;
 	case -ENOSPC:
