@@ -96,8 +96,7 @@ acpi_ex_add_table(u32 table_index,
 
 	/* Install the new table into the local data structures */
 
-	obj_desc->reference.object = ACPI_CAST_PTR(void,
-			(unsigned long)table_index);
+	obj_desc->reference.object = ACPI_TO_POINTER(table_index);
 
 	/* Add the table to the namespace */
 
@@ -400,6 +399,7 @@ acpi_ex_load_op(union acpi_operand_object *obj_desc,
 		}
 
 		ACPI_MEMCPY(table_desc.pointer, table, length);
+		table_desc.address = ACPI_TO_INTEGER(table_desc.pointer);
 		break;
 
 	default:
