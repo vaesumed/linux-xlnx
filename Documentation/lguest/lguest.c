@@ -1501,7 +1501,7 @@ static void setup_tun_net(char *arg)
 	struct device *dev;
 	int netfd, ipfd;
 	u32 ip = INADDR_ANY;
-	bool bridging = false;
+	bool bridging = false, set_mac;
 	char tapif[IFNAMSIZ], *p;
 	struct virtio_net_config conf;
 
@@ -1530,12 +1530,17 @@ static void setup_tun_net(char *arg)
 	/* A mac address may follow the bridge name or IP address */
 	p = strchr(arg, ':');
 	if (p) {
+		set_mac = true;
 		str2mac(p+1, conf.mac);
 		*p = '\0';
 	} else {
 		p = arg + strlen(arg);
 		/* None supplied; query the randomly assigned mac. */
 		get_mac(ipfd, tapif, conf.mac);
+
+		/* If we're bridging we want a different MAC than the tun
+		 * interface. */
+		set_mac = !bridging;
 	}
 
 	/* arg is now either an IP address or a bridge name */
@@ -1547,13 +1552,14 @@ static void setup_tun_net(char *arg)
 	/* Set up the tun device. */
 	configure_device(ipfd, tapif, ip);
 
-	/* Tell Guest what MAC address to use. */
-	add_feature(dev, VIRTIO_NET_F_MAC);
+	/* Tell Guest what MAC address to use unless we're bridging and the
+	 * command line didn't tell us to. */
+	if (set_mac)
+		add_feature(dev, VIRTIO_NET_F_MAC);
 	add_feature(dev, VIRTIO_F_NOTIFY_ON_EMPTY);
 	/* Expect Guest to handle everything except UFO */
 	add_feature(dev, VIRTIO_NET_F_CSUM);
 	add_feature(dev, VIRTIO_NET_F_GUEST_CSUM);
-	add_feature(dev, VIRTIO_NET_F_MAC);
 	add_feature(dev, VIRTIO_NET_F_GUEST_TSO4);
 	add_feature(dev, VIRTIO_NET_F_GUEST_TSO6);
 	add_feature(dev, VIRTIO_NET_F_GUEST_ECN);
