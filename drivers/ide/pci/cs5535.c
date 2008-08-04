@@ -80,12 +80,12 @@ static void cs5535_set_speed(ide_drive_t *drive, const u8 speed)
 
 	/* Set the PIO timings */
 	if (speed < XFER_SW_DMA_0) {
-		ide_drive_t *pair = ide_get_paired_drive(drive);
+		ide_drive_t *pair = ide_get_pair_dev(drive);
 		u8 cmd, pioa;
 
 		cmd = pioa = speed - XFER_PIO_0;
 
-		if (pair->present) {
+		if (pair) {
 			u8 piob = ide_get_best_pio_mode(pair, 255, 4);
 
 			if (piob < cmd)
@@ -153,7 +153,7 @@ static void cs5535_set_pio_mode(ide_drive_t *drive, const u8 pio)
 	cs5535_set_speed(drive, XFER_PIO_0 + pio);
 }
 
-static u8 __devinit cs5535_cable_detect(ide_hwif_t *hwif)
+static u8 cs5535_cable_detect(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
 	u8 bit;

@@ -11,7 +11,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/pci.h>
-#include <linux/hdreg.h>
 #include <linux/ide.h>
 #include <linux/init.h>
 
@@ -116,7 +115,7 @@ static void slc90e66_set_dma_mode(ide_drive_t *drive, const u8 speed)
 	}
 }
 
-static u8 __devinit slc90e66_cable_detect(ide_hwif_t *hwif)
+static u8 slc90e66_cable_detect(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
 	u8 reg47 = 0, mask = hwif->channel ? 0x01 : 0x02;
