@@ -1502,7 +1502,7 @@ unsigned short ip_rt_frag_needed(struct net *net, struct iphdr *iph,
 				    rth->fl.iif != 0 ||
 				    dst_metric_locked(&rth->u.dst, RTAX_MTU) ||
 				    !net_eq(dev_net(rth->u.dst.dev), net) ||
-				    !rt_is_expired(rth))
+				    rt_is_expired(rth))
 					continue;
 
 				if (new_mtu < 68 || new_mtu >= old_mtu) {
@@ -2914,7 +2914,7 @@ static int ipv4_sysctl_rtcache_flush_strategy(ctl_table *table,
 	return 0;
 }
 
-ctl_table ipv4_route_table[] = {
+static ctl_table ipv4_route_table[] = {
 	{
 		.ctl_name	= NET_IPV4_ROUTE_GC_THRESH,
 		.procname	= "gc_thresh",
@@ -3215,6 +3215,19 @@ int __init ip_rt_init(void)
 #endif
 	return rc;
 }
+
+#ifdef CONFIG_SYSCTL
+/*
+ * We really need to sanitize the damn ipv4 init order, then all
+ * this nonsense will go away.
+ */
+void __init ip_static_sysctl_init(void)
+{
+#ifdef CONFIG_SYSCTL
+	register_sysctl_paths(ipv4_route_path, ipv4_route_table);
+#endif
+}
+#endif
 
 EXPORT_SYMBOL(__ip_select_ident);
 EXPORT_SYMBOL(ip_route_input);

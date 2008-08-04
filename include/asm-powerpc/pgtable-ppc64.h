@@ -245,7 +245,7 @@ static inline int pte_write(pte_t pte) { return pte_val(pte) & _PAGE_RW;}
 static inline int pte_dirty(pte_t pte) { return pte_val(pte) & _PAGE_DIRTY;}
 static inline int pte_young(pte_t pte) { return pte_val(pte) & _PAGE_ACCESSED;}
 static inline int pte_file(pte_t pte) { return pte_val(pte) & _PAGE_FILE;}
-static inline int pte_special(pte_t pte) { return 0; }
+static inline int pte_special(pte_t pte) { return pte_val(pte) & _PAGE_SPECIAL; }
 
 static inline void pte_uncache(pte_t pte) { pte_val(pte) |= _PAGE_NO_CACHE; }
 static inline void pte_cache(pte_t pte)   { pte_val(pte) &= ~_PAGE_NO_CACHE; }
@@ -265,7 +265,7 @@ static inline pte_t pte_mkyoung(pte_t pte) {
 static inline pte_t pte_mkhuge(pte_t pte) {
 	return pte; }
 static inline pte_t pte_mkspecial(pte_t pte) {
-	return pte; }
+	pte_val(pte) |= _PAGE_SPECIAL; return pte; }
 static inline unsigned long pte_pgprot(pte_t pte)
 {
 	return __pgprot(pte_val(pte)) & PAGE_PROT_BITS;
@@ -460,6 +460,8 @@ void pgtable_cache_init(void);
 	}
 	return pt;
 }
+
+pte_t *huge_pte_offset(struct mm_struct *mm, unsigned long address);
 
 #endif /* __ASSEMBLY__ */
 

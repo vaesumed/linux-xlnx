@@ -116,7 +116,7 @@ static int ip6_dev_loopback_xmit(struct sk_buff *newskb)
 	__skb_pull(newskb, skb_network_offset(newskb));
 	newskb->pkt_type = PACKET_LOOPBACK;
 	newskb->ip_summed = CHECKSUM_UNNECESSARY;
-	BUG_TRAP(newskb->dst);
+	WARN_ON(!newskb->dst);
 
 	netif_rx(newskb);
 	return 0;
@@ -235,6 +235,10 @@ int ip6_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 	skb_push(skb, sizeof(struct ipv6hdr));
 	skb_reset_network_header(skb);
 	hdr = ipv6_hdr(skb);
+
+	/* Allow local fragmentation. */
+	if (ipfragok)
+		skb->local_df = 1;
 
 	/*
 	 *	Fill in the IPv6 header

@@ -1973,7 +1973,7 @@ static void net_tx_action(struct softirq_action *h)
 			struct sk_buff *skb = clist;
 			clist = clist->next;
 
-			BUG_TRAP(!atomic_read(&skb->users));
+			WARN_ON(atomic_read(&skb->users));
 			__kfree_skb(skb);
 		}
 	}
@@ -2100,7 +2100,7 @@ static int ing_filter(struct sk_buff *skb)
 	rxq = &dev->rx_queue;
 
 	q = rxq->qdisc;
-	if (q) {
+	if (q != &noop_qdisc) {
 		spin_lock(qdisc_lock(q));
 		result = qdisc_enqueue_root(skb, q);
 		spin_unlock(qdisc_lock(q));
@@ -2113,7 +2113,7 @@ static inline struct sk_buff *handle_ing(struct sk_buff *skb,
 					 struct packet_type **pt_prev,
 					 int *ret, struct net_device *orig_dev)
 {
-	if (!skb->dev->rx_queue.qdisc)
+	if (skb->dev->rx_queue.qdisc == &noop_qdisc)
 		goto out;
 
 	if (*pt_prev) {
@@ -3847,7 +3847,7 @@ static void rollback_registered(struct net_device *dev)
 		dev->uninit(dev);
 
 	/* Notifier chain MUST detach us from master device. */
-	BUG_TRAP(!dev->master);
+	WARN_ON(dev->master);
 
 	/* Remove entries from kobject tree */
 	netdev_unregister_kobject(dev);
@@ -4169,9 +4169,9 @@ void netdev_run_todo(void)
 
 		/* paranoia */
 		BUG_ON(atomic_read(&dev->refcnt));
-		BUG_TRAP(!dev->ip_ptr);
-		BUG_TRAP(!dev->ip6_ptr);
-		BUG_TRAP(!dev->dn_ptr);
+		WARN_ON(dev->ip_ptr);
+		WARN_ON(dev->ip6_ptr);
+		WARN_ON(dev->dn_ptr);
 
 		if (dev->destructor)
 			dev->destructor(dev);
@@ -4200,6 +4200,7 @@ static void netdev_init_queues(struct net_device *dev)
 {
 	netdev_init_one_queue(dev, &dev->rx_queue, NULL);
 	netdev_for_each_tx_queue(dev, netdev_init_one_queue, NULL);
+	spin_lock_init(&dev->tx_global_lock);
 }
 
 /**
