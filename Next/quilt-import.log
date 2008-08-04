@@ -1,0 +1,71 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Importing ide based on 2b12a4c524812fb3f6ee590a02e65b95c8c32229
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 2b12a4c524812fb3f6ee590a02e65b95c8c32229
+HEAD is now at 2b12a4c Merge branch 'release' of git://git.kernel.org/pub/scm/linux/kernel/git/aegl/linux-2.6
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ata-add-missing-ata_id_-defines-take-2.patch
+ide-fix-pre-eide-swdma-support-on-big-endian.patch
+ide-fix-ide_fix_driveid.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+ata-add-missing-ata_cmd_-defines.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+ata-add-missing-ata_-defines.patch
+ide-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+ide-remove-no-longer-needed-ide_drive_t-fields.patch
+ide-re-code-ide_fixstring-loop-to-be-less-evil.patch
+ide-cd-use-the-new-object_is_in_stack-helper.patch
+ide-sanitize-struct-ide_port_ops-documentation-take-2.patch
+ide-fix-exabytenest-handling-in-probe_for_drive.patch
+ide-enhance-ide_busy_sleep.patch
+ide-remove-no-longer-needed-bug_on-s-from-init_irq.patch
+ide-remove-ide_chipset_-macros.patch
+ide-remove-unused-_ide_c-and-_ide_disk-defines.patch
+ide-remove-needless-drive-present-checks-from-device-drivers.patch
+ide-check-drive-present-in-ide_get_paired_drive.patch
+ide-remove-config_idedisk_multi_mode.patch
+ide-include-linux-hdreg-h-only-when-needed.patch
+remove-unnecessary-linux-hdreg-h-includes.patch
+ide-call-ide_proc_register_driver-later.patch
+ide-preparations-for-proc-ide-hd_-settings-rework.patch
+ide-proc-ide-hd_-settings-rework.patch
+ide-remove-sector_words-define.patch
+cmd640-add-__set_prefetch_mode.patch
+ide-remove-read-only-atapi_overlap-field-from-ide_drive_t.patch
+ide-remove-supports_dsc_overlap-field-from-ide_driver_t.patch
+ide-factor-out-hdio_-_nice-ioctl-handling-to-ide_-_nice_ioctl.patch
+ide-ide_dev_has_iordy-to-ata_id_has_iordy.patch
+ide-ide_dev_is_sata-to-ata_id_is_sata.patch
+ide-idedisk_supports_lba48-to-ata_id_lba48_enabled.patch
+ide-fix-regression-caused-by-ide_device_get-put-addition-take-2.patch
+remove-unneeded-include-linux-ide-h-s.patch
+ide-remove-config_ide_max_hwifs.patch
+ide-cd-fix-endianity-for-the-error-message-in-cdrom_read_capacity.patch
+ide-check-only-for-cache-flush-command-support-in-ide_id_has_flush_cache.patch
+ide-ide_id_has_flush_cache-to-ata_id_flush_enabled.patch
+ide-ide_id_has_flush_cache_ext-to-ata_id_flush_ext_enabled.patch
+cdrom-dont-check-cdc_play_audio-in-cdrom_count_tracks.patch
+cs5520-add-enablebits-checking.patch
+ide-quirkproc-method-cannot-be-marked-__devinit.patch
+ide-cable_detect-method-cannot-be-marked-__devinit.patch
+Importing m68k based on 2b12a4c524812fb3f6ee590a02e65b95c8c32229
+	quilt series is empty
+$ git update-ref refs/heads/quilt/m68k 2b12a4c524812fb3f6ee590a02e65b95c8c32229
+Unchanged quilt series rr
+Unchanged quilt series ttydev
