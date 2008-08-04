@@ -4,6 +4,8 @@
 
 menu "Security options"
 
+source security/integrity/Kconfig
+
 config KEYS
 	bool "Enable access key retention support"
 	help

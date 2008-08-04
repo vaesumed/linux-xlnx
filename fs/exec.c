@@ -45,6 +45,7 @@
 #include <linux/proc_fs.h>
 #include <linux/mount.h>
 #include <linux/security.h>
+#include <linux/integrity.h>
 #include <linux/syscalls.h>
 #include <linux/tsacct_kern.h>
 #include <linux/cn_proc.h>
@@ -1202,6 +1203,9 @@ int search_binary_handler(struct linux_binprm *bprm,struct pt_regs *regs)
 	}
 #endif
 	retval = security_bprm_check(bprm);
+	if (retval)
+		return retval;
+	retval = integrity_bprm_check(bprm);
 	if (retval)
 		return retval;
 
