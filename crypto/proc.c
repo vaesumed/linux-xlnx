@@ -19,7 +19,36 @@
 #include <linux/rwsem.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/sysctl.h>
 #include "internal.h"
+
+static struct ctl_table crypto_sysctl_table[] = {
+	{
+		.ctl_name       = CTL_UNNUMBERED,
+		.procname       = "fips_enabled",
+		.data           = &fips_enabled,
+		.maxlen         = sizeof(int),
+		.mode           = 0444,
+		.proc_handler   = &proc_dointvec
+	},
+	{
+		.ctl_name = 0,
+	},
+};
+
+static struct ctl_table crypto_dir_table[] = {
+	{
+		.ctl_name       = CTL_UNNUMBERED,
+		.procname       = "crypto",
+		.mode           = 0555,
+		.child          = crypto_sysctl_table
+	},
+	{
+		.ctl_name = 0,
+	},
+};
+
+static struct ctl_table_header *crypto_sysctls;
 
 static void *c_start(struct seq_file *m, loff_t *pos)
 {
@@ -106,9 +135,12 @@ static const struct file_operations proc_crypto_ops = {
 void __init crypto_init_proc(void)
 {
 	proc_create("crypto", 0, NULL, &proc_crypto_ops);
+	crypto_sysctls = register_sysctl_table(crypto_dir_table);
 }
 
 void __exit crypto_exit_proc(void)
 {
 	remove_proc_entry("crypto", NULL);
+	if (crypto_sysctls)
+		unregister_sysctl_table(crypto_sysctls);
 }
