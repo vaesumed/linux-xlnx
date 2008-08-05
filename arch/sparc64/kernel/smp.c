@@ -459,13 +459,13 @@ again:
 	}
 }
 
-static inline void spitfire_xcall_deliver(u64 data0, u64 data1, u64 data2, cpumask_t mask)
+static inline void spitfire_xcall_deliver(u64 data0, u64 data1, u64 data2, const cpumask_t *mask)
 {
 	u64 pstate;
 	int i;
 
 	__asm__ __volatile__("rdpr %%pstate, %0" : "=r" (pstate));
-	for_each_cpu_mask(i, mask)
+	for_each_cpu_mask_nr(i, *mask)
 		spitfire_xcall_helper(data0, data1, data2, pstate, i);
 }
 
@@ -473,13 +473,16 @@ static inline void spitfire_xcall_deliver(u64 data0, u64 data1, u64 data2, cpuma
  * packet, but we have no use for that.  However we do take advantage of
  * the new pipelining feature (ie. dispatch to multiple cpus simultaneously).
  */
-static void cheetah_xcall_deliver(u64 data0, u64 data1, u64 data2, cpumask_t mask)
+static void cheetah_xcall_deliver(u64 data0, u64 data1, u64 data2, const cpumask_t *mask_p)
 {
 	u64 pstate, ver, busy_mask;
 	int nack_busy_id, is_jbus, need_more;
+	cpumask_t mask;
 
-	if (cpus_empty(mask))
+	if (cpus_empty(*mask_p))
 		return;
+
+	mask = *mask_p;
 
 	/* Unfortunately, someone at Sun had the brilliant idea to make the
 	 * busy/nack fields hard-coded by ITID number for this Ultra-III
@@ -511,7 +514,7 @@ retry:
 	{
 		int i;
 
-		for_each_cpu_mask(i, mask) {
+		for_each_cpu_mask_nr(i, mask) {
 			u64 target = (i << 14) | 0x70;
 
 			if (is_jbus) {
@@ -550,7 +553,7 @@ retry:
 						     : : "r" (pstate));
 				if (unlikely(need_more)) {
 					int i, cnt = 0;
-					for_each_cpu_mask(i, mask) {
+					for_each_cpu_mask_nr(i, mask) {
 						cpu_clear(i, mask);
 						cnt++;
 						if (cnt == 32)
@@ -584,7 +587,7 @@ retry:
 			/* Clear out the mask bits for cpus which did not
 			 * NACK us.
 			 */
-			for_each_cpu_mask(i, mask) {
+			for_each_cpu_mask_nr(i, mask) {
 				u64 check_mask;
 
 				if (is_jbus)
@@ -605,16 +608,16 @@ retry:
 }
 
 /* Multi-cpu list version.  */
-static void hypervisor_xcall_deliver(u64 data0, u64 data1, u64 data2, cpumask_t mask)
+static void hypervisor_xcall_deliver(u64 data0, u64 data1, u64 data2, const cpumask_t *mask)
 {
+	int cnt, retries, this_cpu, prev_sent, i;
+	unsigned long flags, status;
+	cpumask_t error_mask;
 	struct trap_per_cpu *tb;
 	u16 *cpu_list;
 	u64 *mondo;
-	cpumask_t error_mask;
-	unsigned long flags, status;
-	int cnt, retries, this_cpu, prev_sent, i;
 
-	if (cpus_empty(mask))
+	if (cpus_empty(*mask))
 		return;
 
 	/* We have to do this whole thing with interrupts fully disabled.
@@ -642,7 +645,7 @@ static void hypervisor_xcall_deliver(u64 data0, u64 data1, u64 data2, cpumask_t 
 
 	/* Setup the initial cpu list.  */
 	cnt = 0;
-	for_each_cpu_mask(i, mask)
+	for_each_cpu_mask_nr(i, *mask)
 		cpu_list[cnt++] = i;
 
 	cpus_clear(error_mask);
@@ -729,7 +732,7 @@ fatal_mondo_cpu_error:
 	       "were in error state\n",
 	       this_cpu);
 	printk(KERN_CRIT "CPU[%d]: Error mask [ ", this_cpu);
-	for_each_cpu_mask(i, error_mask)
+	for_each_cpu_mask_nr(i, error_mask)
 		printk("%d ", i);
 	printk("]\n");
 	return;
@@ -756,23 +759,24 @@ dump_cpu_list_and_out:
 	printk("]\n");
 }
 
-/* Send cross call to all processors mentioned in MASK
- * except self.
+static void (*xcall_deliver)(u64, u64, u64, const cpumask_t *);
+
+/* Send cross call to all processors mentioned in MASK_P
+ * except self.  Really, there are only two cases currently,
+ * "&cpu_online_map" and "&mm->cpu_vm_mask".
  */
-static void smp_cross_call_masked(unsigned long *func, u32 ctx, u64 data1, u64 data2, cpumask_t mask)
+static void smp_cross_call_masked(unsigned long *func, u32 ctx, u64 data1, u64 data2, const cpumask_t *mask_p)
 {
 	u64 data0 = (((u64)ctx)<<32 | (((u64)func) & 0xffffffff));
 	int this_cpu = get_cpu();
+	cpumask_t mask;
 
-	cpus_and(mask, mask, cpu_online_map);
+	mask = *mask_p;
+	if (mask_p != &cpu_online_map)
+		cpus_and(mask, mask, cpu_online_map);
 	cpu_clear(this_cpu, mask);
 
-	if (tlb_type == spitfire)
-		spitfire_xcall_deliver(data0, data1, data2, mask);
-	else if (tlb_type == cheetah || tlb_type == cheetah_plus)
-		cheetah_xcall_deliver(data0, data1, data2, mask);
-	else
-		hypervisor_xcall_deliver(data0, data1, data2, mask);
+	xcall_deliver(data0, data1, data2, &mask);
 	/* NOTE: Caller runs local copy on master. */
 
 	put_cpu();
@@ -782,31 +786,28 @@ extern unsigned long xcall_sync_tick;
 
 static void smp_start_sync_tick_client(int cpu)
 {
-	cpumask_t mask = cpumask_of_cpu(cpu);
-
-	smp_cross_call_masked(&xcall_sync_tick,
-			      0, 0, 0, mask);
+	xcall_deliver((u64) &xcall_sync_tick, 0, 0,
+		      &cpumask_of_cpu(cpu));
 }
 
 extern unsigned long xcall_call_function;
 
 void arch_send_call_function_ipi(cpumask_t mask)
 {
-	smp_cross_call_masked(&xcall_call_function, 0, 0, 0, mask);
+	xcall_deliver((u64) &xcall_call_function, 0, 0, &mask);
 }
 
 extern unsigned long xcall_call_function_single;
 
 void arch_send_call_function_single_ipi(int cpu)
 {
-	cpumask_t mask = cpumask_of_cpu(cpu);
-
-	smp_cross_call_masked(&xcall_call_function_single, 0, 0, 0, mask);
+	xcall_deliver((u64) &xcall_call_function_single, 0, 0,
+		      &cpumask_of_cpu(cpu));
 }
 
 /* Send cross call to all processors except self. */
 #define smp_cross_call(func, ctx, data1, data2) \
-	smp_cross_call_masked(func, ctx, data1, data2, cpu_online_map)
+	smp_cross_call_masked(func, ctx, data1, data2, &cpu_online_map)
 
 void smp_call_function_client(int irq, struct pt_regs *regs)
 {
@@ -893,29 +894,24 @@ void smp_flush_dcache_page_impl(struct page *page, int cpu)
 		__local_flush_dcache_page(page);
 	} else if (cpu_online(cpu)) {
 		void *pg_addr = page_address(page);
-		u64 data0;
+		u64 data0 = 0;
 
 		if (tlb_type == spitfire) {
-			data0 =
-				((u64)&xcall_flush_dcache_page_spitfire);
+			data0 = ((u64)&xcall_flush_dcache_page_spitfire);
 			if (page_mapping(page) != NULL)
 				data0 |= ((u64)1 << 32);
-			spitfire_xcall_deliver(data0,
-					       __pa(pg_addr),
-					       (u64) pg_addr,
-					       mask);
 		} else if (tlb_type == cheetah || tlb_type == cheetah_plus) {
 #ifdef DCACHE_ALIASING_POSSIBLE
-			data0 =
-				((u64)&xcall_flush_dcache_page_cheetah);
-			cheetah_xcall_deliver(data0,
-					      __pa(pg_addr),
-					      0, mask);
+			data0 =	((u64)&xcall_flush_dcache_page_cheetah);
 #endif
 		}
+		if (data0) {
+			xcall_deliver(data0, __pa(pg_addr),
+				      (u64) pg_addr, &mask);
 #ifdef CONFIG_DEBUG_DCFLUSH
-		atomic_inc(&dcpage_flushes_xcall);
+			atomic_inc(&dcpage_flushes_xcall);
 #endif
+		}
 	}
 
 	put_cpu();
@@ -923,10 +919,10 @@ void smp_flush_dcache_page_impl(struct page *page, int cpu)
 
 void flush_dcache_page_all(struct mm_struct *mm, struct page *page)
 {
-	void *pg_addr = page_address(page);
 	cpumask_t mask = cpu_online_map;
-	u64 data0;
+	void *pg_addr;
 	int this_cpu;
+	u64 data0;
 
 	if (tlb_type == hypervisor)
 		return;
@@ -940,47 +936,28 @@ void flush_dcache_page_all(struct mm_struct *mm, struct page *page)
 #endif
 	if (cpus_empty(mask))
 		goto flush_self;
+	data0 = 0;
+	pg_addr = page_address(page);
 	if (tlb_type == spitfire) {
 		data0 = ((u64)&xcall_flush_dcache_page_spitfire);
 		if (page_mapping(page) != NULL)
 			data0 |= ((u64)1 << 32);
-		spitfire_xcall_deliver(data0,
-				       __pa(pg_addr),
-				       (u64) pg_addr,
-				       mask);
 	} else if (tlb_type == cheetah || tlb_type == cheetah_plus) {
 #ifdef DCACHE_ALIASING_POSSIBLE
 		data0 = ((u64)&xcall_flush_dcache_page_cheetah);
-		cheetah_xcall_deliver(data0,
-				      __pa(pg_addr),
-				      0, mask);
 #endif
 	}
+	if (data0) {
+		xcall_deliver(data0, __pa(pg_addr),
+			      (u64) pg_addr, &mask);
 #ifdef CONFIG_DEBUG_DCFLUSH
-	atomic_inc(&dcpage_flushes_xcall);
+		atomic_inc(&dcpage_flushes_xcall);
 #endif
+	}
  flush_self:
 	__local_flush_dcache_page(page);
 
 	put_cpu();
-}
-
-static void __smp_receive_signal_mask(cpumask_t mask)
-{
-	smp_cross_call_masked(&xcall_receive_signal, 0, 0, 0, mask);
-}
-
-void smp_receive_signal(int cpu)
-{
-	cpumask_t mask = cpumask_of_cpu(cpu);
-
-	if (cpu_online(cpu))
-		__smp_receive_signal_mask(mask);
-}
-
-void smp_receive_signal_client(int irq, struct pt_regs *regs)
-{
-	clear_softint(1 << irq);
 }
 
 void smp_new_mmu_context_version_client(int irq, struct pt_regs *regs)
@@ -1083,7 +1060,7 @@ void smp_flush_tlb_mm(struct mm_struct *mm)
 
 	smp_cross_call_masked(&xcall_flush_tlb_mm,
 			      ctx, 0, 0,
-			      mm->cpu_vm_mask);
+			      &mm->cpu_vm_mask);
 
 local_flush_and_out:
 	__flush_tlb_mm(ctx, SECONDARY_CONTEXT);
@@ -1101,7 +1078,7 @@ void smp_flush_tlb_pending(struct mm_struct *mm, unsigned long nr, unsigned long
 	else
 		smp_cross_call_masked(&xcall_flush_tlb_pending,
 				      ctx, nr, (unsigned long) vaddrs,
-				      mm->cpu_vm_mask);
+				      &mm->cpu_vm_mask);
 
 	__flush_tlb_pending(ctx, nr, vaddrs);
 
@@ -1200,6 +1177,16 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 
 void __devinit smp_prepare_boot_cpu(void)
 {
+}
+
+void __init smp_setup_processor_id(void)
+{
+	if (tlb_type == spitfire)
+		xcall_deliver = spitfire_xcall_deliver;
+	else if (tlb_type == cheetah || tlb_type == cheetah_plus)
+		xcall_deliver = cheetah_xcall_deliver;
+	else
+		xcall_deliver = hypervisor_xcall_deliver;
 }
 
 void __devinit smp_fill_in_sib_core_maps(void)
@@ -1370,7 +1357,13 @@ void __init smp_cpus_done(unsigned int max_cpus)
 
 void smp_send_reschedule(int cpu)
 {
-	smp_receive_signal(cpu);
+	xcall_deliver((u64) &xcall_receive_signal, 0, 0,
+		      &cpumask_of_cpu(cpu));
+}
+
+void smp_receive_signal_client(int irq, struct pt_regs *regs)
+{
+	clear_softint(1 << irq);
 }
 
 /* This is a nop because we capture all other cpus
