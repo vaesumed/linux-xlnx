@@ -3276,6 +3276,7 @@ static int bttv_open(struct inode *inode, struct file *file)
 			    sizeof(struct bttv_buffer),
 			    fh);
 	set_tvnorm(btv,btv->tvnorm);
+	set_input(btv, btv->input, btv->tvnorm);
 
 	btv->users++;
 
@@ -3337,6 +3338,10 @@ static int bttv_release(struct inode *inode, struct file *file)
 
 	btv->users--;
 	bttv_field_count(btv);
+
+	if (!btv->users)
+		audio_mute(btv, 1);
+
 	return 0;
 }
 
