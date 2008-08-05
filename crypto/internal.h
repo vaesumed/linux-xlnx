@@ -26,6 +26,8 @@
 #include <linux/rwsem.h>
 #include <linux/slab.h>
 
+extern int fips_enabled;
+
 /* Crypto notification events. */
 enum {
 	CRYPTO_MSG_ALG_REQUEST,
