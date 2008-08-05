@@ -46,8 +46,11 @@ static int c_show(struct seq_file *m, void *p)
 	seq_printf(m, "module       : %s\n", module_name(alg->cra_module));
 	seq_printf(m, "priority     : %d\n", alg->cra_priority);
 	seq_printf(m, "refcnt       : %d\n", atomic_read(&alg->cra_refcnt));
+	seq_printf(m, "selftest     : %s\n",
+		   (alg->cra_flags & CRYPTO_ALG_TESTED) ?
+		   "passed" : "unknown");
 	
-	switch (alg->cra_flags & CRYPTO_ALG_TYPE_MASK) {
+	switch (alg->cra_flags & (CRYPTO_ALG_TYPE_MASK | CRYPTO_ALG_LARVAL)) {
 	case CRYPTO_ALG_TYPE_CIPHER:
 		seq_printf(m, "type         : cipher\n");
 		seq_printf(m, "blocksize    : %u\n", alg->cra_blocksize);
@@ -67,7 +70,10 @@ static int c_show(struct seq_file *m, void *p)
 		seq_printf(m, "type         : compression\n");
 		break;
 	default:
-		if (alg->cra_type && alg->cra_type->show)
+		if (alg->cra_flags & CRYPTO_ALG_LARVAL) {
+			seq_printf(m, "type         : larval\n");
+			seq_printf(m, "flags        : 0x%x\n", alg->cra_flags);
+		} else if (alg->cra_type && alg->cra_type->show)
 			alg->cra_type->show(m, alg);
 		else
 			seq_printf(m, "type         : unknown\n");

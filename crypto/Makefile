@@ -22,7 +22,9 @@ crypto_hash-objs := hash.o
 crypto_hash-objs += ahash.o
 obj-$(CONFIG_CRYPTO_HASH) += crypto_hash.o
 
-obj-$(CONFIG_CRYPTO_MANAGER) += cryptomgr.o
+cryptomgr-objs := algboss.o testmgr.o
+
+obj-$(CONFIG_CRYPTO_MANAGER) += cryptomgr.o aead.o
 obj-$(CONFIG_CRYPTO_HMAC) += hmac.o
 obj-$(CONFIG_CRYPTO_XCBC) += xcbc.o
 obj-$(CONFIG_CRYPTO_NULL) += crypto_null.o
