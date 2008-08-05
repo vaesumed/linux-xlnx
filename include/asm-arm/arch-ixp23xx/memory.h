@@ -12,7 +12,7 @@
 #ifndef __ASM_ARCH_MEMORY_H
 #define __ASM_ARCH_MEMORY_H
 
-#include <asm/hardware.h>
+#include <asm/arch/hardware.h>
 
 /*
  * Physical DRAM offset.
@@ -28,7 +28,6 @@
  *		to an address that the kernel can use.
  */
 #ifndef __ASSEMBLY__
-#include <asm/mach-types.h>
 
 #define __virt_to_bus(v)						\
 	({ unsigned int ret;						\

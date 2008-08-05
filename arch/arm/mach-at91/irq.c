@@ -25,9 +25,8 @@
 #include <linux/mm.h>
 #include <linux/types.h>
 
-#include <asm/hardware.h>
+#include <asm/arch/hardware.h>
 #include <asm/irq.h>
-#include <asm/mach-types.h>
 #include <asm/setup.h>
 
 #include <asm/mach/arch.h>

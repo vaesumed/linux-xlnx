@@ -14,9 +14,8 @@
 #include <linux/init.h>
 #include <linux/platform_device.h>
 
-#include <asm/hardware.h>
+#include <asm/arch/hardware.h>
 #include <asm/io.h>
-#include <asm/mach-types.h>
 #include <asm/mach/map.h>
 
 #include <asm/arch/tc.h>

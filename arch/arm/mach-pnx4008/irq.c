@@ -23,10 +23,9 @@
 #include <linux/ioport.h>
 #include <linux/device.h>
 #include <linux/irq.h>
-#include <asm/hardware.h>
+#include <asm/arch/hardware.h>
 #include <asm/io.h>
 #include <asm/setup.h>
-#include <asm/mach-types.h>
 #include <asm/pgtable.h>
 #include <asm/page.h>
 #include <asm/system.h>
