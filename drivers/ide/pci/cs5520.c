@@ -35,7 +35,6 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
-#include <linux/hdreg.h>
 #include <linux/init.h>
 #include <linux/pci.h>
 #include <linux/ide.h>
@@ -96,6 +95,7 @@ static const struct ide_port_ops cs5520_port_ops = {
 
 static const struct ide_port_info cyrix_chipset __devinitdata = {
 	.name		= DRV_NAME,
+	.enablebits	= { { 0x60, 0x01, 0x01 }, { 0x60, 0x02, 0x02 } },
 	.port_ops	= &cs5520_port_ops,
 	.host_flags	= IDE_HFLAG_ISA_PORTS | IDE_HFLAG_CS5520,
 	.pio_mask	= ATA_PIO4,

@@ -48,7 +48,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/pci.h>
-#include <linux/hdreg.h>
 #include <linux/ide.h>
 #include <linux/init.h>
 
@@ -256,7 +255,7 @@ static const struct ich_laptop ich_laptop[] = {
 	{ 0, }
 };
 
-static u8 __devinit piix_cable_detect(ide_hwif_t *hwif)
+static u8 piix_cable_detect(ide_hwif_t *hwif)
 {
 	struct pci_dev *pdev = to_pci_dev(hwif->dev);
 	const struct ich_laptop *lap = &ich_laptop[0];

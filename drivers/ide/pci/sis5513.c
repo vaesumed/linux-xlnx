@@ -47,7 +47,6 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/hdreg.h>
 #include <linux/pci.h>
 #include <linux/init.h>
 #include <linux/ide.h>
@@ -518,7 +517,7 @@ static const struct sis_laptop sis_laptop[] = {
 	{ 0, }
 };
 
-static u8 __devinit sis_cable_detect(ide_hwif_t *hwif)
+static u8 sis_cable_detect(ide_hwif_t *hwif)
 {
 	struct pci_dev *pdev = to_pci_dev(hwif->dev);
 	const struct sis_laptop *lap = &sis_laptop[0];

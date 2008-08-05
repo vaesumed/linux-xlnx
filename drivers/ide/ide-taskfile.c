@@ -44,9 +44,9 @@ int taskfile_lib_get_identify (ide_drive_t *drive, u8 *buf)
 	memset(&args, 0, sizeof(ide_task_t));
 	args.tf.nsect = 0x01;
 	if (drive->media == ide_disk)
-		args.tf.command = WIN_IDENTIFY;
+		args.tf.command = ATA_CMD_ID_ATA;
 	else
-		args.tf.command = WIN_PIDENTIFY;
+		args.tf.command = ATA_CMD_ID_ATAPI;
 	args.tf_flags	= IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
 	args.data_phase	= TASKFILE_IN;
 	return ide_raw_taskfile(drive, &args, buf, 1);
@@ -99,12 +99,17 @@ ide_startstop_t do_rw_taskfile (ide_drive_t *drive, ide_task_t *task)
 	case TASKFILE_NO_DATA:
 		if (handler == NULL)
 			handler = task_no_data_intr;
-		/* WIN_{SPECIFY,RESTORE,SETMULT} use custom handlers */
 		if (task->tf_flags & IDE_TFLAG_CUSTOM_HANDLER) {
 			switch (tf->command) {
-			case WIN_SPECIFY: handler = set_geometry_intr;	break;
-			case WIN_RESTORE: handler = recal_intr;		break;
-			case WIN_SETMULT: handler = set_multmode_intr;	break;
+			case ATA_CMD_INIT_DEV_PARAMS:
+				handler = set_geometry_intr;
+				break;
+			case ATA_CMD_RESTORE:
+				handler = recal_intr;
+				break;
+			case ATA_CMD_SET_MULTI:
+				handler = set_multmode_intr;
+				break;
 			}
 		}
 		ide_execute_command(drive, tf->command, handler,
@@ -121,7 +126,7 @@ ide_startstop_t do_rw_taskfile (ide_drive_t *drive, ide_task_t *task)
 EXPORT_SYMBOL_GPL(do_rw_taskfile);
 
 /*
- * set_multmode_intr() is invoked on completion of a WIN_SETMULT cmd.
+ * set_multmode_intr() is invoked on completion of a ATA_CMD_SET_MULTI cmd.
  */
 static ide_startstop_t set_multmode_intr(ide_drive_t *drive)
 {
@@ -131,7 +136,7 @@ static ide_startstop_t set_multmode_intr(ide_drive_t *drive)
 	local_irq_enable_in_hardirq();
 	stat = hwif->tp_ops->read_status(hwif);
 
-	if (OK_STAT(stat, READY_STAT, BAD_STAT))
+	if (OK_STAT(stat, ATA_DRDY, BAD_STAT))
 		drive->mult_count = drive->mult_req;
 	else {
 		drive->mult_req = drive->mult_count = 0;
@@ -142,7 +147,7 @@ static ide_startstop_t set_multmode_intr(ide_drive_t *drive)
 }
 
 /*
- * set_geometry_intr() is invoked on completion of a WIN_SPECIFY cmd.
+ * set_geometry_intr() is invoked on completion of a ATA_CMD_INIT_DEV_PARAMS cmd.
  */
 static ide_startstop_t set_geometry_intr(ide_drive_t *drive)
 {
@@ -154,15 +159,15 @@ static ide_startstop_t set_geometry_intr(ide_drive_t *drive)
 
 	while (1) {
 		stat = hwif->tp_ops->read_status(hwif);
-		if ((stat & BUSY_STAT) == 0 || retries-- == 0)
+		if ((stat & ATA_BUSY) == 0 || retries-- == 0)
 			break;
 		udelay(10);
 	};
 
-	if (OK_STAT(stat, READY_STAT, BAD_STAT))
+	if (OK_STAT(stat, ATA_DRDY, BAD_STAT))
 		return ide_stopped;
 
-	if (stat & (ERR_STAT|DRQ_STAT))
+	if (stat & (ATA_ERR | ATA_DRQ))
 		return ide_error(drive, "set_geometry_intr", stat);
 
 	ide_set_handler(drive, &set_geometry_intr, WAIT_WORSTCASE, NULL);
@@ -170,7 +175,7 @@ static ide_startstop_t set_geometry_intr(ide_drive_t *drive)
 }
 
 /*
- * recal_intr() is invoked on completion of a WIN_RESTORE (recalibrate) cmd.
+ * recal_intr() is invoked on completion of a ATA_CMD_RESTORE (recalibrate) cmd.
  */
 static ide_startstop_t recal_intr(ide_drive_t *drive)
 {
@@ -180,7 +185,7 @@ static ide_startstop_t recal_intr(ide_drive_t *drive)
 	local_irq_enable_in_hardirq();
 	stat = hwif->tp_ops->read_status(hwif);
 
-	if (!OK_STAT(stat, READY_STAT, BAD_STAT))
+	if (!OK_STAT(stat, ATA_DRDY, BAD_STAT))
 		return ide_error(drive, "recal_intr", stat);
 	return ide_stopped;
 }
@@ -197,7 +202,7 @@ static ide_startstop_t task_no_data_intr(ide_drive_t *drive)
 	local_irq_enable_in_hardirq();
 	stat = hwif->tp_ops->read_status(hwif);
 
-	if (!OK_STAT(stat, READY_STAT, BAD_STAT))
+	if (!OK_STAT(stat, ATA_DRDY, BAD_STAT))
 		return ide_error(drive, "task_no_data_intr", stat);
 		/* calls ide_end_drive_cmd */
 
@@ -220,13 +225,13 @@ static u8 wait_drive_not_busy(ide_drive_t *drive)
 	for (retries = 0; retries < 1000; retries++) {
 		stat = hwif->tp_ops->read_status(hwif);
 
-		if (stat & BUSY_STAT)
+		if (stat & ATA_BUSY)
 			udelay(10);
 		else
 			break;
 	}
 
-	if (stat & BUSY_STAT)
+	if (stat & ATA_BUSY)
 		printk(KERN_ERR "%s: drive still BUSY!\n", drive->name);
 
 	return stat;
@@ -385,7 +390,7 @@ void task_end_request(ide_drive_t *drive, struct request *rq, u8 stat)
 static ide_startstop_t task_in_unexpected(ide_drive_t *drive, struct request *rq, u8 stat)
 {
 	/* Command all done? */
-	if (OK_STAT(stat, READY_STAT, BUSY_STAT)) {
+	if (OK_STAT(stat, ATA_DRDY, ATA_BUSY)) {
 		task_end_request(drive, rq, stat);
 		return ide_stopped;
 	}
@@ -405,11 +410,11 @@ static ide_startstop_t task_in_intr(ide_drive_t *drive)
 	u8 stat = hwif->tp_ops->read_status(hwif);
 
 	/* Error? */
-	if (stat & ERR_STAT)
+	if (stat & ATA_ERR)
 		return task_error(drive, rq, __func__, stat);
 
 	/* Didn't want any data? Odd. */
-	if (!(stat & DRQ_STAT))
+	if ((stat & ATA_DRQ) == 0)
 		return task_in_unexpected(drive, rq, stat);
 
 	ide_pio_datablock(drive, rq, 0);
@@ -442,7 +447,7 @@ static ide_startstop_t task_out_intr (ide_drive_t *drive)
 		return task_error(drive, rq, __func__, stat);
 
 	/* Deal with unexpected ATA data phase. */
-	if (((stat & DRQ_STAT) == 0) ^ !hwif->nleft)
+	if (((stat & ATA_DRQ) == 0) ^ !hwif->nleft)
 		return task_error(drive, rq, __func__, stat);
 
 	if (!hwif->nleft) {
@@ -461,7 +466,7 @@ static ide_startstop_t pre_task_out_intr(ide_drive_t *drive, struct request *rq)
 {
 	ide_startstop_t startstop;
 
-	if (ide_wait_stat(&startstop, drive, DRQ_STAT,
+	if (ide_wait_stat(&startstop, drive, ATA_DRQ,
 			  drive->bad_wstat, WAIT_DRQ)) {
 		printk(KERN_ERR "%s: no DRQ after issuing %sWRITE%s\n",
 				drive->name,
@@ -729,7 +734,7 @@ int ide_cmd_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 	u8 args[4], xfer_rate = 0;
 	ide_task_t tfargs;
 	struct ide_taskfile *tf = &tfargs.tf;
-	struct hd_driveid *id = drive->id;
+	u16 *id = drive->id;
 
 	if (NULL == (void *) arg) {
 		struct request *rq;
@@ -747,7 +752,7 @@ int ide_cmd_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 
 	memset(&tfargs, 0, sizeof(ide_task_t));
 	tf->feature = args[2];
-	if (args[0] == WIN_SMART) {
+	if (args[0] == ATA_CMD_SMART) {
 		tf->nsect = args[3];
 		tf->lbal  = args[1];
 		tf->lbam  = 0x4f;
@@ -763,16 +768,18 @@ int ide_cmd_ioctl (ide_drive_t *drive, unsigned int cmd, unsigned long arg)
 
 	if (args[3]) {
 		tfargs.tf_flags |= IDE_TFLAG_IO_16BIT;
-		bufsize = SECTOR_WORDS * 4 * args[3];
+		bufsize = SECTOR_SIZE * args[3];
 		buf = kzalloc(bufsize, GFP_KERNEL);
 		if (buf == NULL)
 			return -ENOMEM;
 	}
 
-	if (tf->command == WIN_SETFEATURES &&
+	if (tf->command == ATA_CMD_SET_FEATURES &&
 	    tf->feature == SETFEATURES_XFER &&
 	    tf->nsect >= XFER_SW_DMA_0 &&
-	    (id->dma_ultra || id->dma_mword || id->dma_1word)) {
+	    (id[ATA_ID_UDMA_MODES] ||
+	     id[ATA_ID_MWDMA_MODES] ||
+	     id[ATA_ID_SWDMA_MODES])) {
 		xfer_rate = args[1];
 		if (tf->nsect > XFER_UDMA_2 && !eighty_ninty_three(drive)) {
 			printk(KERN_WARNING "%s: UDMA speeds >UDMA33 cannot "
