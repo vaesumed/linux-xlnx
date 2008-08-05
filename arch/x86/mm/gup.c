@@ -8,6 +8,7 @@
 #include <linux/mm.h>
 #include <linux/vmstat.h>
 #include <linux/highmem.h>
+#include <linux/module.h>
 
 #include <asm/pgtable.h>
 
@@ -296,3 +297,4 @@ slow_irqon:
 		return ret;
 	}
 }
+EXPORT_SYMBOL_GPL(get_user_pages_fast);
