@@ -1,0 +1,106 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard d945934e7bfc005fa294c19b8236641f36b417bc
+HEAD is now at d945934 sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-gotemp.patch
+Importing device-mapper based on v2.6.27-rc1-555-g8f616cd
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 8f616cd5249e03c9e1b371623d85e76d4b86bbc1
+HEAD is now at 8f616cd Merge branch 'for_linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tytso/ext4
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-use-more-error-codes.patch
+dm-mpath-remove-is_active-from-struct-dm_path.patch
+dm-raid1-kcopyd-should-stop-on-error-if-errors-handled.patch
+dm-exception-store-introduce-area_location-function.patch
+dm-exception-store-use-chunk_t-for_areas.patch
+Unchanged quilt series i2c
+Unchanged quilt series kernel-doc
+Importing ide based on ca5de404ff036a29b25e9a83f6919c9f606c5841
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard ca5de404ff036a29b25e9a83f6919c9f606c5841
+HEAD is now at ca5de40 fs: rename buffer trylock
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-pre-eide-swdma-support-on-big-endian.patch
+ide-fix-ide_fix_driveid.patch
+ide-sanitize-struct-ide_port_ops-documentation-take-2.patch
+remove-unnecessary-linux-hdreg-h-includes.patch
+ide-fix-regression-caused-by-ide_device_get-put-addition-take-2.patch
+remove-unneeded-include-linux-ide-h-s.patch
+ide-remove-config_ide_max_hwifs.patch
+ide-cd-fix-endianity-for-the-error-message-in-cdrom_read_capacity.patch
+cdrom-dont-check-cdc_play_audio-in-cdrom_count_tracks.patch
+cs5520-add-enablebits-checking.patch
+ide-quirkproc-method-cannot-be-marked-__devinit.patch
+Context reduced to (2/2) to apply fragment at 444
+ide-cable_detect-method-cannot-be-marked-__devinit.patch
+ata-add-missing-ata_id_-defines-take-2.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+Context reduced to (2/2) to apply fragment at 447
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+ata-add-missing-ata_cmd_-defines.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+ata-add-missing-ata_-defines.patch
+ide-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+ide-remove-no-longer-needed-ide_drive_t-fields.patch
+ide-re-code-ide_fixstring-loop-to-be-less-evil.patch
+ide-cd-use-the-new-object_is_in_stack-helper.patch
+ide-fix-exabytenest-handling-in-probe_for_drive.patch
+ide-enhance-ide_busy_sleep.patch
+ide-remove-no-longer-needed-bug_on-s-from-init_irq.patch
+ide-remove-ide_chipset_-macros.patch
+ide-remove-unused-_ide_c-and-_ide_disk-defines.patch
+ide-remove-needless-drive-present-checks-from-device-drivers.patch
+ide-check-drive-present-in-ide_get_paired_drive.patch
+ide-remove-config_idedisk_multi_mode.patch
+ide-include-linux-hdreg-h-only-when-needed.patch
+ide-call-ide_proc_register_driver-later.patch
+ide-preparations-for-proc-ide-hd_-settings-rework.patch
+ide-proc-ide-hd_-settings-rework.patch
+ide-remove-sector_words-define.patch
+cmd640-add-__set_prefetch_mode.patch
+ide-remove-read-only-atapi_overlap-field-from-ide_drive_t.patch
+ide-remove-supports_dsc_overlap-field-from-ide_driver_t.patch
+ide-factor-out-hdio_-_nice-ioctl-handling-to-ide_-_nice_ioctl.patch
+ide-ide_dev_has_iordy-to-ata_id_has_iordy.patch
+ide-ide_dev_is_sata-to-ata_id_is_sata.patch
+ide-idedisk_supports_lba48-to-ata_id_lba48_enabled.patch
+ide-check-only-for-cache-flush-command-support-in-ide_id_has_flush_cache.patch
+ide-ide_id_has_flush_cache-to-ata_id_flush_enabled.patch
+ide-ide_id_has_flush_cache_ext-to-ata_id_flush_ext_enabled.patch
+ide-use-ata_id_is_cfa.patch
+ide-ide_id_to_hd_driveid-to-ata_id_to_hd_driveid.patch
+ide-lba_capacity_is_ok-to-ata_id_is_lba_capacity_ok.patch
+hpt366-add-hpt3xx_disable_fast_irq-helper.patch
+ide-add-proper-pci-pm-support.patch
+Unchanged quilt series m68k
+Importing rr based on v2.6.27-rc1-632-g2e1e921
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 2e1e9212ed8c532c6b324de77d3cafef5d2bc846
+HEAD is now at 2e1e921 Merge git://git.kernel.org/pub/scm/linux/kernel/git/lethal/sh-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+lguest:no-mac-for-bridge.patch
+misc:generic-get_user_page_fast.patch
+lguest:use-get_user_pages_fast.patch
+module:extend_initcall_debug_functionality_to_the_loader.patch
+stop_machine:remove-unused-variable.patch
+misc:cast_if_type.patch
+misc:typesafe_cb.patch
+misc:kthread-typesafe.patch
+misc:stop_machine-typesafe.patch
+Unchanged quilt series ttydev
