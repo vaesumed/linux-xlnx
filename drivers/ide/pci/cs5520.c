@@ -149,6 +149,10 @@ static struct pci_driver driver = {
 	.name		= "Cyrix_IDE",
 	.id_table	= cs5520_pci_tbl,
 	.probe		= cs5520_init_one,
+#ifdef CONFIG_PM
+	.suspend	= ide_pci_suspend,
+	.resume		= ide_pci_resume,
+#endif
 };
 
 static int __init cs5520_ide_init(void)
