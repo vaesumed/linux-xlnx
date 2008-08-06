@@ -68,6 +68,33 @@ typedef struct region_info_t {
 #define REGION_BAR_MASK		0xe000
 #define REGION_BAR_SHIFT	13
 
+/* For ReplaceCIS */
+typedef struct cisdump_t {
+    u_int	Length;
+    cisdata_t	Data[CISTPL_MAX_CIS_SIZE];
+} cisdump_t;
+
+/* for GetConfigurationInfo */
+typedef struct config_info_t {
+    u_char	Function;
+    u_int	Attributes;
+    u_int	Vcc, Vpp1, Vpp2;
+    u_int	IntType;
+    u_int	ConfigBase;
+    u_char	Status, Pin, Copy, Option, ExtStatus;
+    u_int	Present;
+    u_int	CardValues;
+    u_int	AssignedIRQ;
+    u_int	IRQAttributes;
+    ioaddr_t	BasePort1;
+    ioaddr_t	NumPorts1;
+    u_int	Attributes1;
+    ioaddr_t	BasePort2;
+    ioaddr_t	NumPorts2;
+    u_int	Attributes2;
+    u_int	IOAddrLines;
+} config_info_t;
+
 typedef union ds_ioctl_arg_t {
     adjust_t		adjust;
     config_info_t	config;
@@ -110,6 +137,9 @@ typedef union ds_ioctl_arg_t {
 #define DS_GET_NEXT_DEVICE		_IOWR('d', 62, bind_info_t) 
 #define DS_UNBIND_REQUEST		_IOW ('d', 63, bind_info_t)
 #define DS_BIND_MTD			_IOWR('d', 64, mtd_info_t)
+
+/* used in userspace only */
+#define CS_IN_USE			0x1e
 
 #ifdef __KERNEL__
 #include <linux/device.h>
@@ -219,7 +249,18 @@ struct pcmcia_device {
 #define handle_to_dev(handle) (handle->dev)
 
 /* error reporting */
-void cs_error(struct pcmcia_device *handle, int func, int ret);
+
+const char *pcmcia_error_func(int func);
+const char *pcmcia_error_ret(int ret);
+
+#define cs_error(p_dev, func, ret)			\
+	{						\
+		dev_printk(KERN_NOTICE, &p_dev->dev,	\
+			   "%s : %s\n",			\
+			   pcmcia_error_func(func),	\
+			   pcmcia_error_ret(ret));	\
+	}
+
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_DS_H */
