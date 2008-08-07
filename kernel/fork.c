@@ -760,7 +760,6 @@ void __cleanup_sighand(struct sighand_struct *sighand)
 static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct signal_struct *sig;
-	int ret;
 
 	if (clone_flags & CLONE_THREAD) {
 		atomic_inc(&current->signal->count);
@@ -771,12 +770,6 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 	tsk->signal = sig;
 	if (!sig)
 		return -ENOMEM;
-
-	ret = copy_thread_group_keys(tsk);
-	if (ret < 0) {
-		kmem_cache_free(signal_cachep, sig);
-		return ret;
-	}
 
 	atomic_set(&sig->count, 1);
 	atomic_set(&sig->live, 1);
@@ -835,7 +828,6 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 
 void __cleanup_signal(struct signal_struct *sig)
 {
-	exit_thread_group_keys(sig);
 	kmem_cache_free(signal_cachep, sig);
 }
 
