@@ -15,6 +15,8 @@
  * Documentation/ide/ChangeLog.ide-floppy.1996-2002
  */
 
+#define DRV_NAME "ide-floppy"
+
 #define IDEFLOPPY_VERSION "1.00"
 
 #include <linux/module.h>
@@ -31,6 +33,7 @@
 #include <linux/slab.h>
 #include <linux/cdrom.h>
 #include <linux/ide.h>
+#include <linux/hdreg.h>
 #include <linux/bitops.h>
 #include <linux/mutex.h>
 
@@ -945,7 +948,7 @@ static int idefloppy_get_format_progress(ide_drive_t *drive, int __user *arg)
 		stat = hwif->tp_ops->read_status(hwif);
 		local_irq_restore(flags);
 
-		progress_indication = ((stat & SEEK_STAT) == 0) ? 0 : 0x10000;
+		progress_indication = ((stat & ATA_DSC) == 0) ? 0 : 0x10000;
 	}
 	if (put_user(progress_indication, arg))
 		return (-EFAULT);
@@ -961,72 +964,41 @@ static sector_t idefloppy_capacity(ide_drive_t *drive)
 	return capacity;
 }
 
-/*
- * Check whether we can support a drive, based on the ATAPI IDENTIFY command
- * results.
- */
-static int idefloppy_identify_device(ide_drive_t *drive, struct hd_driveid *id)
+#ifdef CONFIG_IDE_PROC_FS
+ide_devset_rw(bios_cyl,  0, 1023, bios_cyl);
+ide_devset_rw(bios_head, 0,  255, bios_head);
+ide_devset_rw(bios_sect, 0,   63, bios_sect);
+
+static int get_ticks(ide_drive_t *drive)
 {
-	u8 gcw[2];
-	u8 device_type, protocol, removable, drq_type, packet_size;
+	idefloppy_floppy_t *floppy = drive->driver_data;
+	return floppy->ticks;
+}
 
-	*((u16 *) &gcw) = id->config;
-
-	device_type =  gcw[1] & 0x1F;
-	removable   = (gcw[0] & 0x80) >> 7;
-	protocol    = (gcw[1] & 0xC0) >> 6;
-	drq_type    = (gcw[0] & 0x60) >> 5;
-	packet_size =  gcw[0] & 0x03;
-
-#ifdef CONFIG_PPC
-	/* kludge for Apple PowerBook internal zip */
-	if (device_type == 5 &&
-	    !strstr(id->model, "CD-ROM") && strstr(id->model, "ZIP"))
-		device_type = 0;
-#endif
-
-	if (protocol != 2)
-		printk(KERN_ERR "ide-floppy: Protocol (0x%02x) is not ATAPI\n",
-			protocol);
-	else if (device_type != 0)
-		printk(KERN_ERR "ide-floppy: Device type (0x%02x) is not set "
-				"to floppy\n", device_type);
-	else if (!removable)
-		printk(KERN_ERR "ide-floppy: The removable flag is not set\n");
-	else if (drq_type == 3)
-		printk(KERN_ERR "ide-floppy: Sorry, DRQ type (0x%02x) not "
-				"supported\n", drq_type);
-	else if (packet_size != 0)
-		printk(KERN_ERR "ide-floppy: Packet size (0x%02x) is not 12 "
-				"bytes\n", packet_size);
-	else
-		return 1;
+static int set_ticks(ide_drive_t *drive, int arg)
+{
+	idefloppy_floppy_t *floppy = drive->driver_data;
+	floppy->ticks = arg;
 	return 0;
 }
 
-#ifdef CONFIG_IDE_PROC_FS
-static void idefloppy_add_settings(ide_drive_t *drive)
-{
-	idefloppy_floppy_t *floppy = drive->driver_data;
+IDE_DEVSET(ticks, S_RW, 0, 255, get_ticks, set_ticks);
 
-	ide_add_setting(drive, "bios_cyl", SETTING_RW, TYPE_INT, 0, 1023, 1, 1,
-			&drive->bios_cyl, NULL);
-	ide_add_setting(drive, "bios_head", SETTING_RW, TYPE_BYTE, 0, 255, 1, 1,
-			&drive->bios_head, NULL);
-	ide_add_setting(drive, "bios_sect", SETTING_RW,	TYPE_BYTE, 0,  63, 1, 1,
-			&drive->bios_sect, NULL);
-	ide_add_setting(drive, "ticks",	   SETTING_RW, TYPE_BYTE, 0, 255, 1, 1,
-			&floppy->ticks,	 NULL);
-}
-#else
-static inline void idefloppy_add_settings(ide_drive_t *drive) { ; }
+static const struct ide_devset *idefloppy_settings[] = {
+	&ide_devset_bios_cyl,
+	&ide_devset_bios_head,
+	&ide_devset_bios_sect,
+	&ide_devset_ticks,
+	NULL
+};
 #endif
 
 static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 {
+	u16 *id = drive->id;
 	u8 gcw[2];
 
-	*((u16 *) &gcw) = drive->id->config;
+	*((u16 *)&gcw) = id[ATA_ID_CONFIG];
 	floppy->pc = floppy->pc_stack;
 	drive->pc_callback = ide_floppy_callback;
 
@@ -1041,7 +1013,7 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	 * it. It should be fixed as of version 1.9, but to be on the safe side
 	 * we'll leave the limitation below for the 2.2.x tree.
 	 */
-	if (!strncmp(drive->id->model, "IOMEGA ZIP 100 ATAPI", 20)) {
+	if (!strncmp((char *)&id[ATA_ID_PROD], "IOMEGA ZIP 100 ATAPI", 20)) {
 		drive->atapi_flags |= IDE_AFLAG_ZIP_DRIVE;
 		/* This value will be visible in the /proc/ide/hdx/settings */
 		floppy->ticks = IDEFLOPPY_TICKS_DELAY;
@@ -1052,13 +1024,14 @@ static void idefloppy_setup(ide_drive_t *drive, idefloppy_floppy_t *floppy)
 	 * Guess what? The IOMEGA Clik! drive also needs the above fix. It makes
 	 * nasty clicking noises without it, so please don't remove this.
 	 */
-	if (strncmp(drive->id->model, "IOMEGA Clik!", 11) == 0) {
+	if (strncmp((char *)&id[ATA_ID_PROD], "IOMEGA Clik!", 11) == 0) {
 		blk_queue_max_sectors(drive->queue, 64);
 		drive->atapi_flags |= IDE_AFLAG_CLIK_DRIVE;
 	}
 
 	(void) ide_floppy_get_capacity(drive);
-	idefloppy_add_settings(drive);
+
+	ide_proc_register_driver(drive, floppy->driver);
 }
 
 static void ide_floppy_remove(ide_drive_t *drive)
@@ -1115,12 +1088,12 @@ static ide_driver_t idefloppy_driver = {
 	.remove			= ide_floppy_remove,
 	.version		= IDEFLOPPY_VERSION,
 	.media			= ide_floppy,
-	.supports_dsc_overlap	= 0,
 	.do_request		= idefloppy_do_request,
 	.end_request		= idefloppy_end_request,
 	.error			= __ide_error,
 #ifdef CONFIG_IDE_PROC_FS
 	.proc			= idefloppy_proc,
+	.settings		= idefloppy_settings,
 #endif
 };
 
@@ -1388,11 +1361,11 @@ static int ide_floppy_probe(ide_drive_t *drive)
 
 	if (!strstr("ide-floppy", drive->driver_req))
 		goto failed;
-	if (!drive->present)
-		goto failed;
+
 	if (drive->media != ide_floppy)
 		goto failed;
-	if (!idefloppy_identify_device(drive, drive->id)) {
+
+	if (!ide_check_atapi_device(drive, DRV_NAME)) {
 		printk(KERN_ERR "ide-floppy: %s: not supported by this version"
 				" of ide-floppy\n", drive->name);
 		goto failed;
@@ -1409,8 +1382,6 @@ static int ide_floppy_probe(ide_drive_t *drive)
 		goto out_free_floppy;
 
 	ide_init_disk(g, drive);
-
-	ide_proc_register_driver(drive, &idefloppy_driver);
 
 	kref_init(&floppy->kref);
 
