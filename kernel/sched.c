@@ -4947,6 +4947,7 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	unsigned long flags;
 	const struct sched_class *prev_class = p->sched_class;
 	struct rq *rq;
+	uid_t euid;
 
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
@@ -4999,8 +5000,9 @@ recheck:
 			return -EPERM;
 
 		/* can't change other user's priorities */
-		if ((current->euid != p->euid) &&
-		    (current->euid != p->uid))
+		euid = current_euid();
+		if (euid != p->euid &&
+		    euid != p->uid)
 			return -EPERM;
 	}
 
@@ -5208,6 +5210,7 @@ long sched_setaffinity(pid_t pid, const cpumask_t *in_mask)
 	cpumask_t cpus_allowed;
 	cpumask_t new_mask = *in_mask;
 	struct task_struct *p;
+	uid_t euid;
 	int retval;
 
 	get_online_cpus();
@@ -5228,9 +5231,9 @@ long sched_setaffinity(pid_t pid, const cpumask_t *in_mask)
 	get_task_struct(p);
 	read_unlock(&tasklist_lock);
 
+	euid = current_euid();
 	retval = -EPERM;
-	if ((current->euid != p->euid) && (current->euid != p->uid) &&
-			!capable(CAP_SYS_NICE))
+	if (euid != p->euid && euid != p->uid && !capable(CAP_SYS_NICE))
 		goto out_unlock;
 
 	retval = security_task_setscheduler(p, 0, NULL);
