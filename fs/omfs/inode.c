@@ -37,8 +37,8 @@ struct inode *omfs_new_inode(struct inode *dir, int mode)
 
 	inode->i_ino = new_block;
 	inode->i_mode = mode;
-	inode->i_uid = current->fsuid;
-	inode->i_gid = current->fsgid;
+	inode->i_uid = current_fsuid();
+	inode->i_gid = current_fsgid();
 	inode->i_blocks = 0;
 	inode->i_mapping->a_ops = &omfs_aops;
 
