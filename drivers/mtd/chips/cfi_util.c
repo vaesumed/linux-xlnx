@@ -50,6 +50,7 @@ int __xipram qry_present(struct map_info *map, __u32 base,
 
 	return 1; 	/* "QRY" found */
 }
+EXPORT_SYMBOL_GPL(qry_present);
 
 int __xipram qry_mode_on(uint32_t base, struct map_info *map,
 				struct cfi_private *cfi)
@@ -73,12 +74,15 @@ int __xipram qry_mode_on(uint32_t base, struct map_info *map,
 	/* QRY not found */
 	return 0;
 }
+EXPORT_SYMBOL_GPL(qry_mode_on);
+
 void __xipram qry_mode_off(uint32_t base, struct map_info *map,
 				struct cfi_private *cfi)
 {
 	cfi_send_gen_cmd(0xF0, 0, base, map, cfi, cfi->device_type, NULL);
 	cfi_send_gen_cmd(0xFF, 0, base, map, cfi, cfi->device_type, NULL);
 }
+EXPORT_SYMBOL_GPL(qry_mode_off);
 
 struct cfi_extquery *
 __xipram cfi_read_pri(struct map_info *map, __u16 adr, __u16 size, const char* name)
