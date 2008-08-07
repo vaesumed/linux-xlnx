@@ -465,6 +465,7 @@ static int create_elf_fdpic_tables(struct linux_binprm *bprm,
 {
 	unsigned long sp, csp, nitems;
 	elf_caddr_t __user *argv, *envp;
+	const struct cred *cred = current_cred();
 	size_t platform_len = 0, len;
 	char *k_platform;
 	char __user *u_platform, *p;
@@ -586,10 +587,10 @@ static int create_elf_fdpic_tables(struct linux_binprm *bprm,
 	NEW_AUX_ENT(AT_BASE,	interp_params->elfhdr_addr);
 	NEW_AUX_ENT(AT_FLAGS,	0);
 	NEW_AUX_ENT(AT_ENTRY,	exec_params->entry_addr);
-	NEW_AUX_ENT(AT_UID,	(elf_addr_t) current->cred->uid);
-	NEW_AUX_ENT(AT_EUID,	(elf_addr_t) current->cred->euid);
-	NEW_AUX_ENT(AT_GID,	(elf_addr_t) current->cred->gid);
-	NEW_AUX_ENT(AT_EGID,	(elf_addr_t) current->cred->egid);
+	NEW_AUX_ENT(AT_UID,	(elf_addr_t) cred->uid);
+	NEW_AUX_ENT(AT_EUID,	(elf_addr_t) cred->euid);
+	NEW_AUX_ENT(AT_GID,	(elf_addr_t) cred->gid);
+	NEW_AUX_ENT(AT_EGID,	(elf_addr_t) cred->egid);
 
 #ifdef ARCH_DLINFO
 	nr = 0;
