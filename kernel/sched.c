@@ -339,7 +339,9 @@ static inline struct task_group *task_group(struct task_struct *p)
 	struct task_group *tg;
 
 #ifdef CONFIG_USER_SCHED
-	tg = p->cred->user->tg;
+	rcu_read_lock();
+	tg = __task_cred(p)->user->tg;
+	rcu_read_unlock();
 #elif defined(CONFIG_CGROUP_SCHED)
 	tg = container_of(task_subsys_state(p, cpu_cgroup_subsys_id),
 				struct task_group, css);
@@ -4940,6 +4942,22 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	set_load_weight(p);
 }
 
+/*
+ * check the target process has a UID that matches the current process's
+ */
+static bool check_same_owner(struct task_struct *p)
+{
+	const struct cred *cred = current_cred(), *pcred;
+	bool match;
+
+	rcu_read_lock();
+	pcred = __task_cred(p);
+	match = (cred->euid == pcred->euid ||
+		 cred->euid == pcred->uid);
+	rcu_read_unlock();
+	return match;
+}
+
 static int __sched_setscheduler(struct task_struct *p, int policy,
 				struct sched_param *param, bool user)
 {
@@ -4947,7 +4965,6 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	unsigned long flags;
 	const struct sched_class *prev_class = p->sched_class;
 	struct rq *rq;
-	uid_t euid;
 
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
@@ -5000,9 +5017,7 @@ recheck:
 			return -EPERM;
 
 		/* can't change other user's priorities */
-		euid = current_euid();
-		if (euid != p->cred->euid &&
-		    euid != p->cred->uid)
+		if (!check_same_owner(p))
 			return -EPERM;
 	}
 
@@ -5210,7 +5225,6 @@ long sched_setaffinity(pid_t pid, const cpumask_t *in_mask)
 	cpumask_t cpus_allowed;
 	cpumask_t new_mask = *in_mask;
 	struct task_struct *p;
-	uid_t euid;
 	int retval;
 
 	get_online_cpus();
@@ -5231,11 +5245,8 @@ long sched_setaffinity(pid_t pid, const cpumask_t *in_mask)
 	get_task_struct(p);
 	read_unlock(&tasklist_lock);
 
-	euid = current_euid();
 	retval = -EPERM;
-	if (euid != p->cred->euid &&
-	    euid != p->cred->uid &&
-	    !capable(CAP_SYS_NICE))
+	if (!check_same_owner(p) && !capable(CAP_SYS_NICE))
 		goto out_unlock;
 
 	retval = security_task_setscheduler(p, 0, NULL);
