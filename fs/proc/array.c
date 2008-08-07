@@ -187,8 +187,8 @@ static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
 		task_tgid_nr_ns(p, ns),
 		pid_nr_ns(pid, ns),
 		ppid, tpid,
-		p->uid, p->euid, p->suid, p->fsuid,
-		p->gid, p->egid, p->sgid, p->fsgid);
+		p->cred->uid, p->cred->euid, p->cred->suid, p->cred->fsuid,
+		p->cred->gid, p->cred->egid, p->cred->sgid, p->cred->fsgid);
 
 	task_lock(p);
 	if (p->files)
@@ -199,7 +199,7 @@ static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
 		fdt ? fdt->max_fds : 0);
 	rcu_read_unlock();
 
-	group_info = p->group_info;
+	group_info = p->cred->group_info;
 	get_group_info(group_info);
 	task_unlock(p);
 
@@ -268,7 +268,7 @@ static inline void task_sig(struct seq_file *m, struct task_struct *p)
 		blocked = p->blocked;
 		collect_sigign_sigcatch(p, &ignored, &caught);
 		num_threads = atomic_read(&p->signal->count);
-		qsize = atomic_read(&p->user->sigpending);
+		qsize = atomic_read(&p->cred->user->sigpending);
 		qlim = p->signal->rlim[RLIMIT_SIGPENDING].rlim_cur;
 		unlock_task_sighand(p, &flags);
 	}
@@ -300,10 +300,12 @@ static void render_cap_t(struct seq_file *m, const char *header,
 
 static inline void task_cap(struct seq_file *m, struct task_struct *p)
 {
-	render_cap_t(m, "CapInh:\t", &p->cap_inheritable);
-	render_cap_t(m, "CapPrm:\t", &p->cap_permitted);
-	render_cap_t(m, "CapEff:\t", &p->cap_effective);
-	render_cap_t(m, "CapBnd:\t", &p->cap_bset);
+	struct cred *cred = p->cred;
+
+	render_cap_t(m, "CapInh:\t", &cred->cap_inheritable);
+	render_cap_t(m, "CapPrm:\t", &cred->cap_permitted);
+	render_cap_t(m, "CapEff:\t", &cred->cap_effective);
+	render_cap_t(m, "CapBnd:\t", &cred->cap_bset);
 }
 
 static inline void task_context_switch_counts(struct seq_file *m,
