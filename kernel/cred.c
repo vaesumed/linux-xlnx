@@ -35,7 +35,7 @@ static struct thread_group_cred init_tgcred = {
  * The initial credentials for the initial task
  */
 struct cred init_cred = {
-	.usage			= ATOMIC_INIT(3),
+	.usage			= ATOMIC_INIT(4),
 	.securebits		= SECUREBITS_DEFAULT,
 	.cap_inheritable	= CAP_INIT_INH_SET,
 	.cap_permitted		= CAP_FULL_SET,
@@ -133,6 +133,8 @@ struct cred *alloc_creds(const struct cred *old, gfp_t gfp)
  * prepare a new copy, which the caller then modifies and then commits by
  * calling commit_creds().
  *
+ * Preparation involves making a copy of the objective creds for modification.
+ *
  * Returns a pointer to the new creds-to-be if successful, NULL otherwise.
  *
  * Call commit_creds() or abort_creds() to clean up.
@@ -143,7 +145,7 @@ struct cred *prepare_creds(void)
 	const struct cred *old;
 	struct cred *new;
 
-	BUG_ON(atomic_read(&task->cred->usage) < 1);
+	BUG_ON(atomic_read(&task->real_cred->usage) < 1);
 
 	new = kmem_cache_alloc(cred_jar, GFP_KERNEL);
 	if (!new)
@@ -275,6 +277,9 @@ error:
  *
  * We share if we can, but under some circumstances we have to generate a new
  * set.
+ *
+ * The new process gets the current process's subjective credentials as its
+ * objective and subjective credentials
  */
 int copy_creds(struct task_struct *p, unsigned long clone_flags)
 {
@@ -284,6 +289,7 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 	mutex_init(&p->cred_exec_mutex);
 
 	if (!p->cred->thread_keyring && clone_flags & CLONE_THREAD) {
+		p->real_cred = get_cred(p->cred);
 		get_cred(p->cred);
 		return 0;
 	}
@@ -322,7 +328,7 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 #endif
 
 	atomic_inc(&new->user->processes);
-	p->cred = new;
+	p->cred = p->real_cred = get_cred(new);
 	return 0;
 }
 
@@ -331,7 +337,9 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
  * @new: The credentials to be assigned
  *
  * Install a new set of credentials to the current task, using RCU to replace
- * the old set.
+ * the old set.  Both the objective and the subjective credentials pointers are
+ * updated.  This function may not be called if the subjective credentials are
+ * in an overridden state.
  *
  * This function eats the caller's reference to the new credentials.
  *
@@ -343,11 +351,14 @@ int commit_creds(struct cred *new)
 	struct task_struct *task = current;
 	const struct cred *old;
 
+	BUG_ON(task->cred != task->real_cred);
+	BUG_ON(atomic_read(&task->real_cred->usage) < 2);
 	BUG_ON(atomic_read(&new->usage) < 1);
-	BUG_ON(atomic_read(&task->cred->usage) < 1);
 
-	old = task->cred;
+	old = task->real_cred;
 	security_commit_creds(new, old);
+
+	get_cred(new); /* we will require a ref for the subj creds too */
 
 	/* dumpability changes */
 	if (old->euid != new->euid ||
@@ -374,6 +385,7 @@ int commit_creds(struct cred *new)
 	 */
 	if (new->user != old->user)
 		atomic_inc(&new->user->processes);
+	rcu_assign_pointer(task->real_cred, new);
 	rcu_assign_pointer(task->cred, new);
 	if (new->user != old->user)
 		atomic_dec(&old->user->processes);
@@ -393,6 +405,8 @@ int commit_creds(struct cred *new)
 	    new->fsgid != old->fsgid)
 		proc_id_connector(task, PROC_EVENT_GID);
 
+	/* release the old obj and subj refs both */
+	put_cred(old);
 	put_cred(old);
 	return 0;
 }
@@ -413,11 +427,11 @@ void abort_creds(struct cred *new)
 EXPORT_SYMBOL(abort_creds);
 
 /**
- * override_creds - Temporarily override the current process's credentials
+ * override_creds - Override the current process's subjective credentials
  * @new: The credentials to be assigned
  *
- * Install a set of temporary override credentials on the current process,
- * returning the old set for later reversion.
+ * Install a set of temporary override subjective credentials on the current
+ * process, returning the old set for later reversion.
  */
 const struct cred *override_creds(const struct cred *new)
 {
@@ -429,11 +443,11 @@ const struct cred *override_creds(const struct cred *new)
 EXPORT_SYMBOL(override_creds);
 
 /**
- * revert_creds - Revert a temporary credentials override
+ * revert_creds - Revert a temporary subjective credentials override
  * @old: The credentials to be restored
  *
- * Revert a temporary set of override credentials to an old set, discarding the
- * override set.
+ * Revert a temporary set of override subjective credentials to an old set,
+ * discarding the override set.
  */
 extern void revert_creds(const struct cred *old)
 {
