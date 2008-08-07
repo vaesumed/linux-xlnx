@@ -1356,10 +1356,15 @@ int compat_do_execve(char * filename,
 	if (!bprm)
 		goto out_ret;
 
+	bprm->cred = prepare_exec_creds();
+	if (!bprm->cred)
+		goto out_free;
+	check_unsafe_exec(bprm);
+
 	file = open_exec(filename);
 	retval = PTR_ERR(file);
 	if (IS_ERR(file))
-		goto out_kfree;
+		goto out_free;
 
 	sched_exec();
 
@@ -1373,14 +1378,10 @@ int compat_do_execve(char * filename,
 
 	bprm->argc = compat_count(argv, MAX_ARG_STRINGS);
 	if ((retval = bprm->argc) < 0)
-		goto out_mm;
+		goto out;
 
 	bprm->envc = compat_count(envp, MAX_ARG_STRINGS);
 	if ((retval = bprm->envc) < 0)
-		goto out_mm;
-
-	retval = security_bprm_alloc(bprm);
-	if (retval)
 		goto out;
 
 	retval = prepare_binprm(bprm);
@@ -1403,17 +1404,12 @@ int compat_do_execve(char * filename,
 	retval = search_binary_handler(bprm, regs);
 	if (retval >= 0) {
 		/* execve success */
-		security_bprm_free(bprm);
 		acct_update_integrals(current);
 		free_bprm(bprm);
 		return retval;
 	}
 
 out:
-	if (bprm->security)
-		security_bprm_free(bprm);
-
-out_mm:
 	if (bprm->mm)
 		mmput(bprm->mm);
 
@@ -1423,7 +1419,7 @@ out_file:
 		fput(bprm->file);
 	}
 
-out_kfree:
+out_free:
 	free_bprm(bprm);
 
 out_ret:

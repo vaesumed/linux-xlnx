@@ -166,7 +166,7 @@ int cap_capset(struct cred *new,
 
 static inline void bprm_clear_caps(struct linux_binprm *bprm)
 {
-	cap_clear(bprm->cap_post_exec_permitted);
+	cap_clear(bprm->cred->cap_permitted);
 	bprm->cap_effective = false;
 }
 
@@ -197,8 +197,10 @@ int cap_inode_killpriv(struct dentry *dentry)
 }
 
 static inline int cap_from_disk(struct vfs_cap_data *caps,
-				struct linux_binprm *bprm, unsigned size)
+				struct linux_binprm *bprm, unsigned size,
+				bool *effective)
 {
+	struct cred *new = bprm->cred;
 	__u32 magic_etc;
 	unsigned tocopy, i;
 	int ret;
@@ -208,7 +210,7 @@ static inline int cap_from_disk(struct vfs_cap_data *caps,
 
 	magic_etc = le32_to_cpu(caps->magic_etc);
 
-	switch ((magic_etc & VFS_CAP_REVISION_MASK)) {
+	switch (magic_etc & VFS_CAP_REVISION_MASK) {
 	case VFS_CAP_REVISION_1:
 		if (size != XATTR_CAPS_SZ_1)
 			return -EINVAL;
@@ -223,11 +225,8 @@ static inline int cap_from_disk(struct vfs_cap_data *caps,
 		return -EINVAL;
 	}
 
-	if (magic_etc & VFS_CAP_FLAGS_EFFECTIVE) {
-		bprm->cap_effective = true;
-	} else {
-		bprm->cap_effective = false;
-	}
+	if (magic_etc & VFS_CAP_FLAGS_EFFECTIVE)
+		*effective = true;
 
 	ret = 0;
 
@@ -238,18 +237,18 @@ static inline int cap_from_disk(struct vfs_cap_data *caps,
 			/*
 			 * Legacy capability sets have no upper bits
 			 */
-			bprm->cap_post_exec_permitted.cap[i] = 0;
+			new->cap_permitted.cap[i] = 0;
 			continue;
 		}
 		/*
 		 * pP' = (X & fP) | (pI & fI)
 		 */
 		value_cpu = le32_to_cpu(caps->data[i].permitted);
-		bprm->cap_post_exec_permitted.cap[i] =
-			(current->cred->cap_bset.cap[i] & value_cpu) |
-			(current->cred->cap_inheritable.cap[i] &
-				le32_to_cpu(caps->data[i].inheritable));
-		if (value_cpu & ~bprm->cap_post_exec_permitted.cap[i]) {
+		new->cap_permitted.cap[i] =
+			(new->cap_bset.cap[i] & value_cpu) |
+			(new->cap_inheritable.cap[i] &
+			 le32_to_cpu(caps->data[i].inheritable));
+		if (value_cpu & ~new->cap_permitted.cap[i]) {
 			/*
 			 * insufficient to execute correctly
 			 */
@@ -262,11 +261,11 @@ static inline int cap_from_disk(struct vfs_cap_data *caps,
 	 * do not have enough capabilities, we return an error if they are
 	 * missing some "forced" (aka file-permitted) capabilities.
 	 */
-	return bprm->cap_effective ? ret : 0;
+	return *effective ? ret : 0;
 }
 
 /* Locate any VFS capabilities: */
-static int get_file_caps(struct linux_binprm *bprm)
+static int get_file_caps(struct linux_binprm *bprm, bool *effective)
 {
 	struct dentry *dentry;
 	int rc = 0;
@@ -293,7 +292,7 @@ static int get_file_caps(struct linux_binprm *bprm)
 	if (rc < 0)
 		goto out;
 
-	rc = cap_from_disk(&vcaps, bprm, rc);
+	rc = cap_from_disk(&vcaps, bprm, rc, effective);
 	if (rc == -EINVAL)
 		printk(KERN_NOTICE "%s: cap_from_disk returned %d for %s\n",
 		       __func__, rc, bprm->filename);
@@ -317,18 +316,27 @@ int cap_inode_killpriv(struct dentry *dentry)
 	return 0;
 }
 
-static inline int get_file_caps(struct linux_binprm *bprm)
+static inline int get_file_caps(struct linux_binprm *bprm, bool *effective)
 {
 	bprm_clear_caps(bprm);
 	return 0;
 }
 #endif
 
-int cap_bprm_set_security (struct linux_binprm *bprm)
+/*
+ * set up the new credentials for an exec'd task
+ */
+int cap_bprm_set_creds(struct linux_binprm *bprm)
 {
+	const struct cred *old = current_cred();
+	struct cred *new = bprm->cred;
+	bool effective;
 	int ret;
 
-	ret = get_file_caps(bprm);
+	effective = false;
+	ret = get_file_caps(bprm, &effective);
+	if (ret < 0)
+		return ret;
 
 	if (!issecure(SECURE_NOROOT)) {
 		/*
@@ -336,78 +344,67 @@ int cap_bprm_set_security (struct linux_binprm *bprm)
 		 * executables under compatibility mode, we override the
 		 * capability sets for the file.
 		 *
-		 * If only the real uid is 0, we do not set the effective
-		 * bit.
+		 * If only the real uid is 0, we do not set the effective bit.
 		 */
-		if (bprm->e_uid == 0 || current_uid() == 0) {
+		if (new->euid == 0 || new->uid == 0) {
 			/* pP' = (cap_bset & ~0) | (pI & ~0) */
-			bprm->cap_post_exec_permitted = cap_combine(
-				current->cred->cap_bset,
-				current->cred->cap_inheritable);
-			bprm->cap_effective = (bprm->e_uid == 0);
-			ret = 0;
+			new->cap_permitted = cap_combine(old->cap_bset,
+							 old->cap_inheritable);
 		}
+		if (new->euid == 0)
+			effective = true;
 	}
 
-	return ret;
-}
-
-int cap_bprm_apply_creds (struct linux_binprm *bprm, int unsafe)
-{
-	const struct cred *old = current_cred();
-	struct cred *new;
-
-	new = prepare_creds();
-	if (!new)
-		return -ENOMEM;
-
-	if (bprm->e_uid != old->uid || bprm->e_gid != old->gid ||
-	    !cap_issubset(bprm->cap_post_exec_permitted,
-			  old->cap_permitted)) {
-		set_dumpable(current->mm, suid_dumpable);
-		current->pdeath_signal = 0;
-
-		if (unsafe & ~LSM_UNSAFE_PTRACE_CAP) {
-			if (!capable(CAP_SETUID)) {
-				bprm->e_uid = old->uid;
-				bprm->e_gid = old->gid;
-			}
-			if (cap_limit_ptraced_target()) {
-				bprm->cap_post_exec_permitted = cap_intersect(
-					bprm->cap_post_exec_permitted,
-					new->cap_permitted);
-			}
+	/* Don't let someone trace a set[ug]id/setpcap binary with the revised
+	 * credentials unless they have the appropriate permit
+	 */
+	if ((new->euid != old->uid ||
+	     new->egid != old->gid ||
+	     !cap_issubset(new->cap_permitted, old->cap_permitted)) &&
+	    bprm->unsafe & ~LSM_UNSAFE_PTRACE_CAP) {
+		/* downgrade; they get no more than they had, and maybe less */
+		if (!capable(CAP_SETUID)) {
+			new->euid = new->uid;
+			new->egid = new->gid;
 		}
+		if (cap_limit_ptraced_target())
+			new->cap_permitted = cap_intersect(new->cap_permitted,
+							   old->cap_permitted);
 	}
 
-	new->suid = new->euid = new->fsuid = bprm->e_uid;
-	new->sgid = new->egid = new->fsgid = bprm->e_gid;
+	new->suid = new->fsuid = new->euid;
+	new->sgid = new->fsgid = new->egid;
 
-	/* For init, we want to retain the capabilities set
-	 * in the init_task struct. Thus we skip the usual
-	 * capability rules */
+	/* For init, we want to retain the capabilities set in the initial
+	 * task.  Thus we skip the usual capability rules
+	 */
 	if (!is_global_init(current)) {
-		new->cap_permitted = bprm->cap_post_exec_permitted;
-		if (bprm->cap_effective)
-			new->cap_effective = bprm->cap_post_exec_permitted;
+		if (effective)
+			new->cap_effective = new->cap_permitted;
 		else
 			cap_clear(new->cap_effective);
 	}
+	bprm->cap_effective = effective;
 
-	/* AUD: Audit candidate if cred->cap_effective is set */
+	/* AUD: Audit candidate if new->cap_effective is set */
 
 	new->securebits &= ~issecure_mask(SECURE_KEEP_CAPS);
-	return commit_creds(new);
+	return 0;
 }
 
-int cap_bprm_secureexec (struct linux_binprm *bprm)
+/*
+ * determine whether a secure execution is required
+ * - the creds have been committed at this point, and are no longer available
+ *   through bprm
+ */
+int cap_bprm_secureexec(struct linux_binprm *bprm)
 {
 	const struct cred *cred = current_cred();
 
 	if (cred->uid != 0) {
 		if (bprm->cap_effective)
 			return 1;
-		if (!cap_isclear(bprm->cap_post_exec_permitted))
+		if (!cap_isclear(cred->cap_permitted))
 			return 1;
 	}
 

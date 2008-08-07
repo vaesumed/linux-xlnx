@@ -278,7 +278,6 @@ extern ctl_table key_sysctls[];
  * the userspace interface
  */
 extern int install_thread_keyring_to_cred(struct cred *cred);
-extern int exec_keys(struct task_struct *tsk);
 extern void key_fsuid_changed(struct task_struct *tsk);
 extern void key_fsgid_changed(struct task_struct *tsk);
 extern void key_init(void);
@@ -295,7 +294,6 @@ extern void key_init(void);
 #define is_key_possessed(k)		0
 #define install_session_keyring(k)	NULL
 #define install_thread_keyring_to_cred(c) NULL
-#define exec_keys(t)			do { } while(0)
 #define key_fsuid_changed(t)		do { } while(0)
 #define key_fsgid_changed(t)		do { } while(0)
 #define key_init()			do { } while(0)
