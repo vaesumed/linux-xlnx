@@ -333,7 +333,7 @@ static int __devinit usb_hcd_pnx4008_probe(struct platform_device *pdev)
 
 	int ret = 0, irq;
 
-	dev_dbg(&pdev->dev, "%s: " DRIVER_INFO " (pnx4008)\n", hcd_name);
+	usb_dbg(&pdev->dev, "%s: " DRIVER_INFO " (pnx4008)\n", hcd_name);
 	if (usb_disabled()) {
 		err("USB is disabled");
 		ret = -ENODEV;
@@ -400,7 +400,7 @@ static int __devinit usb_hcd_pnx4008_probe(struct platform_device *pdev)
 	hcd->rsrc_start = pdev->resource[0].start;
 	hcd->rsrc_len = pdev->resource[0].end - pdev->resource[0].start + 1;
 	if (!request_mem_region(hcd->rsrc_start, hcd->rsrc_len, hcd_name)) {
-		dev_dbg(&pdev->dev, "request_mem_region failed\n");
+		usb_dbg(&pdev->dev, "request_mem_region failed\n");
 		ret =  -ENOMEM;
 		goto out4;
 	}

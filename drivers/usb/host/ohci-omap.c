@@ -193,7 +193,7 @@ static int ohci_omap_init(struct usb_hcd *hcd)
 	int			need_transceiver = (config->otg != 0);
 	int			ret;
 
-	dev_dbg(hcd->self.controller, "starting USB Controller\n");
+	usb_dbg(hcd->self.controller, "starting USB Controller\n");
 
 	if (config->otg) {
 		ohci_to_hcd(ohci)->self.otg_port = config->otg;
@@ -214,7 +214,7 @@ static int ohci_omap_init(struct usb_hcd *hcd)
 		if (ohci->transceiver) {
 			int	status = otg_set_host(ohci->transceiver,
 						&ohci_to_hcd(ohci)->self);
-			dev_dbg(hcd->self.controller, "init %s transceiver, status %d\n",
+			usb_dbg(hcd->self.controller, "init %s transceiver, status %d\n",
 					ohci->transceiver->label, status);
 			if (status) {
 				if (ohci->transceiver)
@@ -281,7 +281,7 @@ static int ohci_omap_init(struct usb_hcd *hcd)
 
 static void ohci_omap_stop(struct usb_hcd *hcd)
 {
-	dev_dbg(hcd->self.controller, "stopping USB Controller\n");
+	usb_dbg(hcd->self.controller, "stopping USB Controller\n");
 	omap_ohci_clock_power(0);
 }
 
@@ -339,7 +339,7 @@ static int usb_hcd_omap_probe (const struct hc_driver *driver,
 	hcd->rsrc_len = pdev->resource[0].end - pdev->resource[0].start + 1;
 
 	if (!request_mem_region(hcd->rsrc_start, hcd->rsrc_len, hcd_name)) {
-		dev_dbg(&pdev->dev, "request_mem_region failed\n");
+		usb_dbg(&pdev->dev, "request_mem_region failed\n");
 		retval = -EBUSY;
 		goto err1;
 	}

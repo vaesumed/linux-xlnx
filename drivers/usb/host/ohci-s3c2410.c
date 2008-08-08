@@ -47,7 +47,7 @@ static void s3c2410_start_hc(struct platform_device *dev, struct usb_hcd *hcd)
 {
 	struct s3c2410_hcd_info *info = dev->dev.platform_data;
 
-	dev_dbg(&dev->dev, "s3c2410_start_hc:\n");
+	usb_dbg(&dev->dev, "s3c2410_start_hc:\n");
 
 	clk_enable(usb_clk);
 	mdelay(2);			/* let the bus clock stabilise */
@@ -68,7 +68,7 @@ static void s3c2410_stop_hc(struct platform_device *dev)
 {
 	struct s3c2410_hcd_info *info = dev->dev.platform_data;
 
-	dev_dbg(&dev->dev, "s3c2410_stop_hc:\n");
+	usb_dbg(&dev->dev, "s3c2410_stop_hc:\n");
 
 	if (info != NULL) {
 		info->report_oc = NULL;
@@ -109,7 +109,7 @@ ohci_s3c2410_hub_status_data (struct usb_hcd *hcd, char *buf)
 	for (portno = 0; portno < 2; port++, portno++) {
 		if (port->oc_changed == 1 &&
 		    port->flags & S3C_HCDFLG_USED) {
-			dev_dbg(hcd->self.controller,
+			usb_dbg(hcd->self.controller,
 				"oc change on port %d\n", portno);
 
 			if (orig < 1)
@@ -160,7 +160,7 @@ static int ohci_s3c2410_hub_control (
 	int ret = -EINVAL;
 	u32 *data = (u32 *)buf;
 
-	dev_dbg(hcd->self.controller,
+	usb_dbg(hcd->self.controller,
 		"s3c2410_hub_control(%p,0x%04x,0x%04x,0x%04x,%p,%04x)\n",
 		hcd, typeReq, wValue, wIndex, buf, wLength);
 
@@ -178,7 +178,7 @@ static int ohci_s3c2410_hub_control (
 	switch (typeReq) {
 	case SetPortFeature:
 		if (wValue == USB_PORT_FEAT_POWER) {
-			dev_dbg(hcd->self.controller, "SetPortFeat: POWER\n");
+			usb_dbg(hcd->self.controller, "SetPortFeat: POWER\n");
 			s3c2410_usb_set_power(info, wIndex, 1);
 			goto out;
 		}
@@ -187,7 +187,7 @@ static int ohci_s3c2410_hub_control (
 	case ClearPortFeature:
 		switch (wValue) {
 		case USB_PORT_FEAT_C_OVER_CURRENT:
-			dev_dbg(hcd->self.controller,
+			usb_dbg(hcd->self.controller,
 				"ClearPortFeature: C_OVER_CURRENT\n");
 
 			if (valid_port(wIndex)) {
@@ -198,7 +198,7 @@ static int ohci_s3c2410_hub_control (
 			goto out;
 
 		case USB_PORT_FEAT_OVER_CURRENT:
-			dev_dbg(hcd->self.controller,
+			usb_dbg(hcd->self.controller,
 				"ClearPortFeature: OVER_CURRENT\n");
 
 			if (valid_port(wIndex)) {
@@ -208,7 +208,7 @@ static int ohci_s3c2410_hub_control (
 			goto out;
 
 		case USB_PORT_FEAT_POWER:
-			dev_dbg(hcd->self.controller,
+			usb_dbg(hcd->self.controller,
 				"ClearPortFeature: POWER\n");
 
 			if (valid_port(wIndex)) {
@@ -233,7 +233,7 @@ static int ohci_s3c2410_hub_control (
 		if (info->power_control == NULL)
 			return ret;
 
-		dev_dbg(hcd->self.controller, "wHubCharacteristics 0x%04x\n",
+		usb_dbg(hcd->self.controller, "wHubCharacteristics 0x%04x\n",
 			desc->wHubCharacteristics);
 
 		/* remove the old configurations for power-switching, and
@@ -248,7 +248,7 @@ static int ohci_s3c2410_hub_control (
 			desc->wHubCharacteristics |=  cpu_to_le16(0x0008|0x0001);
 		}
 
-		dev_dbg(hcd->self.controller, "wHubCharacteristics after 0x%04x\n",
+		usb_dbg(hcd->self.controller, "wHubCharacteristics after 0x%04x\n",
 			desc->wHubCharacteristics);
 
 		return ret;
@@ -256,7 +256,7 @@ static int ohci_s3c2410_hub_control (
 	case GetPortStatus:
 		/* check port status */
 
-		dev_dbg(hcd->self.controller, "GetPortStatus(%d)\n", wIndex);
+		usb_dbg(hcd->self.controller, "GetPortStatus(%d)\n", wIndex);
 
 		if (valid_port(wIndex)) {
 			if (info->port[wIndex-1].oc_changed) {
