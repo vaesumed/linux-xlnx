@@ -94,13 +94,13 @@ int usb_hcd_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		hcd->rsrc_len = pci_resource_len(dev, 0);
 		if (!request_mem_region(hcd->rsrc_start, hcd->rsrc_len,
 				driver->description)) {
-			dev_dbg(&dev->dev, "controller already in use\n");
+			usb_dbg(&dev->dev, "controller already in use\n");
 			retval = -EBUSY;
 			goto err2;
 		}
 		hcd->regs = ioremap_nocache(hcd->rsrc_start, hcd->rsrc_len);
 		if (hcd->regs == NULL) {
-			dev_dbg(&dev->dev, "error mapping memory\n");
+			usb_dbg(&dev->dev, "error mapping memory\n");
 			retval = -EFAULT;
 			goto err3;
 		}
@@ -121,7 +121,7 @@ int usb_hcd_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
 				break;
 		}
 		if (region == PCI_ROM_RESOURCE) {
-			dev_dbg(&dev->dev, "no i/o regions available\n");
+			usb_dbg(&dev->dev, "no i/o regions available\n");
 			retval = -EBUSY;
 			goto err1;
 		}
@@ -256,12 +256,12 @@ int usb_hcd_pci_suspend(struct pci_dev *dev, pm_message_t message)
 
 		if (message.event == PM_EVENT_FREEZE ||
 				message.event == PM_EVENT_PRETHAW) {
-			dev_dbg(hcd->self.controller, "--> no state change\n");
+			usb_dbg(hcd->self.controller, "--> no state change\n");
 			goto done;
 		}
 
 		if (!has_pci_pm) {
-			dev_dbg(hcd->self.controller, "--> PCI D0/legacy\n");
+			usb_dbg(hcd->self.controller, "--> PCI D0/legacy\n");
 			goto done;
 		}
 
@@ -277,7 +277,7 @@ int usb_hcd_pci_suspend(struct pci_dev *dev, pm_message_t message)
 
 			wake = wake && device_may_wakeup(hcd->self.controller);
 
-			dev_dbg(hcd->self.controller, "--> PCI D3%s\n",
+			usb_dbg(hcd->self.controller, "--> PCI D3%s\n",
 					wake ? "/wakeup" : "");
 
 			/* Ignore these return values.  We rely on pci code to
@@ -287,13 +287,13 @@ int usb_hcd_pci_suspend(struct pci_dev *dev, pm_message_t message)
 			(void) pci_enable_wake(dev, PCI_D3hot, wake);
 			(void) pci_enable_wake(dev, PCI_D3cold, wake);
 		} else {
-			dev_dbg(&dev->dev, "PCI D3 suspend fail, %d\n",
+			usb_dbg(&dev->dev, "PCI D3 suspend fail, %d\n",
 					retval);
 			(void) usb_hcd_pci_resume(dev);
 		}
 
 	} else if (hcd->state != HC_STATE_HALT) {
-		dev_dbg(hcd->self.controller, "hcd state %d; not suspended\n",
+		usb_dbg(hcd->self.controller, "hcd state %d; not suspended\n",
 			hcd->state);
 		WARN_ON(1);
 		retval = -EINVAL;
@@ -331,7 +331,7 @@ int usb_hcd_pci_resume(struct pci_dev *dev)
 
 	hcd = pci_get_drvdata(dev);
 	if (hcd->state != HC_STATE_SUSPENDED) {
-		dev_dbg(hcd->self.controller,
+		usb_dbg(hcd->self.controller,
 				"can't resume, not suspended!\n");
 		return 0;
 	}
@@ -364,7 +364,7 @@ int usb_hcd_pci_resume(struct pci_dev *dev)
 			/* Clean case:  power to USB and to HC registers was
 			 * maintained; remote wakeup is easy.
 			 */
-			dev_dbg(hcd->self.controller, "resume from PCI D%d\n",
+			usb_dbg(hcd->self.controller, "resume from PCI D%d\n",
 					pmcr);
 		} else {
 			/* Clean:  HC lost Vcc power, D0 uninitialized
@@ -376,7 +376,7 @@ int usb_hcd_pci_resume(struct pci_dev *dev)
 			 *   + after BIOS init
 			 *   + after Linux init (HCD statically linked)
 			 */
-			dev_dbg(hcd->self.controller,
+			usb_dbg(hcd->self.controller,
 				"PCI D0, from previous PCI D%d\n",
 				dev->current_state);
 		}
@@ -386,7 +386,7 @@ int usb_hcd_pci_resume(struct pci_dev *dev)
 		(void) pci_enable_wake(dev, PCI_D3cold, 0);
 	} else {
 		/* Same basic cases: clean (powered/not), dirty */
-		dev_dbg(hcd->self.controller, "PCI legacy resume\n");
+		usb_dbg(hcd->self.controller, "PCI legacy resume\n");
 	}
 
 	/* NOTE:  the PCI API itself is asymmetric here.  We don't need to
