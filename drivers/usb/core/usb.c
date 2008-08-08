@@ -61,6 +61,14 @@ MODULE_PARM_DESC(autosuspend, "default autosuspend delay");
 #define usb_autosuspend_delay		0
 #endif
 
+/* if debug is on or not */
+int usb_debug;
+
+/* USB debugging */
+#if defined(CONFIG_USB_DEBUG_MESSAGES)
+module_param_named(debug, usb_debug, bool, 0644);
+MODULE_PARM_DESC(debug, "USB debugging enabled or not");
+#endif
 
 /**
  * usb_ifnum_to_if - get the interface object with a given interface number
@@ -502,14 +510,14 @@ static struct usb_device *match_device(struct usb_device *dev,
 	struct usb_device *ret_dev = NULL;
 	int child;
 
-	dev_dbg(&dev->dev, "check for vendor %04x, product %04x ...\n",
+	usb_dbg(&dev->dev, "check for vendor %04x, product %04x ...\n",
 	    le16_to_cpu(dev->descriptor.idVendor),
 	    le16_to_cpu(dev->descriptor.idProduct));
 
 	/* see if this device matches */
 	if ((vendor_id == le16_to_cpu(dev->descriptor.idVendor)) &&
 	    (product_id == le16_to_cpu(dev->descriptor.idProduct))) {
-		dev_dbg(&dev->dev, "matched this device!\n");
+		usb_dbg(&dev->dev, "matched this device!\n");
 		ret_dev = usb_get_dev(dev);
 		goto exit;
 	}
