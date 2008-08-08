@@ -25,6 +25,7 @@
 
 #include <linux/input.h>
 #include <linux/workqueue.h>
+#include <linux/interrupt.h>
 
 #define IR_TYPE_RC5     1
 #define IR_TYPE_PD      2 /* Pulse distance encoded IR */
@@ -85,6 +86,10 @@ struct card_ir {
 	u32 code;			/* raw code under construction */
 	struct timeval base_time;	/* time of last seen code */
 	int active;			/* building raw code */
+
+	/* NEC decoding */
+	u32			nec_gpio;
+	struct tasklet_struct   tlet;
 };
 
 void ir_input_init(struct input_dev *dev, struct ir_input_state *ir,
@@ -139,6 +144,7 @@ extern IR_KEYTAB_TYPE ir_codes_proteus_2309[IR_KEYTAB_SIZE];
 extern IR_KEYTAB_TYPE ir_codes_budget_ci_old[IR_KEYTAB_SIZE];
 extern IR_KEYTAB_TYPE ir_codes_asus_pc39[IR_KEYTAB_SIZE];
 extern IR_KEYTAB_TYPE ir_codes_encore_enltv[IR_KEYTAB_SIZE];
+extern IR_KEYTAB_TYPE ir_codes_encore_enltv2[IR_KEYTAB_SIZE];
 extern IR_KEYTAB_TYPE ir_codes_tt_1500[IR_KEYTAB_SIZE];
 extern IR_KEYTAB_TYPE ir_codes_fusionhdtv_mce[IR_KEYTAB_SIZE];
 extern IR_KEYTAB_TYPE ir_codes_behold[IR_KEYTAB_SIZE];

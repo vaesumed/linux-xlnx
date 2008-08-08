@@ -116,7 +116,6 @@ static int video_open(struct inode *inode, struct file *file)
 
 	if (minor >= VIDEO_NUM_DEVICES)
 		return -ENODEV;
-	lock_kernel();
 	mutex_lock(&videodev_lock);
 	vfl = video_device[minor];
 	if (vfl == NULL) {
@@ -126,7 +125,6 @@ static int video_open(struct inode *inode, struct file *file)
 		vfl = video_device[minor];
 		if (vfl == NULL) {
 			mutex_unlock(&videodev_lock);
-			unlock_kernel();
 			return -ENODEV;
 		}
 	}
@@ -140,7 +138,6 @@ static int video_open(struct inode *inode, struct file *file)
 	}
 	fops_put(old_fops);
 	mutex_unlock(&videodev_lock);
-	unlock_kernel();
 	return err;
 }
 
@@ -222,11 +219,13 @@ int video_register_device(struct video_device *vfd, int type, int nr)
 EXPORT_SYMBOL(video_register_device);
 
 /**
- *	video_register_device - register video4linux devices
+ *	video_register_device_index - register video4linux devices
  *	@vfd:  video device structure we want to register
  *	@type: type of device to register
  *	@nr:   which device number (0 == /dev/video0, 1 == /dev/video1, ...
  *             -1 == first free)
+ *	@index: stream number based on parent device;
+ *		-1 if auto assign, requested number otherwise
  *
  *	The registration code assigns minor numbers based on the type
  *	requested. -ENFILE is returned in all the device slots for this
