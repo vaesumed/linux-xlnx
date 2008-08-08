@@ -483,6 +483,9 @@ static int ohci_init (struct ohci_hcd *ohci)
 	int ret;
 	struct usb_hcd *hcd = ohci_to_hcd(ohci);
 
+	if (distrust_firmware)
+		ohci->flags |= OHCI_QUIRK_HUB_POWER;
+
 	disable (ohci);
 	ohci->regs = hcd->regs;
 
@@ -689,7 +692,8 @@ retry:
 		temp |= RH_A_NOCP;
 		temp &= ~(RH_A_POTPGT | RH_A_NPS);
 		ohci_writel (ohci, temp, &ohci->regs->roothub.a);
-	} else if ((ohci->flags & OHCI_QUIRK_AMD756) || distrust_firmware) {
+	} else if ((ohci->flags & OHCI_QUIRK_AMD756) ||
+			(ohci->flags & OHCI_QUIRK_HUB_POWER)) {
 		/* hub power always on; required for AMD-756 and some
 		 * Mac platforms.  ganged overcurrent reporting, if any.
 		 */
@@ -882,6 +886,8 @@ static void ohci_stop (struct usb_hcd *hcd)
 
 	if (quirk_zfmicro(ohci))
 		del_timer(&ohci->unlink_watchdog);
+	if (quirk_amdiso(ohci))
+		amd_iso_dev_put();
 
 	remove_debug_files (ohci);
 	ohci_mem_cleanup (ohci);

@@ -512,7 +512,7 @@ static void acm_softint(struct work_struct *work)
 static void acm_waker(struct work_struct *waker)
 {
 	struct acm *acm = container_of(waker, struct acm, waker);
-	long flags;
+	unsigned long flags;
 	int rv;
 
 	rv = usb_autopm_get_interface(acm->control);
@@ -1221,11 +1221,11 @@ static void acm_disconnect(struct usb_interface *intf)
 	struct acm *acm = usb_get_intfdata(intf);
 	struct usb_device *usb_dev = interface_to_usbdev(intf);
 
-	mutex_lock(&open_mutex);
-	if (!acm || !acm->dev) {
-		mutex_unlock(&open_mutex);
+
+	if (!acm || !acm->dev)
 		return;
-	}
+
+	mutex_lock(&open_mutex);
 	if (acm->country_codes){
 		device_remove_file(&acm->control->dev,
 				&dev_attr_wCountryCodes);
