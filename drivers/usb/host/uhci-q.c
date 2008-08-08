@@ -649,7 +649,7 @@ static int uhci_check_bandwidth(struct uhci_hcd *uhci, struct uhci_qh *qh)
 
 	/* Maximum allowable periodic bandwidth is 90%, or 900 us per frame */
 	if (minimax_load + qh->load > 900) {
-		dev_dbg(uhci_dev(uhci), "bandwidth allocation failed: "
+		usb_dbg(uhci_dev(uhci), "bandwidth allocation failed: "
 				"period %d, phase %d, %d + %d us\n",
 				qh->period, qh->phase, minimax_load, qh->load);
 		return -ENOSPC;
@@ -683,7 +683,7 @@ static void uhci_reserve_bandwidth(struct uhci_hcd *uhci, struct uhci_qh *qh)
 		break;
 	}
 	qh->bandwidth_reserved = 1;
-	dev_dbg(uhci_dev(uhci),
+	usb_dbg(uhci_dev(uhci),
 			"%s dev %d ep%02x-%s, period %d, phase %d, %d us\n",
 			"reserve", qh->udev->devnum,
 			qh->hep->desc.bEndpointAddress, p,
@@ -716,7 +716,7 @@ static void uhci_release_bandwidth(struct uhci_hcd *uhci, struct uhci_qh *qh)
 		break;
 	}
 	qh->bandwidth_reserved = 0;
-	dev_dbg(uhci_dev(uhci),
+	usb_dbg(uhci_dev(uhci),
 			"%s dev %d ep%02x-%s, period %d, phase %d, %d us\n",
 			"release", qh->udev->devnum,
 			qh->hep->desc.bEndpointAddress, p,
@@ -1169,7 +1169,7 @@ static int uhci_result_common(struct uhci_hcd *uhci, struct urb *urb)
 					uhci_packetout(td_token(td)));
 			if ((debug == 1 && ret != -EPIPE) || debug > 1) {
 				/* Some debugging code */
-				dev_dbg(&urb->dev->dev,
+				usb_dbg(&urb->dev->dev,
 						"%s: failed with status %x\n",
 						__func__, status);
 

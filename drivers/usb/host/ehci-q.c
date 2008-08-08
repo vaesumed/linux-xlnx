@@ -205,13 +205,12 @@ static int qtd_copy_status (
 				&& (!ehci_is_TDI(ehci)
 			                || urb->dev->tt->hub !=
 					   ehci_to_hcd(ehci)->self.root_hub)) {
-#ifdef DEBUG
 			struct usb_device *tt = urb->dev->tt->hub;
-			dev_dbg (&tt->dev,
+			usb_dbg (&tt->dev,
 				"clear tt buffer port %d, a%d ep%d t%08x\n",
 				urb->dev->ttport, urb->dev->devnum,
 				usb_pipeendpoint (urb->pipe), token);
-#endif /* DEBUG */
+
 			/* REVISIT ARC-derived cores don't clear the root
 			 * hub TT buffer in this way...
 			 */

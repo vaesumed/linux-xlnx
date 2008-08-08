@@ -220,14 +220,14 @@ static int __init ehci_orion_drv_probe(struct platform_device *pdev)
 
 	if (!request_mem_region(res->start, res->end - res->start + 1,
 				ehci_orion_hc_driver.description)) {
-		dev_dbg(&pdev->dev, "controller already in use\n");
+		usb_dbg(&pdev->dev, "controller already in use\n");
 		err = -EBUSY;
 		goto err1;
 	}
 
 	regs = ioremap(res->start, res->end - res->start + 1);
 	if (regs == NULL) {
-		dev_dbg(&pdev->dev, "error mapping memory\n");
+		usb_dbg(&pdev->dev, "error mapping memory\n");
 		err = -EFAULT;
 		goto err2;
 	}
