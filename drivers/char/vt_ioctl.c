@@ -374,6 +374,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	void __user *up = (void __user *)arg;
 	int i, perm;
 	int ret = 0;
+	struct winsize ws;
 
 	console = vc->vc_num;
 
@@ -395,6 +396,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
  
 	kbd = kbd_table + console;
 	switch (cmd) {
+	case TIOCLINUX:
+		return tioclinux(tty, arg);
 	case KIOCSOUND:
 		if (!perm)
 			goto eperm;
@@ -947,14 +950,18 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		    get_user(cc, &vtsizes->v_cols))
 			ret = -EFAULT;
 		else {
+			acquire_console_sem();
 			for (i = 0; i < MAX_NR_CONSOLES; i++) {
 				vc = vc_cons[i].d;
 
 				if (vc) {
 					vc->vc_resize_user = 1;
-					vc_lock_resize(vc_cons[i].d, cc, ll);
+					ws.ws_col = cc;
+					ws.ws_row = ll;
+					vc_resize(vc_cons[i].d, cc, ll);
 				}
 			}
+			release_console_sem();
 		}
 		break;
 	}

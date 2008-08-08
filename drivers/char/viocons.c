@@ -704,6 +704,7 @@ static int viotty_ioctl(struct tty_struct *tty, struct file *file,
 
 	case KDSKBLED:
 		return 0;
+	/* No call to TIOCLINUX is needed in this driver */
 	}
 	return -ENOIOCTLCMD;
 }
