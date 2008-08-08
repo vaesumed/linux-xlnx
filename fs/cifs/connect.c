@@ -351,11 +351,9 @@ cifs_demultiplex_thread(struct TCP_Server_Info *server)
 
 	current->flags |= PF_MEMALLOC;
 	cFYI(1, ("Demultiplex PID: %d", task_pid_nr(current)));
-	write_lock(&GlobalSMBSeslock);
-	atomic_inc(&tcpSesAllocCount);
-	length = tcpSesAllocCount.counter;
-	write_unlock(&GlobalSMBSeslock);
-	if (length  > 1)
+
+	length = atomic_inc_return(&tcpSesAllocCount);
+	if (length > 1)
 		mempool_resize(cifs_req_poolp, length + cifs_min_rcv,
 				GFP_KERNEL);
 
@@ -745,14 +743,11 @@ multi_t2_fnd:
 		coming home not much else we can do but free the memory */
 	}
 
-	write_lock(&GlobalSMBSeslock);
-	atomic_dec(&tcpSesAllocCount);
-	length = tcpSesAllocCount.counter;
-
 	/* last chance to mark ses pointers invalid
 	if there are any pointing to this (e.g
 	if a crazy root user tried to kill cifsd
 	kernel thread explicitly this might happen) */
+	write_lock(&GlobalSMBSeslock);
 	list_for_each(tmp, &GlobalSMBSessionList) {
 		ses = list_entry(tmp, struct cifsSesInfo,
 				cifsSessionList);
@@ -763,6 +758,8 @@ multi_t2_fnd:
 
 	kfree(server->hostname);
 	kfree(server);
+
+	length = atomic_dec_return(&tcpSesAllocCount);
 	if (length  > 0)
 		mempool_resize(cifs_req_poolp, length + cifs_min_rcv,
 				GFP_KERNEL);
@@ -3623,97 +3620,91 @@ int cifs_setup_session(unsigned int xid, struct cifsSesInfo *pSesInfo,
 		}
 		first_time = 1;
 	}
-	if (!rc) {
-		pSesInfo->flags = 0;
-		pSesInfo->capabilities = pSesInfo->server->capabilities;
-		if (linuxExtEnabled == 0)
-			pSesInfo->capabilities &= (~CAP_UNIX);
+
+	if (rc)
+		goto ss_err_exit;
+
+	pSesInfo->flags = 0;
+	pSesInfo->capabilities = pSesInfo->server->capabilities;
+	if (linuxExtEnabled == 0)
+		pSesInfo->capabilities &= (~CAP_UNIX);
 	/*	pSesInfo->sequence_number = 0;*/
-		cFYI(1,
-		      ("Security Mode: 0x%x Capabilities: 0x%x TimeAdjust: %d",
-			pSesInfo->server->secMode,
-			pSesInfo->server->capabilities,
-			pSesInfo->server->timeAdj));
-		if (experimEnabled < 2)
-			rc = CIFS_SessSetup(xid, pSesInfo,
-					    first_time, nls_info);
-		else if (extended_security
-				&& (pSesInfo->capabilities
-					& CAP_EXTENDED_SECURITY)
-				&& (pSesInfo->server->secType == NTLMSSP)) {
-			rc = -EOPNOTSUPP;
-		} else if (extended_security
-			   && (pSesInfo->capabilities & CAP_EXTENDED_SECURITY)
-			   && (pSesInfo->server->secType == RawNTLMSSP)) {
-			cFYI(1, ("NTLMSSP sesssetup"));
-			rc = CIFSNTLMSSPNegotiateSessSetup(xid,
-						pSesInfo,
-						&ntlmv2_flag,
-						nls_info);
-			if (!rc) {
-				if (ntlmv2_flag) {
-					char *v2_response;
-					cFYI(1, ("more secure NTLM ver2 hash"));
-					if (CalcNTLMv2_partial_mac_key(pSesInfo,
-						nls_info)) {
-						rc = -ENOMEM;
-						goto ss_err_exit;
-					} else
-						v2_response = kmalloc(16 + 64 /* blob */, GFP_KERNEL);
-					if (v2_response) {
-						CalcNTLMv2_response(pSesInfo,
-								   v2_response);
-				/*		if (first_time)
-						  cifs_calculate_ntlmv2_mac_key(
-						   pSesInfo->server->mac_signing_key,
-						   response, ntlm_session_key,*/
-						kfree(v2_response);
+	cFYI(1, ("Security Mode: 0x%x Capabilities: 0x%x TimeAdjust: %d",
+		 pSesInfo->server->secMode,
+		 pSesInfo->server->capabilities,
+		 pSesInfo->server->timeAdj));
+	if (experimEnabled < 2)
+		rc = CIFS_SessSetup(xid, pSesInfo, first_time, nls_info);
+	else if (extended_security
+			&& (pSesInfo->capabilities & CAP_EXTENDED_SECURITY)
+			&& (pSesInfo->server->secType == NTLMSSP)) {
+		rc = -EOPNOTSUPP;
+	} else if (extended_security
+			&& (pSesInfo->capabilities & CAP_EXTENDED_SECURITY)
+			&& (pSesInfo->server->secType == RawNTLMSSP)) {
+		cFYI(1, ("NTLMSSP sesssetup"));
+		rc = CIFSNTLMSSPNegotiateSessSetup(xid, pSesInfo, &ntlmv2_flag,
+						   nls_info);
+		if (!rc) {
+			if (ntlmv2_flag) {
+				char *v2_response;
+				cFYI(1, ("more secure NTLM ver2 hash"));
+				if (CalcNTLMv2_partial_mac_key(pSesInfo,
+								nls_info)) {
+					rc = -ENOMEM;
+					goto ss_err_exit;
+				} else
+					v2_response = kmalloc(16 + 64 /* blob*/,
+								GFP_KERNEL);
+				if (v2_response) {
+					CalcNTLMv2_response(pSesInfo,
+								v2_response);
+				/*	if (first_time)
+						cifs_calculate_ntlmv2_mac_key */
+					kfree(v2_response);
 					/* BB Put dummy sig in SessSetup PDU? */
-					} else {
-						rc = -ENOMEM;
-						goto ss_err_exit;
-					}
-
 				} else {
-					SMBNTencrypt(pSesInfo->password,
-						pSesInfo->server->cryptKey,
-						ntlm_session_key);
-
-					if (first_time)
-						cifs_calculate_mac_key(
-							&pSesInfo->server->mac_signing_key,
-							ntlm_session_key,
-							pSesInfo->password);
+					rc = -ENOMEM;
+					goto ss_err_exit;
 				}
+
+			} else {
+				SMBNTencrypt(pSesInfo->password,
+					     pSesInfo->server->cryptKey,
+					     ntlm_session_key);
+
+				if (first_time)
+					cifs_calculate_mac_key(
+					     &pSesInfo->server->mac_signing_key,
+					     ntlm_session_key,
+					     pSesInfo->password);
+			}
 			/* for better security the weaker lanman hash not sent
 			   in AuthSessSetup so we no longer calculate it */
 
-				rc = CIFSNTLMSSPAuthSessSetup(xid,
-					pSesInfo,
-					ntlm_session_key,
-					ntlmv2_flag,
-					nls_info);
-			}
-		} else { /* old style NTLM 0.12 session setup */
-			SMBNTencrypt(pSesInfo->password,
-				pSesInfo->server->cryptKey,
-				ntlm_session_key);
+			rc = CIFSNTLMSSPAuthSessSetup(xid, pSesInfo,
+						      ntlm_session_key,
+						      ntlmv2_flag,
+						      nls_info);
+		}
+	} else { /* old style NTLM 0.12 session setup */
+		SMBNTencrypt(pSesInfo->password, pSesInfo->server->cryptKey,
+			     ntlm_session_key);
 
-			if (first_time)
-				cifs_calculate_mac_key(
+		if (first_time)
+			cifs_calculate_mac_key(
 					&pSesInfo->server->mac_signing_key,
 					ntlm_session_key, pSesInfo->password);
 
-			rc = CIFSSessSetup(xid, pSesInfo,
-				ntlm_session_key, nls_info);
-		}
-		if (rc) {
-			cERROR(1, ("Send error in SessSetup = %d", rc));
-		} else {
-			cFYI(1, ("CIFS Session Established successfully"));
-			pSesInfo->status = CifsGood;
-		}
+		rc = CIFSSessSetup(xid, pSesInfo, ntlm_session_key, nls_info);
 	}
+	if (rc) {
+		cERROR(1, ("Send error in SessSetup = %d", rc));
+	} else {
+		cFYI(1, ("CIFS Session Established successfully"));
+			pSesInfo->status = CifsGood;
+	}
+
 ss_err_exit:
 	return rc;
 }
