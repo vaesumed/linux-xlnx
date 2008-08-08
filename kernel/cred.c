@@ -65,16 +65,18 @@ static void put_tgcred_rcu(struct rcu_head *rcu)
 }
 #endif
 
+#ifdef CONFIG_KEYS
 /*
  * Release a set of thread group credentials.
  */
 void put_tgcred(struct thread_group_cred *tgcred)
 {
-#ifdef CONFIG_KEYS
 	if (atomic_dec_and_test(&tgcred->usage))
 		call_rcu(&tgcred->rcu, put_tgcred_rcu);
-#endif
 }
+#else
+#define put_tgcred(t)
+#endif
 
 /*
  * The RCU callback to actually dispose of a set of credentials
@@ -283,12 +285,18 @@ error:
  */
 int copy_creds(struct task_struct *p, unsigned long clone_flags)
 {
+#ifdef CONFIG_KEYS
 	struct thread_group_cred *tgcred;
+#endif
 	struct cred *new;
 
 	mutex_init(&p->cred_exec_mutex);
 
+#ifdef CONFIG_KEYS
 	if (!p->cred->thread_keyring && clone_flags & CLONE_THREAD) {
+#else
+	if (clone_flags & CLONE_THREAD) {
+#endif
 		p->real_cred = get_cred(p->cred);
 		get_cred(p->cred);
 		return 0;
