@@ -303,7 +303,7 @@ static int uhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 			wPortStatus |= USB_PORT_STAT_LOW_SPEED;
 
 		if (wPortChange)
-			dev_dbg(uhci_dev(uhci), "port %d portsc %04x,%02x\n",
+			usb_dbg(uhci_dev(uhci), "port %d portsc %04x,%02x\n",
 					wIndex, status, lstatus);
 
 		*(__le16 *)buf = cpu_to_le16(wPortStatus);

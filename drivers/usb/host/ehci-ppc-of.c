@@ -115,7 +115,7 @@ ehci_hcd_ppc_of_probe(struct of_device *op, const struct of_device_id *match)
 	if (usb_disabled())
 		return -ENODEV;
 
-	dev_dbg(&op->dev, "initializing PPC-OF USB Controller\n");
+	usb_dbg(&op->dev, "initializing PPC-OF USB Controller\n");
 
 	rv = of_address_to_resource(dn, 0, &res);
 	if (rv)
@@ -193,7 +193,7 @@ static int ehci_hcd_ppc_of_remove(struct of_device *op)
 	struct usb_hcd *hcd = dev_get_drvdata(&op->dev);
 	dev_set_drvdata(&op->dev, NULL);
 
-	dev_dbg(&op->dev, "stopping PPC-OF USB Controller\n");
+	usb_dbg(&op->dev, "stopping PPC-OF USB Controller\n");
 
 	usb_remove_hcd(hcd);
 
