@@ -2,10 +2,6 @@
 # Makefile for USB Host Controller Drivers
 #
 
-ifeq ($(CONFIG_USB_DEBUG),y)
-	EXTRA_CFLAGS		+= -DDEBUG
-endif
-
 isp1760-objs := isp1760-hcd.o isp1760-if.o
 
 obj-$(CONFIG_PCI)		+= pci-quirks.o
