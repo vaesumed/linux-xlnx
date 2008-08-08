@@ -14,6 +14,7 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/syscalls.h>
+#include <linux/sched.h>
 #include <asm/uaccess.h>
 
 /*
