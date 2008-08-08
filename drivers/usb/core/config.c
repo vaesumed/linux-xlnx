@@ -169,7 +169,7 @@ static int usb_parse_endpoint(struct device *ddev, int cfgno, int inum,
 	    USB_DT_INTERFACE, &n);
 	endpoint->extralen = i;
 	if (n > 0)
-		dev_dbg(ddev, "skipped %d descriptor%s after %s\n",
+		usb_dbg(ddev, "skipped %d descriptor%s after %s\n",
 		    n, plural(n), "endpoint");
 	return buffer - buffer0 + i;
 
@@ -248,7 +248,7 @@ static int usb_parse_interface(struct device *ddev, int cfgno,
 	    USB_DT_INTERFACE, &n);
 	alt->extralen = i;
 	if (n > 0)
-		dev_dbg(ddev, "skipped %d descriptor%s after %s\n",
+		usb_dbg(ddev, "skipped %d descriptor%s after %s\n",
 		    n, plural(n), "interface");
 	buffer += i;
 	size -= i;
@@ -459,7 +459,7 @@ static int usb_parse_configuration(struct device *ddev, int cfgidx,
 	    USB_DT_INTERFACE, &n);
 	config->extralen = i;
 	if (n > 0)
-		dev_dbg(ddev, "skipped %d descriptor%s after %s\n",
+		usb_dbg(ddev, "skipped %d descriptor%s after %s\n",
 		    n, plural(n), "configuration");
 	buffer += i;
 	size -= i;
