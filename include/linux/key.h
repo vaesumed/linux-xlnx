@@ -286,14 +286,12 @@ extern void key_init(void);
 
 #define key_validate(k)			0
 #define key_serial(k)			0
-#define key_get(k) 			NULL
+#define key_get(k) 			({ NULL; })
 #define key_put(k)			do { } while(0)
 #define key_ref_put(k)			do { } while(0)
 #define make_key_ref(k, p)		NULL
 #define key_ref_to_ptr(k)		NULL
 #define is_key_possessed(k)		0
-#define install_session_keyring(k)	NULL
-#define install_thread_keyring_to_cred(c) NULL
 #define key_fsuid_changed(t)		do { } while(0)
 #define key_fsgid_changed(t)		do { } while(0)
 #define key_init()			do { } while(0)
