@@ -1,14 +1,6 @@
 #
 # USB Core configuration
 #
-config USB_DEBUG
-	bool "USB verbose debug messages"
-	depends on USB
-	help
-	  Say Y here if you want the USB core & hub drivers to produce a bunch
-	  of debug messages to the system log. Select this if you are having a
-	  problem with USB support and want to see more of what is going on.
-
 config USB_DEBUG_MESSAGES
 	bool
 	prompt "USB debugging messages" if EMBEDDED
