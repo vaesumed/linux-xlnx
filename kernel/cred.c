@@ -69,7 +69,7 @@ static void put_tgcred_rcu(struct rcu_head *rcu)
 /*
  * Release a set of thread group credentials.
  */
-void put_tgcred(struct thread_group_cred *tgcred)
+static void put_tgcred(struct thread_group_cred *tgcred)
 {
 	if (atomic_dec_and_test(&tgcred->usage))
 		call_rcu(&tgcred->rcu, put_tgcred_rcu);
@@ -457,7 +457,7 @@ EXPORT_SYMBOL(override_creds);
  * Revert a temporary set of override subjective credentials to an old set,
  * discarding the override set.
  */
-extern void revert_creds(const struct cred *old)
+void revert_creds(const struct cred *old)
 {
 	const struct cred *override = current->cred;
 
