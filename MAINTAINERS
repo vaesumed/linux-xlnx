@@ -502,6 +502,12 @@ L:	openezx-devel@lists.openezx.org (subscribers-only)
 W:	http://www.openezx.org/
 S:	Maintained
 
+ARM/FREESCALE IMX / MXC ARM ARCHITECTURE
+P:	Sascha Hauer
+M:	kernel@pengutronix.de
+L:	linux-arm-kernel@lists.arm.linux.org.uk (subscribers-only)
+S:	Maintained
+
 ARM/GLOMATION GESBC9312SX MACHINE SUPPORT
 P:	Lennert Buytenhek
 M:	kernel@wantstofly.org
@@ -586,6 +592,11 @@ ARM/LOGICPD PXA270 MACHINE SUPPORT
 P:	Lennert Buytenhek
 M:	kernel@wantstofly.org
 L:	linux-arm-kernel@lists.arm.linux.org.uk (subscribers-only)
+S:	Maintained
+
+ARM/MAGICIAN MACHINE SUPPORT
+P:	Philipp Zabel
+M:	philipp.zabel@gmail.com
 S:	Maintained
 
 ARM/TOSA MACHINE SUPPORT
@@ -713,6 +724,15 @@ M:	mcgrof@gmail.com
 L:	linux-wireless@vger.kernel.org
 L:	ath5k-devel@lists.ath5k.org
 S:	Maintained
+
+ATHEROS ATH9K WIRELESS DRIVER
+P:	Luis R. Rodriguez
+M:	lrodriguez@atheros.com
+P:	Jouni Malinen
+M:	jmalinen@atheros.com
+L:	linux-wireless@vger.kernel.org
+L:	ath9k-devel@lists.ath9k.org
+S:	Supported
 
 ATI_REMOTE2 DRIVER
 P:	Ville Syrjala
@@ -1229,7 +1249,7 @@ S:	Maintained
 CPU FREQUENCY DRIVERS
 P:	Dave Jones
 M:	davej@codemonkey.org.uk
-L:	cpufreq@lists.linux.org.uk
+L:	cpufreq@vger.kernel.org
 W:	http://www.codemonkey.org.uk/projects/cpufreq/
 T:	git kernel.org/pub/scm/linux/kernel/git/davej/cpufreq.git
 S:	Maintained
