@@ -22,6 +22,8 @@
 
 #include "bitfield.h"
 
+#include <asm/cputype.h>
+
 /*
  * SA1100 CS line to physical address
  */
@@ -2055,11 +2057,7 @@
 #define LCCR3_OutEnH	(LCCR3_OEP*0)	/*  Output Enable active High      */
 #define LCCR3_OutEnL	(LCCR3_OEP*1)	/*  Output Enable active Low       */
 
-#ifndef __ASSEMBLY__
-extern unsigned int processor_id;
-#endif
-
-#define CPU_REVISION	(processor_id & 15)
+#define CPU_REVISION	(read_cpuid_id() & 15)
 #define CPU_SA1110_A0	(0)
 #define CPU_SA1110_B0	(4)
 #define CPU_SA1110_B1	(5)
