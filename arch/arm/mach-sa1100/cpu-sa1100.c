@@ -88,6 +88,8 @@
 #include <linux/init.h>
 #include <linux/cpufreq.h>
 
+#include <asm/cputype.h>
+
 #include <mach/hardware.h>
 
 #include "generic.h"
@@ -240,7 +242,7 @@ static struct cpufreq_driver sa1100_driver = {
 
 static int __init sa1100_dram_init(void)
 {
- 	if ((processor_id & CPU_SA1100_MASK) == CPU_SA1100_ID)
+	if ((read_cpuid_id() & CPU_SA1100_MASK) == CPU_SA1100_ID)
 		return cpufreq_register_driver(&sa1100_driver);
 	else
 		return -ENODEV;
