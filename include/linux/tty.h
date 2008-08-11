@@ -208,6 +208,7 @@ struct tty_operations;
 
 struct tty_struct {
 	int	magic;
+	struct kref kref;
 	struct tty_driver *driver;
 	const struct tty_operations *ops;
 	int index;
@@ -310,6 +311,23 @@ extern int kmsg_redirect;
 extern void console_init(void);
 extern int vcs_init(void);
 
+/**
+ *	tty_kref_get		-	get a tty reference
+ *	@tty: tty device
+ *
+ *	Return a new reference to a tty object. The caller must hold
+ *	sufficient locks/counts to ensure that their existing reference cannot
+ *	go away
+ */
+
+extern inline struct tty_struct *tty_kref_get(struct tty_struct *tty)
+{
+	if (tty)
+		kref_get(&tty->kref);
+	return tty;
+}
+extern void tty_kref_put(struct tty_struct *tty);
+
 extern int tty_paranoia_check(struct tty_struct *tty, struct inode *inode,
 			      const char *routine);
 extern char *tty_name(struct tty_struct *tty, char *buf);
@@ -331,6 +349,8 @@ extern int tty_write_room(struct tty_struct *tty);
 extern void tty_driver_flush_buffer(struct tty_struct *tty);
 extern void tty_throttle(struct tty_struct *tty);
 extern void tty_unthrottle(struct tty_struct *tty);
+extern int tty_do_resize(struct tty_struct *tty, struct tty_struct *real_tty,
+						struct winsize *ws);
 
 extern int is_current_pgrp_orphaned(void);
 extern struct pid *tty_get_pgrp(struct tty_struct *tty);
@@ -345,6 +365,9 @@ extern void __do_SAK(struct tty_struct *tty);
 extern void disassociate_ctty(int priv);
 extern void no_tty(void);
 extern void tty_flip_buffer_push(struct tty_struct *tty);
+extern void tty_buffer_free_all(struct tty_struct *tty);
+extern void tty_buffer_flush(struct tty_struct *tty);
+extern void tty_buffer_init(struct tty_struct *tty);
 extern speed_t tty_get_baud_rate(struct tty_struct *tty);
 extern speed_t tty_termios_baud_rate(struct ktermios *termios);
 extern speed_t tty_termios_input_baud_rate(struct ktermios *termios);
