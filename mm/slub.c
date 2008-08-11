@@ -2809,6 +2809,7 @@ static int kmem_cache_vacate(struct page *page, void *scratch)
 	void *private;
 	unsigned long flags;
 	unsigned long objects;
+	struct kmem_cache_cpu *c;
 
 	local_irq_save(flags);
 	slab_lock(page);
@@ -2857,9 +2858,13 @@ out:
 	 * Check the result and unfreeze the slab
 	 */
 	leftover = page->inuse;
-	if (leftover)
+	c = get_cpu_slab(s, smp_processor_id());
+	if (leftover) {
 		/* Unsuccessful reclaim. Avoid future reclaim attempts. */
+		stat(c, SHRINK_OBJECT_RECLAIM_FAILED);
 		__ClearPageSlubKickable(page);
+	} else
+		stat(c, SHRINK_SLAB_RECLAIMED);
 	unfreeze_slab(s, page, leftover > 0);
 	local_irq_restore(flags);
 	return leftover;
@@ -2910,11 +2915,14 @@ static unsigned long __kmem_cache_shrink(struct kmem_cache *s, int node,
 	LIST_HEAD(zaplist);
 	int freed = 0;
 	struct kmem_cache_node *n = get_node(s, node);
+	struct kmem_cache_cpu *c;
 
 	if (n->nr_partial <= limit)
 		return 0;
 
 	spin_lock_irqsave(&n->list_lock, flags);
+	c = get_cpu_slab(s, smp_processor_id());
+	stat(c, SHRINK_CALLS);
 	list_for_each_entry_safe(page, page2, &n->partial, lru) {
 		if (!slab_trylock(page))
 			/* Busy slab. Get out of the way */
@@ -2934,12 +2942,14 @@ static unsigned long __kmem_cache_shrink(struct kmem_cache *s, int node,
 
 			list_move(&page->lru, &zaplist);
 			if (s->kick) {
+				stat(c, SHRINK_ATTEMPT_DEFRAG);
 				n->nr_partial--;
 				__SetPageSlubFrozen(page);
 			}
 			slab_unlock(page);
 		} else {
 			/* Empty slab page */
+			stat(c, SHRINK_EMPTY_SLAB);
 			list_del(&page->lru);
 			n->nr_partial--;
 			slab_unlock(page);
@@ -4368,6 +4378,12 @@ STAT_ATTR(DEACTIVATE_TO_HEAD, deactivate_to_head);
 STAT_ATTR(DEACTIVATE_TO_TAIL, deactivate_to_tail);
 STAT_ATTR(DEACTIVATE_REMOTE_FREES, deactivate_remote_frees);
 STAT_ATTR(ORDER_FALLBACK, order_fallback);
+STAT_ATTR(SHRINK_CALLS, shrink_calls);
+STAT_ATTR(SHRINK_ATTEMPT_DEFRAG, shrink_attempt_defrag);
+STAT_ATTR(SHRINK_EMPTY_SLAB, shrink_empty_slab);
+STAT_ATTR(SHRINK_SLAB_SKIPPED, shrink_slab_skipped);
+STAT_ATTR(SHRINK_SLAB_RECLAIMED, shrink_slab_reclaimed);
+STAT_ATTR(SHRINK_OBJECT_RECLAIM_FAILED, shrink_object_reclaim_failed);
 #endif
 
 static struct attribute *slab_attrs[] = {
@@ -4422,6 +4438,12 @@ static struct attribute *slab_attrs[] = {
 	&deactivate_to_tail_attr.attr,
 	&deactivate_remote_frees_attr.attr,
 	&order_fallback_attr.attr,
+	&shrink_calls_attr.attr,
+	&shrink_attempt_defrag_attr.attr,
+	&shrink_empty_slab_attr.attr,
+	&shrink_slab_skipped_attr.attr,
+	&shrink_slab_reclaimed_attr.attr,
+	&shrink_object_reclaim_failed_attr.attr,
 #endif
 	NULL
 };
