@@ -142,13 +142,16 @@ typedef void kmem_defrag_kick_func(struct kmem_cache *, int, void **, void *);
 
 /*
  * kmem_cache_setup_defrag() is used to setup callbacks for a slab cache.
+ * kmem_cache_defrag() performs the actual defragmentation.
  */
 #ifdef CONFIG_SLUB
 void kmem_cache_setup_defrag(struct kmem_cache *, kmem_defrag_get_func,
 						kmem_defrag_kick_func);
+int kmem_cache_defrag(int node);
 #else
 static inline void kmem_cache_setup_defrag(struct kmem_cache *s,
 	kmem_defrag_get_func get, kmem_defrag_kick_func kiok) {}
+static inline int kmem_cache_defrag(int node) { return 0; }
 #endif
 
 /*
