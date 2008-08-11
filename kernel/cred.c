@@ -299,6 +299,7 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 #endif
 		p->real_cred = get_cred(p->cred);
 		get_cred(p->cred);
+		atomic_inc(&p->cred->user->processes);
 		return 0;
 	}
 
