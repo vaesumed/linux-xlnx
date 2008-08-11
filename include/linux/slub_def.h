@@ -30,6 +30,12 @@ enum stat_item {
 	DEACTIVATE_TO_TAIL,	/* Cpu slab was moved to the tail of partials */
 	DEACTIVATE_REMOTE_FREES,/* Slab contained remotely freed objects */
 	ORDER_FALLBACK,		/* Number of times fallback was necessary */
+	SHRINK_CALLS,		/* Number of invocations of kmem_cache_shrink */
+	SHRINK_ATTEMPT_DEFRAG,	/* Slabs that were attempted to be reclaimed */
+	SHRINK_EMPTY_SLAB,	/* Shrink encountered and freed empty slab */
+	SHRINK_SLAB_SKIPPED,	/* Slab reclaim skipped an slab (busy etc) */
+	SHRINK_SLAB_RECLAIMED,	/* Successfully reclaimed slabs */
+	SHRINK_OBJECT_RECLAIM_FAILED, /* Callbacks signaled busy objects */
 	NR_SLUB_STAT_ITEMS };
 
 struct kmem_cache_cpu {

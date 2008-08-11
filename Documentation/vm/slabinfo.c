@@ -41,6 +41,9 @@ struct slabinfo {
 	unsigned long cpuslab_flush, deactivate_full, deactivate_empty;
 	unsigned long deactivate_to_head, deactivate_to_tail;
 	unsigned long deactivate_remote_frees, order_fallback;
+	unsigned long shrink_calls, shrink_attempt_defrag, shrink_empty_slab;
+	unsigned long shrink_slab_skipped, shrink_slab_reclaimed;
+	unsigned long shrink_object_reclaim_failed;
 	int numa[MAX_NODES];
 	int numa_partial[MAX_NODES];
 } slabinfo[MAX_SLABS];
@@ -79,6 +82,7 @@ int sort_active = 0;
 int set_debug = 0;
 int show_ops = 0;
 int show_activity = 0;
+int show_defragcount = 0;
 
 /* Debug options */
 int sanity = 0;
@@ -113,6 +117,7 @@ void usage(void)
 		"-e|--empty             Show empty slabs\n"
 		"-f|--first-alias       Show first alias\n"
 		"-F|--defrag            Show defragmentable caches\n"
+		"-G:--display-defrag    Display defrag counters\n"
 		"-h|--help              Show usage information\n"
 		"-i|--inverted          Inverted list\n"
 		"-l|--slabs             Show slabs\n"
@@ -300,6 +305,8 @@ void first_line(void)
 {
 	if (show_activity)
 		printf("Name                   Objects      Alloc       Free   %%Fast Fallb O\n");
+	else if (show_defragcount)
+		printf("Name                   Objects DefragRQ  Slabs Success   Empty Skipped  Failed\n");
 	else
 		printf("Name                   Objects Objsize    Space "
 			"Slabs/Part/Cpu  O/S O %%Ra %%Ef Flg\n");
@@ -466,22 +473,28 @@ void slab_stats(struct slabinfo *s)
 
 	printf("Total                %8lu %8lu\n\n", total_alloc, total_free);
 
-	if (s->cpuslab_flush)
-		printf("Flushes %8lu\n", s->cpuslab_flush);
-
-	if (s->alloc_refill)
-		printf("Refill %8lu\n", s->alloc_refill);
+	if (s->cpuslab_flush || s->alloc_refill)
+		printf("CPU Slab  : Flushes=%lu Refills=%lu\n",
+			s->cpuslab_flush, s->alloc_refill);
 
 	total = s->deactivate_full + s->deactivate_empty +
 			s->deactivate_to_head + s->deactivate_to_tail;
 
 	if (total)
-		printf("Deactivate Full=%lu(%lu%%) Empty=%lu(%lu%%) "
+		printf("Deactivate: Full=%lu(%lu%%) Empty=%lu(%lu%%) "
 			"ToHead=%lu(%lu%%) ToTail=%lu(%lu%%)\n",
 			s->deactivate_full, (s->deactivate_full * 100) / total,
 			s->deactivate_empty, (s->deactivate_empty * 100) / total,
 			s->deactivate_to_head, (s->deactivate_to_head * 100) / total,
 			s->deactivate_to_tail, (s->deactivate_to_tail * 100) / total);
+
+	if (s->shrink_calls)
+		printf("Shrink    : Calls=%lu Attempts=%lu Empty=%lu Successful=%lu\n",
+			s->shrink_calls, s->shrink_attempt_defrag,
+			s->shrink_empty_slab, s->shrink_slab_reclaimed);
+	if (s->shrink_slab_skipped || s->shrink_object_reclaim_failed)
+		printf("Defrag    : Slabs skipped=%lu Object reclaim failed=%lu\n",
+		s->shrink_slab_skipped, s->shrink_object_reclaim_failed);
 }
 
 void report(struct slabinfo *s)
@@ -598,7 +611,12 @@ void slabcache(struct slabinfo *s)
 			total_alloc ? (s->alloc_fastpath * 100 / total_alloc) : 0,
 			total_free ? (s->free_fastpath * 100 / total_free) : 0,
 			s->order_fallback, s->order);
-	}
+	} else
+	if (show_defragcount)
+		printf("%-21s %8ld %7d %7d %7d %7d %7d %7d\n",
+			s->name, s->objects, s->shrink_calls, s->shrink_attempt_defrag,
+			s->shrink_slab_reclaimed, s->shrink_empty_slab,
+			s->shrink_slab_skipped, s->shrink_object_reclaim_failed);
 	else
 		printf("%-21s %8ld %7d %8s %14s %4d %1d %3ld %3ld %s\n",
 			s->name, s->objects, s->object_size, size_str, dist_str,
@@ -1210,6 +1228,13 @@ void read_slab_dir(void)
 			slab->deactivate_to_tail = get_obj("deactivate_to_tail");
 			slab->deactivate_remote_frees = get_obj("deactivate_remote_frees");
 			slab->order_fallback = get_obj("order_fallback");
+			slab->shrink_calls = get_obj("shrink_calls");
+			slab->shrink_attempt_defrag = get_obj("shrink_attempt_defrag");
+			slab->shrink_empty_slab = get_obj("shrink_empty_slab");
+			slab->shrink_slab_skipped = get_obj("shrink_slab_skipped");
+			slab->shrink_slab_reclaimed = get_obj("shrink_slab_reclaimed");
+			slab->shrink_object_reclaim_failed =
+					get_obj("shrink_object_reclaim_failed");
 			slab->defrag_ratio = get_obj("defrag_ratio");
 			slab->remote_node_defrag_ratio =
 					get_obj("remote_node_defrag_ratio");
@@ -1274,6 +1299,7 @@ struct option opts[] = {
 	{ "ctor", 0, NULL, 'C' },
 	{ "debug", 2, NULL, 'd' },
 	{ "display-activity", 0, NULL, 'D' },
+	{ "display-defrag", 0, NULL, 'G' },
 	{ "empty", 0, NULL, 'e' },
 	{ "first-alias", 0, NULL, 'f' },
 	{ "defrag", 0, NULL, 'F' },
@@ -1299,7 +1325,7 @@ int main(int argc, char *argv[])
 
 	page_size = getpagesize();
 
-	while ((c = getopt_long(argc, argv, "aACd::DefFhil1noprstvzTS",
+	while ((c = getopt_long(argc, argv, "aACd::DefFGhil1noprstvzTS",
 						opts, NULL)) != -1)
 		switch (c) {
 		case '1':
@@ -1324,6 +1350,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'f':
 			show_first_alias = 1;
+			break;
+		case 'G':
+			show_defragcount = 1;
 			break;
 		case 'h':
 			usage();
