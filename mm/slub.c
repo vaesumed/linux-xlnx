@@ -128,10 +128,10 @@
 
 /*
  * Maximum number of desirable partial slabs.
- * The existence of more partial slabs makes kmem_cache_shrink
- * sort the partial list by the number of objects in the.
+ * More slabs cause kmem_cache_shrink to sort the slabs by objects
+ * and triggers slab defragmentation.
  */
-#define MAX_PARTIAL 10
+#define MAX_PARTIAL 20
 
 #define DEBUG_DEFAULT_FLAGS (SLAB_DEBUG_FREE | SLAB_RED_ZONE | \
 				SLAB_POISON | SLAB_STORE_USER)
@@ -2789,76 +2789,235 @@ void kmem_cache_setup_defrag(struct kmem_cache *s,
 EXPORT_SYMBOL(kmem_cache_setup_defrag);
 
 /*
- * kmem_cache_shrink removes empty slabs from the partial lists and sorts
- * the remaining slabs by the number of items in use. The slabs with the
- * most items in use come first. New allocations will then fill those up
- * and thus they can be removed from the partial lists.
+ * Vacate all objects in the given slab.
  *
- * The slabs with the least items are placed last. This results in them
- * being allocated from last increasing the chance that the last objects
- * are freed in them.
+ * The scratch aread passed to list function is sufficient to hold
+ * struct listhead times objects per slab. We use it to hold void ** times
+ * objects per slab plus a bitmap for each object.
+ */
+static int kmem_cache_vacate(struct page *page, void *scratch)
+{
+	void **vector = scratch;
+	void *p;
+	void *addr = page_address(page);
+	struct kmem_cache *s;
+	unsigned long *map;
+	int leftover;
+	int count;
+	void *private;
+	unsigned long flags;
+	unsigned long objects;
+
+	local_irq_save(flags);
+	slab_lock(page);
+
+	BUG_ON(!PageSlab(page));	/* Must be s slab page */
+	BUG_ON(!SlabFrozen(page));	/* Slab must have been frozen earlier */
+
+	s = page->slab;
+	objects = page->objects;
+	map = scratch + objects * sizeof(void **);
+	if (!page->inuse || !s->kick)
+		goto out;
+
+	/* Determine used objects */
+	bitmap_fill(map, objects);
+	for_each_free_object(p, s, page->freelist)
+		__clear_bit(slab_index(p, s, addr), map);
+
+	/* Build vector of pointers to objects */
+	count = 0;
+	memset(vector, 0, objects * sizeof(void **));
+	for_each_object(p, s, addr, objects)
+		if (test_bit(slab_index(p, s, addr), map))
+			vector[count++] = p;
+
+	private = s->get(s, count, vector);
+
+	/*
+	 * Got references. Now we can drop the slab lock. The slab
+	 * is frozen so it cannot vanish from under us nor will
+	 * allocations be performed on the slab. However, unlocking the
+	 * slab will allow concurrent slab_frees to proceed.
+	 */
+	slab_unlock(page);
+	local_irq_restore(flags);
+
+	/*
+	 * Perform the KICK callbacks to remove the objects.
+	 */
+	s->kick(s, count, vector, private);
+
+	local_irq_save(flags);
+	slab_lock(page);
+out:
+	/*
+	 * Check the result and unfreeze the slab
+	 */
+	leftover = page->inuse;
+	unfreeze_slab(s, page, leftover > 0);
+	local_irq_restore(flags);
+	return leftover;
+}
+
+/*
+ * Remove objects from a list of slab pages that have been gathered.
+ * Must be called with slabs that have been isolated before.
+ *
+ * kmem_cache_reclaim() is never called from an atomic context. It
+ * allocates memory for temporary storage. We are holding the
+ * slub_lock semaphore which prevents another call into
+ * the defrag logic.
+ */
+int kmem_cache_reclaim(struct list_head *zaplist)
+{
+	int freed = 0;
+	void **scratch;
+	struct page *page;
+	struct page *page2;
+
+	if (list_empty(zaplist))
+		return 0;
+
+	scratch = alloc_scratch();
+	if (!scratch)
+		return 0;
+
+	list_for_each_entry_safe(page, page2, zaplist, lru) {
+		list_del(&page->lru);
+		if (kmem_cache_vacate(page, scratch) == 0)
+			freed++;
+	}
+	kfree(scratch);
+	return freed;
+}
+
+/*
+ * Shrink the slab cache on a particular node of the cache
+ * by releasing slabs with zero objects and trying to reclaim
+ * slabs with less than the configured percentage of objects allocated.
+ */
+static unsigned long __kmem_cache_shrink(struct kmem_cache *s, int node,
+							unsigned long limit)
+{
+	unsigned long flags;
+	struct page *page, *page2;
+	LIST_HEAD(zaplist);
+	int freed = 0;
+	struct kmem_cache_node *n = get_node(s, node);
+
+	if (n->nr_partial <= limit)
+		return 0;
+
+	spin_lock_irqsave(&n->list_lock, flags);
+	list_for_each_entry_safe(page, page2, &n->partial, lru) {
+		if (!slab_trylock(page))
+			/* Busy slab. Get out of the way */
+			continue;
+
+		if (page->inuse) {
+			if (page->inuse * 100 >=
+					s->defrag_ratio * page->objects) {
+				slab_unlock(page);
+				/* Slab contains enough objects */
+				continue;
+			}
+
+			list_move(&page->lru, &zaplist);
+			if (s->kick) {
+				n->nr_partial--;
+				SetSlabFrozen(page);
+			}
+			slab_unlock(page);
+		} else {
+			/* Empty slab page */
+			list_del(&page->lru);
+			n->nr_partial--;
+			slab_unlock(page);
+			discard_slab(s, page);
+			freed++;
+		}
+	}
+
+	if (!s->kick)
+		/*
+		 * No defrag methods. By simply putting the zaplist at the
+		 * end of the partial list we can let them simmer longer
+		 * and thus increase the chance of all objects being
+		 * reclaimed.
+		 *
+		 * We have effectively sorted the partial list and put
+		 * the slabs with more objects first. As soon as they
+		 * are allocated they are going to be removed from the
+		 * partial list.
+		 */
+		list_splice(&zaplist, n->partial.prev);
+
+
+	spin_unlock_irqrestore(&n->list_lock, flags);
+
+	if (s->kick)
+		freed += kmem_cache_reclaim(&zaplist);
+
+	return freed;
+}
+
+/*
+ * Defrag slabs conditional on the amount of fragmentation in a page.
+ */
+int kmem_cache_defrag(int node)
+{
+	struct kmem_cache *s;
+	unsigned long slabs = 0;
+
+	/*
+	 * kmem_cache_defrag may be called from the reclaim path which may be
+	 * called for any page allocator alloc. So there is the danger that we
+	 * get called in a situation where slub already acquired the slub_lock
+	 * for other purposes.
+	 */
+	if (!down_read_trylock(&slub_lock))
+		return 0;
+
+	list_for_each_entry(s, &slab_caches, list) {
+		unsigned long reclaimed = 0;
+
+		/*
+		 * Defragmentable caches come first. If the slab cache is not
+		 * defragmentable then we can stop traversing the list.
+		 */
+		if (!s->kick)
+			break;
+
+		if (node == -1) {
+			int nid;
+
+			for_each_node_state(nid, N_NORMAL_MEMORY)
+				reclaimed += __kmem_cache_shrink(s, nid,
+								MAX_PARTIAL);
+		} else
+			reclaimed = __kmem_cache_shrink(s, node, MAX_PARTIAL);
+
+		slabs += reclaimed;
+	}
+	up_read(&slub_lock);
+	return slabs;
+}
+EXPORT_SYMBOL(kmem_cache_defrag);
+
+/*
+ * kmem_cache_shrink removes empty slabs from the partial lists.
+ * If the slab cache supports defragmentation then objects are
+ * reclaimed.
  */
 int kmem_cache_shrink(struct kmem_cache *s)
 {
 	int node;
-	int i;
-	struct kmem_cache_node *n;
-	struct page *page;
-	struct page *t;
-	int objects = oo_objects(s->max);
-	struct list_head *slabs_by_inuse =
-		kmalloc(sizeof(struct list_head) * objects, GFP_KERNEL);
-	unsigned long flags;
-
-	if (!slabs_by_inuse)
-		return -ENOMEM;
 
 	flush_all(s);
-	for_each_node_state(node, N_NORMAL_MEMORY) {
-		n = get_node(s, node);
+	for_each_node_state(node, N_NORMAL_MEMORY)
+		__kmem_cache_shrink(s, node, 0);
 
-		if (!n->nr_partial)
-			continue;
-
-		for (i = 0; i < objects; i++)
-			INIT_LIST_HEAD(slabs_by_inuse + i);
-
-		spin_lock_irqsave(&n->list_lock, flags);
-
-		/*
-		 * Build lists indexed by the items in use in each slab.
-		 *
-		 * Note that concurrent frees may occur while we hold the
-		 * list_lock. page->inuse here is the upper limit.
-		 */
-		list_for_each_entry_safe(page, t, &n->partial, lru) {
-			if (!page->inuse && slab_trylock(page)) {
-				/*
-				 * Must hold slab lock here because slab_free
-				 * may have freed the last object and be
-				 * waiting to release the slab.
-				 */
-				list_del(&page->lru);
-				n->nr_partial--;
-				slab_unlock(page);
-				discard_slab(s, page);
-			} else {
-				list_move(&page->lru,
-				slabs_by_inuse + page->inuse);
-			}
-		}
-
-		/*
-		 * Rebuild the partial list with the slabs filled up most
-		 * first and the least used slabs at the end.
-		 */
-		for (i = objects - 1; i >= 0; i--)
-			list_splice(slabs_by_inuse + i, n->partial.prev);
-
-		spin_unlock_irqrestore(&n->list_lock, flags);
-	}
-
-	kfree(slabs_by_inuse);
 	return 0;
 }
 EXPORT_SYMBOL(kmem_cache_shrink);
