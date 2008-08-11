@@ -444,6 +444,6 @@ extern void console_print(const char *);
 
 extern int vt_ioctl(struct tty_struct *tty, struct file *file,
 		    unsigned int cmd, unsigned long arg);
-
+extern int tioclinux(struct tty_struct *tty, unsigned long arg);
 #endif /* __KERNEL__ */
 #endif
