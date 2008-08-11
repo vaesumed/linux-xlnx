@@ -1176,7 +1176,7 @@ static int mount_is_safe(struct nameidata *nd)
 	if (S_ISLNK(nd->path.dentry->d_inode->i_mode))
 		return -EPERM;
 	if (nd->path.dentry->d_inode->i_mode & S_ISVTX) {
-		if (current->uid != nd->path.dentry->d_inode->i_uid)
+		if (current_uid() != nd->path.dentry->d_inode->i_uid)
 			return -EPERM;
 	}
 	if (vfs_permission(nd, MAY_WRITE))
