@@ -208,7 +208,7 @@ struct tty_operations;
 
 struct tty_struct {
 	int	magic;
-	kref_t	kref;
+	struct kref kref;
 	struct tty_driver *driver;
 	const struct tty_operations *ops;
 	int index;
