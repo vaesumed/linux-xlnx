@@ -284,6 +284,9 @@ and is between 256 and 4096 characters. It is defined in the file
 			    0x10000 resources
 			    0x20000 user requests
 			    0x40000 package
+ 			The number can be in decimal or prefixed with 0x in hex.
+ 			Warning: Many of these options can produce a lot of
+ 			output and make your system unusable. Be very careful.
 
 	acpi_pm_good	[X86-32,X86-64]
 			Override the pmtimer bug detection: force the kernel
