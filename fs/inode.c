@@ -1364,6 +1364,128 @@ static int __init set_ihash_entries(char *str)
 __setup("ihash_entries=", set_ihash_entries);
 
 /*
+ * Obtain a refcount on a list of struct inodes pointed to by v. If the
+ * inode is in the process of being freed then zap the v[] entry so that
+ * we skip the freeing attempts later.
+ *
+ * This is a generic function for the ->get slab defrag callback.
+ */
+void *get_inodes(struct kmem_cache *s, int nr, void **v)
+{
+	int i;
+
+	spin_lock(&inode_lock);
+	for (i = 0; i < nr; i++) {
+		struct inode *inode = v[i];
+
+		if (inode->i_state & (I_FREEING|I_CLEAR|I_WILL_FREE))
+			v[i] = NULL;
+		else
+			__iget(inode);
+	}
+	spin_unlock(&inode_lock);
+	return NULL;
+}
+EXPORT_SYMBOL(get_inodes);
+
+/*
+ * Function for filesystems that embedd struct inode into their own
+ * fs inode. The offset is the offset of the struct inode in the fs inode.
+ *
+ * The function adds to the pointers in v[] in order to make them point to
+ * struct inode. Then get_inodes() is used to get the refcount.
+ * The converted v[] pointers can then also be passed to the kick() callback
+ * without further processing.
+ */
+void *fs_get_inodes(struct kmem_cache *s, int nr, void **v,
+						unsigned long offset)
+{
+	int i;
+
+	for (i = 0; i < nr; i++)
+		v[i] += offset;
+
+	return get_inodes(s, nr, v);
+}
+EXPORT_SYMBOL(fs_get_inodes);
+
+/*
+ * Generic callback function slab defrag ->kick methods. Takes the
+ * array with inodes where we obtained refcounts using fs_get_inodes()
+ * or get_inodes() and tries to free them.
+ */
+void kick_inodes(struct kmem_cache *s, int nr, void **v, void *private)
+{
+	struct inode *inode;
+	int i;
+	int abort = 0;
+	LIST_HEAD(freeable);
+	int active;
+
+	for (i = 0; i < nr; i++) {
+		inode = v[i];
+		if (!inode)
+			continue;
+
+		if (inode_has_buffers(inode) || inode->i_data.nrpages) {
+			if (remove_inode_buffers(inode))
+				/*
+				 * Should we really be doing this? Or
+				 * limit the writeback here to only a few pages?
+				 *
+				 * Possibly an expensive operation but we
+				 * cannot reclaim the inode if the pages
+				 * are still present.
+				 */
+				invalidate_mapping_pages(&inode->i_data,
+								0, -1);
+		}
+
+		/* Invalidate children and dentry */
+		if (S_ISDIR(inode->i_mode)) {
+			struct dentry *d = d_find_alias(inode);
+
+			if (d) {
+				d_invalidate(d);
+				dput(d);
+			}
+		}
+
+		if (inode->i_state & I_DIRTY)
+			write_inode_now(inode, 1);
+
+		d_prune_aliases(inode);
+	}
+
+	mutex_lock(&iprune_mutex);
+	for (i = 0; i < nr; i++) {
+		inode = v[i];
+
+		if (!inode)
+			/* inode is alrady being freed */
+			continue;
+
+		active = inode->i_sb->s_flags & MS_ACTIVE;
+		iput(inode);
+		if (abort || !active)
+			continue;
+
+		spin_lock(&inode_lock);
+		abort =  !can_unuse(inode);
+
+		if (!abort) {
+			list_move(&inode->i_list, &freeable);
+			inode->i_state |= I_FREEING;
+			inodes_stat.nr_unused--;
+		}
+		spin_unlock(&inode_lock);
+	}
+	dispose_list(&freeable);
+	mutex_unlock(&iprune_mutex);
+}
+EXPORT_SYMBOL(kick_inodes);
+
+/*
  * Initialize the waitqueues and inode hash table.
  */
 void __init inode_init_early(void)
@@ -1402,6 +1524,7 @@ void __init inode_init(void)
 					 SLAB_MEM_SPREAD),
 					 init_once);
 	register_shrinker(&icache_shrinker);
+	kmem_cache_setup_defrag(inode_cachep, get_inodes, kick_inodes);
 
 	/* Hash may have been set up in inode_init_early */
 	if (!hashdist)
