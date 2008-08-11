@@ -1135,6 +1135,9 @@ static struct page *new_slab(struct kmem_cache *s, gfp_t flags, int node)
 			SLAB_STORE_USER | SLAB_TRACE))
 		__SetPageSlubDebug(page);
 
+	if (s->kick)
+		__SetPageSlubKickable(page);
+
 	start = page_address(page);
 
 	if (unlikely(s->flags & SLAB_POISON))
@@ -1175,6 +1178,7 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 		NR_SLAB_RECLAIMABLE : NR_SLAB_UNRECLAIMABLE,
 		-pages);
 
+	__ClearPageSlubKickable(page);
 	__ClearPageSlab(page);
 	reset_page_mapcount(page);
 	__free_pages(page, order);
@@ -1385,6 +1389,8 @@ static void unfreeze_slab(struct kmem_cache *s, struct page *page, int tail)
 			if (SLABDEBUG && PageSlubDebug(page) &&
 						(s->flags & SLAB_STORE_USER))
 				add_full(n, page);
+			if (s->kick)
+				__SetPageSlubKickable(page);
 		}
 		slab_unlock(page);
 	} else {
@@ -2812,12 +2818,12 @@ static int kmem_cache_vacate(struct page *page, void *scratch)
 	slab_lock(page);
 
 	BUG_ON(!PageSlab(page));	/* Must be s slab page */
-	BUG_ON(!SlabFrozen(page));	/* Slab must have been frozen earlier */
+	BUG_ON(!PageSlubFrozen(page));	/* Slab must have been frozen earlier */
 
 	s = page->slab;
 	objects = page->objects;
 	map = scratch + objects * sizeof(void **);
-	if (!page->inuse || !s->kick)
+	if (!page->inuse || !s->kick || !PageSlubKickable(page))
 		goto out;
 
 	/* Determine used objects */
@@ -2855,6 +2861,9 @@ out:
 	 * Check the result and unfreeze the slab
 	 */
 	leftover = page->inuse;
+	if (leftover)
+		/* Unsuccessful reclaim. Avoid future reclaim attempts. */
+		__ClearPageSlubKickable(page);
 	unfreeze_slab(s, page, leftover > 0);
 	local_irq_restore(flags);
 	return leftover;
@@ -2916,17 +2925,21 @@ static unsigned long __kmem_cache_shrink(struct kmem_cache *s, int node,
 			continue;
 
 		if (page->inuse) {
-			if (page->inuse * 100 >=
+			if (!PageSlubKickable(page) || page->inuse * 100 >=
 					s->defrag_ratio * page->objects) {
 				slab_unlock(page);
-				/* Slab contains enough objects */
+				/*
+				 * Slab contains enough objects
+				 * or we alrady tried reclaim before and
+				 * it failed. Skip this one.
+				 */
 				continue;
 			}
 
 			list_move(&page->lru, &zaplist);
 			if (s->kick) {
 				n->nr_partial--;
-				SetSlabFrozen(page);
+				__SetPageSlubFrozen(page);
 			}
 			slab_unlock(page);
 		} else {
