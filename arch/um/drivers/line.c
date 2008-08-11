@@ -275,6 +275,8 @@ int line_ioctl(struct tty_struct *tty, struct file * file,
 	case TIOCGLTC:
 	case TIOCSLTC:
 #endif
+	/* Note: these are out of date as we now have TCGETS2 etc but this
+	   whole lot should probably go away */
 	case TCGETS:
 	case TCSETSF:
 	case TCSETSW:
@@ -298,6 +300,11 @@ int line_ioctl(struct tty_struct *tty, struct file * file,
 		/* do something */
 		break;
 #endif
+	case TIOCLINUX:
+		if (tty->driver->type != TTY_DRIVER_TYPE_CONSOLE)
+			return -EINVAL;
+		return tioclinux(tty, arg);
+
 	default:
 		for (i = 0; i < ARRAY_SIZE(tty_ioctls); i++)
 			if (cmd == tty_ioctls[i].cmd)
