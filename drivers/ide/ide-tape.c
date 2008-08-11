@@ -15,6 +15,8 @@
  * Documentation/ide/ChangeLog.ide-tape.1995-2002
  */
 
+#define DRV_NAME "ide-tape"
+
 #define IDETAPE_VERSION "1.20"
 
 #include <linux/module.h>
@@ -54,8 +56,6 @@ enum {
 	DBG_CHRDEV =		(1 << 2),
 	/* all remaining procedures */
 	DBG_PROCS =		(1 << 3),
-	/* buffer alloc info (pc_stack & rq_stack) */
-	DBG_PCRQ_STACK =	(1 << 4),
 };
 
 /* define to see debug info */
@@ -85,13 +85,6 @@ enum {
  * bytes. This is used for several packet commands (Not for READ/WRITE commands)
  */
 #define IDETAPE_PC_BUFFER_SIZE		256
-
-/*
- *	In various places in the driver, we need to allocate storage
- *	for packet commands and requests, which will remain valid while
- *	we leave the driver to wait for an interrupt or a timeout event.
- */
-#define IDETAPE_PC_STACK		(10 + IDETAPE_MAX_PC_RETRIES)
 
 /*
  * Some drives (for example, Seagate STT3401A Travan) require a very long
@@ -206,13 +199,6 @@ typedef struct ide_tape_obj {
 	struct kref	kref;
 
 	/*
-	 *	Since a typical character device operation requires more
-	 *	than one packet command, we provide here enough memory
-	 *	for the maximum of interconnected packet commands.
-	 *	The packet commands are stored in the circular array pc_stack.
-	 *	pc_stack_index points to the last used entry, and warps around
-	 *	to the start when we get to the last array entry.
-	 *
 	 *	pc points to the current processed packet command.
 	 *
 	 *	failed_pc points to the last failed packet command, or contains
@@ -224,13 +210,11 @@ typedef struct ide_tape_obj {
 	struct ide_atapi_pc *pc;
 	/* Last failed packet command */
 	struct ide_atapi_pc *failed_pc;
-	/* Packet command stack */
-	struct ide_atapi_pc pc_stack[IDETAPE_PC_STACK];
-	/* Next free packet command storage space */
-	int pc_stack_index;
-	struct request rq_stack[IDETAPE_PC_STACK];
-	/* We implement a circular array */
-	int rq_stack_index;
+	/* used by REQ_IDETAPE_{READ,WRITE} requests */
+	struct ide_atapi_pc queued_pc;
+
+	struct ide_atapi_pc request_sense_pc;
+	struct request request_sense_rq;
 
 	/*
 	 * DSC polling variables.
@@ -451,47 +435,6 @@ static void idetape_update_buffers(ide_drive_t *drive, struct ide_atapi_pc *pc)
 }
 
 /*
- *	idetape_next_pc_storage returns a pointer to a place in which we can
- *	safely store a packet command, even though we intend to leave the
- *	driver. A storage space for a maximum of IDETAPE_PC_STACK packet
- *	commands is allocated at initialization time.
- */
-static struct ide_atapi_pc *idetape_next_pc_storage(ide_drive_t *drive)
-{
-	idetape_tape_t *tape = drive->driver_data;
-
-	debug_log(DBG_PCRQ_STACK, "pc_stack_index=%d\n", tape->pc_stack_index);
-
-	if (tape->pc_stack_index == IDETAPE_PC_STACK)
-		tape->pc_stack_index = 0;
-	return (&tape->pc_stack[tape->pc_stack_index++]);
-}
-
-/*
- *	idetape_next_rq_storage is used along with idetape_next_pc_storage.
- *	Since we queue packet commands in the request queue, we need to
- *	allocate a request, along with the allocation of a packet command.
- */
-
-/**************************************************************
- *                                                            *
- *  This should get fixed to use kmalloc(.., GFP_ATOMIC)      *
- *  followed later on by kfree().   -ml                       *
- *                                                            *
- **************************************************************/
-
-static struct request *idetape_next_rq_storage(ide_drive_t *drive)
-{
-	idetape_tape_t *tape = drive->driver_data;
-
-	debug_log(DBG_PCRQ_STACK, "rq_stack_index=%d\n", tape->rq_stack_index);
-
-	if (tape->rq_stack_index == IDETAPE_PC_STACK)
-		tape->rq_stack_index = 0;
-	return (&tape->rq_stack[tape->rq_stack_index++]);
-}
-
-/*
  * called on each failed packet command retry to analyze the request sense. We
  * currently do not utilize this information.
  */
@@ -687,38 +630,23 @@ static void idetape_create_request_sense_cmd(struct ide_atapi_pc *pc)
 	pc->req_xfer = 20;
 }
 
-static void idetape_init_rq(struct request *rq, u8 cmd)
-{
-	blk_rq_init(NULL, rq);
-	rq->cmd_type = REQ_TYPE_SPECIAL;
-	rq->cmd[13] = cmd;
-}
-
 /*
  * Generate a new packet command request in front of the request queue, before
  * the current request, so that it will be processed immediately, on the next
- * pass through the driver. The function below is called from the request
- * handling part of the driver (the "bottom" part). Safe storage for the request
- * should be allocated with ide_tape_next_{pc,rq}_storage() prior to that.
- *
- * Memory for those requests is pre-allocated at initialization time, and is
- * limited to IDETAPE_PC_STACK requests. We assume that we have enough space for
- * the maximum possible number of inter-dependent packet commands.
- *
- * The higher level of the driver - The ioctl handler and the character device
- * handling functions should queue request to the lower level part and wait for
- * their completion using idetape_queue_pc_tail or idetape_queue_rw_tail.
+ * pass through the driver.
  */
 static void idetape_queue_pc_head(ide_drive_t *drive, struct ide_atapi_pc *pc,
 				  struct request *rq)
 {
 	struct ide_tape_obj *tape = drive->driver_data;
 
-	idetape_init_rq(rq, REQ_IDETAPE_PC1);
+	blk_rq_init(NULL, rq);
+	rq->cmd_type = REQ_TYPE_SPECIAL;
 	rq->cmd_flags |= REQ_PREEMPT;
 	rq->buffer = (char *) pc;
 	rq->rq_disk = tape->disk;
 	memcpy(rq->cmd, pc->c, 12);
+	rq->cmd[13] = REQ_IDETAPE_PC1;
 	ide_do_drive_cmd(drive, rq);
 }
 
@@ -729,12 +657,11 @@ static void idetape_queue_pc_head(ide_drive_t *drive, struct ide_atapi_pc *pc,
  */
 static void idetape_retry_pc(ide_drive_t *drive)
 {
-	struct ide_atapi_pc *pc;
-	struct request *rq;
+	struct ide_tape_obj *tape = drive->driver_data;
+	struct request *rq = &tape->request_sense_rq;
+	struct ide_atapi_pc *pc = &tape->request_sense_pc;
 
 	(void)ide_read_error(drive);
-	pc = idetape_next_pc_storage(drive);
-	rq = idetape_next_rq_storage(drive);
 	idetape_create_request_sense_cmd(pc);
 	set_bit(IDE_AFLAG_IGNORE_DSC, &drive->atapi_flags);
 	idetape_queue_pc_head(drive, pc, rq);
@@ -920,8 +847,8 @@ static ide_startstop_t idetape_media_access_finished(ide_drive_t *drive)
 
 	stat = hwif->tp_ops->read_status(hwif);
 
-	if (stat & SEEK_STAT) {
-		if (stat & ERR_STAT) {
+	if (stat & ATA_DSC) {
+		if (stat & ATA_ERR) {
 			/* Error detected */
 			if (pc->c[0] != TEST_UNIT_READY)
 				printk(KERN_ERR "ide-tape: %s: I/O error, ",
@@ -1021,7 +948,7 @@ static ide_startstop_t idetape_do_request(ide_drive_t *drive,
 	}
 
 	if (!test_and_clear_bit(IDE_AFLAG_IGNORE_DSC, &drive->atapi_flags) &&
-	    (stat & SEEK_STAT) == 0) {
+	    (stat & ATA_DSC) == 0) {
 		if (postponed_rq == NULL) {
 			tape->dsc_polling_start = jiffies;
 			tape->dsc_poll_freq = tape->best_dsc_rw_freq;
@@ -1043,12 +970,12 @@ static ide_startstop_t idetape_do_request(ide_drive_t *drive,
 		return ide_stopped;
 	}
 	if (rq->cmd[13] & REQ_IDETAPE_READ) {
-		pc = idetape_next_pc_storage(drive);
+		pc = &tape->queued_pc;
 		ide_tape_create_rw_cmd(tape, pc, rq, READ_6);
 		goto out;
 	}
 	if (rq->cmd[13] & REQ_IDETAPE_WRITE) {
-		pc = idetape_next_pc_storage(drive);
+		pc = &tape->queued_pc;
 		ide_tape_create_rw_cmd(tape, pc, rq, WRITE_6);
 		goto out;
 	}
@@ -1249,16 +1176,7 @@ static void idetape_create_test_unit_ready_cmd(struct ide_atapi_pc *pc)
 
 /*
  * We add a special packet command request to the tail of the request queue, and
- * wait for it to be serviced. This is not to be called from within the request
- * handling part of the driver! We allocate here data on the stack and it is
- * valid until the request is finished. This is not the case for the bottom part
- * of the driver, where we are always leaving the functions to wait for an
- * interrupt or a timer event.
- *
- * From the bottom part of the driver, we should allocate safe memory using
- * idetape_next_pc_storage() and ide_tape_next_rq_storage(), and add the request
- * to the request list without waiting for it to be serviced! In that case, we
- * usually use idetape_queue_pc_head().
+ * wait for it to be serviced.
  */
 static int idetape_queue_pc_tail(ide_drive_t *drive, struct ide_atapi_pc *pc)
 {
@@ -2295,45 +2213,6 @@ static int idetape_chrdev_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-/*
- * check the contents of the ATAPI IDENTIFY command results. We return:
- *
- * 1 - If the tape can be supported by us, based on the information we have so
- * far.
- *
- * 0 - If this tape driver is not currently supported by us.
- */
-static int idetape_identify_device(ide_drive_t *drive)
-{
-	u8 gcw[2], protocol, device_type, removable, packet_size;
-
-	if (drive->id_read == 0)
-		return 1;
-
-	*((unsigned short *) &gcw) = drive->id->config;
-
-	protocol	=   (gcw[1] & 0xC0) >> 6;
-	device_type	=    gcw[1] & 0x1F;
-	removable	= !!(gcw[0] & 0x80);
-	packet_size	=    gcw[0] & 0x3;
-
-	/* Check that we can support this device */
-	if (protocol != 2)
-		printk(KERN_ERR "ide-tape: Protocol (0x%02x) is not ATAPI\n",
-				protocol);
-	else if (device_type != 1)
-		printk(KERN_ERR "ide-tape: Device type (0x%02x) is not set "
-				"to tape\n", device_type);
-	else if (!removable)
-		printk(KERN_ERR "ide-tape: The removable flag is not set\n");
-	else if (packet_size != 0) {
-		printk(KERN_ERR "ide-tape: Packet size (0x%02x) is not 12"
-				" bytes\n", packet_size);
-	} else
-		return 1;
-	return 0;
-}
-
 static void idetape_get_inquiry_results(ide_drive_t *drive)
 {
 	idetape_tape_t *tape = drive->driver_data;
@@ -2409,28 +2288,56 @@ static void idetape_get_mode_sense_results(ide_drive_t *drive)
 }
 
 #ifdef CONFIG_IDE_PROC_FS
-static void idetape_add_settings(ide_drive_t *drive)
-{
-	idetape_tape_t *tape = drive->driver_data;
-
-	ide_add_setting(drive, "buffer", SETTING_READ, TYPE_SHORT, 0, 0xffff,
-			1, 2, (u16 *)&tape->caps[16], NULL);
-	ide_add_setting(drive, "speed", SETTING_READ, TYPE_SHORT, 0, 0xffff,
-			1, 1, (u16 *)&tape->caps[14], NULL);
-	ide_add_setting(drive, "buffer_size", SETTING_READ, TYPE_INT, 0, 0xffff,
-			1, 1024, &tape->buffer_size, NULL);
-	ide_add_setting(drive, "tdsc", SETTING_RW, TYPE_INT, IDETAPE_DSC_RW_MIN,
-			IDETAPE_DSC_RW_MAX, 1000, HZ, &tape->best_dsc_rw_freq,
-			NULL);
-	ide_add_setting(drive, "dsc_overlap", SETTING_RW, TYPE_BYTE, 0, 1, 1,
-			1, &drive->dsc_overlap, NULL);
-	ide_add_setting(drive, "avg_speed", SETTING_READ, TYPE_INT, 0, 0xffff,
-			1, 1, &tape->avg_speed, NULL);
-	ide_add_setting(drive, "debug_mask", SETTING_RW, TYPE_INT, 0, 0xffff, 1,
-			1, &tape->debug_mask, NULL);
+#define ide_tape_devset_get(name, field) \
+static int get_##name(ide_drive_t *drive) \
+{ \
+	idetape_tape_t *tape = drive->driver_data; \
+	return tape->field; \
 }
-#else
-static inline void idetape_add_settings(ide_drive_t *drive) { ; }
+
+#define ide_tape_devset_set(name, field) \
+static int set_##name(ide_drive_t *drive, int arg) \
+{ \
+	idetape_tape_t *tape = drive->driver_data; \
+	tape->field = arg; \
+	return 0; \
+}
+
+#define ide_tape_devset_rw(_name, _min, _max, _field, _mulf, _divf) \
+ide_tape_devset_get(_name, _field) \
+ide_tape_devset_set(_name, _field) \
+__IDE_DEVSET(_name, S_RW, _min, _max, get_##_name, set_##_name, _mulf, _divf)
+
+#define ide_tape_devset_r(_name, _min, _max, _field, _mulf, _divf) \
+ide_tape_devset_get(_name, _field) \
+__IDE_DEVSET(_name, S_READ, _min, _max, get_##_name, NULL, _mulf, _divf)
+
+static int mulf_tdsc(ide_drive_t *drive)	{ return 1000; }
+static int divf_tdsc(ide_drive_t *drive)	{ return   HZ; }
+static int divf_buffer(ide_drive_t *drive)	{ return    2; }
+static int divf_buffer_size(ide_drive_t *drive)	{ return 1024; }
+
+ide_devset_rw(dsc_overlap,	0,	1, dsc_overlap);
+
+ide_tape_devset_rw(debug_mask,	0, 0xffff, debug_mask,  NULL, NULL);
+ide_tape_devset_rw(tdsc, IDETAPE_DSC_RW_MIN, IDETAPE_DSC_RW_MAX,
+		   best_dsc_rw_freq, mulf_tdsc, divf_tdsc);
+
+ide_tape_devset_r(avg_speed,	0, 0xffff, avg_speed,   NULL, NULL);
+ide_tape_devset_r(speed,	0, 0xffff, caps[14],    NULL, NULL);
+ide_tape_devset_r(buffer,	0, 0xffff, caps[16],    NULL, divf_buffer);
+ide_tape_devset_r(buffer_size,	0, 0xffff, buffer_size, NULL, divf_buffer_size);
+
+static const struct ide_devset *idetape_settings[] = {
+	&ide_devset_avg_speed,
+	&ide_devset_buffer,
+	&ide_devset_buffer_size,
+	&ide_devset_debug_mask,
+	&ide_devset_dsc_overlap,
+	&ide_devset_speed,
+	&ide_devset_tdsc,
+	NULL
+};
 #endif
 
 /*
@@ -2462,15 +2369,15 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 		drive->dsc_overlap = 0;
 	}
 	/* Seagate Travan drives do not support DSC overlap. */
-	if (strstr(drive->id->model, "Seagate STT3401"))
+	if (strstr((char *)&drive->id[ATA_ID_PROD], "Seagate STT3401"))
 		drive->dsc_overlap = 0;
 	tape->minor = minor;
 	tape->name[0] = 'h';
 	tape->name[1] = 't';
 	tape->name[2] = '0' + minor;
 	tape->chrdev_dir = IDETAPE_DIR_NONE;
-	tape->pc = tape->pc_stack;
-	*((unsigned short *) &gcw) = drive->id->config;
+
+	*((u16 *)&gcw) = drive->id[ATA_ID_CONFIG];
 
 	/* Command packet DRQ type */
 	if (((gcw[0] & 0x60) >> 5) == 1)
@@ -2512,7 +2419,7 @@ static void idetape_setup(ide_drive_t *drive, idetape_tape_t *tape, int minor)
 		tape->best_dsc_rw_freq * 1000 / HZ,
 		drive->using_dma ? ", DMA":"");
 
-	idetape_add_settings(drive);
+	ide_proc_register_driver(drive, tape->driver);
 }
 
 static void ide_tape_remove(ide_drive_t *drive)
@@ -2577,12 +2484,12 @@ static ide_driver_t idetape_driver = {
 	.remove			= ide_tape_remove,
 	.version		= IDETAPE_VERSION,
 	.media			= ide_tape,
-	.supports_dsc_overlap 	= 1,
 	.do_request		= idetape_do_request,
 	.end_request		= idetape_end_request,
 	.error			= __ide_error,
 #ifdef CONFIG_IDE_PROC_FS
 	.proc			= idetape_proc,
+	.settings		= idetape_settings,
 #endif
 };
 
@@ -2645,11 +2552,11 @@ static int ide_tape_probe(ide_drive_t *drive)
 
 	if (!strstr("ide-tape", drive->driver_req))
 		goto failed;
-	if (!drive->present)
-		goto failed;
+
 	if (drive->media != ide_tape)
 		goto failed;
-	if (!idetape_identify_device(drive)) {
+
+	if (drive->id_read == 1 && !ide_check_atapi_device(drive, DRV_NAME)) {
 		printk(KERN_ERR "ide-tape: %s: not supported by this version of"
 				" the driver\n", drive->name);
 		goto failed;
@@ -2666,8 +2573,6 @@ static int ide_tape_probe(ide_drive_t *drive)
 		goto out_free_tape;
 
 	ide_init_disk(g, drive);
-
-	ide_proc_register_driver(drive, &idetape_driver);
 
 	kref_init(&tape->kref);
 
