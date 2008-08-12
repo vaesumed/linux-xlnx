@@ -255,7 +255,12 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 
 done:
 	kfree(dent);
-	return d_splice_alias(inode, dentry);
+	/*
+	 * Note, d_splice_alias() would be required instead if we supported
+	 * NFS.
+	 */
+	d_add(dentry, inode);
+	return NULL;
 
 out:
 	kfree(dent);
