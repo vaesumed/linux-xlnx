@@ -65,7 +65,6 @@ static void ack_state(void)
 static int stop_cpu(struct stop_machine_data *smdata)
 {
 	enum stopmachine_state curstate = STOPMACHINE_NONE;
-	int uninitialized_var(ret);
 
 	/* Simple state machine */
 	do {
@@ -176,7 +175,7 @@ kill_threads:
 	return err;
 }
 
-int stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus)
+int stop_machine_notype(int (*fn)(void *), void *data, const cpumask_t *cpus)
 {
 	int ret;
 
@@ -187,4 +186,4 @@ int stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(stop_machine);
+EXPORT_SYMBOL_GPL(stop_machine_notype);
