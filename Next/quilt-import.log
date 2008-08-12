@@ -1,0 +1,123 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 7708eba9f0cff55c0d0d781cd8877710adaa342d
+HEAD is now at 7708eba USB: Add vendor/product id of ZTE MF628 to option
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 43ca9019c4705c1baf4d3585438aa748f4d44b28
+HEAD is now at 43ca901 sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+hso-fix-oops-in-read-write-callbacks.patch
+hso-fix-refcounting-on-the-ttyhsx-devices.patch
+usb-hso-make-tty_operations-const.patch
+usb-hso-minor-fixes-due-to-code-review.patch
+usb-add-config_usb_debug_messages-and-usb_dbg.patch
+usb-convert-the-usb-core-code-to-use-usb_dbg.patch
+usb-remove-config_usb_debug.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.27-rc2-git5
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 10fec20ef5eec1c91913baec1225400f0d02df40
+HEAD is now at 10fec20 Merge branch 'for-linus' of git://git.o-hand.com/linux-mfd
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-fix-device_init_wakeup-place.patch
+i2c-isp1301_omap-convert-to-new-style-part-1.patch
+i2c-isp1301_omap-convert-to-new-style-part-2.patch
+i2c-pca-isa-dont-grab-arbitrary-resources.patch
+i2c-renesas-highlander-fpga-smbus-support.patch
+hwmon-dme1737-convert-to-new-style-part-1.patch
+hwmon-dme1737-convert-to-new-style-part-2.patch
+Importing jdelvare-hwmon based on 2.6.27-rc2-git4
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard 796aadeb1b2db9b5d463946766c5bbfd7717158c
+HEAD is now at 796aade Merge branch 'fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/davej/cpufreq
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ad7414-make-ad7414_update_device-static.patch
+hwmon-lm90-01-function-for-16-bit-read.patch
+hwmon-lm90-02-max6657-extra-local-res.patch
+hwmon-lm90-03-max6657-has-no-low-limit-bytes.patch
+hwmon-lm90-04-update-links.patch
+hwmon-lm90-05-convert-some-macros-to-static-functions.patch
+hwmon-lm90-06-support-adt7461-in-extended-mode.patch
+hwmon-lm90-07-rename-temperature-conversion-functions.patch
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing m68k based on 796aadeb1b2db9b5d463946766c5bbfd7717158c
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 796aadeb1b2db9b5d463946766c5bbfd7717158c
+HEAD is now at 796aade Merge branch 'fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/davej/cpufreq
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-wire-up-new-system-calls.diff
+m68k-use-bcd2bin-bin2bcd.diff
+m68k-use-percent-pS-infrastructure.diff
+Unchanged quilt series rr
+Importing ttydev based on 796aadeb1b2db9b5d463946766c5bbfd7717158c
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard 796aadeb1b2db9b5d463946766c5bbfd7717158c
+HEAD is now at 796aade Merge branch 'fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/davej/cpufreq
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+mcfserial-goes-byebye
+epca-port-init
+ser-nr-irq
+.dotest/patch:101: trailing whitespace.
+	
+.dotest/patch:137: trailing whitespace.
+	
+.dotest/patch:143: trailing whitespace.
+	
+.dotest/patch:146: trailing whitespace.
+	
+warning: 4 lines add whitespace errors.
+blackfin-use-initdata
+blackfin-suspend-all
+blackfin-whitespace-trim
+blackfin-common-vars
+blackfin-remove-useless-stop
+blackfin-fix-stop-bug
+blackfin-fix-ircp-bug
+blackfin-fix-uart-map
+tty-move-tioclinux
+tty-fixup-uml
+tty-remove-resize-special
+tty-split-buffering
+tty-split-port
+tty-fix-pty-termios-race
+tty-kref
+tty-kref-modcount
+tty-kref-get-current-tty
+tty-move-write
+tty-usbserial-kref
+.dotest/patch:132: trailing whitespace.
+out:		
+.dotest/patch:324: trailing whitespace.
+		
+.dotest/patch:895: trailing whitespace.
+		if (tty && !C_CLOCAL(tty)) 
+.dotest/patch:1063: trailing whitespace.
+	tty_kref_put(tty);		     
+.dotest/patch:1313: trailing whitespace.
+		} else 
+warning: 5 lines add whitespace errors.
+tty-misc-kref
+tty-fix-cdc-acm
+tty-kref-stallion
+tty-kref-mxser
+.dotest/patch:390: trailing whitespace.
+				
+warning: 1 line adds whitespace errors.
