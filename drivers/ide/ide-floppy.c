@@ -36,6 +36,7 @@
 #include <linux/hdreg.h>
 #include <linux/bitops.h>
 #include <linux/mutex.h>
+#include <linux/scatterlist.h>
 
 #include <scsi/scsi_ioctl.h>
 
