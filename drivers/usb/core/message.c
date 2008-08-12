@@ -56,7 +56,7 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 		usb_kill_urb(urb);
 		retval = (ctx.status == -ENOENT ? -ETIMEDOUT : ctx.status);
 
-		dev_dbg(&urb->dev->dev,
+		usb_dbg(&urb->dev->dev,
 			"%s timed out on ep%d%s len=%d/%d\n",
 			current->comm,
 			usb_endpoint_num(&urb->ep->desc),
@@ -551,7 +551,7 @@ void usb_sg_wait(struct usb_sg_request *io)
 		default:
 			io->urbs[i]->dev = NULL;
 			io->urbs[i]->status = retval;
-			dev_dbg(&io->dev->dev, "%s, submit --> %d\n",
+			usb_dbg(&io->dev->dev, "%s, submit --> %d\n",
 				__func__, retval);
 			usb_sg_cancel(io);
 		}
@@ -806,7 +806,7 @@ int usb_string(struct usb_device *dev, int index, char *buf, size_t size)
 			dev->have_langid = 1;
 			dev->string_langid = tbuf[2] | (tbuf[3] << 8);
 			/* always use the first langid listed */
-			dev_dbg(&dev->dev, "default language 0x%04x\n",
+			usb_dbg(&dev->dev, "default language 0x%04x\n",
 				dev->string_langid);
 		}
 	}
@@ -828,7 +828,7 @@ int usb_string(struct usb_device *dev, int index, char *buf, size_t size)
 	err = idx;
 
 	if (tbuf[1] != USB_DT_STRING)
-		dev_dbg(&dev->dev,
+		usb_dbg(&dev->dev,
 			"wrong descriptor type %02x for string %d (\"%s\")\n",
 			tbuf[1], index, buf);
 
@@ -1070,7 +1070,7 @@ void usb_disable_device(struct usb_device *dev, int skip_ep0)
 {
 	int i;
 
-	dev_dbg(&dev->dev, "%s nuking %s URBs\n", __func__,
+	usb_dbg(&dev->dev, "%s nuking %s URBs\n", __func__,
 		skip_ep0 ? "non-ep0" : "all");
 	for (i = skip_ep0; i < 16; ++i) {
 		usb_disable_endpoint(dev, i);
@@ -1089,7 +1089,7 @@ void usb_disable_device(struct usb_device *dev, int skip_ep0)
 			interface = dev->actconfig->interface[i];
 			if (!device_is_registered(&interface->dev))
 				continue;
-			dev_dbg(&dev->dev, "unregistering interface %s\n",
+			usb_dbg(&dev->dev, "unregistering interface %s\n",
 				dev_name(&interface->dev));
 			usb_remove_sysfs_intf_files(interface);
 			device_del(&interface->dev);
@@ -1197,7 +1197,7 @@ int usb_set_interface(struct usb_device *dev, int interface, int alternate)
 
 	iface = usb_ifnum_to_if(dev, interface);
 	if (!iface) {
-		dev_dbg(&dev->dev, "selecting invalid interface %d\n",
+		usb_dbg(&dev->dev, "selecting invalid interface %d\n",
 			interface);
 		return -EINVAL;
 	}
@@ -1219,7 +1219,7 @@ int usb_set_interface(struct usb_device *dev, int interface, int alternate)
 	 * request if the interface only has one alternate setting.
 	 */
 	if (ret == -EPIPE && iface->num_altsetting == 1) {
-		dev_dbg(&dev->dev,
+		usb_dbg(&dev->dev,
 			"manual set_interface for iface %d, alt %d\n",
 			interface, alternate);
 		manual = 1;
@@ -1629,7 +1629,7 @@ free_interfaces:
 	for (i = 0; i < nintf; ++i) {
 		struct usb_interface *intf = cp->interface[i];
 
-		dev_dbg(&dev->dev,
+		usb_dbg(&dev->dev,
 			"adding %s (config #%d, interface %d)\n",
 			dev_name(&intf->dev), configuration,
 			intf->cur_altsetting->desc.bInterfaceNumber);
