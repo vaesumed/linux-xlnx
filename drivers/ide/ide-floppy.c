@@ -214,12 +214,11 @@ static void ide_floppy_io_buffers(ide_drive_t *drive, struct ide_atapi_pc *pc,
 	ide_hwif_t *hwif = drive->hwif;
 	const struct ide_tp_ops *tp_ops = hwif->tp_ops;
 	xfer_func_t *xf = direction ? tp_ops->output_data : tp_ops->input_data;
-	struct scatterlist *sg = hwif->sg_table;
+	struct scatterlist *sg = pc->sg;
 	char *buf;
 	int count, done = 0;
 
 	while (bcount) {
-
 		count = min(sg->length - pc->b_count, bcount);
 		if (PageHighMem(sg_page(sg))) {
 			unsigned long flags;
@@ -238,9 +237,9 @@ static void ide_floppy_io_buffers(ide_drive_t *drive, struct ide_atapi_pc *pc,
 		done += count;
 
 		if (pc->b_count == sg->length) {
-			if (!--hwif->sg_nents)
+			if (!--pc->sg_cnt)
 				break;
-			sg = sg_next(sg);
+			pc->sg = sg = sg_next(sg);
 			pc->b_count = 0;
 		}
 	}
@@ -577,6 +576,7 @@ static ide_startstop_t idefloppy_do_request(ide_drive_t *drive,
 		struct request *rq, sector_t block_s)
 {
 	idefloppy_floppy_t *floppy = drive->driver_data;
+	ide_hwif_t *hwif = drive->hwif;
 	struct ide_atapi_pc *pc;
 	unsigned long block = (unsigned long)block_s;
 
@@ -619,10 +619,13 @@ static ide_startstop_t idefloppy_do_request(ide_drive_t *drive,
 		return ide_stopped;
 	}
 
-	pc->rq = rq;
-
 	ide_init_sg_cmd(drive, rq);
 	ide_map_sg(drive, rq);
+
+	pc->sg = hwif->sg_table;
+	pc->sg_cnt = hwif->sg_nents;
+
+	pc->rq = rq;
 
 	return idefloppy_issue_pc(drive, pc);
 }
