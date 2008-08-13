@@ -1607,9 +1607,6 @@ static void nsp_cs_detach(struct pcmcia_device *link)
     is received, to configure the PCMCIA socket, and to make the
     ethernet device available to the system.
 ======================================================================*/
-#define CS_CHECK(fn, ret) \
-do { last_fn = (fn); if ((last_ret = (ret)) != 0) goto cs_failed; } while (0)
-/*====================================================================*/
 
 struct nsp_cs_configdata {
 	nsp_hw_data		*data;
@@ -1713,7 +1710,6 @@ static int nsp_cs_config(struct pcmcia_device *link)
 {
 	int		  ret;
 	scsi_info_t	 *info	 = link->priv;
-	int		  last_ret, last_fn;
 	struct nsp_cs_configdata *cfg_mem;
 	struct Scsi_Host *host;
 	nsp_hw_data      *data = &nsp_data_base;
@@ -1729,9 +1725,13 @@ static int nsp_cs_config(struct pcmcia_device *link)
 		goto cs_failed;
 
 	if (link->conf.Attributes & CONF_ENABLE_IRQ) {
-		CS_CHECK(RequestIRQ, pcmcia_request_irq(link, &link->irq));
+		if (pcmcia_request_irq(link, &link->irq))
+			goto cs_failed;
 	}
-	CS_CHECK(RequestConfiguration, pcmcia_request_configuration(link, &link->conf));
+
+	ret = pcmcia_request_configuration(link, &link->conf);
+	if (ret)
+		goto cs_failed;
 
 	if (free_ports) {
 		if (link->io.BasePort1) {
@@ -1798,13 +1798,11 @@ static int nsp_cs_config(struct pcmcia_device *link)
 
  cs_failed:
 	nsp_dbg(NSP_DEBUG_INIT, "config fail");
-	cs_error(link, last_fn, last_ret);
 	nsp_cs_release(link);
 	kfree(cfg_mem);
 
 	return -ENODEV;
 } /* nsp_cs_config */
-#undef CS_CHECK
 
 
 /*======================================================================
