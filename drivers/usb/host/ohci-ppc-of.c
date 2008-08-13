@@ -18,6 +18,7 @@
 
 #include <asm/prom.h>
 
+#include "../core/usb.h"
 
 static int __devinit
 ohci_ppc_of_start(struct usb_hcd *hcd)
