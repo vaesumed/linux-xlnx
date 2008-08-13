@@ -276,6 +276,13 @@ int acpi_match_device_ids(struct acpi_device *device,
 {
 	const struct acpi_device_id *id;
 
+	/*
+	 * If the device is not present, it is unnecessary to load device
+	 * driver for it.
+	 */
+	if (!device->status.present)
+		return -ENODEV;
+
 	if (device->flags.hardware_id) {
 		for (id = ids; id->id[0]; id++) {
 			if (!strcmp((char*)id->id, device->pnp.hardware_id))
@@ -807,6 +814,7 @@ static int acpi_bus_get_power_flags(struct acpi_device *device)
 	/* TBD: System wake support and resource requirements. */
 
 	device->power.state = ACPI_STATE_UNKNOWN;
+	acpi_bus_get_power(device->handle, &(device->power.state));
 
 	return 0;
 }
@@ -901,36 +909,6 @@ static void acpi_device_get_busid(struct acpi_device *device,
 	}
 }
 
-static int
-acpi_video_bus_match(struct acpi_device *device)
-{
-	acpi_handle h_dummy;
-
-	if (!device)
-		return -EINVAL;
-
-	/* Since there is no HID, CID for ACPI Video drivers, we have
-	 * to check well known required nodes for each feature we support.
-	 */
-
-	/* Does this device able to support video switching ? */
-	if (ACPI_SUCCESS(acpi_get_handle(device->handle, "_DOD", &h_dummy)) &&
-	    ACPI_SUCCESS(acpi_get_handle(device->handle, "_DOS", &h_dummy)))
-		return 0;
-
-	/* Does this device able to retrieve a video ROM ? */
-	if (ACPI_SUCCESS(acpi_get_handle(device->handle, "_ROM", &h_dummy)))
-		return 0;
-
-	/* Does this device able to configure which video head to be POSTed ? */
-	if (ACPI_SUCCESS(acpi_get_handle(device->handle, "_VPO", &h_dummy)) &&
-	    ACPI_SUCCESS(acpi_get_handle(device->handle, "_GPD", &h_dummy)) &&
-	    ACPI_SUCCESS(acpi_get_handle(device->handle, "_SPD", &h_dummy)))
-		return 0;
-
-	return -ENODEV;
-}
-
 /*
  * acpi_bay_match - see if a device is an ejectable driver bay
  *
@@ -1013,7 +991,7 @@ static void acpi_device_set_id(struct acpi_device *device,
 		   will get autoloaded and the device might still match
 		   against another driver.
 		*/
-		if (ACPI_SUCCESS(acpi_video_bus_match(device)))
+		if (acpi_is_video_device(device))
 			cid_add = ACPI_VIDEO_HID;
 		else if (ACPI_SUCCESS(acpi_bay_match(device)))
 			cid_add = ACPI_BAY_HID;
@@ -1221,15 +1199,18 @@ acpi_add_single_object(struct acpi_device **child,
 			result = -ENODEV;
 			goto end;
 		}
-		if (!device->status.present) {
-			/* Bay and dock should be handled even if absent */
-			if (!ACPI_SUCCESS(
-			     acpi_is_child_device(device, acpi_bay_match)) &&
-			    !ACPI_SUCCESS(
-			     acpi_is_child_device(device, acpi_dock_match))) {
-					result = -ENODEV;
-					goto end;
-			}
+		/*
+		 * When the device is neither present nor functional, the
+		 * device should not be added to Linux ACPI device tree.
+		 * When the status of the device is not present but functinal,
+		 * it should be added to Linux ACPI tree. For example : bay
+		 * device , dock device.
+		 * In such conditions it is unncessary to check whether it is
+		 * bay device or dock device.
+		 */
+		if (!device->status.present && !device->status.functional) {
+			result = -ENODEV;
+			goto end;
 		}
 		break;
 	default:
@@ -1250,6 +1231,16 @@ acpi_add_single_object(struct acpi_device **child,
 	 * -------------------------------------
 	 */
 	acpi_device_set_id(device, parent, handle, type);
+
+	/*
+	 * The ACPI device is attached to acpi handle before getting
+	 * the power/wakeup/peformance flags. Otherwise OS can't get
+	 * the corresponding ACPI device by the acpi handle in the course
+	 * of getting the power/wakeup/performance flags.
+	 */
+	result = acpi_device_set_context(device, type);
+	if (result)
+		goto end;
 
 	/*
 	 * Power Management
@@ -1281,8 +1272,6 @@ acpi_add_single_object(struct acpi_device **child,
 			goto end;
 	}
 
-	if ((result = acpi_device_set_context(device, type)))
-		goto end;
 
 	result = acpi_device_register(device, parent);
 
@@ -1402,7 +1391,12 @@ static int acpi_bus_scan(struct acpi_device *start, struct acpi_bus_ops *ops)
 		 * TBD: Need notifications and other detection mechanisms
 		 *      in place before we can fully implement this.
 		 */
-		if (child->status.present) {
+		 /*
+		 * When the device is not present but functional, it is also
+		 * necessary to scan the children of this device.
+		 */
+		if (child->status.present || (!child->status.present &&
+					child->status.functional)) {
 			status = acpi_get_next_object(ACPI_TYPE_ANY, chandle,
 						      NULL, NULL);
 			if (ACPI_SUCCESS(status)) {
