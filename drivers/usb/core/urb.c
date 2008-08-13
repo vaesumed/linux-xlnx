@@ -6,6 +6,7 @@
 #include <linux/log2.h>
 #include <linux/usb.h>
 #include <linux/wait.h>
+#include "usb.h"
 #include "hcd.h"
 
 #define to_urb(d) container_of(d, struct urb, kref)
@@ -340,7 +341,7 @@ int usb_submit_urb(struct urb *urb, gfp_t mem_flags)
 
 	max = le16_to_cpu(ep->desc.wMaxPacketSize);
 	if (max <= 0) {
-		dev_dbg(&dev->dev,
+		usb_dbg(&dev->dev,
 			"bogus endpoint ep%d%s in %s (bad maxpacket %d)\n",
 			usb_endpoint_num(&ep->desc), is_out ? "out" : "in",
 			__func__, max);
