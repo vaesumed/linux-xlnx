@@ -121,6 +121,7 @@ enum {
 #define AC_VERB_SET_CONFIG_DEFAULT_BYTES_1	0x71d
 #define AC_VERB_SET_CONFIG_DEFAULT_BYTES_2	0x71e
 #define AC_VERB_SET_CONFIG_DEFAULT_BYTES_3	0x71f
+#define AC_VERB_SET_EAPD				0x788
 #define AC_VERB_SET_CODEC_RESET			0x7ff
 
 /*
@@ -449,6 +450,7 @@ enum {
  */
 
 struct hda_bus;
+struct hda_beep;
 struct hda_codec;
 struct hda_pcm;
 struct hda_pcm_stream;
@@ -634,6 +636,9 @@ struct hda_codec {
 	/* codec specific info */
 	void *spec;
 
+	/* beep device */
+	struct hda_beep *beep;
+
 	/* widget capabilities cache */
 	unsigned int num_nodes;
 	hda_nid_t start_nid;
@@ -649,6 +654,11 @@ struct hda_codec {
 
 	struct snd_hwdep *hwdep;	/* assigned hwdep device */
 
+	/* misc flags */
+	unsigned int spdif_status_reset :1; /* needs to toggle SPDIF for each
+					     * status change
+					     * (e.g. Realtek codecs)
+					     */
 #ifdef CONFIG_SND_HDA_POWER_SAVE
 	unsigned int power_on :1;	/* current (global) power-state */
 	unsigned int power_transition :1; /* power-state in transition */
