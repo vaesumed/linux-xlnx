@@ -73,7 +73,7 @@ const char *dbg_key_str1(const struct ubifs_info *c,
 			 const union ubifs_key *key);
 
 /*
- * DBGKEY macros require dbg_lock to be held, which it is in the dbg message
+ * DBGKEY macros require @dbg_lock to be held, which it is in the dbg message
  * macros.
  */
 #define DBGKEY(key) dbg_key_str0(c, (key))
@@ -329,71 +329,77 @@ static inline int dbg_change(struct ubi_volume_desc *desc, int lnum,
 #else /* !CONFIG_UBIFS_FS_DEBUG */
 
 #define UBIFS_DBG(op)
-#define ubifs_assert(expr)                         ({})
-#define ubifs_assert_cmt_locked(c)
+
+/* Use "if (0)" to make compiler check arguments even if debugging is off */
+#define ubifs_assert(expr)  do {                                               \
+	if (0 && (expr))                                                       \
+		printk(KERN_CRIT "UBIFS assert failed in %s at %u (pid %d)\n", \
+		       __func__, __LINE__, current->pid);                      \
+} while (0)
+
+#define dbg_err(fmt, ...)   do {                                               \
+	if (0)                                                                 \
+		ubifs_err(fmt, ##__VA_ARGS__);                                 \
+} while (0)
+
+#define dbg_msg(fmt, ...) do {                                                 \
+	if (0)                                                                 \
+		printk(KERN_DEBUG "UBIFS DBG (pid %d): %s: " fmt "\n",         \
+		       current->pid, __func__, ##__VA_ARGS__);                 \
+} while (0)
+
 #define dbg_dump_stack()
-#define dbg_err(fmt, ...)                          ({})
-#define dbg_msg(fmt, ...)                          ({})
-#define dbg_key(c, key, fmt, ...)                  ({})
+#define ubifs_assert_cmt_locked(c)
 
-#define dbg_gen(fmt, ...)                          ({})
-#define dbg_jnl(fmt, ...)                          ({})
-#define dbg_tnc(fmt, ...)                          ({})
-#define dbg_lp(fmt, ...)                           ({})
-#define dbg_find(fmt, ...)                         ({})
-#define dbg_mnt(fmt, ...)                          ({})
-#define dbg_io(fmt, ...)                           ({})
-#define dbg_cmt(fmt, ...)                          ({})
-#define dbg_budg(fmt, ...)                         ({})
-#define dbg_log(fmt, ...)                          ({})
-#define dbg_gc(fmt, ...)                           ({})
-#define dbg_scan(fmt, ...)                         ({})
-#define dbg_rcvry(fmt, ...)                        ({})
+#define dbg_gen(fmt, ...)   dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_jnl(fmt, ...)   dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_tnc(fmt, ...)   dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_lp(fmt, ...)    dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_find(fmt, ...)  dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_mnt(fmt, ...)   dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_io(fmt, ...)    dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_cmt(fmt, ...)   dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_budg(fmt, ...)  dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_log(fmt, ...)   dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_gc(fmt, ...)    dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_scan(fmt, ...)  dbg_msg(fmt, ##__VA_ARGS__)
+#define dbg_rcvry(fmt, ...) dbg_msg(fmt, ##__VA_ARGS__)
 
-#define dbg_ntype(type)                            ""
-#define dbg_cstate(cmt_state)                      ""
-#define dbg_get_key_dump(c, key)                   ({})
-#define dbg_dump_inode(c, inode)                   ({})
-#define dbg_dump_node(c, node)                     ({})
-#define dbg_dump_budget_req(req)                   ({})
-#define dbg_dump_lstats(lst)                       ({})
-#define dbg_dump_budg(c)                           ({})
-#define dbg_dump_lprop(c, lp)                      ({})
-#define dbg_dump_lprops(c)                         ({})
-#define dbg_dump_leb(c, lnum)                      ({})
-#define dbg_dump_znode(c, znode)                   ({})
-#define dbg_dump_heap(c, heap, cat)                ({})
-#define dbg_dump_pnode(c, pnode, parent, iip)      ({})
-#define dbg_dump_tnc(c)                            ({})
-#define dbg_dump_index(c)                          ({})
+#define DBGKEY(key)  ((char *)(key))
+#define DBGKEY1(key) ((char *)(key))
+
+#define dbg_ntype(type)                       ""
+#define dbg_cstate(cmt_state)                 ""
+#define dbg_get_key_dump(c, key)              ({})
+#define dbg_dump_inode(c, inode)              ({})
+#define dbg_dump_node(c, node)                ({})
+#define dbg_dump_budget_req(req)              ({})
+#define dbg_dump_lstats(lst)                  ({})
+#define dbg_dump_budg(c)                      ({})
+#define dbg_dump_lprop(c, lp)                 ({})
+#define dbg_dump_lprops(c)                    ({})
+#define dbg_dump_leb(c, lnum)                 ({})
+#define dbg_dump_znode(c, znode)              ({})
+#define dbg_dump_heap(c, heap, cat)           ({})
+#define dbg_dump_pnode(c, pnode, parent, iip) ({})
+#define dbg_dump_tnc(c)                       ({})
+#define dbg_dump_index(c)                     ({})
 
 #define dbg_walk_index(c, leaf_cb, znode_cb, priv) 0
-
 #define dbg_old_index_check_init(c, zroot)         0
 #define dbg_check_old_index(c, zroot)              0
-
 #define dbg_check_cats(c)                          0
-
 #define dbg_check_ltab(c)                          0
-
 #define dbg_check_synced_i_size(inode)             0
-
 #define dbg_check_dir_size(c, dir)                 0
-
 #define dbg_check_tnc(c, x)                        0
-
 #define dbg_check_idx_size(c, idx_size)            0
-
 #define dbg_check_filesystem(c)                    0
-
 #define dbg_check_heap(c, heap, cat, add_pos)      ({})
-
 #define dbg_check_lprops(c)                        0
 #define dbg_check_lpt_nodes(c, cnode, row, col)    0
-
 #define dbg_force_in_the_gaps_enabled              0
 #define dbg_force_in_the_gaps()                    0
-
 #define dbg_failure_mode                           0
 #define dbg_failure_mode_registration(c)           ({})
 #define dbg_failure_mode_deregistration(c)         ({})
