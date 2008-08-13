@@ -613,7 +613,7 @@ void slabcache(struct slabinfo *s)
 			s->order_fallback, s->order);
 	} else
 	if (show_defragcount)
-		printf("%-21s %8ld %7d %7d %7d %7d %7d %7d\n",
+		printf("%-21s %8ld %7lu %7lu %7lu %7lu %7lu %7lu\n",
 			s->name, s->objects, s->shrink_calls, s->shrink_attempt_defrag,
 			s->shrink_slab_reclaimed, s->shrink_empty_slab,
 			s->shrink_slab_skipped, s->shrink_object_reclaim_failed);
