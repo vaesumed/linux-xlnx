@@ -1131,8 +1131,6 @@ xfs_fs_put_super(
 	error = xfs_unmount_flush(mp, 0);
 	WARN_ON(error);
 
-	IRELE(rip);
-
 	/*
 	 * If we're forcing a shutdown, typically because of a media error,
 	 * we want to make sure we invalidate dirty pages that belong to
@@ -1149,6 +1147,7 @@ xfs_fs_put_super(
 	}
 
 	xfs_unmountfs(mp);
+	xfs_freesb(mp);
 	xfs_icsb_destroy_counters(mp);
 	xfs_close_devices(mp);
 	xfs_qmops_put(mp);
@@ -1724,7 +1723,7 @@ xfs_fs_fill_super(
 	if (error)
 		goto out_free_sb;
 
-	error = xfs_mountfs(mp, flags);
+	error = xfs_mountfs(mp);
 	if (error)
 		goto out_filestream_unmount;
 
@@ -1804,10 +1803,8 @@ xfs_fs_fill_super(
 	error = xfs_unmount_flush(mp, 0);
 	WARN_ON(error);
 
-	IRELE(mp->m_rootip);
-
 	xfs_unmountfs(mp);
-	goto out_free_fsname;
+	goto out_free_sb;
 }
 
 STATIC int

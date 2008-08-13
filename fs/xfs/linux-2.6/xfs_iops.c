@@ -89,12 +89,6 @@ xfs_mark_inode_dirty_sync(
  * Change the requested timestamp in the given inode.
  * We don't lock across timestamp updates, and we don't log them but
  * we do record the fact that there is dirty information in core.
- *
- * NOTE -- callers MUST combine XFS_ICHGTIME_MOD or XFS_ICHGTIME_CHG
- *		with XFS_ICHGTIME_ACC to be sure that access time
- *		update will take.  Calling first with XFS_ICHGTIME_ACC
- *		and then XFS_ICHGTIME_MOD may fail to modify the access
- *		timestamp if the filesystem is mounted noacctm.
  */
 void
 xfs_ichgtime(
@@ -103,22 +97,23 @@ xfs_ichgtime(
 {
 	struct inode	*inode = VFS_I(ip);
 	timespec_t	tv;
+	int		sync_it = 0;
 
-	nanotime(&tv);
-	if (flags & XFS_ICHGTIME_MOD) {
+	tv = current_fs_time(inode->i_sb);
+
+	if ((flags & XFS_ICHGTIME_MOD) &&
+	    !timespec_equal(&inode->i_mtime, &tv)) {
 		inode->i_mtime = tv;
 		ip->i_d.di_mtime.t_sec = (__int32_t)tv.tv_sec;
 		ip->i_d.di_mtime.t_nsec = (__int32_t)tv.tv_nsec;
+		sync_it = 1;
 	}
-	if (flags & XFS_ICHGTIME_ACC) {
-		inode->i_atime = tv;
-		ip->i_d.di_atime.t_sec = (__int32_t)tv.tv_sec;
-		ip->i_d.di_atime.t_nsec = (__int32_t)tv.tv_nsec;
-	}
-	if (flags & XFS_ICHGTIME_CHG) {
+	if ((flags & XFS_ICHGTIME_CHG) &&
+	    !timespec_equal(&inode->i_ctime, &tv)) {
 		inode->i_ctime = tv;
 		ip->i_d.di_ctime.t_sec = (__int32_t)tv.tv_sec;
 		ip->i_d.di_ctime.t_nsec = (__int32_t)tv.tv_nsec;
+		sync_it = 1;
 	}
 
 	/*
@@ -130,55 +125,11 @@ xfs_ichgtime(
 	 * ensure that the compiler does not reorder the update
 	 * of i_update_core above the timestamp updates above.
 	 */
-	SYNCHRONIZE();
-	ip->i_update_core = 1;
-	if (!(inode->i_state & I_NEW))
+	if (sync_it) {
+		SYNCHRONIZE();
+		ip->i_update_core = 1;
 		mark_inode_dirty_sync(inode);
-}
-
-/*
- * Variant on the above which avoids querying the system clock
- * in situations where we know the Linux inode timestamps have
- * just been updated (and so we can update our inode cheaply).
- */
-void
-xfs_ichgtime_fast(
-	xfs_inode_t	*ip,
-	struct inode	*inode,
-	int		flags)
-{
-	timespec_t	*tvp;
-
-	/*
-	 * Atime updates for read() & friends are handled lazily now, and
-	 * explicit updates must go through xfs_ichgtime()
-	 */
-	ASSERT((flags & XFS_ICHGTIME_ACC) == 0);
-
-	if (flags & XFS_ICHGTIME_MOD) {
-		tvp = &inode->i_mtime;
-		ip->i_d.di_mtime.t_sec = (__int32_t)tvp->tv_sec;
-		ip->i_d.di_mtime.t_nsec = (__int32_t)tvp->tv_nsec;
 	}
-	if (flags & XFS_ICHGTIME_CHG) {
-		tvp = &inode->i_ctime;
-		ip->i_d.di_ctime.t_sec = (__int32_t)tvp->tv_sec;
-		ip->i_d.di_ctime.t_nsec = (__int32_t)tvp->tv_nsec;
-	}
-
-	/*
-	 * We update the i_update_core field _after_ changing
-	 * the timestamps in order to coordinate properly with
-	 * xfs_iflush() so that we don't lose timestamp updates.
-	 * This keeps us from having to hold the inode lock
-	 * while doing this.  We use the SYNCHRONIZE macro to
-	 * ensure that the compiler does not reorder the update
-	 * of i_update_core above the timestamp updates above.
-	 */
-	SYNCHRONIZE();
-	ip->i_update_core = 1;
-	if (!(inode->i_state & I_NEW))
-		mark_inode_dirty_sync(inode);
 }
 
 /*
