@@ -1235,20 +1235,22 @@ filldir32 (void *__buf, const char *name, int namlen, loff_t offset, u64 ino,
 	if (reclen > buf->count)
 		return -EINVAL;
 	d_ino = ino;
-	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino)
+	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+		buf->error = -EOVERFLOW;
 		return -EOVERFLOW;
+	}
 	buf->error = -EFAULT;	/* only used if we fail.. */
 	dirent = buf->previous;
 	if (dirent)
 		if (put_user(offset, &dirent->d_off))
 			return -EFAULT;
 	dirent = buf->current_dir;
-	buf->previous = dirent;
 	if (put_user(d_ino, &dirent->d_ino)
 	    || put_user(reclen, &dirent->d_reclen)
 	    || copy_to_user(dirent->d_name, name, namlen)
 	    || put_user(0, dirent->d_name + namlen))
 		return -EFAULT;
+	buf->previous = dirent;
 	dirent = (struct compat_dirent __user *) ((char __user *) dirent + reclen);
 	buf->current_dir = dirent;
 	buf->count -= reclen;
@@ -1306,16 +1308,20 @@ fillonedir32 (void * __buf, const char * name, int namlen, loff_t offset, u64 in
 	if (buf->count)
 		return -EINVAL;
 	d_ino = ino;
-	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino)
+	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+		buf->count = -EOVERFLOW;
 		return -EOVERFLOW;
+	}
 	buf->count++;
 	dirent = buf->dirent;
 	if (put_user(d_ino, &dirent->d_ino)
 	    || put_user(offset, &dirent->d_offset)
 	    || put_user(namlen, &dirent->d_namlen)
 	    || copy_to_user(dirent->d_name, name, namlen)
-	    || put_user(0, dirent->d_name + namlen))
+	    || put_user(0, dirent->d_name + namlen)) {
+		buf->count = -EFAULT;
 		return -EFAULT;
+	}
 	return 0;
 }
 

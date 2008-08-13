@@ -1106,6 +1106,15 @@ int path_lookup(const char *name, unsigned int flags,
 	return do_path_lookup(AT_FDCWD, name, flags, nd);
 }
 
+int kern_path(const char *name, unsigned int flags, struct path *path)
+{
+	struct nameidata nd;
+	int res = do_path_lookup(AT_FDCWD, name, flags, &nd);
+	if (!res)
+		*path = nd.path;
+	return res;
+}
+
 /**
  * vfs_path_lookup - lookup a file path relative to a dentry-vfsmount pair
  * @dentry:  pointer to dentry of the base directory
@@ -1138,29 +1147,6 @@ int vfs_path_lookup(struct dentry *dentry, struct vfsmount *mnt,
 
 }
 
-static int __path_lookup_intent_open(int dfd, const char *name,
-		unsigned int lookup_flags, struct nameidata *nd,
-		int open_flags, int create_mode)
-{
-	struct file *filp = get_empty_filp();
-	int err;
-
-	if (filp == NULL)
-		return -ENFILE;
-	nd->intent.open.file = filp;
-	nd->intent.open.flags = open_flags;
-	nd->intent.open.create_mode = create_mode;
-	err = do_path_lookup(dfd, name, lookup_flags|LOOKUP_OPEN, nd);
-	if (IS_ERR(nd->intent.open.file)) {
-		if (err == 0) {
-			err = PTR_ERR(nd->intent.open.file);
-			path_put(&nd->path);
-		}
-	} else if (err != 0)
-		release_open_intent(nd);
-	return err;
-}
-
 /**
  * path_lookup_open - lookup a file path with open intent
  * @dfd: the directory to use as base, or AT_FDCWD
@@ -1172,25 +1158,23 @@ static int __path_lookup_intent_open(int dfd, const char *name,
 int path_lookup_open(int dfd, const char *name, unsigned int lookup_flags,
 		struct nameidata *nd, int open_flags)
 {
-	return __path_lookup_intent_open(dfd, name, lookup_flags, nd,
-			open_flags, 0);
-}
+	struct file *filp = get_empty_filp();
+	int err;
 
-/**
- * path_lookup_create - lookup a file path with open + create intent
- * @dfd: the directory to use as base, or AT_FDCWD
- * @name: pointer to file name
- * @lookup_flags: lookup intent flags
- * @nd: pointer to nameidata
- * @open_flags: open intent flags
- * @create_mode: create intent flags
- */
-static int path_lookup_create(int dfd, const char *name,
-			      unsigned int lookup_flags, struct nameidata *nd,
-			      int open_flags, int create_mode)
-{
-	return __path_lookup_intent_open(dfd, name, lookup_flags|LOOKUP_CREATE,
-			nd, open_flags, create_mode);
+	if (filp == NULL)
+		return -ENFILE;
+	nd->intent.open.file = filp;
+	nd->intent.open.flags = open_flags;
+	nd->intent.open.create_mode = 0;
+	err = do_path_lookup(dfd, name, lookup_flags|LOOKUP_OPEN, nd);
+	if (IS_ERR(nd->intent.open.file)) {
+		if (err == 0) {
+			err = PTR_ERR(nd->intent.open.file);
+			path_put(&nd->path);
+		}
+	} else if (err != 0)
+		release_open_intent(nd);
+	return err;
 }
 
 static struct dentry *__lookup_hash(struct qstr *name,
@@ -1702,8 +1686,7 @@ struct file *do_filp_open(int dfd, const char *pathname,
 	/*
 	 * Create - we need to know the parent.
 	 */
-	error = path_lookup_create(dfd, pathname, LOOKUP_PARENT,
-				   &nd, flag, mode);
+	error = do_path_lookup(dfd, pathname, LOOKUP_PARENT, &nd);
 	if (error)
 		return ERR_PTR(error);
 
@@ -1714,10 +1697,20 @@ struct file *do_filp_open(int dfd, const char *pathname,
 	 */
 	error = -EISDIR;
 	if (nd.last_type != LAST_NORM || nd.last.name[nd.last.len])
-		goto exit;
+		goto exit_parent;
 
+	error = -ENFILE;
+	filp = get_empty_filp();
+	if (filp == NULL)
+		goto exit_parent;
+	nd.intent.open.file = filp;
+	nd.intent.open.flags = flag;
+	nd.intent.open.create_mode = mode;
 	dir = nd.path.dentry;
 	nd.flags &= ~LOOKUP_PARENT;
+	nd.flags |= LOOKUP_CREATE | LOOKUP_OPEN;
+	if (flag & O_EXCL)
+		nd.flags |= LOOKUP_EXCL;
 	mutex_lock(&dir->d_inode->i_mutex);
 	path.dentry = lookup_hash(&nd);
 	path.mnt = nd.path.mnt;
@@ -1822,6 +1815,7 @@ exit_dput:
 exit:
 	if (!IS_ERR(nd.intent.open.file))
 		release_open_intent(&nd);
+exit_parent:
 	path_put(&nd.path);
 	return ERR_PTR(error);
 
@@ -1914,7 +1908,7 @@ struct dentry *lookup_create(struct nameidata *nd, int is_dir)
 	if (nd->last_type != LAST_NORM)
 		goto fail;
 	nd->flags &= ~LOOKUP_PARENT;
-	nd->flags |= LOOKUP_CREATE;
+	nd->flags |= LOOKUP_CREATE | LOOKUP_EXCL;
 	nd->intent.open.flags = O_EXCL;
 
 	/*
@@ -2855,6 +2849,7 @@ EXPORT_SYMBOL(__page_symlink);
 EXPORT_SYMBOL(page_symlink);
 EXPORT_SYMBOL(page_symlink_inode_operations);
 EXPORT_SYMBOL(path_lookup);
+EXPORT_SYMBOL(kern_path);
 EXPORT_SYMBOL(vfs_path_lookup);
 EXPORT_SYMBOL(inode_permission);
 EXPORT_SYMBOL(vfs_permission);
