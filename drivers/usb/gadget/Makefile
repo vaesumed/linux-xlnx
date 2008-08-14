@@ -26,26 +26,28 @@ obj-$(CONFIG_USB_M66592)	+= m66592-udc.o
 gadget_core-objs		:= composite.o usbstring.o config.o \
 					epautoconf.o
 gadget_ether_core-objs		:= u_ether.o
+gadget_ecm_core-objs		:= f_ecm.o
 
 g_zero-objs			:= zero.o f_sourcesink.o f_loopback.o
-g_ether-objs			:= ether.o f_subset.o f_ecm.o
+g_ether-objs			:= ether.o f_subset.o
 g_serial-objs			:= serial.o u_serial.o f_acm.o f_serial.o
 g_midi-objs			:= gmidi.o
 gadgetfs-objs			:= inode.o
 g_file_storage-objs		:= file_storage.o
 g_printer-objs			:= printer.o
-g_cdc-objs			:= cdc2.o f_ecm.o u_serial.o f_acm.o
+g_cdc-objs			:= cdc2.o u_serial.o f_acm.o
 
 ifeq ($(CONFIG_USB_ETH_RNDIS),y)
 	g_ether-objs		+= f_rndis.o rndis.o
 endif
  
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o gadget_core.o
-obj-$(CONFIG_USB_ETH)		+= g_ether.o gadget_core.o gadget_ether_core.o
+obj-$(CONFIG_USB_ETH)		+= g_ether.o gadget_core.o gadget_ether_core.o \
+					gadget_ecm_core.o
 obj-$(CONFIG_USB_GADGETFS)	+= gadgetfs.o
 obj-$(CONFIG_USB_FILE_STORAGE)	+= g_file_storage.o gadget_core.o
 obj-$(CONFIG_USB_G_SERIAL)	+= g_serial.o gadget_core.o
 obj-$(CONFIG_USB_G_PRINTER)	+= g_printer.o gadget_core.o
 obj-$(CONFIG_USB_MIDI_GADGET)	+= g_midi.o gadget_core.o
-obj-$(CONFIG_USB_CDC_COMPOSITE) += g_cdc.o gadget_core.o gadget_ether_core.o
-
+obj-$(CONFIG_USB_CDC_COMPOSITE) += g_cdc.o gadget_core.o gadget_ether_core.o \
+					gadget_ether_core.o
