@@ -61,6 +61,14 @@
 #define CRYPTO_ALG_GENIV		0x00000200
 
 /*
+ * Set if the algorithm has passed automated run-time testing.  Note that
+ * if there is no run-time testing for a given algorithm it is considered
+ * to have passed.
+ */
+
+#define CRYPTO_ALG_TESTED		0x00000400
+
+/*
  * Transform masks and values (for crt_flags).
  */
 #define CRYPTO_TFM_REQ_MASK		0x000fff00
@@ -514,6 +522,8 @@ struct crypto_attr_u32 {
 struct crypto_tfm *crypto_alloc_tfm(const char *alg_name, u32 tfm_flags);
 struct crypto_tfm *crypto_alloc_base(const char *alg_name, u32 type, u32 mask);
 void crypto_free_tfm(struct crypto_tfm *tfm);
+
+int alg_test(const char *driver, const char *alg, u32 type, u32 mask);
 
 /*
  * Transform helpers which query the underlying algorithm.
