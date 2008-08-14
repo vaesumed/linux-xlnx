@@ -96,7 +96,7 @@ void usb_detect_quirks(struct usb_device *udev)
 	if (id)
 		udev->quirks = (u32)(id->driver_info);
 	if (udev->quirks)
-		dev_dbg(&udev->dev, "USB quirks for this device: %x\n",
+		usb_dbg(&udev->dev, "USB quirks for this device: %x\n",
 				udev->quirks);
 
 	/* By default, disable autosuspend for all non-hubs */
