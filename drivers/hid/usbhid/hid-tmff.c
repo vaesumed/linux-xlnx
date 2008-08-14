@@ -163,22 +163,26 @@ int hid_tmff_init(struct hid_device *hid)
 			switch (field->usage[0].hid) {
 			case THRUSTMASTER_USAGE_FF:
 				if (field->report_count < 2) {
-					warn("ignoring FF field with report_count < 2");
+					dev_warn(hid->dev,
+						 "ignoring FF field with report_count < 2\n");
 					continue;
 				}
 
 				if (field->logical_maximum == field->logical_minimum) {
-					warn("ignoring FF field with logical_maximum == logical_minimum");
+					dev_warn(hid->dev,
+						 "ignoring FF field with logical_maximum == logical_minimum\n");
 					continue;
 				}
 
 				if (tmff->report && tmff->report != report) {
-					warn("ignoring FF field in other report");
+					dev_warn(hid->dev,
+						 "ignoring FF field in other report\n");
 					continue;
 				}
 
 				if (tmff->ff_field && tmff->ff_field != field) {
-					warn("ignoring duplicate FF field");
+					dev_warn(hid->dev,
+						 "ignoring duplicate FF field\n");
 					continue;
 				}
 
@@ -199,7 +203,9 @@ int hid_tmff_init(struct hid_device *hid)
 				break;
 
 			default:
-				warn("ignoring unknown output usage %08x", field->usage[0].hid);
+				dev_warn(hid->dev,
+					 "ignoring unknown output usage %08x\n",
+					 field->usage[0].hid);
 				continue;
 			}
 		}
