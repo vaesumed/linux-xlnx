@@ -842,8 +842,10 @@ static void efx_probe_interrupts(struct efx_nic *efx)
 			for_each_online_cpu(cpu) {
 				if (!cpu_isset(cpu, core_mask)) {
 					++efx->rss_queues;
+#if 0
 					cpus_or(core_mask, core_mask,
 						topology_core_siblings(cpu));
+#endif
 				}
 			}
 		} else {
