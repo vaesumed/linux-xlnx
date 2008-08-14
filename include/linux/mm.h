@@ -1263,8 +1263,7 @@ int in_gate_area_no_task(unsigned long addr);
 int drop_caches_sysctl_handler(struct ctl_table *, int, struct file *,
 					void __user *, size_t *, loff_t *);
 unsigned long shrink_slab(unsigned long scanned, gfp_t gfp_mask,
-			unsigned long lru_pages);
-
+				unsigned long lru_pages, struct zone *z);
 #ifndef CONFIG_MMU
 #define randomize_va_space 0
 #else
