@@ -1683,20 +1683,21 @@ aiptek_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	aiptek = kzalloc(sizeof(struct aiptek), GFP_KERNEL);
 	inputdev = input_allocate_device();
 	if (!aiptek || !inputdev) {
-		warn("aiptek: cannot allocate memory or input device");
+		dev_warn(&intf->dev,
+			 "cannot allocate memory or input device\n");
 		goto fail1;
         }
 
 	aiptek->data = usb_buffer_alloc(usbdev, AIPTEK_PACKET_LENGTH,
 					GFP_ATOMIC, &aiptek->data_dma);
         if (!aiptek->data) {
-		warn("aiptek: cannot allocate usb buffer");
+		dev_warn(&intf->dev, "cannot allocate usb buffer\n");
 		goto fail1;
 	}
 
 	aiptek->urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!aiptek->urb) {
-	        warn("aiptek: cannot allocate urb");
+	        dev_warn(&intf->dev, "cannot allocate urb\n");
 		goto fail2;
 	}
 
@@ -1841,7 +1842,8 @@ aiptek_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	 */
 	err = sysfs_create_group(&intf->dev.kobj, &aiptek_attribute_group);
 	if (err) {
-		warn("aiptek: cannot create sysfs group err: %d", err);
+		dev_warn(&intf->dev, "cannot create sysfs group err: %d\n",
+			 err);
 		goto fail3;
         }
 
@@ -1849,7 +1851,8 @@ aiptek_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	 */
 	err = input_register_device(aiptek->inputdev);
 	if (err) {
-		warn("aiptek: input_register_device returned err: %d", err);
+		dev_warn(&intf->dev,
+			 "input_register_device returned err: %d\n", err);
 		goto fail4;
         }
 	return 0;
