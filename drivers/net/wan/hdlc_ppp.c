@@ -381,13 +381,13 @@ static void ppp_cp_parse_cr(struct net_device *dev, u16 pid, u8 id,
 	unsigned int nak_len = 0, rej_len = 0;
 
 	if (!(out = kmalloc(len, GFP_ATOMIC))) {
-		dev_to_hdlc(dev)->stats.rx_dropped++;
+		dev->stats.rx_dropped++;
 		return;	/* out of memory, ignore CR packet */
 	}
 
 	for (opt = data; len; len -= opt[1], opt += opt[1]) {
 		if (len < 2 || len < opt[1]) {
-			dev_to_hdlc(dev)->stats.rx_errors++;
+			dev->stats.rx_errors++;
 			return; /* bad packet, drop silently */
 		}
 
@@ -549,7 +549,7 @@ static int ppp_rx(struct sk_buff *skb)
 	goto out;
 
 rx_error:
-	dev_to_hdlc(dev)->stats.rx_errors++;
+	dev->stats.rx_errors++;
 out:
 	spin_unlock_irqrestore(&ppp->lock, flags);
 	dev_kfree_skb_any(skb);
