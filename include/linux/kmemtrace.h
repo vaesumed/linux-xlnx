@@ -31,7 +31,7 @@ static inline void kmemtrace_mark_alloc_node(enum kmemtrace_type_id type_id,
 					     int node)
 {
 	trace_mark(kmemtrace_alloc, "type_id %d call_site %lu ptr %lu "
-		   "bytes_req %lu bytes_alloc %lu gfp_flags %lu node %d",
+		   "bytes_req %zu bytes_alloc %zu gfp_flags %lu node %d",
 		   type_id, call_site, (unsigned long) ptr,
 		   bytes_req, bytes_alloc, (unsigned long) gfp_flags, node);
 }
