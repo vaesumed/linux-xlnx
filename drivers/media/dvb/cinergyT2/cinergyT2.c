@@ -548,7 +548,8 @@ static int cinergyt2_release (struct inode *inode, struct file *file)
 	mutex_unlock(&cinergyt2->wq_sem);
 
 	if (atomic_dec_and_test(&cinergyt2->inuse) && cinergyt2->disconnect_pending) {
-		warn("delayed unregister in release");
+		dev_warn(&cinergyt2->udev->dev,
+			 "delayed unregister in release\n");
 		cinergyt2_unregister(cinergyt2);
 	}
 
