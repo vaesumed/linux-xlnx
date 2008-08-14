@@ -126,6 +126,7 @@ done:
 				function->name, function, value);
 	return value;
 }
+EXPORT_SYMBOL_GPL(usb_add_function);
 
 /**
  * usb_interface_id() - allocate an unused interface ID
@@ -162,6 +163,7 @@ int __init usb_interface_id(struct usb_configuration *config,
 	}
 	return -ENODEV;
 }
+EXPORT_SYMBOL_GPL(usb_interface_id);
 
 static int config_buf(struct usb_configuration *config,
 		enum usb_device_speed speed, void *buf, u8 type)
@@ -452,6 +454,7 @@ done:
 				config->bConfigurationValue, status);
 	return status;
 }
+EXPORT_SYMBOL_GPL(usb_add_config);
 
 /*-------------------------------------------------------------------------*/
 
@@ -594,6 +597,7 @@ int __init usb_string_id(struct usb_composite_dev *cdev)
 	}
 	return -ENODEV;
 }
+EXPORT_SYMBOL_GPL(usb_string_id);
 
 /*-------------------------------------------------------------------------*/
 
@@ -1025,6 +1029,7 @@ int __init usb_composite_register(struct usb_composite_driver *driver)
 
 	return usb_gadget_register_driver(&composite_driver);
 }
+EXPORT_SYMBOL_GPL(usb_composite_register);
 
 /**
  * usb_composite_unregister() - unregister a composite driver
@@ -1039,3 +1044,18 @@ void __exit usb_composite_unregister(struct usb_composite_driver *driver)
 		return;
 	usb_gadget_unregister_driver(&composite_driver);
 }
+EXPORT_SYMBOL_GPL(usb_composite_unregister);
+
+static int __init composite_init(void)
+{
+	return 0;
+}
+
+static void __exit composite_exit(void)
+{
+}
+
+module_init(composite_init);
+module_exit(composite_exit);
+
+MODULE_LICENSE("GPL");
