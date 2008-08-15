@@ -26,6 +26,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 #include <linux/memcontrol.h>
+#include <linux/security.h>
 
 int sysctl_panic_on_oom;
 int sysctl_oom_kill_allocating_task;
@@ -128,7 +129,8 @@ unsigned long badness(struct task_struct *p, unsigned long uptime)
 	 * Superuser processes are usually more important, so we make it
 	 * less likely that we kill those.
 	 */
-	if (__capable(p, CAP_SYS_ADMIN) || __capable(p, CAP_SYS_RESOURCE))
+	if (has_capability(p, CAP_SYS_ADMIN) ||
+	    has_capability(p, CAP_SYS_RESOURCE))
 		points /= 4;
 
 	/*
@@ -137,7 +139,7 @@ unsigned long badness(struct task_struct *p, unsigned long uptime)
 	 * tend to only have this flag set on applications they think
 	 * of as important.
 	 */
-	if (__capable(p, CAP_SYS_RAWIO))
+	if (has_capability(p, CAP_SYS_RAWIO))
 		points /= 4;
 
 	/*
@@ -296,9 +298,9 @@ static void dump_tasks(const struct mem_cgroup *mem)
 
 		task_lock(p);
 		printk(KERN_INFO "[%5d] %5d %5d %8lu %8lu %3d     %3d %s\n",
-		       p->pid, p->uid, p->tgid, p->mm->total_vm,
-		       get_mm_rss(p->mm), (int)task_cpu(p), p->oomkilladj,
-		       p->comm);
+		       p->pid, __task_cred(p)->uid, p->tgid,
+		       p->mm->total_vm, get_mm_rss(p->mm), (int)task_cpu(p),
+		       p->oomkilladj, p->comm);
 		task_unlock(p);
 	} while_each_thread(g, p);
 }
