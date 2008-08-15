@@ -797,6 +797,7 @@ int __init gether_setup(struct usb_gadget *g, u8 ethaddr[ETH_ALEN])
 
 	return status;
 }
+EXPORT_SYMBOL_GPL(gether_setup);
 
 /**
  * gether_cleanup - remove Ethernet-over-USB device
@@ -817,7 +818,7 @@ void gether_cleanup(void)
 
 	the_dev = NULL;
 }
-
+EXPORT_SYMBOL_GPL(gether_cleanup);
 
 /**
  * gether_connect - notify network layer that USB link is active
@@ -891,6 +892,7 @@ fail0:
 		return ERR_PTR(result);
 	return dev->net;
 }
+EXPORT_SYMBOL_GPL(gether_connect);
 
 /**
  * gether_disconnect - notify network layer that USB link is inactive
@@ -962,3 +964,18 @@ void gether_disconnect(struct gether *link)
 	link->ioport = NULL;
 	spin_unlock(&dev->lock);
 }
+EXPORT_SYMBOL_GPL(gether_disconnect);
+
+static int __init gether_init(void)
+{
+	return 0;
+}
+
+static void __exit gether_exit(void)
+{
+}
+
+module_init(gether_init);
+module_exit(gether_exit);
+
+MODULE_LICENSE("GPL");

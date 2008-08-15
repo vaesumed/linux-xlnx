@@ -734,6 +734,7 @@ fail:
 
 	return status;
 }
+EXPORT_SYMBOL_GPL(ecm_bind);
 
 static void
 ecm_unbind(struct usb_configuration *c, struct usb_function *f)
@@ -829,3 +830,18 @@ int __init ecm_bind_config(struct usb_configuration *c, u8 ethaddr[ETH_ALEN])
 	}
 	return status;
 }
+EXPORT_SYMBOL_GPL(ecm_bind_config);
+
+static int __init ecm_init(void)
+{
+	return 0;
+}
+
+static void __exit ecm_exit(void)
+{
+}
+
+module_init(ecm_init);
+module_exit(ecm_exit);
+
+MODULE_LICENSE("GPL");

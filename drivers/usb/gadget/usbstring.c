@@ -133,4 +133,4 @@ usb_gadget_get_string (struct usb_gadget_strings *table, int id, u8 *buf)
 	buf [1] = USB_DT_STRING;
 	return buf [0];
 }
-
+EXPORT_SYMBOL_GPL(usb_gadget_get_string);

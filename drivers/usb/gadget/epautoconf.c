@@ -286,6 +286,7 @@ struct usb_ep * __init usb_ep_autoconfig (
 	/* Fail */
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(usb_ep_autoconfig);
 
 /**
  * usb_ep_autoconfig_reset - reset endpoint autoconfig state
@@ -308,4 +309,5 @@ void __init usb_ep_autoconfig_reset (struct usb_gadget *gadget)
 #endif
 	epnum = 0;
 }
+EXPORT_SYMBOL_GPL(usb_ep_autoconfig_reset);
 
