@@ -1,0 +1,83 @@
+Importing driver-core.current based on 2.6.27-rc3-git2
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard b635acec48bcaa9183fcbf4e3955616b0d4119b5
+HEAD is now at b635ace Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+kobject-replace-all-occurrences-of-with-instead-of-only-the-first-one.patch
+japanese-translation-of-documentation-submitchecklist.patch
+drivers-base-driver.c-remove-unused-to_dev-macro.patch
+dev_printk-constify-the-dev-argument.patch
+driver-model-anti-oopsing-medicine.patch
+pm-don-t-skip-device-pm-init-when-config_pm_sleep-isn-t-set-and-config_pm-is-set.patch
+driver-core-add-init_name-to-struct-device.patch
+pm-remove-warn_on-from-device_pm_add.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 66bff9abc6d530b2a0bcf6f4e9ee69b942a20ba0
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 66bff9abc6d530b2a0bcf6f4e9ee69b942a20ba0
+HEAD is now at 66bff9a kobject: Fix kobject_rename and !CONFIG_SYSFS
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+usb-gadget-make-gadget_core.ko.patch
+usb-gadget-move-u_ether.c-to-gadget_ether_core.ko.patch
+usb-gadget-move-f_ecm.c-to-gadget_ecm_core.ko.patch
+usb-gadget-move-f_acm.c-and-u_serial.c-gadget_acm_core.ko.patch
+driver-core-basic-infrastructure-for-per-module-dynamic-debug-messages.patch
+.dotest/patch:719: space before tab in indent.
+	  	$echo "set enabled=1 <module_name>" > dynamic_printk/modules
+.dotest/patch:723: space before tab in indent.
+	  	$echo "set enabled=0 <module_name>" > dynamic_printk/modules
+warning: 2 lines add whitespace errors.
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 04ddc0a8772873fa863d2386e2cd3951e9cee4f4
+HEAD is now at 04ddc0a sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+hso-fix-oops-in-read-write-callbacks.patch
+hso-fix-refcounting-on-the-ttyhsx-devices.patch
+usb-hso-make-tty_operations-const.patch
+usb-hso-minor-fixes-due-to-code-review.patch
+usb-add-config_usb_debug_messages-and-usb_dbg.patch
+usb-convert-the-usb-core-code-to-use-usb_dbg.patch
+usb-convert-the-usb-host-controller-code-to-use-usb_dbg.patch
+usb-remove-config_usb_debug.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Unchanged quilt series ttydev
