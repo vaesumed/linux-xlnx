@@ -56,7 +56,7 @@ static void at91_start_hc(struct platform_device *pdev)
 	struct usb_hcd *hcd = platform_get_drvdata(pdev);
 	struct ohci_regs __iomem *regs = hcd->regs;
 
-	dev_dbg(&pdev->dev, "start\n");
+	usb_dbg(&pdev->dev, "start\n");
 
 	/*
 	 * Start the USB clocks.
@@ -74,7 +74,7 @@ static void at91_stop_hc(struct platform_device *pdev)
 	struct usb_hcd *hcd = platform_get_drvdata(pdev);
 	struct ohci_regs __iomem *regs = hcd->regs;
 
-	dev_dbg(&pdev->dev, "stop\n");
+	usb_dbg(&pdev->dev, "stop\n");
 
 	/*
 	 * Put the USB host controller into reset.
