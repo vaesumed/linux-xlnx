@@ -74,15 +74,20 @@ static int fillonedir(void * __buf, const char * name, int namlen,
 	if (buf->count)
 		return -EINVAL;
 	d_ino = ino;
-	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino)
+	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+		buf->count = -EOVERFLOW;
 		return -EOVERFLOW;
+	}
 	buf->count++;
 	dirent = buf->dirent;
-	put_user(d_ino, &dirent->d_ino);
-	put_user(offset, &dirent->d_offset);
-	put_user(namlen, &dirent->d_namlen);
-	copy_to_user(dirent->d_name, name, namlen);
-	put_user(0, dirent->d_name + namlen);
+	if (put_user(d_ino, &dirent->d_ino) ||
+	    put_user(offset, &dirent->d_offset) ||
+	    put_user(namlen, &dirent->d_namlen) ||
+	    copy_to_user(dirent->d_name, name, namlen) ||
+	    put_user(0, dirent->d_name + namlen)) {
+		buf->count = -EFAULT;
+		return -EFAULT;
+	}
 	return 0;
 }
 

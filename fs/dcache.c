@@ -1111,69 +1111,71 @@ static inline struct hlist_head *d_hash(struct dentry *parent,
 }
 
 /**
- * d_alloc_anon - allocate an anonymous dentry
+ * d_obtain_alias - find or allocate a dentry for a given inode
  * @inode: inode to allocate the dentry for
  *
- * This is similar to d_alloc_root.  It is used by filesystems when
- * creating a dentry for a given inode, often in the process of 
- * mapping a filehandle to a dentry.  The returned dentry may be
- * anonymous, or may have a full name (if the inode was already
- * in the cache).  The file system may need to make further
- * efforts to connect this dentry into the dcache properly.
+ * Obtain a dentry for an inode resulting from NFS filehandle conversion or
+ * similar open by handle operations.  The returned dentry may be anonymous,
+ * or may have a full name (if the inode was already in the cache).
  *
- * When called on a directory inode, we must ensure that
- * the inode only ever has one dentry.  If a dentry is
- * found, that is returned instead of allocating a new one.
+ * When called on a directory inode, we must ensure that the inode only ever
+ * has one dentry.  If a dentry is found, that is returned instead of
+ * allocating a new one.
  *
  * On successful return, the reference to the inode has been transferred
  * to the dentry.  If %NULL is returned (indicating kmalloc failure),
- * the reference on the inode has not been released.
+ * the reference on the inode has been released.  To make it easier
+ * to use in export operations a NULL or IS_ERR inode may be passed in
+ * and will be casted to the corresponding NULL or IS_ERR dentry.
  */
-
-struct dentry * d_alloc_anon(struct inode *inode)
+struct dentry *d_obtain_alias(struct inode *inode)
 {
 	static const struct qstr anonstring = { .name = "" };
 	struct dentry *tmp;
 	struct dentry *res;
 
-	if ((res = d_find_alias(inode))) {
-		iput(inode);
-		return res;
-	}
+	if (!inode)
+		return NULL;
+	if (IS_ERR(inode))
+		return ERR_CAST(inode);
+
+	res = d_find_alias(inode);
+	if (res)
+		goto out_iput;
 
 	tmp = d_alloc(NULL, &anonstring);
-	if (!tmp)
-		return NULL;
-
+	if (!tmp) {
+		res = ERR_PTR(-ENOMEM);
+		goto out_iput;
+	}
 	tmp->d_parent = tmp; /* make sure dput doesn't croak */
-	
+
 	spin_lock(&dcache_lock);
 	res = __d_find_alias(inode, 0);
-	if (!res) {
-		/* attach a disconnected dentry */
-		res = tmp;
-		tmp = NULL;
-		spin_lock(&res->d_lock);
-		res->d_sb = inode->i_sb;
-		res->d_parent = res;
-		res->d_inode = inode;
-		res->d_flags |= DCACHE_DISCONNECTED;
-		res->d_flags &= ~DCACHE_UNHASHED;
-		list_add(&res->d_alias, &inode->i_dentry);
-		hlist_add_head(&res->d_hash, &inode->i_sb->s_anon);
-		spin_unlock(&res->d_lock);
-
-		inode = NULL; /* don't drop reference */
-	}
-	spin_unlock(&dcache_lock);
-
-	if (inode)
-		iput(inode);
-	if (tmp)
+	if (res) {
+		spin_unlock(&dcache_lock);
 		dput(tmp);
+		goto out_iput;
+	}
+
+	/* attach a disconnected dentry */
+	spin_lock(&tmp->d_lock);
+	tmp->d_sb = inode->i_sb;
+	tmp->d_inode = inode;
+	tmp->d_flags |= DCACHE_DISCONNECTED;
+	tmp->d_flags &= ~DCACHE_UNHASHED;
+	list_add(&tmp->d_alias, &inode->i_dentry);
+	hlist_add_head(&tmp->d_hash, &inode->i_sb->s_anon);
+	spin_unlock(&tmp->d_lock);
+
+	spin_unlock(&dcache_lock);
+	return tmp;
+
+ out_iput:
+	iput(inode);
 	return res;
 }
-
+EXPORT_SYMBOL_GPL(d_obtain_alias);
 
 /**
  * d_splice_alias - splice a disconnected dentry into the tree if one exists
@@ -1236,7 +1238,7 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
  * If no entry exists with the exact case name, allocate new dentry with
  * the exact case, and return the spliced entry.
  */
-struct dentry *d_add_ci(struct inode *inode, struct dentry *dentry,
+struct dentry *d_add_ci(struct dentry *dentry, struct inode *inode,
 			struct qstr *name)
 {
 	int error;
@@ -2342,7 +2344,6 @@ void __init vfs_caches_init(unsigned long mempages)
 }
 
 EXPORT_SYMBOL(d_alloc);
-EXPORT_SYMBOL(d_alloc_anon);
 EXPORT_SYMBOL(d_alloc_root);
 EXPORT_SYMBOL(d_delete);
 EXPORT_SYMBOL(d_find_alias);
