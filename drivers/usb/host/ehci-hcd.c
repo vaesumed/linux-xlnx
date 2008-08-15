@@ -1102,7 +1102,7 @@ clean0:
 #endif
 	return retval;
 }
-module_init(ehci_hcd_init);
+module_init_async(ehci_hcd_init);
 
 static void __exit ehci_hcd_cleanup(void)
 {
