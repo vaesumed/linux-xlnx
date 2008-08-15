@@ -149,13 +149,16 @@ struct bio {
  * bit 2 -- barrier
  * bit 3 -- fail fast, don't want low level driver retries
  * bit 4 -- synchronous I/O hint: the block layer will unplug immediately
+ * bit 5 -- metadata request
+ * bit 6 -- discard sectors
  */
-#define BIO_RW		0
-#define BIO_RW_AHEAD	1
+#define BIO_RW		0	/* Must match RW in req flags (blkdev.h) */
+#define BIO_RW_AHEAD	1	/* Must match FAILFAST in req flags */
 #define BIO_RW_BARRIER	2
 #define BIO_RW_FAILFAST	3
 #define BIO_RW_SYNC	4
 #define BIO_RW_META	5
+#define BIO_RW_DISCARD	6
 
 /*
  * upper 16 bits of bi_rw define the io priority of this bio
@@ -185,14 +188,15 @@ struct bio {
 #define bio_failfast(bio)	((bio)->bi_rw & (1 << BIO_RW_FAILFAST))
 #define bio_rw_ahead(bio)	((bio)->bi_rw & (1 << BIO_RW_AHEAD))
 #define bio_rw_meta(bio)	((bio)->bi_rw & (1 << BIO_RW_META))
-#define bio_empty_barrier(bio)	(bio_barrier(bio) && !(bio)->bi_size)
+#define bio_discard(bio)	((bio)->bi_rw & (1 << BIO_RW_DISCARD))
+#define bio_empty_barrier(bio)	(bio_barrier(bio) && !bio_has_data(bio) && !bio_discard(bio))
 
 static inline unsigned int bio_cur_sectors(struct bio *bio)
 {
 	if (bio->bi_vcnt)
 		return bio_iovec(bio)->bv_len >> 9;
-
-	return 0;
+	else /* dataless requests such as discard */
+		return bio->bi_size >> 9;
 }
 
 static inline void *bio_data(struct bio *bio)
@@ -444,6 +448,14 @@ static inline char *__bio_kmap_irq(struct bio *bio, unsigned short idx,
 #define bio_kmap_irq(bio, flags) \
 	__bio_kmap_irq((bio), (bio)->bi_idx, (flags))
 #define bio_kunmap_irq(buf,flags)	__bio_kunmap_irq(buf, flags)
+
+/*
+ * Check whether this bio carries any data or not. A NULL bio is allowed.
+ */
+static inline int bio_has_data(struct bio *bio)
+{
+	return bio && bio->bi_io_vec != NULL;
+}
 
 #if defined(CONFIG_BLK_DEV_INTEGRITY)
 
