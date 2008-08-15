@@ -812,6 +812,8 @@ static acpi_status get_u32(u32 *value, u32 cap)
 
 static acpi_status set_u32(u32 value, u32 cap)
 {
+	acpi_status status;
+
 	if (interface->capability & cap) {
 		switch (interface->type) {
 		case ACER_AMW0:
