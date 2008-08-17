@@ -1892,7 +1892,6 @@ static int nfsd_buffered_readdir(struct file *file, filldir_t func,
 		if (!size)
 			break;
 
-
 		de = (struct buffered_dirent *)buf.dirent;
 		while (size > 0) {
 			offset = de->offset;
@@ -1909,7 +1908,9 @@ static int nfsd_buffered_readdir(struct file *file, filldir_t func,
 			size -= reclen;
 			de = (struct buffered_dirent *)((char *)de + reclen);
 		}
-		offset = vfs_llseek(file, 0, 1);
+		offset = vfs_llseek(file, 0, SEEK_CUR);
+		if (!buf.full)
+			break;
 	}
 
  done:
