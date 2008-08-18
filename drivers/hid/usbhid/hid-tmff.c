@@ -221,7 +221,8 @@ int hid_tmff_init(struct hid_device *hid)
 	if (error)
 		goto fail;
 
-	info("Force feedback for ThrustMaster devices by Zinx Verituse <zinx@epicsol.org>");
+	dev_info(hid->dev,
+		 "Force feedback for ThrustMaster devices by Zinx Verituse <zinx@epicsol.org>\n");
 	return 0;
 
  fail:
