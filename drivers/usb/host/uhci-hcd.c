@@ -47,6 +47,7 @@
 #include <asm/system.h>
 
 #include "../core/hcd.h"
+#include "../core/usb.h"
 #include "uhci-hcd.h"
 #include "pci-quirks.h"
 
@@ -265,7 +266,7 @@ __acquires(uhci->lock)
 	struct usb_device *rhdev = uhci_to_hcd(uhci)->self.root_hub;
 
 	auto_stop = (new_state == UHCI_RH_AUTO_STOPPED);
-	dev_dbg(&rhdev->dev, "%s%s\n", __func__,
+	usb_dbg(&rhdev->dev, "%s%s\n", __func__,
 			(auto_stop ? " (auto-stop)" : ""));
 
 	/* Start off by assuming Resume-Detect interrupts and EGSM work
@@ -371,7 +372,7 @@ static void wakeup_rh(struct uhci_hcd *uhci)
 __releases(uhci->lock)
 __acquires(uhci->lock)
 {
-	dev_dbg(&uhci_to_hcd(uhci)->self.root_hub->dev,
+	usb_dbg(&uhci_to_hcd(uhci)->self.root_hub->dev,
 			"%s%s\n", __func__,
 			uhci->rh_state == UHCI_RH_AUTO_STOPPED ?
 				" (auto-start)" : "");
@@ -775,7 +776,7 @@ static int uhci_pci_suspend(struct usb_hcd *hcd, pm_message_t message)
 	struct uhci_hcd *uhci = hcd_to_uhci(hcd);
 	int rc = 0;
 
-	dev_dbg(uhci_dev(uhci), "%s\n", __func__);
+	usb_dbg(uhci_dev(uhci), "%s\n", __func__);
 
 	spin_lock_irq(&uhci->lock);
 	if (!test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags) || uhci->dead)
@@ -811,7 +812,7 @@ static int uhci_pci_resume(struct usb_hcd *hcd)
 {
 	struct uhci_hcd *uhci = hcd_to_uhci(hcd);
 
-	dev_dbg(uhci_dev(uhci), "%s\n", __func__);
+	usb_dbg(uhci_dev(uhci), "%s\n", __func__);
 
 	/* Since we aren't in D3 any more, it's safe to set this flag
 	 * even if the controller was dead.

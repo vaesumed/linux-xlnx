@@ -132,6 +132,20 @@ static inline int is_active(const struct usb_interface *f)
 /* for labeling diagnostics */
 extern const char *usbcore_name;
 
+/* USB debugging */
+#if defined(CONFIG_USB_DEBUG_MESSAGES)
+extern int usb_debug;
+#else
+#define usb_debug	0
+#endif
+
+#define usb_dbg(dev, format, arg...)					\
+	do {								\
+		if (usb_debug)						\
+			dev_printk(KERN_DEBUG , dev , format , ## arg); \
+	} while (0)
+
+
 /* sysfs stuff */
 extern struct attribute_group *usb_device_groups[];
 extern struct attribute_group *usb_interface_groups[];

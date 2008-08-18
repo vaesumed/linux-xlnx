@@ -100,7 +100,7 @@ ohci_hcd_ppc_of_probe(struct of_device *op, const struct of_device_id *match)
 		of_device_is_compatible(dn, "ohci-bigendian") ||
 		of_device_is_compatible(dn, "ohci-be");
 
-	dev_dbg(&op->dev, "initializing PPC-OF USB Controller\n");
+	usb_dbg(&op->dev, "initializing PPC-OF USB Controller\n");
 
 	rv = of_address_to_resource(dn, 0, &res);
 	if (rv)
@@ -164,7 +164,7 @@ static int ohci_hcd_ppc_of_remove(struct of_device *op)
 	struct usb_hcd *hcd = dev_get_drvdata(&op->dev);
 	dev_set_drvdata(&op->dev, NULL);
 
-	dev_dbg(&op->dev, "stopping PPC-OF USB Controller\n");
+	usb_dbg(&op->dev, "stopping PPC-OF USB Controller\n");
 
 	usb_remove_hcd(hcd);
 

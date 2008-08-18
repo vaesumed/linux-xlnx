@@ -101,14 +101,14 @@ static int ixp4xx_ehci_probe(struct platform_device *pdev)
 
 	if (!request_mem_region(hcd->rsrc_start, hcd->rsrc_len,
 				driver->description)) {
-		dev_dbg(&pdev->dev, "controller already in use\n");
+		usb_dbg(&pdev->dev, "controller already in use\n");
 		retval = -EBUSY;
 		goto fail_request_resource;
 	}
 
 	hcd->regs = ioremap_nocache(hcd->rsrc_start, hcd->rsrc_len);
 	if (hcd->regs == NULL) {
-		dev_dbg(&pdev->dev, "error mapping memory\n");
+		usb_dbg(&pdev->dev, "error mapping memory\n");
 		retval = -EFAULT;
 		goto fail_ioremap;
 	}

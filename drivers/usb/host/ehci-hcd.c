@@ -36,6 +36,7 @@
 #include <linux/debugfs.h>
 
 #include "../core/hcd.h"
+#include "../core/usb.h"
 
 #include <asm/byteorder.h>
 #include <asm/io.h>

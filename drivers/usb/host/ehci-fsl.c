@@ -100,14 +100,14 @@ int usb_hcd_fsl_probe(const struct hc_driver *driver,
 	hcd->rsrc_len = res->end - res->start + 1;
 	if (!request_mem_region(hcd->rsrc_start, hcd->rsrc_len,
 				driver->description)) {
-		dev_dbg(&pdev->dev, "controller already in use\n");
+		usb_dbg(&pdev->dev, "controller already in use\n");
 		retval = -EBUSY;
 		goto err2;
 	}
 	hcd->regs = ioremap(hcd->rsrc_start, hcd->rsrc_len);
 
 	if (hcd->regs == NULL) {
-		dev_dbg(&pdev->dev, "error mapping memory\n");
+		usb_dbg(&pdev->dev, "error mapping memory\n");
 		retval = -EFAULT;
 		goto err3;
 	}

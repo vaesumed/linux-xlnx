@@ -19,7 +19,7 @@
 /* this file is part of ehci-hcd.c */
 
 #define ehci_dbg(ehci, fmt, args...) \
-	dev_dbg (ehci_to_hcd(ehci)->self.controller , fmt , ## args )
+	usb_dbg (ehci_to_hcd(ehci)->self.controller , fmt , ## args )
 #define ehci_err(ehci, fmt, args...) \
 	dev_err (ehci_to_hcd(ehci)->self.controller , fmt , ## args )
 #define ehci_info(ehci, fmt, args...) \

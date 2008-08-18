@@ -157,7 +157,7 @@ static int usb_probe_device(struct device *dev)
 	struct usb_device *udev;
 	int error = -ENODEV;
 
-	dev_dbg(dev, "%s\n", __func__);
+	usb_dbg(dev, "%s\n", __func__);
 
 	if (!is_usb_device(dev))	/* Sanity check */
 		return error;
@@ -194,7 +194,7 @@ static int usb_probe_interface(struct device *dev)
 	const struct usb_device_id *id;
 	int error = -ENODEV;
 
-	dev_dbg(dev, "%s\n", __func__);
+	usb_dbg(dev, "%s\n", __func__);
 
 	if (is_usb_device(dev))		/* Sanity check */
 		return error;
@@ -212,7 +212,7 @@ static int usb_probe_interface(struct device *dev)
 	if (!id)
 		id = usb_match_dynamic_id(intf, driver);
 	if (id) {
-		dev_dbg(dev, "%s - got id\n", __func__);
+		usb_dbg(dev, "%s - got id\n", __func__);
 
 		error = usb_autoresume_device(udev);
 		if (error)
@@ -588,8 +588,9 @@ static int usb_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
 	struct usb_device *usb_dev;
 
-	/* driver is often null here; dev_dbg() would oops */
-	pr_debug("usb %s: uevent\n", dev_name(dev));
+	/* driver is often null here; usb_dbg() would oops */
+	if (usb_debug)
+		printk(KERN_DEBUG "usb %s: uevent\n", dev_name(dev));
 
 	if (is_usb_device(dev))
 		usb_dev = to_usb_device(dev);
@@ -599,11 +600,15 @@ static int usb_uevent(struct device *dev, struct kobj_uevent_env *env)
 	}
 
 	if (usb_dev->devnum < 0) {
-		pr_debug("usb %s: already deleted?\n", dev_name(dev));
+		if (usb_debug)
+			printk(KERN_DEBUG "usb %s: already deleted?\n",
+			       dev_name(dev));
 		return -ENODEV;
 	}
 	if (!usb_dev->bus) {
-		pr_debug("usb %s: bus removed?\n", dev_name(dev));
+		if (usb_debug)
+			printk(KERN_DEBUG "usb %s: bus removed?\n",
+			       dev_name(dev));
 		return -ENODEV;
 	}
 
@@ -785,7 +790,7 @@ void usb_forced_unbind_intf(struct usb_interface *intf)
 {
 	struct usb_driver *driver = to_usb_driver(intf->dev.driver);
 
-	dev_dbg(&intf->dev, "forced unbind\n");
+	usb_dbg(&intf->dev, "forced unbind\n");
 	usb_driver_release_interface(driver, intf);
 
 	/* Mark the interface for later rebinding */
@@ -809,7 +814,7 @@ void usb_rebind_intf(struct usb_interface *intf)
 		struct usb_driver *driver =
 				to_usb_driver(intf->dev.driver);
 
-		dev_dbg(&intf->dev, "forced unbind\n");
+		usb_dbg(&intf->dev, "forced unbind\n");
 		usb_driver_release_interface(driver, intf);
 	}
 
@@ -1044,7 +1049,7 @@ static int autosuspend_check(struct usb_device *udev, int reschedule)
 				return -EBUSY;
 			if (intf->needs_remote_wakeup &&
 					!udev->do_remote_wakeup) {
-				dev_dbg(&udev->dev, "remote wakeup needed "
+				usb_dbg(&udev->dev, "remote wakeup needed "
 						"for autosuspend\n");
 				return -EOPNOTSUPP;
 			}

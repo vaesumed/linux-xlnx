@@ -45,6 +45,7 @@
 #include <asm/byteorder.h>
 
 #include "../core/hcd.h"
+#include "../core/usb.h"
 
 #define DRIVER_VERSION "2006 August 04"
 #define DRIVER_AUTHOR "Roman Weissgaerber, David Brownell"
