@@ -25,9 +25,25 @@
 #include "u_ether.h"
 #include "u_serial.h"
 
-
 #define DRIVER_DESC		"CDC Composite Gadget"
 #define DRIVER_VERSION		"King Kamehameha Day 2008"
+
+/*
+ * Kbuild is not very cooperative with respect to linking separately
+ * compiled library objects into one module.  So for now we won't use
+ * separate compilation ... ensuring init/exit sections work to shrink
+ * the runtime footprint, and giving us at least some parts of what
+ * a "gcc --combine ... part1.c part2.c part3.c ... " build would.
+ */
+#include "composite.c"
+#include "usbstring.c"
+#include "config.c"
+#include "epautoconf.c"
+
+#include "f_ecm.c"
+#include "f_acm.c"
+#include "u_serial.c"
+#include "u_ether.c"
 
 /*-------------------------------------------------------------------------*/
 
@@ -148,7 +164,8 @@ static int __init cdc_bind(struct usb_composite_dev *cdev)
 	int			status;
 
 	if (!can_support_ecm(cdev->gadget)) {
-		ERROR(cdev, "controller '%s' not usable\n", gadget->name);
+		dev_err(&cdev->gadget->dev, "controller '%s' not usable\n",
+			gadget->name);
 		return -EINVAL;
 	}
 
@@ -203,7 +220,8 @@ static int __init cdc_bind(struct usb_composite_dev *cdev)
 	if (status < 0)
 		goto fail1;
 
-	INFO(cdev, "%s, version: " DRIVER_VERSION "\n", DRIVER_DESC);
+	dev_info(&cdev->gadget->dev, "%s, version: " DRIVER_VERSION "\n",
+		 DRIVER_DESC);
 
 	return 0;
 
