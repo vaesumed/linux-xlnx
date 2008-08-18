@@ -135,12 +135,12 @@ struct inode *udf_new_inode(struct inode *dir, int mode, int *err)
 			sbi->s_udfrev = UDF_VERS_USE_EXTENDED_FE;
 		iinfo->i_ext.i_data = kzalloc(inode->i_sb->s_blocksize -
 					    sizeof(struct extendedFileEntry),
-					    GFP_KERNEL);
+					    GFP_NOFS);
 	} else {
 		iinfo->i_efe = 0;
 		iinfo->i_ext.i_data = kzalloc(inode->i_sb->s_blocksize -
 					    sizeof(struct fileEntry),
-					    GFP_KERNEL);
+					    GFP_NOFS);
 	}
 	if (!iinfo->i_ext.i_data) {
 		iput(inode);
