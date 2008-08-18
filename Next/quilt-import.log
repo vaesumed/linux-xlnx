@@ -1,0 +1,110 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 0967d61ea0d8e8a7826bd8949cd93dd1e829ac55
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 0967d61ea0d8e8a7826bd8949cd93dd1e829ac55
+HEAD is now at 0967d61 Linux 2.6.27-rc2
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+drivers-ide-pci-use-__devexit_p.patch
+cleanup-powerpc-include-asm-ide-h.patch
+viocd-add-dummy-audio-ioctl-handler.patch
+gdrom-add-dummy-audio_ioctl-handler.patch
+cdrom-handle-toc.patch
+ide-cd-use-bcd2bin-bin2bcd.patch
+sgiioc4-fixup-message-on-resource-allocation-failure.patch
+ata-add-missing-ata_id_-defines-take-2.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+Context reduced to (2/2) to apply fragment at 447
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+ata-add-missing-ata_cmd_-defines.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+ata-add-missing-ata_-defines.patch
+ide-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+ide-remove-no-longer-needed-ide_drive_t-fields.patch
+ide-re-code-ide_fixstring-loop-to-be-less-evil.patch
+ide-cd-use-the-new-object_is_in_stack-helper.patch
+ide-fix-exabytenest-handling-in-probe_for_drive.patch
+ide-enhance-ide_busy_sleep.patch
+ide-remove-no-longer-needed-bug_on-s-from-init_irq.patch
+ide-remove-ide_chipset_-macros.patch
+ide-remove-unused-_ide_c-and-_ide_disk-defines.patch
+ide-remove-needless-drive-present-checks-from-device-drivers.patch
+ide-check-drive-present-in-ide_get_paired_drive.patch
+ide-remove-config_idedisk_multi_mode.patch
+ide-include-linux-hdreg-h-only-when-needed.patch
+ide-call-ide_proc_register_driver-later.patch
+ide-preparations-for-proc-ide-hd_-settings-rework.patch
+ide-proc-ide-hd_-settings-rework.patch
+ide-remove-sector_words-define.patch
+cmd640-add-__set_prefetch_mode.patch
+ide-remove-read-only-atapi_overlap-field-from-ide_drive_t.patch
+ide-remove-supports_dsc_overlap-field-from-ide_driver_t.patch
+ide-factor-out-hdio_-_nice-ioctl-handling-to-ide_-_nice_ioctl.patch
+ide-ide_dev_has_iordy-to-ata_id_has_iordy.patch
+ide-ide_dev_is_sata-to-ata_id_is_sata.patch
+ide-idedisk_supports_lba48-to-ata_id_lba48_enabled.patch
+ide-check-only-for-cache-flush-command-support-in-ide_id_has_flush_cache.patch
+ide-ide_id_has_flush_cache-to-ata_id_flush_enabled.patch
+ide-ide_id_has_flush_cache_ext-to-ata_id_flush_ext_enabled.patch
+ide-use-ata_id_is_cfa.patch
+ide-ide_id_to_hd_driveid-to-ata_id_to_hd_driveid.patch
+ide-lba_capacity_is_ok-to-ata_id_is_lba_capacity_ok.patch
+hpt366-add-hpt3xx_disable_fast_irq-helper.patch
+ide-add-proper-pci-pm-support.patch
+ide-remove-bus_state-field-from-ide_hwif_t.patch
+ide-add-ide_setting_ioctl-helper.patch
+ide-cleanup-generic_ide_ioctl.patch
+ide-move-ioctls-handling-to-ide-ioctls-c.patch
+ide-add-ide_check_atapi_device-helper.patch
+ide-floppy-remove-needless-parens.patch
+ide-floppy-add-ide_floppy_format_ioctl-helper.patch
+ide-tape-remove-idetape_init_rq.patch
+ide-floppy-use-scatterlists-for-pio-transfers.patch
+ide-generic-handle-probing-of-legacy-io-ports-v5.patch
+ide-floppy-tape-remove-request-stack.patch
+ide-floppy-tape-remove-packet-command-stack.patch
+ide-floppy-remove-mode_sense_-defines.patch
+ide-floppy-fixup-ide_floppy_io_buffers.patch
+ide-scsi-cleanup-ide_scsi_io_buffers.patch
+ide-add-ide_io_buffers-helper.patch
+ide-floppy-add-ide_floppy_set_media_lock-helper.patch
+ide-tape-add-ide_tape_set_media_lock-helper.patch
+ide-add-ide_init_pc-helper.patch
+ide-add-ide_queue_pc_head-helper.patch
+ide-add-ide_queue_pc_tail-helper.patch
+ide-floppy-srfp-wp-to-ide_aflag_srfp-wp.patch
+ide-floppy-move-floppy-ioctls-handling-to-ide-floppy_ioctl-c.patch
+ide-add-ide_set_media_lock-helper-patch
+ide-add-ide_do_start_stop-helper.patch
+ide-add-ide_do_test_unit_ready-helper.patch
+ide-move-idefloppy-tape_wait_cmd-defines-to-linux-ide-h.patch
+ide-remove-ide_spin_wait_hwgroup-and-use-special-requests-instead-v2.patch
+ide-drop-dsc_handle-argument-from-ide_pc_intr.patch
+ide-add-pointer-to-the-current-packet-command-to-ide_drive_t.patch
+ide-drop-timeout-and-expiry-arguments-from-ide_pc_intr.patch
+ide-add-request_sense_pc-rq-to-ide_drive_t.patch
+ide-add-ide_retry_pc-helper.patch
+ide-add-pc_update-io_buffers-methods.patch
+ide-make-ide_pc_intr-static.patch
+ide-make-ide_transfer_pc-static.patch
+ide-remove-config_blk_dev_ide-config-option.patch
+ide-remove-unnecessary-max_hwifs-checks-from-ide-probe-c.patch
+xtensa-remove-dead-config_blk_dev_ide-code.patch
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Unchanged quilt series ttydev
