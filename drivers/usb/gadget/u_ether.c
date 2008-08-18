@@ -52,8 +52,6 @@
  * this single "physical" link to be used by multiple virtual links.)
  */
 
-#define DRIVER_VERSION	"29-May-2008"
-
 struct eth_dev {
 	/* lock is held while accessing port_usb
 	 * or updating its backlink port_usb->ioport
