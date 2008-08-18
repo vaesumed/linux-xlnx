@@ -27,7 +27,7 @@ C_UTILS =	composite.o usbstring.o config.o epautoconf.o
 g_zero-objs			:= zero.o
 g_ether-objs			:= ether.o
 g_serial-objs			:= serial.o
-g_midi-objs			:= gmidi.o usbstring.o config.o epautoconf.o
+g_midi-objs			:= gmidi.o
 gadgetfs-objs			:= inode.o
 g_file_storage-objs		:= file_storage.o usbstring.o config.o \
 					epautoconf.o
