@@ -22,8 +22,6 @@ obj-$(CONFIG_USB_M66592)	+= m66592-udc.o
 #
 # USB gadget drivers
 #
-C_UTILS =	composite.o usbstring.o config.o epautoconf.o
-
 g_zero-objs			:= zero.o
 g_ether-objs			:= ether.o
 g_serial-objs			:= serial.o
@@ -31,8 +29,7 @@ g_midi-objs			:= gmidi.o
 gadgetfs-objs			:= inode.o
 g_file_storage-objs		:= file_storage.o
 g_printer-objs			:= printer.o
-g_cdc-objs			:= cdc2.o u_ether.o f_ecm.o \
-					u_serial.o f_acm.o $(C_UTILS)
+g_cdc-objs			:= cdc2.o
 
 ifeq ($(CONFIG_USB_ETH_RNDIS),y)
 	g_ether-objs		+= f_rndis.o rndis.o
