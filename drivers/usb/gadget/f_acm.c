@@ -661,6 +661,7 @@ fail:
 
 	return status;
 }
+EXPORT_SYMBOL_GPL(acm_bind);
 
 static void
 acm_unbind(struct usb_configuration *c, struct usb_function *f)
@@ -757,3 +758,18 @@ int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 		kfree(acm);
 	return status;
 }
+EXPORT_SYMBOL_GPL(acm_bind_config);
+
+static int __init acm_init(void)
+{
+	return 0;
+}
+
+static void __exit acm_exit(void)
+{
+}
+
+module_init(acm_init);
+module_exit(acm_exit);
+
+MODULE_LICENSE("GPL");

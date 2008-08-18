@@ -1140,6 +1140,7 @@ fail:
 	gs_tty_driver = NULL;
 	return status;
 }
+EXPORT_SYMBOL_GPL(gserial_setup);
 
 static int gs_closed(struct gs_port *port)
 {
@@ -1198,6 +1199,7 @@ void gserial_cleanup(void)
 
 	pr_debug("%s: cleaned up ttyGS* support\n", __func__);
 }
+EXPORT_SYMBOL_GPL(gserial_cleanup);
 
 /**
  * gserial_connect - notify TTY I/O glue that USB link is active
@@ -1277,6 +1279,7 @@ fail_out:
 	gser->in->driver_data = NULL;
 	return status;
 }
+EXPORT_SYMBOL_GPL(gserial_connect);
 
 /**
  * gserial_disconnect - notify TTY I/O glue that USB link is inactive
@@ -1328,3 +1331,4 @@ void gserial_disconnect(struct gserial *gser)
 	gs_free_requests(gser->in, &port->write_pool);
 	spin_unlock_irqrestore(&port->port_lock, flags);
 }
+EXPORT_SYMBOL_GPL(gserial_disconnect);
