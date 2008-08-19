@@ -61,7 +61,7 @@ the a little strange:
    Finder's metadata.
  o They are however created (with default values), deleted and renamed
    along with the corresponding data fork or directory.
- o Copying files to a different filesystem will loose those attributes
+ o Copying files to a different filesystem will lose those attributes
    that are essential for MacOS to work.
 
 
