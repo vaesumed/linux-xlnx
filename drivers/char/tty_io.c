@@ -2068,7 +2068,7 @@ static int tiocgwinsz(struct tty_struct *tty, struct winsize __user *arg)
 /**
  *	tty_do_resize		-	resize event
  *	@tty: tty being resized
- *	@real_tty: real tty (if using a pty/tty pair)
+ *	@real_tty: real tty (not the same as tty if using a pty/tty pair)
  *	@rows: rows (character)
  *	@cols: cols (character)
  *
@@ -2085,6 +2085,14 @@ int tty_do_resize(struct tty_struct *tty, struct tty_struct *real_tty,
 	mutex_lock(&tty->termios_mutex);
 	if (!memcmp(ws, &tty->winsize, sizeof(*ws)))
 		goto done;
+
+	/* If a pty/tty pair is updated we will have a real_tty defined
+	   which doesn't match the tty. In this case as we will update
+	   both of the tty termios sets. We can lock both mutex safely here
+	   as in this case real_tty is the tty, tty is the pty side and we
+	   have lock ordering */
+	if (real_tty != tty)
+		mutex_lock(&real_tty->termios_mutex);
 	/* Get the PID values and reference them so we can
 	   avoid holding the tty ctrl lock while sending signals */
 	spin_lock_irqsave(&tty->ctrl_lock, flags);
@@ -2102,6 +2110,8 @@ int tty_do_resize(struct tty_struct *tty, struct tty_struct *real_tty,
 
 	tty->winsize = *ws;
 	real_tty->winsize = *ws;
+	if (real_tty != tty)
+		mutex_unlock(&real_tty->termios_mutex);
 done:
 	mutex_unlock(&tty->termios_mutex);
 	return 0;
