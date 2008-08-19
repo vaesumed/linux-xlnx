@@ -433,7 +433,7 @@ pmac_ide_selectproc(ide_drive_t *drive)
 	if (pmif == NULL)
 		return;
 
-	if (drive->select.b.unit & 0x01)
+	if (drive->dn & 1)
 		writel(pmif->timings[1], PMAC_IDE_REG(IDE_TIMING_CONFIG));
 	else
 		writel(pmif->timings[0], PMAC_IDE_REG(IDE_TIMING_CONFIG));
@@ -455,7 +455,7 @@ pmac_ide_kauai_selectproc(ide_drive_t *drive)
 	if (pmif == NULL)
 		return;
 
-	if (drive->select.b.unit & 0x01) {
+	if (drive->dn & 1) {
 		writel(pmif->timings[1], PMAC_IDE_REG(IDE_KAUAI_PIO_CONFIG));
 		writel(pmif->timings[3], PMAC_IDE_REG(IDE_KAUAI_ULTRA_CONFIG));
 	} else {
@@ -528,7 +528,7 @@ pmac_ide_set_pio_mode(ide_drive_t *drive, const u8 pio)
 		return;
 		
 	/* which drive is it ? */
-	timings = &pmif->timings[drive->select.b.unit & 0x01];
+	timings = &pmif->timings[drive->dn & 1];
 	t = *timings;
 
 	cycle_time = ide_pio_cycle_time(drive, pio);
@@ -669,9 +669,9 @@ static void
 set_timings_mdma(ide_drive_t *drive, int intf_type, u32 *timings, u32 *timings2,
 		 	u8 speed)
 {
+	u16 *id = drive->id;
 	int cycleTime, accessTime = 0, recTime = 0;
 	unsigned accessTicks, recTicks;
-	struct hd_driveid *id = drive->id;
 	struct mdma_timings_t* tm = NULL;
 	int i;
 
@@ -686,8 +686,8 @@ set_timings_mdma(ide_drive_t *drive, int intf_type, u32 *timings, u32 *timings2,
 	}
 
 	/* Check if drive provides explicit DMA cycle time */
-	if ((id->field_valid & 2) && id->eide_dma_time)
-		cycleTime = max_t(int, id->eide_dma_time, cycleTime);
+	if ((id[ATA_ID_FIELD_VALID] & 2) && id[ATA_ID_EIDE_DMA_TIME])
+		cycleTime = max_t(int, id[ATA_ID_EIDE_DMA_TIME], cycleTime);
 
 	/* OHare limits according to some old Apple sources */	
 	if ((intf_type == controller_ohare) && (cycleTime < 150))
@@ -805,9 +805,9 @@ static void pmac_ide_set_dma_mode(ide_drive_t *drive, const u8 speed)
 	ide_hwif_t *hwif = drive->hwif;
 	pmac_ide_hwif_t *pmif =
 		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
-	int unit = (drive->select.b.unit & 0x01);
 	int ret = 0;
 	u32 *timings, *timings2, tl[2];
+	u8 unit = drive->dn & 1;
 
 	timings = &pmif->timings[unit];
 	timings2 = &pmif->timings[unit+2];
@@ -966,11 +966,11 @@ static void pmac_ide_init_dev(ide_drive_t *drive)
 	if (pmif->mediabay) {
 #ifdef CONFIG_PMAC_MEDIABAY
 		if (check_media_bay_by_base(pmif->regbase, MB_CD) == 0) {
-			drive->noprobe = 0;
+			drive->dev_flags &= ~IDE_DFLAG_NOPROBE;
 			return;
 		}
 #endif
-		drive->noprobe = 1;
+		drive->dev_flags |= IDE_DFLAG_NOPROBE;
 	}
 }
 
@@ -1558,8 +1558,7 @@ pmac_ide_dma_setup(ide_drive_t *drive)
 	pmac_ide_hwif_t *pmif =
 		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
 	struct request *rq = HWGROUP(drive)->rq;
-	u8 unit = (drive->select.b.unit & 0x01);
-	u8 ata4;
+	u8 unit = drive->dn & 1, ata4;
 
 	if (pmif == NULL)
 		return 1;
@@ -1672,9 +1671,6 @@ pmac_ide_dma_test_irq (ide_drive_t *drive)
 	status = readl(&dma->status);
 	if (!(status & ACTIVE))
 		return 1;
-	if (!drive->waiting_for_dma)
-		printk(KERN_WARNING "ide%d, ide_dma_test_irq \
-			called while not waiting\n", HWIF(drive)->index);
 
 	/* If dbdma didn't execute the STOP command yet, the
 	 * active bit is still set. We consider that we aren't
