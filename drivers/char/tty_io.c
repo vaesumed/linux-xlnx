@@ -1283,6 +1283,12 @@ static int init_dev(struct tty_driver *driver, int idx,
 		o_tty = alloc_tty_struct();
 		if (!o_tty)
 			goto free_mem_out;
+		if (!try_module_get(driver->other)) {
+			/* This cannot in fact currently happen */
+			free_tty_struct(o_tty);
+			o_tty = NULL;
+			goto free_mem_out;
+		}
 		initialize_tty_struct(o_tty);
 		o_tty->driver = driver->other;
 		o_tty->ops = driver->ops;
@@ -1401,8 +1407,10 @@ end_init:
 	/* Release locally allocated memory ... nothing placed in slots */
 free_mem_out:
 	kfree(o_tp);
-	if (o_tty)
+	if (o_tty) {
+		module_put(o_tty->driver);
 		free_tty_struct(o_tty);
+	}
 	kfree(ltp);
 	kfree(tp);
 	free_tty_struct(tty);
@@ -1461,6 +1469,7 @@ static void release_one_tty(struct kref *kref)
 	tty->magic = 0;
 	/* FIXME: locking on tty->driver->refcount */
 	tty->driver->refcount--;
+	module_put(driver->owner);
 
 	file_list_lock();
 	list_del_init(&tty->tty_files);
@@ -1496,8 +1505,6 @@ EXPORT_SYMBOL(tty_kref_put);
  *	of ttys that the driver keeps.
  *		FIXME: should we require tty_mutex is held here ??
  *
- *	FIXME: We want to defer the module put of the driver to the
- *	destructor.
  */
 static void release_tty(struct tty_struct *tty, int idx)
 {
@@ -1509,7 +1516,6 @@ static void release_tty(struct tty_struct *tty, int idx)
 	if (tty->link)
 		tty_kref_put(tty->link);
 	tty_kref_put(tty);
-	module_put(driver->owner);
 }
 
 /*
