@@ -24,7 +24,6 @@
 #define _LINUX__UCB1400_H
 
 #include <sound/ac97_codec.h>
-#include <asm-generic/gpio.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 
