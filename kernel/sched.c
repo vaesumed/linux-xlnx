@@ -824,9 +824,9 @@ static __read_mostly int scheduler_running;
 
 /*
  * part of the period that we allow rt tasks to run in us.
- * default: 0.95s
+ * default: 9.5s
  */
-int sysctl_sched_rt_runtime = 950000;
+int sysctl_sched_rt_runtime = 9500000;
 
 static inline u64 global_rt_period(void)
 {
