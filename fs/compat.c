@@ -1356,15 +1356,20 @@ int compat_do_execve(char * filename,
 	if (!bprm)
 		goto out_ret;
 
+	retval = mutex_lock_interruptible(&current->cred_exec_mutex);
+	if (retval < 0)
+		goto out_free;
+
+	retval = -ENOMEM;
 	bprm->cred = prepare_exec_creds();
 	if (!bprm->cred)
-		goto out_free;
+		goto out_unlock;
 	check_unsafe_exec(bprm);
 
 	file = open_exec(filename);
 	retval = PTR_ERR(file);
 	if (IS_ERR(file))
-		goto out_free;
+		goto out_unlock;
 
 	sched_exec();
 
@@ -1418,6 +1423,9 @@ out_file:
 		allow_write_access(bprm->file);
 		fput(bprm->file);
 	}
+
+out_unlock:
+	mutex_unlock(&current->cred_exec_mutex);
 
 out_free:
 	free_bprm(bprm);
