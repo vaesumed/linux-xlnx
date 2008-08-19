@@ -1,0 +1,292 @@
+Importing driver-core.current based on 2.6.27-rc3-git4
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard b09c3e3f1710b554348c98e78fbf4a661918779a
+HEAD is now at b09c3e3 removed unused #include <version.h>
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+kobject-replace-all-occurrences-of-with-instead-of-only-the-first-one.patch
+japanese-translation-of-documentation-submitchecklist.patch
+drivers-base-driver.c-remove-unused-to_dev-macro.patch
+dev_printk-constify-the-dev-argument.patch
+driver-model-anti-oopsing-medicine.patch
+pm-don-t-skip-device-pm-init-when-config_pm_sleep-isn-t-set-and-config_pm-is-set.patch
+driver-core-add-init_name-to-struct-device.patch
+pm-remove-warn_on-from-device_pm_add.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 9faccc8a31bdf3f4ea5a2ec99dac078f7179460c
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 9faccc8a31bdf3f4ea5a2ec99dac078f7179460c
+HEAD is now at 9faccc8 kobject: Fix kobject_rename and !CONFIG_SYSFS
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+usb-gadget-move-library-files-into-g_serial-ko.patch
+usb-gadget-move-library-files-into-g_ether.ko.patch
+usb-gadget-move-library-files-into-g_zero.ko.patch
+usb-gadget-move-library-files-into-g_midi.ko.patch
+usb-gadget-move-library-files-into-g_file_storage.ko.patch
+usb-gadget-move-library-files-into-g_printer.ko.patch
+usb-gadget-move-library-files-into-g_cdc.ko.patch
+driver-core-basic-infrastructure-for-per-module-dynamic-debug-messages.patch
+.dotest/patch:722: space before tab in indent.
+	  	$echo "set enabled=1 <module_name>" > dynamic_printk/modules
+.dotest/patch:726: space before tab in indent.
+	  	$echo "set enabled=0 <module_name>" > dynamic_printk/modules
+warning: 2 lines add whitespace errors.
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+put_device-might_sleep.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+sysfs-crash-debugging.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard bf4e86b30d0215300ee7207c022b0b33c7dba60f
+HEAD is now at bf4e86b sysfs: crash debugging
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+hso-fix-oops-in-read-write-callbacks.patch
+hso-fix-refcounting-on-the-ttyhsx-devices.patch
+usb-hso-make-tty_operations-const.patch
+usb-hso-minor-fixes-due-to-code-review.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+.dotest/patch:2027: space before tab in indent.
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+warning: 1 line adds whitespace errors.
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.27-rc3-git3
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 4ad193b43f6da6f15e19eda338c71e5b41383912
+HEAD is now at 4ad193b Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tiwai/sound-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-fix-device_init_wakeup-place.patch
+i2c-isp1301_omap-convert-to-new-style-part-1.patch
+i2c-isp1301_omap-convert-to-new-style-part-2.patch
+i2c-pca-isa-dont-grab-arbitrary-resources.patch
+i2c-renesas-highlander-fpga-smbus-support.patch
+i2c-viapro-add-vx800-support.patch
+i2c-tps65010-vibrator-hookup-to-gpiolib.patch
+hwmon-dme1737-convert-to-new-style-part-1.patch
+hwmon-dme1737-convert-to-new-style-part-2.patch
+i2c-floppy-controller-bus-driver.patch
+i2c-floppy-dependencies.patch
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.27-rc3-git4
+$ git checkout quilt/kernel-doc
+Switched to branch "quilt/kernel-doc"
+$ git reset --hard b09c3e3f1710b554348c98e78fbf4a661918779a
+HEAD is now at b09c3e3 removed unused #include <version.h>
+$ git quiltimport --author Randy Dunlap <randy.dunlap@oracle.com> --patches ../quilt/kernel-doc
+kernelh-kerndoc1.patch
+kerndoc-macro-find.patch
+doc-x86-move-mtrr.patch
+doc-timers-move-hpet.patch
+doc-move-initrd-txt.patch
+kerndoc-security-add.patch
+kerndoc-block-add.patch
+docum-fs-smount.patch
+docum-fs-dnotify.patch
+Importing ide based on b09c3e3f1710b554348c98e78fbf4a661918779a
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard b09c3e3f1710b554348c98e78fbf4a661918779a
+HEAD is now at b09c3e3 removed unused #include <version.h>
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+drivers-ide-pci-use-__devexit_p.patch
+cleanup-powerpc-include-asm-ide-h.patch
+viocd-add-dummy-audio-ioctl-handler.patch
+gdrom-add-dummy-audio_ioctl-handler.patch
+cdrom-handle-toc.patch
+ide-cd-use-bcd2bin-bin2bcd.patch
+sgiioc4-fixup-message-on-resource-allocation-failure.patch
+ata-add-missing-ata_id_-defines-take-2.patch
+ata-add-missing-ata_cmd_-defines.patch
+ata-add-missing-ata_-defines.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+ide-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+ide-remove-no-longer-needed-ide_drive_t-fields.patch
+ide-re-code-ide_fixstring-loop-to-be-less-evil.patch
+ide-cd-use-the-new-object_is_in_stack-helper.patch
+ide-fix-exabytenest-handling-in-probe_for_drive.patch
+ide-enhance-ide_busy_sleep.patch
+ide-remove-no-longer-needed-bug_on-s-from-init_irq.patch
+ide-remove-ide_chipset_-macros.patch
+ide-remove-unused-_ide_c-and-_ide_disk-defines.patch
+ide-remove-needless-drive-present-checks-from-device-drivers.patch
+ide-check-drive-present-in-ide_get_paired_drive.patch
+ide-remove-config_idedisk_multi_mode.patch
+ide-include-linux-hdreg-h-only-when-needed.patch
+ide-call-ide_proc_register_driver-later.patch
+ide-preparations-for-proc-ide-hd_-settings-rework.patch
+ide-proc-ide-hd_-settings-rework.patch
+ide-remove-sector_words-define.patch
+cmd640-add-__set_prefetch_mode.patch
+ide-remove-read-only-atapi_overlap-field-from-ide_drive_t.patch
+ide-remove-supports_dsc_overlap-field-from-ide_driver_t.patch
+ide-factor-out-hdio_-_nice-ioctl-handling-to-ide_-_nice_ioctl.patch
+ide-ide_dev_has_iordy-to-ata_id_has_iordy.patch
+ide-ide_dev_is_sata-to-ata_id_is_sata.patch
+ide-idedisk_supports_lba48-to-ata_id_lba48_enabled.patch
+ide-check-only-for-cache-flush-command-support-in-ide_id_has_flush_cache.patch
+ide-ide_id_has_flush_cache-to-ata_id_flush_enabled.patch
+ide-ide_id_has_flush_cache_ext-to-ata_id_flush_ext_enabled.patch
+ide-use-ata_id_is_cfa.patch
+ide-ide_id_to_hd_driveid-to-ata_id_to_hd_driveid.patch
+ide-lba_capacity_is_ok-to-ata_id_is_lba_capacity_ok.patch
+hpt366-add-hpt3xx_disable_fast_irq-helper.patch
+ide-add-proper-pci-pm-support.patch
+ide-remove-bus_state-field-from-ide_hwif_t.patch
+ide-add-ide_setting_ioctl-helper.patch
+ide-cleanup-generic_ide_ioctl.patch
+ide-move-ioctls-handling-to-ide-ioctls-c.patch
+ide-add-ide_check_atapi_device-helper.patch
+ide-floppy-remove-needless-parens.patch
+ide-floppy-add-ide_floppy_format_ioctl-helper.patch
+ide-tape-remove-idetape_init_rq.patch
+ide-floppy-use-scatterlists-for-pio-transfers.patch
+ide-generic-handle-probing-of-legacy-io-ports-v5.patch
+ide-floppy-tape-remove-request-stack.patch
+ide-floppy-tape-remove-packet-command-stack.patch
+ide-floppy-remove-mode_sense_-defines.patch
+ide-floppy-fixup-ide_floppy_io_buffers.patch
+ide-scsi-cleanup-ide_scsi_io_buffers.patch
+ide-add-ide_io_buffers-helper.patch
+ide-floppy-add-ide_floppy_set_media_lock-helper.patch
+ide-tape-add-ide_tape_set_media_lock-helper.patch
+ide-add-ide_init_pc-helper.patch
+ide-add-ide_queue_pc_head-helper.patch
+ide-add-ide_queue_pc_tail-helper.patch
+ide-floppy-srfp-wp-to-ide_aflag_srfp-wp.patch
+ide-floppy-move-floppy-ioctls-handling-to-ide-floppy_ioctl-c.patch
+ide-add-ide_set_media_lock-helper-patch
+ide-add-ide_do_start_stop-helper.patch
+ide-add-ide_do_test_unit_ready-helper.patch
+ide-move-idefloppy-tape_wait_cmd-defines-to-linux-ide-h.patch
+ide-remove-ide_spin_wait_hwgroup-and-use-special-requests-instead-v2.patch
+ide-drop-dsc_handle-argument-from-ide_pc_intr.patch
+ide-add-pointer-to-the-current-packet-command-to-ide_drive_t.patch
+ide-drop-timeout-and-expiry-arguments-from-ide_pc_intr.patch
+ide-add-request_sense_pc-rq-to-ide_drive_t.patch
+ide-add-ide_retry_pc-helper.patch
+ide-add-pc_update-io_buffers-methods.patch
+ide-make-ide_pc_intr-static.patch
+ide-make-ide_transfer_pc-static.patch
+ide-remove-config_blk_dev_ide-config-option.patch
+ide-remove-unnecessary-max_hwifs-checks-from-ide-probe-c.patch
+xtensa-remove-dead-config_blk_dev_ide-code.patch
+ide-unify-conversion-macros.patch
+ide-add-drive-debug_mask-switch.patch
+ide-add-a-driver-wide-debugging-macro.patch
+ide-floppy-convert-driver-to-the-new-debugging-macro.patch
+ide-floppy-add-a-debug_mask-module-parameter.patch
+ide-fix-ide-acpi-for-slave-device-only-configurations.patch
+ide-disk-set_addressing-fixes.patch
+ide-disk-remove-stale-init_idedisk_capacity-documentation.patch
+ide-disk-add-ide_do_setfeature-helper.patch
+ide-add-device-flags.patch
+ide-dma_pio_retry-to-ide_dflag_dma_pio_retry.patch
+ide-remove-superfluous-media-field-from-ide_driver_t.patch
+ide-remove-superfluous-dma-field-from-ide_hwif_t.patch
+ide-remove-superfluous-waiting_for_dma-checks.patch
+ide-fix-hdio_drive_task-file-ioctls-for-chs-commands-on-lba-devices.patch
+ide-sanitize-ide-_pm_-enums.patch
+cy82c693-remove-dead-cy82c693_setdma_clock-code.patch
+cy82c693-remove-no-longer-needed-cy82c693_debug_logs-code.patch
+ide-use-drive-dn-and-1-instead-of-drive-select-b-unit.patch
+ide-remove-ata_-select_t.patch
+ide-convert-pio_mode-device-setting-to-use-ds_sync-flag.patch
+ide-factor-out-reset-error-reporting-from-reset_pollfunc.patch
+ide-merge-all-taskfile_no_data-data-phase-handlers-into-taskfile_no_intr.patch
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Importing ttydev based on b09c3e3f1710b554348c98e78fbf4a661918779a
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard b09c3e3f1710b554348c98e78fbf4a661918779a
+HEAD is now at b09c3e3 removed unused #include <version.h>
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+mcfserial-goes-byebye
+epca-port-init
+serial-remove-nr-irq
+.dotest/patch:163: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+blackfin-use-initdata
+blackfin-suspend-all
+blackfin-whitespace-trim
+blackfin-common-vars
+blackfin-remove-useless-stop
+blackfin-fix-stop-bug
+blackfin-fix-ircp-bug
+blackfin-fix-uart-map
+tty-move-tioclinux
+tty-fixup-uml
+tty-split-buffering
+tty-split-port
+tty-fix-pty-termios-race
+tty-kref
+tty-kref-modcount
+tty-kref-get-current-tty
+tty-move-write
+tty-usbserial-kref
+.dotest/patch:132: trailing whitespace.
+out:		
+.dotest/patch:324: trailing whitespace.
+		
+.dotest/patch:895: trailing whitespace.
+		if (tty && !C_CLOCAL(tty)) 
+.dotest/patch:1063: trailing whitespace.
+	tty_kref_put(tty);		     
+.dotest/patch:1313: trailing whitespace.
+		} else 
+warning: 5 lines add whitespace errors.
+tty-misc-kref
+tty-kref-stallion
+tty-kref-mxser
+.dotest/patch:390: trailing whitespace.
+				
+warning: 1 line adds whitespace errors.
+tty-fix-vhangup
+tty-current-locking
+tty-current-fix-abusers
+tty-tiocrs485
+tty-kref-hso
+tty-fix-pty
+char-cyclades-remove-bogus-iomap.patch
+char-sx-fix-io-unmapping.patch
+8250-remove-a-few-inlines-of-dubious-value.patch
