@@ -45,7 +45,7 @@
 
 #define PCC_DEBUG_DBEX
 
-#ifdef DEBUG
+#ifdef CONFIG_PCMCIA_DEBUG
 static int m32r_pcc_debug;
 module_param(m32r_pcc_debug, int, 0644);
 #define debug(lvl, fmt, arg...) do {				\
