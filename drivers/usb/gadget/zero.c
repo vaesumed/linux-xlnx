@@ -56,6 +56,20 @@
 #include "g_zero.h"
 #include "gadget_chips.h"
 
+/*
+ * Kbuild is not very cooperative with respect to linking separately
+ * compiled library objects into one module.  So for now we won't use
+ * separate compilation ... ensuring init/exit sections work to shrink
+ * the runtime footprint, and giving us at least some parts of what
+ * a "gcc --combine ... part1.c part2.c part3.c ... " build would.
+ */
+#include "composite.c"
+#include "usbstring.c"
+#include "config.c"
+#include "epautoconf.c"
+
+#include "f_sourcesink.c"
+#include "f_loopback.c"
 
 /*-------------------------------------------------------------------------*/
 

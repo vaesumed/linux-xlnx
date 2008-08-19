@@ -103,6 +103,7 @@ static struct usb_interface_descriptor subset_data_intf __initdata = {
 	/* .iInterface = DYNAMIC */
 };
 
+#if 0
 static struct usb_cdc_header_desc header_desc __initdata = {
 	.bLength =		sizeof header_desc,
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
@@ -110,6 +111,7 @@ static struct usb_cdc_header_desc header_desc __initdata = {
 
 	.bcdCDC =		__constant_cpu_to_le16(0x0110),
 };
+#endif
 
 static struct usb_cdc_mdlm_desc mdlm_desc __initdata = {
 	.bLength =		sizeof mdlm_desc,
@@ -137,6 +139,7 @@ static u8 mdlm_detail_desc[] __initdata = {
 	0,	/* network data capabilities ("raw" encapsulation) */
 };
 
+#if 0
 static struct usb_cdc_ether_desc ether_desc __initdata = {
 	.bLength =		sizeof ether_desc,
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
@@ -149,9 +152,11 @@ static struct usb_cdc_ether_desc ether_desc __initdata = {
 	.wNumberMCFilters =	__constant_cpu_to_le16(0),
 	.bNumberPowerFilters =	0,
 };
+#endif
 
 /* full speed support: */
 
+#if 0
 static struct usb_endpoint_descriptor fs_in_desc __initdata = {
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
@@ -167,6 +172,7 @@ static struct usb_endpoint_descriptor fs_out_desc __initdata = {
 	.bEndpointAddress =	USB_DIR_OUT,
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 };
+#endif
 
 static struct usb_descriptor_header *fs_eth_function[] __initdata = {
 	(struct usb_descriptor_header *) &subset_data_intf,
@@ -181,6 +187,7 @@ static struct usb_descriptor_header *fs_eth_function[] __initdata = {
 
 /* high speed support: */
 
+#if 0
 static struct usb_endpoint_descriptor hs_in_desc __initdata = {
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
@@ -196,6 +203,7 @@ static struct usb_endpoint_descriptor hs_out_desc __initdata = {
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 	.wMaxPacketSize =	__constant_cpu_to_le16(512),
 };
+#endif
 
 static struct usb_descriptor_header *hs_eth_function[] __initdata = {
 	(struct usb_descriptor_header *) &subset_data_intf,
