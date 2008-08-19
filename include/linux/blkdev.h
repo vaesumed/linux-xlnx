@@ -54,7 +54,6 @@ enum rq_cmd_type_bits {
 	REQ_TYPE_PM_SUSPEND,		/* suspend request */
 	REQ_TYPE_PM_RESUME,		/* resume request */
 	REQ_TYPE_PM_SHUTDOWN,		/* shutdown request */
-	REQ_TYPE_FLUSH,			/* flush request */
 	REQ_TYPE_SPECIAL,		/* driver defined type */
 	REQ_TYPE_LINUX_BLOCK,		/* generic block layer message */
 	/*
@@ -76,19 +75,18 @@ enum rq_cmd_type_bits {
  *
  */
 enum {
-	/*
-	 * just examples for now
-	 */
 	REQ_LB_OP_EJECT	= 0x40,		/* eject request */
-	REQ_LB_OP_FLUSH = 0x41,		/* flush device */
+	REQ_LB_OP_FLUSH = 0x41,		/* flush request */
+	REQ_LB_OP_DISCARD = 0x42,	/* discard sectors */
 };
 
 /*
- * request type modified bits. first three bits match BIO_RW* bits, important
+ * request type modified bits. first two bits match BIO_RW* bits, important
  */
 enum rq_flag_bits {
 	__REQ_RW,		/* not set, read. set, write */
 	__REQ_FAILFAST,		/* no low level driver retries */
+	__REQ_DISCARD,		/* request to discard sectors */
 	__REQ_SORTED,		/* elevator knows about this request */
 	__REQ_SOFTBARRIER,	/* may not be passed by ioscheduler */
 	__REQ_HARDBARRIER,	/* may not be passed by drive either */
@@ -111,6 +109,7 @@ enum rq_flag_bits {
 };
 
 #define REQ_RW		(1 << __REQ_RW)
+#define REQ_DISCARD	(1 << __REQ_DISCARD)
 #define REQ_FAILFAST	(1 << __REQ_FAILFAST)
 #define REQ_SORTED	(1 << __REQ_SORTED)
 #define REQ_SOFTBARRIER	(1 << __REQ_SOFTBARRIER)
@@ -233,6 +232,11 @@ struct request {
 	struct request *next_rq;
 };
 
+static inline unsigned short req_get_ioprio(struct request *req)
+{
+	return req->ioprio;
+}
+
 /*
  * State information carried for REQ_TYPE_PM_SUSPEND and REQ_TYPE_PM_RESUME
  * requests. Some step values could eventually be made generic.
@@ -252,6 +256,7 @@ typedef void (request_fn_proc) (struct request_queue *q);
 typedef int (make_request_fn) (struct request_queue *q, struct bio *bio);
 typedef int (prep_rq_fn) (struct request_queue *, struct request *);
 typedef void (unplug_fn) (struct request_queue *);
+typedef int (prepare_discard_fn) (struct request_queue *, struct request *);
 
 struct bio_vec;
 struct bvec_merge_data {
@@ -298,6 +303,7 @@ struct request_queue
 	make_request_fn		*make_request_fn;
 	prep_rq_fn		*prep_rq_fn;
 	unplug_fn		*unplug_fn;
+	prepare_discard_fn	*prepare_discard_fn;
 	merge_bvec_fn		*merge_bvec_fn;
 	prepare_flush_fn	*prepare_flush_fn;
 	softirq_done_fn		*softirq_done_fn;
@@ -526,7 +532,7 @@ enum {
 #define blk_noretry_request(rq)	((rq)->cmd_flags & REQ_FAILFAST)
 #define blk_rq_started(rq)	((rq)->cmd_flags & REQ_STARTED)
 
-#define blk_account_rq(rq)	(blk_rq_started(rq) && blk_fs_request(rq))
+#define blk_account_rq(rq)	(blk_rq_started(rq) && (blk_fs_request(rq) || blk_discard_rq(rq))) 
 
 #define blk_pm_suspend_request(rq)	((rq)->cmd_type == REQ_TYPE_PM_SUSPEND)
 #define blk_pm_resume_request(rq)	((rq)->cmd_type == REQ_TYPE_PM_RESUME)
@@ -536,6 +542,7 @@ enum {
 #define blk_sorted_rq(rq)	((rq)->cmd_flags & REQ_SORTED)
 #define blk_barrier_rq(rq)	((rq)->cmd_flags & REQ_HARDBARRIER)
 #define blk_fua_rq(rq)		((rq)->cmd_flags & REQ_FUA)
+#define blk_discard_rq(rq)	((rq)->cmd_flags & REQ_DISCARD)
 #define blk_bidi_rq(rq)		((rq)->next_rq != NULL)
 #define blk_empty_barrier(rq)	(blk_barrier_rq(rq) && blk_fs_request(rq) && !(rq)->hard_nr_sectors)
 /* rq->queuelist of dequeued request must be list_empty() */
@@ -582,7 +589,8 @@ static inline void blk_clear_queue_full(struct request_queue *q, int rw)
 #define RQ_NOMERGE_FLAGS	\
 	(REQ_NOMERGE | REQ_STARTED | REQ_HARDBARRIER | REQ_SOFTBARRIER)
 #define rq_mergeable(rq)	\
-	(!((rq)->cmd_flags & RQ_NOMERGE_FLAGS) && blk_fs_request((rq)))
+	(!((rq)->cmd_flags & RQ_NOMERGE_FLAGS) && \
+	 (blk_discard_rq(rq) || blk_fs_request((rq))))
 
 /*
  * q->prep_rq_fn return values
@@ -786,6 +794,7 @@ extern void blk_queue_merge_bvec(struct request_queue *, merge_bvec_fn *);
 extern void blk_queue_dma_alignment(struct request_queue *, int);
 extern void blk_queue_update_dma_alignment(struct request_queue *, int);
 extern void blk_queue_softirq_done(struct request_queue *, softirq_done_fn *);
+extern void blk_queue_set_discard(struct request_queue *, prepare_discard_fn *);
 extern struct backing_dev_info *blk_get_backing_dev_info(struct block_device *bdev);
 extern int blk_queue_ordered(struct request_queue *, unsigned, prepare_flush_fn *);
 extern int blk_do_ordered(struct request_queue *, struct request **);
@@ -829,6 +838,16 @@ static inline struct request *blk_map_queue_find_tag(struct blk_queue_tag *bqt,
 }
 
 extern int blkdev_issue_flush(struct block_device *, sector_t *);
+extern int blkdev_issue_discard(struct block_device *, sector_t sector,
+				unsigned nr_sects);
+
+static inline int sb_issue_discard(struct super_block *sb,
+				   sector_t block, unsigned nr_blocks)
+{
+	block <<= (sb->s_blocksize_bits - 9);
+	nr_blocks <<= (sb->s_blocksize_bits - 9);
+	return blkdev_issue_discard(sb->s_bdev, block, nr_blocks);
+}
 
 /*
 * command filter functions
