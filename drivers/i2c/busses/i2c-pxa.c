@@ -60,6 +60,7 @@ struct pxa_i2c {
 	u32			icrlog[32];
 
 	void __iomem		*reg_base;
+	unsigned int		reg_shift;
 
 	unsigned long		iobase;
 	unsigned long		iosize;
@@ -68,11 +69,11 @@ struct pxa_i2c {
 	int			use_pio;
 };
 
-#define _IBMR(i2c)	((i2c)->reg_base + 0)
-#define _IDBR(i2c)	((i2c)->reg_base + 8)
-#define _ICR(i2c)	((i2c)->reg_base + 0x10)
-#define _ISR(i2c)	((i2c)->reg_base + 0x18)
-#define _ISAR(i2c)	((i2c)->reg_base + 0x20)
+#define _IBMR(i2c)	((i2c)->reg_base + (0x0 << (i2c)->reg_shift))
+#define _IDBR(i2c)	((i2c)->reg_base + (0x4 << (i2c)->reg_shift))
+#define _ICR(i2c)	((i2c)->reg_base + (0x8 << (i2c)->reg_shift))
+#define _ISR(i2c)	((i2c)->reg_base + (0xc << (i2c)->reg_shift))
+#define _ISAR(i2c)	((i2c)->reg_base + (0x10 << (i2c)->reg_shift))
 
 /*
  * I2C Slave mode address
@@ -188,14 +189,14 @@ static inline int i2c_pxa_is_slavemode(struct pxa_i2c *i2c)
 
 static void i2c_pxa_abort(struct pxa_i2c *i2c)
 {
-	unsigned long timeout = jiffies + HZ/4;
+	int i = 250;
 
 	if (i2c_pxa_is_slavemode(i2c)) {
 		dev_dbg(&i2c->adap.dev, "%s: called in slave mode\n", __func__);
 		return;
 	}
 
-	while (time_before(jiffies, timeout) && (readl(_IBMR(i2c)) & 0x1) == 0) {
+	while ((i > 0) && (readl(_IBMR(i2c)) & 0x1) == 0) {
 		unsigned long icr = readl(_ICR(i2c));
 
 		icr &= ~ICR_START;
@@ -205,7 +206,8 @@ static void i2c_pxa_abort(struct pxa_i2c *i2c)
 
 		show_state(i2c);
 
-		msleep(1);
+		mdelay(1);
+		i --;
 	}
 
 	writel(readl(_ICR(i2c)) & ~(ICR_MA | ICR_START | ICR_STOP),
@@ -993,6 +995,7 @@ static int i2c_pxa_probe(struct platform_device *dev)
 		ret = -EIO;
 		goto eremap;
 	}
+	i2c->reg_shift = (cpu_is_pxa3xx() && (dev->id == 1)) ? 0 : 1;
 
 	i2c->iobase = res->start;
 	i2c->iosize = res_len(res);
