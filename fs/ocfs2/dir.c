@@ -1305,8 +1305,8 @@ static int ocfs2_expand_inline_dir(struct inode *dir, struct buffer_head *di_bh,
 	 * This should never fail as our extent list is empty and all
 	 * related blocks have been journaled already.
 	 */
-	ret = ocfs2_insert_extent(osb, handle, dir, di_bh, 0, blkno, len, 0,
-				  NULL);
+	ret = ocfs2_dinode_insert_extent(osb, handle, dir, di_bh, 0, blkno,
+					 len, 0, NULL);
 	if (ret) {
 		mlog_errno(ret);
 		goto out;
@@ -1337,8 +1337,8 @@ static int ocfs2_expand_inline_dir(struct inode *dir, struct buffer_head *di_bh,
 		}
 		blkno = ocfs2_clusters_to_blocks(dir->i_sb, bit_off);
 
-		ret = ocfs2_insert_extent(osb, handle, dir, di_bh, 1, blkno,
-					  len, 0, NULL);
+		ret = ocfs2_dinode_insert_extent(osb, handle, dir, di_bh, 1,
+						 blkno, len, 0, NULL);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
@@ -1383,9 +1383,9 @@ static int ocfs2_do_extend_dir(struct super_block *sb,
 	if (extend) {
 		u32 offset = OCFS2_I(dir)->ip_clusters;
 
-		status = ocfs2_do_extend_allocation(OCFS2_SB(sb), dir, &offset,
-						    1, 0, parent_fe_bh, handle,
-						    data_ac, meta_ac, NULL);
+		status = ocfs2_add_inode_data(OCFS2_SB(sb), dir, &offset,
+					      1, 0, parent_fe_bh, handle,
+					      data_ac, meta_ac, NULL);
 		BUG_ON(status == -EAGAIN);
 		if (status < 0) {
 			mlog_errno(status);
@@ -1430,6 +1430,7 @@ static int ocfs2_extend_dir(struct ocfs2_super *osb,
 	int credits, num_free_extents, drop_alloc_sem = 0;
 	loff_t dir_i_size;
 	struct ocfs2_dinode *fe = (struct ocfs2_dinode *) parent_fe_bh->b_data;
+	struct ocfs2_extent_list *el = &fe->id2.i_list;
 	struct ocfs2_alloc_context *data_ac = NULL;
 	struct ocfs2_alloc_context *meta_ac = NULL;
 	handle_t *handle = NULL;
@@ -1479,7 +1480,10 @@ static int ocfs2_extend_dir(struct ocfs2_super *osb,
 	spin_lock(&OCFS2_I(dir)->ip_lock);
 	if (dir_i_size == ocfs2_clusters_to_bytes(sb, OCFS2_I(dir)->ip_clusters)) {
 		spin_unlock(&OCFS2_I(dir)->ip_lock);
-		num_free_extents = ocfs2_num_free_extents(osb, dir, fe);
+		num_free_extents = ocfs2_num_free_extents(osb, dir,
+							  parent_fe_bh,
+							  OCFS2_DINODE_EXTENT,
+							  NULL);
 		if (num_free_extents < 0) {
 			status = num_free_extents;
 			mlog_errno(status);
@@ -1487,7 +1491,7 @@ static int ocfs2_extend_dir(struct ocfs2_super *osb,
 		}
 
 		if (!num_free_extents) {
-			status = ocfs2_reserve_new_metadata(osb, fe, &meta_ac);
+			status = ocfs2_reserve_new_metadata(osb, el, &meta_ac);
 			if (status < 0) {
 				if (status != -ENOSPC)
 					mlog_errno(status);
@@ -1502,7 +1506,7 @@ static int ocfs2_extend_dir(struct ocfs2_super *osb,
 			goto bail;
 		}
 
-		credits = ocfs2_calc_extend_credits(sb, fe, 1);
+		credits = ocfs2_calc_extend_credits(sb, el, 1);
 	} else {
 		spin_unlock(&OCFS2_I(dir)->ip_lock);
 		credits = OCFS2_SIMPLE_DIR_EXTEND_CREDITS;
