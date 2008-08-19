@@ -12,7 +12,7 @@ extern void __bug(const char *file, int line) __attribute__((noreturn));
 #else
 
 /* this just causes an oops */
-#define BUG()		(*(int *)0 = 0)
+#define BUG()		for (;;) { *(int *)0 = 0; }
 
 #endif
 
