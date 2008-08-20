@@ -2353,7 +2353,7 @@ static int kmem_cache_open(struct kmem_cache *s, gfp_t gfpflags,
 	s->refcount = 1;
 	s->defrag_ratio = 30;
 #ifdef CONFIG_NUMA
-	s->remote_node_defrag_ratio = 100;
+	s->remote_node_defrag_ratio = 1000;
 #endif
 	if (!init_kmem_cache_nodes(s, gfpflags & ~SLUB_DMA))
 		goto error;
@@ -4366,7 +4366,7 @@ static ssize_t remote_node_defrag_ratio_store(struct kmem_cache *s,
 	if (err)
 		return err;
 
-	if (ratio < 100)
+	if (ratio <= 100)
 		s->remote_node_defrag_ratio = ratio * 10;
 
 	return length;
