@@ -959,14 +959,14 @@ static inline int pcmcia_devmatch(struct pcmcia_device *dev,
 		 * after it has re-checked that there is no possible module
 		 * with a prod_id/manf_id/card_id match.
 		 */
-		ds_dev_dbg(0, dev, "skipping FUNC_ID match until userspace "
+		ds_dev_dbg(0, &dev->dev, "skipping FUNC_ID match until userspace "
 		       "interaction\n");
 		if (!dev->allow_func_id_match)
 			return 0;
 	}
 
 	if (did->match_flags & PCMCIA_DEV_ID_MATCH_FAKE_CIS) {
-		ds_dev_dbg(0, dev, "device needs a fake CIS\n");
+		ds_dev_dbg(0, &dev->dev, "device needs a fake CIS\n");
 		if (!dev->socket->fake_cis)
 			pcmcia_load_firmware(dev, did->cisfile);
 
