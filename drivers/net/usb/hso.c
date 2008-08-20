@@ -725,7 +725,7 @@ static int hso_net_start_xmit(struct sk_buff *skb, struct net_device *net)
 	result = usb_submit_urb(odev->mux_bulk_tx_urb, GFP_ATOMIC);
 	if (result) {
 		dev_warn(&odev->parent->interface->dev,
-			"failed mux_bulk_tx_urb %d", result);
+			"failed mux_bulk_tx_urb %d\n", result);
 		net->stats.tx_errors++;
 		netif_start_queue(net);
 	} else {
@@ -974,7 +974,7 @@ static void read_bulk_callback(struct urb *urb)
 	result = usb_submit_urb(urb, GFP_ATOMIC);
 	if (result)
 		dev_warn(&odev->parent->interface->dev,
-			 "%s failed submit mux_bulk_rx_urb %d", __func__,
+			 "%s failed submit mux_bulk_rx_urb %d\n", __func__,
 			 result);
 }
 
@@ -1356,7 +1356,7 @@ static int mux_device_request(struct hso_serial *serial, u8 type, u16 port,
 	result = usb_submit_urb(ctrl_urb, GFP_ATOMIC);
 	if (result) {
 		dev_err(&ctrl_urb->dev->dev,
-			"%s failed submit ctrl_urb %d type %d", __func__,
+			"%s failed submit ctrl_urb %d type %d\n", __func__,
 			result, type);
 		return result;
 	}
@@ -1632,7 +1632,7 @@ static void hso_std_serial_read_bulk_callback(struct urb *urb)
 	 * arrives. */
 	result = usb_submit_urb(urb, GFP_ATOMIC);
 	if (result) {
-		dev_err(&urb->dev->dev, "%s failed submit serial rx_urb %d",
+		dev_err(&urb->dev->dev, "%s failed submit serial rx_urb %d\n",
 			__func__, result);
 	}
 }
@@ -1896,12 +1896,12 @@ static int hso_serial_common_create(struct hso_serial *serial, int num_urbs,
 	serial->tx_data_length = tx_size;
 	serial->tx_data = kzalloc(serial->tx_data_length, GFP_KERNEL);
 	if (!serial->tx_data) {
-		dev_err(dev, "%s - Out of memory", __func__);
+		dev_err(dev, "%s - Out of memory\n", __func__);
 		goto exit;
 	}
 	serial->tx_buffer = kzalloc(serial->tx_data_length, GFP_KERNEL);
 	if (!serial->tx_buffer) {
-		dev_err(dev, "%s - Out of memory", __func__);
+		dev_err(dev, "%s - Out of memory\n", __func__);
 		goto exit;
 	}
 
@@ -2049,13 +2049,13 @@ static void hso_create_rfkill(struct hso_device *hso_dev,
 	hso_net->rfkill = rfkill_allocate(&interface_to_usbdev(interface)->dev,
 				 RFKILL_TYPE_WLAN);
 	if (!hso_net->rfkill) {
-		dev_err(dev, "%s - Out of memory", __func__);
+		dev_err(dev, "%s - Out of memory\n", __func__);
 		return;
 	}
 	rfkn = kzalloc(20, GFP_KERNEL);
 	if (!rfkn) {
 		rfkill_free(hso_net->rfkill);
-		dev_err(dev, "%s - Out of memory", __func__);
+		dev_err(dev, "%s - Out of memory\n", __func__);
 		return;
 	}
 	snprintf(rfkn, 20, "hso-%d",
@@ -2068,7 +2068,7 @@ static void hso_create_rfkill(struct hso_device *hso_dev,
 		kfree(rfkn);
 		hso_net->rfkill->name = NULL;
 		rfkill_free(hso_net->rfkill);
-		dev_err(dev, "%s - Failed to register rfkill", __func__);
+		dev_err(dev, "%s - Failed to register rfkill\n", __func__);
 		return;
 	}
 }
@@ -2324,13 +2324,13 @@ struct hso_shared_int *hso_create_shared_int(struct usb_interface *interface)
 
 	mux->shared_intr_urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!mux->shared_intr_urb) {
-		dev_err(&interface->dev, "Could not allocate intr urb?");
+		dev_err(&interface->dev, "Could not allocate intr urb?\n");
 		goto exit;
 	}
 	mux->shared_intr_buf = kzalloc(mux->intr_endp->wMaxPacketSize,
 				       GFP_KERNEL);
 	if (!mux->shared_intr_buf) {
-		dev_err(&interface->dev, "Could not allocate intr buf?");
+		dev_err(&interface->dev, "Could not allocate intr buf?\n");
 		goto exit;
 	}
 
@@ -2724,7 +2724,7 @@ static int hso_mux_submit_intr_urb(struct hso_shared_int *shared_int,
 
 	result = usb_submit_urb(shared_int->shared_intr_urb, gfp);
 	if (result)
-		dev_warn(&usb->dev, "%s failed mux_intr_urb %d", __func__,
+		dev_warn(&usb->dev, "%s failed mux_intr_urb %d\n", __func__,
 			result);
 
 	return result;
