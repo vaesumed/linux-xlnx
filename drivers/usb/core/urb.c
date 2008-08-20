@@ -10,6 +10,8 @@
 
 #define to_urb(d) container_of(d, struct urb, kref)
 
+static DEFINE_SPINLOCK(usb_reject_lock);
+
 static void urb_destroy(struct kref *kref)
 {
 	struct urb *urb = to_urb(kref);
@@ -127,6 +129,13 @@ void usb_anchor_urb(struct urb *urb, struct usb_anchor *anchor)
 	usb_get_urb(urb);
 	list_add_tail(&urb->anchor_list, &anchor->urb_list);
 	urb->anchor = anchor;
+
+	if (unlikely(anchor->poisoned)) {
+		spin_lock(&usb_reject_lock);
+		urb->reject++;
+		spin_unlock(&usb_reject_lock);
+	}
+
 	spin_unlock_irqrestore(&anchor->lock, flags);
 }
 EXPORT_SYMBOL_GPL(usb_anchor_urb);
@@ -544,23 +553,68 @@ EXPORT_SYMBOL_GPL(usb_unlink_urb);
  */
 void usb_kill_urb(struct urb *urb)
 {
-	static DEFINE_MUTEX(reject_mutex);
-
 	might_sleep();
 	if (!(urb && urb->dev && urb->ep))
 		return;
-	mutex_lock(&reject_mutex);
+	spin_lock_irq(&usb_reject_lock);
 	++urb->reject;
-	mutex_unlock(&reject_mutex);
+	spin_unlock_irq(&usb_reject_lock);
 
 	usb_hcd_unlink_urb(urb, -ENOENT);
 	wait_event(usb_kill_urb_queue, atomic_read(&urb->use_count) == 0);
 
-	mutex_lock(&reject_mutex);
+	spin_lock_irq(&usb_reject_lock);
 	--urb->reject;
-	mutex_unlock(&reject_mutex);
+	spin_unlock_irq(&usb_reject_lock);
 }
 EXPORT_SYMBOL_GPL(usb_kill_urb);
+
+/**
+ * usb_poison_urb - reliably kill a transfer and prevent further use of an URB
+ * @urb: pointer to URB describing a previously submitted request,
+ *	may be NULL
+ *
+ * This routine cancels an in-progress request.  It is guaranteed that
+ * upon return all completion handlers will have finished and the URB
+ * will be totally idle and cannot be reused.  These features make
+ * this an ideal way to stop I/O in a disconnect() callback.
+ * If the request has not already finished or been unlinked
+ * the completion handler will see urb->status == -ENOENT.
+ *
+ * After and while the routine runs, attempts to resubmit the URB will fail
+ * with error -EPERM.  Thus even if the URB's completion handler always
+ * tries to resubmit, it will not succeed and the URB will become idle.
+ *
+ * This routine may not be used in an interrupt context (such as a bottom
+ * half or a completion handler), or when holding a spinlock, or in other
+ * situations where the caller can't schedule().
+ */
+void usb_poison_urb(struct urb *urb)
+{
+	might_sleep();
+	if (!(urb && urb->dev && urb->ep))
+		return;
+	spin_lock_irq(&usb_reject_lock);
+	++urb->reject;
+	spin_unlock_irq(&usb_reject_lock);
+
+	usb_hcd_unlink_urb(urb, -ENOENT);
+	wait_event(usb_kill_urb_queue, atomic_read(&urb->use_count) == 0);
+}
+EXPORT_SYMBOL_GPL(usb_poison_urb);
+
+void usb_unpoison_urb(struct urb *urb)
+{
+	unsigned long flags;
+
+	if (!urb)
+		return;
+
+	spin_lock_irqsave(&usb_reject_lock, flags);
+	--urb->reject;
+	spin_unlock_irqrestore(&usb_reject_lock, flags);
+}
+EXPORT_SYMBOL_GPL(usb_unpoison_urb);
 
 /**
  * usb_kill_anchored_urbs - cancel transfer requests en masse
@@ -589,6 +643,35 @@ void usb_kill_anchored_urbs(struct usb_anchor *anchor)
 }
 EXPORT_SYMBOL_GPL(usb_kill_anchored_urbs);
 
+
+/**
+ * usb_poison_anchored_urbs - cease all traffic from an anchor
+ * @anchor: anchor the requests are bound to
+ *
+ * this allows all outstanding URBs to be poisoned starting
+ * from the back of the queue. Newly added URBs will also be
+ * poisoned
+ */
+void usb_poison_anchored_urbs(struct usb_anchor *anchor)
+{
+	struct urb *victim;
+
+	spin_lock_irq(&anchor->lock);
+	anchor->poisoned = 1;
+	while (!list_empty(&anchor->urb_list)) {
+		victim = list_entry(anchor->urb_list.prev, struct urb,
+				    anchor_list);
+		/* we must make sure the URB isn't freed before we kill it*/
+		usb_get_urb(victim);
+		spin_unlock_irq(&anchor->lock);
+		/* this will unanchor the URB */
+		usb_poison_urb(victim);
+		usb_put_urb(victim);
+		spin_lock_irq(&anchor->lock);
+	}
+	spin_unlock_irq(&anchor->lock);
+}
+EXPORT_SYMBOL_GPL(usb_poison_anchored_urbs);
 /**
  * usb_unlink_anchored_urbs - asynchronously cancel transfer requests en masse
  * @anchor: anchor the requests are bound to
