@@ -39,7 +39,7 @@
 #include <linux/nmi.h>
 #include <linux/mutex.h>
 
-#include <asm/io.h>
+#include <linux/io.h>
 #include <asm/irq.h>
 
 #include "8250.h"
@@ -145,11 +145,15 @@ struct uart_8250_port {
 };
 
 struct irq_info {
-	spinlock_t		lock;
+	struct			hlist_node node;
+	int			irq;
+	spinlock_t		lock;	/* Protects list not the hash */
 	struct list_head	*head;
 };
 
-static struct irq_info irq_lists[NR_IRQS];
+#define NR_IRQ_HASH		32	/* Can be adjusted later */
+static struct hlist_head irq_lists[NR_IRQ_HASH];
+static DEFINE_MUTEX(hash_mutex);	/* Used to walk the hash */
 
 /*
  * Here we define the default xmit fifo size used for each type of UART.
@@ -266,7 +270,7 @@ static const struct serial8250_config uart_config[] = {
 	},
 };
 
-#if defined (CONFIG_SERIAL_8250_AU1X00)
+#if defined(CONFIG_SERIAL_8250_AU1X00)
 
 /* Au1x00 UART hardware has a weird register layout */
 static const u8 au_io_in_map[] = {
@@ -536,7 +540,7 @@ static unsigned int serial_icr_read(struct uart_8250_port *up, int offset)
 /*
  * FIFO support.
  */
-static inline void serial8250_clear_fifos(struct uart_8250_port *p)
+static void serial8250_clear_fifos(struct uart_8250_port *p)
 {
 	if (p->capabilities & UART_CAP_FIFO) {
 		serial_outp(p, UART_FCR, UART_FCR_ENABLE_FIFO);
@@ -551,7 +555,7 @@ static inline void serial8250_clear_fifos(struct uart_8250_port *p)
  * capability" bit enabled.  Note that on XR16C850s, we need to
  * reset LCR to write to IER.
  */
-static inline void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
+static void serial8250_set_sleep(struct uart_8250_port *p, int sleep)
 {
 	if (p->capabilities & UART_CAP_SLEEP) {
 		if (p->capabilities & UART_CAP_EFR) {
@@ -1424,8 +1428,7 @@ static unsigned int check_modem_status(struct uart_8250_port *up)
 /*
  * This handles the interrupt from one port.
  */
-static inline void
-serial8250_handle_port(struct uart_8250_port *up)
+static void serial8250_handle_port(struct uart_8250_port *up)
 {
 	unsigned int status;
 	unsigned long flags;
@@ -1535,14 +1538,42 @@ static void serial_do_unlink(struct irq_info *i, struct uart_8250_port *up)
 		BUG_ON(i->head != &up->list);
 		i->head = NULL;
 	}
-
 	spin_unlock_irq(&i->lock);
+	/* List empty so throw away the hash node */
+	if (i->head == NULL) {
+		hlist_del(&i->node);
+		kfree(i);
+	}
 }
 
 static int serial_link_irq_chain(struct uart_8250_port *up)
 {
-	struct irq_info *i = irq_lists + up->port.irq;
+	struct hlist_head *h;
+	struct hlist_node *n;
+	struct irq_info *i;
 	int ret, irq_flags = up->port.flags & UPF_SHARE_IRQ ? IRQF_SHARED : 0;
+
+	mutex_lock(&hash_mutex);
+
+	h = &irq_lists[up->port.irq % NR_IRQ_HASH];
+
+	hlist_for_each(n, h) {
+		i = hlist_entry(n, struct irq_info, node);
+		if (i->irq == up->port.irq)
+			break;
+	}
+
+	if (n == NULL) {
+		i = kzalloc(sizeof(struct irq_info), GFP_KERNEL);
+		if (i == NULL) {
+			mutex_unlock(&hash_mutex);
+			return -ENOMEM;
+		}
+		spin_lock_init(&i->lock);
+		i->irq = up->port.irq;
+		hlist_add_head(&i->node, h);
+	}
+	mutex_unlock(&hash_mutex);
 
 	spin_lock_irq(&i->lock);
 
@@ -1567,14 +1598,27 @@ static int serial_link_irq_chain(struct uart_8250_port *up)
 
 static void serial_unlink_irq_chain(struct uart_8250_port *up)
 {
-	struct irq_info *i = irq_lists + up->port.irq;
+	struct irq_info *i;
+	struct hlist_node *n;
+	struct hlist_head *h;
 
+	mutex_lock(&hash_mutex);
+
+	h = &irq_lists[up->port.irq % NR_IRQ_HASH];
+
+	hlist_for_each(n, h) {
+		i = hlist_entry(n, struct irq_info, node);
+		if (i->irq == up->port.irq)
+			break;
+	}
+
+	BUG_ON(n == NULL);
 	BUG_ON(i->head == NULL);
-
+	
 	if (list_empty(i->head))
 		free_irq(up->port.irq, i);
-
 	serial_do_unlink(i, up);
+	mutex_unlock(&hash_mutex);
 }
 
 /* Base timer interval for polling */
@@ -1719,7 +1763,7 @@ static void serial8250_break_ctl(struct uart_port *port, int break_state)
 /*
  *	Wait for transmitter & holding register to empty
  */
-static inline void wait_for_xmitr(struct uart_8250_port *up, int bits)
+static void wait_for_xmitr(struct uart_8250_port *up, int bits)
 {
 	unsigned int status, tmout = 10000;
 
@@ -2942,7 +2986,7 @@ EXPORT_SYMBOL(serial8250_unregister_port);
 
 static int __init serial8250_init(void)
 {
-	int ret, i;
+	int ret;
 
 	if (nr_uarts > UART_NR)
 		nr_uarts = UART_NR;
@@ -2950,9 +2994,6 @@ static int __init serial8250_init(void)
 	printk(KERN_INFO "Serial: 8250/16550 driver"
 		"%d ports, IRQ sharing %sabled\n", nr_uarts,
 		share_irqs ? "en" : "dis");
-
-	for (i = 0; i < NR_IRQS; i++)
-		spin_lock_init(&irq_lists[i].lock);
 
 	ret = uart_register_driver(&serial8250_reg);
 	if (ret)
@@ -2976,11 +3017,11 @@ static int __init serial8250_init(void)
 		goto out;
 
 	platform_device_del(serial8250_isa_devs);
- put_dev:
+put_dev:
 	platform_device_put(serial8250_isa_devs);
- unreg_uart_drv:
+unreg_uart_drv:
 	uart_unregister_driver(&serial8250_reg);
- out:
+out:
 	return ret;
 }
 

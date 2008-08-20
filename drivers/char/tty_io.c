@@ -176,8 +176,6 @@ static struct tty_struct *alloc_tty_struct(void)
 	return kzalloc(sizeof(struct tty_struct), GFP_KERNEL);
 }
 
-static void tty_buffer_free_all(struct tty_struct *);
-
 /**
  *	free_tty_struct		-	free a disused tty
  *	@tty: tty struct to free
@@ -262,398 +260,6 @@ static int check_tty_count(struct tty_struct *tty, const char *routine)
 #endif
 	return 0;
 }
-
-/*
- * Tty buffer allocation management
- */
-
-/**
- *	tty_buffer_free_all		-	free buffers used by a tty
- *	@tty: tty to free from
- *
- *	Remove all the buffers pending on a tty whether queued with data
- *	or in the free ring. Must be called when the tty is no longer in use
- *
- *	Locking: none
- */
-
-static void tty_buffer_free_all(struct tty_struct *tty)
-{
-	struct tty_buffer *thead;
-	while ((thead = tty->buf.head) != NULL) {
-		tty->buf.head = thead->next;
-		kfree(thead);
-	}
-	while ((thead = tty->buf.free) != NULL) {
-		tty->buf.free = thead->next;
-		kfree(thead);
-	}
-	tty->buf.tail = NULL;
-	tty->buf.memory_used = 0;
-}
-
-/**
- *	tty_buffer_init		-	prepare a tty buffer structure
- *	@tty: tty to initialise
- *
- *	Set up the initial state of the buffer management for a tty device.
- *	Must be called before the other tty buffer functions are used.
- *
- *	Locking: none
- */
-
-static void tty_buffer_init(struct tty_struct *tty)
-{
-	spin_lock_init(&tty->buf.lock);
-	tty->buf.head = NULL;
-	tty->buf.tail = NULL;
-	tty->buf.free = NULL;
-	tty->buf.memory_used = 0;
-}
-
-/**
- *	tty_buffer_alloc	-	allocate a tty buffer
- *	@tty: tty device
- *	@size: desired size (characters)
- *
- *	Allocate a new tty buffer to hold the desired number of characters.
- *	Return NULL if out of memory or the allocation would exceed the
- *	per device queue
- *
- *	Locking: Caller must hold tty->buf.lock
- */
-
-static struct tty_buffer *tty_buffer_alloc(struct tty_struct *tty, size_t size)
-{
-	struct tty_buffer *p;
-
-	if (tty->buf.memory_used + size > 65536)
-		return NULL;
-	p = kmalloc(sizeof(struct tty_buffer) + 2 * size, GFP_ATOMIC);
-	if (p == NULL)
-		return NULL;
-	p->used = 0;
-	p->size = size;
-	p->next = NULL;
-	p->commit = 0;
-	p->read = 0;
-	p->char_buf_ptr = (char *)(p->data);
-	p->flag_buf_ptr = (unsigned char *)p->char_buf_ptr + size;
-	tty->buf.memory_used += size;
-	return p;
-}
-
-/**
- *	tty_buffer_free		-	free a tty buffer
- *	@tty: tty owning the buffer
- *	@b: the buffer to free
- *
- *	Free a tty buffer, or add it to the free list according to our
- *	internal strategy
- *
- *	Locking: Caller must hold tty->buf.lock
- */
-
-static void tty_buffer_free(struct tty_struct *tty, struct tty_buffer *b)
-{
-	/* Dumb strategy for now - should keep some stats */
-	tty->buf.memory_used -= b->size;
-	WARN_ON(tty->buf.memory_used < 0);
-
-	if (b->size >= 512)
-		kfree(b);
-	else {
-		b->next = tty->buf.free;
-		tty->buf.free = b;
-	}
-}
-
-/**
- *	__tty_buffer_flush		-	flush full tty buffers
- *	@tty: tty to flush
- *
- *	flush all the buffers containing receive data. Caller must
- *	hold the buffer lock and must have ensured no parallel flush to
- *	ldisc is running.
- *
- *	Locking: Caller must hold tty->buf.lock
- */
-
-static void __tty_buffer_flush(struct tty_struct *tty)
-{
-	struct tty_buffer *thead;
-
-	while ((thead = tty->buf.head) != NULL) {
-		tty->buf.head = thead->next;
-		tty_buffer_free(tty, thead);
-	}
-	tty->buf.tail = NULL;
-}
-
-/**
- *	tty_buffer_flush		-	flush full tty buffers
- *	@tty: tty to flush
- *
- *	flush all the buffers containing receive data. If the buffer is
- *	being processed by flush_to_ldisc then we defer the processing
- *	to that function
- *
- *	Locking: none
- */
-
-static void tty_buffer_flush(struct tty_struct *tty)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&tty->buf.lock, flags);
-
-	/* If the data is being pushed to the tty layer then we can't
-	   process it here. Instead set a flag and the flush_to_ldisc
-	   path will process the flush request before it exits */
-	if (test_bit(TTY_FLUSHING, &tty->flags)) {
-		set_bit(TTY_FLUSHPENDING, &tty->flags);
-		spin_unlock_irqrestore(&tty->buf.lock, flags);
-		wait_event(tty->read_wait,
-				test_bit(TTY_FLUSHPENDING, &tty->flags) == 0);
-		return;
-	} else
-		__tty_buffer_flush(tty);
-	spin_unlock_irqrestore(&tty->buf.lock, flags);
-}
-
-/**
- *	tty_buffer_find		-	find a free tty buffer
- *	@tty: tty owning the buffer
- *	@size: characters wanted
- *
- *	Locate an existing suitable tty buffer or if we are lacking one then
- *	allocate a new one. We round our buffers off in 256 character chunks
- *	to get better allocation behaviour.
- *
- *	Locking: Caller must hold tty->buf.lock
- */
-
-static struct tty_buffer *tty_buffer_find(struct tty_struct *tty, size_t size)
-{
-	struct tty_buffer **tbh = &tty->buf.free;
-	while ((*tbh) != NULL) {
-		struct tty_buffer *t = *tbh;
-		if (t->size >= size) {
-			*tbh = t->next;
-			t->next = NULL;
-			t->used = 0;
-			t->commit = 0;
-			t->read = 0;
-			tty->buf.memory_used += t->size;
-			return t;
-		}
-		tbh = &((*tbh)->next);
-	}
-	/* Round the buffer size out */
-	size = (size + 0xFF) & ~0xFF;
-	return tty_buffer_alloc(tty, size);
-	/* Should possibly check if this fails for the largest buffer we
-	   have queued and recycle that ? */
-}
-
-/**
- *	tty_buffer_request_room		-	grow tty buffer if needed
- *	@tty: tty structure
- *	@size: size desired
- *
- *	Make at least size bytes of linear space available for the tty
- *	buffer. If we fail return the size we managed to find.
- *
- *	Locking: Takes tty->buf.lock
- */
-int tty_buffer_request_room(struct tty_struct *tty, size_t size)
-{
-	struct tty_buffer *b, *n;
-	int left;
-	unsigned long flags;
-
-	spin_lock_irqsave(&tty->buf.lock, flags);
-
-	/* OPTIMISATION: We could keep a per tty "zero" sized buffer to
-	   remove this conditional if its worth it. This would be invisible
-	   to the callers */
-	if ((b = tty->buf.tail) != NULL)
-		left = b->size - b->used;
-	else
-		left = 0;
-
-	if (left < size) {
-		/* This is the slow path - looking for new buffers to use */
-		if ((n = tty_buffer_find(tty, size)) != NULL) {
-			if (b != NULL) {
-				b->next = n;
-				b->commit = b->used;
-			} else
-				tty->buf.head = n;
-			tty->buf.tail = n;
-		} else
-			size = left;
-	}
-
-	spin_unlock_irqrestore(&tty->buf.lock, flags);
-	return size;
-}
-EXPORT_SYMBOL_GPL(tty_buffer_request_room);
-
-/**
- *	tty_insert_flip_string	-	Add characters to the tty buffer
- *	@tty: tty structure
- *	@chars: characters
- *	@size: size
- *
- *	Queue a series of bytes to the tty buffering. All the characters
- *	passed are marked as without error. Returns the number added.
- *
- *	Locking: Called functions may take tty->buf.lock
- */
-
-int tty_insert_flip_string(struct tty_struct *tty, const unsigned char *chars,
-				size_t size)
-{
-	int copied = 0;
-	do {
-		int space = tty_buffer_request_room(tty, size - copied);
-		struct tty_buffer *tb = tty->buf.tail;
-		/* If there is no space then tb may be NULL */
-		if (unlikely(space == 0))
-			break;
-		memcpy(tb->char_buf_ptr + tb->used, chars, space);
-		memset(tb->flag_buf_ptr + tb->used, TTY_NORMAL, space);
-		tb->used += space;
-		copied += space;
-		chars += space;
-		/* There is a small chance that we need to split the data over
-		   several buffers. If this is the case we must loop */
-	} while (unlikely(size > copied));
-	return copied;
-}
-EXPORT_SYMBOL(tty_insert_flip_string);
-
-/**
- *	tty_insert_flip_string_flags	-	Add characters to the tty buffer
- *	@tty: tty structure
- *	@chars: characters
- *	@flags: flag bytes
- *	@size: size
- *
- *	Queue a series of bytes to the tty buffering. For each character
- *	the flags array indicates the status of the character. Returns the
- *	number added.
- *
- *	Locking: Called functions may take tty->buf.lock
- */
-
-int tty_insert_flip_string_flags(struct tty_struct *tty,
-		const unsigned char *chars, const char *flags, size_t size)
-{
-	int copied = 0;
-	do {
-		int space = tty_buffer_request_room(tty, size - copied);
-		struct tty_buffer *tb = tty->buf.tail;
-		/* If there is no space then tb may be NULL */
-		if (unlikely(space == 0))
-			break;
-		memcpy(tb->char_buf_ptr + tb->used, chars, space);
-		memcpy(tb->flag_buf_ptr + tb->used, flags, space);
-		tb->used += space;
-		copied += space;
-		chars += space;
-		flags += space;
-		/* There is a small chance that we need to split the data over
-		   several buffers. If this is the case we must loop */
-	} while (unlikely(size > copied));
-	return copied;
-}
-EXPORT_SYMBOL(tty_insert_flip_string_flags);
-
-/**
- *	tty_schedule_flip	-	push characters to ldisc
- *	@tty: tty to push from
- *
- *	Takes any pending buffers and transfers their ownership to the
- *	ldisc side of the queue. It then schedules those characters for
- *	processing by the line discipline.
- *
- *	Locking: Takes tty->buf.lock
- */
-
-void tty_schedule_flip(struct tty_struct *tty)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&tty->buf.lock, flags);
-	if (tty->buf.tail != NULL)
-		tty->buf.tail->commit = tty->buf.tail->used;
-	spin_unlock_irqrestore(&tty->buf.lock, flags);
-	schedule_delayed_work(&tty->buf.work, 1);
-}
-EXPORT_SYMBOL(tty_schedule_flip);
-
-/**
- *	tty_prepare_flip_string		-	make room for characters
- *	@tty: tty
- *	@chars: return pointer for character write area
- *	@size: desired size
- *
- *	Prepare a block of space in the buffer for data. Returns the length
- *	available and buffer pointer to the space which is now allocated and
- *	accounted for as ready for normal characters. This is used for drivers
- *	that need their own block copy routines into the buffer. There is no
- *	guarantee the buffer is a DMA target!
- *
- *	Locking: May call functions taking tty->buf.lock
- */
-
-int tty_prepare_flip_string(struct tty_struct *tty, unsigned char **chars,
-								size_t size)
-{
-	int space = tty_buffer_request_room(tty, size);
-	if (likely(space)) {
-		struct tty_buffer *tb = tty->buf.tail;
-		*chars = tb->char_buf_ptr + tb->used;
-		memset(tb->flag_buf_ptr + tb->used, TTY_NORMAL, space);
-		tb->used += space;
-	}
-	return space;
-}
-
-EXPORT_SYMBOL_GPL(tty_prepare_flip_string);
-
-/**
- *	tty_prepare_flip_string_flags	-	make room for characters
- *	@tty: tty
- *	@chars: return pointer for character write area
- *	@flags: return pointer for status flag write area
- *	@size: desired size
- *
- *	Prepare a block of space in the buffer for data. Returns the length
- *	available and buffer pointer to the space which is now allocated and
- *	accounted for as ready for characters. This is used for drivers
- *	that need their own block copy routines into the buffer. There is no
- *	guarantee the buffer is a DMA target!
- *
- *	Locking: May call functions taking tty->buf.lock
- */
-
-int tty_prepare_flip_string_flags(struct tty_struct *tty,
-			unsigned char **chars, char **flags, size_t size)
-{
-	int space = tty_buffer_request_room(tty, size);
-	if (likely(space)) {
-		struct tty_buffer *tb = tty->buf.tail;
-		*chars = tb->char_buf_ptr + tb->used;
-		*flags = tb->flag_buf_ptr + tb->used;
-		tb->used += space;
-	}
-	return space;
-}
-
-EXPORT_SYMBOL_GPL(tty_prepare_flip_string_flags);
-
-
 
 /**
  *	get_tty_driver		-	find device of a tty
@@ -943,6 +549,7 @@ static void do_tty_hangup(struct work_struct *work)
 	struct tty_ldisc *ld;
 	int    closecount = 0, n;
 	unsigned long flags;
+	int refs = 0;
 
 	if (!tty)
 		return;
@@ -1009,8 +616,12 @@ static void do_tty_hangup(struct work_struct *work)
 	if (tty->session) {
 		do_each_pid_task(tty->session, PIDTYPE_SID, p) {
 			spin_lock_irq(&p->sighand->siglock);
-			if (p->signal->tty == tty)
+			if (p->signal->tty == tty) {
 				p->signal->tty = NULL;
+				/* We defer the dereferences outside fo
+				   the tasklist lock */
+				refs++;
+			}
 			if (!p->signal->leader) {
 				spin_unlock_irq(&p->sighand->siglock);
 				continue;
@@ -1035,6 +646,10 @@ static void do_tty_hangup(struct work_struct *work)
 	tty->pgrp = NULL;
 	tty->ctrl_status = 0;
 	spin_unlock_irqrestore(&tty->ctrl_lock, flags);
+
+	/* Account for the p->signal references we killed */
+	while (refs--)
+		tty_kref_put(tty);
 
 	/*
 	 * If one of the devices matches a console pointer, we
@@ -1105,6 +720,23 @@ void tty_vhangup(struct tty_struct *tty)
 EXPORT_SYMBOL(tty_vhangup);
 
 /**
+ *	tty_vhangup_self	-	process vhangup for own ctty
+ *
+ *	Perform a vhangup on the current controlling tty
+ */
+
+void tty_vhangup_self(void)
+{
+	struct tty_struct *tty;
+
+	tty = get_current_tty();
+	if (tty) {
+		tty_vhangup(tty);
+		tty_kref_put(tty);
+	}
+}
+
+/**
  *	tty_hung_up_p		-	was tty hung up
  *	@filp: file pointer of tty
  *
@@ -1157,16 +789,14 @@ void disassociate_ctty(int on_exit)
 	struct pid *tty_pgrp = NULL;
 
 
-	mutex_lock(&tty_mutex);
 	tty = get_current_tty();
 	if (tty) {
 		tty_pgrp = get_pid(tty->pgrp);
 		lock_kernel();
-		mutex_unlock(&tty_mutex);
-		/* XXX: here we race, there is nothing protecting tty */
 		if (on_exit && tty->driver->type != TTY_DRIVER_TYPE_PTY)
 			tty_vhangup(tty);
 		unlock_kernel();
+		tty_kref_put(tty);
 	} else if (on_exit) {
 		struct pid *old_pgrp;
 		spin_lock_irq(&current->sighand->siglock);
@@ -1178,7 +808,6 @@ void disassociate_ctty(int on_exit)
 			kill_pgrp(old_pgrp, SIGCONT, on_exit);
 			put_pid(old_pgrp);
 		}
-		mutex_unlock(&tty_mutex);
 		return;
 	}
 	if (tty_pgrp) {
@@ -1193,8 +822,6 @@ void disassociate_ctty(int on_exit)
 	current->signal->tty_old_pgrp = NULL;
 	spin_unlock_irq(&current->sighand->siglock);
 
-	mutex_lock(&tty_mutex);
-	/* It is possible that do_tty_hangup has free'd this tty */
 	tty = get_current_tty();
 	if (tty) {
 		unsigned long flags;
@@ -1204,13 +831,13 @@ void disassociate_ctty(int on_exit)
 		tty->session = NULL;
 		tty->pgrp = NULL;
 		spin_unlock_irqrestore(&tty->ctrl_lock, flags);
+		tty_kref_put(tty);
 	} else {
 #ifdef TTY_DEBUG_HANGUP
 		printk(KERN_DEBUG "error attempted to write to tty [0x%p]"
 		       " = NULL", tty);
 #endif
 	}
-	mutex_unlock(&tty_mutex);
 
 	/* Now clear signal->tty under the lock */
 	read_lock(&tasklist_lock);
@@ -1456,6 +1083,31 @@ out:
 	return ret;
 }
 
+/**
+ * tty_write_message - write a message to a certain tty, not just the console.
+ * @tty: the destination tty_struct
+ * @msg: the message to write
+ *
+ * This is used for messages that need to be redirected to a specific tty.
+ * We don't put it into the syslog queue right now maybe in the future if
+ * really needed.
+ *
+ * We must still hold the BKL and test the CLOSING flag for the moment.
+ */
+
+void tty_write_message(struct tty_struct *tty, char *msg)
+{
+	lock_kernel();
+	if (tty) {
+		mutex_lock(&tty->atomic_write_lock);
+		if (tty->ops->write && !test_bit(TTY_CLOSING, &tty->flags))
+			tty->ops->write(tty, msg, strlen(msg));
+		tty_write_unlock(tty);
+	}
+	unlock_kernel();
+	return;
+}
+
 
 /**
  *	tty_write		-	write method for tty device file
@@ -1523,42 +1175,6 @@ ssize_t redirected_tty_write(struct file *file, const char __user *buf,
 	return tty_write(file, buf, count, ppos);
 }
 
-void tty_port_init(struct tty_port *port)
-{
-	memset(port, 0, sizeof(*port));
-	init_waitqueue_head(&port->open_wait);
-	init_waitqueue_head(&port->close_wait);
-	mutex_init(&port->mutex);
-	port->close_delay = (50 * HZ) / 100;
-	port->closing_wait = (3000 * HZ) / 100;
-}
-EXPORT_SYMBOL(tty_port_init);
-
-int tty_port_alloc_xmit_buf(struct tty_port *port)
-{
-	/* We may sleep in get_zeroed_page() */
-	mutex_lock(&port->mutex);
-	if (port->xmit_buf == NULL)
-		port->xmit_buf = (unsigned char *)get_zeroed_page(GFP_KERNEL);
-	mutex_unlock(&port->mutex);
-	if (port->xmit_buf == NULL)
-		return -ENOMEM;
-	return 0;
-}
-EXPORT_SYMBOL(tty_port_alloc_xmit_buf);
-
-void tty_port_free_xmit_buf(struct tty_port *port)
-{
-	mutex_lock(&port->mutex);
-	if (port->xmit_buf != NULL) {
-		free_page((unsigned long)port->xmit_buf);
-		port->xmit_buf = NULL;
-	}
-	mutex_unlock(&port->mutex);
-}
-EXPORT_SYMBOL(tty_port_free_xmit_buf);
-
-
 static char ptychar[] = "pqrstuvwxyzabcde";
 
 /**
@@ -1601,7 +1217,8 @@ static void tty_line_name(struct tty_driver *driver, int index, char *p)
  *	init_dev		-	initialise a tty device
  *	@driver: tty driver we are opening a device on
  *	@idx: device index
- *	@tty: returned tty structure
+ *	@ret_tty: returned tty structure
+ *	@first_ok: ok to open a new device (used by ptmx)
  *
  *	Prepare a tty device. This may not be a "new" clean device but
  *	could also be an active device. The pty drivers require special
@@ -1622,7 +1239,7 @@ static void tty_line_name(struct tty_driver *driver, int index, char *p)
  */
 
 static int init_dev(struct tty_driver *driver, int idx,
-	struct tty_struct **ret_tty)
+	struct tty_struct **ret_tty, int first_ok)
 {
 	struct tty_struct *tty, *o_tty;
 	struct ktermios *tp, **tp_loc, *o_tp, **o_tp_loc;
@@ -1653,6 +1270,11 @@ static int init_dev(struct tty_driver *driver, int idx,
 	}
 	if (tty) goto fast_track;
 
+	if (driver->subtype == PTY_TYPE_MASTER &&
+		(driver->flags & TTY_DRIVER_DEVPTS_MEM) && !first_ok) {
+		retval = -EIO;
+		goto end_init;
+	}
 	/*
 	 * First time open is complex, especially for PTY devices.
 	 * This code guarantees that either everything succeeds and the
@@ -1704,6 +1326,12 @@ static int init_dev(struct tty_driver *driver, int idx,
 		o_tty = alloc_tty_struct();
 		if (!o_tty)
 			goto free_mem_out;
+		if (!try_module_get(driver->other->owner)) {
+			/* This cannot in fact currently happen */
+			free_tty_struct(o_tty);
+			o_tty = NULL;
+			goto free_mem_out;
+		}
 		initialize_tty_struct(o_tty);
 		o_tty->driver = driver->other;
 		o_tty->ops = driver->ops;
@@ -1781,7 +1409,7 @@ static int init_dev(struct tty_driver *driver, int idx,
 
 	if (retval)
 		goto release_mem_out;
-	 goto success;
+	goto success;
 
 	/*
 	 * This fast open can be used if the tty is already open.
@@ -1822,8 +1450,10 @@ end_init:
 	/* Release locally allocated memory ... nothing placed in slots */
 free_mem_out:
 	kfree(o_tp);
-	if (o_tty)
+	if (o_tty) {
+		module_put(o_tty->driver->owner);
 		free_tty_struct(o_tty);
+	}
 	kfree(ltp);
 	kfree(tp);
 	free_tty_struct(tty);
@@ -1842,8 +1472,34 @@ release_mem_out:
 	goto end_init;
 }
 
+void tty_free_termios(struct tty_struct *tty)
+{
+	struct ktermios *tp;
+	int idx = tty->index;
+	/* Kill this flag and push into drivers for locking etc */
+	if (tty->driver->flags & TTY_DRIVER_RESET_TERMIOS) {
+		/* FIXME: Locking on ->termios array */
+		tp = tty->termios;
+		tty->driver->termios[idx] = NULL;
+		kfree(tp);
+
+		tp = tty->termios_locked;
+		tty->driver->termios_locked[idx] = NULL;
+		kfree(tp);
+	}
+}
+EXPORT_SYMBOL(tty_free_termios);
+
+void tty_shutdown(struct tty_struct *tty)
+{
+	tty->driver->ttys[tty->index] = NULL;
+	tty_free_termios(tty);
+}
+EXPORT_SYMBOL(tty_shutdown);
+
 /**
  *	release_one_tty		-	release tty structure memory
+ *	@kref: kref of tty we are obliterating
  *
  *	Releases memory associated with a tty structure, and clears out the
  *	driver table slots. This function is called when a device is no longer
@@ -1853,31 +1509,20 @@ release_mem_out:
  *		tty_mutex - sometimes only
  *		takes the file list lock internally when working on the list
  *	of ttys that the driver keeps.
- *		FIXME: should we require tty_mutex is held here ??
  */
-static void release_one_tty(struct tty_struct *tty, int idx)
+static void release_one_tty(struct kref *kref)
 {
-	int devpts = tty->driver->flags & TTY_DRIVER_DEVPTS_MEM;
-	struct ktermios *tp;
+	struct tty_struct *tty = container_of(kref, struct tty_struct, kref);
+	struct tty_driver *driver = tty->driver;
 
-	if (!devpts)
-		tty->driver->ttys[idx] = NULL;
-
-	if (tty->driver->flags & TTY_DRIVER_RESET_TERMIOS) {
-		tp = tty->termios;
-		if (!devpts)
-			tty->driver->termios[idx] = NULL;
-		kfree(tp);
-
-		tp = tty->termios_locked;
-		if (!devpts)
-			tty->driver->termios_locked[idx] = NULL;
-		kfree(tp);
-	}
-
-
+	if (tty->ops->shutdown)
+		tty->ops->shutdown(tty);
+	else
+		tty_shutdown(tty);
 	tty->magic = 0;
+	/* FIXME: locking on tty->driver->refcount */
 	tty->driver->refcount--;
+	module_put(driver->owner);
 
 	file_list_lock();
 	list_del_init(&tty->tty_files);
@@ -1885,6 +1530,21 @@ static void release_one_tty(struct tty_struct *tty, int idx)
 
 	free_tty_struct(tty);
 }
+
+/**
+ *	tty_kref_put		-	release a tty kref
+ *	@tty: tty device
+ *
+ *	Release a reference to a tty device and if need be let the kref
+ *	layer destruct the object for us
+ */
+
+void tty_kref_put(struct tty_struct *tty)
+{
+	if (tty)
+		kref_put(&tty->kref, release_one_tty);
+}
+EXPORT_SYMBOL(tty_kref_put);
 
 /**
  *	release_tty		-	release tty structure memory
@@ -1897,15 +1557,16 @@ static void release_one_tty(struct tty_struct *tty, int idx)
  *		takes the file list lock internally when working on the list
  *	of ttys that the driver keeps.
  *		FIXME: should we require tty_mutex is held here ??
+ *
  */
 static void release_tty(struct tty_struct *tty, int idx)
 {
-	struct tty_driver *driver = tty->driver;
+	/* This should always be true but check for the moment */
+	WARN_ON(tty->index != idx);
 
 	if (tty->link)
-		release_one_tty(tty->link, idx);
-	release_one_tty(tty, idx);
-	module_put(driver->owner);
+		tty_kref_put(tty->link);
+	tty_kref_put(tty);
 }
 
 /*
@@ -2139,7 +1800,7 @@ static void release_dev(struct file *filp)
 }
 
 /**
- *	tty_open		-	open a tty device
+ *	__tty_open		-	open a tty device
  *	@inode: inode of device file
  *	@filp: file pointer to tty
  *
@@ -2187,6 +1848,8 @@ retry_open:
 		index = tty->index;
 		filp->f_flags |= O_NONBLOCK; /* Don't let /dev/tty block */
 		/* noctty = 1; */
+		/* FIXME: Should we take a driver reference ? */
+		tty_kref_put(tty);
 		goto got_driver;
 	}
 #ifdef CONFIG_VT
@@ -2216,7 +1879,7 @@ retry_open:
 		return -ENODEV;
 	}
 got_driver:
-	retval = init_dev(driver, index, &tty);
+	retval = init_dev(driver, index, &tty, 0);
 	mutex_unlock(&tty_mutex);
 	if (retval)
 		return retval;
@@ -2313,7 +1976,7 @@ static int __ptmx_open(struct inode *inode, struct file *filp)
 		return index;
 
 	mutex_lock(&tty_mutex);
-	retval = init_dev(ptm_driver, index, &tty);
+	retval = init_dev(ptm_driver, index, &tty, 1);
 	mutex_unlock(&tty_mutex);
 
 	if (retval)
@@ -2498,7 +2161,7 @@ static int tiocgwinsz(struct tty_struct *tty, struct winsize __user *arg)
 /**
  *	tty_do_resize		-	resize event
  *	@tty: tty being resized
- *	@real_tty: real tty (if using a pty/tty pair)
+ *	@real_tty: real tty (not the same as tty if using a pty/tty pair)
  *	@rows: rows (character)
  *	@cols: cols (character)
  *
@@ -2515,6 +2178,14 @@ int tty_do_resize(struct tty_struct *tty, struct tty_struct *real_tty,
 	mutex_lock(&tty->termios_mutex);
 	if (!memcmp(ws, &tty->winsize, sizeof(*ws)))
 		goto done;
+
+	/* If a pty/tty pair is updated we will have a real_tty defined
+	   which doesn't match the tty. In this case as we will update
+	   both of the tty termios sets. We can lock both mutex safely here
+	   as in this case real_tty is the tty, tty is the pty side and we
+	   have lock ordering */
+	if (real_tty != tty)
+		mutex_lock(&real_tty->termios_mutex);
 	/* Get the PID values and reference them so we can
 	   avoid holding the tty ctrl lock while sending signals */
 	spin_lock_irqsave(&tty->ctrl_lock, flags);
@@ -2532,6 +2203,8 @@ int tty_do_resize(struct tty_struct *tty, struct tty_struct *real_tty,
 
 	tty->winsize = *ws;
 	real_tty->winsize = *ws;
+	if (real_tty != tty)
+		mutex_unlock(&real_tty->termios_mutex);
 done:
 	mutex_unlock(&tty->termios_mutex);
 	return 0;
@@ -3015,10 +2688,6 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		return put_user(tty->ldisc.ops->num, (int __user *)p);
 	case TIOCSETD:
 		return tiocsetd(tty, p);
-#ifdef CONFIG_VT
-	case TIOCLINUX:
-		return tioclinux(tty, arg);
-#endif
 	/*
 	 * Break handling
 	 */
@@ -3209,113 +2878,6 @@ void do_SAK(struct tty_struct *tty)
 EXPORT_SYMBOL(do_SAK);
 
 /**
- *	flush_to_ldisc
- *	@work: tty structure passed from work queue.
- *
- *	This routine is called out of the software interrupt to flush data
- *	from the buffer chain to the line discipline.
- *
- *	Locking: holds tty->buf.lock to guard buffer list. Drops the lock
- *	while invoking the line discipline receive_buf method. The
- *	receive_buf method is single threaded for each tty instance.
- */
-
-static void flush_to_ldisc(struct work_struct *work)
-{
-	struct tty_struct *tty =
-		container_of(work, struct tty_struct, buf.work.work);
-	unsigned long 	flags;
-	struct tty_ldisc *disc;
-	struct tty_buffer *tbuf, *head;
-	char *char_buf;
-	unsigned char *flag_buf;
-
-	disc = tty_ldisc_ref(tty);
-	if (disc == NULL)	/*  !TTY_LDISC */
-		return;
-
-	spin_lock_irqsave(&tty->buf.lock, flags);
-	/* So we know a flush is running */
-	set_bit(TTY_FLUSHING, &tty->flags);
-	head = tty->buf.head;
-	if (head != NULL) {
-		tty->buf.head = NULL;
-		for (;;) {
-			int count = head->commit - head->read;
-			if (!count) {
-				if (head->next == NULL)
-					break;
-				tbuf = head;
-				head = head->next;
-				tty_buffer_free(tty, tbuf);
-				continue;
-			}
-			/* Ldisc or user is trying to flush the buffers
-			   we are feeding to the ldisc, stop feeding the
-			   line discipline as we want to empty the queue */
-			if (test_bit(TTY_FLUSHPENDING, &tty->flags))
-				break;
-			if (!tty->receive_room) {
-				schedule_delayed_work(&tty->buf.work, 1);
-				break;
-			}
-			if (count > tty->receive_room)
-				count = tty->receive_room;
-			char_buf = head->char_buf_ptr + head->read;
-			flag_buf = head->flag_buf_ptr + head->read;
-			head->read += count;
-			spin_unlock_irqrestore(&tty->buf.lock, flags);
-			disc->ops->receive_buf(tty, char_buf,
-							flag_buf, count);
-			spin_lock_irqsave(&tty->buf.lock, flags);
-		}
-		/* Restore the queue head */
-		tty->buf.head = head;
-	}
-	/* We may have a deferred request to flush the input buffer,
-	   if so pull the chain under the lock and empty the queue */
-	if (test_bit(TTY_FLUSHPENDING, &tty->flags)) {
-		__tty_buffer_flush(tty);
-		clear_bit(TTY_FLUSHPENDING, &tty->flags);
-		wake_up(&tty->read_wait);
-	}
-	clear_bit(TTY_FLUSHING, &tty->flags);
-	spin_unlock_irqrestore(&tty->buf.lock, flags);
-
-	tty_ldisc_deref(disc);
-}
-
-/**
- *	tty_flip_buffer_push	-	terminal
- *	@tty: tty to push
- *
- *	Queue a push of the terminal flip buffers to the line discipline. This
- *	function must not be called from IRQ context if tty->low_latency is set.
- *
- *	In the event of the queue being busy for flipping the work will be
- *	held off and retried later.
- *
- *	Locking: tty buffer lock. Driver locks in low latency mode.
- */
-
-void tty_flip_buffer_push(struct tty_struct *tty)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&tty->buf.lock, flags);
-	if (tty->buf.tail != NULL)
-		tty->buf.tail->commit = tty->buf.tail->used;
-	spin_unlock_irqrestore(&tty->buf.lock, flags);
-
-	if (tty->low_latency)
-		flush_to_ldisc(&tty->buf.work.work);
-	else
-		schedule_delayed_work(&tty->buf.work, 1);
-}
-
-EXPORT_SYMBOL(tty_flip_buffer_push);
-
-
-/**
  *	initialize_tty_struct
  *	@tty: tty to initialize
  *
@@ -3328,6 +2890,7 @@ EXPORT_SYMBOL(tty_flip_buffer_push);
 static void initialize_tty_struct(struct tty_struct *tty)
 {
 	memset(tty, 0, sizeof(struct tty_struct));
+	kref_init(&tty->kref);
 	tty->magic = TTY_MAGIC;
 	tty_ldisc_init(tty);
 	tty->session = NULL;
@@ -3335,7 +2898,6 @@ static void initialize_tty_struct(struct tty_struct *tty)
 	tty->overrun_time = jiffies;
 	tty->buf.head = tty->buf.tail = NULL;
 	tty_buffer_init(tty);
-	INIT_DELAYED_WORK(&tty->buf.work, flush_to_ldisc);
 	mutex_init(&tty->termios_mutex);
 	init_waitqueue_head(&tty->write_wait);
 	init_waitqueue_head(&tty->read_wait);
@@ -3584,9 +3146,12 @@ EXPORT_SYMBOL(tty_devnum);
 
 void proc_clear_tty(struct task_struct *p)
 {
+	struct tty_struct *tty;
 	spin_lock_irq(&p->sighand->siglock);
+	tty = p->signal->tty;
 	p->signal->tty = NULL;
 	spin_unlock_irq(&p->sighand->siglock);
+	tty_kref_put(tty);
 }
 
 /* Called under the sighand lock */
@@ -3602,9 +3167,13 @@ static void __proc_set_tty(struct task_struct *tsk, struct tty_struct *tty)
 		tty->pgrp = get_pid(task_pgrp(tsk));
 		spin_unlock_irqrestore(&tty->ctrl_lock, flags);
 		tty->session = get_pid(task_session(tsk));
+		if (tsk->signal->tty) {
+			printk(KERN_DEBUG "tty not NULL!!\n");
+			tty_kref_put(tsk->signal->tty);
+		}
 	}
 	put_pid(tsk->signal->tty_old_pgrp);
-	tsk->signal->tty = tty;
+	tsk->signal->tty = tty_kref_get(tty);
 	tsk->signal->tty_old_pgrp = NULL;
 }
 
@@ -3618,14 +3187,11 @@ static void proc_set_tty(struct task_struct *tsk, struct tty_struct *tty)
 struct tty_struct *get_current_tty(void)
 {
 	struct tty_struct *tty;
-	WARN_ON_ONCE(!mutex_is_locked(&tty_mutex));
-	tty = current->signal->tty;
-	/*
-	 * session->tty can be changed/cleared from under us, make sure we
-	 * issue the load. The obtained pointer, when not NULL, is valid as
-	 * long as we hold tty_mutex.
-	 */
-	barrier();
+	unsigned long flags;
+
+	spin_lock_irqsave(&current->sighand->siglock, flags);
+	tty = tty_kref_get(current->signal->tty);
+	spin_unlock_irqrestore(&current->sighand->siglock, flags);
 	return tty;
 }
 EXPORT_SYMBOL_GPL(get_current_tty);
