@@ -1108,7 +1108,6 @@ static void hso_serial_close(struct tty_struct *tty, struct file *filp)
 	/* reset the rts and dtr */
 	/* do the actual close */
 	serial->open_count--;
-	kref_put(&serial->parent->ref, hso_serial_ref_free);
 	if (serial->open_count <= 0) {
 		serial->open_count = 0;
 		if (serial->tty) {
@@ -1121,6 +1120,7 @@ static void hso_serial_close(struct tty_struct *tty, struct file *filp)
 	if (!usb_gone)
 		usb_autopm_put_interface(serial->parent->interface);
 	mutex_unlock(&serial->parent->mutex);
+	kref_put(&serial->parent->ref, hso_serial_ref_free);
 }
 
 /* close the requested serial port */
