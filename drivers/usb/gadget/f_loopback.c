@@ -70,6 +70,7 @@ static struct usb_interface_descriptor loopback_intf = {
 
 /* full speed support: */
 
+#if 0
 static struct usb_endpoint_descriptor fs_source_desc = {
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
@@ -85,6 +86,7 @@ static struct usb_endpoint_descriptor fs_sink_desc = {
 	.bEndpointAddress =	USB_DIR_OUT,
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 };
+#endif
 
 static struct usb_descriptor_header *fs_loopback_descs[] = {
 	(struct usb_descriptor_header *) &loopback_intf,
@@ -95,6 +97,7 @@ static struct usb_descriptor_header *fs_loopback_descs[] = {
 
 /* high speed support: */
 
+#if 0
 static struct usb_endpoint_descriptor hs_source_desc = {
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
@@ -110,6 +113,7 @@ static struct usb_endpoint_descriptor hs_sink_desc = {
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 	.wMaxPacketSize =	__constant_cpu_to_le16(512),
 };
+#endif
 
 static struct usb_descriptor_header *hs_loopback_descs[] = {
 	(struct usb_descriptor_header *) &loopback_intf,

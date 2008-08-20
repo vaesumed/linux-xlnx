@@ -73,6 +73,23 @@
 #endif
 
 /*
+ * Kbuild is not very cooperative with respect to linking separately
+ * compiled library objects into one module.  So for now we won't use
+ * separate compilation ... ensuring init/exit sections work to shrink
+ * the runtime footprint, and giving us at least some parts of what
+ * a "gcc --combine ... part1.c part2.c part3.c ... " build would.
+ */
+#include "composite.c"
+#include "usbstring.c"
+#include "config.c"
+#include "epautoconf.c"
+
+#include "f_ecm.c"
+#include "f_subset.c"
+#include "u_ether.c"
+
+/*-------------------------------------------------------------------------*/
+/*
  * This driver aims for interoperability by using CDC ECM unless
  *
  *		can_support_ecm()
@@ -332,7 +349,8 @@ static int __init eth_bind(struct usb_composite_dev *cdev)
 	if (status < 0)
 		goto fail;
 
-	INFO(cdev, "%s, version: " DRIVER_VERSION "\n", DRIVER_DESC);
+	dev_info(&cdev->gadget->dev, "%s, version: " DRIVER_VERSION "\n",
+		 DRIVER_DESC);
 
 	return 0;
 
