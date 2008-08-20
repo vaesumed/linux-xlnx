@@ -122,7 +122,6 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/blkdev.h>
-#include <linux/hdreg.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
 #include <linux/init.h>
@@ -605,10 +604,10 @@ static const struct hpt_info hpt371n __devinitdata = {
 
 static int check_in_drive_list(ide_drive_t *drive, const char **list)
 {
-	struct hd_driveid *id = drive->id;
+	char *m = (char *)&drive->id[ATA_ID_PROD];
 
 	while (*list)
-		if (!strcmp(*list++,id->model))
+		if (!strcmp(*list++, m))
 			return 1;
 	return 0;
 }
@@ -649,7 +648,7 @@ static u8 hpt3xx_udma_filter(ide_drive_t *drive)
 	case HPT372A:
 	case HPT372N:
 	case HPT374 :
-		if (ide_dev_is_sata(drive->id))
+		if (ata_id_is_sata(drive->id))
 			mask &= ~0x0e;
 		/* Fall thru */
 	default:
@@ -671,7 +670,7 @@ static u8 hpt3xx_mdma_filter(ide_drive_t *drive)
 	case HPT372A:
 	case HPT372N:
 	case HPT374 :
-		if (ide_dev_is_sata(drive->id))
+		if (ata_id_is_sata(drive->id))
 			return 0x00;
 		/* Fall thru */
 	default:
@@ -728,11 +727,11 @@ static void hpt3xx_set_pio_mode(ide_drive_t *drive, const u8 pio)
 
 static void hpt3xx_quirkproc(ide_drive_t *drive)
 {
-	struct hd_driveid *id	= drive->id;
+	char *m			= (char *)&drive->id[ATA_ID_PROD];
 	const  char **list	= quirk_drives;
 
 	while (*list)
-		if (strstr(id->model, *list++)) {
+		if (strstr(m, *list++)) {
 			drive->quirk_list = 1;
 			return;
 		}
@@ -862,9 +861,6 @@ static int hpt374_dma_test_irq(ide_drive_t *drive)
 	if (dma_stat & 4)
 		return 1;
 
-	if (!drive->waiting_for_dma)
-		printk(KERN_WARNING "%s: (%s) called while not waiting\n",
-				drive->name, __func__);
 	return 0;
 }
 
@@ -942,7 +938,7 @@ static void hpt3xxn_rw_disk(ide_drive_t *drive, struct request *rq)
  *	Perform a calibration cycle on the DPLL.
  *	Returns 1 if this succeeds
  */
-static int __devinit hpt37x_calibrate_dpll(struct pci_dev *dev, u16 f_low, u16 f_high)
+static int hpt37x_calibrate_dpll(struct pci_dev *dev, u16 f_low, u16 f_high)
 {
 	u32 dpll = (f_high << 16) | f_low | 0x100;
 	u8  scr2;
@@ -970,7 +966,37 @@ static int __devinit hpt37x_calibrate_dpll(struct pci_dev *dev, u16 f_low, u16 f
 	return 1;
 }
 
-static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev)
+static void hpt3xx_disable_fast_irq(struct pci_dev *dev, u8 mcr_addr)
+{
+	struct ide_host *host	= pci_get_drvdata(dev);
+	struct hpt_info *info	= host->host_priv + (&dev->dev == host->dev[1]);
+	u8  chip_type		= info->chip_type;
+	u8  new_mcr, old_mcr	= 0;
+
+	/*
+	 * Disable the "fast interrupt" prediction.  Don't hold off
+	 * on interrupts. (== 0x01 despite what the docs say)
+	 */
+	pci_read_config_byte(dev, mcr_addr + 1, &old_mcr);
+
+	if (chip_type >= HPT374)
+		new_mcr = old_mcr & ~0x07;
+	else if (chip_type >= HPT370) {
+		new_mcr = old_mcr;
+		new_mcr &= ~0x02;
+#ifdef HPT_DELAY_INTERRUPT
+		new_mcr &= ~0x01;
+#else
+		new_mcr |=  0x01;
+#endif
+	} else					/* HPT366 and HPT368  */
+		new_mcr = old_mcr & ~0x80;
+
+	if (new_mcr != old_mcr)
+		pci_write_config_byte(dev, mcr_addr + 1, new_mcr);
+}
+
+static unsigned int init_chipset_hpt366(struct pci_dev *dev)
 {
 	unsigned long io_base	= pci_resource_start(dev, 4);
 	struct ide_host *host	= pci_get_drvdata(dev);
@@ -1208,8 +1234,10 @@ static unsigned int __devinit init_chipset_hpt366(struct pci_dev *dev)
 	 * NOTE: This register is only writeable via I/O space.
 	 */
 	if (chip_type == HPT371N && clock == ATA_CLOCK_66MHZ)
-
 		outb(inb(io_base + 0x9c) | 0x04, io_base + 0x9c);
+
+	hpt3xx_disable_fast_irq(dev, 0x50);
+	hpt3xx_disable_fast_irq(dev, 0x54);
 
 	return dev->irq;
 }
@@ -1266,7 +1294,6 @@ static void __devinit init_hwif_hpt366(ide_hwif_t *hwif)
 	struct hpt_info *info	= host->host_priv + (hwif->dev == host->dev[1]);
 	int serialize		= HPT_SERIALIZE_IO;
 	u8  chip_type		= info->chip_type;
-	u8  new_mcr, old_mcr	= 0;
 
 	/* Cache the channel's MISC. control registers' offset */
 	hwif->select_data	= hwif->channel ? 0x54 : 0x50;
@@ -1289,29 +1316,6 @@ static void __devinit init_hwif_hpt366(ide_hwif_t *hwif)
 	/* Serialize access to this device if needed */
 	if (serialize && hwif->mate)
 		hwif->serialized = hwif->mate->serialized = 1;
-
-	/*
-	 * Disable the "fast interrupt" prediction.  Don't hold off
-	 * on interrupts. (== 0x01 despite what the docs say)
-	 */
-	pci_read_config_byte(dev, hwif->select_data + 1, &old_mcr);
-
-	if (info->chip_type >= HPT374)
-		new_mcr = old_mcr & ~0x07;
-	else if (info->chip_type >= HPT370) {
-		new_mcr = old_mcr;
-		new_mcr &= ~0x02;
-
-#ifdef HPT_DELAY_INTERRUPT
-		new_mcr &= ~0x01;
-#else
-		new_mcr |=  0x01;
-#endif
-	} else					/* HPT366 and HPT368  */
-		new_mcr = old_mcr & ~0x80;
-
-	if (new_mcr != old_mcr)
-		pci_write_config_byte(dev, hwif->select_data + 1, new_mcr);
 }
 
 static int __devinit init_dma_hpt366(ide_hwif_t *hwif,
@@ -1621,6 +1625,10 @@ static struct pci_driver driver = {
 	.id_table	= hpt366_pci_tbl,
 	.probe		= hpt366_init_one,
 	.remove		= __devexit_p(hpt366_remove),
+#ifdef CONFIG_PM
+	.suspend	= ide_pci_suspend,
+	.resume		= ide_pci_resume,
+#endif
 };
 
 static int __init hpt366_ide_init(void)
