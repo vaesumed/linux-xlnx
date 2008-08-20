@@ -635,3 +635,252 @@ void sdio_f0_writeb(struct sdio_func *func, unsigned char b, unsigned int addr,
 		*err_ret = ret;
 }
 EXPORT_SYMBOL_GPL(sdio_f0_writeb);
+
+/**
+ *	sdio_read_bytes - low level byte mode transfer from an SDIO function
+ *	@func: SDIO function to access
+ *	@dst: buffer to store the data
+ *	@addr: address to begin reading from
+ *	@bytes: number of bytes to read
+ *
+ *	Performs a byte mode transfer from the address space of the given
+ *	SDIO function. The address is increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_read_bytes(struct sdio_func *func, void *dst,
+	unsigned int addr, int bytes)
+{
+	if (bytes > sdio_max_byte_size(func))
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 0, func->num, addr, 1,
+			dst, 1, bytes);
+}
+EXPORT_SYMBOL_GPL(sdio_read_bytes);
+
+/**
+ *	sdio_read_bytes_noincr - low level byte mode transfer from an SDIO function
+ *	@func: SDIO function to access
+ *	@dst: buffer to store the data
+ *	@addr: address to begin reading from
+ *	@bytes: number of bytes to read
+ *
+ *	Performs a byte mode transfer from the address space of the given
+ *	SDIO function. The address is NOT increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_read_bytes_noincr(struct sdio_func *func, void *dst,
+	unsigned int addr, int bytes)
+{
+	if (bytes > sdio_max_byte_size(func))
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 0, func->num, addr, 0,
+			dst, 1, bytes);
+}
+EXPORT_SYMBOL_GPL(sdio_read_bytes_noincr);
+
+/**
+ *	sdio_read_blocks - low level block mode transfer from an SDIO function
+ *	@func: SDIO function to access
+ *	@dst: buffer to store the data
+ *	@addr: address to begin reading from
+ *	@block: number of blocks to read
+ *
+ *	Performs a block mode transfer from the address space of the given
+ *	SDIO function. The address is increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	The block size needs to be explicitly changed by calling
+ *	sdio_set_block_size().
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_read_blocks(struct sdio_func *func, void *dst,
+	unsigned int addr, int blocks)
+{
+	if (!func->card->cccr.multi_block)
+		return -EINVAL;
+
+	if (blocks > func->card->host->max_blk_count)
+		return -EINVAL;
+	if (blocks > (func->card->host->max_seg_size / func->cur_blksize))
+		return -EINVAL;
+	if (blocks > 511)
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 0, func->num, addr, 1,
+			dst, blocks, func->cur_blksize);
+}
+EXPORT_SYMBOL_GPL(sdio_read_blocks);
+
+/**
+ *	sdio_read_blocks_noincr - low level block mode transfer from an SDIO function
+ *	@func: SDIO function to access
+ *	@dst: buffer to store the data
+ *	@addr: address to begin reading from
+ *	@block: number of blocks to read
+ *
+ *	Performs a block mode transfer from the address space of the given
+ *	SDIO function. The address is NOT increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	The block size needs to be explicitly changed by calling
+ *	sdio_set_block_size().
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_read_blocks_noincr(struct sdio_func *func, void *dst,
+	unsigned int addr, int blocks)
+{
+	if (!func->card->cccr.multi_block)
+		return -EINVAL;
+
+	if (blocks > func->card->host->max_blk_count)
+		return -EINVAL;
+	if (blocks > (func->card->host->max_seg_size / func->cur_blksize))
+		return -EINVAL;
+	if (blocks > 511)
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 0, func->num, addr, 0,
+			dst, blocks, func->cur_blksize);
+}
+EXPORT_SYMBOL_GPL(sdio_read_blocks_noincr);
+
+/**
+ *	sdio_write_bytes - low level byte mode transfer to an SDIO function
+ *	@func: SDIO function to access
+ *	@addr: address to start writing to
+ *	@src: buffer that contains the data to write
+ *	@bytes: number of bytes to write
+ *
+ *	Performs a byte mode transfer to the address space of the given
+ *	SDIO function. The address is increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_write_bytes(struct sdio_func *func, unsigned int addr,
+	 void *src, int bytes)
+{
+	if (bytes > sdio_max_byte_size(func))
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 1, func->num, addr, 1,
+			src, 1, bytes);
+}
+EXPORT_SYMBOL_GPL(sdio_write_bytes);
+
+/**
+ *	sdio_write_bytes_noincr - low level byte mode transfer to an SDIO function
+ *	@func: SDIO function to access
+ *	@addr: address to start writing to
+ *	@src: buffer that contains the data to write
+ *	@bytes: number of bytes to write
+ *
+ *	Performs a byte mode transfer to the address space of the given
+ *	SDIO function. The address is NOT increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_write_bytes_noincr(struct sdio_func *func, unsigned int addr,
+	void *src, int bytes)
+{
+	if (bytes > sdio_max_byte_size(func))
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 1, func->num, addr, 0,
+			src, 1, bytes);
+}
+EXPORT_SYMBOL_GPL(sdio_write_bytes_noincr);
+
+/**
+ *	sdio_read_blocks - low level block mode transfer to an SDIO function
+ *	@func: SDIO function to access
+ *	@addr: address to start writing to
+ *	@src: buffer that contains the data to write
+ *	@block: number of blocks to write
+ *
+ *	Performs a block mode transfer to the address space of the given
+ *	SDIO function. The address is increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	The block size needs to be explicitly changed by calling
+ *	sdio_set_block_size().
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_write_blocks(struct sdio_func *func, unsigned int addr,
+	void *src, int blocks)
+{
+	if (!func->card->cccr.multi_block)
+		return -EINVAL;
+
+	if (blocks > func->card->host->max_blk_count)
+		return -EINVAL;
+	if (blocks > (func->card->host->max_seg_size / func->cur_blksize))
+		return -EINVAL;
+	if (blocks > 511)
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 1, func->num, addr, 1,
+			src, blocks, func->cur_blksize);
+}
+EXPORT_SYMBOL_GPL(sdio_write_blocks);
+
+/**
+ *	sdio_read_blocks_noincr - low level block mode transfer to an SDIO function
+ *	@func: SDIO function to access
+ *	@addr: address to start writing to
+ *	@src: buffer that contains the data to write
+ *	@block: number of blocks to write
+ *
+ *	Performs a block mode transfer to the address space of the given
+ *	SDIO function. The address is NOT increased for each byte. Return
+ *	value indicates if the transfer succeeded or not.
+ *
+ *	The block size needs to be explicitly changed by calling
+ *	sdio_set_block_size().
+ *
+ *	Note: This is a low level function that should only be used as a
+ *	workaround when the hardware has a crappy register abstraction
+ *	that relies on specific SDIO operations.
+ */
+int sdio_write_blocks_noincr(struct sdio_func *func, unsigned int addr,
+	void *src, int blocks)
+{
+	if (!func->card->cccr.multi_block)
+		return -EINVAL;
+
+	if (blocks > func->card->host->max_blk_count)
+		return -EINVAL;
+	if (blocks > (func->card->host->max_seg_size / func->cur_blksize))
+		return -EINVAL;
+	if (blocks > 511)
+		return -EINVAL;
+
+	return mmc_io_rw_extended(func->card, 1, func->num, addr, 0,
+			src, blocks, func->cur_blksize);
+}
+EXPORT_SYMBOL_GPL(sdio_write_blocks_noincr);
+
