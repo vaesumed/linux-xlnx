@@ -1,5 +1,5 @@
-#ifndef __ASM_PARAVIRT_H
-#define __ASM_PARAVIRT_H
+#ifndef ASM_X86__PARAVIRT_H
+#define ASM_X86__PARAVIRT_H
 /* Various instructions on x86 need to be replaced for
  * para-virtualization: those hooks are defined here. */
 
@@ -124,6 +124,9 @@ struct pv_cpu_ops {
 				int entrynum, const void *desc, int size);
 	void (*write_idt_entry)(gate_desc *,
 				int entrynum, const gate_desc *gate);
+	void (*alloc_ldt)(struct desc_struct *ldt, unsigned entries);
+	void (*free_ldt)(struct desc_struct *ldt, unsigned entries);
+
 	void (*load_sp0)(struct tss_struct *tss, struct thread_struct *t);
 
 	void (*set_iopl_mask)(unsigned mask);
@@ -201,12 +204,6 @@ struct pv_irq_ops {
 
 struct pv_apic_ops {
 #ifdef CONFIG_X86_LOCAL_APIC
-	/*
-	 * Direct APIC operations, principally for VMI.  Ideally
-	 * these shouldn't be in this interface.
-	 */
-	void (*apic_write)(unsigned long reg, u32 v);
-	u32 (*apic_read)(unsigned long reg);
 	void (*setup_boot_clock)(void);
 	void (*setup_secondary_clock)(void);
 
@@ -258,13 +255,13 @@ struct pv_mmu_ops {
 	 * Hooks for allocating/releasing pagetable pages when they're
 	 * attached to a pagetable
 	 */
-	void (*alloc_pte)(struct mm_struct *mm, u32 pfn);
-	void (*alloc_pmd)(struct mm_struct *mm, u32 pfn);
-	void (*alloc_pmd_clone)(u32 pfn, u32 clonepfn, u32 start, u32 count);
-	void (*alloc_pud)(struct mm_struct *mm, u32 pfn);
-	void (*release_pte)(u32 pfn);
-	void (*release_pmd)(u32 pfn);
-	void (*release_pud)(u32 pfn);
+	void (*alloc_pte)(struct mm_struct *mm, unsigned long pfn);
+	void (*alloc_pmd)(struct mm_struct *mm, unsigned long pfn);
+	void (*alloc_pmd_clone)(unsigned long pfn, unsigned long clonepfn, unsigned long start, unsigned long count);
+	void (*alloc_pud)(struct mm_struct *mm, unsigned long pfn);
+	void (*release_pte)(unsigned long pfn);
+	void (*release_pmd)(unsigned long pfn);
+	void (*release_pud)(unsigned long pfn);
 
 	/* Pagetable manipulation functions */
 	void (*set_pte)(pte_t *ptep, pte_t pteval);
@@ -825,6 +822,16 @@ do {							\
 	(aux) = __aux;					\
 } while (0)
 
+static inline void paravirt_alloc_ldt(struct desc_struct *ldt, unsigned entries)
+{
+	PVOP_VCALL2(pv_cpu_ops.alloc_ldt, ldt, entries);
+}
+
+static inline void paravirt_free_ldt(struct desc_struct *ldt, unsigned entries)
+{
+	PVOP_VCALL2(pv_cpu_ops.free_ldt, ldt, entries);
+}
+
 static inline void load_TR_desc(void)
 {
 	PVOP_VCALL0(pv_cpu_ops.load_tr_desc);
@@ -899,19 +906,6 @@ static inline void slow_down_io(void)
 }
 
 #ifdef CONFIG_X86_LOCAL_APIC
-/*
- * Basic functions accessing APICs.
- */
-static inline void apic_write(unsigned long reg, u32 v)
-{
-	PVOP_VCALL2(pv_apic_ops.apic_write, reg, v);
-}
-
-static inline u32 apic_read(unsigned long reg)
-{
-	return PVOP_CALL1(unsigned long, pv_apic_ops.apic_read, reg);
-}
-
 static inline void setup_boot_clock(void)
 {
 	PVOP_VCALL0(pv_apic_ops.setup_boot_clock);
@@ -994,35 +988,35 @@ static inline void paravirt_pgd_free(struct mm_struct *mm, pgd_t *pgd)
 	PVOP_VCALL2(pv_mmu_ops.pgd_free, mm, pgd);
 }
 
-static inline void paravirt_alloc_pte(struct mm_struct *mm, unsigned pfn)
+static inline void paravirt_alloc_pte(struct mm_struct *mm, unsigned long pfn)
 {
 	PVOP_VCALL2(pv_mmu_ops.alloc_pte, mm, pfn);
 }
-static inline void paravirt_release_pte(unsigned pfn)
+static inline void paravirt_release_pte(unsigned long pfn)
 {
 	PVOP_VCALL1(pv_mmu_ops.release_pte, pfn);
 }
 
-static inline void paravirt_alloc_pmd(struct mm_struct *mm, unsigned pfn)
+static inline void paravirt_alloc_pmd(struct mm_struct *mm, unsigned long pfn)
 {
 	PVOP_VCALL2(pv_mmu_ops.alloc_pmd, mm, pfn);
 }
 
-static inline void paravirt_alloc_pmd_clone(unsigned pfn, unsigned clonepfn,
-					    unsigned start, unsigned count)
+static inline void paravirt_alloc_pmd_clone(unsigned long pfn, unsigned long clonepfn,
+					    unsigned long start, unsigned long count)
 {
 	PVOP_VCALL4(pv_mmu_ops.alloc_pmd_clone, pfn, clonepfn, start, count);
 }
-static inline void paravirt_release_pmd(unsigned pfn)
+static inline void paravirt_release_pmd(unsigned long pfn)
 {
 	PVOP_VCALL1(pv_mmu_ops.release_pmd, pfn);
 }
 
-static inline void paravirt_alloc_pud(struct mm_struct *mm, unsigned pfn)
+static inline void paravirt_alloc_pud(struct mm_struct *mm, unsigned long pfn)
 {
 	PVOP_VCALL2(pv_mmu_ops.alloc_pud, mm, pfn);
 }
-static inline void paravirt_release_pud(unsigned pfn)
+static inline void paravirt_release_pud(unsigned long pfn)
 {
 	PVOP_VCALL1(pv_mmu_ops.release_pud, pfn);
 }
@@ -1639,4 +1633,4 @@ static inline unsigned long __raw_local_irq_save(void)
 
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_PARAVIRT */
-#endif	/* __ASM_PARAVIRT_H */
+#endif /* ASM_X86__PARAVIRT_H */
