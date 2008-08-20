@@ -251,11 +251,11 @@ int pcmcia_map_mem_page(window_handle_t win, memreq_t *req)
 	struct pcmcia_socket *s;
 	if ((win == NULL) || (win->magic != WINDOW_MAGIC))
 		return -EINVAL;
+	s = win->sock;
 	if (req->Page != 0) {
 		ds_dbg(s, 0, "failure: requested page is zero\n");
 		return -EINVAL;
 	}
-	s = win->sock;
 	win->ctl.card_start = req->CardOffset;
 	if (s->ops->set_mem_map(s, &win->ctl) != 0) {
 		ds_dbg(s, 0, "failed to set_mem_map\n");
