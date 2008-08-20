@@ -417,7 +417,7 @@ static const struct tty_operations pts_unix98_ops = {
 	.chars_in_buffer = pty_chars_in_buffer,
 	.unthrottle = pty_unthrottle,
 	.set_termios = pty_set_termios,
-	.ioctl = pty_bsd_ioctl,
+	.ioctl = pty_unix98_ioctl,
 	.shutdown = pty_shutdown
 };
 
