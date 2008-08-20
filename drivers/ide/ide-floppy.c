@@ -49,6 +49,10 @@
 
 #include "ide-floppy.h"
 
+/* module parameters */
+static unsigned long debug_mask;
+module_param(debug_mask, ulong, 0644);
+
 /* define to see debug info */
 #define IDEFLOPPY_DEBUG_LOG	0
 
@@ -691,6 +695,8 @@ static int idefloppy_open(struct inode *inode, struct file *filp)
 		return -ENXIO;
 
 	drive = floppy->drive;
+
+	drive->debug_mask = debug_mask;
 
 	ide_debug_log(IDE_DBG_FUNC, "Call %s\n", __func__);
 
