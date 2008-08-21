@@ -195,6 +195,9 @@ struct class {
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
 
+	enum sysfs_tag_type tag_type;
+	const void *(*sysfs_tag)(struct device *dev);
+
 	struct pm_ops *pm;
 	struct class_private *p;
 };
