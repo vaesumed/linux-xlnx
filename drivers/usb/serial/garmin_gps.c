@@ -277,7 +277,7 @@ static inline int isAbortTrfCmnd(const unsigned char *buf)
 static void send_to_tty(struct usb_serial_port *port,
 			char *data, unsigned int actual_length)
 {
-	struct tty_struct *tty = port->port.tty;
+	struct tty_struct *tty = tty_port_tty_get(&port->port);
 
 	if (tty && actual_length) {
 
@@ -288,6 +288,7 @@ static void send_to_tty(struct usb_serial_port *port,
 		tty_insert_flip_string(tty, data, actual_length);
 		tty_flip_buffer_push(tty);
 	}
+	tty_kref_put(tty);
 }
 
 

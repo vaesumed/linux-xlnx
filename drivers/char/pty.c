@@ -388,7 +388,14 @@ static int pty_unix98_ioctl(struct tty_struct *tty, struct file *file,
 	return -ENOIOCTLCMD;
 }
 
-static const struct tty_operations pty_unix98_ops = {
+static void pty_shutdown(struct tty_struct *tty)
+{
+	/* We have our own method as we don't use the tty index */
+	kfree(tty->termios);
+	kfree(tty->termios_locked);
+}
+
+static const struct tty_operations ptm_unix98_ops = {
 	.open = pty_open,
 	.close = pty_close,
 	.write = pty_write,
@@ -397,7 +404,21 @@ static const struct tty_operations pty_unix98_ops = {
 	.chars_in_buffer = pty_chars_in_buffer,
 	.unthrottle = pty_unthrottle,
 	.set_termios = pty_set_termios,
-	.ioctl = pty_unix98_ioctl
+	.ioctl = pty_unix98_ioctl,
+	.shutdown = pty_shutdown
+};
+
+static const struct tty_operations pts_unix98_ops = {
+	.open = pty_open,
+	.close = pty_close,
+	.write = pty_write,
+	.write_room = pty_write_room,
+	.flush_buffer = pty_flush_buffer,
+	.chars_in_buffer = pty_chars_in_buffer,
+	.unthrottle = pty_unthrottle,
+	.set_termios = pty_set_termios,
+	.ioctl = pty_bsd_ioctl,
+	.shutdown = pty_shutdown
 };
 
 
@@ -427,7 +448,7 @@ static void __init unix98_pty_init(void)
 	ptm_driver->flags = TTY_DRIVER_RESET_TERMIOS | TTY_DRIVER_REAL_RAW |
 		TTY_DRIVER_DYNAMIC_DEV | TTY_DRIVER_DEVPTS_MEM;
 	ptm_driver->other = pts_driver;
-	tty_set_operations(ptm_driver, &pty_unix98_ops);
+	tty_set_operations(ptm_driver, &ptm_unix98_ops);
 
 	pts_driver->owner = THIS_MODULE;
 	pts_driver->driver_name = "pty_slave";
@@ -443,7 +464,7 @@ static void __init unix98_pty_init(void)
 	pts_driver->flags = TTY_DRIVER_RESET_TERMIOS | TTY_DRIVER_REAL_RAW |
 		TTY_DRIVER_DYNAMIC_DEV | TTY_DRIVER_DEVPTS_MEM;
 	pts_driver->other = ptm_driver;
-	tty_set_operations(pts_driver, &pty_ops);
+	tty_set_operations(pts_driver, &pts_unix98_ops);
 	
 	if (tty_register_driver(ptm_driver))
 		panic("Couldn't register Unix98 ptm driver");

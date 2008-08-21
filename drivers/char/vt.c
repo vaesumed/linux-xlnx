@@ -2136,26 +2136,8 @@ static int do_con_write(struct tty_struct *tty, const unsigned char *buf, int co
 	    release_console_sem();
 	    return 0;
 	}
-	release_console_sem();
-
 	orig_buf = buf;
 	orig_count = count;
-
-	/* At this point 'buf' is guaranteed to be a kernel buffer
-	 * and therefore no access to userspace (and therefore sleeping)
-	 * will be needed.  The con_buf_mtx serializes all tty based
-	 * console rendering and vcs write/read operations.  We hold
-	 * the console spinlock during the entire write.
-	 */
-
-	acquire_console_sem();
-
-	vc = tty->driver_data;
-	if (vc == NULL) {
-		printk(KERN_ERR "vt: argh, driver_data _became_ NULL !\n");
-		release_console_sem();
-		goto out;
-	}
 
 	himask = vc->vc_hi_font_mask;
 	charmask = himask ? 0x1ff : 0xff;
@@ -2583,8 +2565,6 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 	int lines;
 	int ret;
 
-	if (tty->driver->type != TTY_DRIVER_TYPE_CONSOLE)
-		return -EINVAL;
 	if (current->signal->tty != tty && !capable(CAP_SYS_ADMIN))
 		return -EPERM;
 	if (get_user(type, p))
@@ -2778,6 +2758,12 @@ static int con_open(struct tty_struct *tty, struct file *filp)
 		ret = vc_allocate(currcons);
 		if (ret == 0) {
 			struct vc_data *vc = vc_cons[currcons].d;
+
+			/* Still being freed */
+			if (vc->vc_tty) {
+				release_console_sem();
+				return -ERESTARTSYS;
+			}
 			tty->driver_data = vc;
 			vc->vc_tty = tty;
 
@@ -2807,25 +2793,18 @@ static int con_open(struct tty_struct *tty, struct file *filp)
  */
 static void con_close(struct tty_struct *tty, struct file *filp)
 {
-	mutex_lock(&tty_mutex);
-	acquire_console_sem();
-	if (tty && tty->count == 1) {
-		struct vc_data *vc = tty->driver_data;
+	/* Nothing to do - we defer to shutdown */
+}
 
-		if (vc)
-			vc->vc_tty = NULL;
-		tty->driver_data = NULL;
-		vcs_remove_sysfs(tty);
-		release_console_sem();
-		mutex_unlock(&tty_mutex);
-		/*
-		 * tty_mutex is released, but we still hold BKL, so there is
-		 * still exclusion against init_dev()
-		 */
-		return;
-	}
+static void con_shutdown(struct tty_struct *tty)
+{
+	struct vc_data *vc = tty->driver_data;
+	BUG_ON(vc == NULL);
+	acquire_console_sem();
+	vc->vc_tty = NULL;
+	vcs_remove_sysfs(tty);
 	release_console_sem();
-	mutex_unlock(&tty_mutex);
+	tty_shutdown(tty);
 }
 
 static int default_italic_color    = 2; // green (ASCII)
@@ -2950,6 +2929,7 @@ static const struct tty_operations con_ops = {
 	.throttle = con_throttle,
 	.unthrottle = con_unthrottle,
 	.resize = vt_resize,
+	.shutdown = con_shutdown
 };
 
 int __init vty_init(void)
