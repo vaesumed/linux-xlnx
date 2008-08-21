@@ -1049,7 +1049,7 @@ static struct p9_fid *p9_fid_create(struct p9_client *clnt)
 	fid->rdir_fpos = 0;
 	fid->rdir_pos = 0;
 	fid->rdir_fcall = NULL;
-	fid->uid = current->fsuid;
+	fid->uid = current_fsuid();
 	fid->clnt = clnt;
 	fid->aux = NULL;
 
