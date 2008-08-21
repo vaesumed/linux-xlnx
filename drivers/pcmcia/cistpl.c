@@ -1401,7 +1401,7 @@ int pccard_parse_tuple(tuple_t *tuple, cisparse_t *parse)
 	break;
     }
     if (ret)
-	    cs_dbg(s, 0, "parse_tuple failed %d\n", ret);
+	    __cs_dbg(0, "parse_tuple failed %d\n", ret);
     return ret;
 }
 EXPORT_SYMBOL(pccard_parse_tuple);
