@@ -32,7 +32,6 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/pci.h>
-#include <linux/hdreg.h>
 #include <linux/ide.h>
 #include <linux/init.h>
 
@@ -57,8 +56,10 @@ static struct pci_dev *isa_dev;
 
 static int check_in_drive_lists (ide_drive_t *drive, const char **list)
 {
+	char *m = (char *)&drive->id[ATA_ID_PROD];
+
 	while (*list)
-		if (!strcmp(*list++, drive->id->model))
+		if (!strcmp(*list++, m))
 			return 1;
 	return 0;
 }
@@ -152,7 +153,7 @@ static void svwks_set_dma_mode(ide_drive_t *drive, const u8 speed)
 
 	ide_hwif_t *hwif	= HWIF(drive);
 	struct pci_dev *dev	= to_pci_dev(hwif->dev);
-	u8 unit			= (drive->select.b.unit & 0x01);
+	u8 unit			= drive->dn & 1;
 
 	u8 ultra_enable	 = 0, ultra_timing = 0, dma_timing = 0;
 
@@ -174,7 +175,7 @@ static void svwks_set_dma_mode(ide_drive_t *drive, const u8 speed)
 	pci_write_config_byte(dev, 0x54, ultra_enable);
 }
 
-static unsigned int __devinit init_chipset_svwks(struct pci_dev *dev)
+static unsigned int init_chipset_svwks(struct pci_dev *dev)
 {
 	unsigned int reg;
 	u8 btr;
@@ -447,6 +448,10 @@ static struct pci_driver driver = {
 	.id_table	= svwks_pci_tbl,
 	.probe		= svwks_init_one,
 	.remove		= ide_pci_remove,
+#ifdef CONFIG_PM
+	.suspend	= ide_pci_suspend,
+	.resume		= ide_pci_resume,
+#endif
 };
 
 static int __init svwks_ide_init(void)
