@@ -11,6 +11,7 @@ obj-$(CONFIG_USB_CYTHERM)	+= cytherm.o
 obj-$(CONFIG_USB_EMI26)		+= emi26.o
 obj-$(CONFIG_USB_EMI62)		+= emi62.o
 obj-$(CONFIG_USB_FTDI_ELAN)	+= ftdi-elan.o
+obj-$(CONFIG_USB_GOTEMP)	+= gotemp.o
 obj-$(CONFIG_USB_IDMOUSE)	+= idmouse.o
 obj-$(CONFIG_USB_IOWARRIOR)	+= iowarrior.o
 obj-$(CONFIG_USB_ISIGHTFW)	+= isight_firmware.o
@@ -26,6 +27,7 @@ obj-$(CONFIG_USB_RIO500)	+= rio500.o
 obj-$(CONFIG_USB_TEST)		+= usbtest.o
 obj-$(CONFIG_USB_TRANCEVIBRATOR)	+= trancevibrator.o
 obj-$(CONFIG_USB_USS720)	+= uss720.o
+obj-$(CONFIG_USB_SEVSEG)	+= usbsevseg.o
 
 obj-$(CONFIG_USB_SISUSBVGA)	+= sisusbvga/
 
