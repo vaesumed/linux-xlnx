@@ -222,22 +222,24 @@ static int ocfs2_xattr_extend_allocation(struct inode *inode,
 	struct ocfs2_alloc_context *meta_ac = NULL;
 	enum ocfs2_alloc_restarted why;
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
-	struct ocfs2_extent_list *root_el = &xv->xr_list;
 	u32 prev_clusters, logical_start = le32_to_cpu(xv->xr_clusters);
+	struct ocfs2_extent_tree et;
 
 	mlog(0, "(clusters_to_add for xattr= %u)\n", clusters_to_add);
 
+	ocfs2_get_xattr_value_extent_tree(&et, inode, xattr_bh, xv);
+
 restart_all:
 
-	status = ocfs2_lock_allocators(inode, xattr_bh, root_el,
-				       clusters_to_add, 0, &data_ac,
-				       &meta_ac, OCFS2_XATTR_VALUE_EXTENT, xv);
+	status = ocfs2_lock_allocators(inode, &et, clusters_to_add, 0,
+				       &data_ac, &meta_ac);
 	if (status) {
 		mlog_errno(status);
 		goto leave;
 	}
 
-	credits = ocfs2_calc_extend_credits(osb->sb, root_el, clusters_to_add);
+	credits = ocfs2_calc_extend_credits(osb->sb, et.et_root_el,
+					    clusters_to_add);
 	handle = ocfs2_start_trans(osb, credits);
 	if (IS_ERR(handle)) {
 		status = PTR_ERR(handle);
@@ -260,14 +262,11 @@ restarted_transaction:
 					     &logical_start,
 					     clusters_to_add,
 					     0,
-					     xattr_bh,
-					     root_el,
+					     &et,
 					     handle,
 					     data_ac,
 					     meta_ac,
-					     &why,
-					     OCFS2_XATTR_VALUE_EXTENT,
-					     xv);
+					     &why);
 	if ((status < 0) && (status != -EAGAIN)) {
 		if (status != -ENOSPC)
 			mlog_errno(status);
@@ -292,7 +291,7 @@ restarted_transaction:
 			mlog(0, "restarting transaction.\n");
 			/* TODO: This can be more intelligent. */
 			credits = ocfs2_calc_extend_credits(osb->sb,
-							    root_el,
+							    et.et_root_el,
 							    clusters_to_add);
 			status = ocfs2_extend_trans(handle, credits);
 			if (status < 0) {
@@ -324,6 +323,7 @@ leave:
 		goto restart_all;
 	}
 
+	ocfs2_put_extent_tree(&et);
 	return status;
 }
 
@@ -339,11 +339,13 @@ static int __ocfs2_remove_xattr_range(struct inode *inode,
 	struct inode *tl_inode = osb->osb_tl_inode;
 	handle_t *handle;
 	struct ocfs2_alloc_context *meta_ac = NULL;
+	struct ocfs2_extent_tree et;
 
-	ret = ocfs2_lock_allocators(inode, root_bh, &xv->xr_list,
-				    0, 1, NULL, &meta_ac,
-				    OCFS2_XATTR_VALUE_EXTENT, xv);
+	ocfs2_get_xattr_value_extent_tree(&et, inode, root_bh, xv);
+
+	ret = ocfs2_lock_allocators(inode, &et, 0, 1, NULL, &meta_ac);
 	if (ret) {
+		ocfs2_put_extent_tree(&et);
 		mlog_errno(ret);
 		return ret;
 	}
@@ -372,8 +374,8 @@ static int __ocfs2_remove_xattr_range(struct inode *inode,
 		goto out_commit;
 	}
 
-	ret = ocfs2_remove_extent(inode, root_bh, cpos, len, handle, meta_ac,
-				  dealloc, OCFS2_XATTR_VALUE_EXTENT, xv);
+	ret = ocfs2_remove_extent(inode, &et, cpos, len, handle, meta_ac,
+				  dealloc);
 	if (ret) {
 		mlog_errno(ret);
 		goto out_commit;
@@ -399,6 +401,7 @@ out:
 	if (meta_ac)
 		ocfs2_free_alloc_context(meta_ac);
 
+	ocfs2_put_extent_tree(&et);
 	return ret;
 }
 
@@ -3638,26 +3641,24 @@ static int ocfs2_add_new_xattr_cluster(struct inode *inode,
 	struct ocfs2_alloc_context *data_ac = NULL;
 	struct ocfs2_alloc_context *meta_ac = NULL;
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
-	struct ocfs2_xattr_block *xb =
-			(struct ocfs2_xattr_block *)root_bh->b_data;
-	struct ocfs2_xattr_tree_root *xb_root = &xb->xb_attrs.xb_root;
-	struct ocfs2_extent_list *root_el = &xb_root->xt_list;
-	enum ocfs2_extent_tree_type type = OCFS2_XATTR_TREE_EXTENT;
+	struct ocfs2_extent_tree et;
 
 	mlog(0, "Add new xattr cluster for %llu, previous xattr hash = %u, "
 	     "previous xattr blkno = %llu\n",
 	     (unsigned long long)OCFS2_I(inode)->ip_blkno,
 	     prev_cpos, prev_blkno);
 
-	ret = ocfs2_lock_allocators(inode, root_bh, root_el,
-				    clusters_to_add, 0, &data_ac,
-				    &meta_ac, type, NULL);
+	ocfs2_get_xattr_tree_extent_tree(&et, inode, root_bh);
+
+	ret = ocfs2_lock_allocators(inode, &et, clusters_to_add, 0,
+				    &data_ac, &meta_ac);
 	if (ret) {
 		mlog_errno(ret);
 		goto leave;
 	}
 
-	credits = ocfs2_calc_extend_credits(osb->sb, root_el, clusters_to_add);
+	credits = ocfs2_calc_extend_credits(osb->sb, et.et_root_el,
+					    clusters_to_add);
 	handle = ocfs2_start_trans(osb, credits);
 	if (IS_ERR(handle)) {
 		ret = PTR_ERR(handle);
@@ -3721,9 +3722,8 @@ static int ocfs2_add_new_xattr_cluster(struct inode *inode,
 
 	mlog(0, "Insert %u clusters at block %llu for xattr at %u\n",
 	     num_bits, block, v_start);
-	ret = ocfs2_xattr_tree_insert_extent(osb, handle, inode, root_bh,
-					     v_start, block, num_bits,
-					     0, meta_ac);
+	ret = ocfs2_insert_extent(osb, handle, inode, &et, v_start, block,
+				  num_bits, 0, meta_ac);
 	if (ret < 0) {
 		mlog_errno(ret);
 		goto leave;
@@ -3743,6 +3743,7 @@ leave:
 	if (meta_ac)
 		ocfs2_free_alloc_context(meta_ac);
 
+	ocfs2_put_extent_tree(&et);
 	return ret;
 }
 
@@ -4347,9 +4348,11 @@ static int ocfs2_rm_xattr_cluster(struct inode *inode,
 	handle_t *handle;
 	struct ocfs2_xattr_block *xb =
 			(struct ocfs2_xattr_block *)root_bh->b_data;
-	struct ocfs2_extent_list *root_el = &xb->xb_attrs.xb_root.xt_list;
 	struct ocfs2_alloc_context *meta_ac = NULL;
 	struct ocfs2_cached_dealloc_ctxt dealloc;
+	struct ocfs2_extent_tree et;
+
+	ocfs2_get_xattr_tree_extent_tree(&et, inode, root_bh);
 
 	ocfs2_init_dealloc_ctxt(&dealloc);
 
@@ -4358,10 +4361,9 @@ static int ocfs2_rm_xattr_cluster(struct inode *inode,
 
 	ocfs2_remove_xattr_clusters_from_cache(inode, blkno, len);
 
-	ret = ocfs2_lock_allocators(inode, root_bh, root_el,
-				    0, 1, NULL, &meta_ac,
-				    OCFS2_XATTR_TREE_EXTENT, NULL);
+	ret = ocfs2_lock_allocators(inode, &et, 0, 1, NULL, &meta_ac);
 	if (ret) {
+		ocfs2_put_extent_tree(&et);
 		mlog_errno(ret);
 		return ret;
 	}
@@ -4390,8 +4392,8 @@ static int ocfs2_rm_xattr_cluster(struct inode *inode,
 		goto out_commit;
 	}
 
-	ret = ocfs2_remove_extent(inode, root_bh, cpos, len, handle, meta_ac,
-				  &dealloc, OCFS2_XATTR_TREE_EXTENT, NULL);
+	ret = ocfs2_remove_extent(inode, &et, cpos, len, handle, meta_ac,
+				  &dealloc);
 	if (ret) {
 		mlog_errno(ret);
 		goto out_commit;
@@ -4421,6 +4423,7 @@ out:
 
 	ocfs2_run_deallocs(osb, &dealloc);
 
+	ocfs2_put_extent_tree(&et);
 	return ret;
 }
 
