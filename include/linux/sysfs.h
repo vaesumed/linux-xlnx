@@ -80,6 +80,15 @@ struct sysfs_ops {
 
 struct sysfs_dirent;
 
+enum sysfs_tag_type {
+	SYSFS_TAG_TYPE_NONE = 0,
+	SYSFS_TAG_TYPES
+};
+
+struct sysfs_tag_type_operations {
+	const void *(*mount_tag)(void);
+};
+
 #ifdef CONFIG_SYSFS
 
 int sysfs_schedule_callback(struct kobject *kobj, void (*func)(void *),
@@ -126,6 +135,12 @@ struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
 struct sysfs_dirent *sysfs_get(struct sysfs_dirent *sd);
 void sysfs_put(struct sysfs_dirent *sd);
 void sysfs_printk_last_file(void);
+
+int sysfs_make_tagged_dir(struct kobject *, enum sysfs_tag_type tag_type);
+int sysfs_register_tag_type(enum sysfs_tag_type type,
+			    struct sysfs_tag_type_operations *ops);
+void sysfs_exit_tag(enum sysfs_tag_type type, const void *tag);
+
 int __must_check sysfs_init(void);
 
 #else /* CONFIG_SYSFS */
@@ -246,6 +261,22 @@ static inline struct sysfs_dirent *sysfs_get(struct sysfs_dirent *sd)
 	return NULL;
 }
 static inline void sysfs_put(struct sysfs_dirent *sd)
+{
+}
+
+static inline int sysfs_make_tagged_dir(struct kobject *kobj,
+					enum sysfs_tag_type tag_type)
+{
+	return 0;
+}
+
+static inline int sysfs_register_tag_type(enum sysfs_tag_type type,
+					  struct sysfs_tag_type_operations *ops)
+{
+	return 0;
+}
+
+static inline void sysfs_exit_tag(enum sysfs_tag_type type, const void *tag)
 {
 }
 

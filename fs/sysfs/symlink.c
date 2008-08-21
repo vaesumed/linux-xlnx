@@ -119,7 +119,7 @@ void sysfs_remove_link(struct kobject * kobj, const char * name)
 	else
 		parent_sd = kobj->sd;
 
-	sysfs_hash_and_remove(parent_sd, name);
+	sysfs_hash_and_remove(kobj, parent_sd, name);
 }
 
 static int sysfs_get_target_path(struct sysfs_dirent *parent_sd,

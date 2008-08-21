@@ -45,6 +45,7 @@ struct sysfs_dirent {
 	struct sysfs_dirent	*s_sibling;
 	const char		*s_name;
 
+	const void		*s_tag;
 	union {
 		struct sysfs_elem_dir		s_dir;
 		struct sysfs_elem_symlink	s_symlink;
@@ -67,12 +68,20 @@ struct sysfs_dirent {
 #define SYSFS_KOBJ_LINK			0x0008
 #define SYSFS_COPY_NAME			(SYSFS_DIR | SYSFS_KOBJ_LINK)
 
-#define SYSFS_FLAG_MASK			~SYSFS_TYPE_MASK
-#define SYSFS_FLAG_REMOVED		0x0200
+#define SYSFS_TAG_TYPE_MASK		0xff00
+#define SYSFS_TAG_TYPE_SHIFT		8
+
+#define SYSFS_FLAG_MASK			~(SYSFS_TYPE_MASK | SYSFS_TAG_TYPE_MASK)
+#define SYSFS_FLAG_REMOVED		0x020000
 
 static inline unsigned int sysfs_type(struct sysfs_dirent *sd)
 {
 	return sd->s_flags & SYSFS_TYPE_MASK;
+}
+
+static inline enum sysfs_tag_type sysfs_tag_type(struct sysfs_dirent *sd)
+{
+	return (sd->s_flags & SYSFS_TAG_TYPE_MASK) >> SYSFS_TAG_TYPE_SHIFT;
 }
 
 /*
@@ -87,6 +96,7 @@ struct sysfs_addrm_cxt {
 
 struct sysfs_super_info {
 	int	grabbed;
+	const void *tag[SYSFS_TAG_TYPES];
 };
 
 #define sysfs_info(SB) ((struct sysfs_super_info *)(SB)->s_fs_info)
@@ -98,6 +108,7 @@ extern struct sysfs_dirent sysfs_root;
 extern struct super_block *sysfs_sb;
 extern struct kmem_cache *sysfs_dir_cachep;
 extern struct file_system_type sysfs_fs_type;
+extern struct sysfs_tag_type_operations *tag_ops[SYSFS_TAG_TYPES];
 
 void sysfs_grab_supers(void);
 void sysfs_release_supers(void);
@@ -124,6 +135,7 @@ void sysfs_remove_one(struct sysfs_addrm_cxt *acxt, struct sysfs_dirent *sd);
 void sysfs_addrm_finish(struct sysfs_addrm_cxt *acxt);
 
 struct sysfs_dirent *sysfs_find_dirent(struct sysfs_dirent *parent_sd,
+				       const void *tag,
 				       const unsigned char *name);
 struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
 				      const unsigned char *name);
@@ -158,7 +170,8 @@ static inline void __sysfs_put(struct sysfs_dirent *sd)
 struct inode *sysfs_get_inode(struct sysfs_dirent *sd);
 int sysfs_sd_setattr(struct sysfs_dirent *sd, struct inode *inode, struct iattr *iattr);
 int sysfs_setattr(struct dentry *dentry, struct iattr *iattr);
-int sysfs_hash_and_remove(struct sysfs_dirent *dir_sd, const char *name);
+int sysfs_hash_and_remove(struct kobject *kobj, struct sysfs_dirent *dir_sd,
+			  const char *name);
 int sysfs_inode_init(void);
 
 /*

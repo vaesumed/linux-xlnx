@@ -23,7 +23,7 @@ static void remove_files(struct sysfs_dirent *dir_sd, struct kobject *kobj,
 	int i;
 
 	for (i = 0, attr = grp->attrs; *attr; i++, attr++)
-		sysfs_hash_and_remove(dir_sd, (*attr)->name);
+		sysfs_hash_and_remove(kobj, dir_sd, (*attr)->name);
 }
 
 static int create_files(struct sysfs_dirent *dir_sd, struct kobject *kobj,
@@ -39,7 +39,7 @@ static int create_files(struct sysfs_dirent *dir_sd, struct kobject *kobj,
 		 * visibility.  Do this by first removing then
 		 * re-adding (if required) the file */
 		if (update)
-			sysfs_hash_and_remove(dir_sd, (*attr)->name);
+			sysfs_hash_and_remove(kobj, dir_sd, (*attr)->name);
 		if (grp->is_visible) {
 			mode = grp->is_visible(kobj, *attr, i);
 			if (!mode)

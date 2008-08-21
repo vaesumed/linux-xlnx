@@ -35,12 +35,15 @@ static const struct super_operations sysfs_ops = {
 struct sysfs_dirent sysfs_root = {
 	.s_name		= "",
 	.s_count	= ATOMIC_INIT(1),
-	.s_flags	= SYSFS_DIR,
+	.s_flags	= SYSFS_DIR | (SYSFS_TAG_TYPE_NONE << SYSFS_TAG_TYPE_SHIFT),
 	.s_mode		= S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO,
 	.s_ino		= 1,
 };
 
-static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
+struct sysfs_tag_type_operations *tag_ops[SYSFS_TAG_TYPES];
+
+static int sysfs_fill_super(struct super_block *sb, void *data, int silent,
+	const void *tags[SYSFS_TAG_TYPES])
 {
 	struct sysfs_super_info *info = NULL;
 	struct inode *inode = NULL;
@@ -76,8 +79,10 @@ static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_err;
 	}
 	root->d_fsdata = &sysfs_root;
+	root->d_sb = sb;
 	sb->s_root = root;
 	sb->s_fs_info = info;
+	memcpy(info->tag, tags, sizeof(info->tag[0])*SYSFS_TAG_TYPES);
 	return 0;
 
 out_err:
@@ -89,20 +94,74 @@ out_err:
 	return error;
 }
 
+static int sysfs_test_super(struct super_block *sb, void *ptr)
+{
+	const void **tag = ptr;
+	struct sysfs_super_info *info = sysfs_info(sb);
+	enum sysfs_tag_type type;
+	int found = 1;
+
+	for (type = SYSFS_TAG_TYPE_NONE; type < SYSFS_TAG_TYPES; type++) {
+		if (info->tag[type] != tag[type]) {
+			found = 0;
+			break;
+		}
+	}
+
+	return found;
+}
+
 static int sysfs_get_sb(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data, struct vfsmount *mnt)
 {
-	int rc;
+	const void *tag[SYSFS_TAG_TYPES];
+	struct super_block *sb;
+	int error;
+	enum sysfs_tag_type type;
+
+	for (type = SYSFS_TAG_TYPE_NONE; type < SYSFS_TAG_TYPES; type++) {
+		tag[type] = NULL;
+		if (!tag_ops[type])
+			continue;
+		tag[type] = tag_ops[type]->mount_tag();
+	}
+
 	mutex_lock(&sysfs_rename_mutex);
-	rc = get_sb_single(fs_type, flags, data, sysfs_fill_super, mnt);
+	sb = sget(fs_type, sysfs_test_super, set_anon_super, tag);
+	if (IS_ERR(sb)) {
+		error = PTR_ERR(sb);
+		goto out;
+	}
+	if (!sb->s_root) {
+		sb->s_flags = flags;
+		error = sysfs_fill_super(sb, data, flags & MS_SILENT ? 1 : 0,
+					tag);
+		if (error) {
+			up_write(&sb->s_umount);
+			deactivate_super(sb);
+			goto out;
+		}
+		sb->s_flags |= MS_ACTIVE;
+	}
+	do_remount_sb(sb, flags, data, 0);
+	error = simple_set_mnt(mnt, sb);
+out:
 	mutex_unlock(&sysfs_rename_mutex);
-	return rc;
+	return error;
+}
+
+static void sysfs_kill_sb(struct super_block *sb)
+{
+	struct sysfs_super_info *info = sysfs_info(sb);
+
+	kill_anon_super(sb);
+	kfree(info);
 }
 
 struct file_system_type sysfs_fs_type = {
 	.name		= "sysfs",
 	.get_sb		= sysfs_get_sb,
-	.kill_sb	= kill_anon_super,
+	.kill_sb	= sysfs_kill_sb,
 };
 
 void sysfs_grab_supers(void)
@@ -144,6 +203,50 @@ restart:
 		goto restart;
 	}
 	spin_unlock(&sb_lock);
+}
+
+int sysfs_register_tag_type(enum sysfs_tag_type type, struct sysfs_tag_type_operations *ops)
+{
+	int error;
+
+	mutex_lock(&sysfs_rename_mutex);
+
+	error = -EINVAL;
+	if (type >= SYSFS_TAG_TYPES)
+		goto out;
+
+	error = -EINVAL;
+	if (type <= SYSFS_TAG_TYPE_NONE)
+		goto out;
+
+	error = -EBUSY;
+	if (tag_ops[type])
+		goto out;
+
+	error = 0;
+	tag_ops[type] = ops;
+
+out:
+	mutex_unlock(&sysfs_rename_mutex);
+	return error;
+}
+
+void sysfs_exit_tag(enum sysfs_tag_type type, const void *tag)
+{
+	/* Allow the tag to go away while sysfs is still mounted. */
+	struct super_block *sb;
+	mutex_lock(&sysfs_rename_mutex);
+	sysfs_grab_supers();
+	mutex_lock(&sysfs_mutex);
+	list_for_each_entry(sb, &sysfs_fs_type.fs_supers, s_instances) {
+		struct sysfs_super_info *info = sysfs_info(sb);
+		if (info->tag[type] != tag)
+			continue;
+		info->tag[type] = NULL;
+	}
+	mutex_unlock(&sysfs_mutex);
+	sysfs_release_supers();
+	mutex_unlock(&sysfs_rename_mutex);
 }
 
 int __init sysfs_init(void)

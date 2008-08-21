@@ -476,9 +476,12 @@ void sysfs_notify(struct kobject *k, char *dir, char *attr)
 	mutex_lock(&sysfs_mutex);
 
 	if (sd && dir)
-		sd = sysfs_find_dirent(sd, dir);
+		/* Only directories are tagged, so no need to pass
+		 * a tag explicitly.
+		 */
+		sd = sysfs_find_dirent(sd, NULL, dir);
 	if (sd && attr)
-		sd = sysfs_find_dirent(sd, attr);
+		sd = sysfs_find_dirent(sd, NULL, attr);
 	if (sd)
 		sysfs_notify_dirent(sd);
 
@@ -640,7 +643,7 @@ EXPORT_SYMBOL_GPL(sysfs_chmod_file);
 
 void sysfs_remove_file(struct kobject * kobj, const struct attribute * attr)
 {
-	sysfs_hash_and_remove(kobj->sd, attr->name);
+	sysfs_hash_and_remove(kobj, kobj->sd, attr->name);
 }
 
 
@@ -660,7 +663,7 @@ void sysfs_remove_file_from_group(struct kobject *kobj,
 	else
 		dir_sd = sysfs_get(kobj->sd);
 	if (dir_sd) {
-		sysfs_hash_and_remove(dir_sd, attr->name);
+		sysfs_hash_and_remove(kobj, dir_sd, attr->name);
 		sysfs_put(dir_sd);
 	}
 }
