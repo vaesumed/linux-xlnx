@@ -684,7 +684,7 @@ static int bt3c_check_config(struct pcmcia_device *p_dev,
 			     unsigned int vcc,
 			     void *priv_data)
 {
-        unsigned long try = (unsigned long) priv_data;
+	unsigned long try = (unsigned long) priv_data;
 
 	if (cf->vpp1.present & (1 << CISTPL_POWER_VNOM))
 		p_dev->conf.Vpp = cf->vpp1.param[CISTPL_POWER_VNOM] / 10000;
