@@ -90,21 +90,6 @@ int sysfs_create_link(struct kobject *kobj, struct kobject *target,
 }
 
 /**
- *	sysfs_create_link_nowarn - create symlink between two objects.
- *	@kobj:	object whose directory we're creating the link in.
- *	@target:	object we're pointing to.
- *	@name:		name of the symlink.
- *
- *	This function does the same as sysf_create_link(), but it
- *	doesn't warn if the link already exists.
- */
-int sysfs_create_link_nowarn(struct kobject *kobj, struct kobject *target,
-			     const char *name)
-{
-	return sysfs_do_create_link(kobj, target, name, 0);
-}
-
-/**
  *	sysfs_delete_link - remove symlink in object's directory.
  *	@kobj:	object we're acting for.
  *	@targ:	object we're pointing to.
