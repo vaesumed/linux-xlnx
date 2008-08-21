@@ -1,0 +1,143 @@
+Importing driver-core.current based on 2.6.27-rc3-git6
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 1fca25427482387689fa27594c992a961d98768f
+HEAD is now at 1fca254 Merge branch 'release' of git://git.kernel.org/pub/scm/linux/kernel/git/aegl/linux-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+kobject-replace-all-occurrences-of-with-instead-of-only-the-first-one.patch
+japanese-translation-of-documentation-submitchecklist.patch
+drivers-base-driver.c-remove-unused-to_dev-macro.patch
+dev_printk-constify-the-dev-argument.patch
+driver-model-anti-oopsing-medicine.patch
+pm-don-t-skip-device-pm-init-when-config_pm_sleep-isn-t-set-and-config_pm-is-set.patch
+driver-core-add-init_name-to-struct-device.patch
+pm-remove-warn_on-from-device_pm_add.patch
+block-fix-partial-read-of-proc-partitions-diskstats.patch
+block-drop-references-taken-by-class_find_device.patch
+uio-uio_pdrv-fix-memory-leak.patch
+uio-uio_pdrv-fix-license-specification.patch
+uio-generic-irq-handling-for-some-uio-platform-devices.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 58161dc88e6dd2055f1e1427c4f68d8bc3731d1c
+HEAD is now at 58161dc UIO: generic irq handling for some uio platform devices
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-isp1760-fixed-trivial-math-in-comment.patch
+usb-serial-option-support-hsdpa-modem-a2502.patch
+usb-fix-bug-in-usb_unlink_anchored_urbs.patch
+usb-cdc-acm-quirk-for-conexant-cx93010-usb-modem.patch
+usb-fix-pxa27x_udc-usb-speed-handling.patch
+usb-musb-get-rid-of-procfs-entry.patch
+usb-musb-get-rid-of-musb_loglevel-and-use-parameter.patch
+usb-cdc-acm-don-t-unlock-acm-mutex-on-error-path.patch
+usb-add-udev-argument-to-interface-suspend-resume-functions.patch
+usb-defer-set-interface-for-suspended-devices.patch
+usb-add-new-pm-callback-methods-for-usb.patch
+usb-don-t-rebind-before-complete-callback.patch
+usb-automatically-enable-rhsc-interrupts.patch
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard ffb40f0433b5de78163707b28977fa4b648b4a8f
+HEAD is now at ffb40f0 USB: automatically enable RHSC interrupts
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+sysfs-crash-debugging.patch
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+usb-gadget-link-fixes-for-serial-gadget.patch
+usb-gadget-link-fixes-for-gadget-zero.patch
+usb-gadget-link-fixes-for-midi-gadget.patch
+usb-gadget-link-fixes-for-printer-gadget.patch
+usb-gadget-link-fixes-for-storage-gadget.patch
+usb-gadget-link-fixes-for-cdc-composite-gadget.patch
+usb-gadget-link-fixes-for-network-gadget.patch
+driver-core-basic-infrastructure-for-per-module-dynamic-debug-messages.patch
+.dotest/patch:737: space before tab in indent.
+	  	$echo "set enabled=1 <module_name>" > dynamic_printk/modules
+.dotest/patch:741: space before tab in indent.
+	  	$echo "set enabled=0 <module_name>" > dynamic_printk/modules
+warning: 2 lines add whitespace errors.
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+drivers-firmware-iscsi_ibft.c-make-3-functions-static.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+kobject-cleanup-kobject_rename-and-config_sysfs.patch
+sysfs-support-for-preventing-unmounts.patch
+sysfs-sysfs_get_dentry-add-a-sb-parameter.patch
+sysfs-implement-__sysfs_get_dentry.patch
+sysfs-rename-support-multiple-superblocks.patch
+sysfs-introduce-sysfs_sd_setattr-and-fix-sysfs_chmod.patch
+sysfs-sysfs_chmod_file-handle-multiple-superblocks.patch
+.dotest/patch:37: space before tab in indent.
+ 		goto out;
+warning: 1 line adds whitespace errors.
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard bfac15236957793c8dac71b7b5f179da5d139086
+HEAD is now at bfac152 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+usb-removed-unused-include-version.h.patch
+usb-let-some-usb-host-controllers-get-irq-flags-from-resource.patch
+usb-gadget-kconfig-cleanup.patch
+usb-gadget-dummy_hcd-implement-set_wedge.patch
+usb-gadget-net2280-implement-set_wedge.patch
+usb-gadget-function-activation-deactivation.patch
+usb-gadget-cdc-obex-glue.patch
+usb-gadget-defer-obex-enumeration.patch
+fsl_usb2_udc-make-dr_ep_setup-function-static.patch
+fsl_usb2_udc-remove-check-for-udc-null-in-dr_controller_setup.patch
+fsl_usb2_udc-fix-some-sparse-warnings-and-remove-redundant-code.patch
+fsl_usb2_udc-clean-up-whitespace-in-errors-and-warnings.patch
+fsl_usb2_udc-clean-up-whitespace-in-proc-debugging-output.patch
+fsl_usb2_udc-initialize-spinlock-earlier.patch
+fsl_usb2_udc-rename-the-arguments-of-the-fsl_writel-macro.patch
+fsl_usb2_udc-uninline-udc_reset_ep_queue.patch
+fsl_usb2_udc-make-fsl_queue_td-return-type-void.patch
+fsl_usb2_udc-add-a-wmb-before-priming-endpoint.patch
+fsl_usb2_udc-fix-oops-on-probe-failure.patch
+usb-added-driver-for-a-delcom-usb-7-segment-led-display.patch
+hso-fix-oops-in-read-write-callbacks.patch
+hso-fix-refcounting-on-the-ttyhsx-devices.patch
+usb-hso-make-tty_operations-const.patch
+usb-hso-minor-fixes-due-to-code-review.patch
+hso-icon-322-detection-fix.patch
+hso-dev_kfree_skb-crash-fix.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+.dotest/patch:2027: space before tab in indent.
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+warning: 1 line adds whitespace errors.
+usb-remove-use-of-err-in-drivers-usb-serial.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series m68k
+Unchanged quilt series rr
+Unchanged quilt series ttydev
