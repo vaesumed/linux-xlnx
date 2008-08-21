@@ -1550,6 +1550,8 @@ static int azx_position_ok(struct azx *chip, struct azx_dev *azx_dev)
 			chip->position_fix = POS_FIX_POSBUF;
 	}
 
+	if (!bdl_pos_adj[chip->dev_index])
+		return 1; /* no delayed ack */
 	if (pos % azx_dev->period_bytes > azx_dev->period_bytes / 2)
 		return 0; /* NG - it's below the period boundary */
 	return 1; /* OK, it's fine */
@@ -1637,7 +1639,8 @@ static int __devinit create_codec_pcm(struct azx *chip, struct hda_codec *codec,
 	if (!cpcm->stream[0].substreams && !cpcm->stream[1].substreams)
 		return 0;
 
-	snd_assert(cpcm->name, return -EINVAL);
+	if (snd_BUG_ON(!cpcm->name))
+		return -EINVAL;
 
 	err = snd_pcm_new(chip->card, cpcm->name, cpcm->device,
 			  cpcm->stream[0].substreams,
