@@ -135,6 +135,17 @@ static void remove_class_attrs(struct class *cls)
 	}
 }
 
+static int class_setup_tagging(struct class *cls)
+{
+	enum sysfs_tag_type type;
+
+	type = cls->tag_type;
+	if (type == SYSFS_TAG_TYPE_NONE)
+		return 0;
+
+	return sysfs_make_tagged_dir(&cls->p->class_subsys.kobj, type);
+}
+
 int __class_register(struct class *cls, struct lock_class_key *key)
 {
 	struct class_private *cp;
@@ -171,13 +182,24 @@ int __class_register(struct class *cls, struct lock_class_key *key)
 	cls->p = cp;
 
 	error = kset_register(&cp->class_subsys);
-	if (error) {
-		kfree(cp);
-		return error;
-	}
+	if (error)
+		goto out_free_cp;
+
+	error = class_setup_tagging(cls);
+	if (error)
+		goto out_unregister;
+
 	error = add_class_attrs(class_get(cls));
 	class_put(cls);
+	if (error)
+		goto out_unregister;
+out:
 	return error;
+out_unregister:
+	kset_unregister(&cp->class_subsys);
+out_free_cp:
+	kfree(cp);
+	goto out;
 }
 EXPORT_SYMBOL_GPL(__class_register);
 
