@@ -633,9 +633,10 @@ int pcmcia_request_io(struct pcmcia_device *p_dev, io_req_t *req)
 
 	ds_dbg(s, 1, "trying to allocate resource 1\n");
 	if (alloc_io_space(s, req->Attributes1, &req->BasePort1,
-			   req->NumPorts1, req->IOAddrLines))
+			   req->NumPorts1, req->IOAddrLines)) {
 		ds_dbg(s, 0, "allocation of resource 1 failed\n");
 		return -EBUSY;
+	}
 
 	if (req->NumPorts2) {
 		ds_dbg(s, 1, "trying to allocate resource 2\n");
