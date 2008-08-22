@@ -100,6 +100,7 @@ enum {
 	ALC262_BENQ_T31,
 	ALC262_ULTRA,
 	ALC262_LENOVO_3000,
+	ALC262_NEC,
 	ALC262_AUTO,
 	ALC262_MODEL_LAST /* last tag */
 };
@@ -2630,12 +2631,14 @@ static int alc_build_pcms(struct hda_codec *codec)
 
 	info->name = spec->stream_name_analog;
 	if (spec->stream_analog_playback) {
-		snd_assert(spec->multiout.dac_nids, return -EINVAL);
+		if (snd_BUG_ON(!spec->multiout.dac_nids))
+			return -EINVAL;
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK] = *(spec->stream_analog_playback);
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->multiout.dac_nids[0];
 	}
 	if (spec->stream_analog_capture) {
-		snd_assert(spec->adc_nids, return -EINVAL);
+		if (snd_BUG_ON(!spec->adc_nids))
+			return -EINVAL;
 		info->stream[SNDRV_PCM_STREAM_CAPTURE] = *(spec->stream_analog_capture);
 		info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->adc_nids[0];
 	}
@@ -2665,6 +2668,8 @@ static int alc_build_pcms(struct hda_codec *codec)
 			info->stream[SNDRV_PCM_STREAM_CAPTURE] = *(spec->stream_digital_capture);
 			info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->dig_in_nid;
 		}
+		/* FIXME: do we need this for all Realtek codec models? */
+		codec->spdif_status_reset = 1;
 	}
 
 	/* If the use of more than one ADC is requested for the current
@@ -8949,6 +8954,41 @@ static void alc262_hippo1_unsol_event(struct hda_codec *codec,
 }
 
 /*
+ * nec model
+ *  0x15 = headphone
+ *  0x16 = internal speaker
+ *  0x18 = external mic
+ */
+
+static struct snd_kcontrol_new alc262_nec_mixer[] = {
+	HDA_CODEC_VOLUME_MONO("Speaker Playback Volume", 0x0e, 1, 0x0, HDA_OUTPUT),
+	HDA_CODEC_MUTE_MONO("Speaker Playback Switch", 0x16, 0, 0x0, HDA_OUTPUT),
+
+	HDA_CODEC_VOLUME("Mic Playback Volume", 0x0b, 0x0, HDA_INPUT),
+	HDA_CODEC_MUTE("Mic Playback Switch", 0x0b, 0x0, HDA_INPUT),
+	HDA_CODEC_VOLUME("Mic Boost", 0x18, 0, HDA_INPUT),
+
+	HDA_CODEC_VOLUME("Headphone Playback Volume", 0x0d, 0x0, HDA_OUTPUT),
+	HDA_CODEC_MUTE("Headphone Playback Switch", 0x15, 0x0, HDA_OUTPUT),
+	{ } /* end */
+};
+
+static struct hda_verb alc262_nec_verbs[] = {
+	/* Unmute Speaker */
+	{0x16, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_UNMUTE},
+
+	/* Headphone */
+	{0x15, AC_VERB_SET_UNSOLICITED_ENABLE, AC_USRSP_EN | ALC880_HP_EVENT},
+	{0x15, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_OUT},
+
+	/* External mic to headphone */
+	{0x0d, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(1)},
+	/* External mic to speaker */
+	{0x0e, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(1)},
+	{}
+};
+
+/*
  * fujitsu model
  *  0x14 = headphone/spdif-out, 0x15 = internal speaker,
  *  0x1b = port replicator headphone out
@@ -9732,11 +9772,13 @@ static const char *alc262_models[ALC262_MODEL_LAST] = {
 	[ALC262_SONY_ASSAMD]	= "sony-assamd",
 	[ALC262_ULTRA]		= "ultra",
 	[ALC262_LENOVO_3000]	= "lenovo-3000",
+	[ALC262_NEC]		= "nec",
 	[ALC262_AUTO]		= "auto",
 };
 
 static struct snd_pci_quirk alc262_cfg_tbl[] = {
 	SND_PCI_QUIRK(0x1002, 0x437b, "Hippo", ALC262_HIPPO),
+	SND_PCI_QUIRK(0x1033, 0x8895, "NEC Versa S9100", ALC262_NEC),
 	SND_PCI_QUIRK(0x103c, 0x12fe, "HP xw9400", ALC262_HP_BPC),
 	SND_PCI_QUIRK(0x103c, 0x12ff, "HP xw4550", ALC262_HP_BPC),
 	SND_PCI_QUIRK(0x103c, 0x1306, "HP xw8600", ALC262_HP_BPC),
@@ -9946,6 +9988,16 @@ static struct alc_config_preset alc262_presets[] = {
 		.channel_mode = alc262_modes,
 		.input_mux = &alc262_fujitsu_capture_source,
 		.unsol_event = alc262_lenovo_3000_unsol_event,
+	},
+	[ALC262_NEC] = {
+		.mixers = { alc262_nec_mixer },
+		.init_verbs = { alc262_nec_verbs },
+		.num_dacs = ARRAY_SIZE(alc262_dac_nids),
+		.dac_nids = alc262_dac_nids,
+		.hp_nid = 0x03,
+		.num_channel_mode = ARRAY_SIZE(alc262_modes),
+		.channel_mode = alc262_modes,
+		.input_mux = &alc262_capture_source,
 	},
 };
 
@@ -10991,6 +11043,14 @@ static hda_nid_t alc269_adc_nids[1] = {
 	0x08,
 };
 
+static hda_nid_t alc269_capsrc_nids[1] = {
+	0x23,
+};
+
+/* NOTE: ADC2 (0x07) is connected from a recording *MIXER* (0x24),
+ *       not a mux!
+ */
+
 static struct hda_input_mux alc269_eeepc_dmic_capture_source = {
 	.num_items = 2,
 	.items = {
@@ -11017,6 +11077,8 @@ static struct snd_kcontrol_new alc269_base_mixer[] = {
 	HDA_CODEC_MUTE("Line Playback Switch", 0x0b, 0x02, HDA_INPUT),
 	HDA_CODEC_VOLUME("Mic Playback Volume", 0x0b, 0x0, HDA_INPUT),
 	HDA_CODEC_MUTE("Mic Playback Switch", 0x0b, 0x0, HDA_INPUT),
+	HDA_CODEC_VOLUME("Beep Playback Volume", 0x0b, 0x4, HDA_INPUT),
+	HDA_CODEC_MUTE("Beep Playback Switch", 0x0b, 0x4, HDA_INPUT),
 	HDA_CODEC_VOLUME("Mic Boost", 0x18, 0, HDA_INPUT),
 	HDA_CODEC_VOLUME("Front Mic Playback Volume", 0x0b, 0x01, HDA_INPUT),
 	HDA_CODEC_MUTE("Front Mic Playback Switch", 0x0b, 0x01, HDA_INPUT),
@@ -11066,6 +11128,13 @@ static struct snd_kcontrol_new alc269_capture_mixer[] = {
 static struct snd_kcontrol_new alc269_epc_capture_mixer[] = {
 	HDA_CODEC_VOLUME("Capture Volume", 0x08, 0x0, HDA_INPUT),
 	HDA_CODEC_MUTE("Capture Switch", 0x08, 0x0, HDA_INPUT),
+	{ } /* end */
+};
+
+/* beep control */
+static struct snd_kcontrol_new alc269_beep_mixer[] = {
+	HDA_CODEC_VOLUME("Beep Playback Volume", 0x0b, 0x4, HDA_INPUT),
+	HDA_CODEC_MUTE("Beep Playback Switch", 0x0b, 0x4, HDA_INPUT),
 	{ } /* end */
 };
 
@@ -11331,7 +11400,7 @@ static int alc269_auto_create_multi_out_ctls(struct alc_spec *spec,
 static int alc269_parse_auto_config(struct hda_codec *codec)
 {
 	struct alc_spec *spec = codec->spec;
-	int err;
+	int i, err;
 	static hda_nid_t alc269_ignore[] = { 0x1d, 0 };
 
 	err = snd_hda_parse_pin_def_config(codec, &spec->autocfg,
@@ -11354,9 +11423,20 @@ static int alc269_parse_auto_config(struct hda_codec *codec)
 	if (spec->kctl_alloc)
 		spec->mixers[spec->num_mixers++] = spec->kctl_alloc;
 
+	/* create a beep mixer control if the pin 0x1d isn't assigned */
+	for (i = 0; i < ARRAY_SIZE(spec->autocfg.input_pins); i++)
+		if (spec->autocfg.input_pins[i] == 0x1d)
+			break;
+	if (i >= ARRAY_SIZE(spec->autocfg.input_pins))
+		spec->mixers[spec->num_mixers++] = alc269_beep_mixer;
+
 	spec->init_verbs[spec->num_init_verbs++] = alc269_init_verbs;
 	spec->num_mux_defs = 1;
 	spec->input_mux = &spec->private_imux;
+	/* set default input source */
+	snd_hda_codec_write_cache(codec, alc269_capsrc_nids[0],
+				  0, AC_VERB_SET_CONNECT_SEL,
+				  spec->input_mux->items[0].index);
 
 	err = alc_auto_add_mic_boost(codec);
 	if (err < 0)
@@ -11489,6 +11569,7 @@ static int patch_alc269(struct hda_codec *codec)
 
 	spec->adc_nids = alc269_adc_nids;
 	spec->num_adc_nids = ARRAY_SIZE(alc269_adc_nids);
+	spec->capsrc_nids = alc269_capsrc_nids;
 
 	codec->patch_ops = alc_patch_ops;
 	if (board_config == ALC269_AUTO)
