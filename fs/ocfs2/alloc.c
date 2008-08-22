@@ -49,53 +49,107 @@
 
 #include "buffer_head_io.h"
 
-/*
- * ocfs2_extent_tree and ocfs2_extent_tree_operations are used to abstract
- * the b-tree operations in ocfs2. Now all the b-tree operations are not
- * limited to ocfs2_dinode only. Any data which need to allocate clusters
- * to store can use b-tree. And it only needs to implement its ocfs2_extent_tree
- * and operation.
- *
- * ocfs2_extent_tree contains info for the root of the b-tree, it must have a
- * root ocfs2_extent_list and a root_bh so that they can be used in the b-tree
- * functions.
- * ocfs2_extent_tree_operations abstract the normal operations we do for
- * the root of extent b-tree.
- */
-struct ocfs2_extent_tree;
 
+/*
+ * Operations for a specific extent tree type.
+ *
+ * To implement an on-disk btree (extent tree) type in ocfs2, add
+ * an ocfs2_extent_tree_operations structure and the matching
+ * ocfs2_init_<thingy>_extent_tree() function.  That's pretty much it
+ * for the allocation portion of the extent tree.
+ */
 struct ocfs2_extent_tree_operations {
-	void (*set_last_eb_blk) (struct ocfs2_extent_tree *et, u64 blkno);
-	u64 (*get_last_eb_blk) (struct ocfs2_extent_tree *et);
-	void (*update_clusters) (struct inode *inode,
-				 struct ocfs2_extent_tree *et,
-				 u32 new_clusters);
-	int (*sanity_check) (struct inode *inode, struct ocfs2_extent_tree *et);
+	/*
+	 * last_eb_blk is the block number of the right most leaf extent
+	 * block.  Most on-disk structures containing an extent tree store
+	 * this value for fast access.  The ->eo_set_last_eb_blk() and
+	 * ->eo_get_last_eb_blk() operations access this value.  They are
+	 *  both required.
+	 */
+	void (*eo_set_last_eb_blk)(struct ocfs2_extent_tree *et,
+				   u64 blkno);
+	u64 (*eo_get_last_eb_blk)(struct ocfs2_extent_tree *et);
+
+	/*
+	 * The on-disk structure usually keeps track of how many total
+	 * clusters are stored in this extent tree.  This function updates
+	 * that value.  new_clusters is the delta, and must be
+	 * added to the total.  Required.
+	 */
+	void (*eo_update_clusters)(struct inode *inode,
+				   struct ocfs2_extent_tree *et,
+				   u32 new_clusters);
+
+	/*
+	 * If ->eo_insert_check() exists, it is called before rec is
+	 * inserted into the extent tree.  It is optional.
+	 */
+	int (*eo_insert_check)(struct inode *inode,
+			       struct ocfs2_extent_tree *et,
+			       struct ocfs2_extent_rec *rec);
+	int (*eo_sanity_check)(struct inode *inode, struct ocfs2_extent_tree *et);
+
+	/*
+	 * --------------------------------------------------------------
+	 * The remaining are internal to ocfs2_extent_tree and don't have
+	 * accessor functions
+	 */
+
+	/*
+	 * ->eo_fill_root_el() takes et->et_object and sets et->et_root_el.
+	 * It is required.
+	 */
+	void (*eo_fill_root_el)(struct ocfs2_extent_tree *et);
+
+	/*
+	 * ->eo_fill_max_leaf_clusters sets et->et_max_leaf_clusters if
+	 * it exists.  If it does not, et->et_max_leaf_clusters is set
+	 * to 0 (unlimited).  Optional.
+	 */
+	void (*eo_fill_max_leaf_clusters)(struct inode *inode,
+					  struct ocfs2_extent_tree *et);
 };
 
-struct ocfs2_extent_tree {
-	enum ocfs2_extent_tree_type type;
-	struct ocfs2_extent_tree_operations *eops;
-	struct buffer_head *root_bh;
-	struct ocfs2_extent_list *root_el;
-	void *private;
-	unsigned int max_leaf_clusters;
+
+/*
+ * Pre-declare ocfs2_dinode_et_ops so we can use it as a sanity check
+ * in the methods.
+ */
+static u64 ocfs2_dinode_get_last_eb_blk(struct ocfs2_extent_tree *et);
+static void ocfs2_dinode_set_last_eb_blk(struct ocfs2_extent_tree *et,
+					 u64 blkno);
+static void ocfs2_dinode_update_clusters(struct inode *inode,
+					 struct ocfs2_extent_tree *et,
+					 u32 clusters);
+static int ocfs2_dinode_insert_check(struct inode *inode,
+				     struct ocfs2_extent_tree *et,
+				     struct ocfs2_extent_rec *rec);
+static int ocfs2_dinode_sanity_check(struct inode *inode,
+				     struct ocfs2_extent_tree *et);
+static void ocfs2_dinode_fill_root_el(struct ocfs2_extent_tree *et);
+static struct ocfs2_extent_tree_operations ocfs2_dinode_et_ops = {
+	.eo_set_last_eb_blk	= ocfs2_dinode_set_last_eb_blk,
+	.eo_get_last_eb_blk	= ocfs2_dinode_get_last_eb_blk,
+	.eo_update_clusters	= ocfs2_dinode_update_clusters,
+	.eo_insert_check	= ocfs2_dinode_insert_check,
+	.eo_sanity_check	= ocfs2_dinode_sanity_check,
+	.eo_fill_root_el	= ocfs2_dinode_fill_root_el,
 };
 
 static void ocfs2_dinode_set_last_eb_blk(struct ocfs2_extent_tree *et,
 					 u64 blkno)
 {
-	struct ocfs2_dinode *di = (struct ocfs2_dinode *)et->root_bh->b_data;
+	struct ocfs2_dinode *di = et->et_object;
 
-	BUG_ON(et->type != OCFS2_DINODE_EXTENT);
+	BUG_ON(et->et_ops != &ocfs2_dinode_et_ops);
 	di->i_last_eb_blk = cpu_to_le64(blkno);
 }
 
 static u64 ocfs2_dinode_get_last_eb_blk(struct ocfs2_extent_tree *et)
 {
-	struct ocfs2_dinode *di = (struct ocfs2_dinode *)et->root_bh->b_data;
+	struct ocfs2_dinode *di = et->et_object;
 
-	BUG_ON(et->type != OCFS2_DINODE_EXTENT);
+	BUG_ON(et->et_ops != &ocfs2_dinode_et_ops);
 	return le64_to_cpu(di->i_last_eb_blk);
 }
 
@@ -103,13 +157,31 @@ static void ocfs2_dinode_update_clusters(struct inode *inode,
 					 struct ocfs2_extent_tree *et,
 					 u32 clusters)
 {
-	struct ocfs2_dinode *di =
-			(struct ocfs2_dinode *)et->root_bh->b_data;
+	struct ocfs2_dinode *di = et->et_object;
 
 	le32_add_cpu(&di->i_clusters, clusters);
 	spin_lock(&OCFS2_I(inode)->ip_lock);
 	OCFS2_I(inode)->ip_clusters = le32_to_cpu(di->i_clusters);
 	spin_unlock(&OCFS2_I(inode)->ip_lock);
+}
+
+static int ocfs2_dinode_insert_check(struct inode *inode,
+				     struct ocfs2_extent_tree *et,
+				     struct ocfs2_extent_rec *rec)
+{
+	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
+
+	BUG_ON(OCFS2_I(inode)->ip_dyn_features & OCFS2_INLINE_DATA_FL);
+	mlog_bug_on_msg(!ocfs2_sparse_alloc(osb) &&
+			(OCFS2_I(inode)->ip_clusters != rec->e_cpos),
+			"Device %s, asking for sparse allocation: inode %llu, "
+			"cpos %u, clusters %u\n",
+			osb->dev_str,
+			(unsigned long long)OCFS2_I(inode)->ip_blkno,
+			rec->e_cpos,
+			OCFS2_I(inode)->ip_clusters);
+
+	return 0;
 }
 
 static int ocfs2_dinode_sanity_check(struct inode *inode,
@@ -118,9 +190,9 @@ static int ocfs2_dinode_sanity_check(struct inode *inode,
 	int ret = 0;
 	struct ocfs2_dinode *di;
 
-	BUG_ON(et->type != OCFS2_DINODE_EXTENT);
+	BUG_ON(et->et_ops != &ocfs2_dinode_et_ops);
 
-	di = (struct ocfs2_dinode *)et->root_bh->b_data;
+	di = et->et_object;
 	if (!OCFS2_IS_VALID_DINODE(di)) {
 		ret = -EIO;
 		ocfs2_error(inode->i_sb,
@@ -131,18 +203,26 @@ static int ocfs2_dinode_sanity_check(struct inode *inode,
 	return ret;
 }
 
-static struct ocfs2_extent_tree_operations ocfs2_dinode_et_ops = {
-	.set_last_eb_blk	= ocfs2_dinode_set_last_eb_blk,
-	.get_last_eb_blk	= ocfs2_dinode_get_last_eb_blk,
-	.update_clusters	= ocfs2_dinode_update_clusters,
-	.sanity_check		= ocfs2_dinode_sanity_check,
-};
+static void ocfs2_dinode_fill_root_el(struct ocfs2_extent_tree *et)
+{
+	struct ocfs2_dinode *di = et->et_object;
+
+	et->et_root_el = &di->id2.i_list;
+}
+
+
+static void ocfs2_xattr_value_fill_root_el(struct ocfs2_extent_tree *et)
+{
+	struct ocfs2_xattr_value_root *xv = et->et_object;
+
+	et->et_root_el = &xv->xr_list;
+}
 
 static void ocfs2_xattr_value_set_last_eb_blk(struct ocfs2_extent_tree *et,
 					      u64 blkno)
 {
 	struct ocfs2_xattr_value_root *xv =
-		(struct ocfs2_xattr_value_root *)et->private;
+		(struct ocfs2_xattr_value_root *)et->et_object;
 
 	xv->xr_last_eb_blk = cpu_to_le64(blkno);
 }
@@ -150,7 +230,7 @@ static void ocfs2_xattr_value_set_last_eb_blk(struct ocfs2_extent_tree *et,
 static u64 ocfs2_xattr_value_get_last_eb_blk(struct ocfs2_extent_tree *et)
 {
 	struct ocfs2_xattr_value_root *xv =
-		(struct ocfs2_xattr_value_root *) et->private;
+		(struct ocfs2_xattr_value_root *) et->et_object;
 
 	return le64_to_cpu(xv->xr_last_eb_blk);
 }
@@ -160,29 +240,37 @@ static void ocfs2_xattr_value_update_clusters(struct inode *inode,
 					      u32 clusters)
 {
 	struct ocfs2_xattr_value_root *xv =
-		(struct ocfs2_xattr_value_root *)et->private;
+		(struct ocfs2_xattr_value_root *)et->et_object;
 
 	le32_add_cpu(&xv->xr_clusters, clusters);
 }
 
-static int ocfs2_xattr_value_sanity_check(struct inode *inode,
-					  struct ocfs2_extent_tree *et)
+static struct ocfs2_extent_tree_operations ocfs2_xattr_value_et_ops = {
+	.eo_set_last_eb_blk	= ocfs2_xattr_value_set_last_eb_blk,
+	.eo_get_last_eb_blk	= ocfs2_xattr_value_get_last_eb_blk,
+	.eo_update_clusters	= ocfs2_xattr_value_update_clusters,
+	.eo_fill_root_el	= ocfs2_xattr_value_fill_root_el,
+};
+
+static void ocfs2_xattr_tree_fill_root_el(struct ocfs2_extent_tree *et)
 {
-	return 0;
+	struct ocfs2_xattr_block *xb = et->et_object;
+
+	et->et_root_el = &xb->xb_attrs.xb_root.xt_list;
 }
 
-static struct ocfs2_extent_tree_operations ocfs2_xattr_et_ops = {
-	.set_last_eb_blk	= ocfs2_xattr_value_set_last_eb_blk,
-	.get_last_eb_blk	= ocfs2_xattr_value_get_last_eb_blk,
-	.update_clusters	= ocfs2_xattr_value_update_clusters,
-	.sanity_check		= ocfs2_xattr_value_sanity_check,
-};
+static void ocfs2_xattr_tree_fill_max_leaf_clusters(struct inode *inode,
+						    struct ocfs2_extent_tree *et)
+{
+	et->et_max_leaf_clusters =
+		ocfs2_clusters_for_bytes(inode->i_sb,
+					 OCFS2_MAX_XATTR_TREE_LEAF_SIZE);
+}
 
 static void ocfs2_xattr_tree_set_last_eb_blk(struct ocfs2_extent_tree *et,
 					     u64 blkno)
 {
-	struct ocfs2_xattr_block *xb =
-		(struct ocfs2_xattr_block *) et->root_bh->b_data;
+	struct ocfs2_xattr_block *xb = et->et_object;
 	struct ocfs2_xattr_tree_root *xt = &xb->xb_attrs.xb_root;
 
 	xt->xt_last_eb_blk = cpu_to_le64(blkno);
@@ -190,8 +278,7 @@ static void ocfs2_xattr_tree_set_last_eb_blk(struct ocfs2_extent_tree *et,
 
 static u64 ocfs2_xattr_tree_get_last_eb_blk(struct ocfs2_extent_tree *et)
 {
-	struct ocfs2_xattr_block *xb =
-		(struct ocfs2_xattr_block *) et->root_bh->b_data;
+	struct ocfs2_xattr_block *xb = et->et_object;
 	struct ocfs2_xattr_tree_root *xt = &xb->xb_attrs.xb_root;
 
 	return le64_to_cpu(xt->xt_last_eb_blk);
@@ -201,86 +288,99 @@ static void ocfs2_xattr_tree_update_clusters(struct inode *inode,
 					     struct ocfs2_extent_tree *et,
 					     u32 clusters)
 {
-	struct ocfs2_xattr_block *xb =
-			(struct ocfs2_xattr_block *)et->root_bh->b_data;
+	struct ocfs2_xattr_block *xb = et->et_object;
 
 	le32_add_cpu(&xb->xb_attrs.xb_root.xt_clusters, clusters);
 }
 
-static int ocfs2_xattr_tree_sanity_check(struct inode *inode,
-					 struct ocfs2_extent_tree *et)
-{
-	return 0;
-}
-
 static struct ocfs2_extent_tree_operations ocfs2_xattr_tree_et_ops = {
-	.set_last_eb_blk	= ocfs2_xattr_tree_set_last_eb_blk,
-	.get_last_eb_blk	= ocfs2_xattr_tree_get_last_eb_blk,
-	.update_clusters	= ocfs2_xattr_tree_update_clusters,
-	.sanity_check		= ocfs2_xattr_tree_sanity_check,
+	.eo_set_last_eb_blk	= ocfs2_xattr_tree_set_last_eb_blk,
+	.eo_get_last_eb_blk	= ocfs2_xattr_tree_get_last_eb_blk,
+	.eo_update_clusters	= ocfs2_xattr_tree_update_clusters,
+	.eo_fill_root_el	= ocfs2_xattr_tree_fill_root_el,
+	.eo_fill_max_leaf_clusters = ocfs2_xattr_tree_fill_max_leaf_clusters,
 };
 
-static struct ocfs2_extent_tree*
-	 ocfs2_new_extent_tree(struct inode *inode,
-			       struct buffer_head *bh,
-			       enum ocfs2_extent_tree_type et_type,
-			       void *private)
+static void __ocfs2_init_extent_tree(struct ocfs2_extent_tree *et,
+				     struct inode *inode,
+				     struct buffer_head *bh,
+				     void *obj,
+				     struct ocfs2_extent_tree_operations *ops)
 {
-	struct ocfs2_extent_tree *et;
+	et->et_ops = ops;
+	et->et_root_bh = bh;
+	if (!obj)
+		obj = (void *)bh->b_data;
+	et->et_object = obj;
 
-	et = kzalloc(sizeof(*et), GFP_NOFS);
-	if (!et)
-		return NULL;
-
-	et->type = et_type;
-	get_bh(bh);
-	et->root_bh = bh;
-	et->private = private;
-
-	if (et_type == OCFS2_DINODE_EXTENT) {
-		et->root_el = &((struct ocfs2_dinode *)bh->b_data)->id2.i_list;
-		et->eops = &ocfs2_dinode_et_ops;
-	} else if (et_type == OCFS2_XATTR_VALUE_EXTENT) {
-		struct ocfs2_xattr_value_root *xv =
-			(struct ocfs2_xattr_value_root *) private;
-		et->root_el = &xv->xr_list;
-		et->eops = &ocfs2_xattr_et_ops;
-	} else if (et_type == OCFS2_XATTR_TREE_EXTENT) {
-		struct ocfs2_xattr_block *xb =
-			(struct ocfs2_xattr_block *)bh->b_data;
-		et->root_el = &xb->xb_attrs.xb_root.xt_list;
-		et->eops = &ocfs2_xattr_tree_et_ops;
-		et->max_leaf_clusters = ocfs2_clusters_for_bytes(inode->i_sb,
-						OCFS2_MAX_XATTR_TREE_LEAF_SIZE);
-	}
-
-	return et;
+	et->et_ops->eo_fill_root_el(et);
+	if (!et->et_ops->eo_fill_max_leaf_clusters)
+		et->et_max_leaf_clusters = 0;
+	else
+		et->et_ops->eo_fill_max_leaf_clusters(inode, et);
 }
 
-static void ocfs2_free_extent_tree(struct ocfs2_extent_tree *et)
+void ocfs2_init_dinode_extent_tree(struct ocfs2_extent_tree *et,
+				   struct inode *inode,
+				   struct buffer_head *bh)
 {
-	if (et) {
-		brelse(et->root_bh);
-		kfree(et);
-	}
+	__ocfs2_init_extent_tree(et, inode, bh, NULL, &ocfs2_dinode_et_ops);
 }
 
-static inline void ocfs2_set_last_eb_blk(struct ocfs2_extent_tree *et,
-					 u64 new_last_eb_blk)
+void ocfs2_init_xattr_tree_extent_tree(struct ocfs2_extent_tree *et,
+				       struct inode *inode,
+				       struct buffer_head *bh)
 {
-	et->eops->set_last_eb_blk(et, new_last_eb_blk);
+	__ocfs2_init_extent_tree(et, inode, bh, NULL,
+				 &ocfs2_xattr_tree_et_ops);
 }
 
-static inline u64 ocfs2_get_last_eb_blk(struct ocfs2_extent_tree *et)
+void ocfs2_init_xattr_value_extent_tree(struct ocfs2_extent_tree *et,
+					struct inode *inode,
+					struct buffer_head *bh,
+					struct ocfs2_xattr_value_root *xv)
 {
-	return et->eops->get_last_eb_blk(et);
+	__ocfs2_init_extent_tree(et, inode, bh, xv,
+				 &ocfs2_xattr_value_et_ops);
 }
 
-static inline void ocfs2_update_clusters(struct inode *inode,
-					 struct ocfs2_extent_tree *et,
-					 u32 clusters)
+static inline void ocfs2_et_set_last_eb_blk(struct ocfs2_extent_tree *et,
+					    u64 new_last_eb_blk)
 {
-	et->eops->update_clusters(inode, et, clusters);
+	et->et_ops->eo_set_last_eb_blk(et, new_last_eb_blk);
+}
+
+static inline u64 ocfs2_et_get_last_eb_blk(struct ocfs2_extent_tree *et)
+{
+	return et->et_ops->eo_get_last_eb_blk(et);
+}
+
+static inline void ocfs2_et_update_clusters(struct inode *inode,
+					    struct ocfs2_extent_tree *et,
+					    u32 clusters)
+{
+	et->et_ops->eo_update_clusters(inode, et, clusters);
+}
+
+static inline int ocfs2_et_insert_check(struct inode *inode,
+					struct ocfs2_extent_tree *et,
+					struct ocfs2_extent_rec *rec)
+{
+	int ret = 0;
+
+	if (et->et_ops->eo_insert_check)
+		ret = et->et_ops->eo_insert_check(inode, et, rec);
+	return ret;
+}
+
+static inline int ocfs2_et_sanity_check(struct inode *inode,
+					struct ocfs2_extent_tree *et)
+{
+	int ret = 0;
+
+	if (et->et_ops->eo_sanity_check)
+		ret = et->et_ops->eo_sanity_check(inode, et);
+	return ret;
 }
 
 static void ocfs2_free_truncate_context(struct ocfs2_truncate_context *tc);
@@ -591,9 +691,7 @@ struct ocfs2_merge_ctxt {
  */
 int ocfs2_num_free_extents(struct ocfs2_super *osb,
 			   struct inode *inode,
-			   struct buffer_head *root_bh,
-			   enum ocfs2_extent_tree_type type,
-			   void *private)
+			   struct ocfs2_extent_tree *et)
 {
 	int retval;
 	struct ocfs2_extent_list *el = NULL;
@@ -603,31 +701,8 @@ int ocfs2_num_free_extents(struct ocfs2_super *osb,
 
 	mlog_entry_void();
 
-	if (type == OCFS2_DINODE_EXTENT) {
-		struct ocfs2_dinode *fe =
-				(struct ocfs2_dinode *)root_bh->b_data;
-		if (!OCFS2_IS_VALID_DINODE(fe)) {
-			OCFS2_RO_ON_INVALID_DINODE(inode->i_sb, fe);
-			retval = -EIO;
-			goto bail;
-		}
-
-		if (fe->i_last_eb_blk)
-			last_eb_blk = le64_to_cpu(fe->i_last_eb_blk);
-		el = &fe->id2.i_list;
-	} else if (type == OCFS2_XATTR_VALUE_EXTENT) {
-		struct ocfs2_xattr_value_root *xv =
-			(struct ocfs2_xattr_value_root *) private;
-
-		last_eb_blk = le64_to_cpu(xv->xr_last_eb_blk);
-		el = &xv->xr_list;
-	} else if (type == OCFS2_XATTR_TREE_EXTENT) {
-		struct ocfs2_xattr_block *xb =
-			(struct ocfs2_xattr_block *)root_bh->b_data;
-
-		last_eb_blk = le64_to_cpu(xb->xb_attrs.xb_root.xt_last_eb_blk);
-		el = &xb->xb_attrs.xb_root.xt_list;
-	}
+	el = et->et_root_el;
+	last_eb_blk = ocfs2_et_get_last_eb_blk(et);
 
 	if (last_eb_blk) {
 		retval = ocfs2_read_block(osb, last_eb_blk,
@@ -798,7 +873,7 @@ static int ocfs2_add_branch(struct ocfs2_super *osb,
 		eb = (struct ocfs2_extent_block *) eb_bh->b_data;
 		el = &eb->h_list;
 	} else
-		el = et->root_el;
+		el = et->et_root_el;
 
 	/* we never add a branch to a leaf. */
 	BUG_ON(!el->l_tree_depth);
@@ -888,7 +963,7 @@ static int ocfs2_add_branch(struct ocfs2_super *osb,
 		mlog_errno(status);
 		goto bail;
 	}
-	status = ocfs2_journal_access(handle, inode, et->root_bh,
+	status = ocfs2_journal_access(handle, inode, et->et_root_bh,
 				      OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
@@ -913,7 +988,7 @@ static int ocfs2_add_branch(struct ocfs2_super *osb,
 
 	/* fe needs a new last extent block pointer, as does the
 	 * next_leaf on the previously last-extent-block. */
-	ocfs2_set_last_eb_blk(et, new_last_eb_blk);
+	ocfs2_et_set_last_eb_blk(et, new_last_eb_blk);
 
 	eb = (struct ocfs2_extent_block *) (*last_eb_bh)->b_data;
 	eb->h_next_leaf_blk = cpu_to_le64(new_last_eb_blk);
@@ -921,7 +996,7 @@ static int ocfs2_add_branch(struct ocfs2_super *osb,
 	status = ocfs2_journal_dirty(handle, *last_eb_bh);
 	if (status < 0)
 		mlog_errno(status);
-	status = ocfs2_journal_dirty(handle, et->root_bh);
+	status = ocfs2_journal_dirty(handle, et->et_root_bh);
 	if (status < 0)
 		mlog_errno(status);
 	if (eb_bh) {
@@ -987,7 +1062,7 @@ static int ocfs2_shift_tree_depth(struct ocfs2_super *osb,
 	}
 
 	eb_el = &eb->h_list;
-	root_el = et->root_el;
+	root_el = et->et_root_el;
 
 	status = ocfs2_journal_access(handle, inode, new_eb_bh,
 				      OCFS2_JOURNAL_ACCESS_CREATE);
@@ -1008,7 +1083,7 @@ static int ocfs2_shift_tree_depth(struct ocfs2_super *osb,
 		goto bail;
 	}
 
-	status = ocfs2_journal_access(handle, inode, et->root_bh,
+	status = ocfs2_journal_access(handle, inode, et->et_root_bh,
 				      OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
@@ -1029,9 +1104,9 @@ static int ocfs2_shift_tree_depth(struct ocfs2_super *osb,
 	/* If this is our 1st tree depth shift, then last_eb_blk
 	 * becomes the allocated extent block */
 	if (root_el->l_tree_depth == cpu_to_le16(1))
-		ocfs2_set_last_eb_blk(et, le64_to_cpu(eb->h_blkno));
+		ocfs2_et_set_last_eb_blk(et, le64_to_cpu(eb->h_blkno));
 
-	status = ocfs2_journal_dirty(handle, et->root_bh);
+	status = ocfs2_journal_dirty(handle, et->et_root_bh);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
@@ -1081,7 +1156,7 @@ static int ocfs2_find_branch_target(struct ocfs2_super *osb,
 
 	*target_bh = NULL;
 
-	el = et->root_el;
+	el = et->et_root_el;
 
 	while(le16_to_cpu(el->l_tree_depth) > 1) {
 		if (le16_to_cpu(el->l_next_free_rec) == 0) {
@@ -1133,7 +1208,7 @@ static int ocfs2_find_branch_target(struct ocfs2_super *osb,
 
 	/* If we didn't find one and the fe doesn't have any room,
 	 * then return '1' */
-	el = et->root_el;
+	el = et->et_root_el;
 	if (!lowest_bh && (el->l_next_free_rec == el->l_count))
 		status = 1;
 
@@ -1162,7 +1237,7 @@ static int ocfs2_grow_tree(struct inode *inode, handle_t *handle,
 			   struct ocfs2_alloc_context *meta_ac)
 {
 	int ret, shift;
-	struct ocfs2_extent_list *el = et->root_el;
+	struct ocfs2_extent_list *el = et->et_root_el;
 	int depth = le16_to_cpu(el->l_tree_depth);
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 	struct buffer_head *bh = NULL;
@@ -2436,7 +2511,7 @@ static int ocfs2_rotate_subtree_left(struct inode *inode, handle_t *handle,
 		ocfs2_update_edge_lengths(inode, handle, left_path);
 
 		eb = (struct ocfs2_extent_block *)path_leaf_bh(left_path)->b_data;
-		ocfs2_set_last_eb_blk(et, le64_to_cpu(eb->h_blkno));
+		ocfs2_et_set_last_eb_blk(et, le64_to_cpu(eb->h_blkno));
 
 		/*
 		 * Removal of the extent in the left leaf was skipped
@@ -2697,7 +2772,7 @@ static int ocfs2_remove_rightmost_path(struct inode *inode, handle_t *handle,
 	struct ocfs2_extent_list *el;
 
 
-	ret = et->eops->sanity_check(inode, et);
+	ret = ocfs2_et_sanity_check(inode, et);
 	if (ret)
 		goto out;
 	/*
@@ -2756,7 +2831,7 @@ static int ocfs2_remove_rightmost_path(struct inode *inode, handle_t *handle,
 		ocfs2_update_edge_lengths(inode, handle, left_path);
 
 		eb = (struct ocfs2_extent_block *)path_leaf_bh(left_path)->b_data;
-		ocfs2_set_last_eb_blk(et, le64_to_cpu(eb->h_blkno));
+		ocfs2_et_set_last_eb_blk(et, le64_to_cpu(eb->h_blkno));
 	} else {
 		/*
 		 * 'path' is also the leftmost path which
@@ -2767,12 +2842,12 @@ static int ocfs2_remove_rightmost_path(struct inode *inode, handle_t *handle,
 		 */
 		ocfs2_unlink_path(inode, handle, dealloc, path, 1);
 
-		el = et->root_el;
+		el = et->et_root_el;
 		el->l_tree_depth = 0;
 		el->l_next_free_rec = 0;
 		memset(&el->l_recs[0], 0, sizeof(struct ocfs2_extent_rec));
 
-		ocfs2_set_last_eb_blk(et, 0);
+		ocfs2_et_set_last_eb_blk(et, 0);
 	}
 
 	ocfs2_journal_dirty(handle, path_root_bh(path));
@@ -3900,9 +3975,9 @@ static int ocfs2_do_insert_extent(struct inode *inode,
 	struct ocfs2_path *left_path = NULL;
 	struct ocfs2_extent_list *el;
 
-	el = et->root_el;
+	el = et->et_root_el;
 
-	ret = ocfs2_journal_access(handle, inode, et->root_bh,
+	ret = ocfs2_journal_access(handle, inode, et->et_root_bh,
 				   OCFS2_JOURNAL_ACCESS_WRITE);
 	if (ret) {
 		mlog_errno(ret);
@@ -3914,7 +3989,7 @@ static int ocfs2_do_insert_extent(struct inode *inode,
 		goto out_update_clusters;
 	}
 
-	right_path = ocfs2_new_path(et->root_bh, et->root_el);
+	right_path = ocfs2_new_path(et->et_root_bh, et->et_root_el);
 	if (!right_path) {
 		ret = -ENOMEM;
 		mlog_errno(ret);
@@ -3964,7 +4039,7 @@ static int ocfs2_do_insert_extent(struct inode *inode,
 		 * ocfs2_rotate_tree_right() might have extended the
 		 * transaction without re-journaling our tree root.
 		 */
-		ret = ocfs2_journal_access(handle, inode, et->root_bh,
+		ret = ocfs2_journal_access(handle, inode, et->et_root_bh,
 					   OCFS2_JOURNAL_ACCESS_WRITE);
 		if (ret) {
 			mlog_errno(ret);
@@ -3989,10 +4064,10 @@ static int ocfs2_do_insert_extent(struct inode *inode,
 
 out_update_clusters:
 	if (type->ins_split == SPLIT_NONE)
-		ocfs2_update_clusters(inode, et,
-				      le16_to_cpu(insert_rec->e_leaf_clusters));
+		ocfs2_et_update_clusters(inode, et,
+					 le16_to_cpu(insert_rec->e_leaf_clusters));
 
-	ret = ocfs2_journal_dirty(handle, et->root_bh);
+	ret = ocfs2_journal_dirty(handle, et->et_root_bh);
 	if (ret)
 		mlog_errno(ret);
 
@@ -4150,7 +4225,8 @@ static void ocfs2_figure_contig_type(struct inode *inode,
 		 * Caller might want us to limit the size of extents, don't
 		 * calculate contiguousness if we might exceed that limit.
 		 */
-		if (et->max_leaf_clusters && len > et->max_leaf_clusters)
+		if (et->et_max_leaf_clusters &&
+		    (len > et->et_max_leaf_clusters))
 			insert->ins_contig = CONTIG_NONE;
 	}
 }
@@ -4227,7 +4303,7 @@ static int ocfs2_figure_insert_type(struct inode *inode,
 
 	insert->ins_split = SPLIT_NONE;
 
-	el = et->root_el;
+	el = et->et_root_el;
 	insert->ins_tree_depth = le16_to_cpu(el->l_tree_depth);
 
 	if (el->l_tree_depth) {
@@ -4238,7 +4314,7 @@ static int ocfs2_figure_insert_type(struct inode *inode,
 		 * may want it later.
 		 */
 		ret = ocfs2_read_block(OCFS2_SB(inode->i_sb),
-				       ocfs2_get_last_eb_blk(et), &bh,
+				       ocfs2_et_get_last_eb_blk(et), &bh,
 				       OCFS2_BH_CACHED, inode);
 		if (ret) {
 			mlog_exit(ret);
@@ -4265,7 +4341,7 @@ static int ocfs2_figure_insert_type(struct inode *inode,
 		return 0;
 	}
 
-	path = ocfs2_new_path(et->root_bh, et->root_el);
+	path = ocfs2_new_path(et->et_root_bh, et->et_root_el);
 	if (!path) {
 		ret = -ENOMEM;
 		mlog_errno(ret);
@@ -4315,7 +4391,7 @@ static int ocfs2_figure_insert_type(struct inode *inode,
 	 * the case that we're doing a tail append, so maybe we can
 	 * take advantage of that information somehow.
 	 */
-	if (ocfs2_get_last_eb_blk(et) ==
+	if (ocfs2_et_get_last_eb_blk(et) ==
 	    path_leaf_bh(path)->b_blocknr) {
 		/*
 		 * Ok, ocfs2_find_path() returned us the rightmost
@@ -4343,16 +4419,15 @@ out:
  *
  * The caller needs to update fe->i_clusters
  */
-static int ocfs2_insert_extent(struct ocfs2_super *osb,
-			       handle_t *handle,
-			       struct inode *inode,
-			       struct buffer_head *root_bh,
-			       u32 cpos,
-			       u64 start_blk,
-			       u32 new_clusters,
-			       u8 flags,
-			       struct ocfs2_alloc_context *meta_ac,
-			       struct ocfs2_extent_tree *et)
+int ocfs2_insert_extent(struct ocfs2_super *osb,
+			handle_t *handle,
+			struct inode *inode,
+			struct ocfs2_extent_tree *et,
+			u32 cpos,
+			u64 start_blk,
+			u32 new_clusters,
+			u8 flags,
+			struct ocfs2_alloc_context *meta_ac)
 {
 	int status;
 	int uninitialized_var(free_records);
@@ -4360,24 +4435,19 @@ static int ocfs2_insert_extent(struct ocfs2_super *osb,
 	struct ocfs2_insert_type insert = {0, };
 	struct ocfs2_extent_rec rec;
 
-	BUG_ON(OCFS2_I(inode)->ip_dyn_features & OCFS2_INLINE_DATA_FL);
-
 	mlog(0, "add %u clusters at position %u to inode %llu\n",
 	     new_clusters, cpos, (unsigned long long)OCFS2_I(inode)->ip_blkno);
-
-	mlog_bug_on_msg(!ocfs2_sparse_alloc(osb) &&
-			(OCFS2_I(inode)->ip_clusters != cpos),
-			"Device %s, asking for sparse allocation: inode %llu, "
-			"cpos %u, clusters %u\n",
-			osb->dev_str,
-			(unsigned long long)OCFS2_I(inode)->ip_blkno, cpos,
-			OCFS2_I(inode)->ip_clusters);
 
 	memset(&rec, 0, sizeof(rec));
 	rec.e_cpos = cpu_to_le32(cpos);
 	rec.e_blkno = cpu_to_le64(start_blk);
 	rec.e_leaf_clusters = cpu_to_le16(new_clusters);
 	rec.e_flags = flags;
+	status = ocfs2_et_insert_check(inode, et, &rec);
+	if (status) {
+		mlog_errno(status);
+		goto bail;
+	}
 
 	status = ocfs2_figure_insert_type(inode, et, &last_eb_bh, &rec,
 					  &free_records, &insert);
@@ -4406,7 +4476,7 @@ static int ocfs2_insert_extent(struct ocfs2_super *osb,
 	status = ocfs2_do_insert_extent(inode, handle, et, &rec, &insert);
 	if (status < 0)
 		mlog_errno(status);
-	else if (et->type == OCFS2_DINODE_EXTENT)
+	else if (et->et_ops == &ocfs2_dinode_et_ops)
 		ocfs2_extent_map_insert_rec(inode, &rec);
 
 bail:
@@ -4417,103 +4487,10 @@ bail:
 	return status;
 }
 
-int ocfs2_dinode_insert_extent(struct ocfs2_super *osb,
-			       handle_t *handle,
-			       struct inode *inode,
-			       struct buffer_head *root_bh,
-			       u32 cpos,
-			       u64 start_blk,
-			       u32 new_clusters,
-			       u8 flags,
-			       struct ocfs2_alloc_context *meta_ac)
-{
-	int status;
-	struct ocfs2_extent_tree *et = NULL;
-
-	et = ocfs2_new_extent_tree(inode, root_bh, OCFS2_DINODE_EXTENT, NULL);
-	if (!et) {
-		status = -ENOMEM;
-		mlog_errno(status);
-		goto bail;
-	}
-
-	status = ocfs2_insert_extent(osb, handle, inode, root_bh,
-				     cpos, start_blk, new_clusters,
-				     flags, meta_ac, et);
-
-	if (et)
-		ocfs2_free_extent_tree(et);
-bail:
-	return status;
-}
-
-int ocfs2_xattr_value_insert_extent(struct ocfs2_super *osb,
-				    handle_t *handle,
-				    struct inode *inode,
-				    struct buffer_head *root_bh,
-				    u32 cpos,
-				    u64 start_blk,
-				    u32 new_clusters,
-				    u8 flags,
-				    struct ocfs2_alloc_context *meta_ac,
-				    void *private)
-{
-	int status;
-	struct ocfs2_extent_tree *et = NULL;
-
-	et = ocfs2_new_extent_tree(inode, root_bh,
-				   OCFS2_XATTR_VALUE_EXTENT, private);
-	if (!et) {
-		status = -ENOMEM;
-		mlog_errno(status);
-		goto bail;
-	}
-
-	status = ocfs2_insert_extent(osb, handle, inode, root_bh,
-				     cpos, start_blk, new_clusters,
-				     flags, meta_ac, et);
-
-	if (et)
-		ocfs2_free_extent_tree(et);
-bail:
-	return status;
-}
-
-int ocfs2_xattr_tree_insert_extent(struct ocfs2_super *osb,
-				   handle_t *handle,
-				   struct inode *inode,
-				   struct buffer_head *root_bh,
-				   u32 cpos,
-				   u64 start_blk,
-				   u32 new_clusters,
-				   u8 flags,
-				   struct ocfs2_alloc_context *meta_ac)
-{
-	int status;
-	struct ocfs2_extent_tree *et = NULL;
-
-	et = ocfs2_new_extent_tree(inode, root_bh, OCFS2_XATTR_TREE_EXTENT,
-				   NULL);
-	if (!et) {
-		status = -ENOMEM;
-		mlog_errno(status);
-		goto bail;
-	}
-
-	status = ocfs2_insert_extent(osb, handle, inode, root_bh,
-				     cpos, start_blk, new_clusters,
-				     flags, meta_ac, et);
-
-	if (et)
-		ocfs2_free_extent_tree(et);
-bail:
-	return status;
-}
-
 /*
  * Allcate and add clusters into the extent b-tree.
  * The new clusters(clusters_to_add) will be inserted at logical_offset.
- * The extent b-tree's root is root_el and it should be in root_bh, and
+ * The extent b-tree's root is specified by et, and
  * it is not limited to the file storage. Any extent tree can use this
  * function if it implements the proper ocfs2_extent_tree.
  */
@@ -4522,14 +4499,11 @@ int ocfs2_add_clusters_in_btree(struct ocfs2_super *osb,
 				u32 *logical_offset,
 				u32 clusters_to_add,
 				int mark_unwritten,
-				struct buffer_head *root_bh,
-				struct ocfs2_extent_list *root_el,
+				struct ocfs2_extent_tree *et,
 				handle_t *handle,
 				struct ocfs2_alloc_context *data_ac,
 				struct ocfs2_alloc_context *meta_ac,
-				enum ocfs2_alloc_restarted *reason_ret,
-				enum ocfs2_extent_tree_type type,
-				void *private)
+				enum ocfs2_alloc_restarted *reason_ret)
 {
 	int status = 0;
 	int free_extents;
@@ -4543,8 +4517,7 @@ int ocfs2_add_clusters_in_btree(struct ocfs2_super *osb,
 	if (mark_unwritten)
 		flags = OCFS2_EXT_UNWRITTEN;
 
-	free_extents = ocfs2_num_free_extents(osb, inode, root_bh, type,
-					      private);
+	free_extents = ocfs2_num_free_extents(osb, inode, et);
 	if (free_extents < 0) {
 		status = free_extents;
 		mlog_errno(status);
@@ -4563,7 +4536,7 @@ int ocfs2_add_clusters_in_btree(struct ocfs2_super *osb,
 		goto leave;
 	} else if ((!free_extents)
 		   && (ocfs2_alloc_context_bits_left(meta_ac)
-		       < ocfs2_extend_meta_needed(root_el))) {
+		       < ocfs2_extend_meta_needed(et->et_root_el))) {
 		mlog(0, "filesystem is really fragmented...\n");
 		status = -EAGAIN;
 		reason = RESTART_META;
@@ -4581,7 +4554,7 @@ int ocfs2_add_clusters_in_btree(struct ocfs2_super *osb,
 	BUG_ON(num_bits > clusters_to_add);
 
 	/* reserve our write early -- insert_extent may update the inode */
-	status = ocfs2_journal_access(handle, inode, root_bh,
+	status = ocfs2_journal_access(handle, inode, et->et_root_bh,
 				      OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
@@ -4591,28 +4564,15 @@ int ocfs2_add_clusters_in_btree(struct ocfs2_super *osb,
 	block = ocfs2_clusters_to_blocks(osb->sb, bit_off);
 	mlog(0, "Allocating %u clusters at block %u for inode %llu\n",
 	     num_bits, bit_off, (unsigned long long)OCFS2_I(inode)->ip_blkno);
-	if (type == OCFS2_DINODE_EXTENT)
-		status = ocfs2_dinode_insert_extent(osb, handle, inode, root_bh,
-						    *logical_offset, block,
-						    num_bits, flags, meta_ac);
-	else if (type == OCFS2_XATTR_TREE_EXTENT)
-		status = ocfs2_xattr_tree_insert_extent(osb, handle,
-							inode, root_bh,
-							*logical_offset,
-							block, num_bits, flags,
-							meta_ac);
-	else
-		status = ocfs2_xattr_value_insert_extent(osb, handle,
-							 inode, root_bh,
-							 *logical_offset,
-							 block, num_bits, flags,
-							 meta_ac, private);
+	status = ocfs2_insert_extent(osb, handle, inode, et,
+				     *logical_offset, block,
+				     num_bits, flags, meta_ac);
 	if (status < 0) {
 		mlog_errno(status);
 		goto leave;
 	}
 
-	status = ocfs2_journal_dirty(handle, root_bh);
+	status = ocfs2_journal_dirty(handle, et->et_root_bh);
 	if (status < 0) {
 		mlog_errno(status);
 		goto leave;
@@ -4680,7 +4640,7 @@ leftright:
 	 */
 	rec = path_leaf_el(path)->l_recs[split_index];
 
-	rightmost_el = et->root_el;
+	rightmost_el = et->et_root_el;
 
 	depth = le16_to_cpu(rightmost_el->l_tree_depth);
 	if (depth) {
@@ -4823,7 +4783,7 @@ static int __ocfs2_mark_extent_written(struct inode *inode,
 		struct ocfs2_extent_block *eb;
 
 		ret = ocfs2_read_block(OCFS2_SB(inode->i_sb),
-				       ocfs2_get_last_eb_blk(et),
+				       ocfs2_et_get_last_eb_blk(et),
 				       &last_eb_bh, OCFS2_BH_CACHED, inode);
 		if (ret) {
 			mlog_exit(ret);
@@ -4883,19 +4843,17 @@ out:
  *
  * The caller is responsible for passing down meta_ac if we'll need it.
  */
-int ocfs2_mark_extent_written(struct inode *inode, struct buffer_head *root_bh,
+int ocfs2_mark_extent_written(struct inode *inode,
+			      struct ocfs2_extent_tree *et,
 			      handle_t *handle, u32 cpos, u32 len, u32 phys,
 			      struct ocfs2_alloc_context *meta_ac,
-			      struct ocfs2_cached_dealloc_ctxt *dealloc,
-			      enum ocfs2_extent_tree_type et_type,
-			      void *private)
+			      struct ocfs2_cached_dealloc_ctxt *dealloc)
 {
 	int ret, index;
 	u64 start_blkno = ocfs2_clusters_to_blocks(inode->i_sb, phys);
 	struct ocfs2_extent_rec split_rec;
 	struct ocfs2_path *left_path = NULL;
 	struct ocfs2_extent_list *el;
-	struct ocfs2_extent_tree *et = NULL;
 
 	mlog(0, "Inode %lu cpos %u, len %u, phys %u (%llu)\n",
 	     inode->i_ino, cpos, len, phys, (unsigned long long)start_blkno);
@@ -4909,21 +4867,17 @@ int ocfs2_mark_extent_written(struct inode *inode, struct buffer_head *root_bh,
 		goto out;
 	}
 
-	et = ocfs2_new_extent_tree(inode, root_bh, et_type, private);
-	if (!et) {
-		ret = -ENOMEM;
-		mlog_errno(ret);
-		goto out;
-	}
-
 	/*
 	 * XXX: This should be fixed up so that we just re-insert the
 	 * next extent records.
+	 *
+	 * XXX: This is a hack on the extent tree, maybe it should be
+	 * an op?
 	 */
-	if (et_type == OCFS2_DINODE_EXTENT)
+	if (et->et_ops == &ocfs2_dinode_et_ops)
 		ocfs2_extent_map_trunc(inode, 0);
 
-	left_path = ocfs2_new_path(et->root_bh, et->root_el);
+	left_path = ocfs2_new_path(et->et_root_bh, et->et_root_el);
 	if (!left_path) {
 		ret = -ENOMEM;
 		mlog_errno(ret);
@@ -4962,8 +4916,6 @@ int ocfs2_mark_extent_written(struct inode *inode, struct buffer_head *root_bh,
 
 out:
 	ocfs2_free_path(left_path);
-	if (et)
-		ocfs2_free_extent_tree(et);
 	return ret;
 }
 
@@ -4990,7 +4942,7 @@ static int ocfs2_split_tree(struct inode *inode, struct ocfs2_extent_tree *et,
 	depth = path->p_tree_depth;
 	if (depth > 0) {
 		ret = ocfs2_read_block(OCFS2_SB(inode->i_sb),
-				       ocfs2_get_last_eb_blk(et),
+				       ocfs2_et_get_last_eb_blk(et),
 				       &last_eb_bh, OCFS2_BH_CACHED, inode);
 		if (ret < 0) {
 			mlog_errno(ret);
@@ -5003,7 +4955,7 @@ static int ocfs2_split_tree(struct inode *inode, struct ocfs2_extent_tree *et,
 		rightmost_el = path_leaf_el(path);
 
 	credits += path->p_tree_depth +
-		   ocfs2_extend_meta_needed(et->root_el);
+		   ocfs2_extend_meta_needed(et->et_root_el);
 	ret = ocfs2_extend_trans(handle, credits);
 	if (ret) {
 		mlog_errno(ret);
@@ -5193,30 +5145,21 @@ out:
 	return ret;
 }
 
-int ocfs2_remove_extent(struct inode *inode, struct buffer_head *root_bh,
+int ocfs2_remove_extent(struct inode *inode,
+			struct ocfs2_extent_tree *et,
 			u32 cpos, u32 len, handle_t *handle,
 			struct ocfs2_alloc_context *meta_ac,
-			struct ocfs2_cached_dealloc_ctxt *dealloc,
-			enum ocfs2_extent_tree_type et_type,
-			void *private)
+			struct ocfs2_cached_dealloc_ctxt *dealloc)
 {
 	int ret, index;
 	u32 rec_range, trunc_range;
 	struct ocfs2_extent_rec *rec;
 	struct ocfs2_extent_list *el;
 	struct ocfs2_path *path = NULL;
-	struct ocfs2_extent_tree *et = NULL;
-
-	et = ocfs2_new_extent_tree(inode, root_bh, et_type, private);
-	if (!et) {
-		ret = -ENOMEM;
-		mlog_errno(ret);
-		goto out;
-	}
 
 	ocfs2_extent_map_trunc(inode, 0);
 
-	path = ocfs2_new_path(et->root_bh, et->root_el);
+	path = ocfs2_new_path(et->et_root_bh, et->et_root_el);
 	if (!path) {
 		ret = -ENOMEM;
 		mlog_errno(ret);
@@ -5333,8 +5276,6 @@ int ocfs2_remove_extent(struct inode *inode, struct buffer_head *root_bh,
 
 out:
 	ocfs2_free_path(path);
-	if (et)
-		ocfs2_free_extent_tree(et);
 	return ret;
 }
 
@@ -6753,6 +6694,7 @@ int ocfs2_convert_inline_data_to_extents(struct inode *inode,
 	struct ocfs2_alloc_context *data_ac = NULL;
 	struct page **pages = NULL;
 	loff_t end = osb->s_clustersize;
+	struct ocfs2_extent_tree et;
 
 	has_data = i_size_read(inode) ? 1 : 0;
 
@@ -6852,8 +6794,9 @@ int ocfs2_convert_inline_data_to_extents(struct inode *inode,
 		 * this proves to be false, we could always re-build
 		 * the in-inode data from our pages.
 		 */
-		ret = ocfs2_dinode_insert_extent(osb, handle, inode, di_bh,
-						 0, block, 1, 0, NULL);
+		ocfs2_init_dinode_extent_tree(&et, inode, di_bh);
+		ret = ocfs2_insert_extent(osb, handle, inode, &et,
+					  0, block, 1, 0, NULL);
 		if (ret) {
 			mlog_errno(ret);
 			goto out_commit;
