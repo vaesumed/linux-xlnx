@@ -280,7 +280,6 @@ void irq_exit(void)
 	account_system_vtime(current);
 	trace_hardirq_exit();
 	sub_preempt_count(IRQ_EXIT_OFFSET);
-	sched_irq_exit();
 	if (!in_interrupt() && local_softirq_pending())
 		invoke_softirq();
 
