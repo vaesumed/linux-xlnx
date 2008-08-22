@@ -1407,12 +1407,14 @@ int compat_do_execve(char * filename,
 		goto out;
 
 	retval = search_binary_handler(bprm, regs);
-	if (retval >= 0) {
-		/* execve success */
-		acct_update_integrals(current);
-		free_bprm(bprm);
-		return retval;
-	}
+	if (retval < 0)
+		goto out;
+
+	/* execve succeeded */
+	mutex_unlock(&current->cred_exec_mutex);
+	acct_update_integrals(current);
+	free_bprm(bprm);
+	return retval;
 
 out:
 	if (bprm->mm)

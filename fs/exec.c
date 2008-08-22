@@ -1047,11 +1047,12 @@ void install_exec_creds(struct linux_binprm *bprm)
 {
 	security_bprm_committing_creds(bprm);
 
-	/* we hold cred_exec_mutex this far to prevent ptrace_attach() from
-	 * altering our determination of the task's credentials */
 	commit_creds(bprm->cred);
 	bprm->cred = NULL;
-	mutex_unlock(&current->cred_exec_mutex);
+
+	/* cred_exec_mutex must be held at least to this point to prevent
+	 * ptrace_attach() from altering our determination of the task's
+	 * credentials; any time after this it may be unlocked */
 
 	security_bprm_committed_creds(bprm);
 }
@@ -1277,10 +1278,8 @@ EXPORT_SYMBOL(search_binary_handler);
 void free_bprm(struct linux_binprm *bprm)
 {
 	free_arg_pages(bprm);
-	if (bprm->cred) {
-		mutex_unlock(&current->cred_exec_mutex);
+	if (bprm->cred)
 		abort_creds(bprm->cred);
-	}
 	kfree(bprm);
 }
 
@@ -1358,14 +1357,16 @@ int do_execve(char * filename,
 
 	current->flags &= ~PF_KTHREAD;
 	retval = search_binary_handler(bprm,regs);
-	if (retval >= 0) {
-		/* execve success */
-		acct_update_integrals(current);
-		free_bprm(bprm);
-		if (displaced)
-			put_files_struct(displaced);
-		return retval;
-	}
+	if (retval < 0)
+		goto out;
+
+	/* execve succeeded */
+	mutex_unlock(&current->cred_exec_mutex);
+	acct_update_integrals(current);
+	free_bprm(bprm);
+	if (displaced)
+		put_files_struct(displaced);
+	return retval;
 
 out:
 	if (bprm->mm)
