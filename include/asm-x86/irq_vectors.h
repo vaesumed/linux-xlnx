@@ -1,5 +1,5 @@
-#ifndef _ASM_IRQ_VECTORS_H
-#define _ASM_IRQ_VECTORS_H
+#ifndef ASM_X86__IRQ_VECTORS_H
+#define ASM_X86__IRQ_VECTORS_H
 
 #include <linux/threads.h>
 
@@ -19,19 +19,14 @@
 
 /*
  * Reserve the lowest usable priority level 0x20 - 0x2f for triggering
- * cleanup after irq migration on 64 bit.
+ * cleanup after irq migration.
  */
 #define IRQ_MOVE_CLEANUP_VECTOR	FIRST_EXTERNAL_VECTOR
 
 /*
- * Vectors 0x20-0x2f are used for ISA interrupts on 32 bit.
- * Vectors 0x30-0x3f are used for ISA interrupts on 64 bit.
+ * Vectors 0x30-0x3f are used for ISA interrupts.
  */
-#ifdef CONFIG_X86_32
-#define IRQ0_VECTOR		(FIRST_EXTERNAL_VECTOR)
-#else
 #define IRQ0_VECTOR		(FIRST_EXTERNAL_VECTOR + 0x10)
-#endif
 #define IRQ1_VECTOR		(IRQ0_VECTOR + 1)
 #define IRQ2_VECTOR		(IRQ0_VECTOR + 2)
 #define IRQ3_VECTOR		(IRQ0_VECTOR + 3)
@@ -95,11 +90,7 @@
  * start at 0x31(0x41) to spread out vectors evenly between priority
  * levels. (0x80 is the syscall vector)
  */
-#ifdef CONFIG_X86_32
-# define FIRST_DEVICE_VECTOR	0x31
-#else
-# define FIRST_DEVICE_VECTOR	(IRQ15_VECTOR + 2)
-#endif
+#define FIRST_DEVICE_VECTOR	(IRQ15_VECTOR + 2)
 
 #define NR_VECTORS		256
 
@@ -115,7 +106,6 @@
 # else
 #  define NR_IRQS (NR_VECTORS + (32 * MAX_IO_APICS))
 # endif
-# define NR_IRQ_VECTORS NR_IRQS
 
 #elif !defined(CONFIG_X86_VOYAGER)
 
@@ -123,23 +113,15 @@
 
 #  define NR_IRQS		224
 
-#  if (224 >= 32 * NR_CPUS)
-#   define NR_IRQ_VECTORS	NR_IRQS
-#  else
-#   define NR_IRQ_VECTORS	(32 * NR_CPUS)
-#  endif
-
 # else /* IO_APIC || PARAVIRT */
 
 #  define NR_IRQS		16
-#  define NR_IRQ_VECTORS	NR_IRQS
 
 # endif
 
 #else /* !VISWS && !VOYAGER */
 
 # define NR_IRQS		224
-# define NR_IRQ_VECTORS		NR_IRQS
 
 #endif /* VISWS */
 
@@ -178,4 +160,4 @@
 #define VIC_CPU_BOOT_ERRATA_CPI		(VIC_CPI_LEVEL0 + 8)
 
 
-#endif /* _ASM_IRQ_VECTORS_H */
+#endif /* ASM_X86__IRQ_VECTORS_H */
