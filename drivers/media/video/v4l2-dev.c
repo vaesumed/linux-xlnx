@@ -84,11 +84,6 @@ static void video_release(struct device *cd)
 {
 	struct video_device *vfd = container_of(cd, struct video_device, dev);
 
-#if 1
-	/* needed until all drivers are fixed */
-	if (!vfd->release)
-		return;
-#endif
 	vfd->release(vfd);
 }
 
@@ -236,6 +231,9 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 	if (vfd == NULL)
 		return -EINVAL;
 
+	/* the release callback MUST be present */
+	BUG_ON(!vfd->release);
+
 	switch (type) {
 	case VFL_TYPE_GRABBER:
 		base = MINOR_VFL_TYPE_GRABBER_MIN;
@@ -309,13 +307,6 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 		goto fail_minor;
 	}
 
-#if 1
-	/* needed until all drivers are fixed */
-	if (!vfd->release)
-		printk(KERN_WARNING "videodev: \"%s\" has no release callback. "
-		       "Please fix your driver for proper sysfs support, see "
-		       "http://lwn.net/Articles/36850/\n", vfd->name);
-#endif
 	return 0;
 
 fail_minor:
