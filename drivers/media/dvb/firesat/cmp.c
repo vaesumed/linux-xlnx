@@ -10,8 +10,6 @@
  *	the License, or (at your option) any later version.
  */
 
-#include <linux/bug.h>
-#include <linux/hardirq.h>
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
@@ -44,42 +42,6 @@ typedef struct _OPCR
 
 #define FIRESAT_SPEED IEEE1394_SPEED_400
 
-/* hpsb_lock is being removed from the kernel-source,
- * therefor we define our own 'firesat_hpsb_lock'*/
-
-int send_packet_and_wait(struct hpsb_packet *packet);
-
-int firesat_hpsb_lock(struct hpsb_host *host, nodeid_t node, unsigned int generation,
-		u64 addr, int extcode, quadlet_t * data, quadlet_t arg) {
-
-	struct hpsb_packet *packet;
-	int retval = 0;
-
-	BUG_ON(in_interrupt()); // We can't be called in an interrupt, yet
-
-	packet = hpsb_make_lockpacket(host, node, addr, extcode, data, arg);
-	if (!packet)
-		return -ENOMEM;
-
-	packet->generation = generation;
-	retval = send_packet_and_wait(packet);
-	if (retval < 0)
-		goto hpsb_lock_fail;
-
-	retval = hpsb_packet_success(packet);
-
-	if (retval == 0) {
-		*data = packet->data[0];
-	}
-
-	hpsb_lock_fail:
-	hpsb_free_tlabel(packet);
-	hpsb_free_packet(packet);
-
-	return retval;
-}
-
-
 static int cmp_read(struct firesat *firesat, void *buf, u64 addr, size_t len)
 {
 	int ret;
@@ -102,9 +64,9 @@ static int cmp_lock(struct firesat *firesat, quadlet_t *data, u64 addr,
 	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
-	ret = firesat_hpsb_lock(firesat->host, firesat->nodeentry->nodeid,
-				firesat->nodeentry->generation,
-				addr, ext_tcode, data, arg);
+	ret = hpsb_lock(firesat->host, firesat->nodeentry->nodeid,
+			firesat->nodeentry->generation,
+			addr, ext_tcode, data, arg);
 
 	mutex_unlock(&firesat->avc_mutex);
 	return ret;
@@ -234,21 +196,4 @@ int try_CMPBreakPPconnection(struct firesat *firesat, int output_plug,int iso_ch
 		}*/
     }
 	return 0;
-}
-
-static void complete_packet(void *data) {
-	complete((struct completion *) data);
-}
-
-int send_packet_and_wait(struct hpsb_packet *packet) {
-	struct completion done;
-	int retval;
-
-	init_completion(&done);
-	hpsb_set_packet_complete_task(packet, complete_packet, &done);
-	retval = hpsb_send_packet(packet);
-	if (retval == 0)
-		wait_for_completion(&done);
-
-	return retval;
 }
