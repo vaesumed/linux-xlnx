@@ -9,10 +9,9 @@
  *	the License, or (at your option) any later version.
  */
 
-#include "firesat.h"
-#include "firesat-rc.h"
-
 #include <linux/input.h>
+
+#include "firesat-rc.h"
 
 static u16 firesat_irtable[] = {
 	KEY_ESC,

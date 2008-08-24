@@ -11,13 +11,18 @@
  *	the License, or (at your option) any later version.
  */
 
-#include "firesat.h"
+#include <linux/crc32.h>
+#include <linux/delay.h>
+#include <linux/kernel.h>
+#include <linux/moduleparam.h>
+#include <linux/wait.h>
+#include <asm/atomic.h>
+
 #include <ieee1394_transactions.h>
 #include <nodemgr.h>
-#include <asm/byteorder.h>
-#include <linux/delay.h>
-#include <linux/crc32.h>
+
 #include "avc_api.h"
+#include "firesat.h"
 #include "firesat-rc.h"
 
 #define RESPONSE_REGISTER				0xFFFFF0000D00ULL

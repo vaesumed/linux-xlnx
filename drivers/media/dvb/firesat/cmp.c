@@ -10,15 +10,20 @@
  *	the License, or (at your option) any later version.
  */
 
-#include "cmp.h"
-#include <ieee1394.h>
-#include <nodemgr.h>
-#include <highlevel.h>
-#include <ohci1394.h>
+#include <linux/bug.h>
+#include <linux/hardirq.h>
+#include <linux/kernel.h>
+#include <linux/types.h>
+
 #include <hosts.h>
+#include <ieee1394.h>
 #include <ieee1394_core.h>
 #include <ieee1394_transactions.h>
+#include <nodemgr.h>
+
 #include "avc_api.h"
+#include "cmp.h"
+#include "firesat.h"
 
 typedef struct _OPCR
 {

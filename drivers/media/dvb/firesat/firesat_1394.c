@@ -11,26 +11,33 @@
  *	the License, or (at your option) any later version.
  */
 
-#include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/wait.h>
-#include <linux/module.h>
-#include <linux/delay.h>
-#include <linux/time.h>
+#include <linux/device.h>
 #include <linux/errno.h>
-#include <linux/interrupt.h>
-#include <ieee1394_hotplug.h>
-#include <nodemgr.h>
-#include <highlevel.h>
-#include <ohci1394.h>
-#include <hosts.h>
+#include <linux/kernel.h>
+#include <linux/list.h>
+#include <linux/module.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/string.h>
+#include <linux/types.h>
+#include <asm/atomic.h>
+
+#include <dmxdev.h>
+#include <dvb_demux.h>
+#include <dvb_frontend.h>
 #include <dvbdev.h>
 
-#include "firesat.h"
+#include <csr1212.h>
+#include <highlevel.h>
+#include <hosts.h>
+#include <ieee1394_hotplug.h>
+#include <nodemgr.h>
+
 #include "avc_api.h"
 #include "cmp.h"
-#include "firesat-rc.h"
+#include "firesat.h"
 #include "firesat-ci.h"
+#include "firesat-rc.h"
 
 #define FIRESAT_Vendor_ID   0x001287
 
@@ -74,52 +81,6 @@ MODULE_DEVICE_TABLE(ieee1394, firesat_id_table);
 /* list of all firesat devices */
 LIST_HEAD(firesat_list);
 spinlock_t firesat_list_lock = SPIN_LOCK_UNLOCKED;
-
-static void firesat_add_host(struct hpsb_host *host);
-static void firesat_remove_host(struct hpsb_host *host);
-static void firesat_host_reset(struct hpsb_host *host);
-
-static void fcp_request(struct hpsb_host *host,
-			int nodeid,
-			int direction,
-			int cts,
-			u8 *data,
-			size_t length);
-
-static struct hpsb_highlevel firesat_highlevel = {
-	.name		= "firedtv",
-	.add_host	= firesat_add_host,
-	.remove_host	= firesat_remove_host,
-	.host_reset	= firesat_host_reset,
-	.fcp_request	= fcp_request,
-};
-
-static void firesat_add_host (struct hpsb_host *host)
-{
-	struct ti_ohci *ohci = (struct ti_ohci *)host->hostdata;
-
-	/* We only work with the OHCI-1394 driver */
-	if (strcmp(host->driver->name, OHCI1394_DRIVER_NAME))
-		return;
-
-	if (!hpsb_create_hostinfo(&firesat_highlevel, host, 0)) {
-		printk(KERN_ERR "Cannot allocate hostinfo\n");
-		return;
-	}
-
-	hpsb_set_hostinfo(&firesat_highlevel, host, ohci);
-	hpsb_set_hostinfo_key(&firesat_highlevel, host, ohci->host->id);
-}
-
-static void firesat_remove_host (struct hpsb_host *host)
-{
-
-}
-
-static void firesat_host_reset(struct hpsb_host *host)
-{
-    printk(KERN_INFO "FireSAT host_reset (nodeid = 0x%x, hosts active = %d)\n",host->node_id,host->nodes_active);
-}
 
 static void fcp_request(struct hpsb_host *host,
 			int nodeid,
@@ -350,6 +311,11 @@ static struct hpsb_protocol_driver firesat_driver = {
 		.probe  = firesat_probe,
 		.remove = firesat_remove,
 	},
+};
+
+static struct hpsb_highlevel firesat_highlevel = {
+	.name		= "firedtv",
+	.fcp_request	= fcp_request,
 };
 
 static int __init firesat_init(void)
