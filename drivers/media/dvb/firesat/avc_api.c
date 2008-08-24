@@ -1,9 +1,9 @@
 /*
  * FireSAT AVC driver
  *
- * Copyright (c) 2004 Andreas Monitzer <andy@monitzer.com>
- * Copyright (c) 2008 Ben Backx <ben@bbackx.com>
- * Copyright (c) 2008 Henrik Kurelid <henrik@kurelid.se>
+ * Copyright (C) 2004 Andreas Monitzer <andy@monitzer.com>
+ * Copyright (C) 2008 Ben Backx <ben@bbackx.com>
+ * Copyright (C) 2008 Henrik Kurelid <henrik@kurelid.se>
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as

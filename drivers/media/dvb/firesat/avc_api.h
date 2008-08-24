@@ -1,27 +1,20 @@
-/***************************************************************************
-                          avc_api.h  -  description
-                             -------------------
-    begin                : Wed May 1 2000
-    copyright            : (C) 2000 by Manfred Weihs
-    copyright            : (C) 2003 by Philipp Gutgsell
-    copyright            : (C) 2008 by Henrik Kurelid (henrik@kurelid.se)
-    email                : 0014guph@edu.fh-kaernten.ac.at
- ***************************************************************************/
-
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- ***************************************************************************/
-
 /*
- This is based on code written by Peter Halwachs,
- Thomas Groiss and Andreas Monitzer.
-*/
-
+ * AV/C API
+ *
+ * Copyright (C) 2000 Manfred Weihs
+ * Copyright (C) 2003 Philipp Gutgsell <0014guph@edu.fh-kaernten.ac.at>
+ * Copyright (C) 2004 Andreas Monitzer <andy@monitzer.com>
+ * Copyright (C) 2008 Ben Backx <ben@bbackx.com>
+ * Copyright (C) 2008 Henrik Kurelid <henrik@kurelid.se>
+ *
+ * This is based on code written by Peter Halwachs, Thomas Groiss and
+ * Andreas Monitzer.
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 
 #ifndef __AVC_API_H__
 #define __AVC_API_H__
