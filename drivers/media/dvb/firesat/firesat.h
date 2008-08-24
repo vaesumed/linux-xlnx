@@ -13,14 +13,10 @@
 #ifndef _FIREDTV_H
 #define _FIREDTV_H
 
-#include <linux/version.h>
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
-#include <linux/semaphore.h>
-#endif
-
 #include <linux/dvb/dmx.h>
 #include <linux/dvb/frontend.h>
 #include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/spinlock_types.h>
 #include <linux/types.h>
 #include <linux/wait.h>
@@ -32,6 +28,7 @@
 #include <dvb_net.h>
 #include <dvbdev.h>
 
+#include <linux/version.h>
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
 #define DVB_REGISTER_ADAPTER(x, y, z, w, v) dvb_register_adapter(x, y, z, w, v)
 #else
@@ -149,7 +146,7 @@ struct firesat {
 	int				ca_last_command;
 	int				ca_time_interval;
 
-	struct semaphore		avc_sem;
+	struct mutex			avc_mutex;
 	wait_queue_head_t		avc_wait;
 	atomic_t			avc_reply_received;
 
@@ -164,7 +161,7 @@ struct firesat {
 		int pid;
 		int type;	/* 1 - TS, 2 - Filter */
 	} channel[16];
-	struct semaphore		demux_sem;
+	struct mutex			demux_mutex;
 
 	/* needed by avc_api */
 	void *respfrm;

@@ -12,6 +12,7 @@
 
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/mutex.h>
 #include <linux/types.h>
 
 #include <dvb_demux.h>
@@ -26,39 +27,35 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 static struct firesat_channel *firesat_channel_allocate(struct firesat *firesat)
 {
+	struct firesat_channel *c = NULL;
 	int k;
 
-	//printk(KERN_INFO "%s\n", __func__);
-
-	if (down_interruptible(&firesat->demux_sem))
+	if (mutex_lock_interruptible(&firesat->demux_mutex))
 		return NULL;
 
-	for (k = 0; k < 16; k++) {
-		//printk(KERN_INFO "%s: channel %d: active = %d, pid = 0x%x\n",__func__,k,firesat->channel[k].active,firesat->channel[k].pid);
-
+	for (k = 0; k < 16; k++)
 		if (firesat->channel[k].active == 0) {
 			firesat->channel[k].active = 1;
-			up(&firesat->demux_sem);
-			return &firesat->channel[k];
+			c = &firesat->channel[k];
+			break;
 		}
-	}
 
-	up(&firesat->demux_sem);
-	return NULL; // no more channels available
+	mutex_unlock(&firesat->demux_mutex);
+	return c;
 }
 
 static int firesat_channel_collect(struct firesat *firesat, int *pidc, u16 pid[])
 {
 	int k, l = 0;
 
-	if (down_interruptible(&firesat->demux_sem))
+	if (mutex_lock_interruptible(&firesat->demux_mutex))
 		return -EINTR;
 
 	for (k = 0; k < 16; k++)
 		if (firesat->channel[k].active == 1)
 			pid[l++] = firesat->channel[k].pid;
 
-	up(&firesat->demux_sem);
+	mutex_unlock(&firesat->demux_mutex);
 
 	*pidc = l;
 
@@ -68,12 +65,12 @@ static int firesat_channel_collect(struct firesat *firesat, int *pidc, u16 pid[]
 static int firesat_channel_release(struct firesat *firesat,
 				   struct firesat_channel *channel)
 {
-	if (down_interruptible(&firesat->demux_sem))
+	if (mutex_lock_interruptible(&firesat->demux_mutex))
 		return -EINTR;
 
 	channel->active = 0;
 
-	up(&firesat->demux_sem);
+	mutex_unlock(&firesat->demux_mutex);
 	return 0;
 }
 
@@ -163,7 +160,8 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 {
 	struct dvb_demux *demux = dvbdmxfeed->demux;
 	struct firesat *firesat = (struct firesat*)demux->priv;
-	int k, l = 0;
+	struct firesat_channel *c = dvbdmxfeed->priv;
+	int k, l;
 	u16 pids[16];
 
 	//printk(KERN_INFO "%s (pid %u)\n", __func__, dvbdmxfeed->pid);
@@ -188,30 +186,24 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 			return 0;
 	}
 
-	if (down_interruptible(&firesat->demux_sem))
+	if (mutex_lock_interruptible(&firesat->demux_mutex))
 		return -EINTR;
 
-
-	// list except channel to be removed
-	for (k = 0; k < 16; k++)
+	/* list except channel to be removed */
+	for (k = 0, l = 0; k < 16; k++)
 		if (firesat->channel[k].active == 1) {
-			if (&firesat->channel[k] !=
-				(struct firesat_channel *)dvbdmxfeed->priv)
+			if (&firesat->channel[k] != c)
 				pids[l++] = firesat->channel[k].pid;
 			else
 				firesat->channel[k].active = 0;
 		}
 
-	if ((k = AVCTuner_SetPIDs(firesat, l, pids))) {
-		up(&firesat->demux_sem);
-		return k;
-	}
+	k = AVCTuner_SetPIDs(firesat, l, pids);
+	if (!k)
+		c->active = 0;
 
-	((struct firesat_channel *)dvbdmxfeed->priv)->active = 0;
-
-	up(&firesat->demux_sem);
-
-	return 0;
+	mutex_unlock(&firesat->demux_mutex);
+	return k;
 }
 
 int firesat_dvbdev_init(struct firesat *firesat,

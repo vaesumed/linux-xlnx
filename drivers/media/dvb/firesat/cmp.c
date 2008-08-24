@@ -13,6 +13,7 @@
 #include <linux/bug.h>
 #include <linux/hardirq.h>
 #include <linux/kernel.h>
+#include <linux/mutex.h>
 #include <linux/types.h>
 
 #include <hosts.h>
@@ -79,27 +80,33 @@ int firesat_hpsb_lock(struct hpsb_host *host, nodeid_t node, unsigned int genera
 }
 
 
-static int cmp_read(struct firesat *firesat, void *buffer, u64 addr, size_t length) {
+static int cmp_read(struct firesat *firesat, void *buf, u64 addr, size_t len)
+{
 	int ret;
-	if(down_interruptible(&firesat->avc_sem))
+
+	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
-	ret = hpsb_read(firesat->host, firesat->nodeentry->nodeid, firesat->nodeentry->generation,
-		addr, buffer, length);
+	ret = hpsb_read(firesat->host, firesat->nodeentry->nodeid,
+			firesat->nodeentry->generation, addr, buf, len);
 
-	up(&firesat->avc_sem);
+	mutex_unlock(&firesat->avc_mutex);
 	return ret;
 }
 
-static int cmp_lock(struct firesat *firesat, quadlet_t *data, u64 addr, quadlet_t arg, int ext_tcode) {
+static int cmp_lock(struct firesat *firesat, quadlet_t *data, u64 addr,
+		quadlet_t arg, int ext_tcode)
+{
 	int ret;
-	if(down_interruptible(&firesat->avc_sem))
+
+	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
-	ret = firesat_hpsb_lock(firesat->host, firesat->nodeentry->nodeid, firesat->nodeentry->generation,
-		addr, ext_tcode, data, arg);
+	ret = firesat_hpsb_lock(firesat->host, firesat->nodeentry->nodeid,
+				firesat->nodeentry->generation,
+				addr, ext_tcode, data, arg);
 
-	up(&firesat->avc_sem);
+	mutex_unlock(&firesat->avc_mutex);
 	return ret;
 }
 

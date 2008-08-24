@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/string.h>
@@ -177,10 +178,10 @@ static int firesat_probe(struct device *dev)
 			return -ENOMEM;
 		}
 
-		sema_init(&firesat->avc_sem, 1);
+		mutex_init(&firesat->avc_mutex);
 		init_waitqueue_head(&firesat->avc_wait);
 		atomic_set(&firesat->avc_reply_received, 1);
-		sema_init(&firesat->demux_sem, 1);
+		mutex_init(&firesat->demux_mutex);
 		atomic_set(&firesat->reschedule_remotecontrol, 0);
 
 		spin_lock_irqsave(&firesat_list_lock, flags);
