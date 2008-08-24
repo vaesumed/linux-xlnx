@@ -229,60 +229,20 @@ int firesat_dvbdev_init(struct firesat *firesat,
 {
 	int result;
 
-#if 0
-		switch (firesat->type) {
-		case FireSAT_DVB_S:
-			firesat->model_name = "FireSAT DVB-S";
-			firesat->frontend_info = &firesat_S_frontend_info;
-			break;
-		case FireSAT_DVB_C:
-			firesat->model_name = "FireSAT DVB-C";
-			firesat->frontend_info = &firesat_C_frontend_info;
-			break;
-		case FireSAT_DVB_T:
-			firesat->model_name = "FireSAT DVB-T";
-			firesat->frontend_info = &firesat_T_frontend_info;
-			break;
-		default:
-			printk("%s: unknown model type 0x%x on subunit %d!\n",
-				__func__, firesat->type,subunit);
-			firesat->model_name = "Unknown";
-			firesat->frontend_info = NULL;
-		}
-#endif
-/* // ------- CRAP -----------
-		if (!firesat->frontend_info) {
-			spin_lock_irqsave(&firesat_list_lock, flags);
-			list_del(&firesat->list);
-			spin_unlock_irqrestore(&firesat_list_lock, flags);
-			kfree(firesat);
-			continue;
-		}
-*/
-		//initialising firesat->adapter before calling dvb_register_adapter
-		if (!(firesat->adapter = kmalloc(sizeof (struct dvb_adapter), GFP_KERNEL))) {
-			printk("%s: couldn't allocate memory.\n", __func__);
-			kfree(firesat->adapter);
-			kfree(firesat);
-			return -ENOMEM;
-		}
+	firesat->adapter = kmalloc(sizeof(*firesat->adapter), GFP_KERNEL);
+	if (!firesat->adapter) {
+		printk(KERN_ERR "firedtv: couldn't allocate memory\n");
+		return -ENOMEM;
+	}
 
-		if ((result = DVB_REGISTER_ADAPTER(firesat->adapter,
-						   firesat->model_name,
-						   THIS_MODULE,
-						   dev, adapter_nr)) < 0) {
-
-			printk("%s: dvb_register_adapter failed: error %d\n", __func__, result);
-#if 0
-			/* ### cleanup */
-			spin_lock_irqsave(&firesat_list_lock, flags);
-			list_del(&firesat->list);
-			spin_unlock_irqrestore(&firesat_list_lock, flags);
-#endif
-			kfree(firesat);
-
-			return result;
-		}
+	result = DVB_REGISTER_ADAPTER(firesat->adapter,
+				      firedtv_model_names[firesat->type],
+				      THIS_MODULE, dev, adapter_nr);
+	if (result < 0) {
+		printk(KERN_ERR "firedtv: dvb_register_adapter failed\n");
+		kfree(firesat->adapter);
+		return result;
+	}
 
 		memset(&firesat->demux, 0, sizeof(struct dvb_demux));
 		firesat->demux.dmx.capabilities = 0/*DMX_TS_FILTERING | DMX_SECTION_FILTERING*/;

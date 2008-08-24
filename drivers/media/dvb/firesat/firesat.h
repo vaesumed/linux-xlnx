@@ -116,15 +116,15 @@
 
 
 enum model_type {
-	FireSAT_DVB_S = 1,
-	FireSAT_DVB_C = 2,
-	FireSAT_DVB_T = 3,
-	FireSAT_DVB_S2 = 4
+	FireSAT_UNKNOWN = 0,
+	FireSAT_DVB_S   = 1,
+	FireSAT_DVB_C   = 2,
+	FireSAT_DVB_T   = 3,
+	FireSAT_DVB_S2  = 4,
 };
 
 struct firesat {
 	struct dvb_demux dvb_demux;
-	char *model_name;
 
 	/* DVB bits */
 	struct dvb_adapter		*adapter;
@@ -210,6 +210,7 @@ struct CIPHeader {
 	};
 };
 
+extern const char *firedtv_model_names[];
 extern struct list_head firesat_list;
 extern spinlock_t firesat_list_lock;
 
