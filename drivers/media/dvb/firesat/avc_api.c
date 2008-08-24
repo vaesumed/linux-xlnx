@@ -15,6 +15,7 @@
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/moduleparam.h>
+#include <linux/mutex.h>
 #include <linux/wait.h>
 #include <asm/atomic.h>
 
@@ -237,17 +238,20 @@ static int __AVCWrite(struct firesat *firesat, const AVCCmdFrm *CmdFrm,
 	return 0;
 }
 
-int AVCWrite(struct firesat*firesat, const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm) {
+int AVCWrite(struct firesat*firesat, const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm)
+{
 	int ret;
-	if(down_interruptible(&firesat->avc_sem))
+
+	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
 	ret = __AVCWrite(firesat, CmdFrm, RspFrm);
 
-	up(&firesat->avc_sem);
+	mutex_unlock(&firesat->avc_mutex);
 	return ret;
 }
 
+#if 0 /* FIXME:  This should probably be a workqueue job. */
 static void do_schedule_remotecontrol(unsigned long ignored);
 DECLARE_TASKLET(schedule_remotecontrol, do_schedule_remotecontrol, 0);
 
@@ -272,6 +276,7 @@ static void do_schedule_remotecontrol(unsigned long ignored) {
 	}
 	spin_unlock_irqrestore(&firesat_list_lock, flags);
 }
+#endif
 
 int AVCRecv(struct firesat *firesat, u8 *data, size_t length) {
 //	printk(KERN_INFO "%s\n",__func__);
