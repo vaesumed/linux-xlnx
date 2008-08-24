@@ -1832,6 +1832,7 @@ struct buffered_dirent {
 struct readdir_data {
 	char		*dirent;
 	size_t		used;
+	int		full;
 };
 
 static int nfsd_buffered_filldir(void *__buf, const char *name, int namlen,
@@ -1842,8 +1843,10 @@ static int nfsd_buffered_filldir(void *__buf, const char *name, int namlen,
 	unsigned int reclen;
 
 	reclen = ALIGN(sizeof(struct buffered_dirent) + namlen, sizeof(u64));
-	if (buf->used + reclen > PAGE_SIZE)
+	if (buf->used + reclen > PAGE_SIZE) {
+		buf->full = 1;
 		return -EINVAL;
+	}
 
 	de->namlen = namlen;
 	de->offset = offset;
@@ -1875,9 +1878,13 @@ static int nfsd_buffered_readdir(struct file *file, filldir_t func,
 		unsigned int reclen;
 
 		buf.used = 0;
+		buf.full = 0;
 
 		host_err = vfs_readdir(file, nfsd_buffered_filldir, &buf);
-		if (host_err)
+		if (buf.full)
+			host_err = 0;
+
+		if (host_err < 0)
 			break;
 
 		size = buf.used;
