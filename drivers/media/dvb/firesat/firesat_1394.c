@@ -156,6 +156,14 @@ static void fcp_request(struct hpsb_host *host,
 	  printk("%s: received invalid fcp request, ignored\n", __func__);
 }
 
+const char *firedtv_model_names[] = {
+	[FireSAT_UNKNOWN] = "unknown type",
+	[FireSAT_DVB_S]   = "FireDTV S/CI",
+	[FireSAT_DVB_C]   = "FireDTV C/CI",
+	[FireSAT_DVB_T]   = "FireDTV T/CI",
+	[FireSAT_DVB_S2]  = "FireDTV S2  ",
+};
+
 static int firesat_probe(struct device *dev)
 {
 	struct unit_directory *ud = container_of(dev, struct unit_directory, device);
@@ -165,6 +173,7 @@ static int firesat_probe(struct device *dev)
 	unsigned char subunitcount = 0xff, subunit;
 	struct firesat **firesats = kmalloc(sizeof (void*) * 2,GFP_KERNEL);
 	int kv_len;
+	int i;
 	char *kv_buf;
 
 	if (!firesats) {
@@ -244,23 +253,13 @@ static int firesat_probe(struct device *dev)
 		while ((kv_buf + kv_len - 1) == '\0') kv_len--;
 		kv_buf[kv_len++] = '\0';
 
-		/* Determining the device model */
-		if (strcmp(kv_buf, "FireDTV S/CI") == 0) {
-			printk(KERN_INFO "%s: found DVB/S\n", __func__);
-			firesat->type = 1;
-		} else if (strcmp(kv_buf, "FireDTV C/CI") == 0) {
-			printk(KERN_INFO "%s: found DVB/C\n", __func__);
-			firesat->type = 2;
-		} else if (strcmp(kv_buf, "FireDTV T/CI") == 0) {
-			printk(KERN_INFO "%s: found DVB/T\n", __func__);
-			firesat->type = 3;
-		} else if (strcmp(kv_buf, "FireDTV S2  ") == 0) {
-			printk(KERN_INFO "%s: found DVB/S2\n", __func__);
-			firesat->type = 4;
-		}
+		for (i = ARRAY_SIZE(firedtv_model_names); --i;)
+			if (strcmp(kv_buf, firedtv_model_names[i]) == 0)
+				break;
+		firesat->type = i;
 		kfree(kv_buf);
 
-		if (AVCIdentifySubunit(firesat, NULL, (int*)&firesat->type)) {
+		if (AVCIdentifySubunit(firesat)) {
 			printk("%s: cannot identify subunit %d\n", __func__, subunit);
 			spin_lock_irqsave(&firesat_list_lock, flags);
 			list_del(&firesat->list);
@@ -270,6 +269,7 @@ static int firesat_probe(struct device *dev)
 		}
 
 // ----
+		/* FIXME: check for error return */
 		firesat_dvbdev_init(firesat, dev, fe);
 // ----
 		firesats[subunit] = firesat;

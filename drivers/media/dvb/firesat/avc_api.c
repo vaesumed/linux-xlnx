@@ -718,7 +718,8 @@ int AVCTuner_GetTS(struct firesat *firesat){
 	return 0;
 }
 
-int AVCIdentifySubunit(struct firesat *firesat, unsigned char *systemId, int *transport) {
+int AVCIdentifySubunit(struct firesat *firesat)
+{
 	AVCCmdFrm CmdFrm;
 	AVCRspFrm RspFrm;
 
@@ -752,8 +753,6 @@ int AVCIdentifySubunit(struct firesat *firesat, unsigned char *systemId, int *tr
 		printk(KERN_ERR "%s: Invalid response length\n", __func__);
 		return -EINVAL;
 	}
-	if(systemId)
-		*systemId = RspFrm.operand[7];
 	return 0;
 }
 

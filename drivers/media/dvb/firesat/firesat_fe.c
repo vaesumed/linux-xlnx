@@ -209,21 +209,17 @@ int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe)
 {
 	switch (firesat->type) {
 	case FireSAT_DVB_S:
-		firesat->model_name = "FireSAT DVB-S";
 		firesat->frontend_info = &firesat_S_frontend_info;
 		break;
 	case FireSAT_DVB_C:
-		firesat->model_name = "FireSAT DVB-C";
 		firesat->frontend_info = &firesat_C_frontend_info;
 		break;
 	case FireSAT_DVB_T:
-		firesat->model_name = "FireSAT DVB-T";
 		firesat->frontend_info = &firesat_T_frontend_info;
 		break;
 	default:
-		printk("%s: unknown model type 0x%x !\n",
-			__func__, firesat->type);
-		firesat->model_name = "Unknown";
+		printk(KERN_ERR "firedtv: no frontend for model type 0x%x\n",
+		       firesat->type);
 		firesat->frontend_info = NULL;
 	}
 	fe->ops = firesat_ops;

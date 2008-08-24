@@ -423,7 +423,7 @@ extern int AVCTuner_DSD(struct firesat *firesat, struct dvb_frontend_parameters 
 extern int AVCTuner_SetPIDs(struct firesat *firesat, unsigned char pidc, u16 pid[]);
 extern int AVCTuner_GetTS(struct firesat *firesat);
 
-extern int AVCIdentifySubunit(struct firesat *firesat, unsigned char *systemId, int *transport);
+extern int AVCIdentifySubunit(struct firesat *firesat);
 extern int AVCLNBControl(struct firesat *firesat, char voltage, char burst, char conttone, char nrdiseq, struct dvb_diseqc_master_cmd *diseqcmd);
 extern int AVCSubUnitInfo(struct firesat *firesat, char *subunitcount);
 extern int AVCRegisterRemoteControl(struct firesat *firesat);
