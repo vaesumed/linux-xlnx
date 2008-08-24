@@ -10,12 +10,15 @@
  *	the License, or (at your option) any later version.
  */
 
-#include "firesat-ci.h"
-#include "firesat.h"
-#include "avc_api.h"
-
 #include <linux/dvb/ca.h>
+#include <linux/fs.h>
+#include <linux/module.h>
+
 #include <dvbdev.h>
+
+#include "avc_api.h"
+#include "firesat.h"
+#include "firesat-ci.h"
 
 static unsigned int ca_debug = 0;
 module_param(ca_debug, int, 0644);

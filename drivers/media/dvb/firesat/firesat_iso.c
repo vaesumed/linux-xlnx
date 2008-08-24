@@ -9,6 +9,16 @@
  *	the License, or (at your option) any later version.
  */
 
+#include <linux/errno.h>
+#include <linux/kernel.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
+
+#include <dvb_demux.h>
+
+#include <dma.h>
+#include <iso.h>
+
 #include "firesat.h"
 
 static void rawiso_activity_cb(struct hpsb_iso *iso);

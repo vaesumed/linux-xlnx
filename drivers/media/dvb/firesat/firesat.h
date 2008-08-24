@@ -10,21 +10,27 @@
  *	the License, or (at your option) any later version.
  */
 
-#ifndef __FIRESAT_H
-#define __FIRESAT_H
-
-#include "dvb_frontend.h"
-#include "dmxdev.h"
-#include "dvb_demux.h"
-#include "dvb_net.h"
+#ifndef _FIREDTV_H
+#define _FIREDTV_H
 
 #include <linux/version.h>
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
 #include <linux/semaphore.h>
 #endif
-#include <linux/dvb/frontend.h>
+
 #include <linux/dvb/dmx.h>
-#include <iso.h>
+#include <linux/dvb/frontend.h>
+#include <linux/list.h>
+#include <linux/spinlock_types.h>
+#include <linux/types.h>
+#include <linux/wait.h>
+#include <asm/atomic.h>
+
+#include <demux.h>
+#include <dmxdev.h>
+#include <dvb_demux.h>
+#include <dvb_net.h>
+#include <dvbdev.h>
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
 #define DVB_REGISTER_ADAPTER(x, y, z, w, v) dvb_register_adapter(x, y, z, w, v)
@@ -123,6 +129,10 @@ enum model_type {
 	FireSAT_DVB_S2  = 4,
 };
 
+struct hpsb_host;
+struct hpsb_iso;
+struct node_entry;
+
 struct firesat {
 	struct dvb_demux dvb_demux;
 
@@ -214,19 +224,19 @@ extern const char *firedtv_model_names[];
 extern struct list_head firesat_list;
 extern spinlock_t firesat_list_lock;
 
+struct device;
+
 /* firesat_dvb.c */
-extern int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed);
-extern int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
-extern int firesat_dvbdev_init(struct firesat *firesat,
-			       struct device *dev,
-			       struct dvb_frontend *fe);
+int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed);
+int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
+int firesat_dvbdev_init(struct firesat *firesat, struct device *dev,
+		struct dvb_frontend *fe);
 
 /* firesat_fe.c */
-extern int firesat_frontend_attach(struct firesat *firesat,
-				   struct dvb_frontend *fe);
+int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe);
 
 /* firesat_iso.c */
-extern int setup_iso_channel(struct firesat *firesat);
-extern void tear_down_iso_channel(struct firesat *firesat);
+int setup_iso_channel(struct firesat *firesat);
+void tear_down_iso_channel(struct firesat *firesat);
 
-#endif
+#endif /* _FIREDTV_H */

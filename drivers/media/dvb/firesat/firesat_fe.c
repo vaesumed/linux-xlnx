@@ -10,26 +10,15 @@
  *	the License, or (at your option) any later version.
  */
 
-#include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/wait.h>
-#include <linux/module.h>
-#include <linux/delay.h>
-#include <linux/time.h>
 #include <linux/errno.h>
-#include <linux/interrupt.h>
-#include <ieee1394_hotplug.h>
-#include <nodemgr.h>
-#include <highlevel.h>
-#include <ohci1394.h>
-#include <hosts.h>
-#include <dvbdev.h>
+#include <linux/kernel.h>
+#include <linux/types.h>
 
-#include "firesat.h"
+#include <dvb_frontend.h>
+
 #include "avc_api.h"
 #include "cmp.h"
-#include "firesat-rc.h"
-#include "firesat-ci.h"
+#include "firesat.h"
 
 static int firesat_dvb_init(struct dvb_frontend *fe)
 {
