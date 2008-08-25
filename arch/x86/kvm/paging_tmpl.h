@@ -29,7 +29,6 @@
 	#define PT_BASE_ADDR_MASK PT64_BASE_ADDR_MASK
 	#define PT_DIR_BASE_ADDR_MASK PT64_DIR_BASE_ADDR_MASK
 	#define PT_INDEX(addr, level) PT64_INDEX(addr, level)
-	#define SHADOW_PT_INDEX(addr, level) PT64_INDEX(addr, level)
 	#define PT_LEVEL_MASK(level) PT64_LEVEL_MASK(level)
 	#define PT_LEVEL_BITS PT64_LEVEL_BITS
 	#ifdef CONFIG_X86_64
@@ -46,7 +45,6 @@
 	#define PT_BASE_ADDR_MASK PT32_BASE_ADDR_MASK
 	#define PT_DIR_BASE_ADDR_MASK PT32_DIR_BASE_ADDR_MASK
 	#define PT_INDEX(addr, level) PT32_INDEX(addr, level)
-	#define SHADOW_PT_INDEX(addr, level) PT64_INDEX(addr, level)
 	#define PT_LEVEL_MASK(level) PT32_LEVEL_MASK(level)
 	#define PT_LEVEL_BITS PT32_LEVEL_BITS
 	#define PT_MAX_FULL_LEVELS 2
@@ -345,7 +343,7 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 		shadow_addr = __pa(shadow_page->spt);
 		shadow_pte = shadow_addr | PT_PRESENT_MASK | PT_ACCESSED_MASK
 			| PT_WRITABLE_MASK | PT_USER_MASK;
-		*shadow_ent = shadow_pte;
+		set_shadow_pte(shadow_ent, shadow_pte);
 	}
 
 	mmu_set_spte(vcpu, shadow_ent, access, walker->pte_access & access,
@@ -504,7 +502,6 @@ static void FNAME(prefetch_page)(struct kvm_vcpu *vcpu,
 #undef FNAME
 #undef PT_BASE_ADDR_MASK
 #undef PT_INDEX
-#undef SHADOW_PT_INDEX
 #undef PT_LEVEL_MASK
 #undef PT_DIR_BASE_ADDR_MASK
 #undef PT_LEVEL_BITS
