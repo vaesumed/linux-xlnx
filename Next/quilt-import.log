@@ -1,0 +1,118 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing m68k based on 6a55617ed5d1aa62b850de2cf66f5ede2eef4825
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 6a55617ed5d1aa62b850de2cf66f5ede2eef4825
+HEAD is now at 6a55617 Linux v2.6.27-rc4
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-use-bcd2bin-bin2bcd.diff
+m68k-use-percent-pS-infrastructure.diff
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on b09c3e3f1710b554348c98e78fbf4a661918779a
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard b09c3e3f1710b554348c98e78fbf4a661918779a
+HEAD is now at b09c3e3 removed unused #include <version.h>
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-fix-pty-termios-race
+mcfserial-goes-byebye
+epca-port-init
+serial-remove-nr-irq
+.dotest/patch:163: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+blackfin-use-initdata
+blackfin-suspend-all
+blackfin-whitespace-trim
+blackfin-common-vars
+blackfin-remove-useless-stop
+blackfin-fix-stop-bug
+blackfin-fix-ircp-bug
+blackfin-fix-uart-map
+tty-move-tioclinux
+tty-fixup-uml
+tty-split-buffering
+tty-split-port
+tty-ldisc-for-pps
+tty-kref
+tty-kref-modcount
+tty-kref-get-current-tty
+tty-move-write
+tty-usbserial-kref
+.dotest/patch:134: trailing whitespace.
+out:		
+.dotest/patch:326: trailing whitespace.
+		
+.dotest/patch:897: trailing whitespace.
+		if (tty && !C_CLOCAL(tty)) 
+.dotest/patch:1070: trailing whitespace.
+	tty_kref_put(tty);		     
+.dotest/patch:1320: trailing whitespace.
+		} else 
+warning: 5 lines add whitespace errors.
+tty-misc-kref
+tty-kref-stallion
+tty-kref-mxser
+.dotest/patch:390: trailing whitespace.
+				
+warning: 1 line adds whitespace errors.
+tty-fix-vhangup
+tty-current-locking
+tty-current-fix-abusers
+tty-tiocrs485
+tty-kref-hso
+tty-fix-pty
+char-cyclades-remove-bogus-iomap.patch
+char-sx-fix-io-unmapping.patch
+8250-remove-a-few-inlines-of-dubious-value.patch
+vt-remove-bogus-lockdrop
+tty-fix-shutdown
+tty-move-special-cases
+.dotest/patch:553: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+tty-add-termiox
+.dotest/patch:83: trailing whitespace.
+#endif		
+warning: 1 line adds whitespace errors.
+tty-fix-softcar
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.27-rc4-git1
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard d3ee1b405872214609868f3cde631ac157026dd0
+HEAD is now at d3ee1b4 Merge git://git.kernel.org/pub/scm/linux/kernel/git/herbert/crypto-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-fix-device_init_wakeup-place.patch
+i2c-add-missing-kerneldoc-descriptions.patch
+i2c-less-noisy-on-missing-smbus-quick.patch
+i2c-remove-unused-include-version.h.patch
+i2c-isp1301_omap-convert-to-new-style-part-1.patch
+i2c-isp1301_omap-convert-to-new-style-part-2.patch
+i2c-pca-isa-dont-grab-arbitrary-resources.patch
+i2c-renesas-highlander-fpga-smbus-support.patch
+i2c-viapro-add-vx800-support.patch
+i2c-tps65010-vibrator-hookup-to-gpiolib.patch
+hwmon-dme1737-convert-to-new-style-part-1.patch
+hwmon-dme1737-convert-to-new-style-part-2.patch
+i2c-floppy-controller-bus-driver.patch
+i2c-floppy-dependencies.patch
+i2c-i801-smbus-patch-for-intel-ibex-peak-deviceids.patch
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
