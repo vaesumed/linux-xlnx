@@ -15,6 +15,7 @@ Supported adapters:
   * Intel 82801I (ICH9)
   * Intel Tolapai
   * Intel ICH10
+  * Intel PCH
    Datasheets: Publicly available at the Intel website
 
 Authors: 
