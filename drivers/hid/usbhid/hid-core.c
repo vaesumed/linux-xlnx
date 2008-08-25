@@ -414,7 +414,7 @@ void usbhid_submit_report(struct hid_device *hid, struct hid_report *report, uns
 
 		if ((head = (usbhid->outhead + 1) & (HID_OUTPUT_FIFO_SIZE - 1)) == usbhid->outtail) {
 			spin_unlock_irqrestore(&usbhid->outlock, flags);
-			dev_warn(hid->dev, "output queue full\n");
+			dev_warn(&hid->dev, "output queue full\n");
 			return;
 		}
 
@@ -433,7 +433,7 @@ void usbhid_submit_report(struct hid_device *hid, struct hid_report *report, uns
 
 	if ((head = (usbhid->ctrlhead + 1) & (HID_CONTROL_FIFO_SIZE - 1)) == usbhid->ctrltail) {
 		spin_unlock_irqrestore(&usbhid->ctrllock, flags);
-		dev_warn(hid->dev, "control queue full\n");
+		dev_warn(&hid->dev, "control queue full\n");
 		return;
 	}
 
@@ -565,7 +565,7 @@ void usbhid_init_reports(struct hid_device *hid)
 	}
 
 	if (err)
-		dev_warn(hid->dev, "timeout initializing reports\n");
+		dev_warn(&hid->dev, "timeout initializing reports\n");
 }
 
 /*
