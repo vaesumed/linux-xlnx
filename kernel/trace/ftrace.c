@@ -314,6 +314,7 @@ static void ftrace_free_rec(struct dyn_ftrace *rec)
 	rec->flags |= FTRACE_FL_FREE;
 }
 
+#ifdef CONFIG_FTRACE_MCOUNT_RECORD
 void ftrace_release(void *start, unsigned long size)
 {
 	struct dyn_ftrace *rec;
@@ -339,6 +340,7 @@ void ftrace_release(void *start, unsigned long size)
 	spin_unlock(&ftrace_lock);
 
 }
+#endif /* CONFIG_FTRACE_MCOUNT_RECORD */
 
 static struct dyn_ftrace *ftrace_alloc_dyn_node(unsigned long ip)
 {
