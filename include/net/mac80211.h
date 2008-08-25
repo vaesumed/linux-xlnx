@@ -363,6 +363,7 @@ static inline struct ieee80211_tx_info *IEEE80211_SKB_CB(struct sk_buff *skb)
  * @RX_FLAG_TSFT: The timestamp passed in the RX status (@mactime field)
  *	is valid. This is useful in monitor mode and necessary for beacon frames
  *	to enable IBSS merging.
+ * @RX_FLAG_SHORTPRE: Short preamble was used for this frame
  */
 enum mac80211_rx_flags {
 	RX_FLAG_MMIC_ERROR	= 1<<0,
@@ -373,6 +374,7 @@ enum mac80211_rx_flags {
 	RX_FLAG_FAILED_FCS_CRC	= 1<<5,
 	RX_FLAG_FAILED_PLCP_CRC = 1<<6,
 	RX_FLAG_TSFT		= 1<<7,
+	RX_FLAG_SHORTPRE	= 1<<8
 };
 
 /**
@@ -1557,16 +1559,6 @@ ieee80211_get_buffered_bc(struct ieee80211_hw *hw, struct ieee80211_vif *vif);
 unsigned int ieee80211_get_hdrlen_from_skb(const struct sk_buff *skb);
 
 /**
- * ieee80211_get_hdrlen - get header length from frame control
- *
- * This function returns the 802.11 header length in bytes (not including
- * encryption headers.)
- *
- * @fc: the frame control field (in CPU endianness)
- */
-int ieee80211_get_hdrlen(u16 fc);
-
-/**
  * ieee80211_hdrlen - get header length in bytes from frame control
  * @fc: frame control field in little-endian format
  */
@@ -1606,6 +1598,16 @@ void ieee80211_wake_queue(struct ieee80211_hw *hw, int queue);
  * Drivers should use this function instead of netif_stop_queue.
  */
 void ieee80211_stop_queue(struct ieee80211_hw *hw, int queue);
+
+/**
+ * ieee80211_queue_stopped - test status of the queue
+ * @hw: pointer as obtained from ieee80211_alloc_hw().
+ * @queue: queue number (counted from zero).
+ *
+ * Drivers should use this function instead of netif_stop_queue.
+ */
+
+int ieee80211_queue_stopped(struct ieee80211_hw *hw, int queue);
 
 /**
  * ieee80211_stop_queues - stop all queues
