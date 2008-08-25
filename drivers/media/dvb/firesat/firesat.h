@@ -20,6 +20,7 @@
 #include <linux/spinlock_types.h>
 #include <linux/types.h>
 #include <linux/wait.h>
+#include <linux/workqueue.h>
 #include <asm/atomic.h>
 
 #include <demux.h>
@@ -149,8 +150,7 @@ struct firesat {
 	struct mutex			avc_mutex;
 	wait_queue_head_t		avc_wait;
 	atomic_t			avc_reply_received;
-
-	atomic_t			reschedule_remotecontrol;
+	struct work_struct		remote_ctrl_work;
 
 	struct firesat_channel {
 		struct firesat *firesat;
