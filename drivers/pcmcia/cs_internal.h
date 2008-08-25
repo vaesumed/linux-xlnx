@@ -116,7 +116,6 @@ extern void pccard_sysfs_remove_socket(struct device *dev);
 extern struct rw_semaphore pcmcia_socket_list_rwsem;
 extern struct list_head pcmcia_socket_list;
 int pcmcia_get_window(struct pcmcia_socket *s, window_handle_t *handle, int idx, win_req_t *req);
-int pccard_get_configuration_info(struct pcmcia_socket *s, struct pcmcia_device *p_dev, config_info_t *config);
 int pccard_reset_card(struct pcmcia_socket *skt);
 
 
@@ -130,22 +129,26 @@ struct pcmcia_callback{
 
 int pccard_register_pcmcia(struct pcmcia_socket *s, struct pcmcia_callback *c);
 
-#define cs_socket_name(skt)	((skt)->dev.bus_id)
-
-#ifdef DEBUG
+#ifdef CONFIG_PCMCIA_DEBUG
 extern int cs_debug_level(int);
 
 #define cs_dbg(skt, lvl, fmt, arg...) do {		\
 	if (cs_debug_level(lvl))			\
-		printk(KERN_DEBUG "cs: %s: " fmt, 	\
-		       cs_socket_name(skt) , ## arg);	\
+		dev_printk(KERN_DEBUG, &skt->dev,	\
+		 "cs: " fmt, ## arg);			\
+} while (0)
+#define __cs_dbg(lvl, fmt, arg...) do {			\
+	if (cs_debug_level(lvl))			\
+		printk(KERN_DEBUG 			\
+		 "cs: " fmt, ## arg);			\
 } while (0)
 
 #else
 #define cs_dbg(skt, lvl, fmt, arg...) do { } while (0)
+#define __cs_dbg(lvl, fmt, arg...) do { } while (0)
 #endif
 
 #define cs_err(skt, fmt, arg...) \
-	printk(KERN_ERR "cs: %s: " fmt, (skt)->dev.bus_id , ## arg)
+	dev_printk(KERN_ERR, &skt->dev, "cs: " fmt, ## arg)
 
 #endif /* _LINUX_CS_INTERNAL_H */
