@@ -141,15 +141,6 @@ static void dentry_lru_add_tail(struct dentry *dentry)
 static void dentry_lru_del(struct dentry *dentry)
 {
 	if (!list_empty(&dentry->d_lru)) {
-		list_del(&dentry->d_lru);
-		dentry->d_sb->s_nr_dentry_unused--;
-		dentry_stat.nr_unused--;
-	}
-}
-
-static void dentry_lru_del_init(struct dentry *dentry)
-{
-	if (likely(!list_empty(&dentry->d_lru))) {
 		list_del_init(&dentry->d_lru);
 		dentry->d_sb->s_nr_dentry_unused--;
 		dentry_stat.nr_unused--;
@@ -316,7 +307,7 @@ int d_invalidate(struct dentry * dentry)
 static inline struct dentry * __dget_locked(struct dentry *dentry)
 {
 	atomic_inc(&dentry->d_count);
-	dentry_lru_del_init(dentry);
+	dentry_lru_del(dentry);
 	return dentry;
 }
 
@@ -432,7 +423,7 @@ static void prune_one_dentry(struct dentry * dentry)
 
 		if (dentry->d_op && dentry->d_op->d_delete)
 			dentry->d_op->d_delete(dentry);
-		dentry_lru_del_init(dentry);
+		dentry_lru_del(dentry);
 		__d_drop(dentry);
 		dentry = d_kill(dentry);
 		spin_lock(&dcache_lock);
@@ -492,7 +483,7 @@ restart:
 	}
 	while (!list_empty(&tmp)) {
 		dentry = list_entry(tmp.prev, struct dentry, d_lru);
-		dentry_lru_del_init(dentry);
+		dentry_lru_del(dentry);
 		spin_lock(&dentry->d_lock);
 		/*
 		 * We found an inuse dentry which was not removed from
@@ -621,7 +612,7 @@ static void shrink_dcache_for_umount_subtree(struct dentry *dentry)
 
 	/* detach this root from the system */
 	spin_lock(&dcache_lock);
-	dentry_lru_del_init(dentry);
+	dentry_lru_del(dentry);
 	__d_drop(dentry);
 	spin_unlock(&dcache_lock);
 
@@ -635,7 +626,7 @@ static void shrink_dcache_for_umount_subtree(struct dentry *dentry)
 			spin_lock(&dcache_lock);
 			list_for_each_entry(loop, &dentry->d_subdirs,
 					    d_u.d_child) {
-				dentry_lru_del_init(loop);
+				dentry_lru_del(loop);
 				__d_drop(loop);
 				cond_resched_lock(&dcache_lock);
 			}
@@ -817,7 +808,7 @@ resume:
 		struct dentry *dentry = list_entry(tmp, struct dentry, d_u.d_child);
 		next = tmp->next;
 
-		dentry_lru_del_init(dentry);
+		dentry_lru_del(dentry);
 		/* 
 		 * move only zero ref count dentries to the end 
 		 * of the unused list for prune_dcache
