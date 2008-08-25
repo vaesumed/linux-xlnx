@@ -237,9 +237,8 @@ static int firesat_probe(struct device *dev)
 		firesats[subunit] = firesat;
 	} // loop for all tuners
 
-	//beta ;-) Disable remote control stuff to avoid crashing
-	//if(firesats[0])
-	//	AVCRegisterRemoteControl(firesats[0]);
+	if (firesats[0])
+		AVCRegisterRemoteControl(firesats[0]);
 
     return 0;
 }
@@ -325,28 +324,32 @@ static int __init firesat_init(void)
 {
 	int ret;
 
-	printk(KERN_INFO "firedtv loaded\n");
 	hpsb_register_highlevel(&firesat_highlevel);
 	ret = hpsb_register_protocol(&firesat_driver);
 	if (ret) {
 		printk(KERN_ERR "firedtv: failed to register protocol\n");
-		hpsb_unregister_highlevel(&firesat_highlevel);
-		return ret;
+		goto fail;
 	}
 
-	//Crash in this function, just disable RC for the time being...
-	//Don't forget to uncomment in firesat_exit and firesat_probe when you enable this.
-	/*if((ret=firesat_register_rc()))
-		printk("%s: firesat_register_rc return error code %d (ignored)\n", __func__, ret);*/
+	ret = firesat_register_rc();
+	if (ret) {
+		printk(KERN_ERR "firedtv: failed to register input device\n");
+		goto fail_rc;
+	}
 
 	return 0;
+fail_rc:
+	hpsb_unregister_protocol(&firesat_driver);
+fail:
+	hpsb_unregister_highlevel(&firesat_highlevel);
+	return ret;
 }
 
 static void __exit firesat_exit(void)
 {
+	firesat_unregister_rc();
 	hpsb_unregister_protocol(&firesat_driver);
 	hpsb_unregister_highlevel(&firesat_highlevel);
-	printk(KERN_INFO "firedtv quit\n");
 }
 
 module_init(firesat_init);
