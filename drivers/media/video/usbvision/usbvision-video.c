@@ -368,6 +368,7 @@ static int usbvision_v4l2_open(struct inode *inode, struct file *file)
 
 	PDEBUG(DBG_IO, "open");
 
+	lock_kernel();
 	usbvision_reset_powerOffTimer(usbvision);
 
 	if (usbvision->user)
@@ -425,6 +426,7 @@ static int usbvision_v4l2_open(struct inode *inode, struct file *file)
 	usbvision_empty_framequeues(usbvision);
 
 	PDEBUG(DBG_IO, "success");
+	unlock_kernel();
 	return errCode;
 }
 

@@ -1,7 +1,8 @@
 /*
-    Auvitek AU8522 QAM/8VSB demodulator driver
+    Legend Silicon LGS-8GL5 DMB-TH OFDM demodulator driver
 
-    Copyright (C) 2008 Steven Toth <stoth@hauppauge.com>
+    Copyright (C) 2008 Sirius International (Hong Kong) Limited
+	Timothy Lee <timothy.lee@siriushk.com>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,47 +20,26 @@
 
 */
 
-#ifndef __AU8522_H__
-#define __AU8522_H__
+#ifndef LGS8GL5_H
+#define LGS8GL5_H
 
 #include <linux/dvb/frontend.h>
 
-enum au8522_if_freq {
-	AU8522_IF_6MHZ = 0,
-	AU8522_IF_4MHZ,
-	AU8522_IF_3_25MHZ,
-};
-
-struct au8522_config {
+struct lgs8gl5_config {
 	/* the demodulator's i2c address */
 	u8 demod_address;
-
-	/* Return lock status based on tuner lock, or demod lock */
-#define AU8522_TUNERLOCKING 0
-#define AU8522_DEMODLOCKING 1
-	u8 status_mode;
-
-	enum au8522_if_freq vsb_if;
-	enum au8522_if_freq qam_if;
 };
 
-#if defined(CONFIG_DVB_AU8522) || 				\
-	    (defined(CONFIG_DVB_AU8522_MODULE) && defined(MODULE))
-extern struct dvb_frontend *au8522_attach(const struct au8522_config *config,
-					  struct i2c_adapter *i2c);
+#if defined(CONFIG_DVB_LGS8GL5) || \
+	(defined(CONFIG_DVB_LGS8GL5_MODULE) && defined(MODULE))
+extern struct dvb_frontend *lgs8gl5_attach(
+	const struct lgs8gl5_config *config, struct i2c_adapter *i2c);
 #else
-static inline
-struct dvb_frontend *au8522_attach(const struct au8522_config *config,
-				   struct i2c_adapter *i2c)
-{
+static inline struct dvb_frontend *lgs8gl5_attach(
+	const struct lgs8gl5_config *config, struct i2c_adapter *i2c) {
 	printk(KERN_WARNING "%s: driver disabled by Kconfig\n", __func__);
 	return NULL;
 }
-#endif /* CONFIG_DVB_AU8522 */
+#endif /* CONFIG_DVB_LGS8GL5 */
 
-#endif /* __AU8522_H__ */
-
-/*
- * Local variables:
- * c-basic-offset: 8
- */
+#endif /* LGS8GL5_H */
