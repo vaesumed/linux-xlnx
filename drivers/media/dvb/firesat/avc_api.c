@@ -252,27 +252,24 @@ int AVCWrite(struct firesat*firesat, const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm)
 
 int AVCRecv(struct firesat *firesat, u8 *data, size_t length)
 {
-//	printk(KERN_INFO "%s\n",__func__);
+	AVCRspFrm *RspFrm = (AVCRspFrm *)data;
 
-	// remote control handling
-
-#if 0
-	AVCRspFrm *RspFrm = (AVCRspFrm*)data;
-
-	if(/*RspFrm->length >= 8 && ###*/
-			((RspFrm->operand[0] == SFE_VENDOR_DE_COMPANYID_0 &&
-			RspFrm->operand[1] == SFE_VENDOR_DE_COMPANYID_1 &&
-			RspFrm->operand[2] == SFE_VENDOR_DE_COMPANYID_2)) &&
-			RspFrm->operand[3] == SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL) {
-		if(RspFrm->resp == CHANGED) {
-//			printk(KERN_INFO "%s: code = %02x %02x\n",__func__,RspFrm->operand[4],RspFrm->operand[5]);
-			firesat_got_remotecontrolcode((((u16)RspFrm->operand[4]) << 8) | ((u16)RspFrm->operand[5]));
+	if (length >= 8 &&
+	    RspFrm->operand[0] == SFE_VENDOR_DE_COMPANYID_0 &&
+	    RspFrm->operand[1] == SFE_VENDOR_DE_COMPANYID_1 &&
+	    RspFrm->operand[2] == SFE_VENDOR_DE_COMPANYID_2 &&
+	    RspFrm->operand[3] == SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL) {
+		if (RspFrm->resp == CHANGED) {
+			firesat_handle_rc(RspFrm->operand[4] << 8 |
+					  RspFrm->operand[5]);
 			schedule_work(&firesat->remote_ctrl_work);
-		} else if(RspFrm->resp != INTERIM)
-			printk(KERN_INFO "%s: remote control result = %d\n",__func__, RspFrm->resp);
+		} else if (RspFrm->resp != INTERIM) {
+			printk(KERN_INFO "firedtv: remote control result = "
+			       "%d\n", RspFrm->resp);
+		}
 		return 0;
 	}
-#endif
+
 	if(atomic_read(&firesat->avc_reply_received) == 1) {
 		printk(KERN_ERR "%s: received out-of-order AVC response, "
 		       "ignored\n",__func__);
