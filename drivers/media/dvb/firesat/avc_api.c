@@ -17,6 +17,7 @@
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
 #include <linux/wait.h>
+#include <linux/workqueue.h>
 #include <asm/atomic.h>
 
 #include <ieee1394_transactions.h>
@@ -33,8 +34,6 @@
 static unsigned int avc_comm_debug = 0;
 module_param(avc_comm_debug, int, 0644);
 MODULE_PARM_DESC(avc_comm_debug, "debug logging level [0..2] of AV/C communication, default is 0 (no)");
-
-static int __AVCRegisterRemoteControl(struct firesat*firesat, int internal);
 
 /* Frees an allocated packet */
 static void avc_free_packet(struct hpsb_packet *packet)
@@ -251,34 +250,8 @@ int AVCWrite(struct firesat*firesat, const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm)
 	return ret;
 }
 
-#if 0 /* FIXME:  This should probably be a workqueue job. */
-static void do_schedule_remotecontrol(unsigned long ignored);
-DECLARE_TASKLET(schedule_remotecontrol, do_schedule_remotecontrol, 0);
-
-static void do_schedule_remotecontrol(unsigned long ignored) {
-	struct firesat *firesat;
-	unsigned long flags;
-
-	spin_lock_irqsave(&firesat_list_lock, flags);
-	list_for_each_entry(firesat,&firesat_list,list) {
-		if(atomic_read(&firesat->reschedule_remotecontrol) == 1) {
-			if(down_trylock(&firesat->avc_sem))
-				tasklet_schedule(&schedule_remotecontrol);
-			else {
-				if(__AVCRegisterRemoteControl(firesat, 1) == 0)
-					atomic_set(&firesat->reschedule_remotecontrol, 0);
-				else
-					tasklet_schedule(&schedule_remotecontrol);
-
-				up(&firesat->avc_sem);
-			}
-		}
-	}
-	spin_unlock_irqrestore(&firesat_list_lock, flags);
-}
-#endif
-
-int AVCRecv(struct firesat *firesat, u8 *data, size_t length) {
+int AVCRecv(struct firesat *firesat, u8 *data, size_t length)
+{
 //	printk(KERN_INFO "%s\n",__func__);
 
 	// remote control handling
@@ -294,10 +267,7 @@ int AVCRecv(struct firesat *firesat, u8 *data, size_t length) {
 		if(RspFrm->resp == CHANGED) {
 //			printk(KERN_INFO "%s: code = %02x %02x\n",__func__,RspFrm->operand[4],RspFrm->operand[5]);
 			firesat_got_remotecontrolcode((((u16)RspFrm->operand[4]) << 8) | ((u16)RspFrm->operand[5]));
-
-			// schedule
-			atomic_set(&firesat->reschedule_remotecontrol, 1);
-			tasklet_schedule(&schedule_remotecontrol);
+			schedule_work(&firesat->remote_ctrl_work);
 		} else if(RspFrm->resp != INTERIM)
 			printk(KERN_INFO "%s: remote control result = %d\n",__func__, RspFrm->resp);
 		return 0;
@@ -910,7 +880,7 @@ int AVCSubUnitInfo(struct firesat *firesat, char *subunitcount)
 	return 0;
 }
 
-static int __AVCRegisterRemoteControl(struct firesat*firesat, int internal)
+int AVCRegisterRemoteControl(struct firesat *firesat)
 {
 	AVCCmdFrm CmdFrm;
 
@@ -931,19 +901,16 @@ static int __AVCRegisterRemoteControl(struct firesat*firesat, int internal)
 
 	CmdFrm.length = 8;
 
-	if(internal) {
-		if(__AVCWrite(firesat,&CmdFrm,NULL) < 0)
-			return -EIO;
-	} else
-		if(AVCWrite(firesat,&CmdFrm,NULL) < 0)
-			return -EIO;
-
-	return 0;
+	return AVCWrite(firesat, &CmdFrm, NULL);
 }
 
-int AVCRegisterRemoteControl(struct firesat*firesat)
+void avc_remote_ctrl_work(struct work_struct *work)
 {
-	return __AVCRegisterRemoteControl(firesat, 0);
+	struct firesat *firesat =
+			container_of(work, struct firesat, remote_ctrl_work);
+
+	/* Should it be rescheduled in failure cases? */
+	AVCRegisterRemoteControl(firesat);
 }
 
 int AVCTuner_Host2Ca(struct firesat *firesat)

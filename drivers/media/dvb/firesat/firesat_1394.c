@@ -182,7 +182,7 @@ static int firesat_probe(struct device *dev)
 		init_waitqueue_head(&firesat->avc_wait);
 		atomic_set(&firesat->avc_reply_received, 1);
 		mutex_init(&firesat->demux_mutex);
-		atomic_set(&firesat->reschedule_remotecontrol, 0);
+		INIT_WORK(&firesat->remote_ctrl_work, avc_remote_ctrl_work);
 
 		spin_lock_irqsave(&firesat_list_lock, flags);
 		INIT_LIST_HEAD(&firesat->list);
@@ -267,6 +267,8 @@ static int firesat_remove(struct device *dev)
 				spin_lock_irqsave(&firesat_list_lock, flags);
 				list_del(&firesats[k]->list);
 				spin_unlock_irqrestore(&firesat_list_lock, flags);
+
+				cancel_work_sync(&firesats[k]->remote_ctrl_work);
 
 				kfree(firesats[k]->fe);
 				kfree(firesats[k]->adapter);
