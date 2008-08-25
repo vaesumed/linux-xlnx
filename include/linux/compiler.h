@@ -206,15 +206,9 @@ extern void __chk_io_ptr(const volatile void __iomem *);
  * ( The linker trick relies on gcc optimizing out a multiplication with
  *   constant zero - which should be reasonable enough. )
  */
-#ifndef __ASSEMBLY__
-extern unsigned int __BUILD_BUG_ON_non_constant;
-#endif
-
 #define BUILD_BUG_ON(condition)					\
 do {								\
 	(void)sizeof(char[1 - 2*!!(condition)]);		\
-	if (!__builtin_constant_p(condition))			\
-		__BUILD_BUG_ON_non_constant++;			\
 } while (0)
 
 /*
