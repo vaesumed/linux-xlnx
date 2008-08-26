@@ -792,8 +792,10 @@ static int compat_fillonedir(void *__buf, const char *name, int namlen,
 	if (buf->result)
 		return -EINVAL;
 	d_ino = ino;
-	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino)
+	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+		buf->result = -EOVERFLOW;
 		return -EOVERFLOW;
+	}
 	buf->result++;
 	dirent = buf->dirent;
 	if (!access_ok(VERIFY_WRITE, dirent,
@@ -828,7 +830,7 @@ asmlinkage long compat_sys_old_readdir(unsigned int fd,
 	buf.dirent = dirent;
 
 	error = vfs_readdir(file, compat_fillonedir, &buf);
-	if (error >= 0)
+	if (buf.result)
 		error = buf.result;
 
 	fput(file);
@@ -862,8 +864,10 @@ static int compat_filldir(void *__buf, const char *name, int namlen,
 	if (reclen > buf->count)
 		return -EINVAL;
 	d_ino = ino;
-	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino)
+	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+		buf->error = -EOVERFLOW;
 		return -EOVERFLOW;
+	}
 	dirent = buf->previous;
 	if (dirent) {
 		if (__put_user(offset, &dirent->d_off))
@@ -913,9 +917,8 @@ asmlinkage long compat_sys_getdents(unsigned int fd,
 	buf.error = 0;
 
 	error = vfs_readdir(file, compat_filldir, &buf);
-	if (error < 0)
-		goto out_putf;
-	error = buf.error;
+	if (error >= 0)
+		error = buf.error;
 	lastdirent = buf.previous;
 	if (lastdirent) {
 		if (put_user(file->f_pos, &lastdirent->d_off))
@@ -923,8 +926,6 @@ asmlinkage long compat_sys_getdents(unsigned int fd,
 		else
 			error = count - buf.count;
 	}
-
-out_putf:
 	fput(file);
 out:
 	return error;
@@ -1004,19 +1005,16 @@ asmlinkage long compat_sys_getdents64(unsigned int fd,
 	buf.error = 0;
 
 	error = vfs_readdir(file, compat_filldir64, &buf);
-	if (error < 0)
-		goto out_putf;
-	error = buf.error;
+	if (error >= 0)
+		error = buf.error;
 	lastdirent = buf.previous;
 	if (lastdirent) {
 		typeof(lastdirent->d_off) d_off = file->f_pos;
-		error = -EFAULT;
 		if (__put_user_unaligned(d_off, &lastdirent->d_off))
-			goto out_putf;
-		error = count - buf.count;
+			error = -EFAULT;
+		else
+			error = count - buf.count;
 	}
-
-out_putf:
 	fput(file);
 out:
 	return error;
