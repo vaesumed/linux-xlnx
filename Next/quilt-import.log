@@ -1,0 +1,269 @@
+Importing driver-core.current based on 2.6.27-rc4-git3
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current 83097aca8567a0bd593534853b71fe0fa9a75d69
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 83097aca8567a0bd593534853b71fe0fa9a75d69
+Unchanged quilt series m68k
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 83097aca8567a0bd593534853b71fe0fa9a75d69
+HEAD is now at 83097ac Fix oops in acer_wmi driver (acer_wmi_init)
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+sysfs-crash-debugging.patch
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+usb-gadget-link-fixes-for-serial-gadget.patch
+usb-gadget-link-fixes-for-gadget-zero.patch
+usb-gadget-link-fixes-for-midi-gadget.patch
+usb-gadget-link-fixes-for-printer-gadget.patch
+usb-gadget-link-fixes-for-storage-gadget.patch
+usb-gadget-link-fixes-for-cdc-composite-gadget.patch
+usb-gadget-link-fixes-for-network-gadget.patch
+driver-core-basic-infrastructure-for-per-module-dynamic-debug-messages.patch
+.dotest/patch:737: space before tab in indent.
+	  	$echo "set enabled=1 <module_name>" > dynamic_printk/modules
+.dotest/patch:741: space before tab in indent.
+	  	$echo "set enabled=0 <module_name>" > dynamic_printk/modules
+warning: 2 lines add whitespace errors.
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+drivers-firmware-iscsi_ibft.c-make-3-functions-static.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+kobject-cleanup-kobject_rename-and-config_sysfs.patch
+sysfs-support-for-preventing-unmounts.patch
+sysfs-sysfs_get_dentry-add-a-sb-parameter.patch
+sysfs-implement-__sysfs_get_dentry.patch
+sysfs-rename-support-multiple-superblocks.patch
+sysfs-introduce-sysfs_sd_setattr-and-fix-sysfs_chmod.patch
+sysfs-sysfs_chmod_file-handle-multiple-superblocks.patch
+.dotest/patch:37: space before tab in indent.
+ 		goto out;
+warning: 1 line adds whitespace errors.
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 6ac63d1a6ecc445ea3b91446fc80e20bb30782db
+HEAD is now at 6ac63d1 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+usb-let-some-usb-host-controllers-get-irq-flags-from-resource.patch
+usb-gadget-kconfig-cleanup.patch
+usb-gadget-dummy_hcd-implement-set_wedge.patch
+usb-gadget-net2280-implement-set_wedge.patch
+usb-gadget-function-activation-deactivation.patch
+usb-gadget-cdc-obex-glue.patch
+usb-gadget-defer-obex-enumeration.patch
+fsl_usb2_udc-make-dr_ep_setup-function-static.patch
+fsl_usb2_udc-remove-check-for-udc-null-in-dr_controller_setup.patch
+fsl_usb2_udc-fix-some-sparse-warnings-and-remove-redundant-code.patch
+fsl_usb2_udc-clean-up-whitespace-in-errors-and-warnings.patch
+fsl_usb2_udc-clean-up-whitespace-in-proc-debugging-output.patch
+fsl_usb2_udc-initialize-spinlock-earlier.patch
+fsl_usb2_udc-rename-the-arguments-of-the-fsl_writel-macro.patch
+fsl_usb2_udc-uninline-udc_reset_ep_queue.patch
+fsl_usb2_udc-make-fsl_queue_td-return-type-void.patch
+fsl_usb2_udc-add-a-wmb-before-priming-endpoint.patch
+fsl_usb2_udc-fix-oops-on-probe-failure.patch
+usb-added-driver-for-a-delcom-usb-7-segment-led-display.patch
+hso-icon-322-detection-fix.patch
+hso-dev_kfree_skb-crash-fix.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+.dotest/patch:2027: space before tab in indent.
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+warning: 1 line adds whitespace errors.
+usb-remove-use-of-err-in-drivers-usb-serial.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 1fca25427482387689fa27594c992a961d98768f
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 1fca25427482387689fa27594c992a961d98768f
+HEAD is now at 1fca254 Merge branch 'release' of git://git.kernel.org/pub/scm/linux/kernel/git/aegl/linux-2.6
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-compile-fix-for-sff_dma_ops.patch
+ide-palm_bk3710-fix-compile-warning-for-unused-variable.patch
+ide-fix-hwif_to_node.patch
+ide-remove-superfluous-check-from-ide_disk_special.patch
+ide-cleanup-ide_disk_init_mult_count.patch
+ide-cleanup-ide_fix_driveid.patch
+ide-make-drive-id-an-union-take-2.patch
+ide-remove-drive-driveid.patch
+ide-use-ata_id_current_chs_valid.patch
+ide-disk-use-ata_id_wcache_enabled.patch
+ide-disk-use-ata_id_hpa_enabled.patch
+libata-win_-to-ata_cmd_.patch
+ide-win_-to-ata_cmd_.patch
+hd-win_-to-ata_cmd_.patch
+ide-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+ide-remove-no-longer-needed-ide_drive_t-fields.patch
+ide-re-code-ide_fixstring-loop-to-be-less-evil.patch
+ide-cd-use-the-new-object_is_in_stack-helper.patch
+ide-fix-exabytenest-handling-in-probe_for_drive.patch
+ide-enhance-ide_busy_sleep.patch
+ide-remove-no-longer-needed-bug_on-s-from-init_irq.patch
+ide-remove-ide_chipset_-macros.patch
+ide-remove-unused-_ide_c-and-_ide_disk-defines.patch
+ide-remove-needless-drive-present-checks-from-device-drivers.patch
+ide-check-drive-present-in-ide_get_paired_drive.patch
+Context reduced to (2/2) to apply fragment at 1449
+ide-remove-config_idedisk_multi_mode.patch
+ide-include-linux-hdreg-h-only-when-needed.patch
+ide-call-ide_proc_register_driver-later.patch
+ide-preparations-for-proc-ide-hd_-settings-rework.patch
+ide-proc-ide-hd_-settings-rework.patch
+ide-remove-sector_words-define.patch
+cmd640-add-__set_prefetch_mode.patch
+ide-remove-read-only-atapi_overlap-field-from-ide_drive_t.patch
+ide-remove-supports_dsc_overlap-field-from-ide_driver_t.patch
+ide-factor-out-hdio_-_nice-ioctl-handling-to-ide_-_nice_ioctl.patch
+ide-ide_dev_has_iordy-to-ata_id_has_iordy.patch
+ide-ide_dev_is_sata-to-ata_id_is_sata.patch
+ide-idedisk_supports_lba48-to-ata_id_lba48_enabled.patch
+ide-check-only-for-cache-flush-command-support-in-ide_id_has_flush_cache.patch
+ide-ide_id_has_flush_cache-to-ata_id_flush_enabled.patch
+ide-ide_id_has_flush_cache_ext-to-ata_id_flush_ext_enabled.patch
+ide-use-ata_id_is_cfa.patch
+ide-ide_id_to_hd_driveid-to-ata_id_to_hd_driveid.patch
+ide-lba_capacity_is_ok-to-ata_id_is_lba_capacity_ok.patch
+hpt366-add-hpt3xx_disable_fast_irq-helper.patch
+ide-add-proper-pci-pm-support.patch
+ide-remove-bus_state-field-from-ide_hwif_t.patch
+ide-add-ide_setting_ioctl-helper.patch
+ide-cleanup-generic_ide_ioctl.patch
+ide-move-ioctls-handling-to-ide-ioctls-c.patch
+ide-add-ide_check_atapi_device-helper.patch
+ide-floppy-remove-needless-parens.patch
+ide-floppy-add-ide_floppy_format_ioctl-helper.patch
+ide-tape-remove-idetape_init_rq.patch
+ide-floppy-use-scatterlists-for-pio-transfers.patch
+ide-generic-handle-probing-of-legacy-io-ports-v5.patch
+ide-floppy-tape-remove-request-stack.patch
+ide-floppy-tape-remove-packet-command-stack.patch
+ide-floppy-remove-mode_sense_-defines.patch
+ide-floppy-fixup-ide_floppy_io_buffers.patch
+ide-scsi-cleanup-ide_scsi_io_buffers.patch
+ide-add-ide_io_buffers-helper.patch
+ide-floppy-add-ide_floppy_set_media_lock-helper.patch
+ide-tape-add-ide_tape_set_media_lock-helper.patch
+ide-add-ide_init_pc-helper.patch
+ide-add-ide_queue_pc_head-helper.patch
+ide-add-ide_queue_pc_tail-helper.patch
+ide-floppy-srfp-wp-to-ide_aflag_srfp-wp.patch
+ide-floppy-move-floppy-ioctls-handling-to-ide-floppy_ioctl-c.patch
+ide-add-ide_set_media_lock-helper-patch
+ide-add-ide_do_start_stop-helper.patch
+ide-add-ide_do_test_unit_ready-helper.patch
+ide-move-idefloppy-tape_wait_cmd-defines-to-linux-ide-h.patch
+ide-remove-ide_spin_wait_hwgroup-and-use-special-requests-instead-v2.patch
+ide-drop-dsc_handle-argument-from-ide_pc_intr.patch
+ide-add-pointer-to-the-current-packet-command-to-ide_drive_t.patch
+ide-drop-timeout-and-expiry-arguments-from-ide_pc_intr.patch
+ide-add-request_sense_pc-rq-to-ide_drive_t.patch
+ide-add-ide_retry_pc-helper.patch
+ide-add-pc_update-io_buffers-methods.patch
+ide-make-ide_pc_intr-static.patch
+ide-make-ide_transfer_pc-static.patch
+ide-remove-config_blk_dev_ide-config-option.patch
+ide-remove-unnecessary-max_hwifs-checks-from-ide-probe-c.patch
+xtensa-remove-dead-config_blk_dev_ide-code.patch
+ide-unify-conversion-macros.patch
+ide-add-drive-debug_mask-switch.patch
+ide-add-a-driver-wide-debugging-macro.patch
+ide-floppy-convert-driver-to-the-new-debugging-macro.patch
+ide-floppy-add-a-debug_mask-module-parameter.patch
+ide-fix-ide-acpi-for-slave-device-only-configurations.patch
+ide-disk-set_addressing-fixes.patch
+ide-disk-remove-stale-init_idedisk_capacity-documentation.patch
+ide-disk-add-ide_do_setfeature-helper.patch
+ide-add-device-flags.patch
+Context reduced to (2/2) to apply fragment at 897
+ide-dma_pio_retry-to-ide_dflag_dma_pio_retry.patch
+ide-remove-superfluous-media-field-from-ide_driver_t.patch
+ide-remove-superfluous-dma-field-from-ide_hwif_t.patch
+ide-remove-superfluous-waiting_for_dma-checks.patch
+ide-fix-hdio_drive_task-file-ioctls-for-chs-commands-on-lba-devices.patch
+ide-sanitize-ide-_pm_-enums.patch
+cy82c693-remove-dead-cy82c693_setdma_clock-code.patch
+cy82c693-remove-no-longer-needed-cy82c693_debug_logs-code.patch
+ide-use-drive-dn-and-1-instead-of-drive-select-b-unit.patch
+ide-remove-ata_-select_t.patch
+ide-convert-pio_mode-device-setting-to-use-ds_sync-flag.patch
+ide-factor-out-reset-error-reporting-from-reset_pollfunc.patch
+ide-merge-all-taskfile_no_data-data-phase-handlers-into-taskfile_no_intr.patch
+ide-use-unique-names-for-struct-pci_driver-instances.patch
+ide-ide_dma_clear_irq-to-clear_irq.patch
+ide-generic-no-need-to-probe-all-ports-at-once.patch
+ide-generic-remove-no-longer-needed-ide_probe_legacy.patch
+ide-remove-ide_host_alloc_all.patch
+ide-set-ide_aflag_drq_interrupt-in-do_identify.patch
+ide-cd-no-need-to-zero-drive-special-all.patch
+ide-floppy-move-all-ioctl-handling-to-ide-floppy_ioctl-c.patch
+ide-floppy-move-proc-handling-to-ide-floppy_proc-c.patch
+ide-disk-move-all-ioctl-handling-to-ide-disk_ioctl-c.patch
+ide-disk-move-proc-handling-to-ide-disk_proc-c.patch
+ide-kconfig-mark-ide-scsi-as-deprecated.patch
+Importing rr based on v2.6.27-rc4-131-g83097ac
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 83097aca8567a0bd593534853b71fe0fa9a75d69
+HEAD is now at 83097ac Fix oops in acer_wmi driver (acer_wmi_init)
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:balloon_fix_towards_target_when_deflating_balloon.patch
+stop_machine:xen_suspend.patch
+stop_machine:remove-stop_machine_run.patch
+lguest:update-commentry.patch
+module:remove_config_kmod_from_drivers.patch
+module:remove_config_kmod_from_fs.patch
+module:remove_config_kmod_from_net.patch
+module:remove-kmod.c-CONFIG_KMOD-comment.patch
+module:remove_config_kmod.patch
+Unchanged quilt series ttydev
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.27-rc4-162-gd25e26b
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard d25e26b61d59370eee8b7f2634641eb0fa76e952
+HEAD is now at d25e26b [x86] Clean up MAXSMP Kconfig, and limit NR_CPUS to 512
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:remove_config_kmod_from_drivers.patch
+module:remove_config_kmod_from_fs.patch
+module:remove_config_kmod_from_net.patch
+module:remove-kmod.c-CONFIG_KMOD-comment.patch
+module:remove_config_kmod.patch
+Unchanged quilt series ttydev
