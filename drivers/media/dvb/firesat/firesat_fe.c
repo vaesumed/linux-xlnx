@@ -1,5 +1,5 @@
 /*
- * FireSAT DVB driver
+ * FireDTV driver (formerly known as FireSAT)
  *
  * Copyright (C) 2004 Andreas Monitzer <andy@monitzer.com>
  * Copyright (C) 2008 Henrik Kurelid <henrik@kurelid.se>
@@ -235,7 +235,7 @@ int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe)
 
 static struct dvb_frontend_info firesat_S_frontend_info = {
 
-	.name			= "FireSAT DVB-S Frontend",
+	.name			= "FireDTV DVB-S Frontend",
 	.type			= FE_QPSK,
 
 	.frequency_min		= 950000,
@@ -256,7 +256,7 @@ static struct dvb_frontend_info firesat_S_frontend_info = {
 
 static struct dvb_frontend_info firesat_C_frontend_info = {
 
-	.name			= "FireSAT DVB-C Frontend",
+	.name			= "FireDTV DVB-C Frontend",
 	.type			= FE_QAM,
 
 	.frequency_min		= 47000000,
@@ -276,7 +276,7 @@ static struct dvb_frontend_info firesat_C_frontend_info = {
 
 static struct dvb_frontend_info firesat_T_frontend_info = {
 
-	.name			= "FireSAT DVB-T Frontend",
+	.name			= "FireDTV DVB-T Frontend",
 	.type			= FE_OFDM,
 
 	.frequency_min		= 49000000,

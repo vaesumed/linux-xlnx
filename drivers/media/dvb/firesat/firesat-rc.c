@@ -1,5 +1,5 @@
 /*
- * FireSAT AVC driver
+ * FireDTV driver (formerly known as FireSAT)
  *
  * Copyright (C) 2004 Andreas Monitzer <andy@monitzer.com>
  *

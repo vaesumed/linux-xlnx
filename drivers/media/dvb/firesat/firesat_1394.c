@@ -1,5 +1,5 @@
 /*
- * FireSAT DVB driver
+ * FireDTV driver (formerly known as FireSAT)
  *
  * Copyright (C) 2004 Andreas Monitzer <andy@monitzer.com>
  * Copyright (C) 2007-2008 Ben Backx <ben@bbackx.com>
@@ -87,7 +87,7 @@ static void fcp_request(struct hpsb_host *host,
 			size_t length);
 
 static struct hpsb_highlevel firesat_highlevel = {
-	.name		= "FireSAT",
+	.name		= "firedtv",
 	.add_host	= firesat_add_host,
 	.remove_host	= firesat_remove_host,
 	.host_reset	= firesat_host_reset,
@@ -339,7 +339,7 @@ static int firesat_update(struct unit_directory *ud)
 
 static struct hpsb_protocol_driver firesat_driver = {
 
-	.name		= "FireSAT",
+	.name		= "firedtv",
 	.id_table	= firesat_id_table,
 	.update		= firesat_update,
 
@@ -356,11 +356,11 @@ static int __init firesat_init(void)
 {
 	int ret;
 
-	printk(KERN_INFO "FireSAT loaded\n");
+	printk(KERN_INFO "firedtv loaded\n");
 	hpsb_register_highlevel(&firesat_highlevel);
 	ret = hpsb_register_protocol(&firesat_driver);
 	if (ret) {
-		printk(KERN_ERR "FireSAT: failed to register protocol\n");
+		printk(KERN_ERR "firedtv: failed to register protocol\n");
 		hpsb_unregister_highlevel(&firesat_highlevel);
 		return ret;
 	}
@@ -377,7 +377,7 @@ static void __exit firesat_exit(void)
 {
 	hpsb_unregister_protocol(&firesat_driver);
 	hpsb_unregister_highlevel(&firesat_highlevel);
-	printk(KERN_INFO "FireSAT quit\n");
+	printk(KERN_INFO "firedtv quit\n");
 }
 
 module_init(firesat_init);
@@ -385,6 +385,6 @@ module_exit(firesat_exit);
 
 MODULE_AUTHOR("Andreas Monitzer <andy@monitzer.com>");
 MODULE_AUTHOR("Ben Backx <ben@bbackx.com>");
-MODULE_DESCRIPTION("FireSAT DVB Driver");
+MODULE_DESCRIPTION("FireDTV DVB Driver");
 MODULE_LICENSE("GPL");
-MODULE_SUPPORTED_DEVICE("FireSAT DVB");
+MODULE_SUPPORTED_DEVICE("FireDTV DVB");
