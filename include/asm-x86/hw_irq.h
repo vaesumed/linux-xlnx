@@ -115,13 +115,13 @@ extern asmlinkage void smp_invalidate_interrupt(struct pt_regs *);
 #endif
 
 #ifdef CONFIG_X86_32
-extern void (*const interrupt[NR_IRQS])(void);
-#else
-typedef int vector_irq_t[NR_VECTORS];
-DECLARE_PER_CPU(vector_irq_t, vector_irq);
+extern void (*const interrupt[NR_VECTORS])(void);
 #endif
 
-#if defined(CONFIG_X86_IO_APIC) && defined(CONFIG_X86_64)
+typedef int vector_irq_t[NR_VECTORS];
+DECLARE_PER_CPU(vector_irq_t, vector_irq);
+
+#ifdef CONFIG_X86_IO_APIC
 extern void lock_vector_lock(void);
 extern void unlock_vector_lock(void);
 extern void __setup_vector_irq(int cpu);
