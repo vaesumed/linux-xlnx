@@ -386,7 +386,7 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 	int i, idle = 1;
 	cpumask_t span;
 
-	if (rt_b->rt_runtime == RUNTIME_INF)
+	if (!rt_bandwidth_enabled() || rt_b->rt_runtime == RUNTIME_INF)
 		return 1;
 
 	span = sched_rt_period_mask();
@@ -438,9 +438,6 @@ static int sched_rt_runtime_exceeded(struct rt_rq *rt_rq)
 {
 	u64 runtime = sched_rt_runtime(rt_rq);
 
-	if (runtime == RUNTIME_INF)
-		return 0;
-
 	if (rt_rq->rt_throttled)
 		return rt_rq_throttled(rt_rq);
 
@@ -487,13 +484,18 @@ static void update_curr_rt(struct rq *rq)
 	curr->se.exec_start = rq->clock;
 	cpuacct_charge(curr, delta_exec);
 
+	if (!rt_bandwidth_enabled())
+		return;
+
 	for_each_sched_rt_entity(rt_se) {
 		rt_rq = rt_rq_of_se(rt_se);
 
 		spin_lock(&rt_rq->rt_runtime_lock);
-		rt_rq->rt_time += delta_exec;
-		if (sched_rt_runtime_exceeded(rt_rq))
-			resched_task(curr);
+		if (sched_rt_runtime(rt_rq) != RUNTIME_INF) {
+			rt_rq->rt_time += delta_exec;
+			if (sched_rt_runtime_exceeded(rt_rq))
+				resched_task(curr);
+		}
 		spin_unlock(&rt_rq->rt_runtime_lock);
 	}
 }
