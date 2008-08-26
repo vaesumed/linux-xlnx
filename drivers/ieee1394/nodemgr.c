@@ -1298,7 +1298,8 @@ static void nodemgr_update_node(struct node_entry *ne, struct csr1212_csr *csr,
 	if (ne->in_limbo)
 		nodemgr_resume_ne(ne);
 
-	/* Mark the node current */
+	/* Finally, mark the node current */
+	smp_wmb();
 	ne->generation = generation;
 }
 
@@ -1852,7 +1853,7 @@ void hpsb_node_fill_packet(struct node_entry *ne, struct hpsb_packet *packet)
 {
 	packet->host = ne->host;
 	packet->generation = ne->generation;
-	barrier();
+	smp_rmb();
 	packet->node_id = ne->nodeid;
 }
 
@@ -1861,7 +1862,7 @@ int hpsb_node_write(struct node_entry *ne, u64 addr,
 {
 	unsigned int generation = ne->generation;
 
-	barrier();
+	smp_rmb();
 	return hpsb_write(ne->host, ne->nodeid, generation,
 			  addr, buffer, length);
 }
