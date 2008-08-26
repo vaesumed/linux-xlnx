@@ -28,7 +28,7 @@ struct cpu_usage_stat {
 
 struct kernel_stat {
 	struct cpu_usage_stat	cpustat;
-#ifndef CONFIG_GENERIC_HARDIRQS
+#ifndef CONFIG_HAVE_SPARSE_IRQ
        unsigned int irqs[NR_IRQS];
 #endif
 };
