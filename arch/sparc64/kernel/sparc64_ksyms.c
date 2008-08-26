@@ -68,7 +68,6 @@ extern void *__memscan_zero(void *, size_t);
 extern void *__memscan_generic(void *, int, size_t);
 extern int __memcmp(const void *, const void *, __kernel_size_t);
 extern __kernel_size_t strlen(const char *);
-extern void syscall_trace(struct pt_regs *, int);
 extern void sys_sigsuspend(void);
 extern int compat_sys_ioctl(unsigned int fd, unsigned int cmd, u32 arg);
 extern int (*handle_mathemu)(struct pt_regs *, struct fpustate *);
@@ -300,3 +299,5 @@ EXPORT_SYMBOL(xor_niagara_2);
 EXPORT_SYMBOL(xor_niagara_3);
 EXPORT_SYMBOL(xor_niagara_4);
 EXPORT_SYMBOL(xor_niagara_5);
+
+EXPORT_SYMBOL_GPL(real_hard_smp_processor_id);
