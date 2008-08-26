@@ -260,7 +260,7 @@ static int ide_floppy_format_ioctl(ide_drive_t *drive, struct file *file,
 	}
 }
 
-int idefloppy_ioctl(struct inode *inode, struct file *file,
+int ide_floppy_ioctl(struct inode *inode, struct file *file,
 		    unsigned int cmd, unsigned long arg)
 {
 	struct block_device *bdev = inode->i_bdev;
