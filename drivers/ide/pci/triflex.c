@@ -119,6 +119,10 @@ static struct pci_driver driver = {
 	.id_table	= triflex_pci_tbl,
 	.probe		= triflex_init_one,
 	.remove		= ide_pci_remove,
+#ifdef CONFIG_PM
+	.suspend	= ide_pci_suspend,
+	.resume		= ide_pci_resume,
+#endif
 };
 
 static int __init triflex_ide_init(void)
