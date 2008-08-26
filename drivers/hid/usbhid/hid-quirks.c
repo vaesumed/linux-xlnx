@@ -18,7 +18,6 @@
 #include <linux/hid.h>
 
 #include "../hid-ids.h"
-
 /*
  * Alphabetically sorted blacklist by quirk type.
  */
@@ -59,6 +58,7 @@ static const struct hid_blacklist {
 	{ USB_VENDOR_ID_WISEGROUP, USB_DEVICE_ID_QUAD_USB_JOYPAD, HID_QUIRK_NOGET | HID_QUIRK_MULTI_INPUT },
 
 	{ USB_VENDOR_ID_WISEGROUP_LTD, USB_DEVICE_ID_SMARTJOY_DUAL_PLUS, HID_QUIRK_NOGET | HID_QUIRK_MULTI_INPUT },
+	{ USB_VENDOR_ID_WISEGROUP_LTD2, USB_DEVICE_ID_SMARTJOY_DUAL_PLUS, HID_QUIRK_NOGET | HID_QUIRK_MULTI_INPUT },
 
 	{ 0, 0 }
 };
