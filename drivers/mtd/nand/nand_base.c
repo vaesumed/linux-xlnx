@@ -801,9 +801,9 @@ static int nand_read_page_swecc(struct mtd_info *mtd, struct nand_chip *chip,
  * nand_read_subpage - [REPLACABLE] software ecc based sub-page read function
  * @mtd:	mtd info structure
  * @chip:	nand chip info structure
- * @dataofs	offset of requested data within the page
- * @readlen	data length
- * @buf:	buffer to store read data
+ * @data_offs:	offset of requested data within the page
+ * @readlen:	data length
+ * @bufpoi:	buffer to store read data
  */
 static int nand_read_subpage(struct mtd_info *mtd, struct nand_chip *chip, uint32_t data_offs, uint32_t readlen, uint8_t *bufpoi)
 {
@@ -2042,7 +2042,7 @@ int nand_erase_nand(struct mtd_info *mtd, struct erase_info *instr,
 		return -EINVAL;
 	}
 
-	instr->fail_addr = 0xffffffff;
+	instr->fail_addr = MTD_FAIL_ADDR_UNKNOWN;
 
 	/* Grab the lock and see if the device is available */
 	nand_get_device(chip, mtd, FL_ERASING);
