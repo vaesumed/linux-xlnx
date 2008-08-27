@@ -1614,7 +1614,7 @@ static void serial_unlink_irq_chain(struct uart_8250_port *up)
 
 	BUG_ON(n == NULL);
 	BUG_ON(i->head == NULL);
-	
+
 	if (list_empty(i->head))
 		free_irq(up->port.irq, i);
 	serial_do_unlink(i, up);
@@ -2464,7 +2464,7 @@ static void serial8250_config_port(struct uart_port *port, int flags)
 static int
 serial8250_verify_port(struct uart_port *port, struct serial_struct *ser)
 {
-	if (ser->irq >= NR_IRQS || ser->irq < 0 ||
+	if (ser->irq >= nr_irqs || ser->irq < 0 ||
 	    ser->baud_base < 9600 || ser->type < PORT_UNKNOWN ||
 	    ser->type >= ARRAY_SIZE(uart_config) || ser->type == PORT_CIRRUS ||
 	    ser->type == PORT_STARTECH)
