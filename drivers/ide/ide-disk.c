@@ -41,6 +41,12 @@
 
 #include "ide-disk.h"
 
+#if !defined(CONFIG_DEBUG_BLOCK_EXT_DEVT)
+#define IDE_DISK_MINORS		(1 << PARTN_BITS)
+#else
+#define IDE_DISK_MINORS		0
+#endif
+
 static DEFINE_MUTEX(idedisk_ref_mutex);
 
 #define to_ide_disk(obj) container_of(obj, struct ide_disk_obj, kref)
@@ -932,8 +938,7 @@ static int ide_disk_probe(ide_drive_t *drive)
 	if (!idkp)
 		goto failed;
 
-	g = alloc_disk_node(1 << PARTN_BITS,
-			hwif_to_node(drive->hwif));
+	g = alloc_disk_node(IDE_DISK_MINORS, hwif_to_node(drive->hwif));
 	if (!g)
 		goto out_free_idkp;
 
@@ -958,10 +963,11 @@ static int ide_disk_probe(ide_drive_t *drive)
 	} else
 		drive->dev_flags |= IDE_DFLAG_ATTACH;
 
-	g->minors = 1 << PARTN_BITS;
+	g->minors = IDE_DISK_MINORS;
 	g->driverfs_dev = &drive->gendev;
+	g->flags |= GENHD_FL_EXT_DEVT;
 	if (drive->dev_flags & IDE_DFLAG_REMOVABLE)
-		g->flags = GENHD_FL_REMOVABLE;
+		g->flags |= GENHD_FL_REMOVABLE;
 	set_capacity(g, ide_disk_capacity(drive));
 	g->fops = &idedisk_ops;
 	add_disk(g);

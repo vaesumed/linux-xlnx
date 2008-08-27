@@ -33,6 +33,23 @@ void blk_queue_prep_rq(struct request_queue *q, prep_rq_fn *pfn)
 EXPORT_SYMBOL(blk_queue_prep_rq);
 
 /**
+ * blk_queue_set_discard - set a discard_sectors function for queue
+ * @q:		queue
+ * @dfn:	prepare_discard function
+ *
+ * It's possible for a queue to register a discard callback which is used
+ * to transform a discard request into the appropriate type for the
+ * hardware. If none is registered, then discard requests are failed
+ * with %EOPNOTSUPP.
+ *
+ */
+void blk_queue_set_discard(struct request_queue *q, prepare_discard_fn *dfn)
+{
+	q->prepare_discard_fn = dfn;
+}
+EXPORT_SYMBOL(blk_queue_set_discard);
+
+/**
  * blk_queue_merge_bvec - set a merge_bvec function for queue
  * @q:		queue
  * @mbfn:	merge_bvec_fn
@@ -426,7 +443,7 @@ void blk_queue_update_dma_alignment(struct request_queue *q, int mask)
 }
 EXPORT_SYMBOL(blk_queue_update_dma_alignment);
 
-static int __init blk_settings_init(void)
+int __init blk_settings_init(void)
 {
 	blk_max_low_pfn = max_low_pfn - 1;
 	blk_max_pfn = max_pfn - 1;
