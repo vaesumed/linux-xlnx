@@ -18,8 +18,8 @@
 #include <linux/device.h>
 #include <linux/regulator/consumer.h>
 
-struct regulator_constraints;
 struct regulator_dev;
+struct regulator_init_data;
 
 /**
  * struct regulator_ops - regulator operations.
@@ -85,9 +85,8 @@ struct regulator_desc {
 	struct module *owner;
 };
 
-
-struct regulator_dev *regulator_register(struct regulator_desc *regulator_desc,
-					  void *reg_data);
+struct regulator_dev *regulator_register(struct device *dev,
+	struct regulator_desc *regulator_desc);
 void regulator_unregister(struct regulator_dev *rdev);
 
 int regulator_notifier_call_chain(struct regulator_dev *rdev,
@@ -95,5 +94,7 @@ int regulator_notifier_call_chain(struct regulator_dev *rdev,
 
 void *rdev_get_drvdata(struct regulator_dev *rdev);
 int rdev_get_id(struct regulator_dev *rdev);
+
+void *regulator_get_init_drvdata(struct regulator_init_data *reg_init_data);
 
 #endif
