@@ -409,6 +409,7 @@ static int usb_dsbr100_open(struct inode *inode, struct file *file)
 {
 	struct dsbr100_device *radio=video_get_drvdata(video_devdata(file));
 
+	lock_kernel();
 	radio->users = 1;
 	radio->muted = 1;
 
@@ -416,9 +417,11 @@ static int usb_dsbr100_open(struct inode *inode, struct file *file)
 		dev_warn(&radio->usbdev->dev,
 			 "Radio did not start up properly\n");
 		radio->users = 0;
+		unlock_kernel();
 		return -EIO;
 	}
 	dsbr100_setfreq(radio, radio->curfreq);
+	unlock_kernel();
 	return 0;
 }
 

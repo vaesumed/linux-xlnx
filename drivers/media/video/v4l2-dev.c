@@ -116,7 +116,6 @@ static int video_open(struct inode *inode, struct file *file)
 
 	if (minor >= VIDEO_NUM_DEVICES)
 		return -ENODEV;
-	lock_kernel();
 	mutex_lock(&videodev_lock);
 	vfl = video_device[minor];
 	if (vfl == NULL) {
@@ -126,7 +125,6 @@ static int video_open(struct inode *inode, struct file *file)
 		vfl = video_device[minor];
 		if (vfl == NULL) {
 			mutex_unlock(&videodev_lock);
-			unlock_kernel();
 			return -ENODEV;
 		}
 	}
@@ -140,7 +138,6 @@ static int video_open(struct inode *inode, struct file *file)
 	}
 	fops_put(old_fops);
 	mutex_unlock(&videodev_lock);
-	unlock_kernel();
 	return err;
 }
 
@@ -281,7 +278,7 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 	default:
 		printk(KERN_ERR "%s called with unknown type: %d\n",
 		       __func__, type);
-		return -1;
+		return -EINVAL;
 	}
 
 	/* pick a minor number */
