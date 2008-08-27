@@ -360,7 +360,7 @@ config SND_SBAWE
 config SND_SB16_CSP
 	bool "Sound Blaster 16/AWE CSP support"
 	depends on (SND_SB16 || SND_SBAWE) && (BROKEN || !PPC)
-	select FW_LOADER if !SND_SB16_CSP_FIRMWARE_IN_KERNEL
+	select FW_LOADER
 	help
 	  Say Y here to include support for the CSP core.  This special
 	  coprocessor can do variable tasks like various compression and
@@ -400,16 +400,6 @@ config SND_WAVEFRONT
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called snd-wavefront.
-
-config SND_WAVEFRONT_FIRMWARE_IN_KERNEL
-	bool "In-kernel firmware for Wavefront"
-	depends on SND_WAVEFRONT
-	default y
-	help
-	  Say Y here to include the static firmware for FX DSP built in
-	  the kernel for the Wavefront driver.  If you choose N here,
-	  you need to install the firmware files from the
-	  alsa-firmware package.
 
 endif	# SND_ISA
 
