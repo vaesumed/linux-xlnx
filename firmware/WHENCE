@@ -339,3 +339,14 @@ Licence: Allegedly GPLv2+, but no source visible. Marked:
 Found in hex form in kernel source.
 
 --------------------------------------------------------------------------
+
+Driver: wavefront - ISA WaveFront sound card
+
+File: yamaha/yss225_registers.bin
+
+License: GPLv2+
+
+Found in hex form in kernel source, with the following comment:
+   Copyright (c) 1998-2002 by Paul Davis <pbd@op.net>
+
+--------------------------------------------------------------------------
