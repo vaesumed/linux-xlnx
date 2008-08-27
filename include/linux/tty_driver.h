@@ -21,6 +21,11 @@
  *
  *	Required method.
  *
+ * void (*shutdown)(struct tty_struct * tty);
+ *
+ * 	This routine is called when a particular tty device is closed for
+ *	the last time freeing up the resources.
+ *
  * int (*write)(struct tty_struct * tty,
  * 		 const unsigned char *buf, int count);
  *
@@ -180,6 +185,14 @@
  *	not force errors here if they are not resizable objects (eg a serial
  *	line). See tty_do_resize() if you need to wrap the standard method
  *	in your own logic - the usual case.
+ *
+ * void (*set_termiox)(struct tty_struct *tty, struct termiox *new);
+ *
+ *	Called when the device receives a termiox based ioctl. Passes down
+ *	the requested data from user space. This method will not be invoked
+ *	unless the tty also has a valid tty->termiox pointer.
+ *
+ *	Optional: Called under the termios lock
  */
 
 #include <linux/fs.h>
@@ -192,6 +205,7 @@ struct tty_driver;
 struct tty_operations {
 	int  (*open)(struct tty_struct * tty, struct file * filp);
 	void (*close)(struct tty_struct * tty, struct file * filp);
+	void (*shutdown)(struct tty_struct *tty);
 	int  (*write)(struct tty_struct * tty,
 		      const unsigned char *buf, int count);
 	int  (*put_char)(struct tty_struct *tty, unsigned char ch);
@@ -220,6 +234,7 @@ struct tty_operations {
 			unsigned int set, unsigned int clear);
 	int (*resize)(struct tty_struct *tty, struct tty_struct *real_tty,
 				struct winsize *ws);
+	int (*set_termiox)(struct tty_struct *tty, struct termiox *tnew);
 #ifdef CONFIG_CONSOLE_POLL
 	int (*poll_init)(struct tty_driver *driver, int line, char *options);
 	int (*poll_get_char)(struct tty_driver *driver, int line);
