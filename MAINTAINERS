@@ -3845,6 +3845,8 @@ S:	Maintained
 SOUND
 P:	Jaroslav Kysela
 M:	perex@perex.cz
+P:	Takashi Iwai
+M:	tiwai@suse.de
 L:	alsa-devel@alsa-project.org (subscribers-only)
 S:	Maintained
 
