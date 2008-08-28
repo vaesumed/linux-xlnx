@@ -361,7 +361,8 @@ static int mdc800_usb_waitForIRQ (int mode, int msec)
 	
 	if (mdc800->state == NOT_CONNECTED)
 	{
-		warn ("Camera gets disconnected during waiting for irq.");
+		printk(KERN_WARNING "mdc800: Camera gets disconnected "
+		       "during waiting for irq.\n");
 		mdc800->camera_request_ready=0;
 		return -2;
 	}
@@ -443,7 +444,7 @@ static int mdc800_usb_probe (struct usb_interface *intf,
 
 	if (mdc800->dev != NULL)
 	{
-		warn ("only one Mustek MDC800 is supported.");
+		dev_warn(&intf->dev, "only one Mustek MDC800 is supported.\n");
 		return -ENODEV;
 	}
 
@@ -488,7 +489,7 @@ static int mdc800_usb_probe (struct usb_interface *intf,
 	}
 
 
-	info ("Found Mustek MDC800 on USB.");
+	dev_info(&intf->dev, "Found Mustek MDC800 on USB.\n");
 
 	mutex_lock(&mdc800->io_lock);
 
@@ -570,7 +571,7 @@ static void mdc800_usb_disconnect (struct usb_interface *intf)
 		mdc800->dev = NULL;
 		usb_set_intfdata(intf, NULL);
 	}
-	info ("Mustek MDC800 disconnected from USB.");
+	dev_info(&intf->dev, "Mustek MDC800 disconnected from USB.\n");
 }
 
 
@@ -701,7 +702,8 @@ static ssize_t mdc800_device_read (struct file *file, char __user *buf, size_t l
 	}
 	if (mdc800->state == WORKING)
 	{
-		warn ("Illegal State \"working\" reached during read ?!");
+		printk(KERN_WARNING "mdc800: Illegal State \"working\""
+		       "reached during read ?!\n");
 		mutex_unlock(&mdc800->io_lock);
 		return -EBUSY;
 	}
@@ -1018,7 +1020,8 @@ static int __init usb_mdc800_init (void)
 	if (retval)
 		goto cleanup_on_fail;
 
-	info (DRIVER_VERSION ":" DRIVER_DESC);
+	printk(KERN_INFO KBUILD_MODNAME ": " DRIVER_VERSION ":"
+	       DRIVER_DESC "\n");
 
 	return 0;
 
