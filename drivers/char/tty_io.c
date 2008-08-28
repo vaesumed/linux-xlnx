@@ -776,12 +776,12 @@ void disassociate_ctty(int on_exit)
 	tty = get_current_tty();
 	if (tty) {
 		tty_pgrp = get_pid(tty->pgrp);
-		lock_kernel();
 		mutex_unlock(&tty_mutex);
-		/* XXX: here we race, there is nothing protecting tty */
+		lock_kernel();
 		if (on_exit && tty->driver->type != TTY_DRIVER_TYPE_PTY)
 			tty_vhangup(tty);
 		unlock_kernel();
+		tty_kref_put(tty);
 	} else if (on_exit) {
 		struct pid *old_pgrp;
 		spin_lock_irq(&current->sighand->siglock);
@@ -809,7 +809,6 @@ void disassociate_ctty(int on_exit)
 	spin_unlock_irq(&current->sighand->siglock);
 
 	mutex_lock(&tty_mutex);
-	/* It is possible that do_tty_hangup has free'd this tty */
 	tty = get_current_tty();
 	if (tty) {
 		unsigned long flags;
@@ -819,6 +818,7 @@ void disassociate_ctty(int on_exit)
 		tty->session = NULL;
 		tty->pgrp = NULL;
 		spin_unlock_irqrestore(&tty->ctrl_lock, flags);
+		tty_kref_put(tty);
 	} else {
 #ifdef TTY_DEBUG_HANGUP
 		printk(KERN_DEBUG "error attempted to write to tty [0x%p]"
@@ -1283,7 +1283,7 @@ static int init_dev(struct tty_driver *driver, int idx,
 		o_tty = alloc_tty_struct();
 		if (!o_tty)
 			goto free_mem_out;
-		if (!try_module_get(driver->other)) {
+		if (!try_module_get(driver->other->owner)) {
 			/* This cannot in fact currently happen */
 			free_tty_struct(o_tty);
 			o_tty = NULL;
@@ -1408,7 +1408,7 @@ end_init:
 free_mem_out:
 	kfree(o_tp);
 	if (o_tty) {
-		module_put(o_tty->driver);
+		module_put(o_tty->driver->owner);
 		free_tty_struct(o_tty);
 	}
 	kfree(ltp);
@@ -1445,6 +1445,7 @@ release_mem_out:
 static void release_one_tty(struct kref *kref)
 {
 	struct tty_struct *tty = container_of(kref, struct tty_struct, kref);
+	struct tty_driver *driver = tty->driver;
 	int devpts = tty->driver->flags & TTY_DRIVER_DEVPTS_MEM;
 	struct ktermios *tp;
 	int idx = tty->index;
@@ -1508,8 +1509,6 @@ EXPORT_SYMBOL(tty_kref_put);
  */
 static void release_tty(struct tty_struct *tty, int idx)
 {
-	struct tty_driver *driver = tty->driver;
-
 	/* This should always be true but check for the moment */
 	WARN_ON(tty->index != idx);
 
@@ -1797,6 +1796,8 @@ retry_open:
 		index = tty->index;
 		filp->f_flags |= O_NONBLOCK; /* Don't let /dev/tty block */
 		/* noctty = 1; */
+		/* FIXME: Should we take a driver reference ? */
+		tty_kref_put(tty);
 		goto got_driver;
 	}
 #ifdef CONFIG_VT
@@ -3126,7 +3127,7 @@ struct tty_struct *get_current_tty(void)
 {
 	struct tty_struct *tty;
 	WARN_ON_ONCE(!mutex_is_locked(&tty_mutex));
-	tty = current->signal->tty;
+	tty = tty_kref_get(current->signal->tty);
 	/*
 	 * session->tty can be changed/cleared from under us, make sure we
 	 * issue the load. The obtained pointer, when not NULL, is valid as
