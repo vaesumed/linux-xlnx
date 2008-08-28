@@ -91,6 +91,16 @@ struct max1111_data {
 	uint8_t *rx_buf;
 };
 
+#ifdef CONFIG_SHARPSL_PM
+static struct max1111_data *the_max1111;
+
+int max1111_read_channel(int channel)
+{
+	return max1111_read(&the_max1111->spi->dev, channel);
+}
+EXPORT_SYMBOL(max1111_read_channel);
+#endif
+
 static int max1111_read(struct device *dev, int channel)
 {
 	struct max1111_data *data = dev_get_drvdata(dev);
@@ -185,6 +195,9 @@ static int __devinit max1111_probe(struct spi_device *spi)
 		goto err_remove;
 	}
 
+#ifdef CONFIG_SHARPSL_PM
+	the_max1111 = data;
+#endif
 	return 0;
 
 err_remove:
