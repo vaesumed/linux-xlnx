@@ -40,11 +40,15 @@ int i915_wait_ring(struct drm_device * dev, int n, const char *caller)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
 	drm_i915_ring_buffer_t *ring = &(dev_priv->ring);
-	u32 last_head = I915_READ(LP_RING + RING_HEAD) & HEAD_ADDR;
+	u32 acthd_reg = IS_I965G(dev) ? ACTHD_I965 : ACTHD;
+	u32 last_acthd = I915_READ(acthd_reg);
+	u32 acthd;
+	u32 last_head = I915_READ(PRB0_HEAD) & HEAD_ADDR;
 	int i;
 
-	for (i = 0; i < 10000; i++) {
-		ring->head = I915_READ(LP_RING + RING_HEAD) & HEAD_ADDR;
+	for (i = 0; i < 100000; i++) {
+		ring->head = I915_READ(PRB0_HEAD) & HEAD_ADDR;
+		acthd = I915_READ(acthd_reg);
 		ring->space = ring->head - (ring->tail + 8);
 		if (ring->space < 0)
 			ring->space += ring->Size;
@@ -55,11 +59,62 @@ int i915_wait_ring(struct drm_device * dev, int n, const char *caller)
 
 		if (ring->head != last_head)
 			i = 0;
+		if (acthd != last_acthd)
+			i = 0;
 
 		last_head = ring->head;
+		last_acthd = acthd;
+		msleep_interruptible(10);
+
 	}
 
 	return -EBUSY;
+}
+
+/**
+ * Sets up the hardware status page for devices that need a physical address
+ * in the register.
+ */
+int i915_init_phys_hws(struct drm_device *dev)
+{
+	drm_i915_private_t *dev_priv = dev->dev_private;
+	/* Program Hardware Status Page */
+	dev_priv->status_page_dmah =
+		drm_pci_alloc(dev, PAGE_SIZE, PAGE_SIZE, 0xffffffff);
+
+	if (!dev_priv->status_page_dmah) {
+		DRM_ERROR("Can not allocate hardware status page\n");
+		return -ENOMEM;
+	}
+	dev_priv->hw_status_page = dev_priv->status_page_dmah->vaddr;
+	dev_priv->dma_status_page = dev_priv->status_page_dmah->busaddr;
+
+	memset(dev_priv->hw_status_page, 0, PAGE_SIZE);
+
+	I915_WRITE(HWS_PGA, dev_priv->dma_status_page);
+	DRM_DEBUG("Enabled hardware status page\n");
+	return 0;
+}
+
+/**
+ * Frees the hardware status page, whether it's a physical address or a virtual
+ * address set up by the X Server.
+ */
+void i915_free_hws(struct drm_device *dev)
+{
+	drm_i915_private_t *dev_priv = dev->dev_private;
+	if (dev_priv->status_page_dmah) {
+		drm_pci_free(dev, dev_priv->status_page_dmah);
+		dev_priv->status_page_dmah = NULL;
+	}
+
+	if (dev_priv->status_gfx_addr) {
+		dev_priv->status_gfx_addr = 0;
+		drm_core_ioremapfree(&dev_priv->hws_map, dev);
+	}
+
+	/* Need to rewrite hardware status page */
+	I915_WRITE(HWS_PGA, 0x1ffff000);
 }
 
 void i915_kernel_lost_context(struct drm_device * dev)
@@ -67,8 +122,8 @@ void i915_kernel_lost_context(struct drm_device * dev)
 	drm_i915_private_t *dev_priv = dev->dev_private;
 	drm_i915_ring_buffer_t *ring = &(dev_priv->ring);
 
-	ring->head = I915_READ(LP_RING + RING_HEAD) & HEAD_ADDR;
-	ring->tail = I915_READ(LP_RING + RING_TAIL) & TAIL_ADDR;
+	ring->head = I915_READ(PRB0_HEAD) & HEAD_ADDR;
+	ring->tail = I915_READ(PRB0_TAIL) & TAIL_ADDR;
 	ring->space = ring->head - (ring->tail + 8);
 	if (ring->space < 0)
 		ring->space += ring->Size;
@@ -84,7 +139,7 @@ static int i915_dma_cleanup(struct drm_device * dev)
 	 * may not have been called from userspace and after dev_private
 	 * is freed, it's too late.
 	 */
-	if (dev->irq)
+	if (dev->irq_enabled)
 		drm_irq_uninstall(dev);
 
 	if (dev_priv->ring.virtual_start) {
@@ -94,18 +149,9 @@ static int i915_dma_cleanup(struct drm_device * dev)
 		dev_priv->ring.map.size = 0;
 	}
 
-	if (dev_priv->status_page_dmah) {
-		drm_pci_free(dev, dev_priv->status_page_dmah);
-		dev_priv->status_page_dmah = NULL;
-		/* Need to rewrite hardware status page */
-		I915_WRITE(0x02080, 0x1ffff000);
-	}
-
-	if (dev_priv->status_gfx_addr) {
-		dev_priv->status_gfx_addr = 0;
-		drm_core_ioremapfree(&dev_priv->hws_map, dev);
-		I915_WRITE(0x2080, 0x1ffff000);
-	}
+	/* Clear the HWS virtual address at teardown */
+	if (I915_NEED_GFX_HWS(dev))
+		i915_free_hws(dev);
 
 	return 0;
 }
@@ -118,13 +164,6 @@ static int i915_initialize(struct drm_device * dev, drm_i915_init_t * init)
 	if (!dev_priv->sarea) {
 		DRM_ERROR("can not find sarea!\n");
 		i915_dma_cleanup(dev);
-		return -EINVAL;
-	}
-
-	dev_priv->mmio_map = drm_core_findmap(dev, init->mmio_offset);
-	if (!dev_priv->mmio_map) {
-		i915_dma_cleanup(dev);
-		DRM_ERROR("can not find mmio map!\n");
 		return -EINVAL;
 	}
 
@@ -159,34 +198,10 @@ static int i915_initialize(struct drm_device * dev, drm_i915_init_t * init)
 	dev_priv->current_page = 0;
 	dev_priv->sarea_priv->pf_current_page = dev_priv->current_page;
 
-	/* We are using separate values as placeholders for mechanisms for
-	 * private backbuffer/depthbuffer usage.
-	 */
-	dev_priv->use_mi_batchbuffer_start = 0;
-	if (IS_I965G(dev)) /* 965 doesn't support older method */
-		dev_priv->use_mi_batchbuffer_start = 1;
-
 	/* Allow hardware batchbuffers unless told otherwise.
 	 */
 	dev_priv->allow_batchbuffer = 1;
 
-	/* Program Hardware Status Page */
-	if (!I915_NEED_GFX_HWS(dev)) {
-		dev_priv->status_page_dmah =
-			drm_pci_alloc(dev, PAGE_SIZE, PAGE_SIZE, 0xffffffff);
-
-		if (!dev_priv->status_page_dmah) {
-			i915_dma_cleanup(dev);
-			DRM_ERROR("Can not allocate hardware status page\n");
-			return -ENOMEM;
-		}
-		dev_priv->hw_status_page = dev_priv->status_page_dmah->vaddr;
-		dev_priv->dma_status_page = dev_priv->status_page_dmah->busaddr;
-
-		memset(dev_priv->hw_status_page, 0, PAGE_SIZE);
-		I915_WRITE(0x02080, dev_priv->dma_status_page);
-	}
-	DRM_DEBUG("Enabled hardware status page\n");
 	return 0;
 }
 
@@ -198,11 +213,6 @@ static int i915_dma_resume(struct drm_device * dev)
 
 	if (!dev_priv->sarea) {
 		DRM_ERROR("can not find sarea!\n");
-		return -EINVAL;
-	}
-
-	if (!dev_priv->mmio_map) {
-		DRM_ERROR("can not find mmio map!\n");
 		return -EINVAL;
 	}
 
@@ -220,9 +230,9 @@ static int i915_dma_resume(struct drm_device * dev)
 	DRM_DEBUG("hw status page @ %p\n", dev_priv->hw_status_page);
 
 	if (dev_priv->status_gfx_addr != 0)
-		I915_WRITE(0x02080, dev_priv->status_gfx_addr);
+		I915_WRITE(HWS_PGA, dev_priv->status_gfx_addr);
 	else
-		I915_WRITE(0x02080, dev_priv->dma_status_page);
+		I915_WRITE(HWS_PGA, dev_priv->dma_status_page);
 	DRM_DEBUG("Enabled hardware status page\n");
 
 	return 0;
@@ -421,8 +431,8 @@ static void i915_emit_breadcrumb(struct drm_device *dev)
 		dev_priv->sarea_priv->last_enqueue = dev_priv->counter = 1;
 
 	BEGIN_LP_RING(4);
-	OUT_RING(CMD_STORE_DWORD_IDX);
-	OUT_RING(20);
+	OUT_RING(MI_STORE_DWORD_INDEX);
+	OUT_RING(5 << MI_STORE_DWORD_INDEX_SHIFT);
 	OUT_RING(dev_priv->counter);
 	OUT_RING(0);
 	ADVANCE_LP_RING();
@@ -486,7 +496,7 @@ static int i915_dispatch_batchbuffer(struct drm_device * dev,
 				return ret;
 		}
 
-		if (dev_priv->use_mi_batchbuffer_start) {
+		if (!IS_I830(dev) && !IS_845G(dev)) {
 			BEGIN_LP_RING(2);
 			if (IS_I965G(dev)) {
 				OUT_RING(MI_BATCH_BUFFER_START | (2 << 6) | MI_BATCH_NON_SECURE_I965);
@@ -524,7 +534,7 @@ static int i915_dispatch_flip(struct drm_device * dev)
 	i915_kernel_lost_context(dev);
 
 	BEGIN_LP_RING(2);
-	OUT_RING(INST_PARSER_CLIENT | INST_OP_FLUSH | INST_FLUSH_MAP_CACHE);
+	OUT_RING(MI_FLUSH | MI_READ_FLUSH);
 	OUT_RING(0);
 	ADVANCE_LP_RING();
 
@@ -549,8 +559,8 @@ static int i915_dispatch_flip(struct drm_device * dev)
 	dev_priv->sarea_priv->last_enqueue = dev_priv->counter++;
 
 	BEGIN_LP_RING(4);
-	OUT_RING(CMD_STORE_DWORD_IDX);
-	OUT_RING(20);
+	OUT_RING(MI_STORE_DWORD_INDEX);
+	OUT_RING(5 << MI_STORE_DWORD_INDEX_SHIFT);
 	OUT_RING(dev_priv->counter);
 	OUT_RING(0);
 	ADVANCE_LP_RING();
@@ -663,7 +673,7 @@ static int i915_getparam(struct drm_device *dev, void *data,
 
 	switch (param->param) {
 	case I915_PARAM_IRQ_ACTIVE:
-		value = dev->irq ? 1 : 0;
+		value = dev->irq_enabled;
 		break;
 	case I915_PARAM_ALLOW_BATCHBUFFER:
 		value = dev_priv->allow_batchbuffer ? 1 : 0;
@@ -697,8 +707,6 @@ static int i915_setparam(struct drm_device *dev, void *data,
 
 	switch (param->param) {
 	case I915_SETPARAM_USE_MI_BATCHBUFFER_START:
-		if (!IS_I965G(dev))
-			dev_priv->use_mi_batchbuffer_start = param->value;
 		break;
 	case I915_SETPARAM_TEX_LRU_LOG_GRANULARITY:
 		dev_priv->tex_lru_log_granularity = param->value;
@@ -749,8 +757,8 @@ static int i915_set_status_page(struct drm_device *dev, void *data,
 	dev_priv->hw_status_page = dev_priv->hws_map.handle;
 
 	memset(dev_priv->hw_status_page, 0, PAGE_SIZE);
-	I915_WRITE(0x02080, dev_priv->status_gfx_addr);
-	DRM_DEBUG("load hws 0x2080 with gfx mem 0x%x\n",
+	I915_WRITE(HWS_PGA, dev_priv->status_gfx_addr);
+	DRM_DEBUG("load hws HWS_PGA with gfx mem 0x%x\n",
 			dev_priv->status_gfx_addr);
 	DRM_DEBUG("load hws at %p\n", dev_priv->hw_status_page);
 	return 0;
@@ -784,6 +792,28 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	ret = drm_addmap(dev, base, size, _DRM_REGISTERS,
 			 _DRM_KERNEL | _DRM_DRIVER,
 			 &dev_priv->mmio_map);
+
+	/* Init HWS */
+	if (!I915_NEED_GFX_HWS(dev)) {
+		ret = i915_init_phys_hws(dev);
+		if (ret != 0)
+			return ret;
+	}
+
+	/* On the 945G/GM, the chipset reports the MSI capability on the
+	 * integrated graphics even though the support isn't actually there
+	 * according to the published specs.  It doesn't appear to function
+	 * correctly in testing on 945G.
+	 * This may be a side effect of MSI having been made available for PEG
+	 * and the registers being closely associated.
+	 */
+	if (!IS_I945G(dev) && !IS_I945GM(dev))
+		pci_enable_msi(dev->pdev);
+
+	intel_opregion_init(dev);
+
+	spin_lock_init(&dev_priv->user_irq_lock);
+
 	return ret;
 }
 
@@ -791,8 +821,15 @@ int i915_driver_unload(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
+	if (dev->pdev->msi_enabled)
+		pci_disable_msi(dev->pdev);
+
+	i915_free_hws(dev);
+
 	if (dev_priv->mmio_map)
 		drm_rmmap(dev, dev_priv->mmio_map);
+
+	intel_opregion_free(dev);
 
 	drm_free(dev->dev_private, sizeof(drm_i915_private_t),
 		 DRM_MEM_DRIVER);
