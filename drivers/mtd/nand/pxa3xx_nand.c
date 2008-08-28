@@ -291,10 +291,34 @@ static struct pxa3xx_nand_flash micron1GbX16 = {
 	.chip_id	= 0xb12c,
 };
 
+static struct pxa3xx_nand_timing samsung512MbX8_timing = {
+	.tCH	= 25,
+	.tCS	= 44,
+	.tWH	= 32,
+	.tWP	= 44,
+	.tRH	= 32,
+	.tRP	= 44,
+	.tR	= 25000,
+	.tWHR	= 96,
+	.tAR	= 25,
+};
+
+static struct pxa3xx_nand_flash samsung512MbX8 = {
+	.timing		= &samsung512MbX8_timing,
+	.cmdset		= &largepage_cmdset,
+	.page_per_block	= 64,
+	.page_size	= 2048,
+	.flash_width	= 8,
+	.dfc_width	= 8,
+	.num_blocks	= 4096,
+	.chip_id	= 0xdcec,
+};
+
 static struct pxa3xx_nand_flash *builtin_flash_types[] = {
 	&samsung512MbX16,
 	&micron1GbX8,
 	&micron1GbX16,
+	&samsung512MbX8,
 };
 
 #define NDTR0_tCH(c)	(min((c), 7) << 19)

@@ -220,9 +220,6 @@ void pxa27x_cpu_pm_save(unsigned long *sleep_save)
 
 void pxa27x_cpu_pm_restore(unsigned long *sleep_save)
 {
-	/* ensure not to come back here if it wasn't intended */
-	PSPR = 0;
-
 	/* restore registers */
 	RESTORE(GAFR0_L); RESTORE(GAFR0_U);
 	RESTORE(GAFR1_L); RESTORE(GAFR1_U);
@@ -259,8 +256,6 @@ void pxa27x_cpu_pm_enter(suspend_state_t state)
 		pxa_cpu_standby();
 		break;
 	case PM_SUSPEND_MEM:
-		/* set resume return address */
-		PSPR = virt_to_phys(pxa_cpu_resume);
 		pxa27x_cpu_suspend(PWRMODE_SLEEP);
 		break;
 	}
@@ -271,12 +266,28 @@ static int pxa27x_cpu_pm_valid(suspend_state_t state)
 	return state == PM_SUSPEND_MEM || state == PM_SUSPEND_STANDBY;
 }
 
+static int pxa27x_cpu_pm_prepare(void)
+{
+	if (state == PM_SUSPEND_MEM)
+		/* set resume return address */
+		PSPR = virt_to_phys(pxa_cpu_resume);
+	return 0;
+}
+
+static void pxa27x_cpu_pm_finish(void)
+{
+	/* ensure not to come back here if it wasn't intended */
+	PSPR = 0;
+}
+
 static struct pxa_cpu_pm_fns pxa27x_cpu_pm_fns = {
 	.save_count	= SLEEP_SAVE_COUNT,
 	.save		= pxa27x_cpu_pm_save,
 	.restore	= pxa27x_cpu_pm_restore,
 	.valid		= pxa27x_cpu_pm_valid,
 	.enter		= pxa27x_cpu_pm_enter,
+	.prepare	= pxa27x_cpu_pm_prepare,
+	.finish		= pxa27x_cpu_pm_finish,
 };
 
 static void __init pxa27x_init_pm(void)
@@ -349,7 +360,7 @@ struct platform_device pxa27x_device_i2c_power = {
 	.num_resources	= ARRAY_SIZE(i2c_power_resources),
 };
 
-void __init pxa_set_i2c_power_info(struct i2c_pxa_platform_data *info)
+void __init pxa27x_set_i2c_power_info(struct i2c_pxa_platform_data *info)
 {
 	local_irq_disable();
 	PCFR |= PCFR_PI2CEN;
