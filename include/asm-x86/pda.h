@@ -1,5 +1,5 @@
-#ifndef X86_64_PDA_H
-#define X86_64_PDA_H
+#ifndef ASM_X86__PDA_H
+#define ASM_X86__PDA_H
 
 #ifndef __ASSEMBLY__
 #include <linux/stddef.h>
@@ -133,4 +133,4 @@ do {									\
 #define PDA_STACKOFFSET (5*8)
 
 #define refresh_stack_canary() write_pda(stack_canary, current->stack_canary)
-#endif
+#endif /* ASM_X86__PDA_H */

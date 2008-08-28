@@ -36,6 +36,7 @@
 #include <asm/tlbflush.h>
 #include <asm/proto.h>
 #include <asm-generic/sections.h>
+#include <asm/traps.h>
 
 /*
  * Page fault error code bits
@@ -357,8 +358,6 @@ static int is_errata100(struct pt_regs *regs, unsigned long address)
 #endif
 	return 0;
 }
-
-void do_invalid_op(struct pt_regs *, unsigned long);
 
 static int is_f00f_bug(struct pt_regs *regs, unsigned long address)
 {
