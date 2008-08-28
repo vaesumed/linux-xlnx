@@ -1,0 +1,126 @@
+Importing driver-core.current based on 2.6.27-rc4-git6
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current 1941246dd98089dd637f44d3bd4f6cc1c61aa9e4
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 1941246dd98089dd637f44d3bd4f6cc1c61aa9e4
+HEAD is now at 1941246 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tiwai/sound-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-storage-sierra-non-configurable-tru-install.patch
+usb-serial-sierra-device-addition-version-rev.patch
+usb-ehci-fix-some-ehci-hangs-and-crashes.patch
+usb-fix-the-nokia-6300-storage-mode.patch
+usb-correct-sierra-wireless-usb-evdo-modem-device-id.patch
+usb-fix-hcd-interrupt-disabling.patch
+usb-added-driver-for-a-delcom-usb-7-segment-led-display.patch
+usb-add-usb-test-and-measurement-class-driver.patch
+Unchanged quilt series m68k
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard bec40f260a9f2e71fa5001c99f226782ba612781
+HEAD is now at bec40f2 USB: add USB test and measurement class driver
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+sysfs-crash-debugging.patch
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+usb-gadget-link-fixes-for-serial-gadget.patch
+usb-gadget-link-fixes-for-gadget-zero.patch
+usb-gadget-link-fixes-for-midi-gadget.patch
+usb-gadget-link-fixes-for-printer-gadget.patch
+usb-gadget-link-fixes-for-storage-gadget.patch
+usb-gadget-link-fixes-for-cdc-composite-gadget.patch
+usb-gadget-link-fixes-for-network-gadget.patch
+driver-core-basic-infrastructure-for-per-module-dynamic-debug-messages.patch
+.dotest/patch:737: space before tab in indent.
+	  	$echo "set enabled=1 <module_name>" > dynamic_printk/modules
+.dotest/patch:741: space before tab in indent.
+	  	$echo "set enabled=0 <module_name>" > dynamic_printk/modules
+warning: 2 lines add whitespace errors.
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+drivers-firmware-iscsi_ibft.c-make-3-functions-static.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+kobject-cleanup-kobject_rename-and-config_sysfs.patch
+sysfs-support-for-preventing-unmounts.patch
+sysfs-sysfs_get_dentry-add-a-sb-parameter.patch
+sysfs-implement-__sysfs_get_dentry.patch
+sysfs-rename-support-multiple-superblocks.patch
+sysfs-introduce-sysfs_sd_setattr-and-fix-sysfs_chmod.patch
+sysfs-sysfs_chmod_file-handle-multiple-superblocks.patch
+.dotest/patch:37: space before tab in indent.
+ 		goto out;
+warning: 1 line adds whitespace errors.
+klist-don-t-iterate-over-deleted-entries.patch
+driver-core-use-klist-for-class-device-list-and-implement-iterator.patch
+driver-core-add-bus_sort_breadthfirst-function.patch
+.dotest/patch:21: space before tab in indent.
+			   		int (*compare)(const struct device *a,
+.dotest/patch:42: space before tab in indent.
+			   		  const struct device *b))
+.dotest/patch:141: space before tab in indent.
+			   		  const struct device *b));
+warning: 3 lines add whitespace errors.
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 5785329e97b18ef071c8ca1b48eb96c84cc41d1f
+HEAD is now at 5785329 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+usb-let-some-usb-host-controllers-get-irq-flags-from-resource.patch
+usb-gadget-kconfig-cleanup.patch
+usb-gadget-dummy_hcd-implement-set_wedge.patch
+usb-gadget-net2280-implement-set_wedge.patch
+usb-gadget-function-activation-deactivation.patch
+usb-gadget-cdc-obex-glue.patch
+usb-gadget-defer-obex-enumeration.patch
+fsl_usb2_udc-make-dr_ep_setup-function-static.patch
+fsl_usb2_udc-remove-check-for-udc-null-in-dr_controller_setup.patch
+fsl_usb2_udc-fix-some-sparse-warnings-and-remove-redundant-code.patch
+fsl_usb2_udc-clean-up-whitespace-in-errors-and-warnings.patch
+fsl_usb2_udc-clean-up-whitespace-in-proc-debugging-output.patch
+fsl_usb2_udc-initialize-spinlock-earlier.patch
+fsl_usb2_udc-rename-the-arguments-of-the-fsl_writel-macro.patch
+fsl_usb2_udc-uninline-udc_reset_ep_queue.patch
+fsl_usb2_udc-make-fsl_queue_td-return-type-void.patch
+fsl_usb2_udc-add-a-wmb-before-priming-endpoint.patch
+fsl_usb2_udc-fix-oops-on-probe-failure.patch
+hso-icon-322-detection-fix.patch
+hso-dev_kfree_skb-crash-fix.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+.dotest/patch:2027: space before tab in indent.
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+warning: 1 line adds whitespace errors.
+usb-remove-use-of-err-in-drivers-usb-serial.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
