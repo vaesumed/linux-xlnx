@@ -1639,8 +1639,11 @@ extern int		dev_set_allmulti(struct net_device *dev, int inc);
 extern void		netdev_state_change(struct net_device *dev);
 extern void		netdev_bonding_change(struct net_device *dev);
 extern void		netdev_features_change(struct net_device *dev);
-/* Load a device via the kmod */
+#ifdef CONFIG_MODULES
 extern void		dev_load(struct net *net, const char *name);
+#else
+static inline void	dev_load(struct net *net, const char *name) {};
+#endif
 extern void		dev_mcast_init(void);
 extern int		netdev_max_backlog;
 extern int		weight_p;
