@@ -28,6 +28,8 @@
 
 #define RPCDBG_FACILITY	RPCDBG_SVCDSP
 
+static void svc_unregister(const struct svc_serv *serv);
+
 #define svc_serv_is_pooled(serv)    ((serv)->sv_function)
 
 /*
@@ -357,7 +359,7 @@ svc_pool_for_cpu(struct svc_serv *serv, int cpu)
  */
 static struct svc_serv *
 __svc_create(struct svc_program *prog, unsigned int bufsize, int npools,
-	   void (*shutdown)(struct svc_serv *serv))
+	   sa_family_t family, void (*shutdown)(struct svc_serv *serv))
 {
 	struct svc_serv	*serv;
 	unsigned int vers;
@@ -366,6 +368,7 @@ __svc_create(struct svc_program *prog, unsigned int bufsize, int npools,
 
 	if (!(serv = kzalloc(sizeof(*serv), GFP_KERNEL)))
 		return NULL;
+	serv->sv_family    = family;
 	serv->sv_name      = prog->pg_name;
 	serv->sv_program   = prog;
 	serv->sv_nrthreads = 1;
@@ -416,30 +419,29 @@ __svc_create(struct svc_program *prog, unsigned int bufsize, int npools,
 		spin_lock_init(&pool->sp_lock);
 	}
 
-
 	/* Remove any stale portmap registrations */
-	svc_register(serv, 0, 0);
+	svc_unregister(serv);
 
 	return serv;
 }
 
 struct svc_serv *
 svc_create(struct svc_program *prog, unsigned int bufsize,
-		void (*shutdown)(struct svc_serv *serv))
+		sa_family_t family, void (*shutdown)(struct svc_serv *serv))
 {
-	return __svc_create(prog, bufsize, /*npools*/1, shutdown);
+	return __svc_create(prog, bufsize, /*npools*/1, family, shutdown);
 }
 EXPORT_SYMBOL(svc_create);
 
 struct svc_serv *
 svc_create_pooled(struct svc_program *prog, unsigned int bufsize,
-		void (*shutdown)(struct svc_serv *serv),
+		  sa_family_t family, void (*shutdown)(struct svc_serv *serv),
 		  svc_thread_fn func, struct module *mod)
 {
 	struct svc_serv *serv;
 	unsigned int npools = svc_pool_map_get();
 
-	serv = __svc_create(prog, bufsize, npools, shutdown);
+	serv = __svc_create(prog, bufsize, npools, family, shutdown);
 
 	if (serv != NULL) {
 		serv->sv_function = func;
@@ -486,8 +488,7 @@ svc_destroy(struct svc_serv *serv)
 	if (svc_serv_is_pooled(serv))
 		svc_pool_map_put();
 
-	/* Unregister service with the portmapper */
-	svc_register(serv, 0, 0);
+	svc_unregister(serv);
 	kfree(serv->sv_pools);
 	kfree(serv);
 }
@@ -718,29 +719,107 @@ svc_exit_thread(struct svc_rqst *rqstp)
 }
 EXPORT_SYMBOL(svc_exit_thread);
 
+#ifdef CONFIG_SUNRPC_REGISTER_V4
 /*
- * Register an RPC service with the local portmapper.
- * To unregister a service, call this routine with
- * proto and port == 0.
+ * Registering kernel RPC services with rpcbind version 2 will work
+ * over either IPv4 or IPv6, since the Linux kernel always registers
+ * services for the "any" address.
+ *
+ * However, the local rpcbind daemon listens on either only AF_INET
+ * or AF_INET6 (never both).  When it listens on AF_INET6, an rpcbind
+ * version 2 registration will result in registering the service at
+ * IN6ADDR_ANY, even if the RPC service being registered is not
+ * IPv6-enabled.
+ *
+ * Rpcbind version 4 allows us to be a little more specific.  Kernel
+ * RPC services that don't yet support AF_INET6 can register
+ * themselves as IPv4-only with the local rpcbind daemon, even if the
+ * daemon is listening only on AF_INET6.
+ *
+ * And, registering IPv6-enabled kernel RPC services via AF_INET6
+ * verifies that the local user space rpcbind daemon is properly
+ * configured to support remote AF_INET6 rpcbind requests.
+ *
+ * An AF_INET6 registration request will fail if the local rpcbind
+ * daemon is not set up to listen on AF_INET6.  Likewise, we fail
+ * AF_INET6 registration requests if svc_register() is configured to
+ * support only rpcbind version 2.
  */
-int
-svc_register(struct svc_serv *serv, int proto, unsigned short port)
+static int __svc_register(const u32 program, const u32 version,
+			  const sa_family_t family,
+			  const unsigned short protocol,
+			  const unsigned short port)
+{
+	struct sockaddr_in sin = {
+		.sin_family		= AF_INET,
+		.sin_addr.s_addr	= htonl(INADDR_ANY),
+		.sin_port		= htons(port),
+	};
+	struct sockaddr_in6 sin6 = {
+		.sin6_family		= AF_INET6,
+		.sin6_addr		= IN6ADDR_ANY_INIT,
+		.sin6_port		= htons(port),
+	};
+	struct sockaddr *sap;
+	char *netid;
+
+	switch (family) {
+	case AF_INET:
+		sap = (struct sockaddr *)&sin;
+		netid = RPCBIND_NETID_TCP;
+		if (protocol == IPPROTO_UDP)
+			netid = RPCBIND_NETID_UDP;
+		break;
+	case AF_INET6:
+		sap = (struct sockaddr *)&sin6;
+		netid = RPCBIND_NETID_TCP6;
+		if (protocol == IPPROTO_UDP)
+			netid = RPCBIND_NETID_UDP6;
+		break;
+	default:
+		return -EAFNOSUPPORT;
+	}
+
+	return rpcb_v4_register(program, version, sap, netid);
+}
+#else
+static int __svc_register(const u32 program, const u32 version,
+			  sa_family_t family,
+			  const unsigned short protocol,
+			  const unsigned short port)
+{
+	if (family != AF_INET)
+		return -EAFNOSUPPORT;
+
+	return rpcb_register(program, version, protocol, port);
+}
+#endif
+
+/**
+ * svc_register - register an RPC service with the local portmapper
+ * @serv: svc_serv struct for the service to register
+ * @proto: transport protocol number to advertise
+ * @port: port to advertise
+ *
+ * Service is registered for any address in serv's address family
+ */
+int svc_register(const struct svc_serv *serv, const unsigned short proto,
+		 const unsigned short port)
 {
 	struct svc_program	*progp;
-	unsigned long		flags;
 	unsigned int		i;
-	int			error = 0, dummy;
+	int			error = 0;
 
-	if (!port)
-		clear_thread_flag(TIF_SIGPENDING);
+	BUG_ON(proto == 0 && port == 0);
 
 	for (progp = serv->sv_program; progp; progp = progp->pg_next) {
 		for (i = 0; i < progp->pg_nvers; i++) {
 			if (progp->pg_vers[i] == NULL)
 				continue;
 
-			dprintk("svc: svc_register(%s, %s, %d, %d)%s\n",
+			dprintk("svc: svc_register(%s, %u, %s, %u, %d)%s\n",
 					progp->pg_name,
+					serv->sv_family,
 					proto == IPPROTO_UDP?  "udp" : "tcp",
 					port,
 					i,
@@ -750,23 +829,60 @@ svc_register(struct svc_serv *serv, int proto, unsigned short port)
 			if (progp->pg_vers[i]->vs_hidden)
 				continue;
 
-			error = rpcb_register(progp->pg_prog, i, proto, port, &dummy);
+			error = __svc_register(progp->pg_prog, i,
+						serv->sv_family, proto, port);
 			if (error < 0)
 				break;
-			if (port && !dummy) {
-				error = -EACCES;
-				break;
-			}
 		}
 	}
 
-	if (!port) {
-		spin_lock_irqsave(&current->sighand->siglock, flags);
-		recalc_sigpending();
-		spin_unlock_irqrestore(&current->sighand->siglock, flags);
+	return error;
+}
+
+/*
+ * All transport protocols and ports for this service are removed
+ * from the local rpcbind database if the service is not hidden.
+ *
+ * The result of unregistration is reported via dprintk for those
+ * who want verification of the result, but is otherwise not
+ * important.
+ *
+ * The local rpcbind daemon listens on either only IPv6 or only
+ * IPv4.  The kernel can't tell how it's configured.  However,
+ * AF_INET addresses are mapped to AF_INET6 in IPv6-only config-
+ * urations, so even an unregistration request on AF_INET will
+ * get to a local rpcbind daemon listening only on AF_INET6.  So
+ * we always unregister via AF_INET.
+ *
+ * At this point we don't need rpcbind version 4 for unregis-
+ * tration:  A v2 UNSET request will clear all transports (netids),
+ * addresses, and address families for [program, version].
+ */
+static void svc_unregister(const struct svc_serv *serv)
+{
+	struct svc_program *progp;
+	unsigned long flags;
+	unsigned int i;
+	int error;
+
+	clear_thread_flag(TIF_SIGPENDING);
+
+	for (progp = serv->sv_program; progp; progp = progp->pg_next) {
+		for (i = 0; i < progp->pg_nvers; i++) {
+			if (progp->pg_vers[i] == NULL)
+				continue;
+			if (progp->pg_vers[i]->vs_hidden)
+				continue;
+
+			error = rpcb_register(progp->pg_prog, i, 0, 0);
+			dprintk("svc: svc_unregister(%sv%u), error %d\n",
+					progp->pg_name, i, error);
+		}
 	}
 
-	return error;
+	spin_lock_irqsave(&current->sighand->siglock, flags);
+	recalc_sigpending();
+	spin_unlock_irqrestore(&current->sighand->siglock, flags);
 }
 
 /*
