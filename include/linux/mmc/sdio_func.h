@@ -109,18 +109,32 @@ extern int sdio_register_driver(struct sdio_driver *);
 extern void sdio_unregister_driver(struct sdio_driver *);
 
 /*
- * SDIO I/O operations
+ * Host lock management (you need to hold this lock before calling
+ * any other function below)
  */
+
 extern void sdio_claim_host(struct sdio_func *func);
 extern void sdio_release_host(struct sdio_func *func);
+
+/*
+ * General function management
+ */
 
 extern int sdio_enable_func(struct sdio_func *func);
 extern int sdio_disable_func(struct sdio_func *func);
 
 extern int sdio_set_block_size(struct sdio_func *func, unsigned blksz);
 
+/*
+ * Interrupt control
+ */
+
 extern int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler);
 extern int sdio_release_irq(struct sdio_func *func);
+
+/*
+ * Register access functions
+ */
 
 extern unsigned int sdio_align_size(struct sdio_func *func, unsigned int sz);
 
@@ -149,6 +163,31 @@ extern unsigned char sdio_f0_readb(struct sdio_func *func,
 	unsigned int addr, int *err_ret);
 extern void sdio_f0_writeb(struct sdio_func *func, unsigned char b,
 	unsigned int addr, int *err_ret);
+
+/*
+ * Low-level I/O functions for hardware that doesn't properly abstract
+ * the register space. Don't use these unless you absolutely have to.
+ */
+
+extern int sdio_read_bytes(struct sdio_func *func, void *dst,
+	unsigned int addr, int bytes);
+extern int sdio_read_bytes_noincr(struct sdio_func *func, void *dst,
+	unsigned int addr, int bytes);
+
+extern int sdio_read_blocks(struct sdio_func *func, void *dst,
+	unsigned int addr, int blocks);
+extern int sdio_read_blocks_noincr(struct sdio_func *func, void *dst,
+	unsigned int addr, int blocks);
+
+extern int sdio_write_bytes(struct sdio_func *func, unsigned int addr,
+	 void *src, int bytes);
+extern int sdio_write_bytes_noincr(struct sdio_func *func, unsigned int addr,
+	void *src, int bytes);
+
+extern int sdio_write_blocks(struct sdio_func *func, unsigned int addr,
+	void *src, int blocks);
+extern int sdio_write_blocks_noincr(struct sdio_func *func, unsigned int addr,
+	void *src, int blocks);
 
 #endif
 
