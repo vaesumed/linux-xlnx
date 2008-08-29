@@ -18,6 +18,7 @@ config SPARC64
 	select HAVE_ARCH_KGDB
 	select USE_GENERIC_SMP_HELPERS if SMP
 	select HAVE_ARCH_TRACEHOOK
+	select ARCH_WANT_OPTIONAL_GPIOLIB
 
 config GENERIC_TIME
 	bool
@@ -30,6 +31,11 @@ config GENERIC_CMOS_UPDATE
 config GENERIC_CLOCKEVENTS
 	bool
 	default y
+
+config GENERIC_GPIO
+	bool
+	help
+	  Generic GPIO API support
 
 config 64BIT
 	def_bool y
@@ -184,6 +190,17 @@ config US2E_FREQ
 	  For details, take a look at <file:Documentation/cpu-freq>.
 
 	  If in doubt, say N.
+
+config US3_MC
+	tristate "UltraSPARC-III Memory Controller driver"
+	default y
+	help
+	  This adds a driver for the UltraSPARC-III memory controller.
+	  Loading this driver allows exact mnemonic strings to be
+	  printed in the event of a memory error, so that the faulty DIMM
+	  on the motherboard can be matched to the error.
+
+	  If in doubt, say Y, as this information can be very useful.
 
 # Global things across all Sun machines.
 config GENERIC_LOCKBREAK
