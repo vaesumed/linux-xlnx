@@ -1859,8 +1859,8 @@ sg_write_xfer(Sg_request * srp)
 	     && ((SG_FLAG_NO_DXFER | SG_FLAG_MMAP_IO) & hp->flags)))
 		return 0;
 
-	SCSI_LOG_TIMEOUT(4, printk("sg_write_xfer: num_xfer=%d, iovec_count=%d, k_use_sg=%d\n",
-			  num_xfer, iovec_count, schp->k_use_sg));
+	SCSI_LOG_TIMEOUT(4, printk("sg_write_xfer: num_xfer=%d, k_use_sg=%d\n",
+			  num_xfer, schp->k_use_sg));
 
 	return 0;
 }
@@ -1875,8 +1875,8 @@ sg_remove_scat(Sg_scatter_hold * schp)
 
 			for (k = 0; k < schp->k_use_sg && schp->pages[k]; k++) {
 				SCSI_LOG_TIMEOUT(5, printk(
-				    "sg_remove_scat: k=%d, pg=0x%p\n",
-				    k, page));
+				    "sg_remove_scat: k=%d\n",
+				    k));
 				__free_pages(schp->pages[k], schp->page_order);
 			}
 
