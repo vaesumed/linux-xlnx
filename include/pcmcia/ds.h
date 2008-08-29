@@ -137,6 +137,7 @@ struct pcmcia_device {
 #define to_pcmcia_dev(n) container_of(n, struct pcmcia_device, dev)
 #define to_pcmcia_drv(n) container_of(n, struct pcmcia_driver, drv)
 
+#define handle_to_dev(handle) (handle->dev)
 
 /* (deprecated) error reporting by PCMCIA devices. Use dev_printk()
  * or dev_dbg() directly in the driver, without referring to pcmcia_error_func()
