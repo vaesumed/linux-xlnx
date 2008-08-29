@@ -22,7 +22,7 @@ int blk_delete_timer(struct request *req)
 	/*
 	 * Nothing to detach
 	 */
-	if (!q->rq_timed_out_fn)
+	if (!q->rq_timed_out_fn || !req->deadline)
 		return 1;
 
 	/*
@@ -48,7 +48,7 @@ static void blk_rq_timed_out(struct request *req)
 	ret = q->rq_timed_out_fn(req);
 	switch (ret) {
 	case BLK_EH_HANDLED:
-		__blk_complete_request(req);
+		blk_complete_request(req);
 		break;
 	case BLK_EH_RESET_TIMER:
 		blk_add_timer(req);
@@ -138,6 +138,14 @@ void blk_add_timer(struct request *req)
 	 * second.
 	 */
 	expiry = round_jiffies(req->deadline);
+
+	/*
+	 * We use ->deadline == 0 to detect whether a timer was added or
+	 * not, so just increase to next jiffy for that specific case
+	 */
+	if (unlikely(!req->deadline))
+		req->deadline = 1;
+
 	if (!timer_pending(&q->timeout) ||
 	    time_before(expiry, q->timeout.expires))
 		mod_timer(&q->timeout, expiry);

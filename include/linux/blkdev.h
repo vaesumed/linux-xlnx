@@ -785,7 +785,6 @@ extern int blk_end_request_callback(struct request *rq, int error,
 				unsigned int nr_bytes,
 				int (drv_callback)(struct request *));
 extern void blk_complete_request(struct request *);
-extern void __blk_complete_request(struct request *);
 extern void blk_abort_request(struct request *);
 extern int blk_delete_timer(struct request *);
 extern void blk_add_timer(struct request *);
