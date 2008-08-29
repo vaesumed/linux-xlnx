@@ -23,6 +23,7 @@
 #include <linux/mm.h>
 #include <linux/init.h>
 #include <linux/sysctl.h>
+#include <linux/device.h>
 
 #include <asm/uaccess.h>
 #include <asm/system.h>
@@ -226,7 +227,58 @@ static void pty_set_termios(struct tty_struct *tty, struct ktermios *old_termios
         tty->termios->c_cflag |= (CS8 | CREAD);
 }
 
+static int pty_install(struct tty_driver *driver, struct tty_struct *tty)
+{
+	struct tty_struct *o_tty;
+	int idx = tty->index;
+	int retval;
+
+	o_tty = alloc_tty_struct();
+	if (!o_tty)
+		return -ENOMEM;
+	if (!try_module_get(driver->other->owner)) {
+		/* This cannot in fact currently happen */
+		free_tty_struct(o_tty);
+		return -ENOMEM;
+	}
+	initialize_tty_struct(o_tty, driver->other, idx);
+
+	/* We always use new tty termios data so we can do this
+	   the easy way .. */
+	retval = tty_init_termios(tty);
+	if (retval)
+		goto free_mem_out;
+
+	retval = tty_init_termios(o_tty);
+	if (retval) {
+		tty_free_termios(tty);
+		goto free_mem_out;
+	}
+	
+	/*
+	 * Everything allocated ... set up the o_tty structure.
+	 */
+	driver->other->ttys[idx] = o_tty;
+	tty_driver_kref_get(driver->other);
+	if (driver->subtype == PTY_TYPE_MASTER)
+		o_tty->count++;
+	/* Establish the links in both directions */
+	tty->link   = o_tty;
+	o_tty->link = tty;
+
+	tty_driver_kref_get(driver);
+	tty->count++;
+	driver->ttys[idx] = tty;
+	return 0;
+free_mem_out:
+	module_put(o_tty->driver->owner);
+	free_tty_struct(o_tty);
+	return -ENOMEM;
+}
+
+
 static const struct tty_operations pty_ops = {
+	.install = pty_install,
 	.open = pty_open,
 	.close = pty_close,
 	.write = pty_write,
@@ -332,6 +384,8 @@ int pty_limit = NR_UNIX98_PTY_DEFAULT;
 static int pty_limit_min = 0;
 static int pty_limit_max = NR_UNIX98_PTY_MAX;
 
+static struct cdev ptmx_cdev;
+
 static struct ctl_table pty_table[] = {
 	{
 		.ctl_name	= PTY_MAX,
@@ -388,7 +442,114 @@ static int pty_unix98_ioctl(struct tty_struct *tty, struct file *file,
 	return -ENOIOCTLCMD;
 }
 
-static const struct tty_operations pty_unix98_ops = {
+/**
+ *	ptm_unix98_lookup	-	find a pty master
+ *	@driver: ptm driver
+ *	@idx: tty index
+ *
+ *	Look up a pty master device. Called under the tty_mutex for now.
+ *	This provides our locking.
+ */
+
+static struct tty_struct *ptm_unix98_lookup(struct tty_driver *driver, int idx)
+{
+	struct tty_struct *tty = devpts_get_tty(idx);
+	if (tty)
+		tty = tty->link;
+	return tty;
+}
+
+/**
+ *	pts_unix98_lookup	-	find a pty slave
+ *	@driver: pts driver
+ *	@idx: tty index
+ *
+ *	Look up a pty master device. Called under the tty_mutex for now.
+ *	This provides our locking.
+ */
+
+static struct tty_struct *pts_unix98_lookup(struct tty_driver *driver, int idx)
+{
+	struct tty_struct *tty = devpts_get_tty(idx);
+	/* Master must be open before slave */
+	if (!tty)
+		return ERR_PTR(-EIO);
+	return tty;
+}
+
+static void pty_unix98_shutdown(struct tty_struct *tty)
+{
+	/* We have our own method as we don't use the tty index */
+	kfree(tty->termios);
+	kfree(tty->termios_locked);
+}
+
+/* We have no need to install and remove our tty objects as devpts does all
+   the work for us */
+
+static int pty_unix98_install(struct tty_driver *driver, struct tty_struct *tty)
+{
+	struct tty_struct *o_tty;
+	int idx = tty->index;
+
+	o_tty = alloc_tty_struct();
+	if (!o_tty)
+		return -ENOMEM;
+	if (!try_module_get(driver->other->owner)) {
+		/* This cannot in fact currently happen */
+		free_tty_struct(o_tty);
+		return -ENOMEM;
+	}
+	initialize_tty_struct(o_tty, driver->other, idx);
+
+	tty->termios = kmalloc(sizeof(struct ktermios), GFP_KERNEL);
+	if (tty->termios == NULL)
+		goto free_mem_out;
+	*tty->termios = driver->init_termios;
+	tty->termios_locked = kzalloc(sizeof(struct ktermios), GFP_KERNEL);
+	if (tty->termios_locked == NULL)
+		goto free_mem_out;
+	o_tty->termios = kmalloc(sizeof(struct ktermios), GFP_KERNEL);
+	if (o_tty->termios == NULL)
+		goto free_mem_out;
+	*o_tty->termios = driver->other->init_termios;
+	o_tty->termios_locked = kzalloc(sizeof(struct ktermios), GFP_KERNEL);
+	if (o_tty->termios_locked == NULL)
+		goto free_mem_out;
+
+	tty_driver_kref_get(driver->other);
+	if (driver->subtype == PTY_TYPE_MASTER)
+		o_tty->count++;
+	/* Establish the links in both directions */
+	tty->link   = o_tty;
+	o_tty->link = tty;
+	/*
+	 * All structures have been allocated, so now we install them.
+	 * Failures after this point use release_tty to clean up, so
+	 * there's no need to null out the local pointers.
+	 */
+	tty_driver_kref_get(driver);
+	tty->count++;
+	return 0;
+free_mem_out:
+	kfree(o_tty->termios);
+	module_put(o_tty->driver->owner);
+	free_tty_struct(o_tty);
+	kfree(tty->termios_locked);
+	kfree(tty->termios);
+	free_tty_struct(tty);
+	module_put(driver->owner);
+	return -ENOMEM;
+}
+
+static void pty_unix98_remove(struct tty_driver *driver, struct tty_struct *tty)
+{
+}
+
+static const struct tty_operations ptm_unix98_ops = {
+	.lookup = ptm_unix98_lookup,
+	.install = pty_unix98_install,
+	.remove = pty_unix98_remove,
 	.open = pty_open,
 	.close = pty_close,
 	.write = pty_write,
@@ -397,9 +558,89 @@ static const struct tty_operations pty_unix98_ops = {
 	.chars_in_buffer = pty_chars_in_buffer,
 	.unthrottle = pty_unthrottle,
 	.set_termios = pty_set_termios,
-	.ioctl = pty_unix98_ioctl
+	.ioctl = pty_unix98_ioctl,
+	.shutdown = pty_unix98_shutdown
 };
 
+static const struct tty_operations pty_unix98_ops = {
+	.lookup = pts_unix98_lookup,
+	.install = pty_unix98_install,
+	.remove = pty_unix98_remove,
+	.open = pty_open,
+	.close = pty_close,
+	.write = pty_write,
+	.write_room = pty_write_room,
+	.flush_buffer = pty_flush_buffer,
+	.chars_in_buffer = pty_chars_in_buffer,
+	.unthrottle = pty_unthrottle,
+	.set_termios = pty_set_termios,
+	.shutdown = pty_unix98_shutdown
+};
+
+/**
+ *	ptmx_open		-	open a unix 98 pty master
+ *	@inode: inode of device file
+ *	@filp: file pointer to tty
+ *
+ *	Allocate a unix98 pty master device from the ptmx driver.
+ *
+ *	Locking: tty_mutex protects the init_dev work. tty->count should
+ * 		protect the rest.
+ *		allocated_ptys_lock handles the list of free pty numbers
+ */
+
+static int __ptmx_open(struct inode *inode, struct file *filp)
+{
+	struct tty_struct *tty;
+	int retval;
+	int index;
+
+	nonseekable_open(inode, filp);
+
+	/* find a device that is not in use. */
+	index = devpts_new_index();
+	if (index < 0)
+		return index;
+
+	mutex_lock(&tty_mutex);
+	tty = tty_init_dev(ptm_driver, index, 1);
+	mutex_unlock(&tty_mutex);
+
+	if (IS_ERR(tty)) {
+		retval = PTR_ERR(tty);
+		goto out;
+	}
+
+	set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */
+	filp->private_data = tty;
+	file_move(filp, &tty->tty_files);
+
+	retval = devpts_pty_new(tty->link);
+	if (retval)
+		goto out1;
+
+	retval = ptm_driver->ops->open(tty, filp);
+	if (!retval)
+		return 0;
+out1:
+	tty_release_dev(filp);
+	return retval;
+out:
+	devpts_kill_index(index);
+	return retval;
+}
+
+static int ptmx_open(struct inode *inode, struct file *filp)
+{
+	int ret;
+
+	lock_kernel();
+	ret = __ptmx_open(inode, filp);
+	unlock_kernel();
+	return ret;
+}
+
+static struct file_operations ptmx_fops;
 
 static void __init unix98_pty_init(void)
 {
@@ -427,7 +668,7 @@ static void __init unix98_pty_init(void)
 	ptm_driver->flags = TTY_DRIVER_RESET_TERMIOS | TTY_DRIVER_REAL_RAW |
 		TTY_DRIVER_DYNAMIC_DEV | TTY_DRIVER_DEVPTS_MEM;
 	ptm_driver->other = pts_driver;
-	tty_set_operations(ptm_driver, &pty_unix98_ops);
+	tty_set_operations(ptm_driver, &ptm_unix98_ops);
 
 	pts_driver->owner = THIS_MODULE;
 	pts_driver->driver_name = "pty_slave";
@@ -443,16 +684,30 @@ static void __init unix98_pty_init(void)
 	pts_driver->flags = TTY_DRIVER_RESET_TERMIOS | TTY_DRIVER_REAL_RAW |
 		TTY_DRIVER_DYNAMIC_DEV | TTY_DRIVER_DEVPTS_MEM;
 	pts_driver->other = ptm_driver;
-	tty_set_operations(pts_driver, &pty_ops);
+	tty_set_operations(pts_driver, &pty_unix98_ops);
 	
 	if (tty_register_driver(ptm_driver))
 		panic("Couldn't register Unix98 ptm driver");
 	if (tty_register_driver(pts_driver))
 		panic("Couldn't register Unix98 pts driver");
 
+	/* FIXME: WTF */
+#if 0	
 	pty_table[1].data = &ptm_driver->refcount;
-	register_sysctl_table(pty_root_table);
+#endif	
+	register_sysctl_table(pty_root_table);	
+
+	/* Now create the /dev/ptmx special device */
+	tty_default_fops(&ptmx_fops);
+	ptmx_fops.open = ptmx_open;
+
+	cdev_init(&ptmx_cdev, &ptmx_fops);
+	if (cdev_add(&ptmx_cdev, MKDEV(TTYAUX_MAJOR, 2), 1) ||
+	    register_chrdev_region(MKDEV(TTYAUX_MAJOR, 2), 1, "/dev/ptmx") < 0)
+		panic("Couldn't register /dev/ptmx driver\n");
+	device_create(tty_class, NULL, MKDEV(TTYAUX_MAJOR, 2), NULL, "ptmx");
 }
+
 #else
 static inline void unix98_pty_init(void) { }
 #endif
