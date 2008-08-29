@@ -78,7 +78,13 @@ void blk_rq_timed_out_timer(unsigned long data)
 	list_for_each_entry_safe(rq, tmp, &q->timeout_list, timeout_list) {
 		if (time_after_eq(jiffies, rq->deadline)) {
 			list_del_init(&rq->timeout_list);
-			blk_rq_timed_out(rq);
+
+			/*
+			 * if rq->bio is now NULL, then IO completion did
+			 * run on this request and we simply raced to get here
+			 */
+			if (rq->bio)
+				blk_rq_timed_out(rq);
 		}
 		if (!next_set) {
 			next = rq->deadline;
