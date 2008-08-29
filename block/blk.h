@@ -17,6 +17,7 @@ void __blk_queue_free_tags(struct request_queue *q);
 
 void blk_unplug_work(struct work_struct *work);
 void blk_unplug_timeout(unsigned long data);
+void blk_rq_timed_out_timer(unsigned long data);
 
 struct io_context *current_io_context(gfp_t gfp_flags, int node);
 

@@ -112,7 +112,7 @@ static struct notifier_block __cpuinitdata blk_cpu_notifier = {
  *     through a softirq handler. The user must have registered a completion
  *     callback through blk_queue_softirq_done().
  **/
-void blk_complete_request(struct request *req)
+void __blk_complete_request(struct request *req)
 {
 	struct request_queue *q = req->q;
 	unsigned long flags;
@@ -150,6 +150,34 @@ do_local:
 		goto do_local;
 
 	local_irq_restore(flags);
+}
+EXPORT_SYMBOL(__blk_complete_request);
+
+/**
+ * blk_complete_request - end I/O on a request
+ * @req:	the request being processed
+ *
+ * Description:
+ *     Ends all I/O on a request. It does not handle partial completions,
+ *     unless the driver actually implements this in its completion callback
+ *     through requeueing. Theh actual completion happens out-of-order,
+ *     through a softirq handler. The user must have registered a completion
+ *     callback through blk_queue_softirq_done().
+ */
+void blk_complete_request(struct request *req)
+{
+	/*
+	 * We don't have to worry about this one timing out any more.
+	 * If we are unable to remove the timer, then the command
+	 * has already timed out.  In which case, we have no choice but to
+	 * let the timeout function run, as we have no idea where in fact
+	 * that function could really be.  It might be on another processor,
+	 * etc, etc.
+	 */
+	if (!blk_delete_timer(req))
+		return;
+
+	__blk_complete_request(req);
 }
 EXPORT_SYMBOL(blk_complete_request);
 
