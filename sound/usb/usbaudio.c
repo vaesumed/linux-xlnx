@@ -71,6 +71,7 @@ static int pid[SNDRV_CARDS] = { [0 ... (SNDRV_CARDS-1)] = -1 };
 static int nrpacks = 8;		/* max. number of packets per urb */
 static int async_unlink = 1;
 static int device_setup[SNDRV_CARDS]; /* device parameter for this card*/
+static int ignore_ctl_error;
 
 module_param_array(index, int, NULL, 0444);
 MODULE_PARM_DESC(index, "Index value for the USB audio adapter.");
@@ -88,7 +89,9 @@ module_param(async_unlink, bool, 0444);
 MODULE_PARM_DESC(async_unlink, "Use async unlink mode.");
 module_param_array(device_setup, int, NULL, 0444);
 MODULE_PARM_DESC(device_setup, "Specific device setup (if needed).");
-
+module_param(ignore_ctl_error, bool, 0444);
+MODULE_PARM_DESC(ignore_ctl_error,
+		 "Ignore errors from USB controller for mixer interfaces.");
 
 /*
  * debug the h/w constraints
@@ -841,7 +844,8 @@ static int start_urbs(struct snd_usb_substream *subs, struct snd_pcm_runtime *ru
 		return -EBADFD;
 
 	for (i = 0; i < subs->nurbs; i++) {
-		snd_assert(subs->dataurb[i].urb, return -EINVAL);
+		if (snd_BUG_ON(!subs->dataurb[i].urb))
+			return -EINVAL;
 		if (subs->ops.prepare(subs, runtime, subs->dataurb[i].urb) < 0) {
 			snd_printk(KERN_ERR "cannot prepare datapipe for urb %d\n", i);
 			goto __error;
@@ -849,7 +853,8 @@ static int start_urbs(struct snd_usb_substream *subs, struct snd_pcm_runtime *ru
 	}
 	if (subs->syncpipe) {
 		for (i = 0; i < SYNC_URBS; i++) {
-			snd_assert(subs->syncurb[i].urb, return -EINVAL);
+			if (snd_BUG_ON(!subs->syncurb[i].urb))
+				return -EINVAL;
 			if (subs->ops.prepare_sync(subs, runtime, subs->syncurb[i].urb) < 0) {
 				snd_printk(KERN_ERR "cannot prepare syncpipe for urb %d\n", i);
 				goto __error;
@@ -1321,10 +1326,12 @@ static int set_format(struct snd_usb_substream *subs, struct audioformat *fmt)
 	int err;
 
 	iface = usb_ifnum_to_if(dev, fmt->iface);
-	snd_assert(iface, return -EINVAL);
+	if (WARN_ON(!iface))
+		return -EINVAL;
 	alts = &iface->altsetting[fmt->altset_idx];
 	altsd = get_iface_desc(alts);
-	snd_assert(altsd->bAlternateSetting == fmt->altsetting, return -EINVAL);
+	if (WARN_ON(altsd->bAlternateSetting != fmt->altsetting))
+		return -EINVAL;
 
 	if (fmt == subs->cur_audiofmt)
 		return 0;
@@ -3629,7 +3636,7 @@ static void *snd_usb_audio_probe(struct usb_device *dev,
 	if (err > 0) {
 		/* create normal USB audio interfaces */
 		if (snd_usb_create_streams(chip, ifnum) < 0 ||
-		    snd_usb_create_mixer(chip, ifnum) < 0) {
+		    snd_usb_create_mixer(chip, ifnum, ignore_ctl_error) < 0) {
 			goto __error;
 		}
 	}
