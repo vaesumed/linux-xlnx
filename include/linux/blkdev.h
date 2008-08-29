@@ -789,6 +789,7 @@ extern void __blk_complete_request(struct request *);
 extern void blk_abort_request(struct request *);
 extern int blk_delete_timer(struct request *);
 extern void blk_add_timer(struct request *);
+extern void blk_abort_queue(struct request_queue *);
 
 /*
  * blk_end_request() takes bytes instead of sectors as a complete size.
