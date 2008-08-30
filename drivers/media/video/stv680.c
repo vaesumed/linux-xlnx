@@ -1086,6 +1086,7 @@ static int stv_open (struct inode *inode, struct file *file)
 	int err = 0;
 
 	/* we are called with the BKL held */
+	lock_kernel();
 	stv680->user = 1;
 	err = stv_init (stv680);	/* main initialization routine for camera */
 
@@ -1099,6 +1100,7 @@ static int stv_open (struct inode *inode, struct file *file)
 	}
 	if (err)
 		stv680->user = 0;
+	unlock_kernel();
 
 	return err;
 }
@@ -1462,7 +1464,7 @@ static int stv680_probe (struct usb_interface *intf, const struct usb_device_id 
 	mutex_init (&stv680->lock);
 	wmb ();
 
-	if (video_register_device (stv680->vdev, VFL_TYPE_GRABBER, video_nr) == -1) {
+	if (video_register_device(stv680->vdev, VFL_TYPE_GRABBER, video_nr) < 0) {
 		PDEBUG (0, "STV(e): video_register_device failed");
 		retval = -EIO;
 		goto error_vdev;

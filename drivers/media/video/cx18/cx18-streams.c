@@ -119,7 +119,7 @@ static void cx18_stream_init(struct cx18 *cx, int type)
 	s->cx = cx;
 	s->type = type;
 	s->name = cx18_stream_info[type].name;
-	s->handle = 0xffffffff;
+	s->handle = CX18_INVALID_TASK_HANDLE;
 
 	s->dma = cx18_stream_info[type].dma;
 	s->buf_size = cx->stream_buf_size[type];
@@ -432,7 +432,6 @@ int cx18_start_v4l2_encode_stream(struct cx18_stream *s)
 	default:
 		return -EINVAL;
 	}
-	s->buffers_stolen = 0;
 
 	/* mute/unmute video */
 	cx18_vapi(cx, CX18_CPU_SET_VIDEO_MUTE, 2,
@@ -489,7 +488,14 @@ int cx18_start_v4l2_encode_stream(struct cx18_stream *s)
 	/* begin_capture */
 	if (cx18_vapi(cx, CX18_CPU_CAPTURE_START, 1, s->handle)) {
 		CX18_DEBUG_WARN("Error starting capture!\n");
+		/* Ensure we're really not capturing before releasing MDLs */
+		if (s->type == CX18_ENC_STREAM_TYPE_MPG)
+			cx18_vapi(cx, CX18_CPU_CAPTURE_STOP, 2, s->handle, 1);
+		else
+			cx18_vapi(cx, CX18_CPU_CAPTURE_STOP, 1, s->handle);
+		cx18_vapi(cx, CX18_CPU_DE_RELEASE_MDL, 1, s->handle);
 		cx18_vapi(cx, CX18_DESTROY_TASK, 1, s->handle);
+		/* FIXME - clean-up DSP0_INT mask, i_flags, s_flags, etc. */
 		return -EINVAL;
 	}
 
@@ -541,6 +547,9 @@ int cx18_stop_v4l2_encode_stream(struct cx18_stream *s, int gop_end)
 		CX18_INFO("ignoring gop_end: not (yet?) supported by the firmware\n");
 	}
 
+	/* Tell the CX23418 it can't use our buffers anymore */
+	cx18_vapi(cx, CX18_CPU_DE_RELEASE_MDL, 1, s->handle);
+
 	if (s->type != CX18_ENC_STREAM_TYPE_TS)
 		atomic_dec(&cx->ana_capturing);
 	atomic_dec(&cx->tot_capturing);
@@ -549,7 +558,7 @@ int cx18_stop_v4l2_encode_stream(struct cx18_stream *s, int gop_end)
 	clear_bit(CX18_F_S_STREAMING, &s->s_flags);
 
 	cx18_vapi(cx, CX18_DESTROY_TASK, 1, s->handle);
-	s->handle = 0xffffffff;
+	s->handle = CX18_INVALID_TASK_HANDLE;
 
 	if (atomic_read(&cx->tot_capturing) > 0)
 		return 0;
@@ -568,8 +577,8 @@ u32 cx18_find_handle(struct cx18 *cx)
 	for (i = 0; i < CX18_MAX_STREAMS; i++) {
 		struct cx18_stream *s = &cx->streams[i];
 
-		if (s->v4l2dev && s->handle)
+		if (s->v4l2dev && (s->handle != CX18_INVALID_TASK_HANDLE))
 			return s->handle;
 	}
-	return 0;
+	return CX18_INVALID_TASK_HANDLE;
 }

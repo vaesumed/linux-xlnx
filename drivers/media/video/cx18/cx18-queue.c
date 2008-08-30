@@ -37,8 +37,7 @@ void cx18_buf_swap(struct cx18_buffer *buf)
 void cx18_queue_init(struct cx18_queue *q)
 {
 	INIT_LIST_HEAD(&q->list);
-	q->buffers = 0;
-	q->length = 0;
+	atomic_set(&q->buffers, 0);
 	q->bytesused = 0;
 }
 
@@ -55,8 +54,7 @@ void cx18_enqueue(struct cx18_stream *s, struct cx18_buffer *buf,
 	}
 	spin_lock_irqsave(&s->qlock, flags);
 	list_add_tail(&buf->list, &q->list);
-	q->buffers++;
-	q->length += s->buf_size;
+	atomic_inc(&q->buffers);
 	q->bytesused += buf->bytesused - buf->readpos;
 	spin_unlock_irqrestore(&s->qlock, flags);
 }
@@ -70,8 +68,7 @@ struct cx18_buffer *cx18_dequeue(struct cx18_stream *s, struct cx18_queue *q)
 	if (!list_empty(&q->list)) {
 		buf = list_entry(q->list.next, struct cx18_buffer, list);
 		list_del_init(q->list.next);
-		q->buffers--;
-		q->length -= s->buf_size;
+		atomic_dec(&q->buffers);
 		q->bytesused -= buf->bytesused - buf->readpos;
 	}
 	spin_unlock_irqrestore(&s->qlock, flags);
@@ -95,10 +92,8 @@ struct cx18_buffer *cx18_queue_get_buf_irq(struct cx18_stream *s, u32 id,
 		/* the transport buffers are handled differently,
 		   they are not moved to the full queue */
 		if (s->type != CX18_ENC_STREAM_TYPE_TS) {
-			s->q_free.buffers--;
-			s->q_free.length -= s->buf_size;
-			s->q_full.buffers++;
-			s->q_full.length += s->buf_size;
+			atomic_dec(&s->q_free.buffers);
+			atomic_inc(&s->q_full.buffers);
 			s->q_full.bytesused += buf->bytesused;
 			list_move_tail(&buf->list, &s->q_full.list);
 		}
@@ -124,8 +119,7 @@ static void cx18_queue_flush(struct cx18_stream *s, struct cx18_queue *q)
 		buf = list_entry(q->list.next, struct cx18_buffer, list);
 		list_move_tail(q->list.next, &s->q_free.list);
 		buf->bytesused = buf->readpos = buf->b_flags = 0;
-		s->q_free.buffers++;
-		s->q_free.length += s->buf_size;
+		atomic_inc(&s->q_free.buffers);
 	}
 	cx18_queue_init(q);
 	spin_unlock_irqrestore(&s->qlock, flags);
@@ -149,10 +143,10 @@ int cx18_stream_alloc(struct cx18_stream *s)
 		s->name, s->buffers, s->buf_size,
 		s->buffers * s->buf_size / 1024);
 
-	if (((char *)&cx->scb->cpu_mdl[cx->mdl_offset + s->buffers] -
-				(char *)cx->scb) > SCB_RESERVED_SIZE) {
-		unsigned bufsz = (((char *)cx->scb) + SCB_RESERVED_SIZE -
-					((char *)cx->scb->cpu_mdl));
+	if (((char __iomem *)&cx->scb->cpu_mdl[cx->mdl_offset + s->buffers] -
+				(char __iomem *)cx->scb) > SCB_RESERVED_SIZE) {
+		unsigned bufsz = (((char __iomem *)cx->scb) + SCB_RESERVED_SIZE -
+					((char __iomem *)cx->scb->cpu_mdl));
 
 		CX18_ERR("Too many buffers, cannot fit in SCB area\n");
 		CX18_ERR("Max buffers = %zd\n",

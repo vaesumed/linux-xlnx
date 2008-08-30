@@ -1039,7 +1039,8 @@ int usbvideo_RegisterVideoDevice(struct uvd *uvd)
 		return -EINVAL;
 	}
 	uvd->vdev.parent = &uvd->dev->dev;
-	if (video_register_device(&uvd->vdev, VFL_TYPE_GRABBER, video_nr) == -1) {
+	uvd->vdev.release = video_device_release_empty;
+	if (video_register_device(&uvd->vdev, VFL_TYPE_GRABBER, video_nr) < 0) {
 		err("%s: video_register_device failed", __func__);
 		return -EPIPE;
 	}

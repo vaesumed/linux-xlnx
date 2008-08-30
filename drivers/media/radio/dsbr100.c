@@ -274,7 +274,7 @@ static int vidioc_querycap(struct file *file, void *priv,
 static int vidioc_g_tuner(struct file *file, void *priv,
 				struct v4l2_tuner *v)
 {
-	struct dsbr100_device *radio = video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
 	if (v->index > 0)
 		return -EINVAL;
@@ -306,7 +306,7 @@ static int vidioc_s_tuner(struct file *file, void *priv,
 static int vidioc_s_frequency(struct file *file, void *priv,
 				struct v4l2_frequency *f)
 {
-	struct dsbr100_device *radio = video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
 	radio->curfreq = f->frequency;
 	if (dsbr100_setfreq(radio, radio->curfreq)==-1)
@@ -317,7 +317,7 @@ static int vidioc_s_frequency(struct file *file, void *priv,
 static int vidioc_g_frequency(struct file *file, void *priv,
 				struct v4l2_frequency *f)
 {
-	struct dsbr100_device *radio = video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
 	f->type = V4L2_TUNER_RADIO;
 	f->frequency = radio->curfreq;
@@ -342,7 +342,7 @@ static int vidioc_queryctrl(struct file *file, void *priv,
 static int vidioc_g_ctrl(struct file *file, void *priv,
 				struct v4l2_control *ctrl)
 {
-	struct dsbr100_device *radio = video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUDIO_MUTE:
@@ -355,7 +355,7 @@ static int vidioc_g_ctrl(struct file *file, void *priv,
 static int vidioc_s_ctrl(struct file *file, void *priv,
 				struct v4l2_control *ctrl)
 {
-	struct dsbr100_device *radio = video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUDIO_MUTE:
@@ -405,23 +405,26 @@ static int vidioc_s_audio(struct file *file, void *priv,
 
 static int usb_dsbr100_open(struct inode *inode, struct file *file)
 {
-	struct dsbr100_device *radio=video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
+	lock_kernel();
 	radio->users = 1;
 	radio->muted = 1;
 
 	if (dsbr100_start(radio)<0) {
 		warn("Radio did not start up properly");
 		radio->users = 0;
+		unlock_kernel();
 		return -EIO;
 	}
 	dsbr100_setfreq(radio, radio->curfreq);
+	unlock_kernel();
 	return 0;
 }
 
 static int usb_dsbr100_close(struct inode *inode, struct file *file)
 {
-	struct dsbr100_device *radio=video_get_drvdata(video_devdata(file));
+	struct dsbr100_device *radio = video_drvdata(file);
 
 	if (!radio)
 		return -ENODEV;
@@ -493,7 +496,7 @@ static int usb_dsbr100_probe(struct usb_interface *intf,
 	radio->usbdev = interface_to_usbdev(intf);
 	radio->curfreq = FREQ_MIN*FREQ_MUL;
 	video_set_drvdata(radio->videodev, radio);
-	if (video_register_device(radio->videodev, VFL_TYPE_RADIO,radio_nr)) {
+	if (video_register_device(radio->videodev, VFL_TYPE_RADIO, radio_nr) < 0) {
 		warn("Could not register video device");
 		video_device_release(radio->videodev);
 		kfree(radio->transfer_buffer);

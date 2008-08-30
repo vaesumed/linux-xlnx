@@ -622,6 +622,7 @@ static int cx18_encoder_cmd(struct file *file, void *fh,
 {
 	struct cx18_open_id *id = fh;
 	struct cx18 *cx = id->cx;
+	u32 h;
 
 	switch (enc->cmd) {
 	case V4L2_ENC_CMD_START:
@@ -643,8 +644,14 @@ static int cx18_encoder_cmd(struct file *file, void *fh,
 			return -EPERM;
 		if (test_and_set_bit(CX18_F_I_ENC_PAUSED, &cx->i_flags))
 			return 0;
+		h = cx18_find_handle(cx);
+		if (h == CX18_INVALID_TASK_HANDLE) {
+			CX18_ERR("Can't find valid task handle for "
+				 "V4L2_ENC_CMD_PAUSE\n");
+			return -EBADFD;
+		}
 		cx18_mute(cx);
-		cx18_vapi(cx, CX18_CPU_CAPTURE_PAUSE, 1, cx18_find_handle(cx));
+		cx18_vapi(cx, CX18_CPU_CAPTURE_PAUSE, 1, h);
 		break;
 
 	case V4L2_ENC_CMD_RESUME:
@@ -654,7 +661,13 @@ static int cx18_encoder_cmd(struct file *file, void *fh,
 			return -EPERM;
 		if (!test_and_clear_bit(CX18_F_I_ENC_PAUSED, &cx->i_flags))
 			return 0;
-		cx18_vapi(cx, CX18_CPU_CAPTURE_RESUME, 1, cx18_find_handle(cx));
+		h = cx18_find_handle(cx);
+		if (h == CX18_INVALID_TASK_HANDLE) {
+			CX18_ERR("Can't find valid task handle for "
+				 "V4L2_ENC_CMD_RESUME\n");
+			return -EBADFD;
+		}
+		cx18_vapi(cx, CX18_CPU_CAPTURE_RESUME, 1, h);
 		cx18_unmute(cx);
 		break;
 
@@ -731,7 +744,8 @@ static int cx18_log_status(struct file *file, void *fh)
 			continue;
 		CX18_INFO("Stream %s: status 0x%04lx, %d%% of %d KiB (%d buffers) in use\n",
 			  s->name, s->s_flags,
-			  (s->buffers - s->q_free.buffers) * 100 / s->buffers,
+			  (s->buffers - atomic_read(&s->q_free.buffers))
+				* 100 / s->buffers,
 			  (s->buffers * s->buf_size) / 1024, s->buffers);
 	}
 	CX18_INFO("Read MPEG/VBI: %lld/%lld bytes\n",
