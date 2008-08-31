@@ -49,6 +49,7 @@ obj-$(CONFIG_I2C_SIMTEC)	+= i2c-simtec.o
 obj-$(CONFIG_I2C_VERSATILE)	+= i2c-versatile.o
 
 # External I2C/SMBus adapter drivers
+obj-$(CONFIG_I2C_FLOPPY)	+= i2c-floppy.o
 obj-$(CONFIG_I2C_PARPORT)	+= i2c-parport.o
 obj-$(CONFIG_I2C_PARPORT_LIGHT)	+= i2c-parport-light.o
 obj-$(CONFIG_I2C_TAOS_EVM)	+= i2c-taos-evm.o
