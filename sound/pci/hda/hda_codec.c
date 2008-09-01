@@ -588,7 +588,7 @@ int __devinit snd_hda_codec_new(struct hda_bus *bus, unsigned int codec_addr,
 				struct hda_codec **codecp)
 {
 	struct hda_codec *codec;
-	char component[13];
+	char component[31];
 	int err;
 
 	if (snd_BUG_ON(!bus))
@@ -693,7 +693,7 @@ int __devinit snd_hda_codec_new(struct hda_bus *bus, unsigned int codec_addr,
 	snd_hda_create_hwdep(codec);
 #endif
 
-	sprintf(component, "HDA:%08x", codec->vendor_id);
+	sprintf(component, "HDA:%08x,%08x,%08x", codec->vendor_id, codec->subsystem_id, codec->revision_id);
 	snd_component_add(codec->bus->card, component);
 
 	if (codecp)
@@ -2590,12 +2590,12 @@ static void setup_dig_out_stream(struct hda_codec *codec, hda_nid_t nid,
 				 unsigned int stream_tag, unsigned int format)
 {
 	/* turn off SPDIF once; otherwise the IEC958 bits won't be updated */
-	if (codec->spdif_ctls & AC_DIG1_ENABLE)
+	if (codec->spdif_status_reset && (codec->spdif_ctls & AC_DIG1_ENABLE))
 		snd_hda_codec_write(codec, nid, 0, AC_VERB_SET_DIGI_CONVERT_1,
 				    codec->spdif_ctls & ~AC_DIG1_ENABLE & 0xff);
 	snd_hda_codec_setup_stream(codec, nid, stream_tag, 0, format);
 	/* turn on again (if needed) */
-	if (codec->spdif_ctls & AC_DIG1_ENABLE)
+	if (codec->spdif_status_reset && (codec->spdif_ctls & AC_DIG1_ENABLE))
 		snd_hda_codec_write(codec, nid, 0, AC_VERB_SET_DIGI_CONVERT_1,
 				    codec->spdif_ctls & 0xff);
 }
