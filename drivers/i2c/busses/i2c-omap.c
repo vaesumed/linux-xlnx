@@ -589,7 +589,7 @@ omap_i2c_probe(struct platform_device *pdev)
 
 	dev->dev = &pdev->dev;
 	dev->irq = irq->start;
-	dev->base = (void __iomem *) IO_ADDRESS(mem->start);
+	dev->base = IO_ADDRESS(mem->start);
 	platform_set_drvdata(pdev, dev);
 
 	if ((r = omap_i2c_get_clocks(dev)) != 0)
