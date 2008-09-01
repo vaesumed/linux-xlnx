@@ -93,7 +93,7 @@ void blk_rq_timed_out_timer(unsigned long data)
 			next = rq->deadline;
 	}
 
-	if (next_set)
+	if (next_set && !list_empty(&q->timeout_list))
 		mod_timer(&q->timeout, round_jiffies(next));
 
 	spin_unlock_irqrestore(q->queue_lock, flags);
