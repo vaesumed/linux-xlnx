@@ -25,6 +25,7 @@
 
 #include <sound/asound.h>
 #include <sound/memalloc.h>
+#include <sound/minors.h>
 #include <linux/poll.h>
 #include <linux/mm.h>
 #include <linux/bitops.h>
@@ -84,7 +85,11 @@ struct snd_pcm_ops {
  *
  */
 
-#define SNDRV_PCM_DEVICES		8
+#if defined(CONFIG_SND_DYNAMIC_MINORS)
+#define SNDRV_PCM_DEVICES	(SNDRV_OS_MINORS-2)
+#else
+#define SNDRV_PCM_DEVICES	8
+#endif
 
 #define SNDRV_PCM_IOCTL1_FALSE		((void *)0)
 #define SNDRV_PCM_IOCTL1_TRUE		((void *)1)
@@ -416,7 +421,7 @@ struct snd_pcm_str {
 struct snd_pcm {
 	struct snd_card *card;
 	struct list_head list;
-	unsigned int device;	/* device number */
+	int device; /* device number */
 	unsigned int info_flags;
 	unsigned short dev_class;
 	unsigned short dev_subclass;
@@ -1009,5 +1014,7 @@ static inline void snd_pcm_limit_isa_dma_size(int dma, size_t *max)
 					 (IEC958_AES1_CON_ORIGINAL<<8)|\
 					 (IEC958_AES1_CON_PCM_CODER<<8)|\
 					 (IEC958_AES3_CON_FS_48000<<24))
+
+#define PCM_RUNTIME_CHECK(sub) snd_BUG_ON(!(sub) || !(sub)->runtime)
 
 #endif /* __SOUND_PCM_H */
