@@ -44,6 +44,7 @@
 #include <linux/init.h>
 #include <linux/i2c.h>
 #include <linux/videotext.h>
+#include <linux/smp_lock.h>
 #include <linux/videodev.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
@@ -60,6 +61,7 @@ struct saa5246a_device
 	u8     pgbuf[NUM_DAUS][VTX_VIRTUALSIZE];
 	int    is_searching[NUM_DAUS];
 	struct i2c_client *client;
+	unsigned long in_use;
 	struct mutex lock;
 };
 
@@ -115,7 +117,7 @@ static int saa5246a_attach(struct i2c_adapter *adap, int addr, int kind)
 		memset(t->pgbuf[pgbuf], ' ', sizeof(t->pgbuf[0]));
 		t->is_searching[pgbuf] = false;
 	}
-	vd->priv=t;
+	video_set_drvdata(vd, t);
 
 
 	/*
@@ -147,9 +149,10 @@ static int saa5246a_probe(struct i2c_adapter *adap)
 static int saa5246a_detach(struct i2c_client *client)
 {
 	struct video_device *vd = i2c_get_clientdata(client);
+
 	i2c_detach_client(client);
 	video_unregister_device(vd);
-	kfree(vd->priv);
+	kfree(video_get_drvdata(vd));
 	kfree(client);
 	return 0;
 }
@@ -579,8 +582,8 @@ static inline int saa5246a_stop_dau(struct saa5246a_device *t,
 static int do_saa5246a_ioctl(struct inode *inode, struct file *file,
 			    unsigned int cmd, void *arg)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5246a_device *t=vd->priv;
+	struct saa5246a_device *t = video_drvdata(file);
+
 	switch(cmd)
 	{
 		case VTXIOCGETINFO:
@@ -720,8 +723,7 @@ static inline unsigned int vtx_fix_command(unsigned int cmd)
 static int saa5246a_ioctl(struct inode *inode, struct file *file,
 			 unsigned int cmd, unsigned long arg)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5246a_device *t = vd->priv;
+	struct saa5246a_device *t = video_drvdata(file);
 	int err;
 
 	cmd = vtx_fix_command(cmd);
@@ -733,21 +735,15 @@ static int saa5246a_ioctl(struct inode *inode, struct file *file,
 
 static int saa5246a_open(struct inode *inode, struct file *file)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5246a_device *t = vd->priv;
-	int err;
+	struct saa5246a_device *t = video_drvdata(file);
 
-	err = video_exclusive_open(inode,file);
-	if (err < 0)
-		return err;
+	if (t->client == NULL)
+		return -ENODEV;
 
-	if (t->client==NULL) {
-		err = -ENODEV;
-		goto fail;
-	}
+	if (test_and_set_bit(0, &t->in_use))
+		return -EBUSY;
 
 	if (i2c_senddata(t, SAA5246A_REGISTER_R0,
-
 		R0_SELECT_R11 |
 		R0_PLL_TIME_CONSTANT_LONG |
 		R0_ENABLE_nODD_EVEN_OUTPUT |
@@ -773,21 +769,15 @@ static int saa5246a_open(struct inode *inode, struct file *file)
 
 		COMMAND_END))
 	{
-		err = -EIO;
-		goto fail;
+		clear_bit(0, &t->in_use);
+		return -EIO;
 	}
-
 	return 0;
-
-fail:
-	video_exclusive_release(inode,file);
-	return err;
 }
 
 static int saa5246a_release(struct inode *inode, struct file *file)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5246a_device *t = vd->priv;
+	struct saa5246a_device *t = video_drvdata(file);
 
 	/* Stop all acquisition circuits. */
 	i2c_senddata(t, SAA5246A_REGISTER_R1,
@@ -800,7 +790,7 @@ static int saa5246a_release(struct inode *inode, struct file *file)
 		R1_VCS_TO_SCS,
 
 		COMMAND_END);
-	video_exclusive_release(inode,file);
+	clear_bit(0, &t->in_use);
 	return 0;
 }
 

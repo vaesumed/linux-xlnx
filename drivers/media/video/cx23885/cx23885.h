@@ -1,7 +1,7 @@
 /*
  *  Driver for the Conexant CX23885 PCIe bridge
  *
- *  Copyright (c) 2006 Steven Toth <stoth@hauppauge.com>
+ *  Copyright (c) 2006 Steven Toth <stoth@linuxtv.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -64,6 +64,8 @@
 #define CX23885_BOARD_HAUPPAUGE_HVR1700        8
 #define CX23885_BOARD_HAUPPAUGE_HVR1400        9
 #define CX23885_BOARD_DVICO_FUSIONHDTV_7_DUAL_EXP 10
+#define CX23885_BOARD_DVICO_FUSIONHDTV_DVB_T_DUAL_EXP 11
+#define CX23885_BOARD_LEADTEK_WINFAST_PXDVR3200_H 12
 
 /* Currently unsupported by the driver: PAL/H, NTSC/Kr, SECAM B/G/H/LC */
 #define CX23885_NORMS (\

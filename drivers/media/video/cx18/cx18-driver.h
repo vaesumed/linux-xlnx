@@ -216,8 +216,7 @@ struct cx18_buffer {
 
 struct cx18_queue {
 	struct list_head list;
-	u32 buffers;
-	u32 length;
+	atomic_t buffers;
 	u32 bytesused;
 };
 
@@ -236,6 +235,8 @@ struct cx18_dvb {
 
 struct cx18;	 /* forward reference */
 struct cx18_scb; /* forward reference */
+
+#define CX18_INVALID_TASK_HANDLE 0xffffffff
 
 struct cx18_stream {
 	/* These first four fields are always set, even if the stream
@@ -259,7 +260,6 @@ struct cx18_stream {
 	/* Buffer Stats */
 	u32 buffers;
 	u32 buf_size;
-	u32 buffers_stolen;
 
 	/* Buffer Queues */
 	struct cx18_queue q_free;	/* free buffers */

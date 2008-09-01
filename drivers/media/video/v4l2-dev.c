@@ -42,6 +42,7 @@ static ssize_t show_index(struct device *cd,
 			 struct device_attribute *attr, char *buf)
 {
 	struct video_device *vfd = container_of(cd, struct video_device, dev);
+
 	return sprintf(buf, "%i\n", vfd->index);
 }
 
@@ -49,6 +50,7 @@ static ssize_t show_name(struct device *cd,
 			 struct device_attribute *attr, char *buf)
 {
 	struct video_device *vfd = container_of(cd, struct video_device, dev);
+
 	return sprintf(buf, "%.*s\n", (int)sizeof(vfd->name), vfd->name);
 }
 
@@ -58,12 +60,15 @@ static struct device_attribute video_device_attrs[] = {
 	__ATTR_NULL
 };
 
+/*
+ *	Active devices
+ */
+static struct video_device *video_device[VIDEO_NUM_DEVICES];
+static DEFINE_MUTEX(videodev_lock);
+
 struct video_device *video_device_alloc(void)
 {
-	struct video_device *vfd;
-
-	vfd = kzalloc(sizeof(*vfd), GFP_KERNEL);
-	return vfd;
+	return kzalloc(sizeof(struct video_device), GFP_KERNEL);
 }
 EXPORT_SYMBOL(video_device_alloc);
 
@@ -73,16 +78,48 @@ void video_device_release(struct video_device *vfd)
 }
 EXPORT_SYMBOL(video_device_release);
 
+void video_device_release_empty(struct video_device *vfd)
+{
+	/* Do nothing */
+	/* Only valid when the video_device struct is a static. */
+}
+EXPORT_SYMBOL(video_device_release_empty);
+
+/* Called when the last user of the character device is gone. */
+static void v4l2_chardev_release(struct kobject *kobj)
+{
+	struct video_device *vfd = container_of(kobj, struct video_device, cdev.kobj);
+
+	mutex_lock(&videodev_lock);
+	if (video_device[vfd->minor] != vfd)
+		panic("videodev: bad release");
+
+	/* Free up this device for reuse */
+	video_device[vfd->minor] = NULL;
+	mutex_unlock(&videodev_lock);
+
+	/* Release the character device */
+	vfd->cdev_release(kobj);
+	/* Release video_device and perform other
+	   cleanups as needed. */
+	if (vfd->release)
+		vfd->release(vfd);
+}
+
+/* The new kobj_type for the character device */
+static struct kobj_type v4l2_ktype_cdev_default = {
+	.release = v4l2_chardev_release,
+};
+
 static void video_release(struct device *cd)
 {
 	struct video_device *vfd = container_of(cd, struct video_device, dev);
 
-#if 1
-	/* needed until all drivers are fixed */
-	if (!vfd->release)
-		return;
-#endif
-	vfd->release(vfd);
+	/* It's now safe to delete the char device.
+	   This will either trigger the v4l2_chardev_release immediately (if
+	   the refcount goes to 0) or later when the last user of the
+	   character device closes it. */
+	cdev_del(&vfd->cdev);
 }
 
 static struct class video_class = {
@@ -91,86 +128,11 @@ static struct class video_class = {
 	.dev_release = video_release,
 };
 
-/*
- *	Active devices
- */
-
-static struct video_device *video_device[VIDEO_NUM_DEVICES];
-static DEFINE_MUTEX(videodev_lock);
-
 struct video_device *video_devdata(struct file *file)
 {
 	return video_device[iminor(file->f_path.dentry->d_inode)];
 }
 EXPORT_SYMBOL(video_devdata);
-
-/*
- *	Open a video device - FIXME: Obsoleted
- */
-static int video_open(struct inode *inode, struct file *file)
-{
-	unsigned int minor = iminor(inode);
-	int err = 0;
-	struct video_device *vfl;
-	const struct file_operations *old_fops;
-
-	if (minor >= VIDEO_NUM_DEVICES)
-		return -ENODEV;
-	lock_kernel();
-	mutex_lock(&videodev_lock);
-	vfl = video_device[minor];
-	if (vfl == NULL) {
-		mutex_unlock(&videodev_lock);
-		request_module("char-major-%d-%d", VIDEO_MAJOR, minor);
-		mutex_lock(&videodev_lock);
-		vfl = video_device[minor];
-		if (vfl == NULL) {
-			mutex_unlock(&videodev_lock);
-			unlock_kernel();
-			return -ENODEV;
-		}
-	}
-	old_fops = file->f_op;
-	file->f_op = fops_get(vfl->fops);
-	if (file->f_op->open)
-		err = file->f_op->open(inode, file);
-	if (err) {
-		fops_put(file->f_op);
-		file->f_op = fops_get(old_fops);
-	}
-	fops_put(old_fops);
-	mutex_unlock(&videodev_lock);
-	unlock_kernel();
-	return err;
-}
-
-/*
- * open/release helper functions -- handle exclusive opens
- * Should be removed soon
- */
-int video_exclusive_open(struct inode *inode, struct file *file)
-{
-	struct video_device *vfl = video_devdata(file);
-	int retval = 0;
-
-	mutex_lock(&vfl->lock);
-	if (vfl->users)
-		retval = -EBUSY;
-	else
-		vfl->users++;
-	mutex_unlock(&vfl->lock);
-	return retval;
-}
-EXPORT_SYMBOL(video_exclusive_open);
-
-int video_exclusive_release(struct inode *inode, struct file *file)
-{
-	struct video_device *vfl = video_devdata(file);
-
-	vfl->users--;
-	return 0;
-}
-EXPORT_SYMBOL(video_exclusive_release);
 
 /**
  * get_index - assign stream number based on parent device
@@ -256,6 +218,13 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 	int end;
 	int ret;
 	char *name_base;
+	void *priv = video_get_drvdata(vfd);
+
+	if (vfd == NULL)
+		return -EINVAL;
+
+	/* the release callback MUST be present */
+	BUG_ON(!vfd->release);
 
 	switch (type) {
 	case VFL_TYPE_GRABBER:
@@ -281,12 +250,15 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 	default:
 		printk(KERN_ERR "%s called with unknown type: %d\n",
 		       __func__, type);
-		return -1;
+		return -EINVAL;
 	}
 
+	/* Initialize the character device */
+	cdev_init(&vfd->cdev, vfd->fops);
+	vfd->cdev.owner = vfd->fops->owner;
 	/* pick a minor number */
 	mutex_lock(&videodev_lock);
-	if (nr >= 0  &&  nr < end-base) {
+	if (nr >= 0 && nr < end-base) {
 		/* use the one the driver asked for */
 		i = base + nr;
 		if (NULL != video_device[i]) {
@@ -317,10 +289,16 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 		goto fail_minor;
 	}
 
-	mutex_init(&vfd->lock);
-
+	ret = cdev_add(&vfd->cdev, MKDEV(VIDEO_MAJOR, vfd->minor), 1);
+	if (ret < 0) {
+		printk(KERN_ERR "%s: cdev_add failed\n", __func__);
+		goto fail_minor;
+	}
 	/* sysfs class */
-	memset(&vfd->dev, 0x00, sizeof(vfd->dev));
+	memset(&vfd->dev, 0, sizeof(vfd->dev));
+	/* The memset above cleared the device's drvdata, so
+	   put back the copy we made earlier. */
+	video_set_drvdata(vfd, priv);
 	vfd->dev.class = &video_class;
 	vfd->dev.devt = MKDEV(VIDEO_MAJOR, vfd->minor);
 	if (vfd->parent)
@@ -329,23 +307,22 @@ int video_register_device_index(struct video_device *vfd, int type, int nr,
 	ret = device_register(&vfd->dev);
 	if (ret < 0) {
 		printk(KERN_ERR "%s: device_register failed\n", __func__);
-		goto fail_minor;
+		goto del_cdev;
 	}
-
-#if 1
-	/* needed until all drivers are fixed */
-	if (!vfd->release)
-		printk(KERN_WARNING "videodev: \"%s\" has no release callback. "
-		       "Please fix your driver for proper sysfs support, see "
-		       "http://lwn.net/Articles/36850/\n", vfd->name);
-#endif
+	/* Remember the cdev's release function */
+	vfd->cdev_release = vfd->cdev.kobj.ktype->release;
+	/* Install our own */
+	vfd->cdev.kobj.ktype = &v4l2_ktype_cdev_default;
 	return 0;
+
+del_cdev:
+	cdev_del(&vfd->cdev);
 
 fail_minor:
 	mutex_lock(&videodev_lock);
 	video_device[vfd->minor] = NULL;
-	vfd->minor = -1;
 	mutex_unlock(&videodev_lock);
+	vfd->minor = -1;
 	return ret;
 }
 EXPORT_SYMBOL(video_register_device_index);
@@ -360,42 +337,29 @@ EXPORT_SYMBOL(video_register_device_index);
 
 void video_unregister_device(struct video_device *vfd)
 {
-	mutex_lock(&videodev_lock);
-	if (video_device[vfd->minor] != vfd)
-		panic("videodev: bad unregister");
-
-	video_device[vfd->minor] = NULL;
 	device_unregister(&vfd->dev);
-	mutex_unlock(&videodev_lock);
 }
 EXPORT_SYMBOL(video_unregister_device);
 
 /*
- * Video fs operations
- */
-static const struct file_operations video_fops = {
-	.owner		= THIS_MODULE,
-	.llseek		= no_llseek,
-	.open		= video_open,
-};
-
-/*
  *	Initialise video for linux
  */
-
 static int __init videodev_init(void)
 {
+	dev_t dev = MKDEV(VIDEO_MAJOR, 0);
 	int ret;
 
 	printk(KERN_INFO "Linux video capture interface: v2.00\n");
-	if (register_chrdev(VIDEO_MAJOR, VIDEO_NAME, &video_fops)) {
-		printk(KERN_WARNING "video_dev: unable to get major %d\n", VIDEO_MAJOR);
-		return -EIO;
+	ret = register_chrdev_region(dev, VIDEO_NUM_DEVICES, VIDEO_NAME);
+	if (ret < 0) {
+		printk(KERN_WARNING "videodev: unable to get major %d\n",
+				VIDEO_MAJOR);
+		return ret;
 	}
 
 	ret = class_register(&video_class);
 	if (ret < 0) {
-		unregister_chrdev(VIDEO_MAJOR, VIDEO_NAME);
+		unregister_chrdev_region(dev, VIDEO_NUM_DEVICES);
 		printk(KERN_WARNING "video_dev: class_register failed\n");
 		return -EIO;
 	}
@@ -405,8 +369,10 @@ static int __init videodev_init(void)
 
 static void __exit videodev_exit(void)
 {
+	dev_t dev = MKDEV(VIDEO_MAJOR, 0);
+
 	class_unregister(&video_class);
-	unregister_chrdev(VIDEO_MAJOR, VIDEO_NAME);
+	unregister_chrdev_region(dev, VIDEO_NUM_DEVICES);
 }
 
 module_init(videodev_init)

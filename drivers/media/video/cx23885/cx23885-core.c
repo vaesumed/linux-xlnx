@@ -1,7 +1,7 @@
 /*
  *  Driver for the Conexant CX23885 PCIe bridge
  *
- *  Copyright (c) 2006 Steven Toth <stoth@hauppauge.com>
+ *  Copyright (c) 2006 Steven Toth <stoth@linuxtv.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 #include "cx23885.h"
 
 MODULE_DESCRIPTION("Driver for cx23885 based TV cards");
-MODULE_AUTHOR("Steven Toth <stoth@hauppauge.com>");
+MODULE_AUTHOR("Steven Toth <stoth@linuxtv.org>");
 MODULE_LICENSE("GPL");
 
 static unsigned int debug;
@@ -1442,7 +1442,7 @@ void cx23885_cancel_buffers(struct cx23885_tsport *port)
 	struct cx23885_dev *dev = port->dev;
 	struct cx23885_dmaqueue *q = &port->mpegq;
 
-	dprintk(1, "%s()\n", __FUNCTION__);
+	dprintk(1, "%s()\n", __func__);
 	del_timer_sync(&q->timeout);
 	cx23885_stop_dma(port);
 	do_cancel_buffers(port, "cancel", 0);
