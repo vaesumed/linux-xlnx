@@ -111,6 +111,7 @@ void bio_init(struct bio *bio)
 {
 	memset(bio, 0, sizeof(*bio));
 	bio->bi_flags = 1 << BIO_UPTODATE;
+	bio->bi_comp_cpu = -1;
 	atomic_set(&bio->bi_cnt, 1);
 }
 
@@ -206,14 +207,6 @@ inline int bio_phys_segments(struct request_queue *q, struct bio *bio)
 		blk_recount_segments(q, bio);
 
 	return bio->bi_phys_segments;
-}
-
-inline int bio_hw_segments(struct request_queue *q, struct bio *bio)
-{
-	if (unlikely(!bio_flagged(bio, BIO_SEG_VALID)))
-		blk_recount_segments(q, bio);
-
-	return bio->bi_hw_segments;
 }
 
 /**
@@ -350,8 +343,7 @@ static int __bio_add_page(struct request_queue *q, struct bio *bio, struct page
 	 */
 
 	while (bio->bi_phys_segments >= q->max_phys_segments
-	       || bio->bi_hw_segments >= q->max_hw_segments
-	       || BIOVEC_VIRT_OVERSIZE(bio->bi_size)) {
+	       || bio->bi_phys_segments >= q->max_hw_segments) {
 
 		if (retried_segments)
 			return 0;
@@ -395,13 +387,11 @@ static int __bio_add_page(struct request_queue *q, struct bio *bio, struct page
 	}
 
 	/* If we may be able to merge these biovecs, force a recount */
-	if (bio->bi_vcnt && (BIOVEC_PHYS_MERGEABLE(bvec-1, bvec) ||
-	    BIOVEC_VIRT_MERGEABLE(bvec-1, bvec)))
+	if (bio->bi_vcnt && (BIOVEC_PHYS_MERGEABLE(bvec-1, bvec)))
 		bio->bi_flags &= ~(1 << BIO_SEG_VALID);
 
 	bio->bi_vcnt++;
 	bio->bi_phys_segments++;
-	bio->bi_hw_segments++;
  done:
 	bio->bi_size += len;
 	return len;
@@ -449,16 +439,19 @@ int bio_add_page(struct bio *bio, struct page *page, unsigned int len,
 
 struct bio_map_data {
 	struct bio_vec *iovecs;
-	int nr_sgvecs;
 	struct sg_iovec *sgvecs;
+	int nr_sgvecs;
+	int is_our_pages;
 };
 
 static void bio_set_map_data(struct bio_map_data *bmd, struct bio *bio,
-			     struct sg_iovec *iov, int iov_count)
+			     struct sg_iovec *iov, int iov_count,
+			     int is_our_pages)
 {
 	memcpy(bmd->iovecs, bio->bi_io_vec, sizeof(struct bio_vec) * bio->bi_vcnt);
 	memcpy(bmd->sgvecs, iov, sizeof(struct sg_iovec) * iov_count);
 	bmd->nr_sgvecs = iov_count;
+	bmd->is_our_pages = is_our_pages;
 	bio->bi_private = bmd;
 }
 
@@ -493,7 +486,8 @@ static struct bio_map_data *bio_alloc_map_data(int nr_segs, int iov_count,
 }
 
 static int __bio_copy_iov(struct bio *bio, struct bio_vec *iovecs,
-			  struct sg_iovec *iov, int iov_count, int uncopy)
+			  struct sg_iovec *iov, int iov_count, int uncopy,
+			  int do_free_page)
 {
 	int ret = 0, i;
 	struct bio_vec *bvec;
@@ -536,7 +530,7 @@ static int __bio_copy_iov(struct bio *bio, struct bio_vec *iovecs,
 			}
 		}
 
-		if (uncopy)
+		if (do_free_page)
 			__free_page(bvec->bv_page);
 	}
 
@@ -555,7 +549,8 @@ int bio_uncopy_user(struct bio *bio)
 	struct bio_map_data *bmd = bio->bi_private;
 	int ret;
 
-	ret = __bio_copy_iov(bio, bmd->iovecs, bmd->sgvecs, bmd->nr_sgvecs, 1);
+	ret = __bio_copy_iov(bio, bmd->iovecs, bmd->sgvecs, bmd->nr_sgvecs, 1,
+			     bmd->is_our_pages);
 
 	bio_free_map_data(bmd);
 	bio_put(bio);
@@ -565,16 +560,20 @@ int bio_uncopy_user(struct bio *bio)
 /**
  *	bio_copy_user_iov	-	copy user data to bio
  *	@q: destination block queue
+ *	@map_data: pointer to the rq_map_data holding pages (if necessary)
  *	@iov:	the iovec.
  *	@iov_count: number of elements in the iovec
  *	@write_to_vm: bool indicating writing to pages or not
+ *	@gfp_mask: memory allocation flags
  *
  *	Prepares and returns a bio for indirect user io, bouncing data
  *	to/from kernel pages as necessary. Must be paired with
  *	call bio_uncopy_user() on io completion.
  */
-struct bio *bio_copy_user_iov(struct request_queue *q, struct sg_iovec *iov,
-			      int iov_count, int write_to_vm)
+struct bio *bio_copy_user_iov(struct request_queue *q,
+			      struct rq_map_data *map_data,
+			      struct sg_iovec *iov, int iov_count,
+			      int write_to_vm, gfp_t gfp_mask)
 {
 	struct bio_map_data *bmd;
 	struct bio_vec *bvec;
@@ -597,25 +596,38 @@ struct bio *bio_copy_user_iov(struct request_queue *q, struct sg_iovec *iov,
 		len += iov[i].iov_len;
 	}
 
-	bmd = bio_alloc_map_data(nr_pages, iov_count, GFP_KERNEL);
+	bmd = bio_alloc_map_data(nr_pages, iov_count, gfp_mask);
 	if (!bmd)
 		return ERR_PTR(-ENOMEM);
 
 	ret = -ENOMEM;
-	bio = bio_alloc(GFP_KERNEL, nr_pages);
+	bio = bio_alloc(gfp_mask, nr_pages);
 	if (!bio)
 		goto out_bmd;
 
 	bio->bi_rw |= (!write_to_vm << BIO_RW);
 
 	ret = 0;
+	i = 0;
 	while (len) {
-		unsigned int bytes = PAGE_SIZE;
+		unsigned int bytes;
+
+		if (map_data)
+			bytes = 1U << (PAGE_SHIFT + map_data->page_order);
+		else
+			bytes = PAGE_SIZE;
 
 		if (bytes > len)
 			bytes = len;
 
-		page = alloc_page(q->bounce_gfp | GFP_KERNEL);
+		if (map_data) {
+			if (i == map_data->nr_entries) {
+				ret = -ENOMEM;
+				break;
+			}
+			page = map_data->pages[i++];
+		} else
+			page = alloc_page(q->bounce_gfp | gfp_mask);
 		if (!page) {
 			ret = -ENOMEM;
 			break;
@@ -634,16 +646,17 @@ struct bio *bio_copy_user_iov(struct request_queue *q, struct sg_iovec *iov,
 	 * success
 	 */
 	if (!write_to_vm) {
-		ret = __bio_copy_iov(bio, bio->bi_io_vec, iov, iov_count, 0);
+		ret = __bio_copy_iov(bio, bio->bi_io_vec, iov, iov_count, 0, 0);
 		if (ret)
 			goto cleanup;
 	}
 
-	bio_set_map_data(bmd, bio, iov, iov_count);
+	bio_set_map_data(bmd, bio, iov, iov_count, map_data ? 0 : 1);
 	return bio;
 cleanup:
-	bio_for_each_segment(bvec, bio, i)
-		__free_page(bvec->bv_page);
+	if (!map_data)
+		bio_for_each_segment(bvec, bio, i)
+			__free_page(bvec->bv_page);
 
 	bio_put(bio);
 out_bmd:
@@ -654,29 +667,32 @@ out_bmd:
 /**
  *	bio_copy_user	-	copy user data to bio
  *	@q: destination block queue
+ *	@map_data: pointer to the rq_map_data holding pages (if necessary)
  *	@uaddr: start of user address
  *	@len: length in bytes
  *	@write_to_vm: bool indicating writing to pages or not
+ *	@gfp_mask: memory allocation flags
  *
  *	Prepares and returns a bio for indirect user io, bouncing data
  *	to/from kernel pages as necessary. Must be paired with
  *	call bio_uncopy_user() on io completion.
  */
-struct bio *bio_copy_user(struct request_queue *q, unsigned long uaddr,
-			  unsigned int len, int write_to_vm)
+struct bio *bio_copy_user(struct request_queue *q, struct rq_map_data *map_data,
+			  unsigned long uaddr, unsigned int len,
+			  int write_to_vm, gfp_t gfp_mask)
 {
 	struct sg_iovec iov;
 
 	iov.iov_base = (void __user *)uaddr;
 	iov.iov_len = len;
 
-	return bio_copy_user_iov(q, &iov, 1, write_to_vm);
+	return bio_copy_user_iov(q, map_data, &iov, 1, write_to_vm, gfp_mask);
 }
 
 static struct bio *__bio_map_user_iov(struct request_queue *q,
 				      struct block_device *bdev,
 				      struct sg_iovec *iov, int iov_count,
-				      int write_to_vm)
+				      int write_to_vm, gfp_t gfp_mask)
 {
 	int i, j;
 	int nr_pages = 0;
@@ -702,12 +718,12 @@ static struct bio *__bio_map_user_iov(struct request_queue *q,
 	if (!nr_pages)
 		return ERR_PTR(-EINVAL);
 
-	bio = bio_alloc(GFP_KERNEL, nr_pages);
+	bio = bio_alloc(gfp_mask, nr_pages);
 	if (!bio)
 		return ERR_PTR(-ENOMEM);
 
 	ret = -ENOMEM;
-	pages = kcalloc(nr_pages, sizeof(struct page *), GFP_KERNEL);
+	pages = kcalloc(nr_pages, sizeof(struct page *), gfp_mask);
 	if (!pages)
 		goto out;
 
@@ -786,19 +802,21 @@ static struct bio *__bio_map_user_iov(struct request_queue *q,
  *	@uaddr: start of user address
  *	@len: length in bytes
  *	@write_to_vm: bool indicating writing to pages or not
+ *	@gfp_mask: memory allocation flags
  *
  *	Map the user space address into a bio suitable for io to a block
  *	device. Returns an error pointer in case of error.
  */
 struct bio *bio_map_user(struct request_queue *q, struct block_device *bdev,
-			 unsigned long uaddr, unsigned int len, int write_to_vm)
+			 unsigned long uaddr, unsigned int len, int write_to_vm,
+			 gfp_t gfp_mask)
 {
 	struct sg_iovec iov;
 
 	iov.iov_base = (void __user *)uaddr;
 	iov.iov_len = len;
 
-	return bio_map_user_iov(q, bdev, &iov, 1, write_to_vm);
+	return bio_map_user_iov(q, bdev, &iov, 1, write_to_vm, gfp_mask);
 }
 
 /**
@@ -808,18 +826,19 @@ struct bio *bio_map_user(struct request_queue *q, struct block_device *bdev,
  *	@iov:	the iovec.
  *	@iov_count: number of elements in the iovec
  *	@write_to_vm: bool indicating writing to pages or not
+ *	@gfp_mask: memory allocation flags
  *
  *	Map the user space address into a bio suitable for io to a block
  *	device. Returns an error pointer in case of error.
  */
 struct bio *bio_map_user_iov(struct request_queue *q, struct block_device *bdev,
 			     struct sg_iovec *iov, int iov_count,
-			     int write_to_vm)
+			     int write_to_vm, gfp_t gfp_mask)
 {
 	struct bio *bio;
 
-	bio = __bio_map_user_iov(q, bdev, iov, iov_count, write_to_vm);
-
+	bio = __bio_map_user_iov(q, bdev, iov, iov_count, write_to_vm,
+				 gfp_mask);
 	if (IS_ERR(bio))
 		return bio;
 
@@ -976,48 +995,13 @@ static void bio_copy_kern_endio(struct bio *bio, int err)
 struct bio *bio_copy_kern(struct request_queue *q, void *data, unsigned int len,
 			  gfp_t gfp_mask, int reading)
 {
-	unsigned long kaddr = (unsigned long)data;
-	unsigned long end = (kaddr + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	unsigned long start = kaddr >> PAGE_SHIFT;
-	const int nr_pages = end - start;
 	struct bio *bio;
 	struct bio_vec *bvec;
-	struct bio_map_data *bmd;
-	int i, ret;
-	struct sg_iovec iov;
+	int i;
 
-	iov.iov_base = data;
-	iov.iov_len = len;
-
-	bmd = bio_alloc_map_data(nr_pages, 1, gfp_mask);
-	if (!bmd)
-		return ERR_PTR(-ENOMEM);
-
-	ret = -ENOMEM;
-	bio = bio_alloc(gfp_mask, nr_pages);
-	if (!bio)
-		goto out_bmd;
-
-	while (len) {
-		struct page *page;
-		unsigned int bytes = PAGE_SIZE;
-
-		if (bytes > len)
-			bytes = len;
-
-		page = alloc_page(q->bounce_gfp | gfp_mask);
-		if (!page) {
-			ret = -ENOMEM;
-			goto cleanup;
-		}
-
-		if (bio_add_pc_page(q, bio, page, bytes, 0) < bytes) {
-			ret = -EINVAL;
-			goto cleanup;
-		}
-
-		len -= bytes;
-	}
+	bio = bio_copy_user(q, NULL, (unsigned long)data, len, 1, gfp_mask);
+	if (IS_ERR(bio))
+		return bio;
 
 	if (!reading) {
 		void *p = data;
@@ -1030,20 +1014,9 @@ struct bio *bio_copy_kern(struct request_queue *q, void *data, unsigned int len,
 		}
 	}
 
-	bio->bi_private = bmd;
 	bio->bi_end_io = bio_copy_kern_endio;
 
-	bio_set_map_data(bmd, bio, &iov, 1);
 	return bio;
-cleanup:
-	bio_for_each_segment(bvec, bio, i)
-		__free_page(bvec->bv_page);
-
-	bio_put(bio);
-out_bmd:
-	bio_free_map_data(bmd);
-
-	return ERR_PTR(ret);
 }
 
 /*
@@ -1383,7 +1356,6 @@ EXPORT_SYMBOL(bio_init);
 EXPORT_SYMBOL(__bio_clone);
 EXPORT_SYMBOL(bio_clone);
 EXPORT_SYMBOL(bio_phys_segments);
-EXPORT_SYMBOL(bio_hw_segments);
 EXPORT_SYMBOL(bio_add_page);
 EXPORT_SYMBOL(bio_add_pc_page);
 EXPORT_SYMBOL(bio_get_nr_vecs);
