@@ -1009,7 +1009,7 @@ static int __init omap2_mcspi_probe(struct platform_device *pdev)
 	}
 
 	mcspi->phys = r->start;
-	mcspi->base = (void __iomem *) io_p2v(r->start);
+	mcspi->base = IO_ADDRESS(r->start);
 
 	INIT_WORK(&mcspi->work, omap2_mcspi_work);
 

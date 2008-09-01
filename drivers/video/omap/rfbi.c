@@ -59,7 +59,7 @@
 #define DISPC_CONTROL		0x0040
 
 static struct {
-	u32		base;
+	void __iomem	*base;
 	void		(*lcdc_callback)(void *data);
 	void		*lcdc_callback_data;
 	unsigned long	l4_khz;
@@ -518,7 +518,7 @@ static int rfbi_init(struct omapfb_device *fbdev)
 	int r;
 
 	rfbi.fbdev = fbdev;
-	rfbi.base = io_p2v(RFBI_BASE);
+	rfbi.base = IO_ADDRESS(RFBI_BASE);
 
 	if ((r = rfbi_get_clocks()) < 0)
 		return r;
