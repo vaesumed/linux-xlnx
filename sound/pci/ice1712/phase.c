@@ -22,15 +22,24 @@
  */
 
 /* PHASE 22 overview:
- *   Audio controller: VIA Envy24HT-S (slightly trimmed down version of Envy24HT)
+ *   Audio controller: VIA Envy24HT-S (slightly trimmed down Envy24HT, 4in/4out)
  *   Analog chip: AK4524 (partially via Philip's 74HCT125)
- *   Digital receiver: CS8414-CS (not supported in this release)
+ *   Digital receiver: CS8414-CS (supported in this release)
+ *		PHASE 22 revision 2.0 and Terrasoniq/Musonik TS22PCI have CS8416
+ *		(support status unknown, please test and report)
  *
  *   Envy connects to AK4524
  *	- CS directly from GPIO 10
  *	- CCLK via 74HCT125's gate #4 from GPIO 4
  *	- CDTI via 74HCT125's gate #2 from GPIO 5
- *		CDTI may be completely blocked by 74HCT125's gate #1 controlled by GPIO 3
+ *		CDTI may be completely blocked by 74HCT125's gate #1
+ *		controlled by GPIO 3
+ */
+
+/* PHASE 28 overview:
+ *   Audio controller: VIA Envy24HT (full untrimmed version, 8in/8out)
+ *   Analog chip: WM8770 (8 channel 192k DAC, 2 channel 96k ADC)
+ *   Digital receiver: CS8414-CS (supported in this release)
  */
 
 #include <asm/io.h>
@@ -120,6 +129,7 @@ static int __devinit phase22_init(struct snd_ice1712 *ice)
 	// Configure DAC/ADC description for generic part of ice1724
 	switch (ice->eeprom.subvendor) {
 	case VT1724_SUBDEVICE_PHASE22:
+	case VT1724_SUBDEVICE_TS22:
 		ice->num_total_dacs = 2;
 		ice->num_total_adcs = 2;
 		ice->vt1720 = 1; // Envy24HT-S have 16 bit wide GPIO
@@ -136,6 +146,7 @@ static int __devinit phase22_init(struct snd_ice1712 *ice)
 	ice->akm_codecs = 1;
 	switch (ice->eeprom.subvendor) {
 	case VT1724_SUBDEVICE_PHASE22:
+	case VT1724_SUBDEVICE_TS22:
 		if ((err = snd_ice1712_akm4xxx_init(ak, &akm_phase22, &akm_phase22_priv, ice)) < 0)
 			return err;
 		break;
@@ -150,6 +161,7 @@ static int __devinit phase22_add_controls(struct snd_ice1712 *ice)
 
 	switch (ice->eeprom.subvendor) {
 	case VT1724_SUBDEVICE_PHASE22:
+	case VT1724_SUBDEVICE_TS22:
 		err = snd_ice1712_akm4xxx_build_controls(ice);
 		if (err < 0)
 			return err;
@@ -158,9 +170,10 @@ static int __devinit phase22_add_controls(struct snd_ice1712 *ice)
 }
 
 static unsigned char phase22_eeprom[] __devinitdata = {
-	[ICE_EEP2_SYSCONF]     = 0x00,	/* 1xADC, 1xDACs */
+	[ICE_EEP2_SYSCONF]     = 0x28,  /* clock 512, mpu 401,
+					spdif-in/1xADC, 1xDACs */
 	[ICE_EEP2_ACLINK]      = 0x80,	/* I2S */
-	[ICE_EEP2_I2S]         = 0xf8,	/* vol, 96k, 24bit */
+	[ICE_EEP2_I2S]         = 0xf0,	/* vol, 96k, 24bit */
 	[ICE_EEP2_SPDIF]       = 0xc3,	/* out-en, out-int, spdif-in */
 	[ICE_EEP2_GPIO_DIR]    = 0xff,
 	[ICE_EEP2_GPIO_DIR1]   = 0xff,
@@ -174,7 +187,8 @@ static unsigned char phase22_eeprom[] __devinitdata = {
 };
 
 static unsigned char phase28_eeprom[] __devinitdata = {
-	[ICE_EEP2_SYSCONF]     = 0x0b,	/* clock 512, spdif-in/ADC, 4DACs */
+	[ICE_EEP2_SYSCONF]     = 0x2b,  /* clock 512, mpu401,
+					spdif-in/1xADC, 4xDACs */
 	[ICE_EEP2_ACLINK]      = 0x80,	/* I2S */
 	[ICE_EEP2_I2S]         = 0xfc,	/* vol, 96k, 24bit, 192k */
 	[ICE_EEP2_SPDIF]       = 0xc3,	/* out-en, out-int, spdif-in */
@@ -903,6 +917,15 @@ struct snd_ice1712_card_info snd_vt1724_phase_cards[] __devinitdata = {
 		.build_controls = phase28_add_controls,
 		.eeprom_size = sizeof(phase28_eeprom),
 		.eeprom_data = phase28_eeprom,
+	},
+	{
+		.subvendor = VT1724_SUBDEVICE_TS22,
+		.name = "Terrasoniq TS22 PCI",
+		.model = "TS22",
+		.chip_init = phase22_init,
+		.build_controls = phase22_add_controls,
+		.eeprom_size = sizeof(phase22_eeprom),
+		.eeprom_data = phase22_eeprom,
 	},
 	{ } /* terminator */
 };
