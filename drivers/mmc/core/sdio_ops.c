@@ -33,7 +33,15 @@ int mmc_send_io_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 	cmd.flags = MMC_RSP_SPI_R4 | MMC_RSP_R4 | MMC_CMD_BCR;
 
 	for (i = 100; i; i--) {
-		err = mmc_wait_for_cmd(host, &cmd, MMC_CMD_RETRIES);
+		err = mmc_wait_for_cmd(host, &cmd, 0);
+		/*
+		 * Some cards boot up waay to slow, so try again with
+		 * a slight delay if we get a command timeout.
+		 */
+		if (err == -ETIMEDOUT) {
+			mmc_delay(10);
+			err = mmc_wait_for_cmd(host, &cmd, 0);
+		}
 		if (err)
 			break;
 
