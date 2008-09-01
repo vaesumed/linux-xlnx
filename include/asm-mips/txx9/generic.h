@@ -42,9 +42,10 @@ struct txx9_board_vec {
 };
 extern struct txx9_board_vec *txx9_board_vec;
 extern int (*txx9_irq_dispatch)(int pending);
-void prom_init_cmdline(void);
 char *prom_getcmdline(void);
+const char *prom_getenv(const char *name);
 void txx9_wdt_init(unsigned long base);
+void txx9_wdt_now(unsigned long base);
 void txx9_spi_init(int busid, unsigned long base, int irq);
 void txx9_ethaddr_init(unsigned int id, unsigned char *ethaddr);
 void txx9_sio_init(unsigned long baseaddr, int irq,
@@ -58,5 +59,9 @@ static inline void txx9_sio_putchar_init(unsigned long baseaddr)
 {
 }
 #endif
+
+struct physmap_flash_data;
+void txx9_physmap_flash_init(int no, unsigned long addr, unsigned long size,
+			     const struct physmap_flash_data *pdata);
 
 #endif /* __ASM_TXX9_GENERIC_H */
