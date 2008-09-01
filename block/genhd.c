@@ -586,7 +586,7 @@ struct block_device *bdget_disk(struct gendisk *disk, int partno)
 	struct block_device *bdev = NULL;
 
 	part = disk_get_part(disk, partno);
-	if (part && part->nr_sects)
+	if (part && (part->nr_sects || partno == 0))
 		bdev = bdget(part_devt(part));
 	disk_put_part(part);
 
@@ -1033,7 +1033,7 @@ dev_t blk_lookup_devt(const char *name, int partno)
 			continue;
 
 		part = disk_get_part(disk, partno);
-		if (part && part->nr_sects) {
+		if (part && (part->nr_sects || partno == 0)) {
 			devt = part_devt(part);
 			disk_put_part(part);
 			break;
