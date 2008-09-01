@@ -532,8 +532,8 @@ static inline void sun4c_init_ss2_cache_bug(void)
 }
 
 /* Addr is always aligned on a page boundary for us already. */
-static int sun4c_map_dma_area(dma_addr_t *pba, unsigned long va,
-    unsigned long addr, int len)
+static int sun4c_map_dma_area(struct device *dev, dma_addr_t *pba, unsigned long va,
+			      unsigned long addr, int len)
 {
 	unsigned long page, end;
 
@@ -555,14 +555,7 @@ static int sun4c_map_dma_area(dma_addr_t *pba, unsigned long va,
 	return 0;
 }
 
-static struct page *sun4c_translate_dvma(unsigned long busa)
-{
-	/* Fortunately for us, bus_addr == uncached_virt in sun4c. */
-	unsigned long pte = sun4c_get_pte(busa);
-	return pfn_to_page(pte & SUN4C_PFN_MASK);
-}
-
-static void sun4c_unmap_dma_area(unsigned long busa, int len)
+static void sun4c_unmap_dma_area(struct device *dev, unsigned long busa, int len)
 {
 	/* Fortunately for us, bus_addr == uncached_virt in sun4c. */
 	/* XXX Implement this */
@@ -2263,7 +2256,6 @@ void __init ld_mmu_sun4c(void)
 
 	BTFIXUPSET_CALL(mmu_map_dma_area, sun4c_map_dma_area, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(mmu_unmap_dma_area, sun4c_unmap_dma_area, BTFIXUPCALL_NORM);
-	BTFIXUPSET_CALL(mmu_translate_dvma, sun4c_translate_dvma, BTFIXUPCALL_NORM);
 
 	BTFIXUPSET_CALL(sparc_mapiorange, sun4c_mapiorange, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(sparc_unmapiorange, sun4c_unmapiorange, BTFIXUPCALL_NORM);

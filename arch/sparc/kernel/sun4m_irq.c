@@ -20,6 +20,8 @@
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/ioport.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 
 #include <asm/ptrace.h>
 #include <asm/processor.h>
@@ -35,7 +37,6 @@
 #include <asm/smp.h>
 #include <asm/irq.h>
 #include <asm/io.h>
-#include <asm/sbus.h>
 #include <asm/cacheflush.h>
 
 #include "irq.h"
@@ -151,18 +152,6 @@ static unsigned long irq_mask[] = {
 	SUN4M_INT_SBUS(5),				  /* 13 irq 11 */
 	SUN4M_INT_SBUS(6)				  /* 14 irq 13 */
 };
-
-static int sun4m_pil_map[] = { 0, 2, 3, 5, 7, 9, 11, 13 };
-
-static unsigned int sun4m_sbint_to_irq(struct sbus_dev *sdev,
-				       unsigned int sbint)
-{
-	if (sbint >= sizeof(sun4m_pil_map)) {
-		printk(KERN_ERR "%s: bogus SBINT %d\n", sdev->prom_name, sbint);
-		BUG();
-	}
-	return sun4m_pil_map[sbint] | 0x30;
-}
 
 static unsigned long sun4m_get_irqmask(unsigned int irq)
 {
@@ -339,13 +328,13 @@ static void __init sun4m_init_timers(irq_handler_t counter_fn)
 	/* Map the per-cpu Counter registers. */
 	r.flags = cnt_regs[0].which_io;
 	r.start = cnt_regs[0].phys_addr;
-	sun4m_timers = (struct sun4m_timer_regs *) sbus_ioremap(&r, 0,
+	sun4m_timers = (struct sun4m_timer_regs *) of_ioremap(&r, 0,
 	    PAGE_SIZE*SUN4M_NCPUS, "sun4m_cpu_cnt");
 	/* Map the system Counter register. */
 	/* XXX Here we expect consequent calls to yeld adjusent maps. */
 	r.flags = cnt_regs[4].which_io;
 	r.start = cnt_regs[4].phys_addr;
-	sbus_ioremap(&r, 0, cnt_regs[4].reg_size, "sun4m_sys_cnt");
+	of_ioremap(&r, 0, cnt_regs[4].reg_size, "sun4m_sys_cnt");
 
 	sun4m_timers->l10_timer_limit =  (((1000000/HZ) + 1) << 10);
 	master_l10_counter = &sun4m_timers->l10_cur_count;
@@ -423,13 +412,13 @@ void __init sun4m_init_IRQ(void)
 	/* Map the interrupt registers for all possible cpus. */
 	r.flags = int_regs[0].which_io;
 	r.start = int_regs[0].phys_addr;
-	sun4m_interrupts = (struct sun4m_intregs *) sbus_ioremap(&r, 0,
+	sun4m_interrupts = (struct sun4m_intregs *) of_ioremap(&r, 0,
 	    PAGE_SIZE*SUN4M_NCPUS, "interrupts_percpu");
 
 	/* Map the system interrupt control registers. */
 	r.flags = int_regs[4].which_io;
 	r.start = int_regs[4].phys_addr;
-	sbus_ioremap(&r, 0, int_regs[4].reg_size, "interrupts_system");
+	of_ioremap(&r, 0, int_regs[4].reg_size, "interrupts_system");
 
 	sun4m_interrupts->set = ~SUN4M_INT_MASKALL;
 	for (i = 0; !cpu_find_by_instance(i, NULL, &mid); i++)
@@ -447,7 +436,6 @@ void __init sun4m_init_IRQ(void)
 				&sun4m_interrupts->undirected_target;
 		sun4m_interrupts->undirected_target = 0;
 	}
-	BTFIXUPSET_CALL(sbint_to_irq, sun4m_sbint_to_irq, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(enable_irq, sun4m_enable_irq, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(disable_irq, sun4m_disable_irq, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(enable_pil_irq, sun4m_enable_pil_irq, BTFIXUPCALL_NORM);

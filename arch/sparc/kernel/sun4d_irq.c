@@ -19,6 +19,8 @@
 #include <linux/smp.h>
 #include <linux/spinlock.h>
 #include <linux/seq_file.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 
 #include <asm/ptrace.h>
 #include <asm/processor.h>
@@ -34,7 +36,6 @@
 #include <asm/io.h>
 #include <asm/pgalloc.h>
 #include <asm/pgtable.h>
-#include <asm/sbus.h>
 #include <asm/sbi.h>
 #include <asm/cacheflush.h>
 #include <asm/irq_regs.h>
@@ -257,26 +258,6 @@ void sun4d_handler_irq(int irq, struct pt_regs * regs)
 	set_irq_regs(old_regs);
 }
 
-unsigned int sun4d_build_irq(struct sbus_dev *sdev, int irq)
-{
-	int sbusl = pil_to_sbus[irq];
-
-	if (sbusl)
-		return ((sdev->bus->board + 1) << 5) + (sbusl << 2) + sdev->slot;
-	else
-		return irq;
-}
-
-static unsigned int sun4d_sbint_to_irq(struct sbus_dev *sdev,
-				       unsigned int sbint)
-{
-	if (sbint >= sizeof(sbus_to_pil)) {
-		printk(KERN_ERR "%s: bogus SBINT %d\n", sdev->prom_name, sbint);
-		BUG();
-	}
-	return sun4d_build_irq(sdev, sbus_to_pil[sbint]);
-}
-
 int sun4d_request_irq(unsigned int irq,
 		irq_handler_t handler,
 		unsigned long irqflags, const char * devname, void *dev_id)
@@ -409,47 +390,55 @@ static void sun4d_set_udt(int cpu)
 /* Setup IRQ distribution scheme. */
 void __init sun4d_distribute_irqs(void)
 {
+	struct device_node *dp;
+
 #ifdef DISTRIBUTE_IRQS
-	struct sbus_bus *sbus;
-	unsigned long sbus_serving_map;
+	cpumask_t sbus_serving_map;
 
 	sbus_serving_map = cpu_present_map;
-	for_each_sbus(sbus) {
-		if ((sbus->board * 2) == boot_cpu_id && (cpu_present_map & (1 << (sbus->board * 2 + 1))))
-			sbus_tid[sbus->board] = (sbus->board * 2 + 1);
-		else if (cpu_present_map & (1 << (sbus->board * 2)))
-			sbus_tid[sbus->board] = (sbus->board * 2);
-		else if (cpu_present_map & (1 << (sbus->board * 2 + 1)))
-			sbus_tid[sbus->board] = (sbus->board * 2 + 1);
+	for_each_node_by_name(dp, "sbi") {
+		int board = of_getintprop_default(dp, "board#", 0);
+
+		if ((board * 2) == boot_cpu_id && cpu_isset(board * 2 + 1, cpu_present_map))
+			sbus_tid[board] = (board * 2 + 1);
+		else if (cpu_isset(board * 2, cpu_present_map))
+			sbus_tid[board] = (board * 2);
+		else if (cpu_isset(board * 2 + 1, cpu_present_map))
+			sbus_tid[board] = (board * 2 + 1);
 		else
-			sbus_tid[sbus->board] = 0xff;
-		if (sbus_tid[sbus->board] != 0xff)
-			sbus_serving_map &= ~(1 << sbus_tid[sbus->board]);
+			sbus_tid[board] = 0xff;
+		if (sbus_tid[board] != 0xff)
+			cpu_clear(sbus_tid[board], sbus_serving_map);
 	}
-	for_each_sbus(sbus)
-		if (sbus_tid[sbus->board] == 0xff) {
+	for_each_node_by_name(dp, "sbi") {
+		int board = of_getintprop_default(dp, "board#", 0);
+		if (sbus_tid[board] == 0xff) {
 			int i = 31;
 				
-			if (!sbus_serving_map)
+			if (cpus_empty(sbus_serving_map))
 				sbus_serving_map = cpu_present_map;
-			while (!(sbus_serving_map & (1 << i)))
+			while (cpu_isset(i, sbus_serving_map))
 				i--;
-			sbus_tid[sbus->board] = i;
-			sbus_serving_map &= ~(1 << i);
+			sbus_tid[board] = i;
+			cpu_clear(i, sbus_serving_map);
 		}
-	for_each_sbus(sbus) {
-		printk("sbus%d IRQs directed to CPU%d\n", sbus->board, sbus_tid[sbus->board]);
-		set_sbi_tid(sbus->devid, sbus_tid[sbus->board] << 3);
+	}
+	for_each_node_by_name(dp, "sbi") {
+		int devid = of_getintprop_default(dp, "device-id", 0);
+		int board = of_getintprop_default(dp, "board#", 0);
+		printk("sbus%d IRQs directed to CPU%d\n", board, sbus_tid[board]);
+		set_sbi_tid(devid, sbus_tid[board] << 3);
 	}
 #else
-	struct sbus_bus *sbus;
 	int cpuid = cpu_logical_map(1);
 
 	if (cpuid == -1)
 		cpuid = cpu_logical_map(0);
-	for_each_sbus(sbus) {
-		sbus_tid[sbus->board] = cpuid;
-		set_sbi_tid(sbus->devid, cpuid << 3);
+	for_each_node_by_name(dp, "sbi") {
+		int devid = of_getintprop_default(dp, "device-id", 0);
+		int board = of_getintprop_default(dp, "board#", 0);
+		sbus_tid[board] = cpuid;
+		set_sbi_tid(devid, cpuid << 3);
 	}
 	printk("All sbus IRQs directed to CPU%d\n", cpuid);
 #endif
@@ -487,7 +476,7 @@ static void __init sun4d_init_timers(irq_handler_t counter_fn)
 	r.start = CSR_BASE(0)+BW_TIMER_LIMIT;
 #endif
 	r.flags = 0xf;
-	sun4d_timers = (struct sun4d_timer_regs *) sbus_ioremap(&r, 0,
+	sun4d_timers = (struct sun4d_timer_regs *) of_ioremap(&r, 0,
 	    PAGE_SIZE, "user timer");
 
 	sun4d_timers->l10_timer_limit =  (((1000000/HZ) + 1) << 10);
@@ -541,29 +530,34 @@ static void __init sun4d_init_timers(irq_handler_t counter_fn)
 
 void __init sun4d_init_sbi_irq(void)
 {
-	struct sbus_bus *sbus;
-	unsigned mask;
+	struct device_node *dp;
 
 	nsbi = 0;
-	for_each_sbus(sbus)
+	for_each_node_by_name(dp, "sbi")
 		nsbi++;
 	sbus_actions = kzalloc (nsbi * 8 * 4 * sizeof(struct sbus_action), GFP_ATOMIC);
 	if (!sbus_actions) {
 		prom_printf("SUN4D: Cannot allocate sbus_actions, halting.\n");
 		prom_halt();
 	}
-	for_each_sbus(sbus) {
+	for_each_node_by_name(dp, "sbi") {
+		int devid = of_getintprop_default(dp, "device-id", 0);
+		int board = of_getintprop_default(dp, "board#", 0);
+		unsigned int mask;
+
 #ifdef CONFIG_SMP	
-		extern unsigned char boot_cpu_id;
+		{
+			extern unsigned char boot_cpu_id;
 		
-		set_sbi_tid(sbus->devid, boot_cpu_id << 3);
-		sbus_tid[sbus->board] = boot_cpu_id;
+			set_sbi_tid(devid, boot_cpu_id << 3);
+			sbus_tid[board] = boot_cpu_id;
+		}
 #endif
 		/* Get rid of pending irqs from PROM */
-		mask = acquire_sbi(sbus->devid, 0xffffffff);
+		mask = acquire_sbi(devid, 0xffffffff);
 		if (mask) {
-			printk ("Clearing pending IRQs %08x on SBI %d\n", mask, sbus->board);
-			release_sbi(sbus->devid, mask);
+			printk ("Clearing pending IRQs %08x on SBI %d\n", mask, board);
+			release_sbi(devid, mask);
 		}
 	}
 }
@@ -572,7 +566,6 @@ void __init sun4d_init_IRQ(void)
 {
 	local_irq_disable();
 
-	BTFIXUPSET_CALL(sbint_to_irq, sun4d_sbint_to_irq, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(enable_irq, sun4d_enable_irq, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(disable_irq, sun4d_disable_irq, BTFIXUPCALL_NORM);
 	BTFIXUPSET_CALL(clear_clock_irq, sun4d_clear_clock_irq, BTFIXUPCALL_NORM);
