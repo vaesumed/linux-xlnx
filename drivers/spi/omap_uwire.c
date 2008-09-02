@@ -59,7 +59,7 @@
  * and irqs should show there too...
  */
 #define UWIRE_BASE_PHYS		0xFFFB3000
-#define UWIRE_BASE		((void *__iomem)IO_ADDRESS(UWIRE_BASE_PHYS))
+#define UWIRE_BASE		IO_ADDRESS(UWIRE_BASE_PHYS)
 
 /* uWire Registers: */
 #define UWIRE_IO_SIZE 0x20

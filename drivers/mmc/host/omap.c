@@ -1455,7 +1455,7 @@ static int __init mmc_omap_probe(struct platform_device *pdev)
 
 	host->irq = irq;
 	host->phys_base = host->mem_res->start;
-	host->virt_base = (void __iomem *) IO_ADDRESS(host->phys_base);
+	host->virt_base = IO_ADDRESS(host->phys_base);
 
 	if (cpu_is_omap24xx()) {
 		host->iclk = clk_get(&pdev->dev, "mmc_ick");
