@@ -29,7 +29,7 @@ struct dm_dev {
 	struct list_head list;
 
 	atomic_t count;
-	int mode;
+	fmode_t mode;
 	struct block_device *bdev;
 	char name[16];
 };
