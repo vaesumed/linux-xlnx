@@ -580,14 +580,8 @@ typedef struct cisinfo_t {
 
 #define CISTPL_MAX_CIS_SIZE	0x200
 
-/* For ReplaceCIS */
-typedef struct cisdump_t {
-    u_int	Length;
-    cisdata_t	Data[CISTPL_MAX_CIS_SIZE];
-} cisdump_t;
-
-
-int pcmcia_replace_cis(struct pcmcia_socket *s, cisdump_t *cis);
+int pcmcia_replace_cis(struct pcmcia_socket *s,
+		       const u8 *data, const size_t len);
 
 /* don't use outside of PCMCIA core yet */
 int pccard_get_next_tuple(struct pcmcia_socket *s, unsigned int func, tuple_t *tuple);
@@ -612,5 +606,13 @@ int pccard_validate_cis(struct pcmcia_socket *s, unsigned int function, unsigned
 
 #define pcmcia_validate_cis(p_dev, info) \
 		pccard_validate_cis(p_dev->socket, p_dev->func, info)
+
+int pcmcia_loop_config(struct pcmcia_device *p_dev,
+		       int	(*conf_check)	(struct pcmcia_device *p_dev,
+						 cistpl_cftable_entry_t *cf,
+						 cistpl_cftable_entry_t *dflt,
+						 unsigned int vcc,
+						 void *priv_data),
+		       void *priv_data);
 
 #endif /* LINUX_CISTPL_H */
