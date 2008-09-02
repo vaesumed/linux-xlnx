@@ -1,0 +1,110 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on bef69ea0dcce574a425feb0a5aa4c63dd108b9a6
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard bef69ea0dcce574a425feb0a5aa4c63dd108b9a6
+HEAD is now at bef69ea Resource handling: add 'insert_resource_expand_to_fit()' function
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+cris-put-tty
+hvc-put-tty
+mcfserial-goes-byebye
+epca-port-init
+serial-remove-nr-irq
+.dotest/patch:163: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+blackfin-use-initdata
+blackfin-suspend-all
+blackfin-whitespace-trim
+blackfin-common-vars
+blackfin-remove-useless-stop
+blackfin-fix-stop-bug
+blackfin-fix-ircp-bug
+blackfin-fix-uart-map
+tty-move-tioclinux
+tty-fixup-uml
+tty-split-buffering
+tty-split-port
+tty-ldisc-for-pps
+tty-kref
+tty-kref-modcount
+tty-kref-get-current-tty
+tty-move-write
+tty-usbserial-kref
+.dotest/patch:134: trailing whitespace.
+out:		
+.dotest/patch:326: trailing whitespace.
+		
+.dotest/patch:897: trailing whitespace.
+		if (tty && !C_CLOCAL(tty)) 
+.dotest/patch:1070: trailing whitespace.
+	tty_kref_put(tty);		     
+.dotest/patch:1320: trailing whitespace.
+		} else 
+warning: 5 lines add whitespace errors.
+tty-misc-kref
+tty-kref-stallion
+tty-kref-mxser
+.dotest/patch:390: trailing whitespace.
+				
+warning: 1 line adds whitespace errors.
+tty-fix-vhangup
+tty-current-locking
+tty-current-fix-abusers
+tty-tiocrs485
+tty-fix-pty
+char-cyclades-remove-bogus-iomap.patch
+char-sx-fix-io-unmapping.patch
+8250-remove-a-few-inlines-of-dubious-value.patch
+vt-remove-bogus-lockdrop
+tty-fix-shutdown
+tty-move-special-cases
+.dotest/patch:553: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+tty-add-termiox
+.dotest/patch:83: trailing whitespace.
+#endif		
+warning: 1 line adds whitespace errors.
+tty-init-dev-rework
+tty-init-dev-clean
+tty-driver-kref
+.dotest/patch:44: trailing whitespace.
+#if 0	
+.dotest/patch:47: trailing whitespace.
+#endif	
+.dotest/patch:48: trailing whitespace.
+	register_sysctl_table(pty_root_table);	
+warning: 3 lines add whitespace errors.
+tty-add-remove-ops
+tty-finish-initdev
+tty-extract-pty-init
+.dotest/patch:44: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-move-tty-lookup
+tty-devpts-instance
+tty-simplify-devpts-get-tty
+tty-simplify-devpts-new
+tty-simplify-devpts-pty-kill
+pty-clean
+pty-fix-fail-crash
+pty-simplify-allocation
+tty-simplify-allocation
+tty-pty-compare-winsize
+tty-real-termios
+tty-move-canon-specials
+tty-ipw-wtf
+tty-denull
+tty-tidy-n-tty
+tty-kref-hso
