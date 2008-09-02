@@ -784,6 +784,7 @@ sys_delete_module(const char __user *name_user, unsigned int flags)
 	mutex_lock(&module_mutex);
 	/* Store the name of the last unloaded module for diagnostic purposes */
 	strlcpy(last_unloaded_module, mod->name, sizeof(last_unloaded_module));
+	unregister_dynamic_debug_module(mod->name);
 	free_module(mod);
 
  out:
@@ -1783,6 +1784,39 @@ static inline void add_kallsyms(struct module *mod,
 }
 #endif /* CONFIG_KALLSYMS */
 
+#ifdef CONFIG_DYNAMIC_PRINTK_DEBUG
+static void dynamic_printk_setup(struct module *mod,
+				 Elf_Shdr *sechdrs,
+				 unsigned int verboseindex,
+				 const char *secstrings)
+{
+	struct mod_debug *iter;
+	unsigned long value;
+
+	mod->start_verbose = (void *)sechdrs[verboseindex].sh_addr;
+	mod->num_verbose = sechdrs[verboseindex].sh_size /
+				sizeof(*mod->start_verbose);
+
+	for (value = (unsigned long)mod->start_verbose;
+		value < (unsigned long)mod->start_verbose +
+		(unsigned long)(mod->num_verbose * sizeof(struct mod_debug));
+		value += sizeof(struct mod_debug)) {
+			iter = (struct mod_debug *)value;
+			register_dynamic_debug_module(iter->modname,
+				iter->type,
+				iter->logical_modname,
+				iter->flag_names, iter->hash, iter->hash2);
+	}
+}
+#else
+static inline void dynamic_printk_setup(struct module *mod,
+					Elf_Shdr *sechdrs,
+					unsigned int symindex,
+					const char *secstrings)
+{
+}
+#endif /* CONFIG_DYNAMIC_PRINTK_DEBUG */
+
 static void *module_alloc_update_bounds(unsigned long size)
 {
 	void *ret = module_alloc(size);
@@ -1831,6 +1865,7 @@ static noinline struct module *load_module(void __user *umod,
 #endif
 	unsigned int markersindex;
 	unsigned int markersstringsindex;
+	unsigned int verboseindex;
 	struct module *mod;
 	long err = 0;
 	void *percpu = NULL, *ptr = NULL; /* Stops spurious gcc warning */
@@ -2117,6 +2152,7 @@ static noinline struct module *load_module(void __user *umod,
 	markersindex = find_sec(hdr, sechdrs, secstrings, "__markers");
  	markersstringsindex = find_sec(hdr, sechdrs, secstrings,
 					"__markers_strings");
+	verboseindex = find_sec(hdr, sechdrs, secstrings, "__verbose");
 
 	/* Now do relocations. */
 	for (i = 1; i < hdr->e_shnum; i++) {
@@ -2167,6 +2203,7 @@ static noinline struct module *load_module(void __user *umod,
 		marker_update_probe_range(mod->markers,
 			mod->markers + mod->num_markers);
 #endif
+	dynamic_printk_setup(mod, sechdrs, verboseindex, secstrings);
 	err = module_finalize(hdr, sechdrs, mod);
 	if (err < 0)
 		goto cleanup;
