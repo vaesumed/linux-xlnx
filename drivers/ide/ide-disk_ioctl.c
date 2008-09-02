@@ -25,5 +25,5 @@ int ide_disk_ioctl(struct inode *inode, struct file *file,
 	if (err != -EOPNOTSUPP)
 		return err;
 
-	return generic_ide_ioctl(drive, file, bdev, cmd, arg);
+	return generic_ide_ioctl(drive, bdev, cmd, arg);
 }

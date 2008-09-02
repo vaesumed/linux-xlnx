@@ -287,7 +287,7 @@ int ide_floppy_ioctl(struct inode *inode, struct file *file,
 				file ? file->f_mode : 0, cmd, argp);
 
 	if (err == -ENOTTY)
-		err = generic_ide_ioctl(drive, file, bdev, cmd, arg);
+		err = generic_ide_ioctl(drive, bdev, cmd, arg);
 
 	return err;
 }
