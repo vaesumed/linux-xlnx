@@ -1810,6 +1810,53 @@ socket_setattr_failure:
 }
 
 /**
+ * cipso_v4_sock_delattr - Delete the CIPSO option from a socket
+ * @sk: the socket
+ *
+ * Description:
+ * Removes the CIPSO option from a socket, if present.
+ *
+ */
+void cipso_v4_sock_delattr(struct sock *sk)
+{
+	u8 cipso_len;
+	u8 cipso_off;
+	unsigned char *cipso_ptr;
+	struct ip_options *opt;
+	struct inet_sock *sk_inet;
+	struct inet_connection_sock *sk_conn;
+
+	sk_inet = inet_sk(sk);
+	opt = sk_inet->opt;
+	if (opt == NULL || opt->cipso == 0)
+		return;
+
+	cipso_off = opt->cipso - sizeof(struct iphdr);
+	cipso_ptr = &opt->__data[cipso_off];
+	cipso_len = cipso_ptr[1];
+	if (cipso_len < opt->optlen && opt->optlen - cipso_off > cipso_len) {
+		memmove(cipso_ptr, cipso_ptr + cipso_len,
+			opt->optlen - cipso_off - cipso_len);
+		if (opt->srr > opt->cipso)
+			opt->srr -= cipso_len;
+		if (opt->rr)
+			opt->rr -= cipso_len;
+		if (opt->ts)
+			opt->ts -= cipso_len;
+		if (opt->router_alert)
+			opt->router_alert -= cipso_len;
+	} else
+		memset(cipso_ptr, IPOPT_NOOP, cipso_len);
+	if (sk_inet->is_icsk) {
+		sk_conn = inet_csk(sk);
+		sk_conn->icsk_ext_hdr_len -= cipso_len;
+		sk_conn->icsk_sync_mss(sk, sk_conn->icsk_pmtu_cookie);
+	}
+	opt->cipso = 0;
+	opt->optlen -= cipso_len;
+}
+
+/**
  * cipso_v4_getattr - Helper function for the cipso_v4_*_getattr functions
  * @cipso: the CIPSO v4 option
  * @secattr: the security attributes

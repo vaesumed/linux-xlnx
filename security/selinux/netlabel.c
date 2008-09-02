@@ -101,6 +101,51 @@ sock_setsid_return:
 }
 
 /**
+ * selinux_netlbl_conn_setsid - Label a connected socket using NetLabel
+ * @sk: the socket to label
+ * @addr: the destination address
+ *
+ * Description:
+ * Attempt to label a connected socket using the NetLabel mechanism using the
+ * given address.  Returns zero values on success, negative values on failure.
+ *
+ */
+int selinux_netlbl_conn_setsid(struct sock *sk,
+			       struct sockaddr *addr)
+{
+	int rc;
+	struct sk_security_struct *sksec = sk->sk_security;
+	struct netlbl_lsm_secattr secattr;
+
+	if (sksec->nlbl_state != NLBL_REQSKB ||
+	    sksec->nlbl_state != NLBL_CONNLABELED)
+		return 0;
+
+	/* connected sockets are allowed to disconnect when the address family
+	 * is set to AF_UNSPEC, if that is what is happening we want to reset
+	 * the socket */
+	if (addr->sa_family == AF_UNSPEC) {
+		netlbl_sock_delattr(sk);
+		sksec->nlbl_state = NLBL_REQSKB;
+		return 0;
+	}
+
+	netlbl_secattr_init(&secattr);
+
+	rc = security_netlbl_sid_to_secattr(sksec->sid, &secattr);
+	if (rc != 0)
+		goto conn_setsid_return;
+	rc = netlbl_conn_setattr(sk, addr, &secattr);
+	if (rc != 0)
+		goto conn_setsid_return;
+	sksec->nlbl_state = NLBL_CONNLABELED;
+
+conn_setsid_return:
+	netlbl_secattr_destroy(&secattr);
+	return rc;
+}
+
+/**
  * selinux_netlbl_cache_invalidate - Invalidate the NetLabel cache
  *
  * Description:
@@ -398,7 +443,8 @@ int selinux_netlbl_socket_setsockopt(struct socket *sock,
 	struct netlbl_lsm_secattr secattr;
 
 	if (level == IPPROTO_IP && optname == IP_OPTIONS &&
-	    sksec->nlbl_state == NLBL_LABELED) {
+	    (sksec->nlbl_state == NLBL_LABELED ||
+	     sksec->nlbl_state == NLBL_CONNLABELED)) {
 		netlbl_secattr_init(&secattr);
 		lock_sock(sk);
 		rc = netlbl_sock_getattr(sk, &secattr);
