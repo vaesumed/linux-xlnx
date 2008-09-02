@@ -540,22 +540,6 @@ EXPORT_SYMBOL(bd_release);
  *           /sys/block/sda/holders/dm-0 --> /sys/block/dm-0
  */
 
-static struct kobject *bdev_get_kobj(struct block_device *bdev)
-{
-	if (bdev->bd_contains != bdev)
-		return kobject_get(&bdev->bd_part->dev.kobj);
-	else
-		return kobject_get(&bdev->bd_disk->dev.kobj);
-}
-
-static struct kobject *bdev_get_holder(struct block_device *bdev)
-{
-	if (bdev->bd_contains != bdev)
-		return kobject_get(bdev->bd_part->holder_dir);
-	else
-		return kobject_get(bdev->bd_disk->holder_dir);
-}
-
 static int add_symlink(struct kobject *from, struct kobject *to)
 {
 	if (!from || !to)
@@ -604,11 +588,11 @@ static int bd_holder_grab_dirs(struct block_device *bdev,
 	if (!bo->hdev)
 		goto fail_put_sdir;
 
-	bo->sdev = bdev_get_kobj(bdev);
+	bo->sdev = kobject_get(&part_to_dev(bdev->bd_part)->kobj);
 	if (!bo->sdev)
 		goto fail_put_hdev;
 
-	bo->hdir = bdev_get_holder(bdev);
+	bo->hdir = kobject_get(bdev->bd_part->holder_dir);
 	if (!bo->hdir)
 		goto fail_put_sdev;
 
@@ -892,7 +876,7 @@ int check_disk_change(struct block_device *bdev)
 
 	if (bdops->revalidate_disk)
 		bdops->revalidate_disk(bdev->bd_disk);
-	if (bdev->bd_disk->minors > 1)
+	if (disk_partitionable(bdev->bd_disk))
 		bdev->bd_invalidated = 1;
 	return 1;
 }
@@ -927,10 +911,10 @@ static int __blkdev_put(struct block_device *bdev, int for_part);
 
 static int do_open(struct block_device *bdev, struct file *file, int for_part)
 {
-	struct module *owner = NULL;
 	struct gendisk *disk;
+	struct hd_struct *part = NULL;
 	int ret;
-	int part;
+	int partno;
 	int perm = 0;
 
 	if (file->f_mode & FMODE_READ)
@@ -948,25 +932,27 @@ static int do_open(struct block_device *bdev, struct file *file, int for_part)
 
 	ret = -ENXIO;
 	file->f_mapping = bdev->bd_inode->i_mapping;
+
 	lock_kernel();
-	disk = get_gendisk(bdev->bd_dev, &part);
-	if (!disk) {
-		unlock_kernel();
-		bdput(bdev);
-		return ret;
-	}
-	owner = disk->fops->owner;
+
+	disk = get_gendisk(bdev->bd_dev, &partno);
+	if (!disk)
+		goto out_unlock_kernel;
+	part = disk_get_part(disk, partno);
+	if (!part)
+		goto out_unlock_kernel;
 
 	mutex_lock_nested(&bdev->bd_mutex, for_part);
 	if (!bdev->bd_openers) {
 		bdev->bd_disk = disk;
+		bdev->bd_part = part;
 		bdev->bd_contains = bdev;
-		if (!part) {
+		if (!partno) {
 			struct backing_dev_info *bdi;
 			if (disk->fops->open) {
 				ret = disk->fops->open(bdev->bd_inode, file);
 				if (ret)
-					goto out_first;
+					goto out_clear;
 			}
 			if (!bdev->bd_openers) {
 				bd_set_size(bdev,(loff_t)get_capacity(disk)<<9);
@@ -978,36 +964,36 @@ static int do_open(struct block_device *bdev, struct file *file, int for_part)
 			if (bdev->bd_invalidated)
 				rescan_partitions(disk, bdev);
 		} else {
-			struct hd_struct *p;
 			struct block_device *whole;
 			whole = bdget_disk(disk, 0);
 			ret = -ENOMEM;
 			if (!whole)
-				goto out_first;
+				goto out_clear;
 			BUG_ON(for_part);
 			ret = __blkdev_get(whole, file->f_mode, file->f_flags, 1);
 			if (ret)
-				goto out_first;
+				goto out_clear;
 			bdev->bd_contains = whole;
-			p = disk->part[part - 1];
 			bdev->bd_inode->i_data.backing_dev_info =
 			   whole->bd_inode->i_data.backing_dev_info;
-			if (!(disk->flags & GENHD_FL_UP) || !p || !p->nr_sects) {
+			if (!(disk->flags & GENHD_FL_UP) ||
+			    !part || !part->nr_sects) {
 				ret = -ENXIO;
-				goto out_first;
+				goto out_clear;
 			}
-			kobject_get(&p->dev.kobj);
-			bdev->bd_part = p;
-			bd_set_size(bdev, (loff_t) p->nr_sects << 9);
+			bd_set_size(bdev, (loff_t)part->nr_sects << 9);
 		}
 	} else {
+		disk_put_part(part);
 		put_disk(disk);
-		module_put(owner);
+		module_put(disk->fops->owner);
+		part = NULL;
+		disk = NULL;
 		if (bdev->bd_contains == bdev) {
 			if (bdev->bd_disk->fops->open) {
 				ret = bdev->bd_disk->fops->open(bdev->bd_inode, file);
 				if (ret)
-					goto out;
+					goto out_unlock_bdev;
 			}
 			if (bdev->bd_invalidated)
 				rescan_partitions(bdev->bd_disk, bdev);
@@ -1020,19 +1006,24 @@ static int do_open(struct block_device *bdev, struct file *file, int for_part)
 	unlock_kernel();
 	return 0;
 
-out_first:
+ out_clear:
 	bdev->bd_disk = NULL;
+	bdev->bd_part = NULL;
 	bdev->bd_inode->i_data.backing_dev_info = &default_backing_dev_info;
 	if (bdev != bdev->bd_contains)
 		__blkdev_put(bdev->bd_contains, 1);
 	bdev->bd_contains = NULL;
-	put_disk(disk);
-	module_put(owner);
-out:
+ out_unlock_bdev:
 	mutex_unlock(&bdev->bd_mutex);
+ out_unlock_kernel:
 	unlock_kernel();
-	if (ret)
-		bdput(bdev);
+
+	disk_put_part(part);
+	if (disk)
+		module_put(disk->fops->owner);
+	put_disk(disk);
+	bdput(bdev);
+
 	return ret;
 }
 
@@ -1117,11 +1108,8 @@ static int __blkdev_put(struct block_device *bdev, int for_part)
 
 		put_disk(disk);
 		module_put(owner);
-
-		if (bdev->bd_contains != bdev) {
-			kobject_put(&bdev->bd_part->dev.kobj);
-			bdev->bd_part = NULL;
-		}
+		disk_put_part(bdev->bd_part);
+		bdev->bd_part = NULL;
 		bdev->bd_disk = NULL;
 		bdev->bd_inode->i_data.backing_dev_info = &default_backing_dev_info;
 		if (bdev != bdev->bd_contains)

@@ -210,14 +210,10 @@ int blk_register_filter(struct gendisk *disk)
 {
 	int ret;
 	struct blk_cmd_filter *filter = &disk->queue->cmd_filter;
-	struct kobject *parent = kobject_get(disk->holder_dir->parent);
 
-	if (!parent)
-		return -ENODEV;
-
-	ret = kobject_init_and_add(&filter->kobj, &rcf_ktype, parent,
+	ret = kobject_init_and_add(&filter->kobj, &rcf_ktype,
+				   &disk_to_dev(disk)->kobj,
 				   "%s", "cmd_filter");
-
 	if (ret < 0)
 		return ret;
 
@@ -229,6 +225,4 @@ void blk_unregister_filter(struct gendisk *disk)
 	struct blk_cmd_filter *filter = &disk->queue->cmd_filter;
 
 	kobject_put(&filter->kobj);
-	kobject_put(disk->holder_dir->parent);
 }
-

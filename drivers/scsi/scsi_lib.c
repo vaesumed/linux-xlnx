@@ -165,6 +165,29 @@ int scsi_queue_insert(struct scsi_cmnd *cmd, int reason)
 }
 
 /**
+ * scsi_queue_retry - Try inserting a command in the midlevel queue.
+ *
+ * @cmd:	command that we are adding to queue.
+ * @reason:	why we are inserting command to queue.
+ *
+ * Notes:       This is very similar to scsi_queue_insert except that we
+ *              call this function when we don't know if the blk layer timer
+ *              is active or not. We could implement this either by calling
+ *              blk_delete_timer and inserting in the midlevel queue if we
+ *              successfully delete the timer OR setting appropriate result
+ *              field in the cmd and letting it go through the normal done
+ *              routines which will retry the command. For now, We call
+ *              blk_delete_timer!
+ */
+void scsi_queue_retry(struct scsi_cmnd *cmd, int reason)
+{
+	if (blk_delete_timer(cmd->request)) {
+		atomic_inc(&cmd->device->iodone_cnt);
+		scsi_queue_insert(cmd, reason);
+	}
+}
+
+/**
  * scsi_execute - insert request and wait for the result
  * @sdev:	scsi device
  * @cmd:	scsi command
@@ -1180,7 +1203,6 @@ int scsi_setup_blk_pc_cmnd(struct scsi_device *sdev, struct request *req)
 	
 	cmd->transfersize = req->data_len;
 	cmd->allowed = req->retries;
-	cmd->timeout_per_command = req->timeout;
 	return BLKPREP_OK;
 }
 EXPORT_SYMBOL(scsi_setup_blk_pc_cmnd);
@@ -1415,16 +1437,25 @@ static void scsi_kill_request(struct request *req, struct request_queue *q)
 	spin_unlock(shost->host_lock);
 	spin_lock(sdev->request_queue->queue_lock);
 
-	__scsi_done(cmd);
+	blk_complete_request(req);
 }
 
 static void scsi_softirq_done(struct request *rq)
 {
-	struct scsi_cmnd *cmd = rq->completion_data;
-	unsigned long wait_for = (cmd->allowed + 1) * cmd->timeout_per_command;
+	struct scsi_cmnd *cmd = rq->special;
+	unsigned long wait_for = (cmd->allowed + 1) * rq->timeout;
 	int disposition;
 
 	INIT_LIST_HEAD(&cmd->eh_entry);
+
+	/*
+	 * Set the serial numbers back to zero
+	 */
+	cmd->serial_number = 0;
+
+	atomic_inc(&cmd->device->iodone_cnt);
+	if (cmd->result)
+		atomic_inc(&cmd->device->ioerr_cnt);
 
 	disposition = scsi_decide_disposition(cmd);
 	if (disposition != SUCCESS &&
@@ -1674,6 +1705,7 @@ struct request_queue *scsi_alloc_queue(struct scsi_device *sdev)
 
 	blk_queue_prep_rq(q, scsi_prep_fn);
 	blk_queue_softirq_done(q, scsi_softirq_done);
+	blk_queue_rq_timed_out(q, scsi_times_out);
 	return q;
 }
 
