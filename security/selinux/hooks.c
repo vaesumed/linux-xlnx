@@ -4093,6 +4093,8 @@ static int selinux_sock_rcv_skb_compat(struct sock *sk, struct sk_buff *skb,
 			return err;
 		err = avc_has_perm(sk_sid, peer_sid,
 				   SECCLASS_PEER, PEER__RECV, ad);
+		if (err)
+			selinux_netlbl_err(skb, err, 0);
 	} else {
 		err = selinux_netlbl_sock_rcv_skb(sksec, skb, family, ad);
 		if (err)
@@ -4142,10 +4144,14 @@ static int selinux_socket_sock_rcv_skb(struct sock *sk, struct sk_buff *skb)
 			return err;
 		err = selinux_inet_sys_rcv_skb(skb->iif, addrp, family,
 					       peer_sid, &ad);
-		if (err)
+		if (err) {
+			selinux_netlbl_err(skb, err, 0);
 			return err;
+		}
 		err = avc_has_perm(sk_sid, peer_sid, SECCLASS_PEER,
 				   PEER__RECV, &ad);
+		if (err)
+			selinux_netlbl_err(skb, err, 0);
 	}
 
 	if (selinux_secmark_enabled()) {
@@ -4370,6 +4376,7 @@ out:
 static unsigned int selinux_ip_forward(struct sk_buff *skb, int ifindex,
 				       u16 family)
 {
+	int err;
 	char *addrp;
 	u32 peer_sid;
 	struct avc_audit_data ad;
@@ -4393,10 +4400,14 @@ static unsigned int selinux_ip_forward(struct sk_buff *skb, int ifindex,
 	if (selinux_skb_peerlbl_sid(skb, family, &peer_sid) != 0)
 		return NF_DROP;
 
-	if (peerlbl_active)
-		if (selinux_inet_sys_rcv_skb(ifindex, addrp, family,
-					     peer_sid, &ad) != 0)
+	if (peerlbl_active) {
+		err = selinux_inet_sys_rcv_skb(ifindex, addrp, family,
+					       peer_sid, &ad);
+		if (err) {
+			selinux_netlbl_err(skb, err, 1);
 			return NF_DROP;
+		}
+	}
 
 	if (secmark_active)
 		if (avc_has_perm(peer_sid, skb->secmark,
