@@ -480,9 +480,9 @@ static int ipw_ioctl(struct tty_struct *linux_tty, struct file *file,
 					return -EFAULT;
 			}
 			return 0;
-		}
 		case TCFLSH:
 			return tty_perform_flush(linux_tty, arg);
+		}
 	}
 	return tty_mode_ioctl(linux_tty, file, cmd , arg);
 }
