@@ -159,7 +159,7 @@ static struct omap_mcbsp_ops omap1_mcbsp_ops = {
 #ifdef CONFIG_ARCH_OMAP730
 static struct omap_mcbsp_platform_data omap730_mcbsp_pdata[] = {
 	{
-		.virt_base	= io_p2v(OMAP730_MCBSP1_BASE),
+		.virt_base	= IO_ADDRESS(OMAP730_MCBSP1_BASE),
 		.dma_rx_sync	= OMAP_DMA_MCBSP1_RX,
 		.dma_tx_sync	= OMAP_DMA_MCBSP1_TX,
 		.rx_irq		= INT_730_McBSP1RX,
@@ -167,7 +167,7 @@ static struct omap_mcbsp_platform_data omap730_mcbsp_pdata[] = {
 		.ops		= &omap1_mcbsp_ops,
 	},
 	{
-		.virt_base	= io_p2v(OMAP730_MCBSP2_BASE),
+		.virt_base	= IO_ADDRESS(OMAP730_MCBSP2_BASE),
 		.dma_rx_sync	= OMAP_DMA_MCBSP3_RX,
 		.dma_tx_sync	= OMAP_DMA_MCBSP3_TX,
 		.rx_irq		= INT_730_McBSP2RX,
@@ -193,7 +193,7 @@ static struct omap_mcbsp_platform_data omap15xx_mcbsp_pdata[] = {
 		.clk_name	= "mcbsp_clk",
 		},
 	{
-		.virt_base	= io_p2v(OMAP1510_MCBSP2_BASE),
+		.virt_base	= IO_ADDRESS(OMAP1510_MCBSP2_BASE),
 		.dma_rx_sync	= OMAP_DMA_MCBSP2_RX,
 		.dma_tx_sync	= OMAP_DMA_MCBSP2_TX,
 		.rx_irq		= INT_1510_SPI_RX,
@@ -228,7 +228,7 @@ static struct omap_mcbsp_platform_data omap16xx_mcbsp_pdata[] = {
 		.clk_name	= "mcbsp_clk",
 	},
 	{
-		.virt_base	= io_p2v(OMAP1610_MCBSP2_BASE),
+		.virt_base	= IO_ADDRESS(OMAP1610_MCBSP2_BASE),
 		.dma_rx_sync	= OMAP_DMA_MCBSP2_RX,
 		.dma_tx_sync	= OMAP_DMA_MCBSP2_TX,
 		.rx_irq		= INT_1610_McBSP2_RX,

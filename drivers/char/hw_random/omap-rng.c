@@ -122,7 +122,7 @@ static int __init omap_rng_probe(struct platform_device *pdev)
 		return -EBUSY;
 
 	dev_set_drvdata(&pdev->dev, mem);
-	rng_base = (u32 __force __iomem *)io_p2v(res->start);
+	rng_base = IO_ADDRESS(res->start);
 
 	ret = hwrng_register(&omap_rng_ops);
 	if (ret) {
