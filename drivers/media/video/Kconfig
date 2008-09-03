@@ -34,6 +34,7 @@ config VIDEOBUF_DVB
 	select VIDEOBUF_GEN
 
 config VIDEO_BTCX
+	depends on PCI
 	tristate
 
 config VIDEO_IR
@@ -578,13 +579,6 @@ config VIDEO_SAA5249
 	  To compile this driver as a module, choose M here: the
 	  module will be called saa5249.
 
-config TUNER_3036
-	tristate "SAB3036 tuner"
-	depends on I2C && VIDEO_V4L1
-	help
-	  Say Y here to include support for Philips SAB3036 compatible tuners.
-	  If in doubt, say N.
-
 config VIDEO_VINO
 	tristate "SGI Vino Video For Linux (EXPERIMENTAL)"
 	depends on I2C && SGI_IP22 && EXPERIMENTAL && VIDEO_V4L2
@@ -708,21 +702,6 @@ config VIDEO_MXB
 	  To compile this driver as a module, choose M here: the
 	  module will be called mxb.
 
-config VIDEO_DPC
-	tristate "Philips-Semiconductors 'dpc7146 demonstration board'"
-	depends on PCI && VIDEO_V4L1 && I2C
-	select VIDEO_SAA7146_VV
-	select VIDEO_SAA7111 if VIDEO_HELPER_CHIPS_AUTO
-	---help---
-	  This is a video4linux driver for the 'dpc7146 demonstration
-	  board' by Philips-Semiconductors. It's the reference design
-	  for SAA7146 bases boards, so if you have some unsupported
-	  saa7146 based, analog video card, chances are good that it
-	  will work with this skeleton driver.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called dpc7146.
-
 config VIDEO_HEXIUM_ORION
 	tristate "Hexium HV-PCI6 and Orion frame grabber"
 	depends on PCI && VIDEO_V4L2 && I2C
@@ -784,6 +763,70 @@ config VIDEO_CAFE_CCIC
 	  CMOS camera controller.  This is the controller found on first-
 	  generation OLPC systems.
 
+config SOC_CAMERA
+	tristate "SoC camera support"
+	depends on VIDEO_V4L2 && HAS_DMA
+	select VIDEOBUF_GEN
+	help
+	  SoC Camera is a common API to several cameras, not connecting
+	  over a bus like PCI or USB. For example some i2c camera connected
+	  directly to the data bus of an SoC.
+
+config SOC_CAMERA_MT9M001
+	tristate "mt9m001 support"
+	depends on SOC_CAMERA && I2C
+	select GPIO_PCA953X if MT9M001_PCA9536_SWITCH
+	help
+	  This driver supports MT9M001 cameras from Micron, monochrome
+	  and colour models.
+
+config MT9M001_PCA9536_SWITCH
+	bool "pca9536 datawidth switch for mt9m001"
+	depends on SOC_CAMERA_MT9M001 && GENERIC_GPIO
+	help
+	  Select this if your MT9M001 camera uses a PCA9536 I2C GPIO
+	  extender to switch between 8 and 10 bit datawidth modes
+
+config SOC_CAMERA_MT9M111
+	tristate "mt9m111 support"
+	depends on SOC_CAMERA && I2C
+	help
+	  This driver supports MT9M111 cameras from Micron
+
+config SOC_CAMERA_MT9V022
+	tristate "mt9v022 support"
+	depends on SOC_CAMERA && I2C
+	select GPIO_PCA953X if MT9V022_PCA9536_SWITCH
+	help
+	  This driver supports MT9V022 cameras from Micron
+
+config MT9V022_PCA9536_SWITCH
+	bool "pca9536 datawidth switch for mt9v022"
+	depends on SOC_CAMERA_MT9V022 && GENERIC_GPIO
+	help
+	  Select this if your MT9V022 camera uses a PCA9536 I2C GPIO
+	  extender to switch between 8 and 10 bit datawidth modes
+
+config SOC_CAMERA_PLATFORM
+	tristate "platform camera support"
+	depends on SOC_CAMERA
+	help
+	  This is a generic SoC camera platform driver, useful for testing
+
+config VIDEO_PXA27x
+	tristate "PXA27x Quick Capture Interface driver"
+	depends on VIDEO_DEV && PXA27x && SOC_CAMERA
+	select VIDEOBUF_DMA_SG
+	---help---
+	  This is a v4l2 driver for the PXA27x Quick Capture Interface
+
+config VIDEO_SH_MOBILE_CEU
+	tristate "SuperH Mobile CEU Interface driver"
+	depends on VIDEO_DEV && SOC_CAMERA && HAS_DMA
+	select VIDEOBUF_DMA_CONTIG
+	---help---
+	  This is a v4l2 driver for the SuperH Mobile CEU Interface
+
 #
 # USB Multimedia device configuration
 #
@@ -822,8 +865,7 @@ config VIDEO_OVCAMCHIP
 
 config USB_W9968CF
 	tristate "USB W996[87]CF JPEG Dual Mode Camera support"
-	depends on VIDEO_V4L1 && I2C
-	select VIDEO_OVCAMCHIP
+	depends on VIDEO_V4L1 && I2C && VIDEO_OVCAMCHIP
 	---help---
 	  Say Y here if you want support for cameras based on OV681 or
 	  Winbond W9967CF/W9968CF JPEG USB Dual Mode Camera Chips.
@@ -913,65 +955,5 @@ config USB_S2255
 	  This driver can be compiled as a module, called s2255drv.
 
 endif # V4L_USB_DRIVERS
-
-config SOC_CAMERA
-	tristate "SoC camera support"
-	depends on VIDEO_V4L2 && HAS_DMA
-	select VIDEOBUF_GEN
-	help
-	  SoC Camera is a common API to several cameras, not connecting
-	  over a bus like PCI or USB. For example some i2c camera connected
-	  directly to the data bus of an SoC.
-
-config SOC_CAMERA_MT9M001
-	tristate "mt9m001 support"
-	depends on SOC_CAMERA && I2C
-	select GPIO_PCA953X if MT9M001_PCA9536_SWITCH
-	help
-	  This driver supports MT9M001 cameras from Micron, monochrome
-	  and colour models.
-
-config MT9M001_PCA9536_SWITCH
-	bool "pca9536 datawidth switch for mt9m001"
-	depends on SOC_CAMERA_MT9M001 && GENERIC_GPIO
-	help
-	  Select this if your MT9M001 camera uses a PCA9536 I2C GPIO
-	  extender to switch between 8 and 10 bit datawidth modes
-
-config SOC_CAMERA_MT9V022
-	tristate "mt9v022 support"
-	depends on SOC_CAMERA && I2C
-	select GPIO_PCA953X if MT9V022_PCA9536_SWITCH
-	help
-	  This driver supports MT9V022 cameras from Micron
-
-config MT9V022_PCA9536_SWITCH
-	bool "pca9536 datawidth switch for mt9v022"
-	depends on SOC_CAMERA_MT9V022 && GENERIC_GPIO
-	help
-	  Select this if your MT9V022 camera uses a PCA9536 I2C GPIO
-	  extender to switch between 8 and 10 bit datawidth modes
-
-config SOC_CAMERA_PLATFORM
-	tristate "platform camera support"
-	depends on SOC_CAMERA
-	help
-	  This is a generic SoC camera platform driver, useful for testing
-
-config VIDEO_PXA27x
-	tristate "PXA27x Quick Capture Interface driver"
-	depends on VIDEO_DEV && PXA27x
-	select SOC_CAMERA
-	select VIDEOBUF_DMA_SG
-	---help---
-	  This is a v4l2 driver for the PXA27x Quick Capture Interface
-
-config VIDEO_SH_MOBILE_CEU
-	tristate "SuperH Mobile CEU Interface driver"
-	depends on VIDEO_DEV
-	select SOC_CAMERA
-	select VIDEOBUF_DMA_CONTIG
-	---help---
-	  This is a v4l2 driver for the SuperH Mobile CEU Interface
 
 endif # VIDEO_CAPTURE_DRIVERS
