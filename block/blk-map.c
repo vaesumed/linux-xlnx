@@ -41,10 +41,10 @@ static int __blk_rq_unmap_user(struct bio *bio)
 }
 
 static int __blk_rq_map_user(struct request_queue *q, struct request *rq,
-			     void __user *ubuf, unsigned int len)
+			     struct rq_map_data *map_data, void __user *ubuf,
+			     unsigned int len, gfp_t gfp_mask)
 {
 	unsigned long uaddr;
-	unsigned int alignment;
 	struct bio *bio, *orig_bio;
 	int reading, ret;
 
@@ -55,11 +55,10 @@ static int __blk_rq_map_user(struct request_queue *q, struct request *rq,
 	 * direct dma. else, set up kernel bounce buffers
 	 */
 	uaddr = (unsigned long) ubuf;
-	alignment = queue_dma_alignment(q) | q->dma_pad_mask;
-	if (!(uaddr & alignment) && !(len & alignment))
-		bio = bio_map_user(q, NULL, uaddr, len, reading);
+	if (blk_rq_aligned(q, ubuf, len) && !map_data)
+		bio = bio_map_user(q, NULL, uaddr, len, reading, gfp_mask);
 	else
-		bio = bio_copy_user(q, uaddr, len, reading);
+		bio = bio_copy_user(q, map_data, uaddr, len, reading, gfp_mask);
 
 	if (IS_ERR(bio))
 		return PTR_ERR(bio);
@@ -88,8 +87,10 @@ static int __blk_rq_map_user(struct request_queue *q, struct request *rq,
  * blk_rq_map_user - map user data to a request, for REQ_TYPE_BLOCK_PC usage
  * @q:		request queue where request should be inserted
  * @rq:		request structure to fill
+ * @map_data:   pointer to the rq_map_data holding pages (if necessary)
  * @ubuf:	the user buffer
  * @len:	length of user data
+ * @gfp_mask:	memory allocation flags
  *
  * Description:
  *    Data will be mapped directly for zero copy I/O, if possible. Otherwise
@@ -105,7 +106,8 @@ static int __blk_rq_map_user(struct request_queue *q, struct request *rq,
  *    unmapping.
  */
 int blk_rq_map_user(struct request_queue *q, struct request *rq,
-		    void __user *ubuf, unsigned long len)
+		    struct rq_map_data *map_data, void __user *ubuf,
+		    unsigned long len, gfp_t gfp_mask)
 {
 	unsigned long bytes_read = 0;
 	struct bio *bio = NULL;
@@ -132,7 +134,8 @@ int blk_rq_map_user(struct request_queue *q, struct request *rq,
 		if (end - start > BIO_MAX_PAGES)
 			map_len -= PAGE_SIZE;
 
-		ret = __blk_rq_map_user(q, rq, ubuf, map_len);
+		ret = __blk_rq_map_user(q, rq, map_data, ubuf, map_len,
+					gfp_mask);
 		if (ret < 0)
 			goto unmap_rq;
 		if (!bio)
@@ -157,9 +160,11 @@ EXPORT_SYMBOL(blk_rq_map_user);
  * blk_rq_map_user_iov - map user data to a request, for REQ_TYPE_BLOCK_PC usage
  * @q:		request queue where request should be inserted
  * @rq:		request to map data to
+ * @map_data:   pointer to the rq_map_data holding pages (if necessary)
  * @iov:	pointer to the iovec
  * @iov_count:	number of elements in the iovec
  * @len:	I/O byte count
+ * @gfp_mask:	memory allocation flags
  *
  * Description:
  *    Data will be mapped directly for zero copy I/O, if possible. Otherwise
@@ -175,7 +180,8 @@ EXPORT_SYMBOL(blk_rq_map_user);
  *    unmapping.
  */
 int blk_rq_map_user_iov(struct request_queue *q, struct request *rq,
-			struct sg_iovec *iov, int iov_count, unsigned int len)
+			struct rq_map_data *map_data, struct sg_iovec *iov,
+			int iov_count, unsigned int len, gfp_t gfp_mask)
 {
 	struct bio *bio;
 	int i, read = rq_data_dir(rq) == READ;
@@ -193,10 +199,11 @@ int blk_rq_map_user_iov(struct request_queue *q, struct request *rq,
 		}
 	}
 
-	if (unaligned || (q->dma_pad_mask & len))
-		bio = bio_copy_user_iov(q, iov, iov_count, read);
+	if (unaligned || (q->dma_pad_mask & len) || map_data)
+		bio = bio_copy_user_iov(q, map_data, iov, iov_count, read,
+					gfp_mask);
 	else
-		bio = bio_map_user_iov(q, NULL, iov, iov_count, read);
+		bio = bio_map_user_iov(q, NULL, iov, iov_count, read, gfp_mask);
 
 	if (IS_ERR(bio))
 		return PTR_ERR(bio);
@@ -216,6 +223,7 @@ int blk_rq_map_user_iov(struct request_queue *q, struct request *rq,
 	rq->buffer = rq->data = NULL;
 	return 0;
 }
+EXPORT_SYMBOL(blk_rq_map_user_iov);
 
 /**
  * blk_rq_unmap_user - unmap a request with user data
@@ -264,8 +272,6 @@ EXPORT_SYMBOL(blk_rq_unmap_user);
 int blk_rq_map_kern(struct request_queue *q, struct request *rq, void *kbuf,
 		    unsigned int len, gfp_t gfp_mask)
 {
-	unsigned long kaddr;
-	unsigned int alignment;
 	int reading = rq_data_dir(rq) == READ;
 	int do_copy = 0;
 	struct bio *bio;
@@ -275,11 +281,7 @@ int blk_rq_map_kern(struct request_queue *q, struct request *rq, void *kbuf,
 	if (!len || !kbuf)
 		return -EINVAL;
 
-	kaddr = (unsigned long)kbuf;
-	alignment = queue_dma_alignment(q) | q->dma_pad_mask;
-	do_copy = ((kaddr & alignment) || (len & alignment) ||
-		   object_is_on_stack(kbuf));
-
+	do_copy = !blk_rq_aligned(q, kbuf, len) || object_is_on_stack(kbuf);
 	if (do_copy)
 		bio = bio_copy_kern(q, kbuf, len, gfp_mask, reading);
 	else

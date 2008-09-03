@@ -195,7 +195,7 @@ static int mspro_block_bd_open(struct inode *inode, struct file *filp)
 static int mspro_block_disk_release(struct gendisk *disk)
 {
 	struct mspro_block_data *msb = disk->private_data;
-	int disk_id = disk->first_minor >> MEMSTICK_PART_SHIFT;
+	int disk_id = MINOR(disk_devt(disk)) >> MEMSTICK_PART_SHIFT;
 
 	mutex_lock(&mspro_block_disk_lock);
 
