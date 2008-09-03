@@ -17,7 +17,7 @@ typedef __kernel_fsid_t	fsid_t;
 #if BITS_PER_LONG == 64
 #define __statfs_word long
 #else
-typedef __statfs_word __u32
+#define __statfs_word __u32
 #endif
 #endif
 
