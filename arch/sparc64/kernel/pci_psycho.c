@@ -17,10 +17,12 @@
 #include <asm/irq.h>
 #include <asm/starfire.h>
 #include <asm/prom.h>
-#include <asm/oplib.h>
 
 #include "pci_impl.h"
 #include "iommu_common.h"
+
+#define DRIVER_NAME	"psycho"
+#define PFX		DRIVER_NAME ": "
 
 /* All PSYCHO registers are 64-bits.  The following accessor
  * routines are how they are accessed.  The REG parameter
@@ -801,11 +803,12 @@ static void pbm_config_busmastering(struct pci_pbm_info *pbm)
 	pci_config_write8(addr, 64);
 }
 
-static void __init psycho_scan_bus(struct pci_pbm_info *pbm)
+static void __init psycho_scan_bus(struct pci_pbm_info *pbm,
+				   struct device *parent)
 {
 	pbm_config_busmastering(pbm);
 	pbm->is_66mhz_capable = 0;
-	pbm->pci_bus = pci_scan_one_pbm(pbm);
+	pbm->pci_bus = pci_scan_one_pbm(pbm, parent);
 
 	/* After the PCI bus scan is complete, we can register
 	 * the error interrupt handlers.
@@ -840,7 +843,7 @@ static int psycho_iommu_init(struct pci_pbm_info *pbm)
 	control = psycho_read(pbm->controller_regs + PSYCHO_IOMMU_CONTROL);
 	control |= PSYCHO_IOMMU_CTRL_DENAB;
 	psycho_write(pbm->controller_regs + PSYCHO_IOMMU_CONTROL, control);
-	for(i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		psycho_write(pbm->controller_regs + PSYCHO_IOMMU_TAG + (i * 8UL), 0);
 		psycho_write(pbm->controller_regs + PSYCHO_IOMMU_DATA + (i * 8UL), 0);
 	}
@@ -850,8 +853,10 @@ static int psycho_iommu_init(struct pci_pbm_info *pbm)
 	 */
 	err = iommu_table_init(iommu, IO_TSB_SIZE, 0xc0000000, 0xffffffff,
 			       pbm->numa_node);
-	if (err)
+	if (err) {
+		printk(KERN_ERR PFX "iommu_table_init() fails\n");
 		return err;
+	}
 
 	psycho_write(pbm->controller_regs + PSYCHO_IOMMU_TSBBASE,
 		     __pa(iommu->page_table));
@@ -967,9 +972,9 @@ static void psycho_pbm_strbuf_init(struct pci_pbm_info *pbm,
 #define PSYCHO_MEMSPACE_SIZE	0x07fffffffUL
 
 static void __init psycho_pbm_init(struct pci_controller_info *p,
-			    struct device_node *dp, int is_pbm_a)
+				   struct of_device *op, int is_pbm_a)
 {
-	struct property *prop;
+	struct device_node *dp = op->node;
 	struct pci_pbm_info *pbm;
 
 	if (is_pbm_a)
@@ -982,27 +987,20 @@ static void __init psycho_pbm_init(struct pci_controller_info *p,
 
 	pbm->numa_node = -1;
 
-	pbm->scan_bus = psycho_scan_bus;
 	pbm->pci_ops = &sun4u_pci_ops;
 	pbm->config_space_reg_bits = 8;
 
 	pbm->index = pci_num_pbms++;
 
 	pbm->chip_type = PBM_CHIP_TYPE_PSYCHO;
-	pbm->chip_version = 0;
-	prop = of_find_property(dp, "version#", NULL);
-	if (prop)
-		pbm->chip_version = *(int *) prop->value;
-	pbm->chip_revision = 0;
-	prop = of_find_property(dp, "module-revision#", NULL);
-	if (prop)
-		pbm->chip_revision = *(int *) prop->value;
+	pbm->chip_version = of_getintprop_default(dp, "version#", 0);
+	pbm->chip_revision = of_getintprop_default(dp, "module-revision#", 0);
 
 	pbm->parent = p;
 	pbm->prom_node = dp;
 	pbm->name = dp->full_name;
 
-	printk("%s: PSYCHO PCI Bus Module ver[%x:%x]\n",
+	printk(KERN_INFO "%s: PSYCHO PCI Bus Module ver[%x:%x]\n",
 	       pbm->name,
 	       pbm->chip_version, pbm->chip_revision);
 
@@ -1011,49 +1009,59 @@ static void __init psycho_pbm_init(struct pci_controller_info *p,
 	pci_get_pbm_props(pbm);
 
 	psycho_pbm_strbuf_init(pbm, is_pbm_a);
+
+	psycho_scan_bus(pbm, &op->dev);
 }
 
 #define PSYCHO_CONFIGSPACE	0x001000000UL
 
-void __init psycho_init(struct device_node *dp, char *model_name)
+static int __devinit psycho_probe(struct of_device *op,
+				  const struct of_device_id *match)
 {
-	struct linux_prom64_registers *pr_regs;
+	const struct linux_prom64_registers *pr_regs;
+	struct device_node *dp = op->node;
 	struct pci_controller_info *p;
 	struct pci_pbm_info *pbm;
 	struct iommu *iommu;
-	struct property *prop;
+	int is_pbm_a, err;
 	u32 upa_portid;
-	int is_pbm_a;
 
-	upa_portid = 0xff;
-	prop = of_find_property(dp, "upa-portid", NULL);
-	if (prop)
-		upa_portid = *(u32 *) prop->value;
+	upa_portid = of_getintprop_default(dp, "upa-portid", 0xff);
 
 	for (pbm = pci_pbm_root; pbm; pbm = pbm->next) {
 		struct pci_controller_info *p = pbm->parent;
 
 		if (p->pbm_A.portid == upa_portid) {
 			is_pbm_a = (p->pbm_A.prom_node == NULL);
-			psycho_pbm_init(p, dp, is_pbm_a);
-			return;
+			psycho_pbm_init(p, op, is_pbm_a);
+			return 0;
 		}
 	}
 
+	err = -ENOMEM;
 	p = kzalloc(sizeof(struct pci_controller_info), GFP_ATOMIC);
-	if (!p)
-		goto fatal_memory_error;
+	if (!p) {
+		printk(KERN_ERR PFX "Cannot allocate controller info.\n");
+		goto out_err;
+	}
+
 	iommu = kzalloc(sizeof(struct iommu), GFP_ATOMIC);
-	if (!iommu)
-		goto fatal_memory_error;
+	if (!iommu) {
+		printk(KERN_ERR PFX "Cannot allocate PBM iommu.\n");
+		goto out_free_controller;
+	}
 
 	p->pbm_A.iommu = p->pbm_B.iommu = iommu;
 
 	p->pbm_A.portid = upa_portid;
 	p->pbm_B.portid = upa_portid;
 
-	prop = of_find_property(dp, "reg", NULL);
-	pr_regs = prop->value;
+	pr_regs = of_get_property(dp, "reg", NULL);
+	err = -ENODEV;
+	if (!pr_regs) {
+		printk(KERN_ERR PFX "No reg property.\n");
+		goto out_free_iommu;
+	}
 
 	p->pbm_A.controller_regs = pr_regs[2].phys_addr;
 	p->pbm_B.controller_regs = pr_regs[2].phys_addr;
@@ -1063,14 +1071,43 @@ void __init psycho_init(struct device_node *dp, char *model_name)
 
 	psycho_controller_hwinit(&p->pbm_A);
 
-	if (psycho_iommu_init(&p->pbm_A))
-		goto fatal_memory_error;
+	err = psycho_iommu_init(&p->pbm_A);
+	if (err)
+		goto out_free_iommu;
 
 	is_pbm_a = ((pr_regs[0].phys_addr & 0x6000) == 0x2000);
-	psycho_pbm_init(p, dp, is_pbm_a);
-	return;
 
-fatal_memory_error:
-	prom_printf("PSYCHO: Fatal memory allocation error.\n");
-	prom_halt();
+	psycho_pbm_init(p, op, is_pbm_a);
+
+	return 0;
+
+out_free_iommu:
+	kfree(p->pbm_A.iommu);
+
+out_free_controller:
+	kfree(p);
+
+out_err:
+	return err;
 }
+
+static struct of_device_id __initdata psycho_match[] = {
+	{
+		.name = "pci",
+		.compatible = "pci108e,8000",
+	},
+	{},
+};
+
+static struct of_platform_driver psycho_driver = {
+	.name		= DRIVER_NAME,
+	.match_table	= psycho_match,
+	.probe		= psycho_probe,
+};
+
+static int __init psycho_init(void)
+{
+	return of_register_driver(&psycho_driver, &of_bus_type);
+}
+
+subsys_initcall(psycho_init);
