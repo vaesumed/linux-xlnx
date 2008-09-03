@@ -126,7 +126,7 @@ int iwl_hw_txq_attach_buf_to_tfd(struct iwl_priv *priv, void *ptr,
 	u32 num_tbs = IWL_GET_BITS(*tfd, num_tbs);
 
 	/* Each TFD can point to a maximum 20 Tx buffers */
-	if ((num_tbs >= MAX_NUM_OF_TBS) || (num_tbs < 0)) {
+	if (num_tbs >= MAX_NUM_OF_TBS) {
 		IWL_ERROR("Error can not send more than %d chunks\n",
 			  MAX_NUM_OF_TBS);
 		return -EINVAL;
@@ -824,7 +824,7 @@ int iwl_tx_skb(struct iwl_priv *priv, struct sk_buff *skb)
 
 	spin_unlock_irqrestore(&priv->lock, flags);
 
-	hdr_len = ieee80211_get_hdrlen(le16_to_cpu(fc));
+	hdr_len = ieee80211_hdrlen(fc);
 
 	/* Find (or create) index into station table for destination station */
 	sta_id = iwl_get_sta_id(priv, hdr);
@@ -842,7 +842,7 @@ int iwl_tx_skb(struct iwl_priv *priv, struct sk_buff *skb)
 	txq_id = swq_id;
 	if (ieee80211_is_data_qos(fc)) {
 		qc = ieee80211_get_qos_ctl(hdr);
-		tid = qc[0] & 0xf;
+		tid = qc[0] & IEEE80211_QOS_CTL_TID_MASK;
 		seq_number = priv->stations[sta_id].tid[tid].seq_number;
 		seq_number &= IEEE80211_SCTL_SEQ;
 		hdr->seq_ctrl = hdr->seq_ctrl &
@@ -1065,12 +1065,26 @@ int iwl_enqueue_hcmd(struct iwl_priv *priv, struct iwl_host_cmd *cmd)
 	phys_addr += offsetof(struct iwl_cmd, hdr);
 	iwl_hw_txq_attach_buf_to_tfd(priv, tfd, phys_addr, fix_size);
 
-	IWL_DEBUG_HC("Sending command %s (#%x), seq: 0x%04X, "
-		     "%d bytes at %d[%d]:%d\n",
-		     get_cmd_string(out_cmd->hdr.cmd),
-		     out_cmd->hdr.cmd, le16_to_cpu(out_cmd->hdr.sequence),
-		     fix_size, q->write_ptr, idx, IWL_CMD_QUEUE_NUM);
-
+#ifdef CONFIG_IWLWIFI_DEBUG
+	switch (out_cmd->hdr.cmd) {
+	case REPLY_TX_LINK_QUALITY_CMD:
+	case SENSITIVITY_CMD:
+		IWL_DEBUG_HC_DUMP("Sending command %s (#%x), seq: 0x%04X, "
+				"%d bytes at %d[%d]:%d\n",
+				get_cmd_string(out_cmd->hdr.cmd),
+				out_cmd->hdr.cmd,
+				le16_to_cpu(out_cmd->hdr.sequence), fix_size,
+				q->write_ptr, idx, IWL_CMD_QUEUE_NUM);
+				break;
+	default:
+		IWL_DEBUG_HC("Sending command %s (#%x), seq: 0x%04X, "
+				"%d bytes at %d[%d]:%d\n",
+				get_cmd_string(out_cmd->hdr.cmd),
+				out_cmd->hdr.cmd,
+				le16_to_cpu(out_cmd->hdr.sequence), fix_size,
+				q->write_ptr, idx, IWL_CMD_QUEUE_NUM);
+	}
+#endif
 	txq->need_update = 1;
 
 	/* Set up entry in queue's byte count circular buffer */
