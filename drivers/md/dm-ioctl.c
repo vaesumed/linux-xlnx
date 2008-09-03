@@ -426,7 +426,7 @@ static int list_devices(struct dm_ioctl *param, size_t param_size)
 				old_nl->next = (uint32_t) ((void *) nl -
 							   (void *) old_nl);
 			disk = dm_disk(hc->md);
-			nl->dev = huge_encode_dev(disk_devt(disk));
+			nl->dev = huge_encode_dev(MKDEV(disk->major, disk->first_minor));
 			nl->next = 0;
 			strcpy(nl->name, hc->name);
 
@@ -539,7 +539,7 @@ static int __dev_status(struct mapped_device *md, struct dm_ioctl *param)
 	if (dm_suspended(md))
 		param->flags |= DM_SUSPEND_FLAG;
 
-	param->dev = huge_encode_dev(disk_devt(disk));
+	param->dev = huge_encode_dev(MKDEV(disk->major, disk->first_minor));
 
 	/*
 	 * Yes, this will be out of date by the time it gets back
@@ -548,7 +548,7 @@ static int __dev_status(struct mapped_device *md, struct dm_ioctl *param)
 	 */
 	param->open_count = dm_open_count(md);
 
-	if (get_disk_ro(disk))
+	if (disk->policy)
 		param->flags |= DM_READONLY_FLAG;
 
 	param->event_nr = dm_get_event_nr(md);

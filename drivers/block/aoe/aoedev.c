@@ -91,7 +91,7 @@ aoedev_downdev(struct aoedev *d)
 	}
 
 	if (d->gd)
-		set_capacity(d->gd, 0);
+		d->gd->capacity = 0;
 
 	d->flags &= ~DEVFL_UP;
 }

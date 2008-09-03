@@ -112,8 +112,69 @@ int scsi_eh_scmd_add(struct scsi_cmnd *scmd, int eh_flag)
 }
 
 /**
+ * scsi_add_timer - Start timeout timer for a single scsi command.
+ * @scmd:	scsi command that is about to start running.
+ * @timeout:	amount of time to allow this command to run.
+ * @complete:	timeout function to call if timer isn't canceled.
+ *
+ * Notes:
+ *    This should be turned into an inline function.  Each scsi command
+ *    has its own timer, and as it is added to the queue, we set up the
+ *    timer.  When the command completes, we cancel the timer.
+ */
+void scsi_add_timer(struct scsi_cmnd *scmd, int timeout,
+		    void (*complete)(struct scsi_cmnd *))
+{
+
+	/*
+	 * If the clock was already running for this command, then
+	 * first delete the timer.  The timer handling code gets rather
+	 * confused if we don't do this.
+	 */
+	if (scmd->eh_timeout.function)
+		del_timer(&scmd->eh_timeout);
+
+	scmd->eh_timeout.data = (unsigned long)scmd;
+	scmd->eh_timeout.expires = jiffies + timeout;
+	scmd->eh_timeout.function = (void (*)(unsigned long)) complete;
+
+	SCSI_LOG_ERROR_RECOVERY(5, printk("%s: scmd: %p, time:"
+					  " %d, (%p)\n", __func__,
+					  scmd, timeout, complete));
+
+	add_timer(&scmd->eh_timeout);
+}
+
+/**
+ * scsi_delete_timer - Delete/cancel timer for a given function.
+ * @scmd:	Cmd that we are canceling timer for
+ *
+ * Notes:
+ *     This should be turned into an inline function.
+ *
+ * Return value:
+ *     1 if we were able to detach the timer.  0 if we blew it, and the
+ *     timer function has already started to run.
+ */
+int scsi_delete_timer(struct scsi_cmnd *scmd)
+{
+	int rtn;
+
+	rtn = del_timer(&scmd->eh_timeout);
+
+	SCSI_LOG_ERROR_RECOVERY(5, printk("%s: scmd: %p,"
+					 " rtn: %d\n", __func__,
+					 scmd, rtn));
+
+	scmd->eh_timeout.data = (unsigned long)NULL;
+	scmd->eh_timeout.function = NULL;
+
+	return rtn;
+}
+
+/**
  * scsi_times_out - Timeout function for normal scsi commands.
- * @req:	request that is timing out.
+ * @scmd:	Cmd that is timing out.
  *
  * Notes:
  *     We do not need to lock this.  There is the potential for a race
@@ -121,11 +182,9 @@ int scsi_eh_scmd_add(struct scsi_cmnd *scmd, int eh_flag)
  *     normal completion function determines that the timer has already
  *     fired, then it mustn't do anything.
  */
-enum blk_eh_timer_return scsi_times_out(struct request *req)
+void scsi_times_out(struct scsi_cmnd *scmd)
 {
-	struct scsi_cmnd *scmd = req->special;
-	enum blk_eh_timer_return (*eh_timed_out)(struct scsi_cmnd *);
-	enum blk_eh_timer_return rtn = BLK_EH_NOT_HANDLED;
+	enum scsi_eh_timer_return (* eh_timed_out)(struct scsi_cmnd *);
 
 	scsi_log_completion(scmd, TIMEOUT_ERROR);
 
@@ -137,20 +196,22 @@ enum blk_eh_timer_return scsi_times_out(struct request *req)
 		eh_timed_out = NULL;
 
 	if (eh_timed_out)
-		rtn = eh_timed_out(scmd);
-		switch (rtn) {
-		case BLK_EH_NOT_HANDLED:
+		switch (eh_timed_out(scmd)) {
+		case EH_HANDLED:
+			__scsi_done(scmd);
+			return;
+		case EH_RESET_TIMER:
+			scsi_add_timer(scmd, scmd->timeout_per_command,
+				       scsi_times_out);
+			return;
+		case EH_NOT_HANDLED:
 			break;
-		default:
-			return rtn;
 		}
 
 	if (unlikely(!scsi_eh_scmd_add(scmd, SCSI_EH_CANCEL_CMD))) {
 		scmd->result |= DID_TIME_OUT << 16;
-		return BLK_EH_HANDLED;
+		__scsi_done(scmd);
 	}
-
-	return BLK_EH_NOT_HANDLED;
 }
 
 /**
@@ -1732,6 +1793,7 @@ scsi_reset_provider(struct scsi_device *dev, int flag)
 
 	blk_rq_init(NULL, &req);
 	scmd->request = &req;
+	memset(&scmd->eh_timeout, 0, sizeof(scmd->eh_timeout));
 
 	scmd->cmnd = req.cmd;
 
@@ -1741,6 +1803,8 @@ scsi_reset_provider(struct scsi_device *dev, int flag)
 	scmd->cmd_len			= 0;
 
 	scmd->sc_data_direction		= DMA_BIDIRECTIONAL;
+
+	init_timer(&scmd->eh_timeout);
 
 	spin_lock_irqsave(shost->host_lock, flags);
 	shost->tmf_in_progress = 1;

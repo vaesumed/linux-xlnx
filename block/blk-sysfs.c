@@ -156,30 +156,6 @@ static ssize_t queue_nomerges_store(struct request_queue *q, const char *page,
 	return ret;
 }
 
-static ssize_t queue_rq_affinity_show(struct request_queue *q, char *page)
-{
-	unsigned int same = (q->queue_flags & 1 << (QUEUE_FLAG_SAME_COMP)) != 0;
-
-	return queue_var_show(same, page);
-}
-
-static ssize_t
-queue_rq_affinity_store(struct request_queue *q, const char *page, size_t count)
-{
-	ssize_t ret = -EINVAL;
-#if defined(CONFIG_USE_GENERIC_SMP_HELPERS)
-	unsigned long val;
-
-	ret = queue_var_store(&val, page, count);
-	spin_lock_irq(q->queue_lock);
-	if (val)
-		q->queue_flags |= (1 << QUEUE_FLAG_SAME_COMP);
-	else
-		q->queue_flags &= ~(1 << QUEUE_FLAG_SAME_COMP);
-	spin_unlock_irq(q->queue_lock);
-#endif
-	return ret;
-}
 
 static struct queue_sysfs_entry queue_requests_entry = {
 	.attr = {.name = "nr_requests", .mode = S_IRUGO | S_IWUSR },
@@ -221,12 +197,6 @@ static struct queue_sysfs_entry queue_nomerges_entry = {
 	.store = queue_nomerges_store,
 };
 
-static struct queue_sysfs_entry queue_rq_affinity_entry = {
-	.attr = {.name = "rq_affinity", .mode = S_IRUGO | S_IWUSR },
-	.show = queue_rq_affinity_show,
-	.store = queue_rq_affinity_store,
-};
-
 static struct attribute *default_attrs[] = {
 	&queue_requests_entry.attr,
 	&queue_ra_entry.attr,
@@ -235,7 +205,6 @@ static struct attribute *default_attrs[] = {
 	&queue_iosched_entry.attr,
 	&queue_hw_sector_size_entry.attr,
 	&queue_nomerges_entry.attr,
-	&queue_rq_affinity_entry.attr,
 	NULL,
 };
 
@@ -341,7 +310,7 @@ int blk_register_queue(struct gendisk *disk)
 	if (!q->request_fn)
 		return 0;
 
-	ret = kobject_add(&q->kobj, kobject_get(&disk_to_dev(disk)->kobj),
+	ret = kobject_add(&q->kobj, kobject_get(&disk->dev.kobj),
 			  "%s", "queue");
 	if (ret < 0)
 		return ret;
@@ -370,6 +339,6 @@ void blk_unregister_queue(struct gendisk *disk)
 
 		kobject_uevent(&q->kobj, KOBJ_REMOVE);
 		kobject_del(&q->kobj);
-		kobject_put(&disk_to_dev(disk)->kobj);
+		kobject_put(&disk->dev.kobj);
 	}
 }

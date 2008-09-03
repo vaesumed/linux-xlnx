@@ -377,14 +377,13 @@ static void free_tio(struct mapped_device *md, struct dm_target_io *tio)
 static void start_io_acct(struct dm_io *io)
 {
 	struct mapped_device *md = io->md;
-	int cpu;
 
 	io->start_time = jiffies;
 
-	cpu = part_stat_lock();
-	part_round_stats(cpu, &dm_disk(md)->part0);
-	part_stat_unlock();
-	dm_disk(md)->part0.in_flight = atomic_inc_return(&md->pending);
+	preempt_disable();
+	disk_round_stats(dm_disk(md));
+	preempt_enable();
+	dm_disk(md)->in_flight = atomic_inc_return(&md->pending);
 }
 
 static int end_io_acct(struct dm_io *io)
@@ -392,16 +391,15 @@ static int end_io_acct(struct dm_io *io)
 	struct mapped_device *md = io->md;
 	struct bio *bio = io->bio;
 	unsigned long duration = jiffies - io->start_time;
-	int pending, cpu;
+	int pending;
 	int rw = bio_data_dir(bio);
 
-	cpu = part_stat_lock();
-	part_round_stats(cpu, &dm_disk(md)->part0);
-	part_stat_add(cpu, &dm_disk(md)->part0, ticks[rw], duration);
-	part_stat_unlock();
+	preempt_disable();
+	disk_round_stats(dm_disk(md));
+	preempt_enable();
+	dm_disk(md)->in_flight = pending = atomic_dec_return(&md->pending);
 
-	dm_disk(md)->part0.in_flight = pending =
-		atomic_dec_return(&md->pending);
+	disk_stat_add(dm_disk(md), ticks[rw], duration);
 
 	return !pending;
 }
@@ -883,7 +881,6 @@ static int dm_request(struct request_queue *q, struct bio *bio)
 	int r = -EIO;
 	int rw = bio_data_dir(bio);
 	struct mapped_device *md = q->queuedata;
-	int cpu;
 
 	/*
 	 * There is no use in forwarding any barrier request since we can't
@@ -896,10 +893,8 @@ static int dm_request(struct request_queue *q, struct bio *bio)
 
 	down_read(&md->io_lock);
 
-	cpu = part_stat_lock();
-	part_stat_inc(cpu, &dm_disk(md)->part0, ios[rw]);
-	part_stat_add(cpu, &dm_disk(md)->part0, sectors[rw], bio_sectors(bio));
-	part_stat_unlock();
+	disk_stat_inc(dm_disk(md), ios[rw]);
+	disk_stat_add(dm_disk(md), sectors[rw], bio_sectors(bio));
 
 	/*
 	 * If we're suspended we have to queue
@@ -1147,7 +1142,7 @@ static void unlock_fs(struct mapped_device *md);
 
 static void free_dev(struct mapped_device *md)
 {
-	int minor = MINOR(disk_devt(md->disk));
+	int minor = md->disk->first_minor;
 
 	if (md->suspended_bdev) {
 		unlock_fs(md);
@@ -1183,7 +1178,7 @@ static void event_callback(void *context)
 	list_splice_init(&md->uevent_list, &uevents);
 	spin_unlock_irqrestore(&md->uevent_lock, flags);
 
-	dm_send_uevents(&uevents, &disk_to_dev(md->disk)->kobj);
+	dm_send_uevents(&uevents, &md->disk->dev.kobj);
 
 	atomic_inc(&md->event_nr);
 	wake_up(&md->eventq);
@@ -1268,7 +1263,7 @@ static struct mapped_device *dm_find_md(dev_t dev)
 
 	md = idr_find(&_minor_idr, minor);
 	if (md && (md == MINOR_ALLOCED ||
-		   (MINOR(disk_devt(dm_disk(md))) != minor) ||
+		   (dm_disk(md)->first_minor != minor) ||
 		   test_bit(DMF_FREEING, &md->flags))) {
 		md = NULL;
 		goto out;
@@ -1319,8 +1314,7 @@ void dm_put(struct mapped_device *md)
 
 	if (atomic_dec_and_lock(&md->holders, &_minor_lock)) {
 		map = dm_get_table(md);
-		idr_replace(&_minor_idr, MINOR_ALLOCED,
-			    MINOR(disk_devt(dm_disk(md))));
+		idr_replace(&_minor_idr, MINOR_ALLOCED, dm_disk(md)->first_minor);
 		set_bit(DMF_FREEING, &md->flags);
 		spin_unlock(&_minor_lock);
 		if (!dm_suspended(md)) {
@@ -1640,7 +1634,7 @@ out:
  *---------------------------------------------------------------*/
 void dm_kobject_uevent(struct mapped_device *md)
 {
-	kobject_uevent(&disk_to_dev(md->disk)->kobj, KOBJ_CHANGE);
+	kobject_uevent(&md->disk->dev.kobj, KOBJ_CHANGE);
 }
 
 uint32_t dm_next_uevent_seq(struct mapped_device *md)
