@@ -232,6 +232,13 @@ UNUSUAL_DEV(  0x0421, 0x04b9, 0x0551, 0x0551,
 		US_SC_DEVICE, US_PR_DEVICE, NULL,
 		US_FL_FIX_CAPACITY ),
 
+/* Reported by Richard Nauber <RichardNauber@web.de> */
+UNUSUAL_DEV(  0x0421, 0x04fa, 0x0601, 0x0601,
+		"Nokia",
+		"6300",
+		US_SC_DEVICE, US_PR_DEVICE, NULL,
+		US_FL_FIX_CAPACITY ),
+
 /* Reported by Olaf Hering <olh@suse.de> from novell bug #105878 */
 UNUSUAL_DEV(  0x0424, 0x0fdc, 0x0210, 0x0210,
 		"SMSC",
@@ -1576,7 +1583,6 @@ UNUSUAL_DEV(  0x10d6, 0x2200, 0x0100, 0x0100,
 		US_SC_DEVICE, US_PR_DEVICE, NULL,
 		0),
 
-#ifdef CONFIG_USB_STORAGE_SIERRA
 /* Reported by Kevin Lloyd <linux@sierrawireless.com>
  * Entry is needed for the initializer function override,
  * which instructs the device to load as a modem
@@ -1587,7 +1593,6 @@ UNUSUAL_DEV(  0x1199, 0x0fff, 0x0000, 0x9999,
 		"USB MMC Storage",
 		US_SC_DEVICE, US_PR_DEVICE, sierra_ms_init,
 		0),
-#endif
 
 /* Reported by Jaco Kroon <jaco@kroon.co.za>
  * The usb-storage module found on the Digitech GNX4 (and supposedly other
