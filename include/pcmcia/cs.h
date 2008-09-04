@@ -28,71 +28,15 @@ typedef struct conf_reg_t {
 #define CS_WRITE	2
 
 /* for AdjustResourceInfo */
-typedef struct adjust_t {
-    u_int	Action;
-    u_int	Resource;
-    u_int	Attributes;
-    union {
-	struct memory {
-	    u_long	Base;
-	    u_long	Size;
-	} memory;
-	struct io {
-	    ioaddr_t	BasePort;
-	    ioaddr_t	NumPorts;
-	    u_int	IOAddrLines;
-	} io;
-	struct irq {
-	    u_int	IRQ;
-	} irq;
-    } resource;
-} adjust_t;
-
 /* Action field */
 #define REMOVE_MANAGED_RESOURCE		1
 #define ADD_MANAGED_RESOURCE		2
-#define GET_FIRST_MANAGED_RESOURCE	3
-#define GET_NEXT_MANAGED_RESOURCE	4
-/* Resource field */
-#define RES_MEMORY_RANGE		1
-#define RES_IO_RANGE			2
-#define RES_IRQ				3
-/* Attribute field */
-#define RES_IRQ_TYPE			0x03
-#define RES_IRQ_TYPE_EXCLUSIVE		0
-#define RES_IRQ_TYPE_TIME		1
-#define RES_IRQ_TYPE_DYNAMIC		2
-#define RES_IRQ_CSC			0x04
-#define RES_SHARED			0x08
-#define RES_RESERVED			0x10
-#define RES_ALLOCATED			0x20
-#define RES_REMOVED			0x40
+
 
 typedef struct event_callback_args_t {
 	struct pcmcia_device	*client_handle;
 	void			*client_data;
 } event_callback_args_t;
-
-/* for GetConfigurationInfo */
-typedef struct config_info_t {
-    u_char	Function;
-    u_int	Attributes;
-    u_int	Vcc, Vpp1, Vpp2;
-    u_int	IntType;
-    u_int	ConfigBase;
-    u_char	Status, Pin, Copy, Option, ExtStatus;
-    u_int	Present;
-    u_int	CardValues;
-    u_int	AssignedIRQ;
-    u_int	IRQAttributes;
-    ioaddr_t	BasePort1;
-    ioaddr_t	NumPorts1;
-    u_int	Attributes1;
-    ioaddr_t	BasePort2;
-    ioaddr_t	NumPorts2;
-    u_int	Attributes2;
-    u_int	IOAddrLines;
-} config_info_t;
 
 /* For CardValues field */
 #define CV_OPTION_VALUE		0x01
@@ -308,39 +252,6 @@ typedef struct error_info_t {
 #define CS_EVENT_3VCARD			0x200000
 #define CS_EVENT_XVCARD			0x400000
 
-/* Return codes */
-#define CS_SUCCESS		0x00
-#define CS_BAD_ADAPTER		0x01
-#define CS_BAD_ATTRIBUTE	0x02
-#define CS_BAD_BASE		0x03
-#define CS_BAD_EDC		0x04
-#define CS_BAD_IRQ		0x06
-#define CS_BAD_OFFSET		0x07
-#define CS_BAD_PAGE		0x08
-#define CS_READ_FAILURE		0x09
-#define CS_BAD_SIZE		0x0a
-#define CS_BAD_SOCKET		0x0b
-#define CS_BAD_TYPE		0x0d
-#define CS_BAD_VCC		0x0e
-#define CS_BAD_VPP		0x0f
-#define CS_BAD_WINDOW		0x11
-#define CS_WRITE_FAILURE	0x12
-#define CS_NO_CARD		0x14
-#define CS_UNSUPPORTED_FUNCTION	0x15
-#define CS_UNSUPPORTED_MODE	0x16
-#define CS_BAD_SPEED		0x17
-#define CS_BUSY			0x18
-#define CS_GENERAL_FAILURE	0x19
-#define CS_WRITE_PROTECTED	0x1a
-#define CS_BAD_ARG_LENGTH	0x1b
-#define CS_BAD_ARGS		0x1c
-#define CS_CONFIGURATION_LOCKED	0x1d
-#define CS_IN_USE		0x1e
-#define CS_NO_MORE_ITEMS	0x1f
-#define CS_OUT_OF_RESOURCE	0x20
-#define CS_BAD_HANDLE		0x21
-
-#define CS_BAD_TUPLE		0x40
 
 #ifdef __KERNEL__
 
@@ -372,7 +283,6 @@ enum service {
 struct pcmcia_socket;
 
 int pcmcia_access_configuration_register(struct pcmcia_device *p_dev, conf_reg_t *reg);
-int pcmcia_get_configuration_info(struct pcmcia_device *p_dev, config_info_t *config);
 int pcmcia_get_mem_page(window_handle_t win, memreq_t *req);
 int pcmcia_map_mem_page(window_handle_t win, memreq_t *req);
 int pcmcia_modify_configuration(struct pcmcia_device *p_dev, modconf_t *mod);
