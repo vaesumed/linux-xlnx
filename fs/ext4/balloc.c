@@ -1618,7 +1618,7 @@ ext4_fsblk_t ext4_has_free_blocks(struct ext4_sb_info *sbi,
 	free_blocks = percpu_counter_read_positive(&sbi->s_freeblocks_counter);
 
 	if (!capable(CAP_SYS_RESOURCE) &&
-		sbi->s_resuid != current->fsuid &&
+		sbi->s_resuid != current_fsuid() &&
 		(sbi->s_resgid == 0 || !in_group_p(sbi->s_resgid)))
 		root_blocks = ext4_r_blocks_count(sbi->s_es);
 #ifdef CONFIG_SMP
@@ -1633,7 +1633,6 @@ ext4_fsblk_t ext4_has_free_blocks(struct ext4_sb_info *sbi,
 		return free_blocks - root_blocks;
 	return nblocks;
  }
-
 
 /**
  * ext4_should_retry_alloc()
