@@ -9,7 +9,7 @@
  */
 
 /*
- * (c) Copyright Hewlett-Packard Development Company, L.P., 2007
+ * (c) Copyright Hewlett-Packard Development Company, L.P., 2007, 2008
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,6 +64,40 @@ static int selinux_netlbl_sidlookup_cached(struct sk_buff *skb,
 }
 
 /**
+ * selinux_netlbl_sock_genattr - Generate the NetLabel socket secattr
+ * @sk: the socket
+ * @sid: the socket's SID
+ *
+ * Description:
+ * Generate the NetLabel security attributes for a socket, making full use of
+ * the socket's attribute cache.  Returns a pointer to the security attributes
+ * on success, negative values on failure.
+ *
+ */
+static struct netlbl_lsm_secattr *selinux_netlbl_sock_genattr(struct sock *sk,
+							      u32 sid)
+{
+	int rc;
+	struct sk_security_struct *sksec = sk->sk_security;
+	struct netlbl_lsm_secattr *secattr;
+
+	if (sksec->nlbl_secattr != NULL)
+		return sksec->nlbl_secattr;
+
+	secattr = netlbl_secattr_alloc(GFP_ATOMIC);
+	if (secattr == NULL)
+		return NULL;
+	rc = security_netlbl_sid_to_secattr(sid, secattr);
+	if (rc != 0) {
+		netlbl_secattr_free(secattr);
+		return NULL;
+	}
+	sksec->nlbl_secattr = secattr;
+
+	return secattr;
+}
+
+/**
  * selinux_netlbl_sock_setsid - Label a socket using the NetLabel mechanism
  * @sk: the socket to label
  * @sid: the SID to use
@@ -77,19 +111,64 @@ static int selinux_netlbl_sock_setsid(struct sock *sk, u32 sid)
 {
 	int rc;
 	struct sk_security_struct *sksec = sk->sk_security;
-	struct netlbl_lsm_secattr secattr;
+	struct netlbl_lsm_secattr *secattr;
 
-	netlbl_secattr_init(&secattr);
+	secattr = selinux_netlbl_sock_genattr(sk, sid);
+	if (secattr == NULL)
+		return -ENOMEM;
 
-	rc = security_netlbl_sid_to_secattr(sid, &secattr);
-	if (rc != 0)
-		goto sock_setsid_return;
-	rc = netlbl_sock_setattr(sk, &secattr);
-	if (rc == 0)
+	rc = netlbl_sock_setattr(sk, secattr);
+	switch (rc) {
+	case 0:
 		sksec->nlbl_state = NLBL_LABELED;
+		break;
+	case -EDESTADDRREQ:
+		sksec->nlbl_state = NLBL_REQSKB;
+		rc = 0;
+		break;
+	}
 
-sock_setsid_return:
-	netlbl_secattr_destroy(&secattr);
+	return rc;
+}
+
+/**
+ * selinux_netlbl_conn_setsid - Label a connected socket using NetLabel
+ * @sk: the socket to label
+ * @addr: the destination address
+ *
+ * Description:
+ * Attempt to label a connected socket using the NetLabel mechanism using the
+ * given address.  Returns zero values on success, negative values on failure.
+ *
+ */
+int selinux_netlbl_conn_setsid(struct sock *sk,
+			       struct sockaddr *addr)
+{
+	int rc;
+	struct sk_security_struct *sksec = sk->sk_security;
+	struct netlbl_lsm_secattr *secattr;
+
+	if (sksec->nlbl_state != NLBL_REQSKB ||
+	    sksec->nlbl_state != NLBL_CONNLABELED)
+		return 0;
+
+	/* connected sockets are allowed to disconnect when the address family
+	 * is set to AF_UNSPEC, if that is what is happening we want to reset
+	 * the socket */
+	if (addr->sa_family == AF_UNSPEC) {
+		netlbl_sock_delattr(sk);
+		sksec->nlbl_state = NLBL_REQSKB;
+		return 0;
+	}
+
+	secattr = selinux_netlbl_sock_genattr(sk, sksec->sid);
+	if (secattr == NULL)
+		return -ENOMEM;
+
+	rc = netlbl_conn_setattr(sk, addr, secattr);
+	if (rc == 0)
+		sksec->nlbl_state = NLBL_CONNLABELED;
+
 	return rc;
 }
 
@@ -103,6 +182,38 @@ sock_setsid_return:
 void selinux_netlbl_cache_invalidate(void)
 {
 	netlbl_cache_invalidate();
+}
+
+/**
+ * selinux_netlbl_err - Handle a NetLabel packet error
+ * @skb: the packet
+ * @error: the error code
+ * @gateway: true if host is acting as a gateway, false otherwise
+ *
+ * Description:
+ * When a packet is dropped due to a call to avc_has_perm() pass the error
+ * code to the NetLabel subsystem so any protocol specific processing can be
+ * done.  This is safe to call even if you are unsure if NetLabel labeling is
+ * present on the packet, NetLabel is smart enough to only act when it should.
+ *
+ */
+void selinux_netlbl_err(struct sk_buff *skb, int error, int gateway)
+{
+	netlbl_skbuff_err(skb, error, gateway);
+}
+
+/**
+ * selinux_netlbl_sk_security_free - Free the NetLabel fields
+ * @sssec: the sk_security_struct
+ *
+ * Description:
+ * Free all of the memory in the NetLabel fields of a sk_security_struct.
+ *
+ */
+void selinux_netlbl_sk_security_free(struct sk_security_struct *ssec)
+{
+	if (ssec->nlbl_secattr != NULL)
+		netlbl_secattr_free(ssec->nlbl_secattr);
 }
 
 /**
@@ -159,6 +270,51 @@ int selinux_netlbl_skbuff_getsid(struct sk_buff *skb,
 	*type = secattr.type;
 	netlbl_secattr_destroy(&secattr);
 
+	return rc;
+}
+
+/**
+ * selinux_netlbl_skbuff_setsid - Set the NetLabel on a packet given a sid
+ * @skb: the packet
+ * @family: protocol family
+ * @sid: the SID
+ *
+ * Description
+ * Call the NetLabel mechanism to set the label of a packet using @sid.
+ * Returns zero on auccess, negative values on failure.
+ *
+ */
+int selinux_netlbl_skbuff_setsid(struct sk_buff *skb,
+				 u16 family,
+				 u32 sid)
+{
+	int rc;
+	struct netlbl_lsm_secattr secattr_storage;
+	struct netlbl_lsm_secattr *secattr = NULL;
+	struct sock *sk;
+
+	/* if this is a locally generated packet check to see if it is already
+	 * being labeled by it's parent socket, if it is just exit */
+	sk = skb->sk;
+	if (sk != NULL) {
+		struct sk_security_struct *sksec = sk->sk_security;
+		if (sksec->nlbl_state != NLBL_REQSKB)
+			return 0;
+		secattr = sksec->nlbl_secattr;
+	}
+	if (secattr == NULL) {
+		secattr = &secattr_storage;
+		netlbl_secattr_init(secattr);
+		rc = security_netlbl_sid_to_secattr(sid, secattr);
+		if (rc != 0)
+			goto skbuff_setsid_return;
+	}
+
+	rc = netlbl_skbuff_setattr(skb, family, secattr);
+
+skbuff_setsid_return:
+	if (secattr == &secattr_storage)
+		netlbl_secattr_destroy(secattr);
 	return rc;
 }
 
@@ -307,7 +463,7 @@ int selinux_netlbl_sock_rcv_skb(struct sk_security_struct *sksec,
 		return 0;
 
 	if (nlbl_sid != SECINITSID_UNLABELED)
-		netlbl_skbuff_err(skb, rc);
+		netlbl_skbuff_err(skb, rc, 0);
 	return rc;
 }
 
@@ -334,7 +490,8 @@ int selinux_netlbl_socket_setsockopt(struct socket *sock,
 	struct netlbl_lsm_secattr secattr;
 
 	if (level == IPPROTO_IP && optname == IP_OPTIONS &&
-	    sksec->nlbl_state == NLBL_LABELED) {
+	    (sksec->nlbl_state == NLBL_LABELED ||
+	     sksec->nlbl_state == NLBL_CONNLABELED)) {
 		netlbl_secattr_init(&secattr);
 		lock_sock(sk);
 		rc = netlbl_sock_getattr(sk, &secattr);
