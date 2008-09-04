@@ -184,6 +184,7 @@ enum ocfs2_mount_options
 	OCFS2_MOUNT_ERRORS_PANIC = 1 << 3, /* Panic on errors */
 	OCFS2_MOUNT_DATA_WRITEBACK = 1 << 4, /* No data ordering */
 	OCFS2_MOUNT_LOCALFLOCKS = 1 << 5, /* No cluster aware user file locks */
+	OCFS2_MOUNT_INODE64 = 1 << 6,	/* Allow inode numbers > 2^32 */
 };
 
 #define OCFS2_OSB_SOFT_RO	0x0001
