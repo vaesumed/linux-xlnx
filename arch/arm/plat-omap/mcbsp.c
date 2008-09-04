@@ -126,7 +126,7 @@ static void omap_mcbsp_rx_dma_callback(int lch, u16 ch_status, void *data)
  */
 void omap_mcbsp_config(unsigned int id, const struct omap_mcbsp_reg_cfg *config)
 {
-	u32 io_base;
+	void __iomem *io_base;
 
 	if (!omap_mcbsp_check_valid_id(id)) {
 		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
@@ -134,7 +134,7 @@ void omap_mcbsp_config(unsigned int id, const struct omap_mcbsp_reg_cfg *config)
 	}
 
 	io_base = mcbsp[id].io_base;
-	dev_dbg(mcbsp[id].dev, "Configuring McBSP%d  io_base: 0x%8x\n",
+	dev_dbg(mcbsp[id].dev, "Configuring McBSP%d  io_base: 0x%p\n",
 			mcbsp[id].id, io_base);
 
 	/* We write the given config */
@@ -273,7 +273,7 @@ EXPORT_SYMBOL(omap_mcbsp_free);
  */
 void omap_mcbsp_start(unsigned int id)
 {
-	u32 io_base;
+	void __iomem *io_base;
 	u16 w;
 
 	if (!omap_mcbsp_check_valid_id(id)) {
@@ -310,7 +310,7 @@ EXPORT_SYMBOL(omap_mcbsp_start);
 
 void omap_mcbsp_stop(unsigned int id)
 {
-	u32 io_base;
+	void __iomem *io_base;
 	u16 w;
 
 	if (!omap_mcbsp_check_valid_id(id)) {
@@ -337,7 +337,7 @@ EXPORT_SYMBOL(omap_mcbsp_stop);
 /* polled mcbsp i/o operations */
 int omap_mcbsp_pollwrite(unsigned int id, u16 buf)
 {
-	u32 base;
+	void __iomem *base;
 
 	if (!omap_mcbsp_check_valid_id(id)) {
 		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
@@ -379,7 +379,7 @@ EXPORT_SYMBOL(omap_mcbsp_pollwrite);
 
 int omap_mcbsp_pollread(unsigned int id, u16 *buf)
 {
-	u32 base;
+	void __iomem *base;
 
 	if (!omap_mcbsp_check_valid_id(id)) {
 		printk(KERN_ERR "%s: Invalid id (%d)\n", __func__, id + 1);
@@ -424,7 +424,7 @@ EXPORT_SYMBOL(omap_mcbsp_pollread);
  */
 void omap_mcbsp_xmit_word(unsigned int id, u32 word)
 {
-	u32 io_base;
+	void __iomem *io_base;
 	omap_mcbsp_word_length word_length;
 
 	if (!omap_mcbsp_check_valid_id(id)) {
@@ -445,7 +445,7 @@ EXPORT_SYMBOL(omap_mcbsp_xmit_word);
 
 u32 omap_mcbsp_recv_word(unsigned int id)
 {
-	u32 io_base;
+	void __iomem *io_base;
 	u16 word_lsb, word_msb = 0;
 	omap_mcbsp_word_length word_length;
 
@@ -469,7 +469,7 @@ EXPORT_SYMBOL(omap_mcbsp_recv_word);
 
 int omap_mcbsp_spi_master_xmit_word_poll(unsigned int id, u32 word)
 {
-	u32 io_base;
+	void __iomem *io_base;
 	omap_mcbsp_word_length tx_word_length;
 	omap_mcbsp_word_length rx_word_length;
 	u16 spcr2, spcr1, attempts = 0, word_lsb, word_msb = 0;
@@ -534,7 +534,8 @@ EXPORT_SYMBOL(omap_mcbsp_spi_master_xmit_word_poll);
 
 int omap_mcbsp_spi_master_recv_word_poll(unsigned int id, u32 *word)
 {
-	u32 io_base, clock_word = 0;
+	u32 clock_word = 0;
+	void __iomem *io_base;
 	omap_mcbsp_word_length tx_word_length;
 	omap_mcbsp_word_length rx_word_length;
 	u16 spcr2, spcr1, attempts = 0, word_lsb, word_msb = 0;

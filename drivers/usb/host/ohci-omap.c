@@ -344,7 +344,7 @@ static int usb_hcd_omap_probe (const struct hc_driver *driver,
 		goto err1;
 	}
 
-	hcd->regs = (void __iomem *) (int) IO_ADDRESS(hcd->rsrc_start);
+	hcd->regs = IO_ADDRESS(hcd->rsrc_start);
 
 	ohci = hcd_to_ohci(hcd);
 	ohci_hcd_init(ohci);

@@ -574,7 +574,7 @@ static int sossi_init(struct omapfb_device *fbdev)
 	struct clk *dpll1out_ck;
 	int r;
 
-	sossi.base = (void __iomem *)IO_ADDRESS(OMAP_SOSSI_BASE);
+	sossi.base = IO_ADDRESS(OMAP_SOSSI_BASE);
 	sossi.fbdev = fbdev;
 	spin_lock_init(&sossi.lock);
 
