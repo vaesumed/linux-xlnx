@@ -466,15 +466,15 @@ static int mxb_attach(struct saa7146_dev* dev, struct saa7146_pci_extension_data
 	/* checking for i2c-devices can be omitted here, because we
 	   already did this in "mxb_vl42_probe" */
 
-	saa7146_vv_init(dev,&vv_data);
-	if( 0 != saa7146_register_device(&mxb->video_dev, dev, "mxb", VFL_TYPE_GRABBER)) {
+	saa7146_vv_init(dev, &vv_data);
+	if (saa7146_register_device(&mxb->video_dev, dev, "mxb", VFL_TYPE_GRABBER)) {
 		ERR(("cannot register capture v4l2 device. skipping.\n"));
 		return -1;
 	}
 
 	/* initialization stuff (vbi) (only for revision > 0 and for extensions which want it)*/
-	if( 0 != MXB_BOARD_CAN_DO_VBI(dev)) {
-		if( 0 != saa7146_register_device(&mxb->vbi_dev, dev, "mxb", VFL_TYPE_VBI)) {
+	if (MXB_BOARD_CAN_DO_VBI(dev)) {
+		if (saa7146_register_device(&mxb->vbi_dev, dev, "mxb", VFL_TYPE_VBI)) {
 			ERR(("cannot register vbi v4l2 device. skipping.\n"));
 		}
 	}
@@ -486,7 +486,7 @@ static int mxb_attach(struct saa7146_dev* dev, struct saa7146_pci_extension_data
 	i2c_use_client(mxb->saa7111a);
 	i2c_use_client(mxb->tuner);
 
-	printk("mxb: found 'Multimedia eXtension Board'-%d.\n",mxb_num);
+	printk("mxb: found Multimedia eXtension Board #%d.\n", mxb_num);
 
 	mxb_num++;
 	mxb_init_done(dev);
@@ -737,8 +737,8 @@ static int mxb_ioctl(struct saa7146_fh *fh, unsigned int cmd, void *arg)
 		DEB_EE(("VIDIOC_G_TUNER: %d\n", t->index));
 
 		memset(t,0,sizeof(*t));
-		strcpy(t->name, "Television");
 
+		strlcpy(t->name, "Television", sizeof(t->name));
 		t->type = V4L2_TUNER_ANALOG_TV;
 		t->capability = V4L2_TUNER_CAP_NORM | V4L2_TUNER_CAP_STEREO | V4L2_TUNER_CAP_LANG1 | V4L2_TUNER_CAP_LANG2 | V4L2_TUNER_CAP_SAP;
 		t->rangelow = 772;	/* 48.25 MHZ / 62.5 kHz = 772, see fi1216mk2-specs, page 2 */
@@ -746,7 +746,6 @@ static int mxb_ioctl(struct saa7146_fh *fh, unsigned int cmd, void *arg)
 		/* FIXME: add the real signal strength here */
 		t->signal = 0xffff;
 		t->afc = 0;
-
 		mxb->tda9840->driver->command(mxb->tda9840,TDA9840_DETECT, &byte);
 		t->audmode = mxb->cur_mode;
 
@@ -931,27 +930,29 @@ static int mxb_ioctl(struct saa7146_fh *fh, unsigned int cmd, void *arg)
 	return 0;
 }
 
-static int std_callback(struct saa7146_dev* dev, struct saa7146_standard *std)
+static int std_callback(struct saa7146_dev *dev, struct saa7146_standard *standard)
 {
-	struct mxb* mxb = (struct mxb*)dev->ext_priv;
+	struct mxb *mxb = (struct mxb *)dev->ext_priv;
 	int zero = 0;
 	int one = 1;
 
-	if(V4L2_STD_PAL_I == std->id ) {
+	if (V4L2_STD_PAL_I == standard->id) {
 		v4l2_std_id std = V4L2_STD_PAL_I;
+
 		DEB_D(("VIDIOC_S_STD: setting mxb for PAL_I.\n"));
 		/* set the 7146 gpio register -- I don't know what this does exactly */
 		saa7146_write(dev, GPIO_CTRL, 0x00404050);
 		/* unset the 7111 gpio register -- I don't know what this does exactly */
-		mxb->saa7111a->driver->command(mxb->saa7111a,DECODER_SET_GPIO, &zero);
+		mxb->saa7111a->driver->command(mxb->saa7111a, DECODER_SET_GPIO, &zero);
 		mxb->tuner->driver->command(mxb->tuner, VIDIOC_S_STD, &std);
 	} else {
 		v4l2_std_id std = V4L2_STD_PAL_BG;
+
 		DEB_D(("VIDIOC_S_STD: setting mxb for PAL/NTSC/SECAM.\n"));
 		/* set the 7146 gpio register -- I don't know what this does exactly */
 		saa7146_write(dev, GPIO_CTRL, 0x00404050);
 		/* set the 7111 gpio register -- I don't know what this does exactly */
-		mxb->saa7111a->driver->command(mxb->saa7111a,DECODER_SET_GPIO, &one);
+		mxb->saa7111a->driver->command(mxb->saa7111a, DECODER_SET_GPIO, &one);
 		mxb->tuner->driver->command(mxb->tuner, VIDIOC_S_STD, &std);
 	}
 	return 0;
