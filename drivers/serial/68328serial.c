@@ -66,6 +66,7 @@
 #endif
 
 static struct m68k_serial m68k_soft[NR_PORTS];
+struct m68k_serial *IRQ_ports[NR_IRQS];
 
 static unsigned int uart_irqs[NR_PORTS] = UART_IRQ_DEFNS;
 
@@ -374,10 +375,14 @@ clear_and_return:
  */
 irqreturn_t rs_interrupt(int irq, void *dev_id)
 {
-	struct m68k_serial * info = dev_id;
+	struct m68k_serial * info;
 	m68328_uart *uart;
 	unsigned short rx;
 	unsigned short tx;
+
+	info = IRQ_ports[irq];
+	if(!info)
+	    return IRQ_NONE;
 
 	uart = &uart_addr[info->line];
 	rx = uart->urx.w;
@@ -1378,6 +1383,8 @@ rs68328_init(void)
 		   info->port, info->irq);
 	    printk(" is a builtin MC68328 UART\n");
 	    
+	    IRQ_ports[info->irq] = info;	/* waste of space */
+
 #ifdef CONFIG_M68VZ328
 		if (i > 0 )
 			PJSEL &= 0xCF;  /* PSW enable second port output */
@@ -1386,7 +1393,7 @@ rs68328_init(void)
 	    if (request_irq(uart_irqs[i],
 			    rs_interrupt,
 			    IRQF_DISABLED,
-			    "M68328_UART", info))
+			    "M68328_UART", NULL))
                 panic("Unable to attach 68328 serial interrupt\n");
 	}
 	local_irq_restore(flags);

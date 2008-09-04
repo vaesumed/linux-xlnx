@@ -1813,7 +1813,7 @@ static void ftdi_read_bulk_callback(struct urb *urb)
 	if (port->port.count <= 0)
 		return;
 
-	tty = tty_port_tty_get(&port->port);
+	tty = port->port.tty;
 	if (!tty) {
 		dbg("%s - bad tty pointer - exiting", __func__);
 		return;
@@ -1822,7 +1822,7 @@ static void ftdi_read_bulk_callback(struct urb *urb)
 	priv = usb_get_serial_port_data(port);
 	if (!priv) {
 		dbg("%s - bad port private data pointer - exiting", __func__);
-		goto out;
+		return;
 	}
 
 	if (urb != port->read_urb)
@@ -1832,7 +1832,7 @@ static void ftdi_read_bulk_callback(struct urb *urb)
 		/* This will happen at close every time so it is a dbg not an
 		   err */
 		dbg("(this is ok on close) nonzero read bulk status received: %d", status);
-		goto out;
+		return;
 	}
 
 	/* count data bytes, but not status bytes */
@@ -1843,8 +1843,7 @@ static void ftdi_read_bulk_callback(struct urb *urb)
 	spin_unlock_irqrestore(&priv->rx_lock, flags);
 
 	ftdi_process_read(&priv->rx_work.work);
-out:
-	tty_kref_put(tty);
+
 } /* ftdi_read_bulk_callback */
 
 
@@ -1869,7 +1868,7 @@ static void ftdi_process_read(struct work_struct *work)
 	if (port->port.count <= 0)
 		return;
 
-	tty = tty_port_tty_get(&port->port);
+	tty = port->port.tty;
 	if (!tty) {
 		dbg("%s - bad tty pointer - exiting", __func__);
 		return;
@@ -1878,13 +1877,13 @@ static void ftdi_process_read(struct work_struct *work)
 	priv = usb_get_serial_port_data(port);
 	if (!priv) {
 		dbg("%s - bad port private data pointer - exiting", __func__);
-		goto out;
+		return;
 	}
 
 	urb = port->read_urb;
 	if (!urb) {
 		dbg("%s - bad read_urb pointer - exiting", __func__);
-		goto out;
+		return;
 	}
 
 	data = urb->transfer_buffer;
@@ -2027,7 +2026,7 @@ static void ftdi_process_read(struct work_struct *work)
 			schedule_delayed_work(&priv->rx_work, 1);
 		else
 			dbg("%s - port is closed", __func__);
-		goto out;
+		return;
 	}
 
 	/* urb is completely processed */
@@ -2049,8 +2048,6 @@ static void ftdi_process_read(struct work_struct *work)
 				"%s - failed resubmitting read urb, error %d\n",
 				__func__, result);
 	}
-out:
-	tty_kref_put(tty);
 } /* ftdi_process_read */
 
 

@@ -431,7 +431,7 @@ static void	usa26_indat_callback(struct urb *urb)
 	}
 
 	port =  urb->context;
-	tty = tty_port_tty_get(&port->port);
+	tty = port->port.tty;
 	if (tty && urb->actual_length) {
 		/* 0x80 bit is error flag */
 		if ((data[0] & 0x80) == 0) {
@@ -460,7 +460,6 @@ static void	usa26_indat_callback(struct urb *urb)
 		}
 		tty_flip_buffer_push(tty);
 	}
-	tty_kref_put(tty);
 
 	/* Resubmit urb so we continue receiving */
 	urb->dev = port->serial->dev;
@@ -515,7 +514,6 @@ static void	usa26_instat_callback(struct urb *urb)
 	struct usb_serial			*serial;
 	struct usb_serial_port			*port;
 	struct keyspan_port_private	 	*p_priv;
-	struct tty_struct			*tty;
 	int old_dcd_state, err;
 	int status = urb->status;
 
@@ -556,11 +554,12 @@ static void	usa26_instat_callback(struct urb *urb)
 	p_priv->dcd_state = ((msg->gpia_dcd) ? 1 : 0);
 	p_priv->ri_state = ((msg->ri) ? 1 : 0);
 
-	if (old_dcd_state != p_priv->dcd_state) {
-		tty = tty_port_tty_get(&port->port);
-		if (tty && !C_CLOCAL(tty))
-			tty_hangup(tty);
-		tty_kref_put(tty);
+	if (port->port.tty && !C_CLOCAL(port->port.tty)
+	    && old_dcd_state != p_priv->dcd_state) {
+		if (old_dcd_state)
+			tty_hangup(port->port.tty);
+		/*  else */
+		/*	wake_up_interruptible(&p_priv->open_wait); */
 	}
 
 	/* Resubmit urb so we continue receiving */
@@ -606,12 +605,11 @@ static void usa28_indat_callback(struct urb *urb)
 		p_priv = usb_get_serial_port_data(port);
 		data = urb->transfer_buffer;
 
-		tty =tty_port_tty_get(&port->port);
-		if (tty && urb->actual_length) {
+		tty = port->port.tty;
+		if (urb->actual_length) {
 			tty_insert_flip_string(tty, data, urb->actual_length);
 			tty_flip_buffer_push(tty);
 		}
-		tty_kref_put(tty);
 
 		/* Resubmit urb so we continue receiving */
 		urb->dev = port->serial->dev;
@@ -655,7 +653,6 @@ static void	usa28_instat_callback(struct urb *urb)
 	struct usb_serial			*serial;
 	struct usb_serial_port			*port;
 	struct keyspan_port_private	 	*p_priv;
-	struct tty_struct			*tty;
 	int old_dcd_state;
 	int status = urb->status;
 
@@ -693,11 +690,12 @@ static void	usa28_instat_callback(struct urb *urb)
 	p_priv->dcd_state = ((msg->dcd) ? 1 : 0);
 	p_priv->ri_state = ((msg->ri) ? 1 : 0);
 
-	if( old_dcd_state != p_priv->dcd_state && old_dcd_state) {
-		tty = tty_port_tty_get(&port->port);
-		if (tty && !C_CLOCAL(tty)) 
-			tty_hangup(tty);
-		tty_kref_put(tty);
+	if (port->port.tty && !C_CLOCAL(port->port.tty)
+	    && old_dcd_state != p_priv->dcd_state) {
+		if (old_dcd_state)
+			tty_hangup(port->port.tty);
+		/*  else */
+		/*	wake_up_interruptible(&p_priv->open_wait); */
 	}
 
 		/* Resubmit urb so we continue receiving */
@@ -788,11 +786,12 @@ static void	usa49_instat_callback(struct urb *urb)
 	p_priv->dcd_state = ((msg->dcd) ? 1 : 0);
 	p_priv->ri_state = ((msg->ri) ? 1 : 0);
 
-	if (old_dcd_state != p_priv->dcd_state && old_dcd_state) {
-		struct tty_struct *tty = tty_port_tty_get(&port->port);
-		if (tty && !C_CLOCAL(tty))
-			tty_hangup(tty);
-		tty_kref_put(tty);
+	if (port->port.tty && !C_CLOCAL(port->port.tty)
+	    && old_dcd_state != p_priv->dcd_state) {
+		if (old_dcd_state)
+			tty_hangup(port->port.tty);
+		/*  else */
+		/*	wake_up_interruptible(&p_priv->open_wait); */
 	}
 
 	/* Resubmit urb so we continue receiving */
@@ -829,7 +828,7 @@ static void	usa49_indat_callback(struct urb *urb)
 	}
 
 	port =  urb->context;
-	tty = tty_port_tty_get(&port->port);
+	tty = port->port.tty;
 	if (tty && urb->actual_length) {
 		/* 0x80 bit is error flag */
 		if ((data[0] & 0x80) == 0) {
@@ -852,7 +851,6 @@ static void	usa49_indat_callback(struct urb *urb)
 		}
 		tty_flip_buffer_push(tty);
 	}
-	tty_kref_put(tty);
 
 	/* Resubmit urb so we continue receiving */
 	urb->dev = port->serial->dev;
@@ -896,7 +894,7 @@ static void usa49wg_indat_callback(struct urb *urb)
 				return;
 			}
 			port = serial->port[data[i++]];
-			tty = tty_port_tty_get(&port->port);
+			tty = port->port.tty;
 			len = data[i++];
 
 			/* 0x80 bit is error flag */
@@ -930,7 +928,6 @@ static void usa49wg_indat_callback(struct urb *urb)
 			}
 			if (port->port.count)
 				tty_flip_buffer_push(tty);
-			tty_kref_put(tty);
 		}
 	}
 
@@ -971,8 +968,8 @@ static void usa90_indat_callback(struct urb *urb)
 	port =  urb->context;
 	p_priv = usb_get_serial_port_data(port);
 
+	tty = port->port.tty;
 	if (urb->actual_length) {
-		tty = tty_port_tty_get(&port->port);
 		/* if current mode is DMA, looks like usa28 format
 		   otherwise looks like usa26 data format */
 
@@ -1008,7 +1005,6 @@ static void usa90_indat_callback(struct urb *urb)
 			}
 		}
 		tty_flip_buffer_push(tty);
-		tty_kref_put(tty);
 	}
 
 	/* Resubmit urb so we continue receiving */
@@ -1030,7 +1026,6 @@ static void	usa90_instat_callback(struct urb *urb)
 	struct usb_serial			*serial;
 	struct usb_serial_port			*port;
 	struct keyspan_port_private	 	*p_priv;
-	struct tty_struct			*tty;
 	int old_dcd_state, err;
 	int status = urb->status;
 
@@ -1059,11 +1054,12 @@ static void	usa90_instat_callback(struct urb *urb)
 	p_priv->dcd_state = ((msg->dcd) ? 1 : 0);
 	p_priv->ri_state = ((msg->ri) ? 1 : 0);
 
-	if (old_dcd_state != p_priv->dcd_state && old_dcd_state) {
-		tty = tty_port_tty_get(&port->port);
-		if (tty && !C_CLOCAL(tty))
-			tty_hangup(tty);
-		tty_kref_put(tty);
+	if (port->port.tty && !C_CLOCAL(port->port.tty)
+	    && old_dcd_state != p_priv->dcd_state) {
+		if (old_dcd_state)
+			tty_hangup(port->port.tty);
+		/*  else */
+		/*	wake_up_interruptible(&p_priv->open_wait); */
 	}
 
 	/* Resubmit urb so we continue receiving */
@@ -1135,11 +1131,12 @@ static void	usa67_instat_callback(struct urb *urb)
 	p_priv->cts_state = ((msg->hskia_cts) ? 1 : 0);
 	p_priv->dcd_state = ((msg->gpia_dcd) ? 1 : 0);
 
-	if (old_dcd_state != p_priv->dcd_state && old_dcd_state) {
-		struct tty_struct *tty = tty_port_tty_get(&port->port);
-		if (tty && !C_CLOCAL(tty))
-			tty_hangup(tty);
-		tty_kref_put(tty);
+	if (port->port.tty && !C_CLOCAL(port->port.tty)
+	    && old_dcd_state != p_priv->dcd_state) {
+		if (old_dcd_state)
+			tty_hangup(port->port.tty);
+		/*  else */
+		/*	wake_up_interruptible(&p_priv->open_wait); */
 	}
 
 	/* Resubmit urb so we continue receiving */
@@ -1336,7 +1333,7 @@ static void keyspan_close(struct tty_struct *tty,
 			stop_urb(p_priv->out_urbs[i]);
 		}
 	}
-	tty_port_tty_set(&port->port, NULL);
+	port->port.tty = NULL;
 }
 
 /* download the firmware to a pre-renumeration device */

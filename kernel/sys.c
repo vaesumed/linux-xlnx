@@ -1109,7 +1109,9 @@ asmlinkage long sys_setsid(void)
 	group_leader->signal->leader = 1;
 	__set_special_pids(sid);
 
-	proc_clear_tty(group_leader);
+	spin_lock(&group_leader->sighand->siglock);
+	group_leader->signal->tty = NULL;
+	spin_unlock(&group_leader->sighand->siglock);
 
 	err = session;
 out:
