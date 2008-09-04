@@ -1195,7 +1195,7 @@ static int create_debugfs(void)
 	return 0;
 
 error_debugfs:
-		remove_debugfs();
+	remove_debugfs();
 	return -ENOMEM;
 }
 
@@ -1282,6 +1282,7 @@ error_platform_register:
 static void __exit acer_wmi_exit(void)
 {
 	remove_sysfs(acer_platform_device);
+	remove_debugfs();
 	platform_device_del(acer_platform_device);
 	platform_driver_unregister(&acer_platform_driver);
 
