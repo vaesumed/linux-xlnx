@@ -586,10 +586,10 @@ static int create_elf_fdpic_tables(struct linux_binprm *bprm,
 	NEW_AUX_ENT(AT_BASE,	interp_params->elfhdr_addr);
 	NEW_AUX_ENT(AT_FLAGS,	0);
 	NEW_AUX_ENT(AT_ENTRY,	exec_params->entry_addr);
-	NEW_AUX_ENT(AT_UID,	(elf_addr_t) current->uid);
-	NEW_AUX_ENT(AT_EUID,	(elf_addr_t) current->euid);
-	NEW_AUX_ENT(AT_GID,	(elf_addr_t) current->gid);
-	NEW_AUX_ENT(AT_EGID,	(elf_addr_t) current->egid);
+	NEW_AUX_ENT(AT_UID,	(elf_addr_t) current_uid());
+	NEW_AUX_ENT(AT_EUID,	(elf_addr_t) current_euid());
+	NEW_AUX_ENT(AT_GID,	(elf_addr_t) current_gid());
+	NEW_AUX_ENT(AT_EGID,	(elf_addr_t) current_egid());
 
 #ifdef ARCH_DLINFO
 	nr = 0;

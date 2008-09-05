@@ -985,7 +985,7 @@ int flush_old_exec(struct linux_binprm * bprm)
 	/* This is the point of no return */
 	current->sas_ss_sp = current->sas_ss_size = 0;
 
-	if (current->euid == current->uid && current->egid == current->gid)
+	if (current_euid() == current_uid() && current_egid() == current_gid())
 		set_dumpable(current->mm, 1);
 	else
 		set_dumpable(current->mm, suid_dumpable);
@@ -1012,7 +1012,7 @@ int flush_old_exec(struct linux_binprm * bprm)
 	 */
 	current->mm->task_size = TASK_SIZE;
 
-	if (bprm->e_uid != current->euid || bprm->e_gid != current->egid) {
+	if (bprm->e_uid != current_euid() || bprm->e_gid != current_egid()) {
 		suid_keys(current);
 		set_dumpable(current->mm, suid_dumpable);
 		current->pdeath_signal = 0;
@@ -1052,8 +1052,8 @@ int prepare_binprm(struct linux_binprm *bprm)
 	if (bprm->file->f_op == NULL)
 		return -EACCES;
 
-	bprm->e_uid = current->euid;
-	bprm->e_gid = current->egid;
+	bprm->e_uid = current_euid();
+	bprm->e_gid = current_egid();
 
 	if(!(bprm->file->f_path.mnt->mnt_flags & MNT_NOSUID)) {
 		/* Set-uid? */
@@ -1101,7 +1101,7 @@ void compute_creds(struct linux_binprm *bprm)
 {
 	int unsafe;
 
-	if (bprm->e_uid != current->uid) {
+	if (bprm->e_uid != current_uid()) {
 		suid_keys(current);
 		current->pdeath_signal = 0;
 	}
@@ -1429,7 +1429,7 @@ static int format_corename(char *corename, int nr_threads, long signr)
 			/* uid */
 			case 'u':
 				rc = snprintf(out_ptr, out_end - out_ptr,
-					      "%d", current->uid);
+					      "%d", current_uid());
 				if (rc > out_end - out_ptr)
 					goto out;
 				out_ptr += rc;
@@ -1437,7 +1437,7 @@ static int format_corename(char *corename, int nr_threads, long signr)
 			/* gid */
 			case 'g':
 				rc = snprintf(out_ptr, out_end - out_ptr,
-					      "%d", current->gid);
+					      "%d", current_gid());
 				if (rc > out_end - out_ptr)
 					goto out;
 				out_ptr += rc;
@@ -1715,7 +1715,7 @@ int do_coredump(long signr, int exit_code, struct pt_regs * regs)
 	struct inode * inode;
 	struct file * file;
 	int retval = 0;
-	int fsuid = current->fsuid;
+	int fsuid = current_fsuid();
 	int flag = 0;
 	int ispipe = 0;
 	unsigned long core_limit = current->signal->rlim[RLIMIT_CORE].rlim_cur;
@@ -1821,7 +1821,7 @@ int do_coredump(long signr, int exit_code, struct pt_regs * regs)
 	 * Dont allow local users get cute and trick others to coredump
 	 * into their pre-created files:
 	 */
-	if (inode->i_uid != current->fsuid)
+	if (inode->i_uid != current_fsuid())
 		goto close_fail;
 	if (!file->f_op)
 		goto close_fail;
