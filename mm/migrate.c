@@ -984,7 +984,7 @@ asmlinkage long sys_move_pages(pid_t pid, unsigned long nr_pages,
 			const int __user *nodes,
 			int __user *status, int flags)
 {
-	struct cred *cred, *tcred;
+	const struct cred *cred = current_cred(), *tcred;
 	int err = 0;
 	int i;
 	struct task_struct *task;
@@ -1018,14 +1018,16 @@ asmlinkage long sys_move_pages(pid_t pid, unsigned long nr_pages,
 	 * capabilities, superuser privileges or the same
 	 * userid as the target process.
 	 */
-	cred = current->cred;
-	tcred = task->cred;
+	rcu_read_lock();
+	tcred = __task_cred(task);
 	if (cred->euid != tcred->suid && cred->euid != tcred->uid &&
 	    cred->uid  != tcred->suid && cred->uid  != tcred->uid &&
 	    !capable(CAP_SYS_NICE)) {
+		rcu_read_unlock();
 		err = -EPERM;
 		goto out2;
 	}
+	rcu_read_unlock();
 
  	err = security_task_movememory(task);
  	if (err)
