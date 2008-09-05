@@ -35,6 +35,7 @@
 #include <asm/system.h>
 #include <asm/processor.h>
 #include <asm/mmu_context.h>
+#include <asm/syscalls.h>
 #include <asm/fpu.h>
 
 /* This mask defines the bits of the SR which the user is not allowed to
@@ -131,6 +132,8 @@ void user_enable_single_step(struct task_struct *child)
 
 void user_disable_single_step(struct task_struct *child)
 {
+	struct pt_regs *regs = child->thread.uregs;
+
 	regs->sr &= ~SR_SSTEP;
 }
 

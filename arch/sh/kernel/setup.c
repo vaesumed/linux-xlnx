@@ -26,6 +26,7 @@
 #include <linux/err.h>
 #include <linux/debugfs.h>
 #include <linux/crash_dump.h>
+#include <linux/mmzone.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include <asm/page.h>
@@ -171,6 +172,7 @@ static void __init reserve_crashkernel(void)
 				(unsigned long)(free_mem >> 20));
 		crashk_res.start = crash_base;
 		crashk_res.end   = crash_base + crash_size - 1;
+		insert_resource(&iomem_resource, &crashk_res);
 	}
 }
 #else
@@ -203,11 +205,6 @@ void __init __add_active_range(unsigned int nid, unsigned long start_pfn,
 	request_resource(res, &code_resource);
 	request_resource(res, &data_resource);
 	request_resource(res, &bss_resource);
-
-#ifdef CONFIG_KEXEC
-	if (crashk_res.start != crashk_res.end)
-		request_resource(res, &crashk_res);
-#endif
 
 	add_active_range(nid, start_pfn, end_pfn);
 }
