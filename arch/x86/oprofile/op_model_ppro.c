@@ -244,11 +244,11 @@ void arch_perfmon_setup_counters(void)
 
 struct op_x86_model_spec op_arch_perfmon_spec = {
 	/* num_counters/num_controls filled in at runtime */
-	.fill_in_addresses = &ppro_fill_in_addresses,
+	.fill_in_addresses	= &ppro_fill_in_addresses,
 	/* user space does the cpuid check for available events */
-	.setup_ctrs = &ppro_setup_ctrs,
-	.check_ctrs = &ppro_check_ctrs,
-	.start = &ppro_start,
-	.stop = &ppro_stop,
-	.shutdown = &ppro_shutdown
+	.setup_ctrs		= &ppro_setup_ctrs,
+	.check_ctrs		= &ppro_check_ctrs,
+	.start			= &ppro_start,
+	.stop			= &ppro_stop,
+	.shutdown		= &ppro_shutdown
 };
