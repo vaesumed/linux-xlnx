@@ -74,9 +74,9 @@ static int radio[CX18_MAX_CARDS] = { -1, -1, -1, -1, -1, -1, -1, -1,
 				     -1, -1, -1, -1, -1, -1, -1, -1,
 				     -1, -1, -1, -1, -1, -1, -1, -1 };
 
-static int cardtype_c = 1;
-static int tuner_c = 1;
-static int radio_c = 1;
+static unsigned cardtype_c = 1;
+static unsigned tuner_c = 1;
+static unsigned radio_c = 1;
 static char pal[] = "--";
 static char secam[] = "--";
 static char ntsc[] = "-";
@@ -395,9 +395,9 @@ done:
 
 	if (cx->card == NULL) {
 		cx->card = cx18_get_card(CX18_CARD_HVR_1600_ESMT);
-		CX18_ERR("Unknown card: vendor/device: %04x/%04x\n",
+		CX18_ERR("Unknown card: vendor/device: [%04x:%04x]\n",
 		     cx->dev->vendor, cx->dev->device);
-		CX18_ERR("              subsystem vendor/device: %04x/%04x\n",
+		CX18_ERR("              subsystem vendor/device: [%04x:%04x]\n",
 		     cx->dev->subsystem_vendor, cx->dev->subsystem_device);
 		CX18_ERR("Defaulting to %s card\n", cx->card->name);
 		CX18_ERR("Please mail the vendor/device and subsystem vendor/device IDs and what kind of\n");

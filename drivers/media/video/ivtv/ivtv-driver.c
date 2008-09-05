@@ -655,9 +655,9 @@ done:
 
 	if (itv->card == NULL) {
 		itv->card = ivtv_get_card(IVTV_CARD_PVR_150);
-		IVTV_ERR("Unknown card: vendor/device: %04x/%04x\n",
+		IVTV_ERR("Unknown card: vendor/device: [%04x:%04x]\n",
 		     itv->dev->vendor, itv->dev->device);
-		IVTV_ERR("              subsystem vendor/device: %04x/%04x\n",
+		IVTV_ERR("              subsystem vendor/device: [%04x:%04x]\n",
 		     itv->dev->subsystem_vendor, itv->dev->subsystem_device);
 		IVTV_ERR("              %s based\n", chipname);
 		IVTV_ERR("Defaulting to %s card\n", itv->card->name);
@@ -688,7 +688,7 @@ static int __devinit ivtv_init_struct1(struct ivtv *itv)
 	spin_lock_init(&itv->lock);
 	spin_lock_init(&itv->dma_reg_lock);
 
-	itv->irq_work_queues = create_workqueue(itv->name);
+	itv->irq_work_queues = create_singlethread_workqueue(itv->name);
 	if (itv->irq_work_queues == NULL) {
 		IVTV_ERR("Could not create ivtv workqueue\n");
 		return -1;
