@@ -160,7 +160,7 @@ static int selinux_secmark_enabled(void)
  */
 static void cred_init_security(void)
 {
-	struct cred *cred = (struct cred *) current->cred;
+	struct cred *cred = (struct cred *) current->real_cred;
 	struct task_security_struct *tsec;
 
 	tsec = kzalloc(sizeof(struct task_security_struct), GFP_KERNEL);
@@ -183,7 +183,7 @@ static inline u32 cred_sid(const struct cred *cred)
 }
 
 /*
- * get the security ID of a task
+ * get the objective security ID of a task
  */
 static inline u32 task_sid(const struct task_struct *task)
 {
@@ -196,7 +196,7 @@ static inline u32 task_sid(const struct task_struct *task)
 }
 
 /*
- * get the security ID of the current task
+ * get the subjective security ID of the current task
  */
 static inline u32 current_sid(void)
 {
@@ -1393,6 +1393,7 @@ static int cred_has_perm(const struct cred *actor,
  * Check permission between a pair of tasks, e.g. signal checks,
  * fork check, ptrace check, etc.
  * tsk1 is the actor and tsk2 is the target
+ * - this uses the default subjective creds of tsk1
  */
 static int task_has_perm(const struct task_struct *tsk1,
 			 const struct task_struct *tsk2,
@@ -1406,6 +1407,22 @@ static int task_has_perm(const struct task_struct *tsk1,
 	__tsec2 = __task_cred(tsk2)->security;	sid2 = __tsec2->sid;
 	rcu_read_unlock();
 	return avc_has_perm(sid1, sid2, SECCLASS_PROCESS, perms, NULL);
+}
+
+/*
+ * Check permission between current and another task, e.g. signal checks,
+ * fork check, ptrace check, etc.
+ * current is the actor and tsk2 is the target
+ * - this uses current's subjective creds
+ */
+static int current_has_perm(const struct task_struct *tsk,
+			    u32 perms)
+{
+	u32 sid, tsid;
+
+	sid = current_sid();
+	tsid = task_sid(tsk);
+	return avc_has_perm(sid, tsid, SECCLASS_PROCESS, perms, NULL);
 }
 
 #if CAP_LAST_CAP > 63
@@ -1798,7 +1815,7 @@ static int selinux_ptrace_may_access(struct task_struct *child,
 		return avc_has_perm(sid, csid, SECCLASS_FILE, FILE__READ, NULL);
 	}
 
-	return task_has_perm(current, child, PROCESS__PTRACE);
+	return current_has_perm(child, PROCESS__PTRACE);
 }
 
 static int selinux_ptrace_traceme(struct task_struct *parent)
@@ -1817,7 +1834,7 @@ static int selinux_capget(struct task_struct *target, kernel_cap_t *effective,
 {
 	int error;
 
-	error = task_has_perm(current, target, PROCESS__GETCAP);
+	error = current_has_perm(target, PROCESS__GETCAP);
 	if (error)
 		return error;
 
@@ -3076,7 +3093,7 @@ static int selinux_file_mprotect(struct vm_area_struct *vma,
 		} else if (!vma->vm_file &&
 			   vma->vm_start <= vma->vm_mm->start_stack &&
 			   vma->vm_end >= vma->vm_mm->start_stack) {
-			rc = task_has_perm(current, current, PROCESS__EXECSTACK);
+			rc = current_has_perm(current, PROCESS__EXECSTACK);
 		} else if (vma->vm_file && vma->anon_vma) {
 			/*
 			 * We are making executable a file mapping that has
@@ -3225,7 +3242,7 @@ static int selinux_task_create(unsigned long clone_flags)
 	if (rc)
 		return rc;
 
-	return task_has_perm(current, current, PROCESS__FORK);
+	return current_has_perm(current, PROCESS__FORK);
 }
 
 /*
@@ -3290,17 +3307,17 @@ static int selinux_task_setgid(gid_t id0, gid_t id1, gid_t id2, int flags)
 
 static int selinux_task_setpgid(struct task_struct *p, pid_t pgid)
 {
-	return task_has_perm(current, p, PROCESS__SETPGID);
+	return current_has_perm(p, PROCESS__SETPGID);
 }
 
 static int selinux_task_getpgid(struct task_struct *p)
 {
-	return task_has_perm(current, p, PROCESS__GETPGID);
+	return current_has_perm(p, PROCESS__GETPGID);
 }
 
 static int selinux_task_getsid(struct task_struct *p)
 {
-	return task_has_perm(current, p, PROCESS__GETSESSION);
+	return current_has_perm(p, PROCESS__GETSESSION);
 }
 
 static void selinux_task_getsecid(struct task_struct *p, u32 *secid)
@@ -3322,7 +3339,7 @@ static int selinux_task_setnice(struct task_struct *p, int nice)
 	if (rc)
 		return rc;
 
-	return task_has_perm(current, p, PROCESS__SETSCHED);
+	return current_has_perm(p, PROCESS__SETSCHED);
 }
 
 static int selinux_task_setioprio(struct task_struct *p, int ioprio)
@@ -3333,12 +3350,12 @@ static int selinux_task_setioprio(struct task_struct *p, int ioprio)
 	if (rc)
 		return rc;
 
-	return task_has_perm(current, p, PROCESS__SETSCHED);
+	return current_has_perm(p, PROCESS__SETSCHED);
 }
 
 static int selinux_task_getioprio(struct task_struct *p)
 {
-	return task_has_perm(current, p, PROCESS__GETSCHED);
+	return current_has_perm(p, PROCESS__GETSCHED);
 }
 
 static int selinux_task_setrlimit(unsigned int resource, struct rlimit *new_rlim)
@@ -3355,7 +3372,7 @@ static int selinux_task_setrlimit(unsigned int resource, struct rlimit *new_rlim
 	   later be used as a safe reset point for the soft limit
 	   upon context transitions.  See selinux_bprm_committing_creds. */
 	if (old_rlim->rlim_max != new_rlim->rlim_max)
-		return task_has_perm(current, current, PROCESS__SETRLIMIT);
+		return current_has_perm(current, PROCESS__SETRLIMIT);
 
 	return 0;
 }
@@ -3368,17 +3385,17 @@ static int selinux_task_setscheduler(struct task_struct *p, int policy, struct s
 	if (rc)
 		return rc;
 
-	return task_has_perm(current, p, PROCESS__SETSCHED);
+	return current_has_perm(p, PROCESS__SETSCHED);
 }
 
 static int selinux_task_getscheduler(struct task_struct *p)
 {
-	return task_has_perm(current, p, PROCESS__GETSCHED);
+	return current_has_perm(p, PROCESS__GETSCHED);
 }
 
 static int selinux_task_movememory(struct task_struct *p)
 {
-	return task_has_perm(current, p, PROCESS__SETSCHED);
+	return current_has_perm(p, PROCESS__SETSCHED);
 }
 
 static int selinux_task_kill(struct task_struct *p, struct siginfo *info,
@@ -3399,7 +3416,7 @@ static int selinux_task_kill(struct task_struct *p, struct siginfo *info,
 		rc = avc_has_perm(secid, task_sid(p),
 				  SECCLASS_PROCESS, perm, NULL);
 	else
-		rc = task_has_perm(current, p, perm);
+		rc = current_has_perm(p, perm);
 	return rc;
 }
 
@@ -5154,7 +5171,7 @@ static int selinux_getprocattr(struct task_struct *p,
 	unsigned len;
 
 	if (current != p) {
-		error = task_has_perm(current, p, PROCESS__GETATTR);
+		error = current_has_perm(p, PROCESS__GETATTR);
 		if (error)
 			return error;
 	}
@@ -5213,15 +5230,15 @@ static int selinux_setprocattr(struct task_struct *p,
 	 * above restriction is ever removed.
 	 */
 	if (!strcmp(name, "exec"))
-		error = task_has_perm(current, p, PROCESS__SETEXEC);
+		error = current_has_perm(p, PROCESS__SETEXEC);
 	else if (!strcmp(name, "fscreate"))
-		error = task_has_perm(current, p, PROCESS__SETFSCREATE);
+		error = current_has_perm(p, PROCESS__SETFSCREATE);
 	else if (!strcmp(name, "keycreate"))
-		error = task_has_perm(current, p, PROCESS__SETKEYCREATE);
+		error = current_has_perm(p, PROCESS__SETKEYCREATE);
 	else if (!strcmp(name, "sockcreate"))
-		error = task_has_perm(current, p, PROCESS__SETSOCKCREATE);
+		error = current_has_perm(p, PROCESS__SETSOCKCREATE);
 	else if (!strcmp(name, "current"))
-		error = task_has_perm(current, p, PROCESS__SETCURRENT);
+		error = current_has_perm(p, PROCESS__SETCURRENT);
 	else
 		error = -EINVAL;
 	if (error)
