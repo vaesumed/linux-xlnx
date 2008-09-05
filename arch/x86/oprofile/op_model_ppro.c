@@ -201,14 +201,14 @@ static void ppro_shutdown(struct op_msrs const * const msrs)
 
 
 struct op_x86_model_spec op_ppro_spec = {
-	.num_counters = 2,	/* can be overriden */
-	.num_controls = 2,	/* dito */
-	.fill_in_addresses = &ppro_fill_in_addresses,
-	.setup_ctrs = &ppro_setup_ctrs,
-	.check_ctrs = &ppro_check_ctrs,
-	.start = &ppro_start,
-	.stop = &ppro_stop,
-	.shutdown = &ppro_shutdown
+	.num_counters		= 2,	/* can be overriden */
+	.num_controls		= 2,	/* dito */
+	.fill_in_addresses	= &ppro_fill_in_addresses,
+	.setup_ctrs		= &ppro_setup_ctrs,
+	.check_ctrs		= &ppro_check_ctrs,
+	.start			= &ppro_start,
+	.stop			= &ppro_stop,
+	.shutdown		= &ppro_shutdown
 };
 
 /*
