@@ -9,7 +9,7 @@
  */
 
 /*
- * (c) Copyright Hewlett-Packard Development Company, L.P., 2007
+ * (c) Copyright Hewlett-Packard Development Company, L.P., 2007, 2008
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -85,8 +85,15 @@ static int selinux_netlbl_sock_setsid(struct sock *sk, u32 sid)
 	if (rc != 0)
 		goto sock_setsid_return;
 	rc = netlbl_sock_setattr(sk, &secattr);
-	if (rc == 0)
+	switch (rc) {
+	case 0:
 		sksec->nlbl_state = NLBL_LABELED;
+		break;
+	case -EDESTADDRREQ:
+		sksec->nlbl_state = NLBL_REQSKB;
+		rc = 0;
+		break;
+	}
 
 sock_setsid_return:
 	netlbl_secattr_destroy(&secattr);
@@ -177,6 +184,45 @@ int selinux_netlbl_skbuff_getsid(struct sk_buff *skb,
 	*type = secattr.type;
 	netlbl_secattr_destroy(&secattr);
 
+	return rc;
+}
+
+/**
+ * selinux_netlbl_skbuff_setsid - Set the NetLabel on a packet given a sid
+ * @skb: the packet
+ * @family: protocol family
+ * @sid: the SID
+ *
+ * Description
+ * Call the NetLabel mechanism to set the label of a packet using @sid.
+ * Returns zero on auccess, negative values on failure.
+ *
+ */
+int selinux_netlbl_skbuff_setsid(struct sk_buff *skb,
+				 u16 family,
+				 u32 sid)
+{
+	int rc;
+	struct netlbl_lsm_secattr secattr;
+	struct sock *sk;
+
+	/* if this is a locally generated packet check to see if it is already
+	 * being labeled by it's parent socket, if it is just exit */
+	sk = skb->sk;
+	if (sk != NULL) {
+		struct sk_security_struct *sksec = sk->sk_security;
+		if (sksec->nlbl_state != NLBL_REQSKB)
+			return 0;
+	}
+
+	netlbl_secattr_init(&secattr);
+	rc = security_netlbl_sid_to_secattr(sid, &secattr);
+	if (rc != 0)
+		goto skbuff_setsid_return;
+	rc = netlbl_skbuff_setattr(skb, family, &secattr);
+
+skbuff_setsid_return:
+	netlbl_secattr_destroy(&secattr);
 	return rc;
 }
 
