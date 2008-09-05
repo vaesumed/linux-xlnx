@@ -1109,7 +1109,6 @@ struct task_struct {
 	struct list_head cpu_timers[3];
 
 /* process credentials */
-	struct cred __temp_cred __deprecated; /* temporary credentials to be removed */
 	struct cred *cred;	/* actual/objective task credentials */
 
 	char comm[TASK_COMM_LEN]; /* executable name excluding path
