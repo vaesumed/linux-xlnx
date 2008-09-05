@@ -225,10 +225,9 @@ static struct request *get_rdac_req(struct scsi_device *sdev,
 		return NULL;
 	}
 
-	memset(rq->cmd, 0, BLK_MAX_CDB);
-
 	rq->cmd_type = REQ_TYPE_BLOCK_PC;
-	rq->cmd_flags |= REQ_FAILFAST | REQ_NOMERGE;
+	rq->cmd_flags |= REQ_FAILFAST_DEV | REQ_FAILFAST_TRANSPORT |
+			 REQ_FAILFAST_DRIVER;
 	rq->retries = RDAC_RETRIES;
 	rq->timeout = RDAC_TIMEOUT;
 

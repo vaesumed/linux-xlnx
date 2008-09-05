@@ -664,13 +664,14 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		goto out;
 	}
 
-	/* Check to see if the scsi lld put this device into state SDEV_BLOCK. */
-	if (unlikely(cmd->device->sdev_state == SDEV_BLOCK)) {
+	/* Check to see if the scsi lld made this device blocked. */
+	if (unlikely(scsi_device_blocked(cmd->device))) {
 		/* 
-		 * in SDEV_BLOCK, the command is just put back on the device
-		 * queue.  The suspend state has already blocked the queue so
-		 * future requests should not occur until the device 
-		 * transitions out of the suspend state.
+		 * in blocked state, the command is just put back on
+		 * the device queue.  The suspend state has already
+		 * blocked the queue so future requests should not
+		 * occur until the device transitions out of the
+		 * suspend state.
 		 */
 		scsi_queue_insert(cmd, SCSI_MLQUEUE_DEVICE_BUSY);
 
@@ -756,9 +757,12 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 	if (rtn) {
 		if (scsi_delete_timer(cmd)) {
 			atomic_inc(&cmd->device->iodone_cnt);
-			scsi_queue_insert(cmd,
-					  (rtn == SCSI_MLQUEUE_DEVICE_BUSY) ?
-					  rtn : SCSI_MLQUEUE_HOST_BUSY);
+
+			if (rtn != SCSI_MLQUEUE_DEVICE_BUSY &&
+			    rtn != SCSI_MLQUEUE_TARGET_BUSY)
+				rtn = SCSI_MLQUEUE_HOST_BUSY;
+
+			scsi_queue_insert(cmd, rtn);
 		}
 		SCSI_LOG_MLQUEUE(3,
 		    printk("queuecommand : request rejected\n"));
@@ -857,6 +861,7 @@ static struct scsi_driver *scsi_cmd_to_driver(struct scsi_cmnd *cmd)
 void scsi_finish_command(struct scsi_cmnd *cmd)
 {
 	struct scsi_device *sdev = cmd->device;
+	struct scsi_target *starget = scsi_target(sdev);
 	struct Scsi_Host *shost = sdev->host;
 	struct scsi_driver *drv;
 	unsigned int good_bytes;
@@ -872,6 +877,7 @@ void scsi_finish_command(struct scsi_cmnd *cmd)
 	 * XXX(hch): What about locking?
          */
         shost->host_blocked = 0;
+	starget->target_blocked = 0;
         sdev->device_blocked = 0;
 
 	/*

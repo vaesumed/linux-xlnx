@@ -1194,15 +1194,13 @@ int iscsi_queuecommand(struct scsi_cmnd *sc, void (*done)(struct scsi_cmnd *))
 		switch (session->state) {
 		case ISCSI_STATE_IN_RECOVERY:
 			reason = FAILURE_SESSION_IN_RECOVERY;
-			sc->result = DID_IMM_RETRY << 16;
-			break;
+			goto reject;
 		case ISCSI_STATE_LOGGING_OUT:
 			reason = FAILURE_SESSION_LOGGING_OUT;
-			sc->result = DID_IMM_RETRY << 16;
-			break;
+			goto reject;
 		case ISCSI_STATE_RECOVERY_FAILED:
 			reason = FAILURE_SESSION_RECOVERY_TIMEOUT;
-			sc->result = DID_NO_CONNECT << 16;
+			sc->result = DID_TRANSPORT_FAILFAST << 16;
 			break;
 		case ISCSI_STATE_TERMINATE:
 			reason = FAILURE_SESSION_TERMINATE;
@@ -1267,7 +1265,7 @@ reject:
 	spin_unlock(&session->lock);
 	debug_scsi("cmd 0x%x rejected (%d)\n", sc->cmnd[0], reason);
 	spin_lock(host->host_lock);
-	return SCSI_MLQUEUE_HOST_BUSY;
+	return SCSI_MLQUEUE_TARGET_BUSY;
 
 fault:
 	spin_unlock(&session->lock);
@@ -2334,8 +2332,10 @@ static void iscsi_start_session_recovery(struct iscsi_session *session,
 	 * flush queues.
 	 */
 	spin_lock_bh(&session->lock);
-	fail_all_commands(conn, -1,
-			STOP_CONN_RECOVER ? DID_BUS_BUSY : DID_ERROR);
+	if (STOP_CONN_RECOVER)
+		fail_all_commands(conn, -1, DID_TRANSPORT_DISRUPTED);
+	else
+		fail_all_commands(conn, -1, DID_ERROR);
 	flush_control_queues(session, conn);
 	spin_unlock_bh(&session->lock);
 	mutex_unlock(&session->eh_mutex);

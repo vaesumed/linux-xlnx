@@ -88,14 +88,6 @@ lpfc_terminate_rport_io(struct fc_rport *rport)
 			&phba->sli.ring[phba->sli.fcp_ring],
 			ndlp->nlp_sid, 0, LPFC_CTX_TGT);
 	}
-
-	/*
-	 * A device is normally blocked for rediscovery and unblocked when
-	 * devloss timeout happens.  In case a vport is removed or driver
-	 * unloaded before devloss timeout happens, we need to unblock here.
-	 */
-	scsi_target_unblock(&rport->dev);
-	return;
 }
 
 /*
@@ -215,8 +207,16 @@ lpfc_dev_loss_tmo_handler(struct lpfc_nodelist *ndlp)
 		return;
 	}
 
-	if (ndlp->nlp_state == NLP_STE_MAPPED_NODE)
+	if (ndlp->nlp_state == NLP_STE_MAPPED_NODE) {
+		lpfc_printf_vlog(vport, KERN_INFO, LOG_DISCOVERY,
+				 "0284 Devloss timeout Ignored on "
+				 "WWPN %x:%x:%x:%x:%x:%x:%x:%x "
+				 "NPort x%x\n",
+				 *name, *(name+1), *(name+2), *(name+3),
+				 *(name+4), *(name+5), *(name+6), *(name+7),
+				 ndlp->nlp_DID);
 		return;
+	}
 
 	if (ndlp->nlp_type & NLP_FABRIC) {
 		/* We will clean up these Nodes in linkup */
@@ -237,8 +237,6 @@ lpfc_dev_loss_tmo_handler(struct lpfc_nodelist *ndlp)
 		lpfc_sli_abort_iocb(vport, &phba->sli.ring[phba->sli.fcp_ring],
 				    ndlp->nlp_sid, 0, LPFC_CTX_TGT);
 	}
-	if (vport->load_flag & FC_UNLOADING)
-		warn_on = 0;
 
 	if (warn_on) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_DISCOVERY,
@@ -371,6 +369,7 @@ lpfc_work_done(struct lpfc_hba *phba)
 	spin_unlock_irq(&phba->hbalock);
 
 	if (ha_copy & HA_ERATT)
+		/* Handle the error attention event */
 		lpfc_handle_eratt(phba);
 
 	if (ha_copy & HA_MBATT)
@@ -378,6 +377,7 @@ lpfc_work_done(struct lpfc_hba *phba)
 
 	if (ha_copy & HA_LATT)
 		lpfc_handle_latt(phba);
+
 	vports = lpfc_create_vport_work_array(phba);
 	if (vports != NULL)
 		for(i = 0; i <= phba->max_vpi; i++) {
@@ -1013,14 +1013,10 @@ out:
 }
 
 static void
-lpfc_mbx_issue_link_down(struct lpfc_hba *phba)
+lpfc_enable_la(struct lpfc_hba *phba)
 {
 	uint32_t control;
 	struct lpfc_sli *psli = &phba->sli;
-
-	lpfc_linkdown(phba);
-
-	/* turn on Link Attention interrupts - no CLEAR_LA needed */
 	spin_lock_irq(&phba->hbalock);
 	psli->sli_flag |= LPFC_PROCESS_LA;
 	control = readl(phba->HCregaddr);
@@ -1029,6 +1025,15 @@ lpfc_mbx_issue_link_down(struct lpfc_hba *phba)
 	readl(phba->HCregaddr); /* flush */
 	spin_unlock_irq(&phba->hbalock);
 }
+
+static void
+lpfc_mbx_issue_link_down(struct lpfc_hba *phba)
+{
+	lpfc_linkdown(phba);
+	lpfc_enable_la(phba);
+	/* turn on Link Attention interrupts - no CLEAR_LA needed */
+}
+
 
 /*
  * This routine handles processing a READ_LA mailbox
@@ -1077,8 +1082,12 @@ lpfc_mbx_cmpl_read_la(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	}
 
 	phba->fc_eventTag = la->eventTag;
+	if (la->mm)
+		phba->sli.sli_flag |= LPFC_MENLO_MAINT;
+	else
+		phba->sli.sli_flag &= ~LPFC_MENLO_MAINT;
 
-	if (la->attType == AT_LINK_UP) {
+	if (la->attType == AT_LINK_UP && (!la->mm)) {
 		phba->fc_stat.LinkUp++;
 		if (phba->link_flag & LS_LOOPBACK_MODE) {
 			lpfc_printf_log(phba, KERN_ERR, LOG_LINK_EVENT,
@@ -1090,13 +1099,15 @@ lpfc_mbx_cmpl_read_la(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 		} else {
 			lpfc_printf_log(phba, KERN_ERR, LOG_LINK_EVENT,
 					"1303 Link Up Event x%x received "
-					"Data: x%x x%x x%x x%x\n",
+					"Data: x%x x%x x%x x%x x%x x%x %d\n",
 					la->eventTag, phba->fc_eventTag,
 					la->granted_AL_PA, la->UlnkSpeed,
-					phba->alpa_map[0]);
+					phba->alpa_map[0],
+					la->mm, la->fa,
+					phba->wait_4_mlo_maint_flg);
 		}
 		lpfc_mbx_process_link_up(phba, la);
-	} else {
+	} else if (la->attType == AT_LINK_DOWN) {
 		phba->fc_stat.LinkDown++;
 		if (phba->link_flag & LS_LOOPBACK_MODE) {
 			lpfc_printf_log(phba, KERN_ERR, LOG_LINK_EVENT,
@@ -1109,11 +1120,46 @@ lpfc_mbx_cmpl_read_la(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 		else {
 			lpfc_printf_log(phba, KERN_ERR, LOG_LINK_EVENT,
 				"1305 Link Down Event x%x received "
+				"Data: x%x x%x x%x x%x x%x\n",
+				la->eventTag, phba->fc_eventTag,
+				phba->pport->port_state, vport->fc_flag,
+				la->mm, la->fa);
+		}
+		lpfc_mbx_issue_link_down(phba);
+	}
+	if (la->mm && la->attType == AT_LINK_UP) {
+		if (phba->link_state != LPFC_LINK_DOWN) {
+			phba->fc_stat.LinkDown++;
+			lpfc_printf_log(phba, KERN_ERR, LOG_LINK_EVENT,
+				"1312 Link Down Event x%x received "
 				"Data: x%x x%x x%x\n",
 				la->eventTag, phba->fc_eventTag,
 				phba->pport->port_state, vport->fc_flag);
+			lpfc_mbx_issue_link_down(phba);
+		} else
+			lpfc_enable_la(phba);
+
+		lpfc_printf_log(phba, KERN_ERR, LOG_LINK_EVENT,
+				"1310 Menlo Maint Mode Link up Event x%x rcvd "
+				"Data: x%x x%x x%x\n",
+				la->eventTag, phba->fc_eventTag,
+				phba->pport->port_state, vport->fc_flag);
+		/*
+		 * The cmnd that triggered this will be waiting for this
+		 * signal.
+		 */
+		/* WAKEUP for MENLO_SET_MODE or MENLO_RESET command. */
+		if (phba->wait_4_mlo_maint_flg) {
+			phba->wait_4_mlo_maint_flg = 0;
+			wake_up_interruptible(&phba->wait_4_mlo_m_q);
 		}
-		lpfc_mbx_issue_link_down(phba);
+	}
+
+	if (la->fa) {
+		if (la->mm)
+			lpfc_issue_clear_la(phba, vport);
+		lpfc_printf_log(phba, KERN_INFO, LOG_LINK_EVENT,
+				"1311 fa %d\n", la->fa);
 	}
 
 lpfc_mbx_cmpl_read_la_free_mbuf:
@@ -1177,7 +1223,7 @@ lpfc_mbx_cmpl_unreg_vpi(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 		scsi_host_put(shost);
 }
 
-void
+int
 lpfc_mbx_unreg_vpi(struct lpfc_vport *vport)
 {
 	struct lpfc_hba  *phba = vport->phba;
@@ -1186,7 +1232,7 @@ lpfc_mbx_unreg_vpi(struct lpfc_vport *vport)
 
 	mbox = mempool_alloc(phba->mbox_mem_pool, GFP_KERNEL);
 	if (!mbox)
-		return;
+		return 1;
 
 	lpfc_unreg_vpi(phba, vport->vpi, mbox);
 	mbox->vport = vport;
@@ -1197,7 +1243,9 @@ lpfc_mbx_unreg_vpi(struct lpfc_vport *vport)
 				 "1800 Could not issue unreg_vpi\n");
 		mempool_free(mbox, phba->mbox_mem_pool);
 		vport->unreg_vpi_cmpl = VPORT_ERROR;
+		return rc;
 	}
+	return 0;
 }
 
 static void
@@ -2786,7 +2834,7 @@ restart_disc:
 
 	default:
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_DISCOVERY,
-				 "0229 Unexpected discovery timeout, "
+				 "0273 Unexpected discovery timeout, "
 				 "vport State x%x\n", vport->port_state);
 		break;
 	}
