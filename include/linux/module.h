@@ -346,6 +346,10 @@ struct module
 	struct module_ref ref[NR_CPUS];
 #endif
 
+#ifdef CONFIG_DYNAMIC_PRINTK_DEBUG
+	struct mod_debug *start_verbose;
+	unsigned int num_verbose;
+#endif
 };
 #ifndef MODULE_ARCH_INIT
 #define MODULE_ARCH_INIT {}

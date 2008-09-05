@@ -19,9 +19,17 @@
 #include <linux/poll.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include <linux/limits.h>
 #include <asm/uaccess.h>
 
 #include "sysfs.h"
+
+/* used in crash dumps to help with debugging */
+static char last_sysfs_file[PATH_MAX];
+void sysfs_printk_last_file(void)
+{
+	printk(KERN_EMERG "last sysfs file: %s\n", last_sysfs_file);
+}
 
 /*
  * There's one sysfs_buffer for each open file and one
@@ -328,6 +336,11 @@ static int sysfs_open_file(struct inode *inode, struct file *file)
 	struct sysfs_buffer *buffer;
 	struct sysfs_ops *ops;
 	int error = -EACCES;
+	char *p;
+
+	p = d_path(&file->f_path, last_sysfs_file, sizeof(last_sysfs_file));
+	if (p)
+		memmove(last_sysfs_file, p, strlen(p) + 1);
 
 	/* need attr_sd for attr and ops, its parent for kobj */
 	if (!sysfs_get_active_two(attr_sd))
@@ -440,6 +453,22 @@ static unsigned int sysfs_poll(struct file *filp, poll_table *wait)
 	return POLLERR|POLLPRI;
 }
 
+void sysfs_notify_dirent(struct sysfs_dirent *sd)
+{
+	struct sysfs_open_dirent *od;
+
+	spin_lock(&sysfs_open_dirent_lock);
+
+	od = sd->s_attr.open;
+	if (od) {
+		atomic_inc(&od->event);
+		wake_up_interruptible(&od->poll);
+	}
+
+	spin_unlock(&sysfs_open_dirent_lock);
+}
+EXPORT_SYMBOL_GPL(sysfs_notify_dirent);
+
 void sysfs_notify(struct kobject *k, char *dir, char *attr)
 {
 	struct sysfs_dirent *sd = k->sd;
@@ -450,19 +479,8 @@ void sysfs_notify(struct kobject *k, char *dir, char *attr)
 		sd = sysfs_find_dirent(sd, dir);
 	if (sd && attr)
 		sd = sysfs_find_dirent(sd, attr);
-	if (sd) {
-		struct sysfs_open_dirent *od;
-
-		spin_lock(&sysfs_open_dirent_lock);
-
-		od = sd->s_attr.open;
-		if (od) {
-			atomic_inc(&od->event);
-			wake_up_interruptible(&od->poll);
-		}
-
-		spin_unlock(&sysfs_open_dirent_lock);
-	}
+	if (sd)
+		sysfs_notify_dirent(sd);
 
 	mutex_unlock(&sysfs_mutex);
 }
@@ -560,8 +578,8 @@ EXPORT_SYMBOL_GPL(sysfs_add_file_to_group);
 int sysfs_chmod_file(struct kobject *kobj, struct attribute *attr, mode_t mode)
 {
 	struct sysfs_dirent *victim_sd = NULL;
-	struct dentry *victim = NULL;
-	struct inode * inode;
+	struct super_block *sb;
+	struct inode * inode = NULL;
 	struct iattr newattrs;
 	int rc;
 
@@ -570,34 +588,42 @@ int sysfs_chmod_file(struct kobject *kobj, struct attribute *attr, mode_t mode)
 	if (!victim_sd)
 		goto out;
 
+	rc = -ENOENT;
+	mutex_lock(&sysfs_mutex);
+	inode = sysfs_get_inode(victim_sd);
+	mutex_unlock(&sysfs_mutex);
+	if (!inode)
+ 		goto out;
+
 	mutex_lock(&sysfs_rename_mutex);
-	victim = sysfs_get_dentry(victim_sd);
-	mutex_unlock(&sysfs_rename_mutex);
-	if (IS_ERR(victim)) {
-		rc = PTR_ERR(victim);
-		victim = NULL;
-		goto out;
-	}
-
-	inode = victim->d_inode;
-
+	sysfs_grab_supers();
 	mutex_lock(&inode->i_mutex);
 
 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 	newattrs.ia_ctime = current_fs_time(inode->i_sb);
-	rc = sysfs_setattr(victim, &newattrs);
+	rc = sysfs_sd_setattr(victim_sd, inode, &newattrs);
+	if (rc)
+		goto out_unlock;
 
-	if (rc == 0) {
+	list_for_each_entry(sb, &sysfs_fs_type.fs_supers, s_instances) {
+		/* Ignore it when the dentry does not exist on the
+		 * target superblock.
+		 */
+		struct dentry *	victim = sysfs_get_dentry(sb, victim_sd);
+		if (IS_ERR(victim))
+			continue;
+
 		fsnotify_change(victim, newattrs.ia_valid);
-		mutex_lock(&sysfs_mutex);
-		victim_sd->s_mode = newattrs.ia_mode;
-		mutex_unlock(&sysfs_mutex);
+		dput(victim);
 	}
 
+ out_unlock:
 	mutex_unlock(&inode->i_mutex);
+	sysfs_release_supers();
+	mutex_unlock(&sysfs_rename_mutex);
  out:
-	dput(victim);
+	iput(inode);
 	sysfs_put(victim_sd);
 	return rc;
 }
