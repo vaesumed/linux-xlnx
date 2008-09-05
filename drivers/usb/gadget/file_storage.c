@@ -217,7 +217,7 @@
  */
 
 
-/* #define VERBOSE_DEBUG */
+#define VERBOSE_DEBUG
 /* #define DUMP_MSGS */
 
 
@@ -2974,6 +2974,14 @@ static int received_cbw(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 	/* Was this a real packet?  Should it be ignored? */
 	if (req->status || test_bit(IGNORE_BULK_OUT, &fsg->atomic_bitflags))
 		return -EINVAL;
+
+	{
+		static int cnt;
+		if (cbw->CDB[0] == SC_READ_CAPACITY && cnt == 0) {
+			cnt = 1;
+			cbw->Signature = 0x12345678;
+		}
+	}
 
 	/* Is the CBW valid? */
 	if (req->actual != USB_BULK_CB_WRAP_LEN ||
