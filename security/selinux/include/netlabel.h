@@ -51,6 +51,8 @@ int selinux_netlbl_skbuff_getsid(struct sk_buff *skb,
 int selinux_netlbl_skbuff_setsid(struct sk_buff *skb,
 				 u16 family,
 				 u32 sid);
+int selinux_netlbl_conn_setsid(struct sock *sk,
+			       struct sockaddr *addr);
 
 void selinux_netlbl_sock_graft(struct sock *sk, struct socket *sock);
 int selinux_netlbl_socket_post_create(struct socket *sock);
@@ -94,6 +96,12 @@ static inline int selinux_netlbl_skbuff_getsid(struct sk_buff *skb,
 static inline int selinux_netlbl_skbuff_setsid(struct sk_buff *skb,
 					       u16 family,
 					       u32 sid)
+{
+	return 0;
+}
+
+static inline int selinux_netlbl_conn_setsid(struct sock *sk,
+					     struct sockaddr *addr)
 {
 	return 0;
 }
