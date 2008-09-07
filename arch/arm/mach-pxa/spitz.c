@@ -300,21 +300,6 @@ static struct pxa2xx_spi_chip spitz_ads7846_chip = {
 	.gpio_cs		= SPITZ_GPIO_ADS7846_CS,
 };
 
-static void spitz_notify_intensity(int intensity)
-{
-	if (machine_is_spitz() || machine_is_borzoi()) {
-		gpio_set_value(SPITZ_GPIO_BACKLIGHT_CONT, !(intensity & 0x20));
-		gpio_set_value(SPITZ_GPIO_BACKLIGHT_ON, intensity);
-		return;
-	}
-
-	if (machine_is_akita()) {
-		gpio_set_value(AKITA_GPIO_BACKLIGHT_CONT, !(intensity & 0x20));
-		gpio_set_value(AKITA_GPIO_BACKLIGHT_ON, intensity);
-		return;
-	}
-}
-
 static void spitz_bl_kick_battery(void)
 {
 	void (*kick_batt)(void);
@@ -331,7 +316,8 @@ static struct corgi_lcd_platform_data spitz_lcdcon_info = {
 	.max_intensity		= 0x2f,
 	.default_intensity	= 0x1f,
 	.limit_mask		= 0x0b,
-	.notify			= spitz_notify_intensity,
+	.gpio_backlight_cont	= SPITZ_GPIO_BACKLIGHT_CONT,
+	.gpio_backlight_on	= SPITZ_GPIO_BACKLIGHT_ON,
 	.kick_battery		= spitz_bl_kick_battery,
 };
 
@@ -658,6 +644,9 @@ static void __init akita_init(void)
 	i2c_register_board_info(0, ARRAY_AND_SIZE(akita_i2c_board_info));
 
 	common_init();
+
+	spitz_lcdcon_info.gpio_backlight_cont = AKITA_GPIO_BACKLIGHT_CONT;
+	spitz_lcdcon_info.gpio_backlight_on = AKITA_GPIO_BACKLIGHT_ON;
 }
 #endif
 
