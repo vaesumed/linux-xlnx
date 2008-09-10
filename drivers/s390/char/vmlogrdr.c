@@ -503,7 +503,7 @@ static ssize_t vmlogrdr_autopurge_store(struct device * dev,
 					struct device_attribute *attr,
 					const char * buf, size_t count)
 {
-	struct vmlogrdr_priv_t *priv = dev->driver_data;
+	struct vmlogrdr_priv_t *priv = dev_get_drvdata(dev);
 	ssize_t ret = count;
 
 	switch (buf[0]) {
@@ -524,7 +524,7 @@ static ssize_t vmlogrdr_autopurge_show(struct device *dev,
 				       struct device_attribute *attr,
 				       char *buf)
 {
-	struct vmlogrdr_priv_t *priv = dev->driver_data;
+	struct vmlogrdr_priv_t *priv = dev_get_drvdata(dev);
 	return sprintf(buf, "%u\n", priv->autopurge);
 }
 
@@ -540,7 +540,7 @@ static ssize_t vmlogrdr_purge_store(struct device * dev,
 
 	char cp_command[80];
 	char cp_response[80];
-	struct vmlogrdr_priv_t *priv = dev->driver_data;
+	struct vmlogrdr_priv_t *priv = dev_get_drvdata(dev);
 
 	if (buf[0] != '1')
 		return -EINVAL;
@@ -577,7 +577,7 @@ static ssize_t vmlogrdr_autorecording_store(struct device *dev,
 					    struct device_attribute *attr,
 					    const char *buf, size_t count)
 {
-	struct vmlogrdr_priv_t *priv = dev->driver_data;
+	struct vmlogrdr_priv_t *priv = dev_get_drvdata(dev);
 	ssize_t ret = count;
 
 	switch (buf[0]) {
@@ -598,7 +598,7 @@ static ssize_t vmlogrdr_autorecording_show(struct device *dev,
 					   struct device_attribute *attr,
 					   char *buf)
 {
-	struct vmlogrdr_priv_t *priv = dev->driver_data;
+	struct vmlogrdr_priv_t *priv = dev_get_drvdata(dev);
 	return sprintf(buf, "%u\n", priv->autorecording);
 }
 
@@ -611,7 +611,7 @@ static ssize_t vmlogrdr_recording_store(struct device * dev,
 					struct device_attribute *attr,
 					const char * buf, size_t count)
 {
-	struct vmlogrdr_priv_t *priv = dev->driver_data;
+	struct vmlogrdr_priv_t *priv = dev_get_drvdata(dev);
 	ssize_t ret;
 
 	switch (buf[0]) {

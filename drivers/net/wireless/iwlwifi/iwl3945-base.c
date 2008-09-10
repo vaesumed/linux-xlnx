@@ -7319,7 +7319,7 @@ static DRIVER_ATTR(debug_level, S_IWUSR | S_IRUGO,
 static ssize_t show_temperature(struct device *d,
 				struct device_attribute *attr, char *buf)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 
 	if (!iwl3945_is_alive(priv))
 		return -EAGAIN;
@@ -7333,7 +7333,7 @@ static ssize_t show_rs_window(struct device *d,
 			      struct device_attribute *attr,
 			      char *buf)
 {
-	struct iwl3945_priv *priv = d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 	return iwl3945_fill_rs_info(priv->hw, buf, IWL_AP_ID);
 }
 static DEVICE_ATTR(rs_window, S_IRUGO, show_rs_window, NULL);
@@ -7341,7 +7341,7 @@ static DEVICE_ATTR(rs_window, S_IRUGO, show_rs_window, NULL);
 static ssize_t show_tx_power(struct device *d,
 			     struct device_attribute *attr, char *buf)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 	return sprintf(buf, "%d\n", priv->user_txpower_limit);
 }
 
@@ -7349,7 +7349,7 @@ static ssize_t store_tx_power(struct device *d,
 			      struct device_attribute *attr,
 			      const char *buf, size_t count)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 	char *p = (char *)buf;
 	u32 val;
 
@@ -7368,7 +7368,7 @@ static DEVICE_ATTR(tx_power, S_IWUSR | S_IRUGO, show_tx_power, store_tx_power);
 static ssize_t show_flags(struct device *d,
 			  struct device_attribute *attr, char *buf)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 
 	return sprintf(buf, "0x%04X\n", priv->active_rxon.flags);
 }
@@ -7377,7 +7377,7 @@ static ssize_t store_flags(struct device *d,
 			   struct device_attribute *attr,
 			   const char *buf, size_t count)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 	u32 flags = simple_strtoul(buf, NULL, 0);
 
 	mutex_lock(&priv->mutex);
@@ -7402,7 +7402,7 @@ static DEVICE_ATTR(flags, S_IWUSR | S_IRUGO, show_flags, store_flags);
 static ssize_t show_filter_flags(struct device *d,
 				 struct device_attribute *attr, char *buf)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 
 	return sprintf(buf, "0x%04X\n",
 		le32_to_cpu(priv->active_rxon.filter_flags));
@@ -7412,7 +7412,7 @@ static ssize_t store_filter_flags(struct device *d,
 				  struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 	u32 filter_flags = simple_strtoul(buf, NULL, 0);
 
 	mutex_lock(&priv->mutex);
@@ -7710,7 +7710,7 @@ static DEVICE_ATTR(antenna, S_IWUSR | S_IRUGO, show_antenna, store_antenna);
 static ssize_t show_status(struct device *d,
 			   struct device_attribute *attr, char *buf)
 {
-	struct iwl3945_priv *priv = (struct iwl3945_priv *)d->driver_data;
+	struct iwl3945_priv *priv = dev_get_drvdata(d);
 	if (!iwl3945_is_alive(priv))
 		return -EAGAIN;
 	return sprintf(buf, "0x%08x\n", (int)priv->status);
@@ -7725,7 +7725,7 @@ static ssize_t dump_error_log(struct device *d,
 	char *p = (char *)buf;
 
 	if (p[0] == '1')
-		iwl3945_dump_nic_error_log((struct iwl3945_priv *)d->driver_data);
+		iwl3945_dump_nic_error_log(dev_get_drvdata(d));
 
 	return strnlen(buf, count);
 }
@@ -7739,7 +7739,7 @@ static ssize_t dump_event_log(struct device *d,
 	char *p = (char *)buf;
 
 	if (p[0] == '1')
-		iwl3945_dump_nic_event_log((struct iwl3945_priv *)d->driver_data);
+		iwl3945_dump_nic_event_log(dev_get_drvdata(d));
 
 	return strnlen(buf, count);
 }
