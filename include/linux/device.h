@@ -276,9 +276,6 @@ struct device_type {
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	void (*release)(struct device *dev);
 
-	int (*suspend)(struct device *dev, pm_message_t state);
-	int (*resume)(struct device *dev);
-
 	struct pm_ops *pm;
 };
 
