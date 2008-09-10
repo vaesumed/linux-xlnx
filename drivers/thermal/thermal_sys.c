@@ -304,7 +304,7 @@ static LIST_HEAD(thermal_hwmon_list);
 static ssize_t
 name_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	struct thermal_hwmon_device *hwmon = dev->driver_data;
+	struct thermal_hwmon_device *hwmon = dev_get_drvdata(dev);
 	return sprintf(buf, "%s\n", hwmon->type);
 }
 static DEVICE_ATTR(name, 0444, name_show, NULL);
@@ -362,7 +362,7 @@ thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 		result = PTR_ERR(hwmon->device);
 		goto free_mem;
 	}
-	hwmon->device->driver_data = hwmon;
+	dev_set_drvdata(hwmon->device, hwmon);
 	result = device_create_file(hwmon->device, &dev_attr_name);
 	if (result)
 		goto unregister_hwmon_device;
