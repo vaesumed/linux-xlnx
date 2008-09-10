@@ -188,6 +188,8 @@ static int nopnp;
 
 static int __init el3_common_init(struct net_device *dev);
 static void el3_common_remove(struct net_device *dev);
+static int el3_common_suspend(struct net_device *dev);
+static int el3_common_resume(struct net_device *dev);
 static ushort id_read_eeprom(int index);
 static ushort read_eeprom(int ioaddr, int index);
 static int el3_open(struct net_device *dev);
@@ -346,7 +348,7 @@ static int __devinit el3_isa_match(struct device *pdev,
 static int __devexit el3_isa_remove(struct device *pdev,
 				    unsigned int ndev)
 {
-	el3_device_remove(pdev);
+	el3_common_remove(dev_get_drvdata(pdev));
 	dev_set_drvdata(pdev, NULL);
 	return 0;
 }
@@ -356,7 +358,7 @@ static int el3_isa_suspend(struct device *dev, unsigned int n,
 			   pm_message_t state)
 {
 	current_tag = 0;
-	return el3_suspend(dev, state);
+	return el3_common_suspend(dev_get_drvdata(dev));
 }
 
 static int el3_isa_resume(struct device *dev, unsigned int n)
@@ -378,7 +380,7 @@ static int el3_isa_resume(struct device *dev, unsigned int n)
 		return 1;
 	/* Free the interrupt so that some other card can use it. */
 	outw(0x0f00, ioaddr + WN0_IRQ);
-	return el3_resume(dev);
+	return el3_common_resume(ndev);
 }
 #endif
 
@@ -456,12 +458,12 @@ static void __devexit el3_pnp_remove(struct pnp_dev *pdev)
 #ifdef CONFIG_PM
 static int el3_pnp_suspend(struct pnp_dev *pdev, pm_message_t state)
 {
-	return el3_suspend(&pdev->dev, state);
+	return el3_common_suspend(pnp_get_drvdata(pdev));
 }
 
 static int el3_pnp_resume(struct pnp_dev *pdev)
 {
-	return el3_resume(&pdev->dev);
+	return el3_common_resume(pnp_get_drvdata(pdev));
 }
 #endif
 
@@ -647,11 +649,11 @@ static int __init el3_mca_probe(struct device *device)
 	netdev_boot_setup_check(dev);
 
 	el3_dev_fill(dev, phys_addr, ioaddr, irq, if_port, EL3_MCA);
-	device->driver_data = dev;
+	dev_set_drvdata(device, dev);
 	err = el3_common_init(dev);
 
 	if (err) {
-		device->driver_data = NULL;
+		dev_set_drvdata(device, NULL);
 		free_netdev(dev);
 		return -ENOMEM;
 	}
@@ -1439,14 +1441,12 @@ el3_up(struct net_device *dev)
 #ifdef CONFIG_PM
 
 static int
-el3_suspend(struct device *pdev, pm_message_t state)
+el3_common_suspend(struct net_device *dev)
 {
 	unsigned long flags;
-	struct net_device *dev;
 	struct el3_private *lp;
 	int ioaddr;
 
-	dev = pdev->driver_data;
 	lp = netdev_priv(dev);
 	ioaddr = dev->base_addr;
 
@@ -1463,14 +1463,21 @@ el3_suspend(struct device *pdev, pm_message_t state)
 }
 
 static int
-el3_resume(struct device *pdev)
+el3_suspend(struct device *pdev, pm_message_t state)
+{
+	struct net_device *dev;
+
+	dev = dev_get_drvdata(pdev);
+	return el3_common_suspend(dev);
+}
+
+static int
+el3_common_resume(struct net_device *dev)
 {
 	unsigned long flags;
-	struct net_device *dev;
 	struct el3_private *lp;
 	int ioaddr;
 
-	dev = pdev->driver_data;
 	lp = netdev_priv(dev);
 	ioaddr = dev->base_addr;
 
@@ -1484,6 +1491,15 @@ el3_resume(struct device *pdev)
 
 	spin_unlock_irqrestore(&lp->lock, flags);
 	return 0;
+}
+
+static int
+el3_resume(struct device *pdev)
+{
+	struct net_device *dev;
+
+	dev = dev_get_drvdata(pdev);
+	return el3_common_resume(dev);
 }
 
 #endif /* CONFIG_PM */
