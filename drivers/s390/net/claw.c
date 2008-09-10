@@ -581,7 +581,7 @@ claw_irq_handler(struct ccw_device *cdev,
 
 	CLAW_DBF_TEXT(4, trace, "clawirq");
         /* Bypass all 'unsolicited interrupts' */
-	if (!cdev->dev.driver_data) {
+	if (!dev_get_drvdata(&cdev->dev)) {
                 printk(KERN_WARNING "claw: unsolicited interrupt for device:"
 		 	"%s received c-%02x d-%02x\n",
 		       dev_name(&cdev->dev), irb->scsw.cmd.cstat,
@@ -589,7 +589,7 @@ claw_irq_handler(struct ccw_device *cdev,
 		CLAW_DBF_TEXT(2, trace, "badirq");
                 return;
         }
-	privptr = (struct claw_privbk *)cdev->dev.driver_data;
+	privptr = dev_get_drvdata(&cdev->dev);
 
 	/* Try to extract channel from driver data. */
 	if (privptr->channel[READ].cdev == cdev)
@@ -1964,7 +1964,7 @@ probe_error( struct ccwgroup_device *cgdev)
 	struct claw_privbk *privptr;
 
 	CLAW_DBF_TEXT(4, trace, "proberr");
-	privptr = (struct claw_privbk *) cgdev->dev.driver_data;
+	privptr = dev_get_drvdata(&cgdev->dev);
 	if (privptr != NULL) {
 		cgdev->dev.driver_data = NULL;
 		kfree(privptr->p_env);
@@ -2883,7 +2883,7 @@ claw_new_device(struct ccwgroup_device *cgdev)
 	printk(KERN_INFO "claw: add for %s\n",
 	       dev_name(&cgdev->cdev[READ]->dev));
 	CLAW_DBF_TEXT(2, setup, "new_dev");
-	privptr = cgdev->dev.driver_data;
+	privptr = dev_get_drvdata(&cgdev->dev);
 	cgdev->cdev[READ]->dev.driver_data = privptr;
 	cgdev->cdev[WRITE]->dev.driver_data = privptr;
 	if (!privptr)
@@ -2935,7 +2935,7 @@ claw_new_device(struct ccwgroup_device *cgdev)
 	}
 	dev->flags &=~IFF_RUNNING;
 	if (privptr->buffs_alloc == 0) {
-	        ret=init_ccw_bk(dev);
+		ret=init_ccw_bk(dev);
 		if (ret !=0) {
 			unregister_netdev(dev);
 			claw_free_netdevice(dev,1);
@@ -2991,7 +2991,7 @@ claw_shutdown_device(struct ccwgroup_device *cgdev)
 	int	ret;
 
 	CLAW_DBF_TEXT_(2, setup, "%s", dev_name(&cgdev->dev));
-	priv = cgdev->dev.driver_data;
+	priv = dev_get_drvdata(&cgdev->dev);
 	if (!priv)
 		return -ENODEV;
 	ndev = priv->channel[READ].ndev;
@@ -3021,7 +3021,7 @@ claw_remove_device(struct ccwgroup_device *cgdev)
 
 	BUG_ON(!cgdev);
 	CLAW_DBF_TEXT_(2, setup, "%s", dev_name(&cgdev->dev));
-	priv = cgdev->dev.driver_data;
+	priv = dev_get_drvdata(&cgdev->dev);
 	BUG_ON(!priv);
 	printk(KERN_INFO "claw: %s() called %s will be removed.\n",
 			__func__, dev_name(&cgdev->cdev[0]->dev));
@@ -3037,9 +3037,9 @@ claw_remove_device(struct ccwgroup_device *cgdev)
 	kfree(priv->channel[1].irb);
 	priv->channel[1].irb=NULL;
 	kfree(priv);
-	cgdev->dev.driver_data=NULL;
-	cgdev->cdev[READ]->dev.driver_data = NULL;
-	cgdev->cdev[WRITE]->dev.driver_data = NULL;
+	dev_set_drvdata(&cgdev->dev,NULL);
+	dev_set_drvdata(&cgdev->cdev[READ]->dev, NULL);
+	dev_set_drvdata(&cgdev->cdev[WRITE]->dev, NULL);
 	put_device(&cgdev->dev);
 
 	return;
@@ -3055,7 +3055,7 @@ claw_hname_show(struct device *dev, struct device_attribute *attr, char *buf)
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3068,7 +3068,7 @@ claw_hname_write(struct device *dev, struct device_attribute *attr, const char *
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3092,7 +3092,7 @@ claw_adname_show(struct device *dev, struct device_attribute *attr, char *buf)
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3105,7 +3105,7 @@ claw_adname_write(struct device *dev, struct device_attribute *attr, const char 
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3129,7 +3129,7 @@ claw_apname_show(struct device *dev, struct device_attribute *attr, char *buf)
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3143,7 +3143,7 @@ claw_apname_write(struct device *dev, struct device_attribute *attr, const char 
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3177,7 +3177,7 @@ claw_wbuff_show(struct device *dev, struct device_attribute *attr, char *buf)
 	struct claw_privbk *priv;
 	struct claw_env * p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3191,7 +3191,7 @@ claw_wbuff_write(struct device *dev, struct device_attribute *attr, const char *
 	struct claw_env *  p_env;
 	int nnn,max;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3218,7 +3218,7 @@ claw_rbuff_show(struct device *dev, struct device_attribute *attr, char *buf)
 	struct claw_privbk *priv;
 	struct claw_env *  p_env;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
@@ -3232,7 +3232,7 @@ claw_rbuff_write(struct device *dev, struct device_attribute *attr, const char *
 	struct claw_env *p_env;
 	int nnn,max;
 
-	priv = dev->driver_data;
+	priv = dev_get_drvdata(dev);
 	if (!priv)
 		return -ENODEV;
 	p_env = priv->p_env;
