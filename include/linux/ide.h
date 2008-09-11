@@ -702,6 +702,7 @@ extern const struct ide_tp_ops default_tp_ops;
  * @resetproc:		routine to reset controller after a disk reset
  * @maskproc:		special host masking for drive selection
  * @quirkproc:		check host's drive quirk list
+ * @clear_irq:		clear IRQ
  *
  * @mdma_filter:	filter MDMA modes
  * @udma_filter:	filter UDMA modes
@@ -718,6 +719,7 @@ struct ide_port_ops {
 	void	(*resetproc)(ide_drive_t *);
 	void	(*maskproc)(ide_drive_t *, int);
 	void	(*quirkproc)(ide_drive_t *);
+	void	(*clear_irq)(ide_drive_t *);
 
 	u8	(*mdma_filter)(ide_drive_t *);
 	u8	(*udma_filter)(ide_drive_t *);
@@ -779,8 +781,6 @@ typedef struct hwif_s {
 	const struct ide_tp_ops		*tp_ops;
 	const struct ide_port_ops	*port_ops;
 	const struct ide_dma_ops	*dma_ops;
-
-	void (*ide_dma_clear_irq)(ide_drive_t *drive);
 
 	/* dma physical region descriptor table (cpu view) */
 	unsigned int	*dmatable_cpu;
