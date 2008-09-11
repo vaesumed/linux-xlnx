@@ -504,6 +504,22 @@ config I2C_VERSATILE
 
 comment "External I2C/SMBus adapter drivers"
 
+config I2C_FLOPPY
+	tristate "Floppy controller adapter"
+	select I2C_ALGOBIT
+	default n
+	help
+	  This supports a simple do-it-yourself floppy controller to
+	  I2C adapters using the motor control lines for SDA and SCL,
+	  and the drive change input for SDA readback.
+
+	  This support is also available as a module.  If so, the module
+	  will be called i2c-floppy.
+
+	  If you do not have such a device, and do not plan to build one,
+	  it's safe to say N here. Do not say Y here and to the floppy
+	  driver unless you know exactly what you are doing.
+
 config I2C_PARPORT
 	tristate "Parallel port adapter"
 	depends on PARPORT
