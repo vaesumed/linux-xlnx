@@ -401,7 +401,7 @@ static int depca_isa_probe (struct platform_device *);
 
 static int __devexit depca_isa_remove(struct platform_device *pdev)
 {
-	return depca_device_remove(&pdev->dev);
+	return depca_common_remove(dev_get_drvdata(&pdev->dev));
 }
 
 static struct platform_driver depca_isa_driver = {
@@ -804,7 +804,7 @@ static int __init depca_hw_init (struct net_device *dev, struct device *device)
 
 	dev->mem_start = 0;
 
-	device->driver_data = dev;
+	dev_set_drvdata(device, dev);
 	SET_NETDEV_DEV (dev, device);
 
 	status = register_netdev(dev);
@@ -1598,13 +1598,11 @@ static int __init depca_eisa_probe (struct device *device)
 }
 #endif
 
-static int __devexit depca_device_remove (struct device *device)
+static int __devexit depca_common_remove (struct net_device *dev)
 {
-	struct net_device *dev;
 	struct depca_private *lp;
 	int bus;
 
-	dev  = device->driver_data;
 	lp   = dev->priv;
 
 	unregister_netdev (dev);
@@ -1615,6 +1613,14 @@ static int __devexit depca_device_remove (struct device *device)
 	free_netdev (dev);
 
 	return 0;
+}
+
+static int __devexit depca_device_remove (struct device *device)
+{
+	struct net_device *dev;
+
+	dev  = dev_get_drvdata(device);
+	return depca_common_remove(dev);
 }
 
 /*
