@@ -348,6 +348,7 @@ static int __init htab_dt_scan_page_sizes(unsigned long node,
 	return 0;
 }
 
+#ifdef CONFIG_HUGETLB_PAGE
 /* Scan for 16G memory blocks that have been set aside for huge pages
  * and reserve those blocks for 16G huge pages.
  */
@@ -385,6 +386,7 @@ static int __init htab_dt_scan_hugepage_blocks(unsigned long node,
 	add_gpage(phys_addr, block_size, expected_pages);
 	return 0;
 }
+#endif /* CONFIG_HUGETLB_PAGE */
 
 static void __init htab_init_page_sizes(void)
 {
