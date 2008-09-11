@@ -508,6 +508,7 @@ config I2C_FLOPPY
 	tristate "Floppy controller adapter"
 	select I2C_ALGOBIT
 	default n
+	depends on !BLK_DEV_FD && EXPERIMENTAL
 	help
 	  This supports a simple do-it-yourself floppy controller to
 	  I2C adapters using the motor control lines for SDA and SCL,
