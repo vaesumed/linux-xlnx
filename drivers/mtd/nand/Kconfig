@@ -68,12 +68,6 @@ config MTD_NAND_AMS_DELTA
 	help
 	  Support for NAND flash on Amstrad E3 (Delta).
 
-config MTD_NAND_TOTO
-	tristate "NAND Flash device on TOTO board"
-	depends on ARCH_OMAP && BROKEN
-	help
-	  Support for NAND flash on Texas Instruments Toto platform.
-
 config MTD_NAND_TS7250
 	tristate "NAND Flash device on TS-7250 board"
 	depends on MACH_TS72XX
@@ -340,6 +334,13 @@ config MTD_NAND_PXA3xx
 	  This enables the driver for the NAND flash device found on
 	  PXA3xx processors
 
+config MTD_NAND_PXA3xx_BUILTIN
+	bool "Use builtin definitions for some NAND chips (deprecated)"
+	depends on MTD_NAND_PXA3xx
+	help
+	  This enables builtin definitions for some NAND chips. This
+	  is deprecated in favor of platform specific data.
+
 config MTD_NAND_CM_X270
 	tristate "Support for NAND Flash on CM-X270 modules"
 	depends on MTD_NAND && MACH_ARMCORE
@@ -405,5 +406,12 @@ config MTD_NAND_FSL_UPM
 	help
 	  Enables support for NAND Flash chips wired onto Freescale PowerPC
 	  processor localbus with User-Programmable Machine support.
+
+config MTD_NAND_MXC
+	tristate "MXC NAND support"
+	depends on ARCH_MX2
+	help
+	  This enables the driver for the NAND flash controller on the
+	  MXC processors.
 
 endif # MTD_NAND
