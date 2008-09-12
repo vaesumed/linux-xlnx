@@ -17,6 +17,9 @@ void __blk_queue_free_tags(struct request_queue *q);
 
 void blk_unplug_work(struct work_struct *work);
 void blk_unplug_timeout(unsigned long data);
+void blk_rq_timed_out_timer(unsigned long data);
+int blk_delete_timer(struct request *);
+void blk_add_timer(struct request *);
 
 struct io_context *current_io_context(gfp_t gfp_flags, int node);
 
@@ -58,5 +61,17 @@ static inline int queue_congestion_off_threshold(struct request_queue *q)
 		bip_for_each_vec(bvl, _iter.bio->bi_integrity, _iter.i)
 
 #endif /* BLK_DEV_INTEGRITY */
+
+static inline int blk_cpu_to_group(int cpu)
+{
+#ifdef CONFIG_SCHED_MC
+	cpumask_t mask = cpu_coregroup_map(cpu);
+	return first_cpu(mask);
+#elif defined(CONFIG_SCHED_SMT)
+	return first_cpu(per_cpu(cpu_sibling_map, cpu));
+#else
+	return cpu;
+#endif
+}
 
 #endif
