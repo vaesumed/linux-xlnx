@@ -163,25 +163,25 @@ int hid_tmff_init(struct hid_device *hid)
 			switch (field->usage[0].hid) {
 			case THRUSTMASTER_USAGE_FF:
 				if (field->report_count < 2) {
-					dev_warn(hid->dev,
+					dev_warn(&hid->dev,
 						 "ignoring FF field with report_count < 2\n");
 					continue;
 				}
 
 				if (field->logical_maximum == field->logical_minimum) {
-					dev_warn(hid->dev,
+					dev_warn(&hid->dev,
 						 "ignoring FF field with logical_maximum == logical_minimum\n");
 					continue;
 				}
 
 				if (tmff->report && tmff->report != report) {
-					dev_warn(hid->dev,
+					dev_warn(&hid->dev,
 						 "ignoring FF field in other report\n");
 					continue;
 				}
 
 				if (tmff->ff_field && tmff->ff_field != field) {
-					dev_warn(hid->dev,
+					dev_warn(&hid->dev,
 						 "ignoring duplicate FF field\n");
 					continue;
 				}
@@ -203,7 +203,7 @@ int hid_tmff_init(struct hid_device *hid)
 				break;
 
 			default:
-				dev_warn(hid->dev,
+				dev_warn(&hid->dev,
 					 "ignoring unknown output usage %08x\n",
 					 field->usage[0].hid);
 				continue;
@@ -221,7 +221,7 @@ int hid_tmff_init(struct hid_device *hid)
 	if (error)
 		goto fail;
 
-	dev_info(hid->dev,
+	dev_info(&hid->dev,
 		 "Force feedback for ThrustMaster devices by Zinx Verituse <zinx@epicsol.org>\n");
 	return 0;
 
