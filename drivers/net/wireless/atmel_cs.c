@@ -234,7 +234,7 @@ static int atmel_config(struct pcmcia_device *link)
 	struct pcmcia_device_id *did;
 
 	dev = link->priv;
-	did = dev_get_drvdata(handle_to_dev(link));
+	did = dev_get_drvdata(&handle_to_dev(link));
 
 	DEBUG(0, "atmel_config(0x%p)\n", link);
 
