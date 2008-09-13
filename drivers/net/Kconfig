@@ -2379,7 +2379,7 @@ config EHEA
 
 config IXGBE
 	tristate "Intel(R) 10GbE PCI Express adapters support"
-	depends on PCI && INET
+	depends on PCI && INET && DCA
 	select INET_LRO
 	---help---
 	  This driver supports Intel(R) 10GbE PCI Express family of
