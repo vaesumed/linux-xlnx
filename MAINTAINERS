@@ -750,11 +750,13 @@ P:	Ville Syrjala
 M:	syrjala@sci.fi
 S:	Maintained
 
-ATL1 ETHERNET DRIVER
+ATLX ETHERNET DRIVERS
 P:	Jay Cliburn
 M:	jcliburn@gmail.com
 P:	Chris Snook
 M:	csnook@redhat.com
+P:	Jie Yang
+M:	jie.yang@atheros.com
 L:	atl1-devel@lists.sourceforge.net
 W:	http://sourceforge.net/projects/atl1
 W:	http://atl1.sourceforge.net
@@ -4363,7 +4365,7 @@ S:	Maintained
 USB VIDEO CLASS
 P:	Laurent Pinchart
 M:	laurent.pinchart@skynet.be
-L:	linx-uvc-devel@berlios.de
+L:	linux-uvc-devel@lists.berlios.de
 L:	video4linux-list@redhat.com
 W:	http://linux-uvc.berlios.de
 S:	Maintained
