@@ -169,8 +169,6 @@ struct thread_struct {
 #define INIT_MMAP \
 { &init_mm, 0, 0, NULL, PAGE_SHARED, VM_READ | VM_WRITE | VM_EXEC, 1, NULL, NULL }
 
-extern  struct pt_regs fake_swapper_regs;
-
 #define INIT_THREAD  {				\
 	.sp		= sizeof(init_stack) +	\
 			  (long) &init_stack,	\
@@ -268,6 +266,8 @@ extern unsigned long get_wchan(struct task_struct *p);
 
 #define KSTK_EIP(tsk)  ((tsk)->thread.pc)
 #define KSTK_ESP(tsk)  ((tsk)->thread.sp)
+
+#define user_stack_pointer(regs)	((regs)->sp)
 
 #define cpu_relax()	barrier()
 

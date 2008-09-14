@@ -10,6 +10,7 @@
 #ifdef __KERNEL__
 
 #include <linux/compiler.h>
+#include <linux/linkage.h>
 #include <asm/page.h>
 #include <asm/types.h>
 #include <asm/cache.h>
@@ -43,6 +44,8 @@ extern struct sh_cpuinfo cpu_data[];
 #define boot_cpu_data cpu_data[0]
 #define current_cpu_data cpu_data[smp_processor_id()]
 #define raw_current_cpu_data cpu_data[raw_smp_processor_id()]
+
+asmlinkage void __init sh_cpu_init(void);
 
 /*
  * User space process size: 2GB.
@@ -195,6 +198,8 @@ extern unsigned long get_wchan(struct task_struct *p);
 
 #define KSTK_EIP(tsk)  (task_pt_regs(tsk)->pc)
 #define KSTK_ESP(tsk)  (task_pt_regs(tsk)->regs[15])
+
+#define user_stack_pointer(regs)	((regs)->regs[15])
 
 #define cpu_sleep()	__asm__ __volatile__ ("sleep" : : : "memory")
 #define cpu_relax()	barrier()
