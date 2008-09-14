@@ -398,6 +398,7 @@ static struct mca_driver depca_mca_driver = {
 #endif
 
 static int depca_isa_probe (struct platform_device *);
+static int depca_common_remove(struct net_device *dev);
 
 static int __devexit depca_isa_remove(struct platform_device *pdev)
 {
