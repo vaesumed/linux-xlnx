@@ -27,6 +27,7 @@ config LCD_CLASS_DEVICE
 config LCD_CORGI
 	tristate "LCD Panel support for SHARP corgi/spitz model"
 	depends on LCD_CLASS_DEVICE && SPI_MASTER
+	depends on ARM
 	default n
 	help
 	  Say y here to support the LCD panels usually found on SHARP
