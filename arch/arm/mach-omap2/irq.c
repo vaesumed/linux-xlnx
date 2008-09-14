@@ -13,10 +13,10 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
+#include <linux/io.h>
 #include <mach/hardware.h>
 #include <asm/mach/irq.h>
 #include <asm/irq.h>
-#include <asm/io.h>
 
 #define INTC_REVISION	0x0000
 #define INTC_SYSCONFIG	0x0010
@@ -32,7 +32,7 @@
  * for each bank.. when in doubt, consult the TRM.
  */
 static struct omap_irq_bank {
-	unsigned long base_reg;
+	void __iomem *base_reg;
 	unsigned int nr_irqs;
 } __attribute__ ((aligned(4))) irq_banks[] = {
 	{
@@ -94,7 +94,7 @@ static void __init omap_irq_bank_init_one(struct omap_irq_bank *bank)
 	unsigned long tmp;
 
 	tmp = __raw_readl(bank->base_reg + INTC_REVISION) & 0xff;
-	printk(KERN_INFO "IRQ: Found an INTC at 0x%08lx "
+	printk(KERN_INFO "IRQ: Found an INTC at 0x%p "
 			 "(revision %ld.%ld) with %d interrupts\n",
 			 bank->base_reg, tmp >> 4, tmp & 0xf, bank->nr_irqs);
 
