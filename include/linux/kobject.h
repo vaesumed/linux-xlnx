@@ -105,6 +105,7 @@ struct kobj_type {
 	void (*release)(struct kobject *kobj);
 	struct sysfs_ops *sysfs_ops;
 	struct attribute **default_attrs;
+	const void *(*sysfs_tag)(struct kobject *kobj);
 };
 
 struct kobj_uevent_env {

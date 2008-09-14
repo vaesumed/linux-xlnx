@@ -30,6 +30,30 @@ DEFINE_SPINLOCK(sysfs_assoc_lock);
 static DEFINE_SPINLOCK(sysfs_ino_lock);
 static DEFINE_IDA(sysfs_ino_ida);
 
+static const void *sysfs_creation_tag(struct sysfs_dirent *parent_sd,
+				      struct sysfs_dirent *sd)
+{
+	const void *tag = NULL;
+
+	if (sysfs_tag_type(parent_sd)) {
+		struct kobject *kobj;
+		switch (sysfs_type(sd)) {
+		case SYSFS_DIR:
+			kobj = sd->s_dir.kobj;
+			break;
+		case SYSFS_KOBJ_LINK:
+			kobj = sd->s_symlink.target_sd->s_dir.kobj;
+			break;
+		default:
+			BUG();
+		}
+		tag = kobj->ktype->sysfs_tag(kobj);
+		/* NULL tags are reserved for internal use */
+		BUG_ON(tag == NULL);
+	}
+	return tag;
+}
+
 /**
  *	sysfs_link_sibling - link sysfs_dirent into sibling list
  *	@sd: sysfs_dirent of interest
@@ -85,6 +109,7 @@ static void sysfs_unlink_sibling(struct sysfs_dirent *sd)
 
 /**
  *	sysfs_get_dentry - get dentry for the given sysfs_dirent
+ *	@sb: superblock of the dentry to return
  *	@sd: sysfs_dirent of interest
  *
  *	Get dentry for @sd.  Dentry is looked up if currently not
@@ -97,10 +122,22 @@ static void sysfs_unlink_sibling(struct sysfs_dirent *sd)
  *	RETURNS:
  *	Pointer to found dentry on success, ERR_PTR() value on error.
  */
-struct dentry *sysfs_get_dentry(struct sysfs_dirent *sd)
+struct dentry *sysfs_get_dentry(struct super_block *sb,
+				struct sysfs_dirent *sd)
 {
-	struct dentry *dentry = dget(sysfs_sb->s_root);
+	struct dentry *dentry;
 
+	/* Bail if this sd won't show up in this superblock */
+	if (sd->s_parent) {
+		enum sysfs_tag_type type;
+		const void *tag;
+		type = sysfs_tag_type(sd->s_parent);
+		tag = sysfs_info(sb)->tag[type];
+		if (sd->s_tag != tag)
+			return ERR_PTR(-EXDEV);
+	}
+
+	dentry = dget(sb->s_root);
 	while (dentry->d_fsdata != sd) {
 		struct sysfs_dirent *cur;
 		struct dentry *parent;
@@ -419,10 +456,15 @@ void sysfs_addrm_start(struct sysfs_addrm_cxt *acxt,
  */
 int __sysfs_add_one(struct sysfs_addrm_cxt *acxt, struct sysfs_dirent *sd)
 {
-	if (sysfs_find_dirent(acxt->parent_sd, sd->s_name))
+	const void *tag = NULL;
+
+	tag = sysfs_creation_tag(acxt->parent_sd, sd);
+
+	if (sysfs_find_dirent(acxt->parent_sd, tag, sd->s_name))
 		return -EEXIST;
 
 	sd->s_parent = sysfs_get(acxt->parent_sd);
+	sd->s_tag = tag;
 
 	if (sysfs_type(sd) == SYSFS_DIR && acxt->parent_inode)
 		inc_nlink(acxt->parent_inode);
@@ -600,13 +642,17 @@ void sysfs_addrm_finish(struct sysfs_addrm_cxt *acxt)
  *	Pointer to sysfs_dirent if found, NULL if not.
  */
 struct sysfs_dirent *sysfs_find_dirent(struct sysfs_dirent *parent_sd,
+				       const void *tag,
 				       const unsigned char *name)
 {
 	struct sysfs_dirent *sd;
 
-	for (sd = parent_sd->s_dir.children; sd; sd = sd->s_sibling)
+	for (sd = parent_sd->s_dir.children; sd; sd = sd->s_sibling) {
+		if (sd->s_tag != tag)
+			continue;
 		if (!strcmp(sd->s_name, name))
 			return sd;
+	}
 	return NULL;
 }
 
@@ -630,12 +676,13 @@ struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
 	struct sysfs_dirent *sd;
 
 	mutex_lock(&sysfs_mutex);
-	sd = sysfs_find_dirent(parent_sd, name);
+	sd = sysfs_find_dirent(parent_sd, NULL, name);
 	sysfs_get(sd);
 	mutex_unlock(&sysfs_mutex);
 
 	return sd;
 }
+EXPORT_SYMBOL_GPL(sysfs_get_dirent);
 
 static int create_dir(struct kobject *kobj, struct sysfs_dirent *parent_sd,
 		      const char *name, struct sysfs_dirent **p_sd)
@@ -696,13 +743,18 @@ static struct dentry * sysfs_lookup(struct inode *dir, struct dentry *dentry,
 				struct nameidata *nd)
 {
 	struct dentry *ret = NULL;
-	struct sysfs_dirent *parent_sd = dentry->d_parent->d_fsdata;
+	struct dentry *parent = dentry->d_parent;
+	struct sysfs_dirent *parent_sd = parent->d_fsdata;
 	struct sysfs_dirent *sd;
 	struct inode *inode;
+	enum sysfs_tag_type type;
+	const void *tag;
 
 	mutex_lock(&sysfs_mutex);
 
-	sd = sysfs_find_dirent(parent_sd, dentry->d_name.name);
+	type = sysfs_tag_type(parent_sd);
+	tag = sysfs_info(parent->d_sb)->tag[type];
+	sd = sysfs_find_dirent(parent_sd, tag, dentry->d_name.name);
 
 	/* no such entry */
 	if (!sd) {
@@ -792,124 +844,199 @@ void sysfs_remove_dir(struct kobject * kobj)
 	__sysfs_remove_dir(sd);
 }
 
-int sysfs_rename_dir(struct kobject * kobj, const char *new_name)
+/**
+ *	__sysfs_get_dentry - get dentry for the given sysfs_dirent
+ *	@sb: superblock of the dentry to return
+ *	@sd: sysfs_dirent of interest
+ *
+ *	Get dentry for @sd.  Only return a dentry if one currently
+ *	exists.
+ *
+ *	LOCKING:
+ *	Kernel thread context (may sleep)
+ *
+ *	RETURNS:
+ *	Pointer to found dentry on success, NULL on failure.
+ */
+static struct dentry *__sysfs_get_dentry(struct super_block *sb,
+					 struct sysfs_dirent *sd)
 {
-	struct sysfs_dirent *sd = kobj->sd;
-	struct dentry *parent = NULL;
-	struct dentry *old_dentry = NULL, *new_dentry = NULL;
-	const char *dup_name = NULL;
+	struct inode *inode;
+	struct dentry *dentry = NULL;
+
+	inode = ilookup5_nowait(sysfs_sb, sd->s_ino, sysfs_ilookup_test, sd);
+	if (inode && !(inode->i_state & I_NEW)) {
+		struct dentry *alias;
+		spin_lock(&dcache_lock);
+		list_for_each_entry(alias, &inode->i_dentry, d_alias) {
+			if (!IS_ROOT(alias) && d_unhashed(alias))
+				continue;
+			if (alias->d_sb != sb)
+				continue;
+			dentry = alias;
+			dget_locked(dentry);
+			break;
+		}
+		spin_unlock(&dcache_lock);
+	}
+	iput(inode);
+	return dentry;
+}
+
+struct sysfs_rename_struct {
+	struct list_head list;
+	struct dentry *old_dentry;
+	struct dentry *new_dentry;
+	struct dentry *old_parent;
+	struct dentry *new_parent;
+};
+
+static void post_rename(struct list_head *head)
+{
+	struct sysfs_rename_struct *srs;
+	while (!list_empty(head)) {
+		srs = list_entry(head->next, struct sysfs_rename_struct, list);
+		dput(srs->old_dentry);
+		dput(srs->new_dentry);
+		dput(srs->old_parent);
+		dput(srs->new_parent);
+		list_del(&srs->list);
+		kfree(srs);
+	}
+}
+
+static int prep_rename(struct list_head *head,
+	struct sysfs_dirent *sd, struct sysfs_dirent *new_parent_sd,
+	const char *name)
+{
+	struct sysfs_rename_struct *srs;
+	struct super_block *sb;
+	struct dentry *dentry;
 	int error;
 
+	list_for_each_entry(sb, &sysfs_fs_type.fs_supers, s_instances) {
+		dentry = sysfs_get_dentry(sb, sd);
+		if (dentry == ERR_PTR(-EXDEV))
+			continue;
+		if (IS_ERR(dentry)) {
+			error = PTR_ERR(dentry);
+			goto err_out;
+		}
+
+		srs = kzalloc(sizeof(*srs), GFP_KERNEL);
+		if (!srs) {
+			error = -ENOMEM;
+			dput(dentry);
+			goto err_out;
+		}
+
+		INIT_LIST_HEAD(&srs->list);
+		list_add(head, &srs->list);
+		srs->old_dentry = dentry;
+		srs->old_parent = dget(dentry->d_parent);
+
+		dentry = sysfs_get_dentry(sb, new_parent_sd);
+		if (IS_ERR(dentry)) {
+			error = PTR_ERR(dentry);
+			goto err_out;
+		}
+		srs->new_parent = dentry;
+
+		error = -ENOMEM;
+		dentry = d_alloc_name(srs->new_parent, name);
+		if (!dentry)
+			goto err_out;
+		srs->new_dentry = dentry;
+	}
+	return 0;
+
+err_out:
+	post_rename(head);
+	return error;
+}
+
+static int sysfs_mv_dir(struct sysfs_dirent *sd,
+	struct sysfs_dirent *new_parent_sd, const char *new_name)
+{
+	struct list_head todo;
+	struct sysfs_rename_struct *srs;
+	struct inode *old_parent_inode = NULL, *new_parent_inode = NULL;
+	const char *dup_name = NULL;
+	const void *old_tag, *tag;
+	int error;
+
+	INIT_LIST_HEAD(&todo);
+	BUG_ON(!sd->s_parent);
 	mutex_lock(&sysfs_rename_mutex);
+	if (!new_parent_sd)
+		new_parent_sd = &sysfs_root;
+
+	old_tag = sd->s_tag;
+	tag = sysfs_creation_tag(sd->s_parent, sd);
 
 	error = 0;
-	if (strcmp(sd->s_name, new_name) == 0)
-		goto out;	/* nothing to rename */
+	if ((sd->s_parent == new_parent_sd) && (old_tag == tag) &&
+	    (strcmp(sd->s_name, new_name) == 0))
+		goto out;	/* nothing to do */
 
-	/* get the original dentry */
-	old_dentry = sysfs_get_dentry(sd);
-	if (IS_ERR(old_dentry)) {
-		error = PTR_ERR(old_dentry);
-		old_dentry = NULL;
-		goto out;
+	sysfs_grab_supers();
+	if (old_tag == tag) {
+		error = prep_rename(&todo, sd, new_parent_sd, new_name);
+		if (error)
+			goto out_release;
 	}
 
-	parent = old_dentry->d_parent;
+	error = -ENOMEM;
+	mutex_lock(&sysfs_mutex);
+	old_parent_inode = sysfs_get_inode(sd->s_parent);
+	new_parent_inode = sysfs_get_inode(new_parent_sd);
+	mutex_unlock(&sysfs_mutex);
+	if (!old_parent_inode || !new_parent_inode)
+		goto out_release;
 
-	/* lock parent and get dentry for new name */
-	mutex_lock(&parent->d_inode->i_mutex);
+again:
+	mutex_lock(&old_parent_inode->i_mutex);
+	if (old_parent_inode != new_parent_inode) {
+		if (!mutex_trylock(&new_parent_inode->i_mutex)) {
+			mutex_unlock(&old_parent_inode->i_mutex);
+			goto again;
+		}
+	}
 	mutex_lock(&sysfs_mutex);
 
 	error = -EEXIST;
-	if (sysfs_find_dirent(sd->s_parent, new_name))
+	if (sysfs_find_dirent(new_parent_sd, tag, new_name))
 		goto out_unlock;
 
-	error = -ENOMEM;
-	new_dentry = d_alloc_name(parent, new_name);
-	if (!new_dentry)
-		goto out_unlock;
-
-	/* rename kobject and sysfs_dirent */
+	/* rename sysfs_dirent */
 	error = -ENOMEM;
 	new_name = dup_name = kstrdup(new_name, GFP_KERNEL);
 	if (!new_name)
 		goto out_unlock;
 
-	error = kobject_set_name(kobj, "%s", new_name);
-	if (error)
-		goto out_unlock;
-
 	dup_name = sd->s_name;
 	sd->s_name = new_name;
+	sd->s_tag = tag;
 
-	/* rename */
-	d_add(new_dentry, NULL);
-	d_move(old_dentry, new_dentry);
-
-	error = 0;
- out_unlock:
-	mutex_unlock(&sysfs_mutex);
-	mutex_unlock(&parent->d_inode->i_mutex);
-	kfree(dup_name);
-	dput(old_dentry);
-	dput(new_dentry);
- out:
-	mutex_unlock(&sysfs_rename_mutex);
-	return error;
-}
-
-int sysfs_move_dir(struct kobject *kobj, struct kobject *new_parent_kobj)
-{
-	struct sysfs_dirent *sd = kobj->sd;
-	struct sysfs_dirent *new_parent_sd;
-	struct dentry *old_parent, *new_parent = NULL;
-	struct dentry *old_dentry = NULL, *new_dentry = NULL;
-	int error;
-
-	mutex_lock(&sysfs_rename_mutex);
-	BUG_ON(!sd->s_parent);
-	new_parent_sd = new_parent_kobj->sd ? new_parent_kobj->sd : &sysfs_root;
-
-	error = 0;
-	if (sd->s_parent == new_parent_sd)
-		goto out;	/* nothing to move */
-
-	/* get dentries */
-	old_dentry = sysfs_get_dentry(sd);
-	if (IS_ERR(old_dentry)) {
-		error = PTR_ERR(old_dentry);
-		old_dentry = NULL;
-		goto out;
-	}
-	old_parent = old_dentry->d_parent;
-
-	new_parent = sysfs_get_dentry(new_parent_sd);
-	if (IS_ERR(new_parent)) {
-		error = PTR_ERR(new_parent);
-		new_parent = NULL;
-		goto out;
+	/* rename dcache entries */
+	list_for_each_entry(srs, &todo, list) {
+		d_add(srs->new_dentry, NULL);
+		d_move(srs->old_dentry, srs->new_dentry);
 	}
 
-again:
-	mutex_lock(&old_parent->d_inode->i_mutex);
-	if (!mutex_trylock(&new_parent->d_inode->i_mutex)) {
-		mutex_unlock(&old_parent->d_inode->i_mutex);
-		goto again;
+	/* If we are moving across superblocks drop the dcache entries */
+	if (old_tag != tag) {
+		struct super_block *sb;
+		struct dentry *dentry;
+		list_for_each_entry(sb, &sysfs_fs_type.fs_supers, s_instances) {
+			dentry = __sysfs_get_dentry(sb, sd);
+			if (!dentry)
+				continue;
+			shrink_dcache_parent(dentry);
+			d_drop(dentry);
+			dput(dentry);
+		}
 	}
-	mutex_lock(&sysfs_mutex);
-
-	error = -EEXIST;
-	if (sysfs_find_dirent(new_parent_sd, sd->s_name))
-		goto out_unlock;
-
-	error = -ENOMEM;
-	new_dentry = d_alloc_name(new_parent, sd->s_name);
-	if (!new_dentry)
-		goto out_unlock;
-
-	error = 0;
-	d_add(new_dentry, NULL);
-	d_move(old_dentry, new_dentry);
 
 	/* Remove from old parent's list and insert into new parent's list. */
 	sysfs_unlink_sibling(sd);
@@ -918,16 +1045,32 @@ again:
 	sd->s_parent = new_parent_sd;
 	sysfs_link_sibling(sd);
 
- out_unlock:
+	error = 0;
+out_unlock:
 	mutex_unlock(&sysfs_mutex);
-	mutex_unlock(&new_parent->d_inode->i_mutex);
-	mutex_unlock(&old_parent->d_inode->i_mutex);
- out:
-	dput(new_parent);
-	dput(old_dentry);
-	dput(new_dentry);
+	if (new_parent_inode != old_parent_inode)
+		mutex_unlock(&new_parent_inode->i_mutex);
+	mutex_unlock(&old_parent_inode->i_mutex);
+	kfree(dup_name);
+
+out_release:
+	iput(new_parent_inode);
+	iput(old_parent_inode);
+	post_rename(&todo);
+	sysfs_release_supers();
+out:
 	mutex_unlock(&sysfs_rename_mutex);
 	return error;
+}
+
+int sysfs_rename_dir(struct kobject * kobj, const char *new_name)
+{
+	return sysfs_mv_dir(kobj->sd, kobj->sd->s_parent, new_name);
+}
+
+int sysfs_move_dir(struct kobject *kobj, struct kobject *new_parent_kobj)
+{
+	return sysfs_mv_dir(kobj->sd, new_parent_kobj->sd, kobj->sd->s_name);
 }
 
 /* Relationship between s_mode and the DT_xxx types */
@@ -938,10 +1081,12 @@ static inline unsigned char dt_type(struct sysfs_dirent *sd)
 
 static int sysfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 {
-	struct dentry *dentry = filp->f_path.dentry;
-	struct sysfs_dirent * parent_sd = dentry->d_fsdata;
+	struct dentry *parent = filp->f_path.dentry;
+	struct sysfs_dirent *parent_sd = parent->d_fsdata;
 	struct sysfs_dirent *pos;
 	ino_t ino;
+	enum sysfs_tag_type type;
+	const void *tag;
 
 	if (filp->f_pos == 0) {
 		ino = parent_sd->s_ino;
@@ -959,6 +1104,9 @@ static int sysfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 	if ((filp->f_pos > 1) && (filp->f_pos < INT_MAX)) {
 		mutex_lock(&sysfs_mutex);
 
+		type = sysfs_tag_type(parent_sd);
+		tag = sysfs_info(parent->d_sb)->tag[type];
+
 		/* Skip the dentries we have already reported */
 		pos = parent_sd->s_dir.children;
 		while (pos && (filp->f_pos > pos->s_ino))
@@ -967,6 +1115,9 @@ static int sysfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 		for ( ; pos; pos = pos->s_sibling) {
 			const char * name;
 			int len;
+
+			if (pos->s_tag != tag)
+				continue;
 
 			name = pos->s_name;
 			len = strlen(name);
@@ -988,3 +1139,35 @@ const struct file_operations sysfs_dir_operations = {
 	.read		= generic_read_dir,
 	.readdir	= sysfs_readdir,
 };
+
+/**
+ *	sysfs_make_tagged_dir - Require tags of all the entries in a directory.
+ *	@kobj:	object whose children should be filtered by tags
+ *
+ *	Once tagging has been enabled on a directory the contents
+ *	of the directory become dependent upon context captured when
+ *	sysfs was mounted.
+ */
+int sysfs_make_tagged_dir(struct kobject *kobj, enum sysfs_tag_type type)
+{
+	struct sysfs_dirent *sd;
+	int err;
+
+	err = -ENOENT;
+	sd = kobj->sd;
+
+	mutex_lock(&sysfs_mutex);
+	err = -EINVAL;
+	/* We can only enable tagging when we have a valid tag type
+	 * on empty directories where taggint has not already been
+	 * enabled.
+	 */
+	if ((type > SYSFS_TAG_TYPE_NONE) && (type < SYSFS_TAG_TYPES) &&
+	    tag_ops[type] && !sysfs_tag_type(sd) &&
+	    (sysfs_type(sd) == SYSFS_DIR) && !sd->s_dir.children) {
+		err = 0;
+		sd->s_flags |= (type << SYSFS_TAG_TYPE_SHIFT);
+	}
+	mutex_unlock(&sysfs_mutex);
+	return err;
+}
