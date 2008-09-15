@@ -1033,13 +1033,11 @@ struct inode *gfs2_createi(struct gfs2_holder *ghs, const struct qstr *name,
 
 	if (bh)
 		brelse(bh);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
 	return inode;
 
 fail_gunlock2:
 	gfs2_glock_dq_uninit(ghs + 1);
-	if (inode)
+	if (inode && !IS_ERR(inode))
 		iput(inode);
 fail_gunlock:
 	gfs2_glock_dq(ghs);
@@ -1138,54 +1136,6 @@ int gfs2_unlink_ok(struct gfs2_inode *dip, const struct qstr *name,
 		return error;
 
 	return 0;
-}
-
-/*
- * gfs2_ok_to_move - check if it's ok to move a directory to another directory
- * @this: move this
- * @to: to here
- *
- * Follow @to back to the root and make sure we don't encounter @this
- * Assumes we already hold the rename lock.
- *
- * Returns: errno
- */
-
-int gfs2_ok_to_move(struct gfs2_inode *this, struct gfs2_inode *to)
-{
-	struct inode *dir = &to->i_inode;
-	struct super_block *sb = dir->i_sb;
-	struct inode *tmp;
-	struct qstr dotdot;
-	int error = 0;
-
-	gfs2_str2qstr(&dotdot, "..");
-
-	igrab(dir);
-
-	for (;;) {
-		if (dir == &this->i_inode) {
-			error = -EINVAL;
-			break;
-		}
-		if (dir == sb->s_root->d_inode) {
-			error = 0;
-			break;
-		}
-
-		tmp = gfs2_lookupi(dir, &dotdot, 1);
-		if (IS_ERR(tmp)) {
-			error = PTR_ERR(tmp);
-			break;
-		}
-
-		iput(dir);
-		dir = tmp;
-	}
-
-	iput(dir);
-
-	return error;
 }
 
 /**
