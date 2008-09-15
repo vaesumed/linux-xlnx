@@ -31,10 +31,10 @@ static void ieee80211_teardown_sdata(struct net_device *dev)
 	int flushed;
 	int i;
 
-	ieee80211_debugfs_remove_netdev(sdata);
-
 	/* free extra data */
 	ieee80211_free_keys(sdata);
+
+	ieee80211_debugfs_remove_netdev(sdata);
 
 	for (i = 0; i < IEEE80211_FRAGMENT_MAX; i++)
 		__skb_queue_purge(&sdata->fragments[i].skb_list);
@@ -56,7 +56,7 @@ static void ieee80211_teardown_sdata(struct net_device *dev)
 	case IEEE80211_IF_TYPE_MESH_POINT:
 		/* Allow compiler to elide mesh_rmc_free call. */
 		if (ieee80211_vif_is_mesh(&sdata->vif))
-			mesh_rmc_free(dev);
+			mesh_rmc_free(sdata);
 		/* fall through */
 	case IEEE80211_IF_TYPE_STA:
 	case IEEE80211_IF_TYPE_IBSS:
@@ -241,15 +241,13 @@ int ieee80211_if_add(struct ieee80211_local *local, const char *name,
 	return ret;
 }
 
-void ieee80211_if_remove(struct net_device *dev)
+void ieee80211_if_remove(struct ieee80211_sub_if_data *sdata)
 {
-	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
-
 	ASSERT_RTNL();
 
 	list_del_rcu(&sdata->list);
 	synchronize_rcu();
-	unregister_netdevice(dev);
+	unregister_netdevice(sdata->dev);
 }
 
 /*

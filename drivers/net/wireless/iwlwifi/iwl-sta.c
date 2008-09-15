@@ -191,20 +191,20 @@ static void iwl_set_ht_add_station(struct iwl_priv *priv, u8 index,
 	if (!sta_ht_inf || !sta_ht_inf->ht_supported)
 		goto done;
 
-	mimo_ps_mode = (sta_ht_inf->cap & IEEE80211_HT_CAP_MIMO_PS) >> 2;
+	mimo_ps_mode = (sta_ht_inf->cap & IEEE80211_HT_CAP_SM_PS) >> 2;
 
 	sta_flags = priv->stations[index].sta.station_flags;
 
 	sta_flags &= ~(STA_FLG_RTS_MIMO_PROT_MSK | STA_FLG_MIMO_DIS_MSK);
 
 	switch (mimo_ps_mode) {
-	case WLAN_HT_CAP_MIMO_PS_STATIC:
+	case WLAN_HT_CAP_SM_PS_STATIC:
 		sta_flags |= STA_FLG_MIMO_DIS_MSK;
 		break;
-	case WLAN_HT_CAP_MIMO_PS_DYNAMIC:
+	case WLAN_HT_CAP_SM_PS_DYNAMIC:
 		sta_flags |= STA_FLG_RTS_MIMO_PROT_MSK;
 		break;
-	case WLAN_HT_CAP_MIMO_PS_DISABLED:
+	case WLAN_HT_CAP_SM_PS_DISABLED:
 		break;
 	default:
 		IWL_WARNING("Invalid MIMO PS mode %d\n", mimo_ps_mode);
@@ -966,6 +966,11 @@ int iwl_get_sta_id(struct iwl_priv *priv, struct ieee80211_hdr *hdr)
 			       "Defaulting to broadcast...\n",
 			       print_mac(mac, hdr->addr1));
 		iwl_print_hex_dump(priv, IWL_DL_DROP, (u8 *) hdr, sizeof(*hdr));
+		return priv->hw_params.bcast_sta_id;
+
+	/* If we are in monitor mode, use BCAST. This is required for
+	 * packet injection. */
+	case IEEE80211_IF_TYPE_MNTR:
 		return priv->hw_params.bcast_sta_id;
 
 	default:
