@@ -1493,6 +1493,15 @@ el3_common_resume(struct net_device *dev)
 	return 0;
 }
 
+static int
+el3_resume(struct device *pdev)
+{
+	struct net_device *dev;
+
+	dev = dev_get_drvdata(pdev);
+	return el3_common_resume(dev);
+}
+
 #endif /* CONFIG_PM */
 
 module_param(debug,int, 0);
