@@ -1,0 +1,69 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing m68k based on d1c6d2e547148c5aa0c0a4ff6aac82f7c6da1d8b
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard d1c6d2e547148c5aa0c0a4ff6aac82f7c6da1d8b
+HEAD is now at d1c6d2e MN10300: Change the fault handler to check in_atomic() not in_interrupt()
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+m68k-use-bcd2bin-bin2bcd.diff
+m68k-use-percent-pS-infrastructure.diff
+m68k-put-bss-at-end-of-data-section.diff
+m68k-add-notes-to-init-data.diff
+m68k-reverse-platform-mmu-logic-so-sun3-is-last.diff
+amiga-amiserial-no-serial-console-if-modular.diff
+amiga-export-key_maps.diff
+atari-kill-unused-atari_kbd_translate.diff
+atari-define-rtc_lock.diff
+m68k-add-dma_sync_single_range_for_cpu-device.diff
+m68k-asm-pci-h-needs-asm-generic-pci-dma-compat.h.diff
+m68k+parisc-hp_sdc_rtc-printf-format-warnings.diff
+atari-remove-the-broken-Hades-support.diff
+m68k-remove-no-longer-used-pci-code.diff
+m68k-init_irq_proc-depends-on-CONFIG_PROC_FS.diff
+atari-scsi-needs-nvram.diff
+net-rfkill-rfkill-input-c-needs-linux-sched-h.diff
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.27-rc6
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard adee14b2e1557d0a8559f29681732d05a89dfc35
+HEAD is now at adee14b Linux 2.6.27-rc6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-atxp1-fix-detection.patch
+hwmon-ad7414-make-ad7414_update_device-static.patch
+hwmon-lm90-01-function-for-16-bit-read.patch
+hwmon-lm90-02-max6657-extra-local-res.patch
+hwmon-lm90-03-max6657-has-no-low-limit-bytes.patch
+hwmon-lm90-04-update-links.patch
+hwmon-lm90-05-convert-some-macros-to-static-functions.patch
+hwmon-lm90-06-support-adt7461-in-extended-mode.patch
+hwmon-lm90-07-rename-temperature-conversion-functions.patch
+hwmon-lm90-08-support-max6646-max6647-and-max6649.patch
+hwmon-lm90-09-dont-spam-the-log.patch
+hwmon-lm87-01-fix-masking-of-config-register-in-lm87_init_client.patch
+hwmon-lm87-02-restore-original-configuration-register-on-removal.patch
+hwmon-lm87-03-add-support-for-configuration-through-platform_data.patch
+hwmon-ams-01-convert-to-new-style-i2c.patch
+hwmon-ams-02-fix-permissions-on-joystick-module-parameter.patch
+hwmon-ams-03-fix-locking-issues.patch
+hwmon-ams-04-simplify-irq-handling-routine.patch
+hwmon-lm85-01-rework-the-device-detection.patch
+hwmon-lm85-02-standard-pwm-freq-interface.patch
+hwmon-lm85-03-pwm-freq-closest-match.patch
+hwmon-lm85-04-second-pwm-freq-table.patch
+hwmon-lm85-05-convert-to-new-style-i2c.patch
+hwmon-lm85-06-optimize-RANGE_TO_REG.patch
+hwmon-lm85-07-improve-label-names.patch
+hwmon-lm78-01-fix-pnp-io-conflict.patch
+hwmon-lm78-02-alias-detect.patch
+hwmon-lm78-03-fix-winbond-misdetection.patch
+hwmon-lm78-04-dont-abuse-i2c_client.patch
+hwmon-lm78-05-convert-to-new-style-i2c.patch
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
