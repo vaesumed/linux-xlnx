@@ -74,4 +74,5 @@ pxa2xx_cs-$(CONFIG_PXA_SHARPSL)			+= pxa2xx_sharpsl.o
 pxa2xx_cs-$(CONFIG_MACH_ARMCORE)		+= pxa2xx_cm_x270.o
 pxa2xx_cs-$(CONFIG_MACH_PALMTX)			+= pxa2xx_palmtx.o
 pxa2xx_cs-$(CONFIG_MACH_PALMLD)			+= pxa2xx_palmld.o
+pxa2xx_cs-$(CONFIG_ARCH_VIPER)			+= pxa2xx_viper.o
 
