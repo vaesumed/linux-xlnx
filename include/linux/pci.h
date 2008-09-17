@@ -353,7 +353,6 @@ struct pci_bus_region {
 struct pci_dynids {
 	spinlock_t lock;            /* protects list, index */
 	struct list_head list;      /* for IDs added at runtime */
-	unsigned int use_driver_data:1; /* pci_device_id->driver_data is used */
 };
 
 /* ---------------------------------------------------------------- */
@@ -649,6 +648,7 @@ pci_power_t pci_choose_state(struct pci_dev *dev, pm_message_t state);
 bool pci_pme_capable(struct pci_dev *dev, pci_power_t state);
 void pci_pme_active(struct pci_dev *dev, bool enable);
 int pci_enable_wake(struct pci_dev *dev, pci_power_t state, int enable);
+int pci_wake_from_d3(struct pci_dev *dev, bool enable);
 pci_power_t pci_target_state(struct pci_dev *dev);
 int pci_prepare_to_sleep(struct pci_dev *dev);
 int pci_back_from_sleep(struct pci_dev *dev);
