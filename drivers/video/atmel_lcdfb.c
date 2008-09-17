@@ -943,7 +943,7 @@ static int __init atmel_lcdfb_probe(struct platform_device *pdev)
 	ret = register_framebuffer(info);
 	if (ret < 0) {
 		dev_err(dev, "failed to register framebuffer device: %d\n", ret);
-		goto free_cmap;
+		goto reset_drvdata;
 	}
 
 	/* add selected videomode to modelist */
@@ -959,7 +959,8 @@ static int __init atmel_lcdfb_probe(struct platform_device *pdev)
 
 	return 0;
 
-
+reset_drvdata:
+	dev_set_drvdata(dev, NULL);
 free_cmap:
 	fb_dealloc_cmap(&info->cmap);
 unregister_irqs:
@@ -996,10 +997,11 @@ static int __exit atmel_lcdfb_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct fb_info *info = dev_get_drvdata(dev);
-	struct atmel_lcdfb_info *sinfo = info->par;
+	struct atmel_lcdfb_info *sinfo;
 
-	if (!sinfo)
+	if (!info || !info->par)
 		return 0;
+	sinfo = info->par;
 
 	cancel_work_sync(&sinfo->task);
 	exit_backlight(sinfo);
