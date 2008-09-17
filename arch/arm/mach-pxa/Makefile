@@ -29,15 +29,16 @@ obj-$(CONFIG_MACH_MAINSTONE)	+= mainstone.o
 obj-$(CONFIG_ARCH_PXA_IDP)	+= idp.o
 obj-$(CONFIG_MACH_TRIZEPS4)	+= trizeps4.o
 obj-$(CONFIG_MACH_COLIBRI)	+= colibri.o
-obj-$(CONFIG_PXA_SHARP_C7xx)	+= corgi.o corgi_ssp.o corgi_lcd.o sharpsl_pm.o corgi_pm.o
-obj-$(CONFIG_PXA_SHARP_Cxx00)	+= spitz.o corgi_ssp.o corgi_lcd.o sharpsl_pm.o spitz_pm.o
+obj-$(CONFIG_PXA_SHARP_C7xx)	+= corgi.o sharpsl_pm.o corgi_pm.o
+obj-$(CONFIG_PXA_SHARP_Cxx00)	+= spitz.o sharpsl_pm.o spitz_pm.o
 obj-$(CONFIG_MACH_AKITA)	+= akita-ioexp.o
-obj-$(CONFIG_MACH_POODLE)	+= poodle.o corgi_ssp.o
+obj-$(CONFIG_MACH_POODLE)	+= poodle.o
 obj-$(CONFIG_MACH_PCM027)	+= pcm027.o
 obj-$(CONFIG_MACH_PCM990_BASEBOARD)	+= pcm990-baseboard.o
 obj-$(CONFIG_MACH_TOSA)		+= tosa.o
 obj-$(CONFIG_MACH_EM_X270)	+= em-x270.o
 obj-$(CONFIG_MACH_MAGICIAN)	+= magician.o
+obj-$(CONFIG_MACH_MIOA701)	+= mioa701.o mioa701_bootresume.o
 obj-$(CONFIG_ARCH_PXA_ESERIES)	+= eseries.o eseries_udc.o
 obj-$(CONFIG_MACH_E740)		+= e740_lcd.o
 obj-$(CONFIG_MACH_E750)		+= e750_lcd.o
@@ -55,6 +56,7 @@ obj-$(CONFIG_MACH_TAVOREVB)	+= tavorevb.o
 obj-$(CONFIG_MACH_SAAR)		+= saar.o
 
 obj-$(CONFIG_MACH_ARMCORE)      += cm-x270.o
+obj-$(CONFIG_MACH_CM_X300)      += cm-x300.o
 obj-$(CONFIG_PXA_EZX)           += ezx.o
 
 # Support for blinky lights
