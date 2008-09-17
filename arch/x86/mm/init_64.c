@@ -88,6 +88,62 @@ early_param("gbpages", parse_direct_gbpages_on);
 
 int after_bootmem;
 
+unsigned long __supported_pte_mask __read_mostly = ~0UL;
+EXPORT_SYMBOL_GPL(__supported_pte_mask);
+
+static int do_not_nx __cpuinitdata;
+
+/*
+ * noexec=on|off
+ * Control non-executable mappings for 64-bit processes.
+ *
+ * on	Enable (default)
+ * off	Disable
+ */
+static int __init nonx_setup(char *str)
+{
+	if (!str)
+		return -EINVAL;
+	if (!strncmp(str, "on", 2)) {
+		__supported_pte_mask |= _PAGE_NX;
+		do_not_nx = 0;
+	} else if (!strncmp(str, "off", 3)) {
+		do_not_nx = 1;
+		__supported_pte_mask &= ~_PAGE_NX;
+	}
+	return 0;
+}
+early_param("noexec", nonx_setup);
+
+void __cpuinit check_efer(void)
+{
+	unsigned long efer;
+
+	rdmsrl(MSR_EFER, efer);
+	if (!(efer & EFER_NX) || do_not_nx)
+		__supported_pte_mask &= ~_PAGE_NX;
+}
+
+int force_personality32;
+
+/*
+ * noexec32=on|off
+ * Control non executable heap for 32bit processes.
+ * To control the stack too use noexec=off
+ *
+ * on	PROT_READ does not imply PROT_EXEC for 32-bit processes (default)
+ * off	PROT_READ implies PROT_EXEC
+ */
+static int __init nonx32_setup(char *str)
+{
+	if (!strcmp(str, "on"))
+		force_personality32 &= ~READ_IMPLIES_EXEC;
+	else if (!strcmp(str, "off"))
+		force_personality32 |= READ_IMPLIES_EXEC;
+	return 1;
+}
+__setup("noexec32=", nonx32_setup);
+
 /*
  * NOTE: This function is marked __ref because it calls __init function
  * (alloc_bootmem_pages). It's safe to do it ONLY when after_bootmem == 0.
@@ -225,7 +281,7 @@ void __init init_extra_mapping_uc(unsigned long phys, unsigned long size)
 void __init cleanup_highmap(void)
 {
 	unsigned long vaddr = __START_KERNEL_map;
-	unsigned long end = round_up((unsigned long)_end, PMD_SIZE) - 1;
+	unsigned long end = roundup((unsigned long)_end, PMD_SIZE) - 1;
 	pmd_t *pmd = level2_kernel_pgt;
 	pmd_t *last_pmd = pmd + PTRS_PER_PMD;
 
@@ -451,14 +507,14 @@ static void __init find_early_table_space(unsigned long end)
 	unsigned long puds, pmds, ptes, tables, start;
 
 	puds = (end + PUD_SIZE - 1) >> PUD_SHIFT;
-	tables = round_up(puds * sizeof(pud_t), PAGE_SIZE);
+	tables = roundup(puds * sizeof(pud_t), PAGE_SIZE);
 	if (direct_gbpages) {
 		unsigned long extra;
 		extra = end - ((end>>PUD_SHIFT) << PUD_SHIFT);
 		pmds = (extra + PMD_SIZE - 1) >> PMD_SHIFT;
 	} else
 		pmds = (end + PMD_SIZE - 1) >> PMD_SHIFT;
-	tables += round_up(pmds * sizeof(pmd_t), PAGE_SIZE);
+	tables += roundup(pmds * sizeof(pmd_t), PAGE_SIZE);
 
 	if (cpu_has_pse) {
 		unsigned long extra;
@@ -466,7 +522,7 @@ static void __init find_early_table_space(unsigned long end)
 		ptes = (extra + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	} else
 		ptes = (end + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	tables += round_up(ptes * sizeof(pte_t), PAGE_SIZE);
+	tables += roundup(ptes * sizeof(pte_t), PAGE_SIZE);
 
 	/*
 	 * RED-PEN putting page tables only on node 0 could
@@ -768,6 +824,8 @@ static struct kcore_list kcore_mem, kcore_vmalloc, kcore_kernel,
 void __init mem_init(void)
 {
 	long codesize, reservedpages, datasize, initsize;
+
+	start_periodic_check_for_corruption();
 
 	pci_iommu_alloc();
 

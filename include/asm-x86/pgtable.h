@@ -1,5 +1,5 @@
-#ifndef _ASM_X86_PGTABLE_H
-#define _ASM_X86_PGTABLE_H
+#ifndef ASM_X86__PGTABLE_H
+#define ASM_X86__PGTABLE_H
 
 #define FIRST_USER_ADDRESS	0
 
@@ -19,6 +19,7 @@
 #define _PAGE_BIT_UNUSED3	11
 #define _PAGE_BIT_PAT_LARGE	12	/* On 2MB or 1GB pages */
 #define _PAGE_BIT_SPECIAL	_PAGE_BIT_UNUSED1
+#define _PAGE_BIT_CPA_TEST	_PAGE_BIT_UNUSED1
 #define _PAGE_BIT_NX           63       /* No execute: only valid after cpuid check */
 
 #define _PAGE_PRESENT	(_AT(pteval_t, 1) << _PAGE_BIT_PRESENT)
@@ -36,6 +37,7 @@
 #define _PAGE_PAT	(_AT(pteval_t, 1) << _PAGE_BIT_PAT)
 #define _PAGE_PAT_LARGE (_AT(pteval_t, 1) << _PAGE_BIT_PAT_LARGE)
 #define _PAGE_SPECIAL	(_AT(pteval_t, 1) << _PAGE_BIT_SPECIAL)
+#define _PAGE_CPA_TEST	(_AT(pteval_t, 1) << _PAGE_BIT_CPA_TEST)
 #define __HAVE_ARCH_PTE_SPECIAL
 
 #if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
@@ -313,6 +315,8 @@ static inline void native_pagetable_setup_start(pgd_t *base) {}
 static inline void native_pagetable_setup_done(pgd_t *base) {}
 #endif
 
+extern int arch_report_meminfo(char *page);
+
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
 #else  /* !CONFIG_PARAVIRT */
@@ -521,4 +525,4 @@ static inline void clone_pgd_range(pgd_t *dst, pgd_t *src, int count)
 #include <asm-generic/pgtable.h>
 #endif	/* __ASSEMBLY__ */
 
-#endif	/* _ASM_X86_PGTABLE_H */
+#endif /* ASM_X86__PGTABLE_H */
