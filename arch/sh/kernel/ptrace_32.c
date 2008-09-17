@@ -1,12 +1,14 @@
 /*
- * linux/arch/sh/kernel/ptrace.c
+ * SuperH process tracing
  *
- * Original x86 implementation:
- *	By Ross Biro 1/23/92
- *	edited by Linus Torvalds
+ * Copyright (C) 1999, 2000  Kaz Kojima & Niibe Yutaka
+ * Copyright (C) 2002 - 2008  Paul Mundt
  *
- * SuperH version:   Copyright (C) 1999, 2000  Kaz Kojima & Niibe Yutaka
- * Audit support: Yuichi Nakamura <ynakam@hitachisoft.jp>
+ * Audit support by Yuichi Nakamura <ynakam@hitachisoft.jp>
+ *
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file "COPYING" in the main directory of this archive
+ * for more details.
  */
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -22,16 +24,14 @@
 #include <linux/audit.h>
 #include <linux/seccomp.h>
 #include <linux/tracehook.h>
+#include <linux/elf.h>
+#include <linux/regset.h>
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
 #include <asm/system.h>
 #include <asm/processor.h>
 #include <asm/mmu_context.h>
-
-/*
- * does not yet catch signals sent when the child dies.
- * in exit.c or in signal.c.
- */
+#include <asm/syscalls.h>
 
 /*
  * This routine will get a word off of the process kernel stack.
@@ -61,16 +61,12 @@ static inline int put_stack_long(struct task_struct *task, int offset,
 
 void user_enable_single_step(struct task_struct *child)
 {
-	struct pt_regs *regs = task_pt_regs(child);
-	long pc;
-
-	pc = get_stack_long(child, (long)&regs->pc);
-
 	/* Next scheduling will set up UBC */
 	if (child->thread.ubc_pc == 0)
 		ubc_usercnt += 1;
 
-	child->thread.ubc_pc = pc;
+	child->thread.ubc_pc = get_stack_long(child,
+				offsetof(struct pt_regs, pc));
 
 	set_tsk_thread_flag(child, TIF_SINGLESTEP);
 }
@@ -102,9 +98,150 @@ void ptrace_disable(struct task_struct *child)
 	user_disable_single_step(child);
 }
 
+static int genregs_get(struct task_struct *target,
+		       const struct user_regset *regset,
+		       unsigned int pos, unsigned int count,
+		       void *kbuf, void __user *ubuf)
+{
+	const struct pt_regs *regs = task_pt_regs(target);
+	int ret;
+
+	ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf,
+				  regs->regs,
+				  0, 16 * sizeof(unsigned long));
+	if (!ret)
+		/* PC, PR, SR, GBR, MACH, MACL, TRA */
+		ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf,
+					  &regs->pc,
+					  offsetof(struct pt_regs, pc),
+					  sizeof(struct pt_regs));
+	if (!ret)
+		ret = user_regset_copyout_zero(&pos, &count, &kbuf, &ubuf,
+					       sizeof(struct pt_regs), -1);
+
+	return ret;
+}
+
+static int genregs_set(struct task_struct *target,
+		       const struct user_regset *regset,
+		       unsigned int pos, unsigned int count,
+		       const void *kbuf, const void __user *ubuf)
+{
+	struct pt_regs *regs = task_pt_regs(target);
+	int ret;
+
+	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf,
+				 regs->regs,
+				 0, 16 * sizeof(unsigned long));
+	if (!ret && count > 0)
+		ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf,
+					 &regs->pc,
+					 offsetof(struct pt_regs, pc),
+					 sizeof(struct pt_regs));
+	if (!ret)
+		ret = user_regset_copyin_ignore(&pos, &count, &kbuf, &ubuf,
+						sizeof(struct pt_regs), -1);
+
+	return ret;
+}
+
+#ifdef CONFIG_SH_DSP
+static int dspregs_get(struct task_struct *target,
+		       const struct user_regset *regset,
+		       unsigned int pos, unsigned int count,
+		       void *kbuf, void __user *ubuf)
+{
+	const struct pt_dspregs *regs = task_pt_dspregs(target);
+	int ret;
+
+	ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf, regs,
+				  0, sizeof(struct pt_dspregs));
+	if (!ret)
+		ret = user_regset_copyout_zero(&pos, &count, &kbuf, &ubuf,
+					       sizeof(struct pt_dspregs), -1);
+
+	return ret;
+}
+
+static int dspregs_set(struct task_struct *target,
+		       const struct user_regset *regset,
+		       unsigned int pos, unsigned int count,
+		       const void *kbuf, const void __user *ubuf)
+{
+	struct pt_dspregs *regs = task_pt_dspregs(target);
+	int ret;
+
+	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, regs,
+				 0, sizeof(struct pt_dspregs));
+	if (!ret)
+		ret = user_regset_copyin_ignore(&pos, &count, &kbuf, &ubuf,
+						sizeof(struct pt_dspregs), -1);
+
+	return ret;
+}
+
+static int dspregs_active(struct task_struct *target,
+			  const struct user_regset *regset)
+{
+	struct pt_regs *regs = task_pt_regs(target);
+
+	return regs->sr & SR_DSP ? regset->n : 0;
+}
+#endif
+
+/*
+ * These are our native regset flavours.
+ */
+enum sh_regset {
+	REGSET_GENERAL,
+#ifdef CONFIG_SH_DSP
+	REGSET_DSP,
+#endif
+};
+
+static const struct user_regset sh_regsets[] = {
+	/*
+	 * Format is:
+	 *	R0 --> R15
+	 *	PC, PR, SR, GBR, MACH, MACL, TRA
+	 */
+	[REGSET_GENERAL] = {
+		.core_note_type	= NT_PRSTATUS,
+		.n		= ELF_NGREG,
+		.size		= sizeof(long),
+		.align		= sizeof(long),
+		.get		= genregs_get,
+		.set		= genregs_set,
+	},
+
+#ifdef CONFIG_SH_DSP
+	[REGSET_DSP] = {
+		.n		= sizeof(struct pt_dspregs) / sizeof(long),
+		.size		= sizeof(long),
+		.align		= sizeof(long),
+		.get		= dspregs_get,
+		.set		= dspregs_set,
+		.active		= dspregs_active,
+	},
+#endif
+};
+
+static const struct user_regset_view user_sh_native_view = {
+	.name		= "sh",
+	.e_machine	= EM_SH,
+	.regsets	= sh_regsets,
+	.n		= ARRAY_SIZE(sh_regsets),
+};
+
+const struct user_regset_view *task_user_regset_view(struct task_struct *task)
+{
+	return &user_sh_native_view;
+}
+
 long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 {
 	struct user * dummy = NULL;
+	unsigned long __user *datap = (unsigned long __user *)data;
 	int ret;
 
 	switch (request) {
@@ -133,7 +270,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 			tmp = !!tsk_used_math(child);
 		else
 			tmp = 0;
-		ret = put_user(tmp, (unsigned long __user *)data);
+		ret = put_user(tmp, datap);
 		break;
 	}
 
@@ -157,34 +294,27 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 		}
 		break;
 
+	case PTRACE_GETREGS:
+		return copy_regset_to_user(child, &user_sh_native_view,
+					   REGSET_GENERAL,
+					   0, sizeof(struct pt_regs),
+					   (void __user *)data);
+	case PTRACE_SETREGS:
+		return copy_regset_from_user(child, &user_sh_native_view,
+					     REGSET_GENERAL,
+					     0, sizeof(struct pt_regs),
+					     (const void __user *)data);
 #ifdef CONFIG_SH_DSP
-	case PTRACE_GETDSPREGS: {
-		unsigned long dp;
-
-		ret = -EIO;
-		dp = ((unsigned long) child) + THREAD_SIZE -
-			 sizeof(struct pt_dspregs);
-		if (*((int *) (dp - 4)) == SR_FD) {
-			copy_to_user((void *)addr, (void *) dp,
-				sizeof(struct pt_dspregs));
-			ret = 0;
-		}
-		break;
-	}
-
-	case PTRACE_SETDSPREGS: {
-		unsigned long dp;
-
-		ret = -EIO;
-		dp = ((unsigned long) child) + THREAD_SIZE -
-			 sizeof(struct pt_dspregs);
-		if (*((int *) (dp - 4)) == SR_FD) {
-			copy_from_user((void *) dp, (void *)addr,
-				sizeof(struct pt_dspregs));
-			ret = 0;
-		}
-		break;
-	}
+	case PTRACE_GETDSPREGS:
+		return copy_regset_to_user(child, &user_sh_native_view,
+					   REGSET_DSP,
+					   0, sizeof(struct pt_dspregs),
+					   (void __user *)data);
+	case PTRACE_SETDSPREGS:
+		return copy_regset_from_user(child, &user_sh_native_view,
+					     REGSET_DSP,
+					     0, sizeof(struct pt_dspregs),
+					     (const void __user *)data);
 #endif
 #ifdef CONFIG_BINFMT_ELF_FDPIC
 	case PTRACE_GETFDPIC: {
@@ -202,7 +332,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 		}
 
 		ret = 0;
-		if (put_user(tmp, (unsigned long *) data)) {
+		if (put_user(tmp, datap)) {
 			ret = -EFAULT;
 			break;
 		}
