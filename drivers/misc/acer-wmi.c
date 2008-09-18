@@ -339,6 +339,15 @@ static struct dmi_system_id acer_quirks[] = {
 	},
 	{
 		.callback = dmi_matched,
+		.ident = "Acer TravelMate 4280",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Acer"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "TravelMate 4280"),
+		},
+		.driver_data = &quirk_acer_travelmate_2490,
+	},
+	{
+		.callback = dmi_matched,
 		.ident = "Fujitsu Siemens Amilo Li 1718",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "FUJITSU SIEMENS"),
@@ -476,7 +485,7 @@ struct wmi_interface *iface)
 		}
 		break;
 	default:
-		return AE_BAD_ADDRESS;
+		return AE_ERROR;
 	}
 	return AE_OK;
 }
@@ -514,7 +523,7 @@ static acpi_status AMW0_set_u32(u32 value, u32 cap, struct wmi_interface *iface)
 			break;
 		}
 	default:
-		return AE_BAD_ADDRESS;
+		return AE_ERROR;
 	}
 
 	/* Actually do the set */
@@ -689,7 +698,7 @@ struct wmi_interface *iface)
 			return 0;
 		}
 	default:
-		return AE_BAD_ADDRESS;
+		return AE_ERROR;
 	}
 	status = WMI_execute_u32(method_id, 0, &result);
 
@@ -735,7 +744,7 @@ static acpi_status WMID_set_u32(u32 value, u32 cap, struct wmi_interface *iface)
 		}
 		break;
 	default:
-		return AE_BAD_ADDRESS;
+		return AE_ERROR;
 	}
 	return WMI_execute_u32(method_id, (u32)value, NULL);
 }
@@ -785,7 +794,7 @@ static struct wmi_interface wmid_interface = {
 
 static acpi_status get_u32(u32 *value, u32 cap)
 {
-	acpi_status status = AE_BAD_ADDRESS;
+	acpi_status status = AE_ERROR;
 
 	switch (interface->type) {
 	case ACER_AMW0:
@@ -1241,6 +1250,12 @@ static int __init acer_wmi_init(void)
 	}
 
 	set_quirks();
+
+	if (!acpi_video_backlight_support() && has_cap(ACER_CAP_BRIGHTNESS)) {
+		interface->capability &= ~ACER_CAP_BRIGHTNESS;
+		printk(ACER_INFO "Brightness must be controlled by "
+		       "generic video driver\n");
+	}
 
 	if (platform_driver_register(&acer_platform_driver)) {
 		printk(ACER_ERR "Unable to register platform driver.\n");
