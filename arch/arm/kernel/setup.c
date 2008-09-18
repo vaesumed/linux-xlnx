@@ -26,11 +26,13 @@
 #include <linux/fs.h>
 
 #include <asm/cpu.h>
+#include <asm/cputype.h>
 #include <asm/elf.h>
 #include <asm/procinfo.h>
 #include <asm/setup.h>
 #include <asm/mach-types.h>
 #include <asm/cacheflush.h>
+#include <asm/cachetype.h>
 #include <asm/tlbflush.h>
 
 #include <asm/mach/arch.h>
@@ -59,8 +61,7 @@ __setup("fpe=", fpe_setup);
 
 extern void paging_init(struct meminfo *, struct machine_desc *desc);
 extern void reboot_setup(char *str);
-extern int root_mountflags;
-extern void _stext, _text, _etext, __data_start, _edata, _end;
+extern void _text, _etext, __data_start, _edata, _end;
 
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
@@ -110,9 +111,6 @@ static struct stack stacks[NR_CPUS];
 
 char elf_platform[ELF_PLATFORM_SIZE];
 EXPORT_SYMBOL(elf_platform);
-
-unsigned long phys_initrd_start __initdata = 0;
-unsigned long phys_initrd_size __initdata = 0;
 
 static struct meminfo meminfo __initdata = { 0, };
 static const char *cpu_name;
@@ -280,9 +278,9 @@ static inline void dump_cache(const char *prefix, int cpu, unsigned int cache)
 
 static void __init dump_cpu_info(int cpu)
 {
-	unsigned int info = read_cpuid(CPUID_CACHETYPE);
+	unsigned int info = read_cpuid_cachetype();
 
-	if (info != processor_id) {
+	if (info != read_cpuid_id()) {
 		printk("CPU%u: D %s %s cache\n", cpu, cache_is_vivt() ? "VIVT" : "VIPT",
 		       cache_types[CACHE_TYPE(info)]);
 		if (CACHE_S(info)) {
@@ -301,15 +299,15 @@ int cpu_architecture(void)
 {
 	int cpu_arch;
 
-	if ((processor_id & 0x0008f000) == 0) {
+	if ((read_cpuid_id() & 0x0008f000) == 0) {
 		cpu_arch = CPU_ARCH_UNKNOWN;
-	} else if ((processor_id & 0x0008f000) == 0x00007000) {
-		cpu_arch = (processor_id & (1 << 23)) ? CPU_ARCH_ARMv4T : CPU_ARCH_ARMv3;
-	} else if ((processor_id & 0x00080000) == 0x00000000) {
-		cpu_arch = (processor_id >> 16) & 7;
+	} else if ((read_cpuid_id() & 0x0008f000) == 0x00007000) {
+		cpu_arch = (read_cpuid_id() & (1 << 23)) ? CPU_ARCH_ARMv4T : CPU_ARCH_ARMv3;
+	} else if ((read_cpuid_id() & 0x00080000) == 0x00000000) {
+		cpu_arch = (read_cpuid_id() >> 16) & 7;
 		if (cpu_arch)
 			cpu_arch += CPU_ARCH_ARMv3;
-	} else if ((processor_id & 0x000f0000) == 0x000f0000) {
+	} else if ((read_cpuid_id() & 0x000f0000) == 0x000f0000) {
 		unsigned int mmfr0;
 
 		/* Revised CPUID format. Read the Memory Model Feature
@@ -346,10 +344,10 @@ static void __init setup_processor(void)
 	 * types.  The linker builds this table for us from the
 	 * entries in arch/arm/mm/proc-*.S
 	 */
-	list = lookup_processor_type(processor_id);
+	list = lookup_processor_type(read_cpuid_id());
 	if (!list) {
 		printk("CPU configuration botched (ID %08x), unable "
-		       "to continue.\n", processor_id);
+		       "to continue.\n", read_cpuid_id());
 		while (1);
 	}
 
@@ -369,7 +367,7 @@ static void __init setup_processor(void)
 #endif
 
 	printk("CPU: %s [%08x] revision %d (ARMv%s), cr=%08lx\n",
-	       cpu_name, processor_id, (int)processor_id & 15,
+	       cpu_name, read_cpuid_id(), read_cpuid_id() & 15,
 	       proc_arch[cpu_architecture()], cr_alignment);
 
 	sprintf(init_utsname()->machine, "%s%c", list->arch_name, ENDIANNESS);
@@ -443,20 +441,6 @@ static struct machine_desc * __init setup_machine(unsigned int nr)
 	return list;
 }
 
-static void __init early_initrd(char **p)
-{
-	unsigned long start, size;
-
-	start = memparse(*p, p);
-	if (**p == ',') {
-		size = memparse((*p) + 1, p);
-
-		phys_initrd_start = start;
-		phys_initrd_size = size;
-	}
-}
-__early_param("initrd=", early_initrd);
-
 static void __init arm_add_memory(unsigned long start, unsigned long size)
 {
 	struct membank *bank;
@@ -527,12 +511,12 @@ static void __init parse_cmdline(char **cmdline_p, char *from)
 			struct early_params *p;
 
 			for (p = &__early_begin; p < &__early_end; p++) {
-				int len = strlen(p->arg);
+				int arglen = strlen(p->arg);
 
-				if (memcmp(from, p->arg, len) == 0) {
+				if (memcmp(from, p->arg, arglen) == 0) {
 					if (to != command_line)
 						to -= 1;
-					from += len;
+					from += arglen;
 					p->fn(&from);
 
 					while (*from != ' ' && *from != '\0')
@@ -693,26 +677,6 @@ static int __init parse_tag_ramdisk(const struct tag *tag)
 }
 
 __tagtable(ATAG_RAMDISK, parse_tag_ramdisk);
-
-static int __init parse_tag_initrd(const struct tag *tag)
-{
-	printk(KERN_WARNING "ATAG_INITRD is deprecated; "
-		"please update your bootloader.\n");
-	phys_initrd_start = __virt_to_phys(tag->u.initrd.start);
-	phys_initrd_size = tag->u.initrd.size;
-	return 0;
-}
-
-__tagtable(ATAG_INITRD, parse_tag_initrd);
-
-static int __init parse_tag_initrd2(const struct tag *tag)
-{
-	phys_initrd_start = tag->u.initrd.start;
-	phys_initrd_size = tag->u.initrd.size;
-	return 0;
-}
-
-__tagtable(ATAG_INITRD2, parse_tag_initrd2);
 
 static int __init parse_tag_serialnr(const struct tag *tag)
 {
@@ -922,7 +886,7 @@ static int c_show(struct seq_file *m, void *v)
 	int i;
 
 	seq_printf(m, "Processor\t: %s rev %d (%s)\n",
-		   cpu_name, (int)processor_id & 15, elf_platform);
+		   cpu_name, read_cpuid_id() & 15, elf_platform);
 
 #if defined(CONFIG_SMP)
 	for_each_online_cpu(i) {
@@ -949,30 +913,30 @@ static int c_show(struct seq_file *m, void *v)
 		if (elf_hwcap & (1 << i))
 			seq_printf(m, "%s ", hwcap_str[i]);
 
-	seq_printf(m, "\nCPU implementer\t: 0x%02x\n", processor_id >> 24);
+	seq_printf(m, "\nCPU implementer\t: 0x%02x\n", read_cpuid_id() >> 24);
 	seq_printf(m, "CPU architecture: %s\n", proc_arch[cpu_architecture()]);
 
-	if ((processor_id & 0x0008f000) == 0x00000000) {
+	if ((read_cpuid_id() & 0x0008f000) == 0x00000000) {
 		/* pre-ARM7 */
-		seq_printf(m, "CPU part\t: %07x\n", processor_id >> 4);
+		seq_printf(m, "CPU part\t: %07x\n", read_cpuid_id() >> 4);
 	} else {
-		if ((processor_id & 0x0008f000) == 0x00007000) {
+		if ((read_cpuid_id() & 0x0008f000) == 0x00007000) {
 			/* ARM7 */
 			seq_printf(m, "CPU variant\t: 0x%02x\n",
-				   (processor_id >> 16) & 127);
+				   (read_cpuid_id() >> 16) & 127);
 		} else {
 			/* post-ARM7 */
 			seq_printf(m, "CPU variant\t: 0x%x\n",
-				   (processor_id >> 20) & 15);
+				   (read_cpuid_id() >> 20) & 15);
 		}
 		seq_printf(m, "CPU part\t: 0x%03x\n",
-			   (processor_id >> 4) & 0xfff);
+			   (read_cpuid_id() >> 4) & 0xfff);
 	}
-	seq_printf(m, "CPU revision\t: %d\n", processor_id & 15);
+	seq_printf(m, "CPU revision\t: %d\n", read_cpuid_id() & 15);
 
 	{
-		unsigned int cache_info = read_cpuid(CPUID_CACHETYPE);
-		if (cache_info != processor_id) {
+		unsigned int cache_info = read_cpuid_cachetype();
+		if (cache_info != read_cpuid_id()) {
 			seq_printf(m, "Cache type\t: %s\n"
 				      "Cache clean\t: %s\n"
 				      "Cache lockdown\t: %s\n"

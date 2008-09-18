@@ -14,18 +14,19 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
+#include <linux/io.h>
 
-#include <asm/io.h>
+#include <asm/cputype.h>
 
 #include <mach/control.h>
 #include <mach/cpu.h>
 
 #if defined(CONFIG_ARCH_OMAP2420)
-#define TAP_BASE	io_p2v(0x48014000)
+#define TAP_BASE	IO_ADDRESS(0x48014000)
 #elif defined(CONFIG_ARCH_OMAP2430)
-#define TAP_BASE	io_p2v(0x4900A000)
+#define TAP_BASE	IO_ADDRESS(0x4900A000)
 #elif defined(CONFIG_ARCH_OMAP34XX)
-#define TAP_BASE	io_p2v(0x4830A000)
+#define TAP_BASE	IO_ADDRESS(0x4830A000)
 #endif
 
 #define OMAP_TAP_IDCODE		0x0204
