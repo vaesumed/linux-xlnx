@@ -52,6 +52,7 @@
 #include <linux/ioport.h>
 #include <linux/slab.h>
 #include <linux/init.h>
+#include <linux/smp_lock.h>
 #include <stdarg.h>
 #include <linux/i2c.h>
 #include <linux/videotext.h>
@@ -109,6 +110,7 @@ struct saa5249_device
 	int disp_mode;
 	int virtual_mode;
 	struct i2c_client *client;
+	unsigned long in_use;
 	struct mutex lock;
 };
 
@@ -184,7 +186,7 @@ static int saa5249_attach(struct i2c_adapter *adap, int addr, int kind)
 		t->vdau[pgbuf].stopped = true;
 		t->is_searching[pgbuf] = false;
 	}
-	vd->priv=t;
+	video_set_drvdata(vd, t);
 
 
 	/*
@@ -219,7 +221,7 @@ static int saa5249_detach(struct i2c_client *client)
 	struct video_device *vd = i2c_get_clientdata(client);
 	i2c_detach_client(client);
 	video_unregister_device(vd);
-	kfree(vd->priv);
+	kfree(video_get_drvdata(vd));
 	kfree(vd);
 	kfree(client);
 	return 0;
@@ -317,8 +319,7 @@ static int do_saa5249_ioctl(struct inode *inode, struct file *file,
 			    unsigned int cmd, void *arg)
 {
 	static int virtual_mode = false;
-	struct video_device *vd = video_devdata(file);
-	struct saa5249_device *t=vd->priv;
+	struct saa5249_device *t = video_drvdata(file);
 
 	switch(cmd)
 	{
@@ -616,8 +617,7 @@ static inline unsigned int vtx_fix_command(unsigned int cmd)
 static int saa5249_ioctl(struct inode *inode, struct file *file,
 			 unsigned int cmd, unsigned long arg)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5249_device *t=vd->priv;
+	struct saa5249_device *t = video_drvdata(file);
 	int err;
 
 	cmd = vtx_fix_command(cmd);
@@ -629,32 +629,27 @@ static int saa5249_ioctl(struct inode *inode, struct file *file,
 
 static int saa5249_open(struct inode *inode, struct file *file)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5249_device *t=vd->priv;
-	int err,pgbuf;
+	struct saa5249_device *t = video_drvdata(file);
+	int pgbuf;
 
-	err = video_exclusive_open(inode,file);
-	if (err < 0)
-		return err;
+	if (t->client == NULL)
+		return -ENODEV;
 
-	if (t->client==NULL) {
-		err = -ENODEV;
-		goto fail;
-	}
+	if (test_and_set_bit(0, &t->in_use))
+		return -EBUSY;
 
-	if (i2c_senddata(t, 0, 0, -1) ||		/* Select R11 */
-						/* Turn off parity checks (we do this ourselves) */
+	if (i2c_senddata(t, 0, 0, -1) || /* Select R11 */
+		/* Turn off parity checks (we do this ourselves) */
 		i2c_senddata(t, 1, disp_modes[t->disp_mode][0], 0, -1) ||
-						/* Display TV-picture, no virtual rows */
-		i2c_senddata(t, 4, NUM_DAUS, disp_modes[t->disp_mode][1], disp_modes[t->disp_mode][2], 7, -1)) /* Set display to page 4 */
-
+		/* Display TV-picture, no virtual rows */
+		i2c_senddata(t, 4, NUM_DAUS, disp_modes[t->disp_mode][1], disp_modes[t->disp_mode][2], 7, -1))
+		/* Set display to page 4 */
 	{
-		err = -EIO;
-		goto fail;
+		clear_bit(0, &t->in_use);
+		return -EIO;
 	}
 
-	for (pgbuf = 0; pgbuf < NUM_DAUS; pgbuf++)
-	{
+	for (pgbuf = 0; pgbuf < NUM_DAUS; pgbuf++) {
 		memset(t->vdau[pgbuf].pgbuf, ' ', sizeof(t->vdau[0].pgbuf));
 		memset(t->vdau[pgbuf].sregs, 0, sizeof(t->vdau[0].sregs));
 		memset(t->vdau[pgbuf].laststat, 0, sizeof(t->vdau[0].laststat));
@@ -665,21 +660,17 @@ static int saa5249_open(struct inode *inode, struct file *file)
 	}
 	t->virtual_mode = false;
 	return 0;
-
- fail:
-	video_exclusive_release(inode,file);
-	return err;
 }
 
 
 
 static int saa5249_release(struct inode *inode, struct file *file)
 {
-	struct video_device *vd = video_devdata(file);
-	struct saa5249_device *t=vd->priv;
+	struct saa5249_device *t = video_drvdata(file);
+
 	i2c_senddata(t, 1, 0x20, -1);		/* Turn off CCT */
 	i2c_senddata(t, 5, 3, 3, -1);		/* Turn off TV-display */
-	video_exclusive_release(inode,file);
+	clear_bit(0, &t->in_use);
 	return 0;
 }
 
@@ -713,6 +704,7 @@ static struct video_device saa_template =
 {
 	.name		= IF_NAME,
 	.fops           = &saa_fops,
+	.release 	= video_device_release,
 };
 
 MODULE_LICENSE("GPL");
