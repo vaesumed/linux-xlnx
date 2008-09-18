@@ -12,6 +12,8 @@
 #ifdef __KERNEL__
 
 #include <linux/in.h>
+#include <linux/in6.h>
+#include <net/ipv6.h>
 #include <linux/fs.h>
 #include <linux/kref.h>
 #include <linux/utsname.h>
@@ -38,8 +40,9 @@
  */
 struct nlm_host {
 	struct hlist_node	h_hash;		/* doubly linked list */
-	struct sockaddr_in	h_addr;		/* peer address */
-	struct sockaddr_in	h_saddr;	/* our address (optional) */
+	struct sockaddr_storage	h_addr;		/* peer address */
+	size_t			h_addrlen;
+	struct sockaddr_storage	h_srcaddr;	/* our address (optional) */
 	struct rpc_clnt	*	h_rpcclnt;	/* RPC client to talk to peer */
 	char *			h_name;		/* remote hostname */
 	u32			h_version;	/* interface version */
@@ -61,16 +64,54 @@ struct nlm_host {
 	struct list_head	h_granted;	/* Locks in GRANTED state */
 	struct list_head	h_reclaim;	/* Locks in RECLAIM state */
 	struct nsm_handle *	h_nsmhandle;	/* NSM status handle */
+
+	char			h_addrbuf[48],	/* address eyecatchers */
+				h_srcaddrbuf[48];
 };
 
 struct nsm_handle {
 	struct list_head	sm_link;
 	atomic_t		sm_count;
 	char *			sm_name;
-	struct sockaddr_in	sm_addr;
+	struct sockaddr_storage	sm_addr;
+	size_t			sm_addrlen;
 	unsigned int		sm_monitored : 1,
 				sm_sticky : 1;	/* don't unmonitor */
+	char			sm_addrbuf[48];	/* address eyecatcher */
 };
+
+/*
+ * Rigorous type checking on sockaddr type conversions
+ */
+static inline struct sockaddr_in *nlm_addr_in(const struct nlm_host *host)
+{
+	return (struct sockaddr_in *)&host->h_addr;
+}
+
+static inline struct sockaddr *nlm_addr(const struct nlm_host *host)
+{
+	return (struct sockaddr *)&host->h_addr;
+}
+
+static inline struct sockaddr_in *nlm_srcaddr_in(const struct nlm_host *host)
+{
+	return (struct sockaddr_in *)&host->h_srcaddr;
+}
+
+static inline struct sockaddr *nlm_srcaddr(const struct nlm_host *host)
+{
+	return (struct sockaddr *)&host->h_srcaddr;
+}
+
+static inline struct sockaddr_in *nsm_addr_in(const struct nsm_handle *handle)
+{
+	return (struct sockaddr_in *)&handle->sm_addr;
+}
+
+static inline struct sockaddr *nsm_addr(const struct nsm_handle *handle)
+{
+	return (struct sockaddr *)&handle->sm_addr;
+}
 
 /*
  * Map an fl_owner_t into a unique 32-bit "pid"
@@ -233,13 +274,39 @@ static inline struct inode *nlmsvc_file_inode(struct nlm_file *file)
 	return file->f_file->f_path.dentry->d_inode;
 }
 
-/*
- * Compare two host addresses (needs modifying for ipv6)
- */
-static inline int nlm_cmp_addr(const struct sockaddr_in *sin1,
-			       const struct sockaddr_in *sin2)
+static inline int __nlm_cmp_addr4(const struct sockaddr *sap1,
+				  const struct sockaddr *sap2)
 {
+	const struct sockaddr_in *sin1 = (const struct sockaddr_in *)sap1;
+	const struct sockaddr_in *sin2 = (const struct sockaddr_in *)sap2;
 	return sin1->sin_addr.s_addr == sin2->sin_addr.s_addr;
+}
+
+static inline int __nlm_cmp_addr6(const struct sockaddr *sap1,
+				  const struct sockaddr *sap2)
+{
+	const struct sockaddr_in6 *sin1 = (const struct sockaddr_in6 *)sap1;
+	const struct sockaddr_in6 *sin2 = (const struct sockaddr_in6 *)sap2;
+	return ipv6_addr_equal(&sin1->sin6_addr, &sin2->sin6_addr);
+}
+
+/*
+ * Compare two host addresses
+ *
+ * Return TRUE if the addresses are the same; otherwise FALSE.
+ */
+static inline int nlm_cmp_addr(const struct sockaddr *sap1,
+			       const struct sockaddr *sap2)
+{
+	if (sap1->sa_family == sap2->sa_family) {
+		switch (sap1->sa_family) {
+		case AF_INET:
+			return __nlm_cmp_addr4(sap1, sap2);
+		case AF_INET6:
+			return __nlm_cmp_addr6(sap1, sap2);
+		}
+	}
+	return 0;
 }
 
 /*
