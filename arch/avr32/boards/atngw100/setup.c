@@ -204,6 +204,15 @@ postcore_initcall(atngw100_init);
 
 static int __init atngw100_arch_init(void)
 {
+	/* PB30 is the otherwise unused jumper on the mainboard, with an
+	 * external pullup; the jumper grounds it.  Use it however you
+	 * like, including letting U-Boot or Linux tweak boot sequences.
+	 */
+	at32_select_gpio(GPIO_PIN_PB(30), 0);
+	gpio_request(GPIO_PIN_PB(30), "j15");
+	gpio_direction_input(GPIO_PIN_PB(30));
+	gpio_export(GPIO_PIN_PB(30), false);
+
 	/* set_irq_type() after the arch_initcall for EIC has run, and
 	 * before the I2C subsystem could try using this IRQ.
 	 */
