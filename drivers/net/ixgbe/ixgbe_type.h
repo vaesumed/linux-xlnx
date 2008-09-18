@@ -356,12 +356,10 @@
 #define IXGBE_ANLP2     0x042B4
 #define IXGBE_ATLASCTL  0x04800
 
-/* RSCCTL Bit Masks */
-#define IXGBE_RSCCTL_RSCEN          0x01
-#define IXGBE_RSCCTL_MAXDESC_1      0x00
-#define IXGBE_RSCCTL_MAXDESC_4      0x04
-#define IXGBE_RSCCTL_MAXDESC_8      0x08
-#define IXGBE_RSCCTL_MAXDESC_16     0x0C
+/* RDRXCTL Bit Masks */
+#define IXGBE_RDRXCTL_RDMTS_1_2     0x00000000 /* Rx Desc Min Threshold Size */
+#define IXGBE_RDRXCTL_MVMEN         0x00000020
+#define IXGBE_RDRXCTL_DMAIDONE      0x00000008 /* DMA init cycle done */
 
 /* CTRL Bit Masks */
 #define IXGBE_CTRL_GIO_DIS      0x00000004 /* Global IO Master Disable bit */
@@ -822,10 +820,6 @@
 #define IXGBE_RAH_VIND_SHIFT    18
 #define IXGBE_RAH_AV            0x80000000
 
-/* Filters */
-#define IXGBE_MC_TBL_SIZE       128  /* Multicast Filter Table (4096 bits) */
-#define IXGBE_VLAN_FILTER_TBL_SIZE 128  /* VLAN Filter Table (4096 bits) */
-
 /* Header split receive */
 #define IXGBE_RFCTL_ISCSI_DIS       0x00000001
 #define IXGBE_RFCTL_ISCSI_DWC_MASK  0x0000003E
@@ -1007,15 +1001,15 @@ struct ixgbe_legacy_tx_desc {
 		__le32 data;
 		struct {
 			__le16 length;    /* Data buffer length */
-			u8 cso; /* Checksum offset */
-			u8 cmd; /* Descriptor control */
+			u8 cso;           /* Checksum offset */
+			u8 cmd;           /* Descriptor control */
 		} flags;
 	} lower;
 	union {
 		__le32 data;
 		struct {
 			u8 status;     /* Descriptor status */
-			u8 css; /* Checksum start */
+			u8 css;        /* Checksum start */
 			__le16 vlan;
 		} fields;
 	} upper;
@@ -1039,9 +1033,9 @@ union ixgbe_adv_tx_desc {
 struct ixgbe_legacy_rx_desc {
 	__le64 buffer_addr; /* Address of the descriptor's data buffer */
 	__le16 length;      /* Length of data DMAed into data buffer */
-	u16 csum;        /* Packet checksum */
-	u8 status;       /* Descriptor status */
-	u8 errors;       /* Descriptor Errors */
+	__le16 csum;        /* Packet checksum */
+	u8 status;          /* Descriptor status */
+	u8 errors;          /* Descriptor Errors */
 	__le16 vlan;
 };
 
@@ -1053,15 +1047,18 @@ union ixgbe_adv_rx_desc {
 	} read;
 	struct {
 		struct {
-			struct {
-				__le16 pkt_info; /* RSS type, Packet type */
-				__le16 hdr_info; /* Split Header, header len */
+			union {
+				__le32 data;
+				struct {
+					__le16 pkt_info; /* RSS type, Packet type */
+					__le16 hdr_info; /* Split Header, header len */
+				} hs_rss;
 			} lo_dword;
 			union {
 				__le32 rss; /* RSS Hash */
 				struct {
 					__le16 ip_id; /* IP id */
-					u16 csum; /* Packet Checksum */
+					__le16 csum; /* Packet Checksum */
 				} csum_ip;
 			} hi_dword;
 		} lower;
@@ -1167,6 +1164,8 @@ struct ixgbe_addr_filter_info {
 	u32 rar_used_count;
 	u32 mc_addr_in_rar_count;
 	u32 mta_in_use;
+	u32 overflow_promisc;
+	bool user_set_promisc;
 };
 
 /* Flow control parameters */
@@ -1242,6 +1241,10 @@ struct ixgbe_hw_stats {
 /* forward declaration */
 struct ixgbe_hw;
 
+/* iterator type for walking multicast address lists */
+typedef u8* (*ixgbe_mc_addr_itr) (struct ixgbe_hw *hw, u8 **mc_addr_ptr,
+                                  u32 *vmdq);
+
 struct ixgbe_mac_operations {
 	s32 (*reset)(struct ixgbe_hw *);
 	enum ixgbe_media_type (*get_media_type)(struct ixgbe_hw *);
@@ -1263,9 +1266,11 @@ struct ixgbe_mac_info {
 	u8				addr[IXGBE_ETH_LENGTH_OF_ADDRESS];
 	u8				perm_addr[IXGBE_ETH_LENGTH_OF_ADDRESS];
 	s32				mc_filter_type;
+	u32				mcft_size;
+	u32				vft_size;
+	u32				num_rar_entries;
 	u32				num_rx_queues;
 	u32				num_tx_queues;
-	u32				num_rx_addrs;
 	u32				link_attach_type;
 	u32				link_mode_select;
 	bool				link_settings_loaded;
