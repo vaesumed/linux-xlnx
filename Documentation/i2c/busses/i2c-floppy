@@ -1,0 +1,37 @@
+Kernel driver i2c-floppy
+
+Author: Herbert Poetzl <herbert@13thfloor.at>
+
+This driver is for a simple do-it-yourself floppy controller to
+I2C adapter which uses direct I/O access to control both Motor
+Enable lines (A/B) and read back data via the Disk Changed line.
+
+The following circuit is not suited to be used together with
+a Floppy drive (which would need some logic to work properly)
+but as replacement.
+
+ +---+
+ | F |  Motor Enable A [/MOTEA,10] -------------- SCL
+ | L |
+ | O |  Motor Enable B [/MOTEB,16] ------+------- SDA
+ | P |                                   |
+ | P |                                   |
+ | Y |  Disk Change   [/DSKCHG,34] ------+    +-- GND
+ +-+-+                                        |
+   |                                          |
+  GND	                                     GND
+
+The Motor Enable output of floppy disk controllers is an open
+drain output (48mA), usually pulled up to +5V via 1k or higher,
+and the Disk Change is a Schmitt Trigger (0.8V/2.2V) input with
+max 150uA input current (data taken from the WD/FDC 37C6xx
+Floppy Disk Subsystem Controller datasheets, which basically
+combine all the necessary parts of the PC floppy circuit).
+
+So it should be fine to connect it to all 5V I2C devices, and
+most 3.3V devices (which are usually capable of handling 5V
+I2C bus voltages).
+
+Power for those devices can be drawn from either the Floppy
+power connector (+5V/+12V) or from the SATA 3.3V lines
+(or if you prefer from some external source).
