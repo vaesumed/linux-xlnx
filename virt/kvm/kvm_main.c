@@ -41,6 +41,7 @@
 #include <linux/pagemap.h>
 #include <linux/mman.h>
 #include <linux/swap.h>
+#include <linux/intel-iommu.h>
 
 #include <asm/processor.h>
 #include <asm/io.h>
@@ -74,6 +75,14 @@ bool kvm_rebooting;
 static inline int valid_vcpu(int n)
 {
 	return likely(n >= 0 && n < KVM_MAX_VCPUS);
+}
+
+inline int is_mmio_pfn(pfn_t pfn)
+{
+	if (pfn_valid(pfn))
+		return PageReserved(pfn_to_page(pfn));
+
+	return true;
 }
 
 /*
@@ -570,6 +579,12 @@ int __kvm_set_memory_region(struct kvm *kvm,
 	}
 
 	kvm_free_physmem_slot(&old, &new);
+
+	/* map the pages in iommu page table */
+	r = kvm_iommu_map_pages(kvm, base_gfn, npages);
+	if (r)
+		goto out;
+
 	return 0;
 
 out_free:
@@ -708,9 +723,6 @@ unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn)
 }
 EXPORT_SYMBOL_GPL(gfn_to_hva);
 
-/*
- * Requires current->mm->mmap_sem to be held
- */
 pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 {
 	struct page *page[1];
@@ -726,21 +738,24 @@ pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 		return page_to_pfn(bad_page);
 	}
 
-	npages = get_user_pages(current, current->mm, addr, 1, 1, 1, page,
-				NULL);
+	npages = get_user_pages_fast(addr, 1, 1, page);
 
 	if (unlikely(npages != 1)) {
 		struct vm_area_struct *vma;
 
+		down_read(&current->mm->mmap_sem);
 		vma = find_vma(current->mm, addr);
+
 		if (vma == NULL || addr < vma->vm_start ||
 		    !(vma->vm_flags & VM_PFNMAP)) {
+			up_read(&current->mm->mmap_sem);
 			get_page(bad_page);
 			return page_to_pfn(bad_page);
 		}
 
 		pfn = ((addr - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
-		BUG_ON(pfn_valid(pfn));
+		up_read(&current->mm->mmap_sem);
+		BUG_ON(!is_mmio_pfn(pfn));
 	} else
 		pfn = page_to_pfn(page[0]);
 
@@ -754,10 +769,10 @@ struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 	pfn_t pfn;
 
 	pfn = gfn_to_pfn(kvm, gfn);
-	if (pfn_valid(pfn))
+	if (!is_mmio_pfn(pfn))
 		return pfn_to_page(pfn);
 
-	WARN_ON(!pfn_valid(pfn));
+	WARN_ON(is_mmio_pfn(pfn));
 
 	get_page(bad_page);
 	return bad_page;
@@ -773,7 +788,7 @@ EXPORT_SYMBOL_GPL(kvm_release_page_clean);
 
 void kvm_release_pfn_clean(pfn_t pfn)
 {
-	if (pfn_valid(pfn))
+	if (!is_mmio_pfn(pfn))
 		put_page(pfn_to_page(pfn));
 }
 EXPORT_SYMBOL_GPL(kvm_release_pfn_clean);
@@ -799,7 +814,7 @@ EXPORT_SYMBOL_GPL(kvm_set_page_dirty);
 
 void kvm_set_pfn_dirty(pfn_t pfn)
 {
-	if (pfn_valid(pfn)) {
+	if (!is_mmio_pfn(pfn)) {
 		struct page *page = pfn_to_page(pfn);
 		if (!PageReserved(page))
 			SetPageDirty(page);
@@ -809,14 +824,14 @@ EXPORT_SYMBOL_GPL(kvm_set_pfn_dirty);
 
 void kvm_set_pfn_accessed(pfn_t pfn)
 {
-	if (pfn_valid(pfn))
+	if (!is_mmio_pfn(pfn))
 		mark_page_accessed(pfn_to_page(pfn));
 }
 EXPORT_SYMBOL_GPL(kvm_set_pfn_accessed);
 
 void kvm_get_pfn(pfn_t pfn)
 {
-	if (pfn_valid(pfn))
+	if (!is_mmio_pfn(pfn))
 		get_page(pfn_to_page(pfn));
 }
 EXPORT_SYMBOL_GPL(kvm_get_pfn);
@@ -972,12 +987,12 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
 	for (;;) {
 		prepare_to_wait(&vcpu->wq, &wait, TASK_INTERRUPTIBLE);
 
-		if (kvm_cpu_has_interrupt(vcpu))
+		if (kvm_cpu_has_interrupt(vcpu) ||
+		    kvm_cpu_has_pending_timer(vcpu) ||
+		    kvm_arch_vcpu_runnable(vcpu)) {
+			set_bit(KVM_REQ_UNHALT, &vcpu->requests);
 			break;
-		if (kvm_cpu_has_pending_timer(vcpu))
-			break;
-		if (kvm_arch_vcpu_runnable(vcpu))
-			break;
+		}
 		if (signal_pending(current))
 			break;
 
@@ -1118,6 +1133,8 @@ static long kvm_vcpu_ioctl(struct file *filp,
 	struct kvm_vcpu *vcpu = filp->private_data;
 	void __user *argp = (void __user *)arg;
 	int r;
+	struct kvm_fpu *fpu = NULL;
+	struct kvm_sregs *kvm_sregs = NULL;
 
 	if (vcpu->kvm->mm != current->mm)
 		return -EIO;
@@ -1165,25 +1182,28 @@ out_free2:
 		break;
 	}
 	case KVM_GET_SREGS: {
-		struct kvm_sregs kvm_sregs;
-
-		memset(&kvm_sregs, 0, sizeof kvm_sregs);
-		r = kvm_arch_vcpu_ioctl_get_sregs(vcpu, &kvm_sregs);
+		kvm_sregs = kzalloc(sizeof(struct kvm_sregs), GFP_KERNEL);
+		r = -ENOMEM;
+		if (!kvm_sregs)
+			goto out;
+		r = kvm_arch_vcpu_ioctl_get_sregs(vcpu, kvm_sregs);
 		if (r)
 			goto out;
 		r = -EFAULT;
-		if (copy_to_user(argp, &kvm_sregs, sizeof kvm_sregs))
+		if (copy_to_user(argp, kvm_sregs, sizeof(struct kvm_sregs)))
 			goto out;
 		r = 0;
 		break;
 	}
 	case KVM_SET_SREGS: {
-		struct kvm_sregs kvm_sregs;
-
-		r = -EFAULT;
-		if (copy_from_user(&kvm_sregs, argp, sizeof kvm_sregs))
+		kvm_sregs = kmalloc(sizeof(struct kvm_sregs), GFP_KERNEL);
+		r = -ENOMEM;
+		if (!kvm_sregs)
 			goto out;
-		r = kvm_arch_vcpu_ioctl_set_sregs(vcpu, &kvm_sregs);
+		r = -EFAULT;
+		if (copy_from_user(kvm_sregs, argp, sizeof(struct kvm_sregs)))
+			goto out;
+		r = kvm_arch_vcpu_ioctl_set_sregs(vcpu, kvm_sregs);
 		if (r)
 			goto out;
 		r = 0;
@@ -1264,25 +1284,28 @@ out_free2:
 		break;
 	}
 	case KVM_GET_FPU: {
-		struct kvm_fpu fpu;
-
-		memset(&fpu, 0, sizeof fpu);
-		r = kvm_arch_vcpu_ioctl_get_fpu(vcpu, &fpu);
+		fpu = kzalloc(sizeof(struct kvm_fpu), GFP_KERNEL);
+		r = -ENOMEM;
+		if (!fpu)
+			goto out;
+		r = kvm_arch_vcpu_ioctl_get_fpu(vcpu, fpu);
 		if (r)
 			goto out;
 		r = -EFAULT;
-		if (copy_to_user(argp, &fpu, sizeof fpu))
+		if (copy_to_user(argp, fpu, sizeof(struct kvm_fpu)))
 			goto out;
 		r = 0;
 		break;
 	}
 	case KVM_SET_FPU: {
-		struct kvm_fpu fpu;
-
-		r = -EFAULT;
-		if (copy_from_user(&fpu, argp, sizeof fpu))
+		fpu = kmalloc(sizeof(struct kvm_fpu), GFP_KERNEL);
+		r = -ENOMEM;
+		if (!fpu)
 			goto out;
-		r = kvm_arch_vcpu_ioctl_set_fpu(vcpu, &fpu);
+		r = -EFAULT;
+		if (copy_from_user(fpu, argp, sizeof(struct kvm_fpu)))
+			goto out;
+		r = kvm_arch_vcpu_ioctl_set_fpu(vcpu, fpu);
 		if (r)
 			goto out;
 		r = 0;
@@ -1292,6 +1315,8 @@ out_free2:
 		r = kvm_arch_vcpu_ioctl(filp, ioctl, arg);
 	}
 out:
+	kfree(fpu);
+	kfree(kvm_sregs);
 	return r;
 }
 
@@ -1369,17 +1394,22 @@ out:
 
 static int kvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
+	struct page *page[1];
+	unsigned long addr;
+	int npages;
+	gfn_t gfn = vmf->pgoff;
 	struct kvm *kvm = vma->vm_file->private_data;
-	struct page *page;
 
-	if (!kvm_is_visible_gfn(kvm, vmf->pgoff))
+	addr = gfn_to_hva(kvm, gfn);
+	if (kvm_is_error_hva(addr))
 		return VM_FAULT_SIGBUS;
-	page = gfn_to_page(kvm, vmf->pgoff);
-	if (is_error_page(page)) {
-		kvm_release_page_clean(page);
+
+	npages = get_user_pages(current, current->mm, addr, 1, 1, 0, page,
+				NULL);
+	if (unlikely(npages != 1))
 		return VM_FAULT_SIGBUS;
-	}
-	vmf->page = page;
+
+	vmf->page = page[0];
 	return 0;
 }
 
