@@ -463,12 +463,6 @@ and is between 256 and 4096 characters. It is defined in the file
 			Range: 0 - 8192
 			Default: 64
 
-	disable_8254_timer
-	enable_8254_timer
-			[IA32/X86_64] Disable/Enable interrupt 0 timer routing
-			over the 8254 in addition to over the IO-APIC. The
-			kernel tries to set a sensible default.
-
 	hpet=		[X86-32,HPET] option to control HPET usage
 			Format: { enable (default) | disable | force }
 			disable: disable HPET and use PIT instead
@@ -659,11 +653,12 @@ and is between 256 and 4096 characters. It is defined in the file
 	earlyprintk=	[X86-32,X86-64,SH,BLACKFIN]
 			earlyprintk=vga
 			earlyprintk=serial[,ttySn[,baudrate]]
+			earlyprintk=dbgp
 
 			Append ",keep" to not disable it when the real console
 			takes over.
 
-			Only vga or serial at a time, not both.
+			Only vga or serial or usb debug port at a time.
 
 			Currently only ttyS0 and ttyS1 are supported.
 
@@ -1232,6 +1227,29 @@ and is between 256 and 4096 characters. It is defined in the file
 			         or
 			         memmap=0x10000$0x18690000
 
+	memory_corruption_check=0/1 [X86]
+			Some BIOSes seem to corrupt the first 64k of
+			memory when doing things like suspend/resume.
+			Setting this option will scan the memory
+			looking for corruption.  Enabling this will
+			both detect corruption and prevent the kernel
+			from using the memory being corrupted.
+			However, its intended as a diagnostic tool; if
+			repeatable BIOS-originated corruption always
+			affects the same memory, you can use memmap=
+			to prevent the kernel from using that memory.
+
+	memory_corruption_check_size=size [X86]
+			By default it checks for corruption in the low
+			64k, making this memory unavailable for normal
+			use.  Use this parameter to scan for
+			corruption in more or less memory.
+
+	memory_corruption_check_period=seconds [X86]
+			By default it checks for corruption every 60
+			seconds.  Use this parameter to check at some
+			other rate.  0 disables periodic checking.
+
 	memtest=	[KNL,X86] Enable memtest
 			Format: <integer>
 			range: 0,4 : pattern number
@@ -1429,6 +1447,12 @@ and is between 256 and 4096 characters. It is defined in the file
 
 	nolapic_timer	[X86-32,APIC] Do not use the local APIC timer.
 
+	nox2apic	[X86-64,APIC] Do not enable x2APIC mode.
+
+	x2apic_phys	[X86-64,APIC] Use x2apic physical mode instead of
+			default x2apic cluster mode on platforms
+			supporting x2apic.
+
 	noltlbs		[PPC] Do not use large page/tlb entries for kernel
 			lowmem mapping on PPC40x.
 
@@ -1570,6 +1594,17 @@ and is between 256 and 4096 characters. It is defined in the file
 		nomsi		[MSI] If the PCI_MSI kernel config parameter is
 				enabled, this kernel boot option can be used to
 				disable the use of MSI interrupts system-wide.
+		noioapicquirk	[APIC] Disable all boot interrupt quirks.
+				Safety option to keep boot IRQs enabled. This
+				should never be necessary.
+		ioapicreroute	[APIC] Enable rerouting of boot IRQs to the
+				primary IO-APIC for bridges that cannot disable
+				boot IRQs. This fixes a source of spurious IRQs
+				when the system masks IRQs.
+		noioapicreroute	[APIC] Disable workaround that uses the
+				boot IRQ equivalent of an IRQ that connects to
+				a chipset where boot IRQs cannot be disabled.
+				The opposite of ioapicreroute.
 		biosirq		[X86-32] Use PCI BIOS calls to get the interrupt
 				routing table. These calls are known to be buggy
 				on several machines and they hang the machine
@@ -1885,6 +1920,12 @@ and is between 256 and 4096 characters. It is defined in the file
 
 	shapers=	[NET]
 			Maximal number of shapers.
+
+	show_msr=	[x86] show boot-time MSR settings
+			Format: { <integer> }
+			Show boot-time (BIOS-initialized) MSR settings.
+			The parameter means the number of CPUs to show,
+			for example 1 means boot CPU only.
 
 	sim710=		[SCSI,HW]
 			See header of drivers/scsi/sim710.c.

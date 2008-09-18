@@ -47,6 +47,7 @@
 #include <asm/paravirt.h>
 #include <asm/setup.h>
 #include <asm/cacheflush.h>
+#include <asm/smp.h>
 
 unsigned int __VMALLOC_RESERVE = 128 << 20;
 
@@ -458,11 +459,7 @@ static void __init pagetable_init(void)
 {
 	pgd_t *pgd_base = swapper_pg_dir;
 
-	paravirt_pagetable_setup_start(pgd_base);
-
 	permanent_kmaps_init(pgd_base);
-
-	paravirt_pagetable_setup_done(pgd_base);
 }
 
 #ifdef CONFIG_ACPI_SLEEP
@@ -906,6 +903,8 @@ void __init mem_init(void)
 {
 	int codesize, reservedpages, datasize, initsize;
 	int tmp;
+
+	start_periodic_check_for_corruption();
 
 #ifdef CONFIG_FLATMEM
 	BUG_ON(!mem_map);
