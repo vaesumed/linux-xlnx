@@ -1265,6 +1265,8 @@ static void blocking_cb(struct gfs2_sbd *sdp, struct lm_lockname *name,
 	holdtime = gl->gl_tchange + gl->gl_ops->go_min_hold_time;
 	if (time_before(now, holdtime))
 		delay = holdtime - now;
+	if (test_bit(GLF_REPLY_PENDING, &gl->gl_flags))
+		delay = gl->gl_ops->go_min_hold_time;
 
 	spin_lock(&gl->gl_spin);
 	handle_callback(gl, state, 1, delay);
@@ -1816,15 +1818,17 @@ restart:
 	if (gl) {
 		gi->gl = hlist_entry(gl->gl_list.next,
 				     struct gfs2_glock, gl_list);
-		if (gi->gl)
-			gfs2_glock_hold(gi->gl);
+	} else {
+		gi->gl = hlist_entry(gl_hash_table[gi->hash].hb_list.first,
+				     struct gfs2_glock, gl_list);
 	}
+	if (gi->gl)
+		gfs2_glock_hold(gi->gl);
 	read_unlock(gl_lock_addr(gi->hash));
 	if (gl)
 		gfs2_glock_put(gl);
-	if (gl && gi->gl == NULL)
-		gi->hash++;
 	while (gi->gl == NULL) {
+		gi->hash++;
 		if (gi->hash >= GFS2_GL_HASH_SIZE)
 			return 1;
 		read_lock(gl_lock_addr(gi->hash));
@@ -1833,7 +1837,6 @@ restart:
 		if (gi->gl)
 			gfs2_glock_hold(gi->gl);
 		read_unlock(gl_lock_addr(gi->hash));
-		gi->hash++;
 	}
 
 	if (gi->sdp != gi->gl->gl_sbd)
