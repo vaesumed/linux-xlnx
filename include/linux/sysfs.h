@@ -78,6 +78,17 @@ struct sysfs_ops {
 	ssize_t	(*store)(struct kobject *,struct attribute *,const char *, size_t);
 };
 
+struct sysfs_dirent;
+
+enum sysfs_tag_type {
+	SYSFS_TAG_TYPE_NONE = 0,
+	SYSFS_TAG_TYPES
+};
+
+struct sysfs_tag_type_operations {
+	const void *(*mount_tag)(void);
+};
+
 #ifdef CONFIG_SYSFS
 
 int sysfs_schedule_callback(struct kobject *kobj, void (*func)(void *),
@@ -101,10 +112,13 @@ void sysfs_remove_bin_file(struct kobject *kobj, struct bin_attribute *attr);
 
 int __must_check sysfs_create_link(struct kobject *kobj, struct kobject *target,
 				   const char *name);
-int __must_check sysfs_create_link_nowarn(struct kobject *kobj,
-					  struct kobject *target,
-					  const char *name);
 void sysfs_remove_link(struct kobject *kobj, const char *name);
+
+int sysfs_rename_link(struct kobject *kobj, struct kobject *target,
+			const char *old_name, const char *new_name);
+
+void sysfs_delete_link(struct kobject *dir, struct kobject *targ,
+			const char *name);
 
 int __must_check sysfs_create_group(struct kobject *kobj,
 				    const struct attribute_group *grp);
@@ -118,8 +132,19 @@ void sysfs_remove_file_from_group(struct kobject *kobj,
 			const struct attribute *attr, const char *group);
 
 void sysfs_notify(struct kobject *kobj, char *dir, char *attr);
+void sysfs_notify_dirent(struct sysfs_dirent *sd);
+struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
+				      const unsigned char *name);
+struct sysfs_dirent *sysfs_get(struct sysfs_dirent *sd);
+void sysfs_put(struct sysfs_dirent *sd);
+void sysfs_printk_last_file(void);
 
-extern int __must_check sysfs_init(void);
+int sysfs_make_tagged_dir(struct kobject *, enum sysfs_tag_type tag_type);
+int sysfs_register_tag_type(enum sysfs_tag_type type,
+			    struct sysfs_tag_type_operations *ops);
+void sysfs_exit_tag(enum sysfs_tag_type type, const void *tag);
+
+int __must_check sysfs_init(void);
 
 #else /* CONFIG_SYSFS */
 
@@ -183,14 +208,18 @@ static inline int sysfs_create_link(struct kobject *kobj,
 	return 0;
 }
 
-static inline int sysfs_create_link_nowarn(struct kobject *kobj,
-					   struct kobject *target,
-					   const char *name)
+static inline void sysfs_remove_link(struct kobject *kobj, const char *name)
+{
+}
+
+static inline int sysfs_rename_link(struct kobject *k, struct kobject *t,
+				    const char *old_name, const char *new_name)
 {
 	return 0;
 }
 
-static inline void sysfs_remove_link(struct kobject *kobj, const char *name)
+static inline void sysfs_delete_link(struct kobject *k, struct kobject *t,
+				     const char *name)
 {
 }
 
@@ -225,10 +254,46 @@ static inline void sysfs_remove_file_from_group(struct kobject *kobj,
 static inline void sysfs_notify(struct kobject *kobj, char *dir, char *attr)
 {
 }
+static inline void sysfs_notify_dirent(struct sysfs_dirent *sd)
+{
+}
+static inline
+struct sysfs_dirent *sysfs_get_dirent(struct sysfs_dirent *parent_sd,
+				      const unsigned char *name)
+{
+	return NULL;
+}
+static inline struct sysfs_dirent *sysfs_get(struct sysfs_dirent *sd)
+{
+	return NULL;
+}
+static inline void sysfs_put(struct sysfs_dirent *sd)
+{
+}
+
+static inline int sysfs_make_tagged_dir(struct kobject *kobj,
+					enum sysfs_tag_type tag_type)
+{
+	return 0;
+}
+
+static inline int sysfs_register_tag_type(enum sysfs_tag_type type,
+					  struct sysfs_tag_type_operations *ops)
+{
+	return 0;
+}
+
+static inline void sysfs_exit_tag(enum sysfs_tag_type type, const void *tag)
+{
+}
 
 static inline int __must_check sysfs_init(void)
 {
 	return 0;
+}
+
+static inline void sysfs_printk_last_file(void)
+{
 }
 
 #endif /* CONFIG_SYSFS */

@@ -36,7 +36,7 @@ struct pasic3_data {
  */
 void pasic3_write_register(struct device *dev, u32 reg, u8 val)
 {
-	struct pasic3_data *asic = dev->driver_data;
+	struct pasic3_data *asic = dev_get_drvdata(dev);
 	int bus_shift = asic->bus_shift;
 	void __iomem *addr = asic->mapping + (REG_ADDR << bus_shift);
 	void __iomem *data = asic->mapping + (REG_DATA << bus_shift);
@@ -51,7 +51,7 @@ EXPORT_SYMBOL(pasic3_write_register); /* for leds-pasic3 */
  */
 u8 pasic3_read_register(struct device *dev, u32 reg)
 {
-	struct pasic3_data *asic = dev->driver_data;
+	struct pasic3_data *asic = dev_get_drvdata(dev);
 	int bus_shift = asic->bus_shift;
 	void __iomem *addr = asic->mapping + (REG_ADDR << bus_shift);
 	void __iomem *data = asic->mapping + (REG_DATA << bus_shift);
@@ -68,7 +68,7 @@ EXPORT_SYMBOL(pasic3_read_register); /* for leds-pasic3 */
 static int led_device_add(struct device *pasic3_dev,
 				const struct pasic3_leds_machinfo *pdata)
 {
-	struct pasic3_data *asic = pasic3_dev->driver_data;
+	struct pasic3_data *asic = dev_get_drvdata(pasic3_dev);
 	struct platform_device *pdev;
 	int ret;
 
@@ -135,7 +135,7 @@ static struct ds1wm_platform_data ds1wm_pdata = {
 static int ds1wm_device_add(struct platform_device *pasic3_pdev, int bus_shift)
 {
 	struct device *pasic3_dev = &pasic3_pdev->dev;
-	struct pasic3_data *asic = pasic3_dev->driver_data;
+	struct pasic3_data *asic = dev_get_drvdata(pasic3_dev);
 	struct platform_device *pdev;
 	int ret;
 

@@ -90,18 +90,18 @@ int sysfs_create_link(struct kobject *kobj, struct kobject *target,
 }
 
 /**
- *	sysfs_create_link_nowarn - create symlink between two objects.
- *	@kobj:	object whose directory we're creating the link in.
- *	@target:	object we're pointing to.
- *	@name:		name of the symlink.
+ *	sysfs_delete_link - remove symlink in object's directory.
+ *	@kobj:	object we're acting for.
+ *	@targ:	object we're pointing to.
+ *	@name:	name of the symlink to remove.
  *
- *	This function does the same as sysf_create_link(), but it
- *	doesn't warn if the link already exists.
+ *	Unlike sysfs_remove_link sysfs_delete_link has enough information
+ *	to successfully delete symlinks in tagged directories.
  */
-int sysfs_create_link_nowarn(struct kobject *kobj, struct kobject *target,
-			     const char *name)
+void sysfs_delete_link(struct kobject *kobj, struct kobject *targ,
+			const char *name)
 {
-	return sysfs_do_create_link(kobj, target, name, 0);
+	sysfs_hash_and_remove(targ, kobj->sd, name);
 }
 
 /**
@@ -119,7 +119,23 @@ void sysfs_remove_link(struct kobject * kobj, const char * name)
 	else
 		parent_sd = kobj->sd;
 
-	sysfs_hash_and_remove(parent_sd, name);
+	sysfs_hash_and_remove(kobj, parent_sd, name);
+}
+
+/**
+ *	sysfs_rename_link - rename symlink in object's directory.
+ *	@kobj:	object we're acting for.
+ *	@targ:	object we're pointing to.
+ *	@old:	previous name of the symlink.
+ *	@new:	new name of the symlink.
+ *
+ *	A helper function for the common rename symlink idiom.
+ */
+int sysfs_rename_link(struct kobject *kobj, struct kobject *targ,
+			const char *old, const char *new)
+{
+	sysfs_delete_link(kobj, targ, old);
+	return sysfs_create_link(kobj, targ, new);
 }
 
 static int sysfs_get_target_path(struct sysfs_dirent *parent_sd,

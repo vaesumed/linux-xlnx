@@ -17,6 +17,55 @@
 #include <linux/module.h>
 #include <linux/stat.h>
 #include <linux/slab.h>
+#include <linux/kallsyms.h>
+#include <asm-generic/sections.h>
+
+#ifdef CONFIG_X86_32
+static int ptr_in_range(void *ptr, void *start, void *end)
+{
+	/*
+	 * This should hopefully get rid of causing warnings
+	 * if the architecture did not set one of the section
+	 * variables up.
+	 */
+	if (start >= end)
+		return 0;
+
+	if ((ptr >= start) && (ptr < end))
+		return 1;
+	return 0;
+}
+
+static void verify_dynamic_kobject_allocation(struct kobject *kobj)
+{
+	char namebuf[KSYM_NAME_LEN];
+	const char *ret;
+
+	ret = kallsyms_lookup((unsigned long)kobj, NULL, NULL, NULL, namebuf);
+	/*
+	 * This is the X86_32-only part of this function.
+	 * This is here because it is valid to have a kobject
+	 * in an __init section, but only after those
+	 * sections have been freed back to the dynamic pool.
+	 */
+	if (!initmem_now_dynamic &&
+	    ptr_in_range(kobj, __init_begin, __init_end))
+		goto out;
+	if (!ret || !strlen(ret))
+		goto out;
+	pr_debug("---- begin silly warning ----\n");
+	pr_debug("This is a janitorial warning, not a kernel bug.\n");
+	pr_debug("The kobject '%s', at, or inside '%s'@(0x%p) is not "
+		 "dynamically allocated.\n", kobject_name(kobj), namebuf, kobj);
+	pr_debug("kobjects must be dynamically allocated, not static\n");
+	/* dump_stack(); */
+	pr_debug("---- end silly warning ----\n");
+out:
+	return;
+}
+#else
+static void verify_dynamic_kobject_allocation(struct kobject *kobj) { }
+#endif
 
 /*
  * populate_dir - populate directory with attributes.
@@ -282,6 +331,7 @@ void kobject_init(struct kobject *kobj, struct kobj_type *ktype)
 		       "object, something is seriously wrong.\n", kobj);
 		dump_stack();
 	}
+	verify_dynamic_kobject_allocation(kobj);
 
 	kobject_init_internal(kobj);
 	kobj->ktype = ktype;
@@ -387,11 +437,17 @@ EXPORT_SYMBOL_GPL(kobject_init_and_add);
  * kobject_rename - change the name of an object
  * @kobj: object in question.
  * @new_name: object's new name
+ *
+ * It is the responsibility of the caller to provide mutual
+ * exclusion between two different calls of kobject_rename
+ * on the same kobject and to ensure that new_name is valid and
+ * won't conflict with other kobjects.
  */
 int kobject_rename(struct kobject *kobj, const char *new_name)
 {
 	int error = 0;
 	const char *devpath = NULL;
+	const char *dup_name = NULL, *name;
 	char *devpath_string = NULL;
 	char *envp[2];
 
@@ -400,19 +456,6 @@ int kobject_rename(struct kobject *kobj, const char *new_name)
 		return -EINVAL;
 	if (!kobj->parent)
 		return -EINVAL;
-
-	/* see if this name is already in use */
-	if (kobj->kset) {
-		struct kobject *temp_kobj;
-		temp_kobj = kset_find_obj(kobj->kset, new_name);
-		if (temp_kobj) {
-			printk(KERN_WARNING "kobject '%s' cannot be renamed "
-			       "to '%s' as '%s' is already in existence.\n",
-			       kobject_name(kobj), new_name, new_name);
-			kobject_put(temp_kobj);
-			return -EINVAL;
-		}
-	}
 
 	devpath = kobject_get_path(kobj, GFP_KERNEL);
 	if (!devpath) {
@@ -428,15 +471,27 @@ int kobject_rename(struct kobject *kobj, const char *new_name)
 	envp[0] = devpath_string;
 	envp[1] = NULL;
 
+	name = dup_name = kstrdup(new_name, GFP_KERNEL);
+	if (!name) {
+		error = -ENOMEM;
+		goto out;
+	}
+
 	error = sysfs_rename_dir(kobj, new_name);
+	if (error)
+		goto out;
+
+	/* Install the new kobject name */
+	dup_name = kobj->name;
+	kobj->name = name;
 
 	/* This function is mostly/only used for network interface.
 	 * Some hotplug package track interfaces by their name and
 	 * therefore want to know when the name is changed by the user. */
-	if (!error)
-		kobject_uevent_env(kobj, KOBJ_MOVE, envp);
+	kobject_uevent_env(kobj, KOBJ_MOVE, envp);
 
 out:
+	kfree(dup_name);
 	kfree(devpath_string);
 	kfree(devpath);
 	kobject_put(kobj);
