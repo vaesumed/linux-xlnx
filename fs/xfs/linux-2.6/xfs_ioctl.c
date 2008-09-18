@@ -311,9 +311,8 @@ xfs_open_by_handle(
 		return new_fd;
 	}
 
-	dentry = d_alloc_anon(inode);
+	dentry = d_obtain_alias(inode);
 	if (dentry == NULL) {
-		iput(inode);
 		put_unused_fd(new_fd);
 		return -XFS_ERROR(ENOMEM);
 	}
