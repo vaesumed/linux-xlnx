@@ -1060,8 +1060,6 @@ static struct dentry *ext4_lookup(struct inode * dir, struct dentry *dentry, str
 struct dentry *ext4_get_parent(struct dentry *child)
 {
 	unsigned long ino;
-	struct dentry *parent;
-	struct inode *inode;
 	struct dentry dotdot;
 	struct ext4_dir_entry_2 * de;
 	struct buffer_head *bh;
@@ -1071,7 +1069,6 @@ struct dentry *ext4_get_parent(struct dentry *child)
 	dotdot.d_parent = child; /* confusing, isn't it! */
 
 	bh = ext4_find_entry(&dotdot, &de);
-	inode = NULL;
 	if (!bh)
 		return ERR_PTR(-ENOENT);
 	ino = le32_to_cpu(de->inode);
@@ -1083,16 +1080,7 @@ struct dentry *ext4_get_parent(struct dentry *child)
 		return ERR_PTR(-EIO);
 	}
 
-	inode = ext4_iget(child->d_inode->i_sb, ino);
-	if (IS_ERR(inode))
-		return ERR_CAST(inode);
-
-	parent = d_alloc_anon(inode);
-	if (!parent) {
-		iput(inode);
-		parent = ERR_PTR(-ENOMEM);
-	}
-	return parent;
+	return d_obtain_alias(ext4_iget(child->d_inode->i_sb, ino));
 }
 
 #define S_SHIFT 12
