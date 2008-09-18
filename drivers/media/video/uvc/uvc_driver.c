@@ -1663,7 +1663,7 @@ static int uvc_suspend(struct usb_interface *intf, pm_message_t message)
 	return uvc_video_suspend(&dev->video);
 }
 
-static int uvc_resume(struct usb_interface *intf)
+static int __uvc_resume(struct usb_interface *intf, int reset)
 {
 	struct uvc_device *dev = usb_get_intfdata(intf);
 	int ret;
@@ -1672,7 +1672,7 @@ static int uvc_resume(struct usb_interface *intf)
 		intf->cur_altsetting->desc.bInterfaceNumber);
 
 	if (intf->cur_altsetting->desc.bInterfaceSubClass == SC_VIDEOCONTROL) {
-		if ((ret = uvc_ctrl_resume_device(dev)) < 0)
+		if (reset && (ret = uvc_ctrl_resume_device(dev)) < 0)
 			return ret;
 
 		return uvc_status_resume(dev);
@@ -1685,6 +1685,16 @@ static int uvc_resume(struct usb_interface *intf)
 	}
 
 	return uvc_video_resume(&dev->video);
+}
+
+static int uvc_resume(struct usb_interface *intf)
+{
+	return __uvc_resume(intf, 0);
+}
+
+static int uvc_reset_resume(struct usb_interface *intf)
+{
+	return __uvc_resume(intf, 1);
 }
 
 /* ------------------------------------------------------------------------
@@ -1920,6 +1930,15 @@ static struct usb_device_id uvc_ids[] = {
 	  .bInterfaceSubClass	= 1,
 	  .bInterfaceProtocol	= 0,
 	  .driver_info		= UVC_QUIRK_PROBE_MINMAX },
+	/*  Fujitsu Amilo SI2636 - Bison Electronics */
+	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
+				| USB_DEVICE_ID_MATCH_INT_INFO,
+	  .idVendor		= 0x5986,
+	  .idProduct		= 0x0202,
+	  .bInterfaceClass	= USB_CLASS_VIDEO,
+	  .bInterfaceSubClass	= 1,
+	  .bInterfaceProtocol	= 0,
+	  .driver_info		= UVC_QUIRK_PROBE_MINMAX },
 	/* Bison Electronics */
 	{ .match_flags		= USB_DEVICE_ID_MATCH_DEVICE
 				| USB_DEVICE_ID_MATCH_INT_INFO,
@@ -1952,6 +1971,7 @@ struct uvc_driver uvc_driver = {
 		.disconnect	= uvc_disconnect,
 		.suspend	= uvc_suspend,
 		.resume		= uvc_resume,
+		.reset_resume	= uvc_reset_resume,
 		.id_table	= uvc_ids,
 		.supports_autosuspend = 1,
 	},

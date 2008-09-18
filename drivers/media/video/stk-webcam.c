@@ -72,7 +72,7 @@ static void stk_camera_cleanup(struct kref *kref)
 	STK_INFO("Syntek USB2.0 Camera release resources"
 		" video device /dev/video%d\n", dev->vdev.minor);
 	video_unregister_device(&dev->vdev);
-	dev->vdev.priv = NULL;
+	video_set_drvdata(&dev->vdev, NULL);
 
 	if (dev->sio_bufs != NULL || dev->isobufs != NULL)
 		STK_ERROR("We are leaking memory\n");
@@ -689,11 +689,15 @@ static int v4l_stk_open(struct inode *inode, struct file *fp)
 	vdev = video_devdata(fp);
 	dev = vdev_to_camera(vdev);
 
-	if (dev == NULL || !is_present(dev))
+	lock_kernel();
+	if (dev == NULL || !is_present(dev)) {
+		unlock_kernel();
 		return -ENXIO;
+	}
 	fp->private_data = vdev;
 	kref_get(&dev->kref);
 	usb_autopm_get_interface(dev->interface);
+	unlock_kernel();
 
 	return 0;
 }
@@ -1375,7 +1379,7 @@ static int stk_register_video_device(struct stk_camera *dev)
 	dev->vdev = stk_v4l_data;
 	dev->vdev.debug = debug;
 	dev->vdev.parent = &dev->interface->dev;
-	dev->vdev.priv = dev;
+	video_set_drvdata(&dev->vdev, dev);
 	err = video_register_device(&dev->vdev, VFL_TYPE_GRABBER, -1);
 	if (err)
 		STK_ERROR("v4l registration failed\n");
