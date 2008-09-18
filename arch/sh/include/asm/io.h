@@ -194,6 +194,8 @@ __BUILD_MEMORY_STRING(w, u16)
 
 #define IO_SPACE_LIMIT 0xffffffff
 
+extern unsigned long generic_io_base;
+
 /*
  * This function provides a method for the generic case where a board-specific
  * ioport_map simply needs to return the port + some arbitrary port base.
@@ -203,8 +205,6 @@ __BUILD_MEMORY_STRING(w, u16)
  */
 static inline void __set_io_port_base(unsigned long pbase)
 {
-	extern unsigned long generic_io_base;
-
 	generic_io_base = pbase;
 }
 
@@ -347,6 +347,8 @@ __ioremap_mode(unsigned long offset, unsigned long size, unsigned long flags)
 	__ioremap_mode((offset), (size), _PAGE_CACHABLE)
 #define p3_ioremap(offset, size, flags)			\
 	__ioremap((offset), (size), (flags))
+#define ioremap_prot(offset, size, flags)		\
+	__ioremap_mode((offset), (size), (flags))
 #define iounmap(addr)					\
 	__iounmap((addr))
 
