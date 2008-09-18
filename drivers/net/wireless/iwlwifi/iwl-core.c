@@ -399,8 +399,8 @@ static void iwlcore_init_ht_hw_capab(const struct iwl_priv *priv,
 
 	ht_info->cap |= (u16)IEEE80211_HT_CAP_GRN_FLD;
 	ht_info->cap |= (u16)IEEE80211_HT_CAP_SGI_20;
-	ht_info->cap |= (u16)(IEEE80211_HT_CAP_MIMO_PS &
-			     (IWL_MIMO_PS_NONE << 2));
+	ht_info->cap |= (u16)(IEEE80211_HT_CAP_SM_PS &
+			     (WLAN_HT_CAP_SM_PS_DISABLED << 2));
 
 	max_bit_rate = MAX_BIT_RATE_20_MHZ;
 	if (priv->hw_params.fat_channel & BIT(band)) {
@@ -709,7 +709,8 @@ static int iwl_get_active_rx_chain_count(struct iwl_priv *priv)
 	bool is_cam = !test_bit(STATUS_POWER_PMI, &priv->status);
 
 	/* # of Rx chains to use when expecting MIMO. */
-	if (is_single || (!is_cam && (priv->ps_mode == IWL_MIMO_PS_STATIC)))
+	if (is_single || (!is_cam && (priv->current_ht_config.sm_ps ==
+						 WLAN_HT_CAP_SM_PS_STATIC)))
 		return 2;
 	else
 		return 3;
@@ -720,22 +721,34 @@ static int iwl_get_idle_rx_chain_count(struct iwl_priv *priv, int active_cnt)
 	int idle_cnt;
 	bool is_cam = !test_bit(STATUS_POWER_PMI, &priv->status);
 	/* # Rx chains when idling and maybe trying to save power */
-	switch (priv->ps_mode) {
-	case IWL_MIMO_PS_STATIC:
-	case IWL_MIMO_PS_DYNAMIC:
+	switch (priv->current_ht_config.sm_ps) {
+	case WLAN_HT_CAP_SM_PS_STATIC:
+	case WLAN_HT_CAP_SM_PS_DYNAMIC:
 		idle_cnt = (is_cam) ? 2 : 1;
 		break;
-	case IWL_MIMO_PS_NONE:
+	case WLAN_HT_CAP_SM_PS_DISABLED:
 		idle_cnt = (is_cam) ? active_cnt : 1;
 		break;
-	case IWL_MIMO_PS_INVALID:
+	case WLAN_HT_CAP_SM_PS_INVALID:
 	default:
-		IWL_ERROR("invalide mimo ps mode %d\n", priv->ps_mode);
+		IWL_ERROR("invalide mimo ps mode %d\n",
+			   priv->current_ht_config.sm_ps);
 		WARN_ON(1);
 		idle_cnt = -1;
 		break;
 	}
 	return idle_cnt;
+}
+
+/* up to 4 chains */
+static u8 iwl_count_chain_bitmap(u32 chain_bitmap)
+{
+	u8 res;
+	res = (chain_bitmap & BIT(0)) >> 0;
+	res += (chain_bitmap & BIT(1)) >> 1;
+	res += (chain_bitmap & BIT(2)) >> 2;
+	res += (chain_bitmap & BIT(4)) >> 4;
+	return res;
 }
 
 /**
@@ -748,25 +761,35 @@ void iwl_set_rxon_chain(struct iwl_priv *priv)
 {
 	bool is_single = is_single_rx_stream(priv);
 	bool is_cam = !test_bit(STATUS_POWER_PMI, &priv->status);
-	u8 idle_rx_cnt, active_rx_cnt;
+	u8 idle_rx_cnt, active_rx_cnt, valid_rx_cnt;
+	u32 active_chains;
 	u16 rx_chain;
 
 	/* Tell uCode which antennas are actually connected.
 	 * Before first association, we assume all antennas are connected.
 	 * Just after first association, iwl_chain_noise_calibration()
 	 *    checks which antennas actually *are* connected. */
-	rx_chain = priv->hw_params.valid_rx_ant << RXON_RX_CHAIN_VALID_POS;
+	 if (priv->chain_noise_data.active_chains)
+		active_chains = priv->chain_noise_data.active_chains;
+	else
+		active_chains = priv->hw_params.valid_rx_ant;
+
+	rx_chain = active_chains << RXON_RX_CHAIN_VALID_POS;
 
 	/* How many receivers should we use? */
 	active_rx_cnt = iwl_get_active_rx_chain_count(priv);
 	idle_rx_cnt = iwl_get_idle_rx_chain_count(priv, active_rx_cnt);
 
-	/* correct rx chain count accoridng hw settings */
-	if (priv->hw_params.rx_chains_num < active_rx_cnt)
-		active_rx_cnt = priv->hw_params.rx_chains_num;
 
-	if (priv->hw_params.rx_chains_num < idle_rx_cnt)
-		idle_rx_cnt = priv->hw_params.rx_chains_num;
+	/* correct rx chain count according hw settings
+	 * and chain noise calibration
+	 */
+	valid_rx_cnt = iwl_count_chain_bitmap(active_chains);
+	if (valid_rx_cnt < active_rx_cnt)
+		active_rx_cnt = valid_rx_cnt;
+
+	if (valid_rx_cnt < idle_rx_cnt)
+		idle_rx_cnt = valid_rx_cnt;
 
 	rx_chain |= active_rx_cnt << RXON_RX_CHAIN_MIMO_CNT_POS;
 	rx_chain |= idle_rx_cnt  << RXON_RX_CHAIN_CNT_POS;
@@ -778,7 +801,7 @@ void iwl_set_rxon_chain(struct iwl_priv *priv)
 	else
 		priv->staging_rxon.rx_chain &= ~RXON_RX_CHAIN_MIMO_FORCE_MSK;
 
-	IWL_DEBUG_ASSOC("rx_chain=0x%Xi active=%d idle=%d\n",
+	IWL_DEBUG_ASSOC("rx_chain=0x%X active=%d idle=%d\n",
 			priv->staging_rxon.rx_chain,
 			active_rx_cnt, idle_rx_cnt);
 
@@ -788,7 +811,7 @@ void iwl_set_rxon_chain(struct iwl_priv *priv)
 EXPORT_SYMBOL(iwl_set_rxon_chain);
 
 /**
- * iwlcore_set_rxon_channel - Set the phymode and channel values in staging RXON
+ * iwl_set_rxon_channel - Set the phymode and channel values in staging RXON
  * @phymode: MODE_IEEE80211A sets to 5.2GHz; all else set to 2.4GHz
  * @channel: Any channel valid for the requested phymode
 
@@ -797,10 +820,11 @@ EXPORT_SYMBOL(iwl_set_rxon_chain);
  * NOTE:  Does not commit to the hardware; it sets appropriate bit fields
  * in the staging RXON flag structure based on the phymode
  */
-int iwl_set_rxon_channel(struct iwl_priv *priv,
-				enum ieee80211_band band,
-				u16 channel)
+int iwl_set_rxon_channel(struct iwl_priv *priv, struct ieee80211_channel *ch)
 {
+	enum ieee80211_band band = ch->band;
+	u16 channel = ieee80211_frequency_to_channel(ch->center_freq);
+
 	if (!iwl_get_channel_info(priv, band, channel)) {
 		IWL_DEBUG_INFO("Could not set channel to %d [%d]\n",
 			       channel, band);
@@ -834,6 +858,10 @@ int iwl_setup_mac(struct iwl_priv *priv)
 	/* Tell mac80211 our characteristics */
 	hw->flags = IEEE80211_HW_SIGNAL_DBM |
 		    IEEE80211_HW_NOISE_DBM;
+	hw->wiphy->interface_modes =
+		BIT(NL80211_IFTYPE_AP) |
+		BIT(NL80211_IFTYPE_STATION) |
+		BIT(NL80211_IFTYPE_ADHOC);
 	/* Default value; 4 EDCA QOS priorities */
 	hw->queues = 4;
 	/* queues to support 11n aggregation */
@@ -891,7 +919,6 @@ int iwl_init_drv(struct iwl_priv *priv)
 	spin_lock_init(&priv->power_data.lock);
 	spin_lock_init(&priv->sta_lock);
 	spin_lock_init(&priv->hcmd_lock);
-	spin_lock_init(&priv->lq_mngr.lock);
 
 	INIT_LIST_HEAD(&priv->free_frames);
 
@@ -908,7 +935,7 @@ int iwl_init_drv(struct iwl_priv *priv)
 	priv->iw_mode = IEEE80211_IF_TYPE_STA;
 
 	priv->use_ant_b_for_management_frame = 1; /* start with ant B */
-	priv->ps_mode = IWL_MIMO_PS_NONE;
+	priv->current_ht_config.sm_ps = WLAN_HT_CAP_SM_PS_DISABLED;
 
 	/* Choose which receivers/antennas to use */
 	iwl_set_rxon_chain(priv);
@@ -921,8 +948,6 @@ int iwl_init_drv(struct iwl_priv *priv)
 
 	priv->qos_data.qos_active = 0;
 	priv->qos_data.qos_cap.val = 0;
-
-	iwl_set_rxon_channel(priv, IEEE80211_BAND_2GHZ, 6);
 
 	priv->rates_mask = IWL_RATES_MASK;
 	/* If power management is turned on, default to AC mode */
@@ -949,22 +974,6 @@ err:
 	return ret;
 }
 EXPORT_SYMBOL(iwl_init_drv);
-
-void iwl_free_calib_results(struct iwl_priv *priv)
-{
-	kfree(priv->calib_results.lo_res);
-	priv->calib_results.lo_res = NULL;
-	priv->calib_results.lo_res_len = 0;
-
-	kfree(priv->calib_results.tx_iq_res);
-	priv->calib_results.tx_iq_res = NULL;
-	priv->calib_results.tx_iq_res_len = 0;
-
-	kfree(priv->calib_results.tx_iq_perd_res);
-	priv->calib_results.tx_iq_perd_res = NULL;
-	priv->calib_results.tx_iq_perd_res_len = 0;
-}
-EXPORT_SYMBOL(iwl_free_calib_results);
 
 int iwl_set_tx_power(struct iwl_priv *priv, s8 tx_power, bool force)
 {
@@ -993,10 +1002,9 @@ int iwl_set_tx_power(struct iwl_priv *priv, s8 tx_power, bool force)
 }
 EXPORT_SYMBOL(iwl_set_tx_power);
 
-
 void iwl_uninit_drv(struct iwl_priv *priv)
 {
-	iwl_free_calib_results(priv);
+	iwl_calib_free_results(priv);
 	iwlcore_free_geos(priv);
 	iwl_free_channel_map(priv);
 	kfree(priv->scan);
@@ -1150,7 +1158,6 @@ int iwl_verify_ucode(struct iwl_priv *priv)
 }
 EXPORT_SYMBOL(iwl_verify_ucode);
 
-
 static const char *desc_lookup(int i)
 {
 	switch (i) {
@@ -1231,9 +1238,9 @@ EXPORT_SYMBOL(iwl_dump_nic_error_log);
 /**
  * iwl_print_event_log - Dump error event log to syslog
  *
- * NOTE: Must be called with iwl4965_grab_nic_access() already obtained!
+ * NOTE: Must be called with iwl_grab_nic_access() already obtained!
  */
-void iwl_print_event_log(struct iwl_priv *priv, u32 start_idx,
+static void iwl_print_event_log(struct iwl_priv *priv, u32 start_idx,
 				u32 num_events, u32 mode)
 {
 	u32 i;
@@ -1274,8 +1281,6 @@ void iwl_print_event_log(struct iwl_priv *priv, u32 start_idx,
 		}
 	}
 }
-EXPORT_SYMBOL(iwl_print_event_log);
-
 
 void iwl_dump_nic_event_log(struct iwl_priv *priv)
 {

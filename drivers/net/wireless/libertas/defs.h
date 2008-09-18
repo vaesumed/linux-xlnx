@@ -189,6 +189,15 @@ static inline void lbs_deb_hex(unsigned int grp, const char *prompt, u8 *buf, in
 #define MRVDRV_CMD_UPLD_RDY		0x0008
 #define MRVDRV_CARDEVENT		0x0010
 
+
+/* Automatic TX control default levels */
+#define POW_ADAPT_DEFAULT_P0 13
+#define POW_ADAPT_DEFAULT_P1 15
+#define POW_ADAPT_DEFAULT_P2 18
+#define TPC_DEFAULT_P0 5
+#define TPC_DEFAULT_P1 10
+#define TPC_DEFAULT_P2 13
+
 /** TxPD status */
 
 /*	Station firmware use TxPD status field to report final Tx transmit
@@ -243,6 +252,9 @@ static inline void lbs_deb_hex(unsigned int grp, const char *prompt, u8 *buf, in
 
 #define	CMD_F_HOSTCMD		(1 << 0)
 #define FW_CAPINFO_WPA  	(1 << 0)
+#define FW_CAPINFO_FIRMWARE_UPGRADE	(1 << 13)
+#define FW_CAPINFO_BOOT2_UPGRADE	(1<<14)
+#define FW_CAPINFO_PERSISTENT_CONFIG	(1<<15)
 
 #define KEY_LEN_WPA_AES			16
 #define KEY_LEN_WPA_TKIP		32
@@ -316,7 +328,8 @@ enum PS_STATE {
 enum DNLD_STATE {
 	DNLD_RES_RECEIVED,
 	DNLD_DATA_SENT,
-	DNLD_CMD_SENT
+	DNLD_CMD_SENT,
+	DNLD_BOOTCMD_SENT,
 };
 
 /** LBS_MEDIA_STATE */

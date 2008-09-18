@@ -37,27 +37,6 @@
 #include <net/ip_vs.h>
 
 
-static int
-ip_vs_nq_init_svc(struct ip_vs_service *svc)
-{
-	return 0;
-}
-
-
-static int
-ip_vs_nq_done_svc(struct ip_vs_service *svc)
-{
-	return 0;
-}
-
-
-static int
-ip_vs_nq_update_svc(struct ip_vs_service *svc)
-{
-	return 0;
-}
-
-
 static inline unsigned int
 ip_vs_nq_dest_overhead(struct ip_vs_dest *dest)
 {
@@ -120,12 +99,12 @@ ip_vs_nq_schedule(struct ip_vs_service *svc, const struct sk_buff *skb)
 		return NULL;
 
   out:
-	IP_VS_DBG(6, "NQ: server %u.%u.%u.%u:%u "
-		  "activeconns %d refcnt %d weight %d overhead %d\n",
-		  NIPQUAD(least->addr), ntohs(least->port),
-		  atomic_read(&least->activeconns),
-		  atomic_read(&least->refcnt),
-		  atomic_read(&least->weight), loh);
+	IP_VS_DBG_BUF(6, "NQ: server %s:%u "
+		      "activeconns %d refcnt %d weight %d overhead %d\n",
+		      IP_VS_DBG_ADDR(svc->af, &least->addr), ntohs(least->port),
+		      atomic_read(&least->activeconns),
+		      atomic_read(&least->refcnt),
+		      atomic_read(&least->weight), loh);
 
 	return least;
 }
@@ -137,9 +116,9 @@ static struct ip_vs_scheduler ip_vs_nq_scheduler =
 	.refcnt =		ATOMIC_INIT(0),
 	.module =		THIS_MODULE,
 	.n_list =		LIST_HEAD_INIT(ip_vs_nq_scheduler.n_list),
-	.init_service =		ip_vs_nq_init_svc,
-	.done_service =		ip_vs_nq_done_svc,
-	.update_service =	ip_vs_nq_update_svc,
+#ifdef CONFIG_IP_VS_IPV6
+	.supports_ipv6 =	1,
+#endif
 	.schedule =		ip_vs_nq_schedule,
 };
 
