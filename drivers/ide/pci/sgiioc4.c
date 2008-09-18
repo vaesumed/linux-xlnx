@@ -22,7 +22,6 @@
 #include <linux/types.h>
 #include <linux/pci.h>
 #include <linux/delay.h>
-#include <linux/hdreg.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/ioport.h>
@@ -360,14 +359,13 @@ ide_dma_sgiioc4(ide_hwif_t *hwif, const struct ide_port_info *d)
 	}
 	hwif->dma_base = (unsigned long) virt_dma_base;
 
-	hwif->dmatable_cpu = pci_alloc_consistent(dev,
-					  IOC4_PRD_ENTRIES * IOC4_PRD_BYTES,
-					  &hwif->dmatable_dma);
-
-	if (!hwif->dmatable_cpu)
-		goto dma_pci_alloc_failure;
-
 	hwif->sg_max_nents = IOC4_PRD_ENTRIES;
+
+	hwif->prd_max_nents = IOC4_PRD_ENTRIES;
+	hwif->prd_ent_size = IOC4_PRD_BYTES;
+
+	if (ide_allocate_dma_engine(hwif))
+		goto dma_pci_alloc_failure;
 
 	pad = pci_alloc_consistent(dev, IOC4_IDE_CACHELINE_SIZE,
 				   (dma_addr_t *)&hwif->extra_base);
@@ -376,8 +374,8 @@ ide_dma_sgiioc4(ide_hwif_t *hwif, const struct ide_port_info *d)
 		return 0;
 	}
 
-	pci_free_consistent(dev, IOC4_PRD_ENTRIES * IOC4_PRD_BYTES,
-			    hwif->dmatable_cpu, hwif->dmatable_dma);
+	ide_release_dma_engine(hwif);
+
 	printk(KERN_INFO
 	       "%s() -- Error! Unable to allocate DMA Maps for drive %s\n",
 	       __func__, hwif->name);
