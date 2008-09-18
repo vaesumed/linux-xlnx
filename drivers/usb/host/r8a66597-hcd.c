@@ -66,7 +66,7 @@ static unsigned short endian;
 module_param(endian, ushort, 0644);
 MODULE_PARM_DESC(endian, "data endian: big=256, little=0 (default=0)");
 
-static unsigned short irq_sense = INTL;
+static unsigned short irq_sense = 0xff;
 module_param(irq_sense, ushort, 0644);
 MODULE_PARM_DESC(irq_sense, "IRQ sense: low level=32, falling edge=0 "
 		"(default=32)");
@@ -760,10 +760,12 @@ static void enable_r8a66597_pipe_dma(struct r8a66597 *r8a66597,
 			if ((r8a66597->dma_map & (1 << i)) != 0)
 				continue;
 
-			info("address %d, EndpointAddress 0x%02x use DMA FIFO",
-			     usb_pipedevice(urb->pipe),
-			     info->dir_in ? USB_ENDPOINT_DIR_MASK + info->epnum
-					    : info->epnum);
+			dev_info(&dev->udev->dev,
+				 "address %d, EndpointAddress 0x%02x use "
+				 "DMA FIFO\n", usb_pipedevice(urb->pipe),
+				 info->dir_in ?
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+					: info->epnum);
 
 			r8a66597->dma_map |= 1 << i;
 			dev->dma_map |= 1 << i;
@@ -2263,7 +2265,7 @@ static int __init_or_module r8a66597_remove(struct platform_device *pdev)
 #define resource_len(r) (((r)->end - (r)->start) + 1)
 static int __init r8a66597_probe(struct platform_device *pdev)
 {
-	struct resource *res = NULL;
+	struct resource *res = NULL, *ires;
 	int irq = -1;
 	void __iomem *reg = NULL;
 	struct usb_hcd *hcd = NULL;
@@ -2286,12 +2288,15 @@ static int __init r8a66597_probe(struct platform_device *pdev)
 		goto clean_up;
 	}
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
+	ires = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+	if (!ires) {
 		ret = -ENODEV;
-		err("platform_get_irq error.");
+		err("platform_get_resource IORESOURCE_IRQ error.");
 		goto clean_up;
 	}
+
+	irq = ires->start;
+	irq_trigger = ires->flags & IRQF_TRIGGER_MASK;
 
 	reg = ioremap(res->start, resource_len(res));
 	if (reg == NULL) {
@@ -2329,10 +2334,30 @@ static int __init r8a66597_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&r8a66597->child_device);
 
 	hcd->rsrc_start = res->start;
-	if (irq_sense == INTL)
-		irq_trigger = IRQF_TRIGGER_LOW;
-	else
-		irq_trigger = IRQF_TRIGGER_FALLING;
+
+	/* irq_sense setting on cmdline takes precedence over resource
+	 * settings, so the introduction of irqflags in IRQ resourse
+	 * won't disturb existing setups */
+	switch (irq_sense) {
+		case INTL:
+			irq_trigger = IRQF_TRIGGER_LOW;
+			break;
+		case 0:
+			irq_trigger = IRQF_TRIGGER_FALLING;
+			break;
+		case 0xff:
+			if (irq_trigger)
+				irq_sense = (irq_trigger & IRQF_TRIGGER_LOW) ?
+					    INTL : 0;
+			else {
+				irq_sense = INTL;
+				irq_trigger = IRQF_TRIGGER_LOW;
+			}
+			break;
+		default:
+			err("Unknown irq_sense value.");
+	}
+
 	ret = usb_add_hcd(hcd, irq, IRQF_DISABLED | irq_trigger);
 	if (ret != 0) {
 		err("Failed to add hcd");
@@ -2364,7 +2389,8 @@ static int __init r8a66597_init(void)
 	if (usb_disabled())
 		return -ENODEV;
 
-	info("driver %s, %s", hcd_name, DRIVER_VERSION);
+	printk(KERN_INFO KBUILD_MODNAME ": driver %s, %s\n", hcd_name,
+	       DRIVER_VERSION);
 	return platform_driver_register(&r8a66597_driver);
 }
 module_init(r8a66597_init);
