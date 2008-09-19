@@ -1,0 +1,267 @@
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard adee14b2e1557d0a8559f29681732d05a89dfc35
+HEAD is now at adee14b Linux 2.6.27-rc6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-storage-sierra-non-configurable-tru-install.patch
+usb-serial-sierra-device-addition-version-rev.patch
+usb-ehci-fix-some-ehci-hangs-and-crashes.patch
+usb-fix-the-nokia-6300-storage-mode.patch
+usb-correct-sierra-wireless-usb-evdo-modem-device-id.patch
+usb-fix-hcd-interrupt-disabling.patch
+usb-update-of-documentation-usb-anchors.txt.patch
+usb-gadget-fix-omap_udc-dma-regression.patch
+usb-fixing-nokia-3310c-in-storage-mode.patch
+usb-musb-fix-include-path.patch
+usb-fix-ehci-periodic-transfers.patch
+usb-serial-add-siemens-ef81-to-pl-2303-hack-triggers.patch
+usb-serial-cp2101-add-device-ids.patch
+usb-unusual_devs-addition-for-rockchip-mp3-player.patch
+usb-fsl_usb2_udc-fix-vdbg-format-string.patch
+usb-serial-ti_usb_3410_5052-obviously-broken-by-firmware-changes.patch
+usb-ftdi_sio-add-0x5050-0x0900-usb-ids.patch
+usb-serial-add-zte-cdma-tech-id-to-option-driver.patch
+usb-serial-sierra-add-mc8785-vid-pid.patch
+usb-added-driver-for-a-delcom-usb-7-segment-led-display.patch
+usb-add-usb-test-and-measurement-class-driver.patch
+Unchanged quilt series m68k
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 3d7dc336f50f551d42706d4ee964661fe8a9234b
+HEAD is now at 3d7dc33 USB: add USB test and measurement class driver
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+sysfs-crash-debugging.patch
+device-create-block-convert-device_create_drvdata-to-device_create.patch
+device-create-char-convert-device_create_drvdata-to-device_create.patch
+device-create-ieee1394-convert-device_create_drvdata-to-device_create.patch
+.dotest/patch:35: space before tab in indent.
+	    		   MKDEV(IEEE1394_MAJOR,
+warning: 1 line adds whitespace errors.
+device-create-infiniband-convert-device_create_drvdata-to-device_create.patch
+device-create-misc-convert-device_create_drvdata-to-device_create.patch
+device-create-net-convert-device_create_drvdata-to-device_create.patch
+device-create-s390-convert-device_create_drvdata-to-device_create.patch
+device-create-scsi-convert-device_create_drvdata-to-device_create.patch
+device-create-sound-convert-device_create_drvdata-to-device_create.patch
+device-create-usb-convert-device_create_drvdata-to-device_create.patch
+device-create-video-convert-device_create_drvdata-to-device_create.patch
+device-create-ide-convert-device_create_drvdata-to-device_create.patch
+device-create-remove-device_create_drvdata.patch
+usb-gadget-link-fixes-for-serial-gadget.patch
+usb-gadget-link-fixes-for-gadget-zero.patch
+usb-gadget-link-fixes-for-midi-gadget.patch
+usb-gadget-link-fixes-for-printer-gadget.patch
+usb-gadget-link-fixes-for-storage-gadget.patch
+usb-gadget-link-fixes-for-cdc-composite-gadget.patch
+usb-gadget-link-fixes-for-network-gadget.patch
+driver-core-basic-infrastructure-for-per-module-dynamic-debug-messages.patch
+.dotest/patch:728: space before tab in indent.
+	  	$echo "set enabled=1 <module_name>" > dynamic_printk/modules
+.dotest/patch:732: space before tab in indent.
+	  	$echo "set enabled=0 <module_name>" > dynamic_printk/modules
+warning: 2 lines add whitespace errors.
+driver-core-make-struct-platform_pm_ops-static.patch
+sysfs-support-sysfs_notify-from-atomic-context-with-new-sysfs_notify_dirent.patch
+drivers-firmware-iscsi_ibft.c-make-3-functions-static.patch
+driver-core-clarify-device-cleanup.patch
+driver-core-fix-cleanup-in-device_create_vargs.patch
+device-model-do-a-quickcheck-for-driver-binding-before-doing-an-expensive-check.patch
+sysfs-fix-deadlock.patch
+kobject-fix-kobject_rename-and-config_sysfs.patch
+kobject-cleanup-kobject_rename-and-config_sysfs.patch
+sysfs-support-for-preventing-unmounts.patch
+sysfs-sysfs_get_dentry-add-a-sb-parameter.patch
+sysfs-implement-__sysfs_get_dentry.patch
+sysfs-rename-support-multiple-superblocks.patch
+sysfs-introduce-sysfs_sd_setattr-and-fix-sysfs_chmod.patch
+sysfs-sysfs_chmod_file-handle-multiple-superblocks.patch
+.dotest/patch:37: space before tab in indent.
+ 		goto out;
+warning: 1 line adds whitespace errors.
+sysfs-implement-sysfs-tagged-directory-support.patch
+sysfs-merge-sysfs_rename_dir-and-sysfs_move_dir.patch
+sysfs-implement-sysfs_delete_link-and-sysfs_rename_link.patch
+driver-core-implement-tagged-directory-support-for-device-classes.patch
+sysfs-remove-sysfs_create_link_nowarn.patch
+sysfs-revert-netns-fix-device-renaming-for-sysfs.patch
+driver-core-use-dev_get_drvdata-accessors.patch
+acpi-fixup-typo-in-acpi_device_remove.patch
+driver-core-remove-suspend-resume-callbacks-for-device-type.patch
+klist-don-t-iterate-over-deleted-entries.patch
+driver-core-use-klist-for-class-device-list-and-implement-iterator.patch
+driver-core-add-bus_sort_breadthfirst-function.patch
+.dotest/patch:21: space before tab in indent.
+			   		int (*compare)(const struct device *a,
+.dotest/patch:42: space before tab in indent.
+			   		  const struct device *b))
+.dotest/patch:141: space before tab in indent.
+			   		  const struct device *b));
+warning: 3 lines add whitespace errors.
+net-convert-the-phy_device-file-to-use-bus_find_device_by_name.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 5bf60b25e3637198d80a6841916c014ca2c122ab
+HEAD is now at 5bf60b2 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+usb-let-some-usb-host-controllers-get-irq-flags-from-resource.patch
+usb-gadget-kconfig-cleanup.patch
+usb-gadget-dummy_hcd-implement-set_wedge.patch
+usb-gadget-net2280-implement-set_wedge.patch
+usb-gadget-function-activation-deactivation.patch
+usb-gadget-cdc-obex-glue.patch
+usb-gadget-defer-obex-enumeration.patch
+usb-remove-unused-include-version.h.patch
+usb-drivers-usb-misc-use-an-is_err-test-rather-than-a-null-test.patch
+usb-add-freescale-qe-cpm-usb-peripheral-controller-driver.patch
+usb-storage-report-underflow-with-no-sense-data.patch
+ohci-allow-broken-controllers-to-auto-stop.patch
+usb-documentation-usb-anchors.txt-2.patch
+usb-core-fix-usb_otg_blacklist_hub-typo.patch
+usb-ftdi_sio-fix-product-parameter-description.patch
+usb-reset_resume-needs-to-block-autosuspend-when-remote-wakeup-is-needed.patch
+usb-serial-sierra-debug-message-fix.patch
+fsl_usb2_udc-make-dr_ep_setup-function-static.patch
+fsl_usb2_udc-remove-check-for-udc-null-in-dr_controller_setup.patch
+fsl_usb2_udc-fix-some-sparse-warnings-and-remove-redundant-code.patch
+fsl_usb2_udc-clean-up-whitespace-in-errors-and-warnings.patch
+fsl_usb2_udc-clean-up-whitespace-in-proc-debugging-output.patch
+fsl_usb2_udc-initialize-spinlock-earlier.patch
+fsl_usb2_udc-rename-the-arguments-of-the-fsl_writel-macro.patch
+fsl_usb2_udc-uninline-udc_reset_ep_queue.patch
+fsl_usb2_udc-make-fsl_queue_td-return-type-void.patch
+fsl_usb2_udc-add-a-wmb-before-priming-endpoint.patch
+fsl_usb2_udc-fix-oops-on-probe-failure.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+.dotest/patch:2027: space before tab in indent.
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+warning: 1 line adds whitespace errors.
+usb-remove-use-of-err-in-drivers-usb-serial.patch
+usb-gotemp.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on bc45eb8950b8c14487385cfd2bda1613ca8d9703
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard bc45eb8950b8c14487385cfd2bda1613ca8d9703
+HEAD is now at bc45eb8 Merge git://git.kernel.org/pub/scm/linux/kernel/git/herbert/crypto-2.6
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+cris-put-tty
+hvc-put-tty
+mcfserial-goes-byebye
+epca-port-init
+serial-remove-nr-irq
+.dotest/patch:163: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+blackfin-use-initdata
+blackfin-suspend-all
+blackfin-whitespace-trim
+blackfin-common-vars
+blackfin-remove-useless-stop
+blackfin-fix-stop-bug
+blackfin-fix-ircp-bug
+blackfin-fix-uart-map
+tty-move-tioclinux
+tty-fixup-uml
+ip2-merge-files
+ip2-cleanup-globals
+ip2-fix-sparse-warnings
+ip2-cleanup-init
+ip2-tidy-timers
+tty-audit-nul
+serial-ioport-ulong
+tty-split-buffering
+tty-split-port
+tty-ldisc-for-pps
+tty-kref
+tty-kref-modcount
+char-cyclades-remove-bogus-iomap.patch
+char-sx-fix-io-unmapping.patch
+8250-remove-a-few-inlines-of-dubious-value.patch
+tty-tiocrs485
+tty-ipw-wtf
+tty-add-termiox
+.dotest/patch:83: trailing whitespace.
+#endif		
+warning: 1 line adds whitespace errors.
+tty-real-termios
+tty-pty-compare-winsize
+tty-kref-get-current-tty
+tty-move-write
+tty-usbserial-kref
+.dotest/patch:134: trailing whitespace.
+out:		
+.dotest/patch:326: trailing whitespace.
+		
+.dotest/patch:897: trailing whitespace.
+		if (tty && !C_CLOCAL(tty)) 
+.dotest/patch:1070: trailing whitespace.
+	tty_kref_put(tty);		     
+.dotest/patch:1320: trailing whitespace.
+		} else 
+warning: 5 lines add whitespace errors.
+tty-misc-kref
+tty-kref-stallion
+tty-kref-mxser
+.dotest/patch:390: trailing whitespace.
+				
+warning: 1 line adds whitespace errors.
+tty-fix-vhangup
+tty-current-locking
+tty-current-fix-abusers
+tty-fix-pty
+vt-remove-bogus-lockdrop
+tty-fix-shutdown
+tty-move-special-cases
+.dotest/patch:553: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+tty-init-dev-rework
+tty-init-dev-clean
+tty-driver-kref
+.dotest/patch:44: trailing whitespace.
+#if 0	
+.dotest/patch:47: trailing whitespace.
+#endif	
+.dotest/patch:48: trailing whitespace.
+	register_sysctl_table(pty_root_table);	
+warning: 3 lines add whitespace errors.
+tty-add-remove-ops
+tty-finish-initdev
+tty-extract-pty-init
+.dotest/patch:44: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-move-tty-lookup
+tty-devpts-instance
+tty-simplify-devpts-get-tty
+tty-simplify-devpts-new
+tty-simplify-devpts-pty-kill
+pty-clean
+pty-fix-fail-crash
+pty-simplify-allocation
+tty-simplify-allocation
+tty-move-canon-specials
+tty-move-canon-isdn
+tty-gigaset-fixes
+tty-denull
+tty-tidy-n-tty
+tty-kref-hso
+vt-fix-api
+error: No changes
