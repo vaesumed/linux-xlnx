@@ -374,7 +374,7 @@ clear_and_return:
  */
 irqreturn_t rs_interrupt(int irq, void *dev_id)
 {
-	struct m68k_serial *info = dev_id;
+	struct m68k_serial * info = dev_id;
 	m68328_uart *uart;
 	unsigned short rx;
 	unsigned short tx;
