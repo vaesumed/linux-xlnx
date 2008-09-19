@@ -1941,6 +1941,8 @@ xfs_init_zones(void)
 	if (!xfs_vnode_zone)
 		goto out;
 
+	kmem_cache_setup_defrag(xfs_vnode_zone, get_inodes, kick_inodes);
+
 	xfs_ioend_zone = kmem_zone_init(sizeof(xfs_ioend_t), "xfs_ioend");
 	if (!xfs_ioend_zone)
 		goto out_destroy_vnode_zone;

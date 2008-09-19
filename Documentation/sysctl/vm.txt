@@ -38,6 +38,7 @@ Currently, these files are in /proc/sys/vm:
 - numa_zonelist_order
 - nr_hugepages
 - nr_overcommit_hugepages
+- slab_defrag_limit
 
 ==============================================================
 
@@ -347,3 +348,14 @@ Change the maximum size of the hugepage pool. The maximum is
 nr_hugepages + nr_overcommit_hugepages.
 
 See Documentation/vm/hugetlbpage.txt
+
+==============================================================
+
+slab_defrag_limit
+
+Determines the frequency of calls from reclaim into slab defragmentation.
+Slab defrag reclaims objects from sparsely populates slab pages.
+The default is 1000. Increase if slab defragmentation occurs
+too frequently. Decrease if more slab defragmentation passes
+are needed. The slabinfo tool can report on the frequency of the callbacks.
+
