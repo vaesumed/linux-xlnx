@@ -10,11 +10,6 @@
  */
 
 /*
- * cred.c
- */
-extern struct cred *alloc_creds(const struct cred *, gfp_t);
-
-/*
  * user.c
  */
 static inline void sched_switch_user(struct task_struct *p)

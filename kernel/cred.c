@@ -112,21 +112,6 @@ void __put_cred(struct cred *cred)
 }
 EXPORT_SYMBOL(__put_cred);
 
-/*
- * Allocate new credentials
- */
-struct cred *alloc_creds(const struct cred *old, gfp_t gfp)
-{
-	struct cred *new;
-
-	new = kmem_cache_alloc(cred_jar, GFP_KERNEL);
-	if (!new)
-		return NULL;
-	if (old)
-		memcpy(new, old, sizeof(struct cred));
-	return new;
-}
-
 /**
  * prepare_creds - Prepare a new set of credentials for modification
  *
