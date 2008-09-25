@@ -101,14 +101,14 @@ struct thread_group_cred {
  * Note that some members of this structure belong to both categories - the
  * LSM security pointer for instance.
  *
- * A task has two security pointers.  task->sec points to the objective context
- * that defines that task's actual details.  The objective part of this context
- * is used whenever that task is acted upon.
+ * A task has two security pointers.  task->real_cred points to the objective
+ * context that defines that task's actual details.  The objective part of this
+ * context is used whenever that task is acted upon.
  *
- * task->act_as points to the subjective context that defines the details of
- * how that task is going to act upon another object.  This may be overridden
+ * task->cred points to the subjective context that defines the details of how
+ * that task is going to act upon another object.  This may be overridden
  * temporarily to point to another security context, but normally points to the
- * same context as task->sec.
+ * same context as task->real_cred.
  */
 struct cred {
 	atomic_t	usage;
