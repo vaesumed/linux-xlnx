@@ -17,8 +17,13 @@
 /* Pages for switcher itself, then two pages per cpu */
 #define TOTAL_SWITCHER_PAGES (SHARED_SWITCHER_PAGES + 2 * NR_CPUS)
 
+#ifdef CONFIG_X86_PAE
+/* We map at -2M for ease of mapping into the guest (one PTE page). */
+#define SWITCHER_ADDR 0xFFE00000
+#else
 /* We map at -4M for ease of mapping into the guest (one PTE page). */
 #define SWITCHER_ADDR 0xFFC00000
+#endif
 
 /* Found in switcher.S */
 extern unsigned long default_idt_entries[];
