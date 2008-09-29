@@ -12,6 +12,7 @@
 
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/string.h>
 #include <linux/types.h>
 
 #include <dvb_frontend.h>
@@ -22,17 +23,18 @@
 
 static int firesat_dvb_init(struct dvb_frontend *fe)
 {
-	int result;
 	struct firesat *firesat = fe->sec_priv;
+	int err;
 
 	/* FIXME - allocate free channel at IRM */
 	firesat->isochannel = firesat->adapter.num;
 
-	result = try_CMPEstablishPPconnection(firesat, firesat->subunit, firesat->isochannel);
-	if (result != 0) {
+	err = try_CMPEstablishPPconnection(firesat, firesat->subunit,
+					   firesat->isochannel);
+	if (err) {
 		printk(KERN_ERR "Could not establish point to point "
 		       "connection.\n");
-		return -1;
+		return err;
 	}
 
 	return setup_iso_channel(firesat);
@@ -168,105 +170,86 @@ static int firesat_get_frontend(struct dvb_frontend *fe,
 	return -EOPNOTSUPP;
 }
 
-static struct dvb_frontend_info firesat_S_frontend_info;
-static struct dvb_frontend_info firesat_C_frontend_info;
-static struct dvb_frontend_info firesat_T_frontend_info;
-
-static struct dvb_frontend_ops firesat_ops = {
-
-	.init				= firesat_dvb_init,
-	.sleep				= firesat_sleep,
-
-	.set_frontend			= firesat_set_frontend,
-	.get_frontend			= firesat_get_frontend,
-
-	.read_status			= firesat_read_status,
-	.read_ber			= firesat_read_ber,
-	.read_signal_strength		= firesat_read_signal_strength,
-	.read_snr			= firesat_read_snr,
-	.read_ucblocks			= firesat_read_uncorrected_blocks,
-
-	.diseqc_send_master_cmd 	= firesat_diseqc_send_master_cmd,
-	.diseqc_send_burst		= firesat_diseqc_send_burst,
-	.set_tone			= firesat_set_tone,
-	.set_voltage			= firesat_set_voltage,
-};
-
 void firesat_frontend_init(struct firesat *firesat)
 {
+	struct dvb_frontend_ops *ops = &firesat->fe.ops;
+	struct dvb_frontend_info *fi = &ops->info;
+
+	ops->init			= firesat_dvb_init;
+	ops->sleep			= firesat_sleep;
+
+	ops->set_frontend		= firesat_set_frontend;
+	ops->get_frontend		= firesat_get_frontend;
+
+	ops->read_status		= firesat_read_status;
+	ops->read_ber			= firesat_read_ber;
+	ops->read_signal_strength	= firesat_read_signal_strength;
+	ops->read_snr			= firesat_read_snr;
+	ops->read_ucblocks		= firesat_read_uncorrected_blocks;
+
+	ops->diseqc_send_master_cmd 	= firesat_diseqc_send_master_cmd;
+	ops->diseqc_send_burst		= firesat_diseqc_send_burst;
+	ops->set_tone			= firesat_set_tone;
+	ops->set_voltage		= firesat_set_voltage;
+
 	switch (firesat->type) {
 	case FireSAT_DVB_S:
-		firesat->frontend_info = &firesat_S_frontend_info;
+		fi->type		= FE_QPSK;
+
+		fi->frequency_min	= 950000;
+		fi->frequency_max	= 2150000;
+		fi->frequency_stepsize	= 125;
+		fi->symbol_rate_min	= 1000000;
+		fi->symbol_rate_max	= 40000000;
+
+		fi->caps 		= FE_CAN_INVERSION_AUTO	|
+					  FE_CAN_FEC_1_2	|
+					  FE_CAN_FEC_2_3	|
+					  FE_CAN_FEC_3_4	|
+					  FE_CAN_FEC_5_6	|
+					  FE_CAN_FEC_7_8	|
+					  FE_CAN_FEC_AUTO	|
+					  FE_CAN_QPSK;
 		break;
+
 	case FireSAT_DVB_C:
-		firesat->frontend_info = &firesat_C_frontend_info;
+		fi->type		= FE_QAM;
+
+		fi->frequency_min	= 47000000;
+		fi->frequency_max	= 866000000;
+		fi->frequency_stepsize	= 62500;
+		fi->symbol_rate_min	= 870000;
+		fi->symbol_rate_max	= 6900000;
+
+		fi->caps 		= FE_CAN_INVERSION_AUTO |
+					  FE_CAN_QAM_16		|
+					  FE_CAN_QAM_32		|
+					  FE_CAN_QAM_64		|
+					  FE_CAN_QAM_128	|
+					  FE_CAN_QAM_256	|
+					  FE_CAN_QAM_AUTO;
 		break;
+
 	case FireSAT_DVB_T:
-		firesat->frontend_info = &firesat_T_frontend_info;
+		fi->type		= FE_OFDM;
+
+		fi->frequency_min	= 49000000;
+		fi->frequency_max	= 861000000;
+		fi->frequency_stepsize	= 62500;
+
+		fi->caps 		= FE_CAN_INVERSION_AUTO		|
+					  FE_CAN_FEC_2_3		|
+					  FE_CAN_TRANSMISSION_MODE_AUTO |
+					  FE_CAN_GUARD_INTERVAL_AUTO	|
+					  FE_CAN_HIERARCHY_AUTO;
 		break;
+
 	default:
-		printk(KERN_ERR "firedtv: no frontend for model type 0x%x\n",
+		printk(KERN_ERR "FireDTV: no frontend for model type %d\n",
 		       firesat->type);
-		firesat->frontend_info = NULL;
 	}
-	firesat->fe.ops = firesat_ops;
-	firesat->fe.ops.info = *(firesat->frontend_info);
+	strcpy(fi->name, firedtv_model_names[firesat->type]);
+
 	firesat->fe.dvb = &firesat->adapter;
+	firesat->fe.sec_priv = firesat;
 }
-
-static struct dvb_frontend_info firesat_S_frontend_info = {
-
-	.name			= "FireDTV DVB-S Frontend",
-	.type			= FE_QPSK,
-
-	.frequency_min		= 950000,
-	.frequency_max		= 2150000,
-	.frequency_stepsize	= 125,
-	.symbol_rate_min	= 1000000,
-	.symbol_rate_max	= 40000000,
-
-	.caps 			= FE_CAN_INVERSION_AUTO		|
-				  FE_CAN_FEC_1_2		|
-				  FE_CAN_FEC_2_3		|
-				  FE_CAN_FEC_3_4		|
-				  FE_CAN_FEC_5_6		|
-				  FE_CAN_FEC_7_8		|
-				  FE_CAN_FEC_AUTO		|
-				  FE_CAN_QPSK,
-};
-
-static struct dvb_frontend_info firesat_C_frontend_info = {
-
-	.name			= "FireDTV DVB-C Frontend",
-	.type			= FE_QAM,
-
-	.frequency_min		= 47000000,
-	.frequency_max		= 866000000,
-	.frequency_stepsize	= 62500,
-	.symbol_rate_min	= 870000,
-	.symbol_rate_max	= 6900000,
-
-	.caps 			= FE_CAN_INVERSION_AUTO 	|
-				  FE_CAN_QAM_16			|
-				  FE_CAN_QAM_32			|
-				  FE_CAN_QAM_64			|
-				  FE_CAN_QAM_128		|
-				  FE_CAN_QAM_256		|
-				  FE_CAN_QAM_AUTO,
-};
-
-static struct dvb_frontend_info firesat_T_frontend_info = {
-
-	.name			= "FireDTV DVB-T Frontend",
-	.type			= FE_OFDM,
-
-	.frequency_min		= 49000000,
-	.frequency_max		= 861000000,
-	.frequency_stepsize	= 62500,
-
-	.caps 			= FE_CAN_INVERSION_AUTO		|
-				  FE_CAN_FEC_2_3		|
-				  FE_CAN_TRANSMISSION_MODE_AUTO |
-				  FE_CAN_GUARD_INTERVAL_AUTO	|
-				  FE_CAN_HIERARCHY_AUTO,
-};

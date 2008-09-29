@@ -251,9 +251,8 @@ int firesat_dvbdev_init(struct firesat *firesat, struct device *dev)
 		goto fail_rem_frontend;
 
 	dvb_net_init(&firesat->adapter, &firesat->dvbnet, &firesat->demux.dmx);
-	firesat_frontend_init(firesat);
 
-	firesat->fe.sec_priv = firesat;
+	firesat_frontend_init(firesat);
 	err = dvb_register_frontend(&firesat->adapter, &firesat->fe);
 	if (err)
 		goto fail_net_release;
