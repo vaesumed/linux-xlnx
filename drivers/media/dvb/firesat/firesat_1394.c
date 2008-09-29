@@ -176,6 +176,14 @@ static int firesat_probe(struct device *dev)
 			break;
 	firesat->type = i;
 
+	/*
+	 * Work around a bug in udev's path_id script:  Use the fw-host's dev
+	 * instead of the unit directory's dev as parent of the input device.
+	 */
+	err = firesat_register_rc(firesat, dev->parent->parent);
+	if (err)
+		goto fail_free;
+
 	INIT_LIST_HEAD(&firesat->list);
 	spin_lock_irqsave(&firesat_list_lock, flags);
 	list_add_tail(&firesat->list, &firesat_list);
@@ -196,6 +204,8 @@ fail:
 	spin_lock_irqsave(&firesat_list_lock, flags);
 	list_del(&firesat->list);
 	spin_unlock_irqrestore(&firesat_list_lock, flags);
+	firesat_unregister_rc(firesat);
+fail_free:
 	kfree(firesat);
 	return err;
 }
@@ -220,6 +230,7 @@ static int firesat_remove(struct device *dev)
 	spin_unlock_irqrestore(&firesat_list_lock, flags);
 
 	cancel_work_sync(&firesat->remote_ctrl_work);
+	firesat_unregister_rc(firesat);
 
 	kfree(firesat);
 	return 0;
@@ -263,26 +274,13 @@ static int __init firesat_init(void)
 	ret = hpsb_register_protocol(&firesat_driver);
 	if (ret) {
 		printk(KERN_ERR "firedtv: failed to register protocol\n");
-		goto fail;
+		hpsb_unregister_highlevel(&firesat_highlevel);
 	}
-
-	ret = firesat_register_rc();
-	if (ret) {
-		printk(KERN_ERR "firedtv: failed to register input device\n");
-		goto fail_rc;
-	}
-
-	return 0;
-fail_rc:
-	hpsb_unregister_protocol(&firesat_driver);
-fail:
-	hpsb_unregister_highlevel(&firesat_highlevel);
 	return ret;
 }
 
 static void __exit firesat_exit(void)
 {
-	firesat_unregister_rc();
 	hpsb_unregister_protocol(&firesat_driver);
 	hpsb_unregister_highlevel(&firesat_highlevel);
 }

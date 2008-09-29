@@ -127,7 +127,7 @@ enum model_type {
 	FireSAT_DVB_S2  = 4,
 };
 
-struct hpsb_host;
+struct input_dev;
 struct hpsb_iso;
 struct unit_directory;
 
@@ -147,12 +147,13 @@ struct firesat {
 	wait_queue_head_t	avc_wait;
 	bool			avc_reply_received;
 	struct work_struct	remote_ctrl_work;
+	struct input_dev	*remote_ctrl_dev;
 
 	struct firesat_channel {
 		bool active;
 		int pid;
 	} channel[16];
-	struct mutex			demux_mutex;
+	struct mutex demux_mutex;
 
 	struct unit_directory *ud;
 
