@@ -225,8 +225,8 @@ int AVCRecv(struct firesat *firesat, u8 *data, size_t length)
 	    RspFrm->operand[2] == SFE_VENDOR_DE_COMPANYID_2 &&
 	    RspFrm->operand[3] == SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL) {
 		if (RspFrm->resp == CHANGED) {
-			firesat_handle_rc(RspFrm->operand[4] << 8 |
-					  RspFrm->operand[5]);
+			firesat_handle_rc(firesat,
+			    RspFrm->operand[4] << 8 | RspFrm->operand[5]);
 			schedule_work(&firesat->remote_ctrl_work);
 		} else if (RspFrm->resp != INTERIM) {
 			dev_info(&firesat->ud->device,
