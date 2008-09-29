@@ -34,8 +34,8 @@ static struct firesat_channel *firesat_channel_allocate(struct firesat *firesat)
 		return NULL;
 
 	for (k = 0; k < 16; k++)
-		if (firesat->channel[k].active == 0) {
-			firesat->channel[k].active = 1;
+		if (!firesat->channel[k].active) {
+			firesat->channel[k].active = true;
 			c = &firesat->channel[k];
 			break;
 		}
@@ -52,7 +52,7 @@ static int firesat_channel_collect(struct firesat *firesat, int *pidc, u16 pid[]
 		return -EINTR;
 
 	for (k = 0; k < 16; k++)
-		if (firesat->channel[k].active == 1)
+		if (firesat->channel[k].active)
 			pid[l++] = firesat->channel[k].pid;
 
 	mutex_unlock(&firesat->demux_mutex);
@@ -68,7 +68,7 @@ static int firesat_channel_release(struct firesat *firesat,
 	if (mutex_lock_interruptible(&firesat->demux_mutex))
 		return -EINTR;
 
-	channel->active = 0;
+	channel->active = false;
 
 	mutex_unlock(&firesat->demux_mutex);
 	return 0;
@@ -102,7 +102,7 @@ int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		case DMX_TS_PES_OTHER:
 			//Dirty fix to keep firesat->channel pid-list up to date
 			for(k=0;k<16;k++){
-				if(firesat->channel[k].active == 0)
+				if (!firesat->channel[k].active)
 					firesat->channel[k].pid =
 						dvbdmxfeed->pid;
 					break;
@@ -124,11 +124,7 @@ int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	}
 
 	dvbdmxfeed->priv = channel;
-
-	channel->dvbdmxfeed = dvbdmxfeed;
 	channel->pid = dvbdmxfeed->pid;
-	channel->type = dvbdmxfeed->type;
-	channel->firesat = firesat;
 
 	if (firesat_channel_collect(firesat, &pidc, pids)) {
 		firesat_channel_release(firesat, channel);
@@ -191,16 +187,16 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 
 	/* list except channel to be removed */
 	for (k = 0, l = 0; k < 16; k++)
-		if (firesat->channel[k].active == 1) {
+		if (firesat->channel[k].active) {
 			if (&firesat->channel[k] != c)
 				pids[l++] = firesat->channel[k].pid;
 			else
-				firesat->channel[k].active = 0;
+				firesat->channel[k].active = false;
 		}
 
 	k = AVCTuner_SetPIDs(firesat, l, pids);
 	if (!k)
-		c->active = 0;
+		c->active = false;
 
 	mutex_unlock(&firesat->demux_mutex);
 	return k;
