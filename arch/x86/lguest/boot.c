@@ -335,8 +335,12 @@ static void lguest_cpuid(unsigned int *ax, unsigned int *bx,
 	case 1:	/* Basic feature request. */
 		/* We only allow kernel to see SSE3, CMPXCHG16B and SSSE3 */
 		*cx &= 0x00002201;
-		/* SSE, SSE2, FXSR, MMX, CMOV, CMPXCHG8B, TSC, FPU. */
+		/* SSE, SSE2, FXSR, MMX, CMOV, CMPXCHG8B, TSC, FPU, PAE. */
+#ifdef CONFIG_X86_PAE
+		*dx &= 0x07808151;
+#else
 		*dx &= 0x07808111;
+#endif
 		/* The Host can do a nice optimization if it knows that the
 		 * kernel mappings (addresses above 0xC0000000 or whatever
 		 * PAGE_OFFSET is set to) haven't changed.  But Linux calls
@@ -482,15 +486,34 @@ static void lguest_set_pte_at(struct mm_struct *mm, unsigned long addr,
 	lazy_hcall(LHCALL_SET_PTE, __pa(mm->pgd), addr, pteval.pte_low);
 }
 
+#ifdef CONFIG_X86_PAE
 /* The Guest calls this to set a top-level entry.  Again, we set the entry then
  * tell the Host which top-level page we changed, and the index of the entry we
  * changed. */
+static void lguest_set_pud(pud_t *pudp, pud_t pudval)
+{
+	*pudp = pudval;
+	/* 32 bytes aligned pdpt address. */
+	lazy_hcall(LHCALL_SET_PUD, __pa(pudp) & 0xFFFFFFE0,
+		   (__pa(pudp) & 0x1F) / 8, 0);
+}
+
+/* The Guest calls this to set a PMD entry, when PAE is active */
+static void lguest_set_pmd(pmd_t *pmdp, pmd_t pmdval)
+{
+	*pmdp = pmdval;
+	lazy_hcall(LHCALL_SET_PMD, __pa(pmdp) & PAGE_MASK,
+		   (__pa(pmdp) & (PAGE_SIZE - 1)) / 8, 0);
+}
+
+#else
 static void lguest_set_pmd(pmd_t *pmdp, pmd_t pmdval)
 {
 	*pmdp = pmdval;
 	lazy_hcall(LHCALL_SET_PMD, __pa(pmdp)&PAGE_MASK,
 		   (__pa(pmdp)&(PAGE_SIZE-1))/4, 0);
 }
+#endif
 
 /* There are a couple of legacy places where the kernel sets a PTE, but we
  * don't know the top level any more.  This is useless for us, since we don't
@@ -502,11 +525,56 @@ static void lguest_set_pmd(pmd_t *pmdp, pmd_t pmdval)
  * anything changed until we've done the first page table switch. */
 static void lguest_set_pte(pte_t *ptep, pte_t pteval)
 {
+#ifdef CONFIG_X86_PAE
+	ptep->pte_high = pteval.pte_high;
+	smp_wmb();
+	ptep->pte_low = pteval.pte_low;
+#else
 	*ptep = pteval;
+#endif
+
 	/* Don't bother with hypercall before initial setup. */
 	if (current_cr3)
 		lazy_hcall(LHCALL_FLUSH_TLB, 1, 0, 0);
 }
+
+#ifdef CONFIG_X86_PAE
+static void lguest_set_pte_atomic(pte_t *ptep, pte_t pte)
+{
+	set_64bit((u64 *)ptep, pte.pte);
+
+	/* Don't bother with hypercall before initial setup. */
+	if (current_cr3)
+		lazy_hcall(LHCALL_FLUSH_TLB, 1, 0, 0);
+}
+
+static inline void lguest_set_pte_present(struct mm_struct *mm,
+						unsigned long addr,
+						pte_t *ptep, pte_t pte)
+{
+	ptep->pte_low = 0;
+	smp_wmb();
+	ptep->pte_high = pte.pte_high;
+	smp_wmb();
+	ptep->pte_low = pte.pte_low;
+
+	lazy_hcall(LHCALL_SET_PTE, __pa(mm->pgd), addr, pte.pte_low);
+}
+
+void lguest_pte_clear(struct mm_struct *mm, unsigned long addr, pte_t *ptep)
+{
+	ptep->pte_low = 0;
+	smp_wmb();
+	ptep->pte_high = 0;
+
+	lazy_hcall(LHCALL_SET_PTE, current_cr3, addr, 0);
+}
+
+void lguest_pmd_clear(pmd_t *pmdp)
+{
+	lguest_set_pmd(pmdp, __pmd(0));
+}
+#endif
 
 /* Unfortunately for Lguest, the pv_mmu_ops for page tables were based on
  * native page table operations.  On native hardware you can set a new page
@@ -1014,6 +1082,14 @@ __init void lguest_init(void)
 	pv_mmu_ops.set_pte = lguest_set_pte;
 	pv_mmu_ops.set_pte_at = lguest_set_pte_at;
 	pv_mmu_ops.set_pmd = lguest_set_pmd;
+
+#ifdef CONFIG_X86_PAE
+	pv_mmu_ops.set_pte_atomic = lguest_set_pte_atomic;
+	pv_mmu_ops.set_pte_present = lguest_set_pte_at;
+	pv_mmu_ops.pte_clear = lguest_pte_clear;
+	pv_mmu_ops.pmd_clear = lguest_pmd_clear;
+	pv_mmu_ops.set_pud = lguest_set_pud;
+#endif
 	pv_mmu_ops.read_cr2 = lguest_read_cr2;
 	pv_mmu_ops.read_cr3 = lguest_read_cr3;
 	pv_mmu_ops.lazy_mode.enter = paravirt_enter_lazy_mmu;
