@@ -173,7 +173,7 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 				return -EINVAL;
 
 			demux->pids[dvbdmxfeed->pes_type] |= 0x8000;
-			demux->pesfilter[dvbdmxfeed->pes_type] = 0;
+			demux->pesfilter[dvbdmxfeed->pes_type] = NULL;
 		}
 
 		if (!(dvbdmxfeed->ts_type & TS_DECODER &&

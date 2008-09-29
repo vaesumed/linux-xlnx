@@ -146,8 +146,8 @@ static int firesat_probe(struct device *dev)
 	struct firesat *firesat;
 	unsigned long flags;
 	int kv_len;
+	void *kv_str;
 	int i;
-	char *kv_buf;
 	int err = -ENOMEM;
 
 	firesat = kzalloc(sizeof(*firesat), GFP_KERNEL);
@@ -169,20 +169,12 @@ static int firesat_probe(struct device *dev)
 
 	/* Reading device model from ROM */
 	kv_len = (ud->model_name_kv->value.leaf.len - 2) * sizeof(quadlet_t);
-	kv_buf = kmalloc((sizeof(quadlet_t) * kv_len), GFP_KERNEL);
-	if (!kv_buf)
-		goto fail_free;
-	memcpy(kv_buf, CSR1212_TEXTUAL_DESCRIPTOR_LEAF_DATA(ud->model_name_kv),
-	       kv_len);
-	while ((kv_buf + kv_len - 1) == '\0')
-		kv_len--;
-	kv_buf[kv_len++] = '\0';
-
+	kv_str = CSR1212_TEXTUAL_DESCRIPTOR_LEAF_DATA(ud->model_name_kv);
 	for (i = ARRAY_SIZE(firedtv_model_names); --i;)
-		if (strcmp(kv_buf, firedtv_model_names[i]) == 0)
+		if (strlen(firedtv_model_names[i]) <= kv_len &&
+		    strncmp(kv_str, firedtv_model_names[i], kv_len) == 0)
 			break;
 	firesat->type = i;
-	kfree(kv_buf);
 
 	INIT_LIST_HEAD(&firesat->list);
 	spin_lock_irqsave(&firesat_list_lock, flags);
@@ -191,20 +183,19 @@ static int firesat_probe(struct device *dev)
 
 	err = AVCIdentifySubunit(firesat);
 	if (err)
-		goto fail_unlist;
+		goto fail;
 
 	err = firesat_dvbdev_init(firesat, dev);
 	if (err)
-		goto fail_unlist;
+		goto fail;
 
 	AVCRegisterRemoteControl(firesat);
 	return 0;
 
-fail_unlist:
+fail:
 	spin_lock_irqsave(&firesat_list_lock, flags);
 	list_del(&firesat->list);
 	spin_unlock_irqrestore(&firesat_list_lock, flags);
-fail_free:
 	kfree(firesat);
 	return err;
 }

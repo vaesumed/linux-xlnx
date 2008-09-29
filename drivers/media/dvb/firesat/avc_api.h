@@ -434,12 +434,12 @@ int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 void avc_remote_ctrl_work(struct work_struct *work);
 int AVCRegisterRemoteControl(struct firesat *firesat);
 int AVCTuner_Host2Ca(struct firesat *firesat);
-int avc_ca_app_info(struct firesat *firesat, char *app_info, int *length);
-int avc_ca_info(struct firesat *firesat, char *app_info, int *length);
+int avc_ca_app_info(struct firesat *firesat, char *app_info, unsigned int *len);
+int avc_ca_info(struct firesat *firesat, char *app_info, unsigned int *len);
 int avc_ca_reset(struct firesat *firesat);
 int avc_ca_pmt(struct firesat *firesat, char *app_info, int length);
 int avc_ca_get_time_date(struct firesat *firesat, int *interval);
 int avc_ca_enter_menu(struct firesat *firesat);
-int avc_ca_get_mmi(struct firesat *firesat, char *mmi_object, int *length);
+int avc_ca_get_mmi(struct firesat *firesat, char *mmi_object, unsigned int *len);
 
 #endif /* _AVC_API_H */

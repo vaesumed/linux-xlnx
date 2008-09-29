@@ -880,7 +880,7 @@ static int get_ca_object_length(AVCRspFrm *RspFrm)
 	return RspFrm->operand[7];
 }
 
-int avc_ca_app_info(struct firesat *firesat, char *app_info, int *length)
+int avc_ca_app_info(struct firesat *firesat, char *app_info, unsigned int *len)
 {
 	AVCCmdFrm CmdFrm;
 	AVCRspFrm RspFrm;
@@ -912,12 +912,12 @@ int avc_ca_app_info(struct firesat *firesat, char *app_info, int *length)
 	app_info[3] = 6 + RspFrm.operand[pos + 4];
 	app_info[4] = 0x01;
 	memcpy(&app_info[5], &RspFrm.operand[pos], 5 + RspFrm.operand[pos + 4]);
-	*length = app_info[3] + 4;
+	*len = app_info[3] + 4;
 
 	return 0;
 }
 
-int avc_ca_info(struct firesat *firesat, char *app_info, int *length)
+int avc_ca_info(struct firesat *firesat, char *app_info, unsigned int *len)
 {
 	AVCCmdFrm CmdFrm;
 	AVCRspFrm RspFrm;
@@ -948,7 +948,7 @@ int avc_ca_info(struct firesat *firesat, char *app_info, int *length)
 	app_info[3] = 2;
 	app_info[4] = app_info[5];
 	app_info[5] = app_info[6];
-	*length = app_info[3] + 4;
+	*len = app_info[3] + 4;
 
 	return 0;
 }
@@ -1178,7 +1178,7 @@ int avc_ca_enter_menu(struct firesat *firesat)
 	return 0;
 }
 
-int avc_ca_get_mmi(struct firesat *firesat, char *mmi_object, int *length)
+int avc_ca_get_mmi(struct firesat *firesat, char *mmi_object, unsigned int *len)
 {
 	AVCCmdFrm CmdFrm;
 	AVCRspFrm RspFrm;
@@ -1203,8 +1203,8 @@ int avc_ca_get_mmi(struct firesat *firesat, char *mmi_object, int *length)
 	if(AVCWrite(firesat,&CmdFrm,&RspFrm) < 0)
 		return -EIO;
 
-	*length = get_ca_object_length(&RspFrm);
-	memcpy(mmi_object, &RspFrm.operand[get_ca_object_pos(&RspFrm)], *length);
+	*len = get_ca_object_length(&RspFrm);
+	memcpy(mmi_object, &RspFrm.operand[get_ca_object_pos(&RspFrm)], *len);
 
 	return 0;
 }
