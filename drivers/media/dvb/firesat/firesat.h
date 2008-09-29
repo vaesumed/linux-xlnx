@@ -149,13 +149,8 @@ struct firesat {
 	struct work_struct	remote_ctrl_work;
 
 	struct firesat_channel {
-		struct firesat *firesat;
-		struct dvb_demux_feed *dvbdmxfeed;
-
-		int active;
-		int id;
+		bool active;
 		int pid;
-		int type;	/* 1 - TS, 2 - Filter */
 	} channel[16];
 	struct mutex			demux_mutex;
 
