@@ -36,6 +36,7 @@
 #include "xfs_dinode.h"
 #include "xfs_inode.h"
 #include "xfs_btree.h"
+#include "xfs_btree_trace.h"
 #include "xfs_ialloc.h"
 #include "xfs_bmap.h"
 #include "xfs_rtalloc.h"
@@ -1926,10 +1927,19 @@ xfs_alloc_trace_bufs(void)
 	if (!xfs_bmap_trace_buf)
 		goto out_free_alloc_trace;
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
+	xfs_allocbt_trace_buf = ktrace_alloc(XFS_ALLOCBT_TRACE_SIZE,
+					     KM_MAYFAIL);
+	if (!xfs_allocbt_trace_buf)
+		goto out_free_bmap_trace;
+
+	xfs_inobt_trace_buf = ktrace_alloc(XFS_INOBT_TRACE_SIZE, KM_MAYFAIL);
+	if (!xfs_inobt_trace_buf)
+		goto out_free_allocbt_trace;
+
 	xfs_bmbt_trace_buf = ktrace_alloc(XFS_BMBT_TRACE_SIZE, KM_MAYFAIL);
 	if (!xfs_bmbt_trace_buf)
-		goto out_free_bmap_trace;
+		goto out_free_inobt_trace;
 #endif
 #ifdef XFS_ATTR_TRACE
 	xfs_attr_trace_buf = ktrace_alloc(XFS_ATTR_TRACE_SIZE, KM_MAYFAIL);
@@ -1951,8 +1961,12 @@ xfs_alloc_trace_bufs(void)
 	ktrace_free(xfs_attr_trace_buf);
  out_free_bmbt_trace:
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(xfs_bmbt_trace_buf);
+ out_free_inobt_trace:
+	ktrace_free(xfs_inobt_trace_buf);
+ out_free_allocbt_trace:
+	ktrace_free(xfs_allocbt_trace_buf);
  out_free_bmap_trace:
 #endif
 #ifdef XFS_BMAP_TRACE
@@ -1975,8 +1989,10 @@ xfs_free_trace_bufs(void)
 #ifdef XFS_ATTR_TRACE
 	ktrace_free(xfs_attr_trace_buf);
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(xfs_bmbt_trace_buf);
+	ktrace_free(xfs_inobt_trace_buf);
+	ktrace_free(xfs_allocbt_trace_buf);
 #endif
 #ifdef XFS_BMAP_TRACE
 	ktrace_free(xfs_bmap_trace_buf);
