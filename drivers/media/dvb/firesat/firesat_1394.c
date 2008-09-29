@@ -21,7 +21,6 @@
 #include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/types.h>
-#include <asm/atomic.h>
 
 #include <dmxdev.h>
 #include <dvb_demux.h>
@@ -98,8 +97,8 @@ static void fcp_request(struct hpsb_host *host,
 
 		spin_lock_irqsave(&firesat_list_lock, flags);
 		list_for_each_entry(firesat_entry,&firesat_list,list) {
-			if (firesat_entry->host == host &&
-			    firesat_entry->nodeentry->nodeid == nodeid &&
+			if (firesat_entry->ud->ne->host == host &&
+			    firesat_entry->ud->ne->nodeid == nodeid &&
 			    (firesat_entry->subunit == (data[1]&0x7) ||
 			     (firesat_entry->subunit == 0 &&
 			      (data[1]&0x7) == 0x7))) {
@@ -163,10 +162,7 @@ static int firesat_probe(struct device *dev)
 
 		memset(firesat, 0, sizeof (struct firesat));
 
-		firesat->host		= ud->ne->host;
-		firesat->guid		= ud->ne->guid;
-		firesat->guid_vendor_id = ud->ne->guid_vendor_id;
-		firesat->nodeentry	= ud->ne;
+		firesat->ud		= ud;
 		firesat->isochannel	= -1;
 		firesat->tone		= 0xff;
 		firesat->voltage	= 0xff;
@@ -180,7 +176,7 @@ static int firesat_probe(struct device *dev)
 
 		mutex_init(&firesat->avc_mutex);
 		init_waitqueue_head(&firesat->avc_wait);
-		atomic_set(&firesat->avc_reply_received, 1);
+		firesat->avc_reply_received = true;
 		mutex_init(&firesat->demux_mutex);
 		INIT_WORK(&firesat->remote_ctrl_work, avc_remote_ctrl_work);
 
@@ -287,16 +283,12 @@ static int firesat_update(struct unit_directory *ud)
 {
 	struct firesat **firesats = ud->device.driver_data;
 	int k;
-	// loop over subunits
 
 	for (k = 0; k < 2; k++)
-		if (firesats[k]) {
-			firesats[k]->nodeentry = ud->ne;
-
-			if (firesats[k]->isochannel >= 0)
-				try_CMPEstablishPPconnection(firesats[k], firesats[k]->subunit, firesats[k]->isochannel);
-		}
-
+		if (firesats[k] && firesats[k]->isochannel >= 0)
+			try_CMPEstablishPPconnection(firesats[k],
+						     firesats[k]->subunit,
+						     firesats[k]->isochannel);
 	return 0;
 }
 

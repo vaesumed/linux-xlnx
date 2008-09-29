@@ -18,6 +18,7 @@
 
 #include <dma.h>
 #include <iso.h>
+#include <nodemgr.h>
 
 #include "firesat.h"
 
@@ -36,7 +37,7 @@ int setup_iso_channel(struct firesat *firesat)
 {
 	int result;
 	firesat->iso_handle =
-		hpsb_iso_recv_init(firesat->host,
+		hpsb_iso_recv_init(firesat->ud->ne->host,
 				   256 * 200, //data_buf_size,
 				   256, //buf_packets,
 				   firesat->isochannel,

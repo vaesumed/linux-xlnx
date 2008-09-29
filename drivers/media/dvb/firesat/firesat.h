@@ -21,7 +21,6 @@
 #include <linux/types.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
-#include <asm/atomic.h>
 
 #include <demux.h>
 #include <dmxdev.h>
@@ -129,7 +128,7 @@ enum model_type {
 
 struct hpsb_host;
 struct hpsb_iso;
-struct node_entry;
+struct unit_directory;
 
 struct firesat {
 	struct dvb_demux dvb_demux;
@@ -149,7 +148,7 @@ struct firesat {
 
 	struct mutex			avc_mutex;
 	wait_queue_head_t		avc_wait;
-	atomic_t			avc_reply_received;
+	bool				avc_reply_received;
 	struct work_struct		remote_ctrl_work;
 
 	struct firesat_channel {
@@ -167,10 +166,7 @@ struct firesat {
 	void *respfrm;
 	int resp_length;
 
-	struct hpsb_host *host;
-	u64 guid;			/* GUID of this node */
-	u32 guid_vendor_id;		/* Top 24bits of guid */
-	struct node_entry *nodeentry;
+	struct unit_directory *ud;
 
 	enum model_type type;
 	char subunit;
