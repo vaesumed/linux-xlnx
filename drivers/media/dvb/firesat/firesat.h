@@ -132,25 +132,21 @@ struct hpsb_iso;
 struct unit_directory;
 
 struct firesat {
-	struct dvb_demux dvb_demux;
+	struct dvb_adapter	adapter;
+	struct dmxdev		dmxdev;
+	struct dvb_demux	demux;
+	struct dmx_frontend	frontend;
+	struct dvb_net		dvbnet;
+	struct dvb_frontend	fe;
 
-	/* DVB bits */
-	struct dvb_adapter		adapter;
-	struct dmxdev			dmxdev;
-	struct dvb_demux		demux;
-	struct dmx_frontend		frontend;
-	struct dvb_net			dvbnet;
-	struct dvb_frontend_info	*frontend_info;
-	struct dvb_frontend		fe;
+	struct dvb_device	*cadev;
+	int			ca_last_command;
+	int			ca_time_interval;
 
-	struct dvb_device		*cadev;
-	int				ca_last_command;
-	int				ca_time_interval;
-
-	struct mutex			avc_mutex;
-	wait_queue_head_t		avc_wait;
-	bool				avc_reply_received;
-	struct work_struct		remote_ctrl_work;
+	struct mutex		avc_mutex;
+	wait_queue_head_t	avc_wait;
+	bool			avc_reply_received;
+	struct work_struct	remote_ctrl_work;
 
 	struct firesat_channel {
 		struct firesat *firesat;
