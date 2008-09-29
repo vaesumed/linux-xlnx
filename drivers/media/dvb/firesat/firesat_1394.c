@@ -39,40 +39,54 @@
 #include "firesat-ci.h"
 #include "firesat-rc.h"
 
-#define FIRESAT_Vendor_ID   0x001287
+#define MATCH_FLAGS	IEEE1394_MATCH_VENDOR_ID | IEEE1394_MATCH_MODEL_ID | \
+			IEEE1394_MATCH_SPECIFIER_ID | IEEE1394_MATCH_VERSION
+#define DIGITAL_EVERYWHERE_OUI   0x001287
 
 static struct ieee1394_device_id firesat_id_table[] = {
 
 	{
 		/* FloppyDTV S/CI and FloppyDTV S2 */
-		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-		.model_id = 0x000024,
-		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000024,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
 	},{
 		/* FloppyDTV T/CI */
-		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-		.model_id = 0x000025,
-		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000025,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
 	},{
 		/* FloppyDTV C/CI */
-		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-		.model_id = 0x000026,
-		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000026,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
 	},{
 		/* FireDTV S/CI and FloppyDTV S2 */
-		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-		.model_id = 0x000034,
-		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000034,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
 	},{
 		/* FireDTV T/CI */
-		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-		.model_id = 0x000035,
-		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000035,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
 	},{
 		/* FireDTV C/CI */
-		.match_flags = IEEE1394_MATCH_MODEL_ID | IEEE1394_MATCH_SPECIFIER_ID,
-		.model_id = 0x000036,
-		.specifier_id = AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000036,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
 	}, { }
 };
 
