@@ -335,11 +335,11 @@ static void lguest_cpuid(unsigned int *ax, unsigned int *bx,
 	case 1:	/* Basic feature request. */
 		/* We only allow kernel to see SSE3, CMPXCHG16B and SSSE3 */
 		*cx &= 0x00002201;
-		/* SSE, SSE2, FXSR, MMX, CMOV, CMPXCHG8B, TSC, FPU, PAE. */
+		/* SSE, SSE2, FXSR, MMX, CMOV, CMPXCHG8B, TSC, FPU, PSE, PAE. */
 #ifdef CONFIG_X86_PAE
-		*dx &= 0x07808151;
+		*dx &= 0x07808159;
 #else
-		*dx &= 0x07808111;
+		*dx &= 0x07808119;
 #endif
 		/* The Host can do a nice optimization if it knows that the
 		 * kernel mappings (addresses above 0xC0000000 or whatever

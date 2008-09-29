@@ -273,20 +273,96 @@ int demand_page(struct lg_cpu *cpu, unsigned long vaddr, int errcode)
 	pgd_t gpgd;
 	pgd_t *spgd;
 	unsigned long gpte_ptr;
+	unsigned long gpgd_ptr;
 	pte_t gpte;
 	pte_t *spte;
 
 #ifdef CONFIG_X86_PAE
 	pmd_t *spmd;
 	pmd_t gpmd;
+	unsigned long gpmd_ptr;
 #endif
 
+	unsigned long ptepage;
+	int i = 0;
+	pte_t fake_gpte;
+	pte_t *ptep;
+	unsigned long frame;
+
 	/* First step: get the top-level Guest page table entry. */
-	gpgd = lgread(cpu, (unsigned long) gpgd_addr(cpu, vaddr), pgd_t);
+	gpgd_ptr = (unsigned long) gpgd_addr(cpu, vaddr);
+	gpgd = lgread(cpu, gpgd_ptr, pgd_t);
 
 	/* Toplevel not present?  We can't map it in. */
 	if (!(pgd_flags(gpgd) & _PAGE_PRESENT))
 		return 0;
+
+#ifndef CONFIG_X86_PAE
+	/* If the gpgd is actually pointing to a 4MB page,
+	 * instead of pointing to a pte page, we will back it
+	 * with 4KB pages in the host */
+	if (pgd_flags(gpgd) & _PAGE_PSE) {
+		/* Check they're not trying to write to a page the Guest wants
+		 * read-only (bit 2 of errcode == write). */
+		if ((errcode & 2) && !(pgd_flags(gpgd) & _PAGE_RW))
+			return 0;
+
+		/* User access to a kernel-only page? (bit 3 == user access) */
+		if ((errcode & 4) && !(pgd_flags(gpgd) & _PAGE_USER))
+			return 0;
+
+		/* Is the 4MB page within the guest limits? */
+		if (pgd_pfn(gpgd) + ((PGDIR_SIZE - PAGE_SIZE) >> PAGE_SHIFT) >=
+		    cpu->lg->pfn_limit)
+			kill_guest(cpu, "large page out of limits");
+
+		/* Now look at the matching shadow entry. */
+		spgd = spgd_addr(cpu, cpu->cpu_pgd, vaddr);
+
+		/* No shadow entry: allocate a new shadow PTE page. */
+		if (!(pgd_flags(*spgd) & _PAGE_PRESENT)) {
+			ptepage = get_zeroed_page(GFP_KERNEL);
+			if (!ptepage)
+				kill_guest(cpu,
+					   "out of memory allocating pte page");
+			/* We build a shadow pgd, pointing to the PTE page */
+			set_pgd(spgd, __pgd(__pa(ptepage) |
+			      (pgd_flags(gpgd) & ~_PAGE_PSE &  _PAGE_TABLE)));
+		}
+
+		/* Add the _PAGE_ACCESSED and (for a write) _PAGE_DIRTY flag */
+		gpgd = __pgd(pgd_val(gpgd) | _PAGE_ACCESSED);
+		if (errcode & 2)
+			gpgd = __pgd(pgd_val(gpgd) | _PAGE_DIRTY);
+
+		/* We will we use this pointer to populate
+		 * the shadow PTE page */
+		ptep = __va(pgd_pfn(*spgd) << PAGE_SHIFT);
+
+		/* We will create a fake gpte, so we can use
+		 * gpte_to_spte function */
+		frame = pgd_pfn(gpgd) << PAGE_SHIFT;
+
+		/* And here, we completely populate the shadow PTE page,
+		 * so we map the 1024 4KB pages, backing the 4MB guest page */
+		for (; i < PTRS_PER_PTE; i++) {
+			fake_gpte =
+			    __pte(frame | (pgd_flags(gpgd) & ~_PAGE_PSE));
+			frame = frame + PAGE_SIZE;
+			release_pte(ptep[i]);
+			if (pgd_val(gpgd) & _PAGE_DIRTY)
+				ptep[i] = gpte_to_spte(cpu, fake_gpte, 1);
+			else
+				ptep[i] =
+				    gpte_to_spte(cpu, pte_wrprotect(fake_gpte),
+						 0);
+		}
+		/* Finally, we write the Guest PGD entry back: we've set the
+		 * _PAGE_ACCESSED and maybe the _PAGE_DIRTY flags. */
+		lgwrite(cpu, gpgd_ptr, pgd_t, gpgd);
+		return 1;
+	} /* (pgd_flags(gpgd) & _PAGE_PSE) */
+#endif
 
 	/* Now look at the matching shadow entry. */
 	spgd = spgd_addr(cpu, cpu->cpu_pgd, vaddr);
@@ -307,10 +383,77 @@ int demand_page(struct lg_cpu *cpu, unsigned long vaddr, int errcode)
 	}
 
 #ifdef CONFIG_X86_PAE
-	gpmd = lgread(cpu, (unsigned long) gpmd_addr(gpgd, vaddr), pmd_t);
+	gpmd_ptr = gpmd_addr(gpgd, vaddr);
+	gpmd = lgread(cpu, gpmd_ptr, pmd_t);
+
 	/* middle level not present?  We can't map it in. */
 	if (!(pmd_flags(gpmd) & _PAGE_PRESENT))
 		return 0;
+
+	/* If the gpmd is actually pointing to a 2MB page,
+	 * instead of pointing to a pte page, we will back it
+	 * with 4KB pages in the host */
+	if (pmd_flags(gpmd) & _PAGE_PSE) {
+		/* Check they're not trying to write to a page the Guest wants
+		 * read-only (bit 2 of errcode == write). */
+		if ((errcode & 2) && !(pmd_flags(gpmd) & _PAGE_RW))
+			return 0;
+
+		/* User access to a kernel-only page? (bit 3 == user access) */
+		if ((errcode & 4) && !(pmd_flags(gpmd) & _PAGE_USER))
+			return 0;
+
+		/* Is the 2MB page within the guest limits? */
+		if (pmd_pfn(gpmd) + ((PMD_SIZE - PAGE_SIZE) >> PAGE_SHIFT) >=
+							cpu->lg->pfn_limit)
+			kill_guest(cpu, "large page out of limits");
+
+		/* Now look at the matching shadow entry. */
+		spmd = spmd_addr(cpu, *spgd, vaddr);
+
+		/* No shadow entry: allocate a new shadow PTE page. */
+		if (!(pmd_flags(*spmd) & _PAGE_PRESENT)) {
+			ptepage = get_zeroed_page(GFP_KERNEL);
+			if (!ptepage)
+				kill_guest(cpu,
+					   "out of memory allocating pte page");
+			/* We build a shadow pmd, pointing to the PTE page */
+			set_pmd(spmd, __pmd(__pa(ptepage) |
+			      (pmd_flags(gpmd) & ~_PAGE_PSE &  _PAGE_TABLE)));
+		}
+
+		/* Add the _PAGE_ACCESSED and (for a write) _PAGE_DIRTY flag */
+		gpmd = __pmd(pmd_val(gpmd) | _PAGE_ACCESSED);
+		if (errcode & 2)
+			gpmd = __pmd(pmd_val(gpmd) | _PAGE_DIRTY);
+
+		/* We will we use this pointer to populate
+		 * the shadow PTE page */
+		ptep = __va(pmd_pfn(*spmd) << PAGE_SHIFT);
+
+		/* We will create a fake gpte, so we can use
+		 * gpte_to_spte function */
+		frame = pmd_pfn(gpmd) << PAGE_SHIFT;
+
+		/* And here, we completely populate the shadow PTE page,
+		 * so we map the 512 4KB pages, backing the 2MB guest page */
+		for (; i < PTRS_PER_PMD; i++) {
+			fake_gpte =
+			    __pte(frame | (pmd_flags(gpmd) & ~_PAGE_PSE));
+			frame = frame + PAGE_SIZE;
+			release_pte(ptep[i]);
+			if (pmd_val(gpmd) & _PAGE_DIRTY)
+				ptep[i] = gpte_to_spte(cpu, fake_gpte, 1);
+			else
+				ptep[i] =
+				    gpte_to_spte(cpu, pte_wrprotect(fake_gpte),
+						 0);
+		}
+		/* Finally, we write the Guest PGD entry back: we've set the
+		 * _PAGE_ACCESSED and maybe the _PAGE_DIRTY flags. */
+		lgwrite(cpu, gpmd_ptr, pmd_t, gpmd);
+		return 1;
+	} /* (pgd_flags(gpgd) & _PAGE_PSE) */
 
 	/* Now look at the matching shadow entry. */
 	spmd = spmd_addr(cpu, *spgd, vaddr);
@@ -531,10 +674,17 @@ unsigned long guest_pa(struct lg_cpu *cpu, unsigned long vaddr)
 	if (!(pgd_flags(gpgd) & _PAGE_PRESENT))
 		kill_guest(cpu, "Bad address %#lx", vaddr);
 
+	/* Is it a large page? We don't need any gpte to return the address */
+	if (pgd_flags(gpgd) & _PAGE_PSE)
+		return (pgd_val(gpgd) & PGDIR_MASK) | (vaddr & ~PGDIR_MASK);
+
 #ifdef CONFIG_X86_PAE
 	gpmd = lgread(cpu, (unsigned long)gpmd_addr(gpgd, vaddr), pmd_t);
 	if (!(pmd_flags(gpmd) & _PAGE_PRESENT))
 		kill_guest(cpu, "Bad address %#lx", vaddr);
+
+	if (pmd_flags(gpmd) & _PAGE_PSE)
+		return (pmd_val(gpmd) & PMD_MASK) | (vaddr & ~PMD_MASK);
 #endif
 
 	gpte = lgread(cpu, (unsigned long)gpte_addr(cpu, gpgd, vaddr), pte_t);
