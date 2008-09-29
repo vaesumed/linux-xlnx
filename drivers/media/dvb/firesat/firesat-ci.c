@@ -324,19 +324,17 @@ static struct dvb_device firesat_ca = {
 	.kernel_ioctl = firesat_ca_ioctl,
 };
 
-int firesat_ca_init(struct firesat *firesat)
+int firesat_ca_register(struct firesat *firesat)
 {
-	int err;
+	int err = -EFAULT;
 	ANTENNA_INPUT_INFO info;
 
 	if (AVCTunerStatus(firesat, &info))
 		return -EINVAL;
 
 	if (firesat_ca_ready(&info)) {
-		err = dvb_register_device(firesat->adapter,
-					      &firesat->cadev,
-					      &firesat_ca, firesat,
-					      DVB_DEVICE_CA);
+		err = dvb_register_device(&firesat->adapter, &firesat->cadev,
+					  &firesat_ca, firesat, DVB_DEVICE_CA);
 
 		if (info.CaApplicationInfo == 0)
 			printk(KERN_ERR "%s: CaApplicationInfo is not set.\n",
@@ -344,14 +342,11 @@ int firesat_ca_init(struct firesat *firesat)
 		if (info.CaDateTimeRequest == 1)
 			firesat_get_date_time_request(firesat);
 	}
-	else
-		err = -EFAULT;
-
 	return err;
 }
 
 void firesat_ca_release(struct firesat *firesat)
 {
 	if (firesat->cadev)
-	dvb_unregister_device(firesat->cadev);
+		dvb_unregister_device(firesat->cadev);
 }
