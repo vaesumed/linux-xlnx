@@ -13,12 +13,13 @@
 
 #include <linux/crc32.h>
 #include <linux/delay.h>
+#include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
+#include <linux/string.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
-#include <asm/atomic.h>
 
 #include <ieee1394_transactions.h>
 #include <nodemgr.h>
@@ -34,13 +35,6 @@
 static unsigned int avc_comm_debug = 0;
 module_param(avc_comm_debug, int, 0644);
 MODULE_PARM_DESC(avc_comm_debug, "debug logging level [0..2] of AV/C communication, default is 0 (no)");
-
-/* Frees an allocated packet */
-static void avc_free_packet(struct hpsb_packet *packet)
-{
-	hpsb_free_tlabel(packet);
-	hpsb_free_packet(packet);
-}
 
 static const char* get_ctype_string(__u8 ctype)
 {
@@ -166,75 +160,46 @@ static void log_response_frame(const AVCRspFrm *RspFrm)
 }
 
 static int __AVCWrite(struct firesat *firesat, const AVCCmdFrm *CmdFrm,
-		      AVCRspFrm *RspFrm) {
-	struct hpsb_packet *packet;
-	struct node_entry *ne;
-	int num_tries = 0;
-	int packet_ok = 0;
+		      AVCRspFrm *RspFrm)
+{
+	int err, retry;
 
-	ne = firesat->nodeentry;
-	if(!ne) {
-		printk(KERN_ERR "%s: lost node!\n",__func__);
-		return -EIO;
-	}
-
-	/* need all input data */
-	if(!firesat || !ne || !CmdFrm) {
-		printk(KERN_ERR "%s: missing input data!\n",__func__);
-		return -EINVAL;
-	}
-
-	if (avc_comm_debug > 0) {
+	if (avc_comm_debug > 0)
 		log_command_frame(CmdFrm);
-	}
 
-	if(RspFrm)
-		atomic_set(&firesat->avc_reply_received, 0);
+	if (RspFrm)
+		firesat->avc_reply_received = false;
 
-	while (packet_ok == 0 && num_tries < 6) {
-		num_tries++;
-		packet_ok = 1;
-		packet = hpsb_make_writepacket(ne->host, ne->nodeid,
-					       COMMAND_REGISTER,
-					       (quadlet_t*)CmdFrm,
-					       CmdFrm->length);
-		hpsb_set_packet_complete_task(packet,
-					      (void (*)(void*))avc_free_packet,
-					      packet);
-		hpsb_node_fill_packet(ne, packet);
-
-		if (hpsb_send_packet(packet) < 0) {
-			avc_free_packet(packet);
-			atomic_set(&firesat->avc_reply_received, 1);
-			printk(KERN_ERR "%s: send failed!\n",__func__);
-			return -EIO;
+	for (retry = 0; retry < 6; retry++) {
+		err = hpsb_node_write(firesat->ud->ne, COMMAND_REGISTER,
+				      (quadlet_t *)CmdFrm, CmdFrm->length);
+		if (err) {
+			firesat->avc_reply_received = true;
+			dev_err(&firesat->ud->device,
+				"FCP command write failed\n");
+			return err;
 		}
 
-		if(RspFrm) {
-			// AV/C specs say that answers should be send within
-			// 150 ms so let's time out after 200 ms
-			if (wait_event_timeout(firesat->avc_wait,
-					       atomic_read(&firesat->avc_reply_received) == 1,
-					       HZ / 5) == 0) {
-				packet_ok = 0;
-			}
-			else {
-				memcpy(RspFrm, firesat->respfrm,
-				       firesat->resp_length);
-				RspFrm->length = firesat->resp_length;
-				if (avc_comm_debug > 0) {
-					log_response_frame(RspFrm);
-				}
-			}
+		if (!RspFrm)
+			return 0;
+
+		/*
+		 * AV/C specs say that answers should be sent within 150 ms.
+		 * Time out after 200 ms.
+		 */
+		if (wait_event_timeout(firesat->avc_wait,
+				       firesat->avc_reply_received,
+				       HZ / 5) != 0) {
+			memcpy(RspFrm, firesat->respfrm, firesat->resp_length);
+			RspFrm->length = firesat->resp_length;
+			if (avc_comm_debug > 0)
+				log_response_frame(RspFrm);
+
+			return 0;
 		}
 	}
-	if (packet_ok == 0) {
-		printk(KERN_ERR "%s: AV/C response timed out 6 times.\n",
-		       __func__);
-		return -ETIMEDOUT;
-	}
-
-	return 0;
+	dev_err(&firesat->ud->device, "FCP response timed out\n");
+	return -ETIMEDOUT;
 }
 
 int AVCWrite(struct firesat*firesat, const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm)
@@ -264,34 +229,22 @@ int AVCRecv(struct firesat *firesat, u8 *data, size_t length)
 					  RspFrm->operand[5]);
 			schedule_work(&firesat->remote_ctrl_work);
 		} else if (RspFrm->resp != INTERIM) {
-			printk(KERN_INFO "firedtv: remote control result = "
-			       "%d\n", RspFrm->resp);
+			dev_info(&firesat->ud->device,
+				 "remote control result = %d\n", RspFrm->resp);
 		}
 		return 0;
 	}
 
-	if(atomic_read(&firesat->avc_reply_received) == 1) {
-		printk(KERN_ERR "%s: received out-of-order AVC response, "
-		       "ignored\n",__func__);
-		return -EINVAL;
+	if (firesat->avc_reply_received) {
+		dev_err(&firesat->ud->device,
+			"received out-of-order AVC response, ignored\n");
+		return -EIO;
 	}
-//	AVCRspFrm *resp=(AVCRspFrm *)data;
-//	int k;
 
-//	printk(KERN_INFO "resp=0x%x\n",resp->resp);
-//	printk(KERN_INFO "cts=0x%x\n",resp->cts);
-//	printk(KERN_INFO "suid=0x%x\n",resp->suid);
-//	printk(KERN_INFO "sutyp=0x%x\n",resp->sutyp);
-//	printk(KERN_INFO "opcode=0x%x\n",resp->opcode);
-//	printk(KERN_INFO "length=%d\n",resp->length);
+	memcpy(firesat->respfrm, data, length);
+	firesat->resp_length = length;
 
-//	for(k=0;k<2;k++)
-//		printk(KERN_INFO "operand[%d]=%02x\n",k,resp->operand[k]);
-
-	memcpy(firesat->respfrm,data,length);
-	firesat->resp_length=length;
-
-	atomic_set(&firesat->avc_reply_received, 1);
+	firesat->avc_reply_received = true;
 	wake_up(&firesat->avc_wait);
 
 	return 0;

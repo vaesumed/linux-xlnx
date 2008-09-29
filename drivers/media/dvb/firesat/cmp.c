@@ -49,8 +49,7 @@ static int cmp_read(struct firesat *firesat, void *buf, u64 addr, size_t len)
 	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
-	ret = hpsb_read(firesat->host, firesat->nodeentry->nodeid,
-			firesat->nodeentry->generation, addr, buf, len);
+	ret = hpsb_node_read(firesat->ud->ne, addr, buf, len);
 
 	mutex_unlock(&firesat->avc_mutex);
 	return ret;
@@ -64,9 +63,7 @@ static int cmp_lock(struct firesat *firesat, quadlet_t *data, u64 addr,
 	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
-	ret = hpsb_lock(firesat->host, firesat->nodeentry->nodeid,
-			firesat->nodeentry->generation,
-			addr, ext_tcode, data, arg);
+	ret = hpsb_node_lock(firesat->ud->ne, addr, ext_tcode, data, arg);
 
 	mutex_unlock(&firesat->avc_mutex);
 	return ret;
