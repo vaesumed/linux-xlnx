@@ -24,20 +24,18 @@ static int firesat_dvb_init(struct dvb_frontend *fe)
 {
 	int result;
 	struct firesat *firesat = fe->sec_priv;
-//	printk("fdi: 1\n");
-	firesat->isochannel = firesat->adapter->num; //<< 1 | (firesat->subunit & 0x1); // ### ask IRM
-//	printk("fdi: 2\n");
+
+	/* FIXME - allocate free channel at IRM */
+	firesat->isochannel = firesat->adapter.num;
+
 	result = try_CMPEstablishPPconnection(firesat, firesat->subunit, firesat->isochannel);
 	if (result != 0) {
 		printk(KERN_ERR "Could not establish point to point "
 		       "connection.\n");
 		return -1;
 	}
-//	printk("fdi: 3\n");
 
-	result = setup_iso_channel(firesat);
-//	printk("fdi: 4. Result was %d\n", result);
-	return result;
+	return setup_iso_channel(firesat);
 }
 
 static int firesat_sleep(struct dvb_frontend *fe)
@@ -194,7 +192,7 @@ static struct dvb_frontend_ops firesat_ops = {
 	.set_voltage			= firesat_set_voltage,
 };
 
-int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe)
+void firesat_frontend_init(struct firesat *firesat)
 {
 	switch (firesat->type) {
 	case FireSAT_DVB_S:
@@ -211,11 +209,9 @@ int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe)
 		       firesat->type);
 		firesat->frontend_info = NULL;
 	}
-	fe->ops = firesat_ops;
-	fe->ops.info = *(firesat->frontend_info);
-	fe->dvb = firesat->adapter;
-
-	return 0;
+	firesat->fe.ops = firesat_ops;
+	firesat->fe.ops.info = *(firesat->frontend_info);
+	firesat->fe.dvb = &firesat->adapter;
 }
 
 static struct dvb_frontend_info firesat_S_frontend_info = {

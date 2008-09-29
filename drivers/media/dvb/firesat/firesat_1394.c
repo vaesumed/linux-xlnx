@@ -141,168 +141,106 @@ const char *firedtv_model_names[] = {
 
 static int firesat_probe(struct device *dev)
 {
-	struct unit_directory *ud = container_of(dev, struct unit_directory, device);
+	struct unit_directory *ud =
+			container_of(dev, struct unit_directory, device);
 	struct firesat *firesat;
-	struct dvb_frontend *fe;
 	unsigned long flags;
-	unsigned char subunitcount = 0xff, subunit;
-	struct firesat **firesats = kmalloc(sizeof (void*) * 2,GFP_KERNEL);
 	int kv_len;
 	int i;
 	char *kv_buf;
+	int err = -ENOMEM;
 
-	if (!firesats) {
-		printk("%s: couldn't allocate memory.\n", __func__);
+	firesat = kzalloc(sizeof(*firesat), GFP_KERNEL);
+	if (!firesat)
 		return -ENOMEM;
-	}
 
-//    printk(KERN_INFO "FireSAT: Detected device with GUID %08lx%04lx%04lx\n",(unsigned long)((ud->ne->guid)>>32),(unsigned long)(ud->ne->guid & 0xFFFF),(unsigned long)ud->ne->guid_vendor_id);
-	printk(KERN_INFO "%s: loading device\n", __func__);
+	dev->driver_data = firesat;
+	firesat->ud		= ud;
+	firesat->subunit	= 0;
+	firesat->isochannel	= -1;
+	firesat->tone		= 0xff;
+	firesat->voltage	= 0xff;
 
-	firesats[0] = NULL;
-	firesats[1] = NULL;
+	mutex_init(&firesat->avc_mutex);
+	init_waitqueue_head(&firesat->avc_wait);
+	firesat->avc_reply_received = true;
+	mutex_init(&firesat->demux_mutex);
+	INIT_WORK(&firesat->remote_ctrl_work, avc_remote_ctrl_work);
 
-	ud->device.driver_data = firesats;
+	/* Reading device model from ROM */
+	kv_len = (ud->model_name_kv->value.leaf.len - 2) * sizeof(quadlet_t);
+	kv_buf = kmalloc((sizeof(quadlet_t) * kv_len), GFP_KERNEL);
+	if (!kv_buf)
+		goto fail_free;
+	memcpy(kv_buf, CSR1212_TEXTUAL_DESCRIPTOR_LEAF_DATA(ud->model_name_kv),
+	       kv_len);
+	while ((kv_buf + kv_len - 1) == '\0')
+		kv_len--;
+	kv_buf[kv_len++] = '\0';
 
-	for (subunit = 0; subunit < subunitcount; subunit++) {
+	for (i = ARRAY_SIZE(firedtv_model_names); --i;)
+		if (strcmp(kv_buf, firedtv_model_names[i]) == 0)
+			break;
+	firesat->type = i;
+	kfree(kv_buf);
 
-		if (!(firesat = kmalloc(sizeof (struct firesat), GFP_KERNEL)) ||
-		    !(fe = kmalloc(sizeof (struct dvb_frontend), GFP_KERNEL))) {
+	INIT_LIST_HEAD(&firesat->list);
+	spin_lock_irqsave(&firesat_list_lock, flags);
+	list_add_tail(&firesat->list, &firesat_list);
+	spin_unlock_irqrestore(&firesat_list_lock, flags);
 
-			printk("%s: couldn't allocate memory.\n", __func__);
-			kfree(firesats);
-			return -ENOMEM;
-		}
+	err = AVCIdentifySubunit(firesat);
+	if (err)
+		goto fail_unlist;
 
-		memset(firesat, 0, sizeof (struct firesat));
+	err = firesat_dvbdev_init(firesat, dev);
+	if (err)
+		goto fail_unlist;
 
-		firesat->ud		= ud;
-		firesat->isochannel	= -1;
-		firesat->tone		= 0xff;
-		firesat->voltage	= 0xff;
-		firesat->fe             = fe;
+	AVCRegisterRemoteControl(firesat);
+	return 0;
 
-		if (!(firesat->respfrm = kmalloc(sizeof (AVCRspFrm), GFP_KERNEL))) {
-			printk("%s: couldn't allocate memory.\n", __func__);
-			kfree(firesat);
-			return -ENOMEM;
-		}
-
-		mutex_init(&firesat->avc_mutex);
-		init_waitqueue_head(&firesat->avc_wait);
-		firesat->avc_reply_received = true;
-		mutex_init(&firesat->demux_mutex);
-		INIT_WORK(&firesat->remote_ctrl_work, avc_remote_ctrl_work);
-
-		spin_lock_irqsave(&firesat_list_lock, flags);
-		INIT_LIST_HEAD(&firesat->list);
-		list_add_tail(&firesat->list, &firesat_list);
-		spin_unlock_irqrestore(&firesat_list_lock, flags);
-
-		if (subunit == 0) {
-			firesat->subunit = 0x7; // 0x7 = don't care
-			if (AVCSubUnitInfo(firesat, &subunitcount)) {
-				printk("%s: AVC subunit info command failed.\n",__func__);
-				spin_lock_irqsave(&firesat_list_lock, flags);
-				list_del(&firesat->list);
-				spin_unlock_irqrestore(&firesat_list_lock, flags);
-				kfree(firesat);
-				return -EIO;
-			}
-		}
-
-		printk(KERN_INFO "%s: subunit count = %d\n", __func__, subunitcount);
-
-		firesat->subunit = subunit;
-
-		/* Reading device model from ROM */
-		kv_len = (ud->model_name_kv->value.leaf.len - 2) *
-			sizeof(quadlet_t);
-		kv_buf = kmalloc((sizeof(quadlet_t) * kv_len), GFP_KERNEL);
-		memcpy(kv_buf,
-			CSR1212_TEXTUAL_DESCRIPTOR_LEAF_DATA(ud->model_name_kv),
-			kv_len);
-		while ((kv_buf + kv_len - 1) == '\0') kv_len--;
-		kv_buf[kv_len++] = '\0';
-
-		for (i = ARRAY_SIZE(firedtv_model_names); --i;)
-			if (strcmp(kv_buf, firedtv_model_names[i]) == 0)
-				break;
-		firesat->type = i;
-		kfree(kv_buf);
-
-		if (AVCIdentifySubunit(firesat)) {
-			printk("%s: cannot identify subunit %d\n", __func__, subunit);
-			spin_lock_irqsave(&firesat_list_lock, flags);
-			list_del(&firesat->list);
-			spin_unlock_irqrestore(&firesat_list_lock, flags);
-			kfree(firesat);
-			continue;
-		}
-
-// ----
-		/* FIXME: check for error return */
-		firesat_dvbdev_init(firesat, dev, fe);
-// ----
-		firesats[subunit] = firesat;
-	} // loop for all tuners
-
-	if (firesats[0])
-		AVCRegisterRemoteControl(firesats[0]);
-
-    return 0;
+fail_unlist:
+	spin_lock_irqsave(&firesat_list_lock, flags);
+	list_del(&firesat->list);
+	spin_unlock_irqrestore(&firesat_list_lock, flags);
+fail_free:
+	kfree(firesat);
+	return err;
 }
 
 static int firesat_remove(struct device *dev)
 {
-	struct unit_directory *ud = container_of(dev, struct unit_directory, device);
-	struct firesat **firesats = ud->device.driver_data;
-	int k;
+	struct firesat *firesat = dev->driver_data;
 	unsigned long flags;
 
-	if (firesats) {
-		for (k = 0; k < 2; k++)
-			if (firesats[k]) {
-					firesat_ca_release(firesats[k]);
+	firesat_ca_release(firesat);
+	dvb_unregister_frontend(&firesat->fe);
+	dvb_net_release(&firesat->dvbnet);
+	firesat->demux.dmx.close(&firesat->demux.dmx);
+	firesat->demux.dmx.remove_frontend(&firesat->demux.dmx,
+					   &firesat->frontend);
+	dvb_dmxdev_release(&firesat->dmxdev);
+	dvb_dmx_release(&firesat->demux);
+	dvb_unregister_adapter(&firesat->adapter);
 
-				dvb_unregister_frontend(firesats[k]->fe);
-				dvb_net_release(&firesats[k]->dvbnet);
-				firesats[k]->demux.dmx.close(&firesats[k]->demux.dmx);
-				firesats[k]->demux.dmx.remove_frontend(&firesats[k]->demux.dmx, &firesats[k]->frontend);
-				dvb_dmxdev_release(&firesats[k]->dmxdev);
-				dvb_dmx_release(&firesats[k]->demux);
-				dvb_unregister_adapter(firesats[k]->adapter);
+	spin_lock_irqsave(&firesat_list_lock, flags);
+	list_del(&firesat->list);
+	spin_unlock_irqrestore(&firesat_list_lock, flags);
 
-				spin_lock_irqsave(&firesat_list_lock, flags);
-				list_del(&firesats[k]->list);
-				spin_unlock_irqrestore(&firesat_list_lock, flags);
+	cancel_work_sync(&firesat->remote_ctrl_work);
 
-				cancel_work_sync(&firesats[k]->remote_ctrl_work);
-
-				kfree(firesats[k]->fe);
-				kfree(firesats[k]->adapter);
-				kfree(firesats[k]->respfrm);
-				kfree(firesats[k]);
-			}
-		kfree(firesats);
-	} else
-		printk("%s: can't get firesat handle\n", __func__);
-
-	printk(KERN_INFO "FireSAT: Removing device with vendor id 0x%x, model id 0x%x.\n",ud->vendor_id,ud->model_id);
-
+	kfree(firesat);
 	return 0;
 }
 
 static int firesat_update(struct unit_directory *ud)
 {
-	struct firesat **firesats = ud->device.driver_data;
-	int k;
+	struct firesat *firesat = ud->device.driver_data;
 
-	for (k = 0; k < 2; k++)
-		if (firesats[k] && firesats[k]->isochannel >= 0)
-			try_CMPEstablishPPconnection(firesats[k],
-						     firesats[k]->subunit,
-						     firesats[k]->isochannel);
+	if (firesat->isochannel >= 0)
+		try_CMPEstablishPPconnection(firesat, firesat->subunit,
+					     firesat->isochannel);
 	return 0;
 }
 

@@ -431,7 +431,6 @@ int AVCIdentifySubunit(struct firesat *firesat);
 int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 		char conttone, char nrdiseq,
 		struct dvb_diseqc_master_cmd *diseqcmd);
-int AVCSubUnitInfo(struct firesat *firesat, char *subunitcount);
 void avc_remote_ctrl_work(struct work_struct *work);
 int AVCRegisterRemoteControl(struct firesat *firesat);
 int AVCTuner_Host2Ca(struct firesat *firesat);

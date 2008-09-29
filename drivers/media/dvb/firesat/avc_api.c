@@ -794,42 +794,6 @@ int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 	return 0;
 }
 
-int AVCSubUnitInfo(struct firesat *firesat, char *subunitcount)
-{
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
-
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = STATUS;
-	CmdFrm.sutyp = 0x1f;
-	CmdFrm.suid = 0x7;
-	CmdFrm.opcode = SUBUNIT_Info;
-
-	CmdFrm.operand[0] = 0x07;
-	CmdFrm.operand[1] = 0xff;
-	CmdFrm.operand[2] = 0xff;
-	CmdFrm.operand[3] = 0xff;
-	CmdFrm.operand[4] = 0xff;
-
-	CmdFrm.length = 8;
-
-	if(AVCWrite(firesat,&CmdFrm,&RspFrm) < 0)
-		return -EIO;
-
-	if(RspFrm.resp != STABLE) {
-		printk(KERN_ERR "%s: AVCWrite returned code %d\n",
-		       __func__, RspFrm.resp);
-		return -EINVAL;
-	}
-
-	if(subunitcount)
-		*subunitcount = (RspFrm.operand[1] & 0x7) + 1;
-
-	return 0;
-}
-
 int AVCRegisterRemoteControl(struct firesat *firesat)
 {
 	AVCCmdFrm CmdFrm;

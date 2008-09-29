@@ -206,103 +206,79 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	return k;
 }
 
-int firesat_dvbdev_init(struct firesat *firesat,
-			struct device *dev,
-			struct dvb_frontend *fe)
+int firesat_dvbdev_init(struct firesat *firesat, struct device *dev)
 {
-	int result;
+	int err;
 
-	firesat->adapter = kmalloc(sizeof(*firesat->adapter), GFP_KERNEL);
-	if (!firesat->adapter) {
-		printk(KERN_ERR "firedtv: couldn't allocate memory\n");
-		return -ENOMEM;
-	}
+	err = DVB_REGISTER_ADAPTER(&firesat->adapter,
+				   firedtv_model_names[firesat->type],
+				   THIS_MODULE, dev, adapter_nr);
+	if (err)
+		goto fail_log;
 
-	result = DVB_REGISTER_ADAPTER(firesat->adapter,
-				      firedtv_model_names[firesat->type],
-				      THIS_MODULE, dev, adapter_nr);
-	if (result < 0) {
-		printk(KERN_ERR "firedtv: dvb_register_adapter failed\n");
-		kfree(firesat->adapter);
-		return result;
-	}
+	/*DMX_TS_FILTERING | DMX_SECTION_FILTERING*/
+	firesat->demux.dmx.capabilities = 0;
 
-		memset(&firesat->demux, 0, sizeof(struct dvb_demux));
-		firesat->demux.dmx.capabilities = 0/*DMX_TS_FILTERING | DMX_SECTION_FILTERING*/;
+	firesat->demux.priv		= (void *)firesat;
+	firesat->demux.filternum	= 16;
+	firesat->demux.feednum		= 16;
+	firesat->demux.start_feed	= firesat_start_feed;
+	firesat->demux.stop_feed	= firesat_stop_feed;
+	firesat->demux.write_to_decoder	= NULL;
 
-		firesat->demux.priv		= (void *)firesat;
-		firesat->demux.filternum	= 16;
-		firesat->demux.feednum		= 16;
-		firesat->demux.start_feed	= firesat_start_feed;
-		firesat->demux.stop_feed	= firesat_stop_feed;
-		firesat->demux.write_to_decoder	= NULL;
+	err = dvb_dmx_init(&firesat->demux);
+	if (err)
+		goto fail_unreg_adapter;
 
-		if ((result = dvb_dmx_init(&firesat->demux)) < 0) {
-			printk("%s: dvb_dmx_init failed: error %d\n", __func__,
-				   result);
+	firesat->dmxdev.filternum	= 16;
+	firesat->dmxdev.demux		= &firesat->demux.dmx;
+	firesat->dmxdev.capabilities	= 0;
 
-			dvb_unregister_adapter(firesat->adapter);
+	err = dvb_dmxdev_init(&firesat->dmxdev, &firesat->adapter);
+	if (err)
+		goto fail_dmx_release;
 
-			return result;
-		}
+	firesat->frontend.source = DMX_FRONTEND_0;
 
-		firesat->dmxdev.filternum	= 16;
-		firesat->dmxdev.demux		= &firesat->demux.dmx;
-		firesat->dmxdev.capabilities	= 0;
+	err = firesat->demux.dmx.add_frontend(&firesat->demux.dmx,
+					      &firesat->frontend);
+	if (err)
+		goto fail_dmxdev_release;
 
-		if ((result = dvb_dmxdev_init(&firesat->dmxdev, firesat->adapter)) < 0) {
-			printk("%s: dvb_dmxdev_init failed: error %d\n",
-				   __func__, result);
+	err = firesat->demux.dmx.connect_frontend(&firesat->demux.dmx,
+						  &firesat->frontend);
+	if (err)
+		goto fail_rem_frontend;
 
-			dvb_dmx_release(&firesat->demux);
-			dvb_unregister_adapter(firesat->adapter);
+	dvb_net_init(&firesat->adapter, &firesat->dvbnet, &firesat->demux.dmx);
+	firesat_frontend_init(firesat);
 
-			return result;
-		}
+	firesat->fe.sec_priv = firesat;
+	err = dvb_register_frontend(&firesat->adapter, &firesat->fe);
+	if (err)
+		goto fail_net_release;
 
-		firesat->frontend.source = DMX_FRONTEND_0;
+	err = firesat_ca_register(firesat);
+	if (err)
+		dev_info(dev, "Conditional Access Module not enabled\n");
 
-		if ((result = firesat->demux.dmx.add_frontend(&firesat->demux.dmx,
-							  &firesat->frontend)) < 0) {
-			printk("%s: dvb_dmx_init failed: error %d\n", __func__,
-				   result);
+	return 0;
 
-			dvb_dmxdev_release(&firesat->dmxdev);
-			dvb_dmx_release(&firesat->demux);
-			dvb_unregister_adapter(firesat->adapter);
-
-			return result;
-		}
-
-		if ((result = firesat->demux.dmx.connect_frontend(&firesat->demux.dmx,
-								  &firesat->frontend)) < 0) {
-			printk("%s: dvb_dmx_init failed: error %d\n", __func__,
-				   result);
-
-			firesat->demux.dmx.remove_frontend(&firesat->demux.dmx, &firesat->frontend);
-			dvb_dmxdev_release(&firesat->dmxdev);
-			dvb_dmx_release(&firesat->demux);
-			dvb_unregister_adapter(firesat->adapter);
-
-			return result;
-		}
-
-		dvb_net_init(firesat->adapter, &firesat->dvbnet, &firesat->demux.dmx);
-
-//		fe->ops = firesat_ops;
-//		fe->dvb = firesat->adapter;
-		firesat_frontend_attach(firesat, fe);
-
-		fe->sec_priv = firesat; //IMPORTANT, functions depend on this!!!
-		if ((result= dvb_register_frontend(firesat->adapter, fe)) < 0) {
-			printk("%s: dvb_register_frontend_new failed: error %d\n", __func__, result);
-			/* ### cleanup */
-			return result;
-		}
-
-			firesat_ca_init(firesat);
-
-		return 0;
+fail_net_release:
+	dvb_net_release(&firesat->dvbnet);
+	firesat->demux.dmx.close(&firesat->demux.dmx);
+fail_rem_frontend:
+	firesat->demux.dmx.remove_frontend(&firesat->demux.dmx,
+					   &firesat->frontend);
+fail_dmxdev_release:
+	dvb_dmxdev_release(&firesat->dmxdev);
+fail_dmx_release:
+	dvb_dmx_release(&firesat->demux);
+fail_unreg_adapter:
+	dvb_unregister_adapter(&firesat->adapter);
+fail_log:
+	dev_err(dev, "DVB initialization failed\n");
+	return err;
 }
 
 

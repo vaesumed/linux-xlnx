@@ -25,6 +25,7 @@
 #include <demux.h>
 #include <dmxdev.h>
 #include <dvb_demux.h>
+#include <dvb_frontend.h>
 #include <dvb_net.h>
 #include <dvbdev.h>
 
@@ -134,13 +135,13 @@ struct firesat {
 	struct dvb_demux dvb_demux;
 
 	/* DVB bits */
-	struct dvb_adapter		*adapter;
+	struct dvb_adapter		adapter;
 	struct dmxdev			dmxdev;
 	struct dvb_demux		demux;
 	struct dmx_frontend		frontend;
 	struct dvb_net			dvbnet;
 	struct dvb_frontend_info	*frontend_info;
-	struct dvb_frontend		*fe;
+	struct dvb_frontend		fe;
 
 	struct dvb_device		*cadev;
 	int				ca_last_command;
@@ -162,10 +163,6 @@ struct firesat {
 	} channel[16];
 	struct mutex			demux_mutex;
 
-	/* needed by avc_api */
-	void *respfrm;
-	int resp_length;
-
 	struct unit_directory *ud;
 
 	enum model_type type;
@@ -177,6 +174,10 @@ struct firesat {
 	struct hpsb_iso *iso_handle;
 
 	struct list_head list;
+
+	/* needed by avc_api */
+	int resp_length;
+	u8 respfrm[512];
 };
 
 struct firewireheader {
@@ -222,11 +223,10 @@ struct device;
 /* firesat_dvb.c */
 int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed);
 int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
-int firesat_dvbdev_init(struct firesat *firesat, struct device *dev,
-		struct dvb_frontend *fe);
+int firesat_dvbdev_init(struct firesat *firesat, struct device *dev);
 
 /* firesat_fe.c */
-int firesat_frontend_attach(struct firesat *firesat, struct dvb_frontend *fe);
+void firesat_frontend_init(struct firesat *firesat);
 
 /* firesat_iso.c */
 int setup_iso_channel(struct firesat *firesat);
