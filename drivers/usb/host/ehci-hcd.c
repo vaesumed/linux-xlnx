@@ -1045,6 +1045,12 @@ static int __init ehci_hcd_init(void)
 		return -ENODEV;
 
 	printk(KERN_INFO "%s: " DRIVER_DESC "\n", hcd_name);
+	set_bit(USB_EHCI_LOADED, &usb_hcds_loaded);
+	if (test_bit(USB_UHCI_LOADED, &usb_hcds_loaded) ||
+			test_bit(USB_OHCI_LOADED, &usb_hcds_loaded))
+		printk(KERN_WARNING "Warning! ehci_hcd should always be loaded"
+				" before uhci_hcd and ohci_hcd, not after\n");
+
 	pr_debug("%s: block sizes: qh %Zd qtd %Zd itd %Zd sitd %Zd\n",
 		 hcd_name,
 		 sizeof(struct ehci_qh), sizeof(struct ehci_qtd),
@@ -1052,8 +1058,10 @@ static int __init ehci_hcd_init(void)
 
 #ifdef DEBUG
 	ehci_debug_root = debugfs_create_dir("ehci", NULL);
-	if (!ehci_debug_root)
-		return -ENOENT;
+	if (!ehci_debug_root) {
+		retval = -ENOENT;
+		goto err_debug;
+	}
 #endif
 
 #ifdef PLATFORM_DRIVER
@@ -1101,6 +1109,8 @@ clean0:
 	debugfs_remove(ehci_debug_root);
 	ehci_debug_root = NULL;
 #endif
+err_debug:
+	clear_bit(USB_EHCI_LOADED, &usb_hcds_loaded);
 	return retval;
 }
 module_init(ehci_hcd_init);
@@ -1122,6 +1132,7 @@ static void __exit ehci_hcd_cleanup(void)
 #ifdef DEBUG
 	debugfs_remove(ehci_debug_root);
 #endif
+	clear_bit(USB_EHCI_LOADED, &usb_hcds_loaded);
 }
 module_exit(ehci_hcd_cleanup);
 
