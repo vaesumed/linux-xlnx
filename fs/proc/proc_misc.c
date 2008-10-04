@@ -474,15 +474,6 @@ static const struct file_operations proc_interrupts_operations = {
 	.release	= seq_release,
 };
 
-static int cmdline_read_proc(char *page, char **start, off_t off,
-				 int count, int *eof, void *data)
-{
-	int len;
-
-	len = sprintf(page, "%s\n", saved_command_line);
-	return proc_calc_metrics(page, start, off, count, eof, len);
-}
-
 #ifdef CONFIG_FILE_LOCKING
 static int locks_open(struct inode *inode, struct file *filp)
 {
@@ -643,7 +634,6 @@ void __init proc_misc_init(void)
 		char *name;
 		int (*read_proc)(char*,char**,off_t,int,int*,void*);
 	} *p, simple_ones[] = {
-		{"cmdline",	cmdline_read_proc},
 		{"execdomains",	execdomains_read_proc},
 		{NULL,}
 	};
