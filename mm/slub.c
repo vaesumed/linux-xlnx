@@ -2596,7 +2596,7 @@ static noinline struct kmem_cache *dma_kmalloc_cache(int index, gfp_t flags)
 		goto unlock_out;
 	}
 
-	list_add(&s->list, &slab_caches);
+	list_add_tail(&s->list, &slab_caches);
 	kmalloc_caches_dma[index] = s;
 
 	schedule_work(&sysfs_add_work);
