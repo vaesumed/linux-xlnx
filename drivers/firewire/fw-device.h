@@ -22,7 +22,7 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/rwsem.h>
-#include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <asm/atomic.h>
 
 enum fw_device_state {
@@ -63,9 +63,10 @@ struct fw_device {
 	bool cmc;
 	struct fw_card *card;
 	struct device device;
-	/* to prevent deadlocks, never take this lock with card->lock held */
-	spinlock_t client_list_lock;
+
+	struct mutex client_list_mutex;
 	struct list_head client_list;
+
 	u32 *config_rom;
 	size_t config_rom_length;
 	int config_rom_retries;
