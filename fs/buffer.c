@@ -3335,13 +3335,16 @@ static void trigger_write(struct page *page)
 		.for_reclaim = 0
 	};
 
+	if (PageWriteback(page))
+		goto unlock;
+
 	if (!mapping->a_ops->writepage)
 		/* No write method for the address space */
-		return;
+		goto unlock;
 
 	if (!clear_page_dirty_for_io(page))
 		/* Someone else already triggered a write */
-		return;
+		goto unlock;
 
 	rc = mapping->a_ops->writepage(page, &wbc);
 	if (rc < 0)
@@ -3349,7 +3352,7 @@ static void trigger_write(struct page *page)
 		return;
 
 	if (rc == AOP_WRITEPAGE_ACTIVATE)
-		unlock_page(page);
+unlock:		unlock_page(page);
 }
 
 /*
@@ -3401,7 +3404,7 @@ static void kick_buffers(struct kmem_cache *s, int nr, void **v,
 	for (i = 0; i < nr; i++) {
 		page = v[i];
 
-		if (!page || PageWriteback(page))
+		if (!page)
 			continue;
 
 		if (trylock_page(page)) {
