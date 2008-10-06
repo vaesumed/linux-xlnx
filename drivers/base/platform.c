@@ -500,8 +500,6 @@ int platform_driver_register(struct platform_driver *drv)
 		drv->driver.suspend = platform_drv_suspend;
 	if (drv->resume)
 		drv->driver.resume = platform_drv_resume;
-	if (drv->pm)
-		drv->driver.pm = &drv->pm->base;
 	return driver_register(&drv->driver);
 }
 EXPORT_SYMBOL_GPL(platform_driver_register);
@@ -683,7 +681,10 @@ static int platform_pm_suspend(struct device *dev)
 	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (drv && drv->pm) {
+	if (!drv)
+		return 0;
+
+	if (drv->pm) {
 		if (drv->pm->suspend)
 			ret = drv->pm->suspend(dev);
 	} else {
@@ -695,16 +696,15 @@ static int platform_pm_suspend(struct device *dev)
 
 static int platform_pm_suspend_noirq(struct device *dev)
 {
-	struct platform_driver *pdrv;
+	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (!dev->driver)
+	if (!drv)
 		return 0;
 
-	pdrv = to_platform_driver(dev->driver);
-	if (pdrv->pm) {
-		if (pdrv->pm->suspend_noirq)
-			ret = pdrv->pm->suspend_noirq(dev);
+	if (drv->pm) {
+		if (drv->pm->suspend_noirq)
+			ret = drv->pm->suspend_noirq(dev);
 	} else {
 		ret = platform_legacy_suspend_late(dev, PMSG_SUSPEND);
 	}
@@ -717,7 +717,10 @@ static int platform_pm_resume(struct device *dev)
 	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (drv && drv->pm) {
+	if (!drv)
+		return 0;
+
+	if (drv->pm) {
 		if (drv->pm->resume)
 			ret = drv->pm->resume(dev);
 	} else {
@@ -729,16 +732,15 @@ static int platform_pm_resume(struct device *dev)
 
 static int platform_pm_resume_noirq(struct device *dev)
 {
-	struct platform_driver *pdrv;
+	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (!dev->driver)
+	if (!drv)
 		return 0;
 
-	pdrv = to_platform_driver(dev->driver);
-	if (pdrv->pm) {
-		if (pdrv->pm->resume_noirq)
-			ret = pdrv->pm->resume_noirq(dev);
+	if (drv->pm) {
+		if (drv->pm->resume_noirq)
+			ret = drv->pm->resume_noirq(dev);
 	} else {
 		ret = platform_legacy_resume_early(dev);
 	}
@@ -777,16 +779,15 @@ static int platform_pm_freeze(struct device *dev)
 
 static int platform_pm_freeze_noirq(struct device *dev)
 {
-	struct platform_driver *pdrv;
+	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (!dev->driver)
+	if (!drv)
 		return 0;
 
-	pdrv = to_platform_driver(dev->driver);
-	if (pdrv->pm) {
-		if (pdrv->pm->freeze_noirq)
-			ret = pdrv->pm->freeze_noirq(dev);
+	if (drv->pm) {
+		if (drv->pm->freeze_noirq)
+			ret = drv->pm->freeze_noirq(dev);
 	} else {
 		ret = platform_legacy_suspend_late(dev, PMSG_FREEZE);
 	}
@@ -799,7 +800,10 @@ static int platform_pm_thaw(struct device *dev)
 	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (drv && drv->pm) {
+	if (!drv)
+		return 0;
+
+	if (drv->pm) {
 		if (drv->pm->thaw)
 			ret = drv->pm->thaw(dev);
 	} else {
@@ -811,16 +815,15 @@ static int platform_pm_thaw(struct device *dev)
 
 static int platform_pm_thaw_noirq(struct device *dev)
 {
-	struct platform_driver *pdrv;
+	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (!dev->driver)
+	if (!drv)
 		return 0;
 
-	pdrv = to_platform_driver(dev->driver);
-	if (pdrv->pm) {
-		if (pdrv->pm->thaw_noirq)
-			ret = pdrv->pm->thaw_noirq(dev);
+	if (drv->pm) {
+		if (drv->pm->thaw_noirq)
+			ret = drv->pm->thaw_noirq(dev);
 	} else {
 		ret = platform_legacy_resume_early(dev);
 	}
@@ -833,7 +836,10 @@ static int platform_pm_poweroff(struct device *dev)
 	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (drv && drv->pm) {
+	if (!drv)
+		return 0;
+
+	if (drv->pm) {
 		if (drv->pm->poweroff)
 			ret = drv->pm->poweroff(dev);
 	} else {
@@ -845,16 +851,15 @@ static int platform_pm_poweroff(struct device *dev)
 
 static int platform_pm_poweroff_noirq(struct device *dev)
 {
-	struct platform_driver *pdrv;
+	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (!dev->driver)
+	if (!drv)
 		return 0;
 
-	pdrv = to_platform_driver(dev->driver);
-	if (pdrv->pm) {
-		if (pdrv->pm->poweroff_noirq)
-			ret = pdrv->pm->poweroff_noirq(dev);
+	if (drv->pm) {
+		if (drv->pm->poweroff_noirq)
+			ret = drv->pm->poweroff_noirq(dev);
 	} else {
 		ret = platform_legacy_suspend_late(dev, PMSG_HIBERNATE);
 	}
@@ -867,7 +872,10 @@ static int platform_pm_restore(struct device *dev)
 	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (drv && drv->pm) {
+	if (!drv)
+		return 0;
+
+	if (drv->pm) {
 		if (drv->pm->restore)
 			ret = drv->pm->restore(dev);
 	} else {
@@ -879,16 +887,15 @@ static int platform_pm_restore(struct device *dev)
 
 static int platform_pm_restore_noirq(struct device *dev)
 {
-	struct platform_driver *pdrv;
+	struct device_driver *drv = dev->driver;
 	int ret = 0;
 
-	if (!dev->driver)
+	if (!drv)
 		return 0;
 
-	pdrv = to_platform_driver(dev->driver);
-	if (pdrv->pm) {
-		if (pdrv->pm->restore_noirq)
-			ret = pdrv->pm->restore_noirq(dev);
+	if (drv->pm) {
+		if (drv->pm->restore_noirq)
+			ret = drv->pm->restore_noirq(dev);
 	} else {
 		ret = platform_legacy_resume_early(dev);
 	}
@@ -909,17 +916,15 @@ static int platform_pm_restore_noirq(struct device *dev)
 
 #endif /* !CONFIG_HIBERNATION */
 
-static struct pm_ext_ops platform_pm_ops = {
-	.base = {
-		.prepare = platform_pm_prepare,
-		.complete = platform_pm_complete,
-		.suspend = platform_pm_suspend,
-		.resume = platform_pm_resume,
-		.freeze = platform_pm_freeze,
-		.thaw = platform_pm_thaw,
-		.poweroff = platform_pm_poweroff,
-		.restore = platform_pm_restore,
-	},
+static struct dev_pm_ops platform_dev_pm_ops = {
+	.prepare = platform_pm_prepare,
+	.complete = platform_pm_complete,
+	.suspend = platform_pm_suspend,
+	.resume = platform_pm_resume,
+	.freeze = platform_pm_freeze,
+	.thaw = platform_pm_thaw,
+	.poweroff = platform_pm_poweroff,
+	.restore = platform_pm_restore,
 	.suspend_noirq = platform_pm_suspend_noirq,
 	.resume_noirq = platform_pm_resume_noirq,
 	.freeze_noirq = platform_pm_freeze_noirq,
@@ -928,7 +933,7 @@ static struct pm_ext_ops platform_pm_ops = {
 	.restore_noirq = platform_pm_restore_noirq,
 };
 
-#define PLATFORM_PM_OPS_PTR	&platform_pm_ops
+#define PLATFORM_PM_OPS_PTR	(&platform_dev_pm_ops)
 
 #else /* !CONFIG_PM_SLEEP */
 
