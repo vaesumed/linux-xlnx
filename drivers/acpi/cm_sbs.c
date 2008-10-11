@@ -52,8 +52,7 @@ struct proc_dir_entry *acpi_lock_ac_dir(void)
 	if (acpi_ac_dir) {
 		lock_ac_dir_cnt++;
 	} else {
-		ACPI_DEBUG_PRINT((ACPI_DB_ERROR,
-				  "Cannot create %s\n", ACPI_AC_CLASS));
+		printk(KERN_ERR "Cannot create %s\n", ACPI_AC_CLASS);
 	}
 	mutex_unlock(&cm_sbs_mutex);
 	return acpi_ac_dir;
@@ -83,8 +82,7 @@ struct proc_dir_entry *acpi_lock_battery_dir(void)
 	if (acpi_battery_dir) {
 		lock_battery_dir_cnt++;
 	} else {
-		ACPI_DEBUG_PRINT((ACPI_DB_ERROR,
-				  "Cannot create %s\n", ACPI_BATTERY_CLASS));
+		printk(KERN_ERR "Cannot create %s\n", ACPI_BATTERY_CLASS);
 	}
 	mutex_unlock(&cm_sbs_mutex);
 	return acpi_battery_dir;
