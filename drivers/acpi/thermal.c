@@ -364,6 +364,7 @@ static int acpi_thermal_trips_update(struct acpi_thermal *tz, int flag)
 	if (flag & ACPI_TRIPS_CRITICAL) {
 		status = acpi_evaluate_integer(tz->device->handle,
 				"_CRT", NULL, &tmp);
+		tz->trips.critical.temperature = tmp;
 		/*
 		 * Treat freezing temperatures as invalid as well; some
 		 * BIOSes return really low values and cause reboots at startup.
@@ -377,7 +378,6 @@ static int acpi_thermal_trips_update(struct acpi_thermal *tz, int flag)
 					"No or invalid critical threshold"));
 			return -ENODEV;
 		} else {
-			tz->trips.critical.temperature = tmp;
 			tz->trips.critical.flags.valid = 1;
 			ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 					"Found critical threshold [%lu]\n",
