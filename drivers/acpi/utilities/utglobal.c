@@ -45,6 +45,7 @@
 
 #include <acpi/acpi.h>
 #include <acpi/acnamesp.h>
+#include <acpi/amlcode.h>
 
 ACPI_EXPORT_SYMBOL(acpi_gbl_FADT)
 #define _COMPONENT          ACPI_UTILITIES
@@ -575,6 +576,41 @@ char *acpi_ut_get_descriptor_name(void *object)
 
 }
 
+/*******************************************************************************
+ *
+ * FUNCTION:    acpi_ut_get_reference_name
+ *
+ * PARAMETERS:  Object               - An ACPI reference object
+ *
+ * RETURN:      Pointer to a string
+ *
+ * DESCRIPTION: Decode a reference object sub-type to a string.
+ *
+ ******************************************************************************/
+
+/* Printable names of reference object sub-types */
+
+const char *acpi_ut_get_reference_name(union acpi_operand_object *object)
+{
+
+	switch (object->reference.opcode) {
+	case AML_INT_NAMEPATH_OP:
+		return "Name";
+
+	case AML_LOAD_OP:
+		return "DDB-Handle";
+
+	case AML_REF_OF_OP:
+		return "RefOf";
+
+	case AML_INDEX_OP:
+		return "Index";
+
+	default:
+		return "Unknown";
+	}
+}
+
 #if defined(ACPI_DEBUG_OUTPUT) || defined(ACPI_DEBUGGER)
 /*
  * Strings and procedures used for debug only
@@ -677,14 +713,14 @@ u8 acpi_ut_valid_object_type(acpi_object_type type)
  *
  * PARAMETERS:  None
  *
- * RETURN:      None
+ * RETURN:      Status
  *
  * DESCRIPTION: Init library globals.  All globals that require specific
  *              initialization should be initialized here!
  *
  ******************************************************************************/
 
-void acpi_ut_init_globals(void)
+acpi_status acpi_ut_init_globals(void)
 {
 	acpi_status status;
 	u32 i;
@@ -695,7 +731,7 @@ void acpi_ut_init_globals(void)
 
 	status = acpi_ut_create_caches();
 	if (ACPI_FAILURE(status)) {
-		return;
+		return_ACPI_STATUS(status);
 	}
 
 	/* Mutex locked flags */
@@ -772,7 +808,7 @@ void acpi_ut_init_globals(void)
 	acpi_gbl_display_final_mem_stats = FALSE;
 #endif
 
-	return_VOID;
+	return_ACPI_STATUS(AE_OK);
 }
 
 ACPI_EXPORT_SYMBOL(acpi_dbg_level)
