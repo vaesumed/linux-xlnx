@@ -80,24 +80,6 @@ static void __init setup_per_cpu_maps(void)
 #endif
 }
 
-#ifdef CONFIG_HAVE_CPUMASK_OF_CPU_MAP
-cpumask_t *cpumask_of_cpu_map __read_mostly;
-EXPORT_SYMBOL(cpumask_of_cpu_map);
-
-/* requires nr_cpu_ids to be initialized */
-static void __init setup_cpumask_of_cpu(void)
-{
-	int i;
-
-	/* alloc_bootmem zeroes memory */
-	cpumask_of_cpu_map = alloc_bootmem_low(sizeof(cpumask_t) * nr_cpu_ids);
-	for (i = 0; i < nr_cpu_ids; i++)
-		cpu_set(i, cpumask_of_cpu_map[i]);
-}
-#else
-static inline void setup_cpumask_of_cpu(void) { }
-#endif
-
 #ifdef CONFIG_X86_32
 /*
  * Great future not-so-futuristic plan: make i386 and x86_64 do it
@@ -180,9 +162,16 @@ void __init setup_per_cpu_areas(void)
 			printk(KERN_INFO
 			       "cpu %d has no node %d or node-local memory\n",
 				cpu, node);
+			if (ptr)
+				printk(KERN_DEBUG "per cpu data for cpu%d at %016lx\n",
+					 cpu, __pa(ptr));
 		}
-		else
+		else {
 			ptr = alloc_bootmem_pages_node(NODE_DATA(node), size);
+			if (ptr)
+				printk(KERN_DEBUG "per cpu data for cpu%d on node%d at %016lx\n",
+					 cpu, node, __pa(ptr));
+		}
 #endif
 		per_cpu_offset(cpu) = ptr - __per_cpu_start;
 		memcpy(ptr, __per_cpu_start, __per_cpu_end - __per_cpu_start);
@@ -197,9 +186,6 @@ void __init setup_per_cpu_areas(void)
 
 	/* Setup node to cpumask map */
 	setup_node_to_cpumask_map();
-
-	/* Setup cpumask_of_cpu map */
-	setup_cpumask_of_cpu();
 }
 
 #endif
@@ -227,8 +213,8 @@ static void __init setup_node_to_cpumask_map(void)
 	/* allocate the map */
 	map = alloc_bootmem_low(nr_node_ids * sizeof(cpumask_t));
 
-	Dprintk(KERN_DEBUG "Node to cpumask map at %p for %d nodes\n",
-		map, nr_node_ids);
+	pr_debug(KERN_DEBUG "Node to cpumask map at %p for %d nodes\n",
+		 map, nr_node_ids);
 
 	/* node_to_cpumask() will now work */
 	node_to_cpumask_map = map;
@@ -248,7 +234,7 @@ void __cpuinit numa_set_node(int cpu, int node)
 		per_cpu(x86_cpu_to_node_map, cpu) = node;
 
 	else
-		Dprintk(KERN_INFO "Setting node for non-present cpu %d\n", cpu);
+		pr_debug("Setting node for non-present cpu %d\n", cpu);
 }
 
 void __cpuinit numa_clear_node(int cpu)

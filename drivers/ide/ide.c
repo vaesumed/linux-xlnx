@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1994-1998	    Linus Torvalds & authors (see below)
- *  Copyrifht (C) 2003-2005, 2007   Bartlomiej Zolnierkiewicz
+ *  Copyright (C) 2003-2005, 2007   Bartlomiej Zolnierkiewicz
  */
 
 /*
@@ -44,35 +44,21 @@
  *  inspiration from lots of linux users, esp.  hamish@zot.apana.org.au
  */
 
-#define _IDE_C			/* Tell ide.h it's really us */
-
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
-#include <linux/timer.h>
-#include <linux/mm.h>
 #include <linux/interrupt.h>
 #include <linux/major.h>
 #include <linux/errno.h>
 #include <linux/genhd.h>
-#include <linux/blkpg.h>
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/pci.h>
-#include <linux/delay.h>
 #include <linux/ide.h>
+#include <linux/hdreg.h>
 #include <linux/completion.h>
-#include <linux/reboot.h>
-#include <linux/cdrom.h>
-#include <linux/seq_file.h>
 #include <linux/device.h>
-#include <linux/bitops.h>
-
-#include <asm/byteorder.h>
-#include <asm/irq.h>
-#include <asm/uaccess.h>
-#include <asm/io.h>
 
 
 /* default maximum number of failures */
@@ -90,8 +76,6 @@ DEFINE_MUTEX(ide_cfg_mtx);
 
 __cacheline_aligned_in_smp DEFINE_SPINLOCK(ide_lock);
 EXPORT_SYMBOL(ide_lock);
-
-ide_hwif_t ide_hwifs[MAX_HWIFS];	/* master data repository */
 
 static void ide_port_init_devices_data(ide_hwif_t *);
 
@@ -112,16 +96,12 @@ void ide_init_port_data(ide_hwif_t *hwif, unsigned int index)
 	hwif->name[2]	= 'e';
 	hwif->name[3]	= '0' + index;
 
-	hwif->bus_state	= BUSSTATE_ON;
-
 	init_completion(&hwif->gendev_rel_comp);
 
-	default_hwif_iops(hwif);
-	default_hwif_transport(hwif);
+	hwif->tp_ops = &default_tp_ops;
 
 	ide_port_init_devices_data(hwif);
 }
-EXPORT_SYMBOL_GPL(ide_init_port_data);
 
 static void ide_port_init_devices_data(ide_hwif_t *hwif)
 {
@@ -136,7 +116,7 @@ static void ide_port_init_devices_data(ide_hwif_t *hwif)
 		drive->media			= ide_disk;
 		drive->select.all		= (unit<<4)|0xa0;
 		drive->hwif			= hwif;
-		drive->ready_stat		= READY_STAT;
+		drive->ready_stat		= ATA_DRDY;
 		drive->bad_wstat		= BAD_W_STAT;
 		drive->special.b.recalibrate	= 1;
 		drive->special.b.set_geometry	= 1;
@@ -148,53 +128,6 @@ static void ide_port_init_devices_data(ide_hwif_t *hwif)
 		INIT_LIST_HEAD(&drive->list);
 		init_completion(&drive->gendev_rel_comp);
 	}
-}
-
-static void __init init_ide_data (void)
-{
-	unsigned int index;
-
-	/* Initialise all interface structures */
-	for (index = 0; index < MAX_HWIFS; ++index) {
-		ide_hwif_t *hwif = &ide_hwifs[index];
-
-		ide_init_port_data(hwif, index);
-	}
-}
-
-void ide_remove_port_from_hwgroup(ide_hwif_t *hwif)
-{
-	ide_hwgroup_t *hwgroup = hwif->hwgroup;
-
-	spin_lock_irq(&ide_lock);
-	/*
-	 * Remove us from the hwgroup, and free
-	 * the hwgroup if we were the only member
-	 */
-	if (hwif->next == hwif) {
-		BUG_ON(hwgroup->hwif != hwif);
-		kfree(hwgroup);
-	} else {
-		/* There is another interface in hwgroup.
-		 * Unlink us, and set hwgroup->drive and ->hwif to
-		 * something sane.
-		 */
-		ide_hwif_t *g = hwgroup->hwif;
-
-		while (g->next != hwif)
-			g = g->next;
-		g->next = hwif->next;
-		if (hwgroup->hwif == hwif) {
-			/* Chose a random hwif for hwgroup->hwif.
-			 * It's guaranteed that there are no drives
-			 * left in the hwgroup.
-			 */
-			BUG_ON(hwgroup->drive != NULL);
-			hwgroup->hwif = g;
-		}
-		BUG_ON(hwgroup->hwif == hwif);
-	}
-	spin_unlock_irq(&ide_lock);
 }
 
 /* Called with ide_lock held. */
@@ -297,25 +230,19 @@ void ide_unregister(ide_hwif_t *hwif)
 	if (hwif->dma_base)
 		ide_release_dma_engine(hwif);
 
-	spin_lock_irq(&ide_lock);
-	/* restore hwif data to pristine status */
-	ide_init_port_data(hwif, hwif->index);
-	spin_unlock_irq(&ide_lock);
-
 	mutex_unlock(&ide_cfg_mtx);
 }
-
-EXPORT_SYMBOL(ide_unregister);
 
 void ide_init_port_hw(ide_hwif_t *hwif, hw_regs_t *hw)
 {
 	memcpy(&hwif->io_ports, &hw->io_ports, sizeof(hwif->io_ports));
 	hwif->irq = hw->irq;
 	hwif->chipset = hw->chipset;
-	hwif->gendev.parent = hw->dev;
+	hwif->dev = hw->dev;
+	hwif->gendev.parent = hw->parent ? hw->parent : hw->dev;
 	hwif->ack_intr = hw->ack_intr;
+	hwif->config_data = hw->config;
 }
-EXPORT_SYMBOL_GPL(ide_init_port_hw);
 
 /*
  *	Locks for IDE setting functionality
@@ -323,42 +250,9 @@ EXPORT_SYMBOL_GPL(ide_init_port_hw);
 
 DEFINE_MUTEX(ide_setting_mtx);
 
-EXPORT_SYMBOL_GPL(ide_setting_mtx);
+ide_devset_get(io_32bit, io_32bit);
 
-/**
- *	ide_spin_wait_hwgroup	-	wait for group
- *	@drive: drive in the group
- *
- *	Wait for an IDE device group to go non busy and then return
- *	holding the ide_lock which guards the hwgroup->busy status
- *	and right to use it.
- */
-
-int ide_spin_wait_hwgroup (ide_drive_t *drive)
-{
-	ide_hwgroup_t *hwgroup = HWGROUP(drive);
-	unsigned long timeout = jiffies + (3 * HZ);
-
-	spin_lock_irq(&ide_lock);
-
-	while (hwgroup->busy) {
-		unsigned long lflags;
-		spin_unlock_irq(&ide_lock);
-		local_irq_set(lflags);
-		if (time_after(jiffies, timeout)) {
-			local_irq_restore(lflags);
-			printk(KERN_ERR "%s: channel busy\n", drive->name);
-			return -EBUSY;
-		}
-		local_irq_restore(lflags);
-		spin_lock_irq(&ide_lock);
-	}
-	return 0;
-}
-
-EXPORT_SYMBOL(ide_spin_wait_hwgroup);
-
-int set_io_32bit(ide_drive_t *drive, int arg)
+static int set_io_32bit(ide_drive_t *drive, int arg)
 {
 	if (drive->no_io_32bit)
 		return -EPERM;
@@ -366,52 +260,38 @@ int set_io_32bit(ide_drive_t *drive, int arg)
 	if (arg < 0 || arg > 1 + (SUPPORT_VLB_SYNC << 1))
 		return -EINVAL;
 
-	if (ide_spin_wait_hwgroup(drive))
-		return -EBUSY;
-
 	drive->io_32bit = arg;
-
-	spin_unlock_irq(&ide_lock);
 
 	return 0;
 }
+
+ide_devset_get(ksettings, keep_settings);
 
 static int set_ksettings(ide_drive_t *drive, int arg)
 {
 	if (arg < 0 || arg > 1)
 		return -EINVAL;
 
-	if (ide_spin_wait_hwgroup(drive))
-		return -EBUSY;
 	drive->keep_settings = arg;
-	spin_unlock_irq(&ide_lock);
 
 	return 0;
 }
 
-int set_using_dma(ide_drive_t *drive, int arg)
+ide_devset_get(using_dma, using_dma);
+
+static int set_using_dma(ide_drive_t *drive, int arg)
 {
 #ifdef CONFIG_BLK_DEV_IDEDMA
-	ide_hwif_t *hwif = drive->hwif;
 	int err = -EPERM;
 
 	if (arg < 0 || arg > 1)
 		return -EINVAL;
 
-	if (!drive->id || !(drive->id->capability & 1))
+	if (ata_id_has_dma(drive->id) == 0)
 		goto out;
 
-	if (hwif->dma_ops == NULL)
+	if (drive->hwif->dma_ops == NULL)
 		goto out;
-
-	err = -EBUSY;
-	if (ide_spin_wait_hwgroup(drive))
-		goto out;
-	/*
-	 * set ->busy flag, unlock and let it ride
-	 */
-	hwif->hwgroup->busy = 1;
-	spin_unlock_irq(&ide_lock);
 
 	err = 0;
 
@@ -421,12 +301,6 @@ int set_using_dma(ide_drive_t *drive, int arg)
 	} else
 		ide_dma_off(drive);
 
-	/*
-	 * lock, clear ->busy flag and unlock before leaving
-	 */
-	spin_lock_irq(&ide_lock);
-	hwif->hwgroup->busy = 0;
-	spin_unlock_irq(&ide_lock);
 out:
 	return err;
 #else
@@ -437,7 +311,7 @@ out:
 #endif
 }
 
-int set_pio_mode(ide_drive_t *drive, int arg)
+static int set_pio_mode(ide_drive_t *drive, int arg)
 {
 	struct request *rq;
 	ide_hwif_t *hwif = drive->hwif;
@@ -465,6 +339,8 @@ int set_pio_mode(ide_drive_t *drive, int arg)
 	return 0;
 }
 
+ide_devset_get(unmaskirq, unmask);
+
 static int set_unmaskirq(ide_drive_t *drive, int arg)
 {
 	if (drive->no_unmask)
@@ -473,13 +349,19 @@ static int set_unmaskirq(ide_drive_t *drive, int arg)
 	if (arg < 0 || arg > 1)
 		return -EINVAL;
 
-	if (ide_spin_wait_hwgroup(drive))
-		return -EBUSY;
 	drive->unmask = arg;
-	spin_unlock_irq(&ide_lock);
 
 	return 0;
 }
+
+#define ide_gen_devset_rw(_name, _func) \
+__IDE_DEVSET(_name, DS_SYNC, get_##_func, set_##_func)
+
+ide_gen_devset_rw(io_32bit, io_32bit);
+ide_gen_devset_rw(keepsettings, ksettings);
+ide_gen_devset_rw(unmaskirq, unmaskirq);
+ide_gen_devset_rw(using_dma, using_dma);
+__IDE_DEVSET(pio_mode, 0, NULL, set_pio_mode);
 
 static int generic_ide_suspend(struct device *dev, pm_message_t mesg)
 {
@@ -556,146 +438,52 @@ static int generic_ide_resume(struct device *dev)
 	return err;
 }
 
-int generic_ide_ioctl(ide_drive_t *drive, struct file *file, struct block_device *bdev,
-			unsigned int cmd, unsigned long arg)
+/**
+ * ide_device_get	-	get an additional reference to a ide_drive_t
+ * @drive:	device to get a reference to
+ *
+ * Gets a reference to the ide_drive_t and increments the use count of the
+ * underlying LLDD module.
+ */
+int ide_device_get(ide_drive_t *drive)
 {
-	unsigned long flags;
-	ide_driver_t *drv;
-	void __user *p = (void __user *)arg;
-	int err = 0, (*setfunc)(ide_drive_t *, int);
-	u8 *val;
+	struct device *host_dev;
+	struct module *module;
 
-	switch (cmd) {
-	case HDIO_GET_32BIT:	    val = &drive->io_32bit;	 goto read_val;
-	case HDIO_GET_KEEPSETTINGS: val = &drive->keep_settings; goto read_val;
-	case HDIO_GET_UNMASKINTR:   val = &drive->unmask;	 goto read_val;
-	case HDIO_GET_DMA:	    val = &drive->using_dma;	 goto read_val;
-	case HDIO_SET_32BIT:	    setfunc = set_io_32bit;	 goto set_val;
-	case HDIO_SET_KEEPSETTINGS: setfunc = set_ksettings;	 goto set_val;
-	case HDIO_SET_PIO_MODE:	    setfunc = set_pio_mode;	 goto set_val;
-	case HDIO_SET_UNMASKINTR:   setfunc = set_unmaskirq;	 goto set_val;
-	case HDIO_SET_DMA:	    setfunc = set_using_dma;	 goto set_val;
+	if (!get_device(&drive->gendev))
+		return -ENXIO;
+
+	host_dev = drive->hwif->host->dev[0];
+	module = host_dev ? host_dev->driver->owner : NULL;
+
+	if (module && !try_module_get(module)) {
+		put_device(&drive->gendev);
+		return -ENXIO;
 	}
 
-	switch (cmd) {
-		case HDIO_OBSOLETE_IDENTITY:
-		case HDIO_GET_IDENTITY:
-			if (bdev != bdev->bd_contains)
-				return -EINVAL;
-			if (drive->id_read == 0)
-				return -ENOMSG;
-			if (copy_to_user(p, drive->id, (cmd == HDIO_GET_IDENTITY) ? sizeof(*drive->id) : 142))
-				return -EFAULT;
-			return 0;
-
-		case HDIO_GET_NICE:
-			return put_user(drive->dsc_overlap	<<	IDE_NICE_DSC_OVERLAP	|
-					drive->atapi_overlap	<<	IDE_NICE_ATAPI_OVERLAP	|
-					drive->nice1 << IDE_NICE_1,
-					(long __user *) arg);
-#ifdef CONFIG_IDE_TASK_IOCTL
-		case HDIO_DRIVE_TASKFILE:
-		        if (!capable(CAP_SYS_ADMIN) || !capable(CAP_SYS_RAWIO))
-				return -EACCES;
-			switch(drive->media) {
-				case ide_disk:
-					return ide_taskfile_ioctl(drive, cmd, arg);
-				default:
-					return -ENOMSG;
-			}
-#endif /* CONFIG_IDE_TASK_IOCTL */
-
-		case HDIO_DRIVE_CMD:
-			if (!capable(CAP_SYS_RAWIO))
-				return -EACCES;
-			return ide_cmd_ioctl(drive, cmd, arg);
-
-		case HDIO_DRIVE_TASK:
-			if (!capable(CAP_SYS_RAWIO))
-				return -EACCES;
-			return ide_task_ioctl(drive, cmd, arg);
-		case HDIO_SET_NICE:
-			if (!capable(CAP_SYS_ADMIN)) return -EACCES;
-			if (arg != (arg & ((1 << IDE_NICE_DSC_OVERLAP) | (1 << IDE_NICE_1))))
-				return -EPERM;
-			drive->dsc_overlap = (arg >> IDE_NICE_DSC_OVERLAP) & 1;
-			drv = *(ide_driver_t **)bdev->bd_disk->private_data;
-			if (drive->dsc_overlap && !drv->supports_dsc_overlap) {
-				drive->dsc_overlap = 0;
-				return -EPERM;
-			}
-			drive->nice1 = (arg >> IDE_NICE_1) & 1;
-			return 0;
-		case HDIO_DRIVE_RESET:
-			if (!capable(CAP_SYS_ADMIN))
-				return -EACCES;
-
-			/*
-			 *	Abort the current command on the
-			 *	group if there is one, taking
-			 *	care not to allow anything else
-			 *	to be queued and to die on the
-			 *	spot if we miss one somehow
-			 */
-
-			spin_lock_irqsave(&ide_lock, flags);
-
-			if (HWGROUP(drive)->resetting) {
-				spin_unlock_irqrestore(&ide_lock, flags);
-				return -EBUSY;
-			}
-
-			ide_abort(drive, "drive reset");
-
-			BUG_ON(HWGROUP(drive)->handler);
-
-			/* Ensure nothing gets queued after we
-			   drop the lock. Reset will clear the busy */
-
-			HWGROUP(drive)->busy = 1;
-			spin_unlock_irqrestore(&ide_lock, flags);
-			(void) ide_do_reset(drive);
-
-			return 0;
-		case HDIO_GET_BUSSTATE:
-			if (!capable(CAP_SYS_ADMIN))
-				return -EACCES;
-			if (put_user(HWIF(drive)->bus_state, (long __user *)arg))
-				return -EFAULT;
-			return 0;
-
-		case HDIO_SET_BUSSTATE:
-			if (!capable(CAP_SYS_ADMIN))
-				return -EACCES;
-			return -EOPNOTSUPP;
-		default:
-			return -EINVAL;
-	}
-
-read_val:
-	mutex_lock(&ide_setting_mtx);
-	spin_lock_irqsave(&ide_lock, flags);
-	err = *val;
-	spin_unlock_irqrestore(&ide_lock, flags);
-	mutex_unlock(&ide_setting_mtx);
-	return err >= 0 ? put_user(err, (long __user *)arg) : err;
-
-set_val:
-	if (bdev != bdev->bd_contains)
-		err = -EINVAL;
-	else {
-		if (!capable(CAP_SYS_ADMIN))
-			err = -EACCES;
-		else {
-			mutex_lock(&ide_setting_mtx);
-			err = setfunc(drive, arg);
-			mutex_unlock(&ide_setting_mtx);
-		}
-	}
-	return err;
+	return 0;
 }
+EXPORT_SYMBOL_GPL(ide_device_get);
 
-EXPORT_SYMBOL(generic_ide_ioctl);
+/**
+ * ide_device_put	-	release a reference to a ide_drive_t
+ * @drive:	device to release a reference on
+ *
+ * Release a reference to the ide_drive_t and decrements the use count of
+ * the underlying LLDD module.
+ */
+void ide_device_put(ide_drive_t *drive)
+{
+#ifdef CONFIG_MODULE_UNLOAD
+	struct device *host_dev = drive->hwif->host->dev[0];
+	struct module *module = host_dev ? host_dev->driver->owner : NULL;
+
+	if (module)
+		module_put(module);
+#endif
+	put_device(&drive->gendev);
+}
+EXPORT_SYMBOL_GPL(ide_device_put);
 
 static int ide_bus_match(struct device *dev, struct device_driver *drv)
 {
@@ -742,21 +530,21 @@ static ssize_t model_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
 	ide_drive_t *drive = to_ide_device(dev);
-	return sprintf(buf, "%s\n", drive->id->model);
+	return sprintf(buf, "%s\n", (char *)&drive->id[ATA_ID_PROD]);
 }
 
 static ssize_t firmware_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
 	ide_drive_t *drive = to_ide_device(dev);
-	return sprintf(buf, "%s\n", drive->id->fw_rev);
+	return sprintf(buf, "%s\n", (char *)&drive->id[ATA_ID_FW_REV]);
 }
 
 static ssize_t serial_show(struct device *dev, struct device_attribute *attr,
 			   char *buf)
 {
 	ide_drive_t *drive = to_ide_device(dev);
-	return sprintf(buf, "%s\n", drive->id->serial_no);
+	return sprintf(buf, "%s\n", (char *)&drive->id[ATA_ID_SERNO]);
 }
 
 static struct device_attribute ide_dev_attrs[] = {
@@ -873,7 +661,7 @@ MODULE_PARM_DESC(noprobe, "skip probing for a device");
 static unsigned int ide_nowerr;
 
 module_param_call(nowerr, ide_set_dev_param_mask, NULL, &ide_nowerr, 0);
-MODULE_PARM_DESC(nowerr, "ignore the WRERR_STAT bit for a device");
+MODULE_PARM_DESC(nowerr, "ignore the ATA_DF bit for a device");
 
 static unsigned int ide_cdroms;
 
@@ -938,7 +726,7 @@ static void ide_dev_apply_params(ide_drive_t *drive)
 		drive->noprobe = 1;
 	}
 	if (ide_nowerr & (1 << i)) {
-		printk(KERN_INFO "ide: ignoring the WRERR_STAT bit for %s\n",
+		printk(KERN_INFO "ide: ignoring the ATA_DF bit for %s\n",
 				 drive->name);
 		drive->bad_wstat = BAD_R_STAT;
 	}
@@ -959,7 +747,7 @@ static void ide_dev_apply_params(ide_drive_t *drive)
 				 drive->cyl, drive->head, drive->sect);
 		drive->present = 1;
 		drive->media = ide_disk;
-		drive->ready_stat = READY_STAT;
+		drive->ready_stat = ATA_DRDY;
 	}
 }
 
@@ -1020,8 +808,6 @@ static int __init ide_init(void)
 		ret = PTR_ERR(ide_port_class);
 		goto out_port_class;
 	}
-
-	init_ide_data();
 
 	proc_ide_create();
 

@@ -1,5 +1,14 @@
-#ifndef _ASM_X86_SEGMENT_H_
-#define _ASM_X86_SEGMENT_H_
+#ifndef ASM_X86__SEGMENT_H
+#define ASM_X86__SEGMENT_H
+
+/* Constructor for a conventional segment GDT (or LDT) entry */
+/* This is a macro so it can be used in initializers */
+#define GDT_ENTRY(flags, base, limit)			\
+	((((base)  & 0xff000000ULL) << (56-24)) |	\
+	 (((flags) & 0x0000f0ffULL) << 40) |		\
+	 (((limit) & 0x000f0000ULL) << (48-16)) |	\
+	 (((base)  & 0x00ffffffULL) << 16) |		\
+	 (((limit) & 0x0000ffffULL)))
 
 /* Simple and small GDT entries for booting only */
 
@@ -122,12 +131,6 @@
  * Matching rules for certain types of segments.
  */
 
-/* Matches only __KERNEL_CS, ignoring PnP / USER / APM segments */
-#define SEGMENT_IS_KERNEL_CODE(x) (((x) & 0xfc) == GDT_ENTRY_KERNEL_CS * 8)
-
-/* Matches __KERNEL_CS and __USER_CS (they must be 2 entries apart) */
-#define SEGMENT_IS_FLAT_CODE(x)  (((x) & 0xec) == GDT_ENTRY_KERNEL_CS * 8)
-
 /* Matches PNP_CS32 and PNP_CS16 (they must be consecutive) */
 #define SEGMENT_IS_PNP_CODE(x)   (((x) & 0xf4) == GDT_ENTRY_PNPBIOS_BASE * 8)
 
@@ -203,4 +206,4 @@ extern const char early_idt_handlers[NUM_EXCEPTION_VECTORS][10];
 #endif
 #endif
 
-#endif
+#endif /* ASM_X86__SEGMENT_H */

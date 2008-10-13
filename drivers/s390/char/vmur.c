@@ -345,7 +345,7 @@ static int get_urd_class(struct urdev *urd)
 	cc = diag210(&ur_diag210);
 	switch (cc) {
 	case 0:
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 	case 2:
 		return ur_diag210.vrdcvcla; /* virtual device class */
 	case 3:
@@ -621,7 +621,7 @@ static int verify_device(struct urdev *urd)
 	case DEV_CLASS_UR_I:
 		return verify_uri_device(urd);
 	default:
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 	}
 }
 
@@ -654,7 +654,7 @@ static int get_file_reclen(struct urdev *urd)
 	case DEV_CLASS_UR_I:
 		return get_uri_file_reclen(urd);
 	default:
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 	}
 }
 
@@ -827,7 +827,7 @@ static int ur_probe(struct ccw_device *cdev)
 		goto fail_remove_attr;
 	}
 	if ((urd->class != DEV_CLASS_UR_I) && (urd->class != DEV_CLASS_UR_O)) {
-		rc = -ENOTSUPP;
+		rc = -EOPNOTSUPP;
 		goto fail_remove_attr;
 	}
 	spin_lock_irq(get_ccwdev_lock(cdev));
@@ -886,18 +886,19 @@ static int ur_set_online(struct ccw_device *cdev)
 		goto fail_free_cdev;
 	if (urd->cdev->id.cu_type == READER_PUNCH_DEVTYPE) {
 		if (urd->class == DEV_CLASS_UR_I)
-			sprintf(node_id, "vmrdr-%s", cdev->dev.bus_id);
+			sprintf(node_id, "vmrdr-%s", dev_name(&cdev->dev));
 		if (urd->class == DEV_CLASS_UR_O)
-			sprintf(node_id, "vmpun-%s", cdev->dev.bus_id);
+			sprintf(node_id, "vmpun-%s", dev_name(&cdev->dev));
 	} else if (urd->cdev->id.cu_type == PRINTER_DEVTYPE) {
-		sprintf(node_id, "vmprt-%s", cdev->dev.bus_id);
+		sprintf(node_id, "vmprt-%s", dev_name(&cdev->dev));
 	} else {
-		rc = -ENOTSUPP;
+		rc = -EOPNOTSUPP;
 		goto fail_free_cdev;
 	}
 
-	urd->device = device_create(vmur_class, NULL, urd->char_device->dev,
-					"%s", node_id);
+	urd->device = device_create_drvdata(vmur_class, NULL,
+					    urd->char_device->dev, NULL,
+					    "%s", node_id);
 	if (IS_ERR(urd->device)) {
 		rc = PTR_ERR(urd->device);
 		TRACE("ur_set_online: device_create rc=%d\n", rc);

@@ -1,5 +1,5 @@
-#ifndef __ASM_PARAVIRT_H
-#define __ASM_PARAVIRT_H
+#ifndef ASM_X86__PARAVIRT_H
+#define ASM_X86__PARAVIRT_H
 /* Various instructions on x86 need to be replaced for
  * para-virtualization: those hooks are defined here. */
 
@@ -124,6 +124,9 @@ struct pv_cpu_ops {
 				int entrynum, const void *desc, int size);
 	void (*write_idt_entry)(gate_desc *,
 				int entrynum, const gate_desc *gate);
+	void (*alloc_ldt)(struct desc_struct *ldt, unsigned entries);
+	void (*free_ldt)(struct desc_struct *ldt, unsigned entries);
+
 	void (*load_sp0)(struct tss_struct *tss, struct thread_struct *t);
 
 	void (*set_iopl_mask)(unsigned mask);
@@ -137,6 +140,7 @@ struct pv_cpu_ops {
 
 	/* MSR, PMC and TSR operations.
 	   err = 0/-EFAULT.  wrmsr returns 0/-EFAULT. */
+	u64 (*read_msr_amd)(unsigned int msr, int *err);
 	u64 (*read_msr)(unsigned int msr, int *err);
 	int (*write_msr)(unsigned int msr, unsigned low, unsigned high);
 
@@ -200,13 +204,6 @@ struct pv_irq_ops {
 
 struct pv_apic_ops {
 #ifdef CONFIG_X86_LOCAL_APIC
-	/*
-	 * Direct APIC operations, principally for VMI.  Ideally
-	 * these shouldn't be in this interface.
-	 */
-	void (*apic_write)(unsigned long reg, u32 v);
-	void (*apic_write_atomic)(unsigned long reg, u32 v);
-	u32 (*apic_read)(unsigned long reg);
 	void (*setup_boot_clock)(void);
 	void (*setup_secondary_clock)(void);
 
@@ -258,13 +255,13 @@ struct pv_mmu_ops {
 	 * Hooks for allocating/releasing pagetable pages when they're
 	 * attached to a pagetable
 	 */
-	void (*alloc_pte)(struct mm_struct *mm, u32 pfn);
-	void (*alloc_pmd)(struct mm_struct *mm, u32 pfn);
-	void (*alloc_pmd_clone)(u32 pfn, u32 clonepfn, u32 start, u32 count);
-	void (*alloc_pud)(struct mm_struct *mm, u32 pfn);
-	void (*release_pte)(u32 pfn);
-	void (*release_pmd)(u32 pfn);
-	void (*release_pud)(u32 pfn);
+	void (*alloc_pte)(struct mm_struct *mm, unsigned long pfn);
+	void (*alloc_pmd)(struct mm_struct *mm, unsigned long pfn);
+	void (*alloc_pmd_clone)(unsigned long pfn, unsigned long clonepfn, unsigned long start, unsigned long count);
+	void (*alloc_pud)(struct mm_struct *mm, unsigned long pfn);
+	void (*release_pte)(unsigned long pfn);
+	void (*release_pmd)(unsigned long pfn);
+	void (*release_pud)(unsigned long pfn);
 
 	/* Pagetable manipulation functions */
 	void (*set_pte)(pte_t *ptep, pte_t pteval);
@@ -326,6 +323,16 @@ struct pv_mmu_ops {
 			   unsigned long phys, pgprot_t flags);
 };
 
+struct raw_spinlock;
+struct pv_lock_ops {
+	int (*spin_is_locked)(struct raw_spinlock *lock);
+	int (*spin_is_contended)(struct raw_spinlock *lock);
+	void (*spin_lock)(struct raw_spinlock *lock);
+	void (*spin_lock_flags)(struct raw_spinlock *lock, unsigned long flags);
+	int (*spin_trylock)(struct raw_spinlock *lock);
+	void (*spin_unlock)(struct raw_spinlock *lock);
+};
+
 /* This contains all the paravirt structures: we get a convenient
  * number for each function using the offset which we use to indicate
  * what to patch. */
@@ -336,6 +343,7 @@ struct paravirt_patch_template {
 	struct pv_irq_ops pv_irq_ops;
 	struct pv_apic_ops pv_apic_ops;
 	struct pv_mmu_ops pv_mmu_ops;
+	struct pv_lock_ops pv_lock_ops;
 };
 
 extern struct pv_info pv_info;
@@ -345,6 +353,7 @@ extern struct pv_cpu_ops pv_cpu_ops;
 extern struct pv_irq_ops pv_irq_ops;
 extern struct pv_apic_ops pv_apic_ops;
 extern struct pv_mmu_ops pv_mmu_ops;
+extern struct pv_lock_ops pv_lock_ops;
 
 #define PARAVIRT_PATCH(x)					\
 	(offsetof(struct paravirt_patch_template, x) / sizeof(void *))
@@ -716,6 +725,10 @@ static inline u64 paravirt_read_msr(unsigned msr, int *err)
 {
 	return PVOP_CALL2(u64, pv_cpu_ops.read_msr, msr, err);
 }
+static inline u64 paravirt_read_msr_amd(unsigned msr, int *err)
+{
+	return PVOP_CALL2(u64, pv_cpu_ops.read_msr_amd, msr, err);
+}
 static inline int paravirt_write_msr(unsigned msr, unsigned low, unsigned high)
 {
 	return PVOP_CALL3(int, pv_cpu_ops.write_msr, msr, low, high);
@@ -759,6 +772,13 @@ static inline int rdmsrl_safe(unsigned msr, unsigned long long *p)
 	int err;
 
 	*p = paravirt_read_msr(msr, &err);
+	return err;
+}
+static inline int rdmsrl_amd_safe(unsigned msr, unsigned long long *p)
+{
+	int err;
+
+	*p = paravirt_read_msr_amd(msr, &err);
 	return err;
 }
 
@@ -813,6 +833,16 @@ do {							\
 	val = paravirt_rdtscp(&__aux);			\
 	(aux) = __aux;					\
 } while (0)
+
+static inline void paravirt_alloc_ldt(struct desc_struct *ldt, unsigned entries)
+{
+	PVOP_VCALL2(pv_cpu_ops.alloc_ldt, ldt, entries);
+}
+
+static inline void paravirt_free_ldt(struct desc_struct *ldt, unsigned entries)
+{
+	PVOP_VCALL2(pv_cpu_ops.free_ldt, ldt, entries);
+}
 
 static inline void load_TR_desc(void)
 {
@@ -888,24 +918,6 @@ static inline void slow_down_io(void)
 }
 
 #ifdef CONFIG_X86_LOCAL_APIC
-/*
- * Basic functions accessing APICs.
- */
-static inline void apic_write(unsigned long reg, u32 v)
-{
-	PVOP_VCALL2(pv_apic_ops.apic_write, reg, v);
-}
-
-static inline void apic_write_atomic(unsigned long reg, u32 v)
-{
-	PVOP_VCALL2(pv_apic_ops.apic_write_atomic, reg, v);
-}
-
-static inline u32 apic_read(unsigned long reg)
-{
-	return PVOP_CALL1(unsigned long, pv_apic_ops.apic_read, reg);
-}
-
 static inline void setup_boot_clock(void)
 {
 	PVOP_VCALL0(pv_apic_ops.setup_boot_clock);
@@ -988,35 +1000,35 @@ static inline void paravirt_pgd_free(struct mm_struct *mm, pgd_t *pgd)
 	PVOP_VCALL2(pv_mmu_ops.pgd_free, mm, pgd);
 }
 
-static inline void paravirt_alloc_pte(struct mm_struct *mm, unsigned pfn)
+static inline void paravirt_alloc_pte(struct mm_struct *mm, unsigned long pfn)
 {
 	PVOP_VCALL2(pv_mmu_ops.alloc_pte, mm, pfn);
 }
-static inline void paravirt_release_pte(unsigned pfn)
+static inline void paravirt_release_pte(unsigned long pfn)
 {
 	PVOP_VCALL1(pv_mmu_ops.release_pte, pfn);
 }
 
-static inline void paravirt_alloc_pmd(struct mm_struct *mm, unsigned pfn)
+static inline void paravirt_alloc_pmd(struct mm_struct *mm, unsigned long pfn)
 {
 	PVOP_VCALL2(pv_mmu_ops.alloc_pmd, mm, pfn);
 }
 
-static inline void paravirt_alloc_pmd_clone(unsigned pfn, unsigned clonepfn,
-					    unsigned start, unsigned count)
+static inline void paravirt_alloc_pmd_clone(unsigned long pfn, unsigned long clonepfn,
+					    unsigned long start, unsigned long count)
 {
 	PVOP_VCALL4(pv_mmu_ops.alloc_pmd_clone, pfn, clonepfn, start, count);
 }
-static inline void paravirt_release_pmd(unsigned pfn)
+static inline void paravirt_release_pmd(unsigned long pfn)
 {
 	PVOP_VCALL1(pv_mmu_ops.release_pmd, pfn);
 }
 
-static inline void paravirt_alloc_pud(struct mm_struct *mm, unsigned pfn)
+static inline void paravirt_alloc_pud(struct mm_struct *mm, unsigned long pfn)
 {
 	PVOP_VCALL2(pv_mmu_ops.alloc_pud, mm, pfn);
 }
-static inline void paravirt_release_pud(unsigned pfn)
+static inline void paravirt_release_pud(unsigned long pfn)
 {
 	PVOP_VCALL1(pv_mmu_ops.release_pud, pfn);
 }
@@ -1083,6 +1095,9 @@ static inline pteval_t pte_flags(pte_t pte)
 		ret = PVOP_CALL1(pteval_t, pv_mmu_ops.pte_flags,
 				 pte.pte);
 
+#ifdef CONFIG_PARAVIRT_DEBUG
+	BUG_ON(ret & PTE_PFN_MASK);
+#endif
 	return ret;
 }
 
@@ -1374,6 +1389,43 @@ static inline void __set_fixmap(unsigned /* enum fixed_addresses */ idx,
 void _paravirt_nop(void);
 #define paravirt_nop	((void *)_paravirt_nop)
 
+void paravirt_use_bytelocks(void);
+
+#ifdef CONFIG_SMP
+
+static inline int __raw_spin_is_locked(struct raw_spinlock *lock)
+{
+	return PVOP_CALL1(int, pv_lock_ops.spin_is_locked, lock);
+}
+
+static inline int __raw_spin_is_contended(struct raw_spinlock *lock)
+{
+	return PVOP_CALL1(int, pv_lock_ops.spin_is_contended, lock);
+}
+
+static __always_inline void __raw_spin_lock(struct raw_spinlock *lock)
+{
+	PVOP_VCALL1(pv_lock_ops.spin_lock, lock);
+}
+
+static __always_inline void __raw_spin_lock_flags(struct raw_spinlock *lock,
+						  unsigned long flags)
+{
+	PVOP_VCALL2(pv_lock_ops.spin_lock_flags, lock, flags);
+}
+
+static __always_inline int __raw_spin_trylock(struct raw_spinlock *lock)
+{
+	return PVOP_CALL1(int, pv_lock_ops.spin_trylock, lock);
+}
+
+static __always_inline void __raw_spin_unlock(struct raw_spinlock *lock)
+{
+	PVOP_VCALL1(pv_lock_ops.spin_unlock, lock);
+}
+
+#endif
+
 /* These all sit in the .parainstructions section to tell us what to patch. */
 struct paravirt_patch_site {
 	u8 *instr; 		/* original instructions */
@@ -1396,8 +1448,8 @@ extern struct paravirt_patch_site __parainstructions[],
  * caller saved registers but the argument parameter */
 #define PV_SAVE_REGS "pushq %%rdi;"
 #define PV_RESTORE_REGS "popq %%rdi;"
-#define PV_EXTRA_CLOBBERS EXTRA_CLOBBERS, "rcx" , "rdx"
-#define PV_VEXTRA_CLOBBERS EXTRA_CLOBBERS, "rdi", "rcx" , "rdx"
+#define PV_EXTRA_CLOBBERS EXTRA_CLOBBERS, "rcx" , "rdx", "rsi"
+#define PV_VEXTRA_CLOBBERS EXTRA_CLOBBERS, "rdi", "rcx" , "rdx", "rsi"
 #define PV_FLAGS_ARG "D"
 #endif
 
@@ -1458,6 +1510,7 @@ static inline unsigned long __raw_local_irq_save(void)
 	return f;
 }
 
+
 /* Make sure as little as possible of this mess escapes. */
 #undef PARAVIRT_CALL
 #undef __PVOP_CALL
@@ -1489,8 +1542,26 @@ static inline unsigned long __raw_local_irq_save(void)
 
 
 #ifdef CONFIG_X86_64
-#define PV_SAVE_REGS   pushq %rax; pushq %rdi; pushq %rcx; pushq %rdx
-#define PV_RESTORE_REGS popq %rdx; popq %rcx; popq %rdi; popq %rax
+#define PV_SAVE_REGS				\
+	push %rax;				\
+	push %rcx;				\
+	push %rdx;				\
+	push %rsi;				\
+	push %rdi;				\
+	push %r8;				\
+	push %r9;				\
+	push %r10;				\
+	push %r11
+#define PV_RESTORE_REGS				\
+	pop %r11;				\
+	pop %r10;				\
+	pop %r9;				\
+	pop %r8;				\
+	pop %rdi;				\
+	pop %rsi;				\
+	pop %rdx;				\
+	pop %rcx;				\
+	pop %rax
 #define PARA_PATCH(struct, off)        ((PARAVIRT_PATCH_##struct + (off)) / 8)
 #define PARA_SITE(ptype, clobbers, ops) _PVSITE(ptype, clobbers, ops, .quad, 8)
 #define PARA_INDIRECT(addr)	*addr(%rip)
@@ -1576,4 +1647,4 @@ static inline unsigned long __raw_local_irq_save(void)
 
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_PARAVIRT */
-#endif	/* __ASM_PARAVIRT_H */
+#endif /* ASM_X86__PARAVIRT_H */

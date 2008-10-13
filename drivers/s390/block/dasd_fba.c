@@ -139,7 +139,8 @@ dasd_fba_check_characteristics(struct dasd_device *device)
 	if (IS_ERR(block)) {
 		DEV_MESSAGE(KERN_WARNING, device, "%s",
 			    "could not allocate dasd block structure");
-		kfree(device->private);
+		device->private = NULL;
+		kfree(private);
 		return PTR_ERR(block);
 	}
 	device->block = block;
@@ -152,6 +153,10 @@ dasd_fba_check_characteristics(struct dasd_device *device)
 		DEV_MESSAGE(KERN_WARNING, device,
 			    "Read device characteristics returned error %d",
 			    rc);
+		device->block = NULL;
+		dasd_free_block(block);
+		device->private = NULL;
+		kfree(private);
 		return rc;
 	}
 
@@ -446,13 +451,13 @@ dasd_fba_dump_sense(struct dasd_device *device, struct dasd_ccw_req * req,
 	}
 	len = sprintf(page, KERN_ERR PRINTK_HEADER
 		      " I/O status report for device %s:\n",
-		      device->cdev->dev.bus_id);
+		      dev_name(&device->cdev->dev));
 	len += sprintf(page + len, KERN_ERR PRINTK_HEADER
 		       " in req: %p CS: 0x%02X DS: 0x%02X\n", req,
 		       irb->scsw.cmd.cstat, irb->scsw.cmd.dstat);
 	len += sprintf(page + len, KERN_ERR PRINTK_HEADER
 		       " device %s: Failing CCW: %p\n",
-		       device->cdev->dev.bus_id,
+		       dev_name(&device->cdev->dev),
 		       (void *) (addr_t) irb->scsw.cmd.cpa);
 	if (irb->esw.esw0.erw.cons) {
 		for (sl = 0; sl < 4; sl++) {

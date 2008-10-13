@@ -7,6 +7,12 @@
 #include <linux/module.h>
 #include <linux/pm.h>
 #include <linux/clockchips.h>
+#include <asm/system.h>
+
+unsigned long idle_halt;
+EXPORT_SYMBOL(idle_halt);
+unsigned long idle_nomwait;
+EXPORT_SYMBOL(idle_nomwait);
 
 struct kmem_cache *task_xstate_cachep;
 
@@ -178,7 +184,8 @@ static void mwait_idle(void)
 static void poll_idle(void)
 {
 	local_irq_enable();
-	cpu_relax();
+	while (!need_resched())
+		cpu_relax();
 }
 
 /*
@@ -193,6 +200,7 @@ static void poll_idle(void)
  *
  * idle=mwait overrides this decision and forces the usage of mwait.
  */
+static int __cpuinitdata force_mwait;
 
 #define MWAIT_INFO			0x05
 #define MWAIT_ECX_EXTENDED_INFO		0x01
@@ -238,6 +246,14 @@ static int __cpuinit check_c1e_idle(const struct cpuinfo_x86 *c)
 	return 1;
 }
 
+static cpumask_t c1e_mask = CPU_MASK_NONE;
+static int c1e_detected;
+
+void c1e_remove_cpu(int cpu)
+{
+	cpu_clear(cpu, c1e_mask);
+}
+
 /*
  * C1E aware idle routine. We check for C1E active in the interrupt
  * pending message MSR. If we detect C1E, then we handle it the same
@@ -245,9 +261,6 @@ static int __cpuinit check_c1e_idle(const struct cpuinfo_x86 *c)
  */
 static void c1e_idle(void)
 {
-	static cpumask_t c1e_mask = CPU_MASK_NONE;
-	static int c1e_detected;
-
 	if (need_resched())
 		return;
 
@@ -257,8 +270,10 @@ static void c1e_idle(void)
 		rdmsr(MSR_K8_INT_PENDING_MSG, lo, hi);
 		if (lo & K8_INTP_C1E_ACTIVE_MASK) {
 			c1e_detected = 1;
-			mark_tsc_unstable("TSC halt in C1E");
-			printk(KERN_INFO "System has C1E enabled\n");
+			if (!boot_cpu_has(X86_FEATURE_CONSTANT_TSC))
+				mark_tsc_unstable("TSC halt in AMD C1E");
+			printk(KERN_INFO "System has AMD C1E enabled\n");
+			set_cpu_cap(&boot_cpu_data, X86_FEATURE_AMDC1E);
 		}
 	}
 
@@ -320,12 +335,35 @@ void __cpuinit select_idle_routine(const struct cpuinfo_x86 *c)
 
 static int __init idle_setup(char *str)
 {
+	if (!str)
+		return -EINVAL;
+
 	if (!strcmp(str, "poll")) {
 		printk("using polling idle threads.\n");
 		pm_idle = poll_idle;
 	} else if (!strcmp(str, "mwait"))
 		force_mwait = 1;
-	else
+	else if (!strcmp(str, "halt")) {
+		/*
+		 * When the boot option of idle=halt is added, halt is
+		 * forced to be used for CPU idle. In such case CPU C2/C3
+		 * won't be used again.
+		 * To continue to load the CPU idle driver, don't touch
+		 * the boot_option_idle_override.
+		 */
+		pm_idle = default_idle;
+		idle_halt = 1;
+		return 0;
+	} else if (!strcmp(str, "nomwait")) {
+		/*
+		 * If the boot option of "idle=nomwait" is added,
+		 * it means that mwait will be disabled for CPU C2/C3
+		 * states. In such case it won't touch the variable
+		 * of boot_option_idle_override.
+		 */
+		idle_nomwait = 1;
+		return 0;
+	} else
 		return -1;
 
 	boot_option_idle_override = 1;

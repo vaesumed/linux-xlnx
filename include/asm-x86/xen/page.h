@@ -1,5 +1,5 @@
-#ifndef __XEN_PAGE_H
-#define __XEN_PAGE_H
+#ifndef ASM_X86__XEN__PAGE_H
+#define ASM_X86__XEN__PAGE_H
 
 #include <linux/pfn.h>
 
@@ -124,7 +124,7 @@ static inline unsigned long mfn_to_local_pfn(unsigned long mfn)
 
 static inline unsigned long pte_mfn(pte_t pte)
 {
-	return (pte.pte & PTE_MASK) >> PAGE_SHIFT;
+	return (pte.pte & PTE_PFN_MASK) >> PAGE_SHIFT;
 }
 
 static inline pte_t mfn_pte(unsigned long page_nr, pgprot_t pgprot)
@@ -148,14 +148,18 @@ static inline pte_t __pte_ma(pteval_t x)
 }
 
 #define pmd_val_ma(v) ((v).pmd)
+#ifdef __PAGETABLE_PUD_FOLDED
 #define pud_val_ma(v) ((v).pgd.pgd)
+#else
+#define pud_val_ma(v) ((v).pud)
+#endif
 #define __pmd_ma(x)	((pmd_t) { (x) } )
 
 #define pgd_val_ma(x)	((x).pgd)
 
 
-xmaddr_t arbitrary_virt_to_machine(unsigned long address);
+xmaddr_t arbitrary_virt_to_machine(void *address);
 void make_lowmem_page_readonly(void *vaddr);
 void make_lowmem_page_readwrite(void *vaddr);
 
-#endif /* __XEN_PAGE_H */
+#endif /* ASM_X86__XEN__PAGE_H */

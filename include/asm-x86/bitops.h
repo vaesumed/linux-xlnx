@@ -1,5 +1,5 @@
-#ifndef _ASM_X86_BITOPS_H
-#define _ASM_X86_BITOPS_H
+#ifndef ASM_X86__BITOPS_H
+#define ASM_X86__BITOPS_H
 
 /*
  * Copyright 1992, Linus Torvalds.
@@ -356,7 +356,7 @@ static inline unsigned long ffz(unsigned long word)
  * __fls: find last set bit in word
  * @word: The word to search
  *
- * Undefined if no zero exists, so code should check against ~0UL first.
+ * Undefined if no set bit exists, so code should check against 0 first.
  */
 static inline unsigned long __fls(unsigned long word)
 {
@@ -424,16 +424,6 @@ static inline int fls(int x)
 
 #undef ADDR
 
-static inline void set_bit_string(unsigned long *bitmap,
-		unsigned long i, int len)
-{
-	unsigned long end = i + len;
-	while (i < end) {
-		__set_bit(i, bitmap);
-		i++;
-	}
-}
-
 #ifdef __KERNEL__
 
 #include <asm-generic/bitops/sched.h>
@@ -458,4 +448,4 @@ static inline void set_bit_string(unsigned long *bitmap,
 #include <asm-generic/bitops/minix.h>
 
 #endif /* __KERNEL__ */
-#endif	/* _ASM_X86_BITOPS_H */
+#endif /* ASM_X86__BITOPS_H */

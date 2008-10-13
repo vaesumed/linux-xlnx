@@ -13,12 +13,13 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/blkdev.h>
-#include <linux/hdreg.h>
 #include <linux/pci.h>
 #include <linux/init.h>
 #include <linux/ide.h>
 
 #include <asm/io.h>
+
+#define DRV_NAME "pdc202xx_old"
 
 #define PDC202XX_DEBUG_DRIVE_INFO	0
 
@@ -84,7 +85,7 @@ static void pdc202xx_set_mode(ide_drive_t *drive, const u8 speed)
 		 * Prefetch_EN / IORDY_EN / PA[3:0] bits of register A
 		 */
 		AP &= ~0x3f;
-		if (drive->id->capability & 4)
+		if (ata_id_iordy_disable(drive->id))
 			AP |= 0x20;	/* set IORDY_EN bit */
 		if (drive->media == ide_disk)
 			AP |= 0x10;	/* set Prefetch_EN bit */
@@ -115,7 +116,7 @@ static void pdc202xx_set_pio_mode(ide_drive_t *drive, const u8 pio)
 	pdc202xx_set_mode(drive, XFER_PIO_0 + pio);
 }
 
-static u8 __devinit pdc2026x_cable_detect(ide_hwif_t *hwif)
+static u8 pdc2026x_cable_detect(ide_hwif_t *hwif)
 {
 	struct pci_dev *dev = to_pci_dev(hwif->dev);
 	u16 CIS, mask = hwif->channel ? (1 << 11) : (1 << 10);
@@ -152,10 +153,10 @@ static void pdc_old_disable_66MHz_clock(ide_hwif_t *hwif)
 
 static void pdc202xx_quirkproc(ide_drive_t *drive)
 {
-	const char **list, *model = drive->id->model;
+	const char **list, *m = (char *)&drive->id[ATA_ID_PROD];
 
 	for (list = pdc_quirk_drives; *list != NULL; list++)
-		if (strstr(model, *list) != NULL) {
+		if (strstr(m, *list) != NULL) {
 			drive->quirk_list = 2;
 			return;
 		}
@@ -206,7 +207,7 @@ static int pdc202xx_dma_test_irq(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif	= HWIF(drive);
 	unsigned long high_16	= hwif->extra_base - 16;
-	u8 dma_stat		= inb(hwif->dma_status);
+	u8 dma_stat		= inb(hwif->dma_base + ATA_DMA_STATUS);
 	u8 sc1d			= inb(high_16 + 0x001d);
 
 	if (hwif->channel) {
@@ -263,8 +264,7 @@ static void pdc202xx_dma_timeout(ide_drive_t *drive)
 	ide_dma_timeout(drive);
 }
 
-static unsigned int __devinit init_chipset_pdc202xx(struct pci_dev *dev,
-						    const char *name)
+static unsigned int init_chipset_pdc202xx(struct pci_dev *dev)
 {
 	unsigned long dmabase = pci_resource_start(dev, 4);
 	u8 udma_speed_flag = 0, primary_mode = 0, secondary_mode = 0;
@@ -304,15 +304,14 @@ static void __devinit pdc202ata4_fixup_irq(struct pci_dev *dev,
 		if (irq != irq2) {
 			pci_write_config_byte(dev,
 				(PCI_INTERRUPT_LINE)|0x80, irq);     /* 0xbc */
-			printk(KERN_INFO "%s: PCI config space interrupt "
-					 "mirror fixed\n", name);
+			printk(KERN_INFO "%s %s: PCI config space interrupt "
+				"mirror fixed\n", name, pci_name(dev));
 		}
 	}
 }
 
 #define IDE_HFLAGS_PDC202XX \
 	(IDE_HFLAG_ERROR_STOPS_FIFO | \
-	 IDE_HFLAG_ABUSE_SET_DMA_MODE | \
 	 IDE_HFLAG_OFF_BOARD)
 
 static const struct ide_port_ops pdc20246_port_ops = {
@@ -351,9 +350,9 @@ static const struct ide_dma_ops pdc2026x_dma_ops = {
 	.dma_timeout		= pdc202xx_dma_timeout,
 };
 
-#define DECLARE_PDC2026X_DEV(name_str, udma, extra_flags) \
+#define DECLARE_PDC2026X_DEV(udma, extra_flags) \
 	{ \
-		.name		= name_str, \
+		.name		= DRV_NAME, \
 		.init_chipset	= init_chipset_pdc202xx, \
 		.port_ops	= &pdc2026x_port_ops, \
 		.dma_ops	= &pdc2026x_dma_ops, \
@@ -364,8 +363,8 @@ static const struct ide_dma_ops pdc2026x_dma_ops = {
 	}
 
 static const struct ide_port_info pdc202xx_chipsets[] __devinitdata = {
-	{	/* 0 */
-		.name		= "PDC20246",
+	{	/* 0: PDC20246 */
+		.name		= DRV_NAME,
 		.init_chipset	= init_chipset_pdc202xx,
 		.port_ops	= &pdc20246_port_ops,
 		.dma_ops	= &pdc20246_dma_ops,
@@ -375,10 +374,10 @@ static const struct ide_port_info pdc202xx_chipsets[] __devinitdata = {
 		.udma_mask	= ATA_UDMA2,
 	},
 
-	/* 1 */ DECLARE_PDC2026X_DEV("PDC20262", ATA_UDMA4, 0),
-	/* 2 */ DECLARE_PDC2026X_DEV("PDC20263", ATA_UDMA4, 0),
-	/* 3 */ DECLARE_PDC2026X_DEV("PDC20265", ATA_UDMA5, IDE_HFLAG_RQSIZE_256),
-	/* 4 */ DECLARE_PDC2026X_DEV("PDC20267", ATA_UDMA5, IDE_HFLAG_RQSIZE_256),
+	/* 1: PDC2026{2,3} */
+	DECLARE_PDC2026X_DEV(ATA_UDMA4, 0),
+	/* 2: PDC2026{5,7} */
+	DECLARE_PDC2026X_DEV(ATA_UDMA5, IDE_HFLAG_RQSIZE_256),
 };
 
 /**
@@ -397,31 +396,32 @@ static int __devinit pdc202xx_init_one(struct pci_dev *dev, const struct pci_dev
 
 	d = &pdc202xx_chipsets[idx];
 
-	if (idx < 3)
+	if (idx < 2)
 		pdc202ata4_fixup_irq(dev, d->name);
 
-	if (idx == 3) {
+	if (dev->vendor == PCI_DEVICE_ID_PROMISE_20265) {
 		struct pci_dev *bridge = dev->bus->self;
 
 		if (bridge &&
 		    bridge->vendor == PCI_VENDOR_ID_INTEL &&
 		    (bridge->device == PCI_DEVICE_ID_INTEL_I960 ||
 		     bridge->device == PCI_DEVICE_ID_INTEL_I960RM)) {
-			printk(KERN_INFO "ide: Skipping Promise PDC20265 "
-				"attached to I2O RAID controller\n");
+			printk(KERN_INFO DRV_NAME " %s: skipping Promise "
+				"PDC20265 attached to I2O RAID controller\n",
+				pci_name(dev));
 			return -ENODEV;
 		}
 	}
 
-	return ide_setup_pci_device(dev, d);
+	return ide_pci_init_one(dev, d, NULL);
 }
 
 static const struct pci_device_id pdc202xx_pci_tbl[] = {
 	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20246), 0 },
 	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20262), 1 },
-	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20263), 2 },
-	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20265), 3 },
-	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20267), 4 },
+	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20263), 1 },
+	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20265), 2 },
+	{ PCI_VDEVICE(PROMISE, PCI_DEVICE_ID_PROMISE_20267), 2 },
 	{ 0, },
 };
 MODULE_DEVICE_TABLE(pci, pdc202xx_pci_tbl);
@@ -430,6 +430,9 @@ static struct pci_driver driver = {
 	.name		= "Promise_Old_IDE",
 	.id_table	= pdc202xx_pci_tbl,
 	.probe		= pdc202xx_init_one,
+	.remove		= ide_pci_remove,
+	.suspend	= ide_pci_suspend,
+	.resume		= ide_pci_resume,
 };
 
 static int __init pdc202xx_ide_init(void)
@@ -437,7 +440,13 @@ static int __init pdc202xx_ide_init(void)
 	return ide_pci_register_driver(&driver);
 }
 
+static void __exit pdc202xx_ide_exit(void)
+{
+	pci_unregister_driver(&driver);
+}
+
 module_init(pdc202xx_ide_init);
+module_exit(pdc202xx_ide_exit);
 
 MODULE_AUTHOR("Andre Hedrick, Frank Tiernan");
 MODULE_DESCRIPTION("PCI driver module for older Promise IDE");
