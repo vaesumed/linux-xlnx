@@ -672,7 +672,7 @@ int cap_task_fix_setuid(struct cred *new, const struct cred *old, int flags)
  * yet with increased caps.
  * So we check for increased caps on the target process.
  */
-static inline int cap_safe_nice(struct task_struct *p)
+static int cap_safe_nice(struct task_struct *p)
 {
 	int is_subset;
 
