@@ -105,7 +105,7 @@ notrace int ftrace_mcount_set(unsigned long *data)
 	return 0;
 }
 
-int __init ftrace_dyn_arch_init(void *data)
+int ftrace_dyn_arch_init(void *data)
 {
 	extern const unsigned char ftrace_test_p6nop[];
 	extern const unsigned char ftrace_test_nop5[];
