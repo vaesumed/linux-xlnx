@@ -1027,6 +1027,9 @@ static void pci_init_capabilities(struct pci_dev *dev)
 
 	/* Vital Product Data */
 	pci_vpd_pci22_init(dev);
+
+	/* Alternative Routing-ID Forwarding */
+	pci_enable_ari(dev);
 }
 
 void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
