@@ -575,12 +575,23 @@ void __init early_cpu_init(void)
 	}
 
 	early_identify_cpu(&boot_cpu_data);
+
+#ifdef CONFIG_KMEMCHECK
+	/*
+	 * We need 4K granular PTEs for kmemcheck:
+	 */
+	setup_clear_cpu_cap(X86_FEATURE_PSE);
+#endif
 }
 
 /*
  * The NOPL instruction is supposed to exist on all CPUs with
  * family >= 6; unfortunately, that's not true in practice because
  * of early VIA chips and (more importantly) broken virtualizers that
+ *
+ * Note: no 64-bit chip is known to lack these, but put the code here
+ * for consistency with 32 bits, and to make it utterly trivial to
+ * diagnose the problem should it ever surface.
  * are not easy to detect.  In the latter case it doesn't even *fail*
  * reliably, so probing for it doesn't even work.  Disable it completely
  * unless we can find a reliable way to detect all the broken cases.
