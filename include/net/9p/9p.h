@@ -55,6 +55,7 @@ enum p9_debug_flags {
 	P9_DEBUG_SLABS =      	(1<<7),
 	P9_DEBUG_FCALL =	(1<<8),
 	P9_DEBUG_FID =		(1<<9),
+	P9_DEBUG_PKT =		(1<<10),
 };
 
 extern unsigned int p9_debug_level;
