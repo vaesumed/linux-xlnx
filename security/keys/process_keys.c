@@ -667,6 +667,7 @@ try_again:
 		goto invalid_key;
 
 error:
+	put_cred(cred);
 	return key_ref;
 
 invalid_key:
