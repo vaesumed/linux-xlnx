@@ -226,9 +226,8 @@ static void start_rt_bandwidth(struct rt_bandwidth *rt_b)
 
 		now = hrtimer_cb_get_time(&rt_b->rt_period_timer);
 		hrtimer_forward(&rt_b->rt_period_timer, now, rt_b->rt_period);
-		hrtimer_start(&rt_b->rt_period_timer,
-			      rt_b->rt_period_timer.expires,
-			      HRTIMER_MODE_ABS);
+		hrtimer_start_expires(&rt_b->rt_period_timer,
+				HRTIMER_MODE_ABS);
 	}
 	spin_unlock(&rt_b->rt_runtime_lock);
 }
@@ -1063,7 +1062,7 @@ static void hrtick_start(struct rq *rq, u64 delay)
 	struct hrtimer *timer = &rq->hrtick_timer;
 	ktime_t time = ktime_add_ns(timer->base->get_time(), delay);
 
-	timer->expires = time;
+	hrtimer_set_expires(timer, time);
 
 	if (rq == this_rq()) {
 		hrtimer_restart(timer);
@@ -4052,23 +4051,26 @@ DEFINE_PER_CPU(struct kernel_stat, kstat);
 EXPORT_PER_CPU_SYMBOL(kstat);
 
 /*
- * Return p->sum_exec_runtime plus any more ns on the sched_clock
- * that have not yet been banked in case the task is currently running.
+ * Return any ns on the sched_clock that have not yet been banked in
+ * @p in case that task is currently running.
  */
-unsigned long long task_sched_runtime(struct task_struct *p)
+unsigned long long task_delta_exec(struct task_struct *p)
 {
 	unsigned long flags;
-	u64 ns, delta_exec;
 	struct rq *rq;
+	u64 ns = 0;
 
 	rq = task_rq_lock(p, &flags);
-	ns = p->se.sum_exec_runtime;
+
 	if (task_current(rq, p)) {
+		u64 delta_exec;
+
 		update_rq_clock(rq);
 		delta_exec = rq->clock - p->se.exec_start;
 		if ((s64)delta_exec > 0)
-			ns += delta_exec;
+			ns = delta_exec;
 	}
+
 	task_rq_unlock(rq, &flags);
 
 	return ns;
@@ -4085,6 +4087,7 @@ void account_user_time(struct task_struct *p, cputime_t cputime)
 	cputime64_t tmp;
 
 	p->utime = cputime_add(p->utime, cputime);
+	account_group_user_time(p, cputime);
 
 	/* Add user time to cpustat. */
 	tmp = cputime_to_cputime64(cputime);
@@ -4109,6 +4112,7 @@ static void account_guest_time(struct task_struct *p, cputime_t cputime)
 	tmp = cputime_to_cputime64(cputime);
 
 	p->utime = cputime_add(p->utime, cputime);
+	account_group_user_time(p, cputime);
 	p->gtime = cputime_add(p->gtime, cputime);
 
 	cpustat->user = cputime64_add(cpustat->user, tmp);
@@ -4144,6 +4148,7 @@ void account_system_time(struct task_struct *p, int hardirq_offset,
 	}
 
 	p->stime = cputime_add(p->stime, cputime);
+	account_group_system_time(p, cputime);
 
 	/* Add system time to cpustat. */
 	tmp = cputime_to_cputime64(cputime);
@@ -4185,6 +4190,7 @@ void account_steal_time(struct task_struct *p, cputime_t steal)
 
 	if (p == rq->idle) {
 		p->stime = cputime_add(p->stime, steal);
+		account_group_system_time(p, steal);
 		if (atomic_read(&rq->nr_iowait) > 0)
 			cpustat->iowait = cputime64_add(cpustat->iowait, tmp);
 		else
