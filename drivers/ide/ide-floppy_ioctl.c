@@ -33,7 +33,7 @@
 
 static int ide_floppy_get_format_capacities(ide_drive_t *drive, int __user *arg)
 {
-	struct ide_floppy_obj *floppy = drive->driver_data;
+	struct ide_disk_obj *floppy = drive->driver_data;
 	struct ide_atapi_pc pc;
 	u8 header_len, desc_cnt;
 	int i, blocks, length, u_array_size, u_index;
@@ -138,11 +138,11 @@ static int ide_floppy_format_unit(ide_drive_t *drive, int __user *arg)
 
 	if (floppy->openers > 1) {
 		/* Don't format if someone is using the disk */
-		drive->atapi_flags &= ~IDE_AFLAG_FORMAT_IN_PROGRESS;
+		drive->dev_flags &= ~IDE_DFLAG_FORMAT_IN_PROGRESS;
 		return -EBUSY;
 	}
 
-	drive->atapi_flags |= IDE_AFLAG_FORMAT_IN_PROGRESS;
+	drive->dev_flags |= IDE_DFLAG_FORMAT_IN_PROGRESS;
 
 	/*
 	 * Send ATAPI_FORMAT_UNIT to the drive.
@@ -174,7 +174,7 @@ static int ide_floppy_format_unit(ide_drive_t *drive, int __user *arg)
 
 out:
 	if (err)
-		drive->atapi_flags &= ~IDE_AFLAG_FORMAT_IN_PROGRESS;
+		drive->dev_flags &= ~IDE_DFLAG_FORMAT_IN_PROGRESS;
 	return err;
 }
 
@@ -260,13 +260,10 @@ static int ide_floppy_format_ioctl(ide_drive_t *drive, struct file *file,
 	}
 }
 
-int ide_floppy_ioctl(struct inode *inode, struct file *file,
-		    unsigned int cmd, unsigned long arg)
+int ide_floppy_ioctl(ide_drive_t *drive, struct inode *inode,
+		     struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct block_device *bdev = inode->i_bdev;
-	struct ide_floppy_obj *floppy = ide_drv_g(bdev->bd_disk,
-						     ide_floppy_obj);
-	ide_drive_t *drive = floppy->drive;
 	struct ide_atapi_pc pc;
 	void __user *argp = (void __user *)arg;
 	int err;
