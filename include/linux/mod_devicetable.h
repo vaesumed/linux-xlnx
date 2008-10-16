@@ -131,6 +131,16 @@ struct usb_device_id {
 #define USB_DEVICE_ID_MATCH_INT_SUBCLASS	0x0100
 #define USB_DEVICE_ID_MATCH_INT_PROTOCOL	0x0200
 
+#define HID_ANY_ID				(~0)
+
+struct hid_device_id {
+	__u16 bus;
+	__u32 vendor;
+	__u32 product;
+	kernel_ulong_t driver_data
+		__attribute__((aligned(sizeof(kernel_ulong_t))));
+};
+
 /* s390 CCW devices */
 struct ccw_device_id {
 	__u16	match_flags;	/* which fields to match against */
@@ -274,7 +284,7 @@ struct pcmcia_device_id {
 /* Input */
 #define INPUT_DEVICE_ID_EV_MAX		0x1f
 #define INPUT_DEVICE_ID_KEY_MIN_INTERESTING	0x71
-#define INPUT_DEVICE_ID_KEY_MAX		0x1ff
+#define INPUT_DEVICE_ID_KEY_MAX		0x2ff
 #define INPUT_DEVICE_ID_REL_MAX		0x0f
 #define INPUT_DEVICE_ID_ABS_MAX		0x3f
 #define INPUT_DEVICE_ID_MSC_MAX		0x07
