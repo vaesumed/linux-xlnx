@@ -14,8 +14,6 @@
 
 #define CARDBUS_LATENCY_TIMER	176	/* secondary latency timer */
 #define CARDBUS_RESERVE_BUSNR	3
-#define PCI_CFG_SPACE_SIZE	256
-#define PCI_CFG_SPACE_EXP_SIZE	4096
 
 /* Ugh.  Need to stop exporting this to modules. */
 LIST_HEAD(pci_root_buses);
@@ -219,7 +217,7 @@ static inline enum pci_bar_type decode_bar(struct resource *res, u32 bar)
 
 	res->flags = bar & ~PCI_BASE_ADDRESS_MEM_MASK;
 
-	if (res->flags == PCI_BASE_ADDRESS_MEM_TYPE_64)
+	if (res->flags & PCI_BASE_ADDRESS_MEM_TYPE_64)
 		return pci_bar_mem64;
 	return pci_bar_mem32;
 }
@@ -304,8 +302,9 @@ static int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		} else {
 			res->start = l64;
 			res->end = l64 + sz64;
-			printk(KERN_DEBUG "PCI: %s reg %x 64bit mmio: [%llx, %llx]\n",
-				pci_name(dev), pos, (unsigned long long)res->start,
+			dev_printk(KERN_DEBUG, &dev->dev,
+				"reg %x 64bit mmio: [%#llx-%#llx]\n", pos,
+				(unsigned long long)res->start,
 				(unsigned long long)res->end);
 		}
 	} else {
@@ -316,8 +315,8 @@ static int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 
 		res->start = l;
 		res->end = l + sz;
-		printk(KERN_DEBUG "PCI: %s reg %x %s: [%llx, %llx]\n", pci_name(dev),
-			pos, (res->flags & IORESOURCE_IO) ? "io port":"32bit mmio",
+		dev_printk(KERN_DEBUG, &dev->dev, "reg %x %s: [%#llx-%#llx]\n", pos,
+			(res->flags & IORESOURCE_IO) ? "io port" : "32bit mmio",
 			(unsigned long long)res->start, (unsigned long long)res->end);
 	}
 
@@ -389,8 +388,8 @@ void __devinit pci_read_bridge_bases(struct pci_bus *child)
 			res->start = base;
 		if (!res->end)
 			res->end = limit + 0xfff;
-		printk(KERN_DEBUG "PCI: bridge %s io port: [%llx, %llx]\n",
-			pci_name(dev), (unsigned long long) res->start,
+		dev_printk(KERN_DEBUG, &dev->dev, "bridge io port: [%#llx-%#llx]\n",
+			(unsigned long long) res->start,
 			(unsigned long long) res->end);
 	}
 
@@ -403,8 +402,8 @@ void __devinit pci_read_bridge_bases(struct pci_bus *child)
 		res->flags = (mem_base_lo & PCI_MEMORY_RANGE_TYPE_MASK) | IORESOURCE_MEM;
 		res->start = base;
 		res->end = limit + 0xfffff;
-		printk(KERN_DEBUG "PCI: bridge %s 32bit mmio: [%llx, %llx]\n",
-			pci_name(dev), (unsigned long long) res->start,
+		dev_printk(KERN_DEBUG, &dev->dev, "bridge 32bit mmio: [%#llx-%#llx]\n",
+			(unsigned long long) res->start,
 			(unsigned long long) res->end);
 	}
 
@@ -441,8 +440,8 @@ void __devinit pci_read_bridge_bases(struct pci_bus *child)
 		res->flags = (mem_base_lo & PCI_MEMORY_RANGE_TYPE_MASK) | IORESOURCE_MEM | IORESOURCE_PREFETCH;
 		res->start = base;
 		res->end = limit + 0xfffff;
-		printk(KERN_DEBUG "PCI: bridge %s %sbit mmio pref: [%llx, %llx]\n",
-			pci_name(dev), (res->flags & PCI_PREF_RANGE_TYPE_64) ? "64" : "32",
+		dev_printk(KERN_DEBUG, &dev->dev, "bridge %sbit mmio pref: [%#llx-%#llx]\n",
+			(res->flags & PCI_PREF_RANGE_TYPE_64) ? "64" : "32",
 			(unsigned long long) res->start, (unsigned long long) res->end);
 	}
 }
@@ -764,7 +763,7 @@ static int pci_setup_device(struct pci_dev * dev)
 	dev->class = class;
 	class >>= 8;
 
-	dev_dbg(&dev->dev, "found [%04x/%04x] class %06x header type %02x\n",
+	dev_dbg(&dev->dev, "found [%04x:%04x] class %06x header type %02x\n",
 		 dev->vendor, dev->device, class, dev->hdr_type);
 
 	/* "Unknown power state" */
@@ -846,6 +845,11 @@ static int pci_setup_device(struct pci_dev * dev)
 	return 0;
 }
 
+static void pci_release_capabilities(struct pci_dev *dev)
+{
+	pci_vpd_release(dev);
+}
+
 /**
  * pci_release_dev - free a pci device structure when all users of it are finished.
  * @dev: device that's been disconnected
@@ -858,7 +862,7 @@ static void pci_release_dev(struct device *dev)
 	struct pci_dev *pci_dev;
 
 	pci_dev = to_pci_dev(dev);
-	pci_vpd_release(pci_dev);
+	pci_release_capabilities(pci_dev);
 	kfree(pci_dev);
 }
 
@@ -889,8 +893,9 @@ static void set_pcie_port_type(struct pci_dev *pdev)
 int pci_cfg_space_size_ext(struct pci_dev *dev)
 {
 	u32 status;
+	int pos = PCI_CFG_SPACE_SIZE;
 
-	if (pci_read_config_dword(dev, 256, &status) != PCIBIOS_SUCCESSFUL)
+	if (pci_read_config_dword(dev, pos, &status) != PCIBIOS_SUCCESSFUL)
 		goto fail;
 	if (status == 0xffffffff)
 		goto fail;
@@ -938,8 +943,6 @@ struct pci_dev *alloc_pci_dev(void)
 
 	INIT_LIST_HEAD(&dev->bus_list);
 
-	pci_msi_init_pci_dev(dev);
-
 	return dev;
 }
 EXPORT_SYMBOL(alloc_pci_dev);
@@ -951,6 +954,7 @@ EXPORT_SYMBOL(alloc_pci_dev);
 static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 {
 	struct pci_dev *dev;
+	struct pci_slot *slot;
 	u32 l;
 	u8 hdr_type;
 	int delay = 1;
@@ -999,6 +1003,10 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 	dev->error_state = pci_channel_io_normal;
 	set_pcie_port_type(dev);
 
+	list_for_each_entry(slot, &bus->slots, list)
+		if (PCI_SLOT(devfn) == slot->number)
+			dev->slot = slot;
+
 	/* Assume 32-bit PCI; let 64-bit PCI cards (which are far rarer)
 	   set this higher, assuming the system even supports it.  */
 	dev->dma_mask = 0xffffffff;
@@ -1007,9 +1015,22 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 		return NULL;
 	}
 
+	return dev;
+}
+
+static void pci_init_capabilities(struct pci_dev *dev)
+{
+	/* MSI/MSI-X list */
+	pci_msi_init_pci_dev(dev);
+
+	/* Power Management */
+	pci_pm_init(dev);
+
+	/* Vital Product Data */
 	pci_vpd_pci22_init(dev);
 
-	return dev;
+	/* Alternative Routing-ID Forwarding */
+	pci_enable_ari(dev);
 }
 
 void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
@@ -1028,8 +1049,8 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	/* Fix up broken headers */
 	pci_fixup_device(pci_fixup_header, dev);
 
-	/* Initialize power management of the device */
-	pci_pm_init(dev);
+	/* Initialize various capabilities */
+	pci_init_capabilities(dev);
 
 	/*
 	 * Add the device to our list of discovered devices
