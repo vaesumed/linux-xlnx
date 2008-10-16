@@ -33,6 +33,11 @@ struct osd_dev {
 	unsigned def_timeout;
 };
 
+/* Retrieve/return osd_dev(s) for use by Kernel clients */
+struct osd_dev *osduld_path_lookup(const char *dev_name); /*Use IS_ERR/ERR_PTR*/
+void osduld_put_device(struct osd_dev *od);
+
+/* These are called by uld at probe time */
 void osd_dev_init(struct osd_dev *, struct scsi_device *scsi_dev);
 void osd_dev_fini(struct osd_dev *);
 
