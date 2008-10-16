@@ -36,6 +36,7 @@
 #include "xfs_dinode.h"
 #include "xfs_inode.h"
 #include "xfs_btree.h"
+#include "xfs_btree_trace.h"
 #include "xfs_ialloc.h"
 #include "xfs_bmap.h"
 #include "xfs_rtalloc.h"
@@ -58,6 +59,7 @@
 #include "xfs_extfree_item.h"
 #include "xfs_mru_cache.h"
 #include "xfs_inode_item.h"
+#include "xfs_sync.h"
 
 #include <linux/namei.h>
 #include <linux/init.h>
@@ -887,6 +889,40 @@ xfs_fs_inode_init_once(
 	inode_init_once((struct inode *)vnode);
 }
 
+
+/*
+ * Slab object creation initialisation for the XFS inode.
+ * This covers only the idempotent fields in the XFS inode;
+ * all other fields need to be initialised on allocation
+ * from the slab. This avoids the need to repeatedly intialise
+ * fields in the xfs inode that left in the initialise state
+ * when freeing the inode.
+ */
+void
+xfs_inode_init_once(
+	void			*inode)
+{
+	struct xfs_inode	*ip = inode;
+
+	memset(ip, 0, sizeof(struct xfs_inode));
+	atomic_set(&ip->i_iocount, 0);
+	atomic_set(&ip->i_pincount, 0);
+	spin_lock_init(&ip->i_flags_lock);
+	INIT_LIST_HEAD(&ip->i_reclaim);
+	init_waitqueue_head(&ip->i_ipin_wait);
+	/*
+	 * Because we want to use a counting completion, complete
+	 * the flush completion once to allow a single access to
+	 * the flush completion without blocking.
+	 */
+	init_completion(&ip->i_flush);
+	complete(&ip->i_flush);
+
+	mrlock_init(&ip->i_lock, MRLOCK_ALLOW_EQUAL_PRI|MRLOCK_BARRIER,
+		     "xfsino", ip->i_ino);
+	mrlock_init(&ip->i_iolock, MRLOCK_BARRIER, "xfsio", ip->i_ino);
+}
+
 /*
  * Attempt to flush the inode, this will actually fail
  * if the inode is pinned, but we dirty the inode again
@@ -943,146 +979,6 @@ xfs_fs_clear_inode(
 	ASSERT(XFS_I(inode) == NULL);
 }
 
-/*
- * Enqueue a work item to be picked up by the vfs xfssyncd thread.
- * Doing this has two advantages:
- * - It saves on stack space, which is tight in certain situations
- * - It can be used (with care) as a mechanism to avoid deadlocks.
- * Flushing while allocating in a full filesystem requires both.
- */
-STATIC void
-xfs_syncd_queue_work(
-	struct xfs_mount *mp,
-	void		*data,
-	void		(*syncer)(struct xfs_mount *, void *))
-{
-	struct bhv_vfs_sync_work *work;
-
-	work = kmem_alloc(sizeof(struct bhv_vfs_sync_work), KM_SLEEP);
-	INIT_LIST_HEAD(&work->w_list);
-	work->w_syncer = syncer;
-	work->w_data = data;
-	work->w_mount = mp;
-	spin_lock(&mp->m_sync_lock);
-	list_add_tail(&work->w_list, &mp->m_sync_list);
-	spin_unlock(&mp->m_sync_lock);
-	wake_up_process(mp->m_sync_task);
-}
-
-/*
- * Flush delayed allocate data, attempting to free up reserved space
- * from existing allocations.  At this point a new allocation attempt
- * has failed with ENOSPC and we are in the process of scratching our
- * heads, looking about for more room...
- */
-STATIC void
-xfs_flush_inode_work(
-	struct xfs_mount *mp,
-	void		*arg)
-{
-	struct inode	*inode = arg;
-	filemap_flush(inode->i_mapping);
-	iput(inode);
-}
-
-void
-xfs_flush_inode(
-	xfs_inode_t	*ip)
-{
-	struct inode	*inode = VFS_I(ip);
-
-	igrab(inode);
-	xfs_syncd_queue_work(ip->i_mount, inode, xfs_flush_inode_work);
-	delay(msecs_to_jiffies(500));
-}
-
-/*
- * This is the "bigger hammer" version of xfs_flush_inode_work...
- * (IOW, "If at first you don't succeed, use a Bigger Hammer").
- */
-STATIC void
-xfs_flush_device_work(
-	struct xfs_mount *mp,
-	void		*arg)
-{
-	struct inode	*inode = arg;
-	sync_blockdev(mp->m_super->s_bdev);
-	iput(inode);
-}
-
-void
-xfs_flush_device(
-	xfs_inode_t	*ip)
-{
-	struct inode	*inode = VFS_I(ip);
-
-	igrab(inode);
-	xfs_syncd_queue_work(ip->i_mount, inode, xfs_flush_device_work);
-	delay(msecs_to_jiffies(500));
-	xfs_log_force(ip->i_mount, (xfs_lsn_t)0, XFS_LOG_FORCE|XFS_LOG_SYNC);
-}
-
-STATIC void
-xfs_sync_worker(
-	struct xfs_mount *mp,
-	void		*unused)
-{
-	int		error;
-
-	if (!(mp->m_flags & XFS_MOUNT_RDONLY))
-		error = xfs_sync(mp, SYNC_FSDATA | SYNC_BDFLUSH | SYNC_ATTR);
-	mp->m_sync_seq++;
-	wake_up(&mp->m_wait_single_sync_task);
-}
-
-STATIC int
-xfssyncd(
-	void			*arg)
-{
-	struct xfs_mount	*mp = arg;
-	long			timeleft;
-	bhv_vfs_sync_work_t	*work, *n;
-	LIST_HEAD		(tmp);
-
-	set_freezable();
-	timeleft = xfs_syncd_centisecs * msecs_to_jiffies(10);
-	for (;;) {
-		timeleft = schedule_timeout_interruptible(timeleft);
-		/* swsusp */
-		try_to_freeze();
-		if (kthread_should_stop() && list_empty(&mp->m_sync_list))
-			break;
-
-		spin_lock(&mp->m_sync_lock);
-		/*
-		 * We can get woken by laptop mode, to do a sync -
-		 * that's the (only!) case where the list would be
-		 * empty with time remaining.
-		 */
-		if (!timeleft || list_empty(&mp->m_sync_list)) {
-			if (!timeleft)
-				timeleft = xfs_syncd_centisecs *
-							msecs_to_jiffies(10);
-			INIT_LIST_HEAD(&mp->m_sync_work.w_list);
-			list_add_tail(&mp->m_sync_work.w_list,
-					&mp->m_sync_list);
-		}
-		list_for_each_entry_safe(work, n, &mp->m_sync_list, w_list)
-			list_move(&work->w_list, &tmp);
-		spin_unlock(&mp->m_sync_lock);
-
-		list_for_each_entry_safe(work, n, &tmp, w_list) {
-			(*work->w_syncer)(mp, work->w_data);
-			list_del(&work->w_list);
-			if (work == &mp->m_sync_work)
-				continue;
-			kmem_free(work);
-		}
-	}
-
-	return 0;
-}
-
 STATIC void
 xfs_free_fsname(
 	struct xfs_mount	*mp)
@@ -1101,8 +997,7 @@ xfs_fs_put_super(
 	int			unmount_event_flags = 0;
 	int			error;
 
-	kthread_stop(mp->m_sync_task);
-
+	xfs_syncd_stop(mp);
 	xfs_sync(mp, SYNC_ATTR | SYNC_DELWRI);
 
 #ifdef HAVE_DMAPI
@@ -1772,13 +1667,9 @@ xfs_fs_fill_super(
 		goto fail_vnrele;
 	}
 
-	mp->m_sync_work.w_syncer = xfs_sync_worker;
-	mp->m_sync_work.w_mount = mp;
-	mp->m_sync_task = kthread_run(xfssyncd, mp, "xfssyncd");
-	if (IS_ERR(mp->m_sync_task)) {
-		error = -PTR_ERR(mp->m_sync_task);
+	error = xfs_syncd_init(mp);
+	if (error)
 		goto fail_vnrele;
-	}
 
 	xfs_itrace_exit(XFS_I(sb->s_root->d_inode));
 
@@ -1835,8 +1726,17 @@ xfs_fs_get_sb(
 	void			*data,
 	struct vfsmount		*mnt)
 {
-	return get_sb_bdev(fs_type, flags, dev_name, data, xfs_fs_fill_super,
+	int			error;
+
+	error = get_sb_bdev(fs_type, flags, dev_name, data, xfs_fs_fill_super,
 			   mnt);
+	if (!error) {
+		xfs_mount_t	*mp = XFS_M(mnt->mnt_sb);
+
+		mp->m_vfsmount = mnt;
+	}
+
+	return error;
 }
 
 static struct super_operations xfs_super_operations = {
@@ -1882,10 +1782,19 @@ xfs_alloc_trace_bufs(void)
 	if (!xfs_bmap_trace_buf)
 		goto out_free_alloc_trace;
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
+	xfs_allocbt_trace_buf = ktrace_alloc(XFS_ALLOCBT_TRACE_SIZE,
+					     KM_MAYFAIL);
+	if (!xfs_allocbt_trace_buf)
+		goto out_free_bmap_trace;
+
+	xfs_inobt_trace_buf = ktrace_alloc(XFS_INOBT_TRACE_SIZE, KM_MAYFAIL);
+	if (!xfs_inobt_trace_buf)
+		goto out_free_allocbt_trace;
+
 	xfs_bmbt_trace_buf = ktrace_alloc(XFS_BMBT_TRACE_SIZE, KM_MAYFAIL);
 	if (!xfs_bmbt_trace_buf)
-		goto out_free_bmap_trace;
+		goto out_free_inobt_trace;
 #endif
 #ifdef XFS_ATTR_TRACE
 	xfs_attr_trace_buf = ktrace_alloc(XFS_ATTR_TRACE_SIZE, KM_MAYFAIL);
@@ -1907,8 +1816,12 @@ xfs_alloc_trace_bufs(void)
 	ktrace_free(xfs_attr_trace_buf);
  out_free_bmbt_trace:
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(xfs_bmbt_trace_buf);
+ out_free_inobt_trace:
+	ktrace_free(xfs_inobt_trace_buf);
+ out_free_allocbt_trace:
+	ktrace_free(xfs_allocbt_trace_buf);
  out_free_bmap_trace:
 #endif
 #ifdef XFS_BMAP_TRACE
@@ -1931,8 +1844,10 @@ xfs_free_trace_bufs(void)
 #ifdef XFS_ATTR_TRACE
 	ktrace_free(xfs_attr_trace_buf);
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(xfs_bmbt_trace_buf);
+	ktrace_free(xfs_inobt_trace_buf);
+	ktrace_free(xfs_allocbt_trace_buf);
 #endif
 #ifdef XFS_BMAP_TRACE
 	ktrace_free(xfs_bmap_trace_buf);
@@ -2018,7 +1933,7 @@ xfs_init_zones(void)
 	xfs_inode_zone =
 		kmem_zone_init_flags(sizeof(xfs_inode_t), "xfs_inode",
 					KM_ZONE_HWALIGN | KM_ZONE_RECLAIM |
-					KM_ZONE_SPREAD, NULL);
+					KM_ZONE_SPREAD, xfs_inode_init_once);
 	if (!xfs_inode_zone)
 		goto out_destroy_efi_zone;
 
