@@ -1378,6 +1378,7 @@ lcs_schedule_recovery(struct lcs_card *card)
 static void
 lcs_irq(struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 {
+	struct ccwgroup_device *gdev = dev_get_drvdata(&cdev->dev);
 	struct lcs_card *card;
 	struct lcs_channel *channel;
 	int rc, index;
@@ -1386,7 +1387,7 @@ lcs_irq(struct ccw_device *cdev, unsigned long intparm, struct irb *irb)
 	if (lcs_check_irb_error(cdev, irb))
 		return;
 
-	card = CARD_FROM_DEV(cdev);
+	card = dev_get_drvdata(&gdev->dev);
 	if (card->read.ccwdev == cdev)
 		channel = &card->read;
 	else
@@ -1924,7 +1925,7 @@ lcs_portno_show (struct device *dev, struct device_attribute *attr, char *buf)
 {
         struct lcs_card *card;
 
-	card = (struct lcs_card *)dev->driver_data;
+	card = dev_get_drvdata(dev);
 
         if (!card)
                 return 0;
@@ -1941,7 +1942,7 @@ lcs_portno_store (struct device *dev, struct device_attribute *attr, const char 
         struct lcs_card *card;
         int value;
 
-	card = (struct lcs_card *)dev->driver_data;
+	card = dev_get_drvdata(dev);
 
         if (!card)
                 return 0;
@@ -1975,7 +1976,7 @@ lcs_timeout_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct lcs_card *card;
 
-	card = (struct lcs_card *)dev->driver_data;
+	card = dev_get_drvdata(dev);
 
 	return card ? sprintf(buf, "%u\n", card->lancmd_timeout) : 0;
 }
@@ -1986,7 +1987,7 @@ lcs_timeout_store (struct device *dev, struct device_attribute *attr, const char
         struct lcs_card *card;
         int value;
 
-	card = (struct lcs_card *)dev->driver_data;
+	card = dev_get_drvdata(dev);
 
         if (!card)
                 return 0;
@@ -2005,7 +2006,7 @@ static ssize_t
 lcs_dev_recover_store(struct device *dev, struct device_attribute *attr,
 		      const char *buf, size_t count)
 {
-	struct lcs_card *card = dev->driver_data;
+	struct lcs_card *card = dev_get_drvdata(dev);
 	char *tmp;
 	int i;
 
@@ -2058,7 +2059,7 @@ lcs_probe_device(struct ccwgroup_device *ccwgdev)
 		put_device(&ccwgdev->dev);
 		return ret;
         }
-	ccwgdev->dev.driver_data = card;
+	dev_set_drvdata(&ccwgdev->dev, card);
 	ccwgdev->cdev[0]->handler = lcs_irq;
 	ccwgdev->cdev[1]->handler = lcs_irq;
 	card->gdev = ccwgdev;
@@ -2075,7 +2076,7 @@ lcs_register_netdev(struct ccwgroup_device *ccwgdev)
 	struct lcs_card *card;
 
 	LCS_DBF_TEXT(2, setup, "regnetdv");
-	card = (struct lcs_card *)ccwgdev->dev.driver_data;
+	card = dev_get_drvdata(&ccwgdev->dev);
 	if (card->dev->reg_state != NETREG_UNINITIALIZED)
 		return 0;
 	SET_NETDEV_DEV(card->dev, &ccwgdev->dev);
@@ -2094,7 +2095,7 @@ lcs_new_device(struct ccwgroup_device *ccwgdev)
 	enum lcs_dev_states recover_state;
 	int rc;
 
-	card = (struct lcs_card *)ccwgdev->dev.driver_data;
+	card = dev_get_drvdata(&ccwgdev->dev);
 	if (!card)
 		return -ENODEV;
 
@@ -2202,7 +2203,7 @@ __lcs_shutdown_device(struct ccwgroup_device *ccwgdev, int recovery_mode)
 	int ret;
 
 	LCS_DBF_TEXT(3, setup, "shtdndev");
-	card = (struct lcs_card *)ccwgdev->dev.driver_data;
+	card = dev_get_drvdata(&ccwgdev->dev);
 	if (!card)
 		return -ENODEV;
 	if (recovery_mode == 0) {
@@ -2269,7 +2270,7 @@ lcs_remove_device(struct ccwgroup_device *ccwgdev)
 {
 	struct lcs_card *card;
 
-	card = (struct lcs_card *)ccwgdev->dev.driver_data;
+	card = dev_get_drvdata(&ccwgdev->dev);
 	if (!card)
 		return;
 
