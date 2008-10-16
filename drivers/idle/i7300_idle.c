@@ -228,7 +228,7 @@ static int __init i7300_idle_ioat_init(void)
 			(dma_addr_t *)&ioat_desc_phys, GFP_KERNEL);
 	if (!ioat_desc) {
 		printk(KERN_ERR I7300_PRINT "failed to allocate I/O AT desc\n");
-		goto err_unmap;
+		goto err_mark_unused;
 	}
 
 	writel(ioat_desc_phys & 0xffffffffUL,
@@ -258,6 +258,8 @@ static int __init i7300_idle_ioat_init(void)
 
 err_free:
 	dma_free_coherent(&dummy_dma_dev, 4096, (void *)ioat_desc, 0);
+err_mark_unused:
+	writew(0, ioat_chanbase + IOAT_CHANCTRL_OFFSET);
 err_unmap:
 	iounmap(ioat_iomap);
 err_ret:
@@ -332,7 +334,7 @@ static void __exit i7300_idle_ioat_exit(void)
 
 
 /* Store DIMM thermal throttle configuration */
-static void i7300_idle_thrt_save(void)
+static int i7300_idle_thrt_save(void)
 {
 	u32 new_mc_val;
 	u8 gblactlm;
@@ -363,9 +365,10 @@ static void i7300_idle_thrt_save(void)
 	if (gblactlm == 0) {
 		new_mc_val = i7300_idle_mc_saved | DIMM_GTW_MODE;
 		pci_write_config_dword(fbd_dev, DIMM_MC, new_mc_val);
-		dprintk("set GTW_MODE = 1\n");
+		return 0;
 	} else {
-		dprintk("did not set GTW_MODE = 1\n");
+		dprintk("could not set GTW_MODE = 1 (OLTT enabled)\n");
+		return -ENODEV;
 	}
 }
 
@@ -612,10 +615,11 @@ static int __init i7300_idle_init(void)
 	if (i7300_idle_platform_probe())
 		return -ENODEV;
 
-	if (i7300_idle_ioat_init())
+	if (i7300_idle_thrt_save())
 		return -ENODEV;
 
-	i7300_idle_thrt_save();
+	if (i7300_idle_ioat_init())
+		return -ENODEV;
 
 	debugfs_dir = debugfs_create_dir("i7300_idle", NULL);
 	if (debugfs_dir) {
