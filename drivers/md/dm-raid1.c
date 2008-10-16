@@ -4,7 +4,8 @@
  * This file is released under the GPL.
  */
 
-#include "dm.h"
+#include <linux/device-mapper.h>
+
 #include "dm-bio-list.h"
 #include "dm-bio-record.h"
 
@@ -1314,9 +1315,6 @@ static struct mirror_set *alloc_context(unsigned int nr_mirrors,
 {
 	size_t len;
 	struct mirror_set *ms = NULL;
-
-	if (array_too_big(sizeof(*ms), sizeof(ms->mirror[0]), nr_mirrors))
-		return NULL;
 
 	len = sizeof(*ms) + (sizeof(ms->mirror[0]) * nr_mirrors);
 
