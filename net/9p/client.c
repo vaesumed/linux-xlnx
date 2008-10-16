@@ -655,7 +655,7 @@ static void p9_fid_destroy(struct p9_fid *fid)
 	kfree(fid);
 }
 
-static int p9_client_version(struct p9_client *c)
+int p9_client_version(struct p9_client *c)
 {
 	int err = 0;
 	struct p9_req_t *req;
