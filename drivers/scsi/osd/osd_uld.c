@@ -42,6 +42,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/namei.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/module.h>
@@ -141,6 +142,57 @@ static const struct file_operations osd_fops = {
 	.release        = osd_uld_release,
 	.unlocked_ioctl = osd_uld_ioctl,
 };
+
+struct osd_dev *osduld_path_lookup(const char *path)
+{
+	struct nameidata nd;
+	struct inode *inode;
+	struct cdev *cdev;
+	struct osd_uld_device *oud;
+	int error;
+
+	if (!path || !*path)
+		return ERR_PTR(-EINVAL);
+
+	error = path_lookup(path, LOOKUP_FOLLOW, &nd);
+	if (error)
+		return ERR_PTR(error);
+
+	inode = nd.path.dentry->d_inode;
+	error = -EINVAL; /* Not the right device e.g osd_uld_device */
+	if (!S_ISCHR(inode->i_mode))
+		goto out;
+
+	cdev = inode->i_cdev;
+	if (!cdev)
+		goto out;
+
+	/* The Magic wand. Is it our char-dev */
+	/* TODO: Support sg devices */
+	if (cdev->owner != THIS_MODULE)
+		goto out;
+
+	oud = container_of(cdev, struct osd_uld_device, cdev);
+
+	__uld_get(oud);
+	error = 0;
+
+out:
+	path_put(&nd.path);
+	return error ? ERR_PTR(error) : &oud->od;
+}
+EXPORT_SYMBOL(osduld_path_lookup);
+
+void osduld_put_device(struct osd_dev *od)
+{
+	if (od) {
+		struct osd_uld_device *oud = container_of(od,
+						struct osd_uld_device, od);
+
+		__uld_put(oud);
+	}
+}
+EXPORT_SYMBOL(osduld_put_device);
 
 /*
  * Scsi Device operations
