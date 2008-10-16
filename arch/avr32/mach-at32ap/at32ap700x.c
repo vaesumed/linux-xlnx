@@ -1091,7 +1091,9 @@ at32_add_device_eth(unsigned int id, struct eth_platform_data *data)
 			pin_mask |= (1 << 11);	/* RXD2 */
 			pin_mask |= (1 << 12);	/* RXD3 */
 			pin_mask |= (1 << 14);	/* RXCK */
+#ifndef CONFIG_BOARD_MIMC200
 			pin_mask |= (1 << 18);	/* SPD  */
+#endif
 		}
 
 		select_peripheral(PIOC, pin_mask, PERIPH_A, 0);
@@ -1112,8 +1114,10 @@ at32_add_device_eth(unsigned int id, struct eth_platform_data *data)
 		pin_mask |= (1 << 3);	/* MDC  */
 		pin_mask |= (1 << 2);	/* MDIO */
 
+#ifndef CONFIG_BOARD_MIMC200
 		if (!data->is_rmii)
 			pin_mask |= (1 << 15);	/* SPD  */
+#endif
 
 		select_peripheral(PIOD, pin_mask, PERIPH_B, 0);
 
@@ -1470,7 +1474,7 @@ at32_add_device_lcdc(unsigned int id, struct atmel_lcdfb_info *data,
 			pin_mask = ATMEL_LCDC_PRI_24BIT | ATMEL_LCDC_PRI_CONTROL;
 
 		/* LCDC on port C */
-		portc_mask = (pin_mask & 0xfff80000) >> 19;
+		portc_mask = pin_mask & 0xfff80000;
 		select_peripheral(PIOC, portc_mask, PERIPH_A, 0);
 
 		/* LCDC on port D */
