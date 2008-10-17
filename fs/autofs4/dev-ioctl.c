@@ -288,6 +288,7 @@ static int autofs_dev_ioctl_open_mountpoint(const char *path, dev_t devid)
 	struct file *filp;
 	struct nameidata nd;
 	int err, fd;
+	const struct cred *cred = current_cred();
 
 	fd = get_unused_fd();
 	if (likely(fd >= 0)) {
@@ -307,7 +308,8 @@ static int autofs_dev_ioctl_open_mountpoint(const char *path, dev_t devid)
 			goto out;
 		}
 
-		filp = dentry_open(nd.path.dentry, nd.path.mnt, O_RDONLY);
+		filp = dentry_open(nd.path.dentry, nd.path.mnt, O_RDONLY,
+			cred);
 		if (IS_ERR(filp)) {
 			err = PTR_ERR(filp);
 			goto out;
