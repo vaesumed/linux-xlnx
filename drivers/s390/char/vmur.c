@@ -128,7 +128,7 @@ static struct urdev *urdev_get_from_cdev(struct ccw_device *cdev)
 	unsigned long flags;
 
 	spin_lock_irqsave(get_ccwdev_lock(cdev), flags);
-	urd = cdev->dev.driver_data;
+	urd = dev_get_drvdata(&cdev->dev);
 	if (urd)
 		urdev_get(urd);
 	spin_unlock_irqrestore(get_ccwdev_lock(cdev), flags);
@@ -285,7 +285,7 @@ static void ur_int_handler(struct ccw_device *cdev, unsigned long intparm,
 		TRACE("ur_int_handler: unsolicited interrupt\n");
 		return;
 	}
-	urd = cdev->dev.driver_data;
+	urd = dev_get_drvdata(&cdev->dev);
 	BUG_ON(!urd);
 	/* On special conditions irb is an error pointer */
 	if (IS_ERR(irb))
@@ -831,7 +831,7 @@ static int ur_probe(struct ccw_device *cdev)
 		goto fail_remove_attr;
 	}
 	spin_lock_irq(get_ccwdev_lock(cdev));
-	cdev->dev.driver_data = urd;
+	dev_set_drvdata(&cdev->dev, urd);
 	spin_unlock_irq(get_ccwdev_lock(cdev));
 
 	mutex_unlock(&vmur_mutex);
@@ -971,8 +971,8 @@ static void ur_remove(struct ccw_device *cdev)
 	ur_remove_attributes(&cdev->dev);
 
 	spin_lock_irqsave(get_ccwdev_lock(cdev), flags);
-	urdev_put(cdev->dev.driver_data);
-	cdev->dev.driver_data = NULL;
+	urdev_put(dev_get_drvdata(&cdev->dev));
+	dev_set_drvdata(&cdev->dev, NULL);
 	spin_unlock_irqrestore(get_ccwdev_lock(cdev), flags);
 
 	mutex_unlock(&vmur_mutex);
