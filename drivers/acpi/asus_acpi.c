@@ -753,7 +753,7 @@ static int get_lcd_state(void)
 			/* That's what the AML code does */
 			lcd = out_obj.integer.value >> 8;
 	} else if (hotk->model == F3Sa) {
-		unsigned long tmp;
+		unsigned long long tmp;
 		union acpi_object param;
 		struct acpi_object_list input;
 		acpi_status status;
@@ -1321,7 +1321,7 @@ static int asus_hotk_add(struct acpi_device *device)
 	hotk->handle = device->handle;
 	strcpy(acpi_device_name(device), ACPI_HOTK_DEVICE_NAME);
 	strcpy(acpi_device_class(device), ACPI_HOTK_CLASS);
-	acpi_driver_data(device) = hotk;
+	device->driver_data = hotk;
 	hotk->device = device;
 
 	result = asus_hotk_check();
