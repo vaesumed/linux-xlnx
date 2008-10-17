@@ -188,6 +188,9 @@ extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *mem,
 extern int __isolate_lru_page(struct page *page, int mode);
 extern unsigned long shrink_all_memory(unsigned long nr_pages);
 extern int vm_swappiness;
+extern int slab_defrag_limit;
+extern int slab_defrag_counter;
+
 extern int remove_mapping(struct address_space *mapping, struct page *page);
 extern long vm_total_pages;
 
