@@ -1,0 +1,97 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing m68k based on 278429cff8809958d25415ba0ed32b59866ab1a8
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 278429cff8809958d25415ba0ed32b59866ab1a8
+HEAD is now at 278429c Merge branch 'i2c-for-linus' of git://jdelvare.pck.nerim.net/jdelvare-2.6
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+amiga-amiserial-no-serial-console-if-modular.diff
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.27-3976-g7591103
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 7591103c08abade60aeddb432ed0686ddd0de1c6
+HEAD is now at 7591103 Merge git://git.kernel.org/pub/scm/linux/kernel/git/bart/ide-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-kcopyd-avoid-queue-shuffle.patch
+dm-snapshot-fix-primary_pe-race.patch
+dm-snapshot-drop-unused-last_percent.patch
+dm-publish-array_too_big.patch
+dm-remove-dm-header-from-targets.patch
+dm-crypt-tidy-sector.patch
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 278429cff8809958d25415ba0ed32b59866ab1a8
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 278429cff8809958d25415ba0ed32b59866ab1a8
+HEAD is now at 278429c Merge branch 'i2c-for-linus' of git://jdelvare.pck.nerim.net/jdelvare-2.6
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-add-tx4939ide-driver-v3.patch
+ide-disk-fix-ide_dflag_lba48-handling-on-resume.patch
+ide-disk-lock-media-before-checking-for-media-change.patch
+ide-floppy-use-alloc_disk_node.patch
+ide-disk-use-to_ide_drv-and-ide_drv_g.patch
+ide-disk-move-ide_dflag_doorlocking-flag-handling-to-idedisk_set_doorlock.patch
+ide-disk-floppy-set-ide_dflag_attach-in-_setup.patch
+ide-floppy-drop-floppy-argument-from-idefloppy_setup.patch
+ide-floppy-use-drive-capacity64-for-caching-current-capacity.patch
+ide-ide_aflag_media_changed-to-ide_dflag_media_changed.patch
+ide-ide_aflag_wp-to-ide_dflag_wp.patch
+ide-ide_aflag_format_in_progress-to-ide_dflag_format_in_progress.patch
+ide-remove-ide_aflag_no_doorlocking.patch
+ide-disk-factor-out-generic-disk-handling-code-to-ide-gd-c.patch
+ide-disk-use-ide_dflag_media_changed.patch
+ide-floppy-factor-out-generic-disk-handling-code-to-ide-gd-floppy-c.patch
+ide-prepare-for-merging-ide-gd-floppy-c-with-ide-gd-c.patch
+ide-allow-device-drivers-to-specify-per-device-type-proc-settings.patch
+ide-add-generic-ata-atapi-disk-driver.patch
+ide-cd-debug-log-enhancements.patch
+ide-cd-small-drive-type-print-fix.patch
+ide-cd-remove-stale-comment.patch
+ide-fix-support-for-ide-pci-controllers-using-mmio-on-frv.patch
+ide-remove-dead-asm-arm-arch-sa1100-ide-h.patch
+ide-remove-m68k_ide_swapw-define-from-asm-m68k-ide-h.patch
+ide-remove-unused-macros-from-asm-parisc-ide-h.patch
+hpt366-fix-compile-warning.patch
+ide-mask-interrupt-in-ide_config_drive_speed.patch
+hpt366-cleanup-maskproc-method.patch
+sgiioc4-remove-maskproc-method.patch
+ide-floppy-remove-idefloppy_floppy_t-typedef.patch
+ide-remove-broken-hpt34x-driver.patch
+delkin_cb-add-pm-support.patch
+sgiioc4-kill-useless-address-checks.patch
+sgiioc4-kill-duplicate-ioremap.patch
+scc_pata-kill-unused-variables.patch
+ide-re-add-trm290-fix-lost-during-ide_build_dmatable-cleanup.patch
+Importing rr based on v2.6.27-4431-g04ab591
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 04ab591808565f968d4406f6435090ad671ebdab
+HEAD is now at 04ab591 Merge branch 'upstream' of git://ftp.linux-mips.org/pub/scm/upstream-linus
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:remove_config_kmod_from_drivers.patch
+module:remove_config_kmod_from_fs.patch
+module:remove_config_kmod_from_net.patch
+module:remove-kmod.c-CONFIG_KMOD-comment.patch
+module:remove_config_kmod.patch
+module:simplify-load_module.patch
+module:remove_stop_machine_during_load_v2.patch
+module:compile-time-prefix-length-check.patch
+module_param:fix-duplicate-prefixes.patch
+module:core_param.patch
+misc:make-initcall_debug-a-module_param.patch
+misc:make-panic-options-core_params.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+misc:call_init_workqueues_before_pre_smp_initcalls.patch
+misc:workqueue_introduce_create_rt_workqueue.patch
+stop_machine:use_workqueues_instead_of_kernel_threads.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+lguest:physical_address_extension_support.patch
+Context reduced to (1/1) to apply fragment at 851
+error: patch failed: drivers/lguest/page_tables.c:645
+error: drivers/lguest/page_tables.c: patch does not apply
+Unchanged quilt series ttydev
