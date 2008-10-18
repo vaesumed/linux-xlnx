@@ -519,10 +519,16 @@ struct fbd_ioat {
 	unsigned int ioat_dev;
 };
 
+/*
+ * The i5000 chip-set has the same hooks as the i7300
+ * but support is disabled by default because this driver
+ * has not been validated on that platform.
+ */
+#define SUPPORT_I5000 0
+
 static const struct fbd_ioat fbd_ioat_list[] = {
 	{PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_IOAT_CNB},
-#if 0
-	/* Supposed to work - Not fully validated on this platform */
+#if SUPPORT_I5000
 	{PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_IOAT},
 #endif
 	{0, 0}
@@ -531,8 +537,7 @@ static const struct fbd_ioat fbd_ioat_list[] = {
 /* table of devices that work with this driver */
 static const struct pci_device_id pci_tbl[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_FBD_CNB) },
-#if 0
-		/* Supposed to work - Not fully validated on this platform */
+#if SUPPORT_I5000
 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_5000_ERR) },
 #endif
 	{ } /* Terminating entry */
