@@ -198,7 +198,7 @@ xfs_fs_get_parent(
 	if (unlikely(error))
 		return ERR_PTR(-error);
 
-	return d_obtain_alias(cip->i_vnode);
+	return d_obtain_alias(&cip->i_vnode);
 }
 
 const struct export_operations xfs_export_operations = {
