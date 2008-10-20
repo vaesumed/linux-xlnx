@@ -39,6 +39,8 @@
 #include <linux/buffer_head.h> /* for invalidate_bdev */
 #include <linux/poll.h>
 #include <linux/ctype.h>
+#include <linux/kmod.h>
+
 #include <linux/hdreg.h>
 #include <linux/proc_fs.h>
 #include <linux/random.h>
