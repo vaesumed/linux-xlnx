@@ -20,7 +20,7 @@
 #include <linux/smc911x.h>
 #include <media/soc_camera_platform.h>
 #include <media/sh_mobile_ceu.h>
-#include <asm/sh_mobile_lcdc.h>
+#include <video/sh_mobile_lcdc.h>
 #include <asm/io.h>
 #include <asm/clock.h>
 
@@ -52,20 +52,33 @@ static struct platform_device smc9118_device = {
 	},
 };
 
+/*
+ * AP320 and AP325RXA has CPLD data in NOR Flash(0xA80000-0xABFFFF).
+ * If this area erased, this board can not boot.
+ */
 static struct mtd_partition ap325rxa_nor_flash_partitions[] = {
 	{
-		 .name = "uboot",
-		 .offset = 0,
-		 .size = (1 * 1024 * 1024),
-		 .mask_flags = MTD_WRITEABLE,	/* Read-only */
+		.name = "uboot",
+		.offset = 0,
+		.size = (1 * 1024 * 1024),
+		.mask_flags = MTD_WRITEABLE,	/* Read-only */
 	}, {
-		 .name = "kernel",
-		 .offset = MTDPART_OFS_APPEND,
-		 .size = (2 * 1024 * 1024),
+		.name = "kernel",
+		.offset = MTDPART_OFS_APPEND,
+		.size = (2 * 1024 * 1024),
 	}, {
-		 .name = "other",
-		 .offset = MTDPART_OFS_APPEND,
-		 .size = MTDPART_SIZ_FULL,
+		.name = "free-area0",
+		.offset = MTDPART_OFS_APPEND,
+		.size = ((7 * 1024 * 1024) + (512 * 1024)),
+	}, {
+		.name = "CPLD-Data",
+		.offset = MTDPART_OFS_APPEND,
+		.mask_flags = MTD_WRITEABLE,	/* Read-only */
+		.size = (1024 * 128 * 2),
+	}, {
+		.name = "free-area1",
+		.offset = MTDPART_OFS_APPEND,
+		.size = MTDPART_SIZ_FULL,
 	},
 };
 
