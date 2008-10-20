@@ -1,10 +1,14 @@
 /*
  *  Implementation of operations over global quota file
  */
+#include <linux/spinlock.h>
 #include <linux/fs.h>
 #include <linux/quota.h>
 #include <linux/quotaops.h>
 #include <linux/dqblk_qtree.h>
+#include <linux/jiffies.h>
+#include <linux/timer.h>
+#include <linux/writeback.h>
 
 #define MLOG_MASK_PREFIX ML_QUOTA
 #include <cluster/masklog.h>
@@ -19,6 +23,8 @@
 #include "dlmglue.h"
 #include "uptodate.h"
 #include "quota.h"
+
+static void qsync_timer_fn(unsigned long oinfo_ptr);
 
 static void ocfs2_global_disk2memdqb(struct dquot *dquot, void *dp)
 {
@@ -313,6 +319,7 @@ int ocfs2_global_read_info(struct super_block *sb, int type)
 	info->dqi_bgrace = le32_to_cpu(dinfo.dqi_bgrace);
 	info->dqi_igrace = le32_to_cpu(dinfo.dqi_igrace);
 	oinfo->dqi_syncms = le32_to_cpu(dinfo.dqi_syncms);
+	oinfo->dqi_syncjiff = msecs_to_jiffies(oinfo->dqi_syncms);
 	oinfo->dqi_gi.dqi_blocks = le32_to_cpu(dinfo.dqi_blocks);
 	oinfo->dqi_gi.dqi_free_blk = le32_to_cpu(dinfo.dqi_free_blk);
 	oinfo->dqi_gi.dqi_free_entry = le32_to_cpu(dinfo.dqi_free_entry);
@@ -320,6 +327,10 @@ int ocfs2_global_read_info(struct super_block *sb, int type)
 	oinfo->dqi_gi.dqi_usable_bs = sb->s_blocksize -
 						OCFS2_QBLK_RESERVED_SPACE;
 	oinfo->dqi_gi.dqi_qtree_depth = qtree_depth(&oinfo->dqi_gi);
+	setup_timer(&oinfo->dqi_sync_timer, qsync_timer_fn,
+		    (unsigned long)oinfo);
+	mod_timer(&oinfo->dqi_sync_timer,
+		  round_jiffies(jiffies + oinfo->dqi_syncjiff));
 out_err:
 	mlog_exit(status);
 	return status;
@@ -517,6 +528,66 @@ out:
 	if (err < 0)
 		mlog_errno(err);
 	return err;
+}
+
+/*
+ *  Functions for periodic syncing of dquots with global file
+ */
+static int ocfs2_sync_dquot_helper(struct dquot *dquot, unsigned long type)
+{
+	handle_t *handle;
+	struct super_block *sb = dquot->dq_sb;
+	struct ocfs2_mem_dqinfo *oinfo = sb_dqinfo(sb, type)->dqi_priv;
+	struct ocfs2_super *osb = OCFS2_SB(sb);
+	int status = 0;
+
+	mlog_entry("id=%u qtype=%u type=%lu device=%s\n", dquot->dq_id,
+		   dquot->dq_type, type, sb->s_id);
+	if (type != dquot->dq_type)
+		goto out;
+	status = ocfs2_lock_global_qf(oinfo, 1);
+	if (status < 0)
+		goto out;
+
+	handle = ocfs2_start_trans(osb, OCFS2_QSYNC_CREDITS);
+	if (IS_ERR(handle)) {
+		status = PTR_ERR(handle);
+		mlog_errno(status);
+		goto out_ilock;
+	}
+	mutex_lock(&sb_dqopt(sb)->dqio_mutex);
+	status = ocfs2_sync_dquot(dquot);
+	mutex_unlock(&sb_dqopt(sb)->dqio_mutex);
+	if (status < 0)
+		mlog_errno(status);
+	/* We have to write local structure as well... */
+	dquot_mark_dquot_dirty(dquot);
+	status = dquot_commit(dquot);
+	if (status < 0)
+		mlog_errno(status);
+	ocfs2_commit_trans(osb, handle);
+out_ilock:
+	ocfs2_unlock_global_qf(oinfo, 1);
+out:
+	mlog_exit(status);
+	return status;
+}
+
+static void ocfs2_do_qsync(unsigned long oinfo_ptr)
+{
+	struct ocfs2_mem_dqinfo *oinfo = (struct ocfs2_mem_dqinfo *)oinfo_ptr;
+	struct super_block *sb = oinfo->dqi_gqinode->i_sb;
+
+	dquot_scan_active(sb, ocfs2_sync_dquot_helper, oinfo->dqi_type);
+}
+
+static void qsync_timer_fn(unsigned long oinfo_ptr)
+{
+	struct ocfs2_mem_dqinfo *oinfo = (struct ocfs2_mem_dqinfo *)oinfo_ptr;
+
+	pdflush_operation(ocfs2_do_qsync, oinfo_ptr);
+	mod_timer(&oinfo->dqi_sync_timer,
+		  round_jiffies(jiffies + oinfo->dqi_syncjiff));
 }
 
 /*
