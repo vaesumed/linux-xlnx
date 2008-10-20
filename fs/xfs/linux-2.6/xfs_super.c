@@ -36,6 +36,7 @@
 #include "xfs_dinode.h"
 #include "xfs_inode.h"
 #include "xfs_btree.h"
+#include "xfs_btree_trace.h"
 #include "xfs_ialloc.h"
 #include "xfs_bmap.h"
 #include "xfs_rtalloc.h"
@@ -58,6 +59,7 @@
 #include "xfs_extfree_item.h"
 #include "xfs_mru_cache.h"
 #include "xfs_inode_item.h"
+#include "xfs_sync.h"
 
 #include <linux/namei.h>
 #include <linux/init.h>
@@ -70,7 +72,6 @@
 
 static struct quotactl_ops xfs_quotactl_operations;
 static struct super_operations xfs_super_operations;
-static kmem_zone_t *xfs_vnode_zone;
 static kmem_zone_t *xfs_ioend_zone;
 mempool_t *xfs_ioend_pool;
 
@@ -813,18 +814,18 @@ xfs_setup_devices(
  */
 void
 xfsaild_wakeup(
-	xfs_mount_t		*mp,
+	struct xfs_ail		*ailp,
 	xfs_lsn_t		threshold_lsn)
 {
-	mp->m_ail.xa_target = threshold_lsn;
-	wake_up_process(mp->m_ail.xa_task);
+	ailp->xa_target = threshold_lsn;
+	wake_up_process(ailp->xa_task);
 }
 
 int
 xfsaild(
 	void	*data)
 {
-	xfs_mount_t	*mp = (xfs_mount_t *)data;
+	struct xfs_ail	*ailp = data;
 	xfs_lsn_t	last_pushed_lsn = 0;
 	long		tout = 0;
 
@@ -836,11 +837,11 @@ xfsaild(
 		/* swsusp */
 		try_to_freeze();
 
-		ASSERT(mp->m_log);
-		if (XFS_FORCED_SHUTDOWN(mp))
+		ASSERT(ailp->xa_mount->m_log);
+		if (XFS_FORCED_SHUTDOWN(ailp->xa_mount))
 			continue;
 
-		tout = xfsaild_push(mp, &last_pushed_lsn);
+		tout = xfsaild_push(ailp, &last_pushed_lsn);
 	}
 
 	return 0;
@@ -848,43 +849,82 @@ xfsaild(
 
 int
 xfsaild_start(
-	xfs_mount_t	*mp)
+	struct xfs_ail	*ailp)
 {
-	mp->m_ail.xa_target = 0;
-	mp->m_ail.xa_task = kthread_run(xfsaild, mp, "xfsaild");
-	if (IS_ERR(mp->m_ail.xa_task))
-		return -PTR_ERR(mp->m_ail.xa_task);
+	ailp->xa_target = 0;
+	ailp->xa_task = kthread_run(xfsaild, ailp, "xfsaild");
+	if (IS_ERR(ailp->xa_task))
+		return -PTR_ERR(ailp->xa_task);
 	return 0;
 }
 
 void
 xfsaild_stop(
-	xfs_mount_t	*mp)
+	struct xfs_ail	*ailp)
 {
-	kthread_stop(mp->m_ail.xa_task);
+	kthread_stop(ailp->xa_task);
 }
 
 
-
+/* Catch misguided souls that try to use this interface on XFS */
 STATIC struct inode *
 xfs_fs_alloc_inode(
 	struct super_block	*sb)
 {
-	return kmem_zone_alloc(xfs_vnode_zone, KM_SLEEP);
+	BUG();
+	return NULL;
 }
 
+/*
+ * Now that the generic code is guaranteed not to be accessing
+ * the linux inode, we can reclaim the inode.
+ */
 STATIC void
 xfs_fs_destroy_inode(
-	struct inode		*inode)
+	struct inode	*inode)
 {
-	kmem_zone_free(xfs_vnode_zone, inode);
+	xfs_inode_t		*ip = XFS_I(inode);
+
+	XFS_STATS_INC(vn_reclaim);
+	if (xfs_reclaim(ip))
+		panic("%s: cannot reclaim 0x%p\n", __func__, inode);
 }
 
+/*
+ * Slab object creation initialisation for the XFS inode.
+ * This covers only the idempotent fields in the XFS inode;
+ * all other fields need to be initialised on allocation
+ * from the slab. This avoids the need to repeatedly intialise
+ * fields in the xfs inode that left in the initialise state
+ * when freeing the inode.
+ */
 STATIC void
 xfs_fs_inode_init_once(
-	void			*vnode)
+	void			*inode)
 {
-	inode_init_once((struct inode *)vnode);
+	struct xfs_inode	*ip = inode;
+
+	memset(ip, 0, sizeof(struct xfs_inode));
+
+	/* vfs inode */
+	inode_init_once(VFS_I(ip));
+
+	/* xfs inode */
+	atomic_set(&ip->i_iocount, 0);
+	atomic_set(&ip->i_pincount, 0);
+	spin_lock_init(&ip->i_flags_lock);
+	init_waitqueue_head(&ip->i_ipin_wait);
+	/*
+	 * Because we want to use a counting completion, complete
+	 * the flush completion once to allow a single access to
+	 * the flush completion without blocking.
+	 */
+	init_completion(&ip->i_flush);
+	complete(&ip->i_flush);
+
+	mrlock_init(&ip->i_lock, MRLOCK_ALLOW_EQUAL_PRI|MRLOCK_BARRIER,
+		     "xfsino", ip->i_ino);
+	mrlock_init(&ip->i_iolock, MRLOCK_BARRIER, "xfsio", ip->i_ino);
 }
 
 /*
@@ -912,7 +952,7 @@ xfs_fs_write_inode(
 	 * it dirty again so we'll try again later.
 	 */
 	if (error)
-		mark_inode_dirty_sync(inode);
+		xfs_mark_inode_dirty_sync(XFS_I(inode));
 
 	return -error;
 }
@@ -923,164 +963,13 @@ xfs_fs_clear_inode(
 {
 	xfs_inode_t		*ip = XFS_I(inode);
 
-	/*
-	 * ip can be null when xfs_iget_core calls xfs_idestroy if we
-	 * find an inode with di_mode == 0 but without IGET_CREATE set.
-	 */
-	if (ip) {
-		xfs_itrace_entry(ip);
-		XFS_STATS_INC(vn_rele);
-		XFS_STATS_INC(vn_remove);
-		XFS_STATS_INC(vn_reclaim);
-		XFS_STATS_DEC(vn_active);
+	xfs_itrace_entry(ip);
+	XFS_STATS_INC(vn_rele);
+	XFS_STATS_INC(vn_remove);
+	XFS_STATS_DEC(vn_active);
 
-		xfs_inactive(ip);
-		xfs_iflags_clear(ip, XFS_IMODIFIED);
-		if (xfs_reclaim(ip))
-			panic("%s: cannot reclaim 0x%p\n", __func__, inode);
-	}
-
-	ASSERT(XFS_I(inode) == NULL);
-}
-
-/*
- * Enqueue a work item to be picked up by the vfs xfssyncd thread.
- * Doing this has two advantages:
- * - It saves on stack space, which is tight in certain situations
- * - It can be used (with care) as a mechanism to avoid deadlocks.
- * Flushing while allocating in a full filesystem requires both.
- */
-STATIC void
-xfs_syncd_queue_work(
-	struct xfs_mount *mp,
-	void		*data,
-	void		(*syncer)(struct xfs_mount *, void *))
-{
-	struct bhv_vfs_sync_work *work;
-
-	work = kmem_alloc(sizeof(struct bhv_vfs_sync_work), KM_SLEEP);
-	INIT_LIST_HEAD(&work->w_list);
-	work->w_syncer = syncer;
-	work->w_data = data;
-	work->w_mount = mp;
-	spin_lock(&mp->m_sync_lock);
-	list_add_tail(&work->w_list, &mp->m_sync_list);
-	spin_unlock(&mp->m_sync_lock);
-	wake_up_process(mp->m_sync_task);
-}
-
-/*
- * Flush delayed allocate data, attempting to free up reserved space
- * from existing allocations.  At this point a new allocation attempt
- * has failed with ENOSPC and we are in the process of scratching our
- * heads, looking about for more room...
- */
-STATIC void
-xfs_flush_inode_work(
-	struct xfs_mount *mp,
-	void		*arg)
-{
-	struct inode	*inode = arg;
-	filemap_flush(inode->i_mapping);
-	iput(inode);
-}
-
-void
-xfs_flush_inode(
-	xfs_inode_t	*ip)
-{
-	struct inode	*inode = VFS_I(ip);
-
-	igrab(inode);
-	xfs_syncd_queue_work(ip->i_mount, inode, xfs_flush_inode_work);
-	delay(msecs_to_jiffies(500));
-}
-
-/*
- * This is the "bigger hammer" version of xfs_flush_inode_work...
- * (IOW, "If at first you don't succeed, use a Bigger Hammer").
- */
-STATIC void
-xfs_flush_device_work(
-	struct xfs_mount *mp,
-	void		*arg)
-{
-	struct inode	*inode = arg;
-	sync_blockdev(mp->m_super->s_bdev);
-	iput(inode);
-}
-
-void
-xfs_flush_device(
-	xfs_inode_t	*ip)
-{
-	struct inode	*inode = VFS_I(ip);
-
-	igrab(inode);
-	xfs_syncd_queue_work(ip->i_mount, inode, xfs_flush_device_work);
-	delay(msecs_to_jiffies(500));
-	xfs_log_force(ip->i_mount, (xfs_lsn_t)0, XFS_LOG_FORCE|XFS_LOG_SYNC);
-}
-
-STATIC void
-xfs_sync_worker(
-	struct xfs_mount *mp,
-	void		*unused)
-{
-	int		error;
-
-	if (!(mp->m_flags & XFS_MOUNT_RDONLY))
-		error = xfs_sync(mp, SYNC_FSDATA | SYNC_BDFLUSH | SYNC_ATTR);
-	mp->m_sync_seq++;
-	wake_up(&mp->m_wait_single_sync_task);
-}
-
-STATIC int
-xfssyncd(
-	void			*arg)
-{
-	struct xfs_mount	*mp = arg;
-	long			timeleft;
-	bhv_vfs_sync_work_t	*work, *n;
-	LIST_HEAD		(tmp);
-
-	set_freezable();
-	timeleft = xfs_syncd_centisecs * msecs_to_jiffies(10);
-	for (;;) {
-		timeleft = schedule_timeout_interruptible(timeleft);
-		/* swsusp */
-		try_to_freeze();
-		if (kthread_should_stop() && list_empty(&mp->m_sync_list))
-			break;
-
-		spin_lock(&mp->m_sync_lock);
-		/*
-		 * We can get woken by laptop mode, to do a sync -
-		 * that's the (only!) case where the list would be
-		 * empty with time remaining.
-		 */
-		if (!timeleft || list_empty(&mp->m_sync_list)) {
-			if (!timeleft)
-				timeleft = xfs_syncd_centisecs *
-							msecs_to_jiffies(10);
-			INIT_LIST_HEAD(&mp->m_sync_work.w_list);
-			list_add_tail(&mp->m_sync_work.w_list,
-					&mp->m_sync_list);
-		}
-		list_for_each_entry_safe(work, n, &mp->m_sync_list, w_list)
-			list_move(&work->w_list, &tmp);
-		spin_unlock(&mp->m_sync_lock);
-
-		list_for_each_entry_safe(work, n, &tmp, w_list) {
-			(*work->w_syncer)(mp, work->w_data);
-			list_del(&work->w_list);
-			if (work == &mp->m_sync_work)
-				continue;
-			kmem_free(work);
-		}
-	}
-
-	return 0;
+	xfs_inactive(ip);
+	xfs_iflags_clear(ip, XFS_IMODIFIED);
 }
 
 STATIC void
@@ -1101,9 +990,8 @@ xfs_fs_put_super(
 	int			unmount_event_flags = 0;
 	int			error;
 
-	kthread_stop(mp->m_sync_task);
-
-	xfs_sync(mp, SYNC_ATTR | SYNC_DELWRI);
+	xfs_syncd_stop(mp);
+	xfs_sync_inodes(mp, SYNC_ATTR|SYNC_DELWRI);
 
 #ifdef HAVE_DMAPI
 	if (mp->m_flags & XFS_MOUNT_DMAPI) {
@@ -1131,16 +1019,6 @@ xfs_fs_put_super(
 	error = xfs_unmount_flush(mp, 0);
 	WARN_ON(error);
 
-	/*
-	 * If we're forcing a shutdown, typically because of a media error,
-	 * we want to make sure we invalidate dirty pages that belong to
-	 * referenced vnodes as well.
-	 */
-	if (XFS_FORCED_SHUTDOWN(mp)) {
-		error = xfs_sync(mp, SYNC_WAIT | SYNC_CLOSE);
-		ASSERT(error != EFSCORRUPTED);
-	}
-
 	if (mp->m_flags & XFS_MOUNT_DMAPI) {
 		XFS_SEND_UNMOUNT(mp, rip, DM_RIGHT_NULL, 0, 0,
 				unmount_event_flags);
@@ -1161,7 +1039,7 @@ xfs_fs_write_super(
 	struct super_block	*sb)
 {
 	if (!(sb->s_flags & MS_RDONLY))
-		xfs_sync(XFS_M(sb), SYNC_FSDATA);
+		xfs_sync_fsdata(XFS_M(sb), 0);
 	sb->s_dirt = 0;
 }
 
@@ -1172,7 +1050,6 @@ xfs_fs_sync_super(
 {
 	struct xfs_mount	*mp = XFS_M(sb);
 	int			error;
-	int			flags;
 
 	/*
 	 * Treat a sync operation like a freeze.  This is to work
@@ -1186,20 +1063,10 @@ xfs_fs_sync_super(
 	 * dirty the Linux inode until after the transaction I/O
 	 * completes.
 	 */
-	if (wait || unlikely(sb->s_frozen == SB_FREEZE_WRITE)) {
-		/*
-		 * First stage of freeze - no more writers will make progress
-		 * now we are here, so we flush delwri and delalloc buffers
-		 * here, then wait for all I/O to complete.  Data is frozen at
-		 * that point. Metadata is not frozen, transactions can still
-		 * occur here so don't bother flushing the buftarg (i.e
-		 * SYNC_QUIESCE) because it'll just get dirty again.
-		 */
-		flags = SYNC_DATA_QUIESCE;
-	} else
-		flags = SYNC_FSDATA;
-
-	error = xfs_sync(mp, flags);
+	if (wait || unlikely(sb->s_frozen == SB_FREEZE_WRITE))
+		error = xfs_quiesce_data(mp);
+	else
+		error = xfs_sync_fsdata(mp, 0);
 	sb->s_dirt = 0;
 
 	if (unlikely(laptop_mode)) {
@@ -1337,9 +1204,8 @@ xfs_fs_remount(
 
 	/* rw -> ro */
 	if (!(mp->m_flags & XFS_MOUNT_RDONLY) && (*flags & MS_RDONLY)) {
-		xfs_filestream_flush(mp);
-		xfs_sync(mp, SYNC_DATA_QUIESCE);
-		xfs_attr_quiesce(mp);
+		xfs_quiesce_data(mp);
+		xfs_quiesce_attr(mp);
 		mp->m_flags |= XFS_MOUNT_RDONLY;
 	}
 
@@ -1348,7 +1214,7 @@ xfs_fs_remount(
 
 /*
  * Second stage of a freeze. The data is already frozen so we only
- * need to take care of themetadata. Once that's done write a dummy
+ * need to take care of the metadata. Once that's done write a dummy
  * record to dirty the log in case of a crash while frozen.
  */
 STATIC void
@@ -1357,7 +1223,7 @@ xfs_fs_lockfs(
 {
 	struct xfs_mount	*mp = XFS_M(sb);
 
-	xfs_attr_quiesce(mp);
+	xfs_quiesce_attr(mp);
 	xfs_fs_log_dummy(mp);
 }
 
@@ -1679,7 +1545,6 @@ xfs_fs_fill_super(
 		goto out_free_args;
 
 	spin_lock_init(&mp->m_sb_lock);
-	mutex_init(&mp->m_ilock);
 	mutex_init(&mp->m_growlock);
 	atomic_set(&mp->m_active_trans, 0);
 	INIT_LIST_HEAD(&mp->m_sync_list);
@@ -1772,13 +1637,9 @@ xfs_fs_fill_super(
 		goto fail_vnrele;
 	}
 
-	mp->m_sync_work.w_syncer = xfs_sync_worker;
-	mp->m_sync_work.w_mount = mp;
-	mp->m_sync_task = kthread_run(xfssyncd, mp, "xfssyncd");
-	if (IS_ERR(mp->m_sync_task)) {
-		error = -PTR_ERR(mp->m_sync_task);
+	error = xfs_syncd_init(mp);
+	if (error)
 		goto fail_vnrele;
-	}
 
 	xfs_itrace_exit(XFS_I(sb->s_root->d_inode));
 
@@ -1835,8 +1696,17 @@ xfs_fs_get_sb(
 	void			*data,
 	struct vfsmount		*mnt)
 {
-	return get_sb_bdev(fs_type, flags, dev_name, data, xfs_fs_fill_super,
+	int			error;
+
+	error = get_sb_bdev(fs_type, flags, dev_name, data, xfs_fs_fill_super,
 			   mnt);
+	if (!error) {
+		xfs_mount_t	*mp = XFS_M(mnt->mnt_sb);
+
+		mp->m_vfsmount = mnt;
+	}
+
+	return error;
 }
 
 static struct super_operations xfs_super_operations = {
@@ -1882,10 +1752,19 @@ xfs_alloc_trace_bufs(void)
 	if (!xfs_bmap_trace_buf)
 		goto out_free_alloc_trace;
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
+	xfs_allocbt_trace_buf = ktrace_alloc(XFS_ALLOCBT_TRACE_SIZE,
+					     KM_MAYFAIL);
+	if (!xfs_allocbt_trace_buf)
+		goto out_free_bmap_trace;
+
+	xfs_inobt_trace_buf = ktrace_alloc(XFS_INOBT_TRACE_SIZE, KM_MAYFAIL);
+	if (!xfs_inobt_trace_buf)
+		goto out_free_allocbt_trace;
+
 	xfs_bmbt_trace_buf = ktrace_alloc(XFS_BMBT_TRACE_SIZE, KM_MAYFAIL);
 	if (!xfs_bmbt_trace_buf)
-		goto out_free_bmap_trace;
+		goto out_free_inobt_trace;
 #endif
 #ifdef XFS_ATTR_TRACE
 	xfs_attr_trace_buf = ktrace_alloc(XFS_ATTR_TRACE_SIZE, KM_MAYFAIL);
@@ -1907,8 +1786,12 @@ xfs_alloc_trace_bufs(void)
 	ktrace_free(xfs_attr_trace_buf);
  out_free_bmbt_trace:
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(xfs_bmbt_trace_buf);
+ out_free_inobt_trace:
+	ktrace_free(xfs_inobt_trace_buf);
+ out_free_allocbt_trace:
+	ktrace_free(xfs_allocbt_trace_buf);
  out_free_bmap_trace:
 #endif
 #ifdef XFS_BMAP_TRACE
@@ -1931,8 +1814,10 @@ xfs_free_trace_bufs(void)
 #ifdef XFS_ATTR_TRACE
 	ktrace_free(xfs_attr_trace_buf);
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(xfs_bmbt_trace_buf);
+	ktrace_free(xfs_inobt_trace_buf);
+	ktrace_free(xfs_allocbt_trace_buf);
 #endif
 #ifdef XFS_BMAP_TRACE
 	ktrace_free(xfs_bmap_trace_buf);
@@ -1945,16 +1830,10 @@ xfs_free_trace_bufs(void)
 STATIC int __init
 xfs_init_zones(void)
 {
-	xfs_vnode_zone = kmem_zone_init_flags(sizeof(struct inode), "xfs_vnode",
-					KM_ZONE_HWALIGN | KM_ZONE_RECLAIM |
-					KM_ZONE_SPREAD,
-					xfs_fs_inode_init_once);
-	if (!xfs_vnode_zone)
-		goto out;
 
 	xfs_ioend_zone = kmem_zone_init(sizeof(xfs_ioend_t), "xfs_ioend");
 	if (!xfs_ioend_zone)
-		goto out_destroy_vnode_zone;
+		goto out;
 
 	xfs_ioend_pool = mempool_create_slab_pool(4 * MAX_BUF_PER_PAGE,
 						  xfs_ioend_zone);
@@ -1970,6 +1849,7 @@ xfs_init_zones(void)
 						"xfs_bmap_free_item");
 	if (!xfs_bmap_free_item_zone)
 		goto out_destroy_log_ticket_zone;
+
 	xfs_btree_cur_zone = kmem_zone_init(sizeof(xfs_btree_cur_t),
 						"xfs_btree_cur");
 	if (!xfs_btree_cur_zone)
@@ -2017,8 +1897,8 @@ xfs_init_zones(void)
 
 	xfs_inode_zone =
 		kmem_zone_init_flags(sizeof(xfs_inode_t), "xfs_inode",
-					KM_ZONE_HWALIGN | KM_ZONE_RECLAIM |
-					KM_ZONE_SPREAD, NULL);
+			KM_ZONE_HWALIGN | KM_ZONE_RECLAIM | KM_ZONE_SPREAD,
+			xfs_fs_inode_init_once);
 	if (!xfs_inode_zone)
 		goto out_destroy_efi_zone;
 
@@ -2066,8 +1946,6 @@ xfs_init_zones(void)
 	mempool_destroy(xfs_ioend_pool);
  out_destroy_ioend_zone:
 	kmem_zone_destroy(xfs_ioend_zone);
- out_destroy_vnode_zone:
-	kmem_zone_destroy(xfs_vnode_zone);
  out:
 	return -ENOMEM;
 }
@@ -2092,7 +1970,6 @@ xfs_destroy_zones(void)
 	kmem_zone_destroy(xfs_log_ticket_zone);
 	mempool_destroy(xfs_ioend_pool);
 	kmem_zone_destroy(xfs_ioend_zone);
-	kmem_zone_destroy(xfs_vnode_zone);
 
 }
 
