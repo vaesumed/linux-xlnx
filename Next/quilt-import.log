@@ -1,0 +1,248 @@
+Importing driver-core.current based on 2.6.27-git7
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 2e532d68a2b3e2aa6b19731501222069735c741c
+HEAD is now at 2e532d6 {pci,pnp} quirks.c: don't use deprecated print_fn_descriptor_symbol()
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+document-kernel-taint-flags-properly.patch
+error: patch failed: Documentation/sysctl/kernel.txt:363
+error: Documentation/sysctl/kernel.txt: patch does not apply
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard ac7b643ad9c570efa0b5cbc9af5581db8c2faf64
+HEAD is now at ac7b643 Document kernel taint flags properly
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-option-add-ericsson-f3507g-and-dell-5530.patch
+usb-option.c-remove-duplicate-device-ids-now-supported-in-hso.c.patch
+usb-add-oceanic-product-id-to-ftdi_sio.patch
+usb-added-driver-for-a-delcom-usb-7-segment-led-display.patch
+usb-add-usb-test-and-measurement-class-driver.patch
+Importing m68k based on 0cfd81031a26717fe14380d18275f8e217571615
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 0cfd81031a26717fe14380d18275f8e217571615
+HEAD is now at 0cfd810 Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+amiga-amiserial-no-serial-console-if-modular.diff
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 078d8b60ab8002ba5d8e680aac348f42b254f295
+HEAD is now at 078d8b6 USB: add USB test and measurement class driver
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-use-dev_get_drvdata-accessors.patch
+acpi-fixup-typo-in-acpi_device_remove.patch
+pm-simplify-the-new-suspend-hibernation-framework-for-devices.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 0f8bf1f2e0b12a72ae3fbd580bc606b60f9d4238
+HEAD is now at 0f8bf1f warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+drivers-usb-class-usblp.c-adjust-error-handling-code.patch
+usb-kill-urbs-permanently.patch
+usb-extend-poisoning-to-anchors.patch
+ub-remove-sg_stat.patch
+usb-let-some-usb-host-controllers-get-irq-flags-from-resource.patch
+usb-gadget-kconfig-cleanup.patch
+usb-gadget-dummy_hcd-implement-set_wedge.patch
+usb-gadget-net2280-implement-set_wedge.patch
+usb-gadget-function-activation-deactivation.patch
+usb-gadget-cdc-obex-glue.patch
+usb-gadget-defer-obex-enumeration.patch
+usb-remove-unused-include-version.h.patch
+usb-drivers-usb-misc-use-an-is_err-test-rather-than-a-null-test.patch
+usb-add-freescale-qe-cpm-usb-peripheral-controller-driver.patch
+usb-storage-report-underflow-with-no-sense-data.patch
+ohci-allow-broken-controllers-to-auto-stop.patch
+usb-documentation-usb-anchors.txt-2.patch
+usb-core-fix-usb_otg_blacklist_hub-typo.patch
+usb-ftdi_sio-fix-product-parameter-description.patch
+usb-reset_resume-needs-to-block-autosuspend-when-remote-wakeup-is-needed.patch
+usb-serial-sierra-debug-message-fix.patch
+usb-fix-doc-for-usb_autopm_enable.patch
+usb-fix-spelling-in-usb-serial.h.patch
+usb-g_printer-fix-handling-zero-length-packet.patch
+usb-gadget-workaround-storage-command-size-issues.patch
+usb-ehci-dbg-increase-debug-buffer-size-for-periodic-file.patch
+usb-ehci-dbg-fix-reading-less-content-of-periodic-file.patch
+usb-change-hub-initialization-sleeps-to-delayed_work.patch
+.dotest/patch:178: space before tab in indent.
+                        	hub_power_on(hub, true);
+warning: 1 line adds whitespace errors.
+usbmon-fix-tiny-race-exposed-by-the-fastboot-patches.patch
+usb-remove-code-associated-with-config_ppc_merge.patch
+musb-add-sanity-check-for-maximum-number-of-endpoints.patch
+usb-gadget-usb_gadget_vbus_draw-kconfig-option.patch
+usb-fix-s3c2410_udc-usb-speed-handling.patch
+musb-io-only-define-read-write-stubs-if-they-re-not-defined-yet.patch
+omap-musb-fixes-the-tt-programming.patch
+omap-musb-corrects-urb-unlink-function-path.patch
+usb-musb-do-not-mess-up-count-number-and-csr0-register-value.patch
+usb-musb_hdrc-build-fixes.patch
+usb-musb-general-cleanup-to-musbhsdma.c.patch
+usb-musb-remove-dead-code-from-procfs.patch
+usb-ohci-omap-handle-other-omap15xx-chips.patch
+usb-omap_udc-sync-with-omap-tree.patch
+usb-gadget-cdc-ethernet-notification-bugfix.patch
+usb-vstusb.c-new-driver-for-spectrometers-used-by-vernier-software-technology-inc.patch
+usb-ti_usb_3410_5052-removed-duplicated-include.patch
+usb-uhci-improve-scheduling-of-interrupt-urbs.patch
+usb-improve-ehci_watchdog-s-side-effect-in-cpu-power-management.patch
+usb-isp1760-use-an-is_err-test-rather-than-a-null-test.patch
+usb-ftdi-elan-always-pass-usb_bulk_msg-a-timeout-in-milliseconds.patch
+usb-anchor-api-changes-needed-for-btusb.patch
+usb-ehci-ohci-uhci-remove-version-numbers.patch
+usb-ehci-log-a-warning-if-ehci-hcd-is-not-loaded-first.patch
+usb-option-anydata-new-modem-same-id.patch
+usb-snoop-processes-opening-usbfs-device-files.patch
+usb-ehci-fix-remote-wakeup-support-for-arc-tdi-core.patch
+usb-export-if-an-interface-driver-supports-autosuspend.patch
+usb-ohci-add-support-for-tmio-ohci-cell.patch
+usb-hub.c-add-initial_descriptor_timeout-module-parameter-for-usbcore.patch
+usb-option-add-pantech-cards.patch
+usb-ohci-fix-endless-polling-behavior.patch
+usb-fix-up-problems-in-the-vtusb-driver.patch
+fsl_usb2_udc-make-dr_ep_setup-function-static.patch
+fsl_usb2_udc-remove-check-for-udc-null-in-dr_controller_setup.patch
+fsl_usb2_udc-fix-some-sparse-warnings-and-remove-redundant-code.patch
+fsl_usb2_udc-clean-up-whitespace-in-errors-and-warnings.patch
+fsl_usb2_udc-clean-up-whitespace-in-proc-debugging-output.patch
+fsl_usb2_udc-initialize-spinlock-earlier.patch
+fsl_usb2_udc-rename-the-arguments-of-the-fsl_writel-macro.patch
+fsl_usb2_udc-uninline-udc_reset_ep_queue.patch
+fsl_usb2_udc-make-fsl_queue_td-return-type-void.patch
+fsl_usb2_udc-add-a-wmb-before-priming-endpoint.patch
+fsl_usb2_udc-fix-oops-on-probe-failure.patch
+usb-fsl_qe_udc-fix-response-to-get-status-request.patch
+usb-fsl_qe_udc-clear-data-toggle-on-clear-halt-request.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb-input-drivers.patch
+usb-remove-warn-macro-from-usb-media-drivers.patch
+usb-remove-warn-macro-from-usb-net-drivers.patch
+usb-remove-warn-macro-from-usb-drivers.patch
+usb-remove-warn-macro-from-hid-core.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb-serial-drivers.patch
+usb-remove-info-macro-from-usb-misc-drivers.patch
+usb-remove-info-macro-from-remaining-usb-drivers.patch
+.dotest/patch:33: space before tab in indent.
+				 	USB_ENDPOINT_DIR_MASK + info->epnum
+warning: 1 line adds whitespace errors.
+usb-remove-info-macro-from-usb-network-drivers.patch
+usb-remove-info-macro-from-usb-input-drivers.patch
+usb-remove-info-macro-from-usb-mtd-drivers.patch
+usb-remove-info-macro-from-usb.h.patch
+usb-remove-use-of-err-in-drivers-usb-serial.patch
+usb-remove-err-macro-from-usb-class-drivers.patch
+usb-remove-err-macro-from-usb-core-code.patch
+usb-remove-err-macro-from-usb-misc-drivers.patch
+usb-remove-err-macro-from-more-usb-drivers.patch
+usb-gotemp.patch
+Importing device-mapper based on v2.6.27-3976-g7591103
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 7591103c08abade60aeddb432ed0686ddd0de1c6
+HEAD is now at 7591103 Merge git://git.kernel.org/pub/scm/linux/kernel/git/bart/ide-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-kcopyd-avoid-queue-shuffle.patch
+dm-snapshot-fix-primary_pe-race.patch
+dm-snapshot-drop-unused-last_percent.patch
+dm-exception-store-refactor-zero_area.patch
+dm-exception-store-fix-misordered-writes.patch
+dm-publish-array_too_big.patch
+dm-remove-dm-header-from-targets.patch
+dm-crypt-tidy-sector.patch
+Importing i2c based on 2.6.27-git8
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 0cfd81031a26717fe14380d18275f8e217571615
+HEAD is now at 0cfd810 Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-i801-smbus-patch-for-intel-ibex-peak-deviceids.patch
+i2c-algo-pcf-01-pass-adapter-data-into-waitforpin-method.patch
+i2c-algo-pcf-02-add-adapter-hooks-around-xfer-begin-and-end.patch
+i2c-algo-pcf-03-fix-typo-in-debugging-log-message.patch
+i2c-clarify-i2c_adapter-class-usage.patch
+i2c-delete-outdated-client-porting-guide.patch
+i2c-constify-i2c_get_clientdata-parameter.patch
+i2c-delete-legacy-model-documentation.patch
+i2c-drop-2-byte-addr-block-transactions.patch
+i2c-update-doc-writing-clients.patch
+i2c-cleanup-header.patch
+i2c-deprecate-legacy-binding.patch
+Importing jdelvare-hwmon based on 2.6.27-git8
+	quilt series is empty
+$ git update-ref refs/heads/quilt/jdelvare-hwmon 0cfd81031a26717fe14380d18275f8e217571615
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on 2e532d68a2b3e2aa6b19731501222069735c741c
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard 2e532d68a2b3e2aa6b19731501222069735c741c
+HEAD is now at 2e532d6 {pci,pnp} quirks.c: don't use deprecated print_fn_descriptor_symbol()
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+8250-oxsemi
+.dotest/patch:154: trailing whitespace.
+    
+.dotest/patch:179: space before tab in indent.
+	 	pci_oxsemi_tornado_init(dev, board);
+.dotest/patch:180: trailing whitespace.
+    
+.dotest/patch:191: space before tab in indent.
+ 	{	PCI_VENDOR_ID_OXSEMI, 0xc101,    /* OXPCIe952 1 Legacy UART */
+.dotest/patch:194: space before tab in indent.
+ 	{	PCI_VENDOR_ID_OXSEMI, 0xc105,    /* OXPCIe952 1 Legacy UART */
+warning: squelched 2 whitespace errors
+warning: 7 lines add whitespace errors.
+blackfin-kgdb
+blackfin-sir-stopfix
+blackfin-clean-early
+blackfin-rxtx-lock
+blackfin-clear-bi
+pty-simplify-resize
+n-tty-bkl-drop
+.dotest/patch:120: trailing whitespace.
+	
+.dotest/patch:340: trailing whitespace.
+			
+.dotest/patch:590: trailing whitespace.
+	
+.dotest/patch:974: trailing whitespace.
+	
+.dotest/patch:1044: trailing whitespace.
+	
+warning: 5 lines add whitespace errors.
+n-tty-clean
+epca-break-infinite
+pty-remove-pts-global
+pty-per-mount-allocated
+pty-per-mount-config
+pty-option-parsing
+pty-pts-multiple-instances
+pty-mknod-ptmx
+pty-get-init-pts-sb
+pty-pts-enable-multiple
+pty-multiple-doc
+.dotest/patch:98: space before tab in indent.
+   	- adding ptmxmode mount option to devpts entry in /etc/fstab, or
+.dotest/patch:142: trailing whitespace.
+   
+warning: 2 lines add whitespace errors.
+pty-devpts-tidy
+8250-oxsemi-mainpine
+.dotest/patch:18: space before tab in indent.
+	    	return 0;
+.dotest/patch:54: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 1 Port V.34 Super-G3 Fax *.
+.dotest/patch:57: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 2 Port V.34 Super-G3 Fax */
+.dotest/patch:60: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 4 Port V.34 Super-G3 Fax */
+.dotest/patch:63: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 8 Port V.34 Super-G3 Fax */
+warning: 5 lines add whitespace errors.
