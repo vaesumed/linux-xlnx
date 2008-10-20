@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/mount.h>
 #include <linux/namei.h>
+#include <linux/sched.h>
 
 #define dprintk(fmt, args...) do{}while(0)
 
@@ -250,6 +251,7 @@ static int filldir_one(void * __buf, const char * name, int len,
 static int get_name(struct vfsmount *mnt, struct dentry *dentry,
 		char *name, struct dentry *child)
 {
+	const struct cred *cred = current_cred();
 	struct inode *dir = dentry->d_inode;
 	int error;
 	struct file *file;
@@ -264,7 +266,7 @@ static int get_name(struct vfsmount *mnt, struct dentry *dentry,
 	/*
 	 * Open the directory ...
 	 */
-	file = dentry_open(dget(dentry), mntget(mnt), O_RDONLY);
+	file = dentry_open(dget(dentry), mntget(mnt), O_RDONLY, cred);
 	error = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out;
