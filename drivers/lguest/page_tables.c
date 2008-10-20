@@ -298,9 +298,26 @@ int demand_page(struct lg_cpu *cpu, unsigned long vaddr, int errcode)
 		return 0;
 
 #ifndef CONFIG_X86_PAE
-	/* If the gpgd is actually pointing to a 4MB page,
-	 * instead of pointing to a pte page, we will back it
-	 * with 4KB pages in the host */
+	/* Remember that cute diagram with the top-level page table pointing to
+	 * 1024 page tables, each of which referred to 1024 physical pages?
+	 * That's actually a little simplistic: the Guest can also create a
+	 * single virtual-to-physical 4MB page, where the top-level page table
+	 * points directly to the 4MB physical address mapped at that virtual
+	 * address.
+	 *
+	 * Linux uses this to map the kernel itself which is one big linear
+	 * blob: one of these 4MB mappings takes the place of 1024 4k mappings.
+	 * Since there's a small cache of virtual-to-physical mappings in the
+	 * CPU, this actually makes a measurable performance difference in some
+	 * cases by saving more pagetable lookups.  (BTW, this cache is
+	 * perversely called a Translation Lookaside Buffer, or TLB).
+	 *
+	 * The Guest sets up a 4MB page by setting the Page Size Extension
+	 * (PSE) bit in the top-level page table entry.  That means instead of
+	 * pointing to a page of page table entries, this itself is a page
+	 * table entry to a 4MB page.  But it's hard for us to get a 4MB page
+	 * to use here in the Host, so the shadow doesn't use PTE: we make a
+	 * normal page table with 1024 entries. */
 	if (pgd_flags(gpgd) & _PAGE_PSE) {
 		/* Check they're not trying to write to a page the Guest wants
 		 * read-only (bit 2 of errcode == write). */
@@ -311,7 +328,7 @@ int demand_page(struct lg_cpu *cpu, unsigned long vaddr, int errcode)
 		if ((errcode & 4) && !(pgd_flags(gpgd) & _PAGE_USER))
 			return 0;
 
-		/* Is the 4MB page within the guest limits? */
+		/* Is the 4MB page within the Guest limits? */
 		if (pgd_pfn(gpgd) + ((PGDIR_SIZE - PAGE_SIZE) >> PAGE_SHIFT) >=
 		    cpu->lg->pfn_limit)
 			kill_guest(cpu, "large page out of limits");
@@ -327,7 +344,7 @@ int demand_page(struct lg_cpu *cpu, unsigned long vaddr, int errcode)
 					   "out of memory allocating pte page");
 			/* We build a shadow pgd, pointing to the PTE page */
 			set_pgd(spgd, __pgd(__pa(ptepage) |
-			      (pgd_flags(gpgd) & ~_PAGE_PSE &  _PAGE_TABLE)));
+			      (pgd_flags(gpgd) & ~_PAGE_PSE & _PAGE_TABLE)));
 		}
 
 		/* Add the _PAGE_ACCESSED and (for a write) _PAGE_DIRTY flag */
@@ -335,28 +352,32 @@ int demand_page(struct lg_cpu *cpu, unsigned long vaddr, int errcode)
 		if (errcode & 2)
 			gpgd = __pgd(pgd_val(gpgd) | _PAGE_DIRTY);
 
-		/* We will we use this pointer to populate
-		 * the shadow PTE page */
+		/* We will use this pointer to populate the shadow PTE page */
 		ptep = __va(pgd_pfn(*spgd) << PAGE_SHIFT);
 
-		/* We will create a fake gpte, so we can use
-		 * gpte_to_spte function */
+		/* This is the first physical address in the 4MB page. */
 		frame = pgd_pfn(gpgd) << PAGE_SHIFT;
 
-		/* And here, we completely populate the shadow PTE page,
-		 * so we map the 1024 4KB pages, backing the 4MB guest page */
+		/* And here, we completely populate the shadow PTE page, so we
+		 * map the 1024 4KB pages, backing the 4MB Guest page */
 		for (; i < PTRS_PER_PTE; i++) {
+			/* This is what the PTE would normally look like. */
 			fake_gpte =
 			    __pte(frame | (pgd_flags(gpgd) & ~_PAGE_PSE));
-			frame = frame + PAGE_SIZE;
+			/* If there's an old entry, remove it first. */
 			release_pte(ptep[i]);
+
+			/* We put in a Writable or non-writable PTE entry. */
 			if (pgd_val(gpgd) & _PAGE_DIRTY)
 				ptep[i] = gpte_to_spte(cpu, fake_gpte, 1);
 			else
 				ptep[i] =
 				    gpte_to_spte(cpu, pte_wrprotect(fake_gpte),
 						 0);
+			/* Move on to the next 4k page. */
+			frame += PAGE_SIZE;
 		}
+
 		/* Finally, we write the Guest PGD entry back: we've set the
 		 * _PAGE_ACCESSED and maybe the _PAGE_DIRTY flags. */
 		lgwrite(cpu, gpgd_ptr, pgd_t, gpgd);
