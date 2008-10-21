@@ -369,6 +369,11 @@ void __init dmi_scan_machine(void)
 	char __iomem *p, *q;
 	int rc;
 
+#ifdef CONFIG_PARAVIRT
+	if (strcmp(pv_info.name, "lguest") == 0)
+		goto error;
+#endif
+
 	if (efi_enabled) {
 		if (efi.smbios == EFI_INVALID_TABLE_ADDR)
 			goto error;
