@@ -595,8 +595,8 @@ int devpts_pty_new(struct inode *ptmx_inode, struct tty_struct *tty)
 		return -ENOMEM;
 
 	inode->i_ino = number+3;
-	inode->i_uid = opts->setuid ? opts->uid : current->fsuid;
-	inode->i_gid = opts->setgid ? opts->gid : current->fsgid;
+	inode->i_uid = opts->setuid ? opts->uid : current_fsuid();
+	inode->i_gid = opts->setgid ? opts->gid : current_fsgid();
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
 	init_special_inode(inode, S_IFCHR|opts->mode, device);
 	inode->i_private = tty;
