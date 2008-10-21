@@ -178,7 +178,8 @@ v9fs_file_read(struct file *filp, char __user *udata, size_t count,
 	int ret;
 	struct p9_fid *fid;
 
-	P9_DPRINTK(P9_DEBUG_VFS, "count %d offset %lld\n", count, *offset);
+	P9_DPRINTK(P9_DEBUG_VFS, "count %lu offset %lld\n",
+						(unsigned long) count, *offset);
 	fid = filp->private_data;
 
 	if (count > (fid->clnt->msize - P9_IOHDRSZ))
