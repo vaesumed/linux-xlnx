@@ -32,6 +32,7 @@
 #include <linux/ipv6.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/spinlock.h>
 #include <linux/un.h>
 #include <linux/uaccess.h>
 #include <linux/inet.h>
@@ -47,8 +48,8 @@
 
 #define VIRTQUEUE_NUM	128
 
-/* a single mutex to manage channel initialization and attachment */
-static DEFINE_MUTEX(virtio_9p_lock);
+/* a single lock to manage channel initialization and attachment */
+static DEFINE_SPINLOCK(virtio_9p_lock);
 /* global which tracks highest initialized channel */
 static int chan_index;
 
@@ -103,9 +104,9 @@ static void p9_virtio_close(struct p9_client *client)
 {
 	struct virtio_chan *chan = client->trans;
 
-	mutex_lock(&virtio_9p_lock);
+	spin_lock(&virtio_9p_lock);
 	chan->inuse = false;
-	mutex_unlock(&virtio_9p_lock);
+	spin_unlock(&virtio_9p_lock);
 }
 
 /**
@@ -230,10 +231,10 @@ static int p9_virtio_probe(struct virtio_device *vdev)
 	struct virtio_chan *chan;
 	int index;
 
-	mutex_lock(&virtio_9p_lock);
+	spin_lock(&virtio_9p_lock);
 	index = chan_index++;
 	chan = &channels[index];
-	mutex_unlock(&virtio_9p_lock);
+	spin_unlock(&virtio_9p_lock);
 
 	if (chan_index > MAX_9P_CHAN) {
 		printk(KERN_ERR "9p: virtio: Maximum channels exceeded\n");
@@ -262,9 +263,9 @@ static int p9_virtio_probe(struct virtio_device *vdev)
 out_free_vq:
 	vdev->config->del_vq(chan->vq);
 fail:
-	mutex_lock(&virtio_9p_lock);
+	spin_lock(&virtio_9p_lock);
 	chan_index--;
-	mutex_unlock(&virtio_9p_lock);
+	spin_unlock(&virtio_9p_lock);
 	return err;
 }
 
@@ -295,7 +296,7 @@ p9_virtio_create(struct p9_client *client, const char *devname, char *args)
 	struct virtio_chan *chan = channels;
 	int index = 0;
 
-	mutex_lock(&virtio_9p_lock);
+	spin_lock(&virtio_9p_lock);
 	while (index < MAX_9P_CHAN) {
 		if (chan->initialized && !chan->inuse) {
 			chan->inuse = true;
@@ -305,7 +306,7 @@ p9_virtio_create(struct p9_client *client, const char *devname, char *args)
 			chan = &channels[index];
 		}
 	}
-	mutex_unlock(&virtio_9p_lock);
+	spin_unlock(&virtio_9p_lock);
 
 	if (index >= MAX_9P_CHAN) {
 		printk(KERN_ERR "9p: no channels available\n");
