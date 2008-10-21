@@ -3,6 +3,7 @@
 #include <linux/bootmem.h>
 #include <linux/bit_spinlock.h>
 #include <linux/page_cgroup.h>
+#include <linux/vmalloc.h>
 #include <linux/hash.h>
 #include <linux/memory.h>
 
