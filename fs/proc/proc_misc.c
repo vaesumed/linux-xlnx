@@ -701,20 +701,6 @@ static int cmdline_read_proc(char *page, char **start, off_t off,
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
 
-#ifdef CONFIG_FILE_LOCKING
-static int locks_open(struct inode *inode, struct file *filp)
-{
-	return seq_open(filp, &locks_seq_operations);
-}
-
-static const struct file_operations proc_locks_operations = {
-	.open		= locks_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= seq_release,
-};
-#endif /* CONFIG_FILE_LOCKING */
-
 static int execdomains_read_proc(char *page, char **start, off_t off,
 				 int count, int *eof, void *data)
 {
@@ -884,9 +870,6 @@ void __init proc_misc_init(void)
 	/* And now for trickier ones */
 #ifdef CONFIG_PRINTK
 	proc_create("kmsg", S_IRUSR, NULL, &proc_kmsg_operations);
-#endif
-#ifdef CONFIG_FILE_LOCKING
-	proc_create("locks", 0, NULL, &proc_locks_operations);
 #endif
 	proc_create("devices", 0, NULL, &proc_devinfo_operations);
 	proc_create("cpuinfo", 0, NULL, &proc_cpuinfo_operations);
