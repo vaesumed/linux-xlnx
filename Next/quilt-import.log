@@ -1,0 +1,93 @@
+Importing driver-core.current based on 2.6.27-git8
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 0cfd81031a26717fe14380d18275f8e217571615
+HEAD is now at 0cfd810 Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+document-kernel-taint-flags-properly.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 9208f7c0f7c48703e22c83d4aa9f05b88642c59a
+HEAD is now at 9208f7c Document kernel taint flags properly
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-ohci-add-support-for-tmio-ohci-cell.patch
+usb-fix-build-warning-in-ehci-hcd-when-config_usb_debug-is-not-enabled.patch
+usb-fix-debugfs_create_file-s-error-checking-method-for-usb-gadget-s3c2410_udc.patch
+usb-storage-avoid-i-o-errors-when-issuing-scsi-ioctls-to-jmicron-usb-ata-bridge.patch
+usb-add-zte-mf626-usb-gsm-modem-entry.patch
+usb-support-huawei-data-card-product-ids.patch
+Unchanged quilt series m68k
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core 8dd3a3297b2ca34398b21681584e728aff5dba54
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 8dd3a3297b2ca34398b21681584e728aff5dba54
+HEAD is now at 8dd3a32 USB: support Huawei data card product IDs
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+Importing device-mapper based on v2.6.27-3976-g7591103
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 7591103c08abade60aeddb432ed0686ddd0de1c6
+HEAD is now at 7591103 Merge git://git.kernel.org/pub/scm/linux/kernel/git/bart/ide-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-kcopyd-avoid-queue-shuffle.patch
+dm-snapshot-fix-primary_pe-race.patch
+dm-snapshot-drop-unused-last_percent.patch
+dm-exception-store-refactor-zero_area.patch
+dm-exception-store-fix-misordered-writes.patch
+dm-publish-array_too_big.patch
+dm-remove-dm-header-from-targets.patch
+dm-crypt-tidy-sector.patch
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.27-git8
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard 0cfd81031a26717fe14380d18275f8e217571615
+HEAD is now at 0cfd810 Merge git://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-vid-add-support-for-AMD-fam10.patch
+hwmon-lm90-01-fix-hyst-for-specific-chips.patch
+hwmon-lm90-02-handle-LM99-offset.patch
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+Unchanged quilt series kernel-doc
+Importing ide based on a9b6148d25f15ddfe9d7a7f3e526fdb64e7cf7da
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard a9b6148d25f15ddfe9d7a7f3e526fdb64e7cf7da
+HEAD is now at a9b6148 USB: Fix unused label warnings in drivers/usb/host/ehci-hcd.c
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-add-tx4939ide-driver-v3.patch
+Importing rr based on v2.6.27-6489-ga9b6148
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard a9b6148d25f15ddfe9d7a7f3e526fdb64e7cf7da
+HEAD is now at a9b6148 USB: Fix unused label warnings in drivers/usb/host/ehci-hcd.c
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:simplify-load_module.patch
+module:remove_stop_machine_during_load_v2.patch
+module:compile-time-prefix-length-check.patch
+module_param:fix-duplicate-prefixes.patch
+module:core_param.patch
+misc:make-initcall_debug-a-module_param.patch
+misc:make-panic-options-core_params.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+misc:call_init_workqueues_before_pre_smp_initcalls.patch
+misc:workqueue_introduce_create_rt_workqueue.patch
+stop_machine:use_workqueues_instead_of_kernel_threads.patch
+lguest:fix-efi.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+lguest:physical_address_extension_support.patch
+lguest:page_size_extension_support.patch
+lguest:guest_pse_support-doc.patch
+module:remove_config_kmod.patch
+Unchanged quilt series ttydev
