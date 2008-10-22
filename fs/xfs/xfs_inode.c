@@ -41,6 +41,7 @@
 #include "xfs_buf_item.h"
 #include "xfs_inode_item.h"
 #include "xfs_btree.h"
+#include "xfs_btree_trace.h"
 #include "xfs_alloc.h"
 #include "xfs_ialloc.h"
 #include "xfs_bmap.h"
@@ -621,7 +622,7 @@ xfs_iformat_btree(
 	ifp = XFS_IFORK_PTR(ip, whichfork);
 	dfp = (xfs_bmdr_block_t *)XFS_DFORK_PTR(dip, whichfork);
 	size = XFS_BMAP_BROOT_SPACE(dfp);
-	nrecs = XFS_BMAP_BROOT_NUMRECS(dfp);
+	nrecs = be16_to_cpu(dfp->bb_numrecs);
 
 	/*
 	 * blow out if -- fork has less extents than can fit in
@@ -649,8 +650,9 @@ xfs_iformat_btree(
 	 * Copy and convert from the on-disk structure
 	 * to the in-memory structure.
 	 */
-	xfs_bmdr_to_bmbt(dfp, XFS_DFORK_SIZE(dip, ip->i_mount, whichfork),
-		ifp->if_broot, size);
+	xfs_bmdr_to_bmbt(ip->i_mount, dfp,
+			 XFS_DFORK_SIZE(dip, ip->i_mount, whichfork),
+			 ifp->if_broot, size);
 	ifp->if_flags &= ~XFS_IFEXTENTS;
 	ifp->if_flags |= XFS_IFBROOT;
 
@@ -788,6 +790,80 @@ xfs_dic2xflags(
 }
 
 /*
+ * Allocate and initialise an xfs_inode.
+ */
+struct xfs_inode *
+xfs_inode_alloc(
+	struct xfs_mount	*mp,
+	xfs_ino_t		ino)
+{
+	struct xfs_inode	*ip;
+
+	/*
+	 * if this didn't occur in transactions, we could use
+	 * KM_MAYFAIL and return NULL here on ENOMEM. Set the
+	 * code up to do this anyway.
+	 */
+	ip = kmem_zone_alloc(xfs_inode_zone, KM_SLEEP);
+	if (!ip)
+		return NULL;
+
+	ASSERT(atomic_read(&ip->i_iocount) == 0);
+	ASSERT(atomic_read(&ip->i_pincount) == 0);
+	ASSERT(!spin_is_locked(&ip->i_flags_lock));
+	ASSERT(completion_done(&ip->i_flush));
+
+	/*
+	 * initialise the VFS inode here to get failures
+	 * out of the way early.
+	 */
+	if (!inode_init_always(mp->m_super, VFS_I(ip))) {
+		kmem_zone_free(xfs_inode_zone, ip);
+		return NULL;
+	}
+
+	/* initialise the xfs inode */
+	ip->i_ino = ino;
+	ip->i_mount = mp;
+	ip->i_blkno = 0;
+	ip->i_len = 0;
+	ip->i_boffset =0;
+	ip->i_afp = NULL;
+	memset(&ip->i_df, 0, sizeof(xfs_ifork_t));
+	ip->i_flags = 0;
+	ip->i_update_core = 0;
+	ip->i_update_size = 0;
+	ip->i_delayed_blks = 0;
+	memset(&ip->i_d, 0, sizeof(xfs_icdinode_t));
+	ip->i_size = 0;
+	ip->i_new_size = 0;
+
+	/*
+	 * Initialize inode's trace buffers.
+	 */
+#ifdef	XFS_INODE_TRACE
+	ip->i_trace = ktrace_alloc(INODE_TRACE_SIZE, KM_NOFS);
+#endif
+#ifdef XFS_BMAP_TRACE
+	ip->i_xtrace = ktrace_alloc(XFS_BMAP_KTRACE_SIZE, KM_NOFS);
+#endif
+#ifdef XFS_BTREE_TRACE
+	ip->i_btrace = ktrace_alloc(XFS_BMBT_KTRACE_SIZE, KM_NOFS);
+#endif
+#ifdef XFS_RW_TRACE
+	ip->i_rwtrace = ktrace_alloc(XFS_RW_KTRACE_SIZE, KM_NOFS);
+#endif
+#ifdef XFS_ILOCK_TRACE
+	ip->i_lock_trace = ktrace_alloc(XFS_ILOCK_KTRACE_SIZE, KM_NOFS);
+#endif
+#ifdef XFS_DIR2_TRACE
+	ip->i_dir_trace = ktrace_alloc(XFS_DIR2_KTRACE_SIZE, KM_NOFS);
+#endif
+
+	return ip;
+}
+
+/*
  * Given a mount structure and an inode number, return a pointer
  * to a newly allocated in-core inode corresponding to the given
  * inode number.
@@ -809,13 +885,9 @@ xfs_iread(
 	xfs_inode_t	*ip;
 	int		error;
 
-	ASSERT(xfs_inode_zone != NULL);
-
-	ip = kmem_zone_zalloc(xfs_inode_zone, KM_SLEEP);
-	ip->i_ino = ino;
-	ip->i_mount = mp;
-	atomic_set(&ip->i_iocount, 0);
-	spin_lock_init(&ip->i_flags_lock);
+	ip = xfs_inode_alloc(mp, ino);
+	if (!ip)
+		return ENOMEM;
 
 	/*
 	 * Get pointer's to the on-disk inode and the buffer containing it.
@@ -826,39 +898,16 @@ xfs_iread(
 	 */
 	error = xfs_itobp(mp, tp, ip, &dip, &bp, bno, imap_flags, XFS_BUF_LOCK);
 	if (error) {
-		kmem_zone_free(xfs_inode_zone, ip);
+		xfs_idestroy(ip);
 		return error;
 	}
-
-	/*
-	 * Initialize inode's trace buffers.
-	 * Do this before xfs_iformat in case it adds entries.
-	 */
-#ifdef	XFS_INODE_TRACE
-	ip->i_trace = ktrace_alloc(INODE_TRACE_SIZE, KM_NOFS);
-#endif
-#ifdef XFS_BMAP_TRACE
-	ip->i_xtrace = ktrace_alloc(XFS_BMAP_KTRACE_SIZE, KM_NOFS);
-#endif
-#ifdef XFS_BMBT_TRACE
-	ip->i_btrace = ktrace_alloc(XFS_BMBT_KTRACE_SIZE, KM_NOFS);
-#endif
-#ifdef XFS_RW_TRACE
-	ip->i_rwtrace = ktrace_alloc(XFS_RW_KTRACE_SIZE, KM_NOFS);
-#endif
-#ifdef XFS_ILOCK_TRACE
-	ip->i_lock_trace = ktrace_alloc(XFS_ILOCK_KTRACE_SIZE, KM_NOFS);
-#endif
-#ifdef XFS_DIR2_TRACE
-	ip->i_dir_trace = ktrace_alloc(XFS_DIR2_KTRACE_SIZE, KM_NOFS);
-#endif
 
 	/*
 	 * If we got something that isn't an inode it means someone
 	 * (nfs or dmi) has a stale handle.
 	 */
 	if (be16_to_cpu(dip->di_core.di_magic) != XFS_DINODE_MAGIC) {
-		kmem_zone_free(xfs_inode_zone, ip);
+		xfs_idestroy(ip);
 		xfs_trans_brelse(tp, bp);
 #ifdef DEBUG
 		xfs_fs_cmn_err(CE_ALERT, mp, "xfs_iread: "
@@ -881,7 +930,7 @@ xfs_iread(
 		xfs_dinode_from_disk(&ip->i_d, &dip->di_core);
 		error = xfs_iformat(ip, dip);
 		if (error)  {
-			kmem_zone_free(xfs_inode_zone, ip);
+			xfs_idestroy(ip);
 			xfs_trans_brelse(tp, bp);
 #ifdef DEBUG
 			xfs_fs_cmn_err(CE_ALERT, mp, "xfs_iread: "
@@ -910,8 +959,6 @@ xfs_iread(
 		ip->i_df.if_ext_max =
 			XFS_IFORK_DSIZE(ip) / (uint)sizeof(xfs_bmbt_rec_t);
 	}
-
-	INIT_LIST_HEAD(&ip->i_reclaim);
 
 	/*
 	 * The inode format changed when we moved the link count and
@@ -1049,6 +1096,7 @@ xfs_ialloc(
 	uint		flags;
 	int		error;
 	timespec_t	tv;
+	int		filestreams = 0;
 
 	/*
 	 * Call the space management code to pick
@@ -1056,9 +1104,8 @@ xfs_ialloc(
 	 */
 	error = xfs_dialloc(tp, pip ? pip->i_ino : 0, mode, okalloc,
 			    ialloc_context, call_again, &ino);
-	if (error != 0) {
+	if (error)
 		return error;
-	}
 	if (*call_again || ino == NULLFSINO) {
 		*ipp = NULL;
 		return 0;
@@ -1072,9 +1119,8 @@ xfs_ialloc(
 	 */
 	error = xfs_trans_iget(tp->t_mountp, tp, ino,
 				XFS_IGET_CREATE, XFS_ILOCK_EXCL, &ip);
-	if (error != 0) {
+	if (error)
 		return error;
-	}
 	ASSERT(ip != NULL);
 
 	ip->i_d.di_mode = (__uint16_t)mode;
@@ -1155,13 +1201,12 @@ xfs_ialloc(
 		flags |= XFS_ILOG_DEV;
 		break;
 	case S_IFREG:
-		if (pip && xfs_inode_is_filestream(pip)) {
-			error = xfs_filestream_associate(pip, ip);
-			if (error < 0)
-				return -error;
-			if (!error)
-				xfs_iflags_set(ip, XFS_IFILESTREAM);
-		}
+		/*
+		 * we can't set up filestreams until after the VFS inode
+		 * is set up properly.
+		 */
+		if (pip && xfs_inode_is_filestream(pip))
+			filestreams = 1;
 		/* fall through */
 	case S_IFDIR:
 		if (pip && (pip->i_d.di_flags & XFS_DIFLAG_ANY)) {
@@ -1226,6 +1271,15 @@ xfs_ialloc(
 
 	/* now that we have an i_mode we can setup inode ops and unlock */
 	xfs_setup_inode(ip);
+
+	/* now we have set up the vfs inode we can associate the filestream */
+	if (filestreams) {
+		error = xfs_filestream_associate(pip, ip);
+		if (error < 0)
+			return -error;
+		if (!error)
+			xfs_iflags_set(ip, XFS_IFILESTREAM);
+	}
 
 	*ipp = ip;
 	return 0;
@@ -1414,7 +1468,7 @@ xfs_itruncate_start(
 	mp = ip->i_mount;
 
 	/* wait for the completion of any pending DIOs */
-	if (new_size < ip->i_size)
+	if (new_size == 0 || new_size < ip->i_size)
 		vn_iowait(ip);
 
 	/*
@@ -2160,9 +2214,9 @@ xfs_ifree_cluster(
 				iip = (xfs_inode_log_item_t *)lip;
 				ASSERT(iip->ili_logged == 1);
 				lip->li_cb = (void(*)(xfs_buf_t*,xfs_log_item_t*)) xfs_istale_done;
-				spin_lock(&mp->m_ail_lock);
-				iip->ili_flush_lsn = iip->ili_item.li_lsn;
-				spin_unlock(&mp->m_ail_lock);
+				xfs_trans_ail_copy_lsn(mp->m_ail,
+							&iip->ili_flush_lsn,
+							&iip->ili_item.li_lsn);
 				xfs_iflags_set(iip->ili_inode, XFS_ISTALE);
 				pre_flushed++;
 			}
@@ -2183,9 +2237,8 @@ xfs_ifree_cluster(
 			iip->ili_last_fields = iip->ili_format.ilf_fields;
 			iip->ili_format.ilf_fields = 0;
 			iip->ili_logged = 1;
-			spin_lock(&mp->m_ail_lock);
-			iip->ili_flush_lsn = iip->ili_item.li_lsn;
-			spin_unlock(&mp->m_ail_lock);
+			xfs_trans_ail_copy_lsn(mp->m_ail, &iip->ili_flush_lsn,
+						&iip->ili_item.li_lsn);
 
 			xfs_buf_attach_iodone(bp,
 				(void(*)(xfs_buf_t*,xfs_log_item_t*))
@@ -2312,9 +2365,10 @@ xfs_iroot_realloc(
 	int			rec_diff,
 	int			whichfork)
 {
+	struct xfs_mount	*mp = ip->i_mount;
 	int			cur_max;
 	xfs_ifork_t		*ifp;
-	xfs_bmbt_block_t	*new_broot;
+	struct xfs_btree_block	*new_broot;
 	int			new_max;
 	size_t			new_size;
 	char			*np;
@@ -2335,8 +2389,7 @@ xfs_iroot_realloc(
 		 */
 		if (ifp->if_broot_bytes == 0) {
 			new_size = (size_t)XFS_BMAP_BROOT_SPACE_CALC(rec_diff);
-			ifp->if_broot = (xfs_bmbt_block_t*)kmem_alloc(new_size,
-								     KM_SLEEP);
+			ifp->if_broot = kmem_alloc(new_size, KM_SLEEP);
 			ifp->if_broot_bytes = (int)new_size;
 			return;
 		}
@@ -2347,18 +2400,16 @@ xfs_iroot_realloc(
 		 * location.  The records don't change location because
 		 * they are kept butted up against the btree block header.
 		 */
-		cur_max = XFS_BMAP_BROOT_MAXRECS(ifp->if_broot_bytes);
+		cur_max = xfs_bmbt_maxrecs(mp, ifp->if_broot_bytes, 0);
 		new_max = cur_max + rec_diff;
 		new_size = (size_t)XFS_BMAP_BROOT_SPACE_CALC(new_max);
-		ifp->if_broot = (xfs_bmbt_block_t *)
-		  kmem_realloc(ifp->if_broot,
-				new_size,
+		ifp->if_broot = kmem_realloc(ifp->if_broot, new_size,
 				(size_t)XFS_BMAP_BROOT_SPACE_CALC(cur_max), /* old size */
 				KM_SLEEP);
-		op = (char *)XFS_BMAP_BROOT_PTR_ADDR(ifp->if_broot, 1,
-						      ifp->if_broot_bytes);
-		np = (char *)XFS_BMAP_BROOT_PTR_ADDR(ifp->if_broot, 1,
-						      (int)new_size);
+		op = (char *)XFS_BMAP_BROOT_PTR_ADDR(mp, ifp->if_broot, 1,
+						     ifp->if_broot_bytes);
+		np = (char *)XFS_BMAP_BROOT_PTR_ADDR(mp, ifp->if_broot, 1,
+						     (int)new_size);
 		ifp->if_broot_bytes = (int)new_size;
 		ASSERT(ifp->if_broot_bytes <=
 			XFS_IFORK_SIZE(ip, whichfork) + XFS_BROOT_SIZE_ADJ);
@@ -2372,7 +2423,7 @@ xfs_iroot_realloc(
 	 * records, just get rid of the root and clear the status bit.
 	 */
 	ASSERT((ifp->if_broot != NULL) && (ifp->if_broot_bytes > 0));
-	cur_max = XFS_BMAP_BROOT_MAXRECS(ifp->if_broot_bytes);
+	cur_max = xfs_bmbt_maxrecs(mp, ifp->if_broot_bytes, 0);
 	new_max = cur_max + rec_diff;
 	ASSERT(new_max >= 0);
 	if (new_max > 0)
@@ -2380,11 +2431,11 @@ xfs_iroot_realloc(
 	else
 		new_size = 0;
 	if (new_size > 0) {
-		new_broot = (xfs_bmbt_block_t *)kmem_alloc(new_size, KM_SLEEP);
+		new_broot = kmem_alloc(new_size, KM_SLEEP);
 		/*
 		 * First copy over the btree block header.
 		 */
-		memcpy(new_broot, ifp->if_broot, sizeof(xfs_bmbt_block_t));
+		memcpy(new_broot, ifp->if_broot, XFS_BTREE_LBLOCK_LEN);
 	} else {
 		new_broot = NULL;
 		ifp->if_flags &= ~XFS_IFBROOT;
@@ -2397,18 +2448,16 @@ xfs_iroot_realloc(
 		/*
 		 * First copy the records.
 		 */
-		op = (char *)XFS_BMAP_BROOT_REC_ADDR(ifp->if_broot, 1,
-						     ifp->if_broot_bytes);
-		np = (char *)XFS_BMAP_BROOT_REC_ADDR(new_broot, 1,
-						     (int)new_size);
+		op = (char *)XFS_BMBT_REC_ADDR(mp, ifp->if_broot, 1);
+		np = (char *)XFS_BMBT_REC_ADDR(mp, new_broot, 1);
 		memcpy(np, op, new_max * (uint)sizeof(xfs_bmbt_rec_t));
 
 		/*
 		 * Then copy the pointers.
 		 */
-		op = (char *)XFS_BMAP_BROOT_PTR_ADDR(ifp->if_broot, 1,
+		op = (char *)XFS_BMAP_BROOT_PTR_ADDR(mp, ifp->if_broot, 1,
 						     ifp->if_broot_bytes);
-		np = (char *)XFS_BMAP_BROOT_PTR_ADDR(new_broot, 1,
+		np = (char *)XFS_BMAP_BROOT_PTR_ADDR(mp, new_broot, 1,
 						     (int)new_size);
 		memcpy(np, op, new_max * (uint)sizeof(xfs_dfsbno_t));
 	}
@@ -2617,6 +2666,10 @@ xfs_idestroy_fork(
  * It must free the inode itself and any buffers allocated for
  * if_extents/if_data and if_broot.  It must also free the lock
  * associated with the inode.
+ *
+ * Note: because we don't initialise everything on reallocation out
+ * of the zone, we must ensure we nullify everything correctly before
+ * freeing the structure.
  */
 void
 xfs_idestroy(
@@ -2631,8 +2684,6 @@ xfs_idestroy(
 	}
 	if (ip->i_afp)
 		xfs_idestroy_fork(ip, XFS_ATTR_FORK);
-	mrfree(&ip->i_lock);
-	mrfree(&ip->i_iolock);
 
 #ifdef XFS_INODE_TRACE
 	ktrace_free(ip->i_trace);
@@ -2640,7 +2691,7 @@ xfs_idestroy(
 #ifdef XFS_BMAP_TRACE
 	ktrace_free(ip->i_xtrace);
 #endif
-#ifdef XFS_BMBT_TRACE
+#ifdef XFS_BTREE_TRACE
 	ktrace_free(ip->i_btrace);
 #endif
 #ifdef XFS_RW_TRACE
@@ -2658,20 +2709,26 @@ xfs_idestroy(
 		 * inode still in the AIL. If it is there, we should remove
 		 * it to prevent a use-after-free from occurring.
 		 */
-		xfs_mount_t	*mp = ip->i_mount;
 		xfs_log_item_t	*lip = &ip->i_itemp->ili_item;
+		struct xfs_ail	*ailp = lip->li_ailp;
 
 		ASSERT(((lip->li_flags & XFS_LI_IN_AIL) == 0) ||
 				       XFS_FORCED_SHUTDOWN(ip->i_mount));
 		if (lip->li_flags & XFS_LI_IN_AIL) {
-			spin_lock(&mp->m_ail_lock);
+			spin_lock(&ailp->xa_lock);
 			if (lip->li_flags & XFS_LI_IN_AIL)
-				xfs_trans_delete_ail(mp, lip);
+				xfs_trans_ail_delete(ailp, lip);
 			else
-				spin_unlock(&mp->m_ail_lock);
+				spin_unlock(&ailp->xa_lock);
 		}
 		xfs_inode_item_destroy(ip);
+		ip->i_itemp = NULL;
 	}
+	/* asserts to verify all state is correct here */
+	ASSERT(atomic_read(&ip->i_iocount) == 0);
+	ASSERT(atomic_read(&ip->i_pincount) == 0);
+	ASSERT(!spin_is_locked(&ip->i_flags_lock));
+	ASSERT(completion_done(&ip->i_flush));
 	kmem_zone_free(xfs_inode_zone, ip);
 }
 
@@ -2880,7 +2937,7 @@ xfs_iflush_fork(
 			ASSERT(ifp->if_broot_bytes <=
 			       (XFS_IFORK_SIZE(ip, whichfork) +
 				XFS_BROOT_SIZE_ADJ));
-			xfs_bmbt_to_bmdr(ifp->if_broot, ifp->if_broot_bytes,
+			xfs_bmbt_to_bmdr(mp, ifp->if_broot, ifp->if_broot_bytes,
 				(xfs_bmdr_block_t *)cp,
 				XFS_DFORK_SIZE(dip, mp, whichfork));
 		}
@@ -3418,10 +3475,8 @@ xfs_iflush_int(
 		iip->ili_format.ilf_fields = 0;
 		iip->ili_logged = 1;
 
-		ASSERT(sizeof(xfs_lsn_t) == 8);	/* don't lock if it shrinks */
-		spin_lock(&mp->m_ail_lock);
-		iip->ili_flush_lsn = iip->ili_item.li_lsn;
-		spin_unlock(&mp->m_ail_lock);
+		xfs_trans_ail_copy_lsn(mp->m_ail, &iip->ili_flush_lsn,
+					&iip->ili_item.li_lsn);
 
 		/*
 		 * Attach the function xfs_iflush_done to the inode's
@@ -3459,41 +3514,6 @@ corrupt_out:
 }
 
 
-/*
- * Flush all inactive inodes in mp.
- */
-void
-xfs_iflush_all(
-	xfs_mount_t	*mp)
-{
-	xfs_inode_t	*ip;
-
- again:
-	XFS_MOUNT_ILOCK(mp);
-	ip = mp->m_inodes;
-	if (ip == NULL)
-		goto out;
-
-	do {
-		/* Make sure we skip markers inserted by sync */
-		if (ip->i_mount == NULL) {
-			ip = ip->i_mnext;
-			continue;
-		}
-
-		if (!VFS_I(ip)) {
-			XFS_MOUNT_IUNLOCK(mp);
-			xfs_finish_reclaim(ip, 0, XFS_IFLUSH_ASYNC);
-			goto again;
-		}
-
-		ASSERT(vn_count(VFS_I(ip)) == 0);
-
-		ip = ip->i_mnext;
-	} while (ip != mp->m_inodes);
- out:
-	XFS_MOUNT_IUNLOCK(mp);
-}
 
 #ifdef XFS_ILOCK_TRACE
 ktrace_t	*xfs_ilock_trace_buf;
