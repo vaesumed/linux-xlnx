@@ -169,10 +169,10 @@ config SMP
 	  If you don't know what to do here, say N.
 
 config NR_CPUS
-	int "Maximum number of CPUs (2-1024)"
-	range 2 1024
-	depends on SMP
-	default "64"
+	int "Maximum number of CPUs (2-1024)" if SMP
+	range 2 1024 if SMP
+	default "1" if !SMP
+	default "64" if SMP
 
 source "drivers/cpufreq/Kconfig"
 

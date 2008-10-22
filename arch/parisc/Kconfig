@@ -256,10 +256,10 @@ config HPUX
 	depends on !64BIT
 
 config NR_CPUS
-	int "Maximum number of CPUs (2-32)"
-	range 2 32
-	depends on SMP
-	default "32"
+	int "Maximum number of CPUs (2-32)" if SMP
+	range 2 32 if SMP
+	default "1" if !SMP
+	default "32" if SMP
 
 endmenu
 
