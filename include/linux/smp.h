@@ -64,11 +64,20 @@ extern void smp_cpus_done(unsigned int max_cpus);
  * Call a function on all other processors
  */
 int smp_call_function(void(*func)(void *info), void *info, int wait);
-int smp_call_function_mask(cpumask_t mask, void(*func)(void *info), void *info,
-				int wait);
+void smp_call_function_many(const struct cpumask *mask,
+			    void(*func)(void *info), void *info, bool wait);
 int smp_call_function_single(int cpuid, void (*func) (void *info), void *info,
 				int wait);
 void __smp_call_function_single(int cpuid, struct call_single_data *data);
+
+/* Use smp_call_function_many, which takes a pointer to the mask. */
+static inline int __deprecated
+smp_call_function_mask(cpumask_t mask, void(*func)(void *info), void *info,
+		       int wait)
+{
+	smp_call_function_many(&mask, func, info, wait);
+	return 0;
+}
 
 /*
  * Generic and arch helpers
