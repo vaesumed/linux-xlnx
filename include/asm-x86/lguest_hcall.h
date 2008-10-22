@@ -17,6 +17,7 @@
 #define LHCALL_SET_PMD		15
 #define LHCALL_LOAD_TLS		16
 #define LHCALL_NOTIFY		17
+#define LHCALL_SET_PUD		18
 
 #define LGUEST_TRAP_ENTRY 0x1F
 
@@ -32,7 +33,7 @@
  * to make requests of the Host Itself.
  *
  * Our hypercall mechanism uses the highest unused trap code (traps 32 and
- * above are used by real hardware interrupts).  Fifteen hypercalls are
+ * above are used by real hardware interrupts).  Eighteen hypercalls are
  * available: the hypercall number is put in the %eax register, and the
  * arguments (when required) are placed in %edx, %ebx and %ecx.  If a return
  * value makes sense, it's returned in %eax.
