@@ -1,0 +1,137 @@
+Importing driver-core.current based on 2.6.27-git10
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+document-kernel-taint-flags-properly.patch
+driver-core-drivers-base-sys.c-update-comments.patch
+sysfs-fix-return-values-for-sysdev_store_-ulong-int.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 288f2028359533dace73e2cb1a321cc4879ddad6
+HEAD is now at 288f202 sysfs: Fix return values for sysdev_store_{ulong,int}
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-ohci-add-support-for-tmio-ohci-cell.patch
+usb-fix-debugfs_create_file-s-error-checking-method-for-usb-gadget-s3c2410_udc.patch
+usb-storage-avoid-i-o-errors-when-issuing-scsi-ioctls-to-jmicron-usb-ata-bridge.patch
+usb-add-zte-mf626-usb-gsm-modem-entry.patch
+usb-support-huawei-data-card-product-ids.patch
+usb-usbtest.c-length-sglen-and-vary-are-unsigned-so-cannot-be-negative.patch
+usb-speedtouch-add-pre_reset-and-post_reset-routines.patch
+usb-gadget-fix-kernel-doc-warning.patch
+usb-fix-unneeded-endpoint-check-in-pxa27x_udc.patch
+usb-cdc-wdm-make-module-autoload-work.patch
+usb-unusual-dev-for-mio-moov-330-gps.patch
+Importing m68k based on 6da0b38f4433fb0f24615449d7966471b6e5eae0
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 6da0b38f4433fb0f24615449d7966471b6e5eae0
+HEAD is now at 6da0b38 fs/Kconfig: move ext2, ext3, ext4, JBD, JBD2 out
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+amiga-amiserial-no-serial-console-if-modular.diff
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core 858e7eb6bc060fed19de9fc99fe26c5d4cf1c803
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 858e7eb6bc060fed19de9fc99fe26c5d4cf1c803
+HEAD is now at 858e7eb USB: Unusual dev for Mio moov 330 gps
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+Importing device-mapper based on v2.6.27-6509-g2515ddc
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-kcopyd-avoid-queue-shuffle.patch
+dm-snapshot-fix-primary_pe-race.patch
+dm-snapshot-drop-unused-last_percent.patch
+dm-exception-store-refactor-zero_area.patch
+dm-exception-store-fix-misordered-writes.patch
+dm-publish-array_too_big.patch
+dm-remove-dm-header-from-targets.patch
+dm-crypt-tidy-sector.patch
+dm-crypt-fix-async-split.patch
+dm-crypt-remove-waitqueue.patch
+dm-mark-split-bio-as-cloned.patch
+dm-raid1-separate-region_hash-interface-part1.patch
+dm-remove-unused-flush_all.patch
+dm-tidy-local_init.patch
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+8250-oxsemi
+.dotest/patch:154: trailing whitespace.
+    
+.dotest/patch:179: space before tab in indent.
+	 	pci_oxsemi_tornado_init(dev, board);
+.dotest/patch:180: trailing whitespace.
+    
+.dotest/patch:191: space before tab in indent.
+ 	{	PCI_VENDOR_ID_OXSEMI, 0xc101,    /* OXPCIe952 1 Legacy UART */
+.dotest/patch:194: space before tab in indent.
+ 	{	PCI_VENDOR_ID_OXSEMI, 0xc105,    /* OXPCIe952 1 Legacy UART */
+warning: squelched 2 whitespace errors
+warning: 7 lines add whitespace errors.
+8250-oxsemi-mainpine
+.dotest/patch:18: space before tab in indent.
+	    	return 0;
+.dotest/patch:54: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 1 Port V.34 Super-G3 Fax */
+.dotest/patch:57: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 2 Port V.34 Super-G3 Fax */
+.dotest/patch:60: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 4 Port V.34 Super-G3 Fax */
+.dotest/patch:63: space before tab in indent.
+ 	{	PCI_VENDOR_ID_MAINPINE, 0x4000,	/* IQ Express 8 Port V.34 Super-G3 Fax */
+warning: 5 lines add whitespace errors.
+tty-kref-bozo
+blackfin-kgdb
+blackfin-sir-stopfix
+blackfin-clean-early
+blackfin-rxtx-lock
+blackfin-clear-bi
+pty-simplify-resize
+n-tty-bkl-drop
+.dotest/patch:120: trailing whitespace.
+	
+.dotest/patch:340: trailing whitespace.
+			
+.dotest/patch:590: trailing whitespace.
+	
+.dotest/patch:974: trailing whitespace.
+	
+.dotest/patch:1044: trailing whitespace.
+	
+warning: 5 lines add whitespace errors.
+n-tty-clean
+pty-remove-pts-global
+pty-per-mount-allocated
+pty-per-mount-config
+pty-option-parsing
+pty-pts-multiple-instances
+pty-mknod-ptmx
+pty-get-init-pts-sb
+pty-pts-enable-multiple
+pty-multiple-doc
+.dotest/patch:98: space before tab in indent.
+   	- adding ptmxmode mount option to devpts entry in /etc/fstab, or
+.dotest/patch:142: trailing whitespace.
+   
+warning: 2 lines add whitespace errors.
+pty-devpts-tidy
