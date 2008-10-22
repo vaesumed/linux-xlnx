@@ -938,7 +938,7 @@ static int cpu_cmd(void)
 		/* print cpus waiting or in xmon */
 		printf("cpus stopped:");
 		count = 0;
-		for (cpu = 0; cpu < NR_CPUS; ++cpu) {
+		for (cpu = 0; cpu < nr_cpu_ids; ++cpu) {
 			if (cpu_isset(cpu, cpus_in_xmon)) {
 				if (count == 0)
 					printf(" %x", cpu);
@@ -950,7 +950,7 @@ static int cpu_cmd(void)
 			}
 		}
 		if (count > 1)
-			printf("-%x", NR_CPUS - 1);
+			printf("-%x", nr_cpu_ids - 1);
 		printf("\n");
 		return 0;
 	}
