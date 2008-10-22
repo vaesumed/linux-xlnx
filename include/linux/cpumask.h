@@ -198,6 +198,14 @@ extern int nr_cpu_ids;
 #define nr_cpu_ids	NR_CPUS
 #endif
 
+/* The number of bits to hand to the bitmask ops. */
+#if NR_CPUS <= BITS_PER_LONG
+/* This produces more efficient code. */
+#define nr_cpumask_bits	NR_CPUS
+#else
+#define nr_cpumask_bits nr_cpu_ids
+#endif
+
 static inline void cpumask_set_cpu(int cpu, volatile struct cpumask *dstp)
 {
 	set_bit(cpu, dstp->bits);
