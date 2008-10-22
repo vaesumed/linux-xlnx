@@ -307,10 +307,18 @@ static void camera_power_off(void)
 	gpio_set_value(GPIO_PTT3, 0);
 }
 
+static void camera_power(int mode)
+{
+	if (mode)
+		camera_power_on();
+	else
+		camera_power_off();
+}
+
 #ifdef CONFIG_I2C
 static unsigned char camera_ov772x_magic[] =
 {
-	0x09, 0x01, 0x0c, 0x10, 0x0d, 0x41, 0x0e, 0x01,
+	0x09, 0x01, 0x0c, 0x20, 0x0d, 0x41, 0x0e, 0x01,
 	0x12, 0x00, 0x13, 0x8F, 0x14, 0x4A, 0x15, 0x00,
 	0x16, 0x00, 0x17, 0x23, 0x18, 0xa0, 0x19, 0x07,
 	0x1a, 0xf0, 0x1b, 0x40, 0x1f, 0x00, 0x20, 0x10,
@@ -386,6 +394,7 @@ static struct soc_camera_platform_info ov772x_info = {
 	},
 	.bus_param =  SOCAM_PCLK_SAMPLE_RISING | SOCAM_HSYNC_ACTIVE_HIGH |
 	SOCAM_VSYNC_ACTIVE_HIGH | SOCAM_MASTER | SOCAM_DATAWIDTH_8,
+	.power = camera_power,
 	.set_capture = ov772x_set_capture,
 };
 
@@ -400,8 +409,6 @@ static struct platform_device migor_camera_device = {
 static struct sh_mobile_ceu_info sh_mobile_ceu_info = {
 	.flags = SOCAM_MASTER | SOCAM_DATAWIDTH_8 | SOCAM_PCLK_SAMPLE_RISING \
 	| SOCAM_HSYNC_ACTIVE_HIGH | SOCAM_VSYNC_ACTIVE_HIGH,
-	.enable_camera = camera_power_on,
-	.disable_camera = camera_power_off,
 };
 
 static struct resource migor_ceu_resources[] = {
