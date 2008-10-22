@@ -18,7 +18,7 @@ EXPORT_SYMBOL(__next_cpu);
 int cpumask_next_and(int n, const cpumask_t *srcp, const cpumask_t *andp)
 {
 	while ((n = next_cpu_nr(n, *srcp)) < nr_cpu_ids)
-		if (cpu_isset(n, *andp))
+		if (cpumask_test_cpu(n, andp))
 			break;
 	return n;
 }
