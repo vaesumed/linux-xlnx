@@ -52,8 +52,7 @@
  * void cpumask_copy(dmask, smask)	dmask = smask
  *
  * size_t cpumask_size()		Length of cpumask in bytes.
- * cpumask_t cpumask_of_cpu(cpu)	Return cpumask with bit 'cpu' set
- *					(can be used as an lvalue)
+ * const struct cpumask *cpumask_of(cpu) Return cpumask with bit 'cpu' set
  * CPU_MASK_ALL				Initializer - all bits set
  * CPU_MASK_NONE			Initializer - no bits set
  * unsigned long *cpumask_bits(mask)	Array of unsigned long's in mask
@@ -176,6 +175,7 @@ extern cpumask_t _unused_cpumask_arg_;
 #define next_cpu_nr(n, src)		next_cpu(n, src)
 #define cpus_weight_nr(cpumask)		cpus_weight(cpumask)
 #define for_each_cpu_mask_nr(cpu, mask)	for_each_cpu_mask(cpu, mask)
+#define cpumask_of_cpu(cpu) (*cpumask_of(cpu))
 /* End deprecated region. */
 
 #if NR_CPUS > 1
@@ -386,20 +386,12 @@ static inline void cpumask_copy(struct cpumask *dstp,
 extern const unsigned long
 	cpu_bit_bitmap[BITS_PER_LONG+1][BITS_TO_LONGS(NR_CPUS)];
 
-static inline const cpumask_t *get_cpu_mask(unsigned int cpu)
+static inline const struct cpumask *cpumask_of(unsigned int cpu)
 {
 	const unsigned long *p = cpu_bit_bitmap[1 + cpu % BITS_PER_LONG];
 	p -= cpu / BITS_PER_LONG;
-	return (const cpumask_t *)p;
+	return (const struct cpumask *)p;
 }
-
-/*
- * In cases where we take the address of the cpumask immediately,
- * gcc optimizes it out (it's a constant) and there's no huge stack
- * variable created:
- */
-#define cpumask_of_cpu(cpu) (*get_cpu_mask(cpu))
-
 
 #define CPU_MASK_LAST_WORD BITMAP_LAST_WORD_MASK(NR_CPUS)
 
