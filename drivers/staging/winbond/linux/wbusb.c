@@ -185,9 +185,7 @@ static const struct ieee80211_ops wbsoft_ops = {
 struct wbsoft_priv {
 };
 
-
-// Usb kernel subsystem will call this function when a new device is plugged into.
-int wb35_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
+static int wb35_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 {
 	PADAPTER	Adapter;
 	PWBLINUX	pWbLinux;
@@ -353,7 +351,7 @@ int wb35_close(struct net_device *netdev)
 	return 0;
 }
 
-void wb35_disconnect(struct usb_interface *intf)
+static void wb35_disconnect(struct usb_interface *intf)
 {
 	PWBLINUX pWbLinux;
 	PADAPTER Adapter = usb_get_intfdata(intf);
