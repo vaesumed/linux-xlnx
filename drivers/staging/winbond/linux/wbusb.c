@@ -332,25 +332,6 @@ WbUsb_destroy(phw_data_t pHwData)
 {
 }
 
-int wb35_open(struct net_device *netdev)
-{
-	PADAPTER Adapter = (PADAPTER)netdev->priv;
-	phw_data_t pHwData = &Adapter->sHwData;
-
-        netif_start_queue(netdev);
-
-	//TODO : put here temporarily
-	hal_set_accept_broadcast(pHwData, 1); // open accept broadcast
-
-	return 0;
-}
-
-int wb35_close(struct net_device *netdev)
-{
-	netif_stop_queue(netdev);
-	return 0;
-}
-
 static void wb35_disconnect(struct usb_interface *intf)
 {
 	PWBLINUX pWbLinux;
