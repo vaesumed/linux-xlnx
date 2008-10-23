@@ -137,7 +137,7 @@ void native_send_call_func_ipi(const cpumask_t *mask)
 	    cpus_equal(cpu_online_map, cpu_callout_map))
 		send_IPI_allbutself(CALL_FUNCTION_VECTOR);
 	else
-		send_IPI_mask(*mask, CALL_FUNCTION_VECTOR);
+		send_IPI_mask(mask, CALL_FUNCTION_VECTOR);
 }
 
 static void stop_this_cpu(void *dummy)
