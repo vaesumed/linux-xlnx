@@ -586,6 +586,15 @@ extern cpumask_t cpu_active_map;
 #define cpu_active(cpu)		((cpu) == 0)
 #endif
 
+/* Wrappers to manipulate otherwise-constant masks. */
+void set_cpu_possible(unsigned int cpu, bool possible);
+void set_cpu_present(unsigned int cpu, bool present);
+void set_cpu_online(unsigned int cpu, bool online);
+void set_cpu_active(unsigned int cpu, bool active);
+void init_cpu_present(const struct cpumask *src);
+void init_cpu_possible(const struct cpumask *src);
+void init_cpu_online(const struct cpumask *src);
+
 #define cpu_is_offline(cpu)	unlikely(!cpu_online(cpu))
 
 #define for_each_possible_cpu(cpu) for_each_cpu((cpu), &cpu_possible_map)
