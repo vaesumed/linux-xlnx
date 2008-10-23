@@ -174,13 +174,6 @@ extern cpumask_t _unused_cpumask_arg_;
 			cpumask_shift_right(&(dst), &(src), (n))
 #define cpus_shift_left(dst, src, n) \
 			cpumask_shift_left(&(dst), &(src), (n))
-#define cpumask_scnprintf(buf, len, src) \
-			__cpumask_scnprintf((buf), (len), &(src))
-#define cpumask_parse_user(ubuf, ulen, dst) \
-			__cpumask_parse_user((ubuf), (ulen), &(dst))
-#define cpulist_scnprintf(buf, len, src) \
-			__cpulist_scnprintf((buf), (len), &(src))
-#define cpulist_parse(buf, dst) __cpulist_parse((buf), &(dst))
 #define cpu_remap(oldbit, old, new) \
 		cpumask_cpuremap((oldbit), &(old), &(new))
 #define cpus_remap(dst, src, old, new) \
@@ -303,25 +296,25 @@ static inline void cpumask_shift_left(struct cpumask *dstp,
 	bitmap_shift_left(dstp->bits, srcp->bits, n, NR_CPUS);
 }
 
-static inline int __cpumask_scnprintf(char *buf, int len,
-				      const struct cpumask *srcp)
+static inline int cpumask_scnprintf(char *buf, int len,
+				    const struct cpumask *srcp)
 {
 	return bitmap_scnprintf(buf, len, srcp->bits, NR_CPUS);
 }
 
-static inline int __cpumask_parse_user(const char __user *buf, int len,
-				       struct cpumask *dstp)
+static inline int cpumask_parse_user(const char __user *buf, int len,
+				     struct cpumask *dstp)
 {
 	return bitmap_parse_user(buf, len, dstp->bits, NR_CPUS);
 }
 
-static inline int __cpulist_scnprintf(char *buf, int len,
-				      const struct cpumask *srcp)
+static inline int cpulist_scnprintf(char *buf, int len,
+				    const struct cpumask *srcp)
 {
 	return bitmap_scnlistprintf(buf, len, srcp->bits, NR_CPUS);
 }
 
-static inline int __cpulist_parse(const char *buf, struct cpumask *dstp)
+static inline int cpulist_parse(const char *buf, struct cpumask *dstp)
 {
 	return bitmap_parselist(buf, dstp->bits, NR_CPUS);
 }
