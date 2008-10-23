@@ -5,13 +5,13 @@
 
 int __first_cpu(const cpumask_t *srcp)
 {
-	return find_first_bit(srcp->bits, nr_cpumask_bits);
+	return find_first_bit(cpumask_bits(srcp), nr_cpumask_bits);
 }
 EXPORT_SYMBOL(__first_cpu);
 
 int __next_cpu(int n, const cpumask_t *srcp)
 {
-	return find_next_bit(srcp->bits, nr_cpumask_bits, n+1);
+	return find_next_bit(cpumask_bits(srcp), nr_cpumask_bits, n+1);
 }
 EXPORT_SYMBOL(__next_cpu);
 
