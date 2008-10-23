@@ -1,0 +1,165 @@
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 288f2028359533dace73e2cb1a321cc4879ddad6
+HEAD is now at 288f202 sysfs: Fix return values for sysdev_store_{ulong,int}
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-ohci-add-support-for-tmio-ohci-cell.patch
+usb-fix-debugfs_create_file-s-error-checking-method-for-usb-gadget-s3c2410_udc.patch
+usb-storage-avoid-i-o-errors-when-issuing-scsi-ioctls-to-jmicron-usb-ata-bridge.patch
+usb-add-zte-mf626-usb-gsm-modem-entry.patch
+usb-support-huawei-data-card-product-ids.patch
+usb-usbtest.c-length-sglen-and-vary-are-unsigned-so-cannot-be-negative.patch
+usb-speedtouch-add-pre_reset-and-post_reset-routines.patch
+usb-gadget-fix-kernel-doc-warning.patch
+usb-fix-unneeded-endpoint-check-in-pxa27x_udc.patch
+usb-cdc-wdm-make-module-autoload-work.patch
+usb-unusual-dev-for-mio-moov-330-gps.patch
+usb-fix-memory-leak-in-cdc-acm.patch
+usb-don-t-rebind-drivers-after-failed-resume-or-reset.patch
+Importing m68k based on 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+amiga-amiserial-no-serial-console-if-modular.diff
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core 0e286879c54078d66b6d19c014eef60c7559da3b
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 0e286879c54078d66b6d19c014eef60c7559da3b
+HEAD is now at 0e28687 USB: don't rebind drivers after failed resume or reset
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.27-git10
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-i801-smbus-patch-for-intel-ibex-peak-deviceids.patch
+i2c-algo-pcf-01-pass-adapter-data-into-waitforpin-method.patch
+i2c-algo-pcf-02-add-adapter-hooks-around-xfer-begin-and-end.patch
+i2c-algo-pcf-03-fix-typo-in-debugging-log-message.patch
+i2c-clarify-i2c_adapter-class-usage.patch
+i2c-delete-outdated-client-porting-guide.patch
+i2c-constify-i2c_get_clientdata-parameter.patch
+i2c-delete-legacy-model-documentation.patch
+i2c-drop-2-byte-addr-block-transactions.patch
+i2c-update-doc-writing-clients.patch
+i2c-cleanup-header.patch
+i2c-deprecate-legacy-binding.patch
+i2c-use-pci_ioremap_bar.patch
+i2c-inform-about-deprecated-chips-directory.patch
+i2c-add-info-archdata-field.patch
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.27-6509-g2515ddc
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:simplify-load_module.patch
+module:remove_stop_machine_during_load_v2.patch
+module:compile-time-prefix-length-check.patch
+module_param:fix-duplicate-prefixes.patch
+module:core_param.patch
+misc:make-initcall_debug-a-module_param.patch
+misc:make-panic-options-core_params.patch
+misc:call_init_workqueues_before_pre_smp_initcalls.patch
+misc:workqueue_introduce_create_rt_workqueue.patch
+stop_machine:use_workqueues_instead_of_kernel_threads.patch
+stop_machine:fix_error_code_handling_on_multiple_cpus.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net-mergeable-rx-bufs.patch
+error: patch failed: include/linux/virtio_net.h:44
+error: include/linux/virtio_net.h: patch does not apply
+Unchanged quilt series ttydev
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.27-6509-g2515ddc
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:simplify-load_module.patch
+module:remove_stop_machine_during_load_v2.patch
+module:compile-time-prefix-length-check.patch
+module_param:fix-duplicate-prefixes.patch
+module:core_param.patch
+misc:make-initcall_debug-a-module_param.patch
+misc:make-panic-options-core_params.patch
+misc:call_init_workqueues_before_pre_smp_initcalls.patch
+misc:workqueue_introduce_create_rt_workqueue.patch
+stop_machine:use_workqueues_instead_of_kernel_threads.patch
+stop_machine:fix_error_code_handling_on_multiple_cpus.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+lguest:fix-efi.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+lguest:physical_address_extension_support.patch
+lguest:page_size_extension_support.patch
+lguest:guest_pse_support-doc.patch
+module:remove_config_kmod.patch
+cpumask:add-for_each_cpu_mask_and.patch
+x86:modify-send_IPI-API.patch
+sched:reduce-stack-usage.patch
+cpumask:centralize-common-maps.patch
+cpumask:remove-min.patch
+cpumask:add-struct-cpumask.patch
+cpumask:convert-few-difficult-cpumask_t-users.patch
+cpumask:cpumask_size.patch
+cpumask:cpus_copy.patch
+cpumask:cpumask_var_t.patch
+x86:enable-MAXSMP.patch
+.dotest/patch:13: space before tab in indent.
+ 	depends on X86_64 && SMP && DEBUG_KERNEL && EXPERIMENTAL
+.dotest/patch:25: space before tab in indent.
+ 	int "Maximum number of CPUs" if SMP && !MAXSMP
+.dotest/patch:26: space before tab in indent.
+ 	range 2 512 if SMP && !MAXSMP
+.dotest/patch:27: space before tab in indent.
+ 	default "4096" if MAXSMP
+warning: 4 lines add whitespace errors.
+cpumask:CONFIG_NR_CPUS-always.patch
+cpumask:always-have-nr_cpu_ids.patch
+cpumask:add-nr_cpumask_bits.patch
+cpumask:all-ops-compare-against-nr_cpu_ids.patch
+cpumask:fix-impossible-percpu-accesses.patch
+cpumask:use-nr_cpu_ids-in-all-ops.patch
+cpumask:cpumask_bits-everywhere.patch
+cpumask:cpumask_of.patch
+cpumask:for_each_cpu.patch
+cpumask:cpumask_first-cpumask_next.patch
+cpumask:deprecate-any_online_cpu.patch
+cpumask:cpumask_any_but.patch
+cpumask:deprecate-CPUMASK_ALLOC.patch
+cpumask:use-alloc_cpumask_var-in-sched.patch
+cpumask:to_cpumask.patch
+cpumask:cpumap-accessors.patch
+cpumask:CPU_BITS_ALL-and-CPU_BITS_NONE.patch
+cpumask:cpu_online_mask-et-al.patch
+cpumask:cpu_all_mask-and-cpu_none_mask.patch
+cpumask:cleanup-ifdefs.patch
+cpumask:check-all-ops-for-limits.patch
+cpumask:smp_call_function_many.patch
+misc:work_on_cpu.patch
+Unchanged quilt series ttydev
