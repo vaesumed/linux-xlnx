@@ -190,6 +190,13 @@ extern cpumask_t _unused_cpumask_arg_;
 #define cpus_addr(src) ((src).bits)
 /* End deprecated region. */
 
+#if NR_CPUS > 1
+/* Starts at NR_CPUS until we know better. */
+extern int nr_cpu_ids;
+#else
+#define nr_cpu_ids	NR_CPUS
+#endif
+
 static inline void cpumask_set_cpu(int cpu, volatile struct cpumask *dstp)
 {
 	set_bit(cpu, dstp->bits);
@@ -429,7 +436,6 @@ extern cpumask_t cpu_mask_all;
 
 #if NR_CPUS == 1
 
-#define nr_cpu_ids			1
 #define first_cpu(src)			({ (void)(src); 0; })
 #define next_cpu(n, src)		({ (void)(src); 1; })
 #define cpumask_next_and(n, srcp, andp)	({ (void)(srcp), (void)(andp); 1; })
@@ -442,7 +448,6 @@ extern cpumask_t cpu_mask_all;
 
 #else /* NR_CPUS > 1 */
 
-extern int nr_cpu_ids;
 int __first_cpu(const cpumask_t *srcp);
 int __next_cpu(int n, const cpumask_t *srcp);
 int cpumask_next_and(int n, const cpumask_t *srcp, const cpumask_t *andp);

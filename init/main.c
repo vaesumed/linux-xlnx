@@ -372,6 +372,8 @@ EXPORT_SYMBOL(cpu_mask_all);
 #endif
 
 /* Setup number of possible processor ids */
+/* nr_cpu_ids is a real variable for SMP. */
+#ifndef nr_cpu_ids
 int nr_cpu_ids __read_mostly = NR_CPUS;
 EXPORT_SYMBOL(nr_cpu_ids);
 
@@ -385,6 +387,11 @@ static void __init setup_nr_cpu_ids(void)
 
 	nr_cpu_ids = highest_cpu + 1;
 }
+#else
+void __init setup_nr_cpu_ids(void)
+{
+}
+#endif /* ... nr_cpu_ids is a constant. */
 
 #ifndef CONFIG_HAVE_SETUP_PER_CPU_AREA
 unsigned long __per_cpu_offset[NR_CPUS] __read_mostly;
