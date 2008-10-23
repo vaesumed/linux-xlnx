@@ -303,7 +303,7 @@ int __init smtc_build_cpu_map(int start_cpu_slot)
 	 * everything up so that "logical" = "physical".
 	 */
 	ntcs = ((read_c0_mvpconf0() & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1;
-	for (i=start_cpu_slot; i<NR_CPUS && i<ntcs; i++) {
+	for (i = start_cpu_slot; i < nr_cpu_ids && i < ntcs; i++) {
 		cpu_set(i, cpu_possible_map);
 		__cpu_number_map[i] = i;
 		__cpu_logical_map[i] = i;
@@ -422,8 +422,8 @@ void smtc_prepare_cpus(int cpus)
 	if (vpelimit > 0 && nvpe > vpelimit)
 		nvpe = vpelimit;
 	ntc = ((val & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1;
-	if (ntc > NR_CPUS)
-		ntc = NR_CPUS;
+	if (ntc > nr_cpu_ids)
+		ntc = nr_cpu_ids;
 	if (tclimit > 0 && ntc > tclimit)
 		ntc = tclimit;
 	slop = ntc % nvpe;

@@ -224,7 +224,7 @@ void __init cmp_smp_setup(void)
 		cpu_set(0, mt_fpu_cpumask);
 #endif /* CONFIG_MIPS_MT_FPAFF */
 
-	for (i = 1; i < NR_CPUS; i++) {
+	for (i = 1; i < nr_cpu_ids; i++) {
 		if (amon_cpu_avail(i)) {
 			cpu_set(i, cpu_possible_map);
 			__cpu_number_map[i]	= ++ncpu;
