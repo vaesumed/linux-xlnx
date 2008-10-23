@@ -78,6 +78,11 @@ static void do_hcall(struct lg_cpu *cpu, struct hcall_args *args)
 	case LHCALL_SET_PMD:
 		guest_set_pmd(cpu->lg, args->arg1, args->arg2);
 		break;
+#ifdef CONFIG_X86_PAE
+	case LHCALL_SET_PUD:
+		guest_set_pud(cpu->lg, args->arg1, args->arg2);
+		break;
+#endif
 	case LHCALL_SET_CLOCKEVENT:
 		guest_set_clockevent(cpu, args->arg1);
 		break;

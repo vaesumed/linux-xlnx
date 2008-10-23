@@ -680,6 +680,12 @@ config SYSCTL_SYSCALL_CHECK
 	  to properly maintain and use. This enables checks that help
 	  you to keep things correct.
 
+config DEBUG_PER_CPU_MAPS
+	bool "Cpumask debug checks"
+	---help---
+	  Extra debugging for cpumasks.
+	  eg. to make sure accesses to cpumasks are < nr_cpu_ids.
+
 source kernel/trace/Kconfig
 
 config PROVIDE_OHCI1394_DMA_INIT

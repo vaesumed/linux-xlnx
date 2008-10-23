@@ -456,7 +456,7 @@ static void lapic_timer_setup(enum clock_event_mode mode,
 static void lapic_timer_broadcast(cpumask_t mask)
 {
 #ifdef CONFIG_SMP
-	send_IPI_mask(mask, LOCAL_TIMER_VECTOR);
+	send_IPI_mask(&mask, LOCAL_TIMER_VECTOR);
 #endif
 }
 
@@ -2106,7 +2106,7 @@ __cpuinit int apic_is_clustered_box(void)
 	bios_cpu_apicid = early_per_cpu_ptr(x86_bios_cpu_apicid);
 	bitmap_zero(clustermap, NUM_APIC_CLUSTERS);
 
-	for (i = 0; i < NR_CPUS; i++) {
+	for (i = 0; i < nr_cpu_ids; i++) {
 		/* are we being called early in kernel startup? */
 		if (bios_cpu_apicid) {
 			id = bios_cpu_apicid[i];

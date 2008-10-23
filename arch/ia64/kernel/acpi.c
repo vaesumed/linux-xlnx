@@ -907,7 +907,7 @@ int acpi_map_lsapic(acpi_handle handle, int *pcpu)
 
 	cpus_complement(tmp_map, cpu_present_map);
 	cpu = first_cpu(tmp_map);
-	if (cpu >= NR_CPUS)
+	if (cpu >= nr_cpu_ids)
 		return -EINVAL;
 
 	acpi_map_cpu2node(handle, cpu, physid);
