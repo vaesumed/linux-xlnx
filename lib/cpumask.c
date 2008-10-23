@@ -24,6 +24,17 @@ int cpumask_next_and(int n, const cpumask_t *srcp, const cpumask_t *andp)
 }
 EXPORT_SYMBOL(cpumask_next_and);
 
+int cpumask_any_but(const struct cpumask *mask, unsigned int cpu)
+{
+	unsigned int i;
+
+	for_each_cpu(i, mask)
+		if (i != cpu)
+			break;
+	return i;
+}
+EXPORT_SYMBOL(cpumask_any_but);
+
 /* These are not inline because of header tangles. */
 #ifdef CONFIG_CPUMASK_OFFSTACK
 bool alloc_cpumask_var(cpumask_var_t *mask, gfp_t flags)
