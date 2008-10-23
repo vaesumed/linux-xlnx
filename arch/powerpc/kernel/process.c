@@ -941,7 +941,7 @@ static inline int valid_irq_stack(unsigned long sp, struct task_struct *p,
 	 * Avoid crashing if the stack has overflowed and corrupted
 	 * task_cpu(p), which is in the thread_info struct.
 	 */
-	if (cpu < NR_CPUS && cpu_possible(cpu)) {
+	if (cpu < nr_cpu_ids && cpu_possible(cpu)) {
 		stack_page = (unsigned long) hardirq_ctx[cpu];
 		if (sp >= stack_page + sizeof(struct thread_struct)
 		    && sp <= stack_page + THREAD_SIZE - nbytes)

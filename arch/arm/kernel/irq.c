@@ -193,7 +193,7 @@ void migrate_irqs(void)
 		if (desc->cpu == cpu) {
 			unsigned int newcpu = any_online_cpu(desc->affinity);
 
-			if (newcpu == NR_CPUS) {
+			if (newcpu >= nr_cpu_ids) {
 				if (printk_ratelimit())
 					printk(KERN_INFO "IRQ%u no longer affine to CPU%u\n",
 					       i, cpu);

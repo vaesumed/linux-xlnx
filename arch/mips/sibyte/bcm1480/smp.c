@@ -150,7 +150,7 @@ static void __init bcm1480_smp_setup(void)
 	__cpu_number_map[0] = 0;
 	__cpu_logical_map[0] = 0;
 
-	for (i = 1, num = 0; i < NR_CPUS; i++) {
+	for (i = 1, num = 0; i < nr_cpu_ids; i++) {
 		if (cfe_cpu_stop(i) == 0) {
 			cpu_set(i, cpu_possible_map);
 			__cpu_number_map[i] = ++num;

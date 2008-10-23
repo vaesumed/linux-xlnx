@@ -497,7 +497,7 @@ smp_cpus_done(unsigned int max_cpus)
 	int cpu;
 	unsigned long bogosum = 0;
 
-	for(cpu = 0; cpu < NR_CPUS; cpu++) 
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++)
 		if (cpu_online(cpu))
 			bogosum += cpu_data[cpu].loops_per_jiffy;
 	
@@ -698,7 +698,7 @@ flush_tlb_mm(struct mm_struct *mm)
 		flush_tlb_current(mm);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
 				if (!cpu_online(cpu) || cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
@@ -747,7 +747,7 @@ flush_tlb_page(struct vm_area_struct *vma, unsigned long addr)
 		flush_tlb_current_page(mm, vma, addr);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
 				if (!cpu_online(cpu) || cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
@@ -803,7 +803,7 @@ flush_icache_user_range(struct vm_area_struct *vma, struct page *page,
 		__load_new_mm_context(mm);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
 				if (!cpu_online(cpu) || cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
