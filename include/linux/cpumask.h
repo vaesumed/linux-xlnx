@@ -97,8 +97,8 @@
  * void cpumask_onto(dst, orig, relmap)	*dst = orig relative to relmap
  * void cpumask_fold(dst, orig, sz)	dst bits = orig bits mod sz
  *
- * for_each_cpu_mask(cpu, mask)		for-loop cpu over mask using nr_cpu_ids
- * for_each_cpu_mask_and(cpu, mask, and) for-loop cpu over (mask & and).
+ * for_each_cpu(cpu, mask)		for-loop cpu over mask, <= nr_cpu_ids
+ * for_each_cpu_and(cpu, mask, and)	for-loop cpu over (mask & and).
  *
  * int num_online_cpus()		Number of online CPUs
  * int num_possible_cpus()		Number of all possible CPUs
@@ -175,6 +175,9 @@ extern cpumask_t _unused_cpumask_arg_;
 #define cpus_weight_nr(cpumask)		cpus_weight(cpumask)
 #define for_each_cpu_mask_nr(cpu, mask)	for_each_cpu_mask(cpu, mask)
 #define cpumask_of_cpu(cpu) (*cpumask_of(cpu))
+#define for_each_cpu_mask(cpu, mask)	for_each_cpu(cpu, &(mask))
+#define for_each_cpu_mask_and(cpu, mask, and)	\
+		for_each_cpu_and(cpu, &(mask), &(and))
 /* End deprecated region. */
 
 #if NR_CPUS > 1
@@ -443,9 +446,9 @@ extern cpumask_t cpu_mask_all;
 #define cpumask_next_and(n, srcp, andp)	({ (void)(srcp), (void)(andp); 1; })
 #define any_online_cpu(mask)		0
 
-#define for_each_cpu_mask(cpu, mask)		\
+#define for_each_cpu(cpu, mask)			\
 	for ((cpu) = 0; (cpu) < 1; (cpu)++, (void)mask)
-#define for_each_cpu_mask_and(cpu, mask, and)	\
+#define for_each_cpu_and(cpu, mask, and)	\
 	for ((cpu) = 0; (cpu) < 1; (cpu)++, (void)mask, (void)and)
 
 #else /* NR_CPUS > 1 */
@@ -459,13 +462,13 @@ int __any_online_cpu(const cpumask_t *mask);
 #define next_cpu(n, src)	__next_cpu((n), &(src))
 #define any_online_cpu(mask) __any_online_cpu(&(mask))
 
-#define for_each_cpu_mask(cpu, mask)			\
+#define for_each_cpu(cpu, mask)				\
 	for ((cpu) = -1;				\
-		(cpu) = next_cpu((cpu), (mask)),	\
+		(cpu) = __next_cpu((cpu), (mask)),	\
 		(cpu) < nr_cpu_ids;)
-#define for_each_cpu_mask_and(cpu, mask, and)				\
+#define for_each_cpu_and(cpu, mask, and)				\
 	for ((cpu) = -1;						\
-		(cpu) = cpumask_next_and((cpu), &(mask), &(and)),	\
+		(cpu) = cpumask_next_and((cpu), (mask), (and)),		\
 		(cpu) < nr_cpu_ids;)
 
 #define num_online_cpus()	cpus_weight(cpu_online_map)
@@ -597,8 +600,8 @@ extern cpumask_t cpu_active_map;
 
 #define cpu_is_offline(cpu)	unlikely(!cpu_online(cpu))
 
-#define for_each_possible_cpu(cpu) for_each_cpu_mask((cpu), cpu_possible_map)
-#define for_each_online_cpu(cpu)   for_each_cpu_mask((cpu), cpu_online_map)
-#define for_each_present_cpu(cpu)  for_each_cpu_mask((cpu), cpu_present_map)
+#define for_each_possible_cpu(cpu) for_each_cpu((cpu), &cpu_possible_map)
+#define for_each_online_cpu(cpu)   for_each_cpu((cpu), &cpu_online_map)
+#define for_each_present_cpu(cpu)  for_each_cpu((cpu), &cpu_present_map)
 
 #endif /* __LINUX_CPUMASK_H */
