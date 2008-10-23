@@ -199,7 +199,7 @@ int smp_call_function_single(int cpu, void (*func) (void *info), void *info,
 EXPORT_SYMBOL(smp_call_function_single);
 
 /**
- * smp_call_function_mask(): Run a function on a set of other CPUs.
+ * smp_call_function_many(): Run a function on a set of other CPUs.
  * @mask: The set of cpus to run on.  Must not include the current cpu.
  * @func: The function to run. This must be fast and non-blocking.
  * @info: An arbitrary pointer to pass to the function.
@@ -213,16 +213,17 @@ EXPORT_SYMBOL(smp_call_function_single);
  * You must not call this function with disabled interrupts or from a
  * hardware interrupt handler or from a bottom half handler.
  */
-int smp_call_function_mask(cpumask_t mask, void (*func)(void *), void *info,
-			   int wait)
+int smp_call_function_many(const struct cpumask *maskp,
+			   void (*func)(void *), void *info, bool wait)
 {
+	cpumask_t mask = *maskp;
 	spin_lock(&call_lock);
 	cpu_clear(smp_processor_id(), mask);
 	__smp_call_function_map(func, info, wait, mask);
 	spin_unlock(&call_lock);
 	return 0;
 }
-EXPORT_SYMBOL(smp_call_function_mask);
+EXPORT_SYMBOL(smp_call_function_many);
 
 void smp_send_stop(void)
 {
