@@ -116,6 +116,7 @@ struct cpumask {
 typedef struct cpumask cpumask_t;
 extern cpumask_t _unused_cpumask_arg_;
 
+#define CPU_MASK_ALL_PTR	(cpu_all_mask)
 #define CPU_MASK_ALL		((cpumask_t){ CPU_BITS_ALL })
 #define CPU_MASK_NONE		((cpumask_t){ CPU_BITS_NONE })
 #define CPU_MASK_CPU0		((cpumask_t){ CPU_BITS_CPU0 })
@@ -174,6 +175,7 @@ extern cpumask_t _unused_cpumask_arg_;
 #define cpu_online_map		(*(cpumask_t *)cpu_online_mask)
 #define cpu_present_map		(*(cpumask_t *)cpu_present_mask)
 #define cpu_active_map		(*(cpumask_t *)cpu_active_mask)
+#define cpu_mask_all		(*(cpumask_t *)cpu_all_mask)
 /* End deprecated region. */
 
 #if NR_CPUS > 1
@@ -414,8 +416,6 @@ static inline const struct cpumask *cpumask_of(unsigned int cpu)
 	[BITS_TO_LONGS(CONFIG_NR_CPUS)-1] = CPU_MASK_LAST_WORD	\
 }
 
-#define CPU_MASK_ALL_PTR	(&CPU_MASK_ALL)
-
 #else
 
 #define CPU_BITS_ALL						\
@@ -423,10 +423,6 @@ static inline const struct cpumask *cpumask_of(unsigned int cpu)
 	[0 ... BITS_TO_LONGS(CONFIG_NR_CPUS)-2] = ~0UL,		\
 	[BITS_TO_LONGS(CONFIG_NR_CPUS)-1] = CPU_MASK_LAST_WORD	\
 }
-
-/* cpu_mask_all is in init/main.c */
-extern cpumask_t cpu_mask_all;
-#define CPU_MASK_ALL_PTR	(&cpu_mask_all)
 
 #endif
 
@@ -559,6 +555,14 @@ extern const struct cpumask *const cpu_possible_mask;
 extern const struct cpumask *const cpu_online_mask;
 extern const struct cpumask *const cpu_present_mask;
 extern const struct cpumask *const cpu_active_mask;
+
+/* It's common to want to use cpu_all_mask in struct member initializers,
+ * so it has to refer to an address rather than a pointer. */
+extern const DECLARE_BITMAP(cpu_all_bits, CONFIG_NR_CPUS);
+#define cpu_all_mask to_cpumask(cpu_all_bits)
+
+/* First bits of cpu_bit_bitmap are in fact unset. */
+#define cpu_none_mask to_cpumask(cpu_bit_bitmap[0])
 
 #if NR_CPUS > 1
 #define num_online_cpus()	cpus_weight(cpu_online_map)
