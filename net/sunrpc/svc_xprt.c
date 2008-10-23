@@ -515,10 +515,8 @@ int svc_port_is_privileged(struct sockaddr *sin)
 }
 
 /*
- * Make sure that we don't have too many active connections. If we have,
- * something must be dropped. It's not clear what will happen if we allow
- * "too many" connections, but when dealing with network-facing software,
- * we have to code defensively. Here we do that by imposing hard limits.
+ * Make sure that we don't have too many active connections.  If we
+ * have, something must be dropped.
  *
  * There's no point in trying to do random drop here for DoS
  * prevention. The NFS clients does 1 reconnect in 15 seconds. An
@@ -527,27 +525,19 @@ int svc_port_is_privileged(struct sockaddr *sin)
  * The only somewhat efficient mechanism would be if drop old
  * connections from the same IP first. But right now we don't even
  * record the client IP in svc_sock.
- *
- * single-threaded services that expect a lot of clients will probably
- * need to set sv_maxconn to override the default value which is based
- * on the number of threads
  */
 static void svc_check_conn_limits(struct svc_serv *serv)
 {
-	unsigned int limit = serv->sv_maxconn ? serv->sv_maxconn :
-				(serv->sv_nrthreads+3) * 20;
-
-	if (serv->sv_tmpcnt > limit) {
+	if (serv->sv_tmpcnt > (serv->sv_nrthreads+3)*20) {
 		struct svc_xprt *xprt = NULL;
 		spin_lock_bh(&serv->sv_lock);
 		if (!list_empty(&serv->sv_tempsocks)) {
 			if (net_ratelimit()) {
 				/* Try to help the admin */
 				printk(KERN_NOTICE "%s: too many open  "
-				       "connections, consider increasing %s\n",
-				       serv->sv_name, serv->sv_maxconn ?
-				       "the max number of connections." :
-				       "the number of threads.");
+				       "connections, consider increasing the "
+				       "number of nfsd threads\n",
+				       serv->sv_name);
 			}
 			/*
 			 * Always select the oldest connection. It's not fair,
