@@ -416,8 +416,7 @@ xfs_bulkstat(
 		/*
 		 * Allocate and initialize a btree cursor for ialloc btree.
 		 */
-		cur = xfs_btree_init_cursor(mp, NULL, agbp, agno, XFS_BTNUM_INO,
-						(xfs_inode_t *)0, 0);
+		cur = xfs_inobt_init_cursor(mp, NULL, agbp, agno);
 		irbp = irbuf;
 		irbufend = irbuf + nirbuf;
 		end_of_ag = 0;
@@ -472,7 +471,7 @@ xfs_bulkstat(
 			 * In any case, increment to the next record.
 			 */
 			if (!error)
-				error = xfs_inobt_increment(cur, 0, &tmp);
+				error = xfs_btree_increment(cur, 0, &tmp);
 		} else {
 			/*
 			 * Start of ag.  Lookup the first inode chunk.
@@ -539,7 +538,7 @@ xfs_bulkstat(
 			 * Set agino to after this chunk and bump the cursor.
 			 */
 			agino = gino + XFS_INODES_PER_CHUNK;
-			error = xfs_inobt_increment(cur, 0, &tmp);
+			error = xfs_btree_increment(cur, 0, &tmp);
 			cond_resched();
 		}
 		/*
@@ -594,21 +593,21 @@ xfs_bulkstat(
 						/*
 						 * Get the inode cluster buffer
 						 */
-						ASSERT(xfs_inode_zone != NULL);
-						ip = kmem_zone_zalloc(xfs_inode_zone,
-								      KM_SLEEP);
-						ip->i_ino = ino;
-						ip->i_mount = mp;
-						spin_lock_init(&ip->i_flags_lock);
 						if (bp)
 							xfs_buf_relse(bp);
+						ip = xfs_inode_alloc(mp, ino);
+						if (!ip) {
+							bp = NULL;
+							rval = ENOMEM;
+							break;
+						}
 						error = xfs_itobp(mp, NULL, ip,
 								&dip, &bp, bno,
 								XFS_IMAP_BULKSTAT,
 								XFS_BUF_LOCK);
 						if (!error)
 							clustidx = ip->i_boffset / mp->m_sb.sb_inodesize;
-						kmem_zone_free(xfs_inode_zone, ip);
+						xfs_idestroy(ip);
 						if (XFS_TEST_ERROR(error != 0,
 								   mp, XFS_ERRTAG_BULKSTAT_READ_CHUNK,
 								   XFS_RANDOM_BULKSTAT_READ_CHUNK)) {
@@ -842,8 +841,7 @@ xfs_inumbers(
 				agino = 0;
 				continue;
 			}
-			cur = xfs_btree_init_cursor(mp, NULL, agbp, agno,
-				XFS_BTNUM_INO, (xfs_inode_t *)0, 0);
+			cur = xfs_inobt_init_cursor(mp, NULL, agbp, agno);
 			error = xfs_inobt_lookup_ge(cur, agino, 0, 0, &tmp);
 			if (error) {
 				xfs_btree_del_cursor(cur, XFS_BTREE_ERROR);
@@ -887,7 +885,7 @@ xfs_inumbers(
 			bufidx = 0;
 		}
 		if (left) {
-			error = xfs_inobt_increment(cur, 0, &tmp);
+			error = xfs_btree_increment(cur, 0, &tmp);
 			if (error) {
 				xfs_btree_del_cursor(cur, XFS_BTREE_ERROR);
 				cur = NULL;
