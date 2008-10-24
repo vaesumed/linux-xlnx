@@ -56,14 +56,14 @@ struct s921_isdb_t_transmission_mode_params {
 	u8 layer_a_nseg;
 
 	u8 layer_b_mode;
-#define ISDB_T_LB_MODE_1 0 
+#define ISDB_T_LB_MODE_1 0
 #define ISDB_T_LB_MODE_2 1
 #define ISDB_T_LB_MODE_3 2
 	u8 layer_b_carrier_modulation;
 #define ISDB_T_LB_CM_DQPSK 0
 #define ISDB_T_LB_CM_QPSK  1
 #define ISDB_T_LB_CM_16QAM 2
-#define ISDB_T_LB_CM_64QAM 3 
+#define ISDB_T_LB_CM_64QAM 3
 #define ISDB_T_LB_CM_NOLAYER 4
 	u8 layer_b_code_rate;
 #define ISDB_T_LB_CR_1_2   0
