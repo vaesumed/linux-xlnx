@@ -52,12 +52,6 @@
 struct _lowcore *lowcore_ptr[NR_CPUS];
 EXPORT_SYMBOL(lowcore_ptr);
 
-cpumask_t cpu_online_map = CPU_MASK_NONE;
-EXPORT_SYMBOL(cpu_online_map);
-
-cpumask_t cpu_possible_map = CPU_MASK_ALL;
-EXPORT_SYMBOL(cpu_possible_map);
-
 static struct task_struct *current_set[NR_CPUS];
 
 static u8 smp_cpu_type;
@@ -205,7 +199,7 @@ int smp_call_function_single(int cpu, void (*func) (void *info), void *info,
 EXPORT_SYMBOL(smp_call_function_single);
 
 /**
- * smp_call_function_mask(): Run a function on a set of other CPUs.
+ * smp_call_function_many(): Run a function on a set of other CPUs.
  * @mask: The set of cpus to run on.  Must not include the current cpu.
  * @func: The function to run. This must be fast and non-blocking.
  * @info: An arbitrary pointer to pass to the function.
@@ -219,16 +213,17 @@ EXPORT_SYMBOL(smp_call_function_single);
  * You must not call this function with disabled interrupts or from a
  * hardware interrupt handler or from a bottom half handler.
  */
-int smp_call_function_mask(cpumask_t mask, void (*func)(void *), void *info,
-			   int wait)
+int smp_call_function_many(const struct cpumask *maskp,
+			   void (*func)(void *), void *info, bool wait)
 {
+	cpumask_t mask = *maskp;
 	spin_lock(&call_lock);
 	cpu_clear(smp_processor_id(), mask);
 	__smp_call_function_map(func, info, wait, mask);
 	spin_unlock(&call_lock);
 	return 0;
 }
-EXPORT_SYMBOL(smp_call_function_mask);
+EXPORT_SYMBOL(smp_call_function_many);
 
 void smp_send_stop(void)
 {
@@ -444,7 +439,7 @@ static int smp_rescan_cpus_sigp(cpumask_t avail)
 	int cpu_id, logical_cpu;
 
 	logical_cpu = first_cpu(avail);
-	if (logical_cpu == NR_CPUS)
+	if (logical_cpu >= nr_cpu_ids)
 		return 0;
 	for (cpu_id = 0; cpu_id <= 65535; cpu_id++) {
 		if (cpu_known(cpu_id))
@@ -456,7 +451,7 @@ static int smp_rescan_cpus_sigp(cpumask_t avail)
 		cpu_set(logical_cpu, cpu_present_map);
 		smp_cpu_state[logical_cpu] = CPU_STATE_CONFIGURED;
 		logical_cpu = next_cpu(logical_cpu, avail);
-		if (logical_cpu == NR_CPUS)
+		if (logical_cpu >= nr_cpu_ids)
 			break;
 	}
 	return 0;
@@ -469,7 +464,7 @@ static int smp_rescan_cpus_sclp(cpumask_t avail)
 	int rc;
 
 	logical_cpu = first_cpu(avail);
-	if (logical_cpu == NR_CPUS)
+	if (logical_cpu >= nr_cpu_ids)
 		return 0;
 	info = kmalloc(sizeof(*info), GFP_KERNEL);
 	if (!info)
@@ -491,7 +486,7 @@ static int smp_rescan_cpus_sclp(cpumask_t avail)
 		else
 			smp_cpu_state[logical_cpu] = CPU_STATE_CONFIGURED;
 		logical_cpu = next_cpu(logical_cpu, avail);
-		if (logical_cpu == NR_CPUS)
+		if (logical_cpu >= nr_cpu_ids)
 			break;
 	}
 out:
@@ -733,7 +728,7 @@ static int __init setup_possible_cpus(char *s)
 
 	pcpus = simple_strtoul(s, NULL, 0);
 	cpu_possible_map = cpumask_of_cpu(0);
-	for (cpu = 1; cpu < pcpus && cpu < NR_CPUS; cpu++)
+	for (cpu = 1; cpu < pcpus && cpu < nr_cpu_ids; cpu++)
 		cpu_set(cpu, cpu_possible_map);
 	return 0;
 }

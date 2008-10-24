@@ -290,7 +290,7 @@ static void smtc_configure_tlb(void)
  * possibly leave some TCs/VPEs as "slave" processors.
  *
  * Use c0_MVPConf0 to find out how many TCs are available, setting up
- * phys_cpu_present_map and the logical/physical mappings.
+ * cpu_possible_map and the logical/physical mappings.
  */
 
 int __init smtc_build_cpu_map(int start_cpu_slot)
@@ -303,8 +303,8 @@ int __init smtc_build_cpu_map(int start_cpu_slot)
 	 * everything up so that "logical" = "physical".
 	 */
 	ntcs = ((read_c0_mvpconf0() & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1;
-	for (i=start_cpu_slot; i<NR_CPUS && i<ntcs; i++) {
-		cpu_set(i, phys_cpu_present_map);
+	for (i = start_cpu_slot; i < nr_cpu_ids && i < ntcs; i++) {
+		cpu_set(i, cpu_possible_map);
 		__cpu_number_map[i] = i;
 		__cpu_logical_map[i] = i;
 	}
@@ -422,8 +422,8 @@ void smtc_prepare_cpus(int cpus)
 	if (vpelimit > 0 && nvpe > vpelimit)
 		nvpe = vpelimit;
 	ntc = ((val & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1;
-	if (ntc > NR_CPUS)
-		ntc = NR_CPUS;
+	if (ntc > nr_cpu_ids)
+		ntc = nr_cpu_ids;
 	if (tclimit > 0 && ntc > tclimit)
 		ntc = tclimit;
 	slop = ntc % nvpe;
@@ -521,7 +521,7 @@ void smtc_prepare_cpus(int cpus)
 	 * Pull any physically present but unused TCs out of circulation.
 	 */
 	while (tc < (((val & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1)) {
-		cpu_clear(tc, phys_cpu_present_map);
+		cpu_clear(tc, cpu_possible_map);
 		cpu_clear(tc, cpu_present_map);
 		tc++;
 	}
