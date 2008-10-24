@@ -1006,7 +1006,7 @@ long work_on_cpu(unsigned int cpu, long (*fn)(void *), void *arg)
 		wfc.ret = -EINVAL;
 	else {
 		schedule_work_on(cpu, &wfc.work);
-		flush_workqueue(&wfc.work);
+		flush_work(&wfc.work);
 	}
 	put_online_cpus();
 
