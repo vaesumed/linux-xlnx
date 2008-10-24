@@ -20,10 +20,10 @@ MODULE_PARM_DESC(debug,"lgdt3304 debugging (default off)");
 
 struct lgdt3304_state
 {
-        struct dvb_frontend frontend;
-        fe_modulation_t current_modulation;
-        __u32 snr; 
-        __u32 current_frequency;
+	struct dvb_frontend frontend;
+	fe_modulation_t current_modulation;
+	__u32 snr;
+	__u32 current_frequency;
 	__u8 addr;
 	struct i2c_adapter *i2c;
 };
@@ -37,20 +37,20 @@ static int i2c_write_demod_bytes (struct dvb_frontend *fe, __u8 *buf, int len)
 		.len = 3,
 		.buf = buf
 	};
-        int i;
-        int err;
+	int i;
+	int err;
 
-        for (i=0; i<len-1; i+=3){
+	for (i=0; i<len-1; i+=3){
 		if((err = i2c_transfer(state->i2c, &i2cmsgs, 1))<0) {
 			printk("%s i2c_transfer error %d\n", __FUNCTION__, err);
-                        if (err < 0)
-                                return err;
-                        else
-                                return -EREMOTEIO;
-                }
-                i2cmsgs.buf += 3;
-        }
-        return 0;
+			if (err < 0)
+				return err;
+			else
+				return -EREMOTEIO;
+		}
+		i2cmsgs.buf += 3;
+	}
+	return 0;
 }
 
 static int lgdt3304_i2c_read_reg(struct dvb_frontend *fe, unsigned int reg)
@@ -102,7 +102,7 @@ static int lgdt3304_i2c_write_reg(struct dvb_frontend *fe, int reg, int val)
 }
 
 
-static int lgdt3304_soft_Reset(struct dvb_frontend *fe) 
+static int lgdt3304_soft_Reset(struct dvb_frontend *fe)
 {
 	lgdt3304_i2c_write_reg(fe, 0x0002, 0x9a);
 	lgdt3304_i2c_write_reg(fe, 0x0002, 0x9b);
@@ -138,7 +138,7 @@ static int lgdt3304_set_parameters(struct dvb_frontend *fe, struct dvb_frontend_
 		0x03, 0x14, 0xe1,
 		0x05, 0x0e, 0x5b,
 	};
-	
+
 	/* not yet tested .. */
 	static __u8 lgdt3304_qam64_data[] = {
 		/* 16bit  , 8bit */
@@ -248,14 +248,14 @@ static int lgdt3304_set_parameters(struct dvb_frontend *fe, struct dvb_frontend_
 	lgdt3304_soft_Reset(fe);
 
 
-        if (fe->ops.tuner_ops.set_params) 
-                fe->ops.tuner_ops.set_params(fe, param);
-        
+	if (fe->ops.tuner_ops.set_params)
+		fe->ops.tuner_ops.set_params(fe, param);
+
 	return 0;
 }
 
 static int lgdt3304_init(struct dvb_frontend *fe) {
-        return 0;
+	return 0;
 }
 
 static int lgdt3304_sleep(struct dvb_frontend *fe) {
@@ -271,7 +271,7 @@ static int lgdt3304_read_status(struct dvb_frontend *fe, fe_status_t *status)
 
 	*status = 0;
 	dprintk("lgdt read status\n");
-	
+
 	r011d = lgdt3304_i2c_read_reg(fe, 0x011d);
 
 	dprintk("%02x\n", r011d);
