@@ -35,6 +35,9 @@ int stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus);
  * won't come or go while it's being called.  Used by hotplug cpu.
  */
 int __stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus);
+
+void stop_machine_init(void);
+
 #else
 
 static inline int stop_machine(int (*fn)(void *), void *data,
@@ -46,5 +49,8 @@ static inline int stop_machine(int (*fn)(void *), void *data,
 	local_irq_enable();
 	return ret;
 }
+
+static inline void stop_machine_init(void) { }
+
 #endif /* CONFIG_SMP */
 #endif /* _LINUX_STOP_MACHINE */
