@@ -930,8 +930,7 @@ static void sbp2_login(struct work_struct *work)
 
 	/* Unreported error during __scsi_add_device() */
 	smp_rmb(); /* get current card generation */
-	if (generation != device->card->generation ||
-	    !scsi_device_online(sdev)) {
+	if (generation != device->card->generation) {
 		scsi_remove_device(sdev);
 		scsi_device_put(sdev);
 		goto out_logout_login;
