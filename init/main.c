@@ -256,8 +256,8 @@ static int __init loglevel(char *str)
 
 early_param("loglevel", loglevel);
 
-#ifdef PERCPU_MODULE_RESERVE
-unsigned int percpu_reserve = PERCPU_MODULE_RESERVE;
+#ifdef PERCPU_RESERVE_SIZE
+unsigned int percpu_reserve = PERCPU_RESERVE_SIZE;
 
 static int __init init_percpu_reserve(char *str)
 {
@@ -411,7 +411,7 @@ static void __init setup_per_cpu_areas(void)
 	unsigned long nr_possible_cpus = num_possible_cpus();
 
 	/* Copy section for each CPU (we discard the original) */
-	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
+	size = ALIGN(PERCPU_AREA_SIZE, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
 	printk(KERN_INFO "percpu area: %d bytes total, %d available.\n",
 		size, size - (__per_cpu_end - __per_cpu_start));

@@ -43,16 +43,16 @@
 
 extern unsigned int percpu_reserve;
 /* Enough to cover all DEFINE_PER_CPUs in kernel, including modules. */
-#ifndef PERCPU_ENOUGH_ROOM
+#ifndef PERCPU_AREA_SIZE
 #ifdef CONFIG_MODULES
-#define PERCPU_MODULE_RESERVE	8192
+#define PERCPU_RESERVE_SIZE	8192
 #else
-#define PERCPU_MODULE_RESERVE	0
+#define PERCPU_RESERVE_SIZE	0
 #endif
 
-#define PERCPU_ENOUGH_ROOM						\
+#define PERCPU_AREA_SIZE						\
 	(__per_cpu_end - __per_cpu_start + percpu_reserve)
-#endif	/* PERCPU_ENOUGH_ROOM */
+#endif	/* PERCPU_AREA_SIZE */
 
 /*
  * Must be an lvalue. Since @var must be a simple identifier,
