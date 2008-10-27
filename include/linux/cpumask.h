@@ -57,6 +57,9 @@
  * CPU_MASK_NONE			Initializer - no bits set
  * unsigned long *cpumask_bits(mask)	Array of unsigned long's in mask
  *
+ * struct cpumask *to_cpumask(const unsigned long[])
+ *					Convert a bitmap to a cpumask.
+ *
  * ------------------------------------------------------------------------
  *
  * int cpumask_scnprintf(buf, len, mask) Format cpumask for printing
@@ -364,6 +367,17 @@ static inline void cpumask_copy(struct cpumask *dstp,
 
 #define cpumask_any(srcp) cpumask_first(srcp)
 #define cpumask_any_and(mask1, mask2) cpumask_first_and((mask1), (mask2))
+
+/* Used for static bitmaps of CONFIG_NR_CPUS bits.  Must be a constant to use
+ * as an initializer. */
+#define to_cpumask(bitmap)						\
+	((struct cpumask *)(1 ? (bitmap)				\
+			    : (void *)sizeof(__check_is_bitmap(bitmap))))
+
+static inline int __check_is_bitmap(const unsigned long *bitmap)
+{
+	return 1;
+}
 
 /*
  * Special-case data structure for "single bit set only" constant CPU masks.
