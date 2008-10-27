@@ -458,22 +458,25 @@ unsigned __kprobes long oops_begin(void)
 
 void __kprobes oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 {
-	die_owner = -1;
+	if (regs && kexec_should_crash(current))
+		crash_kexec(regs);
+
 	bust_spinlocks(0);
+	die_owner = -1;
+	add_taint(TAINT_DIE);
 	die_nest_count--;
 	if (!die_nest_count)
 		/* Nest count reaches zero, release the lock. */
 		__raw_spin_unlock(&die_lock);
 	raw_local_irq_restore(flags);
-	if (!regs) {
-		oops_exit();
+	oops_exit();
+
+	if (!signr)
 		return;
-	}
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
-	oops_exit();
 	do_exit(signr);
 }
 
@@ -496,29 +499,31 @@ int __kprobes __die(const char *str, struct pt_regs *regs, long err)
 		return 1;
 
 	show_registers(regs);
-	add_taint(TAINT_DIE);
 	/* Executive summary in case the oops scrolled away */
 	printk(KERN_ALERT "RIP ");
 	printk_address(regs->ip, 1);
 	printk(" RSP <%016lx>\n", regs->sp);
-	if (kexec_should_crash(current))
-		crash_kexec(regs);
 	return 0;
 }
 
+/*
+ * This is gone through when something in the kernel has done something bad
+ * and is about to be terminated:
+ */
 void die(const char *str, struct pt_regs *regs, long err)
 {
 	unsigned long flags = oops_begin();
+	int sig = SIGSEGV;
 
-	if (!user_mode(regs))
+	if (!user_mode_vm(regs))
 		report_bug(regs->ip, regs);
 
 	if (__die(str, regs, err))
-		regs = NULL;
-	oops_end(flags, regs, SIGSEGV);
+		sig = 0;
+	oops_end(flags, regs, sig);
 }
 
-notrace __kprobes void
+void notrace __kprobes
 die_nmi(char *str, struct pt_regs *regs, int do_panic)
 {
 	unsigned long flags;
@@ -526,20 +531,18 @@ die_nmi(char *str, struct pt_regs *regs, int do_panic)
 	if (notify_die(DIE_NMIWATCHDOG, str, regs, 0, 2, SIGINT) == NOTIFY_STOP)
 		return;
 
-	flags = oops_begin();
 	/*
 	 * We are in trouble anyway, lets at least try
 	 * to get a message out.
 	 */
+	flags = oops_begin();
 	printk(KERN_EMERG "%s", str);
 	printk(" on CPU%d, ip %08lx, registers:\n",
 		smp_processor_id(), regs->ip);
 	show_registers(regs);
-	if (kexec_should_crash(current))
-		crash_kexec(regs);
+	oops_end(flags, regs, 0);
 	if (do_panic || panic_on_oops)
 		panic("Non maskable interrupt");
-	oops_end(flags, NULL, SIGBUS);
 	nmi_exit();
 	local_irq_enable();
 	do_exit(SIGBUS);
