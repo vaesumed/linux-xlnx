@@ -922,7 +922,7 @@ void ehca_destroy_comp_pool(void)
 
 	unregister_hotcpu_notifier(&comp_pool_callback_nb);
 
-	for (i = 0; i < NR_CPUS; i++) {
+	for (i = 0; i < nr_cpu_ids; i++) {
 		if (cpu_online(i))
 			destroy_comp_task(pool, i);
 	}

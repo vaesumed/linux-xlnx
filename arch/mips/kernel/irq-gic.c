@@ -182,7 +182,7 @@ static void gic_set_affinity(unsigned int irq, cpumask_t cpumask)
 		_intrmap[irq].cpunum = first_cpu(tmp);
 
 		/* Update the pcpu_masks */
-		for (i = 0; i < NR_CPUS; i++)
+		for (i = 0; i < nr_cpu_ids; i++)
 			clear_bit(irq, pcpu_masks[i].pcpu_mask);
 		set_bit(irq, pcpu_masks[first_cpu(tmp)].pcpu_mask);
 

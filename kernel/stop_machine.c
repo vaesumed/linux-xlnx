@@ -154,10 +154,8 @@ int stop_machine(int (*fn)(void *), void *data, const cpumask_t *cpus)
 }
 EXPORT_SYMBOL_GPL(stop_machine);
 
-static int __init stop_machine_init(void)
+void __init stop_machine_init(void)
 {
 	stop_machine_wq = create_rt_workqueue("kstop");
 	stop_machine_work = alloc_percpu(struct work_struct);
-	return 0;
 }
-core_initcall(stop_machine_init);

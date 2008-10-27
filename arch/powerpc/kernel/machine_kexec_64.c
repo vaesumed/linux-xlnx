@@ -176,7 +176,7 @@ static void kexec_prepare_cpus(void)
 	my_cpu = get_cpu();
 
 	/* check the others cpus are now down (via paca hw cpu id == -1) */
-	for (i=0; i < NR_CPUS; i++) {
+	for (i = 0; i < nr_cpu_ids; i++) {
 		if (i == my_cpu)
 			continue;
 
