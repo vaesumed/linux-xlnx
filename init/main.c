@@ -118,6 +118,7 @@ extern void time_init(void);
 /* Default late time init is NULL. archs can override this later. */
 void (*late_time_init)(void);
 extern void softirq_init(void);
+extern void cpu_alloc_init(void);
 
 /* Untouched command line saved by arch-specific code. */
 char __initdata boot_command_line[COMMAND_LINE_SIZE];
@@ -589,6 +590,7 @@ asmlinkage void __init start_kernel(void)
 	unwind_setup();
 	setup_per_cpu_areas();
 	setup_nr_cpu_ids();
+	cpu_alloc_init();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
 	/*
