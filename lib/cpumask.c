@@ -11,6 +11,9 @@ EXPORT_SYMBOL(cpumask_first);
 
 int cpumask_next(int n, const cpumask_t *srcp)
 {
+	/* -1 is a legal arg here. */
+	if (n != -1)
+		cpumask_check(n);
 	return find_next_bit(cpumask_bits(srcp), nr_cpumask_bits, n+1);
 }
 EXPORT_SYMBOL(cpumask_next);
