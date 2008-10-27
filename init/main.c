@@ -130,6 +130,7 @@ static char *execute_command;
 static char *ramdisk_execute_command;
 
 #ifdef CONFIG_SMP
+extern void cpu_alloc_init(void);
 /* Setup configured maximum number of CPUs to activate */
 unsigned int __initdata setup_max_cpus = NR_CPUS;
 
@@ -167,6 +168,8 @@ static int __init maxcpus(char *str)
 
 early_param("maxcpus", maxcpus);
 #else
+static inline void cpu_alloc_init(void) { }
+
 #define setup_max_cpus NR_CPUS
 #endif
 
@@ -587,6 +590,7 @@ asmlinkage void __init start_kernel(void)
 	mm_init_owner(&init_mm, &init_task);
 	setup_command_line(command_line);
 	unwind_setup();
+	cpu_alloc_init();
 	setup_per_cpu_areas();
 	setup_nr_cpu_ids();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
