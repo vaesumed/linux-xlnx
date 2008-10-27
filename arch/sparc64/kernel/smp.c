@@ -1390,7 +1390,7 @@ void __init real_setup_per_cpu_areas(void)
 	char *ptr;
 
 	/* Copy section for each CPU (we discard the original) */
-	goal = PERCPU_ENOUGH_ROOM;
+	goal = PERCPU_AREA_SIZE;
 
 	__per_cpu_shift = PAGE_SHIFT;
 	for (size = PAGE_SIZE; size < goal; size <<= 1UL)

@@ -149,7 +149,7 @@ void __init setup_per_cpu_areas(void)
 	setup_cpu_pda_map();
 
 	/* Copy section for each CPU (we discard the original) */
-	old_size = PERCPU_ENOUGH_ROOM;
+	old_size = PERCPU_AREA_SIZE;
 	align = max_t(unsigned long, PAGE_SIZE, align);
 	size = roundup(old_size, align);
 	printk(KERN_INFO "PERCPU: Allocating %zd bytes of per cpu data\n",
