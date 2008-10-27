@@ -504,7 +504,7 @@ static int percpu_modinit(void)
 	/* Static in-kernel percpu data (used). */
 	pcpu_size[0] = -(__per_cpu_end-__per_cpu_start);
 	/* Free room. */
-	pcpu_size[1] = PERCPU_ENOUGH_ROOM + pcpu_size[0];
+	pcpu_size[1] = PERCPU_AREA_SIZE + pcpu_size[0];
 	if (pcpu_size[1] < 0) {
 		printk(KERN_ERR "No per-cpu room for modules.\n");
 		pcpu_num_used = 1;
