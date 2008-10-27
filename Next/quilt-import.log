@@ -1,0 +1,143 @@
+Importing driver-core.current based on 2.6.28-rc1
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+HEAD is now at 57f8f7b Linux 2.6.28-rc1
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+document-kernel-taint-flags-properly.patch
+driver-core-drivers-base-sys.c-update-comments.patch
+sysfs-fix-return-values-for-sysdev_store_-ulong-int.patch
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 5214edd9f6dc7bc282276585f73b3f6019600e33
+Importing m68k based on 332edc2f7fa58b818dfed1cede60272eecc27c0a
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 332edc2f7fa58b818dfed1cede60272eecc27c0a
+HEAD is now at 332edc2 Merge branch 'release' of git://git.kernel.org/pub/scm/linux/kernel/git/lenb/linux-acpi-2.6
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+amiga-amiserial-no-serial-console-if-modular.diff
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core 5214edd9f6dc7bc282276585f73b3f6019600e33
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 5214edd9f6dc7bc282276585f73b3f6019600e33
+HEAD is now at 5214edd sysfs: Fix return values for sysdev_store_{ulong,int}
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+Importing device-mapper based on v2.6.27-7464-g332edc2
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper 332edc2f7fa58b818dfed1cede60272eecc27c0a
+Importing i2c based on 2.6.28-rc1
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+HEAD is now at 57f8f7b Linux 2.6.28-rc1
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-scx200_i2c-add-missing-class-parameter.patch
+Importing jdelvare-hwmon based on 2.6.28-rc1
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+HEAD is now at 57f8f7b Linux 2.6.28-rc1
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-w83781d-doesnt-link-when-built-in.patch
+hwmon-vid-add-support-for-AMD-fam10.patch
+hwmon-lm90-01-fix-hyst-for-specific-chips.patch
+hwmon-lm90-02-handle-LM99-offset.patch
+hwmon-adt7473-fix-voltage-conversion.patch
+hwmon-abituguru3-01-cosmetic-whitespace-fixes.patch
+hwmon-abituguru3-02-enable-dmi-probing-feature-on-aw9d-max.patch
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-f71882fg-04-style-cleanups.patch
+hwmon-f71882fg-05-add-f71862fg-support.patch
+hwmon-f71882fg-06-no-io-to-unreserved-ports.patch
+hwmon-add-ltc4245-driver.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+hwmon-it87-add-it8720f-support.patch
+Unchanged quilt series kernel-doc
+Importing ide based on 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+HEAD is now at 57f8f7b Linux 2.6.28-rc1
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+Importing rr based on v2.6.27-6509-g2515ddc
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 2515ddc6db8eb49a79f0fe5e67ff09ac7c81eab4
+HEAD is now at 2515ddc binfmt_elf_fdpic: Update for cputime changes.
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:simplify-load_module.patch
+module:remove_stop_machine_during_load_v2.patch
+module:compile-time-prefix-length-check.patch
+module_param:fix-duplicate-prefixes.patch
+module:core_param.patch
+misc:make-initcall_debug-a-module_param.patch
+misc:make-panic-options-core_params.patch
+misc:call_init_workqueues_before_pre_smp_initcalls.patch
+misc:workqueue_introduce_create_rt_workqueue.patch
+stop_machine:use_workqueues_instead_of_kernel_threads.patch
+stop_machine:fix_error_code_handling_on_multiple_cpus.patch
+stop_machine:fix-init-breakage.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net-mergeable-rx-bufs.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+lguest:fix-efi.patch
+lguest:fix-irq-vectors.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+cpumask:add-for_each_cpu_mask_and.patch
+x86:modify-send_IPI-API.patch
+sched:reduce-stack-usage.patch
+cpumask:centralize-common-maps.patch
+cpumask:remove-min.patch
+cpumask:add-struct-cpumask.patch
+cpumask:convert-few-difficult-cpumask_t-users.patch
+cpumask:cpumask_size.patch
+cpumask:cpus_copy.patch
+cpumask:cpumask_var_t.patch
+x86:enable-MAXSMP.patch
+cpumask:CONFIG_NR_CPUS-always.patch
+cpumask:always-have-nr_cpu_ids.patch
+cpumask:add-nr_cpumask_bits.patch
+cpumask:all-ops-compare-against-nr_cpu_ids.patch
+cpumask:fix-impossible-percpu-accesses.patch
+cpumask:use-nr_cpu_ids-in-all-ops.patch
+cpumask:cpumask_bits-everywhere.patch
+cpumask:cpumask_of.patch
+cpumask:for_each_cpu.patch
+cpumask:cpumask_first-cpumask_next.patch
+cpumask:deprecate-any_online_cpu.patch
+cpumask:cpumask_any_but.patch
+cpumask:deprecate-CPUMASK_ALLOC.patch
+cpumask:use-alloc_cpumask_var-in-sched.patch
+cpumask:to_cpumask.patch
+cpumask:cpumap-accessors.patch
+cpumask:CPU_BITS_ALL-and-CPU_BITS_NONE.patch
+cpumask:cpu_online_mask-et-al.patch
+cpumask:cpu_all_mask-and-cpu_none_mask.patch
+cpumask:cleanup-ifdefs.patch
+cpumask:check-all-ops-for-limits.patch
+cpumask:simple-smp_call_function_many.patch
+misc:work_on_cpu.patch
+Importing ttydev based on origin/master
+	quilt series is empty
+$ git update-ref refs/heads/quilt/ttydev f8d56f1771e4867acc461146764b4feeb5245669
