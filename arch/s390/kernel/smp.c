@@ -103,7 +103,7 @@ static void do_call_function(void)
 }
 
 static void __smp_call_function_map(void (*func) (void *info), void *info,
-				    int wait, struct cpumask *map)
+				    int wait, cpumask_t map)
 {
 	struct call_data_struct data;
 	int cpu, local = 0;
@@ -163,16 +163,14 @@ out:
  * You must not call this function with disabled interrupts, from a
  * hardware interrupt handler or from a bottom half.
  */
-
-/* protected by call_lock */
-static DEFINE_BITMAP(smp_call_map, CONFIG_NR_CPUS);
-
 int smp_call_function(void (*func) (void *info), void *info, int wait)
 {
+	cpumask_t map;
+
 	spin_lock(&call_lock);
-	cpumask_copy(to_cpumask(smp_call_map), cpu_online_mask);
-	cpumask_clear_cpu(smp_processor_id(), to_cpumask(smp_call_map));
-	__smp_call_function_map(func, info, wait, to_cpumask(smp_call_map));
+	map = cpu_online_map;
+	cpu_clear(smp_processor_id(), map);
+	__smp_call_function_map(func, info, wait, map);
 	spin_unlock(&call_lock);
 	return 0;
 }
@@ -194,15 +192,14 @@ int smp_call_function_single(int cpu, void (*func) (void *info), void *info,
 			     int wait)
 {
 	spin_lock(&call_lock);
-	cpumask_copy(to_cpumask(smp_call_map), cpumask_of(cpu));
-	__smp_call_function_map(func, info, wait, cpumask_of(cpu));
+	__smp_call_function_map(func, info, wait, cpumask_of_cpu(cpu));
 	spin_unlock(&call_lock);
 	return 0;
 }
 EXPORT_SYMBOL(smp_call_function_single);
 
 /**
- * smp_call_function_many(): Run a function on a set of other CPUs.
+ * smp_call_function_mask(): Run a function on a set of other CPUs.
  * @mask: The set of cpus to run on.  Must not include the current cpu.
  * @func: The function to run. This must be fast and non-blocking.
  * @info: An arbitrary pointer to pass to the function.
@@ -216,17 +213,16 @@ EXPORT_SYMBOL(smp_call_function_single);
  * You must not call this function with disabled interrupts or from a
  * hardware interrupt handler or from a bottom half handler.
  */
-int smp_call_function_many(const struct cpumask *mask,
-			   void (*func)(void *), void *info, bool wait)
+int smp_call_function_mask(cpumask_t mask, void (*func)(void *), void *info,
+			   int wait)
 {
 	spin_lock(&call_lock);
-	cpumask_copy(to_cpumask(smp_call_map), cpu_online_mask);
-	cpumask_clear_cpu(smp_processor_id(), to_cpumask(smp_call_map));
-	__smp_call_function_map(func, info, wait, to_cpumask(smp_call_map));
+	cpu_clear(smp_processor_id(), mask);
+	__smp_call_function_map(func, info, wait, mask);
 	spin_unlock(&call_lock);
 	return 0;
 }
-EXPORT_SYMBOL(smp_call_function_many);
+EXPORT_SYMBOL(smp_call_function_mask);
 
 void smp_send_stop(void)
 {
