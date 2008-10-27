@@ -573,6 +573,7 @@ config IOMMU_HELPER
 config MAXSMP
 	bool "Configure Maximum number of SMP Processors and NUMA Nodes"
 	depends on X86_64 && SMP && DEBUG_KERNEL && EXPERIMENTAL
+	depends on BROKEN
 	select CPUMASK_OFFSTACK
 	help
 	  Configure maximum number of CPUS and NUMA Nodes for this
