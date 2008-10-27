@@ -256,6 +256,18 @@ static int __init loglevel(char *str)
 
 early_param("loglevel", loglevel);
 
+#ifdef PERCPU_MODULE_RESERVE
+unsigned int percpu_reserve = PERCPU_MODULE_RESERVE;
+
+static int __init init_percpu_reserve(char *str)
+{
+	get_option(&str, &percpu_reserve);
+	return 0;
+}
+
+early_param("percpu", init_percpu_reserve);
+#endif
+
 /*
  * Unknown boot options get handed to init, unless they look like
  * failed parameters
@@ -401,6 +413,8 @@ static void __init setup_per_cpu_areas(void)
 	/* Copy section for each CPU (we discard the original) */
 	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
+	printk(KERN_INFO "percpu area: %d bytes total, %d available.\n",
+		size, size - (__per_cpu_end - __per_cpu_start));
 
 	for_each_possible_cpu(i) {
 		__per_cpu_offset[i] = ptr - __per_cpu_start;
