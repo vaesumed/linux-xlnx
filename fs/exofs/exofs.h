@@ -165,4 +165,15 @@ struct osd_request *prepare_osd_write(struct osd_dev *od,
 				      void *data);
 void free_osd_req(struct osd_request *or);
 
+/* inode.c               */
+void exofs_truncate(struct inode *inode);
+int exofs_setattr(struct dentry *, struct iattr *);
+
+/*********************
+ * operation vectors *
+ *********************/
+/* file.c            */
+extern const struct inode_operations exofs_file_inode_operations;
+extern const struct file_operations exofs_file_operations;
+
 #endif
