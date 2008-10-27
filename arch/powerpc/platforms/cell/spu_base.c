@@ -114,7 +114,7 @@ static inline void mm_needs_global_tlbie(struct mm_struct *mm)
 	cpumask_setall(&mm->cpu_vm_mask);
 
 	/* Global TLBIE broadcast required with SPEs. */
-	if (NR_CPUS == 1)
+	if (nr_cpu_ids == 1)
 		cpumask_set_cpu(1, &mm->cpu_vm_mask);
 }
 

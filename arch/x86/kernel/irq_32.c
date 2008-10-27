@@ -246,7 +246,7 @@ void fixup_irqs(cpumask_t map)
 			continue;
 
 		cpus_and(mask, desc->affinity, map);
-		if (any_online_cpu(mask) == NR_CPUS) {
+		if (any_online_cpu(mask) >= nr_cpu_ids) {
 			printk("Breaking affinity for irq %i\n", irq);
 			mask = map;
 		}

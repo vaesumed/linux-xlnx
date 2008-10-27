@@ -365,7 +365,7 @@ static void __init pmac_setup_arch(void)
 		 */
 		int cpu;
 
-		for (cpu = 1; cpu < 4 && cpu < NR_CPUS; ++cpu)
+		for (cpu = 1; cpu < 4 && cpu < nr_cpu_ids; ++cpu)
 			cpu_set(cpu, cpu_possible_map);
 		smp_ops = &psurge_smp_ops;
 	}
