@@ -194,12 +194,12 @@ extern int nr_cpu_ids;
 
 static inline void cpumask_set_cpu(int cpu, volatile struct cpumask *dstp)
 {
-	set_bit(cpu, dstp->bits);
+	set_bit(cpu, cpumask_bits(dstp));
 }
 
 static inline void cpumask_clear_cpu(int cpu, volatile struct cpumask *dstp)
 {
-	clear_bit(cpu, dstp->bits);
+	clear_bit(cpu, cpumask_bits(dstp));
 }
 
 /* No static inline type checking - see Subtlety (1) above. */
@@ -207,130 +207,142 @@ static inline void cpumask_clear_cpu(int cpu, volatile struct cpumask *dstp)
 
 static inline int cpumask_test_and_set_cpu(int cpu, struct cpumask *addr)
 {
-	return test_and_set_bit(cpu, addr->bits);
+	return test_and_set_bit(cpu, cpumask_bits(addr));
 }
 
 static inline void cpumask_setall(struct cpumask *dstp)
 {
-	bitmap_fill(dstp->bits, nr_cpumask_bits);
+	bitmap_fill(cpumask_bits(dstp), nr_cpumask_bits);
 }
 
 static inline void cpumask_clear(struct cpumask *dstp)
 {
-	bitmap_zero(dstp->bits, nr_cpumask_bits);
+	bitmap_zero(cpumask_bits(dstp), nr_cpumask_bits);
 }
 
 static inline void cpumask_and(struct cpumask *dstp,
 			       const struct cpumask *src1p,
 			       const struct cpumask *src2p)
 {
-	bitmap_and(dstp->bits, src1p->bits, src2p->bits, nr_cpumask_bits);
+	bitmap_and(cpumask_bits(dstp), cpumask_bits(src1p),
+				       cpumask_bits(src2p), nr_cpumask_bits);
 }
 
 static inline void cpumask_or(struct cpumask *dstp, const struct cpumask *src1p,
 			      const struct cpumask *src2p)
 {
-	bitmap_or(dstp->bits, src1p->bits, src2p->bits, nr_cpumask_bits);
+	bitmap_or(cpumask_bits(dstp), cpumask_bits(src1p),
+				      cpumask_bits(src2p), nr_cpumask_bits);
 }
 
 static inline void cpumask_xor(struct cpumask *dstp,
 			       const struct cpumask *src1p,
 			       const struct cpumask *src2p)
 {
-	bitmap_xor(dstp->bits, src1p->bits, src2p->bits, nr_cpumask_bits);
+	bitmap_xor(cpumask_bits(dstp), cpumask_bits(src1p),
+				       cpumask_bits(src2p), nr_cpumask_bits);
 }
 
 static inline void cpumask_andnot(struct cpumask *dstp,
 				  const struct cpumask *src1p,
 				  const struct cpumask *src2p)
 {
-	bitmap_andnot(dstp->bits, src1p->bits, src2p->bits, nr_cpumask_bits);
+	bitmap_andnot(cpumask_bits(dstp), cpumask_bits(src1p),
+					  cpumask_bits(src2p), nr_cpumask_bits);
 }
 
 static inline void cpumask_complement(struct cpumask *dstp,
 				      const struct cpumask *srcp)
 {
-	bitmap_complement(dstp->bits, srcp->bits, nr_cpumask_bits);
+	bitmap_complement(cpumask_bits(dstp), cpumask_bits(srcp),
+					      nr_cpumask_bits);
 }
 
 static inline int cpumask_equal(const struct cpumask *src1p,
 				const struct cpumask *src2p)
 {
-	return bitmap_equal(src1p->bits, src2p->bits, nr_cpumask_bits);
+	return bitmap_equal(cpumask_bits(src1p), cpumask_bits(src2p),
+						 nr_cpumask_bits);
 }
 
 static inline int cpumask_intersects(const struct cpumask *src1p,
 				     const struct cpumask *src2p)
 {
-	return bitmap_intersects(src1p->bits, src2p->bits, nr_cpumask_bits);
+	return bitmap_intersects(cpumask_bits(src1p), cpumask_bits(src2p),
+						      nr_cpumask_bits);
 }
 
 static inline int cpumask_subset(const struct cpumask *src1p,
 				 const struct cpumask *src2p)
 {
-	return bitmap_subset(src1p->bits, src2p->bits, nr_cpumask_bits);
+	return bitmap_subset(cpumask_bits(src1p), cpumask_bits(src2p),
+						  nr_cpumask_bits);
 }
 
 static inline int cpumask_empty(const struct cpumask *srcp)
 {
-	return bitmap_empty(srcp->bits, nr_cpumask_bits);
+	return bitmap_empty(cpumask_bits(srcp), nr_cpumask_bits);
 }
 
 static inline int cpumask_full(const struct cpumask *srcp)
 {
-	return bitmap_full(srcp->bits, nr_cpumask_bits);
+	return bitmap_full(cpumask_bits(srcp), nr_cpumask_bits);
 }
 
 static inline int __cpus_weight(const cpumask_t *srcp, int nbits)
 {
-	return bitmap_weight(srcp->bits, nbits);
+	return bitmap_weight(cpumask_bits(srcp), nbits);
 }
 
 static inline int cpumask_weight(const struct cpumask *srcp)
 {
-	return bitmap_weight(srcp->bits, nr_cpumask_bits);
+	return bitmap_weight(cpumask_bits(srcp), nr_cpumask_bits);
 }
 
 static inline void cpumask_shift_right(struct cpumask *dstp,
 				       const struct cpumask *srcp, int n)
 {
-	bitmap_shift_right(dstp->bits, srcp->bits, n, nr_cpumask_bits);
+	bitmap_shift_right(cpumask_bits(dstp), cpumask_bits(srcp), n,
+					       nr_cpumask_bits);
 }
 
 static inline void cpumask_shift_left(struct cpumask *dstp,
 				      const struct cpumask *srcp, int n)
 {
-	bitmap_shift_left(dstp->bits, srcp->bits, n, nr_cpumask_bits);
+	bitmap_shift_left(cpumask_bits(dstp), cpumask_bits(srcp), n,
+					      nr_cpumask_bits);
 }
 
 static inline int cpumask_scnprintf(char *buf, int len,
 				    const struct cpumask *srcp)
 {
-	return bitmap_scnprintf(buf, len, srcp->bits, nr_cpumask_bits);
+	return bitmap_scnprintf(buf, len, cpumask_bits(srcp), nr_cpumask_bits);
 }
 
 static inline int cpumask_parse_user(const char __user *buf, int len,
 				     struct cpumask *dstp)
 {
-	return bitmap_parse_user(buf, len, dstp->bits, nr_cpumask_bits);
+	return bitmap_parse_user(buf, len, cpumask_bits(dstp), nr_cpumask_bits);
 }
 
 static inline int cpulist_scnprintf(char *buf, int len,
 				    const struct cpumask *srcp)
 {
-	return bitmap_scnlistprintf(buf, len, srcp->bits, nr_cpumask_bits);
+	return bitmap_scnlistprintf(buf, len, cpumask_bits(srcp),
+					      nr_cpumask_bits);
 }
 
 static inline int cpulist_parse(const char *buf, struct cpumask *dstp)
 {
-	return bitmap_parselist(buf, dstp->bits, nr_cpumask_bits);
+	return bitmap_parselist(buf, cpumask_bits(dstp), nr_cpumask_bits);
 }
 
 static inline int cpumask_cpuremap(int oldbit,
 				   const struct cpumask *oldp,
 				   const struct cpumask *newp)
 {
-	return bitmap_bitremap(oldbit, oldp->bits, newp->bits, nr_cpumask_bits);
+	return bitmap_bitremap(oldbit, cpumask_bits(oldp), cpumask_bits(newp),
+							   nr_cpumask_bits);
 }
 
 static inline void cpumask_remap(struct cpumask *dstp,
@@ -338,21 +350,23 @@ static inline void cpumask_remap(struct cpumask *dstp,
 				 const struct cpumask *oldp,
 				 const struct cpumask *newp)
 {
-	bitmap_remap(dstp->bits, srcp->bits, oldp->bits, newp->bits,
-		     nr_cpumask_bits);
+	bitmap_remap(cpumask_bits(dstp), cpumask_bits(srcp),
+		     cpumask_bits(oldp), cpumask_bits(newp), nr_cpumask_bits);
 }
 
 static inline void cpumask_onto(struct cpumask *dstp,
 				const struct cpumask *origp,
 				const struct cpumask *relmapp)
 {
-	bitmap_onto(dstp->bits, origp->bits, relmapp->bits, nr_cpumask_bits);
+	bitmap_onto(cpumask_bits(dstp), cpumask_bits(origp),
+					cpumask_bits(relmapp), nr_cpumask_bits);
 }
 
 static inline void cpumask_fold(struct cpumask *dstp,
 				const struct cpumask *origp, int sz)
 {
-	bitmap_fold(dstp->bits, origp->bits, sz, nr_cpumask_bits);
+	bitmap_fold(cpumask_bits(dstp), cpumask_bits(origp), sz,
+					nr_cpumask_bits);
 }
 
 static inline void cpumask_copy(struct cpumask *dstp,
