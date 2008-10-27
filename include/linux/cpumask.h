@@ -64,6 +64,7 @@
  * int next_cpu(cpu, mask)		Next cpu past 'cpu', or NR_CPUS
  * int next_cpu_nr(cpu, mask)		Next cpu past 'cpu', or nr_cpu_ids
  *
+ * size_t cpumask_size()		Length of cpumask in bytes.
  * cpumask_t cpumask_of_cpu(cpu)	Return cpumask with bit 'cpu' set
  *					(can be used as an lvalue)
  * CPU_MASK_ALL				Initializer - all bits set
@@ -146,6 +147,8 @@ struct cpumask {
 	DECLARE_BITMAP(bits, NR_CPUS);
 };
 #define cpumask_bits(maskp) ((maskp)->bits)
+
+#define cpumask_size() (BITS_TO_LONGS(NR_CPUS) * sizeof(long))
 
 /* Deprecated. */
 typedef struct cpumask cpumask_t;
