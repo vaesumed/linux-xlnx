@@ -46,8 +46,8 @@
  * void cpumask_shift_right(dst, src, n) Shift right
  * void cpumask_shift_left(dst, src, n)	Shift left
  *
- * int first_cpu(mask)			Number lowest set bit, or >= nr_cpu_ids
- * int next_cpu(cpu, mask)		Next cpu past 'cpu', or >= nr_cpu_ids
+ * int cpumask_first(mask)		Number lowest set bit, or >= nr_cpu_ids
+ * int cpumask_next(cpu, mask)		Next cpu past 'cpu', or >= nr_cpu_ids
  *
  * void cpumask_copy(dmask, smask)	dmask = smask
  *
@@ -178,6 +178,8 @@ extern cpumask_t _unused_cpumask_arg_;
 #define for_each_cpu_mask(cpu, mask)	for_each_cpu(cpu, &(mask))
 #define for_each_cpu_mask_and(cpu, mask, and)	\
 		for_each_cpu_and(cpu, &(mask), &(and))
+#define first_cpu(src)		cpumask_first(&(src))
+#define next_cpu(n, src)	cpumask_next((n), &(src))
 /* End deprecated region. */
 
 #if NR_CPUS > 1
@@ -441,8 +443,8 @@ extern cpumask_t cpu_mask_all;
 
 #if NR_CPUS == 1
 
-#define first_cpu(src)			({ (void)(src); 0; })
-#define next_cpu(n, src)		({ (void)(src); 1; })
+#define cpumask_first(src)		({ (void)(src); 0; })
+#define cpumask_next(n, src)		({ (void)(src); 1; })
 #define cpumask_next_and(n, srcp, andp)	({ (void)(srcp), (void)(andp); 1; })
 #define any_online_cpu(mask)		0
 
@@ -453,18 +455,16 @@ extern cpumask_t cpu_mask_all;
 
 #else /* NR_CPUS > 1 */
 
-int __first_cpu(const cpumask_t *srcp);
-int __next_cpu(int n, const cpumask_t *srcp);
+int cpumask_first(const cpumask_t *srcp);
+int cpumask_next(int n, const cpumask_t *srcp);
 int cpumask_next_and(int n, const cpumask_t *srcp, const cpumask_t *andp);
 int __any_online_cpu(const cpumask_t *mask);
 
-#define first_cpu(src)		__first_cpu(&(src))
-#define next_cpu(n, src)	__next_cpu((n), &(src))
 #define any_online_cpu(mask) __any_online_cpu(&(mask))
 
 #define for_each_cpu(cpu, mask)				\
 	for ((cpu) = -1;				\
-		(cpu) = __next_cpu((cpu), (mask)),	\
+		(cpu) = cpumask_next((cpu), (mask)),	\
 		(cpu) < nr_cpu_ids;)
 #define for_each_cpu_and(cpu, mask, and)				\
 	for ((cpu) = -1;						\

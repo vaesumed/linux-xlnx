@@ -3,21 +3,21 @@
 #include <linux/cpumask.h>
 #include <linux/module.h>
 
-int __first_cpu(const cpumask_t *srcp)
+int cpumask_first(const cpumask_t *srcp)
 {
 	return find_first_bit(cpumask_bits(srcp), nr_cpumask_bits);
 }
-EXPORT_SYMBOL(__first_cpu);
+EXPORT_SYMBOL(cpumask_first);
 
-int __next_cpu(int n, const cpumask_t *srcp)
+int cpumask_next(int n, const cpumask_t *srcp)
 {
 	return find_next_bit(cpumask_bits(srcp), nr_cpumask_bits, n+1);
 }
-EXPORT_SYMBOL(__next_cpu);
+EXPORT_SYMBOL(cpumask_next);
 
 int cpumask_next_and(int n, const cpumask_t *srcp, const cpumask_t *andp)
 {
-	while ((n = next_cpu(n, *srcp)) < nr_cpu_ids)
+	while ((n = cpumask_next(n, srcp)) < nr_cpu_ids)
 		if (cpumask_test_cpu(n, andp))
 			break;
 	return n;
