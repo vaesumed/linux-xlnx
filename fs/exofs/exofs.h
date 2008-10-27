@@ -136,4 +136,15 @@ int osd_req_write_pages(struct osd_request *or,
 	const struct osd_obj_id *, u64 offset, u64 length,
 	struct page **pages, int page_count);
 
+/* inode.c               */
+void exofs_truncate(struct inode *inode);
+int exofs_setattr(struct dentry *, struct iattr *);
+
+/*********************
+ * operation vectors *
+ *********************/
+/* file.c            */
+extern const struct inode_operations exofs_file_inode_operations;
+extern const struct file_operations exofs_file_operations;
+
 #endif

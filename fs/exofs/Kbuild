@@ -26,5 +26,5 @@ KBUILD_CPPFLAGS := -I$(OSD_INC) $(KBUILD_CPPFLAGS)
 
 endif
 
-exofs-objs := osd.o
+exofs-objs := osd.o inode.o file.o
 obj-$(CONFIG_EXOFS_FS) += exofs.o
