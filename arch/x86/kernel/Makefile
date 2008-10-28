@@ -104,6 +104,8 @@ microcode-$(CONFIG_MICROCODE_INTEL)	+= microcode_intel.o
 microcode-$(CONFIG_MICROCODE_AMD)	+= microcode_amd.o
 obj-$(CONFIG_MICROCODE)			+= microcode.o
 
+obj-$(CONFIG_X86_CHECK_BIOS_CORRUPTION) += check.o
+
 ###
 # 64 bit specific files
 ifeq ($(CONFIG_X86_64),y)
