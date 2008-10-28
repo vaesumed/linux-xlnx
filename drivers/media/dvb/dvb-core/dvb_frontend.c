@@ -571,6 +571,7 @@ restart:
 
 				if (fepriv->state & FESTATE_RETUNE) {
 					dprintk("%s: Retune requested, FESTATE_RETUNE\n", __func__);
+					params = &fepriv->parameters;
 					fepriv->state = FESTATE_TUNED;
 				}
 
