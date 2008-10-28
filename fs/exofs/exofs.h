@@ -54,6 +54,15 @@
 #define _LLU(x) (unsigned long long)(x)
 
 /*
+ * struct to hold what we get from mount options
+ */
+struct exofs_mountopt {
+	const char *dev_name;
+	uint64_t pid;
+	int timeout;
+};
+
+/*
  * our extension to the in-memory superblock
  */
 struct exofs_sb_info {
@@ -125,6 +134,14 @@ static inline struct exofs_i_info *exofs_i(struct inode *inode)
 }
 
 /*
+ * ugly struct so that we can pass two arguments to update_inode's callback
+ */
+struct updatei_args {
+	struct exofs_sb_info	*sbi;
+	struct exofs_fcb	fcb;
+};
+
+/*
  * Maximum count of links to a file
  */
 #define EXOFS_LINK_MAX           32000
@@ -149,6 +166,8 @@ int exofs_write_begin(struct file *file, struct address_space *mapping,
 		struct page **pagep, void **fsdata);
 extern struct inode *exofs_iget(struct super_block *, unsigned long);
 struct inode *exofs_new_inode(struct inode *, int);
+extern int exofs_write_inode(struct inode *, int);
+extern void exofs_delete_inode(struct inode *);
 
 /* dir.c:                */
 int exofs_add_link(struct dentry *, struct inode *);
@@ -178,6 +197,9 @@ extern const struct address_space_operations exofs_aops;
 /* namei.c           */
 extern const struct inode_operations exofs_dir_inode_operations;
 extern const struct inode_operations exofs_special_inode_operations;
+
+/* super.c           */
+extern const struct super_operations exofs_sops;
 
 /* symlink.c         */
 extern const struct inode_operations exofs_symlink_inode_operations;
