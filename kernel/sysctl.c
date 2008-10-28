@@ -474,7 +474,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= &proc_dointvec,
 	},
-#ifdef CONFIG_FTRACE
+#ifdef CONFIG_FUNCTION_TRACER
 	{
 		.ctl_name	= CTL_UNNUMBERED,
 		.procname	= "ftrace_enabled",
@@ -482,6 +482,16 @@ static struct ctl_table kern_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= &ftrace_enable_sysctl,
+	},
+#endif
+#ifdef CONFIG_TRACING
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "ftrace_dump_on_opps",
+		.data		= &ftrace_dump_on_oops,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= &proc_dointvec,
 	},
 #endif
 #ifdef CONFIG_MODULES
