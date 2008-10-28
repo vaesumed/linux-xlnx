@@ -1,0 +1,107 @@
+Importing driver-core.current based on 2.6.28-rc2
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard 0173a3265b228da319ceb9c1ec6a5682fd1b2d92
+HEAD is now at 0173a32 Linux 2.6.28-rc2
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+document-kernel-taint-flags-properly.patch
+driver-core-drivers-base-sys.c-update-comments.patch
+sysfs-fix-return-values-for-sysdev_store_-ulong-int.patch
+update-stable-tree-documentation.patch
+howto-sync-patch-for-jp_jp-howto.patch
+driver-core-fix-dynamic_debug-cmd-line-parameter.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard b9005ce07e71fd4dc2dd398aea4d6e7f12852d9a
+HEAD is now at b9005ce Driver core: fix 'dynamic_debug' cmd line parameter
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-fix-crash-when-urbs-are-unlinked-after-the-device-is-gone.patch
+usb-usbtmc-use-explicit-unsigned-type-for-input-buffer-instead-of-char.patch
+usb-unusual-dev-for-the-kyocera-contax-sl300r-t-digital-camera.patch
+usb-prevent-autosuspend-during-hub-initialization.patch
+Importing m68k based on 0173a3265b228da319ceb9c1ec6a5682fd1b2d92
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 0173a3265b228da319ceb9c1ec6a5682fd1b2d92
+HEAD is now at 0173a32 Linux 2.6.28-rc2
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+mac-macfb-do-not-overflow-fix-id.diff
+mac-reinstate-rtc.diff
+mac-via-cleanup-and-commentry.diff
+mac-machw_h_cleanup.diff
+mac-baboon-interrupt-enable-disable.diff
+mac-mac_esp-asm-fix.diff
+mac-macfb-annotations-and-compiler-warning-fix.diff
+m68k-fpsp040-fix-trigraph-ignored-warning.diff
+fbcon-remove-broken-mac-vbl-handler.diff
+fbcon-protect-free-irq-by-MACH_IS_ATARI-check.diff
+mac-esp-fix-for-quadras-with-two-esp-chips.diff
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 669916a50ccce5d98a733f0fc39c792ce24737a6
+HEAD is now at 669916a USB: prevent autosuspend during hub initialization
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+uio-use-pci_ioremap_bar-in-drivers-uio.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 3683ddb5a1f30a15de87190b0be86e1477f7d3dc
+HEAD is now at 3683ddb UIO: use pci_ioremap_bar() in drivers/uio
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+Importing device-mapper based on v2.6.28-rc2
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper 0173a3265b228da319ceb9c1ec6a5682fd1b2d92
+Importing i2c based on 2.6.28-rc2-git1
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard f8d56f1771e4867acc461146764b4feeb5245669
+HEAD is now at f8d56f1 Merge branch 'for-linus' of git://neil.brown.name/md
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-scx200_i2c-add-missing-class-parameter.patch
+Importing jdelvare-hwmon based on 2.6.28-rc2-git1
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard f8d56f1771e4867acc461146764b4feeb5245669
+HEAD is now at f8d56f1 Merge branch 'for-linus' of git://neil.brown.name/md
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-f71882fg-04-style-cleanups.patch
+hwmon-f71882fg-05-add-f71862fg-support.patch
+hwmon-f71882fg-06-no-io-to-unreserved-ports.patch
+hwmon-add-ltc4245-driver.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+hwmon-it87-add-it8720f-support.patch
+Importing kernel-doc based on 2.6.27-git4
+	quilt series is empty
+$ git update-ref refs/heads/quilt/kernel-doc 7591103c08abade60aeddb432ed0686ddd0de1c6
+Importing ide based on 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+HEAD is now at 57f8f7b Linux 2.6.28-rc1
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-cd-fix-dma-alignment-regression.patch
+ide-switch-to-a-common-address.patch
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+Unchanged quilt series rr
+Unchanged quilt series ttydev
