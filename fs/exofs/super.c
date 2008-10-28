@@ -57,6 +57,8 @@ enum { Opt_pid, Opt_to, Opt_mkfs, Opt_format, Opt_err };
 static match_table_t tokens = {
 	{Opt_pid, "pid=%u"},
 	{Opt_to, "to=%u"},
+	{Opt_mkfs, "mkfs=%u"},
+	{Opt_format, "format=%u"},
 	{Opt_err, NULL}
 };
 
@@ -102,6 +104,16 @@ static int parse_options(char *options, struct exofs_mountopt *opts)
 				return -EINVAL;
 			}
 			opts->timeout = option * HZ;
+			break;
+		case Opt_mkfs:
+			if (match_int(&args[0], &option))
+				return -EINVAL;
+			opts->mkfs = option != 0;
+			break;
+		case Opt_format:
+			if (match_int(&args[0], &option))
+				return -EINVAL;
+			opts->format = option;
 			break;
 		}
 	}
@@ -279,6 +291,12 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 	atomic_set(&sbi->s_curr_pending, 0);
 	sb->s_bdev = NULL;
 	sb->s_dev = 0;
+
+	/* see if we need to make the file system on the obsd */
+	if (opts->mkfs) {
+		EXOFS_DBGMSG("exofs_mkfs %p\n", sbi->s_dev);
+		exofs_mkfs(sbi->s_dev, sbi->s_pid, opts->format);
+	}
 
 	/* read data from on-disk superblock object */
 	exofs_make_credential(sbi->s_cred, sbi->s_pid, EXOFS_SUPER_ID);

@@ -189,6 +189,9 @@ struct osd_request *prepare_osd_write(struct osd_dev *od,
 				      void *data);
 void free_osd_req(struct osd_request *or);
 
+/* mkexofs.c             */
+int exofs_mkfs(struct osd_dev *dev, uint64_t p_id, uint64_t format_size);
+
 /* inode.c               */
 void exofs_truncate(struct inode *inode);
 int exofs_setattr(struct dentry *, struct iattr *);
