@@ -706,3 +706,184 @@ struct inode *exofs_new_inode(struct inode *dir, int mode)
 
 	return inode;
 }
+
+/*
+ * Callback function from exofs_update_inode().
+ */
+static void updatei_done(struct osd_request *req, void *p)
+{
+	struct updatei_args *args = p;
+
+	free_osd_req(req);
+
+	atomic_dec(&args->sbi->s_curr_pending);
+
+	kfree(args);
+}
+
+/*
+ * Write the inode to the OSD.  Just fill up the struct, and set the attribute
+ * synchronously or asynchronously depending on the do_sync flag.
+ */
+static int exofs_update_inode(struct inode *inode, int do_sync)
+{
+	struct exofs_i_info *oi = exofs_i(inode);
+	struct super_block *sb = inode->i_sb;
+	struct exofs_sb_info *sbi = sb->s_fs_info;
+	struct osd_request *req;
+	struct exofs_fcb *fcb;
+	struct updatei_args *args;
+	int ret;
+
+	args = kzalloc(sizeof(*args), GFP_KERNEL);
+	if (!args)
+		return -ENOMEM;
+
+	fcb = &args->fcb;
+
+	fcb->i_mode = cpu_to_le16(inode->i_mode);
+	fcb->i_uid = cpu_to_le32(inode->i_uid);
+	fcb->i_gid = cpu_to_le32(inode->i_gid);
+	fcb->i_links_count = cpu_to_le16(inode->i_nlink);
+	fcb->i_ctime = cpu_to_le32(inode->i_ctime.tv_sec);
+	fcb->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
+	fcb->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
+	oi->i_commit_size = i_size_read(inode);
+	fcb->i_size = cpu_to_le64(oi->i_commit_size);
+	fcb->i_generation = cpu_to_le32(inode->i_generation);
+
+	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
+		if (old_valid_dev(inode->i_rdev)) {
+			fcb->i_data[0] =
+				cpu_to_le32(old_encode_dev(inode->i_rdev));
+			fcb->i_data[1] = 0;
+		} else {
+			fcb->i_data[0] = 0;
+			fcb->i_data[1] =
+				cpu_to_le32(new_encode_dev(inode->i_rdev));
+			fcb->i_data[2] = 0;
+		}
+	} else
+		memcpy(fcb->i_data, oi->i_data, sizeof(fcb->i_data));
+
+	req = prepare_osd_set_attr(sbi->s_dev, sbi->s_pid,
+				 (uint64_t) (inode->i_ino + EXOFS_OBJ_OFF));
+	if (!req) {
+		EXOFS_ERR("ERROR: prepare set_attr failed.\n");
+		ret = -ENOMEM;
+		goto free_args;
+	}
+
+	prepare_set_attr_list_add_entry(req,
+					OSD_PAGE_NUM_IBM_UOBJ_FS_DATA,
+					OSD_ATTR_NUM_IBM_UOBJ_FS_DATA_INODE,
+					EXOFS_INO_ATTR_SIZE,
+					(unsigned char *)fcb);
+
+	if (!obj_created(oi)) {
+		BUG_ON(!obj_2bcreated(oi));
+		wait_event(oi->i_wq, obj_created(oi));
+	}
+
+	if (do_sync) {
+		ret = exofs_sync_op(req, sbi->s_timeout, oi->i_cred);
+		free_osd_req(req);
+		goto free_args;
+	} else {
+		args->sbi = sbi;
+
+		ret = exofs_async_op(req, updatei_done, args, oi->i_cred);
+		if (ret) {
+			free_osd_req(req);
+			goto free_args;
+		}
+		atomic_inc(&sbi->s_curr_pending);
+		goto out; /* deallocation in updatei_done */
+	}
+
+free_args:
+	kfree(args);
+out:
+	return ret;
+}
+
+int exofs_write_inode(struct inode *inode, int wait)
+{
+	return exofs_update_inode(inode, wait);
+}
+
+int exofs_sync_inode(struct inode *inode)
+{
+	struct writeback_control wbc = {
+		.sync_mode = WB_SYNC_ALL,
+		.nr_to_write = 0,	/* sys_fsync did this */
+	};
+
+	return sync_inode(inode, &wbc);
+}
+
+/*
+ * Callback function from exofs_delete_inode() - don't have much cleaning up to
+ * do.
+ */
+static void delete_done(struct osd_request *req, void *p)
+{
+	struct exofs_sb_info *sbi;
+	free_osd_req(req);
+	sbi = p;
+	atomic_dec(&sbi->s_curr_pending);
+}
+
+/*
+ * Called when the refcount of an inode reaches zero.  We remove the object
+ * from the OSD here.  We make sure the object was created before we try and
+ * delete it.
+ */
+void exofs_delete_inode(struct inode *inode)
+{
+	struct exofs_i_info *oi = exofs_i(inode);
+	struct osd_request *req = NULL;
+	struct super_block *sb = inode->i_sb;
+	struct exofs_sb_info *sbi = sb->s_fs_info;
+	int ret;
+
+	truncate_inode_pages(&inode->i_data, 0);
+
+	if (is_bad_inode(inode))
+		goto no_delete;
+	mark_inode_dirty(inode);
+	exofs_update_inode(inode, inode_needs_sync(inode));
+
+	inode->i_size = 0;
+	if (inode->i_blocks)
+		exofs_truncate(inode);
+
+	clear_inode(inode);
+
+	req = prepare_osd_remove(sbi->s_dev, sbi->s_pid,
+				 inode->i_ino + EXOFS_OBJ_OFF);
+	if (!req) {
+		EXOFS_ERR("ERROR: prepare_osd_remove failed\n");
+		return;
+	}
+
+	/* if we are deleting an obj that hasn't been created yet, wait */
+	if (!obj_created(oi)) {
+		BUG_ON(!obj_2bcreated(oi));
+		wait_event(oi->i_wq, obj_created(oi));
+	}
+
+	ret = exofs_async_op(req, delete_done, sbi, oi->i_cred);
+	if (ret) {
+		EXOFS_ERR(
+		       "ERROR: @exofs_delete_inode exofs_async_op failed\n");
+		free_osd_req(req);
+		return;
+	}
+	atomic_inc(&sbi->s_curr_pending);
+
+	return;
+
+no_delete:
+	clear_inode(inode);
+}
