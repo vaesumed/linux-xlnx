@@ -122,8 +122,6 @@ struct ide_io_ports {
 #define MAX_DRIVES	2	/* per interface; 2 assumed by lots of code */
 #define SECTOR_SIZE	512
 
-#define IDE_LARGE_SEEK(b1,b2,t)	(((b1) > (b2) + (t)) || ((b2) > (b1) + (t)))
-
 /*
  * Timeouts for various operations:
  */
@@ -496,8 +494,6 @@ enum {
 	 * when more than one interrupt is needed.
 	 */
 	IDE_AFLAG_LIMIT_NFRAMES		= (1 << 7),
-	/* Seeking in progress. */
-	IDE_AFLAG_SEEKING		= (1 << 8),
 	/* Saved TOC information is current. */
 	IDE_AFLAG_TOC_VALID		= (1 << 9),
 	/* We think that the drive door is locked. */
@@ -909,6 +905,8 @@ typedef struct hwgroup_s {
 
 	int req_gen;
 	int req_gen_timer;
+
+	spinlock_t lock;
 } ide_hwgroup_t;
 
 typedef struct ide_driver_s ide_driver_t;
@@ -1602,13 +1600,13 @@ extern struct mutex ide_cfg_mtx;
 /*
  * Structure locking:
  *
- * ide_cfg_mtx and ide_lock together protect changes to
- * ide_hwif_t->{next,hwgroup}
+ * ide_cfg_mtx and hwgroup->lock together protect changes to
+ * ide_hwif_t->next
  * ide_drive_t->next
  *
- * ide_hwgroup_t->busy: ide_lock
- * ide_hwgroup_t->hwif: ide_lock
- * ide_hwif_t->mate: constant, no locking
+ * ide_hwgroup_t->busy: hwgroup->lock
+ * ide_hwgroup_t->hwif: hwgroup->lock
+ * ide_hwif_t->{hwgroup,mate}: constant, no locking
  * ide_drive_t->hwif: constant, no locking
  */
 
