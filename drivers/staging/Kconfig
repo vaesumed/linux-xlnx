@@ -61,4 +61,6 @@ source "drivers/staging/at76_usb/Kconfig"
 
 source "drivers/staging/poch/Kconfig"
 
+source "drivers/staging/agnx/Kconfig"
+
 endif # !STAGING_EXCLUDE_BUILD
