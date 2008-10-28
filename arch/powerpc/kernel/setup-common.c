@@ -167,7 +167,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	unsigned short maj;
 	unsigned short min;
 
-	if (cpu_id == NR_CPUS) {
+	if (cpu_id == nr_cpu_ids) {
 		struct device_node *root;
 		const char *model = NULL;
 #if defined(CONFIG_SMP) && defined(CONFIG_PPC32)
@@ -203,7 +203,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	/* We only show online cpus: disable preempt (overzealous, I
 	 * knew) to prevent cpu going down. */
 	preempt_disable();
-	if (!cpu_online(cpu_id)) {
+	if (cpu_id >= nr_cpu_ids || !cpu_online(cpu_id)) {
 		preempt_enable();
 		return 0;
 	}
@@ -314,7 +314,7 @@ static void *c_start(struct seq_file *m, loff_t *pos)
 {
 	unsigned long i = *pos;
 
-	return i <= NR_CPUS ? (void *)(i + 1) : NULL;
+	return i <= nr_cpu_ids ? (void *)(i + 1) : NULL;
 }
 
 static void *c_next(struct seq_file *m, void *v, loff_t *pos)
@@ -409,7 +409,7 @@ void __init smp_setup_cpu_maps(void)
 
 	DBG("smp_setup_cpu_maps()\n");
 
-	while ((dn = of_find_node_by_type(dn, "cpu")) && cpu < NR_CPUS) {
+	while ((dn = of_find_node_by_type(dn, "cpu")) && cpu < nr_cpu_ids) {
 		const int *intserv;
 		int j, len;
 
@@ -428,7 +428,7 @@ void __init smp_setup_cpu_maps(void)
 				intserv = &cpu;	/* assume logical == phys */
 		}
 
-		for (j = 0; j < nthreads && cpu < NR_CPUS; j++) {
+		for (j = 0; j < nthreads && cpu < nr_cpu_ids; j++) {
 			DBG("    thread %d -> cpu %d (hard id %d)\n",
 			    j, cpu, intserv[j]);
 			cpu_set(cpu, cpu_present_map);

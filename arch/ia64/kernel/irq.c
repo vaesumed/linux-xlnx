@@ -153,7 +153,7 @@ static void migrate_irqs(void)
 			continue;
 
 		cpus_and(mask, irq_desc[irq].affinity, cpu_online_map);
-		if (any_online_cpu(mask) == NR_CPUS) {
+		if (any_online_cpu(mask) >= nr_cpu_ids) {
 			/*
 			 * Save it for phase 2 processing
 			 */
