@@ -158,7 +158,6 @@ void *cpu_alloc(unsigned long size, gfp_t flags, unsigned long align);
 void cpu_free(void *cpu_pointer, unsigned long size);
 
 #ifndef CONFIG_SMP
-#define per_cpu_offset(x) 0
 #define SHIFT_PERCPU_PTR(__p, __offset)	(__p)
 #endif
 
