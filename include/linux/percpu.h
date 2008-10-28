@@ -174,7 +174,6 @@ static inline void cpu_free(void *cpu_pointer, unsigned long size)
 }
 
 #define SHIFT_PERCPU_PTR(__p, __offset)	(__p)
-#define per_cpu_offset(x) 0
 #endif
 
 /* Return a pointer to the instance of a object for a particular processor */
