@@ -289,42 +289,48 @@ static unsigned int die_nest_count;
 
 unsigned __kprobes long oops_begin(void)
 {
+	int cpu;
 	unsigned long flags;
 
 	oops_enter();
 
-	if (die_owner != raw_smp_processor_id()) {
-		console_verbose();
-		raw_local_irq_save(flags);
-		__raw_spin_lock(&die_lock);
-		die_owner = smp_processor_id();
-		die_nest_count = 0;
-		bust_spinlocks(1);
-	} else {
-		raw_local_irq_save(flags);
+	/* racy, but better than risking deadlock. */
+	raw_local_irq_save(flags);
+	cpu = smp_processor_id();
+	if (!__raw_spin_trylock(&die_lock)) {
+		if (cpu == die_owner)
+			/* nested oops. should stop eventually */;
+		else
+			__raw_spin_lock(&die_lock);
 	}
 	die_nest_count++;
+	die_owner = cpu;
+	console_verbose();
+	bust_spinlocks(1);
 	return flags;
 }
 
 void __kprobes oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 {
+	if (regs && kexec_should_crash(current))
+		crash_kexec(regs);
+
 	bust_spinlocks(0);
 	die_owner = -1;
 	add_taint(TAINT_DIE);
-	__raw_spin_unlock(&die_lock);
+	die_nest_count--;
+	if (!die_nest_count)
+		/* Nest count reaches zero, release the lock. */
+		__raw_spin_unlock(&die_lock);
 	raw_local_irq_restore(flags);
+	oops_exit();
 
-	if (!regs)
+	if (!signr)
 		return;
-
-	if (kexec_should_crash(current))
-		crash_kexec(regs);
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
-	oops_exit();
 	do_exit(signr);
 }
 
@@ -370,53 +376,39 @@ int __kprobes __die(const char *str, struct pt_regs *regs, long err)
 void die(const char *str, struct pt_regs *regs, long err)
 {
 	unsigned long flags = oops_begin();
+	int sig = SIGSEGV;
 
-	if (die_nest_count < 3) {
+	if (!user_mode_vm(regs))
 		report_bug(regs->ip, regs);
 
-		if (__die(str, regs, err))
-			regs = NULL;
-	} else {
-		printk(KERN_EMERG "Recursive die() failure, output suppressed\n");
-	}
-
-	oops_end(flags, regs, SIGSEGV);
+	if (__die(str, regs, err))
+		sig = 0;
+	oops_end(flags, regs, sig);
 }
-
-static DEFINE_SPINLOCK(nmi_print_lock);
 
 void notrace __kprobes
 die_nmi(char *str, struct pt_regs *regs, int do_panic)
 {
+	unsigned long flags;
+
 	if (notify_die(DIE_NMIWATCHDOG, str, regs, 0, 2, SIGINT) == NOTIFY_STOP)
 		return;
 
-	spin_lock(&nmi_print_lock);
 	/*
-	* We are in trouble anyway, lets at least try
-	* to get a message out:
-	*/
-	bust_spinlocks(1);
+	 * We are in trouble anyway, lets at least try
+	 * to get a message out.
+	 */
+	flags = oops_begin();
 	printk(KERN_EMERG "%s", str);
 	printk(" on CPU%d, ip %08lx, registers:\n",
 		smp_processor_id(), regs->ip);
 	show_registers(regs);
-	if (do_panic)
+	oops_end(flags, regs, 0);
+	if (do_panic || panic_on_oops)
 		panic("Non maskable interrupt");
-	console_silent();
-	spin_unlock(&nmi_print_lock);
-
-	/*
-	 * If we are in kernel we are probably nested up pretty bad
-	 * and might aswell get out now while we still can:
-	 */
-	if (!user_mode_vm(regs)) {
-		current->thread.trap_no = 2;
-		crash_kexec(regs);
-	}
-
-	bust_spinlocks(0);
-	do_exit(SIGSEGV);
+	nmi_exit();
+	local_irq_enable();
+	do_exit(SIGBUS);
 }
 
 static int __init oops_setup(char *s)
