@@ -65,4 +65,6 @@ source "drivers/staging/agnx/Kconfig"
 
 source "drivers/staging/otus/Kconfig"
 
+source "drivers/staging/rt2860/Kconfig"
+
 endif # !STAGING_EXCLUDE_BUILD
