@@ -182,7 +182,8 @@ int cpumask_any_but(const struct cpumask *mask, unsigned int cpu);
 
 static inline size_t cpumask_size(void)
 {
-	return BITS_TO_LONGS(nr_cpumask_bits) * sizeof(long);
+	/* FIXME: Use nr_cpumask_bits once all cpumask_t assignments banished */
+	return BITS_TO_LONGS(NR_CPUS) * sizeof(long);
 }
 
 /* Deprecated. */
