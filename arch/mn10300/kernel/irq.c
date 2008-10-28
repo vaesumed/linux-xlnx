@@ -207,7 +207,7 @@ int show_interrupts(struct seq_file *p, void *v)
 		/* display column title bar naming CPUs */
 	case 0:
 		seq_printf(p, "           ");
-		for (j = 0; j < NR_CPUS; j++)
+		for (j = 0; j < nr_cpu_ids; j++)
 			if (cpu_online(j))
 				seq_printf(p, "CPU%d       ", j);
 		seq_putc(p, '\n');
@@ -241,7 +241,7 @@ int show_interrupts(struct seq_file *p, void *v)
 		/* polish off with NMI and error counters */
 	case NR_IRQS:
 		seq_printf(p, "NMI: ");
-		for (j = 0; j < NR_CPUS; j++)
+		for (j = 0; j < nr_cpu_ids; j++)
 			if (cpu_online(j))
 				seq_printf(p, "%10u ", nmi_count(j));
 		seq_putc(p, '\n');

@@ -400,7 +400,7 @@ static void do_event_scan_all_cpus(long delay)
 		get_online_cpus();
 
 		cpu = next_cpu(cpu, cpu_online_map);
-		if (cpu == NR_CPUS)
+		if (cpu >= nr_cpu_ids)
 			break;
 	}
 	put_online_cpus();
