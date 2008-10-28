@@ -140,6 +140,8 @@ int exofs_write_begin(struct file *file, struct address_space *mapping,
 		struct page **pagep, void **fsdata);
 extern struct inode *exofs_iget(struct super_block *, unsigned long);
 struct inode *exofs_new_inode(struct inode *, int);
+extern int exofs_write_inode(struct inode *, int);
+extern void exofs_delete_inode(struct inode *);
 
 /* dir.c:                */
 int exofs_add_link(struct dentry *, struct inode *);
@@ -169,6 +171,9 @@ extern const struct address_space_operations exofs_aops;
 /* namei.c           */
 extern const struct inode_operations exofs_dir_inode_operations;
 extern const struct inode_operations exofs_special_inode_operations;
+
+/* super.c           */
+extern const struct super_operations exofs_sops;
 
 /* symlink.c         */
 extern const struct inode_operations exofs_symlink_inode_operations;
