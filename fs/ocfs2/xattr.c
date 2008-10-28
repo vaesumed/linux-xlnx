@@ -3,25 +3,20 @@
  *
  * xattr.c
  *
- * Copyright (C) 2008 Oracle.  All rights reserved.
+ * Copyright (C) 2004, 2008 Oracle.  All rights reserved.
  *
  * CREDITS:
- * Lots of code in this file is taken from ext3.
+ * Lots of code in this file is copy from linux/fs/ext3/xattr.c.
+ * Copyright (C) 2001-2003 Andreas Gruenbacher, <agruen@suse.de>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * License version 2 as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public
- * License along with this program; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA 021110-1307, USA.
  */
 
 #include <linux/capability.h>
@@ -83,7 +78,7 @@ struct xattr_handler *ocfs2_xattr_handlers[] = {
 	NULL
 };
 
-static struct xattr_handler *ocfs2_xattr_handler_map[] = {
+static struct xattr_handler *ocfs2_xattr_handler_map[OCFS2_XATTR_MAX] = {
 	[OCFS2_XATTR_INDEX_USER]	= &ocfs2_xattr_user_handler,
 	[OCFS2_XATTR_INDEX_TRUSTED]	= &ocfs2_xattr_trusted_handler,
 };
@@ -116,6 +111,10 @@ static int ocfs2_xattr_bucket_get_name_value(struct inode *inode,
 					     int *block_off,
 					     int *new_offset);
 
+static int ocfs2_xattr_block_find(struct inode *inode,
+				  int name_index,
+				  const char *name,
+				  struct ocfs2_xattr_search *xs);
 static int ocfs2_xattr_index_block_find(struct inode *inode,
 					struct buffer_head *root_bh,
 					int name_index,
@@ -136,6 +135,24 @@ static int ocfs2_xattr_set_entry_index_block(struct inode *inode,
 
 static int ocfs2_delete_xattr_index_block(struct inode *inode,
 					  struct buffer_head *xb_bh);
+
+static inline u16 ocfs2_xattr_buckets_per_cluster(struct ocfs2_super *osb)
+{
+	return (1 << osb->s_clustersize_bits) / OCFS2_XATTR_BUCKET_SIZE;
+}
+
+static inline u16 ocfs2_blocks_per_xattr_bucket(struct super_block *sb)
+{
+	return OCFS2_XATTR_BUCKET_SIZE / (1 << sb->s_blocksize_bits);
+}
+
+static inline u16 ocfs2_xattr_max_xe_in_bucket(struct super_block *sb)
+{
+	u16 len = sb->s_blocksize -
+		 offsetof(struct ocfs2_xattr_header, xh_entries);
+
+	return len / sizeof(struct ocfs2_xattr_entry);
+}
 
 static inline const char *ocfs2_xattr_prefix(int name_index)
 {
@@ -542,14 +559,12 @@ static int ocfs2_xattr_block_list(struct inode *inode,
 		mlog_errno(ret);
 		return ret;
 	}
-	/*Verify the signature of xattr block*/
-	if (memcmp((void *)blk_bh->b_data, OCFS2_XATTR_BLOCK_SIGNATURE,
-		   strlen(OCFS2_XATTR_BLOCK_SIGNATURE))) {
-		ret = -EFAULT;
-		goto cleanup;
-	}
 
 	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
+	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
+		ret = -EIO;
+		goto cleanup;
+	}
 
 	if (!(le16_to_cpu(xb->xb_flags) & OCFS2_XATTR_INDEXED)) {
 		struct ocfs2_xattr_header *header = &xb->xb_attrs.xb_header;
@@ -749,47 +764,20 @@ static int ocfs2_xattr_block_get(struct inode *inode,
 				 size_t buffer_size,
 				 struct ocfs2_xattr_search *xs)
 {
-	struct ocfs2_dinode *di = (struct ocfs2_dinode *)xs->inode_bh->b_data;
-	struct buffer_head *blk_bh = NULL;
 	struct ocfs2_xattr_block *xb;
 	struct ocfs2_xattr_value_root *xv;
 	size_t size;
 	int ret = -ENODATA, name_offset, name_len, block_off, i;
 
-	if (!di->i_xattr_loc)
-		return ret;
-
 	memset(&xs->bucket, 0, sizeof(xs->bucket));
 
-	ret = ocfs2_read_block(inode, le64_to_cpu(di->i_xattr_loc), &blk_bh);
-	if (ret < 0) {
+	ret = ocfs2_xattr_block_find(inode, name_index, name, xs);
+	if (ret) {
 		mlog_errno(ret);
-		return ret;
-	}
-	/*Verify the signature of xattr block*/
-	if (memcmp((void *)blk_bh->b_data, OCFS2_XATTR_BLOCK_SIGNATURE,
-		   strlen(OCFS2_XATTR_BLOCK_SIGNATURE))) {
-		ret = -EFAULT;
 		goto cleanup;
 	}
 
-	xs->xattr_bh = blk_bh;
-	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
-
-	if (!(le16_to_cpu(xb->xb_flags) & OCFS2_XATTR_INDEXED)) {
-		xs->header = &xb->xb_attrs.xb_header;
-		xs->base = (void *)xs->header;
-		xs->end = (void *)(blk_bh->b_data) + blk_bh->b_size;
-		xs->here = xs->header->xh_entries;
-
-		ret = ocfs2_xattr_find_entry(name_index, name, xs);
-	} else
-		ret = ocfs2_xattr_index_block_find(inode, blk_bh,
-						   name_index,
-						   name, xs);
-
-	if (ret)
-		goto cleanup;
+	xb = (struct ocfs2_xattr_block *)xs->xattr_bh->b_data;
 	size = le64_to_cpu(xs->here->xe_value_size);
 	if (buffer) {
 		ret = -ERANGE;
@@ -828,7 +816,8 @@ cleanup:
 		brelse(xs->bucket.bhs[i]);
 	memset(&xs->bucket, 0, sizeof(xs->bucket));
 
-	brelse(blk_bh);
+	brelse(xs->xattr_bh);
+	xs->xattr_bh = NULL;
 	return ret;
 }
 
@@ -837,11 +826,11 @@ cleanup:
  * Copy an extended attribute into the buffer provided.
  * Buffer is NULL to compute the size of buffer required.
  */
-int ocfs2_xattr_get(struct inode *inode,
-		    int name_index,
-		    const char *name,
-		    void *buffer,
-		    size_t buffer_size)
+static int ocfs2_xattr_get(struct inode *inode,
+			   int name_index,
+			   const char *name,
+			   void *buffer,
+			   size_t buffer_size)
 {
 	int ret;
 	struct ocfs2_dinode *di = NULL;
@@ -1229,7 +1218,7 @@ static int ocfs2_xattr_set_entry(struct inode *inode,
 
 	free = min_offs - ((void *)last - xs->base) - sizeof(__u32);
 	if (free < 0)
-		return -EFAULT;
+		return -EIO;
 
 	if (!xs->not_found) {
 		size_t size = 0;
@@ -1514,10 +1503,9 @@ static int ocfs2_xattr_free_block(struct inode *inode,
 		goto out;
 	}
 
-	/*Verify the signature of xattr block*/
-	if (memcmp((void *)blk_bh->b_data, OCFS2_XATTR_BLOCK_SIGNATURE,
-		   strlen(OCFS2_XATTR_BLOCK_SIGNATURE))) {
-		ret = -EFAULT;
+	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
+	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
+		ret = -EIO;
 		goto out;
 	}
 
@@ -1527,7 +1515,6 @@ static int ocfs2_xattr_free_block(struct inode *inode,
 		goto out;
 	}
 
-	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
 	blk = le64_to_cpu(xb->xb_blkno);
 	bit = le16_to_cpu(xb->xb_suballoc_bit);
 	bg_blkno = ocfs2_which_suballoc_group(blk, bit);
@@ -1771,15 +1758,14 @@ static int ocfs2_xattr_block_find(struct inode *inode,
 		mlog_errno(ret);
 		return ret;
 	}
-	/*Verify the signature of xattr block*/
-	if (memcmp((void *)blk_bh->b_data, OCFS2_XATTR_BLOCK_SIGNATURE,
-		   strlen(OCFS2_XATTR_BLOCK_SIGNATURE))) {
-			ret = -EFAULT;
-			goto cleanup;
+
+	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
+	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
+		ret = -EIO;
+		goto cleanup;
 	}
 
 	xs->xattr_bh = blk_bh;
-	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
 
 	if (!(le16_to_cpu(xb->xb_flags) & OCFS2_XATTR_INDEXED)) {
 		xs->header = &xb->xb_attrs.xb_header;
@@ -1802,52 +1788,6 @@ static int ocfs2_xattr_block_find(struct inode *inode,
 cleanup:
 	brelse(blk_bh);
 
-	return ret;
-}
-
-/*
- * When all the xattrs are deleted from index btree, the ocfs2_xattr_tree
- * will be erased and ocfs2_xattr_block will have its ocfs2_xattr_header
- * re-initialized.
- */
-static int ocfs2_restore_xattr_block(struct inode *inode,
-				     struct ocfs2_xattr_search *xs)
-{
-	int ret;
-	handle_t *handle;
-	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
-	struct ocfs2_xattr_block *xb =
-		(struct ocfs2_xattr_block *)xs->xattr_bh->b_data;
-	struct ocfs2_extent_list *el = &xb->xb_attrs.xb_root.xt_list;
-	u16 xb_flags = le16_to_cpu(xb->xb_flags);
-
-	BUG_ON(!(xb_flags & OCFS2_XATTR_INDEXED) ||
-		le16_to_cpu(el->l_next_free_rec) != 0);
-
-	handle = ocfs2_start_trans(osb, OCFS2_XATTR_BLOCK_UPDATE_CREDITS);
-	if (IS_ERR(handle)) {
-		ret = PTR_ERR(handle);
-		handle = NULL;
-		goto out;
-	}
-
-	ret = ocfs2_journal_access(handle, inode, xs->xattr_bh,
-				   OCFS2_JOURNAL_ACCESS_WRITE);
-	if (ret < 0) {
-		mlog_errno(ret);
-		goto out_commit;
-	}
-
-	memset(&xb->xb_attrs, 0, inode->i_sb->s_blocksize -
-	       offsetof(struct ocfs2_xattr_block, xb_attrs));
-
-	xb->xb_flags = cpu_to_le16(xb_flags & ~OCFS2_XATTR_INDEXED);
-
-	ocfs2_journal_dirty(handle, xs->xattr_bh);
-
-out_commit:
-	ocfs2_commit_trans(osb, handle);
-out:
 	return ret;
 }
 
@@ -1961,8 +1901,6 @@ out:
 	}
 
 	ret = ocfs2_xattr_set_entry_index_block(inode, xi, xs);
-	if (!ret && xblk->xb_attrs.xb_root.xt_list.l_next_free_rec == 0)
-		ret = ocfs2_restore_xattr_block(inode, xs);
 
 end:
 
@@ -2818,7 +2756,11 @@ static int ocfs2_xattr_create_index_block(struct inode *inode,
 	if (data_bh)
 		ocfs2_journal_dirty(handle, data_bh);
 
-	ocfs2_xattr_update_xattr_search(inode, xs, xb_bh, xh_bh);
+	ret = ocfs2_xattr_update_xattr_search(inode, xs, xb_bh, xh_bh);
+	if (ret) {
+		mlog_errno(ret);
+		goto out_commit;
+	}
 
 	/* Change from ocfs2_xattr_header to ocfs2_xattr_tree_root */
 	memset(&xb->xb_attrs, 0, inode->i_sb->s_blocksize -
@@ -3220,7 +3162,9 @@ static int ocfs2_half_xattr_bucket(struct inode *inode,
 
 	for (i = 0; i < blk_per_bucket; i++) {
 		ret = ocfs2_journal_access(handle, inode, t_bhs[i],
-					   OCFS2_JOURNAL_ACCESS_CREATE);
+					   new_bucket_head ?
+					   OCFS2_JOURNAL_ACCESS_CREATE :
+					   OCFS2_JOURNAL_ACCESS_WRITE);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
@@ -3382,6 +3326,8 @@ static int ocfs2_cp_xattr_bucket(struct inode *inode,
 
 	for (i = 0; i < blk_per_bucket; i++) {
 		ret = ocfs2_journal_access(handle, inode, t_bhs[i],
+					   t_is_new ?
+					   OCFS2_JOURNAL_ACCESS_CREATE :
 					   OCFS2_JOURNAL_ACCESS_WRITE);
 		if (ret)
 			goto out;
@@ -4146,7 +4092,7 @@ static int ocfs2_xattr_value_update_size(struct inode *inode,
 	handle_t *handle = NULL;
 
 	handle = ocfs2_start_trans(osb, 1);
-	if (handle == NULL) {
+	if (IS_ERR(handle)) {
 		ret = -ENOMEM;
 		mlog_errno(ret);
 		goto out;
@@ -4313,7 +4259,7 @@ static int ocfs2_rm_xattr_cluster(struct inode *inode,
 	}
 
 	handle = ocfs2_start_trans(osb, OCFS2_REMOVE_EXTENT_CREDITS);
-	if (handle == NULL) {
+	if (IS_ERR(handle)) {
 		ret = -ENOMEM;
 		mlog_errno(ret);
 		goto out;
@@ -4727,14 +4673,11 @@ out:
 /*
  * 'trusted' attributes support
  */
-
-#define XATTR_TRUSTED_PREFIX "trusted."
-
 static size_t ocfs2_xattr_trusted_list(struct inode *inode, char *list,
 				       size_t list_size, const char *name,
 				       size_t name_len)
 {
-	const size_t prefix_len = sizeof(XATTR_TRUSTED_PREFIX) - 1;
+	const size_t prefix_len = XATTR_TRUSTED_PREFIX_LEN;
 	const size_t total_len = prefix_len + name_len + 1;
 
 	if (list && total_len <= list_size) {
@@ -4771,18 +4714,14 @@ struct xattr_handler ocfs2_xattr_trusted_handler = {
 	.set	= ocfs2_xattr_trusted_set,
 };
 
-
 /*
  * 'user' attributes support
  */
-
-#define XATTR_USER_PREFIX "user."
-
 static size_t ocfs2_xattr_user_list(struct inode *inode, char *list,
 				    size_t list_size, const char *name,
 				    size_t name_len)
 {
-	const size_t prefix_len = sizeof(XATTR_USER_PREFIX) - 1;
+	const size_t prefix_len = XATTR_USER_PREFIX_LEN;
 	const size_t total_len = prefix_len + name_len + 1;
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 
