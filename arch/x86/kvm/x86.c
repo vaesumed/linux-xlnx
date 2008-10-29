@@ -39,6 +39,7 @@
 #include <asm/uaccess.h>
 #include <asm/msr.h>
 #include <asm/desc.h>
+#include <asm/mtrr.h>
 
 #define MAX_IO_MSRS 256
 #define CR0_RESERVED_BITS						\
@@ -86,6 +87,7 @@ struct kvm_stats_debugfs_item debugfs_entries[] = {
 	{ "halt_wakeup", VCPU_STAT(halt_wakeup) },
 	{ "hypercalls", VCPU_STAT(hypercalls) },
 	{ "request_irq", VCPU_STAT(request_irq_exits) },
+	{ "request_nmi", VCPU_STAT(request_nmi_exits) },
 	{ "irq_exits", VCPU_STAT(irq_exits) },
 	{ "host_state_reload", VCPU_STAT(host_state_reload) },
 	{ "efer_reload", VCPU_STAT(efer_reload) },
@@ -93,6 +95,7 @@ struct kvm_stats_debugfs_item debugfs_entries[] = {
 	{ "insn_emulation", VCPU_STAT(insn_emulation) },
 	{ "insn_emulation_fail", VCPU_STAT(insn_emulation_fail) },
 	{ "irq_injections", VCPU_STAT(irq_injections) },
+	{ "nmi_injections", VCPU_STAT(nmi_injections) },
 	{ "mmu_shadow_zapped", VM_STAT(mmu_shadow_zapped) },
 	{ "mmu_pte_write", VM_STAT(mmu_pte_write) },
 	{ "mmu_pte_updated", VM_STAT(mmu_pte_updated) },
@@ -449,7 +452,7 @@ static u32 msrs_to_save[] = {
 	MSR_CSTAR, MSR_KERNEL_GS_BASE, MSR_SYSCALL_MASK, MSR_LSTAR,
 #endif
 	MSR_IA32_TIME_STAMP_COUNTER, MSR_KVM_SYSTEM_TIME, MSR_KVM_WALL_CLOCK,
-	MSR_IA32_PERF_STATUS,
+	MSR_IA32_PERF_STATUS, MSR_IA32_CR_PAT
 };
 
 static unsigned num_msrs_to_save;
@@ -648,10 +651,38 @@ static bool msr_mtrr_valid(unsigned msr)
 
 static int set_msr_mtrr(struct kvm_vcpu *vcpu, u32 msr, u64 data)
 {
+	u64 *p = (u64 *)&vcpu->arch.mtrr_state.fixed_ranges;
+
 	if (!msr_mtrr_valid(msr))
 		return 1;
 
-	vcpu->arch.mtrr[msr - 0x200] = data;
+	if (msr == MSR_MTRRdefType) {
+		vcpu->arch.mtrr_state.def_type = data;
+		vcpu->arch.mtrr_state.enabled = (data & 0xc00) >> 10;
+	} else if (msr == MSR_MTRRfix64K_00000)
+		p[0] = data;
+	else if (msr == MSR_MTRRfix16K_80000 || msr == MSR_MTRRfix16K_A0000)
+		p[1 + msr - MSR_MTRRfix16K_80000] = data;
+	else if (msr >= MSR_MTRRfix4K_C0000 && msr <= MSR_MTRRfix4K_F8000)
+		p[3 + msr - MSR_MTRRfix4K_C0000] = data;
+	else if (msr == MSR_IA32_CR_PAT)
+		vcpu->arch.pat = data;
+	else {	/* Variable MTRRs */
+		int idx, is_mtrr_mask;
+		u64 *pt;
+
+		idx = (msr - 0x200) / 2;
+		is_mtrr_mask = msr - 0x200 - 2 * idx;
+		if (!is_mtrr_mask)
+			pt =
+			  (u64 *)&vcpu->arch.mtrr_state.var_ranges[idx].base_lo;
+		else
+			pt =
+			  (u64 *)&vcpu->arch.mtrr_state.var_ranges[idx].mask_lo;
+		*pt = data;
+	}
+
+	kvm_mmu_reset_context(vcpu);
 	return 0;
 }
 
@@ -747,10 +778,37 @@ int kvm_get_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata)
 
 static int get_msr_mtrr(struct kvm_vcpu *vcpu, u32 msr, u64 *pdata)
 {
+	u64 *p = (u64 *)&vcpu->arch.mtrr_state.fixed_ranges;
+
 	if (!msr_mtrr_valid(msr))
 		return 1;
 
-	*pdata = vcpu->arch.mtrr[msr - 0x200];
+	if (msr == MSR_MTRRdefType)
+		*pdata = vcpu->arch.mtrr_state.def_type +
+			 (vcpu->arch.mtrr_state.enabled << 10);
+	else if (msr == MSR_MTRRfix64K_00000)
+		*pdata = p[0];
+	else if (msr == MSR_MTRRfix16K_80000 || msr == MSR_MTRRfix16K_A0000)
+		*pdata = p[1 + msr - MSR_MTRRfix16K_80000];
+	else if (msr >= MSR_MTRRfix4K_C0000 && msr <= MSR_MTRRfix4K_F8000)
+		*pdata = p[3 + msr - MSR_MTRRfix4K_C0000];
+	else if (msr == MSR_IA32_CR_PAT)
+		*pdata = vcpu->arch.pat;
+	else {	/* Variable MTRRs */
+		int idx, is_mtrr_mask;
+		u64 *pt;
+
+		idx = (msr - 0x200) / 2;
+		is_mtrr_mask = msr - 0x200 - 2 * idx;
+		if (!is_mtrr_mask)
+			pt =
+			  (u64 *)&vcpu->arch.mtrr_state.var_ranges[idx].base_lo;
+		else
+			pt =
+			  (u64 *)&vcpu->arch.mtrr_state.var_ranges[idx].mask_lo;
+		*pdata = *pt;
+	}
+
 	return 0;
 }
 
@@ -1318,6 +1376,15 @@ static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
+static int kvm_vcpu_ioctl_nmi(struct kvm_vcpu *vcpu)
+{
+	vcpu_load(vcpu);
+	kvm_inject_nmi(vcpu);
+	vcpu_put(vcpu);
+
+	return 0;
+}
+
 static int vcpu_ioctl_tpr_access_reporting(struct kvm_vcpu *vcpu,
 					   struct kvm_tpr_access_ctl *tac)
 {
@@ -1372,6 +1439,13 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 		if (copy_from_user(&irq, argp, sizeof irq))
 			goto out;
 		r = kvm_vcpu_ioctl_interrupt(vcpu, &irq);
+		if (r)
+			goto out;
+		r = 0;
+		break;
+	}
+	case KVM_NMI: {
+		r = kvm_vcpu_ioctl_nmi(vcpu);
 		if (r)
 			goto out;
 		r = 0;
@@ -2404,8 +2478,6 @@ int kvm_emulate_pio(struct kvm_vcpu *vcpu, struct kvm_run *run, int in,
 	val = kvm_register_read(vcpu, VCPU_REGS_RAX);
 	memcpy(vcpu->arch.pio_data, &val, 4);
 
-	kvm_x86_ops->skip_emulated_instruction(vcpu);
-
 	pio_dev = vcpu_find_pio_dev(vcpu, port, size, !in);
 	if (pio_dev) {
 		kernel_pio(pio_dev, vcpu, vcpu->arch.pio_data);
@@ -2541,7 +2613,7 @@ int kvm_arch_init(void *opaque)
 	kvm_mmu_set_nonpresent_ptes(0ull, 0ull);
 	kvm_mmu_set_base_ptes(PT_PRESENT_MASK);
 	kvm_mmu_set_mask_ptes(PT_USER_MASK, PT_ACCESSED_MASK,
-			PT_DIRTY_MASK, PT64_NX_MASK, 0);
+			PT_DIRTY_MASK, PT64_NX_MASK, 0, 0);
 	return 0;
 
 out:
@@ -2812,18 +2884,37 @@ static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu,
 		(kvm_x86_ops->get_rflags(vcpu) & X86_EFLAGS_IF));
 }
 
+/*
+ * Check if userspace requested a NMI window, and that the NMI window
+ * is open.
+ *
+ * No need to exit to userspace if we already have a NMI queued.
+ */
+static int dm_request_for_nmi_injection(struct kvm_vcpu *vcpu,
+					struct kvm_run *kvm_run)
+{
+	return (!vcpu->arch.nmi_pending &&
+		kvm_run->request_nmi_window &&
+		vcpu->arch.nmi_window_open);
+}
+
 static void post_kvm_run_save(struct kvm_vcpu *vcpu,
 			      struct kvm_run *kvm_run)
 {
 	kvm_run->if_flag = (kvm_x86_ops->get_rflags(vcpu) & X86_EFLAGS_IF) != 0;
 	kvm_run->cr8 = kvm_get_cr8(vcpu);
 	kvm_run->apic_base = kvm_get_apic_base(vcpu);
-	if (irqchip_in_kernel(vcpu->kvm))
+	if (irqchip_in_kernel(vcpu->kvm)) {
 		kvm_run->ready_for_interrupt_injection = 1;
-	else
+		kvm_run->ready_for_nmi_injection = 1;
+	} else {
 		kvm_run->ready_for_interrupt_injection =
 					(vcpu->arch.interrupt_window_open &&
 					 vcpu->arch.irq_summary == 0);
+		kvm_run->ready_for_nmi_injection =
+					(vcpu->arch.nmi_window_open &&
+					 vcpu->arch.nmi_pending == 0);
+	}
 }
 
 static void vapic_enter(struct kvm_vcpu *vcpu)
@@ -2973,7 +3064,7 @@ static int __vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		pr_debug("vcpu %d received sipi with vector # %x\n",
 			 vcpu->vcpu_id, vcpu->arch.sipi_vector);
 		kvm_lapic_reset(vcpu);
-		r = kvm_x86_ops->vcpu_reset(vcpu);
+		r = kvm_arch_vcpu_reset(vcpu);
 		if (r)
 			return r;
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
@@ -2999,6 +3090,11 @@ static int __vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		}
 
 		if (r > 0) {
+			if (dm_request_for_nmi_injection(vcpu, kvm_run)) {
+				r = -EINTR;
+				kvm_run->exit_reason = KVM_EXIT_NMI;
+				++vcpu->stat.request_nmi_exits;
+			}
 			if (dm_request_for_irq_injection(vcpu, kvm_run)) {
 				r = -EINTR;
 				kvm_run->exit_reason = KVM_EXIT_INTR;
@@ -3275,9 +3371,9 @@ static void seg_desct_to_kvm_desct(struct desc_struct *seg_desc, u16 selector,
 	kvm_desct->padding = 0;
 }
 
-static void get_segment_descritptor_dtable(struct kvm_vcpu *vcpu,
-					   u16 selector,
-					   struct descriptor_table *dtable)
+static void get_segment_descriptor_dtable(struct kvm_vcpu *vcpu,
+					  u16 selector,
+					  struct descriptor_table *dtable)
 {
 	if (selector & 1 << 2) {
 		struct kvm_segment kvm_seg;
@@ -3302,7 +3398,7 @@ static int load_guest_segment_descriptor(struct kvm_vcpu *vcpu, u16 selector,
 	struct descriptor_table dtable;
 	u16 index = selector >> 3;
 
-	get_segment_descritptor_dtable(vcpu, selector, &dtable);
+	get_segment_descriptor_dtable(vcpu, selector, &dtable);
 
 	if (dtable.limit < index * 8 + 7) {
 		kvm_queue_exception_e(vcpu, GP_VECTOR, selector & 0xfffc);
@@ -3321,7 +3417,7 @@ static int save_guest_segment_descriptor(struct kvm_vcpu *vcpu, u16 selector,
 	struct descriptor_table dtable;
 	u16 index = selector >> 3;
 
-	get_segment_descritptor_dtable(vcpu, selector, &dtable);
+	get_segment_descriptor_dtable(vcpu, selector, &dtable);
 
 	if (dtable.limit < index * 8 + 7)
 		return 1;
@@ -3900,6 +3996,7 @@ int kvm_arch_vcpu_setup(struct kvm_vcpu *vcpu)
 	/* We do fxsave: this must be aligned. */
 	BUG_ON((unsigned long)&vcpu->arch.host_fx_image & 0xF);
 
+	vcpu->arch.mtrr_state.have_fixed = 1;
 	vcpu_load(vcpu);
 	r = kvm_arch_vcpu_reset(vcpu);
 	if (r == 0)
@@ -3925,6 +4022,9 @@ void kvm_arch_vcpu_destroy(struct kvm_vcpu *vcpu)
 
 int kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 {
+	vcpu->arch.nmi_pending = false;
+	vcpu->arch.nmi_injected = false;
+
 	return kvm_x86_ops->vcpu_reset(vcpu);
 }
 
@@ -4127,7 +4227,8 @@ void kvm_arch_flush_shadow(struct kvm *kvm)
 int kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu)
 {
 	return vcpu->arch.mp_state == KVM_MP_STATE_RUNNABLE
-	       || vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED;
+	       || vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED
+	       || vcpu->arch.nmi_pending;
 }
 
 static void vcpu_kick_intr(void *info)
