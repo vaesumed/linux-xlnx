@@ -232,6 +232,7 @@ config MSI_LAPTOP
         depends on X86
         depends on ACPI_EC
         depends on BACKLIGHT_CLASS_DEVICE
+	depends on RFKILL
         ---help---
 	  This is a driver for laptops built by MSI (MICRO-STAR
 	  INTERNATIONAL):
@@ -262,6 +263,7 @@ config COMPAL_LAPTOP
 	depends on X86
 	depends on ACPI_EC
 	depends on BACKLIGHT_CLASS_DEVICE
+	depends on RFKILL
 	---help---
 	  This is a driver for laptops built by Compal:
 
