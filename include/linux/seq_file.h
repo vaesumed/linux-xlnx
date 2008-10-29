@@ -52,7 +52,7 @@ int seq_path_root(struct seq_file *m, struct path *path, struct path *root,
 int seq_bitmap(struct seq_file *m, unsigned long *bits, unsigned int nr_bits);
 static inline int seq_cpumask(struct seq_file *m, cpumask_t *mask)
 {
-	return seq_bitmap(m, mask->bits, NR_CPUS);
+	return seq_bitmap(m, cpumask_bits(mask), nr_cpu_ids);
 }
 
 static inline int seq_nodemask(struct seq_file *m, nodemask_t *mask)

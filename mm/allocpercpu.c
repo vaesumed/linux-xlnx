@@ -34,7 +34,7 @@ static void percpu_depopulate(void *__pdata, int cpu)
 static void __percpu_depopulate_mask(void *__pdata, cpumask_t *mask)
 {
 	int cpu;
-	for_each_cpu_mask_nr(cpu, *mask)
+	for_each_cpu(cpu, mask)
 		percpu_depopulate(__pdata, cpu);
 }
 
@@ -86,7 +86,7 @@ static int __percpu_populate_mask(void *__pdata, size_t size, gfp_t gfp,
 	int cpu;
 
 	cpus_clear(populated);
-	for_each_cpu_mask_nr(cpu, *mask)
+	for_each_cpu(cpu, mask)
 		if (unlikely(!percpu_populate(__pdata, size, gfp, cpu))) {
 			__percpu_depopulate_mask(__pdata, &populated);
 			return -ENOMEM;

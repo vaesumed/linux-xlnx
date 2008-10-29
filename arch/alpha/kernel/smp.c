@@ -70,11 +70,6 @@ enum ipi_message_type {
 /* Set to a secondary's cpuid when it comes online.  */
 static int smp_secondary_alive __devinitdata = 0;
 
-/* Which cpus ids came online.  */
-cpumask_t cpu_online_map;
-
-EXPORT_SYMBOL(cpu_online_map);
-
 int smp_num_probed;		/* Internal processor count */
 int smp_num_cpus = 1;		/* Number that came online.  */
 EXPORT_SYMBOL(smp_num_cpus);
@@ -502,7 +497,7 @@ smp_cpus_done(unsigned int max_cpus)
 	int cpu;
 	unsigned long bogosum = 0;
 
-	for(cpu = 0; cpu < NR_CPUS; cpu++) 
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++)
 		if (cpu_online(cpu))
 			bogosum += cpu_data[cpu].loops_per_jiffy;
 	
@@ -703,7 +698,7 @@ flush_tlb_mm(struct mm_struct *mm)
 		flush_tlb_current(mm);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
 				if (!cpu_online(cpu) || cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
@@ -752,7 +747,7 @@ flush_tlb_page(struct vm_area_struct *vma, unsigned long addr)
 		flush_tlb_current_page(mm, vma, addr);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
 				if (!cpu_online(cpu) || cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
@@ -808,7 +803,7 @@ flush_icache_user_range(struct vm_area_struct *vma, struct page *page,
 		__load_new_mm_context(mm);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
 				if (!cpu_online(cpu) || cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])

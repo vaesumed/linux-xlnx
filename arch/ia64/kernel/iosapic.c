@@ -720,7 +720,7 @@ get_target_cpu (unsigned int gsi, int irq)
 		for (numa_cpu = first_cpu(cpu_mask) ; i < cpu_index ; i++)
 			numa_cpu = next_cpu(numa_cpu, cpu_mask);
 
-		if (numa_cpu != NR_CPUS)
+		if (numa_cpu < nr_cpus_ids)
 			return cpu_physical_id(numa_cpu);
 	}
 skip_numa_setup:
@@ -731,7 +731,7 @@ skip_numa_setup:
 	 * case of NUMA.)
 	 */
 	do {
-		if (++cpu >= NR_CPUS)
+		if (++cpu >= nr_cpu_ids)
 			cpu = 0;
 	} while (!cpu_online(cpu) || !cpu_isset(cpu, domain));
 
