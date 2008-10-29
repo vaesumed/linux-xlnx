@@ -228,14 +228,13 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
 
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
-	void *ret;
-
 	if (__builtin_constant_p(size)) {
 		if (size > PAGE_SIZE)
 			return kmalloc_large(size, flags);
 
 		if (!(flags & SLUB_DMA)) {
 			struct kmem_cache *s = kmalloc_slab(size);
+			void *ret;
 
 			if (!s)
 				return ZERO_SIZE_PTR;
