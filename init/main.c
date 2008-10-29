@@ -133,6 +133,7 @@ static char *execute_command;
 static char *ramdisk_execute_command;
 
 #ifdef CONFIG_SMP
+extern void cpu_alloc_init(void);
 /* Setup configured maximum number of CPUs to activate */
 unsigned int __initdata setup_max_cpus = NR_CPUS;
 
@@ -170,6 +171,8 @@ static int __init maxcpus(char *str)
 
 early_param("maxcpus", maxcpus);
 #else
+static inline void cpu_alloc_init(void) { }
+
 #define setup_max_cpus NR_CPUS
 #endif
 
@@ -258,6 +261,18 @@ static int __init loglevel(char *str)
 }
 
 early_param("loglevel", loglevel);
+
+#ifdef PERCPU_RESERVE_SIZE
+unsigned int percpu_reserve = PERCPU_RESERVE_SIZE;
+
+static int __init init_percpu_reserve(char *str)
+{
+	get_option(&str, &percpu_reserve);
+	return 0;
+}
+
+early_param("percpu", init_percpu_reserve);
+#endif
 
 /*
  * Unknown boot options get handed to init, unless they look like
@@ -404,8 +419,10 @@ static void __init setup_per_cpu_areas(void)
 	unsigned long nr_possible_cpus = num_possible_cpus();
 
 	/* Copy section for each CPU (we discard the original) */
-	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
+	size = ALIGN(PERCPU_AREA_SIZE, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
+	printk(KERN_INFO "percpu area: %d bytes total, %d available.\n",
+		size, size - (__per_cpu_end - __per_cpu_start));
 
 	for_each_possible_cpu(i) {
 		__per_cpu_offset[i] = ptr - __per_cpu_start;
@@ -584,6 +601,7 @@ asmlinkage void __init start_kernel(void)
 	mm_init_owner(&init_mm, &init_task);
 	setup_command_line(command_line);
 	unwind_setup();
+	cpu_alloc_init();
 	setup_per_cpu_areas();
 	setup_nr_cpu_ids();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
