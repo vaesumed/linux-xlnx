@@ -643,7 +643,7 @@ static int static_obj(void *obj)
 	 */
 	for_each_possible_cpu(i) {
 		start = (unsigned long) __per_cpu_start + per_cpu_offset(i);
-		end   = (unsigned long) __per_cpu_start + PERCPU_ENOUGH_ROOM
+		end   = (unsigned long) __per_cpu_start + PERCPU_AREA_SIZE
 					+ per_cpu_offset(i);
 
 		if ((addr >= start) && (addr < end))
