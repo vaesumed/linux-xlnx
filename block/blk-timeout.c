@@ -139,6 +139,11 @@ void blk_rq_timed_out_timer(unsigned long data)
 		}
 	}
 
+	/*
+	 * next can never be 0 here with the list non-empty, since we always
+	 * bump ->deadline to 1 so we can detect if the timer was ever added or not.
+	 * See comment in blk_add_timer()
+	 */
 	if (next)
 		mod_timer(&q->timeout, round_jiffies(next));
 
