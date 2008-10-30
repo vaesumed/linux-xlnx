@@ -1,0 +1,56 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.28-rc2-95-g49fdf67
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 49fdf6785fd660e18a1eb4588928f47e9fa29a9a
+HEAD is now at 49fdf67 Merge branch 'for-linus' of git://git.kernel.dk/linux-2.6-block
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-snap-fix-register_snapshot-deadlock.patch
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 57f8f7b60db6f1ed2c6918ab9230c4623a9dbe37
+HEAD is now at 57f8f7b Linux 2.6.28-rc1
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-cd-fix-dma-alignment-regression.patch
+ide-switch-to-a-common-address.patch
+tx4938ide-check-minimum-cycle-time-and-shwt-range.patch
+tx4938ide-do-not-call-devm_ioremap-for-whole-128kb.patch
+tx4938ide-avoid-underflow-on-calculation-of-a-wait-cycle.patch
+ide-gd-re-get-floppy-capacity-on-revalidate.patch
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+ali14xx-doesnt-use-shared-irqs.patch
+cmd64x-set-ide_hflag_serialize-explictly-for-cmd646.patch
+gayle-set-ide_hflag_serialize-explictly.patch
+Importing rr based on v2.6.28-rc2-185-ge946217
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard e946217e4fdaa67681bbabfa8e6b18641921f750
+HEAD is now at e946217 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+lguest:fix-moved-asm-dir.patch
+lguest:fix-efi.patch
+lguest:fix-irq-vectors.patch
+virtio:net-mergeable-rx-bufs.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+Unchanged quilt series ttydev
