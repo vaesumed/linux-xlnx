@@ -111,10 +111,13 @@ void spu_flush_all_slbs(struct mm_struct *mm)
  */
 static inline void mm_needs_global_tlbie(struct mm_struct *mm)
 {
-	int nr = (NR_CPUS > 1) ? NR_CPUS : NR_CPUS + 1;
-
 	/* Global TLBIE broadcast required with SPEs. */
-	__cpus_setall(&mm->cpu_vm_mask, nr);
+	if (NR_CPUS > 1)
+		cpumask_setall(&mm->cpu_vm_mask);
+	else {
+		cpumask_set_cpu(0, &mm->cpu_vm_mask);
+		cpumask_set_cpu(1, &mm->cpu_vm_mask);
+	}
 }
 
 void spu_associate_mm(struct spu *spu, struct mm_struct *mm)
