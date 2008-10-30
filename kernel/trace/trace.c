@@ -64,6 +64,28 @@ static cpumask_t __read_mostly		tracing_buffer_mask;
 
 static int tracing_disabled = 1;
 
+/*
+ * ftrace_dump_on_oops - variable to dump ftrace buffer on oops
+ *
+ * If there is an oops (or kernel panic) and the ftrace_dump_on_oops
+ * is set, then ftrace_dump is called. This will output the contents
+ * of the ftrace buffers to the console.  This is very useful for
+ * capturing traces that lead to crashes and outputing it to a
+ * serial console.
+ *
+ * It is default off, but you can enable it with either specifying
+ * "ftrace_dump_on_oops" in the kernel command line, or setting
+ * /proc/sys/kernel/ftrace_dump_on_oops to true.
+ */
+int ftrace_dump_on_oops;
+
+static int __init set_ftrace_dump_on_oops(char *str)
+{
+	ftrace_dump_on_oops = 1;
+	return 1;
+}
+__setup("ftrace_dump_on_oops", set_ftrace_dump_on_oops);
+
 long
 ns2usecs(cycle_t nsec)
 {
@@ -3020,7 +3042,8 @@ EXPORT_SYMBOL_GPL(__ftrace_printk);
 static int trace_panic_handler(struct notifier_block *this,
 			       unsigned long event, void *unused)
 {
-	ftrace_dump();
+	if (ftrace_dump_on_oops)
+		ftrace_dump();
 	return NOTIFY_OK;
 }
 
@@ -3036,7 +3059,8 @@ static int trace_die_handler(struct notifier_block *self,
 {
 	switch (val) {
 	case DIE_OOPS:
-		ftrace_dump();
+		if (ftrace_dump_on_oops)
+			ftrace_dump();
 		break;
 	default:
 		break;
@@ -3076,7 +3100,6 @@ trace_printk_seq(struct trace_seq *s)
 
 	trace_seq_reset(s);
 }
-
 
 void ftrace_dump(void)
 {
