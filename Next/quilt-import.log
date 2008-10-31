@@ -1,0 +1,29 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.28-rc2-185-ge946217
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard e946217e4fdaa67681bbabfa8e6b18641921f750
+HEAD is now at e946217 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-raid1-fix-do_failures.patch
+dm-snapshot-fix-register_snapshot-deadlock.patch
+dm-snapshot-wait-for-chunks-in-destructor.patch
+Importing i2c based on 2.6.28-rc2-git3
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard e946217e4fdaa67681bbabfa8e6b18641921f750
+HEAD is now at e946217 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-scx200_i2c-add-missing-class-parameter.patch
+i2c-update-mailing-list-address.patch
+i2c-s3c2410-correct-use-of-not-and-and.patch
+i2c-replace-bus_id-with-dev_name-dev_set_name.patch
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
