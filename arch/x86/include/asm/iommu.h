@@ -10,6 +10,9 @@ extern int dmar_disabled;
 
 extern unsigned long iommu_nr_pages(unsigned long addr, unsigned long len);
 
+/* 10 seconds */
+#define DMAR_OPERATION_TIMEOUT ((cycles_t) tsc_khz*10*1000)
+
 #ifdef CONFIG_GART_IOMMU
 extern int gart_iommu_aperture;
 extern int gart_iommu_aperture_allowed;
