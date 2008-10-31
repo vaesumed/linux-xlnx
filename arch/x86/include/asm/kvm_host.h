@@ -21,6 +21,7 @@
 
 #include <asm/pvclock-abi.h>
 #include <asm/desc.h>
+#include <asm/mtrr.h>
 
 #define KVM_MAX_VCPUS 16
 #define KVM_MEMORY_SLOTS 32
@@ -86,6 +87,7 @@
 #define KVM_MIN_FREE_MMU_PAGES 5
 #define KVM_REFILL_PAGES 25
 #define KVM_MAX_CPUID_ENTRIES 40
+#define KVM_NR_FIXED_MTRR_REGION 88
 #define KVM_NR_VAR_MTRR 8
 
 extern spinlock_t kvm_lock;
@@ -190,9 +192,11 @@ struct kvm_mmu_page {
 	u64 *spt;
 	/* hold the gfn of each spte inside spt */
 	gfn_t *gfns;
-	unsigned long slot_bitmap; /* One bit set per slot which has memory
-				    * in this shadow page.
-				    */
+	/*
+	 * One bit set per slot which has memory
+	 * in this shadow page.
+	 */
+	DECLARE_BITMAP(slot_bitmap, KVM_MEMORY_SLOTS + KVM_PRIVATE_MEM_SLOTS);
 	int multimapped;         /* More than one parent_pte? */
 	int root_count;          /* Currently serving as active root */
 	bool unsync;
@@ -327,8 +331,10 @@ struct kvm_vcpu_arch {
 
 	bool nmi_pending;
 	bool nmi_injected;
+	bool nmi_window_open;
 
-	u64 mtrr[0x100];
+	struct mtrr_state_type mtrr_state;
+	u32 pat;
 };
 
 struct kvm_mem_alias {
@@ -355,6 +361,7 @@ struct kvm_arch{
 	struct kvm_ioapic *vioapic;
 	struct kvm_pit *vpit;
 	struct hlist_head irq_ack_notifier_list;
+	int vapics_in_nmi_mode;
 
 	int round_robin_prev_vcpu;
 	unsigned int tss_addr;
@@ -397,6 +404,7 @@ struct kvm_vcpu_stat {
 	u32 halt_exits;
 	u32 halt_wakeup;
 	u32 request_irq_exits;
+	u32 request_nmi_exits;
 	u32 irq_exits;
 	u32 host_state_reload;
 	u32 efer_reload;
@@ -405,6 +413,7 @@ struct kvm_vcpu_stat {
 	u32 insn_emulation_fail;
 	u32 hypercalls;
 	u32 irq_injections;
+	u32 nmi_injections;
 };
 
 struct descriptor_table {
@@ -477,6 +486,7 @@ struct kvm_x86_ops {
 
 	int (*set_tss_addr)(struct kvm *kvm, unsigned int addr);
 	int (*get_tdp_level)(void);
+	int (*get_mt_mask_shift)(void);
 };
 
 extern struct kvm_x86_ops *kvm_x86_ops;
@@ -490,7 +500,7 @@ int kvm_mmu_setup(struct kvm_vcpu *vcpu);
 void kvm_mmu_set_nonpresent_ptes(u64 trap_pte, u64 notrap_pte);
 void kvm_mmu_set_base_ptes(u64 base_pte);
 void kvm_mmu_set_mask_ptes(u64 user_mask, u64 accessed_mask,
-		u64 dirty_mask, u64 nx_mask, u64 x_mask);
+		u64 dirty_mask, u64 nx_mask, u64 x_mask, u64 mt_mask);
 
 int kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
 void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot);
