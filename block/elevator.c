@@ -618,6 +618,20 @@ void elv_insert(struct request_queue *q, struct request *rq, int where)
 
 	case ELEVATOR_INSERT_SORT:
 		BUG_ON(!blk_fs_request(rq) && !blk_discard_rq(rq));
+
+		/*
+		 * If we're going to unplug the device, do it now before
+		 * we put a potentially small and mergeable new
+		 * request on the queue, instead of just after it.
+		 */
+		if (blk_queue_plugged(q)) {
+			int nrq = q->rq.count[READ] + q->rq.count[WRITE]
+				- q->in_flight;
+			if (nrq >= q->unplug_thresh)
+				__generic_unplug_device(q);
+			unplug_it = 0;
+		}
+
 		rq->cmd_flags |= REQ_SORTED;
 		q->nr_sorted++;
 		if (rq_mergeable(rq)) {
