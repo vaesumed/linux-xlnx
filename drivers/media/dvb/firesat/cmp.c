@@ -82,6 +82,7 @@ int cmp_establish_pp_connection(struct firesat *firesat, int plug, int channel)
 {
 	__be32 old_opcr, opcr;
 	u64 opcr_address = CMP_OUTPUT_PLUG_CONTROL_REG_0 + (plug << 2);
+	int attempts = 0;
 	int ret;
 
 	ret = cmp_read(firesat, &opcr, opcr_address, 4);
@@ -128,7 +129,9 @@ repeat:
 		 * deallocate isochronous channel and bandwidth at IRM
 		 */
 
-		goto repeat;
+		if (++attempts < 6) /* arbitrary limit */
+			goto repeat;
+		return -EBUSY;
 	}
 
 	return 0;
@@ -138,6 +141,7 @@ void cmp_break_pp_connection(struct firesat *firesat, int plug, int channel)
 {
 	__be32 old_opcr, opcr;
 	u64 opcr_address = CMP_OUTPUT_PLUG_CONTROL_REG_0 + (plug << 2);
+	int attempts = 0;
 
 	if (cmp_read(firesat, &opcr, opcr_address, 4) < 0)
 		return;
@@ -161,6 +165,7 @@ repeat:
 		 * owner, deallocate isochronous channel and bandwidth at IRM
 		 */
 
-		goto repeat;
+		if (++attempts < 6) /* arbitrary limit */
+			goto repeat;
 	}
 }
