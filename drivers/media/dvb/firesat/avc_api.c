@@ -32,140 +32,10 @@
 #define COMMAND_REGISTER				0xFFFFF0000B00ULL
 #define PCR_BASE_ADDRESS				0xFFFFF0000900ULL
 
-static unsigned int avc_comm_debug = 0;
-module_param(avc_comm_debug, int, 0644);
-MODULE_PARM_DESC(avc_comm_debug, "debug logging level [0..2] of AV/C communication, default is 0 (no)");
-
-static const char* get_ctype_string(__u8 ctype)
-{
-	switch(ctype)
-	{
-	case 0:
-		return "CONTROL";
-	case 1:
-		return "STATUS";
-	case 2:
-		return "SPECIFIC_INQUIRY";
-	case 3:
-		return "NOTIFY";
-	case 4:
-		return "GENERAL_INQUIRY";
-	}
-	return "UNKNOWN";
-}
-
-static const char* get_resp_string(__u8 ctype)
-{
-	switch(ctype)
-	{
-	case 8:
-		return "NOT_IMPLEMENTED";
-	case 9:
-		return "ACCEPTED";
-	case 10:
-		return "REJECTED";
-	case 11:
-		return "IN_TRANSITION";
-	case 12:
-		return "IMPLEMENTED_STABLE";
-	case 13:
-		return "CHANGED";
-	case 15:
-		return "INTERIM";
-	}
-	return "UNKNOWN";
-}
-
-static const char* get_subunit_address(__u8 subunit_id, __u8 subunit_type)
-{
-	if (subunit_id == 7 && subunit_type == 0x1F)
-		return "Unit";
-	if (subunit_id == 0 && subunit_type == 0x05)
-		return "Tuner(0)";
-	return "Unsupported";
-}
-
-static const char* get_opcode_string(__u8 opcode)
-{
-	switch(opcode)
-	{
-	case 0x02:
-		return "PlugInfo";
-	case 0x08:
-		return "OpenDescriptor";
-	case 0x09:
-		return "ReadDescriptor";
-	case 0x18:
-		return "OutputPlugSignalFormat";
-	case 0x31:
-		return "SubunitInfo";
-	case 0x30:
-		return "UnitInfo";
-	case 0xB2:
-		return "Power";
-	case 0xC8:
-		return "DirectSelectInformationType";
-	case 0xCB:
-		return "DirectSelectData";
-	case 0x00:
-		return "Vendor";
-
-	}
-	return "Unknown";
-}
-
-static void log_command_frame(const AVCCmdFrm *CmdFrm)
-{
-	int k;
-	printk(KERN_INFO "AV/C Command Frame:\n");
-	printk(KERN_INFO "CommandType=%s, Address=%s(0x%02X,0x%02X), "
-	       "opcode=%s(0x%02X), length=%d\n",
-	       get_ctype_string(CmdFrm->ctype),
-	       get_subunit_address(CmdFrm->suid, CmdFrm->sutyp),
-	       CmdFrm->suid, CmdFrm->sutyp, get_opcode_string(CmdFrm->opcode),
-	       CmdFrm->opcode, CmdFrm->length);
-	if (avc_comm_debug > 1) {
-		for(k = 0; k < CmdFrm->length - 3; k++) {
-			if (k % 5 != 0)
-				printk(", ");
-			else if (k != 0)
-				printk("\n");
-			printk(KERN_INFO "operand[%d] = %02X", k,
-			       CmdFrm->operand[k]);
-		}
-		printk(KERN_INFO "\n");
-	}
-}
-
-static void log_response_frame(const AVCRspFrm *RspFrm)
-{
-	int k;
-	printk(KERN_INFO "AV/C Response Frame:\n");
-	printk(KERN_INFO "Response=%s, Address=%s(0x%02X,0x%02X), "
-	       "opcode=%s(0x%02X), length=%d\n", get_resp_string(RspFrm->resp),
-	       get_subunit_address(RspFrm->suid, RspFrm->sutyp),
-	       RspFrm->suid, RspFrm->sutyp, get_opcode_string(RspFrm->opcode),
-	       RspFrm->opcode, RspFrm->length);
-	if (avc_comm_debug > 1) {
-		for(k = 0; k < RspFrm->length - 3; k++) {
-			if (k % 5 != 0)
-				printk(KERN_INFO ", ");
-			else if (k != 0)
-				printk(KERN_INFO "\n");
-			printk(KERN_INFO "operand[%d] = %02X", k,
-			       RspFrm->operand[k]);
-		}
-		printk(KERN_INFO "\n");
-	}
-}
-
 static int __AVCWrite(struct firesat *firesat, const AVCCmdFrm *CmdFrm,
 		      AVCRspFrm *RspFrm)
 {
 	int err, retry;
-
-	if (avc_comm_debug > 0)
-		log_command_frame(CmdFrm);
 
 	if (RspFrm)
 		firesat->avc_reply_received = false;
@@ -192,8 +62,6 @@ static int __AVCWrite(struct firesat *firesat, const AVCCmdFrm *CmdFrm,
 				       HZ / 5) != 0) {
 			memcpy(RspFrm, firesat->respfrm, firesat->resp_length);
 			RspFrm->length = firesat->resp_length;
-			if (avc_comm_debug > 0)
-				log_response_frame(RspFrm);
 
 			return 0;
 		}
@@ -266,14 +134,10 @@ static void AVCTuner_tuneQPSK(struct firesat *firesat, struct dvb_frontend_param
 	CmdFrm->operand[2]=SFE_VENDOR_DE_COMPANYID_2;
 	CmdFrm->operand[3]=SFE_VENDOR_OPCODE_TUNE_QPSK;
 
-	printk(KERN_INFO "%s: tuning to frequency %u\n",__func__,params->frequency);
-
 	CmdFrm->operand[4] = (params->frequency >> 24) & 0xFF;
 	CmdFrm->operand[5] = (params->frequency >> 16) & 0xFF;
 	CmdFrm->operand[6] = (params->frequency >> 8) & 0xFF;
 	CmdFrm->operand[7] = params->frequency & 0xFF;
-
-	printk(KERN_INFO "%s: symbol rate = %uBd\n",__func__,params->u.qpsk.symbol_rate);
 
 	CmdFrm->operand[8] = ((params->u.qpsk.symbol_rate/1000) >> 8) & 0xFF;
 	CmdFrm->operand[9] = (params->u.qpsk.symbol_rate/1000) & 0xFF;
@@ -324,8 +188,6 @@ int AVCTuner_DSD(struct firesat *firesat, struct dvb_frontend_parameters *params
 	AVCRspFrm RspFrm;
 	M_VALID_FLAGS flags;
 	int k;
-
-//	printk(KERN_INFO "%s\n", __func__);
 
 	if (firesat->type == FireSAT_DVB_S || firesat->type == FireSAT_DVB_S2)
 		AVCTuner_tuneQPSK(firesat, params, &CmdFrm);
@@ -618,8 +480,6 @@ int AVCTuner_GetTS(struct firesat *firesat){
 	AVCRspFrm RspFrm;
 	int k;
 
-	//printk(KERN_INFO "%s\n", __func__);
-
 	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
 
 	CmdFrm.cts		= AVC;
@@ -734,10 +594,7 @@ int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 {
 	AVCCmdFrm CmdFrm;
 	AVCRspFrm RspFrm;
-	int i,j;
-
-	printk(KERN_INFO "%s: voltage = %x, burst = %x, conttone = %x\n",
-	       __func__, voltage, burst, conttone);
+	int i, j, k;
 
 	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
 
@@ -757,17 +614,11 @@ int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 
 	i=6;
 
-	for(j=0;j<nrdiseq;j++) {
-		int k;
-		printk(KERN_INFO "%s: diseq %d len %x\n",
-		       __func__, j, diseqcmd[j].msg_len);
-		CmdFrm.operand[i++]=diseqcmd[j].msg_len;
+	for (j = 0; j < nrdiseq; j++) {
+		CmdFrm.operand[i++] = diseqcmd[j].msg_len;
 
-		for(k=0;k<diseqcmd[j].msg_len;k++) {
-			printk(KERN_INFO "%s: diseq %d msg[%d] = %x\n",
-			       __func__, j, k, diseqcmd[j].msg[k]);
-			CmdFrm.operand[i++]=diseqcmd[j].msg[k];
-		}
+		for (k = 0; k < diseqcmd[j].msg_len; k++)
+			CmdFrm.operand[i++] = diseqcmd[j].msg[k];
 	}
 
 	CmdFrm.operand[i++]=burst;
@@ -777,11 +628,6 @@ int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 	if((i+3)%4)
 		CmdFrm.length += 4 - ((i+3)%4);
 
-/*	for(j=0;j<CmdFrm.length;j++)
-		printk(KERN_INFO "%s: CmdFrm.operand[%d]=0x%x\n",__func__,j,CmdFrm.operand[j]);
-
-	printk(KERN_INFO "%s: cmdfrm.length = %u\n",__func__,CmdFrm.length);
-	*/
 	if(AVCWrite(firesat,&CmdFrm,&RspFrm) < 0)
 		return -EIO;
 
@@ -797,8 +643,6 @@ int AVCLNBControl(struct firesat *firesat, char voltage, char burst,
 int AVCRegisterRemoteControl(struct firesat *firesat)
 {
 	AVCCmdFrm CmdFrm;
-
-//	printk(KERN_INFO "%s\n",__func__);
 
 	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
 
@@ -1051,7 +895,6 @@ int avc_ca_pmt(struct firesat *firesat, char *msg, int length)
 	read_pos = 6;
 	write_pos = 22;
 	if (program_info_length > 0) {
-/* 		printk(KERN_INFO "Copying descriptors at programme level.\n"); */
 		pmt_cmd_id = msg[read_pos++];
 		if (pmt_cmd_id != 1 && pmt_cmd_id !=4) {
 			printk(KERN_ERR "Invalid pmt_cmd_id=%d.\n",
@@ -1063,8 +906,6 @@ int avc_ca_pmt(struct firesat *firesat, char *msg, int length)
 		write_pos += program_info_length;
 	}
 	while (read_pos < length) {
-/* 		printk(KERN_INFO "Copying descriptors at stream level for " */
-/* 		       "stream type %d.\n", msg[read_pos]); */
 		CmdFrm.operand[write_pos++] = msg[read_pos++];
 		CmdFrm.operand[write_pos++] = msg[read_pos++];
 		CmdFrm.operand[write_pos++] = msg[read_pos++];
