@@ -62,7 +62,7 @@ static int firesat_ca_get_slot_info(struct firesat *firesat, void *arg)
 	ANTENNA_INPUT_INFO info;
 	struct ca_slot_info *slot = arg;
 
-	if (AVCTunerStatus(firesat, &info))
+	if (avc_tuner_status(firesat, &info))
 		return -EFAULT;
 
 	if (slot->num != 0)
@@ -109,7 +109,7 @@ static int firesat_ca_get_msg(struct firesat *firesat, void *arg)
 		err = firesat_ca_info(firesat, arg);
 		break;
 	default:
-		if (AVCTunerStatus(firesat, &info))
+		if (avc_tuner_status(firesat, &info))
 			err = -EFAULT;
 		else if (info.CaMmi == 1)
 			err = firesat_ca_get_mmi(firesat, arg);
@@ -199,7 +199,7 @@ static int firesat_ca_ioctl(struct inode *inode, struct file *file,
 	}
 
 	/* FIXME Is this necessary? */
-	AVCTunerStatus(firesat, &info);
+	avc_tuner_status(firesat, &info);
 
 	return err;
 }
@@ -230,7 +230,7 @@ int firesat_ca_register(struct firesat *firesat)
 	ANTENNA_INPUT_INFO info;
 	int err;
 
-	if (AVCTunerStatus(firesat, &info))
+	if (avc_tuner_status(firesat, &info))
 		return -EINVAL;
 
 	if (!firesat_ca_ready(&info))

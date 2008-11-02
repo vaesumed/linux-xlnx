@@ -130,16 +130,17 @@ int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		return -EINTR;
 	}
 
-	if(dvbdmxfeed->pid == 8192) {
-		if((k = AVCTuner_GetTS(firesat))) {
+	if (dvbdmxfeed->pid == 8192) {
+		k = avc_tuner_get_ts(firesat);
+		if (k) {
 			firesat_channel_release(firesat, channel);
 			printk("%s: AVCTuner_GetTS failed with error %d\n",
 			       __func__, k);
 			return k;
 		}
-	}
-	else {
-		if((k = AVCTuner_SetPIDs(firesat, pidc, pids))) {
+	} else {
+		k = avc_tuner_set_pids(firesat, pidc, pids);
+		if (k) {
 			firesat_channel_release(firesat, channel);
 			printk("%s: AVCTuner_SetPIDs failed with error %d\n",
 			       __func__, k);
@@ -190,7 +191,7 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 				firesat->channel[k].active = false;
 		}
 
-	k = AVCTuner_SetPIDs(firesat, l, pids);
+	k = avc_tuner_set_pids(firesat, l, pids);
 	if (!k)
 		c->active = false;
 
