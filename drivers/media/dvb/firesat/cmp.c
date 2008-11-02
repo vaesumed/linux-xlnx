@@ -15,6 +15,8 @@
 #include <linux/mutex.h>
 #include <linux/types.h>
 
+#include <asm/byteorder.h>
+
 #include <ieee1394.h>
 #include <nodemgr.h>
 
@@ -23,22 +25,6 @@
 #include "firesat.h"
 
 #define CMP_OUTPUT_PLUG_CONTROL_REG_0	0xfffff0000904ULL
-
-typedef struct _OPCR
-{
-	__u8 PTPConnCount    : 6 ; // Point to point connect. counter
-	__u8 BrConnCount     : 1 ; // Broadcast connection counter
-	__u8 OnLine          : 1 ; // On Line
-
-	__u8 ChNr            : 6 ; // Channel number
-	__u8 Res             : 2 ; // Reserved
-
-	__u8 PayloadHi       : 2 ; // Payoad high bits
-	__u8 OvhdID          : 4 ; // Overhead ID
-	__u8 DataRate        : 2 ; // Data Rate
-
-	__u8 PayloadLo           ; // Payoad low byte
-} OPCR ;
 
 static int cmp_read(struct firesat *firesat, void *buf, u64 addr, size_t len)
 {
@@ -55,15 +41,16 @@ static int cmp_read(struct firesat *firesat, void *buf, u64 addr, size_t len)
 	return ret;
 }
 
-static int cmp_lock(struct firesat *firesat, quadlet_t *data, u64 addr,
-		quadlet_t arg, int ext_tcode)
+static int cmp_lock(struct firesat *firesat, void *data, u64 addr, __be32 arg,
+		    int ext_tcode)
 {
 	int ret;
 
 	if (mutex_lock_interruptible(&firesat->avc_mutex))
 		return -EINTR;
 
-	ret = hpsb_node_lock(firesat->ud->ne, addr, ext_tcode, data, arg);
+	ret = hpsb_node_lock(firesat->ud->ne, addr, ext_tcode, data,
+			     (__force quadlet_t)arg);
 	if (ret < 0)
 		dev_err(&firesat->ud->device, "CMP: lock I/O error\n");
 
@@ -71,10 +58,29 @@ static int cmp_lock(struct firesat *firesat, quadlet_t *data, u64 addr,
 	return ret;
 }
 
+static inline u32 get_opcr(__be32 opcr, u32 mask, u32 shift)
+{
+	return (be32_to_cpu(opcr) >> shift) & mask;
+}
+
+static inline void set_opcr(__be32 *opcr, u32 value, u32 mask, u32 shift)
+{
+	*opcr &= ~cpu_to_be32(mask << shift);
+	*opcr |= cpu_to_be32((value & mask) << shift);
+}
+
+#define get_opcr_online(v)		get_opcr((v), 0x1, 31)
+#define get_opcr_p2p_connections(v)	get_opcr((v), 0x3f, 24)
+#define get_opcr_channel(v)		get_opcr((v), 0x3f, 16)
+
+#define set_opcr_p2p_connections(p, v)	set_opcr((p), (v), 0x3f, 24)
+#define set_opcr_channel(p, v)		set_opcr((p), (v), 0x3f, 16)
+#define set_opcr_data_rate(p, v)	set_opcr((p), (v), 0x3, 14)
+#define set_opcr_overhead_id(p, v)	set_opcr((p), (v), 0xf, 10)
+
 int cmp_establish_pp_connection(struct firesat *firesat, int plug, int channel)
 {
-	quadlet_t old_opcr, opcr;
-	OPCR *hilf = (OPCR *)&opcr;
+	__be32 old_opcr, opcr;
 	u64 opcr_address = CMP_OUTPUT_PLUG_CONTROL_REG_0 + (plug << 2);
 	int ret;
 
@@ -83,15 +89,15 @@ int cmp_establish_pp_connection(struct firesat *firesat, int plug, int channel)
 		return ret;
 
 repeat:
-	if (!hilf->OnLine) {
+	if (!get_opcr_online(opcr)) {
 		dev_err(&firesat->ud->device, "CMP: output offline\n");
 		return -EBUSY;
 	}
 
 	old_opcr = opcr;
 
-	if (hilf->PTPConnCount) {
-		if (hilf->ChNr != channel) {
+	if (get_opcr_p2p_connections(opcr)) {
+		if (get_opcr_channel(opcr) != channel) {
 			dev_err(&firesat->ud->device,
 				"CMP: cannot change channel\n");
 			return -EBUSY;
@@ -101,16 +107,16 @@ repeat:
 
 		/* We don't allocate isochronous resources. */
 	} else {
-		hilf->ChNr = channel;
-		hilf->DataRate = IEEE1394_SPEED_400;
+		set_opcr_channel(&opcr, channel);
+		set_opcr_data_rate(&opcr, IEEE1394_SPEED_400);
 
 		/* FIXME: this is for the worst case - optimize */
-		hilf->OvhdID = 0;
+		set_opcr_overhead_id(&opcr, 0);
 
 		/* FIXME: allocate isochronous channel and bandwidth at IRM */
 	}
 
-	hilf->PTPConnCount++;
+	set_opcr_p2p_connections(&opcr, get_opcr_p2p_connections(opcr) + 1);
 
 	ret = cmp_lock(firesat, &opcr, opcr_address, old_opcr, 2);
 	if (ret < 0)
@@ -130,21 +136,21 @@ repeat:
 
 void cmp_break_pp_connection(struct firesat *firesat, int plug, int channel)
 {
-	quadlet_t old_opcr, opcr;
-	OPCR *hilf = (OPCR *)&opcr;
+	__be32 old_opcr, opcr;
 	u64 opcr_address = CMP_OUTPUT_PLUG_CONTROL_REG_0 + (plug << 2);
 
 	if (cmp_read(firesat, &opcr, opcr_address, 4) < 0)
 		return;
 
 repeat:
-	if (!hilf->OnLine || !hilf->PTPConnCount || hilf->ChNr != channel) {
+	if (!get_opcr_online(opcr) || !get_opcr_p2p_connections(opcr) ||
+	    get_opcr_channel(opcr) != channel) {
 		dev_err(&firesat->ud->device, "CMP: no connection to break\n");
 		return;
 	}
 
 	old_opcr = opcr;
-	hilf->PTPConnCount--;
+	set_opcr_p2p_connections(&opcr, get_opcr_p2p_connections(opcr) - 1);
 
 	if (cmp_lock(firesat, &opcr, opcr_address, old_opcr, 2) < 0)
 		return;
