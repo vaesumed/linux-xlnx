@@ -124,11 +124,7 @@ static void fcp_request(struct hpsb_host *host,
 
 		if (firesat)
 			AVCRecv(firesat,data,length);
-		else
-			printk("%s: received fcp request from unknown source, ignored\n", __func__);
 	}
-	else
-	  printk("%s: received invalid fcp request, ignored\n", __func__);
 }
 
 const char *firedtv_model_names[] = {

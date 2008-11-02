@@ -81,8 +81,6 @@ int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	int pidc,k;
 	u16 pids[16];
 
-//	printk(KERN_INFO "%s (pid %u)\n", __func__, dvbdmxfeed->pid);
-
 	switch (dvbdmxfeed->type) {
 	case DMX_TYPE_TS:
 	case DMX_TYPE_SEC:
@@ -159,8 +157,6 @@ int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	struct firesat_channel *c = dvbdmxfeed->priv;
 	int k, l;
 	u16 pids[16];
-
-	//printk(KERN_INFO "%s (pid %u)\n", __func__, dvbdmxfeed->pid);
 
 	if (dvbdmxfeed->type == DMX_TYPE_TS && !((dvbdmxfeed->ts_type & TS_PACKET) &&
 				(demux->dmx.frontend->source != DMX_MEMORY_FE))) {

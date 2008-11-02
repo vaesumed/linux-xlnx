@@ -77,13 +77,10 @@ int try_CMPEstablishPPconnection(struct firesat *firesat, int output_plug, int i
 	u64 oPCR_address=0xfffff0000904ull+(output_plug << 2);
 	int result=cmp_read(firesat, &test_oPCR, oPCR_address, 4);
 
-/* 	printk(KERN_INFO "%s: nodeid = %d\n",__func__,firesat->nodeentry->nodeid); */
-
 	if (result < 0) {
 		printk("%s: cannot read oPCR\n", __func__);
 		return result;
 	} else {
-/* 		printk(KERN_INFO "%s: oPCR = %08x\n",__func__,test_oPCR); */
 		do {
 			OPCR *hilf= (OPCR*) &test_oPCR;
 
@@ -117,10 +114,7 @@ int try_CMPEstablishPPconnection(struct firesat *firesat, int output_plug, int i
 
 				hilf->PTPConnCount++;
 				new_oPCR=test_oPCR;
-/* 				printk(KERN_INFO "%s: trying compare_swap...\n",__func__); */
-/* 				printk(KERN_INFO "%s: oPCR_old: %08x, oPCR_new: %08x\n",__func__, old_oPCR, new_oPCR); */
 				result=cmp_lock(firesat, &test_oPCR, oPCR_address, old_oPCR, 2);
-
 				if (result < 0) {
 					printk("%s: cannot compare_swap oPCR\n",__func__);
 					return result;
@@ -152,8 +146,6 @@ int try_CMPBreakPPconnection(struct firesat *firesat, int output_plug,int iso_ch
 	u64 oPCR_address=0xfffff0000904ull+(output_plug << 2);
 	int result=cmp_read(firesat, &test_oPCR, oPCR_address, 4);
 
-/* 	printk(KERN_INFO "%s\n",__func__); */
-
 	if (result < 0) {
 		printk("%s: cannot read oPCR\n", __func__);
 		return result;
@@ -166,11 +158,10 @@ int try_CMPBreakPPconnection(struct firesat *firesat, int output_plug,int iso_ch
 				return -EINVAL;
 			} else {
 				quadlet_t new_oPCR;
+
 				old_oPCR=test_oPCR;
 				hilf->PTPConnCount--;
 				new_oPCR=test_oPCR;
-
-//				printk(KERN_INFO "%s: trying compare_swap...\n", __func__);
 				result=cmp_lock(firesat, &test_oPCR, oPCR_address, old_oPCR, 2);
 				if (result < 0) {
 					printk("%s: cannot compare_swap oPCR\n",__func__);

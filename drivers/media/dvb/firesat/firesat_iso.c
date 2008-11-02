@@ -60,7 +60,6 @@ static void rawiso_activity_cb(struct hpsb_iso *iso)
 {
 	unsigned int num;
 	unsigned int i;
-/* 	unsigned int j; */
 	unsigned int packet;
 	unsigned long flags;
 	struct firesat *firesat = NULL;
@@ -89,12 +88,7 @@ static void rawiso_activity_cb(struct hpsb_iso *iso)
 				(188 + sizeof(struct firewireheader));
 			if (iso->infos[packet].len <= sizeof(struct CIPHeader))
 				continue; // ignore empty packet
-/* 			printk("%s: Handling packets (%d): ", __func__, */
-/* 			       iso->infos[packet].len); */
-/* 			for (j = 0; j < iso->infos[packet].len - */
-/* 				     sizeof(struct CIPHeader); j++) */
-/* 				printk("%02X,", buf[j]); */
-/* 			printk("\n"); */
+
 			while (count --) {
 				if (buf[sizeof(struct firewireheader)] == 0x47)
 					dvb_dmx_swfilter_packets(&firesat->demux,
