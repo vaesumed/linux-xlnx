@@ -20,20 +20,8 @@
 #include "firesat.h"
 #include "firesat-ci.h"
 
-static unsigned int ca_debug = 0;
-module_param(ca_debug, int, 0644);
-MODULE_PARM_DESC(ca_debug, "debug logging of ca system, default is 0 (no)");
-
 static int firesat_ca_ready(ANTENNA_INPUT_INFO *info)
 {
-	if (ca_debug != 0)
-		printk("%s: CaMmi=%d, CaInit=%d, CaError=%d, CaDvb=%d, "
-		       "CaModule=%d, CaAppInfo=%d, CaDateTime=%d, "
-		       "CaPmt=%d\n", __func__, info->CaMmi,
-		       info->CaInitializationStatus, info->CaErrorFlag,
-		       info->CaDvbFlag, info->CaModulePresentStatus,
-		       info->CaApplicationInfo,
-		       info->CaDateTimeRequest, info->CaPmtReply);
 	return info->CaInitializationStatus == 1 &&
 		info->CaErrorFlag == 0 &&
 		info->CaDvbFlag == 1 &&
@@ -54,8 +42,6 @@ static int firesat_get_ca_flags(ANTENNA_INPUT_INFO *info)
 
 static int firesat_ca_reset(struct firesat *firesat)
 {
-	if (ca_debug)
-		printk(KERN_INFO "%s: ioctl CA_RESET\n", __func__);
 	if (avc_ca_reset(firesat))
 		return -EFAULT;
 	return 0;
@@ -70,8 +56,6 @@ static int firesat_ca_get_caps(struct firesat *firesat, void *arg)
 	cap_p->slot_type = CA_CI;
 	cap_p->descr_num = 1;
 	cap_p->descr_type = CA_ECD;
-	if (ca_debug)
-		printk(KERN_INFO "%s: ioctl CA_GET_CAP\n", __func__);
 	return err;
 }
 
@@ -80,9 +64,6 @@ static int firesat_ca_get_slot_info(struct firesat *firesat, void *arg)
 	ANTENNA_INPUT_INFO info;
 	struct ca_slot_info *slot_p = (struct ca_slot_info*)arg;
 
-	if (ca_debug)
-		printk(KERN_INFO "%s: ioctl CA_GET_SLOT_INFO on slot %d.\n",
-		       __func__, slot_p->num);
 	if (AVCTunerStatus(firesat, &info))
 		return -EFAULT;
 
@@ -99,51 +80,27 @@ static int firesat_ca_get_slot_info(struct firesat *firesat, void *arg)
 static int firesat_ca_app_info(struct firesat *firesat, void *arg)
 {
 	struct ca_msg *reply_p = (struct ca_msg*)arg;
-	int i;
 
 	if (avc_ca_app_info(firesat, reply_p->msg, &reply_p->length))
 		return -EFAULT;
-	if (ca_debug) {
-		printk(KERN_INFO "%s: Creating TAG_APP_INFO message:",
-		       __func__);
-		for (i = 0; i < reply_p->length; i++)
-			printk("0x%02X, ", (unsigned char)reply_p->msg[i]);
-		printk("\n");
-		}
 	return 0;
 }
 
 static int firesat_ca_info(struct firesat *firesat, void *arg)
 {
 	struct ca_msg *reply_p = (struct ca_msg*)arg;
-	int i;
 
 	if (avc_ca_info(firesat, reply_p->msg, &reply_p->length))
 		return -EFAULT;
-	if (ca_debug) {
-		printk(KERN_INFO "%s: Creating TAG_CA_INFO message:",
-		       __func__);
-		for (i = 0; i < reply_p->length; i++)
-			printk("0x%02X, ", (unsigned char)reply_p->msg[i]);
-		printk("\n");
-	}
 	return 0;
 }
 
 static int firesat_ca_get_mmi(struct firesat *firesat, void *arg)
 {
 	struct ca_msg *reply_p = (struct ca_msg*)arg;
-	int i;
 
 	if (avc_ca_get_mmi(firesat, reply_p->msg, &reply_p->length))
 		return -EFAULT;
-	if (ca_debug) {
-		printk(KERN_INFO "%s: Creating MMI reply INFO message:",
-		       __func__);
-		for (i = 0; i < reply_p->length; i++)
-			printk("0x%02X, ", (unsigned char)reply_p->msg[i]);
-		printk("\n");
-	}
 	return 0;
 }
 
@@ -200,28 +157,17 @@ static int firesat_ca_send_msg(struct firesat *firesat, void *arg)
 		(msg_p->msg[0] << 16) + (msg_p->msg[1] << 8) + msg_p->msg[2];
 	switch (firesat->ca_last_command) {
 	case TAG_CA_PMT:
-		if (ca_debug != 0)
-			printk(KERN_INFO "%s: Message received: TAG_CA_PMT\n",
-			       __func__);
 		err = firesat_ca_pmt(firesat, arg);
 		break;
 	case TAG_APP_INFO_ENQUIRY:
 		// This is all handled in ca_get_msg
-		if (ca_debug != 0)
-			printk(KERN_INFO "%s: Message received: "
-			       "TAG_APP_INFO_ENQUIRY\n", __func__);
 		err = 0;
 		break;
 	case TAG_CA_INFO_ENQUIRY:
 		// This is all handled in ca_get_msg
-		if (ca_debug != 0)
-			printk(KERN_INFO "%s: Message received: "
-			       "TAG_CA_APP_INFO_ENQUIRY\n", __func__);
 		err = 0;
 		break;
 	case TAG_ENTER_MENU:
-		if (ca_debug != 0)
-			printk(KERN_INFO "%s: Entering CA menu.\n", __func__);
 		err = avc_ca_enter_menu(firesat);
 		break;
 	default:
@@ -272,36 +218,23 @@ static int firesat_ca_ioctl(struct inode *inode, struct file *file,
 
 static int firesat_get_date_time_request(struct firesat *firesat)
 {
-	if (ca_debug)
-		printk(KERN_INFO "%s: Retrieving Time/Date request\n",
-		       __func__);
 	if (avc_ca_get_time_date(firesat, &firesat->ca_time_interval))
 		return -EFAULT;
-	if (ca_debug)
-		printk(KERN_INFO "%s: Time/Date interval is %d\n",
-		       __func__, firesat->ca_time_interval);
-
 	return 0;
 }
 
 static int firesat_ca_io_open(struct inode *inode, struct file *file)
 {
-	if (ca_debug != 0)
-		printk(KERN_INFO "%s\n",__func__);
 	return dvb_generic_open(inode, file);
 }
 
 static int firesat_ca_io_release(struct inode *inode, struct file *file)
 {
-	if (ca_debug != 0)
-		printk(KERN_INFO "%s\n",__func__);
 	return dvb_generic_release(inode, file);
 }
 
 static unsigned int firesat_ca_io_poll(struct file *file, poll_table *wait)
 {
-	if (ca_debug != 0)
-		printk(KERN_INFO "%s\n",__func__);
 	return POLLIN;
 }
 
