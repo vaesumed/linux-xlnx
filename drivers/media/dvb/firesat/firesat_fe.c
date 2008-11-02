@@ -55,8 +55,8 @@ static int firesat_diseqc_send_master_cmd(struct dvb_frontend *fe,
 {
 	struct firesat *firesat = fe->sec_priv;
 
-	return AVCLNBControl(firesat, LNBCONTROL_DONTCARE, LNBCONTROL_DONTCARE,
-			     LNBCONTROL_DONTCARE, 1, cmd);
+	return avc_lnb_control(firesat, LNBCONTROL_DONTCARE,
+			LNBCONTROL_DONTCARE, LNBCONTROL_DONTCARE, 1, cmd);
 }
 
 static int firesat_diseqc_send_burst(struct dvb_frontend *fe,
@@ -82,24 +82,19 @@ static int firesat_set_voltage(struct dvb_frontend *fe,
 	return 0;
 }
 
-static int firesat_read_status (struct dvb_frontend *fe, fe_status_t *status)
+static int firesat_read_status(struct dvb_frontend *fe, fe_status_t *status)
 {
 	struct firesat *firesat = fe->sec_priv;
 	ANTENNA_INPUT_INFO info;
 
-	if (AVCTunerStatus(firesat, &info))
+	if (avc_tuner_status(firesat, &info))
 		return -EINVAL;
 
-	if (info.NoRF) {
+	if (info.NoRF)
 		*status = 0;
-	} else {
-		*status = FE_HAS_SIGNAL	|
-			FE_HAS_VITERBI	|
-			FE_HAS_SYNC	|
-			FE_HAS_CARRIER	|
-			FE_HAS_LOCK;
-	}
-
+	else
+		*status = FE_HAS_SIGNAL | FE_HAS_VITERBI | FE_HAS_SYNC |
+			  FE_HAS_CARRIER | FE_HAS_LOCK;
 	return 0;
 }
 
@@ -108,14 +103,11 @@ static int firesat_read_ber(struct dvb_frontend *fe, u32 *ber)
 	struct firesat *firesat = fe->sec_priv;
 	ANTENNA_INPUT_INFO info;
 
-	if (AVCTunerStatus(firesat, &info))
+	if (avc_tuner_status(firesat, &info))
 		return -EINVAL;
 
-	*ber = (info.BER[0] << 24) |
-		(info.BER[1] << 16) |
-		(info.BER[2] <<  8) |
-		info.BER[3];
-
+	*ber = info.BER[0] << 24 | info.BER[1] << 16 |
+	       info.BER[2] << 8 | info.BER[3];
 	return 0;
 }
 
@@ -124,11 +116,10 @@ static int firesat_read_signal_strength (struct dvb_frontend *fe, u16 *strength)
 	struct firesat *firesat = fe->sec_priv;
 	ANTENNA_INPUT_INFO info;
 
-	if (AVCTunerStatus(firesat, &info))
+	if (avc_tuner_status(firesat, &info))
 		return -EINVAL;
 
 	*strength = info.SignalStrength << 8;
-
 	return 0;
 }
 
@@ -137,14 +128,12 @@ static int firesat_read_snr(struct dvb_frontend *fe, u16 *snr)
 	struct firesat *firesat = fe->sec_priv;
 	ANTENNA_INPUT_INFO info;
 
-	if (AVCTunerStatus(firesat, &info))
+	if (avc_tuner_status(firesat, &info))
 		return -EINVAL;
 
-	*snr = (info.CarrierNoiseRatio[0] << 8) +
-		info.CarrierNoiseRatio[1];
+	/* C/N[dB] = -10 * log10(snr / 65535) */
+	*snr = (info.CarrierNoiseRatio[0] << 8) + info.CarrierNoiseRatio[1];
 	*snr *= 257;
-	// C/N[dB] = -10 * log10(snr / 65535)
-
 	return 0;
 }
 
@@ -158,10 +147,11 @@ static int firesat_set_frontend(struct dvb_frontend *fe,
 {
 	struct firesat *firesat = fe->sec_priv;
 
-	if (AVCTuner_DSD(firesat, params, NULL) != ACCEPTED)
+	/* FIXME: avc_tuner_dsd never returns ACCEPTED. Check status? */
+	if (avc_tuner_dsd(firesat, params) != ACCEPTED)
 		return -EINVAL;
 	else
-		return 0; //not sure of this...
+		return 0; /* not sure of this... */
 }
 
 static int firesat_get_frontend(struct dvb_frontend *fe,

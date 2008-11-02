@@ -123,7 +123,7 @@ static void fcp_request(struct hpsb_host *host,
 		spin_unlock_irqrestore(&firesat_list_lock, flags);
 
 		if (firesat)
-			AVCRecv(firesat,data,length);
+			avc_recv(firesat, data, length);
 	}
 }
 
@@ -185,7 +185,7 @@ static int firesat_probe(struct device *dev)
 	list_add_tail(&firesat->list, &firesat_list);
 	spin_unlock_irqrestore(&firesat_list_lock, flags);
 
-	err = AVCIdentifySubunit(firesat);
+	err = avc_identify_subunit(firesat);
 	if (err)
 		goto fail;
 
@@ -193,7 +193,7 @@ static int firesat_probe(struct device *dev)
 	if (err)
 		goto fail;
 
-	AVCRegisterRemoteControl(firesat);
+	avc_register_remote_control(firesat);
 	return 0;
 
 fail:
