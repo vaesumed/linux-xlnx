@@ -421,7 +421,7 @@ int avc_tuner_dsd(struct firesat *firesat,
 	if (avc_write(firesat, &CmdFrm, &RspFrm) < 0)
 		return -EIO;
 
-	mdelay(500);
+	msleep(500);
 #if 0
 	/* FIXME: */
 	/* u8 *status was an out-parameter of avc_tuner_dsd, unused by caller */
@@ -471,7 +471,7 @@ int avc_tuner_set_pids(struct firesat *firesat, unsigned char pidc, u16 pid[])
 	if (avc_write(firesat, &CmdFrm, &RspFrm) < 0)
 		return -EIO;
 
-	mdelay(50);
+	msleep(50);
 	return 0;
 }
 
@@ -504,7 +504,7 @@ int avc_tuner_get_ts(struct firesat *firesat)
 	if (avc_write(firesat, &CmdFrm, &RspFrm) < 0)
 		return -EIO;
 
-	mdelay(250);
+	msleep(250);
 	return 0;
 }
 
