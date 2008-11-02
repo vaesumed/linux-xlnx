@@ -29,8 +29,8 @@ static int firesat_dvb_init(struct dvb_frontend *fe)
 	/* FIXME - allocate free channel at IRM */
 	firesat->isochannel = firesat->adapter.num;
 
-	err = try_CMPEstablishPPconnection(firesat, firesat->subunit,
-					   firesat->isochannel);
+	err = cmp_establish_pp_connection(firesat, firesat->subunit,
+					  firesat->isochannel);
 	if (err) {
 		printk(KERN_ERR "Could not establish point to point "
 		       "connection.\n");
@@ -45,7 +45,7 @@ static int firesat_sleep(struct dvb_frontend *fe)
 	struct firesat *firesat = fe->sec_priv;
 
 	tear_down_iso_channel(firesat);
-	try_CMPBreakPPconnection(firesat, firesat->subunit, firesat->isochannel);
+	cmp_break_pp_connection(firesat, firesat->subunit, firesat->isochannel);
 	firesat->isochannel = -1;
 	return 0;
 }
