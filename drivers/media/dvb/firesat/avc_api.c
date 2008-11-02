@@ -176,9 +176,10 @@ static void avc_tuner_tuneqpsk(struct firesat *firesat,
 		CmdFrm->operand[13] = 0x1;
 		CmdFrm->operand[14] = 0xff;
 		CmdFrm->operand[15] = 0xff;
+		CmdFrm->length = 20;
+	} else {
+		CmdFrm->length = 16;
 	}
-
-	CmdFrm->length = 16;
 }
 
 static void avc_tuner_dsd_dvb_c(struct dvb_frontend_parameters *params,
