@@ -6,6 +6,8 @@
  * Copyright IBM Corporation 2008
  */
 
+#define KMSG_COMPONENT "zfcp"
+
 #include "zfcp_ext.h"
 
 struct ct_iu_gpn_ft_req {
