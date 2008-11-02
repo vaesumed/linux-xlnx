@@ -237,8 +237,8 @@ static int firesat_update(struct unit_directory *ud)
 	struct firesat *firesat = ud->device.driver_data;
 
 	if (firesat->isochannel >= 0)
-		try_CMPEstablishPPconnection(firesat, firesat->subunit,
-					     firesat->isochannel);
+		cmp_establish_pp_connection(firesat, firesat->subunit,
+					    firesat->isochannel);
 	return 0;
 }
 
