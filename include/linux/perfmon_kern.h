@@ -190,6 +190,8 @@ void pfm_ctxsw_in(struct task_struct *prev, struct task_struct *next);
 void pfm_ctxsw_out(struct task_struct *prev, struct task_struct *next);
 void __pfm_init_percpu(void *dummy);
 
+void pfm_interrupt_handler(unsigned long ip, struct pt_regs *regs);
+
 static inline void pfm_exit_thread(void)
 {
 	if (current->pfm_context)
