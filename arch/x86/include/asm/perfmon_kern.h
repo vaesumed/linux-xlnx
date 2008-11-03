@@ -66,6 +66,7 @@ struct pfm_x86_ctx_flags {
 struct pfm_arch_context {
 	u64 saved_real_iip;		/* instr pointer of last NMI intr */
 	struct pfm_x86_ctx_flags flags;	/* flags */
+	int saved_started;
 };
 
 /*
@@ -257,6 +258,8 @@ void pfm_arch_stop(struct task_struct *task, struct pfm_context *ctx);
 static inline void pfm_arch_intr_freeze_pmu(struct pfm_context *ctx,
 					    struct pfm_event_set *set)
 {
+	struct pfm_arch_context *ctx_arch;
+	ctx_arch = pfm_ctx_arch(ctx);
 	/*
 	 * on X86, freezing is equivalent to stopping
 	 */
@@ -265,9 +268,9 @@ static inline void pfm_arch_intr_freeze_pmu(struct pfm_context *ctx,
 	/*
 	 * we mark monitoring as stopped to avoid
 	 * certain side effects especially in
-	 * pfm_switch_sets_from_intr() and
 	 * pfm_arch_restore_pmcs()
 	 */
+	ctx_arch->saved_started = ctx->flags.started;
 	ctx->flags.started = 0;
 }
 
@@ -282,8 +285,12 @@ static inline void pfm_arch_intr_freeze_pmu(struct pfm_context *ctx,
  */
 static inline void pfm_arch_intr_unfreeze_pmu(struct pfm_context *ctx)
 {
+	struct pfm_arch_context *ctx_arch;
+
 	if (ctx == NULL)
 		return;
+
+	ctx_arch = pfm_ctx_arch(ctx);
 
 	PFM_DBG_ovfl("state=%d", ctx->state);
 
@@ -291,7 +298,7 @@ static inline void pfm_arch_intr_unfreeze_pmu(struct pfm_context *ctx)
 	 * restore flags.started which is cleared in
 	 * pfm_arch_intr_freeze_pmu()
 	 */
-	ctx->flags.started = 1;
+	ctx->flags.started = ctx_arch->saved_started;
 
 	pfm_arch_restore_pmcs(ctx, ctx->active_set);
 }
