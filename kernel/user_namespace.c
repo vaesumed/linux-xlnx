@@ -19,6 +19,7 @@ static struct user_namespace *clone_user_ns(struct user_namespace *old_ns)
 {
 	struct user_namespace *ns;
 	struct user_struct *new_user;
+	struct cred *new;
 	int n;
 
 	ns = kmalloc(sizeof(struct user_namespace), GFP_KERNEL);
@@ -38,14 +39,23 @@ static struct user_namespace *clone_user_ns(struct user_namespace *old_ns)
 	}
 
 	/* Reset current->user with a new one */
-	new_user = alloc_uid(ns, current->uid);
+	new_user = alloc_uid(ns, current_uid());
 	if (!new_user) {
 		free_uid(ns->root_user);
 		kfree(ns);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	switch_uid(new_user);
+	/* Install the new user */
+	new = prepare_creds();
+	if (!new) {
+		free_uid(new_user);
+		free_uid(ns->root_user);
+		kfree(ns);
+	}
+	free_uid(new->user);
+	new->user = new_user;
+	commit_creds(new);
 	return ns;
 }
 
