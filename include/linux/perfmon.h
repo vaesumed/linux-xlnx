@@ -46,6 +46,16 @@
 #define PFM_PMC_BV	PFM_BVSIZE(PFM_MAX_PMCS)
 
 /*
+ * argument to pfm_create
+ * populated on return
+ */
+struct pfarg_sinfo {
+	__u64 sif_avail_pmcs[PFM_PMC_BV];/* out: available PMCs */
+	__u64 sif_avail_pmds[PFM_PMD_BV];/* out: available PMDs */
+	__u64 sif_reserved1[4];		 /* for future use */
+};
+
+/*
  * PMC and PMD generic register description
  */
 struct pfarg_pmr {

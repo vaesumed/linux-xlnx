@@ -55,13 +55,18 @@ void pfm_session_release(void);
 
 int  pfm_init_sysfs(void);
 
+int __pfm_create_context(__u32 ctx_flags, struct pfarg_sinfo *sif,
+			 struct pfm_context **new_ctx);
 void pfm_free_context(struct pfm_context *ctx);
+void pfm_undo_create(int fd, struct pfm_context *ctx);
 
 int __pfm_stop(struct pfm_context *ctx);
 int __pfm_start(struct pfm_context *ctx);
 
 int __pfm_load_context(struct pfm_context *ctx, struct task_struct *task);
 int __pfm_unload_context(struct pfm_context *ctx);
+
+int pfm_alloc_fd(struct file **cfile);
 
 ssize_t pfm_sysfs_res_show(char *buf, size_t sz, int what);
 
