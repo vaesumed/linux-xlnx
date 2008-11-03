@@ -52,6 +52,9 @@ int  pfm_init_sysfs(void);
 
 void pfm_free_context(struct pfm_context *ctx);
 
+int pfm_pmu_acquire(struct pfm_context *ctx);
+void pfm_pmu_release(void);
+
 void pfm_save_pmds(struct pfm_context *ctx);
 
 /*
