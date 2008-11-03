@@ -22,4 +22,12 @@ config  X86_PERFMON_INTEL_ARCH
 	help
 	Enables support for Intel architectural performance counters.
 	This feature was introduced with Intel Core Solo/Core Duo processors.
-endmenu
+
+config	X86_PERFMON_AMD64
+	bool "Support AMD Athlon/Opteron hardware performance counters"
+	depends on PERFMON
+	default n
+	help
+	Enables support for Athlon/Opterton hardware performance counters.
+	Support for  family 6, 15 and 16 processors.
+ endmenu

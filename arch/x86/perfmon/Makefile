@@ -4,3 +4,4 @@
 #
 obj-$(CONFIG_PERFMON)			+= perfmon.o
 obj-$(CONFIG_X86_PERFMON_INTEL_ARCH)	+= perfmon_intel_arch.o
+obj-$(CONFIG_X86_PERFMON_AMD64)		+= perfmon_amd64.o
