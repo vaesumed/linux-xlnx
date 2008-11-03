@@ -46,6 +46,22 @@
 #define PFM_PMC_BV	PFM_BVSIZE(PFM_MAX_PMCS)
 
 /*
+ * PMC and PMD generic register description
+ */
+struct pfarg_pmr {
+	__u16 reg_num;		/* which register */
+	__u16 reg_res1;		/* reserved */
+	__u32 reg_flags;	/* REGFL flags */
+	__u64 reg_value;	/* 64-bit value */
+};
+
+/*
+ * pfm_write, pfm_read type:
+ */
+#define PFM_RW_PMD	0x01 /* accessing PMD registers */
+#define PFM_RW_PMC	0x02 /* accessing PMC registers */
+
+/*
  * default value for the user and group security parameters in
  * /proc/sys/kernel/perfmon/sys_group
  * /proc/sys/kernel/perfmon/task_group

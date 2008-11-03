@@ -44,6 +44,11 @@ static inline void pfm_set_pmu_owner(struct task_struct *task,
 }
 
 int pfm_init_ctx(void);
+int __pfm_write_pmcs(struct pfm_context *ctx, struct pfarg_pmr *req,
+		     int count);
+int __pfm_write_pmds(struct pfm_context *ctx, struct pfarg_pmr *req,
+		     int count);
+int __pfm_read_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count);
 
 int pfm_session_acquire(void);
 void pfm_session_release(void);
