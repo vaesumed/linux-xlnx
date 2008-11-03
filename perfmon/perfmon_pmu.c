@@ -164,6 +164,10 @@ int pfm_pmu_register(struct pfm_pmu_config *cfg)
 	pfm_pmu_conf = cfg;
 	pfm_pmu_conf->ovfl_mask = (1ULL << cfg->counter_width) - 1;
 
+	ret = pfm_sysfs_add_pmu(pfm_pmu_conf);
+	if (ret)
+		pfm_pmu_conf = NULL;
+
 unlock:
 	spin_unlock(&pfm_pmu_conf_lock);
 

@@ -52,6 +52,8 @@ int  pfm_init_sysfs(void);
 
 void pfm_free_context(struct pfm_context *ctx);
 
+ssize_t pfm_sysfs_res_show(char *buf, size_t sz, int what);
+
 int pfm_pmu_acquire(struct pfm_context *ctx);
 void pfm_pmu_release(void);
 

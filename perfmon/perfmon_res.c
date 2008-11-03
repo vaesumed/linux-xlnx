@@ -188,3 +188,36 @@ void pfm_session_allcpus_release(void)
 	spin_unlock_irqrestore(&pfm_res_lock, flags);
 }
 EXPORT_SYMBOL(pfm_session_allcpus_release);
+
+/**
+ * pfm_sysfs_res_show - return currnt resourcde usage for sysfs
+ * @buf: buffer to hold string in return
+ * @sz: size of buf
+ * @what: what to produce
+ *        what=0 : thread_sessions
+ *        what=1 : cpus_weight(sys_cpumask)
+ *        what=2 : smpl_buf_mem_cur
+ *        what=3 : pmu model name
+ *
+ * called from perfmon_sysfs.c
+ * return number of bytes written into buf (up to sz)
+ */
+ssize_t pfm_sysfs_res_show(char *buf, size_t sz, int what)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&pfm_res_lock, flags);
+
+	switch (what) {
+	case 0: snprintf(buf, sz, "%u\n", pfm_res.thread_sessions);
+		break;
+	case 1: snprintf(buf, sz, "%d\n", cpus_weight(pfm_res.sys_cpumask));
+		break;
+	case 3:
+		snprintf(buf, sz, "%s\n",
+			pfm_pmu_conf ?	pfm_pmu_conf->pmu_name
+				     :	"unknown\n");
+	}
+	spin_unlock_irqrestore(&pfm_res_lock, flags);
+	return strlen(buf);
+}

@@ -62,6 +62,9 @@ int __init pfm_init(void)
 	if (pfm_init_fs())
 		goto error_disable;
 
+ 	if (pfm_init_sysfs())
+ 		goto error_disable;
+
 	/*
 	 * one time, arch-specific global initialization
 	 */
