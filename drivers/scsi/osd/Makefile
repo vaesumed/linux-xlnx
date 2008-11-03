@@ -28,10 +28,16 @@ V ?= 0
 # this is the basic Kbuild out-of-tree invocation, with the M= option
 KBUILD_BASE = +$(MAKE) -C $(KSRC) M=`pwd` KBUILD_OUTPUT=$(KBUILD_OUTPUT) ARCH=$(ARCH) V=$(V)
 
-all: libosd
+all: libosd osd_test
 
 libosd: ;
 	$(KBUILD_BASE) OSD_INC=$(OSD_INC) modules
 
-clean:
+clean: osd_test_clean
 	$(KBUILD_BASE) clean
+
+osd_test: osd_test.o
+	$(CC) -o $@ $<
+
+osd_test_clean:
+	rm -vf osd_test
