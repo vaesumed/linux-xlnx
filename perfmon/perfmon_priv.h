@@ -60,6 +60,9 @@ void pfm_free_context(struct pfm_context *ctx);
 int __pfm_stop(struct pfm_context *ctx);
 int __pfm_start(struct pfm_context *ctx);
 
+int __pfm_load_context(struct pfm_context *ctx, struct task_struct *task);
+int __pfm_unload_context(struct pfm_context *ctx);
+
 ssize_t pfm_sysfs_res_show(char *buf, size_t sz, int what);
 
 int pfm_pmu_acquire(struct pfm_context *ctx);
