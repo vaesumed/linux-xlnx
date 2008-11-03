@@ -15,29 +15,8 @@
 #include <linux/stop_machine.h>
 #include <linux/mutex.h>
 
-/*
- * Represents all cpu's present in the system
- * In systems capable of hotplug, this map could dynamically grow
- * as new cpu's are detected in the system via any platform specific
- * method, such as ACPI for e.g.
- */
-cpumask_t cpu_present_map __read_mostly;
-EXPORT_SYMBOL(cpu_present_map);
-
-#ifndef CONFIG_SMP
-
-/*
- * Represents all cpu's that are currently online.
- */
-cpumask_t cpu_online_map __read_mostly = CPU_MASK_ALL;
-EXPORT_SYMBOL(cpu_online_map);
-
-cpumask_t cpu_possible_map __read_mostly = CPU_MASK_ALL;
-EXPORT_SYMBOL(cpu_possible_map);
-
-#else /* CONFIG_SMP */
-
-/* Serializes the updates to cpu_online_map, cpu_present_map */
+#ifdef CONFIG_SMP
+/* Serializes the updates to cpu_online_mask, cpu_present_mask */
 static DEFINE_MUTEX(cpu_add_remove_lock);
 
 static __cpuinitdata RAW_NOTIFIER_HEAD(cpu_chain);
@@ -63,8 +42,6 @@ void __init cpu_hotplug_init(void)
 	mutex_init(&cpu_hotplug.lock);
 	cpu_hotplug.refcount = 0;
 }
-
-cpumask_t cpu_active_map;
 
 #ifdef CONFIG_HOTPLUG_CPU
 
@@ -96,7 +73,7 @@ EXPORT_SYMBOL_GPL(put_online_cpus);
 
 /*
  * The following two API's must be used when attempting
- * to serialize the updates to cpu_online_map, cpu_present_map.
+ * to serialize the updates to cpu_online_mask, cpu_present_mask.
  */
 void cpu_maps_update_begin(void)
 {
@@ -499,3 +476,74 @@ const unsigned long cpu_bit_bitmap[BITS_PER_LONG+1][BITS_TO_LONGS(NR_CPUS)] = {
 #endif
 };
 EXPORT_SYMBOL_GPL(cpu_bit_bitmap);
+
+#ifdef CONFIG_INIT_ALL_POSSIBLE
+static DECLARE_BITMAP(cpu_possible_bits, CONFIG_NR_CPUS) __read_mostly
+	= CPU_BITS_ALL;
+#else
+static DECLARE_BITMAP(cpu_possible_bits, CONFIG_NR_CPUS) __read_mostly;
+#endif
+const struct cpumask *const cpu_possible_mask = to_cpumask(cpu_possible_bits);
+EXPORT_SYMBOL(cpu_possible_mask);
+
+static DECLARE_BITMAP(cpu_online_bits, CONFIG_NR_CPUS) __read_mostly;
+const struct cpumask *const cpu_online_mask = to_cpumask(cpu_online_bits);
+EXPORT_SYMBOL(cpu_online_mask);
+
+static DECLARE_BITMAP(cpu_present_bits, CONFIG_NR_CPUS) __read_mostly;
+const struct cpumask *const cpu_present_mask = to_cpumask(cpu_present_bits);
+EXPORT_SYMBOL(cpu_present_mask);
+
+static DECLARE_BITMAP(cpu_active_bits, CONFIG_NR_CPUS) __read_mostly;
+const struct cpumask *const cpu_active_mask = to_cpumask(cpu_active_bits);
+EXPORT_SYMBOL(cpu_active_mask);
+
+const DECLARE_BITMAP(cpu_all_bits, CONFIG_NR_CPUS) = CPU_BITS_ALL;
+EXPORT_SYMBOL(cpu_all_bits);
+
+void set_cpu_possible(unsigned int cpu, bool possible)
+{
+	if (possible)
+		cpumask_set_cpu(cpu, to_cpumask(cpu_possible_bits));
+	else
+		cpumask_clear_cpu(cpu, to_cpumask(cpu_possible_bits));
+}
+
+void set_cpu_present(unsigned int cpu, bool present)
+{
+	if (present)
+		cpumask_set_cpu(cpu, to_cpumask(cpu_present_bits));
+	else
+		cpumask_clear_cpu(cpu, to_cpumask(cpu_present_bits));
+}
+
+void set_cpu_online(unsigned int cpu, bool online)
+{
+	if (online)
+		cpumask_set_cpu(cpu, to_cpumask(cpu_online_bits));
+	else
+		cpumask_clear_cpu(cpu, to_cpumask(cpu_online_bits));
+}
+
+void set_cpu_active(unsigned int cpu, bool active)
+{
+	if (active)
+		cpumask_set_cpu(cpu, to_cpumask(cpu_active_bits));
+	else
+		cpumask_clear_cpu(cpu, to_cpumask(cpu_active_bits));
+}
+
+void init_cpu_present(const struct cpumask *src)
+{
+	cpumask_copy(to_cpumask(cpu_present_bits), src);
+}
+
+void init_cpu_possible(const struct cpumask *src)
+{
+	cpumask_copy(to_cpumask(cpu_possible_bits), src);
+}
+
+void init_cpu_online(const struct cpumask *src)
+{
+	cpumask_copy(to_cpumask(cpu_online_bits), src);
+}
