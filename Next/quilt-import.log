@@ -1,0 +1,76 @@
+Importing driver-core.current based on 2.6.28-rc2-git5
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current 721d5dfe7e516954c501d5e9d0dfab379cf4241a
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 721d5dfe7e516954c501d5e9d0dfab379cf4241a
+HEAD is now at 721d5df Merge branch 'for-linus' of git://neil.brown.name/md
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-vstusb-fix-compiler-warning-on-x86-64.patch
+usb-add-nikon-d300-camera-to-unusual_devs.patch
+usb-don-t-register-endpoints-for-interfaces-that-are-going-away.patch
+usb-musb-fix-for-isochronous-in-transfer.patch
+usb-musb-fixes-endpoint-allocation-logic.patch
+usb-musb-tusb6010-kill-compile-warning.patch
+usb-musb-removes-compilation-warning-in-gadget-mode.patch
+usb-musb-fix-debug-global-variable-name.patch
+usb-musb-fix-bulk-request-on-different-available-endpoints.patch
+usb-musb-fix-for-kernel-panic-with-multiple-bulk-transfer.patch
+Unchanged quilt series m68k
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard c71798475ebf5a7f1f02f152ca49b448ce81da7f
+HEAD is now at c717984 usb: musb: Fix for kernel panic with multiple bulk transfer
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+pm-simplify-the-new-suspend-hibernation-framework-for-devices.patch
+driver-core-rearrange-struct-device-for-better-packing.patch
+driver-core-remove-completion-from-struct-klist_node.patch
+driver-core-struct-device-replace-bus_id-with-dev_name-dev_set_name.patch
+uio-use-pci_ioremap_bar-in-drivers-uio.patch
+uio-uio_pdrv_genirq-allow-custom-irq_flags.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 878f10229662bedeca043904ee1bb1a36c1a4266
+HEAD is now at 878f102 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+usb-host-oxford-oxu210hp-hcd-driver.patch
+usb-protect-hcd.h-from-multiple-inclusions.patch
+usb-avoid-needless-address-taking-of-function-parameters.patch
+usb-straighten-out-inline-code-in-sysfs.c.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+usb-gotemp.patch
+Importing device-mapper based on v2.6.28-rc2-185-ge946217
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard e946217e4fdaa67681bbabfa8e6b18641921f750
+HEAD is now at e946217 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-raid1-fix-do_failures.patch
+dm-snapshot-fix-register_snapshot-deadlock.patch
+dm-snapshot-wait-for-chunks-in-destructor.patch
+Importing i2c based on 2.6.28-rc2-git4
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 65fc716fa673cf98fb5887180fd3c52ca0371198
+HEAD is now at 65fc716 Merge git://git.kernel.org/pub/scm/linux/kernel/git/sam/kbuild-fixes
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-replace-bus_id-with-dev_name-dev_set_name-part-1.patch
+i2c-replace-bus_id-with-dev_name-dev_set_name-part-2.patch
+i2c-drop-I2C_CLASS_ALL.patch
+i2c-drop-I2C_CLASS_CAM_ANALOG-and-I2C_CLASS_SOUND.patch
+i2c-drop-I2C_CLASS_CAM_DIGITAL.patch
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
