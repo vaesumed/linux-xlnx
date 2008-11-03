@@ -72,6 +72,17 @@ struct pfarg_pmr {
 #define PFM_RW_PMC	0x02 /* accessing PMC registers */
 
 /*
+ * pfm_set_state state:
+ */
+#define PFM_ST_START	0x01 /* start monitoring */
+#define PFM_ST_STOP	0x02 /* stop monitoring */
+
+/*
+ * pfm_attach special target to trigger detach
+ */
+#define PFM_NO_TARGET	-1 /* detach session target */
+
+/*
  * default value for the user and group security parameters in
  * /proc/sys/kernel/perfmon/sys_group
  * /proc/sys/kernel/perfmon/task_group
