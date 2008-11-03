@@ -15,6 +15,7 @@
 struct s390_idle_data {
 	spinlock_t lock;
 	unsigned long long idle_count;
+	unsigned long long idle_delta;
 	unsigned long long idle_enter;
 	unsigned long long idle_time;
 };
