@@ -36,6 +36,7 @@
  * 02111-1307 USA
  */
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/perfmon_kern.h>
 #include "perfmon_priv.h"
 
@@ -103,3 +104,87 @@ void pfm_session_release(void)
 
 	spin_unlock_irqrestore(&pfm_res_lock, flags);
 }
+
+/**
+ * pfm_session_allcpus_acquire - acquire per-cpu sessions on all available cpus
+ *
+ * currently used by Oprofile on X86
+ */
+int pfm_session_allcpus_acquire(void)
+{
+	unsigned long flags;
+	u32 nsys_cpus, cpu;
+	int ret = -EBUSY;
+
+	spin_lock_irqsave(&pfm_res_lock, flags);
+
+	nsys_cpus = cpus_weight(pfm_res.sys_cpumask);
+
+	PFM_DBG("in  sys=%u task=%u",
+		nsys_cpus,
+		pfm_res.thread_sessions);
+
+	if (nsys_cpus) {
+		PFM_DBG("already some system-wide sessions");
+		goto abort;
+	}
+
+	/*
+	 * cannot mix system wide and per-task sessions
+	 */
+	if (pfm_res.thread_sessions) {
+		PFM_DBG("%u conflicting thread_sessions",
+			pfm_res.thread_sessions);
+		goto abort;
+	}
+
+	for_each_online_cpu(cpu) {
+		cpu_set(cpu, pfm_res.sys_cpumask);
+		nsys_cpus++;
+	}
+
+	PFM_DBG("out sys=%u task=%u",
+		nsys_cpus,
+		pfm_res.thread_sessions);
+
+	ret = 0;
+abort:
+	spin_unlock_irqrestore(&pfm_res_lock, flags);
+
+	return ret;
+}
+EXPORT_SYMBOL(pfm_session_allcpus_acquire);
+
+/**
+ * pfm_session_allcpus_release - relase per-cpu sessions on all cpus
+ *
+ * currently used by Oprofile code
+ */
+void pfm_session_allcpus_release(void)
+{
+	unsigned long flags;
+	u32 nsys_cpus, cpu;
+
+	spin_lock_irqsave(&pfm_res_lock, flags);
+
+	nsys_cpus = cpus_weight(pfm_res.sys_cpumask);
+
+	PFM_DBG("in  sys=%u task=%u",
+		nsys_cpus,
+		pfm_res.thread_sessions);
+
+	/*
+	 * XXX: could use __cpus_clear() with nbits
+	 */
+	for_each_online_cpu(cpu) {
+		cpu_clear(cpu, pfm_res.sys_cpumask);
+		nsys_cpus--;
+	}
+
+	PFM_DBG("out sys=%u task=%u",
+		nsys_cpus,
+		pfm_res.thread_sessions);
+
+	spin_unlock_irqrestore(&pfm_res_lock, flags);
+}
+EXPORT_SYMBOL(pfm_session_allcpus_release);
