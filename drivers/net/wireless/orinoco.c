@@ -487,12 +487,17 @@ orinoco_dl_firmware(struct orinoco_private *priv,
 	if (err)
 		goto free;
 
-	err = request_firmware(&fw_entry, firmware, priv->dev);
-	if (err) {
-		printk(KERN_ERR "%s: Cannot find firmware %s\n",
-		       dev->name, firmware);
-		err = -ENOENT;
-		goto free;
+	if (priv->cached_fw)
+		fw_entry = priv->cached_fw;
+	else {
+		err = request_firmware(&fw_entry, firmware, priv->dev);
+		if (err) {
+			printk(KERN_ERR "%s: Cannot find firmware %s\n",
+			       dev->name, firmware);
+			err = -ENOENT;
+			goto free;
+		}
+		priv->cached_fw = fw_entry;
 	}
 
 	hdr = (const struct orinoco_fw_header *) fw_entry->data;
@@ -535,7 +540,11 @@ orinoco_dl_firmware(struct orinoco_private *priv,
 	       dev->name, hermes_present(hw));
 
 abort:
-	release_firmware(fw_entry);
+	/* In case of error, assume firmware was bogus and release it */
+	if (err) {
+		priv->cached_fw = NULL;
+		release_firmware(fw_entry);
+	}
 
 free:
 	kfree(pda);
@@ -1477,12 +1486,11 @@ static void orinoco_rx(struct net_device *dev,
 			   MICHAEL_MIC_LEN)) {
 			union iwreq_data wrqu;
 			struct iw_michaelmicfailure wxmic;
-			DECLARE_MAC_BUF(mac);
 
 			printk(KERN_WARNING "%s: "
-			       "Invalid Michael MIC in data frame from %s, "
+			       "Invalid Michael MIC in data frame from %pM, "
 			       "using key %i\n",
-			       dev->name, print_mac(mac, src), key_id);
+			       dev->name, src, key_id);
 
 			/* TODO: update stats */
 
@@ -2301,6 +2309,11 @@ int orinoco_reinit_firmware(struct net_device *dev)
 	int err;
 
 	err = hermes_init(hw);
+	if (priv->do_fw_download && !err) {
+		err = orinoco_download(priv);
+		if (err)
+			priv->do_fw_download = 0;
+	}
 	if (!err)
 		err = orinoco_allocate_fid(dev);
 
@@ -2926,12 +2939,6 @@ static void orinoco_reset(struct work_struct *work)
 		}
 	}
 
-	if (priv->do_fw_download) {
-		err = orinoco_download(priv);
-		if (err)
-			priv->do_fw_download = 0;
-	}
-
 	err = orinoco_reinit_firmware(dev);
 	if (err) {
 		printk(KERN_ERR "%s: orinoco_reset: Error %d re-initializing firmware\n",
@@ -3277,7 +3284,6 @@ static int orinoco_init(struct net_device *dev)
 	struct hermes_idstring nickbuf;
 	u16 reclen;
 	int len;
-	DECLARE_MAC_BUF(mac);
 
 	/* No need to lock, the hw_unavailable flag is already set in
 	 * alloc_orinocodev() */
@@ -3348,8 +3354,8 @@ static int orinoco_init(struct net_device *dev)
 		goto out;
 	}
 
-	printk(KERN_DEBUG "%s: MAC address %s\n",
-	       dev->name, print_mac(mac, dev->dev_addr));
+	printk(KERN_DEBUG "%s: MAC address %pM\n",
+	       dev->name, dev->dev_addr);
 
 	/* Get the station name */
 	err = hermes_read_ltv(hw, USER_BAP, HERMES_RID_CNFOWNNAME,
@@ -3535,6 +3541,8 @@ struct net_device
 	netif_carrier_off(dev);
 	priv->last_linkstatus = 0xffff;
 
+	priv->cached_fw = NULL;
+
 	return dev;
 }
 
@@ -3546,6 +3554,9 @@ void free_orinocodev(struct net_device *dev)
 	 * when we call tasklet_kill it will run one final time,
 	 * emptying the list */
 	tasklet_kill(&priv->rx_tasklet);
+	if (priv->cached_fw)
+		release_firmware(priv->cached_fw);
+	priv->cached_fw = NULL;
 	priv->wpa_ie_len = 0;
 	kfree(priv->wpa_ie);
 	orinoco_mic_free(priv);

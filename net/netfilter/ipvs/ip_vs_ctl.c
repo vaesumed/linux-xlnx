@@ -1867,9 +1867,9 @@ static int ip_vs_info_seq_show(struct seq_file *seq, void *v)
 		if (iter->table == ip_vs_svc_table) {
 #ifdef CONFIG_IP_VS_IPV6
 			if (svc->af == AF_INET6)
-				seq_printf(seq, "%s  [" NIP6_FMT "]:%04X %s ",
+				seq_printf(seq, "%s  [%pI6]:%04X %s ",
 					   ip_vs_proto_name(svc->protocol),
-					   NIP6(svc->addr.in6),
+					   &svc->addr.in6,
 					   ntohs(svc->port),
 					   svc->scheduler->name);
 			else
@@ -1895,9 +1895,9 @@ static int ip_vs_info_seq_show(struct seq_file *seq, void *v)
 #ifdef CONFIG_IP_VS_IPV6
 			if (dest->af == AF_INET6)
 				seq_printf(seq,
-					   "  -> [" NIP6_FMT "]:%04X"
+					   "  -> [%pI6]:%04X"
 					   "      %-7s %-6d %-10d %-10d\n",
-					   NIP6(dest->addr.in6),
+					   &dest->addr.in6,
 					   ntohs(dest->port),
 					   ip_vs_fwd_name(atomic_read(&dest->conn_flags)),
 					   atomic_read(&dest->weight),
@@ -2141,8 +2141,8 @@ do_ip_vs_set_ctl(struct sock *sk, int cmd, void __user *user, unsigned int len)
 
 	/* Check for valid protocol: TCP or UDP, even for fwmark!=0 */
 	if (usvc.protocol != IPPROTO_TCP && usvc.protocol != IPPROTO_UDP) {
-		IP_VS_ERR("set_ctl: invalid protocol: %d %d.%d.%d.%d:%d %s\n",
-			  usvc.protocol, NIPQUAD(usvc.addr.ip),
+		IP_VS_ERR("set_ctl: invalid protocol: %d %pI4:%d %s\n",
+			  usvc.protocol, &usvc.addr.ip,
 			  ntohs(usvc.port), usvc.sched_name);
 		ret = -EFAULT;
 		goto out_unlock;

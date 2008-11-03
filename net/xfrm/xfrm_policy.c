@@ -2381,9 +2381,7 @@ static int xfrm_dev_event(struct notifier_block *this, unsigned long event, void
 }
 
 static struct notifier_block xfrm_dev_notifier = {
-	xfrm_dev_event,
-	NULL,
-	0
+	.notifier_call	= xfrm_dev_event,
 };
 
 #ifdef CONFIG_XFRM_STATISTICS
@@ -2457,25 +2455,21 @@ static void xfrm_audit_common_policyinfo(struct xfrm_policy *xp,
 
 	switch(sel->family) {
 	case AF_INET:
-		audit_log_format(audit_buf, " src=" NIPQUAD_FMT,
-				 NIPQUAD(sel->saddr.a4));
+		audit_log_format(audit_buf, " src=%pI4", &sel->saddr.a4);
 		if (sel->prefixlen_s != 32)
 			audit_log_format(audit_buf, " src_prefixlen=%d",
 					 sel->prefixlen_s);
-		audit_log_format(audit_buf, " dst=" NIPQUAD_FMT,
-				 NIPQUAD(sel->daddr.a4));
+		audit_log_format(audit_buf, " dst=%pI4", &sel->daddr.a4);
 		if (sel->prefixlen_d != 32)
 			audit_log_format(audit_buf, " dst_prefixlen=%d",
 					 sel->prefixlen_d);
 		break;
 	case AF_INET6:
-		audit_log_format(audit_buf, " src=" NIP6_FMT,
-				 NIP6(*(struct in6_addr *)sel->saddr.a6));
+		audit_log_format(audit_buf, " src=%pI6", sel->saddr.a6);
 		if (sel->prefixlen_s != 128)
 			audit_log_format(audit_buf, " src_prefixlen=%d",
 					 sel->prefixlen_s);
-		audit_log_format(audit_buf, " dst=" NIP6_FMT,
-				 NIP6(*(struct in6_addr *)sel->daddr.a6));
+		audit_log_format(audit_buf, " dst=%pI6", sel->daddr.a6);
 		if (sel->prefixlen_d != 128)
 			audit_log_format(audit_buf, " dst_prefixlen=%d",
 					 sel->prefixlen_d);
