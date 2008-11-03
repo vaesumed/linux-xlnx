@@ -64,6 +64,28 @@ static cpumask_t __read_mostly		tracing_buffer_mask;
 
 static int tracing_disabled = 1;
 
+/*
+ * ftrace_dump_on_oops - variable to dump ftrace buffer on oops
+ *
+ * If there is an oops (or kernel panic) and the ftrace_dump_on_oops
+ * is set, then ftrace_dump is called. This will output the contents
+ * of the ftrace buffers to the console.  This is very useful for
+ * capturing traces that lead to crashes and outputing it to a
+ * serial console.
+ *
+ * It is default off, but you can enable it with either specifying
+ * "ftrace_dump_on_oops" in the kernel command line, or setting
+ * /proc/sys/kernel/ftrace_dump_on_oops to true.
+ */
+int ftrace_dump_on_oops;
+
+static int __init set_ftrace_dump_on_oops(char *str)
+{
+	ftrace_dump_on_oops = 1;
+	return 1;
+}
+__setup("ftrace_dump_on_oops", set_ftrace_dump_on_oops);
+
 long
 ns2usecs(cycle_t nsec)
 {
@@ -2820,22 +2842,39 @@ static struct file_operations tracing_mark_fops = {
 
 #ifdef CONFIG_DYNAMIC_FTRACE
 
+#define DYN_INFO_BUF_SIZE 1023
+static char ftrace_dyn_info_buffer[DYN_INFO_BUF_SIZE+1];
+static DEFINE_MUTEX(dyn_info_mutex);
+
+int __weak ftrace_arch_read_dyn_info(char *buf, int size)
+{
+	return 0;
+}
+
 static ssize_t
-tracing_read_long(struct file *filp, char __user *ubuf,
+tracing_read_dyn_info(struct file *filp, char __user *ubuf,
 		  size_t cnt, loff_t *ppos)
 {
 	unsigned long *p = filp->private_data;
-	char buf[64];
+	char *buf = ftrace_dyn_info_buffer;
 	int r;
 
-	r = sprintf(buf, "%ld\n", *p);
+	mutex_lock(&dyn_info_mutex);
+	r = sprintf(buf, "%ld ", *p);
 
-	return simple_read_from_buffer(ubuf, cnt, ppos, buf, r);
+	r += ftrace_arch_read_dyn_info(buf+r, DYN_INFO_BUF_SIZE-r);
+	buf[r++] = '\n';
+
+	r = simple_read_from_buffer(ubuf, cnt, ppos, buf, r);
+
+	mutex_unlock(&dyn_info_mutex);
+
+	return r;
 }
 
-static struct file_operations tracing_read_long_fops = {
+static struct file_operations tracing_dyn_info_fops = {
 	.open		= tracing_open_generic,
-	.read		= tracing_read_long,
+	.read		= tracing_read_dyn_info,
 };
 #endif
 
@@ -2944,7 +2983,7 @@ static __init int tracer_init_debugfs(void)
 #ifdef CONFIG_DYNAMIC_FTRACE
 	entry = debugfs_create_file("dyn_ftrace_total_info", 0444, d_tracer,
 				    &ftrace_update_tot_cnt,
-				    &tracing_read_long_fops);
+				    &tracing_dyn_info_fops);
 	if (!entry)
 		pr_warning("Could not create debugfs "
 			   "'dyn_ftrace_total_info' entry\n");
@@ -3025,7 +3064,8 @@ EXPORT_SYMBOL_GPL(__ftrace_printk);
 static int trace_panic_handler(struct notifier_block *this,
 			       unsigned long event, void *unused)
 {
-	ftrace_dump();
+	if (ftrace_dump_on_oops)
+		ftrace_dump();
 	return NOTIFY_OK;
 }
 
@@ -3041,7 +3081,8 @@ static int trace_die_handler(struct notifier_block *self,
 {
 	switch (val) {
 	case DIE_OOPS:
-		ftrace_dump();
+		if (ftrace_dump_on_oops)
+			ftrace_dump();
 		break;
 	default:
 		break;
@@ -3081,7 +3122,6 @@ trace_printk_seq(struct trace_seq *s)
 
 	trace_seq_reset(s);
 }
-
 
 void ftrace_dump(void)
 {
