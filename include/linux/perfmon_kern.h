@@ -186,6 +186,8 @@ extern const struct file_operations pfm_file_ops;
 
 void pfm_handle_work(struct pt_regs *regs);
 void __pfm_exit_thread(void);
+void pfm_ctxsw_in(struct task_struct *prev, struct task_struct *next);
+void pfm_ctxsw_out(struct task_struct *prev, struct task_struct *next);
 void __pfm_init_percpu(void *dummy);
 
 static inline void pfm_exit_thread(void)
@@ -263,5 +265,10 @@ static inline void pfm_handle_work(struct pt_regs *regs)
 static inline void pfm_copy_thread(struct task_struct *t)
 {}
 
+static inline void pfm_ctxsw_in(struct task_struct *p, struct task_struct *n)
+{}
+
+static inline void pfm_ctxsw_out(struct task_struct *p, struct task_struct *n)
+{}
 #endif /* CONFIG_PERFMON */
 #endif /* __LINUX_PERFMON_KERN_H__ */
