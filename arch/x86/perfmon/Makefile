@@ -3,3 +3,4 @@
 # Contributed by Stephane Eranian <eranian@hpl.hp.com>
 #
 obj-$(CONFIG_PERFMON)			+= perfmon.o
+obj-$(CONFIG_X86_PERFMON_INTEL_ARCH)	+= perfmon_intel_arch.o
