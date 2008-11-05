@@ -1312,19 +1312,15 @@ static void __run_hrtimer(struct hrtimer *timer)
 #ifdef CONFIG_HIGH_RES_TIMERS
 
 /*
- * High resolution timer interrupt
- * Called with interrupts disabled
+ * High resolution timer interrupt internal worker function called
+ * with interrupts disabled either from hrtimer_interrupt() or from
+ * hrtimer_peek_ahead()
  */
-void hrtimer_interrupt(struct clock_event_device *dev)
+void __hrtimer_interrupt(struct hrtimer_cpu_base *cpu_base, int peekahead)
 {
-	struct hrtimer_cpu_base *cpu_base = &__get_cpu_var(hrtimer_bases);
 	struct hrtimer_clock_base *base;
 	ktime_t expires_next, now;
 	int i, raise = 0;
-
-	BUG_ON(!cpu_base->hres_active);
-	cpu_base->nr_events++;
-	dev->next_event.tv64 = KTIME_MAX;
 
  retry:
 	now = ktime_get();
@@ -1385,6 +1381,13 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 		base++;
 	}
 
+	/*
+	 * We just peeked ahead. The hardware timer did not expire. So
+	 * we can leave the timer armed.
+	 */
+	if (peekahead && cpu_base->expires_next.tv64 == expires_next.tv64)
+		goto out;
+
 	cpu_base->expires_next = expires_next;
 
 	/* Reprogramming necessary ? */
@@ -1393,9 +1396,26 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 			goto retry;
 	}
 
+out:
 	/* Raise softirq ? */
 	if (raise)
 		raise_softirq(HRTIMER_SOFTIRQ);
+}
+
+
+/*
+ * High resolution timer interrupt
+ * Called with interrupts disabled
+ */
+void hrtimer_interrupt(struct clock_event_device *dev)
+{
+	struct hrtimer_cpu_base *cpu_base = &__get_cpu_var(hrtimer_bases);
+
+	BUG_ON(!cpu_base->hres_active);
+	cpu_base->nr_events++;
+	dev->next_event.tv64 = KTIME_MAX;
+
+	__hrtimer_interrupt(cpu_base, 0);
 }
 
 /**
@@ -1409,16 +1429,15 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  */
 void hrtimer_peek_ahead_timers(void)
 {
-	struct tick_device *td;
 	unsigned long flags;
+
+	WARN_ON_ONCE(!irqs_disabled());
 
 	if (!hrtimer_hres_active())
 		return;
 
 	local_irq_save(flags);
-	td = &__get_cpu_var(tick_cpu_device);
-	if (td && td->evtdev)
-		hrtimer_interrupt(td->evtdev);
+	__hrtimer_interrupt(&__get_cpu_var(hrtimer_bases), 1);
 	local_irq_restore(flags);
 }
 
