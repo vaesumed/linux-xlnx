@@ -1,0 +1,124 @@
+Importing driver-core.current based on 2.6.28-rc3
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+HEAD is now at 45beca0 Linux v2.6.28-rc3
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-vstusb-fix-compiler-warning-on-x86-64.patch
+usb-add-nikon-d300-camera-to-unusual_devs.patch
+usb-don-t-register-endpoints-for-interfaces-that-are-going-away.patch
+usb-musb-fix-for-isochronous-in-transfer.patch
+usb-musb-fixes-endpoint-allocation-logic.patch
+usb-musb-tusb6010-kill-compile-warning.patch
+usb-musb-removes-compilation-warning-in-gadget-mode.patch
+usb-musb-fix-debug-global-variable-name.patch
+usb-musb-fix-bulk-request-on-different-available-endpoints.patch
+usb-musb-fix-for-kernel-panic-with-multiple-bulk-transfer.patch
+Importing m68k based on 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+HEAD is now at 45beca0 Linux v2.6.28-rc3
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+mac-macfb-do-not-overflow-fix-id.diff
+mac-reinstate-rtc.diff
+mac-via-cleanup-and-commentry.diff
+mac-machw_h_cleanup.diff
+mac-baboon-interrupt-enable-disable.diff
+mac-mac_esp-asm-fix.diff
+mac-macfb-annotations-and-compiler-warning-fix.diff
+m68k-fpsp040-fix-trigraph-ignored-warning.diff
+fbcon-remove-broken-mac-vbl-handler.diff
+fbcon-protect-free-irq-by-MACH_IS_ATARI-check.diff
+mac-esp-fix-for-quadras-with-two-esp-chips.diff
+m68k-use-the-new-byteorder-headers.diff
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard b542db411a50fb58c49c6787793707c9515d60da
+HEAD is now at b542db4 usb: musb: Fix for kernel panic with multiple bulk transfer
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+pm-simplify-the-new-suspend-hibernation-framework-for-devices.patch
+driver-core-rearrange-struct-device-for-better-packing.patch
+driver-core-remove-completion-from-struct-klist_node.patch
+driver-core-struct-device-replace-bus_id-with-dev_name-dev_set_name.patch
+uio-use-pci_ioremap_bar-in-drivers-uio.patch
+uio-uio_pdrv_genirq-allow-custom-irq_flags.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 7c3516d68f9b3264dd12c0ec3aa95dbf1f1b9752
+HEAD is now at 7c3516d warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+usb-host-oxford-oxu210hp-hcd-driver.patch
+usb-protect-hcd.h-from-multiple-inclusions.patch
+usb-avoid-needless-address-taking-of-function-parameters.patch
+usb-straighten-out-inline-code-in-sysfs.c.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+usb-add-new-opticon-serial-driver.patch
+usb-gotemp.patch
+Importing device-mapper based on v2.6.28-rc3-31-ga75952b
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper a75952b72a0fff3031124003e62118111aed42c1
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+HEAD is now at 45beca0 Linux v2.6.28-rc3
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+ali14xx-doesnt-use-shared-irqs.patch
+cmd64x-set-ide_hflag_serialize-explictly-for-cmd646.patch
+gayle-set-ide_hflag_serialize-explictly.patch
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 7c3516d68f9b3264dd12c0ec3aa95dbf1f1b9752
+HEAD is now at 7c3516d warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+usb-host-oxford-oxu210hp-hcd-driver.patch
+usb-protect-hcd.h-from-multiple-inclusions.patch
+usb-avoid-needless-address-taking-of-function-parameters.patch
+usb-straighten-out-inline-code-in-sysfs.c.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-add-new-opticon-serial-driver.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
