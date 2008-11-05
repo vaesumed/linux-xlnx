@@ -76,8 +76,17 @@ restore_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc,
 	/* Always make any pending restarted system calls return -EINTR */
 	current_thread_info()->restart_block.fn = do_no_restart_syscall;
 
+#ifdef CONFIG_X86_32
+	GET_SEG(gs);
+	COPY_SEG(fs);
+	COPY_SEG(es);
+	COPY_SEG(ds);
+#endif /* CONFIG_X86_32 */
+
 	COPY(di); COPY(si); COPY(bp); COPY(sp); COPY(bx);
 	COPY(dx); COPY(cx); COPY(ip);
+
+#ifdef CONFIG_X86_64
 	COPY(r8);
 	COPY(r9);
 	COPY(r10);
@@ -86,11 +95,17 @@ restore_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc,
 	COPY(r13);
 	COPY(r14);
 	COPY(r15);
+#endif /* CONFIG_X86_64 */
 
+#ifdef CONFIG_X86_32
+	COPY_SEG_STRICT(cs);
+	COPY_SEG_STRICT(ss);
+#else /* !CONFIG_X86_32 */
 	/* Kernel saves and restores only the CS segment register on signals,
 	 * which is the bare minimum needed to allow mixed 32/64-bit code.
 	 * App's signal handler can save/restore other segments if needed. */
 	COPY_SEG_STRICT(cs);
+#endif /* CONFIG_X86_32 */
 
 	err |= __get_user(tmpflags, &sc->flags);
 	regs->flags = (regs->flags & ~FIX_EFLAGS) | (tmpflags & FIX_EFLAGS);
@@ -184,12 +199,10 @@ setup_sigcontext(struct sigcontext __user *sc, struct pt_regs *regs,
  */
 
 static void __user *
-get_stack(struct k_sigaction *ka, struct pt_regs *regs, unsigned long size)
+get_stack(struct k_sigaction *ka, unsigned long sp, unsigned long size)
 {
-	unsigned long sp;
-
 	/* Default to using normal stack - redzone*/
-	sp = regs->sp - 128;
+	sp -= 128;
 
 	/* This is the X/Open sanctioned signal stack switching.  */
 	if (ka->sa.sa_flags & SA_ONSTACK) {
@@ -209,14 +222,14 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 	struct task_struct *me = current;
 
 	if (used_math()) {
-		fp = get_stack(ka, regs, sig_xstate_size);
+		fp = get_stack(ka, regs->sp, sig_xstate_size);
 		frame = (void __user *)round_down(
 			(unsigned long)fp - sizeof(struct rt_sigframe), 16) - 8;
 
 		if (save_i387_xstate(fp) < 0)
 			return -EFAULT;
 	} else
-		frame = get_stack(ka, regs, sizeof(struct rt_sigframe)) - 8;
+		frame = get_stack(ka, regs->sp, sizeof(struct rt_sigframe)) - 8;
 
 	if (!access_ok(VERIFY_WRITE, frame, sizeof(*frame)))
 		return -EFAULT;
@@ -282,14 +295,30 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
  */
 static int signr_convert(int sig)
 {
+#ifdef CONFIG_X86_32
+	struct thread_info *info = current_thread_info();
+
+	if (info->exec_domain && info->exec_domain->signal_invmap && sig < 32)
+		return info->exec_domain->signal_invmap[sig];
+#endif /* CONFIG_X86_32 */
 	return sig;
 }
 
+#ifdef CONFIG_X86_32
+
+#define is_ia32	1
+#define ia32_setup_frame	__setup_frame
+#define ia32_setup_rt_frame	__setup_rt_frame
+
+#else /* !CONFIG_X86_32 */
+
 #ifdef CONFIG_IA32_EMULATION
 #define is_ia32	test_thread_flag(TIF_IA32)
-#else
+#else /* !CONFIG_IA32_EMULATION */
 #define is_ia32	0
-#endif
+#endif /* CONFIG_IA32_EMULATION */
+
+#endif /* CONFIG_X86_32 */
 
 static int
 setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
@@ -391,8 +420,13 @@ handle_signal(unsigned long sig, siginfo_t *info, struct k_sigaction *ka,
 	return 0;
 }
 
+#ifdef CONFIG_X86_32
+#define NR_restart_syscall	__NR_restart_syscall
+#else /* !CONFIG_X86_32 */
 #define NR_restart_syscall	\
 	test_thread_flag(TIF_IA32) ? __NR_ia32_restart_syscall : __NR_restart_syscall
+#endif /* CONFIG_X86_32 */
+
 /*
  * Note that 'init' is a special process: it doesn't get signals it doesn't
  * want to handle. Thus you cannot kill init even with a SIGKILL even by
