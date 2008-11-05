@@ -69,4 +69,6 @@ source "drivers/staging/rt2860/Kconfig"
 
 source "drivers/staging/benet/Kconfig"
 
+source "drivers/staging/comedi/Kconfig"
+
 endif # !STAGING_EXCLUDE_BUILD
