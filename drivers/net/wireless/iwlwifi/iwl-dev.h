@@ -112,11 +112,9 @@ struct iwl_queue {
 				* space less than this */
 } __attribute__ ((packed));
 
-#define MAX_NUM_OF_TBS          (20)
-
 /* One for each TFD */
 struct iwl_tx_info {
-	struct sk_buff *skb[MAX_NUM_OF_TBS];
+	struct sk_buff *skb[IWL_NUM_OF_TBS - 1];
 };
 
 /**
@@ -134,12 +132,13 @@ struct iwl_tx_info {
  */
 struct iwl_tx_queue {
 	struct iwl_queue q;
-	struct iwl_tfd_frame *bd;
+	struct iwl_tfd *tfds;
 	struct iwl_cmd *cmd[TFD_TX_CMD_SLOTS];
 	struct iwl_tx_info *txb;
-	int need_update;
-	int sched_retry;
-	int active;
+	u8 need_update;
+	u8 sched_retry;
+	u8 active;
+	u8 swq_id;
 };
 
 #define IWL_NUM_SCAN_RATES         (2)
@@ -252,7 +251,8 @@ struct iwl_cmd_meta {
 	/* The CMD_SIZE_HUGE flag bit indicates that the command
 	 * structure is stored at the end of the shared queue memory. */
 	u32 flags;
-
+	DECLARE_PCI_UNMAP_ADDR(mapping)
+	DECLARE_PCI_UNMAP_LEN(len)
 } __attribute__ ((packed));
 
 #define IWL_CMD_MAX_PAYLOAD 320
@@ -268,23 +268,15 @@ struct iwl_cmd {
 	struct iwl_cmd_meta meta;	/* driver data */
 	struct iwl_cmd_header hdr;	/* uCode API */
 	union {
-		struct iwl_addsta_cmd addsta;
-		struct iwl_led_cmd led;
 		u32 flags;
 		u8 val8;
 		u16 val16;
 		u32 val32;
-		struct iwl4965_bt_cmd bt;
-		struct iwl4965_rxon_time_cmd rxon_time;
-		struct iwl_powertable_cmd powertable;
-		struct iwl_qosparam_cmd qosparam;
 		struct iwl_tx_cmd tx;
-		struct iwl4965_rxon_assoc_cmd rxon_assoc;
-		struct iwl_rem_sta_cmd rm_sta;
-		u8 *indirect;
 		u8 payload[IWL_CMD_MAX_PAYLOAD];
 	} __attribute__ ((packed)) cmd;
 } __attribute__ ((packed));
+
 
 struct iwl_host_cmd {
 	u8 id;
@@ -412,9 +404,8 @@ struct iwl_ht_info {
 	u8 max_amsdu_size;
 	u8 ampdu_factor;
 	u8 mpdu_density;
-	u8 supp_mcs_set[16];
+	struct ieee80211_mcs_info mcs;
 	/* BSS related data */
-	u8 control_channel;
 	u8 extension_chan_offset;
 	u8 tx_chan_width;
 	u8 ht_protection;
@@ -527,8 +518,8 @@ struct iwl_sensitivity_ranges {
  * @sw_crypto: 0 for hw, 1 for sw
  * @max_xxx_size: for ucode uses
  * @ct_kill_threshold: temperature threshold
+ * @calib_init_cfg: setup initial calibrations for the hw
  * @struct iwl_sensitivity_ranges: range of sensitivity values
- * @first_ampdu_q: first HW queue available for ampdu
  */
 struct iwl_hw_params {
 	u16 max_txq_num;
@@ -548,8 +539,8 @@ struct iwl_hw_params {
 	u32 max_data_size;
 	u32 max_bsm_size;
 	u32 ct_kill_threshold; /* value in hw-dependent units */
+	u32 calib_init_cfg;
 	const struct iwl_sensitivity_ranges *sens;
-	u8 first_ampdu_q;
 };
 
 #define HT_SHORT_GI_20MHZ	(1 << 0)
@@ -584,7 +575,7 @@ struct iwl_addsta_cmd;
 extern int iwl_send_add_sta(struct iwl_priv *priv,
 			    struct iwl_addsta_cmd *sta, u8 flags);
 extern u8 iwl_add_station_flags(struct iwl_priv *priv, const u8 *addr,
-			int is_ap, u8 flags, struct ieee80211_ht_info *ht_info);
+			int is_ap, u8 flags, struct ieee80211_sta_ht_cap *ht_info);
 extern void iwl4965_update_chain_flags(struct iwl_priv *priv);
 extern int iwl4965_set_pwr_src(struct iwl_priv *priv, enum iwl_pwr_src src);
 extern const u8 iwl_bcast_addr[ETH_ALEN];
@@ -699,6 +690,20 @@ struct statistics_general_data {
 	u32 beacon_energy_c;
 };
 
+
+/*
+ * enum iwl_calib
+ * defines the order in which results of initial calibrations
+ * should be sent to the runtime uCode
+ */
+enum iwl_calib {
+	IWL_CALIB_XTAL,
+	IWL_CALIB_LO,
+	IWL_CALIB_TX_IQ,
+	IWL_CALIB_TX_IQ_PERD,
+	IWL_CALIB_MAX
+};
+
 /* Opaque calibration results */
 struct iwl_calib_result {
 	void *buf;
@@ -765,7 +770,6 @@ enum {
 
 
 #define IWL_MAX_NUM_QUEUES	20 /* FIXME: do dynamic allocation */
-#define IWL_CALIB_MAX  3
 
 struct iwl_priv {
 
@@ -817,12 +821,13 @@ struct iwl_priv {
 	unsigned long scan_start;
 	unsigned long scan_pass_start;
 	unsigned long scan_start_tsf;
+	struct iwl_scan_cmd *scan;
 	int scan_bands;
 	int one_direct_scan;
 	u8 direct_ssid_len;
 	u8 direct_ssid[IW_ESSID_MAX_SIZE];
-	struct iwl_scan_cmd *scan;
-	u32 scan_tx_ant[IEEE80211_NUM_BANDS];
+	u8 scan_tx_ant[IEEE80211_NUM_BANDS];
+	u8 mgmt_tx_ant;
 
 	/* spinlock */
 	spinlock_t lock;	/* protect general shared data */
@@ -849,7 +854,7 @@ struct iwl_priv {
 	u8 ucode_write_complete;	/* the image write is complete */
 
 
-	struct iwl4965_rxon_time_cmd rxon_timing;
+	struct iwl_rxon_time_cmd rxon_timing;
 
 	/* We declare this const so it can only be
 	 * changed via explicit cast within the
@@ -881,7 +886,6 @@ struct iwl_priv {
 	u16 active_rate_basic;
 
 	u8 assoc_station_added;
-	u8 use_ant_b_for_management_frame;	/* Tx antenna selection */
 	u8 start_calib;
 	struct iwl_sensitivity_data sensitivity_data;
 	struct iwl_chain_noise_data chain_noise_data;
@@ -907,7 +911,7 @@ struct iwl_priv {
 
 	unsigned long status;
 
-	int last_rx_rssi;	/* From Rx packet statisitics */
+	int last_rx_rssi;	/* From Rx packet statistics */
 	int last_rx_noise;	/* From beacon statistics */
 
 	/* counts mgmt, ctl, and data packets */

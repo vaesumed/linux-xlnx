@@ -68,6 +68,8 @@ static struct pci_device_id ixgbe_pci_tbl[] = {
 	 board_82598 },
 	{PCI_VDEVICE(INTEL, IXGBE_DEV_ID_82598AF_SINGLE_PORT),
 	 board_82598 },
+	{PCI_VDEVICE(INTEL, IXGBE_DEV_ID_82598AT),
+	 board_82598 },
 	{PCI_VDEVICE(INTEL, IXGBE_DEV_ID_82598EB_CX4),
 	 board_82598 },
 	{PCI_VDEVICE(INTEL, IXGBE_DEV_ID_82598_CX4_DUAL_PORT),
@@ -666,7 +668,6 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_adapter *adapter,
 
 		skb->protocol = eth_type_trans(skb, adapter->netdev);
 		ixgbe_receive_skb(adapter, skb, staterr, rx_ring, rx_desc);
-		adapter->netdev->last_rx = jiffies;
 
 next_desc:
 		rx_desc->wb.upper.status_error = 0;
@@ -904,6 +905,17 @@ static void ixgbe_set_itr_msix(struct ixgbe_q_vector *q_vector)
 	return;
 }
 
+static void ixgbe_check_fan_failure(struct ixgbe_adapter *adapter, u32 eicr)
+{
+	struct ixgbe_hw *hw = &adapter->hw;
+
+	if ((adapter->flags & IXGBE_FLAG_FAN_FAIL_CAPABLE) &&
+	    (eicr & IXGBE_EICR_GPI_SDP1)) {
+		DPRINTK(PROBE, CRIT, "Fan has stopped, replace the adapter\n");
+		/* write to clear the interrupt */
+		IXGBE_WRITE_REG(hw, IXGBE_EICR, IXGBE_EICR_GPI_SDP1);
+	}
+}
 
 static void ixgbe_check_lsc(struct ixgbe_adapter *adapter)
 {
@@ -927,6 +939,8 @@ static irqreturn_t ixgbe_msix_lsc(int irq, void *data)
 
 	if (eicr & IXGBE_EICR_LSC)
 		ixgbe_check_lsc(adapter);
+
+	ixgbe_check_fan_failure(adapter, eicr);
 
 	if (!test_bit(__IXGBE_DOWN, &adapter->state))
 		IXGBE_WRITE_REG(hw, IXGBE_EIMS, IXGBE_EIMS_OTHER);
@@ -1316,6 +1330,8 @@ static irqreturn_t ixgbe_intr(int irq, void *data)
 	if (eicr & IXGBE_EICR_LSC)
 		ixgbe_check_lsc(adapter);
 
+	ixgbe_check_fan_failure(adapter, eicr);
+
 	if (netif_rx_schedule_prep(netdev, &adapter->q_vector[0].napi)) {
 		adapter->tx_ring[0].total_packets = 0;
 		adapter->tx_ring[0].total_bytes = 0;
@@ -1418,6 +1434,8 @@ static inline void ixgbe_irq_enable(struct ixgbe_adapter *adapter)
 {
 	u32 mask;
 	mask = IXGBE_EIMS_ENABLE_MASK;
+	if (adapter->flags & IXGBE_FLAG_FAN_FAIL_CAPABLE)
+		mask |= IXGBE_EIMS_GPI_SDP1;
 	IXGBE_WRITE_REG(&adapter->hw, IXGBE_EIMS, mask);
 	IXGBE_WRITE_FLUSH(&adapter->hw);
 }
@@ -1925,6 +1943,13 @@ static int ixgbe_up_complete(struct ixgbe_adapter *adapter)
 		/* legacy interrupts, use EIAM to auto-mask when reading EICR,
 		 * specifically only auto mask tx and rx interrupts */
 		IXGBE_WRITE_REG(hw, IXGBE_EIAM, IXGBE_EICS_RTX_QUEUE);
+	}
+
+	/* Enable fan failure interrupt if media type is copper */
+	if (adapter->flags & IXGBE_FLAG_FAN_FAIL_CAPABLE) {
+		gpie = IXGBE_READ_REG(hw, IXGBE_GPIE);
+		gpie |= IXGBE_SDP1_GPIEN;
+		IXGBE_WRITE_REG(hw, IXGBE_GPIE, gpie);
 	}
 
 	mhadd = IXGBE_READ_REG(hw, IXGBE_MHADD);
@@ -2564,6 +2589,9 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 	rss = min(IXGBE_MAX_RSS_INDICES, (int)num_online_cpus());
 	adapter->ring_feature[RING_F_RSS].indices = rss;
 	adapter->flags |= IXGBE_FLAG_RSS_ENABLED;
+	if (hw->mac.ops.get_media_type &&
+	    (hw->mac.ops.get_media_type(hw) == ixgbe_media_type_copper))
+		adapter->flags |= IXGBE_FLAG_FAN_FAIL_CAPABLE;
 
 	/* default flow control settings */
 	hw->fc.original_type = ixgbe_fc_none;
@@ -3691,6 +3719,10 @@ static int ixgbe_link_config(struct ixgbe_hw *hw)
 	/* must always autoneg for both 1G and 10G link */
 	hw->mac.autoneg = true;
 
+	if ((hw->mac.type == ixgbe_mac_82598EB) &&
+	    (hw->phy.media_type == ixgbe_media_type_copper))
+		autoneg = IXGBE_LINK_SPEED_82598_AUTONEG;
+
 	return hw->mac.ops.setup_link_speed(hw, autoneg, true, true);
 }
 
@@ -3877,8 +3909,7 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 	pci_read_config_word(pdev, IXGBE_PCI_LINK_STATUS, &link_status);
 	link_speed = link_status & IXGBE_PCI_LINK_SPEED;
 	link_width = link_status & IXGBE_PCI_LINK_WIDTH;
-	dev_info(&pdev->dev, "(PCI Express:%s:%s) "
-	         "%02x:%02x:%02x:%02x:%02x:%02x\n",
+	dev_info(&pdev->dev, "(PCI Express:%s:%s) %pM\n",
 	        ((link_speed == IXGBE_PCI_LINK_SPEED_5000) ? "5.0Gb/s" :
 	         (link_speed == IXGBE_PCI_LINK_SPEED_2500) ? "2.5Gb/s" :
 	         "Unknown"),
@@ -3887,8 +3918,7 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 	         (link_width == IXGBE_PCI_LINK_WIDTH_2) ? "Width x2" :
 	         (link_width == IXGBE_PCI_LINK_WIDTH_1) ? "Width x1" :
 	         "Unknown"),
-	        netdev->dev_addr[0], netdev->dev_addr[1], netdev->dev_addr[2],
-	        netdev->dev_addr[3], netdev->dev_addr[4], netdev->dev_addr[5]);
+	        netdev->dev_addr);
 	ixgbe_read_pba_num_generic(hw, &part_num);
 	dev_info(&pdev->dev, "MAC: %d, PHY: %d, PBA No: %06x-%03x\n",
 	         hw->mac.type, hw->phy.type,

@@ -557,8 +557,6 @@ static int rxq_process(struct rx_queue *rxq, int budget)
 			skb->protocol = eth_type_trans(skb, mp->dev);
 			netif_receive_skb(skb);
 		}
-
-		mp->dev->last_rx = jiffies;
 	}
 
 	if (rx < budget)
@@ -2592,7 +2590,6 @@ static int mv643xx_eth_probe(struct platform_device *pdev)
 	struct mv643xx_eth_private *mp;
 	struct net_device *dev;
 	struct resource *res;
-	DECLARE_MAC_BUF(mac);
 	int err;
 
 	pd = pdev->dev.platform_data;
@@ -2686,8 +2683,8 @@ static int mv643xx_eth_probe(struct platform_device *pdev)
 	if (err)
 		goto out;
 
-	dev_printk(KERN_NOTICE, &dev->dev, "port %d with MAC address %s\n",
-		   mp->port_num, print_mac(mac, dev->dev_addr));
+	dev_printk(KERN_NOTICE, &dev->dev, "port %d with MAC address %pM\n",
+		   mp->port_num, dev->dev_addr);
 
 	if (mp->tx_desc_sram_size > 0)
 		dev_printk(KERN_NOTICE, &dev->dev, "configured with sram\n");

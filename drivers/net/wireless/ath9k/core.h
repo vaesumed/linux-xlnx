@@ -380,7 +380,6 @@ void ath_rx_cleanup(struct ath_softc *sc);
 int ath_rx_tasklet(struct ath_softc *sc, int flush);
 int ath_rx_input(struct ath_softc *sc,
 		 struct ath_node *node,
-		 int is_ampdu,
 		 struct sk_buff *skb,
 		 struct ath_recv_status *rx_status,
 		 enum ATH_RX_TYPE *status);
@@ -443,9 +442,6 @@ struct ath_txq {
 	u32 axq_depth;			/* queue depth */
 	u8 axq_aggr_depth;		/* aggregates queued */
 	u32 axq_totalqueued;		/* total ever queued */
-
-	/* count to determine if descriptor should generate int on this txq. */
-	u32 axq_intrcnt;
 
 	bool stopped;			/* Is mac80211 queue stopped ? */
 	struct ath_buf *axq_linkbuf;	/* virtual addr of last buffer*/
@@ -650,6 +646,9 @@ struct ath_node {
 	u8 an_smmode; /* SM Power save mode */
 	u8 an_flags;
 	u8 an_addr[ETH_ALEN];
+
+	u16 maxampdu;
+	u8 mpdudensity;
 };
 
 void ath_tx_resume_tid(struct ath_softc *sc,
@@ -919,8 +918,6 @@ enum RATE_TYPE {
 
 struct ath_ht_info {
 	enum ath9k_ht_macmode tx_chan_width;
-	u16 maxampdu;
-	u8 mpdudensity;
 	u8 ext_chan_offset;
 };
 
@@ -1007,7 +1004,6 @@ struct ath_softc {
 	struct ath_txq sc_txq[ATH9K_NUM_TX_QUEUES];
 	struct ath_descdma sc_txdma;
 	u32 sc_txqsetup;
-	u32 sc_txintrperiod;	/* tx interrupt batching */
 	int sc_haltype2q[ATH9K_WME_AC_VO+1]; /* HAL WME	AC -> h/w qnum */
 	u16 seq_no; /* TX sequence number */
 

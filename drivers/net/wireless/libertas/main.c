@@ -588,7 +588,6 @@ static int lbs_add_mcast_addrs(struct cmd_ds_mac_multicast_adr *cmd,
 {
 	int i = nr_addrs;
 	struct dev_mc_list *mc_list;
-	DECLARE_MAC_BUF(mac);
 
 	if ((dev->flags & (IFF_UP|IFF_MULTICAST)) != (IFF_UP|IFF_MULTICAST))
 		return nr_addrs;
@@ -596,16 +595,16 @@ static int lbs_add_mcast_addrs(struct cmd_ds_mac_multicast_adr *cmd,
 	netif_addr_lock_bh(dev);
 	for (mc_list = dev->mc_list; mc_list; mc_list = mc_list->next) {
 		if (mac_in_list(cmd->maclist, nr_addrs, mc_list->dmi_addr)) {
-			lbs_deb_net("mcast address %s:%s skipped\n", dev->name,
-				    print_mac(mac, mc_list->dmi_addr));
+			lbs_deb_net("mcast address %s:%pM skipped\n", dev->name,
+				    mc_list->dmi_addr);
 			continue;
 		}
 
 		if (i == MRVDRV_MAX_MULTICAST_LIST_SIZE)
 			break;
 		memcpy(&cmd->maclist[6*i], mc_list->dmi_addr, ETH_ALEN);
-		lbs_deb_net("mcast address %s:%s added to filter\n", dev->name,
-			    print_mac(mac, mc_list->dmi_addr));
+		lbs_deb_net("mcast address %s:%pM added to filter\n", dev->name,
+			    mc_list->dmi_addr);
 		i++;
 	}
 	netif_addr_unlock_bh(dev);
@@ -1646,33 +1645,6 @@ out:
 	lbs_deb_leave_args(LBS_DEB_MAIN, "ret %d", ret);
 	return ret;
 }
-
-#ifndef CONFIG_IEEE80211
-const char *escape_essid(const char *essid, u8 essid_len)
-{
-	static char escaped[IW_ESSID_MAX_SIZE * 2 + 1];
-	const char *s = essid;
-	char *d = escaped;
-
-	if (ieee80211_is_empty_essid(essid, essid_len)) {
-		memcpy(escaped, "<hidden>", sizeof("<hidden>"));
-		return escaped;
-	}
-
-	essid_len = min(essid_len, (u8) IW_ESSID_MAX_SIZE);
-	while (essid_len--) {
-		if (*s == '\0') {
-			*d++ = '\\';
-			*d++ = '0';
-			s++;
-		} else {
-			*d++ = *s++;
-		}
-	}
-	*d = '\0';
-	return escaped;
-}
-#endif
 
 module_init(lbs_init_module);
 module_exit(lbs_exit_module);

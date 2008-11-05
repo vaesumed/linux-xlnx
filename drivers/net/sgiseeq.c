@@ -377,7 +377,6 @@ memory_squeeze:
 					skb_put(skb, len);
 					skb->protocol = eth_type_trans(skb, dev);
 					netif_rx(skb);
-					dev->last_rx = jiffies;
 					dev->stats.rx_packets++;
 					dev->stats.rx_bytes += len;
 				} else {
@@ -719,7 +718,6 @@ static int __init sgiseeq_probe(struct platform_device *pdev)
 	struct sgiseeq_private *sp;
 	struct net_device *dev;
 	int err;
-	DECLARE_MAC_BUF(mac);
 
 	dev = alloc_etherdev(sizeof (struct sgiseeq_private));
 	if (!dev) {
@@ -793,8 +791,7 @@ static int __init sgiseeq_probe(struct platform_device *pdev)
 		goto err_out_free_page;
 	}
 
-	printk(KERN_INFO "%s: %s %s\n",
-	       dev->name, sgiseeqstr, print_mac(mac, dev->dev_addr));
+	printk(KERN_INFO "%s: %s %pM\n", dev->name, sgiseeqstr, dev->dev_addr);
 
 	return 0;
 

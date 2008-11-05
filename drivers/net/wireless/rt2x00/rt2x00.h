@@ -599,6 +599,9 @@ struct rt2x00lib_ops {
 #define CONFIG_UPDATE_SLOT_TIME 	( 1 << 5 )
 #define CONFIG_UPDATE_BEACON_INT	( 1 << 6 )
 #define CONFIG_UPDATE_ALL		0xffff
+
+	int (*set_retry_limit) (struct ieee80211_hw *hw,
+				u32 short_limit, u32 long_limit);
 };
 
 /*
@@ -997,7 +1000,7 @@ int rt2x00mac_add_interface(struct ieee80211_hw *hw,
 			    struct ieee80211_if_init_conf *conf);
 void rt2x00mac_remove_interface(struct ieee80211_hw *hw,
 				struct ieee80211_if_init_conf *conf);
-int rt2x00mac_config(struct ieee80211_hw *hw, struct ieee80211_conf *conf);
+int rt2x00mac_config(struct ieee80211_hw *hw, u32 changed);
 int rt2x00mac_config_interface(struct ieee80211_hw *hw,
 			       struct ieee80211_vif *vif,
 			       struct ieee80211_if_conf *conf);
