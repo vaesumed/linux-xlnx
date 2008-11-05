@@ -583,7 +583,8 @@ static void tick_nohz_kick_tick(int cpu)
 	if (delta.tv64 <= tick_period.tv64)
 		return;
 
-	tick_nohz_restart(ts, now);
+	if (!tick_check_oneshot_broadcast_wakeup(cpu, now))
+		tick_nohz_restart(ts, now);
 }
 
 #else

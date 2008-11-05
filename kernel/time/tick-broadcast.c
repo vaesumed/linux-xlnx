@@ -397,6 +397,27 @@ void tick_check_oneshot_broadcast(int cpu)
 }
 
 /*
+ * Called from tick_nohz_kick_tick() to check, whether the next
+ * broadcast event is less than a tick_period away or already pending
+ * to avoid reprogramming of the per cpu device.
+ */
+int tick_check_oneshot_broadcast_wakeup(int cpu, ktime_t now)
+{
+	struct clock_event_device *bc = tick_broadcast_device.evtdev;
+	ktime_t delta;
+	int res = 0;
+
+	spin_lock(&tick_broadcast_lock);
+
+	delta =	ktime_sub(bc->next_event, now);
+	if (delta.tv64 <= tick_period.tv64)
+		res = 1;
+
+	spin_unlock(&tick_broadcast_lock);
+	return res;
+}
+
+/*
  * Handle oneshot mode broadcasting
  */
 static void tick_handle_oneshot_broadcast(struct clock_event_device *dev)
