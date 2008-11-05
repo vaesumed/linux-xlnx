@@ -143,7 +143,7 @@ static void kvm_free_assigned_device(struct kvm *kvm,
 	if (irqchip_in_kernel(kvm) && assigned_dev->irq_requested)
 		free_irq(assigned_dev->host_irq, (void *)assigned_dev);
 
-	kvm_unregister_irq_ack_notifier(kvm, &assigned_dev->ack_notifier);
+	kvm_unregister_irq_ack_notifier(&assigned_dev->ack_notifier);
 	kvm_free_irq_source_id(kvm, assigned_dev->irq_source_id);
 
 	if (cancel_work_sync(&assigned_dev->interrupt_work))
@@ -151,6 +151,8 @@ static void kvm_free_assigned_device(struct kvm *kvm,
 		 * care of kvm_put_kvm.
 		 */
 		kvm_put_kvm(kvm);
+
+	pci_reset_function(assigned_dev->dev);
 
 	pci_release_regions(assigned_dev->dev);
 	pci_disable_device(assigned_dev->dev);
@@ -283,6 +285,9 @@ static int kvm_vm_ioctl_assign_device(struct kvm *kvm,
 		       __func__);
 		goto out_disable;
 	}
+
+	pci_reset_function(dev);
+
 	match->assigned_dev_id = assigned_dev->assigned_dev_id;
 	match->host_busnr = assigned_dev->busnr;
 	match->host_devfn = assigned_dev->devfn;
