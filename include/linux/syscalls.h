@@ -625,4 +625,15 @@ asmlinkage long sys_fallocate(int fd, int mode, loff_t offset, loff_t len);
 
 int kernel_execve(const char *filename, char *const argv[], char *const envp[]);
 
+#ifdef CONFIG_PERFMON
+struct pfarg_sinfo;
+asmlinkage long sys_pfm_create(int flags, struct pfarg_sinfo *s,
+			       char  __user *f, void __user *uarg, size_t uarg_size);
+
+asmlinkage long sys_pfm_write(int fd, int flags, int type, void __user *arg, size_t s);
+asmlinkage long sys_pfm_read(int fd, int flags, int type, void __user *arg, size_t s);
+asmlinkage long sys_pfm_attach(int fd, int flags, int target);
+asmlinkage long sys_pfm_set_state(int fd, int flags, int state);
+#endif /* CONFIG_PERFMON */
+
 #endif
