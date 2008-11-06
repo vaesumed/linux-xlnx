@@ -321,7 +321,7 @@ struct thread_struct {
 #else
 # define INIT_THREAD_IA32
 #endif /* CONFIG_IA32_SUPPORT */
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	void *pfm_context;		     /* pointer to detailed PMU context */
 	unsigned long pfm_needs_checking;    /* when >0, pending perfmon work on kernel exit */
 # define INIT_THREAD_PM		.pfm_context =		NULL,     \

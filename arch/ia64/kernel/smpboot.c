@@ -381,7 +381,7 @@ smp_callin (void)
 	extern void ia64_init_itm(void);
 	extern volatile int time_keeper_id;
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	extern void pfm_init_percpu(void);
 #endif
 
@@ -411,7 +411,7 @@ smp_callin (void)
 
 	ia64_mca_cmc_vector_setup();	/* Setup vector on AP */
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	pfm_init_percpu();
 #endif
 

@@ -31,7 +31,7 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/unwind.h>
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 #include <asm/perfmon.h>
 #endif
 
@@ -2105,7 +2105,7 @@ access_uarea(struct task_struct *child, unsigned long addr,
 				"address 0x%lx\n", addr);
 		return -1;
 	}
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	/*
 	 * Check if debug registers are used by perfmon. This
 	 * test must be done once we know that we can do the
