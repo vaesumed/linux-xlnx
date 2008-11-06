@@ -1316,7 +1316,7 @@ static void __run_hrtimer(struct hrtimer *timer)
  * with interrupts disabled either from hrtimer_interrupt() or from
  * hrtimer_peek_ahead()
  */
-void __hrtimer_interrupt(struct hrtimer_cpu_base *cpu_base, int peekahead)
+int __hrtimer_interrupt(struct hrtimer_cpu_base *cpu_base, int peekahead)
 {
 	struct hrtimer_clock_base *base;
 	ktime_t expires_next, now;
@@ -1324,6 +1324,13 @@ void __hrtimer_interrupt(struct hrtimer_cpu_base *cpu_base, int peekahead)
 
  retry:
 	now = ktime_get();
+
+	/*
+	 * In peek ahead mode bail out, if the hw interrupt is
+	 * imminent:
+	 */
+	if (peekahead && cpu_base->expires_next.tv64 < now.tv64)
+		return -ETIME;
 
 	expires_next.tv64 = KTIME_MAX;
 
@@ -1392,6 +1399,12 @@ void __hrtimer_interrupt(struct hrtimer_cpu_base *cpu_base, int peekahead)
 
 	/* Reprogramming necessary ? */
 	if (expires_next.tv64 != KTIME_MAX) {
+		/*
+		 * Clear the peeakahead flag once we decided to
+		 * reprogram. Otherwise we break out in the check
+		 * above.
+		 */
+		peekahead = 0;
 		if (tick_program_event(expires_next, 0))
 			goto retry;
 	}
@@ -1400,6 +1413,8 @@ out:
 	/* Raise softirq ? */
 	if (raise)
 		raise_softirq(HRTIMER_SOFTIRQ);
+
+	return 0;
 }
 
 
@@ -1427,18 +1442,14 @@ void hrtimer_interrupt(struct clock_event_device *dev)
  * they are run immediately and then removed from the timer queue.
  *
  */
-void hrtimer_peek_ahead_timers(void)
+int hrtimer_peek_ahead_timers(void)
 {
-	unsigned long flags;
-
 	WARN_ON_ONCE(!irqs_disabled());
 
 	if (!hrtimer_hres_active())
-		return;
+		return 0;
 
-	local_irq_save(flags);
-	__hrtimer_interrupt(&__get_cpu_var(hrtimer_bases), 1);
-	local_irq_restore(flags);
+	return __hrtimer_interrupt(&__get_cpu_var(hrtimer_bases), 1);
 }
 
 static void run_hrtimer_softirq(struct softirq_action *h)
