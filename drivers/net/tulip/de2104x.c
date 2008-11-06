@@ -459,7 +459,6 @@ static void de_rx (struct de_private *de)
 
 		de->net_stats.rx_packets++;
 		de->net_stats.rx_bytes += skb->len;
-		de->dev->last_rx = jiffies;
 		rc = netif_rx (skb);
 		if (rc == NET_RX_DROP)
 			drop = 1;
@@ -1932,7 +1931,6 @@ static int __devinit de_init_one (struct pci_dev *pdev,
 	void __iomem *regs;
 	unsigned long pciaddr;
 	static int board_idx = -1;
-	DECLARE_MAC_BUF(mac);
 
 	board_idx++;
 
@@ -2046,11 +2044,11 @@ static int __devinit de_init_one (struct pci_dev *pdev,
 		goto err_out_iomap;
 
 	/* print info about board and interface just registered */
-	printk (KERN_INFO "%s: %s at 0x%lx, %s, IRQ %d\n",
+	printk (KERN_INFO "%s: %s at 0x%lx, %pM, IRQ %d\n",
 		dev->name,
 		de->de21040 ? "21040" : "21041",
 		dev->base_addr,
-		print_mac(mac, dev->dev_addr),
+		dev->dev_addr,
 		dev->irq);
 
 	pci_set_drvdata(pdev, dev);

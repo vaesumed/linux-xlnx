@@ -912,7 +912,6 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	u16 eeprom_data = 0;
 	u16 eeprom_apme_mask = E1000_EEPROM_APME;
 	int bars, need_ioport;
-	DECLARE_MAC_BUF(mac);
 
 	/* do not allocate ioport bars when not needed */
 	need_ioport = e1000_is_need_ioport(pdev);
@@ -967,8 +966,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	hw->back = adapter;
 
 	err = -EIO;
-	hw->hw_addr = ioremap(pci_resource_start(pdev, BAR_0),
-			      pci_resource_len(pdev, BAR_0));
+	hw->hw_addr = pci_ioremap_bar(pdev, BAR_0);
 	if (!hw->hw_addr)
 		goto err_ioremap;
 
@@ -1016,9 +1014,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	 * because it depends on mac_type */
 	if ((hw->mac_type == e1000_ich8lan) &&
 	   (pci_resource_flags(pdev, 1) & IORESOURCE_MEM)) {
-		hw->flash_address =
-			ioremap(pci_resource_start(pdev, 1),
-				pci_resource_len(pdev, 1));
+		hw->flash_address = pci_ioremap_bar(pdev, 1);
 		if (!hw->flash_address)
 			goto err_flashmap;
 	}
@@ -1194,7 +1190,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 		 (hw->bus_width == e1000_bus_width_pciex_1) ? "Width x1" :
 		 "32-bit"));
 
-	printk("%s\n", print_mac(mac, netdev->dev_addr));
+	printk("%pM\n", netdev->dev_addr);
 
 	if (hw->bus_type == e1000_bus_type_pci_express) {
 		DPRINTK(PROBE, WARNING, "This device (id %04x:%04x) will no "
@@ -4102,8 +4098,6 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 		} else {
 			netif_receive_skb(skb);
 		}
-
-		netdev->last_rx = jiffies;
 
 next_desc:
 		rx_desc->status = 0;

@@ -229,7 +229,9 @@ struct sock {
 	} sk_backlog;
 	wait_queue_head_t	*sk_sleep;
 	struct dst_entry	*sk_dst_cache;
+#ifdef CONFIG_XFRM
 	struct xfrm_policy	*sk_policy[2];
+#endif
 	rwlock_t		sk_dst_lock;
 	atomic_t		sk_rmem_alloc;
 	atomic_t		sk_wmem_alloc;
@@ -269,7 +271,9 @@ struct sock {
 	struct sk_buff		*sk_send_head;
 	__u32			sk_sndmsg_off;
 	int			sk_write_pending;
+#ifdef CONFIG_SECURITY
 	void			*sk_security;
+#endif
 	__u32			sk_mark;
 	/* XXX 4 bytes hole on 64 bit */
 	void			(*sk_state_change)(struct sock *sk);
@@ -361,6 +365,27 @@ static __inline__ int sk_del_node_init(struct sock *sk)
 	return rc;
 }
 
+static __inline__ int __sk_del_node_init_rcu(struct sock *sk)
+{
+	if (sk_hashed(sk)) {
+		hlist_del_init_rcu(&sk->sk_node);
+		return 1;
+	}
+	return 0;
+}
+
+static __inline__ int sk_del_node_init_rcu(struct sock *sk)
+{
+	int rc = __sk_del_node_init_rcu(sk);
+
+	if (rc) {
+		/* paranoid for a while -acme */
+		WARN_ON(atomic_read(&sk->sk_refcnt) == 1);
+		__sock_put(sk);
+	}
+	return rc;
+}
+
 static __inline__ void __sk_add_node(struct sock *sk, struct hlist_head *list)
 {
 	hlist_add_head(&sk->sk_node, list);
@@ -370,6 +395,17 @@ static __inline__ void sk_add_node(struct sock *sk, struct hlist_head *list)
 {
 	sock_hold(sk);
 	__sk_add_node(sk, list);
+}
+
+static __inline__ void __sk_add_node_rcu(struct sock *sk, struct hlist_head *list)
+{
+	hlist_add_head_rcu(&sk->sk_node, list);
+}
+
+static __inline__ void sk_add_node_rcu(struct sock *sk, struct hlist_head *list)
+{
+	sock_hold(sk);
+	__sk_add_node_rcu(sk, list);
 }
 
 static __inline__ void __sk_del_bind_node(struct sock *sk)
@@ -385,6 +421,8 @@ static __inline__ void sk_add_bind_node(struct sock *sk,
 
 #define sk_for_each(__sk, node, list) \
 	hlist_for_each_entry(__sk, node, list, sk_node)
+#define sk_for_each_rcu_safenext(__sk, node, list, next) \
+	hlist_for_each_entry_rcu_safenext(__sk, node, list, sk_node, next)
 #define sk_for_each_from(__sk, node) \
 	if (__sk && ({ node = &(__sk)->sk_node; 1; })) \
 		hlist_for_each_entry_from(__sk, node, sk_node)
@@ -587,8 +625,9 @@ struct proto {
 	int			*sysctl_rmem;
 	int			max_header;
 
-	struct kmem_cache		*slab;
+	struct kmem_cache	*slab;
 	unsigned int		obj_size;
+	int			slab_flags;
 
 	atomic_t		*orphan_count;
 
@@ -597,7 +636,7 @@ struct proto {
 
 	union {
 		struct inet_hashinfo	*hashinfo;
-		struct hlist_head	*udp_hash;
+		struct udp_table	*udp_table;
 		struct raw_hashinfo	*raw_hash;
 	} h;
 

@@ -480,11 +480,14 @@ static void sch_atm_dequeue(unsigned long data)
 		 * If traffic is properly shaped, this won't generate nasty
 		 * little bursts. Otherwise, it may ... (but that's okay)
 		 */
-		while ((skb = flow->q->dequeue(flow->q))) {
-			if (!atm_may_send(flow->vcc, skb->truesize)) {
-				(void)flow->q->ops->requeue(skb, flow->q);
+		while ((skb = flow->q->ops->peek(flow->q))) {
+			if (!atm_may_send(flow->vcc, skb->truesize))
 				break;
-			}
+
+			skb = qdisc_dequeue_peeked(flow->q);
+			if (unlikely(!skb))
+				break;
+
 			pr_debug("atm_tc_dequeue: sending on class %p\n", flow);
 			/* remove any LL header somebody else has attached */
 			skb_pull(skb, skb_network_offset(skb));
@@ -516,10 +519,19 @@ static struct sk_buff *atm_tc_dequeue(struct Qdisc *sch)
 
 	pr_debug("atm_tc_dequeue(sch %p,[qdisc %p])\n", sch, p);
 	tasklet_schedule(&p->task);
-	skb = p->link.q->dequeue(p->link.q);
+	skb = qdisc_dequeue_peeked(p->link.q);
 	if (skb)
 		sch->q.qlen--;
 	return skb;
+}
+
+static struct sk_buff *atm_tc_peek(struct Qdisc *sch)
+{
+	struct atm_qdisc_data *p = qdisc_priv(sch);
+
+	pr_debug("atm_tc_peek(sch %p,[qdisc %p])\n", sch, p);
+
+	return p->link.q->ops->peek(p->link.q);
 }
 
 static int atm_tc_requeue(struct sk_buff *skb, struct Qdisc *sch)
@@ -694,6 +706,7 @@ static struct Qdisc_ops atm_qdisc_ops __read_mostly = {
 	.priv_size	= sizeof(struct atm_qdisc_data),
 	.enqueue	= atm_tc_enqueue,
 	.dequeue	= atm_tc_dequeue,
+	.peek		= atm_tc_peek,
 	.requeue	= atm_tc_requeue,
 	.drop		= atm_tc_drop,
 	.init		= atm_tc_init,

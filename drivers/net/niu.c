@@ -3139,8 +3139,6 @@ static int niu_process_rx_pkt(struct niu *np, struct rx_ring_info *rp)
 	skb->protocol = eth_type_trans(skb, np->dev);
 	netif_receive_skb(skb);
 
-	np->dev->last_rx = jiffies;
-
 	return num_rcr;
 }
 
@@ -8638,10 +8636,8 @@ static void __devinit niu_assign_netdev_ops(struct net_device *dev)
 static void __devinit niu_device_announce(struct niu *np)
 {
 	struct net_device *dev = np->dev;
-	DECLARE_MAC_BUF(mac);
 
-	pr_info("%s: NIU Ethernet %s\n",
-		dev->name, print_mac(mac, dev->dev_addr));
+	pr_info("%s: NIU Ethernet %pM\n", dev->name, dev->dev_addr);
 
 	if (np->parent->plat_type == PLAT_TYPE_ATCA_CP3220) {
 		pr_info("%s: Port type[%s] mode[%s:%s] XCVR[%s] phy[%s]\n",
