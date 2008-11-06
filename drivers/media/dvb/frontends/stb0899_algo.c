@@ -91,7 +91,7 @@ static u32 stb0899_set_srate(struct stb0899_state *state, u32 master_clk, u32 sr
 	 *   SFR = (srate << 21 + master_clk) / (2 * master_clk)
 	 *
 	 * stored as 20 bit number with an offset of 4 bit:
-	 *   sfr = SFR << 4; 
+	 *   sfr = SFR << 4;
 	 */
 
 	tmp = stb0899_do_div((((u64)srate) << 21) + master_clk, 2 * master_clk);

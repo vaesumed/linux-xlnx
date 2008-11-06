@@ -372,7 +372,7 @@ err:
 }
 
 int stb0899_write_s2reg(struct stb0899_state *state,
-		 	u32 stb0899_i2cdev,
+			u32 stb0899_i2cdev,
 			u32 stb0899_base_addr,
 			u16 stb0899_reg_offset,
 			u32 stb0899_data)

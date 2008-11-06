@@ -10,7 +10,7 @@ stkwebcam-objs	:=	stk-webcam.o stk-sensor.o
 
 videodev-objs	:=	v4l2-dev.o v4l2-ioctl.o
 
-obj-$(CONFIG_VIDEO_DEV) += videodev.o compat_ioctl32.o v4l2-int-device.o
+obj-$(CONFIG_VIDEO_DEV) += videodev.o v4l2-compat-ioctl32.o v4l2-int-device.o
 
 obj-$(CONFIG_VIDEO_V4L2_COMMON) += v4l2-common.o
 
@@ -133,6 +133,7 @@ obj-$(CONFIG_SOC_CAMERA)	+= soc_camera.o
 obj-$(CONFIG_SOC_CAMERA_MT9M001)	+= mt9m001.o
 obj-$(CONFIG_SOC_CAMERA_MT9M111)	+= mt9m111.o
 obj-$(CONFIG_SOC_CAMERA_MT9V022)	+= mt9v022.o
+obj-$(CONFIG_SOC_CAMERA_OV772X)		+= ov772x.o
 obj-$(CONFIG_SOC_CAMERA_PLATFORM)	+= soc_camera_platform.o
 
 obj-$(CONFIG_VIDEO_AU0828) += au0828/
