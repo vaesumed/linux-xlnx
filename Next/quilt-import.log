@@ -1,0 +1,38 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 7c3516d68f9b3264dd12c0ec3aa95dbf1f1b9752
+HEAD is now at 7c3516d warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+usb-host-oxford-oxu210hp-hcd-driver.patch
+usb-protect-hcd.h-from-multiple-inclusions.patch
+usb-avoid-needless-address-taking-of-function-parameters.patch
+usb-straighten-out-inline-code-in-sysfs.c.patch
+hso-fix-hso_serial_close-refcounting.patch
+hso-put-linefeeds-on-printk-s-in-hso.c.patch
+usb-add-new-opticon-serial-driver.patch
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.28-rc3-54-g75fa677
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 75fa67706cce5272bcfc51ed646f2da21f3bdb6e
+HEAD is now at 75fa677 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+virtio:net-mergeable-rx-bufs.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+cpumask:new-API-only.patch
+Unchanged quilt series ttydev
