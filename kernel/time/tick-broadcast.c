@@ -412,6 +412,8 @@ int tick_check_oneshot_broadcast_wakeup(int cpu, ktime_t now)
 	delta =	ktime_sub(bc->next_event, now);
 	if (delta.tv64 <= tick_period.tv64)
 		res = 1;
+	else
+		cpu_clear(cpu, tick_broadcast_oneshot_mask);
 
 	spin_unlock(&tick_broadcast_lock);
 	return res;
