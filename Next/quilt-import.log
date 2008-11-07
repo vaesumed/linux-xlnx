@@ -1,0 +1,34 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series m68k
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.28-rc3-31-ga75952b
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard a75952b72a0fff3031124003e62118111aed42c1
+HEAD is now at a75952b Merge git://git.kernel.org/pub/scm/linux/kernel/git/sfrench/cifs-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-raid1-flush-workqueue-before-destruction.patch
+dm-stripe-fix-init-failure.patch
+dm-consolidate-target-deregistration-error-handling.patch
+dm-mpath-avoid-attempting-to-activate-null-path.patch
+dm-mpath-warn-if-args-ignored.patch
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.28-rc3-54-g75fa677
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 75fa67706cce5272bcfc51ed646f2da21f3bdb6e
+HEAD is now at 75fa677 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+virtio:net-mergeable-rx-bufs.patch
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+cpumask:new-API-only.patch
+Unchanged quilt series ttydev
