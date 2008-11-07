@@ -322,7 +322,6 @@ static int __devinit epic_init_one (struct pci_dev *pdev,
 	int i, ret, option = 0, duplex = 0;
 	void *ring_space;
 	dma_addr_t ring_dma;
-	DECLARE_MAC_BUF(mac);
 
 /* when built into the kernel, we only print version if device is found */
 #ifndef MODULE
@@ -364,7 +363,7 @@ static int __devinit epic_init_one (struct pci_dev *pdev,
 	ioaddr = pci_resource_start (pdev, 0);
 #else
 	ioaddr = pci_resource_start (pdev, 1);
-	ioaddr = (long) ioremap (ioaddr, pci_resource_len (pdev, 1));
+	ioaddr = (long) pci_ioremap_bar(pdev, 1);
 	if (!ioaddr) {
 		dev_err(&pdev->dev, "ioremap failed\n");
 		goto err_out_free_netdev;
@@ -499,9 +498,9 @@ static int __devinit epic_init_one (struct pci_dev *pdev,
 	if (ret < 0)
 		goto err_out_unmap_rx;
 
-	printk(KERN_INFO "%s: %s at %#lx, IRQ %d, %s\n",
+	printk(KERN_INFO "%s: %s at %#lx, IRQ %d, %pM\n",
 	       dev->name, pci_id_tbl[chip_idx].name, ioaddr, dev->irq,
-	       print_mac(mac, dev->dev_addr));
+	       dev->dev_addr);
 
 out:
 	return ret;
@@ -1223,7 +1222,6 @@ static int epic_rx(struct net_device *dev, int budget)
 			}
 			skb->protocol = eth_type_trans(skb, dev);
 			netif_receive_skb(skb);
-			dev->last_rx = jiffies;
 			ep->stats.rx_packets++;
 			ep->stats.rx_bytes += pkt_len;
 		}

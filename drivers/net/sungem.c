@@ -863,7 +863,6 @@ static int gem_rx(struct gem *gp, int work_to_do)
 
 		gp->net_stats.rx_packets++;
 		gp->net_stats.rx_bytes += len;
-		gp->dev->last_rx = jiffies;
 
 	next:
 		entry = NEXT_RX(entry);
@@ -2966,7 +2965,6 @@ static int __devinit gem_init_one(struct pci_dev *pdev,
 	struct net_device *dev;
 	struct gem *gp;
 	int err, pci_using_dac;
-	DECLARE_MAC_BUF(mac);
 
 	if (gem_version_printed++ == 0)
 		printk(KERN_INFO "%s", version);
@@ -3150,9 +3148,8 @@ static int __devinit gem_init_one(struct pci_dev *pdev,
 		goto err_out_free_consistent;
 	}
 
-	printk(KERN_INFO "%s: Sun GEM (PCI) 10/100/1000BaseT Ethernet "
-	       "%s\n",
-	       dev->name, print_mac(mac, dev->dev_addr));
+	printk(KERN_INFO "%s: Sun GEM (PCI) 10/100/1000BaseT Ethernet %pM\n",
+	       dev->name, dev->dev_addr);
 
 	if (gp->phy_type == phy_mii_mdio0 ||
      	    gp->phy_type == phy_mii_mdio1)

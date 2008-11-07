@@ -87,12 +87,12 @@ static inline const char *ip_vs_dbg_addr(int af, char *buf, size_t buf_len,
 	int len;
 #ifdef CONFIG_IP_VS_IPV6
 	if (af == AF_INET6)
-		len = snprintf(&buf[*idx], buf_len - *idx, "[" NIP6_FMT "]",
-			       NIP6(addr->in6)) + 1;
+		len = snprintf(&buf[*idx], buf_len - *idx, "[%pI6]",
+			       &addr->in6) + 1;
 	else
 #endif
-		len = snprintf(&buf[*idx], buf_len - *idx, NIPQUAD_FMT,
-			       NIPQUAD(addr->ip)) + 1;
+		len = snprintf(&buf[*idx], buf_len - *idx, "%pI4",
+			       &addr->ip) + 1;
 
 	*idx += len;
 	BUG_ON(*idx > buf_len + 1);
@@ -503,9 +503,6 @@ struct ip_vs_scheduler {
 	char			*name;		/* scheduler name */
 	atomic_t		refcnt;		/* reference counter */
 	struct module		*module;	/* THIS_MODULE/NULL */
-#ifdef CONFIG_IP_VS_IPV6
-	int			supports_ipv6;	/* scheduler has IPv6 support */
-#endif
 
 	/* scheduler initializing service */
 	int (*init_service)(struct ip_vs_service *svc);

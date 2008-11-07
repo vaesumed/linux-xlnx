@@ -924,10 +924,15 @@ int dev_change_name(struct net_device *dev, const char *newname)
 		strlcpy(dev->name, newname, IFNAMSIZ);
 
 rollback:
-	ret = device_rename(&dev->dev, dev->name);
-	if (ret) {
-		memcpy(dev->name, oldname, IFNAMSIZ);
-		return ret;
+	/* For now only devices in the initial network namespace
+	 * are in sysfs.
+	 */
+	if (net == &init_net) {
+		ret = device_rename(&dev->dev, dev->name);
+		if (ret) {
+			memcpy(dev->name, oldname, IFNAMSIZ);
+			return ret;
+		}
 	}
 
 	write_lock_bh(&dev_base_lock);
@@ -2251,8 +2256,10 @@ int netif_receive_skb(struct sk_buff *skb)
 	rcu_read_lock();
 
 	/* Don't receive packets in an exiting network namespace */
-	if (!net_alive(dev_net(skb->dev)))
+	if (!net_alive(dev_net(skb->dev))) {
+		kfree_skb(skb);
 		goto out;
+	}
 
 #ifdef CONFIG_NET_CLS_ACT
 	if (skb->tc_verd & TC_NCLS) {
@@ -2371,7 +2378,7 @@ EXPORT_SYMBOL(__napi_schedule);
 static void net_rx_action(struct softirq_action *h)
 {
 	struct list_head *list = &__get_cpu_var(softnet_data).poll_list;
-	unsigned long start_time = jiffies;
+	unsigned long time_limit = jiffies + 2;
 	int budget = netdev_budget;
 	void *have;
 
@@ -2382,13 +2389,10 @@ static void net_rx_action(struct softirq_action *h)
 		int work, weight;
 
 		/* If softirq window is exhuasted then punt.
-		 *
-		 * Note that this is a slight policy change from the
-		 * previous NAPI code, which would allow up to 2
-		 * jiffies to pass before breaking out.  The test
-		 * used to be "jiffies - start_time > 1".
+		 * Allow this to run for 2 jiffies since which will allow
+		 * an average latency of 1.5/HZ.
 		 */
-		if (unlikely(budget <= 0 || jiffies != start_time))
+		if (unlikely(budget <= 0 || time_after(jiffies, time_limit)))
 			goto softnet_break;
 
 		local_irq_enable();
@@ -4463,6 +4467,15 @@ int dev_change_net_namespace(struct net_device *dev, struct net *net, const char
 	if (dev->features & NETIF_F_NETNS_LOCAL)
 		goto out;
 
+#ifdef CONFIG_SYSFS
+	/* Don't allow real devices to be moved when sysfs
+	 * is enabled.
+	 */
+	err = -EINVAL;
+	if (dev->dev.parent)
+		goto out;
+#endif
+
 	/* Ensure the device has been registrered */
 	err = -EINVAL;
 	if (dev->reg_state != NETREG_REGISTERED)
@@ -4520,6 +4533,8 @@ int dev_change_net_namespace(struct net_device *dev, struct net *net, const char
 	 */
 	dev_addr_discard(dev);
 
+	netdev_unregister_kobject(dev);
+
 	/* Actually switch the network namespace */
 	dev_net_set(dev, net);
 
@@ -4536,7 +4551,6 @@ int dev_change_net_namespace(struct net_device *dev, struct net *net, const char
 	}
 
 	/* Fixup kobjects */
-	netdev_unregister_kobject(dev);
 	err = netdev_register_kobject(dev);
 	WARN_ON(err);
 
@@ -4843,6 +4857,12 @@ static void __net_exit default_device_exit(struct net *net)
 		if (dev->features & NETIF_F_NETNS_LOCAL)
 			continue;
 
+		/* Delete virtual devices */
+		if (dev->rtnl_link_ops && dev->rtnl_link_ops->dellink) {
+			dev->rtnl_link_ops->dellink(dev);
+			continue;
+		}
+
 		/* Push remaing network devices to init_net */
 		snprintf(fb_name, IFNAMSIZ, "dev%d", dev->ifindex);
 		err = dev_change_net_namespace(dev, &init_net, fb_name);
@@ -4887,6 +4907,18 @@ static int __init net_dev_init(void)
 		INIT_LIST_HEAD(&ptype_base[i]);
 
 	if (register_pernet_subsys(&netdev_net_ops))
+		goto out;
+
+	/* The loopback device is special if any other network devices
+	 * is present in a network namespace the loopback device must
+	 * be present. Since we now dynamically allocate and free the
+	 * loopback device ensure this invariant is maintained by
+	 * keeping the loopback device as the first device on the
+	 * list of network devices.  Ensuring the loopback devices
+	 * is the first device that appears and the last network device
+	 * that disappears.
+	 */
+	if (register_pernet_device(&loopback_net_ops))
 		goto out;
 
 	if (register_pernet_device(&default_device_ops))

@@ -457,7 +457,6 @@ static inline void cp_rx_skb (struct cp_private *cp, struct sk_buff *skb,
 
 	cp->dev->stats.rx_packets++;
 	cp->dev->stats.rx_bytes += skb->len;
-	cp->dev->last_rx = jiffies;
 
 #if CP_VLAN_TAG_USED
 	if (cp->vlgrp && (desc->opts2 & cpu_to_le32(RxVlanTagged))) {
@@ -1826,7 +1825,6 @@ static int cp_init_one (struct pci_dev *pdev, const struct pci_device_id *ent)
 	void __iomem *regs;
 	resource_size_t pciaddr;
 	unsigned int addr_len, i, pci_using_dac;
-	DECLARE_MAC_BUF(mac);
 
 #ifndef MODULE
 	static int version_printed;
@@ -1967,10 +1965,10 @@ static int cp_init_one (struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_out_iomap;
 
 	printk (KERN_INFO "%s: RTL-8139C+ at 0x%lx, "
-		"%s, IRQ %d\n",
+		"%pM, IRQ %d\n",
 		dev->name,
 		dev->base_addr,
-		print_mac(mac, dev->dev_addr),
+		dev->dev_addr,
 		dev->irq);
 
 	pci_set_drvdata(pdev, dev);

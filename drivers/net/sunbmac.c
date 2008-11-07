@@ -878,7 +878,6 @@ static void bigmac_rx(struct bigmac *bp)
 		/* No checksums done by the BigMAC ;-( */
 		skb->protocol = eth_type_trans(skb, bp->dev);
 		netif_rx(skb);
-		bp->dev->last_rx = jiffies;
 		bp->enet_stats.rx_packets++;
 		bp->enet_stats.rx_bytes += len;
 	next:
@@ -1081,7 +1080,6 @@ static int __devinit bigmac_ether_init(struct of_device *op,
 	static int version_printed;
 	struct net_device *dev;
 	u8 bsizes, bsizes_more;
-	DECLARE_MAC_BUF(mac);
 	struct bigmac *bp;
 	int i;
 
@@ -1212,8 +1210,8 @@ static int __devinit bigmac_ether_init(struct of_device *op,
 
 	dev_set_drvdata(&bp->bigmac_op->dev, bp);
 
-	printk(KERN_INFO "%s: BigMAC 100baseT Ethernet %s\n",
-	       dev->name, print_mac(mac, dev->dev_addr));
+	printk(KERN_INFO "%s: BigMAC 100baseT Ethernet %pM\n",
+	       dev->name, dev->dev_addr);
 
 	return 0;
 

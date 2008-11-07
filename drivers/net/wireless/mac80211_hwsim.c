@@ -63,13 +63,13 @@ struct hwsim_sta_priv {
 static inline void hwsim_check_sta_magic(struct ieee80211_sta *sta)
 {
 	struct hwsim_sta_priv *sp = (void *)sta->drv_priv;
-	WARN_ON(sp->magic != HWSIM_VIF_MAGIC);
+	WARN_ON(sp->magic != HWSIM_STA_MAGIC);
 }
 
 static inline void hwsim_set_sta_magic(struct ieee80211_sta *sta)
 {
 	struct hwsim_sta_priv *sp = (void *)sta->drv_priv;
-	sp->magic = HWSIM_VIF_MAGIC;
+	sp->magic = HWSIM_STA_MAGIC;
 }
 
 static inline void hwsim_clear_sta_magic(struct ieee80211_sta *sta)
@@ -209,7 +209,7 @@ static bool mac80211_hwsim_tx_frame(struct ieee80211_hw *hw,
 	/* TODO: set mactime */
 	rx_status.freq = data->channel->center_freq;
 	rx_status.band = data->channel->band;
-	rx_status.rate_idx = info->tx_rate_idx;
+	rx_status.rate_idx = info->control.rates[0].idx;
 	/* TODO: simulate signal strength (and optional packet drop) */
 
 	/* Copy skb to all enabled radios that are on the current frequency */
@@ -269,13 +269,9 @@ static int mac80211_hwsim_tx(struct ieee80211_hw *hw, struct sk_buff *skb)
 	if (txi->control.sta)
 		hwsim_check_sta_magic(txi->control.sta);
 
-	memset(&txi->status, 0, sizeof(txi->status));
-	if (!(txi->flags & IEEE80211_TX_CTL_NO_ACK)) {
-		if (ack)
-			txi->flags |= IEEE80211_TX_STAT_ACK;
-		else
-			txi->status.excessive_retries = 1;
-	}
+	ieee80211_tx_info_clear_status(txi);
+	if (!(txi->flags & IEEE80211_TX_CTL_NO_ACK) && ack)
+		txi->flags |= IEEE80211_TX_STAT_ACK;
 	ieee80211_tx_status_irqsafe(hw, skb);
 	return NETDEV_TX_OK;
 }
@@ -301,10 +297,9 @@ static void mac80211_hwsim_stop(struct ieee80211_hw *hw)
 static int mac80211_hwsim_add_interface(struct ieee80211_hw *hw,
 					struct ieee80211_if_init_conf *conf)
 {
-	DECLARE_MAC_BUF(mac);
-	printk(KERN_DEBUG "%s:%s (type=%d mac_addr=%s)\n",
+	printk(KERN_DEBUG "%s:%s (type=%d mac_addr=%pM)\n",
 	       wiphy_name(hw->wiphy), __func__, conf->type,
-	       print_mac(mac, conf->mac_addr));
+	       conf->mac_addr);
 	hwsim_set_magic(conf->vif);
 	return 0;
 }
@@ -313,10 +308,9 @@ static int mac80211_hwsim_add_interface(struct ieee80211_hw *hw,
 static void mac80211_hwsim_remove_interface(
 	struct ieee80211_hw *hw, struct ieee80211_if_init_conf *conf)
 {
-	DECLARE_MAC_BUF(mac);
-	printk(KERN_DEBUG "%s:%s (type=%d mac_addr=%s)\n",
+	printk(KERN_DEBUG "%s:%s (type=%d mac_addr=%pM)\n",
 	       wiphy_name(hw->wiphy), __func__, conf->type,
-	       print_mac(mac, conf->mac_addr));
+	       conf->mac_addr);
 	hwsim_check_magic(conf->vif);
 	hwsim_clear_magic(conf->vif);
 }
@@ -361,10 +355,10 @@ static void mac80211_hwsim_beacon(unsigned long arg)
 }
 
 
-static int mac80211_hwsim_config(struct ieee80211_hw *hw,
-				 struct ieee80211_conf *conf)
+static int mac80211_hwsim_config(struct ieee80211_hw *hw, u32 changed)
 {
 	struct mac80211_hwsim_data *data = hw->priv;
+	struct ieee80211_conf *conf = &hw->conf;
 
 	printk(KERN_DEBUG "%s:%s (freq=%d radio_enabled=%d beacon_int=%d)\n",
 	       wiphy_name(hw->wiphy), __func__,
@@ -505,7 +499,6 @@ static int __init init_mac80211_hwsim(void)
 	u8 addr[ETH_ALEN];
 	struct mac80211_hwsim_data *data;
 	struct ieee80211_hw *hw;
-	DECLARE_MAC_BUF(mac);
 
 	if (radios < 1 || radios > 100)
 		return -EINVAL;
@@ -566,19 +559,18 @@ static int __init init_mac80211_hwsim(void)
 		data->band.n_channels = ARRAY_SIZE(hwsim_channels);
 		data->band.bitrates = data->rates;
 		data->band.n_bitrates = ARRAY_SIZE(hwsim_rates);
-		data->band.ht_info.ht_supported = 1;
-		data->band.ht_info.cap = IEEE80211_HT_CAP_SUP_WIDTH |
+		data->band.ht_cap.ht_supported = true;
+		data->band.ht_cap.cap = IEEE80211_HT_CAP_SUP_WIDTH_20_40 |
 			IEEE80211_HT_CAP_GRN_FLD |
 			IEEE80211_HT_CAP_SGI_40 |
 			IEEE80211_HT_CAP_DSSSCCK40;
-		data->band.ht_info.ampdu_factor = 0x3;
-		data->band.ht_info.ampdu_density = 0x6;
-		memset(data->band.ht_info.supp_mcs_set, 0,
-		       sizeof(data->band.ht_info.supp_mcs_set));
-		data->band.ht_info.supp_mcs_set[0] = 0xff;
-		data->band.ht_info.supp_mcs_set[1] = 0xff;
-		data->band.ht_info.supp_mcs_set[12] =
-			IEEE80211_HT_CAP_MCS_TX_DEFINED;
+		data->band.ht_cap.ampdu_factor = 0x3;
+		data->band.ht_cap.ampdu_density = 0x6;
+		memset(&data->band.ht_cap.mcs, 0,
+		       sizeof(data->band.ht_cap.mcs));
+		data->band.ht_cap.mcs.rx_mask[0] = 0xff;
+		data->band.ht_cap.mcs.rx_mask[1] = 0xff;
+		data->band.ht_cap.mcs.tx_params = IEEE80211_HT_MCS_TX_DEFINED;
 		hw->wiphy->bands[IEEE80211_BAND_2GHZ] = &data->band;
 
 		err = ieee80211_register_hw(hw);
@@ -588,9 +580,9 @@ static int __init init_mac80211_hwsim(void)
 			goto failed_hw;
 		}
 
-		printk(KERN_DEBUG "%s: hwaddr %s registered\n",
+		printk(KERN_DEBUG "%s: hwaddr %pM registered\n",
 		       wiphy_name(hw->wiphy),
-		       print_mac(mac, hw->wiphy->perm_addr));
+		       hw->wiphy->perm_addr);
 
 		setup_timer(&data->beacon_timer, mac80211_hwsim_beacon,
 			    (unsigned long) hw);

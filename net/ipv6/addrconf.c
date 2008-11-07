@@ -2988,9 +2988,8 @@ static void if6_seq_stop(struct seq_file *seq, void *v)
 static int if6_seq_show(struct seq_file *seq, void *v)
 {
 	struct inet6_ifaddr *ifp = (struct inet6_ifaddr *)v;
-	seq_printf(seq,
-		   NIP6_SEQFMT " %02x %02x %02x %02x %8s\n",
-		   NIP6(ifp->addr),
+	seq_printf(seq, "%pi6 %02x %02x %02x %02x %8s\n",
+		   &ifp->addr,
 		   ifp->idev->dev->ifindex,
 		   ifp->prefix_len,
 		   ifp->scope,
@@ -4033,8 +4032,8 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.forwarding,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&addrconf_sysctl_forward,
-			.strategy	=	&addrconf_sysctl_forward_strategy,
+			.proc_handler	=	addrconf_sysctl_forward,
+			.strategy	=	addrconf_sysctl_forward_strategy,
 		},
 		{
 			.ctl_name	=	NET_IPV6_HOP_LIMIT,
@@ -4050,7 +4049,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.mtu6,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_ACCEPT_RA,
@@ -4058,7 +4057,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_ra,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_ACCEPT_REDIRECTS,
@@ -4066,7 +4065,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_redirects,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_AUTOCONF,
@@ -4074,7 +4073,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.autoconf,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_DAD_TRANSMITS,
@@ -4082,7 +4081,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.dad_transmits,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_RTR_SOLICITS,
@@ -4090,7 +4089,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.rtr_solicits,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_RTR_SOLICIT_INTERVAL,
@@ -4098,8 +4097,8 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.rtr_solicit_interval,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec_jiffies,
-			.strategy	=	&sysctl_jiffies,
+			.proc_handler	=	proc_dointvec_jiffies,
+			.strategy	=	sysctl_jiffies,
 		},
 		{
 			.ctl_name	=	NET_IPV6_RTR_SOLICIT_DELAY,
@@ -4107,8 +4106,8 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.rtr_solicit_delay,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec_jiffies,
-			.strategy	=	&sysctl_jiffies,
+			.proc_handler	=	proc_dointvec_jiffies,
+			.strategy	=	sysctl_jiffies,
 		},
 		{
 			.ctl_name	=	NET_IPV6_FORCE_MLD_VERSION,
@@ -4116,7 +4115,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.force_mld_version,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 #ifdef CONFIG_IPV6_PRIVACY
 		{
@@ -4125,7 +4124,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.use_tempaddr,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_TEMP_VALID_LFT,
@@ -4133,7 +4132,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.temp_valid_lft,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_TEMP_PREFERED_LFT,
@@ -4141,7 +4140,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.temp_prefered_lft,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_REGEN_MAX_RETRY,
@@ -4149,7 +4148,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.regen_max_retry,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_MAX_DESYNC_FACTOR,
@@ -4157,7 +4156,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.max_desync_factor,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 #endif
 		{
@@ -4166,7 +4165,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.max_addresses,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_ACCEPT_RA_DEFRTR,
@@ -4174,7 +4173,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_ra_defrtr,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_ACCEPT_RA_PINFO,
@@ -4182,7 +4181,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_ra_pinfo,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 #ifdef CONFIG_IPV6_ROUTER_PREF
 		{
@@ -4191,7 +4190,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_ra_rtr_pref,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_RTR_PROBE_INTERVAL,
@@ -4199,8 +4198,8 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.rtr_probe_interval,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec_jiffies,
-			.strategy	=	&sysctl_jiffies,
+			.proc_handler	=	proc_dointvec_jiffies,
+			.strategy	=	sysctl_jiffies,
 		},
 #ifdef CONFIG_IPV6_ROUTE_INFO
 		{
@@ -4209,7 +4208,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_ra_rt_info_max_plen,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 #endif
 #endif
@@ -4219,7 +4218,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.proxy_ndp,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	NET_IPV6_ACCEPT_SOURCE_ROUTE,
@@ -4227,7 +4226,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_source_route,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 #ifdef CONFIG_IPV6_OPTIMISTIC_DAD
 		{
@@ -4236,7 +4235,7 @@ static struct addrconf_sysctl_table
 			.data           =       &ipv6_devconf.optimistic_dad,
 			.maxlen         =       sizeof(int),
 			.mode           =       0644,
-			.proc_handler   =       &proc_dointvec,
+			.proc_handler   =       proc_dointvec,
 
 		},
 #endif
@@ -4247,7 +4246,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.mc_forwarding,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 #endif
 		{
@@ -4256,7 +4255,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.disable_ipv6,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	CTL_UNNUMBERED,
@@ -4264,7 +4263,7 @@ static struct addrconf_sysctl_table
 			.data		=	&ipv6_devconf.accept_dad,
 			.maxlen		=	sizeof(int),
 			.mode		=	0644,
-			.proc_handler	=	&proc_dointvec,
+			.proc_handler	=	proc_dointvec,
 		},
 		{
 			.ctl_name	=	0,	/* sentinel */

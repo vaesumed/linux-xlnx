@@ -229,7 +229,7 @@ enum {
 #define IWL_MIMO2_SWITCH_SISO_C         4
 #define IWL_MIMO2_SWITCH_GI             5
 
-/*FIXME:RS:add posible acctions for MIMO3*/
+/*FIXME:RS:add possible actions for MIMO3*/
 
 #define IWL_ACTION_LIMIT		3	/* # possible actions */
 
@@ -283,6 +283,16 @@ static inline u8 num_of_ant(u8 mask)
 		!!((mask) & ANT_B) +
 		!!((mask) & ANT_C);
 }
+
+static inline u8 first_antenna(u8 mask)
+{
+	if (mask & ANT_A)
+		return ANT_A;
+	if (mask & ANT_B)
+		return ANT_B;
+	return ANT_C;
+}
+
 
 static inline u8 iwl4965_get_prev_ieee_rate(u8 rate_index)
 {

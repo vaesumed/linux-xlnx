@@ -76,8 +76,6 @@ static int loopback_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	skb->protocol = eth_type_trans(skb,dev);
 
-	dev->last_rx = jiffies;
-
 	/* it's OK to use per_cpu_ptr() because BHs are off */
 	pcpu_lstats = dev->ml_priv;
 	lb_stats = per_cpu_ptr(pcpu_lstats, smp_processor_id());
@@ -206,17 +204,8 @@ static __net_exit void loopback_net_exit(struct net *net)
 	unregister_netdev(dev);
 }
 
-static struct pernet_operations __net_initdata loopback_net_ops = {
+/* Registered in net/core/dev.c */
+struct pernet_operations __net_initdata loopback_net_ops = {
        .init = loopback_net_init,
        .exit = loopback_net_exit,
 };
-
-static int __init loopback_init(void)
-{
-	return register_pernet_device(&loopback_net_ops);
-}
-
-/* Loopback is special. It should be initialized before any other network
- * device and network subsystem.
- */
-fs_initcall(loopback_init);

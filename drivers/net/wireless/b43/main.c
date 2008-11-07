@@ -1339,25 +1339,6 @@ u8 b43_ieee80211_antenna_sanitize(struct b43_wldev *dev,
 	return antenna_nr;
 }
 
-static int b43_antenna_from_ieee80211(struct b43_wldev *dev, u8 antenna)
-{
-	antenna = b43_ieee80211_antenna_sanitize(dev, antenna);
-	switch (antenna) {
-	case 0:		/* default/diversity */
-		return B43_ANTENNA_DEFAULT;
-	case 1:		/* Antenna 0 */
-		return B43_ANTENNA0;
-	case 2:		/* Antenna 1 */
-		return B43_ANTENNA1;
-	case 3:		/* Antenna 2 */
-		return B43_ANTENNA2;
-	case 4:		/* Antenna 3 */
-		return B43_ANTENNA3;
-	default:
-		return B43_ANTENNA_DEFAULT;
-	}
-}
-
 /* Convert a b43 antenna number value to the PHY TX control value. */
 static u16 b43_antenna_to_phyctl(int antenna)
 {
@@ -1399,7 +1380,7 @@ static void b43_write_beacon_template(struct b43_wldev *dev,
 				  len, ram_offset, shm_size_offset, rate);
 
 	/* Write the PHY TX control parameters. */
-	antenna = b43_antenna_from_ieee80211(dev, info->antenna_sel_tx);
+	antenna = B43_ANTENNA_DEFAULT;
 	antenna = b43_antenna_to_phyctl(antenna);
 	ctl = b43_shm_read16(dev, B43_SHM_SHARED, B43_SHM_SH_BEACPHYCTL);
 	/* We can't send beacons with short preamble. Would get PHY errors. */
@@ -3339,11 +3320,28 @@ init_failure:
 	return err;
 }
 
-static int b43_op_config(struct ieee80211_hw *hw, struct ieee80211_conf *conf)
+/* Write the short and long frame retry limit values. */
+static void b43_set_retry_limits(struct b43_wldev *dev,
+				 unsigned int short_retry,
+				 unsigned int long_retry)
+{
+	/* The retry limit is a 4-bit counter. Enforce this to avoid overflowing
+	 * the chip-internal counter. */
+	short_retry = min(short_retry, (unsigned int)0xF);
+	long_retry = min(long_retry, (unsigned int)0xF);
+
+	b43_shm_write16(dev, B43_SHM_SCRATCH, B43_SHM_SC_SRLIMIT,
+			short_retry);
+	b43_shm_write16(dev, B43_SHM_SCRATCH, B43_SHM_SC_LRLIMIT,
+			long_retry);
+}
+
+static int b43_op_config(struct ieee80211_hw *hw, u32 changed)
 {
 	struct b43_wl *wl = hw_to_b43_wl(hw);
 	struct b43_wldev *dev;
 	struct b43_phy *phy;
+	struct ieee80211_conf *conf = &hw->conf;
 	unsigned long flags;
 	int antenna;
 	int err = 0;
@@ -3357,6 +3355,13 @@ static int b43_op_config(struct ieee80211_hw *hw, struct ieee80211_conf *conf)
 		goto out_unlock_mutex;
 	dev = wl->current_dev;
 	phy = &dev->phy;
+
+	if (changed & IEEE80211_CONF_CHANGE_RETRY_LIMITS)
+		b43_set_retry_limits(dev, conf->short_frame_max_tx_count,
+					  conf->long_frame_max_tx_count);
+	changed &= ~IEEE80211_CONF_CHANGE_RETRY_LIMITS;
+	if (!changed)
+		goto out_unlock_mutex;
 
 	/* Disable IRQs while reconfiguring the device.
 	 * This makes it possible to drop the spinlock throughout
@@ -3399,9 +3404,9 @@ static int b43_op_config(struct ieee80211_hw *hw, struct ieee80211_conf *conf)
 	}
 
 	/* Antennas for RX and management frame TX. */
-	antenna = b43_antenna_from_ieee80211(dev, conf->antenna_sel_tx);
+	antenna = B43_ANTENNA_DEFAULT;
 	b43_mgmtframe_txantenna(dev, antenna);
-	antenna = b43_antenna_from_ieee80211(dev, conf->antenna_sel_rx);
+	antenna = B43_ANTENNA_DEFAULT;
 	if (phy->ops->set_rx_antenna)
 		phy->ops->set_rx_antenna(dev, antenna);
 
@@ -3445,7 +3450,6 @@ static int b43_op_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	u8 algorithm;
 	u8 index;
 	int err;
-	DECLARE_MAC_BUF(mac);
 
 	if (modparam_nohwcrypt)
 		return -ENOSPC; /* User disabled HW-crypto */
@@ -3533,9 +3537,9 @@ out_unlock:
 	mutex_unlock(&wl->mutex);
 	if (!err) {
 		b43dbg(wl, "%s hardware based encryption for keyidx: %d, "
-		       "mac: %s\n",
+		       "mac: %pM\n",
 		       cmd == SET_KEY ? "Using" : "Disabling", key->keyidx,
-		       print_mac(mac, addr));
+		       addr);
 	}
 	return err;
 }
@@ -3878,22 +3882,6 @@ static void b43_imcfglo_timeouts_workaround(struct b43_wldev *dev)
 #endif /* CONFIG_SSB_DRIVER_PCICORE */
 }
 
-/* Write the short and long frame retry limit values. */
-static void b43_set_retry_limits(struct b43_wldev *dev,
-				 unsigned int short_retry,
-				 unsigned int long_retry)
-{
-	/* The retry limit is a 4-bit counter. Enforce this to avoid overflowing
-	 * the chip-internal counter. */
-	short_retry = min(short_retry, (unsigned int)0xF);
-	long_retry = min(long_retry, (unsigned int)0xF);
-
-	b43_shm_write16(dev, B43_SHM_SCRATCH, B43_SHM_SC_SRLIMIT,
-			short_retry);
-	b43_shm_write16(dev, B43_SHM_SCRATCH, B43_SHM_SC_LRLIMIT,
-			long_retry);
-}
-
 static void b43_set_synth_pu_delay(struct b43_wldev *dev, bool idle)
 {
 	u16 pu_delay;
@@ -4214,26 +4202,6 @@ static void b43_op_stop(struct ieee80211_hw *hw)
 	cancel_work_sync(&(wl->txpower_adjust_work));
 }
 
-static int b43_op_set_retry_limit(struct ieee80211_hw *hw,
-				  u32 short_retry_limit, u32 long_retry_limit)
-{
-	struct b43_wl *wl = hw_to_b43_wl(hw);
-	struct b43_wldev *dev;
-	int err = 0;
-
-	mutex_lock(&wl->mutex);
-	dev = wl->current_dev;
-	if (unlikely(!dev || (b43_status(dev) < B43_STAT_INITIALIZED))) {
-		err = -ENODEV;
-		goto out_unlock;
-	}
-	b43_set_retry_limits(dev, short_retry_limit, long_retry_limit);
-out_unlock:
-	mutex_unlock(&wl->mutex);
-
-	return err;
-}
-
 static int b43_op_beacon_set_tim(struct ieee80211_hw *hw,
 				 struct ieee80211_sta *sta, bool set)
 {
@@ -4270,7 +4238,6 @@ static const struct ieee80211_ops b43_hw_ops = {
 	.get_tx_stats		= b43_op_get_tx_stats,
 	.start			= b43_op_start,
 	.stop			= b43_op_stop,
-	.set_retry_limit	= b43_op_set_retry_limit,
 	.set_tim		= b43_op_beacon_set_tim,
 	.sta_notify		= b43_op_sta_notify,
 };
@@ -4588,7 +4555,7 @@ static int b43_wireless_init(struct ssb_device *dev)
 		BIT(NL80211_IFTYPE_ADHOC);
 
 	hw->queues = b43_modparam_qos ? 4 : 1;
-	hw->max_altrates = 1;
+	hw->max_rates = 2;
 	SET_IEEE80211_DEV(hw, dev->dev);
 	if (is_valid_ether_addr(sprom->et1mac))
 		SET_IEEE80211_PERM_ADDR(hw, sprom->et1mac);
