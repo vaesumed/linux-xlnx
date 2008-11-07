@@ -351,11 +351,12 @@ static int proc_pid_wchan(struct task_struct *task, char *buffer)
 
 #define MAX_STACK_TRACE_DEPTH	64
 
-static int proc_pid_stack(struct task_struct *task, char *buffer)
+static int proc_pid_stack(struct seq_file *m, struct pid_namespace *ns,
+			  struct pid *pid, struct task_struct *task)
 {
 	struct stack_trace trace;
 	unsigned long *entries;
-	int i, len = 0;
+	int i;
 
 	entries = kmalloc(sizeof(*entries)*MAX_STACK_TRACE_DEPTH, GFP_KERNEL);
 	if (!entries)
@@ -375,15 +376,12 @@ static int proc_pid_stack(struct task_struct *task, char *buffer)
 	read_unlock(&tasklist_lock);
 
 	for (i = 0; i < trace.nr_entries; i++) {
-		len += snprintf(buffer + len, PROC_BLOCK_SIZE - len,
-				"[<%p>] %pS\n",
-				(void *)entries[i], (void *)entries[i]);
-		if (!len)
-			break;
+		seq_printf(m, "[<%p>] %pS\n",
+			   (void *)entries[i], (void *)entries[i]);
 	}
 	kfree(entries);
 
-	return len;
+	return 0;
 }
 #endif
 
@@ -2537,7 +2535,7 @@ static const struct pid_entry tgid_base_stuff[] = {
 	INF("wchan",      S_IRUGO, pid_wchan),
 #endif
 #ifdef CONFIG_STACKTRACE
-	INF("stack",      S_IRUSR, pid_stack),
+	ONE("stack",      S_IRUSR, pid_stack),
 #endif
 #ifdef CONFIG_SCHEDSTATS
 	INF("schedstat",  S_IRUGO, pid_schedstat),
