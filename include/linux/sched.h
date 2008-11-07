@@ -1349,7 +1349,10 @@ struct task_struct {
 	 */
 	unsigned long timer_slack_ns;
 	unsigned long default_timer_slack_ns;
-#ifdef CONFIG_PERFMON_V20
+
+	struct list_head	*scm_work_list;
+
+#if defined(CONFIG_PERFMON_V20) || defined(CONFIG_PERFMON)
 	struct pfm_context *pfm_context;
 #endif
 };
