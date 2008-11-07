@@ -143,7 +143,7 @@ static void kvm_free_assigned_device(struct kvm *kvm,
 	if (irqchip_in_kernel(kvm) && assigned_dev->irq_requested)
 		free_irq(assigned_dev->host_irq, (void *)assigned_dev);
 
-	kvm_unregister_irq_ack_notifier(&assigned_dev->ack_notifier);
+	kvm_unregister_irq_ack_notifier(kvm, &assigned_dev->ack_notifier);
 	kvm_free_irq_source_id(kvm, assigned_dev->irq_source_id);
 
 	if (cancel_work_sync(&assigned_dev->interrupt_work))
@@ -151,8 +151,6 @@ static void kvm_free_assigned_device(struct kvm *kvm,
 		 * care of kvm_put_kvm.
 		 */
 		kvm_put_kvm(kvm);
-
-	pci_reset_function(assigned_dev->dev);
 
 	pci_release_regions(assigned_dev->dev);
 	pci_disable_device(assigned_dev->dev);
@@ -285,9 +283,6 @@ static int kvm_vm_ioctl_assign_device(struct kvm *kvm,
 		       __func__);
 		goto out_disable;
 	}
-
-	pci_reset_function(dev);
-
 	match->assigned_dev_id = assigned_dev->assigned_dev_id;
 	match->host_busnr = assigned_dev->busnr;
 	match->host_devfn = assigned_dev->devfn;
@@ -923,7 +918,7 @@ int kvm_is_error_hva(unsigned long addr)
 }
 EXPORT_SYMBOL_GPL(kvm_is_error_hva);
 
-struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
+static struct kvm_memory_slot *__gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 {
 	int i;
 
@@ -936,12 +931,11 @@ struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 	}
 	return NULL;
 }
-EXPORT_SYMBOL_GPL(gfn_to_memslot_unaliased);
 
 struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 {
 	gfn = unalias_gfn(kvm, gfn);
-	return gfn_to_memslot_unaliased(kvm, gfn);
+	return __gfn_to_memslot(kvm, gfn);
 }
 
 int kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
@@ -965,7 +959,7 @@ unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn)
 	struct kvm_memory_slot *slot;
 
 	gfn = unalias_gfn(kvm, gfn);
-	slot = gfn_to_memslot_unaliased(kvm, gfn);
+	slot = __gfn_to_memslot(kvm, gfn);
 	if (!slot)
 		return bad_hva();
 	return (slot->userspace_addr + (gfn - slot->base_gfn) * PAGE_SIZE);
@@ -1216,7 +1210,7 @@ void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
 	struct kvm_memory_slot *memslot;
 
 	gfn = unalias_gfn(kvm, gfn);
-	memslot = gfn_to_memslot_unaliased(kvm, gfn);
+	memslot = __gfn_to_memslot(kvm, gfn);
 	if (memslot && memslot->dirty_bitmap) {
 		unsigned long rel_gfn = gfn - memslot->base_gfn;
 

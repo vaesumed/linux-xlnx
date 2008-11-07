@@ -16,9 +16,11 @@ if VIRTUALIZATION
 
 config KVM
 	bool "Kernel-based Virtual Machine (KVM) support"
-	depends on EXPERIMENTAL
+	depends on 44x && EXPERIMENTAL
 	select PREEMPT_NOTIFIERS
 	select ANON_INODES
+	# We can only run on Book E hosts so far
+	select KVM_BOOKE_HOST
 	---help---
 	  Support hosting virtualized guest machines. You will also
 	  need to select one or more of the processor modules below.
@@ -28,11 +30,12 @@ config KVM
 
 	  If unsure, say N.
 
-config KVM_440
-	bool "KVM support for PowerPC 440 processors"
+config KVM_BOOKE_HOST
+	bool "KVM host support for Book E PowerPC processors"
 	depends on KVM && 44x
 	---help---
-	  KVM can run unmodified 440 guest kernels on 440 host processors.
+	  Provides host support for KVM on Book E PowerPC processors. Currently
+	  this works on 440 processors only.
 
 config KVM_TRACE
 	bool "KVM trace support"
