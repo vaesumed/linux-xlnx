@@ -186,6 +186,21 @@ u64 get_cpu_idle_time_us(int cpu, u64 *last_update_time)
 }
 EXPORT_SYMBOL_GPL(get_cpu_idle_time_us);
 
+int check_idle_spurious_wakeup(int cpu)
+{
+	struct tick_sched *ts = &per_cpu(tick_cpu_sched, cpu);
+	int ret;
+
+	local_irq_disable();
+	ret= ts->irq_last_wakeups == ts->irq_wakeups;
+
+	ts->irq_last_wakeups = ts->irq_wakeups;
+	ts->spurious_wakeups += ret;
+	local_irq_enable();
+	return ret;
+}
+EXPORT_SYMBOL_GPL(check_idle_spurious_wakeup);
+
 /**
  * tick_nohz_stop_sched_tick - stop the idle tick from the idle task
  *
@@ -577,6 +592,8 @@ void tick_check_idle(int cpu)
 {
 	struct tick_sched *ts = &per_cpu(tick_cpu_sched, cpu);
 	ktime_t now;
+
+	ts->irq_wakeups++;
 
 	tick_check_oneshot_broadcast(cpu);
 

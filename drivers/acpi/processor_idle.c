@@ -41,6 +41,7 @@
 #include <linux/pm_qos_params.h>
 #include <linux/clockchips.h>
 #include <linux/cpuidle.h>
+#include <linux/tick.h>
 
 /*
  * Include the apic definitions for x86 to have the APIC timer related defines
@@ -1458,6 +1459,7 @@ static int acpi_idle_enter_c1(struct cpuidle_device *dev,
 	u32 t1, t2;
 	struct acpi_processor *pr;
 	struct acpi_processor_cx *cx = cpuidle_get_statedata(state);
+	int sleep_ticks = 0;
 
 	pr = __get_cpu_var(processors);
 
@@ -1473,6 +1475,7 @@ static int acpi_idle_enter_c1(struct cpuidle_device *dev,
 		return 0;
 	}
 
+again:
 	if (pr->flags.bm_check)
 		acpi_idle_update_bm_rld(pr, cx);
 
@@ -1480,10 +1483,18 @@ static int acpi_idle_enter_c1(struct cpuidle_device *dev,
 	acpi_idle_do_entry(cx);
 	t2 = inl(acpi_gbl_FADT.xpm_timer_block.address);
 
+	sleep_ticks += ticks_elapsed(t1, t2);
+
 	local_irq_enable();
+
+	/* Check for spurious wakeup */
+	if (check_idle_spurious_wakeup(pr->id) && !need_resched()) {
+		local_irq_disable();
+		goto again;
+	}
 	cx->usage++;
 
-	return ticks_elapsed_in_us(t1, t2);
+	return sleep_ticks;
 }
 
 /**
@@ -1527,6 +1538,7 @@ static int acpi_idle_enter_simple(struct cpuidle_device *dev,
 	 */
 	acpi_state_timer_broadcast(pr, cx, 1);
 
+again:
 	if (pr->flags.bm_check)
 		acpi_idle_update_bm_rld(pr, cx);
 
@@ -1544,12 +1556,18 @@ static int acpi_idle_enter_simple(struct cpuidle_device *dev,
 	if (tsc_halts_in_c(cx->type))
 		mark_tsc_unstable("TSC halts in idle");;
 #endif
-	sleep_ticks = ticks_elapsed(t1, t2);
-
+	sleep_ticks += ticks_elapsed(t1, t2);
 	/* Tell the scheduler how much we idled: */
 	sched_clock_idle_wakeup_event(sleep_ticks*PM_TIMER_TICK_NS);
 
 	local_irq_enable();
+
+	/* Check for spurious wakeup */
+	if (check_idle_spurious_wakeup(pr->id) && !need_resched()) {
+		local_irq_disable();
+		goto again;
+	}
+
 	current_thread_info()->status |= TS_POLLING;
 
 	cx->usage++;
@@ -1613,13 +1631,15 @@ static int acpi_idle_enter_bm(struct cpuidle_device *dev,
 
 	acpi_unlazy_tlb(smp_processor_id());
 
-	/* Tell the scheduler that we are going deep-idle: */
-	sched_clock_idle_sleep_event();
 	/*
 	 * Must be done before busmaster disable as we might need to
 	 * access HPET !
 	 */
 	acpi_state_timer_broadcast(pr, cx, 1);
+
+again:
+	/* Tell the scheduler that we are going deep-idle: */
+	sched_clock_idle_sleep_event();
 
 	acpi_idle_update_bm_rld(pr, cx);
 
@@ -1666,6 +1686,13 @@ static int acpi_idle_enter_bm(struct cpuidle_device *dev,
 	sched_clock_idle_wakeup_event(sleep_ticks*PM_TIMER_TICK_NS);
 
 	local_irq_enable();
+
+	/* Check for spurious wakeup */
+	if (check_idle_spurious_wakeup(pr->id) && !need_resched()) {
+		local_irq_disable();
+		goto again;
+	}
+
 	current_thread_info()->status |= TS_POLLING;
 
 	cx->usage++;
