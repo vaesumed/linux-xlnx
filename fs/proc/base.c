@@ -65,6 +65,7 @@
 #include <linux/mm.h>
 #include <linux/rcupdate.h>
 #include <linux/kallsyms.h>
+#include <linux/stacktrace.h>
 #include <linux/resource.h>
 #include <linux/module.h>
 #include <linux/mount.h>
@@ -128,6 +129,12 @@ struct pid_entry {
 	NOD(NAME, (S_IFREG|(MODE)), 			\
 		NULL, &proc_single_file_operations,	\
 		{ .proc_show = &proc_##OTYPE } )
+
+/*
+ * buffer size used for proc read.  See proc_info_read().
+ * 4K page size but our output routines use some slack for overruns
+ */
+#define PROC_BLOCK_SIZE	(3*1024)
 
 /*
  * Count the number of hardlinks for the pid_entry table, excluding the .
@@ -339,6 +346,46 @@ static int proc_pid_wchan(struct task_struct *task, char *buffer)
 		return sprintf(buffer, "%s", symname);
 }
 #endif /* CONFIG_KALLSYMS */
+
+#ifdef CONFIG_STACKTRACE
+
+#define MAX_STACK_TRACE_DEPTH	64
+
+static int proc_pid_stack(struct task_struct *task, char *buffer)
+{
+	struct stack_trace trace;
+	unsigned long *entries;
+	int i, len = 0;
+
+	entries = kmalloc(sizeof(*entries)*MAX_STACK_TRACE_DEPTH, GFP_KERNEL);
+	if (!entries)
+		return -ENOMEM;
+
+	trace.nr_entries	= 0;
+	trace.max_entries	= MAX_STACK_TRACE_DEPTH;
+	trace.entries		= entries;
+	trace.skip		= 0;
+
+	/*
+	 * Protect against the task exiting (and deallocating its
+	 * stack, etc.) while we save its backtrace:
+	 */
+	read_lock(&tasklist_lock);
+	save_stack_trace_tsk(task, &trace);
+	read_unlock(&tasklist_lock);
+
+	for (i = 0; i < trace.nr_entries; i++) {
+		len += snprintf(buffer + len, PROC_BLOCK_SIZE - len,
+				"[<%p>] %pS\n",
+				(void *)entries[i], (void *)entries[i]);
+		if (!len)
+			break;
+	}
+	kfree(entries);
+
+	return len;
+}
+#endif
 
 #ifdef CONFIG_SCHEDSTATS
 /*
@@ -687,8 +734,6 @@ static const struct file_operations proc_mountstats_operations = {
 	.llseek		= seq_lseek,
 	.release	= mounts_release,
 };
-
-#define PROC_BLOCK_SIZE	(3*1024)		/* 4K page size but our output routines use some slack for overruns */
 
 static ssize_t proc_info_read(struct file * file, char __user * buf,
 			  size_t count, loff_t *ppos)
@@ -2490,6 +2535,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 #endif
 #ifdef CONFIG_KALLSYMS
 	INF("wchan",      S_IRUGO, pid_wchan),
+#endif
+#ifdef CONFIG_STACKTRACE
+	INF("stack",      S_IRUSR, pid_stack),
 #endif
 #ifdef CONFIG_SCHEDSTATS
 	INF("schedstat",  S_IRUGO, pid_schedstat),
