@@ -352,7 +352,7 @@ static int wusbhc_rh_get_port_status(struct wusbhc *wusbhc, u16 port_idx,
 				     u32 *_buf, u16 wLength)
 {
 	int result = -EINVAL;
-	u16 *buf = (u16 *) _buf;
+	__le16 *buf = (__le16 *)_buf;
 
 	d_fnstart(1, wusbhc->dev, "(wusbhc %p port_idx %u wLength %u)\n",
 		  wusbhc, port_idx, wLength);
