@@ -403,16 +403,20 @@ void tick_check_oneshot_broadcast(int cpu)
  */
 int tick_check_oneshot_broadcast_wakeup(int cpu, ktime_t now)
 {
-	struct clock_event_device *bc = tick_broadcast_device.evtdev;
+	struct clock_event_device *bc;
 	ktime_t delta;
 	int res = 0;
 
 	spin_lock(&tick_broadcast_lock);
+	bc = tick_broadcast_device.evtdev;
 
-	delta =	ktime_sub(bc->next_event, now);
-	if (delta.tv64 <= tick_period.tv64)
-		res = 1;
-	else
+	if (bc) {
+		delta =	ktime_sub(bc->next_event, now);
+		if (delta.tv64 <= tick_period.tv64)
+			res = 1;
+		else
+			cpu_clear(cpu, tick_broadcast_oneshot_mask);
+	} else
 		cpu_clear(cpu, tick_broadcast_oneshot_mask);
 
 	spin_unlock(&tick_broadcast_lock);
