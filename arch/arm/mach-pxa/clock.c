@@ -28,9 +28,13 @@ static struct clk *clk_lookup(struct device *dev, const char *id)
 {
 	struct clk *p;
 
-	list_for_each_entry(p, &clocks, node)
-		if (strcmp(id, p->name) == 0 && p->dev == dev)
-			return p;
+	list_for_each_entry(p, &clocks, node) {
+		if (p->dev != dev)
+			continue;
+		if (id && (!p->name || strcmp(id, p->name)))
+			continue;
+		return p;
+	}
 
 	return NULL;
 }
@@ -40,12 +44,17 @@ struct clk *clk_get(struct device *dev, const char *id)
 	struct clk *p, *clk = ERR_PTR(-ENOENT);
 
 	mutex_lock(&clocks_mutex);
+	/* Look for an exact match */
 	p = clk_lookup(dev, id);
-	if (!p)
+	if (!p && dev)
+		/* Then try just the device */
+		p = clk_lookup(dev, NULL);
+	if (!p && id)
+		/* Then try just the name */
 		p = clk_lookup(NULL, id);
+	mutex_unlock(&clocks_mutex);
 	if (p)
 		clk = p;
-	mutex_unlock(&clocks_mutex);
 
 	if (!IS_ERR(clk) && clk->ops == NULL)
 		clk = clk->other;
