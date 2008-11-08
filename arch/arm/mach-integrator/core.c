@@ -29,6 +29,7 @@
 #include <asm/leds.h>
 #include <asm/mach/time.h>
 
+#include "clock.h"
 #include "common.h"
 
 static struct amba_pl010_data integrator_uart_data;
@@ -108,9 +109,42 @@ static struct amba_device *amba_devs[] __initdata = {
 	&kmi1_device,
 };
 
+/*
+ * These are fixed clocks.
+ */
+static struct clk clk24mhz = {
+	.rate	= 24000000,
+};
+
+static struct clk uartclk = {
+	.rate	= 14745600,
+};
+
+static struct clk_lookup lookups[] = {
+	{	/* UART0 */
+		.devname	= "mb:16",
+		.clk		= &uartclk,
+	}, {	/* UART1 */
+		.devname	= "mb:17",
+		.clk		= &uartclk,
+	}, {	/* KMI0 */
+		.devname	= "mb:18",
+		.clk		= &clk24mhz,
+	}, {	/* KMI1 */
+		.devname	= "mb:19",
+		.clk		= &clk24mhz,
+	}, {	/* MMCI - IntegratorCP */
+		.devname	= "mb:1c",
+		.clk		= &uartclk,
+	}
+};
+
 static int __init integrator_init(void)
 {
 	int i;
+
+	for (i = 0; i < ARRAY_SIZE(lookups); i++)
+		clk_register_lookup(&lookups[i]);
 
 	for (i = 0; i < ARRAY_SIZE(amba_devs); i++) {
 		struct amba_device *d = amba_devs[i];

@@ -9,17 +9,22 @@
  * published by the Free Software Foundation.
  */
 struct module;
-struct icst525_params;
+
+#include <asm/hardware/icst525.h>
 
 struct clk {
-	struct list_head	node;
 	unsigned long		rate;
 	struct module		*owner;
-	const char		*name;
 	const struct icst525_params *params;
 	void			*data;
 	void			(*setvco)(struct clk *, struct icst525_vco vco);
 };
 
-int clk_register(struct clk *clk);
-void clk_unregister(struct clk *clk);
+struct clk_lookup {
+	struct list_head	node;
+	const char		*devname;
+	struct clk		*clk;
+};
+
+int clk_register_lookup(struct clk_lookup *cl);
+void clk_unregister_lookup(struct clk_lookup *cl);

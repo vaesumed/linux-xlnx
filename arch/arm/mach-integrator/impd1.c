@@ -37,6 +37,8 @@ MODULE_PARM_DESC(lmid, "logic module stack position");
 struct impd1_module {
 	void __iomem	*base;
 	struct clk	vcos[2];
+	char		names[3][20];
+	struct clk_lookup clks[3];
 };
 
 static const struct icst525_params impd1_vco_params = {
@@ -339,9 +341,8 @@ static struct impd1_device impd1_devs[] = {
 	}
 };
 
-static const char *impd1_vconames[2] = {
-	"CLCDCLK",
-	"AUXVCO2",
+static struct clk fixed_14745600 = {
+	.rate = 14745600,
 };
 
 static int impd1_probe(struct lm_device *dev)
@@ -374,13 +375,25 @@ static int impd1_probe(struct lm_device *dev)
 
 	for (i = 0; i < ARRAY_SIZE(impd1->vcos); i++) {
 		impd1->vcos[i].owner = THIS_MODULE,
-		impd1->vcos[i].name = impd1_vconames[i],
 		impd1->vcos[i].params = &impd1_vco_params,
 		impd1->vcos[i].data = impd1,
 		impd1->vcos[i].setvco = impd1_setvco;
-
-		clk_register(&impd1->vcos[i]);
 	}
+
+	sprintf(impd1->names[0], "lm%x:01000", dev->id);
+	impd1->clks[0].devname	= impd1->names[0];
+	impd1->clks[0].clk	= &impd1->vcos[0];
+
+	sprintf(impd1->names[1], "lm%x:00100", dev->id);
+	impd1->clks[1].devname	= impd1->names[1];
+	impd1->clks[1].clk	= &fixed_14745600;
+
+	sprintf(impd1->names[2], "lm%x:00200", dev->id);
+	impd1->clks[2].devname	= impd1->names[2];
+	impd1->clks[2].clk	= &fixed_14745600;
+
+	for (i = 0; i < ARRAY_SIZE(impd1->clks); i++)
+		clk_register_lookup(&impd1->clks[i]);
 
 	for (i = 0; i < ARRAY_SIZE(impd1_devs); i++) {
 		struct impd1_device *idev = impd1_devs + i;
@@ -434,8 +447,8 @@ static void impd1_remove(struct lm_device *dev)
 
 	device_for_each_child(&dev->dev, NULL, impd1_remove_one);
 
-	for (i = 0; i < ARRAY_SIZE(impd1->vcos); i++)
-		clk_unregister(&impd1->vcos[i]);
+	for (i = 0; i < ARRAY_SIZE(impd1->clks); i++)
+		clk_unregister_lookup(&impd1->clks[i]);
 
 	lm_set_drvdata(dev, NULL);
 
