@@ -188,11 +188,58 @@ static void realview_oscvco_set(struct clk *clk, struct icst307_vco vco)
 	writel(0, sys_lock);
 }
 
-struct clk realview_clcd_clk = {
-	.name	= "CLCDCLK",
+static struct clk oscvco_clk = {
 	.params	= &realview_oscvco_params,
 	.setvco = realview_oscvco_set,
 };
+
+/*
+ * These are fixed clocks.
+ */
+static struct clk ref24_clk = {
+	.rate	= 24000000,
+};
+
+static struct clk_lookup lookups[] = {
+	{	/* UART0 */
+		.devname	= "dev:f1",
+		.clk		= &ref24_clk,
+	}, {	/* UART1 */
+		.devname	= "dev:f2",
+		.clk		= &ref24_clk,
+	}, {	/* UART2 */
+		.devname	= "dev:f3",
+		.clk		= &ref24_clk,
+	}, {	/* UART3 */
+		.devname	= "fpga:09",
+		.clk		= &ref24_clk,
+	}, {	/* KMI0 */
+		.devname	= "fpga:06",
+		.clk		= &ref24_clk,
+	}, {	/* KMI1 */
+		.devname	= "fpga:07",
+		.clk		= &ref24_clk,
+	}, {	/* MMC0 */
+		.devname	= "fpga:05",
+		.clk		= &ref24_clk,
+	}, {	/* EB:CLCD */
+		.devname	= "dev:20",
+		.clk		= &oscvco_clk,
+	}, {	/* PB:CLCD */
+		.devname	= "issp:20",
+		.clk		= &oscvco_clk,
+	}
+};
+
+static int __init clk_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(lookups); i++)
+		clk_register_lookup(&lookups[i]);
+	return 0;
+}
+arch_initcall(clk_init);
 
 /*
  * CLCD support.

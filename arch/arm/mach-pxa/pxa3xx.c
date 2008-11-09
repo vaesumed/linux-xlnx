@@ -231,28 +231,28 @@ static struct clk pxa3xx_clks[] = {
 		.dev		= &pxa3xx_device_i2c_power.dev,
 	},
 
-	PXA3xx_CK("LCDCLK",  LCD,    &clk_pxa3xx_hsio_ops, &pxa_device_fb.dev),
+	PXA3xx_CK(NULL,  LCD,    &clk_pxa3xx_hsio_ops, &pxa_device_fb.dev),
 	PXA3xx_CK("CAMCLK",  CAMERA, &clk_pxa3xx_hsio_ops, NULL),
 	PXA3xx_CK("AC97CLK", AC97,   &clk_pxa3xx_ac97_ops, NULL),
 
-	PXA3xx_CKEN("UARTCLK", FFUART, 14857000, 1, &pxa_device_ffuart.dev),
-	PXA3xx_CKEN("UARTCLK", BTUART, 14857000, 1, &pxa_device_btuart.dev),
+	PXA3xx_CKEN(NULL, FFUART, 14857000, 1, &pxa_device_ffuart.dev),
+	PXA3xx_CKEN(NULL, BTUART, 14857000, 1, &pxa_device_btuart.dev),
 	PXA3xx_CKEN("UARTCLK", STUART, 14857000, 1, NULL),
 
-	PXA3xx_CKEN("I2CCLK", I2C,  32842000, 0, &pxa_device_i2c.dev),
-	PXA3xx_CKEN("UDCCLK", UDC,  48000000, 5, &pxa27x_device_udc.dev),
-	PXA3xx_CKEN("USBCLK", USBH, 48000000, 0, &pxa27x_device_ohci.dev),
-	PXA3xx_CKEN("KBDCLK", KEYPAD,  32768, 0, &pxa27x_device_keypad.dev),
+	PXA3xx_CKEN(NULL, I2C,  32842000, 0, &pxa_device_i2c.dev),
+	PXA3xx_CKEN(NULL, UDC,  48000000, 5, &pxa27x_device_udc.dev),
+	PXA3xx_CKEN(NULL, USBH, 48000000, 0, &pxa27x_device_ohci.dev),
+	PXA3xx_CKEN(NULL, KEYPAD,  32768, 0, &pxa27x_device_keypad.dev),
 
-	PXA3xx_CKEN("SSPCLK", SSP1, 13000000, 0, &pxa27x_device_ssp1.dev),
-	PXA3xx_CKEN("SSPCLK", SSP2, 13000000, 0, &pxa27x_device_ssp2.dev),
-	PXA3xx_CKEN("SSPCLK", SSP3, 13000000, 0, &pxa27x_device_ssp3.dev),
-	PXA3xx_CKEN("SSPCLK", SSP4, 13000000, 0, &pxa3xx_device_ssp4.dev),
-	PXA3xx_CKEN("PWMCLK", PWM0, 13000000, 0, &pxa27x_device_pwm0.dev),
-	PXA3xx_CKEN("PWMCLK", PWM1, 13000000, 0, &pxa27x_device_pwm1.dev),
+	PXA3xx_CKEN(NULL, SSP1, 13000000, 0, &pxa27x_device_ssp1.dev),
+	PXA3xx_CKEN(NULL, SSP2, 13000000, 0, &pxa27x_device_ssp2.dev),
+	PXA3xx_CKEN(NULL, SSP3, 13000000, 0, &pxa27x_device_ssp3.dev),
+	PXA3xx_CKEN(NULL, SSP4, 13000000, 0, &pxa3xx_device_ssp4.dev),
+	PXA3xx_CKEN(NULL, PWM0, 13000000, 0, &pxa27x_device_pwm0.dev),
+	PXA3xx_CKEN(NULL, PWM1, 13000000, 0, &pxa27x_device_pwm1.dev),
 
-	PXA3xx_CKEN("MMCCLK", MMC1, 19500000, 0, &pxa_device_mci.dev),
-	PXA3xx_CKEN("MMCCLK", MMC2, 19500000, 0, &pxa3xx_device_mci2.dev),
+	PXA3xx_CKEN(NULL, MMC1, 19500000, 0, &pxa_device_mci.dev),
+	PXA3xx_CKEN(NULL, MMC2, 19500000, 0, &pxa3xx_device_mci2.dev),
 };
 
 #ifdef CONFIG_PM

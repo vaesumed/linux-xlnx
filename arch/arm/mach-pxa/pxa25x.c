@@ -175,26 +175,26 @@ static struct clk pxa25x_hwuart_clk =
  * PXA 2xx clock declarations.
  */
 static struct clk pxa25x_clks[] = {
-	INIT_CK("LCDCLK", LCD, &clk_pxa25x_lcd_ops, &pxa_device_fb.dev),
-	INIT_CKEN("UARTCLK", FFUART, 14745600, 1, &pxa_device_ffuart.dev),
-	INIT_CKEN("UARTCLK", BTUART, 14745600, 1, &pxa_device_btuart.dev),
+	INIT_CK(NULL, LCD, &clk_pxa25x_lcd_ops, &pxa_device_fb.dev),
+	INIT_CKEN(NULL, FFUART, 14745600, 1, &pxa_device_ffuart.dev),
+	INIT_CKEN(NULL, BTUART, 14745600, 1, &pxa_device_btuart.dev),
 	INIT_CKEN("UARTCLK", STUART, 14745600, 1, NULL),
-	INIT_CKEN("UDCCLK", USB, 47923000, 5, &pxa25x_device_udc.dev),
+	INIT_CKEN(NULL", USB, 47923000, 5, &pxa25x_device_udc.dev),
 	INIT_CLK("GPIO11_CLK", &clk_pxa25x_gpio11_ops, 3686400, 0, NULL),
 	INIT_CLK("GPIO12_CLK", &clk_pxa25x_gpio12_ops, 32768, 0, NULL),
-	INIT_CKEN("MMCCLK", MMC, 19169000, 0, &pxa_device_mci.dev),
-	INIT_CKEN("I2CCLK", I2C, 31949000, 0, &pxa_device_i2c.dev),
+	INIT_CKEN(NULL, MMC, 19169000, 0, &pxa_device_mci.dev),
+	INIT_CKEN(NULL, I2C, 31949000, 0, &pxa_device_i2c.dev),
 
-	INIT_CKEN("SSPCLK",  SSP, 3686400, 0, &pxa25x_device_ssp.dev),
-	INIT_CKEN("SSPCLK", NSSP, 3686400, 0, &pxa25x_device_nssp.dev),
-	INIT_CKEN("SSPCLK", ASSP, 3686400, 0, &pxa25x_device_assp.dev),
-	INIT_CKEN("PWMCLK", PWM0, 3686400, 0, &pxa25x_device_pwm0.dev),
-	INIT_CKEN("PWMCLK", PWM1, 3686400, 0, &pxa25x_device_pwm1.dev),
+	INIT_CKEN(NULL,  SSP, 3686400, 0, &pxa25x_device_ssp.dev),
+	INIT_CKEN(NULL, NSSP, 3686400, 0, &pxa25x_device_nssp.dev),
+	INIT_CKEN(NULL, ASSP, 3686400, 0, &pxa25x_device_assp.dev),
+	INIT_CKEN(NULL, PWM0, 3686400, 0, &pxa25x_device_pwm0.dev),
+	INIT_CKEN(NULL, PWM1, 3686400, 0, &pxa25x_device_pwm1.dev),
 
 	INIT_CKEN("AC97CLK",     AC97,     24576000, 0, NULL),
 
 	/*
-	INIT_CKEN("I2SCLK",  I2S,  14745600, 0, NULL),
+	INIT_CKEN(NULL,  I2S,  14745600, 0, &pxa_device_i2s.dev),
 	*/
 	INIT_CKEN("FICPCLK", FICP, 47923000, 0, NULL),
 };
