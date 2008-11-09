@@ -1067,10 +1067,8 @@ static int dvb_register(struct cx8802_dev *dev)
 		fe0->dvb.frontend = dvb_attach(cx24116_attach,
 					       &tevii_s460_config,
 					       &core->i2c_adap);
-		if (fe0->dvb.frontend != NULL) {
-			core->prev_set_voltage = fe0->dvb.frontend->ops.set_voltage;
+		if (fe0->dvb.frontend != NULL)
 			fe0->dvb.frontend->ops.set_voltage = tevii_dvbs_set_voltage;
-		}
 		break;
 	case CX88_BOARD_OMICOM_SS4_PCI:
 	case CX88_BOARD_TBS_8920:
@@ -1079,10 +1077,8 @@ static int dvb_register(struct cx8802_dev *dev)
 		fe0->dvb.frontend = dvb_attach(cx24116_attach,
 					       &hauppauge_hvr4000_config,
 					       &core->i2c_adap);
-		if (fe0->dvb.frontend != NULL) {
-			core->prev_set_voltage = fe0->dvb.frontend->ops.set_voltage;
+		if (fe0->dvb.frontend != NULL)
 			fe0->dvb.frontend->ops.set_voltage = tevii_dvbs_set_voltage;
-		}
 		break;
 	default:
 		printk(KERN_ERR "%s/2: The frontend of your DVB/ATSC card isn't supported yet\n",
