@@ -67,6 +67,7 @@ int cpumask_any_but(const struct cpumask *mask, unsigned int cpu)
 {
 	unsigned int i;
 
+	cpumask_check(cpu);
 	for_each_cpu(i, mask)
 		if (i != cpu)
 			break;
