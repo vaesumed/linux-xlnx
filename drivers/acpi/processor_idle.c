@@ -1508,7 +1508,7 @@ static int acpi_idle_enter_simple(struct cpuidle_device *dev,
 	struct acpi_processor *pr;
 	struct acpi_processor_cx *cx = cpuidle_get_statedata(state);
 	u32 t1, t2;
-	int sleep_ticks = 0;
+	int ticks, sleep_ticks = 0;
 
 	pr = __get_cpu_var(processors);
 
@@ -1556,11 +1556,12 @@ again:
 	if (tsc_halts_in_c(cx->type))
 		mark_tsc_unstable("TSC halts in idle");;
 #endif
-	sleep_ticks += ticks_elapsed(t1, t2);
+	ticks = ticks_elapsed(t1, t2);
 	/* Tell the scheduler how much we idled: */
-	sched_clock_idle_wakeup_event(sleep_ticks*PM_TIMER_TICK_NS);
+	sched_clock_idle_wakeup_event(ticks*PM_TIMER_TICK_NS);
 
 	local_irq_enable();
+	sleep_ticks += ticks;
 
 	/* Check for spurious wakeup */
 	if (check_idle_spurious_wakeup(pr->id) && !need_resched()) {
@@ -1593,7 +1594,7 @@ static int acpi_idle_enter_bm(struct cpuidle_device *dev,
 	struct acpi_processor *pr;
 	struct acpi_processor_cx *cx = cpuidle_get_statedata(state);
 	u32 t1, t2;
-	int sleep_ticks = 0;
+	int ticks, sleep_ticks = 0;
 
 	pr = __get_cpu_var(processors);
 
@@ -1681,11 +1682,12 @@ again:
 	if (tsc_halts_in_c(ACPI_STATE_C3))
 		mark_tsc_unstable("TSC halts in idle");
 #endif
-	sleep_ticks = ticks_elapsed(t1, t2);
+	ticks = ticks_elapsed(t1, t2);
 	/* Tell the scheduler how much we idled: */
-	sched_clock_idle_wakeup_event(sleep_ticks*PM_TIMER_TICK_NS);
+	sched_clock_idle_wakeup_event(ticks*PM_TIMER_TICK_NS);
 
 	local_irq_enable();
+	sleep_ticks += ticks;
 
 	/* Check for spurious wakeup */
 	if (check_idle_spurious_wakeup(pr->id) && !need_resched()) {
