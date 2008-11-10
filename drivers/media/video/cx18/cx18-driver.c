@@ -448,7 +448,6 @@ static int __devinit cx18_init_struct1(struct cx18 *cx)
 	mutex_init(&cx->gpio_lock);
 
 	spin_lock_init(&cx->lock);
-	spin_lock_init(&cx->dma_reg_lock);
 
 	cx->work_queue = create_singlethread_workqueue(cx->name);
 	if (cx->work_queue == NULL) {
