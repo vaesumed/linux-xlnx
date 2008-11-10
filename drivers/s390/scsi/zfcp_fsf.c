@@ -6,6 +6,8 @@
  * Copyright IBM Corporation 2002, 2008
  */
 
+#define KMSG_COMPONENT "zfcp"
+
 #include <linux/blktrace_api.h>
 #include "zfcp_ext.h"
 
