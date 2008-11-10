@@ -581,10 +581,10 @@ static void cx18_load_and_init_modules(struct cx18 *cx)
 
 #ifdef MODULE
 	/* load modules */
-#ifndef CONFIG_MEDIA_TUNER
+#ifdef CONFIG_MEDIA_TUNER_MODULE
 	hw = cx18_request_module(cx, hw, "tuner", CX18_HW_TUNER);
 #endif
-#ifndef CONFIG_VIDEO_CS5345
+#ifdef CONFIG_VIDEO_CS5345_MODULE
 	hw = cx18_request_module(cx, hw, "cs5345", CX18_HW_CS5345);
 #endif
 #endif
@@ -732,8 +732,6 @@ static int __devinit cx18_probe(struct pci_dev *dev,
 		cx->std = V4L2_STD_NTSC_M;
 
 	if (cx->options.tuner == -1) {
-		int i;
-
 		for (i = 0; i < CX18_CARD_MAX_TUNERS; i++) {
 			if ((cx->std & cx->card->tuners[i].std) == 0)
 				continue;
