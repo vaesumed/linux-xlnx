@@ -92,21 +92,19 @@ struct vring {
  *	struct vring_used_elem used[num];
  * };
  */
-static inline void vring_init(struct vring *vr, unsigned int num, void *p,
-			      unsigned long pagesize)
+static inline void vring_init(struct vring *vr, unsigned int num, void *p)
 {
 	vr->num = num;
 	vr->desc = p;
 	vr->avail = p + num*sizeof(struct vring_desc);
-	vr->used = (void *)(((unsigned long)&vr->avail->ring[num] + pagesize-1)
-			    & ~(pagesize - 1));
+	vr->used = (void *)VIRTIO_PAGE_ALIGN((unsigned long)&vr->avail->ring[num]);
 }
 
-static inline unsigned vring_size(unsigned int num, unsigned long pagesize)
+static inline unsigned vring_size(unsigned int num)
 {
-	return ((sizeof(struct vring_desc) * num + sizeof(__u16) * (2 + num)
-		 + pagesize - 1) & ~(pagesize - 1))
-		+ sizeof(__u16) * 2 + sizeof(struct vring_used_elem) * num;
+	return VIRTIO_PAGE_ALIGN(sizeof(struct vring_desc) * num +
+	    sizeof(__u16) * (2 + num)) +
+		sizeof(__u16) * 2 + sizeof(struct vring_used_elem) * num;
 }
 
 #ifdef __KERNEL__
