@@ -129,6 +129,7 @@ static int qdio_do_eqbs(struct qdio_q *q, unsigned char *state,
 	char dbf_text[15];
 
 	BUG_ON(!q->irq_ptr->sch_token);
+	qdio_perf_stat_inc(&perf_stats.debug_eqbs_all);
 
 	if (!q->is_input_q)
 		nr += q->irq_ptr->nr_input_qs;
@@ -139,8 +140,10 @@ again:
 	/* At least one buffer was processed, return and extract the remaining
 	 * buffers later.
 	 */
-	if ((ccq == 96) && (count != tmp_count))
+	if ((ccq == 96) && (count != tmp_count)) {
+		qdio_perf_stat_inc(&perf_stats.debug_eqbs_incomplete);
 		return (count - tmp_count);
+	}
 	if (rc == 1) {
 		QDIO_DBF_TEXT5(1, trace, "eqAGAIN");
 		goto again;
@@ -179,6 +182,7 @@ static int qdio_do_sqbs(struct qdio_q *q, unsigned char state, int start,
 	char dbf_text[15];
 
 	BUG_ON(!q->irq_ptr->sch_token);
+	qdio_perf_stat_inc(&perf_stats.debug_sqbs_all);
 
 	if (!q->is_input_q)
 		nr += q->irq_ptr->nr_input_qs;
@@ -187,6 +191,7 @@ again:
 	rc = qdio_check_ccq(q, ccq);
 	if (rc == 1) {
 		QDIO_DBF_TEXT5(1, trace, "sqAGAIN");
+		qdio_perf_stat_inc(&perf_stats.debug_sqbs_incomplete);
 		goto again;
 	}
 	if (rc < 0) {
@@ -1129,23 +1134,23 @@ void qdio_int_handler(struct ccw_device *cdev, unsigned long intparm,
 /**
  * qdio_get_ssqd_desc - get qdio subchannel description
  * @cdev: ccw device to get description for
+ * @data: where to store the ssqd
  *
- * Returns a pointer to the saved qdio subchannel description,
- * or NULL for not setup qdio devices.
+ * Returns 0 or an error code. The results of the chsc are stored in the
+ * specified structure.
  */
-struct qdio_ssqd_desc *qdio_get_ssqd_desc(struct ccw_device *cdev)
+int qdio_get_ssqd_desc(struct ccw_device *cdev,
+		       struct qdio_ssqd_desc *data)
 {
-	struct qdio_irq *irq_ptr;
 	char dbf_text[15];
+
+	if (!cdev || !cdev->private)
+		return -EINVAL;
 
 	sprintf(dbf_text, "qssq%4x", cdev->private->schid.sch_no);
 	QDIO_DBF_TEXT0(0, setup, dbf_text);
 
-	irq_ptr = cdev->private->qdio_data;
-	if (!irq_ptr)
-		return NULL;
-
-	return &irq_ptr->ssqd_desc;
+	return qdio_setup_get_ssqd(NULL, &cdev->private->schid, data);
 }
 EXPORT_SYMBOL_GPL(qdio_get_ssqd_desc);
 
