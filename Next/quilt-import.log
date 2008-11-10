@@ -1,0 +1,88 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing m68k based on 75fa67706cce5272bcfc51ed646f2da21f3bdb6e
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard 75fa67706cce5272bcfc51ed646f2da21f3bdb6e
+HEAD is now at 75fa677 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+mac-macfb-do-not-overflow-fix-id.diff
+mac-reinstate-rtc.diff
+mac-via-cleanup-and-commentry.diff
+mac-machw_h_cleanup.diff
+mac-baboon-interrupt-enable-disable.diff
+mac-mac_esp-asm-fix.diff
+mac-macfb-annotations-and-compiler-warning-fix.diff
+m68k-fpsp040-fix-trigraph-ignored-warning.diff
+fbcon-remove-broken-mac-vbl-handler.diff
+fbcon-protect-free-irq-by-MACH_IS_ATARI-check.diff
+mac-esp-fix-for-quadras-with-two-esp-chips.diff
+m68k-use-the-new-byteorder-headers.diff
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.28-rc3-git5
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard fed4d59b6ec5481caceb17863f19a0b0e5eaa939
+HEAD is now at fed4d59 Merge branch 'release' of git://git.kernel.org/pub/scm/linux/kernel/git/aegl/linux-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-f71882fg-04-style-cleanups.patch
+hwmon-f71882fg-05-add-f71862fg-support.patch
+hwmon-f71882fg-06-no-io-to-unreserved-ports.patch
+hwmon-add-ltc4245-driver.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+hwmon-it87-add-it8720f-support.patch
+hwmon-i5k_amb-load-automatically-on-all-5000-5400-chipsets.patch
+hwmon-k8temp-01-warn-about-errata.patch
+Unchanged quilt series kernel-doc
+Importing ide based on 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+HEAD is now at 45beca0 Linux v2.6.28-rc3
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-the-ide_release_lock-imbalance.patch
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+Context reduced to (1/1) to apply fragment at 949
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+ali14xx-doesnt-use-shared-irqs.patch
+cmd64x-set-ide_hflag_serialize-explictly-for-cmd646.patch
+gayle-set-ide_hflag_serialize-explictly.patch
+ide-fix-quirk_list-checking-in-ide_do_request.patch
+ide-always-set-nien-on-idle-devices.patch
+rz1000-apply-chipset-quirks-early-v2.patch
+trm290-add-ide_hflag_trm290-host-flag.patch
+cy82c693-remove-superfluous-ide_cy82c693-chipset-type.patch
+ide-rework-handling-of-serialized-ports-v2.patch
+ide-struct-device-replace-bus_id-with-dev_name()-dev_set_name().patch
+Importing rr based on v2.6.28-rc3-54-g75fa677
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 75fa67706cce5272bcfc51ed646f2da21f3bdb6e
+HEAD is now at 75fa677 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+virtio:net-mergeable-rx-bufs.patch
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+cpumask:new-API-only.patch
+cpumask:new-API-only-ingo-update.patch
+cpumask:new-API-only-more-updates.patch
+cpumask:new-API-make-free_bootmem_cpumask_var-init.patch
+Unchanged quilt series ttydev
