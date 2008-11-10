@@ -742,7 +742,7 @@ M:	jirislaby@gmail.com
 P:	Nick Kossifidis
 M:	mickflemm@gmail.com
 P:	Luis R. Rodriguez
-M:	mcgrof@gmail.com
+M:	lrodriguez@atheros.com
 P:	Bob Copeland
 M:	me@bobcopeland.com
 L:	linux-wireless@vger.kernel.org
@@ -1604,11 +1604,6 @@ P:	Corentin Chary
 M:	corentincj@iksaif.net
 L:	acpi4asus-user@lists.sourceforge.net
 W:	http://sourceforge.net/projects/acpi4asus
-S:	Maintained
-
-EEPRO100 NETWORK DRIVER
-P:	Andrey V. Savochkin
-M:	saw@saw.sw.com.sg
 S:	Maintained
 
 EFS FILESYSTEM
@@ -3897,6 +3892,12 @@ P:	Mark M. Hoffman
 M:	mhoffman@lightlink.com
 L:	lm-sensors@lm-sensors.org
 S:	Maintained
+
+SMSC911x ETHERNET DRIVER
+P:	Steve Glendinning
+M:	steve.glendinning@smsc.com
+L:	netdev@vger.kernel.org
+S:	Supported
 
 SMX UIO Interface
 P:	Ben Nizette

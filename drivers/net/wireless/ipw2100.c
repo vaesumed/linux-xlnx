@@ -163,6 +163,8 @@ that only one external action is invoked at a time.
 #include <linux/ctype.h>
 #include <linux/pm_qos_params.h>
 
+#include <net/lib80211.h>
+
 #include "ipw2100.h"
 
 #define IPW2100_VERSION "git-1.2.2"
@@ -185,7 +187,7 @@ MODULE_LICENSE("GPL");
 static int debug = 0;
 static int mode = 0;
 static int channel = 0;
-static int associate = 1;
+static int associate = 0;
 static int disable = 0;
 #ifdef CONFIG_PM
 static struct ipw2100_fw ipw2100_firmware;
@@ -201,7 +203,7 @@ module_param(disable, int, 0444);
 MODULE_PARM_DESC(debug, "debug level");
 MODULE_PARM_DESC(mode, "network mode (0=BSS,1=IBSS,2=Monitor)");
 MODULE_PARM_DESC(channel, "channel");
-MODULE_PARM_DESC(associate, "auto associate when scanning (default on)");
+MODULE_PARM_DESC(associate, "auto associate when scanning (default off)");
 MODULE_PARM_DESC(disable, "manually disable the radio (default 0 [radio on])");
 
 static u32 ipw2100_debug_level = IPW_DL_NONE;
@@ -1914,7 +1916,7 @@ static void isr_indicate_associated(struct ipw2100_priv *priv, u32 status)
 	u32 chan;
 	char *txratename;
 	u8 bssid[ETH_ALEN];
-	DECLARE_MAC_BUF(mac);
+	DECLARE_SSID_BUF(ssid);
 
 	/*
 	 * TBD: BSSID is usually 00:00:00:00:00:00 here and not
@@ -1975,10 +1977,9 @@ static void isr_indicate_associated(struct ipw2100_priv *priv, u32 status)
 		break;
 	}
 
-	IPW_DEBUG_INFO("%s: Associated with '%s' at %s, channel %d (BSSID="
-		       "%s)\n",
-		       priv->net_dev->name, escape_essid(essid, essid_len),
-		       txratename, chan, print_mac(mac, bssid));
+	IPW_DEBUG_INFO("%s: Associated with '%s' at %s, channel %d (BSSID=%pM)\n",
+		       priv->net_dev->name, print_ssid(ssid, essid, essid_len),
+		       txratename, chan, bssid);
 
 	/* now we copy read ssid into dev */
 	if (!(priv->config & CFG_STATIC_ESSID)) {
@@ -2004,8 +2005,9 @@ static int ipw2100_set_essid(struct ipw2100_priv *priv, char *essid,
 		.host_command_length = ssid_len
 	};
 	int err;
+	DECLARE_SSID_BUF(ssid);
 
-	IPW_DEBUG_HC("SSID: '%s'\n", escape_essid(essid, ssid_len));
+	IPW_DEBUG_HC("SSID: '%s'\n", print_ssid(ssid, essid, ssid_len));
 
 	if (ssid_len)
 		memcpy(cmd.host_command_parameters, essid, ssid_len);
@@ -2046,12 +2048,12 @@ static int ipw2100_set_essid(struct ipw2100_priv *priv, char *essid,
 
 static void isr_indicate_association_lost(struct ipw2100_priv *priv, u32 status)
 {
-	DECLARE_MAC_BUF(mac);
+	DECLARE_SSID_BUF(ssid);
 
 	IPW_DEBUG(IPW_DL_NOTIF | IPW_DL_STATE | IPW_DL_ASSOC,
-		  "disassociated: '%s' %s \n",
-		  escape_essid(priv->essid, priv->essid_len),
-		  print_mac(mac, priv->bssid));
+		  "disassociated: '%s' %pM \n",
+		  print_ssid(ssid, priv->essid, priv->essid_len),
+		  priv->bssid);
 
 	priv->status &= ~(STATUS_ASSOCIATED | STATUS_ASSOCIATING);
 
@@ -4058,7 +4060,6 @@ static ssize_t show_bssinfo(struct device *d, struct device_attribute *attr,
 	char *out = buf;
 	int length;
 	int ret;
-	DECLARE_MAC_BUF(mac);
 
 	if (priv->status & STATUS_RF_KILL_MASK)
 		return 0;
@@ -4086,7 +4087,7 @@ static ssize_t show_bssinfo(struct device *d, struct device_attribute *attr,
 			       __LINE__);
 
 	out += sprintf(out, "ESSID: %s\n", essid);
-	out += sprintf(out, "BSSID:   %s\n", print_mac(mac, bssid));
+	out += sprintf(out, "BSSID:   %pM\n", bssid);
 	out += sprintf(out, "Channel: %d\n", chan);
 
 	return out - buf;
@@ -4662,7 +4663,6 @@ static int ipw2100_read_mac_address(struct ipw2100_priv *priv)
 {
 	u32 length = ETH_ALEN;
 	u8 addr[ETH_ALEN];
-	DECLARE_MAC_BUF(mac);
 
 	int err;
 
@@ -4673,8 +4673,7 @@ static int ipw2100_read_mac_address(struct ipw2100_priv *priv)
 	}
 
 	memcpy(priv->net_dev->dev_addr, addr, ETH_ALEN);
-	IPW_DEBUG_INFO("card MAC is %s\n",
-		       print_mac(mac, priv->net_dev->dev_addr));
+	IPW_DEBUG_INFO("card MAC is %pM\n", priv->net_dev->dev_addr);
 
 	return 0;
 }
@@ -5053,10 +5052,8 @@ static int ipw2100_set_mandatory_bssid(struct ipw2100_priv *priv, u8 * bssid,
 	int err;
 
 #ifdef CONFIG_IPW2100_DEBUG
-	DECLARE_MAC_BUF(mac);
 	if (bssid != NULL)
-		IPW_DEBUG_HC("MANDATORY_BSSID: %s\n",
-			     print_mac(mac, bssid));
+		IPW_DEBUG_HC("MANDATORY_BSSID: %pM\n", bssid);
 	else
 		IPW_DEBUG_HC("MANDATORY_BSSID: <clear>\n");
 #endif
@@ -6905,7 +6902,6 @@ static int ipw2100_wx_set_wap(struct net_device *dev,
 	static const unsigned char off[] = {
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 	};
-	DECLARE_MAC_BUF(mac);
 
 	// sanity checks
 	if (wrqu->ap_addr.sa_family != ARPHRD_ETHER)
@@ -6931,8 +6927,7 @@ static int ipw2100_wx_set_wap(struct net_device *dev,
 
 	err = ipw2100_set_mandatory_bssid(priv, wrqu->ap_addr.sa_data, 0);
 
-	IPW_DEBUG_WX("SET BSSID -> %s\n",
-		     print_mac(mac, wrqu->ap_addr.sa_data));
+	IPW_DEBUG_WX("SET BSSID -> %pM\n", wrqu->ap_addr.sa_data);
 
       done:
 	mutex_unlock(&priv->action_mutex);
@@ -6948,7 +6943,6 @@ static int ipw2100_wx_get_wap(struct net_device *dev,
 	 */
 
 	struct ipw2100_priv *priv = ieee80211_priv(dev);
-	DECLARE_MAC_BUF(mac);
 
 	/* If we are associated, trying to associate, or have a statically
 	 * configured BSSID then return that; otherwise return ANY */
@@ -6958,8 +6952,7 @@ static int ipw2100_wx_get_wap(struct net_device *dev,
 	} else
 		memset(wrqu->ap_addr.sa_data, 0, ETH_ALEN);
 
-	IPW_DEBUG_WX("Getting WAP BSSID: %s\n",
-		     print_mac(mac, wrqu->ap_addr.sa_data));
+	IPW_DEBUG_WX("Getting WAP BSSID: %pM\n", wrqu->ap_addr.sa_data);
 	return 0;
 }
 
@@ -6971,6 +6964,7 @@ static int ipw2100_wx_set_essid(struct net_device *dev,
 	char *essid = "";	/* ANY */
 	int length = 0;
 	int err = 0;
+	DECLARE_SSID_BUF(ssid);
 
 	mutex_lock(&priv->action_mutex);
 	if (!(priv->status & STATUS_INITIALIZED)) {
@@ -7000,8 +6994,8 @@ static int ipw2100_wx_set_essid(struct net_device *dev,
 		goto done;
 	}
 
-	IPW_DEBUG_WX("Setting ESSID: '%s' (%d)\n", escape_essid(essid, length),
-		     length);
+	IPW_DEBUG_WX("Setting ESSID: '%s' (%d)\n",
+		     print_ssid(ssid, essid, length), length);
 
 	priv->essid_len = length;
 	memcpy(priv->essid, essid, priv->essid_len);
@@ -7022,12 +7016,13 @@ static int ipw2100_wx_get_essid(struct net_device *dev,
 	 */
 
 	struct ipw2100_priv *priv = ieee80211_priv(dev);
+	DECLARE_SSID_BUF(ssid);
 
 	/* If we are associated, trying to associate, or have a statically
 	 * configured ESSID then return that; otherwise return ANY */
 	if (priv->config & CFG_STATIC_ESSID || priv->status & STATUS_ASSOCIATED) {
 		IPW_DEBUG_WX("Getting essid: '%s'\n",
-			     escape_essid(priv->essid, priv->essid_len));
+			     print_ssid(ssid, priv->essid, priv->essid_len));
 		memcpy(extra, priv->essid, priv->essid_len);
 		wrqu->essid.length = priv->essid_len;
 		wrqu->essid.flags = 1;	/* active */

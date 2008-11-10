@@ -341,15 +341,14 @@ static void adm8211_interrupt_tci(struct ieee80211_hw *dev)
 		pci_unmap_single(priv->pdev, info->mapping,
 				 info->skb->len, PCI_DMA_TODEVICE);
 
-		memset(&txi->status, 0, sizeof(txi->status));
+		ieee80211_tx_info_clear_status(txi);
+
 		skb_pull(skb, sizeof(struct adm8211_tx_hdr));
 		memcpy(skb_push(skb, info->hdrlen), skb->cb, info->hdrlen);
-		if (!(txi->flags & IEEE80211_TX_CTL_NO_ACK)) {
-			if (status & TDES0_STATUS_ES)
-				txi->status.excessive_retries = 1;
-			else
-				txi->flags |= IEEE80211_TX_STAT_ACK;
-		}
+		if (!(txi->flags & IEEE80211_TX_CTL_NO_ACK) &&
+		    !(status & TDES0_STATUS_ES))
+			txi->flags |= IEEE80211_TX_STAT_ACK;
+
 		ieee80211_tx_status_irqsafe(dev, skb);
 
 		info->skb = NULL;
@@ -1314,9 +1313,10 @@ static int adm8211_set_ssid(struct ieee80211_hw *dev, u8 *ssid, size_t ssid_len)
 	return 0;
 }
 
-static int adm8211_config(struct ieee80211_hw *dev, struct ieee80211_conf *conf)
+static int adm8211_config(struct ieee80211_hw *dev, u32 changed)
 {
 	struct adm8211_priv *priv = dev->priv;
+	struct ieee80211_conf *conf = &dev->conf;
 	int channel = ieee80211_frequency_to_channel(conf->channel->center_freq);
 
 	if (channel != priv->channel) {
@@ -1690,8 +1690,10 @@ static int adm8211_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 	struct ieee80211_hdr *hdr;
 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	struct ieee80211_rate *txrate = ieee80211_get_tx_rate(dev, info);
+	u8 rc_flags;
 
-	short_preamble = !!(txrate->flags & IEEE80211_TX_CTL_SHORT_PREAMBLE);
+	rc_flags = info->control.rates[0].flags;
+	short_preamble = !!(rc_flags & IEEE80211_TX_RC_USE_SHORT_PREAMBLE);
 	plcp_signal = txrate->bitrate;
 
 	hdr = (struct ieee80211_hdr *)skb->data;
@@ -1723,10 +1725,10 @@ static int adm8211_tx(struct ieee80211_hw *dev, struct sk_buff *skb)
 	if (short_preamble)
 		txhdr->header_control |= cpu_to_le16(ADM8211_TXHDRCTL_SHORT_PREAMBLE);
 
-	if (info->flags & IEEE80211_TX_CTL_USE_RTS_CTS)
+	if (rc_flags & IEEE80211_TX_RC_USE_RTS_CTS)
 		txhdr->header_control |= cpu_to_le16(ADM8211_TXHDRCTL_ENABLE_RTS);
 
-	txhdr->retry_limit = info->control.retry_limit;
+	txhdr->retry_limit = info->control.rates[0].count;
 
 	adm8211_tx_raw(dev, skb, plcp_signal, hdrlen);
 
@@ -1791,7 +1793,6 @@ static int __devinit adm8211_probe(struct pci_dev *pdev,
 	int err;
 	u32 reg;
 	u8 perm_addr[ETH_ALEN];
-	DECLARE_MAC_BUF(mac);
 
 	err = pci_enable_device(pdev);
 	if (err) {
@@ -1925,8 +1926,8 @@ static int __devinit adm8211_probe(struct pci_dev *pdev,
 		goto err_free_desc;
 	}
 
-	printk(KERN_INFO "%s: hwaddr %s, Rev 0x%02x\n",
-	       wiphy_name(dev->wiphy), print_mac(mac, dev->wiphy->perm_addr),
+	printk(KERN_INFO "%s: hwaddr %pM, Rev 0x%02x\n",
+	       wiphy_name(dev->wiphy), dev->wiphy->perm_addr,
 	       pdev->revision);
 
 	return 0;
