@@ -65,8 +65,6 @@ static void cpuidle_idle_call(void)
 		return;
 	}
 
-#if 0
-	/* shows regressions, re-enable for 2.6.29 */
 	/*
 	 * run any timers that can be run now, at this point
 	 * before calculating the idle duration etc.
@@ -75,7 +73,6 @@ static void cpuidle_idle_call(void)
 		local_irq_enable();
 		return;
 	}
-#endif
 
 	/* ask the governor for the next state */
 	next_state = cpuidle_curr_governor->select(dev);
