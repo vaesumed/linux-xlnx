@@ -56,9 +56,9 @@ void pfm_save_pmds(struct pfm_context *ctx)
 	 * save HW PMD, for counters, reconstruct 64-bit value
 	 */
 	for (i = 0; num; i++) {
-		if (test_bit(i, cast_ulp(used_pmds))) {
+		if (pfm_arch_bv_test_bit(i, used_pmds)) {
 			val = pfm_read_pmd(ctx, i);
-			if (likely(test_bit(i, cast_ulp(cnt_pmds))))
+			if (likely(pfm_arch_bv_test_bit(i, cnt_pmds)))
 				val = (set->pmds[i] & ~ovfl_mask) |
 					(val & ovfl_mask);
 			set->pmds[i] = val;

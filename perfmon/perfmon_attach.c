@@ -87,7 +87,7 @@ static int pfm_load_ctx_thread(struct pfm_context *ctx,
 	 * cleanup bitvectors
 	 */
 	max = ctx->regs.max_intr_pmd;
-	bitmap_zero(cast_ulp(set->povfl_pmds), max);
+	pfm_arch_bv_zero(set->povfl_pmds, max);
 
 	set->npend_ovfls = 0;
 
@@ -208,9 +208,9 @@ static void pfm_update_ovfl_pmds(struct pfm_context *ctx)
 	PFM_DBG("novfls=%u", num_ovfls);
 
 	for (i = 0; num_ovfls; i++) {
-		if (test_bit(i, cast_ulp(set->povfl_pmds))) {
+		if (pfm_arch_bv_test_bit(i, set->povfl_pmds)) {
 			/* only correct value for counters */
-			if (test_bit(i, cast_ulp(cnt_pmds)))
+			if (pfm_arch_bv_test_bit(i, cnt_pmds))
 				set->pmds[i] += 1 + ovfl_mask;
 			num_ovfls--;
 		}
@@ -223,8 +223,7 @@ static void pfm_update_ovfl_pmds(struct pfm_context *ctx)
 	 * returning stale data even after the context is unloaded
 	 */
 	set->npend_ovfls = 0;
-	bitmap_zero(cast_ulp(set->povfl_pmds),
-		    ctx->regs.max_intr_pmd);
+	pfm_arch_bv_zero(set->povfl_pmds, ctx->regs.max_intr_pmd);
 }
 
 /**

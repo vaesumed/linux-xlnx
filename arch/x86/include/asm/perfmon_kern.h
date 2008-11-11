@@ -376,6 +376,63 @@ static inline void pfm_arch_disarm_handle_work(struct task_struct *task)
 
 asmlinkage void  pmu_interrupt(void);
 
+static inline void pfm_arch_bv_copy(u64 *a, u64 *b, int nbits)
+{
+	bitmap_copy((unsigned long *)a,
+		    (unsigned long *)b,
+		    nbits);
+}
+
+static inline void pfm_arch_bv_or(u64 *a, u64 *b, u64 *c, int nbits)
+{
+	bitmap_or((unsigned long *)a,
+		  (unsigned long *)b,
+		  (unsigned long *)c,
+		  nbits);
+}
+
+static inline void pfm_arch_bv_and(u64 *a, u64 *b, u64 *c, int nbits)
+{
+	bitmap_and((unsigned long *)a,
+		  (unsigned long *)b,
+		  (unsigned long *)c,
+		  nbits);
+}
+
+
+static inline void pfm_arch_bv_zero(u64 *a, int nbits)
+{
+	bitmap_zero((unsigned long *)a, nbits);
+}
+
+static inline int pfm_arch_bv_weight(u64 *a, int nbits)
+{
+	return bitmap_weight((unsigned long *)a, nbits);
+}
+
+static inline void pfm_arch_bv_set_bit(int b, u64 *a)
+{
+	__set_bit(b, (unsigned long *)a);
+}
+
+static inline void pfm_arch_bv_clear_bit(int b, u64 *a)
+{
+	__clear_bit(b, (unsigned long *)a);
+}
+
+static inline int pfm_arch_bv_test_bit(int b, u64 *a)
+{
+	return test_bit(b, (unsigned long *)a);
+}
+
+static inline unsigned long pfm_arch_bv_find_next_bit(const u64 *addr,
+						      unsigned long size,
+						      unsigned long offset)
+{
+	return find_next_bit((unsigned long *)addr,
+			     size,
+			     offset);
+}
 #endif /* CONFIG_PEFMON */
 
 #endif /* _ASM_X86_PERFMON_KERN_H_ */

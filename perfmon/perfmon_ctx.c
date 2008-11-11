@@ -209,7 +209,7 @@ static void pfm_create_initial_set(struct pfm_context *ctx)
 	 * install default values for all PMC  registers
 	 */
 	for (i = 0; i < max_pmc; i++) {
-		if (test_bit(i, cast_ulp(impl_pmcs))) {
+		if (pfm_arch_bv_test_bit(i, impl_pmcs)) {
 			set->pmcs[i] = pfm_pmu_conf->pmc_desc[i].dfl_val;
 			PFM_DBG("pmc%u=0x%llx",
 				i,
@@ -332,13 +332,13 @@ int __pfm_create_context(__u32 ctx_flags,
 	 * must copy over the entire vector to avoid
 	 * returning bogus upper bits pass by user
 	 */
-	bitmap_copy(cast_ulp(sif->sif_avail_pmcs),
-		    cast_ulp(ctx->regs.pmcs),
-		    PFM_MAX_PMCS);
+	pfm_arch_bv_copy(sif->sif_avail_pmcs,
+			 ctx->regs.pmcs,
+			 PFM_MAX_PMCS);
 
-	bitmap_copy(cast_ulp(sif->sif_avail_pmds),
-		    cast_ulp(ctx->regs.pmds),
-		    PFM_MAX_PMDS);
+	pfm_arch_bv_copy(sif->sif_avail_pmds,
+			 ctx->regs.pmds,
+			 PFM_MAX_PMDS);
 
 	/*
 	 * we defer the fd_install until we are certain the call succeeded

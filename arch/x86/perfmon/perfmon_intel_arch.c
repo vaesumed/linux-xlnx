@@ -169,7 +169,7 @@ static void pfm_intel_arch_check_errata(void)
 
 static inline void set_enable_mask(unsigned int i)
 {
-	__set_bit(i, cast_ulp(enable_mask));
+	pfm_arch_bv_set_bit(i, enable_mask);
 
 	/* max_enable = highest + 1 */
 	if ((i+1) > max_enable)
@@ -418,7 +418,7 @@ static int __kprobes pfm_intel_arch_has_ovfls(struct pfm_context *ctx)
 	 * may be available.
 	 */
 	for (i = 0; num; i++) {
-		if (test_bit(i, cast_ulp(cnt_mask))) {
+		if (pfm_arch_bv_test_bit(i, cnt_mask)) {
 			rdmsrl(pfm_intel_arch_pmd_desc[i].hw_addr, val);
 			if (!(val & wmask))
 				return 1;
@@ -437,12 +437,12 @@ static int pfm_intel_arch_stop_save(struct pfm_context *ctx,
 
 	wmask = 1ULL << pfm_pmu_conf->counter_width;
 
-	bitmap_and(cast_ulp(used_mask),
-		   cast_ulp(set->used_pmcs),
-		   cast_ulp(enable_mask),
-		   max_enable);
+	pfm_arch_bv_and(used_mask,
+			set->used_pmcs,
+			enable_mask,
+			max_enable);
 
-	count = bitmap_weight(cast_ulp(used_mask), max_enable);
+	count = pfm_arch_bv_weight(used_mask, max_enable);
 
 	/*
 	 * stop monitoring
@@ -450,7 +450,7 @@ static int pfm_intel_arch_stop_save(struct pfm_context *ctx,
 	 * wrmsrl() is serializing.
 	 */
 	for (i = 0; count; i++) {
-		if (test_bit(i, cast_ulp(used_mask))) {
+		if (pfm_arch_bv_test_bit(i, used_mask)) {
 			wrmsrl(pfm_pmu_conf->pmc_desc[i].hw_addr, 0);
 			count--;
 		}
@@ -474,10 +474,10 @@ static int pfm_intel_arch_stop_save(struct pfm_context *ctx,
 	 */
 	count = set->nused_pmds;
 	for (i = 0; count; i++) {
-		if (test_bit(i, cast_ulp(set->used_pmds))) {
+		if (pfm_arch_bv_test_bit(i, set->used_pmds)) {
 			val = pfm_arch_read_pmd(ctx, i);
 			if (!(val & wmask)) {
-				__set_bit(i, cast_ulp(set->povfl_pmds));
+				pfm_arch_bv_set_bit(i, set->povfl_pmds);
 				set->npend_ovfls++;
 			}
 			val = (set->pmds[i] & ~ovfl_mask)
@@ -508,7 +508,7 @@ static void __kprobes pfm_intel_arch_quiesce(void)
 	 * too many cachelines
 	 */
 	for (i = 0; i < pfm_pmu_conf->regs_all.max_pmc; i++) {
-		if (test_bit(i, cast_ulp(pfm_pmu_conf->regs_all.pmcs))) {
+		if (pfm_arch_bv_test_bit(i, pfm_pmu_conf->regs_all.pmcs)) {
 			if (i == 16)
 				wrmsrl(MSR_CORE_PERF_FIXED_CTR_CTRL, 0);
 			else

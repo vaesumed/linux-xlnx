@@ -70,7 +70,7 @@ static u16 pfm_intr_process_64bit_ovfls(struct pfm_context *ctx,
 		/*
 		 * skip pmd which did not overflow
 		 */
-		if (!test_bit(i, cast_ulp(set->povfl_pmds)))
+		if (!pfm_arch_bv_test_bit(i, set->povfl_pmds))
 			continue;
 
 		num_ovfls--;
@@ -83,7 +83,7 @@ static u16 pfm_intr_process_64bit_ovfls(struct pfm_context *ctx,
 		 * frozen. The residual count is not taken into consideration
 		 * here but will be with any read of the pmd
 		 */
-		if (likely(test_bit(i, cast_ulp(ctx->regs.cnt_pmds)))) {
+		if (likely(pfm_arch_bv_test_bit(i, ctx->regs.cnt_pmds))) {
 			old_val = new_val = set->pmds[i];
 			new_val += 1 + ovfl_mask;
 			set->pmds[i] = new_val;
@@ -120,7 +120,7 @@ static u16 pfm_intr_process_64bit_ovfls(struct pfm_context *ctx,
 	 * mark the overflows as consumed
 	 */
 	set->npend_ovfls = 0;
-	bitmap_zero(cast_ulp(set->povfl_pmds), max_intr);
+	pfm_arch_bv_zero(set->povfl_pmds, max_intr);
 
 	return num_64b_ovfls;
 }

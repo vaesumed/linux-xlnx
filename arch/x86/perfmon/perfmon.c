@@ -196,7 +196,7 @@ void pfm_arch_restore_pmds(struct pfm_context *ctx, struct pfm_event_set *set)
 	 * 	  another
 	 */
 	for (i = 0; num; i++) {
-		if (likely(test_bit(i, cast_ulp(set->used_pmds)))) {
+		if (likely(pfm_arch_bv_test_bit(i, set->used_pmds))) {
 			pfm_write_pmd(ctx, i, set->pmds[i]);
 			num--;
 		}
@@ -218,7 +218,6 @@ void pfm_arch_restore_pmds(struct pfm_context *ctx, struct pfm_event_set *set)
 void pfm_arch_restore_pmcs(struct pfm_context *ctx, struct pfm_event_set *set)
 {
 	u16 i, num;
-	unsigned long *mask;
 
 	/*
 	 * we need to restore PMCs only when:
@@ -243,10 +242,9 @@ void pfm_arch_restore_pmcs(struct pfm_context *ctx, struct pfm_event_set *set)
 	 * it is possible to optimize by only restoring the registers that
 	 * are used, but this has to be done by model-specific code.
 	 */
-	mask = cast_ulp(ctx->regs.pmcs);
 	num = ctx->regs.num_pmcs;
 	for (i = 0; num; i++) {
-		if (test_bit(i, mask)) {
+		if (pfm_arch_bv_test_bit(i, ctx->regs.pmcs)) {
 			pfm_arch_write_pmc(ctx, i, set->pmcs[i]);
 			num--;
 		}
@@ -497,7 +495,7 @@ int pfm_arch_pmu_acquire(u64 *unavail_pmcs, u64 *unavail_pmds)
 		 */
 		if (!reserve_evntsel_nmi(d->hw_addr)) {
 			PFM_DBG("pmc%d(%s) already used", i, d->desc);
-			__set_bit(i, cast_ulp(unavail_pmcs));
+			pfm_arch_bv_set_bit(i, unavail_pmcs);
 			nlost++;
 			continue;
 		}
@@ -525,7 +523,7 @@ int pfm_arch_pmu_acquire(u64 *unavail_pmcs, u64 *unavail_pmds)
 
 		if (!reserve_perfctr_nmi(d->hw_addr)) {
 			PFM_DBG("pmd%d(%s) already used", i, d->desc);
-			__set_bit(i, cast_ulp(unavail_pmds));
+			pfm_arch_bv_set_bit(i, unavail_pmds);
 		}
 	}
 	/*
@@ -543,7 +541,7 @@ undo:
 	for (i = 0; i < pfm_pmu_conf->num_pmc_entries;  i++, d++) {
 		if (!(d->type & PFM_REG_I))
 			continue;
-		if (!test_bit(i, cast_ulp(unavail_pmcs)))
+		if (!pfm_arch_bv_test_bit(i, unavail_pmcs))
 			release_evntsel_nmi(d->hw_addr);
 	}
 	return -EBUSY;
@@ -583,7 +581,7 @@ void pfm_arch_pmu_release(void)
 	d = pfm_pmu_conf->pmc_desc;
 	n = pfm_pmu_conf->regs_all.num_pmcs;
 	for (i = 0; n; i++, d++) {
-		if (!test_bit(i, cast_ulp(pfm_pmu_conf->regs_all.pmcs)))
+		if (!pfm_arch_bv_test_bit(i, pfm_pmu_conf->regs_all.pmcs))
 			continue;
 		release_evntsel_nmi(d->hw_addr);
 		n--;
@@ -592,7 +590,7 @@ void pfm_arch_pmu_release(void)
 	d = pfm_pmu_conf->pmd_desc;
 	n = pfm_pmu_conf->regs_all.num_pmds;
 	for (i = 0; n; i++, d++) {
-		if (!test_bit(i, cast_ulp(pfm_pmu_conf->regs_all.pmds)))
+		if (!pfm_arch_bv_test_bit(i, pfm_pmu_conf->regs_all.pmds))
 			continue;
 		release_perfctr_nmi(d->hw_addr);
 		n--;

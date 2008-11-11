@@ -189,7 +189,7 @@ static int pfm_amd64_load_context(struct pfm_context *ctx)
 	set = ctx->active_set;
 	n = set->nused_pmcs;
 	for (i = 0; n; i++) {
-		if (!test_bit(i, cast_ulp(set->used_pmcs)))
+		if (!pfm_arch_bv_test_bit(i, set->used_pmcs))
 			continue;
 
 		if ((set->pmcs[i] & 0xff) >= 0xee)
@@ -279,10 +279,10 @@ static void pfm_amd64_setup_registers(void)
 {
 	u16 i;
 
-	__set_bit(0, cast_ulp(enable_mask));
-	__set_bit(1, cast_ulp(enable_mask));
-	__set_bit(2, cast_ulp(enable_mask));
-	__set_bit(3, cast_ulp(enable_mask));
+	pfm_arch_bv_set_bit(0, enable_mask);
+	pfm_arch_bv_set_bit(1, enable_mask);
+	pfm_arch_bv_set_bit(2, enable_mask);
+	pfm_arch_bv_set_bit(3, enable_mask);
 	max_enable = 3+1;
 
 	/*
@@ -356,7 +356,7 @@ static int __kprobes pfm_amd64_has_ovfls(struct pfm_context *ctx)
 	xrd = pfm_amd64_pmd_desc;
 
 	for (i = 0; num; i++) {
-		if (test_bit(i, cast_ulp(cnt_mask))) {
+		if (pfm_arch_bv_test_bit(i, cnt_mask)) {
 			rdmsrl(xrd[i].hw_addr, val);
 			if (!(val & wmask))
 				return 1;
@@ -386,12 +386,12 @@ static int pfm_amd64_stop_save(struct pfm_context *ctx,
 
 	wmask = 1ULL << pfm_pmu_conf->counter_width;
 
-	bitmap_and(cast_ulp(used_mask),
-		   cast_ulp(set->used_pmcs),
-		   cast_ulp(enable_mask),
-		   max_enable);
+	pfm_arch_bv_and(used_mask,
+		        set->used_pmcs,
+		        enable_mask,
+		        max_enable);
 
-	count = bitmap_weight(cast_ulp(used_mask), max_enable);
+	count = pfm_arch_bv_weight(used_mask, max_enable);
 
 	/*
 	 * stop monitoring
@@ -399,7 +399,7 @@ static int pfm_amd64_stop_save(struct pfm_context *ctx,
 	 * wrmsrl() is serializing.
 	 */
 	for (i = 0; count; i++) {
-		if (test_bit(i, cast_ulp(used_mask))) {
+		if (pfm_arch_bv_test_bit(i, used_mask)) {
 			wrmsrl(pfm_pmu_conf->pmc_desc[i].hw_addr, 0);
 			count--;
 		}
@@ -422,11 +422,11 @@ static int pfm_amd64_stop_save(struct pfm_context *ctx,
 	 */
 	count = set->nused_pmds;
 	for (i = 0; count; i++) {
-		if (test_bit(i, cast_ulp(set->used_pmds))) {
+		if (pfm_arch_bv_test_bit(i, set->used_pmds)) {
 			val = pfm_arch_read_pmd(ctx, i);
-			if (likely(test_bit(i, cast_ulp(cnt_pmds)))) {
+			if (likely(pfm_arch_bv_test_bit(i, cnt_pmds))) {
 				if (!(val & wmask)) {
-					__set_bit(i,cast_ulp(set->povfl_pmds));
+					pfm_arch_bv_set_bit(i,set->povfl_pmds);
 					set->npend_ovfls++;
 				}
 				val = (set->pmds[i] & ~ovfl_mask)
@@ -452,13 +452,13 @@ static void __kprobes pfm_amd64_quiesce(void)
 	 * quiesce PMU by clearing available registers that have
 	 * the start/stop capability
 	 */
-	if (test_bit(0, cast_ulp(pfm_pmu_conf->regs_all.pmcs)))
+	if (pfm_arch_bv_test_bit(0, pfm_pmu_conf->regs_all.pmcs))
 		wrmsrl(MSR_K7_EVNTSEL0, 0);
-	if (test_bit(1, cast_ulp(pfm_pmu_conf->regs_all.pmcs)))
+	if (pfm_arch_bv_test_bit(1, pfm_pmu_conf->regs_all.pmcs))
 		wrmsrl(MSR_K7_EVNTSEL0+1, 0);
-	if (test_bit(2, cast_ulp(pfm_pmu_conf->regs_all.pmcs)))
+	if (pfm_arch_bv_test_bit(2, pfm_pmu_conf->regs_all.pmcs))
 		wrmsrl(MSR_K7_EVNTSEL0+2, 0);
-	if (test_bit(3, cast_ulp(pfm_pmu_conf->regs_all.pmcs)))
+	if (pfm_arch_bv_test_bit(3, pfm_pmu_conf->regs_all.pmcs))
 		wrmsrl(MSR_K7_EVNTSEL0+3, 0);
 }
 

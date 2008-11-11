@@ -80,13 +80,13 @@ static void pfm_pmu_regdesc_init(struct pfm_regdesc *regs, int excl_type,
 		if (!(d->type & PFM_REG_I))
 			continue;
 
-		if (test_bit(i, cast_ulp(unavail_pmcs)))
+		if (pfm_arch_bv_test_bit(i, unavail_pmcs))
 			continue;
 
 		if (d->type & excl_type)
 			continue;
 
-		__set_bit(i, cast_ulp(regs->pmcs));
+		pfm_arch_bv_set_bit(i, regs->pmcs);
 
 		max1 = i;
 		n++;
@@ -102,13 +102,13 @@ static void pfm_pmu_regdesc_init(struct pfm_regdesc *regs, int excl_type,
 		if (!(d->type & PFM_REG_I))
 			continue;
 
-		if (test_bit(i, cast_ulp(unavail_pmds)))
+		if (pfm_arch_bv_test_bit(i, unavail_pmds))
 			continue;
 
 		if (d->type & excl_type)
 			continue;
 
-		__set_bit(i, cast_ulp(regs->pmds));
+		pfm_arch_bv_set_bit(i, regs->pmds);
 		max1 = i;
 		n++;
 
@@ -116,7 +116,7 @@ static void pfm_pmu_regdesc_init(struct pfm_regdesc *regs, int excl_type,
 		 * read-write registers
 		 */
 		if (!(d->type & PFM_REG_RO)) {
-			__set_bit(i, cast_ulp(regs->rw_pmds));
+			pfm_arch_bv_set_bit(i, regs->rw_pmds);
 			max3 = i;
 			n2++;
 		}
@@ -125,7 +125,7 @@ static void pfm_pmu_regdesc_init(struct pfm_regdesc *regs, int excl_type,
 		 * counter registers
 		 */
 		if (d->type & PFM_REG_C64) {
-			__set_bit(i, cast_ulp(regs->cnt_pmds));
+			pfm_arch_bv_set_bit(i, regs->cnt_pmds);
 			n_counters++;
 		}
 
@@ -133,7 +133,7 @@ static void pfm_pmu_regdesc_init(struct pfm_regdesc *regs, int excl_type,
 		 * PMD with intr capabilities
 		 */
 		if (d->type & PFM_REG_INTR) {
-			__set_bit(i, cast_ulp(regs->intr_pmds));
+			pfm_arch_bv_set_bit(i, regs->intr_pmds);
 			max2 = i;
 		}
 	}

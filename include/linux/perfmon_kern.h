@@ -182,8 +182,6 @@ static inline struct pfm_arch_context *pfm_ctx_arch(struct pfm_context *c)
 
 extern const struct file_operations pfm_file_ops;
 
-#define cast_ulp(_x) ((unsigned long *)_x)
-
 void pfm_handle_work(struct pt_regs *regs);
 void __pfm_exit_thread(void);
 void pfm_ctxsw_in(struct task_struct *prev, struct task_struct *next);

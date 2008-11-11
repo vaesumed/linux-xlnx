@@ -52,7 +52,7 @@
  */
 static inline int is_invalid(u16 cnum, u64 *impl, u16 max)
 {
-	return cnum >= max || !test_bit(cnum, cast_ulp(impl));
+	return cnum >= max || !pfm_arch_bv_test_bit(cnum, impl);
 }
 
 /**
@@ -65,10 +65,10 @@ static inline int is_invalid(u16 cnum, u64 *impl, u16 max)
 static inline void update_used_reg(struct pfm_context *ctx,
 				   struct pfm_event_set *set, u16 cnum)
 {
-	bitmap_or(cast_ulp(set->used_pmcs),
-		  cast_ulp(set->used_pmcs),
-		  cast_ulp(pfm_pmu_conf->pmd_desc[cnum].dep_pmcs),
-		  ctx->regs.max_pmc);
+	pfm_arch_bv_or(set->used_pmcs,
+		       set->used_pmcs,
+		       pfm_pmu_conf->pmd_desc[cnum].dep_pmcs,
+		       ctx->regs.max_pmc);
 }
 
 /**
@@ -82,7 +82,7 @@ static inline void update_used_reg(struct pfm_context *ctx,
  * that we do not pick up stale values from another session.
  */
 static inline int update_changes(struct pfm_context *ctx, struct pfm_event_set *set,
-				 unsigned long *old_used_pmcs)
+				 u64 *old_used_pmcs)
 {
 	struct pfarg_pmr req;
 	u16 max_pmc, max_pmd;
@@ -94,8 +94,8 @@ static inline int update_changes(struct pfm_context *ctx, struct pfm_event_set *
 	/*
 	 * update used counts
 	 */
-	set->nused_pmds = bitmap_weight(cast_ulp(set->used_pmds), max_pmd);
-	set->nused_pmcs = bitmap_weight(cast_ulp(set->used_pmcs), max_pmc);
+	set->nused_pmds = pfm_arch_bv_weight(set->used_pmds, max_pmd);
+	set->nused_pmcs = pfm_arch_bv_weight(set->used_pmcs, max_pmc);
 
 	PFM_DBG("u_pmds=0x%llx nu_pmds=%u u_pmcs=0x%llx nu_pmcs=%u",
 		(unsigned long long)set->used_pmds[0],
@@ -105,11 +105,11 @@ static inline int update_changes(struct pfm_context *ctx, struct pfm_event_set *
 
 	memset(&req, 0, sizeof(req));
 
-	n = bitmap_weight(cast_ulp(set->used_pmcs), max_pmc);
+	n = pfm_arch_bv_weight(set->used_pmcs, max_pmc);
 	for(p = 0; n; n--, p = q+1) {
-		q = find_next_bit(cast_ulp(set->used_pmcs), max_pmc, p);
+		q = pfm_arch_bv_find_next_bit(set->used_pmcs, max_pmc, p);
 
-		if (test_bit(q, cast_ulp(old_used_pmcs)))
+		if (pfm_arch_bv_test_bit(q, old_used_pmcs))
 			continue;
 
 		req.reg_num = q;
@@ -160,8 +160,8 @@ int __pfm_write_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 	ret = -EINVAL;
 	set = ctx->active_set;
 
-	bitmap_copy(cast_ulp(old_used_pmcs), cast_ulp(set->used_pmcs),
-		    ctx->regs.max_pmc);
+	pfm_arch_bv_copy(old_used_pmcs, set->used_pmcs,
+			 ctx->regs.max_pmc);
 
 	for (i = 0; i < count; i++, req++) {
 
@@ -195,9 +195,9 @@ int __pfm_write_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 		 * ovfl. Does affect ovfl switch on restart but new
 		 * value has already been established here
 		 */
-		if (test_bit(cnum, cast_ulp(set->povfl_pmds))) {
+		if (pfm_arch_bv_test_bit(cnum, set->povfl_pmds)) {
 			set->npend_ovfls--;
-			__clear_bit(cnum, cast_ulp(set->povfl_pmds));
+			pfm_arch_bv_clear_bit(cnum, set->povfl_pmds);
 		}
 
 		/*
@@ -205,7 +205,7 @@ int __pfm_write_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 		 */
 		set->pmds[cnum] = value;
 
-		__set_bit(cnum, cast_ulp(set->used_pmds));
+		pfm_arch_bv_set_bit(cnum, set->used_pmds);
 		update_used_reg(ctx, set, cnum);
 
 		set->priv_flags |= PFM_SETFL_PRIV_MOD_PMDS;
@@ -215,8 +215,8 @@ int __pfm_write_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 		/*
 		 * update number of used PMD registers
 		 */
-		set->nused_pmds = bitmap_weight(cast_ulp(set->used_pmds),
-						max_pmd);
+		set->nused_pmds = pfm_arch_bv_weight(set->used_pmds,
+						     max_pmd);
 
 		PFM_DBG("pmd%u=0x%llx a_pmu=%d "
 			"ctx_pmd=0x%llx "
@@ -230,7 +230,7 @@ int __pfm_write_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 	}
 	ret = 0;
 error:
-	update_changes(ctx, set, cast_ulp(old_used_pmcs));
+	update_changes(ctx, set, old_used_pmcs);
 	/*
 	 * make changes visible
 	 */
@@ -326,8 +326,8 @@ int __pfm_write_pmcs(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 		 * the PMC needs to be modified for particular bits, especially
 		 * on overflow or to stop/start.
 		 */
-		if (!test_bit(cnum, cast_ulp(set->used_pmcs))) {
-			__set_bit(cnum, cast_ulp(set->used_pmcs));
+		if (!pfm_arch_bv_test_bit(cnum, set->used_pmcs)) {
+			pfm_arch_bv_set_bit(cnum, set->used_pmcs);
 			set->nused_pmcs++;
 		}
 
@@ -416,7 +416,7 @@ int __pfm_read_pmds(struct pfm_context *ctx, struct pfarg_pmr *req, int count)
 		 * 	  level, e.g., IA-64 self-monitoring, I386 RDPMC).
 		 * 	- do not need to maintain PMC -> PMD dependencies
 		 */
-		if (unlikely(!test_bit(cnum, cast_ulp(set->used_pmds)))) {
+		if (unlikely(!pfm_arch_bv_test_bit(cnum, set->used_pmds))) {
 			PFM_DBG("pmd%u cannot read, because not used", cnum);
 			goto error;
 		}
