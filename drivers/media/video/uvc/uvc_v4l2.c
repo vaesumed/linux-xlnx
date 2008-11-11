@@ -252,7 +252,7 @@ static int uvc_v4l2_set_format(struct uvc_video_device *video,
 	if (ret < 0)
 		return ret;
 
-	if ((ret = uvc_set_video_ctrl(video, &probe, 0)) < 0)
+	if ((ret = uvc_commit_video(video, &probe)) < 0)
 		return ret;
 
 	memcpy(&video->streaming->ctrl, &probe, sizeof probe);
@@ -316,7 +316,7 @@ static int uvc_v4l2_set_streamparm(struct uvc_video_device *video,
 		return ret;
 
 	/* Commit the new settings. */
-	if ((ret = uvc_set_video_ctrl(video, &probe, 0)) < 0)
+	if ((ret = uvc_commit_video(video, &probe)) < 0)
 		return ret;
 
 	memcpy(&video->streaming->ctrl, &probe, sizeof probe);
@@ -464,8 +464,7 @@ static int uvc_v4l2_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int __uvc_v4l2_do_ioctl(struct file *file,
-		     unsigned int cmd, void *arg)
+static int uvc_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 {
 	struct video_device *vdev = video_devdata(file);
 	struct uvc_video_device *video = video_get_drvdata(vdev);
@@ -979,7 +978,7 @@ static int __uvc_v4l2_do_ioctl(struct file *file,
 
 	default:
 		if ((ret = v4l_compat_translate_ioctl(file, cmd, arg,
-			__uvc_v4l2_do_ioctl)) == -ENOIOCTLCMD)
+			uvc_v4l2_do_ioctl)) == -ENOIOCTLCMD)
 			uvc_trace(UVC_TRACE_IOCTL, "Unknown ioctl 0x%08x\n",
 				  cmd);
 		return ret;
@@ -988,17 +987,11 @@ static int __uvc_v4l2_do_ioctl(struct file *file,
 	return ret;
 }
 
-static int uvc_v4l2_do_ioctl(struct inode *inode, struct file *file,
-			      unsigned int cmd, void *arg)
-{
-	return __uvc_v4l2_do_ioctl(file, cmd, arg);
-}
-
 static int uvc_v4l2_ioctl(struct inode *inode, struct file *file,
 		     unsigned int cmd, unsigned long arg)
 {
 	uvc_trace(UVC_TRACE_CALLS, "uvc_v4l2_ioctl\n");
-	return video_usercopy(inode, file, cmd, arg, uvc_v4l2_do_ioctl);
+	return video_usercopy(file, cmd, arg, uvc_v4l2_do_ioctl);
 }
 
 static ssize_t uvc_v4l2_read(struct file *file, char __user *data,
