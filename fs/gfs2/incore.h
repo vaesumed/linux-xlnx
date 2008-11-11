@@ -68,12 +68,6 @@ struct gfs2_bitmap {
 	u32 bi_len;
 };
 
-struct gfs2_rgrp_host {
-	u32 rg_free;
-	u32 rg_dinodes;
-	u64 rg_igeneration;
-};
-
 struct gfs2_rgrpd {
 	struct list_head rd_list;	/* Link with superblock */
 	struct list_head rd_list_mru;
@@ -83,14 +77,16 @@ struct gfs2_rgrpd {
 	u32 rd_length;			/* length of rgrp header in fs blocks */
 	u32 rd_data;			/* num of data blocks in rgrp */
 	u32 rd_bitbytes;		/* number of bytes in data bitmaps */
-	struct gfs2_rgrp_host rd_rg;
-	struct gfs2_bitmap *rd_bits;
-	unsigned int rd_bh_count;
-	struct mutex rd_mutex;
+	u32 rd_free;
 	u32 rd_free_clone;
+	u32 rd_dinodes;
+	u64 rd_igeneration;
+	struct gfs2_bitmap *rd_bits;
+	struct mutex rd_mutex;
 	struct gfs2_log_element rd_le;
-	u32 rd_last_alloc;
 	struct gfs2_sbd *rd_sbd;
+	unsigned int rd_bh_count;
+	u32 rd_last_alloc;
 	unsigned char rd_flags;
 #define GFS2_RDF_CHECK        0x01      /* Need to check for unlinked inodes */
 #define GFS2_RDF_NOALLOC      0x02      /* rg prohibits allocation */
@@ -233,29 +229,23 @@ enum {
 	GIF_USER                = 4, /* user inode, not metadata addr space */
 };
 
-struct gfs2_dinode_host {
-	u64 di_size;		/* number of bytes in file */
-	u64 di_generation;	/* generation number for NFS */
-	u32 di_flags;		/* GFS2_DIF_... */
-	/* These only apply to directories  */
-	u32 di_entries;		/* The number of entries in the directory */
-	u64 di_eattr;		/* extended attribute block number */
-};
 
 struct gfs2_inode {
 	struct inode i_inode;
 	u64 i_no_addr;
 	u64 i_no_formal_ino;
+	u64 i_generation;
+	u64 i_eattr;
+	loff_t i_disksize;
 	unsigned long i_flags;		/* GIF_... */
-
-	struct gfs2_dinode_host i_di; /* To be replaced by ref to block */
-
 	struct gfs2_glock *i_gl; /* Move into i_gh? */
 	struct gfs2_holder i_iopen_gh;
 	struct gfs2_holder i_gh; /* for prepare/commit_write only */
 	struct gfs2_alloc *i_alloc;
 	u64 i_goal;	/* goal block for allocations */
 	struct rw_semaphore i_rw_mutex;
+	u32 i_entries;
+	u32 i_diskflags;
 	u8 i_height;
 	u8 i_depth;
 };
