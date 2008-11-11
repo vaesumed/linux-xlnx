@@ -21,6 +21,8 @@
 
 #define ATH_PCI_VERSION "0.1"
 
+#define IEEE80211_HTCAP_MAXRXAMPDU_FACTOR	13
+
 static char *dev_info = "ath9k";
 
 MODULE_AUTHOR("Atheros Communications");
@@ -162,7 +164,7 @@ static int ath_key_config(struct ath_softc *sc,
 	if (!sc->sc_vaps[0])
 		return -EIO;
 
-	vif = sc->sc_vaps[0];
+	vif = sc->sc_vaps[0]->av_if_data;
 	opmode = vif->type;
 
 	/*
@@ -295,6 +297,41 @@ static void ath9k_rx_prepare(struct ath_softc *sc,
 	rx_status->flag |= RX_FLAG_TSFT;
 }
 
+static u8 parse_mpdudensity(u8 mpdudensity)
+{
+	/*
+	 * 802.11n D2.0 defined values for "Minimum MPDU Start Spacing":
+	 *   0 for no restriction
+	 *   1 for 1/4 us
+	 *   2 for 1/2 us
+	 *   3 for 1 us
+	 *   4 for 2 us
+	 *   5 for 4 us
+	 *   6 for 8 us
+	 *   7 for 16 us
+	 */
+	switch (mpdudensity) {
+	case 0:
+		return 0;
+	case 1:
+	case 2:
+	case 3:
+		/* Our lower layer calculations limit our precision to
+		   1 microsecond */
+		return 1;
+	case 4:
+		return 2;
+	case 5:
+		return 4;
+	case 6:
+		return 8;
+	case 7:
+		return 16;
+	default:
+		return 0;
+	}
+}
+
 static void ath9k_ht_conf(struct ath_softc *sc,
 			  struct ieee80211_bss_conf *bss_conf)
 {
@@ -313,18 +350,24 @@ static void ath9k_ht_conf(struct ath_softc *sc,
 }
 
 static void ath9k_bss_assoc_info(struct ath_softc *sc,
-				 struct ieee80211_vif *vif,
 				 struct ieee80211_bss_conf *bss_conf)
 {
 	struct ieee80211_hw *hw = sc->hw;
 	struct ieee80211_channel *curchan = hw->conf.channel;
-	struct ath_vap *avp = (void *)vif->drv_priv;
+	struct ath_vap *avp;
 	int pos;
 
 	if (bss_conf->assoc) {
 		DPRINTF(sc, ATH_DBG_CONFIG, "%s: Bss Info ASSOC %d\n",
 			__func__,
 			bss_conf->aid);
+
+		avp = sc->sc_vaps[0];
+		if (avp == NULL) {
+			DPRINTF(sc, ATH_DBG_FATAL, "%s: Invalid interface\n",
+				__func__);
+			return;
+		}
 
 		/* New association, store aid */
 		if (avp->av_opmode == ATH9K_M_STA) {
@@ -406,7 +449,7 @@ void ath_get_beaconconfig(struct ath_softc *sc,
 }
 
 void ath_tx_complete(struct ath_softc *sc, struct sk_buff *skb,
-		     struct ath_xmit_status *tx_status)
+		     struct ath_xmit_status *tx_status, struct ath_node *an)
 {
 	struct ieee80211_hw *hw = sc->hw;
 	struct ieee80211_tx_info *tx_info = IEEE80211_SKB_CB(skb);
@@ -436,6 +479,8 @@ void ath_tx_complete(struct ath_softc *sc, struct sk_buff *skb,
 	tx_info->status.rates[0].count = tx_status->retries + 1;
 
 	ieee80211_tx_status(hw, skb);
+	if (an)
+		ath_node_put(sc, an, ATH9K_BH_STATUS_CHANGE);
 }
 
 int _ath_rx_indicate(struct ath_softc *sc,
@@ -444,10 +489,12 @@ int _ath_rx_indicate(struct ath_softc *sc,
 		     u16 keyix)
 {
 	struct ieee80211_hw *hw = sc->hw;
+	struct ath_node *an = NULL;
 	struct ieee80211_rx_status rx_status;
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *) skb->data;
 	int hdrlen = ieee80211_get_hdrlen_from_skb(skb);
 	int padsize;
+	enum ATH_RX_TYPE st;
 
 	/* see if any padding is done by the hw and remove it */
 	if (hdrlen & 3) {
@@ -470,6 +517,33 @@ int _ath_rx_indicate(struct ath_softc *sc,
 		if (test_bit(keyix, sc->sc_keymap))
 			rx_status.flag |= RX_FLAG_DECRYPTED;
 	}
+
+	spin_lock_bh(&sc->node_lock);
+	an = ath_node_find(sc, hdr->addr2);
+	spin_unlock_bh(&sc->node_lock);
+
+	if (an) {
+		ath_rx_input(sc, an,
+			     skb, status, &st);
+	}
+	if (!an || (st != ATH_RX_CONSUMED))
+		__ieee80211_rx(hw, skb, &rx_status);
+
+	return 0;
+}
+
+int ath_rx_subframe(struct ath_node *an,
+		    struct sk_buff *skb,
+		    struct ath_recv_status *status)
+{
+	struct ath_softc *sc = an->an_sc;
+	struct ieee80211_hw *hw = sc->hw;
+	struct ieee80211_rx_status rx_status;
+
+	/* Prepare rx status */
+	ath9k_rx_prepare(sc, skb, status, &rx_status);
+	if (!(status->flags & ATH_RX_DECRYPT_ERROR))
+		rx_status.flag |= RX_FLAG_DECRYPTED;
 
 	__ieee80211_rx(hw, skb, &rx_status);
 
@@ -592,7 +666,6 @@ fail:
 }
 
 #ifdef CONFIG_RFKILL
-
 /*******************/
 /*	Rfkill	   */
 /*******************/
@@ -793,72 +866,43 @@ static void ath_deinit_rfkill(struct ath_softc *sc)
 		sc->rf_kill.rfkill = NULL;
 	}
 }
-
-static int ath_start_rfkill_poll(struct ath_softc *sc)
-{
-	if (sc->sc_ah->ah_caps.hw_caps & ATH9K_HW_CAP_RFSILENT)
-		queue_delayed_work(sc->hw->workqueue,
-				   &sc->rf_kill.rfkill_poll, 0);
-
-	if (!(sc->sc_flags & SC_OP_RFKILL_REGISTERED)) {
-		if (rfkill_register(sc->rf_kill.rfkill)) {
-			DPRINTF(sc, ATH_DBG_FATAL,
-				"Unable to register rfkill\n");
-			rfkill_free(sc->rf_kill.rfkill);
-
-			/* Deinitialize the device */
-			if (sc->pdev->irq)
-				free_irq(sc->pdev->irq, sc);
-			ath_detach(sc);
-			pci_iounmap(sc->pdev, sc->mem);
-			pci_release_region(sc->pdev, 0);
-			pci_disable_device(sc->pdev);
-			ieee80211_free_hw(hw);
-			return -EIO;
-		} else {
-			sc->sc_flags |= SC_OP_RFKILL_REGISTERED;
-		}
-	}
-
-	return 0;
-}
 #endif /* CONFIG_RFKILL */
 
-static void ath_detach(struct ath_softc *sc)
+static int ath_detach(struct ath_softc *sc)
 {
 	struct ieee80211_hw *hw = sc->hw;
-	int i = 0;
 
 	DPRINTF(sc, ATH_DBG_CONFIG, "%s: Detach ATH hw\n", __func__);
 
-	ieee80211_unregister_hw(hw);
-
+	/* Deinit LED control */
 	ath_deinit_leds(sc);
 
 #ifdef CONFIG_RFKILL
+	/* deinit rfkill */
 	ath_deinit_rfkill(sc);
 #endif
+
+	/* Unregister hw */
+
+	ieee80211_unregister_hw(hw);
+
+	/* unregister Rate control */
 	ath_rate_control_unregister();
-	ath_rate_detach(sc->sc_rc);
+
+	/* tx/rx cleanup */
 
 	ath_rx_cleanup(sc);
 	ath_tx_cleanup(sc);
 
-	tasklet_kill(&sc->intr_tq);
-	tasklet_kill(&sc->bcon_tasklet);
+	/* Deinit */
 
-	if (!(sc->sc_flags & SC_OP_INVALID))
-		ath9k_hw_setpower(sc->sc_ah, ATH9K_PM_AWAKE);
+	ath_deinit(sc);
 
-	/* cleanup tx queues */
-	for (i = 0; i < ATH9K_NUM_TX_QUEUES; i++)
-		if (ATH_TXQ_SETUP(sc, i))
-			ath_tx_cleanupq(sc, &sc->sc_txq[i]);
-
-	ath9k_hw_detach(sc->sc_ah);
+	return 0;
 }
 
-static int ath_attach(u16 devid, struct ath_softc *sc)
+static int ath_attach(u16 devid,
+		      struct ath_softc *sc)
 {
 	struct ieee80211_hw *hw = sc->hw;
 	int error = 0;
@@ -869,23 +913,47 @@ static int ath_attach(u16 devid, struct ath_softc *sc)
 	if (error != 0)
 		return error;
 
+	/* Init nodes */
+
+	INIT_LIST_HEAD(&sc->node_list);
+	spin_lock_init(&sc->node_lock);
+
 	/* get mac address from hardware and set in mac80211 */
 
 	SET_IEEE80211_PERM_ADDR(hw, sc->sc_myaddr);
 
-	hw->flags = IEEE80211_HW_RX_INCLUDES_FCS |
-		IEEE80211_HW_HOST_BROADCAST_PS_BUFFERING |
-		IEEE80211_HW_SIGNAL_DBM |
-		IEEE80211_HW_AMPDU_AGGREGATION;
+	/* setup channels and rates */
 
-	hw->wiphy->interface_modes =
-		BIT(NL80211_IFTYPE_AP) |
-		BIT(NL80211_IFTYPE_STATION) |
-		BIT(NL80211_IFTYPE_ADHOC);
+	sc->sbands[IEEE80211_BAND_2GHZ].channels =
+		sc->channels[IEEE80211_BAND_2GHZ];
+	sc->sbands[IEEE80211_BAND_2GHZ].bitrates =
+		sc->rates[IEEE80211_BAND_2GHZ];
+	sc->sbands[IEEE80211_BAND_2GHZ].band = IEEE80211_BAND_2GHZ;
+
+	if (sc->sc_ah->ah_caps.hw_caps & ATH9K_HW_CAP_HT)
+		/* Setup HT capabilities for 2.4Ghz*/
+		setup_ht_cap(&sc->sbands[IEEE80211_BAND_2GHZ].ht_cap);
+
+	hw->wiphy->bands[IEEE80211_BAND_2GHZ] =
+		&sc->sbands[IEEE80211_BAND_2GHZ];
+
+	if (test_bit(ATH9K_MODE_11A, sc->sc_ah->ah_caps.wireless_modes)) {
+		sc->sbands[IEEE80211_BAND_5GHZ].channels =
+			sc->channels[IEEE80211_BAND_5GHZ];
+		sc->sbands[IEEE80211_BAND_5GHZ].bitrates =
+			sc->rates[IEEE80211_BAND_5GHZ];
+		sc->sbands[IEEE80211_BAND_5GHZ].band =
+			IEEE80211_BAND_5GHZ;
+
+		if (sc->sc_ah->ah_caps.hw_caps & ATH9K_HW_CAP_HT)
+			/* Setup HT capabilities for 5Ghz*/
+			setup_ht_cap(&sc->sbands[IEEE80211_BAND_5GHZ].ht_cap);
+
+		hw->wiphy->bands[IEEE80211_BAND_5GHZ] =
+			&sc->sbands[IEEE80211_BAND_5GHZ];
+	}
 
 	hw->queues = 4;
-	hw->sta_data_size = sizeof(struct ath_node);
-	hw->vif_data_size = sizeof(struct ath_vap);
 
 	/* Register rate control */
 	hw->rate_control_algorithm = "ath9k_rate_control";
@@ -897,17 +965,6 @@ static int ath_attach(u16 devid, struct ath_softc *sc)
 		ath_rate_control_unregister();
 		goto bad;
 	}
-
-	if (sc->sc_ah->ah_caps.hw_caps & ATH9K_HW_CAP_HT) {
-		setup_ht_cap(&sc->sbands[IEEE80211_BAND_2GHZ].ht_cap);
-		if (test_bit(ATH9K_MODE_11A, sc->sc_ah->ah_caps.wireless_modes))
-			setup_ht_cap(&sc->sbands[IEEE80211_BAND_5GHZ].ht_cap);
-	}
-
-	hw->wiphy->bands[IEEE80211_BAND_2GHZ] =	&sc->sbands[IEEE80211_BAND_2GHZ];
-	if (test_bit(ATH9K_MODE_11A, sc->sc_ah->ah_caps.wireless_modes))
-		hw->wiphy->bands[IEEE80211_BAND_5GHZ] =
-			&sc->sbands[IEEE80211_BAND_5GHZ];
 
 	error = ieee80211_register_hw(hw);
 	if (error != 0) {
@@ -954,44 +1011,62 @@ static int ath9k_start(struct ieee80211_hw *hw)
 	DPRINTF(sc, ATH_DBG_CONFIG, "%s: Starting driver with "
 		"initial channel: %d MHz\n", __func__, curchan->center_freq);
 
-	memset(&sc->sc_ht_info, 0, sizeof(struct ath_ht_info));
-
 	/* setup initial channel */
 
 	pos = ath_get_channel(sc, curchan);
 	if (pos == -1) {
 		DPRINTF(sc, ATH_DBG_FATAL, "%s: Invalid channel\n", __func__);
-		error = -EINVAL;
-		goto exit;
+		return -EINVAL;
 	}
 
 	sc->sc_ah->ah_channels[pos].chanmode =
 		(curchan->band == IEEE80211_BAND_2GHZ) ? CHANNEL_G : CHANNEL_A;
 
+	/* open ath_dev */
 	error = ath_open(sc, &sc->sc_ah->ah_channels[pos]);
 	if (error) {
 		DPRINTF(sc, ATH_DBG_FATAL,
 			"%s: Unable to complete ath_open\n", __func__);
-		goto exit;
+		return error;
 	}
 
 #ifdef CONFIG_RFKILL
-	error = ath_start_rfkill_poll(sc);
+	/* Start rfkill polling */
+	if (sc->sc_ah->ah_caps.hw_caps & ATH9K_HW_CAP_RFSILENT)
+		queue_delayed_work(sc->hw->workqueue,
+				   &sc->rf_kill.rfkill_poll, 0);
+
+	if (!(sc->sc_flags & SC_OP_RFKILL_REGISTERED)) {
+		if (rfkill_register(sc->rf_kill.rfkill)) {
+			DPRINTF(sc, ATH_DBG_FATAL,
+					"Unable to register rfkill\n");
+			rfkill_free(sc->rf_kill.rfkill);
+
+			/* Deinitialize the device */
+			if (sc->pdev->irq)
+				free_irq(sc->pdev->irq, sc);
+			ath_detach(sc);
+			pci_iounmap(sc->pdev, sc->mem);
+			pci_release_region(sc->pdev, 0);
+			pci_disable_device(sc->pdev);
+			ieee80211_free_hw(hw);
+			return -EIO;
+		} else {
+			sc->sc_flags |= SC_OP_RFKILL_REGISTERED;
+		}
+	}
 #endif
 
-exit:
-	return error;
+	ieee80211_wake_queues(hw);
+	return 0;
 }
 
 static int ath9k_tx(struct ieee80211_hw *hw,
 		    struct sk_buff *skb)
 {
-	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	struct ath_softc *sc = hw->priv;
-	struct ath_tx_control txctl;
 	int hdrlen, padsize;
-
-	memset(&txctl, 0, sizeof(struct ath_tx_control));
+	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 
 	/*
 	 * As a temporary workaround, assign seq# here; this will likely need
@@ -1016,47 +1091,45 @@ static int ath9k_tx(struct ieee80211_hw *hw,
 		memmove(skb->data, skb->data + padsize, hdrlen);
 	}
 
-	/* Check if a tx queue is available */
-
-	txctl.txq = ath_test_get_txq(sc, skb);
-	if (!txctl.txq)
-		goto exit;
-
 	DPRINTF(sc, ATH_DBG_XMIT, "%s: transmitting packet, skb: %p\n",
 		__func__,
 		skb);
 
-	if (ath_tx_start(sc, skb, &txctl) != 0) {
+	if (ath_tx_start(sc, skb) != 0) {
 		DPRINTF(sc, ATH_DBG_XMIT, "%s: TX failed\n", __func__);
-		goto exit;
+		dev_kfree_skb_any(skb);
+		/* FIXME: Check for proper return value from ATH_DEV */
+		return 0;
 	}
 
-	return 0;
-exit:
-	dev_kfree_skb_any(skb);
 	return 0;
 }
 
 static void ath9k_stop(struct ieee80211_hw *hw)
 {
 	struct ath_softc *sc = hw->priv;
-
-	if (sc->sc_flags & SC_OP_INVALID) {
-		DPRINTF(sc, ATH_DBG_ANY, "%s: Device not present\n", __func__);
-		return;
-	}
-
-	ath_stop(sc);
+	int error;
 
 	DPRINTF(sc, ATH_DBG_CONFIG, "%s: Driver halt\n", __func__);
+
+	error = ath_suspend(sc);
+	if (error)
+		DPRINTF(sc, ATH_DBG_CONFIG,
+			"%s: Device is no longer present\n", __func__);
+
+	ieee80211_stop_queues(hw);
+
+#ifdef CONFIG_RFKILL
+	if (sc->sc_ah->ah_caps.hw_caps & ATH9K_HW_CAP_RFSILENT)
+		cancel_delayed_work_sync(&sc->rf_kill.rfkill_poll);
+#endif
 }
 
 static int ath9k_add_interface(struct ieee80211_hw *hw,
 			       struct ieee80211_if_init_conf *conf)
 {
 	struct ath_softc *sc = hw->priv;
-	struct ath_vap *avp = (void *)conf->vif->drv_priv;
-	int ic_opmode = 0;
+	int error, ic_opmode = 0;
 
 	/* Support only vap for now */
 
@@ -1084,22 +1157,13 @@ static int ath9k_add_interface(struct ieee80211_hw *hw,
 		__func__,
 		ic_opmode);
 
-	/* Set the VAP opmode */
-	avp->av_opmode = ic_opmode;
-	avp->av_bslot = -1;
-
-	if (ic_opmode == ATH9K_M_HOSTAP)
-		ath9k_hw_set_tsfadjust(sc->sc_ah, 1);
-
-	sc->sc_vaps[0] = conf->vif;
-	sc->sc_nvaps++;
-
-	/* Set the device opmode */
-	sc->sc_ah->ah_opmode = ic_opmode;
-
-	/* default VAP configuration */
-	avp->av_config.av_fixed_rateset = IEEE80211_FIXED_RATE_NONE;
-	avp->av_config.av_fixed_retryset = 0x03030303;
+	error = ath_vap_attach(sc, 0, conf->vif, ic_opmode);
+	if (error) {
+		DPRINTF(sc, ATH_DBG_FATAL,
+			"%s: Unable to attach vap, error: %d\n",
+			__func__, error);
+		return error;
+	}
 
 	if (conf->type == NL80211_IFTYPE_AP) {
 		/* TODO: is this a suitable place to start ANI for AP mode? */
@@ -1115,15 +1179,26 @@ static void ath9k_remove_interface(struct ieee80211_hw *hw,
 				   struct ieee80211_if_init_conf *conf)
 {
 	struct ath_softc *sc = hw->priv;
-	struct ath_vap *avp = (void *)conf->vif->drv_priv;
+	struct ath_vap *avp;
+	int error;
 
 	DPRINTF(sc, ATH_DBG_CONFIG, "%s: Detach VAP\n", __func__);
+
+	avp = sc->sc_vaps[0];
+	if (avp == NULL) {
+		DPRINTF(sc, ATH_DBG_FATAL, "%s: Invalid interface\n",
+			__func__);
+		return;
+	}
 
 #ifdef CONFIG_SLOW_ANT_DIV
 	ath_slow_ant_div_stop(&sc->sc_antdiv);
 #endif
 	/* Stop ANI */
 	del_timer_sync(&sc->sc_ani.timer);
+
+	/* Update ratectrl */
+	ath_rate_newstate(sc, avp);
 
 	/* Reclaim beacon resources */
 	if (sc->sc_ah->ah_opmode == ATH9K_M_HOSTAP ||
@@ -1132,10 +1207,16 @@ static void ath9k_remove_interface(struct ieee80211_hw *hw,
 		ath_beacon_return(sc, avp);
 	}
 
+	/* Set interrupt mask */
+	sc->sc_imask &= ~(ATH9K_INT_SWBA | ATH9K_INT_BMISS);
+	ath9k_hw_set_interrupts(sc->sc_ah, sc->sc_imask & ~ATH9K_INT_GLOBAL);
 	sc->sc_flags &= ~SC_OP_BEACONS;
 
-	sc->sc_vaps[0] = NULL;
-	sc->sc_nvaps--;
+	error = ath_vap_detach(sc, 0);
+	if (error)
+		DPRINTF(sc, ATH_DBG_FATAL,
+			"%s: Unable to detach vap, error: %d\n",
+			__func__, error);
 }
 
 static int ath9k_config(struct ieee80211_hw *hw, u32 changed)
@@ -1183,9 +1264,16 @@ static int ath9k_config_interface(struct ieee80211_hw *hw,
 {
 	struct ath_softc *sc = hw->priv;
 	struct ath_hal *ah = sc->sc_ah;
-	struct ath_vap *avp = (void *)vif->drv_priv;
+	struct ath_vap *avp;
 	u32 rfilt = 0;
 	int error, i;
+
+	avp = sc->sc_vaps[0];
+	if (avp == NULL) {
+		DPRINTF(sc, ATH_DBG_FATAL, "%s: Invalid interface\n",
+			__func__);
+		return -EINVAL;
+	}
 
 	/* TODO: Need to decide which hw opmode to use for multi-interface
 	 * cases */
@@ -1214,6 +1302,23 @@ static int ath9k_config_interface(struct ieee80211_hw *hw,
 
 			/* Set aggregation protection mode parameters */
 			sc->sc_config.ath_aggr_prot = 0;
+
+			/*
+			 * Reset our TSF so that its value is lower than the
+			 * beacon that we are trying to catch.
+			 * Only then hw will update its TSF register with the
+			 * new beacon. Reset the TSF before setting the BSSID
+			 * to avoid allowing in any frames that would update
+			 * our TSF only to have us clear it
+			 * immediately thereafter.
+			 */
+			ath9k_hw_reset_tsf(sc->sc_ah);
+
+			/* Disable BMISS interrupt when we're not associated */
+			ath9k_hw_set_interrupts(sc->sc_ah,
+					sc->sc_imask &
+					~(ATH9K_INT_SWBA | ATH9K_INT_BMISS));
+			sc->sc_imask &= ~(ATH9K_INT_SWBA | ATH9K_INT_BMISS);
 
 			DPRINTF(sc, ATH_DBG_CONFIG,
 				"%s: RX filter 0x%x bssid %pM aid 0x%x\n",
@@ -1250,7 +1355,7 @@ static int ath9k_config_interface(struct ieee80211_hw *hw,
 	}
 
 	/* Check for WLAN_CAPABILITY_PRIVACY ? */
-	if ((avp->av_opmode != ATH9K_M_STA)) {
+	if ((avp->av_opmode != NL80211_IFTYPE_STATION)) {
 		for (i = 0; i < IEEE80211_WEP_NKID; i++)
 			if (ath9k_hw_keyisvalid(sc->sc_ah, (u16)i))
 				ath9k_hw_keysetmac(sc->sc_ah,
@@ -1305,13 +1410,44 @@ static void ath9k_sta_notify(struct ieee80211_hw *hw,
 			     struct ieee80211_sta *sta)
 {
 	struct ath_softc *sc = hw->priv;
+	struct ath_node *an;
+	unsigned long flags;
+
+	spin_lock_irqsave(&sc->node_lock, flags);
+	an = ath_node_find(sc, sta->addr);
+	spin_unlock_irqrestore(&sc->node_lock, flags);
 
 	switch (cmd) {
 	case STA_NOTIFY_ADD:
-		ath_node_attach(sc, sta);
+		spin_lock_irqsave(&sc->node_lock, flags);
+		if (!an) {
+			ath_node_attach(sc, sta->addr, 0);
+			DPRINTF(sc, ATH_DBG_CONFIG, "%s: Attach a node: %pM\n",
+				__func__, sta->addr);
+		} else {
+			ath_node_get(sc, sta->addr);
+		}
+
+		/* XXX: Is this right? Can the capabilities change? */
+		an = ath_node_find(sc, sta->addr);
+		an->maxampdu = 1 << (IEEE80211_HTCAP_MAXRXAMPDU_FACTOR +
+					sta->ht_cap.ampdu_factor);
+		an->mpdudensity =
+			parse_mpdudensity(sta->ht_cap.ampdu_density);
+
+		spin_unlock_irqrestore(&sc->node_lock, flags);
 		break;
 	case STA_NOTIFY_REMOVE:
-		ath_node_detach(sc, sta);
+		if (!an)
+			DPRINTF(sc, ATH_DBG_FATAL,
+				"%s: Removal of a non-existent node\n",
+				__func__);
+		else {
+			ath_node_put(sc, an, ATH9K_BH_STATUS_INTACT);
+			DPRINTF(sc, ATH_DBG_CONFIG, "%s: Put a node: %pM\n",
+				__func__,
+				sta->addr);
+		}
 		break;
 	default:
 		break;
@@ -1426,7 +1562,7 @@ static void ath9k_bss_info_changed(struct ieee80211_hw *hw,
 		DPRINTF(sc, ATH_DBG_CONFIG, "%s: BSS Changed ASSOC %d\n",
 			__func__,
 			bss_conf->assoc);
-		ath9k_bss_assoc_info(sc, vif, bss_conf);
+		ath9k_bss_assoc_info(sc, bss_conf);
 	}
 }
 
@@ -1459,13 +1595,21 @@ static int ath9k_ampdu_action(struct ieee80211_hw *hw,
 
 	switch (action) {
 	case IEEE80211_AMPDU_RX_START:
-		if (!(sc->sc_flags & SC_OP_RXAGGR))
-			ret = -ENOTSUPP;
+		ret = ath_rx_aggr_start(sc, sta->addr, tid, ssn);
+		if (ret < 0)
+			DPRINTF(sc, ATH_DBG_FATAL,
+				"%s: Unable to start RX aggregation\n",
+				__func__);
 		break;
 	case IEEE80211_AMPDU_RX_STOP:
+		ret = ath_rx_aggr_stop(sc, sta->addr, tid);
+		if (ret < 0)
+			DPRINTF(sc, ATH_DBG_FATAL,
+				"%s: Unable to stop RX aggregation\n",
+				__func__);
 		break;
 	case IEEE80211_AMPDU_TX_START:
-		ret = ath_tx_aggr_start(sc, sta, tid, ssn);
+		ret = ath_tx_aggr_start(sc, sta->addr, tid, ssn);
 		if (ret < 0)
 			DPRINTF(sc, ATH_DBG_FATAL,
 				"%s: Unable to start TX aggregation\n",
@@ -1474,16 +1618,13 @@ static int ath9k_ampdu_action(struct ieee80211_hw *hw,
 			ieee80211_start_tx_ba_cb_irqsafe(hw, sta->addr, tid);
 		break;
 	case IEEE80211_AMPDU_TX_STOP:
-		ret = ath_tx_aggr_stop(sc, sta, tid);
+		ret = ath_tx_aggr_stop(sc, sta->addr, tid);
 		if (ret < 0)
 			DPRINTF(sc, ATH_DBG_FATAL,
 				"%s: Unable to stop TX aggregation\n",
 				__func__);
 
 		ieee80211_stop_tx_ba_cb_irqsafe(hw, sta->addr, tid);
-		break;
-	case IEEE80211_AMPDU_TX_RESUME:
-		ath_tx_aggr_resume(sc, sta, tid);
 		break;
 	default:
 		DPRINTF(sc, ATH_DBG_FATAL,
@@ -1507,12 +1648,20 @@ static struct ieee80211_ops ath9k_ops = {
 	.config 	    = ath9k_config,
 	.config_interface   = ath9k_config_interface,
 	.configure_filter   = ath9k_configure_filter,
+	.get_stats          = NULL,
 	.sta_notify         = ath9k_sta_notify,
 	.conf_tx 	    = ath9k_conf_tx,
+	.get_tx_stats 	    = NULL,
 	.bss_info_changed   = ath9k_bss_info_changed,
+	.set_tim            = NULL,
 	.set_key            = ath9k_set_key,
+	.hw_scan            = NULL,
+	.get_tkip_seq       = NULL,
+	.set_rts_threshold  = NULL,
+	.set_frag_threshold = NULL,
 	.get_tsf 	    = ath9k_get_tsf,
 	.reset_tsf 	    = ath9k_reset_tsf,
+	.tx_last_beacon     = NULL,
 	.ampdu_action       = ath9k_ampdu_action,
 	.set_frag_threshold = ath9k_no_fragmentation,
 };
@@ -1590,6 +1739,17 @@ static int ath_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto bad2;
 	}
 
+	hw->flags = IEEE80211_HW_RX_INCLUDES_FCS |
+		IEEE80211_HW_HOST_BROADCAST_PS_BUFFERING |
+		IEEE80211_HW_SIGNAL_DBM |
+		IEEE80211_HW_NOISE_DBM |
+		IEEE80211_HW_AMPDU_AGGREGATION;
+
+	hw->wiphy->interface_modes =
+		BIT(NL80211_IFTYPE_AP) |
+		BIT(NL80211_IFTYPE_STATION) |
+		BIT(NL80211_IFTYPE_ADHOC);
+
 	SET_IEEE80211_DEV(hw, &pdev->dev);
 	pci_set_drvdata(pdev, hw);
 
@@ -1637,10 +1797,17 @@ static void ath_pci_remove(struct pci_dev *pdev)
 {
 	struct ieee80211_hw *hw = pci_get_drvdata(pdev);
 	struct ath_softc *sc = hw->priv;
+	enum ath9k_int status;
 
-	ath_detach(sc);
-	if (pdev->irq)
+	if (pdev->irq) {
+		ath9k_hw_set_interrupts(sc->sc_ah, 0);
+		/* clear the ISR */
+		ath9k_hw_getisr(sc->sc_ah, &status);
+		sc->sc_flags |= SC_OP_INVALID;
 		free_irq(pdev->irq, sc);
+	}
+	ath_detach(sc);
+
 	pci_iounmap(pdev, sc->mem);
 	pci_release_region(pdev, 0);
 	pci_disable_device(pdev);
