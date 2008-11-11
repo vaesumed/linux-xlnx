@@ -176,19 +176,20 @@ enum {
 };
 
 /* DCCP features (RFC 4340 section 6.4) */
-enum {
+enum dccp_feature_numbers {
 	DCCPF_RESERVED = 0,
 	DCCPF_CCID = 1,
-	DCCPF_SHORT_SEQNOS = 2,		/* XXX: not yet implemented */
+	DCCPF_SHORT_SEQNOS = 2,
 	DCCPF_SEQUENCE_WINDOW = 3,
-	DCCPF_ECN_INCAPABLE = 4,	/* XXX: not yet implemented */
+	DCCPF_ECN_INCAPABLE = 4,
 	DCCPF_ACK_RATIO = 5,
 	DCCPF_SEND_ACK_VECTOR = 6,
 	DCCPF_SEND_NDP_COUNT = 7,
 	DCCPF_MIN_CSUM_COVER = 8,
-	DCCPF_DATA_CHECKSUM = 9,	/* XXX: not yet implemented */
+	DCCPF_DATA_CHECKSUM = 9,
 	/* 10-127 reserved */
 	DCCPF_MIN_CCID_SPECIFIC = 128,
+	DCCPF_SEND_LEV_RATE = 192,	/* RFC 4342, sec. 8.4 */
 	DCCPF_MAX_CCID_SPECIFIC = 255,
 };
 
@@ -411,6 +412,7 @@ extern void dccp_minisock_init(struct dccp_minisock *dmsk);
  * @dreq_iss: initial sequence number sent on the Response (RFC 4340, 7.1)
  * @dreq_isr: initial sequence number received on the Request
  * @dreq_service: service code present on the Request (there is just one)
+ * @dreq_featneg: feature negotiation options for this connection
  * The following two fields are analogous to the ones in dccp_sock:
  * @dreq_timestamp_echo: last received timestamp to echo (13.1)
  * @dreq_timestamp_echo: the time of receiving the last @dreq_timestamp_echo
@@ -420,6 +422,7 @@ struct dccp_request_sock {
 	__u64			 dreq_iss;
 	__u64			 dreq_isr;
 	__be32			 dreq_service;
+	struct list_head	 dreq_featneg;
 	__u32			 dreq_timestamp_echo;
 	__u32			 dreq_timestamp_time;
 };
@@ -497,6 +500,7 @@ struct dccp_ackvec;
  * @dccps_mss_cache - current value of MSS (path MTU minus header sizes)
  * @dccps_rate_last - timestamp for rate-limiting DCCP-Sync (RFC 4340, 7.5.4)
  * @dccps_minisock - associated minisock (accessed via dccp_msk)
+ * @dccps_featneg - tracks feature-negotiation state (mostly during handshake)
  * @dccps_hc_rx_ackvec - rx half connection ack vector
  * @dccps_hc_rx_ccid - CCID used for the receiver (or receiving half-connection)
  * @dccps_hc_tx_ccid - CCID used for the sender (or sending half-connection)
@@ -534,6 +538,7 @@ struct dccp_sock {
 	__u64				dccps_ndp_count:48;
 	unsigned long			dccps_rate_last;
 	struct dccp_minisock		dccps_minisock;
+	struct list_head		dccps_featneg;
 	struct dccp_ackvec		*dccps_hc_rx_ackvec;
 	struct ccid			*dccps_hc_rx_ccid;
 	struct ccid			*dccps_hc_tx_ccid;
