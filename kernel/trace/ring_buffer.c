@@ -16,6 +16,8 @@
 #include <linux/list.h>
 #include <linux/fs.h>
 
+#include "trace.h"
+
 /* Up this if you want to test the TIME_EXTENTS and normalization */
 #define DEBUG_SHIFT 0
 
@@ -152,7 +154,7 @@ static inline int test_time_stamp(u64 delta)
 struct ring_buffer_per_cpu {
 	int				cpu;
 	struct ring_buffer		*buffer;
-	spinlock_t			lock;
+	raw_spinlock_t			lock;
 	struct lock_class_key		lock_key;
 	struct list_head		pages;
 	struct buffer_page		*head_page;	/* read from head */
@@ -186,6 +188,7 @@ struct ring_buffer_iter {
 	u64				read_stamp;
 };
 
+/* buffer may be either ring_buffer or ring_buffer_per_cpu */
 #define RB_WARN_ON(buffer, cond)				\
 	do {							\
 		if (unlikely(cond)) {				\
@@ -199,7 +202,25 @@ struct ring_buffer_iter {
 		if (unlikely(cond)) {				\
 			atomic_inc(&buffer->record_disabled);	\
 			WARN_ON(1);				\
+			return;					\
+		}						\
+	} while (0)
+
+#define RB_WARN_ON_RET_INT(buffer, cond)			\
+	do {							\
+		if (unlikely(cond)) {				\
+			atomic_inc(&buffer->record_disabled);	\
+			WARN_ON(1);				\
 			return -1;				\
+		}						\
+	} while (0)
+
+#define RB_WARN_ON_RET_NULL(buffer, cond)			\
+	do {							\
+		if (unlikely(cond)) {				\
+			atomic_inc(&buffer->record_disabled);	\
+			WARN_ON(1);				\
+			return NULL;				\
 		}						\
 	} while (0)
 
@@ -210,6 +231,17 @@ struct ring_buffer_iter {
 			once++;					\
 			atomic_inc(&buffer->record_disabled);	\
 			WARN_ON(1);				\
+		}						\
+	} while (0)
+
+/* buffer must be ring_buffer not per_cpu */
+#define RB_WARN_ON_UNLOCK(buffer, cond)				\
+	do {							\
+		if (unlikely(cond)) {				\
+			mutex_unlock(&buffer->mutex);		\
+			atomic_inc(&buffer->record_disabled);	\
+			WARN_ON(1);				\
+			return -1;				\
 		}						\
 	} while (0)
 
@@ -225,13 +257,13 @@ static int rb_check_pages(struct ring_buffer_per_cpu *cpu_buffer)
 	struct list_head *head = &cpu_buffer->pages;
 	struct buffer_page *page, *tmp;
 
-	RB_WARN_ON_RET(cpu_buffer, head->next->prev != head);
-	RB_WARN_ON_RET(cpu_buffer, head->prev->next != head);
+	RB_WARN_ON_RET_INT(cpu_buffer, head->next->prev != head);
+	RB_WARN_ON_RET_INT(cpu_buffer, head->prev->next != head);
 
 	list_for_each_entry_safe(page, tmp, head, list) {
-		RB_WARN_ON_RET(cpu_buffer,
+		RB_WARN_ON_RET_INT(cpu_buffer,
 			       page->list.next->prev != &page->list);
-		RB_WARN_ON_RET(cpu_buffer,
+		RB_WARN_ON_RET_INT(cpu_buffer,
 			       page->list.prev->next != &page->list);
 	}
 
@@ -289,7 +321,7 @@ rb_allocate_cpu_buffer(struct ring_buffer *buffer, int cpu)
 
 	cpu_buffer->cpu = cpu;
 	cpu_buffer->buffer = buffer;
-	spin_lock_init(&cpu_buffer->lock);
+	cpu_buffer->lock = (raw_spinlock_t)__RAW_SPIN_LOCK_UNLOCKED;
 	INIT_LIST_HEAD(&cpu_buffer->pages);
 
 	page = kzalloc_node(ALIGN(sizeof(*page), cache_line_size()),
@@ -438,13 +470,13 @@ rb_remove_pages(struct ring_buffer_per_cpu *cpu_buffer, unsigned nr_pages)
 	synchronize_sched();
 
 	for (i = 0; i < nr_pages; i++) {
-		BUG_ON(list_empty(&cpu_buffer->pages));
+		RB_WARN_ON_RET(cpu_buffer, list_empty(&cpu_buffer->pages));
 		p = cpu_buffer->pages.next;
 		page = list_entry(p, struct buffer_page, list);
 		list_del_init(&page->list);
 		free_buffer_page(page);
 	}
-	BUG_ON(list_empty(&cpu_buffer->pages));
+	RB_WARN_ON_RET(cpu_buffer, list_empty(&cpu_buffer->pages));
 
 	rb_reset_cpu(cpu_buffer);
 
@@ -466,7 +498,7 @@ rb_insert_pages(struct ring_buffer_per_cpu *cpu_buffer,
 	synchronize_sched();
 
 	for (i = 0; i < nr_pages; i++) {
-		BUG_ON(list_empty(pages));
+		RB_WARN_ON_RET(cpu_buffer, list_empty(pages));
 		p = pages->next;
 		page = list_entry(p, struct buffer_page, list);
 		list_del_init(&page->list);
@@ -521,7 +553,7 @@ int ring_buffer_resize(struct ring_buffer *buffer, unsigned long size)
 	if (size < buffer_size) {
 
 		/* easy case, just free pages */
-		BUG_ON(nr_pages >= buffer->pages);
+		RB_WARN_ON_UNLOCK(buffer, nr_pages >= buffer->pages);
 
 		rm_pages = buffer->pages - nr_pages;
 
@@ -540,7 +572,8 @@ int ring_buffer_resize(struct ring_buffer *buffer, unsigned long size)
 	 * add these pages to the cpu_buffers. Otherwise we just free
 	 * them all and return -ENOMEM;
 	 */
-	BUG_ON(nr_pages <= buffer->pages);
+	RB_WARN_ON_UNLOCK(buffer, nr_pages <= buffer->pages);
+
 	new_pages = nr_pages - buffer->pages;
 
 	for_each_buffer_cpu(buffer, cpu) {
@@ -563,7 +596,7 @@ int ring_buffer_resize(struct ring_buffer *buffer, unsigned long size)
 		rb_insert_pages(cpu_buffer, &pages, new_pages);
 	}
 
-	BUG_ON(!list_empty(&pages));
+	RB_WARN_ON_UNLOCK(buffer, !list_empty(&pages));
 
  out:
 	buffer->pages = nr_pages;
@@ -651,7 +684,7 @@ static void rb_update_overflow(struct ring_buffer_per_cpu *cpu_buffer)
 	     head += rb_event_length(event)) {
 
 		event = __rb_page_index(cpu_buffer->head_page, head);
-		BUG_ON(rb_null_event(event));
+		RB_WARN_ON_RET(cpu_buffer, rb_null_event(event));
 		/* Only count data entries */
 		if (event->type != RINGBUF_TYPE_DATA)
 			continue;
@@ -852,7 +885,8 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 	if (write > BUF_PAGE_SIZE) {
 		struct buffer_page *next_page = tail_page;
 
-		spin_lock_irqsave(&cpu_buffer->lock, flags);
+		local_irq_save(flags);
+		__raw_spin_lock(&cpu_buffer->lock);
 
 		rb_inc_page(cpu_buffer, &next_page);
 
@@ -928,7 +962,8 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 			rb_set_commit_to_write(cpu_buffer);
 		}
 
-		spin_unlock_irqrestore(&cpu_buffer->lock, flags);
+		__raw_spin_unlock(&cpu_buffer->lock);
+		local_irq_restore(flags);
 
 		/* fail and let the caller try again */
 		return ERR_PTR(-EAGAIN);
@@ -936,7 +971,7 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 
 	/* We reserved something on the buffer */
 
-	BUG_ON(write > BUF_PAGE_SIZE);
+	RB_WARN_ON_RET_NULL(cpu_buffer, write > BUF_PAGE_SIZE);
 
 	event = __rb_page_index(tail_page, tail);
 	rb_update_event(event, type, length);
@@ -951,7 +986,8 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 	return event;
 
  out_unlock:
-	spin_unlock_irqrestore(&cpu_buffer->lock, flags);
+	__raw_spin_unlock(&cpu_buffer->lock);
+	local_irq_restore(flags);
 	return NULL;
 }
 
@@ -1137,8 +1173,7 @@ ring_buffer_lock_reserve(struct ring_buffer *buffer,
 		return NULL;
 
 	/* If we are tracing schedule, we don't want to recurse */
-	resched = need_resched();
-	preempt_disable_notrace();
+	resched = ftrace_preempt_disable();
 
 	cpu = raw_smp_processor_id();
 
@@ -1169,10 +1204,7 @@ ring_buffer_lock_reserve(struct ring_buffer *buffer,
 	return event;
 
  out:
-	if (resched)
-		preempt_enable_notrace();
-	else
-		preempt_enable_notrace();
+	ftrace_preempt_enable(resched);
 	return NULL;
 }
 
@@ -1214,12 +1246,9 @@ int ring_buffer_unlock_commit(struct ring_buffer *buffer,
 	/*
 	 * Only the last preempt count needs to restore preemption.
 	 */
-	if (preempt_count() == 1) {
-		if (per_cpu(rb_need_resched, cpu))
-			preempt_enable_no_resched_notrace();
-		else
-			preempt_enable_notrace();
-	} else
+	if (preempt_count() == 1)
+		ftrace_preempt_enable(per_cpu(rb_need_resched, cpu));
+	else
 		preempt_enable_no_resched_notrace();
 
 	return 0;
@@ -1252,8 +1281,7 @@ int ring_buffer_write(struct ring_buffer *buffer,
 	if (atomic_read(&buffer->record_disabled))
 		return -EBUSY;
 
-	resched = need_resched();
-	preempt_disable_notrace();
+	resched = ftrace_preempt_disable();
 
 	cpu = raw_smp_processor_id();
 
@@ -1279,10 +1307,7 @@ int ring_buffer_write(struct ring_buffer *buffer,
 
 	ret = 0;
  out:
-	if (resched)
-		preempt_enable_no_resched_notrace();
-	else
-		preempt_enable_notrace();
+	ftrace_preempt_enable(resched);
 
 	return ret;
 }
@@ -1549,7 +1574,8 @@ rb_get_reader_page(struct ring_buffer_per_cpu *cpu_buffer)
 	unsigned long flags;
 	int nr_loops = 0;
 
-	spin_lock_irqsave(&cpu_buffer->lock, flags);
+	local_irq_save(flags);
+	__raw_spin_lock(&cpu_buffer->lock);
 
  again:
 	/*
@@ -1611,7 +1637,8 @@ rb_get_reader_page(struct ring_buffer_per_cpu *cpu_buffer)
 	goto again;
 
  out:
-	spin_unlock_irqrestore(&cpu_buffer->lock, flags);
+	__raw_spin_unlock(&cpu_buffer->lock);
+	local_irq_restore(flags);
 
 	return reader;
 }
@@ -1625,7 +1652,7 @@ static void rb_advance_reader(struct ring_buffer_per_cpu *cpu_buffer)
 	reader = rb_get_reader_page(cpu_buffer);
 
 	/* This function should not be called when buffer is empty */
-	BUG_ON(!reader);
+	RB_WARN_ON_RET(cpu_buffer, !reader);
 
 	event = rb_reader_event(cpu_buffer);
 
@@ -1652,7 +1679,8 @@ static void rb_advance_iter(struct ring_buffer_iter *iter)
 	 * Check if we are at the end of the buffer.
 	 */
 	if (iter->head >= rb_page_size(iter->head_page)) {
-		BUG_ON(iter->head_page == cpu_buffer->commit_page);
+		RB_WARN_ON_RET(buffer,
+			       iter->head_page == cpu_buffer->commit_page);
 		rb_inc_iter(iter);
 		return;
 	}
@@ -1665,8 +1693,9 @@ static void rb_advance_iter(struct ring_buffer_iter *iter)
 	 * This should not be called to advance the header if we are
 	 * at the tail of the buffer.
 	 */
-	BUG_ON((iter->head_page == cpu_buffer->commit_page) &&
-	       (iter->head + length > rb_commit_index(cpu_buffer)));
+	RB_WARN_ON_RET(cpu_buffer,
+		       (iter->head_page == cpu_buffer->commit_page) &&
+		       (iter->head + length > rb_commit_index(cpu_buffer)));
 
 	rb_update_iter_read_stamp(iter, event);
 
@@ -1880,9 +1909,11 @@ ring_buffer_read_start(struct ring_buffer *buffer, int cpu)
 	atomic_inc(&cpu_buffer->record_disabled);
 	synchronize_sched();
 
-	spin_lock_irqsave(&cpu_buffer->lock, flags);
+	local_irq_save(flags);
+	__raw_spin_lock(&cpu_buffer->lock);
 	ring_buffer_iter_reset(iter);
-	spin_unlock_irqrestore(&cpu_buffer->lock, flags);
+	__raw_spin_unlock(&cpu_buffer->lock);
+	local_irq_restore(flags);
 
 	return iter;
 }
@@ -1968,11 +1999,13 @@ void ring_buffer_reset_cpu(struct ring_buffer *buffer, int cpu)
 	if (!cpu_isset(cpu, buffer->cpumask))
 		return;
 
-	spin_lock_irqsave(&cpu_buffer->lock, flags);
+	local_irq_save(flags);
+	__raw_spin_lock(&cpu_buffer->lock);
 
 	rb_reset_cpu(cpu_buffer);
 
-	spin_unlock_irqrestore(&cpu_buffer->lock, flags);
+	__raw_spin_unlock(&cpu_buffer->lock);
+	local_irq_restore(flags);
 }
 
 /**
