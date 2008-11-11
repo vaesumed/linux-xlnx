@@ -65,14 +65,15 @@ static void cpuidle_idle_call(void)
 		return;
 	}
 
-#if 0
-	/* shows regressions, re-enable for 2.6.29 */
 	/*
 	 * run any timers that can be run now, at this point
 	 * before calculating the idle duration etc.
 	 */
-	hrtimer_peek_ahead_timers();
-#endif
+	if (hrtimer_peek_ahead_timers()) {
+		local_irq_enable();
+		return;
+	}
+
 	/* ask the governor for the next state */
 	next_state = cpuidle_curr_governor->select(dev);
 	if (need_resched())
