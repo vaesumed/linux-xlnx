@@ -121,6 +121,7 @@ extern void time_init(void);
 /* Default late time init is NULL. archs can override this later. */
 void (*late_time_init)(void);
 extern void softirq_init(void);
+extern void cpu_alloc_init(void);
 
 /* Untouched command line saved by arch-specific code. */
 char __initdata boot_command_line[COMMAND_LINE_SIZE];
@@ -258,6 +259,18 @@ static int __init loglevel(char *str)
 }
 
 early_param("loglevel", loglevel);
+
+#ifdef PERCPU_RESERVE_SIZE
+unsigned int percpu_reserve = PERCPU_RESERVE_SIZE;
+
+static int __init init_percpu_reserve(char *str)
+{
+	get_option(&str, &percpu_reserve);
+	return 0;
+}
+
+early_param("percpu", init_percpu_reserve);
+#endif
 
 /*
  * Unknown boot options get handed to init, unless they look like
@@ -402,8 +415,10 @@ static void __init setup_per_cpu_areas(void)
 	unsigned long nr_possible_cpus = num_possible_cpus();
 
 	/* Copy section for each CPU (we discard the original) */
-	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
+	size = ALIGN(PERCPU_AREA_SIZE, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
+	printk(KERN_INFO "percpu area: %d bytes total, %d available.\n",
+		size, size - (__per_cpu_end - __per_cpu_start));
 
 	for_each_possible_cpu(i) {
 		__per_cpu_offset[i] = ptr - __per_cpu_start;
@@ -584,6 +599,7 @@ asmlinkage void __init start_kernel(void)
 	unwind_setup();
 	setup_per_cpu_areas();
 	setup_nr_cpu_ids();
+	cpu_alloc_init();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
 	/*
