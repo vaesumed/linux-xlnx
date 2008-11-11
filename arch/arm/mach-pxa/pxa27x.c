@@ -145,28 +145,28 @@ static const struct clkops clk_pxa27x_lcd_ops = {
 };
 
 static struct clk pxa27x_clks[] = {
-	INIT_CK("LCDCLK", LCD,    &clk_pxa27x_lcd_ops, &pxa_device_fb.dev),
+	INIT_CK(NULL, LCD,    &clk_pxa27x_lcd_ops, &pxa_device_fb.dev),
 	INIT_CK("CAMCLK", CAMERA, &clk_pxa27x_lcd_ops, NULL),
 
-	INIT_CKEN("UARTCLK", FFUART, 14857000, 1, &pxa_device_ffuart.dev),
-	INIT_CKEN("UARTCLK", BTUART, 14857000, 1, &pxa_device_btuart.dev),
+	INIT_CKEN(NULL, FFUART, 14857000, 1, &pxa_device_ffuart.dev),
+	INIT_CKEN(NULL, BTUART, 14857000, 1, &pxa_device_btuart.dev),
 	INIT_CKEN("UARTCLK", STUART, 14857000, 1, NULL),
 
-	INIT_CKEN("I2SCLK",  I2S,  14682000, 0, &pxa_device_i2s.dev),
-	INIT_CKEN("I2CCLK",  I2C,  32842000, 0, &pxa_device_i2c.dev),
-	INIT_CKEN("UDCCLK",  USB,  48000000, 5, &pxa27x_device_udc.dev),
-	INIT_CKEN("MMCCLK",  MMC,  19500000, 0, &pxa_device_mci.dev),
+	INIT_CKEN(NULL,  I2S,  14682000, 0, &pxa_device_i2s.dev),
+	INIT_CKEN(NULL,  I2C,  32842000, 0, &pxa_device_i2c.dev),
+	INIT_CKEN(NULL,  USB,  48000000, 5, &pxa27x_device_udc.dev),
+	INIT_CKEN(NULL,  MMC,  19500000, 0, &pxa_device_mci.dev),
 	INIT_CKEN("FICPCLK", FICP, 48000000, 0, &pxa_device_ficp.dev),
 
-	INIT_CKEN("USBCLK", USBHOST, 48000000, 0, &pxa27x_device_ohci.dev),
-	INIT_CKEN("I2CCLK", PWRI2C, 13000000, 0, &pxa27x_device_i2c_power.dev),
-	INIT_CKEN("KBDCLK", KEYPAD, 32768, 0, &pxa27x_device_keypad.dev),
+	INIT_CKEN(NULL, USBHOST, 48000000, 0, &pxa27x_device_ohci.dev),
+	INIT_CKEN(NULL, PWRI2C, 13000000, 0, &pxa27x_device_i2c_power.dev),
+	INIT_CKEN(NULL, KEYPAD, 32768, 0, &pxa27x_device_keypad.dev),
 
-	INIT_CKEN("SSPCLK", SSP1, 13000000, 0, &pxa27x_device_ssp1.dev),
-	INIT_CKEN("SSPCLK", SSP2, 13000000, 0, &pxa27x_device_ssp2.dev),
-	INIT_CKEN("SSPCLK", SSP3, 13000000, 0, &pxa27x_device_ssp3.dev),
-	INIT_CKEN("PWMCLK", PWM0, 13000000, 0, &pxa27x_device_pwm0.dev),
-	INIT_CKEN("PWMCLK", PWM1, 13000000, 0, &pxa27x_device_pwm1.dev),
+	INIT_CKEN(NULL, SSP1, 13000000, 0, &pxa27x_device_ssp1.dev),
+	INIT_CKEN(NULL, SSP2, 13000000, 0, &pxa27x_device_ssp2.dev),
+	INIT_CKEN(NULL, SSP3, 13000000, 0, &pxa27x_device_ssp3.dev),
+	INIT_CKEN(NULL, PWM0, 13000000, 0, &pxa27x_device_pwm0.dev),
+	INIT_CKEN(NULL, PWM1, 13000000, 0, &pxa27x_device_pwm1.dev),
 
 	INIT_CKEN("AC97CLK",     AC97,     24576000, 0, NULL),
 	INIT_CKEN("AC97CONFCLK", AC97CONF, 24576000, 0, NULL),
