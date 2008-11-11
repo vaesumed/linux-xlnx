@@ -97,7 +97,7 @@ static inline void vring_init(struct vring *vr, unsigned int num, void *p)
 	vr->num = num;
 	vr->desc = p;
 	vr->avail = p + num*sizeof(struct vring_desc);
-	vr->used = (void *)VIRTIO_PAGE_ALIGN((unsigned long)&vr->avail->ring[num]);
+	vr->used = (void *)VIRTIO_PAGE_ALIGN((long)&vr->avail->ring[num]);
 }
 
 static inline unsigned vring_size(unsigned int num)
