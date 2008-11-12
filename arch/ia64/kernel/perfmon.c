@@ -52,7 +52,7 @@
 #include <asm/uaccess.h>
 #include <asm/delay.h>
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 /*
  * perfmon context state
  */
@@ -6820,10 +6820,10 @@ pfm_inherit(struct task_struct *task, struct pt_regs *regs)
 	 * the psr bits are already set properly in copy_threads()
 	 */
 }
-#else  /* !CONFIG_PERFMON */
+#else  /* !CONFIG_PERFMON_v20 */
 asmlinkage long
 sys_perfmonctl (int fd, int cmd, void *arg, int count)
 {
 	return -ENOSYS;
 }
-#endif /* CONFIG_PERFMON */
+#endif /* CONFIG_PERFMON_V20 */

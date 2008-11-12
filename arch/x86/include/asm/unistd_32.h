@@ -338,6 +338,11 @@
 #define __NR_dup3		330
 #define __NR_pipe2		331
 #define __NR_inotify_init1	332
+#define __NR_pfm_create		333
+#define __NR_pfm_write		(__NR_pfm_create+1)
+#define __NR_pfm_read		(__NR_pfm_create+2)
+#define __NR_pfm_attach		(__NR_pfm_create+3)
+#define __NR_pfm_set_state	(__NR_pfm_create+4)
 
 #ifdef __KERNEL__
 
