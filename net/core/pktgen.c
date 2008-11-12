@@ -422,6 +422,7 @@ static struct pktgen_dev *pktgen_find_dev(struct pktgen_thread *t,
 					  const char *ifname);
 static int pktgen_device_event(struct notifier_block *, unsigned long, void *);
 static void pktgen_run_all_threads(void);
+static void pktgen_reset_all_threads(void);
 static void pktgen_stop_all_threads_ifs(void);
 static int pktgen_stop_device(struct pktgen_dev *pkt_dev);
 static void pktgen_stop(struct pktgen_thread *t);
@@ -480,6 +481,9 @@ static ssize_t pgctrl_write(struct file *file, const char __user * buf,
 	else if (!strcmp(data, "start"))
 		pktgen_run_all_threads();
 
+	else if (!strcmp(data, "reset"))
+		pktgen_reset_all_threads();
+
 	else
 		printk(KERN_WARNING "pktgen: Unknown command: %s\n", data);
 
@@ -509,7 +513,6 @@ static int pktgen_if_show(struct seq_file *seq, void *v)
 	__u64 sa;
 	__u64 stopped;
 	__u64 now = getCurUs();
-	DECLARE_MAC_BUF(mac);
 
 	seq_printf(seq,
 		   "Params: count %llu  min_pkt_size: %u  max_pkt_size: %u\n",
@@ -554,12 +557,12 @@ static int pktgen_if_show(struct seq_file *seq, void *v)
 
 	seq_puts(seq, "     src_mac: ");
 
-	seq_printf(seq, "%s ",
-		   print_mac(mac, is_zero_ether_addr(pkt_dev->src_mac) ?
-			     pkt_dev->odev->dev_addr : pkt_dev->src_mac));
+	seq_printf(seq, "%pM ",
+		   is_zero_ether_addr(pkt_dev->src_mac) ?
+			     pkt_dev->odev->dev_addr : pkt_dev->src_mac);
 
 	seq_printf(seq, "dst_mac: ");
-	seq_printf(seq, "%s\n", print_mac(mac, pkt_dev->dst_mac));
+	seq_printf(seq, "%pM\n", pkt_dev->dst_mac);
 
 	seq_printf(seq,
 		   "     udp_src_min: %d  udp_src_max: %d  udp_dst_min: %d  udp_dst_max: %d\n",
@@ -3166,6 +3169,24 @@ static void pktgen_run_all_threads(void)
 
 	list_for_each_entry(t, &pktgen_threads, th_list)
 		t->control |= (T_RUN);
+
+	mutex_unlock(&pktgen_thread_lock);
+
+	schedule_timeout_interruptible(msecs_to_jiffies(125));	/* Propagate thread->control  */
+
+	pktgen_wait_all_threads_run();
+}
+
+static void pktgen_reset_all_threads(void)
+{
+	struct pktgen_thread *t;
+
+	pr_debug("pktgen: entering pktgen_reset_all_threads.\n");
+
+	mutex_lock(&pktgen_thread_lock);
+
+	list_for_each_entry(t, &pktgen_threads, th_list)
+		t->control |= (T_REMDEVALL);
 
 	mutex_unlock(&pktgen_thread_lock);
 

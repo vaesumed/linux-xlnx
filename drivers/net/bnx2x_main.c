@@ -1328,7 +1328,6 @@ static void bnx2x_tpa_stop(struct bnx2x *bp, struct bnx2x_fastpath *fp,
 			dev_kfree_skb(skb);
 		}
 
-		bp->dev->last_rx = jiffies;
 
 		/* put new skb in bin */
 		fp->tpa_pool[queue].skb = new_skb;
@@ -1557,7 +1556,6 @@ reuse_rx:
 #endif
 			netif_receive_skb(skb);
 
-		bp->dev->last_rx = jiffies;
 
 next_rx:
 		rx_buf->skb = NULL;
@@ -8769,7 +8767,6 @@ static int bnx2x_run_loopback(struct bnx2x *bp, int loopback_mode, u8 link_up)
 	rc = 0;
 
 test_loopback_rx_exit:
-	bp->dev->last_rx = jiffies;
 
 	fp->rx_bd_cons = NEXT_RX_IDX(fp->rx_bd_cons);
 	fp->rx_bd_prod = NEXT_RX_IDX(fp->rx_bd_prod);
@@ -9853,11 +9850,8 @@ static void bnx2x_set_rx_mode(struct net_device *dev)
 			     mclist && (i < dev->mc_count);
 			     i++, mclist = mclist->next) {
 
-				DP(NETIF_MSG_IFUP, "Adding mcast MAC: "
-				   "%02x:%02x:%02x:%02x:%02x:%02x\n",
-				   mclist->dmi_addr[0], mclist->dmi_addr[1],
-				   mclist->dmi_addr[2], mclist->dmi_addr[3],
-				   mclist->dmi_addr[4], mclist->dmi_addr[5]);
+				DP(NETIF_MSG_IFUP, "Adding mcast MAC: %pM\n",
+				   mclist->dmi_addr);
 
 				crc = crc32c_le(0, mclist->dmi_addr, ETH_ALEN);
 				bit = (crc >> 24) & 0xff;
@@ -10092,8 +10086,7 @@ static int __devinit bnx2x_init_dev(struct pci_dev *pdev,
 
 	dev->irq = pdev->irq;
 
-	bp->regview = ioremap_nocache(dev->base_addr,
-				      pci_resource_len(pdev, 0));
+	bp->regview = pci_ioremap_bar(pdev, 0);
 	if (!bp->regview) {
 		printk(KERN_ERR PFX "Cannot map register space, aborting\n");
 		rc = -ENOMEM;
@@ -10194,7 +10187,6 @@ static int __devinit bnx2x_init_one(struct pci_dev *pdev,
 	struct net_device *dev = NULL;
 	struct bnx2x *bp;
 	int rc;
-	DECLARE_MAC_BUF(mac);
 
 	if (version_printed++ == 0)
 		printk(KERN_INFO "%s", version);
@@ -10238,7 +10230,7 @@ static int __devinit bnx2x_init_one(struct pci_dev *pdev,
 	       bnx2x_get_pcie_width(bp),
 	       (bnx2x_get_pcie_speed(bp) == 2) ? "5GHz (Gen2)" : "2.5GHz",
 	       dev->base_addr, bp->pdev->irq);
-	printk(KERN_CONT "node addr %s\n", print_mac(mac, dev->dev_addr));
+	printk(KERN_CONT "node addr %pM\n", dev->dev_addr);
 	return 0;
 
 init_one_exit:

@@ -2136,7 +2136,6 @@ static void ql_process_mac_rx_intr(struct ql3_adapter *qdev,
 	skb->protocol = eth_type_trans(skb, qdev->ndev);
 
 	netif_receive_skb(skb);
-	qdev->ndev->last_rx = jiffies;
 	lrg_buf_cb2->skb = NULL;
 
 	if (qdev->device_id == QL3022_DEVICE_ID)
@@ -2210,7 +2209,6 @@ static void ql_process_macip_rx_intr(struct ql3_adapter *qdev,
 	netif_receive_skb(skb2);
 	ndev->stats.rx_packets++;
 	ndev->stats.rx_bytes += length;
-	ndev->last_rx = jiffies;
 	lrg_buf_cb2->skb = NULL;
 
 	if (qdev->device_id == QL3022_DEVICE_ID)
@@ -3529,7 +3527,6 @@ static void ql_display_dev_info(struct net_device *ndev)
 {
 	struct ql3_adapter *qdev = (struct ql3_adapter *)netdev_priv(ndev);
 	struct pci_dev *pdev = qdev->pdev;
-	DECLARE_MAC_BUF(mac);
 
 	printk(KERN_INFO PFX
 	       "\n%s Adapter %d RevisionID %d found %s on PCI slot %d.\n",
@@ -3555,8 +3552,8 @@ static void ql_display_dev_info(struct net_device *ndev)
 
 	if (netif_msg_probe(qdev))
 		printk(KERN_INFO PFX
-		       "%s: MAC address %s\n",
-		       ndev->name, print_mac(mac, ndev->dev_addr));
+		       "%s: MAC address %pM\n",
+		       ndev->name, ndev->dev_addr);
 }
 
 static int ql_adapter_down(struct ql3_adapter *qdev, int do_reset)
@@ -3978,9 +3975,7 @@ static int __devinit ql3xxx_probe(struct pci_dev *pdev,
 	if (qdev->device_id == QL3032_DEVICE_ID)
 		ndev->features |= NETIF_F_IP_CSUM | NETIF_F_SG;
 
-	qdev->mem_map_registers =
-	    ioremap_nocache(pci_resource_start(pdev, 1),
-			    pci_resource_len(qdev->pdev, 1));
+	qdev->mem_map_registers = pci_ioremap_bar(pdev, 1);
 	if (!qdev->mem_map_registers) {
 		printk(KERN_ERR PFX "%s: cannot map device registers\n",
 		       pci_name(pdev));

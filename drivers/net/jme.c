@@ -931,7 +931,6 @@ jme_alloc_and_feed_skb(struct jme_adapter *jme, int idx)
 				RXWBFLAG_DEST_MUL)
 			++(NET_STAT(jme).multicast);
 
-		jme->dev->last_rx = jiffies;
 		NET_STAT(jme).rx_bytes += framesize;
 		++(NET_STAT(jme).rx_packets);
 	}
@@ -2862,18 +2861,10 @@ jme_init_one(struct pci_dev *pdev,
 		goto err_out_free_shadow;
 	}
 
-	msg_probe(jme,
-		"JMC250 gigabit%s ver:%x rev:%x "
-		"macaddr:%02x:%02x:%02x:%02x:%02x:%02x\n",
+	msg_probe(jme, "JMC250 gigabit%s ver:%x rev:%x macaddr:%pM\n",
 		(jme->fpgaver != 0) ? " (FPGA)" : "",
 		(jme->fpgaver != 0) ? jme->fpgaver : jme->chiprev,
-		jme->rev,
-		netdev->dev_addr[0],
-		netdev->dev_addr[1],
-		netdev->dev_addr[2],
-		netdev->dev_addr[3],
-		netdev->dev_addr[4],
-		netdev->dev_addr[5]);
+		jme->rev, netdev->dev_addr);
 
 	return 0;
 
