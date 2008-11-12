@@ -8,6 +8,11 @@
 #include <linux/device.h>
 #include <linux/mod_devicetable.h>
 
+#define VIRTIO_PAGE_SHIFT    12
+#define VIRTIO_PAGE_SIZE     (1<<VIRTIO_PAGE_SHIFT)
+#define VIRTIO_PAGE_MASK     (~(VIRTIO_PAGE_SIZE - 1))
+#define VIRTIO_PAGE_ALIGN(x) (((x) + VIRTIO_PAGE_SIZE - 1) & VIRTIO_PAGE_MASK)
+
 /**
  * virtqueue - a queue to register buffers for sending or receiving.
  * @callback: the function to call when buffers are consumed (can be NULL).

@@ -75,7 +75,7 @@ MODULE_DEVICE_TABLE(pci, virtio_pci_id_table);
  * would make more sense for virtio to not insist on having it's own device. */
 static struct device virtio_pci_root = {
 	.parent		= NULL,
-	.bus_id		= "virtio-pci",
+	.init_name	= "virtio-pci",
 };
 
 /* Convert a generic virtio device to our structure */
@@ -237,14 +237,14 @@ static struct virtqueue *vp_find_vq(struct virtio_device *vdev, unsigned index,
 	info->queue_index = index;
 	info->num = num;
 
-	info->queue = kzalloc(PAGE_ALIGN(vring_size(num,PAGE_SIZE)), GFP_KERNEL);
+	info->queue = kzalloc(PAGE_ALIGN(vring_size(num)), GFP_KERNEL);
 	if (info->queue == NULL) {
 		err = -ENOMEM;
 		goto out_info;
 	}
 
 	/* activate the queue */
-	iowrite32(virt_to_phys(info->queue) >> PAGE_SHIFT,
+	iowrite32(virt_to_phys(info->queue) >> VIRTIO_PAGE_SHIFT,
 		  vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
 
 	/* create the vring */
@@ -357,7 +357,7 @@ static int __devinit virtio_pci_probe(struct pci_dev *pci_dev,
 
 	/* register a handler for the queue with the PCI device's interrupt */
 	err = request_irq(vp_dev->pci_dev->irq, vp_interrupt, IRQF_SHARED,
-			  vp_dev->vdev.dev.bus_id, vp_dev);
+			  dev_name(&vp_dev->vdev.dev), vp_dev);
 	if (err)
 		goto out_set_drvdata;
 

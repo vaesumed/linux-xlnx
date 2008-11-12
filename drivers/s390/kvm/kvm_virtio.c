@@ -187,8 +187,7 @@ static struct virtqueue *kvm_find_vq(struct virtio_device *vdev,
 
 	config = kvm_vq_config(kdev->desc)+index;
 
-	err = vmem_add_mapping(config->address,
-			       vring_size(config->num, PAGE_SIZE));
+	err = vmem_add_mapping(config->address, vring_size(config->num));
 	if (err)
 		goto out;
 
@@ -208,8 +207,7 @@ static struct virtqueue *kvm_find_vq(struct virtio_device *vdev,
 	vq->priv = config;
 	return vq;
 unmap:
-	vmem_remove_mapping(config->address,
-			    vring_size(config->num, PAGE_SIZE));
+	vmem_remove_mapping(config->address, vring_size(config->num));
 out:
 	return ERR_PTR(err);
 }
@@ -219,8 +217,7 @@ static void kvm_del_vq(struct virtqueue *vq)
 	struct kvm_vqconfig *config = vq->priv;
 
 	vring_del_virtqueue(vq);
-	vmem_remove_mapping(config->address,
-			    vring_size(config->num, PAGE_SIZE));
+	vmem_remove_mapping(config->address, vring_size(config->num));
 }
 
 /*
