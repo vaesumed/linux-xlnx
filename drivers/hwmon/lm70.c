@@ -65,10 +65,9 @@ static ssize_t lm70_sense_temp(struct device *dev,
 		"spi_write_then_read failed with status %d\n", status);
 		goto out;
 	}
-	dev_dbg(dev, "rxbuf[1] : 0x%x rxbuf[0] : 0x%x\n", rxbuf[1], rxbuf[0]);
-
-	raw = (rxbuf[1] << 8) + rxbuf[0];
-	dev_dbg(dev, "raw=0x%x\n", raw);
+	raw = (rxbuf[0] << 8) + rxbuf[1];
+	dev_dbg(dev, "rxbuf[0] : 0x%x rxbuf[1] : 0x%x raw=0x%04x\n",
+		rxbuf[0], rxbuf[1], raw);
 
 	/*
 	 * The "raw" temperature read into rxbuf[] is a 16-bit signed 2's
