@@ -90,6 +90,16 @@ acpi_set_firmware_waking_vector(acpi_physical_address physical_address)
 
 	facs->firmware_waking_vector = (u32)physical_address;
 
+	status = acpi_get_table(ACPI_SIG_FACS, 2,
+		ACPI_CAST_INDIRECT_PTR(struct acpi_table_header, &facs));
+	if (ACPI_FAILURE(status))
+		return_ACPI_STATUS(AE_OK);
+
+	if (facs->version >= 1)
+		facs->xfirmware_waking_vector = 0;
+
+	facs->firmware_waking_vector = (u32)physical_address;
+
 	return_ACPI_STATUS(AE_OK);
 }
 
