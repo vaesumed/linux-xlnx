@@ -536,6 +536,7 @@
 #define WM8350_REV_E				0x4
 #define WM8350_REV_F				0x5
 #define WM8350_REV_G				0x6
+#define WM8350_REV_H				0x7
 
 #define WM8350_NUM_IRQ				63
 
@@ -571,6 +572,8 @@ struct wm8350 {
 	int (*write_dev)(struct wm8350 *wm8350, char reg, int size,
 			 void *src);
 	u16 *reg_cache;
+
+	struct mutex auxadc_mutex;
 
 	/* Interrupt handling */
 	struct work_struct irq_work;
