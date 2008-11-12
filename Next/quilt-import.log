@@ -1,0 +1,89 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing m68k based on f7160c7573615ec82c691e294cf80d920b5d588d
+$ git checkout quilt/m68k
+Switched to branch "quilt/m68k"
+$ git reset --hard f7160c7573615ec82c691e294cf80d920b5d588d
+HEAD is now at f7160c7 Linux 2.6.28-rc4
+$ git quiltimport --author Geert Uytterhoeven <geert@linux-m68k.org> --patches ../quilt/m68k
+mac-macfb-do-not-overflow-fix-id.diff
+m68k-m68k_setup_user_interrupt-off-by-one.diff
+mac-reinstate-rtc.diff
+mac-via-cleanup-and-commentry.diff
+mac-machw_h_cleanup.diff
+mac-baboon-interrupt-enable-disable.diff
+mac-mac_esp-asm-fix.diff
+mac-macfb-annotations-and-compiler-warning-fix.diff
+m68k-fpsp040-fix-trigraph-ignored-warning.diff
+fbcon-remove-broken-mac-vbl-handler.diff
+fbcon-protect-free-irq-by-MACH_IS_ATARI-check.diff
+mac-esp-fix-for-quadras-with-two-esp-chips.diff
+m68k-use-the-new-byteorder-headers.diff
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.28-rc3-261-g8b805ef
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 8b805ef617cf0e02f6d18b891f8deb6246421b01
+HEAD is now at 8b805ef Merge branch 'for-2.6.28' of git://linux-nfs.org/~bfields/linux
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+stop_machine:fix-return-race.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+virtio:net-mergeable-rx-bufs.patch
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+virtio:linux_standardize_s_concept_of_page_size.patch
+virtio:linux_standardize_s_concept_of_page_size-fix.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+Importing ttydev based on f7160c7573615ec82c691e294cf80d920b5d588d
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard f7160c7573615ec82c691e294cf80d920b5d588d
+HEAD is now at f7160c7 Linux 2.6.28-rc4
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+blackfin-kgdb
+blackfin-sir-stopfix
+blackfin-clean-early
+blackfin-rxtx-lock
+blackfin-clear-bi
+n-tty-bkl-drop
+.dotest/patch:120: trailing whitespace.
+	
+.dotest/patch:340: trailing whitespace.
+			
+.dotest/patch:590: trailing whitespace.
+	
+.dotest/patch:974: trailing whitespace.
+	
+.dotest/patch:1044: trailing whitespace.
+	
+warning: 5 lines add whitespace errors.
+n-tty-clean
+pty-remove-pts-global
+pty-per-mount-allocated
+pty-per-mount-config
+pty-option-parsing
+pty-pts-multiple-instances
+pty-mknod-ptmx
+pty-get-init-pts-sb
+pty-pts-enable-multiple
+pty-multiple-doc
+.dotest/patch:98: space before tab in indent.
+   	- adding ptmxmode mount option to devpts entry in /etc/fstab, or
+.dotest/patch:142: trailing whitespace.
+   
+warning: 2 lines add whitespace errors.
+pty-devpts-tidy
+tty-trivial-usb-sierra-format
+tty-sparse-warning-driver-lookup
+pty-simplify-resize
+n-tty-fix-control
+n-tty-full-checks
+n-tty-bell
+tty-usb-close-race
