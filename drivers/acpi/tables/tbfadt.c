@@ -159,6 +159,7 @@ void acpi_tb_parse_fadt(u32 table_index, u8 flags)
 {
 	u32 length;
 	struct acpi_table_header *table;
+	acpi_status status;
 
 	/*
 	 * The FADT has multiple versions with different lengths,
@@ -197,6 +198,22 @@ void acpi_tb_parse_fadt(u32 table_index, u8 flags)
 
 	acpi_tb_install_table((acpi_physical_address) acpi_gbl_FADT.Xfacs,
 			      flags, ACPI_SIG_FACS, ACPI_TABLE_INDEX_FACS);
+
+	/*
+	 * install the acpi_gbl_FADT.facs if it's not null
+	 * and it's different from acpi_gbl_FADT.Xfacs
+	 */
+	if (!acpi_gbl_FADT.facs || acpi_gbl_FADT.facs == acpi_gbl_FADT.Xfacs)
+		return;
+
+	if (acpi_gbl_root_table_list.count >= acpi_gbl_root_table_list.size) {
+		status = acpi_tb_resize_root_table_list();
+		if (ACPI_FAILURE(status))
+			return;
+	}
+	acpi_tb_install_table((acpi_physical_address)acpi_gbl_FADT.facs, flags,
+				ACPI_SIG_FACS, acpi_gbl_root_table_list.count);
+	acpi_gbl_root_table_list.count++;
 }
 
 /*******************************************************************************
