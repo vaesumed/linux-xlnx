@@ -155,6 +155,10 @@ void cpu_free(void *cpu_pointer, unsigned long size);
  * running the current code.
  */
 #define THIS_CPU(__p)	SHIFT_PERCPU_PTR((__p), my_cpu_offset)
+
+/*
+ * Do the same but disable the check for a non preemptable context
+ */
 #define __THIS_CPU(__p)	SHIFT_PERCPU_PTR((__p), __my_cpu_offset)
 
 #define CPU_ALLOC(type, flags)	((typeof(type) *)cpu_alloc(sizeof(type), (flags), \
