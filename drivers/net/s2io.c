@@ -7544,7 +7544,6 @@ static int rx_osm_handler(struct ring_info *ring_data, struct RxD_t * rxdp)
 	sp->mac_control.stats_info->sw_stat.mem_freed += skb->truesize;
 send_up:
 	queue_rx_frame(skb, RXD_GET_VLAN_TAG(rxdp->Control_2));
-	dev->last_rx = jiffies;
 aggregate:
 	sp->mac_control.rings[ring_no].rx_bufs_left -= 1;
 	return SUCCESS;
@@ -7748,7 +7747,6 @@ s2io_init_nic(struct pci_dev *pdev, const struct pci_device_id *pre)
 	int mode;
 	u8 dev_intr_type = intr_type;
 	u8 dev_multiq = 0;
-	DECLARE_MAC_BUF(mac);
 
 	ret = s2io_verify_parm(pdev, &dev_intr_type, &dev_multiq);
 	if (ret)
@@ -7918,8 +7916,7 @@ s2io_init_nic(struct pci_dev *pdev, const struct pci_device_id *pre)
 		goto mem_alloc_failed;
 	}
 
-	sp->bar0 = ioremap(pci_resource_start(pdev, 0),
-				     pci_resource_len(pdev, 0));
+	sp->bar0 = pci_ioremap_bar(pdev, 0);
 	if (!sp->bar0) {
 		DBG_PRINT(ERR_DBG, "%s: Neterion: cannot remap io mem1\n",
 			  dev->name);
@@ -7927,8 +7924,7 @@ s2io_init_nic(struct pci_dev *pdev, const struct pci_device_id *pre)
 		goto bar0_remap_failed;
 	}
 
-	sp->bar1 = ioremap(pci_resource_start(pdev, 2),
-				     pci_resource_len(pdev, 2));
+	sp->bar1 = pci_ioremap_bar(pdev, 2);
 	if (!sp->bar1) {
 		DBG_PRINT(ERR_DBG, "%s: Neterion: cannot remap io mem2\n",
 			  dev->name);
@@ -8125,8 +8121,7 @@ s2io_init_nic(struct pci_dev *pdev, const struct pci_device_id *pre)
 		  sp->product_name, pdev->revision);
 	DBG_PRINT(ERR_DBG, "%s: Driver version %s\n", dev->name,
 		  s2io_driver_version);
-	DBG_PRINT(ERR_DBG, "%s: MAC ADDR: %s\n",
-		  dev->name, print_mac(mac, dev->dev_addr));
+	DBG_PRINT(ERR_DBG, "%s: MAC ADDR: %pM\n", dev->name, dev->dev_addr);
 	DBG_PRINT(ERR_DBG, "SERIAL NUMBER: %s\n", sp->serial_num);
 	if (sp->device_type & XFRAME_II_DEVICE) {
 		mode = s2io_print_pci_mode(sp);

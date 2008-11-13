@@ -249,11 +249,9 @@ static void rt2x00lib_evaluate_antenna(struct rt2x00_dev *rt2x00dev)
 	rt2x00dev->link.ant.flags &= ~ANTENNA_RX_DIVERSITY;
 	rt2x00dev->link.ant.flags &= ~ANTENNA_TX_DIVERSITY;
 
-	if (rt2x00dev->hw->conf.antenna_sel_rx == 0 &&
-	    rt2x00dev->default_ant.rx == ANTENNA_SW_DIVERSITY)
+	if (rt2x00dev->default_ant.rx == ANTENNA_SW_DIVERSITY)
 		rt2x00dev->link.ant.flags |= ANTENNA_RX_DIVERSITY;
-	if (rt2x00dev->hw->conf.antenna_sel_tx == 0 &&
-	    rt2x00dev->default_ant.tx == ANTENNA_SW_DIVERSITY)
+	if (rt2x00dev->default_ant.tx == ANTENNA_SW_DIVERSITY)
 		rt2x00dev->link.ant.flags |= ANTENNA_TX_DIVERSITY;
 
 	if (!(rt2x00dev->link.ant.flags & ANTENNA_RX_DIVERSITY) &&
@@ -419,7 +417,7 @@ static void rt2x00lib_intf_scheduled_iter(void *data, u8 *mac,
 	 */
 	spin_lock(&intf->lock);
 
-	memcpy(&conf, &intf->conf, sizeof(conf));
+	memcpy(&conf, &vif->bss_conf, sizeof(conf));
 	delayed_flags = intf->delayed_flags;
 	intf->delayed_flags = 0;
 
@@ -500,7 +498,9 @@ void rt2x00lib_txdone(struct queue_entry *entry,
 {
 	struct rt2x00_dev *rt2x00dev = entry->queue->rt2x00dev;
 	struct ieee80211_tx_info *tx_info = IEEE80211_SKB_CB(entry->skb);
+	struct skb_frame_desc *skbdesc = get_skb_frame_desc(entry->skb);
 	enum data_queue_qid qid = skb_get_queue_mapping(entry->skb);
+	u8 rate_idx, rate_flags;
 
 	/*
 	 * Unmap the skb.
@@ -530,14 +530,18 @@ void rt2x00lib_txdone(struct queue_entry *entry,
 	rt2x00dev->link.qual.tx_failed +=
 	    test_bit(TXDONE_FAILURE, &txdesc->flags);
 
+	rate_idx = skbdesc->tx_rate_idx;
+	rate_flags = skbdesc->tx_rate_flags;
+
 	/*
 	 * Initialize TX status
 	 */
 	memset(&tx_info->status, 0, sizeof(tx_info->status));
 	tx_info->status.ack_signal = 0;
-	tx_info->status.excessive_retries =
-	    test_bit(TXDONE_EXCESSIVE_RETRY, &txdesc->flags);
-	tx_info->status.retry_count = txdesc->retry;
+	tx_info->status.rates[0].idx = rate_idx;
+	tx_info->status.rates[0].flags = rate_flags;
+	tx_info->status.rates[0].count = txdesc->retry + 1;
+	tx_info->status.rates[1].idx = -1; /* terminate */
 
 	if (!(tx_info->flags & IEEE80211_TX_CTL_NO_ACK)) {
 		if (test_bit(TXDONE_SUCCESS, &txdesc->flags))
@@ -546,7 +550,7 @@ void rt2x00lib_txdone(struct queue_entry *entry,
 			rt2x00dev->low_level_stats.dot11ACKFailureCount++;
 	}
 
-	if (tx_info->flags & IEEE80211_TX_CTL_USE_RTS_CTS) {
+	if (rate_flags & IEEE80211_TX_RC_USE_RTS_CTS) {
 		if (test_bit(TXDONE_SUCCESS, &txdesc->flags))
 			rt2x00dev->low_level_stats.dot11RTSSuccessCount++;
 		else if (test_bit(TXDONE_FAILURE, &txdesc->flags))
@@ -1052,10 +1056,16 @@ int rt2x00lib_probe_dev(struct rt2x00_dev *rt2x00dev)
 	 */
 	rt2x00dev->hw->vif_data_size = sizeof(struct rt2x00_intf);
 
-	rt2x00dev->hw->wiphy->interface_modes =
-	    BIT(NL80211_IFTYPE_AP) |
-	    BIT(NL80211_IFTYPE_STATION) |
-	    BIT(NL80211_IFTYPE_ADHOC);
+	/*
+	 * Determine which operating modes are supported, all modes
+	 * which require beaconing, depend on the availability of
+	 * beacon entries.
+	 */
+	rt2x00dev->hw->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION);
+	if (rt2x00dev->ops->bcn->entry_num > 0)
+		rt2x00dev->hw->wiphy->interface_modes |=
+		    BIT(NL80211_IFTYPE_ADHOC) |
+		    BIT(NL80211_IFTYPE_AP);
 
 	/*
 	 * Let the driver probe the device to detect the capabilities.
@@ -1247,7 +1257,7 @@ int rt2x00lib_resume(struct rt2x00_dev *rt2x00dev)
 	/*
 	 * Reconfigure device.
 	 */
-	retval = rt2x00mac_config(rt2x00dev->hw, &rt2x00dev->hw->conf);
+	retval = rt2x00mac_config(rt2x00dev->hw, ~0);
 	if (retval)
 		goto exit;
 

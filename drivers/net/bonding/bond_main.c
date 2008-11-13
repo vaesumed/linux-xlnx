@@ -89,6 +89,7 @@
 
 static int max_bonds	= BOND_DEFAULT_MAX_BONDS;
 static int num_grat_arp = 1;
+static int num_unsol_na = 1;
 static int miimon	= BOND_LINK_MON_INTERV;
 static int updelay	= 0;
 static int downdelay	= 0;
@@ -96,6 +97,7 @@ static int use_carrier	= 1;
 static char *mode	= NULL;
 static char *primary	= NULL;
 static char *lacp_rate	= NULL;
+static char *ad_select  = NULL;
 static char *xmit_hash_policy = NULL;
 static int arp_interval = BOND_LINK_ARP_INTERV;
 static char *arp_ip_target[BOND_MAX_ARP_TARGETS] = { NULL, };
@@ -107,6 +109,8 @@ module_param(max_bonds, int, 0);
 MODULE_PARM_DESC(max_bonds, "Max number of bonded devices");
 module_param(num_grat_arp, int, 0644);
 MODULE_PARM_DESC(num_grat_arp, "Number of gratuitous ARP packets to send on failover event");
+module_param(num_unsol_na, int, 0644);
+MODULE_PARM_DESC(num_unsol_na, "Number of unsolicited IPv6 Neighbor Advertisements packets to send on failover event");
 module_param(miimon, int, 0);
 MODULE_PARM_DESC(miimon, "Link check interval in milliseconds");
 module_param(updelay, int, 0);
@@ -127,6 +131,8 @@ MODULE_PARM_DESC(primary, "Primary network device to use");
 module_param(lacp_rate, charp, 0);
 MODULE_PARM_DESC(lacp_rate, "LACPDU tx rate to request from 802.3ad partner "
 			    "(slow/fast)");
+module_param(ad_select, charp, 0);
+MODULE_PARM_DESC(ad_select, "803.ad aggregation selection logic: stable (0, default), bandwidth (1), count (2)");
 module_param(xmit_hash_policy, charp, 0);
 MODULE_PARM_DESC(xmit_hash_policy, "XOR hashing method: 0 for layer 2 (default)"
 				   ", 1 for layer 3+4");
@@ -197,6 +203,13 @@ struct bond_parm_tbl fail_over_mac_tbl[] = {
 {	NULL,			-1},
 };
 
+struct bond_parm_tbl ad_select_tbl[] = {
+{	"stable",	BOND_AD_STABLE},
+{	"bandwidth",	BOND_AD_BANDWIDTH},
+{	"count",	BOND_AD_COUNT},
+{	NULL,		-1},
+};
+
 /*-------------------------- Forward declarations ---------------------------*/
 
 static void bond_send_gratuitous_arp(struct bonding *bond);
@@ -242,14 +255,13 @@ static int bond_add_vlan(struct bonding *bond, unsigned short vlan_id)
 	dprintk("bond: %s, vlan id %d\n",
 		(bond ? bond->dev->name: "None"), vlan_id);
 
-	vlan = kmalloc(sizeof(struct vlan_entry), GFP_KERNEL);
+	vlan = kzalloc(sizeof(struct vlan_entry), GFP_KERNEL);
 	if (!vlan) {
 		return -ENOMEM;
 	}
 
 	INIT_LIST_HEAD(&vlan->vlan_list);
 	vlan->vlan_id = vlan_id;
-	vlan->vlan_ip = 0;
 
 	write_lock_bh(&bond->lock);
 
@@ -1208,6 +1220,9 @@ void bond_change_active_slave(struct bonding *bond, struct slave *new_active)
 			bond->send_grat_arp = bond->params.num_grat_arp;
 			bond_send_gratuitous_arp(bond);
 
+			bond->send_unsol_na = bond->params.num_unsol_na;
+			bond_send_unsolicited_na(bond);
+
 			write_unlock_bh(&bond->curr_slave_lock);
 			read_unlock(&bond->lock);
 
@@ -1791,7 +1806,6 @@ int bond_release(struct net_device *bond_dev, struct net_device *slave_dev)
 	struct slave *slave, *oldcurrent;
 	struct sockaddr addr;
 	int mac_addr_differ;
-	DECLARE_MAC_BUF(mac);
 
 	/* slave is not a slave or master is not master of this slave */
 	if (!(slave_dev->flags & IFF_SLAVE) ||
@@ -1820,11 +1834,11 @@ int bond_release(struct net_device *bond_dev, struct net_device *slave_dev)
 		if (!mac_addr_differ && (bond->slave_cnt > 1))
 			printk(KERN_WARNING DRV_NAME
 			       ": %s: Warning: the permanent HWaddr of %s - "
-			       "%s - is still in use by %s. "
+			       "%pM - is still in use by %s. "
 			       "Set the HWaddr of %s to a different address "
 			       "to avoid conflicts.\n",
 			       bond_dev->name, slave_dev->name,
-			       print_mac(mac, slave->perm_hwaddr),
+			       slave->perm_hwaddr,
 			       bond_dev->name, slave_dev->name);
 	}
 
@@ -2464,6 +2478,12 @@ void bond_mii_monitor(struct work_struct *work)
 		read_unlock(&bond->curr_slave_lock);
 	}
 
+	if (bond->send_unsol_na) {
+		read_lock(&bond->curr_slave_lock);
+		bond_send_unsolicited_na(bond);
+		read_unlock(&bond->curr_slave_lock);
+	}
+
 	if (bond_miimon_inspect(bond)) {
 		read_unlock(&bond->lock);
 		rtnl_lock();
@@ -2586,8 +2606,8 @@ static void bond_arp_send_all(struct bonding *bond, struct slave *slave)
 		if (rv) {
 			if (net_ratelimit()) {
 				printk(KERN_WARNING DRV_NAME
-			     ": %s: no route to arp_ip_target %u.%u.%u.%u\n",
-				       bond->dev->name, NIPQUAD(fl.fl4_dst));
+			     ": %s: no route to arp_ip_target %pI4\n",
+				       bond->dev->name, &fl.fl4_dst);
 			}
 			continue;
 		}
@@ -2623,8 +2643,8 @@ static void bond_arp_send_all(struct bonding *bond, struct slave *slave)
 
 		if (net_ratelimit()) {
 			printk(KERN_WARNING DRV_NAME
-	       ": %s: no path to arp_ip_target %u.%u.%u.%u via rt.dev %s\n",
-			       bond->dev->name, NIPQUAD(fl.fl4_dst),
+	       ": %s: no path to arp_ip_target %pI4 via rt.dev %s\n",
+			       bond->dev->name, &fl.fl4_dst,
 			       rt->u.dst.dev ? rt->u.dst.dev->name : "NULL");
 		}
 		ip_rt_put(rt);
@@ -2673,10 +2693,8 @@ static void bond_validate_arp(struct bonding *bond, struct slave *slave, __be32 
 
 	targets = bond->params.arp_targets;
 	for (i = 0; (i < BOND_MAX_ARP_TARGETS) && targets[i]; i++) {
-		dprintk("bva: sip %u.%u.%u.%u tip %u.%u.%u.%u t[%d] "
-			"%u.%u.%u.%u bhti(tip) %d\n",
-		       NIPQUAD(sip), NIPQUAD(tip), i, NIPQUAD(targets[i]),
-		       bond_has_this_ip(bond, tip));
+		dprintk("bva: sip %pI4 tip %pI4 t[%d] %pI4 bhti(tip) %d\n",
+			&sip, &tip, i, &targets[i], bond_has_this_ip(bond, tip));
 		if (sip == targets[i]) {
 			if (bond_has_this_ip(bond, tip))
 				slave->last_arp_rx = jiffies;
@@ -2728,10 +2746,10 @@ static int bond_arp_rcv(struct sk_buff *skb, struct net_device *dev, struct pack
 	arp_ptr += 4 + dev->addr_len;
 	memcpy(&tip, arp_ptr, 4);
 
-	dprintk("bond_arp_rcv: %s %s/%d av %d sv %d sip %u.%u.%u.%u"
-		" tip %u.%u.%u.%u\n", bond->dev->name, slave->dev->name,
-		slave->state, bond->params.arp_validate,
-		slave_do_arp_validate(bond, slave), NIPQUAD(sip), NIPQUAD(tip));
+	dprintk("bond_arp_rcv: %s %s/%d av %d sv %d sip %pI4 tip %pI4\n",
+		bond->dev->name, slave->dev->name, slave->state,
+		bond->params.arp_validate, slave_do_arp_validate(bond, slave),
+		&sip, &tip);
 
 	/*
 	 * Backup slaves won't see the ARP reply, but do come through
@@ -3161,6 +3179,12 @@ void bond_activebackup_arp_mon(struct work_struct *work)
 		read_unlock(&bond->curr_slave_lock);
 	}
 
+	if (bond->send_unsol_na) {
+		read_lock(&bond->curr_slave_lock);
+		bond_send_unsolicited_na(bond);
+		read_unlock(&bond->curr_slave_lock);
+	}
+
 	if (bond_ab_arp_inspect(bond, delta_in_ticks)) {
 		read_unlock(&bond->lock);
 		rtnl_lock();
@@ -3239,7 +3263,6 @@ static void bond_info_show_master(struct seq_file *seq)
 	struct bonding *bond = seq->private;
 	struct slave *curr;
 	int i;
-	u32 target;
 
 	read_lock(&bond->curr_slave_lock);
 	curr = bond->curr_active_slave;
@@ -3293,8 +3316,7 @@ static void bond_info_show_master(struct seq_file *seq)
 				continue;
 			if (printed)
 				seq_printf(seq, ",");
-			target = ntohl(bond->params.arp_targets[i]);
-			seq_printf(seq, " %d.%d.%d.%d", HIPQUAD(target));
+			seq_printf(seq, " %pI4", &bond->params.arp_targets[i]);
 			printed = 1;
 		}
 		seq_printf(seq, "\n");
@@ -3302,11 +3324,12 @@ static void bond_info_show_master(struct seq_file *seq)
 
 	if (bond->params.mode == BOND_MODE_8023AD) {
 		struct ad_info ad_info;
-		DECLARE_MAC_BUF(mac);
 
 		seq_puts(seq, "\n802.3ad info\n");
 		seq_printf(seq, "LACP rate: %s\n",
 			   (bond->params.lacp_fast) ? "fast" : "slow");
+		seq_printf(seq, "Aggregator selection policy (ad_select): %s\n",
+			   ad_select_tbl[bond->params.ad_select].modename);
 
 		if (bond_3ad_get_active_agg_info(bond, &ad_info)) {
 			seq_printf(seq, "bond %s has no active aggregator\n",
@@ -3322,8 +3345,8 @@ static void bond_info_show_master(struct seq_file *seq)
 				   ad_info.actor_key);
 			seq_printf(seq, "\tPartner Key: %d\n",
 				   ad_info.partner_key);
-			seq_printf(seq, "\tPartner Mac Address: %s\n",
-				   print_mac(mac, ad_info.partner_system));
+			seq_printf(seq, "\tPartner Mac Address: %pM\n",
+				   ad_info.partner_system);
 		}
 	}
 }
@@ -3331,7 +3354,6 @@ static void bond_info_show_master(struct seq_file *seq)
 static void bond_info_show_slave(struct seq_file *seq, const struct slave *slave)
 {
 	struct bonding *bond = seq->private;
-	DECLARE_MAC_BUF(mac);
 
 	seq_printf(seq, "\nSlave Interface: %s\n", slave->dev->name);
 	seq_printf(seq, "MII Status: %s\n",
@@ -3339,9 +3361,7 @@ static void bond_info_show_slave(struct seq_file *seq, const struct slave *slave
 	seq_printf(seq, "Link Failure Count: %u\n",
 		   slave->link_failure_count);
 
-	seq_printf(seq,
-		   "Permanent HW addr: %s\n",
-		   print_mac(mac, slave->perm_hwaddr));
+	seq_printf(seq, "Permanent HW addr: %pM\n", slave->perm_hwaddr);
 
 	if (bond->params.mode == BOND_MODE_8023AD) {
 		const struct aggregator *agg
@@ -3816,6 +3836,7 @@ static int bond_open(struct net_device *bond_dev)
 		queue_delayed_work(bond->wq, &bond->ad_work, 0);
 		/* register to receive LACPDUs */
 		bond_register_lacpdu(bond);
+		bond_3ad_initiate_agg_selection(bond, 1);
 	}
 
 	return 0;
@@ -3836,6 +3857,7 @@ static int bond_close(struct net_device *bond_dev)
 	write_lock_bh(&bond->lock);
 
 	bond->send_grat_arp = 0;
+	bond->send_unsol_na = 0;
 
 	/* signal timers not to re-arm */
 	bond->kill_timers = 1;
@@ -4551,6 +4573,7 @@ static int bond_init(struct net_device *bond_dev, struct bond_params *params)
 	bond->primary_slave = NULL;
 	bond->dev = bond_dev;
 	bond->send_grat_arp = 0;
+	bond->send_unsol_na = 0;
 	bond->setup_by_slave = 0;
 	INIT_LIST_HEAD(&bond->vlan_list);
 
@@ -4573,6 +4596,8 @@ static int bond_init(struct net_device *bond_dev, struct bond_params *params)
 	bond_dev->tx_queue_len = 0;
 	bond_dev->flags |= IFF_MASTER|IFF_MULTICAST;
 	bond_dev->priv_flags |= IFF_BONDING;
+	if (bond->params.arp_interval)
+		bond_dev->priv_flags |= IFF_MASTER_ARPMON;
 
 	/* At first, we block adding VLANs. That's the only way to
 	 * prevent problems that occur when adding VLANs over an
@@ -4751,6 +4776,23 @@ static int bond_check_params(struct bond_params *params)
 		}
 	}
 
+	if (ad_select) {
+		params->ad_select = bond_parse_parm(ad_select, ad_select_tbl);
+		if (params->ad_select == -1) {
+			printk(KERN_ERR DRV_NAME
+			       ": Error: Invalid ad_select \"%s\"\n",
+			       ad_select == NULL ? "NULL" : ad_select);
+			return -EINVAL;
+		}
+
+		if (bond_mode != BOND_MODE_8023AD) {
+			printk(KERN_WARNING DRV_NAME
+			       ": ad_select param only affects 802.3ad mode\n");
+		}
+	} else {
+		params->ad_select = BOND_AD_STABLE;
+	}
+
 	if (max_bonds < 0 || max_bonds > INT_MAX) {
 		printk(KERN_WARNING DRV_NAME
 		       ": Warning: max_bonds (%d) not in range %d-%d, so it "
@@ -4796,6 +4838,13 @@ static int bond_check_params(struct bond_params *params)
 		       ": Warning: num_grat_arp (%d) not in range 0-255 so it "
 		       "was reset to 1 \n", num_grat_arp);
 		num_grat_arp = 1;
+	}
+
+	if (num_unsol_na < 0 || num_unsol_na > 255) {
+		printk(KERN_WARNING DRV_NAME
+		       ": Warning: num_unsol_na (%d) not in range 0-255 so it "
+		       "was reset to 1 \n", num_unsol_na);
+		num_unsol_na = 1;
 	}
 
 	/* reset values for 802.3ad */
@@ -4999,6 +5048,7 @@ static int bond_check_params(struct bond_params *params)
 	params->xmit_policy = xmit_hashtype;
 	params->miimon = miimon;
 	params->num_grat_arp = num_grat_arp;
+	params->num_unsol_na = num_unsol_na;
 	params->arp_interval = arp_interval;
 	params->arp_validate = arp_validate_value;
 	params->updelay = updelay;
@@ -5151,6 +5201,7 @@ static int __init bonding_init(void)
 
 	register_netdevice_notifier(&bond_netdev_notifier);
 	register_inetaddr_notifier(&bond_inetaddr_notifier);
+	bond_register_ipv6_notifier();
 
 	goto out;
 err:
@@ -5173,6 +5224,7 @@ static void __exit bonding_exit(void)
 {
 	unregister_netdevice_notifier(&bond_netdev_notifier);
 	unregister_inetaddr_notifier(&bond_inetaddr_notifier);
+	bond_unregister_ipv6_notifier();
 
 	bond_destroy_sysfs();
 

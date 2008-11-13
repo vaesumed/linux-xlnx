@@ -1340,7 +1340,6 @@ struct neigh_parms *neigh_parms_alloc(struct net_device *dev,
 	if (p) {
 		p->tbl		  = tbl;
 		atomic_set(&p->refcnt, 1);
-		INIT_RCU_HEAD(&p->rcu_head);
 		p->reachable_time =
 				neigh_rand_reach_time(p->base_reachable_time);
 
@@ -1412,7 +1411,6 @@ void neigh_table_init_no_netlink(struct neigh_table *tbl)
 	tbl->parms.net = &init_net;
 #endif
 	atomic_set(&tbl->parms.refcnt, 1);
-	INIT_RCU_HEAD(&tbl->parms.rcu_head);
 	tbl->parms.reachable_time =
 			  neigh_rand_reach_time(tbl->parms.base_reachable_time);
 
@@ -1426,9 +1424,8 @@ void neigh_table_init_no_netlink(struct neigh_table *tbl)
 		panic("cannot create neighbour cache statistics");
 
 #ifdef CONFIG_PROC_FS
-	tbl->pde = proc_create_data(tbl->id, 0, init_net.proc_net_stat,
-				    &neigh_stat_seq_fops, tbl);
-	if (!tbl->pde)
+	if (!proc_create_data(tbl->id, 0, init_net.proc_net_stat,
+			      &neigh_stat_seq_fops, tbl))
 		panic("cannot create neighbour proc dir entry");
 #endif
 
@@ -2568,128 +2565,128 @@ static struct neigh_sysctl_table {
 			.procname	= "mcast_solicit",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.ctl_name	= NET_NEIGH_UCAST_SOLICIT,
 			.procname	= "ucast_solicit",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.ctl_name	= NET_NEIGH_APP_SOLICIT,
 			.procname	= "app_solicit",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.procname	= "retrans_time",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_userhz_jiffies,
+			.proc_handler	= proc_dointvec_userhz_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_REACHABLE_TIME,
 			.procname	= "base_reachable_time",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_jiffies,
-			.strategy	= &sysctl_jiffies,
+			.proc_handler	= proc_dointvec_jiffies,
+			.strategy	= sysctl_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_DELAY_PROBE_TIME,
 			.procname	= "delay_first_probe_time",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_jiffies,
-			.strategy	= &sysctl_jiffies,
+			.proc_handler	= proc_dointvec_jiffies,
+			.strategy	= sysctl_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_GC_STALE_TIME,
 			.procname	= "gc_stale_time",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_jiffies,
-			.strategy	= &sysctl_jiffies,
+			.proc_handler	= proc_dointvec_jiffies,
+			.strategy	= sysctl_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_UNRES_QLEN,
 			.procname	= "unres_qlen",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.ctl_name	= NET_NEIGH_PROXY_QLEN,
 			.procname	= "proxy_qlen",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.procname	= "anycast_delay",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_userhz_jiffies,
+			.proc_handler	= proc_dointvec_userhz_jiffies,
 		},
 		{
 			.procname	= "proxy_delay",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_userhz_jiffies,
+			.proc_handler	= proc_dointvec_userhz_jiffies,
 		},
 		{
 			.procname	= "locktime",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_userhz_jiffies,
+			.proc_handler	= proc_dointvec_userhz_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_RETRANS_TIME_MS,
 			.procname	= "retrans_time_ms",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_ms_jiffies,
-			.strategy	= &sysctl_ms_jiffies,
+			.proc_handler	= proc_dointvec_ms_jiffies,
+			.strategy	= sysctl_ms_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_REACHABLE_TIME_MS,
 			.procname	= "base_reachable_time_ms",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_ms_jiffies,
-			.strategy	= &sysctl_ms_jiffies,
+			.proc_handler	= proc_dointvec_ms_jiffies,
+			.strategy	= sysctl_ms_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_GC_INTERVAL,
 			.procname	= "gc_interval",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec_jiffies,
-			.strategy	= &sysctl_jiffies,
+			.proc_handler	= proc_dointvec_jiffies,
+			.strategy	= sysctl_jiffies,
 		},
 		{
 			.ctl_name	= NET_NEIGH_GC_THRESH1,
 			.procname	= "gc_thresh1",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.ctl_name	= NET_NEIGH_GC_THRESH2,
 			.procname	= "gc_thresh2",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{
 			.ctl_name	= NET_NEIGH_GC_THRESH3,
 			.procname	= "gc_thresh3",
 			.maxlen		= sizeof(int),
 			.mode		= 0644,
-			.proc_handler	= &proc_dointvec,
+			.proc_handler	= proc_dointvec,
 		},
 		{},
 	},

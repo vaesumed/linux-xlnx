@@ -8,7 +8,7 @@
 #include <linux/wireless.h>
 #include <linux/bitops.h>
 
-#include <net/ieee80211.h>
+#include <net/lib80211.h>
 #include <net/iw_handler.h>
 
 #include "host.h"
@@ -1977,6 +1977,7 @@ static int lbs_set_essid(struct net_device *dev, struct iw_request_info *info,
 	u8 ssid_len = 0;
 	struct assoc_request * assoc_req;
 	int in_ssid_len = dwrq->length;
+	DECLARE_SSID_BUF(ssid_buf);
 
 	lbs_deb_enter(LBS_DEB_WEXT);
 
@@ -2005,7 +2006,7 @@ static int lbs_set_essid(struct net_device *dev, struct iw_request_info *info,
 		lbs_deb_wext("requested any SSID\n");
 	} else {
 		lbs_deb_wext("requested SSID '%s'\n",
-		             escape_essid(ssid, ssid_len));
+		             print_ssid(ssid_buf, ssid, ssid_len));
 	}
 
 out:
@@ -2104,7 +2105,6 @@ static int lbs_set_wap(struct net_device *dev, struct iw_request_info *info,
 	struct lbs_private *priv = dev->priv;
 	struct assoc_request * assoc_req;
 	int ret = 0;
-	DECLARE_MAC_BUF(mac);
 
 	lbs_deb_enter(LBS_DEB_WEXT);
 
@@ -2114,7 +2114,7 @@ static int lbs_set_wap(struct net_device *dev, struct iw_request_info *info,
 	if (awrq->sa_family != ARPHRD_ETHER)
 		return -EINVAL;
 
-	lbs_deb_wext("ASSOC: WAP: sa_data %s\n", print_mac(mac, awrq->sa_data));
+	lbs_deb_wext("ASSOC: WAP: sa_data %pM\n", awrq->sa_data);
 
 	mutex_lock(&priv->lock);
 
