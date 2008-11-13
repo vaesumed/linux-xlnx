@@ -104,6 +104,11 @@ static void uwb_dbg_rsv_cb(struct uwb_rsv *rsv)
 
 	dev_dbg(dev, "debug: rsv %s -> %s: %s\n",
 		owner, target, uwb_rsv_state_str(rsv->state));
+
+	if (rsv->state == UWB_RSV_STATE_NONE) {
+		list_del(&rsv->pal_node);
+		uwb_rsv_destroy(rsv);
+	}
 }
 
 static int cmd_rsv_establish(struct uwb_rc *rc,
@@ -153,14 +158,26 @@ static int cmd_rsv_terminate(struct uwb_rc *rc,
 			found = rsv;
 			break;
 		}
+		i++;
 	}
 	if (!found)
 		return -EINVAL;
 
-	list_del(&found->pal_node);
 	uwb_rsv_terminate(found);
 
 	return 0;
+}
+
+static int cmd_ie_add(struct uwb_rc *rc, struct uwb_dbg_cmd_ie *ie_to_add)
+{
+	return uwb_rc_ie_add(rc,
+			     (const struct uwb_ie_hdr *) ie_to_add->data,
+			     ie_to_add->len);
+}
+
+static int cmd_ie_rm(struct uwb_rc *rc, struct uwb_dbg_cmd_ie *ie_to_rm)
+{
+	return uwb_rc_ie_rm(rc, ie_to_rm->data[0]);
 }
 
 static int command_open(struct inode *inode, struct file *file)
@@ -189,6 +206,12 @@ static ssize_t command_write(struct file *file, const char __user *buf,
 		break;
 	case UWB_DBG_CMD_RSV_TERMINATE:
 		ret = cmd_rsv_terminate(rc, &cmd.rsv_terminate);
+		break;
+	case UWB_DBG_CMD_IE_ADD:
+		ret = cmd_ie_add(rc, &cmd.ie_add);
+		break;
+	case UWB_DBG_CMD_IE_RM:
+		ret = cmd_ie_rm(rc, &cmd.ie_rm);
 		break;
 	default:
 		return -EINVAL;
@@ -287,8 +310,10 @@ static void uwb_dbg_new_rsv(struct uwb_rsv *rsv)
 {
 	struct uwb_rc *rc = rsv->rc;
 
-	if (rc->dbg->accept)
+	if (rc->dbg->accept) {
+		list_add_tail(&rsv->pal_node, &rc->dbg->rsvs);
 		uwb_rsv_accept(rsv, uwb_dbg_rsv_cb, NULL);
+	}
 }
 
 /**
@@ -325,7 +350,7 @@ void uwb_dbg_add_rc(struct uwb_rc *rc)
 }
 
 /**
- * uwb_dbg_add_rc - remove a radio controller's debug interface
+ * uwb_dbg_del_rc - remove a radio controller's debug interface
  * @rc: the radio controller
  */
 void uwb_dbg_del_rc(struct uwb_rc *rc)
@@ -336,7 +361,7 @@ void uwb_dbg_del_rc(struct uwb_rc *rc)
 		return;
 
 	list_for_each_entry_safe(rsv, t, &rc->dbg->rsvs, pal_node) {
-		uwb_rsv_destroy(rsv);
+		uwb_rsv_terminate(rsv);
 	}
 
 	uwb_pal_unregister(rc, &rc->dbg->pal);
