@@ -65,6 +65,7 @@
 #include <linux/highmem.h>
 #include <linux/syscalls.h>
 #include <linux/inotify.h>
+#include <linux/capability.h>
 
 #include "audit.h"
 
@@ -84,6 +85,15 @@ int audit_n_rules;
 /* determines whether we collect data for signals sent */
 int audit_signals;
 
+struct audit_cap_data {
+	kernel_cap_t		permitted;
+	kernel_cap_t		inheritable;
+	union {
+		unsigned int	fE;		/* effective bit of a file capability */
+		kernel_cap_t	effective;	/* effective set of a process */
+	};
+};
+
 /* When fs/namei.c:getname() is called, we store the pointer in name and
  * we don't let putname() free it (instead we free all of the saved
  * pointers at syscall exit time).
@@ -100,6 +110,8 @@ struct audit_names {
 	gid_t		gid;
 	dev_t		rdev;
 	u32		osid;
+	struct audit_cap_data fcap;
+	unsigned int	fcap_ver;
 };
 
 struct audit_aux_data {
@@ -182,6 +194,20 @@ struct audit_aux_data_pids {
 	u32			target_sid[AUDIT_AUX_PIDS];
 	char 			target_comm[AUDIT_AUX_PIDS][TASK_COMM_LEN];
 	int			pid_count;
+};
+
+struct audit_aux_data_bprm_fcaps {
+	struct audit_aux_data	d;
+	struct audit_cap_data	fcap;
+	unsigned int		fcap_ver;
+	struct audit_cap_data	old_pcap;
+	struct audit_cap_data	new_pcap;
+};
+
+struct audit_aux_data_capset {
+	struct audit_aux_data	d;
+	pid_t			pid;
+	struct audit_cap_data	cap;
 };
 
 struct audit_tree_refs {
@@ -1171,6 +1197,35 @@ static void audit_log_execve_info(struct audit_context *context,
 	kfree(buf);
 }
 
+static void audit_log_cap(struct audit_buffer *ab, char *prefix, kernel_cap_t *cap)
+{
+	int i;
+
+	audit_log_format(ab, " %s=", prefix);
+	CAP_FOR_EACH_U32(i) {
+		audit_log_format(ab, "%08x", cap->cap[(_KERNEL_CAPABILITY_U32S-1) - i]);
+	}
+}
+
+static void audit_log_fcaps(struct audit_buffer *ab, struct audit_names *name)
+{
+	kernel_cap_t *perm = &name->fcap.permitted;
+	kernel_cap_t *inh = &name->fcap.inheritable;
+	int log = 0;
+
+	if (!cap_isclear(*perm)) {
+		audit_log_cap(ab, "cap_fp", perm);
+		log = 1;
+	}
+	if (!cap_isclear(*inh)) {
+		audit_log_cap(ab, "cap_fi", inh);
+		log = 1;
+	}
+
+	if (log)
+		audit_log_format(ab, " cap_fe=%d cap_fver=%x", name->fcap.fE, name->fcap_ver);
+}
+
 static void audit_log_exit(struct audit_context *context, struct task_struct *tsk)
 {
 	int i, call_panic = 0;
@@ -1334,6 +1389,28 @@ static void audit_log_exit(struct audit_context *context, struct task_struct *ts
 			audit_log_format(ab, "fd0=%d fd1=%d", axs->fd[0], axs->fd[1]);
 			break; }
 
+		case AUDIT_BPRM_FCAPS: {
+			struct audit_aux_data_bprm_fcaps *axs = (void *)aux;
+			audit_log_format(ab, "fver=%x", axs->fcap_ver);
+			audit_log_cap(ab, "fp", &axs->fcap.permitted);
+			audit_log_cap(ab, "fi", &axs->fcap.inheritable);
+			audit_log_format(ab, " fe=%d", axs->fcap.fE);
+			audit_log_cap(ab, "old_pp", &axs->old_pcap.permitted);
+			audit_log_cap(ab, "old_pi", &axs->old_pcap.inheritable);
+			audit_log_cap(ab, "old_pe", &axs->old_pcap.effective);
+			audit_log_cap(ab, "new_pp", &axs->new_pcap.permitted);
+			audit_log_cap(ab, "new_pi", &axs->new_pcap.inheritable);
+			audit_log_cap(ab, "new_pe", &axs->new_pcap.effective);
+			break; }
+
+		case AUDIT_CAPSET: {
+			struct audit_aux_data_capset *axs = (void *)aux;
+			audit_log_format(ab, "pid=%d", axs->pid);
+			audit_log_cap(ab, "cap_pi", &axs->cap.inheritable);
+			audit_log_cap(ab, "cap_pp", &axs->cap.permitted);
+			audit_log_cap(ab, "cap_pe", &axs->cap.effective);
+			break; }
+
 		}
 		audit_log_end(ab);
 	}
@@ -1420,6 +1497,8 @@ static void audit_log_exit(struct audit_context *context, struct task_struct *ts
 				security_release_secctx(ctx, len);
 			}
 		}
+
+		audit_log_fcaps(ab, n);
 
 		audit_log_end(ab);
 	}
@@ -1787,8 +1866,36 @@ static int audit_inc_name_count(struct audit_context *context,
 	return 0;
 }
 
+
+static inline int audit_copy_fcaps(struct audit_names *name, const struct dentry *dentry)
+{
+	struct cpu_vfs_cap_data caps;
+	int rc;
+
+	memset(&name->fcap.permitted, 0, sizeof(kernel_cap_t));
+	memset(&name->fcap.inheritable, 0, sizeof(kernel_cap_t));
+	name->fcap.fE = 0;
+	name->fcap_ver = 0;
+
+	if (!dentry)
+		return 0;
+
+	rc = get_vfs_caps_from_disk(dentry, &caps);
+	if (rc)
+		return rc;
+
+	name->fcap.permitted = caps.permitted;
+	name->fcap.inheritable = caps.inheritable;
+	name->fcap.fE = !!(caps.magic_etc & VFS_CAP_FLAGS_EFFECTIVE);
+	name->fcap_ver = (caps.magic_etc & VFS_CAP_REVISION_MASK) >> VFS_CAP_REVISION_SHIFT;
+
+	return 0;
+}
+
+
 /* Copy inode data into an audit_names. */
-static void audit_copy_inode(struct audit_names *name, const struct inode *inode)
+static void audit_copy_inode(struct audit_names *name, const struct dentry *dentry,
+			     const struct inode *inode)
 {
 	name->ino   = inode->i_ino;
 	name->dev   = inode->i_sb->s_dev;
@@ -1797,6 +1904,7 @@ static void audit_copy_inode(struct audit_names *name, const struct inode *inode
 	name->gid   = inode->i_gid;
 	name->rdev  = inode->i_rdev;
 	security_inode_getsecid(inode, &name->osid);
+	audit_copy_fcaps(name, dentry);
 }
 
 /**
@@ -1831,7 +1939,7 @@ void __audit_inode(const char *name, const struct dentry *dentry)
 		context->names[idx].name = NULL;
 	}
 	handle_path(dentry);
-	audit_copy_inode(&context->names[idx], inode);
+	audit_copy_inode(&context->names[idx], dentry, inode);
 }
 
 /**
@@ -1892,7 +2000,7 @@ void __audit_inode_child(const char *dname, const struct dentry *dentry,
 		if (!strcmp(dname, n->name) ||
 		     !audit_compare_dname_path(dname, n->name, &dirlen)) {
 			if (inode)
-				audit_copy_inode(n, inode);
+				audit_copy_inode(n, NULL, inode);
 			else
 				n->ino = (unsigned long)-1;
 			found_child = n->name;
@@ -1906,7 +2014,7 @@ add_names:
 			return;
 		idx = context->name_count - 1;
 		context->names[idx].name = NULL;
-		audit_copy_inode(&context->names[idx], parent);
+		audit_copy_inode(&context->names[idx], NULL, parent);
 	}
 
 	if (!found_child) {
@@ -1927,7 +2035,7 @@ add_names:
 		}
 
 		if (inode)
-			audit_copy_inode(&context->names[idx], inode);
+			audit_copy_inode(&context->names[idx], NULL, inode);
 		else
 			context->names[idx].ino = (unsigned long)-1;
 	}
@@ -2425,6 +2533,86 @@ int __audit_signal_info(int sig, struct task_struct *t)
 	security_task_getsecid(t, &axp->target_sid[axp->pid_count]);
 	memcpy(axp->target_comm[axp->pid_count], t->comm, TASK_COMM_LEN);
 	axp->pid_count++;
+
+	return 0;
+}
+
+/**
+ * __audit_log_bprm_fcaps - store information about a loading bprm and relevant fcaps
+ * @bprm pointer to the bprm being processed
+ * @caps the caps read from the disk
+ *
+ * Simply check if the proc already has the caps given by the file and if not
+ * store the priv escalation info for later auditing at the end of the syscall
+ *
+ * this can fail and we don't care.  See the note in audit.h for
+ * audit_log_bprm_fcaps() for my explaination....
+ *
+ * -Eric
+ */
+void __audit_log_bprm_fcaps(struct linux_binprm *bprm, kernel_cap_t *pP, kernel_cap_t *pE)
+{
+	struct audit_aux_data_bprm_fcaps *ax;
+	struct audit_context *context = current->audit_context;
+	struct cpu_vfs_cap_data vcaps;
+	struct dentry *dentry;
+
+	ax = kmalloc(sizeof(*ax), GFP_KERNEL);
+	if (!ax)
+		return;
+
+	ax->d.type = AUDIT_BPRM_FCAPS;
+	ax->d.next = context->aux;
+	context->aux = (void *)ax;
+
+	dentry = dget(bprm->file->f_dentry);
+	get_vfs_caps_from_disk(dentry, &vcaps);
+	dput(dentry);
+
+	ax->fcap.permitted = vcaps.permitted;
+	ax->fcap.inheritable = vcaps.inheritable;
+	ax->fcap.fE = !!(vcaps.magic_etc & VFS_CAP_FLAGS_EFFECTIVE);
+	ax->fcap_ver = (vcaps.magic_etc & VFS_CAP_REVISION_MASK) >> VFS_CAP_REVISION_SHIFT;
+
+	ax->old_pcap.permitted = *pP;
+	ax->old_pcap.inheritable = current->cap_inheritable;
+	ax->old_pcap.effective = *pE;
+
+	ax->new_pcap.permitted = current->cap_permitted;
+	ax->new_pcap.inheritable = current->cap_inheritable;
+	ax->new_pcap.effective = current->cap_effective;
+}
+
+/**
+ * __audit_log_capset - store information about the arguments to the capset syscall
+ * @pid target pid of the capset call
+ * @eff effective cap set
+ * @inh inheritible cap set
+ * @perm permited cap set
+ *
+ * Record the aguments userspace sent to sys_capset for later printing by the
+ * audit system if applicable
+ */
+int __audit_log_capset(pid_t pid, kernel_cap_t *eff, kernel_cap_t *inh, kernel_cap_t *perm)
+{
+	struct audit_aux_data_capset *ax;
+	struct audit_context *context = current->audit_context;
+
+	if (likely(!audit_enabled || !context || context->dummy))
+		return 0;
+
+	ax = kmalloc(sizeof(*ax), GFP_KERNEL);
+	if (!ax)
+		return -ENOMEM;
+
+	ax->d.type = AUDIT_CAPSET;
+	ax->d.next = context->aux;
+	context->aux = (void *)ax;
+
+	ax->pid = pid;
+	ax->cap.effective = *eff;
+	ax->cap.inheritable = *eff;
+	ax->cap.permitted = *perm;
 
 	return 0;
 }

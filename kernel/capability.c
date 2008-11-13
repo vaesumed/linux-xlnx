@@ -7,6 +7,7 @@
  * 30 May 2002:	Cleanup, Robert M. Love <rml@tech9.net>
  */
 
+#include <linux/audit.h>
 #include <linux/capability.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -32,6 +33,17 @@ const kernel_cap_t __cap_init_eff_set = CAP_INIT_EFF_SET;
 EXPORT_SYMBOL(__cap_empty_set);
 EXPORT_SYMBOL(__cap_full_set);
 EXPORT_SYMBOL(__cap_init_eff_set);
+
+#ifdef CONFIG_SECURITY_FILE_CAPABILITIES
+int file_caps_enabled = 1;
+
+static int __init file_caps_disable(char *str)
+{
+	file_caps_enabled = 0;
+	return 1;
+}
+__setup("no_file_caps", file_caps_disable);
+#endif
 
 /*
  * More recent versions of libcap are available from:
@@ -457,6 +469,10 @@ asmlinkage long sys_capset(cap_user_header_t header, const cap_user_data_t data)
 		i++;
 	}
 
+	ret = audit_log_capset(pid, &effective, &inheritable, &permitted);
+	if (ret)
+		return ret;
+
 	if (pid && (pid != task_pid_vnr(current)))
 		ret = do_sys_capset_other_tasks(pid, &effective, &inheritable,
 						&permitted);
@@ -498,6 +514,11 @@ asmlinkage long sys_capset(cap_user_header_t header, const cap_user_data_t data)
  */
 int capable(int cap)
 {
+	if (unlikely(!cap_valid(cap))) {
+		printk(KERN_CRIT "capable() called with invalid cap=%u\n", cap);
+		BUG();
+	}
+
 	if (has_capability(current, cap)) {
 		current->flags |= PF_SUPERPRIV;
 		return 1;

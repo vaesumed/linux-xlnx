@@ -99,6 +99,8 @@
 #define AUDIT_OBJ_PID		1318	/* ptrace target */
 #define AUDIT_TTY		1319	/* Input on an administrative TTY */
 #define AUDIT_EOE		1320	/* End of multi-record event */
+#define AUDIT_BPRM_FCAPS	1321	/* Information about fcaps increasing perms */
+#define AUDIT_CAPSET		1322	/* Record showing argument to sys_capset */
 
 #define AUDIT_AVC		1400	/* SE Linux avc denial or grant */
 #define AUDIT_SELINUX_ERR	1401	/* Internal SE Linux Errors */
@@ -452,6 +454,8 @@ extern int __audit_mq_timedsend(mqd_t mqdes, size_t msg_len, unsigned int msg_pr
 extern int __audit_mq_timedreceive(mqd_t mqdes, size_t msg_len, unsigned int __user *u_msg_prio, const struct timespec __user *u_abs_timeout);
 extern int __audit_mq_notify(mqd_t mqdes, const struct sigevent __user *u_notification);
 extern int __audit_mq_getsetattr(mqd_t mqdes, struct mq_attr *mqstat);
+extern void __audit_log_bprm_fcaps(struct linux_binprm *bprm, kernel_cap_t *pP, kernel_cap_t *pE);
+extern int __audit_log_capset(pid_t pid, kernel_cap_t *eff, kernel_cap_t *inh, kernel_cap_t *perm);
 
 static inline int audit_ipc_obj(struct kern_ipc_perm *ipcp)
 {
@@ -501,6 +505,36 @@ static inline int audit_mq_getsetattr(mqd_t mqdes, struct mq_attr *mqstat)
 		return __audit_mq_getsetattr(mqdes, mqstat);
 	return 0;
 }
+
+/*
+ * ieieeeeee, an audit function without a return code!
+ *
+ * This function might fail!  I decided that it didn't matter.  We are too late
+ * to fail the syscall and the information isn't REQUIRED for any purpose.  It's
+ * just nice to have.  We should be able to look at past audit logs to figure
+ * out this process's current cap set along with the fcaps from the PATH record
+ * and use that to come up with the final set.  Yeah, its ugly, but all the info
+ * is still in the audit log.  So I'm not going to bother mentioning we failed
+ * if we couldn't allocate memory.
+ *
+ * If someone changes their mind they could create the aux record earlier and
+ * then search here and use that earlier allocation.  But I don't wanna.
+ *
+ * -Eric
+ */
+static inline void audit_log_bprm_fcaps(struct linux_binprm *bprm, kernel_cap_t *pP, kernel_cap_t *pE)
+{
+	if (unlikely(!audit_dummy_context()))
+		__audit_log_bprm_fcaps(bprm, pP, pE);
+}
+
+static inline int audit_log_capset(pid_t pid, kernel_cap_t *eff, kernel_cap_t *inh, kernel_cap_t *perm)
+{
+	if (unlikely(!audit_dummy_context()))
+		return __audit_log_capset(pid, eff, inh, perm);
+	return 0;
+}
+
 extern int audit_n_rules;
 extern int audit_signals;
 #else
@@ -532,6 +566,8 @@ extern int audit_signals;
 #define audit_mq_timedreceive(d,l,p,t) ({ 0; })
 #define audit_mq_notify(d,n) ({ 0; })
 #define audit_mq_getsetattr(d,s) ({ 0; })
+#define audit_log_bprm_fcaps(b, p, e) do { ; } while (0)
+#define audit_log_capset(pid, e, i, p) ({ 0; })
 #define audit_ptrace(t) ((void)0)
 #define audit_n_rules 0
 #define audit_signals 0

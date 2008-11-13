@@ -8,6 +8,7 @@
  */
 
 #include <linux/capability.h>
+#include <linux/audit.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -48,7 +49,7 @@ EXPORT_SYMBOL(cap_netlink_recv);
  * returns 0 when a task has a capability, but the kernel's capable()
  * returns 1 for this case.
  */
-int cap_capable (struct task_struct *tsk, int cap)
+int cap_capable(struct task_struct *tsk, int cap, int audit)
 {
 	/* Derived from include/linux/sched.h:capable. */
 	if (cap_raised(tsk->cap_effective, cap))
@@ -111,7 +112,7 @@ static inline int cap_inh_is_capped(void)
 	 * to the old permitted set. That is, if the current task
 	 * does *not* possess the CAP_SETPCAP capability.
 	 */
-	return (cap_capable(current, CAP_SETPCAP) != 0);
+	return (cap_capable(current, CAP_SETPCAP, SECURITY_CAP_AUDIT) != 0);
 }
 
 static inline int cap_limit_ptraced_target(void) { return 1; }
@@ -202,17 +203,70 @@ int cap_inode_killpriv(struct dentry *dentry)
 	return inode->i_op->removexattr(dentry, XATTR_NAME_CAPS);
 }
 
-static inline int cap_from_disk(struct vfs_cap_data *caps,
-				struct linux_binprm *bprm, unsigned size)
+static inline int bprm_caps_from_vfs_caps(struct cpu_vfs_cap_data *caps,
+					  struct linux_binprm *bprm)
 {
+	unsigned i;
+	int ret = 0;
+
+	if (caps->magic_etc & VFS_CAP_FLAGS_EFFECTIVE)
+		bprm->cap_effective = true;
+	else
+		bprm->cap_effective = false;
+
+	CAP_FOR_EACH_U32(i) {
+		__u32 permitted = caps->permitted.cap[i];
+		__u32 inheritable = caps->inheritable.cap[i];
+
+		/*
+		 * pP' = (X & fP) | (pI & fI)
+		 */
+		bprm->cap_post_exec_permitted.cap[i] =
+			(current->cap_bset.cap[i] & permitted) |
+			(current->cap_inheritable.cap[i] & inheritable);
+
+		if (permitted & ~bprm->cap_post_exec_permitted.cap[i]) {
+			/*
+			 * insufficient to execute correctly
+			 */
+			ret = -EPERM;
+		}
+	}
+
+	/*
+	 * For legacy apps, with no internal support for recognizing they
+	 * do not have enough capabilities, we return an error if they are
+	 * missing some "forced" (aka file-permitted) capabilities.
+	 */
+	return bprm->cap_effective ? ret : 0;
+}
+
+int get_vfs_caps_from_disk(const struct dentry *dentry, struct cpu_vfs_cap_data *cpu_caps)
+{
+	struct inode *inode = dentry->d_inode;
 	__u32 magic_etc;
 	unsigned tocopy, i;
-	int ret;
+	int size;
+	struct vfs_cap_data caps;
+
+	memset(cpu_caps, 0, sizeof(struct cpu_vfs_cap_data));
+
+	if (!inode || !inode->i_op || !inode->i_op->getxattr)
+		return -ENODATA;
+
+	size = inode->i_op->getxattr((struct dentry *)dentry, XATTR_NAME_CAPS, &caps,
+				   XATTR_CAPS_SZ);
+	if (size == -ENODATA || size == -EOPNOTSUPP) {
+		/* no data, that's ok */
+		return -ENODATA;
+	}
+	if (size < 0)
+		return size;
 
 	if (size < sizeof(magic_etc))
 		return -EINVAL;
 
-	magic_etc = le32_to_cpu(caps->magic_etc);
+	cpu_caps->magic_etc = magic_etc = le32_to_cpu(caps.magic_etc);
 
 	switch ((magic_etc & VFS_CAP_REVISION_MASK)) {
 	case VFS_CAP_REVISION_1:
@@ -229,46 +283,13 @@ static inline int cap_from_disk(struct vfs_cap_data *caps,
 		return -EINVAL;
 	}
 
-	if (magic_etc & VFS_CAP_FLAGS_EFFECTIVE) {
-		bprm->cap_effective = true;
-	} else {
-		bprm->cap_effective = false;
-	}
-
-	ret = 0;
-
 	CAP_FOR_EACH_U32(i) {
-		__u32 value_cpu;
-
-		if (i >= tocopy) {
-			/*
-			 * Legacy capability sets have no upper bits
-			 */
-			bprm->cap_post_exec_permitted.cap[i] = 0;
-			continue;
-		}
-		/*
-		 * pP' = (X & fP) | (pI & fI)
-		 */
-		value_cpu = le32_to_cpu(caps->data[i].permitted);
-		bprm->cap_post_exec_permitted.cap[i] =
-			(current->cap_bset.cap[i] & value_cpu) |
-			(current->cap_inheritable.cap[i] &
-				le32_to_cpu(caps->data[i].inheritable));
-		if (value_cpu & ~bprm->cap_post_exec_permitted.cap[i]) {
-			/*
-			 * insufficient to execute correctly
-			 */
-			ret = -EPERM;
-		}
+		if (i >= tocopy)
+			break;
+		cpu_caps->permitted.cap[i] = le32_to_cpu(caps.data[i].permitted);
+		cpu_caps->inheritable.cap[i] = le32_to_cpu(caps.data[i].inheritable);
 	}
-
-	/*
-	 * For legacy apps, with no internal support for recognizing they
-	 * do not have enough capabilities, we return an error if they are
-	 * missing some "forced" (aka file-permitted) capabilities.
-	 */
-	return bprm->cap_effective ? ret : 0;
+	return 0;
 }
 
 /* Locate any VFS capabilities: */
@@ -276,33 +297,29 @@ static int get_file_caps(struct linux_binprm *bprm)
 {
 	struct dentry *dentry;
 	int rc = 0;
-	struct vfs_cap_data vcaps;
-	struct inode *inode;
+	struct cpu_vfs_cap_data vcaps;
 
 	bprm_clear_caps(bprm);
+
+	if (!file_caps_enabled)
+		return 0;
 
 	if (bprm->file->f_vfsmnt->mnt_flags & MNT_NOSUID)
 		return 0;
 
 	dentry = dget(bprm->file->f_dentry);
-	inode = dentry->d_inode;
-	if (!inode->i_op || !inode->i_op->getxattr)
-		goto out;
 
-	rc = inode->i_op->getxattr(dentry, XATTR_NAME_CAPS, &vcaps,
-				   XATTR_CAPS_SZ);
-	if (rc == -ENODATA || rc == -EOPNOTSUPP) {
-		/* no data, that's ok */
-		rc = 0;
+	rc = get_vfs_caps_from_disk(dentry, &vcaps);
+	if (rc < 0) {
+		if (rc == -EINVAL)
+			printk(KERN_NOTICE "%s: get_vfs_caps_from_disk returned %d for %s\n",
+				__func__, rc, bprm->filename);
+		else if (rc == -ENODATA)
+			rc = 0;
 		goto out;
 	}
-	if (rc < 0)
-		goto out;
 
-	rc = cap_from_disk(&vcaps, bprm, rc);
-	if (rc == -EINVAL)
-		printk(KERN_NOTICE "%s: cap_from_disk returned %d for %s\n",
-		       __func__, rc, bprm->filename);
+	rc = bprm_caps_from_vfs_caps(&vcaps, bprm);
 
 out:
 	dput(dentry);
@@ -360,6 +377,9 @@ int cap_bprm_set_security (struct linux_binprm *bprm)
 
 void cap_bprm_apply_creds (struct linux_binprm *bprm, int unsafe)
 {
+	kernel_cap_t pP = current->cap_permitted;
+	kernel_cap_t pE = current->cap_effective;
+
 	if (bprm->e_uid != current->uid || bprm->e_gid != current->gid ||
 	    !cap_issubset(bprm->cap_post_exec_permitted,
 			  current->cap_permitted)) {
@@ -393,7 +413,24 @@ void cap_bprm_apply_creds (struct linux_binprm *bprm, int unsafe)
 			cap_clear(current->cap_effective);
 	}
 
-	/* AUD: Audit candidate if current->cap_effective is set */
+	/*
+	 * Audit candidate if current->cap_effective is set
+	 *
+	 * We do not bother to audit if 3 things are true:
+	 *   1) cap_effective has all caps
+	 *   2) we are root
+	 *   3) root is supposed to have all caps (SECURE_NOROOT)
+	 * Since this is just a normal root execing a process.
+	 *
+	 * Number 1 above might fail if you don't have a full bset, but I think
+	 * that is interesting information to audit.
+	 */
+	if (!cap_isclear(current->cap_effective)) {
+		if (!cap_issubset(CAP_FULL_SET, current->cap_effective) ||
+		    (bprm->e_uid != 0) || (current->uid != 0) ||
+		    issecure(SECURE_NOROOT))
+			audit_log_bprm_fcaps(bprm, &pP, &pE);
+	}
 
 	current->securebits &= ~issecure_mask(SECURE_KEEP_CAPS);
 }
@@ -640,7 +677,7 @@ int cap_task_prctl(int option, unsigned long arg2, unsigned long arg3,
 		    || ((current->securebits & SECURE_ALL_LOCKS
 			 & ~arg2))                                    /*[2]*/
 		    || (arg2 & ~(SECURE_ALL_LOCKS | SECURE_ALL_BITS)) /*[3]*/
-		    || (cap_capable(current, CAP_SETPCAP) != 0)) {    /*[4]*/
+		    || (cap_capable(current, CAP_SETPCAP, SECURITY_CAP_AUDIT) != 0)) { /*[4]*/
 			/*
 			 * [1] no changing of bits that are locked
 			 * [2] no unlocking of locks
@@ -705,7 +742,7 @@ int cap_vm_enough_memory(struct mm_struct *mm, long pages)
 {
 	int cap_sys_admin = 0;
 
-	if (cap_capable(current, CAP_SYS_ADMIN) == 0)
+	if (cap_capable(current, CAP_SYS_ADMIN, SECURITY_CAP_NOAUDIT) == 0)
 		cap_sys_admin = 1;
 	return __vm_enough_memory(mm, pages, cap_sys_admin);
 }

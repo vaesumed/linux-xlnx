@@ -1365,12 +1365,14 @@ static int task_has_perm(struct task_struct *tsk1,
 
 /* Check whether a task is allowed to use a capability. */
 static int task_has_capability(struct task_struct *tsk,
-			       int cap)
+			       int cap, int audit)
 {
 	struct task_security_struct *tsec;
 	struct avc_audit_data ad;
+	struct av_decision avd;
 	u16 sclass;
 	u32 av = CAP_TO_MASK(cap);
+	int rc;
 
 	tsec = tsk->security;
 
@@ -1390,7 +1392,11 @@ static int task_has_capability(struct task_struct *tsk,
 		       "SELinux:  out of range capability %d\n", cap);
 		BUG();
 	}
-	return avc_has_perm(tsec->sid, tsec->sid, sclass, av, &ad);
+
+	rc = avc_has_perm_noaudit(tsec->sid, tsec->sid, sclass, av, 0, &avd);
+	if (audit == SECURITY_CAP_AUDIT)
+		avc_audit(tsec->sid, tsec->sid, sclass, av, &avd, rc, &ad);
+	return rc;
 }
 
 /* Check whether a task is allowed to use a system operation. */
@@ -1687,35 +1693,6 @@ static inline u32 file_mask_to_av(int mode, int mask)
 	return av;
 }
 
-/*
- * Convert a file mask to an access vector and include the correct open
- * open permission.
- */
-static inline u32 open_file_mask_to_av(int mode, int mask)
-{
-	u32 av = file_mask_to_av(mode, mask);
-
-	if (selinux_policycap_openperm) {
-		/*
-		 * lnk files and socks do not really have an 'open'
-		 */
-		if (S_ISREG(mode))
-			av |= FILE__OPEN;
-		else if (S_ISCHR(mode))
-			av |= CHR_FILE__OPEN;
-		else if (S_ISBLK(mode))
-			av |= BLK_FILE__OPEN;
-		else if (S_ISFIFO(mode))
-			av |= FIFO_FILE__OPEN;
-		else if (S_ISDIR(mode))
-			av |= DIR__OPEN;
-		else
-			printk(KERN_ERR "SELinux: WARNING: inside %s with "
-				"unknown mode:%x\n", __func__, mode);
-	}
-	return av;
-}
-
 /* Convert a Linux file to an access vector. */
 static inline u32 file_to_av(struct file *file)
 {
@@ -1736,6 +1713,36 @@ static inline u32 file_to_av(struct file *file)
 		av = FILE__IOCTL;
 	}
 
+	return av;
+}
+
+/*
+ * Convert a file to an access vector and include the correct open
+ * open permission.
+ */
+static inline u32 open_file_to_av(struct file *file)
+{
+	u32 av = file_to_av(file);
+
+	if (selinux_policycap_openperm) {
+		mode_t mode = file->f_path.dentry->d_inode->i_mode;
+		/*
+		 * lnk files and socks do not really have an 'open'
+		 */
+		if (S_ISREG(mode))
+			av |= FILE__OPEN;
+		else if (S_ISCHR(mode))
+			av |= CHR_FILE__OPEN;
+		else if (S_ISBLK(mode))
+			av |= BLK_FILE__OPEN;
+		else if (S_ISFIFO(mode))
+			av |= FIFO_FILE__OPEN;
+		else if (S_ISDIR(mode))
+			av |= DIR__OPEN;
+		else
+			printk(KERN_ERR "SELinux: WARNING: inside %s with "
+				"unknown mode:%o\n", __func__, mode);
+	}
 	return av;
 }
 
@@ -1801,15 +1808,15 @@ static void selinux_capset_set(struct task_struct *target, kernel_cap_t *effecti
 	secondary_ops->capset_set(target, effective, inheritable, permitted);
 }
 
-static int selinux_capable(struct task_struct *tsk, int cap)
+static int selinux_capable(struct task_struct *tsk, int cap, int audit)
 {
 	int rc;
 
-	rc = secondary_ops->capable(tsk, cap);
+	rc = secondary_ops->capable(tsk, cap, audit);
 	if (rc)
 		return rc;
 
-	return task_has_capability(tsk, cap);
+	return task_has_capability(tsk, cap, audit);
 }
 
 static int selinux_sysctl_get_sid(ctl_table *table, u16 tclass, u32 *sid)
@@ -1972,16 +1979,8 @@ static int selinux_syslog(int type)
 static int selinux_vm_enough_memory(struct mm_struct *mm, long pages)
 {
 	int rc, cap_sys_admin = 0;
-	struct task_security_struct *tsec = current->security;
 
-	rc = secondary_ops->capable(current, CAP_SYS_ADMIN);
-	if (rc == 0)
-		rc = avc_has_perm_noaudit(tsec->sid, tsec->sid,
-					  SECCLASS_CAPABILITY,
-					  CAP_TO_MASK(CAP_SYS_ADMIN),
-					  0,
-					  NULL);
-
+	rc = selinux_capable(current, CAP_SYS_ADMIN, SECURITY_CAP_NOAUDIT);
 	if (rc == 0)
 		cap_sys_admin = 1;
 
@@ -2269,7 +2268,9 @@ static void selinux_bprm_post_apply_creds(struct linux_binprm *bprm)
 	struct rlimit *rlim, *initrlim;
 	struct itimerval itimer;
 	struct bprm_security_struct *bsec;
+	struct sighand_struct *psig;
 	int rc, i;
+	unsigned long flags;
 
 	tsec = current->security;
 	bsec = bprm->security;
@@ -2330,7 +2331,12 @@ static void selinux_bprm_post_apply_creds(struct linux_binprm *bprm)
 
 	/* Wake up the parent if it is waiting so that it can
 	   recheck wait permission to the new task SID. */
+	read_lock_irq(&tasklist_lock);
+	psig = current->parent->sighand;
+	spin_lock_irqsave(&psig->siglock, flags);
 	wake_up_interruptible(&current->parent->signal->wait_chldexit);
+	spin_unlock_irqrestore(&psig->siglock, flags);
+	read_unlock_irq(&tasklist_lock);
 }
 
 /* superblock security operations */
@@ -2650,7 +2656,7 @@ static int selinux_inode_permission(struct inode *inode, int mask)
 	}
 
 	return inode_has_perm(current, inode,
-			       open_file_mask_to_av(inode->i_mode, mask), NULL);
+			      file_mask_to_av(inode->i_mode, mask), NULL);
 }
 
 static int selinux_inode_setattr(struct dentry *dentry, struct iattr *iattr)
@@ -2806,7 +2812,6 @@ static int selinux_inode_getsecurity(const struct inode *inode, const char *name
 	u32 size;
 	int error;
 	char *context = NULL;
-	struct task_security_struct *tsec = current->security;
 	struct inode_security_struct *isec = inode->i_security;
 
 	if (strcmp(name, XATTR_SELINUX_SUFFIX))
@@ -2821,13 +2826,7 @@ static int selinux_inode_getsecurity(const struct inode *inode, const char *name
 	 * and lack of permission just means that we fall back to the
 	 * in-core context value, not a denial.
 	 */
-	error = secondary_ops->capable(current, CAP_MAC_ADMIN);
-	if (!error)
-		error = avc_has_perm_noaudit(tsec->sid, tsec->sid,
-					     SECCLASS_CAPABILITY2,
-					     CAPABILITY2__MAC_ADMIN,
-					     0,
-					     NULL);
+	error = selinux_capable(current, CAP_MAC_ADMIN, SECURITY_CAP_NOAUDIT);
 	if (!error)
 		error = security_sid_to_context_force(isec->sid, &context,
 						      &size);
@@ -3166,7 +3165,7 @@ static int selinux_dentry_open(struct file *file)
 	 * new inode label or new policy.
 	 * This check is not redundant - do not remove.
 	 */
-	return inode_has_perm(current, inode, file_to_av(file), NULL);
+	return inode_has_perm(current, inode, open_file_to_av(file), NULL);
 }
 
 /* task security operations */
@@ -4387,7 +4386,7 @@ static int selinux_nlmsg_perm(struct sock *sk, struct sk_buff *skb)
 				  "SELinux:  unrecognized netlink message"
 				  " type=%hu for sclass=%hu\n",
 				  nlh->nlmsg_type, isec->sclass);
-			if (!selinux_enforcing)
+			if (!selinux_enforcing || security_get_allow_unknown())
 				err = 0;
 		}
 
