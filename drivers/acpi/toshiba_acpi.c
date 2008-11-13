@@ -780,19 +780,20 @@ static int __init toshiba_acpi_init(void)
 		}
 	}
 
-	toshiba_backlight_device = backlight_device_register("toshiba",
+	if (!acpi_video_backlight_support()) {
+		toshiba_backlight_device = backlight_device_register("toshiba",
 						&toshiba_acpi.p_dev->dev,
 						NULL,
 						&toshiba_backlight_data);
-        if (IS_ERR(toshiba_backlight_device)) {
-		ret = PTR_ERR(toshiba_backlight_device);
-
-		printk(KERN_ERR "Could not register toshiba backlight device\n");
-		toshiba_backlight_device = NULL;
-		toshiba_acpi_exit();
-		return ret;
+		if (IS_ERR(toshiba_backlight_device)) {
+			ret = PTR_ERR(toshiba_backlight_device);
+			printk(KERN_ERR "Could not register toshiba backlight device\n");
+			toshiba_backlight_device = NULL;
+			toshiba_acpi_exit();
+			return ret;
+		}
+		toshiba_backlight_device->props.max_brightness = HCI_LCD_BRIGHTNESS_LEVELS - 1;
 	}
-        toshiba_backlight_device->props.max_brightness = HCI_LCD_BRIGHTNESS_LEVELS - 1;
 
 	/* Register rfkill switch for Bluetooth */
 	if (hci_get_bt_present(&bt_present) == HCI_SUCCESS && bt_present) {
