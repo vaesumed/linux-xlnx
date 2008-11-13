@@ -1,0 +1,181 @@
+Importing driver-core.current based on 2.6.28-rc4-git2
+$ git checkout quilt/driver-core.current
+Switched to branch "quilt/driver-core.current"
+$ git reset --hard f21f237cf55494c3a4209de323281a3b0528da10
+HEAD is now at f21f237 Merge branch 'timers-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+driver-core-fix-using-ret-variable-in-unregister_dynamic_debug_module.patch
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard 8a1dd158b19063c7ce266d8c234d6be4a805bf12
+HEAD is now at 8a1dd15 driver core: fix using 'ret' variable in unregister_dynamic_debug_module
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-vstusb-fix-compiler-warning-on-x86-64.patch
+usb-add-nikon-d300-camera-to-unusual_devs.patch
+usb-don-t-register-endpoints-for-interfaces-that-are-going-away.patch
+usb-musb-fix-for-isochronous-in-transfer.patch
+usb-musb-fixes-endpoint-allocation-logic.patch
+usb-musb-tusb6010-kill-compile-warning.patch
+usb-musb-removes-compilation-warning-in-gadget-mode.patch
+usb-musb-fix-debug-global-variable-name.patch
+usb-musb-fix-bulk-request-on-different-available-endpoints.patch
+usb-musb-fix-for-kernel-panic-with-multiple-bulk-transfer.patch
+usb-add-yiso-u893-usb-modem-vendor-and-product-ids-to-option-driver.patch
+usb-mention-urb_free_buffer-in-usb_free_urb-documentation.patch
+usb-cp2101-add-device-id-for-amb2560.patch
+usb-cdc-acm.c-fix-recursive-lock-in-acm_start_wb-error-path.patch
+usb-unusual_devs-entry-for-argosy-usb-mass-storage-interface.patch
+usb-fix-ps3-usb-shutdown-problems.patch
+usb-storage-adjust-comment-in-kconfig.patch
+usb-cp2101-add-enfora-gsm2228.patch
+usb-remove-optional-bus-bindings-in-isp1760-fixing-runtime-warning.patch
+usb-unusual-devs-patch-for-nokia-7610-supernova.patch
+usb-usb-storage-add-quirks-module-parameter.patch
+usb-sisusb2vga-driver-add-0x0711-0x0903.patch
+ub-stub-pre_reset-and-post_reset-to-fix-oops.patch
+usb-r8a66597-hcd-fix-wrong-data-access-in-superh-on-chip-usb.patch
+usb-fsl_qe_udc-report-disconnect-before-unbinding-fixing-oopses.patch
+Unchanged quilt series m68k
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 1c042b24e4bf0deec00281bb153a70327187343e
+HEAD is now at 1c042b2 USB: fsl_qe_udc: Report disconnect before unbinding fixing oopses
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+pm-simplify-the-new-suspend-hibernation-framework-for-devices.patch
+driver-core-rearrange-struct-device-for-better-packing.patch
+driver-core-remove-completion-from-struct-klist_node.patch
+driver-core-struct-device-replace-bus_id-with-dev_name-dev_set_name.patch
+sysfs-clarify-sysfs_deprecated-help-text.patch
+uio-use-pci_ioremap_bar-in-drivers-uio.patch
+uio-uio_pdrv_genirq-allow-custom-irq_flags.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 4fa10e37aaad5012ff946f833d8efaf61c422445
+HEAD is now at 4fa10e3 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+usb-host-oxford-oxu210hp-hcd-driver.patch
+usb-protect-hcd.h-from-multiple-inclusions.patch
+usb-avoid-needless-address-taking-of-function-parameters.patch
+usb-straighten-out-inline-code-in-sysfs.c.patch
+usb-ehci-pci-quirks.c-don-t-wait-so-long-for-bios-handoff.patch
+usb-wusb-annotate-association-types-withe-proper-endianness.patch
+usb-remove-restrictions-on-signal-numbers-in-devio.c.patch
+usb-power-availability-check-for-berry_charge.patch
+usb-usbtmc-indent-braces-disagree-something-else-is-desired.patch
+usb-change-interface-to-usb_lock_device_for_reset.patch
+usb-fsl_qe_udc-check-for-muram-allocation-errors.patch
+usb-add-imx-udc-gadget-driver.patch
+usb-add-new-opticon-serial-driver.patch
+Importing device-mapper based on v2.6.28-rc3-31-ga75952b
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard a75952b72a0fff3031124003e62118111aed42c1
+HEAD is now at a75952b Merge git://git.kernel.org/pub/scm/linux/kernel/git/sfrench/cifs-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-raid1-flush-workqueue-before-destruction.patch
+dm-stripe-fix-init-failure.patch
+dm-consolidate-target-deregistration-error-handling.patch
+dm-mpath-avoid-attempting-to-activate-null-path.patch
+dm-mpath-warn-if-args-ignored.patch
+dm-move-wake_up-into-dm_io_acct.patch
+Importing i2c based on 2.6.28-rc4-git2
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard f21f237cf55494c3a4209de323281a3b0528da10
+HEAD is now at f21f237 Merge branch 'timers-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-replace-bus_id-with-dev_name-dev_set_name-part-1.patch
+i2c-replace-bus_id-with-dev_name-dev_set_name-part-2.patch
+i2c-drop-I2C_CLASS_ALL.patch
+i2c-drop-I2C_CLASS_CAM_ANALOG-and-I2C_CLASS_SOUND.patch
+i2c-drop-I2C_CLASS_CAM_DIGITAL.patch
+i2c-apanel-convert-to-new-style.patch
+Importing jdelvare-hwmon based on 2.6.28-rc4-git2
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard f21f237cf55494c3a4209de323281a3b0528da10
+HEAD is now at f21f237 Merge branch 'timers-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-f71882fg-04-style-cleanups.patch
+hwmon-f71882fg-05-add-f71862fg-support.patch
+hwmon-f71882fg-06-no-io-to-unreserved-ports.patch
+hwmon-add-ltc4245-driver.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+hwmon-it87-add-it8720f-support.patch
+hwmon-i5k_amb-load-automatically-on-all-5000-5400-chipsets.patch
+hwmon-k8temp-01-warn-about-errata.patch
+hwmon-fschmd-01-cleanup.patch
+hwmon-lm70-01-fix-byte-order.patch
+hwmon-lm70-02-ti-tmp121-support.patch
+Unchanged quilt series kernel-doc
+Importing ide based on 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 45beca08dd8b6d6a65c5ffd730af2eac7a2c7a03
+HEAD is now at 45beca0 Linux v2.6.28-rc3
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-the-ide_release_lock-imbalance.patch
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+Context reduced to (1/1) to apply fragment at 949
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+ali14xx-doesnt-use-shared-irqs.patch
+cmd64x-set-ide_hflag_serialize-explictly-for-cmd646.patch
+gayle-set-ide_hflag_serialize-explictly.patch
+ide-fix-quirk_list-checking-in-ide_do_request.patch
+ide-always-set-nien-on-idle-devices.patch
+rz1000-apply-chipset-quirks-early-v2.patch
+trm290-add-ide_hflag_trm290-host-flag.patch
+cy82c693-remove-superfluous-ide_cy82c693-chipset-type.patch
+ide-rework-handling-of-serialized-ports-v2.patch
+ide-struct-device-replace-bus_id-with-dev_name()-dev_set_name().patch
+ide-respect-current-dma-setting-during-resume.patch
+ide-fix-build-for-debug_pm.patch
+ide-remove-dead-code-from-drive_is_ready.patch
+ide-remove-redundant-code-from-ide_end_drive_cmd.patch
+ide-remove-inline-tags-from-ide-probe-c.patch
+ide-checkpatch.pl-fixes-for-ide-lib-c.patch
+ide-use-ata_dma_-defines-in-ide-dma-sff-c.patch
+ide-move-power-management-support-to-ide-pm-c.patch
+ide-move-legacy-isa-vlb-ports-handling-to-ide-legacy-c.patch
+ide-remove-superfluous-local_irq_save-restore-from-ide_dump_status.patch
+ide-push-local_irq_save-restore-to-do_identify.patch
+ide-cd-remove-dead-atapi_overlap-setting.patch
+Importing rr based on v2.6.28-rc3-261-g8b805ef
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 8b805ef617cf0e02f6d18b891f8deb6246421b01
+HEAD is now at 8b805ef Merge branch 'for-2.6.28' of git://linux-nfs.org/~bfields/linux
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+stop_machine:fix-return-race.patch
+virtio:net_recycle_some_more_rx_buffer_pages.patch
+virtio:net_hook_up_the_set_tso_ethtool_op.patch
+virtio:net-mergeable-rx-bufs.patch
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+virtio:VIRTIO_PCI_QUEUE_ADDR_SHIFT.patch
+virtio:rename-vring-pagesize-to-align.patch
+virtio:VIRTIO_PCI_VRING_ALIGN.patch
+virtio:LGUEST_VRING_ALIGN.patch
+virtio:KVM_S390_VIRTIO_RING_ALIGN.patch
+virtio:virtqueue-hand-in-vqalign.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+Unchanged quilt series ttydev
