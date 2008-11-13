@@ -40,7 +40,7 @@
 #include <asm/system.h>
 #include <asm/tlbflush.h>
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 # include <asm/perfmon.h>
 #endif
 
@@ -660,7 +660,7 @@ init_IRQ (void)
 	}
 #endif
 #endif
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	pfm_init_percpu();
 #endif
 	platform_irq_init();

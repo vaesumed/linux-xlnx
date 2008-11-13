@@ -46,7 +46,7 @@
 
 #include "entry.h"
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 # include <asm/perfmon.h>
 #endif
 
@@ -174,7 +174,7 @@ do_notify_resume_user(sigset_t *unused, struct sigscratch *scr, long in_syscall)
 		return;
 	}
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	if (current->thread.pfm_needs_checking)
 		/*
 		 * Note: pfm_handle_work() allow us to call it with interrupts
@@ -334,14 +334,14 @@ cpu_idle (void)
 void
 ia64_save_extra (struct task_struct *task)
 {
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	unsigned long info;
 #endif
 
 	if ((task->thread.flags & IA64_THREAD_DBG_VALID) != 0)
 		ia64_save_debug_regs(&task->thread.dbr[0]);
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	if ((task->thread.flags & IA64_THREAD_PM_VALID) != 0)
 		pfm_save_regs(task);
 
@@ -359,14 +359,14 @@ ia64_save_extra (struct task_struct *task)
 void
 ia64_load_extra (struct task_struct *task)
 {
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	unsigned long info;
 #endif
 
 	if ((task->thread.flags & IA64_THREAD_DBG_VALID) != 0)
 		ia64_load_debug_regs(&task->thread.dbr[0]);
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	if ((task->thread.flags & IA64_THREAD_PM_VALID) != 0)
 		pfm_load_regs(task);
 
@@ -523,7 +523,7 @@ copy_thread (int nr, unsigned long clone_flags,
 	}
 #endif
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	if (current->thread.pfm_context)
 		pfm_inherit(p, child_ptregs);
 #endif
@@ -735,7 +735,7 @@ exit_thread (void)
 {
 
 	ia64_drop_fpu(current);
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
        /* if needed, stop monitoring and flush state to perfmon context */
 	if (current->thread.pfm_context)
 		pfm_exit_thread(current);
