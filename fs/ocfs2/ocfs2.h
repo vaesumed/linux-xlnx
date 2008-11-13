@@ -337,6 +337,9 @@ struct ocfs2_super
 	struct ocfs2_node_map		osb_recovering_orphan_dirs;
 	unsigned int			*osb_orphan_wipes;
 	wait_queue_head_t		osb_wipe_event;
+
+	unsigned int			osb_dx_mask;
+	u32				osb_dx_seed[4];
 };
 
 #define OCFS2_SB(sb)	    ((struct ocfs2_super *)(sb)->s_fs_info)
@@ -391,6 +394,13 @@ static inline int ocfs2_supports_xattr(struct ocfs2_super *osb)
 static inline int ocfs2_meta_ecc(struct ocfs2_super *osb)
 {
 	if (osb->s_feature_incompat & OCFS2_FEATURE_INCOMPAT_META_ECC)
+		return 1;
+	return 0;
+}
+
+static inline int ocfs2_supports_indexed_dirs(struct ocfs2_super *osb)
+{
+	if (osb->s_feature_incompat & OCFS2_FEATURE_INCOMPAT_INDEXED_DIRS)
 		return 1;
 	return 0;
 }
@@ -474,6 +484,12 @@ static inline int ocfs2_uses_extended_slot_map(struct ocfs2_super *osb)
 
 #define OCFS2_IS_VALID_DIR_TRAILER(ptr)					\
 	(!strcmp((ptr)->db_signature, OCFS2_DIR_TRAILER_SIGNATURE))
+
+#define OCFS2_IS_VALID_DX_ROOT(ptr)					\
+	(!strcmp((ptr)->dr_signature, OCFS2_DX_ROOT_SIGNATURE))
+
+#define OCFS2_IS_VALID_DX_LEAF(ptr)					\
+	(!strcmp((ptr)->dl_signature, OCFS2_DX_LEAF_SIGNATURE))
 
 static inline unsigned long ino_from_blkno(struct super_block *sb,
 					   u64 blkno)
