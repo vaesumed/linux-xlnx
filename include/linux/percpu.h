@@ -157,11 +157,6 @@ static inline void percpu_free(void *__pdata)
 void *cpu_alloc(unsigned long size, gfp_t flags, unsigned long align);
 void cpu_free(void *cpu_pointer, unsigned long size);
 
-#ifndef CONFIG_SMP
-#define per_cpu_offset(x) 0
-#define SHIFT_PERCPU_PTR(__p, __offset)	(__p)
-#endif
-
 /* Return a pointer to the instance of a object for a particular processor */
 #define CPU_PTR(__p, __cpu)	SHIFT_PERCPU_PTR((__p), per_cpu_offset(__cpu))
 
