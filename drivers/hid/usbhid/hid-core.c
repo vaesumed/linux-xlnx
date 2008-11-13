@@ -4,7 +4,7 @@
  *  Copyright (c) 1999 Andreas Gal
  *  Copyright (c) 2000-2005 Vojtech Pavlik <vojtech@suse.cz>
  *  Copyright (c) 2005 Michael Haboustak <mike-@cinci.rr.com> for Concept2, Inc
- *  Copyright (c) 2006-2007 Jiri Kosina
+ *  Copyright (c) 2006-2008 Jiri Kosina
  */
 
 /*
@@ -640,9 +640,7 @@ static void hid_find_max_report(struct hid_device *hid, unsigned int type,
 	unsigned int size;
 
 	list_for_each_entry(report, &hid->report_enum[type].report_list, list) {
-		size = ((report->size - 1) >> 3) + 1;
-		if (type == HID_INPUT_REPORT && hid->report_enum[type].numbered)
-			size++;
+		size = ((report->size - 1) >> 3) + 1 + hid->report_enum[type].numbered;
 		if (*max < size)
 			*max = size;
 	}
@@ -780,6 +778,8 @@ static int usbhid_start(struct hid_device *hid)
 	unsigned int n, insize = 0;
 	int ret;
 
+	clear_bit(HID_DISCONNECTED, &usbhid->iofl);
+
 	usbhid->bufsize = HID_MIN_BUFFER_SIZE;
 	hid_find_max_report(hid, HID_INPUT_REPORT, &usbhid->bufsize);
 	hid_find_max_report(hid, HID_OUTPUT_REPORT, &usbhid->bufsize);
@@ -881,12 +881,24 @@ static int usbhid_start(struct hid_device *hid)
 	set_bit(HID_STARTED, &usbhid->iofl);
 	mutex_unlock(&usbhid->setup);
 
+	/* Some keyboards don't work until their LEDs have been set.
+	 * Since BIOSes do set the LEDs, it must be safe for any device
+	 * that supports the keyboard boot protocol.
+	 */
+	if (interface->desc.bInterfaceSubClass == USB_INTERFACE_SUBCLASS_BOOT &&
+			interface->desc.bInterfaceProtocol ==
+				USB_INTERFACE_PROTOCOL_KEYBOARD)
+		usbhid_set_leds(hid);
+
 	return 0;
 
 fail:
 	usb_free_urb(usbhid->urbin);
 	usb_free_urb(usbhid->urbout);
 	usb_free_urb(usbhid->urbctrl);
+	usbhid->urbin = NULL;
+	usbhid->urbout = NULL;
+	usbhid->urbctrl = NULL;
 	hid_free_buffers(dev, hid);
 	mutex_unlock(&usbhid->setup);
 	return ret;
@@ -923,6 +935,9 @@ static void usbhid_stop(struct hid_device *hid)
 	usb_free_urb(usbhid->urbin);
 	usb_free_urb(usbhid->urbctrl);
 	usb_free_urb(usbhid->urbout);
+	usbhid->urbin = NULL; /* don't mess up next start */
+	usbhid->urbctrl = NULL;
+	usbhid->urbout = NULL;
 
 	hid_free_buffers(hid_to_usb_dev(hid), hid);
 	mutex_unlock(&usbhid->setup);
