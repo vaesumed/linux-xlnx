@@ -717,18 +717,16 @@ irqreturn_t be_int(int irq, void *dev)
  */
 int be_poll(struct napi_struct *napi, int budget)
 {
-	struct net_device *netdev = napi->dev;
-	struct be_net_object *pnob = (struct be_net_object *)netdev->priv;
-	struct be_adapter *adapter = pnob->adapter;
+	struct be_net_object *pnob = container_of(napi, struct be_net_object, napi);
 	u32 work_done;
 
-	adapter->be_stat.bes_polls++;
+	pnob->adapter->be_stat.bes_polls++;
 	work_done = process_rx_completions(pnob, budget);
 	BUG_ON(work_done > budget);
 
 	/* All consumed */
 	if (work_done < budget) {
-		netif_rx_complete(netdev, napi);
+		netif_rx_complete(pnob->netdev, napi);
 		/* enable intr */
 		be_notify_cmpl(pnob, work_done, pnob->rx_cq_id, 1);
 	} else {
