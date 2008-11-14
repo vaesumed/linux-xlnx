@@ -653,7 +653,16 @@ __SYSCALL(__NR_dup3, sys_dup3)
 __SYSCALL(__NR_pipe2, sys_pipe2)
 #define __NR_inotify_init1			294
 __SYSCALL(__NR_inotify_init1, sys_inotify_init1)
-
+#define __NR_pfm_create				295
+__SYSCALL(__NR_pfm_create, sys_pfm_create)
+#define __NR_pfm_write				(__NR_pfm_create+1)
+__SYSCALL(__NR_pfm_write, sys_pfm_write)
+#define __NR_pfm_read				(__NR_pfm_create+2)
+ __SYSCALL(__NR_pfm_read, sys_pfm_read)
+#define __NR_pfm_attach				(__NR_pfm_create+3)
+__SYSCALL(__NR_pfm_attach, sys_pfm_attach)
+#define __NR_pfm_set_state			(__NR_pfm_create+4)
+__SYSCALL(__NR_pfm_set_state, sys_pfm_set_state)
 
 #ifndef __NO_STUBS
 #define __ARCH_WANT_OLD_READDIR
