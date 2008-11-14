@@ -1013,7 +1013,7 @@ static int cifs_oplock_thread(void *dummyarg)
 				not bother sending an oplock release if session
 				to server still is disconnected since oplock
 				already released by the server in that case */
-			if (pTcon->tidStatus != CifsNeedReconnect) {
+			if (!pTcon->need_reconnect) {
 				rc = CIFSSMBLock(0, pTcon, netfid,
 						0 /* len */ , 0 /* offset */, 0,
 						0, LOCKING_ANDX_OPLOCK_RELEASE,
@@ -1059,9 +1059,9 @@ init_cifs(void)
 {
 	int rc = 0;
 	cifs_proc_init();
-/*	INIT_LIST_HEAD(&GlobalServerList);*/	/* BB not implemented yet */
-	INIT_LIST_HEAD(&GlobalSMBSessionList);
-	INIT_LIST_HEAD(&GlobalTreeConnectionList);
+	INIT_LIST_HEAD(&global_cifs_sock_list);
+	INIT_LIST_HEAD(&GlobalSMBSessionList); /* BB to be removed by jl */
+	INIT_LIST_HEAD(&GlobalTreeConnectionList); /* BB to be removed by jl */
 	INIT_LIST_HEAD(&GlobalOplock_Q);
 #ifdef CONFIG_CIFS_EXPERIMENTAL
 	INIT_LIST_HEAD(&GlobalDnotifyReqList);

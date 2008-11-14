@@ -122,6 +122,8 @@ struct cifs_cred {
  */
 
 struct TCP_Server_Info {
+	struct list_head tcp_ses_list;
+	struct list_head smb_ses_list;
 	/* 15 character server name + 0x20 16th byte indicating type = srv */
 	char server_RFC1001_name[SERVER_NAME_LEN_WITH_NULL];
 	char unicode_server_Name[SERVER_NAME_LEN_WITH_NULL * 2];
@@ -195,6 +197,7 @@ struct cifsUidInfo {
  */
 struct cifsSesInfo {
 	struct list_head cifsSessionList;
+	struct list_head tcon_list;
 	struct semaphore sesSem;
 #if 0
 	struct cifsUidInfo *uidInfo;	/* pointer to user info */
@@ -216,6 +219,7 @@ struct cifsSesInfo {
 	char userName[MAX_USERNAME_SIZE + 1];
 	char *domainName;
 	char *password;
+	bool need_reconnect:1; /* connection reset, uid now invalid */
 };
 /* no more than one of the following three session flags may be set */
 #define CIFS_SES_NT4 1
@@ -288,6 +292,7 @@ struct cifsTconInfo {
 	bool unix_ext:1;  /* if false disable Linux extensions to CIFS protocol
 				for this mount even if server would support */
 	bool local_lease:1; /* check leases (only) on local system not remote */
+	bool need_reconnect:1; /* connection reset, tid now invalid */
 	/* BB add field for back pointer to sb struct(s)? */
 };
 
@@ -587,22 +592,15 @@ require use of the stronger protocol */
 #define GLOBAL_EXTERN extern
 #endif
 
-/*
- * The list of servers that did not respond with NT LM 0.12.
- * This list helps improve performance and eliminate the messages indicating
- * that we had a communications error talking to the server in this list.
- */
-/* Feature not supported */
-/* GLOBAL_EXTERN struct servers_not_supported *NotSuppList; */
 
-/*
- * The following is a hash table of all the users we know about.
- */
-GLOBAL_EXTERN struct smbUidInfo *GlobalUidList[UID_HASH];
-
-/* GLOBAL_EXTERN struct list_head GlobalServerList; BB not implemented yet */
-GLOBAL_EXTERN struct list_head GlobalSMBSessionList;
-GLOBAL_EXTERN struct list_head GlobalTreeConnectionList;
+/* the list of TCP_Server_Info structures, ie each of the sockets
+ * connecting our client to a distinct server (ip address), is
+ * chained together by global_cifs_sock_list. The list of all our SMB
+ * sessions (and from that the tree connections) can be found
+ * by iterating over global_cifs_sock_list */
+GLOBAL_EXTERN struct list_head global_cifs_sock_list;
+GLOBAL_EXTERN struct list_head GlobalSMBSessionList; /* BB to be removed by jl*/
+GLOBAL_EXTERN struct list_head GlobalTreeConnectionList; /* BB to be removed */
 GLOBAL_EXTERN rwlock_t GlobalSMBSeslock;  /* protects list inserts on 3 above */
 
 GLOBAL_EXTERN struct list_head GlobalOplock_Q;
