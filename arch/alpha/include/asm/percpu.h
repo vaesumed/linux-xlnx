@@ -68,6 +68,8 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #define per_cpu(var, cpu)		(*((void)(cpu), &per_cpu_var(var)))
 #define __get_cpu_var(var)		per_cpu_var(var)
 #define __raw_get_cpu_var(var)		per_cpu_var(var)
+#define per_cpu_offset(x)		0
+#define SHIFT_PERCPU_PTR(__p, __offset)	(__p)
 
 #define PER_CPU_ATTRIBUTES
 
