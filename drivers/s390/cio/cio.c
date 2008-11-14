@@ -9,6 +9,8 @@
  *		 Martin Schwidefsky (schwidefsky@de.ibm.com)
  */
 
+#define KMSG_COMPONENT "cio"
+
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -102,44 +104,6 @@ cio_get_options (struct subchannel *sch)
        if (sch->options.inter)
 		flags |= DOIO_SUPPRESS_INTER;
        return flags;
-}
-
-/*
- * Use tpi to get a pending interrupt, call the interrupt handler and
- * return a pointer to the subchannel structure.
- */
-static int
-cio_tpi(void)
-{
-	struct tpi_info *tpi_info;
-	struct subchannel *sch;
-	struct irb *irb;
-	int irq_context;
-
-	tpi_info = (struct tpi_info *) __LC_SUBCHANNEL_ID;
-	if (tpi (NULL) != 1)
-		return 0;
-	irb = (struct irb *) __LC_IRB;
-	/* Store interrupt response block to lowcore. */
-	if (tsch (tpi_info->schid, irb) != 0)
-		/* Not status pending or not operational. */
-		return 1;
-	sch = (struct subchannel *)(unsigned long)tpi_info->intparm;
-	if (!sch)
-		return 1;
-	irq_context = in_interrupt();
-	if (!irq_context)
-		local_bh_disable();
-	irq_enter ();
-	spin_lock(sch->lock);
-	memcpy(&sch->schib.scsw, &irb->scsw, sizeof(union scsw));
-	if (sch->driver && sch->driver->irq)
-		sch->driver->irq(sch);
-	spin_unlock(sch->lock);
-	irq_exit ();
-	if (!irq_context)
-		_local_bh_enable();
-	return 1;
 }
 
 static int
@@ -687,6 +651,43 @@ static char console_sch_name[10] = "0.x.xxxx";
 static struct io_subchannel_private console_priv;
 static int console_subchannel_in_use;
 
+/*
+ * Use tpi to get a pending interrupt, call the interrupt handler and
+ * return a pointer to the subchannel structure.
+ */
+static int cio_tpi(void)
+{
+	struct tpi_info *tpi_info;
+	struct subchannel *sch;
+	struct irb *irb;
+	int irq_context;
+
+	tpi_info = (struct tpi_info *) __LC_SUBCHANNEL_ID;
+	if (tpi(NULL) != 1)
+		return 0;
+	irb = (struct irb *) __LC_IRB;
+	/* Store interrupt response block to lowcore. */
+	if (tsch(tpi_info->schid, irb) != 0)
+		/* Not status pending or not operational. */
+		return 1;
+	sch = (struct subchannel *)(unsigned long)tpi_info->intparm;
+	if (!sch)
+		return 1;
+	irq_context = in_interrupt();
+	if (!irq_context)
+		local_bh_disable();
+	irq_enter();
+	spin_lock(sch->lock);
+	memcpy(&sch->schib.scsw, &irb->scsw, sizeof(union scsw));
+	if (sch->driver && sch->driver->irq)
+		sch->driver->irq(sch);
+	spin_unlock(sch->lock);
+	irq_exit();
+	if (!irq_context)
+		_local_bh_enable();
+	return 1;
+}
+
 void *cio_get_console_priv(void)
 {
 	return &console_priv;
@@ -780,7 +781,7 @@ cio_probe_console(void)
 	sch_no = cio_get_console_sch_no();
 	if (sch_no == -1) {
 		console_subchannel_in_use = 0;
-		printk(KERN_WARNING "cio: No ccw console found!\n");
+		pr_warning("No CCW console was found\n");
 		return ERR_PTR(-ENODEV);
 	}
 	memset(&console_subchannel, 0, sizeof(struct subchannel));
