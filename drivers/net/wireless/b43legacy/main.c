@@ -1160,29 +1160,6 @@ static void b43legacy_update_templates(struct b43legacy_wl *wl)
 	wl->beacon1_uploaded = 0;
 }
 
-static void b43legacy_set_ssid(struct b43legacy_wldev *dev,
-			       const u8 *ssid, u8 ssid_len)
-{
-	u32 tmp;
-	u16 i;
-	u16 len;
-
-	len = min((u16)ssid_len, (u16)0x100);
-	for (i = 0; i < len; i += sizeof(u32)) {
-		tmp = (u32)(ssid[i + 0]);
-		if (i + 1 < len)
-			tmp |= (u32)(ssid[i + 1]) << 8;
-		if (i + 2 < len)
-			tmp |= (u32)(ssid[i + 2]) << 16;
-		if (i + 3 < len)
-			tmp |= (u32)(ssid[i + 3]) << 24;
-		b43legacy_shm_write32(dev, B43legacy_SHM_SHARED,
-				      0x380 + i, tmp);
-	}
-	b43legacy_shm_write16(dev, B43legacy_SHM_SHARED,
-			      0x48, len);
-}
-
 static void b43legacy_set_beacon_int(struct b43legacy_wldev *dev,
 				     u16 beacon_int)
 {
@@ -2556,26 +2533,27 @@ init_failure:
 	return err;
 }
 
-static int b43legacy_antenna_from_ieee80211(u8 antenna)
+/* Write the short and long frame retry limit values. */
+static void b43legacy_set_retry_limits(struct b43legacy_wldev *dev,
+				       unsigned int short_retry,
+				       unsigned int long_retry)
 {
-	switch (antenna) {
-	case 0: /* default/diversity */
-		return B43legacy_ANTENNA_DEFAULT;
-	case 1: /* Antenna 0 */
-		return B43legacy_ANTENNA0;
-	case 2: /* Antenna 1 */
-		return B43legacy_ANTENNA1;
-	default:
-		return B43legacy_ANTENNA_DEFAULT;
-	}
+	/* The retry limit is a 4-bit counter. Enforce this to avoid overflowing
+	 * the chip-internal counter. */
+	short_retry = min(short_retry, (unsigned int)0xF);
+	long_retry = min(long_retry, (unsigned int)0xF);
+
+	b43legacy_shm_write16(dev, B43legacy_SHM_WIRELESS, 0x0006, short_retry);
+	b43legacy_shm_write16(dev, B43legacy_SHM_WIRELESS, 0x0007, long_retry);
 }
 
 static int b43legacy_op_dev_config(struct ieee80211_hw *hw,
-				   struct ieee80211_conf *conf)
+				   u32 changed)
 {
 	struct b43legacy_wl *wl = hw_to_b43legacy_wl(hw);
 	struct b43legacy_wldev *dev;
 	struct b43legacy_phy *phy;
+	struct ieee80211_conf *conf = &hw->conf;
 	unsigned long flags;
 	unsigned int new_phymode = 0xFFFF;
 	int antenna_tx;
@@ -2583,12 +2561,20 @@ static int b43legacy_op_dev_config(struct ieee80211_hw *hw,
 	int err = 0;
 	u32 savedirqs;
 
-	antenna_tx = b43legacy_antenna_from_ieee80211(conf->antenna_sel_tx);
-	antenna_rx = b43legacy_antenna_from_ieee80211(conf->antenna_sel_rx);
+	antenna_tx = B43legacy_ANTENNA_DEFAULT;
+	antenna_rx = B43legacy_ANTENNA_DEFAULT;
 
 	mutex_lock(&wl->mutex);
 	dev = wl->current_dev;
 	phy = &dev->phy;
+
+	if (changed & IEEE80211_CONF_CHANGE_RETRY_LIMITS)
+		b43legacy_set_retry_limits(dev,
+					   conf->short_frame_max_tx_count,
+					   conf->long_frame_max_tx_count);
+	changed &= ~IEEE80211_CONF_CHANGE_RETRY_LIMITS;
+	if (!changed)
+		goto out_unlock_mutex;
 
 	/* Switch the PHY mode (if necessary). */
 	switch (conf->channel->band) {
@@ -2735,7 +2721,6 @@ static int b43legacy_op_config_interface(struct ieee80211_hw *hw,
 	if (b43legacy_status(dev) >= B43legacy_STAT_INITIALIZED) {
 		if (b43legacy_is_mode(wl, NL80211_IFTYPE_AP)) {
 			B43legacy_WARN_ON(vif->type != NL80211_IFTYPE_AP);
-			b43legacy_set_ssid(dev, conf->ssid, conf->ssid_len);
 			if (conf->changed & IEEE80211_IFCC_BEACON)
 				b43legacy_update_templates(wl);
 		} else if (b43legacy_is_mode(wl, NL80211_IFTYPE_ADHOC)) {
@@ -3000,20 +2985,6 @@ static void b43legacy_imcfglo_timeouts_workaround(struct b43legacy_wldev *dev)
 		ssb_write32(dev->dev, SSB_IMCFGLO, tmp);
 	}
 #endif /* CONFIG_SSB_DRIVER_PCICORE */
-}
-
-/* Write the short and long frame retry limit values. */
-static void b43legacy_set_retry_limits(struct b43legacy_wldev *dev,
-				       unsigned int short_retry,
-				       unsigned int long_retry)
-{
-	/* The retry limit is a 4-bit counter. Enforce this to avoid overflowing
-	 * the chip-internal counter. */
-	short_retry = min(short_retry, (unsigned int)0xF);
-	long_retry = min(long_retry, (unsigned int)0xF);
-
-	b43legacy_shm_write16(dev, B43legacy_SHM_WIRELESS, 0x0006, short_retry);
-	b43legacy_shm_write16(dev, B43legacy_SHM_WIRELESS, 0x0007, long_retry);
 }
 
 static void b43legacy_set_synth_pu_delay(struct b43legacy_wldev *dev,
@@ -3380,28 +3351,6 @@ static void b43legacy_op_stop(struct ieee80211_hw *hw)
 	mutex_unlock(&wl->mutex);
 }
 
-static int b43legacy_op_set_retry_limit(struct ieee80211_hw *hw,
-					u32 short_retry_limit,
-					u32 long_retry_limit)
-{
-	struct b43legacy_wl *wl = hw_to_b43legacy_wl(hw);
-	struct b43legacy_wldev *dev;
-	int err = 0;
-
-	mutex_lock(&wl->mutex);
-	dev = wl->current_dev;
-	if (unlikely(!dev ||
-		     (b43legacy_status(dev) < B43legacy_STAT_INITIALIZED))) {
-		err = -ENODEV;
-		goto out_unlock;
-	}
-	b43legacy_set_retry_limits(dev, short_retry_limit, long_retry_limit);
-out_unlock:
-	mutex_unlock(&wl->mutex);
-
-	return err;
-}
-
 static int b43legacy_op_beacon_set_tim(struct ieee80211_hw *hw,
 				       struct ieee80211_sta *sta, bool set)
 {
@@ -3427,7 +3376,6 @@ static const struct ieee80211_ops b43legacy_hw_ops = {
 	.get_tx_stats		= b43legacy_op_get_tx_stats,
 	.start			= b43legacy_op_start,
 	.stop			= b43legacy_op_stop,
-	.set_retry_limit	= b43legacy_op_set_retry_limit,
 	.set_tim		= b43legacy_op_beacon_set_tim,
 };
 
@@ -3710,7 +3658,7 @@ static int b43legacy_wireless_init(struct ssb_device *dev)
 		BIT(NL80211_IFTYPE_WDS) |
 		BIT(NL80211_IFTYPE_ADHOC);
 	hw->queues = 1; /* FIXME: hardware has more queues */
-	hw->max_altrates = 1;
+	hw->max_rates = 2;
 	SET_IEEE80211_DEV(hw, dev->dev);
 	if (is_valid_ether_addr(sprom->et1mac))
 		SET_IEEE80211_PERM_ADDR(hw, sprom->et1mac);

@@ -646,9 +646,10 @@ static int icmpv6_rcv(struct sk_buff *skb)
 	int type;
 
 	if (!xfrm6_policy_check(NULL, XFRM_POLICY_IN, skb)) {
+		struct sec_path *sp = skb_sec_path(skb);
 		int nh;
 
-		if (!(skb->sp && skb->sp->xvec[skb->sp->len - 1]->props.flags &
+		if (!(sp && sp->xvec[sp->len - 1]->props.flags &
 				 XFRM_STATE_ICMP))
 			goto drop_no_count;
 
@@ -680,8 +681,8 @@ static int icmpv6_rcv(struct sk_buff *skb)
 		skb->csum = ~csum_unfold(csum_ipv6_magic(saddr, daddr, skb->len,
 					     IPPROTO_ICMPV6, 0));
 		if (__skb_checksum_complete(skb)) {
-			LIMIT_NETDEBUG(KERN_DEBUG "ICMPv6 checksum failed [" NIP6_FMT " > " NIP6_FMT "]\n",
-				       NIP6(*saddr), NIP6(*daddr));
+			LIMIT_NETDEBUG(KERN_DEBUG "ICMPv6 checksum failed [%pI6 > %pI6]\n",
+				       saddr, daddr);
 			goto discard_it;
 		}
 	}
@@ -955,8 +956,8 @@ ctl_table ipv6_icmp_table_template[] = {
 		.data		= &init_net.ipv6.sysctl.icmpv6_time,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dointvec_ms_jiffies,
-		.strategy	= &sysctl_ms_jiffies
+		.proc_handler	= proc_dointvec_ms_jiffies,
+		.strategy	= sysctl_ms_jiffies
 	},
 	{ .ctl_name = 0 },
 };

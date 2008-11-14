@@ -59,8 +59,9 @@ struct dst_entry
 
 	struct neighbour	*neighbour;
 	struct hh_cache		*hh;
+#ifdef CONFIG_XFRM
 	struct xfrm_state	*xfrm;
-
+#endif
 	int			(*input)(struct sk_buff*);
 	int			(*output)(struct sk_buff*);
 
@@ -103,7 +104,6 @@ struct dst_ops
 	void			(*link_failure)(struct sk_buff *);
 	void			(*update_pmtu)(struct dst_entry *dst, u32 mtu);
 	int			(*local_out)(struct sk_buff *skb);
-	int			entry_size;
 
 	atomic_t		entries;
 	struct kmem_cache 		*kmem_cachep;
