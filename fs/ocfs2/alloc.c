@@ -5255,6 +5255,78 @@ out:
 	return ret;
 }
 
+int ocfs2_remove_btree_range(struct inode *inode,
+			     struct ocfs2_extent_tree *et,
+			     u32 cpos, u32 phys_cpos, u32 len,
+			     struct ocfs2_cached_dealloc_ctxt *dealloc)
+{
+	int ret;
+	u64 phys_blkno = ocfs2_clusters_to_blocks(inode->i_sb, phys_cpos);
+	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
+	struct inode *tl_inode = osb->osb_tl_inode;
+	handle_t *handle;
+	struct ocfs2_alloc_context *meta_ac = NULL;
+
+	ret = ocfs2_lock_allocators(inode, et, 0, 1, NULL, &meta_ac);
+	if (ret) {
+		mlog_errno(ret);
+		return ret;
+	}
+
+	mutex_lock(&tl_inode->i_mutex);
+
+	if (ocfs2_truncate_log_needs_flush(osb)) {
+		ret = __ocfs2_flush_truncate_log(osb);
+		if (ret < 0) {
+			mlog_errno(ret);
+			goto out;
+		}
+	}
+
+	handle = ocfs2_start_trans(osb, OCFS2_REMOVE_EXTENT_CREDITS);
+	if (IS_ERR(handle)) {
+		ret = PTR_ERR(handle);
+		mlog_errno(ret);
+		goto out;
+	}
+
+	ret = ocfs2_journal_access(handle, inode, et->et_root_bh,
+				   OCFS2_JOURNAL_ACCESS_WRITE);
+	if (ret) {
+		mlog_errno(ret);
+		goto out;
+	}
+
+	ret = ocfs2_remove_extent(inode, et, cpos, len, handle, meta_ac,
+				  dealloc);
+	if (ret) {
+		mlog_errno(ret);
+		goto out_commit;
+	}
+
+	ocfs2_et_update_clusters(inode, et, -len);
+
+	ret = ocfs2_journal_dirty(handle, et->et_root_bh);
+	if (ret) {
+		mlog_errno(ret);
+		goto out_commit;
+	}
+
+	ret = ocfs2_truncate_log_append(osb, handle, phys_blkno, len);
+	if (ret)
+		mlog_errno(ret);
+
+out_commit:
+	ocfs2_commit_trans(osb, handle);
+out:
+	mutex_unlock(&tl_inode->i_mutex);
+
+	if (meta_ac)
+		ocfs2_free_alloc_context(meta_ac);
+
+	return ret;
+}
+
 int ocfs2_truncate_log_needs_flush(struct ocfs2_super *osb)
 {
 	struct buffer_head *tl_bh = osb->osb_tl_bh;
@@ -5800,7 +5872,10 @@ int ocfs2_truncate_log_init(struct ocfs2_super *osb)
  */
 
 /*
- * Describes a single block free from a suballocator
+ * Describe a single bit freed from a suballocator.  For the block
+ * suballocators, it represents one block.  For the global cluster
+ * allocator, it represents some clusters and free_bit indicates
+ * clusters number.
  */
 struct ocfs2_cached_block_free {
 	struct ocfs2_cached_block_free		*free_next;
@@ -5815,10 +5890,10 @@ struct ocfs2_per_slot_free_list {
 	struct ocfs2_cached_block_free		*f_first;
 };
 
-static int ocfs2_free_cached_items(struct ocfs2_super *osb,
-				   int sysfile_type,
-				   int slot,
-				   struct ocfs2_cached_block_free *head)
+static int ocfs2_free_cached_blocks(struct ocfs2_super *osb,
+				    int sysfile_type,
+				    int slot,
+				    struct ocfs2_cached_block_free *head)
 {
 	int ret;
 	u64 bg_blkno;
@@ -5893,6 +5968,82 @@ out:
 	return ret;
 }
 
+int ocfs2_cache_cluster_dealloc(struct ocfs2_cached_dealloc_ctxt *ctxt,
+				u64 blkno, unsigned int bit)
+{
+	int ret = 0;
+	struct ocfs2_cached_block_free *item;
+
+	item = kmalloc(sizeof(*item), GFP_NOFS);
+	if (item == NULL) {
+		ret = -ENOMEM;
+		mlog_errno(ret);
+		return ret;
+	}
+
+	mlog(0, "Insert clusters: (bit %u, blk %llu)\n",
+	     bit, (unsigned long long)blkno);
+
+	item->free_blk = blkno;
+	item->free_bit = bit;
+	item->free_next = ctxt->c_global_allocator;
+
+	ctxt->c_global_allocator = item;
+	return ret;
+}
+
+static int ocfs2_free_cached_clusters(struct ocfs2_super *osb,
+				      struct ocfs2_cached_block_free *head)
+{
+	struct ocfs2_cached_block_free *tmp;
+	struct inode *tl_inode = osb->osb_tl_inode;
+	handle_t *handle;
+	int ret = 0;
+
+	mutex_lock(&tl_inode->i_mutex);
+
+	while (head) {
+		if (ocfs2_truncate_log_needs_flush(osb)) {
+			ret = __ocfs2_flush_truncate_log(osb);
+			if (ret < 0) {
+				mlog_errno(ret);
+				break;
+			}
+		}
+
+		handle = ocfs2_start_trans(osb, OCFS2_TRUNCATE_LOG_UPDATE);
+		if (IS_ERR(handle)) {
+			ret = PTR_ERR(handle);
+			mlog_errno(ret);
+			break;
+		}
+
+		ret = ocfs2_truncate_log_append(osb, handle, head->free_blk,
+						head->free_bit);
+
+		ocfs2_commit_trans(osb, handle);
+		tmp = head;
+		head = head->free_next;
+		kfree(tmp);
+
+		if (ret < 0) {
+			mlog_errno(ret);
+			break;
+		}
+	}
+
+	mutex_unlock(&tl_inode->i_mutex);
+
+	while (head) {
+		/* Premature exit may have left some dangling items. */
+		tmp = head;
+		head = head->free_next;
+		kfree(tmp);
+	}
+
+	return ret;
+}
+
 int ocfs2_run_deallocs(struct ocfs2_super *osb,
 		       struct ocfs2_cached_dealloc_ctxt *ctxt)
 {
@@ -5908,8 +6059,10 @@ int ocfs2_run_deallocs(struct ocfs2_super *osb,
 		if (fl->f_first) {
 			mlog(0, "Free items: (type %u, slot %d)\n",
 			     fl->f_inode_type, fl->f_slot);
-			ret2 = ocfs2_free_cached_items(osb, fl->f_inode_type,
-						       fl->f_slot, fl->f_first);
+			ret2 = ocfs2_free_cached_blocks(osb,
+							fl->f_inode_type,
+							fl->f_slot,
+							fl->f_first);
 			if (ret2)
 				mlog_errno(ret2);
 			if (!ret)
@@ -5918,6 +6071,17 @@ int ocfs2_run_deallocs(struct ocfs2_super *osb,
 
 		ctxt->c_first_suballocator = fl->f_next_suballocator;
 		kfree(fl);
+	}
+
+	if (ctxt->c_global_allocator) {
+		ret2 = ocfs2_free_cached_clusters(osb,
+						  ctxt->c_global_allocator);
+		if (ret2)
+			mlog_errno(ret2);
+		if (!ret)
+			ret = ret2;
+
+		ctxt->c_global_allocator = NULL;
 	}
 
 	return ret;
