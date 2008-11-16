@@ -1,0 +1,50 @@
+/*?
+ * Text: "The z/VM IUCV Hypervisor console cannot be used without z/VM.\n"
+ * Severity: Warning
+ * Description:
+ * On Linux instances that run in environments other than the z/VM hypervisor,
+ * z/VM IUCV is not available and the z/VM IUCV Hypervisor console cannot be
+ * used.
+ * User action:
+ * If the system does not run on a z/VM guest virtual machine,
+ * ignore this message.
+ */
+
+/*?
+ * Text: "Could not create new z/VM IUCV HVC backend rc=%d.\n"
+ * Severity: Error
+ * Parameter:
+ *   @1: Return code of the operation that has failed.
+ * Description:
+ * The driver initialization has failed to allocate a new z/VM IUCV HVC
+ * back-end. A common cause might be that there are not sufficient memory
+ * available.
+ * User action:
+ * Enure that the z/VM guest virtual machine has sufficient memory.
+ */
+
+/*?
+ * Text: "Could not register iucv handler (rc=%d).\n"
+ * Severity: Error
+ * Parameter:
+ *   @1: Return code from the IUCV registration.
+ * Description:
+ * The driver initialization has failed to register its z/VM IUCV callbacks to
+ * handle z/VM IUCV connections, and sending/receiving of IUCV messages.
+ * User action:
+ * Typically there might be additional IUCV error messages at the Linux kernel
+ * startup. Check the system log files.
+ */
+
+/*?
+ * Text: "Not enough memory for driver initialization (rs=%d).\n"
+ * Severity: Error
+ * Parameter:
+ *   @1: Memory allocation has failed: 1 = kmem_cache; and 2 = mempool.
+ * Description:
+ * The z/VM IUCV Hypervisor console back-end initialization has faild, because
+ * of a general memory allocation failure.
+ * User action:
+ * Ensure that the z/VM guest virtual machine has sufficient memory.
+ * See the your Linux distributor manuals for minimum system requirements.
+ */
