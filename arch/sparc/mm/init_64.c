@@ -50,7 +50,7 @@
 #include <asm/cpudata.h>
 #include <asm/irq.h>
 
-#include "init.h"
+#include "init_64.h"
 
 unsigned long kern_linear_pte_xor[2] __read_mostly;
 
