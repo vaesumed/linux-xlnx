@@ -190,10 +190,10 @@ small_smb_init(int smb_command, int wct, struct cifsTconInfo *tcon,
 		/* need to prevent multiple threads trying to
 		simultaneously reconnect the same SMB session */
 			down(&tcon->ses->sesSem);
-			if (tcon->ses->status == CifsNeedReconnect)
+			if (tcon->ses->need_reconnect)
 				rc = cifs_setup_session(0, tcon->ses,
 							nls_codepage);
-			if (!rc && (tcon->tidStatus == CifsNeedReconnect)) {
+			if (!rc && (tcon->need_reconnect)) {
 				mark_open_files_invalid(tcon);
 				rc = CIFSTCon(0, tcon->ses, tcon->treeName,
 					      tcon, nls_codepage);
@@ -295,7 +295,7 @@ smb_init(int smb_command, int wct, struct cifsTconInfo *tcon,
 	   check for tcp and smb session status done differently
 	   for those three - in the calling routine */
 	if (tcon) {
-		if (tcon->tidStatus == CifsExiting) {
+		if (tcon->need_reconnect) {
 			/* only tree disconnect, open, and write,
 			  (and ulogoff which does not have tcon)
 			  are allowed as we start force umount */
@@ -337,10 +337,10 @@ smb_init(int smb_command, int wct, struct cifsTconInfo *tcon,
 		/* need to prevent multiple threads trying to
 		simultaneously reconnect the same SMB session */
 			down(&tcon->ses->sesSem);
-			if (tcon->ses->status == CifsNeedReconnect)
+			if (tcon->ses->need_reconnect)
 				rc = cifs_setup_session(0, tcon->ses,
 							nls_codepage);
-			if (!rc && (tcon->tidStatus == CifsNeedReconnect)) {
+			if (!rc && (tcon->need_reconnect)) {
 				mark_open_files_invalid(tcon);
 				rc = CIFSTCon(0, tcon->ses, tcon->treeName,
 					      tcon, nls_codepage);
@@ -664,8 +664,9 @@ CIFSSMBNegotiate(unsigned int xid, struct cifsSesInfo *ses)
 			rc = -EIO;
 			goto neg_err_exit;
 		}
-
-		if (server->socketUseCount.counter > 1) {
+		read_lock(&cifs_tcp_ses_lock);
+		if (server->srv_count > 1) {
+			read_unlock(&cifs_tcp_ses_lock);
 			if (memcmp(server->server_GUID,
 				   pSMBr->u.extended_response.
 				   GUID, 16) != 0) {
@@ -674,9 +675,11 @@ CIFSSMBNegotiate(unsigned int xid, struct cifsSesInfo *ses)
 					pSMBr->u.extended_response.GUID,
 					16);
 			}
-		} else
+		} else {
+			read_unlock(&cifs_tcp_ses_lock);
 			memcpy(server->server_GUID,
 			       pSMBr->u.extended_response.GUID, 16);
+		}
 
 		if (count == 16) {
 			server->secType = RawNTLMSSP;
@@ -759,7 +762,7 @@ CIFSSMBTDis(const int xid, struct cifsTconInfo *tcon)
 
 	/* No need to return error on this operation if tid invalidated and
 	closed on server already e.g. due to tcp session crashing */
-	if (tcon->tidStatus == CifsNeedReconnect) {
+	if (tcon->need_reconnect) {
 		up(&tcon->tconSem);
 		return 0;
 	}
@@ -796,43 +799,36 @@ CIFSSMBLogoff(const int xid, struct cifsSesInfo *ses)
 	int rc = 0;
 
 	cFYI(1, ("In SMBLogoff for session disconnect"));
-	if (ses)
-		down(&ses->sesSem);
-	else
+
+	/*
+	 * BB: do we need to check validity of ses and server? They should
+	 * always be valid since we have an active reference. If not, that
+	 * should probably be a BUG()
+	 */
+	if (!ses || !ses->server)
 		return -EIO;
 
-	atomic_dec(&ses->inUse);
-	if (atomic_read(&ses->inUse) > 0) {
-		up(&ses->sesSem);
-		return -EBUSY;
-	}
+	down(&ses->sesSem);
+	if (ses->need_reconnect)
+		goto session_already_dead; /* no need to send SMBlogoff if uid
+					      already closed due to reconnect */
 	rc = small_smb_init(SMB_COM_LOGOFF_ANDX, 2, NULL, (void **)&pSMB);
 	if (rc) {
 		up(&ses->sesSem);
 		return rc;
 	}
 
-	if (ses->server) {
-		pSMB->hdr.Mid = GetNextMid(ses->server);
+	pSMB->hdr.Mid = GetNextMid(ses->server);
 
-		if (ses->server->secMode &
+	if (ses->server->secMode &
 		   (SECMODE_SIGN_REQUIRED | SECMODE_SIGN_ENABLED))
 			pSMB->hdr.Flags2 |= SMBFLG2_SECURITY_SIGNATURE;
-	}
 
 	pSMB->hdr.Uid = ses->Suid;
 
 	pSMB->AndXCommand = 0xFF;
 	rc = SendReceiveNoRsp(xid, ses, (struct smb_hdr *) pSMB, 0);
-	if (ses->server) {
-		atomic_dec(&ses->server->socketUseCount);
-		if (atomic_read(&ses->server->socketUseCount) == 0) {
-			spin_lock(&GlobalMid_Lock);
-			ses->server->tcpStatus = CifsExiting;
-			spin_unlock(&GlobalMid_Lock);
-			rc = -ESHUTDOWN;
-		}
-	}
+session_already_dead:
 	up(&ses->sesSem);
 
 	/* if session dead then we do not need to do ulogoff,
