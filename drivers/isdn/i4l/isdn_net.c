@@ -890,15 +890,15 @@ isdn_net_log_skb(struct sk_buff * skb, isdn_net_local * lp)
 		proto = ETH_P_IP;
 		switch (lp->p_encap) {
 			case ISDN_NET_ENCAP_IPTYP:
-				proto = ntohs(*(unsigned short *) &buf[0]);
+				proto = ntohs(*(__be16 *)&buf[0]);
 				p = &buf[2];
 				break;
 			case ISDN_NET_ENCAP_ETHER:
-				proto = ntohs(*(unsigned short *) &buf[12]);
+				proto = ntohs(*(__be16 *)&buf[12]);
 				p = &buf[14];
 				break;
 			case ISDN_NET_ENCAP_CISCOHDLC:
-				proto = ntohs(*(unsigned short *) &buf[2]);
+				proto = ntohs(*(__be16 *)&buf[2]);
 				p = &buf[4];
 				break;
 #ifdef CONFIG_ISDN_PPP
@@ -942,18 +942,12 @@ isdn_net_log_skb(struct sk_buff * skb, isdn_net_local * lp)
 					strcpy(addinfo, " IDP");
 					break;
 			}
-			printk(KERN_INFO
-				"OPEN: %d.%d.%d.%d -> %d.%d.%d.%d%s\n",
-
-			       p[12], p[13], p[14], p[15],
-			       p[16], p[17], p[18], p[19],
-			       addinfo);
+			printk(KERN_INFO "OPEN: %pI4 -> %pI4%s\n",
+			       p + 12, p + 16, addinfo);
 			break;
 		case ETH_P_ARP:
-			printk(KERN_INFO
-				"OPEN: ARP %d.%d.%d.%d -> *.*.*.* ?%d.%d.%d.%d\n",
-			       p[14], p[15], p[16], p[17],
-			       p[24], p[25], p[26], p[27]);
+			printk(KERN_INFO "OPEN: ARP %pI4 -> *.*.*.* ?%pI4\n",
+			       p + 14, p + 24);
 			break;
 	}
 }
@@ -1539,15 +1533,16 @@ isdn_net_ciscohdlck_slarp_send_keepalive(unsigned long data)
 	p = skb_put(skb, 4 + 14);
 
 	/* cisco header */
-	p += put_u8 (p, CISCO_ADDR_UNICAST);
-	p += put_u8 (p, CISCO_CTRL);
-	p += put_u16(p, CISCO_TYPE_SLARP);
+	*(u8 *)(p + 0) = CISCO_ADDR_UNICAST;
+	*(u8 *)(p + 1) = CISCO_CTRL;
+	*(__be16 *)(p + 2) = cpu_to_be16(CISCO_TYPE_SLARP);
 
 	/* slarp keepalive */
-	p += put_u32(p, CISCO_SLARP_KEEPALIVE);
-	p += put_u32(p, lp->cisco_myseq);
-	p += put_u32(p, lp->cisco_yourseq);
-	p += put_u16(p, 0xffff); // reliablity, always 0xffff
+	*(__be32 *)(p +  4) = cpu_to_be32(CISCO_SLARP_KEEPALIVE);
+	*(__be32 *)(p +  8) = cpu_to_be32(lp->cisco_myseq);
+	*(__be32 *)(p + 12) = cpu_to_be32(lp->cisco_yourseq);
+	*(__be16 *)(p + 16) = cpu_to_be16(0xffff); // reliablity, always 0xffff
+	p += 18;
 
 	isdn_net_write_super(lp, skb);
 
@@ -1569,15 +1564,16 @@ isdn_net_ciscohdlck_slarp_send_request(isdn_net_local *lp)
 	p = skb_put(skb, 4 + 14);
 
 	/* cisco header */
-	p += put_u8 (p, CISCO_ADDR_UNICAST);
-	p += put_u8 (p, CISCO_CTRL);
-	p += put_u16(p, CISCO_TYPE_SLARP);
+	*(u8 *)(p + 0) = CISCO_ADDR_UNICAST;
+	*(u8 *)(p + 1) = CISCO_CTRL;
+	*(__be16 *)(p + 2) = cpu_to_be16(CISCO_TYPE_SLARP);
 
 	/* slarp request */
-	p += put_u32(p, CISCO_SLARP_REQUEST);
-	p += put_u32(p, 0); // address
-	p += put_u32(p, 0); // netmask
-	p += put_u16(p, 0); // unused
+	*(__be32 *)(p +  4) = cpu_to_be32(CISCO_SLARP_REQUEST);
+	*(__be32 *)(p +  8) = cpu_to_be32(0); // address
+	*(__be32 *)(p + 12) = cpu_to_be32(0); // netmask
+	*(__be16 *)(p + 16) = cpu_to_be16(0); // unused
+	p += 18;
 
 	isdn_net_write_super(lp, skb);
 }
@@ -1634,16 +1630,17 @@ isdn_net_ciscohdlck_slarp_send_reply(isdn_net_local *lp)
 	p = skb_put(skb, 4 + 14);
 
 	/* cisco header */
-	p += put_u8 (p, CISCO_ADDR_UNICAST);
-	p += put_u8 (p, CISCO_CTRL);
-	p += put_u16(p, CISCO_TYPE_SLARP);
+	*(u8 *)(p + 0) = CISCO_ADDR_UNICAST;
+	*(u8 *)(p + 1) = CISCO_CTRL;
+	*(__be16 *)(p + 2) = cpu_to_be16(CISCO_TYPE_SLARP);
 
 	/* slarp reply, send own ip/netmask; if values are nonsense remote
 	 * should think we are unable to provide it with an address via SLARP */
-	p += put_u32(p, CISCO_SLARP_REPLY);
-	p += put_u32(p, addr);	// address
-	p += put_u32(p, mask);	// netmask
-	p += put_u16(p, 0);	// unused
+	*(__be32 *)(p +  4) = cpu_to_be32(CISCO_SLARP_REPLY);
+	*(__be32 *)(p +  8) = cpu_to_be32(addr); // address
+	*(__be32 *)(p + 12) = cpu_to_be32(mask); // netmask
+	*(__be16 *)(p + 16) = cpu_to_be16(0); // unused
+	p += 18;
 
 	isdn_net_write_super(lp, skb);
 }
@@ -1654,44 +1651,39 @@ isdn_net_ciscohdlck_slarp_in(isdn_net_local *lp, struct sk_buff *skb)
 	unsigned char *p;
 	int period;
 	u32 code;
-	u32 my_seq, addr;
-	u32 your_seq, mask;
-	u32 local;
+	u32 my_seq;
+	u32 your_seq;
+	__be32 local;
+	__be32 *addr, *mask;
 	u16 unused;
 
 	if (skb->len < 14)
 		return;
 
 	p = skb->data;
-	p += get_u32(p, &code);
-	
+	code = be32_to_cpup((__be32 *)p);
+	p += 4;
+
 	switch (code) {
 	case CISCO_SLARP_REQUEST:
 		lp->cisco_yourseq = 0;
 		isdn_net_ciscohdlck_slarp_send_reply(lp);
 		break;
 	case CISCO_SLARP_REPLY:
-		addr = ntohl(*(u32 *)p);
-		mask = ntohl(*(u32 *)(p+4));
-		if (mask != 0xfffffffc)
+		addr = (__be32 *)p;
+		mask = (__be32 *)(p + 4);
+		if (*mask != cpu_to_be32(0xfffffffc))
 			goto slarp_reply_out;
-		if ((addr & 3) == 0 || (addr & 3) == 3)
+		if ((*addr & cpu_to_be32(3)) == cpu_to_be32(0) ||
+		    (*addr & cpu_to_be32(3)) == cpu_to_be32(3))
 			goto slarp_reply_out;
-		local = addr ^ 3;
-		printk(KERN_INFO "%s: got slarp reply: "
-			"remote ip: %d.%d.%d.%d, "
-			"local ip: %d.%d.%d.%d "
-			"mask: %d.%d.%d.%d\n",
-		       lp->netdev->dev->name,
-		       HIPQUAD(addr),
-		       HIPQUAD(local),
-		       HIPQUAD(mask));
+		local = *addr ^ cpu_to_be32(3);
+		printk(KERN_INFO "%s: got slarp reply: remote ip: %pI4, local ip: %pI4 mask: %pI4\n",
+		       lp->netdev->dev->name, addr, &local, mask);
 		break;
   slarp_reply_out:
-		 printk(KERN_INFO "%s: got invalid slarp "
-				 "reply (%d.%d.%d.%d/%d.%d.%d.%d) "
-				 "- ignored\n", lp->netdev->dev->name,
-				 HIPQUAD(addr), HIPQUAD(mask));
+		printk(KERN_INFO "%s: got invalid slarp reply (%pI4/%pI4) - ignored\n",
+		       lp->netdev->dev->name, addr, mask);
 		break;
 	case CISCO_SLARP_KEEPALIVE:
 		period = (int)((jiffies - lp->cisco_last_slarp_in
@@ -1705,9 +1697,10 @@ isdn_net_ciscohdlck_slarp_in(isdn_net_local *lp, struct sk_buff *skb)
 				lp->cisco_keepalive_period);
 		}
 		lp->cisco_last_slarp_in = jiffies;
-		p += get_u32(p, &my_seq);
-		p += get_u32(p, &your_seq);
-		p += get_u16(p, &unused);
+		my_seq = be32_to_cpup((__be32 *)(p + 0));
+		your_seq = be32_to_cpup((__be32 *)(p + 4));
+		unused = be16_to_cpup((__be16 *)(p + 8));
+		p += 10;
 		lp->cisco_yourseq = my_seq;
 		lp->cisco_mineseen = your_seq;
 		break;
@@ -1726,9 +1719,10 @@ isdn_net_ciscohdlck_receive(isdn_net_local *lp, struct sk_buff *skb)
 		goto out_free;
 
 	p = skb->data;
-	p += get_u8 (p, &addr);
-	p += get_u8 (p, &ctrl);
-	p += get_u16(p, &type);
+	addr = *(u8 *)(p + 0);
+	ctrl = *(u8 *)(p + 1);
+	type = be16_to_cpup((__be16 *)(p + 2));
+	p += 4;
 	skb_pull(skb, 4);
 	
 	if (addr != CISCO_ADDR_UNICAST && addr != CISCO_ADDR_BROADCAST) {
@@ -1916,9 +1910,10 @@ static int isdn_net_header(struct sk_buff *skb, struct net_device *dev,
 		case ISDN_NET_ENCAP_CISCOHDLC:
 		case ISDN_NET_ENCAP_CISCOHDLCK:
 			p = skb_push(skb, 4);
-			p += put_u8 (p, CISCO_ADDR_UNICAST);
-			p += put_u8 (p, CISCO_CTRL);
-			p += put_u16(p, type);
+			*(u8 *)(p + 0) = CISCO_ADDR_UNICAST;
+			*(u8 *)(p + 1) = CISCO_CTRL;
+			*(__be16 *)(p + 2) = cpu_to_be16(type);
+			p += 4;
 			len = 4;
 			break;
 #ifdef CONFIG_ISDN_X25

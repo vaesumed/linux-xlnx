@@ -108,23 +108,6 @@ congestion_drop:
 	return NET_XMIT_CN;
 }
 
-static int red_requeue(struct sk_buff *skb, struct Qdisc* sch)
-{
-	struct red_sched_data *q = qdisc_priv(sch);
-	struct Qdisc *child = q->qdisc;
-	int ret;
-
-	if (red_is_idling(&q->parms))
-		red_end_of_idle_period(&q->parms);
-
-	ret = child->ops->requeue(skb, child);
-	if (likely(ret == NET_XMIT_SUCCESS)) {
-		sch->qstats.requeues++;
-		sch->q.qlen++;
-	}
-	return ret;
-}
-
 static struct sk_buff * red_dequeue(struct Qdisc* sch)
 {
 	struct sk_buff *skb;
@@ -138,6 +121,14 @@ static struct sk_buff * red_dequeue(struct Qdisc* sch)
 		red_start_of_idle_period(&q->parms);
 
 	return skb;
+}
+
+static struct sk_buff * red_peek(struct Qdisc* sch)
+{
+	struct red_sched_data *q = qdisc_priv(sch);
+	struct Qdisc *child = q->qdisc;
+
+	return child->ops->peek(child);
 }
 
 static unsigned int red_drop(struct Qdisc* sch)
@@ -361,7 +352,7 @@ static struct Qdisc_ops red_qdisc_ops __read_mostly = {
 	.cl_ops		=	&red_class_ops,
 	.enqueue	=	red_enqueue,
 	.dequeue	=	red_dequeue,
-	.requeue	=	red_requeue,
+	.peek		=	red_peek,
 	.drop		=	red_drop,
 	.init		=	red_init,
 	.reset		=	red_reset,

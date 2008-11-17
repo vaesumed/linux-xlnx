@@ -381,8 +381,7 @@ ixgb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	adapter->hw.back = adapter;
 	adapter->msg_enable = netif_msg_init(debug, DEFAULT_DEBUG_LEVEL_SHIFT);
 
-	adapter->hw.hw_addr = ioremap(pci_resource_start(pdev, BAR_0),
-	                              pci_resource_len(pdev, BAR_0));
+	adapter->hw.hw_addr = pci_ioremap_bar(pdev, BAR_0);
 	if (!adapter->hw.hw_addr) {
 		err = -EIO;
 		goto err_ioremap;
@@ -1981,7 +1980,6 @@ ixgb_clean_rx_irq(struct ixgb_adapter *adapter, int *work_done, int work_to_do)
 		} else {
 			netif_receive_skb(skb);
 		}
-		netdev->last_rx = jiffies;
 
 rxdesc_done:
 		/* clean up descriptor, might be written over by hw */

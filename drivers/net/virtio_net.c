@@ -125,7 +125,8 @@ static void receive_skb(struct net_device *dev, struct sk_buff *skb,
 		unsigned int i;
 
 		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
-			give_a_page(dev->priv, skb_shinfo(skb)->frags[i].page);
+			give_a_page(netdev_priv(dev),
+				    skb_shinfo(skb)->frags[i].page);
 		skb->data_len = 0;
 		skb_shinfo(skb)->nr_frags = 0;
 	}
@@ -325,9 +326,7 @@ static int xmit_skb(struct virtnet_info *vi, struct sk_buff *skb)
 
 	sg_init_table(sg, 2+MAX_SKB_FRAGS);
 
-	pr_debug("%s: xmit %p " MAC_FMT "\n", vi->dev->name, skb,
-		 dest[0], dest[1], dest[2],
-		 dest[3], dest[4], dest[5]);
+	pr_debug("%s: xmit %p %pM\n", vi->dev->name, skb, dest);
 
 	/* Encode metadata header at front. */
 	hdr = skb_vnet_hdr(skb);
