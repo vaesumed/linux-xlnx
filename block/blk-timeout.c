@@ -111,7 +111,7 @@ static void blk_rq_timed_out(struct request *req)
 void blk_rq_timed_out_timer(unsigned long data)
 {
 	struct request_queue *q = (struct request_queue *) data;
-	unsigned long flags, uninitialized_var(next), next_set = 0;
+	unsigned long flags, next = 0;
 	struct request *rq, *tmp;
 
 	spin_lock_irqsave(q->queue_lock, flags);
@@ -126,15 +126,18 @@ void blk_rq_timed_out_timer(unsigned long data)
 			if (blk_mark_rq_complete(rq))
 				continue;
 			blk_rq_timed_out(rq);
+		} else {
+			if (!next || time_after(next, rq->deadline))
+				next = rq->deadline;
 		}
-		if (!next_set) {
-			next = rq->deadline;
-			next_set = 1;
-		} else if (time_after(next, rq->deadline))
-			next = rq->deadline;
 	}
 
-	if (next_set && !list_empty(&q->timeout_list))
+	/*
+	 * next can never be 0 here with the list non-empty, since we always
+	 * bump ->deadline to 1 so we can detect if the timer was ever added
+	 * or not. See comment in blk_add_timer()
+	 */
+	if (next)
 		mod_timer(&q->timeout, round_jiffies_up(next));
 
 	spin_unlock_irqrestore(q->queue_lock, flags);
