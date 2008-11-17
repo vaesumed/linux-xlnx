@@ -174,3 +174,10 @@ cond_syscall(compat_sys_timerfd_settime);
 cond_syscall(compat_sys_timerfd_gettime);
 cond_syscall(sys_eventfd);
 cond_syscall(sys_eventfd2);
+
+/* perfmon */
+cond_syscall(sys_pfm_create);
+cond_syscall(sys_pfm_write);
+cond_syscall(sys_pfm_read);
+cond_syscall(sys_pfm_attach);
+cond_syscall(sys_pfm_set_state);
