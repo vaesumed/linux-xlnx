@@ -324,6 +324,7 @@ struct module
 
 	/* Per-cpu data. */
 	void *percpu;
+	int percpu_size;
 
 	/* The command line arguments (may be mangled).  People like
 	   keeping pointers to this stuff */
