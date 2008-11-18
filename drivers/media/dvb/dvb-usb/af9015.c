@@ -806,6 +806,16 @@ static int af9015_read_config(struct usb_device *udev)
 					  ARRAY_SIZE(af9015_ir_table_msi);
 				}
 				break;
+			case USB_VID_AVERMEDIA:
+				af9015_properties[i].rc_key_map =
+				  af9015_rc_keys_avermedia;
+				af9015_properties[i].rc_key_map_size =
+				  ARRAY_SIZE(af9015_rc_keys_avermedia);
+				af9015_config.ir_table =
+				  af9015_ir_table_avermedia;
+				af9015_config.ir_table_size =
+				  ARRAY_SIZE(af9015_ir_table_avermedia);
+				break;
 			}
 		}
 	}
@@ -1197,6 +1207,7 @@ static struct usb_device_id af9015_usb_table[] = {
 	{USB_DEVICE(USB_VID_TELESTAR,  USB_PID_TELESTAR_STARSTICK_2)},
 	{USB_DEVICE(USB_VID_AVERMEDIA, USB_PID_AVERMEDIA_A309)},
 /* 15 */{USB_DEVICE(USB_VID_MSI_2,     USB_PID_MSI_DIGI_VOX_MINI_III)},
+	{USB_DEVICE(USB_VID_KWORLD_2,  USB_PID_KWORLD_395U)},
 	{0},
 };
 MODULE_DEVICE_TABLE(usb, af9015_usb_table);
@@ -1347,7 +1358,7 @@ static struct dvb_usb_device_properties af9015_properties[] = {
 
 		.i2c_algo = &af9015_i2c_algo,
 
-		.num_device_descs = 6,
+		.num_device_descs = 7,
 		.devices = {
 			{
 				.name = "Xtensions XD-380",
@@ -1377,6 +1388,12 @@ static struct dvb_usb_device_properties af9015_properties[] = {
 			{
 				.name = "MSI Digi VOX mini III",
 				.cold_ids = {&af9015_usb_table[15], NULL},
+				.warm_ids = {NULL},
+			},
+			{
+				.name = "KWorld USB DVB-T TV Stick II " \
+					"(VS-DVB-T 395U)",
+				.cold_ids = {&af9015_usb_table[16], NULL},
 				.warm_ids = {NULL},
 			},
 		}
