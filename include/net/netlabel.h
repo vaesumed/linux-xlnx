@@ -105,7 +105,36 @@ struct cipso_v4_doi;
  *
  */
 
-/* NetLabel audit information */
+/*
+ * NetLabel configuration variables
+ */
+
+/* NetLabel static/fallback label priority */
+#define NETLBL_STCLBLPRI_FIRST          0
+#define NETLBL_STCLBLPRI_LAST           1	/* default */
+extern int netlbl_stclbl_priority;
+
+/* NetLabel unlabeled accept flag */
+#define NETLBL_UNLACCEPT_OFF            0
+#define NETLBL_UNLACCEPT_ON             1	/* default */
+extern int netlbl_unlbl_accept;
+
+/*
+ * LSM audit information
+ */
+
+/**
+ * struct netlbl_audit - NetLabel LSM audit information
+ * @secid: security label token
+ * @loginuid: login UID
+ * @sessionid: session ID
+ *
+ * Description:
+ * NetLabel generates several different types of security relevant audit events
+ * and this structure should be used by the LSM to provide the necessary
+ * information for the generated audit events.
+ *
+ */
 struct netlbl_audit {
 	u32 secid;
 	uid_t loginuid;

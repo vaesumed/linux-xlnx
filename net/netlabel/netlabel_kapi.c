@@ -48,6 +48,12 @@
 #include "netlabel_addrlist.h"
 
 /*
+ * Configuration Variables
+ */
+
+int netlbl_stclbl_priority = NETLBL_STCLBLPRI_LAST;
+
+/*
  * Configuration Functions
  */
 
@@ -813,11 +819,30 @@ int netlbl_skbuff_getattr(const struct sk_buff *skb,
 			  u16 family,
 			  struct netlbl_lsm_secattr *secattr)
 {
-	if (CIPSO_V4_OPTEXIST(skb) &&
-	    cipso_v4_skbuff_getattr(skb, secattr) == 0)
-		return 0;
+	int ret_val;
 
-	return netlbl_unlabel_getattr(skb, family, secattr);
+	if (netlbl_stclbl_priority == NETLBL_STCLBLPRI_FIRST) {
+		ret_val = netlbl_unlabel_getattr_static(skb, family, secattr);
+		if (ret_val == 0 && secattr->type & NETLBL_SECATTR_SECID)
+			return 0;
+	}
+
+	switch (family) {
+	case AF_INET:
+		if (CIPSO_V4_OPTEXIST(skb) &&
+		    cipso_v4_skbuff_getattr(skb, secattr) == 0)
+			return 0;
+		break;
+	default:
+		break;
+	}
+
+	if (netlbl_stclbl_priority == NETLBL_STCLBLPRI_FIRST)
+		ret_val = netlbl_unlabel_getattr(skb, secattr);
+	else
+		ret_val = netlbl_unlabel_getattr_static(skb, family, secattr);
+
+	return ret_val;
 }
 
 /**

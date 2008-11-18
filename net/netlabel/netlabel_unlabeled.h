@@ -238,8 +238,10 @@ int netlbl_unlhsh_remove(struct net *net,
 
 /* Process Unlabeled incoming network packets */
 int netlbl_unlabel_getattr(const struct sk_buff *skb,
-			   u16 family,
 			   struct netlbl_lsm_secattr *secattr);
+int netlbl_unlabel_getattr_static(const struct sk_buff *skb,
+				  u16 family,
+				  struct netlbl_lsm_secattr *secattr);
 
 /* Set the default configuration to allow Unlabeled packets */
 int netlbl_unlabel_defconf(void);

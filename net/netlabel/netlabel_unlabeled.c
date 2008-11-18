@@ -118,7 +118,7 @@ static struct netlbl_unlhsh_tbl *netlbl_unlhsh = NULL;
 static struct netlbl_unlhsh_iface *netlbl_unlhsh_def = NULL;
 
 /* Accept unlabeled packets flag */
-static u8 netlabel_unlabel_acceptflg = 0;
+int netlbl_unlbl_accept = NETLBL_UNLACCEPT_ON;
 
 /* NetLabel Generic NETLINK unlabeled family */
 static struct genl_family netlbl_unlabel_gnl_family = {
@@ -831,8 +831,8 @@ static void netlbl_unlabel_acceptflg_set(u8 value,
 	struct audit_buffer *audit_buf;
 	u8 old_val;
 
-	old_val = netlabel_unlabel_acceptflg;
-	netlabel_unlabel_acceptflg = value;
+	old_val = netlbl_unlbl_accept;
+	netlbl_unlbl_accept = value;
 	audit_buf = netlbl_audit_start_common(AUDIT_MAC_UNLBL_ALLOW,
 					      audit_info);
 	if (audit_buf != NULL) {
@@ -943,7 +943,7 @@ static int netlbl_unlabel_list(struct sk_buff *skb, struct genl_info *info)
 
 	ret_val = nla_put_u8(ans_skb,
 			     NLBL_UNLABEL_A_ACPTFLG,
-			     netlabel_unlabel_acceptflg);
+			     netlbl_unlbl_accept);
 	if (ret_val != 0)
 		goto list_failure;
 
@@ -1543,19 +1543,40 @@ int __init netlbl_unlabel_init(u32 size)
 }
 
 /**
- * netlbl_unlabel_getattr - Get the security attributes for an unlabled packet
+ * netlbl_unlabel_getattr - Get the secattrs for an unlabled packet
  * @skb: the packet
  * @family: protocol family
  * @secattr: the security attributes
  *
  * Description:
- * Determine the security attributes, if any, for an unlabled packet and return
- * them in @secattr.  Returns zero on success and negative values on failure.
+ * Determine if unlabeled packets are allowed, ignoring any static labels.
+ * Returns zero on success and negative values on failure.
  *
  */
 int netlbl_unlabel_getattr(const struct sk_buff *skb,
-			   u16 family,
 			   struct netlbl_lsm_secattr *secattr)
+{
+	if (netlbl_unlbl_accept == 0)
+		return -ENOMSG;
+	secattr->type = NETLBL_NLTYPE_UNLABELED;
+	return 0;
+}
+
+/**
+ * netlbl_unlabel_getattr_static - Get the secattrs for an unlabled packet
+ * @skb: the packet
+ * @family: protocol family
+ * @secattr: the security attributes
+ *
+ * Description:
+ * Determine the security attributes, taking into account the static labels,
+ * for an unlabled packet and return them in @secattr.  Returns zero on success
+ * and negative values on failure.
+ *
+ */
+int netlbl_unlabel_getattr_static(const struct sk_buff *skb,
+				  u16 family,
+				  struct netlbl_lsm_secattr *secattr)
 {
 	struct netlbl_unlhsh_iface *iface;
 
@@ -1601,10 +1622,7 @@ int netlbl_unlabel_getattr(const struct sk_buff *skb,
 
 unlabel_getattr_nolabel:
 	rcu_read_unlock();
-	if (netlabel_unlabel_acceptflg == 0)
-		return -ENOMSG;
-	secattr->type = NETLBL_NLTYPE_UNLABELED;
-	return 0;
+	return netlbl_unlabel_getattr(skb, secattr);
 }
 
 /**
@@ -1635,8 +1653,6 @@ int __init netlbl_unlabel_defconf(void)
 	ret_val = netlbl_domhsh_add_default(entry, &audit_info);
 	if (ret_val != 0)
 		return ret_val;
-
-	netlbl_unlabel_acceptflg_set(1, &audit_info);
 
 	return 0;
 }
