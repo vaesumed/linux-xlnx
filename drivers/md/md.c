@@ -1588,7 +1588,7 @@ static void print_desc(mdp_disk_t *desc)
 		desc->major,desc->minor,desc->raid_disk,desc->state);
 }
 
-static void print_sb(mdp_super_t *sb)
+static void print_sb_90(mdp_super_t *sb)
 {
 	int i;
 
@@ -1619,10 +1619,48 @@ static void print_sb(mdp_super_t *sb)
 	}
 	printk(KERN_INFO "md:     THIS: ");
 	print_desc(&sb->this_disk);
-
 }
 
-static void print_rdev(mdk_rdev_t *rdev)
+static void print_sb_1(struct mdp_superblock_1 *sb)
+{
+	__u8 *uuid;
+
+	uuid = sb->set_uuid;
+	printk(KERN_INFO "md:  SB: (V:%d) (F:%x) Array-ID:<%02x%02x%02x%02x"
+			":%02x%02x:%02x%02x:%02x%02x:%02x%02x%02x%02x%02x%02x>\n"
+	       KERN_INFO "md:    Name: \"%s\" CT:%Lu\n",
+		sb->major_version, sb->feature_map,
+		uuid[0], uuid[1], uuid[2], uuid[3],
+		uuid[4], uuid[5], uuid[6], uuid[7],
+		uuid[8], uuid[9], uuid[10], uuid[11],
+		uuid[12], uuid[13], uuid[14], uuid[15],
+		sb->set_name,
+		sb->ctime & 0xffffffffffLL);
+
+	uuid = sb->device_uuid;
+	printk(KERN_INFO "md:       L%d SZ%Ld RD:%d LO:%d CS:%d DO:%Ld DS:%Ld SO:%Ld"
+			" RO:%Ld\n"
+	       KERN_INFO "md:     Dev:%08x UUID: %02x%02x%02x%02x:%02x%02x:%02x%02x:%02x%02x"
+			":%02x%02x%02x%02x%02x%02x\n"
+	       KERN_INFO "md:       (F:%d) UT:%Lu Events:%Ld ResyncOffset:%Ld CSUM:%08x\n"
+	       KERN_INFO "md:         (MaxDev:%d) \n",
+		sb->level, sb->size, sb->raid_disks,
+		sb->layout, sb->chunksize,
+		sb->data_offset, sb->data_size,
+		sb->super_offset, sb->recovery_offset,
+		sb->dev_number,
+		uuid[0], uuid[1], uuid[2], uuid[3],
+		uuid[4], uuid[5], uuid[6], uuid[7],
+		uuid[8], uuid[9], uuid[10], uuid[11],
+		uuid[12], uuid[13], uuid[14], uuid[15],
+		sb->devflags,
+		sb->utime, sb->events,
+		sb->resync_offset,
+		sb->sb_csum, sb->max_dev
+		);
+}
+
+static void print_rdev(mdk_rdev_t *rdev, int major_version)
 {
 	char b[BDEVNAME_SIZE];
 	printk(KERN_INFO "md: rdev %s, SZ:%08llu F:%d S:%d DN:%u\n",
@@ -1630,8 +1668,15 @@ static void print_rdev(mdk_rdev_t *rdev)
 	        test_bit(Faulty, &rdev->flags), test_bit(In_sync, &rdev->flags),
 	        rdev->desc_nr);
 	if (rdev->sb_loaded) {
-		printk(KERN_INFO "md: rdev superblock:\n");
-		print_sb((mdp_super_t*)page_address(rdev->sb_page));
+		printk(KERN_INFO "md: rdev superblock (MJ:%d):\n", major_version);
+		switch (major_version) {
+		case 0:
+			print_sb_90((mdp_super_t*)page_address(rdev->sb_page));
+			break;
+		case 1:
+			print_sb_1((struct mdp_superblock_1 *)page_address(rdev->sb_page));
+			break;
+		}
 	} else
 		printk(KERN_INFO "md: no rdev superblock!\n");
 }
@@ -1658,7 +1703,7 @@ static void md_print_devices(void)
 		printk("\n");
 
 		list_for_each_entry(rdev, &mddev->disks, same_set)
-			print_rdev(rdev);
+			print_rdev(rdev, mddev->major_version);
 	}
 	printk("md:	**********************************\n");
 	printk("\n");
