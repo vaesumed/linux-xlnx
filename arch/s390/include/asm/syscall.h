@@ -17,9 +17,7 @@
 static inline long syscall_get_nr(struct task_struct *task,
 				  struct pt_regs *regs)
 {
-	if (regs->trap != __LC_SVC_OLD_PSW)
-		return -1;
-	return regs->gprs[2];
+	return regs->svcnr ? regs->svcnr : -1;
 }
 
 static inline void syscall_rollback(struct task_struct *task,
