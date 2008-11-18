@@ -600,8 +600,8 @@ void __init setup_per_cpu_areas(void)
 	/* Copy section for each CPU (we discard the original) */
 	size = ALIGN(__per_cpu_end - __per_cpu_start, PAGE_SIZE);
 #ifdef CONFIG_MODULES
-	if (size < PERCPU_ENOUGH_ROOM)
-		size = PERCPU_ENOUGH_ROOM;
+	if (size < PERCPU_AREA_SIZE)
+		size = PERCPU_AREA_SIZE;
 #endif
 
 	for_each_possible_cpu(i) {
