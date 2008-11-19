@@ -92,3 +92,5 @@ struct pde_opener {
 	struct list_head lh;
 };
 void pde_users_dec(struct proc_dir_entry *pde);
+
+extern struct list_head proc_automounts;

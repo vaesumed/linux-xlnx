@@ -176,7 +176,7 @@ repeat:
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials */
 	atomic_dec(&__task_cred(p)->user->processes);
-
+	proc_shrink_automounts();
 	proc_flush_task(p);
 	write_lock_irq(&tasklist_lock);
 	tracehook_finish_release_task(p);
