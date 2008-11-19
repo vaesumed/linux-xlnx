@@ -2270,6 +2270,7 @@ static int ocfs2_calc_xattr_set_need(struct inode *inode,
 								 value_size);
 			xv = (struct ocfs2_xattr_value_root *)
 			     (base + name_offset + name_len);
+			value_size = OCFS2_XATTR_ROOT_SIZE;
 		} else
 			xv = &def_xv.xv;
 
@@ -2283,7 +2284,8 @@ static int ocfs2_calc_xattr_set_need(struct inode *inode,
 							     &xv->xr_list,
 							     new_clusters -
 							     old_clusters);
-			goto out;
+			if (value_size >= OCFS2_XATTR_ROOT_SIZE)
+				goto out;
 		}
 	} else {
 		/*
@@ -2412,7 +2414,7 @@ static int __ocfs2_xattr_set_handle(struct inode *inode,
 				    struct ocfs2_xattr_search *xbs,
 				    struct ocfs2_xattr_set_ctxt *ctxt)
 {
-	int ret = 0, credits;
+	int ret = 0, credits, old_found;
 
 	if (!xi->value) {
 		/* Remove existing extended attribute */
@@ -2431,6 +2433,7 @@ static int __ocfs2_xattr_set_handle(struct inode *inode,
 			xi->value = NULL;
 			xi->value_len = 0;
 
+			old_found = xis->not_found;
 			xis->not_found = -ENODATA;
 			ret = ocfs2_calc_xattr_set_need(inode,
 							di,
@@ -2440,6 +2443,7 @@ static int __ocfs2_xattr_set_handle(struct inode *inode,
 							NULL,
 							NULL,
 							&credits);
+			xis->not_found = old_found;
 			if (ret) {
 				mlog_errno(ret);
 				goto out;
@@ -2460,6 +2464,7 @@ static int __ocfs2_xattr_set_handle(struct inode *inode,
 				if (ret)
 					goto out;
 
+				old_found = xis->not_found;
 				xis->not_found = -ENODATA;
 				ret = ocfs2_calc_xattr_set_need(inode,
 								di,
@@ -2469,6 +2474,7 @@ static int __ocfs2_xattr_set_handle(struct inode *inode,
 								NULL,
 								NULL,
 								&credits);
+				xis->not_found = old_found;
 				if (ret) {
 					mlog_errno(ret);
 					goto out;
