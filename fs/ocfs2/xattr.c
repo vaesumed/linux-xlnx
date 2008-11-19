@@ -266,7 +266,8 @@ static int ocfs2_read_xattr_bucket(struct ocfs2_xattr_bucket *bucket,
 	int rc;
 
 	rc = ocfs2_read_blocks(bucket->bu_inode, xb_blkno,
-			       bucket->bu_blocks, bucket->bu_bhs, 0);
+			       bucket->bu_blocks, bucket->bu_bhs, 0,
+			       NULL);
 	if (rc)
 		ocfs2_xattr_bucket_relse(bucket);
 	return rc;
@@ -312,6 +313,61 @@ static void ocfs2_xattr_bucket_copy_data(struct ocfs2_xattr_bucket *dest,
 		memcpy(bucket_block(dest, i), bucket_block(src, i),
 		       blocksize);
 	}
+}
+
+static int ocfs2_validate_xattr_block(struct super_block *sb,
+				      struct buffer_head *bh)
+{
+	struct ocfs2_xattr_block *xb =
+		(struct ocfs2_xattr_block *)bh->b_data;
+
+	mlog(0, "Validating xattr block %llu\n",
+	     (unsigned long long)bh->b_blocknr);
+
+	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
+		ocfs2_error(sb,
+			    "Extended attribute block #%llu has bad "
+			    "signature %.*s",
+			    (unsigned long long)bh->b_blocknr, 7,
+			    xb->xb_signature);
+		return -EINVAL;
+	}
+
+	if (le64_to_cpu(xb->xb_blkno) != bh->b_blocknr) {
+		ocfs2_error(sb,
+			    "Extended attribute block #%llu has an "
+			    "invalid xb_blkno of %llu",
+			    (unsigned long long)bh->b_blocknr,
+			    (unsigned long long)le64_to_cpu(xb->xb_blkno));
+		return -EINVAL;
+	}
+
+	if (le32_to_cpu(xb->xb_fs_generation) != OCFS2_SB(sb)->fs_generation) {
+		ocfs2_error(sb,
+			    "Extended attribute block #%llu has an invalid "
+			    "xb_fs_generation of #%u",
+			    (unsigned long long)bh->b_blocknr,
+			    le32_to_cpu(xb->xb_fs_generation));
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int ocfs2_read_xattr_block(struct inode *inode, u64 xb_blkno,
+				  struct buffer_head **bh)
+{
+	int rc;
+	struct buffer_head *tmp = *bh;
+
+	rc = ocfs2_read_block(inode, xb_blkno, &tmp,
+			      ocfs2_validate_xattr_block);
+
+	/* If ocfs2_read_block() got us a new bh, pass it up. */
+	if (!rc && !*bh)
+		*bh = tmp;
+
+	return rc;
 }
 
 static inline const char *ocfs2_xattr_prefix(int name_index)
@@ -739,18 +795,14 @@ static int ocfs2_xattr_block_list(struct inode *inode,
 	if (!di->i_xattr_loc)
 		return ret;
 
-	ret = ocfs2_read_block(inode, le64_to_cpu(di->i_xattr_loc), &blk_bh);
+	ret = ocfs2_read_xattr_block(inode, le64_to_cpu(di->i_xattr_loc),
+				     &blk_bh);
 	if (ret < 0) {
 		mlog_errno(ret);
 		return ret;
 	}
 
 	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
-	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
-		ret = -EIO;
-		goto cleanup;
-	}
-
 	if (!(le16_to_cpu(xb->xb_flags) & OCFS2_XATTR_INDEXED)) {
 		struct ocfs2_xattr_header *header = &xb->xb_attrs.xb_header;
 		ret = ocfs2_xattr_list_entries(inode, header,
@@ -760,7 +812,7 @@ static int ocfs2_xattr_block_list(struct inode *inode,
 		ret = ocfs2_xattr_tree_list_index_block(inode, xt,
 						   buffer, buffer_size);
 	}
-cleanup:
+
 	brelse(blk_bh);
 
 	return ret;
@@ -870,7 +922,7 @@ static int ocfs2_xattr_get_value_outside(struct inode *inode,
 		blkno = ocfs2_clusters_to_blocks(inode->i_sb, p_cluster);
 		/* Copy ocfs2_xattr_value */
 		for (i = 0; i < num_clusters * bpc; i++, blkno++) {
-			ret = ocfs2_read_block(inode, blkno, &bh);
+			ret = ocfs2_read_block(inode, blkno, &bh, NULL);
 			if (ret) {
 				mlog_errno(ret);
 				goto out;
@@ -1119,7 +1171,7 @@ static int __ocfs2_xattr_set_value_outside(struct inode *inode,
 		blkno = ocfs2_clusters_to_blocks(inode->i_sb, p_cluster);
 
 		for (i = 0; i < num_clusters * bpc; i++, blkno++) {
-			ret = ocfs2_read_block(inode, blkno, &bh);
+			ret = ocfs2_read_block(inode, blkno, &bh, NULL);
 			if (ret) {
 				mlog_errno(ret);
 				goto out;
@@ -1693,15 +1745,9 @@ static int ocfs2_xattr_free_block(struct inode *inode,
 	u64 blk, bg_blkno;
 	u16 bit;
 
-	ret = ocfs2_read_block(inode, block, &blk_bh);
+	ret = ocfs2_read_xattr_block(inode, block, &blk_bh);
 	if (ret < 0) {
 		mlog_errno(ret);
-		goto out;
-	}
-
-	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
-	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
-		ret = -EIO;
 		goto out;
 	}
 
@@ -1711,6 +1757,7 @@ static int ocfs2_xattr_free_block(struct inode *inode,
 		goto out;
 	}
 
+	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
 	blk = le64_to_cpu(xb->xb_blkno);
 	bit = le16_to_cpu(xb->xb_suballoc_bit);
 	bg_blkno = ocfs2_which_suballoc_group(blk, bit);
@@ -1950,19 +1997,15 @@ static int ocfs2_xattr_block_find(struct inode *inode,
 	if (!di->i_xattr_loc)
 		return ret;
 
-	ret = ocfs2_read_block(inode, le64_to_cpu(di->i_xattr_loc), &blk_bh);
+	ret = ocfs2_read_xattr_block(inode, le64_to_cpu(di->i_xattr_loc),
+				     &blk_bh);
 	if (ret < 0) {
 		mlog_errno(ret);
 		return ret;
 	}
 
-	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
-	if (!OCFS2_IS_VALID_XATTR_BLOCK(xb)) {
-		ret = -EIO;
-		goto cleanup;
-	}
-
 	xs->xattr_bh = blk_bh;
+	xb = (struct ocfs2_xattr_block *)blk_bh->b_data;
 
 	if (!(le16_to_cpu(xb->xb_flags) & OCFS2_XATTR_INDEXED)) {
 		xs->header = &xb->xb_attrs.xb_header;
@@ -2160,7 +2203,7 @@ static int ocfs2_calc_xattr_set_need(struct inode *inode,
 		base = xis->base;
 		credits += OCFS2_INODE_UPDATE_CREDITS;
 	} else {
-		int i, block_off;
+		int i, block_off = 0;
 		xb = (struct ocfs2_xattr_block *)xbs->xattr_bh->b_data;
 		xe = xbs->here;
 		name_offset = le16_to_cpu(xe->xe_name_offset);
@@ -2259,9 +2302,9 @@ meta_guess:
 	/* calculate metadata allocation. */
 	if (di->i_xattr_loc) {
 		if (!xbs->xattr_bh) {
-			ret = ocfs2_read_block(inode,
-					       le64_to_cpu(di->i_xattr_loc),
-					       &bh);
+			ret = ocfs2_read_xattr_block(inode,
+						     le64_to_cpu(di->i_xattr_loc),
+						     &bh);
 			if (ret) {
 				mlog_errno(ret);
 				goto out;
@@ -2793,6 +2836,7 @@ static int ocfs2_find_xe_in_bucket(struct inode *inode,
 			mlog_errno(ret);
 			break;
 		}
+
 
 		xe_name = bucket_block(bucket, block_off) + new_offset;
 		if (!memcmp(name, xe_name, name_len)) {
@@ -3558,7 +3602,7 @@ static int ocfs2_mv_xattr_bucket_cross_cluster(struct inode *inode,
 			goto out;
 		}
 
-		ret = ocfs2_read_block(inode, prev_blkno, &old_bh);
+		ret = ocfs2_read_block(inode, prev_blkno, &old_bh, NULL);
 		if (ret < 0) {
 			mlog_errno(ret);
 			brelse(new_bh);
@@ -3950,7 +3994,7 @@ static int ocfs2_cp_xattr_cluster(struct inode *inode,
 	ocfs2_journal_dirty(handle, first_bh);
 
 	/* update the new bucket header. */
-	ret = ocfs2_read_block(inode, to_blk_start, &bh);
+	ret = ocfs2_read_block(inode, to_blk_start, &bh, NULL);
 	if (ret < 0) {
 		mlog_errno(ret);
 		goto out;
@@ -4297,7 +4341,7 @@ static int ocfs2_add_new_xattr_bucket(struct inode *inode,
 		goto out;
 	}
 
-	ret = ocfs2_read_block(inode, p_blkno, &first_bh);
+	ret = ocfs2_read_block(inode, p_blkno, &first_bh, NULL);
 	if (ret) {
 		mlog_errno(ret);
 		goto out;
@@ -4595,7 +4639,7 @@ static int ocfs2_xattr_bucket_value_truncate(struct inode *inode,
 	BUG_ON(value_blk != (offset + OCFS2_XATTR_ROOT_SIZE - 1) / blocksize);
 	value_blk += header_bh->b_blocknr;
 
-	ret = ocfs2_read_block(inode, value_blk, &value_bh);
+	ret = ocfs2_read_block(inode, value_blk, &value_bh, NULL);
 	if (ret) {
 		mlog_errno(ret);
 		goto out;
