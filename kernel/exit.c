@@ -165,6 +165,7 @@ void release_task(struct task_struct * p)
 repeat:
 	tracehook_prepare_release_task(p);
 	atomic_dec(&p->user->processes);
+	proc_shrink_automounts();
 	proc_flush_task(p);
 	write_lock_irq(&tasklist_lock);
 	tracehook_finish_release_task(p);
