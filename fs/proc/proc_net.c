@@ -169,6 +169,41 @@ const struct inode_operations proc_net_inode_operations = {
 };
 
 
+int proc_net_revalidate(struct task_struct *task, struct dentry *dentry,
+			struct nameidata *nd)
+{
+	struct inode *inode = dentry->d_inode;
+	struct dentry *tdentry;
+	struct vfsmount *tmnt;
+	int ret = 1;
+
+	/* Are we talking about a proc/net mount point? */
+	if (!nd || inode->i_op != &proc_net_inode_operations)
+		goto out;
+
+	/*
+	 * If the wrong filesystem is mounted on /proc/<pid>/net report the
+	 * dentry is invalid.
+	 */
+	tmnt = mntget(nd->path.mnt);
+	tdentry = dget(dentry);
+	if (follow_down(&tmnt, &tdentry)) {
+		struct nsproxy *ns;
+
+		rcu_read_lock();
+		ns = task_nsproxy(task);
+		if ((ns == NULL) ||
+		     (tmnt->mnt_sb->s_magic != PROC_NET_SUPER_MAGIC) ||
+		     (tmnt->mnt_sb->s_fs_info != ns->net_ns))
+			ret = 0;
+		rcu_read_unlock();
+	}
+	dput(tdentry);
+	mntput(tmnt);
+out:
+	return ret;
+}
+
 struct proc_dir_entry *proc_net_fops_create(struct net *net,
 	const char *name, mode_t mode, const struct file_operations *fops)
 {
