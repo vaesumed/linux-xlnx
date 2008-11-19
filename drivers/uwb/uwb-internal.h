@@ -66,14 +66,14 @@ extern int uwb_rc_scan(struct uwb_rc *rc,
 		       unsigned channel, enum uwb_scan_type type,
 		       unsigned bpst_offset);
 extern int uwb_rc_send_all_drp_ie(struct uwb_rc *rc);
-extern ssize_t uwb_rc_print_IEs(struct uwb_rc *rc, char *, size_t);
-extern void uwb_rc_ie_init(struct uwb_rc *);
-extern void uwb_rc_ie_init(struct uwb_rc *);
-extern ssize_t uwb_rc_ie_setup(struct uwb_rc *);
-extern void uwb_rc_ie_release(struct uwb_rc *);
-extern int uwb_rc_ie_add(struct uwb_rc *,
-			 const struct uwb_ie_hdr *, size_t);
-extern int uwb_rc_ie_rm(struct uwb_rc *, enum uwb_ie);
+
+void uwb_rc_ie_init(struct uwb_rc *);
+int uwb_rc_ie_setup(struct uwb_rc *);
+void uwb_rc_ie_release(struct uwb_rc *);
+int uwb_ie_dump_hex(const struct uwb_ie_hdr *ies, size_t len,
+		    char *buf, size_t size);
+int uwb_rc_set_ie(struct uwb_rc *, struct uwb_rc_cmd_set_ie *);
+
 
 extern const char *uwb_rc_strerror(unsigned code);
 
@@ -160,13 +160,14 @@ struct uwb_event {
 	};
 };
 
-extern void uwbd_start(void);
-extern void uwbd_stop(void);
+extern void uwbd_start(struct uwb_rc *rc);
+extern void uwbd_stop(struct uwb_rc *rc);
 extern struct uwb_event *uwb_event_alloc(size_t, gfp_t gfp_mask);
 extern void uwbd_event_queue(struct uwb_event *);
 void uwbd_flush(struct uwb_rc *rc);
 
 /* UWB event handlers */
+extern int uwbd_evt_handle_rc_ie_rcv(struct uwb_event *);
 extern int uwbd_evt_handle_rc_beacon(struct uwb_event *);
 extern int uwbd_evt_handle_rc_beacon_size(struct uwb_event *);
 extern int uwbd_evt_handle_rc_bpoie_change(struct uwb_event *);
@@ -192,15 +193,6 @@ int uwbd_evt_handle_rc_dev_addr_conflict(struct uwb_event *evt);
  */
 
 extern unsigned long beacon_timeout_ms;
-
-/** Beacon cache list */
-struct uwb_beca {
-	struct list_head list;
-	size_t entries;
-	struct mutex mutex;
-};
-
-extern struct uwb_beca uwb_beca;
 
 /**
  * Beacon cache entry
@@ -228,9 +220,6 @@ struct uwb_beca_e {
 struct uwb_beacon_frame;
 extern ssize_t uwb_bce_print_IEs(struct uwb_dev *, struct uwb_beca_e *,
 				 char *, size_t);
-extern struct uwb_beca_e *__uwb_beca_add(struct uwb_rc_evt_beacon *,
-					 struct uwb_beacon_frame *,
-					 unsigned long);
 
 extern void uwb_bce_kfree(struct kref *_bce);
 static inline void uwb_bce_get(struct uwb_beca_e *bce)
@@ -241,8 +230,8 @@ static inline void uwb_bce_put(struct uwb_beca_e *bce)
 {
 	kref_put(&bce->refcnt, uwb_bce_kfree);
 }
-extern void uwb_beca_purge(void);
-extern void uwb_beca_release(void);
+extern void uwb_beca_purge(struct uwb_rc *rc);
+extern void uwb_beca_release(struct uwb_rc *rc);
 
 struct uwb_dev *uwb_dev_get_by_devaddr(struct uwb_rc *rc,
 				       const struct uwb_dev_addr *devaddr);
@@ -259,6 +248,7 @@ extern struct device_attribute dev_attr_scan;
 void uwb_rsv_init(struct uwb_rc *rc);
 int uwb_rsv_setup(struct uwb_rc *rc);
 void uwb_rsv_cleanup(struct uwb_rc *rc);
+void uwb_rsv_remove_all(struct uwb_rc *rc);
 
 void uwb_rsv_set_state(struct uwb_rsv *rsv, enum uwb_rsv_state new_state);
 void uwb_rsv_remove(struct uwb_rsv *rsv);
