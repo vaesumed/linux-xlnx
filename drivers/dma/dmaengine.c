@@ -233,10 +233,6 @@ static void dma_client_chan_alloc(struct dma_client *client)
 	list_for_each_entry(device, &dma_device_list, global_node) {
 		if (dma_has_cap(DMA_PRIVATE, device->cap_mask))
 			continue;
-		/* Does the client require a specific DMA controller? */
-		if (client->slave && client->slave->dma_dev
-				&& client->slave->dma_dev != device->dev)
-			continue;
 
 		list_for_each_entry(chan, &device->channels, device_node) {
 			if (!dma_chan_satisfies_mask(chan, client->cap_mask))
@@ -612,10 +608,6 @@ void dma_async_client_register(struct dma_client *client)
 	struct dma_device *device, *_d;
 	struct dma_chan *chan;
 	int err;
-
-	/* validate client data */
-	BUG_ON(dma_has_cap(DMA_SLAVE, client->cap_mask) &&
-		!client->slave);
 
 	mutex_lock(&dma_list_mutex);
 	dmaengine_ref_count++;
