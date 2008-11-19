@@ -97,6 +97,7 @@ extern spinlock_t proc_subdir_lock;
 
 extern void proc_root_init(void);
 
+void proc_shrink_automounts(void);
 void proc_flush_task(struct task_struct *task);
 struct dentry *proc_pid_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *);
 int proc_pid_readdir(struct file * filp, void * dirent, filldir_t filldir);
@@ -200,6 +201,10 @@ extern void dup_mm_exe_file(struct mm_struct *oldmm, struct mm_struct *newmm);
 static inline void proc_net_remove(struct net *net, const char *name) {}
 
 static inline void proc_flush_task(struct task_struct *task)
+{
+}
+
+static inline void proc_shrink_automounts(void)
 {
 }
 
