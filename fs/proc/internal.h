@@ -91,3 +91,5 @@ struct pde_opener {
 	int (*release)(struct inode *, struct file *);
 	struct list_head lh;
 };
+
+extern struct list_head proc_automounts;
