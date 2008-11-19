@@ -45,7 +45,7 @@ MODULE_AUTHOR("Jean-Francois Moine <http://moinejf.free.fr>");
 MODULE_DESCRIPTION("GSPCA USB Camera Driver");
 MODULE_LICENSE("GPL");
 
-#define DRIVER_VERSION_NUMBER	KERNEL_VERSION(2, 3, 0)
+#define DRIVER_VERSION_NUMBER	KERNEL_VERSION(2, 4, 0)
 
 static int video_nr = -1;
 
@@ -150,8 +150,11 @@ static void fill_frame(struct gspca_dev *gspca_dev,
 
 		/* check the packet status and length */
 		len = urb->iso_frame_desc[i].actual_length;
-		if (len == 0)
+		if (len == 0) {
+			if (gspca_dev->empty_packet == 0)
+				gspca_dev->empty_packet = 1;
 			continue;
+		}
 		st = urb->iso_frame_desc[i].status;
 		if (st) {
 			PDEBUG(D_ERR,
@@ -596,6 +599,12 @@ static int gspca_init_transfer(struct gspca_dev *gspca_dev)
 		ret = create_urbs(gspca_dev, ep);
 		if (ret < 0)
 			goto out;
+
+		/* clear the bulk endpoint */
+		if (gspca_dev->alt == 0)	/* if bulk transfer */
+			usb_clear_halt(gspca_dev->dev,
+					usb_rcvintpipe(gspca_dev->dev,
+						 gspca_dev->cam.epaddr));
 
 		/* start the cam */
 		ret = gspca_dev->sd_desc->start(gspca_dev);
@@ -1850,6 +1859,7 @@ int gspca_dev_probe(struct usb_interface *intf,
 	gspca_dev->nbalt = intf->num_altsetting;
 	gspca_dev->sd_desc = sd_desc;
 	gspca_dev->nbufread = 2;
+	gspca_dev->empty_packet = -1;	/* don't check the empty packets */
 
 	/* configure the subdriver and initialize the USB device */
 	ret = gspca_dev->sd_desc->config(gspca_dev, id);
@@ -1988,7 +1998,7 @@ int gspca_auto_gain_n_exposure(struct gspca_dev *gspca_dev, int avg_lum,
 	   desired lumination fast (with the risc of a slight overshoot) */
 	steps = abs(desired_avg_lum - avg_lum) / deadzone;
 
-	PDEBUG(D_FRAM, "autogain: lum: %d, desired: %d, steps: %d\n",
+	PDEBUG(D_FRAM, "autogain: lum: %d, desired: %d, steps: %d",
 		avg_lum, desired_avg_lum, steps);
 
 	for (i = 0; i < steps; i++) {
