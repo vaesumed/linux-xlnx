@@ -1,0 +1,42 @@
+What:		/sys/kernel/perfmon
+Date:		Oct 2008
+KernelVersion:	2.6.27
+Contact:	eranian@gmail.com
+
+Description:	provide the configuration interface for the perfmon subsystems.
+	        The tree contains information about the detected hardware,
+		current state of the subsystem as well as some configuration
+		parameters.
+
+		The tree consists of the following entries:
+
+	/sys/kernel/perfmon/debug (read-write):
+
+		Enable perfmon debugging output. The traces are rate-limited
+		to avoid flooding the console. It is possible to change the
+		throttling via /proc/sys/kernel/printk_ratelimit.
+
+		The value is interpreted as a bitmask.  Each bit enables a
+		particular type of debug messages. Refer to the file
+		include/linux/perfmon_kern.h for more information.
+
+	/sys/kernel/perfmon/task_group (read-write):
+
+		Users group allowed to create a per-thread context (session).
+   		-1 means any group.
+
+	/sys/kernel/perfmon/task_sessions_count (read-only):
+
+		Number of per-thread contexts (sessions) currently attached
+		to threads.
+
+   	/sys/kernel/perfmon/version (read-only):
+
+		Perfmon interface revision number.
+
+	/sys/kernel/perfmon/arg_mem_max(read-write):
+
+		Maximum size of vector arguments expressed in bytes.
+		It can be modified but must be at least a page.
+		Default: PAGE_SIZE
+

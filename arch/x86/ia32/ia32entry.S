@@ -826,4 +826,9 @@ ia32_sys_call_table:
 	.quad sys_dup3			/* 330 */
 	.quad sys_pipe2
 	.quad sys_inotify_init1
+	.quad sys_pfm_create
+	.quad sys_pfm_write
+	.quad sys_pfm_read		/* 335 */
+	.quad sys_pfm_attach
+	.quad sys_pfm_set_state
 ia32_syscall_end:

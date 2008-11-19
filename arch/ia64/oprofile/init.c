@@ -20,7 +20,7 @@ int __init oprofile_arch_init(struct oprofile_operations *ops)
 {
 	int ret = -ENODEV;
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	/* perfmon_init() can fail, but we have no way to report it */
 	ret = perfmon_init(ops);
 #endif
@@ -32,7 +32,7 @@ int __init oprofile_arch_init(struct oprofile_operations *ops)
 
 void oprofile_arch_exit(void)
 {
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
 	perfmon_exit();
 #endif
 }
