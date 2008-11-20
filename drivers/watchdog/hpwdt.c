@@ -485,11 +485,7 @@ static int hpwdt_pretimeout(struct notifier_block *nb, unsigned long ulReason,
 			"Management Log for details.\n");
 	}
 
-	/*
-	 * for kdump, we must return NOTIFY_OK here to execute the
-	 * crash_nmi_callback afterwards, see arch/x86/kernel/crash.c
-	 */
-	return allow_kdump ? NOTIFY_OK : NOTIFY_STOP;
+	return NOTIFY_OK;
 }
 
 /*
