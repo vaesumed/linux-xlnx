@@ -57,6 +57,9 @@
 #define WM8350_OVER_CURRENT_INT_STATUS_MASK     0x25
 #define WM8350_GPIO_INT_STATUS_MASK             0x26
 #define WM8350_COMPARATOR_INT_STATUS_MASK       0x27
+#define WM8350_MISC_OVERRIDES			0xE3
+#define WM8350_COMPARATOR_OVERRIDES		0xE7
+#define WM8350_STATE_MACHINE_STATUS		0xE9
 
 #define WM8350_MAX_REGISTER                     0xFF
 
@@ -523,6 +526,29 @@
 #define WM8350_DC2_STS                          0x0002
 #define WM8350_DC1_STS                          0x0001
 
+/*
+ * R227 (0xE3) - Misc Overrides
+ */
+#define WM8350_USB_LIMIT_OVRDE			0x0400
+
+/*
+ * R227 (0xE7) - Comparator Overrides
+ */
+#define WM8350_USB_FB_OVRDE			0x8000
+#define WM8350_WALL_FB_OVRDE			0x4000
+#define WM8350_BATT_FB_OVRDE			0x2000
+
+
+/*
+ * R233 (0xE9) - State Machinine Status
+ */
+#define WM8350_USB_SM_MASK			0x0700
+#define WM8350_USB_SM_SHIFT			8
+
+#define WM8350_USB_SM_100_SLV   1
+#define WM8350_USB_SM_500_SLV   5
+#define WM8350_USB_SM_STDBY_SLV 7
+
 /* WM8350 wake up conditions */
 #define WM8350_IRQ_WKUP_OFF_STATE		43
 #define WM8350_IRQ_WKUP_HIB_STATE		44
@@ -536,6 +562,7 @@
 #define WM8350_REV_E				0x4
 #define WM8350_REV_F				0x5
 #define WM8350_REV_G				0x6
+#define WM8350_REV_H				0x7
 
 #define WM8350_NUM_IRQ				63
 
@@ -571,6 +598,8 @@ struct wm8350 {
 	int (*write_dev)(struct wm8350 *wm8350, char reg, int size,
 			 void *src);
 	u16 *reg_cache;
+
+	struct mutex auxadc_mutex;
 
 	/* Interrupt handling */
 	struct work_struct irq_work;
