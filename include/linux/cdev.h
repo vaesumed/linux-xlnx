@@ -16,6 +16,7 @@ struct cdev {
 	struct list_head list;
 	dev_t dev;
 	unsigned int count;
+	void (*release)(struct cdev *);
 };
 
 void cdev_init(struct cdev *, const struct file_operations *);
