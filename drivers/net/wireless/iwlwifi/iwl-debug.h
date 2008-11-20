@@ -101,13 +101,12 @@ static inline void iwl_dbgfs_unregister(struct iwl_priv *priv)
  *
  * To add your debug level to the list of levels seen when you perform
  *
- * % cat /proc/net/iwl/debug_level
+ * % cat /sys/class/net/wlanX/device/debug_level
  *
  * you simply need to add your entry to the iwl_debug_levels array.
  *
- * If you do not see debug_level in /proc/net/iwl then you do not have
- * CONFIG_IWLWIFI_DEBUG defined in your kernel configuration
- *
+ * If you do not see debug_level in  /sys/class/net/wlanX/device/debug_level
+ * then you do not have CONFIG_IWLWIFI_DEBUG defined in your kernel config file
  */
 
 #define IWL_DL_INFO		(1 << 0)
@@ -183,6 +182,8 @@ static inline void iwl_dbgfs_unregister(struct iwl_priv *priv)
 #define IWL_DEBUG_STATS(f, a...) IWL_DEBUG(IWL_DL_STATS, f, ## a)
 #define IWL_DEBUG_STATS_LIMIT(f, a...) IWL_DEBUG_LIMIT(IWL_DL_STATS, f, ## a)
 #define IWL_DEBUG_TX_REPLY(f, a...) IWL_DEBUG(IWL_DL_TX_REPLY, f, ## a)
+#define IWL_DEBUG_TX_REPLY_LIMIT(f, a...) \
+	IWL_DEBUG_LIMIT(IWL_DL_TX_REPLY, f, ## a)
 #define IWL_DEBUG_QOS(f, a...)   IWL_DEBUG(IWL_DL_QOS, f, ## a)
 #define IWL_DEBUG_RADIO(f, a...)  IWL_DEBUG(IWL_DL_RADIO, f, ## a)
 #define IWL_DEBUG_POWER(f, a...)  IWL_DEBUG(IWL_DL_POWER, f, ## a)

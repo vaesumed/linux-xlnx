@@ -631,7 +631,6 @@ static int __devinit rhine_init_one(struct pci_dev *pdev,
 #else
 	int bar = 0;
 #endif
-	DECLARE_MAC_BUF(mac);
 
 /* when built into the kernel, we only print version if device is found */
 #ifndef MODULE
@@ -787,14 +786,14 @@ static int __devinit rhine_init_one(struct pci_dev *pdev,
 	if (rc)
 		goto err_out_unmap;
 
-	printk(KERN_INFO "%s: VIA %s at 0x%lx, %s, IRQ %d.\n",
+	printk(KERN_INFO "%s: VIA %s at 0x%lx, %pM, IRQ %d.\n",
 	       dev->name, name,
 #ifdef USE_MMIO
 	       memaddr,
 #else
 	       (long)ioaddr,
 #endif
-	       print_mac(mac, dev->dev_addr), pdev->irq);
+	       dev->dev_addr, pdev->irq);
 
 	pci_set_drvdata(pdev, dev);
 
@@ -1505,7 +1504,6 @@ static int rhine_rx(struct net_device *dev, int limit)
 			}
 			skb->protocol = eth_type_trans(skb, dev);
 			netif_receive_skb(skb);
-			dev->last_rx = jiffies;
 			rp->stats.rx_bytes += pkt_len;
 			rp->stats.rx_packets++;
 		}
