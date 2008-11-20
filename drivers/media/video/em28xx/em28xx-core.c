@@ -369,9 +369,8 @@ static int em28xx_set_audio_source(struct em28xx *dev)
 			break;
 		default:
 			input = EM28XX_AUDIO_SRC_LINE;
-			video = disable;
-			line  = enable;
 			break;
+		}
 	}
 
 	ret = em28xx_write_reg_bits(dev, EM28XX_R0E_AUDIOSRC, input, 0xc0);
