@@ -434,20 +434,6 @@ int ocfs2_journal_dirty(handle_t *handle,
 	return status;
 }
 
-#ifdef CONFIG_OCFS2_COMPAT_JBD
-int ocfs2_journal_dirty_data(handle_t *handle,
-			     struct buffer_head *bh)
-{
-	int err = journal_dirty_data(handle, bh);
-	if (err)
-		mlog_errno(err);
-	/* TODO: When we can handle it, abort the handle and go RO on
-	 * error here. */
-
-	return err;
-}
-#endif
-
 #define OCFS2_DEFAULT_COMMIT_INTERVAL	(HZ * JBD2_DEFAULT_MAX_COMMIT_AGE)
 
 void ocfs2_set_journal_params(struct ocfs2_super *osb)
@@ -587,17 +573,11 @@ static int ocfs2_journal_toggle_dirty(struct ocfs2_super *osb,
 	mlog_entry_void();
 
 	fe = (struct ocfs2_dinode *)bh->b_data;
-	if (!OCFS2_IS_VALID_DINODE(fe)) {
-		/* This is called from startup/shutdown which will
-		 * handle the errors in a specific manner, so no need
-		 * to call ocfs2_error() here. */
-		mlog(ML_ERROR, "Journal dinode %llu  has invalid "
-		     "signature: %.*s",
-		     (unsigned long long)le64_to_cpu(fe->i_blkno), 7,
-		     fe->i_signature);
-		status = -EIO;
-		goto out;
-	}
+
+	/* The journal bh on the osb always comes from ocfs2_journal_init()
+	 * and was validated there inside ocfs2_inode_lock_full().  It's a
+	 * code bug if we mess it up. */
+	BUG_ON(!OCFS2_IS_VALID_DINODE(fe));
 
 	flags = le32_to_cpu(fe->id1.journal1.ij_flags);
 	if (dirty)
@@ -613,7 +593,6 @@ static int ocfs2_journal_toggle_dirty(struct ocfs2_super *osb,
 	if (status < 0)
 		mlog_errno(status);
 
-out:
 	mlog_exit(status);
 	return status;
 }
@@ -1135,8 +1114,7 @@ static int ocfs2_read_journal_inode(struct ocfs2_super *osb,
 	}
 	SET_INODE_JOURNAL(inode);
 
-	status = ocfs2_read_blocks(inode, OCFS2_I(inode)->ip_blkno, 1, bh,
-				   OCFS2_BH_IGNORE_CACHE);
+	status = ocfs2_read_inode_block_full(inode, bh, OCFS2_BH_IGNORE_CACHE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
