@@ -30,6 +30,7 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/timer.h>
+#include <linux/wait.h>
 #include <linux/workqueue.h>
 #include <linux/uwb/spec.h>
 
@@ -84,6 +85,22 @@ enum { UWB_RC_CTX_MAX = 256 };
 struct uwb_notifs_chain {
 	struct list_head list;
 	struct mutex mutex;
+};
+
+/* Beacon cache list */
+struct uwb_beca {
+	struct list_head list;
+	size_t entries;
+	struct mutex mutex;
+};
+
+/* Event handling thread. */
+struct uwbd {
+	int pid;
+	struct task_struct *task;
+	wait_queue_head_t wq;
+	struct list_head event_list;
+	spinlock_t event_list_lock;
 };
 
 /**
@@ -201,6 +218,7 @@ struct uwb_rsv {
 	struct uwb_rc *rc;
 	struct list_head rc_node;
 	struct list_head pal_node;
+	struct kref kref;
 
 	struct uwb_dev *owner;
 	struct uwb_rsv_target target;
@@ -341,6 +359,9 @@ struct uwb_rc {
 	enum uwb_scan_type scan_type:3;
 	unsigned ready:1;
 	struct uwb_notifs_chain notifs_chain;
+	struct uwb_beca uwb_beca;
+
+	struct uwbd uwbd;
 
 	struct uwb_drp_avail drp_avail;
 	struct list_head reservations;
@@ -443,7 +464,6 @@ ssize_t uwb_rc_vcmd(struct uwb_rc *rc, const char *cmd_name,
 		    struct uwb_rccb *cmd, size_t cmd_size,
 		    u8 expected_type, u16 expected_event,
 		    struct uwb_rceb **preply);
-ssize_t uwb_rc_get_ie(struct uwb_rc *, struct uwb_rc_evt_get_ie **);
 int uwb_bg_joined(struct uwb_rc *rc);
 
 size_t __uwb_addr_print(char *, size_t, const unsigned char *, int);
@@ -520,6 +540,8 @@ void uwb_rc_rm(struct uwb_rc *);
 void uwb_rc_neh_grok(struct uwb_rc *, void *, size_t);
 void uwb_rc_neh_error(struct uwb_rc *, int);
 void uwb_rc_reset_all(struct uwb_rc *rc);
+void uwb_rc_pre_reset(struct uwb_rc *rc);
+void uwb_rc_post_reset(struct uwb_rc *rc);
 
 /**
  * uwb_rsv_is_owner - is the owner of this reservation the RC?
@@ -652,22 +674,9 @@ static inline int edc_inc(struct edc *err_hist, u16 max_err, u16 timeframe)
 
 /* Information Element handling */
 
-/* For representing the state of writing to a buffer when iterating */
-struct uwb_buf_ctx {
-	char *buf;
-	size_t bytes, size;
-};
-
-typedef int (*uwb_ie_f)(struct uwb_dev *, const struct uwb_ie_hdr *,
-			size_t, void *);
 struct uwb_ie_hdr *uwb_ie_next(void **ptr, size_t *len);
-ssize_t uwb_ie_for_each(struct uwb_dev *uwb_dev, uwb_ie_f fn, void *data,
-			const void *buf, size_t size);
-int uwb_ie_dump_hex(struct uwb_dev *, const struct uwb_ie_hdr *,
-		    size_t, void *);
-int uwb_rc_set_ie(struct uwb_rc *, struct uwb_rc_cmd_set_ie *);
-struct uwb_ie_hdr *uwb_ie_next(void **ptr, size_t *len);
-
+int uwb_rc_ie_add(struct uwb_rc *uwb_rc, const struct uwb_ie_hdr *ies, size_t size);
+int uwb_rc_ie_rm(struct uwb_rc *uwb_rc, enum uwb_ie element_id);
 
 /*
  * Transmission statistics
