@@ -7,4 +7,4 @@ DRIVER_OBJS := $(addprefix ../../../drivers/oprofile/, \
 		timer_int.o )
 
 oprofile-y := $(DRIVER_OBJS) init.o backtrace.o
-oprofile-$(CONFIG_PERFMON) += perfmon.o
+oprofile-$(CONFIG_PERFMON_V20) += perfmon.o
