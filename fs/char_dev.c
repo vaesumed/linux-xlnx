@@ -482,26 +482,22 @@ void cdev_del(struct cdev *p)
 }
 
 
-static void cdev_default_release(struct kobject *kobj)
+static void cdev_release(struct kobject *kobj)
 {
 	struct cdev *p = container_of(kobj, struct cdev, kobj);
 	cdev_purge(p);
+	if (p->release)
+		p->release(p);
 }
 
-static void cdev_dynamic_release(struct kobject *kobj)
+static struct kobj_type cdev_ktype = {
+	.release	= cdev_release,
+};
+
+static void cdev_alloc_release(struct cdev *cdev)
 {
-	struct cdev *p = container_of(kobj, struct cdev, kobj);
-	cdev_purge(p);
-	kfree(p);
+	kfree(cdev);
 }
-
-static struct kobj_type ktype_cdev_default = {
-	.release	= cdev_default_release,
-};
-
-static struct kobj_type ktype_cdev_dynamic = {
-	.release	= cdev_dynamic_release,
-};
 
 /**
  * cdev_alloc() - allocate a cdev structure
@@ -510,10 +506,10 @@ static struct kobj_type ktype_cdev_dynamic = {
  */
 struct cdev *cdev_alloc(void)
 {
-	struct cdev *p = kzalloc(sizeof(struct cdev), GFP_KERNEL);
+	struct cdev *p = kmalloc(sizeof(struct cdev), GFP_KERNEL);
 	if (p) {
-		INIT_LIST_HEAD(&p->list);
-		kobject_init(&p->kobj, &ktype_cdev_dynamic);
+		cdev_init(p, NULL);
+		p->release = cdev_alloc_release;
 	}
 	return p;
 }
@@ -530,7 +526,7 @@ void cdev_init(struct cdev *cdev, const struct file_operations *fops)
 {
 	memset(cdev, 0, sizeof *cdev);
 	INIT_LIST_HEAD(&cdev->list);
-	kobject_init(&cdev->kobj, &ktype_cdev_default);
+	kobject_init(&cdev->kobj, &cdev_ktype);
 	cdev->ops = fops;
 }
 
