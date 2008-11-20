@@ -87,6 +87,13 @@ void s390_idle_leave(void)
 
 	idle = &__get_cpu_var(s390_idle);
 	idle_time = S390_lowcore.int_clock - idle->idle_enter;
+#ifdef CONFIG_VIRT_CPU_ACCOUNTING
+	idle_time += idle->idle_delta;
+	idle->idle_delta = idle_time & 4095;
+	idle_time -= idle->idle_delta;
+	account_idle_time(idle_time >> 12);
+	S390_lowcore.last_update_clock = S390_lowcore.int_clock;
+#endif
 	spin_lock(&idle->lock);
 	idle->idle_time += idle_time;
 	idle->idle_enter = 0ULL;
