@@ -89,6 +89,7 @@ static struct resource sh_keysc_resources[] = {
 
 static struct platform_device sh_keysc_device = {
 	.name           = "sh_keysc",
+	.id             = 0, /* "keysc0" clock */
 	.num_resources  = ARRAY_SIZE(sh_keysc_resources),
 	.resource       = sh_keysc_resources,
 	.dev	= {
@@ -432,6 +433,7 @@ static struct resource migor_ceu_resources[] = {
 
 static struct platform_device migor_ceu_device = {
 	.name		= "sh_mobile_ceu",
+	.id             = 0, /* "ceu0" clock */
 	.num_resources	= ARRAY_SIZE(migor_ceu_resources),
 	.resource	= migor_ceu_resources,
 	.dev	= {
@@ -479,7 +481,6 @@ static int __init migor_devices_setup(void)
 	ctrl_outl(0x00110080, BSC_CS4WCR);
 
 	/* KEYSC */
-	clk_always_enable("mstp214"); /* KEYSC */
 	gpio_request(GPIO_FN_KEYOUT0, NULL);
 	gpio_request(GPIO_FN_KEYOUT1, NULL);
 	gpio_request(GPIO_FN_KEYOUT2, NULL);
@@ -501,7 +502,6 @@ static int __init migor_devices_setup(void)
 	gpio_request(GPIO_FN_IRQ6, NULL);
 
 	/* LCD Panel */
-	clk_always_enable("mstp200"); /* LCDC */
 #ifdef CONFIG_SH_MIGOR_QVGA /* LCDC - QVGA - Enable SYS Interface signals */
 	gpio_request(GPIO_FN_LCDD17, NULL);
 	gpio_request(GPIO_FN_LCDD16, NULL);
@@ -554,7 +554,6 @@ static int __init migor_devices_setup(void)
 #endif
 
 	/* CEU */
-	clk_always_enable("mstp203"); /* CEU */
 	gpio_request(GPIO_FN_VIO_CLK2, NULL);
 	gpio_request(GPIO_FN_VIO_VD2, NULL);
 	gpio_request(GPIO_FN_VIO_HD2, NULL);
