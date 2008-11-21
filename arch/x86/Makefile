@@ -171,6 +171,9 @@ ifeq ($(CONFIG_X86_32),y)
 drivers-$(CONFIG_FB) += arch/x86/video/
 endif
 
+# x86 platform-specific drivers
+drivers-y       += drivers/x86/
+
 ####
 # boot loader support. Several targets are kept for legacy purposes
 
