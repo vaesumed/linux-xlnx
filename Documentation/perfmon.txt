@@ -1,0 +1,206 @@
+              The perfmon hardware monitoring interface
+              ------------------------------------------
+		           Stephane Eranian
+			  <eranian@gmail.com>
+
+I/ Introduction
+
+   The perfmon interface provides access to the hardware performance counters
+   of major processors. Nowadays, all processors implement some flavor of
+   performance counters which capture micro-architectural level information
+   such as the number of elapsed cycles, number of cache misses, and so on.
+
+   The interface is implemented as a set of new system calls and a set of
+   config files in /sys.
+
+   It is possible to monitor a single thread or a CPU. In either mode,
+   applications can count or sample. System-wide monitoring is supported by
+   running a monitoring session on each CPU. The interface supports event-based
+   sampling where the sampling period is expressed as the number of occurrences
+   of event, instead of just a timeout. This approach provides a better
+   granularity and flexibility.
+
+   For performance reason, it is possible to use a kernel-level sampling buffer
+   to minimize the overhead incurred by sampling. The format of the buffer,
+   what is recorded, how it is recorded, and how it is exported to user is
+   controlled by a kernel module called a sampling format. The current
+   implementation comes with a default format but it is possible to create
+   additional formats. There is an kernel registration interface for formats.
+   Each format is identified by a simple string which a tool can pass when a
+   monitoring session is created.
+
+   The interface also provides support for event set and multiplexing to work
+   around hardware limitations in the number of available counters or in how
+   events can be combined. Each set defines as many counters as the hardware
+   can support. The kernel then multiplexes the sets. The interface supports
+   time-based switching but also overflow-based switching, i.e., after n
+   overflows of designated counters.
+
+   Applications never manipulates the actual performance counter registers.
+   Instead they see a logical Performance Monitoring Unit (PMU) composed of a
+   set of config registers (PMC) and a set of data registers (PMD). Note that
+   PMD are not necessarily counters, they can be buffers. The logical PMU is
+   then mapped onto the actual PMU using a mapping table which is implemented
+   as a kernel module. The mapping is chosen once for each new processor. It is
+   visible in /sys/kernel/perfmon/pmu_desc. The kernel module is automatically
+   loaded on first use.
+
+   A monitoring session is uniquely identified by a file descriptor obtained
+   when the session is created. File sharing semantics apply to access the
+   session inside a process. A session is never inherited across fork. The file
+   descriptor can be used to receive counter overflow notifications or when the
+   sampling buffer is full. It is possible to use poll/select on the descriptor
+   to wait for notifications from multiple sessions. Similarly, the descriptor
+   supports asynchronous notifications via SIGIO.
+
+   Counters are always exported as being 64-bit wide regardless of what the
+   underlying hardware implements.
+
+II/ Kernel compilation
+
+    To enable perfmon, you need to enable CONFIG_PERFMON and also some of the
+    model-specific PMU modules.
+
+III/ OProfile interactions
+
+    The set of features offered by perfmon is rich enough to support migrating
+    Oprofile on top of it. That means that PMU programming and low-level
+    interrupt handling could be done by perfmon. The Oprofile sampling buffer
+    management code in the kernel as well as how samples are exported to users
+    could remain through the use of a sampling format. This is how Oprofile
+    works on Itanium.
+
+    The current interactions with Oprofile are:
+	- on X86: Both subsystems can be compiled into the same kernel. There
+		  is enforced mutual exclusion between the two subsystems. When
+		  there is an Oprofile session, no perfmon session can exist
+		  and vice-versa.
+
+	- On IA-64: Oprofile works on top of perfmon. Oprofile being a
+		    system-wide monitoring tool, the regular per-thread vs.
+		    system-wide session restrictions apply.
+
+	- on PPC: no integration yet. Only one subsystem can be enabled.
+	- on MIPS: no integration yet.  Only one subsystem can be enabled.
+
+IV/ User tools
+
+    We have released a simple monitoring tool to demonstrate the features of
+    the interface. The tool is called pfmon and it comes with a simple helper
+    library called libpfm. The library comes with a set of examples to show
+    how to use the kernel interface. Visit http://perfmon2.sf.net for details.
+
+    There maybe other tools available for perfmon.
+
+V/ How to program?
+
+   The best way to learn how to program perfmon, is to take a look at the
+   source code for the examples in libpfm. The source code is available from:
+
+		http://perfmon2.sf.net
+
+VI/ System calls overview
+
+   In this section, we describe the state of the interface as submitted to the
+   kernel. There are more extensions available, and we will update the section
+   as they get implemented in the upstream kernel.
+
+   The interface is implemented by the following system calls:
+
+   * int pfm_create(int flags, pfarg_sinfo_t *s);
+
+      This function creates a perfmon per-thread session.
+      The flags parameter is currently unused and must be set to 0.
+
+      Upon return and if s is not NULL, the kernel return the list of available
+      PMC and PMD registers. Tools should not assume, they have access to the
+      entire PMU, it may be shared with other kernel subsystems, e.g., on X86
+      the NMI watchdog timer.
+
+      The function returns the file descriptor identifying the session.
+
+   * int pfm_write(int fd, int flags, int type, void *d, size_t sz)
+
+      This function is used to write PMU registers for the session identified
+      by fd.
+
+      The flags parameter is currently unused and must be set to 0.
+
+      The type reflects the type of registers to write and determines the type
+      of the d parameter. The following types are defined:
+
+         - PFM_RW_PMC: write PMC registers, expect pfarg_pmr_t pointer for d
+         - PFM_RW_PMD: write PMD registers, expect pfarg_pmr_t pointer for d
+
+     The type field is not a bitmask, only one type can be passed per call.
+
+     the sz parameter describes the size of the vector of elements passed in d.
+
+   * int pfm_read(int fd, int flags, int type, void *d, size_t sz);
+
+      This function is used to read PMU registers for the session identified
+      by fd.
+
+      This function is used to write PMU registers for the session identified
+      by fd.
+
+      The flags parameter is currently unused and must be set to 0.
+
+      The type reflects the type of registers to write and determines the type
+      of the d parameter. The following types are supported:
+
+         - PFM_RW_PMD: write PMD registers, expect pfarg_pmr_t pointer for d
+
+     The type field is not a bitmask, only one type can be passed per call.
+
+     Reading of PMC registers is not allowed.
+
+     the sz parameter describes the size of the vector of elements passed in d.
+
+
+   * int pfm_attach(int fd, int flags, int target);
+
+      This function is used to attach and detach the session to and from
+      thread.
+
+      To attach the thread is identified by target which must have the
+      value returned by gettid() (not pthread_self). For a single threaded
+      process, that value is equal to the value returned by getpid().
+
+      To detach, the special target PFM_NO_TARGET must be passed.
+
+      The flags parameter is currently unused and must be set to 0.
+
+      The session is always attached as stopped, i.e., with monitoring
+      inactive. Monitoring is always stopped as a consequence of detaching.
+
+   * int pfm_set_state(int fd, int flags, int state);
+
+     The function is used to set the running state of the session. The state to
+     go to is indicated by state.
+
+     The following states are defined, only one can be specified at a time:
+
+        - PFM_ST_START: start monitoring
+        - PFM_ST_STOP: stop monitoring
+
+      The flags parameter is currently unused and must be set to 0.
+
+   * int close(int fd)
+
+   To destroy a session, the regular close() system call is used.
+
+
+VII/ /sys interface overview
+
+   Refer to Documentation/ABI/testing/sysfs-perfmon-* for a detailed
+   description of the sysfs interface of perfmon2.
+
+VIII/ debugfs interface overview
+
+  Refer to Documentation/perfmon-debugfs.txt for a detailed description of the
+  debug and statistics interface of perfmon.
+
+IX/ Documentation
+
+   Visit http://perfmon2.sf.net
