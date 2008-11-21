@@ -27,9 +27,6 @@
 #include "glops.h"
 #include "inode.h"
 #include "mount.h"
-#include "ops_fstype.h"
-#include "ops_dentry.h"
-#include "ops_super.h"
 #include "recovery.h"
 #include "rgrp.h"
 #include "super.h"
@@ -63,7 +60,6 @@ static void gfs2_tune_init(struct gfs2_tune *gt)
 	gt->gt_log_flush_secs = 60;
 	gt->gt_recoverd_secs = 60;
 	gt->gt_logd_secs = 1;
-	gt->gt_quotad_secs = 5;
 	gt->gt_quota_simul_sync = 64;
 	gt->gt_quota_warn_period = 10;
 	gt->gt_quota_scale_num = 1;
@@ -110,6 +106,9 @@ static struct gfs2_sbd *init_sbd(struct super_block *sb)
 	INIT_LIST_HEAD(&sdp->sd_quota_list);
 	spin_lock_init(&sdp->sd_quota_spin);
 	mutex_init(&sdp->sd_quota_mutex);
+	init_waitqueue_head(&sdp->sd_quota_wait);
+	INIT_LIST_HEAD(&sdp->sd_trunc_list);
+	spin_lock_init(&sdp->sd_trunc_lock);
 
 	spin_lock_init(&sdp->sd_log_lock);
 
@@ -620,7 +619,7 @@ static int map_journal_extents(struct gfs2_sbd *sdp)
 
 	prev_db = 0;
 
-	for (lb = 0; lb < ip->i_di.di_size >> sdp->sd_sb.sb_bsize_shift; lb++) {
+	for (lb = 0; lb < ip->i_disksize >> sdp->sd_sb.sb_bsize_shift; lb++) {
 		bh.b_state = 0;
 		bh.b_blocknr = 0;
 		bh.b_size = 1 << ip->i_inode.i_blkbits;
@@ -972,9 +971,6 @@ static int init_threads(struct gfs2_sbd *sdp, int undo)
 		return error;
 	}
 	sdp->sd_logd_process = p;
-
-	sdp->sd_statfs_sync_time = jiffies;
-	sdp->sd_quota_sync_time = jiffies;
 
 	p = kthread_run(gfs2_quotad, sdp, "gfs2_quotad");
 	error = IS_ERR(p);
