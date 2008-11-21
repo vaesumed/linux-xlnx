@@ -56,6 +56,7 @@
 #include "suballoc.h"
 #include "super.h"
 #include "xattr.h"
+#include "acl.h"
 
 #include "buffer_head_io.h"
 
@@ -401,12 +402,9 @@ static int ocfs2_truncate_file(struct inode *inode,
 		   (unsigned long long)OCFS2_I(inode)->ip_blkno,
 		   (unsigned long long)new_i_size);
 
+	/* We trust di_bh because it comes from ocfs2_inode_lock(), which
+	 * already validated it */
 	fe = (struct ocfs2_dinode *) di_bh->b_data;
-	if (!OCFS2_IS_VALID_DINODE(fe)) {
-		OCFS2_RO_ON_INVALID_DINODE(inode->i_sb, fe);
-		status = -EIO;
-		goto bail;
-	}
 
 	mlog_bug_on_msg(le64_to_cpu(fe->i_size) != i_size_read(inode),
 			"Inode %llu, inode i_size = %lld != di "
@@ -545,18 +543,12 @@ static int __ocfs2_extend_allocation(struct inode *inode, u32 logical_start,
 	 */
 	BUG_ON(mark_unwritten && !ocfs2_sparse_alloc(osb));
 
-	status = ocfs2_read_block(inode, OCFS2_I(inode)->ip_blkno, &bh);
+	status = ocfs2_read_inode_block(inode, &bh);
 	if (status < 0) {
 		mlog_errno(status);
 		goto leave;
 	}
-
 	fe = (struct ocfs2_dinode *) bh->b_data;
-	if (!OCFS2_IS_VALID_DINODE(fe)) {
-		OCFS2_RO_ON_INVALID_DINODE(inode->i_sb, fe);
-		status = -EIO;
-		goto leave;
-	}
 
 restart_all:
 	BUG_ON(le32_to_cpu(fe->i_clusters) != OCFS2_I(inode)->ip_clusters);
@@ -989,6 +981,12 @@ bail_unlock_rw:
 bail:
 	brelse(bh);
 
+	if (!status && attr->ia_valid & ATTR_MODE) {
+		status = ocfs2_acl_chmod(inode);
+		if (status < 0)
+			mlog_errno(status);
+	}
+
 	mlog_exit(status);
 	return status;
 }
@@ -1035,7 +1033,7 @@ int ocfs2_permission(struct inode *inode, int mask)
 		goto out;
 	}
 
-	ret = generic_permission(inode, mask, NULL);
+	ret = generic_permission(inode, mask, ocfs2_check_acl);
 
 	ocfs2_inode_unlock(inode, 0);
 out:
@@ -1128,9 +1126,8 @@ static int ocfs2_write_remove_suid(struct inode *inode)
 {
 	int ret;
 	struct buffer_head *bh = NULL;
-	struct ocfs2_inode_info *oi = OCFS2_I(inode);
 
-	ret = ocfs2_read_block(inode, oi->ip_blkno, &bh);
+	ret = ocfs2_read_inode_block(inode, &bh);
 	if (ret < 0) {
 		mlog_errno(ret);
 		goto out;
@@ -1156,8 +1153,7 @@ static int ocfs2_allocate_unwritten_extents(struct inode *inode,
 	struct buffer_head *di_bh = NULL;
 
 	if (OCFS2_I(inode)->ip_dyn_features & OCFS2_INLINE_DATA_FL) {
-		ret = ocfs2_read_block(inode, OCFS2_I(inode)->ip_blkno,
-				       &di_bh);
+		ret = ocfs2_read_inode_block(inode, &di_bh);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
@@ -1223,83 +1219,6 @@ next:
 out:
 
 	brelse(di_bh);
-	return ret;
-}
-
-static int __ocfs2_remove_inode_range(struct inode *inode,
-				      struct buffer_head *di_bh,
-				      u32 cpos, u32 phys_cpos, u32 len,
-				      struct ocfs2_cached_dealloc_ctxt *dealloc)
-{
-	int ret;
-	u64 phys_blkno = ocfs2_clusters_to_blocks(inode->i_sb, phys_cpos);
-	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
-	struct inode *tl_inode = osb->osb_tl_inode;
-	handle_t *handle;
-	struct ocfs2_alloc_context *meta_ac = NULL;
-	struct ocfs2_dinode *di = (struct ocfs2_dinode *)di_bh->b_data;
-	struct ocfs2_extent_tree et;
-
-	ocfs2_init_dinode_extent_tree(&et, inode, di_bh);
-
-	ret = ocfs2_lock_allocators(inode, &et, 0, 1, NULL, &meta_ac);
-	if (ret) {
-		mlog_errno(ret);
-		return ret;
-	}
-
-	mutex_lock(&tl_inode->i_mutex);
-
-	if (ocfs2_truncate_log_needs_flush(osb)) {
-		ret = __ocfs2_flush_truncate_log(osb);
-		if (ret < 0) {
-			mlog_errno(ret);
-			goto out;
-		}
-	}
-
-	handle = ocfs2_start_trans(osb, OCFS2_REMOVE_EXTENT_CREDITS);
-	if (IS_ERR(handle)) {
-		ret = PTR_ERR(handle);
-		mlog_errno(ret);
-		goto out;
-	}
-
-	ret = ocfs2_journal_access(handle, inode, di_bh,
-				   OCFS2_JOURNAL_ACCESS_WRITE);
-	if (ret) {
-		mlog_errno(ret);
-		goto out;
-	}
-
-	ret = ocfs2_remove_extent(inode, &et, cpos, len, handle, meta_ac,
-				  dealloc);
-	if (ret) {
-		mlog_errno(ret);
-		goto out_commit;
-	}
-
-	OCFS2_I(inode)->ip_clusters -= len;
-	di->i_clusters = cpu_to_le32(OCFS2_I(inode)->ip_clusters);
-
-	ret = ocfs2_journal_dirty(handle, di_bh);
-	if (ret) {
-		mlog_errno(ret);
-		goto out_commit;
-	}
-
-	ret = ocfs2_truncate_log_append(osb, handle, phys_blkno, len);
-	if (ret)
-		mlog_errno(ret);
-
-out_commit:
-	ocfs2_commit_trans(osb, handle);
-out:
-	mutex_unlock(&tl_inode->i_mutex);
-
-	if (meta_ac)
-		ocfs2_free_alloc_context(meta_ac);
-
 	return ret;
 }
 
@@ -1402,7 +1321,9 @@ static int ocfs2_remove_inode_range(struct inode *inode,
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 	struct ocfs2_cached_dealloc_ctxt dealloc;
 	struct address_space *mapping = inode->i_mapping;
+	struct ocfs2_extent_tree et;
 
+	ocfs2_init_dinode_extent_tree(&et, inode, di_bh);
 	ocfs2_init_dealloc_ctxt(&dealloc);
 
 	if (byte_len == 0)
@@ -1458,9 +1379,9 @@ static int ocfs2_remove_inode_range(struct inode *inode,
 
 		/* Only do work for non-holes */
 		if (phys_cpos != 0) {
-			ret = __ocfs2_remove_inode_range(inode, di_bh, cpos,
-							 phys_cpos, alloc_size,
-							 &dealloc);
+			ret = ocfs2_remove_btree_range(inode, &et, cpos,
+						       phys_cpos, alloc_size,
+						       &dealloc);
 			if (ret) {
 				mlog_errno(ret);
 				goto out;
