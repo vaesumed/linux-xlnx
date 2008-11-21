@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/uwb/umc.h>
@@ -91,8 +90,6 @@ static void whc_stop(struct usb_hcd *usb_hcd)
 	struct whc *whc = wusbhc_to_whc(wusbhc);
 
 	mutex_lock(&wusbhc->mutex);
-
-	wusbhc_stop(wusbhc);
 
 	/* stop HC */
 	le_writel(0, whc->base + WUSBINTR);
