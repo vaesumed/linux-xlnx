@@ -135,6 +135,7 @@ static int rcktpt_type[NUM_BOARDS];
 static int is_PCI[NUM_BOARDS];
 static rocketModel_t rocketModel[NUM_BOARDS];
 static int max_board;
+static const struct tty_port_operations rocket_port_ops;
 
 /*
  * The following arrays define the interrupt bits corresponding to each AIOP.
@@ -498,7 +499,7 @@ static void rp_handle_port(struct r_port *info)
 	if (!info)
 		return;
 
-	if ((info->flags & ROCKET_INITIALIZED) == 0) {
+	if ((info->flags & ASYNC_INITIALIZED) == 0) {
 		printk(KERN_WARNING "rp: WARNING: rp_handle_port called with "
 				"info->flags & NOT_INIT\n");
 		return;
@@ -649,9 +650,8 @@ static void init_r_port(int board, int aiop, int chan, struct pci_dev *pci_dev)
 	info->board = board;
 	info->aiop = aiop;
 	info->chan = chan;
-	info->port.closing_wait = 3000;
-	info->port.close_delay = 50;
-	init_waitqueue_head(&info->port.open_wait);
+	tty_port_init(&info->port);
+	info->port.ops = &rocket_port_ops;
 	init_completion(&info->close_wait);
 	info->flags &= ~ROCKET_MODE_MASK;
 	switch (pc104[board][line]) {
@@ -864,11 +864,25 @@ static void configure_r_port(struct r_port *info,
 	}
 }
 
+static int carrier_raised(struct tty_port *port)
+{
+	struct r_port *info = container_of(port, struct r_port, port);
+	return (sGetChanStatusLo(&info->channel) & CD_ACT) ? 1 : 0;
+}
+
+static void raise_dtr_rts(struct tty_port *port)
+{
+	struct r_port *info = container_of(port, struct r_port, port);
+	sSetDTR(&info->channel);
+	sSetRTS(&info->channel);
+}
+
 /*  info->port.count is considered critical, protected by spinlocks.  */
 static int block_til_ready(struct tty_struct *tty, struct file *filp,
 			   struct r_port *info)
 {
 	DECLARE_WAITQUEUE(wait, current);
+	struct tty_port *port = &info->port;
 	int retval;
 	int do_clocal = 0, extra_count = 0;
 	unsigned long flags;
@@ -878,11 +892,11 @@ static int block_til_ready(struct tty_struct *tty, struct file *filp,
 	 * until it's done, and then try again.
 	 */
 	if (tty_hung_up_p(filp))
-		return ((info->flags & ROCKET_HUP_NOTIFY) ? -EAGAIN : -ERESTARTSYS);
-	if (info->flags & ROCKET_CLOSING) {
+		return ((info->flags & ASYNC_HUP_NOTIFY) ? -EAGAIN : -ERESTARTSYS);
+	if (info->flags & ASYNC_CLOSING) {
 		if (wait_for_completion_interruptible(&info->close_wait))
 			return -ERESTARTSYS;
-		return ((info->flags & ROCKET_HUP_NOTIFY) ? -EAGAIN : -ERESTARTSYS);
+		return ((info->flags & ASYNC_HUP_NOTIFY) ? -EAGAIN : -ERESTARTSYS);
 	}
 
 	/*
@@ -890,7 +904,7 @@ static int block_til_ready(struct tty_struct *tty, struct file *filp,
 	 * then make the check up front and then exit.
 	 */
 	if ((filp->f_flags & O_NONBLOCK) || (tty->flags & (1 << TTY_IO_ERROR))) {
-		info->flags |= ROCKET_NORMAL_ACTIVE;
+		info->flags |= ASYNC_NORMAL_ACTIVE;
 		return 0;
 	}
 	if (tty->termios->c_cflag & CLOCAL)
@@ -898,42 +912,41 @@ static int block_til_ready(struct tty_struct *tty, struct file *filp,
 
 	/*
 	 * Block waiting for the carrier detect and the line to become free.  While we are in
-	 * this loop, info->port.count is dropped by one, so that rp_close() knows when to free things.
+	 * this loop, port->count is dropped by one, so that rp_close() knows when to free things.
          * We restore it upon exit, either normal or abnormal.
 	 */
 	retval = 0;
-	add_wait_queue(&info->port.open_wait, &wait);
+	add_wait_queue(&port->open_wait, &wait);
 #ifdef ROCKET_DEBUG_OPEN
-	printk(KERN_INFO "block_til_ready before block: ttyR%d, count = %d\n", info->line, info->port.count);
+	printk(KERN_INFO "block_til_ready before block: ttyR%d, count = %d\n", info->line, port->count);
 #endif
 	spin_lock_irqsave(&info->slock, flags);
 
 #ifdef ROCKET_DISABLE_SIMUSAGE
-	info->flags |= ROCKET_NORMAL_ACTIVE;
+	info->flags |= ASYNC_NORMAL_ACTIVE;
 #else
 	if (!tty_hung_up_p(filp)) {
 		extra_count = 1;
-		info->port.count--;
+		port->count--;
 	}
 #endif
-	info->port.blocked_open++;
+	port->blocked_open++;
 
 	spin_unlock_irqrestore(&info->slock, flags);
 
 	while (1) {
-		if (tty->termios->c_cflag & CBAUD) {
-			sSetDTR(&info->channel);
-			sSetRTS(&info->channel);
-		}
+		if (tty->termios->c_cflag & CBAUD)
+			tty_port_raise_dtr_rts(port);
 		set_current_state(TASK_INTERRUPTIBLE);
-		if (tty_hung_up_p(filp) || !(info->flags & ROCKET_INITIALIZED)) {
-			if (info->flags & ROCKET_HUP_NOTIFY)
+		if (tty_hung_up_p(filp) || !(info->flags & ASYNC_INITIALIZED)) {
+			if (info->flags & ASYNC_HUP_NOTIFY)
 				retval = -EAGAIN;
 			else
 				retval = -ERESTARTSYS;
 			break;
 		}
-		if (!(info->flags & ROCKET_CLOSING) && (do_clocal || (sGetChanStatusLo(&info->channel) & CD_ACT)))
+		if (!(info->flags & ASYNC_CLOSING) &&
+			(do_clocal || tty_port_carrier_raised(port)))
 			break;
 		if (signal_pending(current)) {
 			retval = -ERESTARTSYS;
@@ -941,28 +954,28 @@ static int block_til_ready(struct tty_struct *tty, struct file *filp,
 		}
 #ifdef ROCKET_DEBUG_OPEN
 		printk(KERN_INFO "block_til_ready blocking: ttyR%d, count = %d, flags=0x%0x\n",
-		     info->line, info->port.count, info->flags);
+		     info->line, port->count, info->flags);
 #endif
 		schedule();	/*  Don't hold spinlock here, will hang PC */
 	}
 	__set_current_state(TASK_RUNNING);
-	remove_wait_queue(&info->port.open_wait, &wait);
+	remove_wait_queue(&port->open_wait, &wait);
 
 	spin_lock_irqsave(&info->slock, flags);
 
 	if (extra_count)
-		info->port.count++;
-	info->port.blocked_open--;
+		port->count++;
+	port->blocked_open--;
 
 	spin_unlock_irqrestore(&info->slock, flags);
 
 #ifdef ROCKET_DEBUG_OPEN
 	printk(KERN_INFO "block_til_ready after blocking: ttyR%d, count = %d\n",
-	       info->line, info->port.count);
+	       info->line, port->count);
 #endif
 	if (retval)
 		return retval;
-	info->flags |= ROCKET_NORMAL_ACTIVE;
+	info->flags |= ASYNC_NORMAL_ACTIVE;
 	return 0;
 }
 
@@ -985,12 +998,12 @@ static int rp_open(struct tty_struct *tty, struct file *filp)
 	if (!page)
 		return -ENOMEM;
 
-	if (info->flags & ROCKET_CLOSING) {
+	if (info->flags & ASYNC_CLOSING) {
 		retval = wait_for_completion_interruptible(&info->close_wait);
 		free_page(page);
 		if (retval)
 			return retval;
-		return ((info->flags & ROCKET_HUP_NOTIFY) ? -EAGAIN : -ERESTARTSYS);
+		return ((info->flags & ASYNC_HUP_NOTIFY) ? -EAGAIN : -ERESTARTSYS);
 	}
 
 	/*
@@ -1019,7 +1032,7 @@ static int rp_open(struct tty_struct *tty, struct file *filp)
 	/*
 	 * Info->count is now 1; so it's safe to sleep now.
 	 */
-	if ((info->flags & ROCKET_INITIALIZED) == 0) {
+	if ((info->flags & ASYNC_INITIALIZED) == 0) {
 		cp = &info->channel;
 		sSetRxTrigger(cp, TRIG_1);
 		if (sGetChanStatus(cp) & CD_ACT)
@@ -1043,7 +1056,7 @@ static int rp_open(struct tty_struct *tty, struct file *filp)
 		sEnRxFIFO(cp);
 		sEnTransmit(cp);
 
-		info->flags |= ROCKET_INITIALIZED;
+		info->flags |= ASYNC_INITIALIZED;
 
 		/*
 		 * Set up the tty->alt_speed kludge
@@ -1118,7 +1131,7 @@ static void rp_close(struct tty_struct *tty, struct file *filp)
 		spin_unlock_irqrestore(&info->slock, flags);
 		return;
 	}
-	info->flags |= ROCKET_CLOSING;
+	info->flags |= ASYNC_CLOSING;
 	spin_unlock_irqrestore(&info->slock, flags);
 
 	cp = &info->channel;
@@ -1138,7 +1151,7 @@ static void rp_close(struct tty_struct *tty, struct file *filp)
 	/*
 	 * Wait for the transmit buffer to clear
 	 */
-	if (info->port.closing_wait != ROCKET_CLOSING_WAIT_NONE)
+	if (info->port.closing_wait != ASYNC_CLOSING_WAIT_NONE)
 		tty_wait_until_sent(tty, info->port.closing_wait);
 	/*
 	 * Before we drop DTR, make sure the UART transmitter
@@ -1179,7 +1192,7 @@ static void rp_close(struct tty_struct *tty, struct file *filp)
 			info->xmit_buf = NULL;
 		}
 	}
-	info->flags &= ~(ROCKET_INITIALIZED | ROCKET_CLOSING | ROCKET_NORMAL_ACTIVE);
+	info->flags &= ~(ASYNC_INITIALIZED | ASYNC_CLOSING | ASYNC_NORMAL_ACTIVE);
 	tty->closing = 0;
 	complete_all(&info->close_wait);
 	atomic_dec(&rp_num_ports_open);
@@ -1636,14 +1649,14 @@ static void rp_hangup(struct tty_struct *tty)
 	printk(KERN_INFO "rp_hangup of ttyR%d...\n", info->line);
 #endif
 	rp_flush_buffer(tty);
-	if (info->flags & ROCKET_CLOSING)
+	if (info->flags & ASYNC_CLOSING)
 		return;
 	if (info->port.count)
 		atomic_dec(&rp_num_ports_open);
 	clear_bit((info->aiop * 8) + info->chan, (void *) &xmit_flags[info->board]);
 
 	info->port.count = 0;
-	info->flags &= ~ROCKET_NORMAL_ACTIVE;
+	info->flags &= ~ASYNC_NORMAL_ACTIVE;
 	info->port.tty = NULL;
 
 	cp = &info->channel;
@@ -1653,7 +1666,7 @@ static void rp_hangup(struct tty_struct *tty)
 	sDisCTSFlowCtl(cp);
 	sDisTxSoftFlowCtl(cp);
 	sClrTxXOFF(cp);
-	info->flags &= ~ROCKET_INITIALIZED;
+	info->flags &= ~ASYNC_INITIALIZED;
 
 	wake_up_interruptible(&info->port.open_wait);
 }
@@ -2369,6 +2382,11 @@ static const struct tty_operations rocket_ops = {
 	.wait_until_sent = rp_wait_until_sent,
 	.tiocmget = rp_tiocmget,
 	.tiocmset = rp_tiocmset,
+};
+
+static const struct tty_port_operations rocket_port_ops = {
+	.carrier_raised = carrier_raised,
+	.raise_dtr_rts = raise_dtr_rts,
 };
 
 /*
