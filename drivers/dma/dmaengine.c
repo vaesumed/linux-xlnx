@@ -103,9 +103,16 @@ static struct device_attribute dma_attrs[] = {
 	__ATTR_NULL
 };
 
+static void chan_dev_release(struct device *dev)
+{
+	/* nothing to do */
+	do { } while (0);
+}
+
 static struct class dma_devclass = {
 	.name		= "dma",
 	.dev_attrs	= dma_attrs,
+	.dev_release	= chan_dev_release,
 };
 
 /* --- client and device registration --- */
