@@ -63,8 +63,16 @@ struct ftrace_branch_data {
 	const char *func;
 	const char *file;
 	unsigned line;
-	unsigned long correct;
-	unsigned long incorrect;
+	union {
+		struct {
+			unsigned long correct;
+			unsigned long incorrect;
+		};
+		struct {
+			unsigned long miss;
+			unsigned long hit;
+		};
+	};
 };
 
 /*
@@ -77,34 +85,18 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
 #define likely_notrace(x)	__builtin_expect(!!(x), 1)
 #define unlikely_notrace(x)	__builtin_expect(!!(x), 0)
 
-#define likely_check(x) ({						\
+#define __branch_check__(x, expect) ({					\
 			int ______r;					\
 			static struct ftrace_branch_data		\
 				__attribute__((__aligned__(4)))		\
-				__attribute__((section("_ftrace_likely"))) \
+				__attribute__((section("_ftrace_annotated_branch"))) \
 				______f = {				\
 				.func = __func__,			\
 				.file = __FILE__,			\
 				.line = __LINE__,			\
 			};						\
-			______f.line = __LINE__;			\
 			______r = likely_notrace(x);			\
-			ftrace_likely_update(&______f, ______r, 1);	\
-			______r;					\
-		})
-#define unlikely_check(x) ({						\
-			int ______r;					\
-			static struct ftrace_branch_data		\
-				__attribute__((__aligned__(4)))		\
-				__attribute__((section("_ftrace_unlikely"))) \
-				______f = {				\
-				.func = __func__,			\
-				.file = __FILE__,			\
-				.line = __LINE__,			\
-			};						\
-			______f.line = __LINE__;			\
-			______r = unlikely_notrace(x);			\
-			ftrace_likely_update(&______f, ______r, 0);	\
+			ftrace_likely_update(&______f, ______r, expect); \
 			______r;					\
 		})
 
@@ -114,11 +106,37 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
  * written by Daniel Walker.
  */
 # ifndef likely
-#  define likely(x)	(__builtin_constant_p(x) ? !!(x) : likely_check(x))
+#  define likely(x)	(__builtin_constant_p(x) ? !!(x) : __branch_check__(x, 1))
 # endif
 # ifndef unlikely
-#  define unlikely(x)	(__builtin_constant_p(x) ? !!(x) : unlikely_check(x))
+#  define unlikely(x)	(__builtin_constant_p(x) ? !!(x) : __branch_check__(x, 0))
 # endif
+
+#ifdef CONFIG_PROFILE_ALL_BRANCHES
+/*
+ * "Define 'is'", Bill Clinton
+ * "Define 'if'", Steven Rostedt
+ */
+#define if(cond) if (__builtin_constant_p((cond)) ? !!(cond) :		\
+	({								\
+		int ______r;						\
+		static struct ftrace_branch_data			\
+			__attribute__((__aligned__(4)))			\
+			__attribute__((section("_ftrace_branch")))	\
+			______f = {					\
+				.func = __func__,			\
+				.file = __FILE__,			\
+				.line = __LINE__,			\
+			};						\
+		______r = !!(cond);					\
+		if (______r)						\
+			______f.hit++;					\
+		else							\
+			______f.miss++;					\
+		______r;						\
+	}))
+#endif /* CONFIG_PROFILE_ALL_BRANCHES */
+
 #else
 # define likely(x)	__builtin_expect(!!(x), 1)
 # define unlikely(x)	__builtin_expect(!!(x), 0)

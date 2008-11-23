@@ -185,12 +185,13 @@ EXPORT_SYMBOL(ftrace_likely_update);
 struct ftrace_pointer {
 	void		*start;
 	void		*stop;
+	int		hit;
 };
 
 static void *
 t_next(struct seq_file *m, void *v, loff_t *pos)
 {
-	struct ftrace_pointer *f = m->private;
+	const struct ftrace_pointer *f = m->private;
 	struct ftrace_branch_data *p = v;
 
 	(*pos)++;
@@ -223,13 +224,17 @@ static void t_stop(struct seq_file *m, void *p)
 
 static int t_show(struct seq_file *m, void *v)
 {
+	const struct ftrace_pointer *fp = m->private;
 	struct ftrace_branch_data *p = v;
 	const char *f;
-	unsigned long percent;
+	long percent;
 
 	if (v == (void *)1) {
-		seq_printf(m, " correct incorrect  %% "
-			      "       Function                "
+		if (fp->hit)
+			seq_printf(m, "   miss      hit    %% ");
+		else
+			seq_printf(m, " correct incorrect  %% ");
+		seq_printf(m, "       Function                "
 			      "  File              Line\n"
 			      " ------- ---------  - "
 			      "       --------                "
@@ -243,13 +248,20 @@ static int t_show(struct seq_file *m, void *v)
 		f--;
 	f++;
 
+	/*
+	 * The miss is overlayed on correct, and hit on incorrect.
+	 */
 	if (p->correct) {
 		percent = p->incorrect * 100;
 		percent /= p->correct + p->incorrect;
 	} else
-		percent = p->incorrect ? 100 : 0;
+		percent = p->incorrect ? 100 : -1;
 
-	seq_printf(m, "%8lu %8lu %3lu ", p->correct, p->incorrect, percent);
+	seq_printf(m, "%8lu %8lu ",  p->correct, p->incorrect);
+	if (percent < 0)
+		seq_printf(m, "  X ");
+	else
+		seq_printf(m, "%3ld ", percent);
 	seq_printf(m, "%-30.30s %-20.20s %d\n", p->func, f, p->line);
 	return 0;
 }
@@ -261,7 +273,7 @@ static struct seq_operations tracing_likely_seq_ops = {
 	.show		= t_show,
 };
 
-static int tracing_likely_open(struct inode *inode, struct file *file)
+static int tracing_branch_open(struct inode *inode, struct file *file)
 {
 	int ret;
 
@@ -274,25 +286,30 @@ static int tracing_likely_open(struct inode *inode, struct file *file)
 	return ret;
 }
 
-static struct file_operations tracing_likely_fops = {
-	.open		= tracing_likely_open,
+static const struct file_operations tracing_branch_fops = {
+	.open		= tracing_branch_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
 };
 
-extern unsigned long __start_likely_profile[];
-extern unsigned long __stop_likely_profile[];
-extern unsigned long __start_unlikely_profile[];
-extern unsigned long __stop_unlikely_profile[];
+#ifdef CONFIG_PROFILE_ALL_BRANCHES
+extern unsigned long __start_branch_profile[];
+extern unsigned long __stop_branch_profile[];
 
-static struct ftrace_pointer ftrace_likely_pos = {
-	.start			= __start_likely_profile,
-	.stop			= __stop_likely_profile,
+static const struct ftrace_pointer ftrace_branch_pos = {
+	.start			= __start_branch_profile,
+	.stop			= __stop_branch_profile,
+	.hit			= 1,
 };
 
-static struct ftrace_pointer ftrace_unlikely_pos = {
-	.start			= __start_unlikely_profile,
-	.stop			= __stop_unlikely_profile,
+#endif /* CONFIG_PROFILE_ALL_BRANCHES */
+
+extern unsigned long __start_annotated_branch_profile[];
+extern unsigned long __stop_annotated_branch_profile[];
+
+static const struct ftrace_pointer ftrace_annotated_branch_pos = {
+	.start			= __start_annotated_branch_profile,
+	.stop			= __stop_annotated_branch_profile,
 };
 
 static __init int ftrace_branch_init(void)
@@ -302,18 +319,21 @@ static __init int ftrace_branch_init(void)
 
 	d_tracer = tracing_init_dentry();
 
-	entry = debugfs_create_file("profile_likely", 0444, d_tracer,
-				    &ftrace_likely_pos,
-				    &tracing_likely_fops);
+	entry = debugfs_create_file("profile_annotated_branch", 0444, d_tracer,
+				    (void *)&ftrace_annotated_branch_pos,
+				    &tracing_branch_fops);
 	if (!entry)
-		pr_warning("Could not create debugfs 'profile_likely' entry\n");
+		pr_warning("Could not create debugfs "
+			   "'profile_annotatet_branch' entry\n");
 
-	entry = debugfs_create_file("profile_unlikely", 0444, d_tracer,
-				    &ftrace_unlikely_pos,
-				    &tracing_likely_fops);
+#ifdef CONFIG_PROFILE_ALL_BRANCHES
+	entry = debugfs_create_file("profile_branch", 0444, d_tracer,
+				    (void *)&ftrace_branch_pos,
+				    &tracing_branch_fops);
 	if (!entry)
 		pr_warning("Could not create debugfs"
-			   " 'profile_unlikely' entry\n");
+			   " 'profile_branch' entry\n");
+#endif
 
 	return 0;
 }
