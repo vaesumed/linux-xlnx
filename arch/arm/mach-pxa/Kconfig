@@ -199,6 +199,10 @@ config MACH_E800
 config TRIZEPS_PXA
 	bool "PXA based Keith und Koep Trizeps DIMM-Modules"
 
+config MACH_H5000
+	bool "HP iPAQ h5000"
+	select PXA25x
+
 config MACH_TRIZEPS4
 	bool "Keith und Koep Trizeps4 DIMM-Module"
 	depends on TRIZEPS_PXA
@@ -301,6 +305,16 @@ config MACH_PCM027
 config ARCH_PXA_PALM
 	bool "PXA based Palm PDAs"
 	select HAVE_PWM
+
+config MACH_PALMT5
+	bool "Palm Tungsten|T5"
+	default y
+	depends on ARCH_PXA_PALM
+	select PXA27x
+	select IWMMXT
+	help
+	  Say Y here if you intend to run this kernel on a Palm Tungsten|T5
+	  handheld computer.
 
 config MACH_PALMTX
 	bool "Palm T|X"
