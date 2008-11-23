@@ -1008,7 +1008,7 @@ void do_ide_request(struct request_queue *q)
 again:
 		hwif = drive->hwif;
 
-		if (hwgroup->hwif->sharing_irq && hwif != hwgroup->hwif) {
+		if (hwif != hwgroup->hwif) {
 			/*
 			 * set nIEN for previous hwif, drives in the
 			 * quirk_list may not like intr setups/cleanups
