@@ -85,7 +85,7 @@ enum ocfs2_unlock_action {
 };
 
 /* ocfs2_lock_res->l_flags flags. */
-#define OCFS2_LOCK_ATTACHED      (0x00000001) /* have we initialized
+#define OCFS2_LOCK_ATTACHED      (0x00000001) /* we have initialized
 					       * the lvb */
 #define OCFS2_LOCK_BUSY          (0x00000002) /* we are currently in
 					       * dlm_lock */
@@ -195,6 +195,7 @@ enum ocfs2_mount_options
 	OCFS2_MOUNT_LOCALFLOCKS = 1 << 5, /* No cluster aware user file locks */
 	OCFS2_MOUNT_NOUSERXATTR = 1 << 6, /* No user xattr */
 	OCFS2_MOUNT_INODE64 = 1 << 7,	/* Allow inode numbers > 2^32 */
+	OCFS2_MOUNT_POSIX_ACL = 1 << 8,	/* POSIX access control lists */
 };
 
 #define OCFS2_OSB_SOFT_RO	0x0001
@@ -443,35 +444,12 @@ static inline int ocfs2_uses_extended_slot_map(struct ocfs2_super *osb)
 #define OCFS2_IS_VALID_DINODE(ptr)					\
 	(!strcmp((ptr)->i_signature, OCFS2_INODE_SIGNATURE))
 
-#define OCFS2_RO_ON_INVALID_DINODE(__sb, __di)	do {			\
-	typeof(__di) ____di = (__di);					\
-	ocfs2_error((__sb), 						\
-		"Dinode # %llu has bad signature %.*s",			\
-		(unsigned long long)le64_to_cpu((____di)->i_blkno), 7, 	\
-		(____di)->i_signature);					\
-} while (0)
-
 #define OCFS2_IS_VALID_EXTENT_BLOCK(ptr)				\
 	(!strcmp((ptr)->h_signature, OCFS2_EXTENT_BLOCK_SIGNATURE))
-
-#define OCFS2_RO_ON_INVALID_EXTENT_BLOCK(__sb, __eb)	do {		\
-	typeof(__eb) ____eb = (__eb);					\
-	ocfs2_error((__sb), 						\
-		"Extent Block # %llu has bad signature %.*s",		\
-		(unsigned long long)le64_to_cpu((____eb)->h_blkno), 7,	\
-		(____eb)->h_signature);					\
-} while (0)
 
 #define OCFS2_IS_VALID_GROUP_DESC(ptr)					\
 	(!strcmp((ptr)->bg_signature, OCFS2_GROUP_DESC_SIGNATURE))
 
-#define OCFS2_RO_ON_INVALID_GROUP_DESC(__sb, __gd)	do {		\
-	typeof(__gd) ____gd = (__gd);					\
-		ocfs2_error((__sb),					\
-		"Group Descriptor # %llu has bad signature %.*s",	\
-		(unsigned long long)le64_to_cpu((____gd)->bg_blkno), 7, \
-		(____gd)->bg_signature);				\
-} while (0)
 
 #define OCFS2_IS_VALID_XATTR_BLOCK(ptr)					\
 	(!strcmp((ptr)->xb_signature, OCFS2_XATTR_BLOCK_SIGNATURE))

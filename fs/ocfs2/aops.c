@@ -68,19 +68,12 @@ static int ocfs2_symlink_get_block(struct inode *inode, sector_t iblock,
 		goto bail;
 	}
 
-	status = ocfs2_read_block(inode, OCFS2_I(inode)->ip_blkno, &bh);
+	status = ocfs2_read_inode_block(inode, &bh);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
 	}
 	fe = (struct ocfs2_dinode *) bh->b_data;
-
-	if (!OCFS2_IS_VALID_DINODE(fe)) {
-		mlog(ML_ERROR, "Invalid dinode #%llu: signature = %.*s\n",
-		     (unsigned long long)le64_to_cpu(fe->i_blkno), 7,
-		     fe->i_signature);
-		goto bail;
-	}
 
 	if ((u64)iblock >= ocfs2_clusters_to_blocks(inode->i_sb,
 						    le32_to_cpu(fe->i_clusters))) {
@@ -262,7 +255,7 @@ static int ocfs2_readpage_inline(struct inode *inode, struct page *page)
 	BUG_ON(!PageLocked(page));
 	BUG_ON(!(OCFS2_I(inode)->ip_dyn_features & OCFS2_INLINE_DATA_FL));
 
-	ret = ocfs2_read_block(inode, OCFS2_I(inode)->ip_blkno, &di_bh);
+	ret = ocfs2_read_inode_block(inode, &di_bh);
 	if (ret) {
 		mlog_errno(ret);
 		goto out;
@@ -481,12 +474,6 @@ handle_t *ocfs2_start_walk_page_trans(struct inode *inode,
 
 	if (ocfs2_should_order_data(inode)) {
 		ret = ocfs2_jbd2_file_inode(handle, inode);
-#ifdef CONFIG_OCFS2_COMPAT_JBD
-		ret = walk_page_buffers(handle,
-					page_buffers(page),
-					from, to, NULL,
-					ocfs2_journal_dirty_data);
-#endif
 		if (ret < 0)
 			mlog_errno(ret);
 	}
@@ -1072,15 +1059,8 @@ static void ocfs2_write_failure(struct inode *inode,
 		tmppage = wc->w_pages[i];
 
 		if (page_has_buffers(tmppage)) {
-			if (ocfs2_should_order_data(inode)) {
+			if (ocfs2_should_order_data(inode))
 				ocfs2_jbd2_file_inode(wc->w_handle, inode);
-#ifdef CONFIG_OCFS2_COMPAT_JBD
-				walk_page_buffers(wc->w_handle,
-						  page_buffers(tmppage),
-						  from, to, NULL,
-						  ocfs2_journal_dirty_data);
-#endif
-			}
 
 			block_commit_write(tmppage, from, to);
 		}
@@ -1919,15 +1899,8 @@ int ocfs2_write_end_nolock(struct address_space *mapping,
 		}
 
 		if (page_has_buffers(tmppage)) {
-			if (ocfs2_should_order_data(inode)) {
+			if (ocfs2_should_order_data(inode))
 				ocfs2_jbd2_file_inode(wc->w_handle, inode);
-#ifdef CONFIG_OCFS2_COMPAT_JBD
-				walk_page_buffers(wc->w_handle,
-						  page_buffers(tmppage),
-						  from, to, NULL,
-						  ocfs2_journal_dirty_data);
-#endif
-			}
 			block_commit_write(tmppage, from, to);
 		}
 	}
