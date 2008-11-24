@@ -19,6 +19,7 @@
 #include <linux/wait.h>
 #include <linux/tracehook.h>
 #include <linux/elf.h>
+#include <linux/perfmon_kern.h>
 #include <linux/smp.h>
 #include <linux/mm.h>
 
@@ -748,6 +749,10 @@ do_notify_resume(struct pt_regs *regs, void *unused, __u32 thread_info_flags)
 	if (thread_info_flags & _TIF_MCE_NOTIFY)
 		mce_notify_user();
 #endif /* CONFIG_X86_64 && CONFIG_X86_MCE */
+
+  	/* process perfmon asynchronous work (e.g. block thread or reset) */
+  	if (thread_info_flags & _TIF_PERFMON_WORK)
+  		pfm_handle_work(regs);
 
 	/* deal with pending signal delivery */
 	if (thread_info_flags & _TIF_SIGPENDING)
