@@ -332,14 +332,25 @@ static int em28xx_i2c_eeprom(struct em28xx *dev, unsigned char *eedata, int len)
 	struct em28xx_eeprom *em_eeprom = (void *)eedata;
 	int i, err, size = len, block;
 
+	if (dev->chip_id == CHIP_ID_EM2874) {
+		/* Empia switched to a 16-bit addressable eeprom in newer
+		   devices.  While we could certainly write a routine to read
+		   the eeprom, there is nothing of use in there that cannot be
+		   accessed through registers, and there is the risk that we
+		   could corrupt the eeprom (since a 16-bit read call is
+		   interpreted as a write call by 8-bit eeproms).
+		*/
+		return 0;
+	}
+
 	dev->i2c_client.addr = 0xa0 >> 1;
 
 	/* Check if board has eeprom */
 	err = i2c_master_recv(&dev->i2c_client, &buf, 0);
 	if (err < 0) {
-		em28xx_errdev("%s: i2c_master_recv failed! err [%d]\n",
-			__func__, err);
-		return err;
+		em28xx_errdev("board has no eeprom\n");
+		memset(eedata, 0, len);
+		return -ENODEV;
 	}
 
 	buf = 0;
@@ -609,14 +620,16 @@ int em28xx_i2c_register(struct em28xx *dev)
 	dev->i2c_client.adapter = &dev->i2c_adap;
 
 	retval = em28xx_i2c_eeprom(dev, dev->eedata, sizeof(dev->eedata));
-	if (retval < 0) {
+	if ((retval < 0) && (retval != -ENODEV)) {
 		em28xx_errdev("%s: em28xx_i2_eeprom failed! retval [%d]\n",
 			__func__, retval);
+
 		return retval;
 	}
 
 	if (i2c_scan)
 		em28xx_do_i2c_scan(dev);
+
 	return 0;
 }
 

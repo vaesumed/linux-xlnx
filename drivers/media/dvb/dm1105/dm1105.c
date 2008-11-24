@@ -19,7 +19,6 @@
  *
  */
 
-#include <linux/version.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -368,7 +367,7 @@ static int __devinit dm1105dvb_dma_map(struct dm1105dvb *dm1105dvb)
 {
 	dm1105dvb->ts_buf = pci_alloc_consistent(dm1105dvb->pdev, 6*DM1105_DMA_BYTES, &dm1105dvb->dma_addr);
 
-	return pci_dma_mapping_error(dm1105dvb->pdev, dm1105dvb->dma_addr);
+	return !dm1105dvb->ts_buf;
 }
 
 static void dm1105dvb_dma_unmap(struct dm1105dvb *dm1105dvb)
@@ -376,7 +375,7 @@ static void dm1105dvb_dma_unmap(struct dm1105dvb *dm1105dvb)
 	pci_free_consistent(dm1105dvb->pdev, 6*DM1105_DMA_BYTES, dm1105dvb->ts_buf, dm1105dvb->dma_addr);
 }
 
-static void __devinit dm1105dvb_enable_irqs(struct dm1105dvb *dm1105dvb)
+static void dm1105dvb_enable_irqs(struct dm1105dvb *dm1105dvb)
 {
 	outb(INTMAK_ALLMASK, dm_io_mem(DM1105_INTMAK));
 	outb(1, dm_io_mem(DM1105_CR));
