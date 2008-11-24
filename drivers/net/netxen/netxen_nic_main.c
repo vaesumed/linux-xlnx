@@ -439,7 +439,6 @@ netxen_read_mac_addr(struct netxen_adapter *adapter)
 	int i;
 	unsigned char *p;
 	__le64 mac_addr;
-	DECLARE_MAC_BUF(mac);
 	struct net_device *netdev = adapter->netdev;
 	struct pci_dev *pdev = adapter->pdev;
 
@@ -462,10 +461,9 @@ netxen_read_mac_addr(struct netxen_adapter *adapter)
 
 	/* set station address */
 
-	if (!is_valid_ether_addr(netdev->perm_addr)) {
-		dev_warn(&pdev->dev, "Bad MAC address %s.\n",
-				print_mac(mac, netdev->dev_addr));
-	} else
+	if (!is_valid_ether_addr(netdev->perm_addr))
+		dev_warn(&pdev->dev, "Bad MAC address %pM.\n", netdev->dev_addr);
+	else
 		adapter->macaddr_set(adapter, netdev->dev_addr);
 
 	return 0;
@@ -543,7 +541,7 @@ netxen_nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 
-	adapter = netdev->priv;
+	adapter = netdev_priv(netdev);
 	adapter->netdev  = netdev;
 	adapter->pdev    = pdev;
 	adapter->ahw.pci_func  = pci_func_id;
@@ -988,7 +986,7 @@ static void __devexit netxen_nic_remove(struct pci_dev *pdev)
  */
 static int netxen_nic_open(struct net_device *netdev)
 {
-	struct netxen_adapter *adapter = (struct netxen_adapter *)netdev->priv;
+	struct netxen_adapter *adapter = netdev_priv(netdev);
 	int err = 0;
 	int ctx, ring;
 	irq_handler_t handler;

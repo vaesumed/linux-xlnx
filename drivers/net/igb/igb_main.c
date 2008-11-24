@@ -76,8 +76,6 @@ static int igb_setup_all_tx_resources(struct igb_adapter *);
 static int igb_setup_all_rx_resources(struct igb_adapter *);
 static void igb_free_all_tx_resources(struct igb_adapter *);
 static void igb_free_all_rx_resources(struct igb_adapter *);
-static void igb_free_tx_resources(struct igb_ring *);
-static void igb_free_rx_resources(struct igb_ring *);
 void igb_update_stats(struct igb_adapter *);
 static int igb_probe(struct pci_dev *, const struct pci_device_id *);
 static void __devexit igb_remove(struct pci_dev *pdev);
@@ -259,11 +257,13 @@ static int igb_alloc_queues(struct igb_adapter *adapter)
 
 	for (i = 0; i < adapter->num_tx_queues; i++) {
 		struct igb_ring *ring = &(adapter->tx_ring[i]);
+		ring->count = adapter->tx_ring_count;
 		ring->adapter = adapter;
 		ring->queue_index = i;
 	}
 	for (i = 0; i < adapter->num_rx_queues; i++) {
 		struct igb_ring *ring = &(adapter->rx_ring[i]);
+		ring->count = adapter->rx_ring_count;
 		ring->adapter = adapter;
 		ring->queue_index = i;
 		ring->itr_register = E1000_ITR;
@@ -950,6 +950,25 @@ static int igb_is_need_ioport(struct pci_dev *pdev)
 	}
 }
 
+static const struct net_device_ops igb_netdev_ops = {
+	.ndo_open 		= igb_open,
+	.ndo_stop		= igb_close,
+	.ndo_start_xmit		= igb_xmit_frame_adv,
+	.ndo_get_stats		= igb_get_stats,
+	.ndo_set_multicast_list	= igb_set_multi,
+	.ndo_set_mac_address	= igb_set_mac,
+	.ndo_change_mtu		= igb_change_mtu,
+	.ndo_do_ioctl		= igb_ioctl,
+	.ndo_tx_timeout		= igb_tx_timeout,
+	.ndo_validate_addr	= eth_validate_addr,
+	.ndo_vlan_rx_register	= igb_vlan_rx_register,
+	.ndo_vlan_rx_add_vid	= igb_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid	= igb_vlan_rx_kill_vid,
+#ifdef CONFIG_NET_POLL_CONTROLLER
+	.ndo_poll_controller	= igb_netpoll,
+#endif
+};
+
 /**
  * igb_probe - Device Initialization Routine
  * @pdev: PCI device information struct
@@ -1059,23 +1078,9 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	if (!adapter->hw.hw_addr)
 		goto err_ioremap;
 
-	netdev->open = &igb_open;
-	netdev->stop = &igb_close;
-	netdev->get_stats = &igb_get_stats;
-	netdev->set_multicast_list = &igb_set_multi;
-	netdev->set_mac_address = &igb_set_mac;
-	netdev->change_mtu = &igb_change_mtu;
-	netdev->do_ioctl = &igb_ioctl;
+	netdev->netdev_ops = &igb_netdev_ops;
 	igb_set_ethtool_ops(netdev);
-	netdev->tx_timeout = &igb_tx_timeout;
 	netdev->watchdog_timeo = 5 * HZ;
-	netdev->vlan_rx_register = igb_vlan_rx_register;
-	netdev->vlan_rx_add_vid = igb_vlan_rx_add_vid;
-	netdev->vlan_rx_kill_vid = igb_vlan_rx_kill_vid;
-#ifdef CONFIG_NET_POLL_CONTROLLER
-	netdev->poll_controller = igb_netpoll;
-#endif
-	netdev->hard_start_xmit = &igb_xmit_frame_adv;
 
 	strncpy(netdev->name, pci_name(pdev), sizeof(netdev->name) - 1);
 
@@ -1275,16 +1280,14 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 
 	dev_info(&pdev->dev, "Intel(R) Gigabit Ethernet Network Connection\n");
 	/* print bus type/speed/width info */
-	dev_info(&pdev->dev,
-		 "%s: (PCIe:%s:%s) %02x:%02x:%02x:%02x:%02x:%02x\n",
+	dev_info(&pdev->dev, "%s: (PCIe:%s:%s) %pM\n",
 		 netdev->name,
 		 ((hw->bus.speed == e1000_bus_speed_2500)
 		  ? "2.5Gb/s" : "unknown"),
 		 ((hw->bus.width == e1000_bus_width_pcie_x4)
 		  ? "Width x4" : (hw->bus.width == e1000_bus_width_pcie_x1)
 		  ? "Width x1" : "unknown"),
-		 netdev->dev_addr[0], netdev->dev_addr[1], netdev->dev_addr[2],
-		 netdev->dev_addr[3], netdev->dev_addr[4], netdev->dev_addr[5]);
+		 netdev->dev_addr);
 
 	igb_read_part_num(hw, &part_num);
 	dev_info(&pdev->dev, "%s: PBA No: %06x-%03x\n", netdev->name,
@@ -1397,6 +1400,8 @@ static int __devinit igb_sw_init(struct igb_adapter *adapter)
 
 	pci_read_config_word(pdev, PCI_COMMAND, &hw->bus.pci_cmd_word);
 
+	adapter->tx_ring_count = IGB_DEFAULT_TXD;
+	adapter->rx_ring_count = IGB_DEFAULT_RXD;
 	adapter->rx_buffer_len = MAXIMUM_ETHERNET_VLAN_SIZE;
 	adapter->rx_ps_hdr_size = 0; /* disable packet split */
 	adapter->max_frame_size = netdev->mtu + ETH_HLEN + ETH_FCS_LEN;
@@ -1985,7 +1990,7 @@ static void igb_configure_rx(struct igb_adapter *adapter)
  *
  * Free all transmit software resources
  **/
-static void igb_free_tx_resources(struct igb_ring *tx_ring)
+void igb_free_tx_resources(struct igb_ring *tx_ring)
 {
 	struct pci_dev *pdev = tx_ring->adapter->pdev;
 
@@ -2085,7 +2090,7 @@ static void igb_clean_all_tx_rings(struct igb_adapter *adapter)
  *
  * Free all receive software resources
  **/
-static void igb_free_rx_resources(struct igb_ring *rx_ring)
+void igb_free_rx_resources(struct igb_ring *rx_ring)
 {
 	struct pci_dev *pdev = rx_ring->adapter->pdev;
 
@@ -3923,8 +3928,10 @@ send_up:
 		next_buffer = &rx_ring->buffer_info[i];
 
 		if (!(staterr & E1000_RXD_STAT_EOP)) {
-			buffer_info->skb = xchg(&next_buffer->skb, skb);
-			buffer_info->dma = xchg(&next_buffer->dma, 0);
+			buffer_info->skb = next_buffer->skb;
+			buffer_info->dma = next_buffer->dma;
+			next_buffer->skb = skb;
+			next_buffer->dma = 0;
 			goto next_desc;
 		}
 
@@ -3941,8 +3948,6 @@ send_up:
 		skb->protocol = eth_type_trans(skb, netdev);
 
 		igb_receive_skb(rx_ring, staterr, rx_desc, skb);
-
-		netdev->last_rx = jiffies;
 
 next_desc:
 		rx_desc->wb.upper.status_error = 0;

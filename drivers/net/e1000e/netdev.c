@@ -103,8 +103,6 @@ static void e1000_receive_skb(struct e1000_adapter *adapter,
 					 le16_to_cpu(vlan));
 	else
 		netif_receive_skb(skb);
-
-	netdev->last_rx = jiffies;
 }
 
 /**
@@ -2004,8 +2002,7 @@ static int e1000_clean(struct napi_struct *napi, int budget)
 	struct net_device *poll_dev = adapter->netdev;
 	int tx_cleaned = 0, work_done = 0;
 
-	/* Must NOT use netdev_priv macro here. */
-	adapter = poll_dev->priv;
+	adapter = netdev_priv(poll_dev);
 
 	if (adapter->msix_entries &&
 	    !(adapter->rx_ring->ims_val & adapter->tx_ring->ims_val))
@@ -4670,14 +4667,12 @@ static void e1000_print_device_info(struct e1000_adapter *adapter)
 	u32 pba_num;
 
 	/* print bus type/speed/width info */
-	e_info("(PCI Express:2.5GB/s:%s) %02x:%02x:%02x:%02x:%02x:%02x\n",
+	e_info("(PCI Express:2.5GB/s:%s) %pM\n",
 	       /* bus width */
 	       ((hw->bus.width == e1000_bus_width_pcie_x4) ? "Width x4" :
 	        "Width x1"),
 	       /* MAC address */
-	       netdev->dev_addr[0], netdev->dev_addr[1],
-	       netdev->dev_addr[2], netdev->dev_addr[3],
-	       netdev->dev_addr[4], netdev->dev_addr[5]);
+	       netdev->dev_addr);
 	e_info("Intel(R) PRO/%s Network Connection\n",
 	       (hw->phy.type == e1000_phy_ife) ? "10/100" : "1000");
 	e1000e_read_pba_num(hw, &pba_num);
@@ -4708,6 +4703,26 @@ static void e1000_eeprom_checks(struct e1000_adapter *adapter)
 			 "Warning: detected ASPM enabled in EEPROM\n");
 	}
 }
+
+static const struct net_device_ops e1000e_netdev_ops = {
+	.ndo_open		= e1000_open,
+	.ndo_stop		= e1000_close,
+	.ndo_start_xmit		= e1000_xmit_frame,
+	.ndo_get_stats		= e1000_get_stats,
+	.ndo_set_multicast_list	= e1000_set_multi,
+	.ndo_set_mac_address	= e1000_set_mac,
+	.ndo_change_mtu		= e1000_change_mtu,
+	.ndo_do_ioctl		= e1000_ioctl,
+	.ndo_tx_timeout		= e1000_tx_timeout,
+	.ndo_validate_addr	= eth_validate_addr,
+
+	.ndo_vlan_rx_register	= e1000_vlan_rx_register,
+	.ndo_vlan_rx_add_vid	= e1000_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid	= e1000_vlan_rx_kill_vid,
+#ifdef CONFIG_NET_POLL_CONTROLLER
+	.ndo_poll_controller	= e1000_netpoll,
+#endif
+};
 
 /**
  * e1000_probe - Device Initialization Routine
@@ -4807,24 +4822,10 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	}
 
 	/* construct the net_device struct */
-	netdev->open			= &e1000_open;
-	netdev->stop			= &e1000_close;
-	netdev->hard_start_xmit		= &e1000_xmit_frame;
-	netdev->get_stats		= &e1000_get_stats;
-	netdev->set_multicast_list	= &e1000_set_multi;
-	netdev->set_mac_address		= &e1000_set_mac;
-	netdev->change_mtu		= &e1000_change_mtu;
-	netdev->do_ioctl		= &e1000_ioctl;
+	netdev->netdev_ops		= &e1000e_netdev_ops;
 	e1000e_set_ethtool_ops(netdev);
-	netdev->tx_timeout		= &e1000_tx_timeout;
 	netdev->watchdog_timeo		= 5 * HZ;
 	netif_napi_add(netdev, &adapter->napi, e1000_clean, 64);
-	netdev->vlan_rx_register	= e1000_vlan_rx_register;
-	netdev->vlan_rx_add_vid		= e1000_vlan_rx_add_vid;
-	netdev->vlan_rx_kill_vid	= e1000_vlan_rx_kill_vid;
-#ifdef CONFIG_NET_POLL_CONTROLLER
-	netdev->poll_controller		= e1000_netpoll;
-#endif
 	strncpy(netdev->name, pci_name(pdev), sizeof(netdev->name) - 1);
 
 	netdev->mem_start = mmio_start;
@@ -4925,10 +4926,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	memcpy(netdev->perm_addr, adapter->hw.mac.addr, netdev->addr_len);
 
 	if (!is_valid_ether_addr(netdev->perm_addr)) {
-		e_err("Invalid MAC Address: %02x:%02x:%02x:%02x:%02x:%02x\n",
-		      netdev->perm_addr[0], netdev->perm_addr[1],
-		      netdev->perm_addr[2], netdev->perm_addr[3],
-		      netdev->perm_addr[4], netdev->perm_addr[5]);
+		e_err("Invalid MAC Address: %pM\n", netdev->perm_addr);
 		err = -EIO;
 		goto err_eeprom;
 	}
