@@ -28,6 +28,7 @@
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #include <linux/swap.h>
+#include <linux/quotaops.h>
 
 #define MLOG_MASK_PREFIX ML_DISK_ALLOC
 #include <cluster/masklog.h>
@@ -187,20 +188,12 @@ static int ocfs2_dinode_insert_check(struct inode *inode,
 static int ocfs2_dinode_sanity_check(struct inode *inode,
 				     struct ocfs2_extent_tree *et)
 {
-	int ret = 0;
-	struct ocfs2_dinode *di;
+	struct ocfs2_dinode *di = et->et_object;
 
 	BUG_ON(et->et_ops != &ocfs2_dinode_et_ops);
+	BUG_ON(!OCFS2_IS_VALID_DINODE(di));
 
-	di = et->et_object;
-	if (!OCFS2_IS_VALID_DINODE(di)) {
-		ret = -EIO;
-		ocfs2_error(inode->i_sb,
-			"Inode %llu has invalid path root",
-			(unsigned long long)OCFS2_I(inode)->ip_blkno);
-	}
-
-	return ret;
+	return 0;
 }
 
 static void ocfs2_dinode_fill_root_el(struct ocfs2_extent_tree *et)
@@ -686,6 +679,61 @@ struct ocfs2_merge_ctxt {
 	int			c_split_covers_rec;
 };
 
+static int ocfs2_validate_extent_block(struct super_block *sb,
+				       struct buffer_head *bh)
+{
+	struct ocfs2_extent_block *eb =
+		(struct ocfs2_extent_block *)bh->b_data;
+
+	mlog(0, "Validating extent block %llu\n",
+	     (unsigned long long)bh->b_blocknr);
+
+	if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
+		ocfs2_error(sb,
+			    "Extent block #%llu has bad signature %.*s",
+			    (unsigned long long)bh->b_blocknr, 7,
+			    eb->h_signature);
+		return -EINVAL;
+	}
+
+	if (le64_to_cpu(eb->h_blkno) != bh->b_blocknr) {
+		ocfs2_error(sb,
+			    "Extent block #%llu has an invalid h_blkno "
+			    "of %llu",
+			    (unsigned long long)bh->b_blocknr,
+			    (unsigned long long)le64_to_cpu(eb->h_blkno));
+		return -EINVAL;
+	}
+
+	if (le32_to_cpu(eb->h_fs_generation) != OCFS2_SB(sb)->fs_generation) {
+		ocfs2_error(sb,
+			    "Extent block #%llu has an invalid "
+			    "h_fs_generation of #%u",
+			    (unsigned long long)bh->b_blocknr,
+			    le32_to_cpu(eb->h_fs_generation));
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int ocfs2_read_extent_block(struct inode *inode, u64 eb_blkno,
+			    struct buffer_head **bh)
+{
+	int rc;
+	struct buffer_head *tmp = *bh;
+
+	rc = ocfs2_read_block(inode, eb_blkno, &tmp,
+			      ocfs2_validate_extent_block);
+
+	/* If ocfs2_read_block() got us a new bh, pass it up. */
+	if (!rc && !*bh)
+		*bh = tmp;
+
+	return rc;
+}
+
+
 /*
  * How many free extents have we got before we need more meta data?
  */
@@ -705,8 +753,7 @@ int ocfs2_num_free_extents(struct ocfs2_super *osb,
 	last_eb_blk = ocfs2_et_get_last_eb_blk(et);
 
 	if (last_eb_blk) {
-		retval = ocfs2_read_block(inode, last_eb_blk,
-					  &eb_bh);
+		retval = ocfs2_read_extent_block(inode, last_eb_blk, &eb_bh);
 		if (retval < 0) {
 			mlog_errno(retval);
 			goto bail;
@@ -908,11 +955,8 @@ static int ocfs2_add_branch(struct ocfs2_super *osb,
 	for(i = 0; i < new_blocks; i++) {
 		bh = new_eb_bhs[i];
 		eb = (struct ocfs2_extent_block *) bh->b_data;
-		if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-			OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-			status = -EIO;
-			goto bail;
-		}
+		/* ocfs2_create_new_meta_bhs() should create it right! */
+		BUG_ON(!OCFS2_IS_VALID_EXTENT_BLOCK(eb));
 		eb_el = &eb->h_list;
 
 		status = ocfs2_journal_access(handle, inode, bh,
@@ -1052,11 +1096,8 @@ static int ocfs2_shift_tree_depth(struct ocfs2_super *osb,
 	}
 
 	eb = (struct ocfs2_extent_block *) new_eb_bh->b_data;
-	if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-		OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-		status = -EIO;
-		goto bail;
-	}
+	/* ocfs2_create_new_meta_bhs() should create it right! */
+	BUG_ON(!OCFS2_IS_VALID_EXTENT_BLOCK(eb));
 
 	eb_el = &eb->h_list;
 	root_el = et->et_root_el;
@@ -1176,18 +1217,13 @@ static int ocfs2_find_branch_target(struct ocfs2_super *osb,
 		brelse(bh);
 		bh = NULL;
 
-		status = ocfs2_read_block(inode, blkno, &bh);
+		status = ocfs2_read_extent_block(inode, blkno, &bh);
 		if (status < 0) {
 			mlog_errno(status);
 			goto bail;
 		}
 
 		eb = (struct ocfs2_extent_block *) bh->b_data;
-		if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-			OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-			status = -EIO;
-			goto bail;
-		}
 		el = &eb->h_list;
 
 		if (le16_to_cpu(el->l_next_free_rec) <
@@ -1540,7 +1576,7 @@ static int __ocfs2_find_path(struct inode *inode,
 
 		brelse(bh);
 		bh = NULL;
-		ret = ocfs2_read_block(inode, blkno, &bh);
+		ret = ocfs2_read_extent_block(inode, blkno, &bh);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
@@ -1548,11 +1584,6 @@ static int __ocfs2_find_path(struct inode *inode,
 
 		eb = (struct ocfs2_extent_block *) bh->b_data;
 		el = &eb->h_list;
-		if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-			OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-			ret = -EIO;
-			goto out;
-		}
 
 		if (le16_to_cpu(el->l_next_free_rec) >
 		    le16_to_cpu(el->l_count)) {
@@ -4097,8 +4128,15 @@ ocfs2_figure_merge_contig_type(struct inode *inode, struct ocfs2_path *path,
 			    le16_to_cpu(new_el->l_count)) {
 				bh = path_leaf_bh(left_path);
 				eb = (struct ocfs2_extent_block *)bh->b_data;
-				OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb,
-								 eb);
+				ocfs2_error(inode->i_sb,
+					    "Extent block #%llu has an "
+					    "invalid l_next_free_rec of "
+					    "%d.  It should have "
+					    "matched the l_count of %d",
+					    (unsigned long long)le64_to_cpu(eb->h_blkno),
+					    le16_to_cpu(new_el->l_next_free_rec),
+					    le16_to_cpu(new_el->l_count));
+				status = -EINVAL;
 				goto out;
 			}
 			rec = &new_el->l_recs[
@@ -4147,8 +4185,12 @@ ocfs2_figure_merge_contig_type(struct inode *inode, struct ocfs2_path *path,
 			if (le16_to_cpu(new_el->l_next_free_rec) <= 1) {
 				bh = path_leaf_bh(right_path);
 				eb = (struct ocfs2_extent_block *)bh->b_data;
-				OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb,
-								 eb);
+				ocfs2_error(inode->i_sb,
+					    "Extent block #%llu has an "
+					    "invalid l_next_free_rec of %d",
+					    (unsigned long long)le64_to_cpu(eb->h_blkno),
+					    le16_to_cpu(new_el->l_next_free_rec));
+				status = -EINVAL;
 				goto out;
 			}
 			rec = &new_el->l_recs[1];
@@ -4294,7 +4336,9 @@ static int ocfs2_figure_insert_type(struct inode *inode,
 		 * ocfs2_figure_insert_type() and ocfs2_add_branch()
 		 * may want it later.
 		 */
-		ret = ocfs2_read_block(inode, ocfs2_et_get_last_eb_blk(et), &bh);
+		ret = ocfs2_read_extent_block(inode,
+					      ocfs2_et_get_last_eb_blk(et),
+					      &bh);
 		if (ret) {
 			mlog_exit(ret);
 			goto out;
@@ -4760,20 +4804,15 @@ static int __ocfs2_mark_extent_written(struct inode *inode,
 	if (path->p_tree_depth) {
 		struct ocfs2_extent_block *eb;
 
-		ret = ocfs2_read_block(inode, ocfs2_et_get_last_eb_blk(et),
-				       &last_eb_bh);
+		ret = ocfs2_read_extent_block(inode,
+					      ocfs2_et_get_last_eb_blk(et),
+					      &last_eb_bh);
 		if (ret) {
 			mlog_exit(ret);
 			goto out;
 		}
 
 		eb = (struct ocfs2_extent_block *) last_eb_bh->b_data;
-		if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-			OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-			ret = -EROFS;
-			goto out;
-		}
-
 		rightmost_el = &eb->h_list;
 	} else
 		rightmost_el = path_root_el(path);
@@ -4918,8 +4957,9 @@ static int ocfs2_split_tree(struct inode *inode, struct ocfs2_extent_tree *et,
 
 	depth = path->p_tree_depth;
 	if (depth > 0) {
-		ret = ocfs2_read_block(inode, ocfs2_et_get_last_eb_blk(et),
-				       &last_eb_bh);
+		ret = ocfs2_read_extent_block(inode,
+					      ocfs2_et_get_last_eb_blk(et),
+					      &last_eb_bh);
 		if (ret < 0) {
 			mlog_errno(ret);
 			goto out;
@@ -5255,6 +5295,78 @@ out:
 	return ret;
 }
 
+int ocfs2_remove_btree_range(struct inode *inode,
+			     struct ocfs2_extent_tree *et,
+			     u32 cpos, u32 phys_cpos, u32 len,
+			     struct ocfs2_cached_dealloc_ctxt *dealloc)
+{
+	int ret;
+	u64 phys_blkno = ocfs2_clusters_to_blocks(inode->i_sb, phys_cpos);
+	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
+	struct inode *tl_inode = osb->osb_tl_inode;
+	handle_t *handle;
+	struct ocfs2_alloc_context *meta_ac = NULL;
+
+	ret = ocfs2_lock_allocators(inode, et, 0, 1, NULL, &meta_ac);
+	if (ret) {
+		mlog_errno(ret);
+		return ret;
+	}
+
+	mutex_lock(&tl_inode->i_mutex);
+
+	if (ocfs2_truncate_log_needs_flush(osb)) {
+		ret = __ocfs2_flush_truncate_log(osb);
+		if (ret < 0) {
+			mlog_errno(ret);
+			goto out;
+		}
+	}
+
+	handle = ocfs2_start_trans(osb, ocfs2_remove_extent_credits(osb->sb));
+	if (IS_ERR(handle)) {
+		ret = PTR_ERR(handle);
+		mlog_errno(ret);
+		goto out;
+	}
+
+	ret = ocfs2_journal_access(handle, inode, et->et_root_bh,
+				   OCFS2_JOURNAL_ACCESS_WRITE);
+	if (ret) {
+		mlog_errno(ret);
+		goto out;
+	}
+
+	ret = ocfs2_remove_extent(inode, et, cpos, len, handle, meta_ac,
+				  dealloc);
+	if (ret) {
+		mlog_errno(ret);
+		goto out_commit;
+	}
+
+	ocfs2_et_update_clusters(inode, et, -len);
+
+	ret = ocfs2_journal_dirty(handle, et->et_root_bh);
+	if (ret) {
+		mlog_errno(ret);
+		goto out_commit;
+	}
+
+	ret = ocfs2_truncate_log_append(osb, handle, phys_blkno, len);
+	if (ret)
+		mlog_errno(ret);
+
+out_commit:
+	ocfs2_commit_trans(osb, handle);
+out:
+	mutex_unlock(&tl_inode->i_mutex);
+
+	if (meta_ac)
+		ocfs2_free_alloc_context(meta_ac);
+
+	return ret;
+}
+
 int ocfs2_truncate_log_needs_flush(struct ocfs2_super *osb)
 {
 	struct buffer_head *tl_bh = osb->osb_tl_bh;
@@ -5308,13 +5420,13 @@ int ocfs2_truncate_log_append(struct ocfs2_super *osb,
 	start_cluster = ocfs2_blocks_to_clusters(osb->sb, start_blk);
 
 	di = (struct ocfs2_dinode *) tl_bh->b_data;
-	tl = &di->id2.i_dealloc;
-	if (!OCFS2_IS_VALID_DINODE(di)) {
-		OCFS2_RO_ON_INVALID_DINODE(osb->sb, di);
-		status = -EIO;
-		goto bail;
-	}
 
+	/* tl_bh is loaded from ocfs2_truncate_log_init().  It's validated
+	 * by the underlying call to ocfs2_read_inode_block(), so any
+	 * corruption is a code bug */
+	BUG_ON(!OCFS2_IS_VALID_DINODE(di));
+
+	tl = &di->id2.i_dealloc;
 	tl_count = le16_to_cpu(tl->tl_count);
 	mlog_bug_on_msg(tl_count > ocfs2_truncate_recs_per_inode(osb->sb) ||
 			tl_count == 0,
@@ -5464,13 +5576,13 @@ int __ocfs2_flush_truncate_log(struct ocfs2_super *osb)
 	BUG_ON(mutex_trylock(&tl_inode->i_mutex));
 
 	di = (struct ocfs2_dinode *) tl_bh->b_data;
-	tl = &di->id2.i_dealloc;
-	if (!OCFS2_IS_VALID_DINODE(di)) {
-		OCFS2_RO_ON_INVALID_DINODE(osb->sb, di);
-		status = -EIO;
-		goto out;
-	}
 
+	/* tl_bh is loaded from ocfs2_truncate_log_init().  It's validated
+	 * by the underlying call to ocfs2_read_inode_block(), so any
+	 * corruption is a code bug */
+	BUG_ON(!OCFS2_IS_VALID_DINODE(di));
+
+	tl = &di->id2.i_dealloc;
 	num_to_flush = le16_to_cpu(tl->tl_used);
 	mlog(0, "Flush %u records from truncate log #%llu\n",
 	     num_to_flush, (unsigned long long)OCFS2_I(tl_inode)->ip_blkno);
@@ -5586,7 +5698,7 @@ static int ocfs2_get_truncate_log_info(struct ocfs2_super *osb,
 		goto bail;
 	}
 
-	status = ocfs2_read_block(inode, OCFS2_I(inode)->ip_blkno, &bh);
+	status = ocfs2_read_inode_block(inode, &bh);
 	if (status < 0) {
 		iput(inode);
 		mlog_errno(status);
@@ -5625,13 +5737,13 @@ int ocfs2_begin_truncate_log_recovery(struct ocfs2_super *osb,
 	}
 
 	di = (struct ocfs2_dinode *) tl_bh->b_data;
-	tl = &di->id2.i_dealloc;
-	if (!OCFS2_IS_VALID_DINODE(di)) {
-		OCFS2_RO_ON_INVALID_DINODE(tl_inode->i_sb, di);
-		status = -EIO;
-		goto bail;
-	}
 
+	/* tl_bh is loaded from ocfs2_get_truncate_log_info().  It's
+	 * validated by the underlying call to ocfs2_read_inode_block(),
+	 * so any corruption is a code bug */
+	BUG_ON(!OCFS2_IS_VALID_DINODE(di));
+
+	tl = &di->id2.i_dealloc;
 	if (le16_to_cpu(tl->tl_used)) {
 		mlog(0, "We'll have %u logs to recover\n",
 		     le16_to_cpu(tl->tl_used));
@@ -5800,7 +5912,10 @@ int ocfs2_truncate_log_init(struct ocfs2_super *osb)
  */
 
 /*
- * Describes a single block free from a suballocator
+ * Describe a single bit freed from a suballocator.  For the block
+ * suballocators, it represents one block.  For the global cluster
+ * allocator, it represents some clusters and free_bit indicates
+ * clusters number.
  */
 struct ocfs2_cached_block_free {
 	struct ocfs2_cached_block_free		*free_next;
@@ -5815,10 +5930,10 @@ struct ocfs2_per_slot_free_list {
 	struct ocfs2_cached_block_free		*f_first;
 };
 
-static int ocfs2_free_cached_items(struct ocfs2_super *osb,
-				   int sysfile_type,
-				   int slot,
-				   struct ocfs2_cached_block_free *head)
+static int ocfs2_free_cached_blocks(struct ocfs2_super *osb,
+				    int sysfile_type,
+				    int slot,
+				    struct ocfs2_cached_block_free *head)
 {
 	int ret;
 	u64 bg_blkno;
@@ -5893,6 +6008,82 @@ out:
 	return ret;
 }
 
+int ocfs2_cache_cluster_dealloc(struct ocfs2_cached_dealloc_ctxt *ctxt,
+				u64 blkno, unsigned int bit)
+{
+	int ret = 0;
+	struct ocfs2_cached_block_free *item;
+
+	item = kmalloc(sizeof(*item), GFP_NOFS);
+	if (item == NULL) {
+		ret = -ENOMEM;
+		mlog_errno(ret);
+		return ret;
+	}
+
+	mlog(0, "Insert clusters: (bit %u, blk %llu)\n",
+	     bit, (unsigned long long)blkno);
+
+	item->free_blk = blkno;
+	item->free_bit = bit;
+	item->free_next = ctxt->c_global_allocator;
+
+	ctxt->c_global_allocator = item;
+	return ret;
+}
+
+static int ocfs2_free_cached_clusters(struct ocfs2_super *osb,
+				      struct ocfs2_cached_block_free *head)
+{
+	struct ocfs2_cached_block_free *tmp;
+	struct inode *tl_inode = osb->osb_tl_inode;
+	handle_t *handle;
+	int ret = 0;
+
+	mutex_lock(&tl_inode->i_mutex);
+
+	while (head) {
+		if (ocfs2_truncate_log_needs_flush(osb)) {
+			ret = __ocfs2_flush_truncate_log(osb);
+			if (ret < 0) {
+				mlog_errno(ret);
+				break;
+			}
+		}
+
+		handle = ocfs2_start_trans(osb, OCFS2_TRUNCATE_LOG_UPDATE);
+		if (IS_ERR(handle)) {
+			ret = PTR_ERR(handle);
+			mlog_errno(ret);
+			break;
+		}
+
+		ret = ocfs2_truncate_log_append(osb, handle, head->free_blk,
+						head->free_bit);
+
+		ocfs2_commit_trans(osb, handle);
+		tmp = head;
+		head = head->free_next;
+		kfree(tmp);
+
+		if (ret < 0) {
+			mlog_errno(ret);
+			break;
+		}
+	}
+
+	mutex_unlock(&tl_inode->i_mutex);
+
+	while (head) {
+		/* Premature exit may have left some dangling items. */
+		tmp = head;
+		head = head->free_next;
+		kfree(tmp);
+	}
+
+	return ret;
+}
+
 int ocfs2_run_deallocs(struct ocfs2_super *osb,
 		       struct ocfs2_cached_dealloc_ctxt *ctxt)
 {
@@ -5908,8 +6099,10 @@ int ocfs2_run_deallocs(struct ocfs2_super *osb,
 		if (fl->f_first) {
 			mlog(0, "Free items: (type %u, slot %d)\n",
 			     fl->f_inode_type, fl->f_slot);
-			ret2 = ocfs2_free_cached_items(osb, fl->f_inode_type,
-						       fl->f_slot, fl->f_first);
+			ret2 = ocfs2_free_cached_blocks(osb,
+							fl->f_inode_type,
+							fl->f_slot,
+							fl->f_first);
 			if (ret2)
 				mlog_errno(ret2);
 			if (!ret)
@@ -5918,6 +6111,17 @@ int ocfs2_run_deallocs(struct ocfs2_super *osb,
 
 		ctxt->c_first_suballocator = fl->f_next_suballocator;
 		kfree(fl);
+	}
+
+	if (ctxt->c_global_allocator) {
+		ret2 = ocfs2_free_cached_clusters(osb,
+						  ctxt->c_global_allocator);
+		if (ret2)
+			mlog_errno(ret2);
+		if (!ret)
+			ret = ret2;
+
+		ctxt->c_global_allocator = NULL;
 	}
 
 	return ret;
@@ -6075,11 +6279,10 @@ static int ocfs2_find_new_last_ext_blk(struct inode *inode,
 
 	eb = (struct ocfs2_extent_block *) bh->b_data;
 	el = &eb->h_list;
-	if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-		OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-		ret = -EROFS;
-		goto out;
-	}
+
+	/* ocfs2_find_leaf() gets the eb from ocfs2_read_extent_block().
+	 * Any corruption is a code bug. */
+	BUG_ON(!OCFS2_IS_VALID_EXTENT_BLOCK(eb));
 
 	*new_last_eb = bh;
 	get_bh(*new_last_eb);
@@ -6350,6 +6553,8 @@ static int ocfs2_do_truncate(struct ocfs2_super *osb,
 		goto bail;
 	}
 
+	vfs_dq_free_space_nodirty(inode,
+			ocfs2_clusters_to_bytes(osb->sb, clusters_to_del));
 	spin_lock(&OCFS2_I(inode)->ip_lock);
 	OCFS2_I(inode)->ip_clusters = le32_to_cpu(fe->i_clusters) -
 				      clusters_to_del;
@@ -6436,11 +6641,6 @@ static void ocfs2_map_and_dirty_page(struct inode *inode, handle_t *handle,
 		mlog_errno(ret);
 	else if (ocfs2_should_order_data(inode)) {
 		ret = ocfs2_jbd2_file_inode(handle, inode);
-#ifdef CONFIG_OCFS2_COMPAT_JBD
-		ret = walk_page_buffers(handle, page_buffers(page),
-					from, to, &partial,
-					ocfs2_journal_dirty_data);
-#endif
 		if (ret < 0)
 			mlog_errno(ret);
 	}
@@ -6663,6 +6863,7 @@ int ocfs2_convert_inline_data_to_extents(struct inode *inode,
 	struct page **pages = NULL;
 	loff_t end = osb->s_clustersize;
 	struct ocfs2_extent_tree et;
+	int did_quota = 0;
 
 	has_data = i_size_read(inode) ? 1 : 0;
 
@@ -6682,7 +6883,8 @@ int ocfs2_convert_inline_data_to_extents(struct inode *inode,
 		}
 	}
 
-	handle = ocfs2_start_trans(osb, OCFS2_INLINE_TO_EXTENTS_CREDITS);
+	handle = ocfs2_start_trans(osb,
+				   ocfs2_inline_to_extents_credits(osb->sb));
 	if (IS_ERR(handle)) {
 		ret = PTR_ERR(handle);
 		mlog_errno(ret);
@@ -6700,6 +6902,13 @@ int ocfs2_convert_inline_data_to_extents(struct inode *inode,
 		u32 bit_off, num;
 		unsigned int page_end;
 		u64 phys;
+
+		if (vfs_dq_alloc_space_nodirty(inode,
+				       ocfs2_clusters_to_bytes(osb->sb, 1))) {
+			ret = -EDQUOT;
+			goto out_commit;
+		}
+		did_quota = 1;
 
 		ret = ocfs2_claim_clusters(osb, handle, data_ac, 1, &bit_off,
 					   &num);
@@ -6774,6 +6983,10 @@ int ocfs2_convert_inline_data_to_extents(struct inode *inode,
 	}
 
 out_commit:
+	if (ret < 0 && did_quota)
+		vfs_dq_free_space_nodirty(inode,
+					  ocfs2_clusters_to_bytes(osb->sb, 1));
+
 	ocfs2_commit_trans(osb, handle);
 
 out_unlock:
@@ -6984,20 +7197,14 @@ int ocfs2_prepare_truncate(struct ocfs2_super *osb,
 	ocfs2_init_dealloc_ctxt(&(*tc)->tc_dealloc);
 
 	if (fe->id2.i_list.l_tree_depth) {
-		status = ocfs2_read_block(inode, le64_to_cpu(fe->i_last_eb_blk),
-					  &last_eb_bh);
+		status = ocfs2_read_extent_block(inode,
+						 le64_to_cpu(fe->i_last_eb_blk),
+						 &last_eb_bh);
 		if (status < 0) {
 			mlog_errno(status);
 			goto bail;
 		}
 		eb = (struct ocfs2_extent_block *) last_eb_bh->b_data;
-		if (!OCFS2_IS_VALID_EXTENT_BLOCK(eb)) {
-			OCFS2_RO_ON_INVALID_EXTENT_BLOCK(inode->i_sb, eb);
-
-			brelse(last_eb_bh);
-			status = -EIO;
-			goto bail;
-		}
 	}
 
 	(*tc)->tc_last_eb_bh = last_eb_bh;
