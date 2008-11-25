@@ -4679,7 +4679,6 @@ static struct ata_queued_cmd *ata_qc_new(struct ata_port *ap)
 /**
  *	ata_qc_new_init - Request an available ATA command, and initialize it
  *	@dev: Device from whom we request an available command structure
- *	@tag: command tag
  *
  *	LOCKING:
  *	None.
