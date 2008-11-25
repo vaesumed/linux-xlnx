@@ -10,6 +10,7 @@
 
 #include <asm/page.h>
 #include <asm/schid.h>
+#include <asm/debug.h>
 #include "chsc.h"
 
 #define QDIO_BUSY_BIT_PATIENCE		100	/* 100 microseconds */
@@ -300,11 +301,13 @@ struct qdio_irq {
 	struct qdio_q *input_qs[QDIO_MAX_QUEUES_PER_IRQ];
 	struct qdio_q *output_qs[QDIO_MAX_QUEUES_PER_IRQ];
 
+	debug_info_t *debug_area;
 	struct mutex setup_mutex;
 };
 
 /* helper functions */
 #define queue_type(q)	q->irq_ptr->qib.qfmt
+#define SCH_NO(q)	(q->irq_ptr->schid.sch_no)
 
 #define is_thinint_irq(irq) \
 	(irq->qib.qfmt == QDIO_IQDIO_QFMT || \
@@ -378,6 +381,9 @@ void qdio_int_handler(struct ccw_device *cdev, unsigned long intparm,
 int qdio_allocate_qs(struct qdio_irq *irq_ptr, int nr_input_qs,
 		     int nr_output_qs);
 void qdio_setup_ssqd_info(struct qdio_irq *irq_ptr);
+int qdio_setup_get_ssqd(struct qdio_irq *irq_ptr,
+			struct subchannel_id *schid,
+			struct qdio_ssqd_desc *data);
 int qdio_setup_irq(struct qdio_initialize *init_data);
 void qdio_print_subchannel_info(struct qdio_irq *irq_ptr,
 				struct ccw_device *cdev);
