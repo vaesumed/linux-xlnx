@@ -64,7 +64,7 @@ struct kvm_vcpu_stat {
 	u32 halt_wakeup;
 };
 
-struct tlbe {
+struct kvmppc_44x_tlbe {
 	u32 tid; /* Only the low 8 bits are used. */
 	u32 word0;
 	u32 word1;
@@ -75,16 +75,6 @@ struct kvm_arch {
 };
 
 struct kvm_vcpu_arch {
-	/* Unmodified copy of the guest's TLB. */
-	struct tlbe guest_tlb[PPC44x_TLB_SIZE];
-	/* TLB that's actually used when the guest is running. */
-	struct tlbe shadow_tlb[PPC44x_TLB_SIZE];
-	/* Pages which are referenced in the shadow TLB. */
-	struct page *shadow_pages[PPC44x_TLB_SIZE];
-
-	/* Track which TLB entries we've modified in the current exit. */
-	u8 shadow_tlb_mod[PPC44x_TLB_SIZE];
-
 	u32 host_stack;
 	u32 host_pid;
 	u32 host_dbcr0;
@@ -94,32 +84,32 @@ struct kvm_vcpu_arch {
 	u32 host_msr;
 
 	u64 fpr[32];
-	u32 gpr[32];
+	ulong gpr[32];
 
-	u32 pc;
+	ulong pc;
 	u32 cr;
-	u32 ctr;
-	u32 lr;
-	u32 xer;
+	ulong ctr;
+	ulong lr;
+	ulong xer;
 
-	u32 msr;
+	ulong msr;
 	u32 mmucr;
-	u32 sprg0;
-	u32 sprg1;
-	u32 sprg2;
-	u32 sprg3;
-	u32 sprg4;
-	u32 sprg5;
-	u32 sprg6;
-	u32 sprg7;
-	u32 srr0;
-	u32 srr1;
-	u32 csrr0;
-	u32 csrr1;
-	u32 dsrr0;
-	u32 dsrr1;
-	u32 dear;
-	u32 esr;
+	ulong sprg0;
+	ulong sprg1;
+	ulong sprg2;
+	ulong sprg3;
+	ulong sprg4;
+	ulong sprg5;
+	ulong sprg6;
+	ulong sprg7;
+	ulong srr0;
+	ulong srr1;
+	ulong csrr0;
+	ulong csrr1;
+	ulong dsrr0;
+	ulong dsrr1;
+	ulong dear;
+	ulong esr;
 	u32 dec;
 	u32 decar;
 	u32 tbl;
@@ -127,7 +117,7 @@ struct kvm_vcpu_arch {
 	u32 tcr;
 	u32 tsr;
 	u32 ivor[16];
-	u32 ivpr;
+	ulong ivpr;
 	u32 pir;
 
 	u32 shadow_pid;
@@ -141,8 +131,8 @@ struct kvm_vcpu_arch {
 	u32 dbcr1;
 
 	u32 last_inst;
-	u32 fault_dear;
-	u32 fault_esr;
+	ulong fault_dear;
+	ulong fault_esr;
 	gpa_t paddr_accessed;
 
 	u8 io_gpr; /* GPR used as IO source/target */
