@@ -1,0 +1,66 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.28-rc6-7-ged31348
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard ed313489badef16d700f5a3be50e8fd8f8294bc8
+HEAD is now at ed31348 Merge master.kernel.org:/home/rmk/linux-2.6-arm
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+virtio:VIRTIO_PCI_QUEUE_ADDR_SHIFT.patch
+virtio:rename-vring-pagesize-to-align.patch
+virtio:VIRTIO_PCI_VRING_ALIGN.patch
+virtio:LGUEST_VRING_ALIGN.patch
+virtio:KVM_S390_VIRTIO_RING_ALIGN.patch
+virtio:virtqueue-hand-in-vqalign.patch
+virtio:balloon_avoid_Linux_page_size.patch
+virtio:balloon_avoid_Linux_page_size-fix.patch
+virtio:block-no-max-segment-size-by-default.patch
+virtio:block-dynamic-max-segments.patch
+virtio:console_support_console_resizing.patch
+virtio:kvm_s390_implement_config_changed_for_on_s390.patch
+.dotest/patch:19: space before tab in indent.
+ 	subcode = S390_lowcore.cpu_addr;
+warning: 1 line adds whitespace errors.
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+module:compare-sym-values-for-export-mark-in-proc-kallsyms.patch
+param:usb-use-core_param.patch
+param:core_param-really-really-early.patch
+bitmap:test-for-constant.patch
+6c2e9403.patch
+f6d87f4bd259cf33e092cd1a8fde05f291c47af1.patch
+6cc88bc4.patch
+569712b2.patch
+54ac14a8.patch
+b5fe363b.patch
+x86:speedstep-centrino-cleanup.patch
+cpumask:centralize-common-maps.patch
+cpumask:convert-few-difficult-cpumask_t-users.patch
+cpumask:smp_call_function_many.patch
+cpumask:fix-impossible-percpu-accesses-pnp.patch
+cpumask:fix-impossible-percpu-accesses-m32r.patch
+cpumask:fix-impossible-percpu-accesses-x86.patch
+cpumask:infiniband-avoid-NR_CPUS-iteration.patch
+cpumask:convert-drivers_infiniband_ehca.patch
+cpumask:convert-drivers_infiniband_ipath.patch
+cpumask:use-nr_cpu_ids-in-seq_cpumask.patch
+cpumask:irq-functions-take-cpumask_t-ptr.patch
+cpumask:clock_event_device-takes-cpumask-ptr.patch
+cpumask:cpumask_of_node.patch
+cpumask:cpumask_of_node-x86.patch
+cpumask:cpumask_of_node-sparc.patch
+cpumask:cpumask_of_node-sh.patch
+cpumask:cpumask_of_node-powerpc.patch
+cpumask:cpumask_of_node-ia64.patch
+cpumask:cpumask_of_node-mips.patch
+cpumask:cpumask_of_node-alpha.patch
+Unchanged quilt series ttydev
+Unchanged quilt series staging
