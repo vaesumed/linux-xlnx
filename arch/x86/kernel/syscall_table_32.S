@@ -332,3 +332,8 @@ ENTRY(sys_call_table)
 	.long sys_dup3			/* 330 */
 	.long sys_pipe2
 	.long sys_inotify_init1
+	.long sys_pfm_create
+	.long sys_pfm_write
+	.long sys_pfm_read		/* 335 */
+	.long sys_pfm_attach
+	.long sys_pfm_set_state

@@ -983,6 +983,11 @@ apicinterrupt ERROR_APIC_VECTOR \
 apicinterrupt SPURIOUS_APIC_VECTOR \
 	spurious_interrupt smp_spurious_interrupt
 
+#ifdef CONFIG_PERFMON
+apicinterrupt LOCAL_PERFMON_VECTOR \
+	pmu_interrupt smp_pmu_interrupt
+#endif
+
 /*
  * Exception entry points.
  */

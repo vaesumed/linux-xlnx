@@ -224,7 +224,7 @@ extern void ia64_account_on_switch (struct task_struct *prev, struct task_struct
 # define IA64_ACCOUNT_ON_SWITCH(p,n)
 #endif
 
-#ifdef CONFIG_PERFMON
+#ifdef CONFIG_PERFMON_V20
   DECLARE_PER_CPU(unsigned long, pfm_syst_info);
 # define PERFMON_IS_SYSWIDE() (__get_cpu_var(pfm_syst_info) & 0x1)
 #else
