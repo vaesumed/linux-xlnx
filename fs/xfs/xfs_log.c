@@ -100,12 +100,11 @@ STATIC void xlog_ungrant_log_space(xlog_t	 *log,
 
 
 /* local ticket functions */
-STATIC xlog_ticket_t	*xlog_ticket_get(xlog_t *log,
+STATIC xlog_ticket_t	*xlog_ticket_alloc(xlog_t *log,
 					 int	unit_bytes,
 					 int	count,
 					 char	clientid,
 					 uint	flags);
-STATIC void		xlog_ticket_put(xlog_t *log, xlog_ticket_t *ticket);
 
 #if defined(DEBUG)
 STATIC void	xlog_verify_dest_ptr(xlog_t *log, __psint_t ptr);
@@ -360,7 +359,7 @@ xfs_log_done(xfs_mount_t	*mp,
 		 */
 		xlog_trace_loggrant(log, ticket, "xfs_log_done: (non-permanent)");
 		xlog_ungrant_log_space(log, ticket);
-		xlog_ticket_put(log, ticket);
+		xfs_log_ticket_put(ticket);
 	} else {
 		xlog_trace_loggrant(log, ticket, "xfs_log_done: (permanent)");
 		xlog_regrant_reserve_log_space(log, ticket);
@@ -514,7 +513,7 @@ xfs_log_reserve(xfs_mount_t	 *mp,
 		retval = xlog_regrant_write_log_space(log, internal_ticket);
 	} else {
 		/* may sleep if need to allocate more tickets */
-		internal_ticket = xlog_ticket_get(log, unit_bytes, cnt,
+		internal_ticket = xlog_ticket_alloc(log, unit_bytes, cnt,
 						  client, flags);
 		if (!internal_ticket)
 			return XFS_ERROR(ENOMEM);
@@ -572,12 +571,12 @@ xfs_log_mount(
 	/*
 	 * Initialize the AIL now we have a log.
 	 */
-	spin_lock_init(&mp->m_ail_lock);
 	error = xfs_trans_ail_init(mp);
 	if (error) {
 		cmn_err(CE_WARN, "XFS: AIL initialisation failed: error %d", error);
 		goto error;
 	}
+	mp->m_log->l_ailp = mp->m_ail;
 
 	/*
 	 * skip log recovery on a norecovery mount.  pretend it all
@@ -749,7 +748,7 @@ xfs_log_unmount_write(xfs_mount_t *mp)
 		if (tic) {
 			xlog_trace_loggrant(log, tic, "unmount rec");
 			xlog_ungrant_log_space(log, tic);
-			xlog_ticket_put(log, tic);
+			xfs_log_ticket_put(tic);
 		}
 	} else {
 		/*
@@ -906,7 +905,7 @@ xfs_log_move_tail(xfs_mount_t	*mp,
 int
 xfs_log_need_covered(xfs_mount_t *mp)
 {
-	int		needed = 0, gen;
+	int		needed = 0;
 	xlog_t		*log = mp->m_log;
 
 	if (!xfs_fs_writable(mp))
@@ -915,7 +914,7 @@ xfs_log_need_covered(xfs_mount_t *mp)
 	spin_lock(&log->l_icloglock);
 	if (((log->l_covered_state == XLOG_STATE_COVER_NEED) ||
 		(log->l_covered_state == XLOG_STATE_COVER_NEED2))
-			&& !xfs_trans_first_ail(mp, &gen)
+			&& !xfs_trans_ail_tail(log->l_ailp)
 			&& xlog_iclogs_empty(log)) {
 		if (log->l_covered_state == XLOG_STATE_COVER_NEED)
 			log->l_covered_state = XLOG_STATE_COVER_DONE;
@@ -952,7 +951,7 @@ xlog_assign_tail_lsn(xfs_mount_t *mp)
 	xfs_lsn_t tail_lsn;
 	xlog_t	  *log = mp->m_log;
 
-	tail_lsn = xfs_trans_tail_ail(mp);
+	tail_lsn = xfs_trans_ail_tail(mp->m_ail);
 	spin_lock(&log->l_grant_lock);
 	if (tail_lsn != 0) {
 		log->l_tail_lsn = tail_lsn;
@@ -1446,7 +1445,7 @@ xlog_grant_push_ail(xfs_mount_t	*mp,
      */
     if (threshold_lsn &&
 	!XLOG_FORCED_SHUTDOWN(log))
-	    xfs_trans_push_ail(mp, threshold_lsn);
+	    xfs_trans_ail_push(log->l_ailp, threshold_lsn);
 }	/* xlog_grant_push_ail */
 
 
@@ -3222,22 +3221,33 @@ xlog_state_want_sync(xlog_t *log, xlog_in_core_t *iclog)
  */
 
 /*
- * Free a used ticket.
+ * Free a used ticket when it's refcount falls to zero.
  */
-STATIC void
-xlog_ticket_put(xlog_t		*log,
-		xlog_ticket_t	*ticket)
+void
+xfs_log_ticket_put(
+	xlog_ticket_t	*ticket)
 {
-	sv_destroy(&ticket->t_wait);
-	kmem_zone_free(xfs_log_ticket_zone, ticket);
-}	/* xlog_ticket_put */
+	ASSERT(atomic_read(&ticket->t_ref) > 0);
+	if (atomic_dec_and_test(&ticket->t_ref)) {
+		sv_destroy(&ticket->t_wait);
+		kmem_zone_free(xfs_log_ticket_zone, ticket);
+	}
+}
 
+xlog_ticket_t *
+xfs_log_ticket_get(
+	xlog_ticket_t	*ticket)
+{
+	ASSERT(atomic_read(&ticket->t_ref) > 0);
+	atomic_inc(&ticket->t_ref);
+	return ticket;
+}
 
 /*
  * Allocate and initialise a new log ticket.
  */
 STATIC xlog_ticket_t *
-xlog_ticket_get(xlog_t		*log,
+xlog_ticket_alloc(xlog_t		*log,
 		int		unit_bytes,
 		int		cnt,
 		char		client,
@@ -3308,6 +3318,7 @@ xlog_ticket_get(xlog_t		*log,
 		unit_bytes += 2*BBSIZE;
         }
 
+	atomic_set(&tic->t_ref, 1);
 	tic->t_unit_res		= unit_bytes;
 	tic->t_curr_res		= unit_bytes;
 	tic->t_cnt		= cnt;
@@ -3323,7 +3334,7 @@ xlog_ticket_get(xlog_t		*log,
 	xlog_tic_reset_res(tic);
 
 	return tic;
-}	/* xlog_ticket_get */
+}
 
 
 /******************************************************************************
