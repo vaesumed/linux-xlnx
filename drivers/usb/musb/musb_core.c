@@ -1212,7 +1212,7 @@ static int __init ep_config_from_table(struct musb *musb)
 		if (epn >= musb->config->num_eps) {
 			pr_debug("%s: invalid ep %d\n",
 					musb_driver_name, epn);
-			continue;
+			return -EINVAL;
 		}
 		offset = fifo_setup(musb, hw_ep + epn, cfg++, offset);
 		if (offset < 0) {
@@ -1671,17 +1671,20 @@ musb_mode_store(struct device *dev, struct device_attribute *attr,
 {
 	struct musb	*musb = dev_to_musb(dev);
 	unsigned long	flags;
+	int		status;
 
 	spin_lock_irqsave(&musb->lock, flags);
-	if (!strncmp(buf, "host", 4))
-		musb_platform_set_mode(musb, MUSB_HOST);
-	if (!strncmp(buf, "peripheral", 10))
-		musb_platform_set_mode(musb, MUSB_PERIPHERAL);
-	if (!strncmp(buf, "otg", 3))
-		musb_platform_set_mode(musb, MUSB_OTG);
+	if (sysfs_streq(buf, "host"))
+		status = musb_platform_set_mode(musb, MUSB_HOST);
+	else if (sysfs_streq(buf, "peripheral"))
+		status = musb_platform_set_mode(musb, MUSB_PERIPHERAL);
+	else if (sysfs_streq(buf, "otg"))
+		status = musb_platform_set_mode(musb, MUSB_OTG);
+	else
+		status = -EINVAL;
 	spin_unlock_irqrestore(&musb->lock, flags);
 
-	return n;
+	return (status == 0) ? n : status;
 }
 static DEVICE_ATTR(mode, 0644, musb_mode_show, musb_mode_store);
 
@@ -1781,7 +1784,7 @@ allocate_instance(struct device *dev,
 #ifdef CONFIG_USB_MUSB_HDRC_HCD
 	struct usb_hcd	*hcd;
 
-	hcd = usb_create_hcd(&musb_hc_driver, dev, dev->bus_id);
+	hcd = usb_create_hcd(&musb_hc_driver, dev, dev_name(dev));
 	if (!hcd)
 		return NULL;
 	/* usbcore sets dev->driver_data to hcd, and sometimes uses that... */
@@ -1810,7 +1813,6 @@ allocate_instance(struct device *dev,
 	for (epnum = 0, ep = musb->endpoints;
 			epnum < musb->config->num_eps;
 			epnum++, ep++) {
-
 		ep->musb = musb;
 		ep->epnum = epnum;
 	}
@@ -1838,7 +1840,7 @@ static void musb_free(struct musb *musb)
 	musb_gadget_cleanup(musb);
 #endif
 
-	if (musb->nIrq >= 0) {
+	if (musb->nIrq >= 0 && musb->irq_wake) {
 		disable_irq_wake(musb->nIrq);
 		free_irq(musb->nIrq, musb);
 	}
@@ -1984,15 +1986,19 @@ bad_config:
 	INIT_WORK(&musb->irq_work, musb_irq_work);
 
 	/* attach to the IRQ */
-	if (request_irq(nIrq, musb->isr, 0, dev->bus_id, musb)) {
+	if (request_irq(nIrq, musb->isr, 0, dev_name(dev), musb)) {
 		dev_err(dev, "request_irq %d failed!\n", nIrq);
 		status = -ENODEV;
 		goto fail2;
 	}
 	musb->nIrq = nIrq;
 /* FIXME this handles wakeup irqs wrong */
-	if (enable_irq_wake(nIrq) == 0)
+	if (enable_irq_wake(nIrq) == 0) {
+		musb->irq_wake = 1;
 		device_init_wakeup(dev, 1);
+	} else {
+		musb->irq_wake = 0;
+	}
 
 	pr_info("%s: USB %s mode controller at %p using %s, IRQ %d\n",
 			musb_driver_name,

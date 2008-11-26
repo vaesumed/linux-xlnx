@@ -402,6 +402,7 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 #ifdef	CONFIG_PM
 	mutex_init(&dev->pm_mutex);
 	INIT_DELAYED_WORK(&dev->autosuspend, usb_autosuspend_work);
+	INIT_WORK(&dev->autoresume, usb_autoresume_work);
 	dev->autosuspend_delay = usb_autosuspend_delay * HZ;
 	dev->connect_time = jiffies;
 	dev->active_duration = -jiffies;
@@ -513,10 +514,7 @@ EXPORT_SYMBOL_GPL(usb_put_intf);
  * disconnect; in some drivers (such as usb-storage) the disconnect()
  * or suspend() method will block waiting for a device reset to complete.
  *
- * Returns a negative error code for failure, otherwise 1 or 0 to indicate
- * that the device will or will not have to be unlocked.  (0 can be
- * returned when an interface is given and is BINDING, because in that
- * case the driver already owns the device lock.)
+ * Returns a negative error code for failure, otherwise 0.
  */
 int usb_lock_device_for_reset(struct usb_device *udev,
 			      const struct usb_interface *iface)
@@ -527,16 +525,9 @@ int usb_lock_device_for_reset(struct usb_device *udev,
 		return -ENODEV;
 	if (udev->state == USB_STATE_SUSPENDED)
 		return -EHOSTUNREACH;
-	if (iface) {
-		switch (iface->condition) {
-		case USB_INTERFACE_BINDING:
-			return 0;
-		case USB_INTERFACE_BOUND:
-			break;
-		default:
-			return -EINTR;
-		}
-	}
+	if (iface && (iface->condition == USB_INTERFACE_UNBINDING ||
+			iface->condition == USB_INTERFACE_UNBOUND))
+		return -EINTR;
 
 	while (usb_trylock_device(udev) != 0) {
 
@@ -550,10 +541,11 @@ int usb_lock_device_for_reset(struct usb_device *udev,
 			return -ENODEV;
 		if (udev->state == USB_STATE_SUSPENDED)
 			return -EHOSTUNREACH;
-		if (iface && iface->condition != USB_INTERFACE_BOUND)
+		if (iface && (iface->condition == USB_INTERFACE_UNBINDING ||
+				iface->condition == USB_INTERFACE_UNBOUND))
 			return -EINTR;
 	}
-	return 1;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(usb_lock_device_for_reset);
 
@@ -962,9 +954,6 @@ void usb_buffer_unmap_sg(const struct usb_device *dev, int is_in,
 }
 EXPORT_SYMBOL_GPL(usb_buffer_unmap_sg);
 
-/* format to disable USB on kernel command line is: nousb */
-__module_param_call("", nousb, param_set_bool, param_get_bool, &nousb, 0444);
-
 /*
  * for external read access to <nousb>
  */
@@ -1051,6 +1040,11 @@ static void __exit usb_exit(void)
 	bus_unregister(&usb_bus_type);
 	ksuspend_usb_cleanup();
 }
+
+/* To disable USB, kernel command line is 'nousb' not 'usbcore.nousb' */
+#undef MODULE_PARAM_PREFIX
+#define MODULE_PARAM_PREFIX
+module_param(nousb, bool, 0444);
 
 subsys_initcall(usb_init);
 module_exit(usb_exit);

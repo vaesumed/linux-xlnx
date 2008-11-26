@@ -184,6 +184,20 @@ static int usb_unbind_device(struct device *dev)
 	return 0;
 }
 
+/*
+ * Cancel any pending scheduled resets
+ *
+ * [see usb_queue_reset_device()]
+ *
+ * Called after unconfiguring / when releasing interfaces. See
+ * comments in __usb_queue_reset_device() regarding
+ * udev->reset_running.
+ */
+static void usb_cancel_queued_reset(struct usb_interface *iface)
+{
+	if (iface->reset_running == 0)
+		cancel_work_sync(&iface->reset_ws);
+}
 
 /* called from driver core with dev locked */
 static int usb_probe_interface(struct device *dev)
@@ -242,6 +256,7 @@ static int usb_probe_interface(struct device *dev)
 			mark_quiesced(intf);
 			intf->needs_remote_wakeup = 0;
 			intf->condition = USB_INTERFACE_UNBOUND;
+			usb_cancel_queued_reset(intf);
 		} else
 			intf->condition = USB_INTERFACE_BOUND;
 
@@ -272,6 +287,7 @@ static int usb_unbind_interface(struct device *dev)
 		usb_disable_interface(udev, intf);
 
 	driver->disconnect(intf);
+	usb_cancel_queued_reset(intf);
 
 	/* Reset other interface state.
 	 * We cannot do a Set-Interface if the device is suspended or
@@ -378,8 +394,10 @@ void usb_driver_release_interface(struct usb_driver *driver,
 	if (device_is_registered(dev)) {
 		iface->condition = USB_INTERFACE_UNBINDING;
 		device_release_driver(dev);
+	} else {
+		iface->condition = USB_INTERFACE_UNBOUND;
+		usb_cancel_queued_reset(iface);
 	}
-
 	dev->driver = NULL;
 	usb_set_intfdata(iface, NULL);
 
@@ -940,7 +958,8 @@ static int usb_suspend_interface(struct usb_device *udev,
 	if (udev->state == USB_STATE_NOTATTACHED || !is_active(intf))
 		goto done;
 
-	if (intf->condition == USB_INTERFACE_UNBOUND)	/* This can't happen */
+	/* This can happen; see usb_driver_release_interface() */
+	if (intf->condition == USB_INTERFACE_UNBOUND)
 		goto done;
 	driver = to_usb_driver(intf->dev.driver);
 
@@ -1090,7 +1109,7 @@ static int autosuspend_check(struct usb_device *udev, int reschedule)
 	if (reschedule) {
 		if (!timer_pending(&udev->autosuspend.timer)) {
 			queue_delayed_work(ksuspend_usb_wq, &udev->autosuspend,
-				round_jiffies_relative(suspend_time - j));
+				round_jiffies_up_relative(suspend_time - j));
 		}
 		return -EAGAIN;
 	}
@@ -1339,6 +1358,19 @@ void usb_autosuspend_work(struct work_struct *work)
 	usb_autopm_do_device(udev, 0);
 }
 
+/* usb_autoresume_work - callback routine to autoresume a USB device */
+void usb_autoresume_work(struct work_struct *work)
+{
+	struct usb_device *udev =
+		container_of(work, struct usb_device, autoresume);
+
+	/* Wake it up, let the drivers do their thing, and then put it
+	 * back to sleep.
+	 */
+	if (usb_autopm_do_device(udev, 1) == 0)
+		usb_autopm_do_device(udev, -1);
+}
+
 /**
  * usb_autosuspend_device - delayed autosuspend of a USB device and its interfaces
  * @udev: the usb_device to autosuspend
@@ -1490,6 +1522,45 @@ void usb_autopm_put_interface(struct usb_interface *intf)
 EXPORT_SYMBOL_GPL(usb_autopm_put_interface);
 
 /**
+ * usb_autopm_put_interface_async - decrement a USB interface's PM-usage counter
+ * @intf: the usb_interface whose counter should be decremented
+ *
+ * This routine does essentially the same thing as
+ * usb_autopm_put_interface(): it decrements @intf's usage counter and
+ * queues a delayed autosuspend request if the counter is <= 0.  The
+ * difference is that it does not acquire the device's pm_mutex;
+ * callers must handle all synchronization issues themselves.
+ *
+ * Typically a driver would call this routine during an URB's completion
+ * handler, if no more URBs were pending.
+ *
+ * This routine can run in atomic context.
+ */
+void usb_autopm_put_interface_async(struct usb_interface *intf)
+{
+	struct usb_device	*udev = interface_to_usbdev(intf);
+	int			status = 0;
+
+	if (intf->condition == USB_INTERFACE_UNBOUND) {
+		status = -ENODEV;
+	} else {
+		udev->last_busy = jiffies;
+		--intf->pm_usage_cnt;
+		if (udev->autosuspend_disabled || udev->autosuspend_delay < 0)
+			status = -EPERM;
+		else if (intf->pm_usage_cnt <= 0 &&
+				!timer_pending(&udev->autosuspend.timer)) {
+			queue_delayed_work(ksuspend_usb_wq, &udev->autosuspend,
+					round_jiffies_up_relative(
+						udev->autosuspend_delay));
+		}
+	}
+	dev_vdbg(&intf->dev, "%s: status %d cnt %d\n",
+			__func__, status, intf->pm_usage_cnt);
+}
+EXPORT_SYMBOL_GPL(usb_autopm_put_interface_async);
+
+/**
  * usb_autopm_get_interface - increment a USB interface's PM-usage counter
  * @intf: the usb_interface whose counter should be incremented
  *
@@ -1535,6 +1606,37 @@ int usb_autopm_get_interface(struct usb_interface *intf)
 EXPORT_SYMBOL_GPL(usb_autopm_get_interface);
 
 /**
+ * usb_autopm_get_interface_async - increment a USB interface's PM-usage counter
+ * @intf: the usb_interface whose counter should be incremented
+ *
+ * This routine does much the same thing as
+ * usb_autopm_get_interface(): it increments @intf's usage counter and
+ * queues an autoresume request if the result is > 0.  The differences
+ * are that it does not acquire the device's pm_mutex (callers must
+ * handle all synchronization issues themselves), and it does not
+ * autoresume the device directly (it only queues a request).  After a
+ * successful call, the device will generally not yet be resumed.
+ *
+ * This routine can run in atomic context.
+ */
+int usb_autopm_get_interface_async(struct usb_interface *intf)
+{
+	struct usb_device	*udev = interface_to_usbdev(intf);
+	int			status = 0;
+
+	if (intf->condition == USB_INTERFACE_UNBOUND)
+		status = -ENODEV;
+	else if (udev->autoresume_disabled)
+		status = -EPERM;
+	else if (++intf->pm_usage_cnt > 0 && udev->state == USB_STATE_SUSPENDED)
+		queue_work(ksuspend_usb_wq, &udev->autoresume);
+	dev_vdbg(&intf->dev, "%s: status %d cnt %d\n",
+			__func__, status, intf->pm_usage_cnt);
+	return status;
+}
+EXPORT_SYMBOL_GPL(usb_autopm_get_interface_async);
+
+/**
  * usb_autopm_set_interface - set a USB interface's autosuspend state
  * @intf: the usb_interface whose state should be set
  *
@@ -1559,6 +1661,9 @@ EXPORT_SYMBOL_GPL(usb_autopm_set_interface);
 #else
 
 void usb_autosuspend_work(struct work_struct *work)
+{}
+
+void usb_autoresume_work(struct work_struct *work)
 {}
 
 #endif /* CONFIG_USB_SUSPEND */
