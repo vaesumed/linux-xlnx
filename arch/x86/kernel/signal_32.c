@@ -4,29 +4,32 @@
  *  1997-11-28  Modified for POSIX.1b signals by Richard Henderson
  *  2000-06-20  Pentium III FXSR, SSE support by Gareth Hughes
  */
-#include <linux/list.h>
 
-#include <linux/personality.h>
-#include <linux/binfmts.h>
-#include <linux/suspend.h>
-#include <linux/kernel.h>
-#include <linux/ptrace.h>
-#include <linux/signal.h>
-#include <linux/stddef.h>
-#include <linux/unistd.h>
-#include <linux/errno.h>
 #include <linux/sched.h>
-#include <linux/wait.h>
-#include <linux/tracehook.h>
-#include <linux/elf.h>
-#include <linux/smp.h>
 #include <linux/mm.h>
+#include <linux/smp.h>
+#include <linux/kernel.h>
+#include <linux/signal.h>
+#include <linux/errno.h>
+#include <linux/wait.h>
+#include <linux/ptrace.h>
+#include <linux/tracehook.h>
+#include <linux/unistd.h>
+#include <linux/stddef.h>
+#include <linux/personality.h>
+#include <linux/uaccess.h>
 
 #include <asm/processor.h>
 #include <asm/ucontext.h>
-#include <asm/uaccess.h>
 #include <asm/i387.h>
 #include <asm/vdso.h>
+
+#ifdef CONFIG_X86_64
+#include <asm/proto.h>
+#include <asm/ia32_unistd.h>
+#include <asm/mce.h>
+#endif /* CONFIG_X86_64 */
+
 #include <asm/syscall.h>
 #include <asm/syscalls.h>
 
@@ -44,6 +47,28 @@
 #else
 # define FIX_EFLAGS	__FIX_EFLAGS
 #endif
+
+static const struct {
+	u16 poplmovl;
+	u32 val;
+	u16 int80;
+} __attribute__((packed)) retcode = {
+	0xb858,		/* popl %eax; movl $..., %eax */
+	__NR_sigreturn,
+	0x80cd,		/* int $0x80 */
+};
+
+static const struct {
+	u8  movl;
+	u32 val;
+	u16 int80;
+	u8  pad;
+} __attribute__((packed)) rt_retcode = {
+	0xb8,		/* movl $..., %eax */
+	__NR_rt_sigreturn,
+	0x80cd,		/* int $0x80 */
+	0
+};
 
 /*
  * Atomically swap in the new signal mask, and wait for a signal.
@@ -100,6 +125,7 @@ sys_sigaction(int sig, const struct old_sigaction __user *act,
 	return ret;
 }
 
+#ifdef CONFIG_X86_32
 asmlinkage int sys_sigaltstack(unsigned long bx)
 {
 	/*
@@ -112,6 +138,14 @@ asmlinkage int sys_sigaltstack(unsigned long bx)
 
 	return do_sigaltstack(uss, uoss, regs->sp);
 }
+#else /* !CONFIG_X86_32 */
+asmlinkage long
+sys_sigaltstack(const stack_t __user *uss, stack_t __user *uoss,
+		struct pt_regs *regs)
+{
+	return do_sigaltstack(uss, uoss, regs->sp);
+}
+#endif /* CONFIG_X86_32 */
 
 #define COPY(x)			{		\
 	err |= __get_user(regs->x, &sc->x);	\
@@ -123,7 +157,7 @@ asmlinkage int sys_sigaltstack(unsigned long bx)
 		regs->seg = tmp;			\
 }
 
-#define COPY_SEG_STRICT(seg)	{			\
+#define COPY_SEG_CPL3(seg)	{			\
 		unsigned short tmp;			\
 		err |= __get_user(tmp, &sc->seg);	\
 		regs->seg = tmp | 3;			\
@@ -149,14 +183,36 @@ restore_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc,
 	/* Always make any pending restarted system calls return -EINTR */
 	current_thread_info()->restart_block.fn = do_no_restart_syscall;
 
+#ifdef CONFIG_X86_32
 	GET_SEG(gs);
 	COPY_SEG(fs);
 	COPY_SEG(es);
 	COPY_SEG(ds);
+#endif /* CONFIG_X86_32 */
+
 	COPY(di); COPY(si); COPY(bp); COPY(sp); COPY(bx);
 	COPY(dx); COPY(cx); COPY(ip);
-	COPY_SEG_STRICT(cs);
-	COPY_SEG_STRICT(ss);
+
+#ifdef CONFIG_X86_64
+	COPY(r8);
+	COPY(r9);
+	COPY(r10);
+	COPY(r11);
+	COPY(r12);
+	COPY(r13);
+	COPY(r14);
+	COPY(r15);
+#endif /* CONFIG_X86_64 */
+
+#ifdef CONFIG_X86_32
+	COPY_SEG_CPL3(cs);
+	COPY_SEG_CPL3(ss);
+#else /* !CONFIG_X86_32 */
+	/* Kernel saves and restores only the CS segment register on signals,
+	 * which is the bare minimum needed to allow mixed 32/64-bit code.
+	 * App's signal handler can save/restore other segments if needed. */
+	COPY_SEG_CPL3(cs);
+#endif /* CONFIG_X86_32 */
 
 	err |= __get_user(tmpflags, &sc->flags);
 	regs->flags = (regs->flags & ~FIX_EFLAGS) | (tmpflags & FIX_EFLAGS);
@@ -243,12 +299,19 @@ badframe:
 	return 0;
 }
 
+#ifdef CONFIG_X86_32
 asmlinkage int sys_rt_sigreturn(unsigned long __unused)
 {
 	struct pt_regs *regs = (struct pt_regs *)&__unused;
 
 	return do_rt_sigreturn(regs);
 }
+#else /* !CONFIG_X86_32 */
+asmlinkage long sys_rt_sigreturn(struct pt_regs *regs)
+{
+	return do_rt_sigreturn(regs);
+}
+#endif /* CONFIG_X86_32 */
 
 /*
  * Set up a signal frame.
@@ -257,14 +320,20 @@ static int
 setup_sigcontext(struct sigcontext __user *sc, void __user *fpstate,
 		 struct pt_regs *regs, unsigned long mask)
 {
-	int tmp, err = 0;
+	int err = 0;
 
+#ifdef CONFIG_X86_32
+	{
+		unsigned int tmp;
+
+		savesegment(gs, tmp);
+		err |= __put_user(tmp, (unsigned int __user *)&sc->gs);
+	}
 	err |= __put_user(regs->fs, (unsigned int __user *)&sc->fs);
-	savesegment(gs, tmp);
-	err |= __put_user(tmp, (unsigned int __user *)&sc->gs);
-
 	err |= __put_user(regs->es, (unsigned int __user *)&sc->es);
 	err |= __put_user(regs->ds, (unsigned int __user *)&sc->ds);
+#endif /* CONFIG_X86_32 */
+
 	err |= __put_user(regs->di, &sc->di);
 	err |= __put_user(regs->si, &sc->si);
 	err |= __put_user(regs->bp, &sc->bp);
@@ -273,19 +342,33 @@ setup_sigcontext(struct sigcontext __user *sc, void __user *fpstate,
 	err |= __put_user(regs->dx, &sc->dx);
 	err |= __put_user(regs->cx, &sc->cx);
 	err |= __put_user(regs->ax, &sc->ax);
+#ifdef CONFIG_X86_64
+	err |= __put_user(regs->r8, &sc->r8);
+	err |= __put_user(regs->r9, &sc->r9);
+	err |= __put_user(regs->r10, &sc->r10);
+	err |= __put_user(regs->r11, &sc->r11);
+	err |= __put_user(regs->r12, &sc->r12);
+	err |= __put_user(regs->r13, &sc->r13);
+	err |= __put_user(regs->r14, &sc->r14);
+	err |= __put_user(regs->r15, &sc->r15);
+#endif /* CONFIG_X86_64 */
+
 	err |= __put_user(current->thread.trap_no, &sc->trapno);
 	err |= __put_user(current->thread.error_code, &sc->err);
 	err |= __put_user(regs->ip, &sc->ip);
+#ifdef CONFIG_X86_32
 	err |= __put_user(regs->cs, (unsigned int __user *)&sc->cs);
 	err |= __put_user(regs->flags, &sc->flags);
 	err |= __put_user(regs->sp, &sc->sp_at_signal);
 	err |= __put_user(regs->ss, (unsigned int __user *)&sc->ss);
+#else /* !CONFIG_X86_32 */
+	err |= __put_user(regs->flags, &sc->flags);
+	err |= __put_user(regs->cs, &sc->cs);
+	err |= __put_user(0, &sc->gs);
+	err |= __put_user(0, &sc->fs);
+#endif /* CONFIG_X86_32 */
 
-	tmp = save_i387_xstate(fpstate);
-	if (tmp < 0)
-		err = 1;
-	else
-		err |= __put_user(tmp ? fpstate : NULL, &sc->fpstate);
+	err |= __put_user(fpstate, &sc->fpstate);
 
 	/* non-iBCS2 extensions.. */
 	err |= __put_user(mask, &sc->oldmask);
@@ -328,6 +411,8 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
 	if (used_math()) {
 		sp = sp - sig_xstate_size;
 		*fpstate = (struct _fpstate *) sp;
+		if (save_i387_xstate(*fpstate) < 0)
+			return (void __user *)-1L;
 	}
 
 	sp -= frame_size;
@@ -383,9 +468,7 @@ __setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	 * reasons and because gdb uses it as a signature to notice
 	 * signal handler stack frames.
 	 */
-	err |= __put_user(0xb858, (short __user *)(frame->retcode+0));
-	err |= __put_user(__NR_sigreturn, (int __user *)(frame->retcode+2));
-	err |= __put_user(0x80cd, (short __user *)(frame->retcode+6));
+	err |= __put_user(*((u64 *)&retcode), (u64 *)frame->retcode);
 
 	if (err)
 		return -EFAULT;
@@ -454,9 +537,7 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 	 * reasons and because gdb uses it as a signature to notice
 	 * signal handler stack frames.
 	 */
-	err |= __put_user(0xb8, (char __user *)(frame->retcode+0));
-	err |= __put_user(__NR_rt_sigreturn, (int __user *)(frame->retcode+1));
-	err |= __put_user(0x80cd, (short __user *)(frame->retcode+5));
+	err |= __put_user(*((u64 *)&rt_retcode), (u64 *)frame->retcode);
 
 	if (err)
 		return -EFAULT;
@@ -481,16 +562,30 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
  */
 static int signr_convert(int sig)
 {
+#ifdef CONFIG_X86_32
 	struct thread_info *info = current_thread_info();
 
 	if (info->exec_domain && info->exec_domain->signal_invmap && sig < 32)
 		return info->exec_domain->signal_invmap[sig];
+#endif /* CONFIG_X86_32 */
 	return sig;
 }
+
+#ifdef CONFIG_X86_32
 
 #define is_ia32	1
 #define ia32_setup_frame	__setup_frame
 #define ia32_setup_rt_frame	__setup_rt_frame
+
+#else /* !CONFIG_X86_32 */
+
+#ifdef CONFIG_IA32_EMULATION
+#define is_ia32	test_thread_flag(TIF_IA32)
+#else /* !CONFIG_IA32_EMULATION */
+#define is_ia32	0
+#endif /* CONFIG_IA32_EMULATION */
+
+#endif /* CONFIG_X86_32 */
 
 static int
 setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
@@ -592,7 +687,13 @@ handle_signal(unsigned long sig, siginfo_t *info, struct k_sigaction *ka,
 	return 0;
 }
 
+#ifdef CONFIG_X86_32
 #define NR_restart_syscall	__NR_restart_syscall
+#else /* !CONFIG_X86_32 */
+#define NR_restart_syscall	\
+	test_thread_flag(TIF_IA32) ? __NR_ia32_restart_syscall : __NR_restart_syscall
+#endif /* CONFIG_X86_32 */
+
 /*
  * Note that 'init' is a special process: it doesn't get signals it doesn't
  * want to handle. Thus you cannot kill init even with a SIGKILL even by
