@@ -58,10 +58,11 @@ static struct virtio_device_id id_table[] = {
 
 static u32 page_to_balloon_pfn(struct page *page)
 {
-    unsigned long pfn = page_to_pfn(page);
+	unsigned long pfn = page_to_pfn(page);
 
-    /* Convert pfn from Linux page size to balloon page size. */
-    return pfn >> (PAGE_SHIFT - VIRTIO_BALLOON_PFN_SHIFT);
+	BUILD_BUG_ON(PAGE_SHIFT < VIRTIO_BALLOON_PFN_SHIFT);
+	/* Convert pfn from Linux page size to balloon page size. */
+	return pfn >> (PAGE_SHIFT - VIRTIO_BALLOON_PFN_SHIFT);
 }
 
 static void balloon_ack(struct virtqueue *vq)
