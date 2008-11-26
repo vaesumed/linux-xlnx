@@ -28,7 +28,6 @@
 #include "inode.h"
 #include "log.h"
 #include "mount.h"
-#include "ops_super.h"
 #include "quota.h"
 #include "recovery.h"
 #include "rgrp.h"
@@ -143,8 +142,6 @@ static void gfs2_put_super(struct super_block *sb)
 	kthread_stop(sdp->sd_quotad_process);
 	kthread_stop(sdp->sd_logd_process);
 	kthread_stop(sdp->sd_recoverd_process);
-	while (sdp->sd_glockd_num--)
-		kthread_stop(sdp->sd_glockd_process[sdp->sd_glockd_num]);
 
 	if (!(sb->s_flags & MS_RDONLY)) {
 		error = gfs2_make_fs_ro(sdp);
@@ -370,7 +367,6 @@ static void gfs2_clear_inode(struct inode *inode)
 	 */
 	if (test_bit(GIF_USER, &ip->i_flags)) {
 		ip->i_gl->gl_object = NULL;
-		gfs2_glock_schedule_for_reclaim(ip->i_gl);
 		gfs2_glock_put(ip->i_gl);
 		ip->i_gl = NULL;
 		if (ip->i_iopen_gh.gh_gl) {
@@ -423,8 +419,6 @@ static int gfs2_show_options(struct seq_file *s, struct vfsmount *mnt)
 		seq_printf(s, ",debug");
 	if (args->ar_upgrade)
 		seq_printf(s, ",upgrade");
-	if (args->ar_num_glockd != GFS2_GLOCKD_DEFAULT)
-		seq_printf(s, ",num_glockd=%u", args->ar_num_glockd);
 	if (args->ar_posix_acl)
 		seq_printf(s, ",acl");
 	if (args->ar_quota != GFS2_QUOTA_DEFAULT) {
@@ -494,16 +488,16 @@ static void gfs2_delete_inode(struct inode *inode)
 	gfs2_holder_reinit(LM_ST_EXCLUSIVE, LM_FLAG_TRY_1CB | GL_NOCACHE, &ip->i_iopen_gh);
 	error = gfs2_glock_nq(&ip->i_iopen_gh);
 	if (error)
-		goto out_uninit;
+		goto out_truncate;
 
 	if (S_ISDIR(inode->i_mode) &&
-	    (ip->i_di.di_flags & GFS2_DIF_EXHASH)) {
+	    (ip->i_diskflags & GFS2_DIF_EXHASH)) {
 		error = gfs2_dir_exhash_dealloc(ip);
 		if (error)
 			goto out_unlock;
 	}
 
-	if (ip->i_di.di_eattr) {
+	if (ip->i_eattr) {
 		error = gfs2_ea_dealloc(ip);
 		if (error)
 			goto out_unlock;
@@ -519,6 +513,7 @@ static void gfs2_delete_inode(struct inode *inode)
 	if (error)
 		goto out_unlock;
 
+out_truncate:
 	error = gfs2_trans_begin(sdp, 0, sdp->sd_jdesc->jd_blocks);
 	if (error)
 		goto out_unlock;
@@ -527,8 +522,8 @@ static void gfs2_delete_inode(struct inode *inode)
 	gfs2_trans_end(sdp);
 
 out_unlock:
-	gfs2_glock_dq(&ip->i_iopen_gh);
-out_uninit:
+	if (test_bit(HIF_HOLDER, &ip->i_iopen_gh.gh_iflags))
+		gfs2_glock_dq(&ip->i_iopen_gh);
 	gfs2_holder_uninit(&ip->i_iopen_gh);
 	gfs2_glock_dq_uninit(&gh);
 	if (error && error != GLR_TRYFAILED)
