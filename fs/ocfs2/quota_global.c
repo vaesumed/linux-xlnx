@@ -85,38 +85,42 @@ struct qtree_fmt_operations ocfs2_global_ops = {
 	.is_id = ocfs2_global_is_id,
 };
 
-struct buffer_head *ocfs2_read_quota_block(struct inode *inode,
-					   int block, int *err)
+int ocfs2_read_quota_block(struct inode *inode, u64 v_block,
+			   struct buffer_head **bh)
 {
-	struct buffer_head *tmp = NULL;
+	int rc = 0;
+	struct buffer_head *tmp = *bh;
 
-	*err = ocfs2_read_virt_blocks(inode, block, 1, &tmp, 0, NULL);
-	if (*err)
-		mlog_errno(*err);
+	rc = ocfs2_read_virt_blocks(inode, v_block, 1, &tmp, 0, NULL);
+	if (rc)
+		mlog_errno(rc);
 
-	return tmp;
+	/* If ocfs2_read_virt_blocks() got us a new bh, pass it up. */
+	if (!rc && !*bh)
+		*bh = tmp;
+
+	return rc;
 }
 
-static struct buffer_head *ocfs2_get_quota_block(struct inode *inode,
-						 int block, int *err)
+static int ocfs2_get_quota_block(struct inode *inode, int block,
+				 struct buffer_head **bh)
 {
 	u64 pblock, pcount;
-	struct buffer_head *bh;
+	int err;
 
 	down_read(&OCFS2_I(inode)->ip_alloc_sem);
-	*err = ocfs2_extent_map_get_blocks(inode, block, &pblock, &pcount,
-					   NULL);
+	err = ocfs2_extent_map_get_blocks(inode, block, &pblock, &pcount, NULL);
 	up_read(&OCFS2_I(inode)->ip_alloc_sem);
-	if (*err) {
-		mlog_errno(*err);
-		return NULL;
+	if (err) {
+		mlog_errno(err);
+		return err;
 	}
-	bh = sb_getblk(inode->i_sb, pblock);
-	if (!bh) {
-		*err = -EIO;
-		mlog_errno(*err);
+	*bh = sb_getblk(inode->i_sb, pblock);
+	if (!*bh) {
+		err = -EIO;
+		mlog_errno(err);
 	}
-	return bh;
+	return err;;
 }
 
 /* Read data from global quotafile - avoid pagecache and such because we cannot
@@ -141,8 +145,9 @@ ssize_t ocfs2_quota_read(struct super_block *sb, int type, char *data,
 	toread = len;
 	while (toread > 0) {
 		tocopy = min((size_t)(sb->s_blocksize - offset), toread);
-		bh = ocfs2_read_quota_block(gqinode, blk, &err);
-		if (!bh) {
+		bh = NULL;
+		err = ocfs2_read_quota_block(gqinode, blk, &bh);
+		if (err) {
 			mlog_errno(err);
 			return err;
 		}
@@ -166,8 +171,8 @@ ssize_t ocfs2_quota_write(struct super_block *sb, int type,
 	struct inode *gqinode = oinfo->dqi_gqinode;
 	int offset = off & (sb->s_blocksize - 1);
 	sector_t blk = off >> sb->s_blocksize_bits;
-	int err = 0, new = 0;
-	struct buffer_head *bh;
+	int err = 0, new = 0, ja_type;
+	struct buffer_head *bh = NULL;
 	handle_t *handle = journal_current_handle();
 
 	if (!handle) {
@@ -198,33 +203,29 @@ ssize_t ocfs2_quota_write(struct super_block *sb, int type,
 	/* Not rewriting whole block? */
 	if ((offset || len < sb->s_blocksize - OCFS2_QBLK_RESERVED_SPACE) &&
 	    !new) {
-		bh = ocfs2_read_quota_block(gqinode, blk, &err);
-		if (!bh) {
-			mlog_errno(err);
-			return err;
-		}
-		err = ocfs2_journal_access(handle, gqinode, bh,
-						OCFS2_JOURNAL_ACCESS_WRITE);
+		err = ocfs2_read_quota_block(gqinode, blk, &bh);
+		ja_type = OCFS2_JOURNAL_ACCESS_WRITE;
 	} else {
-		bh = ocfs2_get_quota_block(gqinode, blk, &err);
-		if (!bh) {
-			mlog_errno(err);
-			return err;
-		}
-		err = ocfs2_journal_access(handle, gqinode, bh,
-						OCFS2_JOURNAL_ACCESS_CREATE);
+		err = ocfs2_get_quota_block(gqinode, blk, &bh);
+		ja_type = OCFS2_JOURNAL_ACCESS_CREATE;
 	}
-	if (err < 0) {
-		brelse(bh);
-		goto out;
+	if (err) {
+		mlog_errno(err);
+		return err;
 	}
 	lock_buffer(bh);
 	if (new)
 		memset(bh->b_data, 0, sb->s_blocksize);
 	memcpy(bh->b_data + offset, data, len);
 	flush_dcache_page(bh->b_page);
+	set_buffer_uptodate(bh);
 	unlock_buffer(bh);
 	ocfs2_set_buffer_uptodate(gqinode, bh);
+	err = ocfs2_journal_access(handle, gqinode, bh, ja_type);
+	if (err < 0) {
+		brelse(bh);
+		goto out;
+	}
 	err = ocfs2_journal_dirty(handle, bh);
 	brelse(bh);
 	if (err < 0)
@@ -454,9 +455,9 @@ int __ocfs2_sync_dquot(struct dquot *dquot, int freeing)
 	olditime = dquot->dq_dqb.dqb_itime;
 	oldbtime = dquot->dq_dqb.dqb_btime;
 	ocfs2_global_disk2memdqb(dquot, &dqblk);
-	mlog(0, "Syncing global dquot %d space %lld+%lld, inodes %lld+%lld\n",
-	     dquot->dq_id, dquot->dq_dqb.dqb_curspace, spacechange,
-	     dquot->dq_dqb.dqb_curinodes, inodechange);
+	mlog(0, "Syncing global dquot %u space %lld+%lld, inodes %lld+%lld\n",
+	     dquot->dq_id, dquot->dq_dqb.dqb_curspace, (long long)spacechange,
+	     dquot->dq_dqb.dqb_curinodes, (long long)inodechange);
 	if (!test_bit(DQ_LASTSET_B + QIF_SPACE_B, &dquot->dq_flags))
 		dquot->dq_dqb.dqb_curspace += spacechange;
 	if (!test_bit(DQ_LASTSET_B + QIF_INODES_B, &dquot->dq_flags))
@@ -873,7 +874,7 @@ out:
 
 static int ocfs2_dquot_drop_slow(struct inode *inode)
 {
-	int status;
+	int status = 0;
 	int cnt;
 	int got_lock[MAXQUOTAS] = {0, 0};
 	handle_t *handle;
