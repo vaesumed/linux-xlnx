@@ -312,7 +312,8 @@ static void sun4u_irq_enable(unsigned int virt_irq)
 	}
 }
 
-static void sun4u_set_affinity(unsigned int virt_irq, cpumask_t mask)
+static void sun4u_set_affinity(unsigned int virt_irq,
+			       const struct cpumask *mask)
 {
 	sun4u_irq_enable(virt_irq);
 }
