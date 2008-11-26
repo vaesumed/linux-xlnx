@@ -376,8 +376,6 @@ int param_get_string(char *buffer, struct kernel_param *kp)
 #define to_module_attr(n) container_of(n, struct module_attribute, attr);
 #define to_module_kobject(n) container_of(n, struct module_kobject, kobj);
 
-extern struct kernel_param __start___param[], __stop___param[];
-
 struct param_attribute
 {
 	struct module_attribute mattr;
@@ -636,15 +634,17 @@ static void __init param_sysfs_builtin(void)
 			continue;
 
 		dot = strchr(kp->name, '.');
-		if (!dot) {
-			/* This happens for core_param() */
-			strcpy(modname, "kernel");
-			name_len = 0;
-		} else {
-			name_len = dot - kp->name + 1;
-			strlcpy(modname, kp->name, name_len);
-		}
+		BUG_ON(!dot);
+		name_len = dot - kp->name + 1;
+		strlcpy(modname, kp->name, name_len);
 		kernel_add_sysfs_param(modname, kp, name_len);
+	}
+
+	for (kp = __start___core_param; kp < __stop___core_param; kp++) {
+		if (kp->perm == 0)
+			continue;
+
+		kernel_add_sysfs_param("kernel", kp, 0);
 	}
 }
 
