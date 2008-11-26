@@ -8,6 +8,14 @@
 #include <linux/cdrom.h>
 #include <asm/byteorder.h>
 
+#define IDECD_DEBUG_LOG		1
+
+#if IDECD_DEBUG_LOG
+#define ide_debug_log(lvl, fmt, args...) __ide_debug_log(lvl, fmt, args)
+#else
+#define ide_debug_log(lvl, fmt, args...) do {} while (0)
+#endif
+
 /*
  * typical timeout for packet command
  */
@@ -88,8 +96,6 @@ struct cdrom_info {
 	struct request_sense sense_data;
 
 	struct request request_sense_request;
-	unsigned long last_block;
-	unsigned long start_seek;
 
 	u8 max_speed;		/* Max speed of the drive. */
 	u8 current_speed;	/* Current speed of the drive. */
