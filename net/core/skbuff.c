@@ -501,7 +501,7 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 	new->network_header	= old->network_header;
 	new->mac_header		= old->mac_header;
 	new->dst		= dst_clone(old->dst);
-#ifdef CONFIG_INET
+#ifdef CONFIG_XFRM
 	new->sp			= secpath_get(old->sp);
 #endif
 	memcpy(new->cb, old->cb, sizeof(old->cb));
@@ -556,6 +556,7 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	C(truesize);
 #if defined(CONFIG_MAC80211) || defined(CONFIG_MAC80211_MODULE)
 	C(do_not_encrypt);
+	C(requeue);
 #endif
 	atomic_set(&n->users, 1);
 
@@ -2015,6 +2016,148 @@ void skb_split(struct sk_buff *skb, struct sk_buff *skb1, const u32 len)
 		skb_split_inside_header(skb, skb1, len, pos);
 	else		/* Second chunk has no header, nothing to copy. */
 		skb_split_no_header(skb, skb1, len, pos);
+}
+
+/* Shifting from/to a cloned skb is a no-go.
+ *
+ * Caller cannot keep skb_shinfo related pointers past calling here!
+ */
+static int skb_prepare_for_shift(struct sk_buff *skb)
+{
+	return skb_cloned(skb) && pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
+}
+
+/**
+ * skb_shift - Shifts paged data partially from skb to another
+ * @tgt: buffer into which tail data gets added
+ * @skb: buffer from which the paged data comes from
+ * @shiftlen: shift up to this many bytes
+ *
+ * Attempts to shift up to shiftlen worth of bytes, which may be less than
+ * the length of the skb, from tgt to skb. Returns number bytes shifted.
+ * It's up to caller to free skb if everything was shifted.
+ *
+ * If @tgt runs out of frags, the whole operation is aborted.
+ *
+ * Skb cannot include anything else but paged data while tgt is allowed
+ * to have non-paged data as well.
+ *
+ * TODO: full sized shift could be optimized but that would need
+ * specialized skb free'er to handle frags without up-to-date nr_frags.
+ */
+int skb_shift(struct sk_buff *tgt, struct sk_buff *skb, int shiftlen)
+{
+	int from, to, merge, todo;
+	struct skb_frag_struct *fragfrom, *fragto;
+
+	BUG_ON(shiftlen > skb->len);
+	BUG_ON(skb_headlen(skb));	/* Would corrupt stream */
+
+	todo = shiftlen;
+	from = 0;
+	to = skb_shinfo(tgt)->nr_frags;
+	fragfrom = &skb_shinfo(skb)->frags[from];
+
+	/* Actual merge is delayed until the point when we know we can
+	 * commit all, so that we don't have to undo partial changes
+	 */
+	if (!to ||
+	    !skb_can_coalesce(tgt, to, fragfrom->page, fragfrom->page_offset)) {
+		merge = -1;
+	} else {
+		merge = to - 1;
+
+		todo -= fragfrom->size;
+		if (todo < 0) {
+			if (skb_prepare_for_shift(skb) ||
+			    skb_prepare_for_shift(tgt))
+				return 0;
+
+			/* All previous frag pointers might be stale! */
+			fragfrom = &skb_shinfo(skb)->frags[from];
+			fragto = &skb_shinfo(tgt)->frags[merge];
+
+			fragto->size += shiftlen;
+			fragfrom->size -= shiftlen;
+			fragfrom->page_offset += shiftlen;
+
+			goto onlymerged;
+		}
+
+		from++;
+	}
+
+	/* Skip full, not-fitting skb to avoid expensive operations */
+	if ((shiftlen == skb->len) &&
+	    (skb_shinfo(skb)->nr_frags - from) > (MAX_SKB_FRAGS - to))
+		return 0;
+
+	if (skb_prepare_for_shift(skb) || skb_prepare_for_shift(tgt))
+		return 0;
+
+	while ((todo > 0) && (from < skb_shinfo(skb)->nr_frags)) {
+		if (to == MAX_SKB_FRAGS)
+			return 0;
+
+		fragfrom = &skb_shinfo(skb)->frags[from];
+		fragto = &skb_shinfo(tgt)->frags[to];
+
+		if (todo >= fragfrom->size) {
+			*fragto = *fragfrom;
+			todo -= fragfrom->size;
+			from++;
+			to++;
+
+		} else {
+			get_page(fragfrom->page);
+			fragto->page = fragfrom->page;
+			fragto->page_offset = fragfrom->page_offset;
+			fragto->size = todo;
+
+			fragfrom->page_offset += todo;
+			fragfrom->size -= todo;
+			todo = 0;
+
+			to++;
+			break;
+		}
+	}
+
+	/* Ready to "commit" this state change to tgt */
+	skb_shinfo(tgt)->nr_frags = to;
+
+	if (merge >= 0) {
+		fragfrom = &skb_shinfo(skb)->frags[0];
+		fragto = &skb_shinfo(tgt)->frags[merge];
+
+		fragto->size += fragfrom->size;
+		put_page(fragfrom->page);
+	}
+
+	/* Reposition in the original skb */
+	to = 0;
+	while (from < skb_shinfo(skb)->nr_frags)
+		skb_shinfo(skb)->frags[to++] = skb_shinfo(skb)->frags[from++];
+	skb_shinfo(skb)->nr_frags = to;
+
+	BUG_ON(todo > 0 && !skb_shinfo(skb)->nr_frags);
+
+onlymerged:
+	/* Most likely the tgt won't ever need its checksum anymore, skb on
+	 * the other hand might need it if it needs to be resent
+	 */
+	tgt->ip_summed = CHECKSUM_PARTIAL;
+	skb->ip_summed = CHECKSUM_PARTIAL;
+
+	/* Yak, is it really working this way? Some helper please? */
+	skb->len -= shiftlen;
+	skb->data_len -= shiftlen;
+	skb->truesize -= shiftlen;
+	tgt->len += shiftlen;
+	tgt->data_len += shiftlen;
+	tgt->truesize += shiftlen;
+
+	return shiftlen;
 }
 
 /**

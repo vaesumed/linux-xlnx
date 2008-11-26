@@ -131,7 +131,6 @@ static struct dst_ops dn_dst_ops = {
 	.negative_advice =	dn_dst_negative_advice,
 	.link_failure =		dn_dst_link_failure,
 	.update_pmtu =		dn_dst_update_pmtu,
-	.entry_size =		sizeof(struct dn_route),
 	.entries =		ATOMIC_INIT(0),
 };
 
@@ -1185,7 +1184,7 @@ static int dn_route_output_key(struct dst_entry **pprt, struct flowi *flp, int f
 
 	err = __dn_route_output_key(pprt, flp, flags);
 	if (err == 0 && flp->proto) {
-		err = xfrm_lookup(pprt, flp, NULL, 0);
+		err = xfrm_lookup(&init_net, pprt, flp, NULL, 0);
 	}
 	return err;
 }
@@ -1196,8 +1195,8 @@ int dn_route_output_sock(struct dst_entry **pprt, struct flowi *fl, struct sock 
 
 	err = __dn_route_output_key(pprt, fl, flags & MSG_TRYHARD);
 	if (err == 0 && fl->proto) {
-		err = xfrm_lookup(pprt, fl, sk, (flags & MSG_DONTWAIT) ?
-						0 : XFRM_LOOKUP_WAIT);
+		err = xfrm_lookup(&init_net, pprt, fl, sk,
+				 (flags & MSG_DONTWAIT) ? 0 : XFRM_LOOKUP_WAIT);
 	}
 	return err;
 }
