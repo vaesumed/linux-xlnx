@@ -12,8 +12,8 @@ CHECKFLAGS	+= -D__sparc__ -D__sparc_v9__ -D__arch64__ -m64
 # Undefine sparc when processing vmlinux.lds - it is used
 # And teach CPP we are doing 64 bit builds (for this case)
 CPPFLAGS_vmlinux.lds += -m64 -Usparc
-
-LDFLAGS		:= -m elf64_sparc
+LDFLAGS              := -m elf64_sparc
+export BITS          := 64
 
 KBUILD_CFLAGS += -m64 -pipe -mno-fpu -mcpu=ultrasparc -mcmodel=medlow \
 	-ffixed-g4 -ffixed-g5 -fcall-used-g7 -Wno-sign-compare \
@@ -27,10 +27,10 @@ endif
 
 head-y := arch/sparc64/kernel/head.o arch/sparc64/kernel/init_task.o
 
-core-y				+= arch/sparc64/kernel/ arch/sparc64/mm/
-core-y				+= arch/sparc64/math-emu/
+core-y				+= arch/sparc64/kernel/ arch/sparc/mm/
+core-y				+= arch/sparc/math-emu/
 libs-y				+= arch/sparc64/prom/ arch/sparc64/lib/
-drivers-$(CONFIG_OPROFILE)	+= arch/sparc64/oprofile/
+drivers-$(CONFIG_OPROFILE)	+= arch/sparc/oprofile/
 
 boot := arch/sparc64/boot
 
