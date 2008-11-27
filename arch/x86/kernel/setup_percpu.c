@@ -282,7 +282,7 @@ static void __cpuinit numa_set_cpumask(int cpu, int enable)
 	else
 		cpu_clear(cpu, *mask);
 
-	cpulist_scnprintf(buf, sizeof(buf), *mask);
+	cpulist_scnprintf(buf, sizeof(buf), mask);
 	printk(KERN_DEBUG "%s cpu %d node %d: mask now %s\n",
 		enable? "numa_add_cpu":"numa_remove_cpu", cpu, node, buf);
  }
@@ -334,25 +334,25 @@ static const cpumask_t cpu_mask_none;
 /*
  * Returns a pointer to the bitmask of CPUs on Node 'node'.
  */
-const cpumask_t *_node_to_cpumask_ptr(int node)
+const cpumask_t *cpumask_of_node(int node)
 {
 	if (node_to_cpumask_map == NULL) {
 		printk(KERN_WARNING
-			"_node_to_cpumask_ptr(%d): no node_to_cpumask_map!\n",
+			"cpumask_of_node(%d): no node_to_cpumask_map!\n",
 			node);
 		dump_stack();
 		return (const cpumask_t *)&cpu_online_map;
 	}
 	if (node >= nr_node_ids) {
 		printk(KERN_WARNING
-			"_node_to_cpumask_ptr(%d): node > nr_node_ids(%d)\n",
+			"cpumask_of_node(%d): node > nr_node_ids(%d)\n",
 			node, nr_node_ids);
 		dump_stack();
 		return &cpu_mask_none;
 	}
 	return &node_to_cpumask_map[node];
 }
-EXPORT_SYMBOL(_node_to_cpumask_ptr);
+EXPORT_SYMBOL(cpumask_of_node);
 
 /*
  * Returns a bitmask of CPUs on Node 'node'.
