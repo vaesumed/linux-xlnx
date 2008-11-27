@@ -327,6 +327,7 @@ struct zone {
 	unsigned long		recent_scanned[2];
 
 	unsigned long		pages_scanned;	   /* since last reclaim */
+	unsigned long		slab_defrag_counter; /* since last defrag */
 	unsigned long		flags;		   /* zone flags, see below */
 
 	/* Zone statistics */
