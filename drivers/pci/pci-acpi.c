@@ -143,47 +143,36 @@ static acpi_status __acpi_query_osc(u32 flags, struct acpi_osc_data *osc_data,
 	return status;
 }
 
-static acpi_status acpi_query_osc(acpi_handle handle,
-				  u32 level, void *context, void **retval)
+/*
+ * pci_acpi_osc_support: Invoke _OSC indicating support for the given feature
+ * @flags: Bitmask of flags to support
+ *
+ * See the ACPI spec for the definition of the flags
+ */
+int pci_acpi_osc_support(acpi_handle handle, u32 flags)
 {
+	u32 dummy;
 	acpi_status status;
-	struct acpi_osc_data *osc_data;
-	u32 flags = (unsigned long)context, dummy;
 	acpi_handle tmp;
+	struct acpi_osc_data *osc_data;
+	int rc = 0;
 
 	status = acpi_get_handle(handle, "_OSC", &tmp);
 	if (ACPI_FAILURE(status))
-		return AE_OK;
+		return -ENOTTY;
 
 	mutex_lock(&pci_acpi_lock);
 	osc_data = acpi_get_osc_data(handle);
 	if (!osc_data) {
 		printk(KERN_ERR "acpi osc data array is full\n");
+		rc = -ENOMEM;
 		goto out;
 	}
 
 	__acpi_query_osc(flags, osc_data, &dummy);
 out:
 	mutex_unlock(&pci_acpi_lock);
-	return AE_OK;
-}
-
-/**
- * __pci_osc_support_set - register OS support to Firmware
- * @flags: OS support bits
- * @hid: hardware ID
- *
- * Update OS support fields and doing a _OSC Query to obtain an update
- * from Firmware on supported control bits.
- **/
-acpi_status __pci_osc_support_set(u32 flags, const char *hid)
-{
-	if (!(flags & OSC_SUPPORT_MASKS))
-		return AE_TYPE;
-
-	acpi_get_devices(hid, acpi_query_osc,
-			 (void *)(unsigned long)flags, NULL);
-	return AE_OK;
+	return rc;
 }
 
 /**
@@ -375,7 +364,7 @@ static int acpi_pci_find_root_bridge(struct device *dev, acpi_handle *handle)
 	 * The string should be the same as root bridge's name
 	 * Please look at 'pci_scan_bus_parented'
 	 */
-	num = sscanf(dev->bus_id, "pci%04x:%02x", &seg, &bus);
+	num = sscanf(dev_name(dev), "pci%04x:%02x", &seg, &bus);
 	if (num != 2)
 		return -ENODEV;
 	*handle = acpi_get_pci_rootbridge_handle(seg, bus);
