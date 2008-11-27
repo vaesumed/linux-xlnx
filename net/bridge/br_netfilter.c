@@ -109,7 +109,6 @@ static struct dst_ops fake_dst_ops = {
 	.family =		AF_INET,
 	.protocol =		__constant_htons(ETH_P_IP),
 	.update_pmtu =		fake_update_pmtu,
-	.entry_size =		sizeof(struct rtable),
 	.entries =		ATOMIC_INIT(0),
 };
 
@@ -951,35 +950,35 @@ static ctl_table brnf_table[] = {
 		.data		= &brnf_call_arptables,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &brnf_sysctl_call_tables,
+		.proc_handler	= brnf_sysctl_call_tables,
 	},
 	{
 		.procname	= "bridge-nf-call-iptables",
 		.data		= &brnf_call_iptables,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &brnf_sysctl_call_tables,
+		.proc_handler	= brnf_sysctl_call_tables,
 	},
 	{
 		.procname	= "bridge-nf-call-ip6tables",
 		.data		= &brnf_call_ip6tables,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &brnf_sysctl_call_tables,
+		.proc_handler	= brnf_sysctl_call_tables,
 	},
 	{
 		.procname	= "bridge-nf-filter-vlan-tagged",
 		.data		= &brnf_filter_vlan_tagged,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &brnf_sysctl_call_tables,
+		.proc_handler	= brnf_sysctl_call_tables,
 	},
 	{
 		.procname	= "bridge-nf-filter-pppoe-tagged",
 		.data		= &brnf_filter_pppoe_tagged,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &brnf_sysctl_call_tables,
+		.proc_handler	= brnf_sysctl_call_tables,
 	},
 	{ .ctl_name = 0 }
 };
