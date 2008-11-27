@@ -634,7 +634,9 @@ static void __init param_sysfs_builtin(void)
 			continue;
 
 		dot = strchr(kp->name, '.');
-		BUG_ON(!dot);
+		/* FIXME: USB code sets prefix to "".  Should use core_param */
+		if (!dot)
+			continue;
 		name_len = dot - kp->name + 1;
 		strlcpy(modname, kp->name, name_len);
 		kernel_add_sysfs_param(modname, kp, name_len);
