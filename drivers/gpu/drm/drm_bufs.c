@@ -210,7 +210,7 @@ static int drm_addmap_core(struct drm_device * dev, unsigned int offset,
 		map->offset = (unsigned long)map->handle;
 		if (map->flags & _DRM_CONTAINS_LOCK) {
 			/* Prevent a 2nd X Server from creating a 2nd lock */
-			if (dev->primary->master->lock.hw_lock != NULL) {
+			if (dev->primary->master->lock.hw_lock != &dev->default_lock) {
 				vfree(map->handle);
 				drm_free(map, sizeof(*map), DRM_MEM_MAPS);
 				return -EBUSY;

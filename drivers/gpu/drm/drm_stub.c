@@ -93,6 +93,7 @@ struct drm_master *drm_master_create(struct drm_minor *minor)
 	drm_ht_create(&master->magiclist, DRM_MAGIC_HASH_ORDER);
 	INIT_LIST_HEAD(&master->magicfree);
 	master->minor = minor;
+	master->lock.hw_lock = &minor->dev->default_lock;
 
 	list_add_tail(&master->head, &minor->master_list);
 
@@ -130,7 +131,7 @@ static void drm_master_destroy(struct kref *kref)
 
 	drm_ht_remove(&master->magiclist);
 
-	if (master->lock.hw_lock) {
+	if (master->lock.hw_lock != &dev->default_lock) {
 		if (dev->sigdata.lock == master->lock.hw_lock)
 			dev->sigdata.lock = NULL;
 		master->lock.hw_lock = NULL;
@@ -218,6 +219,12 @@ static int drm_fill_in_dev(struct drm_device * dev, struct pci_dev *pdev,
 	dev->types[5] = _DRM_STAT_UNLOCKS;
 
 	dev->driver = driver;
+
+	/*
+	 * Set up default lock for DRI2, which doesn't need a lock.
+	 * User space will override this in the legacy DRI case.
+	 */
+	dev->sigdata.lock = &dev->default_lock;
 
 	if (drm_core_has_AGP(dev)) {
 		if (drm_device_is_agp(dev))

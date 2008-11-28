@@ -350,7 +350,8 @@ static int i915_wait_irq(struct drm_device * dev, int irq_nr)
 	return ret;
 }
 
-/* Needs the lock as it touches the ring.
+/* Needs the lock as it touches the ring, though if user space haven't
+ * set up a lock, we expect it to not touch the ring.
  */
 int i915_irq_emit(struct drm_device *dev, void *data,
 			 struct drm_file *file_priv)

@@ -823,6 +823,7 @@ struct drm_device {
 	/*@} */
 
 	struct list_head filelist;
+	struct drm_hw_lock default_lock;
 
 	/** \name Memory management */
 	/*@{ */
