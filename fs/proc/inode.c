@@ -35,16 +35,13 @@ struct proc_dir_entry *de_get(struct proc_dir_entry *de)
  */
 void de_put(struct proc_dir_entry *de)
 {
-	lock_kernel();
 	if (!atomic_read(&de->count)) {
 		printk("de_put: entry %s already free!\n", de->name);
-		unlock_kernel();
 		return;
 	}
 
 	if (atomic_dec_and_test(&de->count))
 		free_proc_entry(de);
-	unlock_kernel();
 }
 
 /*
@@ -123,7 +120,7 @@ void __init proc_init_inodecache(void)
 				proc_get_inodes, kick_inodes);
 }
 
-static const struct super_operations proc_sops = {
+const struct super_operations proc_sops = {
 	.alloc_inode	= proc_alloc_inode,
 	.destroy_inode	= proc_destroy_inode,
 	.drop_inode	= generic_delete_inode,
