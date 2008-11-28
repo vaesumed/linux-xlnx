@@ -90,6 +90,32 @@ void __init acpi_old_suspend_ordering(void)
 	old_suspend_ordering = true;
 }
 
+/*
+ * According to the ACPI specification the BIOS should make sure that ACPI is
+ * enabled and SCI_EN bit is set on wake-up from S1 - S3 sleep states.  Still,
+ * some BIOSes don't do that and therefore we use acpi_enable() to enable ACPI
+ * on such systems during resume.  Unfortunately that doesn't help in
+ * particularly pathological cases in which SCI_EN has to be set directly on
+ * resume, although the specification states very clearly that this flag is
+ * owned by the hardware.  The set_sci_en_on_resume variable will be set in such
+ * cases.
+ */
+static bool set_sci_en_on_resume;
+
+/*
+ * The ACPI specification wants us to save NVS memory regions during hibernation
+ * and to restore them during the subsequent resume.  However, it is not certain
+ * if this mechanism is going to work on all machines, so we allow the user to
+ * disable this mechanism using the 'acpi_sleep=s4_nonvs' kernel command line
+ * option.
+ */
+static bool s4_no_nvs;
+
+void __init acpi_s4_no_nvs(void)
+{
+	s4_no_nvs = true;
+}
+
 /**
  *	acpi_pm_disable_gpes - Disable the GPEs.
  */
@@ -235,7 +261,11 @@ static int acpi_suspend_enter(suspend_state_t pm_state)
 	}
 
 	/* If ACPI is not enabled by the BIOS, we need to enable it here. */
-	acpi_enable();
+	if (set_sci_en_on_resume)
+		acpi_set_register(ACPI_BITREG_SCI_ENABLE, 1);
+	else
+		acpi_enable();
+
 	/* Reprogram control registers and execute _BFS */
 	acpi_leave_sleep_state_prep(acpi_state);
 
@@ -323,6 +353,12 @@ static int __init init_old_suspend_ordering(const struct dmi_system_id *d)
 	return 0;
 }
 
+static int __init init_set_sci_en_on_resume(const struct dmi_system_id *d)
+{
+	set_sci_en_on_resume = true;
+	return 0;
+}
+
 static struct dmi_system_id __initdata acpisleep_dmi_table[] = {
 	{
 	.callback = init_old_suspend_ordering,
@@ -338,6 +374,22 @@ static struct dmi_system_id __initdata acpisleep_dmi_table[] = {
 	.matches = {
 		DMI_MATCH(DMI_SYS_VENDOR, "Hewlett-Packard"),
 		DMI_MATCH(DMI_PRODUCT_NAME, "HP xw4600 Workstation"),
+		},
+	},
+	{
+	.callback = init_set_sci_en_on_resume,
+	.ident = "Apple MacBook 1,1",
+	.matches = {
+		DMI_MATCH(DMI_SYS_VENDOR, "Apple Computer, Inc."),
+		DMI_MATCH(DMI_PRODUCT_NAME, "MacBook1,1"),
+		},
+	},
+	{
+	.callback = init_set_sci_en_on_resume,
+	.ident = "Apple MacMini 1,1",
+	.matches = {
+		DMI_MATCH(DMI_SYS_VENDOR, "Apple Computer, Inc."),
+		DMI_MATCH(DMI_PRODUCT_NAME, "Macmini1,1"),
 		},
 	},
 	{},
@@ -356,9 +408,25 @@ void __init acpi_no_s4_hw_signature(void)
 
 static int acpi_hibernation_begin(void)
 {
-	acpi_target_sleep_state = ACPI_STATE_S4;
-	acpi_sleep_tts_switch(acpi_target_sleep_state);
-	return 0;
+	int error;
+
+	error = s4_no_nvs ? 0 : hibernate_nvs_alloc();
+	if (!error) {
+		acpi_target_sleep_state = ACPI_STATE_S4;
+		acpi_sleep_tts_switch(acpi_target_sleep_state);
+	}
+
+	return error;
+}
+
+static int acpi_hibernation_pre_snapshot(void)
+{
+	int error = acpi_pm_prepare();
+
+	if (!error)
+		hibernate_nvs_save();
+
+	return error;
 }
 
 static int acpi_hibernation_enter(void)
@@ -379,6 +447,12 @@ static int acpi_hibernation_enter(void)
 	return ACPI_SUCCESS(status) ? 0 : -EFAULT;
 }
 
+static void acpi_hibernation_finish(void)
+{
+	hibernate_nvs_free();
+	acpi_pm_finish();
+}
+
 static void acpi_hibernation_leave(void)
 {
 	/*
@@ -394,6 +468,8 @@ static void acpi_hibernation_leave(void)
 			"cannot resume!\n");
 		panic("ACPI S4 hardware signature mismatch");
 	}
+	/* Restore the NVS memory area */
+	hibernate_nvs_restore();
 }
 
 static void acpi_pm_enable_gpes(void)
@@ -404,8 +480,8 @@ static void acpi_pm_enable_gpes(void)
 static struct platform_hibernation_ops acpi_hibernation_ops = {
 	.begin = acpi_hibernation_begin,
 	.end = acpi_pm_end,
-	.pre_snapshot = acpi_pm_prepare,
-	.finish = acpi_pm_finish,
+	.pre_snapshot = acpi_hibernation_pre_snapshot,
+	.finish = acpi_hibernation_finish,
 	.prepare = acpi_pm_prepare,
 	.enter = acpi_hibernation_enter,
 	.leave = acpi_hibernation_leave,
@@ -431,8 +507,22 @@ static int acpi_hibernation_begin_old(void)
 
 	error = acpi_sleep_prepare(ACPI_STATE_S4);
 
+	if (!error) {
+		if (!s4_no_nvs)
+			error = hibernate_nvs_alloc();
+		if (!error)
+			acpi_target_sleep_state = ACPI_STATE_S4;
+	}
+	return error;
+}
+
+static int acpi_hibernation_pre_snapshot_old(void)
+{
+	int error = acpi_pm_disable_gpes();
+
 	if (!error)
-		acpi_target_sleep_state = ACPI_STATE_S4;
+		hibernate_nvs_save();
+
 	return error;
 }
 
@@ -443,8 +533,8 @@ static int acpi_hibernation_begin_old(void)
 static struct platform_hibernation_ops acpi_hibernation_ops_old = {
 	.begin = acpi_hibernation_begin_old,
 	.end = acpi_pm_end,
-	.pre_snapshot = acpi_pm_disable_gpes,
-	.finish = acpi_pm_finish,
+	.pre_snapshot = acpi_hibernation_pre_snapshot_old,
+	.finish = acpi_hibernation_finish,
 	.prepare = acpi_pm_disable_gpes,
 	.enter = acpi_hibernation_enter,
 	.leave = acpi_hibernation_leave,
