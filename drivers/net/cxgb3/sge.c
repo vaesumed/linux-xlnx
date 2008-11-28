@@ -549,16 +549,15 @@ static void *alloc_ring(struct pci_dev *pdev, size_t nelem, size_t elem_size,
 
 	if (!p)
 		return NULL;
-	if (sw_size) {
+	if (sw_size && metadata) {
 		s = kcalloc(nelem, sw_size, GFP_KERNEL);
 
 		if (!s) {
 			dma_free_coherent(&pdev->dev, len, p, *phys);
 			return NULL;
 		}
-	}
-	if (metadata)
 		*(void **)metadata = s;
+	}
 	memset(p, 0, len);
 	return p;
 }
@@ -1876,7 +1875,6 @@ static void rx_eth(struct adapter *adap, struct sge_rspq *rq,
 
 	skb_pull(skb, sizeof(*p) + pad);
 	skb->protocol = eth_type_trans(skb, adap->port[p->iff]);
-	skb->dev->last_rx = jiffies;
 	pi = netdev_priv(skb->dev);
 	if (pi->rx_csum_offload && p->csum_valid && p->csum == htons(0xffff) &&
 	    !p->fragment) {

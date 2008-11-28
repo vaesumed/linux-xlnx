@@ -42,7 +42,7 @@
 /* People can turn this off for buggy TCP's found in printers etc. */
 int sysctl_tcp_retrans_collapse __read_mostly = 1;
 
-/* People can turn this on to  work with those rare, broken TCPs that
+/* People can turn this on to work with those rare, broken TCPs that
  * interpret the window field as a signed quantity.
  */
 int sysctl_tcp_workaround_signed_windows __read_mostly = 0;
@@ -484,7 +484,7 @@ static unsigned tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 	}
 	if (likely(sysctl_tcp_window_scaling)) {
 		opts->ws = tp->rx_opt.rcv_wscale;
-		if(likely(opts->ws))
+		if (likely(opts->ws))
 			size += TCPOLEN_WSCALE_ALIGNED;
 	}
 	if (likely(sysctl_tcp_sack)) {
@@ -526,7 +526,7 @@ static unsigned tcp_synack_options(struct sock *sk,
 
 	if (likely(ireq->wscale_ok)) {
 		opts->ws = ireq->rcv_wscale;
-		if(likely(opts->ws))
+		if (likely(opts->ws))
 			size += TCPOLEN_WSCALE_ALIGNED;
 	}
 	if (likely(doing_ts)) {
@@ -1175,7 +1175,7 @@ static int tcp_init_tso_segs(struct sock *sk, struct sk_buff *skb,
 
 static inline int tcp_minshall_check(const struct tcp_sock *tp)
 {
-	return after(tp->snd_sml,tp->snd_una) &&
+	return after(tp->snd_sml, tp->snd_una) &&
 		!after(tp->snd_sml, tp->snd_nxt);
 }
 
@@ -1769,46 +1769,22 @@ u32 __tcp_select_window(struct sock *sk)
 	return window;
 }
 
-/* Attempt to collapse two adjacent SKB's during retransmission. */
-static void tcp_retrans_try_collapse(struct sock *sk, struct sk_buff *skb,
-				     int mss_now)
+/* Collapses two adjacent SKB's during retransmission. */
+static void tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *next_skb = tcp_write_queue_next(sk, skb);
 	int skb_size, next_skb_size;
 	u16 flags;
 
-	/* The first test we must make is that neither of these two
-	 * SKB's are still referenced by someone else.
-	 */
-	if (skb_cloned(skb) || skb_cloned(next_skb))
-		return;
-
 	skb_size = skb->len;
 	next_skb_size = next_skb->len;
 	flags = TCP_SKB_CB(skb)->flags;
-
-	/* Also punt if next skb has been SACK'd. */
-	if (TCP_SKB_CB(next_skb)->sacked & TCPCB_SACKED_ACKED)
-		return;
-
-	/* Next skb is out of window. */
-	if (after(TCP_SKB_CB(next_skb)->end_seq, tcp_wnd_end(tp)))
-		return;
-
-	/* Punt if not enough space exists in the first SKB for
-	 * the data in the second, or the total combined payload
-	 * would exceed the MSS.
-	 */
-	if ((next_skb_size > skb_tailroom(skb)) ||
-	    ((skb_size + next_skb_size) > mss_now))
-		return;
 
 	BUG_ON(tcp_skb_pcount(skb) != 1 || tcp_skb_pcount(next_skb) != 1);
 
 	tcp_highest_sack_combine(sk, next_skb, skb);
 
-	/* Ok.	We will be able to collapse the packet. */
 	tcp_unlink_write_queue(next_skb, sk);
 
 	skb_copy_from_linear_data(next_skb, skb_put(skb, next_skb_size),
@@ -1850,54 +1826,60 @@ static void tcp_retrans_try_collapse(struct sock *sk, struct sk_buff *skb,
 	sk_wmem_free_skb(sk, next_skb);
 }
 
-/* Do a simple retransmit without using the backoff mechanisms in
- * tcp_timer. This is used for path mtu discovery.
- * The socket is already locked here.
- */
-void tcp_simple_retransmit(struct sock *sk)
+static int tcp_can_collapse(struct sock *sk, struct sk_buff *skb)
 {
-	const struct inet_connection_sock *icsk = inet_csk(sk);
+	if (tcp_skb_pcount(skb) > 1)
+		return 0;
+	/* TODO: SACK collapsing could be used to remove this condition */
+	if (skb_shinfo(skb)->nr_frags != 0)
+		return 0;
+	if (skb_cloned(skb))
+		return 0;
+	if (skb == tcp_send_head(sk))
+		return 0;
+	/* Some heurestics for collapsing over SACK'd could be invented */
+	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
+		return 0;
+
+	return 1;
+}
+
+static void tcp_retrans_try_collapse(struct sock *sk, struct sk_buff *to,
+				     int space)
+{
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct sk_buff *skb;
-	unsigned int mss = tcp_current_mss(sk, 0);
-	u32 prior_lost = tp->lost_out;
+	struct sk_buff *skb = to, *tmp;
+	int first = 1;
 
-	tcp_for_write_queue(skb, sk) {
-		if (skb == tcp_send_head(sk))
-			break;
-		if (skb->len > mss &&
-		    !(TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)) {
-			if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS) {
-				TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_RETRANS;
-				tp->retrans_out -= tcp_skb_pcount(skb);
-			}
-			tcp_skb_mark_lost_uncond_verify(tp, skb);
-		}
-	}
-
-	tcp_clear_retrans_hints_partial(tp);
-
-	if (prior_lost == tp->lost_out)
+	if (!sysctl_tcp_retrans_collapse)
+		return;
+	if (TCP_SKB_CB(skb)->flags & TCPCB_FLAG_SYN)
 		return;
 
-	if (tcp_is_reno(tp))
-		tcp_limit_reno_sacked(tp);
+	tcp_for_write_queue_from_safe(skb, tmp, sk) {
+		if (!tcp_can_collapse(sk, skb))
+			break;
 
-	tcp_verify_left_out(tp);
+		space -= skb->len;
 
-	/* Don't muck with the congestion window here.
-	 * Reason is that we do not increase amount of _data_
-	 * in network, but units changed and effective
-	 * cwnd/ssthresh really reduced now.
-	 */
-	if (icsk->icsk_ca_state != TCP_CA_Loss) {
-		tp->high_seq = tp->snd_nxt;
-		tp->snd_ssthresh = tcp_current_ssthresh(sk);
-		tp->prior_ssthresh = 0;
-		tp->undo_marker = 0;
-		tcp_set_ca_state(sk, TCP_CA_Loss);
+		if (first) {
+			first = 0;
+			continue;
+		}
+
+		if (space < 0)
+			break;
+		/* Punt if not enough space exists in the first SKB for
+		 * the data in the second
+		 */
+		if (skb->len > skb_tailroom(to))
+			break;
+
+		if (after(TCP_SKB_CB(skb)->end_seq, tcp_wnd_end(tp)))
+			break;
+
+		tcp_collapse_retrans(sk, to);
 	}
-	tcp_xmit_retransmit_queue(sk);
 }
 
 /* This retransmits one SKB.  Policy decisions and retransmit queue
@@ -1949,17 +1931,7 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 			return -ENOMEM; /* We'll try again later. */
 	}
 
-	/* Collapse two adjacent packets if worthwhile and we can. */
-	if (!(TCP_SKB_CB(skb)->flags & TCPCB_FLAG_SYN) &&
-	    (skb->len < (cur_mss >> 1)) &&
-	    (!tcp_skb_is_last(sk, skb)) &&
-	    (tcp_write_queue_next(sk, skb) != tcp_send_head(sk)) &&
-	    (skb_shinfo(skb)->nr_frags == 0 &&
-	     skb_shinfo(tcp_write_queue_next(sk, skb))->nr_frags == 0) &&
-	    (tcp_skb_pcount(skb) == 1 &&
-	     tcp_skb_pcount(tcp_write_queue_next(sk, skb)) == 1) &&
-	    (sysctl_tcp_retrans_collapse != 0))
-		tcp_retrans_try_collapse(sk, skb, cur_mss);
+	tcp_retrans_try_collapse(sk, skb, cur_mss);
 
 	/* Some Solaris stacks overoptimize and ignore the FIN on a
 	 * retransmit when old data is attached.  So strip it off
