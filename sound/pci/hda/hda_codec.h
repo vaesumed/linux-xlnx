@@ -585,7 +585,6 @@ struct hda_bus_template {
 	void *private_data;
 	struct pci_dev *pci;
 	const char *modelname;
-	int *power_save;
 	struct hda_bus_ops ops;
 };
 
@@ -602,7 +601,6 @@ struct hda_bus {
 	void *private_data;
 	struct pci_dev *pci;
 	const char *modelname;
-	int *power_save;
 	struct hda_bus_ops ops;
 
 	/* codec linked list */
