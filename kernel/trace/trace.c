@@ -963,6 +963,7 @@ static void ftrace_trace_userstack(struct trace_array *tr,
 		   struct trace_array_cpu *data,
 		   unsigned long flags, int pc)
 {
+#ifdef CONFIG_STACKTRACE
 	struct ring_buffer_event *event;
 	struct userstack_entry *entry;
 	struct stack_trace trace;
@@ -988,6 +989,7 @@ static void ftrace_trace_userstack(struct trace_array *tr,
 
 	save_stack_trace_user(&trace);
 	ring_buffer_unlock_commit(tr->buffer, event, irq_flags);
+#endif
 }
 
 void __trace_userstack(struct trace_array *tr,
