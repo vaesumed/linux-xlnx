@@ -40,6 +40,7 @@
 #include <linux/bootmem.h>
 #include <linux/slab.h>
 #include <asm/desc.h>
+#include <asm/cacheflush.h>
 
 #define PCI_BIOS32_SD_VALUE		0x5F32335F	/* "_32_" */
 #define CRU_BIOS_SIGNATURE_VALUE	0x55524324
@@ -116,7 +117,7 @@ static unsigned int reload;			/* the computed soft_margin */
 static int nowayout = WATCHDOG_NOWAYOUT;
 static char expect_release;
 static unsigned long hpwdt_is_open;
-static unsigned int allow_kdump;
+static unsigned int allow_kdump = 1;
 
 static void __iomem *pci_mem_addr;		/* the PCI-memory address */
 static unsigned long __iomem *hpwdt_timer_reg;
@@ -394,6 +395,8 @@ static void __devinit dmi_find_cru(const struct dmi_header *dm)
 				smbios_cru64_ptr->double_offset;
 			cru_rom_addr = ioremap(cru_physical_address,
 				smbios_cru64_ptr->double_length);
+			set_memory_x((unsigned long)cru_rom_addr & PAGE_MASK,
+				smbios_cru64_ptr->double_length >> PAGE_SHIFT);
 		}
 	}
 }
@@ -482,7 +485,7 @@ static int hpwdt_pretimeout(struct notifier_block *nb, unsigned long ulReason,
 			"Management Log for details.\n");
 	}
 
-	return NOTIFY_STOP;
+	return NOTIFY_OK;
 }
 
 /*
