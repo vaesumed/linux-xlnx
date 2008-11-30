@@ -205,12 +205,11 @@ ifeq ($(ARCH),x86_64)
         SRCARCH := x86
 endif
 
+# Additional ARCH settings for sparc
+       SRCARCH := sparc
+
 # Where to locate arch specific headers
-ifeq ($(ARCH),sparc64)
-       hdr-arch  := sparc
-else
-       hdr-arch  := $(SRCARCH)
-endif
+hdr-arch  := $(SRCARCH)
 
 KCONFIG_CONFIG	?= .config
 
