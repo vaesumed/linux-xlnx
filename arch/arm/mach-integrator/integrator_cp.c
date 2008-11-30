@@ -405,7 +405,7 @@ static struct mmc_platform_data mmc_data = {
 
 static struct amba_device mmc_device = {
 	.dev		= {
-		.bus_id	= "mb:1c",
+		.init_name = "mb:1c",
 		.platform_data = &mmc_data,
 	},
 	.res		= {
@@ -419,7 +419,7 @@ static struct amba_device mmc_device = {
 
 static struct amba_device aaci_device = {
 	.dev		= {
-		.bus_id	= "mb:1d",
+		.init_name = "mb:1d",
 	},
 	.res		= {
 		.start	= INTCP_PA_AACI_BASE,
@@ -530,7 +530,7 @@ static struct clcd_board clcd_data = {
 
 static struct amba_device clcd_device = {
 	.dev		= {
-		.bus_id	= "mb:c0",
+		.init_name = "mb:c0",
 		.coherent_dma_mask = ~0,
 		.platform_data = &clcd_data,
 	},
