@@ -41,7 +41,7 @@ BTOBJS := $(patsubst %/, %/built-in.o, $(VMLINUX_INIT))
 BTLIBS := $(patsubst %/, %/built-in.o, $(VMLINUX_MAIN))
 LDFLAGS_image := -T arch/sparc/kernel/vmlinux.lds $(BTOBJS) \
                   --start-group $(BTLIBS) --end-group \
-                  $(kallsyms.o) $(obj)/btfix.o
+                  $(obj)/btfix.o
 
 # Link the final image including btfixup'ed symbols.
 # This is a replacement for the link done in the top-level Makefile.

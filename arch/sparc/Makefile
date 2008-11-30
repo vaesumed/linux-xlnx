@@ -40,10 +40,6 @@ VMLINUX_MAIN := $(core-y) kernel/ mm/ fs/ ipc/ security/ crypto/ block/
 VMLINUX_MAIN += $(patsubst %/, %/lib.a, $(libs-y)) $(libs-y)
 VMLINUX_MAIN += $(drivers-y) $(net-y)
 
-ifdef CONFIG_KALLSYMS
-kallsyms.o := .tmp_kallsyms2.o
-endif
-
 # Default target
 all: zImage
 
