@@ -1,5 +1,5 @@
 /*
- * arch/arm/mach-h720x/include/mach/dma.h
+ * arch/arm/mach-h720x/include/mach/isa-dma.h
  *
  * Architecture DMA routes
  *
@@ -7,13 +7,6 @@
  */
 #ifndef __ASM_ARCH_DMA_H
 #define __ASM_ARCH_DMA_H
-
-/*
- * This is the maximum DMA address that can be DMAd to.
- * There should not be more than (0xd0000000 - 0xc0000000)
- * bytes of RAM.
- */
-#define MAX_DMA_ADDRESS		0xd0000000
 
 #if defined (CONFIG_CPU_H7201)
 #define MAX_DMA_CHANNELS	3
