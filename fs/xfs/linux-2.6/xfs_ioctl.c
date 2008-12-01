@@ -691,8 +691,7 @@ xfs_ioc_space(
 	if (ioflags & IO_INVIS)
 		attr_flags |= XFS_ATTR_DMI;
 
-	error = xfs_change_file_space(ip, cmd, &bf, filp->f_pos,
-					      NULL, attr_flags);
+	error = xfs_change_file_space(ip, cmd, &bf, filp->f_pos, attr_flags);
 	return -error;
 }
 
@@ -1007,7 +1006,7 @@ xfs_ioctl_setattr(
 	 * to the file owner ID, except in cases where the
 	 * CAP_FSETID capability is applicable.
 	 */
-	if (current->fsuid != ip->i_d.di_uid && !capable(CAP_FOWNER)) {
+	if (current_fsuid() != ip->i_d.di_uid && !capable(CAP_FOWNER)) {
 		code = XFS_ERROR(EPERM);
 		goto error_return;
 	}
@@ -1104,10 +1103,6 @@ xfs_ioctl_setattr(
 
 	/*
 	 * Change file ownership.  Must be the owner or privileged.
-	 * If the system was configured with the "restricted_chown"
-	 * option, the owner is not permitted to give away the file,
-	 * and can change the group id only to a group of which he
-	 * or she is a member.
 	 */
 	if (mask & FSX_PROJID) {
 		/*
@@ -1136,7 +1131,7 @@ xfs_ioctl_setattr(
 			 * the superblock version number since projids didn't
 			 * exist before DINODE_VERSION_2 and SB_VERSION_NLINK.
 			 */
-			if (ip->i_d.di_version == XFS_DINODE_VERSION_1)
+			if (ip->i_d.di_version == 1)
 				xfs_bump_ino_vers2(tp, ip);
 		}
 
@@ -1255,32 +1250,58 @@ xfs_ioc_setxflags(
 }
 
 STATIC int
+xfs_getbmap_format(void **ap, struct getbmapx *bmv, int *full)
+{
+	struct getbmap __user	*base = *ap;
+
+	/* copy only getbmap portion (not getbmapx) */
+	if (copy_to_user(base, bmv, sizeof(struct getbmap)))
+		return XFS_ERROR(EFAULT);
+
+	*ap += sizeof(struct getbmap);
+	return 0;
+}
+
+STATIC int
 xfs_ioc_getbmap(
 	struct xfs_inode	*ip,
 	int			ioflags,
 	unsigned int		cmd,
 	void			__user *arg)
 {
-	struct getbmap		bm;
-	int			iflags;
+	struct getbmapx		bmx;
 	int			error;
 
-	if (copy_from_user(&bm, arg, sizeof(bm)))
+	if (copy_from_user(&bmx, arg, sizeof(struct getbmapx)))
 		return -XFS_ERROR(EFAULT);
 
-	if (bm.bmv_count < 2)
+	if (bmx.bmv_count < 2)
 		return -XFS_ERROR(EINVAL);
 
-	iflags = (cmd == XFS_IOC_GETBMAPA ? BMV_IF_ATTRFORK : 0);
+	bmx.bmv_iflags = (cmd == XFS_IOC_GETBMAPA ? BMV_IF_ATTRFORK : 0);
 	if (ioflags & IO_INVIS)
-		iflags |= BMV_IF_NO_DMAPI_READ;
+		bmx.bmv_iflags |= BMV_IF_NO_DMAPI_READ;
 
-	error = xfs_getbmap(ip, &bm, (struct getbmap __user *)arg+1, iflags);
+	error = xfs_getbmap(ip, &bmx, xfs_getbmap_format,
+			    (struct getbmap *)arg+1);
 	if (error)
 		return -error;
 
-	if (copy_to_user(arg, &bm, sizeof(bm)))
+	/* copy back header - only size of getbmap */
+	if (copy_to_user(arg, &bmx, sizeof(struct getbmap)))
 		return -XFS_ERROR(EFAULT);
+	return 0;
+}
+
+STATIC int
+xfs_getbmapx_format(void **ap, struct getbmapx *bmv, int *full)
+{
+	struct getbmapx __user	*base = *ap;
+
+	if (copy_to_user(base, bmv, sizeof(struct getbmapx)))
+		return XFS_ERROR(EFAULT);
+
+	*ap += sizeof(struct getbmapx);
 	return 0;
 }
 
@@ -1290,8 +1311,6 @@ xfs_ioc_getbmapx(
 	void			__user *arg)
 {
 	struct getbmapx		bmx;
-	struct getbmap		bm;
-	int			iflags;
 	int			error;
 
 	if (copy_from_user(&bmx, arg, sizeof(bmx)))
@@ -1300,26 +1319,16 @@ xfs_ioc_getbmapx(
 	if (bmx.bmv_count < 2)
 		return -XFS_ERROR(EINVAL);
 
-	/*
-	 * Map input getbmapx structure to a getbmap
-	 * structure for xfs_getbmap.
-	 */
-	GETBMAP_CONVERT(bmx, bm);
-
-	iflags = bmx.bmv_iflags;
-
-	if (iflags & (~BMV_IF_VALID))
+	if (bmx.bmv_iflags & (~BMV_IF_VALID))
 		return -XFS_ERROR(EINVAL);
 
-	iflags |= BMV_IF_EXTENDED;
-
-	error = xfs_getbmap(ip, &bm, (struct getbmapx __user *)arg+1, iflags);
+	error = xfs_getbmap(ip, &bmx, xfs_getbmapx_format,
+			    (struct getbmapx *)arg+1);
 	if (error)
 		return -error;
 
-	GETBMAP_CONVERT(bm, bmx);
-
-	if (copy_to_user(arg, &bmx, sizeof(bmx)))
+	/* copy back header */
+	if (copy_to_user(arg, &bmx, sizeof(struct getbmapx)))
 		return -XFS_ERROR(EFAULT);
 
 	return 0;
