@@ -178,10 +178,10 @@ static int armflash_probe(struct platform_device *dev)
 		if (nr == 1)
 			/* No MTD concatenation, just use the default name */
 			snprintf(subdev->name, SUBDEV_NAME_SIZE, "%s",
-				 dev->dev.bus_id);
+				 dev_name(&dev->dev));
 		else
 			snprintf(subdev->name, SUBDEV_NAME_SIZE, "%s-%d",
-				 dev->dev.bus_id, i);
+				 dev_name(&dev->dev), i);
 		subdev->plat = plat;
 
 		err = armflash_subdev_probe(subdev, res);
@@ -206,7 +206,7 @@ static int armflash_probe(struct platform_device *dev)
 			cdev[i] = info->subdev[i].mtd;
 
 		info->mtd = mtd_concat_create(cdev, info->nr_subdev,
-					      dev->dev.bus_id);
+					      dev_name(&dev->dev));
 		if (info->mtd == NULL)
 			err = -ENXIO;
 #else

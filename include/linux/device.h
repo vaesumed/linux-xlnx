@@ -65,7 +65,7 @@ struct bus_type {
 	int (*resume_early)(struct device *dev);
 	int (*resume)(struct device *dev);
 
-	struct pm_ext_ops *pm;
+	struct dev_pm_ops *pm;
 
 	struct bus_type_private *p;
 };
@@ -133,7 +133,7 @@ struct device_driver {
 	int (*resume) (struct device *dev);
 	struct attribute_group **groups;
 
-	struct pm_ops *pm;
+	struct dev_pm_ops *pm;
 
 	struct driver_private *p;
 };
@@ -198,7 +198,7 @@ struct class {
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
 
-	struct pm_ops *pm;
+	struct dev_pm_ops *pm;
 	struct class_private *p;
 };
 
@@ -291,7 +291,7 @@ struct device_type {
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
 
-	struct pm_ops *pm;
+	struct dev_pm_ops *pm;
 };
 
 /* interface for exporting device attributes */
@@ -373,9 +373,9 @@ struct device {
 
 	struct kobject kobj;
 	char	bus_id[BUS_ID_SIZE];	/* position on parent bus */
+	unsigned		uevent_suppress:1;
 	const char		*init_name; /* initial name of the device */
 	struct device_type	*type;
-	unsigned		uevent_suppress:1;
 
 	struct semaphore	sem;	/* semaphore to synchronize calls to
 					 * its driver.
@@ -408,12 +408,13 @@ struct device {
 	/* arch specific additions */
 	struct dev_archdata	archdata;
 
+	dev_t			devt;	/* dev_t, creates the sysfs "dev" */
+
 	spinlock_t		devres_lock;
 	struct list_head	devres_head;
 
 	struct klist_node	knode_class;
 	struct class		*class;
-	dev_t			devt;	/* dev_t, creates the sysfs "dev" */
 	struct attribute_group	**groups;	/* optional groups */
 
 	void	(*release)(struct device *dev);
