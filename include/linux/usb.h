@@ -120,6 +120,11 @@ enum usb_interface_condition {
  *	to the sysfs representation for that device.
  * @pm_usage_cnt: PM usage counter for this interface; autosuspend is not
  *	allowed unless the counter is 0.
+ * @reset_ws: Used for scheduling resets from atomic context.
+ * @reset_running: set to 1 if the interface is currently running a
+ *      queued reset so that usb_cancel_queued_reset() doesn't try to
+ *      remove from the workqueue when running inside the worker
+ *      thread. See __usb_queue_reset_device().
  *
  * USB device drivers attach to interfaces on a physical device.  Each
  * interface encapsulates a single high level function, such as feeding
@@ -168,10 +173,12 @@ struct usb_interface {
 	unsigned needs_remote_wakeup:1;	/* driver requires remote wakeup */
 	unsigned needs_altsetting0:1;	/* switch to altsetting 0 is pending */
 	unsigned needs_binding:1;	/* needs delayed unbind/rebind */
+	unsigned reset_running:1;
 
 	struct device dev;		/* interface specific device info */
 	struct device *usb_dev;
 	int pm_usage_cnt;		/* usage counter for autosuspend */
+	struct work_struct reset_ws;	/* for resets in atomic context */
 };
 #define	to_usb_interface(d) container_of(d, struct usb_interface, dev)
 #define	interface_to_usbdev(intf) \
@@ -329,7 +336,7 @@ struct usb_bus {
 #endif
 	struct device *dev;		/* device for this bus */
 
-#if defined(CONFIG_USB_MON)
+#if defined(CONFIG_USB_MON) || defined(CONFIG_USB_MON_MODULE)
 	struct mon_bus *mon_bus;	/* non-null when associated */
 	int monitored;			/* non-zero when monitored */
 #endif
@@ -398,6 +405,7 @@ struct usb_tt;
  * @urbnum: number of URBs submitted for the whole device
  * @active_duration: total time device is not suspended
  * @autosuspend: for delayed autosuspends
+ * @autoresume: for autoresumes requested while in_interrupt
  * @pm_mutex: protects PM operations
  * @last_busy: time of last use
  * @autosuspend_delay: in jiffies
@@ -476,6 +484,7 @@ struct usb_device {
 
 #ifdef CONFIG_PM
 	struct delayed_work autosuspend;
+	struct work_struct autoresume;
 	struct mutex pm_mutex;
 
 	unsigned long last_busy;
@@ -505,6 +514,7 @@ extern int usb_lock_device_for_reset(struct usb_device *udev,
 
 /* USB port reset for device reinitialization */
 extern int usb_reset_device(struct usb_device *dev);
+extern void usb_queue_reset_device(struct usb_interface *dev);
 
 extern struct usb_device *usb_find_device(u16 vendor_id, u16 product_id);
 
@@ -513,6 +523,8 @@ extern struct usb_device *usb_find_device(u16 vendor_id, u16 product_id);
 extern int usb_autopm_set_interface(struct usb_interface *intf);
 extern int usb_autopm_get_interface(struct usb_interface *intf);
 extern void usb_autopm_put_interface(struct usb_interface *intf);
+extern int usb_autopm_get_interface_async(struct usb_interface *intf);
+extern void usb_autopm_put_interface_async(struct usb_interface *intf);
 
 static inline void usb_autopm_enable(struct usb_interface *intf)
 {
@@ -539,7 +551,12 @@ static inline int usb_autopm_set_interface(struct usb_interface *intf)
 static inline int usb_autopm_get_interface(struct usb_interface *intf)
 { return 0; }
 
+static inline int usb_autopm_get_interface_async(struct usb_interface *intf)
+{ return 0; }
+
 static inline void usb_autopm_put_interface(struct usb_interface *intf)
+{ }
+static inline void usb_autopm_put_interface_async(struct usb_interface *intf)
 { }
 static inline void usb_autopm_enable(struct usb_interface *intf)
 { }
@@ -1050,7 +1067,7 @@ struct usb_device_driver {
 	void (*disconnect) (struct usb_device *udev);
 
 	int (*suspend) (struct usb_device *udev, pm_message_t message);
-	int (*resume) (struct usb_device *udev);
+	int (*resume) (struct usb_device *udev, pm_message_t message);
 	struct usbdrv_wrap drvwrap;
 	unsigned int supports_autosuspend:1;
 };
