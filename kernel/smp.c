@@ -329,6 +329,8 @@ void smp_call_function_many(const struct cpumask *mask,
 		data->csd.flags |= CSD_FLAG_WAIT;
 	data->csd.func = func;
 	data->csd.info = info;
+	/* FIXME: Make archs use new iterators and ignore bits >= nr_cpu_ids */
+	memset(to_cpumask(data->cpumask_bits), 0, cpumask_size());
 	cpumask_and(to_cpumask(data->cpumask_bits), mask, cpu_online_mask);
 	cpumask_clear_cpu(smp_processor_id(), to_cpumask(data->cpumask_bits));
 	data->refs = cpumask_weight(to_cpumask(data->cpumask_bits));
