@@ -7,7 +7,8 @@ ROOT_IMG	:= /usr/src/root.img
 ELFTOAOUT	:= elftoaout
 
 hostprogs-y	:= piggyback btfixupprep
-targets		:= tftpboot.img btfix.o btfix.S image
+targets		:= tftpboot.img btfix.o btfix.S image zImage
+clean-files	:= System.map
 
 quiet_cmd_elftoaout	= ELFTOAOUT $@
       cmd_elftoaout	= $(ELFTOAOUT) $(obj)/image -o $@
@@ -37,11 +38,11 @@ define rule_image
 	echo 'cmd_$@ := $(cmd_image)' > $(@D)/.$(@F).cmd
 endef
 
-BTOBJS := $(HEAD_Y) $(INIT_Y)
-BTLIBS := $(CORE_Y) $(LIBS_Y) $(DRIVERS_Y) $(NET_Y)
+BTOBJS := $(patsubst %/, %/built-in.o, $(VMLINUX_INIT))
+BTLIBS := $(patsubst %/, %/built-in.o, $(VMLINUX_MAIN))
 LDFLAGS_image := -T arch/sparc/kernel/vmlinux.lds $(BTOBJS) \
                   --start-group $(BTLIBS) --end-group \
-                  $(kallsyms.o) $(obj)/btfix.o
+                  $(obj)/btfix.o
 
 # Link the final image including btfixup'ed symbols.
 # This is a replacement for the link done in the top-level Makefile.
