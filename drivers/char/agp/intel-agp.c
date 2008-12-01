@@ -2201,7 +2201,7 @@ static int __devinit agp_intel_probe(struct pci_dev *pdev,
 
 	if (intel_agp_chipsets[i].name == NULL) {
 		if (cap_ptr)
-			dev_warn(&pdev->dev, "unsupported Intel chipset [%04x/%04x]\n",
+			dev_warn(&pdev->dev, "unsupported Intel chipset [%04x:%04x]\n",
 				 pdev->vendor, pdev->device);
 		agp_put_bridge(bridge);
 		return -ENODEV;

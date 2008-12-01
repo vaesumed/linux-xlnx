@@ -507,7 +507,7 @@ static int __devinit agp_amd64_probe(struct pci_dev *pdev,
 	    pdev->device == PCI_DEVICE_ID_AMD_8151_0) {
 		amd8151_init(pdev, bridge);
 	} else {
-		dev_info(&pdev->dev, "AGP bridge [%04x/%04x]\n",
+		dev_info(&pdev->dev, "AGP bridge [%04x:%04x]\n",
 			 pdev->vendor, pdev->device);
 	}
 

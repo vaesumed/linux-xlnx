@@ -190,7 +190,7 @@ static int __devinit agp_sis_probe(struct pci_dev *pdev,
 		return -ENODEV;
 
 
-	dev_info(&pdev->dev, "SiS chipset [%04x/%04x]\n",
+	dev_info(&pdev->dev, "SiS chipset [%04x:%04x]\n",
 		 pdev->vendor, pdev->device);
 	bridge = agp_alloc_bridge();
 	if (!bridge)
