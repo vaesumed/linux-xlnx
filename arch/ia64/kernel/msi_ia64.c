@@ -49,11 +49,12 @@
 static struct irq_chip	ia64_msi_chip;
 
 #ifdef CONFIG_SMP
-static void ia64_set_msi_irq_affinity(unsigned int irq, cpumask_t cpu_mask)
+static void ia64_set_msi_irq_affinity(unsigned int irq,
+				      const cpumask_t *cpu_mask)
 {
 	struct msi_msg msg;
 	u32 addr, data;
-	int cpu = first_cpu(cpu_mask);
+	int cpu = first_cpu(*cpu_mask);
 
 	if (!cpu_online(cpu))
 		return;
