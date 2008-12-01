@@ -39,7 +39,6 @@
  * them to the hw and transfer the replies/notifications back to the
  * UWB stack through the UWB daemon (UWBD).
  */
-#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/pci.h>
@@ -333,47 +332,23 @@ void whcrc_release_rc_umc(struct whcrc *whcrc)
 static int whcrc_start_rc(struct uwb_rc *rc)
 {
 	struct whcrc *whcrc = rc->priv;
-	int result = 0;
 	struct device *dev = &whcrc->umc_dev->dev;
-	unsigned long start, duration;
 
 	/* Reset the thing */
 	le_writel(URCCMD_RESET, whcrc->rc_base + URCCMD);
-	if (d_test(3))
-		start = jiffies;
 	if (whci_wait_for(dev, whcrc->rc_base + URCCMD, URCCMD_RESET, 0,
-			  5000, "device to reset at init") < 0) {
-		result = -EBUSY;
-		goto error;
-	} else if (d_test(3)) {
-		duration = jiffies - start;
-		if (duration > msecs_to_jiffies(40))
-			dev_err(dev, "Device took %ums to "
-				     "reset. MAX expected: 40ms\n",
-				     jiffies_to_msecs(duration));
-	}
+			  5000, "hardware reset") < 0)
+		return -EBUSY;
 
 	/* Set the event buffer, start the controller (enable IRQs later) */
 	le_writel(0, whcrc->rc_base + URCINTR);
 	le_writel(URCCMD_RS, whcrc->rc_base + URCCMD);
-	result = -ETIMEDOUT;
-	if (d_test(3))
-		start = jiffies;
 	if (whci_wait_for(dev, whcrc->rc_base + URCSTS, URCSTS_HALTED, 0,
-			  5000, "device to start") < 0)
-		goto error;
-	if (d_test(3)) {
-		duration = jiffies - start;
-		if (duration > msecs_to_jiffies(40))
-			dev_err(dev, "Device took %ums to start. "
-				     "MAX expected: 40ms\n",
-				     jiffies_to_msecs(duration));
-	}
+			  5000, "radio controller start") < 0)
+		return -ETIMEDOUT;
 	whcrc_enable_events(whcrc);
-	result = 0;
 	le_writel(URCINTR_EN_ALL, whcrc->rc_base + URCINTR);
-error:
-	return result;
+	return 0;
 }
 
 
@@ -395,7 +370,7 @@ void whcrc_stop_rc(struct uwb_rc *rc)
 
 	le_writel(0, whcrc->rc_base + URCCMD);
 	whci_wait_for(&umc_dev->dev, whcrc->rc_base + URCSTS,
-		      URCSTS_HALTED, 0, 40, "URCSTS.HALTED");
+		      URCSTS_HALTED, URCSTS_HALTED, 100, "radio controller stop");
 }
 
 static void whcrc_init(struct whcrc *whcrc)
@@ -489,6 +464,24 @@ static void whcrc_remove(struct umc_dev *umc_dev)
 	d_printf(1, &umc_dev->dev, "freed whcrc %p\n", whcrc);
 }
 
+static int whcrc_pre_reset(struct umc_dev *umc)
+{
+	struct whcrc *whcrc = umc_get_drvdata(umc);
+	struct uwb_rc *uwb_rc = whcrc->uwb_rc;
+
+	uwb_rc_pre_reset(uwb_rc);
+	return 0;
+}
+
+static int whcrc_post_reset(struct umc_dev *umc)
+{
+	struct whcrc *whcrc = umc_get_drvdata(umc);
+	struct uwb_rc *uwb_rc = whcrc->uwb_rc;
+
+	uwb_rc_post_reset(uwb_rc);
+	return 0;
+}
+
 /* PCI device ID's that we handle [so it gets loaded] */
 static struct pci_device_id whcrc_id_table[] = {
 	{ PCI_DEVICE_CLASS(PCI_CLASS_WIRELESS_WHCI, ~0) },
@@ -497,10 +490,12 @@ static struct pci_device_id whcrc_id_table[] = {
 MODULE_DEVICE_TABLE(pci, whcrc_id_table);
 
 static struct umc_driver whcrc_driver = {
-	.name   = "whc-rc",
-	.cap_id = UMC_CAP_ID_WHCI_RC,
-	.probe  = whcrc_probe,
-	.remove = whcrc_remove,
+	.name       = "whc-rc",
+	.cap_id     = UMC_CAP_ID_WHCI_RC,
+	.probe      = whcrc_probe,
+	.remove     = whcrc_remove,
+	.pre_reset  = whcrc_pre_reset,
+	.post_reset = whcrc_post_reset,
 };
 
 static int __init whcrc_driver_init(void)
