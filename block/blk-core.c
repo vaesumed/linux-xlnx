@@ -139,6 +139,9 @@ static void req_bio_endio(struct request *rq, struct bio *bio,
 			nbytes = bio->bi_size;
 		}
 
+		if (unlikely(rq->cmd_flags & REQ_QUIET))
+			set_bit(BIO_QUIET, &bio->bi_flags);
+
 		bio->bi_size -= nbytes;
 		bio->bi_sector += (nbytes >> 9);
 
@@ -396,6 +399,7 @@ EXPORT_SYMBOL(blk_stop_queue);
 void blk_sync_queue(struct request_queue *q)
 {
 	del_timer_sync(&q->unplug_timer);
+	del_timer_sync(&q->timeout);
 	kblockd_flush_work(&q->unplug_work);
 }
 EXPORT_SYMBOL(blk_sync_queue);
