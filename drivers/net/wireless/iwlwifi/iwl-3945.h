@@ -828,8 +828,6 @@ struct iwl3945_priv {
 	unsigned long last_statistics_time;
 
 	/* context information */
-	u8 essid[IW_ESSID_MAX_SIZE];
-	u8 essid_len;
 	u16 rates_mask;
 
 	u32 power_mode;
@@ -888,7 +886,6 @@ struct iwl3945_priv {
 	struct work_struct report_work;
 	struct work_struct request_scan;
 	struct work_struct beacon_update;
-	struct work_struct set_monitor;
 
 	struct tasklet_struct irq_tasklet;
 
@@ -953,6 +950,8 @@ static inline int is_channel_ibss(const struct iwl3945_channel_info *ch)
 
 extern const struct iwl3945_channel_info *iwl3945_get_channel_info(
 	const struct iwl3945_priv *priv, enum ieee80211_band band, u16 channel);
+
+extern int iwl3945_rs_next_rate(struct iwl3945_priv *priv, int rate);
 
 /* Requires full declaration of iwl3945_priv before including */
 #include "iwl-3945-io.h"
