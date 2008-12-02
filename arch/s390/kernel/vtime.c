@@ -56,19 +56,13 @@ void account_process_tick(struct task_struct *tsk, int user_tick)
 	cputime =  S390_lowcore.system_timer >> 12;
 	S390_lowcore.system_timer -= cputime << 12;
 	S390_lowcore.steal_clock -= cputime << 12;
-	if (idle_task(smp_processor_id()) != current)
-		account_system_time(tsk, HARDIRQ_OFFSET, cputime, cputime);
-	else
-		account_idle_time(cputime);
+	account_system_time(tsk, HARDIRQ_OFFSET, cputime, cputime);
 
 	cputime = S390_lowcore.steal_clock;
 	if ((__s64) cputime > 0) {
 		cputime >>= 12;
 		S390_lowcore.steal_clock -= cputime << 12;
-		if (idle_task(smp_processor_id()) != current)
-			account_steal_time(cputime);
-		else
-			account_idle_time(cputime);
+		account_steal_time(cputime);
 	}
 }
 
@@ -94,10 +88,7 @@ void account_vtime(struct task_struct *tsk)
 	cputime =  S390_lowcore.system_timer >> 12;
 	S390_lowcore.system_timer -= cputime << 12;
 	S390_lowcore.steal_clock -= cputime << 12;
-	if (idle_task(smp_processor_id()) != current)
-		account_system_time(tsk, 0, cputime, cputime);
-	else
-		account_idle_time(cputime);
+	account_system_time(tsk, 0, cputime, cputime);
 }
 
 /*
@@ -117,10 +108,7 @@ void account_system_vtime(struct task_struct *tsk)
 	cputime =  S390_lowcore.system_timer >> 12;
 	S390_lowcore.system_timer -= cputime << 12;
 	S390_lowcore.steal_clock -= cputime << 12;
-	if (in_irq() || idle_task(smp_processor_id()) != current)
-		account_system_time(tsk, 0, cputime, cputime);
-	else
-		account_idle_time(cputime);
+	account_system_time(tsk, 0, cputime, cputime);
 }
 EXPORT_SYMBOL_GPL(account_system_vtime);
 
@@ -158,8 +146,8 @@ void vtime_start_cpu_timer(void)
 	if (vt_list->idle & 1LL<<63)
 		return;
 
-	if (!list_empty(&vt_list->list))
-		set_vtimer(vt_list->idle);
+	S390_lowcore.last_update_timer = S390_lowcore.async_enter_timer;
+	set_vtimer(vt_list->idle);
 }
 
 void vtime_stop_cpu_timer(void)
