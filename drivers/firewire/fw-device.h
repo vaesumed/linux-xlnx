@@ -21,7 +21,9 @@
 
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/idr.h>
 #include <linux/rwsem.h>
+#include <linux/mutex.h>
 #include <asm/atomic.h>
 
 enum fw_device_state {
@@ -62,7 +64,10 @@ struct fw_device {
 	bool cmc;
 	struct fw_card *card;
 	struct device device;
+
+	struct mutex client_list_mutex;
 	struct list_head client_list;
+
 	u32 *config_rom;
 	size_t config_rom_length;
 	int config_rom_retries;
@@ -99,6 +104,7 @@ void fw_device_cdev_update(struct fw_device *device);
 void fw_device_cdev_remove(struct fw_device *device);
 
 extern struct rw_semaphore fw_device_rwsem;
+extern struct idr fw_device_idr;
 extern int fw_cdev_major;
 
 /*
