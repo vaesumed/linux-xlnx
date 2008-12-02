@@ -476,9 +476,12 @@ check_next:
 		atomic_sub(count, &q->nr_buf_used);
 		break;
 	case SLSB_CU_INPUT_EMPTY:
+		DBF_DEV_EVENT(DBF_INFO, q->irq_ptr, "in nop");
+		break;
 	case SLSB_P_INPUT_NOT_INIT:
 	case SLSB_P_INPUT_ACK:
-		DBF_DEV_EVENT(DBF_INFO, q->irq_ptr, "in nop");
+		WARN_ON(1);
+		q->first_to_check++;
 		break;
 	default:
 		BUG();
@@ -648,6 +651,9 @@ check_next:
 		DBF_DEV_EVENT(DBF_INFO, q->irq_ptr, "out primed:%1d", q->nr);
 		break;
 	case SLSB_P_OUTPUT_NOT_INIT:
+		WARN_ON(1);
+		q->first_to_check++;
+		break;
 	case SLSB_P_OUTPUT_HALTED:
 		break;
 	default:
