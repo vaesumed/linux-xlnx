@@ -89,6 +89,10 @@ VMLINUX_MAIN := $(core-y) kernel/ mm/ fs/ ipc/ security/ crypto/ block/
 VMLINUX_MAIN += $(patsubst %/, %/lib.a, $(libs-y)) $(libs-y)
 VMLINUX_MAIN += $(drivers-y) $(net-y)
 
+ifdef CONFIG_KALLSYMS
+export kallsyms.o := .tmp_kallsyms2.o
+endif
+
 boot-y                 := arch/sparc/boot
 boot-$(CONFIG_SPARC64) := arch/sparc64/boot
 
