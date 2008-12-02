@@ -6610,7 +6610,7 @@ static int sched_domain_debug_one(struct sched_domain *sd, int cpu, int level,
 	struct sched_group *group = sd->groups;
 	char str[256];
 
-	cpulist_scnprintf(str, sizeof(str), sd->span);
+	cpulist_scnprintf(str, sizeof(str), &sd->span);
 	cpus_clear(*groupmask);
 
 	printk(KERN_DEBUG "%*s domain %d: ", level, "", level);
@@ -6663,7 +6663,7 @@ static int sched_domain_debug_one(struct sched_domain *sd, int cpu, int level,
 
 		cpus_or(*groupmask, *groupmask, group->cpumask);
 
-		cpulist_scnprintf(str, sizeof(str), group->cpumask);
+		cpulist_scnprintf(str, sizeof(str), &group->cpumask);
 		printk(KERN_CONT " %s", str);
 
 		group = group->next;
@@ -7062,7 +7062,7 @@ cpu_to_phys_group(int cpu, const cpumask_t *cpu_map, struct sched_group **sg,
 {
 	int group;
 #ifdef CONFIG_SCHED_MC
-	*mask = cpu_coregroup_map(cpu);
+	*mask = *cpu_coregroup_mask(cpu);
 	cpus_and(*mask, *mask, *cpu_map);
 	group = first_cpu(*mask);
 #elif defined(CONFIG_SCHED_SMT)
@@ -7435,7 +7435,7 @@ static int __build_sched_domains(const cpumask_t *cpu_map,
 		sd = &per_cpu(core_domains, i);
 		SD_INIT(sd, MC);
 		set_domain_attribute(sd, attr);
-		sd->span = cpu_coregroup_map(i);
+		sd->span = *cpu_coregroup_mask(i);
 		cpus_and(sd->span, sd->span, *cpu_map);
 		sd->parent = p;
 		p->child = sd;
@@ -7478,7 +7478,7 @@ static int __build_sched_domains(const cpumask_t *cpu_map,
 		SCHED_CPUMASK_VAR(this_core_map, allmasks);
 		SCHED_CPUMASK_VAR(send_covered, allmasks);
 
-		*this_core_map = cpu_coregroup_map(i);
+		*this_core_map = *cpu_coregroup_mask(i);
 		cpus_and(*this_core_map, *this_core_map, *cpu_map);
 		if (i != first_cpu(*this_core_map))
 			continue;
