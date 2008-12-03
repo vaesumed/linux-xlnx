@@ -533,15 +533,6 @@ void __init arch_get_boot_command_line(void)
 {
 	strlcpy(boot_command_line, __va(ia64_boot_param->command_line),
 		COMMAND_LINE_SIZE);
-}
-
-void __init setup_arch(void)
-{
-	unw_init();
-
-	paravirt_arch_setup_early();
-
-	ia64_patch_vtop((u64) __start___vtop_patchlist, (u64) __end___vtop_patchlist);
 
 	efi_init();
 	io_port_init();
@@ -554,8 +545,15 @@ void __init setup_arch(void)
 	 */
 	machvec_init_from_cmdline(boot_command_line);
 #endif
+}
 
-	parse_early_param();
+void __init setup_arch(void)
+{
+	unw_init();
+
+	paravirt_arch_setup_early();
+
+	ia64_patch_vtop((u64) __start___vtop_patchlist, (u64) __end___vtop_patchlist);
 
 	if (early_console_setup(boot_command_line) == 0)
 		mark_bsp_online();

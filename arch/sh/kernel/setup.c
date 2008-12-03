@@ -382,8 +382,6 @@ void __init setup_arch(void)
 	if (!memory_end)
 		memory_end = memory_start + __MEMORY_SIZE;
 
-	parse_early_param();
-
 	sh_mv_setup();
 
 	/*

@@ -876,8 +876,6 @@ void __init setup_arch(void)
 	bss_resource.start = virt_to_phys(&__bss_start);
 	bss_resource.end = virt_to_phys(&__bss_stop)-1;
 
-	parse_early_param();
-
 #ifdef CONFIG_X86_64
 	check_efer();
 #endif
@@ -915,7 +913,6 @@ void __init setup_arch(void)
 	probe_roms();
 #endif
 
-	/* after parse_early_param, so could debug it */
 	insert_resource(&iomem_resource, &code_resource);
 	insert_resource(&iomem_resource, &data_resource);
 	insert_resource(&iomem_resource, &bss_resource);

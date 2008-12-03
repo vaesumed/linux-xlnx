@@ -206,7 +206,7 @@ static int __init obsolete_checksetup(char *line)
 		int n = strlen(p->str);
 		if (!strncmp(line, p->str, n)) {
 			if (p->early) {
-				/* Already done in parse_early_param?
+				/* Already done in do_early_param?
 				 * (Needs exact match on param part).
 				 * Keep iterating, as we can have early
 				 * params and __setups of same names 8( */
@@ -523,21 +523,6 @@ static int __init do_early_param(char *param, char *val)
 	return 0;
 }
 
-/* Arch code calls this early on, or if not, just before other parsing. */
-void __init parse_early_param(void)
-{
-	static __initdata int done = 0;
-	static __initdata char tmp_cmdline[COMMAND_LINE_SIZE];
-
-	if (done)
-		return;
-
-	/* All fall through to do_early_param. */
-	strlcpy(tmp_cmdline, boot_command_line, COMMAND_LINE_SIZE);
-	parse_args("early options", tmp_cmdline, NULL, 0, do_early_param, true);
-	done = 1;
-}
-
 /*
  *	Activate the first processor.
  */
@@ -566,6 +551,9 @@ asmlinkage void __init start_kernel(void)
 	parse_args("Core params", boot_command_line, __start___core_param,
 		   __stop___core_param - __start___core_param,
 		   unknown_core_ok, true);
+	/* All fall through to do_early_param. */
+	parse_args("early options", boot_command_line, NULL, 0, do_early_param,
+		   true);
 
 	smp_setup_processor_id();
 
@@ -615,7 +603,6 @@ asmlinkage void __init start_kernel(void)
 	build_all_zonelists();
 	page_alloc_init();
 	printk(KERN_NOTICE "Kernel command line: %s\n", boot_command_line);
-	parse_early_param();
 	parse_args("Booting kernel", static_command_line, __start___param,
 		   __stop___param - __start___param,
 		   &unknown_bootoption, false);

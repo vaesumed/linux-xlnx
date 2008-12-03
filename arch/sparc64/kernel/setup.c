@@ -283,9 +283,6 @@ void __init arch_get_boot_command_line(void)
 
 void __init setup_arch(void)
 {
-	/* Initialize PROM console. */
-	parse_early_param();
-
 	boot_flags_init(boot_command_line);
 	register_console(&prom_early_console);
 
