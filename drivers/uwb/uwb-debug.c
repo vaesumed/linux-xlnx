@@ -33,8 +33,6 @@
 #include <linux/seq_file.h>
 
 #include <linux/uwb/debug-cmd.h>
-#define D_LOCAL 0
-#include <linux/uwb/debug.h>
 
 #include "uwb-internal.h"
 
@@ -104,6 +102,11 @@ static void uwb_dbg_rsv_cb(struct uwb_rsv *rsv)
 
 	dev_dbg(dev, "debug: rsv %s -> %s: %s\n",
 		owner, target, uwb_rsv_state_str(rsv->state));
+
+	if (rsv->state == UWB_RSV_STATE_NONE) {
+		list_del(&rsv->pal_node);
+		uwb_rsv_destroy(rsv);
+	}
 }
 
 static int cmd_rsv_establish(struct uwb_rc *rc,
@@ -119,7 +122,7 @@ static int cmd_rsv_establish(struct uwb_rc *rc,
 	if (target == NULL)
 		return -ENODEV;
 
-	rsv = uwb_rsv_create(rc, uwb_dbg_rsv_cb, NULL);
+	rsv = uwb_rsv_create(rc, uwb_dbg_rsv_cb, rc->dbg);
 	if (rsv == NULL) {
 		uwb_dev_put(target);
 		return -ENOMEM;
@@ -153,14 +156,26 @@ static int cmd_rsv_terminate(struct uwb_rc *rc,
 			found = rsv;
 			break;
 		}
+		i++;
 	}
 	if (!found)
 		return -EINVAL;
 
-	list_del(&found->pal_node);
 	uwb_rsv_terminate(found);
 
 	return 0;
+}
+
+static int cmd_ie_add(struct uwb_rc *rc, struct uwb_dbg_cmd_ie *ie_to_add)
+{
+	return uwb_rc_ie_add(rc,
+			     (const struct uwb_ie_hdr *) ie_to_add->data,
+			     ie_to_add->len);
+}
+
+static int cmd_ie_rm(struct uwb_rc *rc, struct uwb_dbg_cmd_ie *ie_to_rm)
+{
+	return uwb_rc_ie_rm(rc, ie_to_rm->data[0]);
 }
 
 static int command_open(struct inode *inode, struct file *file)
@@ -175,7 +190,7 @@ static ssize_t command_write(struct file *file, const char __user *buf,
 {
 	struct uwb_rc *rc = file->private_data;
 	struct uwb_dbg_cmd cmd;
-	int ret;
+	int ret = 0;
 
 	if (len != sizeof(struct uwb_dbg_cmd))
 		return -EINVAL;
@@ -189,6 +204,18 @@ static ssize_t command_write(struct file *file, const char __user *buf,
 		break;
 	case UWB_DBG_CMD_RSV_TERMINATE:
 		ret = cmd_rsv_terminate(rc, &cmd.rsv_terminate);
+		break;
+	case UWB_DBG_CMD_IE_ADD:
+		ret = cmd_ie_add(rc, &cmd.ie_add);
+		break;
+	case UWB_DBG_CMD_IE_RM:
+		ret = cmd_ie_rm(rc, &cmd.ie_rm);
+		break;
+	case UWB_DBG_CMD_RADIO_START:
+		ret = uwb_radio_start(&rc->dbg->pal);
+		break;
+	case UWB_DBG_CMD_RADIO_STOP:
+		uwb_radio_stop(&rc->dbg->pal);
 		break;
 	default:
 		return -EINVAL;
@@ -283,12 +310,24 @@ static struct file_operations drp_avail_fops = {
 	.owner   = THIS_MODULE,
 };
 
-static void uwb_dbg_new_rsv(struct uwb_rsv *rsv)
+static void uwb_dbg_channel_changed(struct uwb_pal *pal, int channel)
 {
-	struct uwb_rc *rc = rsv->rc;
+	struct device *dev = &pal->rc->uwb_dev.dev;
 
-	if (rc->dbg->accept)
-		uwb_rsv_accept(rsv, uwb_dbg_rsv_cb, NULL);
+	if (channel > 0)
+		dev_info(dev, "debug: channel %d started\n", channel);
+	else
+		dev_info(dev, "debug: channel stopped\n");
+}
+
+static void uwb_dbg_new_rsv(struct uwb_pal *pal, struct uwb_rsv *rsv)
+{
+	struct uwb_dbg *dbg = container_of(pal, struct uwb_dbg, pal);
+
+	if (dbg->accept) {
+		list_add_tail(&rsv->pal_node, &dbg->rsvs);
+		uwb_rsv_accept(rsv, uwb_dbg_rsv_cb, dbg);
+	}
 }
 
 /**
@@ -304,8 +343,11 @@ void uwb_dbg_add_rc(struct uwb_rc *rc)
 	INIT_LIST_HEAD(&rc->dbg->rsvs);
 
 	uwb_pal_init(&rc->dbg->pal);
+	rc->dbg->pal.rc = rc;
+	rc->dbg->pal.channel_changed = uwb_dbg_channel_changed;
 	rc->dbg->pal.new_rsv = uwb_dbg_new_rsv;
-	uwb_pal_register(rc, &rc->dbg->pal);
+	uwb_pal_register(&rc->dbg->pal);
+
 	if (root_dir) {
 		rc->dbg->root_d = debugfs_create_dir(dev_name(&rc->uwb_dev.dev),
 						     root_dir);
@@ -325,7 +367,7 @@ void uwb_dbg_add_rc(struct uwb_rc *rc)
 }
 
 /**
- * uwb_dbg_add_rc - remove a radio controller's debug interface
+ * uwb_dbg_del_rc - remove a radio controller's debug interface
  * @rc: the radio controller
  */
 void uwb_dbg_del_rc(struct uwb_rc *rc)
@@ -336,10 +378,10 @@ void uwb_dbg_del_rc(struct uwb_rc *rc)
 		return;
 
 	list_for_each_entry_safe(rsv, t, &rc->dbg->rsvs, pal_node) {
-		uwb_rsv_destroy(rsv);
+		uwb_rsv_terminate(rsv);
 	}
 
-	uwb_pal_unregister(rc, &rc->dbg->pal);
+	uwb_pal_unregister(&rc->dbg->pal);
 
 	if (root_dir) {
 		debugfs_remove(rc->dbg->drp_avail_f);
@@ -364,4 +406,17 @@ void uwb_dbg_init(void)
 void uwb_dbg_exit(void)
 {
 	debugfs_remove(root_dir);
+}
+
+/**
+ * uwb_dbg_create_pal_dir - create a debugfs directory for a PAL
+ * @pal: The PAL.
+ */
+struct dentry *uwb_dbg_create_pal_dir(struct uwb_pal *pal)
+{
+	struct uwb_rc *rc = pal->rc;
+
+	if (root_dir && rc->dbg && rc->dbg->root_d && pal->name)
+		return debugfs_create_dir(pal->name, rc->dbg->root_d);
+	return NULL;
 }
