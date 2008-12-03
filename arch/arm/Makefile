@@ -96,7 +96,6 @@ textofs-y	:= 0x00008000
 
  machine-$(CONFIG_ARCH_RPC)	   := rpc
  machine-$(CONFIG_ARCH_EBSA110)	   := ebsa110
- machine-$(CONFIG_ARCH_CLPS7500)   := clps7500
  machine-$(CONFIG_FOOTBRIDGE)	   := footbridge
  machine-$(CONFIG_ARCH_SHARK)	   := shark
  machine-$(CONFIG_ARCH_SA1100)	   := sa1100
@@ -144,6 +143,7 @@ endif
  machine-$(CONFIG_ARCH_MSM)	   := msm
  machine-$(CONFIG_ARCH_LOKI)       := loki
  machine-$(CONFIG_ARCH_MV78XX0)    := mv78xx0
+ machine-$(CONFIG_ARCH_W90X900)    := w90x900
 
 ifeq ($(CONFIG_ARCH_EBSA110),y)
 # This is what happens if you forget the IOCS16 line.
