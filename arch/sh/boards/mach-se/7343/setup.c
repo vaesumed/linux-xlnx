@@ -110,7 +110,7 @@ device_initcall(sh7343se_devices_setup);
 /*
  * Initialize the board
  */
-static void __init sh7343se_setup(char **cmdline_p)
+static void __init sh7343se_setup(void)
 {
 	ctrl_outw(0xf900, FPGA_OUT);	/* FPGA */
 

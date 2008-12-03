@@ -85,7 +85,7 @@ static int __init landisk_devices_setup(void)
 
 __initcall(landisk_devices_setup);
 
-static void __init landisk_setup(char **cmdline_p)
+static void __init landisk_setup(void)
 {
         /* LED ON */
 	ctrl_outb(ctrl_inb(PA_LED) | 0x03, PA_LED);

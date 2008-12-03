@@ -17,7 +17,7 @@
 struct device;
 
 struct sh_machine_vector {
-	void (*mv_setup)(char **cmdline_p);
+	void (*mv_setup)(void);
 	const char *mv_name;
 	int mv_nr_irqs;
 

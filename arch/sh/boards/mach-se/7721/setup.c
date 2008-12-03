@@ -79,7 +79,7 @@ static int __init se7721_devices_setup(void)
 }
 device_initcall(se7721_devices_setup);
 
-static void __init se7721_setup(char **cmdline_p)
+static void __init se7721_setup(void)
 {
 	/* for USB */
 	ctrl_outw(0x0000, 0xA405010C);	/* PGCR */

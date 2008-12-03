@@ -447,7 +447,7 @@ io_port_init (void)
  * Returns non-zero if a console couldn't be setup.
  */
 static inline int __init
-early_console_setup (char *cmdline)
+early_console_setup(char *cmdline)
 {
 	int earlycons = 0;
 
@@ -529,17 +529,19 @@ int __init reserve_elfcorehdr(unsigned long *start, unsigned long *end)
 
 #endif /* CONFIG_PROC_VMCORE */
 
-void __init
-setup_arch (char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+	strlcpy(boot_command_line, __va(ia64_boot_param->command_line),
+		COMMAND_LINE_SIZE);
+}
+
+void __init setup_arch(void)
 {
 	unw_init();
 
 	paravirt_arch_setup_early();
 
 	ia64_patch_vtop((u64) __start___vtop_patchlist, (u64) __end___vtop_patchlist);
-
-	*cmdline_p = __va(ia64_boot_param->command_line);
-	strlcpy(boot_command_line, *cmdline_p, COMMAND_LINE_SIZE);
 
 	efi_init();
 	io_port_init();
@@ -550,12 +552,12 @@ setup_arch (char **cmdline_p)
 	 * that ia64_mv is initialised before any command line
 	 * settings may cause console setup to occur
 	 */
-	machvec_init_from_cmdline(*cmdline_p);
+	machvec_init_from_cmdline(boot_command_line);
 #endif
 
 	parse_early_param();
 
-	if (early_console_setup(*cmdline_p) == 0)
+	if (early_console_setup(boot_command_line) == 0)
 		mark_bsp_online();
 
 #ifdef CONFIG_ACPI
@@ -605,7 +607,7 @@ setup_arch (char **cmdline_p)
 #endif
 
 	paravirt_banner();
-	paravirt_arch_setup_console(cmdline_p);
+	paravirt_arch_setup_console();
 
 #ifdef CONFIG_VT
 	if (!conswitchp) {
@@ -631,7 +633,7 @@ setup_arch (char **cmdline_p)
 	if (!nomca)
 		ia64_mca_init();
 
-	platform_setup(cmdline_p);
+	platform_setup();
 #ifndef CONFIG_IA64_HP_SIM
 	check_sal_cache_flush();
 #endif

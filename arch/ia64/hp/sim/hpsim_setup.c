@@ -38,7 +38,7 @@ ia64_ctl_trace (long on)
 }
 
 void __init
-hpsim_setup (char **cmdline_p)
+hpsim_setup(void)
 {
 	ROOT_DEV = Root_SDA1;		/* default to first SCSI drive */
 

@@ -81,7 +81,7 @@ static int __init sdk7780_devices_setup(void)
 }
 device_initcall(sdk7780_devices_setup);
 
-static void __init sdk7780_setup(char **cmdline_p)
+static void __init sdk7780_setup(void)
 {
 	u16 ver = ctrl_inw(FPGA_FPVERR);
 	u16 dateStamp = ctrl_inw(FPGA_FPDATER);

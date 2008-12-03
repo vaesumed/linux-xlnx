@@ -26,10 +26,9 @@
 extern void platform_init(bp_tag_t*);
 
 /*
- * platform_setup is called from setup_arch with a pointer to the command-line
- * string.
+ * platform_setup is called from setup_arch.
  */
-extern void platform_setup (char **);
+extern void platform_setup(void);
 
 /*
  * platform_init_irq is called from init_IRQ.

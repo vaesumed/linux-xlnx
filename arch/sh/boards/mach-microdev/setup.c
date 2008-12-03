@@ -355,7 +355,7 @@ static int __init smsc_superio_setup(void)
 	return 0;
 }
 
-static void __init microdev_setup(char **cmdline_p)
+static void __init microdev_setup(void)
 {
 	int * const fpgaRevisionRegister = (int*)(MICRODEV_FPGA_GP_BASE + 0x8ul);
 	const int fpgaRevision = *fpgaRevisionRegister;

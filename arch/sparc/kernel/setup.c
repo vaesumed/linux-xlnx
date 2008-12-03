@@ -203,16 +203,19 @@ struct tt_entry *sparc_ttable;
 
 struct pt_regs fake_swapper_regs;
 
-void __init setup_arch(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+	strcpy(boot_command_line, prom_getbootargs());
+}
+
+void __init setup_arch(void)
 {
 	int i;
 	unsigned long highest_paddr;
 
 	sparc_ttable = (struct tt_entry *) &start;
 
-	/* Initialize PROM console and command line. */
-	*cmdline_p = prom_getbootargs();
-	strcpy(boot_command_line, *cmdline_p);
+	/* Initialize PROM console. */
 	parse_early_param();
 
 	/* Set sparc_cpu_model */
@@ -262,7 +265,7 @@ void __init setup_arch(char **cmdline_p)
 #elif defined(CONFIG_PROM_CONSOLE)
 	conswitchp = &prom_con;
 #endif
-	boot_flags_init(*cmdline_p);
+	boot_flags_init(boot_command_line);
 
 	idprom_init();
 	if (ARCH_SUN4C)
