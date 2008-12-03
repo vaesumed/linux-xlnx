@@ -136,7 +136,8 @@ extern int parse_args(const char *name,
 		      char *args,
 		      struct kernel_param *params,
 		      unsigned num,
-		      int (*unknown)(char *param, char *val));
+		      int (*unknown)(char *param, char *val),
+		      bool restore_args);
 
 /* All the helper functions */
 /* The macros to do compile-time type checking stolen from Jakub
