@@ -60,6 +60,7 @@ static struct resource data_resource = {
 static unsigned long __initdata phys_memory_base;
 static unsigned long __initdata phys_memory_end;
 static unsigned long __initdata memory_end;
+static unsigned long __initdata memory_param;
 unsigned long memory_size;
 
 struct thread_info *__current_ti = &init_thread_union.thread_info;
@@ -79,41 +80,17 @@ void __init arch_get_boot_command_line(void)
 }
 
 /*
- * FIXME: use core_param
+ * handle a specific memory limit handed over the kernel command line
  */
-static void __init parse_mem_cmdline(void)
+static int __init mem_parameter(char *data)
 {
-	char *from, *to, c;
+	if (!data || !*data)
+		return 0;
 
-	/* see if there's an explicit memory size option */
-	from = redboot_command_line;
-	to = redboot_command_line;
-	c = ' ';
-
-	for (;;) {
-		if (c == ' ' && !memcmp(from, "mem=", 4)) {
-			if (to != redboot_command_line)
-				to--;
-			memory_size = memparse(from + 4, &from);
-		}
-
-		c = *(from++);
-		if (!c)
-			break;
-
-		*(to++) = c;
-	}
-
-	*to = '\0';
-
-	if (memory_size == 0)
-		panic("Memory size not known\n");
-
-	memory_end = (unsigned long) CONFIG_KERNEL_RAM_BASE_ADDRESS +
-		memory_size;
-	if (memory_end > phys_memory_end)
-		memory_end = phys_memory_end;
+	memory_param = memparse(data, NULL);
+	return 0;
 }
+early_param("mem", mem_parameter);
 
 /*
  * architecture specific setup
@@ -125,7 +102,6 @@ void __init setup_arch(void)
 
 	cpu_init();
 	unit_setup();
-	parse_mem_cmdline();
 
 	init_mm.start_code = (unsigned long)&_text;
 	init_mm.end_code = (unsigned long) &_etext;
@@ -222,6 +198,16 @@ void __init cpu_init(void)
 	}
 
 	phys_memory_end = phys_memory_base + memory_size;
+
+	if (memory_param)
+		memory_size = memory_param;
+	if (memory_size == 0)
+		panic("Memory size not known\n");
+
+	memory_end = (unsigned long) CONFIG_KERNEL_RAM_BASE_ADDRESS +
+		memory_size;
+	if (memory_end > phys_memory_end)
+		memory_end = phys_memory_end;
 
 #ifdef CONFIG_FPU
 	fpu_init_state();
