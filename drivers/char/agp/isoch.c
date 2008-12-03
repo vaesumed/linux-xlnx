@@ -359,7 +359,7 @@ int agp_3_5_enable(struct agp_bridge_data *bridge)
 			case 0x0001:    /* Unclassified device */
 				/* Don't know what this is, but log it for investigation. */
 				if (mcapndx != 0) {
-					dev_info(&td->dev, "wacky, found unclassified AGP device %s [%04x/%04x]\n",
+					dev_info(&td->dev, "wacky, found unclassified AGP device %s [%04x:%04x]\n",
 						 pci_name(dev),
 						 dev->vendor, dev->device);
 				}
