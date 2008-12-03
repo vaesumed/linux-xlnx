@@ -563,6 +563,9 @@ void __init __weak thread_info_cache_init(void)
 asmlinkage void __init start_kernel(void)
 {
 	arch_get_boot_command_line();
+	parse_args("Core params", boot_command_line, __start___core_param,
+		   __stop___core_param - __start___core_param,
+		   unknown_core_ok, true);
 
 	smp_setup_processor_id();
 
@@ -592,9 +595,6 @@ asmlinkage void __init start_kernel(void)
 	setup_arch();
 	mm_init_owner(&init_mm, &init_task);
 	setup_command_line();
-	parse_args("Core params", boot_command_line, __start___core_param,
-		   __stop___core_param - __start___core_param,
-		   unknown_core_ok, true);
 
 	unwind_setup();
 	setup_per_cpu_areas();
