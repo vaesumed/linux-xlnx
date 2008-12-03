@@ -19,6 +19,8 @@ config X86_64
 config X86
 	def_bool y
 	select HAVE_AOUT if X86_32
+	select HAVE_READQ
+	select HAVE_WRITEQ
 	select HAVE_UNSTABLE_SCHED_CLOCK
 	select HAVE_IDE
 	select HAVE_OPROFILE
@@ -561,7 +563,7 @@ config AMD_IOMMU
 
 # need this always selected by IOMMU for the VIA workaround
 config SWIOTLB
-	bool
+	def_bool y if X86_64
 	help
 	  Support for software bounce buffers used on x86-64 systems
 	  which don't have a hardware IOMMU (e.g. the current generation
