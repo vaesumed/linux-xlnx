@@ -123,8 +123,6 @@ extern void softirq_init(void);
 char __initdata boot_command_line[COMMAND_LINE_SIZE];
 /* Untouched saved command line (eg. for /proc) */
 char *saved_command_line;
-/* Command line for parameter parsing */
-static char *static_command_line;
 
 static char *execute_command;
 static char *ramdisk_execute_command;
@@ -452,20 +450,6 @@ static void __init smp_init(void)
 #endif
 
 /*
- * We need to store the untouched command line for future reference.
- * We also need to store the touched command line since the parameter
- * parsing is performed in place, and we should allow a component to
- * store reference of name/value for future reference.
- */
-static void __init setup_command_line(void)
-{
-	saved_command_line = alloc_bootmem(strlen (boot_command_line)+1);
-	static_command_line = alloc_bootmem(strlen (boot_command_line)+1);
-	strcpy (saved_command_line, boot_command_line);
-	strcpy (static_command_line, boot_command_line);
-}
-
-/*
  * We need to finalize in a non-__init function or else race conditions
  * between the root thread and the init thread may cause start_kernel to
  * be reaped by free_initmem before the root thread has proceeded to
@@ -541,6 +525,8 @@ void __init __weak thread_info_cache_init(void)
 /* Ideally, this would take a 'const char *cmdline' param. */
 asmlinkage void __init start_kernel(void)
 {
+	char *static_command_line;
+
 	arch_get_boot_command_line();
 	parse_args("Core and early params", boot_command_line,
 		   __start___core_param,
@@ -574,7 +560,6 @@ asmlinkage void __init start_kernel(void)
 	printk(linux_banner);
 	setup_arch();
 	mm_init_owner(&init_mm, &init_task);
-	setup_command_line();
 
 	unwind_setup();
 	setup_per_cpu_areas();
@@ -595,6 +580,9 @@ asmlinkage void __init start_kernel(void)
 	build_all_zonelists();
 	page_alloc_init();
 	printk(KERN_NOTICE "Kernel command line: %s\n", boot_command_line);
+	/* param parsing can keep pointers to the commandline. */
+	static_command_line = alloc_bootmem(strlen(boot_command_line)+1);
+	strcpy(static_command_line, boot_command_line);
 	parse_args("Booting kernel", static_command_line, __start___param,
 		   __stop___param - __start___param,
 		   &unknown_bootoption, false);
@@ -695,6 +683,8 @@ asmlinkage void __init start_kernel(void)
 	acpi_early_init(); /* before LAPIC and SMP init */
 
 	ftrace_init();
+
+	saved_command_line = kstrdup(boot_command_line, GFP_KERNEL);
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
