@@ -242,7 +242,7 @@ static void x25_asy_encaps(struct x25_asy *sl, unsigned char *icp, int len)
 	 * if we did not request it before write operation.
 	 *       14 Oct 1994  Dmitry Gorodchanin.
 	 */
-	sl->tty->flags |= (1 << TTY_DO_WRITE_WAKEUP);
+	set_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
 	actual = sl->tty->ops->write(sl->tty, sl->xbuff, count);
 	sl->xleft = count - actual;
 	sl->xhead = sl->xbuff + actual;
@@ -257,7 +257,7 @@ static void x25_asy_encaps(struct x25_asy *sl, unsigned char *icp, int len)
 static void x25_asy_write_wakeup(struct tty_struct *tty)
 {
 	int actual;
-	struct x25_asy *sl = (struct x25_asy *) tty->disc_data;
+	struct x25_asy *sl = tty->disc_data;
 
 	/* First make sure we're connected. */
 	if (!sl || sl->magic != X25_ASY_MAGIC || !netif_running(sl->dev))
@@ -267,7 +267,7 @@ static void x25_asy_write_wakeup(struct tty_struct *tty)
 		/* Now serial buffer is almost free & we can start
 		 * transmission of another packet */
 		sl->stats.tx_packets++;
-		tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
+		clear_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
 		x25_asy_unlock(sl);
 		return;
 	}
@@ -290,7 +290,7 @@ static void x25_asy_timeout(struct net_device *dev)
 		       (tty_chars_in_buffer(sl->tty) || sl->xleft) ?
 		       "bad line quality" : "driver error");
 		sl->xleft = 0;
-		sl->tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
+		clear_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
 		x25_asy_unlock(sl);
 	}
 	spin_unlock(&sl->lock);
@@ -500,7 +500,7 @@ static int x25_asy_close(struct net_device *dev)
 
 	spin_lock(&sl->lock);
 	if (sl->tty)
-		sl->tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
+		clear_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
 
 	netif_stop_queue(dev);
 	sl->rcount = 0;
@@ -523,7 +523,7 @@ static int x25_asy_close(struct net_device *dev)
 static void x25_asy_receive_buf(struct tty_struct *tty,
 				const unsigned char *cp, char *fp, int count)
 {
-	struct x25_asy *sl = (struct x25_asy *) tty->disc_data;
+	struct x25_asy *sl = tty->disc_data;
 
 	if (!sl || sl->magic != X25_ASY_MAGIC || !netif_running(sl->dev))
 		return;
@@ -551,7 +551,7 @@ static void x25_asy_receive_buf(struct tty_struct *tty,
 
 static int x25_asy_open_tty(struct tty_struct *tty)
 {
-	struct x25_asy *sl = (struct x25_asy *) tty->disc_data;
+	struct x25_asy *sl = tty->disc_data;
 	int err;
 
 	if (tty->ops->write == NULL)
@@ -592,7 +592,7 @@ static int x25_asy_open_tty(struct tty_struct *tty)
  */
 static void x25_asy_close_tty(struct tty_struct *tty)
 {
-	struct x25_asy *sl = (struct x25_asy *) tty->disc_data;
+	struct x25_asy *sl = tty->disc_data;
 
 	/* First make sure we're connected. */
 	if (!sl || sl->magic != X25_ASY_MAGIC)
@@ -692,7 +692,7 @@ static void x25_asy_unesc(struct x25_asy *sl, unsigned char s)
 static int x25_asy_ioctl(struct tty_struct *tty, struct file *file,
 			 unsigned int cmd,  unsigned long arg)
 {
-	struct x25_asy *sl = (struct x25_asy *) tty->disc_data;
+	struct x25_asy *sl = tty->disc_data;
 
 	/* First make sure we're connected. */
 	if (!sl || sl->magic != X25_ASY_MAGIC)
