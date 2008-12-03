@@ -18,7 +18,10 @@
 #ifndef __XFS_VNODE_H__
 #define __XFS_VNODE_H__
 
+#include "xfs_fs.h"
+
 struct file;
+struct xfs_inode;
 struct xfs_iomap;
 struct attrlist_cursor_kern;
 
@@ -79,11 +82,6 @@ do { \
 	xfs_itrace_rele((ip), __FILE__, __LINE__, (inst_t *)__return_address); \
 	iput(VFS_I(ip)); \
 } while (0)
-
-static inline struct inode *vn_grab(struct inode *vp)
-{
-	return igrab(vp);
-}
 
 /*
  * Dealing with bad inodes
