@@ -63,30 +63,17 @@ EXPORT_SYMBOL(parisc_bus_is_phys);
 unsigned long parisc_vmerge_boundary = 0;
 unsigned long parisc_vmerge_max_size = 0;
 
-void __init setup_cmdline(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
 {
 	extern unsigned int boot_args[];
 
 	/* Collect stuff passed in from the boot loader */
 
 	/* boot_args[0] is free-mem start, boot_args[1] is ptr to command line */
-	if (boot_args[0] < 64) {
-		/* called from hpux boot loader */
-		boot_command_line[0] = '\0';
-	} else {
+	if (boot_args[0] >= 64) {
+		/* not called from hpux boot loader */
 		strcpy(boot_command_line, (char *)__va(boot_args[1]));
-
-#ifdef CONFIG_BLK_DEV_INITRD
-		if (boot_args[2] != 0) /* did palo pass us a ramdisk? */
-		{
-		    initrd_start = (unsigned long)__va(boot_args[2]);
-		    initrd_end = (unsigned long)__va(boot_args[3]);
-		}
-#endif
 	}
-
-	strcpy(command_line, boot_command_line);
-	*cmdline_p = command_line;
 }
 
 #ifdef CONFIG_PA11
@@ -121,6 +108,7 @@ extern void collect_boot_cpu_data(void);
 
 void __init setup_arch(char **cmdline_p)
 {
+	extern unsigned int boot_args[];
 #ifdef CONFIG_64BIT
 	extern int parisc_narrow_firmware;
 #endif
@@ -142,7 +130,15 @@ void __init setup_arch(char **cmdline_p)
 	}
 #endif
 	setup_pdc();
-	setup_cmdline(cmdline_p);
+	strcpy(command_line, boot_command_line);
+
+#ifdef CONFIG_BLK_DEV_INITRD
+	/* did palo pass us a ramdisk? */
+	if (boot_args[0] >= 64 && boot_args[2] != 0) {
+		initrd_start = (unsigned long)__va(boot_args[2]);
+		initrd_end = (unsigned long)__va(boot_args[3]);
+	}
+#endif
 	collect_boot_cpu_data();
 	do_memory_inventory();  /* probe for physical memory */
 	parisc_cache_init();

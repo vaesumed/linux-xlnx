@@ -73,15 +73,17 @@ static const char *const mn10300_cputypes[] = {
 	"unknown"
 };
 
+void __init arch_get_boot_command_line(void)
+{
+	strcpy(boot_command_line, redboot_command_line);
+}
+
 /*
- *
+ * FIXME: use core_param
  */
-static void __init parse_mem_cmdline(char **cmdline_p)
+static void __init parse_mem_cmdline(void)
 {
 	char *from, *to, c;
-
-	/* save unparsed command line copy for /proc/cmdline */
-	strcpy(boot_command_line, redboot_command_line);
 
 	/* see if there's an explicit memory size option */
 	from = redboot_command_line;
@@ -103,7 +105,6 @@ static void __init parse_mem_cmdline(char **cmdline_p)
 	}
 
 	*to = '\0';
-	*cmdline_p = redboot_command_line;
 
 	if (memory_size == 0)
 		panic("Memory size not known\n");
@@ -117,14 +118,14 @@ static void __init parse_mem_cmdline(char **cmdline_p)
 /*
  * architecture specific setup
  */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 	unsigned long bootmap_size;
 	unsigned long kstart_pfn, start_pfn, free_pfn, end_pfn;
 
 	cpu_init();
 	unit_setup();
-	parse_mem_cmdline(cmdline_p);
+	parse_mem_cmdline();
 
 	init_mm.start_code = (unsigned long)&_text;
 	init_mm.end_code = (unsigned long) &_etext;

@@ -115,7 +115,6 @@ EXPORT_SYMBOL(elf_platform);
 static struct meminfo meminfo __initdata = { 0, };
 static const char *cpu_name;
 static const char *machine_name;
-static char __initdata command_line[COMMAND_LINE_SIZE];
 
 static char default_command_line[COMMAND_LINE_SIZE] __initdata = CONFIG_CMDLINE;
 static union { char c[4]; unsigned long l; } endian_test __initdata = { { 'l', '?', '?', 'b' } };
@@ -414,10 +413,12 @@ __early_param("mem=", early_mem);
 
 /*
  * Initial parsing of the command line.
+ * FIXME: Use generic core_param.  This actually removes args from the
+ * cmdline as seen in /proc!
  */
-static void __init parse_cmdline(char **cmdline_p, char *from)
+static void __init parse_cmdline(char *from)
 {
-	char c = ' ', *to = command_line;
+	char c = ' ', *to = boot_command_line;
 	int len = 0;
 
 	for (;;) {
@@ -429,7 +430,7 @@ static void __init parse_cmdline(char **cmdline_p, char *from)
 				int arglen = strlen(p->arg);
 
 				if (memcmp(from, p->arg, arglen) == 0) {
-					if (to != command_line)
+					if (to != boot_command_line)
 						to -= 1;
 					from += arglen;
 					p->fn(&from);
@@ -448,7 +449,6 @@ static void __init parse_cmdline(char **cmdline_p, char *from)
 		*to++ = c;
 	}
 	*to = '\0';
-	*cmdline_p = command_line;
 }
 
 static void __init
@@ -673,7 +673,8 @@ static int __init customize_machine(void)
 }
 arch_initcall(customize_machine);
 
-void __init setup_arch(char **cmdline_p)
+/* We not only get the command line here, we parse the tags as well. */
+void __init arch_get_boot_command_line(void)
 {
 	struct tag *tags = (struct tag *)&init_tags;
 	struct machine_desc *mdesc;
@@ -681,10 +682,6 @@ void __init setup_arch(char **cmdline_p)
 
 	setup_processor();
 	mdesc = setup_machine(machine_arch_type);
-	machine_name = mdesc->name;
-
-	if (mdesc->soft_reboot)
-		reboot_setup("s");
 
 	if (__atags_pointer)
 		tags = phys_to_virt(__atags_pointer);
@@ -703,21 +700,29 @@ void __init setup_arch(char **cmdline_p)
 	if (mdesc->fixup)
 		mdesc->fixup(mdesc, tags, &from, &meminfo);
 
-	if (tags->hdr.tag == ATAG_CORE) {
-		if (meminfo.nr_banks != 0)
-			squash_mem_tags(tags);
-		save_atags(tags);
-		parse_tags(tags);
-	}
+	if (meminfo.nr_banks != 0)
+		squash_mem_tags(tags);
+	save_atags(tags);
+	parse_tags(tags);
+
+	/* This copies into boot_command_line */
+	parse_cmdline(from);
+}
+
+void __init setup_arch(void)
+{
+	struct machine_desc *mdesc = setup_machine(machine_arch_type);
+
+	machine_name = mdesc->name;
+
+	if (mdesc->soft_reboot)
+		reboot_setup("s");
 
 	init_mm.start_code = (unsigned long) &_text;
 	init_mm.end_code   = (unsigned long) &_etext;
 	init_mm.end_data   = (unsigned long) &_edata;
 	init_mm.brk	   = (unsigned long) &_end;
 
-	memcpy(boot_command_line, from, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE-1] = '\0';
-	parse_cmdline(cmdline_p, from);
 	paging_init(&meminfo, mdesc);
 	request_standard_resources(&meminfo, mdesc);
 

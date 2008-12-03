@@ -149,7 +149,8 @@ extern char *saved_command_line;
 extern unsigned int reset_devices;
 
 /* used by init/main.c */
-void setup_arch(char **);
+void setup_arch(void);
+void arch_get_boot_command_line(void);
 void prepare_namespace(void);
 
 extern void (*late_time_init)(void);

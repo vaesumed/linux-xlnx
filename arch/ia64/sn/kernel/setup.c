@@ -100,7 +100,7 @@ EXPORT_SYMBOL(physical_node_map);
 
 int num_cnodes;
 
-static void sn_init_pdas(char **);
+static void sn_init_pdas(void);
 static void build_cnode_tables(void);
 
 static nodepda_t *nodepdaindr[MAX_COMPACT_NODES];
@@ -361,13 +361,12 @@ static unsigned long sn2_rtc_initial;
 
 /**
  * sn_setup - SN platform setup routine
- * @cmdline_p: kernel command line
  *
  * Handles platform setup for SN machines.  This includes determining
  * the RTC frequency (via a SAL call), initializing secondary CPUs, and
  * setting up per-node data areas.  The console is also initialized here.
  */
-void __init sn_setup(char **cmdline_p)
+void __init sn_setup(void)
 {
 	long status, ticks_per_sec, drift;
 	u32 version = sn_sal_rev();
@@ -425,11 +424,11 @@ void __init sn_setup(char **cmdline_p)
 
 	if (vga_console_membase) {
 		/* usable vga ... make tty0 the preferred default console */
-		if (!strstr(*cmdline_p, "console="))
+		if (!strstr(boot_command_line, "console="))
 			add_preferred_console("tty", 0, NULL);
 	} else {
 		printk(KERN_DEBUG "SGI: Disabling VGA console\n");
-		if (!strstr(*cmdline_p, "console="))
+		if (!strstr(boot_command_line, "console="))
 			add_preferred_console("ttySG", 0, NULL);
 #ifdef CONFIG_DUMMY_CONSOLE
 		conswitchp = &dummy_con;
@@ -470,7 +469,7 @@ void __init sn_setup(char **cmdline_p)
 	/*
 	 * Create the PDAs and NODEPDAs for all the cpus.
 	 */
-	sn_init_pdas(cmdline_p);
+	sn_init_pdas();
 
 	ia64_mark_idle = &snidle;
 
@@ -502,7 +501,7 @@ void __init sn_setup(char **cmdline_p)
  *
  * One time setup for Node Data Area.  Called by sn_setup().
  */
-static void __init sn_init_pdas(char **cmdline_p)
+static void __init sn_init_pdas(void)
 {
 	cnodeid_t cnode;
 

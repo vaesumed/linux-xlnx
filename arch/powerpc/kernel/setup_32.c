@@ -264,11 +264,15 @@ static void __init exc_lvl_early_init(void)
 #define exc_lvl_early_init()
 #endif
 
-/* Warning, IO base is not yet inited */
-void __init setup_arch(char **cmdline_p)
+void arch_get_boot_command_line(void)
 {
-	*cmdline_p = cmd_line;
+	/* FIXME: Get rid of cmd_line in favor of boot_command_line? */
+	strlcpy(boot_command_line, cmd_line, COMMAND_LINE_SIZE);
+}
 
+/* Warning, IO base is not yet inited */
+void __init setup_arch(void)
+{
 	/* so udelay does something sensible, assume <= 1000 bogomips */
 	loops_per_jiffy = 500000000 / HZ;
 

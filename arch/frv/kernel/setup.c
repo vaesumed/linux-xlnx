@@ -721,6 +721,7 @@ void __cpuinit calibrate_delay(void)
 /*****************************************************************************/
 /*
  * look through the command line for some things we need to know immediately
+ * FIXME: Use core_param or early_param.
  */
 static void __init parse_cmdline_early(char *cmdline)
 {
@@ -747,19 +748,22 @@ static void __init parse_cmdline_early(char *cmdline)
 
 } /* end parse_cmdline_early() */
 
+void __init arch_get_boot_command_line(void)
+{
+	memcpy(boot_command_line, redboot_command_line, COMMAND_LINE_SIZE);
+}
+
 /*****************************************************************************/
 /*
  *
  */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 #ifdef CONFIG_MMU
 	printk("Linux FR-V port done by Red Hat Inc <dhowells@redhat.com>\n");
 #else
 	printk("uClinux FR-V port done by Red Hat Inc <dhowells@redhat.com>\n");
 #endif
-
-	memcpy(boot_command_line, redboot_command_line, COMMAND_LINE_SIZE);
 
 	determine_cpu();
 	determine_clocks(1);
@@ -794,7 +798,6 @@ void __init setup_arch(char **cmdline_p)
 
 	/* deal with the command line - RedBoot may have passed one to the kernel */
 	memcpy(command_line, boot_command_line, sizeof(command_line));
-	*cmdline_p = &command_line[0];
 	parse_cmdline_early(command_line);
 
 	/* set up the memory description

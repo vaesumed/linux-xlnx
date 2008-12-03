@@ -118,16 +118,21 @@ void mcf_settimericr(unsigned int timer, unsigned int level)
 }
 
 /***************************************************************************/
+#if defined(CONFIG_NETtel) || defined(CONFIG_eLIA) || \
+    defined(CONFIG_SECUREEDGEMP3) || defined(CONFIG_CLEOPATRA)
+void __init platform_get_boot_command_line(void)
+{
+	/* Copy command line from FLASH to local buffer... */
+	strlcpy(boot_command_line, (char *) 0xf0004000, COMMAND_LINE_SIZE);
+}
+#endif
 
-void __init config_BSP(char *commandp, int size)
+void __init config_BSP(void)
 {
 	mcf_setimr(MCFSIM_IMR_MASKALL);
 
 #if defined(CONFIG_NETtel) || defined(CONFIG_eLIA) || \
     defined(CONFIG_SECUREEDGEMP3) || defined(CONFIG_CLEOPATRA)
-	/* Copy command line from FLASH to local buffer... */
-	memcpy(commandp, (char *) 0xf0004000, size);
-	commandp[size-1] = 0;
 	/* Different timer setup - to prevent device clash */
 	mcf_timervector = 30;
 	mcf_profilevector = 31;

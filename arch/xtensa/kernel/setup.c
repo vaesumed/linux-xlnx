@@ -198,10 +198,6 @@ void __init init_arch(bp_tag_t *bp_start)
 
 	sysmem.nr_banks = 0;
 
-#ifdef CONFIG_CMDLINE_BOOL
-	strcpy(command_line, default_command_line);
-#endif
-
 	/* Parse boot parameters */
 
         if (bp_start)
@@ -240,14 +236,19 @@ extern char _UserExceptionVector_text_end;
 extern char _DoubleExceptionVector_literal_start;
 extern char _DoubleExceptionVector_text_end;
 
-void __init setup_arch(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+#ifdef CONFIG_CMDLINE_BOOL
+	strcpy(command_line, default_command_line);
+#endif
+	/* FIXME: Can we skip command_line? */
+	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
+}
+
+void __init setup_arch(void)
 {
 	extern int mem_reserve(unsigned long, unsigned long, int);
 	extern void bootmem_init(void);
-
-	memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE-1] = '\0';
-	*cmdline_p = command_line;
 
 	/* Reserve some memory regions */
 

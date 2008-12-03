@@ -41,8 +41,6 @@ unsigned long memory_end;
 EXPORT_SYMBOL(memory_start);
 EXPORT_SYMBOL(memory_end);
 
-char __initdata command_line[COMMAND_LINE_SIZE];
-
 /* machine dependent timer functions */
 void (*mach_gettod)(int*, int*, int*, int*, int*, int*);
 int (*mach_set_clock_mmss)(unsigned long);
@@ -111,7 +109,20 @@ void (*mach_power_off)(void);
 extern int _stext, _etext, _sdata, _edata, _sbss, _ebss, _end;
 extern int _ramstart, _ramend;
 
-void __init setup_arch(char **cmdline_p)
+void __weak __init platform_get_boot_command_line(void)
+{
+}
+
+void __init arch_get_boot_command_line(void)
+{
+#if defined(CONFIG_BOOTPARAM)
+	strlcpy(boot_command_line, CONFIG_BOOTPARAM_STRING, COMMAND_LINE_SIZE);
+#endif
+
+	platform_get_boot_command_line();
+}
+
+void __init setup_arch(void)
 {
 	int bootmap_size;
 
@@ -123,12 +134,7 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.end_data = (unsigned long) &_edata;
 	init_mm.brk = (unsigned long) 0;
 
-	config_BSP(&command_line[0], sizeof(command_line));
-
-#if defined(CONFIG_BOOTPARAM)
-	strncpy(&command_line[0], CONFIG_BOOTPARAM_STRING, sizeof(command_line));
-	command_line[sizeof(command_line) - 1] = 0;
-#endif
+	config_BSP();
 
 	printk(KERN_INFO "\x0F\r\n\nuClinux/" CPU "\n");
 
@@ -176,14 +182,9 @@ void __init setup_arch(char **cmdline_p)
 		(int) memory_start, (int) memory_end);
 #endif
 
-	/* Keep a copy of command line */
-	*cmdline_p = &command_line[0];
-	memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE-1] = 0;
-
 #ifdef DEBUG
-	if (strlen(*cmdline_p))
-		printk(KERN_DEBUG "Command line: '%s'\n", *cmdline_p);
+	if (strlen(boot_command_line))
+		printk(KERN_DEBUG "Command line: '%s'\n", boot_command_line);
 #endif
 
 #if defined(CONFIG_FRAMEBUFFER_CONSOLE) && defined(CONFIG_DUMMY_CONSOLE)

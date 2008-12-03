@@ -590,7 +590,7 @@ static int __init migor_devices_setup(void)
 }
 __initcall(migor_devices_setup);
 
-static void __init migor_setup(char **cmdline_p)
+static void __init migor_setup(void)
 {
 }
 

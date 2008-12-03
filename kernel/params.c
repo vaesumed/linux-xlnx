@@ -30,6 +30,15 @@
 #define DEBUGP(fmt, a...)
 #endif
 
+/*
+ * If the arch already sets boot_command_line, we need do nothing.
+ * This is not in init/main.c because David Howells reports that on FRV
+ * gcc 4.1.2 will inline empty functions, ignoring noinline and weak.
+ */
+void __init __weak arch_get_boot_command_line(void)
+{
+}
+
 static inline char dash2underscore(char c)
 {
 	if (c == '-')

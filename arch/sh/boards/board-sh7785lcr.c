@@ -278,7 +278,7 @@ static void sh7785lcr_power_off(void)
 }
 
 /* Initialize the board */
-static void __init sh7785lcr_setup(char **cmdline_p)
+static void __init sh7785lcr_setup(void)
 {
 	void __iomem *sm501_reg;
 

@@ -91,7 +91,18 @@ static const struct console gdb_console = {
 };
 #endif
 
-void __init setup_arch(char **cmdline_p)
+/* FIXME: Can we avoid command_line temporary? */
+void __init arch_get_boot_command_line(void)
+{
+#ifdef CONFIG_DEFAULT_CMDLINE
+	/* set from default command line */
+	if (*command_line == '\0')
+		strcpy(command_line, CONFIG_KERNEL_COMMAND);
+#endif
+	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
+}
+
+void __init setup_arch(void)
 {
 	int bootmap_size;
 
@@ -145,19 +156,9 @@ void __init setup_arch(char **cmdline_p)
 		(int) memory_end, (int) &_ramend);
 #endif
 
-#ifdef CONFIG_DEFAULT_CMDLINE
-	/* set from default command line */
-	if (*command_line == '\0')
-		strcpy(command_line,CONFIG_KERNEL_COMMAND);
-#endif
-	/* Keep a copy of command line */
-	*cmdline_p = &command_line[0];
-	memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE-1] = 0;
-
 #ifdef DEBUG
-	if (strlen(*cmdline_p)) 
-		printk(KERN_DEBUG "Command line: '%s'\n", *cmdline_p);
+	if (strlen(command_line))
+		printk(KERN_DEBUG "Command line: '%s'\n", command_line);
 #endif
 
 	/*

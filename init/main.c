@@ -463,12 +463,12 @@ static void __init smp_init(void)
  * parsing is performed in place, and we should allow a component to
  * store reference of name/value for future reference.
  */
-static void __init setup_command_line(char *command_line)
+static void __init setup_command_line(void)
 {
 	saved_command_line = alloc_bootmem(strlen (boot_command_line)+1);
-	static_command_line = alloc_bootmem(strlen (command_line)+1);
+	static_command_line = alloc_bootmem(strlen (boot_command_line)+1);
 	strcpy (saved_command_line, boot_command_line);
-	strcpy (static_command_line, command_line);
+	strcpy (static_command_line, boot_command_line);
 }
 
 /*
@@ -559,9 +559,10 @@ void __init __weak thread_info_cache_init(void)
 {
 }
 
+/* Ideally, this would take a 'const char *cmdline' param. */
 asmlinkage void __init start_kernel(void)
 {
-	char * command_line;
+	arch_get_boot_command_line();
 
 	smp_setup_processor_id();
 
@@ -588,10 +589,10 @@ asmlinkage void __init start_kernel(void)
 	page_address_init();
 	printk(KERN_NOTICE);
 	printk(linux_banner);
-	setup_arch(&command_line);
+	setup_arch();
 	mm_init_owner(&init_mm, &init_task);
-	setup_command_line(command_line);
-	parse_args("Core params", command_line, __start___core_param,
+	setup_command_line();
+	parse_args("Core params", boot_command_line, __start___core_param,
 		   __stop___core_param - __start___core_param,
 		   unknown_core_ok, true);
 

@@ -60,10 +60,16 @@ machvec_init_from_cmdline(const char *cmdline)
 	return machvec_init(str);
 }
 
+/* Just make sure 'machvec' param is ignored during general parsing. */
+static int __init ignore_machvec(char *p)
+{
+	return 0;
+}
+early_param("machvec", ignore_machvec);
 #endif /* CONFIG_IA64_GENERIC */
 
 void
-machvec_setup (char **arg)
+machvec_setup(void)
 {
 }
 EXPORT_SYMBOL(machvec_setup);
