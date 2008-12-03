@@ -580,8 +580,6 @@ void __init setup_arch(void)
 		       ((cpu_hz + 500) / 1000) % 1000);
 	}
 
-	parse_early_param();
-
 	setup_bootmem();
 
 #ifdef CONFIG_VT

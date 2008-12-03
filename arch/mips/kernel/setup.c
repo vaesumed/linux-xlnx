@@ -482,8 +482,6 @@ static void __init arch_mem_init(void)
 	pr_info("Determined physical RAM map:\n");
 	print_memory_map();
 
-	parse_early_param();
-
 	if (usermem) {
 		pr_info("User-defined physical RAM map:\n");
 		print_memory_map();

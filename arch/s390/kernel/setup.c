@@ -785,8 +785,6 @@ setup_arch(void)
 	else
 		memcpy(&uaccess, &uaccess_std, sizeof(uaccess));
 
-	parse_early_param();
-
 	setup_ipl();
 	setup_memory_end();
 	setup_addressing_mode();

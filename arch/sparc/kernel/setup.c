@@ -215,9 +215,6 @@ void __init setup_arch(void)
 
 	sparc_ttable = (struct tt_entry *) &start;
 
-	/* Initialize PROM console. */
-	parse_early_param();
-
 	/* Set sparc_cpu_model */
 	sparc_cpu_model = sun_unknown;
 	if (!strcmp(&cputypval,"sun4 "))
