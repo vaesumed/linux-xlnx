@@ -79,7 +79,7 @@ struct kparam_array
    parameters.  perm sets the visibility in sysfs: 000 means it's
    not there, read bits mean it's readable, write bits mean it's
    writable. */
-#define __module_param_call(prefix, name, set, get, arg, perm)		\
+#define __module_param_call(prefix, section, name, set, get, arg, perm)	\
 	/* Default value instead of permissions? */			\
 	static int __param_perm_check_##name __attribute__((unused)) =	\
 	BUILD_BUG_ON_ZERO((perm) < 0 || (perm) > 0777 || ((perm) & 2))	\
@@ -87,11 +87,12 @@ struct kparam_array
 	static const char __param_str_##name[] = prefix #name;		\
 	static struct kernel_param __moduleparam_const __param_##name	\
 	__used								\
-    __attribute__ ((unused,__section__ ("__param"),aligned(sizeof(void *)))) \
+    __attribute__ ((unused, __section__(section), aligned(sizeof(void *)))) \
 	= { __param_str_##name, perm, set, get, { arg } }
 
 #define module_param_call(name, set, get, arg, perm)			      \
-	__module_param_call(MODULE_PARAM_PREFIX, name, set, get, arg, perm)
+	__module_param_call(MODULE_PARAM_PREFIX, "__param",		      \
+			    name, set, get, arg, perm)
 
 /* Helper functions: type is byte, short, ushort, int, uint, long,
    ulong, charp, bool or invbool, or XXX if you define param_get_XXX,
@@ -106,21 +107,22 @@ struct kparam_array
 
 #ifndef MODULE
 /**
- * core_param - define a historical core kernel parameter.
+ * core_param - define a core kernel parameter to be set very early
  * @name: the name of the cmdline and sysfs parameter (often the same as var)
  * @var: the variable
  * @type: the type (for param_set_##type and param_get_##type)
  * @perm: visibility in sysfs
  *
- * core_param is just like module_param(), but cannot be modular and
- * doesn't add a prefix (such as "printk.").  This is for compatibility
- * with __setup(), and it makes sense as truly core parameters aren't
- * tied to the particular file they're in.
+ * core_param is just like module_param(), but cannot be modular,
+ * doesn't add a prefix (such as "printk.") and is called insanely
+ * early in boot.  This is for compatibility with __setup(), and it
+ * makes sense as truly core parameters aren't tied to the particular
+ * file they're in.
  */
 #define core_param(name, var, type, perm)				\
 	param_check_##type(name, &(var));				\
-	__module_param_call("", name, param_set_##type, param_get_##type, \
-			    &var, perm)
+	__module_param_call("", "__core_param", name, param_set_##type, \
+			    param_get_##type, &var, perm)
 #endif /* !MODULE */
 
 /* Actually copy string: maxlen param is usually sizeof(string). */
@@ -224,5 +226,9 @@ static inline int module_param_sysfs_setup(struct module *mod,
 static inline void module_param_sysfs_remove(struct module *mod)
 { }
 #endif
+
+/* Created by include/asm-generic/vmlinux.lds.h */
+extern struct kernel_param __start___core_param[], __stop___core_param[];
+extern struct kernel_param __start___param[], __stop___param[];
 
 #endif /* _LINUX_MODULE_PARAMS_H */
