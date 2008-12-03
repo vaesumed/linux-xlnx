@@ -443,7 +443,8 @@ int mlx4_en_activate_rx_rings(struct mlx4_en_priv *priv)
 		/* Fill Rx buffers */
 		ring->full = 0;
 	}
-	if (mlx4_en_fill_rx_buffers(priv))
+	err = mlx4_en_fill_rx_buffers(priv);
+	if (err)
 		goto err_buffers;
 
 	for (ring_ind = 0; ring_ind < priv->rx_ring_num; ring_ind++) {
@@ -775,8 +776,6 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 						be16_to_cpu(cqe->sl_vid));
 		} else
 			netif_receive_skb(skb);
-
-		dev->last_rx = jiffies;
 
 next:
 		++cq->mcq.cons_index;
