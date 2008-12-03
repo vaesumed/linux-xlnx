@@ -256,12 +256,32 @@ static int __init loglevel(char *str)
 
 early_param("loglevel", loglevel);
 
+static bool __init is_core_param(const char *param)
+{
+	const struct kernel_param *i;
+
+	for (i = __start___core_param; i < __stop___core_param; i++)
+		if (strcmp(param, i->name) == 0)
+			return true;
+	return false;
+}
+
+/* We can ignore options not found in core params. */
+static int __init unknown_core_ok(char *param, char *val)
+{
+	return 0;
+}
+
 /*
  * Unknown boot options get handed to init, unless they look like
  * failed parameters
  */
 static int __init unknown_bootoption(char *param, char *val)
 {
+	/* Already handled as a core param? */
+	if (is_core_param(param))
+		return 0;
+
 	/* Change NUL term back to "=", to make "param" the whole string. */
 	if (val) {
 		/* param=val or param="val"? */
@@ -542,7 +562,6 @@ void __init __weak thread_info_cache_init(void)
 asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
-	extern struct kernel_param __start___param[], __stop___param[];
 
 	smp_setup_processor_id();
 
@@ -572,6 +591,10 @@ asmlinkage void __init start_kernel(void)
 	setup_arch(&command_line);
 	mm_init_owner(&init_mm, &init_task);
 	setup_command_line(command_line);
+	parse_args("Core params", command_line, __start___core_param,
+		   __stop___core_param - __start___core_param,
+		   unknown_core_ok, true);
+
 	unwind_setup();
 	setup_per_cpu_areas();
 	setup_nr_cpu_ids();

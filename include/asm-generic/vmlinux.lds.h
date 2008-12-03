@@ -213,6 +213,9 @@
 		VMLINUX_SYMBOL(__start___param) = .;			\
 		*(__param)						\
 		VMLINUX_SYMBOL(__stop___param) = .;			\
+		VMLINUX_SYMBOL(__start___core_param) = .;		\
+		*(__core_param)						\
+		VMLINUX_SYMBOL(__stop___core_param) = .;		\
 		. = ALIGN((align));					\
 		VMLINUX_SYMBOL(__end_rodata) = .;			\
 	}								\
