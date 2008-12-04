@@ -527,6 +527,9 @@ asmlinkage void __init start_kernel(void)
 {
 	char *static_command_line;
 
+	printk(KERN_NOTICE);
+	printk(linux_banner);
+
 	arch_get_boot_command_line();
 	parse_args("Core and early params", boot_command_line,
 		   __start___core_param,
@@ -556,8 +559,6 @@ asmlinkage void __init start_kernel(void)
 	tick_init();
 	boot_cpu_init();
 	page_address_init();
-	printk(KERN_NOTICE);
-	printk(linux_banner);
 	setup_arch();
 	mm_init_owner(&init_mm, &init_task);
 
