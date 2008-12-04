@@ -1,0 +1,430 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.28-rc7-91-gf6f7b52
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard f6f7b52e2f6149d2ee365717afff315b05720162
+HEAD is now at f6f7b52 Merge git://git.kernel.org/pub/scm/linux/kernel/git/wim/linux-2.6-watchdog
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-table-drop-reference-at-unbind.patch
+dm-snapshot-change-yield-to-msleep.patch
+dm-log-fix-dm_io_client-leak-on-error-paths.patch
+dm-consolidate-target-deregistration-error-handling.patch
+dm-log-avoid-reinitialising-io_req-on-every-operation.patch
+dm-support-barriers-on-simple-devices.patch
+dm-request-add-caches.patch
+dm-request-extend-target-interface.patch
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.28-rc6-184-gd9d060a
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard d9d060a98ff89fe0f86e24c9c0c3d2f0c566781c
+HEAD is now at d9d060a Merge branch 'drm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:pci_queue_allocation_not_page_aligned.patch
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+virtio:VIRTIO_PCI_QUEUE_ADDR_SHIFT.patch
+virtio:rename-vring-pagesize-to-align.patch
+virtio:VIRTIO_PCI_VRING_ALIGN.patch
+virtio:LGUEST_VRING_ALIGN.patch
+virtio:KVM_S390_VIRTIO_RING_ALIGN.patch
+virtio:virtqueue-hand-in-vqalign.patch
+virtio:balloon_avoid_Linux_page_size.patch
+virtio:block-no-max-segment-size-by-default.patch
+virtio:block-dynamic-max-segments.patch
+virtio:blk_fix_type_warning.patch
+virtio:net_large_tx_mtu_support.patch
+virtio:console_support_console_resizing.patch
+virtio:kvm_s390_implement_config_changed_for_on_s390.patch
+.dotest/patch:19: space before tab in indent.
+ 	subcode = S390_lowcore.cpu_addr;
+warning: 1 line adds whitespace errors.
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+module:remove_config_kmod.patch
+module:compare-sym-values-for-export-mark-in-proc-kallsyms.patch
+bitmap:test-for-constant.patch
+6cc88bc4.patch
+569712b2.patch
+54ac14a8.patch
+b5fe363b.patch
+x86:speedstep-centrino-cleanup.patch
+cpumask:centralize-common-maps.patch
+cpumask:convert-few-difficult-cpumask_t-users.patch
+cpumask:irq-functions-take-cpumask_t-ptr.patch
+cpumask:clock_event_device-takes-cpumask-ptr.patch
+cpumask:smp_call_function_many.patch
+cpumask:fix-impossible-percpu-accesses-pnp.patch
+cpumask:fix-impossible-percpu-accesses-m32r.patch
+cpumask:fix-impossible-percpu-accesses-x86.patch
+cpumask:infiniband-avoid-NR_CPUS-iteration.patch
+cpumask:convert-drivers_infiniband_ehca.patch
+cpumask:convert-drivers_infiniband_ipath.patch
+cpumask:use-nr_cpu_ids-in-seq_cpumask.patch
+cpumask:cpumask_of_node.patch
+cpumask:cpumask_of_node-x86.patch
+cpumask:cpumask_of_node-sparc.patch
+cpumask:cpumask_of_node-sh.patch
+cpumask:cpumask_of_node-powerpc.patch
+cpumask:cpumask_of_node-ia64.patch
+cpumask:cpumask_of_node-mips.patch
+cpumask:cpumask_of_node-alpha.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-core.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-net.patch
+cpumask:CONFIG_NR_CPUS-always.patch
+cpumask:use-cpumap-accessors-core.patch
+cpumask:for_each_cpu-in-cpumask.h.patch
+cpumask:cpu_online_mask-etc-as-primary.patch
+sparc:__fls.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:work_on_cpu-pci.patch
+misc:work_on_cpu-powerpc-sysfs.patch
+cpumask:cpu_coregroup_mask-x86.patch
+cpumask:cpu_coregroup_mask-sparc.patch
+cpumask:cpu_coregroup_mask-s390.patch
+cpumask:use-cpu_coregroup_mask.patch
+cpumask:CONFIG_CPUMASK_OFFSTACK.patch
+Importing ttydev based on f6f7b52e2f6149d2ee365717afff315b05720162
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard f6f7b52e2f6149d2ee365717afff315b05720162
+HEAD is now at f6f7b52 Merge git://git.kernel.org/pub/scm/linux/kernel/git/wim/linux-2.6-watchdog
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+blackfin-kgdb
+blackfin-sir-stopfix
+blackfin-clean-early
+blackfin-rxtx-lock
+blackfin-clear-bi
+n-tty-bkl-drop
+.dotest/patch:120: trailing whitespace.
+	
+.dotest/patch:340: trailing whitespace.
+			
+.dotest/patch:590: trailing whitespace.
+	
+.dotest/patch:974: trailing whitespace.
+	
+.dotest/patch:1044: trailing whitespace.
+	
+warning: 5 lines add whitespace errors.
+n-tty-clean
+pty-remove-pts-global
+pty-per-mount-allocated
+pty-per-mount-config
+pty-option-parsing
+pty-pts-multiple-instances
+pty-mknod-ptmx
+pty-get-init-pts-sb
+pty-pts-enable-multiple
+pty-multiple-doc
+.dotest/patch:98: space before tab in indent.
+   	- adding ptmxmode mount option to devpts entry in /etc/fstab, or
+.dotest/patch:142: trailing whitespace.
+   
+warning: 2 lines add whitespace errors.
+pty-devpts-tidy
+tty-trivial-usb-sierra-format
+tty-sparse-warning-driver-lookup
+pty-simplify-resize
+n-tty-fix-control
+n-tty-full-checks
+n-tty-bell
+tty-usb-close-race
+devpts-fix-unused-function-warning
+tty-serial-fix-tornado
+tty-serial-use-const
+tty-usb-console-kref
+error: No changes
+Unchanged quilt series staging
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on f6f7b52e2f6149d2ee365717afff315b05720162
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard f6f7b52e2f6149d2ee365717afff315b05720162
+HEAD is now at f6f7b52 Merge git://git.kernel.org/pub/scm/linux/kernel/git/wim/linux-2.6-watchdog
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+blackfin-kgdb
+blackfin-sir-stopfix
+blackfin-clean-early
+blackfin-rxtx-lock
+blackfin-clear-bi
+n-tty-bkl-drop
+.dotest/patch:120: trailing whitespace.
+	
+.dotest/patch:340: trailing whitespace.
+			
+.dotest/patch:590: trailing whitespace.
+	
+.dotest/patch:974: trailing whitespace.
+	
+.dotest/patch:1044: trailing whitespace.
+	
+warning: 5 lines add whitespace errors.
+n-tty-clean
+pty-remove-pts-global
+pty-per-mount-allocated
+pty-per-mount-config
+pty-option-parsing
+pty-pts-multiple-instances
+pty-mknod-ptmx
+pty-get-init-pts-sb
+pty-pts-enable-multiple
+pty-multiple-doc
+.dotest/patch:98: space before tab in indent.
+   	- adding ptmxmode mount option to devpts entry in /etc/fstab, or
+.dotest/patch:142: trailing whitespace.
+   
+warning: 2 lines add whitespace errors.
+pty-devpts-tidy
+tty-trivial-usb-sierra-format
+tty-sparse-warning-driver-lookup
+pty-simplify-resize
+n-tty-fix-control
+n-tty-full-checks
+n-tty-bell
+tty-usb-close-race
+devpts-fix-unused-function-warning
+tty-serial-fix-tornado
+tty-serial-use-const
+tty-usb-console-devcon
+tty-wrap-credentials
+ppp-tty-hang
+tty-port-extract-cd
+.dotest/patch:804: trailing whitespace.
+	
+.dotest/patch:1332: trailing whitespace.
+	
+.dotest/patch:1334: space before tab in indent.
+ 	usc_get_serial_signals(info);
+.dotest/patch:1410: space before tab in indent.
+ 		if (!(port->flags & ASYNC_CLOSING) && (do_clocal || dcd))
+.dotest/patch:1481: space before tab in indent.
+ 	get_signals(info);
+warning: squelched 4 whitespace errors
+warning: 9 lines add whitespace errors.
+tty-rio-ckmalloc-must-die
+tty-port-extract-raise-dtr
+.dotest/patch:156: space before tab in indent.
+ 	usc_set_serial_signals(info);
+.dotest/patch:202: space before tab in indent.
+ 	set_signals(info);
+warning: 2 lines add whitespace errors.
+tty-isicom-relock
+.dotest/patch:136: space before tab in indent.
+ 	set_signals(info);
+warning: 1 line adds whitespace errors.
+tty-genser-relock
+.dotest/patch:52: trailing whitespace.
+	
+.dotest/patch:63: space before tab in indent.
+        	port->flags |= ASYNC_NORMAL_ACTIVE;
+warning: 2 lines add whitespace errors.
+tty-rocketport-flags
+tty-riscom8-relock
+tty-mxser-relock
+tty-port-block_til_ready
+.dotest/patch:348: trailing whitespace.
+ 
+.dotest/patch:429: trailing whitespace.
+	
+warning: 2 lines add whitespace errors.
+tty-istallion-rework
+.dotest/patch:149: space before tab in indent.
+ 	spin_lock_irqsave(&stli_lock, flags);
+warning: 1 line adds whitespace errors.
+tty-stallion-rework
+tty-esp-remove
+tty-port-zerobaudopen
+tty-port-close
+.dotest/patch:103: trailing whitespace.
+	
+.dotest/patch:464: trailing whitespace.
+	   as we don't yet have everyone using refcounts */	
+.dotest/patch:507: trailing whitespace.
+	
+.dotest/patch:510: trailing whitespace.
+	
+.dotest/patch:622: trailing whitespace.
+	if (tty_port_close_start(&info->port, tty, filp) == 0)			 
+warning: squelched 2 whitespace errors
+warning: 7 lines add whitespace errors.
+tty-console-crash-fix
+error: No changes
+Unchanged quilt series staging
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on f6f7b52e2f6149d2ee365717afff315b05720162
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard f6f7b52e2f6149d2ee365717afff315b05720162
+HEAD is now at f6f7b52 Merge git://git.kernel.org/pub/scm/linux/kernel/git/wim/linux-2.6-watchdog
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+blackfin-kgdb
+blackfin-sir-stopfix
+blackfin-clean-early
+blackfin-rxtx-lock
+blackfin-clear-bi
+n-tty-bkl-drop
+.dotest/patch:120: trailing whitespace.
+	
+.dotest/patch:340: trailing whitespace.
+			
+.dotest/patch:590: trailing whitespace.
+	
+.dotest/patch:974: trailing whitespace.
+	
+.dotest/patch:1044: trailing whitespace.
+	
+warning: 5 lines add whitespace errors.
+n-tty-clean
+pty-remove-pts-global
+pty-per-mount-allocated
+pty-per-mount-config
+pty-option-parsing
+pty-pts-multiple-instances
+pty-mknod-ptmx
+pty-get-init-pts-sb
+pty-pts-enable-multiple
+pty-multiple-doc
+.dotest/patch:98: space before tab in indent.
+   	- adding ptmxmode mount option to devpts entry in /etc/fstab, or
+.dotest/patch:142: trailing whitespace.
+   
+warning: 2 lines add whitespace errors.
+pty-devpts-tidy
+tty-trivial-usb-sierra-format
+tty-sparse-warning-driver-lookup
+pty-simplify-resize
+n-tty-fix-control
+n-tty-full-checks
+n-tty-bell
+tty-usb-close-race
+devpts-fix-unused-function-warning
+tty-serial-fix-tornado
+tty-serial-use-const
+tty-usb-console-devcon
+tty-wrap-credentials
+ppp-tty-hang
+tty-port-extract-cd
+.dotest/patch:804: trailing whitespace.
+	
+.dotest/patch:1332: trailing whitespace.
+	
+.dotest/patch:1334: space before tab in indent.
+ 	usc_get_serial_signals(info);
+.dotest/patch:1410: space before tab in indent.
+ 		if (!(port->flags & ASYNC_CLOSING) && (do_clocal || dcd))
+.dotest/patch:1481: space before tab in indent.
+ 	get_signals(info);
+warning: squelched 4 whitespace errors
+warning: 9 lines add whitespace errors.
+tty-rio-ckmalloc-must-die
+tty-port-extract-raise-dtr
+.dotest/patch:156: space before tab in indent.
+ 	usc_set_serial_signals(info);
+.dotest/patch:202: space before tab in indent.
+ 	set_signals(info);
+warning: 2 lines add whitespace errors.
+tty-isicom-relock
+.dotest/patch:136: space before tab in indent.
+ 	set_signals(info);
+warning: 1 line adds whitespace errors.
+tty-genser-relock
+.dotest/patch:52: trailing whitespace.
+	
+.dotest/patch:63: space before tab in indent.
+        	port->flags |= ASYNC_NORMAL_ACTIVE;
+warning: 2 lines add whitespace errors.
+tty-rocketport-flags
+tty-riscom8-relock
+tty-mxser-relock
+tty-port-block_til_ready
+.dotest/patch:348: trailing whitespace.
+ 
+.dotest/patch:429: trailing whitespace.
+	
+warning: 2 lines add whitespace errors.
+tty-istallion-rework
+.dotest/patch:149: space before tab in indent.
+ 	spin_lock_irqsave(&stli_lock, flags);
+warning: 1 line adds whitespace errors.
+tty-stallion-rework
+tty-esp-remove
+tty-port-zerobaudopen
+tty-port-close
+.dotest/patch:103: trailing whitespace.
+	
+.dotest/patch:464: trailing whitespace.
+	   as we don't yet have everyone using refcounts */	
+.dotest/patch:507: trailing whitespace.
+	
+.dotest/patch:510: trailing whitespace.
+	
+.dotest/patch:622: trailing whitespace.
+	if (tty_port_close_start(&info->port, tty, filp) == 0)			 
+warning: squelched 2 whitespace errors
+warning: 7 lines add whitespace errors.
+tty-oxsemi-baud-base
+tty-usb-tdrain-fix
+tty-n-tty-sigio
+tty-pty-wakeup
+tty-cleanup-flag-abuse
+tty-net-drivercasts
+tty-drivercasts
+tty-nozomi-kref
+tty-kref-hso
+tty-hso-fix-termios
+tty-hso-modem
+tty-epca-relock
+tty-epca-refcount
+tty-epca-portops
+tty-rocket-relock
+tty-rocket-flags
+tty-rocket-kref
+tty-rocket-portfuncs
+.dotest/patch:136: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-synclink_cs-port
+.dotest/patch:136: space before tab in indent.
+	 	tx_start(info, tty);
+.dotest/patch:405: space before tab in indent.
+  		if (capable(CAP_SYS_ADMIN) && tty)
+.dotest/patch:443: space before tab in indent.
+ 	if (!tty || tty->termios->c_cflag & HUPCL) {
+.dotest/patch:543: space before tab in indent.
+	 	tx_start(info, tty);
+.dotest/patch:552: space before tab in indent.
+		 	tx_start(info, tty);
+warning: squelched 7 whitespace errors
+warning: 12 lines add whitespace errors.
+tty-usb-lock-drop
+.dotest/patch:30: space before tab in indent.
+	    	unlock_kernel();
+warning: 1 line adds whitespace errors.
+tty-ioctl-includes
+tty-blackfin-function
+tty-serial-move-port
+Unchanged quilt series staging
