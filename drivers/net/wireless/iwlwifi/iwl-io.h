@@ -55,7 +55,7 @@
  * _iwl_read32.)
  *
  * These declarations are *extremely* useful in quickly isolating code deltas
- * which result in misconfiguring of the hardware I/O.  In combination with
+ * which result in misconfiguration of the hardware I/O.  In combination with
  * git-bisect and the IO debug level you can quickly determine the specific
  * commit which breaks the IO sequence to the hardware.
  *
@@ -109,7 +109,7 @@ static inline int __iwl_poll_bit(const char *f, u32 l,
 	int ret = _iwl_poll_bit(priv, addr, bits, mask, timeout);
 	IWL_DEBUG_IO("poll_bit(0x%08X, 0x%08X, 0x%08X) - %s- %s %d\n",
 		     addr, bits, mask,
-		     unlikely(ret  == -ETIMEDOUT)?"timeout":"", f, l);
+		     unlikely(ret  == -ETIMEDOUT) ? "timeout" : "", f, l);
 	return ret;
 }
 #define iwl_poll_bit(priv, addr, bits, mask, timeout) \
