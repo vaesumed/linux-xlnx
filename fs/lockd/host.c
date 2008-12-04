@@ -37,6 +37,7 @@ static struct nsm_handle	*nsm_find(const struct sockaddr *sap,
 						const char *hostname,
 						const size_t hostname_len,
 						const int create);
+static void			nsm_release(struct nsm_handle *nsm);
 
 struct nlm_lookup_host_info {
 	const int		server;		/* search for server|client */
@@ -261,10 +262,8 @@ nlm_destroy_host(struct nlm_host *host)
 	BUG_ON(!list_empty(&host->h_lockowners));
 	BUG_ON(atomic_read(&host->h_count));
 
-	/*
-	 * Release NSM handle and unmonitor host.
-	 */
 	nsm_unmonitor(host);
+	nsm_release(host->h_nsmhandle);
 
 	clnt = host->h_rpcclnt;
 	if (clnt != NULL)
@@ -703,8 +702,7 @@ found:
 /*
  * Release an NSM handle
  */
-void
-nsm_release(struct nsm_handle *nsm)
+static void nsm_release(struct nsm_handle *nsm)
 {
 	if (!nsm)
 		return;
