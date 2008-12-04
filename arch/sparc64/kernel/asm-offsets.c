@@ -1,1 +1,1 @@
-#include "../../sparc/kernel/asm-offsets.c"
+/* Dummy asm-offsets.c file. Required by kbuild and ready to be used - hint! */

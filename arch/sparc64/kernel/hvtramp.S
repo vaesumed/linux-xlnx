@@ -1,6 +1,6 @@
 /* hvtramp.S: Hypervisor start-cpu trampoline code.
  *
- * Copyright (C) 2007, 2008 David S. Miller <davem@davemloft.net>
+ * Copyright (C) 2007 David S. Miller <davem@davemloft.net>
  */
 
 #include <linux/init.h>
@@ -14,7 +14,6 @@
 #include <asm/ptrace.h>
 #include <asm/head.h>
 #include <asm/asi.h>
-#include <asm/pil.h>
 
 	__CPUINIT
 	.align		8
@@ -33,7 +32,7 @@
 	 */
 hv_cpu_startup:
 	SET_GL(0)
-	wrpr		%g0, PIL_NORMAL_MAX, %pil
+	wrpr		%g0, 15, %pil
 	wrpr		%g0, 0, %canrestore
 	wrpr		%g0, 0, %otherwin
 	wrpr		%g0, 6, %cansave

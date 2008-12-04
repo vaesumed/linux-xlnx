@@ -43,10 +43,29 @@ atomic_sub: /* %o0 = decrement, %o1 = atomic_ptr */
 2:	BACKOFF_SPIN(%o2, %o3, 1b)
 	.size	atomic_sub, .-atomic_sub
 
+	/* On SMP we need to use memory barriers to ensure
+	 * correct memory operation ordering, nop these out
+	 * for uniprocessor.
+	 */
+#ifdef CONFIG_SMP
+
+#define ATOMIC_PRE_BARRIER	membar #StoreLoad | #LoadLoad;
+#define ATOMIC_POST_BARRIER	\
+	ba,pt %xcc, 80b;	\
+	membar #StoreLoad | #StoreStore
+
+80:	retl
+	 nop
+#else
+#define ATOMIC_PRE_BARRIER
+#define ATOMIC_POST_BARRIER
+#endif
+
 	.globl	atomic_add_ret
 	.type	atomic_add_ret,#function
 atomic_add_ret: /* %o0 = increment, %o1 = atomic_ptr */
 	BACKOFF_SETUP(%o2)
+	ATOMIC_PRE_BARRIER
 1:	lduw	[%o1], %g1
 	add	%g1, %o0, %g7
 	cas	[%o1], %g1, %g7
@@ -54,6 +73,7 @@ atomic_add_ret: /* %o0 = increment, %o1 = atomic_ptr */
 	bne,pn	%icc, 2f
 	 add	%g7, %o0, %g7
 	sra	%g7, 0, %o0
+	ATOMIC_POST_BARRIER
 	retl
 	 nop
 2:	BACKOFF_SPIN(%o2, %o3, 1b)
@@ -63,6 +83,7 @@ atomic_add_ret: /* %o0 = increment, %o1 = atomic_ptr */
 	.type	atomic_sub_ret,#function
 atomic_sub_ret: /* %o0 = decrement, %o1 = atomic_ptr */
 	BACKOFF_SETUP(%o2)
+	ATOMIC_PRE_BARRIER
 1:	lduw	[%o1], %g1
 	sub	%g1, %o0, %g7
 	cas	[%o1], %g1, %g7
@@ -70,6 +91,7 @@ atomic_sub_ret: /* %o0 = decrement, %o1 = atomic_ptr */
 	bne,pn	%icc, 2f
 	 sub	%g7, %o0, %g7
 	sra	%g7, 0, %o0
+	ATOMIC_POST_BARRIER
 	retl
 	 nop
 2:	BACKOFF_SPIN(%o2, %o3, 1b)
@@ -109,6 +131,7 @@ atomic64_sub: /* %o0 = decrement, %o1 = atomic_ptr */
 	.type	atomic64_add_ret,#function
 atomic64_add_ret: /* %o0 = increment, %o1 = atomic_ptr */
 	BACKOFF_SETUP(%o2)
+	ATOMIC_PRE_BARRIER
 1:	ldx	[%o1], %g1
 	add	%g1, %o0, %g7
 	casx	[%o1], %g1, %g7
@@ -116,6 +139,7 @@ atomic64_add_ret: /* %o0 = increment, %o1 = atomic_ptr */
 	bne,pn	%xcc, 2f
 	 add	%g7, %o0, %g7
 	mov	%g7, %o0
+	ATOMIC_POST_BARRIER
 	retl
 	 nop
 2:	BACKOFF_SPIN(%o2, %o3, 1b)
@@ -125,6 +149,7 @@ atomic64_add_ret: /* %o0 = increment, %o1 = atomic_ptr */
 	.type	atomic64_sub_ret,#function
 atomic64_sub_ret: /* %o0 = decrement, %o1 = atomic_ptr */
 	BACKOFF_SETUP(%o2)
+	ATOMIC_PRE_BARRIER
 1:	ldx	[%o1], %g1
 	sub	%g1, %o0, %g7
 	casx	[%o1], %g1, %g7
@@ -132,6 +157,7 @@ atomic64_sub_ret: /* %o0 = decrement, %o1 = atomic_ptr */
 	bne,pn	%xcc, 2f
 	 sub	%g7, %o0, %g7
 	mov	%g7, %o0
+	ATOMIC_POST_BARRIER
 	retl
 	 nop
 2:	BACKOFF_SPIN(%o2, %o3, 1b)

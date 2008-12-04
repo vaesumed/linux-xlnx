@@ -27,55 +27,73 @@ enum auxio_type {
 static enum auxio_type auxio_devtype = AUXIO_TYPE_NODEV;
 static DEFINE_SPINLOCK(auxio_lock);
 
-static void __auxio_rmw(u8 bits_on, u8 bits_off, int ebus)
+static void __auxio_sbus_set(u8 bits_on, u8 bits_off)
 {
 	if (auxio_register) {
+		unsigned char regval;
 		unsigned long flags;
-		u8 regval, newval;
+		unsigned char newval;
 
 		spin_lock_irqsave(&auxio_lock, flags);
 
-		regval = (ebus ?
-			  (u8) readl(auxio_register) :
-			  sbus_readb(auxio_register));
+		regval =  sbus_readb(auxio_register);
 		newval =  regval | bits_on;
 		newval &= ~bits_off;
-		if (!ebus)
-			newval &= ~AUXIO_AUX1_MASK;
-		if (ebus)
-			writel((u32) newval, auxio_register);
-		else
-			sbus_writeb(newval, auxio_register);
+		newval &= ~AUXIO_AUX1_MASK;
+		sbus_writeb(newval, auxio_register);
 		
 		spin_unlock_irqrestore(&auxio_lock, flags);
 	}
 }
 
-static void __auxio_set_bit(u8 bit, int on, int ebus)
+static void __auxio_ebus_set(u8 bits_on, u8 bits_off)
 {
-	u8 bits_on = (ebus ? AUXIO_PCIO_LED : AUXIO_AUX1_LED);
-	u8 bits_off = 0;
+	if (auxio_register) {
+		unsigned char regval;
+		unsigned long flags;
+		unsigned char newval;
 
-	if (!on) {
-		u8 tmp = bits_off;
-		bits_off = bits_on;
-		bits_on = tmp;
+		spin_lock_irqsave(&auxio_lock, flags);
+
+		regval =  (u8)readl(auxio_register);
+		newval =  regval | bits_on;
+		newval &= ~bits_off;
+		writel((u32)newval, auxio_register);
+
+		spin_unlock_irqrestore(&auxio_lock, flags);
 	}
-	__auxio_rmw(bits_on, bits_off, ebus);
+}
+
+static inline void __auxio_ebus_set_led(int on)
+{
+	(on) ? __auxio_ebus_set(AUXIO_PCIO_LED, 0) :
+		__auxio_ebus_set(0, AUXIO_PCIO_LED) ;
+}
+
+static inline void __auxio_sbus_set_led(int on)
+{
+	(on) ? __auxio_sbus_set(AUXIO_AUX1_LED, 0) :
+		__auxio_sbus_set(0, AUXIO_AUX1_LED) ;
 }
 
 void auxio_set_led(int on)
 {
-	int ebus = auxio_devtype == AUXIO_TYPE_EBUS;
-	u8 bit;
-
-	bit = (ebus ? AUXIO_PCIO_LED : AUXIO_AUX1_LED);
-	__auxio_set_bit(bit, on, ebus);
+	switch(auxio_devtype) {
+	case AUXIO_TYPE_SBUS:
+		__auxio_sbus_set_led(on);
+		break;
+	case AUXIO_TYPE_EBUS:
+		__auxio_ebus_set_led(on);
+		break;
+	default:
+		break;
+	}
 }
 
-static void __auxio_sbus_set_lte(int on)
+static inline void __auxio_sbus_set_lte(int on)
 {
-	__auxio_set_bit(AUXIO_AUX1_LTE, on, 0);
+	(on) ? __auxio_sbus_set(AUXIO_AUX1_LTE, 0) : 
+		__auxio_sbus_set(0, AUXIO_AUX1_LTE) ;
 }
 
 void auxio_set_lte(int on)

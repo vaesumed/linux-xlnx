@@ -1371,6 +1371,7 @@ static int cheetah_fix_ce(unsigned long physaddr)
 	__asm__ __volatile__("ldxa	[%0] %3, %%g0\n\t"
 			     "ldxa	[%1] %3, %%g0\n\t"
 			     "casxa	[%2] %3, %%g0, %%g0\n\t"
+			     "membar	#StoreLoad | #StoreStore\n\t"
 			     "ldxa	[%0] %3, %%g0\n\t"
 			     "ldxa	[%1] %3, %%g0\n\t"
 			     "membar	#Sync"
@@ -1832,7 +1833,7 @@ static void sun4v_log_error(struct pt_regs *regs, struct sun4v_error_entry *ent,
 	}
 }
 
-/* We run with %pil set to PIL_NORMAL_MAX and PSTATE_IE enabled in %pstate.
+/* We run with %pil set to 15 and PSTATE_IE enabled in %pstate.
  * Log the event and clear the first word of the entry.
  */
 void sun4v_resum_error(struct pt_regs *regs, unsigned long offset)
@@ -1880,7 +1881,7 @@ void sun4v_resum_overflow(struct pt_regs *regs)
 	atomic_inc(&sun4v_resum_oflow_cnt);
 }
 
-/* We run with %pil set to PIL_NORMAL_MAX and PSTATE_IE enabled in %pstate.
+/* We run with %pil set to 15 and PSTATE_IE enabled in %pstate.
  * Log the event, clear the first word of the entry, and die.
  */
 void sun4v_nonresum_error(struct pt_regs *regs, unsigned long offset)
