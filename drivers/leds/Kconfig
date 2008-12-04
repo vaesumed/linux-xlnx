@@ -63,6 +63,12 @@ config LEDS_WRAP
 	help
 	  This option enables support for the PCEngines WRAP programmable LEDs.
 
+config LEDS_ALIX2
+	tristate "LED Support for ALIX.2 and ALIX.3 series"
+	depends on LEDS_CLASS && X86 && EXPERIMENTAL
+	help
+	  This option enables support for the PCEngines ALIX.2 and ALIX.3 LEDs.
+
 config LEDS_H1940
 	tristate "LED Support for iPAQ H1940 device"
 	depends on LEDS_CLASS && ARCH_H1940
@@ -77,7 +83,7 @@ config LEDS_COBALT_QUBE
 
 config LEDS_COBALT_RAQ
 	bool "LED Support for the Cobalt Raq series"
-	depends on LEDS_CLASS && MIPS_COBALT
+	depends on LEDS_CLASS=y && MIPS_COBALT
 	select LEDS_TRIGGERS
 	help
 	  This option enables support for the Cobalt Raq series LEDs.
