@@ -165,11 +165,8 @@ acpi_status acpi_ns_root_initialize(void)
 
 				obj_desc->method.method_flags =
 				    AML_METHOD_INTERNAL_ONLY;
-
-#ifndef ACPI_DUMP_APP
 				obj_desc->method.implementation =
 				    acpi_ut_osi_implementation;
-#endif
 #endif
 				break;
 
@@ -521,11 +518,11 @@ acpi_ns_lookup(union acpi_generic_state *scope_info,
 	}
 
 	/*
-	 * Search namespace for each segment of the name.  Loop through and
+	 * Search namespace for each segment of the name. Loop through and
 	 * verify (or add to the namespace) each name segment.
 	 *
 	 * The object type is significant only at the last name
-	 * segment.  (We don't care about the types along the path, only
+	 * segment. (We don't care about the types along the path, only
 	 * the type of the final target object.)
 	 */
 	this_search_type = ACPI_TYPE_ANY;
@@ -591,6 +588,10 @@ acpi_ns_lookup(union acpi_generic_state *scope_info,
 			 * segments).
 			 */
 			if (this_node->type == ACPI_TYPE_LOCAL_ALIAS) {
+				if (!this_node->object) {
+					return_ACPI_STATUS(AE_NOT_EXIST);
+				}
+
 				if (acpi_ns_opens_scope
 				    (((struct acpi_namespace_node *)this_node->
 				      object)->type)) {
