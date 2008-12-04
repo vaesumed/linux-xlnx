@@ -59,6 +59,7 @@
 #define DAVINCI_MCBSP_PCR_CLKXP		(1 << 1)
 #define DAVINCI_MCBSP_PCR_FSRP		(1 << 2)
 #define DAVINCI_MCBSP_PCR_FSXP		(1 << 3)
+#define DAVINCI_MCBSP_PCR_SCLKME	(1 << 7)
 #define DAVINCI_MCBSP_PCR_CLKRM		(1 << 8)
 #define DAVINCI_MCBSP_PCR_CLKXM		(1 << 9)
 #define DAVINCI_MCBSP_PCR_FSRM		(1 << 10)
@@ -110,16 +111,59 @@ static void davinci_mcbsp_start(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_mcbsp_dev *dev = rtd->dai->cpu_dai->private_data;
+	struct snd_soc_device *socdev = rtd->socdev;
+	struct snd_soc_platform *platform = socdev->card->platform;
 	u32 w;
+	int ret;
 
 	/* Start the sample generator and enable transmitter/receiver */
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
 	MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_GRST, 1);
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_XRST, 1);
-	else
-		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_RRST, 1);
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		/* Stop the DMA to avoid data loss */
+		/* while the transmitter is out of reset to handle XSYNCERR */
+		if (platform->pcm_ops->trigger) {
+			ret = platform->pcm_ops->trigger(substream,
+				SNDRV_PCM_TRIGGER_STOP);
+			if (ret < 0)
+				printk(KERN_DEBUG "Playback DMA stop failed\n");
+		}
+
+		/* Enable the transmitter */
+		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
+		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_XRST, 1);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+
+		/* wait for any unexpected frame sync error to occur */
+		udelay(100);
+
+		/* Disable the transmitter to clear any outstanding XSYNCERR */
+		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
+		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_XRST, 0);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+
+		/* Restart the DMA */
+		if (platform->pcm_ops->trigger) {
+			ret = platform->pcm_ops->trigger(substream,
+				SNDRV_PCM_TRIGGER_START);
+			if (ret < 0)
+				printk(KERN_DEBUG "Playback DMA start failed\n");
+		}
+		/* Enable the transmitter */
+		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
+		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_XRST, 1);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+
+	} else {
+
+		/* Enable the reciever */
+		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
+		MOD_REG_BIT(w, DAVINCI_MCBSP_SPCR_RRST, 1);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+	}
+
 
 	/* Start frame sync */
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
@@ -144,7 +188,8 @@ static void davinci_mcbsp_stop(struct snd_pcm_substream *substream)
 	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
 }
 
-static int davinci_i2s_startup(struct snd_pcm_substream *substream)
+static int davinci_i2s_startup(struct snd_pcm_substream *substream,
+			       struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->dai->cpu_dai;
@@ -168,6 +213,16 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 					DAVINCI_MCBSP_PCR_FSRM |
 					DAVINCI_MCBSP_PCR_CLKXM |
 					DAVINCI_MCBSP_PCR_CLKRM);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG,
+					DAVINCI_MCBSP_SRGR_FSGM);
+		break;
+	case SND_SOC_DAIFMT_CBM_CFS:
+		/* McBSP CLKR pin is the input for the Sample Rate Generator.
+		 * McBSP FSR and FSX are driven by the Sample Rate Generator. */
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_PCR_REG,
+					DAVINCI_MCBSP_PCR_SCLKME |
+					DAVINCI_MCBSP_PCR_FSXM |
+					DAVINCI_MCBSP_PCR_FSRM);
 		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SRGR_REG,
 					DAVINCI_MCBSP_SRGR_FSGM);
 		break;
@@ -205,11 +260,34 @@ static int davinci_i2s_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		return -EINVAL;
 	}
 
+	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
+	case SND_SOC_DAIFMT_RIGHT_J:
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG,
+					DAVINCI_MCBSP_RCR_RFRLEN1(1) |
+					DAVINCI_MCBSP_RCR_RDATDLY(0));
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG,
+					DAVINCI_MCBSP_XCR_XFRLEN1(1) |
+					DAVINCI_MCBSP_XCR_XDATDLY(0) |
+					DAVINCI_MCBSP_XCR_XFIG);
+		break;
+	case SND_SOC_DAIFMT_I2S:
+	default:
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG,
+					DAVINCI_MCBSP_RCR_RFRLEN1(1) |
+					DAVINCI_MCBSP_RCR_RDATDLY(1));
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG,
+					DAVINCI_MCBSP_XCR_XFRLEN1(1) |
+					DAVINCI_MCBSP_XCR_XDATDLY(1) |
+					DAVINCI_MCBSP_XCR_XFIG);
+		break;
+	}
+
 	return 0;
 }
 
 static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
-				 struct snd_pcm_hw_params *params)
+				 struct snd_pcm_hw_params *params,
+				 struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct davinci_pcm_dma_params *dma_params = rtd->dai->cpu_dai->dma_data;
@@ -219,17 +297,14 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 	u32 w;
 
 	/* general line settings */
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG,
-				DAVINCI_MCBSP_SPCR_RINTM(3) |
-				DAVINCI_MCBSP_SPCR_XINTM(3) |
-				DAVINCI_MCBSP_SPCR_FREE);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG,
-				DAVINCI_MCBSP_RCR_RFRLEN1(1) |
-				DAVINCI_MCBSP_RCR_RDATDLY(1));
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG,
-				DAVINCI_MCBSP_XCR_XFRLEN1(1) |
-				DAVINCI_MCBSP_XCR_XDATDLY(1) |
-				DAVINCI_MCBSP_XCR_XFIG);
+	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SPCR_REG);
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
+		w |= DAVINCI_MCBSP_SPCR_RINTM(3) | DAVINCI_MCBSP_SPCR_FREE;
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+	} else {
+		w |= DAVINCI_MCBSP_SPCR_XINTM(3) | DAVINCI_MCBSP_SPCR_FREE;
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_SPCR_REG, w);
+	}
 
 	i = hw_param_interval(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
 	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_SRGR_REG);
@@ -260,20 +335,24 @@ static int davinci_i2s_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_RCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_RCR_RWDLEN1(mcbsp_word_length) |
-		       DAVINCI_MCBSP_RCR_RWDLEN2(mcbsp_word_length), 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG, w);
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
+		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_RCR_REG);
+		MOD_REG_BIT(w, DAVINCI_MCBSP_RCR_RWDLEN1(mcbsp_word_length) |
+			       DAVINCI_MCBSP_RCR_RWDLEN2(mcbsp_word_length), 1);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_RCR_REG, w);
 
-	w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_XCR_REG);
-	MOD_REG_BIT(w, DAVINCI_MCBSP_XCR_XWDLEN1(mcbsp_word_length) |
-		       DAVINCI_MCBSP_XCR_XWDLEN2(mcbsp_word_length), 1);
-	davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG, w);
+	} else {
+		w = davinci_mcbsp_read_reg(dev, DAVINCI_MCBSP_XCR_REG);
+		MOD_REG_BIT(w, DAVINCI_MCBSP_XCR_XWDLEN1(mcbsp_word_length) |
+			       DAVINCI_MCBSP_XCR_XWDLEN2(mcbsp_word_length), 1);
+		davinci_mcbsp_write_reg(dev, DAVINCI_MCBSP_XCR_REG, w);
 
+	}
 	return 0;
 }
 
-static int davinci_i2s_trigger(struct snd_pcm_substream *substream, int cmd)
+static int davinci_i2s_trigger(struct snd_pcm_substream *substream, int cmd,
+			       struct snd_soc_dai *dai)
 {
 	int ret = 0;
 
@@ -299,8 +378,8 @@ static int davinci_i2s_probe(struct platform_device *pdev,
 			     struct snd_soc_dai *dai)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_machine *machine = socdev->machine;
-	struct snd_soc_dai *cpu_dai = machine->dai_link[pdev->id].cpu_dai;
+	struct snd_soc_card *card = socdev->card;
+	struct snd_soc_dai *cpu_dai = card->dai_link[pdev->id].cpu_dai;
 	struct davinci_mcbsp_dev *dev;
 	struct resource *mem, *ioarea;
 	struct evm_snd_platform_data *pdata;
@@ -361,8 +440,8 @@ static void davinci_i2s_remove(struct platform_device *pdev,
 			       struct snd_soc_dai *dai)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_machine *machine = socdev->machine;
-	struct snd_soc_dai *cpu_dai = machine->dai_link[pdev->id].cpu_dai;
+	struct snd_soc_card *card = socdev->card;
+	struct snd_soc_dai *cpu_dai = card->dai_link[pdev->id].cpu_dai;
 	struct davinci_mcbsp_dev *dev = cpu_dai->private_data;
 	struct resource *mem;
 
@@ -381,7 +460,6 @@ static void davinci_i2s_remove(struct platform_device *pdev,
 struct snd_soc_dai davinci_i2s_dai = {
 	.name = "davinci-i2s",
 	.id = 0,
-	.type = SND_SOC_DAI_I2S,
 	.probe = davinci_i2s_probe,
 	.remove = davinci_i2s_remove,
 	.playback = {
@@ -397,8 +475,7 @@ struct snd_soc_dai davinci_i2s_dai = {
 	.ops = {
 		.startup = davinci_i2s_startup,
 		.trigger = davinci_i2s_trigger,
-		.hw_params = davinci_i2s_hw_params,},
-	.dai_ops = {
+		.hw_params = davinci_i2s_hw_params,
 		.set_fmt = davinci_i2s_set_dai_fmt,
 	},
 };
