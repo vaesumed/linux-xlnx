@@ -266,12 +266,6 @@ static bool __init is_core_param(const char *param)
 	return false;
 }
 
-/* We can ignore options not found in core params. */
-static int __init unknown_core_ok(char *param, char *val)
-{
-	return 0;
-}
-
 /*
  * Unknown boot options get handed to init, unless they look like
  * failed parameters
@@ -548,12 +542,10 @@ void __init __weak thread_info_cache_init(void)
 asmlinkage void __init start_kernel(void)
 {
 	arch_get_boot_command_line();
-	parse_args("Core params", boot_command_line, __start___core_param,
+	parse_args("Core and early params", boot_command_line,
+		   __start___core_param,
 		   __stop___core_param - __start___core_param,
-		   unknown_core_ok, true);
-	/* All fall through to do_early_param. */
-	parse_args("early options", boot_command_line, NULL, 0, do_early_param,
-		   true);
+		   do_early_param, true);
 
 	smp_setup_processor_id();
 
