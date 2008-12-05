@@ -1694,6 +1694,9 @@ static int em28xx_v4l2_close(struct inode *inode, struct file *filp)
 			return 0;
 		}
 
+		/* Save some power by putting tuner to sleep */
+		em28xx_i2c_call_clients(dev, TUNER_SET_STANDBY, NULL);
+
 		/* do this before setting alternate! */
 		em28xx_uninit_isoc(dev);
 		em28xx_set_mode(dev, EM28XX_SUSPEND);
@@ -2130,6 +2133,9 @@ static int em28xx_init_dev(struct em28xx **devhandle, struct usb_device *udev,
 	}
 	mutex_unlock(&em28xx_extension_devlist_lock);
 	mutex_unlock(&em28xx_devlist_mutex);
+
+	/* Save some power by putting tuner to sleep */
+	em28xx_i2c_call_clients(dev, TUNER_SET_STANDBY, NULL);
 
 	return 0;
 
