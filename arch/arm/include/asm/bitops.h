@@ -239,6 +239,7 @@ extern int _find_next_bit_be(const unsigned long *p, int size, int offset);
 #include <asm-generic/bitops/ffz.h>
 #include <asm-generic/bitops/__ffs.h>
 #include <asm-generic/bitops/fls.h>
+#include <asm-generic/bitops/__fls.h>
 #include <asm-generic/bitops/ffs.h>
 
 #else
