@@ -25,6 +25,8 @@ config SUPERH32
 	select HAVE_KRETPROBES
 	select HAVE_ARCH_TRACEHOOK
 	select HAVE_FUNCTION_TRACER
+	select HAVE_FTRACE_MCOUNT_RECORD
+	select HAVE_DYNAMIC_FTRACE
 
 config SUPERH64
 	def_bool y if CPU_SH5
@@ -54,7 +56,7 @@ config GENERIC_HARDIRQS
 	def_bool y
 
 config GENERIC_HARDIRQS_NO__DO_IRQ
-	def_bool y
+	def_bool y if !HD64461
 
 config GENERIC_IRQ_PROBE
 	def_bool y
@@ -83,10 +85,17 @@ config GENERIC_LOCKBREAK
 
 config SYS_SUPPORTS_PM
 	bool
+	depends on !SMP
+
+config ARCH_SUSPEND_POSSIBLE
+	def_bool n
+
+config ARCH_HIBERNATION_POSSIBLE
+	def_bool n
 
 config SYS_SUPPORTS_APM_EMULATION
 	bool
-	select SYS_SUPPORTS_PM
+	select ARCH_SUSPEND_POSSIBLE
 
 config SYS_SUPPORTS_SMP
 	bool
@@ -181,6 +190,11 @@ config CPU_SUBTYPE_SH7619
 
 # SH-2A Processor Support
 
+config CPU_SUBTYPE_SH7201
+	bool "Support SH7201 processor"
+	select CPU_SH2A
+	select CPU_HAS_FPU
+ 
 config CPU_SUBTYPE_SH7203
 	bool "Support SH7203 processor"
 	select CPU_SH2A
@@ -746,13 +760,11 @@ source "fs/Kconfig.binfmt"
 endmenu
 
 menu "Power management options (EXPERIMENTAL)"
-depends on EXPERIMENTAL && SYS_SUPPORTS_PM
+depends on EXPERIMENTAL
 
-config ARCH_SUSPEND_POSSIBLE
-	def_bool y
-	depends on !SMP
+source "kernel/power/Kconfig"
 
-source kernel/power/Kconfig
+source "drivers/cpuidle/Kconfig"
 
 endmenu
 
