@@ -196,13 +196,9 @@ static void __devexit ricoh_mmc_remove(struct pci_dev *pdev)
 	pci_set_drvdata(pdev, NULL);
 }
 
-static int ricoh_mmc_suspend_noirq(struct device *dev)
+static int ricoh_mmc_suspend(struct pci_dev *pdev, pm_message_t state)
 {
-	struct pci_dev *pdev = NULL;
 	struct pci_dev *fw_dev = NULL;
-
-	pdev = to_pci_dev(dev);
-	BUG_ON(pdev == NULL);
 
 	fw_dev = pci_get_drvdata(pdev);
 	BUG_ON(fw_dev == NULL);
@@ -214,13 +210,9 @@ static int ricoh_mmc_suspend_noirq(struct device *dev)
 	return 0;
 }
 
-static int ricoh_mmc_resume_noirq(struct device *dev)
+static int ricoh_mmc_resume(struct pci_dev *pdev)
 {
-	struct pci_dev *pdev = NULL;
 	struct pci_dev *fw_dev = NULL;
-
-	pdev = to_pci_dev(dev);
-	BUG_ON(pdev == NULL);
 
 	fw_dev = pci_get_drvdata(pdev);
 	BUG_ON(fw_dev == NULL);
@@ -232,17 +224,13 @@ static int ricoh_mmc_resume_noirq(struct device *dev)
 	return 0;
 }
 
-static struct pm_ext_ops ricoh_mmc_pm_ext_opts = {
-	.suspend_noirq =	ricoh_mmc_suspend_noirq,
-	.resume_noirq =		ricoh_mmc_resume_noirq,
-};
-
 static struct pci_driver ricoh_mmc_driver = {
 	.name = 	DRIVER_NAME,
 	.id_table =	pci_ids,
 	.probe = 	ricoh_mmc_probe,
 	.remove =	__devexit_p(ricoh_mmc_remove),
-	.pm =		&ricoh_mmc_pm_ext_opts,
+	.suspend =	ricoh_mmc_suspend,
+	.resume =	ricoh_mmc_resume,
 };
 
 /*****************************************************************************\
