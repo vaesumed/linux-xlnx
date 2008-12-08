@@ -37,6 +37,7 @@ static struct nsm_handle	*nsm_find(const struct sockaddr *sap,
 						const char *hostname,
 						const size_t hostname_len,
 						const int create);
+static void			nsm_release(struct nsm_handle *nsm);
 
 struct nlm_lookup_host_info {
 	const int		server;		/* search for server|client */
@@ -104,25 +105,37 @@ static void nlm_clear_port(struct sockaddr *sap)
 	}
 }
 
+static void nlm_display_ipv4_address(const struct sockaddr *sap, char *buf,
+				     const size_t len)
+{
+	const struct sockaddr_in *sin = (struct sockaddr_in *)sap;
+	snprintf(buf, len, NIPQUAD_FMT, NIPQUAD(sin->sin_addr.s_addr));
+}
+
+static void nlm_display_ipv6_address(const struct sockaddr *sap, char *buf,
+				     const size_t len)
+{
+	const struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sap;
+
+	if (ipv6_addr_v4mapped(&sin6->sin6_addr))
+		snprintf(buf, len, NIPQUAD_FMT,
+				NIPQUAD(sin6->sin6_addr.s6_addr32[3]));
+	else if (sin6->sin6_scope_id != 0)
+		snprintf(buf, len, NIP6_FMT "%%%u", NIP6(sin6->sin6_addr),
+				sin6->sin6_scope_id);
+	else
+		snprintf(buf, len, NIP6_FMT, NIP6(sin6->sin6_addr));
+}
+
 static void nlm_display_address(const struct sockaddr *sap,
 				char *buf, const size_t len)
 {
-	const struct sockaddr_in *sin = (struct sockaddr_in *)sap;
-	const struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sap;
-
 	switch (sap->sa_family) {
-	case AF_UNSPEC:
-		snprintf(buf, len, "unspecified");
-		break;
 	case AF_INET:
-		snprintf(buf, len, NIPQUAD_FMT, NIPQUAD(sin->sin_addr.s_addr));
+		nlm_display_ipv4_address(sap, buf, len);
 		break;
 	case AF_INET6:
-		if (ipv6_addr_v4mapped(&sin6->sin6_addr))
-			snprintf(buf, len, NIPQUAD_FMT,
-				 NIPQUAD(sin6->sin6_addr.s6_addr32[3]));
-		else
-			snprintf(buf, len, NIP6_FMT, NIP6(sin6->sin6_addr));
+		nlm_display_ipv6_address(sap, buf, len);
 		break;
 	default:
 		snprintf(buf, len, "unsupported address family");
@@ -205,6 +218,7 @@ static struct nlm_host *nlm_lookup_host(struct nlm_lookup_host_info *ni)
 		goto out;
 	}
 	host->h_name	   = nsm->sm_name;
+	host->h_addrbuf    = nsm->sm_addrbuf;
 	memcpy(nlm_addr(host), ni->sap, ni->salen);
 	host->h_addrlen = ni->salen;
 	nlm_clear_port(nlm_addr(host));
@@ -230,11 +244,6 @@ static struct nlm_host *nlm_lookup_host(struct nlm_lookup_host_info *ni)
 
 	nrhosts++;
 
-	nlm_display_address((struct sockaddr *)&host->h_addr,
-				host->h_addrbuf, sizeof(host->h_addrbuf));
-	nlm_display_address((struct sockaddr *)&host->h_srcaddr,
-				host->h_srcaddrbuf, sizeof(host->h_srcaddrbuf));
-
 	dprintk("lockd: nlm_lookup_host created host %s\n",
 			host->h_name);
 
@@ -254,10 +263,8 @@ nlm_destroy_host(struct nlm_host *host)
 	BUG_ON(!list_empty(&host->h_lockowners));
 	BUG_ON(atomic_read(&host->h_count));
 
-	/*
-	 * Release NSM handle and unmonitor host.
-	 */
 	nsm_unmonitor(host);
+	nsm_release(host->h_nsmhandle);
 
 	clnt = host->h_rpcclnt;
 	if (clnt != NULL)
@@ -372,8 +379,8 @@ nlm_bind_host(struct nlm_host *host)
 {
 	struct rpc_clnt	*clnt;
 
-	dprintk("lockd: nlm_bind_host %s (%s), my addr=%s\n",
-			host->h_name, host->h_addrbuf, host->h_srcaddrbuf);
+	dprintk("lockd: nlm_bind_host %s (%s)\n",
+			host->h_name, host->h_addrbuf);
 
 	/* Lock host handle */
 	mutex_lock(&host->h_mutex);
@@ -696,8 +703,7 @@ found:
 /*
  * Release an NSM handle
  */
-void
-nsm_release(struct nsm_handle *nsm)
+static void nsm_release(struct nsm_handle *nsm)
 {
 	if (!nsm)
 		return;
