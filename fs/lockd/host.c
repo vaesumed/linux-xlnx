@@ -111,9 +111,6 @@ static void nlm_display_address(const struct sockaddr *sap,
 	const struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sap;
 
 	switch (sap->sa_family) {
-	case AF_UNSPEC:
-		snprintf(buf, len, "unspecified");
-		break;
 	case AF_INET:
 		snprintf(buf, len, NIPQUAD_FMT, NIPQUAD(sin->sin_addr.s_addr));
 		break;
@@ -177,7 +174,7 @@ static struct nlm_host *nlm_lookup_host(struct nlm_lookup_host_info *ni)
 
 		nlm_get_host(host);
 		dprintk("lockd: nlm_lookup_host found host %s (%s)\n",
-				host->h_name, host->h_addrbuf);
+				host->h_name, nsm->sm_addrbuf);
 		goto out;
 	}
 
@@ -229,11 +226,6 @@ static struct nlm_host *nlm_lookup_host(struct nlm_lookup_host_info *ni)
 	INIT_LIST_HEAD(&host->h_reclaim);
 
 	nrhosts++;
-
-	nlm_display_address((struct sockaddr *)&host->h_addr,
-				host->h_addrbuf, sizeof(host->h_addrbuf));
-	nlm_display_address((struct sockaddr *)&host->h_srcaddr,
-				host->h_srcaddrbuf, sizeof(host->h_srcaddrbuf));
 
 	dprintk("lockd: nlm_lookup_host created host %s\n",
 			host->h_name);
@@ -372,8 +364,8 @@ nlm_bind_host(struct nlm_host *host)
 {
 	struct rpc_clnt	*clnt;
 
-	dprintk("lockd: nlm_bind_host %s (%s), my addr=%s\n",
-			host->h_name, host->h_addrbuf, host->h_srcaddrbuf);
+	dprintk("lockd: nlm_bind_host %s (%s)\n",
+			host->h_name, host->h_nsmhandle->sm_addrbuf);
 
 	/* Lock host handle */
 	mutex_lock(&host->h_mutex);
