@@ -48,7 +48,7 @@
 ACPI_MODULE_NAME("tbfadt")
 
 /* Local prototypes */
-static void inline
+static inline void
 acpi_tb_init_generic_address(struct acpi_generic_address *generic_address,
 			     u8 byte_width, u64 address);
 
@@ -122,7 +122,7 @@ static struct acpi_fadt_info fadt_info_table[] = {
  *
  ******************************************************************************/
 
-static void inline
+static inline void
 acpi_tb_init_generic_address(struct acpi_generic_address *generic_address,
 			     u8 byte_width, u64 address)
 {
@@ -286,14 +286,27 @@ static void acpi_tb_convert_fadt(void)
 
 	acpi_gbl_FADT.header.length = sizeof(struct acpi_table_fadt);
 
-	/* Expand the 32-bit FACS and DSDT addresses to 64-bit as necessary */
-
+	/*
+	 * Expand the 32-bit FACS and DSDT addresses to 64-bit as necessary.
+	 * Later code will always use the X 64-bit field. Also, check for an
+	 * address mismatch between the 32-bit and 64-bit address fields
+	 * (FIRMWARE_CTRL/X_FIRMWARE_CTRL, DSDT/X_DSDT) which would indicate
+	 * the presence of two FACS or two DSDT tables.
+	 */
 	if (!acpi_gbl_FADT.Xfacs) {
 		acpi_gbl_FADT.Xfacs = (u64) acpi_gbl_FADT.facs;
+	} else if (acpi_gbl_FADT.facs &&
+		   (acpi_gbl_FADT.Xfacs != (u64) acpi_gbl_FADT.facs)) {
+		ACPI_WARNING((AE_INFO,
+		    "32/64 FACS address mismatch in FADT - two FACS tables!"));
 	}
 
 	if (!acpi_gbl_FADT.Xdsdt) {
 		acpi_gbl_FADT.Xdsdt = (u64) acpi_gbl_FADT.dsdt;
+	} else if (acpi_gbl_FADT.dsdt &&
+		   (acpi_gbl_FADT.Xdsdt != (u64) acpi_gbl_FADT.dsdt)) {
+		ACPI_WARNING((AE_INFO,
+		    "32/64 DSDT address mismatch in FADT - two DSDT tables!"));
 	}
 
 	/*
