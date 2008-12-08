@@ -200,7 +200,7 @@ static int iwl3945_hwrate_to_plcp_idx(u8 plcp)
  * priv->eeprom  is used to determine if antenna AUX/MAIN are reversed
  * priv->antenna specifies the antenna diversity mode:
  *
- * IWL_ANTENNA_DIVERISTY - NIC selects best antenna by itself
+ * IWL_ANTENNA_DIVERSITY - NIC selects best antenna by itself
  * IWL_ANTENNA_MAIN      - Force MAIN antenna
  * IWL_ANTENNA_AUX       - Force AUX antenna
  */
@@ -261,6 +261,35 @@ static inline const char *iwl3945_get_tx_fail_reason(u32 status)
 }
 #endif
 
+/*
+ * get ieee prev rate from rate scale table.
+ * for A and B mode we need to overright prev
+ * value
+ */
+int iwl3945_rs_next_rate(struct iwl3945_priv *priv, int rate)
+{
+	int next_rate = iwl3945_get_prev_ieee_rate(rate);
+
+	switch (priv->band) {
+	case IEEE80211_BAND_5GHZ:
+		if (rate == IWL_RATE_12M_INDEX)
+			next_rate = IWL_RATE_9M_INDEX;
+		else if (rate == IWL_RATE_6M_INDEX)
+			next_rate = IWL_RATE_6M_INDEX;
+		break;
+/* XXX cannot be invoked in current mac80211 so not a regression
+	case MODE_IEEE80211B:
+		if (rate == IWL_RATE_11M_INDEX_TABLE)
+			next_rate = IWL_RATE_5M_INDEX_TABLE;
+		break;
+ */
+	default:
+		break;
+	}
+
+	return next_rate;
+}
+
 
 /**
  * iwl3945_tx_queue_reclaim - Reclaim Tx queue entries already Tx'd
@@ -308,6 +337,7 @@ static void iwl3945_rx_reply_tx(struct iwl3945_priv *priv,
 	struct iwl3945_tx_resp *tx_resp = (void *)&pkt->u.raw[0];
 	u32  status = le32_to_cpu(tx_resp->status);
 	int rate_idx;
+	int fail;
 
 	if ((index >= txq->q.n_bd) || (iwl3945_x2_queue_used(&txq->q, index) == 0)) {
 		IWL_ERROR("Read index for DMA queue txq_id (%d) index %d "
@@ -318,9 +348,18 @@ static void iwl3945_rx_reply_tx(struct iwl3945_priv *priv,
 	}
 
 	info = IEEE80211_SKB_CB(txq->txb[txq->q.read_ptr].skb[0]);
-	memset(&info->status, 0, sizeof(info->status));
+	ieee80211_tx_info_clear_status(info);
 
-	info->status.retry_count = tx_resp->failure_frame;
+	/* Fill the MRR chain with some info about on-chip retransmissions */
+	rate_idx = iwl3945_hwrate_to_plcp_idx(tx_resp->rate);
+	if (info->band == IEEE80211_BAND_5GHZ)
+		rate_idx -= IWL_FIRST_OFDM_RATE;
+
+	fail = tx_resp->failure_frame;
+
+	info->status.rates[0].idx = rate_idx;
+	info->status.rates[0].count = fail + 1; /* add final attempt */
+
 	/* tx_status->rts_retry_count = tx_resp->failure_rts; */
 	info->flags |= ((status & TX_STATUS_MSK) == TX_STATUS_SUCCESS) ?
 				IEEE80211_TX_STAT_ACK : 0;
@@ -329,10 +368,6 @@ static void iwl3945_rx_reply_tx(struct iwl3945_priv *priv,
 			txq_id, iwl3945_get_tx_fail_reason(status), status,
 			tx_resp->rate, tx_resp->failure_frame);
 
-	rate_idx = iwl3945_hwrate_to_plcp_idx(tx_resp->rate);
-	if (info->band == IEEE80211_BAND_5GHZ)
-		rate_idx -= IWL_FIRST_OFDM_RATE;
-	info->tx_rate_idx = rate_idx;
 	IWL_DEBUG_TX_REPLY("Tx queue reclaim %d\n", index);
 	iwl3945_tx_queue_reclaim(priv, txq_id, index);
 
@@ -756,13 +791,19 @@ int iwl3945_hw_txq_free_tfd(struct iwl3945_priv *priv, struct iwl3945_tx_queue *
 
 u8 iwl3945_hw_find_station(struct iwl3945_priv *priv, const u8 *addr)
 {
-	int i;
+	int i, start = IWL_AP_ID;
 	int ret = IWL_INVALID_STATION;
 	unsigned long flags;
-	DECLARE_MAC_BUF(mac);
+
+	if ((priv->iw_mode == NL80211_IFTYPE_ADHOC) ||
+	    (priv->iw_mode == NL80211_IFTYPE_AP))
+		start = IWL_STA_ID;
+
+	if (is_broadcast_ether_addr(addr))
+		return priv->hw_setting.bcast_sta_id;
 
 	spin_lock_irqsave(&priv->sta_lock, flags);
-	for (i = IWL_STA_ID; i < priv->hw_setting.max_stations; i++)
+	for (i = start; i < priv->hw_setting.max_stations; i++)
 		if ((priv->stations[i].used) &&
 		    (!compare_ether_addr
 		     (priv->stations[i].sta.sta.addr, addr))) {
@@ -770,8 +811,8 @@ u8 iwl3945_hw_find_station(struct iwl3945_priv *priv, const u8 *addr)
 			goto out;
 		}
 
-	IWL_DEBUG_INFO("can not find STA %s (total %d)\n",
-		       print_mac(mac, addr), priv->num_stations);
+	IWL_DEBUG_INFO("can not find STA %pM (total %d)\n",
+		       addr, priv->num_stations);
  out:
 	spin_unlock_irqrestore(&priv->sta_lock, flags);
 	return ret;
@@ -1830,7 +1871,7 @@ static int iwl3945_hw_reg_comp_txpower_temp(struct iwl3945_priv *priv)
 		ref_temp = (s16)priv->eeprom.groups[ch_info->group_index].
 		    temperature;
 
-		/* get power index adjustment based on curr and factory
+		/* get power index adjustment based on current and factory
 		 * temps */
 		delta_index = iwl3945_hw_reg_adjust_power_by_temp(temperature,
 							      ref_temp);
@@ -2467,13 +2508,17 @@ void iwl3945_hw_cancel_deferred_work(struct iwl3945_priv *priv)
 
 static struct iwl_3945_cfg iwl3945_bg_cfg = {
 	.name = "3945BG",
-	.fw_name = "iwlwifi-3945" IWL3945_UCODE_API ".ucode",
+	.fw_name_pre = IWL3945_FW_PRE,
+	.ucode_api_max = IWL3945_UCODE_API_MAX,
+	.ucode_api_min = IWL3945_UCODE_API_MIN,
 	.sku = IWL_SKU_G,
 };
 
 static struct iwl_3945_cfg iwl3945_abg_cfg = {
 	.name = "3945ABG",
-	.fw_name = "iwlwifi-3945" IWL3945_UCODE_API ".ucode",
+	.fw_name_pre = IWL3945_FW_PRE,
+	.ucode_api_max = IWL3945_UCODE_API_MAX,
+	.ucode_api_min = IWL3945_UCODE_API_MIN,
 	.sku = IWL_SKU_A|IWL_SKU_G,
 };
 
