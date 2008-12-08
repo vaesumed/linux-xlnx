@@ -601,6 +601,14 @@ static int scsi_probe_lun(struct scsi_device *sdev, unsigned char *inq_result,
 				    (sshdr.ascq == 0))
 					continue;
 			}
+		} else {
+			/*
+			 * If the first four bytes are all 0 then probably
+			 * nothing was transferred.  Try again.
+			 */
+			if ((inq_result[0] | inq_result[1] |
+			     inq_result[2] | inq_result[3]) == 0)
+				continue;
 		}
 		break;
 	}
