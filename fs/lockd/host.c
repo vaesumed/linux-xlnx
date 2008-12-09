@@ -109,7 +109,7 @@ static void nlm_display_ipv4_address(const struct sockaddr *sap, char *buf,
 				     const size_t len)
 {
 	const struct sockaddr_in *sin = (struct sockaddr_in *)sap;
-	snprintf(buf, len, NIPQUAD_FMT, NIPQUAD(sin->sin_addr.s_addr));
+	snprintf(buf, len, "%pI4", &sin->sin_addr.s_addr);
 }
 
 static void nlm_display_ipv6_address(const struct sockaddr *sap, char *buf,
@@ -118,13 +118,13 @@ static void nlm_display_ipv6_address(const struct sockaddr *sap, char *buf,
 	const struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sap;
 
 	if (ipv6_addr_v4mapped(&sin6->sin6_addr))
-		snprintf(buf, len, NIPQUAD_FMT,
-				NIPQUAD(sin6->sin6_addr.s6_addr32[3]));
+		snprintf(buf, len, "%pI4",
+				&sin6->sin6_addr.s6_addr32[3]);
 	else if (sin6->sin6_scope_id != 0)
-		snprintf(buf, len, NIP6_FMT "%%%u", NIP6(sin6->sin6_addr),
+		snprintf(buf, len, "%pI6%%%u", &sin6->sin6_addr,
 				sin6->sin6_scope_id);
 	else
-		snprintf(buf, len, NIP6_FMT, NIP6(sin6->sin6_addr));
+		snprintf(buf, len, "%pI6", &sin6->sin6_addr);
 }
 
 static void nlm_display_address(const struct sockaddr *sap,
