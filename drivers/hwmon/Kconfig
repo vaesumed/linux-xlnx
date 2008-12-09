@@ -238,6 +238,16 @@ config SENSORS_ASB100
 	  This driver can also be built as a module.  If so, the module
 	  will be called asb100.
 
+config SENSORS_F8000
+	tristate "Asus F8000"
+	depends on X86
+	help
+	  If you say yes here you get support for hardware monitoring
+	  features of the Asus F8000 Super-I/O chips.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called f8000.
+
 config SENSORS_ATXP1
 	tristate "Attansic ATXP1 VID controller"
 	depends on I2C && EXPERIMENTAL
