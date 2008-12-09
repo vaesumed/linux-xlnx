@@ -656,7 +656,7 @@ static int pci_pm_restore_noirq(struct device *dev)
 
 #endif /* !CONFIG_HIBERNATION */
 
-struct pm_ext_ops pci_pm_ops = {
+static struct pm_ext_ops pci_pm_ops = {
 	.base = {
 		.prepare = pci_pm_prepare,
 		.complete = pci_pm_complete,
