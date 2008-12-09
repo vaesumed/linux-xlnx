@@ -195,7 +195,6 @@ static int drm_name_info(char *buf, char **start, off_t offset, int request,
 			 int *eof, void *data)
 {
 	struct drm_minor *minor = (struct drm_minor *) data;
-	struct drm_master *master = minor->master;
 	struct drm_device *dev = minor->dev;
 	int len = 0;
 
@@ -204,16 +203,13 @@ static int drm_name_info(char *buf, char **start, off_t offset, int request,
 		return 0;
 	}
 
-	if (!master)
-		return 0;
-
 	*start = &buf[offset];
 	*eof = 0;
 
-	if (master->unique) {
+	if (dev->unique) {
 		DRM_PROC_PRINT("%s %s %s\n",
 			       dev->driver->pci_driver.name,
-			       pci_name(dev->pdev), master->unique);
+			       pci_name(dev->pdev), dev->unique);
 	} else {
 		DRM_PROC_PRINT("%s %s\n", dev->driver->pci_driver.name,
 			       pci_name(dev->pdev));
