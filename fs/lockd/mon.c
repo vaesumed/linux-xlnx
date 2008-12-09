@@ -18,8 +18,6 @@
 
 #define NLMDBG_FACILITY		NLMDBG_MONITOR
 
-#define XDR_ADDRBUF_LEN		(20)
-
 static struct rpc_clnt *	nsm_create(void);
 
 static struct rpc_program	nsm_program;
@@ -37,7 +35,13 @@ nsm_mon_unmon(struct nsm_handle *nsm, u32 proc, struct nsm_res *res)
 {
 	struct rpc_clnt	*clnt;
 	int		status;
-	struct nsm_args	args;
+	struct nsm_args args = {
+		.addr		= nsm_addr_in(nsm)->sin_addr.s_addr,
+		.prog		= NLM_PROGRAM,
+		.vers		= 3,
+		.proc		= NLMPROC_NSM_NOTIFY,
+		.mon_name	= nsm->sm_mon_name,
+	};
 	struct rpc_message msg = {
 		.rpc_argp	= &args,
 		.rpc_resp	= res,
@@ -46,22 +50,18 @@ nsm_mon_unmon(struct nsm_handle *nsm, u32 proc, struct nsm_res *res)
 	clnt = nsm_create();
 	if (IS_ERR(clnt)) {
 		status = PTR_ERR(clnt);
+		dprintk("lockd: failed to create NSM upcall transport, "
+				"status=%d\n", status);
 		goto out;
 	}
 
-	memset(&args, 0, sizeof(args));
-	args.mon_name = nsm->sm_name;
-	args.addr = nsm_addr_in(nsm)->sin_addr.s_addr;
-	args.prog = NLM_PROGRAM;
-	args.vers = 3;
-	args.proc = NLMPROC_NSM_NOTIFY;
 	memset(res, 0, sizeof(*res));
 
 	msg.rpc_proc = &clnt->cl_procinfo[proc];
 	status = rpc_call_sync(clnt, &msg, 0);
 	if (status < 0)
-		printk(KERN_DEBUG "nsm_mon_unmon: rpc failed, status=%d\n",
-			status);
+		dprintk("lockd: NSM upcall RPC failed, status=%d\n",
+				status);
 	else
 		status = 0;
 	rpc_shutdown_client(clnt);
@@ -69,58 +69,71 @@ nsm_mon_unmon(struct nsm_handle *nsm, u32 proc, struct nsm_res *res)
 	return status;
 }
 
-/*
- * Set up monitoring of a remote host
+/**
+ * nsm_monitor - Notify a peer in case we reboot
+ * @host: pointer to nlm_host of peer to notify
+ *
+ * If this peer is not already monitored, this function sends an
+ * upcall to the local rpc.statd to record the name/address of
+ * the peer to notify in case we reboot.
+ *
+ * Returns zero if the peer is monitored by the local rpc.statd;
+ * otherwise a negative errno value is returned.
  */
-int
-nsm_monitor(struct nlm_host *host)
+int nsm_monitor(const struct nlm_host *host)
 {
 	struct nsm_handle *nsm = host->h_nsmhandle;
 	struct nsm_res	res;
 	int		status;
 
-	dprintk("lockd: nsm_monitor(%s)\n", host->h_name);
-	BUG_ON(nsm == NULL);
+	dprintk("lockd: nsm_monitor(%s)\n", nsm->sm_name);
 
 	if (nsm->sm_monitored)
 		return 0;
 
-	status = nsm_mon_unmon(nsm, SM_MON, &res);
+	/*
+	 * Choose whether to record the caller_name or IP address of
+	 * this peer in the local rpc.statd's database.
+	 */
+	nsm->sm_mon_name = nsm_use_hostnames ? nsm->sm_name : nsm->sm_addrbuf;
 
-	if (status < 0 || res.status != 0)
-		printk(KERN_NOTICE "lockd: cannot monitor %s\n", host->h_name);
+	status = nsm_mon_unmon(nsm, SM_MON, &res);
+	if (res.status != 0)
+		status = -EIO;
+	if (status < 0)
+		printk(KERN_NOTICE "lockd: cannot monitor %s\n", nsm->sm_name);
 	else
 		nsm->sm_monitored = 1;
 	return status;
 }
 
-/*
- * Cease to monitor remote host
+/**
+ * nsm_unmonitor - Unregister peer notification
+ * @host: pointer to nlm_host of peer to stop monitoring
+ *
+ * If this peer is monitored, this function sends an upcall to
+ * tell the local rpc.statd not to send this peer a notification
+ * when we reboot.
  */
-int
-nsm_unmonitor(struct nlm_host *host)
+void nsm_unmonitor(const struct nlm_host *host)
 {
 	struct nsm_handle *nsm = host->h_nsmhandle;
 	struct nsm_res	res;
-	int		status = 0;
-
-	if (nsm == NULL)
-		return 0;
-	host->h_nsmhandle = NULL;
+	int status;
 
 	if (atomic_read(&nsm->sm_count) == 1
 	 && nsm->sm_monitored && !nsm->sm_sticky) {
-		dprintk("lockd: nsm_unmonitor(%s)\n", host->h_name);
+		dprintk("lockd: nsm_unmonitor(%s)\n", nsm->sm_name);
 
 		status = nsm_mon_unmon(nsm, SM_UNMON, &res);
+		if (res.status != 0)
+			status = -EIO;
 		if (status < 0)
 			printk(KERN_NOTICE "lockd: cannot unmonitor %s\n",
-					host->h_name);
+					nsm->sm_name);
 		else
 			nsm->sm_monitored = 0;
 	}
-	nsm_release(nsm);
-	return status;
 }
 
 /*
@@ -165,25 +178,10 @@ static __be32 *xdr_encode_nsm_string(__be32 *p, char *string)
 
 /*
  * "mon_name" specifies the host to be monitored.
- *
- * Linux uses a text version of the IP address of the remote
- * host as the host identifier (the "mon_name" argument).
- *
- * Linux statd always looks up the canonical hostname first for
- * whatever remote hostname it receives, so this works alright.
  */
 static __be32 *xdr_encode_mon_name(__be32 *p, struct nsm_args *argp)
 {
-	char	buffer[XDR_ADDRBUF_LEN + 1];
-	char	*name = argp->mon_name;
-
-	if (!nsm_use_hostnames) {
-		snprintf(buffer, XDR_ADDRBUF_LEN,
-			 NIPQUAD_FMT, NIPQUAD(argp->addr));
-		name = buffer;
-	}
-
-	return xdr_encode_nsm_string(p, name);
+	return xdr_encode_nsm_string(p, argp->mon_name);
 }
 
 /*
