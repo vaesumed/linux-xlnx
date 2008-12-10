@@ -1,0 +1,97 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.28-rc7-git4
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard bbeba4c35c252b2e961f09ce6ebe76b2cd5e7e3e
+HEAD is now at bbeba4c Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/bdev
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-f71882fg-04-style-cleanups.patch
+hwmon-f71882fg-05-add-f71862fg-support.patch
+hwmon-f71882fg-06-no-io-to-unreserved-ports.patch
+hwmon-add-ltc4245-driver.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+hwmon-it87-add-it8720f-support.patch
+hwmon-i5k_amb-load-automatically-on-all-5000-5400-chipsets.patch
+hwmon-k8temp-01-warn-about-errata.patch
+hwmon-fschmd-01-cleanup.patch
+hwmon-fschmd-02-watchdog-v4.patch
+hwmon-fschmd-03-deprecate-pos-her.patch
+hwmon-lm70-01-fix-byte-order.patch
+hwmon-lm70-02-ti-tmp121-support.patch
+hwmon-f8000-new-driver.patch
+hwmon-acpi-check-conflict.patch
+hwmon-typos.patch
+Unchanged quilt series kernel-doc
+Importing ide based on 437f2f91d6597c67662f847d9ed4c99cb3c440cd
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 437f2f91d6597c67662f847d9ed4c99cb3c440cd
+HEAD is now at 437f2f9 Merge master.kernel.org:/home/rmk/linux-2.6-arm
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+Context reduced to (1/1) to apply fragment at 950
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+ali14xx-doesnt-use-shared-irqs.patch
+cmd64x-set-ide_hflag_serialize-explictly-for-cmd646.patch
+gayle-set-ide_hflag_serialize-explictly.patch
+ide-fix-quirk_list-checking-in-ide_do_request.patch
+ide-always-set-nien-on-idle-devices.patch
+rz1000-apply-chipset-quirks-early-v2.patch
+ide-add-max_sectors-field-to-struct-ide_port_info.patch
+trm290-add-ide_hflag_trm290-host-flag.patch
+cy82c693-remove-superfluous-ide_cy82c693-chipset-type.patch
+ide-rework-handling-of-serialized-ports-v2.patch
+Context reduced to (1/1) to apply fragment at 1401
+ide-struct-device-replace-bus_id-with-dev_name()-dev_set_name().patch
+ide-remove-redundant-code-from-ide_end_drive_cmd.patch
+ide-remove-inline-tags-from-ide-probe-c.patch
+ide-checkpatch.pl-fixes-for-ide-lib-c.patch
+ide-use-ata_dma_-defines-in-ide-dma-sff-c.patch
+ide-move-power-management-support-to-ide-pm-c.patch
+ide-move-legacy-isa-vlb-ports-handling-to-ide-legacy-c-v2.patch
+ide-remove-superfluous-local_irq_save-restore-from-ide_dump_status.patch
+ide-push-local_irq_save-restore-to-do_identify.patch
+ide-cd-remove-dead-atapi_overlap-setting.patch
+tx493x-fix-intendation.patch
+ide-remove-chipset-type-fixup-from-ide_host_register.patch
+ide-small-ide_register_port-cleanup.patch
+ide-factor-out-device-type-classifying-from-do_identify.patch
+ide-move-sysfs-support-to-ide-sysfs-c.patch
+ide-remove-ide-pm-hack-from-do_ide_request.patch
+ide-remove-paranoia-checks-for-hwgroup-busy.patch
+ide-add-ide_un-lock_hwgroup-helpers.patch
+ide-use-per-device-request-queue-locks.patch
+ide-cd-move-debug-defines-into-header.patch
+ide-make-ide_aflag_numbering-continuous-again.patch
+ide-floppy-allocate-only-toplevel-packet-commands.patch
+ide-remove-ide-scsi.patch
+ide-atapi-add-a-dev_is_idecd-inline.patch
+ide-atapi-combine-drive-specific-assignments.patch
+ide-atapi-setup-dma-for-ide-cd.patch
+ide-atapi-accomodate-transfer-length-calculation-for-ide-cd.patch
+ide-atapi-teach-ide-atapi-about-drive-waiting_for_dma.patch
+ide-cd-move-cdrom_timer_expiry-to-ide-atapi.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_issue_pc.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_transfer_pc.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_pc_intr.patch
+ide-remove-the-last-ide-scsi-remnants.patch
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series staging
