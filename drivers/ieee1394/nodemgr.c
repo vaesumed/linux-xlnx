@@ -977,6 +977,9 @@ static struct unit_directory *nodemgr_process_unit_directory
 	ud->ud_kv = ud_kv;
 	ud->id = (*id)++;
 
+	/* inherit vendor_id from root directory if none exists in unit dir */
+	ud->vendor_id = ne->vendor_id;
+
 	csr1212_for_each_dir_entry(ne->csr, kv, ud_kv, dentry) {
 		switch (kv->key.id) {
 		case CSR1212_KV_ID_VENDOR:
@@ -1271,7 +1274,8 @@ static void nodemgr_update_node(struct node_entry *ne, struct csr1212_csr *csr,
 		csr1212_destroy_csr(csr);
 	}
 
-	/* Mark the node current */
+	/* Finally, mark the node current */
+	smp_wmb();
 	ne->generation = generation;
 
 	if (ne->in_limbo) {
@@ -1685,6 +1689,7 @@ static int nodemgr_host_thread(void *data)
 		g = get_hpsb_generation(host);
 		for (i = 0; i < 4 ; i++) {
 			msleep_interruptible(63);
+			try_to_freeze();
 			if (kthread_should_stop())
 				goto exit;
 
@@ -1725,6 +1730,7 @@ static int nodemgr_host_thread(void *data)
 		/* Sleep 3 seconds */
 		for (i = 3000/200; i; i--) {
 			msleep_interruptible(200);
+			try_to_freeze();
 			if (kthread_should_stop())
 				goto exit;
 
@@ -1802,7 +1808,7 @@ void hpsb_node_fill_packet(struct node_entry *ne, struct hpsb_packet *packet)
 {
 	packet->host = ne->host;
 	packet->generation = ne->generation;
-	barrier();
+	smp_rmb();
 	packet->node_id = ne->nodeid;
 }
 
@@ -1811,7 +1817,7 @@ int hpsb_node_write(struct node_entry *ne, u64 addr,
 {
 	unsigned int generation = ne->generation;
 
-	barrier();
+	smp_rmb();
 	return hpsb_write(ne->host, ne->nodeid, generation,
 			  addr, buffer, length);
 }
