@@ -97,7 +97,7 @@ int mdiobus_register(struct mii_bus *bus)
 	bus->dev.parent = bus->parent;
 	bus->dev.class = &mdio_bus_class;
 	bus->dev.groups = NULL;
-	memcpy(bus->dev.bus_id, bus->id, MII_BUS_ID_SIZE);
+	dev_set_name(&bus->dev, bus->id);
 
 	err = device_register(&bus->dev);
 	if (err) {
@@ -191,7 +191,7 @@ struct phy_device *mdiobus_scan(struct mii_bus *bus, int addr)
 
 	phydev->dev.parent = bus->parent;
 	phydev->dev.bus = &mdio_bus_type;
-	snprintf(phydev->dev.bus_id, BUS_ID_SIZE, PHY_ID_FMT, bus->id, addr);
+	dev_set_name(&phydev->dev, PHY_ID_FMT, bus->id, addr);
 
 	phydev->bus = bus;
 
@@ -284,9 +284,12 @@ static int mdio_bus_suspend(struct device * dev, pm_message_t state)
 {
 	int ret = 0;
 	struct device_driver *drv = dev->driver;
+	struct phy_driver *phydrv = to_phy_driver(drv);
+	struct phy_device *phydev = to_phy_device(dev);
 
-	if (drv && drv->suspend)
-		ret = drv->suspend(dev, state);
+	if ((!device_may_wakeup(phydev->dev.parent)) &&
+		(phydrv && phydrv->suspend))
+			ret = phydrv->suspend(phydev);
 
 	return ret;
 }
@@ -295,9 +298,12 @@ static int mdio_bus_resume(struct device * dev)
 {
 	int ret = 0;
 	struct device_driver *drv = dev->driver;
+	struct phy_driver *phydrv = to_phy_driver(drv);
+	struct phy_device *phydev = to_phy_device(dev);
 
-	if (drv && drv->resume)
-		ret = drv->resume(dev);
+	if ((!device_may_wakeup(phydev->dev.parent)) &&
+		(phydrv && phydrv->resume))
+		ret = phydrv->resume(phydev);
 
 	return ret;
 }

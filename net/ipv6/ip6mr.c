@@ -297,15 +297,15 @@ static int ipmr_mfc_seq_show(struct seq_file *seq, void *v)
 		const struct mfc6_cache *mfc = v;
 		const struct ipmr_mfc_iter *it = seq->private;
 
-		seq_printf(seq,
-			   NIP6_FMT " " NIP6_FMT " %-3d %8ld %8ld %8ld",
-			   NIP6(mfc->mf6c_mcastgrp), NIP6(mfc->mf6c_origin),
-			   mfc->mf6c_parent,
-			   mfc->mfc_un.res.pkt,
-			   mfc->mfc_un.res.bytes,
-			   mfc->mfc_un.res.wrong_if);
+		seq_printf(seq, "%pI6 %pI6 %-3hd",
+			   &mfc->mf6c_mcastgrp, &mfc->mf6c_origin,
+			   mfc->mf6c_parent);
 
 		if (it->cache != &mfc_unres_queue) {
+			seq_printf(seq, " %8lu %8lu %8lu",
+				   mfc->mfc_un.res.pkt,
+				   mfc->mfc_un.res.bytes,
+				   mfc->mfc_un.res.wrong_if);
 			for (n = mfc->mfc_un.res.minvif;
 			     n < mfc->mfc_un.res.maxvif; n++) {
 				if (MIF_EXISTS(n) &&
@@ -314,6 +314,11 @@ static int ipmr_mfc_seq_show(struct seq_file *seq, void *v)
 						   " %2d:%-3d",
 						   n, mfc->mfc_un.res.ttls[n]);
 			}
+		} else {
+			/* unresolved mfc_caches don't contain
+			 * pkt, bytes and wrong_if values
+			 */
+			seq_printf(seq, " %8lu %8lu %8lu", 0ul, 0ul, 0ul);
 		}
 		seq_putc(seq, '\n');
 	}
@@ -417,12 +422,16 @@ static int reg_vif_xmit(struct sk_buff *skb, struct net_device *dev)
 	return 0;
 }
 
+static const struct net_device_ops reg_vif_netdev_ops = {
+	.ndo_start_xmit	= reg_vif_xmit,
+};
+
 static void reg_vif_setup(struct net_device *dev)
 {
 	dev->type		= ARPHRD_PIMREG;
 	dev->mtu		= 1500 - sizeof(struct ipv6hdr) - 8;
 	dev->flags		= IFF_NOARP;
-	dev->hard_start_xmit	= reg_vif_xmit;
+	dev->netdev_ops		= &reg_vif_netdev_ops;
 	dev->destructor		= free_netdev;
 }
 
@@ -683,20 +692,18 @@ static struct mfc6_cache *ip6mr_cache_find(struct in6_addr *origin, struct in6_a
  */
 static struct mfc6_cache *ip6mr_cache_alloc(void)
 {
-	struct mfc6_cache *c = kmem_cache_alloc(mrt_cachep, GFP_KERNEL);
+	struct mfc6_cache *c = kmem_cache_zalloc(mrt_cachep, GFP_KERNEL);
 	if (c == NULL)
 		return NULL;
-	memset(c, 0, sizeof(*c));
 	c->mfc_un.res.minvif = MAXMIFS;
 	return c;
 }
 
 static struct mfc6_cache *ip6mr_cache_alloc_unres(void)
 {
-	struct mfc6_cache *c = kmem_cache_alloc(mrt_cachep, GFP_ATOMIC);
+	struct mfc6_cache *c = kmem_cache_zalloc(mrt_cachep, GFP_ATOMIC);
 	if (c == NULL)
 		return NULL;
-	memset(c, 0, sizeof(*c));
 	skb_queue_head_init(&c->mfc_un.unres.unresolved);
 	c->mfc_un.unres.expires = jiffies + 10 * HZ;
 	return c;
