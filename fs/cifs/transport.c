@@ -37,15 +37,11 @@ extern mempool_t *cifs_mid_poolp;
 extern struct kmem_cache *cifs_oplock_cachep;
 
 static struct mid_q_entry *
-AllocMidQEntry(const struct smb_hdr *smb_buffer, struct cifsSesInfo *ses)
+AllocMidQEntry(const struct smb_hdr *smb_buffer, struct TCP_Server_Info *server)
 {
 	struct mid_q_entry *temp;
 
-	if (ses == NULL) {
-		cERROR(1, ("Null session passed in to AllocMidQEntry"));
-		return NULL;
-	}
-	if (ses->server == NULL) {
+	if (server == NULL) {
 		cERROR(1, ("Null TCP session in AllocMidQEntry"));
 		return NULL;
 	}
@@ -62,12 +58,11 @@ AllocMidQEntry(const struct smb_hdr *smb_buffer, struct cifsSesInfo *ses)
 	/*	do_gettimeofday(&temp->when_sent);*/ /* easier to use jiffies */
 		/* when mid allocated can be before when sent */
 		temp->when_alloc = jiffies;
-		temp->ses = ses;
 		temp->tsk = current;
 	}
 
 	spin_lock(&GlobalMid_Lock);
-	list_add_tail(&temp->qhead, &ses->server->pending_mid_q);
+	list_add_tail(&temp->qhead, &server->pending_mid_q);
 	atomic_inc(&midCount);
 	temp->midState = MID_REQUEST_ALLOCATED;
 	spin_unlock(&GlobalMid_Lock);
@@ -349,37 +344,38 @@ static int wait_for_free_request(struct cifsSesInfo *ses, const int long_op)
 	if (long_op == CIFS_ASYNC_OP) {
 		/* oplock breaks must not be held up */
 		atomic_inc(&ses->server->inFlight);
-	} else {
-		spin_lock(&GlobalMid_Lock);
-		while (1) {
-			if (atomic_read(&ses->server->inFlight) >=
-					cifs_max_pending){
-				spin_unlock(&GlobalMid_Lock);
-#ifdef CONFIG_CIFS_STATS2
-				atomic_inc(&ses->server->num_waiters);
-#endif
-				wait_event(ses->server->request_q,
-					atomic_read(&ses->server->inFlight)
-					 < cifs_max_pending);
-#ifdef CONFIG_CIFS_STATS2
-				atomic_dec(&ses->server->num_waiters);
-#endif
-				spin_lock(&GlobalMid_Lock);
-			} else {
-				if (ses->server->tcpStatus == CifsExiting) {
-					spin_unlock(&GlobalMid_Lock);
-					return -ENOENT;
-				}
+		return 0;
+	}
 
-				/* can not count locking commands against total
-				   as they are allowed to block on server */
-
-				/* update # of requests on the wire to server */
-				if (long_op != CIFS_BLOCKING_OP)
-					atomic_inc(&ses->server->inFlight);
+	spin_lock(&GlobalMid_Lock);
+	while (1) {
+		if (atomic_read(&ses->server->inFlight) >=
+				cifs_max_pending){
+			spin_unlock(&GlobalMid_Lock);
+#ifdef CONFIG_CIFS_STATS2
+			atomic_inc(&ses->server->num_waiters);
+#endif
+			wait_event(ses->server->request_q,
+				   atomic_read(&ses->server->inFlight)
+				     < cifs_max_pending);
+#ifdef CONFIG_CIFS_STATS2
+			atomic_dec(&ses->server->num_waiters);
+#endif
+			spin_lock(&GlobalMid_Lock);
+		} else {
+			if (ses->server->tcpStatus == CifsExiting) {
 				spin_unlock(&GlobalMid_Lock);
-				break;
+				return -ENOENT;
 			}
+
+			/* can not count locking commands against total
+			   as they are allowed to block on server */
+
+			/* update # of requests on the wire to server */
+			if (long_op != CIFS_BLOCKING_OP)
+				atomic_inc(&ses->server->inFlight);
+			spin_unlock(&GlobalMid_Lock);
+			break;
 		}
 	}
 	return 0;
@@ -390,17 +386,21 @@ static int allocate_mid(struct cifsSesInfo *ses, struct smb_hdr *in_buf,
 {
 	if (ses->server->tcpStatus == CifsExiting) {
 		return -ENOENT;
-	} else if (ses->server->tcpStatus == CifsNeedReconnect) {
+	}
+
+	if (ses->server->tcpStatus == CifsNeedReconnect) {
 		cFYI(1, ("tcp session dead - return to caller to retry"));
 		return -EAGAIN;
-	} else if (ses->status != CifsGood) {
+	}
+
+	if (ses->status != CifsGood) {
 		/* check if SMB session is bad because we are setting it up */
 		if ((in_buf->Command != SMB_COM_SESSION_SETUP_ANDX) &&
 			(in_buf->Command != SMB_COM_NEGOTIATE))
 			return -EAGAIN;
 		/* else ok - we are setting up session */
 	}
-	*ppmidQ = AllocMidQEntry(in_buf, ses);
+	*ppmidQ = AllocMidQEntry(in_buf, ses->server);
 	if (*ppmidQ == NULL)
 		return -ENOMEM;
 	return 0;
@@ -415,11 +415,8 @@ static int wait_for_response(struct cifsSesInfo *ses,
 
 	for (;;) {
 		curr_timeout = timeout + jiffies;
-		wait_event(ses->server->response_q,
-			(!(midQ->midState == MID_REQUEST_SUBMITTED)) ||
-			time_after(jiffies, curr_timeout) ||
-			((ses->server->tcpStatus != CifsGood) &&
-			 (ses->server->tcpStatus != CifsNew)));
+		wait_event_timeout(ses->server->response_q,
+			midQ->midState != MID_REQUEST_SUBMITTED, timeout);
 
 		if (time_after(jiffies, curr_timeout) &&
 			(midQ->midState == MID_REQUEST_SUBMITTED) &&
@@ -521,11 +518,11 @@ SendReceive2(const unsigned int xid, struct cifsSesInfo *ses,
 	   and avoid races inside tcp sendmsg code that could cause corruption
 	   of smb data */
 
-	down(&ses->server->tcpSem);
+	mutex_lock(&ses->server->srv_mutex);
 
 	rc = allocate_mid(ses, in_buf, &midQ);
 	if (rc) {
-		up(&ses->server->tcpSem);
+		mutex_unlock(&ses->server->srv_mutex);
 		cifs_small_buf_release(in_buf);
 		/* Update # of requests on wire to server */
 		atomic_dec(&ses->server->inFlight);
@@ -533,6 +530,11 @@ SendReceive2(const unsigned int xid, struct cifsSesInfo *ses,
 		return rc;
 	}
 	rc = cifs_sign_smb2(iov, n_vec, ses->server, &midQ->sequence_number);
+	if (rc) {
+		mutex_unlock(&ses->server->srv_mutex);
+		cifs_small_buf_release(in_buf);
+		goto out;
+	}
 
 	midQ->midState = MID_REQUEST_SUBMITTED;
 #ifdef CONFIG_CIFS_STATS2
@@ -546,7 +548,7 @@ SendReceive2(const unsigned int xid, struct cifsSesInfo *ses,
 	midQ->when_sent = jiffies;
 #endif
 
-	up(&ses->server->tcpSem);
+	mutex_unlock(&ses->server->srv_mutex);
 	cifs_small_buf_release(in_buf);
 
 	if (rc < 0)
@@ -695,6 +697,12 @@ SendReceive(const unsigned int xid, struct cifsSesInfo *ses,
 	   to the same server. We may make this configurable later or
 	   use ses->maxReq */
 
+	if (in_buf->smb_buf_length > CIFSMaxBufSize + MAX_CIFS_HDR_SIZE - 4) {
+		cERROR(1, ("Illegal length, greater than maximum frame, %d",
+			   in_buf->smb_buf_length));
+		return -EIO;
+	}
+
 	rc = wait_for_free_request(ses, long_op);
 	if (rc)
 		return rc;
@@ -703,29 +711,22 @@ SendReceive(const unsigned int xid, struct cifsSesInfo *ses,
 	   and avoid races inside tcp sendmsg code that could cause corruption
 	   of smb data */
 
-	down(&ses->server->tcpSem);
+	mutex_lock(&ses->server->srv_mutex);
 
 	rc = allocate_mid(ses, in_buf, &midQ);
 	if (rc) {
-		up(&ses->server->tcpSem);
+		mutex_unlock(&ses->server->srv_mutex);
 		/* Update # of requests on wire to server */
 		atomic_dec(&ses->server->inFlight);
 		wake_up(&ses->server->request_q);
 		return rc;
 	}
 
-	if (in_buf->smb_buf_length > CIFSMaxBufSize + MAX_CIFS_HDR_SIZE - 4) {
-		cERROR(1, ("Illegal length, greater than maximum frame, %d",
-			in_buf->smb_buf_length));
-		DeleteMidQEntry(midQ);
-		up(&ses->server->tcpSem);
-		/* Update # of requests on wire to server */
-		atomic_dec(&ses->server->inFlight);
-		wake_up(&ses->server->request_q);
-		return -EIO;
-	}
-
 	rc = cifs_sign_smb(in_buf, ses->server, &midQ->sequence_number);
+	if (rc) {
+		mutex_unlock(&ses->server->srv_mutex);
+		goto out;
+	}
 
 	midQ->midState = MID_REQUEST_SUBMITTED;
 #ifdef CONFIG_CIFS_STATS2
@@ -738,7 +739,7 @@ SendReceive(const unsigned int xid, struct cifsSesInfo *ses,
 	atomic_dec(&ses->server->inSend);
 	midQ->when_sent = jiffies;
 #endif
-	up(&ses->server->tcpSem);
+	mutex_unlock(&ses->server->srv_mutex);
 
 	if (rc < 0)
 		goto out;
@@ -866,16 +867,16 @@ send_nt_cancel(struct cifsTconInfo *tcon, struct smb_hdr *in_buf,
 
 	header_assemble(in_buf, SMB_COM_NT_CANCEL, tcon, 0);
 	in_buf->Mid = mid;
-	down(&ses->server->tcpSem);
+	mutex_lock(&ses->server->srv_mutex);
 	rc = cifs_sign_smb(in_buf, ses->server, &midQ->sequence_number);
 	if (rc) {
-		up(&ses->server->tcpSem);
+		mutex_unlock(&ses->server->srv_mutex);
 		return rc;
 	}
 	rc = smb_send(ses->server->ssocket, in_buf, in_buf->smb_buf_length,
 	      (struct sockaddr *) &(ses->server->addr.sockAddr),
 	      ses->server->noblocksnd);
-	up(&ses->server->tcpSem);
+	mutex_unlock(&ses->server->srv_mutex);
 	return rc;
 }
 
@@ -933,6 +934,12 @@ SendReceiveBlockingLock(const unsigned int xid, struct cifsTconInfo *tcon,
 	   to the same server. We may make this configurable later or
 	   use ses->maxReq */
 
+	if (in_buf->smb_buf_length > CIFSMaxBufSize + MAX_CIFS_HDR_SIZE - 4) {
+		cERROR(1, ("Illegal length, greater than maximum frame, %d",
+			   in_buf->smb_buf_length));
+		return -EIO;
+	}
+
 	rc = wait_for_free_request(ses, CIFS_BLOCKING_OP);
 	if (rc)
 		return rc;
@@ -941,23 +948,20 @@ SendReceiveBlockingLock(const unsigned int xid, struct cifsTconInfo *tcon,
 	   and avoid races inside tcp sendmsg code that could cause corruption
 	   of smb data */
 
-	down(&ses->server->tcpSem);
+	mutex_lock(&ses->server->srv_mutex);
 
 	rc = allocate_mid(ses, in_buf, &midQ);
 	if (rc) {
-		up(&ses->server->tcpSem);
+		mutex_unlock(&ses->server->srv_mutex);
 		return rc;
 	}
 
-	if (in_buf->smb_buf_length > CIFSMaxBufSize + MAX_CIFS_HDR_SIZE - 4) {
-		up(&ses->server->tcpSem);
-		cERROR(1, ("Illegal length, greater than maximum frame, %d",
-			in_buf->smb_buf_length));
-		DeleteMidQEntry(midQ);
-		return -EIO;
-	}
-
 	rc = cifs_sign_smb(in_buf, ses->server, &midQ->sequence_number);
+	if (rc) {
+		DeleteMidQEntry(midQ);
+		mutex_unlock(&ses->server->srv_mutex);
+		return rc;
+	}
 
 	midQ->midState = MID_REQUEST_SUBMITTED;
 #ifdef CONFIG_CIFS_STATS2
@@ -970,7 +974,7 @@ SendReceiveBlockingLock(const unsigned int xid, struct cifsTconInfo *tcon,
 	atomic_dec(&ses->server->inSend);
 	midQ->when_sent = jiffies;
 #endif
-	up(&ses->server->tcpSem);
+	mutex_unlock(&ses->server->srv_mutex);
 
 	if (rc < 0) {
 		DeleteMidQEntry(midQ);
