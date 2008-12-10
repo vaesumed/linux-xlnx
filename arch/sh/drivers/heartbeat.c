@@ -116,7 +116,7 @@ static int heartbeat_drv_probe(struct platform_device *pdev)
 	return mod_timer(&hd->timer, jiffies + 1);
 }
 
-static int heartbeat_drv_remove(struct platform_device *pdev)
+static void heartbeat_drv_remove(struct platform_device *pdev)
 {
 	struct heartbeat_data *hd = platform_get_drvdata(pdev);
 
@@ -127,13 +127,11 @@ static int heartbeat_drv_remove(struct platform_device *pdev)
 
 	if (!pdev->dev.platform_data)
 		kfree(hd);
-
-	return 0;
 }
 
 static struct platform_driver heartbeat_driver = {
 	.probe		= heartbeat_drv_probe,
-	.remove		= heartbeat_drv_remove,
+	.remove_new	= heartbeat_drv_remove,
 	.driver		= {
 		.name	= DRV_NAME,
 	},
