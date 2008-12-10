@@ -363,7 +363,7 @@ static inline int map_8250_out_reg(struct uart_8250_port *up, int offset)
 
 #endif
 
-static unsigned int serial_in(struct uart_8250_port *up, int offset)
+static inline unsigned int __serial_in(struct uart_8250_port *up, int offset)
 {
 	unsigned int tmp;
 	offset = map_8250_in_reg(up, offset) << up->port.regshift;
@@ -397,6 +397,52 @@ static unsigned int serial_in(struct uart_8250_port *up, int offset)
 		return inb(up->port.iobase + offset);
 	}
 }
+/*
+ * A silicon issue on IOP13XX causes IIR reads to return UART_IIR_NO_INT
+ * even if an interrupt is pending. Use the system interrupt pending
+ * register to check for servicing as a workaround.
+ */
+#ifdef CONFIG_ARCH_IOP13XX
+#include <mach/irqs.h>
+#define serial_in(x, y) iop13xx_serial_in(x, y)
+static unsigned int iop13xx_serial_in(struct uart_8250_port *up, int offset)
+{
+	unsigned int val;
+	if (offset == UART_IIR) {
+		unsigned long ipnd, iir;
+		/* enable cp6 */
+		asm volatile (
+			"mrc	p15, 0, r0, c15, c1, 0\n\t"
+			"orr	r0, r0, #(1 << 6)\n\t"
+			"mcr	p15, 0, r0, c15, c1, 0\n\t"
+			: : : "r0");
+		ipnd = read_intpnd_1();
+		iir = UART_IIR_NO_INT;
+		switch ((u32) up->port.membase) {
+		case IOP13XX_UART0_VIRT:
+			if (ipnd & (1 << (IRQ_IOP13XX_UART0 - 32)))
+				iir &= ~UART_IIR_NO_INT;
+			break;
+		case IOP13XX_UART1_VIRT:
+			if (ipnd & (1 << (IRQ_IOP13XX_UART1 - 32)))
+				iir &= ~UART_IIR_NO_INT;
+			break;
+		default:
+			BUG();
+		}
+		/* read to clear the interrupt */
+		val = __serial_in(up, UART_LSR);
+
+		/* trust the system interrupt pending register over the uart */
+		val = iir;
+	} else
+		val = __serial_in(up, offset);
+
+	return val;
+}
+#else
+#define serial_in(x, y) __serial_in(x, y)
+#endif
 
 static void
 serial_out(struct uart_8250_port *up, int offset, int value)
@@ -471,7 +517,7 @@ serial_out_sync(struct uart_8250_port *up, int offset, int value)
  * needed for certain old 386 machines, I've left these #define's
  * in....
  */
-#define serial_inp(up, offset)		serial_in(up, offset)
+#define serial_inp(up, offset)		__serial_in(up, offset)
 #define serial_outp(up, offset, value)	serial_out(up, offset, value)
 
 /* Uart divisor latch read */
@@ -939,11 +985,11 @@ static void autoconfig_16550a(struct uart_8250_port *up)
 	 */
 	serial_outp(up, UART_LCR, 0);
 	serial_outp(up, UART_FCR, UART_FCR_ENABLE_FIFO | UART_FCR7_64BYTE);
-	status1 = serial_in(up, UART_IIR) >> 5;
+	status1 = __serial_in(up, UART_IIR) >> 5;
 	serial_outp(up, UART_FCR, UART_FCR_ENABLE_FIFO);
 	serial_outp(up, UART_LCR, UART_LCR_DLAB);
 	serial_outp(up, UART_FCR, UART_FCR_ENABLE_FIFO | UART_FCR7_64BYTE);
-	status2 = serial_in(up, UART_IIR) >> 5;
+	status2 = __serial_in(up, UART_IIR) >> 5;
 	serial_outp(up, UART_FCR, UART_FCR_ENABLE_FIFO);
 	serial_outp(up, UART_LCR, 0);
 
@@ -1096,7 +1142,7 @@ static void autoconfig(struct uart_8250_port *up, unsigned int probeflags)
 	serial_outp(up, UART_LCR, 0);
 
 	serial_outp(up, UART_FCR, UART_FCR_ENABLE_FIFO);
-	scratch = serial_in(up, UART_IIR) >> 6;
+	scratch = __serial_in(up, UART_IIR) >> 6;
 
 	DEBUG_AUTOCONF("iir=%d ", scratch);
 
