@@ -727,7 +727,8 @@ static int wm8900_add_widgets(struct snd_soc_codec *codec)
 }
 
 static int wm8900_hw_params(struct snd_pcm_substream *substream,
-	struct snd_pcm_hw_params *params)
+	struct snd_pcm_hw_params *params,
+	struct snd_soc_dai *dai)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -1117,8 +1118,6 @@ struct snd_soc_dai wm8900_dai = {
 	 },
 	.ops = {
 		.hw_params = wm8900_hw_params,
-	 },
-	.dai_ops = {
 		 .set_clkdiv = wm8900_set_dai_clkdiv,
 		 .set_pll = wm8900_set_dai_pll,
 		 .set_fmt = wm8900_set_dai_fmt,
@@ -1366,7 +1365,7 @@ static int wm8900_init(struct snd_soc_device *socdev)
 	wm8900_add_controls(codec);
 	wm8900_add_widgets(codec);
 
-	ret = snd_soc_register_card(socdev);
+	ret = snd_soc_init_card(socdev);
 	if (ret < 0) {
 		dev_err(&i2c_client->dev, "Failed to register card\n");
 		goto card_err;
@@ -1383,105 +1382,51 @@ priv_err:
 	return ret;
 }
 
-static struct snd_soc_device *wm8900_socdev;
+static struct i2c_client *wm8900_client;
 
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
-
-static unsigned short normal_i2c[] = { 0, I2C_CLIENT_END };
-
-/* Magic definition of all other variables and things */
-I2C_CLIENT_INSMOD;
-
-static struct i2c_driver wm8900_i2c_driver;
-static struct i2c_client client_template;
-
-/* If the i2c layer weren't so broken, we could pass this kind of data
-   around */
-static int wm8900_codec_probe(struct i2c_adapter *adap, int addr, int kind)
+static int wm8900_i2c_probe(struct i2c_client *i2c,
+			    const struct i2c_device_id *id)
 {
-	struct snd_soc_device *socdev = wm8900_socdev;
-	struct wm8900_setup_data *setup = socdev->codec_data;
-	struct snd_soc_codec *codec = socdev->codec;
-	struct i2c_client *i2c;
-	int ret;
-
-	if (addr != setup->i2c_address)
-		return -ENODEV;
-
-	dev_err(&adap->dev, "Probe on %x\n", addr);
-
-	client_template.adapter = adap;
-	client_template.addr = addr;
-
-	i2c = kmemdup(&client_template, sizeof(client_template), GFP_KERNEL);
-	if (i2c == NULL) {
-		kfree(codec);
-		return -ENOMEM;
-	}
-	i2c_set_clientdata(i2c, codec);
-	codec->control_data = i2c;
-
-	ret = i2c_attach_client(i2c);
-	if (ret < 0) {
-		dev_err(&adap->dev,
-			"failed to attach codec at addr %x\n", addr);
-		goto err;
-	}
-
-	ret = wm8900_init(socdev);
-	if (ret < 0) {
-		dev_err(&adap->dev, "failed to initialise WM8900\n");
-		goto err;
-	}
-	return ret;
-
-err:
-	kfree(codec);
-	kfree(i2c);
-	return ret;
+	wm8900_client = i2c;
+	wm8900_dai.dev = &i2c->dev;
+	return snd_soc_register_dai(&wm8900_dai);
 }
 
-static int wm8900_i2c_detach(struct i2c_client *client)
+static int wm8900_i2c_remove(struct i2c_client *client)
 {
-	struct snd_soc_codec *codec = i2c_get_clientdata(client);
-	i2c_detach_client(client);
-	kfree(codec->reg_cache);
-	kfree(client);
+	snd_soc_unregister_dai(&wm8900_dai);
+	wm8900_dai.dev = NULL;
+	wm8900_client = NULL;
 	return 0;
 }
 
-static int wm8900_i2c_attach(struct i2c_adapter *adap)
-{
-	return i2c_probe(adap, &addr_data, wm8900_codec_probe);
-}
+static const struct i2c_device_id wm8900_i2c_id[] = {
+	{ "wm8900", 0 },
+	{ }
+};
+MODULE_DEVICE_TABLE(i2c, wm8900_i2c_id);
 
-/* corgi i2c codec control layer */
 static struct i2c_driver wm8900_i2c_driver = {
 	.driver = {
 		.name = "WM8900 I2C codec",
 		.owner = THIS_MODULE,
 	},
-	.attach_adapter = wm8900_i2c_attach,
-	.detach_client =  wm8900_i2c_detach,
-	.command =        NULL,
+	.probe = wm8900_i2c_probe,
+	.remove = wm8900_i2c_remove,
+	.id_table = wm8900_i2c_id,
 };
-
-static struct i2c_client client_template = {
-	.name =   "WM8900",
-	.driver = &wm8900_i2c_driver,
-};
-#endif
 
 static int wm8900_probe(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct wm8900_setup_data *setup;
 	struct snd_soc_codec *codec;
 	int ret = 0;
 
-	dev_info(&pdev->dev, "WM8900 Audio Codec\n");
+	if (!wm8900_client) {
+		dev_err(&pdev->dev, "I2C client not yet instantiated\n");
+		return -ENODEV;
+	}
 
-	setup = socdev->codec_data;
 	codec = kzalloc(sizeof(struct snd_soc_codec), GFP_KERNEL);
 	if (codec == NULL)
 		return -ENOMEM;
@@ -1494,18 +1439,13 @@ static int wm8900_probe(struct platform_device *pdev)
 
 	codec->set_bias_level = wm8900_set_bias_level;
 
-	wm8900_socdev = socdev;
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
-	if (setup->i2c_address) {
-		normal_i2c[0] = setup->i2c_address;
-		codec->hw_write = (hw_write_t)i2c_master_send;
-		ret = i2c_add_driver(&wm8900_i2c_driver);
-		if (ret != 0)
-			printk(KERN_ERR "can't add i2c driver");
-	}
-#else
-#error Non-I2C interfaces not yet supported
-#endif
+	codec->hw_write = (hw_write_t)i2c_master_send;
+	codec->control_data = wm8900_client;
+
+	ret = wm8900_init(socdev);
+	if (ret != 0)
+		kfree(codec);
+
 	return ret;
 }
 
@@ -1520,9 +1460,6 @@ static int wm8900_remove(struct platform_device *pdev)
 
 	snd_soc_free_pcms(socdev);
 	snd_soc_dapm_free(socdev);
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
-	i2c_del_driver(&wm8900_i2c_driver);
-#endif
 	kfree(codec);
 
 	return 0;
@@ -1535,6 +1472,18 @@ struct snd_soc_codec_device soc_codec_dev_wm8900 = {
 	.resume =	wm8900_resume,
 };
 EXPORT_SYMBOL_GPL(soc_codec_dev_wm8900);
+
+static int __devinit wm8900_modinit(void)
+{
+	return i2c_add_driver(&wm8900_i2c_driver);
+}
+module_init(wm8900_modinit);
+
+static void __exit wm8900_exit(void)
+{
+	i2c_del_driver(&wm8900_i2c_driver);
+}
+module_exit(wm8900_exit);
 
 MODULE_DESCRIPTION("ASoC WM8900 driver");
 MODULE_AUTHOR("Mark Brown <broonie@opensource.wolfonmicro.com>");
