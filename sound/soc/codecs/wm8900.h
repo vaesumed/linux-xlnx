@@ -55,7 +55,6 @@
 #define WM8900_
 
 struct wm8900_setup_data {
-	int i2c_bus;
 	unsigned short i2c_address;
 };
 

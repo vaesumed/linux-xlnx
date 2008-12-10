@@ -406,12 +406,11 @@ static int __init au1xpsc_audio_dbdma_init(void)
 {
 	au1xpsc_audio_pcmdma[PCM_TX] = NULL;
 	au1xpsc_audio_pcmdma[PCM_RX] = NULL;
-	return snd_soc_register_platform(&au1xpsc_soc_platform);
+	return 0;
 }
 
 static void __exit au1xpsc_audio_dbdma_exit(void)
 {
-	snd_soc_unregister_platform(&au1xpsc_soc_platform);
 }
 
 module_init(au1xpsc_audio_dbdma_init);

@@ -4020,7 +4020,7 @@ M:	tiwai@suse.de
 L:	alsa-devel@alsa-project.org (subscribers-only)
 S:	Maintained
 
-SOUND - SOC LAYER / DYNAMIC AUDIO POWER MANAGEMENT (ASoC)
+SOUND - SOC LAYER / DYNAMIC AUDIO POWER MANAGEMENT
 P:	Liam Girdwood
 M:	lrg@slimlogic.co.uk
 P:	Mark Brown

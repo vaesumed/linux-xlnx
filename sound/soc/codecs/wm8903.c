@@ -773,14 +773,14 @@ static const struct snd_kcontrol_new left_output_mixer[] = {
 SOC_DAPM_SINGLE("DACL Switch", WM8903_ANALOGUE_LEFT_MIX_0, 3, 1, 0),
 SOC_DAPM_SINGLE("DACR Switch", WM8903_ANALOGUE_LEFT_MIX_0, 2, 1, 0),
 SOC_DAPM_SINGLE_W("Left Bypass Switch", WM8903_ANALOGUE_LEFT_MIX_0, 1, 1, 0),
-SOC_DAPM_SINGLE_W("Right Bypass Switch", WM8903_ANALOGUE_LEFT_MIX_0, 0, 1, 0),
+SOC_DAPM_SINGLE_W("Right Bypass Switch", WM8903_ANALOGUE_LEFT_MIX_0, 1, 1, 0),
 };
 
 static const struct snd_kcontrol_new right_output_mixer[] = {
 SOC_DAPM_SINGLE("DACL Switch", WM8903_ANALOGUE_RIGHT_MIX_0, 3, 1, 0),
 SOC_DAPM_SINGLE("DACR Switch", WM8903_ANALOGUE_RIGHT_MIX_0, 2, 1, 0),
 SOC_DAPM_SINGLE_W("Left Bypass Switch", WM8903_ANALOGUE_RIGHT_MIX_0, 1, 1, 0),
-SOC_DAPM_SINGLE_W("Right Bypass Switch", WM8903_ANALOGUE_RIGHT_MIX_0, 0, 1, 0),
+SOC_DAPM_SINGLE_W("Right Bypass Switch", WM8903_ANALOGUE_RIGHT_MIX_0, 1, 1, 0),
 };
 
 static const struct snd_kcontrol_new left_speaker_mixer[] = {
@@ -788,7 +788,7 @@ SOC_DAPM_SINGLE("DACL Switch", WM8903_ANALOGUE_SPK_MIX_LEFT_0, 3, 1, 0),
 SOC_DAPM_SINGLE("DACR Switch", WM8903_ANALOGUE_SPK_MIX_LEFT_0, 2, 1, 0),
 SOC_DAPM_SINGLE("Left Bypass Switch", WM8903_ANALOGUE_SPK_MIX_LEFT_0, 1, 1, 0),
 SOC_DAPM_SINGLE("Right Bypass Switch", WM8903_ANALOGUE_SPK_MIX_LEFT_0,
-		0, 1, 0),
+		1, 1, 0),
 };
 
 static const struct snd_kcontrol_new right_speaker_mixer[] = {
@@ -797,7 +797,7 @@ SOC_DAPM_SINGLE("DACR Switch", WM8903_ANALOGUE_SPK_MIX_RIGHT_0, 2, 1, 0),
 SOC_DAPM_SINGLE("Left Bypass Switch", WM8903_ANALOGUE_SPK_MIX_RIGHT_0,
 		1, 1, 0),
 SOC_DAPM_SINGLE("Right Bypass Switch", WM8903_ANALOGUE_SPK_MIX_RIGHT_0,
-		0, 1, 0),
+		1, 1, 0),
 };
 
 static const struct snd_soc_dapm_widget wm8903_dapm_widgets[] = {
@@ -1257,8 +1257,7 @@ static struct {
 	{ 0,      0 },
 };
 
-static int wm8903_startup(struct snd_pcm_substream *substream,
-			  struct snd_soc_dai *dai)
+static int wm8903_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -1299,8 +1298,7 @@ static int wm8903_startup(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static void wm8903_shutdown(struct snd_pcm_substream *substream,
-			    struct snd_soc_dai *dai)
+static void wm8903_shutdown(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -1319,8 +1317,7 @@ static void wm8903_shutdown(struct snd_pcm_substream *substream,
 }
 
 static int wm8903_hw_params(struct snd_pcm_substream *substream,
-			    struct snd_pcm_hw_params *params,
-			    struct snd_soc_dai *dai)
+			    struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
@@ -1518,6 +1515,8 @@ struct snd_soc_dai wm8903_dai = {
 		 .startup = wm8903_startup,
 		 .shutdown = wm8903_shutdown,
 		 .hw_params = wm8903_hw_params,
+	},
+	.dai_ops = {
 		 .digital_mute = wm8903_digital_mute,
 		 .set_fmt = wm8903_set_dai_fmt,
 		 .set_sysclk = wm8903_set_dai_sysclk
@@ -1648,7 +1647,7 @@ static int wm8903_init(struct snd_soc_device *socdev)
 
 	wm8903_add_controls(codec);
 	wm8903_add_widgets(codec);
-	ret = snd_soc_init_card(socdev);
+	ret = snd_soc_register_card(socdev);
 	if (ret < 0) {
 		dev_err(&i2c->dev, "wm8903: failed to register card\n");
 		goto card_err;
@@ -1808,18 +1807,6 @@ struct snd_soc_codec_device soc_codec_dev_wm8903 = {
 	.resume =	wm8903_resume,
 };
 EXPORT_SYMBOL_GPL(soc_codec_dev_wm8903);
-
-static int __devinit wm8903_modinit(void)
-{
-	return snd_soc_register_dai(&wm8903_dai);
-}
-module_init(wm8903_modinit);
-
-static void __exit wm8903_exit(void)
-{
-	snd_soc_unregister_dai(&wm8903_dai);
-}
-module_exit(wm8903_exit);
 
 MODULE_DESCRIPTION("ASoC WM8903 driver");
 MODULE_AUTHOR("Mark Brown <broonie@opensource.wolfsonmicro.cm>");
