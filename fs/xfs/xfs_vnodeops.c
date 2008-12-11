@@ -54,33 +54,10 @@
 #include "xfs_vnodeops.h"
 
 int
-xfs_open(
-	xfs_inode_t	*ip)
-{
-	int		mode;
-
-	if (XFS_FORCED_SHUTDOWN(ip->i_mount))
-		return XFS_ERROR(EIO);
-
-	/*
-	 * If it's a directory with any blocks, read-ahead block 0
-	 * as we're almost certain to have the next operation be a read there.
-	 */
-	if (S_ISDIR(ip->i_d.di_mode) && ip->i_d.di_nextents > 0) {
-		mode = xfs_ilock_map_shared(ip);
-		if (ip->i_d.di_nextents > 0)
-			(void)xfs_da_reada_buf(NULL, ip, 0, XFS_DATA_FORK);
-		xfs_iunlock(ip, mode);
-	}
-	return 0;
-}
-
-int
 xfs_setattr(
 	struct xfs_inode	*ip,
 	struct iattr		*iattr,
-	int			flags,
-	cred_t			*credp)
+	int			flags)
 {
 	xfs_mount_t		*mp = ip->i_mount;
 	struct inode		*inode = VFS_I(ip);
@@ -233,10 +210,6 @@ xfs_setattr(
 
 	/*
 	 * Change file ownership.  Must be the owner or privileged.
-	 * If the system was configured with the "restricted_chown"
-	 * option, the owner is not permitted to give away the file,
-	 * and can change the group id only to a group of which he
-	 * or she is a member.
 	 */
 	if (mask & (ATTR_UID|ATTR_GID)) {
 		/*
@@ -260,9 +233,8 @@ xfs_setattr(
 		 * shall be equal to either the group ID or one of the
 		 * supplementary group IDs of the calling process.
 		 */
-		if (restricted_chown &&
-		    (iuid != uid || (igid != gid &&
-				     !in_group_p((gid_t)gid))) &&
+		if ((iuid != uid ||
+		     (igid != gid && !in_group_p((gid_t)gid))) &&
 		    !capable(CAP_CHOWN)) {
 			code = XFS_ERROR(EPERM);
 			goto error_return;
@@ -366,7 +338,7 @@ xfs_setattr(
 		}
 
 		/* wait for all I/O to complete */
-		vn_iowait(ip);
+		xfs_ioend_wait(ip);
 
 		if (!code)
 			code = xfs_itruncate_data(ip, iattr->ia_size);
@@ -456,10 +428,6 @@ xfs_setattr(
 
 	/*
 	 * Change file ownership.  Must be the owner or privileged.
-	 * If the system was configured with the "restricted_chown"
-	 * option, the owner is not permitted to give away the file,
-	 * and can change the group id only to a group of which he
-	 * or she is a member.
 	 */
 	if (mask & (ATTR_UID|ATTR_GID)) {
 		/*
@@ -713,7 +681,7 @@ xfs_fsync(
 		return XFS_ERROR(EIO);
 
 	/* capture size updates in I/O completion before writing the inode. */
-	error = filemap_fdatawait(VFS_I(ip)->i_mapping);
+	error = xfs_wait_on_pages(ip, 0, -1);
 	if (error)
 		return XFS_ERROR(error);
 
@@ -1028,6 +996,12 @@ xfs_inactive_symlink_rmt(
 		ASSERT(XFS_FORCED_SHUTDOWN(mp));
 		goto error0;
 	}
+	/*
+	 * transaction commit worked ok so we can drop the extra ticket
+	 * reference that we gained in xfs_trans_dup()
+	 */
+	xfs_log_ticket_put(tp->t_ticket);
+
 	/*
 	 * Remove the memory for extent descriptions (just bookkeeping).
 	 */
@@ -1625,8 +1599,6 @@ xfs_create(
 		xfs_trans_set_sync(tp);
 	}
 
-	dp->i_gen++;
-
 	/*
 	 * Attach the dquot(s) to the inodes and modify them incore.
 	 * These ids of the inode couldn't have changed since the new
@@ -1993,13 +1965,6 @@ xfs_remove(
 	}
 	xfs_ichgtime(dp, XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG);
 
-	/*
-	 * Bump the in memory generation count on the parent
-	 * directory so that other can know that it has changed.
-	 */
-	dp->i_gen++;
-	xfs_trans_log_inode(tp, dp, XFS_ILOG_CORE);
-
 	if (is_dir) {
 		/*
 		 * Drop the link from ip's "..".
@@ -2009,7 +1974,7 @@ xfs_remove(
 			goto out_bmap_cancel;
 
 		/*
-		 * Drop the link from dp to ip.
+		 * Drop the "." link from ip to self.
 		 */
 		error = xfs_droplink(tp, ip);
 		if (error)
@@ -2017,14 +1982,14 @@ xfs_remove(
 	} else {
 		/*
 		 * When removing a non-directory we need to log the parent
-		 * inode here for the i_gen update.  For a directory this is
-		 * done implicitly by the xfs_droplink call for the ".." entry.
+		 * inode here.  For a directory this is done implicitly
+		 * by the xfs_droplink call for the ".." entry.
 		 */
 		xfs_trans_log_inode(tp, dp, XFS_ILOG_CORE);
 	}
 
 	/*
-	 * Drop the "." link from ip to self.
+	 * Drop the link from dp to ip.
 	 */
 	error = xfs_droplink(tp, ip);
 	if (error)
@@ -2178,7 +2143,6 @@ xfs_link(
 	if (error)
 		goto abort_return;
 	xfs_ichgtime(tdp, XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG);
-	tdp->i_gen++;
 	xfs_trans_log_inode(tp, tdp, XFS_ILOG_CORE);
 
 	error = xfs_bumplink(tp, sip);
@@ -2355,18 +2319,10 @@ xfs_mkdir(
 	}
 	xfs_ichgtime(dp, XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG);
 
-	/*
-	 * Bump the in memory version number of the parent directory
-	 * so that other processes accessing it will recognize that
-	 * the directory has changed.
-	 */
-	dp->i_gen++;
-
 	error = xfs_dir_init(tp, cdp, dp);
 	if (error)
 		goto error2;
 
-	cdp->i_gen = 1;
 	error = xfs_bumplink(tp, dp);
 	if (error)
 		goto error2;
@@ -2653,13 +2609,6 @@ xfs_symlink(
 	xfs_trans_log_inode(tp, dp, XFS_ILOG_CORE);
 
 	/*
-	 * Bump the in memory version number of the parent directory
-	 * so that other processes accessing it will recognize that
-	 * the directory has changed.
-	 */
-	dp->i_gen++;
-
-	/*
 	 * If this is a synchronous mount, make sure that the
 	 * symlink transaction goes to disk before returning to
 	 * the user.
@@ -2809,7 +2758,7 @@ xfs_reclaim(
 		return 0;
 	}
 
-	vn_iowait(ip);
+	xfs_ioend_wait(ip);
 
 	ASSERT(XFS_FORCED_SHUTDOWN(ip->i_mount) || ip->i_delayed_blks == 0);
 
@@ -2833,122 +2782,10 @@ xfs_reclaim(
 	if (!ip->i_update_core && (ip->i_itemp == NULL)) {
 		xfs_ilock(ip, XFS_ILOCK_EXCL);
 		xfs_iflock(ip);
-		return xfs_finish_reclaim(ip, 1, XFS_IFLUSH_DELWRI_ELSE_SYNC);
-	} else {
-		xfs_mount_t	*mp = ip->i_mount;
-
-		/* Protect sync and unpin from us */
-		XFS_MOUNT_ILOCK(mp);
-		spin_lock(&ip->i_flags_lock);
-		__xfs_iflags_set(ip, XFS_IRECLAIMABLE);
-		VFS_I(ip)->i_private = NULL;
-		ip->i_vnode = NULL;
-		spin_unlock(&ip->i_flags_lock);
-		list_add_tail(&ip->i_reclaim, &mp->m_del_inodes);
-		XFS_MOUNT_IUNLOCK(mp);
+		xfs_iflags_set(ip, XFS_IRECLAIMABLE);
+		return xfs_reclaim_inode(ip, 1, XFS_IFLUSH_DELWRI_ELSE_SYNC);
 	}
-	return 0;
-}
-
-int
-xfs_finish_reclaim(
-	xfs_inode_t	*ip,
-	int		locked,
-	int		sync_mode)
-{
-	xfs_perag_t	*pag = xfs_get_perag(ip->i_mount, ip->i_ino);
-	struct inode	*vp = VFS_I(ip);
-
-	if (vp && VN_BAD(vp))
-		goto reclaim;
-
-	/* The hash lock here protects a thread in xfs_iget_core from
-	 * racing with us on linking the inode back with a vnode.
-	 * Once we have the XFS_IRECLAIM flag set it will not touch
-	 * us.
-	 */
-	write_lock(&pag->pag_ici_lock);
-	spin_lock(&ip->i_flags_lock);
-	if (__xfs_iflags_test(ip, XFS_IRECLAIM) ||
-	    (!__xfs_iflags_test(ip, XFS_IRECLAIMABLE) && vp == NULL)) {
-		spin_unlock(&ip->i_flags_lock);
-		write_unlock(&pag->pag_ici_lock);
-		if (locked) {
-			xfs_ifunlock(ip);
-			xfs_iunlock(ip, XFS_ILOCK_EXCL);
-		}
-		return 1;
-	}
-	__xfs_iflags_set(ip, XFS_IRECLAIM);
-	spin_unlock(&ip->i_flags_lock);
-	write_unlock(&pag->pag_ici_lock);
-	xfs_put_perag(ip->i_mount, pag);
-
-	/*
-	 * If the inode is still dirty, then flush it out.  If the inode
-	 * is not in the AIL, then it will be OK to flush it delwri as
-	 * long as xfs_iflush() does not keep any references to the inode.
-	 * We leave that decision up to xfs_iflush() since it has the
-	 * knowledge of whether it's OK to simply do a delwri flush of
-	 * the inode or whether we need to wait until the inode is
-	 * pulled from the AIL.
-	 * We get the flush lock regardless, though, just to make sure
-	 * we don't free it while it is being flushed.
-	 */
-	if (!locked) {
-		xfs_ilock(ip, XFS_ILOCK_EXCL);
-		xfs_iflock(ip);
-	}
-
-	/*
-	 * In the case of a forced shutdown we rely on xfs_iflush() to
-	 * wait for the inode to be unpinned before returning an error.
-	 */
-	if (xfs_iflush(ip, sync_mode) == 0) {
-		/* synchronize with xfs_iflush_done */
-		xfs_iflock(ip);
-		xfs_ifunlock(ip);
-	}
-
-	xfs_iunlock(ip, XFS_ILOCK_EXCL);
-
- reclaim:
-	xfs_ireclaim(ip);
-	return 0;
-}
-
-int
-xfs_finish_reclaim_all(xfs_mount_t *mp, int noblock)
-{
-	int		purged;
-	xfs_inode_t	*ip, *n;
-	int		done = 0;
-
-	while (!done) {
-		purged = 0;
-		XFS_MOUNT_ILOCK(mp);
-		list_for_each_entry_safe(ip, n, &mp->m_del_inodes, i_reclaim) {
-			if (noblock) {
-				if (xfs_ilock_nowait(ip, XFS_ILOCK_EXCL) == 0)
-					continue;
-				if (xfs_ipincount(ip) ||
-				    !xfs_iflock_nowait(ip)) {
-					xfs_iunlock(ip, XFS_ILOCK_EXCL);
-					continue;
-				}
-			}
-			XFS_MOUNT_IUNLOCK(mp);
-			if (xfs_finish_reclaim(ip, noblock,
-					XFS_IFLUSH_DELWRI_ELSE_ASYNC))
-				delay(1);
-			purged = 1;
-			break;
-		}
-
-		done = !purged;
-	}
-
-	XFS_MOUNT_IUNLOCK(mp);
+	xfs_inode_set_reclaim_tag(ip);
 	return 0;
 }
 
@@ -3197,6 +3034,8 @@ xfs_zero_remaining_bytes(
 	bp = xfs_buf_get_noaddr(mp->m_sb.sb_blocksize,
 				XFS_IS_REALTIME_INODE(ip) ?
 				mp->m_rtdev_targp : mp->m_ddev_targp);
+	if (!bp)
+		return XFS_ERROR(ENOMEM);
 
 	for (offset = startoff; offset <= endoff; offset = lastoffset + 1) {
 		offset_fsb = XFS_B_TO_FSBT(mp, offset);
@@ -3312,7 +3151,8 @@ xfs_free_file_space(
 		need_iolock = 0;
 	if (need_iolock) {
 		xfs_ilock(ip, XFS_IOLOCK_EXCL);
-		vn_iowait(ip);	/* wait for the completion of any pending DIOs */
+		/* wait for the completion of any pending DIOs */
+		xfs_ioend_wait(ip);
 	}
 
 	rounding = max_t(uint, 1 << mp->m_sb.sb_blocklog, PAGE_CACHE_SIZE);
@@ -3474,7 +3314,6 @@ xfs_change_file_space(
 	int		cmd,
 	xfs_flock64_t	*bf,
 	xfs_off_t	offset,
-	cred_t		*credp,
 	int		attr_flags)
 {
 	xfs_mount_t	*mp = ip->i_mount;
@@ -3562,7 +3401,7 @@ xfs_change_file_space(
 		iattr.ia_valid = ATTR_SIZE;
 		iattr.ia_size = startoffset;
 
-		error = xfs_setattr(ip, &iattr, attr_flags, credp);
+		error = xfs_setattr(ip, &iattr, attr_flags);
 
 		if (error)
 			return error;
