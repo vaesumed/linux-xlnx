@@ -13,6 +13,12 @@
 #include <linux/nfs.h>
 #include <linux/sunrpc/xdr.h>
 
+#define SM_PRIV_SIZE		16
+
+struct nsm_private {
+	unsigned char		data[SM_PRIV_SIZE];
+};
+
 struct svc_rqst;
 
 #define NLM_MAXCOOKIELEN    	32
@@ -77,10 +83,10 @@ struct nlm_res {
  * statd callback when client has rebooted
  */
 struct nlm_reboot {
-	char *		mon;
-	unsigned int	len;
-	u32		state;
-	__be32		addr;
+	char			*mon;
+	unsigned int		len;
+	u32			state;
+	struct nsm_private	priv;
 };
 
 /*
