@@ -448,7 +448,7 @@ static int serdes_init_niu_1g_serdes(struct niu *np)
 	struct niu_link_config *lp = &np->link_config;
 	u16 pll_cfg, pll_sts;
 	int max_retry = 100;
-	u64 sig, mask, val;
+	u64 uninitialized_var(sig), mask, val;
 	u32 tx_cfg, rx_cfg;
 	unsigned long i;
 	int err;
@@ -547,7 +547,7 @@ static int serdes_init_niu_10g_serdes(struct niu *np)
 	struct niu_link_config *lp = &np->link_config;
 	u32 tx_cfg, rx_cfg, pll_cfg, pll_sts;
 	int max_retry = 100;
-	u64 sig, mask, val;
+	u64 uninitialized_var(sig), mask, val;
 	unsigned long i;
 	int err;
 
@@ -738,7 +738,7 @@ static int esr_write_glue0(struct niu *np, unsigned long chan, u32 val)
 
 static int esr_reset(struct niu *np)
 {
-	u32 reset;
+	u32 uninitialized_var(reset);
 	int err;
 
 	err = mdio_write(np, np->port, NIU_ESR_DEV_ADDR,
@@ -3392,8 +3392,6 @@ static int niu_process_rx_pkt(struct niu *np, struct rx_ring_info *rp)
 	skb->protocol = eth_type_trans(skb, np->dev);
 	netif_receive_skb(skb);
 
-	np->dev->last_rx = jiffies;
-
 	return num_rcr;
 }
 
@@ -5849,9 +5847,34 @@ static void niu_stop_hw(struct niu *np)
 	niu_reset_rx_channels(np);
 }
 
+static void niu_set_irq_name(struct niu *np)
+{
+	int port = np->port;
+	int i, j = 1;
+
+	sprintf(np->irq_name[0], "%s:MAC", np->dev->name);
+
+	if (port == 0) {
+		sprintf(np->irq_name[1], "%s:MIF", np->dev->name);
+		sprintf(np->irq_name[2], "%s:SYSERR", np->dev->name);
+		j = 3;
+	}
+
+	for (i = 0; i < np->num_ldg - j; i++) {
+		if (i < np->num_rx_rings)
+			sprintf(np->irq_name[i+j], "%s-rx-%d",
+				np->dev->name, i);
+		else if (i < np->num_tx_rings + np->num_rx_rings)
+			sprintf(np->irq_name[i+j], "%s-tx-%d", np->dev->name,
+				i - np->num_rx_rings);
+	}
+}
+
 static int niu_request_irq(struct niu *np)
 {
 	int i, j, err;
+
+	niu_set_irq_name(np);
 
 	err = 0;
 	for (i = 0; i < np->num_ldg; i++) {
@@ -5859,7 +5882,7 @@ static int niu_request_irq(struct niu *np)
 
 		err = request_irq(lp->irq, niu_interrupt,
 				  IRQF_SHARED | IRQF_SAMPLE_RANDOM,
-				  np->dev->name, lp);
+				  np->irq_name[i], lp);
 		if (err)
 			goto out_free_irqs;
 
@@ -6055,10 +6078,10 @@ static void niu_get_rx_stats(struct niu *np)
 		dropped += rp->rx_dropped;
 		errors += rp->rx_errors;
 	}
-	np->net_stats.rx_packets = pkts;
-	np->net_stats.rx_bytes = bytes;
-	np->net_stats.rx_dropped = dropped;
-	np->net_stats.rx_errors = errors;
+	np->dev->stats.rx_packets = pkts;
+	np->dev->stats.rx_bytes = bytes;
+	np->dev->stats.rx_dropped = dropped;
+	np->dev->stats.rx_errors = errors;
 }
 
 static void niu_get_tx_stats(struct niu *np)
@@ -6074,9 +6097,9 @@ static void niu_get_tx_stats(struct niu *np)
 		bytes += rp->tx_bytes;
 		errors += rp->tx_errors;
 	}
-	np->net_stats.tx_packets = pkts;
-	np->net_stats.tx_bytes = bytes;
-	np->net_stats.tx_errors = errors;
+	np->dev->stats.tx_packets = pkts;
+	np->dev->stats.tx_bytes = bytes;
+	np->dev->stats.tx_errors = errors;
 }
 
 static struct net_device_stats *niu_get_stats(struct net_device *dev)
@@ -6086,7 +6109,7 @@ static struct net_device_stats *niu_get_stats(struct net_device *dev)
 	niu_get_rx_stats(np);
 	niu_get_tx_stats(np);
 
-	return &np->net_stats;
+	return &dev->stats;
 }
 
 static void niu_load_hash_xmac(struct niu *np, u16 *hash)
@@ -8891,28 +8914,31 @@ static struct net_device * __devinit niu_alloc_and_init(
 	return dev;
 }
 
+static const struct net_device_ops niu_netdev_ops = {
+	.ndo_open		= niu_open,
+	.ndo_stop		= niu_close,
+	.ndo_start_xmit		= niu_start_xmit,
+	.ndo_get_stats		= niu_get_stats,
+	.ndo_set_multicast_list	= niu_set_rx_mode,
+	.ndo_validate_addr	= eth_validate_addr,
+	.ndo_set_mac_address	= niu_set_mac_addr,
+	.ndo_do_ioctl		= niu_ioctl,
+	.ndo_tx_timeout		= niu_tx_timeout,
+	.ndo_change_mtu		= niu_change_mtu,
+};
+
 static void __devinit niu_assign_netdev_ops(struct net_device *dev)
 {
-	dev->open = niu_open;
-	dev->stop = niu_close;
-	dev->get_stats = niu_get_stats;
-	dev->set_multicast_list = niu_set_rx_mode;
-	dev->set_mac_address = niu_set_mac_addr;
-	dev->do_ioctl = niu_ioctl;
-	dev->tx_timeout = niu_tx_timeout;
-	dev->hard_start_xmit = niu_start_xmit;
+	dev->netdev_ops = &niu_netdev_ops;
 	dev->ethtool_ops = &niu_ethtool_ops;
 	dev->watchdog_timeo = NIU_TX_TIMEOUT;
-	dev->change_mtu = niu_change_mtu;
 }
 
 static void __devinit niu_device_announce(struct niu *np)
 {
 	struct net_device *dev = np->dev;
-	DECLARE_MAC_BUF(mac);
 
-	pr_info("%s: NIU Ethernet %s\n",
-		dev->name, print_mac(mac, dev->dev_addr));
+	pr_info("%s: NIU Ethernet %pM\n", dev->name, dev->dev_addr);
 
 	if (np->parent->plat_type == PLAT_TYPE_ATCA_CP3220) {
 		pr_info("%s: Port type[%s] mode[%s:%s] XCVR[%s] phy[%s]\n",
