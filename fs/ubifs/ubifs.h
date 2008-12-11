@@ -386,12 +386,12 @@ struct ubifs_inode {
 	unsigned int dirty:1;
 	unsigned int xattr:1;
 	unsigned int bulk_read:1;
+	unsigned int compr_type:2;
 	struct mutex ui_mutex;
 	spinlock_t ui_lock;
 	loff_t synced_i_size;
 	loff_t ui_size;
 	int flags;
-	int compr_type;
 	pgoff_t last_page_read;
 	pgoff_t read_in_a_row;
 	int data_len;
@@ -893,14 +893,24 @@ struct ubifs_orphan {
 /**
  * struct ubifs_mount_opts - UBIFS-specific mount options information.
  * @unmount_mode: selected unmount mode (%0 default, %1 normal, %2 fast)
- * @bulk_read: enable bulk-reads
- * @chk_data_crc: check CRCs when reading data nodes
+ * @bulk_read: enable/disable bulk-reads (%0 default, %1 disabe, %2 enable)
+ * @chk_data_crc: enable/disable CRC data checking when reading data nodes
+ *                (%0 default, %1 disabe, %2 enable)
+ * @override_compr: override default compressor (%0 - do not override and use
+ *                  superblock compressor, %1 - override and use compressor
+ *                  specified in @compr_type)
+ * @compr_type: compressor type to override the superblock compressor with
+ *              (%UBIFS_COMPR_NONE, etc)
  */
 struct ubifs_mount_opts {
 	unsigned int unmount_mode:2;
 	unsigned int bulk_read:2;
 	unsigned int chk_data_crc:2;
+	unsigned int override_compr:1;
+	unsigned int compr_type:2;
 };
+
+struct ubifs_debug_info;
 
 /**
  * struct ubifs_info - UBIFS file-system description data structure
@@ -946,6 +956,7 @@ struct ubifs_mount_opts {
  * @no_chk_data_crc: do not check CRCs when reading data nodes (except during
  *                   recovery)
  * @bulk_read: enable bulk-reads
+ * @default_compr: default compression algorithm (%UBIFS_COMPR_LZO, etc)
  *
  * @tnc_mutex: protects the Tree Node Cache (TNC), @zroot, @cnext, @enext, and
  *             @calc_idx_sz
@@ -963,8 +974,6 @@ struct ubifs_mount_opts {
  * @ileb_nxt: next pre-allocated index LEBs
  * @old_idx: tree of index nodes obsoleted since the last commit start
  * @bottom_up_buf: a buffer which is used by 'dirty_cow_bottom_up()' in tnc.c
- * @new_ihead_lnum: used by debugging to check ihead_lnum
- * @new_ihead_offs: used by debugging to check ihead_offs
  *
  * @mst_node: master node
  * @mst_offs: offset of valid master node
@@ -986,7 +995,6 @@ struct ubifs_mount_opts {
  * @main_lebs: count of LEBs in the main area
  * @main_first: first LEB of the main area
  * @main_bytes: main area size in bytes
- * @default_compr: default compression algorithm (%UBIFS_COMPR_LZO, etc)
  *
  * @key_hash_type: type of the key hash
  * @key_hash: direntry key hash function
@@ -1149,15 +1157,8 @@ struct ubifs_mount_opts {
  * @always_chk_crc: always check CRCs (while mounting and remounting rw)
  * @mount_opts: UBIFS-specific mount options
  *
- * @dbg_buf: a buffer of LEB size used for debugging purposes
- * @old_zroot: old index root - used by 'dbg_check_old_index()'
- * @old_zroot_level: old index root level - used by 'dbg_check_old_index()'
- * @old_zroot_sqnum: old index root sqnum - used by 'dbg_check_old_index()'
- * @failure_mode: failure mode for recovery testing
- * @fail_delay: 0=>don't delay, 1=>delay a time, 2=>delay a number of calls
- * @fail_timeout: time in jiffies when delay of failure mode expires
- * @fail_cnt: current number of calls to failure mode I/O functions
- * @fail_cnt_max: number of calls by which to delay failure mode
+ * @dbg: debugging-related information
+ * @dfs: debugfs support-related information
  */
 struct ubifs_info {
 	struct super_block *vfs_sb;
@@ -1196,6 +1197,7 @@ struct ubifs_info {
 	unsigned int big_lpt:1;
 	unsigned int no_chk_data_crc:1;
 	unsigned int bulk_read:1;
+	unsigned int default_compr:2;
 
 	struct mutex tnc_mutex;
 	struct ubifs_zbranch zroot;
@@ -1212,10 +1214,6 @@ struct ubifs_info {
 	int ileb_nxt;
 	struct rb_root old_idx;
 	int *bottom_up_buf;
-#ifdef CONFIG_UBIFS_FS_DEBUG
-	int new_ihead_lnum;
-	int new_ihead_offs;
-#endif
 
 	struct ubifs_mst_node *mst_node;
 	int mst_offs;
@@ -1237,7 +1235,6 @@ struct ubifs_info {
 	int main_lebs;
 	int main_first;
 	long long main_bytes;
-	int default_compr;
 
 	uint8_t key_hash_type;
 	uint32_t (*key_hash)(const char *str, int len);
@@ -1391,21 +1388,7 @@ struct ubifs_info {
 	struct ubifs_mount_opts mount_opts;
 
 #ifdef CONFIG_UBIFS_FS_DEBUG
-	void *dbg_buf;
-	struct ubifs_zbranch old_zroot;
-	int old_zroot_level;
-	unsigned long long old_zroot_sqnum;
-	int failure_mode;
-	int fail_delay;
-	unsigned long fail_timeout;
-	unsigned int fail_cnt;
-	unsigned int fail_cnt_max;
-	long long chk_lpt_sz;
-	long long chk_lpt_sz2;
-	long long chk_lpt_wastage;
-	int chk_lpt_lebs;
-	int new_nhead_lnum;
-	int new_nhead_offs;
+	struct ubifs_debug_info *dbg;
 #endif
 };
 
@@ -1639,6 +1622,9 @@ void ubifs_add_lpt_dirt(struct ubifs_info *c, int lnum, int dirty);
 void ubifs_add_nnode_dirt(struct ubifs_info *c, struct ubifs_nnode *nnode);
 uint32_t ubifs_unpack_bits(uint8_t **addr, int *pos, int nrbits);
 struct ubifs_nnode *ubifs_first_nnode(struct ubifs_info *c, int *hght);
+/* Needed only in debugging code in lpt_commit.c */
+int ubifs_unpack_nnode(const struct ubifs_info *c, void *buf,
+		       struct ubifs_nnode *nnode);
 
 /* lpt_commit.c */
 int ubifs_lpt_start_commit(struct ubifs_info *c);
@@ -1714,7 +1700,7 @@ long ubifs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
 /* compressor.c */
 int __init ubifs_compressors_init(void);
-void __exit ubifs_compressors_exit(void);
+void ubifs_compressors_exit(void);
 void ubifs_compress(const void *in_buf, int in_len, void *out_buf, int *out_len,
 		    int *compr_type);
 int ubifs_decompress(const void *buf, int len, void *out, int *out_len,
