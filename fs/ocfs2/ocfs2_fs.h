@@ -767,7 +767,7 @@ struct ocfs2_dir_block_trailer {
 	__u8		db_signature[8];	/* Signature for verification */
 	__le64		db_reserved2;
 	__le64		db_free_next;		/* Next block in list (unused) */
-	__le64		db_check;		/* Error checking */
+	struct ocfs2_block_check db_check;	/* Error checking */
 };
 
 /*
