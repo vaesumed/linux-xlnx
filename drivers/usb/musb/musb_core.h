@@ -359,6 +359,7 @@ struct musb {
 	struct otg_transceiver	xceiv;
 
 	int nIrq;
+	unsigned		irq_wake:1;
 
 	struct musb_hw_ep	 endpoints[MUSB_C_NUM_EPS];
 #define control_ep		endpoints
@@ -467,7 +468,7 @@ extern void musb_platform_disable(struct musb *musb);
 
 extern void musb_hnp_stop(struct musb *musb);
 
-extern void musb_platform_set_mode(struct musb *musb, u8 musb_mode);
+extern int musb_platform_set_mode(struct musb *musb, u8 musb_mode);
 
 #if defined(CONFIG_USB_TUSB6010) || \
 	defined(CONFIG_ARCH_OMAP2430) || defined(CONFIG_ARCH_OMAP34XX)
