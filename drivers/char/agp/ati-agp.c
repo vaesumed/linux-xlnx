@@ -488,7 +488,7 @@ static int __devinit agp_ati_probe(struct pci_dev *pdev,
 			goto found;
 	}
 
-	dev_err(&pdev->dev, "unsupported Ati chipset [%04x/%04x])\n",
+	dev_err(&pdev->dev, "unsupported Ati chipset [%04x:%04x])\n",
 		pdev->vendor, pdev->device);
 	return -ENODEV;
 
