@@ -3199,15 +3199,16 @@ static int __devinit ohci1394_pci_probe(struct pci_dev *dev,
 	/* Now enable LPS, which we need in order to start accessing
 	 * most of the registers.  In fact, on some cards (ALI M5251),
 	 * accessing registers in the SClk domain without LPS enabled
-	 * will lock up the machine.  Wait 50msec to make sure we have
-	 * full link enabled.  */
+	 * will lock up the machine. */
 	reg_write(ohci, OHCI1394_HCControlSet, OHCI1394_HCControl_LPS);
 
 	/* Disable and clear interrupts */
 	reg_write(ohci, OHCI1394_IntEventClear, 0xffffffff);
 	reg_write(ohci, OHCI1394_IntMaskClear, 0xffffffff);
 
-	mdelay(50);
+	/* Flush MMIO writes and wait to make sure we have full link enabled. */
+	reg_read(ohci, OHCI1394_Version);
+	msleep(50);
 
 	/* Determine the number of available IR and IT contexts. */
 	ohci->nb_iso_rcv_ctx =
@@ -3233,8 +3234,9 @@ static int __devinit ohci1394_pci_probe(struct pci_dev *dev,
 	 * we need to get to that "no event", so enough should be initialized
 	 * by that point.
 	 */
-	if (request_irq(dev->irq, ohci_irq_handler, IRQF_SHARED,
-			 OHCI1394_DRIVER_NAME, ohci)) {
+	err = request_irq(dev->irq, ohci_irq_handler, IRQF_SHARED,
+			  OHCI1394_DRIVER_NAME, ohci);
+	if (err) {
 		PRINT_G(KERN_ERR, "Failed to allocate interrupt %d", dev->irq);
 		goto err;
 	}
@@ -3421,12 +3423,14 @@ static int ohci1394_pci_resume(struct pci_dev *dev)
 	reg_write(ohci, OHCI1394_HCControlSet, OHCI1394_HCControl_LPS);
 	reg_write(ohci, OHCI1394_IntEventClear, 0xffffffff);
 	reg_write(ohci, OHCI1394_IntMaskClear, 0xffffffff);
-	mdelay(50);
+	reg_read(ohci, OHCI1394_Version);
+	msleep(50);
 
-	if (request_irq(dev->irq, ohci_irq_handler, IRQF_SHARED,
-			OHCI1394_DRIVER_NAME, ohci)) {
+	err = request_irq(dev->irq, ohci_irq_handler, IRQF_SHARED,
+			  OHCI1394_DRIVER_NAME, ohci);
+	if (err) {
 		PRINT_G(KERN_ERR, "Failed to allocate interrupt %d", dev->irq);
-		return -EIO;
+		return err;
 	}
 
 	ohci_initialize(ohci);
