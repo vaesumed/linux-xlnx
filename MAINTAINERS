@@ -1690,6 +1690,12 @@ M:	khali@linux-fr.org
 L:	lm-sensors@lm-sensors.org
 S:	Maintained
 
+F8000 HARDWARE MONITORING DRIVER
+P:	Jean Delvare
+M:	khali@linux-fr.org
+L:	lm-sensors@lm-sensors.org
+S:	Maintained
+
 FARSYNC SYNCHRONOUS DRIVER
 P:	Kevin Curtis
 M:	kevin.curtis@farsite.co.uk

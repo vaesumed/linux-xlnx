@@ -1,0 +1,71 @@
+Kernel driver f8000
+====================
+
+Supported chips:
+  * Asus f8000
+    Prefix: 'f8000'
+    Addresses scanned: none, address read from Super I/O config space
+    Datasheet: Available on request from Fintek
+
+Author: Jean Delvare <khali@linux-fr.org>
+
+Thanks to Aaron Huang from Fintek for providing technical documentation.
+
+
+Description
+-----------
+
+The F8000 is a Super I/O chip designed by Fintek for Asus, which includes
+hardware monitoring capabilities. It can monitor 3 internal voltages, up to
+4 fans and up to 3 temperature sensors.
+
+This chip also has fan controlling features, which are not supported by
+this driver (yet).
+
+The driver assumes that no more than one chip is present, which seems
+reasonable.
+
+
+Voltage Monitoring
+------------------
+
+Voltages are sampled by an 8-bit ADC with a LSB of 8 mV. The supported
+range is thus from 0 to 2.040 V. The F8000 only monitors its own voltages,
+and they are all divided by 2 internally, so that they fit in this range.
+
+This voltage input mapping is as follows:
+
+in0     VCC3	+3.3V
+in1     VSB	+3.3V Stand-By
+in2     VBAT	battery
+
+
+Fan Monitoring
+--------------
+
+Fan rotation speeds are reported as 12-bit values from a gated clock
+signal. Speeds down to 366 RPM can be measured. There is no theoretical
+high limit.
+
+The chip and driver assume 2 pulse-per-revolution fans.
+
+
+Temperature Monitoring
+----------------------
+
+Temperatures are reported in degrees Celsius. Each temperature measured
+has a high limit and a critical limit. The driver doesn't yet support
+changing these limits.
+
+One of the temperature channels is internal, the other two are external.
+The mapping is as follows:
+
+temp1   internal
+temp2   external
+temp3   external
+
+
+Fan Control
+-----------
+
+Not supported by the driver at this point.
