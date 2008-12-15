@@ -782,7 +782,7 @@ static void get_hpc_access (void)
 /*----------------------------------------------------------------------
 * Name:    free_hpc_access()
 *---------------------------------------------------------------------*/
-void free_hpc_access (void)
+static void free_hpc_access(void)
 {
 	mutex_unlock(&sem_hpcaccess);
 }
