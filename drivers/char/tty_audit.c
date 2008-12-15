@@ -76,10 +76,11 @@ static void tty_audit_log(const char *description, struct task_struct *tsk,
 	ab = audit_log_start(NULL, GFP_KERNEL, AUDIT_TTY);
 	if (ab) {
 		char name[sizeof(tsk->comm)];
+		uid_t uid = task_uid(tsk);
 
 		audit_log_format(ab, "%s pid=%u uid=%u auid=%u ses=%u "
 				 "major=%d minor=%d comm=", description,
-				 tsk->pid, tsk->uid, loginuid, sessionid,
+				 tsk->pid, uid, loginuid, sessionid,
 				 major, minor);
 		get_task_comm(name, tsk);
 		audit_log_untrustedstring(ab, name);
