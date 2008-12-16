@@ -7,7 +7,7 @@
 #include <linux/kvm_host.h>
 #include <asm/msr.h>
 
-#include "svm.h"
+#include <asm/svm.h>
 
 static const u32 host_save_user_msrs[] = {
 #ifdef CONFIG_X86_64
@@ -41,6 +41,16 @@ struct vcpu_svm {
 	unsigned long host_dr7;
 
 	u32 *msrpm;
+	struct vmcb *hsave;
+	u64 hsave_msr;
+
+	u64 nested_vmcb;
+
+	/* These are the merged vectors */
+	u32 *nested_msrpm;
+
+	/* gpa pointers to the real vectors */
+	u64 nested_vmcb_msrpm;
 };
 
 #endif
