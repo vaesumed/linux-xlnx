@@ -603,6 +603,19 @@ config SCSI_FLASHPOINT
 	  substantial, so users of MultiMaster Host Adapters may not
 	  wish to include it.
 
+config LIBFC
+	tristate "LibFC module"
+	depends on SCSI && SCSI_FC_ATTRS
+	---help---
+	  Fibre Channel library module
+
+config FCOE
+	tristate "FCoE module"
+	depends on SCSI
+	select LIBFC
+	---help---
+	  Fibre Channel over Ethernet module
+
 config SCSI_DMX3191D
 	tristate "DMX3191D SCSI support"
 	depends on PCI && SCSI
@@ -1356,6 +1369,13 @@ config SCSI_LPFC
 	help
           This lpfc driver supports the Emulex LightPulse
           Family of Fibre Channel PCI host adapters.
+
+config SCSI_LPFC_DEBUG_FS
+	bool "Emulex LightPulse Fibre Channel debugfs Support"
+	depends on SCSI_LPFC && DEBUG_FS
+	help
+	  This makes debugging infomation from the lpfc driver
+	  available via the debugfs filesystem.
 
 config SCSI_SIM710
 	tristate "Simple 53c710 SCSI support (Compaq, NCR machines)"
