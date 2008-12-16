@@ -339,6 +339,10 @@ struct ocfs2_super
 
 #define OCFS2_SB(sb)	    ((struct ocfs2_super *)(sb)->s_fs_info)
 
+/* Useful typedef for passing around journal access functions */
+typedef int (*ocfs2_journal_access_func)(handle_t *handle, struct inode *inode,
+					 struct buffer_head *bh, int type);
+
 static inline int ocfs2_should_order_data(struct inode *inode)
 {
 	if (!S_ISREG(inode->i_mode))
@@ -378,6 +382,13 @@ static inline int ocfs2_supports_inline_data(struct ocfs2_super *osb)
 static inline int ocfs2_supports_xattr(struct ocfs2_super *osb)
 {
 	if (osb->s_feature_incompat & OCFS2_FEATURE_INCOMPAT_XATTR)
+		return 1;
+	return 0;
+}
+
+static inline int ocfs2_meta_ecc(struct ocfs2_super *osb)
+{
+	if (osb->s_feature_incompat & OCFS2_FEATURE_INCOMPAT_META_ECC)
 		return 1;
 	return 0;
 }
@@ -458,6 +469,9 @@ static inline int ocfs2_uses_extended_slot_map(struct ocfs2_super *osb)
 
 #define OCFS2_IS_VALID_XATTR_BLOCK(ptr)					\
 	(!strcmp((ptr)->xb_signature, OCFS2_XATTR_BLOCK_SIGNATURE))
+
+#define OCFS2_IS_VALID_DIR_TRAILER(ptr)					\
+	(!strcmp((ptr)->db_signature, OCFS2_DIR_TRAILER_SIGNATURE))
 
 static inline unsigned long ino_from_blkno(struct super_block *sb,
 					   u64 blkno)
@@ -615,5 +629,6 @@ static inline s16 ocfs2_get_inode_steal_slot(struct ocfs2_super *osb)
 #define ocfs2_clear_bit ext2_clear_bit
 #define ocfs2_test_bit ext2_test_bit
 #define ocfs2_find_next_zero_bit ext2_find_next_zero_bit
+#define ocfs2_find_next_bit ext2_find_next_bit
 #endif  /* OCFS2_H */
 

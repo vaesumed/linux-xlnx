@@ -65,6 +65,7 @@
 #define OCFS2_EXTENT_BLOCK_SIGNATURE	"EXBLK01"
 #define OCFS2_GROUP_DESC_SIGNATURE      "GROUP01"
 #define OCFS2_XATTR_BLOCK_SIGNATURE	"XATTR01"
+#define OCFS2_DIR_TRAILER_SIGNATURE	"DIRTRL1"
 
 /* Compatibility flags */
 #define OCFS2_HAS_COMPAT_FEATURE(sb,mask)			\
@@ -92,7 +93,8 @@
 					 | OCFS2_FEATURE_INCOMPAT_INLINE_DATA \
 					 | OCFS2_FEATURE_INCOMPAT_EXTENDED_SLOT_MAP \
 					 | OCFS2_FEATURE_INCOMPAT_USERSPACE_STACK \
-					 | OCFS2_FEATURE_INCOMPAT_XATTR)
+					 | OCFS2_FEATURE_INCOMPAT_XATTR \
+					 | OCFS2_FEATURE_INCOMPAT_META_ECC)
 #define OCFS2_FEATURE_RO_COMPAT_SUPP	(OCFS2_FEATURE_RO_COMPAT_UNWRITTEN \
 					 | OCFS2_FEATURE_RO_COMPAT_USRQUOTA \
 					 | OCFS2_FEATURE_RO_COMPAT_GRPQUOTA)
@@ -147,6 +149,9 @@
 
 /* Support for extended attributes */
 #define OCFS2_FEATURE_INCOMPAT_XATTR		0x0200
+
+/* Metadata checksum and error correction */
+#define OCFS2_FEATURE_INCOMPAT_META_ECC		0x0800
 
 /*
  * backup superblock flag is used to indicate that this volume
@@ -421,6 +426,22 @@ static unsigned char ocfs2_type_by_mode[S_IFMT >> S_SHIFT] = {
 #define OCFS2_RAW_SB(dinode)		(&((dinode)->id2.i_super))
 
 /*
+ * Block checking structure.  This is used in metadata to validate the
+ * contents.  If OCFS2_FEATURE_INCOMPAT_META_ECC is not set, it is all
+ * zeros.
+ */
+struct ocfs2_block_check {
+/*00*/	__le32 bc_crc32e;	/* 802.3 Ethernet II CRC32 */
+	__le16 bc_ecc;		/* Single-error-correction parity vector.
+				   This is a simple Hamming code dependant
+				   on the blocksize.  OCFS2's maximum
+				   blocksize, 4K, requires 16 parity bits,
+				   so we fit in __le16. */
+	__le16 bc_reserved1;
+/*08*/
+};
+
+/*
  * On disk extent record for OCFS2
  * It describes a range of clusters on disk.
  *
@@ -507,7 +528,7 @@ struct ocfs2_truncate_log {
 struct ocfs2_extent_block
 {
 /*00*/	__u8 h_signature[8];		/* Signature for verification */
-	__le64 h_reserved1;
+	struct ocfs2_block_check h_check;	/* Error checking */
 /*10*/	__le16 h_suballoc_slot;		/* Slot suballocator this
 					   extent_header belongs to */
 	__le16 h_suballoc_bit;		/* Bit offset in suballocator
@@ -677,7 +698,8 @@ struct ocfs2_dinode {
 					   was set in i_flags */
 	__le16 i_dyn_features;
 	__le64 i_xattr_loc;
-/*80*/	__le64 i_reserved2[7];
+/*80*/	struct ocfs2_block_check i_check;	/* Error checking */
+/*88*/	__le64 i_reserved2[6];
 /*B8*/	union {
 		__le64 i_pad1;		/* Generic way to refer to this
 					   64bit union */
@@ -726,6 +748,30 @@ struct ocfs2_dir_entry {
 } __attribute__ ((packed));
 
 /*
+ * Per-block record for the unindexed directory btree. This is carefully
+ * crafted so that the rec_len and name_len records of an ocfs2_dir_entry are
+ * mirrored. That way, the directory manipulation code needs a minimal amount
+ * of update.
+ *
+ * NOTE: Keep this structure aligned to a multiple of 4 bytes.
+ */
+struct ocfs2_dir_block_trailer {
+/*00*/	__le64		db_compat_inode;	/* Always zero. Was inode */
+
+	__le16		db_compat_rec_len;	/* Backwards compatible with
+						 * ocfs2_dir_entry. */
+	__u8		db_compat_name_len;	/* Always zero. Was name_len */
+	__u8		db_reserved0;
+	__le16		db_reserved1;
+	__le16		db_free_rec_len;	/* Size of largest empty hole
+						 * in this block. (unused) */
+	__u8		db_signature[8];	/* Signature for verification */
+	__le64		db_reserved2;
+	__le64		db_free_next;		/* Next block in list (unused) */
+	struct ocfs2_block_check db_check;	/* Error checking */
+};
+
+/*
  * On disk allocator group structure for OCFS2
  */
 struct ocfs2_group_desc
@@ -744,7 +790,8 @@ struct ocfs2_group_desc
 /*20*/	__le64   bg_parent_dinode;       /* dinode which owns me, in
 					   blocks */
 	__le64   bg_blkno;               /* Offset on disk, in blocks */
-/*30*/	__le64   bg_reserved2[2];
+/*30*/	struct ocfs2_block_check bg_check;	/* Error checking */
+	__le64   bg_reserved2;
 /*40*/	__u8    bg_bitmap[0];
 };
 
@@ -787,7 +834,12 @@ struct ocfs2_xattr_header {
 						   in this extent record,
 						   only valid in the first
 						   bucket. */
-	__le64  xh_csum;
+	struct ocfs2_block_check xh_check;	/* Error checking
+						   (Note, this is only
+						    used for xattr
+						    buckets.  A block uses
+						    xb_check and sets
+						    this field to zero.) */
 	struct ocfs2_xattr_entry xh_entries[0]; /* xattr entry list. */
 };
 
@@ -838,7 +890,7 @@ struct ocfs2_xattr_block {
 					block group */
 	__le32	xb_fs_generation;    /* Must match super block */
 /*10*/	__le64	xb_blkno;            /* Offset on disk, in blocks */
-	__le64	xb_csum;
+	struct ocfs2_block_check xb_check;	/* Error checking */
 /*20*/	__le16	xb_flags;            /* Indicates whether this block contains
 					real xattr or a xattr tree. */
 	__le16	xb_reserved0;
@@ -981,6 +1033,25 @@ struct ocfs2_local_disk_dqblk {
 	__le64 dqb_spacemod;	/* Change in the amount of used space */
 /*10*/	__le64 dqb_inodemod;	/* Change in the amount of used inodes */
 };
+
+
+/*
+ * The quota trailer lives at the end of each quota block.
+ */
+
+struct ocfs2_disk_dqtrailer {
+/*00*/	struct ocfs2_block_check dq_check;	/* Error checking */
+/*08*/	/* Cannot be larger than OCFS2_QBLK_RESERVED_SPACE */
+};
+
+static inline struct ocfs2_disk_dqtrailer *ocfs2_block_dqtrailer(int blocksize,
+								 void *buf)
+{
+	char *ptr = buf;
+	ptr += blocksize - OCFS2_QBLK_RESERVED_SPACE;
+
+	return (struct ocfs2_disk_dqtrailer *)ptr;
+}
 
 #ifdef __KERNEL__
 static inline int ocfs2_fast_symlink_chars(struct super_block *sb)

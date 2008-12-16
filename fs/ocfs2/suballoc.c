@@ -35,6 +35,7 @@
 #include "ocfs2.h"
 
 #include "alloc.h"
+#include "blockcheck.h"
 #include "dlmglue.h"
 #include "inode.h"
 #include "journal.h"
@@ -250,8 +251,22 @@ int ocfs2_check_group_descriptor(struct super_block *sb,
 				 struct buffer_head *bh)
 {
 	int rc;
+	struct ocfs2_group_desc *gd = (struct ocfs2_group_desc *)bh->b_data;
 
-	rc = ocfs2_validate_gd_self(sb, bh, 1);
+	BUG_ON(!buffer_uptodate(bh));
+
+	/*
+	 * If the ecc fails, we return the error but otherwise
+	 * leave the filesystem running.  We know any error is
+	 * local to this block.
+	 */
+	rc = ocfs2_validate_meta_ecc(sb, bh->b_data, &gd->bg_check);
+	if (rc) {
+		mlog(ML_ERROR,
+		     "Checksum failed for group descriptor %llu\n",
+		     (unsigned long long)bh->b_blocknr);
+	} else
+		rc = ocfs2_validate_gd_self(sb, bh, 1);
 	if (!rc)
 		rc = ocfs2_validate_gd_parent(sb, di, bh, 1);
 
@@ -261,8 +276,26 @@ int ocfs2_check_group_descriptor(struct super_block *sb,
 static int ocfs2_validate_group_descriptor(struct super_block *sb,
 					   struct buffer_head *bh)
 {
+	int rc;
+	struct ocfs2_group_desc *gd = (struct ocfs2_group_desc *)bh->b_data;
+
 	mlog(0, "Validating group descriptor %llu\n",
 	     (unsigned long long)bh->b_blocknr);
+
+	BUG_ON(!buffer_uptodate(bh));
+
+	/*
+	 * If the ecc fails, we return the error but otherwise
+	 * leave the filesystem running.  We know any error is
+	 * local to this block.
+	 */
+	rc = ocfs2_validate_meta_ecc(sb, bh->b_data, &gd->bg_check);
+	if (rc)
+		return rc;
+
+	/*
+	 * Errors after here are fatal.
+	 */
 
 	return ocfs2_validate_gd_self(sb, bh, 0);
 }
@@ -314,10 +347,10 @@ static int ocfs2_block_group_fill(handle_t *handle,
 		goto bail;
 	}
 
-	status = ocfs2_journal_access(handle,
-				      alloc_inode,
-				      bg_bh,
-				      OCFS2_JOURNAL_ACCESS_CREATE);
+	status = ocfs2_journal_access_gd(handle,
+					 alloc_inode,
+					 bg_bh,
+					 OCFS2_JOURNAL_ACCESS_CREATE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
@@ -447,8 +480,8 @@ static int ocfs2_block_group_alloc(struct ocfs2_super *osb,
 
 	bg = (struct ocfs2_group_desc *) bg_bh->b_data;
 
-	status = ocfs2_journal_access(handle, alloc_inode,
-				      bh, OCFS2_JOURNAL_ACCESS_WRITE);
+	status = ocfs2_journal_access_di(handle, alloc_inode,
+					 bh, OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
@@ -957,10 +990,10 @@ static inline int ocfs2_block_group_set_bits(handle_t *handle,
 	if (ocfs2_is_cluster_bitmap(alloc_inode))
 		journal_type = OCFS2_JOURNAL_ACCESS_UNDO;
 
-	status = ocfs2_journal_access(handle,
-				      alloc_inode,
-				      group_bh,
-				      journal_type);
+	status = ocfs2_journal_access_gd(handle,
+					 alloc_inode,
+					 group_bh,
+					 journal_type);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
@@ -1031,8 +1064,8 @@ static int ocfs2_relink_block_group(handle_t *handle,
 	bg_ptr = le64_to_cpu(bg->bg_next_group);
 	prev_bg_ptr = le64_to_cpu(prev_bg->bg_next_group);
 
-	status = ocfs2_journal_access(handle, alloc_inode, prev_bg_bh,
-				      OCFS2_JOURNAL_ACCESS_WRITE);
+	status = ocfs2_journal_access_gd(handle, alloc_inode, prev_bg_bh,
+					 OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto out_rollback;
@@ -1046,8 +1079,8 @@ static int ocfs2_relink_block_group(handle_t *handle,
 		goto out_rollback;
 	}
 
-	status = ocfs2_journal_access(handle, alloc_inode, bg_bh,
-				      OCFS2_JOURNAL_ACCESS_WRITE);
+	status = ocfs2_journal_access_gd(handle, alloc_inode, bg_bh,
+					 OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto out_rollback;
@@ -1061,8 +1094,8 @@ static int ocfs2_relink_block_group(handle_t *handle,
 		goto out_rollback;
 	}
 
-	status = ocfs2_journal_access(handle, alloc_inode, fe_bh,
-				      OCFS2_JOURNAL_ACCESS_WRITE);
+	status = ocfs2_journal_access_di(handle, alloc_inode, fe_bh,
+					 OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto out_rollback;
@@ -1213,8 +1246,8 @@ static int ocfs2_alloc_dinode_update_counts(struct inode *inode,
 	struct ocfs2_dinode *di = (struct ocfs2_dinode *) di_bh->b_data;
 	struct ocfs2_chain_list *cl = (struct ocfs2_chain_list *) &di->id2.i_chain;
 
-	ret = ocfs2_journal_access(handle, inode, di_bh,
-				   OCFS2_JOURNAL_ACCESS_WRITE);
+	ret = ocfs2_journal_access_di(handle, inode, di_bh,
+				      OCFS2_JOURNAL_ACCESS_WRITE);
 	if (ret < 0) {
 		mlog_errno(ret);
 		goto out;
@@ -1385,10 +1418,10 @@ static int ocfs2_search_chain(struct ocfs2_alloc_context *ac,
 
 	/* Ok, claim our bits now: set the info on dinode, chainlist
 	 * and then the group */
-	status = ocfs2_journal_access(handle,
-				      alloc_inode,
-				      ac->ac_bh,
-				      OCFS2_JOURNAL_ACCESS_WRITE);
+	status = ocfs2_journal_access_di(handle,
+					 alloc_inode,
+					 ac->ac_bh,
+					 OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
@@ -1795,8 +1828,8 @@ static inline int ocfs2_block_group_clear_bits(handle_t *handle,
 	if (ocfs2_is_cluster_bitmap(alloc_inode))
 		journal_type = OCFS2_JOURNAL_ACCESS_UNDO;
 
-	status = ocfs2_journal_access(handle, alloc_inode, group_bh,
-				      journal_type);
+	status = ocfs2_journal_access_gd(handle, alloc_inode, group_bh,
+					 journal_type);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
@@ -1871,8 +1904,8 @@ int ocfs2_free_suballoc_bits(handle_t *handle,
 		goto bail;
 	}
 
-	status = ocfs2_journal_access(handle, alloc_inode, alloc_bh,
-				      OCFS2_JOURNAL_ACCESS_WRITE);
+	status = ocfs2_journal_access_di(handle, alloc_inode, alloc_bh,
+					 OCFS2_JOURNAL_ACCESS_WRITE);
 	if (status < 0) {
 		mlog_errno(status);
 		goto bail;
