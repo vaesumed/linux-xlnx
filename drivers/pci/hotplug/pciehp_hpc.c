@@ -1254,7 +1254,7 @@ abort:
 	return NULL;
 }
 
-void pcie_release_ctrl(struct controller *ctrl)
+static void pcie_release_ctrl(struct controller *ctrl)
 {
 	pcie_shutdown_notification(ctrl);
 	pcie_cleanup_slot(ctrl);

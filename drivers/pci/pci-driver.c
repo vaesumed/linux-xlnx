@@ -16,6 +16,7 @@
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/cpu.h>
 #include "pci.h"
 
 /*
@@ -48,7 +49,7 @@ store_new_id(struct device_driver *driver, const char *buf, size_t count)
 		subdevice=PCI_ANY_ID, class=0, class_mask=0;
 	unsigned long driver_data=0;
 	int fields=0;
-	int retval;
+	int retval=0;
 
 	fields = sscanf(buf, "%x %x %x %x %x %x %lx",
 			&vendor, &device, &subvendor, &subdevice,
@@ -58,16 +59,18 @@ store_new_id(struct device_driver *driver, const char *buf, size_t count)
 
 	/* Only accept driver_data values that match an existing id_table
 	   entry */
-	retval = -EINVAL;
-	while (ids->vendor || ids->subvendor || ids->class_mask) {
-		if (driver_data == ids->driver_data) {
-			retval = 0;
-			break;
+	if (ids) {
+		retval = -EINVAL;
+		while (ids->vendor || ids->subvendor || ids->class_mask) {
+			if (driver_data == ids->driver_data) {
+				retval = 0;
+				break;
+			}
+			ids++;
 		}
-		ids++;
+		if (retval)	/* No match */
+			return retval;
 	}
-	if (retval)	/* No match */
-		return retval;
 
 	dynid = kzalloc(sizeof(*dynid), GFP_KERNEL);
 	if (!dynid)
@@ -183,32 +186,43 @@ static const struct pci_device_id *pci_match_device(struct pci_driver *drv,
 	return pci_match_id(drv->id_table, dev);
 }
 
+struct drv_dev_and_id {
+	struct pci_driver *drv;
+	struct pci_dev *dev;
+	const struct pci_device_id *id;
+};
+
+static long local_pci_probe(void *_ddi)
+{
+	struct drv_dev_and_id *ddi = _ddi;
+
+	return ddi->drv->probe(ddi->dev, ddi->id);
+}
+
 static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 			  const struct pci_device_id *id)
 {
-	int error;
-#ifdef CONFIG_NUMA
-	/* Execute driver initialization on node where the
-	   device's bus is attached to.  This way the driver likely
-	   allocates its local memory on the right node without
-	   any need to change it. */
-	struct mempolicy *oldpol;
-	cpumask_t oldmask = current->cpus_allowed;
-	int node = dev_to_node(&dev->dev);
+	int error, node;
+	struct drv_dev_and_id ddi = { drv, dev, id };
 
+	/* Execute driver initialization on node where the device's
+	   bus is attached to.  This way the driver likely allocates
+	   its local memory on the right node without any need to
+	   change it. */
+	node = dev_to_node(&dev->dev);
 	if (node >= 0) {
+		int cpu;
 		node_to_cpumask_ptr(nodecpumask, node);
-		set_cpus_allowed_ptr(current, nodecpumask);
-	}
-	/* And set default memory allocation policy */
-	oldpol = current->mempolicy;
-	current->mempolicy = NULL;	/* fall back to system default policy */
-#endif
-	error = drv->probe(dev, id);
-#ifdef CONFIG_NUMA
-	set_cpus_allowed_ptr(current, &oldmask);
-	current->mempolicy = oldpol;
-#endif
+
+		get_online_cpus();
+		cpu = cpumask_any_and(nodecpumask, cpu_online_mask);
+		if (cpu < nr_cpu_ids)
+			error = work_on_cpu(cpu, local_pci_probe, &ddi);
+		else
+			error = local_pci_probe(&ddi);
+		put_online_cpus();
+	} else
+		error = local_pci_probe(&ddi);
 	return error;
 }
 
@@ -681,7 +695,7 @@ static int pci_pm_restore_noirq(struct device *dev)
 
 #endif /* !CONFIG_HIBERNATION */
 
-struct dev_pm_ops pci_dev_pm_ops = {
+static struct dev_pm_ops pci_dev_pm_ops = {
 	.prepare = pci_pm_prepare,
 	.complete = pci_pm_complete,
 	.suspend = pci_pm_suspend,
