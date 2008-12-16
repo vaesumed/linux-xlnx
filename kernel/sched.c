@@ -7138,8 +7138,7 @@ cpu_to_phys_group(int cpu, const struct cpumask *cpu_map,
 {
 	int group;
 #ifdef CONFIG_SCHED_MC
-	/* FIXME: Use cpu_coregroup_mask. */
-	*mask = cpu_coregroup_map(cpu);
+	*mask = *cpu_coregroup_mask(cpu);
 	cpus_and(*mask, *mask, *cpu_map);
 	group = cpumask_first(mask);
 #elif defined(CONFIG_SCHED_SMT)
@@ -7479,7 +7478,7 @@ static int __build_sched_domains(const struct cpumask *cpu_map,
 		sd = &per_cpu(core_domains, i).sd;
 		SD_INIT(sd, MC);
 		set_domain_attribute(sd, attr);
-		*sched_domain_span(sd) = cpu_coregroup_map(i);
+		*sched_domain_span(sd) = *cpu_coregroup_mask(i);
 		cpumask_and(sched_domain_span(sd),
 			    sched_domain_span(sd), cpu_map);
 		sd->parent = p;
@@ -7517,8 +7516,7 @@ static int __build_sched_domains(const struct cpumask *cpu_map,
 #ifdef CONFIG_SCHED_MC
 	/* Set up multi-core groups */
 	for_each_cpu(i, cpu_map) {
-		/* FIXME: Use cpu_coregroup_mask */
-		*this_core_map = cpu_coregroup_map(i);
+		*this_core_map = *cpu_coregroup_mask(i);
 		cpus_and(*this_core_map, *this_core_map, *cpu_map);
 		if (i != cpumask_first(this_core_map))
 			continue;
