@@ -98,7 +98,7 @@ void mcf_autovector(unsigned int vec)
 
 /***************************************************************************/
 
-void __init config_BSP(char *commandp, int size)
+void __init config_BSP(void)
 {
 	mcf_disableall();
 	mach_reset = coldfire_reset;

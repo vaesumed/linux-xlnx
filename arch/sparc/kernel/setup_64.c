@@ -277,14 +277,14 @@ void __init boot_cpu_id_too_large(int cpu)
 }
 #endif
 
-void __init setup_arch(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
 {
-	/* Initialize PROM console and command line. */
-	*cmdline_p = prom_getbootargs();
-	strcpy(boot_command_line, *cmdline_p);
-	parse_early_param();
+	strcpy(boot_command_line, prom_getbootargs());
+}
 
-	boot_flags_init(*cmdline_p);
+void __init setup_arch(void)
+{
+	boot_flags_init(boot_command_line);
 	register_console(&prom_early_console);
 
 	if (tlb_type == hypervisor)

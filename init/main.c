@@ -127,8 +127,6 @@ extern void softirq_init(void);
 char __initdata boot_command_line[COMMAND_LINE_SIZE];
 /* Untouched saved command line (eg. for /proc) */
 char *saved_command_line;
-/* Command line for parameter parsing */
-static char *static_command_line;
 
 static char *execute_command;
 static char *ramdisk_execute_command;
@@ -210,7 +208,7 @@ static int __init obsolete_checksetup(char *line)
 		int n = strlen(p->str);
 		if (!strncmp(line, p->str, n)) {
 			if (p->early) {
-				/* Already done in parse_early_param?
+				/* Already done in do_early_param?
 				 * (Needs exact match on param part).
 				 * Keep iterating, as we can have early
 				 * params and __setups of same names 8( */
@@ -260,12 +258,26 @@ static int __init loglevel(char *str)
 
 early_param("loglevel", loglevel);
 
+static bool __init is_core_param(const char *param)
+{
+	const struct kernel_param *i;
+
+	for (i = __start___core_param; i < __stop___core_param; i++)
+		if (strcmp(param, i->name) == 0)
+			return true;
+	return false;
+}
+
 /*
  * Unknown boot options get handed to init, unless they look like
  * failed parameters
  */
 static int __init unknown_bootoption(char *param, char *val)
 {
+	/* Already handled as a core param? */
+	if (is_core_param(param))
+		return 0;
+
 	/* Change NUL term back to "=", to make "param" the whole string. */
 	if (val) {
 		/* param=val or param="val"? */
@@ -437,20 +449,6 @@ static void __init smp_init(void)
 #endif
 
 /*
- * We need to store the untouched command line for future reference.
- * We also need to store the touched command line since the parameter
- * parsing is performed in place, and we should allow a component to
- * store reference of name/value for future reference.
- */
-static void __init setup_command_line(char *command_line)
-{
-	saved_command_line = alloc_bootmem(strlen (boot_command_line)+1);
-	static_command_line = alloc_bootmem(strlen (command_line)+1);
-	strcpy (saved_command_line, boot_command_line);
-	strcpy (static_command_line, command_line);
-}
-
-/*
  * We need to finalize in a non-__init function or else race conditions
  * between the root thread and the init thread may cause start_kernel to
  * be reaped by free_initmem before the root thread has proceeded to
@@ -502,21 +500,6 @@ static int __init do_early_param(char *param, char *val)
 	return 0;
 }
 
-/* Arch code calls this early on, or if not, just before other parsing. */
-void __init parse_early_param(void)
-{
-	static __initdata int done = 0;
-	static __initdata char tmp_cmdline[COMMAND_LINE_SIZE];
-
-	if (done)
-		return;
-
-	/* All fall through to do_early_param. */
-	strlcpy(tmp_cmdline, boot_command_line, COMMAND_LINE_SIZE);
-	parse_args("early options", tmp_cmdline, NULL, 0, do_early_param);
-	done = 1;
-}
-
 /*
  *	Activate the first processor.
  */
@@ -547,10 +530,19 @@ void __init __weak early_irq_init(void)
 	arch_early_irq_init();
 }
 
+/* Ideally, this would take a 'const char *cmdline' param. */
 asmlinkage void __init start_kernel(void)
 {
-	char * command_line;
-	extern struct kernel_param __start___param[], __stop___param[];
+	char *static_command_line;
+
+	printk(KERN_NOTICE);
+	printk(linux_banner);
+
+	arch_get_boot_command_line();
+	parse_args("Core and early params", boot_command_line,
+		   __start___core_param,
+		   __stop___core_param - __start___core_param,
+		   do_early_param, true);
 
 	smp_setup_processor_id();
 
@@ -581,11 +573,9 @@ asmlinkage void __init start_kernel(void)
 	tick_init();
 	boot_cpu_init();
 	page_address_init();
-	printk(KERN_NOTICE);
-	printk(linux_banner);
-	setup_arch(&command_line);
+	setup_arch();
 	mm_init_owner(&init_mm, &init_task);
-	setup_command_line(command_line);
+
 	unwind_setup();
 	setup_per_cpu_areas();
 	setup_nr_cpu_ids();
@@ -605,10 +595,12 @@ asmlinkage void __init start_kernel(void)
 	build_all_zonelists();
 	page_alloc_init();
 	printk(KERN_NOTICE "Kernel command line: %s\n", boot_command_line);
-	parse_early_param();
+	/* param parsing can keep pointers to the commandline. */
+	static_command_line = alloc_bootmem(strlen(boot_command_line)+1);
+	strcpy(static_command_line, boot_command_line);
 	parse_args("Booting kernel", static_command_line, __start___param,
 		   __stop___param - __start___param,
-		   &unknown_bootoption);
+		   &unknown_bootoption, false);
 	if (!irqs_disabled()) {
 		printk(KERN_WARNING "start_kernel(): bug: interrupts were "
 				"enabled *very* early, fixing it\n");
@@ -711,6 +703,8 @@ asmlinkage void __init start_kernel(void)
 	acpi_early_init(); /* before LAPIC and SMP init */
 
 	ftrace_init();
+
+	saved_command_line = kstrdup(boot_command_line, GFP_KERNEL);
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();

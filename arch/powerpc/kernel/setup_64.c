@@ -502,16 +502,20 @@ static void __init emergency_stack_init(void)
 	}
 }
 
+void arch_get_boot_command_line(void)
+{
+	/* FIXME: Get rid of cmd_line in favor of boot_command_line? */
+	strlcpy(boot_command_line, cmd_line, COMMAND_LINE_SIZE);
+}
+
 /*
  * Called into from start_kernel, after lock_kernel has been called.
  * Initializes bootmem, which is unsed to manage page allocation until
  * mem_init is called.
  */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 	ppc64_boot_msg(0x12, "Setup Arch");
-
-	*cmdline_p = cmd_line;
 
 	/*
 	 * Set cache line size based on type of cpu as a default.

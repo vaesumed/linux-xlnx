@@ -81,7 +81,7 @@ device_initcall(se7780_devices_setup);
 #define GPIO_PMSELR      0xFFEA0080
 #define GPIO_PECR        0xFFEA0008
 
-static void __init se7780_setup(char **cmdline_p)
+static void __init se7780_setup(void)
 {
 	/* "SH-Linux" on LED Display */
 	ctrl_outw( 'S' , PA_LED_DISP + (DISP_SEL0_ADDR << 1) );

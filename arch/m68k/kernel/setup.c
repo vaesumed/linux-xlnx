@@ -75,8 +75,6 @@ EXPORT_SYMBOL(m68k_memory);
 
 struct mem_info m68k_ramdisk;
 
-static char m68k_command_line[CL_SIZE];
-
 void (*mach_sched_init) (irq_handler_t handler) __initdata = NULL;
 /* machine dependent irq functions */
 void (*mach_init_IRQ) (void) __initdata = NULL;
@@ -170,8 +168,7 @@ static void __init m68k_parse_bootinfo(const struct bi_record *record)
 			break;
 
 		case BI_COMMAND_LINE:
-			strlcpy(m68k_command_line, (const char *)data,
-				sizeof(m68k_command_line));
+			/* Done in arch_get_boot_command_line */
 			break;
 
 		default:
@@ -213,7 +210,22 @@ static void __init m68k_parse_bootinfo(const struct bi_record *record)
 #endif
 }
 
-void __init setup_arch(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+	extern char _end[];
+	/* The bootinfo is located right after the kernel bss */
+	const struct bi_record *record = (const struct bi_record *)&_end;
+
+	while (record->tag != BI_LAST) {
+		if (record->tag == BI_COMMAND_LINE)
+			strlcpy(boot_command_line, (const char *)record->data,
+				COMMAND_LINE_SIZE);
+
+		record = ((void *)record) + record->size;
+	}
+}
+
+void __init setup_arch(void)
 {
 	extern int _etext, _edata, _end;
 	int i;
@@ -255,11 +267,6 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.end_code = (unsigned long) &_etext;
 	init_mm.end_data = (unsigned long) &_edata;
 	init_mm.brk = (unsigned long) &_end;
-
-	*cmdline_p = m68k_command_line;
-	memcpy(boot_command_line, *cmdline_p, CL_SIZE);
-
-	parse_early_param();
 
 #ifdef CONFIG_DUMMY_CONSOLE
 	conswitchp = &dummy_con;

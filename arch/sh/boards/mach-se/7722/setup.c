@@ -152,7 +152,7 @@ static int __init se7722_devices_setup(void)
 }
 device_initcall(se7722_devices_setup);
 
-static void __init se7722_setup(char **cmdline_p)
+static void __init se7722_setup(void)
 {
 	ctrl_outw(0x010D, FPGA_OUT);    /* FPGA */
 

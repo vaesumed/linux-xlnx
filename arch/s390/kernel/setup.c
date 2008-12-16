@@ -751,7 +751,7 @@ static void __init setup_hwcaps(void)
  */
 
 void __init
-setup_arch(char **cmdline_p)
+setup_arch(void)
 {
         /*
          * print what head.S has found out about the machine
@@ -780,10 +780,6 @@ setup_arch(char **cmdline_p)
 		pr_info("Linux is running natively in 64-bit mode\n");
 #endif /* CONFIG_64BIT */
 
-	/* Have one command line that is parsed and saved in /proc/cmdline */
-	/* boot_command_line has been already set up in early.c */
-	*cmdline_p = boot_command_line;
-
         ROOT_DEV = Root_RAM0;
 
 	init_mm.start_code = PAGE_OFFSET;
@@ -795,8 +791,6 @@ setup_arch(char **cmdline_p)
 		memcpy(&uaccess, &uaccess_mvcos, sizeof(uaccess));
 	else
 		memcpy(&uaccess, &uaccess_std, sizeof(uaccess));
-
-	parse_early_param();
 
 	setup_ipl();
 	setup_memory_end();

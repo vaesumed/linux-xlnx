@@ -108,15 +108,17 @@ void mcf_settimericr(unsigned int timer, unsigned int level)
 
 /***************************************************************************/
 
-void __init config_BSP(char *commandp, int size)
+#if defined(CONFIG_NETtel)
+void __init platform_get_boot_command_line(void)
+{
+	/* Copy command line from FLASH to local buffer... */
+	strlcpy(boot_command_line, (char *)0xf0004000, COMMAND_LINE_SIZE);
+}
+#endif /* CONFIG_NETtel */
+
+void __init config_BSP(void)
 {
 	mcf_setimr(MCFSIM_IMR_MASKALL);
-
-#if defined(CONFIG_NETtel)
-	/* Copy command line from FLASH to local buffer... */
-	memcpy(commandp, (char *) 0xf0004000, size);
-	commandp[size-1] = 0;
-#endif /* CONFIG_NETtel */
 
 	mach_reset = coldfire_reset;
 }

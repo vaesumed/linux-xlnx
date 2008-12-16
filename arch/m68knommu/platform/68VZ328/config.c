@@ -59,7 +59,7 @@ static void m68vz328_reset(void)
 	);
 }
 
-static void init_hardware(char *command, int size)
+static void init_hardware(void)
 {
 #ifdef CONFIG_DIRECT_IO_ACCESS
 	SCR = 0x10;					/* allow user access to internal registers */
@@ -150,7 +150,7 @@ _bsc0(char *, getserialnum)
 _bsc1(unsigned char *, gethwaddr, int, a)
 _bsc1(char *, getbenv, char *, a)
 
-static void init_hardware(char *command, int size)
+static void init_hardware(void)
 {
 	char *p;
 
@@ -158,11 +158,13 @@ static void init_hardware(char *command, int size)
 	p = cs8900a_hwaddr = gethwaddr(0);
 	printk(KERN_INFO "uCdimm hwaddr %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",
 		p[0], p[1], p[2], p[3], p[4], p[5]);
+#if 0 /* Did this ever work?  strcpy wrong way? */
 	p = getbenv("APPEND");
 	if (p)
 		strcpy(p, command);
 	else
 		command[0] = 0;
+#endif
 }
 
 /***************************************************************************/
@@ -172,7 +174,7 @@ static void m68vz328_reset(void)
 {
 }
 
-static void init_hardware(char *command, int size)
+static void init_hardware(void)
 {
 }
 
@@ -180,11 +182,11 @@ static void init_hardware(char *command, int size)
 #endif
 /***************************************************************************/
 
-void config_BSP(char *command, int size)
+void config_BSP(void)
 {
 	printk(KERN_INFO "68VZ328 DragonBallVZ support (c) 2001 Lineo, Inc.\n");
 
-	init_hardware(command, size);
+	init_hardware();
 
 	mach_gettod = m68328_timer_gettod;
 	mach_reset = m68vz328_reset;

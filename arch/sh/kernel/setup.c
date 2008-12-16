@@ -329,7 +329,19 @@ static int __init parse_elfcorehdr(char *arg)
 early_param("elfcorehdr", parse_elfcorehdr);
 #endif
 
-void __init setup_arch(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+#ifdef CONFIG_CMDLINE_BOOL
+	strlcpy(command_line, CONFIG_CMDLINE, sizeof(command_line));
+#else
+	strlcpy(command_line, COMMAND_LINE, sizeof(command_line));
+#endif
+
+	/* FIXME: get rid of command_line, just use boot_command_line? */
+	memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
+}
+
+void __init setup_arch(void)
 {
 	enable_mmu();
 
@@ -370,18 +382,6 @@ void __init setup_arch(char **cmdline_p)
 	if (!memory_end)
 		memory_end = memory_start + __MEMORY_SIZE;
 
-#ifdef CONFIG_CMDLINE_BOOL
-	strlcpy(command_line, CONFIG_CMDLINE, sizeof(command_line));
-#else
-	strlcpy(command_line, COMMAND_LINE, sizeof(command_line));
-#endif
-
-	/* Save unparsed command line copy for /proc/cmdline */
-	memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-	*cmdline_p = command_line;
-
-	parse_early_param();
-
 	sh_mv_setup();
 
 	/*
@@ -407,7 +407,7 @@ void __init setup_arch(char **cmdline_p)
 
 	/* Perform the machine specific initialisation */
 	if (likely(sh_mv.mv_setup))
-		sh_mv.mv_setup(cmdline_p);
+		sh_mv.mv_setup();
 
 	paging_init();
 

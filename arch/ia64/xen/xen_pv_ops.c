@@ -129,7 +129,7 @@ xen_arch_setup_early(void)
 }
 
 static void __init
-xen_arch_setup_console(char **cmdline_p)
+xen_arch_setup_console(void)
 {
 	add_preferred_console("xenboot", 0, NULL);
 	add_preferred_console("tty", 0, NULL);

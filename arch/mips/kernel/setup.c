@@ -465,7 +465,14 @@ static int __init early_parse_mem(char *p)
 }
 early_param("mem", early_parse_mem);
 
-static void __init arch_mem_init(char **cmdline_p)
+void arch_get_boot_command_line(void)
+{
+	/* FIXME: Just replace command_line with boot_command_line? */
+	strlcpy(command_line, arcs_cmdline, sizeof(command_line));
+	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
+}
+
+static void __init arch_mem_init(void)
 {
 	extern void plat_mem_setup(void);
 
@@ -474,13 +481,6 @@ static void __init arch_mem_init(char **cmdline_p)
 
 	pr_info("Determined physical RAM map:\n");
 	print_memory_map();
-
-	strlcpy(command_line, arcs_cmdline, sizeof(command_line));
-	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-
-	*cmdline_p = command_line;
-
-	parse_early_param();
 
 	if (usermem) {
 		pr_info("User-defined physical RAM map:\n");
@@ -545,7 +545,7 @@ static void __init resource_init(void)
 	}
 }
 
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch()
 {
 	cpu_probe();
 	prom_init();
@@ -564,7 +564,7 @@ void __init setup_arch(char **cmdline_p)
 #endif
 #endif
 
-	arch_mem_init(cmdline_p);
+	arch_mem_init();
 
 	resource_init();
 	plat_smp_setup();

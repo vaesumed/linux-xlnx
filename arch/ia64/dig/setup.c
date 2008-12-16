@@ -25,7 +25,7 @@
 #include <asm/system.h>
 
 void __init
-dig_setup (char **cmdline_p)
+dig_setup(void)
 {
 	unsigned int orig_x, orig_y, num_cols, num_rows, font_height;
 

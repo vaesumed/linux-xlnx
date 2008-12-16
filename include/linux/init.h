@@ -150,7 +150,8 @@ extern unsigned int reset_devices;
 extern int initmem_now_dynamic;
 
 /* used by init/main.c */
-void setup_arch(char **);
+void setup_arch(void);
+void arch_get_boot_command_line(void);
 void prepare_namespace(void);
 
 extern void (*late_time_init)(void);
@@ -246,8 +247,6 @@ struct obs_kernel_param {
 #define early_param(str, fn)					\
 	__setup_param(str, fn, fn, 1)
 
-/* Relies on boot_command_line being set */
-void __init parse_early_param(void);
 #endif /* __ASSEMBLY__ */
 
 /**
