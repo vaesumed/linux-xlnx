@@ -240,9 +240,7 @@ void sun4c_complete_all_stores(void)
 
 	_unused = sun4c_get_context();
 	sun4c_set_context(_unused);
-#ifdef CONFIG_SUN_AUXIO
 	_unused = get_auxio();
-#endif
 }
 
 /* Bootup utility functions. */
@@ -1124,8 +1122,8 @@ static void sun4c_get_scsi_sgl(struct device *dev, struct scatterlist *sg, int s
 {
 	while (sz != 0) {
 		--sz;
-		sg->dvma_address = (__u32)sun4c_lockarea(sg_virt(sg), sg->length);
-		sg->dvma_length = sg->length;
+		sg->dma_address = (__u32)sun4c_lockarea(sg_virt(sg), sg->length);
+		sg->dma_length = sg->length;
 		sg = sg_next(sg);
 	}
 }
@@ -1141,7 +1139,7 @@ static void sun4c_release_scsi_sgl(struct device *dev, struct scatterlist *sg, i
 {
 	while (sz != 0) {
 		--sz;
-		sun4c_unlockarea((char *)sg->dvma_address, sg->length);
+		sun4c_unlockarea((char *)sg->dma_address, sg->length);
 		sg = sg_next(sg);
 	}
 }
