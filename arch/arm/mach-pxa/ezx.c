@@ -21,6 +21,7 @@
 #include <mach/pxafb.h>
 #include <mach/ohci.h>
 #include <mach/i2c.h>
+#include <mach/hardware.h>
 
 #include <mach/mfp-pxa27x.h>
 #include <mach/pxa-regs.h>
@@ -112,6 +113,10 @@ static unsigned long ezx_pin_config[] __initdata = {
 	GPIO91_USB_P3_1,	/* ICL_XRXD */
 	GPIO56_USB_P3_4,	/* ICL_VMOUT */
 	GPIO113_USB_P3_3,	/* /ICL_VMIN */
+
+	/* I2C */
+	GPIO117_I2C_SCL,
+	GPIO118_I2C_SDA,
 };
 
 static void __init ezx_init(void)
