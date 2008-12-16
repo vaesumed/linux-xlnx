@@ -616,10 +616,8 @@ static void res_free(struct em28xx_fh *fh)
 {
 	struct em28xx    *dev = fh->dev;
 
-	mutex_lock(&dev->lock);
 	fh->stream_on = 0;
 	dev->stream_on = 0;
-	mutex_unlock(&dev->lock);
 }
 
 /*
@@ -1281,7 +1279,9 @@ static int vidioc_streamoff(struct file *file, void *priv,
 		return -EINVAL;
 
 	videobuf_streamoff(&fh->vb_vidq);
+	mutex_lock(&dev->lock);
 	res_free(fh);
+	mutex_unlock(&dev->lock);
 
 	return 0;
 }
@@ -1676,10 +1676,9 @@ static int em28xx_v4l2_close(struct inode *inode, struct file *filp)
 	em28xx_videodbg("users=%d\n", dev->users);
 
 
+	mutex_lock(&dev->lock);
 	if (res_check(fh))
 		res_free(fh);
-
-	mutex_lock(&dev->lock);
 
 	if (dev->users == 1) {
 		videobuf_stop(&fh->vb_vidq);
