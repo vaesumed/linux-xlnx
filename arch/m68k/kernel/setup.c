@@ -212,7 +212,7 @@ static void __init m68k_parse_bootinfo(const struct bi_record *record)
 
 void __init arch_get_boot_command_line(void)
 {
-	extern char _end[];
+	extern int _end;
 	/* The bootinfo is located right after the kernel bss */
 	const struct bi_record *record = (const struct bi_record *)&_end;
 

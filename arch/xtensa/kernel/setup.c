@@ -281,7 +281,7 @@ void __init setup_arch(void)
 
 	bootmem_init();
 
-	platform_setup(cmdline_p);
+	platform_setup();
 
 
 	paging_init();
