@@ -3,6 +3,9 @@
  *    Author(s): Heiko Carstens <heiko.carstens@de.ibm.com>
  */
 
+#define KMSG_COMPONENT "cpu"
+#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
+
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/init.h>
@@ -57,6 +60,7 @@ struct core_info {
 	cpumask_t mask;
 };
 
+static int topology_enabled;
 static void topology_work_fn(struct work_struct *work);
 static struct tl_info *tl_info;
 static struct core_info core_info;
@@ -77,8 +81,8 @@ cpumask_t cpu_coregroup_map(unsigned int cpu)
 	cpumask_t mask;
 
 	cpus_clear(mask);
-	if (!machine_has_topology)
-		return cpu_present_map;
+	if (!topology_enabled || !machine_has_topology)
+		return cpu_possible_map;
 	spin_lock_irqsave(&topology_lock, flags);
 	while (core) {
 		if (cpu_isset(cpu, core->mask)) {
@@ -168,7 +172,7 @@ static void topology_update_polarization_simple(void)
 	int cpu;
 
 	mutex_lock(&smp_cpu_state_mutex);
-	for_each_present_cpu(cpu)
+	for_each_possible_cpu(cpu)
 		smp_cpu_polarization[cpu] = POLARIZATION_HRZ;
 	mutex_unlock(&smp_cpu_state_mutex);
 }
@@ -199,7 +203,7 @@ int topology_set_cpu_management(int fc)
 		rc = ptf(PTF_HORIZONTAL);
 	if (rc)
 		return -EBUSY;
-	for_each_present_cpu(cpu)
+	for_each_possible_cpu(cpu)
 		smp_cpu_polarization[cpu] = POLARIZATION_UNKNWN;
 	return rc;
 }
@@ -208,7 +212,7 @@ static void update_cpu_core_map(void)
 {
 	int cpu;
 
-	for_each_present_cpu(cpu)
+	for_each_possible_cpu(cpu)
 		cpu_core_map[cpu] = cpu_coregroup_map(cpu);
 }
 
@@ -262,6 +266,15 @@ static void topology_interrupt(__u16 code)
 	schedule_work(&topology_work);
 }
 
+static int __init early_parse_topology(char *p)
+{
+	if (strncmp(p, "on", 2))
+		return 0;
+	topology_enabled = 1;
+	return 0;
+}
+early_param("topology", early_parse_topology);
+
 static int __init init_topology_update(void)
 {
 	int rc;
@@ -311,7 +324,7 @@ void __init s390_init_cpu_topology(void)
 	for (i = 0; i < info->mnest - 2; i++)
 		nr_cores *= info->mag[NR_MAG - 3 - i];
 
-	printk(KERN_INFO "CPU topology:");
+	pr_info("The CPU configuration topology of the machine is:");
 	for (i = 0; i < NR_MAG; i++)
 		printk(" %d", info->mag[i]);
 	printk(" / %d\n", info->mnest);
