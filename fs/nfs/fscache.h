@@ -86,6 +86,12 @@ extern void nfs_fscache_reset_inode_cookie(struct inode *);
 extern void __nfs_fscache_invalidate_page(struct page *, struct inode *);
 extern int nfs_fscache_release_page(struct page *, gfp_t);
 
+extern int __nfs_readpage_from_fscache(struct nfs_open_context *,
+				       struct inode *, struct page *);
+extern int __nfs_readpages_from_fscache(struct nfs_open_context *,
+					struct inode *, struct address_space *,
+					struct list_head *, unsigned *);
+
 /*
  * release the caching state associated with a page if undergoing complete page
  * invalidation
@@ -97,6 +103,32 @@ static inline void nfs_fscache_invalidate_page(struct page *page,
 		__nfs_fscache_invalidate_page(page, inode);
 }
 
+/*
+ * Retrieve a page from an inode data storage object.
+ */
+static inline int nfs_readpage_from_fscache(struct nfs_open_context *ctx,
+					    struct inode *inode,
+					    struct page *page)
+{
+	if (NFS_I(inode)->fscache)
+		return __nfs_readpage_from_fscache(ctx, inode, page);
+	return -ENOBUFS;
+}
+
+/*
+ * Retrieve a set of pages from an inode data storage object.
+ */
+static inline int nfs_readpages_from_fscache(struct nfs_open_context *ctx,
+					     struct inode *inode,
+					     struct address_space *mapping,
+					     struct list_head *pages,
+					     unsigned *nr_pages)
+{
+	if (NFS_I(inode)->fscache)
+		return __nfs_readpages_from_fscache(ctx, inode, mapping, pages,
+						    nr_pages);
+	return -ENOBUFS;
+}
 
 #else /* CONFIG_NFS_FSCACHE */
 static inline int nfs_fscache_register(void) { return 0; }
@@ -125,6 +157,21 @@ static inline int nfs_fscache_release_page(struct page *page, gfp_t gfp)
 }
 static inline void nfs_fscache_invalidate_page(struct page *page,
 					       struct inode *inode) {}
+
+static inline int nfs_readpage_from_fscache(struct nfs_open_context *ctx,
+					    struct inode *inode,
+					    struct page *page)
+{
+	return -ENOBUFS;
+}
+static inline int nfs_readpages_from_fscache(struct nfs_open_context *ctx,
+					     struct inode *inode,
+					     struct address_space *mapping,
+					     struct list_head *pages,
+					     unsigned *nr_pages)
+{
+	return -ENOBUFS;
+}
 
 #endif /* CONFIG_NFS_FSCACHE */
 #endif /* _NFS_FSCACHE_H */
