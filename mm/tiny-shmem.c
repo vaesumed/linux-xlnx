@@ -121,14 +121,3 @@ int shmem_unuse(swp_entry_t entry, struct page *page)
 {
 	return 0;
 }
-
-#ifndef CONFIG_MMU
-unsigned long shmem_get_unmapped_area(struct file *file,
-				      unsigned long addr,
-				      unsigned long len,
-				      unsigned long pgoff,
-				      unsigned long flags)
-{
-	return ramfs_nommu_get_unmapped_area(file, addr, len, pgoff, flags);
-}
-#endif
