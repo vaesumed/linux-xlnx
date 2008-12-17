@@ -187,6 +187,8 @@ struct fscache_netfs {
  * - these are undefined symbols when FS-Cache is not configured and the
  *   optimiser takes care of not using them
  */
+extern struct fscache_cache_tag *__fscache_lookup_cache_tag(const char *);
+extern void __fscache_release_cache_tag(struct fscache_cache_tag *);
 
 /**
  * fscache_register_netfs - Register a filesystem as desiring caching services
@@ -232,7 +234,10 @@ void fscache_unregister_netfs(struct fscache_netfs *netfs)
 static inline
 struct fscache_cache_tag *fscache_lookup_cache_tag(const char *name)
 {
-	return NULL;
+	if (fscache_available())
+		return __fscache_lookup_cache_tag(name);
+	else
+		return NULL;
 }
 
 /**
@@ -247,6 +252,8 @@ struct fscache_cache_tag *fscache_lookup_cache_tag(const char *name)
 static inline
 void fscache_release_cache_tag(struct fscache_cache_tag *tag)
 {
+	if (fscache_available())
+		__fscache_release_cache_tag(tag);
 }
 
 /**
