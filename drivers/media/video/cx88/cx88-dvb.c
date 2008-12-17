@@ -406,7 +406,7 @@ static int tevii_dvbs_set_voltage(struct dvb_frontend *fe,
 			cx_write(MO_GP0_IO, 0x00006060);
 			break;
 		case SEC_VOLTAGE_OFF:
-		   	printk("LNB Voltage SEC_VOLTAGE_off\n");
+			printk("LNB Voltage SEC_VOLTAGE_off\n");
 			break;
 	}
 
@@ -606,7 +606,7 @@ static int dvb_register(struct cx8802_dev *dev)
 	/* Get the first frontend */
 	fe0 = videobuf_dvb_get_frontend(&dev->frontends, 1);
 	if (!fe0)
-		return -EINVAL;
+		goto frontend_detach;
 
 	/* multi-frontend gate control is undefined or defaults to fe0 */
 	dev->frontends.gate = 0;
@@ -653,38 +653,35 @@ static int dvb_register(struct cx8802_dev *dev)
 		}
 		break;
 	case CX88_BOARD_HAUPPAUGE_HVR3000:
+		/* MFE frontend 1 */
+		mfe_shared = 1;
+		dev->frontends.gate = 2;
 		/* DVB-S init */
 		fe0->dvb.frontend = dvb_attach(cx24123_attach,
-			       &hauppauge_novas_config,
-			       &dev->core->i2c_adap);
+					&hauppauge_novas_config,
+					&dev->core->i2c_adap);
 		if (fe0->dvb.frontend) {
-			if (!dvb_attach(isl6421_attach, fe0->dvb.frontend,
-			&dev->core->i2c_adap, 0x08, ISL6421_DCL, 0x00)) {
-				dprintk( 1, "%s(): HVR3000 - DVB-S LNB Init: failed\n", __func__);
-			}
-		} else {
-			dprintk( 1, "%s(): HVR3000 - DVB-S Init: failed\n", __func__);
+			if (!dvb_attach(isl6421_attach,
+					fe0->dvb.frontend,
+					&dev->core->i2c_adap,
+					0x08, ISL6421_DCL, 0x00))
+				goto frontend_detach;
 		}
-		/* DVB-T init */
+		/* MFE frontend 2 */
 		fe1 = videobuf_dvb_get_frontend(&dev->frontends, 2);
-		if (fe1) {
-			dev->frontends.gate = 2;
-			mfe_shared = 1;
-			fe1->dvb.frontend = dvb_attach(cx22702_attach,
-				&hauppauge_hvr_config,
-				&dev->core->i2c_adap);
-			if (fe1->dvb.frontend) {
-				fe1->dvb.frontend->id = 1;
-				if(!dvb_attach(simple_tuner_attach, fe1->dvb.frontend,
-						&dev->core->i2c_adap, 0x61,
-						TUNER_PHILIPS_FMD1216ME_MK3)) {
-					dprintk( 1, "%s(): HVR3000 - DVB-T misc Init: failed\n", __func__);
-				}
-			} else {
-				dprintk( 1, "%s(): HVR3000 - DVB-T Init: failed\n", __func__);
-			}
-		} else {
-			dprintk( 1, "%s(): HVR3000 - DVB-T Init: can't find frontend 2.\n", __func__);
+		if (!fe1)
+			goto frontend_detach;
+		/* DVB-T init */
+		fe1->dvb.frontend = dvb_attach(cx22702_attach,
+					&hauppauge_hvr_config,
+					&dev->core->i2c_adap);
+		if (fe1->dvb.frontend) {
+			fe1->dvb.frontend->id = 1;
+			if (!dvb_attach(simple_tuner_attach,
+					fe1->dvb.frontend,
+					&dev->core->i2c_adap,
+					0x61, TUNER_PHILIPS_FMD1216ME_MK3))
+				goto frontend_detach;
 		}
 		break;
 	case CX88_BOARD_DVICO_FUSIONHDTV_DVB_T_PLUS:
@@ -998,50 +995,51 @@ static int dvb_register(struct cx8802_dev *dev)
 		}
 		break;
 	case CX88_BOARD_HAUPPAUGE_HVR4000:
+		/* MFE frontend 1 */
+		mfe_shared = 1;
+		dev->frontends.gate = 2;
 		/* DVB-S/S2 Init */
 		fe0->dvb.frontend = dvb_attach(cx24116_attach,
-			&hauppauge_hvr4000_config,
-			&dev->core->i2c_adap);
+					&hauppauge_hvr4000_config,
+					&dev->core->i2c_adap);
 		if (fe0->dvb.frontend) {
-			if(!dvb_attach(isl6421_attach, fe0->dvb.frontend,
-				&dev->core->i2c_adap, 0x08, ISL6421_DCL, 0x00)) {
-				dprintk( 1, "%s(): HVR4000 - DVB-S LNB Init: failed\n", __func__);
-			}
-		} else {
-			dprintk( 1, "%s(): HVR4000 - DVB-S Init: failed\n", __func__);
+			if (!dvb_attach(isl6421_attach,
+					fe0->dvb.frontend,
+					&dev->core->i2c_adap,
+					0x08, ISL6421_DCL, 0x00))
+				goto frontend_detach;
 		}
-		/* DVB-T Init */
+		/* MFE frontend 2 */
 		fe1 = videobuf_dvb_get_frontend(&dev->frontends, 2);
-		if (fe1) {
-			dev->frontends.gate = 2;
-			mfe_shared = 1;
-			fe1->dvb.frontend = dvb_attach(cx22702_attach,
-				&hauppauge_hvr_config,
-				&dev->core->i2c_adap);
-			if (fe1->dvb.frontend) {
-				fe1->dvb.frontend->id = 1;
-				if(!dvb_attach(simple_tuner_attach, fe1->dvb.frontend,
-					&dev->core->i2c_adap, 0x61,
-					TUNER_PHILIPS_FMD1216ME_MK3)) {
-					dprintk( 1, "%s(): HVR4000 - DVB-T misc Init: failed\n", __func__);
-				}
-			} else {
-				dprintk( 1, "%s(): HVR4000 - DVB-T Init: failed\n", __func__);
-			}
-		} else {
-			dprintk( 1, "%s(): HVR4000 - DVB-T Init: can't find frontend 2.\n", __func__);
+		if (!fe1)
+			goto frontend_detach;
+		/* DVB-T Init */
+		fe1->dvb.frontend = dvb_attach(cx22702_attach,
+					&hauppauge_hvr_config,
+					&dev->core->i2c_adap);
+		if (fe1->dvb.frontend) {
+			fe1->dvb.frontend->id = 1;
+			if (!dvb_attach(simple_tuner_attach,
+					fe1->dvb.frontend,
+					&dev->core->i2c_adap,
+					0x61, TUNER_PHILIPS_FMD1216ME_MK3))
+				goto frontend_detach;
 		}
 		break;
 	case CX88_BOARD_HAUPPAUGE_HVR4000LITE:
 		fe0->dvb.frontend = dvb_attach(cx24116_attach,
-			&hauppauge_hvr4000_config,
-			&dev->core->i2c_adap);
+					&hauppauge_hvr4000_config,
+					&dev->core->i2c_adap);
 		if (fe0->dvb.frontend) {
-			dvb_attach(isl6421_attach, fe0->dvb.frontend,
-				&dev->core->i2c_adap,
-				0x08, ISL6421_DCL, 0x00);
+			if (!dvb_attach(isl6421_attach,
+					fe0->dvb.frontend,
+					&dev->core->i2c_adap,
+					0x08, ISL6421_DCL, 0x00))
+				goto frontend_detach;
 		}
 		break;
+	case CX88_BOARD_PROF_6200:
+	case CX88_BOARD_TBS_8910:
 	case CX88_BOARD_TEVII_S420:
 		fe0->dvb.frontend = dvb_attach(stv0299_attach,
 						&tevii_tuner_sharp_config,
@@ -1070,21 +1068,18 @@ static int dvb_register(struct cx8802_dev *dev)
 		fe0->dvb.frontend = dvb_attach(cx24116_attach,
 					       &tevii_s460_config,
 					       &core->i2c_adap);
-		if (fe0->dvb.frontend != NULL) {
-			core->prev_set_voltage = fe0->dvb.frontend->ops.set_voltage;
+		if (fe0->dvb.frontend != NULL)
 			fe0->dvb.frontend->ops.set_voltage = tevii_dvbs_set_voltage;
-		}
 		break;
 	case CX88_BOARD_OMICOM_SS4_PCI:
 	case CX88_BOARD_TBS_8920:
 	case CX88_BOARD_PROF_7300:
+	case CX88_BOARD_SATTRADE_ST4200:
 		fe0->dvb.frontend = dvb_attach(cx24116_attach,
 					       &hauppauge_hvr4000_config,
 					       &core->i2c_adap);
-		if (fe0->dvb.frontend != NULL) {
-			core->prev_set_voltage = fe0->dvb.frontend->ops.set_voltage;
+		if (fe0->dvb.frontend != NULL)
 			fe0->dvb.frontend->ops.set_voltage = tevii_dvbs_set_voltage;
-		}
 		break;
 	default:
 		printk(KERN_ERR "%s/2: The frontend of your DVB/ATSC card isn't supported yet\n",
@@ -1092,11 +1087,11 @@ static int dvb_register(struct cx8802_dev *dev)
 		break;
 	}
 
-        if ( (NULL == fe0->dvb.frontend) || (fe1 && NULL == fe1->dvb.frontend) ) {
+	if ( (NULL == fe0->dvb.frontend) || (fe1 && NULL == fe1->dvb.frontend) ) {
 		printk(KERN_ERR
 		       "%s/2: frontend initialization failed\n",
 		       core->name);
-		return -EINVAL;
+		goto frontend_detach;
 	}
 	/* define general-purpose callback pointer */
 	fe0->dvb.frontend->callback = cx88_tuner_callback;
@@ -1199,8 +1194,7 @@ static int cx8802_dvb_probe(struct cx8802_driver *drv)
 {
 	struct cx88_core *core = drv->core;
 	struct cx8802_dev *dev = drv->core->dvbdev;
-	int err, i;
-	struct videobuf_dvb_frontend *fe;
+	int err;
 
 	dprintk( 1, "%s\n", __func__);
 	dprintk( 1, " ->being probed by Card=%d Name=%s, PCI %02x:%02x\n",
@@ -1216,31 +1210,47 @@ static int cx8802_dvb_probe(struct cx8802_driver *drv)
 	/* If vp3054 isn't enabled, a stub will just return 0 */
 	err = vp3054_i2c_probe(dev);
 	if (0 != err)
-		goto fail_core;
+		goto fail_probe;
 
 	/* dvb stuff */
 	printk(KERN_INFO "%s/2: cx2388x based DVB/ATSC card\n", core->name);
 	dev->ts_gen_cntrl = 0x0c;
 
-	for (i = 1; i <= core->board.num_frontends; i++) {
-		fe = videobuf_dvb_get_frontend(&core->dvbdev->frontends, i);
-		if (!fe) {
-			printk(KERN_ERR "%s() failed to get frontend(%d)\n", __func__, i);
-			continue;
+	err = -ENODEV;
+	if (core->board.num_frontends) {
+		struct videobuf_dvb_frontend *fe;
+		int i;
+
+		for (i = 1; i <= core->board.num_frontends; i++) {
+			fe = videobuf_dvb_get_frontend(&core->dvbdev->frontends, i);
+			if (fe == NULL) {
+				printk(KERN_ERR "%s() failed to get frontend(%d)\n",
+					__func__, i);
+				goto fail_probe;
+			}
+			videobuf_queue_sg_init(&fe->dvb.dvbq, &dvb_qops,
+				    &dev->pci->dev, &dev->slock,
+				    V4L2_BUF_TYPE_VIDEO_CAPTURE,
+				    V4L2_FIELD_TOP,
+				    sizeof(struct cx88_buffer),
+				    dev);
+			/* init struct videobuf_dvb */
+			fe->dvb.name = dev->core->name;
 		}
-		videobuf_queue_sg_init(&fe->dvb.dvbq, &dvb_qops,
-			    &dev->pci->dev, &dev->slock,
-			    V4L2_BUF_TYPE_VIDEO_CAPTURE,
-			    V4L2_FIELD_TOP,
-			    sizeof(struct cx88_buffer),
-			    dev);
-		/* init struct videobuf_dvb */
-		fe->dvb.name = dev->core->name;
+	} else {
+		/* no frontends allocated */
+		printk(KERN_ERR "%s/2 .num_frontends should be non-zero\n",
+			core->name);
+		goto fail_core;
 	}
 	err = dvb_register(dev);
-	if (err != 0)
+	if (err)
+		/* frontends/adapter de-allocated in dvb_register */
 		printk(KERN_ERR "%s/2: dvb_register failed (err = %d)\n",
 		       core->name, err);
+	return err;
+fail_probe:
+	videobuf_dvb_dealloc_frontends(&core->dvbdev->frontends);
 fail_core:
 	return err;
 }

@@ -432,6 +432,7 @@ static const unsigned char init_ov9650[][3] =
 	{BRIDGE, M5602_XB_PIX_OF_LINE_L, 0x00},
 	{BRIDGE, M5602_XB_SIG_INI, 0x01},
 	{BRIDGE, M5602_XB_VSYNC_PARA, 0x00},
+	/* Moves the view window in a vertical orientation */
 	{BRIDGE, M5602_XB_VSYNC_PARA, 0x09},
 	{BRIDGE, M5602_XB_VSYNC_PARA, 0x00},
 	{BRIDGE, M5602_XB_VSYNC_PARA, 0x01},
@@ -461,42 +462,6 @@ static const unsigned char power_down_ov9650[][3] =
 	{BRIDGE, M5602_XB_GPIO_DAT_H, 0x02},
 	{BRIDGE, M5602_XB_SEN_CLK_DIV, 0x04},
 	{BRIDGE, M5602_XB_SEN_CLK_CTRL, 0xb0}
-};
-
-/* Vertically and horizontally flips the image if matched, needed for machines
-   where the sensor is mounted upside down */
-static
-    const
-	struct dmi_system_id ov9650_flip_dmi_table[] = {
-	{
-		.ident = "ASUS A6VC",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK Computer Inc."),
-			DMI_MATCH(DMI_PRODUCT_NAME, "A6VC")
-		}
-	},
-	{
-		.ident = "ASUS A6VM",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK Computer Inc."),
-			DMI_MATCH(DMI_PRODUCT_NAME, "A6VM")
-		}
-	},
-	{
-		.ident = "ASUS A6JC",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK Computer Inc."),
-			DMI_MATCH(DMI_PRODUCT_NAME, "A6JC")
-		}
-	},
-	{
-		.ident = "ASUS A6Kt",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK Computer Inc."),
-			DMI_MATCH(DMI_PRODUCT_NAME, "A6Kt")
-		}
-	},
-	{ }
 };
 
 #endif

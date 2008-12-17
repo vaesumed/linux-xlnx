@@ -444,15 +444,46 @@ static int sh_mobile_ceu_try_bus_param(struct soc_camera_device *icd,
 	return 0;
 }
 
-static int sh_mobile_ceu_set_fmt_cap(struct soc_camera_device *icd,
-				     __u32 pixfmt, struct v4l2_rect *rect)
+static int sh_mobile_ceu_set_fmt(struct soc_camera_device *icd,
+				 __u32 pixfmt, struct v4l2_rect *rect)
 {
-	return icd->ops->set_fmt_cap(icd, pixfmt, rect);
+	const struct soc_camera_data_format *cam_fmt = NULL;
+	int ret;
+
+	/*
+	 * TODO: find a suitable supported by the SoC output format, check
+	 * whether the sensor supports one of acceptable input formats.
+	 */
+	if (pixfmt) {
+		cam_fmt = soc_camera_format_by_fourcc(icd, pixfmt);
+		if (!cam_fmt)
+			return -EINVAL;
+	}
+
+	ret = icd->ops->set_fmt(icd, pixfmt, rect);
+	if (pixfmt && !ret)
+		icd->current_fmt = cam_fmt;
+
+	return ret;
 }
 
-static int sh_mobile_ceu_try_fmt_cap(struct soc_camera_device *icd,
-				     struct v4l2_format *f)
+static int sh_mobile_ceu_try_fmt(struct soc_camera_device *icd,
+				 struct v4l2_format *f)
 {
+	const struct soc_camera_data_format *cam_fmt;
+	int ret = sh_mobile_ceu_try_bus_param(icd, f->fmt.pix.pixelformat);
+
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * TODO: find a suitable supported by the SoC output format, check
+	 * whether the sensor supports one of acceptable input formats.
+	 */
+	cam_fmt = soc_camera_format_by_fourcc(icd, f->fmt.pix.pixelformat);
+	if (!cam_fmt)
+		return -EINVAL;
+
 	/* FIXME: calculate using depth and bus width */
 
 	if (f->fmt.pix.height < 4)
@@ -466,8 +497,12 @@ static int sh_mobile_ceu_try_fmt_cap(struct soc_camera_device *icd,
 	f->fmt.pix.width &= ~0x01;
 	f->fmt.pix.height &= ~0x03;
 
+	f->fmt.pix.bytesperline = f->fmt.pix.width *
+		DIV_ROUND_UP(cam_fmt->depth, 8);
+	f->fmt.pix.sizeimage = f->fmt.pix.height * f->fmt.pix.bytesperline;
+
 	/* limit to sensor capabilities */
-	return icd->ops->try_fmt_cap(icd, f);
+	return icd->ops->try_fmt(icd, f);
 }
 
 static int sh_mobile_ceu_reqbufs(struct soc_camera_file *icf,
@@ -535,12 +570,11 @@ static struct soc_camera_host_ops sh_mobile_ceu_host_ops = {
 	.owner		= THIS_MODULE,
 	.add		= sh_mobile_ceu_add_device,
 	.remove		= sh_mobile_ceu_remove_device,
-	.set_fmt_cap	= sh_mobile_ceu_set_fmt_cap,
-	.try_fmt_cap	= sh_mobile_ceu_try_fmt_cap,
+	.set_fmt	= sh_mobile_ceu_set_fmt,
+	.try_fmt	= sh_mobile_ceu_try_fmt,
 	.reqbufs	= sh_mobile_ceu_reqbufs,
 	.poll		= sh_mobile_ceu_poll,
 	.querycap	= sh_mobile_ceu_querycap,
-	.try_bus_param	= sh_mobile_ceu_try_bus_param,
 	.set_bus_param	= sh_mobile_ceu_set_bus_param,
 	.init_videobuf	= sh_mobile_ceu_init_videobuf,
 };
@@ -609,7 +643,7 @@ static int sh_mobile_ceu_probe(struct platform_device *pdev)
 
 	/* request irq */
 	err = request_irq(pcdev->irq, sh_mobile_ceu_irq, IRQF_DISABLED,
-			  pdev->dev.bus_id, pcdev);
+			  dev_name(&pdev->dev), pcdev);
 	if (err) {
 		dev_err(&pdev->dev, "Unable to register CEU interrupt.\n");
 		goto exit_release_mem;
@@ -618,8 +652,8 @@ static int sh_mobile_ceu_probe(struct platform_device *pdev)
 	pcdev->ici.priv = pcdev;
 	pcdev->ici.dev.parent = &pdev->dev;
 	pcdev->ici.nr = pdev->id;
-	pcdev->ici.drv_name = pdev->dev.bus_id,
-	pcdev->ici.ops = &sh_mobile_ceu_host_ops,
+	pcdev->ici.drv_name = dev_name(&pdev->dev);
+	pcdev->ici.ops = &sh_mobile_ceu_host_ops;
 
 	err = soc_camera_host_register(&pcdev->ici);
 	if (err)
