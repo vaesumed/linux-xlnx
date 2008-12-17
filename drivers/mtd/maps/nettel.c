@@ -226,7 +226,7 @@ static int __init nettel_init(void)
 
 	if ((amd_mtd = do_map_probe("jedec_probe", &nettel_amd_map))) {
 		printk(KERN_NOTICE "SNAPGEAR: AMD flash device size = %dK\n",
-			(int)(amd_mtd->size>>10));
+			amd_mtd->size>>10);
 
 		amd_mtd->owner = THIS_MODULE;
 
@@ -362,7 +362,8 @@ static int __init nettel_init(void)
 
 	intel_mtd->owner = THIS_MODULE;
 
-	num_intel_partitions = ARRAY_SIZE(nettel_intel_partitions);
+	num_intel_partitions = sizeof(nettel_intel_partitions) /
+		sizeof(nettel_intel_partitions[0]);
 
 	if (intelboot) {
 		/*
