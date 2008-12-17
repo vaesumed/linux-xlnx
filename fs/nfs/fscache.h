@@ -91,6 +91,7 @@ extern int __nfs_readpage_from_fscache(struct nfs_open_context *,
 extern int __nfs_readpages_from_fscache(struct nfs_open_context *,
 					struct inode *, struct address_space *,
 					struct list_head *, unsigned *);
+extern void __nfs_readpage_to_fscache(struct inode *, struct page *, int);
 
 /*
  * release the caching state associated with a page if undergoing complete page
@@ -129,6 +130,19 @@ static inline int nfs_readpages_from_fscache(struct nfs_open_context *ctx,
 						    nr_pages);
 	return -ENOBUFS;
 }
+
+/*
+ * Store a page newly fetched from the server in an inode data storage object
+ * in the cache.
+ */
+static inline void nfs_readpage_to_fscache(struct inode *inode,
+					   struct page *page,
+					   int sync)
+{
+	if (PageFsCache(page))
+		__nfs_readpage_to_fscache(inode, page, sync);
+}
+
 
 #else /* CONFIG_NFS_FSCACHE */
 static inline int nfs_fscache_register(void) { return 0; }
@@ -172,6 +186,8 @@ static inline int nfs_readpages_from_fscache(struct nfs_open_context *ctx,
 {
 	return -ENOBUFS;
 }
+static inline void nfs_readpage_to_fscache(struct inode *inode,
+					   struct page *page, int sync) {}
 
 #endif /* CONFIG_NFS_FSCACHE */
 #endif /* _NFS_FSCACHE_H */
