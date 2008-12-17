@@ -664,10 +664,14 @@ struct snd_ca0106_pcm {
 struct snd_ca0106_details {
         u32 serial;
         char * name;
-        int ac97;
-	int gpio_type;
-	int i2c_adc;
-	int spi_dac;
+	int ac97;	/* ac97 = 0 -> Select MIC, Line in, TAD in, AUX in.
+			   ac97 = 1 -> Default to AC97 in. */
+	int gpio_type;	/* gpio_type = 1 -> shared mic-in/line-in
+			   gpio_type = 2 -> shared side-out/line-in. */
+	int i2c_adc;	/* with i2c_adc=1, the driver adds some capture volume
+			   controls, phone, mic, line-in and aux. */
+	int spi_dac;	/* spi_dac=1 adds the mute switch for each analog
+			   output, front, rear, etc. */
 };
 
 // definition of the chip-specific record
@@ -686,7 +690,7 @@ struct snd_ca0106 {
 	spinlock_t emu_lock;
 
 	struct snd_ac97 *ac97;
-	struct snd_pcm *pcm;
+	struct snd_pcm *pcm[4];
 
 	struct snd_ca0106_channel playback_channels[4];
 	struct snd_ca0106_channel capture_channels[4];
@@ -703,6 +707,11 @@ struct snd_ca0106 {
 	struct snd_ca_midi midi2;
 
 	u16 spi_dac_reg[16];
+
+#ifdef CONFIG_PM
+#define NUM_SAVED_VOLUMES	9
+	unsigned int saved_vol[NUM_SAVED_VOLUMES];
+#endif
 };
 
 int snd_ca0106_mixer(struct snd_ca0106 *emu);
@@ -721,3 +730,11 @@ int snd_ca0106_i2c_write(struct snd_ca0106 *emu, u32 reg, u32 value);
 
 int snd_ca0106_spi_write(struct snd_ca0106 * emu,
 				   unsigned int data);
+
+#ifdef CONFIG_PM
+void snd_ca0106_mixer_suspend(struct snd_ca0106 *chip);
+void snd_ca0106_mixer_resume(struct snd_ca0106 *chip);
+#else
+#define snd_ca0106_mixer_suspend(chip)	do { } while (0)
+#define snd_ca0106_mixer_resume(chip)	do { } while (0)
+#endif
