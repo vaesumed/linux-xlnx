@@ -48,10 +48,6 @@ EXPORT_SYMBOL(ioremap_bot);	/* aka VMALLOC_END */
 
 extern char etext[], _stext[];
 
-#ifdef CONFIG_SMP
-extern void hash_page_sync(void);
-#endif
-
 #ifdef HAVE_BATS
 extern phys_addr_t v_mapped_by_bats(unsigned long va);
 extern unsigned long p_mapped_by_bats(phys_addr_t pa);
@@ -123,23 +119,6 @@ pgtable_t pte_alloc_one(struct mm_struct *mm, unsigned long address)
 		return NULL;
 	pgtable_page_ctor(ptepage);
 	return ptepage;
-}
-
-void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
-{
-#ifdef CONFIG_SMP
-	hash_page_sync();
-#endif
-	free_page((unsigned long)pte);
-}
-
-void pte_free(struct mm_struct *mm, pgtable_t ptepage)
-{
-#ifdef CONFIG_SMP
-	hash_page_sync();
-#endif
-	pgtable_page_dtor(ptepage);
-	__free_page(ptepage);
 }
 
 void __iomem *
@@ -363,7 +342,11 @@ static int __change_page_attr(struct page *page, pgprot_t prot)
 		return -EINVAL;
 	set_pte_at(&init_mm, address, kpte, mk_pte(page, prot));
 	wmb();
-	flush_HPTE(0, address, pmd_val(*kpmd));
+#ifdef CONFIG_PPC_STD_MMU
+	flush_hash_pages(0, address, pmd_val(*kpmd), 1);
+#else
+	flush_tlb_page(NULL, address);
+#endif
 	pte_unmap(kpte);
 
 	return 0;

@@ -49,11 +49,11 @@ int boot_cpuid;
 EXPORT_SYMBOL_GPL(boot_cpuid);
 int boot_cpuid_phys;
 
+int smp_hw_index[NR_CPUS];
+
 unsigned long ISA_DMA_THRESHOLD;
 unsigned int DMA_MODE_READ;
 unsigned int DMA_MODE_WRITE;
-
-int have_of = 1;
 
 #ifdef CONFIG_VGA_CONSOLE
 unsigned long vgacon_remap_base;
