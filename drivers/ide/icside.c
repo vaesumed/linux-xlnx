@@ -419,7 +419,7 @@ static void icside_setup_ports(hw_regs_t *hw, void __iomem *base,
 	hw->chipset = ide_acorn;
 }
 
-static int __init
+static int __devinit
 icside_register_v5(struct icside_state *state, struct expansion_card *ec)
 {
 	void __iomem *base;
@@ -473,7 +473,7 @@ static const struct ide_port_info icside_v6_port_info __initdata = {
 	.swdma_mask		= ATA_SWDMA2,
 };
 
-static int __init
+static int __devinit
 icside_register_v6(struct icside_state *state, struct expansion_card *ec)
 {
 	void __iomem *ioc_base, *easi_base;
@@ -690,9 +690,9 @@ static int __init icside_init(void)
 	return ecard_register_driver(&icside_driver);
 }
 
-static void __exit icside_exit(void);
+static void __exit icside_exit(void)
 {
-	ecard_unregister_driver(&icside_driver);
+	ecard_remove_driver(&icside_driver);
 }
 
 MODULE_AUTHOR("Russell King <rmk@arm.linux.org.uk>");
