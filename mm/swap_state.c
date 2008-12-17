@@ -74,8 +74,8 @@ int add_to_swap_cache(struct page *page, swp_entry_t entry, gfp_t gfp_mask)
 
 	BUG_ON(!PageLocked(page));
 	BUG_ON(PageSwapCache(page));
-	BUG_ON(PagePrivate(page));
 	BUG_ON(!PageSwapBacked(page));
+	BUG_ON(page_has_private(page));
 	error = radix_tree_preload(gfp_mask);
 	if (!error) {
 		page_cache_get(page);
@@ -111,7 +111,7 @@ void __delete_from_swap_cache(struct page *page)
 	BUG_ON(!PageLocked(page));
 	BUG_ON(!PageSwapCache(page));
 	BUG_ON(PageWriteback(page));
-	BUG_ON(PagePrivate(page));
+	BUG_ON(page_has_private(page));
 
 	radix_tree_delete(&swapper_space.page_tree, page_private(page));
 	set_page_private(page, 0);
