@@ -57,9 +57,6 @@
  *                              Called by notif.c:wusb_handle_dn_connect()
  *                              when a DN_Connect is received.
  *
- *   wusbhc_devconnect_auth()   Called by rh.c:wusbhc_rh_port_reset() when
- *                              doing the device connect sequence.
- *
  *     wusb_devconnect_acked()  Ack done, release resources.
  *
  *   wusb_handle_dn_alive()     Called by notif.c:wusb_handle_dn()
@@ -68,9 +65,6 @@
  *   wusb_handle_dn_disconnect()Called by notif.c:wusb_handle_dn() to
  *                              process a disconenct request from a
  *                              device.
- *
- *   wusb_dev_reset()           Called by rh.c:wusbhc_rh_port_reset() when
- *                              resetting a device.
  *
  *   __wusb_dev_disable()       Called by rh.c:wusbhc_rh_clear_port_feat() when
  *                              disabling a port.
@@ -366,12 +360,10 @@ void wusbhc_devconnect_ack(struct wusbhc *wusbhc, struct wusb_dn_connect *dnc,
 	port->wusb_dev = wusb_dev;
 	port->status |= USB_PORT_STAT_CONNECTION;
 	port->change |= USB_PORT_STAT_C_CONNECTION;
-	port->reset_count = 0;
 	/* Now the port status changed to connected; khubd will
 	 * pick the change up and try to reset the port to bring it to
 	 * the enabled state--so this process returns up to the stack
-	 * and it calls back into wusbhc_rh_port_reset() who will call
-	 * devconnect_auth().
+	 * and it calls back into wusbhc_rh_port_reset().
 	 */
 error_unlock:
 	mutex_unlock(&wusbhc->mutex);
@@ -413,9 +405,6 @@ static void __wusbhc_dev_disconnect(struct wusbhc *wusbhc,
 		wusb_dev_put(wusb_dev);
 	}
 	port->wusb_dev = NULL;
-	/* don't reset the reset_count to zero or wusbhc_rh_port_reset will get
-	 * confused! We only reset to zero when we connect a new device.
-	 */
 
 	/* After a device disconnects, change the GTK (see [WUSB]
 	 * section 6.2.11.2). */
@@ -426,39 +415,6 @@ static void __wusbhc_dev_disconnect(struct wusbhc *wusbhc,
 	 * khubd's timer will pick up the disconnection and remove the USB
 	 * device from the system
 	 */
-}
-
-/*
- * Authenticate a device into the WUSB Cluster
- *
- * Called from the Root Hub code (rh.c:wusbhc_rh_port_reset()) when
- * asking for a reset on a port that is not enabled (ie: first connect
- * on the port).
- *
- * Performs the 4way handshake to allow the device to comunicate w/ the
- * WUSB Cluster securely; once done, issue a request to the device for
- * it to change to address 0.
- *
- * This mimics the reset step of Wired USB that once resetting a
- * device, leaves the port in enabled state and the dev with the
- * default address (0).
- *
- * WUSB1.0[7.1.2]
- *
- * @port_idx: port where the change happened--This is the index into
- *            the wusbhc port array, not the USB port number.
- */
-int wusbhc_devconnect_auth(struct wusbhc *wusbhc, u8 port_idx)
-{
-	struct device *dev = wusbhc->dev;
-	struct wusb_port *port = wusb_port_by_idx(wusbhc, port_idx);
-
-	d_fnstart(3, dev, "(%p, %u)\n", wusbhc, port_idx);
-	port->status &= ~USB_PORT_STAT_RESET;
-	port->status |= USB_PORT_STAT_ENABLE;
-	port->change |= USB_PORT_STAT_C_RESET | USB_PORT_STAT_C_ENABLE;
-	d_fnend(3, dev, "(%p, %u) = 0\n", wusbhc, port_idx);
-	return 0;
 }
 
 /*
@@ -528,21 +484,15 @@ static void __wusbhc_keep_alive(struct wusbhc *wusbhc)
  */
 static void wusbhc_keep_alive_run(struct work_struct *ws)
 {
-	struct delayed_work *dw =
-		container_of(ws, struct delayed_work, work);
-	struct wusbhc *wusbhc =
-		container_of(dw, struct wusbhc, keep_alive_timer);
+	struct delayed_work *dw = container_of(ws, struct delayed_work, work);
+	struct wusbhc *wusbhc =	container_of(dw, struct wusbhc, keep_alive_timer);
 
-	d_fnstart(5, wusbhc->dev, "(wusbhc %p)\n", wusbhc);
-	if (wusbhc->active) {
-		mutex_lock(&wusbhc->mutex);
-		__wusbhc_keep_alive(wusbhc);
-		mutex_unlock(&wusbhc->mutex);
-		queue_delayed_work(wusbd, &wusbhc->keep_alive_timer,
-				   (wusbhc->trust_timeout * CONFIG_HZ)/1000/2);
-	}
-	d_fnend(5, wusbhc->dev, "(wusbhc %p) = void\n", wusbhc);
-	return;
+	mutex_lock(&wusbhc->mutex);
+	__wusbhc_keep_alive(wusbhc);
+	mutex_unlock(&wusbhc->mutex);
+
+	queue_delayed_work(wusbd, &wusbhc->keep_alive_timer,
+			   msecs_to_jiffies(wusbhc->trust_timeout / 2));
 }
 
 /*
@@ -659,60 +609,6 @@ static void wusbhc_handle_dn_disconnect(struct wusbhc *wusbhc, struct wusb_dev *
 	mutex_lock(&wusbhc->mutex);
 	__wusbhc_dev_disconnect(wusbhc, wusb_port_by_idx(wusbhc, wusb_dev->port_idx));
 	mutex_unlock(&wusbhc->mutex);
-}
-
-/*
- * Reset a WUSB device on a HWA
- *
- * @wusbhc
- * @port_idx   Index of the port where the device is
- *
- * In Wireless USB, a reset is more or less equivalent to a full
- * disconnect; so we just do a full disconnect and send the device a
- * Device Reset IE (WUSB1.0[7.5.11]) giving it a few millisecs (6 MMCs).
- *
- * @wusbhc should be refcounted and unlocked
- */
-int wusbhc_dev_reset(struct wusbhc *wusbhc, u8 port_idx)
-{
-	int result;
-	struct device *dev = wusbhc->dev;
-	struct wusb_dev *wusb_dev;
-	struct wuie_reset *ie;
-
-	d_fnstart(3, dev, "(%p, %u)\n", wusbhc, port_idx);
-	mutex_lock(&wusbhc->mutex);
-	result = 0;
-	wusb_dev = wusb_port_by_idx(wusbhc, port_idx)->wusb_dev;
-	if (wusb_dev == NULL) {
-		/* reset no device? ignore */
-		dev_dbg(dev, "RESET: no device at port %u, ignoring\n",
-			port_idx);
-		goto error_unlock;
-	}
-	result = -ENOMEM;
-	ie = kzalloc(sizeof(*ie), GFP_KERNEL);
-	if (ie == NULL)
-		goto error_unlock;
-	ie->hdr.bLength = sizeof(ie->hdr) + sizeof(ie->CDID);
-	ie->hdr.bIEIdentifier = WUIE_ID_RESET_DEVICE;
-	ie->CDID = wusb_dev->cdid;
-	result = wusbhc_mmcie_set(wusbhc, 0xff, 6, &ie->hdr);
-	if (result < 0) {
-		dev_err(dev, "RESET: cant's set MMC: %d\n", result);
-		goto error_kfree;
-	}
-	__wusbhc_dev_disconnect(wusbhc, wusb_port_by_idx(wusbhc, port_idx));
-
-	/* 120ms, hopefully 6 MMCs (FIXME) */
-	msleep(120);
-	wusbhc_mmcie_rm(wusbhc, &ie->hdr);
-error_kfree:
-	kfree(ie);
-error_unlock:
-	mutex_unlock(&wusbhc->mutex);
-	d_fnend(3, dev, "(%p, %u) = %d\n", wusbhc, port_idx, result);
-	return result;
 }
 
 /*
@@ -1222,8 +1118,7 @@ void wusbhc_devconnect_destroy(struct wusbhc *wusbhc)
  * FIXME: This also enables the keep alives but this is not necessary
  * until there are connected and authenticated devices.
  */
-int wusbhc_devconnect_start(struct wusbhc *wusbhc,
-			    const struct wusb_ckhdid *chid)
+int wusbhc_devconnect_start(struct wusbhc *wusbhc)
 {
 	struct device *dev = wusbhc->dev;
 	struct wuie_host_info *hi;
@@ -1236,7 +1131,7 @@ int wusbhc_devconnect_start(struct wusbhc *wusbhc,
 	hi->hdr.bLength       = sizeof(*hi);
 	hi->hdr.bIEIdentifier = WUIE_ID_HOST_INFO;
 	hi->attributes        = cpu_to_le16((wusbhc->rsv->stream << 3) | WUIE_HI_CAP_ALL);
-	hi->CHID              = *chid;
+	hi->CHID              = wusbhc->chid;
 	result = wusbhc_mmcie_set(wusbhc, 0, 0, &hi->hdr);
 	if (result < 0) {
 		dev_err(dev, "Cannot add Host Info MMCIE: %d\n", result);
