@@ -3,6 +3,7 @@
 #
 
 fscache-y := \
+	fsc-fsdef.o \
 	fsc-main.o
 
 fscache-$(CONFIG_PROC_FS) += fsc-proc.o
