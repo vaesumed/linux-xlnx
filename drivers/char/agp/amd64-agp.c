@@ -393,6 +393,7 @@ static int __devinit uli_agp_init(struct pci_dev *pdev)
 
 	if (i == ARRAY_SIZE(uli_sizes)) {
 		dev_info(&pdev->dev, "no ULi size found for %d\n", size);
+		pci_dev_put(dev1);
 		return -ENODEV;
 	}
 
@@ -400,8 +401,10 @@ static int __devinit uli_agp_init(struct pci_dev *pdev)
 	pci_read_config_dword (k8_northbridges[0], AMD64_GARTAPERTUREBASE, &httfea);
 
 	/* if x86-64 aperture base is beyond 4G, exit here */
-	if ((httfea & 0x7fff) >> (32 - 25))
+	if ((httfea & 0x7fff) >> (32 - 25)) {
+		pci_dev_put(dev1);
 		return -ENODEV;
+	}
 
 	httfea = (httfea& 0x7fff) << 25;
 
@@ -451,6 +454,7 @@ static int nforce3_agp_init(struct pci_dev *pdev)
 
 	if (i == ARRAY_SIZE(nforce3_sizes)) {
 		dev_info(&pdev->dev, "no NForce3 size found for %d\n", size);
+		pci_dev_put(dev1);
 		return -ENODEV;
 	}
 
@@ -465,6 +469,7 @@ static int nforce3_agp_init(struct pci_dev *pdev)
 	/* if x86-64 aperture base is beyond 4G, exit here */
 	if ( (apbase & 0x7fff) >> (32 - 25) ) {
 		dev_info(&pdev->dev, "aperture base > 4G\n");
+		pci_dev_put(dev1);
 		return -ENODEV;
 	}
 
@@ -507,7 +512,7 @@ static int __devinit agp_amd64_probe(struct pci_dev *pdev,
 	    pdev->device == PCI_DEVICE_ID_AMD_8151_0) {
 		amd8151_init(pdev, bridge);
 	} else {
-		dev_info(&pdev->dev, "AGP bridge [%04x/%04x]\n",
+		dev_info(&pdev->dev, "AGP bridge [%04x:%04x]\n",
 			 pdev->vendor, pdev->device);
 	}
 

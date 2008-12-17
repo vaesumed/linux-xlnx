@@ -466,7 +466,7 @@ static int __devinit agp_serverworks_probe(struct pci_dev *pdev,
 	default:
 		if (cap_ptr)
 			dev_err(&pdev->dev, "unsupported Serverworks chipset "
-				"[%04x/%04x]\n", pdev->vendor, pdev->device);
+				"[%04x:%04x]\n", pdev->vendor, pdev->device);
 		return -ENODEV;
 	}
 
