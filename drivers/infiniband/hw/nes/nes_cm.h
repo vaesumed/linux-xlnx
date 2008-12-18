@@ -76,6 +76,10 @@ enum nes_timer_type {
 	NES_TIMER_TYPE_CLOSE,
 };
 
+#define NES_PASSIVE_STATE_INDICATED	0
+#define NES_DO_NOT_SEND_RESET_EVENT	1
+#define NES_SEND_RESET_EVENT		2
+
 #define MAX_NES_IFS 4
 
 #define SET_ACK 1
@@ -292,7 +296,10 @@ struct nes_cm_node {
 	int                       apbvt_set;
 	int                       accept_pend;
 	int			freed;
+	struct list_head	timer_entry;
+	struct list_head	reset_entry;
 	struct nes_qp		*nesqp;
+	atomic_t 		passive_state;
 };
 
 /* structure for client or CM to fill when making CM api calls. */
@@ -390,7 +397,7 @@ struct nes_cm_ops {
 			struct nes_cm_node *);
 	int (*reject)(struct nes_cm_core *, struct ietf_mpa_frame *,
 			struct nes_cm_node *);
-	void (*recv_pkt)(struct nes_cm_core *, struct nes_vnic *,
+	int (*recv_pkt)(struct nes_cm_core *, struct nes_vnic *,
 			struct sk_buff *);
 	int (*destroy_cm_core)(struct nes_cm_core *);
 	int (*get)(struct nes_cm_core *);
