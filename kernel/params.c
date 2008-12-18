@@ -30,6 +30,15 @@
 #define DEBUGP(fmt, a...)
 #endif
 
+/*
+ * If the arch already sets boot_command_line, we need do nothing.
+ * This is not in init/main.c because David Howells reports that on FRV
+ * gcc 4.1.2 will inline empty functions, ignoring noinline and weak.
+ */
+void __init __weak arch_get_boot_command_line(void)
+{
+}
+
 static inline char dash2underscore(char c)
 {
 	if (c == '-')
@@ -72,9 +81,36 @@ static int parse_one(char *param,
 	return -ENOENT;
 }
 
+struct replacements {
+	unsigned int num;
+	struct {
+		char *pos;
+		char oldc;
+	} replace[3];
+};
+
+static void replace(char *place, char newc, struct replacements *replacements)
+{
+	BUG_ON(replacements->num == ARRAY_SIZE(replacements->replace));
+	replacements->replace[replacements->num].pos = place;
+	replacements->replace[replacements->num].oldc = *place;
+	*place = newc;
+	replacements->num++;
+
+}
+
+static void unreplace_all(struct replacements *replaced)
+{
+	unsigned int i;
+
+	for (i = 0; i < replaced->num; i++)
+		*replaced->replace[i].pos = replaced->replace[i].oldc;
+}
+
 /* You can use " around spaces, but can't escape ". */
 /* Hyphens and underscores equivalent in parameter names. */
-static char *next_arg(char *args, char **param, char **val)
+static char *next_arg(char *args, char **param, char **val,
+		      struct replacements *replacements)
 {
 	unsigned int i, equals = 0;
 	int in_quote = 0, quoted = 0;
@@ -101,21 +137,21 @@ static char *next_arg(char *args, char **param, char **val)
 	if (!equals)
 		*val = NULL;
 	else {
-		args[equals] = '\0';
+		replace(&args[equals], '\0', replacements);
 		*val = args + equals + 1;
 
 		/* Don't include quotes in value. */
 		if (**val == '"') {
 			(*val)++;
 			if (args[i-1] == '"')
-				args[i-1] = '\0';
+				replace(&args[i-1], '\0', replacements);
 		}
 		if (quoted && args[i-1] == '"')
-			args[i-1] = '\0';
+			replace(&args[i-1], '\0', replacements);
 	}
 
 	if (args[i]) {
-		args[i] = '\0';
+		replace(&args[i], '\0', replacements);
 		next = args + i + 1;
 	} else
 		next = args + i;
@@ -131,7 +167,8 @@ int parse_args(const char *name,
 	       char *args,
 	       struct kernel_param *params,
 	       unsigned num,
-	       int (*unknown)(char *param, char *val))
+	       int (*unknown)(char *param, char *val),
+	       bool restore_args)
 {
 	char *param, *val;
 
@@ -144,14 +181,18 @@ int parse_args(const char *name,
 	while (*args) {
 		int ret;
 		int irq_was_disabled;
+		struct replacements replaced = { .num = 0 };
 
-		args = next_arg(args, &param, &val);
+		args = next_arg(args, &param, &val, &replaced);
 		irq_was_disabled = irqs_disabled();
 		ret = parse_one(param, val, params, num, unknown);
 		if (irq_was_disabled && !irqs_disabled()) {
 			printk(KERN_WARNING "parse_args(): option '%s' enabled "
 					"irq's!\n", param);
 		}
+		if (restore_args)
+			unreplace_all(&replaced);
+
 		switch (ret) {
 		case -ENOENT:
 			printk(KERN_ERR "%s: Unknown parameter `%s'\n",
@@ -375,8 +416,6 @@ int param_get_string(char *buffer, struct kernel_param *kp)
 /* sysfs output in /sys/modules/XYZ/parameters/ */
 #define to_module_attr(n) container_of(n, struct module_attribute, attr);
 #define to_module_kobject(n) container_of(n, struct module_kobject, kobj);
-
-extern struct kernel_param __start___param[], __stop___param[];
 
 struct param_attribute
 {
@@ -636,15 +675,19 @@ static void __init param_sysfs_builtin(void)
 			continue;
 
 		dot = strchr(kp->name, '.');
-		if (!dot) {
-			/* This happens for core_param() */
-			strcpy(modname, "kernel");
-			name_len = 0;
-		} else {
-			name_len = dot - kp->name + 1;
-			strlcpy(modname, kp->name, name_len);
-		}
+		/* FIXME: USB code sets prefix to "".  Should use core_param */
+		if (!dot)
+			continue;
+		name_len = dot - kp->name + 1;
+		strlcpy(modname, kp->name, name_len);
 		kernel_add_sysfs_param(modname, kp, name_len);
+	}
+
+	for (kp = __start___core_param; kp < __stop___core_param; kp++) {
+		if (kp->perm == 0)
+			continue;
+
+		kernel_add_sysfs_param("kernel", kp, 0);
 	}
 }
 

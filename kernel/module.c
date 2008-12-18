@@ -2231,7 +2231,7 @@ static noinline struct module *load_module(void __user *umod,
 	 */
 	list_add_rcu(&mod->list, &modules);
 
-	err = parse_args(mod->name, mod->args, kp, num_kp, NULL);
+	err = parse_args(mod->name, mod->args, kp, num_kp, NULL, false);
 	if (err < 0)
 		goto unlink;
 

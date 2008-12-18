@@ -218,7 +218,7 @@ static void rts7751r2d_power_off(void)
 /*
  * Initialize the board
  */
-static void __init rts7751r2d_setup(char **cmdline_p)
+static void __init rts7751r2d_setup(void)
 {
 	void __iomem *sm501_reg;
 	u16 ver = ctrl_inw(PA_VERREG);
