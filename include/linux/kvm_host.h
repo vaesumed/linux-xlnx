@@ -16,6 +16,7 @@
 #include <linux/mm.h>
 #include <linux/preempt.h>
 #include <linux/marker.h>
+#include <linux/msi.h>
 #include <asm/signal.h>
 
 #include <linux/kvm.h>
@@ -72,7 +73,7 @@ struct kvm_vcpu {
 	struct kvm_run *run;
 	int guest_mode;
 	unsigned long requests;
-	struct kvm_guest_debug guest_debug;
+	unsigned long guest_debug;
 	int fpu_active;
 	int guest_fpu_loaded;
 	wait_queue_head_t wq;
@@ -254,8 +255,8 @@ int kvm_arch_vcpu_ioctl_get_mpstate(struct kvm_vcpu *vcpu,
 				    struct kvm_mp_state *mp_state);
 int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
 				    struct kvm_mp_state *mp_state);
-int kvm_arch_vcpu_ioctl_debug_guest(struct kvm_vcpu *vcpu,
-				    struct kvm_debug_guest *dbg);
+int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
+					struct kvm_guest_debug *dbg);
 int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run);
 
 int kvm_arch_init(void *opaque);
@@ -306,8 +307,14 @@ struct kvm_assigned_dev_kernel {
 	int host_busnr;
 	int host_devfn;
 	int host_irq;
+	bool host_irq_disabled;
 	int guest_irq;
-	int irq_requested;
+	struct msi_msg guest_msi;
+#define KVM_ASSIGNED_DEV_GUEST_INTX	(1 << 0)
+#define KVM_ASSIGNED_DEV_GUEST_MSI	(1 << 1)
+#define KVM_ASSIGNED_DEV_HOST_INTX	(1 << 8)
+#define KVM_ASSIGNED_DEV_HOST_MSI	(1 << 9)
+	unsigned long irq_requested_type;
 	int irq_source_id;
 	struct pci_dev *dev;
 	struct kvm *kvm;
@@ -316,8 +323,7 @@ void kvm_set_irq(struct kvm *kvm, int irq_source_id, int irq, int level);
 void kvm_notify_acked_irq(struct kvm *kvm, unsigned gsi);
 void kvm_register_irq_ack_notifier(struct kvm *kvm,
 				   struct kvm_irq_ack_notifier *kian);
-void kvm_unregister_irq_ack_notifier(struct kvm *kvm,
-				     struct kvm_irq_ack_notifier *kian);
+void kvm_unregister_irq_ack_notifier(struct kvm_irq_ack_notifier *kian);
 int kvm_request_irq_source_id(struct kvm *kvm);
 void kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id);
 
