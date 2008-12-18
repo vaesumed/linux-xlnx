@@ -3394,8 +3394,12 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 		s->inuse = max_t(int, s->inuse, ALIGN(size, sizeof(void *)));
 		up_write(&slub_lock);
 
-		if (sysfs_slab_alias(s, name))
+		if (sysfs_slab_alias(s, name)) {
+			down_write(&slub_lock);
+			s->refcount--;
+			up_write(&slub_lock);
 			goto err;
+		}
 		return s;
 	}
 
@@ -3405,8 +3409,13 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 				size, align, flags, ctor)) {
 			list_add_tail(&s->list, &slab_caches);
 			up_write(&slub_lock);
-			if (sysfs_slab_add(s))
+			if (sysfs_slab_add(s)) {
+				down_write(&slub_lock);
+				list_del(&s->list);
+				up_write(&slub_lock);
+				kfree(s);
 				goto err;
+			}
 			return s;
 		}
 		kfree(s);
