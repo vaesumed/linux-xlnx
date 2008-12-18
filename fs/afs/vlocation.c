@@ -281,10 +281,7 @@ static void afs_vlocation_apply_update(struct afs_vlocation *vl,
 
 	vl->vldb = *vldb;
 
-#ifdef AFS_CACHING_SUPPORT
-	/* update volume entry in local cache */
-	cachefs_update_cookie(vl->cache);
-#endif
+	fscache_update_cookie(vl->cache);
 }
 
 /*
@@ -304,12 +301,8 @@ static int afs_vlocation_fill_in_record(struct afs_vlocation *vl,
 	memset(&vldb, 0, sizeof(vldb));
 
 	/* see if we have an in-cache copy (will set vl->valid if there is) */
-#ifdef AFS_CACHING_SUPPORT
-	cachefs_acquire_cookie(cell->cache,
-			       &afs_volume_cache_index_def,
-			       vlocation,
-			       &vl->cache);
-#endif
+	vl->cache = fscache_acquire_cookie(vl->cell->cache,
+					   &afs_vlocation_cache_index_def, vl);
 
 	if (vl->valid) {
 		/* try to update a known volume in the cell VL databases by
@@ -420,6 +413,9 @@ fill_in_record:
 	spin_unlock(&vl->lock);
 	wake_up(&vl->waitq);
 
+	/* update volume entry in local cache */
+	fscache_update_cookie(vl->cache);
+
 	/* schedule for regular updates */
 	afs_vlocation_queue_for_updates(vl);
 	goto success;
@@ -465,7 +461,7 @@ found_in_memory:
 	spin_unlock(&vl->lock);
 
 success:
-	_leave(" = %p",vl);
+	_leave(" = %p", vl);
 	return vl;
 
 error_abandon:
@@ -523,10 +519,7 @@ static void afs_vlocation_destroy(struct afs_vlocation *vl)
 {
 	_enter("%p", vl);
 
-#ifdef AFS_CACHING_SUPPORT
-	cachefs_relinquish_cookie(vl->cache, 0);
-#endif
-
+	fscache_relinquish_cookie(vl->cache, 0);
 	afs_put_cell(vl->cell);
 	kfree(vl);
 }

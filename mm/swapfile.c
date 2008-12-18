@@ -350,7 +350,7 @@ static int remove_exclusive_swap_page_count(struct page *page, int count)
 	struct swap_info_struct * p;
 	swp_entry_t entry;
 
-	BUG_ON(PagePrivate(page));
+	BUG_ON(page_has_private(page));
 	BUG_ON(!PageLocked(page));
 
 	if (!PageSwapCache(page))
@@ -432,7 +432,7 @@ void free_swap_and_cache(swp_entry_t entry)
 	if (page) {
 		int one_user;
 
-		BUG_ON(PagePrivate(page));
+		BUG_ON(page_has_private(page));
 		one_user = (page_count(page) == 2);
 		/* Only cache user (+us), or swap space full? Free it! */
 		/* Also recheck PageSwapCache after page is locked (above) */
