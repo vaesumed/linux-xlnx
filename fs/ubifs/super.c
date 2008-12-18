@@ -417,6 +417,11 @@ static int ubifs_show_options(struct seq_file *s, struct vfsmount *mnt)
 	else if (c->mount_opts.chk_data_crc == 1)
 		seq_printf(s, ",no_chk_data_crc");
 
+	if (c->mount_opts.override_compr) {
+		seq_printf(s, ",compr=");
+		seq_printf(s, ubifs_compr_name(c->mount_opts.compr_type));
+	}
+
 	return 0;
 }
 
@@ -878,6 +883,7 @@ static int check_volume_empty(struct ubifs_info *c)
  * Opt_no_bulk_read: disable bulk-reads
  * Opt_chk_data_crc: check CRCs when reading data nodes
  * Opt_no_chk_data_crc: do not check CRCs when reading data nodes
+ * Opt_override_compr: override default compressor
  * Opt_err: just end of array marker
  */
 enum {
@@ -887,6 +893,7 @@ enum {
 	Opt_no_bulk_read,
 	Opt_chk_data_crc,
 	Opt_no_chk_data_crc,
+	Opt_override_compr,
 	Opt_err,
 };
 
@@ -897,6 +904,7 @@ static const match_table_t tokens = {
 	{Opt_no_bulk_read, "no_bulk_read"},
 	{Opt_chk_data_crc, "chk_data_crc"},
 	{Opt_no_chk_data_crc, "no_chk_data_crc"},
+	{Opt_override_compr, "compr=%s"},
 	{Opt_err, NULL},
 };
 
@@ -950,6 +958,28 @@ static int ubifs_parse_options(struct ubifs_info *c, char *options,
 			c->mount_opts.chk_data_crc = 1;
 			c->no_chk_data_crc = 1;
 			break;
+		case Opt_override_compr:
+		{
+			char *name = match_strdup(&args[0]);
+
+			if (!name)
+				return -ENOMEM;
+			if (!strcmp(name, "none"))
+				c->mount_opts.compr_type = UBIFS_COMPR_NONE;
+			else if (!strcmp(name, "lzo"))
+				c->mount_opts.compr_type = UBIFS_COMPR_LZO;
+			else if (!strcmp(name, "zlib"))
+				c->mount_opts.compr_type = UBIFS_COMPR_ZLIB;
+			else {
+				ubifs_err("unknown compressor \"%s\"", name);
+				kfree(name);
+				return -EINVAL;
+			}
+			kfree(name);
+			c->mount_opts.override_compr = 1;
+			c->default_compr = c->mount_opts.compr_type;
+			break;
+		}
 		default:
 			ubifs_err("unrecognized mount option \"%s\" "
 				  "or missing value", p);
@@ -1039,11 +1069,9 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (err)
 		return err;
 
-#ifdef CONFIG_UBIFS_FS_DEBUG
-	c->dbg_buf = vmalloc(c->leb_size);
-	if (!c->dbg_buf)
-		return -ENOMEM;
-#endif
+	err = ubifs_debugging_init(c);
+	if (err)
+		return err;
 
 	err = check_volume_empty(c);
 	if (err)
@@ -1100,27 +1128,25 @@ static int mount_ubifs(struct ubifs_info *c)
 		goto out_free;
 
 	/*
-	 * Make sure the compressor which is set as the default on in the
-	 * superblock was actually compiled in.
+	 * Make sure the compressor which is set as default in the superblock
+	 * or overriden by mount options is actually compiled in.
 	 */
 	if (!ubifs_compr_present(c->default_compr)) {
-		ubifs_warn("'%s' compressor is set by superblock, but not "
-			   "compiled in", ubifs_compr_name(c->default_compr));
-		c->default_compr = UBIFS_COMPR_NONE;
+		ubifs_err("'compressor \"%s\" is not compiled in",
+			  ubifs_compr_name(c->default_compr));
+		goto out_free;
 	}
-
-	dbg_failure_mode_registration(c);
 
 	err = init_constants_late(c);
 	if (err)
-		goto out_dereg;
+		goto out_free;
 
 	sz = ALIGN(c->max_idx_node_sz, c->min_io_size);
 	sz = ALIGN(sz + c->max_idx_node_sz, c->min_io_size);
 	c->cbuf = kmalloc(sz, GFP_NOFS);
 	if (!c->cbuf) {
 		err = -ENOMEM;
-		goto out_dereg;
+		goto out_free;
 	}
 
 	sprintf(c->bgt_name, BGT_NAME_PATTERN, c->vi.ubi_num, c->vi.vol_id);
@@ -1232,6 +1258,10 @@ static int mount_ubifs(struct ubifs_info *c)
 		}
 	}
 
+	err = dbg_debugfs_init_fs(c);
+	if (err)
+		goto out_infos;
+
 	err = dbg_check_filesystem(c);
 	if (err)
 		goto out_infos;
@@ -1320,14 +1350,12 @@ out_wbufs:
 	free_wbufs(c);
 out_cbuf:
 	kfree(c->cbuf);
-out_dereg:
-	dbg_failure_mode_deregistration(c);
 out_free:
 	kfree(c->bu.buf);
 	vfree(c->ileb_buf);
 	vfree(c->sbuf);
 	kfree(c->bottom_up_buf);
-	UBIFS_DBG(vfree(c->dbg_buf));
+	ubifs_debugging_exit(c);
 	return err;
 }
 
@@ -1345,6 +1373,7 @@ static void ubifs_umount(struct ubifs_info *c)
 	dbg_gen("un-mounting UBI device %d, volume %d", c->vi.ubi_num,
 		c->vi.vol_id);
 
+	dbg_debugfs_exit_fs(c);
 	spin_lock(&ubifs_infos_lock);
 	list_del(&c->infos_list);
 	spin_unlock(&ubifs_infos_lock);
@@ -1364,8 +1393,7 @@ static void ubifs_umount(struct ubifs_info *c)
 	vfree(c->ileb_buf);
 	vfree(c->sbuf);
 	kfree(c->bottom_up_buf);
-	UBIFS_DBG(vfree(c->dbg_buf));
-	dbg_failure_mode_deregistration(c);
+	ubifs_debugging_exit(c);
 }
 
 /**
@@ -1849,7 +1877,6 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_iput;
 
 	mutex_unlock(&c->umount_mutex);
-
 	return 0;
 
 out_iput:
@@ -2021,6 +2048,14 @@ static int __init ubifs_init(void)
 	BUILD_BUG_ON(UBIFS_REF_NODE_SZ != 64);
 
 	/*
+	 * We use 2 bit wide bit-fields to store compression type, which should
+	 * be amended if more compressors are added. The bit-fields are:
+	 * @compr_type in 'struct ubifs_inode', @default_compr in
+	 * 'struct ubifs_info' and @compr_type in 'struct ubifs_mount_opts'.
+	 */
+	BUILD_BUG_ON(UBIFS_COMPR_TYPES_CNT > 4);
+
+	/*
 	 * We require that PAGE_CACHE_SIZE is greater-than-or-equal-to
 	 * UBIFS_BLOCK_SIZE. It is assumed that both are powers of 2.
 	 */
@@ -2049,11 +2084,17 @@ static int __init ubifs_init(void)
 
 	err = ubifs_compressors_init();
 	if (err)
+		goto out_shrinker;
+
+	err = dbg_debugfs_init();
+	if (err)
 		goto out_compr;
 
 	return 0;
 
 out_compr:
+	ubifs_compressors_exit();
+out_shrinker:
 	unregister_shrinker(&ubifs_shrinker_info);
 	kmem_cache_destroy(ubifs_inode_slab);
 out_reg:
@@ -2068,6 +2109,7 @@ static void __exit ubifs_exit(void)
 	ubifs_assert(list_empty(&ubifs_infos));
 	ubifs_assert(atomic_long_read(&ubifs_clean_zn_cnt) == 0);
 
+	dbg_debugfs_exit();
 	ubifs_compressors_exit();
 	unregister_shrinker(&ubifs_shrinker_info);
 	kmem_cache_destroy(ubifs_inode_slab);
