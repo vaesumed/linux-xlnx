@@ -517,8 +517,8 @@ static int em28xx_config(struct em28xx *dev)
 	int retval;
 
 	/* Sets I2C speed to 100 KHz */
-	if (!dev->is_em2800) {
-		retval = em28xx_write_regs_req(dev, 0x00, 0x06, "\x40", 1);
+	if (!dev->board.is_em2800) {
+		retval = em28xx_write_reg(dev, EM28XX_R06_I2C_CLK, 0x40);
 		if (retval < 0) {
 			em28xx_errdev("%s: em28xx_write_regs_req failed! retval [%d]\n",
 				__func__, retval);
@@ -528,9 +528,9 @@ static int em28xx_config(struct em28xx *dev)
 
 	/* enable vbi capturing */
 
-/*	em28xx_write_regs_req(dev, 0x00, 0x0e, "\xC0", 1); audio register */
-/*	em28xx_write_regs_req(dev, 0x00, 0x0f, "\x80", 1); clk register */
-	em28xx_write_regs_req(dev, 0x00, 0x11, "\x51", 1);
+/*	em28xx_write_reg(dev, EM28XX_R0E_AUDIOSRC, 0xc0); audio register */
+/*	em28xx_write_reg(dev, EM28XX_R0F_XCLK, 0x80); clk register */
+	em28xx_write_reg(dev, EM28XX_R11_VINCTRL, 0x51);
 
 	dev->mute = 1;		/* maybe not the right place... */
 	dev->volume = 0x1f;
@@ -565,10 +565,14 @@ static void video_mux(struct em28xx *dev, int index)
 	route.output = 0;
 	dev->ctl_input = index;
 	dev->ctl_ainput = INPUT(index)->amux;
+	dev->ctl_aoutput = INPUT(index)->aout;
+
+	if (!dev->ctl_aoutput)
+		dev->ctl_aoutput = EM28XX_AOUT_MASTER;
 
 	em28xx_i2c_call_clients(dev, VIDIOC_INT_S_VIDEO_ROUTING, &route);
 
-	if (dev->has_msp34xx) {
+	if (dev->board.has_msp34xx) {
 		if (dev->i2s_speed) {
 			em28xx_i2c_call_clients(dev, VIDIOC_INT_I2S_CLOCK_FREQ,
 				&dev->i2s_speed);
@@ -742,7 +746,7 @@ static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 
 	mutex_lock(&dev->lock);
 
-	if (dev->is_em2800) {
+	if (dev->board.is_em2800) {
 		/* the em2800 can only scale down to 50% */
 		if (height % (maxh / 2))
 			height = maxh;
@@ -927,20 +931,38 @@ static int vidioc_g_audio(struct file *file, void *priv, struct v4l2_audio *a)
 {
 	struct em28xx_fh   *fh    = priv;
 	struct em28xx      *dev   = fh->dev;
-	unsigned int        index = a->index;
 
-	if (a->index > 1)
-		return -EINVAL;
-
-	index = dev->ctl_ainput;
-
-	if (index == 0)
+	switch (a->index) {
+	case EM28XX_AMUX_VIDEO:
 		strcpy(a->name, "Television");
-	else
+		break;
+	case EM28XX_AMUX_LINE_IN:
 		strcpy(a->name, "Line In");
+		break;
+	case EM28XX_AMUX_VIDEO2:
+		strcpy(a->name, "Television alt");
+		break;
+	case EM28XX_AMUX_PHONE:
+		strcpy(a->name, "Phone");
+		break;
+	case EM28XX_AMUX_MIC:
+		strcpy(a->name, "Mic");
+		break;
+	case EM28XX_AMUX_CD:
+		strcpy(a->name, "CD");
+		break;
+	case EM28XX_AMUX_AUX:
+		strcpy(a->name, "Aux");
+		break;
+	case EM28XX_AMUX_PCM_OUT:
+		strcpy(a->name, "PCM");
+		break;
+	default:
+		return -EINVAL;
+	}
 
+	a->index = dev->ctl_ainput;
 	a->capability = V4L2_AUDCAP_STEREO;
-	a->index = index;
 
 	return 0;
 }
@@ -950,9 +972,11 @@ static int vidioc_s_audio(struct file *file, void *priv, struct v4l2_audio *a)
 	struct em28xx_fh   *fh  = priv;
 	struct em28xx      *dev = fh->dev;
 
-	if (a->index != dev->ctl_ainput)
-		return -EINVAL;
+	dev->ctl_ainput = INPUT(a->index)->amux;
+	dev->ctl_aoutput = INPUT(a->index)->aout;
 
+	if (!dev->ctl_aoutput)
+		dev->ctl_aoutput = EM28XX_AOUT_MASTER;
 	return 0;
 }
 
@@ -973,7 +997,7 @@ static int vidioc_queryctrl(struct file *file, void *priv,
 
 	qc->id = id;
 
-	if (!dev->has_msp34xx) {
+	if (!dev->board.has_msp34xx) {
 		for (i = 0; i < ARRAY_SIZE(em28xx_qctrl); i++) {
 			if (qc->id && qc->id == em28xx_qctrl[i].id) {
 				memcpy(qc, &(em28xx_qctrl[i]), sizeof(*qc));
@@ -1003,7 +1027,7 @@ static int vidioc_g_ctrl(struct file *file, void *priv,
 		return rc;
 	mutex_lock(&dev->lock);
 
-	if (!dev->has_msp34xx)
+	if (!dev->board.has_msp34xx)
 		rc = em28xx_get_ctrl(dev, ctrl);
 	else
 		rc = -EINVAL;
@@ -1031,7 +1055,7 @@ static int vidioc_s_ctrl(struct file *file, void *priv,
 
 	mutex_lock(&dev->lock);
 
-	if (dev->has_msp34xx)
+	if (dev->board.has_msp34xx)
 		em28xx_i2c_call_clients(dev, VIDIOC_S_CTRL, ctrl);
 	else {
 		rc = 1;
@@ -1270,7 +1294,7 @@ static int vidioc_querycap(struct file *file, void  *priv,
 
 	strlcpy(cap->driver, "em28xx", sizeof(cap->driver));
 	strlcpy(cap->card, em28xx_boards[dev->model].name, sizeof(cap->card));
-	strlcpy(cap->bus_info, dev->udev->dev.bus_id, sizeof(cap->bus_info));
+	strlcpy(cap->bus_info, dev_name(&dev->udev->dev), sizeof(cap->bus_info));
 
 	cap->version = EM28XX_VERSION_CODE;
 
@@ -1423,7 +1447,7 @@ static int radio_querycap(struct file *file, void  *priv,
 
 	strlcpy(cap->driver, "em28xx", sizeof(cap->driver));
 	strlcpy(cap->card, em28xx_boards[dev->model].name, sizeof(cap->card));
-	strlcpy(cap->bus_info, dev->udev->dev.bus_id, sizeof(cap->bus_info));
+	strlcpy(cap->bus_info, dev_name(&dev->udev->dev), sizeof(cap->bus_info));
 
 	cap->version = EM28XX_VERSION_CODE;
 	cap->capabilities = V4L2_CAP_TUNER;
@@ -1599,11 +1623,13 @@ static void em28xx_release_resources(struct em28xx *dev)
 
 	/*FIXME: I2C IR should be disconnected */
 
-	em28xx_info("V4L2 devices /dev/video%d and /dev/vbi%d deregistered\n",
-				dev->vdev->num, dev->vbi_dev->num);
 	list_del(&dev->devlist);
 	if (dev->sbutton_input_dev)
 		em28xx_deregister_snapshot_button(dev);
+
+	if (dev->ir)
+		em28xx_ir_fini(dev);
+
 	if (dev->radio_dev) {
 		if (-1 != dev->radio_dev->minor)
 			video_unregister_device(dev->radio_dev);
@@ -1612,6 +1638,8 @@ static void em28xx_release_resources(struct em28xx *dev)
 		dev->radio_dev = NULL;
 	}
 	if (dev->vbi_dev) {
+		em28xx_info("V4L2 device /dev/vbi%d deregistered\n",
+			    dev->vbi_dev->num);
 		if (-1 != dev->vbi_dev->minor)
 			video_unregister_device(dev->vbi_dev);
 		else
@@ -1619,6 +1647,8 @@ static void em28xx_release_resources(struct em28xx *dev)
 		dev->vbi_dev = NULL;
 	}
 	if (dev->vdev) {
+		em28xx_info("V4L2 device /dev/video%d deregistered\n",
+			    dev->vdev->num);
 		if (-1 != dev->vdev->minor)
 			video_unregister_device(dev->vdev);
 		else
@@ -1664,9 +1694,12 @@ static int em28xx_v4l2_close(struct inode *inode, struct file *filp)
 			return 0;
 		}
 
+		/* Save some power by putting tuner to sleep */
+		em28xx_i2c_call_clients(dev, TUNER_SET_STANDBY, NULL);
+
 		/* do this before setting alternate! */
 		em28xx_uninit_isoc(dev);
-		em28xx_set_mode(dev, EM28XX_MODE_UNDEFINED);
+		em28xx_set_mode(dev, EM28XX_SUSPEND);
 
 		/* set alternate 0 */
 		dev->alt = 0;
@@ -1924,7 +1957,6 @@ static struct video_device *em28xx_vdev_init(struct em28xx *dev,
 	return vfd;
 }
 
-
 static int register_analog_devices(struct em28xx *dev)
 {
 	int ret;
@@ -2005,7 +2037,7 @@ static int em28xx_init_dev(struct em28xx **devhandle, struct usb_device *udev,
 	dev->em28xx_read_reg_req_len = em28xx_read_reg_req_len;
 	dev->em28xx_write_regs_req = em28xx_write_regs_req;
 	dev->em28xx_read_reg_req = em28xx_read_reg_req;
-	dev->is_em2800 = em28xx_boards[dev->model].is_em2800;
+	dev->board.is_em2800 = em28xx_boards[dev->model].is_em2800;
 
 	em28xx_pre_card_setup(dev);
 
@@ -2027,11 +2059,10 @@ static int em28xx_init_dev(struct em28xx **devhandle, struct usb_device *udev,
 	em28xx_card_setup(dev);
 
 	/* Configure audio */
-	errCode = em28xx_audio_analog_set(dev);
+	errCode = em28xx_audio_setup(dev);
 	if (errCode < 0) {
-		em28xx_errdev("%s: em28xx_audio_analog_set - errCode [%d]!\n",
+		em28xx_errdev("%s: Error while setting audio - errCode [%d]!\n",
 			__func__, errCode);
-		return errCode;
 	}
 
 	/* configure the device */
@@ -2063,9 +2094,9 @@ static int em28xx_init_dev(struct em28xx **devhandle, struct usb_device *udev,
 	INIT_LIST_HEAD(&dev->vidq.queued);
 
 
-	if (dev->has_msp34xx) {
+	if (dev->board.has_msp34xx) {
 		/* Send a reset to other chips via gpio */
-		errCode = em28xx_write_regs_req(dev, 0x00, 0x08, "\xf7", 1);
+		errCode = em28xx_write_reg(dev, EM28XX_R08_GPIO, 0xf7);
 		if (errCode < 0) {
 			em28xx_errdev("%s: em28xx_write_regs_req - msp34xx(1) failed! errCode [%d]\n",
 				__func__, errCode);
@@ -2073,7 +2104,7 @@ static int em28xx_init_dev(struct em28xx **devhandle, struct usb_device *udev,
 		}
 		msleep(3);
 
-		errCode = em28xx_write_regs_req(dev, 0x00, 0x08, "\xff", 1);
+		errCode = em28xx_write_reg(dev, EM28XX_R08_GPIO, 0xff);
 		if (errCode < 0) {
 			em28xx_errdev("%s: em28xx_write_regs_req - msp34xx(2) failed! errCode [%d]\n",
 				__func__, errCode);
@@ -2103,6 +2134,9 @@ static int em28xx_init_dev(struct em28xx **devhandle, struct usb_device *udev,
 	mutex_unlock(&em28xx_extension_devlist_lock);
 	mutex_unlock(&em28xx_devlist_mutex);
 
+	/* Save some power by putting tuner to sleep */
+	em28xx_i2c_call_clients(dev, TUNER_SET_STANDBY, NULL);
+
 	return 0;
 
 fail_reg_devices:
@@ -2118,10 +2152,10 @@ static void request_module_async(struct work_struct *work)
 
 	if (dev->has_audio_class)
 		request_module("snd-usb-audio");
-	else
+	else if (dev->has_alsa_audio)
 		request_module("em28xx-alsa");
 
-	if (dev->has_dvb)
+	if (dev->board.has_dvb)
 		request_module("em28xx-dvb");
 }
 
@@ -2146,7 +2180,9 @@ static int em28xx_usb_probe(struct usb_interface *interface,
 	struct usb_interface *uif;
 	struct em28xx *dev = NULL;
 	int retval = -ENODEV;
-	int i, nr, ifnum;
+	int i, nr, ifnum, isoc_pipe;
+	char *speed;
+	char descr[255] = "";
 
 	udev = usb_get_dev(interface_to_usbdev(interface));
 	ifnum = interface->altsetting[0].desc.bInterfaceNumber;
@@ -2157,36 +2193,87 @@ static int em28xx_usb_probe(struct usb_interface *interface,
 
 	/* Don't register audio interfaces */
 	if (interface->altsetting[0].desc.bInterfaceClass == USB_CLASS_AUDIO) {
-		em28xx_err(DRIVER_NAME " audio device (%04x:%04x): interface %i, class %i\n",
-				udev->descriptor.idVendor,
-				udev->descriptor.idProduct,
-				ifnum,
-				interface->altsetting[0].desc.bInterfaceClass);
-
-		em28xx_devused &= ~(1<<nr);
-		return -ENODEV;
-	}
-
-	em28xx_err(DRIVER_NAME " new video device (%04x:%04x): interface %i, class %i\n",
-			udev->descriptor.idVendor,
-			udev->descriptor.idProduct,
+		em28xx_err(DRIVER_NAME " audio device (%04x:%04x): "
+			"interface %i, class %i\n",
+			le16_to_cpu(udev->descriptor.idVendor),
+			le16_to_cpu(udev->descriptor.idProduct),
 			ifnum,
 			interface->altsetting[0].desc.bInterfaceClass);
 
-	endpoint = &interface->cur_altsetting->endpoint[1].desc;
+		em28xx_devused &= ~(1<<nr);
+		return -ENODEV;
+	}
+
+	endpoint = &interface->cur_altsetting->endpoint[0].desc;
 
 	/* check if the device has the iso in endpoint at the correct place */
-	if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) !=
-	    USB_ENDPOINT_XFER_ISOC) {
-		em28xx_err(DRIVER_NAME " probing error: endpoint is non-ISO endpoint!\n");
-		em28xx_devused &= ~(1<<nr);
-		return -ENODEV;
+	if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) ==
+	    USB_ENDPOINT_XFER_ISOC &&
+	    (interface->altsetting[1].endpoint[0].desc.wMaxPacketSize == 940))
+	{
+		/* It's a newer em2874/em2875 device */
+		isoc_pipe = 0;
+	} else {
+		int check_interface = 1;
+		isoc_pipe = 1;
+		endpoint = &interface->cur_altsetting->endpoint[1].desc;
+		if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) !=
+		    USB_ENDPOINT_XFER_ISOC)
+			check_interface = 0;
+
+		if ((endpoint->bEndpointAddress & USB_ENDPOINT_DIR_MASK) == USB_DIR_OUT)
+			check_interface = 0;
+
+		if (!check_interface) {
+			em28xx_err(DRIVER_NAME " video device (%04x:%04x): "
+				"interface %i, class %i found.\n",
+				le16_to_cpu(udev->descriptor.idVendor),
+				le16_to_cpu(udev->descriptor.idProduct),
+				ifnum,
+				interface->altsetting[0].desc.bInterfaceClass);
+
+			em28xx_err(DRIVER_NAME " This is an anciliary "
+				"interface not used by the driver\n");
+
+			em28xx_devused &= ~(1<<nr);
+			return -ENODEV;
+		}
 	}
-	if ((endpoint->bEndpointAddress & USB_ENDPOINT_DIR_MASK) == USB_DIR_OUT) {
-		em28xx_err(DRIVER_NAME " probing error: endpoint is ISO OUT endpoint!\n");
-		em28xx_devused &= ~(1<<nr);
-		return -ENODEV;
+
+	switch (udev->speed) {
+	case USB_SPEED_LOW:
+		speed = "1.5";
+		break;
+	case USB_SPEED_UNKNOWN:
+	case USB_SPEED_FULL:
+		speed = "12";
+		break;
+	case USB_SPEED_HIGH:
+		speed = "480";
+		break;
+	default:
+		speed = "unknown";
 	}
+
+	if (udev->manufacturer)
+		strlcpy(descr, udev->manufacturer, sizeof(descr));
+
+	if (udev->product) {
+		if (*descr)
+			strlcat(descr, " ", sizeof(descr));
+		strlcat(descr, udev->product, sizeof(descr));
+	}
+	if (*descr)
+		strlcat(descr, " ", sizeof(descr));
+
+	printk(DRIVER_NAME ": New device %s@ %s Mbps "
+		"(%04x:%04x, interface %d, class %d)\n",
+		descr,
+		speed,
+		le16_to_cpu(udev->descriptor.idVendor),
+		le16_to_cpu(udev->descriptor.idProduct),
+		ifnum,
+		interface->altsetting->desc.bInterfaceNumber);
 
 	if (nr >= EM28XX_MAXBOARDS) {
 		printk(DRIVER_NAME ": Supports only %i em28xx boards.\n",
@@ -2217,14 +2304,11 @@ static int em28xx_usb_probe(struct usb_interface *interface,
 		}
 	}
 
-	printk(KERN_INFO DRIVER_NAME " %s usb audio class\n",
-		   dev->has_audio_class ? "Has" : "Doesn't have");
-
 	/* compute alternate max packet sizes */
 	uif = udev->actconfig->interface[0];
 
 	dev->num_alt = uif->num_altsetting;
-	em28xx_info("Alternate settings: %i\n", dev->num_alt);
+	em28xx_videodbg("Alternate settings: %i\n", dev->num_alt);
 /*	dev->alt_max_pkt_size = kmalloc(sizeof(*dev->alt_max_pkt_size)* */
 	dev->alt_max_pkt_size = kmalloc(32 * dev->num_alt, GFP_KERNEL);
 
@@ -2236,11 +2320,11 @@ static int em28xx_usb_probe(struct usb_interface *interface,
 	}
 
 	for (i = 0; i < dev->num_alt ; i++) {
-		u16 tmp = le16_to_cpu(uif->altsetting[i].endpoint[1].desc.
+		u16 tmp = le16_to_cpu(uif->altsetting[i].endpoint[isoc_pipe].desc.
 							wMaxPacketSize);
 		dev->alt_max_pkt_size[i] =
 		    (tmp & 0x07ff) * (((tmp & 0x1800) >> 11) + 1);
-		em28xx_info("Alternate setting %i, max size= %i\n", i,
+		em28xx_videodbg("Alternate setting %i, max size= %i\n", i,
 						dev->alt_max_pkt_size[i]);
 	}
 
@@ -2255,8 +2339,6 @@ static int em28xx_usb_probe(struct usb_interface *interface,
 
 		return retval;
 	}
-
-	em28xx_info("Found %s\n", em28xx_boards[dev->model].name);
 
 	/* save our data pointer in this interface device */
 	usb_set_intfdata(interface, dev);
