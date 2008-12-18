@@ -1157,6 +1157,8 @@ static int aead_authenc_givencrypt(
 	edesc->desc.hdr = ctx->desc_hdr_template | DESC_HDR_MODE0_ENCRYPT;
 
 	memcpy(req->giv, ctx->iv, crypto_aead_ivsize(authenc));
+	/* avoid consecutive packets going out with same IV */
+	*(__be64 *)req->giv ^= cpu_to_be64(req->seq);
 
 	return ipsec_esp(edesc, areq, req->giv, req->seq,
 			 ipsec_esp_encrypt_done);
@@ -1355,7 +1357,7 @@ static int hw_supports(struct device *dev, __be32 desc_hdr_template)
 	return ret;
 }
 
-static int __devexit talitos_remove(struct of_device *ofdev)
+static int talitos_remove(struct of_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct talitos_private *priv = dev_get_drvdata(dev);
@@ -1448,6 +1450,8 @@ static int talitos_probe(struct of_device *ofdev,
 	dev_set_drvdata(dev, priv);
 
 	priv->ofdev = ofdev;
+
+	INIT_LIST_HEAD(&priv->alg_list);
 
 	tasklet_init(&priv->done_task, talitos_done, (unsigned long)dev);
 	tasklet_init(&priv->error_task, talitos_error, (unsigned long)dev);
@@ -1575,8 +1579,6 @@ static int talitos_probe(struct of_device *ofdev,
 	}
 
 	/* register crypto algorithms the device supports */
-	INIT_LIST_HEAD(&priv->alg_list);
-
 	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {
 		if (hw_supports(dev, driver_algs[i].desc_hdr_template)) {
 			struct talitos_crypto_alg *t_alg;
@@ -1620,7 +1622,7 @@ static struct of_platform_driver talitos_driver = {
 	.name = "talitos",
 	.match_table = talitos_match,
 	.probe = talitos_probe,
-	.remove = __devexit_p(talitos_remove),
+	.remove = talitos_remove,
 };
 
 static int __init talitos_init(void)
