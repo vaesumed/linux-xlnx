@@ -601,7 +601,7 @@ static int __devinit agp_uninorth_probe(struct pci_dev *pdev,
 		}
 	}
 
-	dev_err(&pdev->dev, "unsupported Apple chipset [%04x/%04x]\n",
+	dev_err(&pdev->dev, "unsupported Apple chipset [%04x:%04x]\n",
 		pdev->vendor, pdev->device);
 	return -ENODEV;
 
