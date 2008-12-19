@@ -51,7 +51,6 @@
 #include "xfs_vnodeops.h"
 
 #include <linux/capability.h>
-#include <linux/mount.h>
 #include <linux/writeback.h>
 
 
@@ -243,7 +242,7 @@ xfs_read(
 
 	if (unlikely(ioflags & IO_ISDIRECT)) {
 		if (inode->i_mapping->nrpages)
-			ret = xfs_flushinval_pages(ip, (*offset & PAGE_CACHE_MASK),
+			ret = -xfs_flushinval_pages(ip, (*offset & PAGE_CACHE_MASK),
 						    -1, FI_REMAPF_LOCKED);
 		mutex_unlock(&inode->i_mutex);
 		if (ret) {
@@ -668,15 +667,8 @@ start:
 	if (new_size > xip->i_size)
 		xip->i_new_size = new_size;
 
-	/*
-	 * We're not supposed to change timestamps in readonly-mounted
-	 * filesystems.  Throw it away if anyone asks us.
-	 */
-	if (likely(!(ioflags & IO_INVIS) &&
-		   !mnt_want_write(file->f_path.mnt))) {
+	if (likely(!(ioflags & IO_INVIS)))
 		xfs_ichgtime(xip, XFS_ICHGTIME_MOD | XFS_ICHGTIME_CHG);
-		mnt_drop_write(file->f_path.mnt);
-	}
 
 	/*
 	 * If the offset is beyond the size of the file, we have a couple
@@ -855,13 +847,7 @@ retry:
 int
 xfs_bdstrat_cb(struct xfs_buf *bp)
 {
-	xfs_mount_t	*mp;
-
-	mp = XFS_BUF_FSPRIVATE3(bp, xfs_mount_t *);
-	if (!XFS_FORCED_SHUTDOWN(mp)) {
-		xfs_buf_iorequest(bp);
-		return 0;
-	} else {
+	if (XFS_FORCED_SHUTDOWN(bp->b_mount)) {
 		xfs_buftrace("XFS__BDSTRAT IOERROR", bp);
 		/*
 		 * Metadata write that didn't get logged but
@@ -874,6 +860,9 @@ xfs_bdstrat_cb(struct xfs_buf *bp)
 		else
 			return (xfs_bioerror(bp));
 	}
+
+	xfs_buf_iorequest(bp);
+	return 0;
 }
 
 /*
