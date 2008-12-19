@@ -289,6 +289,7 @@ acpi_status asmlinkage acpi_enter_sleep_state(u8 sleep_state)
 		return_ACPI_STATUS(status);
 	}
 
+#ifdef	ACPI_20_GTS_BFS
 	/* Execute the _GTS method */
 
 	arg_list.count = 1;
@@ -300,6 +301,7 @@ acpi_status asmlinkage acpi_enter_sleep_state(u8 sleep_state)
 	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND) {
 		return_ACPI_STATUS(status);
 	}
+#endif
 
 	/* Get current value of PM1A control */
 
@@ -535,6 +537,7 @@ acpi_status acpi_leave_sleep_state_prep(u8 sleep_state)
 		}
 	}
 
+#ifdef	ACPI_20_GTS_BFS
 	/* Execute the _BFS method */
 
 	arg_list.count = 1;
@@ -546,6 +549,7 @@ acpi_status acpi_leave_sleep_state_prep(u8 sleep_state)
 	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND) {
 		ACPI_EXCEPTION((AE_INFO, status, "During Method _BFS"));
 	}
+#endif
 
 	return_ACPI_STATUS(status);
 }
