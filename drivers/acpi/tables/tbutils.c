@@ -564,7 +564,8 @@ acpi_tb_parse_root_table(acpi_physical_address rsdp_address, u8 flags)
 	 * Complete the initialization of the root table array by examining
 	 * the header of each table
 	 */
-	for (i = 2; i < acpi_gbl_root_table_list.count; i++) {
+	for (i = 2, table_count = acpi_gbl_root_table_list.count;
+		i < table_count; i++) {
 		acpi_tb_install_table(acpi_gbl_root_table_list.tables[i].
 				      address, flags, NULL, i);
 
