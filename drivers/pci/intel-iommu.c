@@ -27,7 +27,6 @@
 #include <linux/slab.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
-#include <linux/sysdev.h>
 #include <linux/spinlock.h>
 #include <linux/pci.h>
 #include <linux/dmar.h>
@@ -54,6 +53,180 @@
 
 #define DOMAIN_MAX_ADDR(gaw) ((((u64)1) << gaw) - 1)
 
+#define IOVA_PFN(addr)		((addr) >> PAGE_SHIFT)
+#define DMA_32BIT_PFN		IOVA_PFN(DMA_32BIT_MASK)
+#define DMA_64BIT_PFN		IOVA_PFN(DMA_64BIT_MASK)
+
+/*
+ * 0: Present
+ * 1-11: Reserved
+ * 12-63: Context Ptr (12 - (haw-1))
+ * 64-127: Reserved
+ */
+struct root_entry {
+	u64	val;
+	u64	rsvd1;
+};
+#define ROOT_ENTRY_NR (VTD_PAGE_SIZE/sizeof(struct root_entry))
+static inline bool root_present(struct root_entry *root)
+{
+	return (root->val & 1);
+}
+static inline void set_root_present(struct root_entry *root)
+{
+	root->val |= 1;
+}
+static inline void set_root_value(struct root_entry *root, unsigned long value)
+{
+	root->val |= value & VTD_PAGE_MASK;
+}
+
+static inline struct context_entry *
+get_context_addr_from_root(struct root_entry *root)
+{
+	return (struct context_entry *)
+		(root_present(root)?phys_to_virt(
+		root->val & VTD_PAGE_MASK) :
+		NULL);
+}
+
+/*
+ * low 64 bits:
+ * 0: present
+ * 1: fault processing disable
+ * 2-3: translation type
+ * 12-63: address space root
+ * high 64 bits:
+ * 0-2: address width
+ * 3-6: aval
+ * 8-23: domain id
+ */
+struct context_entry {
+	u64 lo;
+	u64 hi;
+};
+
+static inline bool context_present(struct context_entry *context)
+{
+	return (context->lo & 1);
+}
+static inline void context_set_present(struct context_entry *context)
+{
+	context->lo |= 1;
+}
+
+static inline void context_set_fault_enable(struct context_entry *context)
+{
+	context->lo &= (((u64)-1) << 2) | 1;
+}
+
+#define CONTEXT_TT_MULTI_LEVEL 0
+
+static inline void context_set_translation_type(struct context_entry *context,
+						unsigned long value)
+{
+	context->lo &= (((u64)-1) << 4) | 3;
+	context->lo |= (value & 3) << 2;
+}
+
+static inline void context_set_address_root(struct context_entry *context,
+					    unsigned long value)
+{
+	context->lo |= value & VTD_PAGE_MASK;
+}
+
+static inline void context_set_address_width(struct context_entry *context,
+					     unsigned long value)
+{
+	context->hi |= value & 7;
+}
+
+static inline void context_set_domain_id(struct context_entry *context,
+					 unsigned long value)
+{
+	context->hi |= (value & ((1 << 16) - 1)) << 8;
+}
+
+static inline void context_clear_entry(struct context_entry *context)
+{
+	context->lo = 0;
+	context->hi = 0;
+}
+
+/*
+ * 0: readable
+ * 1: writable
+ * 2-6: reserved
+ * 7: super page
+ * 8-11: available
+ * 12-63: Host physcial address
+ */
+struct dma_pte {
+	u64 val;
+};
+
+static inline void dma_clear_pte(struct dma_pte *pte)
+{
+	pte->val = 0;
+}
+
+static inline void dma_set_pte_readable(struct dma_pte *pte)
+{
+	pte->val |= DMA_PTE_READ;
+}
+
+static inline void dma_set_pte_writable(struct dma_pte *pte)
+{
+	pte->val |= DMA_PTE_WRITE;
+}
+
+static inline void dma_set_pte_prot(struct dma_pte *pte, unsigned long prot)
+{
+	pte->val = (pte->val & ~3) | (prot & 3);
+}
+
+static inline u64 dma_pte_addr(struct dma_pte *pte)
+{
+	return (pte->val & VTD_PAGE_MASK);
+}
+
+static inline void dma_set_pte_addr(struct dma_pte *pte, u64 addr)
+{
+	pte->val |= (addr & VTD_PAGE_MASK);
+}
+
+static inline bool dma_pte_present(struct dma_pte *pte)
+{
+	return (pte->val & 3) != 0;
+}
+
+struct dmar_domain {
+	int	id;			/* domain id */
+	struct intel_iommu *iommu;	/* back pointer to owning iommu */
+
+	struct list_head devices; 	/* all devices' list */
+	struct iova_domain iovad;	/* iova's that belong to this domain */
+
+	struct dma_pte	*pgd;		/* virtual address */
+	spinlock_t	mapping_lock;	/* page table lock */
+	int		gaw;		/* max guest address width */
+
+	/* adjusted guest address width, 0 is level 2 30-bit */
+	int		agaw;
+
+#define DOMAIN_FLAG_MULTIPLE_DEVICES 1
+	int		flags;
+};
+
+/* PCI domain-device relationship */
+struct device_domain_info {
+	struct list_head link;	/* link to domain siblings */
+	struct list_head global; /* link to global list */
+	u8 bus;			/* PCI bus numer */
+	u8 devfn;		/* PCI devfn number */
+	struct pci_dev *dev; /* it's NULL for PCIE-to-PCI bridge */
+	struct dmar_domain *domain; /* pointer to domain */
+};
 
 static void flush_unmaps_timeout(unsigned long data);
 
@@ -226,7 +399,7 @@ static int device_context_mapped(struct intel_iommu *iommu, u8 bus, u8 devfn)
 		ret = 0;
 		goto out;
 	}
-	ret = context_present(context[devfn]);
+	ret = context_present(&context[devfn]);
 out:
 	spin_unlock_irqrestore(&iommu->lock, flags);
 	return ret;
@@ -242,7 +415,7 @@ static void clear_context_table(struct intel_iommu *iommu, u8 bus, u8 devfn)
 	root = &iommu->root_entry[bus];
 	context = get_context_addr_from_root(root);
 	if (context) {
-		context_clear_entry(context[devfn]);
+		context_clear_entry(&context[devfn]);
 		__iommu_flush_cache(iommu, &context[devfn], \
 			sizeof(*context));
 	}
@@ -339,7 +512,7 @@ static struct dma_pte * addr_to_dma_pte(struct dmar_domain *domain, u64 addr)
 		if (level == 1)
 			break;
 
-		if (!dma_pte_present(*pte)) {
+		if (!dma_pte_present(pte)) {
 			tmp_page = alloc_pgtable_page();
 
 			if (!tmp_page) {
@@ -349,16 +522,16 @@ static struct dma_pte * addr_to_dma_pte(struct dmar_domain *domain, u64 addr)
 			}
 			__iommu_flush_cache(domain->iommu, tmp_page,
 					PAGE_SIZE);
-			dma_set_pte_addr(*pte, virt_to_phys(tmp_page));
+			dma_set_pte_addr(pte, virt_to_phys(tmp_page));
 			/*
 			 * high level table always sets r/w, last level page
 			 * table control read/write
 			 */
-			dma_set_pte_readable(*pte);
-			dma_set_pte_writable(*pte);
+			dma_set_pte_readable(pte);
+			dma_set_pte_writable(pte);
 			__iommu_flush_cache(domain->iommu, pte, sizeof(*pte));
 		}
-		parent = phys_to_virt(dma_pte_addr(*pte));
+		parent = phys_to_virt(dma_pte_addr(pte));
 		level--;
 	}
 
@@ -381,9 +554,9 @@ static struct dma_pte *dma_addr_level_pte(struct dmar_domain *domain, u64 addr,
 		if (level == total)
 			return pte;
 
-		if (!dma_pte_present(*pte))
+		if (!dma_pte_present(pte))
 			break;
-		parent = phys_to_virt(dma_pte_addr(*pte));
+		parent = phys_to_virt(dma_pte_addr(pte));
 		total--;
 	}
 	return NULL;
@@ -398,7 +571,7 @@ static void dma_pte_clear_one(struct dmar_domain *domain, u64 addr)
 	pte = dma_addr_level_pte(domain, addr, 1);
 
 	if (pte) {
-		dma_clear_pte(*pte);
+		dma_clear_pte(pte);
 		__iommu_flush_cache(domain->iommu, pte, sizeof(*pte));
 	}
 }
@@ -445,8 +618,8 @@ static void dma_pte_free_pagetable(struct dmar_domain *domain,
 			pte = dma_addr_level_pte(domain, tmp, level);
 			if (pte) {
 				free_pgtable_page(
-					phys_to_virt(dma_pte_addr(*pte)));
-				dma_clear_pte(*pte);
+					phys_to_virt(dma_pte_addr(pte)));
+				dma_clear_pte(pte);
 				__iommu_flush_cache(domain->iommu,
 						pte, sizeof(*pte));
 			}
@@ -1161,17 +1334,17 @@ static int domain_context_mapping_one(struct dmar_domain *domain,
 	if (!context)
 		return -ENOMEM;
 	spin_lock_irqsave(&iommu->lock, flags);
-	if (context_present(*context)) {
+	if (context_present(context)) {
 		spin_unlock_irqrestore(&iommu->lock, flags);
 		return 0;
 	}
 
-	context_set_domain_id(*context, domain->id);
-	context_set_address_width(*context, domain->agaw);
-	context_set_address_root(*context, virt_to_phys(domain->pgd));
-	context_set_translation_type(*context, CONTEXT_TT_MULTI_LEVEL);
-	context_set_fault_enable(*context);
-	context_set_present(*context);
+	context_set_domain_id(context, domain->id);
+	context_set_address_width(context, domain->agaw);
+	context_set_address_root(context, virt_to_phys(domain->pgd));
+	context_set_translation_type(context, CONTEXT_TT_MULTI_LEVEL);
+	context_set_fault_enable(context);
+	context_set_present(context);
 	__iommu_flush_cache(iommu, context, sizeof(*context));
 
 	/* it's a non-present to present mapping */
@@ -1273,9 +1446,9 @@ domain_page_mapping(struct dmar_domain *domain, dma_addr_t iova,
 		/* We don't need lock here, nobody else
 		 * touches the iova range
 		 */
-		BUG_ON(dma_pte_addr(*pte));
-		dma_set_pte_addr(*pte, start_pfn << VTD_PAGE_SHIFT);
-		dma_set_pte_prot(*pte, prot);
+		BUG_ON(dma_pte_addr(pte));
+		dma_set_pte_addr(pte, start_pfn << VTD_PAGE_SHIFT);
+		dma_set_pte_prot(pte, prot);
 		__iommu_flush_cache(domain->iommu, pte, sizeof(*pte));
 		start_pfn++;
 		index++;
@@ -1563,6 +1736,11 @@ static void __init iommu_prepare_gfx_mapping(void)
 			printk(KERN_ERR "IOMMU: mapping reserved region failed\n");
 	}
 }
+#else /* !CONFIG_DMAR_GFX_WA */
+static inline void iommu_prepare_gfx_mapping(void)
+{
+	return;
+}
 #endif
 
 #ifdef CONFIG_DMAR_FLOPPY_WA
@@ -1590,7 +1768,7 @@ static inline void iommu_prepare_isa(void)
 }
 #endif /* !CONFIG_DMAR_FLPY_WA */
 
-int __init init_dmars(void)
+static int __init init_dmars(void)
 {
 	struct dmar_drhd_unit *drhd;
 	struct dmar_rmrr_unit *rmrr;
@@ -2431,7 +2609,7 @@ u64 intel_iommu_iova_to_pfn(struct dmar_domain *domain, u64 iova)
 	pte = addr_to_dma_pte(domain, iova);
 
 	if (pte)
-		pfn = dma_pte_addr(*pte);
+		pfn = dma_pte_addr(pte);
 
 	return pfn >> VTD_PAGE_SHIFT;
 }
