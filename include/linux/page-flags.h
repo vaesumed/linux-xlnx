@@ -117,6 +117,7 @@ enum pageflags {
 	/* SLUB */
 	PG_slub_frozen = PG_active,
 	PG_slub_debug = PG_error,
+	PG_slub_kickable = PG_dirty,
 };
 
 #ifndef __GENERATING_BOUNDS_H
@@ -201,6 +202,7 @@ __PAGEFLAG(SlobFree, slob_free)
 
 __PAGEFLAG(SlubFrozen, slub_frozen)
 __PAGEFLAG(SlubDebug, slub_debug)
+__PAGEFLAG(SlubKickable, slub_kickable)
 
 /*
  * Only test-and-set exist for PG_writeback.  The unconditional operators are
