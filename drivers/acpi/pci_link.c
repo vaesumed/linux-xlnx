@@ -693,18 +693,7 @@ int acpi_pci_link_free_irq(acpi_handle handle)
 		printk(KERN_ERR PREFIX "Link isn't initialized\n");
 		return -1;
 	}
-#ifdef	FUTURE_USE
-	/*
-	 * The Link reference count allows us to _DISable an unused link
-	 * and suspend time, and set it again  on resume.
-	 * However, 2.6.12 still has irq_router.resume
-	 * which blindly restores the link state.
-	 * So we disable the reference count method
-	 * to prevent duplicate acpi_pci_link_set()
-	 * which would harm some systems
-	 */
 	link->refcnt--;
-#endif
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 			  "Link %s is dereferenced %d\n",
 			  acpi_device_bid(link->device), link->refcnt));
