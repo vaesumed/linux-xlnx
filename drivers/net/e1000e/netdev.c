@@ -4759,7 +4759,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 		}
 	}
 
-	err = pci_request_selected_regions(pdev,
+	err = pci_request_selected_regions_exclusive(pdev,
 	                                  pci_select_bars(pdev, IORESOURCE_MEM),
 	                                  e1000e_driver_name);
 	if (err)
