@@ -35,6 +35,7 @@ struct sh_mobile_lcdc_chan {
 struct sh_mobile_lcdc_priv {
 	void __iomem *base;
 #ifdef CONFIG_HAVE_CLK
+	struct clk *dot_clk;
 	struct clk *clk;
 #endif
 	unsigned long lddckr;
@@ -207,6 +208,11 @@ static int sh_mobile_lcdc_start(struct sh_mobile_lcdc_priv *priv)
 	int k, m;
 	int ret = 0;
 
+#ifdef CONFIG_HAVE_CLK
+	clk_enable(priv->clk);
+	if (priv->dot_clk)
+		clk_enable(priv->dot_clk);
+#endif
 	/* reset */
 	lcdc_write(priv, _LDCNT2R, lcdc_read(priv, _LDCNT2R) | LCDC_RESET);
 	lcdc_wait_bit(priv, _LDCNT2R, LCDC_RESET, 0);
@@ -371,6 +377,12 @@ static void sh_mobile_lcdc_stop(struct sh_mobile_lcdc_priv *priv)
 
 	/* stop the lcdc */
 	sh_mobile_lcdc_start_stop(priv, 0);
+
+#ifdef CONFIG_HAVE_CLK
+	if (priv->dot_clk)
+		clk_disable(priv->dot_clk);
+	clk_disable(priv->clk);
+#endif
 }
 
 static int sh_mobile_lcdc_check_interface(struct sh_mobile_lcdc_chan *ch)
@@ -413,9 +425,13 @@ static int sh_mobile_lcdc_check_interface(struct sh_mobile_lcdc_chan *ch)
 	return -EINVAL;
 }
 
-static int sh_mobile_lcdc_setup_clocks(struct device *dev, int clock_source,
+static int sh_mobile_lcdc_setup_clocks(struct platform_device *pdev,
+				       int clock_source,
 				       struct sh_mobile_lcdc_priv *priv)
 {
+#ifdef CONFIG_HAVE_CLK
+	char clk_name[8];
+#endif
 	char *str;
 	int icksel;
 
@@ -430,14 +446,20 @@ static int sh_mobile_lcdc_setup_clocks(struct device *dev, int clock_source,
 	priv->lddckr = icksel << 16;
 
 #ifdef CONFIG_HAVE_CLK
+	snprintf(clk_name, sizeof(clk_name), "lcdc%d", pdev->id);
+	priv->clk = clk_get(&pdev->dev, clk_name);
+	if (IS_ERR(priv->clk)) {
+		dev_err(&pdev->dev, "cannot get clock \"%s\"\n", clk_name);
+		return PTR_ERR(priv->clk);
+	}
+	
 	if (str) {
-		priv->clk = clk_get(dev, str);
-		if (IS_ERR(priv->clk)) {
-			dev_err(dev, "cannot get clock %s\n", str);
-			return PTR_ERR(priv->clk);
+		priv->dot_clk = clk_get(&pdev->dev, str);
+		if (IS_ERR(priv->dot_clk)) {
+			dev_err(&pdev->dev, "cannot get dot clock %s\n", str);
+			clk_put(priv->clk);
+			return PTR_ERR(priv->dot_clk);
 		}
-
-		clk_enable(priv->clk);
 	}
 #endif
 
@@ -477,9 +499,11 @@ static struct fb_fix_screeninfo sh_mobile_lcdc_fix  = {
 
 static struct fb_ops sh_mobile_lcdc_ops = {
 	.fb_setcolreg	= sh_mobile_lcdc_setcolreg,
-	.fb_fillrect	= cfb_fillrect,
-	.fb_copyarea	= cfb_copyarea,
-	.fb_imageblit	= cfb_imageblit,
+	.fb_read        = fb_sys_read,
+	.fb_write       = fb_sys_write,
+	.fb_fillrect	= sys_fillrect,
+	.fb_copyarea	= sys_copyarea,
+	.fb_imageblit	= sys_imageblit,
 };
 
 static int sh_mobile_lcdc_set_bpp(struct fb_var_screeninfo *var, int bpp)
@@ -587,8 +611,7 @@ static int __init sh_mobile_lcdc_probe(struct platform_device *pdev)
 		goto err1;
 	}
 
-	error = sh_mobile_lcdc_setup_clocks(&pdev->dev,
-					    pdata->clock_source, priv);
+	error = sh_mobile_lcdc_setup_clocks(pdev, pdata->clock_source, priv);
 	if (error) {
 		dev_err(&pdev->dev, "unable to setup clocks\n");
 		goto err1;
@@ -697,10 +720,9 @@ static int sh_mobile_lcdc_remove(struct platform_device *pdev)
 	}
 
 #ifdef CONFIG_HAVE_CLK
-	if (priv->clk) {
-		clk_disable(priv->clk);
-		clk_put(priv->clk);
-	}
+	if (priv->dot_clk)
+		clk_put(priv->dot_clk);
+	clk_put(priv->clk);
 #endif
 
 	if (priv->base)
