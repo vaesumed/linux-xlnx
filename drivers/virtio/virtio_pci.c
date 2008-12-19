@@ -75,7 +75,7 @@ MODULE_DEVICE_TABLE(pci, virtio_pci_id_table);
  * would make more sense for virtio to not insist on having it's own device. */
 static struct device virtio_pci_root = {
 	.parent		= NULL,
-	.bus_id		= "virtio-pci",
+	.init_name	= "virtio-pci",
 };
 
 /* Convert a generic virtio device to our structure */
@@ -216,7 +216,7 @@ static struct virtqueue *vp_find_vq(struct virtio_device *vdev, unsigned index,
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
 	struct virtio_pci_vq_info *info;
 	struct virtqueue *vq;
-	unsigned long flags;
+	unsigned long flags, size;
 	u16 num;
 	int err;
 
@@ -237,19 +237,20 @@ static struct virtqueue *vp_find_vq(struct virtio_device *vdev, unsigned index,
 	info->queue_index = index;
 	info->num = num;
 
-	info->queue = kzalloc(PAGE_ALIGN(vring_size(num,PAGE_SIZE)), GFP_KERNEL);
+	size = PAGE_ALIGN(vring_size(num, VIRTIO_PCI_VRING_ALIGN));
+	info->queue = alloc_pages_exact(size, GFP_KERNEL|__GFP_ZERO);
 	if (info->queue == NULL) {
 		err = -ENOMEM;
 		goto out_info;
 	}
 
 	/* activate the queue */
-	iowrite32(virt_to_phys(info->queue) >> PAGE_SHIFT,
+	iowrite32(virt_to_phys(info->queue) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT,
 		  vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
 
 	/* create the vring */
-	vq = vring_new_virtqueue(info->num, vdev, info->queue,
-				 vp_notify, callback);
+	vq = vring_new_virtqueue(info->num, VIRTIO_PCI_VRING_ALIGN,
+				 vdev, info->queue, vp_notify, callback);
 	if (!vq) {
 		err = -ENOMEM;
 		goto out_activate_queue;
@@ -266,7 +267,7 @@ static struct virtqueue *vp_find_vq(struct virtio_device *vdev, unsigned index,
 
 out_activate_queue:
 	iowrite32(0, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
-	kfree(info->queue);
+	free_pages_exact(info->queue, size);
 out_info:
 	kfree(info);
 	return ERR_PTR(err);
@@ -277,7 +278,7 @@ static void vp_del_vq(struct virtqueue *vq)
 {
 	struct virtio_pci_device *vp_dev = to_vp_device(vq->vdev);
 	struct virtio_pci_vq_info *info = vq->priv;
-	unsigned long flags;
+	unsigned long flags, size;
 
 	spin_lock_irqsave(&vp_dev->lock, flags);
 	list_del(&info->node);
@@ -289,7 +290,8 @@ static void vp_del_vq(struct virtqueue *vq)
 	iowrite16(info->queue_index, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_SEL);
 	iowrite32(0, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
 
-	kfree(info->queue);
+	size = PAGE_ALIGN(vring_size(info->num, VIRTIO_PCI_VRING_ALIGN));
+	free_pages_exact(info->queue, size);
 	kfree(info);
 }
 
@@ -357,7 +359,7 @@ static int __devinit virtio_pci_probe(struct pci_dev *pci_dev,
 
 	/* register a handler for the queue with the PCI device's interrupt */
 	err = request_irq(vp_dev->pci_dev->irq, vp_interrupt, IRQF_SHARED,
-			  vp_dev->vdev.dev.bus_id, vp_dev);
+			  dev_name(&vp_dev->vdev.dev), vp_dev);
 	if (err)
 		goto out_set_drvdata;
 
