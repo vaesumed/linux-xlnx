@@ -23,8 +23,14 @@
 /*
  * Credentials
  */
-typedef struct cred {
-       /* EMPTY */
-} cred_t;
+typedef const struct cred cred_t;
+
+extern cred_t *sys_cred;
+
+/* this is a hack.. (assumes sys_cred is the only cred_t in the system) */
+static inline int capable_cred(cred_t *cr, int cid)
+{
+	return (cr == sys_cred) ? 1 : capable(cid);
+}
 
 #endif  /* __XFS_CRED_H__ */
