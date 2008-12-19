@@ -371,11 +371,15 @@ int __init linux_main(int argc, char **argv)
 	return start_uml();
 }
 
-void __init setup_arch(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+	/* FIXME: do we need command_line at all? */
+	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
+}
+
+void __init setup_arch(void)
 {
 	paging_init();
-	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-	*cmdline_p = command_line;
 	setup_hostinfo(host_info, sizeof host_info);
 }
 

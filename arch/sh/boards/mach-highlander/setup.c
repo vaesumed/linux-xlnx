@@ -279,7 +279,7 @@ static void r7780rp_power_off(void)
 /*
  * Initialize the board
  */
-static void __init highlander_setup(char **cmdline_p)
+static void __init highlander_setup(void)
 {
 	u16 ver = ctrl_inw(PA_VERREG);
 	int i;

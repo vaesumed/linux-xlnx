@@ -710,23 +710,23 @@ static inline int __init get_mem_size(void)
 	BUG();
 }
 
-void __init setup_arch(char **cmdline_p)
+void arch_get_boot_command_line(void)
+{
+#if defined(CONFIG_CMDLINE_BOOL)
+	strlcpy(command_line, CONFIG_CMDLINE, sizeof(command_line));
+#endif
+
+	/* FIXME: Get rid of command_line and just use boot_command_line? */
+	strlcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
+}
+
+void __init setup_arch(void)
 {
 	unsigned long sclk, cclk;
 
 #ifdef CONFIG_DUMMY_CONSOLE
 	conswitchp = &dummy_con;
 #endif
-
-#if defined(CONFIG_CMDLINE_BOOL)
-	strncpy(&command_line[0], CONFIG_CMDLINE, sizeof(command_line));
-	command_line[sizeof(command_line) - 1] = 0;
-#endif
-
-	/* Keep a copy of command line */
-	*cmdline_p = &command_line[0];
-	memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE - 1] = '\0';
 
 	/* setup memory defaults from the user config */
 	physical_mem_end = 0;
