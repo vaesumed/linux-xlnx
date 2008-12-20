@@ -2835,13 +2835,16 @@ nfsd4_lockt(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	nfs4_transform_lock_offset(&file_lock);
 
-	/* vfs_test_lock uses the struct file _only_ to resolve the inode.
+	/*
+	 * vfs_test_lock uses the struct file _only_ to resolve the inode.
 	 * since LOCKT doesn't require an OPEN, and therefore a struct
 	 * file may not exist, pass vfs_test_lock a struct file with
-	 * only the dentry:inode set.
+	 * only the dentry and i_fop (in case the filesystem defines
+	 * its own lock method) set.
 	 */
 	memset(&file, 0, sizeof (struct file));
 	file.f_path.dentry = cstate->current_fh.fh_dentry;
+	file.f_op = inode->i_fop;
 
 	status = nfs_ok;
 	error = vfs_test_lock(&file, &file_lock);
