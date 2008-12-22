@@ -267,8 +267,11 @@ out_release:
 
 int __ref cpu_down(unsigned int cpu)
 {
-	int err = 0;
+	int err;
 
+	err = stop_machine_create();
+	if (err)
+		return err;
 	cpu_maps_update_begin();
 
 	if (cpu_hotplug_disabled) {
@@ -295,6 +298,7 @@ int __ref cpu_down(unsigned int cpu)
 
 out:
 	cpu_maps_update_done();
+	stop_machine_destroy();
 	return err;
 }
 EXPORT_SYMBOL(cpu_down);
