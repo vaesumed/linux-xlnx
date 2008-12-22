@@ -1273,6 +1273,7 @@ struct device *__root_device_register(const char *name, struct module *owner)
 		return ERR_PTR(err);
 	}
 
+#ifdef CONFIG_MODULE
 	if (owner) {
 		struct module_kobject *mk = &owner->mkobj;
 
@@ -1283,6 +1284,7 @@ struct device *__root_device_register(const char *name, struct module *owner)
 		}
 		root->owner = owner;
 	}
+#endif
 
 	return &root->dev;
 }
