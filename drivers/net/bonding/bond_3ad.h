@@ -42,10 +42,11 @@ typedef struct mac_addr {
 	u8 mac_addr_value[ETH_ALEN];
 } mac_addr_t;
 
-typedef enum {
-	AD_BANDWIDTH = 0,
-	AD_COUNT
-} agg_selection_t;
+enum {
+	BOND_AD_STABLE = 0,
+	BOND_AD_BANDWIDTH = 1,
+	BOND_AD_COUNT = 2,
+};
 
 // rx machine states(43.4.11 in the 802.3ad standard)
 typedef enum {
@@ -198,6 +199,15 @@ typedef struct aggregator {
 	u16 num_of_ports;
 } aggregator_t;
 
+struct port_params {
+	struct mac_addr system;
+	u16 system_priority;
+	u16 key;
+	u16 port_number;
+	u16 port_priority;
+	u16 port_state;
+};
+
 // port structure(43.4.6 in the 802.3ad standard)
 typedef struct port {
 	u16 actor_port_number;
@@ -210,18 +220,10 @@ typedef struct port {
 	u16 actor_oper_port_key;
 	u8 actor_admin_port_state;
 	u8 actor_oper_port_state;
-	struct mac_addr partner_admin_system;
-	struct mac_addr partner_oper_system;
-	u16 partner_admin_system_priority;
-	u16 partner_oper_system_priority;
-	u16 partner_admin_key;
-	u16 partner_oper_key;
-	u16 partner_admin_port_number;
-	u16 partner_oper_port_number;
-	u16 partner_admin_port_priority;
-	u16 partner_oper_port_priority;
-	u8 partner_admin_port_state;
-	u8 partner_oper_port_state;
+
+	struct port_params partner_admin;
+	struct port_params partner_oper;
+
 	u16 is_enabled;	      // BOOLEAN
 	// ****** PRIVATE PARAMETERS ******
 	u16 sm_vars;	      // all state machines variables for this port
@@ -277,6 +279,7 @@ void bond_3ad_initialize(struct bonding *bond, u16 tick_resolution, int lacp_fas
 int  bond_3ad_bind_slave(struct slave *slave);
 void bond_3ad_unbind_slave(struct slave *slave);
 void bond_3ad_state_machine_handler(struct work_struct *);
+void bond_3ad_initiate_agg_selection(struct bonding *bond, int timeout);
 void bond_3ad_adapter_speed_changed(struct slave *slave);
 void bond_3ad_adapter_duplex_changed(struct slave *slave);
 void bond_3ad_handle_link_change(struct slave *slave, char link);
