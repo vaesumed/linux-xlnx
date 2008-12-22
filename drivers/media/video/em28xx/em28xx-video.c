@@ -39,6 +39,7 @@
 #include "em28xx.h"
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
+#include <media/v4l2-chip-ident.h>
 #include <media/msp3400.h>
 #include <media/tuner.h>
 
@@ -1213,6 +1214,21 @@ static int em28xx_reg_len(int reg)
 	}
 }
 
+static int vidioc_g_chip_ident(struct file *file, void *priv,
+	       struct v4l2_chip_ident *chip)
+{
+	struct em28xx_fh      *fh  = priv;
+	struct em28xx         *dev = fh->dev;
+
+	chip->ident = V4L2_IDENT_NONE;
+	chip->revision = 0;
+
+	em28xx_i2c_call_clients(dev, VIDIOC_G_CHIP_IDENT, chip);
+
+	return 0;
+}
+
+
 static int vidioc_g_register(struct file *file, void *priv,
 			     struct v4l2_register *reg)
 {
@@ -1220,7 +1236,8 @@ static int vidioc_g_register(struct file *file, void *priv,
 	struct em28xx         *dev = fh->dev;
 	int ret;
 
-	if (reg->match_type == V4L2_CHIP_MATCH_AC97) {
+	switch (reg->match_type) {
+	case V4L2_CHIP_MATCH_AC97:
 		mutex_lock(&dev->lock);
 		ret = em28xx_read_ac97(dev, reg->reg);
 		mutex_unlock(&dev->lock);
@@ -1229,11 +1246,18 @@ static int vidioc_g_register(struct file *file, void *priv,
 
 		reg->val = ret;
 		return 0;
+	case V4L2_CHIP_MATCH_I2C_DRIVER:
+		em28xx_i2c_call_clients(dev, VIDIOC_DBG_G_REGISTER, reg);
+		return 0;
+	case V4L2_CHIP_MATCH_I2C_ADDR:
+		/* Not supported yet */
+		return -EINVAL;
+	default:
+		if (!v4l2_chip_match_host(reg->match_type, reg->match_chip))
+			return -EINVAL;
 	}
 
-	if (!v4l2_chip_match_host(reg->match_type, reg->match_chip))
-		return -EINVAL;
-
+	/* Match host */
 	if (em28xx_reg_len(reg->reg) == 1) {
 		mutex_lock(&dev->lock);
 		ret = em28xx_read_reg(dev, reg->reg);
@@ -1266,14 +1290,25 @@ static int vidioc_s_register(struct file *file, void *priv,
 	__le64 buf;
 	int    rc;
 
-	if (reg->match_type == V4L2_CHIP_MATCH_AC97) {
+	switch (reg->match_type) {
+	case V4L2_CHIP_MATCH_AC97:
 		mutex_lock(&dev->lock);
 		rc = em28xx_write_ac97(dev, reg->reg, reg->val);
 		mutex_unlock(&dev->lock);
 
 		return rc;
+	case V4L2_CHIP_MATCH_I2C_DRIVER:
+		em28xx_i2c_call_clients(dev, VIDIOC_DBG_S_REGISTER, reg);
+		return 0;
+	case V4L2_CHIP_MATCH_I2C_ADDR:
+		/* Not supported yet */
+		return -EINVAL;
+	default:
+		if (!v4l2_chip_match_host(reg->match_type, reg->match_chip))
+			return -EINVAL;
 	}
 
+	/* Match host */
 	buf = cpu_to_le64(reg->val);
 
 	mutex_lock(&dev->lock);
@@ -1926,6 +1961,7 @@ static const struct v4l2_ioctl_ops video_ioctl_ops = {
 #ifdef CONFIG_VIDEO_ADV_DEBUG
 	.vidioc_g_register          = vidioc_g_register,
 	.vidioc_s_register          = vidioc_s_register,
+	.vidioc_g_chip_ident        = vidioc_g_chip_ident,
 #endif
 #ifdef CONFIG_VIDEO_V4L1_COMPAT
 	.vidiocgmbuf                = vidiocgmbuf,
