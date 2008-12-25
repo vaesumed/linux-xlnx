@@ -560,6 +560,8 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 	if (this_cpu->c_early_init)
 		this_cpu->c_early_init(c);
 
+	override_capabilities(c->x86_capability);
+
 	validate_pat_support(c);
 
 #ifdef CONFIG_SMP
