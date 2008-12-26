@@ -856,8 +856,9 @@ struct symbol *sym_check_deps(struct symbol *sym)
 	struct property *prop;
 
 	if (sym->flags & SYMBOL_CHECK) {
-		fprintf(stderr, "%s:%d:error: found recursive dependency: %s",
-		        sym->prop->file->name, sym->prop->lineno,
+		fprintf(stderr, "%s:%d:error: found recursive dependency:\n",
+		        sym->prop->file->name, sym->prop->lineno);
+		fprintf(stderr, "\t    %s\n",
 			sym->name ? sym->name : "<choice>");
 		return sym;
 	}
@@ -877,7 +878,9 @@ struct symbol *sym_check_deps(struct symbol *sym)
 	}
 
 	if (sym2) {
-		fprintf(stderr, " -> %s", sym->name ? sym->name : "<choice>");
+		fprintf(stderr, "\t -> %s (%s:%d)\n",
+		        sym->name ? sym->name : "<choice>",
+			sym->prop->file->name, sym->prop->lineno);
 		if (sym2 == sym) {
 			fprintf(stderr, "\n");
 			zconfnerrs++;
@@ -937,6 +940,8 @@ const char *prop_get_type_name(enum prop_type type)
 		return "select";
 	case P_RANGE:
 		return "range";
+	case P_SYMBOL:
+		return "symbol";
 	case P_UNKNOWN:
 		break;
 	}

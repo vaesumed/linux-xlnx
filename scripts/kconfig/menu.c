@@ -55,6 +55,8 @@ void menu_add_entry(struct symbol *sym)
 	*last_entry_ptr = menu;
 	last_entry_ptr = &menu->next;
 	current_entry = menu;
+	if (sym)
+		 menu_add_prop(P_SYMBOL, NULL, NULL, NULL);
 }
 
 void menu_end_entry(void)
