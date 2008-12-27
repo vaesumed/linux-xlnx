@@ -522,6 +522,21 @@ void __init __weak thread_info_cache_init(void)
 {
 }
 
+/* Non-destructive early parse of commandline.  PowerPC calls this early. */
+void __init parse_early_and_core_params(char *cmdline)
+{
+	static bool __initdata done = false;
+
+	if (done)
+		return;
+
+	parse_args("Core and early params", cmdline,
+		   __start___core_param,
+		   __stop___core_param - __start___core_param,
+		   do_early_param, true);
+	done = true;
+}
+
 asmlinkage void __init start_kernel(void)
 {
 	char *static_command_line;
@@ -530,10 +545,7 @@ asmlinkage void __init start_kernel(void)
 	printk(linux_banner);
 
 	arch_get_boot_command_line();
-	parse_args("Core and early params", boot_command_line,
-		   __start___core_param,
-		   __stop___core_param - __start___core_param,
-		   do_early_param, true);
+	parse_early_and_core_params(boot_command_line);
 
 	smp_setup_processor_id();
 

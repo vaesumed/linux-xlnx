@@ -264,12 +264,6 @@ static void __init exc_lvl_early_init(void)
 #define exc_lvl_early_init()
 #endif
 
-void arch_get_boot_command_line(void)
-{
-	/* FIXME: Get rid of cmd_line in favor of boot_command_line? */
-	strlcpy(boot_command_line, cmd_line, COMMAND_LINE_SIZE);
-}
-
 /* Warning, IO base is not yet inited */
 void __init setup_arch(void)
 {
