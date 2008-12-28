@@ -14,6 +14,8 @@
 #include <linux/irqflags.h>
 #include <linux/smp.h>
 #include <linux/percpu.h>
+#include <linux/irqnr.h>
+
 #include <asm/atomic.h>
 #include <asm/ptrace.h>
 #include <asm/system.h>
@@ -109,13 +111,13 @@ extern void enable_irq(unsigned int irq);
 
 extern cpumask_t irq_default_affinity;
 
-extern int irq_set_affinity(unsigned int irq, cpumask_t cpumask);
+extern int irq_set_affinity(unsigned int irq, const struct cpumask *cpumask);
 extern int irq_can_set_affinity(unsigned int irq);
 extern int irq_select_affinity(unsigned int irq);
 
 #else /* CONFIG_SMP */
 
-static inline int irq_set_affinity(unsigned int irq, cpumask_t cpumask)
+static inline int irq_set_affinity(unsigned int irq, const struct cpumask *m)
 {
 	return -EINVAL;
 }

@@ -62,6 +62,7 @@
 #include <asm/mtrr.h>
 #include <asm/vmi.h>
 #include <asm/genapic.h>
+#include <asm/setup.h>
 #include <linux/mc146818rtc.h>
 
 #include <mach_apic.h>
@@ -101,14 +102,8 @@ EXPORT_SYMBOL(smp_num_siblings);
 /* Last level cache ID of each logical CPU */
 DEFINE_PER_CPU(u16, cpu_llc_id) = BAD_APICID;
 
-/* bitmap of online cpus */
-cpumask_t cpu_online_map __read_mostly;
-EXPORT_SYMBOL(cpu_online_map);
-
 cpumask_t cpu_callin_map;
 cpumask_t cpu_callout_map;
-cpumask_t cpu_possible_map;
-EXPORT_SYMBOL(cpu_possible_map);
 
 /* representing HT siblings of each logical CPU */
 DEFINE_PER_CPU(cpumask_t, cpu_sibling_map);
@@ -534,7 +529,7 @@ static void impress_friends(void)
 	pr_debug("Before bogocount - setting activated=1.\n");
 }
 
-static inline void __inquire_remote_apic(int apicid)
+void __inquire_remote_apic(int apicid)
 {
 	unsigned i, regs[] = { APIC_ID >> 4, APIC_LVR >> 4, APIC_SPIV >> 4 };
 	char *names[] = { "ID", "VERSION", "SPIV" };
@@ -573,14 +568,13 @@ static inline void __inquire_remote_apic(int apicid)
 	}
 }
 
-#ifdef WAKE_SECONDARY_VIA_NMI
 /*
  * Poke the other CPU in the eye via NMI to wake it up. Remember that the normal
  * INIT, INIT, STARTUP sequence will reset the chip hard for us, and this
  * won't ... remember to clear down the APIC, etc later.
  */
-static int __devinit
-wakeup_secondary_cpu(int logical_apicid, unsigned long start_eip)
+int __devinit
+wakeup_secondary_cpu_via_nmi(int logical_apicid, unsigned long start_eip)
 {
 	unsigned long send_status, accept_status = 0;
 	int maxlvt;
@@ -597,7 +591,7 @@ wakeup_secondary_cpu(int logical_apicid, unsigned long start_eip)
 	 * Give the other CPU some time to accept the IPI.
 	 */
 	udelay(200);
-	if (APIC_INTEGRATED(apic_version[phys_apicid])) {
+	if (APIC_INTEGRATED(apic_version[boot_cpu_physical_apicid])) {
 		maxlvt = lapic_get_maxlvt();
 		if (maxlvt > 3)			/* Due to the Pentium erratum 3AP.  */
 			apic_write(APIC_ESR, 0);
@@ -612,11 +606,9 @@ wakeup_secondary_cpu(int logical_apicid, unsigned long start_eip)
 
 	return (send_status | accept_status);
 }
-#endif	/* WAKE_SECONDARY_VIA_NMI */
 
-#ifdef WAKE_SECONDARY_VIA_INIT
-static int __devinit
-wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
+int __devinit
+wakeup_secondary_cpu_via_init(int phys_apicid, unsigned long start_eip)
 {
 	unsigned long send_status, accept_status = 0;
 	int maxlvt, num_starts, j;
@@ -735,7 +727,6 @@ wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
 
 	return (send_status | accept_status);
 }
-#endif	/* WAKE_SECONDARY_VIA_INIT */
 
 struct create_idle {
 	struct work_struct work;
@@ -1261,6 +1252,15 @@ void __init native_smp_cpus_done(unsigned int max_cpus)
 	check_nmi_watchdog();
 }
 
+static int __initdata setup_possible_cpus = -1;
+static int __init _setup_possible_cpus(char *str)
+{
+	get_option(&str, &setup_possible_cpus);
+	return 0;
+}
+early_param("possible_cpus", _setup_possible_cpus);
+
+
 /*
  * cpu_possible_map should be static, it cannot change as cpu's
  * are onlined, or offlined. The reason is per-cpu data-structures
@@ -1273,7 +1273,7 @@ void __init native_smp_cpus_done(unsigned int max_cpus)
  *
  * Three ways to find out the number of additional hotplug CPUs:
  * - If the BIOS specified disabled CPUs in ACPI/mptables use that.
- * - The user can overwrite it with additional_cpus=NUM
+ * - The user can overwrite it with possible_cpus=NUM
  * - Otherwise don't reserve additional CPUs.
  * We do this because additional CPUs waste a lot of memory.
  * -AK
@@ -1286,9 +1286,17 @@ __init void prefill_possible_map(void)
 	if (!num_processors)
 		num_processors = 1;
 
-	possible = num_processors + disabled_cpus;
-	if (possible > NR_CPUS)
-		possible = NR_CPUS;
+	if (setup_possible_cpus == -1)
+		possible = num_processors + disabled_cpus;
+	else
+		possible = setup_possible_cpus;
+
+	if (possible > CONFIG_NR_CPUS) {
+		printk(KERN_WARNING
+			"%d Processors exceeds NR_CPUS limit of %d\n",
+			possible, CONFIG_NR_CPUS);
+		possible = CONFIG_NR_CPUS;
+	}
 
 	printk(KERN_INFO "SMP: Allowing %d CPUs, %d hotplug CPUs\n",
 		possible, max_t(int, possible - num_processors, 0));
@@ -1353,7 +1361,7 @@ void cpu_disable_common(void)
 	lock_vector_lock();
 	remove_cpu_from_maps(cpu);
 	unlock_vector_lock();
-	fixup_irqs(cpu_online_map);
+	fixup_irqs();
 }
 
 int native_cpu_disable(void)
