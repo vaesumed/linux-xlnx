@@ -732,6 +732,10 @@ struct wm8350_led {
 };
 
 struct wm8350_pmic {
+	/* Number of regulators of each type on this device */
+	int max_dcdc;
+	int max_isink;
+
 	/* ISINK to DCDC mapping */
 	int isink_A_dcdc;
 	int isink_B_dcdc;

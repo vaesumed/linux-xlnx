@@ -63,7 +63,7 @@ config UCB1400_CORE
 
 config TWL4030_CORE
 	bool "Texas Instruments TWL4030/TPS659x0 Support"
-	depends on I2C=y && GENERIC_HARDIRQS && (ARCH_OMAP2 || ARCH_OMAP3)
+	depends on I2C=y && GENERIC_HARDIRQS
 	help
 	  Say yes here if you have TWL4030 family chip on your board.
 	  This core driver provides register access and IRQ handling
@@ -116,6 +116,7 @@ config PMIC_DA903X
 
 config MFD_WM8400
 	tristate "Support Wolfson Microelectronics WM8400"
+	select MFD_CORE
 	depends on I2C
 	help
 	  Support for the Wolfson Microelecronics WM8400 PMIC and audio
@@ -139,6 +140,38 @@ config MFD_WM8350_CONFIG_MODE_2
 	depends on MFD_WM8350
 
 config MFD_WM8350_CONFIG_MODE_3
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8351_CONFIG_MODE_0
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8351_CONFIG_MODE_1
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8351_CONFIG_MODE_2
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8351_CONFIG_MODE_3
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8352_CONFIG_MODE_0
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8352_CONFIG_MODE_1
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8352_CONFIG_MODE_2
+	bool
+	depends on MFD_WM8350
+
+config MFD_WM8352_CONFIG_MODE_3
 	bool
 	depends on MFD_WM8350
 
