@@ -24,9 +24,11 @@
 #include <linux/errno.h>
 #include <linux/device.h>
 #include <linux/vmalloc.h>
+#include <linux/mutex.h>
 #include <linux/poll.h>
 #include <linux/preempt.h>
 #include <linux/time.h>
+#include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/mm.h>
 #include <linux/idr.h>
@@ -107,7 +109,6 @@ static int fw_device_op_open(struct inode *inode, struct file *file)
 {
 	struct fw_device *device;
 	struct client *client;
-	unsigned long flags;
 
 	device = fw_device_get_by_devt(inode->i_rdev);
 	if (device == NULL)
@@ -132,9 +133,9 @@ static int fw_device_op_open(struct inode *inode, struct file *file)
 
 	file->private_data = client;
 
-	spin_lock_irqsave(&device->card->lock, flags);
+	mutex_lock(&device->client_list_mutex);
 	list_add_tail(&client->link, &device->client_list);
-	spin_unlock_irqrestore(&device->card->lock, flags);
+	mutex_unlock(&device->client_list_mutex);
 
 	return 0;
 }
@@ -205,12 +206,14 @@ fw_device_op_read(struct file *file,
 	return dequeue_event(client, buffer, count);
 }
 
-/* caller must hold card->lock so that node pointers can be dereferenced here */
 static void
 fill_bus_reset_event(struct fw_cdev_event_bus_reset *event,
 		     struct client *client)
 {
 	struct fw_card *card = client->device->card;
+	unsigned long flags;
+
+	spin_lock_irqsave(&card->lock, flags);
 
 	event->closure	     = client->bus_reset_closure;
 	event->type          = FW_CDEV_EVENT_BUS_RESET;
@@ -220,22 +223,20 @@ fill_bus_reset_event(struct fw_cdev_event_bus_reset *event,
 	event->bm_node_id    = 0; /* FIXME: We don't track the BM. */
 	event->irm_node_id   = card->irm_node->node_id;
 	event->root_node_id  = card->root_node->node_id;
+
+	spin_unlock_irqrestore(&card->lock, flags);
 }
 
 static void
 for_each_client(struct fw_device *device,
 		void (*callback)(struct client *client))
 {
-	struct fw_card *card = device->card;
 	struct client *c;
-	unsigned long flags;
 
-	spin_lock_irqsave(&card->lock, flags);
-
+	mutex_lock(&device->client_list_mutex);
 	list_for_each_entry(c, &device->client_list, link)
 		callback(c);
-
-	spin_unlock_irqrestore(&card->lock, flags);
+	mutex_unlock(&device->client_list_mutex);
 }
 
 static void
@@ -243,7 +244,7 @@ queue_bus_reset_event(struct client *client)
 {
 	struct bus_reset *bus_reset;
 
-	bus_reset = kzalloc(sizeof(*bus_reset), GFP_ATOMIC);
+	bus_reset = kzalloc(sizeof(*bus_reset), GFP_KERNEL);
 	if (bus_reset == NULL) {
 		fw_notify("Out of memory when allocating bus reset event\n");
 		return;
@@ -274,11 +275,11 @@ static int ioctl_get_info(struct client *client, void *buffer)
 {
 	struct fw_cdev_get_info *get_info = buffer;
 	struct fw_cdev_event_bus_reset bus_reset;
-	struct fw_card *card = client->device->card;
 	unsigned long ret = 0;
 
 	client->version = get_info->version;
 	get_info->version = FW_CDEV_VERSION;
+	get_info->card = client->device->card->index;
 
 	down_read(&fw_device_rwsem);
 
@@ -300,17 +301,11 @@ static int ioctl_get_info(struct client *client, void *buffer)
 	client->bus_reset_closure = get_info->bus_reset_closure;
 	if (get_info->bus_reset != 0) {
 		void __user *uptr = u64_to_uptr(get_info->bus_reset);
-		unsigned long flags;
 
-		spin_lock_irqsave(&card->lock, flags);
 		fill_bus_reset_event(&bus_reset, client);
-		spin_unlock_irqrestore(&card->lock, flags);
-
 		if (copy_to_user(uptr, &bus_reset, sizeof(bus_reset)))
 			return -EFAULT;
 	}
-
-	get_info->card = card->index;
 
 	return 0;
 }
@@ -403,6 +398,7 @@ static int ioctl_send_request(struct client *client, void *buffer)
 	struct fw_device *device = client->device;
 	struct fw_cdev_send_request *request = buffer;
 	struct response *response;
+	int ret;
 
 	/* What is the biggest size we'll accept, really? */
 	if (request->length > 4096)
@@ -419,8 +415,26 @@ static int ioctl_send_request(struct client *client, void *buffer)
 	if (request->data &&
 	    copy_from_user(response->response.data,
 			   u64_to_uptr(request->data), request->length)) {
-		kfree(response);
-		return -EFAULT;
+		ret = -EFAULT;
+		goto err;
+	}
+
+	switch (request->tcode) {
+	case TCODE_WRITE_QUADLET_REQUEST:
+	case TCODE_WRITE_BLOCK_REQUEST:
+	case TCODE_READ_QUADLET_REQUEST:
+	case TCODE_READ_BLOCK_REQUEST:
+	case TCODE_LOCK_MASK_SWAP:
+	case TCODE_LOCK_COMPARE_SWAP:
+	case TCODE_LOCK_FETCH_ADD:
+	case TCODE_LOCK_LITTLE_ADD:
+	case TCODE_LOCK_BOUNDED_ADD:
+	case TCODE_LOCK_WRAP_ADD:
+	case TCODE_LOCK_VENDOR_DEPENDENT:
+		break;
+	default:
+		ret = -EINVAL;
+		goto err;
 	}
 
 	response->resource.release = release_transaction;
@@ -439,6 +453,10 @@ static int ioctl_send_request(struct client *client, void *buffer)
 		return sizeof(request) + request->length;
 	else
 		return sizeof(request);
+ err:
+	kfree(response);
+
+	return ret;
 }
 
 struct address_handler {
@@ -990,7 +1008,6 @@ static int fw_device_op_release(struct inode *inode, struct file *file)
 	struct client *client = file->private_data;
 	struct event *e, *next_e;
 	struct client_resource *r, *next_r;
-	unsigned long flags;
 
 	if (client->buffer.pages)
 		fw_iso_buffer_destroy(&client->buffer, client->device->card);
@@ -1009,9 +1026,9 @@ static int fw_device_op_release(struct inode *inode, struct file *file)
 	list_for_each_entry_safe(e, next_e, &client->event_list, link)
 		kfree(e);
 
-	spin_lock_irqsave(&client->device->card->lock, flags);
+	mutex_lock(&client->device->client_list_mutex);
 	list_del(&client->link);
-	spin_unlock_irqrestore(&client->device->card->lock, flags);
+	mutex_unlock(&client->device->client_list_mutex);
 
 	fw_device_put(client->device);
 	kfree(client);
