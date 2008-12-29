@@ -69,6 +69,17 @@ _ENTRY(_start);
 	li	r24,0		/* CPU number */
 
 /*
+ * In case the firmware didn't do it, we apply some workarounds
+ * that are good for all 440 core variants here
+ */
+	mfspr	r3,SPRN_CCR0
+	rlwinm	r3,r3,0,0,27	/* disable icache prefetch */
+	isync
+	mtspr	SPRN_CCR0,r3
+	isync
+	sync
+
+/*
  * Set up the initial MMU state
  *
  * We are still executing code at the virtual address
