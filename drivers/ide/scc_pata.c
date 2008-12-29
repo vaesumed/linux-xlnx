@@ -217,7 +217,7 @@ scc_ide_outsl(unsigned long port, void *addr, u32 count)
 
 static void scc_set_pio_mode(ide_drive_t *drive, const u8 pio)
 {
-	ide_hwif_t *hwif = HWIF(drive);
+	ide_hwif_t *hwif = drive->hwif;
 	struct scc_ports *ports = ide_get_hwifdata(hwif);
 	unsigned long ctl_base = ports->ctl;
 	unsigned long cckctrl_port = ctl_base + 0xff0;
@@ -249,7 +249,7 @@ static void scc_set_pio_mode(ide_drive_t *drive, const u8 pio)
 
 static void scc_set_dma_mode(ide_drive_t *drive, const u8 speed)
 {
-	ide_hwif_t *hwif = HWIF(drive);
+	ide_hwif_t *hwif = drive->hwif;
 	struct scc_ports *ports = ide_get_hwifdata(hwif);
 	unsigned long ctl_base = ports->ctl;
 	unsigned long cckctrl_port = ctl_base + 0xff0;
@@ -316,7 +316,7 @@ static void scc_dma_host_set(ide_drive_t *drive, int on)
 static int scc_dma_setup(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = drive->hwif;
-	struct request *rq = HWGROUP(drive)->rq;
+	struct request *rq = hwif->rq;
 	unsigned int reading;
 	u8 dma_stat;
 
@@ -387,7 +387,7 @@ static int __scc_dma_end(ide_drive_t *drive)
 
 static int scc_dma_end(ide_drive_t *drive)
 {
-	ide_hwif_t *hwif = HWIF(drive);
+	ide_hwif_t *hwif = drive->hwif;
 	void __iomem *dma_base = (void __iomem *)hwif->dma_base;
 	unsigned long intsts_port = hwif->dma_base + 0x014;
 	u32 reg;
@@ -405,7 +405,7 @@ static int scc_dma_end(ide_drive_t *drive)
 			       drive->name);
 			data_loss = 1;
 			if (retry++) {
-				struct request *rq = HWGROUP(drive)->rq;
+				struct request *rq = hwif->rq;
 				int unit;
 				/* ERROR_RESET and drive->crc_count are needed
 				 * to reduce DMA transfer mode in retry process.
@@ -496,7 +496,7 @@ static int scc_dma_end(ide_drive_t *drive)
 /* returns 1 if dma irq issued, 0 otherwise */
 static int scc_dma_test_irq(ide_drive_t *drive)
 {
-	ide_hwif_t *hwif = HWIF(drive);
+	ide_hwif_t *hwif = drive->hwif;
 	u32 int_stat = in_be32((void __iomem *)hwif->dma_base + 0x014);
 
 	/* SCC errata A252,A308 workaround: Step4 */
