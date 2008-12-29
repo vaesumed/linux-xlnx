@@ -919,7 +919,7 @@ out_unlock:
 
 	/* drop_futex_key_refs() must be called outside the spinlocks. */
 	while (--drop_count >= 0)
-		drop_futex_key_refs(&key1);
+		drop_futex_key_refs(&key2);
 
 out_put_keys:
 	put_futex_key(fshared, &key2);
