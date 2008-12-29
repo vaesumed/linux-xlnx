@@ -561,6 +561,13 @@ static void intel_i830_init_gtt_entries(void)
 	} else {
 		switch (gmch_ctrl & I855_GMCH_GMS_MASK) {
 		case I855_GMCH_GMS_STOLEN_1M:
+			if (IS_G33) {
+				size = 0;
+				WARN(1, KERN_WARNING
+				       "Warning: G33 chip with 1MB allocated."
+					" Older X.org Intel drivers will not"
+					" work.\n");
+			}
 			gtt_entries = MB(1) - KB(size);
 			break;
 		case I855_GMCH_GMS_STOLEN_4M:
@@ -2201,7 +2208,7 @@ static int __devinit agp_intel_probe(struct pci_dev *pdev,
 
 	if (intel_agp_chipsets[i].name == NULL) {
 		if (cap_ptr)
-			dev_warn(&pdev->dev, "unsupported Intel chipset [%04x/%04x]\n",
+			dev_warn(&pdev->dev, "unsupported Intel chipset [%04x:%04x]\n",
 				 pdev->vendor, pdev->device);
 		agp_put_bridge(bridge);
 		return -ENODEV;
