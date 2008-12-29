@@ -954,6 +954,13 @@ void usb_buffer_unmap_sg(const struct usb_device *dev, int is_in,
 }
 EXPORT_SYMBOL_GPL(usb_buffer_unmap_sg);
 
+/* To disable USB, kernel command line is 'nousb' not 'usbcore.nousb' */
+#ifdef MODULE
+module_param(nousb, bool, 0444);
+#else
+core_param(nousb, nousb, bool, 0444);
+#endif
+
 /*
  * for external read access to <nousb>
  */
@@ -1077,11 +1084,6 @@ static void __exit usb_exit(void)
 	bus_unregister(&usb_bus_type);
 	ksuspend_usb_cleanup();
 }
-
-/* To disable USB, kernel command line is 'nousb' not 'usbcore.nousb' */
-#undef MODULE_PARAM_PREFIX
-#define MODULE_PARAM_PREFIX
-module_param(nousb, bool, 0444);
 
 subsys_initcall(usb_init);
 module_exit(usb_exit);

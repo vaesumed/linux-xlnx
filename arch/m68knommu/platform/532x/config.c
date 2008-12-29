@@ -115,21 +115,19 @@ void mcf_settimericr(unsigned int timer, unsigned int level)
 }
 
 /***************************************************************************/
+#if !defined(CONFIG_BOOTPARAM)
+void __init platform_get_boot_command_line(void)
+{
+	/* Copy command line from FLASH to local buffer... */
+	memcpy(boot_command_line, (char *)0x4000, 4);
+	if (strncmp(boot_command_line, "kcl ", 4) == 0)
+		strlcpy(boot_command_line, (char *)0x4004, COMMAND_LINE_SIZE);
+}
+#endif
 
-void __init config_BSP(char *commandp, int size)
+void __init config_BSP(void)
 {
 	mcf_setimr(MCFSIM_IMR_MASKALL);
-
-#if !defined(CONFIG_BOOTPARAM)
-	/* Copy command line from FLASH to local buffer... */
-	memcpy(commandp, (char *) 0x4000, 4);
-	if(strncmp(commandp, "kcl ", 4) == 0){
-		memcpy(commandp, (char *) 0x4004, size);
-		commandp[size-1] = 0;
-	} else {
-		memset(commandp, 0, size);
-	}
-#endif
 
 	mcf_timervector = 64+32;
 	mcf_profilevector = 64+33;

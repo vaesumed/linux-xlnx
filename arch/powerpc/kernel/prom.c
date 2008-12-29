@@ -32,6 +32,7 @@
 #include <linux/debugfs.h>
 #include <linux/irq.h>
 #include <linux/lmb.h>
+#include <linux/start_kernel.h>
 
 #include <asm/prom.h>
 #include <asm/rtas.h>
@@ -1188,7 +1189,7 @@ void __init early_init_devtree(void *params)
 
 	/* Save command line for /proc/cmdline and then parse parameters */
 	strlcpy(boot_command_line, cmd_line, COMMAND_LINE_SIZE);
-	parse_early_param();
+	parse_early_and_core_params(boot_command_line);
 
 	/* Reserve LMB regions used by kernel, initrd, dt, etc... */
 	lmb_reserve(PHYSICAL_START, __pa(klimit) - PHYSICAL_START);

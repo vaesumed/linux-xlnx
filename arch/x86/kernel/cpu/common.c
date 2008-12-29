@@ -220,7 +220,8 @@ static char __cpuinit *table_lookup_model(struct cpuinfo_x86 *c)
 	return NULL;		/* Not found */
 }
 
-__u32 cleared_cpu_caps[NCAPINTS] __cpuinitdata;
+__u32 cpu_caps_cleared[NCAPINTS] __cpuinitdata;
+__u32 cpu_caps_set[NCAPINTS] __cpuinitdata;
 
 /* Current gdt points %fs at the "master" per-cpu area: after this,
  * it's on the real one. */
@@ -513,6 +514,16 @@ static void __cpuinit identify_cpu_without_cpuid(struct cpuinfo_x86 *c)
 #endif
 }
 
+static void __cpuinit override_capabilities(u32 x86_capability[])
+{
+	unsigned int i;
+
+	for (i = 0; i < NCAPINTS; i++) {
+		x86_capability[i] &= ~cpu_caps_cleared[i];
+		x86_capability[i] |= cpu_caps_set[i];
+	}
+}
+
 /*
  * Do minimum CPU detection early.
  * Fields really needed: vendor, cpuid_level, family, model, mask,
@@ -549,6 +560,8 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 
 	if (this_cpu->c_early_init)
 		this_cpu->c_early_init(c);
+
+	override_capabilities(c->x86_capability);
 
 	validate_pat_support(c);
 
@@ -705,6 +718,10 @@ static void __cpuinit identify_cpu(struct cpuinfo_x86 *c)
 #endif
 
 	init_hypervisor(c);
+
+	/* Command-line override before we AND into smp all cpus cap. */
+	override_capabilities(c->x86_capability);
+
 	/*
 	 * On SMP, boot_cpu_data holds the common feature set between
 	 * all CPUs; so make sure that we indicate which features are
@@ -716,10 +733,6 @@ static void __cpuinit identify_cpu(struct cpuinfo_x86 *c)
 		for (i = 0; i < NCAPINTS; i++)
 			boot_cpu_data.x86_capability[i] &= c->x86_capability[i];
 	}
-
-	/* Clear all flags overriden by options */
-	for (i = 0; i < NCAPINTS; i++)
-		c->x86_capability[i] &= ~cleared_cpu_caps[i];
 
 #ifdef CONFIG_X86_MCE
 	/* Init Machine Check Exception if available. */

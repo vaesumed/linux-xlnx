@@ -24,7 +24,7 @@ static void __init init_sh03_IRQ(void)
 /* arch/sh/boards/sh03/rtc.c */
 void sh03_time_init(void);
 
-static void __init sh03_setup(char **cmdline_p)
+static void __init sh03_setup(void)
 {
 	board_time_init = sh03_time_init;
 }

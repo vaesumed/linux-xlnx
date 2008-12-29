@@ -40,8 +40,6 @@ struct avr32_cpuinfo boot_cpu_data = {
 };
 EXPORT_SYMBOL(boot_cpu_data);
 
-static char __initdata command_line[COMMAND_LINE_SIZE];
-
 /*
  * Standard memory resources
  */
@@ -536,7 +534,12 @@ static void __init setup_bootmem(void)
 	}
 }
 
-void __init setup_arch (char **cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+	parse_tags(bootloader_tags);
+}
+
+void __init setup_arch(void)
 {
 	struct clk *cpu_clk;
 
@@ -553,8 +556,6 @@ void __init setup_arch (char **cmdline_p)
 	kernel_code.end = __pa(init_mm.end_code - 1);
 	kernel_data.start = __pa(init_mm.end_code);
 	kernel_data.end = __pa(init_mm.brk - 1);
-
-	parse_tags(bootloader_tags);
 
 	setup_processor();
 	setup_platform();
@@ -578,10 +579,6 @@ void __init setup_arch (char **cmdline_p)
 		       ((cpu_hz + 500) / 1000) / 1000,
 		       ((cpu_hz + 500) / 1000) % 1000);
 	}
-
-	strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
-	*cmdline_p = command_line;
-	parse_early_param();
 
 	setup_bootmem();
 

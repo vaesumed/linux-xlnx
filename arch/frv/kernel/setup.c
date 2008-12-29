@@ -718,48 +718,41 @@ void __cpuinit calibrate_delay(void)
 
 } /* end calibrate_delay() */
 
-/*****************************************************************************/
 /*
- * look through the command line for some things we need to know immediately
+ * handle a specific memory limit handed over the kernel command line
  */
-static void __init parse_cmdline_early(char *cmdline)
+static int __init mem_parameter(char *data)
 {
-	if (!cmdline)
-		return;
+	unsigned long long mem_size;
 
-	while (*cmdline) {
-		if (*cmdline == ' ')
-			cmdline++;
+	if (!data || !*data)
+		return 0;
+	mem_size = memparse(data, NULL);
+	memory_end = memory_start + mem_size;
+	return 0;
+}
+early_param("mem", mem_parameter);
 
-		/* "mem=XXX[kKmM]" sets SDRAM size to <mem>, overriding the value we worked
-		 * out from the SDRAM controller mask register
-		 */
-		if (!memcmp(cmdline, "mem=", 4)) {
-			unsigned long long mem_size;
-
-			mem_size = memparse(cmdline + 4, &cmdline);
-			memory_end = memory_start + mem_size;
-		}
-
-		while (*cmdline && *cmdline != ' ')
-			cmdline++;
-	}
-
-} /* end parse_cmdline_early() */
+/*
+ * retrieve the boot command line from RedBoot and stash it somewhere more
+ * appropriate
+ */
+void __init arch_get_boot_command_line(void)
+{
+	memcpy(boot_command_line, redboot_command_line, COMMAND_LINE_SIZE);
+}
 
 /*****************************************************************************/
 /*
  *
  */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 #ifdef CONFIG_MMU
 	printk("Linux FR-V port done by Red Hat Inc <dhowells@redhat.com>\n");
 #else
 	printk("uClinux FR-V port done by Red Hat Inc <dhowells@redhat.com>\n");
 #endif
-
-	memcpy(boot_command_line, redboot_command_line, COMMAND_LINE_SIZE);
 
 	determine_cpu();
 	determine_clocks(1);
@@ -791,11 +784,6 @@ void __init setup_arch(char **cmdline_p)
 	early_serial_setup(&__frv_uart1);
 #endif
 #endif
-
-	/* deal with the command line - RedBoot may have passed one to the kernel */
-	memcpy(command_line, boot_command_line, sizeof(command_line));
-	*cmdline_p = &command_line[0];
-	parse_cmdline_early(command_line);
 
 	/* set up the memory description
 	 * - by now the stack is part of the init task */

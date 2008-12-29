@@ -508,11 +508,9 @@ static void __init emergency_stack_init(void)
  * Initializes bootmem, which is unsed to manage page allocation until
  * mem_init is called.
  */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 	ppc64_boot_msg(0x12, "Setup Arch");
-
-	*cmdline_p = cmd_line;
 
 	/*
 	 * Set cache line size based on type of cpu as a default.

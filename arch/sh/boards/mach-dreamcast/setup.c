@@ -33,7 +33,7 @@ extern void aica_time_init(void);
 extern int gapspci_init(void);
 extern int systemasic_irq_demux(int);
 
-static void __init dreamcast_setup(char **cmdline_p)
+static void __init dreamcast_setup(void)
 {
 	int i;
 

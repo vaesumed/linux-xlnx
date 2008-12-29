@@ -25,7 +25,7 @@ struct pci_dev;
 struct msi_desc;
 struct dma_attrs;
 
-typedef void ia64_mv_setup_t (char **);
+typedef void ia64_mv_setup_t (void);
 typedef void ia64_mv_cpu_init_t (void);
 typedef void ia64_mv_irq_init_t (void);
 typedef void ia64_mv_send_ipi_t (int, int, int, int);
@@ -111,7 +111,7 @@ machvec_noop_bus (struct pci_bus *bus)
 {
 }
 
-extern void machvec_setup (char **);
+extern void machvec_setup(void);
 extern void machvec_timer_interrupt (int, void *);
 extern void machvec_dma_sync_single (struct device *, dma_addr_t, size_t, int);
 extern void machvec_dma_sync_sg (struct device *, struct scatterlist *, int, int);
