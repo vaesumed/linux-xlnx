@@ -34,6 +34,7 @@
 
 #define TEMP_FROM_REG(val)	(((((val) >> 16) & 0xff) - 49) * 1000)
 #define REG_TEMP	0xe4
+#define REG_CPUID	0xfc
 #define SEL_PLACE	0x40
 #define SEL_CORE	0x04
 
@@ -47,6 +48,7 @@ struct k8temp_data {
 	/* registers values */
 	u8 sensorsp;		/* sensor presence bits - SEL_CORE & SEL_PLACE */
 	u32 temp[2][2];		/* core, place */
+	u8 fam;
 };
 
 static struct k8temp_data *k8temp_update_device(struct device *dev)
@@ -153,6 +155,19 @@ static int __devinit k8temp_probe(struct pci_dev *pdev,
 	if (!(data = kzalloc(sizeof(struct k8temp_data), GFP_KERNEL))) {
 		err = -ENOMEM;
 		goto exit;
+	}
+
+	/* get real PCI based cpuid, prior revF of fam 0Fh, this reg is 0 */
+	pci_read_config_dword(pdev, REG_CPUID, &cpuid);
+
+	data->fam = (cpuid & 0x00000f00) >> 8;
+	data->fam += (cpuid & 0x0ff00000) >> 20;
+
+	switch (data->fam) {
+	case 0xf:
+		dev_warn(&pdev->dev, "Temperature readouts might be wrong"
+					" - check errata #141\n");
+		break;
 	}
 
 	pci_read_config_byte(pdev, REG_TEMP, &scfg);
