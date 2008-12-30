@@ -414,7 +414,8 @@ static int acpi_pci_link_set(struct acpi_pci_link *link, int irq)
 		link->irq.active = irq;
 	}
 
-	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Set IRQ %d\n", link->irq.active));
+	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Link %s set to IRQ %d\n",
+		acpi_device_bid(link->device), link->irq.active));
 
       end:
 	kfree(resource);
@@ -649,6 +650,9 @@ acpi_pci_link_allocate_irq(acpi_handle handle,
 		return -1;
 	}
 	link->refcnt++;
+	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
+			  "Link %s is referenced %d\n",
+			  acpi_device_bid(link->device), link->refcnt));
 	mutex_unlock(&acpi_link_lock);
 
 	if (triggering)
@@ -657,9 +661,6 @@ acpi_pci_link_allocate_irq(acpi_handle handle,
 		*polarity = link->irq.polarity;
 	if (name)
 		*name = acpi_device_bid(link->device);
-	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
-			  "Link %s is referenced\n",
-			  acpi_device_bid(link->device)));
 	return (link->irq.active);
 }
 
@@ -692,23 +693,15 @@ int acpi_pci_link_free_irq(acpi_handle handle)
 		printk(KERN_ERR PREFIX "Link isn't initialized\n");
 		return -1;
 	}
-#ifdef	FUTURE_USE
-	/*
-	 * The Link reference count allows us to _DISable an unused link
-	 * and suspend time, and set it again  on resume.
-	 * However, 2.6.12 still has irq_router.resume
-	 * which blindly restores the link state.
-	 * So we disable the reference count method
-	 * to prevent duplicate acpi_pci_link_set()
-	 * which would harm some systems
-	 */
 	link->refcnt--;
-#endif
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
-			  "Link %s is dereferenced\n",
-			  acpi_device_bid(link->device)));
+			  "Link %s is dereferenced %d\n",
+			  acpi_device_bid(link->device), link->refcnt));
 
 	if (link->refcnt == 0) {
+		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
+			  "Link %s is disabled\n",
+			  acpi_device_bid(link->device)));
 		acpi_evaluate_object(link->device->handle, "_DIS", NULL, NULL);
 	}
 	mutex_unlock(&acpi_link_lock);
@@ -782,13 +775,17 @@ static int acpi_pci_link_add(struct acpi_device *device)
 	return result;
 }
 
-static int acpi_pci_link_resume(struct acpi_pci_link *link)
+static void acpi_pci_link_resume(struct acpi_pci_link *link)
 {
 
+	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Link %s resume ref %d act %d ini %d\n",
+		acpi_device_bid(link->device), link->refcnt,
+		link->irq.active, link->irq.initialized));
+
 	if (link->refcnt && link->irq.active && link->irq.initialized)
-		return (acpi_pci_link_set(link, link->irq.active));
-	else
-		return 0;
+		acpi_pci_link_set(link, link->irq.active);
+
+	return;
 }
 
 static int irqrouter_resume(struct sys_device *dev)
