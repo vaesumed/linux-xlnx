@@ -69,6 +69,7 @@ void tracing_on(void)
 {
 	set_bit(RB_BUFFERS_ON_BIT, &ring_buffer_flags);
 }
+EXPORT_SYMBOL_GPL(tracing_on);
 
 /**
  * tracing_off - turn off all tracing buffers
@@ -82,6 +83,7 @@ void tracing_off(void)
 {
 	clear_bit(RB_BUFFERS_ON_BIT, &ring_buffer_flags);
 }
+EXPORT_SYMBOL_GPL(tracing_off);
 
 /**
  * tracing_off_permanent - permanently disable ring buffers
@@ -111,12 +113,14 @@ u64 ring_buffer_time_stamp(int cpu)
 
 	return time;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_time_stamp);
 
 void ring_buffer_normalize_time_stamp(int cpu, u64 *ts)
 {
 	/* Just stupid testing the normalize function and deltas */
 	*ts >>= DEBUG_SHIFT;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_normalize_time_stamp);
 
 #define RB_EVNT_HDR_SIZE (sizeof(struct ring_buffer_event))
 #define RB_ALIGNMENT_SHIFT	2
@@ -166,6 +170,7 @@ unsigned ring_buffer_event_length(struct ring_buffer_event *event)
 {
 	return rb_event_length(event);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_event_length);
 
 /* inline for ring buffer fast paths */
 static inline void *
@@ -187,6 +192,7 @@ void *ring_buffer_event_data(struct ring_buffer_event *event)
 {
 	return rb_event_data(event);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_event_data);
 
 #define for_each_buffer_cpu(buffer, cpu)		\
 	for_each_cpu(cpu, buffer->cpumask)
@@ -427,7 +433,7 @@ extern int ring_buffer_page_too_big(void);
 
 /**
  * ring_buffer_alloc - allocate a new ring_buffer
- * @size: the size in bytes that is needed.
+ * @size: the size in bytes per cpu that is needed.
  * @flags: attributes to set for the ring buffer.
  *
  * Currently the only flag that is available is the RB_FL_OVERWRITE
@@ -496,6 +502,7 @@ struct ring_buffer *ring_buffer_alloc(unsigned long size, unsigned flags)
 	kfree(buffer);
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_alloc);
 
 /**
  * ring_buffer_free - free a ring buffer.
@@ -513,6 +520,7 @@ ring_buffer_free(struct ring_buffer *buffer)
 
 	kfree(buffer);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_free);
 
 static void rb_reset_cpu(struct ring_buffer_per_cpu *cpu_buffer);
 
@@ -688,6 +696,7 @@ int ring_buffer_resize(struct ring_buffer *buffer, unsigned long size)
 	mutex_unlock(&buffer->mutex);
 	return -ENOMEM;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_resize);
 
 static inline int rb_null_event(struct ring_buffer_event *event)
 {
@@ -1312,6 +1321,7 @@ ring_buffer_lock_reserve(struct ring_buffer *buffer,
 	ftrace_preempt_enable(resched);
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_lock_reserve);
 
 static void rb_commit(struct ring_buffer_per_cpu *cpu_buffer,
 		      struct ring_buffer_event *event)
@@ -1358,6 +1368,7 @@ int ring_buffer_unlock_commit(struct ring_buffer *buffer,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_unlock_commit);
 
 /**
  * ring_buffer_write - write data to the buffer without reserving
@@ -1419,6 +1430,7 @@ int ring_buffer_write(struct ring_buffer *buffer,
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_write);
 
 static inline int rb_per_cpu_empty(struct ring_buffer_per_cpu *cpu_buffer)
 {
@@ -1445,6 +1457,7 @@ void ring_buffer_record_disable(struct ring_buffer *buffer)
 {
 	atomic_inc(&buffer->record_disabled);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_record_disable);
 
 /**
  * ring_buffer_record_enable - enable writes to the buffer
@@ -1457,6 +1470,7 @@ void ring_buffer_record_enable(struct ring_buffer *buffer)
 {
 	atomic_dec(&buffer->record_disabled);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_record_enable);
 
 /**
  * ring_buffer_record_disable_cpu - stop all writes into the cpu_buffer
@@ -1478,6 +1492,7 @@ void ring_buffer_record_disable_cpu(struct ring_buffer *buffer, int cpu)
 	cpu_buffer = buffer->buffers[cpu];
 	atomic_inc(&cpu_buffer->record_disabled);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_record_disable_cpu);
 
 /**
  * ring_buffer_record_enable_cpu - enable writes to the buffer
@@ -1497,6 +1512,7 @@ void ring_buffer_record_enable_cpu(struct ring_buffer *buffer, int cpu)
 	cpu_buffer = buffer->buffers[cpu];
 	atomic_dec(&cpu_buffer->record_disabled);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_record_enable_cpu);
 
 /**
  * ring_buffer_entries_cpu - get the number of entries in a cpu buffer
@@ -1513,6 +1529,7 @@ unsigned long ring_buffer_entries_cpu(struct ring_buffer *buffer, int cpu)
 	cpu_buffer = buffer->buffers[cpu];
 	return cpu_buffer->entries;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_entries_cpu);
 
 /**
  * ring_buffer_overrun_cpu - get the number of overruns in a cpu_buffer
@@ -1529,6 +1546,7 @@ unsigned long ring_buffer_overrun_cpu(struct ring_buffer *buffer, int cpu)
 	cpu_buffer = buffer->buffers[cpu];
 	return cpu_buffer->overrun;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_overrun_cpu);
 
 /**
  * ring_buffer_entries - get the number of entries in a buffer
@@ -1551,6 +1569,7 @@ unsigned long ring_buffer_entries(struct ring_buffer *buffer)
 
 	return entries;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_entries);
 
 /**
  * ring_buffer_overrun_cpu - get the number of overruns in buffer
@@ -1573,6 +1592,7 @@ unsigned long ring_buffer_overruns(struct ring_buffer *buffer)
 
 	return overruns;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_overruns);
 
 static void rb_iter_reset(struct ring_buffer_iter *iter)
 {
@@ -1608,6 +1628,7 @@ void ring_buffer_iter_reset(struct ring_buffer_iter *iter)
 	rb_iter_reset(iter);
 	spin_unlock_irqrestore(&cpu_buffer->reader_lock, flags);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_iter_reset);
 
 /**
  * ring_buffer_iter_empty - check if an iterator has no more to read
@@ -1622,6 +1643,7 @@ int ring_buffer_iter_empty(struct ring_buffer_iter *iter)
 	return iter->head_page == cpu_buffer->commit_page &&
 		iter->head == rb_commit_index(cpu_buffer);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_iter_empty);
 
 static void
 rb_update_read_stamp(struct ring_buffer_per_cpu *cpu_buffer,
@@ -1888,6 +1910,7 @@ rb_buffer_peek(struct ring_buffer *buffer, int cpu, u64 *ts)
 
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_peek);
 
 static struct ring_buffer_event *
 rb_iter_peek(struct ring_buffer_iter *iter, u64 *ts)
@@ -1948,6 +1971,7 @@ rb_iter_peek(struct ring_buffer_iter *iter, u64 *ts)
 
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_iter_peek);
 
 /**
  * ring_buffer_peek - peek at the next event to be read
@@ -2025,6 +2049,7 @@ ring_buffer_consume(struct ring_buffer *buffer, int cpu, u64 *ts)
 
 	return event;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_consume);
 
 /**
  * ring_buffer_read_start - start a non consuming read of the buffer
@@ -2067,6 +2092,7 @@ ring_buffer_read_start(struct ring_buffer *buffer, int cpu)
 
 	return iter;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_read_start);
 
 /**
  * ring_buffer_finish - finish reading the iterator of the buffer
@@ -2083,6 +2109,7 @@ ring_buffer_read_finish(struct ring_buffer_iter *iter)
 	atomic_dec(&cpu_buffer->record_disabled);
 	kfree(iter);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_read_finish);
 
 /**
  * ring_buffer_read - read the next item in the ring buffer by the iterator
@@ -2109,6 +2136,7 @@ ring_buffer_read(struct ring_buffer_iter *iter, u64 *ts)
 
 	return event;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_read);
 
 /**
  * ring_buffer_size - return the size of the ring buffer (in bytes)
@@ -2118,6 +2146,7 @@ unsigned long ring_buffer_size(struct ring_buffer *buffer)
 {
 	return BUF_PAGE_SIZE * buffer->pages;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_size);
 
 static void
 rb_reset_cpu(struct ring_buffer_per_cpu *cpu_buffer)
@@ -2164,6 +2193,7 @@ void ring_buffer_reset_cpu(struct ring_buffer *buffer, int cpu)
 
 	spin_unlock_irqrestore(&cpu_buffer->reader_lock, flags);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_reset_cpu);
 
 /**
  * ring_buffer_reset - reset a ring buffer
@@ -2176,6 +2206,7 @@ void ring_buffer_reset(struct ring_buffer *buffer)
 	for_each_buffer_cpu(buffer, cpu)
 		ring_buffer_reset_cpu(buffer, cpu);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_reset);
 
 /**
  * rind_buffer_empty - is the ring buffer empty?
@@ -2194,6 +2225,7 @@ int ring_buffer_empty(struct ring_buffer *buffer)
 	}
 	return 1;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_empty);
 
 /**
  * ring_buffer_empty_cpu - is a cpu buffer of a ring buffer empty?
@@ -2210,6 +2242,7 @@ int ring_buffer_empty_cpu(struct ring_buffer *buffer, int cpu)
 	cpu_buffer = buffer->buffers[cpu];
 	return rb_per_cpu_empty(cpu_buffer);
 }
+EXPORT_SYMBOL_GPL(ring_buffer_empty_cpu);
 
 /**
  * ring_buffer_swap_cpu - swap a CPU buffer between two ring buffers
@@ -2258,6 +2291,7 @@ int ring_buffer_swap_cpu(struct ring_buffer *buffer_a,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ring_buffer_swap_cpu);
 
 static void rb_remove_entries(struct ring_buffer_per_cpu *cpu_buffer,
 			      struct buffer_data_page *bpage)
