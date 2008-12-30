@@ -128,9 +128,14 @@
 	.colorspace = _colorspace }
 #define RGB_FMT(_name, _depth, _fourcc) \
 	COL_FMT(_name, _depth, _fourcc, V4L2_COLORSPACE_SRGB)
+#define JPG_FMT(_name, _depth, _fourcc) \
+	COL_FMT(_name, _depth, _fourcc, V4L2_COLORSPACE_JPEG)
 
 static const struct soc_camera_data_format mt9m111_colour_formats[] = {
-	COL_FMT("YCrYCb 8 bit", 8, V4L2_PIX_FMT_YUYV, V4L2_COLORSPACE_JPEG),
+	JPG_FMT("CbYCrY 16 bit", 16, V4L2_PIX_FMT_UYVY),
+	JPG_FMT("CrYCbY 16 bit", 16, V4L2_PIX_FMT_VYUY),
+	JPG_FMT("YCbYCr 16 bit", 16, V4L2_PIX_FMT_YUYV),
+	JPG_FMT("YCrYCb 16 bit", 16, V4L2_PIX_FMT_YVYU),
 	RGB_FMT("RGB 565", 16, V4L2_PIX_FMT_RGB565),
 	RGB_FMT("RGB 555", 16, V4L2_PIX_FMT_RGB555),
 	RGB_FMT("Bayer (sRGB) 10 bit", 10, V4L2_PIX_FMT_SBGGR16),
@@ -438,7 +443,24 @@ static int mt9m111_set_pixfmt(struct soc_camera_device *icd, u32 pixfmt)
 	case V4L2_PIX_FMT_RGB565:
 		ret = mt9m111_setfmt_rgb565(icd);
 		break;
+	case V4L2_PIX_FMT_UYVY:
+		mt9m111->swap_yuv_y_chromas = 0;
+		mt9m111->swap_yuv_cb_cr = 0;
+		ret = mt9m111_setfmt_yuv(icd);
+		break;
+	case V4L2_PIX_FMT_VYUY:
+		mt9m111->swap_yuv_y_chromas = 0;
+		mt9m111->swap_yuv_cb_cr = 1;
+		ret = mt9m111_setfmt_yuv(icd);
+		break;
 	case V4L2_PIX_FMT_YUYV:
+		mt9m111->swap_yuv_y_chromas = 1;
+		mt9m111->swap_yuv_cb_cr = 0;
+		ret = mt9m111_setfmt_yuv(icd);
+		break;
+	case V4L2_PIX_FMT_YVYU:
+		mt9m111->swap_yuv_y_chromas = 1;
+		mt9m111->swap_yuv_cb_cr = 1;
 		ret = mt9m111_setfmt_yuv(icd);
 		break;
 	default:
@@ -452,8 +474,8 @@ static int mt9m111_set_pixfmt(struct soc_camera_device *icd, u32 pixfmt)
 	return ret;
 }
 
-static int mt9m111_set_fmt_cap(struct soc_camera_device *icd,
-			       __u32 pixfmt, struct v4l2_rect *rect)
+static int mt9m111_set_fmt(struct soc_camera_device *icd,
+			   __u32 pixfmt, struct v4l2_rect *rect)
 {
 	struct mt9m111 *mt9m111 = container_of(icd, struct mt9m111, icd);
 	int ret;
@@ -473,8 +495,8 @@ static int mt9m111_set_fmt_cap(struct soc_camera_device *icd,
 	return ret;
 }
 
-static int mt9m111_try_fmt_cap(struct soc_camera_device *icd,
-			       struct v4l2_format *f)
+static int mt9m111_try_fmt(struct soc_camera_device *icd,
+			   struct v4l2_format *f)
 {
 	if (f->fmt.pix.height > MT9M111_MAX_HEIGHT)
 		f->fmt.pix.height = MT9M111_MAX_HEIGHT;
@@ -597,8 +619,8 @@ static struct soc_camera_ops mt9m111_ops = {
 	.release		= mt9m111_release,
 	.start_capture		= mt9m111_start_capture,
 	.stop_capture		= mt9m111_stop_capture,
-	.set_fmt_cap		= mt9m111_set_fmt_cap,
-	.try_fmt_cap		= mt9m111_try_fmt_cap,
+	.set_fmt		= mt9m111_set_fmt,
+	.try_fmt		= mt9m111_try_fmt,
 	.query_bus_param	= mt9m111_query_bus_param,
 	.set_bus_param		= mt9m111_set_bus_param,
 	.controls		= mt9m111_controls,
@@ -634,18 +656,15 @@ static int mt9m111_set_flip(struct soc_camera_device *icd, int flip, int mask)
 
 static int mt9m111_get_global_gain(struct soc_camera_device *icd)
 {
-	unsigned int data, gain;
+	int data;
 
 	data = reg_read(GLOBAL_GAIN);
 	if (data >= 0)
-		gain = ((data & (1 << 10)) * 2)
-			| ((data & (1 << 9)) * 2)
-			| (data & 0x2f);
-	else
-		gain = data;
-
-	return gain;
+		return (data & 0x2f) * (1 << ((data >> 10) & 1)) *
+			(1 << ((data >> 9) & 1));
+	return data;
 }
+
 static int mt9m111_set_global_gain(struct soc_camera_device *icd, int gain)
 {
 	u16 val;

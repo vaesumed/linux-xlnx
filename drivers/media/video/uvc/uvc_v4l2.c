@@ -252,9 +252,6 @@ static int uvc_v4l2_set_format(struct uvc_video_device *video,
 	if (ret < 0)
 		return ret;
 
-	if ((ret = uvc_set_video_ctrl(video, &probe, 0)) < 0)
-		return ret;
-
 	memcpy(&video->streaming->ctrl, &probe, sizeof probe);
 	video->streaming->cur_format = format;
 	video->streaming->cur_frame = frame;
@@ -313,10 +310,6 @@ static int uvc_v4l2_set_streamparm(struct uvc_video_device *video,
 
 	/* Probe the device with the new settings. */
 	if ((ret = uvc_probe_video(video, &probe)) < 0)
-		return ret;
-
-	/* Commit the new settings. */
-	if ((ret = uvc_set_video_ctrl(video, &probe, 0)) < 0)
 		return ret;
 
 	memcpy(&video->streaming->ctrl, &probe, sizeof probe);
@@ -464,16 +457,12 @@ static int uvc_v4l2_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int __uvc_v4l2_do_ioctl(struct file *file,
-		     unsigned int cmd, void *arg)
+static int uvc_v4l2_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 {
 	struct video_device *vdev = video_devdata(file);
 	struct uvc_video_device *video = video_get_drvdata(vdev);
 	struct uvc_fh *handle = (struct uvc_fh *)file->private_data;
 	int ret = 0;
-
-	if (uvc_trace_param & UVC_TRACE_IOCTL)
-		v4l_printk_ioctl(cmd);
 
 	switch (cmd) {
 	/* Query capabilities */
@@ -925,7 +914,7 @@ static int __uvc_v4l2_do_ioctl(struct file *file,
 		if (!capable(CAP_SYS_ADMIN))
 			return -EPERM;
 
-		info = kmalloc(sizeof *info, GFP_KERNEL);
+		info = kzalloc(sizeof *info, GFP_KERNEL);
 		if (info == NULL)
 			return -ENOMEM;
 
@@ -952,7 +941,7 @@ static int __uvc_v4l2_do_ioctl(struct file *file,
 		if (!capable(CAP_SYS_ADMIN))
 			return -EPERM;
 
-		map = kmalloc(sizeof *map, GFP_KERNEL);
+		map = kzalloc(sizeof *map, GFP_KERNEL);
 		if (map == NULL)
 			return -ENOMEM;
 
@@ -979,7 +968,7 @@ static int __uvc_v4l2_do_ioctl(struct file *file,
 
 	default:
 		if ((ret = v4l_compat_translate_ioctl(file, cmd, arg,
-			__uvc_v4l2_do_ioctl)) == -ENOIOCTLCMD)
+			uvc_v4l2_do_ioctl)) == -ENOIOCTLCMD)
 			uvc_trace(UVC_TRACE_IOCTL, "Unknown ioctl 0x%08x\n",
 				  cmd);
 		return ret;
@@ -988,17 +977,16 @@ static int __uvc_v4l2_do_ioctl(struct file *file,
 	return ret;
 }
 
-static int uvc_v4l2_do_ioctl(struct inode *inode, struct file *file,
-			      unsigned int cmd, void *arg)
-{
-	return __uvc_v4l2_do_ioctl(file, cmd, arg);
-}
-
 static int uvc_v4l2_ioctl(struct inode *inode, struct file *file,
 		     unsigned int cmd, unsigned long arg)
 {
-	uvc_trace(UVC_TRACE_CALLS, "uvc_v4l2_ioctl\n");
-	return video_usercopy(inode, file, cmd, arg, uvc_v4l2_do_ioctl);
+	if (uvc_trace_param & UVC_TRACE_IOCTL) {
+		uvc_printk(KERN_DEBUG, "uvc_v4l2_ioctl(");
+		v4l_printk_ioctl(cmd);
+		printk(")\n");
+	}
+
+	return video_usercopy(file, cmd, arg, uvc_v4l2_do_ioctl);
 }
 
 static ssize_t uvc_v4l2_read(struct file *file, char __user *data,

@@ -60,6 +60,8 @@ enum {
 
 	/* OmniVision sensors: reserved range 250-299 */
 	V4L2_IDENT_OV7670 = 250,
+	V4L2_IDENT_OV7720 = 251,
+	V4L2_IDENT_OV7725 = 252,
 
 	/* Conexant MPEG encoder/decoders: reserved range 410-420 */
 	V4L2_IDENT_CX23415 = 415,
@@ -68,6 +70,9 @@ enum {
 
 	/* module vp27smpx: just ident 2700 */
 	V4L2_IDENT_VP27SMPX = 2700,
+
+	/* module tvp5150 */
+	V4L2_IDENT_TVP5150 = 5150,
 
 	/* module cs5345: just ident 5345 */
 	V4L2_IDENT_CS5345 = 5345,
