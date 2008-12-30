@@ -1,0 +1,177 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 9a1d1035631ad8b3edf301b273c30bdfc75de01e
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 9a1d1035631ad8b3edf301b273c30bdfc75de01e
+HEAD is now at 9a1d103 Merge git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi-rc-fixes-2.6
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+tx4939ide-do-not-use-zero-count-prd-entry.patch
+tx493-89-ide-fix-length-for-__ide_flush_dcache_range.patch
+ide-fix-ide-acpi-regression.patch
+ide-unify-ide_intr-s-exit-points.patch
+ide-ide-settings-dont-need-an-ide_lock-held.patch
+ide-__ide_port_unregister_devices-doesnt-need-an-ide_lock-held.patch
+ide-ide_hwgroup_t-rq-doesnt-need-an-ide_lock-held.patch
+ide-push-ide_lock-to-__ide_end_request.patch
+ide-ide_lock-__blk_end_request-to-blk_end_request.patch
+ide-use-queue-lock-instead-of-ide_lock-when-possible.patch
+ide-replace-the-global-ide_lock-spinlock-by-per-hwgroup-spinlocks-v2.patch
+ide-cleanup-ide_do_request.patch
+ide-cd-remove-obsolete-seek-optimization.patch
+ali14xx-doesnt-use-shared-irqs.patch
+cmd64x-set-ide_hflag_serialize-explictly-for-cmd646.patch
+gayle-set-ide_hflag_serialize-explictly.patch
+ide-fix-quirk_list-checking-in-ide_do_request.patch
+ide-always-set-nien-on-idle-devices.patch
+rz1000-apply-chipset-quirks-early-v2.patch
+ide-add-max_sectors-field-to-struct-ide_port_info.patch
+trm290-add-ide_hflag_trm290-host-flag.patch
+cy82c693-remove-superfluous-ide_cy82c693-chipset-type.patch
+ide-rework-handling-of-serialized-ports-v2.patch
+ide-struct-device-replace-bus_id-with-dev_name()-dev_set_name().patch
+ide-remove-redundant-code-from-ide_end_drive_cmd.patch
+ide-remove-inline-tags-from-ide-probe-c.patch
+ide-checkpatch.pl-fixes-for-ide-lib-c.patch
+ide-use-ata_dma_-defines-in-ide-dma-sff-c.patch
+ide-move-power-management-support-to-ide-pm-c.patch
+ide-move-legacy-isa-vlb-ports-handling-to-ide-legacy-c-v2.patch
+ide-remove-superfluous-local_irq_save-restore-from-ide_dump_status.patch
+ide-push-local_irq_save-restore-to-do_identify.patch
+ide-cd-remove-dead-atapi_overlap-setting.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+tx493x-fix-intendation.patch
+ide-remove-chipset-type-fixup-from-ide_host_register.patch
+ide-small-ide_register_port-cleanup.patch
+ide-factor-out-device-type-classifying-from-do_identify.patch
+ide-move-sysfs-support-to-ide-sysfs-c.patch
+ide-remove-ide-pm-hack-from-do_ide_request.patch
+ide-remove-paranoia-checks-for-hwgroup-busy.patch
+ide-add-ide_un-lock_hwgroup-helpers.patch
+ide-use-per-device-request-queue-locks-v2.patch
+ide-cd-move-debug-defines-into-header.patch
+ide-make-ide_aflag_numbering-continuous-again.patch
+ide-floppy-allocate-only-toplevel-packet-commands.patch
+ide-remove-ide-scsi.patch
+ide-atapi-add-a-dev_is_idecd-inline.patch
+ide-atapi-combine-drive-specific-assignments.patch
+ide-atapi-setup-dma-for-ide-cd.patch
+ide-atapi-accomodate-transfer-length-calculation-for-ide-cd.patch
+ide-atapi-teach-ide-atapi-about-drive-waiting_for_dma.patch
+ide-cd-move-cdrom_timer_expiry-to-ide-atapi.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_issue_pc.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_transfer_pc.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_pc_intr.patch
+ide-remove-the-last-ide-scsi-remnants.patch
+drivers_ide-move-a-dereference-below-a-null-test.patch
+ide-atapi-compute-cmd_len-based-on-device-type-in-ide_transfer_pc.patch
+ide-atapi-assign-expiry-and-timeout-based-on-device-type.patch
+ide-atapi-split-drive-specific-functionality-in-ide_issue_pc.patch
+ide-cd-remove-xferlen-arg-to-cdrom_start_packet_command.patch
+ide-cd-remove-handler-wrappers.patch
+ide-atapi-remove-timeout-arg-to-ide_issue_pc.patch
+ide-atapi-put-the-rest-of-non-ide-cd-code-into-the-else-clause-of-ide_transfer_pc.patch
+ide-atapi-start-dma-in-a-drive-specific-way.patch
+ide-fix-setting-nien-on-idle-devices.patch
+ide-add-cur_port-to-struct-ide_host-and-use-it-for-serialized-hosts.patch
+ide-use-per-port-irq-handlers.patch
+ide-remove-hwgroup-hwif-and-drive-hwif-next.patch
+ide-use-lock-bitops-for-ports-serialization.patch
+ide-merge-ide_hwgroup_t-with-ide_hwif_t.patch
+ide-update-ide_unregister-documentation.patch
+ide-move-ide_init_port_data-and-friends-to-ide-probe-c.patch
+ide-remove-hwif-macro.patch
+ide-remove-local_irq_set-macro.patch
+ide-remove-ide_pci_enablebit_t-typedef.patch
+ide-remove-byte-typedef.patch
+ide-remove-ide_driver_t-typedef.patch
+ide-unexport-ide_wait_not_busy.patch
+ide-remove-error-method-from-struct-ide_driver.patch
+amd74xx-use-ide_get_pair_dev-helper.patch
+cmd640-use-ide_get_pair_dev-helper.patch
+cmd64x-use-ide_get_pair_dev-helper.patch
+it821x-use-ide_get_pair_dev-helper.patch
+ide-numa-aware-allocation-of-host-and-port-structures.patch
+ide-dynamic-allocation-of-device-structures.patch
+ide-add-port-and-host-iterators.patch
+ide-fix-drive-s-dword-io-handling.patch
+ide-cd-wait-for-drq-to-get-set-per-default.patch
+ide-cd-start-dma-before-sending-the-actual-packet-command.patch
+ide-cd-convert-to-ide-atapi-facilities.patch
+Importing rr based on rr_cpumask/master
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard e12f0102ac81d660c9f801d0a0e10ccf4537a9de
+HEAD is now at e12f010 cpumask: Use nr_cpu_ids in seq_cpumask
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:pci_queue_allocation_not_page_aligned.patch
+virtio:struct_device_replace_bus_id_with_dev_name_dev_set_name.patch
+virtio:VIRTIO_PCI_QUEUE_ADDR_SHIFT.patch
+virtio:rename-vring-pagesize-to-align.patch
+virtio:VIRTIO_PCI_VRING_ALIGN.patch
+virtio:LGUEST_VRING_ALIGN.patch
+virtio:KVM_S390_VIRTIO_RING_ALIGN.patch
+virtio:virtqueue-hand-in-vqalign.patch
+virtio:balloon_avoid_Linux_page_size.patch
+virtio:block-no-max-segment-size-by-default.patch
+virtio:block-dynamic-max-segments.patch
+virtio:blk_fix_type_warning.patch
+virtio:add_pci_device_release_function.patch
+virtio:console_support_console_resizing.patch
+virtio:kvm_s390_implement_config_changed_for_on_s390.patch
+lguest:move_the_initial_guest_page_table_creation_code_to_the_host.patch
+lguest:struct_device_replace_bus_id_with_dev_name.patch
+module:remove_config_kmod.patch
+module:compare-sym-values-for-export-mark-in-proc-kallsyms.patch
+module:print_unload_info-no-proc.patch
+stop_machine:introduce_stop_machine_create_destroy.patch
+module:convert_to_stop_machine_create_destroy.patch
+cpumask:fix-impossible-percpu-accesses-pnp.patch
+cpumask:fix-impossible-percpu-accesses-m32r.patch
+cpumask:fix-impossible-percpu-accesses-x86.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-core.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-net.patch
+cpumask:use-cpumap-accessors-core.patch
+parisc:remove-cpu_online_map-declaration.patch
+avr32:__fls.patch
+blackfin:__fls.patch
+m68k:__fls.patch
+m68knommu:__fls.patch
+bitmap:find_last_bit.patch
+bitmap:find_last_bit-fix.patch
+cpumask:use-find_last_bit.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:work_on_cpu-pci.patch
+misc:work_on_cpu-powerpc-sysfs.patch
+cpumask:topology_core_cpumask-and-topology_thread_cpumask-x86.patch
+cpumask:topology_core_cpumask-and-topology_thread_cpumask-sparc.patch
+cpumask:topology_core_cpumask-and-topology_thread_cpumask-s390.patch
+cpumask:topology_core_cpumask-and-topology_thread_cpumask-powerpc.patch
+cpumask:topology_core_cpumask-and-topology_thread_cpumask-ia64.patch
+cpumask:use-topology_core_cpumask-and-topology_thread_cpumask.patch
+cpumask:convert-kernel_trace.patch
+cpumask:convert-kernel_trace-convert-iterator.patch
+cpumask:remove-any_online_cpu-users-kernel.patch
+cpumask:remove-any_online_cpu-users-mm.patch
+cpumask:convert-kernel_compat.c.patch
+cpumask:convert-kernel_workqueue.c.patch
+cpumask:convert-kernel_time.patch
+cpumask:convert-kernel_irq.patch
+cpumask:convert-kernel_rcu.patch
+cpumask:convert-kernel_profile.patch
+cpumask:convert-kernel_cpu.patch
+cpumask:convert-kernel.patch
+cpumask:convert-mm.patch
+cpumask:get-rid-of-_nr-core.patch
+cpumask:zero-extra-bits.patch
+cpumask:CONFIG_DISABLE_OBSOLETE_CPUMASK_FUNCTIONS.patch
+net:xfrm_proc-use-snmp_fold_field.patch
+Unchanged quilt series ttydev
+Unchanged quilt series staging
