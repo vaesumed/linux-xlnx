@@ -1513,10 +1513,10 @@ use_pio_instead:
 static int
 pmac_ide_dma_setup(ide_drive_t *drive)
 {
-	ide_hwif_t *hwif = HWIF(drive);
+	ide_hwif_t *hwif = drive->hwif;
 	pmac_ide_hwif_t *pmif =
 		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
-	struct request *rq = HWGROUP(drive)->rq;
+	struct request *rq = hwif->rq;
 	u8 unit = drive->dn & 1, ata4 = (pmif->kind == controller_kl_ata4);
 
 	if (!pmac_ide_build_dmatable(drive, rq)) {
@@ -1637,7 +1637,7 @@ pmac_ide_dma_test_irq (ide_drive_t *drive)
 			break;
 		if (++timeout > 100) {
 			printk(KERN_WARNING "ide%d, ide_dma_test_irq \
-			timeout flushing channel\n", HWIF(drive)->index);
+			timeout flushing channel\n", hwif->index);
 			break;
 		}
 	}	
