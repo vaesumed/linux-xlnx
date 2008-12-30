@@ -14,7 +14,9 @@
 #    Only include files located in asm* and linux* are checked.
 #    The rest are assumed to be system include files.
 #
-# 2) TODO: check for leaked CONFIG_ symbols
+# 2) It is checked that prototypes does not use "extern"
+#
+# 3) Check for leaked CONFIG_ symbols
 
 use strict;
 
@@ -33,6 +35,8 @@ foreach my $file (@files) {
 	while ($line = <FH>) {
 		$lineno++;
 		check_include();
+		check_prototypes();
+		check_config();
 	}
 	close FH;
 }
@@ -54,3 +58,18 @@ sub check_include
 		}
 	}
 }
+
+sub check_prototypes
+{
+	if ($line =~ m/^\s*extern\b/) {
+		printf STDERR "$filename:$lineno: extern's make no sense in userspace\n";
+	}
+}
+
+sub check_config
+{
+	if ($line =~ m/[^a-zA-Z0-9_]+CONFIG_([a-zA-Z0-9]+)[^a-zA-Z0-9]/) {
+		printf STDERR "$filename:$lineno: leaks CONFIG_$1 to userspace where it is not valid\n";
+	}
+}
+
