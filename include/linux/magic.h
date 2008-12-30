@@ -33,6 +33,7 @@
 #define NFS_SUPER_MAGIC		0x6969
 #define OPENPROM_SUPER_MAGIC	0x9fa1
 #define PROC_SUPER_MAGIC	0x9fa0
+#define PROC_NET_SUPER_MAGIC	0x706e6574
 #define QNX4_SUPER_MAGIC	0x002f		/* qnx4 fs detection */
 
 #define REISERFS_SUPER_MAGIC	0x52654973	/* used by gcc */
