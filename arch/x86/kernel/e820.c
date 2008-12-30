@@ -37,6 +37,8 @@
  * copied. It doesn't get modified afterwards. It's registered for the
  * /sys/firmware/memmap interface.
  *
+ * user_e820, exactmap and memlimit are set on cmdline by mem= and memmap=.
+ *
  * That memory map is not modified and is used as base for kexec. The kexec'd
  * kernel should get the same memory map as the firmware provides. Then the
  * user can e.g. boot the original kernel with mem=1G while still booting the
@@ -44,6 +46,9 @@
  */
 struct e820map e820;
 struct e820map e820_saved;
+static struct e820map user_e820 __initdata;
+static bool exactmap __initdata;
+static u64 memlimit __initdata;
 
 /* For PCI or other memory-mapped resources */
 unsigned long pci_mem_start = 0xaeedbabe;
@@ -107,22 +112,28 @@ int __init e820_all_mapped(u64 start, u64 end, unsigned type)
 	return 0;
 }
 
+static void __init __e820_add_region(struct e820map *e820,
+				     u64 start, u64 size, int type)
+{
+	int x = e820->nr_map;
+
+	if (x == ARRAY_SIZE(e820->map)) {
+		printk(KERN_ERR "Ooops! Too many entries in the memory map!\n");
+		return;
+	}
+
+	e820->map[x].addr = start;
+	e820->map[x].size = size;
+	e820->map[x].type = type;
+	e820->nr_map++;
+}
+
 /*
  * Add a memory region to the kernel e820 map.
  */
 void __init e820_add_region(u64 start, u64 size, int type)
 {
-	int x = e820.nr_map;
-
-	if (x == ARRAY_SIZE(e820.map)) {
-		printk(KERN_ERR "Ooops! Too many entries in the memory map!\n");
-		return;
-	}
-
-	e820.map[x].addr = start;
-	e820.map[x].size = size;
-	e820.map[x].type = type;
-	e820.nr_map++;
+	__e820_add_region(&e820, start, size, type);
 }
 
 void __init e820_print_map(char *who)
@@ -1178,13 +1189,9 @@ static void early_panic(char *msg)
 	panic(msg);
 }
 
-static int userdef __initdata;
-
 /* "mem=nopentium" disables the 4MB page tables. */
 static int __init parse_memopt(char *p)
 {
-	u64 mem_size;
-
 	if (!p)
 		return -EINVAL;
 
@@ -1195,10 +1202,7 @@ static int __init parse_memopt(char *p)
 	}
 #endif
 
-	userdef = 1;
-	mem_size = memparse(p, &p);
-	e820_remove_range(mem_size, ULLONG_MAX - mem_size, E820_RAM, 1);
-
+	memlimit = memparse(p, &p);
 	return 0;
 }
 early_param("mem", parse_memopt);
@@ -1212,6 +1216,43 @@ static int __init parse_memmap_opt(char *p)
 		return -EINVAL;
 
 	if (!strncmp(p, "exactmap", 8)) {
+		exactmap = true;
+		return 0;
+	}
+
+	oldp = p;
+	mem_size = memparse(p, &p);
+	if (p == oldp)
+		return -EINVAL;
+
+	if (*p == '@') {
+		start_at = memparse(p+1, &p);
+		__e820_add_region(&user_e820, start_at, mem_size, E820_RAM);
+	} else if (*p == '#') {
+		start_at = memparse(p+1, &p);
+		__e820_add_region(&user_e820, start_at, mem_size, E820_ACPI);
+	} else if (*p == '$') {
+		start_at = memparse(p+1, &p);
+		__e820_add_region(&user_e820, start_at, mem_size,
+				  E820_RESERVED);
+	} else
+		memlimit = mem_size;
+
+	return *p == '\0' ? 0 : -EINVAL;
+}
+early_param("memmap", parse_memmap_opt);
+
+void __init finish_e820_parsing(void)
+{
+	bool userdef = false;
+	int i;
+
+	if (memlimit) {
+		e820_remove_range(memlimit, ULLONG_MAX - memlimit, E820_RAM, 1);
+		userdef = true;
+	}
+
+	if (exactmap) {
 #ifdef CONFIG_CRASH_DUMP
 		/*
 		 * If we are doing a crash dump, we still need to know
@@ -1221,34 +1262,15 @@ static int __init parse_memmap_opt(char *p)
 		saved_max_pfn = e820_end_of_ram_pfn();
 #endif
 		e820.nr_map = 0;
-		userdef = 1;
-		return 0;
+		userdef = true;
 	}
 
-	oldp = p;
-	mem_size = memparse(p, &p);
-	if (p == oldp)
-		return -EINVAL;
+	for (i = 0; i < user_e820.nr_map; i++) {
+		e820_add_region(user_e820.map[i].addr, user_e820.map[i].size,
+				user_e820.map[i].type);
+		userdef = true;
+	}
 
-	userdef = 1;
-	if (*p == '@') {
-		start_at = memparse(p+1, &p);
-		e820_add_region(start_at, mem_size, E820_RAM);
-	} else if (*p == '#') {
-		start_at = memparse(p+1, &p);
-		e820_add_region(start_at, mem_size, E820_ACPI);
-	} else if (*p == '$') {
-		start_at = memparse(p+1, &p);
-		e820_add_region(start_at, mem_size, E820_RESERVED);
-	} else
-		e820_remove_range(mem_size, ULLONG_MAX - mem_size, E820_RAM, 1);
-
-	return *p == '\0' ? 0 : -EINVAL;
-}
-early_param("memmap", parse_memmap_opt);
-
-void __init finish_e820_parsing(void)
-{
 	if (userdef) {
 		int nr = e820.nr_map;
 

@@ -40,6 +40,20 @@ static struct cpu cpu_devices[NR_CPUS];
 
 extern void show_etrax_copyright(void);		/* arch-vX/kernel/setup.c */
 
+void __init arch_get_boot_command_line(void)
+{
+#ifdef CONFIG_ETRAX_CMDLINE
+	if (!strcmp(cris_command_line, "")) {
+		strlcpy(cris_command_line, CONFIG_ETRAX_CMDLINE,
+			COMMAND_LINE_SIZE);
+		cris_command_line[COMMAND_LINE_SIZE - 1] = '\0';
+	}
+#endif
+
+	/* FIXME: Do we need cris_command_line at all? */
+	strlcpy(boot_command_line, cris_command_line, COMMAND_LINE_SIZE);
+}
+
 /* This mainly sets up the memory area, and can be really confusing.
  *
  * The physical DRAM is virtually mapped into dram_start to dram_end
@@ -56,7 +70,7 @@ extern void show_etrax_copyright(void);		/* arch-vX/kernel/setup.c */
  *
  */
 
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 	extern void init_etrax_debug(void);
 	unsigned long bootmap_size;
@@ -143,19 +157,6 @@ void __init setup_arch(char **cmdline_p)
 	/* paging_init() sets up the MMU and marks all pages as reserved */
 
 	paging_init();
-
-	*cmdline_p = cris_command_line;
-
-#ifdef CONFIG_ETRAX_CMDLINE
-        if (!strcmp(cris_command_line, "")) {
-		strlcpy(cris_command_line, CONFIG_ETRAX_CMDLINE, COMMAND_LINE_SIZE);
-		cris_command_line[COMMAND_LINE_SIZE - 1] = '\0';
-	}
-#endif
-
-	/* Save command line for future references. */
-	memcpy(boot_command_line, cris_command_line, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE - 1] = '\0';
 
 	/* give credit for the CRIS port */
 	show_etrax_copyright();

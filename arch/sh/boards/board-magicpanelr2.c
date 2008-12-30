@@ -202,7 +202,7 @@ static void __init setup_port_multiplexing(void)
 	ctrl_outw(0x0142, PORT_PVCR);	/* 00 00 00 01 01 00 00 10 */
 }
 
-static void __init mpr2_setup(char **cmdline_p)
+static void __init mpr2_setup(void)
 {
 	__set_io_port_base(0xa0000000);
 

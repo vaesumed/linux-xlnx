@@ -163,7 +163,7 @@ L1:
 
 	/* Copy command line from end of bss to command line */
 	moveal	#_ebss, %a0
-	moveal	#command_line, %a1
+	moveal	#boot_command_line, %a1
 	lea	%a1@(512), %a2
 
 	DBG_PUTC('G')

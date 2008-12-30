@@ -67,7 +67,7 @@ static int __init hp6xx_devices_setup(void)
 	return platform_add_devices(hp6xx_devices, ARRAY_SIZE(hp6xx_devices));
 }
 
-static void __init hp6xx_setup(char **cmdline_p)
+static void __init hp6xx_setup(void)
 {
 	u8 v8;
 	u16 v;

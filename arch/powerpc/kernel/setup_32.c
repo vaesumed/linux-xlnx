@@ -272,10 +272,8 @@ static void __init exc_lvl_early_init(void)
 #endif
 
 /* Warning, IO base is not yet inited */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
-	*cmdline_p = cmd_line;
-
 	/* so udelay does something sensible, assume <= 1000 bogomips */
 	loops_per_jiffy = 500000000 / HZ;
 
