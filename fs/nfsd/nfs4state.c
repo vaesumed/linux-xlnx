@@ -719,8 +719,8 @@ nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		status = nfserr_clid_inuse;
 		if (!same_creds(&conf->cl_cred, &rqstp->rq_cred)
 				|| conf->cl_addr != sin->sin_addr.s_addr) {
-			dprintk("NFSD: setclientid: string in use by client"
-				"at %u.%u.%u.%u\n", NIPQUAD(conf->cl_addr));
+			dprintk("NFSD: setclientid: string in use by clientat %pI4\n",
+				&conf->cl_addr);
 			goto out;
 		}
 	}
@@ -2423,13 +2423,13 @@ static struct list_head lockstateid_hashtbl[STATEID_HASH_SIZE];
 static struct nfs4_stateid *
 find_stateid(stateid_t *stid, int flags)
 {
-	struct nfs4_stateid *local = NULL;
+	struct nfs4_stateid *local;
 	u32 st_id = stid->si_stateownerid;
 	u32 f_id = stid->si_fileid;
 	unsigned int hashval;
 
 	dprintk("NFSD: find_stateid flags 0x%x\n",flags);
-	if ((flags & LOCK_STATE) || (flags & RD_STATE) || (flags & WR_STATE)) {
+	if (flags & (LOCK_STATE | RD_STATE | WR_STATE)) {
 		hashval = stateid_hashval(st_id, f_id);
 		list_for_each_entry(local, &lockstateid_hashtbl[hashval], st_hash) {
 			if ((local->st_stateid.si_stateownerid == st_id) &&
@@ -2437,7 +2437,8 @@ find_stateid(stateid_t *stid, int flags)
 				return local;
 		}
 	} 
-	if ((flags & OPEN_STATE) || (flags & RD_STATE) || (flags & WR_STATE)) {
+
+	if (flags & (OPEN_STATE | RD_STATE | WR_STATE)) {
 		hashval = stateid_hashval(st_id, f_id);
 		list_for_each_entry(local, &stateid_hashtbl[hashval], st_hash) {
 			if ((local->st_stateid.si_stateownerid == st_id) &&

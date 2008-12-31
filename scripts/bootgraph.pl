@@ -37,7 +37,10 @@
 # 	dmesg | perl scripts/bootgraph.pl > output.svg
 #
 
-my %start, %end;
+use strict;
+
+my %start;
+my %end;
 my $done = 0;
 my $maxtime = 0;
 my $firsttime = 100;
@@ -75,11 +78,13 @@ while (<>) {
 }
 
 if ($count == 0) {
-	print "No data found in the dmesg. Make sure that 'printk.time=1' and\n";
-	print "'initcall_debug' are passed on the kernel command line.\n\n";
-	print "Usage: \n";
-	print "      dmesg | perl scripts/bootgraph.pl > output.svg\n\n";
-	exit;
+    print STDERR <<END;
+No data found in the dmesg. Make sure that 'printk.time=1' and
+'initcall_debug' are passed on the kernel command line.
+Usage:
+      dmesg | perl scripts/bootgraph.pl > output.svg
+END
+    exit 1;
 }
 
 print "<?xml version=\"1.0\" standalone=\"no\"?> \n";
@@ -105,18 +110,20 @@ my $threshold = ($maxtime - $firsttime) / 60.0;
 my $stylecounter = 0;
 my %rows;
 my $rowscount = 1;
-while (($key,$value) = each %start) {
+my @initcalls = sort { $start{$a} <=> $start{$b} } keys(%start);
+
+foreach my $key (@initcalls) {
 	my $duration = $end{$key} - $start{$key};
 
 	if ($duration >= $threshold) {
-		my $s, $s2, $e, $y;
-		$pid = $pids{$key};
+		my ($s, $s2, $e, $w, $y, $y2, $style);
+		my $pid = $pids{$key};
 
 		if (!defined($rows{$pid})) {
 			$rows{$pid} = $rowscount;
 			$rowscount = $rowscount + 1;
 		}
-		$s = ($value - $firsttime) * $mult;
+		$s = ($start{$key} - $firsttime) * $mult;
 		$s2 = $s + 6;
 		$e = ($end{$key} - $firsttime) * $mult;
 		$w = $e - $s;
@@ -140,9 +147,9 @@ while (($key,$value) = each %start) {
 my $time = $firsttime;
 my $step = ($maxtime - $firsttime) / 15;
 while ($time < $maxtime) {
-	my $s2 = ($time - $firsttime) * $mult;
+	my $s3 = ($time - $firsttime) * $mult;
 	my $tm = int($time * 100) / 100.0;
-	print "<text transform=\"translate($s2,89) rotate(90)\">$tm</text>\n";
+	print "<text transform=\"translate($s3,89) rotate(90)\">$tm</text>\n";
 	$time = $time + $step;
 }
 
