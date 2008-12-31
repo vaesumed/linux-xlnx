@@ -32,7 +32,7 @@
 
 #include "ubifs.h"
 #include <linux/writeback.h>
-#include <asm/div64.h>
+#include <linux/math64.h>
 
 /*
  * When pessimistic budget calculations say that there is no enough space,
@@ -258,8 +258,8 @@ static int make_free_space(struct ubifs_info *c, struct retries_info *ri)
  */
 int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 {
-	int ret;
-	uint64_t idx_size;
+	int idx_lebs, eff_leb_size = c->leb_size - c->max_idx_node_sz;
+	long long idx_size;
 
 	idx_size = c->old_idx_sz + c->budg_idx_growth + c->budg_uncommitted_idx;
 
@@ -271,23 +271,16 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 	 * pair, nor similarly the two variables for the new index size, so we
 	 * have to do this costly 64-bit division on fast-path.
 	 */
-	if (do_div(idx_size, c->leb_size - c->max_idx_node_sz))
-		ret = idx_size + 1;
-	else
-		ret = idx_size;
+	idx_size += eff_leb_size - 1;
+	idx_lebs = div_u64(idx_size, eff_leb_size);
 	/*
 	 * The index head is not available for the in-the-gaps method, so add an
 	 * extra LEB to compensate.
 	 */
-	ret += 1;
-	/*
-	 * At present the index needs at least 2 LEBs: one for the index head
-	 * and one for in-the-gaps method (which currently does not cater for
-	 * the index head and so excludes it from consideration).
-	 */
-	if (ret < 2)
-		ret = 2;
-	return ret;
+	idx_lebs += 1;
+	if (idx_lebs < MIN_INDEX_LEBS)
+		idx_lebs = MIN_INDEX_LEBS;
+	return idx_lebs;
 }
 
 /**
@@ -713,8 +706,8 @@ void ubifs_release_dirty_inode_budget(struct ubifs_info *c,
  * (e.g., via the 'statfs()' call) reports that it has N bytes available, they
  * are able to write a file of size N. UBIFS attaches node headers to each data
  * node and it has to write indexind nodes as well. This introduces additional
- * overhead, and UBIFS it has to report sligtly less free space to meet the
- * above expectetion.
+ * overhead, and UBIFS has to report sligtly less free space to meet the above
+ * expectetions.
  *
  * This function assumes free space is made up of uncompressed data nodes and
  * full index nodes (one per data node, tripled because we always allow enough
@@ -723,7 +716,7 @@ void ubifs_release_dirty_inode_budget(struct ubifs_info *c,
  * Note, the calculation is pessimistic, which means that most of the time
  * UBIFS reports less space than it actually has.
  */
-long long ubifs_reported_space(const struct ubifs_info *c, uint64_t free)
+long long ubifs_reported_space(const struct ubifs_info *c, long long free)
 {
 	int divisor, factor, f;
 
@@ -745,8 +738,7 @@ long long ubifs_reported_space(const struct ubifs_info *c, uint64_t free)
 	divisor = UBIFS_MAX_DATA_NODE_SZ;
 	divisor += (c->max_idx_node_sz * 3) / (f - 1);
 	free *= factor;
-	do_div(free, divisor);
-	return free;
+	return div_u64(free, divisor);
 }
 
 /**
@@ -771,7 +763,8 @@ long long ubifs_get_free_space(struct ubifs_info *c)
 	long long available, outstanding, free;
 
 	spin_lock(&c->space_lock);
-	min_idx_lebs = ubifs_calc_min_idx_lebs(c);
+	min_idx_lebs = c->min_idx_lebs;
+	ubifs_assert(min_idx_lebs == ubifs_calc_min_idx_lebs(c));
 	outstanding = c->budg_data_growth + c->budg_dd_growth;
 
 	/*
