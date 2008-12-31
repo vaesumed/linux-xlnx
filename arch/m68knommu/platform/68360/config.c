@@ -142,8 +142,7 @@ _bsc1(unsigned char *, gethwaddr, int, a)
 _bsc1(char *, getbenv, char *, a)
 #endif
 
-
-void config_BSP(char *command, int len)
+void config_BSP(void)
 {
   unsigned char *p;
 
@@ -172,11 +171,14 @@ void config_BSP(char *command, int len)
   printk(KERN_INFO "uCquicc hwaddr %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",
          p[0], p[1], p[2], p[3], p[4], p[5]);
 
+#if 0 /* Did this ever work?  Was strcpy supposed to be other way? */
   p = getbenv("APPEND");
   if (p)
     strcpy(p,command);
   else
     command[0] = 0;
+#endif
+
 #else
   scc1_hwaddr = "\00\01\02\03\04\05";
 #endif

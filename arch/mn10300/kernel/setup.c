@@ -60,6 +60,7 @@ static struct resource data_resource = {
 static unsigned long __initdata phys_memory_base;
 static unsigned long __initdata phys_memory_end;
 static unsigned long __initdata memory_end;
+static unsigned long __initdata memory_param;
 unsigned long memory_size;
 
 struct thread_info *__current_ti = &init_thread_union.thread_info;
@@ -73,58 +74,34 @@ static const char *const mn10300_cputypes[] = {
 	"unknown"
 };
 
-/*
- *
- */
-static void __init parse_mem_cmdline(char **cmdline_p)
+void __init arch_get_boot_command_line(void)
 {
-	char *from, *to, c;
-
-	/* save unparsed command line copy for /proc/cmdline */
 	strcpy(boot_command_line, redboot_command_line);
-
-	/* see if there's an explicit memory size option */
-	from = redboot_command_line;
-	to = redboot_command_line;
-	c = ' ';
-
-	for (;;) {
-		if (c == ' ' && !memcmp(from, "mem=", 4)) {
-			if (to != redboot_command_line)
-				to--;
-			memory_size = memparse(from + 4, &from);
-		}
-
-		c = *(from++);
-		if (!c)
-			break;
-
-		*(to++) = c;
-	}
-
-	*to = '\0';
-	*cmdline_p = redboot_command_line;
-
-	if (memory_size == 0)
-		panic("Memory size not known\n");
-
-	memory_end = (unsigned long) CONFIG_KERNEL_RAM_BASE_ADDRESS +
-		memory_size;
-	if (memory_end > phys_memory_end)
-		memory_end = phys_memory_end;
 }
+
+/*
+ * handle a specific memory limit handed over the kernel command line
+ */
+static int __init mem_parameter(char *data)
+{
+	if (!data || !*data)
+		return 0;
+
+	memory_param = memparse(data, NULL);
+	return 0;
+}
+early_param("mem", mem_parameter);
 
 /*
  * architecture specific setup
  */
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 	unsigned long bootmap_size;
 	unsigned long kstart_pfn, start_pfn, free_pfn, end_pfn;
 
 	cpu_init();
 	unit_setup();
-	parse_mem_cmdline(cmdline_p);
 
 	init_mm.start_code = (unsigned long)&_text;
 	init_mm.end_code = (unsigned long) &_etext;
@@ -221,6 +198,16 @@ void __init cpu_init(void)
 	}
 
 	phys_memory_end = phys_memory_base + memory_size;
+
+	if (memory_param)
+		memory_size = memory_param;
+	if (memory_size == 0)
+		panic("Memory size not known\n");
+
+	memory_end = (unsigned long) CONFIG_KERNEL_RAM_BASE_ADDRESS +
+		memory_size;
+	if (memory_end > phys_memory_end)
+		memory_end = phys_memory_end;
 
 #ifdef CONFIG_FPU
 	fpu_init_state();

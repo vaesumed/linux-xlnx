@@ -19,7 +19,7 @@ extern void (*mach_reset)( void );
 extern void (*mach_halt)( void );
 extern void (*mach_power_off)( void );
 
-extern void config_BSP(char *command, int len);
+extern void config_BSP(void);
 
 extern void do_IRQ(int irq, struct pt_regs *fp);
 

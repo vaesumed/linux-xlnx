@@ -576,10 +576,8 @@ static int disable_nx __initdata;
 static int __init noexec_setup(char *str)
 {
 	if (!str || !strcmp(str, "on")) {
-		if (cpu_has_nx) {
-			__supported_pte_mask |= _PAGE_NX;
-			disable_nx = 0;
-		}
+		__supported_pte_mask |= _PAGE_NX;
+		disable_nx = 0;
 	} else {
 		if (!strcmp(str, "off")) {
 			disable_nx = 1;
@@ -596,6 +594,11 @@ early_param("noexec", noexec_setup);
 static void __init set_nx(void)
 {
 	unsigned int v[4], l, h;
+
+	if ((__supported_pte_mask & _PAGE_NX) && !cpu_has_nx) {
+		printk("'noexec' ignored: CPU not capable\n");
+		__supported_pte_mask &= ~_PAGE_NX;
+	}
 
 	if (cpu_has_pae && (cpuid_eax(0x80000000) > 0x80000001)) {
 		cpuid(0x80000001, &v[0], &v[1], &v[2], &v[3]);

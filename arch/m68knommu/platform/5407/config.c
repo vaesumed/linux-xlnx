@@ -110,7 +110,7 @@ void mcf_settimericr(unsigned int timer, unsigned int level)
 
 /***************************************************************************/
 
-void __init config_BSP(char *commandp, int size)
+void __init config_BSP(void)
 {
 	mcf_setimr(MCFSIM_IMR_MASKALL);
 

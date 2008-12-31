@@ -369,7 +369,7 @@ void wildfiremod_halt(void)
 }
 #endif
 
-void __init config_BSP(char *commandp, int size)
+void __init config_BSP(void)
 {
 	mcf_disableall();
 

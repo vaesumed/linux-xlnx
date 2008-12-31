@@ -123,7 +123,18 @@ void mcf_settimericr(int timer, int level)
 
 /***************************************************************************/
 
-void __init config_BSP(char *commandp, int size)
+void __init platform_get_boot_command_line(void)
+{
+#if defined(CONFIG_NETtel) || defined(CONFIG_SCALES)
+	/* Copy command line from FLASH to local buffer... */
+	strlcpy(boot_command_line, (char *)0xf0004000, COMMAND_LINE_SIZE);
+#elif defined(CONFIG_CANCam)
+	/* Copy command line from FLASH to local buffer... */
+	strlcpy(boot_command_line, (char *)0xf0010000, COMMAND_LINE_SIZE);
+#endif
+}
+
+void __init config_BSP(void)
 {
 #if defined (CONFIG_MOD5272)
 	volatile unsigned char	*pivrp;
@@ -134,16 +145,6 @@ void __init config_BSP(char *commandp, int size)
 #endif
 
 	mcf_disableall();
-
-#if defined(CONFIG_NETtel) || defined(CONFIG_SCALES)
-	/* Copy command line from FLASH to local buffer... */
-	memcpy(commandp, (char *) 0xf0004000, size);
-	commandp[size-1] = 0;
-#elif defined(CONFIG_CANCam)
-	/* Copy command line from FLASH to local buffer... */
-	memcpy(commandp, (char *) 0xf0010000, size);
-	commandp[size-1] = 0;
-#endif
 
 	mcf_timervector = 69;
 	mcf_profilevector = 70;

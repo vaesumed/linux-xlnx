@@ -114,7 +114,7 @@ void mcf_autovector(unsigned int vec)
 
 /***************************************************************************/
 
-void __init config_BSP(char *commandp, int size)
+void __init config_BSP(void)
 {
 	mach_reset = coldfire_reset;
 	m520x_uarts_init();

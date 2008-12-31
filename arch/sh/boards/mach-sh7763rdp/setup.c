@@ -151,7 +151,7 @@ static int __init sh7763rdp_devices_setup(void)
 }
 device_initcall(sh7763rdp_devices_setup);
 
-static void __init sh7763rdp_setup(char **cmdline_p)
+static void __init sh7763rdp_setup(void)
 {
 	/* Board version check */
 	if (ctrl_inw(CPLD_BOARD_ID_ERV_REG) == 0xECB1)

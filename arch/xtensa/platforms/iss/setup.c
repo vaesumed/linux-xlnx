@@ -104,7 +104,7 @@ static struct notifier_block iss_panic_block = {
 	0
 };
 
-void __init platform_setup(char **p_cmdline)
+void __init platform_setup(void)
 {
 	atomic_notifier_chain_register(&panic_notifier_list, &iss_panic_block);
 }

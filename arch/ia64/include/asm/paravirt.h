@@ -64,7 +64,7 @@ struct pv_init_ops {
 	int (*reserve_memory)(struct rsvd_region *region);
 
 	void (*arch_setup_early)(void);
-	void (*arch_setup_console)(char **cmdline_p);
+	void (*arch_setup_console)(void);
 	int (*arch_setup_nomca)(void);
 
 	void (*post_smp_prepare_boot_cpu)(void);
@@ -91,10 +91,10 @@ static inline void paravirt_arch_setup_early(void)
 		pv_init_ops.arch_setup_early();
 }
 
-static inline void paravirt_arch_setup_console(char **cmdline_p)
+static inline void paravirt_arch_setup_console(void)
 {
 	if (pv_init_ops.arch_setup_console)
-		pv_init_ops.arch_setup_console(cmdline_p);
+		pv_init_ops.arch_setup_console();
 }
 
 static inline int paravirt_arch_setup_nomca(void)
@@ -238,7 +238,7 @@ paravirt_do_steal_accounting(unsigned long *new_itm)
 #define paravirt_reserve_memory(region)			0
 
 #define paravirt_arch_setup_early()			do { } while (0)
-#define paravirt_arch_setup_console(cmdline_p)		do { } while (0)
+#define paravirt_arch_setup_console()			do { } while (0)
 #define paravirt_arch_setup_nomca()			0
 #define paravirt_post_smp_prepare_boot_cpu()		do { } while (0)
 

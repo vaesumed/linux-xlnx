@@ -79,7 +79,7 @@ struct kparam_array
    parameters.  perm sets the visibility in sysfs: 000 means it's
    not there, read bits mean it's readable, write bits mean it's
    writable. */
-#define __module_param_call(prefix, name, set, get, arg, perm)		\
+#define __module_param_call(prefix, section, name, set, get, arg, perm)	\
 	/* Default value instead of permissions? */			\
 	static int __param_perm_check_##name __attribute__((unused)) =	\
 	BUILD_BUG_ON_ZERO((perm) < 0 || (perm) > 0777 || ((perm) & 2))	\
@@ -87,11 +87,12 @@ struct kparam_array
 	static const char __param_str_##name[] = prefix #name;		\
 	static struct kernel_param __moduleparam_const __param_##name	\
 	__used								\
-    __attribute__ ((unused,__section__ ("__param"),aligned(sizeof(void *)))) \
+    __attribute__ ((unused, __section__(section), aligned(sizeof(void *)))) \
 	= { __param_str_##name, perm, set, get, { arg } }
 
 #define module_param_call(name, set, get, arg, perm)			      \
-	__module_param_call(MODULE_PARAM_PREFIX, name, set, get, arg, perm)
+	__module_param_call(MODULE_PARAM_PREFIX, "__param",		      \
+			    name, set, get, arg, perm)
 
 /* Helper functions: type is byte, short, ushort, int, uint, long,
    ulong, charp, bool or invbool, or XXX if you define param_get_XXX,
@@ -106,21 +107,26 @@ struct kparam_array
 
 #ifndef MODULE
 /**
- * core_param - define a historical core kernel parameter.
+ * core_param - define a core kernel parameter to be set very early
  * @name: the name of the cmdline and sysfs parameter (often the same as var)
  * @var: the variable
  * @type: the type (for param_set_##type and param_get_##type)
  * @perm: visibility in sysfs
  *
- * core_param is just like module_param(), but cannot be modular and
- * doesn't add a prefix (such as "printk.").  This is for compatibility
- * with __setup(), and it makes sense as truly core parameters aren't
- * tied to the particular file they're in.
+ * core_param is just like module_param(), but cannot be modular,
+ * doesn't add a prefix (such as "printk.") and is called insanely
+ * early in boot.  This is for compatibility with __setup(), and it
+ * makes sense as truly core parameters aren't tied to the particular
+ * file they're in.
+ *
+ * Note: You can't use 'charp' here (which keeps a pointer into our
+ * tmp cmdline).
  */
 #define core_param(name, var, type, perm)				\
 	param_check_##type(name, &(var));				\
-	__module_param_call("", name, param_set_##type, param_get_##type, \
-			    &var, perm)
+	__module_param_call("", "__core_param", name, param_set_##type, \
+			    param_get_##type, &var, perm		\
+			    + BUILD_BUG_ON_ZERO(param_##type##_keeps_reference))
 #endif /* !MODULE */
 
 /* Actually copy string: maxlen param is usually sizeof(string). */
@@ -136,7 +142,8 @@ extern int parse_args(const char *name,
 		      char *args,
 		      struct kernel_param *params,
 		      unsigned num,
-		      int (*unknown)(char *param, char *val));
+		      int (*unknown)(char *param, char *val),
+		      bool restore_args);
 
 /* All the helper functions */
 /* The macros to do compile-time type checking stolen from Jakub
@@ -147,42 +154,52 @@ extern int parse_args(const char *name,
 extern int param_set_byte(const char *val, struct kernel_param *kp);
 extern int param_get_byte(char *buffer, struct kernel_param *kp);
 #define param_check_byte(name, p) __param_check(name, p, unsigned char)
+#define param_byte_keeps_reference 0
 
 extern int param_set_short(const char *val, struct kernel_param *kp);
 extern int param_get_short(char *buffer, struct kernel_param *kp);
 #define param_check_short(name, p) __param_check(name, p, short)
+#define param_short_keeps_reference 0
 
 extern int param_set_ushort(const char *val, struct kernel_param *kp);
 extern int param_get_ushort(char *buffer, struct kernel_param *kp);
 #define param_check_ushort(name, p) __param_check(name, p, unsigned short)
+#define param_ushort_keeps_reference 0
 
 extern int param_set_int(const char *val, struct kernel_param *kp);
 extern int param_get_int(char *buffer, struct kernel_param *kp);
 #define param_check_int(name, p) __param_check(name, p, int)
+#define param_int_keeps_reference 0
 
 extern int param_set_uint(const char *val, struct kernel_param *kp);
 extern int param_get_uint(char *buffer, struct kernel_param *kp);
 #define param_check_uint(name, p) __param_check(name, p, unsigned int)
+#define param_uint_keeps_reference 0
 
 extern int param_set_long(const char *val, struct kernel_param *kp);
 extern int param_get_long(char *buffer, struct kernel_param *kp);
 #define param_check_long(name, p) __param_check(name, p, long)
+#define param_long_keeps_reference 0
 
 extern int param_set_ulong(const char *val, struct kernel_param *kp);
 extern int param_get_ulong(char *buffer, struct kernel_param *kp);
 #define param_check_ulong(name, p) __param_check(name, p, unsigned long)
+#define param_ulong_keeps_reference 0
 
 extern int param_set_charp(const char *val, struct kernel_param *kp);
 extern int param_get_charp(char *buffer, struct kernel_param *kp);
 #define param_check_charp(name, p) __param_check(name, p, char *)
+#define param_charp_keeps_reference 1
 
 extern int param_set_bool(const char *val, struct kernel_param *kp);
 extern int param_get_bool(char *buffer, struct kernel_param *kp);
 #define param_check_bool(name, p) __param_check(name, p, int)
+#define param_bool_keeps_reference 0
 
 extern int param_set_invbool(const char *val, struct kernel_param *kp);
 extern int param_get_invbool(char *buffer, struct kernel_param *kp);
 #define param_check_invbool(name, p) __param_check(name, p, int)
+#define param_invbool_keeps_reference 0
 
 /* Comma-separated array: *nump is set to number they actually specified. */
 #define module_param_array_named(name, array, type, nump, perm)		\
@@ -223,5 +240,9 @@ static inline int module_param_sysfs_setup(struct module *mod,
 static inline void module_param_sysfs_remove(struct module *mod)
 { }
 #endif
+
+/* Created by include/asm-generic/vmlinux.lds.h */
+extern struct kernel_param __start___core_param[], __stop___core_param[];
+extern struct kernel_param __start___param[], __stop___param[];
 
 #endif /* _LINUX_MODULE_PARAMS_H */

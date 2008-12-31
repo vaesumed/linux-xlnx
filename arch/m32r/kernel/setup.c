@@ -83,20 +83,21 @@ static struct resource code_resource = {
 unsigned long memory_start;
 unsigned long memory_end;
 
-void __init setup_arch(char **);
 int get_cpuinfo(char *);
 
-static __inline__ void parse_mem_cmdline(char ** cmdline_p)
+void __init arch_get_boot_command_line(void)
+{
+	strlcpy(boot_command_line, COMMAND_LINE, COMMAND_LINE_SIZE);
+}
+
+/* FIXME: use core_param/early_param here. */
+static inline void parse_mem_cmdline(void)
 {
 	char c = ' ';
 	char *to = command_line;
 	char *from = COMMAND_LINE;
 	int len = 0;
 	int usermem = 0;
-
-	/* Save unparsed command line copy for /proc/cmdline */
-	memcpy(boot_command_line, COMMAND_LINE, COMMAND_LINE_SIZE);
-	boot_command_line[COMMAND_LINE_SIZE-1] = '\0';
 
 	memory_start = (unsigned long)CONFIG_MEMORY_START+PAGE_OFFSET;
 	memory_end = memory_start+(unsigned long)CONFIG_MEMORY_SIZE;
@@ -124,7 +125,6 @@ static __inline__ void parse_mem_cmdline(char ** cmdline_p)
 		*(to++) = c;
 	}
 	*to = '\0';
-	*cmdline_p = command_line;
 	if (usermem)
 		printk(KERN_INFO "user-defined physical RAM map:\n");
 }
@@ -220,7 +220,7 @@ static unsigned long __init setup_memory(void)
 extern unsigned long setup_memory(void);
 #endif	/* CONFIG_DISCONTIGMEM */
 
-void __init setup_arch(char **cmdline_p)
+void __init setup_arch(void)
 {
 	ROOT_DEV = old_decode_dev(ORIG_ROOT_DEV);
 

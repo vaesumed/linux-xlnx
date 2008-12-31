@@ -496,8 +496,27 @@ register_cpus(void)
 
 arch_initcall(register_cpus);
 
+void arch_get_boot_command_line(void)
+{
+	/*
+	 * Locate the command line.
+	 */
+	/* Hack for Jensen... since we're restricted to 8 or 16 chars for
+	   boot flags depending on the boot mode, we need some shorthand.
+	   This should do for installation.  */
+	if (strcmp(COMMAND_LINE, "INSTALL") == 0) {
+		strlcpy(command_line, "root=/dev/fd0 load_ramdisk=1",
+			sizeof command_line);
+	} else {
+		strlcpy(command_line, COMMAND_LINE, sizeof command_line);
+	}
+
+	/* FIXME: Can we skip command_line and just use boot_command_line? */
+	strcpy(boot_command_line, command_line);
+}
+
 void __init
-setup_arch(char **cmdline_p)
+setup_arch(void)
 {
 	extern char _end[];
 
@@ -542,21 +561,8 @@ setup_arch(char **cmdline_p)
 	kernel_end = callback_init(kernel_end);
 
 	/* 
-	 * Locate the command line.
-	 */
-	/* Hack for Jensen... since we're restricted to 8 or 16 chars for
-	   boot flags depending on the boot mode, we need some shorthand.
-	   This should do for installation.  */
-	if (strcmp(COMMAND_LINE, "INSTALL") == 0) {
-		strlcpy(command_line, "root=/dev/fd0 load_ramdisk=1", sizeof command_line);
-	} else {
-		strlcpy(command_line, COMMAND_LINE, sizeof command_line);
-	}
-	strcpy(boot_command_line, command_line);
-	*cmdline_p = command_line;
-
-	/* 
 	 * Process command-line arguments.
+	 * FIXME: Use core_param.
 	 */
 	while ((p = strsep(&args, " \t")) != NULL) {
 		if (!*p) continue;

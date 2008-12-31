@@ -58,7 +58,7 @@ static __init void get_lowmem_redirect(unsigned long *base, unsigned long *size)
 	BUG();
 }
 
-void __init uv_setup(char **cmdline_p)
+void __init uv_setup(void)
 {
 	union uvh_si_addr_map_config_u m_n_config;
 	union uvh_node_id_u node_id;
