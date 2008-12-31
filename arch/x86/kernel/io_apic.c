@@ -170,7 +170,7 @@ static struct irq_cfg irq_cfgx[NR_IRQS] = {
 	[15] = { .vector = IRQ15_VECTOR, },
 };
 
-void __init arch_early_irq_init(void)
+int __init arch_early_irq_init(void)
 {
 	struct irq_cfg *cfg;
 	struct irq_desc *desc;
@@ -188,6 +188,8 @@ void __init arch_early_irq_init(void)
 		if (i < NR_IRQS_LEGACY)
 			cpumask_setall(cfg[i].domain);
 	}
+
+	return 0;
 }
 
 #ifdef CONFIG_SPARSE_IRQ
@@ -230,7 +232,7 @@ static struct irq_cfg *get_one_free_irq_cfg(int cpu)
 	return cfg;
 }
 
-void arch_init_chip_data(struct irq_desc *desc, int cpu)
+int arch_init_chip_data(struct irq_desc *desc, int cpu)
 {
 	struct irq_cfg *cfg;
 
@@ -242,6 +244,8 @@ void arch_init_chip_data(struct irq_desc *desc, int cpu)
 			BUG_ON(1);
 		}
 	}
+
+	return 0;
 }
 
 #ifdef CONFIG_NUMA_MIGRATE_IRQ_DESC
@@ -1400,8 +1404,6 @@ void __setup_vector_irq(int cpu)
 
 	/* Mark the inuse vectors */
 	for_each_irq_desc(irq, desc) {
-		if (!desc)
-			continue;
 		cfg = desc->chip_data;
 		if (!cpumask_test_cpu(cpu, cfg->domain))
 			continue;
@@ -1783,8 +1785,6 @@ __apicdebuginit(void) print_IO_APIC(void)
 	for_each_irq_desc(irq, desc) {
 		struct irq_pin_list *entry;
 
-		if (!desc)
-			continue;
 		cfg = desc->chip_data;
 		entry = cfg->irq_2_pin;
 		if (!entry)
@@ -2425,9 +2425,6 @@ static void ir_irq_migration(struct work_struct *work)
 	struct irq_desc *desc;
 
 	for_each_irq_desc(irq, desc) {
-		if (!desc)
-			continue;
-
 		if (desc->status & IRQ_MOVE_PENDING) {
 			unsigned long flags;
 
@@ -2713,9 +2710,6 @@ static inline void init_IO_APIC_traps(void)
 	 * 0x80, because int 0x80 is hm, kind of importantish. ;)
 	 */
 	for_each_irq_desc(irq, desc) {
-		if (!desc)
-			continue;
-
 		cfg = desc->chip_data;
 		if (IO_APIC_IRQ(irq) && cfg && !cfg->vector) {
 			/*
