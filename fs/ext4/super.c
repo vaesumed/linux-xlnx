@@ -1994,7 +1994,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	else
 		ext4_warning(sb, __func__,
 			"extents feature not enabled on this filesystem, "
-			"use tune2fs.\n");
+			"use tune2fs.");
 
 	/*
 	 * enable delayed allocation by default
