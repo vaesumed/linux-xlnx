@@ -1444,7 +1444,6 @@ static int ext4_fill_flex_info(struct super_block *sb)
 	ext4_group_t flex_group_count;
 	ext4_group_t flex_group;
 	int groups_per_flex = 0;
-	__u64 block_bitmap = 0;
 	int i;
 
 	if (!sbi->s_es->s_log_groups_per_flex) {
@@ -1466,9 +1465,6 @@ static int ext4_fill_flex_info(struct super_block *sb)
 				"%lu flex groups\n", flex_group_count);
 		goto failed;
 	}
-
-	gdp = ext4_get_group_desc(sb, 1, &bh);
-	block_bitmap = ext4_block_bitmap(sb, gdp) - 1;
 
 	for (i = 0; i < sbi->s_groups_count; i++) {
 		gdp = ext4_get_group_desc(sb, i, &bh);
@@ -2117,6 +2113,18 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	for (i = 0; i < 4; i++)
 		sbi->s_hash_seed[i] = le32_to_cpu(es->s_hash_seed[i]);
 	sbi->s_def_hash_version = es->s_def_hash_version;
+	i = le32_to_cpu(es->s_flags);
+	if (i & EXT2_FLAGS_UNSIGNED_HASH)
+		sbi->s_hash_unsigned = 3;
+	else if ((i & EXT2_FLAGS_SIGNED_HASH) == 0) {
+#ifdef __CHAR_UNSIGNED__
+		es->s_flags |= cpu_to_le32(EXT2_FLAGS_UNSIGNED_HASH);
+		sbi->s_hash_unsigned = 3;
+#else
+		es->s_flags |= cpu_to_le32(EXT2_FLAGS_SIGNED_HASH);
+#endif
+		sb->s_dirt = 1;
+	}
 
 	if (sbi->s_blocks_per_group > blocksize * 8) {
 		printk(KERN_ERR
@@ -3512,18 +3520,15 @@ static int ext4_ui_proc_open(struct inode *inode, struct file *file)
 static ssize_t ext4_ui_proc_write(struct file *file, const char __user *buf,
 			       size_t cnt, loff_t *ppos)
 {
-	unsigned int *p = PDE(file->f_path.dentry->d_inode)->data;
+	unsigned long *p = PDE(file->f_path.dentry->d_inode)->data;
 	char str[32];
-	unsigned long value;
 
 	if (cnt >= sizeof(str))
 		return -EINVAL;
 	if (copy_from_user(str, buf, cnt))
 		return -EFAULT;
-	value = simple_strtol(str, NULL, 0);
-	if (value < 0)
-		return -ERANGE;
-	*p = value;
+
+	*p = simple_strtoul(str, NULL, 0);
 	return cnt;
 }
 
