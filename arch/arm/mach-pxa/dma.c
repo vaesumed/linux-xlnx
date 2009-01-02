@@ -113,7 +113,7 @@ static irqreturn_t dma_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-int __init pxa_init_dma(int num_ch)
+int __init pxa_init_dma(int irq, int num_ch)
 {
 	int i, ret;
 
