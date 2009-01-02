@@ -471,7 +471,7 @@ void ide_pci_setup_ports(struct pci_dev *dev, const struct ide_port_info *d,
 	 */
 
 	for (port = 0; port < channels; ++port) {
-		const ide_pci_enablebit_t *e = &(d->enablebits[port]);
+		const struct ide_pci_enablebit *e = &d->enablebits[port];
 
 		if (e->reg && (pci_read_config_byte(dev, e->reg, &tmp) ||
 		    (tmp & e->mask) != e->val)) {
@@ -519,8 +519,7 @@ static int do_ide_setup_pci_device(struct pci_dev *dev,
 	if (ret < 0)
 		goto out;
 
-	/* Is it an "IDE storage" device in non-PCI mode? */
-	if ((dev->class >> 8) == PCI_CLASS_STORAGE_IDE && (dev->class & 5) != 5) {
+	if (ide_pci_is_in_compatibility_mode(dev)) {
 		if (noisy)
 			printk(KERN_INFO "%s %s: not 100%% native mode: will "
 				"probe irqs later\n", d->name, pci_name(dev));
