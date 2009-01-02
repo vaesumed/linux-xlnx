@@ -1,0 +1,117 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 6a94cb73064c952255336cc57731904174b2c58f
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard 6a94cb73064c952255336cc57731904174b2c58f
+HEAD is now at 6a94cb7 Merge branch 'for-linus' of git://oss.sgi.com/xfs/xfs
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+tx493x-fix-intendation.patch
+ide-remove-chipset-type-fixup-from-ide_host_register.patch
+ide-small-ide_register_port-cleanup.patch
+ide-factor-out-device-type-classifying-from-do_identify.patch
+ide-move-sysfs-support-to-ide-sysfs-c.patch
+ide-dont-execute-the-next-queued-command-from-the-hard-irq-context-v2.patch
+ide-remove-ide-pm-hack-from-do_ide_request.patch
+ide-remove-paranoia-checks-for-hwgroup-busy.patch
+ide-add-ide_un-lock_hwgroup-helpers.patch
+ide-use-per-device-request-queue-locks-v2.patch
+ide-cd-move-debug-defines-into-header.patch
+ide-make-ide_aflag_numbering-continuous-again.patch
+ide-floppy-allocate-only-toplevel-packet-commands.patch
+ide-remove-ide-scsi.patch
+ide-atapi-add-a-dev_is_idecd-inline.patch
+ide-atapi-combine-drive-specific-assignments.patch
+ide-atapi-setup-dma-for-ide-cd.patch
+ide-atapi-accomodate-transfer-length-calculation-for-ide-cd.patch
+ide-atapi-teach-ide-atapi-about-drive-waiting_for_dma.patch
+ide-cd-move-cdrom_timer_expiry-to-ide-atapi.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_issue_pc.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_transfer_pc.patch
+ide-atapi-remove-ide-scsi-remnants-from-ide_pc_intr.patch
+ide-remove-the-last-ide-scsi-remnants.patch
+ide-atapi-compute-cmd_len-based-on-device-type-in-ide_transfer_pc.patch
+ide-atapi-assign-expiry-and-timeout-based-on-device-type.patch
+ide-atapi-split-drive-specific-functionality-in-ide_issue_pc.patch
+ide-cd-remove-xferlen-arg-to-cdrom_start_packet_command.patch
+ide-cd-remove-handler-wrappers.patch
+ide-atapi-remove-timeout-arg-to-ide_issue_pc.patch
+ide-atapi-put-the-rest-of-non-ide-cd-code-into-the-else-clause-of-ide_transfer_pc.patch
+ide-atapi-start-dma-in-a-drive-specific-way.patch
+ide-fix-setting-nien-on-idle-devices.patch
+ide-add-cur_port-to-struct-ide_host-and-use-it-for-serialized-hosts.patch
+ide-use-per-port-irq-handlers.patch
+ide-remove-hwgroup-hwif-and-drive-hwif-next.patch
+ide-use-lock-bitops-for-ports-serialization.patch
+ide-merge-ide_hwgroup_t-with-ide_hwif_t.patch
+ide-update-ide_unregister-documentation.patch
+ide-move-ide_init_port_data-and-friends-to-ide-probe-c.patch
+ide-remove-hwif-macro.patch
+ide-remove-local_irq_set-macro.patch
+ide-remove-ide_pci_enablebit_t-typedef.patch
+ide-remove-byte-typedef.patch
+ide-remove-ide_driver_t-typedef.patch
+ide-unexport-ide_wait_not_busy.patch
+ide-remove-error-method-from-struct-ide_driver.patch
+amd74xx-use-ide_get_pair_dev-helper.patch
+cmd640-use-ide_get_pair_dev-helper.patch
+cmd64x-use-ide_get_pair_dev-helper.patch
+it821x-use-ide_get_pair_dev-helper.patch
+ide-numa-aware-allocation-of-host-and-port-structures.patch
+ide-dynamic-allocation-of-device-structures.patch
+ide-add-port-and-host-iterators.patch
+ide-fix-drive-s-dword-io-handling.patch
+ide-cd-wait-for-drq-to-get-set-per-default.patch
+ide-cd-start-dma-before-sending-the-actual-packet-command.patch
+ide-cd-convert-to-ide-atapi-facilities.patch
+ide-make-paranoia-handler-check-in-ide_intr-more-strict.patch
+ide-use-ide_pci_is_in_compatibility_mode-helper-in-setup-pci-c.patch
+ide-remove-superfluous-hwif-variable-assignment-from-ide_timer_expiry.patch
+ide-struct-ide_atapi_pc-remove-unused-fields-and-update-documentation.patch
+ide-remove-unused-ide_hwif_t-sg_mapped-field.patch
+ide-remove-now-redundant-cur_dev-checks.patch
+ide-fix-ide_port_scan-to-do-acpi-setup-after-initializing-request-queues.patch
+Importing rr based on rr_cpumask/master
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard 8c384cdee3e04d6194a2c2b192b624754f990835
+HEAD is now at 8c384cd cpumask: CONFIG_DISABLE_OBSOLETE_CPUMASK_FUNCTIONS
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:remove_config_kmod.patch
+module:compare-sym-values-for-export-mark-in-proc-kallsyms.patch
+module:print_unload_info-no-proc.patch
+module:parisc_fix_loading_failure_of_large_kernel_modules.patch
+stop_machine:introduce_stop_machine_create_destroy.patch
+module:convert_to_stop_machine_create_destroy.patch
+cpumask:fix-impossible-percpu-accesses-x86.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:work_on_cpu-pci.patch
+misc:work_on_cpu-powerpc-sysfs.patch
+cpumask:topology_core_cpumask-and-topology_thread_cpumask-x86.patch
+cpumask:use-topology_core_cpumask-and-topology_thread_cpumask.patch
+cpualloc:big_percpu_alloc.patch
+cpualloc:move-net-to-big_alloc_percpu.patch
+cpualloc:remove-alignment-on-cpu_workqueue_struct.patch
+cpualloc:remove-percpu_ptr-users.patch
+cpualloc:add-align-arg-to-__alloc_percpu.patch
+cpualloc:make_the_per_cpu_reserve_configurable.patch
+cpualloc:parse-percpu-earlier.patch
+cpualloc:generalize-percpu_modalloc-percpu_modfree.patch
+cpualloc:expose-module-percpu-allocator.patch
+cpualloc:use-module-allocator.patch
+cpualloc:documentation.patch
+cpualloc:get_cpu_ptr.patch
+cpualloc:read_percpu.patch
+cpualloc:rename-per_cpu-vars.patch
+Context reduced to (1/1) to apply fragment at 137
+cpualloc:remove-per_cpu__-prefix.patch
+cpualloc:__percpu-annotation-for-sparse.patch
+Unchanged quilt series ttydev
+Unchanged quilt series staging
