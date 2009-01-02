@@ -118,7 +118,6 @@
 #include <linux/errno.h>
 #include <linux/init.h>
 #include <linux/slab.h>
-#include <linux/module.h>
 #include <linux/kref.h>
 #include <linux/usb.h>
 #include <linux/device.h>
@@ -475,7 +474,6 @@ static void ks959_rcv_irq(struct urb *urb)
 						  bytes[i]);
 			}
 		}
-		kingsun->netdev->last_rx = jiffies;
 		do_gettimeofday(&kingsun->rx_time);
 		kingsun->receiving =
 		    (kingsun->rx_unwrap_buff.state != OUTSIDE_FRAME) ? 1 : 0;

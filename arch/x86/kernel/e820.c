@@ -677,22 +677,6 @@ struct early_res {
 };
 static struct early_res early_res[MAX_EARLY_RES] __initdata = {
 	{ 0, PAGE_SIZE, "BIOS data page" },	/* BIOS data page */
-#if defined(CONFIG_X86_64) && defined(CONFIG_X86_TRAMPOLINE)
-	{ TRAMPOLINE_BASE, TRAMPOLINE_BASE + 2 * PAGE_SIZE, "TRAMPOLINE" },
-#endif
-#if defined(CONFIG_X86_32) && defined(CONFIG_SMP)
-	/*
-	 * But first pinch a few for the stack/trampoline stuff
-	 * FIXME: Don't need the extra page at 4K, but need to fix
-	 * trampoline before removing it. (see the GDT stuff)
-	 */
-	{ PAGE_SIZE, PAGE_SIZE + PAGE_SIZE, "EX TRAMPOLINE" },
-	/*
-	 * Has to be in very low memory so we can execute
-	 * real-mode AP code.
-	 */
-	{ TRAMPOLINE_BASE, TRAMPOLINE_BASE + PAGE_SIZE, "TRAMPOLINE" },
-#endif
 	{}
 };
 
@@ -1290,15 +1274,17 @@ void __init e820_reserve_resources(void)
 		res->start = e820.map[i].addr;
 		res->end = end;
 
-		res->flags = IORESOURCE_MEM | IORESOURCE_BUSY;
+		res->flags = IORESOURCE_MEM;
 
 		/*
 		 * don't register the region that could be conflicted with
 		 * pci device BAR resource and insert them later in
 		 * pcibios_resource_survey()
 		 */
-		if (e820.map[i].type != E820_RESERVED || res->start < (1ULL<<20))
+		if (e820.map[i].type != E820_RESERVED || res->start < (1ULL<<20)) {
+			res->flags |= IORESOURCE_BUSY;
 			insert_resource(&iomem_resource, res);
+		}
 		res++;
 	}
 
@@ -1318,7 +1304,7 @@ void __init e820_reserve_resources_late(void)
 	res = e820_res;
 	for (i = 0; i < e820.nr_map; i++) {
 		if (!res->parent && res->end)
-			reserve_region_with_split(&iomem_resource, res->start, res->end, res->name);
+			insert_resource_expand_to_fit(&iomem_resource, res);
 		res++;
 	}
 }
