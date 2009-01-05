@@ -1176,7 +1176,7 @@ static int mount_is_safe(struct path *path)
 	if (S_ISLNK(path->dentry->d_inode->i_mode))
 		return -EPERM;
 	if (path->dentry->d_inode->i_mode & S_ISVTX) {
-		if (current->uid != path->dentry->d_inode->i_uid)
+		if (current_uid() != path->dentry->d_inode->i_uid)
 			return -EPERM;
 	}
 	if (inode_permission(path->dentry->d_inode, MAY_WRITE))
@@ -1815,8 +1815,8 @@ static void shrink_submounts(struct vfsmount *mnt, struct list_head *umounts)
 		while (!list_empty(&graveyard)) {
 			m = list_first_entry(&graveyard, struct vfsmount,
 						mnt_expire);
-			touch_mnt_namespace(mnt->mnt_ns);
-			umount_tree(mnt, 1, umounts);
+			touch_mnt_namespace(m->mnt_ns);
+			umount_tree(m, 1, umounts);
 		}
 	}
 }
