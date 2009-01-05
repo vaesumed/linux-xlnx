@@ -26,8 +26,10 @@
 #include <linux/delay.h>
 #include <linux/idr.h>
 #include <linux/string.h>
+#include <linux/mutex.h>
 #include <linux/rwsem.h>
 #include <linux/semaphore.h>
+#include <linux/spinlock.h>
 #include <asm/system.h>
 #include <linux/ctype.h>
 #include "fw-transaction.h"
@@ -617,7 +619,7 @@ static int shutdown_unit(struct device *device, void *data)
  */
 DECLARE_RWSEM(fw_device_rwsem);
 
-static DEFINE_IDR(fw_device_idr);
+DEFINE_IDR(fw_device_idr);
 int fw_cdev_major;
 
 struct fw_device *fw_device_get_by_devt(dev_t devt)
@@ -689,7 +691,7 @@ static void fw_device_init(struct work_struct *work)
 			fw_notify("giving up on config rom for node id %x\n",
 				  device->node_id);
 			if (device->node == device->card->root_node)
-				schedule_delayed_work(&device->card->work, 0);
+				fw_schedule_bm_work(device->card, 0);
 			fw_device_release(&device->device);
 		}
 		return;
@@ -758,7 +760,7 @@ static void fw_device_init(struct work_struct *work)
 	 * pretty harmless.
 	 */
 	if (device->node == device->card->root_node)
-		schedule_delayed_work(&device->card->work, 0);
+		fw_schedule_bm_work(device->card, 0);
 
 	return;
 
@@ -892,7 +894,7 @@ static void fw_device_refresh(struct work_struct *work)
 	fw_device_shutdown(work);
  out:
 	if (node_id == card->root_node->node_id)
-		schedule_delayed_work(&card->work, 0);
+		fw_schedule_bm_work(card, 0);
 }
 
 void fw_node_event(struct fw_card *card, struct fw_node *node, int event)
@@ -923,6 +925,7 @@ void fw_node_event(struct fw_card *card, struct fw_node *node, int event)
 		device->node = fw_node_get(node);
 		device->node_id = node->node_id;
 		device->generation = card->generation;
+		mutex_init(&device->client_list_mutex);
 		INIT_LIST_HEAD(&device->client_list);
 
 		/*

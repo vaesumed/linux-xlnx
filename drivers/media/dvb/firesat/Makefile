@@ -1,0 +1,13 @@
+firedtv-objs := firesat_1394.o	\
+		firesat_dvb.o	\
+		firesat_fe.o	\
+		firesat_iso.o	\
+		avc_api.o	\
+		cmp.o		\
+		firesat-rc.o	\
+		firesat-ci.o
+
+obj-$(CONFIG_DVB_FIREDTV) += firedtv.o
+
+EXTRA_CFLAGS := -Idrivers/ieee1394
+EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core
