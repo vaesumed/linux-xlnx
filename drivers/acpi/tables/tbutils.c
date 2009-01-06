@@ -113,6 +113,30 @@ acpi_tb_check_xsdt(acpi_physical_address address)
 
 /*******************************************************************************
  *
+ * FUNCTION:    acpi_tb_initialize_facs
+ *
+ * PARAMETERS:  None
+ *
+ * RETURN:      Status
+ *
+ * DESCRIPTION: Create a permanent mapping for the FADT and save it in a global
+ *              for accessing the Global Lock and Firmware Waking Vector
+ *
+ ******************************************************************************/
+
+acpi_status acpi_tb_initialize_facs(void)
+{
+	acpi_status status;
+
+	status = acpi_get_table_by_index(ACPI_TABLE_INDEX_FACS,
+					 ACPI_CAST_INDIRECT_PTR(struct
+								acpi_table_header,
+								&acpi_gbl_FACS));
+	return status;
+}
+
+/*******************************************************************************
+ *
  * FUNCTION:    acpi_tb_tables_loaded
  *
  * PARAMETERS:  None
@@ -540,7 +564,8 @@ acpi_tb_parse_root_table(acpi_physical_address rsdp_address, u8 flags)
 	 * Complete the initialization of the root table array by examining
 	 * the header of each table
 	 */
-	for (i = 2; i < acpi_gbl_root_table_list.count; i++) {
+	for (i = 2, table_count = acpi_gbl_root_table_list.count;
+		i < table_count; i++) {
 		acpi_tb_install_table(acpi_gbl_root_table_list.tables[i].
 				      address, flags, NULL, i);
 
