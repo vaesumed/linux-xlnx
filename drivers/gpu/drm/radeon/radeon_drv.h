@@ -226,9 +226,13 @@ struct radeon_virt_surface {
 #define RADEON_FLUSH_EMITED	(1 < 0)
 #define RADEON_PURGE_EMITED	(1 < 1)
 
+struct drm_radeon_master_private {
+	drm_local_map_t *sarea;
+	drm_radeon_sarea_t *sarea_priv;
+};
+
 typedef struct drm_radeon_private {
 	drm_radeon_ring_buffer_t ring;
-	drm_radeon_sarea_t *sarea_priv;
 
 	u32 fb_location;
 	u32 fb_size;
@@ -287,7 +291,6 @@ typedef struct drm_radeon_private {
 	unsigned long gart_textures_offset;
 
 	drm_local_map_t *sarea;
-	drm_local_map_t *mmio;
 	drm_local_map_t *cp_ring;
 	drm_local_map_t *ring_rptr;
 	drm_local_map_t *gart_textures;
@@ -300,7 +303,6 @@ typedef struct drm_radeon_private {
 	atomic_t swi_emitted;
 	int vblank_crtc;
 	uint32_t irq_enable_reg;
-	int irq_enabled;
 	uint32_t r500_disp_irq_reg;
 
 	struct radeon_surface surfaces[RADEON_MAX_SURFACES];
@@ -318,6 +320,7 @@ typedef struct drm_radeon_private {
 
 	int num_gb_pipes;
 	int track_flush;
+	drm_local_map_t *mmio;
 } drm_radeon_private_t;
 
 typedef struct drm_radeon_buf_priv {
@@ -410,6 +413,9 @@ extern int radeon_driver_open(struct drm_device *dev,
 extern long radeon_compat_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg);
 
+extern int radeon_master_create(struct drm_device *dev, struct drm_master *master);
+extern void radeon_master_destroy(struct drm_device *dev, struct drm_master *master);
+extern void radeon_cp_dispatch_flip(struct drm_device *dev, struct drm_master *master);
 /* r300_cmdbuf.c */
 extern void r300_init_reg_flags(struct drm_device *dev);
 
@@ -447,12 +453,12 @@ extern int r300_do_cp_cmdbuf(struct drm_device *dev,
  * handling, not bus mastering itself.
  */
 #define RADEON_BUS_CNTL			0x0030
-/* r1xx, r2xx, r300, r(v)350, r420/r481, rs480 */
+/* r1xx, r2xx, r300, r(v)350, r420/r481, rs400/rs480 */
 #	define RADEON_BUS_MASTER_DIS		(1 << 6)
-/* rs400, rs690/rs740 */
-#	define RS400_BUS_MASTER_DIS		(1 << 14)
-#	define RS400_MSI_REARM		        (1 << 20)
-/* see RS480_MSI_REARM in AIC_CNTL for rs480 */
+/* rs600/rs690/rs740 */
+#	define RS600_BUS_MASTER_DIS		(1 << 14)
+#	define RS600_MSI_REARM		        (1 << 20)
+/* see RS400_MSI_REARM in AIC_CNTL for rs480 */
 
 #define RADEON_BUS_CNTL1		0x0034
 #	define RADEON_PMI_BM_DIS		(1 << 2)
@@ -937,7 +943,7 @@ extern int r300_do_cp_cmdbuf(struct drm_device *dev,
 
 #define RADEON_AIC_CNTL			0x01d0
 #	define RADEON_PCIGART_TRANSLATE_EN	(1 << 0)
-#	define RS480_MSI_REARM	                (1 << 3)
+#	define RS400_MSI_REARM	                (1 << 3)
 #define RADEON_AIC_STAT			0x01d4
 #define RADEON_AIC_PT_BASE		0x01d8
 #define RADEON_AIC_LO_ADDR		0x01dc
@@ -1336,8 +1342,9 @@ do {									\
 } while (0)
 
 #define VB_AGE_TEST_WITH_RETURN( dev_priv )				\
-do {									\
-	drm_radeon_sarea_t *sarea_priv = dev_priv->sarea_priv;		\
+do {								\
+	struct drm_radeon_master_private *master_priv = file_priv->master->driver_priv;	\
+	drm_radeon_sarea_t *sarea_priv = master_priv->sarea_priv;	\
 	if ( sarea_priv->last_dispatch >= RADEON_MAX_VB_AGE ) {		\
 		int __ret = radeon_do_cp_idle( dev_priv );		\
 		if ( __ret ) return __ret;				\

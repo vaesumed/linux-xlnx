@@ -15,13 +15,8 @@
  * Size of kernel stack for each process
  */
 #ifndef __s390x__
-#ifndef __SMALL_STACK
 #define THREAD_ORDER 1
 #define ASYNC_ORDER  1
-#else
-#define THREAD_ORDER 0
-#define ASYNC_ORDER  0
-#endif
 #else /* __s390x__ */
 #ifndef __SMALL_STACK
 #define THREAD_ORDER 2
@@ -52,6 +47,8 @@ struct thread_info {
 	unsigned int		cpu;		/* current CPU */
 	int			preempt_count;	/* 0 => preemptable, <0 => BUG */
 	struct restart_block	restart_block;
+	__u64			user_timer;
+	__u64			system_timer;
 };
 
 /*

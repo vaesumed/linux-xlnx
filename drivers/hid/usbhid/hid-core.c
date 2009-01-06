@@ -4,7 +4,7 @@
  *  Copyright (c) 1999 Andreas Gal
  *  Copyright (c) 2000-2005 Vojtech Pavlik <vojtech@suse.cz>
  *  Copyright (c) 2005 Michael Haboustak <mike-@cinci.rr.com> for Concept2, Inc
- *  Copyright (c) 2006-2007 Jiri Kosina
+ *  Copyright (c) 2006-2008 Jiri Kosina
  */
 
 /*
@@ -20,6 +20,7 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/mm.h>
+#include <linux/mutex.h>
 #include <linux/smp_lock.h>
 #include <linux/spinlock.h>
 #include <asm/unaligned.h>
@@ -640,9 +641,7 @@ static void hid_find_max_report(struct hid_device *hid, unsigned int type,
 	unsigned int size;
 
 	list_for_each_entry(report, &hid->report_enum[type].report_list, list) {
-		size = ((report->size - 1) >> 3) + 1;
-		if (type == HID_INPUT_REPORT && hid->report_enum[type].numbered)
-			size++;
+		size = ((report->size - 1) >> 3) + 1 + hid->report_enum[type].numbered;
 		if (*max < size)
 			*max = size;
 	}
@@ -652,13 +651,16 @@ static int hid_alloc_buffers(struct usb_device *dev, struct hid_device *hid)
 {
 	struct usbhid_device *usbhid = hid->driver_data;
 
-	if (!(usbhid->inbuf = usb_buffer_alloc(dev, usbhid->bufsize, GFP_ATOMIC, &usbhid->inbuf_dma)))
-		return -1;
-	if (!(usbhid->outbuf = usb_buffer_alloc(dev, usbhid->bufsize, GFP_ATOMIC, &usbhid->outbuf_dma)))
-		return -1;
-	if (!(usbhid->cr = usb_buffer_alloc(dev, sizeof(*(usbhid->cr)), GFP_ATOMIC, &usbhid->cr_dma)))
-		return -1;
-	if (!(usbhid->ctrlbuf = usb_buffer_alloc(dev, usbhid->bufsize, GFP_ATOMIC, &usbhid->ctrlbuf_dma)))
+	usbhid->inbuf = usb_buffer_alloc(dev, usbhid->bufsize, GFP_KERNEL,
+			&usbhid->inbuf_dma);
+	usbhid->outbuf = usb_buffer_alloc(dev, usbhid->bufsize, GFP_KERNEL,
+			&usbhid->outbuf_dma);
+	usbhid->cr = usb_buffer_alloc(dev, sizeof(*usbhid->cr), GFP_KERNEL,
+			&usbhid->cr_dma);
+	usbhid->ctrlbuf = usb_buffer_alloc(dev, usbhid->bufsize, GFP_KERNEL,
+			&usbhid->ctrlbuf_dma);
+	if (!usbhid->inbuf || !usbhid->outbuf || !usbhid->cr ||
+			!usbhid->ctrlbuf)
 		return -1;
 
 	return 0;
@@ -776,20 +778,11 @@ static int usbhid_start(struct hid_device *hid)
 	struct usb_interface *intf = to_usb_interface(hid->dev.parent);
 	struct usb_host_interface *interface = intf->cur_altsetting;
 	struct usb_device *dev = interface_to_usbdev(intf);
-	struct usbhid_device *usbhid;
+	struct usbhid_device *usbhid = hid->driver_data;
 	unsigned int n, insize = 0;
 	int ret;
 
-	WARN_ON(hid->driver_data);
-
-	usbhid = kzalloc(sizeof(struct usbhid_device), GFP_KERNEL);
-	if (usbhid == NULL) {
-		ret = -ENOMEM;
-		goto err;
-	}
-
-	hid->driver_data = usbhid;
-	usbhid->hid = hid;
+	clear_bit(HID_DISCONNECTED, &usbhid->iofl);
 
 	usbhid->bufsize = HID_MIN_BUFFER_SIZE;
 	hid_find_max_report(hid, HID_INPUT_REPORT, &usbhid->bufsize);
@@ -815,7 +808,7 @@ static int usbhid_start(struct hid_device *hid)
 		int interval;
 
 		endpoint = &interface->endpoint[n].desc;
-		if ((endpoint->bmAttributes & 3) != 3)		/* Not an interrupt endpoint */
+		if (!usb_endpoint_xfer_int(endpoint))
 			continue;
 
 		interval = endpoint->bInterval;
@@ -856,12 +849,6 @@ static int usbhid_start(struct hid_device *hid)
 		}
 	}
 
-	if (!usbhid->urbin) {
-		err_hid("couldn't find an input interrupt endpoint");
-		ret = -ENODEV;
-		goto fail;
-	}
-
 	init_waitqueue_head(&usbhid->wait);
 	INIT_WORK(&usbhid->reset_work, hid_reset);
 	setup_timer(&usbhid->io_retry, hid_retry_timeout, (unsigned long) hid);
@@ -888,15 +875,27 @@ static int usbhid_start(struct hid_device *hid)
 	usbhid_init_reports(hid);
 	hid_dump_device(hid);
 
+	set_bit(HID_STARTED, &usbhid->iofl);
+
+	/* Some keyboards don't work until their LEDs have been set.
+	 * Since BIOSes do set the LEDs, it must be safe for any device
+	 * that supports the keyboard boot protocol.
+	 */
+	if (interface->desc.bInterfaceSubClass == USB_INTERFACE_SUBCLASS_BOOT &&
+			interface->desc.bInterfaceProtocol ==
+				USB_INTERFACE_PROTOCOL_KEYBOARD)
+		usbhid_set_leds(hid);
+
 	return 0;
 
 fail:
 	usb_free_urb(usbhid->urbin);
 	usb_free_urb(usbhid->urbout);
 	usb_free_urb(usbhid->urbctrl);
+	usbhid->urbin = NULL;
+	usbhid->urbout = NULL;
+	usbhid->urbctrl = NULL;
 	hid_free_buffers(dev, hid);
-	kfree(usbhid);
-err:
 	return ret;
 }
 
@@ -907,6 +906,7 @@ static void usbhid_stop(struct hid_device *hid)
 	if (WARN_ON(!usbhid))
 		return;
 
+	clear_bit(HID_STARTED, &usbhid->iofl);
 	spin_lock_irq(&usbhid->inlock);	/* Sync with error handler */
 	set_bit(HID_DISCONNECTED, &usbhid->iofl);
 	spin_unlock_irq(&usbhid->inlock);
@@ -929,10 +929,11 @@ static void usbhid_stop(struct hid_device *hid)
 	usb_free_urb(usbhid->urbin);
 	usb_free_urb(usbhid->urbctrl);
 	usb_free_urb(usbhid->urbout);
+	usbhid->urbin = NULL; /* don't mess up next start */
+	usbhid->urbctrl = NULL;
+	usbhid->urbout = NULL;
 
 	hid_free_buffers(hid_to_usb_dev(hid), hid);
-	kfree(usbhid);
-	hid->driver_data = NULL;
 }
 
 static struct hid_ll_driver usb_hid_driver = {
@@ -946,13 +947,25 @@ static struct hid_ll_driver usb_hid_driver = {
 
 static int hid_probe(struct usb_interface *intf, const struct usb_device_id *id)
 {
+	struct usb_host_interface *interface = intf->cur_altsetting;
 	struct usb_device *dev = interface_to_usbdev(intf);
+	struct usbhid_device *usbhid;
 	struct hid_device *hid;
+	unsigned int n, has_in = 0;
 	size_t len;
 	int ret;
 
 	dbg_hid("HID probe called for ifnum %d\n",
 			intf->altsetting->desc.bInterfaceNumber);
+
+	for (n = 0; n < interface->desc.bNumEndpoints; n++)
+		if (usb_endpoint_is_int_in(&interface->endpoint[n].desc))
+			has_in++;
+	if (!has_in) {
+		dev_err(&intf->dev, "couldn't find an input interrupt "
+				"endpoint\n");
+		return -ENODEV;
+	}
 
 	hid = hid_allocate_device();
 	if (IS_ERR(hid))
@@ -972,6 +985,9 @@ static int hid_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	hid->vendor = le16_to_cpu(dev->descriptor.idVendor);
 	hid->product = le16_to_cpu(dev->descriptor.idProduct);
 	hid->name[0] = 0;
+	if (intf->cur_altsetting->desc.bInterfaceProtocol ==
+			USB_INTERFACE_PROTOCOL_MOUSE)
+		hid->type = HID_TYPE_USBMOUSE;
 
 	if (dev->manufacturer)
 		strlcpy(hid->name, dev->manufacturer, sizeof(hid->name));
@@ -997,14 +1013,25 @@ static int hid_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	if (usb_string(dev, dev->descriptor.iSerialNumber, hid->uniq, 64) <= 0)
 		hid->uniq[0] = 0;
 
+	usbhid = kzalloc(sizeof(*usbhid), GFP_KERNEL);
+	if (usbhid == NULL) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	hid->driver_data = usbhid;
+	usbhid->hid = hid;
+
 	ret = hid_add_device(hid);
 	if (ret) {
 		if (ret != -ENODEV)
 			dev_err(&intf->dev, "can't add hid device: %d\n", ret);
-		goto err;
+		goto err_free;
 	}
 
 	return 0;
+err_free:
+	kfree(usbhid);
 err:
 	hid_destroy_device(hid);
 	return ret;
@@ -1013,11 +1040,14 @@ err:
 static void hid_disconnect(struct usb_interface *intf)
 {
 	struct hid_device *hid = usb_get_intfdata(intf);
+	struct usbhid_device *usbhid;
 
 	if (WARN_ON(!hid))
 		return;
 
+	usbhid = hid->driver_data;
 	hid_destroy_device(hid);
+	kfree(usbhid);
 }
 
 static int hid_suspend(struct usb_interface *intf, pm_message_t message)
@@ -1025,10 +1055,13 @@ static int hid_suspend(struct usb_interface *intf, pm_message_t message)
 	struct hid_device *hid = usb_get_intfdata (intf);
 	struct usbhid_device *usbhid = hid->driver_data;
 
+	if (!test_bit(HID_STARTED, &usbhid->iofl))
+		return 0;
+
 	spin_lock_irq(&usbhid->inlock);	/* Sync with error handler */
 	set_bit(HID_SUSPENDED, &usbhid->iofl);
 	spin_unlock_irq(&usbhid->inlock);
-	del_timer(&usbhid->io_retry);
+	del_timer_sync(&usbhid->io_retry);
 	usb_kill_urb(usbhid->urbin);
 	dev_dbg(&intf->dev, "suspend\n");
 	return 0;
@@ -1039,6 +1072,9 @@ static int hid_resume(struct usb_interface *intf)
 	struct hid_device *hid = usb_get_intfdata (intf);
 	struct usbhid_device *usbhid = hid->driver_data;
 	int status;
+
+	if (!test_bit(HID_STARTED, &usbhid->iofl))
+		return 0;
 
 	clear_bit(HID_SUSPENDED, &usbhid->iofl);
 	usbhid->retry_delay = 0;

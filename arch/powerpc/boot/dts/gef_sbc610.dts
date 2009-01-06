@@ -98,6 +98,12 @@
 			interrupt-parent = <&mpic>;
 
 		};
+		gef_gpio: gpio@7,14000 {
+			#gpio-cells = <2>;
+			compatible = "gef,sbc610-gpio";
+			reg = <0x7 0x14000 0x24>;
+			gpio-controller;
+		};
 	};
 
 	soc@fef00000 {
@@ -108,7 +114,7 @@
 		compatible = "simple-bus";
 		ranges = <0x0 0xfef00000 0x00100000>;
 		reg = <0xfef00000 0x100000>;	// CCSRBAR 1M
-		bus-frequency = <0>;
+		bus-frequency = <33333333>;
 
 		i2c1: i2c@3000 {
 			#address-cells = <1>;
@@ -118,6 +124,11 @@
 			interrupts = <0x2b 0x2>;
 			interrupt-parent = <&mpic>;
 			dfsrr;
+
+			rtc@51 {
+				compatible = "epson,rx8581";
+				reg = <0x00000051>;
+			};
 
 			eti@6b {
 				compatible = "dallas,ds1682";

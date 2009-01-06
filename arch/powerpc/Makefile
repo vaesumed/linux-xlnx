@@ -107,7 +107,6 @@ KBUILD_CFLAGS += $(call cc-option,-mno-altivec)
 # (We use all available options to help semi-broken compilers)
 KBUILD_CFLAGS += $(call cc-option,-mno-spe)
 KBUILD_CFLAGS += $(call cc-option,-mspe=no)
-KBUILD_CFLAGS += $(call cc-option,-mabi=no-spe)
 
 # Enable unit-at-a-time mode when possible. It shrinks the
 # kernel considerably.
@@ -122,7 +121,7 @@ KBUILD_CFLAGS		+= -mcpu=powerpc
 endif
 
 # Work around a gcc code-gen bug with -fno-omit-frame-pointer.
-ifeq ($(CONFIG_FTRACE),y)
+ifeq ($(CONFIG_FUNCTION_TRACER),y)
 KBUILD_CFLAGS		+= -mno-sched-epilog
 endif
 
