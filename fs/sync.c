@@ -83,10 +83,6 @@ int file_fsync(struct file *filp, struct dentry *dentry, int datasync)
  *
  * Write back data and metadata for @file to disk.  If @datasync is
  * set only metadata needed to access modified file data is written.
- *
- * In case this function is called from nfsd @file may be %NULL and
- * only @dentry is set.  This can only happen when the filesystem
- * implements the export_operations API.
  */
 int vfs_fsync(struct file *file, struct dentry *dentry, int datasync)
 {
@@ -94,18 +90,8 @@ int vfs_fsync(struct file *file, struct dentry *dentry, int datasync)
 	struct address_space *mapping;
 	int err, ret;
 
-	/*
-	 * Get mapping and operations from the file in case we have
-	 * as file, or get the default values for them in case we
-	 * don't have a struct file available.  Damn nfsd..
-	 */
-	if (file) {
-		mapping = file->f_mapping;
-		fop = file->f_op;
-	} else {
-		mapping = dentry->d_inode->i_mapping;
-		fop = dentry->d_inode->i_fop;
-	}
+	mapping = file->f_mapping;
+	fop = file->f_op;
 
 	if (!fop || !fop->fsync) {
 		ret = -EINVAL;
