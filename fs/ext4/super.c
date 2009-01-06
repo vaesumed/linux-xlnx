@@ -1310,7 +1310,7 @@ set_qf_format:
 					EXT4_FEATURE_INCOMPAT_EXTENTS)) {
 				ext4_warning(sb, __func__,
 					"extents feature not enabled "
-					"on this filesystem, use tune2fs\n");
+					"on this filesystem, use tune2fs");
 				return 0;
 			}
 			set_opt(sbi->s_mount_opt, EXTENTS);
@@ -1994,7 +1994,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	else
 		ext4_warning(sb, __func__,
 			"extents feature not enabled on this filesystem, "
-			"use tune2fs.\n");
+			"use tune2fs.");
 
 	/*
 	 * enable delayed allocation by default
