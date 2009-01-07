@@ -78,6 +78,10 @@ struct percpu_data {
 extern void *__percpu_alloc_mask(size_t size, gfp_t gfp, cpumask_t *mask);
 extern void percpu_free(void *__pdata);
 
+void *percpu_modalloc(unsigned long size, unsigned long align);
+void percpu_modfree(void *pcpuptr);
+
+void percpu_alloc_init(void);
 #else /* CONFIG_SMP */
 
 #define percpu_ptr(ptr, cpu) ({ (void)(cpu); (ptr); })
@@ -92,6 +96,19 @@ static inline void percpu_free(void *__pdata)
 	kfree(__pdata);
 }
 
+static inline void *percpu_modalloc(unsigned long size, unsigned long align)
+{
+	return kzalloc(size, GFP_KERNEL);
+}
+
+static inline void percpu_modfree(void *pcpuptr)
+{
+	kfree(pcpuptr);
+}
+
+static inline void percpu_alloc_init(void)
+{
+}
 #endif /* CONFIG_SMP */
 
 #define percpu_alloc_mask(size, gfp, mask) \
