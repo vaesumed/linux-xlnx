@@ -77,6 +77,16 @@ static inline void percpu_alloc_init(void)
 }
 #endif /* CONFIG_SMP */
 
+/**
+ * alloc_percpu - allocate memory on every possible cpu.
+ * @type: the type to allocate
+ *
+ * Allocates memory for use with per_cpu_ptr/get_cpu_ptr/__get_cpu_ptr.
+ * The memory is always zeroed.  Returns NULL on failure.
+ *
+ * Note that percpu memory is a limited resource; it's usually used for small
+ * allocations.  Use big_alloc_percpu/big_cpu_ptr if that's not the case.
+ */
 #define alloc_percpu(type) \
 	(type *)__alloc_percpu(sizeof(type), __alignof__(type))
 

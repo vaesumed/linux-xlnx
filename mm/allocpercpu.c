@@ -45,6 +45,13 @@ static inline unsigned int block_size(int val)
 	return val;
 }
 
+/**
+ * __alloc_percpu - allocate dynamic percpu memory
+ * @size: bytes to allocate
+ * @align: bytes to align (< PAGE_SIZE)
+ *
+ * See alloc_percpu().
+ */
 void *__alloc_percpu(unsigned long size, unsigned long align)
 {
 	unsigned long extra;
@@ -91,6 +98,12 @@ void *__alloc_percpu(unsigned long size, unsigned long align)
 }
 EXPORT_SYMBOL_GPL(__alloc_percpu);
 
+/**
+ * free_percpu - free memory allocated with alloc_percpu.
+ * @pcpuptr: the pointer returned from alloc_percpu.
+ *
+ * Like kfree(), the argument can be NULL.
+ */
 void free_percpu(void *freeme)
 {
 	unsigned int i;

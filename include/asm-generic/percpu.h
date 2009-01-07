@@ -61,6 +61,14 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 	(*SHIFT_PERCPU_PTR(&per_cpu_var(var), __my_cpu_offset))
 
 /* Use RELOC_HIDE: some arch's SHIFT_PERCPU_PTR really want an identifier. */
+/**
+ * per_cpu_ptr - get a pointer to a particular cpu's allocated memory
+ * @ptr: the pointer returned from alloc_percpu
+ * @cpu: the cpu whose memory you want to access
+ *
+ * Similar to per_cpu(), except for dynamic memory.
+ * cpu_possible(@cpu) must be true.
+ */
 #define per_cpu_ptr(ptr, cpu) \
 	RELOC_HIDE((ptr), (per_cpu_offset(cpu)))
 
