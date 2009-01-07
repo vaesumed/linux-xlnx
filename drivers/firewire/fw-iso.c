@@ -28,11 +28,10 @@
 #include "fw-topology.h"
 #include "fw-device.h"
 
-int
-fw_iso_buffer_init(struct fw_iso_buffer *buffer, struct fw_card *card,
-		   int page_count, enum dma_data_direction direction)
+int fw_iso_buffer_init(struct fw_iso_buffer *buffer, struct fw_card *card,
+		       int page_count, enum dma_data_direction direction)
 {
-	int i, j, retval = -ENOMEM;
+	int i, j;
 	dma_addr_t address;
 
 	buffer->page_count = page_count;
@@ -69,19 +68,19 @@ fw_iso_buffer_init(struct fw_iso_buffer *buffer, struct fw_card *card,
 	kfree(buffer->pages);
  out:
 	buffer->pages = NULL;
-	return retval;
+	return -ENOMEM;
 }
 
 int fw_iso_buffer_map(struct fw_iso_buffer *buffer, struct vm_area_struct *vma)
 {
 	unsigned long uaddr;
-	int i, retval;
+	int i, ret;
 
 	uaddr = vma->vm_start;
 	for (i = 0; i < buffer->page_count; i++) {
-		retval = vm_insert_page(vma, uaddr, buffer->pages[i]);
-		if (retval)
-			return retval;
+		ret = vm_insert_page(vma, uaddr, buffer->pages[i]);
+		if (ret)
+			return ret;
 		uaddr += PAGE_SIZE;
 	}
 
@@ -105,14 +104,14 @@ void fw_iso_buffer_destroy(struct fw_iso_buffer *buffer,
 	buffer->pages = NULL;
 }
 
-struct fw_iso_context *
-fw_iso_context_create(struct fw_card *card, int type,
-		      int channel, int speed, size_t header_size,
-		      fw_iso_callback_t callback, void *callback_data)
+struct fw_iso_context *fw_iso_context_create(struct fw_card *card,
+		int type, int channel, int speed, size_t header_size,
+		fw_iso_callback_t callback, void *callback_data)
 {
 	struct fw_iso_context *ctx;
 
-	ctx = card->driver->allocate_iso_context(card, type, header_size);
+	ctx = card->driver->allocate_iso_context(card,
+						 type, channel, header_size);
 	if (IS_ERR(ctx))
 		return ctx;
 
@@ -134,25 +133,23 @@ void fw_iso_context_destroy(struct fw_iso_context *ctx)
 	card->driver->free_iso_context(ctx);
 }
 
-int
-fw_iso_context_start(struct fw_iso_context *ctx, int cycle, int sync, int tags)
+int fw_iso_context_start(struct fw_iso_context *ctx,
+			 int cycle, int sync, int tags)
 {
 	return ctx->card->driver->start_iso(ctx, cycle, sync, tags);
 }
 
-int
-fw_iso_context_queue(struct fw_iso_context *ctx,
-		     struct fw_iso_packet *packet,
-		     struct fw_iso_buffer *buffer,
-		     unsigned long payload)
+int fw_iso_context_queue(struct fw_iso_context *ctx,
+			 struct fw_iso_packet *packet,
+			 struct fw_iso_buffer *buffer,
+			 unsigned long payload)
 {
 	struct fw_card *card = ctx->card;
 
 	return card->driver->queue_iso(ctx, packet, buffer, payload);
 }
 
-int
-fw_iso_context_stop(struct fw_iso_context *ctx)
+int fw_iso_context_stop(struct fw_iso_context *ctx)
 {
 	return ctx->card->driver->stop_iso(ctx);
 }
