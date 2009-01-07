@@ -152,6 +152,12 @@ SECTIONS
 		__stop___ftr_fixup = .;
 	}
 	. = ALIGN(8);
+	__mmu_ftr_fixup : AT(ADDR(__mmu_ftr_fixup) - LOAD_OFFSET) {
+		__start___mmu_ftr_fixup = .;
+		*(__mmu_ftr_fixup)
+		__stop___mmu_ftr_fixup = .;
+	}
+	. = ALIGN(8);
 	__lwsync_fixup : AT(ADDR(__lwsync_fixup) - LOAD_OFFSET) {
 		__start___lwsync_fixup = .;
 		*(__lwsync_fixup)
@@ -187,6 +193,7 @@ SECTIONS
 		*(.machine.desc)
 		__machine_desc_end = . ;
 	}
+#ifdef CONFIG_RELOCATABLE
 	. = ALIGN(8);
 	.dynsym : AT(ADDR(.dynsym) - LOAD_OFFSET) { *(.dynsym) }
 	.dynstr : AT(ADDR(.dynstr) - LOAD_OFFSET) { *(.dynstr) }
@@ -202,9 +209,7 @@ SECTIONS
 		__rela_dyn_start = .;
 		*(.rela*)
 	}
-
-	/* Fake ELF header containing RPA note; for addnote */
-	.fakeelf : AT(ADDR(.fakeelf) - LOAD_OFFSET) { *(.fakeelf) }
+#endif
 
 	/* freed after init ends here */
 	. = ALIGN(PAGE_SIZE);

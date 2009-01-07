@@ -558,23 +558,42 @@ struct timer_rand_state {
 	unsigned dont_count_entropy:1;
 };
 
+#ifndef CONFIG_SPARSE_IRQ
+
 static struct timer_rand_state *irq_timer_state[NR_IRQS];
 
 static struct timer_rand_state *get_timer_rand_state(unsigned int irq)
 {
-	if (irq >= nr_irqs)
-		return NULL;
-
 	return irq_timer_state[irq];
 }
 
-static void set_timer_rand_state(unsigned int irq, struct timer_rand_state *state)
+static void set_timer_rand_state(unsigned int irq,
+				 struct timer_rand_state *state)
 {
-	if (irq >= nr_irqs)
-		return;
-
 	irq_timer_state[irq] = state;
 }
+
+#else
+
+static struct timer_rand_state *get_timer_rand_state(unsigned int irq)
+{
+	struct irq_desc *desc;
+
+	desc = irq_to_desc(irq);
+
+	return desc->timer_rand_state;
+}
+
+static void set_timer_rand_state(unsigned int irq,
+				 struct timer_rand_state *state)
+{
+	struct irq_desc *desc;
+
+	desc = irq_to_desc(irq);
+
+	desc->timer_rand_state = state;
+}
+#endif
 
 static struct timer_rand_state input_timer_state;
 
@@ -933,9 +952,6 @@ void rand_initialize_irq(int irq)
 {
 	struct timer_rand_state *state;
 
-	if (irq >= nr_irqs)
-		return;
-
 	state = get_timer_rand_state(irq);
 
 	if (state)
@@ -1139,18 +1155,12 @@ static int random_fasync(int fd, struct file *filp, int on)
 	return fasync_helper(fd, filp, on, &fasync);
 }
 
-static int random_release(struct inode *inode, struct file *filp)
-{
-	return fasync_helper(-1, filp, 0, &fasync);
-}
-
 const struct file_operations random_fops = {
 	.read  = random_read,
 	.write = random_write,
 	.poll  = random_poll,
 	.unlocked_ioctl = random_ioctl,
 	.fasync = random_fasync,
-	.release = random_release,
 };
 
 const struct file_operations urandom_fops = {
@@ -1158,7 +1168,6 @@ const struct file_operations urandom_fops = {
 	.write = random_write,
 	.unlocked_ioctl = random_ioctl,
 	.fasync = random_fasync,
-	.release = random_release,
 };
 
 /***************************************************************

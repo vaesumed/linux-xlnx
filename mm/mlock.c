@@ -66,14 +66,10 @@ void __clear_page_mlock(struct page *page)
 		putback_lru_page(page);
 	} else {
 		/*
-		 * Page not on the LRU yet.  Flush all pagevecs and retry.
+		 * We lost the race. the page already moved to evictable list.
 		 */
-		lru_add_drain_all();
-		if (!isolate_lru_page(page))
-			putback_lru_page(page);
-		else if (PageUnevictable(page))
+		if (PageUnevictable(page))
 			count_vm_event(UNEVICTABLE_PGSTRANDED);
-
 	}
 }
 
@@ -166,7 +162,7 @@ static long __mlock_vma_pages_range(struct vm_area_struct *vma,
 	unsigned long addr = start;
 	struct page *pages[16]; /* 16 gives a reasonable batch */
 	int nr_pages = (end - start) / PAGE_SIZE;
-	int ret;
+	int ret = 0;
 	int gup_flags = 0;
 
 	VM_BUG_ON(start & ~PAGE_MASK);
@@ -186,8 +182,6 @@ static long __mlock_vma_pages_range(struct vm_area_struct *vma,
 
 	if (vma->vm_flags & VM_WRITE)
 		gup_flags |= GUP_FLAGS_WRITE;
-
-	lru_add_drain_all();	/* push cached pages to LRU */
 
 	while (nr_pages > 0) {
 		int i;
@@ -250,8 +244,6 @@ static long __mlock_vma_pages_range(struct vm_area_struct *vma,
 		}
 		ret = 0;
 	}
-
-	lru_add_drain_all();	/* to update stats */
 
 	return ret;	/* count entire vma as locked_vm */
 }
@@ -546,6 +538,8 @@ asmlinkage long sys_mlock(unsigned long start, size_t len)
 	if (!can_do_mlock())
 		return -EPERM;
 
+	lru_add_drain_all();	/* flush pagevec */
+
 	down_write(&current->mm->mmap_sem);
 	len = PAGE_ALIGN(len + (start & ~PAGE_MASK));
 	start &= PAGE_MASK;
@@ -612,6 +606,8 @@ asmlinkage long sys_mlockall(int flags)
 	if (!can_do_mlock())
 		goto out;
 
+	lru_add_drain_all();	/* flush pagevec */
+
 	down_write(&current->mm->mmap_sem);
 
 	lock_limit = current->signal->rlim[RLIMIT_MEMLOCK].rlim_cur;
@@ -670,4 +666,49 @@ void user_shm_unlock(size_t size, struct user_struct *user)
 	user->locked_shm -= (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	spin_unlock(&shmlock_user_lock);
 	free_uid(user);
+}
+
+void *alloc_locked_buffer(size_t size)
+{
+	unsigned long rlim, vm, pgsz;
+	void *buffer = NULL;
+
+	pgsz = PAGE_ALIGN(size) >> PAGE_SHIFT;
+
+	down_write(&current->mm->mmap_sem);
+
+	rlim = current->signal->rlim[RLIMIT_AS].rlim_cur >> PAGE_SHIFT;
+	vm   = current->mm->total_vm + pgsz;
+	if (rlim < vm)
+		goto out;
+
+	rlim = current->signal->rlim[RLIMIT_MEMLOCK].rlim_cur >> PAGE_SHIFT;
+	vm   = current->mm->locked_vm + pgsz;
+	if (rlim < vm)
+		goto out;
+
+	buffer = kzalloc(size, GFP_KERNEL);
+	if (!buffer)
+		goto out;
+
+	current->mm->total_vm  += pgsz;
+	current->mm->locked_vm += pgsz;
+
+ out:
+	up_write(&current->mm->mmap_sem);
+	return buffer;
+}
+
+void free_locked_buffer(void *buffer, size_t size)
+{
+	unsigned long pgsz = PAGE_ALIGN(size) >> PAGE_SHIFT;
+
+	down_write(&current->mm->mmap_sem);
+
+	current->mm->total_vm  -= pgsz;
+	current->mm->locked_vm -= pgsz;
+
+	up_write(&current->mm->mmap_sem);
+
+	kfree(buffer);
 }

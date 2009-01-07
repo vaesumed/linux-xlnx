@@ -326,12 +326,13 @@ static struct file_system_type bd_type = {
 	.kill_sb	= kill_anon_super,
 };
 
-static struct vfsmount *bd_mnt __read_mostly;
-struct super_block *blockdev_superblock;
+struct super_block *blockdev_superblock __read_mostly;
 
 void __init bdev_cache_init(void)
 {
 	int err;
+	struct vfsmount *bd_mnt;
+
 	bdev_cachep = kmem_cache_create("bdev_cache", sizeof(struct bdev_inode),
 			0, (SLAB_HWCACHE_ALIGN|SLAB_RECLAIM_ACCOUNT|
 				SLAB_MEM_SPREAD|SLAB_PANIC),
@@ -373,7 +374,7 @@ struct block_device *bdget(dev_t dev)
 	struct block_device *bdev;
 	struct inode *inode;
 
-	inode = iget5_locked(bd_mnt->mnt_sb, hash(dev),
+	inode = iget5_locked(blockdev_superblock, hash(dev),
 			bdev_test, bdev_set, &dev);
 
 	if (!inode)
@@ -463,7 +464,7 @@ void bd_forget(struct inode *inode)
 
 	spin_lock(&bdev_lock);
 	if (inode->i_bdev) {
-		if (inode->i_sb != blockdev_superblock)
+		if (!sb_is_blkdev_sb(inode->i_sb))
 			bdev = inode->i_bdev;
 		__bd_forget(inode);
 	}
@@ -986,7 +987,6 @@ static int __blkdev_put(struct block_device *bdev, fmode_t mode, int for_part);
 static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 {
 	struct gendisk *disk;
-	struct hd_struct *part = NULL;
 	int ret;
 	int partno;
 	int perm = 0;
@@ -1004,24 +1004,25 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 		return ret;
 	}
 
-	ret = -ENXIO;
-
 	lock_kernel();
 
+	ret = -ENXIO;
 	disk = get_gendisk(bdev->bd_dev, &partno);
 	if (!disk)
-		goto out_unlock_kernel;
-	part = disk_get_part(disk, partno);
-	if (!part)
 		goto out_unlock_kernel;
 
 	mutex_lock_nested(&bdev->bd_mutex, for_part);
 	if (!bdev->bd_openers) {
 		bdev->bd_disk = disk;
-		bdev->bd_part = part;
 		bdev->bd_contains = bdev;
 		if (!partno) {
 			struct backing_dev_info *bdi;
+
+			ret = -ENXIO;
+			bdev->bd_part = disk_get_part(disk, partno);
+			if (!bdev->bd_part)
+				goto out_clear;
+
 			if (disk->fops->open) {
 				ret = disk->fops->open(bdev, mode);
 				if (ret)
@@ -1049,18 +1050,17 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 			bdev->bd_contains = whole;
 			bdev->bd_inode->i_data.backing_dev_info =
 			   whole->bd_inode->i_data.backing_dev_info;
+			bdev->bd_part = disk_get_part(disk, partno);
 			if (!(disk->flags & GENHD_FL_UP) ||
-			    !part || !part->nr_sects) {
+			    !bdev->bd_part || !bdev->bd_part->nr_sects) {
 				ret = -ENXIO;
 				goto out_clear;
 			}
-			bd_set_size(bdev, (loff_t)part->nr_sects << 9);
+			bd_set_size(bdev, (loff_t)bdev->bd_part->nr_sects << 9);
 		}
 	} else {
-		disk_put_part(part);
 		put_disk(disk);
 		module_put(disk->fops->owner);
-		part = NULL;
 		disk = NULL;
 		if (bdev->bd_contains == bdev) {
 			if (bdev->bd_disk->fops->open) {
@@ -1080,6 +1080,7 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 	return 0;
 
  out_clear:
+	disk_put_part(bdev->bd_part);
 	bdev->bd_disk = NULL;
 	bdev->bd_part = NULL;
 	bdev->bd_inode->i_data.backing_dev_info = &default_backing_dev_info;
@@ -1091,7 +1092,6 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
  out_unlock_kernel:
 	unlock_kernel();
 
-	disk_put_part(part);
 	if (disk)
 		module_put(disk->fops->owner);
 	put_disk(disk);
@@ -1136,12 +1136,15 @@ static int blkdev_open(struct inode * inode, struct file * filp)
 	if (res)
 		return res;
 
-	if (!(filp->f_mode & FMODE_EXCL))
-		return 0;
+	if (filp->f_mode & FMODE_EXCL) {
+		res = bd_claim(bdev, filp);
+		if (res)
+			goto out_blkdev_put;
+	}
 
-	if (!(res = bd_claim(bdev, filp)))
-		return 0;
+	return 0;
 
+ out_blkdev_put:
 	blkdev_put(bdev, filp->f_mode);
 	return res;
 }
@@ -1204,8 +1207,16 @@ static long block_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 {
 	struct block_device *bdev = I_BDEV(file->f_mapping->host);
 	fmode_t mode = file->f_mode;
+
+	/*
+	 * O_NDELAY can be altered using fcntl(.., F_SETFL, ..), so we have
+	 * to updated it before every ioctl.
+	 */
 	if (file->f_flags & O_NDELAY)
-		mode |= FMODE_NDELAY_NOW;
+		mode |= FMODE_NDELAY;
+	else
+		mode &= ~FMODE_NDELAY;
+
 	return blkdev_ioctl(bdev, mode, cmd, arg);
 }
 

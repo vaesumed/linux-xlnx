@@ -202,7 +202,6 @@ char *__init __acpi_map_table(unsigned long phys_addr, unsigned long size)
                             Boot-time Table Parsing
    -------------------------------------------------------------------------- */
 
-static int total_cpus __initdata;
 static int available_cpus __initdata;
 struct acpi_table_madt *acpi_madt __initdata;
 static u8 has_8259;
@@ -678,6 +677,30 @@ static int __init acpi_parse_fadt(struct acpi_table_header *table)
 	return 0;
 }
 
+int __init early_acpi_boot_init(void)
+{
+	int ret;
+
+	/*
+	 * do a partial walk of MADT to determine how many CPUs
+	 * we have including offline CPUs
+	 */
+	if (acpi_table_parse(ACPI_SIG_MADT, acpi_parse_madt)) {
+		printk(KERN_ERR PREFIX "Can't find MADT\n");
+		return 0;
+	}
+
+	ret = acpi_table_parse_madt(ACPI_MADT_TYPE_LOCAL_SAPIC,
+		acpi_parse_lsapic, NR_CPUS);
+	if (ret < 1)
+		printk(KERN_ERR PREFIX
+		       "Error parsing MADT - no LAPIC entries\n");
+
+	return 0;
+}
+
+
+
 int __init acpi_boot_init(void)
 {
 
@@ -700,11 +723,6 @@ int __init acpi_boot_init(void)
 	    (ACPI_MADT_TYPE_LOCAL_APIC_OVERRIDE, acpi_parse_lapic_addr_ovr, 0) < 0)
 		printk(KERN_ERR PREFIX
 		       "Error parsing LAPIC address override entry\n");
-
-	if (acpi_table_parse_madt(ACPI_MADT_TYPE_LOCAL_SAPIC, acpi_parse_lsapic, NR_CPUS)
-	    < 1)
-		printk(KERN_ERR PREFIX
-		       "Error parsing MADT - no LAPIC entries\n");
 
 	if (acpi_table_parse_madt(ACPI_MADT_TYPE_LOCAL_APIC_NMI, acpi_parse_lapic_nmi, 0)
 	    < 0)
@@ -982,7 +1000,7 @@ acpi_map_iosapic(acpi_handle handle, u32 depth, void *context, void **ret)
 	node = pxm_to_node(pxm);
 
 	if (node >= MAX_NUMNODES || !node_online(node) ||
-	    cpus_empty(node_to_cpumask(node)))
+	    cpumask_empty(cpumask_of_node(node)))
 		return AE_OK;
 
 	/* We know a gsi to node mapping! */

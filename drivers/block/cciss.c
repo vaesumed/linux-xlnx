@@ -96,6 +96,8 @@ static const struct pci_device_id cciss_pci_device_id[] = {
 	{PCI_VENDOR_ID_HP,     PCI_DEVICE_ID_HP_CISSE,     0x103C, 0x3245},
 	{PCI_VENDOR_ID_HP,     PCI_DEVICE_ID_HP_CISSE,     0x103C, 0x3247},
 	{PCI_VENDOR_ID_HP,     PCI_DEVICE_ID_HP_CISSE,     0x103C, 0x3249},
+	{PCI_VENDOR_ID_HP,     PCI_DEVICE_ID_HP_CISSE,     0x103C, 0x324A},
+	{PCI_VENDOR_ID_HP,     PCI_DEVICE_ID_HP_CISSE,     0x103C, 0x324B},
 	{PCI_VENDOR_ID_HP,     PCI_ANY_ID,	PCI_ANY_ID, PCI_ANY_ID,
 		PCI_CLASS_STORAGE_RAID << 8, 0xffff << 8, 0},
 	{0,}
@@ -133,6 +135,8 @@ static struct board_type products[] = {
 	{0x3245103C, "Smart Array P410i", &SA5_access},
 	{0x3247103C, "Smart Array P411", &SA5_access},
 	{0x3249103C, "Smart Array P812", &SA5_access},
+	{0x324A103C, "Smart Array P712m", &SA5_access},
+	{0x324B103C, "Smart Array P711m", &SA5_access},
 	{0xFFFF103C, "Unknown Smart Array", &SA5_access},
 };
 
@@ -160,7 +164,7 @@ static int cciss_getgeo(struct block_device *bdev, struct hd_geometry *geo);
 
 static int cciss_revalidate(struct gendisk *disk);
 static int rebuild_lun_table(ctlr_info_t *h, int first_time);
-static int deregister_disk(struct gendisk *disk, drive_info_struct *drv,
+static int deregister_disk(ctlr_info_t *h, int drv_index,
 			   int clear_all);
 
 static void cciss_read_capacity(int ctlr, int logvol, int withirq,
@@ -211,31 +215,17 @@ static struct block_device_operations cciss_fops = {
 /*
  * Enqueuing and dequeuing functions for cmdlists.
  */
-static inline void addQ(CommandList_struct **Qptr, CommandList_struct *c)
+static inline void addQ(struct hlist_head *list, CommandList_struct *c)
 {
-	if (*Qptr == NULL) {
-		*Qptr = c;
-		c->next = c->prev = c;
-	} else {
-		c->prev = (*Qptr)->prev;
-		c->next = (*Qptr);
-		(*Qptr)->prev->next = c;
-		(*Qptr)->prev = c;
-	}
+	hlist_add_head(&c->list, list);
 }
 
-static inline CommandList_struct *removeQ(CommandList_struct **Qptr,
-					  CommandList_struct *c)
+static inline void removeQ(CommandList_struct *c)
 {
-	if (c && c->next != c) {
-		if (*Qptr == c)
-			*Qptr = c->next;
-		c->prev->next = c->next;
-		c->next->prev = c->prev;
-	} else {
-		*Qptr = NULL;
-	}
-	return c;
+	if (WARN_ON(hlist_unhashed(&c->list)))
+		return;
+
+	hlist_del_init(&c->list);
 }
 
 #include "cciss_scsi.c"		/* For SCSI tape support */
@@ -502,6 +492,7 @@ static CommandList_struct *cmd_alloc(ctlr_info_t *h, int get_from_pool)
 		c->cmdindex = i;
 	}
 
+	INIT_HLIST_NODE(&c->list);
 	c->busaddr = (__u32) cmd_dma_handle;
 	temp64.val = (__u64) err_dma_handle;
 	c->ErrDesc.Addr.lower = temp64.val32.lower;
@@ -1366,6 +1357,7 @@ static void cciss_add_disk(ctlr_info_t *h, struct gendisk *disk,
 	disk->first_minor = drv_index << NWD_SHIFT;
 	disk->fops = &cciss_fops;
 	disk->private_data = &h->drv[drv_index];
+	disk->driverfs_dev = &h->pdev->dev;
 
 	/* Set up queue information */
 	blk_queue_bounce_limit(disk->queue, h->pdev->dma_mask);
@@ -1487,8 +1479,7 @@ static void cciss_update_drive_info(int ctlr, int drv_index, int first_time)
 		 * which keeps the interrupt handler from starting
 		 * the queue.
 		 */
-		ret = deregister_disk(h->gendisk[drv_index],
-				      &h->drv[drv_index], 0);
+		ret = deregister_disk(h, drv_index, 0);
 		h->drv[drv_index].busy_configuring = 0;
 	}
 
@@ -1688,6 +1679,11 @@ static int rebuild_lun_table(ctlr_info_t *h, int first_time)
 	for (i = 0; i <= h->highest_lun; i++) {
 		int j;
 		drv_found = 0;
+
+		/* skip holes in the array from already deleted drives */
+		if (h->drv[i].raid_level == -1)
+			continue;
+
 		for (j = 0; j < num_luns; j++) {
 			memcpy(&lunid, &ld_buff->LUN[j][0], 4);
 			lunid = le32_to_cpu(lunid);
@@ -1701,8 +1697,7 @@ static int rebuild_lun_table(ctlr_info_t *h, int first_time)
 			spin_lock_irqsave(CCISS_LOCK(h->ctlr), flags);
 			h->drv[i].busy_configuring = 1;
 			spin_unlock_irqrestore(CCISS_LOCK(h->ctlr), flags);
-			return_code = deregister_disk(h->gendisk[i],
-				&h->drv[i], 1);
+			return_code = deregister_disk(h, i, 1);
 			h->drv[i].busy_configuring = 0;
 		}
 	}
@@ -1772,14 +1767,18 @@ mem_msg:
  *             the highest_lun should be left unchanged and the LunID
  *             should not be cleared.
 */
-static int deregister_disk(struct gendisk *disk, drive_info_struct *drv,
+static int deregister_disk(ctlr_info_t *h, int drv_index,
 			   int clear_all)
 {
 	int i;
-	ctlr_info_t *h = get_host(disk);
+	struct gendisk *disk;
+	drive_info_struct *drv;
 
 	if (!capable(CAP_SYS_RAWIO))
 		return -EPERM;
+
+	drv = &h->drv[drv_index];
+	disk = h->gendisk[drv_index];
 
 	/* make sure logical volume is NOT is use */
 	if (clear_all || (h->gendisk[0] == disk)) {
@@ -2538,7 +2537,8 @@ static void start_io(ctlr_info_t *h)
 {
 	CommandList_struct *c;
 
-	while ((c = h->reqQ) != NULL) {
+	while (!hlist_empty(&h->reqQ)) {
+		c = hlist_entry(h->reqQ.first, CommandList_struct, list);
 		/* can't do anything if fifo is full */
 		if ((h->access.fifo_full(h))) {
 			printk(KERN_WARNING "cciss: fifo full\n");
@@ -2546,14 +2546,14 @@ static void start_io(ctlr_info_t *h)
 		}
 
 		/* Get the first entry from the Request Q */
-		removeQ(&(h->reqQ), c);
+		removeQ(c);
 		h->Qdepth--;
 
 		/* Tell the controller execute command */
 		h->access.submit_command(h, c);
 
 		/* Put job onto the completed Q */
-		addQ(&(h->cmpQ), c);
+		addQ(&h->cmpQ, c);
 	}
 }
 
@@ -2566,7 +2566,7 @@ static inline void resend_cciss_cmd(ctlr_info_t *h, CommandList_struct *c)
 	memset(c->err_info, 0, sizeof(ErrorInfo_struct));
 
 	/* add it to software queue and then send it to the controller */
-	addQ(&(h->reqQ), c);
+	addQ(&h->reqQ, c);
 	h->Qdepth++;
 	if (h->Qdepth > h->maxQsinceinit)
 		h->maxQsinceinit = h->Qdepth;
@@ -2842,7 +2842,7 @@ static void do_cciss_request(struct request_queue *q)
 		h->maxSG = seg;
 
 #ifdef CCISS_DEBUG
-	printk(KERN_DEBUG "cciss: Submitting %d sectors in %d segments\n",
+	printk(KERN_DEBUG "cciss: Submitting %lu sectors in %d segments\n",
 	       creq->nr_sectors, seg);
 #endif				/* CCISS_DEBUG */
 
@@ -2887,7 +2887,7 @@ static void do_cciss_request(struct request_queue *q)
 
 	spin_lock_irq(q->queue_lock);
 
-	addQ(&(h->reqQ), c);
+	addQ(&h->reqQ, c);
 	h->Qdepth++;
 	if (h->Qdepth > h->maxQsinceinit)
 		h->maxQsinceinit = h->Qdepth;
@@ -2975,16 +2975,12 @@ static irqreturn_t do_cciss_intr(int irq, void *dev_id)
 				a = c->busaddr;
 
 			} else {
+				struct hlist_node *tmp;
+
 				a &= ~3;
-				if ((c = h->cmpQ) == NULL) {
-					printk(KERN_WARNING
-					       "cciss: Completion of %08x ignored\n",
-					       a1);
-					continue;
-				}
-				while (c->busaddr != a) {
-					c = c->next;
-					if (c == h->cmpQ)
+				c = NULL;
+				hlist_for_each_entry(c, tmp, &h->cmpQ, list) {
+					if (c->busaddr == a)
 						break;
 				}
 			}
@@ -2992,8 +2988,8 @@ static irqreturn_t do_cciss_intr(int irq, void *dev_id)
 			 * If we've found the command, take it off the
 			 * completion Q and free it
 			 */
-			if (c->busaddr == a) {
-				removeQ(&h->cmpQ, c);
+			if (c && c->busaddr == a) {
+				removeQ(c);
 				if (c->cmd_type == CMD_RWREQ) {
 					complete_command(h, c, 0);
 				} else if (c->cmd_type == CMD_IOCTL_PEND) {
@@ -3192,7 +3188,7 @@ static int __devinit cciss_pci_init(ctlr_info_t *c, struct pci_dev *pdev)
 
 	c->paddr = pci_resource_start(pdev, 0);	/* addressing mode bits already removed */
 #ifdef CCISS_DEBUG
-	printk("address 0 = %x\n", c->paddr);
+	printk("address 0 = %lx\n", c->paddr);
 #endif				/* CCISS_DEBUG */
 	c->vaddr = remap_pci_mem(c->paddr, 0x250);
 
@@ -3219,7 +3215,8 @@ static int __devinit cciss_pci_init(ctlr_info_t *c, struct pci_dev *pdev)
 #endif				/* CCISS_DEBUG */
 	cfg_base_addr_index = find_PCI_BAR_index(pdev, cfg_base_addr);
 #ifdef CCISS_DEBUG
-	printk("cfg base address index = %x\n", cfg_base_addr_index);
+	printk("cfg base address index = %llx\n",
+		(unsigned long long)cfg_base_addr_index);
 #endif				/* CCISS_DEBUG */
 	if (cfg_base_addr_index == -1) {
 		printk(KERN_WARNING "cciss: Cannot find cfg_base_addr_index\n");
@@ -3229,7 +3226,7 @@ static int __devinit cciss_pci_init(ctlr_info_t *c, struct pci_dev *pdev)
 
 	cfg_offset = readl(c->vaddr + SA5_CTMEM_OFFSET);
 #ifdef CCISS_DEBUG
-	printk("cfg offset = %x\n", cfg_offset);
+	printk("cfg offset = %llx\n", (unsigned long long)cfg_offset);
 #endif				/* CCISS_DEBUG */
 	c->cfgtable = remap_pci_mem(pci_resource_start(pdev,
 						       cfg_base_addr_index) +
@@ -3404,13 +3401,16 @@ static int __devinit cciss_init_one(struct pci_dev *pdev,
 	int i;
 	int j = 0;
 	int rc;
-	int dac;
+	int dac, return_code;
+	InquiryData_struct *inq_buff = NULL;
 
 	i = alloc_cciss_hba();
 	if (i < 0)
 		return -1;
 
 	hba[i]->busy_initializing = 1;
+	INIT_HLIST_HEAD(&hba[i]->cmpQ);
+	INIT_HLIST_HEAD(&hba[i]->reqQ);
 
 	if (cciss_pci_init(hba[i], pdev) != 0)
 		goto clean1;
@@ -3510,6 +3510,25 @@ static int __devinit cciss_init_one(struct pci_dev *pdev,
 	/* Turn the interrupts on so we can service requests */
 	hba[i]->access.set_intr_mask(hba[i], CCISS_INTR_ON);
 
+	/* Get the firmware version */
+	inq_buff = kzalloc(sizeof(InquiryData_struct), GFP_KERNEL);
+	if (inq_buff == NULL) {
+		printk(KERN_ERR "cciss: out of memory\n");
+		goto clean4;
+	}
+
+	return_code = sendcmd_withirq(CISS_INQUIRY, i, inq_buff,
+		sizeof(InquiryData_struct), 0, 0 , 0, TYPE_CMD);
+	if (return_code == IO_OK) {
+		hba[i]->firm_ver[0] = inq_buff->data_byte[32];
+		hba[i]->firm_ver[1] = inq_buff->data_byte[33];
+		hba[i]->firm_ver[2] = inq_buff->data_byte[34];
+		hba[i]->firm_ver[3] = inq_buff->data_byte[35];
+	} else {	 /* send command failed */
+		printk(KERN_WARNING "cciss: unable to determine firmware"
+			" version of controller\n");
+	}
+
 	cciss_procinit(i);
 
 	hba[i]->cciss_max_sectors = 2048;
@@ -3520,6 +3539,7 @@ static int __devinit cciss_init_one(struct pci_dev *pdev,
 	return 1;
 
 clean4:
+	kfree(inq_buff);
 #ifdef CONFIG_CISS_SCSI_TAPE
 	kfree(hba[i]->scsi_rejects.complete);
 #endif
@@ -3698,15 +3718,17 @@ static void fail_all_cmds(unsigned long ctlr)
 	pci_disable_device(h->pdev);	/* Make sure it is really dead. */
 
 	/* move everything off the request queue onto the completed queue */
-	while ((c = h->reqQ) != NULL) {
-		removeQ(&(h->reqQ), c);
+	while (!hlist_empty(&h->reqQ)) {
+		c = hlist_entry(h->reqQ.first, CommandList_struct, list);
+		removeQ(c);
 		h->Qdepth--;
-		addQ(&(h->cmpQ), c);
+		addQ(&h->cmpQ, c);
 	}
 
 	/* Now, fail everything on the completed queue with a HW error */
-	while ((c = h->cmpQ) != NULL) {
-		removeQ(&h->cmpQ, c);
+	while (!hlist_empty(&h->cmpQ)) {
+		c = hlist_entry(h->cmpQ.first, CommandList_struct, list);
+		removeQ(c);
 		c->err_info->CommandStatus = CMD_HARDWARE_ERR;
 		if (c->cmd_type == CMD_RWREQ) {
 			complete_command(h, c, 0);

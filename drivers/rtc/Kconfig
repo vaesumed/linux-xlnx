@@ -102,8 +102,12 @@ config RTC_INTF_DEV_UIE_EMUL
 	depends on RTC_INTF_DEV
 	help
 	  Provides an emulation for RTC_UIE if the underlying rtc chip
-	  driver does not expose RTC_UIE ioctls.  Those requests generate
+	  driver does not expose RTC_UIE ioctls. Those requests generate
 	  once-per-second update interrupts, used for synchronization.
+
+	  The emulation code will read the time from the hardware
+	  clock several times per second, please enable this option
+	  only if you know that you really need it.
 
 config RTC_DRV_TEST
 	tristate "Test driver/device"
@@ -277,6 +281,14 @@ config RTC_DRV_FM3130
 	  This driver can also be built as a module. If so the module
 	  will be called rtc-fm3130.
 
+config RTC_DRV_RX8581
+	tristate "Epson RX-8581"
+	help
+	  If you say yes here you will get support for the Epson RX-8581.
+
+	  This driver can also be built as a module. If so the module
+	  will be called rtc-rx8581.
+
 endif # I2C
 
 comment "SPI RTC drivers"
@@ -301,6 +313,17 @@ config RTC_DRV_DS1305
 
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-ds1305.
+
+config RTC_DRV_DS1390
+	tristate "Dallas/Maxim DS1390/93/94"
+	help
+	  If you say yes here you get support for the DS1390/93/94 chips.
+
+	  This driver only supports the RTC feature, and not other chip
+	  features such as alarms and trickle charging.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called rtc-ds1390.
 
 config RTC_DRV_MAX6902
 	tristate "Maxim MAX6902"
@@ -467,6 +490,16 @@ config RTC_DRV_V3020
 
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-v3020.
+
+config RTC_DRV_WM8350
+	tristate "Wolfson Microelectronics WM8350 RTC"
+	depends on MFD_WM8350
+	help
+	  If you say yes here you will get support for the RTC subsystem
+	  of the Wolfson Microelectronics WM8350.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called "rtc-wm8350".
 
 comment "on-CPU RTC drivers"
 
