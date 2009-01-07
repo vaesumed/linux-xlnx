@@ -24,6 +24,7 @@
 #include <linux/kdebug.h>
 #include <linux/kexec.h>
 #include <linux/limits.h>
+#include <linux/hardirq.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/fpu.h>
