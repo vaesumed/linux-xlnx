@@ -57,6 +57,22 @@ extern unsigned int percpu_reserve;
 	&__get_cpu_var(var); }))
 #define put_cpu_var(var) preempt_enable()
 
+/**
+ * put_cpu_ptr - return a pointer to this cpu's allocated memory
+ * @ptr: the pointer passed to get_cpu_ptr().
+ *
+ * Counterpart to get_cpu_ptr(): re-enables preemption
+ */
+#define put_cpu_ptr(ptr) preempt_enable()
+
+/**
+ * get_cpu_ptr - hold a pointer to this cpu's allocated memory
+ * @ptr: the pointer returned from alloc_percpu
+ *
+ * Similar to get_cpu_var(), except for dynamic memory.  Disables preemption.
+ */
+#define get_cpu_ptr(ptr) ({ preempt_disable(); __get_cpu_ptr(ptr); })
+
 #ifdef CONFIG_SMP
 void *__alloc_percpu(unsigned long size, unsigned long align);
 void free_percpu(void *pcpuptr);

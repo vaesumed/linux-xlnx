@@ -62,8 +62,16 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 	(*SHIFT_PERCPU_PTR(var, my_cpu_offset))
 #define __raw_get_cpu_var(var) \
 	(*SHIFT_PERCPU_PTR(var, __my_cpu_offset))
+#define __get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, my_cpu_offset)
+#define __raw_get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, __my_cpu_offset)
 #define per_cpu_ptr(ptr, cpu) \
 	RELOC_HIDE((ptr), (per_cpu_offset(cpu)))
+#define __get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, my_cpu_offset)
+#define __raw_get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, __my_cpu_offset)
 
 #else /* ! SMP */
 
@@ -71,6 +79,8 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #define __get_cpu_var(var)		per_cpu_var(var)
 #define __raw_get_cpu_var(var)		per_cpu_var(var)
 #define per_cpu_ptr(ptr, cpu)		(ptr)
+#define __get_cpu_ptr(ptr)		(ptr)
+#define __raw_get_cpu_ptr(ptr)		(ptr)
 
 #define PER_CPU_ATTRIBUTES
 

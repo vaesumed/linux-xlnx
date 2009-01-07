@@ -72,6 +72,15 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #define per_cpu_ptr(ptr, cpu) \
 	RELOC_HIDE((ptr), (per_cpu_offset(cpu)))
 
+/**
+ * __get_cpu_ptr - get a pointer to this cpu's allocated memory
+ * @ptr: the pointer returned from alloc_percpu
+ *
+ * Similar to __get_cpu_var(), except for dynamic memory.
+ */
+#define __get_cpu_ptr(ptr) RELOC_HIDE(ptr, my_cpu_offset)
+#define __raw_get_cpu_ptr(ptr) RELOC_HIDE(ptr, __my_cpu_offset)
+
 #ifdef CONFIG_HAVE_SETUP_PER_CPU_AREA
 extern void setup_per_cpu_areas(void);
 #endif
@@ -82,6 +91,8 @@ extern void setup_per_cpu_areas(void);
 #define __get_cpu_var(var)			per_cpu_var(var)
 #define __raw_get_cpu_var(var)			per_cpu_var(var)
 #define per_cpu_ptr(ptr, cpu)			(ptr)
+#define __get_cpu_ptr(ptr)			(ptr)
+#define __raw_get_cpu_ptr(ptr)			(ptr)
 
 #endif	/* SMP */
 
