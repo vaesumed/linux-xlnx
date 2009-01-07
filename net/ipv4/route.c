@@ -543,7 +543,7 @@ static int ip_rt_acct_read(char *buffer, char **start, off_t offset,
 			unsigned int j;
 			u32 *src;
 
-			src = ((u32 *) per_cpu_ptr(ip_rt_acct, i)) + offset;
+			src = ((u32 *)big_per_cpu_ptr(ip_rt_acct, i)) + offset;
 			for (j = 0; j < length/4; j++)
 				dst[j] += src[j];
 		}
@@ -3376,7 +3376,7 @@ int __init ip_rt_init(void)
 	int rc = 0;
 
 #ifdef CONFIG_NET_CLS_ROUTE
-	ip_rt_acct = __alloc_percpu(256 * sizeof(struct ip_rt_acct));
+	ip_rt_acct = big_alloc_percpu(256 * sizeof(struct ip_rt_acct));
 	if (!ip_rt_acct)
 		panic("IP: failed to allocate ip_rt_acct\n");
 #endif

@@ -137,27 +137,27 @@ struct linux_xfrm_mib {
 #define SNMP_STAT_USRPTR(name)	(name[1])
 
 #define SNMP_INC_STATS_BH(mib, field) 	\
-	(per_cpu_ptr(mib[0], raw_smp_processor_id())->mibs[field]++)
+	(big_per_cpu_ptr(mib[0], raw_smp_processor_id())->mibs[field]++)
 #define SNMP_INC_STATS_USER(mib, field) \
 	do { \
-		per_cpu_ptr(mib[1], get_cpu())->mibs[field]++; \
+		big_per_cpu_ptr(mib[1], get_cpu())->mibs[field]++; \
 		put_cpu(); \
 	} while (0)
 #define SNMP_INC_STATS(mib, field) 	\
 	do { \
-		per_cpu_ptr(mib[!in_softirq()], get_cpu())->mibs[field]++; \
+		big_per_cpu_ptr(mib[!in_softirq()], get_cpu())->mibs[field]++; \
 		put_cpu(); \
 	} while (0)
 #define SNMP_DEC_STATS(mib, field) 	\
 	do { \
-		per_cpu_ptr(mib[!in_softirq()], get_cpu())->mibs[field]--; \
+		big_per_cpu_ptr(mib[!in_softirq()], get_cpu())->mibs[field]--; \
 		put_cpu(); \
 	} while (0)
 #define SNMP_ADD_STATS_BH(mib, field, addend) 	\
-	(per_cpu_ptr(mib[0], raw_smp_processor_id())->mibs[field] += addend)
+	(big_per_cpu_ptr(mib[0], raw_smp_processor_id())->mibs[field] += addend)
 #define SNMP_ADD_STATS_USER(mib, field, addend) 	\
 	do { \
-		per_cpu_ptr(mib[1], get_cpu())->mibs[field] += addend; \
+		big_per_cpu_ptr(mib[1], get_cpu())->mibs[field] += addend; \
 		put_cpu(); \
 	} while (0)
 
