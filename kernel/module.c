@@ -403,18 +403,14 @@ static inline unsigned int block_size(int val)
 	return val;
 }
 
-static void *percpu_modalloc(unsigned long size, unsigned long align,
-			     const char *name)
+static void *percpu_modalloc(unsigned long size, unsigned long align)
 {
 	unsigned long extra;
 	unsigned int i;
 	void *ptr;
 
-	if (align > PAGE_SIZE) {
-		printk(KERN_WARNING "%s: per-cpu alignment %li > %li\n",
-		       name, align, PAGE_SIZE);
+	if (WARN_ON(align > PAGE_SIZE))
 		align = PAGE_SIZE;
-	}
 
 	ptr = __per_cpu_start;
 	for (i = 0; i < pcpu_num_used; ptr += block_size(pcpu_size[i]), i++) {
@@ -440,6 +436,10 @@ static void *percpu_modalloc(unsigned long size, unsigned long align,
 
 		/* Mark allocated */
 		pcpu_size[i] = -pcpu_size[i];
+
+		/* Zero since most callers want it and it's a PITA to do. */
+		for_each_possible_cpu(i)
+			memset(ptr + per_cpu_offset(i), 0, size);
 		return ptr;
 	}
 
@@ -452,6 +452,9 @@ static void percpu_modfree(void *freeme)
 {
 	unsigned int i;
 	void *ptr = __per_cpu_start + block_size(pcpu_size[0]);
+
+	if (!freeme)
+		return;
 
 	/* First entry is core kernel percpu data. */
 	for (i = 1; i < pcpu_num_used; ptr += block_size(pcpu_size[i]), i++) {
@@ -514,14 +517,13 @@ static int percpu_modinit(void)
 }
 __initcall(percpu_modinit);
 #else /* ... !CONFIG_SMP */
-static inline void *percpu_modalloc(unsigned long size, unsigned long align,
-				    const char *name)
+static inline void *percpu_modalloc(unsigned long size, unsigned long align)
 {
-	return NULL;
+	return kzalloc(size);
 }
 static inline void percpu_modfree(void *pcpuptr)
 {
-	BUG();
+	kfree(pcpuptr);
 }
 static inline unsigned int find_pcpusec(Elf_Ehdr *hdr,
 					Elf_Shdr *sechdrs,
@@ -1463,8 +1465,7 @@ static void free_module(struct module *mod)
 	/* This may be NULL, but that's OK */
 	module_free(mod, mod->module_init);
 	kfree(mod->args);
-	if (mod->percpu)
-		percpu_modfree(mod->percpu);
+	percpu_modfree(mod->percpu);
 
 	/* Free lock-classes: */
 	lockdep_free_key_range(mod->module_core, mod->core_size);
@@ -2021,8 +2022,7 @@ static noinline struct module *load_module(void __user *umod,
 	if (pcpuindex) {
 		/* We have a special allocation for this section. */
 		percpu = percpu_modalloc(sechdrs[pcpuindex].sh_size,
-					 sechdrs[pcpuindex].sh_addralign,
-					 mod->name);
+					 sechdrs[pcpuindex].sh_addralign);
 		if (!percpu) {
 			err = -ENOMEM;
 			goto free_mod;
@@ -2292,8 +2292,7 @@ static noinline struct module *load_module(void __user *umod,
  free_core:
 	module_free(mod, mod->module_core);
  free_percpu:
-	if (percpu)
-		percpu_modfree(percpu);
+	percpu_modfree(percpu);
  free_mod:
 	kfree(args);
  free_hdr:
