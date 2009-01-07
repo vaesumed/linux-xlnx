@@ -50,7 +50,7 @@ struct cpu_workqueue_struct {
 	struct task_struct *thread;
 
 	int run_depth;		/* Detect run_workqueue() recursion depth */
-} ____cacheline_aligned;
+};
 
 /*
  * The externally visible workqueue abstraction is an array of
