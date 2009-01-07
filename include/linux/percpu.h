@@ -11,7 +11,7 @@
 #ifdef CONFIG_SMP
 #define DEFINE_PER_CPU(type, name)					\
 	__attribute__((__section__(".data.percpu")))			\
-	PER_CPU_ATTRIBUTES __typeof__(type) name
+	PER_CPU_ATTRIBUTES __typeof__(type) __percpu name
 
 #ifdef MODULE
 #define SHARED_ALIGNED_SECTION ".data.percpu"
@@ -21,15 +21,15 @@
 
 #define DEFINE_PER_CPU_SHARED_ALIGNED(type, name)			\
 	__attribute__((__section__(SHARED_ALIGNED_SECTION)))		\
-	PER_CPU_ATTRIBUTES __typeof__(type) name			\
+	PER_CPU_ATTRIBUTES __typeof__(type) __percpu name		\
 	____cacheline_aligned_in_smp
 
 #define DEFINE_PER_CPU_PAGE_ALIGNED(type, name)			\
 	__attribute__((__section__(".data.percpu.page_aligned")))	\
-	PER_CPU_ATTRIBUTES __typeof__(type) name
+	PER_CPU_ATTRIBUTES __typeof__(type) __percpu name
 #else
 #define DEFINE_PER_CPU(type, name)					\
-	PER_CPU_ATTRIBUTES __typeof__(type) name
+	PER_CPU_ATTRIBUTES __typeof__(type) __percpu name
 
 #define DEFINE_PER_CPU_SHARED_ALIGNED(type, name)		      \
 	DEFINE_PER_CPU(type, name)

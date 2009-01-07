@@ -45,7 +45,9 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
  * Only S390 provides its own means of moving the pointer.
  */
 #ifndef SHIFT_PERCPU_PTR
-#define SHIFT_PERCPU_PTR(__p, __offset)	RELOC_HIDE((__p), (__offset))
+/* Weird cast keeps both GCC and sparse happy. */
+#define SHIFT_PERCPU_PTR(__p, __offset)	\
+	((typeof(*__p) __kernel __force *)RELOC_HIDE((__p), (__offset)))
 #endif
 
 /*
@@ -72,16 +74,19 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #endif /* read_percpu_var */
 
 /* Use RELOC_HIDE: some arch's SHIFT_PERCPU_PTR really want an identifier. */
+#define RELOC_PERCPU(addr, off) \
+	((typeof(*addr) __kernel __force *)RELOC_HIDE((addr), (off)))
+
 /**
  * per_cpu_ptr - get a pointer to a particular cpu's allocated memory
- * @ptr: the pointer returned from alloc_percpu
+ * @ptr: the pointer returned from alloc_percpu, or &per-cpu var
  * @cpu: the cpu whose memory you want to access
  *
  * Similar to per_cpu(), except for dynamic memory.
  * cpu_possible(@cpu) must be true.
  */
 #define per_cpu_ptr(ptr, cpu) \
-	RELOC_HIDE((ptr), (per_cpu_offset(cpu)))
+	RELOC_PERCPU((ptr), (per_cpu_offset(cpu)))
 
 /**
  * __get_cpu_ptr - get a pointer to this cpu's allocated memory
@@ -89,8 +94,8 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
  *
  * Similar to __get_cpu_var(), except for dynamic memory.
  */
-#define __get_cpu_ptr(ptr) RELOC_HIDE(ptr, my_cpu_offset)
-#define __raw_get_cpu_ptr(ptr) RELOC_HIDE(ptr, __my_cpu_offset)
+#define __get_cpu_ptr(ptr) RELOC_PERCPU(ptr, my_cpu_offset)
+#define __raw_get_cpu_ptr(ptr) RELOC_PERCPU(ptr, __my_cpu_offset)
 
 #ifndef read_percpu_ptr
 /**
@@ -124,7 +129,7 @@ extern void setup_per_cpu_areas(void);
 #define PER_CPU_ATTRIBUTES
 #endif
 
-#define DECLARE_PER_CPU(type, name) extern PER_CPU_ATTRIBUTES \
-					__typeof__(type) per_cpu_var(name)
+#define DECLARE_PER_CPU(type, name) \
+	extern PER_CPU_ATTRIBUTES __percpu __typeof__(type) per_cpu_var(name)
 
 #endif /* _ASM_GENERIC_PERCPU_H_ */
