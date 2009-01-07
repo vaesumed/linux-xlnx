@@ -95,28 +95,28 @@ EXPORT_SYMBOL(touch_all_softlockup_watchdogs);
 void softlockup_tick(void)
 {
 	int this_cpu = smp_processor_id();
-	unsigned long touch_timestamp = per_cpu(touch_timestamp, this_cpu);
-	unsigned long print_timestamp;
+	unsigned long touch_ts = per_cpu(touch_timestamp, this_cpu);
+	unsigned long print_ts;
 	struct pt_regs *regs = get_irq_regs();
 	unsigned long now;
 
 	/* Is detection switched off? */
 	if (!per_cpu(watchdog_task, this_cpu) || softlockup_thresh <= 0) {
 		/* Be sure we don't false trigger if switched back on */
-		if (touch_timestamp)
+		if (touch_ts)
 			per_cpu(touch_timestamp, this_cpu) = 0;
 		return;
 	}
 
-	if (touch_timestamp == 0) {
+	if (touch_ts == 0) {
 		__touch_softlockup_watchdog();
 		return;
 	}
 
-	print_timestamp = per_cpu(print_timestamp, this_cpu);
+	print_ts = per_cpu(print_timestamp, this_cpu);
 
 	/* report at most once a second */
-	if (print_timestamp == touch_timestamp || did_panic)
+	if (print_ts == touch_ts || did_panic)
 		return;
 
 	/* do not print during early bootup: */
@@ -131,18 +131,18 @@ void softlockup_tick(void)
 	 * Wake up the high-prio watchdog task twice per
 	 * threshold timespan.
 	 */
-	if (now > touch_timestamp + softlockup_thresh/2)
+	if (now > touch_ts + softlockup_thresh/2)
 		wake_up_process(per_cpu(watchdog_task, this_cpu));
 
 	/* Warn about unreasonable delays: */
-	if (now <= (touch_timestamp + softlockup_thresh))
+	if (now <= (touch_ts + softlockup_thresh))
 		return;
 
-	per_cpu(print_timestamp, this_cpu) = touch_timestamp;
+	per_cpu(print_timestamp, this_cpu) = touch_ts;
 
 	spin_lock(&print_lock);
 	printk(KERN_ERR "BUG: soft lockup - CPU#%d stuck for %lus! [%s:%d]\n",
-			this_cpu, now - touch_timestamp,
+			this_cpu, now - touch_ts,
 			current->comm, task_pid_nr(current));
 	print_modules();
 	print_irqtrace_events(current);

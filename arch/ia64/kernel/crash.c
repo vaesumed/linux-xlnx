@@ -50,7 +50,7 @@ final_note(void *buf)
 
 extern void ia64_dump_cpu_regs(void *);
 
-static DEFINE_PER_CPU(struct elf_prstatus, elf_prstatus);
+static DEFINE_PER_CPU(struct elf_prstatus, elf_prstatus_pcpu);
 
 void
 crash_save_this_cpu(void)
@@ -59,7 +59,7 @@ crash_save_this_cpu(void)
 	unsigned long cfm, sof, sol;
 
 	int cpu = smp_processor_id();
-	struct elf_prstatus *prstatus = &per_cpu(elf_prstatus, cpu);
+	struct elf_prstatus *prstatus = &per_cpu(elf_prstatus_pcpu, cpu);
 
 	elf_greg_t *dst = (elf_greg_t *)&(prstatus->pr_reg);
 	memset(prstatus, 0, sizeof(*prstatus));

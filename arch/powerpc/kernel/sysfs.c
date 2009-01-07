@@ -25,7 +25,7 @@
 
 static DEFINE_PER_CPU(struct cpu, cpu_devices);
 
-static DEFINE_PER_CPU(struct kobject *, cache_toplevel);
+static DEFINE_PER_CPU(struct kobject *, cache_toplevel_pcpu);
 
 /*
  * SMT snooze delay stuff, 64-bit only for now
@@ -333,7 +333,7 @@ struct cache_desc {
 	u32 associativity;	/* e.g. 8-way... 0 is fully associative */
 };
 
-DEFINE_PER_CPU(struct cache_desc *, cache_desc);
+DEFINE_PER_CPU(struct cache_desc *, cache_desc_pcpu);
 
 static struct cache_desc *kobj_to_cache_desc(struct kobject *k)
 {
@@ -589,10 +589,10 @@ static void __cpuinit create_cache_info(struct sys_device *sysdev)
 	cache_toplevel = kobject_create_and_add("cache", &sysdev->kobj);
 	if (!cache_toplevel)
 		return;
-	per_cpu(cache_toplevel, cpu) = cache_toplevel;
+	per_cpu(cache_toplevel_pcpu, cpu) = cache_toplevel;
 	np = of_get_cpu_node(cpu, NULL);
 	if (np != NULL) {
-		per_cpu(cache_desc, cpu) =
+		per_cpu(cache_desc_pcpu, cpu) =
 			create_cache_index_info(np, cache_toplevel, 0, 1);
 		of_node_put(np);
 	}
@@ -673,11 +673,11 @@ static void remove_cache_info(struct sys_device *sysdev)
 	struct cache_desc *cache_desc;
 	int cpu = sysdev->id;
 
-	cache_desc = per_cpu(cache_desc, cpu);
+	cache_desc = per_cpu(cache_desc_pcpu, cpu);
 	if (cache_desc != NULL)
 		kobject_put(&cache_desc->kobj);
 
-	cache_toplevel = per_cpu(cache_toplevel, cpu);
+	cache_toplevel = per_cpu(cache_toplevel_pcpu, cpu);
 	if (cache_toplevel != NULL)
 		kobject_put(cache_toplevel);
 }
