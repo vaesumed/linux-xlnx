@@ -60,6 +60,9 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #define __raw_get_cpu_var(var) \
 	(*SHIFT_PERCPU_PTR(&per_cpu_var(var), __my_cpu_offset))
 
+/* Use RELOC_HIDE: some arch's SHIFT_PERCPU_PTR really want an identifier. */
+#define per_cpu_ptr(ptr, cpu) \
+	RELOC_HIDE((ptr), (per_cpu_offset(cpu)))
 
 #ifdef CONFIG_HAVE_SETUP_PER_CPU_AREA
 extern void setup_per_cpu_areas(void);
@@ -70,6 +73,7 @@ extern void setup_per_cpu_areas(void);
 #define per_cpu(var, cpu)			(*((void)(cpu), &per_cpu_var(var)))
 #define __get_cpu_var(var)			per_cpu_var(var)
 #define __raw_get_cpu_var(var)			per_cpu_var(var)
+#define per_cpu_ptr(ptr, cpu)			(ptr)
 
 #endif	/* SMP */
 

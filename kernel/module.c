@@ -1322,7 +1322,7 @@ static void free_module(struct module *mod)
 	/* This may be NULL, but that's OK */
 	module_free(mod, mod->module_init);
 	kfree(mod->args);
-	percpu_modfree(mod->percpu);
+	free_percpu(mod->percpu);
 
 	/* Free lock-classes: */
 	lockdep_free_key_range(mod->module_core, mod->core_size);
@@ -1878,8 +1878,8 @@ static noinline struct module *load_module(void __user *umod,
 
 	if (pcpuindex) {
 		/* We have a special allocation for this section. */
-		percpu = percpu_modalloc(sechdrs[pcpuindex].sh_size,
-					 sechdrs[pcpuindex].sh_addralign);
+		percpu = __alloc_percpu(sechdrs[pcpuindex].sh_size,
+					sechdrs[pcpuindex].sh_addralign);
 		if (!percpu) {
 			err = -ENOMEM;
 			goto free_mod;
@@ -2149,7 +2149,7 @@ static noinline struct module *load_module(void __user *umod,
  free_core:
 	module_free(mod, mod->module_core);
  free_percpu:
-	percpu_modfree(percpu);
+	free_percpu(percpu);
  free_mod:
 	kfree(args);
  free_hdr:

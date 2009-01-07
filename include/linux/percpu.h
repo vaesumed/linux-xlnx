@@ -58,50 +58,16 @@ extern unsigned int percpu_reserve;
 #define put_cpu_var(var) preempt_enable()
 
 #ifdef CONFIG_SMP
-
-struct percpu_data {
-	void *ptrs[1];
-};
-
-#define __percpu_disguise(pdata) (struct percpu_data *)~(unsigned long)(pdata)
-/* 
- * Use this to get to a cpu's version of the per-cpu object dynamically
- * allocated. Non-atomic access to the current CPU's version should
- * probably be combined with get_cpu()/put_cpu().
- */ 
-#define percpu_ptr(ptr, cpu)                              \
-({                                                        \
-        struct percpu_data *__p = __percpu_disguise(ptr); \
-        (__typeof__(ptr))__p->ptrs[(cpu)];	          \
-})
-
-extern void *__percpu_alloc_mask(size_t size, gfp_t gfp, cpumask_t *mask);
-extern void percpu_free(void *__pdata);
-
-void *percpu_modalloc(unsigned long size, unsigned long align);
-void percpu_modfree(void *pcpuptr);
-
+void *__alloc_percpu(unsigned long size, unsigned long align);
+void free_percpu(void *pcpuptr);
 void percpu_alloc_init(void);
-#else /* CONFIG_SMP */
-
-#define percpu_ptr(ptr, cpu) ({ (void)(cpu); (ptr); })
-
-static __always_inline void *__percpu_alloc_mask(size_t size, gfp_t gfp, cpumask_t *mask)
-{
-	return kzalloc(size, gfp);
-}
-
-static inline void percpu_free(void *__pdata)
-{
-	kfree(__pdata);
-}
-
-static inline void *percpu_modalloc(unsigned long size, unsigned long align)
+#else
+static inline void *__alloc_percpu(unsigned long size, unsigned long align)
 {
 	return kzalloc(size, GFP_KERNEL);
 }
 
-static inline void percpu_modfree(void *pcpuptr)
+static inline void free_percpu(void *pcpuptr)
 {
 	kfree(pcpuptr);
 }
@@ -111,19 +77,8 @@ static inline void percpu_alloc_init(void)
 }
 #endif /* CONFIG_SMP */
 
-#define percpu_alloc_mask(size, gfp, mask) \
-	__percpu_alloc_mask((size), (gfp), &(mask))
-
-#define percpu_alloc(size, gfp) percpu_alloc_mask((size), (gfp), cpu_online_map)
-
-/* (legacy) interface for use without CPU hotplug handling */
-
-#define __alloc_percpu(size, align)	percpu_alloc_mask((size), GFP_KERNEL, \
-						  cpu_possible_map)
-#define alloc_percpu(type)	(type *)__alloc_percpu(sizeof(type), \
-						       __alignof__(type))
-#define free_percpu(ptr)	percpu_free((ptr))
-#define per_cpu_ptr(ptr, cpu)	percpu_ptr((ptr), (cpu))
+#define alloc_percpu(type) \
+	(type *)__alloc_percpu(sizeof(type), __alignof__(type))
 
 /* Big per-cpu allocations.  Less efficient, but if you're doing an unbounded
  * number of allocations or large ones, you need these until we implement
