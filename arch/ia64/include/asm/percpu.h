@@ -40,6 +40,7 @@ extern void *per_cpu_init(void);
  * more efficient.
  */
 #define __ia64_per_cpu_var(var)	per_cpu__##var
+#define read_percpu_var(var)	(0, __ia64_per_cpu_var(var))
 
 #include <asm-generic/percpu.h>
 

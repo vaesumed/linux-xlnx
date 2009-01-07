@@ -102,6 +102,10 @@ DECLARE_PER_CPU(struct x8664_pda, pda);
 
 #endif	/* SMP */
 
+/* Define these now so asm-generic/percpu.h doesn't. */
+#define read_percpu_var(var) x86_read_percpu(var)
+#define read_percpu_ptr(ptr) x86_read_percpu(*(ptr))
+
 #include <asm-generic/percpu.h>
 
 /* We can use this directly for local CPU (faster). */

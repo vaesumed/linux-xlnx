@@ -60,6 +60,17 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #define __raw_get_cpu_var(var) \
 	(*SHIFT_PERCPU_PTR(&per_cpu_var(var), __my_cpu_offset))
 
+#ifndef read_percpu_var
+/**
+ * read_percpu_var - get a copy of this cpu's percpu simple var.
+ * @var: the name of the per-cpu variable.
+ *
+ * Like __raw_get_cpu_var(), but doesn't provide an lvalue.  Some platforms
+ * can do this more efficiently (x86/32).  Only works on fundamental types.
+ */
+#define read_percpu_var(var) (0, __raw_get_cpu_var(var))
+#endif /* read_percpu_var */
+
 /* Use RELOC_HIDE: some arch's SHIFT_PERCPU_PTR really want an identifier. */
 /**
  * per_cpu_ptr - get a pointer to a particular cpu's allocated memory
@@ -81,6 +92,17 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 #define __get_cpu_ptr(ptr) RELOC_HIDE(ptr, my_cpu_offset)
 #define __raw_get_cpu_ptr(ptr) RELOC_HIDE(ptr, __my_cpu_offset)
 
+#ifndef read_percpu_ptr
+/**
+ * read_percpu_ptr - deref this cpu's simple percpu pointer.
+ * @ptr: the address of the per-cpu variable.
+ *
+ * Like read_percpu_var(), but can be used on pointers returned from
+ * alloc_percpu.
+ */
+#define read_percpu_ptr(ptr) (0, *__raw_get_cpu_ptr(ptr))
+#endif /* read_percpu_ptr */
+
 #ifdef CONFIG_HAVE_SETUP_PER_CPU_AREA
 extern void setup_per_cpu_areas(void);
 #endif
@@ -90,9 +112,11 @@ extern void setup_per_cpu_areas(void);
 #define per_cpu(var, cpu)			(*((void)(cpu), &per_cpu_var(var)))
 #define __get_cpu_var(var)			per_cpu_var(var)
 #define __raw_get_cpu_var(var)			per_cpu_var(var)
+#define read_percpu_var(var)			(0, per_cpu_var(var))
 #define per_cpu_ptr(ptr, cpu)			(ptr)
 #define __get_cpu_ptr(ptr)			(ptr)
 #define __raw_get_cpu_ptr(ptr)			(ptr)
+#define read_percpu_ptr(ptr)			(0, *(ptr))
 
 #endif	/* SMP */
 
