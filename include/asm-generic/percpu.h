@@ -7,7 +7,7 @@
  * Determine the real variable name from the name visible in the
  * kernel sources.
  */
-#define per_cpu_var(var) per_cpu__##var
+#define per_cpu_var(var) var
 
 #ifdef CONFIG_SMP
 

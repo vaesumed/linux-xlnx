@@ -7,7 +7,7 @@
  * Determine the real variable name from the name visible in the
  * kernel sources.
  */
-#define per_cpu_var(var) per_cpu__##var
+#define per_cpu_var(var) var
 
 #ifdef CONFIG_SMP
 
@@ -43,7 +43,7 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 	unsigned long __ptr, tmp_gp;			\
 	asm (  "br	%1, 1f		  	      \n\
 	1:	ldgp	%1, 0(%1)	    	      \n\
-		ldq %0, per_cpu__" #var"(%1)\t!literal"		\
+		ldq %0, "#var"(%1)\t!literal"		\
 		: "=&r"(__ptr), "=&r"(tmp_gp));		\
 	(typeof(&per_cpu_var(var)))(__ptr + (offset)); })
 
