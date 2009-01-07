@@ -388,6 +388,8 @@ static void __init setup_per_cpu_areas(void)
 	/* Copy section for each CPU (we discard the original) */
 	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
+	printk(KERN_INFO "percpu area: %d bytes total, %d available.\n",
+		size, size - (__per_cpu_end - __per_cpu_start));
 
 	for_each_possible_cpu(i) {
 		__per_cpu_offset[i] = ptr - __per_cpu_start;

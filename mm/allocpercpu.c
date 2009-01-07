@@ -142,6 +142,11 @@ void percpu_free(void *__pdata)
 }
 EXPORT_SYMBOL_GPL(percpu_free);
 
+/* A heuristic based on observation.  May need to increase. */
+unsigned int percpu_reserve = (sizeof(unsigned long) * 2500);
+
+core_param(percpu, percpu_reserve, uint, 0444);
+
 void *big_alloc_percpu(unsigned long size)
 {
 	unsigned int cpu;
