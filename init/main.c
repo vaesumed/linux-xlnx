@@ -385,6 +385,12 @@ static void __init setup_per_cpu_areas(void)
 	char *ptr;
 	unsigned long nr_possible_cpus = num_possible_cpus();
 
+	/* FIXME: core_param is too late, so grab percpu here. */
+	ptr = strstr(boot_command_line, "percpu=");
+	if (ptr)
+		percpu_reserve = simple_strtoul(ptr + strlen("percpu="),
+						NULL, 0);
+
 	/* Copy section for each CPU (we discard the original) */
 	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
