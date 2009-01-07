@@ -141,3 +141,38 @@ void percpu_free(void *__pdata)
 	kfree(__percpu_disguise(__pdata));
 }
 EXPORT_SYMBOL_GPL(percpu_free);
+
+void *big_alloc_percpu(unsigned long size)
+{
+	unsigned int cpu;
+	void **bp;
+
+	bp = kcalloc(sizeof(void *), nr_cpu_ids, GFP_KERNEL);
+	if (unlikely(!bp))
+		return NULL;
+
+	for_each_possible_cpu(cpu) {
+		bp[cpu] = kzalloc_node(size, GFP_KERNEL, cpu_to_node(cpu));
+		if (unlikely(!bp[cpu]))
+			goto fail;
+	}
+	return bp;
+
+fail:
+	/* kcalloc zeroes and kfree(NULL) is safe, so this works, */
+	big_free_percpu(bp);
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(big_alloc_percpu);
+
+void big_free_percpu(const void *_bp)
+{
+	void *const *bp = _bp;
+	unsigned int cpu;
+
+	if (likely(bp))
+		for_each_possible_cpu(cpu)
+			kfree(bp[cpu]);
+	kfree(bp);
+}
+EXPORT_SYMBOL_GPL(big_free_percpu);

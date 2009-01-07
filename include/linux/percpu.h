@@ -113,4 +113,28 @@ static inline void percpu_free(void *__pdata)
 #define free_percpu(ptr)	percpu_free((ptr))
 #define per_cpu_ptr(ptr, cpu)	percpu_ptr((ptr), (cpu))
 
+/* Big per-cpu allocations.  Less efficient, but if you're doing an unbounded
+ * number of allocations or large ones, you need these until we implement
+ * growing percpu regions. */
+#ifdef CONFIG_SMP
+extern void *big_alloc_percpu(unsigned long size);
+extern void big_free_percpu(const void *);
+
+#define big_per_cpu_ptr(bptr, cpu) ({		\
+	void **__bp = (void **)(bptr);		\
+	(__typeof__(bptr))__bp[(cpu)];		\
+})
+#else
+static inline void *big_alloc_percpu(unsigned long size)
+{
+	return kzalloc(size, GFP_KERNEL);
+}
+static inline void big_free_percpu(const void *bp)
+{
+	kfree(bp);
+}
+
+#define big_per_cpu_ptr(ptr, cpu) ({ (void)(cpu); (ptr); })
+#endif /* !CONFIG_SMP */
+
 #endif /* __LINUX_PERCPU_H */
