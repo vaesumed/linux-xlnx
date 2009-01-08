@@ -7,7 +7,7 @@
  * Determine the real variable name from the name visible in the
  * kernel sources.
  */
-#define per_cpu_var(var) per_cpu__##var
+#define per_cpu_var(var) var
 
 #ifdef CONFIG_SMP
 
@@ -43,7 +43,7 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 	unsigned long __ptr, tmp_gp;			\
 	asm (  "br	%1, 1f		  	      \n\
 	1:	ldgp	%1, 0(%1)	    	      \n\
-		ldq %0, per_cpu__" #var"(%1)\t!literal"		\
+		ldq %0, "#var"(%1)\t!literal"		\
 		: "=&r"(__ptr), "=&r"(tmp_gp));		\
 	(typeof(&per_cpu_var(var)))(__ptr + (offset)); })
 
@@ -62,12 +62,29 @@ extern unsigned long __per_cpu_offset[NR_CPUS];
 	(*SHIFT_PERCPU_PTR(var, my_cpu_offset))
 #define __raw_get_cpu_var(var) \
 	(*SHIFT_PERCPU_PTR(var, __my_cpu_offset))
+#define read_percpu_var(var) (0, __raw_get_cpu_var(var))
+#define __get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, my_cpu_offset)
+#define __raw_get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, __my_cpu_offset)
+#define per_cpu_ptr(ptr, cpu) \
+	RELOC_HIDE((ptr), (per_cpu_offset(cpu)))
+#define __get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, my_cpu_offset)
+#define __raw_get_cpu_ptr(ptr) \
+	RELOC_HIDE(ptr, __my_cpu_offset)
+#define read_percpu_ptr(ptr) (0, *__raw_get_cpu_ptr(ptr))
 
 #else /* ! SMP */
 
 #define per_cpu(var, cpu)		(*((void)(cpu), &per_cpu_var(var)))
 #define __get_cpu_var(var)		per_cpu_var(var)
 #define __raw_get_cpu_var(var)		per_cpu_var(var)
+#define read_percpu_var(var)		(0, per_cpu_var(var))
+#define per_cpu_ptr(ptr, cpu)		(ptr)
+#define __get_cpu_ptr(ptr)		(ptr)
+#define __raw_get_cpu_ptr(ptr)		(ptr)
+#define read_percpu_ptr(ptr)		(0, *(ptr))
 
 #define PER_CPU_ATTRIBUTES
 

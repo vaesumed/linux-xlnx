@@ -955,7 +955,7 @@ unsigned long kernel_eflags;
  * Copies of the original ist values from the tss are only accessed during
  * debugging, no special alignment required.
  */
-DEFINE_PER_CPU(struct orig_ist, orig_ist);
+DEFINE_PER_CPU(struct orig_ist, orig_ist_pcpu);
 
 #else
 
@@ -980,7 +980,7 @@ void __cpuinit cpu_init(void)
 {
 	int cpu = stack_smp_processor_id();
 	struct tss_struct *t = &per_cpu(init_tss, cpu);
-	struct orig_ist *orig_ist = &per_cpu(orig_ist, cpu);
+	struct orig_ist *orig_ist = &per_cpu(orig_ist_pcpu, cpu);
 	unsigned long v;
 	char *estacks = NULL;
 	struct task_struct *me;

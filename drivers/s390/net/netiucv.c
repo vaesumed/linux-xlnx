@@ -98,7 +98,7 @@ MODULE_DESCRIPTION ("Linux for S/390 IUCV network driver");
 		debug_event(iucv_dbf_##name,level,(void*)(addr),len); \
 	} while (0)
 
-DECLARE_PER_CPU(char[256], iucv_dbf_txt_buf);
+DECLARE_PER_CPU(char[256], iucv_dbf_txt_buf_pcpu);
 
 /* Allow to sort out low debug levels early to avoid wasted sprints */
 static inline int iucv_dbf_passes(debug_info_t *dbf_grp, int level)
@@ -110,11 +110,11 @@ static inline int iucv_dbf_passes(debug_info_t *dbf_grp, int level)
 	do { \
 		if (iucv_dbf_passes(iucv_dbf_##name, level)) { \
 			char* iucv_dbf_txt_buf = \
-					get_cpu_var(iucv_dbf_txt_buf); \
+					get_cpu_var(iucv_dbf_txt_buf_pcpu); \
 			sprintf(iucv_dbf_txt_buf, text); \
 			debug_text_event(iucv_dbf_##name, level, \
 						iucv_dbf_txt_buf); \
-			put_cpu_var(iucv_dbf_txt_buf); \
+			put_cpu_var(iucv_dbf_txt_buf_pcpu); \
 		} \
 	} while (0)
 
@@ -462,7 +462,7 @@ static debug_info_t *iucv_dbf_setup = NULL;
 static debug_info_t *iucv_dbf_data = NULL;
 static debug_info_t *iucv_dbf_trace = NULL;
 
-DEFINE_PER_CPU(char[256], iucv_dbf_txt_buf);
+DEFINE_PER_CPU(char[256], iucv_dbf_txt_buf_pcpu);
 
 static void iucv_unregister_dbf_views(void)
 {

@@ -25,7 +25,7 @@
 
 static DEFINE_PER_CPU(struct cpu, cpu_devices);
 
-static DEFINE_PER_CPU(struct kobject *, cache_toplevel);
+static DEFINE_PER_CPU(struct kobject *, cache_toplevel_pcpu);
 
 /*
  * SMT snooze delay stuff, 64-bit only for now
@@ -134,36 +134,15 @@ void ppc_enable_pmcs(void)
 }
 EXPORT_SYMBOL(ppc_enable_pmcs);
 
-#if defined(CONFIG_6xx) || defined(CONFIG_PPC64)
-/* XXX convert to rusty's on_one_cpu */
-static unsigned long run_on_cpu(unsigned long cpu,
-			        unsigned long (*func)(unsigned long),
-				unsigned long arg)
-{
-	cpumask_t old_affinity = current->cpus_allowed;
-	unsigned long ret;
-
-	/* should return -EINVAL to userspace */
-	if (set_cpus_allowed(current, cpumask_of_cpu(cpu)))
-		return 0;
-
-	ret = func(arg);
-
-	set_cpus_allowed(current, old_affinity);
-
-	return ret;
-}
-#endif
-
 #define SYSFS_PMCSETUP(NAME, ADDRESS) \
-static unsigned long read_##NAME(unsigned long junk) \
+static long read_##NAME(void *junk) \
 { \
 	return mfspr(ADDRESS); \
 } \
-static unsigned long write_##NAME(unsigned long val) \
+static long write_##NAME(void *val) \
 { \
 	ppc_enable_pmcs(); \
-	mtspr(ADDRESS, val); \
+	mtspr(ADDRESS, (unsigned long)val);	\
 	return 0; \
 } \
 static ssize_t show_##NAME(struct sys_device *dev, \
@@ -171,7 +150,7 @@ static ssize_t show_##NAME(struct sys_device *dev, \
 			char *buf) \
 { \
 	struct cpu *cpu = container_of(dev, struct cpu, sysdev); \
-	unsigned long val = run_on_cpu(cpu->sysdev.id, read_##NAME, 0); \
+	unsigned long val = work_on_cpu(cpu->sysdev.id, read_##NAME, NULL); \
 	return sprintf(buf, "%lx\n", val); \
 } \
 static ssize_t __used \
@@ -183,7 +162,7 @@ static ssize_t __used \
 	int ret = sscanf(buf, "%lx", &val); \
 	if (ret != 1) \
 		return -EINVAL; \
-	run_on_cpu(cpu->sysdev.id, write_##NAME, val); \
+	work_on_cpu(cpu->sysdev.id, write_##NAME, (void *)val);	\
 	return count; \
 }
 
@@ -354,7 +333,7 @@ struct cache_desc {
 	u32 associativity;	/* e.g. 8-way... 0 is fully associative */
 };
 
-DEFINE_PER_CPU(struct cache_desc *, cache_desc);
+DEFINE_PER_CPU(struct cache_desc *, cache_desc_pcpu);
 
 static struct cache_desc *kobj_to_cache_desc(struct kobject *k)
 {
@@ -610,10 +589,10 @@ static void __cpuinit create_cache_info(struct sys_device *sysdev)
 	cache_toplevel = kobject_create_and_add("cache", &sysdev->kobj);
 	if (!cache_toplevel)
 		return;
-	per_cpu(cache_toplevel, cpu) = cache_toplevel;
+	per_cpu(cache_toplevel_pcpu, cpu) = cache_toplevel;
 	np = of_get_cpu_node(cpu, NULL);
 	if (np != NULL) {
-		per_cpu(cache_desc, cpu) =
+		per_cpu(cache_desc_pcpu, cpu) =
 			create_cache_index_info(np, cache_toplevel, 0, 1);
 		of_node_put(np);
 	}
@@ -694,11 +673,11 @@ static void remove_cache_info(struct sys_device *sysdev)
 	struct cache_desc *cache_desc;
 	int cpu = sysdev->id;
 
-	cache_desc = per_cpu(cache_desc, cpu);
+	cache_desc = per_cpu(cache_desc_pcpu, cpu);
 	if (cache_desc != NULL)
 		kobject_put(&cache_desc->kobj);
 
-	cache_toplevel = per_cpu(cache_toplevel, cpu);
+	cache_toplevel = per_cpu(cache_toplevel_pcpu, cpu);
 	if (cache_toplevel != NULL)
 		kobject_put(cache_toplevel);
 }

@@ -939,7 +939,7 @@ cpu_init (void)
 	unsigned long num_phys_stacked;
 	pal_vm_info_2_u_t vmi;
 	unsigned int max_ctx;
-	struct cpuinfo_ia64 *cpu_info;
+	struct cpuinfo_ia64 *cpuinfo;
 	void *cpu_data;
 
 	cpu_data = per_cpu_init();
@@ -972,15 +972,15 @@ cpu_init (void)
 	 * depends on the data returned by identify_cpu().  We break the dependency by
 	 * accessing cpu_data() through the canonical per-CPU address.
 	 */
-	cpu_info = cpu_data + ((char *) &__ia64_per_cpu_var(cpu_info) - __per_cpu_start);
-	identify_cpu(cpu_info);
+	cpuinfo = cpu_data + ((char *) &__ia64_per_cpu_var(cpu_info) - __per_cpu_start);
+	identify_cpu(cpuinfo);
 
 #ifdef CONFIG_MCKINLEY
 	{
 #		define FEATURE_SET 16
 		struct ia64_pal_retval iprv;
 
-		if (cpu_info->family == 0x1f) {
+		if (cpuinfo->family == 0x1f) {
 			PAL_CALL_PHYS(iprv, PAL_PROC_GET_FEATURES, 0, FEATURE_SET, 0);
 			if ((iprv.status == 0) && (iprv.v0 & 0x80) && (iprv.v2 & 0x80))
 				PAL_CALL_PHYS(iprv, PAL_PROC_SET_FEATURES,

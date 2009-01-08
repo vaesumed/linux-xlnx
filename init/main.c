@@ -386,9 +386,17 @@ static void __init setup_per_cpu_areas(void)
 	char *ptr;
 	unsigned long nr_possible_cpus = num_possible_cpus();
 
+	/* FIXME: core_param is too late, so grab percpu here. */
+	ptr = strstr(boot_command_line, "percpu=");
+	if (ptr)
+		percpu_reserve = simple_strtoul(ptr + strlen("percpu="),
+						NULL, 0);
+
 	/* Copy section for each CPU (we discard the original) */
 	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
 	ptr = alloc_bootmem_pages(size * nr_possible_cpus);
+	printk(KERN_INFO "percpu area: %d bytes total, %d available.\n",
+		size, size - (__per_cpu_end - __per_cpu_start));
 
 	for_each_possible_cpu(i) {
 		__per_cpu_offset[i] = ptr - __per_cpu_start;
@@ -648,6 +656,7 @@ asmlinkage void __init start_kernel(void)
 	enable_debug_pagealloc();
 	cpu_hotplug_init();
 	kmem_cache_init();
+	percpu_alloc_init();
 	kmemtrace_init();
 	debug_objects_mem_init();
 	idr_init_cache();

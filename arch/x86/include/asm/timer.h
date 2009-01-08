@@ -42,13 +42,14 @@ extern int no_timer_check;
  *			-johnstul@us.ibm.com "math is hard, lets go shopping!"
  */
 
-DECLARE_PER_CPU(unsigned long, cyc2ns);
+DECLARE_PER_CPU(unsigned long, percpu_cyc2ns);
 
 #define CYC2NS_SCALE_FACTOR 10 /* 2^10, carefully chosen */
 
 static inline unsigned long long __cycles_2_ns(unsigned long long cyc)
 {
-	return cyc * per_cpu(cyc2ns, smp_processor_id()) >> CYC2NS_SCALE_FACTOR;
+	return cyc * per_cpu(percpu_cyc2ns, smp_processor_id()) >>
+		CYC2NS_SCALE_FACTOR;
 }
 
 static inline unsigned long long cycles_2_ns(unsigned long long cyc)

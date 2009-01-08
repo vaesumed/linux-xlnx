@@ -62,14 +62,14 @@ static DEFINE_SPINLOCK(cpufreq_driver_lock);
  * - Governor routines that can be called in cpufreq hotplug path should not
  *   take this sem as top level hotplug notifier handler takes this.
  */
-static DEFINE_PER_CPU(int, policy_cpu);
+static DEFINE_PER_CPU(int, policy_cpu_pcpu);
 static DEFINE_PER_CPU(struct rw_semaphore, cpu_policy_rwsem);
 
 #define lock_policy_rwsem(mode, cpu)					\
 int lock_policy_rwsem_##mode						\
 (int cpu)								\
 {									\
-	int policy_cpu = per_cpu(policy_cpu, cpu);			\
+	int policy_cpu = per_cpu(policy_cpu_pcpu, cpu);			\
 	BUG_ON(policy_cpu == -1);					\
 	down_##mode(&per_cpu(cpu_policy_rwsem, policy_cpu));		\
 	if (unlikely(!cpu_online(cpu))) {				\
@@ -88,7 +88,7 @@ EXPORT_SYMBOL_GPL(lock_policy_rwsem_write);
 
 void unlock_policy_rwsem_read(int cpu)
 {
-	int policy_cpu = per_cpu(policy_cpu, cpu);
+	int policy_cpu = per_cpu(policy_cpu_pcpu, cpu);
 	BUG_ON(policy_cpu == -1);
 	up_read(&per_cpu(cpu_policy_rwsem, policy_cpu));
 }
@@ -96,7 +96,7 @@ EXPORT_SYMBOL_GPL(unlock_policy_rwsem_read);
 
 void unlock_policy_rwsem_write(int cpu)
 {
-	int policy_cpu = per_cpu(policy_cpu, cpu);
+	int policy_cpu = per_cpu(policy_cpu_pcpu, cpu);
 	BUG_ON(policy_cpu == -1);
 	up_write(&per_cpu(cpu_policy_rwsem, policy_cpu));
 }
@@ -811,7 +811,7 @@ static int cpufreq_add_dev(struct sys_device *sys_dev)
 	policy->cpus = cpumask_of_cpu(cpu);
 
 	/* Initially set CPU itself as the policy_cpu */
-	per_cpu(policy_cpu, cpu) = cpu;
+	per_cpu(policy_cpu_pcpu, cpu) = cpu;
 	lock_policy_rwsem_write(cpu);
 
 	init_completion(&policy->kobj_unregister);
@@ -855,7 +855,7 @@ static int cpufreq_add_dev(struct sys_device *sys_dev)
 
 			/* Set proper policy_cpu */
 			unlock_policy_rwsem_write(cpu);
-			per_cpu(policy_cpu, cpu) = managed_policy->cpu;
+			per_cpu(policy_cpu_pcpu, cpu) = managed_policy->cpu;
 
 			if (lock_policy_rwsem_write(cpu) < 0)
 				goto err_out_driver_exit;
@@ -918,7 +918,7 @@ static int cpufreq_add_dev(struct sys_device *sys_dev)
 	spin_lock_irqsave(&cpufreq_driver_lock, flags);
 	for_each_cpu_mask_nr(j, policy->cpus) {
 		per_cpu(cpufreq_cpu_data, j) = policy;
-		per_cpu(policy_cpu, j) = policy->cpu;
+		per_cpu(policy_cpu_pcpu, j) = policy->cpu;
 	}
 	spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
 
@@ -1923,7 +1923,7 @@ static int __init cpufreq_core_init(void)
 	int cpu;
 
 	for_each_possible_cpu(cpu) {
-		per_cpu(policy_cpu, cpu) = -1;
+		per_cpu(policy_cpu_pcpu, cpu) = -1;
 		init_rwsem(&per_cpu(cpu_policy_rwsem, cpu));
 	}
 	return 0;

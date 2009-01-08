@@ -40,7 +40,7 @@ static unsigned long *in_exception_stack(unsigned cpu, unsigned long stack,
 	 * 'stack' is in one of them:
 	 */
 	for (k = 0; k < N_EXCEPTION_STACKS; k++) {
-		unsigned long end = per_cpu(orig_ist, cpu).ist[k];
+		unsigned long end = per_cpu(orig_ist_pcpu, cpu).ist[k];
 		/*
 		 * Is 'stack' above this exception frame's end?
 		 * If yes then skip to the next frame.

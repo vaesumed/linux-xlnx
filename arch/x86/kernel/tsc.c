@@ -570,7 +570,7 @@ EXPORT_SYMBOL(recalibrate_cpu_khz);
  *                      -johnstul@us.ibm.com "math is hard, lets go shopping!"
  */
 
-DEFINE_PER_CPU(unsigned long, cyc2ns);
+DEFINE_PER_CPU(unsigned long, percpu_cyc2ns);
 
 static void set_cyc2ns_scale(unsigned long cpu_khz, int cpu)
 {
@@ -580,7 +580,7 @@ static void set_cyc2ns_scale(unsigned long cpu_khz, int cpu)
 	local_irq_save(flags);
 	sched_clock_idle_sleep_event();
 
-	scale = &per_cpu(cyc2ns, cpu);
+	scale = &per_cpu(percpu_cyc2ns, cpu);
 
 	rdtscll(tsc_now);
 	ns_now = __cycles_2_ns(tsc_now);

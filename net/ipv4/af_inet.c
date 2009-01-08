@@ -1365,8 +1365,8 @@ unsigned long snmp_fold_field(void *mib[], int offt)
 	int i;
 
 	for_each_possible_cpu(i) {
-		res += *(((unsigned long *) per_cpu_ptr(mib[0], i)) + offt);
-		res += *(((unsigned long *) per_cpu_ptr(mib[1], i)) + offt);
+		res += *(((unsigned long *)big_per_cpu_ptr(mib[0], i)) + offt);
+		res += *(((unsigned long *)big_per_cpu_ptr(mib[1], i)) + offt);
 	}
 	return res;
 }
@@ -1375,15 +1375,15 @@ EXPORT_SYMBOL_GPL(snmp_fold_field);
 int snmp_mib_init(void *ptr[2], size_t mibsize)
 {
 	BUG_ON(ptr == NULL);
-	ptr[0] = __alloc_percpu(mibsize);
+	ptr[0] = big_alloc_percpu(mibsize);
 	if (!ptr[0])
 		goto err0;
-	ptr[1] = __alloc_percpu(mibsize);
+	ptr[1] = big_alloc_percpu(mibsize);
 	if (!ptr[1])
 		goto err1;
 	return 0;
 err1:
-	free_percpu(ptr[0]);
+	big_free_percpu(ptr[0]);
 	ptr[0] = NULL;
 err0:
 	return -ENOMEM;
@@ -1393,8 +1393,8 @@ EXPORT_SYMBOL_GPL(snmp_mib_init);
 void snmp_mib_free(void *ptr[2])
 {
 	BUG_ON(ptr == NULL);
-	free_percpu(ptr[0]);
-	free_percpu(ptr[1]);
+	big_free_percpu(ptr[0]);
+	big_free_percpu(ptr[1]);
 	ptr[0] = ptr[1] = NULL;
 }
 EXPORT_SYMBOL_GPL(snmp_mib_free);

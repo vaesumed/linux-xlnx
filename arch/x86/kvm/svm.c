@@ -111,7 +111,7 @@ struct svm_cpu_data {
 	struct page *save_area;
 };
 
-static DEFINE_PER_CPU(struct svm_cpu_data *, svm_data);
+static DEFINE_PER_CPU(struct svm_cpu_data *, svm_data_pcpu);
 static uint32_t svm_features;
 
 struct svm_init_data {
@@ -275,7 +275,7 @@ static void svm_hardware_enable(void *garbage)
 		printk(KERN_ERR "svm_cpu_init: err EOPNOTSUPP on %d\n", me);
 		return;
 	}
-	svm_data = per_cpu(svm_data, me);
+	svm_data = per_cpu(svm_data_pcpu, me);
 
 	if (!svm_data) {
 		printk(KERN_ERR "svm_cpu_init: svm_data is NULL on %d\n",
@@ -301,12 +301,12 @@ static void svm_hardware_enable(void *garbage)
 static void svm_cpu_uninit(int cpu)
 {
 	struct svm_cpu_data *svm_data
-		= per_cpu(svm_data, raw_smp_processor_id());
+		= per_cpu(svm_data_pcpu, raw_smp_processor_id());
 
 	if (!svm_data)
 		return;
 
-	per_cpu(svm_data, raw_smp_processor_id()) = NULL;
+	per_cpu(svm_data_pcpu, raw_smp_processor_id()) = NULL;
 	__free_page(svm_data->save_area);
 	kfree(svm_data);
 }
@@ -325,7 +325,7 @@ static int svm_cpu_init(int cpu)
 	if (!svm_data->save_area)
 		goto err_1;
 
-	per_cpu(svm_data, cpu) = svm_data;
+	per_cpu(svm_data_pcpu, cpu) = svm_data;
 
 	return 0;
 
@@ -2205,7 +2205,7 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 {
 	int cpu = raw_smp_processor_id();
 
-	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
+	struct svm_cpu_data *svm_data = per_cpu(svm_data_pcpu, cpu);
 	svm_data->tss_desc->type = 9; /* available 32/64-bit TSS */
 	load_TR_desc();
 }
@@ -2214,7 +2214,7 @@ static void pre_svm_run(struct vcpu_svm *svm)
 {
 	int cpu = raw_smp_processor_id();
 
-	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
+	struct svm_cpu_data *svm_data = per_cpu(svm_data_pcpu, cpu);
 
 	svm->vmcb->control.tlb_ctl = TLB_CONTROL_DO_NOTHING;
 	if (svm->vcpu.cpu != cpu ||

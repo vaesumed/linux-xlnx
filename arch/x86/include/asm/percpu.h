@@ -66,13 +66,13 @@ DECLARE_PER_CPU(struct x8664_pda, pda);
  */
 #ifdef CONFIG_SMP
 #define PER_CPU(var, reg)				\
-	movl %fs:per_cpu__##this_cpu_off, reg;		\
-	lea per_cpu__##var(reg), reg
-#define PER_CPU_VAR(var)	%fs:per_cpu__##var
+	movl %fs:this_cpu_off, reg;			\
+	lea var(reg), reg
+#define PER_CPU_VAR(var)	%fs:var
 #else /* ! SMP */
 #define PER_CPU(var, reg)			\
-	movl $per_cpu__##var, reg
-#define PER_CPU_VAR(var)	per_cpu__##var
+	movl $var, reg
+#define PER_CPU_VAR(var)	var
 #endif	/* SMP */
 
 #else /* ...!ASSEMBLY */
@@ -101,6 +101,10 @@ DECLARE_PER_CPU(struct x8664_pda, pda);
 #define __percpu_seg ""
 
 #endif	/* SMP */
+
+/* Define these now so asm-generic/percpu.h doesn't. */
+#define read_percpu_var(var) x86_read_percpu(var)
+#define read_percpu_ptr(ptr) x86_read_percpu(*(ptr))
 
 #include <asm-generic/percpu.h>
 
@@ -162,11 +166,11 @@ do {							\
 	ret__;						\
 })
 
-#define x86_read_percpu(var) percpu_from_op("mov", per_cpu__##var)
-#define x86_write_percpu(var, val) percpu_to_op("mov", per_cpu__##var, val)
-#define x86_add_percpu(var, val) percpu_to_op("add", per_cpu__##var, val)
-#define x86_sub_percpu(var, val) percpu_to_op("sub", per_cpu__##var, val)
-#define x86_or_percpu(var, val) percpu_to_op("or", per_cpu__##var, val)
+#define x86_read_percpu(var) percpu_from_op("mov", var)
+#define x86_write_percpu(var, val) percpu_to_op("mov", var, val)
+#define x86_add_percpu(var, val) percpu_to_op("add", var, val)
+#define x86_sub_percpu(var, val) percpu_to_op("sub", var, val)
+#define x86_or_percpu(var, val) percpu_to_op("or", var, val)
 #endif /* !__ASSEMBLY__ */
 #endif /* !CONFIG_X86_64 */
 

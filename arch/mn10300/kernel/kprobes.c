@@ -39,7 +39,7 @@ static unsigned long kprobe_status;
 static kprobe_opcode_t current_kprobe_ss_buf[MAX_INSN_SIZE + 2];
 static unsigned long current_kprobe_bp_addr;
 
-DEFINE_PER_CPU(struct kprobe *, current_kprobe) = NULL;
+DEFINE_PER_CPU(struct kprobe *, current_kprobe_pcpu) = NULL;
 
 
 /* singlestep flag bits */

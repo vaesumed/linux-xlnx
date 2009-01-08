@@ -1073,9 +1073,9 @@ ENTRY(\sym)
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	movq %gs:pda_data_offset, %rbp
-	subq $EXCEPTION_STKSZ, per_cpu__init_tss + TSS_ist + (\ist - 1) * 8(%rbp)
+	subq $EXCEPTION_STKSZ, init_tss + TSS_ist + (\ist - 1) * 8(%rbp)
 	call \do_sym
-	addq $EXCEPTION_STKSZ, per_cpu__init_tss + TSS_ist + (\ist - 1) * 8(%rbp)
+	addq $EXCEPTION_STKSZ, init_tss + TSS_ist + (\ist - 1) * 8(%rbp)
 	jmp paranoid_exit	/* %ebx: no swapgs flag */
 	CFI_ENDPROC
 END(\sym)
