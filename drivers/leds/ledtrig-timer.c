@@ -78,34 +78,30 @@ static ssize_t led_delay_on_store(struct device *dev,
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
 	struct timer_trig_data *timer_data = led_cdev->trigger_data;
-	int ret = -EINVAL;
-	char *after;
-	unsigned long state = simple_strtoul(buf, &after, 10);
-	size_t count = after - buf;
+	unsigned long state;
+	ssize_t ret;
 
-	if (*after && isspace(*after))
-		count++;
+	ret = strict_strtoul(buf, 10, &state);
+	if (ret)
+		return ret;
 
-	if (count == size) {
-		if (timer_data->delay_on != state) {
-			/* the new value differs from the previous */
-			timer_data->delay_on = state;
+	if (timer_data->delay_on != state) {
+		/* the new value differs from the previous */
+		timer_data->delay_on = state;
 
-			/* deactivate previous settings */
-			del_timer_sync(&timer_data->timer);
+		/* deactivate previous settings */
+		del_timer_sync(&timer_data->timer);
 
-			/* try to activate hardware acceleration, if any */
-			if (!led_cdev->blink_set ||
-			    led_cdev->blink_set(led_cdev,
-			      &timer_data->delay_on, &timer_data->delay_off)) {
-				/* no hardware acceleration, blink via timer */
-				mod_timer(&timer_data->timer, jiffies + 1);
-			}
+		/* try to activate hardware acceleration, if any */
+		if (!led_cdev->blink_set ||
+		    led_cdev->blink_set(led_cdev,
+		      &timer_data->delay_on, &timer_data->delay_off)) {
+			/* no hardware acceleration, blink via timer */
+			mod_timer(&timer_data->timer, jiffies + 1);
 		}
-		ret = count;
 	}
 
-	return ret;
+	return strnlen(buf, size);
 }
 
 static ssize_t led_delay_off_show(struct device *dev,
@@ -122,34 +118,30 @@ static ssize_t led_delay_off_store(struct device *dev,
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
 	struct timer_trig_data *timer_data = led_cdev->trigger_data;
-	int ret = -EINVAL;
-	char *after;
-	unsigned long state = simple_strtoul(buf, &after, 10);
-	size_t count = after - buf;
+	unsigned long state;
+	ssize_t ret;
 
-	if (*after && isspace(*after))
-		count++;
+	ret = strict_strtoul(buf, 10, &state);
+	if (ret)
+		return ret;
 
-	if (count == size) {
-		if (timer_data->delay_off != state) {
-			/* the new value differs from the previous */
-			timer_data->delay_off = state;
+	if (timer_data->delay_off != state) {
+		/* the new value differs from the previous */
+		timer_data->delay_off = state;
 
-			/* deactivate previous settings */
-			del_timer_sync(&timer_data->timer);
+		/* deactivate previous settings */
+		del_timer_sync(&timer_data->timer);
 
-			/* try to activate hardware acceleration, if any */
-			if (!led_cdev->blink_set ||
-			    led_cdev->blink_set(led_cdev,
-			      &timer_data->delay_on, &timer_data->delay_off)) {
-				/* no hardware acceleration, blink via timer */
-				mod_timer(&timer_data->timer, jiffies + 1);
-			}
+		/* try to activate hardware acceleration, if any */
+		if (!led_cdev->blink_set ||
+		    led_cdev->blink_set(led_cdev,
+		      &timer_data->delay_on, &timer_data->delay_off)) {
+			/* no hardware acceleration, blink via timer */
+			mod_timer(&timer_data->timer, jiffies + 1);
 		}
-		ret = count;
 	}
 
-	return ret;
+	return strnlen(buf, size);
 }
 
 static DEVICE_ATTR(delay_on, 0644, led_delay_on_show, led_delay_on_store);

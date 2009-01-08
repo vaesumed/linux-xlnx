@@ -45,23 +45,18 @@ static ssize_t led_brightness_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
-	ssize_t ret = -EINVAL;
-	char *after;
-	unsigned long state = simple_strtoul(buf, &after, 10);
-	size_t count = after - buf;
+	unsigned long state;
+	ssize_t ret;
 
-	if (*after && isspace(*after))
-		count++;
+	ret = strict_strtoul(buf, 10, &state);
+	if (ret)
+		return ret;
 
-	if (count == size) {
-		ret = count;
+	if (state == LED_OFF)
+		led_trigger_remove(led_cdev);
+	led_set_brightness(led_cdev, state);
 
-		if (state == LED_OFF)
-			led_trigger_remove(led_cdev);
-		led_set_brightness(led_cdev, state);
-	}
-
-	return ret;
+	return strnlen(buf, size);
 }
 
 static DEVICE_ATTR(brightness, 0644, led_brightness_show, led_brightness_store);
@@ -93,7 +88,7 @@ EXPORT_SYMBOL_GPL(led_classdev_resume);
 
 /**
  * led_classdev_register - register a new object of led_classdev class.
- * @dev: The device to register.
+ * @parent: The device to register.
  * @led_cdev: the led_classdev structure for this device.
  */
 int led_classdev_register(struct device *parent, struct led_classdev *led_cdev)

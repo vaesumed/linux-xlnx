@@ -127,7 +127,7 @@ static int ams_delta_led_remove(struct platform_device *pdev)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(ams_delta_leds); i--)
+	for (i = 0; i < ARRAY_SIZE(ams_delta_leds); i++)
 		led_classdev_unregister(&ams_delta_leds[i].cdev);
 
 	return 0;
@@ -151,7 +151,7 @@ static int __init ams_delta_led_init(void)
 
 static void __exit ams_delta_led_exit(void)
 {
-	return platform_driver_unregister(&ams_delta_led_driver);
+	platform_driver_unregister(&ams_delta_led_driver);
 }
 
 module_init(ams_delta_led_init);
