@@ -210,4 +210,18 @@ struct kvm_sregs {
 struct kvm_fpu {
 };
 
+#define KVM_IA64_VCPU_STACK_SHIFT	16
+#define KVM_IA64_VCPU_STACK_SIZE	(1UL << KVM_IA64_VCPU_STACK_SHIFT)
+
+struct kvm_ia64_vcpu_stack {
+	unsigned char stack[KVM_IA64_VCPU_STACK_SIZE];
+};
+
+struct kvm_debug_exit_arch {
+};
+
+/* for KVM_SET_GUEST_DEBUG */
+struct kvm_guest_debug_arch {
+};
+
 #endif
