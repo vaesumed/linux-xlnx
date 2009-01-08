@@ -1,0 +1,277 @@
+Importing driver-core.current based on 2.6.28-git9
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current ede6f5aea054d3fb67c78857f7abdee602302043
+Importing usb.current based on quilt/driver-core.current
+$ git checkout quilt/usb.current
+Switched to branch "quilt/usb.current"
+$ git reset --hard ede6f5aea054d3fb67c78857f7abdee602302043
+HEAD is now at ede6f5a Fix up 64-bit byte swaps for most 32-bit architectures
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-unusual_devs.h-additions-for-pentax-k10d.patch
+usb-another-unusual_devs-entry-for-another-bad-argosy-storage-device.patch
+usb-storage-extend-unusual-range-for-067b-3507.patch
+usb-storage-recognizing-and-enabling-nokia-5200-cell-phoes.patch
+usb-storage-unusual_devs.h-additions-for-macpower-masterbox.patch
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 67debd681a75cf3ad02f6c6a040780e185b91494
+HEAD is now at 67debd6 USB: storage: unusual_devs.h additions for Macpower MasterBox
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+bus_id-scsi.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+$ git checkout quilt/usb
+Switched to branch "quilt/usb"
+$ git reset --hard 8c5dbc12049ee7eaaa6b74fdace18b70d3395a84
+HEAD is now at 8c5dbc1 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-clean-up-redundant-tests-on-unsigned.patch
+usb-use-pci_ioremap_bar-in-drivers-usb.patch
+usb-avoid-20ms-delay-in-ehci-resume.patch
+usb-host-oxford-oxu210hp-hcd-driver.patch
+usb-protect-hcd.h-from-multiple-inclusions.patch
+usb-avoid-needless-address-taking-of-function-parameters.patch
+usb-straighten-out-inline-code-in-sysfs.c.patch
+usb-ehci-pci-quirks.c-don-t-wait-so-long-for-bios-handoff.patch
+usb-wusb-annotate-association-types-withe-proper-endianness.patch
+usb-remove-restrictions-on-signal-numbers-in-devio.c.patch
+usb-power-availability-check-for-berry_charge.patch
+usb-usbtmc-indent-braces-disagree-something-else-is-desired.patch
+usb-change-interface-to-usb_lock_device_for_reset.patch
+usb-fsl_qe_udc-check-for-muram-allocation-errors.patch
+usb-powerpc-workaround-for-the-ppc440epx-usbh_23-errata.patch
+usb-struct-device-replace-bus_id-with-dev_name-dev_set_name.patch
+usb-oxu210hp-hcd.c-struct-device-replace-bus_id-with-dev_name-dev_set_name.patch
+usb-usb-storage-add-quirks-module-parameter.patch
+usb-add-asynchronous-autosuspend-autoresume-support.patch
+usb-introduce-usb_queue_reset-to-do-resets-from-atomic-contexts-v7.patch
+usb-convert-ohci-pnx4008-to-a-new-style-i2c-driver.patch
+usb-m66592-and-r8a66597-resource-changes.patch
+usb-gadget-pxa27x_udc.c-cleanup-kernel-doc.patch
+usb-serial-ipw.c-mark-__init-__exit-for-usb_ipw_-init-exit.patch
+usb-allow-usbmon-as-a-module-even-if-usbcore-is-builtin.patch
+usb-announce-new-devices-earlier.patch
+usb-storage-clean-up-unusual_devs.h.patch
+usb-usb-storage-remove-us-sensebuf.patch
+usb-storage-devices-and-sat.patch
+usb-storage-flag-devices-known-to-support-sane_sense.patch
+usb-g_file_storage-add-cd-rom-emulation.patch
+usb-usb-storage-merge-cb-and-cbi-transport-routines.patch
+usb-usb-storage-merge-atapi-and-qic-157-protocol-routines.patch
+usb-storage-set-bounce-limit-for-non-dma-capable-host-controllers.patch
+usb-don-t-use-__module_param_call.patch
+usb-gadget-change-simple_strtol-to-simple_strtoul.patch
+usb-gadget-mips-ci13xxx_udc.patch
+usb-musb-sysfs-mode-updates.patch
+usb-musb-build-fixes-for-davinci.patch
+usb-musb-minor-locking-fix.patch
+usb-musb-host-side-diagnostics-tweaks.patch
+usb-musb-add-musb-git-tree-to-maintainers-entry.patch
+usb-musb-check-if-set_irq_wake-succeded-and-remember-it.patch
+usb-gadget-pxa25x_udc-vbus-sense-initialization.patch
+usb-gadget-s3c2410_udc-uses-standard-gpio-calls.patch
+usb-move-isp1301_omap-to-drivers-usb-otg.patch
+usb-otg-gpio_vbus-transceiver-stub.patch
+usb-otg-add-otg_put_transceiver.patch
+usb-otg-sharable-otg-transceiver-ops.patch
+usb-utilize-round_jiffies_up_relative.patch
+usb-enhance-usage-of-pm_message_t.patch
+usb-serial-usb_debug-make-static.patch
+usb-gadget-don-t-wait-for-completion-twice.patch
+usb-isp1760-use-a-specific-plx-bridge-instead-of-any-bdridge.patch
+usb-isp1760-fix-probe-in-pci-glue-code.patch
+usb-serial-fix-up-urb-status-usage.patch
+usb-option-increase-outgoing-buffer-size-and-number.patch
+usb-usb-storage-merge-dpcm-support-into-sddr09.patch
+usb-musb-use-new-platform-data-interface-of-musb-to-replace-old-one.patch
+usb-musb-add-blackfin-driver-to-musb-framework.patch
+usb-musb-make-sure-we-program-the-correct-values-in-only-when-necessary.patch
+usb-musb-add-blackfin-version-low-level-register-accessing-helper-functions.patch
+usb-musb-enable-low-level-dma-operation-for-blackfin.patch
+usb-musb-add-blackfin-specific-configuration-to-musb.patch
+usb-musb-add-blackfin-kconfig-options-and-makefile.patch
+usb-musb-blackfin-provides-read-write-i-o-accessor-in-header-files.patch
+usb-musb-kill-some-compiling-warning-in-musb-blackfin-part.patch
+usb-make-printk-messages-more-searchable.patch
+usb-utilize-the-bus-notifiers.patch
+usb-mark-reject-field-of-struct-urb-as-atomic_t.patch
+usb-unusual-dev-for-option-n.v.-zerocd-modems.patch
+usb-isp1760-don-t-auto-disable-port1-on-isp1761.patch
+usb-extension-of-anchor-api-to-unpoison-an-anchor.patch
+usb-add-imx-udc-gadget-driver.patch
+/home/sfr/kernels/next/next/.git/rebase-apply/patch:348: space before tab in indent.
+	 		if (!temp & EPSTAT_STALL)
+/home/sfr/kernels/next/next/.git/rebase-apply/patch:349: space before tab in indent.
+	 			break;
+/home/sfr/kernels/next/next/.git/rebase-apply/patch:350: space before tab in indent.
+	 		udelay(20);
+/home/sfr/kernels/next/next/.git/rebase-apply/patch:351: space before tab in indent.
+	 	}
+warning: 4 lines add whitespace errors.
+usb-otg-twl4030-transceiver-driver.patch
+usb-storage-add-last-sector-hacks.patch
+usb-storage-make-the-quirks-module-parameter-writable.patch
+usb-storage-set-capacity_heuristics-flag-for-bad-vendors.patch
+usb-fix-up-suspend-and-resume-for-pci-host-controllers.patch
+usb-automatically-enable-wakeup-for-pci-host-controllers.patch
+usb-cancel-pending-set-config-requests-if-userspace-gets-there-first.patch
+usb-re-enable-interface-after-driver-unbinds.patch
+usb-fix-minor-nit-in-usbfs-checking.patch
+usb-fix-goku_udc-usb-speed-handling.patch
+usb-emi26-fix-oops-on-load.patch
+usb-add-new-opticon-serial-driver.patch
+usb-add-siemens_mpi-usb-serial-stub-driver.patch
+usb-remove-warn-macro-from-usb.h.patch
+usb-remove-info-macro-from-usb.h.patch
+debugfs-add-helpers-for-exporting-a-size_t-simple-value.patch
+wimax-documentation-for-the-stack.patch
+wimax-headers-for-kernel-api-and-user-space-interaction.patch
+wimax-internal-api-for-the-kernel-space-wimax-stack.patch
+wimax-debug-macros-and-debug-settings-for-the-wimax-stack.patch
+wimax-generic-device-management.patch
+genetlink-export-genl_unregister_mc_group.patch
+wimax-basic-api-kernel-user-messaging-rfkill-and-reset.patch
+wimax-debugfs-controls.patch
+wimax-makefile-kconfig-and-docbook-linkage-for-the-stack.patch
+i2400m-documentation-and-instructions-for-usage.patch
+i2400m-host-device-procotol-and-core-driver-definitions.patch
+i2400m-generic-probe-disconnect-reset-and-message-passing.patch
+i2400m-linkage-to-the-networking-stack.patch
+i2400m-firmware-loading-and-bootrom-initialization.patch
+i2400m-rx-and-tx-data-control-paths.patch
+i2400m-various-functions-for-device-management.patch
+i2400m-debugfs-controls.patch
+i2400m-usb-header-for-the-usb-bus-driver.patch
+i2400m-usb-probe-disconnect-dev-init-shutdown-and-reset-backends.patch
+i2400m-usb-firmware-upload-backend.patch
+i2400m-usb-tx-and-rx-path-backends.patch
+i2400m-sdio-header-for-the-sdio-subdriver.patch
+i2400m-sdio-probe-disconnect-dev-init-shutdown-and-reset-backends.patch
+i2400m-sdio-firmware-upload-backend.patch
+i2400m-sdio-tx-and-rx-path-backends.patch
+i2400m-makefile-and-kconfig.patch
+wimax-export-linux-wimax.h-and-linux-wimax-i2400m.h-with-headers_install.patch
+wimax-i2400m-add-credits-and-maintainers-entries.patch
+Importing device-mapper based on v2.6.28-6127-g238c6d5
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 238c6d54830c624f34ac9cf123ac04aebfca5013
+HEAD is now at 238c6d5 Merge git://git.kernel.org/pub/scm/linux/kernel/git/agk/linux-2.6-dm
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-ioctl-validate-name-length-when-renaming.patch
+dm-table-rework-reference-counting-fix.patch
+Importing i2c based on 2.6.28-git9
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard ede6f5aea054d3fb67c78857f7abdee602302043
+HEAD is now at ede6f5a Fix up 64-bit byte swaps for most 32-bit architectures
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-replace-bus_id-with-dev_name-dev_set_name-part-1.patch
+i2c-replace-bus_id-with-dev_name-dev_set_name-part-2.patch
+i2c-drop-I2C_CLASS_ALL.patch
+i2c-drop-I2C_CLASS_CAM_ANALOG-and-I2C_CLASS_SOUND.patch
+i2c-drop-I2C_CLASS_CAM_DIGITAL.patch
+i2c-apanel-convert-to-new-style.patch
+i2c-busses-use-snprintf.patch
+Importing jdelvare-hwmon based on 2.6.28-git9
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard ede6f5aea054d3fb67c78857f7abdee602302043
+HEAD is now at ede6f5a Fix up 64-bit byte swaps for most 32-bit architectures
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-f71882fg-01-use-sensor_device_attribute_2.patch
+hwmon-f71882fg-02-misc-cleanups.patch
+hwmon-f71882fg-03-add-pwm-support.patch
+hwmon-f71882fg-04-style-cleanups.patch
+hwmon-f71882fg-05-add-f71862fg-support.patch
+hwmon-f71882fg-06-no-io-to-unreserved-ports.patch
+hwmon-f71882fg-07-f8000-prep.patch
+hwmon-f71882fg-08-fix-store-functions.patch
+hwmon-f71882fg-09-simplify-hyst-functions.patch
+hwmon-f71882fg-10-check-for-powerdown.patch
+hwmon-f71882fg-11-separate-max-crit-alarm-and-beep.patch
+hwmon-f71882fg-12-remove-fan_mode-modoption.patch
+hwmon-f71882fg-13-add-f8000-support.patch
+hwmon-f71882fg-14-add-f71862fg-pwm3.patch
+hwmon-f71882fg-15-fix-f8000-auto_channels_temp.patch
+hwmon-f71882fg-16-add-and-update-doc.patch
+hwmon-f71882fg-17-printout-fan-modes.patch
+hwmon-f71882fg-18-fix-fan-reg-funcs.patch
+hwmon-add-ltc4245-driver.patch
+hwmon-dont-overuse-I2C_CLIENT_MODULE_PARM.patch
+hwmon-it87-add-it8720f-support.patch
+hwmon-i5k_amb-load-automatically-on-all-5000-5400-chipsets.patch
+hwmon-fschmd-01-cleanup.patch
+hwmon-fschmd-02-watchdog-v4.patch
+hwmon-fschmd-03-deprecate-pos-her.patch
+hwmon-lm70-01-fix-byte-order.patch
+hwmon-lm70-02-ti-tmp121-support.patch
+hwmon-acpi-check-conflict.patch
+hwmon-typos.patch
+hwmon-k8temp-01-warn-about-errata.patch
+Unchanged quilt series kernel-doc
+Importing ide based on ede6f5aea054d3fb67c78857f7abdee602302043
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard ede6f5aea054d3fb67c78857f7abdee602302043
+HEAD is now at ede6f5a Fix up 64-bit byte swaps for most 32-bit architectures
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-accidental-lockdep-breakage-caused-by-local_irq_set-removal.patch
+it821x-add-ultra_mask-quirk-for-vortex86sx.patch
+it821x-use-dev-revision-instead-of-pci_read_config_byte.patch
+ide-cant-use-ssd-non-rotational-queue-flag-for-all-cfa-devices.patch
+via82cxxx-fix-cable-warning-message.patch
+sl82c105-remove-dead-code.patch
+ide-remove-unused-config_blk_dev_ide_au1xxx_seqts_per_rq.patch
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-rqsize-init-from-init_irq-to-ide_init_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+Importing rr based on v2.6.28-5716-gfe0bdec
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard fe0bdec68b77020281dc814805edfe594ae89e0f
+HEAD is now at fe0bdec Merge branch 'audit.b61' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/audit-current
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:remove_config_kmod.patch
+module:compare-sym-values-for-export-mark-in-proc-kallsyms.patch
+module:print_unload_info-no-proc.patch
+module:parisc_fix_loading_failure_of_large_kernel_modules.patch
+module:parisc-fix-large-modules.patch
+stop_machine:introduce_stop_machine_create_destroy.patch
+module:convert_to_stop_machine_create_destroy.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:work_on_cpu-pci.patch
+misc:work_on_cpu-powerpc-sysfs.patch
+cpualloc:big_percpu_alloc.patch
+cpualloc:move-net-to-big_alloc_percpu.patch
+cpualloc:remove-alignment-on-cpu_workqueue_struct.patch
+cpualloc:remove-percpu_ptr-users.patch
+cpualloc:add-align-arg-to-__alloc_percpu.patch
+cpualloc:make_the_per_cpu_reserve_configurable.patch
+cpualloc:parse-percpu-earlier.patch
+cpualloc:generalize-percpu_modalloc-percpu_modfree.patch
+cpualloc:expose-module-percpu-allocator.patch
+cpualloc:use-module-allocator.patch
+cpualloc:documentation.patch
+cpualloc:get_cpu_ptr.patch
+cpualloc:read_percpu.patch
+cpualloc:rename-per_cpu-vars.patch
+cpualloc:remove-per_cpu__-prefix.patch
+cpualloc:__percpu-annotation-for-sparse.patch
+Importing ttydev based on ede6f5aea054d3fb67c78857f7abdee602302043
+$ git checkout quilt/ttydev
+Switched to branch "quilt/ttydev"
+$ git reset --hard ede6f5aea054d3fb67c78857f7abdee602302043
+HEAD is now at ede6f5a Fix up 64-bit byte swaps for most 32-bit architectures
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+pty-doc-fix
+serial-neo-removenullcheck
+usb-serial-remove-nullcheck
+Importing staging based on quilt/usb
+	quilt series is empty
+$ git update-ref refs/heads/quilt/staging 9e8790464a3e7f562228ed84f70202053bcbda34
