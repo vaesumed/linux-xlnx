@@ -1140,8 +1140,27 @@ acpi_ds_exec_begin_control_op(struct acpi_walk_state *walk_state,
 			  op->common.aml_opcode, walk_state));
 
 	switch (op->common.aml_opcode) {
-	case AML_IF_OP:
 	case AML_WHILE_OP:
+
+		/*
+		 * If this is an additional iteration of a while loop, continue.
+		 * There is no need to allocate a new control state.
+		 */
+		if (walk_state->control_state) {
+			if (walk_state->control_state->control.aml_predicate_start
+				== (walk_state->parser_state.aml - 1)) {
+
+				/* Reset the state to start-of-loop */
+
+				walk_state->control_state->common.state =
+				    ACPI_CONTROL_CONDITIONAL_EXECUTING;
+				break;
+			}
+		}
+
+		/*lint -fallthrough */
+
+	case AML_IF_OP:
 
 		/*
 		 * IF/WHILE: Create a new control state to manage these
@@ -1243,12 +1262,35 @@ acpi_ds_exec_end_control_op(struct acpi_walk_state * walk_state,
 
 		ACPI_DEBUG_PRINT((ACPI_DB_DISPATCH, "[WHILE_OP] Op=%p\n", op));
 
-		if (walk_state->control_state->common.value) {
+		control_state = walk_state->control_state;
+		if (control_state->common.value) {
 
-			/* Predicate was true, go back and evaluate it again! */
+			/* Predicate was true, the body of the loop was just executed */
 
+			/*
+			 * This loop counter mechanism allows the interpreter to escape
+			 * possibly infinite loops. This can occur in poorly written AML
+			 * when the hardware does not respond within a while loop and the
+			 * loop does not implement a timeout.
+			 */
+			control_state->control.loop_count++;
+			if (control_state->control.loop_count >
+				ACPI_MAX_LOOP_ITERATIONS) {
+				status = AE_AML_INFINITE_LOOP;
+				break;
+			}
+
+			/*
+			 * Go back and evaluate the predicate and maybe execute the loop
+			 * another time
+			 */
 			status = AE_CTRL_PENDING;
+			walk_state->aml_last_while =
+			    control_state->control.aml_predicate_start;
+			break;
 		}
+
+		/* Predicate was false, terminate this while loop */
 
 		ACPI_DEBUG_PRINT((ACPI_DB_DISPATCH,
 				  "[WHILE_OP] termination! Op=%p\n", op));
@@ -1257,9 +1299,6 @@ acpi_ds_exec_end_control_op(struct acpi_walk_state * walk_state,
 
 		control_state =
 		    acpi_ut_pop_generic_state(&walk_state->control_state);
-
-		walk_state->aml_last_while =
-		    control_state->control.aml_predicate_start;
 		acpi_ut_delete_generic_state(control_state);
 		break;
 

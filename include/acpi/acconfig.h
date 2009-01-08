@@ -63,7 +63,7 @@
 
 /* Current ACPICA subsystem version in YYYYMMDD format */
 
-#define ACPI_CA_VERSION                 0x20080926
+#define ACPI_CA_VERSION                 0x20081031
 
 /*
  * OS name, used for the _OS object.  The _OS object is essentially obsolete,
@@ -118,6 +118,10 @@
 /* Size of the root table array is increased by this increment */
 
 #define ACPI_ROOT_TABLE_SIZE_INCREMENT  4
+
+/* Maximum number of While() loop iterations before forced abort */
+
+#define ACPI_MAX_LOOP_ITERATIONS        0xFFFF
 
 /******************************************************************************
  *
