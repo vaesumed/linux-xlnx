@@ -201,7 +201,7 @@ union fw_cdev_event {
  *		case, @rom_length is updated with the actual length of the
  *		configuration ROM.
  * @rom:	If non-zero, address of a buffer to be filled by a copy of the
- *		local node's configuration ROM
+ *		device's configuration ROM
  * @bus_reset:	If non-zero, address of a buffer to be filled by a
  *		&struct fw_cdev_event_bus_reset with the current state
  *		of the bus.  This does not cause a bus reset to happen.
@@ -229,7 +229,7 @@ struct fw_cdev_get_info {
  * Send a request to the device.  This ioctl implements all outgoing requests.
  * Both quadlet and block request specify the payload as a pointer to the data
  * in the @data field.  Once the transaction completes, the kernel writes an
- * &fw_cdev_event_request event back.  The @closure field is passed back to
+ * &fw_cdev_event_response event back.  The @closure field is passed back to
  * user space in the response event.
  */
 struct fw_cdev_send_request {
