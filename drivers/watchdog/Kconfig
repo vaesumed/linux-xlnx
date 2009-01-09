@@ -797,6 +797,12 @@ config BOOKE_WDT
 	  Please see Documentation/watchdog/watchdog-api.txt for
 	  more information.
 
+config GEF_WDT
+	tristate "GE Fanuc Watchdog Timer"
+	depends on GEF_SBC610
+	---help---
+	  Watchdog timer found in a number of GE Fanuc single board computers.
+
 # PPC64 Architecture
 
 config WATCHDOG_RTAS
