@@ -698,7 +698,7 @@ interrupt_base:
 	/* Performance Monitor */
 	EXCEPTION(0x2060, PerformanceMonitor, performance_monitor_exception, EXC_XFER_STD)
 	
-	EXCEPTION(0x2070, Doorbell, unknown_exception, EXC_XFER_EE)
+	EXCEPTION(0x2070, Doorbell, unknown_exception, EXC_XFER_STD)
 
 	/* Debug Interrupt */
 	DEBUG_DEBUG_EXCEPTION
