@@ -1,0 +1,79 @@
+Importing driver-core.current based on 2.6.28-git11
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current 9e42d0cf5020aaf217433cad1a224745241d212a
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 9e42d0cf5020aaf217433cad1a224745241d212a
+Importing driver-core based on quilt/usb.current
+$ git checkout quilt/driver-core
+Switched to branch "quilt/driver-core"
+$ git reset --hard 9e42d0cf5020aaf217433cad1a224745241d212a
+HEAD is now at 9e42d0c Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/sparc-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+bus_id-scsi.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+Importing usb based on quilt/driver-core
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb 04164b0a76f3b0f0b9a46eef90541ab7f7aac18e
+Importing device-mapper based on v2.6.28-6127-g238c6d5
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 238c6d54830c624f34ac9cf123ac04aebfca5013
+HEAD is now at 238c6d5 Merge git://git.kernel.org/pub/scm/linux/kernel/git/agk/linux-2.6-dm
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-ioctl-validate-name-length-when-renaming.patch
+dm-table-rework-reference-counting-fix.patch
+dm-target-use-module-refcount-directly.patch
+dm-target-remove-struct-tt_internal.patch
+dm-exception-store-separate-type-from-instance.patch
+Importing i2c based on 2.6.28-git10
+	quilt series is empty
+$ git update-ref refs/heads/quilt/i2c 8cfc7f9c005313ecd4e98ad1feb391d8dfce9ed2
+Importing jdelvare-hwmon based on 2.6.28-git10
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard 8cfc7f9c005313ecd4e98ad1feb391d8dfce9ed2
+HEAD is now at 8cfc7f9 Merge branch 'sched-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-k8temp-01-warn-about-errata.patch
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.28-5716-gfe0bdec
+$ git checkout quilt/rr
+Switched to branch "quilt/rr"
+$ git reset --hard fe0bdec68b77020281dc814805edfe594ae89e0f
+HEAD is now at fe0bdec Merge branch 'audit.b61' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/audit-current
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:remove_config_kmod.patch
+module:compare-sym-values-for-export-mark-in-proc-kallsyms.patch
+module:print_unload_info-no-proc.patch
+module:parisc_fix_loading_failure_of_large_kernel_modules.patch
+module:parisc-fix-large-modules.patch
+stop_machine:introduce_stop_machine_create_destroy.patch
+module:convert_to_stop_machine_create_destroy.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:work_on_cpu-pci.patch
+misc:work_on_cpu-powerpc-sysfs.patch
+cpualloc:big_percpu_alloc.patch
+cpualloc:move-net-to-big_alloc_percpu.patch
+cpualloc:remove-alignment-on-cpu_workqueue_struct.patch
+cpualloc:remove-percpu_ptr-users.patch
+cpualloc:add-align-arg-to-__alloc_percpu.patch
+cpualloc:make_the_per_cpu_reserve_configurable.patch
+cpualloc:parse-percpu-earlier.patch
+cpualloc:generalize-percpu_modalloc-percpu_modfree.patch
+cpualloc:expose-module-percpu-allocator.patch
+cpualloc:use-module-allocator.patch
+cpualloc:documentation.patch
+cpualloc:get_cpu_ptr.patch
+error: patch failed: arch/alpha/include/asm/percpu.h:71
+error: arch/alpha/include/asm/percpu.h: patch does not apply
+error: patch failed: include/asm-generic/percpu.h:82
+error: include/asm-generic/percpu.h: patch does not apply
+$ git reset --hard 3db9b863fa5cd6c65da4248d896654c6c81345a1
+HEAD is now at 3db9b86 cpualloc:__percpu-annotation-for-sparse
+Unchanged quilt series ttydev
+Importing staging based on quilt/usb
+	quilt series is empty
+$ git update-ref refs/heads/quilt/staging 04164b0a76f3b0f0b9a46eef90541ab7f7aac18e
