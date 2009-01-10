@@ -402,7 +402,7 @@ static int add_client_resource(struct client *client,
 	int ret;
 
  retry:
-	if (idr_pre_get(&client->resource_idr, gfp_mask) == 0)
+	if (idr_pre_get(&client->resource_idr, gfp_mask | __GFP_ZERO) == 0)
 		return -ENOMEM;
 
 	spin_lock_irqsave(&client->lock, flags);
