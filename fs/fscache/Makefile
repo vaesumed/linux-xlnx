@@ -7,7 +7,8 @@ fscache-y := \
 	fsc-cookie.o \
 	fsc-fsdef.o \
 	fsc-main.o \
-	fsc-netfs.o
+	fsc-netfs.o \
+	fsc-object.o
 
 fscache-$(CONFIG_PROC_FS) += fsc-proc.o
 fscache-$(CONFIG_FSCACHE_STATS) += fsc-stats.o
