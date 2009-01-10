@@ -46,6 +46,7 @@
 #include "delegation.h"
 #include "iostat.h"
 #include "internal.h"
+#include "fscache.h"
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
@@ -1337,6 +1338,10 @@ static int __init init_nfs_fs(void)
 {
 	int err;
 
+	err = nfs_fscache_register();
+	if (err < 0)
+		goto out7;
+
 	err = nfsiod_start();
 	if (err)
 		goto out6;
@@ -1389,6 +1394,8 @@ out4:
 out5:
 	nfsiod_stop();
 out6:
+	nfs_fscache_unregister();
+out7:
 	return err;
 }
 
@@ -1399,6 +1406,7 @@ static void __exit exit_nfs_fs(void)
 	nfs_destroy_readpagecache();
 	nfs_destroy_inodecache();
 	nfs_destroy_nfspagecache();
+	nfs_fscache_unregister();
 #ifdef CONFIG_PROC_FS
 	rpc_proc_unregister("nfs");
 #endif
