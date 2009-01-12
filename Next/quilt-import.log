@@ -1,0 +1,57 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.28-6127-g238c6d5
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 238c6d54830c624f34ac9cf123ac04aebfca5013
+HEAD is now at 238c6d5 Merge git://git.kernel.org/pub/scm/linux/kernel/git/agk/linux-2.6-dm
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-ioctl-validate-name-length-when-renaming.patch
+dm-table-rework-reference-counting-fix.patch
+dm-target-use-module-refcount-directly.patch
+dm-target-remove-struct-tt_internal.patch
+dm-exception-store-separate-type-from-instance.patch
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.28-git12
+$ git checkout quilt/jdelvare-hwmon
+Switched to branch "quilt/jdelvare-hwmon"
+$ git reset --hard 1df2d017fe9d22a49bad157b4f5aa19212f29557
+HEAD is now at 1df2d01 Merge branch 'docs-next' of git://git.lwn.net/linux-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-k8temp-01-warn-about-errata.patch
+hwmon-k8temp-02-fix-wrong-sensor-selection-for-revf-revg.patch
+hwmon-k8temp-03-fix-temperature-reporting-for-most-revg.patch
+hwmon-add-adt7475-driver-v2.patch
+/home/sfr/kernels/next/next/.git/rebase-apply/patch:17: space before tab in indent.
+	   		below this sets an alarm.
+/home/sfr/kernels/next/next/.git/rebase-apply/patch:22: space before tab in indent.
+     			only have effect when auto mode is turned off (see
+warning: 2 lines add whitespace errors.
+Unchanged quilt series kernel-doc
+Importing ide based on ede6f5aea054d3fb67c78857f7abdee602302043
+$ git checkout quilt/ide
+Switched to branch "quilt/ide"
+$ git reset --hard ede6f5aea054d3fb67c78857f7abdee602302043
+HEAD is now at ede6f5a Fix up 64-bit byte swaps for most 32-bit architectures
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-accidental-lockdep-breakage-caused-by-local_irq_set-removal.patch
+it821x-add-ultra_mask-quirk-for-vortex86sx.patch
+it821x-use-dev-revision-instead-of-pci_read_config_byte.patch
+ide-cant-use-ssd-non-rotational-queue-flag-for-all-cfa-devices.patch
+via82cxxx-fix-cable-warning-message.patch
+sl82c105-remove-dead-code.patch
+ide-remove-unused-config_blk_dev_ide_au1xxx_seqts_per_rq.patch
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-rqsize-init-from-init_irq-to-ide_init_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+tx4938ide-fix-build-error-due-to-read_sff_dma_status-moving.patch
+ide-force-via-ide-legacy-interrupts-for-amigaone-boards.patch
+ide-add-cs5536-host-driver-v2.patch
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series staging
