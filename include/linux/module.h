@@ -222,7 +222,7 @@ void *__symbol_get_gpl(const char *symbol);
 struct module_ref
 {
 	local_t count;
-} ____cacheline_aligned;
+};
 
 enum module_state
 {
