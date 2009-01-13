@@ -24,11 +24,6 @@ struct __kernel_sockaddr_storage {
 #include <linux/types.h>		/* pid_t			*/
 #include <linux/compiler.h>		/* __user			*/
 
-#ifdef CONFIG_PROC_FS
-struct seq_file;
-extern void socket_seq_show(struct seq_file *seq);
-#endif
-
 typedef unsigned short	sa_family_t;
 
 /*
@@ -303,6 +298,11 @@ struct ucred {
 #define IPX_TYPE	1
 
 #ifdef __KERNEL__
+#ifdef CONFIG_PROC_FS
+struct seq_file;
+extern void socket_seq_show(struct seq_file *seq);
+#endif
+
 extern int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len);
 extern int memcpy_fromiovecend(unsigned char *kdata, struct iovec *iov, 
 				int offset, int len);
