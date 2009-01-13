@@ -54,6 +54,18 @@ config ASUS_LAPTOP
 
 	  If you have an ACPI-compatible ASUS laptop, say Y or M here.
 
+config DELL_LAPTOP
+	tristate "Dell Laptop Extras (EXPERIMENTAL)"
+	depends on X86
+	depends on DCDBAS
+	depends on EXPERIMENTAL
+	depends on BACKLIGHT_CLASS_DEVICE
+	depends on RFKILL
+	default n
+	---help---
+	This driver adds support for rfkill and backlight control to Dell
+	laptops.
+
 config FUJITSU_LAPTOP
 	tristate "Fujitsu Laptop Extras"
 	depends on ACPI
@@ -119,6 +131,19 @@ config MSI_LAPTOP
 	  <http://0pointer.de/lennart/tchibo.html>.
 
 	  If you have an MSI S270 laptop, say Y or M here.
+
+config OQO_WMI
+       tristate "OQO WMI extras"
+       depends on ACPI_WMI
+       depends on INPUT
+       depends on RFKILL
+       depends on BACKLIGHT_CLASS_DEVICE
+       help
+         Say Y here if you want to support rfkill and backlight control on
+         series 2 OQO handheld devices.
+
+         To compile this driver as a module, choose M here: the module will
+         be called oqo-wmi.
 
 config PANASONIC_LAPTOP
 	tristate "Panasonic Laptop Extras"
