@@ -1,6 +1,7 @@
 #include <linux/serial_core.h>
-#include <asm/io.h>
-#include <asm/gpio.h>
+#include <linux/gpio.h>
+#include <linux/io.h>
+#include <asm/gpio.h>	/* needed for PORT_xxx defs on SH-3 */
 
 #if defined(CONFIG_H83007) || defined(CONFIG_H83068)
 #include <asm/regs306x.h>
