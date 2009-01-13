@@ -646,7 +646,7 @@ static inline int __init unprotect_pm_master(void)
 	return e;
 }
 
-static void __init clocks_init(void)
+static void __init clocks_init(struct device *dev)
 {
 	int e = 0;
 	struct clk *osc;
@@ -654,10 +654,18 @@ static void __init clocks_init(void)
 	u8 ctrl = HFCLK_FREQ_26_MHZ;
 
 #if defined(CONFIG_ARCH_OMAP2) || defined(CONFIG_ARCH_OMAP3)
+	/*
+	 * If the clk API is followed correctly, then this kind of crap
+	 * is not required - it's only required if you think that matching
+	 * by "clock name" is the way to go.  It isn't.  The "clock name"
+	 * passed is supposed to be the _consumer_ name, not some random
+	 * system wide unique name.  Fix your clk API code to resolve the
+	 * build error below.
+	 */
 	if (cpu_is_omap2430())
-		osc = clk_get(NULL, "osc_ck");
+		osc = clk_get(dev, "osc_ck");
 	else
-		osc = clk_get(NULL, "osc_sys_ck");
+		osc = clk_get(dev, "osc_sys_ck");
 
 	if (IS_ERR(osc)) {
 		printk(KERN_WARNING "Skipping twl4030 internal clock init and "
@@ -773,7 +781,7 @@ twl4030_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	inuse = true;
 
 	/* setup clock framework */
-	clocks_init();
+	clocks_init(&client->dev);
 
 	/* Maybe init the T2 Interrupt subsystem */
 	if (client->irq
