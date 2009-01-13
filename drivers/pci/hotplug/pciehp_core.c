@@ -468,7 +468,7 @@ static void pciehp_remove (struct pcie_device *dev)
 }
 
 #ifdef CONFIG_PM
-static int pciehp_suspend (struct pcie_device *dev, pm_message_t state)
+static int pciehp_suspend (struct pcie_device *dev)
 {
 	dev_info(&dev->device, "%s ENTRY\n", __func__);
 	return 0;
@@ -496,7 +496,7 @@ static int pciehp_resume (struct pcie_device *dev)
 	}
 	return 0;
 }
-#endif
+#endif /* PM */
 
 static struct pcie_port_service_driver hpdriver_portdrv = {
 	.name		= PCIE_MODULE_NAME,
