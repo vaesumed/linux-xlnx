@@ -1,0 +1,28 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.28-6127-g238c6d5
+$ git checkout quilt/device-mapper
+Switched to branch "quilt/device-mapper"
+$ git reset --hard 238c6d54830c624f34ac9cf123ac04aebfca5013
+HEAD is now at 238c6d5 Merge git://git.kernel.org/pub/scm/linux/kernel/git/agk/linux-2.6-dm
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-ioctl-validate-name-length-when-renaming.patch
+dm-table-rework-reference-counting-fix.patch
+dm-target-use-module-refcount-directly.patch
+dm-target-remove-struct-tt_internal.patch
+Importing i2c based on 2.6.29-rc1-git2
+$ git checkout quilt/i2c
+Switched to branch "quilt/i2c"
+$ git reset --hard 3b1b71950b81c4a20ae63c2322383ab4932cdabd
+HEAD is now at 3b1b719 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/geert/linux-m68k
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-id-remove-unused-ids.patch
+i2c-deprecate-legacy-binding-API.patch
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series staging
