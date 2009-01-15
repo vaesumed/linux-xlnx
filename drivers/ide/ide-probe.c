@@ -778,7 +778,6 @@ EXPORT_SYMBOL_GPL(ide_undecoded_slave);
 static int ide_probe_port(ide_hwif_t *hwif)
 {
 	ide_drive_t *drive;
-	unsigned long flags;
 	unsigned int irqd;
 	int i, rc = -ENODEV;
 
@@ -796,9 +795,6 @@ static int ide_probe_port(ide_hwif_t *hwif)
 	if (irqd)
 		disable_irq(hwif->irq);
 
-	local_irq_save(flags);
-	local_irq_enable_in_hardirq();
-
 	if (ide_port_wait_ready(hwif) == -EBUSY)
 		printk(KERN_DEBUG "%s: Wait for ready failed before probe !\n", hwif->name);
 
@@ -811,8 +807,6 @@ static int ide_probe_port(ide_hwif_t *hwif)
 		if (drive->dev_flags & IDE_DFLAG_PRESENT)
 			rc = 0;
 	}
-
-	local_irq_restore(flags);
 
 	/*
 	 * Use cached IRQ number. It might be (and is...) changed by probe
@@ -830,29 +824,18 @@ static void ide_port_tune_devices(ide_hwif_t *hwif)
 	ide_drive_t *drive;
 	int i;
 
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (drive->dev_flags & IDE_DFLAG_PRESENT) {
-			if (port_ops && port_ops->quirkproc)
-				port_ops->quirkproc(drive);
-		}
+	ide_port_for_each_present_dev(i, drive, hwif) {
+		if (port_ops && port_ops->quirkproc)
+			port_ops->quirkproc(drive);
 	}
 
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (drive->dev_flags & IDE_DFLAG_PRESENT) {
-			ide_set_max_pio(drive);
+	ide_port_for_each_present_dev(i, drive, hwif) {
+		ide_set_max_pio(drive);
 
-			drive->dev_flags |= IDE_DFLAG_NICE1;
+		drive->dev_flags |= IDE_DFLAG_NICE1;
 
-			if (hwif->dma_ops)
-				ide_set_dma(drive);
-		}
-	}
-
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (hwif->host_flags & IDE_HFLAG_NO_IO_32BIT)
-			drive->dev_flags |= IDE_DFLAG_NO_IO_32BIT;
-		else
-			drive->dev_flags &= ~IDE_DFLAG_NO_IO_32BIT;
+		if (hwif->dma_ops)
+			ide_set_dma(drive);
 	}
 }
 
@@ -923,10 +906,7 @@ static int ide_port_setup_devices(ide_hwif_t *hwif)
 	int i, j = 0;
 
 	mutex_lock(&ide_cfg_mtx);
-	ide_port_for_each_dev(i, drive, hwif) {
-		if ((drive->dev_flags & IDE_DFLAG_PRESENT) == 0)
-			continue;
-
+	ide_port_for_each_present_dev(i, drive, hwif) {
 		if (ide_init_queue(drive)) {
 			printk(KERN_ERR "ide: failed to init %s\n",
 					drive->name);
@@ -951,13 +931,6 @@ static int init_irq (ide_hwif_t *hwif)
 	struct ide_io_ports *io_ports = &hwif->io_ports;
 	int sa = 0;
 
-	mutex_lock(&ide_cfg_mtx);
-	spin_lock_init(&hwif->lock);
-
-	init_timer(&hwif->timer);
-	hwif->timer.function = &ide_timer_expiry;
-	hwif->timer.data = (unsigned long)hwif;
-
 #if defined(__mc68000__)
 	sa = IRQF_SHARED;
 #endif /* __mc68000__ */
@@ -971,14 +944,6 @@ static int init_irq (ide_hwif_t *hwif)
 	if (request_irq(hwif->irq, &ide_intr, sa, hwif->name, hwif))
 		goto out_up;
 
-	if (!hwif->rqsize) {
-		if ((hwif->host_flags & IDE_HFLAG_NO_LBA48) ||
-		    (hwif->host_flags & IDE_HFLAG_NO_LBA48_DMA))
-			hwif->rqsize = 256;
-		else
-			hwif->rqsize = 65536;
-	}
-
 #if !defined(__mc68000__)
 	printk(KERN_INFO "%s at 0x%03lx-0x%03lx,0x%03lx on irq %d", hwif->name,
 		io_ports->data_addr, io_ports->status_addr,
@@ -991,10 +956,8 @@ static int init_irq (ide_hwif_t *hwif)
 		printk(KERN_CONT " (serialized)");
 	printk(KERN_CONT "\n");
 
-	mutex_unlock(&ide_cfg_mtx);
 	return 0;
 out_up:
-	mutex_unlock(&ide_cfg_mtx);
 	return 1;
 }
 
@@ -1155,12 +1118,9 @@ static void hwif_register_devices(ide_hwif_t *hwif)
 	ide_drive_t *drive;
 	unsigned int i;
 
-	ide_port_for_each_dev(i, drive, hwif) {
+	ide_port_for_each_present_dev(i, drive, hwif) {
 		struct device *dev = &drive->gendev;
 		int ret;
-
-		if ((drive->dev_flags & IDE_DFLAG_PRESENT) == 0)
-			continue;
 
 		dev_set_name(dev, "%u.%u", hwif->index, i);
 		dev->parent = &hwif->gendev;
@@ -1186,6 +1146,8 @@ static void ide_port_init_devices(ide_hwif_t *hwif)
 
 		if (hwif->host_flags & IDE_HFLAG_IO_32BIT)
 			drive->io_32bit = 1;
+		if (hwif->host_flags & IDE_HFLAG_NO_IO_32BIT)
+			drive->dev_flags |= IDE_DFLAG_NO_IO_32BIT;
 		if (hwif->host_flags & IDE_HFLAG_UNMASK_IRQS)
 			drive->dev_flags |= IDE_DFLAG_UNMASK;
 		if (hwif->host_flags & IDE_HFLAG_NO_UNMASK_IRQS)
@@ -1253,6 +1215,13 @@ static void ide_init_port(ide_hwif_t *hwif, unsigned int port,
 
 	if (d->max_sectors)
 		hwif->rqsize = d->max_sectors;
+	else {
+		if ((hwif->host_flags & IDE_HFLAG_NO_LBA48) ||
+		    (hwif->host_flags & IDE_HFLAG_NO_LBA48_DMA))
+			hwif->rqsize = 256;
+		else
+			hwif->rqsize = 65536;
+	}
 
 	/* call chipset specific routine for each enabled port */
 	if (d->init_hwif)
@@ -1310,6 +1279,12 @@ static void ide_init_port_data(ide_hwif_t *hwif, unsigned int index)
 	hwif->name[1]	= 'd';
 	hwif->name[2]	= 'e';
 	hwif->name[3]	= '0' + index;
+
+	spin_lock_init(&hwif->lock);
+
+	init_timer(&hwif->timer);
+	hwif->timer.function = &ide_timer_expiry;
+	hwif->timer.data = (unsigned long)hwif;
 
 	init_completion(&hwif->gendev_rel_comp);
 
@@ -1532,7 +1507,7 @@ int ide_host_register(struct ide_host *host, const struct ide_port_info *d,
 
 		j++;
 
-		ide_acpi_init(hwif);
+		ide_acpi_init_port(hwif);
 
 		if (hwif->present)
 			ide_acpi_port_init_devices(hwif);
@@ -1589,11 +1564,9 @@ static void __ide_port_unregister_devices(ide_hwif_t *hwif)
 	ide_drive_t *drive;
 	int i;
 
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (drive->dev_flags & IDE_DFLAG_PRESENT) {
-			device_unregister(&drive->gendev);
-			wait_for_completion(&drive->gendev_rel_comp);
-		}
+	ide_port_for_each_present_dev(i, drive, hwif) {
+		device_unregister(&drive->gendev);
+		wait_for_completion(&drive->gendev_rel_comp);
 	}
 }
 
