@@ -108,29 +108,43 @@ struct ucode_cpu_info ucode_cpu_info[NR_CPUS];
 EXPORT_SYMBOL_GPL(ucode_cpu_info);
 
 #ifdef CONFIG_MICROCODE_OLD_INTERFACE
+struct do_microcode_update_args {
+	const void __user *buf;
+	size_t size;
+};
+
+static long do_microcode_update_sub(void *_args)
+{
+	struct do_microcode_update_args *args = _args;
+	long error;
+	int cpu = smp_processor_id();
+
+	error = microcode_ops->request_microcode_user(cpu, args->buf,
+						      args->size);
+	if (!error)
+		microcode_ops->apply_microcode(cpu);
+
+	return error;
+}
+
 static int do_microcode_update(const void __user *buf, size_t size)
 {
-	cpumask_t old;
+	struct do_microcode_update_args args;
 	int error = 0;
 	int cpu;
 
-	old = current->cpus_allowed;
-
+	args.buf = buf;
+	args.size = size;
 	for_each_online_cpu(cpu) {
 		struct ucode_cpu_info *uci = ucode_cpu_info + cpu;
 
 		if (!uci->valid)
 			continue;
 
-		set_cpus_allowed_ptr(current, &cpumask_of_cpu(cpu));
-		error = microcode_ops->request_microcode_user(cpu, buf, size);
+		error = work_on_cpu(cpu, do_microcode_update_sub, &args);
 		if (error < 0)
-			goto out;
-		if (!error)
-			microcode_ops->apply_microcode(cpu);
+			break;
 	}
-out:
-	set_cpus_allowed_ptr(current, &old);
 	return error;
 }
 
@@ -151,15 +165,9 @@ static ssize_t microcode_write(struct file *file, const char __user *buf,
 		return -EINVAL;
 	}
 
-	get_online_cpus();
-	mutex_lock(&microcode_mutex);
-
 	ret = do_microcode_update(buf, len);
 	if (!ret)
 		ret = (ssize_t)len;
-
-	mutex_unlock(&microcode_mutex);
-	put_online_cpus();
 
 	return ret;
 }
@@ -205,6 +213,18 @@ MODULE_ALIAS_MISCDEV(MICROCODE_MINOR);
 /* fake device for request_firmware */
 static struct platform_device *microcode_pdev;
 
+static long reload_store_sub(void *unused)
+{
+	int cpu = smp_processor_id();
+	long err;
+
+	err = microcode_ops->request_microcode_fw(cpu, &microcode_pdev->dev);
+	if (!err)
+		microcode_ops->apply_microcode(cpu);
+
+	return err;
+}
+
 static ssize_t reload_store(struct sys_device *dev,
 			    struct sysdev_attribute *attr,
 			    const char *buf, size_t sz)
@@ -218,20 +238,12 @@ static ssize_t reload_store(struct sys_device *dev,
 	if (end == buf)
 		return -EINVAL;
 	if (val == 1) {
-		cpumask_t old = current->cpus_allowed;
-
 		get_online_cpus();
 		if (cpu_online(cpu)) {
-			set_cpus_allowed_ptr(current, &cpumask_of_cpu(cpu));
 			mutex_lock(&microcode_mutex);
-			if (uci->valid) {
-				err = microcode_ops->request_microcode_fw(cpu,
-						&microcode_pdev->dev);
-				if (!err)
-					microcode_ops->apply_microcode(cpu);
-			}
+			if (uci->valid)
+				work_on_cpu(cpu, reload_store_sub, NULL);
 			mutex_unlock(&microcode_mutex);
-			set_cpus_allowed_ptr(current, &old);
 		}
 		put_online_cpus();
 	}
@@ -349,19 +361,10 @@ static void microcode_update_cpu(int cpu)
 		microcode_ops->apply_microcode(cpu);
 }
 
-static void microcode_init_cpu(int cpu)
+static long microcode_init_cpu(void *unused)
 {
-	cpumask_t old = current->cpus_allowed;
-
-	set_cpus_allowed_ptr(current, &cpumask_of_cpu(cpu));
-	/* We should bind the task to the CPU */
-	BUG_ON(raw_smp_processor_id() != cpu);
-
-	mutex_lock(&microcode_mutex);
-	microcode_update_cpu(cpu);
-	mutex_unlock(&microcode_mutex);
-
-	set_cpus_allowed_ptr(current, &old);
+	microcode_update_cpu(smp_processor_id());
+	return 0;
 }
 
 static int mc_sysdev_add(struct sys_device *sys_dev)
@@ -379,7 +382,7 @@ static int mc_sysdev_add(struct sys_device *sys_dev)
 	if (err)
 		return err;
 
-	microcode_init_cpu(cpu);
+	work_on_cpu(cpu, microcode_init_cpu, NULL);
 	return 0;
 }
 
@@ -424,7 +427,7 @@ mc_cpu_callback(struct notifier_block *nb, unsigned long action, void *hcpu)
 	switch (action) {
 	case CPU_ONLINE:
 	case CPU_ONLINE_FROZEN:
-		microcode_init_cpu(cpu);
+		work_on_cpu(cpu, microcode_init_cpu, NULL);
 	case CPU_DOWN_FAILED:
 	case CPU_DOWN_FAILED_FROZEN:
 		pr_debug("microcode: CPU%d added\n", cpu);
