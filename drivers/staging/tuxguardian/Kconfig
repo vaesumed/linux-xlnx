@@ -1,0 +1,8 @@
+config SECURITY_TUXGUARDIAN
+	tristate "TuxGuardian network access control"
+	depends on SECURITY_NETWORK && BROKEN
+	default N
+	---help---
+	  Enable support for TuxGuardian, an access control that
+	  attempts to provide control over every process that connects
+	  to the network.
