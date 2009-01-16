@@ -31,6 +31,7 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <linux/sysfs.h>
+#include <linux/delay.h>
 #include "lm75.h"
 
 /* Addresses to scan */
@@ -76,6 +77,7 @@ struct ds1621_data {
 	struct mutex update_lock;
 	char valid;			/* !=0 if following fields are valid */
 	unsigned long last_updated;	/* In jiffies */
+	unsigned long last_written;	/* In jiffies */
 
 	u16 temp[3];			/* Register values, word */
 	u8 conf;			/* Register encoding, combined */
@@ -122,15 +124,33 @@ static int ds1621_read_value(struct i2c_client *client, u8 reg)
 
 static int ds1621_write_value(struct i2c_client *client, u8 reg, u16 value)
 {
+	struct ds1621_data *data = i2c_get_clientdata(client);
+	int ret;
+
+	/* The datasheet specifies that there should always be at least
+	   10 ms between writes */
+	if (time_before(jiffies, data->last_written + msecs_to_jiffies(10))) {
+		dev_dbg(&client->dev,
+			"Must wait a bit before we can write again\n");
+		msleep(10);
+	}
+
 	if (reg == DS1621_REG_CONF)
-		return i2c_smbus_write_byte_data(client, reg, value);
+		ret = i2c_smbus_write_byte_data(client, reg, value);
 	else
-		return i2c_smbus_write_word_data(client, reg, swab16(value));
+		ret = i2c_smbus_write_word_data(client, reg, swab16(value));
+
+	data->last_written = jiffies;
+	return ret;
 }
 
 static void ds1621_init_client(struct i2c_client *client)
 {
-	int reg = ds1621_read_value(client, DS1621_REG_CONF);
+	struct ds1621_data *data = i2c_get_clientdata(client);
+	int old_reg, reg;
+
+	data->last_written = jiffies;
+	old_reg = reg = ds1621_read_value(client, DS1621_REG_CONF);
 	/* switch to continuous conversion mode */
 	reg &= ~ DS1621_REG_CONFIG_1SHOT;
 
@@ -140,7 +160,8 @@ static void ds1621_init_client(struct i2c_client *client)
 	else if (polarity == 1)
 		reg |= DS1621_REG_CONFIG_POLARITY;
 	
-	ds1621_write_value(client, DS1621_REG_CONF, reg);
+	if (reg != old_reg)
+		ds1621_write_value(client, DS1621_REG_CONF, reg);
 	
 	/* start conversion */
 	i2c_smbus_write_byte(client, DS1621_COM_START);
@@ -160,7 +181,7 @@ static ssize_t set_temp(struct device *dev, struct device_attribute *da,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 	struct i2c_client *client = to_i2c_client(dev);
-	struct ds1621_data *data = ds1621_update_client(dev);
+	struct ds1621_data *data = i2c_get_clientdata(client);
 	u16 val = LM75_TEMP_TO_REG(simple_strtol(buf, NULL, 10));
 
 	mutex_lock(&data->update_lock);
