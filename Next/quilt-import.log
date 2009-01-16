@@ -1,0 +1,68 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.29-rc1-git5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 5393f780277165f282a37ed82dd878159ec9dad5
+HEAD is now at 5393f78 Merge branch 'merge' of git://git.kernel.org/pub/scm/linux/kernel/git/benh/powerpc
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-k8temp-01-warn-about-errata.patch
+hwmon-k8temp-02-fix-wrong-sensor-selection-for-revf-revg.patch
+hwmon-k8temp-03-fix-temperature-reporting-for-most-revg.patch
+hwmon-add-adt7475-driver-v2.patch
+hwmon-abituguru3-01-match-partial-dmi-board-name-strings.patch
+hwmon-abituguru3-02-enable-dmi-probing-feature-on-in9-32x-max.patch
+hwmon-abituguru3-03-fix-config_dmi-n-fallback-to-probe.patch
+hwmon-ds1621-01-10ms-between-writes.patch
+hwmon-ds1621-02-save-an-i2c-write-at-init.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 4f4c923...280591b master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Importing ide based on 5393f780277165f282a37ed82dd878159ec9dad5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 5393f780277165f282a37ed82dd878159ec9dad5
+HEAD is now at 5393f78 Merge branch 'merge' of git://git.kernel.org/pub/scm/linux/kernel/git/benh/powerpc
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-rqsize-init-from-init_irq-to-ide_init_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+ide-force-via-ide-legacy-interrupts-for-amigaone-boards.patch
+ide-add-cs5536-host-driver-v2.patch
+ide-remove-superfluous-check-from-ide_proc_port_register_devices.patch
+ide-acpi-no-need-to-zero-acpidata-for-devices.patch
+ide-acpi-init-acpi-handles-early-for-devices.patch
+ide-add-ide_for_each_present_dev-iterator.patch
+ide-sanitize-acpi-initialization.patch
+ide-acpi-cleanup-do_drive_get_gtf.patch
+ide-acpi-cleanup-do_drive_set_taskfiles.patch
+ide-acpi-remove-taskfile_load_raw.patch
+Context reduced to (2/2) to apply fragment at 21
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 1a71090...59a9cec master     -> quilt/ide  (forced update)
+Importing rr based on v2.6.29-rc1-224-ga652504
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard a6525042bfdfcab128bd91fad264de10fd24a55e
+HEAD is now at a652504 Merge branch 'x86-pat-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+cpumask:work_on_cpu-no-get_online_cpus.patch
+cpumask:work_on_cpu-own-workqueue.patch
+module:use_a_better_scheme_for_refcounting.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 815c391...c7e2d09 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series staging
