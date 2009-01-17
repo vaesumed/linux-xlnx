@@ -607,6 +607,8 @@ EXPORT_SYMBOL(end_page_writeback);
  * @page: the page
  *
  * Clear PG_owner_priv_2 and wake up any processes waiting for that event.
+ * This is used to indicate - using PG_fscache_write (an alternate name for the
+ * same bit) - that a page has finished being written to the local disk cache.
  */
 void end_page_owner_priv_2(struct page *page)
 {
