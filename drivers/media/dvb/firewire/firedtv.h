@@ -212,15 +212,15 @@ extern spinlock_t firesat_list_lock;
 
 struct device;
 
-/* firesat_dvb.c */
+/* firedtv-dvb.c */
 int firesat_start_feed(struct dvb_demux_feed *dvbdmxfeed);
 int firesat_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
 int firesat_dvbdev_init(struct firesat *firesat, struct device *dev);
 
-/* firesat_fe.c */
+/* firedtv-fe.c */
 void firesat_frontend_init(struct firesat *firesat);
 
-/* firesat_iso.c */
+/* firedtv-iso.c */
 int setup_iso_channel(struct firesat *firesat);
 void tear_down_iso_channel(struct firesat *firesat);
 

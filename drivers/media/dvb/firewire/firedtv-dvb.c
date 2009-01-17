@@ -19,9 +19,9 @@
 #include <dvb_frontend.h>
 #include <dvbdev.h>
 
-#include "avc_api.h"
-#include "firesat.h"
-#include "firesat-ci.h"
+#include "avc.h"
+#include "firedtv.h"
+#include "firedtv-ci.h"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 

@@ -20,7 +20,7 @@
 #include <iso.h>
 #include <nodemgr.h>
 
-#include "firesat.h"
+#include "firedtv.h"
 
 static void rawiso_activity_cb(struct hpsb_iso *iso);
 

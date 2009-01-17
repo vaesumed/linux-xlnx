@@ -25,9 +25,9 @@
 #include <ieee1394_transactions.h>
 #include <nodemgr.h>
 
-#include "avc_api.h"
-#include "firesat.h"
-#include "firesat-rc.h"
+#include "avc.h"
+#include "firedtv.h"
+#include "firedtv-rc.h"
 
 #define FCP_COMMAND_REGISTER	0xfffff0000b00ULL
 

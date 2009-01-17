@@ -17,9 +17,9 @@
 
 #include <dvb_frontend.h>
 
-#include "avc_api.h"
+#include "avc.h"
 #include "cmp.h"
-#include "firesat.h"
+#include "firedtv.h"
 
 static int firesat_dvb_init(struct dvb_frontend *fe)
 {

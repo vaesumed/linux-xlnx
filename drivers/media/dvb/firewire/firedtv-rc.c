@@ -15,8 +15,8 @@
 #include <linux/string.h>
 #include <linux/types.h>
 
-#include "firesat-rc.h"
-#include "firesat.h"
+#include "firedtv-rc.h"
+#include "firedtv.h"
 
 /* fixed table with older keycodes, geared towards MythTV */
 const static u16 oldtable[] = {

@@ -33,11 +33,11 @@
 #include <ieee1394_hotplug.h>
 #include <nodemgr.h>
 
-#include "avc_api.h"
+#include "avc.h"
 #include "cmp.h"
-#include "firesat.h"
-#include "firesat-ci.h"
-#include "firesat-rc.h"
+#include "firedtv.h"
+#include "firedtv-ci.h"
+#include "firedtv-rc.h"
 
 #define MATCH_FLAGS	IEEE1394_MATCH_VENDOR_ID | IEEE1394_MATCH_MODEL_ID | \
 			IEEE1394_MATCH_SPECIFIER_ID | IEEE1394_MATCH_VERSION

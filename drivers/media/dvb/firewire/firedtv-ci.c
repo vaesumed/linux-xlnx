@@ -16,9 +16,9 @@
 
 #include <dvbdev.h>
 
-#include "avc_api.h"
-#include "firesat.h"
-#include "firesat-ci.h"
+#include "avc.h"
+#include "firedtv.h"
+#include "firedtv-ci.h"
 
 static int firesat_ca_ready(ANTENNA_INPUT_INFO *info)
 {

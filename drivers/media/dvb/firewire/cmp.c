@@ -20,9 +20,9 @@
 #include <ieee1394.h>
 #include <nodemgr.h>
 
-#include "avc_api.h"
+#include "avc.h"
 #include "cmp.h"
-#include "firesat.h"
+#include "firedtv.h"
 
 #define CMP_OUTPUT_PLUG_CONTROL_REG_0	0xfffff0000904ULL
 
