@@ -1593,6 +1593,14 @@ config AFS_DEBUG
 
 	  If unsure, say N.
 
+config AFS_FSCACHE
+	bool "Provide AFS client caching support (EXPERIMENTAL)"
+	depends on EXPERIMENTAL
+	depends on AFS_FS=m && FSCACHE || AFS_FS=y && FSCACHE=y
+	help
+	  Say Y here if you want AFS data to be cached locally on disk through
+	  the generic filesystem cache manager
+
 config 9P_FS
 	tristate "Plan 9 Resource Sharing Support (9P2000) (Experimental)"
 	depends on INET && NET_9P && EXPERIMENTAL
