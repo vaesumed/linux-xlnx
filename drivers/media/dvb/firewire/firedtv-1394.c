@@ -27,10 +27,12 @@
 #include <dvb_frontend.h>
 #include <dvbdev.h>
 
+#include <dma.h>
 #include <csr1212.h>
 #include <highlevel.h>
 #include <hosts.h>
 #include <ieee1394_hotplug.h>
+#include <iso.h>
 #include <nodemgr.h>
 
 #include "avc.h"
@@ -38,6 +40,96 @@
 #include "firedtv.h"
 #include "firedtv-ci.h"
 #include "firedtv-rc.h"
+
+/* list of all firedtv devices */
+static LIST_HEAD(fdtv_list);
+static DEFINE_SPINLOCK(fdtv_list_lock);
+
+#define FIREWIRE_HEADER_SIZE	4
+#define CIP_HEADER_SIZE		8
+
+static void rawiso_activity_cb(struct hpsb_iso *iso)
+{
+	struct firedtv *fdtv_iterator, *fdtv = NULL;
+	unsigned int i, num, packet;
+	unsigned char *buf;
+	unsigned long flags;
+	int count;
+
+	spin_lock_irqsave(&fdtv_list_lock, flags);
+	list_for_each_entry(fdtv_iterator, &fdtv_list, list)
+		if(fdtv_iterator->iso_handle == iso) {
+			fdtv = fdtv_iterator;
+			break;
+		}
+	spin_unlock_irqrestore(&fdtv_list_lock, flags);
+
+	packet = iso->first_packet;
+	num = hpsb_iso_n_ready(iso);
+
+	if (!fdtv) {
+		dev_err(&fdtv->ud->device, "received at unknown iso channel\n");
+		goto out;
+	}
+
+	for (i = 0; i < num; i++, packet = (packet + 1) % iso->buf_packets) {
+		buf = dma_region_i(&iso->data_buf, unsigned char,
+			iso->infos[packet].offset + CIP_HEADER_SIZE);
+		count = (iso->infos[packet].len - CIP_HEADER_SIZE) /
+			(188 + FIREWIRE_HEADER_SIZE);
+
+		/* ignore empty packet */
+		if (iso->infos[packet].len <= CIP_HEADER_SIZE)
+			continue;
+
+		while (count--) {
+			if (buf[FIREWIRE_HEADER_SIZE] == 0x47)
+				dvb_dmx_swfilter_packets(&fdtv->demux,
+						&buf[FIREWIRE_HEADER_SIZE], 1);
+			else
+				dev_err(&fdtv->ud->device,
+					"skipping invalid packet\n");
+			buf += 188 + FIREWIRE_HEADER_SIZE;
+		}
+	}
+out:
+	hpsb_iso_recv_release_packets(iso, num);
+}
+
+void tear_down_iso_channel(struct firedtv *fdtv)
+{
+	if (fdtv->iso_handle != NULL) {
+		hpsb_iso_stop(fdtv->iso_handle);
+		hpsb_iso_shutdown(fdtv->iso_handle);
+	}
+	fdtv->iso_handle = NULL;
+}
+
+#define FDTV_ISO_BUFFER_PACKETS 256
+#define FDTV_ISO_BUFFER_SIZE (FDTV_ISO_BUFFER_PACKETS * 200)
+
+int setup_iso_channel(struct firedtv *fdtv)
+{
+	int ret;
+
+	fdtv->iso_handle = hpsb_iso_recv_init(fdtv->ud->ne->host,
+				FDTV_ISO_BUFFER_SIZE, FDTV_ISO_BUFFER_PACKETS,
+				fdtv->isochannel, HPSB_ISO_DMA_DEFAULT,
+				-1, /* stat.config.irq_interval */
+				rawiso_activity_cb);
+	if (fdtv->iso_handle == NULL) {
+		dev_err(&fdtv->ud->device, "cannot initialize iso receive\n");
+		return -ENOMEM;
+	}
+
+	ret = hpsb_iso_recv_start(fdtv->iso_handle, -1, -1, 0);
+	if (ret != 0) {
+		dev_err(&fdtv->ud->device, "cannot start iso receive\n");
+		hpsb_iso_shutdown(fdtv->iso_handle);
+		fdtv->iso_handle = NULL;
+	}
+	return ret;
+}
 
 #define MATCH_FLAGS	IEEE1394_MATCH_VENDOR_ID | IEEE1394_MATCH_MODEL_ID | \
 			IEEE1394_MATCH_SPECIFIER_ID | IEEE1394_MATCH_VERSION
@@ -91,10 +183,6 @@ static struct ieee1394_device_id fdtv_id_table[] = {
 };
 
 MODULE_DEVICE_TABLE(ieee1394, fdtv_id_table);
-
-/* list of all firedtv devices */
-LIST_HEAD(fdtv_list);
-DEFINE_SPINLOCK(fdtv_list_lock);
 
 static void fcp_request(struct hpsb_host *host,
 			int nodeid,

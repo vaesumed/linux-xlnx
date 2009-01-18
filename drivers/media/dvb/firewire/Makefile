@@ -1,7 +1,6 @@
 firedtv-objs := firedtv-1394.o	\
 		firedtv-dvb.o	\
 		firedtv-fe.o	\
-		firedtv-iso.o	\
 		avc.o		\
 		cmp.o		\
 		firedtv-rc.o	\

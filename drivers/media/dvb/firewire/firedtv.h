@@ -173,9 +173,6 @@ struct firedtv {
 };
 
 extern const char *fdtv_model_names[];
-extern struct list_head fdtv_list;
-extern spinlock_t fdtv_list_lock;
-
 struct device;
 
 /* firedtv-dvb.c */
@@ -186,7 +183,7 @@ int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev);
 /* firedtv-fe.c */
 void fdtv_frontend_init(struct firedtv *fdtv);
 
-/* firedtv-iso.c */
+/* firedtv-1394.c */
 int setup_iso_channel(struct firedtv *fdtv);
 void tear_down_iso_channel(struct firedtv *fdtv);
 
