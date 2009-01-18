@@ -314,7 +314,7 @@ static int omap_i2c_init(struct omap_i2c_dev *dev)
 	if (cpu_class_is_omap1()) {
 		struct clk *armxor_ck;
 
-		armxor_ck = clk_get(NULL, "armxor_ck");
+		armxor_ck = clk_get(dev->dev, "armxor_ck");
 		if (IS_ERR(armxor_ck))
 			dev_warn(dev->dev, "Could not get armxor_ck\n");
 		else {
