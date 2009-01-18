@@ -304,8 +304,8 @@ enum
 	TCA_FW_UNSPEC,
 	TCA_FW_CLASSID,
 	TCA_FW_POLICE,
-	TCA_FW_INDEV, /*  used by CONFIG_NET_CLS_IND */
-	TCA_FW_ACT, /* used by CONFIG_NET_CLS_ACT */
+	TCA_FW_INDEV,	/* used by NET_CLS_IND */
+	TCA_FW_ACT,	/* used by NET_CLS_ACT */
 	TCA_FW_MASK,
 	__TCA_FW_MAX
 };
