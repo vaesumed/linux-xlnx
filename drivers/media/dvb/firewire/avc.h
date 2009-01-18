@@ -47,10 +47,7 @@ typedef struct {
 
 #ifdef __LITTLE_ENDIAN
 
-// Definition FCP Command Frame
-typedef struct _AVCCmdFrm
-{
-		// AV/C command frame
+struct avc_command_frame {
 	__u8 ctype  : 4 ;   // command type
 	__u8 cts    : 4 ;   // always 0x0 for AVC
 	__u8 suid   : 3 ;   // subunit ID
@@ -58,12 +55,9 @@ typedef struct _AVCCmdFrm
 	__u8 opcode : 8 ;   // opcode
 	__u8 operand[509] ; // array of operands [1-507]
 	int length;         //length of the command frame
-} AVCCmdFrm ;
+};
 
-// Definition FCP Response Frame
-typedef struct _AVCRspFrm
-{
-        // AV/C response frame
+struct avc_response_frame {
 	__u8 resp		: 4 ;   // response type
 	__u8 cts		: 4 ;   // always 0x0 for AVC
 	__u8 suid		: 3 ;   // subunit ID
@@ -71,12 +65,11 @@ typedef struct _AVCRspFrm
 	__u8 opcode	: 8 ;   // opcode
 	__u8 operand[509] ; // array of operands [1-507]
 	int length;         //length of the response frame
-} AVCRspFrm ;
+};
 
 #else
 
-typedef struct _AVCCmdFrm
-{
+struct avc_command_frame {
 	__u8 cts:4;
 	__u8 ctype:4;
 	__u8 sutyp:5;
@@ -84,10 +77,9 @@ typedef struct _AVCCmdFrm
 	__u8 opcode;
 	__u8 operand[509];
 	int length;
-} AVCCmdFrm;
+};
 
-typedef struct _AVCRspFrm
-{
+struct avc_response_frame {
 	__u8 cts:4;
 	__u8 resp:4;
 	__u8 sutyp:5;
@@ -95,7 +87,7 @@ typedef struct _AVCRspFrm
 	__u8 opcode;
 	__u8 operand[509];
 	int length;
-} AVCRspFrm;
+};
 
 #endif
 

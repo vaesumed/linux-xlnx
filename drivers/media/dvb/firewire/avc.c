@@ -33,16 +33,16 @@
 #define FCP_COMMAND_REGISTER	0xfffff0000b00ULL
 
 static int __avc_write(struct firedtv *fdtv,
-		       const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm)
+		const struct avc_command_frame *c, struct avc_response_frame *r)
 {
 	int err, retry;
 
-	if (RspFrm)
+	if (r)
 		fdtv->avc_reply_received = false;
 
 	for (retry = 0; retry < 6; retry++) {
 		err = hpsb_node_write(fdtv->ud->ne, FCP_COMMAND_REGISTER,
-				      (quadlet_t *)CmdFrm, CmdFrm->length);
+				      (quadlet_t *)c, c->length);
 		if (err) {
 			fdtv->avc_reply_received = true;
 			dev_err(&fdtv->ud->device,
@@ -50,7 +50,7 @@ static int __avc_write(struct firedtv *fdtv,
 			return err;
 		}
 
-		if (!RspFrm)
+		if (!r)
 			return 0;
 
 		/*
@@ -60,8 +60,8 @@ static int __avc_write(struct firedtv *fdtv,
 		if (wait_event_timeout(fdtv->avc_wait,
 				       fdtv->avc_reply_received,
 				       HZ / 5) != 0) {
-			memcpy(RspFrm, fdtv->respfrm, fdtv->resp_length);
-			RspFrm->length = fdtv->resp_length;
+			memcpy(r, fdtv->respfrm, fdtv->resp_length);
+			r->length = fdtv->resp_length;
 
 			return 0;
 		}
@@ -71,14 +71,14 @@ static int __avc_write(struct firedtv *fdtv,
 }
 
 static int avc_write(struct firedtv *fdtv,
-		     const AVCCmdFrm *CmdFrm, AVCRspFrm *RspFrm)
+		const struct avc_command_frame *c, struct avc_response_frame *r)
 {
 	int ret;
 
 	if (mutex_lock_interruptible(&fdtv->avc_mutex))
 		return -EINTR;
 
-	ret = __avc_write(fdtv, CmdFrm, RspFrm);
+	ret = __avc_write(fdtv, c, r);
 
 	mutex_unlock(&fdtv->avc_mutex);
 	return ret;
@@ -86,20 +86,20 @@ static int avc_write(struct firedtv *fdtv,
 
 int avc_recv(struct firedtv *fdtv, u8 *data, size_t length)
 {
-	AVCRspFrm *RspFrm = (AVCRspFrm *)data;
+	struct avc_response_frame *r = (struct avc_response_frame *)data;
 
 	if (length >= 8 &&
-	    RspFrm->operand[0] == SFE_VENDOR_DE_COMPANYID_0 &&
-	    RspFrm->operand[1] == SFE_VENDOR_DE_COMPANYID_1 &&
-	    RspFrm->operand[2] == SFE_VENDOR_DE_COMPANYID_2 &&
-	    RspFrm->operand[3] == SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL) {
-		if (RspFrm->resp == CHANGED) {
+	    r->operand[0] == SFE_VENDOR_DE_COMPANYID_0 &&
+	    r->operand[1] == SFE_VENDOR_DE_COMPANYID_1 &&
+	    r->operand[2] == SFE_VENDOR_DE_COMPANYID_2 &&
+	    r->operand[3] == SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL) {
+		if (r->resp == CHANGED) {
 			fdtv_handle_rc(fdtv,
-			    RspFrm->operand[4] << 8 | RspFrm->operand[5]);
+			    r->operand[4] << 8 | r->operand[5]);
 			schedule_work(&fdtv->remote_ctrl_work);
-		} else if (RspFrm->resp != INTERIM) {
+		} else if (r->resp != INTERIM) {
 			dev_info(&fdtv->ud->device,
-				 "remote control result = %d\n", RspFrm->resp);
+				 "remote control result = %d\n", r->resp);
 		}
 		return 0;
 	}
@@ -124,67 +124,62 @@ int avc_recv(struct firedtv *fdtv, u8 *data, size_t length)
  * (not supported by the AVC standard)
  */
 static void avc_tuner_tuneqpsk(struct firedtv *fdtv,
-		struct dvb_frontend_parameters *params, AVCCmdFrm *CmdFrm)
+			       struct dvb_frontend_parameters *params,
+			       struct avc_command_frame *c)
 {
-	CmdFrm->opcode = VENDOR;
+	c->opcode = VENDOR;
 
-	CmdFrm->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm->operand[3] = SFE_VENDOR_OPCODE_TUNE_QPSK;
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_TUNE_QPSK;
 
-	CmdFrm->operand[4] = (params->frequency >> 24) & 0xff;
-	CmdFrm->operand[5] = (params->frequency >> 16) & 0xff;
-	CmdFrm->operand[6] = (params->frequency >> 8) & 0xff;
-	CmdFrm->operand[7] = params->frequency & 0xff;
+	c->operand[4] = (params->frequency >> 24) & 0xff;
+	c->operand[5] = (params->frequency >> 16) & 0xff;
+	c->operand[6] = (params->frequency >> 8) & 0xff;
+	c->operand[7] = params->frequency & 0xff;
 
-	CmdFrm->operand[8] = ((params->u.qpsk.symbol_rate / 1000) >> 8) & 0xff;
-	CmdFrm->operand[9] = (params->u.qpsk.symbol_rate / 1000) & 0xff;
+	c->operand[8] = ((params->u.qpsk.symbol_rate / 1000) >> 8) & 0xff;
+	c->operand[9] = (params->u.qpsk.symbol_rate / 1000) & 0xff;
 
 	switch(params->u.qpsk.fec_inner) {
-	case FEC_1_2:
-		CmdFrm->operand[10] = 0x1; break;
-	case FEC_2_3:
-		CmdFrm->operand[10] = 0x2; break;
-	case FEC_3_4:
-		CmdFrm->operand[10] = 0x3; break;
-	case FEC_5_6:
-		CmdFrm->operand[10] = 0x4; break;
-	case FEC_7_8:
-		CmdFrm->operand[10] = 0x5; break;
+	case FEC_1_2:	c->operand[10] = 0x1; break;
+	case FEC_2_3:	c->operand[10] = 0x2; break;
+	case FEC_3_4:	c->operand[10] = 0x3; break;
+	case FEC_5_6:	c->operand[10] = 0x4; break;
+	case FEC_7_8:	c->operand[10] = 0x5; break;
 	case FEC_4_5:
 	case FEC_8_9:
 	case FEC_AUTO:
-	default:
-		CmdFrm->operand[10] = 0x0;
+	default:	c->operand[10] = 0x0;
 	}
 
 	if (fdtv->voltage == 0xff)
-		CmdFrm->operand[11] = 0xff;
+		c->operand[11] = 0xff;
 	else if (fdtv->voltage == SEC_VOLTAGE_18) /* polarisation */
-		CmdFrm->operand[11] = 0;
+		c->operand[11] = 0;
 	else
-		CmdFrm->operand[11] = 1;
+		c->operand[11] = 1;
 
 	if (fdtv->tone == 0xff)
-		CmdFrm->operand[12] = 0xff;
+		c->operand[12] = 0xff;
 	else if (fdtv->tone == SEC_TONE_ON) /* band */
-		CmdFrm->operand[12] = 1;
+		c->operand[12] = 1;
 	else
-		CmdFrm->operand[12] = 0;
+		c->operand[12] = 0;
 
 	if (fdtv->type == FIREDTV_DVB_S2) {
-		CmdFrm->operand[13] = 0x1;
-		CmdFrm->operand[14] = 0xff;
-		CmdFrm->operand[15] = 0xff;
-		CmdFrm->length = 20;
+		c->operand[13] = 0x1;
+		c->operand[14] = 0xff;
+		c->operand[15] = 0xff;
+		c->length = 20;
 	} else {
-		CmdFrm->length = 16;
+		c->length = 16;
 	}
 }
 
 static void avc_tuner_dsd_dvb_c(struct dvb_frontend_parameters *params,
-		AVCCmdFrm *CmdFrm)
+				struct avc_command_frame *c)
 {
 	M_VALID_FLAGS flags;
 
@@ -199,78 +194,61 @@ static void avc_tuner_dsd_dvb_c(struct dvb_frontend_parameters *params,
 	flags.Bits.reserved1 = 0;
 	flags.Bits.Network_ID = 0;
 
-	CmdFrm->opcode	= DSD;
+	c->opcode = DSD;
 
-	CmdFrm->operand[0]  = 0;    /* source plug */
-	CmdFrm->operand[1]  = 0xd2; /* subfunction replace */
-	CmdFrm->operand[2]  = 0x20; /* system id = DVB */
-	CmdFrm->operand[3]  = 0x00; /* antenna number */
+	c->operand[0]  = 0;    /* source plug */
+	c->operand[1]  = 0xd2; /* subfunction replace */
+	c->operand[2]  = 0x20; /* system id = DVB */
+	c->operand[3]  = 0x00; /* antenna number */
 	/* system_specific_multiplex selection_length */
-	CmdFrm->operand[4]  = 0x11;
-	CmdFrm->operand[5]  = flags.Valid_Word.ByteHi; /* valid_flags [0] */
-	CmdFrm->operand[6]  = flags.Valid_Word.ByteLo; /* valid_flags [1] */
-	CmdFrm->operand[7]  = 0x00;
-	CmdFrm->operand[8]  = 0x00;
-	CmdFrm->operand[9]  = 0x00;
-	CmdFrm->operand[10] = 0x00;
+	c->operand[4]  = 0x11;
+	c->operand[5]  = flags.Valid_Word.ByteHi; /* valid_flags [0] */
+	c->operand[6]  = flags.Valid_Word.ByteLo; /* valid_flags [1] */
+	c->operand[7]  = 0x00;
+	c->operand[8]  = 0x00;
+	c->operand[9]  = 0x00;
+	c->operand[10] = 0x00;
 
-	CmdFrm->operand[11] =
-		(((params->frequency / 4000) >> 16) & 0xff) | (2 << 6);
-	CmdFrm->operand[12] =
-		((params->frequency / 4000) >> 8) & 0xff;
-	CmdFrm->operand[13] = (params->frequency / 4000) & 0xff;
-	CmdFrm->operand[14] =
-		((params->u.qpsk.symbol_rate / 1000) >> 12) & 0xff;
-	CmdFrm->operand[15] =
-		((params->u.qpsk.symbol_rate / 1000) >> 4) & 0xff;
-	CmdFrm->operand[16] =
-		((params->u.qpsk.symbol_rate / 1000) << 4) & 0xf0;
-	CmdFrm->operand[17] = 0x00;
+	c->operand[11] = (((params->frequency / 4000) >> 16) & 0xff) | (2 << 6);
+	c->operand[12] = ((params->frequency / 4000) >> 8) & 0xff;
+	c->operand[13] = (params->frequency / 4000) & 0xff;
+	c->operand[14] = ((params->u.qpsk.symbol_rate / 1000) >> 12) & 0xff;
+	c->operand[15] = ((params->u.qpsk.symbol_rate / 1000) >> 4) & 0xff;
+	c->operand[16] = ((params->u.qpsk.symbol_rate / 1000) << 4) & 0xf0;
+	c->operand[17] = 0x00;
 
 	switch (params->u.qpsk.fec_inner) {
-	case FEC_1_2:
-		CmdFrm->operand[18] = 0x1; break;
-	case FEC_2_3:
-		CmdFrm->operand[18] = 0x2; break;
-	case FEC_3_4:
-		CmdFrm->operand[18] = 0x3; break;
-	case FEC_5_6:
-		CmdFrm->operand[18] = 0x4; break;
-	case FEC_7_8:
-		CmdFrm->operand[18] = 0x5; break;
-	case FEC_8_9:
-		CmdFrm->operand[18] = 0x6; break;
-	case FEC_4_5:
-		CmdFrm->operand[18] = 0x8; break;
+	case FEC_1_2:	c->operand[18] = 0x1; break;
+	case FEC_2_3:	c->operand[18] = 0x2; break;
+	case FEC_3_4:	c->operand[18] = 0x3; break;
+	case FEC_5_6:	c->operand[18] = 0x4; break;
+	case FEC_7_8:	c->operand[18] = 0x5; break;
+	case FEC_8_9:	c->operand[18] = 0x6; break;
+	case FEC_4_5:	c->operand[18] = 0x8; break;
 	case FEC_AUTO:
-	default:
-		CmdFrm->operand[18] = 0x0;
+	default:	c->operand[18] = 0x0;
 	}
-	switch (params->u.qam.modulation) {
-	case QAM_16:
-		CmdFrm->operand[19] = 0x08; break;
-	case QAM_32:
-		CmdFrm->operand[19] = 0x10; break;
-	case QAM_64:
-		CmdFrm->operand[19] = 0x18; break;
-	case QAM_128:
-		CmdFrm->operand[19] = 0x20; break;
-	case QAM_256:
-		CmdFrm->operand[19] = 0x28; break;
-	case QAM_AUTO:
-	default:
-		CmdFrm->operand[19] = 0x00;
-	}
-	CmdFrm->operand[20] = 0x00;
-	CmdFrm->operand[21] = 0x00;
-	/* Nr_of_dsd_sel_specs = 0 -> no PIDs are transmitted */
-	CmdFrm->operand[22] = 0x00;
 
-	CmdFrm->length = 28;
+	switch (params->u.qam.modulation) {
+	case QAM_16:	c->operand[19] = 0x08; break;
+	case QAM_32:	c->operand[19] = 0x10; break;
+	case QAM_64:	c->operand[19] = 0x18; break;
+	case QAM_128:	c->operand[19] = 0x20; break;
+	case QAM_256:	c->operand[19] = 0x28; break;
+	case QAM_AUTO:
+	default:	c->operand[19] = 0x00;
+	}
+
+	c->operand[20] = 0x00;
+	c->operand[21] = 0x00;
+	/* Nr_of_dsd_sel_specs = 0 -> no PIDs are transmitted */
+	c->operand[22] = 0x00;
+
+	c->length = 28;
 }
 
 static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
-		AVCCmdFrm *CmdFrm)
+				struct avc_command_frame *c)
 {
 	M_VALID_FLAGS flags;
 
@@ -294,183 +272,163 @@ static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 		params->u.ofdm.transmission_mode != TRANSMISSION_MODE_AUTO;
 	flags.Bits_T.NetworkId = 0;
 
-	CmdFrm->opcode	= DSD;
+	c->opcode = DSD;
 
-	CmdFrm->operand[0]  = 0;    /* source plug */
-	CmdFrm->operand[1]  = 0xd2; /* subfunction replace */
-	CmdFrm->operand[2]  = 0x20; /* system id = DVB */
-	CmdFrm->operand[3]  = 0x00; /* antenna number */
+	c->operand[0]  = 0;    /* source plug */
+	c->operand[1]  = 0xd2; /* subfunction replace */
+	c->operand[2]  = 0x20; /* system id = DVB */
+	c->operand[3]  = 0x00; /* antenna number */
 	/* system_specific_multiplex selection_length */
-	CmdFrm->operand[4]  = 0x0c;
-	CmdFrm->operand[5]  = flags.Valid_Word.ByteHi; /* valid_flags [0] */
-	CmdFrm->operand[6]  = flags.Valid_Word.ByteLo; /* valid_flags [1] */
-	CmdFrm->operand[7]  = 0x0;
-	CmdFrm->operand[8]  = (params->frequency / 10) >> 24;
-	CmdFrm->operand[9]  = ((params->frequency / 10) >> 16) & 0xff;
-	CmdFrm->operand[10] = ((params->frequency / 10) >>  8) & 0xff;
-	CmdFrm->operand[11] = (params->frequency / 10) & 0xff;
+	c->operand[4]  = 0x0c;
+	c->operand[5]  = flags.Valid_Word.ByteHi; /* valid_flags [0] */
+	c->operand[6]  = flags.Valid_Word.ByteLo; /* valid_flags [1] */
+	c->operand[7]  = 0x0;
+	c->operand[8]  = (params->frequency / 10) >> 24;
+	c->operand[9]  = ((params->frequency / 10) >> 16) & 0xff;
+	c->operand[10] = ((params->frequency / 10) >>  8) & 0xff;
+	c->operand[11] = (params->frequency / 10) & 0xff;
 
 	switch (params->u.ofdm.bandwidth) {
-	case BANDWIDTH_7_MHZ:
-		CmdFrm->operand[12] = 0x20; break;
+	case BANDWIDTH_7_MHZ:	c->operand[12] = 0x20; break;
 	case BANDWIDTH_8_MHZ:
-	case BANDWIDTH_6_MHZ: /* not defined by AVC spec */
+	case BANDWIDTH_6_MHZ:	/* not defined by AVC spec */
 	case BANDWIDTH_AUTO:
-	default:
-		CmdFrm->operand[12] = 0x00;
+	default:		c->operand[12] = 0x00;
 	}
+
 	switch (params->u.ofdm.constellation) {
-	case QAM_16:
-		CmdFrm->operand[13] = 1 << 6; break;
-	case QAM_64:
-		CmdFrm->operand[13] = 2 << 6; break;
+	case QAM_16:	c->operand[13] = 1 << 6; break;
+	case QAM_64:	c->operand[13] = 2 << 6; break;
 	case QPSK:
-	default:
-		CmdFrm->operand[13] = 0x00;
+	default:	c->operand[13] = 0x00;
 	}
+
 	switch (params->u.ofdm.hierarchy_information) {
-	case HIERARCHY_1:
-		CmdFrm->operand[13] |= 1 << 3; break;
-	case HIERARCHY_2:
-		CmdFrm->operand[13] |= 2 << 3; break;
-	case HIERARCHY_4:
-		CmdFrm->operand[13] |= 3 << 3; break;
+	case HIERARCHY_1:	c->operand[13] |= 1 << 3; break;
+	case HIERARCHY_2:	c->operand[13] |= 2 << 3; break;
+	case HIERARCHY_4:	c->operand[13] |= 3 << 3; break;
 	case HIERARCHY_AUTO:
 	case HIERARCHY_NONE:
-	default:
-		break;
+	default:		break;
 	}
+
 	switch (params->u.ofdm.code_rate_HP) {
-	case FEC_2_3:
-		CmdFrm->operand[13] |= 1; break;
-	case FEC_3_4:
-		CmdFrm->operand[13] |= 2; break;
-	case FEC_5_6:
-		CmdFrm->operand[13] |= 3; break;
-	case FEC_7_8:
-		CmdFrm->operand[13] |= 4; break;
+	case FEC_2_3:	c->operand[13] |= 1; break;
+	case FEC_3_4:	c->operand[13] |= 2; break;
+	case FEC_5_6:	c->operand[13] |= 3; break;
+	case FEC_7_8:	c->operand[13] |= 4; break;
 	case FEC_1_2:
-	default:
-		break;
+	default:	break;
 	}
+
 	switch (params->u.ofdm.code_rate_LP) {
-	case FEC_2_3:
-		CmdFrm->operand[14] = 1 << 5; break;
-	case FEC_3_4:
-		CmdFrm->operand[14] = 2 << 5; break;
-	case FEC_5_6:
-		CmdFrm->operand[14] = 3 << 5; break;
-	case FEC_7_8:
-		CmdFrm->operand[14] = 4 << 5; break;
+	case FEC_2_3:	c->operand[14] = 1 << 5; break;
+	case FEC_3_4:	c->operand[14] = 2 << 5; break;
+	case FEC_5_6:	c->operand[14] = 3 << 5; break;
+	case FEC_7_8:	c->operand[14] = 4 << 5; break;
 	case FEC_1_2:
-	default:
-		CmdFrm->operand[14] = 0x00; break;
+	default:	c->operand[14] = 0x00; break;
 	}
+
 	switch (params->u.ofdm.guard_interval) {
-	case GUARD_INTERVAL_1_16:
-		CmdFrm->operand[14] |= 1 << 3; break;
-	case GUARD_INTERVAL_1_8:
-		CmdFrm->operand[14] |= 2 << 3; break;
-	case GUARD_INTERVAL_1_4:
-		CmdFrm->operand[14] |= 3 << 3; break;
+	case GUARD_INTERVAL_1_16:	c->operand[14] |= 1 << 3; break;
+	case GUARD_INTERVAL_1_8:	c->operand[14] |= 2 << 3; break;
+	case GUARD_INTERVAL_1_4:	c->operand[14] |= 3 << 3; break;
 	case GUARD_INTERVAL_1_32:
 	case GUARD_INTERVAL_AUTO:
-	default:
-		break;
+	default:			break;
 	}
+
 	switch (params->u.ofdm.transmission_mode) {
-	case TRANSMISSION_MODE_8K:
-		CmdFrm->operand[14] |= 1 << 1; break;
+	case TRANSMISSION_MODE_8K:	c->operand[14] |= 1 << 1; break;
 	case TRANSMISSION_MODE_2K:
 	case TRANSMISSION_MODE_AUTO:
-	default:
-		break;
+	default:			break;
 	}
 
-	CmdFrm->operand[15] = 0x00; /* network_ID[0] */
-	CmdFrm->operand[16] = 0x00; /* network_ID[1] */
+	c->operand[15] = 0x00; /* network_ID[0] */
+	c->operand[16] = 0x00; /* network_ID[1] */
 	/* Nr_of_dsd_sel_specs = 0 -> no PIDs are transmitted */
-	CmdFrm->operand[17] = 0x00;
+	c->operand[17] = 0x00;
 
-	CmdFrm->length = 24;
+	c->length = 24;
 }
 
 int avc_tuner_dsd(struct firedtv *fdtv,
 		  struct dvb_frontend_parameters *params)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts	= AVC;
-	CmdFrm.ctype	= CONTROL;
-	CmdFrm.sutyp	= 0x5;
-	CmdFrm.suid	= fdtv->subunit;
+	c->cts   = AVC;
+	c->ctype = CONTROL;
+	c->sutyp = 0x5;
+	c->suid  = fdtv->subunit;
 
 	switch (fdtv->type) {
 	case FIREDTV_DVB_S:
-	case FIREDTV_DVB_S2:
-		avc_tuner_tuneqpsk(fdtv, params, &CmdFrm); break;
-	case FIREDTV_DVB_C:
-		avc_tuner_dsd_dvb_c(params, &CmdFrm); break;
-	case FIREDTV_DVB_T:
-		avc_tuner_dsd_dvb_t(params, &CmdFrm); break;
+	case FIREDTV_DVB_S2: avc_tuner_tuneqpsk(fdtv, params, c); break;
+	case FIREDTV_DVB_C: avc_tuner_dsd_dvb_c(params, c); break;
+	case FIREDTV_DVB_T: avc_tuner_dsd_dvb_t(params, c); break;
 	default:
 		BUG();
 	}
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	msleep(500);
 #if 0
 	/* FIXME: */
 	/* u8 *status was an out-parameter of avc_tuner_dsd, unused by caller */
-	if(status)
-		*status=RspFrm.operand[2];
+	if (status)
+		*status = r->operand[2];
 #endif
 	return 0;
 }
 
 int avc_tuner_set_pids(struct firedtv *fdtv, unsigned char pidc, u16 pid[])
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
 	int pos, k;
 
 	if (pidc > 16 && pidc != 0xff)
 		return -EINVAL;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts	= AVC;
-	CmdFrm.ctype	= CONTROL;
-	CmdFrm.sutyp	= 0x5;
-	CmdFrm.suid	= fdtv->subunit;
-	CmdFrm.opcode	= DSD;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = DSD;
 
-	CmdFrm.operand[0]  = 0; // source plug
-	CmdFrm.operand[1]  = 0xD2; // subfunction replace
-	CmdFrm.operand[2]  = 0x20; // system id = DVB
-	CmdFrm.operand[3]  = 0x00; // antenna number
-	CmdFrm.operand[4]  = 0x00; // system_specific_multiplex selection_length
-	CmdFrm.operand[5]  = pidc; // Nr_of_dsd_sel_specs
+	c->operand[0] = 0;	/* source plug */
+	c->operand[1] = 0xD2;	/* subfunction replace */
+	c->operand[2] = 0x20;	/* system id = DVB */
+	c->operand[3] = 0x00;	/* antenna number */
+	c->operand[4] = 0x00;	/* system_specific_multiplex selection_length */
+	c->operand[5] = pidc;	/* Nr_of_dsd_sel_specs */
 
 	pos = 6;
 	if (pidc != 0xff)
 		for (k = 0; k < pidc; k++) {
-			CmdFrm.operand[pos++] = 0x13; // flowfunction relay
-			CmdFrm.operand[pos++] = 0x80; // dsd_sel_spec_valid_flags -> PID
-			CmdFrm.operand[pos++] = (pid[k] >> 8) & 0x1F;
-			CmdFrm.operand[pos++] = pid[k] & 0xFF;
-			CmdFrm.operand[pos++] = 0x00; // tableID
-			CmdFrm.operand[pos++] = 0x00; // filter_length
+			c->operand[pos++] = 0x13; /* flowfunction relay */
+			c->operand[pos++] = 0x80; /* dsd_sel_spec_valid_flags -> PID */
+			c->operand[pos++] = (pid[k] >> 8) & 0x1F;
+			c->operand[pos++] = pid[k] & 0xFF;
+			c->operand[pos++] = 0x00; /* tableID */
+			c->operand[pos++] = 0x00; /* filter_length */
 		}
 
-	CmdFrm.length = ALIGN(3 + pos, 4);
+	c->length = ALIGN(3 + pos, 4);
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	msleep(50);
@@ -479,31 +437,37 @@ int avc_tuner_set_pids(struct firedtv *fdtv, unsigned char pidc, u16 pid[])
 
 int avc_tuner_get_ts(struct firedtv *fdtv)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts		= AVC;
-	CmdFrm.ctype	= CONTROL;
-	CmdFrm.sutyp	= 0x5;
-	CmdFrm.suid		= fdtv->subunit;
-	CmdFrm.opcode	= DSIT;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = DSIT;
 
-	CmdFrm.operand[0]  = 0; // source plug
-	CmdFrm.operand[1]  = 0xD2; // subfunction replace
-	CmdFrm.operand[2]  = 0xFF; //status
-	CmdFrm.operand[3]  = 0x20; // system id = DVB
-	CmdFrm.operand[4]  = 0x00; // antenna number
-	CmdFrm.operand[5]  = 0x0;  // system_specific_search_flags
-	CmdFrm.operand[6]  = (fdtv->type == FIREDTV_DVB_T)?0x0c:0x11; // system_specific_multiplex selection_length
-	CmdFrm.operand[7]  = 0x00; // valid_flags [0]
-	CmdFrm.operand[8]  = 0x00; // valid_flags [1]
-	CmdFrm.operand[7 + (fdtv->type == FIREDTV_DVB_T)?0x0c:0x11] = 0x00; // nr_of_dsit_sel_specs (always 0)
+	c->operand[0] = 0;	/* source plug */
+	c->operand[1] = 0xD2;	/* subfunction replace */
+	c->operand[2] = 0xFF;	/* status */
+	c->operand[3] = 0x20;	/* system id = DVB */
+	c->operand[4] = 0x00;	/* antenna number */
+	c->operand[5] = 0x0; 	/* system_specific_search_flags */
 
-	CmdFrm.length = (fdtv->type == FIREDTV_DVB_T)?24:28;
+	/* system_specific_multiplex selection_length */
+	c->operand[6] = fdtv->type == FIREDTV_DVB_T ? 0x0c : 0x11;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[7] = 0x00;	/* valid_flags [0] */
+	c->operand[8] = 0x00;	/* valid_flags [1] */
+
+	/* nr_of_dsit_sel_specs (always 0) */
+	c->operand[7 + (fdtv->type == FIREDTV_DVB_T) ? 0x0c : 0x11] = 0x00;
+
+	c->length = fdtv->type == FIREDTV_DVB_T ? 24 : 28;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	msleep(250);
@@ -512,32 +476,33 @@ int avc_tuner_get_ts(struct firedtv *fdtv)
 
 int avc_identify_subunit(struct firedtv *fdtv)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 
-	memset(&CmdFrm,0,sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = CONTROL;
-	CmdFrm.sutyp = 0x5; // tuner
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = READ_DESCRIPTOR;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x5; /* tuner */
+	c->suid   = fdtv->subunit;
+	c->opcode = READ_DESCRIPTOR;
 
-	CmdFrm.operand[0]=DESCRIPTOR_SUBUNIT_IDENTIFIER;
-	CmdFrm.operand[1]=0xff;
-	CmdFrm.operand[2]=0x00;
-	CmdFrm.operand[3]=0x00; // length highbyte
-	CmdFrm.operand[4]=0x08; // length lowbyte
-	CmdFrm.operand[5]=0x00; // offset highbyte
-	CmdFrm.operand[6]=0x0d; // offset lowbyte
+	c->operand[0] = DESCRIPTOR_SUBUNIT_IDENTIFIER;
+	c->operand[1] = 0xff;
+	c->operand[2] = 0x00;
+	c->operand[3] = 0x00; /* length highbyte */
+	c->operand[4] = 0x08; /* length lowbyte  */
+	c->operand[5] = 0x00; /* offset highbyte */
+	c->operand[6] = 0x0d; /* offset lowbyte  */
 
-	CmdFrm.length=12;
+	c->length = 12;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
-	if ((RspFrm.resp != STABLE && RspFrm.resp != ACCEPTED) ||
-	    (RspFrm.operand[3] << 8) + RspFrm.operand[4] != 8) {
+	if ((r->resp != STABLE && r->resp != ACCEPTED) ||
+	    (r->operand[3] << 8) + r->operand[4] != 8) {
 		dev_err(&fdtv->ud->device,
 			"cannot read subunit identifier\n");
 		return -EINVAL;
@@ -548,42 +513,44 @@ int avc_identify_subunit(struct firedtv *fdtv)
 int avc_tuner_status(struct firedtv *fdtv,
 		     ANTENNA_INPUT_INFO *antenna_input_info)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 	int length;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts=AVC;
-	CmdFrm.ctype=CONTROL;
-	CmdFrm.sutyp=0x05; // tuner
-	CmdFrm.suid=fdtv->subunit;
-	CmdFrm.opcode=READ_DESCRIPTOR;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x05; /* tuner */
+	c->suid   = fdtv->subunit;
+	c->opcode = READ_DESCRIPTOR;
 
-	CmdFrm.operand[0]=DESCRIPTOR_TUNER_STATUS;
-	CmdFrm.operand[1]=0xff; //read_result_status
-	CmdFrm.operand[2]=0x00; // reserver
-	CmdFrm.operand[3]=0;//sizeof(ANTENNA_INPUT_INFO) >> 8;
-	CmdFrm.operand[4]=0;//sizeof(ANTENNA_INPUT_INFO) & 0xFF;
-	CmdFrm.operand[5]=0x00;
-	CmdFrm.operand[6]=0x00;
-	CmdFrm.length=12;
+	c->operand[0] = DESCRIPTOR_TUNER_STATUS;
+	c->operand[1] = 0xff;	/* read_result_status */
+	c->operand[2] = 0x00;	/* reserver */
+	c->operand[3] = 0;	/* sizeof(ANTENNA_INPUT_INFO) >> 8; */
+	c->operand[4] = 0;	/* sizeof(ANTENNA_INPUT_INFO) & 0xFF; */
+	c->operand[5] = 0x00;
+	c->operand[6] = 0x00;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
-	if (RspFrm.resp != STABLE && RspFrm.resp != ACCEPTED) {
+	if (r->resp != STABLE && r->resp != ACCEPTED) {
 		dev_err(&fdtv->ud->device, "cannot read tuner status\n");
 		return -EINVAL;
 	}
 
-	length = RspFrm.operand[9];
-	if (RspFrm.operand[1] != 0x10 || length != sizeof(ANTENNA_INPUT_INFO)) {
+	length = r->operand[9];
+	if (r->operand[1] != 0x10 || length != sizeof(ANTENNA_INPUT_INFO)) {
 		dev_err(&fdtv->ud->device, "got invalid tuner status\n");
 		return -EINVAL;
 	}
 
-	memcpy(antenna_input_info, &RspFrm.operand[10], length);
+	memcpy(antenna_input_info, &r->operand[10], length);
 	return 0;
 }
 
@@ -591,44 +558,45 @@ int avc_lnb_control(struct firedtv *fdtv, char voltage, char burst,
 		    char conttone, char nrdiseq,
 		    struct dvb_diseqc_master_cmd *diseqcmd)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 	int i, j, k;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts=AVC;
-	CmdFrm.ctype=CONTROL;
-	CmdFrm.sutyp=0x05;
-	CmdFrm.suid=fdtv->subunit;
-	CmdFrm.opcode=VENDOR;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x05;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_LNB_CONTROL;
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_LNB_CONTROL;
 
-	CmdFrm.operand[4]=voltage;
-	CmdFrm.operand[5]=nrdiseq;
+	c->operand[4] = voltage;
+	c->operand[5] = nrdiseq;
 
-	i=6;
+	i = 6;
 
 	for (j = 0; j < nrdiseq; j++) {
-		CmdFrm.operand[i++] = diseqcmd[j].msg_len;
+		c->operand[i++] = diseqcmd[j].msg_len;
 
 		for (k = 0; k < diseqcmd[j].msg_len; k++)
-			CmdFrm.operand[i++] = diseqcmd[j].msg[k];
+			c->operand[i++] = diseqcmd[j].msg[k];
 	}
 
-	CmdFrm.operand[i++]=burst;
-	CmdFrm.operand[i++]=conttone;
+	c->operand[i++] = burst;
+	c->operand[i++] = conttone;
 
-	CmdFrm.length = ALIGN(3 + i, 4);
+	c->length = ALIGN(3 + i, 4);
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
-	if (RspFrm.resp != ACCEPTED) {
+	if (r->resp != ACCEPTED) {
 		dev_err(&fdtv->ud->device, "LNB control failed\n");
 		return -EINVAL;
 	}
@@ -638,24 +606,25 @@ int avc_lnb_control(struct firedtv *fdtv, char voltage, char burst,
 
 int avc_register_remote_control(struct firedtv *fdtv)
 {
-	AVCCmdFrm CmdFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = NOTIFY;
-	CmdFrm.sutyp = 0x1f;
-	CmdFrm.suid = 0x7;
-	CmdFrm.opcode = VENDOR;
+	c->cts = AVC;
+	c->ctype = NOTIFY;
+	c->sutyp = 0x1f;
+	c->suid = 0x7;
+	c->opcode = VENDOR;
 
-	CmdFrm.operand[0] = SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1] = SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2] = SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3] = SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL;
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL;
 
-	CmdFrm.length = 8;
+	c->length = 8;
 
-	return avc_write(fdtv, &CmdFrm, NULL);
+	return avc_write(fdtv, c, NULL);
 }
 
 void avc_remote_ctrl_work(struct work_struct *work)
@@ -670,91 +639,97 @@ void avc_remote_ctrl_work(struct work_struct *work)
 #if 0 /* FIXME: unused */
 int avc_tuner_host2ca(struct firedtv *fdtv)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = CONTROL;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_HOST2CA;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_APPLICATION_INFO; // ca tag
-	CmdFrm.operand[6] = 0; // more/last
-	CmdFrm.operand[7] = 0; // length
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_HOST2CA;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_APPLICATION_INFO; /* ca tag */
+	c->operand[6] = 0; /* more/last */
+	c->operand[7] = 0; /* length */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	return 0;
 }
 #endif
 
-static int get_ca_object_pos(AVCRspFrm *RspFrm)
+static int get_ca_object_pos(struct avc_response_frame *r)
 {
 	int length = 1;
 
 	/* Check length of length field */
-	if (RspFrm->operand[7] & 0x80)
-		length = (RspFrm->operand[7] & 0x7f) + 1;
+	if (r->operand[7] & 0x80)
+		length = (r->operand[7] & 0x7f) + 1;
 	return length + 7;
 }
 
-static int get_ca_object_length(AVCRspFrm *RspFrm)
+static int get_ca_object_length(struct avc_response_frame *r)
 {
 #if 0 /* FIXME: unused */
 	int size = 0;
 	int i;
 
-	if (RspFrm->operand[7] & 0x80)
-		for (i = 0; i < (RspFrm->operand[7] & 0x7f); i++) {
+	if (r->operand[7] & 0x80)
+		for (i = 0; i < (r->operand[7] & 0x7f); i++) {
 			size <<= 8;
-			size += RspFrm->operand[8 + i];
+			size += r->operand[8 + i];
 		}
 #endif
-	return RspFrm->operand[7];
+	return r->operand[7];
 }
 
 int avc_ca_app_info(struct firedtv *fdtv, char *app_info, unsigned int *len)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 	int pos;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = STATUS;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_CA2HOST;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_APPLICATION_INFO; // ca tag
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = STATUS;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_CA2HOST;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_APPLICATION_INFO; /* ca tag */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	/* FIXME: check response code and validate response data */
 
-	pos = get_ca_object_pos(&RspFrm);
+	pos = get_ca_object_pos(r);
 	app_info[0] = (TAG_APP_INFO >> 16) & 0xFF;
 	app_info[1] = (TAG_APP_INFO >> 8) & 0xFF;
 	app_info[2] = (TAG_APP_INFO >> 0) & 0xFF;
-	app_info[3] = 6 + RspFrm.operand[pos + 4];
+	app_info[3] = 6 + r->operand[pos + 4];
 	app_info[4] = 0x01;
-	memcpy(&app_info[5], &RspFrm.operand[pos], 5 + RspFrm.operand[pos + 4]);
+	memcpy(&app_info[5], &r->operand[pos], 5 + r->operand[pos + 4]);
 	*len = app_info[3] + 4;
 
 	return 0;
@@ -762,35 +737,38 @@ int avc_ca_app_info(struct firedtv *fdtv, char *app_info, unsigned int *len)
 
 int avc_ca_info(struct firedtv *fdtv, char *app_info, unsigned int *len)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 	int pos;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = STATUS;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_CA2HOST;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_APPLICATION_INFO; // ca tag
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = STATUS;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_CA2HOST;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_APPLICATION_INFO; /* ca tag */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
-	pos = get_ca_object_pos(&RspFrm);
+	pos = get_ca_object_pos(r);
 	app_info[0] = (TAG_CA_INFO >> 16) & 0xFF;
 	app_info[1] = (TAG_CA_INFO >> 8) & 0xFF;
 	app_info[2] = (TAG_CA_INFO >> 0) & 0xFF;
 	app_info[3] = 2;
-	app_info[4] = RspFrm.operand[pos + 0];
-	app_info[5] = RspFrm.operand[pos + 1];
+	app_info[4] = r->operand[pos + 0];
+	app_info[5] = r->operand[pos + 1];
 	*len = app_info[3] + 4;
 
 	return 0;
@@ -798,28 +776,31 @@ int avc_ca_info(struct firedtv *fdtv, char *app_info, unsigned int *len)
 
 int avc_ca_reset(struct firedtv *fdtv)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = CONTROL;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_HOST2CA;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_RESET; // ca tag
-	CmdFrm.operand[6] = 0; // more/last
-	CmdFrm.operand[7] = 1; // length
-	CmdFrm.operand[8] = 0; // force hardware reset
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_HOST2CA;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_RESET; /* ca tag */
+	c->operand[6] = 0; /* more/last */
+	c->operand[7] = 1; /* length */
+	c->operand[8] = 0; /* force hardware reset */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	return 0;
@@ -827,8 +808,9 @@ int avc_ca_reset(struct firedtv *fdtv)
 
 int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 	int list_management;
 	int program_info_length;
 	int pmt_cmd_id;
@@ -837,59 +819,53 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 	int es_info_length;
 	int crc32_csum;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = CONTROL;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
+
+	c->cts    = AVC;
+	c->ctype  = CONTROL;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
 	if (msg[0] != LIST_MANAGEMENT_ONLY) {
 		dev_info(&fdtv->ud->device,
 			 "forcing list_management to ONLY\n");
 		msg[0] = LIST_MANAGEMENT_ONLY;
 	}
-	// We take the cmd_id from the programme level only!
+	/* We take the cmd_id from the programme level only! */
 	list_management = msg[0];
 	program_info_length = ((msg[4] & 0x0F) << 8) + msg[5];
 	if (program_info_length > 0)
-		program_info_length--; // Remove pmt_cmd_id
+		program_info_length--; /* Remove pmt_cmd_id */
 	pmt_cmd_id = msg[6];
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_HOST2CA;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_PMT; // ca tag
-	CmdFrm.operand[6] = 0; // more/last
-	//CmdFrm.operand[7] = XXXprogram_info_length + 17; // length
-	CmdFrm.operand[8] = list_management;
-	CmdFrm.operand[9] = 0x01; // pmt_cmd=OK_descramble
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_HOST2CA;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_PMT; /* ca tag */
+	c->operand[6] = 0; /* more/last */
+	/* c->operand[7] = XXXprogram_info_length + 17; */ /* length */
+	c->operand[8] = list_management;
+	c->operand[9] = 0x01; /* pmt_cmd=OK_descramble */
 
-	// TS program map table
+	/* TS program map table */
 
-	// Table id=2
-	CmdFrm.operand[10] = 0x02;
-	// Section syntax + length
-	CmdFrm.operand[11] = 0x80;
-	//CmdFrm.operand[12] = XXXprogram_info_length + 12;
-	// Program number
-	CmdFrm.operand[13] = msg[1];
-	CmdFrm.operand[14] = msg[2];
-	// Version number=0 + current/next=1
-	CmdFrm.operand[15] = 0x01;
-	// Section number=0
-	CmdFrm.operand[16] = 0x00;
-	// Last section number=0
-	CmdFrm.operand[17] = 0x00;
-	// PCR_PID=1FFF
-	CmdFrm.operand[18] = 0x1F;
-	CmdFrm.operand[19] = 0xFF;
-	// Program info length
-	CmdFrm.operand[20] = (program_info_length >> 8);
-	CmdFrm.operand[21] = (program_info_length & 0xFF);
-	// CA descriptors at programme level
+	c->operand[10] = 0x02; /* Table id=2 */
+	c->operand[11] = 0x80; /* Section syntax + length */
+	/* c->operand[12] = XXXprogram_info_length + 12; */
+	c->operand[13] = msg[1]; /* Program number */
+	c->operand[14] = msg[2];
+	c->operand[15] = 0x01; /* Version number=0 + current/next=1 */
+	c->operand[16] = 0x00; /* Section number=0 */
+	c->operand[17] = 0x00; /* Last section number=0 */
+	c->operand[18] = 0x1F; /* PCR_PID=1FFF */
+	c->operand[19] = 0xFF;
+	c->operand[20] = (program_info_length >> 8); /* Program info length */
+	c->operand[21] = (program_info_length & 0xFF);
+
+	/* CA descriptors at programme level */
 	read_pos = 6;
 	write_pos = 22;
 	if (program_info_length > 0) {
@@ -898,22 +874,22 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 			dev_err(&fdtv->ud->device,
 				"invalid pmt_cmd_id %d\n", pmt_cmd_id);
 
-		memcpy(&CmdFrm.operand[write_pos], &msg[read_pos],
+		memcpy(&c->operand[write_pos], &msg[read_pos],
 		       program_info_length);
 		read_pos += program_info_length;
 		write_pos += program_info_length;
 	}
 	while (read_pos < length) {
-		CmdFrm.operand[write_pos++] = msg[read_pos++];
-		CmdFrm.operand[write_pos++] = msg[read_pos++];
-		CmdFrm.operand[write_pos++] = msg[read_pos++];
+		c->operand[write_pos++] = msg[read_pos++];
+		c->operand[write_pos++] = msg[read_pos++];
+		c->operand[write_pos++] = msg[read_pos++];
 		es_info_length =
 			((msg[read_pos] & 0x0F) << 8) + msg[read_pos + 1];
 		read_pos += 2;
 		if (es_info_length > 0)
-			es_info_length--; // Remove pmt_cmd_id
-		CmdFrm.operand[write_pos++] = es_info_length >> 8;
-		CmdFrm.operand[write_pos++] = es_info_length & 0xFF;
+			es_info_length--; /* Remove pmt_cmd_id */
+		c->operand[write_pos++] = es_info_length >> 8;
+		c->operand[write_pos++] = es_info_length & 0xFF;
 		if (es_info_length > 0) {
 			pmt_cmd_id = msg[read_pos++];
 			if (pmt_cmd_id != 1 && pmt_cmd_id != 4)
@@ -921,37 +897,36 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 					"invalid pmt_cmd_id %d "
 					"at stream level\n", pmt_cmd_id);
 
-			memcpy(&CmdFrm.operand[write_pos], &msg[read_pos],
+			memcpy(&c->operand[write_pos], &msg[read_pos],
 			       es_info_length);
 			read_pos += es_info_length;
 			write_pos += es_info_length;
 		}
 	}
 
-	// CRC
-	CmdFrm.operand[write_pos++] = 0x00;
-	CmdFrm.operand[write_pos++] = 0x00;
-	CmdFrm.operand[write_pos++] = 0x00;
-	CmdFrm.operand[write_pos++] = 0x00;
+	/* CRC */
+	c->operand[write_pos++] = 0x00;
+	c->operand[write_pos++] = 0x00;
+	c->operand[write_pos++] = 0x00;
+	c->operand[write_pos++] = 0x00;
 
-	CmdFrm.operand[7] = write_pos - 8;
-	CmdFrm.operand[12] = write_pos - 13;
+	c->operand[7] = write_pos - 8;
+	c->operand[12] = write_pos - 13;
 
-	crc32_csum = crc32_be(0, &CmdFrm.operand[10],
-			   CmdFrm.operand[12] - 1);
-	CmdFrm.operand[write_pos - 4] = (crc32_csum >> 24) & 0xFF;
-	CmdFrm.operand[write_pos - 3] = (crc32_csum >> 16) & 0xFF;
-	CmdFrm.operand[write_pos - 2] = (crc32_csum >>  8) & 0xFF;
-	CmdFrm.operand[write_pos - 1] = (crc32_csum >>  0) & 0xFF;
+	crc32_csum = crc32_be(0, &c->operand[10], c->operand[12] - 1);
+	c->operand[write_pos - 4] = (crc32_csum >> 24) & 0xFF;
+	c->operand[write_pos - 3] = (crc32_csum >> 16) & 0xFF;
+	c->operand[write_pos - 2] = (crc32_csum >>  8) & 0xFF;
+	c->operand[write_pos - 1] = (crc32_csum >>  0) & 0xFF;
 
-	CmdFrm.length = ALIGN(3 + write_pos, 4);
+	c->length = ALIGN(3 + write_pos, 4);
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
-	if (RspFrm.resp != ACCEPTED) {
+	if (r->resp != ACCEPTED) {
 		dev_err(&fdtv->ud->device,
-			"CA PMT failed with response 0x%x\n", RspFrm.resp);
+			"CA PMT failed with response 0x%x\n", r->resp);
 		return -EFAULT;
 	}
 
@@ -960,59 +935,65 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 
 int avc_ca_get_time_date(struct firedtv *fdtv, int *interval)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = STATUS;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_CA2HOST;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_DATE_TIME; // ca tag
-	CmdFrm.operand[6] = 0; // more/last
-	CmdFrm.operand[7] = 0; // length
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = STATUS;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_CA2HOST;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_DATE_TIME; /* ca tag */
+	c->operand[6] = 0; /* more/last */
+	c->operand[7] = 0; /* length */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	/* FIXME: check response code and validate response data */
 
-	*interval = RspFrm.operand[get_ca_object_pos(&RspFrm)];
+	*interval = r->operand[get_ca_object_pos(r)];
 
 	return 0;
 }
 
 int avc_ca_enter_menu(struct firedtv *fdtv)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = STATUS;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_HOST2CA;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_ENTER_MENU;
-	CmdFrm.operand[6] = 0; // more/last
-	CmdFrm.operand[7] = 0; // length
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = STATUS;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_HOST2CA;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_ENTER_MENU;
+	c->operand[6] = 0; /* more/last */
+	c->operand[7] = 0; /* length */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	return 0;
@@ -1020,33 +1001,36 @@ int avc_ca_enter_menu(struct firedtv *fdtv)
 
 int avc_ca_get_mmi(struct firedtv *fdtv, char *mmi_object, unsigned int *len)
 {
-	AVCCmdFrm CmdFrm;
-	AVCRspFrm RspFrm;
+	char buffer[sizeof(struct avc_command_frame)];
+	struct avc_command_frame *c = (void *)buffer;
+	struct avc_response_frame *r = (void *)buffer;
 
-	memset(&CmdFrm, 0, sizeof(AVCCmdFrm));
-	CmdFrm.cts = AVC;
-	CmdFrm.ctype = STATUS;
-	CmdFrm.sutyp = 0x5;
-	CmdFrm.suid = fdtv->subunit;
-	CmdFrm.opcode = VENDOR;
+	memset(c, 0, sizeof(*c));
 
-	CmdFrm.operand[0]=SFE_VENDOR_DE_COMPANYID_0;
-	CmdFrm.operand[1]=SFE_VENDOR_DE_COMPANYID_1;
-	CmdFrm.operand[2]=SFE_VENDOR_DE_COMPANYID_2;
-	CmdFrm.operand[3]=SFE_VENDOR_OPCODE_CA2HOST;
-	CmdFrm.operand[4] = 0; // slot
-	CmdFrm.operand[5] = SFE_VENDOR_TAG_CA_MMI;
-	CmdFrm.operand[6] = 0; // more/last
-	CmdFrm.operand[7] = 0; // length
-	CmdFrm.length = 12;
+	c->cts    = AVC;
+	c->ctype  = STATUS;
+	c->sutyp  = 0x5;
+	c->suid   = fdtv->subunit;
+	c->opcode = VENDOR;
 
-	if (avc_write(fdtv, &CmdFrm, &RspFrm) < 0)
+	c->operand[0] = SFE_VENDOR_DE_COMPANYID_0;
+	c->operand[1] = SFE_VENDOR_DE_COMPANYID_1;
+	c->operand[2] = SFE_VENDOR_DE_COMPANYID_2;
+	c->operand[3] = SFE_VENDOR_OPCODE_CA2HOST;
+	c->operand[4] = 0; /* slot */
+	c->operand[5] = SFE_VENDOR_TAG_CA_MMI;
+	c->operand[6] = 0; /* more/last */
+	c->operand[7] = 0; /* length */
+
+	c->length = 12;
+
+	if (avc_write(fdtv, c, r) < 0)
 		return -EIO;
 
 	/* FIXME: check response code and validate response data */
 
-	*len = get_ca_object_length(&RspFrm);
-	memcpy(mmi_object, &RspFrm.operand[get_ca_object_pos(&RspFrm)], *len);
+	*len = get_ca_object_length(r);
+	memcpy(mmi_object, &r->operand[get_ca_object_pos(r)], *len);
 
 	return 0;
 }
