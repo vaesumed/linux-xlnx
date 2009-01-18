@@ -440,6 +440,7 @@ int avc_tuner_get_ts(struct firedtv *fdtv)
 	char buffer[sizeof(struct avc_command_frame)];
 	struct avc_command_frame *c = (void *)buffer;
 	struct avc_response_frame *r = (void *)buffer; /* FIXME: unused */
+	int sl;
 
 	memset(c, 0, sizeof(*c));
 
@@ -449,21 +450,18 @@ int avc_tuner_get_ts(struct firedtv *fdtv)
 	c->suid   = fdtv->subunit;
 	c->opcode = DSIT;
 
+	sl = fdtv->type == FIREDTV_DVB_T ? 0x0c : 0x11;
+
 	c->operand[0] = 0;	/* source plug */
 	c->operand[1] = 0xD2;	/* subfunction replace */
 	c->operand[2] = 0xFF;	/* status */
 	c->operand[3] = 0x20;	/* system id = DVB */
 	c->operand[4] = 0x00;	/* antenna number */
 	c->operand[5] = 0x0; 	/* system_specific_search_flags */
-
-	/* system_specific_multiplex selection_length */
-	c->operand[6] = fdtv->type == FIREDTV_DVB_T ? 0x0c : 0x11;
-
+	c->operand[6] = sl;	/* system_specific_multiplex selection_length */
 	c->operand[7] = 0x00;	/* valid_flags [0] */
 	c->operand[8] = 0x00;	/* valid_flags [1] */
-
-	/* nr_of_dsit_sel_specs (always 0) */
-	c->operand[7 + (fdtv->type == FIREDTV_DVB_T) ? 0x0c : 0x11] = 0x00;
+	c->operand[7 + sl] = 0x00; /* nr_of_dsit_sel_specs (always 0) */
 
 	c->length = fdtv->type == FIREDTV_DVB_T ? 24 : 28;
 
