@@ -147,10 +147,10 @@ static int ds1621_write_value(struct i2c_client *client, u8 reg, u16 value)
 static void ds1621_init_client(struct i2c_client *client)
 {
 	struct ds1621_data *data = i2c_get_clientdata(client);
-	int reg;
+	int old_reg, reg;
 
 	data->last_written = jiffies;
-	reg = ds1621_read_value(client, DS1621_REG_CONF);
+	old_reg = reg = ds1621_read_value(client, DS1621_REG_CONF);
 	/* switch to continuous conversion mode */
 	reg &= ~ DS1621_REG_CONFIG_1SHOT;
 
@@ -160,7 +160,8 @@ static void ds1621_init_client(struct i2c_client *client)
 	else if (polarity == 1)
 		reg |= DS1621_REG_CONFIG_POLARITY;
 	
-	ds1621_write_value(client, DS1621_REG_CONF, reg);
+	if (reg != old_reg)
+		ds1621_write_value(client, DS1621_REG_CONF, reg);
 	
 	/* start conversion */
 	i2c_smbus_write_byte(client, DS1621_COM_START);
