@@ -36,7 +36,6 @@
 #include <nodemgr.h>
 
 #include "avc.h"
-#include "cmp.h"
 #include "firedtv.h"
 #include "firedtv-ci.h"
 #include "firedtv-rc.h"

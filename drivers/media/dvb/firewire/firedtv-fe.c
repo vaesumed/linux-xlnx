@@ -18,7 +18,6 @@
 #include <dvb_frontend.h>
 
 #include "avc.h"
-#include "cmp.h"
 #include "firedtv.h"
 
 static int fdtv_dvb_init(struct dvb_frontend *fe)

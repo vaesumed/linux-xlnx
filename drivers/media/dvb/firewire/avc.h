@@ -429,4 +429,7 @@ int avc_ca_get_time_date(struct firedtv *fdtv, int *interval);
 int avc_ca_enter_menu(struct firedtv *fdtv);
 int avc_ca_get_mmi(struct firedtv *fdtv, char *mmi_object, unsigned int *len);
 
+int cmp_establish_pp_connection(struct firedtv *fdtv, int plug, int channel);
+void cmp_break_pp_connection(struct firedtv *fdtv, int plug, int channel);
+
 #endif /* _AVC_API_H */
