@@ -23,6 +23,9 @@
 
 #include "firedtv.h"
 
+#define FIREWIRE_HEADER_SIZE	4
+#define CIP_HEADER_SIZE		8
+
 static void rawiso_activity_cb(struct hpsb_iso *iso)
 {
 	struct firedtv *fdtv_iterator, *fdtv = NULL;
@@ -49,22 +52,22 @@ static void rawiso_activity_cb(struct hpsb_iso *iso)
 
 	for (i = 0; i < num; i++, packet = (packet + 1) % iso->buf_packets) {
 		buf = dma_region_i(&iso->data_buf, unsigned char,
-			iso->infos[packet].offset + sizeof(struct CIPHeader));
-		count = (iso->infos[packet].len - sizeof(struct CIPHeader)) /
-			(188 + sizeof(struct firewireheader));
+			iso->infos[packet].offset + CIP_HEADER_SIZE);
+		count = (iso->infos[packet].len - CIP_HEADER_SIZE) /
+			(188 + FIREWIRE_HEADER_SIZE);
 
 		/* ignore empty packet */
-		if (iso->infos[packet].len <= sizeof(struct CIPHeader))
+		if (iso->infos[packet].len <= CIP_HEADER_SIZE)
 			continue;
 
 		while (count--) {
-			if (buf[sizeof(struct firewireheader)] == 0x47)
+			if (buf[FIREWIRE_HEADER_SIZE] == 0x47)
 				dvb_dmx_swfilter_packets(&fdtv->demux,
-				    &buf[sizeof(struct firewireheader)], 1);
+						&buf[FIREWIRE_HEADER_SIZE], 1);
 			else
 				dev_err(&fdtv->ud->device,
 					"skipping invalid packet\n");
-			buf += 188 + sizeof(struct firewireheader);
+			buf += 188 + FIREWIRE_HEADER_SIZE;
 		}
 	}
 out:

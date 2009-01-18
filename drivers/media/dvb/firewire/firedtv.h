@@ -172,40 +172,6 @@ struct firedtv {
 	u8 respfrm[512];
 };
 
-struct firewireheader {
-	union {
-		struct {
-			__u8 tcode:4;
-			__u8 sy:4;
-			__u8 tag:2;
-			__u8 channel:6;
-
-			__u8 length_l;
-			__u8 length_h;
-		} hdr;
-		__u32 val;
-	};
-};
-
-struct CIPHeader {
-	union {
-		struct {
-			__u8 syncbits:2;
-			__u8 sid:6;
-			__u8 dbs;
-			__u8 fn:2;
-			__u8 qpc:3;
-			__u8 sph:1;
-			__u8 rsv:2;
-			__u8 dbc;
-			__u8 syncbits2:2;
-			__u8 fmt:6;
-			__u32 fdf:24;
-		} cip;
-		__u64 val;
-	};
-};
-
 extern const char *fdtv_model_names[];
 extern struct list_head fdtv_list;
 extern spinlock_t fdtv_list_lock;
