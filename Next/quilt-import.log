@@ -1,0 +1,148 @@
+Importing driver-core.current based on 2.6.29-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 1de9e8e70f5acc441550ca75433563d91b269bbe
+HEAD is now at 1de9e8e Linux 2.6.29-rc2
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+driver-core-convert-to-in-dev_set_name.patch
+pnp-fix-broken-pnp-lowercasing-for-acpi-module-aliases.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+   c597650..5df2cb0  master     -> quilt/driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 5df2cb05f04d0ffe0f8a4129158e58248c5083ee
+HEAD is now at 5df2cb0 PNP: fix broken pnp lowercasing for acpi module aliases
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-cp2101-add-fasttrax-gps-evaluation-kit-vendor-product-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+   c597650..7a64bf1  master     -> quilt/usb.current
+Importing driver-core based on quilt/usb.current
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 7a64bf1b6370628b834f4986f9fa148f6e007600
+HEAD is now at 7a64bf1 USB: cp2101: add fasttrax GPS evaluation kit vendor/product ID
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+warn-when-statically-allocated-kobjects-are-used.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 5400944...c0cdf47 master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb c0cdf4791676b423766cad9fdb8129cee0662794
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.29-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 1de9e8e70f5acc441550ca75433563d91b269bbe
+HEAD is now at 1de9e8e Linux 2.6.29-rc2
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-id-remove-unused-ids.patch
+i2c-id-remove-unused-hw-ids.patch
+i2c-update-quilt-tree-location.patch
+i2c-deprecate-legacy-binding-API.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 19319ec...48917c1 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 1de9e8e70f5acc441550ca75433563d91b269bbe
+HEAD is now at 1de9e8e Linux 2.6.29-rc2
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ds1621-01-10ms-between-writes.patch
+hwmon-ds1621-02-save-an-i2c-write-at-init.patch
+hwmon-ds1621-03-improve-resolution.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 280591b...68bb0fb master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on a6525042bfdfcab128bd91fad264de10fd24a55e
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard a6525042bfdfcab128bd91fad264de10fd24a55e
+HEAD is now at a652504 Merge branch 'x86-pat-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-flush-race-fix
+tty-serial-8250-ibm0299
+tty-supra-express
+serial-pnx8xxx-break
+ftdi-sio-ref-leak
+tty-hso-kref-fix
+tty-usb-hso-lock
+tty-usb-hso-kref-throttle
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 7afb3a9...5a48823 master     -> quilt/ttydev  (forced update)
+Importing staging based on quilt/usb
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard c0cdf4791676b423766cad9fdb8129cee0662794
+HEAD is now at c0cdf47 warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-comedi-fix-kbuild.patch
+staging-meilhaus-fix-kbuild.patch
+staging-android-binder-fix-arm-build-errors.patch
+staging-android-timed_gpio-fix-build-to-build-on-kernels-after-2.6.25.patch
+staging-android-add-lowmemorykiller-documentation.patch
+staging-dst-core-files.patch
+staging-dst-network-state-machine.patch
+staging-dst-export-node.patch
+staging-dst-thread-pool.patch
+staging-dst-transactions.patch
+staging-dst-crypto-processing.patch
+staging-dst-kconfig-and-makefile-changes.patch
+staging-dst-kconfig-update.patch
+staging-add-tuxguardian-lsm-to-the-staging-tree.patch
+staging-add-stlc45xx-wi-fi-driver-for-stlc4550-4560.patch
+staging-sxg-new-sxg_sgl-design-and-mac-header-changes.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:52: space before tab in indent.
+ 		 * Get out of here
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:53: space before tab in indent.
+ 		 */
+warning: 2 lines add whitespace errors.
+staging-sxg-typedef-removal-pending-work.patch
+staging-sxg-commenting-style-fixes-pending-work.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:905: space before tab in indent.
+	 	 * XXXTODO - Assuming Link Attention is only being generated
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:906: space before tab in indent.
+	 	 * for the Link Alarm pin (and not for a XAUI Link Status change)
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:907: space before tab in indent.
+	 	 * , then it's impossible to get here.  Yet we've gotten here
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:908: space before tab in indent.
+	 	 * twice (under extreme conditions - bouncing the link up and
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:909: space before tab in indent.
+	 	 * down many times a second). Needs further investigation.
+warning: squelched 1 whitespace error
+warning: 6 lines add whitespace errors.
+staging-sxg-indentation-fixes-mostly-80-char-lines.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:272: space before tab in indent.
+			     	     /* Memory write and invalidate */
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:484: space before tab in indent.
+ 			 * to RESET
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:485: space before tab in indent.
+ 			 */
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:786: space before tab in indent.
+				       	AXGMAC_CFG1_XMT_EN |
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:788: space before tab in indent.
+				       	AXGMAC_CFG1_RCV_PAUSE |
+warning: squelched 9 whitespace errors
+warning: 14 lines add whitespace errors.
+staging-sxg-receive-code-and-data-structure-cleanups.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:57: space before tab in indent.
+        	              sizeof(struct sxg_config_mac));
+warning: 1 line adds whitespace errors.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 5400944...1454baa master     -> quilt/staging  (forced update)
