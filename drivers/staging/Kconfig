@@ -95,5 +95,11 @@ source "drivers/staging/epl/Kconfig"
 
 source "drivers/staging/android/Kconfig"
 
+source "drivers/staging/dst/Kconfig"
+
+source "drivers/staging/tuxguardian/Kconfig"
+
+source "drivers/staging/stlc45xx/Kconfig"
+
 endif # !STAGING_EXCLUDE_BUILD
 endif # STAGING
