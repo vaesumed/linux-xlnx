@@ -1,0 +1,50 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 5393f780277165f282a37ed82dd878159ec9dad5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 5393f780277165f282a37ed82dd878159ec9dad5
+HEAD is now at 5393f78 Merge branch 'merge' of git://git.kernel.org/pub/scm/linux/kernel/git/benh/powerpc
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-pmac-breakage.patch
+ide-fix-falcon-ide-breakage.patch
+palm_bk3710-buildfix.patch
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-rqsize-init-from-init_irq-to-ide_init_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+ide-force-via-ide-legacy-interrupts-for-amigaone-boards.patch
+ide-add-cs5536-host-driver-v2.patch
+ide-remove-superfluous-check-from-ide_proc_port_register_devices.patch
+ide-acpi-no-need-to-zero-acpidata-for-devices.patch
+ide-acpi-init-acpi-handles-early-for-devices.patch
+ide-add-ide_for_each_present_dev-iterator.patch
+ide-sanitize-acpi-initialization.patch
+ide-acpi-cleanup-do_drive_get_gtf.patch
+ide-acpi-cleanup-do_drive_set_taskfiles.patch
+ide-acpi-remove-taskfile_load_raw.patch
+Context reduced to (2/2) to apply fragment at 21
+ide-remove-stale-comments-from-drive_is_ready.patch
+ide-unexport-ide_devset_execute.patch
+ide-move-drive_is_ready-to-ide-io-c.patch
+ide-move-ide_dma_timeout_retry-to-ide-dma-c.patch
+ide-remove-ide_do_drive_cmd.patch
+ide-factor-out-processing-of-special-commands-from-ide_special_rq.patch
+ide-move-ide_do_park_unpark-to-ide-park-c.patch
+ide-move-device-settings-code-to-ide-devsets-c.patch
+ide-move-xfer-mode-tuning-to-ide-xfer-mode-c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 59a9cec...53cec23 master     -> quilt/ide  (forced update)
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series staging
