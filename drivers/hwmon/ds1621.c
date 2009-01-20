@@ -31,6 +31,7 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <linux/sysfs.h>
+#include <linux/delay.h>
 #include "lm75.h"
 
 /* Addresses to scan */
@@ -58,6 +59,8 @@ static const u8 DS1621_REG_TEMP[3] = {
 	0xA2,		/* min, word, RW */
 	0xA1,		/* max, word, RW */
 };
+#define DS1621_REG_COUNTER		0xA8
+#define DS1621_REG_SLOPE		0xA9
 #define DS1621_REG_CONF			0xAC /* byte, RW */
 #define DS1621_COM_START		0xEE /* no data */
 #define DS1621_COM_STOP			0x22 /* no data */
@@ -76,16 +79,17 @@ struct ds1621_data {
 	struct mutex update_lock;
 	char valid;			/* !=0 if following fields are valid */
 	unsigned long last_updated;	/* In jiffies */
+	unsigned long last_written;	/* In jiffies */
 
-	u16 temp[3];			/* Register values, word */
+	s16 temp[3];			/* Register values, word */
 	u8 conf;			/* Register encoding, combined */
+	u8 slope;			/* Register value */
 };
 
 static int ds1621_probe(struct i2c_client *client,
 			const struct i2c_device_id *id);
 static int ds1621_detect(struct i2c_client *client, int kind,
 			 struct i2c_board_info *info);
-static void ds1621_init_client(struct i2c_client *client);
 static int ds1621_remove(struct i2c_client *client);
 static struct ds1621_data *ds1621_update_client(struct device *dev);
 
@@ -109,12 +113,13 @@ static struct i2c_driver ds1621_driver = {
 	.address_data	= &addr_data,
 };
 
-/* All registers are word-sized, except for the configuration register.
+/* The temperature value and limit registers are word-sized.
    DS1621 uses a high-byte first convention, which is exactly opposite to
    the SMBus standard. */
 static int ds1621_read_value(struct i2c_client *client, u8 reg)
 {
-	if (reg == DS1621_REG_CONF)
+	if (reg == DS1621_REG_CONF ||
+	    reg == DS1621_REG_COUNTER || reg == DS1621_REG_SLOPE)
 		return i2c_smbus_read_byte_data(client, reg);
 	else
 		return swab16(i2c_smbus_read_word_data(client, reg));
@@ -122,15 +127,33 @@ static int ds1621_read_value(struct i2c_client *client, u8 reg)
 
 static int ds1621_write_value(struct i2c_client *client, u8 reg, u16 value)
 {
+	struct ds1621_data *data = i2c_get_clientdata(client);
+	int ret;
+
+	/* The datasheet specifies that there should always be at least
+	   10 ms between writes */
+	if (time_before(jiffies, data->last_written + msecs_to_jiffies(10))) {
+		dev_dbg(&client->dev,
+			"Must wait a bit before we can write again\n");
+		msleep(10);
+	}
+
 	if (reg == DS1621_REG_CONF)
-		return i2c_smbus_write_byte_data(client, reg, value);
+		ret = i2c_smbus_write_byte_data(client, reg, value);
 	else
-		return i2c_smbus_write_word_data(client, reg, swab16(value));
+		ret = i2c_smbus_write_word_data(client, reg, swab16(value));
+
+	data->last_written = jiffies;
+	return ret;
 }
 
-static void ds1621_init_client(struct i2c_client *client)
+static int ds1621_init_client(struct i2c_client *client)
 {
-	int reg = ds1621_read_value(client, DS1621_REG_CONF);
+	struct ds1621_data *data = i2c_get_clientdata(client);
+	int old_reg, reg;
+
+	data->last_written = jiffies;
+	old_reg = reg = ds1621_read_value(client, DS1621_REG_CONF);
 	/* switch to continuous conversion mode */
 	reg &= ~ DS1621_REG_CONFIG_1SHOT;
 
@@ -140,10 +163,20 @@ static void ds1621_init_client(struct i2c_client *client)
 	else if (polarity == 1)
 		reg |= DS1621_REG_CONFIG_POLARITY;
 	
-	ds1621_write_value(client, DS1621_REG_CONF, reg);
+	if (reg != old_reg)
+		ds1621_write_value(client, DS1621_REG_CONF, reg);
 	
 	/* start conversion */
 	i2c_smbus_write_byte(client, DS1621_COM_START);
+
+	/* assume that the value of this register never changes */
+	data->slope = ds1621_read_value(client, DS1621_REG_SLOPE);
+	if (data->slope == 0) {
+		dev_err(&client->dev, "Invalid slope value\n");
+		return -ENODEV;
+	}
+
+	return 0;
 }
 
 static ssize_t show_temp(struct device *dev, struct device_attribute *da,
@@ -151,8 +184,7 @@ static ssize_t show_temp(struct device *dev, struct device_attribute *da,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 	struct ds1621_data *data = ds1621_update_client(dev);
-	return sprintf(buf, "%d\n",
-		       LM75_TEMP_FROM_REG(data->temp[attr->index]));
+	return sprintf(buf, "%d\n", data->temp[attr->index] * 1000 / 256);
 }
 
 static ssize_t set_temp(struct device *dev, struct device_attribute *da,
@@ -160,7 +192,7 @@ static ssize_t set_temp(struct device *dev, struct device_attribute *da,
 {
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 	struct i2c_client *client = to_i2c_client(dev);
-	struct ds1621_data *data = ds1621_update_client(dev);
+	struct ds1621_data *data = i2c_get_clientdata(client);
 	u16 val = LM75_TEMP_TO_REG(simple_strtol(buf, NULL, 10));
 
 	mutex_lock(&data->update_lock);
@@ -260,7 +292,9 @@ static int ds1621_probe(struct i2c_client *client,
 	mutex_init(&data->update_lock);
 
 	/* Initialize the DS1621 chip */
-	ds1621_init_client(client);
+	err = ds1621_init_client(client);
+	if (err)
+		goto exit_free;
 
 	/* Register sysfs hooks */
 	if ((err = sysfs_create_group(&client->dev.kobj, &ds1621_group)))
@@ -299,7 +333,8 @@ static struct ds1621_data *ds1621_update_client(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct ds1621_data *data = i2c_get_clientdata(client);
-	u8 new_conf;
+	u8 new_conf, counter;
+	s16 temp;
 
 	mutex_lock(&data->update_lock);
 
@@ -314,6 +349,22 @@ static struct ds1621_data *ds1621_update_client(struct device *dev)
 		for (i = 0; i < ARRAY_SIZE(data->temp); i++)
 			data->temp[i] = ds1621_read_value(client,
 							  DS1621_REG_TEMP[i]);
+
+		/* read the extra resolution bits */
+		counter = ds1621_read_value(client, DS1621_REG_COUNTER);
+		/* There is a small chance that the device updated the
+		   registers by the time we read the counter register.
+		   So we have to read the temperature register again. */
+		temp = ds1621_read_value(client, DS1621_REG_TEMP[0]);
+		if (temp == data->temp[0]) {
+			/* merge the extra resolution bits */
+			data->temp[0] = (data->temp[0] & 0xff00) + 0xc0
+					- (counter << 8) / data->slope;
+		} else {
+			/* The reading just changed, meaning that we are at
+			   the exact boundary between the two values. */
+			data->temp[0] = (data->temp[0] + temp) / 2;
+		}
 
 		/* reset alarms if necessary */
 		new_conf = data->conf;
