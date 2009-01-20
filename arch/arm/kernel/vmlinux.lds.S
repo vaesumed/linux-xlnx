@@ -121,6 +121,7 @@ SECTIONS
 
 	.data : AT(__data_loc) {
 		_data = .;		/* address in memory */
+		_sdata = .;
 
 		/*
 		 * first, the init task union, aligned
@@ -172,6 +173,7 @@ SECTIONS
 		__bss_start = .;	/* BSS				*/
 		*(.bss)
 		*(COMMON)
+		__bss_stop = .;
 		_end = .;
 	}
 					/* Stabs debugging sections.	*/
