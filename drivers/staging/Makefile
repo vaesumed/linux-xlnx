@@ -30,3 +30,6 @@ obj-$(CONFIG_INPUT_MIMIO)	+= mimio/
 obj-$(CONFIG_TRANZPORT)		+= frontier/
 obj-$(CONFIG_EPL)		+= epl/
 obj-$(CONFIG_ANDROID)		+= android/
+obj-$(CONFIG_DST)		+= dst/
+obj-$(CONFIG_SECURITY_TUXGUARDIAN)	+= tuxguardian/
+obj-$(CONFIG_STLC45XX)		+= stlc45xx/
