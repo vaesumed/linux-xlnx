@@ -487,71 +487,16 @@ static ide_startstop_t execute_drive_cmd (ide_drive_t *drive,
  	return ide_stopped;
 }
 
-int ide_devset_execute(ide_drive_t *drive, const struct ide_devset *setting,
-		       int arg)
-{
-	struct request_queue *q = drive->queue;
-	struct request *rq;
-	int ret = 0;
-
-	if (!(setting->flags & DS_SYNC))
-		return setting->set(drive, arg);
-
-	rq = blk_get_request(q, READ, __GFP_WAIT);
-	rq->cmd_type = REQ_TYPE_SPECIAL;
-	rq->cmd_len = 5;
-	rq->cmd[0] = REQ_DEVSET_EXEC;
-	*(int *)&rq->cmd[1] = arg;
-	rq->special = setting->set;
-
-	if (blk_execute_rq(q, NULL, rq, 0))
-		ret = rq->errors;
-	blk_put_request(rq);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(ide_devset_execute);
-
 static ide_startstop_t ide_special_rq(ide_drive_t *drive, struct request *rq)
 {
 	u8 cmd = rq->cmd[0];
 
-	if (cmd == REQ_PARK_HEADS || cmd == REQ_UNPARK_HEADS) {
-		ide_task_t task;
-		struct ide_taskfile *tf = &task.tf;
-
-		memset(&task, 0, sizeof(task));
-		if (cmd == REQ_PARK_HEADS) {
-			drive->sleep = *(unsigned long *)rq->special;
-			drive->dev_flags |= IDE_DFLAG_SLEEPING;
-			tf->command = ATA_CMD_IDLEIMMEDIATE;
-			tf->feature = 0x44;
-			tf->lbal = 0x4c;
-			tf->lbam = 0x4e;
-			tf->lbah = 0x55;
-			task.tf_flags |= IDE_TFLAG_CUSTOM_HANDLER;
-		} else		/* cmd == REQ_UNPARK_HEADS */
-			tf->command = ATA_CMD_CHK_POWER;
-
-		task.tf_flags |= IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
-		task.rq = rq;
-		drive->hwif->data_phase = task.data_phase = TASKFILE_NO_DATA;
-		return do_rw_taskfile(drive, &task);
-	}
-
 	switch (cmd) {
+	case REQ_PARK_HEADS:
+	case REQ_UNPARK_HEADS:
+		return ide_do_park_unpark(drive, rq);
 	case REQ_DEVSET_EXEC:
-	{
-		int err, (*setfunc)(ide_drive_t *, int) = rq->special;
-
-		err = setfunc(drive, *(int *)&rq->cmd[1]);
-		if (err)
-			rq->errors = err;
-		else
-			err = 1;
-		ide_end_request(drive, err, 0);
-		return ide_stopped;
-	}
+		return ide_do_devset(drive, rq);
 	case REQ_DRIVE_RESET:
 		return ide_do_reset(drive);
 	default:
@@ -817,63 +762,6 @@ plug_device_2:
 		blk_plug_device(q);
 }
 
-/*
- * un-busy the port etc, and clear any pending DMA status. we want to
- * retry the current request in pio mode instead of risking tossing it
- * all away
- */
-static ide_startstop_t ide_dma_timeout_retry(ide_drive_t *drive, int error)
-{
-	ide_hwif_t *hwif = drive->hwif;
-	struct request *rq;
-	ide_startstop_t ret = ide_stopped;
-
-	/*
-	 * end current dma transaction
-	 */
-
-	if (error < 0) {
-		printk(KERN_WARNING "%s: DMA timeout error\n", drive->name);
-		(void)hwif->dma_ops->dma_end(drive);
-		ret = ide_error(drive, "dma timeout error",
-				hwif->tp_ops->read_status(hwif));
-	} else {
-		printk(KERN_WARNING "%s: DMA timeout retry\n", drive->name);
-		hwif->dma_ops->dma_timeout(drive);
-	}
-
-	/*
-	 * disable dma for now, but remember that we did so because of
-	 * a timeout -- we'll reenable after we finish this next request
-	 * (or rather the first chunk of it) in pio.
-	 */
-	drive->dev_flags |= IDE_DFLAG_DMA_PIO_RETRY;
-	drive->retry_pio++;
-	ide_dma_off_quietly(drive);
-
-	/*
-	 * un-busy drive etc and make sure request is sane
-	 */
-
-	rq = hwif->rq;
-	if (!rq)
-		goto out;
-
-	hwif->rq = NULL;
-
-	rq->errors = 0;
-
-	if (!rq->bio)
-		goto out;
-
-	rq->sector = rq->bio->bi_sector;
-	rq->current_nr_sectors = bio_iovec(rq->bio)->bv_len >> 9;
-	rq->hard_cur_sectors = rq->current_nr_sectors;
-	rq->buffer = bio_data(rq->bio);
-out:
-	return ret;
-}
-
 static void ide_plug_device(ide_drive_t *drive)
 {
 	struct request_queue *q = drive->queue;
@@ -883,6 +771,29 @@ static void ide_plug_device(ide_drive_t *drive)
 	if (!elv_queue_empty(q))
 		blk_plug_device(q);
 	spin_unlock_irqrestore(q->queue_lock, flags);
+}
+
+static int drive_is_ready(ide_drive_t *drive)
+{
+	ide_hwif_t *hwif = drive->hwif;
+	u8 stat = 0;
+
+	if (drive->waiting_for_dma)
+		return hwif->dma_ops->dma_test_irq(drive);
+
+	if (hwif->io_ports.ctl_addr &&
+	    (hwif->host_flags & IDE_HFLAG_BROKEN_ALTSTATUS) == 0)
+		stat = hwif->tp_ops->read_altstatus(hwif);
+	else
+		/* Note: this may clear a pending IRQ!! */
+		stat = hwif->tp_ops->read_status(hwif);
+
+	if (stat & ATA_BUSY)
+		/* drive busy: definitely not interrupting */
+		return 0;
+
+	/* drive ready: *might* be interrupting */
+	return 1;
 }
 
 /**
@@ -1159,54 +1070,6 @@ out_early:
 
 	return irq_ret;
 }
-
-/**
- *	ide_do_drive_cmd	-	issue IDE special command
- *	@drive: device to issue command
- *	@rq: request to issue
- *
- *	This function issues a special IDE device request
- *	onto the request queue.
- *
- *	the rq is queued at the head of the request queue, displacing
- *	the currently-being-processed request and this function
- *	returns immediately without waiting for the new rq to be
- *	completed.  This is VERY DANGEROUS, and is intended for
- *	careful use by the ATAPI tape/cdrom driver code.
- */
-
-void ide_do_drive_cmd(ide_drive_t *drive, struct request *rq)
-{
-	struct request_queue *q = drive->queue;
-	unsigned long flags;
-
-	drive->hwif->rq = NULL;
-
-	spin_lock_irqsave(q->queue_lock, flags);
-	__elv_add_request(q, rq, ELEVATOR_INSERT_FRONT, 0);
-	spin_unlock_irqrestore(q->queue_lock, flags);
-}
-EXPORT_SYMBOL(ide_do_drive_cmd);
-
-void ide_pktcmd_tf_load(ide_drive_t *drive, u32 tf_flags, u16 bcount, u8 dma)
-{
-	ide_hwif_t *hwif = drive->hwif;
-	ide_task_t task;
-
-	memset(&task, 0, sizeof(task));
-	task.tf_flags = IDE_TFLAG_OUT_LBAH | IDE_TFLAG_OUT_LBAM |
-			IDE_TFLAG_OUT_FEATURE | tf_flags;
-	task.tf.feature = dma;		/* Use PIO/DMA */
-	task.tf.lbam    = bcount & 0xff;
-	task.tf.lbah    = (bcount >> 8) & 0xff;
-
-	ide_tf_dump(drive->name, &task.tf);
-	hwif->tp_ops->set_irq(hwif, 1);
-	SELECT_MASK(drive, 0);
-	hwif->tp_ops->tf_load(drive, &task);
-}
-
-EXPORT_SYMBOL_GPL(ide_pktcmd_tf_load);
 
 void ide_pad_transfer(ide_drive_t *drive, int write, int len)
 {

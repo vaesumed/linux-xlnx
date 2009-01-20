@@ -1167,12 +1167,13 @@ int ide_busy_sleep(ide_hwif_t *, unsigned long, int);
 
 int ide_wait_stat(ide_startstop_t *, ide_drive_t *, u8, u8, unsigned long);
 
+ide_startstop_t ide_do_park_unpark(ide_drive_t *, struct request *);
+ide_startstop_t ide_do_devset(ide_drive_t *, struct request *);
+
 extern ide_startstop_t ide_do_reset (ide_drive_t *);
 
 extern int ide_devset_execute(ide_drive_t *drive,
 			      const struct ide_devset *setting, int arg);
-
-extern void ide_do_drive_cmd(ide_drive_t *, struct request *);
 
 extern void ide_end_drive_cmd(ide_drive_t *, u8, u8);
 
@@ -1197,10 +1198,6 @@ void SELECT_MASK(ide_drive_t *, int);
 
 u8 ide_read_error(ide_drive_t *);
 void ide_read_bcount_and_ireason(ide_drive_t *, u16 *, u8 *);
-
-extern int drive_is_ready(ide_drive_t *);
-
-void ide_pktcmd_tf_load(ide_drive_t *, u32, u16, u8);
 
 int ide_check_atapi_device(ide_drive_t *, const char *);
 
@@ -1469,6 +1466,7 @@ static inline int config_drive_for_dma(ide_drive_t *drive) { return 0; }
 
 void ide_dma_lost_irq(ide_drive_t *);
 void ide_dma_timeout(ide_drive_t *);
+ide_startstop_t ide_dma_timeout_retry(ide_drive_t *, int);
 
 #else
 static inline int ide_id_dma_bug(ide_drive_t *drive) { return 0; }
@@ -1480,21 +1478,24 @@ static inline void ide_dma_on(ide_drive_t *drive) { ; }
 static inline void ide_dma_verbose(ide_drive_t *drive) { ; }
 static inline int ide_set_dma(ide_drive_t *drive) { return 1; }
 static inline void ide_check_dma_crc(ide_drive_t *drive) { ; }
+static inline ide_startstop_t ide_dma_timeout_retry(ide_drive_t *drive, int error) { return ide_stopped; }
 static inline void ide_release_dma_engine(ide_hwif_t *hwif) { ; }
 #endif /* CONFIG_BLK_DEV_IDEDMA */
 
 #ifdef CONFIG_BLK_DEV_IDEACPI
+int ide_acpi_init(void);
 extern int ide_acpi_exec_tfs(ide_drive_t *drive);
 extern void ide_acpi_get_timing(ide_hwif_t *hwif);
 extern void ide_acpi_push_timing(ide_hwif_t *hwif);
-extern void ide_acpi_init(ide_hwif_t *hwif);
+void ide_acpi_init_port(ide_hwif_t *);
 void ide_acpi_port_init_devices(ide_hwif_t *);
 extern void ide_acpi_set_state(ide_hwif_t *hwif, int on);
 #else
+static inline int ide_acpi_init(void) { return 0; }
 static inline int ide_acpi_exec_tfs(ide_drive_t *drive) { return 0; }
 static inline void ide_acpi_get_timing(ide_hwif_t *hwif) { ; }
 static inline void ide_acpi_push_timing(ide_hwif_t *hwif) { ; }
-static inline void ide_acpi_init(ide_hwif_t *hwif) { ; }
+static inline void ide_acpi_init_port(ide_hwif_t *hwif) { ; }
 static inline void ide_acpi_port_init_devices(ide_hwif_t *hwif) { ; }
 static inline void ide_acpi_set_state(ide_hwif_t *hwif, int on) {}
 #endif
@@ -1528,9 +1529,7 @@ static inline void ide_set_hwifdata (ide_hwif_t * hwif, void *data)
 	hwif->hwif_data = data;
 }
 
-const char *ide_xfer_verbose(u8 mode);
 extern void ide_toggle_bounce(ide_drive_t *drive, int on);
-extern int ide_set_xfer_rate(ide_drive_t *drive, u8 rate);
 
 u64 ide_get_lba_addr(struct ide_taskfile *, int);
 u8 ide_dump_status(ide_drive_t *, const char *, u8);
@@ -1569,14 +1568,18 @@ void ide_timing_merge(struct ide_timing *, struct ide_timing *,
 		      struct ide_timing *, unsigned int);
 int ide_timing_compute(ide_drive_t *, u8, struct ide_timing *, int, int);
 
+#ifdef CONFIG_IDE_XFER_MODE
 int ide_scan_pio_blacklist(char *);
-
+const char *ide_xfer_verbose(u8);
 u8 ide_get_best_pio_mode(ide_drive_t *, u8, u8);
-
 int ide_set_pio_mode(ide_drive_t *, u8);
 int ide_set_dma_mode(ide_drive_t *, u8);
-
 void ide_set_pio(ide_drive_t *, u8);
+int ide_set_xfer_rate(ide_drive_t *, u8);
+#else
+static inline void ide_set_pio(ide_drive_t *drive, u8 pio) { ; }
+static inline int ide_set_xfer_rate(ide_drive_t *drive, u8 rate) { return -1; }
+#endif
 
 static inline void ide_set_max_pio(ide_drive_t *drive)
 {
@@ -1608,6 +1611,10 @@ static inline ide_drive_t *ide_get_pair_dev(ide_drive_t *drive)
 
 #define ide_port_for_each_dev(i, dev, port) \
 	for ((i) = 0; ((dev) = (port)->devices[i]) || (i) < MAX_DRIVES; (i)++)
+
+#define ide_port_for_each_present_dev(i, dev, port) \
+	for ((i) = 0; ((dev) = (port)->devices[i]) || (i) < MAX_DRIVES; (i)++) \
+		if ((dev)->dev_flags & IDE_DFLAG_PRESENT)
 
 #define ide_host_for_each_port(i, port, host) \
 	for ((i) = 0; ((port) = (host)->ports[i]) || (i) < MAX_HOST_PORTS; (i)++)
