@@ -426,9 +426,9 @@ struct ubifs_unclean_leb {
  * LEB properties flags.
  *
  * LPROPS_UNCAT: not categorized
- * LPROPS_DIRTY: dirty > 0, not index
+ * LPROPS_DIRTY: dirty > free, dirty >= @c->dead_wm, not index
  * LPROPS_DIRTY_IDX: dirty + free > @c->min_idx_node_sze and index
- * LPROPS_FREE: free > 0, not empty, not index
+ * LPROPS_FREE: free > 0, dirty < @c->dead_wm, not empty, not index
  * LPROPS_HEAP_CNT: number of heaps used for storing categorized LEBs
  * LPROPS_EMPTY: LEB is empty, not taken
  * LPROPS_FREEABLE: free + dirty == leb_size, not index, not taken
@@ -1405,13 +1405,13 @@ extern struct list_head ubifs_infos;
 extern spinlock_t ubifs_infos_lock;
 extern atomic_long_t ubifs_clean_zn_cnt;
 extern struct kmem_cache *ubifs_inode_slab;
-extern struct super_operations ubifs_super_operations;
-extern struct address_space_operations ubifs_file_address_operations;
-extern struct file_operations ubifs_file_operations;
-extern struct inode_operations ubifs_file_inode_operations;
-extern struct file_operations ubifs_dir_operations;
-extern struct inode_operations ubifs_dir_inode_operations;
-extern struct inode_operations ubifs_symlink_inode_operations;
+extern const struct super_operations ubifs_super_operations;
+extern const struct address_space_operations ubifs_file_address_operations;
+extern const struct file_operations ubifs_file_operations;
+extern const struct inode_operations ubifs_file_inode_operations;
+extern const struct file_operations ubifs_dir_operations;
+extern const struct inode_operations ubifs_dir_inode_operations;
+extern const struct inode_operations ubifs_symlink_inode_operations;
 extern struct backing_dev_info ubifs_backing_dev_info;
 extern struct ubifs_compressor *ubifs_compressors[UBIFS_COMPR_TYPES_CNT];
 

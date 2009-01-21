@@ -432,18 +432,19 @@ static int ubifs_sync_fs(struct super_block *sb, int wait)
 	int i, err;
 	struct ubifs_info *c = sb->s_fs_info;
 	struct writeback_control wbc = {
-		.sync_mode   = wait ? WB_SYNC_ALL : WB_SYNC_NONE,
+		.sync_mode   = WB_SYNC_ALL,
 		.range_start = 0,
 		.range_end   = LLONG_MAX,
 		.nr_to_write = LONG_MAX,
 	};
 
 	/*
-	 * Note by akpm about WB_SYNC_NONE used above: zero @wait is just an
-	 * advisory thing to help the file system shove lots of data into the
-	 * queues. If some gets missed then it'll be picked up on the second
+	 * Zero @wait is just an advisory thing to help the file system shove
+	 * lots of data into the queues, and there will be the second
 	 * '->sync_fs()' call, with non-zero @wait.
 	 */
+	if (!wait)
+		return 0;
 
 	if (sb->s_flags & MS_RDONLY)
 		return 0;
@@ -572,15 +573,8 @@ static int init_constants_early(struct ubifs_info *c)
 	c->ranges[UBIFS_IDX_NODE].max_len = INT_MAX;
 
 	/*
-	 * Initialize dead and dark LEB space watermarks.
-	 *
-	 * Dead space is the space which cannot be used. Its watermark is
-	 * equivalent to min. I/O unit or minimum node size if it is greater
-	 * then min. I/O unit.
-	 *
-	 * Dark space is the space which might be used, or might not, depending
-	 * on which node should be written to the LEB. Its watermark is
-	 * equivalent to maximum UBIFS node size.
+	 * Initialize dead and dark LEB space watermarks. See gc.c for comments
+	 * about these values.
 	 */
 	c->dead_wm = ALIGN(MIN_WRITE_SZ, c->min_io_size);
 	c->dark_wm = ALIGN(UBIFS_MAX_NODE_SZ, c->min_io_size);
@@ -1777,7 +1771,7 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 	return 0;
 }
 
-struct super_operations ubifs_super_operations = {
+const struct super_operations ubifs_super_operations = {
 	.alloc_inode   = ubifs_alloc_inode,
 	.destroy_inode = ubifs_destroy_inode,
 	.put_super     = ubifs_put_super,
