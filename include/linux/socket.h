@@ -24,11 +24,6 @@ struct __kernel_sockaddr_storage {
 #include <linux/types.h>		/* pid_t			*/
 #include <linux/compiler.h>		/* __user			*/
 
-#ifdef CONFIG_PROC_FS
-struct seq_file;
-extern void socket_seq_show(struct seq_file *seq);
-#endif
-
 typedef unsigned short	sa_family_t;
 
 /*
@@ -261,12 +256,13 @@ struct ucred {
 #define MSG_CMSG_CLOEXEC 0x40000000	/* Set close_on_exit for file
 					   descriptor received through
 					   SCM_RIGHTS */
+#ifdef __KERNEL__
 #if defined(CONFIG_COMPAT)
 #define MSG_CMSG_COMPAT	0x80000000	/* This message needs 32 bit fixups */
 #else
 #define MSG_CMSG_COMPAT	0		/* We never have 32 bit fixups */
 #endif
-
+#endif /* __KERNEL__ */
 
 /* Setsockoptions(2) level. Thanks to BSD these must match IPPROTO_xxx */
 #define SOL_IP		0
@@ -303,6 +299,11 @@ struct ucred {
 #define IPX_TYPE	1
 
 #ifdef __KERNEL__
+#ifdef CONFIG_PROC_FS
+struct seq_file;
+extern void socket_seq_show(struct seq_file *seq);
+#endif
+
 extern int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len);
 extern int memcpy_fromiovecend(unsigned char *kdata, struct iovec *iov, 
 				int offset, int len);
