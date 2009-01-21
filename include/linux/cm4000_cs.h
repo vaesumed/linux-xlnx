@@ -19,7 +19,7 @@ typedef struct atreq {
 
 
 /* what is particularly stupid in the original driver is the arch-dependant
- * member sizes. This leads to CONFIG_COMPAT breakage, since 32bit userspace
+ * member sizes. This leads to COMPAT breakage, since 32bit userspace
  * will lay out the structure members differently than the 64bit kernel.
  *
  * I've changed "ptsreq.protocol" from "unsigned long" to "u_int32_t".

@@ -3,6 +3,7 @@
 /* This header is BSD licensed so anyone can use the definitions to implement
  * compatible drivers/servers. */
 #include <linux/virtio_config.h>
+#include <linux/types.h>
 
 /* The ID for virtio_block */
 #define VIRTIO_ID_BLOCK	2
