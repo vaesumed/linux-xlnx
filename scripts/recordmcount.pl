@@ -100,14 +100,19 @@ $P =~ s@.*/@@g;
 
 my $V = '0.1';
 
-if ($#ARGV < 6) {
-	print "usage: $P arch objdump objcopy cc ld nm rm mv inputfile\n";
+if ($#ARGV < 7) {
+	print "usage: $P arch objdump objcopy cc ld nm rm mv is_module inputfile\n";
 	print "version: $V\n";
 	exit(1);
 }
 
 my ($arch, $bits, $objdump, $objcopy, $cc,
-    $ld, $nm, $rm, $mv, $inputfile) = @ARGV;
+    $ld, $nm, $rm, $mv, $is_module, $inputfile) = @ARGV;
+
+# This file refers to mcount and shouldn't be ftraced, so lets' ignore it
+if ($inputfile eq "kernel/trace/ftrace.o") {
+    exit(0);
+}
 
 # Acceptable sections to record.
 my %text_sections = (
@@ -201,6 +206,13 @@ if ($arch eq "x86_64") {
     $alignment = 2;
     $section_type = '%progbits';
 
+} elsif ($arch eq "ia64") {
+    $mcount_regex = "^\\s*([0-9a-fA-F]+):.*\\s_mcount\$";
+    $type = "data8";
+
+    if ($is_module eq "0") {
+        $cc .= " -mconstant-gp";
+    }
 } else {
     die "Arch $arch is not supported with CONFIG_FTRACE_MCOUNT_RECORD";
 }
