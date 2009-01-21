@@ -1,0 +1,25 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Importing device-mapper based on v2.6.29-rc2-13-gf3b8436
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard f3b8436ad9a8ad36b3c9fa1fe030c7f38e5d3d0b
+HEAD is now at f3b8436 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/roland/infiniband
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-ioctl-validate-name-length-when-renaming.patch
+dm-table-rework-reference-counting-fix.patch
+dm-target-use-module-refcount-directly.patch
+dm-target-remove-struct-tt_internal.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + e468ea8...44856d9 master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series staging
