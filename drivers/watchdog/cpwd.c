@@ -400,8 +400,7 @@ static int cpwd_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int cpwd_ioctl(struct inode *inode, struct file *file, 
-		      unsigned int cmd, unsigned long arg)
+static long cpwd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	static struct watchdog_info info = {
 		.options		= WDIOF_SETTIMEOUT,
@@ -515,13 +514,13 @@ static ssize_t cpwd_read(struct file * file, char __user *buffer,
 }
 
 static const struct file_operations cpwd_fops = {
-	.owner =	THIS_MODULE,
-	.ioctl =	cpwd_ioctl,
-	.compat_ioctl =	cpwd_compat_ioctl,
-	.open =		cpwd_open,
-	.write =	cpwd_write,
-	.read =		cpwd_read,
-	.release =	cpwd_release,
+	.owner =		THIS_MODULE,
+	.unlocked_ioctl =	cpwd_ioctl,
+	.compat_ioctl =		cpwd_compat_ioctl,
+	.open =			cpwd_open,
+	.write =		cpwd_write,
+	.read =			cpwd_read,
+	.release =		cpwd_release,
 };
 
 static int __devinit cpwd_probe(struct of_device *op,
