@@ -6,6 +6,8 @@
 #include <linux/relay.h>
 #endif
 
+#include <linux/types.h>
+
 /*
  * Trace categories
  */

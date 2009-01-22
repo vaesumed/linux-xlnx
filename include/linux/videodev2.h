@@ -1480,7 +1480,7 @@ struct v4l2_chip_ident_old {
 
 #if 1
 /* Experimental, meant for debugging, testing and internal use.
-   Only implemented if CONFIG_VIDEO_ADV_DEBUG is defined.
+   Only implemented if VIDEO_ADV_DEBUG is defined.
    You must be root to use these ioctls. Never use these in applications! */
 #define	VIDIOC_DBG_S_REGISTER 	 _IOW('V', 79, struct v4l2_dbg_register)
 #define	VIDIOC_DBG_G_REGISTER 	_IOWR('V', 80, struct v4l2_dbg_register)
