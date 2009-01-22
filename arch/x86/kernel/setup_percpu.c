@@ -13,6 +13,7 @@
 #include <asm/mpspec.h>
 #include <asm/apicdef.h>
 #include <asm/highmem.h>
+#include <asm/cpumask.h>
 
 #ifdef CONFIG_X86_LOCAL_APIC
 unsigned int num_processors;
@@ -136,7 +137,7 @@ static void __init setup_cpu_pda_map(void)
 #ifdef CONFIG_X86_64
 
 /* correctly size the local cpu masks */
-static void setup_cpu_local_masks(void)
+static void __init setup_cpu_local_masks(void)
 {
 	alloc_bootmem_cpumask_var(&cpu_initialized_mask);
 	alloc_bootmem_cpumask_var(&cpu_callin_mask);
