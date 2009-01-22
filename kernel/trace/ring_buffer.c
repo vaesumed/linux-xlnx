@@ -244,7 +244,7 @@ static inline int test_time_stamp(u64 delta)
 	return 0;
 }
 
-#define BUF_PAGE_SIZE (PAGE_SIZE - sizeof(struct buffer_data_page))
+#define BUF_PAGE_SIZE (PAGE_SIZE - offsetof(struct buffer_data_page, data))
 
 /*
  * head_page == tail_page && head == tail then buffer is empty.
@@ -2166,6 +2166,9 @@ rb_reset_cpu(struct ring_buffer_per_cpu *cpu_buffer)
 
 	cpu_buffer->overrun = 0;
 	cpu_buffer->entries = 0;
+
+	cpu_buffer->write_stamp = 0;
+	cpu_buffer->read_stamp = 0;
 }
 
 /**
