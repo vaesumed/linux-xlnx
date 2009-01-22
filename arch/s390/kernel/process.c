@@ -159,6 +159,13 @@ void exit_thread(void)
 
 void flush_thread(void)
 {
+	if (test_thread_flag(TIF_ABI_PENDING)) {
+		clear_thread_flag(TIF_ABI_PENDING);
+		if (test_thread_flag(TIF_31BIT))
+			clear_thread_flag(TIF_31BIT);
+		else
+			set_thread_flag(TIF_31BIT);
+	}
 	clear_used_math();
 	clear_tsk_thread_flag(current, TIF_USEDFPU);
 }
