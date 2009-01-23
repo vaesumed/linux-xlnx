@@ -2022,7 +2022,6 @@ config IGB
 config IGB_LRO 
 	bool "Use software LRO"
 	depends on IGB && INET
-	select INET_LRO
 	---help---
 	  Say Y here if you want to use large receive offload. 
 
@@ -2408,7 +2407,6 @@ config CHELSIO_T3
 	tristate "Chelsio Communications T3 10Gb Ethernet support"
 	depends on CHELSIO_T3_DEPENDS
 	select FW_LOADER
-	select INET_LRO
 	help
 	  This driver supports Chelsio T3-based gigabit and 10Gb Ethernet
 	  adapters.
@@ -2444,7 +2442,6 @@ config ENIC
 config IXGBE
 	tristate "Intel(R) 10GbE PCI Express adapters support"
 	depends on PCI && INET
-	select INET_LRO
 	---help---
 	  This driver supports Intel(R) 10GbE PCI Express family of
 	  adapters.  For more information on how to identify your adapter, go

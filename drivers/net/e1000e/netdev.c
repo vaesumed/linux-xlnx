@@ -99,8 +99,8 @@ static void e1000_receive_skb(struct e1000_adapter *adapter,
 	skb->protocol = eth_type_trans(skb, netdev);
 
 	if (adapter->vlgrp && (status & E1000_RXD_STAT_VP))
-		vlan_hwaccel_receive_skb(skb, adapter->vlgrp,
-					 le16_to_cpu(vlan));
+		vlan_gro_receive(&adapter->napi, adapter->vlgrp,
+				 le16_to_cpu(vlan), skb);
 	else
 		napi_gro_receive(&adapter->napi, skb);
 }
@@ -1179,12 +1179,12 @@ static irqreturn_t e1000_intr_msi(int irq, void *data)
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
 	}
 
-	if (netif_rx_schedule_prep(&adapter->napi)) {
+	if (napi_schedule_prep(&adapter->napi)) {
 		adapter->total_tx_bytes = 0;
 		adapter->total_tx_packets = 0;
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
-		__netif_rx_schedule(&adapter->napi);
+		__napi_schedule(&adapter->napi);
 	}
 
 	return IRQ_HANDLED;
@@ -1246,12 +1246,12 @@ static irqreturn_t e1000_intr(int irq, void *data)
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
 	}
 
-	if (netif_rx_schedule_prep(&adapter->napi)) {
+	if (napi_schedule_prep(&adapter->napi)) {
 		adapter->total_tx_bytes = 0;
 		adapter->total_tx_packets = 0;
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
-		__netif_rx_schedule(&adapter->napi);
+		__napi_schedule(&adapter->napi);
 	}
 
 	return IRQ_HANDLED;
@@ -1320,10 +1320,10 @@ static irqreturn_t e1000_intr_msix_rx(int irq, void *data)
 		adapter->rx_ring->set_itr = 0;
 	}
 
-	if (netif_rx_schedule_prep(&adapter->napi)) {
+	if (napi_schedule_prep(&adapter->napi)) {
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
-		__netif_rx_schedule(&adapter->napi);
+		__napi_schedule(&adapter->napi);
 	}
 	return IRQ_HANDLED;
 }
@@ -2028,7 +2028,7 @@ clean_rx:
 	if (work_done < budget) {
 		if (adapter->itr_setting & 3)
 			e1000_set_itr(adapter);
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		if (adapter->msix_entries)
 			ew32(IMS, adapter->rx_ring->ims_val);
 		else
