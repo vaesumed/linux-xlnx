@@ -250,21 +250,19 @@ err_misc:
 }
 
 /**
- *	actual_try_to_identify	-	send ata/atapi identify
+ *	try_to_identify	-	send ATA/ATAPI identify
  *	@drive: drive to identify
  *	@cmd: command to use
  *
  *	try_to_identify() sends an ATA(PI) IDENTIFY request to a drive
- *	and waits for a response.  It also monitors irqs while this is
- *	happening, in hope of automatically determining which one is
- *	being used by the interface.
+ *	and waits for a response.
  *
  *	Returns:	0  device was identified
  *			1  device timed-out (no response to identify request)
  *			2  device aborted the command (refused to identify itself)
  */
 
-static int actual_try_to_identify (ide_drive_t *drive, u8 cmd)
+static int try_to_identify(ide_drive_t *drive, u8 cmd)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	struct ide_io_ports *io_ports = &hwif->io_ports;
@@ -272,6 +270,13 @@ static int actual_try_to_identify (ide_drive_t *drive, u8 cmd)
 	int use_altstatus = 0, rc;
 	unsigned long timeout;
 	u8 s = 0, a = 0;
+
+	/*
+	 * Disable device IRQ.  Otherwise we'll get spurious interrupts
+	 * during the identify phase that the IRQ handler isn't expecting.
+	 */
+	if (io_ports->ctl_addr)
+		tp_ops->set_irq(hwif, 0);
 
 	/* take a deep breath */
 	msleep(50);
@@ -327,63 +332,6 @@ static int actual_try_to_identify (ide_drive_t *drive, u8 cmd)
 		rc = 2;
 	}
 	return rc;
-}
-
-/**
- *	try_to_identify	-	try to identify a drive
- *	@drive: drive to probe
- *	@cmd: command to use
- *
- *	Issue the identify command and then do IRQ probing to
- *	complete the identification when needed by finding the
- *	IRQ the drive is attached to
- */
- 
-static int try_to_identify (ide_drive_t *drive, u8 cmd)
-{
-	ide_hwif_t *hwif = drive->hwif;
-	const struct ide_tp_ops *tp_ops = hwif->tp_ops;
-	int retval;
-	int autoprobe = 0;
-	unsigned long cookie = 0;
-
-	/*
-	 * Disable device irq unless we need to
-	 * probe for it. Otherwise we'll get spurious
-	 * interrupts during the identify-phase that
-	 * the irq handler isn't expecting.
-	 */
-	if (hwif->io_ports.ctl_addr) {
-		if (!hwif->irq) {
-			autoprobe = 1;
-			cookie = probe_irq_on();
-		}
-		tp_ops->set_irq(hwif, autoprobe);
-	}
-
-	retval = actual_try_to_identify(drive, cmd);
-
-	if (autoprobe) {
-		int irq;
-
-		tp_ops->set_irq(hwif, 0);
-		/* clear drive IRQ */
-		(void)tp_ops->read_status(hwif);
-		udelay(5);
-		irq = probe_irq_off(cookie);
-		if (!hwif->irq) {
-			if (irq > 0) {
-				hwif->irq = irq;
-			} else {
-				/* Mmmm.. multiple IRQs..
-				 * don't know which was ours
-				 */
-				printk(KERN_ERR "%s: IRQ probe failed (0x%lx)\n",
-					drive->name, cookie);
-			}
-		}
-	}
-	return retval;
 }
 
 int ide_busy_sleep(ide_hwif_t *hwif, unsigned long timeout, int altstatus)
@@ -649,7 +597,8 @@ static int ide_register_port(ide_hwif_t *hwif)
 	/* register with global device tree */
 	dev_set_name(&hwif->gendev, hwif->name);
 	hwif->gendev.driver_data = hwif;
-	hwif->gendev.parent = hwif->dev;
+	if (hwif->gendev.parent == NULL)
+		hwif->gendev.parent = hwif->dev;
 	hwif->gendev.release = hwif_release_dev;
 
 	ret = device_register(&hwif->gendev);
@@ -778,7 +727,6 @@ EXPORT_SYMBOL_GPL(ide_undecoded_slave);
 static int ide_probe_port(ide_hwif_t *hwif)
 {
 	ide_drive_t *drive;
-	unsigned long flags;
 	unsigned int irqd;
 	int i, rc = -ENODEV;
 
@@ -796,9 +744,6 @@ static int ide_probe_port(ide_hwif_t *hwif)
 	if (irqd)
 		disable_irq(hwif->irq);
 
-	local_save_flags(flags);
-	local_irq_enable_in_hardirq();
-
 	if (ide_port_wait_ready(hwif) == -EBUSY)
 		printk(KERN_DEBUG "%s: Wait for ready failed before probe !\n", hwif->name);
 
@@ -811,8 +756,6 @@ static int ide_probe_port(ide_hwif_t *hwif)
 		if (drive->dev_flags & IDE_DFLAG_PRESENT)
 			rc = 0;
 	}
-
-	local_irq_restore(flags);
 
 	/*
 	 * Use cached IRQ number. It might be (and is...) changed by probe
@@ -830,29 +773,18 @@ static void ide_port_tune_devices(ide_hwif_t *hwif)
 	ide_drive_t *drive;
 	int i;
 
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (drive->dev_flags & IDE_DFLAG_PRESENT) {
-			if (port_ops && port_ops->quirkproc)
-				port_ops->quirkproc(drive);
-		}
+	ide_port_for_each_present_dev(i, drive, hwif) {
+		if (port_ops && port_ops->quirkproc)
+			port_ops->quirkproc(drive);
 	}
 
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (drive->dev_flags & IDE_DFLAG_PRESENT) {
-			ide_set_max_pio(drive);
+	ide_port_for_each_present_dev(i, drive, hwif) {
+		ide_set_max_pio(drive);
 
-			drive->dev_flags |= IDE_DFLAG_NICE1;
+		drive->dev_flags |= IDE_DFLAG_NICE1;
 
-			if (hwif->dma_ops)
-				ide_set_dma(drive);
-		}
-	}
-
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (hwif->host_flags & IDE_HFLAG_NO_IO_32BIT)
-			drive->dev_flags |= IDE_DFLAG_NO_IO_32BIT;
-		else
-			drive->dev_flags &= ~IDE_DFLAG_NO_IO_32BIT;
+		if (hwif->dma_ops)
+			ide_set_dma(drive);
 	}
 }
 
@@ -923,10 +855,7 @@ static int ide_port_setup_devices(ide_hwif_t *hwif)
 	int i, j = 0;
 
 	mutex_lock(&ide_cfg_mtx);
-	ide_port_for_each_dev(i, drive, hwif) {
-		if ((drive->dev_flags & IDE_DFLAG_PRESENT) == 0)
-			continue;
-
+	ide_port_for_each_present_dev(i, drive, hwif) {
 		if (ide_init_queue(drive)) {
 			printk(KERN_ERR "ide: failed to init %s\n",
 					drive->name);
@@ -950,13 +879,6 @@ static int init_irq (ide_hwif_t *hwif)
 {
 	struct ide_io_ports *io_ports = &hwif->io_ports;
 	int sa = 0;
-
-	mutex_lock(&ide_cfg_mtx);
-	spin_lock_init(&hwif->lock);
-
-	init_timer(&hwif->timer);
-	hwif->timer.function = &ide_timer_expiry;
-	hwif->timer.data = (unsigned long)hwif;
 
 #if defined(__mc68000__)
 	sa = IRQF_SHARED;
@@ -991,10 +913,8 @@ static int init_irq (ide_hwif_t *hwif)
 		printk(KERN_CONT " (serialized)");
 	printk(KERN_CONT "\n");
 
-	mutex_unlock(&ide_cfg_mtx);
 	return 0;
 out_up:
-	mutex_unlock(&ide_cfg_mtx);
 	return 1;
 }
 
@@ -1093,14 +1013,9 @@ static void drive_release_dev (struct device *dev)
 
 static int hwif_init(ide_hwif_t *hwif)
 {
-	int old_irq;
-
 	if (!hwif->irq) {
-		hwif->irq = __ide_default_irq(hwif->io_ports.data_addr);
-		if (!hwif->irq) {
-			printk(KERN_ERR "%s: disabled, no IRQ\n", hwif->name);
-			return 0;
-		}
+		printk(KERN_ERR "%s: disabled, no IRQ\n", hwif->name);
+		return 0;
 	}
 
 	if (register_blkdev(hwif->major, hwif->name))
@@ -1118,29 +1033,12 @@ static int hwif_init(ide_hwif_t *hwif)
 
 	sg_init_table(hwif->sg_table, hwif->sg_max_nents);
 	
-	if (init_irq(hwif) == 0)
-		goto done;
-
-	old_irq = hwif->irq;
-	/*
-	 *	It failed to initialise. Find the default IRQ for 
-	 *	this port and try that.
-	 */
-	hwif->irq = __ide_default_irq(hwif->io_ports.data_addr);
-	if (!hwif->irq) {
-		printk(KERN_ERR "%s: disabled, unable to get IRQ %d\n",
-			hwif->name, old_irq);
-		goto out;
-	}
 	if (init_irq(hwif)) {
-		printk(KERN_ERR "%s: probed IRQ %d and default IRQ %d failed\n",
-			hwif->name, old_irq, hwif->irq);
+		printk(KERN_ERR "%s: disabled, unable to get IRQ %d\n",
+			hwif->name, hwif->irq);
 		goto out;
 	}
-	printk(KERN_WARNING "%s: probed IRQ %d failed, using default\n",
-		hwif->name, hwif->irq);
 
-done:
 	blk_register_region(MKDEV(hwif->major, 0), MAX_DRIVES << PARTN_BITS,
 			    THIS_MODULE, ata_probe, ata_lock, hwif);
 	return 1;
@@ -1155,12 +1053,9 @@ static void hwif_register_devices(ide_hwif_t *hwif)
 	ide_drive_t *drive;
 	unsigned int i;
 
-	ide_port_for_each_dev(i, drive, hwif) {
+	ide_port_for_each_present_dev(i, drive, hwif) {
 		struct device *dev = &drive->gendev;
 		int ret;
-
-		if ((drive->dev_flags & IDE_DFLAG_PRESENT) == 0)
-			continue;
 
 		dev_set_name(dev, "%u.%u", hwif->index, i);
 		dev->parent = &hwif->gendev;
@@ -1186,6 +1081,8 @@ static void ide_port_init_devices(ide_hwif_t *hwif)
 
 		if (hwif->host_flags & IDE_HFLAG_IO_32BIT)
 			drive->io_32bit = 1;
+		if (hwif->host_flags & IDE_HFLAG_NO_IO_32BIT)
+			drive->dev_flags |= IDE_DFLAG_NO_IO_32BIT;
 		if (hwif->host_flags & IDE_HFLAG_UNMASK_IRQS)
 			drive->dev_flags |= IDE_DFLAG_UNMASK;
 		if (hwif->host_flags & IDE_HFLAG_NO_UNMASK_IRQS)
@@ -1206,10 +1103,6 @@ static void ide_init_port(ide_hwif_t *hwif, unsigned int port,
 
 	if (d->init_iops)
 		d->init_iops(hwif);
-
-	if ((!hwif->irq && (d->host_flags & IDE_HFLAG_LEGACY_IRQS)) ||
-	    (d->host_flags & IDE_HFLAG_FORCE_LEGACY_IRQS))
-		hwif->irq = port ? 15 : 14;
 
 	/* ->host_flags may be set by ->init_iops (or even earlier...) */
 	hwif->host_flags |= d->host_flags;
@@ -1310,6 +1203,12 @@ static void ide_init_port_data(ide_hwif_t *hwif, unsigned int index)
 	hwif->name[1]	= 'd';
 	hwif->name[2]	= 'e';
 	hwif->name[3]	= '0' + index;
+
+	spin_lock_init(&hwif->lock);
+
+	init_timer(&hwif->timer);
+	hwif->timer.function = &ide_timer_expiry;
+	hwif->timer.data = (unsigned long)hwif;
 
 	init_completion(&hwif->gendev_rel_comp);
 
@@ -1532,7 +1431,7 @@ int ide_host_register(struct ide_host *host, const struct ide_port_info *d,
 
 		j++;
 
-		ide_acpi_init(hwif);
+		ide_acpi_init_port(hwif);
 
 		if (hwif->present)
 			ide_acpi_port_init_devices(hwif);
@@ -1589,11 +1488,9 @@ static void __ide_port_unregister_devices(ide_hwif_t *hwif)
 	ide_drive_t *drive;
 	int i;
 
-	ide_port_for_each_dev(i, drive, hwif) {
-		if (drive->dev_flags & IDE_DFLAG_PRESENT) {
-			device_unregister(&drive->gendev);
-			wait_for_completion(&drive->gendev_rel_comp);
-		}
+	ide_port_for_each_present_dev(i, drive, hwif) {
+		device_unregister(&drive->gendev);
+		wait_for_completion(&drive->gendev_rel_comp);
 	}
 }
 
