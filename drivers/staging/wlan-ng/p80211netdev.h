@@ -59,6 +59,8 @@
 /*================================================================*/
 /* Constants */
 
+#define WLAN_RELEASE	"0.3.0-staging"
+
 #define WLAN_DEVICE_CLOSED	0
 #define WLAN_DEVICE_OPEN	1
 
@@ -103,9 +105,6 @@
 #define P80211_NSDCAP_HWFRAGMENT            0x80  /* nsd handles frag/defrag */
 #define P80211_NSDCAP_AUTOJOIN              0x100  /* nsd does autojoin */
 #define P80211_NSDCAP_NOSCAN                0x200  /* nsd can scan */
-
-/*================================================================*/
-/* Macros */
 
 /*================================================================*/
 /* Types */

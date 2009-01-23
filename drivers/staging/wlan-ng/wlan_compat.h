@@ -86,19 +86,12 @@
 #define BIT31	0x80000000
 
 /*=============================================================*/
-/*------ Compiler Portability Macros --------------------------*/
-/*=============================================================*/
-#define __WLAN_ATTRIB_PACK__		__attribute__ ((packed))
-
-/*=============================================================*/
 /*------ OS Portability Macros --------------------------------*/
 /*=============================================================*/
 
 #ifndef WLAN_DBVAR
 #define WLAN_DBVAR	wlan_debug
 #endif
-
-#define WLAN_RELEASE	"0.3.0-lkml"
 
 #include <linux/hardirq.h>
 
@@ -117,14 +110,10 @@
 		for( __i__=0; __i__ < (n); __i__++) \
 			printk( " %02x", ((u8*)(p))[__i__]); \
 		printk("\n"); }
-	#define DBFENTER { if ( WLAN_DBVAR >= 5 ){ WLAN_LOG_DEBUG(3,"---->\n"); } }
-	#define DBFEXIT  { if ( WLAN_DBVAR >= 5 ){ WLAN_LOG_DEBUG(3,"<----\n"); } }
 
 	#define WLAN_LOG_DEBUG(l,x,args...) if ( WLAN_DBVAR >= (l)) printk(KERN_DEBUG "%s(%lu): " x ,  __func__, (preempt_count() & PREEMPT_MASK), ##args );
 #else
 	#define WLAN_HEX_DUMP( l, s, p, n)
-	#define DBFENTER
-	#define DBFEXIT
 
 	#define WLAN_LOG_DEBUG(l, s, args...)
 #endif
@@ -134,15 +123,6 @@ typedef struct net_device netdevice_t;
 
 #define URB_ASYNC_UNLINK 0
 #define USB_QUEUE_BULK 0
-
-/*=============================================================*/
-/*------ Hardware Portability Macros --------------------------*/
-/*=============================================================*/
-
-#define ieee2host16(n)	__le16_to_cpu(n)
-#define ieee2host32(n)	__le32_to_cpu(n)
-#define host2ieee16(n)	__cpu_to_le16(n)
-#define host2ieee32(n)	__cpu_to_le32(n)
 
 /*=============================================================*/
 /*--- General Macros ------------------------------------------*/
@@ -184,10 +164,5 @@ typedef struct net_device netdevice_t;
 extern int wlan_debug;
 #endif
 
-extern int wlan_ethconv;		/* What's the default ethconv? */
-
-/*=============================================================*/
-/*--- Functions -----------------------------------------------*/
-/*=============================================================*/
 #endif /* _WLAN_COMPAT_H */
 
