@@ -402,6 +402,7 @@ static int cpwd_release(struct inode *inode, struct file *file)
 
 static long cpwd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
+	struct inode *inode = file->f_path.dentry->d_inode;
 	static struct watchdog_info info = {
 		.options		= WDIOF_SETTIMEOUT,
 		.firmware_version	= 1,
@@ -480,7 +481,7 @@ static long cpwd_compat_ioctl(struct file *file, unsigned int cmd,
 	case WIOCSTOP:
 	case WIOCGSTAT:
 		lock_kernel();
-		rval = cpwd_ioctl(file->f_path.dentry->d_inode, file, cmd, arg);
+		rval = cpwd_ioctl(file, cmd, arg);
 		unlock_kernel();
 		break;
 
