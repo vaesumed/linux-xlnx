@@ -19,11 +19,15 @@
 #include <linux/signal.h>
 #include <linux/rcupdate.h>
 #include <linux/pid_namespace.h>
-#include <linux/smp_lock.h>
+#include <linux/mutex.h>
 
 #include <asm/poll.h>
 #include <asm/siginfo.h>
 #include <asm/uaccess.h>
+
+/* Serialize access to file->f_flags */
+DEFINE_SPINLOCK(file_flags_lock);
+EXPORT_SYMBOL(file_flags_lock);
 
 void set_close_on_exec(unsigned int fd, int flag)
 {
@@ -141,7 +145,7 @@ SYSCALL_DEFINE1(dup, unsigned int, fildes)
 	return ret;
 }
 
-#define SETFL_MASK (O_APPEND | O_NONBLOCK | O_NDELAY | FASYNC | O_DIRECT | O_NOATIME)
+#define SETFL_MASK (O_APPEND | O_NONBLOCK | O_NDELAY | O_DIRECT | O_NOATIME)
 
 static int setfl(int fd, struct file * filp, unsigned long arg)
 {
@@ -176,24 +180,59 @@ static int setfl(int fd, struct file * filp, unsigned long arg)
 	if (error)
 		return error;
 
-	/*
-	 * We still need a lock here for now to keep multiple FASYNC calls
-	 * from racing with each other.
-	 */
-	lock_kernel();
 	if ((arg ^ filp->f_flags) & FASYNC) {
-		if (filp->f_op && filp->f_op->fasync) {
-			error = filp->f_op->fasync(fd, filp, (arg & FASYNC) != 0);
-			if (error < 0)
-				goto out;
-		}
+		error = fasync_change(fd, filp, (arg & FASYNC) != 0);
+		if (error == -ENOTTY)
+			/*
+			 * ABI compatibility: fcntl() has traditionally returned
+			 * zero in this case (but ioctl() does not).
+			 */
+			error = 0;
+		else if (error < 0)
+			goto out;
 	}
 
+	lock_file_flags();
 	filp->f_flags = (arg & SETFL_MASK) | (filp->f_flags & ~SETFL_MASK);
+	unlock_file_flags();
  out:
-	unlock_kernel();
 	return error;
 }
+
+
+
+/*
+ * Change the setting of fasync, let the driver know.
+ * Not static because ioctl_fioasync() uses it too.
+ */
+int fasync_change(int fd, struct file *filp, int on)
+{
+	int ret = 0;
+	static DEFINE_MUTEX(fasync_mutex);
+
+	if (filp->f_op->fasync == NULL)
+		return -ENOTTY;
+
+	mutex_lock(&fasync_mutex);
+	/* Can test without flags lock, nobody else will change it */
+	if (((filp->f_flags & FASYNC) == 0) == (on == 0))
+		goto out;
+	ret = filp->f_op->fasync(fd, filp, on);
+	if (ret >= 0) {
+		lock_file_flags();
+		if (on)
+			filp->f_flags |= FASYNC;
+		else
+			filp->f_flags &= ~FASYNC;
+		unlock_file_flags();
+	}
+  out:
+	mutex_unlock(&fasync_mutex);
+	return ret;
+}
+
+
+
 
 static void f_modown(struct file *filp, struct pid *pid, enum pid_type type,
                      uid_t uid, uid_t euid, int force)
