@@ -66,6 +66,7 @@ enum {
 	STAC_9205_DELL_M42,
 	STAC_9205_DELL_M43,
 	STAC_9205_DELL_M44,
+	STAC_9205_EAPD,
 	STAC_9205_MODELS
 };
 
@@ -81,6 +82,7 @@ enum {
 
 enum {
 	STAC_92HD83XXX_REF,
+	STAC_92HD83XXX_PWR_REF,
 	STAC_92HD83XXX_MODELS
 };
 
@@ -337,7 +339,7 @@ static hda_nid_t stac92hd83xxx_slave_dig_outs[2] = {
 };
 
 static unsigned int stac92hd83xxx_pwr_mapping[4] = {
-	0x03, 0x0c, 0x20, 0x80,
+	0x03, 0x0c, 0x20, 0x40,
 };
 
 static hda_nid_t stac92hd83xxx_amp_nids[1] = {
@@ -1515,6 +1517,8 @@ static struct snd_pci_quirk stac9200_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
 		      "DFI LanParty", STAC_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
+		      "DFI LanParty", STAC_REF),
 	/* Dell laptops have BIOS problem */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x01a8,
 		      "unknown Dell", STAC_9200_DELL_D21),
@@ -1664,6 +1668,7 @@ static struct snd_pci_quirk stac925x_codec_id_cfg_tbl[] = {
 static struct snd_pci_quirk stac925x_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668, "DFI LanParty", STAC_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101, "DFI LanParty", STAC_REF),
 	SND_PCI_QUIRK(0x8384, 0x7632, "Stac9202 Reference Board", STAC_REF),
 
 	/* Default table for unknown ID */
@@ -1707,6 +1712,8 @@ static struct snd_pci_quirk stac92hd73xx_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
 				"DFI LanParty", STAC_92HD73XX_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
+				"DFI LanParty", STAC_92HD73XX_REF),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x0254,
 				"Dell Studio 1535", STAC_DELL_M6_DMIC),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x0255,
@@ -1739,15 +1746,19 @@ static unsigned int ref92hd83xxx_pin_configs[14] = {
 
 static unsigned int *stac92hd83xxx_brd_tbl[STAC_92HD83XXX_MODELS] = {
 	[STAC_92HD83XXX_REF] = ref92hd83xxx_pin_configs,
+	[STAC_92HD83XXX_PWR_REF] = ref92hd83xxx_pin_configs,
 };
 
 static const char *stac92hd83xxx_models[STAC_92HD83XXX_MODELS] = {
 	[STAC_92HD83XXX_REF] = "ref",
+	[STAC_92HD83XXX_PWR_REF] = "mic-ref",
 };
 
 static struct snd_pci_quirk stac92hd83xxx_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
+		      "DFI LanParty", STAC_92HD83XXX_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
 		      "DFI LanParty", STAC_92HD83XXX_REF),
 	{} /* terminator */
 };
@@ -1797,6 +1808,8 @@ static const char *stac92hd71bxx_models[STAC_92HD71BXX_MODELS] = {
 static struct snd_pci_quirk stac92hd71bxx_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
+		      "DFI LanParty", STAC_92HD71BXX_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
 		      "DFI LanParty", STAC_92HD71BXX_REF),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x30f2,
 		      "HP dv5", STAC_HP_M4),
@@ -1988,6 +2001,8 @@ static struct snd_pci_quirk stac922x_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
 		      "DFI LanParty", STAC_D945_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
+		      "DFI LanParty", STAC_D945_REF),
 	/* Intel 945G based systems */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x0101,
 		      "Intel D945G", STAC_D945GTP3),
@@ -2144,6 +2159,8 @@ static struct snd_pci_quirk stac927x_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
 		      "DFI LanParty", STAC_D965_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
+		      "DFI LanParty", STAC_D965_REF),
 	 /* Intel 946 based systems */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x3d01, "Intel D946", STAC_D965_3ST),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0xa301, "Intel D946", STAC_D965_3ST),
@@ -2240,6 +2257,7 @@ static unsigned int *stac9205_brd_tbl[STAC_9205_MODELS] = {
 	[STAC_9205_DELL_M42] = dell_9205_m42_pin_configs,
 	[STAC_9205_DELL_M43] = dell_9205_m43_pin_configs,
 	[STAC_9205_DELL_M44] = dell_9205_m44_pin_configs,
+	[STAC_9205_EAPD] = NULL,
 };
 
 static const char *stac9205_models[STAC_9205_MODELS] = {
@@ -2247,12 +2265,16 @@ static const char *stac9205_models[STAC_9205_MODELS] = {
 	[STAC_9205_DELL_M42] = "dell-m42",
 	[STAC_9205_DELL_M43] = "dell-m43",
 	[STAC_9205_DELL_M44] = "dell-m44",
+	[STAC_9205_EAPD] = "eapd",
 };
 
 static struct snd_pci_quirk stac9205_cfg_tbl[] = {
 	/* SigmaTel reference board */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_INTEL, 0x2668,
 		      "DFI LanParty", STAC_9205_REF),
+	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
+		      "DFI LanParty", STAC_9205_REF),
+	/* Dell */
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x01f1,
 		      "unknown Dell", STAC_9205_DELL_M42),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x01f2,
@@ -2283,6 +2305,8 @@ static struct snd_pci_quirk stac9205_cfg_tbl[] = {
 		      "Dell Inspiron", STAC_9205_DELL_M44),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x0228,
 		      "Dell Vostro 1500", STAC_9205_DELL_M42),
+	/* Gateway */
+	SND_PCI_QUIRK(0x107b, 0x0565, "Gateway T1616", STAC_9205_EAPD),
 	{} /* terminator */
 };
 
@@ -4814,13 +4838,6 @@ static int patch_stac92hd83xxx(struct hda_codec *codec)
 		AC_VERB_SET_CONNECT_SEL, num_dacs);
 
 	spec->init = stac92hd83xxx_core_init;
-	switch (codec->vendor_id) {
-	case 0x111d7605:
-		break;
-	default:
-		spec->num_pwrs--;
-	}
-
 	spec->mixer = stac92hd83xxx_mixer;
 	spec->num_pins = ARRAY_SIZE(stac92hd83xxx_pin_nids);
 	spec->num_dmuxes = ARRAY_SIZE(stac92hd83xxx_dmux_nids);
@@ -4844,6 +4861,15 @@ again:
 	if (err < 0) {
 		stac92xx_free(codec);
 		return err;
+	}
+
+	switch (codec->vendor_id) {
+	case 0x111d7604:
+	case 0x111d7605:
+		if (spec->board_config == STAC_92HD83XXX_PWR_REF)
+			break;
+		spec->num_pwrs = 0;
+		break;
 	}
 
 	err = stac92xx_parse_auto_config(codec, 0x1d, 0);
@@ -5320,7 +5346,9 @@ static int patch_stac9205(struct hda_codec *codec)
 
 	spec->aloopback_mask = 0x40;
 	spec->aloopback_shift = 0;
-	spec->eapd_switch = 1;
+	/* Turn on/off EAPD per HP plugging */
+	if (spec->board_config != STAC_9205_EAPD)
+		spec->eapd_switch = 1;
 	spec->multiout.dac_nids = spec->dac_nids;
 	
 	switch (spec->board_config){
