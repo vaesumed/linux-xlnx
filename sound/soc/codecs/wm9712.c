@@ -154,21 +154,6 @@ SOC_SINGLE("Mic 2 Volume", AC97_MIC, 0, 31, 1),
 SOC_SINGLE("Mic 20dB Boost Switch", AC97_MIC, 7, 1, 0),
 };
 
-/* add non dapm controls */
-static int wm9712_add_controls(struct snd_soc_codec *codec)
-{
-	int err, i;
-
-	for (i = 0; i < ARRAY_SIZE(wm9712_snd_ac97_controls); i++) {
-		err = snd_ctl_add(codec->card,
-				  snd_soc_cnew(&wm9712_snd_ac97_controls[i],
-					       codec, NULL));
-		if (err < 0)
-			return err;
-	}
-	return 0;
-}
-
 /* We have to create a fake left and right HP mixers because
  * the codec only has a single control that is shared by both channels.
  * This makes it impossible to determine the audio path.
@@ -467,7 +452,7 @@ static unsigned int ac97_read(struct snd_soc_codec *codec,
 	else {
 		reg = reg >> 1;
 
-		if (reg > (ARRAY_SIZE(wm9712_reg)))
+		if (reg >= (ARRAY_SIZE(wm9712_reg)))
 			return -EIO;
 
 		return cache[reg];
@@ -481,7 +466,7 @@ static int ac97_write(struct snd_soc_codec *codec, unsigned int reg,
 
 	soc_ac97_ops.write(codec->ac97, reg, val);
 	reg = reg >> 1;
-	if (reg <= (ARRAY_SIZE(wm9712_reg)))
+	if (reg < (ARRAY_SIZE(wm9712_reg)))
 		cache[reg] = val;
 
 	return 0;
@@ -698,7 +683,8 @@ static int wm9712_soc_probe(struct platform_device *pdev)
 	ac97_write(codec, AC97_VIDEO, ac97_read(codec, AC97_VIDEO) | 0x3000);
 
 	wm9712_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
-	wm9712_add_controls(codec);
+	snd_soc_add_controls(codec, wm9712_snd_ac97_controls,
+				ARRAY_SIZE(wm9712_snd_ac97_controls));
 	wm9712_add_widgets(codec);
 	ret = snd_soc_init_card(socdev);
 	if (ret < 0) {

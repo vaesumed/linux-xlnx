@@ -32,7 +32,6 @@
 
 struct wm9713_priv {
 	u32 pll_in; /* PLL input frequency */
-	u32 pll_out; /* PLL output frequency */
 };
 
 static unsigned int ac97_read(struct snd_soc_codec *codec,
@@ -189,21 +188,6 @@ SOC_SINGLE("3D Upper Cut-off Switch", AC97_REC_GAIN_MIC, 5, 1, 0),
 SOC_SINGLE("3D Lower Cut-off Switch", AC97_REC_GAIN_MIC, 4, 1, 0),
 SOC_SINGLE("3D Depth", AC97_REC_GAIN_MIC, 0, 15, 1),
 };
-
-/* add non dapm controls */
-static int wm9713_add_controls(struct snd_soc_codec *codec)
-{
-	int err, i;
-
-	for (i = 0; i < ARRAY_SIZE(wm9713_snd_ac97_controls); i++) {
-		err = snd_ctl_add(codec->card,
-				snd_soc_cnew(&wm9713_snd_ac97_controls[i],
-					codec, NULL));
-		if (err < 0)
-			return err;
-	}
-	return 0;
-}
 
 /* We have to create a fake left and right HP mixers because
  * the codec only has a single control that is shared by both channels.
@@ -636,7 +620,7 @@ static unsigned int ac97_read(struct snd_soc_codec *codec,
 	else {
 		reg = reg >> 1;
 
-		if (reg > (ARRAY_SIZE(wm9713_reg)))
+		if (reg >= (ARRAY_SIZE(wm9713_reg)))
 			return -EIO;
 
 		return cache[reg];
@@ -650,7 +634,7 @@ static int ac97_write(struct snd_soc_codec *codec, unsigned int reg,
 	if (reg < 0x7c)
 		soc_ac97_ops.write(codec->ac97, reg, val);
 	reg = reg >> 1;
-	if (reg <= (ARRAY_SIZE(wm9713_reg)))
+	if (reg < (ARRAY_SIZE(wm9713_reg)))
 		cache[reg] = val;
 
 	return 0;
@@ -738,13 +722,13 @@ static int wm9713_set_pll(struct snd_soc_codec *codec,
 	struct _pll_div pll_div;
 
 	/* turn PLL off ? */
-	if (freq_in == 0 || freq_out == 0) {
+	if (freq_in == 0) {
 		/* disable PLL power and select ext source */
 		reg = ac97_read(codec, AC97_HANDSET_RATE);
 		ac97_write(codec, AC97_HANDSET_RATE, reg | 0x0080);
 		reg = ac97_read(codec, AC97_EXTENDED_MID);
 		ac97_write(codec, AC97_EXTENDED_MID, reg | 0x0200);
-		wm9713->pll_out = 0;
+		wm9713->pll_in = 0;
 		return 0;
 	}
 
@@ -788,7 +772,6 @@ static int wm9713_set_pll(struct snd_soc_codec *codec,
 	ac97_write(codec, AC97_EXTENDED_MID, reg & 0xfdff);
 	reg = ac97_read(codec, AC97_HANDSET_RATE);
 	ac97_write(codec, AC97_HANDSET_RATE, reg & 0xff7f);
-	wm9713->pll_out = freq_out;
 	wm9713->pll_in = freq_in;
 
 	/* wait 10ms AC97 link frames for the link to stabilise */
@@ -1164,8 +1147,8 @@ static int wm9713_soc_resume(struct platform_device *pdev)
 	wm9713_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
 	/* do we need to re-start the PLL ? */
-	if (wm9713->pll_out)
-		wm9713_set_pll(codec, 0, wm9713->pll_in, wm9713->pll_out);
+	if (wm9713->pll_in)
+		wm9713_set_pll(codec, 0, wm9713->pll_in, 0);
 
 	/* only synchronise the codec if warm reset failed */
 	if (ret == 0) {
@@ -1245,7 +1228,8 @@ static int wm9713_soc_probe(struct platform_device *pdev)
 	reg = ac97_read(codec, AC97_CD) & 0x7fff;
 	ac97_write(codec, AC97_CD, reg);
 
-	wm9713_add_controls(codec);
+	snd_soc_add_controls(codec, wm9713_snd_ac97_controls,
+				ARRAY_SIZE(wm9713_snd_ac97_controls));
 	wm9713_add_widgets(codec);
 	ret = snd_soc_init_card(socdev);
 	if (ret < 0)

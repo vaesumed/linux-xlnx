@@ -47,7 +47,7 @@ static inline unsigned int wm8728_read_reg_cache(struct snd_soc_codec *codec,
 	unsigned int reg)
 {
 	u16 *cache = codec->reg_cache;
-	BUG_ON(reg > ARRAY_SIZE(wm8728_reg_defaults));
+	BUG_ON(reg >= ARRAY_SIZE(wm8728_reg_defaults));
 	return cache[reg];
 }
 
@@ -55,7 +55,7 @@ static inline void wm8728_write_reg_cache(struct snd_soc_codec *codec,
 	u16 reg, unsigned int value)
 {
 	u16 *cache = codec->reg_cache;
-	BUG_ON(reg > ARRAY_SIZE(wm8728_reg_defaults));
+	BUG_ON(reg >= ARRAY_SIZE(wm8728_reg_defaults));
 	cache[reg] = value;
 }
 
@@ -91,21 +91,6 @@ SOC_DOUBLE_R_TLV("Digital Playback Volume", WM8728_DACLVOL, WM8728_DACRVOL,
 
 SOC_SINGLE("Deemphasis", WM8728_DACCTL, 1, 1, 0),
 };
-
-static int wm8728_add_controls(struct snd_soc_codec *codec)
-{
-	int err, i;
-
-	for (i = 0; i < ARRAY_SIZE(wm8728_snd_controls); i++) {
-		err = snd_ctl_add(codec->card,
-				  snd_soc_cnew(&wm8728_snd_controls[i],
-						codec, NULL));
-		if (err < 0)
-			return err;
-	}
-
-	return 0;
-}
 
 /*
  * DAPM controls.
@@ -330,7 +315,8 @@ static int wm8728_init(struct snd_soc_device *socdev)
 	/* power on device */
 	wm8728_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
-	wm8728_add_controls(codec);
+	snd_soc_add_controls(codec, wm8728_snd_controls,
+				ARRAY_SIZE(wm8728_snd_controls));
 	wm8728_add_widgets(codec);
 	ret = snd_soc_init_card(socdev);
 	if (ret < 0) {
