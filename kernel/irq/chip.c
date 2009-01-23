@@ -293,7 +293,8 @@ static inline void mask_ack_irq(struct irq_desc *desc, int irq)
 		desc->chip->mask_ack(irq);
 	else {
 		desc->chip->mask(irq);
-		desc->chip->ack(irq);
+		if (desc->chip->ack)
+			desc->chip->ack(irq);
 	}
 }
 
@@ -386,6 +387,7 @@ handle_level_irq(unsigned int irq, struct irq_desc *desc)
 out_unlock:
 	spin_unlock(&desc->lock);
 }
+EXPORT_SYMBOL_GPL(handle_level_irq);
 
 /**
  *	handle_fasteoi_irq - irq handler for transparent controllers
@@ -478,7 +480,8 @@ handle_edge_irq(unsigned int irq, struct irq_desc *desc)
 	kstat_incr_irqs_this_cpu(irq, desc);
 
 	/* Start handling the irq */
-	desc->chip->ack(irq);
+	if (desc->chip->ack)
+		desc->chip->ack(irq);
 	desc = irq_remap_to_desc(irq, desc);
 
 	/* Mark the IRQ currently in progress.*/
@@ -596,6 +599,7 @@ __set_irq_handler(unsigned int irq, irq_flow_handler_t handle, int is_chained,
 	}
 	spin_unlock_irqrestore(&desc->lock, flags);
 }
+EXPORT_SYMBOL_GPL(__set_irq_handler);
 
 void
 set_irq_chip_and_handler(unsigned int irq, struct irq_chip *chip,
