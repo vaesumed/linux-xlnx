@@ -33,11 +33,13 @@
  * able to sucessfully recover with this option (drive will return good
  * status as soon as the cdb is validated).
  */
+#ifdef __KERNEL__
 #if defined(CONFIG_CDROM_PKTCDVD_WCACHE)
 #define USE_WCACHING		1
 #else
 #define USE_WCACHING		0
 #endif
+#endif /* __KERNEL__ */
 
 /*
  * No user-servicable parts beyond this point ->

@@ -1,6 +1,7 @@
 #ifndef __LINUX_PKT_CLS_H
 #define __LINUX_PKT_CLS_H
 
+#include <linux/types.h>
 #include <linux/pkt_sched.h>
 
 /* I think i could have done better macros ; for now this is stolen from
@@ -303,8 +304,8 @@ enum
 	TCA_FW_UNSPEC,
 	TCA_FW_CLASSID,
 	TCA_FW_POLICE,
-	TCA_FW_INDEV, /*  used by CONFIG_NET_CLS_IND */
-	TCA_FW_ACT, /* used by CONFIG_NET_CLS_ACT */
+	TCA_FW_INDEV,	/* used by NET_CLS_IND */
+	TCA_FW_ACT,	/* used by NET_CLS_ACT */
 	TCA_FW_MASK,
 	__TCA_FW_MAX
 };
