@@ -495,7 +495,7 @@ void fw_core_remove_card(struct fw_card *card)
 	fw_core_initiate_bus_reset(card, 1);
 
 	mutex_lock(&card_mutex);
-	list_del(&card->link);
+	list_del_init(&card->link);
 	mutex_unlock(&card_mutex);
 
 	/* Set up the dummy driver. */
