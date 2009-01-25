@@ -231,6 +231,10 @@ int __init musb_platform_init(struct musb *musb)
 #if defined(CONFIG_ARCH_OMAP2430)
 	omap_cfg_reg(AE5_2430_USB0HS_STP);
 #endif
+	if (!x) {
+		pr_err("omap: musb: null transceiver found\n");
+		return -ENODEV;
+	}
 
 	musb_platform_resume(musb);
 
