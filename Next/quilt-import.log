@@ -1,0 +1,388 @@
+Importing driver-core.current based on 2.6.29-rc2-git1
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard f3b8436ad9a8ad36b3c9fa1fe030c7f38e5d3d0b
+HEAD is now at f3b8436 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/roland/infiniband
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+driver-core-convert-to-in-dev_set_name.patch
+pnp-fix-broken-pnp-lowercasing-for-acpi-module-aliases.patch
+sysfs-fix-problems-with-binary-files.patch
+debugfs-introduce-stub-for-debugfs_create_size_t-when-debug_fs-n.patch
+klist.c-bit-0-in-pointer-can-t-be-used-as-flag.patch
+sync-patch-for-jp_jp-stable_kernel_rules.txt.patch
+uio-add-missing-documentation-of-features-added-recently.patch
+driver-core-fix-kernel-doc-parameter-name.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+ + 75356a0...7dbfdd2 master     -> quilt/driver-core.current  (forced update)
+Importing usb.current based on quilt/driver-core.current
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 7dbfdd2f0efbd2ba43d2edb7b1a8d32b78c458ef
+HEAD is now at 7dbfdd2 driver-core: fix kernel-doc parameter name
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-cp2101-add-fasttrax-gps-evaluation-kit-vendor-product-id.patch
+usb-fix-toggle-mismatch-in-disable_endpoint-paths.patch
+usb-storage-add-unusual-devs-entry.patch
+usb-don-t-enable-wakeup-by-default-for-pci-host-controllers.patch
+usb-fix-suspend-resume-of-pci-usb-controllers.patch
+usb-fix-char-device-disconnect-handling.patch
+usb-omap1-ohci-buildfix.patch
+usb-musb-davinci-buildfix.patch
+usb-musb_hdrc-another-davinci-buildfix.patch
+usb-musb-free_irq-bugfix.patch
+usb-prevent-musb-init-oops.patch
+usb-musb-tusb6010-buildfix.patch
+usb-musb-uses-endpoint-functions.patch
+usb-musb-cppi-bugfixes.patch
+usb-musb-cppi-dma-fix.patch
+usb-composite-fix-bug-should-test-set_alt-function-pointer-before-use-it.patch
+usb-composite-fix-bug-low-byte-of-w_index-is-the-usb-interface-number-not-the-whole-2-bytes-of-w_index.patch
+usb-cdc-acm-support-some-gps-data-loggers.patch
+usb-cdc-acm-quirk-for-mtk-gps.patch
+usb-remove-vernier-labpro-from-ldusb.patch
+usb-usblp.c-add-usblp_quirk_bidir-to-brother-hl-1440.patch
+usb-cp2101-device.patch
+usb-ftdi_sio-added-alti-2-vid-and-neptune-3-pid.patch
+usb-ftdi_sio-driver-support-of-bar-code-scanner-from-diebold.patch
+usb-add-kernel-doc-for-wusb_dev-in-struct-usb_device.patch
+usb-usbmon-implement-compat_ioctl.patch
+usb-storage-support-of-dane-elec-mediatouch-usb-device.patch
+usb-remove-zte-modem-from-unusual_devices.patch
+usb-option-driver-onda-device-mt503hs-has-wrong-id.patch
+usb-cdc-acm-add-another-conexant-modem-to-the-quirks.patch
+usb-new-id-for-ti_usb_3410_5052-driver.patch
+usb-gadget-fix-x-y.patch
+usb-unusual_dev-usb-storage-needs-to-ignore-a-device.patch
+usb-storage-add-another-unusual_dev-for-off-by-one-bug.patch
+usb-option-add-quanta-hsdpa-data-card-device-ids.patch
+usb-driver-for-freescale-quicc-engine-usb-host-controller.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 6efe421...d307e94 master     -> quilt/usb.current  (forced update)
+Importing driver-core based on quilt/usb.current
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard d307e944e0671f0b126f246a100b78c63204733e
+HEAD is now at d307e94 USB: Driver for Freescale QUICC Engine USB Host Controller
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+bus_id-edac2.patch
+bus_id-spi.patch
+bus_id-video2.patch
+bus_id-zorro.patch
+bus_id-input2.patch
+bus_id-mmc2.patch
+bus_id-mtd.patch
+bus_id-parisc.patch
+bus_id-pci.patch
+bus_id-rapidio.patch
+bus_id-s390.patch
+bus_id-serial.patch
+bus_id-sh.patch
+bus_id-tc.patch
+bus_id-pcmcia2.patch
+bus_id-rtc2.patch
+bus_id-net2.patch
+bus_id-drm.patch
+bus_id-v4l.patch
+bus_id-acpi.patch
+bus_id-amba.patch
+bus_id-dio.patch
+bus_id-dma.patch
+bus_id-eisa.patch
+bus_id-gpio.patch
+bus_id-ide.patch
+bus_id-mca.patch
+bus_id-mfd.patch
+bus_id-wimax.patch
+bus_id-usb.patch
+driver-core-get-rid-of-struct-device-s-bus_id-string-array.patch
+sysfs-use-standard-magic.h-for-sysfs.patch
+sysfs-take-sysfs_mutex-when-fetching-the-root-inode.patch
+driver-core-check-bus-match-without-holding-device-lock.patch
+uio-add-name-attributes-for-mappings-and-port-regions.patch
+warn-when-statically-allocated-kobjects-are-used.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 3098eb2...91416fc master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 91416fc8b9aa5a32d6223624267cc687b9dc7d29
+HEAD is now at 91416fc warn when statically-allocated kobjects are used
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usblp-continuously-poll-for-status.patch
+usb-gpio_vbus-add-delayed-vbus_session-calls.patch
+usb-pxa27x_udc-factor-pullup-code-to-prepare-otg-transceiver.patch
+usb-pxa27x_udc-add-vbus-session-handling.patch
+usb-pxa27x_udc-add-otg-transceiver-support.patch
+usb-pxa27x_udc-add-vbus_draw-callback.patch
+usb-move-definitions-from-usb.h-to-usb-ch9.h.patch
+usb-ub-use-usb-api-functions-rather-than-constants.patch
+usb-remove-redundant-test-in-pxa27x_udc-and-ftdi_sio.patch
+usb-drivers-use-usb-api-functions-rather-than-constants.patch
+usb-gadget-remove-duplicated-include.patch
+usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+usb-imx_udc-fix-imx-udc-gadget-bugs.patch
+usb-imx_udc-fix-imx-udc-gadget-code-style.patch
+usb-imx_udc-fix-imx-udc-gadget-ep0-irq-handling.patch
+usb-imx_udc-fix-imx-udc-gadget-general-irq-handling.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + 93f9eaf...539d702a master     -> quilt/usb  (forced update)
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 5393f780277165f282a37ed82dd878159ec9dad5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 5393f780277165f282a37ed82dd878159ec9dad5
+HEAD is now at 5393f78 Merge branch 'merge' of git://git.kernel.org/pub/scm/linux/kernel/git/benh/powerpc
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-pmac-breakage.patch
+ide-fix-falcon-ide-breakage.patch
+palm_bk3710-buildfix.patch
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+ide-force-via-ide-legacy-interrupts-for-amigaone-boards.patch
+ide-add-cs5536-host-driver-v2.patch
+ide-remove-superfluous-check-from-ide_proc_port_register_devices.patch
+ide-acpi-no-need-to-zero-acpidata-for-devices.patch
+ide-acpi-init-acpi-handles-early-for-devices.patch
+ide-add-ide_for_each_present_dev-iterator.patch
+ide-sanitize-acpi-initialization.patch
+ide-acpi-cleanup-do_drive_get_gtf.patch
+ide-acpi-cleanup-do_drive_set_taskfiles.patch
+ide-acpi-remove-taskfile_load_raw.patch
+Context reduced to (2/2) to apply fragment at 21
+ide-remove-stale-comments-from-drive_is_ready.patch
+ide-unexport-ide_devset_execute.patch
+ide-move-drive_is_ready-to-ide-io-c.patch
+ide-move-ide_dma_timeout_retry-to-ide-dma-c.patch
+ide-remove-ide_do_drive_cmd.patch
+ide-factor-out-processing-of-special-commands-from-ide_special_rq.patch
+ide-move-ide_do_park_unpark-to-ide-park-c.patch
+ide-move-device-settings-code-to-ide-devsets-c.patch
+ide-move-xfer-mode-tuning-to-ide-xfer-mode-c.patch
+ide-move-ide_read_bcount_and_ireason-to-ide-atapi-c.patch
+ide-move-standard-io-code-to-ide-io-std-c.patch
+ide-fix-printk-levels-in-atapi_-reset_pollfunc.patch
+ide-fix-comments-in-ide_config_drive_speed.patch
+ide-checkpatch-pl-fixes-for-ide-iops-c.patch
+ide-move-error-handling-code-to-ide-eh-c-v2.patch
+mn10300-add-pci_get_legacy_ide_irq-to-asm-pci-h.patch
+amd74xx-use-ide_pci_is_in_compatibility_mode.patch
+ns87415-use-pci_get_legacy_ide_irq.patch
+ns87415-small-init_hwif-cleanup.patch
+trm290-small-init_hwif-cleanup.patch
+ide-handle-ide_hflag_-force-_legacy_irqs-in-ide_pci_init_-one-two-.patch
+ide-use-pci_get_legacy_ide_irq-in-ide_pci_init_-one-two-.patch
+ide-use-ide_pci_is_in_compatibility_mode-in-ide_pci_init_-one-two-.patch
+ide-remove-no-longer-needed-ide_hflag_-force-_legacy_irqs.patch
+amd74xx-remove-no-longer-needed-init_hwif-method.patch
+ide-remove-no-longer-needed-irq-fallback-code-from-hwif_init.patch
+ide-remove-no-longer-needed-irq-auto-probing-from-try_to_identify-v2.patch
+ide-remove-try_to_identify-wrapper.patch
+ide-fix-init_chipset-method-to-return-int.patch
+ide-remove-pciirq-argument-from-ide_pci_setup_ports.patch
+frv-remove-asm-ide-h.patch
+mn10300-remove-asm-ide-h.patch
+ide-fix-kmalloc-failure-handling-in-ide_driveid_update.patch
+ide-propagate-altstatus-workarounds-to-ide_driveid_update.patch
+ide-shorten-timeout-value-in-ide_driveid_update.patch
+ide-remove-broken-exabytenest-support.patch
+ide-classify-device-type-in-do_probe.patch
+ide-sanitize-select_mask-usage-in-ide_driveid_update.patch
+ide-clear-drive-irq-after-re-enabling-local-irqs-in-ide_driveid_update.patch
+ide-use-try_to_identify-in-ide_driveid_update.patch
+tx4939ide-typo-fix-and-minor-cleanup.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + d9ab9f0...0b674ce master     -> quilt/ide  (forced update)
+Unchanged quilt series rr
+Importing ttydev based on f3b8436ad9a8ad36b3c9fa1fe030c7f38e5d3d0b
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard f3b8436ad9a8ad36b3c9fa1fe030c7f38e5d3d0b
+HEAD is now at f3b8436 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/roland/infiniband
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+serial-pnx833x
+tty-jsm-devexit
+tty-8250-pci-3620
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 5a48823...b379f46 master     -> quilt/ttydev  (forced update)
+Importing staging based on quilt/usb
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 539d702a270aae713b27fd46c5acb288793cb01c
+HEAD is now at 539d702a USB: imx_udc: Fix IMX UDC gadget general irq handling
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-comedi-fix-kbuild.patch
+staging-meilhaus-fix-kbuild.patch
+staging-android-binder-fix-arm-build-errors.patch
+staging-android-timed_gpio-fix-build-to-build-on-kernels-after-2.6.25.patch
+staging-android-add-lowmemorykiller-documentation.patch
+staging-android-task_get_unused_fd_flags-fix-the-wrong-usage-of-tsk-signal.patch
+staging-agnx-drivers-staging-agnx-agnx.h-needs-linux-io.h.patch
+staging-usbip-usbip_start_threads-handle-kernel_thread-failure.patch
+staging-sxg-new-sxg_sgl-design-and-mac-header-changes.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:52: space before tab in indent.
+ 		 * Get out of here
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:53: space before tab in indent.
+ 		 */
+warning: 2 lines add whitespace errors.
+staging-sxg-typedef-removal-pending-work.patch
+staging-sxg-commenting-style-fixes-pending-work.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:905: space before tab in indent.
+	 	 * XXXTODO - Assuming Link Attention is only being generated
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:906: space before tab in indent.
+	 	 * for the Link Alarm pin (and not for a XAUI Link Status change)
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:907: space before tab in indent.
+	 	 * , then it's impossible to get here.  Yet we've gotten here
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:908: space before tab in indent.
+	 	 * twice (under extreme conditions - bouncing the link up and
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:909: space before tab in indent.
+	 	 * down many times a second). Needs further investigation.
+warning: squelched 1 whitespace error
+warning: 6 lines add whitespace errors.
+staging-sxg-indentation-fixes-mostly-80-char-lines.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:272: space before tab in indent.
+			     	     /* Memory write and invalidate */
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:484: space before tab in indent.
+ 			 * to RESET
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:485: space before tab in indent.
+ 			 */
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:786: space before tab in indent.
+				       	AXGMAC_CFG1_XMT_EN |
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:788: space before tab in indent.
+				       	AXGMAC_CFG1_RCV_PAUSE |
+warning: squelched 9 whitespace errors
+warning: 14 lines add whitespace errors.
+staging-sxg-receive-code-and-data-structure-cleanups.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:57: space before tab in indent.
+        	              sizeof(struct sxg_config_mac));
+warning: 1 line adds whitespace errors.
+staging-sxg-ethtool-framework-and-receive-code-path-changes.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:222: space before tab in indent.
+ 	 * from the FLASH/EEPROM or download file ?
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:223: space before tab in indent.
+ 	 */
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:225: space before tab in indent.
+ 	 * Also check what is the right EEPROM length : EEPROM_SIZE_XFMR or EEPROM_SIZE_NO_XFMR
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:226: space before tab in indent.
+ 	 */
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:247: space before tab in indent.
+                	memcpy(data + index * ETH_GSTRING_LEN,
+warning: squelched 3 whitespace errors
+warning: 8 lines add whitespace errors.
+staging-sxg-sxg-sgl-related-cleanup-in-data-structures-and-code.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:410: space before tab in indent.
+       	void                            *temp_RcvBlock;
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:411: space before tab in indent.
+       	struct list_entry               *ple;
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:412: space before tab in indent.
+       	struct sxg_rcv_block_hdr        *RcvBlockHdr;
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:484: space before tab in indent.
+        	iounmap((void *)adapter->HwRegs);
+warning: 4 lines add whitespace errors.
+staging-sxg-locking-related-changes.-fix-locking-levels.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:120: space before tab in indent.
+ 		ple = RemoveHeadList(&adapter->AllSglBuffers);
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:121: space before tab in indent.
+ 		Sgl = container_of(ple, struct sxg_scatter_gather, AllList);
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:122: space before tab in indent.
+ 		kfree(Sgl);
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:168: space before tab in indent.
+ 	atomic_inc(&adapter->pending_allocations);
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:183: space before tab in indent.
+ 		atomic_dec(&adapter->pending_allocations);
+warning: squelched 11 whitespace errors
+warning: 16 lines add whitespace errors.
+staging-sxg-add-ethtool-functionality-enhancement-and-misc-cleanups.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:94: space before tab in indent.
+ 			if (adapter->stats.rx_missed_errors< 5) {
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:218: space before tab in indent.
+ 	return STATUS_FAILURE;
+warning: 2 lines add whitespace errors.
+staging-sxg-firmware-updates.patch
+staging-sxg-fix-to-load-card-on-low-memory-machines.patch
+staging-sxg-fix-build-warnings-in-sxg_ethtool.patch
+staging-sxg-remove-firmware-files-from-sgx_ethtool.c.patch
+staging-sxg-fix-build-warnings-in-downloadb-firmware-files.patch
+staging-sxg-fix-build-warnings-in-sxg.c.patch
+staging-asus_oled-fix-sparse-warnings-about-using-plain-integer-as-null-pointer.patch
+staging-asus_oled-do-not-initialise-statics-to-0-or-null.patch
+staging-asus_oled-trailing-statements-should-be-on-next-line.patch
+staging-asus_oled-fix-various-checkpatch.pl-issues-regarding-missing-or-obsolete-spaces.patch
+staging-asus_oled-do-not-use-assignment-in-if-condition.patch
+staging-w35und-remove-unused-header-files.patch
+staging-w35und-remove-unnecessary-os_common.h-header-file.patch
+staging-w35und-remove-crazy-commented-out-includes.patch
+staging-w35und-unify-mto.h-and-mto_f.h-header-files.patch
+staging-w35und-convert-code-to-use-eth_alen.patch
+staging-w35und-remove-useless-macro-from-common.h.patch
+staging-w35und-kill-wbdebug-and-remove-common.h-header-file.patch
+staging-w35und-typedef-removal.patch
+staging-wb35und-remove-hw_data_t-typedef.patch
+staging-w35und-remove-mto_func_input-macro-obfuscation.patch
+staging-wlan-ng-remove-use-of-__wlan_attrib_pack__.patch
+staging-wlan-ng-remove-use-of-wlan_addr_len.patch
+staging-wlan-ng-remove-stray-comments-in-header-files.patch
+staging-wlan-ng-cleanup-wlan_compat.h-more.patch
+staging-wlan-ng-remove-dbfenter-dbfexit-macros.patch
+staging-wlan-ng-use-generic-byteorder-macros.patch
+staging-remove-duplicated-include-s.patch
+staging-agnx-move-a-dereference-below-a-null-test.patch
+staging-go7007-move-a-dereference-below-a-null-test.patch
+staging-comedi-correct-use-of-and.patch
+staging-meilhaus-correct-use-of-and.patch
+staging-rt2860-rt2870-correct-use-of-and.patch
+staging-comedi-use-define_spinlock.patch
+staging-meilhaus-use-define_spinlock.patch
+staging-go7007-introduce-missing-kfree.patch
+staging-comedi-introduce-missing-kfree.patch
+staging-comedi-move-a-dereference-below-a-null-test.patch
+staging-rt2860-remove-kernel-version-compatibility-wrappers.patch
+staging-otus-logical-bit-and-confusion.patch
+staging-meilhaus-unsigned-won-t-get-negative-after-subtraction.patch
+staging-altpciechdma-null-deref-in-altpciechdma.c-remove.patch
+staging-slicoss-use-request_firmware.patch
+staging-at76_usb-mention-mac80211-port-in-todo-file.patch
+staging-otus-use-usb-api-functions-rather-than-constants.patch
+staging-rspiusb-use-usb-api-functions-rather-than-constants.patch
+staging-frontier-make-checkpatch.pl-considerably-happier-with-tranzport-driver.patch
+staging-frontier-make-checkpatch.pl-much-happier-with-alphatrack-driver.patch
+staging-frontier-removed-now-unused-frontier_compat.h-file.patch
+staging-frontier-updated-documentation.patch
+staging-frontier-make-checkpatch.pl-happy-with-alphatrack.h.patch
+staging-frontier-remove-unused-components-of-the-alphatrack-tranzport-sysfs-interface.patch
+staging-dst-core-files.patch
+staging-dst-network-state-machine.patch
+staging-dst-export-node.patch
+staging-dst-thread-pool.patch
+staging-dst-transactions.patch
+staging-dst-crypto-processing.patch
+staging-dst-replace-bus_id-with-dev_set_name.patch
+staging-dst-kconfig-and-makefile-changes.patch
+staging-dst-kconfig-update.patch
+staging-dst-optimize-bio-allocation.patch
+staging-dst-extend-thread-pool-exit-conditions.patch
+staging-dst-do-not-allow-empty-barriers.patch
+staging-dst-kconfig-text-update.patch
+staging-dst-fix-build-dependancy.patch
+staging-add-stlc45xx-wi-fi-driver-for-stlc4550-4560.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 262acd8...e878435 master     -> quilt/staging  (forced update)
