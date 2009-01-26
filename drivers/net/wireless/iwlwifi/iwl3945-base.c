@@ -5361,7 +5361,7 @@ static int iwl3945_read_ucode(struct iwl3945_priv *priv)
 
 	/* api_ver should match the api version forming part of the
 	 * firmware filename ... but we don't check for that and only rely
-	 * on the API version read from firware header from here on forward */
+	 * on the API version read from firmware header from here on forward */
 
 	if (api_ver < api_min || api_ver > api_max) {
 		IWL_ERROR("Driver unable to support your firmware API. "
