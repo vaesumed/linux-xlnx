@@ -510,7 +510,6 @@ int ide_devset_execute(ide_drive_t *drive, const struct ide_devset *setting,
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(ide_devset_execute);
 
 static ide_startstop_t ide_special_rq(ide_drive_t *drive, struct request *rq)
 {
