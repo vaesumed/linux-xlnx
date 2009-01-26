@@ -210,6 +210,7 @@ struct ocfs2_journal;
 struct ocfs2_slot_info;
 struct ocfs2_recovery_map;
 struct ocfs2_quota_recovery;
+struct ocfs2_dentry_lock;
 struct ocfs2_super
 {
 	struct task_struct *commit_task;
@@ -286,11 +287,6 @@ struct ocfs2_super
 
 	u64 la_last_gd;
 
-#ifdef CONFIG_OCFS2_FS_STATS
-	struct dentry *local_alloc_debug;
-	char *local_alloc_debug_buf;
-#endif
-
 	/* Next three fields are for local node slot recovery during
 	 * mount. */
 	int dirty;
@@ -307,6 +303,7 @@ struct ocfs2_super
 	struct ocfs2_dlm_debug *osb_dlm_debug;
 
 	struct dentry *osb_debug_root;
+	struct dentry *osb_ctxt;
 
 	wait_queue_head_t recovery_event;
 
@@ -324,6 +321,11 @@ struct ocfs2_super
 	 */
 	struct list_head blocked_lock_list;
 	unsigned long blocked_lock_count;
+
+	/* List of dentry locks to release. Anyone can add locks to
+	 * the list, ocfs2_wq processes the list  */
+	struct ocfs2_dentry_lock *dentry_lock_list;
+	struct work_struct dentry_lock_work;
 
 	wait_queue_head_t		osb_mount_event;
 
