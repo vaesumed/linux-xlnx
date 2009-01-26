@@ -34,6 +34,7 @@
 #define _IF_PPP_H_
 
 #include <linux/compiler.h>
+#include <linux/types.h>
 
 /*
  * Packet sizes
