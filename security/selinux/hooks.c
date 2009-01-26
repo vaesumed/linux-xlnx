@@ -89,7 +89,7 @@
 #define XATTR_SELINUX_SUFFIX "selinux"
 #define XATTR_NAME_SELINUX XATTR_SECURITY_PREFIX XATTR_SELINUX_SUFFIX
 
-#define NUM_SEL_MNT_OPTS 4
+#define NUM_SEL_MNT_OPTS 5
 
 extern unsigned int policydb_loaded_version;
 extern int selinux_nlmsg_lookup(u16 sclass, u16 nlmsg_type, u32 *perm);
@@ -353,6 +353,7 @@ enum {
 	Opt_fscontext = 2,
 	Opt_defcontext = 3,
 	Opt_rootcontext = 4,
+	Opt_labelsupport = 5,
 };
 
 static const match_table_t tokens = {
@@ -360,6 +361,7 @@ static const match_table_t tokens = {
 	{Opt_fscontext, FSCONTEXT_STR "%s"},
 	{Opt_defcontext, DEFCONTEXT_STR "%s"},
 	{Opt_rootcontext, ROOTCONTEXT_STR "%s"},
+	{Opt_labelsupport, LABELSUPP_STR},
 	{Opt_error, NULL},
 };
 
@@ -431,7 +433,7 @@ static int sb_finish_set_opts(struct super_block *sb)
 		}
 	}
 
-	sbsec->initialized = 1;
+	sbsec->flags |= (SE_SBINITIALIZED | SE_SBLABELSUPP);
 
 	if (sbsec->behavior > ARRAY_SIZE(labeling_behaviors))
 		printk(KERN_ERR "SELinux: initialized (dev %s, type %s), unknown behavior\n",
@@ -440,6 +442,12 @@ static int sb_finish_set_opts(struct super_block *sb)
 		printk(KERN_DEBUG "SELinux: initialized (dev %s, type %s), %s\n",
 		       sb->s_id, sb->s_type->name,
 		       labeling_behaviors[sbsec->behavior-1]);
+
+	if (sbsec->behavior == SECURITY_FS_USE_GENFS ||
+	    sbsec->behavior == SECURITY_FS_USE_MNTPOINT ||
+	    sbsec->behavior == SECURITY_FS_USE_NONE ||
+	    sbsec->behavior > ARRAY_SIZE(labeling_behaviors))
+		sbsec->flags &= ~SE_SBLABELSUPP;
 
 	/* Initialize the root inode. */
 	rc = inode_doinit_with_dentry(root_inode, root);
@@ -487,23 +495,22 @@ static int selinux_get_mnt_opts(const struct super_block *sb,
 
 	security_init_mnt_opts(opts);
 
-	if (!sbsec->initialized)
+	if (!(sbsec->flags & SE_SBINITIALIZED))
 		return -EINVAL;
 
 	if (!ss_initialized)
 		return -EINVAL;
 
-	/*
-	 * if we ever use sbsec flags for anything other than tracking mount
-	 * settings this is going to need a mask
-	 */
-	tmp = sbsec->flags;
+	tmp = sbsec->flags & SE_MNTMASK;
 	/* count the number of mount options for this sb */
 	for (i = 0; i < 8; i++) {
 		if (tmp & 0x01)
 			opts->num_mnt_opts++;
 		tmp >>= 1;
 	}
+	/* Check if the Label support flag is set */
+	if (sbsec->flags & SE_SBLABELSUPP)
+		opts->num_mnt_opts++;
 
 	opts->mnt_opts = kcalloc(opts->num_mnt_opts, sizeof(char *), GFP_ATOMIC);
 	if (!opts->mnt_opts) {
@@ -549,6 +556,10 @@ static int selinux_get_mnt_opts(const struct super_block *sb,
 		opts->mnt_opts[i] = context;
 		opts->mnt_opts_flags[i++] = ROOTCONTEXT_MNT;
 	}
+	if (sbsec->flags & SE_SBLABELSUPP) {
+		opts->mnt_opts[i] = NULL;
+		opts->mnt_opts_flags[i++] = SE_SBLABELSUPP;
+	}
 
 	BUG_ON(i != opts->num_mnt_opts);
 
@@ -562,8 +573,10 @@ out_free:
 static int bad_option(struct superblock_security_struct *sbsec, char flag,
 		      u32 old_sid, u32 new_sid)
 {
+	char mnt_flags = sbsec->flags & SE_MNTMASK;
+
 	/* check if the old mount command had the same options */
-	if (sbsec->initialized)
+	if (sbsec->flags & SE_SBINITIALIZED)
 		if (!(sbsec->flags & flag) ||
 		    (old_sid != new_sid))
 			return 1;
@@ -571,8 +584,8 @@ static int bad_option(struct superblock_security_struct *sbsec, char flag,
 	/* check if we were passed the same options twice,
 	 * aka someone passed context=a,context=b
 	 */
-	if (!sbsec->initialized)
-		if (sbsec->flags & flag)
+	if (!(sbsec->flags & SE_SBINITIALIZED))
+		if (mnt_flags & flag)
 			return 1;
 	return 0;
 }
@@ -626,7 +639,7 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	 * this sb does not set any security options.  (The first options
 	 * will be used for both mounts)
 	 */
-	if (sbsec->initialized && (sb->s_type->fs_flags & FS_BINARY_MOUNTDATA)
+	if ((sbsec->flags & SE_SBINITIALIZED) && (sb->s_type->fs_flags & FS_BINARY_MOUNTDATA)
 	    && (num_opts == 0))
 		goto out;
 
@@ -637,6 +650,9 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	 */
 	for (i = 0; i < num_opts; i++) {
 		u32 sid;
+
+		if (flags[i] == SE_SBLABELSUPP)
+			continue;
 		rc = security_context_to_sid(mount_options[i],
 					     strlen(mount_options[i]), &sid);
 		if (rc) {
@@ -690,19 +706,19 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 		}
 	}
 
-	if (sbsec->initialized) {
+	if (sbsec->flags & SE_SBINITIALIZED) {
 		/* previously mounted with options, but not on this attempt? */
-		if (sbsec->flags && !num_opts)
+		if ((sbsec->flags & SE_MNTMASK) && !num_opts)
 			goto out_double_mount;
 		rc = 0;
 		goto out;
 	}
 
 	if (strcmp(sb->s_type->name, "proc") == 0)
-		sbsec->proc = 1;
+		sbsec->flags |= SE_SBPROC;
 
 	/* Determine the labeling behavior to use for this filesystem type. */
-	rc = security_fs_use(sbsec->proc ? "proc" : sb->s_type->name, &sbsec->behavior, &sbsec->sid);
+	rc = security_fs_use((sbsec->flags & SE_SBPROC) ? "proc" : sb->s_type->name, &sbsec->behavior, &sbsec->sid);
 	if (rc) {
 		printk(KERN_WARNING "%s: security_fs_use(%s) returned %d\n",
 		       __func__, sb->s_type->name, rc);
@@ -806,10 +822,10 @@ static void selinux_sb_clone_mnt_opts(const struct super_block *oldsb,
 	}
 
 	/* how can we clone if the old one wasn't set up?? */
-	BUG_ON(!oldsbsec->initialized);
+	BUG_ON(!(oldsbsec->flags & SE_SBINITIALIZED));
 
 	/* if fs is reusing a sb, just let its options stand... */
-	if (newsbsec->initialized)
+	if (newsbsec->flags & SE_SBINITIALIZED)
 		return;
 
 	mutex_lock(&newsbsec->lock);
@@ -917,7 +933,8 @@ static int selinux_parse_opts_str(char *options,
 				goto out_err;
 			}
 			break;
-
+		case Opt_labelsupport:
+			break;
 		default:
 			rc = -EINVAL;
 			printk(KERN_WARNING "SELinux:  unknown mount option\n");
@@ -999,7 +1016,12 @@ static void selinux_write_opts(struct seq_file *m,
 	char *prefix;
 
 	for (i = 0; i < opts->num_mnt_opts; i++) {
-		char *has_comma = strchr(opts->mnt_opts[i], ',');
+		char *has_comma;
+
+		if (opts->mnt_opts[i])
+			has_comma = strchr(opts->mnt_opts[i], ',');
+		else
+			has_comma = NULL;
 
 		switch (opts->mnt_opts_flags[i]) {
 		case CONTEXT_MNT:
@@ -1014,6 +1036,10 @@ static void selinux_write_opts(struct seq_file *m,
 		case DEFCONTEXT_MNT:
 			prefix = DEFCONTEXT_STR;
 			break;
+		case SE_SBLABELSUPP:
+			seq_putc(m, ',');
+			seq_puts(m, LABELSUPP_STR);
+			continue;
 		default:
 			BUG();
 		};
@@ -1209,7 +1235,7 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 		goto out_unlock;
 
 	sbsec = inode->i_sb->s_security;
-	if (!sbsec->initialized) {
+	if (!(sbsec->flags & SE_SBINITIALIZED)) {
 		/* Defer initialization until selinux_complete_init,
 		   after the initial policy is loaded and the security
 		   server is ready to handle calls. */
@@ -1326,7 +1352,7 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 		/* Default to the fs superblock SID. */
 		isec->sid = sbsec->sid;
 
-		if (sbsec->proc && !S_ISLNK(inode->i_mode)) {
+		if ((sbsec->flags & SE_SBPROC) && !S_ISLNK(inode->i_mode)) {
 			struct proc_inode *proci = PROC_I(inode);
 			if (proci->pde) {
 				isec->sclass = inode_mode_to_security_class(inode->i_mode);
@@ -1587,7 +1613,7 @@ static int may_create(struct inode *dir,
 	if (rc)
 		return rc;
 
-	if (!newsid || sbsec->behavior == SECURITY_FS_USE_MNTPOINT) {
+	if (!newsid || !(sbsec->flags & SE_SBLABELSUPP)) {
 		rc = security_transition_sid(sid, dsec->sid, tclass, &newsid);
 		if (rc)
 			return rc;
@@ -2400,7 +2426,8 @@ static inline int selinux_option(char *option, int len)
 	return (match_prefix(CONTEXT_STR, sizeof(CONTEXT_STR)-1, option, len) ||
 		match_prefix(FSCONTEXT_STR, sizeof(FSCONTEXT_STR)-1, option, len) ||
 		match_prefix(DEFCONTEXT_STR, sizeof(DEFCONTEXT_STR)-1, option, len) ||
-		match_prefix(ROOTCONTEXT_STR, sizeof(ROOTCONTEXT_STR)-1, option, len));
+		match_prefix(ROOTCONTEXT_STR, sizeof(ROOTCONTEXT_STR)-1, option, len) ||
+		match_prefix(LABELSUPP_STR, sizeof(LABELSUPP_STR)-1, option, len));
 }
 
 static inline void take_option(char **to, char *from, int *first, int len)
@@ -2570,7 +2597,7 @@ static int selinux_inode_init_security(struct inode *inode, struct inode *dir,
 	sid = tsec->sid;
 	newsid = tsec->create_sid;
 
-	if (!newsid || sbsec->behavior == SECURITY_FS_USE_MNTPOINT) {
+	if (!newsid || !(sbsec->flags & SE_SBLABELSUPP)) {
 		rc = security_transition_sid(sid, dsec->sid,
 					     inode_mode_to_security_class(inode->i_mode),
 					     &newsid);
@@ -2585,14 +2612,14 @@ static int selinux_inode_init_security(struct inode *inode, struct inode *dir,
 	}
 
 	/* Possibly defer initialization to selinux_complete_init. */
-	if (sbsec->initialized) {
+	if (sbsec->flags & SE_SBINITIALIZED) {
 		struct inode_security_struct *isec = inode->i_security;
 		isec->sclass = inode_mode_to_security_class(inode->i_mode);
 		isec->sid = newsid;
 		isec->initialized = 1;
 	}
 
-	if (!ss_initialized || sbsec->behavior == SECURITY_FS_USE_MNTPOINT)
+	if (!ss_initialized || !(sbsec->flags & SE_SBLABELSUPP))
 		return -EOPNOTSUPP;
 
 	if (name) {
@@ -2769,7 +2796,7 @@ static int selinux_inode_setxattr(struct dentry *dentry, const char *name,
 		return selinux_inode_setotherxattr(dentry, name);
 
 	sbsec = inode->i_sb->s_security;
-	if (sbsec->behavior == SECURITY_FS_USE_MNTPOINT)
+	if (!(sbsec->flags & SE_SBLABELSUPP))
 		return -EOPNOTSUPP;
 
 	if (!is_owner_or_cap(inode))
