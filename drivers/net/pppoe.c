@@ -1099,7 +1099,7 @@ static int pppoe_seq_open(struct inode *inode, struct file *file)
 		return err;
 
 	m = file->private_data;
-	net = maybe_get_net(PDE_NET(PDE(inode)));
+	net = maybe_get_net(inode->i_sb->s_fs_info);
 	BUG_ON(!net);
 	m->private = net;
 

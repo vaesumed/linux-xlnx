@@ -2576,7 +2576,7 @@ static int pppol2tp_proc_open(struct inode *inode, struct file *file)
 		goto out;
 
 	pd = m->private;
-	net = maybe_get_net(PDE_NET(PDE(inode)));
+	net = maybe_get_net(inode->i_sb->s_fs_info);
 	BUG_ON(!net);
 	pd->seq_net = net;
 	return 0;
