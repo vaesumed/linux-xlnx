@@ -51,6 +51,7 @@
 #include <linux/moduleparam.h>
 #include <sound/core.h>
 #include <sound/wss.h>
+#include <sound/opl3.h>
 #include <sound/sb.h>
 #include <sound/initval.h>
 
@@ -79,6 +80,7 @@ static int sbdma16[SNDRV_CARDS] = SNDRV_DEFAULT_DMA;
 static long wssport[SNDRV_CARDS] = SNDRV_DEFAULT_PORT;
 static int wssirq[SNDRV_CARDS] = SNDRV_DEFAULT_IRQ;
 static int wssdma[SNDRV_CARDS] = SNDRV_DEFAULT_DMA;
+static long fmport[SNDRV_CARDS] = SNDRV_DEFAULT_PORT;
 
 module_param_array(index, int, NULL, 0444);
 MODULE_PARM_DESC(index, "Index value for CMI8330 soundcard.");
@@ -107,6 +109,8 @@ MODULE_PARM_DESC(wssirq, "IRQ # for CMI8330 WSS driver.");
 module_param_array(wssdma, int, NULL, 0444);
 MODULE_PARM_DESC(wssdma, "DMA for CMI8330 WSS driver.");
 
+module_param_array(fmport, long, NULL, 0444);
+MODULE_PARM_DESC(fmport, "FM port # for CMI8330 driver.");
 #ifdef CONFIG_PNP
 static int isa_registered;
 static int pnp_registered;
@@ -219,8 +223,10 @@ WSS_SINGLE("3D Control - Switch", 0,
 		CMI8330_RMUX3D, 5, 1, 1),
 WSS_SINGLE("PC Speaker Playback Volume", 0,
 		CMI8330_OUTPUTVOL, 3, 3, 0),
-WSS_SINGLE("FM Playback Switch", 0,
-		CMI8330_RECMUX, 3, 1, 1),
+WSS_DOUBLE("FM Playback Switch", 0,
+		CS4231_AUX2_LEFT_INPUT, CS4231_AUX2_RIGHT_INPUT, 7, 7, 1, 1),
+WSS_DOUBLE("FM Playback Volume", 0,
+		CS4231_AUX2_LEFT_INPUT, CS4231_AUX2_RIGHT_INPUT, 0, 0, 31, 1),
 WSS_SINGLE(SNDRV_CTL_NAME_IEC958("Input ", CAPTURE, SWITCH), 0,
 		CMI8330_RMUX3D, 7, 1, 1),
 WSS_SINGLE(SNDRV_CTL_NAME_IEC958("Input ", PLAYBACK, SWITCH), 0,
@@ -333,6 +339,7 @@ static int __devinit snd_cmi8330_pnp(int dev, struct snd_cmi8330 *acard,
 	wssport[dev] = pnp_port_start(pdev, 0);
 	wssdma[dev] = pnp_dma(pdev, 0);
 	wssirq[dev] = pnp_irq(pdev, 0);
+	fmport[dev] = pnp_port_start(pdev, 1);
 
 	/* allocate SB16 resources */
 	pdev = acard->play;
@@ -467,26 +474,29 @@ static int snd_cmi8330_resume(struct snd_card *card)
 
 #define PFX	"cmi8330: "
 
-static struct snd_card *snd_cmi8330_card_new(int dev)
+static int snd_cmi8330_card_new(int dev, struct snd_card **cardp)
 {
 	struct snd_card *card;
 	struct snd_cmi8330 *acard;
+	int err;
 
-	card = snd_card_new(index[dev], id[dev], THIS_MODULE,
-			    sizeof(struct snd_cmi8330));
-	if (card == NULL) {
+	err = snd_card_create(index[dev], id[dev], THIS_MODULE,
+			      sizeof(struct snd_cmi8330), &card);
+	if (err < 0) {
 		snd_printk(KERN_ERR PFX "could not get a new card\n");
-		return NULL;
+		return err;
 	}
 	acard = card->private_data;
 	acard->card = card;
-	return card;
+	*cardp = card;
+	return 0;
 }
 
 static int __devinit snd_cmi8330_probe(struct snd_card *card, int dev)
 {
 	struct snd_cmi8330 *acard;
 	int i, err;
+	struct snd_opl3 *opl3;
 
 	acard = card->private_data;
 	err = snd_wss_create(card, wssport[dev] + 4, -1,
@@ -530,6 +540,20 @@ static int __devinit snd_cmi8330_probe(struct snd_card *card, int dev)
 		snd_printk(KERN_ERR PFX "failed to create pcms\n");
 		return err;
 	}
+	if (fmport[dev] != SNDRV_AUTO_PORT) {
+		if (snd_opl3_create(card,
+				    fmport[dev], fmport[dev] + 2,
+				    OPL3_HW_AUTO, 0, &opl3) < 0) {
+			snd_printk(KERN_ERR PFX
+				   "no OPL device at 0x%lx-0x%lx ?\n",
+				   fmport[dev], fmport[dev] + 2);
+		} else {
+			err = snd_opl3_hwdep_new(opl3, 0, 1, NULL);
+			if (err < 0)
+				return err;
+		}
+	}
+
 
 	strcpy(card->driver, "CMI8330/C3D");
 	strcpy(card->shortname, "C-Media CMI8330/C3D");
@@ -564,9 +588,9 @@ static int __devinit snd_cmi8330_isa_probe(struct device *pdev,
 	struct snd_card *card;
 	int err;
 
-	card = snd_cmi8330_card_new(dev);
-	if (! card)
-		return -ENOMEM;
+	err = snd_cmi8330_card_new(dev, &card);
+	if (err < 0)
+		return err;
 	snd_card_set_dev(card, pdev);
 	if ((err = snd_cmi8330_probe(card, dev)) < 0) {
 		snd_card_free(card);
@@ -628,9 +652,9 @@ static int __devinit snd_cmi8330_pnp_detect(struct pnp_card_link *pcard,
 	if (dev >= SNDRV_CARDS)
 		return -ENODEV;
 			       
-	card = snd_cmi8330_card_new(dev);
-	if (! card)
-		return -ENOMEM;
+	res = snd_cmi8330_card_new(dev, &card);
+	if (res < 0)
+		return res;
 	if ((res = snd_cmi8330_pnp(dev, card->private_data, pcard, pid)) < 0) {
 		snd_printk(KERN_ERR PFX "PnP detection failed\n");
 		snd_card_free(card);
