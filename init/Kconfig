@@ -807,7 +807,7 @@ config SLUB_DEBUG
 
 choice
 	prompt "Choose SLAB allocator"
-	default SLUB
+	default SLQB
 	help
 	   This option allows to select a slab allocator.
 
@@ -827,6 +827,11 @@ config SLUB
 	   of queues of objects. SLUB can use memory efficiently
 	   and has enhanced diagnostics. SLUB is the default choice for
 	   a slab allocator.
+
+config SLQB
+	bool "SLQB (Queued allocator)"
+	help
+	  SLQB is a proposed new slab allocator.
 
 config SLOB
 	depends on EMBEDDED
@@ -869,7 +874,7 @@ config HAVE_GENERIC_DMA_COHERENT
 config SLABINFO
 	bool
 	depends on PROC_FS
-	depends on SLAB || SLUB_DEBUG
+	depends on SLAB || SLUB_DEBUG || SLQB
 	default y
 
 config RT_MUTEXES
