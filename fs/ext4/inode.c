@@ -4619,7 +4619,7 @@ int ext4_setattr(struct dentry *dentry, struct iattr *attr)
 			error = PTR_ERR(handle);
 			goto err_out;
 		}
-		error = DQUOT_TRANSFER(inode, attr) ? -EDQUOT : 0;
+		error = vfs_dq_transfer(inode, attr) ? -EDQUOT : 0;
 		if (error) {
 			ext4_journal_stop(handle);
 			return error;
@@ -4998,7 +4998,7 @@ int ext4_mark_inode_dirty(handle_t *handle, struct inode *inode)
  * i_size has been changed by generic_commit_write() and we thus need
  * to include the updated inode in the current transaction.
  *
- * Also, DQUOT_ALLOC_SPACE() will always dirty the inode when blocks
+ * Also, vfs_dq_alloc_block() will always dirty the inode when blocks
  * are allocated to the file.
  *
  * If the inode is marked synchronous, we don't honour that here - doing
