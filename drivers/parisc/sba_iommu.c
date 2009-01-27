@@ -1206,30 +1206,46 @@ sba_alloc_pdir(unsigned int pdir_size)
 	return (void *) pdir_base;
 }
 
-static struct device *next_device(struct klist_iter *i)
+struct setup_ibase_imask {
+	struct ioc *ioc;
+	int ioc_num;
+}
+
+static int setup_ibase_imask_dev(struct device *dev, void *data)
 {
-        struct klist_node * n = klist_next(i);
-        return n ? container_of(n, struct device, knode_parent) : NULL;
+	/* lba_set_iregs() is in drivers/parisc/lba_pci.c */
+        extern void lba_set_iregs(struct parisc_device *, u32, u32);
+	struct setup_ibase_imask *imask = data;
+	struct ioc *ioc = data->ioc;
+	struct parisc_device *lba = to_parisc_device(dev);
+	int rope_num = (lba->hpa.start >> 13) & 0xf;
+
+	if (rope_num >> 3 == data->ioc_num)
+		lba_set_iregs(lba, ioc->ibase, ioc->imask);
+	return 0;
 }
 
 /* setup Mercury or Elroy IBASE/IMASK registers. */
 static void 
 setup_ibase_imask(struct parisc_device *sba, struct ioc *ioc, int ioc_num)
 {
-	/* lba_set_iregs() is in drivers/parisc/lba_pci.c */
-        extern void lba_set_iregs(struct parisc_device *, u32, u32);
-	struct device *dev;
-	struct klist_iter i;
+	struct setup_ibase_imask *data;
 
-	klist_iter_init(&sba->dev.klist_children, &i);
-	while ((dev = next_device(&i))) {
-		struct parisc_device *lba = to_parisc_device(dev);
-		int rope_num = (lba->hpa.start >> 13) & 0xf;
-		if (rope_num >> 3 == ioc_num)
-			lba_set_iregs(lba, ioc->ibase, ioc->imask);
-	}
-	klist_iter_exit(&i);
+	data.ioc = ioc;
+	data.ioc_num = ioc_num;
+
+	device_for_each_child(&sba->dev, &data, setup_ibase_imask_dev);
 }
+
+#ifdef SBA_AGP_SUPPORT
+static int match_quicksilver(struct device *dev, void *data)
+{
+	struct parisc_device *padev = to_parisc_device(dev);
+
+	if (IS_QUICKSILVER(padev))
+		return 1;
+}
+#endif
 
 static void
 sba_ioc_init_pluto(struct parisc_device *sba, struct ioc *ioc, int ioc_num)
@@ -1237,9 +1253,7 @@ sba_ioc_init_pluto(struct parisc_device *sba, struct ioc *ioc, int ioc_num)
 	u32 iova_space_mask;
 	u32 iova_space_size;
 	int iov_order, tcnfg;
-#ifdef SBA_AGP_SUPPORT
-	int agp_found = 0;
-#endif
+
 	/*
 	** Firmware programs the base and size of a "safe IOVA space"
 	** (one that doesn't overlap memory or LMMIO space) in the
@@ -1333,8 +1347,8 @@ sba_ioc_init_pluto(struct parisc_device *sba, struct ioc *ioc, int ioc_num)
 
 #ifdef SBA_AGP_SUPPORT
 {
-	struct klist_iter i;
-	struct device *dev = NULL;
+	struct device *dev;
+	int agp_found = 0;
 
 	/*
 	** If an AGP device is present, only use half of the IOV space
@@ -1344,13 +1358,9 @@ sba_ioc_init_pluto(struct parisc_device *sba, struct ioc *ioc, int ioc_num)
 	** We program the next pdir index after we stop w/ a key for
 	** the GART code to handshake on.
 	*/
-	klist_iter_init(&sba->dev.klist_children, &i);
-	while ((dev = next_device(&i))) {
-		struct parisc_device *lba = to_parisc_device(dev);
-		if (IS_QUICKSILVER(lba))
-			agp_found = 1;
-	}
-	klist_iter_exit(&i);
+	dev = device_find_child(&sba->dev, NULL, match_quicksilver);
+	if (dev)
+		agp_found = 1;
 
 	if (agp_found && sba_reserve_agpgart) {
 		printk(KERN_INFO "%s: reserving %dMb of IOVA space for agpgart\n",
