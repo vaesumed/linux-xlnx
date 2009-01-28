@@ -241,26 +241,6 @@ acpi_processor_power_activate(struct acpi_processor *pr,
 		old->promotion.count = 0;
 	new->demotion.count = 0;
 
-	/* Cleanup from old state. */
-	if (old) {
-		switch (old->type) {
-		case ACPI_STATE_C3:
-			/* Disable bus master reload */
-			if (new->type != ACPI_STATE_C3 && pr->flags.bm_check)
-				acpi_set_register(ACPI_BITREG_BUS_MASTER_RLD, 0);
-			break;
-		}
-	}
-
-	/* Prepare to use new state. */
-	switch (new->type) {
-	case ACPI_STATE_C3:
-		/* Enable bus master reload */
-		if (old->type != ACPI_STATE_C3 && pr->flags.bm_check)
-			acpi_set_register(ACPI_BITREG_BUS_MASTER_RLD, 1);
-		break;
-	}
-
 	pr->power.state = new;
 
 	return;
@@ -447,7 +427,7 @@ static void acpi_processor_idle(void)
 
 		pr->power.bm_activity <<= diff;
 
-		acpi_get_register(ACPI_BITREG_BUS_MASTER_STATUS, &bm_status);
+		acpi_get_register_unlocked(ACPI_BITREG_BUS_MASTER_STATUS, &bm_status);
 		if (bm_status) {
 			pr->power.bm_activity |= 0x1;
 			acpi_set_register(ACPI_BITREG_BUS_MASTER_STATUS, 1);
@@ -1121,7 +1101,6 @@ static void acpi_processor_power_verify_c3(struct acpi_processor *pr,
 					  " for C3 to be enabled on SMP systems\n"));
 			return;
 		}
-		acpi_set_register(ACPI_BITREG_BUS_MASTER_RLD, 0);
 	}
 
 	/*
@@ -1137,6 +1116,15 @@ static void acpi_processor_power_verify_c3(struct acpi_processor *pr,
 #else
 	cx->latency_ticks = cx->latency;
 #endif
+	/*
+	 * On older chipsets, BM_RLD needs to be set
+	 * in order for Bus Master activity to wake the
+	 * system from C3.  Newer chipsets handle DMA
+	 * during C3 automatically and BM_RLD is a NOP.
+	 * In either case, the proper way to
+	 * handle BM_RLD is to set it and leave it set.
+	 */
+	acpi_set_register(ACPI_BITREG_BUS_MASTER_RLD, 1);
 
 	return;
 }
@@ -1383,7 +1371,7 @@ static int acpi_idle_bm_check(void)
 {
 	u32 bm_status = 0;
 
-	acpi_get_register(ACPI_BITREG_BUS_MASTER_STATUS, &bm_status);
+	acpi_get_register_unlocked(ACPI_BITREG_BUS_MASTER_STATUS, &bm_status);
 	if (bm_status)
 		acpi_set_register(ACPI_BITREG_BUS_MASTER_STATUS, 1);
 	/*
@@ -1397,25 +1385,6 @@ static int acpi_idle_bm_check(void)
 			bm_status = 1;
 	}
 	return bm_status;
-}
-
-/**
- * acpi_idle_update_bm_rld - updates the BM_RLD bit depending on target state
- * @pr: the processor
- * @target: the new target state
- */
-static inline void acpi_idle_update_bm_rld(struct acpi_processor *pr,
-					   struct acpi_processor_cx *target)
-{
-	if (pr->flags.bm_rld_set && target->type != ACPI_STATE_C3) {
-		acpi_set_register(ACPI_BITREG_BUS_MASTER_RLD, 0);
-		pr->flags.bm_rld_set = 0;
-	}
-
-	if (!pr->flags.bm_rld_set && target->type == ACPI_STATE_C3) {
-		acpi_set_register(ACPI_BITREG_BUS_MASTER_RLD, 1);
-		pr->flags.bm_rld_set = 1;
-	}
 }
 
 /**
@@ -1473,9 +1442,6 @@ static int acpi_idle_enter_c1(struct cpuidle_device *dev,
 		return 0;
 	}
 
-	if (pr->flags.bm_check)
-		acpi_idle_update_bm_rld(pr, cx);
-
 	t1 = inl(acpi_gbl_FADT.xpm_timer_block.address);
 	acpi_idle_do_entry(cx);
 	t2 = inl(acpi_gbl_FADT.xpm_timer_block.address);
@@ -1526,9 +1492,6 @@ static int acpi_idle_enter_simple(struct cpuidle_device *dev,
 	 * access HPET !
 	 */
 	acpi_state_timer_broadcast(pr, cx, 1);
-
-	if (pr->flags.bm_check)
-		acpi_idle_update_bm_rld(pr, cx);
 
 	if (cx->type == ACPI_STATE_C3)
 		ACPI_FLUSH_CPU_CACHE();
@@ -1620,8 +1583,6 @@ static int acpi_idle_enter_bm(struct cpuidle_device *dev,
 	 * access HPET !
 	 */
 	acpi_state_timer_broadcast(pr, cx, 1);
-
-	acpi_idle_update_bm_rld(pr, cx);
 
 	/*
 	 * disable bus master
