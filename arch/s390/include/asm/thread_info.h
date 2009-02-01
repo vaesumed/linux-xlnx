@@ -97,6 +97,7 @@ static inline struct thread_info *current_thread_info(void)
 #define TIF_MEMDIE		19
 #define TIF_RESTORE_SIGMASK	20	/* restore signal mask in do_signal() */
 #define TIF_FREEZE		21	/* thread is freezing for suspend */
+#define TIF_ABI_PENDING		22	/* 32/64 bit switch needed */
 
 #define _TIF_SYSCALL_TRACE	(1<<TIF_SYSCALL_TRACE)
 #define _TIF_NOTIFY_RESUME	(1<<TIF_NOTIFY_RESUME)
@@ -111,6 +112,7 @@ static inline struct thread_info *current_thread_info(void)
 #define _TIF_POLLING_NRFLAG	(1<<TIF_POLLING_NRFLAG)
 #define _TIF_31BIT		(1<<TIF_31BIT)
 #define _TIF_FREEZE		(1<<TIF_FREEZE)
+#define _TIF_ABI_PENDING	(1<<TIF_ABI_PENDING)
 
 #endif /* __KERNEL__ */
 
