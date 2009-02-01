@@ -16,7 +16,6 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/init.h>
-#include <linux/klist.h>
 #include <linux/agp_backend.h>
 #include <linux/log2.h>
 

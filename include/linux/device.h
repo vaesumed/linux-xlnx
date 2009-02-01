@@ -28,6 +28,7 @@
 #define BUS_ID_SIZE		20
 
 struct device;
+struct device_private;
 struct device_driver;
 struct driver_private;
 struct class;
@@ -365,14 +366,11 @@ struct device_dma_parameters {
 };
 
 struct device {
-	struct klist		klist_children;
-	struct klist_node	knode_parent;	/* node in sibling list */
-	struct klist_node	knode_driver;
-	struct klist_node	knode_bus;
 	struct device		*parent;
 
+	struct device_private	*p;
+
 	struct kobject kobj;
-	char	bus_id[BUS_ID_SIZE];	/* position on parent bus */
 	unsigned		uevent_suppress:1;
 	const char		*init_name; /* initial name of the device */
 	struct device_type	*type;
@@ -425,8 +423,7 @@ struct device {
 
 static inline const char *dev_name(const struct device *dev)
 {
-	/* will be changed into kobject_name(&dev->kobj) in the near future */
-	return dev->bus_id;
+	return kobject_name(&dev->kobj);
 }
 
 extern int dev_set_name(struct device *dev, const char *name, ...)
