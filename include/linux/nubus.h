@@ -296,6 +296,7 @@ struct nubus_dev {
 	struct nubus_board* board;
 };
 
+#ifdef __KERNEL__
 /* This is all NuBus devices (used to find devices later on) */
 extern struct nubus_dev* nubus_devices;
 /* This is all NuBus cards */
@@ -304,7 +305,7 @@ extern struct nubus_board* nubus_boards;
 /* Generic NuBus interface functions, modelled after the PCI interface */
 void nubus_scan_bus(void);
 extern void nubus_proc_init(void);
-int get_nubus_list(char *buf);
+#endif /* __KERNEL__ */
 int nubus_proc_attach_device(struct nubus_dev *dev);
 int nubus_proc_detach_device(struct nubus_dev *dev);
 /* If we need more precision we can add some more of these */

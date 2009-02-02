@@ -80,6 +80,8 @@
 
 #define PTRACE_SINGLEBLOCK	33	/* resume execution until next branch */
 
+#ifdef __KERNEL__
+
 #ifdef CONFIG_X86_PTRACE_BTS
 
 #ifndef __ASSEMBLY__
@@ -141,5 +143,6 @@ struct ptrace_bts_config {
    Returns number of BTS records drained.
 */
 #endif /* CONFIG_X86_PTRACE_BTS */
+#endif /* __KERNEL__ */
 
 #endif /* _ASM_X86_PTRACE_ABI_H */

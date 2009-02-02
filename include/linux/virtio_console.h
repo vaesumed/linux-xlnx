@@ -5,6 +5,8 @@
 /* This header, excluding the #ifdef __KERNEL__ part, is BSD licensed so
  * anyone can use the definitions to implement compatible drivers/servers. */
 
+#include <linux/types.h>
+
 /* The ID for virtio console */
 #define VIRTIO_ID_CONSOLE	3
 
