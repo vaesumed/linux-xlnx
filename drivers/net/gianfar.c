@@ -141,8 +141,6 @@ void gfar_start(struct net_device *dev);
 static void gfar_clear_exact_match(struct net_device *dev);
 static void gfar_set_mac_for_addr(struct net_device *dev, int num, u8 *addr);
 
-extern const struct ethtool_ops gfar_ethtool_ops;
-
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
 MODULE_LICENSE("GPL");
@@ -462,6 +460,9 @@ static int gfar_probe(struct of_device *ofdev,
 				dev->name);
 		goto register_fail;
 	}
+
+	device_init_wakeup(&dev->dev,
+		priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
 
 	/* fill out IRQ number and name fields */
 	len_devname = strlen(dev->name);
@@ -1200,6 +1201,8 @@ static int gfar_enet_open(struct net_device *dev)
 
 	netif_start_queue(dev);
 
+	device_set_wakeup_enable(&dev->dev, priv->wol_en);
+
 	return err;
 }
 
@@ -1623,9 +1626,9 @@ static void gfar_schedule_cleanup(struct net_device *dev)
 	spin_lock_irqsave(&priv->txlock, flags);
 	spin_lock(&priv->rxlock);
 
-	if (netif_rx_schedule_prep(&priv->napi)) {
+	if (napi_schedule_prep(&priv->napi)) {
 		gfar_write(&priv->regs->imask, IMASK_RTX_DISABLED);
-		__netif_rx_schedule(&priv->napi);
+		__napi_schedule(&priv->napi);
 	}
 
 	spin_unlock(&priv->rxlock);
@@ -1882,7 +1885,7 @@ static int gfar_poll(struct napi_struct *napi, int budget)
 		return budget;
 
 	if (rx_cleaned < budget) {
-		netif_rx_complete(napi);
+		napi_complete(napi);
 
 		/* Clear the halt bit in RSTAT */
 		gfar_write(&priv->regs->rstat, RSTAT_CLEAR_RHALT);

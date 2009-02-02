@@ -115,9 +115,6 @@ static bool igb_clean_tx_irq(struct igb_ring *);
 static int igb_poll(struct napi_struct *, int);
 static bool igb_clean_rx_irq_adv(struct igb_ring *, int *, int);
 static void igb_alloc_rx_buffers_adv(struct igb_ring *, int);
-#ifdef CONFIG_IGB_LRO
-static int igb_get_skb_hdr(struct sk_buff *skb, void **, void **, u64 *, void *);
-#endif
 static int igb_ioctl(struct net_device *, struct ifreq *, int cmd);
 static void igb_tx_timeout(struct net_device *);
 static void igb_reset_task(struct work_struct *);
@@ -1189,7 +1186,7 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	netdev->features |= NETIF_F_TSO6;
 
 #ifdef CONFIG_IGB_LRO
-	netdev->features |= NETIF_F_LRO;
+	netdev->features |= NETIF_F_GRO;
 #endif
 
 	netdev->vlan_features |= NETIF_F_TSO;
@@ -1200,7 +1197,6 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	if (pci_using_dac)
 		netdev->features |= NETIF_F_HIGHDMA;
 
-	netdev->features |= NETIF_F_LLTX;
 	adapter->en_mng_pt = igb_enable_mng_pass_thru(&adapter->hw);
 
 	/* before reading the NVM, reset the controller to put the device in a
@@ -1738,14 +1734,6 @@ int igb_setup_rx_resources(struct igb_adapter *adapter,
 	struct pci_dev *pdev = adapter->pdev;
 	int size, desc_len;
 
-#ifdef CONFIG_IGB_LRO
-	size = sizeof(struct net_lro_desc) * MAX_LRO_DESCRIPTORS;
-	rx_ring->lro_mgr.lro_arr = vmalloc(size);
-	if (!rx_ring->lro_mgr.lro_arr)
-		goto err;
-	memset(rx_ring->lro_mgr.lro_arr, 0, size);
-#endif
-
 	size = sizeof(struct igb_buffer) * rx_ring->count;
 	rx_ring->buffer_info = vmalloc(size);
 	if (!rx_ring->buffer_info)
@@ -1772,10 +1760,6 @@ int igb_setup_rx_resources(struct igb_adapter *adapter,
 	return 0;
 
 err:
-#ifdef CONFIG_IGB_LRO
-	vfree(rx_ring->lro_mgr.lro_arr);
-	rx_ring->lro_mgr.lro_arr = NULL;
-#endif
 	vfree(rx_ring->buffer_info);
 	dev_err(&adapter->pdev->dev, "Unable to allocate memory for "
 		"the receive descriptor ring\n");
@@ -1929,16 +1913,6 @@ static void igb_configure_rx(struct igb_adapter *adapter)
 		rxdctl |= IGB_RX_HTHRESH << 8;
 		rxdctl |= IGB_RX_WTHRESH << 16;
 		wr32(E1000_RXDCTL(j), rxdctl);
-#ifdef CONFIG_IGB_LRO
-		/* Intitial LRO Settings */
-		ring->lro_mgr.max_aggr = MAX_LRO_AGGR;
-		ring->lro_mgr.max_desc = MAX_LRO_DESCRIPTORS;
-		ring->lro_mgr.get_skb_header = igb_get_skb_hdr;
-		ring->lro_mgr.features = LRO_F_NAPI | LRO_F_EXTRACT_VLAN_ID;
-		ring->lro_mgr.dev = adapter->netdev;
-		ring->lro_mgr.ip_summed = CHECKSUM_UNNECESSARY;
-		ring->lro_mgr.ip_summed_aggr = CHECKSUM_UNNECESSARY;
-#endif
 	}
 
 	if (adapter->num_rx_queues > 1) {
@@ -2126,11 +2100,6 @@ void igb_free_rx_resources(struct igb_ring *rx_ring)
 
 	vfree(rx_ring->buffer_info);
 	rx_ring->buffer_info = NULL;
-
-#ifdef CONFIG_IGB_LRO
-	vfree(rx_ring->lro_mgr.lro_arr);
-	rx_ring->lro_mgr.lro_arr = NULL;
-#endif 
 
 	pci_free_consistent(pdev, rx_ring->size, rx_ring->desc, rx_ring->dma);
 
@@ -2779,12 +2748,12 @@ static inline bool igb_tx_csum_adv(struct igb_adapter *adapter,
 
 		if (skb->ip_summed == CHECKSUM_PARTIAL) {
 			switch (skb->protocol) {
-			case __constant_htons(ETH_P_IP):
+			case cpu_to_be16(ETH_P_IP):
 				tu_cmd |= E1000_ADVTXD_TUCMD_IPV4;
 				if (ip_hdr(skb)->protocol == IPPROTO_TCP)
 					tu_cmd |= E1000_ADVTXD_TUCMD_L4T_TCP;
 				break;
-			case __constant_htons(ETH_P_IPV6):
+			case cpu_to_be16(ETH_P_IPV6):
 				/* XXX what about other V6 headers?? */
 				if (ipv6_hdr(skb)->nexthdr == IPPROTO_TCP)
 					tu_cmd |= E1000_ADVTXD_TUCMD_L4T_TCP;
@@ -3385,8 +3354,8 @@ static irqreturn_t igb_msix_rx(int irq, void *data)
 
 	igb_write_itr(rx_ring);
 
-	if (netif_rx_schedule_prep(&rx_ring->napi))
-		__netif_rx_schedule(&rx_ring->napi);
+	if (napi_schedule_prep(&rx_ring->napi))
+		__napi_schedule(&rx_ring->napi);
 
 #ifdef CONFIG_IGB_DCA
 	if (rx_ring->adapter->flags & IGB_FLAG_DCA_ENABLED)
@@ -3535,7 +3504,7 @@ static irqreturn_t igb_intr_msi(int irq, void *data)
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
 	}
 
-	netif_rx_schedule(&adapter->rx_ring[0].napi);
+	napi_schedule(&adapter->rx_ring[0].napi);
 
 	return IRQ_HANDLED;
 }
@@ -3573,7 +3542,7 @@ static irqreturn_t igb_intr(int irq, void *data)
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
 	}
 
-	netif_rx_schedule(&adapter->rx_ring[0].napi);
+	napi_schedule(&adapter->rx_ring[0].napi);
 
 	return IRQ_HANDLED;
 }
@@ -3608,7 +3577,7 @@ static int igb_poll(struct napi_struct *napi, int budget)
 	    !netif_running(netdev)) {
 		if (adapter->itr_setting & 3)
 			igb_set_itr(adapter);
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		if (!test_bit(__IGB_DOWN, &adapter->state))
 			igb_irq_enable(adapter);
 		return 0;
@@ -3634,7 +3603,7 @@ static int igb_clean_rx_ring_msix(struct napi_struct *napi, int budget)
 
 	/* If not enough Rx work done, exit the polling mode */
 	if ((work_done == 0) || !netif_running(netdev)) {
-		netif_rx_complete(napi);
+		napi_complete(napi);
 
 		if (adapter->itr_setting & 3) {
 			if (adapter->num_rx_queues == 1)
@@ -3764,39 +3733,6 @@ static bool igb_clean_tx_irq(struct igb_ring *tx_ring)
 	return (count < tx_ring->count);
 }
 
-#ifdef CONFIG_IGB_LRO
- /**
- * igb_get_skb_hdr - helper function for LRO header processing
- * @skb: pointer to sk_buff to be added to LRO packet
- * @iphdr: pointer to ip header structure
- * @tcph: pointer to tcp header structure
- * @hdr_flags: pointer to header flags
- * @priv: pointer to the receive descriptor for the current sk_buff
- **/
-static int igb_get_skb_hdr(struct sk_buff *skb, void **iphdr, void **tcph,
-                           u64 *hdr_flags, void *priv)
-{
-	union e1000_adv_rx_desc *rx_desc = priv;
-	u16 pkt_type = rx_desc->wb.lower.lo_dword.pkt_info &
-	               (E1000_RXDADV_PKTTYPE_IPV4 | E1000_RXDADV_PKTTYPE_TCP);
-
-	/* Verify that this is a valid IPv4 TCP packet */
-	if (pkt_type != (E1000_RXDADV_PKTTYPE_IPV4 |
-	                  E1000_RXDADV_PKTTYPE_TCP))
-		return -1;
-
-	/* Set network headers */
-	skb_reset_network_header(skb);
-	skb_set_transport_header(skb, ip_hdrlen(skb));
-	*iphdr = ip_hdr(skb);
-	*tcph = tcp_hdr(skb);
-	*hdr_flags = LRO_IPV4 | LRO_TCP;
-
-	return 0;
-
-}
-#endif /* CONFIG_IGB_LRO */
-
 /**
  * igb_receive_skb - helper function to handle rx indications
  * @ring: pointer to receive ring receving this packet 
@@ -3811,28 +3747,21 @@ static void igb_receive_skb(struct igb_ring *ring, u8 status,
 	struct igb_adapter * adapter = ring->adapter;
 	bool vlan_extracted = (adapter->vlgrp && (status & E1000_RXD_STAT_VP));
 
-#ifdef CONFIG_IGB_LRO
-	if (adapter->netdev->features & NETIF_F_LRO &&
-	    skb->ip_summed == CHECKSUM_UNNECESSARY) {
+	skb_record_rx_queue(skb, ring->queue_index);
+	if (skb->ip_summed == CHECKSUM_UNNECESSARY) {
 		if (vlan_extracted)
-			lro_vlan_hwaccel_receive_skb(&ring->lro_mgr, skb,
-			                   adapter->vlgrp,
-			                   le16_to_cpu(rx_desc->wb.upper.vlan),
-			                   rx_desc);
+			vlan_gro_receive(&ring->napi, adapter->vlgrp,
+			                 le16_to_cpu(rx_desc->wb.upper.vlan),
+			                 skb);
 		else
-			lro_receive_skb(&ring->lro_mgr,skb, rx_desc);
-		ring->lro_used = 1;
+			napi_gro_receive(&ring->napi, skb);
 	} else {
-#endif
 		if (vlan_extracted)
 			vlan_hwaccel_receive_skb(skb, adapter->vlgrp,
 			                  le16_to_cpu(rx_desc->wb.upper.vlan));
 		else
-
 			netif_receive_skb(skb);
-#ifdef CONFIG_IGB_LRO
 	}
-#endif
 }
 
 
@@ -3986,13 +3915,6 @@ next_desc:
 
 	rx_ring->next_to_clean = i;
 	cleaned_count = IGB_DESC_UNUSED(rx_ring);
-
-#ifdef CONFIG_IGB_LRO
-	if (rx_ring->lro_used) {
-		lro_flush_all(&rx_ring->lro_mgr);
-		rx_ring->lro_used = 0;
-	}
-#endif
 
 	if (cleaned_count)
 		igb_alloc_rx_buffers_adv(rx_ring, cleaned_count);
