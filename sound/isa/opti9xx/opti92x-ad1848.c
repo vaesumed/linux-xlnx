@@ -815,14 +815,8 @@ static int __devinit snd_opti9xx_probe(struct snd_card *card)
 				   chip->fm_port, chip->fm_port + 4 - 1);
 		}
 		if (opl3) {
-#ifdef CS4231
-			const int t1dev = 1;
-#else
-			const int t1dev = 0;
-#endif
-			if ((error = snd_opl3_timer_new(opl3, t1dev, t1dev+1)) < 0)
-				return error;
-			if ((error = snd_opl3_hwdep_new(opl3, 0, 1, &synth)) < 0)
+			error = snd_opl3_hwdep_new(opl3, 0, 1, &synth);
+			if (error < 0)
 				return error;
 		}
 	}
@@ -830,15 +824,18 @@ static int __devinit snd_opti9xx_probe(struct snd_card *card)
 	return snd_card_register(card);
 }
 
-static struct snd_card *snd_opti9xx_card_new(void)
+static int snd_opti9xx_card_new(struct snd_card **cardp)
 {
 	struct snd_card *card;
+	int err;
 
-	card = snd_card_new(index, id, THIS_MODULE, sizeof(struct snd_opti9xx));
-	if (! card)
-		return NULL;
+	err = snd_card_create(index, id, THIS_MODULE,
+			      sizeof(struct snd_opti9xx), &card);
+	if (err < 0)
+		return err;
 	card->private_free = snd_card_opti9xx_free;
-	return card;
+	*cardp = card;
+	return 0;
 }
 
 static int __devinit snd_opti9xx_isa_match(struct device *devptr,
@@ -903,9 +900,9 @@ static int __devinit snd_opti9xx_isa_probe(struct device *devptr,
 	}
 #endif
 
-	card = snd_opti9xx_card_new();
-	if (! card)
-		return -ENOMEM;
+	error = snd_opti9xx_card_new(&card);
+	if (error < 0)
+		return error;
 
 	if ((error = snd_card_opti9xx_detect(card, card->private_data)) < 0) {
 		snd_card_free(card);
@@ -950,9 +947,9 @@ static int __devinit snd_opti9xx_pnp_probe(struct pnp_card_link *pcard,
 		return -EBUSY;
 	if (! isapnp)
 		return -ENODEV;
-	card = snd_opti9xx_card_new();
-	if (! card)
-		return -ENOMEM;
+	error = snd_opti9xx_card_new(&card);
+	if (error < 0)
+		return error;
 	chip = card->private_data;
 
 	hw = snd_card_opti9xx_pnp(chip, pcard, pid);
