@@ -627,7 +627,7 @@ i915_gem_create_mmap_offset(struct drm_gem_object *obj)
 	struct drm_gem_mm *mm = dev->mm_private;
 	struct drm_i915_gem_object *obj_priv = obj->driver_private;
 	struct drm_map_list *list;
-	struct drm_map *map;
+	struct drm_local_map *map;
 	int ret = 0;
 
 	/* Set the object up for mmap'ing */
@@ -2857,7 +2857,7 @@ void i915_gem_free_object(struct drm_gem_object *obj)
 	struct drm_device *dev = obj->dev;
 	struct drm_gem_mm *mm = dev->mm_private;
 	struct drm_map_list *list;
-	struct drm_map *map;
+	struct drm_local_map *map;
 	struct drm_i915_gem_object *obj_priv = obj->driver_private;
 
 	while (obj_priv->pin_count > 0)
