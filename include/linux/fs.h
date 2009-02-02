@@ -879,6 +879,23 @@ extern spinlock_t files_lock;
 #define get_file(x)	atomic_long_inc(&(x)->f_count)
 #define file_count(x)	atomic_long_read(&(x)->f_count)
 
+/*
+ * Serialize changes to file->f_flags.  These should not be called
+ * from interrupt context.
+ */
+extern spinlock_t file_flags_lock;
+
+static inline void lock_file_flags(void)
+{
+	spin_lock(&file_flags_lock);
+}
+
+static inline void unlock_file_flags(void)
+{
+	spin_unlock(&file_flags_lock);
+}
+extern int fasync_change(int fd, struct file *filp, int on);
+
 #ifdef CONFIG_DEBUG_WRITECOUNT
 static inline void file_take_write(struct file *f)
 {
