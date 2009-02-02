@@ -379,7 +379,6 @@ static int sd_config(struct gspca_dev *gspca_dev,
 
 	cam = &gspca_dev->cam;
 
-	cam->epaddr = 0x01;
 	cam->cam_mode = vga_mode;
 	cam->nmodes = ARRAY_SIZE(vga_mode);
 
@@ -556,8 +555,6 @@ static const struct sd_desc sd_desc = {
 
 /* -- module initialisation -- */
 static const __devinitdata struct usb_device_id device_table[] = {
-	{USB_DEVICE(0x06f8, 0x3002)},	/* Hercules Blog Webcam */
-	{USB_DEVICE(0x06f8, 0x3003)},	/* Hercules Dualpix HD Weblog */
 	{USB_DEVICE(0x1415, 0x2000)},	/* Sony HD Eye for PS3 (SLEH 00201) */
 	{}
 };
@@ -585,8 +582,10 @@ static struct usb_driver sd_driver = {
 /* -- module insert / remove -- */
 static int __init sd_mod_init(void)
 {
-	if (usb_register(&sd_driver) < 0)
-		return -1;
+	int ret;
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
 	PDEBUG(D_PROBE, "registered");
 	return 0;
 }

@@ -119,7 +119,8 @@ static inline int usb_find_address(struct i2c_adapter *i2c_adap,
 		/* try extended address code... */
 		ret = try_write_address(i2c_adap, addr, retries);
 		if (ret != 1) {
-			err("died at extended address code, while writing");
+			dev_err(&i2c_adap->dev,
+				"died at extended address code,	while writing\n");
 			return -EREMOTEIO;
 		}
 		add[0] = addr;
@@ -128,7 +129,8 @@ static inline int usb_find_address(struct i2c_adapter *i2c_adap,
 			addr |= 0x01;
 			ret = try_read_address(i2c_adap, addr, retries);
 			if (ret != 1) {
-				err("died at extended address code, while reading");
+				dev_err(&i2c_adap->dev,
+					"died at extended address code, while reading\n");
 				return -EREMOTEIO;
 			}
 		}
@@ -157,7 +159,7 @@ usbvision_i2c_xfer(struct i2c_adapter *i2c_adap, struct i2c_msg msgs[], int num)
 	struct i2c_msg *pmsg;
 	struct usb_usbvision *usbvision;
 	int i, ret;
-	unsigned char addr;
+	unsigned char addr = 0;
 
 	usbvision = (struct usb_usbvision *)i2c_get_adapdata(i2c_adap);
 

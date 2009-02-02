@@ -1,7 +1,7 @@
 /*
  *      uvc_video.c  --  USB Video Class driver - Video handling
  *
- *      Copyright (C) 2005-2008
+ *      Copyright (C) 2005-2009
  *          Laurent Pinchart (laurent.pinchart@skynet.be)
  *
  *      This program is free software; you can redistribute it and/or modify
@@ -12,7 +12,6 @@
  */
 
 #include <linux/kernel.h>
-#include <linux/version.h>
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/usb.h>
@@ -115,7 +114,7 @@ static int uvc_get_video_ctrl(struct uvc_video_device *video,
 		ctrl->wCompQuality = le16_to_cpup((__le16 *)data);
 		ret = 0;
 		goto out;
-	} else if (query == GET_DEF && probe == 1) {
+	} else if (query == GET_DEF && probe == 1 && ret != size) {
 		/* Many cameras don't support the GET_DEF request on their
 		 * video probe control. Warn once and return, the caller will
 		 * fall back to GET_CUR.
@@ -160,7 +159,7 @@ static int uvc_get_video_ctrl(struct uvc_video_device *video,
 	}
 
 	/* Some broken devices return a null or wrong dwMaxVideoFrameSize.
-	 * Try to get the value from the format and frame descriptor.
+	 * Try to get the value from the format and frame descriptors.
 	 */
 	uvc_fixup_buffer_size(video, ctrl);
 	ret = 0;
@@ -191,9 +190,6 @@ static int uvc_set_video_ctrl(struct uvc_video_device *video,
 	*(__le16 *)&data[12] = cpu_to_le16(ctrl->wCompQuality);
 	*(__le16 *)&data[14] = cpu_to_le16(ctrl->wCompWindowSize);
 	*(__le16 *)&data[16] = cpu_to_le16(ctrl->wDelay);
-	/* Note: Some of the fields below are not required for IN devices (see
-	 * UVC spec, 4.3.1.1), but we still copy them in case support for OUT
-	 * devices is added in the future. */
 	put_unaligned_le32(ctrl->dwMaxVideoFrameSize, &data[18]);
 	put_unaligned_le32(ctrl->dwMaxPayloadTransferSize, &data[22]);
 
@@ -400,7 +396,7 @@ static int uvc_video_decode_start(struct uvc_video_device *video,
 	 *
 	 * Empty buffers (bytesused == 0) don't trigger end of frame detection
 	 * as it doesn't make sense to return an empty buffer. This also
-	 * avoids detecting and of frame conditions at FID toggling if the
+	 * avoids detecting end of frame conditions at FID toggling if the
 	 * previous payload had the EOF bit set.
 	 */
 	if (fid != video->last_fid && buf->buf.bytesused != 0) {
@@ -453,6 +449,17 @@ static void uvc_video_decode_end(struct uvc_video_device *video,
 	}
 }
 
+/* Video payload encoding is handled by uvc_video_encode_header() and
+ * uvc_video_encode_data(). Only bulk transfers are currently supported.
+ *
+ * uvc_video_encode_header is called at the start of a payload. It adds header
+ * data to the transfer buffer and returns the header size. As the only known
+ * UVC output device transfers a whole frame in a single payload, the EOF bit
+ * is always set in the header.
+ *
+ * uvc_video_encode_data is called for every URB and copies the data from the
+ * video buffer to the transfer buffer.
+ */
 static int uvc_video_encode_header(struct uvc_video_device *video,
 		struct uvc_buffer *buf, __u8 *data, int len)
 {
@@ -692,27 +699,47 @@ static void uvc_free_urb_buffers(struct uvc_video_device *video)
  * already allocated when resuming from suspend, in which case it will
  * return without touching the buffers.
  *
- * Return 0 on success or -ENOMEM when out of memory.
+ * Limit the buffer size to UVC_MAX_PACKETS bulk/isochronous packets. If the
+ * system is too low on memory try successively smaller numbers of packets
+ * until allocation succeeds.
+ *
+ * Return the number of allocated packets on success or 0 when out of memory.
  */
 static int uvc_alloc_urb_buffers(struct uvc_video_device *video,
-	unsigned int size)
+	unsigned int size, unsigned int psize, gfp_t gfp_flags)
 {
+	unsigned int npackets;
 	unsigned int i;
 
 	/* Buffers are already allocated, bail out. */
 	if (video->urb_size)
 		return 0;
 
-	for (i = 0; i < UVC_URBS; ++i) {
-		video->urb_buffer[i] = usb_buffer_alloc(video->dev->udev,
-			size, GFP_KERNEL, &video->urb_dma[i]);
-		if (video->urb_buffer[i] == NULL) {
-			uvc_free_urb_buffers(video);
-			return -ENOMEM;
+	/* Compute the number of packets. Bulk endpoints might transfer UVC
+	 * payloads accross multiple URBs.
+	 */
+	npackets = DIV_ROUND_UP(size, psize);
+	if (npackets > UVC_MAX_PACKETS)
+		npackets = UVC_MAX_PACKETS;
+
+	/* Retry allocations until one succeed. */
+	for (; npackets > 1; npackets /= 2) {
+		for (i = 0; i < UVC_URBS; ++i) {
+			video->urb_buffer[i] = usb_buffer_alloc(
+				video->dev->udev, psize * npackets,
+				gfp_flags | __GFP_NOWARN, &video->urb_dma[i]);
+			if (!video->urb_buffer[i]) {
+				uvc_free_urb_buffers(video);
+				break;
+			}
+		}
+
+		if (i == UVC_URBS) {
+			video->urb_size = psize * npackets;
+			return npackets;
 		}
 	}
 
-	video->urb_size = size;
 	return 0;
 }
 
@@ -746,28 +773,18 @@ static int uvc_init_video_isoc(struct uvc_video_device *video,
 {
 	struct urb *urb;
 	unsigned int npackets, i, j;
-	__u16 psize;
-	__u32 size;
+	u16 psize;
+	u32 size;
 
-	/* Compute the number of isochronous packets to allocate by dividing
-	 * the maximum video frame size by the packet size. Limit the result
-	 * to UVC_MAX_ISO_PACKETS.
-	 */
 	psize = le16_to_cpu(ep->desc.wMaxPacketSize);
 	psize = (psize & 0x07ff) * (1 + ((psize >> 11) & 3));
-
 	size = video->streaming->ctrl.dwMaxVideoFrameSize;
-	if (size > UVC_MAX_FRAME_SIZE)
-		return -EINVAL;
 
-	npackets = DIV_ROUND_UP(size, psize);
-	if (npackets > UVC_MAX_ISO_PACKETS)
-		npackets = UVC_MAX_ISO_PACKETS;
+	npackets = uvc_alloc_urb_buffers(video, size, psize, gfp_flags);
+	if (npackets == 0)
+		return -ENOMEM;
 
 	size = npackets * psize;
-
-	if (uvc_alloc_urb_buffers(video, size) < 0)
-		return -ENOMEM;
 
 	for (i = 0; i < UVC_URBS; ++i) {
 		urb = usb_alloc_urb(npackets, gfp_flags);
@@ -807,24 +824,19 @@ static int uvc_init_video_bulk(struct uvc_video_device *video,
 	struct usb_host_endpoint *ep, gfp_t gfp_flags)
 {
 	struct urb *urb;
-	unsigned int pipe, i;
-	__u16 psize;
-	__u32 size;
+	unsigned int npackets, pipe, i;
+	u16 psize;
+	u32 size;
 
-	/* Compute the bulk URB size. Some devices set the maximum payload
-	 * size to a value too high for memory-constrained devices. We must
-	 * then transfer the payload accross multiple URBs. To be consistant
-	 * with isochronous mode, allocate maximum UVC_MAX_ISO_PACKETS per bulk
-	 * URB.
-	 */
 	psize = le16_to_cpu(ep->desc.wMaxPacketSize) & 0x07ff;
 	size = video->streaming->ctrl.dwMaxPayloadTransferSize;
 	video->bulk.max_payload_size = size;
-	if (size > psize * UVC_MAX_ISO_PACKETS)
-		size = psize * UVC_MAX_ISO_PACKETS;
 
-	if (uvc_alloc_urb_buffers(video, size) < 0)
+	npackets = uvc_alloc_urb_buffers(video, size, psize, gfp_flags);
+	if (npackets == 0)
 		return -ENOMEM;
+
+	size = npackets * psize;
 
 	if (usb_endpoint_dir_in(&ep->desc))
 		pipe = usb_rcvbulkpipe(video->dev->udev,
@@ -953,7 +965,7 @@ int uvc_video_suspend(struct uvc_video_device *video)
 }
 
 /*
- * Reconfigure the video interface and restart streaming if it was enable
+ * Reconfigure the video interface and restart streaming if it was enabled
  * before suspend.
  *
  * If an error occurs, disable the video queue. This will wake all pending
@@ -985,8 +997,8 @@ int uvc_video_resume(struct uvc_video_device *video)
  */
 
 /*
- * Initialize the UVC video device by retrieving the default format and
- * committing it.
+ * Initialize the UVC video device by switching to alternate setting 0 and
+ * retrieve the default format.
  *
  * Some cameras (namely the Fuji Finepix) set the format and frame
  * indexes to zero. The UVC standard doesn't clearly make this a spec
@@ -1014,7 +1026,7 @@ int uvc_video_init(struct uvc_video_device *video)
 	 */
 	usb_set_interface(video->dev->udev, video->streaming->intfnum, 0);
 
-	/* Some webcams don't suport GET_DEF request on the probe control. We
+	/* Some webcams don't suport GET_DEF requests on the probe control. We
 	 * fall back to GET_CUR if GET_DEF fails.
 	 */
 	if ((ret = uvc_get_video_ctrl(video, probe, 1, GET_DEF)) < 0 &&
