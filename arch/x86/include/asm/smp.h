@@ -15,11 +15,8 @@
 #  include <asm/io_apic.h>
 # endif
 #endif
-#include <asm/pda.h>
 #include <asm/thread_info.h>
 #include <asm/cpumask.h>
-
-extern int __cpuinit get_local_pda(int cpu);
 
 extern int smp_num_siblings;
 extern unsigned int num_processors;
@@ -27,9 +24,7 @@ extern unsigned int num_processors;
 DECLARE_PER_CPU(cpumask_t, cpu_sibling_map);
 DECLARE_PER_CPU(cpumask_t, cpu_core_map);
 DECLARE_PER_CPU(u16, cpu_llc_id);
-#ifdef CONFIG_X86_32
 DECLARE_PER_CPU(int, cpu_number);
-#endif
 
 static inline struct cpumask *cpu_sibling_mask(int cpu)
 {
@@ -162,11 +157,11 @@ extern unsigned disabled_cpus __cpuinitdata;
  * from the initial startup. We map APIC_BASE very early in page_setup(),
  * so this is correct in the x86 case.
  */
-#define raw_smp_processor_id() (x86_read_percpu(cpu_number))
+#define raw_smp_processor_id() (percpu_read(cpu_number))
 extern int safe_smp_processor_id(void);
 
 #elif defined(CONFIG_X86_64_SMP)
-#define raw_smp_processor_id()	read_pda(cpunumber)
+#define raw_smp_processor_id() (percpu_read(cpu_number))
 
 #define stack_smp_processor_id()					\
 ({								\

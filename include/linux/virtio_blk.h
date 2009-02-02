@@ -4,6 +4,7 @@
  * compatible drivers/servers. */
 #include <linux/types.h>
 #include <linux/virtio_config.h>
+#include <linux/types.h>
 
 /* The ID for virtio_block */
 #define VIRTIO_ID_BLOCK	2

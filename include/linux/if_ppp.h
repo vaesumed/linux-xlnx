@@ -35,6 +35,7 @@
 
 #include <linux/types.h>
 #include <linux/compiler.h>
+#include <linux/types.h>
 
 /*
  * Packet sizes

@@ -5,8 +5,12 @@
 
 /*
  * Legacy E820 BIOS limits us to 128 (E820MAX) nodes due to the
- * constrained space in the zeropage.  If we have more nodes than
- * that, and if we've booted off EFI firmware, then the EFI tables
+ * constrained space in the zeropage.
+ */
+
+#ifdef __KERNEL__
+/* If we have more nodes than that, and if we have
+ * booted off EFI firmware, then the EFI tables
  * passed us from the EFI firmware can list more nodes.  Size our
  * internal memory map tables to have room for these additional
  * nodes, based on up to three entries per node for which the
@@ -26,7 +30,6 @@
  * to collapse the next two #ifdef lines to a single line:
  *	#if defined(__KERNEL__) && defined(CONFIG_EFI)
  */
-#ifdef __KERNEL__
 #ifdef CONFIG_EFI
 #include <linux/numa.h>
 #define E820_X_MAX (E820MAX + 3 * MAX_NUMNODES)
@@ -50,6 +53,7 @@
 
 #ifndef __ASSEMBLY__
 #include <linux/types.h>
+
 struct e820entry {
 	__u64 addr;	/* start of memory segment */
 	__u64 size;	/* size of memory segment */
