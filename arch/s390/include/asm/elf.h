@@ -174,12 +174,16 @@ extern char elf_platform[];
 #else /* __s390x__ */
 #define SET_PERSONALITY(ex)					\
 do {								\
+	unsigned long new_flags = 0;				\
 	if (personality(current->personality) != PER_LINUX32)	\
 		set_personality(PER_LINUX);			\
 	if ((ex).e_ident[EI_CLASS] == ELFCLASS32)		\
-		set_thread_flag(TIF_31BIT);			\
+		new_flags = _TIF_31BIT;				\
+	if ((current_thread_info()->flags & _TIF_31BIT)		\
+	    != new_flags)					\
+		set_thread_flag(TIF_ABI_PENDING);		\
 	else							\
-		clear_thread_flag(TIF_31BIT);			\
+		clear_thread_flag(TIF_ABI_PENDING);		\
 } while (0)
 #endif /* __s390x__ */
 
