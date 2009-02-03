@@ -103,11 +103,13 @@ do_open_lookup(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nfsd4_o
 					(u32 *)open->op_verf.data,
 					&open->op_truncate, &created);
 
-		/* If we ever decide to use different attrs to store the
-		 * verifier in nfsd_create_v3, then we'll need to change this
+		/*
+		 * Following rfc 3530 14.2.16, use the returned bitmask
+		 * to indicate which attributes we used to store the
+		 * verifier:
 		 */
 		if (open->op_createmode == NFS4_CREATE_EXCLUSIVE && status == 0)
-			open->op_bmval[1] |= (FATTR4_WORD1_TIME_ACCESS |
+			open->op_bmval[1] = (FATTR4_WORD1_TIME_ACCESS |
 						FATTR4_WORD1_TIME_MODIFY);
 	} else {
 		status = nfsd_lookup(rqstp, current_fh,
@@ -119,11 +121,11 @@ do_open_lookup(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nfsd4_o
 
 	set_change_info(&open->op_cinfo, current_fh);
 
-	/* set reply cache */
 	fh_dup2(current_fh, &resfh);
-	open->op_stateowner->so_replay.rp_openfh_len = resfh.fh_handle.fh_size;
-	memcpy(open->op_stateowner->so_replay.rp_openfh,
-			&resfh.fh_handle.fh_base, resfh.fh_handle.fh_size);
+
+	/* set reply cache */
+	fh_copy_shallow(&open->op_stateowner->so_replay.rp_openfh,
+			&resfh.fh_handle);
 
 	if (!created)
 		status = do_open_permission(rqstp, current_fh, open,
@@ -150,10 +152,8 @@ do_open_fhandle(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nfsd4_
 	memset(&open->op_cinfo, 0, sizeof(struct nfsd4_change_info));
 
 	/* set replay cache */
-	open->op_stateowner->so_replay.rp_openfh_len = current_fh->fh_handle.fh_size;
-	memcpy(open->op_stateowner->so_replay.rp_openfh,
-		&current_fh->fh_handle.fh_base,
-		current_fh->fh_handle.fh_size);
+	fh_copy_shallow(&open->op_stateowner->so_replay.rp_openfh,
+			&current_fh->fh_handle);
 
 	open->op_truncate = (open->op_iattr.ia_valid & ATTR_SIZE) &&
 		(open->op_iattr.ia_size == 0);
@@ -185,9 +185,8 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if (status == nfserr_replay_me) {
 		struct nfs4_replay *rp = &open->op_stateowner->so_replay;
 		fh_put(&cstate->current_fh);
-		cstate->current_fh.fh_handle.fh_size = rp->rp_openfh_len;
-		memcpy(&cstate->current_fh.fh_handle.fh_base, rp->rp_openfh,
-				rp->rp_openfh_len);
+		fh_copy_shallow(&cstate->current_fh.fh_handle,
+				&rp->rp_openfh);
 		status = fh_verify(rqstp, &cstate->current_fh, 0, NFSD_MAY_NOP);
 		if (status)
 			dprintk("nfsd4_open: replay failed"
