@@ -173,15 +173,12 @@ static void kvm_assigned_dev_interrupt_work_handler(struct work_struct *work)
 		assigned_dev->host_irq_disabled = false;
 	}
 	mutex_unlock(&assigned_dev->kvm->lock);
-	kvm_put_kvm(assigned_dev->kvm);
 }
 
 static irqreturn_t kvm_assigned_dev_intr(int irq, void *dev_id)
 {
 	struct kvm_assigned_dev_kernel *assigned_dev =
 		(struct kvm_assigned_dev_kernel *) dev_id;
-
-	kvm_get_kvm(assigned_dev->kvm);
 
 	schedule_work(&assigned_dev->interrupt_work);
 
@@ -213,6 +210,7 @@ static void kvm_assigned_dev_ack_irq(struct kvm_irq_ack_notifier *kian)
 	}
 }
 
+/* The function implicit hold kvm->lock mutex due to cancel_work_sync() */
 static void kvm_free_assigned_irq(struct kvm *kvm,
 				  struct kvm_assigned_dev_kernel *assigned_dev)
 {
@@ -228,11 +226,24 @@ static void kvm_free_assigned_irq(struct kvm *kvm,
 	if (!assigned_dev->irq_requested_type)
 		return;
 
-	if (cancel_work_sync(&assigned_dev->interrupt_work))
-		/* We had pending work. That means we will have to take
-		 * care of kvm_put_kvm.
-		 */
-		kvm_put_kvm(kvm);
+	/*
+	 * In kvm_free_device_irq, cancel_work_sync return true if:
+	 * 1. work is scheduled, and then cancelled.
+	 * 2. work callback is executed.
+	 *
+	 * The first one ensured that the irq is disabled and no more events
+	 * would happen. But for the second one, the irq may be enabled (e.g.
+	 * for MSI). So we disable irq here to prevent further events.
+	 *
+	 * Notice this maybe result in nested disable if the interrupt type is
+	 * INTx, but it's OK for we are going to free it.
+	 *
+	 * If this function is a part of VM destroy, please ensure that till
+	 * now, the kvm state is still legal for probably we also have to wait
+	 * interrupt_work done.
+	 */
+	disable_irq_nosync(assigned_dev->host_irq);
+	cancel_work_sync(&assigned_dev->interrupt_work);
 
 	free_irq(assigned_dev->host_irq, (void *)assigned_dev);
 
@@ -285,8 +296,8 @@ static int assigned_device_update_intx(struct kvm *kvm,
 
 	if (irqchip_in_kernel(kvm)) {
 		if (!msi2intx &&
-		    adev->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI) {
-			free_irq(adev->host_irq, (void *)kvm);
+		    (adev->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI)) {
+			free_irq(adev->host_irq, (void *)adev);
 			pci_disable_msi(adev->dev);
 		}
 
@@ -332,6 +343,14 @@ static int assigned_device_update_msi(struct kvm *kvm,
 		adev->irq_requested_type &= ~KVM_ASSIGNED_DEV_GUEST_MSI;
 		adev->guest_irq = airq->guest_irq;
 		adev->ack_notifier.gsi = airq->guest_irq;
+	} else {
+		/*
+		 * Guest require to disable device MSI, we disable MSI and
+		 * re-enable INTx by default again. Notice it's only for
+		 * non-msi2intx.
+		 */
+		assigned_device_update_intx(kvm, adev, airq);
+		return 0;
 	}
 
 	if (adev->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI)
@@ -368,6 +387,7 @@ static int kvm_vm_ioctl_assign_irq(struct kvm *kvm,
 {
 	int r = 0;
 	struct kvm_assigned_dev_kernel *match;
+	u32 current_flags = 0, changed_flags;
 
 	mutex_lock(&kvm->lock);
 
@@ -405,8 +425,13 @@ static int kvm_vm_ioctl_assign_irq(struct kvm *kvm,
 		}
 	}
 
-	if ((!msi2intx &&
-	     (assigned_irq->flags & KVM_DEV_IRQ_ASSIGN_ENABLE_MSI)) ||
+	if ((match->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI) &&
+		 (match->irq_requested_type & KVM_ASSIGNED_DEV_GUEST_MSI))
+		current_flags |= KVM_DEV_IRQ_ASSIGN_ENABLE_MSI;
+
+	changed_flags = assigned_irq->flags ^ current_flags;
+
+	if ((changed_flags & KVM_DEV_IRQ_ASSIGN_MSI_ACTION) ||
 	    (msi2intx && match->dev->msi_enabled)) {
 #ifdef CONFIG_X86
 		r = assigned_device_update_msi(kvm, match, assigned_irq);
@@ -789,11 +814,19 @@ static int kvm_mmu_notifier_clear_flush_young(struct mmu_notifier *mn,
 	return young;
 }
 
+static void kvm_mmu_notifier_release(struct mmu_notifier *mn,
+				     struct mm_struct *mm)
+{
+	struct kvm *kvm = mmu_notifier_to_kvm(mn);
+	kvm_arch_flush_shadow(kvm);
+}
+
 static const struct mmu_notifier_ops kvm_mmu_notifier_ops = {
 	.invalidate_page	= kvm_mmu_notifier_invalidate_page,
 	.invalidate_range_start	= kvm_mmu_notifier_invalidate_range_start,
 	.invalidate_range_end	= kvm_mmu_notifier_invalidate_range_end,
 	.clear_flush_young	= kvm_mmu_notifier_clear_flush_young,
+	.release		= kvm_mmu_notifier_release,
 };
 #endif /* CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER */
 
@@ -806,6 +839,10 @@ static struct kvm *kvm_create_vm(void)
 
 	if (IS_ERR(kvm))
 		goto out;
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
+	INIT_LIST_HEAD(&kvm->irq_routing);
+	INIT_HLIST_HEAD(&kvm->mask_notifier_list);
+#endif
 
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	page = alloc_page(GFP_KERNEL | __GFP_ZERO);
@@ -883,9 +920,11 @@ static void kvm_destroy_vm(struct kvm *kvm)
 {
 	struct mm_struct *mm = kvm->mm;
 
+	kvm_arch_sync_events(kvm);
 	spin_lock(&kvm_lock);
 	list_del(&kvm->vm_list);
 	spin_unlock(&kvm_lock);
+	kvm_free_irq_routing(kvm);
 	kvm_io_bus_destroy(&kvm->pio_bus);
 	kvm_io_bus_destroy(&kvm->mmio_bus);
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
@@ -1732,13 +1771,13 @@ out_free2:
 		r = 0;
 		break;
 	}
-	case KVM_DEBUG_GUEST: {
-		struct kvm_debug_guest dbg;
+	case KVM_SET_GUEST_DEBUG: {
+		struct kvm_guest_debug dbg;
 
 		r = -EFAULT;
 		if (copy_from_user(&dbg, argp, sizeof dbg))
 			goto out;
-		r = kvm_arch_vcpu_ioctl_debug_guest(vcpu, &dbg);
+		r = kvm_arch_vcpu_ioctl_set_guest_debug(vcpu, &dbg);
 		if (r)
 			goto out;
 		r = 0;
@@ -1906,6 +1945,36 @@ static long kvm_vm_ioctl(struct file *filp,
 		break;
 	}
 #endif
+#ifdef KVM_CAP_IRQ_ROUTING
+	case KVM_SET_GSI_ROUTING: {
+		struct kvm_irq_routing routing;
+		struct kvm_irq_routing __user *urouting;
+		struct kvm_irq_routing_entry *entries;
+
+		r = -EFAULT;
+		if (copy_from_user(&routing, argp, sizeof(routing)))
+			goto out;
+		r = -EINVAL;
+		if (routing.nr >= KVM_MAX_IRQ_ROUTES)
+			goto out;
+		if (routing.flags)
+			goto out;
+		r = -ENOMEM;
+		entries = vmalloc(routing.nr * sizeof(*entries));
+		if (!entries)
+			goto out;
+		r = -EFAULT;
+		urouting = argp;
+		if (copy_from_user(entries, urouting->entries,
+				   routing.nr * sizeof(*entries)))
+			goto out_free_irq_routing;
+		r = kvm_set_irq_routing(kvm, entries, routing.nr,
+					routing.flags);
+	out_free_irq_routing:
+		vfree(entries);
+		break;
+	}
+#endif
 	default:
 		r = kvm_arch_vm_ioctl(filp, ioctl, arg);
 	}
@@ -1972,6 +2041,10 @@ static long kvm_dev_ioctl_check_extension_generic(long arg)
 	case KVM_CAP_USER_MEMORY:
 	case KVM_CAP_DESTROY_MEMORY_REGION_WORKS:
 		return 1;
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
+	case KVM_CAP_IRQ_ROUTING:
+		return 1;
+#endif
 	default:
 		break;
 	}
