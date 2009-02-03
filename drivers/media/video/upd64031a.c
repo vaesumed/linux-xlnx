@@ -21,7 +21,6 @@
  */
 
 
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/i2c.h>
@@ -268,7 +267,6 @@ MODULE_DEVICE_TABLE(i2c, upd64031a_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "upd64031a",
-	.driverid = I2C_DRIVERID_UPD64031A,
 	.command = upd64031a_command,
 	.probe = upd64031a_probe,
 	.remove = upd64031a_remove,

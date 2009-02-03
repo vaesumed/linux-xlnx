@@ -21,6 +21,8 @@
 #define MODULE_NAME "stk014"
 
 #include "gspca.h"
+#define QUANT_VAL 7		/* quantization table */
+				/* <= 4 KO - 7: good (enough!) */
 #include "jpeg.h"
 
 MODULE_AUTHOR("Jean-Francois Moine <http://moinejf.free.fr>");
@@ -36,9 +38,6 @@ struct sd {
 	unsigned char colors;
 	unsigned char lightfreq;
 };
-
-/* global parameters */
-static int sd_quant = 7;		/* <= 4 KO - 7: good (enough!) */
 
 /* V4L2 controls supported by the driver */
 static int sd_setbrightness(struct gspca_dev *gspca_dev, __s32 val);
@@ -180,7 +179,7 @@ static int rcv_val(struct gspca_dev *gspca_dev,
 	reg_w(gspca_dev, 0x63b, 0);
 	reg_w(gspca_dev, 0x630, 5);
 	ret = usb_bulk_msg(dev,
-			usb_rcvbulkpipe(dev, 5),
+			usb_rcvbulkpipe(dev, 0x05),
 			gspca_dev->usb_buf,
 			4,		/* length */
 			&alen,
@@ -294,9 +293,7 @@ static int sd_config(struct gspca_dev *gspca_dev,
 			const struct usb_device_id *id)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
-	struct cam *cam = &gspca_dev->cam;
 
-	cam->epaddr = 0x02;
 	gspca_dev->cam.cam_mode = vga_mode;
 	gspca_dev->cam.nmodes = ARRAY_SIZE(vga_mode);
 	sd->brightness = BRIGHTNESS_DEF;
@@ -420,7 +417,7 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 					ffd9, 2);
 
 		/* put the JPEG 411 header */
-		jpeg_put_header(gspca_dev, frame, sd_quant, 0x22);
+		jpeg_put_header(gspca_dev, frame, 0x22);
 
 		/* beginning of the frame */
 #define STKHDRSZ 12
@@ -562,8 +559,10 @@ static struct usb_driver sd_driver = {
 /* -- module insert / remove -- */
 static int __init sd_mod_init(void)
 {
-	if (usb_register(&sd_driver) < 0)
-		return -1;
+	int ret;
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
 	info("registered");
 	return 0;
 }
@@ -575,6 +574,3 @@ static void __exit sd_mod_exit(void)
 
 module_init(sd_mod_init);
 module_exit(sd_mod_exit);
-
-module_param_named(quant, sd_quant, int, 0644);
-MODULE_PARM_DESC(quant, "Quantization index (0..8)");

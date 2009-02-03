@@ -30,7 +30,6 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -932,7 +931,7 @@ static int saa717x_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 		break;
 
 	case V4L2_CID_HUE:
-		if (ctrl->value < -127 || ctrl->value > 127) {
+		if (ctrl->value < -128 || ctrl->value > 127) {
 			v4l2_err(sd, "invalid hue setting %d\n", ctrl->value);
 			return -ERANGE;
 		}
@@ -1529,7 +1528,6 @@ MODULE_DEVICE_TABLE(i2c, saa717x_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "saa717x",
-	.driverid = I2C_DRIVERID_SAA717X,
 	.command = saa717x_command,
 	.probe = saa717x_probe,
 	.remove = saa717x_remove,

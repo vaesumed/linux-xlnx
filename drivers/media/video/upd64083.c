@@ -21,7 +21,6 @@
  * 02110-1301, USA.
  */
 
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/i2c.h>
@@ -240,7 +239,6 @@ MODULE_DEVICE_TABLE(i2c, upd64083_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "upd64083",
-	.driverid = I2C_DRIVERID_UPD64083,
 	.command = upd64083_command,
 	.probe = upd64083_probe,
 	.remove = upd64083_remove,

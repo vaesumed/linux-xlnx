@@ -37,9 +37,6 @@ MODULE_PARM_DESC(debug, "set debugging level" DVB_USB_DEBUG_STATUS);
 static int dvb_usb_af9015_remote;
 module_param_named(remote, dvb_usb_af9015_remote, int, 0644);
 MODULE_PARM_DESC(remote, "select remote");
-static int dvb_usb_af9015_dual_mode;
-module_param_named(dual_mode, dvb_usb_af9015_dual_mode, int, 0644);
-MODULE_PARM_DESC(dual_mode, "enable dual mode");
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 static DEFINE_MUTEX(af9015_usb_mutex);
@@ -694,7 +691,12 @@ static int af9015_read_config(struct usb_device *udev)
 
 	/* IR remote controller */
 	req.addr = AF9015_EEPROM_IR_MODE;
-	ret = af9015_rw_udev(udev, &req);
+	/* first message will timeout often due to possible hw bug */
+	for (i = 0; i < 4; i++) {
+		ret = af9015_rw_udev(udev, &req);
+		if (!ret)
+			break;
+	}
 	if (ret)
 		goto error;
 	deb_info("%s: IR mode:%d\n", __func__, val);
@@ -742,6 +744,16 @@ static int af9015_read_config(struct usb_device *udev)
 				  af9015_ir_table_digittrade;
 				af9015_config.ir_table_size =
 				  ARRAY_SIZE(af9015_ir_table_digittrade);
+				break;
+			case AF9015_REMOTE_AVERMEDIA_KS:
+				af9015_properties[i].rc_key_map =
+				  af9015_rc_keys_avermedia;
+				af9015_properties[i].rc_key_map_size =
+				  ARRAY_SIZE(af9015_rc_keys_avermedia);
+				af9015_config.ir_table =
+				  af9015_ir_table_avermedia_ks;
+				af9015_config.ir_table_size =
+				  ARRAY_SIZE(af9015_ir_table_avermedia_ks);
 				break;
 			}
 		} else {
@@ -831,22 +843,20 @@ static int af9015_read_config(struct usb_device *udev)
 		goto error;
 	af9015_config.dual_mode = val;
 	deb_info("%s: TS mode:%d\n", __func__, af9015_config.dual_mode);
-	/* disable dual mode by default because it is buggy */
-	if (!dvb_usb_af9015_dual_mode)
-		af9015_config.dual_mode = 0;
 
-	/* set buffer size according to USB port speed */
+	/* Set adapter0 buffer size according to USB port speed, adapter1 buffer
+	   size can be static because it is enabled only USB2.0 */
 	for (i = 0; i < af9015_properties_count; i++) {
 		/* USB1.1 set smaller buffersize and disable 2nd adapter */
 		if (udev->speed == USB_SPEED_FULL) {
-			af9015_properties[i].adapter->stream.u.bulk.buffersize =
-				TS_USB11_MAX_PACKET_SIZE;
+			af9015_properties[i].adapter[0].stream.u.bulk.buffersize
+				= TS_USB11_MAX_PACKET_SIZE;
 			/* disable 2nd adapter because we don't have
 			   PID-filters */
 			af9015_config.dual_mode = 0;
 		} else {
-			af9015_properties[i].adapter->stream.u.bulk.buffersize =
-				TS_USB20_MAX_PACKET_SIZE;
+			af9015_properties[i].adapter[0].stream.u.bulk.buffersize
+				= TS_USB20_MAX_PACKET_SIZE;
 		}
 	}
 
@@ -1212,6 +1222,7 @@ static struct usb_device_id af9015_usb_table[] = {
 	{USB_DEVICE(USB_VID_AVERMEDIA, USB_PID_AVERMEDIA_A309)},
 /* 15 */{USB_DEVICE(USB_VID_MSI_2,     USB_PID_MSI_DIGI_VOX_MINI_III)},
 	{USB_DEVICE(USB_VID_KWORLD_2,  USB_PID_KWORLD_395U)},
+	{USB_DEVICE(USB_VID_KWORLD_2,  USB_PID_KWORLD_395U_2)},
 	{0},
 };
 MODULE_DEVICE_TABLE(usb, af9015_usb_table);
@@ -1254,6 +1265,12 @@ static struct dvb_usb_device_properties af9015_properties[] = {
 					.type = USB_BULK,
 					.count = 6,
 					.endpoint = 0x85,
+					.u = {
+						.bulk = {
+							.buffersize =
+						TS_USB20_MAX_PACKET_SIZE,
+						}
+					}
 				},
 			}
 		},
@@ -1353,6 +1370,12 @@ static struct dvb_usb_device_properties af9015_properties[] = {
 					.type = USB_BULK,
 					.count = 6,
 					.endpoint = 0x85,
+					.u = {
+						.bulk = {
+							.buffersize =
+						TS_USB20_MAX_PACKET_SIZE,
+						}
+					}
 				},
 			}
 		},
@@ -1399,7 +1422,8 @@ static struct dvb_usb_device_properties af9015_properties[] = {
 			{
 				.name = "KWorld USB DVB-T TV Stick II " \
 					"(VS-DVB-T 395U)",
-				.cold_ids = {&af9015_usb_table[16], NULL},
+				.cold_ids = {&af9015_usb_table[16],
+					     &af9015_usb_table[17], NULL},
 				.warm_ids = {NULL},
 			},
 		}

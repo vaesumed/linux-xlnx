@@ -242,7 +242,7 @@ static int tda9875_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 static int tda9875_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
 	struct tda9875 *t = to_state(sd);
-	int chvol=0, volume, balance, left, right;
+	int chvol = 0, volume = 0, balance = 0, left, right;
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUDIO_VOLUME:
@@ -401,7 +401,6 @@ MODULE_DEVICE_TABLE(i2c, tda9875_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "tda9875",
-	.driverid = I2C_DRIVERID_TDA9875,
 	.command = tda9875_command,
 	.probe = tda9875_probe,
 	.remove = tda9875_remove,

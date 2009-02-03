@@ -194,9 +194,9 @@ static int amradio_start(struct amradio_device *radio)
 		return retval;
 	}
 
-	mutex_unlock(&radio->lock);
-
 	radio->muted = 0;
+
+	mutex_unlock(&radio->lock);
 
 	return retval;
 }
@@ -230,9 +230,9 @@ static int amradio_stop(struct amradio_device *radio)
 		return retval;
 	}
 
-	mutex_unlock(&radio->lock);
-
 	radio->muted = 1;
+
+	mutex_unlock(&radio->lock);
 
 	return retval;
 }
@@ -284,9 +284,9 @@ static int amradio_setfreq(struct amradio_device *radio, int freq)
 		return retval;
 	}
 
-	mutex_unlock(&radio->lock);
-
 	radio->stereo = 0;
+
+	mutex_unlock(&radio->lock);
 
 	return retval;
 }
@@ -313,9 +313,11 @@ static void usb_amradio_disconnect(struct usb_interface *intf)
 static int vidioc_querycap(struct file *file, void *priv,
 					struct v4l2_capability *v)
 {
+	struct amradio_device *radio = video_drvdata(file);
+
 	strlcpy(v->driver, "radio-mr800", sizeof(v->driver));
 	strlcpy(v->card, "AverMedia MR 800 USB FM Radio", sizeof(v->card));
-	sprintf(v->bus_info, "USB");
+	usb_make_path(radio->usbdev, v->bus_info, sizeof(v->bus_info));
 	v->version = RADIO_VERSION;
 	v->capabilities = V4L2_CAP_TUNER;
 	return 0;
