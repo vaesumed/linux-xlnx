@@ -111,7 +111,7 @@ struct kmem_cache_cpu {
 	struct kmlist		rlist;
 	struct kmem_cache_list	*remote_cache_list;
 #endif
-} ____cacheline_aligned;
+} ____cacheline_aligned_in_smp;
 
 /*
  * Per-node, per-kmem_cache structure. Used for node-specific allocations.
@@ -128,9 +128,18 @@ struct kmem_cache {
 	unsigned long	flags;
 	int		hiwater;	/* LIFO list high watermark */
 	int		freebatch;	/* LIFO freelist batch flush size */
+#ifdef CONFIG_SMP
+	struct kmem_cache_cpu	**cpu_slab; /* dynamic per-cpu structures */
+#else
+	struct kmem_cache_cpu	cpu_slab;
+#endif
 	int		objsize;	/* Size of object without meta data */
 	int		offset;		/* Free pointer offset. */
 	int		objects;	/* Number of objects in slab */
+
+#ifdef CONFIG_NUMA
+	struct kmem_cache_node	**node_slab; /* dynamic per-node structures */
+#endif
 
 	int		size;		/* Size of object including meta data */
 	int		order;		/* Allocation order */
@@ -148,15 +157,7 @@ struct kmem_cache {
 #ifdef CONFIG_SLQB_SYSFS
 	struct kobject	kobj;		/* For sysfs */
 #endif
-#ifdef CONFIG_NUMA
-	struct kmem_cache_node	*node[MAX_NUMNODES];
-#endif
-#ifdef CONFIG_SMP
-	struct kmem_cache_cpu	*cpu_slab[NR_CPUS];
-#else
-	struct kmem_cache_cpu	cpu_slab;
-#endif
-};
+} ____cacheline_aligned;
 
 /*
  * Kmalloc subsystem.
@@ -237,7 +238,7 @@ static __always_inline struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 
 	index = kmalloc_index(size);
 	if (unlikely(index == 0))
-		return NULL;
+		return ZERO_SIZE_PTR;
 
 	if (likely(!(flags & SLQB_DMA)))
 		return &kmalloc_caches[index];
