@@ -51,6 +51,8 @@
 #include <asm/bitops.h>
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
+#include <linux/if_ether.h>
+#include <linux/bitops.h>
 
 /*================================================================*/
 /* Project Includes */
@@ -125,7 +127,7 @@ static const long p80211wext_channel_freq[] = {
 #define NUM_CHANNELS ARRAY_SIZE(p80211wext_channel_freq)
 
 /* steal a spare bit to store the shared/opensystems state. should default to open if not set */
-#define HOSTWEP_SHAREDKEY BIT3
+#define HOSTWEP_SHAREDKEY BIT(3)
 
 
 /** function declarations =============== */
@@ -147,15 +149,12 @@ static int p80211wext_dorequest(wlandevice_t *wlandev, u32 did, u32 data)
 	p80211item_uint32_t		mibitem;
 	int	result;
 
-	DBFENTER;
-
 	msg.msgcode = DIDmsg_dot11req_mibset;
 	mibitem.did = did;
 	mibitem.data = data;
 	memcpy(&msg.mibattribute.data, &mibitem, sizeof(mibitem));
 	result = p80211req_dorequest(wlandev, (u8*)&msg);
 
-	DBFEXIT;
 	return result;
 }
 
@@ -167,8 +166,6 @@ static int p80211wext_autojoin(wlandevice_t *wlandev)
 
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	/* Get ESSID */
 	result = p80211wext_giwessid(wlandev->netdev, NULL, &data, ssid);
@@ -203,7 +200,6 @@ static int p80211wext_autojoin(wlandevice_t *wlandev)
 
 exit:
 
-	DBFEXIT;
 	return err;
 
 }
@@ -216,7 +212,6 @@ struct iw_statistics* p80211wext_get_wireless_stats (netdevice_t *dev)
 	struct iw_statistics* wstats = &wlandev->wstats;
 	int retval;
 
-	DBFENTER;
 	/* Check */
 	if ( (wlandev == NULL) || (wlandev->msdstate != WLAN_MSD_RUNNING) )
 		return NULL;
@@ -248,8 +243,6 @@ struct iw_statistics* p80211wext_get_wireless_stats (netdevice_t *dev)
 	wstats->discard.retries = 0;   // tx retries.
 	wstats->miss.beacon = 0;
 
-	DBFEXIT;
-
 	return wstats;
 }
 
@@ -260,8 +253,6 @@ static int p80211wext_giwname(netdevice_t *dev,
 	struct iw_param rate;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	result = p80211wext_giwrate(dev, NULL, &rate, NULL);
 
@@ -281,7 +272,6 @@ static int p80211wext_giwname(netdevice_t *dev,
 		break;
 	}
 exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -294,8 +284,6 @@ static int p80211wext_giwfreq(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	msg.msgcode = DIDmsg_dot11req_mibget;
 	mibitem.did = DIDmib_dot11phy_dot11PhyDSSSTable_dot11CurrentChannel;
@@ -319,7 +307,6 @@ static int p80211wext_giwfreq(netdevice_t *dev,
 	freq->m = p80211_channel_to_mhz(mibitem.data, 0) * 100000;
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -332,8 +319,6 @@ static int p80211wext_siwfreq(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
@@ -358,7 +343,6 @@ static int p80211wext_siwfreq(netdevice_t *dev,
 	}
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -367,8 +351,6 @@ static int p80211wext_giwmode(netdevice_t *dev,
 			      __u32 *mode, char *extra)
 {
 	wlandevice_t *wlandev = dev->ml_priv;
-
-	DBFENTER;
 
 	switch (wlandev->macmode) {
 	case WLAN_MACMODE_IBSS_STA:
@@ -385,7 +367,6 @@ static int p80211wext_giwmode(netdevice_t *dev,
 		*mode = IW_MODE_AUTO;
 	}
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -398,8 +379,6 @@ static int p80211wext_siwmode(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int 	result;
 	int     err = 0;
-
-	DBFENTER;
 
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
@@ -428,7 +407,7 @@ static int p80211wext_siwmode(netdevice_t *dev,
 		break;
 	default:
 		/* Not set yet. */
-		WLAN_LOG_INFO("Operation mode: %d not support\n", *mode);
+		printk(KERN_INFO "Operation mode: %d not support\n", *mode);
 		return -EOPNOTSUPP;
 	}
 
@@ -443,8 +422,6 @@ static int p80211wext_siwmode(netdevice_t *dev,
 		err = -EFAULT;
 
  exit:
-	DBFEXIT;
-
 	return err;
 }
 
@@ -455,8 +432,6 @@ static int p80211wext_giwrange(netdevice_t *dev,
 {
         struct iw_range *range = (struct iw_range *) extra;
 	int i, val;
-
-	DBFENTER;
 
 	// for backward compatability set size & zero everything we don't understand
 	data->length = sizeof(*range);
@@ -517,7 +492,6 @@ static int p80211wext_giwrange(netdevice_t *dev,
 	// XXX need to cap it if we're running at ~2Mbps..
 	range->throughput = 5500000;
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -528,12 +502,9 @@ static int p80211wext_giwap(netdevice_t *dev,
 
 	wlandevice_t *wlandev = dev->ml_priv;
 
-	DBFENTER;
-
 	memcpy(ap_addr->sa_data, wlandev->bssid, WLAN_BSSID_LEN);
 	ap_addr->sa_family = ARPHRD_ETHER;
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -544,8 +515,6 @@ static int p80211wext_giwencode(netdevice_t *dev,
 	wlandevice_t *wlandev = dev->ml_priv;
 	int err = 0;
 	int i;
-
-	DBFENTER;
 
 	i = (erq->flags & IW_ENCODE_INDEX) - 1;
 	erq->flags = 0;
@@ -577,7 +546,6 @@ static int p80211wext_giwencode(netdevice_t *dev,
 	memcpy(key, wlandev->wep_keys[i], erq->length);
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -593,7 +561,6 @@ static int p80211wext_siwencode(netdevice_t *dev,
 	int result = 0;
 	int i;
 
-	DBFENTER;
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
 		goto exit;
@@ -710,7 +677,6 @@ static int p80211wext_siwencode(netdevice_t *dev,
 
  exit:
 
-	DBFEXIT;
 	return err;
 }
 
@@ -719,8 +685,6 @@ static int p80211wext_giwessid(netdevice_t *dev,
 			       struct iw_point *data, char *essid)
 {
 	wlandevice_t *wlandev = dev->ml_priv;
-
-	DBFENTER;
 
 	if (wlandev->ssid.len) {
 		data->length = wlandev->ssid.len;
@@ -736,7 +700,6 @@ static int p80211wext_giwessid(netdevice_t *dev,
 		data->flags = 0;
 	}
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -750,8 +713,6 @@ static int p80211wext_siwessid(netdevice_t *dev,
 	int result;
 	int err = 0;
 	int length = data->length;
-
-	DBFENTER;
 
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
@@ -789,7 +750,6 @@ static int p80211wext_siwessid(netdevice_t *dev,
 	}
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -801,8 +761,6 @@ static int p80211wext_siwcommit(netdevice_t *dev,
 	wlandevice_t *wlandev = dev->ml_priv;
 	int err = 0;
 
-	DBFENTER;
-
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
 		goto exit;
@@ -812,7 +770,6 @@ static int p80211wext_siwcommit(netdevice_t *dev,
 	err = p80211wext_autojoin(wlandev);
 
  exit:
- 	DBFEXIT;
 	return err;
 }
 
@@ -826,8 +783,6 @@ static int p80211wext_giwrate(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	msg.msgcode = DIDmsg_dot11req_mibget;
 	mibitem.did = DIDmib_p2_p2MAC_p2CurrentTxRate;
@@ -867,7 +822,6 @@ static int p80211wext_giwrate(netdevice_t *dev,
 		err = -EINVAL;
 	}
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -880,8 +834,6 @@ static int p80211wext_giwrts(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	msg.msgcode = DIDmsg_dot11req_mibget;
 	mibitem.did = DIDmib_dot11mac_dot11OperationTable_dot11RTSThreshold;
@@ -900,7 +852,6 @@ static int p80211wext_giwrts(netdevice_t *dev,
 	rts->fixed = 1;
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -914,8 +865,6 @@ static int p80211wext_siwrts(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
@@ -938,7 +887,6 @@ static int p80211wext_siwrts(netdevice_t *dev,
 	}
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -951,8 +899,6 @@ static int p80211wext_giwfrag(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	msg.msgcode = DIDmsg_dot11req_mibget;
 	mibitem.did = DIDmib_dot11mac_dot11OperationTable_dot11FragmentationThreshold;
@@ -971,7 +917,6 @@ static int p80211wext_giwfrag(netdevice_t *dev,
 	frag->fixed = 1;
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -984,8 +929,6 @@ static int p80211wext_siwfrag(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
@@ -1009,7 +952,6 @@ static int p80211wext_siwfrag(netdevice_t *dev,
 	}
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -1031,8 +973,6 @@ static int p80211wext_giwretry(netdevice_t *dev,
 	int result;
 	int err = 0;
 	u16 shortretry, longretry, lifetime;
-
-	DBFENTER;
 
 	msg.msgcode = DIDmsg_dot11req_mibget;
 	mibitem.did = DIDmib_dot11mac_dot11OperationTable_dot11ShortRetryLimit;
@@ -1095,7 +1035,6 @@ static int p80211wext_giwretry(netdevice_t *dev,
 	}
 
  exit:
-	DBFEXIT;
 	return err;
 
 }
@@ -1109,8 +1048,6 @@ static int p80211wext_siwretry(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	if (!wlan_wext_write) {
 		err = (-EOPNOTSUPP);
@@ -1164,7 +1101,6 @@ static int p80211wext_siwretry(netdevice_t *dev,
 	}
 
  exit:
-	DBFEXIT;
 	return err;
 
 }
@@ -1178,8 +1114,6 @@ static int p80211wext_siwtxpow(netdevice_t *dev,
         p80211msg_dot11req_mibset_t     msg;
         int result;
         int err = 0;
-
-        DBFENTER;
 
        if (!wlan_wext_write) {
                 err = (-EOPNOTSUPP);
@@ -1201,7 +1135,6 @@ static int p80211wext_siwtxpow(netdevice_t *dev,
         }
 
  exit:
-        DBFEXIT;
         return err;
 }
 
@@ -1214,8 +1147,6 @@ static int p80211wext_giwtxpow(netdevice_t *dev,
 	p80211msg_dot11req_mibset_t     msg;
 	int result;
 	int err = 0;
-
-	DBFENTER;
 
 	msg.msgcode = DIDmsg_dot11req_mibget;
 	mibitem.did = DIDmib_dot11phy_dot11PhyTxPowerTable_dot11CurrentTxPowerLevel;
@@ -1238,7 +1169,6 @@ static int p80211wext_giwtxpow(netdevice_t *dev,
 	rrq->value = mibitem.data;
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -1251,7 +1181,6 @@ static int p80211wext_siwspy(netdevice_t *dev,
         int number = srq->length;
         int i;
 
-	DBFENTER;
 
 	/* Copy the data from the input buffer */
 	memcpy(address, extra, sizeof(struct sockaddr)*number);
@@ -1273,7 +1202,6 @@ static int p80211wext_siwspy(netdevice_t *dev,
                 wlandev->spy_number = number;
         }
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -1288,8 +1216,6 @@ static int p80211wext_giwspy(netdevice_t *dev,
         struct iw_quality spy_stat[IW_MAX_SPY];
         int number;
         int i;
-
-	DBFENTER;
 
         number = wlandev->spy_number;
 
@@ -1312,7 +1238,6 @@ static int p80211wext_giwspy(netdevice_t *dev,
 	memcpy(extra, address, sizeof(struct sockaddr)*number);
 	memcpy(extra+sizeof(struct sockaddr)*number, spy_stat, sizeof(struct iw_quality)*number);
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -1348,10 +1273,8 @@ static int p80211wext_siwscan(netdevice_t *dev,
 	int err = 0;
 	int i = 0;
 
-	DBFENTER;
-
 	if (wlandev->macmode == WLAN_MACMODE_ESS_AP) {
-		WLAN_LOG_ERROR("Can't scan in AP mode\n");
+		printk(KERN_ERR "Can't scan in AP mode\n");
 		err = (-EOPNOTSUPP);
 		goto exit;
 	}
@@ -1378,7 +1301,6 @@ static int p80211wext_siwscan(netdevice_t *dev,
 		err = prism2_result2err (msg.resultcode.data);
 
  exit:
-	DBFEXIT;
 	return err;
 }
 
@@ -1406,7 +1328,7 @@ wext_translate_bss(struct iw_request_info *info, char *current_ev,
 		char essid[IW_ESSID_MAX_SIZE + 1];
 		int size;
 
-		size = wlan_min(IW_ESSID_MAX_SIZE, bss->ssid.data.len);
+		size = min_t(unsigned short, IW_ESSID_MAX_SIZE, bss->ssid.data.len);
 		memset(&essid, 0, sizeof (essid));
 		memcpy(&essid, bss->ssid.data.data, size);
 		WLAN_LOG_DEBUG(1, " essid size = %d\n", size);
@@ -1473,8 +1395,6 @@ static int p80211wext_giwscan(netdevice_t *dev,
 	int scan_good = 0;
 	char *current_ev = extra;
 
-	DBFENTER;
-
 	/* Since wireless tools doesn't really have a way of passing how
 	 * many scan results results there were back here, keep grabbing them
 	 * until we fail.
@@ -1501,7 +1421,6 @@ static int p80211wext_giwscan(netdevice_t *dev,
 	if (result && !scan_good)
 		err = prism2_result2err (msg.resultcode.data);
 
-	DBFEXIT;
 	return err;
 }
 
@@ -1597,8 +1516,6 @@ static int p80211wext_get_encodeext(struct net_device *dev,
 	int max_len;
 	int idx;
 
-	DBFENTER;
-
 	WLAN_LOG_DEBUG(1,"get_encode_ext flags[%d] alg[%d] keylen[%d]\n",ext->ext_flags,(int)ext->alg,(int)ext->key_len);
 
 
@@ -1633,8 +1550,6 @@ static int p80211wext_get_encodeext(struct net_device *dev,
 
 	encoding->flags |= IW_ENCODE_ENABLED;
 exit:
-	DBFEXIT;
-
 	return result;
 }
 
@@ -1800,14 +1715,12 @@ int p80211wext_event_associated(wlandevice_t *wlandev, int assoc)
 {
         union iwreq_data data;
 
-        DBFENTER;
-
         /* Send the association state first */
         data.ap_addr.sa_family = ARPHRD_ETHER;
         if (assoc) {
-                memcpy(data.ap_addr.sa_data, wlandev->bssid, WLAN_ADDR_LEN);
+                memcpy(data.ap_addr.sa_data, wlandev->bssid, ETH_ALEN);
         } else {
-                memset(data.ap_addr.sa_data, 0, WLAN_ADDR_LEN);
+                memset(data.ap_addr.sa_data, 0, ETH_ALEN);
         }
 
         if (wlan_wext_write)
@@ -1818,7 +1731,6 @@ int p80211wext_event_associated(wlandevice_t *wlandev, int assoc)
         // XXX send association data, like IEs, etc etc.
 
  done:
-        DBFEXIT;
         return 0;
 }
 

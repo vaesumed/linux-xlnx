@@ -63,6 +63,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
+#include <linux/byteorder/generic.h>
 
 #include <asm/byteorder.h>
 
@@ -82,25 +83,10 @@
 
 
 /*================================================================*/
-/* Local Constants */
-
-/*================================================================*/
-/* Local Macros */
-
-
-/*================================================================*/
-/* Local Types */
-
-
-/*================================================================*/
 /* Local Static Definitions */
 
 static u8	oui_rfc1042[] = {0x00, 0x00, 0x00};
 static u8	oui_8021h[] = {0x00, 0x00, 0xf8};
-
-/*================================================================*/
-/* Local Function Declarations */
-
 
 /*================================================================*/
 /* Function Definitions */
@@ -140,7 +126,6 @@ int skb_ether_to_p80211( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 	wlan_snap_t     *e_snap;
 	int foo;
 
-	DBFENTER;
 	memcpy(&e_hdr, skb->data, sizeof(e_hdr));
 
 	if (skb->len <= 0) {
@@ -193,29 +178,29 @@ int skb_ether_to_p80211( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 
 	/* Set up the 802.11 header */
 	/* It's a data frame */
-	fc = host2ieee16( WLAN_SET_FC_FTYPE(WLAN_FTYPE_DATA) |
+	fc = cpu_to_le16( WLAN_SET_FC_FTYPE(WLAN_FTYPE_DATA) |
 			  WLAN_SET_FC_FSTYPE(WLAN_FSTYPE_DATAONLY));
 
 	switch ( wlandev->macmode ) {
 	case WLAN_MACMODE_IBSS_STA:
-		memcpy(p80211_hdr->a3.a1, &e_hdr.daddr, WLAN_ADDR_LEN);
-		memcpy(p80211_hdr->a3.a2, wlandev->netdev->dev_addr, WLAN_ADDR_LEN);
-		memcpy(p80211_hdr->a3.a3, wlandev->bssid, WLAN_ADDR_LEN);
+		memcpy(p80211_hdr->a3.a1, &e_hdr.daddr, ETH_ALEN);
+		memcpy(p80211_hdr->a3.a2, wlandev->netdev->dev_addr, ETH_ALEN);
+		memcpy(p80211_hdr->a3.a3, wlandev->bssid, ETH_ALEN);
 		break;
 	case WLAN_MACMODE_ESS_STA:
-		fc |= host2ieee16(WLAN_SET_FC_TODS(1));
-		memcpy(p80211_hdr->a3.a1, wlandev->bssid, WLAN_ADDR_LEN);
-		memcpy(p80211_hdr->a3.a2, wlandev->netdev->dev_addr, WLAN_ADDR_LEN);
-		memcpy(p80211_hdr->a3.a3, &e_hdr.daddr, WLAN_ADDR_LEN);
+		fc |= cpu_to_le16(WLAN_SET_FC_TODS(1));
+		memcpy(p80211_hdr->a3.a1, wlandev->bssid, ETH_ALEN);
+		memcpy(p80211_hdr->a3.a2, wlandev->netdev->dev_addr, ETH_ALEN);
+		memcpy(p80211_hdr->a3.a3, &e_hdr.daddr, ETH_ALEN);
 		break;
 	case WLAN_MACMODE_ESS_AP:
-		fc |= host2ieee16(WLAN_SET_FC_FROMDS(1));
-		memcpy(p80211_hdr->a3.a1, &e_hdr.daddr, WLAN_ADDR_LEN);
-		memcpy(p80211_hdr->a3.a2, wlandev->bssid, WLAN_ADDR_LEN);
-		memcpy(p80211_hdr->a3.a3, &e_hdr.saddr, WLAN_ADDR_LEN);
+		fc |= cpu_to_le16(WLAN_SET_FC_FROMDS(1));
+		memcpy(p80211_hdr->a3.a1, &e_hdr.daddr, ETH_ALEN);
+		memcpy(p80211_hdr->a3.a2, wlandev->bssid, ETH_ALEN);
+		memcpy(p80211_hdr->a3.a3, &e_hdr.saddr, ETH_ALEN);
 		break;
 	default:
-		WLAN_LOG_ERROR("Error: Converting eth to wlan in unknown mode.\n");
+		printk(KERN_ERR "Error: Converting eth to wlan in unknown mode.\n");
 		return 1;
 		break;
 	}
@@ -225,20 +210,16 @@ int skb_ether_to_p80211( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 	if ((wlandev->hostwep & HOSTWEP_PRIVACYINVOKED) && (wlandev->hostwep & HOSTWEP_ENCRYPT)) {
 		// XXXX need to pick keynum other than default?
 
-#if 1
 		p80211_wep->data = kmalloc(skb->len, GFP_ATOMIC);
-#else
-		p80211_wep->data = skb->data;
-#endif
 
 		if ((foo = wep_encrypt(wlandev, skb->data, p80211_wep->data,
 				       skb->len,
 				(wlandev->hostwep & HOSTWEP_DEFAULTKEY_MASK),
 				p80211_wep->iv, p80211_wep->icv))) {
-			WLAN_LOG_WARNING("Host en-WEP failed, dropping frame (%d).\n", foo);
+			printk(KERN_WARNING "Host en-WEP failed, dropping frame (%d).\n", foo);
 			return 2;
 		}
-		fc |= host2ieee16(WLAN_SET_FC_ISWEP(1));
+		fc |= cpu_to_le16(WLAN_SET_FC_ISWEP(1));
 	}
 
 
@@ -248,7 +229,6 @@ int skb_ether_to_p80211( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 	p80211_hdr->a3.dur = 0;
 	p80211_hdr->a3.seq = 0;
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -308,15 +288,13 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 
 	int foo;
 
-	DBFENTER;
-
 	payload_length = skb->len - WLAN_HDR_A3_LEN - WLAN_CRC_LEN;
 	payload_offset = WLAN_HDR_A3_LEN;
 
 	w_hdr = (p80211_hdr_t *) skb->data;
 
         /* setup some vars for convenience */
-	fc = ieee2host16(w_hdr->a3.fc);
+	fc = le16_to_cpu(w_hdr->a3.fc);
 	if ( (WLAN_GET_FC_TODS(fc) == 0) && (WLAN_GET_FC_FROMDS(fc) == 0) ) {
 		memcpy(daddr, w_hdr->a3.a1, WLAN_ETHADDR_LEN);
 		memcpy(saddr, w_hdr->a3.a2, WLAN_ETHADDR_LEN);
@@ -329,7 +307,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 	} else {
 		payload_offset = WLAN_HDR_A4_LEN;
 		if (payload_length < WLAN_HDR_A4_LEN - WLAN_HDR_A3_LEN) {
-			WLAN_LOG_ERROR("A4 frame too short!\n");
+			printk(KERN_ERR "A4 frame too short!\n");
 			return 1;
 		}
 		payload_length -= (WLAN_HDR_A4_LEN - WLAN_HDR_A3_LEN);
@@ -340,7 +318,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 	/* perform de-wep if necessary.. */
 	if ((wlandev->hostwep & HOSTWEP_PRIVACYINVOKED) && WLAN_GET_FC_ISWEP(fc) && (wlandev->hostwep & HOSTWEP_DECRYPT)) {
 		if (payload_length <= 8) {
-			WLAN_LOG_ERROR("WEP frame too short (%u).\n",
+			printk(KERN_ERR "WEP frame too short (%u).\n",
 					skb->len);
 			return 1;
 		}
@@ -380,7 +358,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 		if ( payload_length > (netdev->mtu + WLAN_ETHHDR_LEN)) {
 			/* A bogus length ethfrm has been encap'd. */
 			/* Is someone trying an oflow attack? */
-			WLAN_LOG_ERROR("ENCAP frame too large (%d > %d)\n",
+			printk(KERN_ERR "ENCAP frame too large (%d > %d)\n",
 				payload_length, netdev->mtu + WLAN_ETHHDR_LEN);
 			return 1;
 		}
@@ -396,7 +374,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 		   (e_llc->ctl == 0x03) &&
 		   (((memcmp( e_snap->oui, oui_rfc1042, WLAN_IEEE_OUI_LEN)==0) &&
 		    (ethconv == WLAN_ETHCONV_8021h) &&
-		    (p80211_stt_findproto(ieee2host16(e_snap->type)))) ||
+		    (p80211_stt_findproto(le16_to_cpu(e_snap->type)))) ||
 		    (memcmp( e_snap->oui, oui_rfc1042, WLAN_IEEE_OUI_LEN)!=0)))
 	{
 		WLAN_LOG_DEBUG(3, "SNAP+RFC1042 len: %d\n", payload_length);
@@ -407,7 +385,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 		if ( payload_length > netdev->mtu ) {
 			/* A bogus length ethfrm has been sent. */
 			/* Is someone trying an oflow attack? */
-			WLAN_LOG_ERROR("SNAP frame too large (%d > %d)\n",
+			printk(KERN_ERR "SNAP frame too large (%d > %d)\n",
 				payload_length, netdev->mtu);
 			return 1;
 		}
@@ -437,7 +415,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 		    > netdev->mtu) {
 			/* A bogus length ethfrm has been sent. */
 			/* Is someone trying an oflow attack? */
-			WLAN_LOG_ERROR("DIXII frame too large (%ld > %d)\n",
+			printk(KERN_ERR "DIXII frame too large (%ld > %d)\n",
 					(long int) (payload_length - sizeof(wlan_llc_t) -
 						    sizeof(wlan_snap_t)),
 					netdev->mtu);
@@ -472,7 +450,7 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 		if ( payload_length > netdev->mtu ) {
 			/* A bogus length ethfrm has been sent. */
 			/* Is someone trying an oflow attack? */
-			WLAN_LOG_ERROR("OTHER frame too large (%d > %d)\n",
+			printk(KERN_ERR "OTHER frame too large (%d > %d)\n",
 				payload_length,
 				netdev->mtu);
 			return 1;
@@ -511,7 +489,6 @@ int skb_p80211_to_ether( wlandevice_t *wlandev, u32 ethconv, struct sk_buff *skb
 	/* Free the metadata */
 	p80211skb_rxmeta_detach(skb);
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -567,7 +544,6 @@ p80211skb_rxmeta_detach(struct sk_buff *skb)
 	p80211_rxmeta_t		*rxmeta;
 	p80211_frmmeta_t	*frmmeta;
 
-	DBFENTER;
 	/* Sanity checks */
 	if ( skb==NULL ) {			/* bad skb */
 		WLAN_LOG_DEBUG(1, "Called w/ null skb.\n");
@@ -590,7 +566,6 @@ p80211skb_rxmeta_detach(struct sk_buff *skb)
 	/* Clear skb->cb */
 	memset(skb->cb, 0, sizeof(skb->cb));
 exit:
-	DBFEXIT;
 	return;
 }
 
@@ -617,11 +592,9 @@ p80211skb_rxmeta_attach(struct wlandevice *wlandev, struct sk_buff *skb)
 	p80211_rxmeta_t		*rxmeta;
 	p80211_frmmeta_t	*frmmeta;
 
-	DBFENTER;
-
 	/* If these already have metadata, we error out! */
 	if (P80211SKB_RXMETA(skb) != NULL) {
-		WLAN_LOG_ERROR("%s: RXmeta already attached!\n",
+		printk(KERN_ERR "%s: RXmeta already attached!\n",
 				wlandev->name);
 		result = 0;
 		goto exit;
@@ -631,7 +604,7 @@ p80211skb_rxmeta_attach(struct wlandevice *wlandev, struct sk_buff *skb)
 	rxmeta = kmalloc(sizeof(p80211_rxmeta_t), GFP_ATOMIC);
 
 	if ( rxmeta == NULL ) {
-		WLAN_LOG_ERROR("%s: Failed to allocate rxmeta.\n",
+		printk(KERN_ERR "%s: Failed to allocate rxmeta.\n",
 				wlandev->name);
 		result = 1;
 		goto exit;
@@ -648,7 +621,6 @@ p80211skb_rxmeta_attach(struct wlandevice *wlandev, struct sk_buff *skb)
 	frmmeta->magic = P80211_FRMMETA_MAGIC;
 	frmmeta->rx = rxmeta;
 exit:
-	DBFEXIT;
 	return result;
 }
 
@@ -672,15 +644,14 @@ void
 p80211skb_free(struct wlandevice *wlandev, struct sk_buff *skb)
 {
 	p80211_frmmeta_t	*meta;
-	DBFENTER;
+
 	meta = P80211SKB_FRMMETA(skb);
 	if ( meta && meta->rx) {
 		p80211skb_rxmeta_detach(skb);
 	} else {
-		WLAN_LOG_ERROR("Freeing an skb (%p) w/ no frmmeta.\n", skb);
+		printk(KERN_ERR "Freeing an skb (%p) w/ no frmmeta.\n", skb);
 	}
 
 	dev_kfree_skb(skb);
-	DBFEXIT;
 	return;
 }
