@@ -1,0 +1,116 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.29-rc2
+	quilt series is empty
+$ git update-ref refs/heads/quilt/kernel-doc 1de9e8e70f5acc441550ca75433563d91b269bbe
+Importing ide based on 33bfad54b58cf05cfe6678c3ec9235d4bc8db4c2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 33bfad54b58cf05cfe6678c3ec9235d4bc8db4c2
+HEAD is now at 33bfad5 Allow opportunistic merging of VM_CAN_NONLINEAR areas
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-cd-fix-dma-for-non-bio-backed-requests.patch
+ide-struct-device-replace-bus_id-with-dev_name-dev_set_name.patch
+ide-fix-ide_register_port-failure-handling.patch
+ide-disable-and-unregister-devices-if-initialization-fails.patch
+ide-force-via-ide-legacy-interrupts-for-amigaone-boards.patch
+ide-add-cs5536-host-driver-v3.patch
+tx4939ide-typo-fix-and-minor-cleanup.patch
+icside-fix-pcb-version-6-support.patch
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+ide-remove-superfluous-check-from-ide_proc_port_register_devices.patch
+ide-acpi-no-need-to-zero-acpidata-for-devices.patch
+ide-acpi-init-acpi-handles-early-for-devices.patch
+ide-add-ide_for_each_present_dev-iterator.patch
+ide-sanitize-acpi-initialization.patch
+ide-acpi-cleanup-do_drive_get_gtf.patch
+ide-acpi-cleanup-do_drive_set_taskfiles.patch
+ide-acpi-remove-taskfile_load_raw.patch
+Context reduced to (2/2) to apply fragment at 21
+ide-remove-stale-comments-from-drive_is_ready.patch
+ide-unexport-ide_devset_execute.patch
+ide-move-drive_is_ready-to-ide-io-c.patch
+ide-move-ide_dma_timeout_retry-to-ide-dma-c.patch
+ide-remove-ide_do_drive_cmd.patch
+ide-factor-out-processing-of-special-commands-from-ide_special_rq.patch
+ide-move-ide_do_park_unpark-to-ide-park-c.patch
+ide-move-device-settings-code-to-ide-devsets-c.patch
+ide-move-xfer-mode-tuning-to-ide-xfer-mode-c.patch
+ide-move-ide_read_bcount_and_ireason-to-ide-atapi-c.patch
+ide-move-standard-io-code-to-ide-io-std-c.patch
+ide-fix-printk-levels-in-atapi_-reset_pollfunc.patch
+ide-fix-comments-in-ide_config_drive_speed.patch
+ide-checkpatch-pl-fixes-for-ide-iops-c.patch
+ide-move-error-handling-code-to-ide-eh-c-v2.patch
+mn10300-add-pci_get_legacy_ide_irq-to-asm-pci-h.patch
+amd74xx-use-ide_pci_is_in_compatibility_mode.patch
+ns87415-use-pci_get_legacy_ide_irq.patch
+ns87415-small-init_hwif-cleanup.patch
+trm290-small-init_hwif-cleanup.patch
+ide-handle-ide_hflag_-force-_legacy_irqs-in-ide_pci_init_-one-two-.patch
+ide-use-pci_get_legacy_ide_irq-in-ide_pci_init_-one-two-.patch
+ide-use-ide_pci_is_in_compatibility_mode-in-ide_pci_init_-one-two-.patch
+ide-remove-no-longer-needed-ide_hflag_-force-_legacy_irqs.patch
+amd74xx-remove-no-longer-needed-init_hwif-method.patch
+ide-remove-no-longer-needed-irq-fallback-code-from-hwif_init.patch
+ide-remove-no-longer-needed-irq-auto-probing-from-try_to_identify-v2.patch
+ide-remove-try_to_identify-wrapper.patch
+ide-fix-init_chipset-method-to-return-int.patch
+ide-remove-pciirq-argument-from-ide_pci_setup_ports.patch
+frv-remove-asm-ide-h.patch
+mn10300-remove-asm-ide-h.patch
+ide-fix-kmalloc-failure-handling-in-ide_driveid_update.patch
+ide-propagate-altstatus-workarounds-to-ide_driveid_update.patch
+ide-shorten-timeout-value-in-ide_driveid_update.patch
+ide-remove-broken-exabytenest-support.patch
+ide-classify-device-type-in-do_probe.patch
+ide-sanitize-select_mask-usage-in-ide_driveid_update.patch
+ide-clear-drive-irq-after-re-enabling-local-irqs-in-ide_driveid_update.patch
+ide-use-try_to_identify-in-ide_driveid_update.patch
+icside-use-struct-ide_port_info-also-for-pcb-version-5.patch
+ide_arm-use-struct-ide_port_info.patch
+ide-generic-use-struct-ide_port_info.patch
+ide-pnp-use-struct-ide_port_info.patch
+buddha-use-struct-ide_port_info.patch
+macide-use-struct-ide_port_info.patch
+ide-move-rqsize-init-from-init_irq-to-ide_init_port.patch
+ide-improve-debugging-scheme.patch
+ide-remove-ide_arch_intr-v2.patch
+ide-remove-ide_arch_lock.patch
+ide-make-m68k-host-drivers-use-ide_hflag_mmio.patch
+m68k-cleanup-asm-ide-h.patch
+ide-palm_bk3710-use-ioremap-instead-of-arch-specific-io_address.patch
+ide-cd-use-ide_drive_t-s-rq-in-cdrom_queue_request_sense.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 0b674ce...a9f2793 master     -> quilt/ide  (forced update)
+Importing rr based on v2.6.29-rc3-324-g45c82b5
+$ cd ../quilt-tmp
+$ git reset --hard 45c82b5a770be66845687a7d027c8b52946d59af
+HEAD is now at 45c82b5 Merge branch 'header-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:use_a_better_scheme_for_refcounting.patch
+virtio:pci_do_not_oops_on_config_change_if_driver_not_loaded.patch
+cpumask:partial-revert-powernow-k8.patch
+cpumask:sched_rt-pick_optimal_cpu-first_cpu-fix.patch
+virtio:net_allow_setting_the_mac_address_of_the_nic.patch
+virtio:fix_bad_ring_start_us_and_end_use_macros.patch
+virtio:fix-ring-macros-harder.patch
+cpumask:sched_rt-no-alloc.patch
+misc:kthread-dont-use-find_task_by_pid_ns.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 229d1b3...8e60d21 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series staging
