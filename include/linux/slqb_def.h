@@ -237,7 +237,7 @@ static __always_inline struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 
 	index = kmalloc_index(size);
 	if (unlikely(index == 0))
-		return NULL;
+		return ZERO_SIZE_PTR;
 
 	if (likely(!(flags & SLQB_DMA)))
 		return &kmalloc_caches[index];
