@@ -48,6 +48,8 @@
 #define UDF_SPARABLE_MAP15		0x1522U
 #define UDF_METADATA_MAP25		0x2511U
 
+#define UDF_INVALID_MODE		((mode_t)-1)
+
 #pragma pack(1) /* XXX(hch): Why?  This file just defines in-core structures */
 
 struct udf_meta_data {
@@ -123,6 +125,8 @@ struct udf_sb_info {
 	mode_t			s_umask;
 	gid_t			s_gid;
 	uid_t			s_uid;
+	mode_t			s_fmode;
+	mode_t			s_dmode;
 
 	/* Root Info */
 	struct timespec		s_record_time;
