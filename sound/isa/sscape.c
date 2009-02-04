@@ -89,9 +89,6 @@ MODULE_DEVICE_TABLE(pnp_card, sscape_pnpids);
 #endif
 
 
-#define MPU401_IO(i)     ((i) + 0)
-#define MIDI_DATA_IO(i)  ((i) + 0)
-#define MIDI_CTRL_IO(i)  ((i) + 1)
 #define HOST_CTRL_IO(i)  ((i) + 2)
 #define HOST_DATA_IO(i)  ((i) + 3)
 #define ODIE_ADDR_IO(i)  ((i) + 4)
@@ -128,9 +125,6 @@ enum GA_REG {
 
 #define DMA_8BIT  0x80
 
-
-#define AD1845_FREQ_SEL_MSB    0x16
-#define AD1845_FREQ_SEL_LSB    0x17
 
 enum card_type {
 	SSCAPE,
@@ -330,7 +324,7 @@ static int host_write_ctrl_unsafe(unsigned io_base, unsigned char data,
  */
 static inline int verify_mpu401(const struct snd_mpu401 * mpu)
 {
-	return ((inb(MIDI_CTRL_IO(mpu->port)) & 0xc0) == 0x80);
+	return ((inb(MPU401C(mpu)) & 0xc0) == 0x80);
 }
 
 /*
@@ -338,7 +332,7 @@ static inline int verify_mpu401(const struct snd_mpu401 * mpu)
  */
 static inline void initialise_mpu401(const struct snd_mpu401 * mpu)
 {
-	outb(0, MIDI_DATA_IO(mpu->port));
+	outb(0, MPU401D(mpu));
 }
 
 /*
@@ -396,11 +390,11 @@ static int sscape_wait_dma_unsafe(unsigned io_base, enum GA_REG reg, unsigned ti
  */
 static int obp_startup_ack(struct soundscape *s, unsigned timeout)
 {
-	while (timeout != 0) {
+	unsigned long end_time = jiffies + msecs_to_jiffies(timeout);
+
+	do {
 		unsigned long flags;
 		unsigned char x;
-
-		schedule_timeout_uninterruptible(1);
 
 		spin_lock_irqsave(&s->lock, flags);
 		x = inb(HOST_DATA_IO(s->io_base));
@@ -408,8 +402,8 @@ static int obp_startup_ack(struct soundscape *s, unsigned timeout)
 		if ((x & 0xfe) == 0xfe)
 			return 1;
 
-		--timeout;
-	} /* while */
+		msleep(10);
+	} while (time_before(jiffies, end_time));
 
 	return 0;
 }
@@ -423,11 +417,11 @@ static int obp_startup_ack(struct soundscape *s, unsigned timeout)
  */
 static int host_startup_ack(struct soundscape *s, unsigned timeout)
 {
-	while (timeout != 0) {
+	unsigned long end_time = jiffies + msecs_to_jiffies(timeout);
+
+	do {
 		unsigned long flags;
 		unsigned char x;
-
-		schedule_timeout_uninterruptible(1);
 
 		spin_lock_irqsave(&s->lock, flags);
 		x = inb(HOST_DATA_IO(s->io_base));
@@ -435,8 +429,8 @@ static int host_startup_ack(struct soundscape *s, unsigned timeout)
 		if (x == 0xfe)
 			return 1;
 
-		--timeout;
-	} /* while */
+		msleep(10);
+	} while (time_before(jiffies, end_time));
 
 	return 0;
 }
@@ -532,10 +526,10 @@ static int upload_dma_data(struct soundscape *s,
 	 * give it 5 seconds (max) ...
 	 */
 	ret = 0;
-	if (!obp_startup_ack(s, 5)) {
+	if (!obp_startup_ack(s, 5000)) {
 		snd_printk(KERN_ERR "sscape: No response from on-board processor after upload\n");
 		ret = -EAGAIN;
-	} else if (!host_startup_ack(s, 5)) {
+	} else if (!host_startup_ack(s, 5000)) {
 		snd_printk(KERN_ERR "sscape: SoundScape failed to initialise\n");
 		ret = -EAGAIN;
 	}
@@ -955,82 +949,6 @@ static int __devinit create_mpu401(struct snd_card *card, int devnum, unsigned l
 
 
 /*
- * Override for the CS4231 playback format function.
- * The AD1845 has much simpler format and rate selection.
- */
-static void ad1845_playback_format(struct snd_wss *chip,
-				   struct snd_pcm_hw_params *params,
-				   unsigned char format)
-{
-	unsigned long flags;
-	unsigned rate = params_rate(params);
-
-	/*
-	 * The AD1845 can't handle sample frequencies
-	 * outside of 4 kHZ to 50 kHZ
-	 */
-	if (rate > 50000)
-		rate = 50000;
-	else if (rate < 4000)
-		rate = 4000;
-
-	spin_lock_irqsave(&chip->reg_lock, flags);
-
-	/*
-	 * Program the AD1845 correctly for the playback stream.
-	 * Note that we do NOT need to toggle the MCE bit because
-	 * the PLAYBACK_ENABLE bit of the Interface Configuration
-	 * register is set.
-	 * 
-	 * NOTE: We seem to need to write to the MSB before the LSB
-	 *       to get the correct sample frequency.
-	 */
-	snd_wss_out(chip, CS4231_PLAYBK_FORMAT, (format & 0xf0));
-	snd_wss_out(chip, AD1845_FREQ_SEL_MSB, (unsigned char) (rate >> 8));
-	snd_wss_out(chip, AD1845_FREQ_SEL_LSB, (unsigned char) rate);
-
-	spin_unlock_irqrestore(&chip->reg_lock, flags);
-}
-
-/*
- * Override for the CS4231 capture format function. 
- * The AD1845 has much simpler format and rate selection.
- */
-static void ad1845_capture_format(struct snd_wss *chip,
-				  struct snd_pcm_hw_params *params,
-				  unsigned char format)
-{
-	unsigned long flags;
-	unsigned rate = params_rate(params);
-
-	/*
-	 * The AD1845 can't handle sample frequencies 
-	 * outside of 4 kHZ to 50 kHZ
-	 */
-	if (rate > 50000)
-		rate = 50000;
-	else if (rate < 4000)
-		rate = 4000;
-
-	spin_lock_irqsave(&chip->reg_lock, flags);
-
-	/*
-	 * Program the AD1845 correctly for the playback stream.
-	 * Note that we do NOT need to toggle the MCE bit because
-	 * the CAPTURE_ENABLE bit of the Interface Configuration
-	 * register is set.
-	 *
-	 * NOTE: We seem to need to write to the MSB before the LSB
-	 *       to get the correct sample frequency.
-	 */
-	snd_wss_out(chip, CS4231_REC_FORMAT, (format & 0xf0));
-	snd_wss_out(chip, AD1845_FREQ_SEL_MSB, (unsigned char) (rate >> 8));
-	snd_wss_out(chip, AD1845_FREQ_SEL_LSB, (unsigned char) rate);
-
-	spin_unlock_irqrestore(&chip->reg_lock, flags);
-}
-
-/*
  * Create an AD1845 PCM subdevice on the SoundScape. The AD1845
  * is very much like a CS4231, with a few extra bits. We will
  * try to support at least some of the extra bits by overriding
@@ -1055,11 +973,6 @@ static int __devinit create_ad1845(struct snd_card *card, unsigned port,
 		unsigned long flags;
 		struct snd_pcm *pcm;
 
-#define AD1845_FREQ_SEL_ENABLE  0x08
-
-#define AD1845_PWR_DOWN_CTRL   0x1b
-#define AD1845_CRYS_CLOCK_SEL  0x1d
-
 /*
  * It turns out that the PLAYBACK_ENABLE bit is set
  * by the lowlevel driver ...
@@ -1074,7 +987,6 @@ static int __devinit create_ad1845(struct snd_card *card, unsigned port,
  */
 
 		if (sscape->type != SSCAPE_VIVO) {
-			int val;
 			/*
 			 * The input clock frequency on the SoundScape must
 			 * be 14.31818 MHz, because we must set this register
@@ -1082,22 +994,10 @@ static int __devinit create_ad1845(struct snd_card *card, unsigned port,
 			 */
 			snd_wss_mce_up(chip);
 			spin_lock_irqsave(&chip->reg_lock, flags);
-			snd_wss_out(chip, AD1845_CRYS_CLOCK_SEL, 0x20);
+			snd_wss_out(chip, AD1845_CLOCK, 0x20);
 			spin_unlock_irqrestore(&chip->reg_lock, flags);
 			snd_wss_mce_down(chip);
 
-			/*
-			 * More custom configuration:
-			 * a) select "mode 2" and provide a current drive of 8mA
-			 * b) enable frequency selection (for capture/playback)
-			 */
-			spin_lock_irqsave(&chip->reg_lock, flags);
-			snd_wss_out(chip, CS4231_MISC_INFO,
-				    CS4231_MODE2 | 0x10);
-			val = snd_wss_in(chip, AD1845_PWR_DOWN_CTRL);
-			snd_wss_out(chip, AD1845_PWR_DOWN_CTRL,
-				    val | AD1845_FREQ_SEL_ENABLE);
-			spin_unlock_irqrestore(&chip->reg_lock, flags);
 		}
 
 		err = snd_wss_pcm(chip, 0, &pcm);
@@ -1113,11 +1013,13 @@ static int __devinit create_ad1845(struct snd_card *card, unsigned port,
 					    "for AD1845 chip\n");
 			goto _error;
 		}
-		err = snd_wss_timer(chip, 0, NULL);
-		if (err < 0) {
-			snd_printk(KERN_ERR "sscape: No timer device "
-					    "for AD1845 chip\n");
-			goto _error;
+		if (chip->hardware != WSS_HW_AD1848) {
+			err = snd_wss_timer(chip, 0, NULL);
+			if (err < 0) {
+				snd_printk(KERN_ERR "sscape: No timer device "
+						    "for AD1845 chip\n");
+				goto _error;
+			}
 		}
 
 		if (sscape->type != SSCAPE_VIVO) {
@@ -1128,8 +1030,6 @@ static int __devinit create_ad1845(struct snd_card *card, unsigned port,
 						    "MIDI mixer control\n");
 				goto _error;
 			}
-			chip->set_playback_format = ad1845_playback_format;
-			chip->set_capture_format = ad1845_capture_format;
 		}
 
 		strcpy(card->driver, "SoundScape");
@@ -1288,12 +1188,11 @@ static int __devinit create_sscape(int dev, struct snd_card *card)
 	}
 #define MIDI_DEVNUM  0
 	if (sscape->type != SSCAPE_VIVO) {
-		err = create_mpu401(card, MIDI_DEVNUM,
-				    MPU401_IO(xport), mpu_irq[dev]);
+		err = create_mpu401(card, MIDI_DEVNUM, xport, mpu_irq[dev]);
 		if (err < 0) {
 			printk(KERN_ERR "sscape: Failed to create "
 					"MPU-401 device at 0x%x\n",
-					MPU401_IO(xport));
+					xport);
 			goto _release_dma;
 		}
 
@@ -1357,10 +1256,10 @@ static int __devinit snd_sscape_probe(struct device *pdev, unsigned int dev)
 	struct soundscape *sscape;
 	int ret;
 
-	card = snd_card_new(index[dev], id[dev], THIS_MODULE,
-			    sizeof(struct soundscape));
-	if (!card)
-		return -ENOMEM;
+	ret = snd_card_create(index[dev], id[dev], THIS_MODULE,
+			      sizeof(struct soundscape), &card);
+	if (ret < 0)
+		return ret;
 
 	sscape = get_card_soundscape(card);
 	sscape->type = SSCAPE;
@@ -1462,10 +1361,10 @@ static int __devinit sscape_pnp_detect(struct pnp_card_link *pcard,
 	 * Create a new ALSA sound card entry, in anticipation
 	 * of detecting our hardware ...
 	 */
-	card = snd_card_new(index[idx], id[idx], THIS_MODULE,
-			    sizeof(struct soundscape));
-	if (!card)
-		return -ENOMEM;
+	ret = snd_card_create(index[idx], id[idx], THIS_MODULE,
+			      sizeof(struct soundscape), &card);
+	if (ret < 0)
+		return ret;
 
 	sscape = get_card_soundscape(card);
 
