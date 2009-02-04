@@ -1,0 +1,28 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.29-rc3-430-gb1792e3
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard b1792e367053968f2ddb48bc911d314143ce6242
+HEAD is now at b1792e3 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jbarnes/pci-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+cpumask:partial-revert-powernow-k8.patch
+cpumask:fix-cpu_online_map-etc-assignment.patch
+virtio:net_allow_setting_the_mac_address_of_the_nic.patch
+virtio:fix_bad_ring_start_us_and_end_use_macros.patch
+virtio:fix-ring-macros-harder.patch
+cpumask:sched_rt-no-alloc.patch
+misc:kthread-dont-use-find_task_by_pid_ns.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 8e60d21...8313ed9 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series staging
