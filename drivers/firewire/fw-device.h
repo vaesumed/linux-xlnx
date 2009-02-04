@@ -23,6 +23,7 @@
 #include <linux/cdev.h>
 #include <linux/idr.h>
 #include <linux/rwsem.h>
+#include <linux/mutex.h>
 #include <asm/atomic.h>
 
 enum fw_device_state {
@@ -64,7 +65,10 @@ struct fw_device {
 	bool cmc;
 	struct fw_card *card;
 	struct device device;
+
+	struct mutex client_list_mutex;
 	struct list_head client_list;
+
 	u32 *config_rom;
 	size_t config_rom_length;
 	int config_rom_retries;
@@ -176,8 +180,7 @@ struct fw_driver {
 	const struct fw_device_id *id_table;
 };
 
-static inline struct fw_driver *
-fw_driver(struct device_driver *drv)
+static inline struct fw_driver *fw_driver(struct device_driver *drv)
 {
 	return container_of(drv, struct fw_driver, driver);
 }
