@@ -1008,8 +1008,13 @@ static int vidioc_g_ctrl(struct file *file, void *priv,
 
 	if (dev->board.has_msp34xx)
 		em28xx_i2c_call_clients(dev, VIDIOC_G_CTRL, ctrl);
-	else
+	else {
 		rc = em28xx_get_ctrl(dev, ctrl);
+		if (rc < 0) {
+			em28xx_i2c_call_clients(dev, VIDIOC_G_CTRL, ctrl);
+			rc = 0;
+		}
+	}
 
 	mutex_unlock(&dev->lock);
 	return rc;
@@ -1345,7 +1350,7 @@ static int vidioc_querycap(struct file *file, void  *priv,
 
 	strlcpy(cap->driver, "em28xx", sizeof(cap->driver));
 	strlcpy(cap->card, em28xx_boards[dev->model].name, sizeof(cap->card));
-	strlcpy(cap->bus_info, dev_name(&dev->udev->dev), sizeof(cap->bus_info));
+	usb_make_path(dev->udev, cap->bus_info, sizeof(cap->bus_info));
 
 	cap->version = EM28XX_VERSION_CODE;
 
@@ -1496,7 +1501,7 @@ static int radio_querycap(struct file *file, void  *priv,
 
 	strlcpy(cap->driver, "em28xx", sizeof(cap->driver));
 	strlcpy(cap->card, em28xx_boards[dev->model].name, sizeof(cap->card));
-	strlcpy(cap->bus_info, dev_name(&dev->udev->dev), sizeof(cap->bus_info));
+	usb_make_path(dev->udev, cap->bus_info, sizeof(cap->bus_info));
 
 	cap->version = EM28XX_VERSION_CODE;
 	cap->capabilities = V4L2_CAP_TUNER;
