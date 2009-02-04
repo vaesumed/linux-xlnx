@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel 10 Gigabit PCI Express Linux driver
-  Copyright(c) 1999 - 2008 Intel Corporation.
+  Copyright(c) 1999 - 2009 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -34,6 +34,8 @@
 #define IXGBE_INTEL_VENDOR_ID   0x8086
 
 /* Device IDs */
+#define IXGBE_DEV_ID_82598               0x10B6
+#define IXGBE_DEV_ID_82598_BX            0x1508
 #define IXGBE_DEV_ID_82598AF_DUAL_PORT   0x10C6
 #define IXGBE_DEV_ID_82598AF_SINGLE_PORT 0x10C7
 #define IXGBE_DEV_ID_82598EB_SFP_LOM     0x10DB
@@ -819,6 +821,10 @@
 #define IXGBE_FW_PTR            0x0F
 #define IXGBE_PBANUM0_PTR       0x15
 #define IXGBE_PBANUM1_PTR       0x16
+#define IXGBE_PCIE_MSIX_82598_CAPS  0x62
+
+/* MSI-X capability fields masks */
+#define IXGBE_PCIE_MSIX_TBL_SZ_MASK     0x7FF
 
 /* Legacy EEPROM word offsets */
 #define IXGBE_ISCSI_BOOT_CAPS           0x0033
@@ -1449,6 +1455,7 @@ struct ixgbe_mac_info {
 	u32                             num_rar_entries;
 	u32                             max_tx_queues;
 	u32                             max_rx_queues;
+	u32                             max_msix_vectors;
 	u32                             link_attach_type;
 	u32                             link_mode_select;
 	bool                            link_settings_loaded;

@@ -47,7 +47,7 @@
 
 #include "e1000.h"
 
-#define DRV_VERSION "0.3.3.3-k6"
+#define DRV_VERSION "0.3.3.4-k2"
 char e1000e_driver_name[] = "e1000e";
 const char e1000e_driver_version[] = DRV_VERSION;
 
@@ -99,8 +99,8 @@ static void e1000_receive_skb(struct e1000_adapter *adapter,
 	skb->protocol = eth_type_trans(skb, netdev);
 
 	if (adapter->vlgrp && (status & E1000_RXD_STAT_VP))
-		vlan_hwaccel_receive_skb(skb, adapter->vlgrp,
-					 le16_to_cpu(vlan));
+		vlan_gro_receive(&adapter->napi, adapter->vlgrp,
+				 le16_to_cpu(vlan), skb);
 	else
 		napi_gro_receive(&adapter->napi, skb);
 }
@@ -1179,12 +1179,12 @@ static irqreturn_t e1000_intr_msi(int irq, void *data)
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
 	}
 
-	if (netif_rx_schedule_prep(&adapter->napi)) {
+	if (napi_schedule_prep(&adapter->napi)) {
 		adapter->total_tx_bytes = 0;
 		adapter->total_tx_packets = 0;
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
-		__netif_rx_schedule(&adapter->napi);
+		__napi_schedule(&adapter->napi);
 	}
 
 	return IRQ_HANDLED;
@@ -1246,12 +1246,12 @@ static irqreturn_t e1000_intr(int irq, void *data)
 			mod_timer(&adapter->watchdog_timer, jiffies + 1);
 	}
 
-	if (netif_rx_schedule_prep(&adapter->napi)) {
+	if (napi_schedule_prep(&adapter->napi)) {
 		adapter->total_tx_bytes = 0;
 		adapter->total_tx_packets = 0;
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
-		__netif_rx_schedule(&adapter->napi);
+		__napi_schedule(&adapter->napi);
 	}
 
 	return IRQ_HANDLED;
@@ -1320,10 +1320,10 @@ static irqreturn_t e1000_intr_msix_rx(int irq, void *data)
 		adapter->rx_ring->set_itr = 0;
 	}
 
-	if (netif_rx_schedule_prep(&adapter->napi)) {
+	if (napi_schedule_prep(&adapter->napi)) {
 		adapter->total_rx_bytes = 0;
 		adapter->total_rx_packets = 0;
-		__netif_rx_schedule(&adapter->napi);
+		__napi_schedule(&adapter->napi);
 	}
 	return IRQ_HANDLED;
 }
@@ -1698,7 +1698,6 @@ int e1000e_setup_tx_resources(struct e1000_adapter *adapter)
 
 	tx_ring->next_to_use = 0;
 	tx_ring->next_to_clean = 0;
-	spin_lock_init(&adapter->tx_queue_lock);
 
 	return 0;
 err:
@@ -2007,16 +2006,7 @@ static int e1000_clean(struct napi_struct *napi, int budget)
 	    !(adapter->rx_ring->ims_val & adapter->tx_ring->ims_val))
 		goto clean_rx;
 
-	/*
-	 * e1000_clean is called per-cpu.  This lock protects
-	 * tx_ring from being cleaned by multiple cpus
-	 * simultaneously.  A failure obtaining the lock means
-	 * tx_ring is currently being cleaned anyway.
-	 */
-	if (spin_trylock(&adapter->tx_queue_lock)) {
-		tx_cleaned = e1000_clean_tx_irq(adapter);
-		spin_unlock(&adapter->tx_queue_lock);
-	}
+	tx_cleaned = e1000_clean_tx_irq(adapter);
 
 clean_rx:
 	adapter->clean_rx(adapter, &work_done, budget);
@@ -2028,7 +2018,7 @@ clean_rx:
 	if (work_done < budget) {
 		if (adapter->itr_setting & 3)
 			e1000_set_itr(adapter);
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		if (adapter->msix_entries)
 			ew32(IMS, adapter->rx_ring->ims_val);
 		else
@@ -2922,8 +2912,6 @@ static int __devinit e1000_sw_init(struct e1000_adapter *adapter)
 	if (e1000_alloc_queues(adapter))
 		return -ENOMEM;
 
-	spin_lock_init(&adapter->tx_queue_lock);
-
 	/* Explicitly disable IRQ since the NIC can be in any state. */
 	e1000_irq_disable(adapter);
 
@@ -3782,11 +3770,11 @@ static bool e1000_tx_csum(struct e1000_adapter *adapter, struct sk_buff *skb)
 		return 0;
 
 	switch (skb->protocol) {
-	case __constant_htons(ETH_P_IP):
+	case cpu_to_be16(ETH_P_IP):
 		if (ip_hdr(skb)->protocol == IPPROTO_TCP)
 			cmd_len |= E1000_TXD_CMD_TCP;
 		break;
-	case __constant_htons(ETH_P_IPV6):
+	case cpu_to_be16(ETH_P_IPV6):
 		/* XXX not handling all IPV6 headers */
 		if (ipv6_hdr(skb)->nexthdr == IPPROTO_TCP)
 			cmd_len |= E1000_TXD_CMD_TCP;
@@ -4069,7 +4057,6 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	unsigned int max_txd_pwr = E1000_MAX_TXD_PWR;
 	unsigned int tx_flags = 0;
 	unsigned int len = skb->len - skb->data_len;
-	unsigned long irq_flags;
 	unsigned int nr_frags;
 	unsigned int mss;
 	int count = 0;
@@ -4138,18 +4125,12 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	if (adapter->hw.mac.tx_pkt_filtering)
 		e1000_transfer_dhcp_info(adapter, skb);
 
-	if (!spin_trylock_irqsave(&adapter->tx_queue_lock, irq_flags))
-		/* Collision - tell upper layer to requeue */
-		return NETDEV_TX_LOCKED;
-
 	/*
 	 * need: count + 2 desc gap to keep tail from touching
 	 * head, otherwise try next time
 	 */
-	if (e1000_maybe_stop_tx(netdev, count + 2)) {
-		spin_unlock_irqrestore(&adapter->tx_queue_lock, irq_flags);
+	if (e1000_maybe_stop_tx(netdev, count + 2))
 		return NETDEV_TX_BUSY;
-	}
 
 	if (adapter->vlgrp && vlan_tx_tag_present(skb)) {
 		tx_flags |= E1000_TX_FLAGS_VLAN;
@@ -4161,7 +4142,6 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	tso = e1000_tso(adapter, skb);
 	if (tso < 0) {
 		dev_kfree_skb_any(skb);
-		spin_unlock_irqrestore(&adapter->tx_queue_lock, irq_flags);
 		return NETDEV_TX_OK;
 	}
 
@@ -4182,7 +4162,6 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	if (count < 0) {
 		/* handle pci_map_single() error in e1000_tx_map */
 		dev_kfree_skb_any(skb);
-		spin_unlock_irqrestore(&adapter->tx_queue_lock, irq_flags);
 		return NETDEV_TX_OK;
 	}
 
@@ -4193,7 +4172,6 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	/* Make sure there is space in the ring for the next send. */
 	e1000_maybe_stop_tx(netdev, MAX_SKB_FRAGS + 2);
 
-	spin_unlock_irqrestore(&adapter->tx_queue_lock, irq_flags);
 	return NETDEV_TX_OK;
 }
 
@@ -4921,12 +4899,6 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 
 	if (pci_using_dac)
 		netdev->features |= NETIF_F_HIGHDMA;
-
-	/*
-	 * We should not be using LLTX anymore, but we are still Tx faster with
-	 * it.
-	 */
-	netdev->features |= NETIF_F_LLTX;
 
 	if (e1000e_enable_mng_pass_thru(&adapter->hw))
 		adapter->flags |= FLAG_MNG_PT_ENABLED;

@@ -1333,14 +1333,39 @@ static void sock_spd_release(struct splice_pipe_desc *spd, unsigned int i)
 	put_page(spd->pages[i]);
 }
 
-static inline struct page *linear_to_page(struct page *page, unsigned int len,
-					  unsigned int offset)
+static inline struct page *linear_to_page(struct page *page, unsigned int *len,
+					  unsigned int *offset,
+					  struct sk_buff *skb)
 {
-	struct page *p = alloc_pages(GFP_KERNEL, 0);
+	struct sock *sk = skb->sk;
+	struct page *p = sk->sk_sndmsg_page;
+	unsigned int off;
 
-	if (!p)
-		return NULL;
-	memcpy(page_address(p) + offset, page_address(page) + offset, len);
+	if (!p) {
+new_page:
+		p = sk->sk_sndmsg_page = alloc_pages(sk->sk_allocation, 0);
+		if (!p)
+			return NULL;
+
+		off = sk->sk_sndmsg_off = 0;
+		/* hold one ref to this page until it's full */
+	} else {
+		unsigned int mlen;
+
+		off = sk->sk_sndmsg_off;
+		mlen = PAGE_SIZE - off;
+		if (mlen < 64 && mlen < *len) {
+			put_page(p);
+			goto new_page;
+		}
+
+		*len = min_t(unsigned int, *len, mlen);
+	}
+
+	memcpy(page_address(p) + off, page_address(page) + *offset, *len);
+	sk->sk_sndmsg_off += *len;
+	*offset = off;
+	get_page(p);
 
 	return p;
 }
@@ -1349,21 +1374,21 @@ static inline struct page *linear_to_page(struct page *page, unsigned int len,
  * Fill page/offset/length into spd, if it can hold more pages.
  */
 static inline int spd_fill_page(struct splice_pipe_desc *spd, struct page *page,
-				unsigned int len, unsigned int offset,
+				unsigned int *len, unsigned int offset,
 				struct sk_buff *skb, int linear)
 {
 	if (unlikely(spd->nr_pages == PIPE_BUFFERS))
 		return 1;
 
 	if (linear) {
-		page = linear_to_page(page, len, offset);
+		page = linear_to_page(page, len, &offset, skb);
 		if (!page)
 			return 1;
 	} else
 		get_page(page);
 
 	spd->pages[spd->nr_pages] = page;
-	spd->partial[spd->nr_pages].len = len;
+	spd->partial[spd->nr_pages].len = *len;
 	spd->partial[spd->nr_pages].offset = offset;
 	spd->nr_pages++;
 
@@ -1405,7 +1430,7 @@ static inline int __splice_segment(struct page *page, unsigned int poff,
 		/* the linear region may spread across several pages  */
 		flen = min_t(unsigned int, flen, PAGE_SIZE - poff);
 
-		if (spd_fill_page(spd, page, flen, poff, skb, linear))
+		if (spd_fill_page(spd, page, &flen, poff, skb, linear))
 			return 1;
 
 		__segment_seek(&page, &poff, &plen, flen);
@@ -2585,17 +2610,23 @@ int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 	struct sk_buff *p = *head;
 	struct sk_buff *nskb;
 	unsigned int headroom;
-	unsigned int hlen = p->data - skb_mac_header(p);
-	unsigned int len = skb->len;
+	unsigned int len = skb_gro_len(skb);
 
-	if (hlen + p->len + len >= 65536)
+	if (p->len + len >= 65536)
 		return -E2BIG;
 
 	if (skb_shinfo(p)->frag_list)
 		goto merge;
-	else if (!skb_headlen(p) && !skb_headlen(skb) &&
-		 skb_shinfo(p)->nr_frags + skb_shinfo(skb)->nr_frags <
-		 MAX_SKB_FRAGS) {
+	else if (skb_headlen(skb) <= skb_gro_offset(skb)) {
+		if (skb_shinfo(p)->nr_frags + skb_shinfo(skb)->nr_frags >
+		    MAX_SKB_FRAGS)
+			return -E2BIG;
+
+		skb_shinfo(skb)->frags[0].page_offset +=
+			skb_gro_offset(skb) - skb_headlen(skb);
+		skb_shinfo(skb)->frags[0].size -=
+			skb_gro_offset(skb) - skb_headlen(skb);
+
 		memcpy(skb_shinfo(p)->frags + skb_shinfo(p)->nr_frags,
 		       skb_shinfo(skb)->frags,
 		       skb_shinfo(skb)->nr_frags * sizeof(skb_frag_t));
@@ -2612,7 +2643,7 @@ int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 	}
 
 	headroom = skb_headroom(p);
-	nskb = netdev_alloc_skb(p->dev, headroom);
+	nskb = netdev_alloc_skb(p->dev, headroom + skb_gro_offset(p));
 	if (unlikely(!nskb))
 		return -ENOMEM;
 
@@ -2620,12 +2651,15 @@ int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 	nskb->mac_len = p->mac_len;
 
 	skb_reserve(nskb, headroom);
+	__skb_put(nskb, skb_gro_offset(p));
 
-	skb_set_mac_header(nskb, -hlen);
+	skb_set_mac_header(nskb, skb_mac_header(p) - p->data);
 	skb_set_network_header(nskb, skb_network_offset(p));
 	skb_set_transport_header(nskb, skb_transport_offset(p));
 
-	memcpy(skb_mac_header(nskb), skb_mac_header(p), hlen);
+	__skb_pull(p, skb_gro_offset(p));
+	memcpy(skb_mac_header(nskb), skb_mac_header(p),
+	       p->data - skb_mac_header(p));
 
 	*NAPI_GRO_CB(nskb) = *NAPI_GRO_CB(p);
 	skb_shinfo(nskb)->frag_list = p;
