@@ -2172,12 +2172,12 @@ error_nodes:
 error_node_array:
 #ifdef CONFIG_NUMA
 	kmem_cache_dyn_array_free(s->node_slab);
-#endif
 error_cpu_array:
+#endif
 #ifdef CONFIG_SMP
 	kmem_cache_dyn_array_free(s->cpu_slab);
-#endif
 error_lock:
+#endif
 	up_write(&slqb_lock);
 error:
 	if (flags & SLAB_PANIC)
