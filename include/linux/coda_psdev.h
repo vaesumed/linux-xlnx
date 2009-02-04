@@ -87,6 +87,8 @@ struct upc_req {
  * Statistics
  */
 
+#ifdef __KERNEL__
 extern struct venus_comm coda_comms[];
+#endif /* __KERNEL__ */
 
 #endif

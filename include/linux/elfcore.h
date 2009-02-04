@@ -64,6 +64,7 @@ struct elf_prstatus
 	long	pr_instr;		/* Current instruction */
 #endif
 	elf_gregset_t pr_reg;	/* GP registers */
+#ifdef __KERNEL__
 #ifdef CONFIG_BINFMT_ELF_FDPIC
 	/* When using FDPIC, the loadmap addresses need to be communicated
 	 * to GDB in order for GDB to do the necessary relocations.  The
@@ -74,6 +75,7 @@ struct elf_prstatus
 	unsigned long pr_exec_fdpic_loadmap;
 	unsigned long pr_interp_fdpic_loadmap;
 #endif
+#endif /* __KERNEL__ */
 	int pr_fpvalid;		/* True if math co-processor being used.  */
 };
 

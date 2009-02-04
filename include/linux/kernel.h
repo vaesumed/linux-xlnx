@@ -528,6 +528,7 @@ struct sysinfo {
 /* Trap pasters of __FUNCTION__ at compile-time */
 #define __FUNCTION__ (__func__)
 
+#ifdef __KERNEL__
 /* This helps us to avoid #ifdef CONFIG_NUMA */
 #ifdef CONFIG_NUMA
 #define NUMA_BUILD 1
@@ -539,5 +540,5 @@ struct sysinfo {
 #ifdef CONFIG_FTRACE_MCOUNT_RECORD
 # define REBUILD_DUE_TO_FTRACE_MCOUNT_RECORD
 #endif
-
+#endif /* __KERNEL__ */
 #endif

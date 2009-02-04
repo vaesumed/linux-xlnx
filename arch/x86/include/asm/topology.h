@@ -83,7 +83,8 @@ extern cpumask_t *node_to_cpumask_map;
 DECLARE_EARLY_PER_CPU(int, x86_cpu_to_node_map);
 
 /* Returns the number of the current Node. */
-#define numa_node_id()		read_pda(nodenumber)
+DECLARE_PER_CPU(int, node_number);
+#define numa_node_id()		percpu_read(node_number)
 
 #ifdef CONFIG_DEBUG_PER_CPU_MAPS
 extern int cpu_to_node(int cpu);
@@ -102,10 +103,7 @@ static inline int cpu_to_node(int cpu)
 /* Same function but used if called before per_cpu areas are setup */
 static inline int early_cpu_to_node(int cpu)
 {
-	if (early_per_cpu_ptr(x86_cpu_to_node_map))
-		return early_per_cpu_ptr(x86_cpu_to_node_map)[cpu];
-
-	return per_cpu(x86_cpu_to_node_map, cpu);
+	return early_per_cpu(x86_cpu_to_node_map, cpu);
 }
 
 /* Returns a pointer to the cpumask of CPUs on Node 'node'. */
@@ -192,9 +190,20 @@ extern int __node_distance(int, int);
 
 #else /* !CONFIG_NUMA */
 
-#define numa_node_id()		0
-#define	cpu_to_node(cpu)	0
-#define	early_cpu_to_node(cpu)	0
+static inline int numa_node_id(void)
+{
+	return 0;
+}
+
+static inline int cpu_to_node(int cpu)
+{
+	return 0;
+}
+
+static inline int early_cpu_to_node(int cpu)
+{
+	return 0;
+}
 
 static inline const cpumask_t *cpumask_of_node(int node)
 {
