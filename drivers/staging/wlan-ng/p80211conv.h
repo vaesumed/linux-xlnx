@@ -60,11 +60,8 @@
 #define WLAN_IEEE_OUI_LEN	3
 
 #define WLAN_ETHCONV_ENCAP	1
-#define WLAN_ETHCONV_RFC1042	2
 #define WLAN_ETHCONV_8021h	3
 
-#define WLAN_MIN_ETHFRM_LEN	60
-#define WLAN_MAX_ETHFRM_LEN	1514
 #define WLAN_ETHHDR_LEN		14
 
 #define P80211CAPTURE_VERSION	0x80211001
@@ -148,7 +145,7 @@ typedef struct wlan_ethhdr
 	u8	daddr[WLAN_ETHADDR_LEN];
 	u8	saddr[WLAN_ETHADDR_LEN];
 	u16	type;
-} __WLAN_ATTRIB_PACK__ wlan_ethhdr_t;
+} __attribute__((packed)) wlan_ethhdr_t;
 
 /* local llc header type */
 typedef struct wlan_llc
@@ -156,20 +153,17 @@ typedef struct wlan_llc
 	u8	dsap;
 	u8	ssap;
 	u8	ctl;
-} __WLAN_ATTRIB_PACK__ wlan_llc_t;
+} __attribute__((packed)) wlan_llc_t;
 
 /* local snap header type */
 typedef struct wlan_snap
 {
 	u8	oui[WLAN_IEEE_OUI_LEN];
 	u16	type;
-} __WLAN_ATTRIB_PACK__ wlan_snap_t;
+} __attribute__((packed)) wlan_snap_t;
 
 /* Circular include trick */
 struct wlandevice;
-
-/*================================================================*/
-/* Externs */
 
 /*================================================================*/
 /*Function Declarations */
@@ -181,6 +175,5 @@ int skb_ether_to_p80211( struct wlandevice *wlandev, u32 ethconv,
 			 p80211_metawep_t *p80211_wep );
 
 int p80211_stt_findproto(u16 proto);
-int p80211_stt_addproto(u16 proto);
 
 #endif
