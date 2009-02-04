@@ -431,7 +431,7 @@ musb_advance_schedule(struct musb *musb, struct urb *urb,
 	else
 		qh = musb_giveback(qh, urb, urb->status);
 
-	if (qh && qh->is_ready && !list_empty(&qh->hep->urb_list)) {
+	if (qh != NULL && qh->is_ready) {
 		DBG(4, "... next ep%d %cX urb %p\n",
 				hw_ep->epnum, is_in ? 'R' : 'T',
 				next_urb(qh));
@@ -2071,7 +2071,19 @@ static int musb_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 		ret = 0;
 		qh->is_ready = 0;
 		__musb_giveback(musb, urb, 0);
-		qh->is_ready = ready;
+
+		/*
+		 * If the URB list has emptied, it's time to kill this qh.
+		 * However, if this was called from the driver callback,
+		 * we don't really want to do it now, deferring it until
+		 * we return to musb_giveback(), or bad things will happen...
+		 */
+		if (ready && list_empty(&qh->hep->urb_list)) {
+			qh->hep->hcpriv = NULL;
+			list_del(&qh->ring);
+			kfree(qh);
+		} else
+			qh->is_ready = ready;
 	} else
 		ret = musb_cleanup_urb(urb, qh, urb->pipe & USB_DIR_IN);
 done:
