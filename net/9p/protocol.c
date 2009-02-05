@@ -164,7 +164,7 @@ p9pdu_vreadf(struct p9_fcall *pdu, int optional, const char *fmt, va_list ap)
 					errcode = -EFAULT;
 					break;
 				}
-				*val = cpu_to_le16(*val);
+				*val = le16_to_cpu(*val);
 			}
 			break;
 		case 'd':{
@@ -173,7 +173,7 @@ p9pdu_vreadf(struct p9_fcall *pdu, int optional, const char *fmt, va_list ap)
 					errcode = -EFAULT;
 					break;
 				}
-				*val = cpu_to_le32(*val);
+				*val = le32_to_cpu(*val);
 			}
 			break;
 		case 'q':{
@@ -182,7 +182,7 @@ p9pdu_vreadf(struct p9_fcall *pdu, int optional, const char *fmt, va_list ap)
 					errcode = -EFAULT;
 					break;
 				}
-				*val = cpu_to_le64(*val);
+				*val = le64_to_cpu(*val);
 			}
 			break;
 		case 's':{
@@ -362,19 +362,19 @@ p9pdu_vwritef(struct p9_fcall *pdu, int optional, const char *fmt, va_list ap)
 			}
 			break;
 		case 'w':{
-				int16_t val = va_arg(ap, int);
+				int16_t val = cpu_to_le16(va_arg(ap, int));
 				if (pdu_write(pdu, &val, sizeof(val)))
 					errcode = -EFAULT;
 			}
 			break;
 		case 'd':{
-				int32_t val = va_arg(ap, int32_t);
+				int32_t val = cpu_to_le32(va_arg(ap, int32_t));
 				if (pdu_write(pdu, &val, sizeof(val)))
 					errcode = -EFAULT;
 			}
 			break;
 		case 'q':{
-				int64_t val = va_arg(ap, int64_t);
+				int64_t val = cpu_to_le64(va_arg(ap, int64_t));
 				if (pdu_write(pdu, &val, sizeof(val)))
 					errcode = -EFAULT;
 			}
