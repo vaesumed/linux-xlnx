@@ -54,8 +54,20 @@ static unsigned int def_sampling_rate;
 			(MIN_SAMPLING_RATE_RATIO * jiffies_to_usecs(10))
 #define MIN_SAMPLING_RATE			\
 			(def_sampling_rate / MIN_SAMPLING_RATE_RATIO)
+/* Above MIN_SAMPLING_RATE will vanish with its sysfs file soon
+ * Define the minimal settable sampling rate to the greater of:
+ *   - "HW transition latency" * 100 (same as default sampling / 10)
+ *   - MIN_STAT_SAMPLING_RATE
+ * To avoid that userspace shoots itself.
+*/
+unsigned int minimum_sampling_rate(void)
+{
+	return max(def_sampling_rate / 10, MIN_STAT_SAMPLING_RATE);
+}
+
+/* This will also vanish soon with removing sampling_rate_max */
 #define MAX_SAMPLING_RATE			(500 * def_sampling_rate)
-#define DEF_SAMPLING_RATE_LATENCY_MULTIPLIER	(1000)
+#define LATENCY_MULTIPLIER			(1000)
 #define DEF_SAMPLING_DOWN_FACTOR		(1)
 #define MAX_SAMPLING_DOWN_FACTOR		(10)
 #define TRANSITION_LATENCY_LIMIT		(10 * 1000 * 1000)
@@ -82,7 +94,7 @@ static unsigned int dbs_enable;	/* number of CPUs using this policy */
  * cpu_hotplug lock should be taken before that. Note that cpu_hotplug lock
  * is recursive for the same process. -Venki
  */
-static DEFINE_MUTEX (dbs_mutex);
+static DEFINE_MUTEX(dbs_mutex);
 static DECLARE_DELAYED_WORK(dbs_work, do_dbs_timer);
 
 struct dbs_tuners {
@@ -140,12 +152,27 @@ static struct notifier_block dbs_cpufreq_notifier_block = {
 /************************** sysfs interface ************************/
 static ssize_t show_sampling_rate_max(struct cpufreq_policy *policy, char *buf)
 {
-	return sprintf (buf, "%u\n", MAX_SAMPLING_RATE);
+	static int print_once;
+
+	if (!print_once) {
+		printk(KERN_INFO "CPUFREQ: conservative sampling_rate_max "
+		       "sysfs file is deprecated - used by: %s\n",
+		       current->comm);
+		print_once = 1;
+	}
+	return sprintf(buf, "%u\n", MAX_SAMPLING_RATE);
 }
 
 static ssize_t show_sampling_rate_min(struct cpufreq_policy *policy, char *buf)
 {
-	return sprintf (buf, "%u\n", MIN_SAMPLING_RATE);
+	static int print_once;
+
+	if (!print_once) {
+		printk(KERN_INFO "CPUFREQ: conservative sampling_rate_max "
+		       "sysfs file is deprecated - used by: %s\n", current->comm);
+		print_once = 1;
+	}
+	return sprintf(buf, "%u\n", MIN_SAMPLING_RATE);
 }
 
 #define define_one_ro(_name)				\
@@ -174,7 +201,7 @@ static ssize_t store_sampling_down_factor(struct cpufreq_policy *unused,
 {
 	unsigned int input;
 	int ret;
-	ret = sscanf (buf, "%u", &input);
+	ret = sscanf(buf, "%u", &input);
 	if (ret != 1 || input > MAX_SAMPLING_DOWN_FACTOR || input < 1)
 		return -EINVAL;
 
@@ -190,15 +217,14 @@ static ssize_t store_sampling_rate(struct cpufreq_policy *unused,
 {
 	unsigned int input;
 	int ret;
-	ret = sscanf (buf, "%u", &input);
+	ret = sscanf(buf, "%u", &input);
 
 	mutex_lock(&dbs_mutex);
-	if (ret != 1 || input > MAX_SAMPLING_RATE || input < MIN_SAMPLING_RATE) {
+	if (ret != 1) {
 		mutex_unlock(&dbs_mutex);
 		return -EINVAL;
 	}
-
-	dbs_tuners_ins.sampling_rate = input;
+	dbs_tuners_ins.sampling_rate = max(input, minimum_sampling_rate());
 	mutex_unlock(&dbs_mutex);
 
 	return count;
@@ -209,10 +235,11 @@ static ssize_t store_up_threshold(struct cpufreq_policy *unused,
 {
 	unsigned int input;
 	int ret;
-	ret = sscanf (buf, "%u", &input);
+	ret = sscanf(buf, "%u", &input);
 
 	mutex_lock(&dbs_mutex);
-	if (ret != 1 || input > 100 || input <= dbs_tuners_ins.down_threshold) {
+	if (ret != 1 || input > 100 ||
+	    input <= dbs_tuners_ins.down_threshold) {
 		mutex_unlock(&dbs_mutex);
 		return -EINVAL;
 	}
@@ -228,7 +255,7 @@ static ssize_t store_down_threshold(struct cpufreq_policy *unused,
 {
 	unsigned int input;
 	int ret;
-	ret = sscanf (buf, "%u", &input);
+	ret = sscanf(buf, "%u", &input);
 
 	mutex_lock(&dbs_mutex);
 	if (ret != 1 || input > 100 || input >= dbs_tuners_ins.up_threshold) {
@@ -310,7 +337,7 @@ define_one_rw(down_threshold);
 define_one_rw(ignore_nice_load);
 define_one_rw(freq_step);
 
-static struct attribute * dbs_attributes[] = {
+static struct attribute *dbs_attributes[] = {
 	&sampling_rate_max.attr,
 	&sampling_rate_min.attr,
 	&sampling_rate.attr,
@@ -523,11 +550,9 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 			if (latency == 0)
 				latency = 1;
 
-			def_sampling_rate = 10 * latency *
-					DEF_SAMPLING_RATE_LATENCY_MULTIPLIER;
-
-			if (def_sampling_rate < MIN_STAT_SAMPLING_RATE)
-				def_sampling_rate = MIN_STAT_SAMPLING_RATE;
+			def_sampling_rate =
+				max(10 * latency * LATENCY_MULTIPLIER,
+				    MIN_STAT_SAMPLING_RATE);
 
 			dbs_tuners_ins.sampling_rate = def_sampling_rate;
 
@@ -600,11 +625,11 @@ static void __exit cpufreq_gov_dbs_exit(void)
 }
 
 
-MODULE_AUTHOR ("Alexander Clouter <alex-kernel@digriz.org.uk>");
-MODULE_DESCRIPTION ("'cpufreq_conservative' - A dynamic cpufreq governor for "
+MODULE_AUTHOR("Alexander Clouter <alex-kernel@digriz.org.uk>");
+MODULE_DESCRIPTION("'cpufreq_conservative' - A dynamic cpufreq governor for "
 		"Low Latency Frequency Transition capable processors "
 		"optimised for use in a battery environment");
-MODULE_LICENSE ("GPL");
+MODULE_LICENSE("GPL");
 
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_CONSERVATIVE
 fs_initcall(cpufreq_gov_dbs_init);
