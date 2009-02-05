@@ -86,13 +86,9 @@
 /*----------------------------------------------------------------*/
 /* Netlink multicast bits for different types of messages */
 
-#define P80211_NL_MCAST_GRP_MLME	BIT0	/* Local station messages */
-#define P80211_NL_MCAST_GRP_SNIFF	BIT1	/* Sniffer messages */
-#define P80211_NL_MCAST_GRP_DIST	BIT2	/* Distribution system messages */
-
-/*================================================================*/
-/* Macros */
-
+#define P80211_NL_MCAST_GRP_MLME	BIT(0)	/* Local station messages */
+#define P80211_NL_MCAST_GRP_SNIFF	BIT(1)	/* Sniffer messages */
+#define P80211_NL_MCAST_GRP_DIST	BIT(2)	/* Distribution system messages */
 
 /*================================================================*/
 /* Types */
@@ -109,7 +105,7 @@ typedef struct p80211ioctl_req
 	u32	magic;
 	u16	len;
 	u32	result;
-} __WLAN_ATTRIB_PACK__ p80211ioctl_req_t;
+} __attribute__((packed)) p80211ioctl_req_t;
 
 
 /*================================================================*/
