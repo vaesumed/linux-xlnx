@@ -40,8 +40,27 @@
      *  which is shared between several drivers.
      */
 
-int falconide_intr_lock;
-EXPORT_SYMBOL(falconide_intr_lock);
+static int falconide_intr_lock;
+
+static void falconide_release_lock(void)
+{
+	if (falconide_intr_lock == 0) {
+		printk(KERN_ERR "%s: bug\n", __func__);
+		return;
+	}
+	falconide_intr_lock = 0;
+	stdma_release();
+}
+
+static void falconide_get_lock(irq_handler_t handler, void *data)
+{
+	if (falconide_intr_lock == 0) {
+		if (in_interrupt() > 0)
+			panic("Falcon IDE hasn't ST-DMA lock in interrupt");
+		stdma_lock(handler, data);
+		falconide_intr_lock = 1;
+	}
+}
 
 static void falconide_input_data(ide_drive_t *drive, struct request *rq,
 				 void *buf, unsigned int len)
@@ -51,7 +70,7 @@ static void falconide_input_data(ide_drive_t *drive, struct request *rq,
 	if (drive->media == ide_disk && rq && rq->cmd_type == REQ_TYPE_FS)
 		return insw(data_addr, buf, (len + 1) / 2);
 
-	insw_swapw(data_addr, buf, (len + 1) / 2);
+	raw_insw_swapw((u16 *)data_addr, buf, (len + 1) / 2);
 }
 
 static void falconide_output_data(ide_drive_t *drive, struct request *rq,
@@ -62,7 +81,7 @@ static void falconide_output_data(ide_drive_t *drive, struct request *rq,
 	if (drive->media == ide_disk && rq && rq->cmd_type == REQ_TYPE_FS)
 		return outsw(data_addr, buf, (len + 1) / 2);
 
-	outsw_swapw(data_addr, buf, (len + 1) / 2);
+	raw_outsw_swapw((u16 *)data_addr, buf, (len + 1) / 2);
 }
 
 /* Atari has a byte-swapped IDE interface */
@@ -81,8 +100,11 @@ static const struct ide_tp_ops falconide_tp_ops = {
 };
 
 static const struct ide_port_info falconide_port_info = {
+	.get_lock		= falconide_get_lock,
+	.release_lock		= falconide_release_lock,
 	.tp_ops			= &falconide_tp_ops,
-	.host_flags		= IDE_HFLAG_NO_DMA | IDE_HFLAG_SERIALIZE,
+	.host_flags		= IDE_HFLAG_MMIO | IDE_HFLAG_SERIALIZE |
+				  IDE_HFLAG_NO_DMA,
 };
 
 static void __init falconide_setup_ports(hw_regs_t *hw)
