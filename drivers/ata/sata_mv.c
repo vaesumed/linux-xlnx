@@ -31,8 +31,6 @@
  *
  * --> Complete a full errata audit for all chipsets to identify others.
  *
- * --> ATAPI support (Marvell claims the 60xx/70xx chips can do it).
- *
  * --> Develop a low-power-consumption strategy, and implement it.
  *
  * --> [Experiment, low priority] Investigate interrupt coalescing.
@@ -68,7 +66,7 @@
 #include <linux/libata.h>
 
 #define DRV_NAME	"sata_mv"
-#define DRV_VERSION	"1.25"
+#define DRV_VERSION	"1.26"
 
 enum {
 	/* BAR's are enumerated in terms of pci_resource_start() terms */
@@ -120,14 +118,15 @@ enum {
 	MV_FLAG_IRQ_COALESCE	= (1 << 29),  /* IRQ coalescing capability */
 
 	MV_COMMON_FLAGS		= ATA_FLAG_SATA | ATA_FLAG_NO_LEGACY |
-				  ATA_FLAG_MMIO | ATA_FLAG_NO_ATAPI |
-				  ATA_FLAG_PIO_POLLING,
+				  ATA_FLAG_MMIO | ATA_FLAG_PIO_POLLING,
 
-	MV_6XXX_FLAGS		= MV_FLAG_IRQ_COALESCE,
+	MV_GEN_I_FLAGS		= MV_COMMON_FLAGS | ATA_FLAG_NO_ATAPI,
 
-	MV_GENIIE_FLAGS		= MV_COMMON_FLAGS | MV_6XXX_FLAGS |
+	MV_GEN_II_FLAGS		= MV_COMMON_FLAGS | MV_FLAG_IRQ_COALESCE |
 				  ATA_FLAG_PMP | ATA_FLAG_ACPI_SATA |
-				  ATA_FLAG_NCQ | ATA_FLAG_AN,
+				  ATA_FLAG_NCQ,
+
+	MV_GEN_IIE_FLAGS	= MV_GEN_II_FLAGS | ATA_FLAG_AN,
 
 	CRQB_FLAG_READ		= (1 << 0),
 	CRQB_TAG_SHIFT		= 1,
@@ -347,6 +346,12 @@ enum {
 
 	EDMA_HALTCOND_OFS	= 0x60,		/* GenIIe halt conditions */
 
+
+	BMDMA_CMD_OFS		= 0x224,	/* bmdma command register */
+	BMDMA_STATUS_OFS	= 0x228,	/* bmdma status register */
+	BMDMA_PRD_LOW_OFS	= 0x22c,	/* bmdma PRD addr 31:0 */
+	BMDMA_PRD_HIGH_OFS	= 0x230,	/* bmdma PRD addr 63:32 */
+
 	/* Host private flags (hp_flags) */
 	MV_HP_FLAG_MSI		= (1 << 0),
 	MV_HP_ERRATA_50XXB0	= (1 << 1),
@@ -535,7 +540,7 @@ static void mv_reset_channel(struct mv_host_priv *hpriv, void __iomem *mmio,
 			     unsigned int port_no);
 static int mv_stop_edma(struct ata_port *ap);
 static int mv_stop_edma_engine(void __iomem *port_mmio);
-static void mv_edma_cfg(struct ata_port *ap, int want_ncq);
+static void mv_edma_cfg(struct ata_port *ap, int want_ncq, int want_edma);
 
 static void mv_pmp_select(struct ata_port *ap, int pmp);
 static int mv_pmp_hardreset(struct ata_link *link, unsigned int *class,
@@ -545,6 +550,15 @@ static int  mv_softreset(struct ata_link *link, unsigned int *class,
 static void mv_pmp_error_handler(struct ata_port *ap);
 static void mv_process_crpb_entries(struct ata_port *ap,
 					struct mv_port_priv *pp);
+
+static unsigned long mv_mode_filter(struct ata_device *dev,
+				    unsigned long xfer_mask);
+static void mv_sff_irq_clear(struct ata_port *ap);
+static int mv_check_atapi_dma(struct ata_queued_cmd *qc);
+static void mv_bmdma_setup(struct ata_queued_cmd *qc);
+static void mv_bmdma_start(struct ata_queued_cmd *qc);
+static void mv_bmdma_stop(struct ata_queued_cmd *qc);
+static u8   mv_bmdma_status(struct ata_port *ap);
 
 /* .sg_tablesize is (MV_MAX_SG_CT / 2) in the structures below
  * because we have to allow room for worst case splitting of
@@ -593,6 +607,14 @@ static struct ata_port_operations mv6_ops = {
 	.pmp_softreset		= mv_softreset,
 	.softreset		= mv_softreset,
 	.error_handler		= mv_pmp_error_handler,
+
+	.sff_irq_clear		= mv_sff_irq_clear,
+	.check_atapi_dma	= mv_check_atapi_dma,
+	.bmdma_setup		= mv_bmdma_setup,
+	.bmdma_start		= mv_bmdma_start,
+	.bmdma_stop		= mv_bmdma_stop,
+	.bmdma_status		= mv_bmdma_status,
+	.mode_filter		= mv_mode_filter,
 };
 
 static struct ata_port_operations mv_iie_ops = {
@@ -603,53 +625,49 @@ static struct ata_port_operations mv_iie_ops = {
 
 static const struct ata_port_info mv_port_info[] = {
 	{  /* chip_504x */
-		.flags		= MV_COMMON_FLAGS,
+		.flags		= MV_GEN_I_FLAGS,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv5_ops,
 	},
 	{  /* chip_508x */
-		.flags		= MV_COMMON_FLAGS | MV_FLAG_DUAL_HC,
+		.flags		= MV_GEN_I_FLAGS | MV_FLAG_DUAL_HC,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv5_ops,
 	},
 	{  /* chip_5080 */
-		.flags		= MV_COMMON_FLAGS | MV_FLAG_DUAL_HC,
+		.flags		= MV_GEN_I_FLAGS | MV_FLAG_DUAL_HC,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv5_ops,
 	},
 	{  /* chip_604x */
-		.flags		= MV_COMMON_FLAGS | MV_6XXX_FLAGS |
-				  ATA_FLAG_PMP | ATA_FLAG_ACPI_SATA |
-				  ATA_FLAG_NCQ,
+		.flags		= MV_GEN_II_FLAGS,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv6_ops,
 	},
 	{  /* chip_608x */
-		.flags		= MV_COMMON_FLAGS | MV_6XXX_FLAGS |
-				  ATA_FLAG_PMP | ATA_FLAG_ACPI_SATA |
-				  ATA_FLAG_NCQ | MV_FLAG_DUAL_HC,
+		.flags		= MV_GEN_II_FLAGS | MV_FLAG_DUAL_HC,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv6_ops,
 	},
 	{  /* chip_6042 */
-		.flags		= MV_GENIIE_FLAGS,
+		.flags		= MV_GEN_IIE_FLAGS,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv_iie_ops,
 	},
 	{  /* chip_7042 */
-		.flags		= MV_GENIIE_FLAGS,
+		.flags		= MV_GEN_IIE_FLAGS,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv_iie_ops,
 	},
 	{  /* chip_soc */
-		.flags		= MV_GENIIE_FLAGS,
+		.flags		= MV_GEN_IIE_FLAGS,
 		.pio_mask	= 0x1f,	/* pio0-4 */
 		.udma_mask	= ATA_UDMA6,
 		.port_ops	= &mv_iie_ops,
@@ -852,8 +870,32 @@ static void mv_enable_port_irqs(struct ata_port *ap,
 	mv_set_main_irq_mask(ap->host, disable_bits, enable_bits);
 }
 
+static void mv_clear_and_enable_port_irqs(struct ata_port *ap,
+					  void __iomem *port_mmio,
+					  unsigned int port_irqs)
+{
+	struct mv_host_priv *hpriv = ap->host->private_data;
+	int hardport = mv_hardport_from_port(ap->port_no);
+	void __iomem *hc_mmio = mv_hc_base_from_port(
+				mv_host_base(ap->host), ap->port_no);
+	u32 hc_irq_cause;
+
+	/* clear EDMA event indicators, if any */
+	writelfl(0, port_mmio + EDMA_ERR_IRQ_CAUSE_OFS);
+
+	/* clear pending irq events */
+	hc_irq_cause = ~((DEV_IRQ | DMA_IRQ) << hardport);
+	writelfl(hc_irq_cause, hc_mmio + HC_IRQ_CAUSE_OFS);
+
+	/* clear FIS IRQ Cause */
+	if (IS_GEN_IIE(hpriv))
+		writelfl(0, port_mmio + SATA_FIS_IRQ_CAUSE_OFS);
+
+	mv_enable_port_irqs(ap, port_irqs);
+}
+
 /**
- *      mv_start_dma - Enable eDMA engine
+ *      mv_start_edma - Enable eDMA engine
  *      @base: port base address
  *      @pp: port private data
  *
@@ -863,7 +905,7 @@ static void mv_enable_port_irqs(struct ata_port *ap,
  *      LOCKING:
  *      Inherited from caller.
  */
-static void mv_start_dma(struct ata_port *ap, void __iomem *port_mmio,
+static void mv_start_edma(struct ata_port *ap, void __iomem *port_mmio,
 			 struct mv_port_priv *pp, u8 protocol)
 {
 	int want_ncq = (protocol == ATA_PROT_NCQ);
@@ -875,26 +917,11 @@ static void mv_start_dma(struct ata_port *ap, void __iomem *port_mmio,
 	}
 	if (!(pp->pp_flags & MV_PP_FLAG_EDMA_EN)) {
 		struct mv_host_priv *hpriv = ap->host->private_data;
-		int hardport = mv_hardport_from_port(ap->port_no);
-		void __iomem *hc_mmio = mv_hc_base_from_port(
-					mv_host_base(ap->host), ap->port_no);
-		u32 hc_irq_cause;
 
-		/* clear EDMA event indicators, if any */
-		writelfl(0, port_mmio + EDMA_ERR_IRQ_CAUSE_OFS);
-
-		/* clear pending irq events */
-		hc_irq_cause = ~((DEV_IRQ | DMA_IRQ) << hardport);
-		writelfl(hc_irq_cause, hc_mmio + HC_IRQ_CAUSE_OFS);
-
-		mv_edma_cfg(ap, want_ncq);
-
-		/* clear FIS IRQ Cause */
-		if (IS_GEN_IIE(hpriv))
-			writelfl(0, port_mmio + SATA_FIS_IRQ_CAUSE_OFS);
+		mv_edma_cfg(ap, want_ncq, 1);
 
 		mv_set_edma_ptrs(port_mmio, hpriv, pp);
-		mv_enable_port_irqs(ap, DONE_IRQ|ERR_IRQ);
+		mv_clear_and_enable_port_irqs(ap, port_mmio, DONE_IRQ|ERR_IRQ);
 
 		writelfl(EDMA_EN, port_mmio + EDMA_CMD_OFS);
 		pp->pp_flags |= MV_PP_FLAG_EDMA_EN;
@@ -952,6 +979,7 @@ static int mv_stop_edma(struct ata_port *ap)
 {
 	void __iomem *port_mmio = mv_ap_base(ap);
 	struct mv_port_priv *pp = ap->private_data;
+	int err = 0;
 
 	if (!(pp->pp_flags & MV_PP_FLAG_EDMA_EN))
 		return 0;
@@ -959,9 +987,10 @@ static int mv_stop_edma(struct ata_port *ap)
 	mv_wait_for_edma_empty_idle(ap);
 	if (mv_stop_edma_engine(port_mmio)) {
 		ata_port_printk(ap, KERN_ERR, "Unable to stop eDMA\n");
-		return -EIO;
+		err = -EIO;
 	}
-	return 0;
+	mv_edma_cfg(ap, 0, 0);
+	return err;
 }
 
 #ifdef ATA_DEBUG
@@ -1176,7 +1205,7 @@ static void mv_60x1_errata_sata25(struct ata_port *ap, int want_ncq)
 		writel(new, hpriv->base + MV_GPIO_PORT_CTL_OFS);
 }
 
-static void mv_edma_cfg(struct ata_port *ap, int want_ncq)
+static void mv_edma_cfg(struct ata_port *ap, int want_ncq, int want_edma)
 {
 	u32 cfg;
 	struct mv_port_priv *pp    = ap->private_data;
@@ -1185,7 +1214,7 @@ static void mv_edma_cfg(struct ata_port *ap, int want_ncq)
 
 	/* set up non-NCQ EDMA configuration */
 	cfg = EDMA_CFG_Q_DEPTH;		/* always 0x1f for *all* chips */
-	pp->pp_flags &= ~MV_PP_FLAG_FBS_EN;
+	pp->pp_flags &= ~(MV_PP_FLAG_FBS_EN | MV_PP_FLAG_NCQ_EN);
 
 	if (IS_GEN_I(hpriv))
 		cfg |= (1 << 8);	/* enab config burst size mask */
@@ -1214,9 +1243,11 @@ static void mv_edma_cfg(struct ata_port *ap, int want_ncq)
 		}
 
 		cfg |= (1 << 23);	/* do not mask PM field in rx'd FIS */
-		cfg |= (1 << 22);	/* enab 4-entry host queue cache */
-		if (!IS_SOC(hpriv))
-			cfg |= (1 << 18);	/* enab early completion */
+		if (want_edma) {
+			cfg |= (1 << 22); /* enab 4-entry host queue cache */
+			if (!IS_SOC(hpriv))
+				cfg |= (1 << 18); /* enab early completion */
+		}
 		if (hpriv->hp_flags & MV_HP_CUT_THROUGH)
 			cfg |= (1 << 17); /* enab cut-thru (dis stor&forwrd) */
 	}
@@ -1224,8 +1255,7 @@ static void mv_edma_cfg(struct ata_port *ap, int want_ncq)
 	if (want_ncq) {
 		cfg |= EDMA_CFG_NCQ;
 		pp->pp_flags |=  MV_PP_FLAG_NCQ_EN;
-	} else
-		pp->pp_flags &= ~MV_PP_FLAG_NCQ_EN;
+	}
 
 	writelfl(cfg, port_mmio + EDMA_CFG_OFS);
 }
@@ -1309,6 +1339,7 @@ static int mv_port_start(struct ata_port *ap)
 			pp->sg_tbl_dma[tag] = pp->sg_tbl_dma[0];
 		}
 	}
+	mv_edma_cfg(ap, 0, 0);
 	return 0;
 
 out_port_free_dma_mem:
@@ -1357,12 +1388,13 @@ static void mv_fill_sg(struct ata_queued_cmd *qc)
 			u32 offset = addr & 0xffff;
 			u32 len = sg_len;
 
-			if ((offset + sg_len > 0x10000))
+			if (offset + len > 0x10000)
 				len = 0x10000 - offset;
 
 			mv_sg->addr = cpu_to_le32(addr & 0xffffffff);
 			mv_sg->addr_hi = cpu_to_le32((addr >> 16) >> 16);
 			mv_sg->flags_size = cpu_to_le32(len & 0xffff);
+			mv_sg->reserved = 0;
 
 			sg_len -= len;
 			addr += len;
@@ -1374,6 +1406,7 @@ static void mv_fill_sg(struct ata_queued_cmd *qc)
 
 	if (likely(last_sg))
 		last_sg->flags_size |= cpu_to_le32(EPRD_FLAG_END_OF_TBL);
+	mb(); /* ensure data structure is visible to the chipset */
 }
 
 static void mv_crqb_pack_cmd(__le16 *cmdw, u8 data, u8 addr, unsigned last)
@@ -1381,6 +1414,167 @@ static void mv_crqb_pack_cmd(__le16 *cmdw, u8 data, u8 addr, unsigned last)
 	u16 tmp = data | (addr << CRQB_CMD_ADDR_SHIFT) | CRQB_CMD_CS |
 		(last ? CRQB_CMD_LAST : 0);
 	*cmdw = cpu_to_le16(tmp);
+}
+
+/**
+ *	mv_mode_filter - Allow ATAPI DMA only on GenII chips.
+ *	@dev: device whose xfer modes are being configured.
+ *
+ *	Only the GenII hardware can use DMA with ATAPI drives.
+ */
+static unsigned long mv_mode_filter(struct ata_device *adev,
+				    unsigned long xfer_mask)
+{
+	if (adev->class == ATA_DEV_ATAPI) {
+		struct mv_host_priv *hpriv = adev->link->ap->host->private_data;
+		if (!IS_GEN_II(hpriv)) {
+			xfer_mask &= ~(ATA_MASK_MWDMA | ATA_MASK_UDMA);
+			ata_dev_printk(adev, KERN_INFO,
+				"ATAPI DMA not supported on this chipset\n");
+		}
+	}
+	return xfer_mask;
+}
+
+/**
+ *	mv_sff_irq_clear - Clear hardware interrupt after DMA.
+ *	@ap: Port associated with this ATA transaction.
+ *
+ *	We need this only for ATAPI bmdma transactions,
+ *	as otherwise we experience spurious interrupts
+ *	after libata-sff handles the bmdma interrupts.
+ */
+static void mv_sff_irq_clear(struct ata_port *ap)
+{
+	mv_clear_and_enable_port_irqs(ap, mv_ap_base(ap), ERR_IRQ);
+}
+
+/**
+ *	mv_check_atapi_dma - Filter ATAPI cmds which are unsuitable for DMA.
+ *	@qc: queued command to check for chipset/DMA compatibility.
+ *
+ *	The bmdma engines cannot handle speculative data sizes
+ *	(bytecount under/over flow).  So only allow DMA for
+ *	data transfer commands with known data sizes.
+ *
+ *	LOCKING:
+ *	Inherited from caller.
+ */
+static int mv_check_atapi_dma(struct ata_queued_cmd *qc)
+{
+	struct scsi_cmnd *scmd = qc->scsicmd;
+
+	if (scmd) {
+		switch (scmd->cmnd[0]) {
+		case READ_6:
+		case READ_10:
+		case READ_12:
+		case WRITE_6:
+		case WRITE_10:
+		case WRITE_12:
+		case GPCMD_READ_CD:
+		case GPCMD_SEND_DVD_STRUCTURE:
+		case GPCMD_SEND_CUE_SHEET:
+			return 0; /* DMA is safe */
+		}
+	}
+	return -EOPNOTSUPP; /* use PIO instead */
+}
+
+/**
+ *	mv_bmdma_setup - Set up BMDMA transaction
+ *	@qc: queued command to prepare DMA for.
+ *
+ *	LOCKING:
+ *	Inherited from caller.
+ */
+static void mv_bmdma_setup(struct ata_queued_cmd *qc)
+{
+	struct ata_port *ap = qc->ap;
+	void __iomem *port_mmio = mv_ap_base(ap);
+	struct mv_port_priv *pp = ap->private_data;
+
+	mv_fill_sg(qc);
+
+	/* clear all DMA cmd bits */
+	writel(0, port_mmio + BMDMA_CMD_OFS);
+
+	/* load PRD table addr. */
+	writel((pp->sg_tbl_dma[qc->tag] >> 16) >> 16,
+		port_mmio + BMDMA_PRD_HIGH_OFS);
+	writelfl(pp->sg_tbl_dma[qc->tag],
+		port_mmio + BMDMA_PRD_LOW_OFS);
+
+	/* issue r/w command */
+	ap->ops->sff_exec_command(ap, &qc->tf);
+}
+
+/**
+ *	mv_bmdma_start - Start a BMDMA transaction
+ *	@qc: queued command to start DMA on.
+ *
+ *	LOCKING:
+ *	Inherited from caller.
+ */
+static void mv_bmdma_start(struct ata_queued_cmd *qc)
+{
+	struct ata_port *ap = qc->ap;
+	void __iomem *port_mmio = mv_ap_base(ap);
+	unsigned int rw = (qc->tf.flags & ATA_TFLAG_WRITE);
+	u32 cmd = (rw ? 0 : ATA_DMA_WR) | ATA_DMA_START;
+
+	/* start host DMA transaction */
+	writelfl(cmd, port_mmio + BMDMA_CMD_OFS);
+}
+
+/**
+ *	mv_bmdma_stop - Stop BMDMA transfer
+ *	@qc: queued command to stop DMA on.
+ *
+ *	Clears the ATA_DMA_START flag in the bmdma control register
+ *
+ *	LOCKING:
+ *	Inherited from caller.
+ */
+static void mv_bmdma_stop(struct ata_queued_cmd *qc)
+{
+	struct ata_port *ap = qc->ap;
+	void __iomem *port_mmio = mv_ap_base(ap);
+	u32 cmd;
+
+	/* clear start/stop bit */
+	cmd = readl(port_mmio + BMDMA_CMD_OFS);
+	cmd &= ~ATA_DMA_START;
+	writelfl(cmd, port_mmio + BMDMA_CMD_OFS);
+
+	/* one-PIO-cycle guaranteed wait, per spec, for HDMA1:0 transition */
+	ata_sff_dma_pause(ap);
+}
+
+/**
+ *	mv_bmdma_status - Read BMDMA status
+ *	@ap: port for which to retrieve DMA status.
+ *
+ *	Read and return equivalent of the sff BMDMA status register.
+ *
+ *	LOCKING:
+ *	Inherited from caller.
+ */
+static u8 mv_bmdma_status(struct ata_port *ap)
+{
+	void __iomem *port_mmio = mv_ap_base(ap);
+	u32 reg, status;
+
+	/*
+	 * Other bits are valid only if ATA_DMA_ACTIVE==0,
+	 * and the ATA_DMA_INTR bit doesn't exist.
+	 */
+	reg = readl(port_mmio + BMDMA_STATUS_OFS);
+	if (reg & ATA_DMA_ACTIVE)
+		status = ATA_DMA_ACTIVE;
+	else
+		status = (reg & ATA_DMA_ERR) | ATA_DMA_INTR;
+	return status;
 }
 
 /**
@@ -1558,14 +1752,26 @@ static void mv_qc_prep_iie(struct ata_queued_cmd *qc)
  */
 static unsigned int mv_qc_issue(struct ata_queued_cmd *qc)
 {
+	static int limit_warnings = 10;
 	struct ata_port *ap = qc->ap;
 	void __iomem *port_mmio = mv_ap_base(ap);
 	struct mv_port_priv *pp = ap->private_data;
 	u32 in_index;
+	unsigned int port_irqs = DONE_IRQ | ERR_IRQ;
 
-	if ((qc->tf.protocol != ATA_PROT_DMA) &&
-	    (qc->tf.protocol != ATA_PROT_NCQ)) {
-		static int limit_warnings = 10;
+	switch (qc->tf.protocol) {
+	case ATA_PROT_DMA:
+	case ATA_PROT_NCQ:
+		mv_start_edma(ap, port_mmio, pp, qc->tf.protocol);
+		pp->req_idx = (pp->req_idx + 1) & MV_MAX_Q_DEPTH_MASK;
+		in_index = pp->req_idx << EDMA_REQ_Q_PTR_SHIFT;
+
+		/* Write the request in pointer to kick the EDMA to life */
+		writelfl((pp->crqb_dma & EDMA_REQ_Q_BASE_LO_MASK) | in_index,
+					port_mmio + EDMA_REQ_Q_IN_PTR_OFS);
+		return 0;
+
+	case ATA_PROT_PIO:
 		/*
 		 * Errata SATA#16, SATA#24: warn if multiple DRQs expected.
 		 *
@@ -1583,27 +1789,21 @@ static unsigned int mv_qc_issue(struct ata_queued_cmd *qc)
 					": attempting PIO w/multiple DRQ: "
 					"this may fail due to h/w errata\n");
 		}
+		/* drop through */
+	case ATAPI_PROT_PIO:
+		port_irqs = ERR_IRQ;	/* leave DONE_IRQ masked for PIO */
+		/* drop through */
+	default:
 		/*
 		 * We're about to send a non-EDMA capable command to the
 		 * port.  Turn off EDMA so there won't be problems accessing
 		 * shadow block, etc registers.
 		 */
 		mv_stop_edma(ap);
-		mv_enable_port_irqs(ap, ERR_IRQ);
+		mv_clear_and_enable_port_irqs(ap, mv_ap_base(ap), port_irqs);
 		mv_pmp_select(ap, qc->dev->link->pmp);
 		return ata_sff_qc_issue(qc);
 	}
-
-	mv_start_dma(ap, port_mmio, pp, qc->tf.protocol);
-
-	pp->req_idx = (pp->req_idx + 1) & MV_MAX_Q_DEPTH_MASK;
-	in_index = pp->req_idx << EDMA_REQ_Q_PTR_SHIFT;
-
-	/* and write the request in pointer to kick the EDMA to life */
-	writelfl((pp->crqb_dma & EDMA_REQ_Q_BASE_LO_MASK) | in_index,
-		 port_mmio + EDMA_REQ_Q_IN_PTR_OFS);
-
-	return 0;
 }
 
 static struct ata_queued_cmd *mv_get_active_qc(struct ata_port *ap)
@@ -1614,8 +1814,12 @@ static struct ata_queued_cmd *mv_get_active_qc(struct ata_port *ap)
 	if (pp->pp_flags & MV_PP_FLAG_NCQ_EN)
 		return NULL;
 	qc = ata_qc_from_tag(ap, ap->link.active_tag);
-	if (qc && (qc->tf.flags & ATA_TFLAG_POLLING))
-		qc = NULL;
+	if (qc) {
+		if (qc->tf.flags & ATA_TFLAG_POLLING)
+			qc = NULL;
+		else if (!(qc->flags & ATA_QCFLAG_ACTIVE))
+			qc = NULL;
+	}
 	return qc;
 }
 
@@ -2792,6 +2996,7 @@ static int mv_hardreset(struct ata_link *link, unsigned int *class,
 				extra = HZ; /* only extend it once, max */
 		}
 	} while (sstatus != 0x0 && sstatus != 0x113 && sstatus != 0x123);
+	mv_edma_cfg(ap, 0, 0);
 
 	return rc;
 }
