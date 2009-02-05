@@ -13,6 +13,7 @@
 
 #include <linux/types.h>
 #include <asm/ebcdic.h>
+#include <linux/ctype.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/mempool.h>
@@ -82,6 +83,11 @@ struct iucv_tty_buffer {
 	struct iucv_tty_msg	*mbuf;	/* buffer to store input/output data */
 };
 
+struct iucv_vmid_filter {
+	struct list_head	list;		/* list pointer */
+	u8			vmid[8];	/* z/VM user ID (EBCDIC) */
+};
+
 /* IUCV callback handler */
 static	int hvc_iucv_path_pending(struct iucv_path *, u8[8], u8[16]);
 static void hvc_iucv_path_severed(struct iucv_path *, u8[16]);
@@ -95,6 +101,9 @@ static unsigned long hvc_iucv_devices = 1;
 /* Array of allocated hvc iucv tty lines... */
 static struct hvc_iucv_private *hvc_iucv_table[MAX_HVC_IUCV_LINES];
 #define IUCV_HVC_CON_IDX	(0)
+/* List of z/VM user ID filter entries (struct iucv_vmid_filter) */
+static LIST_HEAD(hvc_iucv_filter_list);
+static char *hvc_iucv_filter_string = NULL;
 
 /* Kmem cache and mempool for iucv_tty_buffer elements */
 static struct kmem_cache *hvc_iucv_buffer_cache;
@@ -640,8 +649,10 @@ static	int hvc_iucv_path_pending(struct iucv_path *path,
 				  u8 ipvmid[8], u8 ipuser[16])
 {
 	struct hvc_iucv_private *priv;
+	struct iucv_vmid_filter *ent;
 	u8 nuser_data[16];
-	int i, rc;
+	u8 vm_user_id[9];
+	int i, rc, is_allowed;
 
 	priv = NULL;
 	for (i = 0; i < hvc_iucv_devices; i++)
@@ -652,6 +663,25 @@ static	int hvc_iucv_path_pending(struct iucv_path *path,
 		}
 	if (!priv)
 		return -ENODEV;
+
+	/* Enforce that ipvmid is allowed to connect to us */
+	if (!list_empty(&hvc_iucv_filter_list)) {
+		is_allowed = 0;
+		list_for_each_entry(ent, &hvc_iucv_filter_list, list)
+			if (0 == memcmp(ipvmid, ent->vmid, 8)) {
+				is_allowed = 1;
+				break;
+			}
+		if (!is_allowed) {
+			iucv_path_sever(path, ipuser);
+			iucv_path_free(path);
+			memcpy(vm_user_id, ipvmid, 8);
+			vm_user_id[8] = 0;
+			pr_info("A connection request from z/VM user ID %s "
+				"was refused\n", vm_user_id);
+			return 0;
+		}
+	}
 
 	spin_lock(&priv->lock);
 
@@ -877,6 +907,78 @@ static int __init hvc_iucv_alloc(int id, unsigned int is_console)
 }
 
 /**
+ * hvc_iucv_parse_filter() - Parse filter for a single z/VM user ID
+ * @filter:	String containing a comma-separated list of z/VM user IDs
+ */
+static char * __init hvc_iucv_parse_filter(char *filter)
+{
+	char *nextdelim, *residual;
+	size_t len;
+	struct iucv_vmid_filter *filter_ent;
+
+	nextdelim = strchr(filter, ',');
+	if (nextdelim) {
+		len = nextdelim - filter;
+		residual = nextdelim + 1;
+	} else {
+		len = strlen(filter);
+		residual = filter + len;
+	}
+
+	if (len == 0 || len > 8)
+		return ERR_PTR(-EINVAL);
+
+	filter_ent = kzalloc(sizeof(*filter_ent), GFP_KERNEL);
+	if (!filter_ent)
+		return ERR_PTR(-ENOMEM);
+
+	/* pad with blanks and save upper case version of user ID on list */
+	memset(filter_ent->vmid, ' ', sizeof(filter_ent->vmid));
+	while (len--)
+		filter_ent->vmid[len] = toupper(filter[len]);
+	filter_ent->vmid[len] = toupper(filter[len]);
+	list_add_tail(&filter_ent->list, &hvc_iucv_filter_list);
+
+	return residual;
+}
+
+/**
+ * hvc_iucv_parse_filter() - Set up z/VM user ID filter list
+ * @filter:	String consisting of a comma-separated list of z/VM user IDs
+ *
+ * The function parses the @filter string and creates
+ * a list of z/VM user ID filter entries.
+ * Return code 0 means success, -EINVAL if filter is syntactically incorrect
+ * or -ENOMEM if there was not enough memory to allocate filter list entries.
+ */
+static int __init hvc_iucv_setup_filter(char *filter)
+{
+	int err;
+	char *residual;
+	struct iucv_vmid_filter *ent, *next;
+
+	if (!filter)
+		return 0;
+
+	residual = filter;
+	while (*residual) {
+		residual = hvc_iucv_parse_filter(residual);
+		if (IS_ERR(residual)) {
+			err = PTR_ERR(residual);
+			goto out_free_list;
+		}
+	}
+	return 0;
+
+out_free_list:
+	list_for_each_entry_safe(ent, next, &hvc_iucv_filter_list, list) {
+		list_del(&ent->list);
+		kfree(ent);
+	}
+	return err;
+}
+
+/**
  * hvc_iucv_init() - z/VM IUCV HVC device driver initialization
  */
 static int __init hvc_iucv_init(void)
@@ -897,6 +999,18 @@ static int __init hvc_iucv_init(void)
 		pr_err("%lu is not a valid value for the hvc_iucv= "
 			"kernel parameter\n", hvc_iucv_devices);
 		return -EINVAL;
+	}
+
+	/* parse hvc_iucv_allow string and create z/VM user ID filter list */
+	rc = hvc_iucv_setup_filter(hvc_iucv_filter_string);
+	if (rc) {
+		if (rc == -ENOMEM)
+			pr_err("Allocating memory failed with "
+				"reason code=%d\n", 3);
+		if (rc == -EINVAL)
+			pr_err("hvc_iucv_allow= does not specify a valid "
+				"z/VM user ID list\n");
+		return rc;
 	}
 
 	hvc_iucv_buffer_cache = kmem_cache_create(KMSG_COMPONENT,
@@ -968,6 +1082,22 @@ static	int __init hvc_iucv_config(char *val)
 	 return strict_strtoul(val, 10, &hvc_iucv_devices);
 }
 
+/**
+ * hvc_iucv_filter_config() - Set and enable IUCV user ID filtering
+ * @val:	String with comma-separated z/VM user IDs
+ *
+ * The pointer @val is temporary stored and parsed in the
+ * hvc_iucv_init() function, because kzalloc() is not yet available
+ * at this stage.
+ */
+static	int __init hvc_iucv_filter_config(char *val)
+{
+	if (MACHINE_IS_VM)
+		hvc_iucv_filter_string = val;
+	return 0;
+}
+
 
 device_initcall(hvc_iucv_init);
 __setup("hvc_iucv=", hvc_iucv_config);
+__setup("hvc_iucv_allow=", hvc_iucv_filter_config);
