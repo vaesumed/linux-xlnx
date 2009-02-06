@@ -1,0 +1,6 @@
+- Some mount time options should have been 64-bit, but are declared as 32-bit
+  because that's what the kernel's parsing methods support at this time.
+
+- Out-of-space may cause a severe problem if the object (and directory entry)
+  were written, but the inode attributes failed. Then if the filesystem was
+  unmounted and mounted the kernel can get into an endless loop doing a readdir.
