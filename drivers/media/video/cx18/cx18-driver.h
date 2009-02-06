@@ -48,6 +48,7 @@
 #include <linux/dvb/audio.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
+#include <media/v4l2-device.h>
 #include <media/tuner.h>
 #include "cx18-mailbox.h"
 #include "cx18-av-core.h"
@@ -79,7 +80,7 @@
 #define CX18_CARD_YUAN_MPC718 	      3	/* Yuan MPC718 */
 #define CX18_CARD_CNXT_RAPTOR_PAL     4	/* Conexant Raptor PAL */
 #define CX18_CARD_TOSHIBA_QOSMIO_DVBT 5 /* Toshiba Qosmio Interal DVB-T/Analog*/
-#define CX18_CARD_LEADTEK_PVR2100     6 /* Leadtek WinFast PVR2100 */
+#define CX18_CARD_LEADTEK_PVR2100     6 /* Leadtek WinFast PVR2100/DVR3100 H */
 #define CX18_CARD_LAST 		      6
 
 #define CX18_ENC_STREAM_TYPE_MPG  0
@@ -279,7 +280,7 @@ struct cx18_epu_work_order {
 struct cx18_stream {
 	/* These first four fields are always set, even if the stream
 	   is not actually created. */
-	struct video_device *v4l2dev;	/* NULL when stream not created */
+	struct video_device *video_dev;	/* NULL when stream not created */
 	struct cx18 *cx; 		/* for ease of use */
 	const char *name;		/* name of the stream */
 	int type;			/* stream type */
@@ -385,7 +386,9 @@ struct cx18_i2c_algo_callback_data {
 struct cx18 {
 	int num;		/* board number, -1 during init! */
 	char name[8];		/* board name for printk and interrupts (e.g. 'cx180') */
-	struct pci_dev *dev;	/* PCI device */
+	struct pci_dev *pci_dev;
+	struct v4l2_device v4l2_dev;
+
 	const struct cx18_card *card;	/* card information */
 	const char *card_name;  /* full name of the card */
 	const struct cx18_card_tuner_i2c *card_i2c; /* i2c addresses to probe for tuner */
@@ -413,7 +416,7 @@ struct cx18 {
 
 	/* dualwatch */
 	unsigned long dualwatch_jiffies;
-	u16 dualwatch_stereo_mode;
+	u32 dualwatch_stereo_mode;
 
 	/* Digitizer type */
 	int digitizer;		/* 0x00EF = saa7114 0x00FO = saa7115 0x0106 = mic */

@@ -128,10 +128,10 @@ static void cx18_release_stream(struct cx18_stream *s)
 static void cx18_dualwatch(struct cx18 *cx)
 {
 	struct v4l2_tuner vt;
-	u16 new_bitmap;
-	u16 new_stereo_mode;
-	const u16 stereo_mask = 0x0300;
-	const u16 dual = 0x0200;
+	u32 new_bitmap;
+	u32 new_stereo_mode;
+	const u32 stereo_mask = 0x0300;
+	const u32 dual = 0x0200;
 	u32 h;
 
 	new_stereo_mode = cx->params.audio_properties & stereo_mask;
@@ -665,7 +665,7 @@ int cx18_v4l2_open(struct file *filp)
 			if (cx18_cards[x] == NULL)
 				continue;
 			s = &cx18_cards[x]->streams[y];
-			if (s->v4l2dev && s->v4l2dev->minor == minor) {
+			if (s->video_dev && s->video_dev->minor == minor) {
 				cx = cx18_cards[x];
 				break;
 			}
