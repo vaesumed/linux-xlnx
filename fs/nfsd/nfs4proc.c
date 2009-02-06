@@ -179,7 +179,7 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	nfs4_lock_state();
 
 	/* check seqid for replay. set nfs4_owner */
-	status = nfsd4_process_open1(open);
+	status = nfsd4_process_open1(rqstp, open);
 	if (status == nfserr_replay_me) {
 		struct nfs4_replay *rp = &open->op_stateowner->so_replay;
 		fh_put(&cstate->current_fh);
@@ -504,6 +504,7 @@ nfsd4_read(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	   struct nfsd4_read *read)
 {
 	__be32 status;
+	int flags = RD_STATE;
 
 	/* no need to check permission - this will be done in nfsd_read() */
 
@@ -511,11 +512,13 @@ nfsd4_read(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if (read->rd_offset >= OFFSET_MAX)
 		return nfserr_inval;
 
+	if (nfsd4_has_session(cstate))
+		flags |= HAS_SESSION;
 	nfs4_lock_state();
 	/* check stateid */
 	if ((status = nfs4_preprocess_stateid_op(&cstate->current_fh,
 				&read->rd_stateid,
-				RD_STATE, &read->rd_filp))) {
+				flags, &read->rd_filp))) {
 		dprintk("NFSD: nfsd4_read: couldn't process stateid!\n");
 		goto out;
 	}
@@ -643,11 +646,14 @@ nfsd4_setattr(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	      struct nfsd4_setattr *setattr)
 {
 	__be32 status = nfs_ok;
+	int flags = WR_STATE;
 
+	if (nfsd4_has_session(cstate))
+		flags |= HAS_SESSION;
 	if (setattr->sa_iattr.ia_valid & ATTR_SIZE) {
 		nfs4_lock_state();
 		status = nfs4_preprocess_stateid_op(&cstate->current_fh,
-			&setattr->sa_stateid, WR_STATE, NULL);
+			&setattr->sa_stateid, flags, NULL);
 		nfs4_unlock_state();
 		if (status) {
 			dprintk("NFSD: nfsd4_setattr: couldn't process stateid!\n");
@@ -679,15 +685,18 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	u32 *p;
 	__be32 status = nfs_ok;
 	unsigned long cnt;
+	int flags = WR_STATE;
 
 	/* no need to check permission - this will be done in nfsd_write() */
 
 	if (write->wr_offset >= OFFSET_MAX)
 		return nfserr_inval;
 
+	if (nfsd4_has_session(cstate))
+		flags |= HAS_SESSION;
 	nfs4_lock_state();
 	status = nfs4_preprocess_stateid_op(&cstate->current_fh, stateid,
-					WR_STATE, &filp);
+					    flags, &filp);
 	if (filp)
 		get_file(filp);
 	nfs4_unlock_state();
