@@ -382,6 +382,28 @@ static void release_openowner(struct nfs4_stateowner *sop)
 	nfs4_put_stateowner(sop);
 }
 
+#if defined(CONFIG_NFSD_V4_1)
+static void
+release_session(struct nfsd4_session *ses)
+{
+	list_del(&ses->se_hash);
+	list_del(&ses->se_perclnt);
+	nfsd4_put_session(ses);
+}
+
+void
+free_session(struct kref *kref)
+{
+	struct nfsd4_session *ses;
+
+	ses = container_of(kref, struct nfsd4_session, se_ref);
+	kfree(ses->se_slots);
+	kfree(ses);
+}
+#else /* CONFIG_NFSD_V4_1 */
+static inline void release_session(struct nfsd4_session *ses) {}
+#endif /* CONFIG_NFSD_V4_1 */
+
 static inline void
 renew_client(struct nfs4_client *clp)
 {
