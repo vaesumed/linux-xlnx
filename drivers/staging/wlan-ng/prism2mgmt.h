@@ -62,15 +62,6 @@
 
 
 /*=============================================================*/
-/*------ Constants --------------------------------------------*/
-
-/*=============================================================*/
-/*------ Macros -----------------------------------------------*/
-
-/*=============================================================*/
-/*------ Types and their related constants --------------------*/
-
-/*=============================================================*/
 /*------ Static variable externs ------------------------------*/
 
 extern int	prism2_debug;
@@ -83,10 +74,6 @@ extern int      prism2_reset_settletime;
 u32
 prism2sta_ifstate(wlandevice_t *wlandev, u32 ifstate);
 
-void
-prism2sta_ev_dtim(wlandevice_t *wlandev);
-void
-prism2sta_ev_infdrop(wlandevice_t *wlandev);
 void
 prism2sta_ev_info(wlandevice_t *wlandev, hfa384x_InfFrame_t *inf);
 void
@@ -145,11 +132,5 @@ void prism2sta_processing_defer(struct work_struct *data);
 
 void prism2sta_commsqual_defer(struct work_struct *data);
 void prism2sta_commsqual_timer(unsigned long data);
-
-/*=============================================================*/
-/*--- Inline Function Definitions (if supported) --------------*/
-/*=============================================================*/
-
-
 
 #endif

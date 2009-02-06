@@ -130,6 +130,7 @@
 #include <asm/bitops.h>
 #include <linux/list.h>
 #include <linux/usb.h>
+#include <linux/byteorder/generic.h>
 
 #include "wlan_compat.h"
 
@@ -161,6 +162,8 @@ enum cmd_mode
 typedef enum cmd_mode CMD_MODE;
 
 #define THROTTLE_JIFFIES	(HZ/8)
+#define URB_ASYNC_UNLINK 0
+#define USB_QUEUE_BULK 0
 
 /*================================================================*/
 /* Local Macros */
@@ -404,8 +407,6 @@ submit_rx_urb(hfa384x_t *hw, gfp_t memflags)
 	struct sk_buff *skb;
 	int result;
 
-	DBFENTER;
-
 	skb = dev_alloc_skb(sizeof(hfa384x_usbin_t));
 	if (skb == NULL) {
 		result = -ENOMEM;
@@ -426,7 +427,7 @@ submit_rx_urb(hfa384x_t *hw, gfp_t memflags)
 
 		/* Check whether we need to reset the RX pipe */
 		if (result == -EPIPE) {
-			WLAN_LOG_WARNING("%s rx pipe stalled: requesting reset\n",
+			printk(KERN_WARNING "%s rx pipe stalled: requesting reset\n",
 			                 hw->wlandev->netdev->name);
 			if ( !test_and_set_bit(WORK_RX_HALT, &hw->usb_flags) )
 				schedule_work(&hw->usb_work);
@@ -440,8 +441,6 @@ submit_rx_urb(hfa384x_t *hw, gfp_t memflags)
 	}
 
  done:
-
-	DBFEXIT;
 	return result;
 }
 
@@ -469,8 +468,6 @@ submit_tx_urb(hfa384x_t *hw, struct urb *tx_urb, gfp_t memflags)
 	struct net_device *netdev = hw->wlandev->netdev;
 	int result;
 
-	DBFENTER;
-
 	result = -ENOLINK;
 	if ( netif_running(netdev) ) {
 
@@ -479,7 +476,7 @@ submit_tx_urb(hfa384x_t *hw, struct urb *tx_urb, gfp_t memflags)
 
 			/* Test whether we need to reset the TX pipe */
 			if (result == -EPIPE) {
-				WLAN_LOG_WARNING("%s tx pipe stalled: requesting reset\n",
+				printk(KERN_WARNING "%s tx pipe stalled: requesting reset\n",
 				                 netdev->name);
 				set_bit(WORK_TX_HALT, &hw->usb_flags);
 				schedule_work(&hw->usb_work);
@@ -488,8 +485,6 @@ submit_tx_urb(hfa384x_t *hw, struct urb *tx_urb, gfp_t memflags)
 			}
 		}
 	}
-
-	DBFEXIT;
 
 	return result;
 }
@@ -516,13 +511,10 @@ hfa384x_usb_defer(struct work_struct *data)
 	hfa384x_t *hw = container_of(data, struct hfa384x, usb_work);
 	struct net_device *netdev = hw->wlandev->netdev;
 
-	DBFENTER;
-
 	/* Don't bother trying to reset anything if the plug
 	 * has been pulled ...
 	 */
 	if ( hw->wlandev->hwremoved ) {
-		DBFEXIT;
 		return;
 	}
 
@@ -586,8 +578,6 @@ hfa384x_usb_defer(struct work_struct *data)
 	if ( test_and_clear_bit(WORK_TX_RESUME, &hw->usb_flags) ) {
 		netif_wake_queue(hw->wlandev->netdev);
 	}
-
-	DBFEXIT;
 }
 
 
@@ -615,8 +605,6 @@ hfa384x_usb_defer(struct work_struct *data)
 void
 hfa384x_create( hfa384x_t *hw, struct usb_device *usb)
 {
-	DBFENTER;
-
 	memset(hw, 0, sizeof(hfa384x_t));
 	hw->usb = usb;
 
@@ -669,8 +657,6 @@ hfa384x_create( hfa384x_t *hw, struct usb_device *usb)
 	init_timer(&hw->commsqual_timer);
 	hw->commsqual_timer.data = (unsigned long) hw;
 	hw->commsqual_timer.function = prism2sta_commsqual_timer;
-
-	DBFEXIT;
 }
 
 
@@ -701,8 +687,6 @@ hfa384x_destroy( hfa384x_t *hw)
 {
 	struct sk_buff *skb;
 
-	DBFENTER;
-
 	if ( hw->state == HFA384x_STATE_RUNNING ) {
 		hfa384x_drvr_stop(hw);
 	}
@@ -717,8 +701,6 @@ hfa384x_destroy( hfa384x_t *hw)
         while ( (skb = skb_dequeue(&hw->authq)) ) {
                 dev_kfree_skb(skb);
         }
-
-	DBFEXIT;
 }
 
 
@@ -746,8 +728,6 @@ static int
 usbctlx_get_status(const hfa384x_usb_cmdresp_t *cmdresp,
                    hfa384x_cmdresult_t *result)
 {
-	DBFENTER;
-
 	result->status = hfa384x2host_16(cmdresp->status);
 	result->resp0 = hfa384x2host_16(cmdresp->resp0);
 	result->resp1 = hfa384x2host_16(cmdresp->resp1);
@@ -760,7 +740,6 @@ usbctlx_get_status(const hfa384x_usb_cmdresp_t *cmdresp,
 	                result->resp1,
 	                result->resp2);
 
-	DBFEXIT;
 	return (result->status & HFA384x_STATUS_RESULT);
 }
 
@@ -768,13 +747,10 @@ static void
 usbctlx_get_rridresult(const hfa384x_usb_rridresp_t *rridresp,
                        hfa384x_rridresult_t *result)
 {
-	DBFENTER;
-
 	result->rid = hfa384x2host_16(rridresp->rid);
 	result->riddata = rridresp->data;
 	result->riddata_len = ((hfa384x2host_16(rridresp->frmlen) - 1) * 2);
 
-	DBFEXIT;
 }
 
 
@@ -833,7 +809,7 @@ static int usbctlx_rrid_completor_fn(usbctlx_completor_t *head)
 
 	/* Validate the length, note body len calculation in bytes */
 	if ( rridresult.riddata_len != complete->riddatalen ) {
-		WLAN_LOG_WARNING(
+		printk(KERN_WARNING
 			"RID len mismatch, rid=0x%04x hlen=%d fwlen=%d\n",
 		        rridresult.rid,
 		        complete->riddatalen,
@@ -934,8 +910,6 @@ init_rmem_completor(usbctlx_rmem_completor_t *completor,
 static void
 hfa384x_cb_status(hfa384x_t *hw, const hfa384x_usbctlx_t *ctlx)
 {
-	DBFENTER;
-
 	if ( ctlx->usercb != NULL ) {
 		hfa384x_cmdresult_t cmdresult;
 
@@ -948,8 +922,6 @@ hfa384x_cb_status(hfa384x_t *hw, const hfa384x_usbctlx_t *ctlx)
 
 		ctlx->usercb(hw, &cmdresult, ctlx->usercb_data);
 	}
-
-	DBFEXIT;
 }
 
 
@@ -976,8 +948,6 @@ hfa384x_cb_status(hfa384x_t *hw, const hfa384x_usbctlx_t *ctlx)
 static void
 hfa384x_cb_rrid(hfa384x_t *hw, const hfa384x_usbctlx_t *ctlx)
 {
-	DBFENTER;
-
 	if ( ctlx->usercb != NULL ) {
 		hfa384x_rridresult_t rridresult;
 
@@ -990,8 +960,6 @@ hfa384x_cb_rrid(hfa384x_t *hw, const hfa384x_usbctlx_t *ctlx)
 
 		ctlx->usercb(hw, &rridresult, ctlx->usercb_data);
 	}
-
-	DBFEXIT;
 }
 
 static inline int
@@ -1127,9 +1095,6 @@ hfa384x_cmd_initialize(hfa384x_t *hw)
 	int	i;
 	hfa384x_metacmd_t cmd;
 
-	DBFENTER;
-
-
 	cmd.cmd = HFA384x_CMDCODE_INIT;
 	cmd.parm0 = 0;
 	cmd.parm1 = 0;
@@ -1153,7 +1118,6 @@ hfa384x_cmd_initialize(hfa384x_t *hw)
 
         hw->link_status = HFA384x_LINK_NOTCONNECTED;
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1183,8 +1147,6 @@ int hfa384x_cmd_disable(hfa384x_t *hw, u16 macport)
 	int	result = 0;
 	hfa384x_metacmd_t cmd;
 
-	DBFENTER;
-
 	cmd.cmd = HFA384x_CMD_CMDCODE_SET(HFA384x_CMDCODE_DISABLE) |
 		  HFA384x_CMD_MACPORT_SET(macport);
 	cmd.parm0 = 0;
@@ -1193,7 +1155,6 @@ int hfa384x_cmd_disable(hfa384x_t *hw, u16 macport)
 
 	result = hfa384x_docmd_wait(hw, &cmd);
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1223,8 +1184,6 @@ int hfa384x_cmd_enable(hfa384x_t *hw, u16 macport)
 	int	result = 0;
 	hfa384x_metacmd_t cmd;
 
-	DBFENTER;
-
 	cmd.cmd = HFA384x_CMD_CMDCODE_SET(HFA384x_CMDCODE_ENABLE) |
 		  HFA384x_CMD_MACPORT_SET(macport);
 	cmd.parm0 = 0;
@@ -1233,7 +1192,6 @@ int hfa384x_cmd_enable(hfa384x_t *hw, u16 macport)
 
 	result = hfa384x_docmd_wait(hw, &cmd);
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1271,8 +1229,6 @@ int hfa384x_cmd_monitor(hfa384x_t *hw, u16 enable)
 	int	result = 0;
 	hfa384x_metacmd_t cmd;
 
-	DBFENTER;
-
 	cmd.cmd = HFA384x_CMD_CMDCODE_SET(HFA384x_CMDCODE_MONITOR) |
 		HFA384x_CMD_AINFO_SET(enable);
 	cmd.parm0 = 0;
@@ -1281,7 +1237,6 @@ int hfa384x_cmd_monitor(hfa384x_t *hw, u16 enable)
 
 	result = hfa384x_docmd_wait(hw, &cmd);
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1330,7 +1285,6 @@ int hfa384x_cmd_download(hfa384x_t *hw, u16 mode, u16 lowaddr,
 	int	result = 0;
 	hfa384x_metacmd_t cmd;
 
-	DBFENTER;
 	WLAN_LOG_DEBUG(5,
 		"mode=%d, lowaddr=0x%04x, highaddr=0x%04x, codelen=%d\n",
 		mode, lowaddr, highaddr, codelen);
@@ -1344,7 +1298,6 @@ int hfa384x_cmd_download(hfa384x_t *hw, u16 mode, u16 lowaddr,
 
 	result = hfa384x_docmd_wait(hw, &cmd);
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1377,9 +1330,7 @@ void
 hfa384x_copy_from_aux(
 	hfa384x_t *hw, u32 cardaddr, u32 auxctl, void *buf, unsigned int len)
 {
-	DBFENTER;
-	WLAN_LOG_ERROR("not used in USB.\n");
-	DBFEXIT;
+	printk(KERN_ERR "not used in USB.\n");
 }
 
 
@@ -1411,9 +1362,7 @@ void
 hfa384x_copy_to_aux(
 	hfa384x_t *hw, u32 cardaddr, u32 auxctl, void *buf, unsigned int len)
 {
-	DBFENTER;
-	WLAN_LOG_ERROR("not used in USB.\n");
-	DBFEXIT;
+	printk(KERN_ERR "not used in USB.\n");
 }
 
 
@@ -1444,14 +1393,11 @@ int hfa384x_corereset(hfa384x_t *hw, int holdtime, int settletime, int genesis)
 {
 	int 			result = 0;
 
-	DBFENTER;
-
 	result=usb_reset_device(hw->usb);
 	if(result<0) {
-		WLAN_LOG_ERROR("usb_reset_device() failed, result=%d.\n",result);
+		printk(KERN_ERR "usb_reset_device() failed, result=%d.\n",result);
 	}
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1486,8 +1432,6 @@ static int hfa384x_usbctlx_complete_sync(hfa384x_t *hw,
 {
 	unsigned long flags;
 	int result;
-
-	DBFENTER;
 
 	result = wait_for_completion_interruptible(&ctlx->done);
 
@@ -1555,7 +1499,7 @@ static int hfa384x_usbctlx_complete_sync(hfa384x_t *hw,
 		if (ctlx->state == CTLX_COMPLETE) {
 			result = completor->complete(completor);
 		} else {
-			WLAN_LOG_WARNING("CTLX[%d] error: state(%s)\n",
+			printk(KERN_WARNING "CTLX[%d] error: state(%s)\n",
 			                 hfa384x2host_16(ctlx->outbuf.type),
 			                 ctlxstr(ctlx->state));
 			result = -EIO;
@@ -1566,7 +1510,6 @@ static int hfa384x_usbctlx_complete_sync(hfa384x_t *hw,
 		kfree(ctlx);
 	}
 
-	DBFEXIT;
 	return result;
 }
 
@@ -1614,7 +1557,6 @@ hfa384x_docmd(
 	int			result;
 	hfa384x_usbctlx_t	*ctlx;
 
-	DBFENTER;
 	ctlx = usbctlx_alloc();
 	if ( ctlx == NULL ) {
 		result = -ENOMEM;
@@ -1655,7 +1597,6 @@ hfa384x_docmd(
 	}
 
 done:
-	DBFEXIT;
 	return result;
 }
 
@@ -1710,7 +1651,6 @@ hfa384x_dorrid(
 	int			result;
 	hfa384x_usbctlx_t	*ctlx;
 
-	DBFENTER;
 	ctlx = usbctlx_alloc();
 	if ( ctlx == NULL ) {
 		result = -ENOMEM;
@@ -1745,7 +1685,6 @@ hfa384x_dorrid(
 	}
 
 done:
-	DBFEXIT;
 	return result;
 }
 
@@ -1796,7 +1735,6 @@ hfa384x_dowrid(
 	int			result;
 	hfa384x_usbctlx_t	*ctlx;
 
-	DBFENTER;
 	ctlx = usbctlx_alloc();
 	if ( ctlx == NULL ) {
 		result = -ENOMEM;
@@ -1838,7 +1776,6 @@ hfa384x_dowrid(
 	}
 
 done:
-	DBFEXIT;
 	return result;
 }
 
@@ -1890,7 +1827,6 @@ hfa384x_dormem(
 	int			result;
 	hfa384x_usbctlx_t	*ctlx;
 
-	DBFENTER;
 	ctlx = usbctlx_alloc();
 	if ( ctlx == NULL ) {
 		result = -ENOMEM;
@@ -1937,7 +1873,6 @@ hfa384x_dormem(
 	}
 
 done:
-	DBFEXIT;
 	return result;
 }
 
@@ -1991,7 +1926,6 @@ hfa384x_dowmem(
 	int			result;
 	hfa384x_usbctlx_t	*ctlx;
 
-	DBFENTER;
 	WLAN_LOG_DEBUG(5, "page=0x%04x offset=0x%04x len=%d\n",
 		page,offset,len);
 
@@ -2038,7 +1972,6 @@ hfa384x_dowmem(
 	}
 
 done:
-	DBFEXIT;
 	return result;
 }
 
@@ -2064,8 +1997,6 @@ int hfa384x_drvr_commtallies( hfa384x_t *hw )
 {
 	hfa384x_metacmd_t cmd;
 
-	DBFENTER;
-
 	cmd.cmd = HFA384x_CMDCODE_INQ;
 	cmd.parm0 = HFA384x_IT_COMMTALLIES;
 	cmd.parm1 = 0;
@@ -2073,7 +2004,6 @@ int hfa384x_drvr_commtallies( hfa384x_t *hw )
 
 	hfa384x_docmd_async(hw, &cmd, NULL, NULL, NULL);
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -2104,7 +2034,6 @@ int hfa384x_drvr_disable(hfa384x_t *hw, u16 macport)
 {
 	int	result = 0;
 
-	DBFENTER;
 	if ((!hw->isap && macport != 0) ||
 	    (hw->isap && !(macport <= HFA384x_PORTID_MAX)) ||
 	    !(hw->port_enabled[macport]) ){
@@ -2115,7 +2044,6 @@ int hfa384x_drvr_disable(hfa384x_t *hw, u16 macport)
 			hw->port_enabled[macport] = 0;
 		}
 	}
-	DBFEXIT;
 	return result;
 }
 
@@ -2146,7 +2074,6 @@ int hfa384x_drvr_enable(hfa384x_t *hw, u16 macport)
 {
 	int	result = 0;
 
-	DBFENTER;
 	if ((!hw->isap && macport != 0) ||
 	    (hw->isap && !(macport <= HFA384x_PORTID_MAX)) ||
 	    (hw->port_enabled[macport]) ){
@@ -2157,7 +2084,6 @@ int hfa384x_drvr_enable(hfa384x_t *hw, u16 macport)
 			hw->port_enabled[macport] = 1;
 		}
 	}
-	DBFEXIT;
 	return result;
 }
 
@@ -2188,7 +2114,6 @@ int hfa384x_drvr_flashdl_enable(hfa384x_t *hw)
 	int		result = 0;
 	int		i;
 
-	DBFENTER;
 	/* Check that a port isn't active */
 	for ( i = 0; i < HFA384x_PORTID_MAX; i++) {
 		if ( hw->port_enabled[i] ) {
@@ -2219,7 +2144,7 @@ int hfa384x_drvr_flashdl_enable(hfa384x_t *hw)
 	WLAN_LOG_DEBUG(1,"flashdl_enable\n");
 
 	hw->dlstate = HFA384x_DLSTATE_FLASHENABLED;
-	DBFEXIT;
+
 	return result;
 }
 
@@ -2245,7 +2170,6 @@ int hfa384x_drvr_flashdl_enable(hfa384x_t *hw)
 ----------------------------------------------------------------*/
 int hfa384x_drvr_flashdl_disable(hfa384x_t *hw)
 {
-	DBFENTER;
 	/* Check that we're already in the download state */
 	if ( hw->dlstate != HFA384x_DLSTATE_FLASHENABLED ) {
 		return -EINVAL;
@@ -2258,7 +2182,6 @@ int hfa384x_drvr_flashdl_disable(hfa384x_t *hw)
 	hfa384x_cmd_download(hw, HFA384x_PROGMODE_DISABLE, 0, 0 , 0);
 	hw->dlstate = HFA384x_DLSTATE_DISABLED;
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -2314,7 +2237,6 @@ hfa384x_drvr_flashdl_write(
 	int		i;
 	int		j;
 
-	DBFENTER;
 	WLAN_LOG_DEBUG(5,"daddr=0x%08x len=%d\n", daddr, len);
 
 	/* Check that we're in the flash download state */
@@ -2322,7 +2244,7 @@ hfa384x_drvr_flashdl_write(
 		return -EINVAL;
 	}
 
-	WLAN_LOG_INFO("Download %d bytes to flash @0x%06x\n", len, daddr);
+	printk(KERN_INFO "Download %d bytes to flash @0x%06x\n", len, daddr);
 
 	/* Convert to flat address for arithmetic */
 	/* NOTE: dlbuffer RID stores the address in AUX format */
@@ -2333,7 +2255,7 @@ hfa384x_drvr_flashdl_write(
 		hw->bufinfo.page, hw->bufinfo.offset, dlbufaddr);
 
 #if 0
-WLAN_LOG_WARNING("dlbuf@0x%06lx len=%d to=%d\n", dlbufaddr, hw->bufinfo.len, hw->dltimeout);
+printk(KERN_WARNING "dlbuf@0x%06lx len=%d to=%d\n", dlbufaddr, hw->bufinfo.len, hw->dltimeout);
 #endif
 	/* Calculations to determine how many fills of the dlbuffer to do
 	 * and how many USB wmemreq's to do for each fill.  At this point
@@ -2360,14 +2282,14 @@ WLAN_LOG_WARNING("dlbuf@0x%06lx len=%d to=%d\n", dlbufaddr, hw->bufinfo.len, hw-
 		burnlo = HFA384x_ADDR_CMD_MKOFF(burndaddr);
 		burnhi = HFA384x_ADDR_CMD_MKPAGE(burndaddr);
 
-		WLAN_LOG_INFO("Writing %d bytes to flash @0x%06x\n",
+		printk(KERN_INFO "Writing %d bytes to flash @0x%06x\n",
 			burnlen, burndaddr);
 
 		/* Set the download mode */
 		result = hfa384x_cmd_download(hw, HFA384x_PROGMODE_NV,
 				burnlo, burnhi, burnlen);
 		if ( result ) {
-			WLAN_LOG_ERROR("download(NV,lo=%x,hi=%x,len=%x) "
+			printk(KERN_ERR "download(NV,lo=%x,hi=%x,len=%x) "
 				"cmd failed, result=%d. Aborting d/l\n",
 				burnlo, burnhi, burnlen, result);
 			goto exit_proc;
@@ -2396,18 +2318,6 @@ WLAN_LOG_WARNING("dlbuf@0x%06lx len=%d to=%d\n", dlbufaddr, hw->bufinfo.len, hw-
 					writeoffset,
 					writebuf,
 					writelen );
-#if 0
-
-Comment out for debugging, assume the write was successful.
-			if (result) {
-				WLAN_LOG_ERROR(
-					"Write to dl buffer failed, "
-					"result=0x%04x. Aborting.\n",
-					result);
-				goto exit_proc;
-			}
-#endif
-
 		}
 
 		/* set the download 'write flash' mode */
@@ -2415,7 +2325,7 @@ Comment out for debugging, assume the write was successful.
 				HFA384x_PROGMODE_NVWRITE,
 				0,0,0);
 		if ( result ) {
-			WLAN_LOG_ERROR(
+			printk(KERN_ERR
 				"download(NVWRITE,lo=%x,hi=%x,len=%x) "
 				"cmd failed, result=%d. Aborting d/l\n",
 				burnlo, burnhi, burnlen, result);
@@ -2431,7 +2341,6 @@ exit_proc:
 	/*  actually disable programming mode.  Remember, that will cause the */
 	/*  the firmware to effectively reset itself. */
 
-	DBFEXIT;
 	return result;
 }
 
@@ -2464,11 +2373,9 @@ exit_proc:
 int hfa384x_drvr_getconfig(hfa384x_t *hw, u16 rid, void *buf, u16 len)
 {
 	int 			result;
-	DBFENTER;
 
 	result = hfa384x_dorrid_wait(hw, rid, buf, len);
 
-	DBFEXIT;
 	return result;
 }
 
@@ -2567,35 +2474,8 @@ hfa384x_drvr_setconfig_async(
 ----------------------------------------------------------------*/
 int hfa384x_drvr_handover( hfa384x_t *hw, u8 *addr)
 {
-        DBFENTER;
-	WLAN_LOG_ERROR("Not currently supported in USB!\n");
-	DBFEXIT;
+	printk(KERN_ERR "Not currently supported in USB!\n");
 	return -EIO;
-}
-
-/*----------------------------------------------------------------
-* hfa384x_drvr_low_level
-*
-* Write test commands to the card.  Some test commands don't make
-* sense without prior set-up.  For example, continous TX isn't very
-* useful until you set the channel.  That functionality should be
-*
-* Side effects:
-*
-* Call context:
-*      process thread
-* -----------------------------------------------------------------*/
-int hfa384x_drvr_low_level(hfa384x_t *hw, hfa384x_metacmd_t *cmd)
-{
-	int             result;
-	DBFENTER;
-
-	/* Do i need a host2hfa... conversion ? */
-
-	result = hfa384x_docmd_wait(hw, cmd);
-
-	DBFEXIT;
-	return result;
 }
 
 /*----------------------------------------------------------------
@@ -2619,7 +2499,6 @@ int hfa384x_drvr_low_level(hfa384x_t *hw, hfa384x_metacmd_t *cmd)
 int
 hfa384x_drvr_ramdl_disable(hfa384x_t *hw)
 {
-	DBFENTER;
 	/* Check that we're already in the download state */
 	if ( hw->dlstate != HFA384x_DLSTATE_RAMENABLED ) {
 		return -EINVAL;
@@ -2632,7 +2511,6 @@ hfa384x_drvr_ramdl_disable(hfa384x_t *hw)
 	hfa384x_cmd_download(hw, HFA384x_PROGMODE_DISABLE, 0, 0 , 0);
 	hw->dlstate = HFA384x_DLSTATE_DISABLED;
 
-	DBFEXIT;
 	return 0;
 }
 
@@ -2668,11 +2546,11 @@ hfa384x_drvr_ramdl_enable(hfa384x_t *hw, u32 exeaddr)
 	u16		lowaddr;
 	u16		hiaddr;
 	int		i;
-	DBFENTER;
+
 	/* Check that a port isn't active */
 	for ( i = 0; i < HFA384x_PORTID_MAX; i++) {
 		if ( hw->port_enabled[i] ) {
-			WLAN_LOG_ERROR(
+			printk(KERN_ERR
 				"Can't download with a macport enabled.\n");
 			return -EINVAL;
 		}
@@ -2680,7 +2558,7 @@ hfa384x_drvr_ramdl_enable(hfa384x_t *hw, u32 exeaddr)
 
 	/* Check that we're not already in a download state */
 	if ( hw->dlstate != HFA384x_DLSTATE_DISABLED ) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"Download state not disabled.\n");
 		return -EINVAL;
 	}
@@ -2705,7 +2583,6 @@ hfa384x_drvr_ramdl_enable(hfa384x_t *hw, u32 exeaddr)
 			result);
 	}
 
-	DBFEXIT;
 	return result;
 }
 
@@ -2747,13 +2624,13 @@ hfa384x_drvr_ramdl_write(hfa384x_t *hw, u32 daddr, void* buf, u32 len)
 	u16		currpage;
 	u16		curroffset;
 	u16		currlen;
-	DBFENTER;
+
 	/* Check that we're in the ram download state */
 	if ( hw->dlstate != HFA384x_DLSTATE_RAMENABLED ) {
 		return -EINVAL;
 	}
 
-	WLAN_LOG_INFO("Writing %d bytes to ram @0x%06x\n", len, daddr);
+	printk(KERN_INFO "Writing %d bytes to ram @0x%06x\n", len, daddr);
 
 	/* How many dowmem calls?  */
 	nwrites = len / HFA384x_USB_RWMEM_MAXLEN;
@@ -2782,7 +2659,6 @@ hfa384x_drvr_ramdl_write(hfa384x_t *hw, u32 daddr, void* buf, u32 len)
 		/* TODO: We really should have a readback. */
 	}
 
-	DBFEXIT;
 	return result;
 }
 
@@ -2840,8 +2716,6 @@ int hfa384x_drvr_readpda(hfa384x_t *hw, void *buf, unsigned int len)
 		{ HFA3841_PDA_BOGUS_BASE,	0}
 	};
 
-	DBFENTER;
-
 	/* Read the pda from each known address.  */
 	for ( i = 0; i < ARRAY_SIZE(pdaloc); i++) {
 		/* Make address */
@@ -2855,7 +2729,7 @@ int hfa384x_drvr_readpda(hfa384x_t *hw, void *buf, unsigned int len)
 			len);		/* units of bytes */
 
 		if (result) {
-			WLAN_LOG_WARNING(
+			printk(KERN_WARNING
 					  "Read from index %zd failed, continuing\n",
 				i );
 			continue;
@@ -2869,14 +2743,14 @@ int hfa384x_drvr_readpda(hfa384x_t *hw, void *buf, unsigned int len)
 			pdrcode = hfa384x2host_16(pda[currpdr+1]);
 			/* Test the record length */
 			if ( pdrlen > HFA384x_PDR_LEN_MAX || pdrlen == 0) {
-				WLAN_LOG_ERROR("pdrlen invalid=%d\n",
+				printk(KERN_ERR "pdrlen invalid=%d\n",
 					pdrlen);
 				pdaok = 0;
 				break;
 			}
 			/* Test the code */
 			if ( !hfa384x_isgood_pdrcode(pdrcode) ) {
-				WLAN_LOG_ERROR("pdrcode invalid=%d\n",
+				printk(KERN_ERR "pdrcode invalid=%d\n",
 					pdrcode);
 				pdaok = 0;
 				break;
@@ -2893,7 +2767,7 @@ int hfa384x_drvr_readpda(hfa384x_t *hw, void *buf, unsigned int len)
 			}
 		}
 		if ( pdaok ) {
-			WLAN_LOG_INFO(
+			printk(KERN_INFO
 				"PDA Read from 0x%08x in %s space.\n",
 				pdaloc[i].cardaddr,
 				pdaloc[i].auxctl == 0 ? "EXTDS" :
@@ -2910,7 +2784,6 @@ int hfa384x_drvr_readpda(hfa384x_t *hw, void *buf, unsigned int len)
 		WLAN_LOG_DEBUG(3,"Failure: pda is not okay\n");
 	}
 
-	DBFEXIT;
 	return result;
 }
 
@@ -2965,7 +2838,6 @@ int hfa384x_drvr_start(hfa384x_t *hw)
 {
 	int		result, result1, result2;
 	u16		status;
-	DBFENTER;
 
 	might_sleep();
 
@@ -2976,23 +2848,23 @@ int hfa384x_drvr_start(hfa384x_t *hw)
 	 */
 	result = usb_get_status(hw->usb, USB_RECIP_ENDPOINT, hw->endp_in, &status);
 	if (result < 0) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"Cannot get bulk in endpoint status.\n");
 		goto done;
 	}
 	if ((status == 1) && usb_clear_halt(hw->usb, hw->endp_in)) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"Failed to reset bulk in endpoint.\n");
 	}
 
 	result = usb_get_status(hw->usb, USB_RECIP_ENDPOINT, hw->endp_out, &status);
 	if (result < 0) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"Cannot get bulk out endpoint status.\n");
 		goto done;
 	}
 	if ((status == 1) && usb_clear_halt(hw->usb, hw->endp_out)) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"Failed to reset bulk out endpoint.\n");
 	}
 
@@ -3002,7 +2874,7 @@ int hfa384x_drvr_start(hfa384x_t *hw)
 	/* Post the IN urb */
 	result = submit_rx_urb(hw, GFP_KERNEL);
 	if (result != 0) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"Fatal, failed to submit RX URB, result=%d\n",
 			result);
 		goto done;
@@ -3023,7 +2895,7 @@ int hfa384x_drvr_start(hfa384x_t *hw)
 	result = result2 = hfa384x_cmd_initialize(hw);
 	if (result1 != 0) {
 		if (result2 != 0) {
-			WLAN_LOG_ERROR(
+			printk(KERN_ERR
 				"cmd_initialize() failed on two attempts, results %d and %d\n",
 				result1, result2);
 			usb_kill_urb(&hw->rx_urb);
@@ -3034,17 +2906,16 @@ int hfa384x_drvr_start(hfa384x_t *hw)
 			WLAN_LOG_DEBUG(0, "but second attempt succeeded. All should be ok\n");
 		}
 	} else if (result2 != 0) {
-		WLAN_LOG_WARNING(
+		printk(KERN_WARNING
 			"First cmd_initialize() succeeded, but second attempt failed (result=%d)\n",
 			result2);
-		WLAN_LOG_WARNING("Most likely the card will be functional\n");
+		printk(KERN_WARNING "Most likely the card will be functional\n");
 			goto done;
 	}
 
 	hw->state = HFA384x_STATE_RUNNING;
 
 done:
-	DBFEXIT;
 	return result;
 }
 
@@ -3073,7 +2944,6 @@ hfa384x_drvr_stop(hfa384x_t *hw)
 {
 	int	result = 0;
 	int	i;
-	DBFENTER;
 
 	might_sleep();
 
@@ -3098,7 +2968,6 @@ hfa384x_drvr_stop(hfa384x_t *hw)
 		hw->port_enabled[i] = 0;
 	}
 
-	DBFEXIT;
 	return result;
 }
 
@@ -3131,10 +3000,8 @@ int hfa384x_drvr_txframe(hfa384x_t *hw, struct sk_buff *skb, p80211_hdr_t *p8021
 	int		ret;
 	char		*ptr;
 
-	DBFENTER;
-
 	if (hw->tx_urb.status == -EINPROGRESS) {
-		WLAN_LOG_WARNING("TX URB already in use\n");
+		printk(KERN_WARNING "TX URB already in use\n");
 		result = 3;
 		goto exit;
 	}
@@ -3175,7 +3042,6 @@ int hfa384x_drvr_txframe(hfa384x_t *hw, struct sk_buff *skb, p80211_hdr_t *p8021
 	/* if we're using host WEP, increase size by IV+ICV */
 	if (p80211_wep->data) {
 		hw->txbuff.txfrm.desc.data_len = host2hfa384x_16(skb->len+8);
-		// hw->txbuff.txfrm.desc.tx_control |= HFA384x_TX_NOENCRYPT_SET(1);
 		usbpktlen+=8;
 	} else {
 		hw->txbuff.txfrm.desc.data_len = host2hfa384x_16(skb->len);
@@ -3210,13 +3076,12 @@ int hfa384x_drvr_txframe(hfa384x_t *hw, struct sk_buff *skb, p80211_hdr_t *p8021
 	result = 1;
 	ret = submit_tx_urb(hw, &hw->tx_urb, GFP_ATOMIC);
 	if ( ret != 0 ) {
-		WLAN_LOG_ERROR(
+		printk(KERN_ERR
 			"submit_tx_urb() failed, error=%d\n", ret);
 		result = 3;
 	}
 
  exit:
-	DBFEXIT;
 	return result;
 }
 
@@ -3224,8 +3089,6 @@ void hfa384x_tx_timeout(wlandevice_t *wlandev)
 {
 	hfa384x_t	*hw = wlandev->priv;
 	unsigned long flags;
-
-	DBFENTER;
 
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
@@ -3238,8 +3101,6 @@ void hfa384x_tx_timeout(wlandevice_t *wlandev)
 	}
 
 	spin_unlock_irqrestore(&hw->ctlxq.lock, flags);
-
-	DBFEXIT;
 }
 
 /*----------------------------------------------------------------
@@ -3262,8 +3123,6 @@ static void hfa384x_usbctlx_reaper_task(unsigned long data)
 	struct list_head *temp;
 	unsigned long	flags;
 
-	DBFENTER;
-
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
 	/* This list is guaranteed to be empty if someone
@@ -3279,7 +3138,6 @@ static void hfa384x_usbctlx_reaper_task(unsigned long data)
 
 	spin_unlock_irqrestore(&hw->ctlxq.lock, flags);
 
-	DBFEXIT;
 }
 
 /*----------------------------------------------------------------
@@ -3304,8 +3162,6 @@ static void hfa384x_usbctlx_completion_task(unsigned long data)
 	unsigned long flags;
 
 	int reap = 0;
-
-	DBFENTER;
 
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
@@ -3361,8 +3217,6 @@ static void hfa384x_usbctlx_completion_task(unsigned long data)
 
 	if (reap)
 		tasklet_schedule(&hw->reaper_bh);
-
-	DBFEXIT;
 }
 
 /*----------------------------------------------------------------
@@ -3386,8 +3240,6 @@ static int unlocked_usbctlx_cancel_async(hfa384x_t *hw, hfa384x_usbctlx_t *ctlx)
 {
 	int ret;
 
-	DBFENTER;
-
 	/*
 	 * Try to delete the URB containing our request packet.
 	 * If we succeed, then its completion handler will be
@@ -3407,8 +3259,6 @@ static int unlocked_usbctlx_cancel_async(hfa384x_t *hw, hfa384x_usbctlx_t *ctlx)
 		unlocked_usbctlx_complete(hw, ctlx);
 		ret = 0;
 	}
-
-	DBFEXIT;
 
 	return ret;
 }
@@ -3437,8 +3287,6 @@ static int unlocked_usbctlx_cancel_async(hfa384x_t *hw, hfa384x_usbctlx_t *ctlx)
 ----------------------------------------------------------------*/
 static void unlocked_usbctlx_complete(hfa384x_t *hw, hfa384x_usbctlx_t *ctlx)
 {
-	DBFENTER;
-
 	/* Timers have been stopped, and ctlx should be in
 	 * a terminal state. Retire it from the "active"
 	 * queue.
@@ -3453,13 +3301,11 @@ static void unlocked_usbctlx_complete(hfa384x_t *hw, hfa384x_usbctlx_t *ctlx)
 		break;
 
 	default:
-		WLAN_LOG_ERROR("CTLX[%d] not in a terminating state(%s)\n",
+		printk(KERN_ERR "CTLX[%d] not in a terminating state(%s)\n",
 		               hfa384x2host_16(ctlx->outbuf.type),
 		               ctlxstr(ctlx->state));
 		break;
 	} /* switch */
-
-	DBFEXIT;
 }
 
 /*----------------------------------------------------------------
@@ -3482,7 +3328,6 @@ static void
 hfa384x_usbctlxq_run(hfa384x_t	*hw)
 {
 	unsigned long		flags;
-	DBFENTER;
 
 	/* acquire lock */
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
@@ -3542,7 +3387,7 @@ hfa384x_usbctlxq_run(hfa384x_t	*hw)
 			 * this CTLX back in the "pending" queue
 			 * and schedule a reset ...
 			 */
-			WLAN_LOG_WARNING("%s tx pipe stalled: requesting reset\n",
+			printk(KERN_WARNING "%s tx pipe stalled: requesting reset\n",
 			                 hw->wlandev->netdev->name);
 			list_move(&head->list, &hw->ctlxq.pending);
 			set_bit(WORK_TX_HALT, &hw->usb_flags);
@@ -3551,20 +3396,18 @@ hfa384x_usbctlxq_run(hfa384x_t	*hw)
 		}
 
 		if (result == -ESHUTDOWN) {
-			WLAN_LOG_WARNING("%s urb shutdown!\n",
+			printk(KERN_WARNING "%s urb shutdown!\n",
 					 hw->wlandev->netdev->name);
 			break;
 		}
 
-		WLAN_LOG_ERROR("Failed to submit CTLX[%d]: error=%d\n",
+		printk(KERN_ERR "Failed to submit CTLX[%d]: error=%d\n",
 		               hfa384x2host_16(head->outbuf.type), result);
 		unlocked_usbctlx_complete(hw, head);
 	} /* while */
 
 	unlock:
 	spin_unlock_irqrestore(&hw->ctlxq.lock, flags);
-
-	DBFEXIT;
 }
 
 
@@ -3600,8 +3443,6 @@ static void hfa384x_usbin_callback(struct urb *urb)
 		ABORT
 	} action;
 
-	DBFENTER;
-
 	if ( !wlandev ||
 	     !wlandev->netdev ||
 	     wlandev->hwremoved )
@@ -3631,7 +3472,7 @@ static void hfa384x_usbin_callback(struct urb *urb)
 		break;
 
 	case -EPIPE:
-		WLAN_LOG_WARNING("%s rx pipe stalled: requesting reset\n",
+		printk(KERN_WARNING "%s rx pipe stalled: requesting reset\n",
 		                 wlandev->netdev->name);
 		if ( !test_and_set_bit(WORK_RX_HALT, &hw->usb_flags) )
 			schedule_work(&hw->usb_work);
@@ -3682,7 +3523,7 @@ static void hfa384x_usbin_callback(struct urb *urb)
 		result = submit_rx_urb(hw, GFP_ATOMIC);
 
 		if (result != 0) {
-			WLAN_LOG_ERROR(
+			printk(KERN_ERR
 				"Fatal, failed to resubmit rx_urb. error=%d\n",
 				result);
 		}
@@ -3747,8 +3588,6 @@ exit:
 
 	if (skb)
 		dev_kfree_skb(skb);
-
-	DBFEXIT;
 }
 
 
@@ -3778,8 +3617,6 @@ static void hfa384x_usbin_ctlx(hfa384x_t *hw, hfa384x_usbin_t *usbin,
 	hfa384x_usbctlx_t	*ctlx;
 	int			run_queue = 0;
 	unsigned long		flags;
-
-	DBFENTER;
 
 retry:
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
@@ -3825,7 +3662,7 @@ retry:
 		 * Check that our message is what we're expecting ...
 		 */
 		if (ctlx->outbuf.type != intype) {
-			WLAN_LOG_WARNING("Expected IN[%d], received IN[%d] - ignored.\n",
+			printk(KERN_WARNING "Expected IN[%d], received IN[%d] - ignored.\n",
 			                 hfa384x2host_16(ctlx->outbuf.type),
 			                 hfa384x2host_16(intype));
 			goto unlock;
@@ -3860,7 +3697,7 @@ retry:
 			/*
 			 * Throw this CTLX away ...
 			 */
-			WLAN_LOG_ERROR("Matched IN URB, CTLX[%d] in invalid state(%s)."
+			printk(KERN_ERR "Matched IN URB, CTLX[%d] in invalid state(%s)."
 			               " Discarded.\n",
 			               hfa384x2host_16(ctlx->outbuf.type),
 			               ctlxstr(ctlx->state));
@@ -3875,8 +3712,6 @@ unlock:
 
 	if (run_queue)
 		hfa384x_usbctlxq_run(hw);
-
-	DBFEXIT;
 }
 
 
@@ -3900,7 +3735,6 @@ unlock:
 static void hfa384x_usbin_txcompl(wlandevice_t *wlandev, hfa384x_usbin_t *usbin)
 {
 	u16			status;
-	DBFENTER;
 
 	status = hfa384x2host_16(usbin->type); /* yeah I know it says type...*/
 
@@ -3911,8 +3745,6 @@ static void hfa384x_usbin_txcompl(wlandevice_t *wlandev, hfa384x_usbin_t *usbin)
 		prism2sta_ev_tx(wlandev, status);
 	}
 	// prism2sta_ev_alloc(wlandev);
-
-	DBFEXIT;
 }
 
 
@@ -3942,8 +3774,6 @@ static void hfa384x_usbin_rx(wlandevice_t *wlandev, struct sk_buff *skb)
 	u16                  data_len;
 	u16                  fc;
 
-	DBFENTER;
-
 	/* Byte order convert once up front. */
 	usbin->rxfrm.desc.status =
 		hfa384x2host_16(usbin->rxfrm.desc.status);
@@ -3954,7 +3784,7 @@ static void hfa384x_usbin_rx(wlandevice_t *wlandev, struct sk_buff *skb)
 	switch( HFA384x_RXSTATUS_MACPORT_GET(usbin->rxfrm.desc.status) )
 	{
 	case 0:
-		fc = ieee2host16(usbin->rxfrm.desc.frame_control);
+		fc = le16_to_cpu(usbin->rxfrm.desc.frame_control);
 
 		/* If exclude and we receive an unencrypted, drop it */
 		if ( (wlandev->hostwep & HOSTWEP_EXCLUDEUNENCRYPTED) &&
@@ -4011,14 +3841,13 @@ static void hfa384x_usbin_rx(wlandevice_t *wlandev, struct sk_buff *skb)
 		break;
 
 	default:
-		WLAN_LOG_WARNING("Received frame on unsupported port=%d\n",
+		printk(KERN_WARNING "Received frame on unsupported port=%d\n",
 			HFA384x_RXSTATUS_MACPORT_GET(usbin->rxfrm.desc.status) );
 		goto done;
 		break;
 	}
 
 done:
-	DBFEXIT;
 	return;
 }
 
@@ -4054,11 +3883,9 @@ static void hfa384x_int_rxmonitor( wlandevice_t *wlandev, hfa384x_usb_rxfrm_t *r
 	struct sk_buff			*skb;
 	hfa384x_t		        *hw = wlandev->priv;
 
-
-	DBFENTER;
 	/* Don't forget the status, time, and data_len fields are in host order */
 	/* Figure out how big the frame is */
-	fc = ieee2host16(rxdesc->frame_control);
+	fc = le16_to_cpu(rxdesc->frame_control);
 	hdrlen = p80211_headerlen(fc);
 	datalen = hfa384x2host_16(rxdesc->data_len);
 
@@ -4075,7 +3902,7 @@ static void hfa384x_int_rxmonitor( wlandevice_t *wlandev, hfa384x_usb_rxfrm_t *r
 	}
 
 	if ( (skb = dev_alloc_skb(skblen)) == NULL ) {
-		WLAN_LOG_ERROR("alloc_skb failed trying to allocate %d bytes\n", skblen);
+		printk(KERN_ERR "alloc_skb failed trying to allocate %d bytes\n", skblen);
 		return;
 	}
 
@@ -4128,7 +3955,6 @@ static void hfa384x_int_rxmonitor( wlandevice_t *wlandev, hfa384x_usb_rxfrm_t *r
 	/* pass it back up */
 	prism2sta_ev_rx(wlandev, skb);
 
-	DBFEXIT;
 	return;
 }
 
@@ -4153,12 +3979,8 @@ static void hfa384x_int_rxmonitor( wlandevice_t *wlandev, hfa384x_usb_rxfrm_t *r
 ----------------------------------------------------------------*/
 static void hfa384x_usbin_info(wlandevice_t *wlandev, hfa384x_usbin_t *usbin)
 {
-	DBFENTER;
-
 	usbin->infofrm.info.framelen = hfa384x2host_16(usbin->infofrm.info.framelen);
 	prism2sta_ev_info(wlandev, &usbin->infofrm.info);
-
-	DBFEXIT;
 }
 
 
@@ -4183,7 +4005,6 @@ static void hfa384x_usbout_callback(struct urb *urb)
 {
 	wlandevice_t		*wlandev = urb->context;
 	hfa384x_usbout_t	*usbout = urb->transfer_buffer;
-	DBFENTER;
 
 #ifdef DEBUG_USB
 	dbprint_urb(urb);
@@ -4200,7 +4021,7 @@ static void hfa384x_usbout_callback(struct urb *urb)
 		case -EPIPE:
 		{
 			hfa384x_t *hw = wlandev->priv;
-			WLAN_LOG_WARNING("%s tx pipe stalled: requesting reset\n",
+			printk(KERN_WARNING "%s tx pipe stalled: requesting reset\n",
 			                 wlandev->netdev->name);
 			if ( !test_and_set_bit(WORK_TX_HALT, &hw->usb_flags) )
 				schedule_work(&hw->usb_work);
@@ -4230,13 +4051,11 @@ static void hfa384x_usbout_callback(struct urb *urb)
 			break;
 
 		default:
-			WLAN_LOG_INFO("unknown urb->status=%d\n", urb->status);
+			printk(KERN_INFO "unknown urb->status=%d\n", urb->status);
 			++(wlandev->linux_stats.tx_errors);
 			break;
 		} /* switch */
 	}
-
-	DBFEXIT;
 }
 
 
@@ -4264,8 +4083,6 @@ static void hfa384x_ctlxout_callback(struct urb *urb)
 	int		run_queue = 0;
 	hfa384x_usbctlx_t	*ctlx;
 	unsigned long	flags;
-
-	DBFENTER;
 
 	WLAN_LOG_DEBUG(3,"urb->status=%d\n", urb->status);
 #ifdef DEBUG_USB
@@ -4330,7 +4147,7 @@ retry:
 
 		default:
 			/* This is NOT a valid CTLX "success" state! */
-			WLAN_LOG_ERROR(
+			printk(KERN_ERR
 			    "Illegal CTLX[%d] success state(%s, %d) in OUT URB\n",
 			    hfa384x2host_16(ctlx->outbuf.type),
 			    ctlxstr(ctlx->state), urb->status);
@@ -4340,7 +4157,7 @@ retry:
 		/* If the pipe has stalled then we need to reset it */
 		if ( (urb->status == -EPIPE) &&
 		      !test_and_set_bit(WORK_TX_HALT, &hw->usb_flags) ) {
-			WLAN_LOG_WARNING("%s tx pipe stalled: requesting reset\n",
+			printk(KERN_WARNING "%s tx pipe stalled: requesting reset\n",
 			                 hw->wlandev->netdev->name);
 			schedule_work(&hw->usb_work);
 		}
@@ -4372,7 +4189,7 @@ retry:
 		hfa384x_usbctlxq_run(hw);
 
  done:
-	DBFEXIT;
+        ;
 }
 
 
@@ -4399,7 +4216,6 @@ hfa384x_usbctlx_reqtimerfn(unsigned long data)
 {
 	hfa384x_t	*hw = (hfa384x_t*)data;
 	unsigned long   flags;
-	DBFENTER;
 
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
@@ -4436,8 +4252,6 @@ hfa384x_usbctlx_reqtimerfn(unsigned long data)
 	}
 
 	spin_unlock_irqrestore(&hw->ctlxq.lock, flags);
-
-	DBFEXIT;
 }
 
 
@@ -4465,8 +4279,6 @@ hfa384x_usbctlx_resptimerfn(unsigned long data)
 	hfa384x_t *hw = (hfa384x_t*)data;
 	unsigned long   flags;
 
-	DBFENTER;
-
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
 	hw->resp_timer_done = 1;
@@ -4489,7 +4301,8 @@ hfa384x_usbctlx_resptimerfn(unsigned long data)
 	spin_unlock_irqrestore(&hw->ctlxq.lock, flags);
 
  done:
-	DBFEXIT;
+        ;
+
 }
 
 /*----------------------------------------------------------------
@@ -4513,8 +4326,6 @@ hfa384x_usb_throttlefn(unsigned long data)
 	hfa384x_t *hw = (hfa384x_t*)data;
 	unsigned long   flags;
 
-	DBFENTER;
-
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
 	/*
@@ -4535,8 +4346,6 @@ hfa384x_usb_throttlefn(unsigned long data)
 	}
 
 	spin_unlock_irqrestore(&hw->ctlxq.lock, flags);
-
-	DBFEXIT;
 }
 
 
@@ -4566,8 +4375,6 @@ hfa384x_usbctlx_submit(
 	unsigned long flags;
 	int ret;
 
-	DBFENTER;
-
 	spin_lock_irqsave(&hw->ctlxq.lock, flags);
 
 	if (hw->wlandev->hwremoved) {
@@ -4582,7 +4389,6 @@ hfa384x_usbctlx_submit(
 		ret = 0;
 	}
 
-	DBFEXIT;
 	return ret;
 }
 
@@ -4608,11 +4414,7 @@ hfa384x_usbctlx_submit(
 ----------------------------------------------------------------*/
 static void hfa384x_usbout_tx(wlandevice_t *wlandev, hfa384x_usbout_t *usbout)
 {
-	DBFENTER;
-
 	prism2sta_ev_alloc(wlandev);
-
-	DBFEXIT;
 }
 
 /*----------------------------------------------------------------
