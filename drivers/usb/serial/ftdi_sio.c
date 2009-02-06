@@ -2287,11 +2287,8 @@ static int ftdi_tiocmget(struct tty_struct *tty, struct file *file)
 			   FTDI_SIO_GET_MODEM_STATUS_REQUEST_TYPE,
 			   0, 0,
 			   buf, 1, WDR_TIMEOUT);
-		if (ret < 0) {
-			dbg("%s Could not get modem status of device - err: %d", __func__,
-			    ret);
+		if (ret < 0)
 			return ret;
-		}
 		break;
 	case FT8U232AM:
 	case FT232BM:
@@ -2306,15 +2303,11 @@ static int ftdi_tiocmget(struct tty_struct *tty, struct file *file)
 				   FTDI_SIO_GET_MODEM_STATUS_REQUEST_TYPE,
 				   0, priv->interface,
 				   buf, 2, WDR_TIMEOUT);
-		if (ret < 0) {
-			dbg("%s Could not get modem status of device - err: %d", __func__,
-			    ret);
+		if (ret < 0)
 			return ret;
-		}
 		break;
 	default:
 		return -EFAULT;
-		break;
 	}
 
 	return  (buf[0] & FTDI_SIO_DSR_MASK ? TIOCM_DSR : 0) |
