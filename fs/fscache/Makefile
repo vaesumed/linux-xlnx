@@ -9,7 +9,8 @@ fscache-y := \
 	fsc-main.o \
 	fsc-netfs.o \
 	fsc-object.o \
-	fsc-operation.o
+	fsc-operation.o \
+	fsc-page.o
 
 fscache-$(CONFIG_PROC_FS) += fsc-proc.o
 fscache-$(CONFIG_FSCACHE_STATS) += fsc-stats.o
