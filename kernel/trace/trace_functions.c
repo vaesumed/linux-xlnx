@@ -24,32 +24,21 @@ static struct trace_array	*func_trace;
 static void tracing_start_function_trace(void);
 static void tracing_stop_function_trace(void);
 
-static void start_function_trace(struct trace_array *tr)
+static int function_trace_init(struct trace_array *tr)
 {
 	func_trace = tr;
 	tr->cpu = get_cpu();
-	tracing_reset_online_cpus(tr);
 	put_cpu();
 
 	tracing_start_cmdline_record();
 	tracing_start_function_trace();
-}
-
-static void stop_function_trace(struct trace_array *tr)
-{
-	tracing_stop_function_trace();
-	tracing_stop_cmdline_record();
-}
-
-static int function_trace_init(struct trace_array *tr)
-{
-	start_function_trace(tr);
 	return 0;
 }
 
 static void function_trace_reset(struct trace_array *tr)
 {
-	stop_function_trace(tr);
+	tracing_stop_function_trace();
+	tracing_stop_cmdline_record();
 }
 
 static void function_trace_start(struct trace_array *tr)
@@ -78,7 +67,7 @@ function_trace_call_preempt_only(unsigned long ip, unsigned long parent_ip)
 	disabled = atomic_inc_return(&data->disabled);
 
 	if (likely(disabled == 1))
-		trace_function(tr, data, ip, parent_ip, flags, pc);
+		trace_function(tr, ip, parent_ip, flags, pc);
 
 	atomic_dec(&data->disabled);
 	ftrace_preempt_enable(resched);
@@ -108,7 +97,7 @@ function_trace_call(unsigned long ip, unsigned long parent_ip)
 
 	if (likely(disabled == 1)) {
 		pc = preempt_count();
-		trace_function(tr, data, ip, parent_ip, flags, pc);
+		trace_function(tr, ip, parent_ip, flags, pc);
 	}
 
 	atomic_dec(&data->disabled);
@@ -139,7 +128,7 @@ function_stack_trace_call(unsigned long ip, unsigned long parent_ip)
 
 	if (likely(disabled == 1)) {
 		pc = preempt_count();
-		trace_function(tr, data, ip, parent_ip, flags, pc);
+		trace_function(tr, ip, parent_ip, flags, pc);
 		/*
 		 * skip over 5 funcs:
 		 *    __ftrace_trace_stack,
@@ -148,7 +137,7 @@ function_stack_trace_call(unsigned long ip, unsigned long parent_ip)
 		 *    ftrace_list_func
 		 *    ftrace_call
 		 */
-		__trace_stack(tr, data, flags, 5, pc);
+		__trace_stack(tr, flags, 5, pc);
 	}
 
 	atomic_dec(&data->disabled);

@@ -165,7 +165,7 @@ static void __blk_add_trace(struct blk_trace *bt, sector_t sector, int bytes,
 	struct task_struct *tsk = current;
 	struct ring_buffer_event *event = NULL;
 	struct blk_io_trace *t;
-	unsigned long flags;
+	unsigned long flags = 0;
 	unsigned long *sequence;
 	pid_t pid;
 	int cpu, pc = 0;
@@ -187,19 +187,15 @@ static void __blk_add_trace(struct blk_trace *bt, sector_t sector, int bytes,
 	cpu = raw_smp_processor_id();
 
 	if (blk_tr) {
-		struct trace_entry *ent;
 		tracing_record_cmdline(current);
 
-		event = ring_buffer_lock_reserve(blk_tr->buffer,
-						 sizeof(*t) + pdu_len, &flags);
+		pc = preempt_count();
+		event = trace_buffer_lock_reserve(blk_tr, TRACE_BLK,
+						  sizeof(*t) + pdu_len,
+						  0, pc);
 		if (!event)
 			return;
-
-		ent = ring_buffer_event_data(event);
-		t = (struct blk_io_trace *)ent;
-		pc = preempt_count();
-		tracing_generic_entry_update(ent, 0, pc);
-		ent->type = TRACE_BLK;
+		t = ring_buffer_event_data(event);
 		goto record_it;
 	}
 
@@ -241,12 +237,7 @@ record_it:
 			memcpy((void *) t + sizeof(*t), pdu_data, pdu_len);
 
 		if (blk_tr) {
-			ring_buffer_unlock_commit(blk_tr->buffer, event, flags);
-			if (pid != 0 &&
-			    !(blk_tracer_flags.val & TRACE_BLK_OPT_CLASSIC) &&
-			    (trace_flags & TRACE_ITER_STACKTRACE) != 0)
-				__trace_stack(blk_tr, NULL, flags, 5, pc);
-			trace_wake_up();
+			trace_buffer_unlock_commit(blk_tr, event, 0, pc);
 			return;
 		}
 	}
@@ -1095,8 +1086,6 @@ static void blk_tracer_print_header(struct seq_file *m)
 
 static void blk_tracer_start(struct trace_array *tr)
 {
-	tracing_reset_online_cpus(tr);
-
 	mutex_lock(&blk_probe_mutex);
 	if (atomic_add_return(1, &blk_probes_ref) == 1)
 		if (blk_register_tracepoints())
@@ -1243,8 +1232,6 @@ static struct trace_event trace_blk_event = {
 	.type	 	= TRACE_BLK,
 	.trace		= blk_trace_event_print,
 	.latency_trace	= blk_trace_event_print,
-	.raw		= trace_nop_print,
-	.hex		= trace_nop_print,
 	.binary		= blk_trace_event_print_binary,
 };
 

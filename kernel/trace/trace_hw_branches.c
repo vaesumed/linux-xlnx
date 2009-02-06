@@ -132,7 +132,6 @@ static int bts_trace_init(struct trace_array *tr)
 	hw_branch_trace = tr;
 
 	register_hotcpu_notifier(&bts_hotcpu_notifier);
-	tracing_reset_online_cpus(tr);
 	bts_trace_start(tr);
 
 	return 0;
@@ -175,7 +174,7 @@ void trace_hw_branch(u64 from, u64 to)
 	struct trace_array *tr = hw_branch_trace;
 	struct ring_buffer_event *event;
 	struct hw_branch_entry *entry;
-	unsigned long irq1, irq2;
+	unsigned long irq1;
 	int cpu;
 
 	if (unlikely(!tr))
@@ -189,16 +188,15 @@ void trace_hw_branch(u64 from, u64 to)
 	if (atomic_inc_return(&tr->data[cpu]->disabled) != 1)
 		goto out;
 
-	event = ring_buffer_lock_reserve(tr->buffer, sizeof(*entry), &irq2);
+	event = trace_buffer_lock_reserve(tr, TRACE_HW_BRANCHES,
+					  sizeof(*entry), 0, 0);
 	if (!event)
 		goto out;
 	entry	= ring_buffer_event_data(event);
-	tracing_generic_entry_update(&entry->ent, 0, from);
-	entry->ent.type = TRACE_HW_BRANCHES;
 	entry->ent.cpu = cpu;
 	entry->from = from;
 	entry->to   = to;
-	ring_buffer_unlock_commit(tr->buffer, event, irq2);
+	trace_buffer_unlock_commit(tr, event, 0, 0);
 
  out:
 	atomic_dec(&tr->data[cpu]->disabled);

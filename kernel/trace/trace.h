@@ -395,6 +395,7 @@ struct trace_iterator {
 	cpumask_var_t		started;
 };
 
+int tracer_init(struct tracer *t, struct trace_array *tr);
 int tracing_is_enabled(void);
 void trace_wake_up(void);
 void tracing_reset(struct trace_array *tr, int cpu);
@@ -402,6 +403,17 @@ void tracing_reset_online_cpus(struct trace_array *tr);
 int tracing_open_generic(struct inode *inode, struct file *filp);
 struct dentry *tracing_init_dentry(void);
 void init_tracer_sysprof_debugfs(struct dentry *d_tracer);
+
+struct ring_buffer_event;
+
+struct ring_buffer_event *trace_buffer_lock_reserve(struct trace_array *tr,
+						    unsigned char type,
+						    unsigned long len,
+						    unsigned long flags,
+						    int pc);
+void trace_buffer_unlock_commit(struct trace_array *tr,
+				struct ring_buffer_event *event,
+				unsigned long flags, int pc);
 
 struct trace_entry *tracing_get_trace_entry(struct trace_array *tr,
 						struct trace_array_cpu *data);
@@ -419,14 +431,12 @@ void ftrace(struct trace_array *tr,
 			    unsigned long parent_ip,
 			    unsigned long flags, int pc);
 void tracing_sched_switch_trace(struct trace_array *tr,
-				struct trace_array_cpu *data,
 				struct task_struct *prev,
 				struct task_struct *next,
 				unsigned long flags, int pc);
 void tracing_record_cmdline(struct task_struct *tsk);
 
 void tracing_sched_wakeup_trace(struct trace_array *tr,
-				struct trace_array_cpu *data,
 				struct task_struct *wakee,
 				struct task_struct *cur,
 				unsigned long flags, int pc);
@@ -436,7 +446,6 @@ void trace_special(struct trace_array *tr,
 		   unsigned long arg2,
 		   unsigned long arg3, int pc);
 void trace_function(struct trace_array *tr,
-		    struct trace_array_cpu *data,
 		    unsigned long ip,
 		    unsigned long parent_ip,
 		    unsigned long flags, int pc);
@@ -462,7 +471,6 @@ void update_max_tr_single(struct trace_array *tr,
 			  struct task_struct *tsk, int cpu);
 
 void __trace_stack(struct trace_array *tr,
-		   struct trace_array_cpu *data,
 		   unsigned long flags,
 		   int skip, int pc);
 
