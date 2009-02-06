@@ -1407,8 +1407,8 @@ static struct hda_verb ad1981_init_verbs[] = {
 	{0x1e, AC_VERB_SET_AMP_GAIN_MUTE, 0xb000},
 	{0x1f, AC_VERB_SET_AMP_GAIN_MUTE, 0xb080},
 	/* Mic boost: 0dB */
-	{0x08, AC_VERB_SET_AMP_GAIN_MUTE, 0xb000},
-	{0x18, AC_VERB_SET_AMP_GAIN_MUTE, 0xb000},
+	{0x08, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
+	{0x18, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
 	/* Record selector: Front mic */
 	{0x15, AC_VERB_SET_CONNECT_SEL, 0x0},
 	{0x15, AC_VERB_SET_AMP_GAIN_MUTE, 0xb080},
@@ -2288,10 +2288,6 @@ static struct hda_verb ad1988_capture_init_verbs[] = {
 	{0x0c, AC_VERB_SET_CONNECT_SEL, 0x1},
 	{0x0d, AC_VERB_SET_CONNECT_SEL, 0x1},
 	{0x0e, AC_VERB_SET_CONNECT_SEL, 0x1},
-	/* ADCs; muted */
-	{0x08, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
-	{0x09, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
-	{0x0f, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
 
 	{ }
 };
@@ -2399,10 +2395,6 @@ static struct hda_verb ad1988_3stack_init_verbs[] = {
 	{0x0c, AC_VERB_SET_CONNECT_SEL, 0x1},
 	{0x0d, AC_VERB_SET_CONNECT_SEL, 0x1},
 	{0x0e, AC_VERB_SET_CONNECT_SEL, 0x1},
-	/* ADCs; muted */
-	{0x08, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
-	{0x09, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
-	{0x0f, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
 	/* Analog Mix output amp */
 	{0x21, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_UNMUTE | 0x1f}, /* 0dB */
 	{ }
@@ -2474,10 +2466,6 @@ static struct hda_verb ad1988_laptop_init_verbs[] = {
 	{0x0c, AC_VERB_SET_CONNECT_SEL, 0x1},
 	{0x0d, AC_VERB_SET_CONNECT_SEL, 0x1},
 	{0x0e, AC_VERB_SET_CONNECT_SEL, 0x1},
-	/* ADCs; muted */
-	{0x08, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
-	{0x09, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
-	{0x0f, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
 	/* Analog Mix output amp */
 	{0x21, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_UNMUTE | 0x1f}, /* 0dB */
 	{ }
@@ -3195,10 +3183,10 @@ static struct hda_verb ad1884_init_verbs[] = {
 	{0x0e, AC_VERB_SET_CONNECT_SEL, 0x1},
 	/* Port-B (front mic) pin */
 	{0x14, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_VREF80},
-	{0x14, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
+	{0x14, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
 	/* Port-C (rear mic) pin */
 	{0x15, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_VREF80},
-	{0x15, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
+	{0x15, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
 	/* Analog mixer; mute as default */
 	{0x20, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_MUTE(0)},
 	{0x20, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_MUTE(1)},
@@ -3349,7 +3337,7 @@ static struct hda_verb ad1984_thinkpad_init_verbs[] = {
 	{0x1c, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_VREF80},
 	{0x1c, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
 	/* docking mic boost */
-	{0x25, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
+	{0x25, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_ZERO},
 	/* Analog mixer - docking mic; mute as default */
 	{0x20, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_MUTE(4)},
 	/* enable EAPD bit */
@@ -3613,10 +3601,10 @@ static struct hda_verb ad1884a_init_verbs[] = {
 	{0x13, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
 	/* Port-B (front mic) pin */
 	{0x14, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_VREF80},
-	{0x14, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
+	{0x14, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
 	/* Port-C (rear line-in) pin */
 	{0x15, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_IN},
-	{0x15, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
+	{0x15, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
 	/* Port-E (rear mic) pin */
 	{0x1c, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_VREF80},
 	{0x1c, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE},
@@ -3902,6 +3890,8 @@ static struct snd_pci_quirk ad1884a_cfg_tbl[] = {
 	SND_PCI_QUIRK(0x103c, 0x3030, "HP", AD1884A_MOBILE),
 	SND_PCI_QUIRK(0x103c, 0x3037, "HP 2230s", AD1884A_LAPTOP),
 	SND_PCI_QUIRK(0x103c, 0x3056, "HP", AD1884A_MOBILE),
+	SND_PCI_QUIRK(0x103c, 0x3072, "HP", AD1884A_LAPTOP),
+	SND_PCI_QUIRK(0x103c, 0x3077, "HP", AD1884A_LAPTOP),
 	SND_PCI_QUIRK(0x103c, 0x30e6, "HP 6730b", AD1884A_LAPTOP),
 	SND_PCI_QUIRK(0x103c, 0x30e7, "HP EliteBook 8530p", AD1884A_LAPTOP),
 	SND_PCI_QUIRK(0x103c, 0x3614, "HP 6730s", AD1884A_LAPTOP),
