@@ -9,8 +9,6 @@
  * This file handles the architecture-dependent parts of process handling..
  */
 
-#include <stdarg.h>
-
 #include <linux/cpu.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
@@ -627,9 +625,6 @@ asmlinkage int sys_vfork(struct pt_regs regs)
 	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, regs.sp, &regs, 0, NULL, NULL);
 }
 
-/*
- * sys_execve() executes a new program.
- */
 asmlinkage int sys_execve(struct pt_regs regs)
 {
 	int error;
