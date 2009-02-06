@@ -379,6 +379,20 @@ static inline void wait_on_page_writeback(struct page *page)
 
 extern void end_page_writeback(struct page *page);
 
+/**
+ * wait_on_page_owner_priv_2 - Wait for PG_owner_priv_2 to become clear
+ * @page: The page to monitor
+ *
+ * Wait for a PG_owner_priv_2 to become clear on the specified page.
+ */
+static inline void wait_on_page_owner_priv_2(struct page *page)
+{
+	if (PageOwnerPriv2(page))
+		wait_on_page_bit(page, PG_owner_priv_2);
+}
+
+extern void end_page_owner_priv_2(struct page *page);
+
 /*
  * Fault a userspace page into pagetables.  Return non-zero on a fault.
  *

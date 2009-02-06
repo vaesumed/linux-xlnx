@@ -603,6 +603,21 @@ void end_page_writeback(struct page *page)
 EXPORT_SYMBOL(end_page_writeback);
 
 /**
+ * end_page_owner_priv_2 - Clear PG_owner_priv_2 and wake up any waiters
+ * @page: the page
+ *
+ * Clear PG_owner_priv_2 and wake up any processes waiting for that event.
+ */
+void end_page_owner_priv_2(struct page *page)
+{
+	if (!TestClearPageOwnerPriv2(page))
+		BUG();
+	smp_mb__after_clear_bit();
+	wake_up_page(page, PG_owner_priv_2);
+}
+EXPORT_SYMBOL(end_page_owner_priv_2);
+
+/**
  * __lock_page - get a lock on the page, assuming we need to sleep to get it
  * @page: the page to lock
  *
@@ -2463,6 +2478,9 @@ EXPORT_SYMBOL(generic_file_aio_write);
  * The address_space is to try to release any data against the page
  * (presumably at page->private).  If the release was successful, return `1'.
  * Otherwise return zero.
+ *
+ * This may also be called if PG_fscache is set on a page, indicating that the
+ * page is known to the local caching routines.
  *
  * The @gfp_mask argument specifies whether I/O may be performed to release
  * this page (__GFP_IO), and whether the call may block (__GFP_WAIT & __GFP_FS).
