@@ -17,11 +17,10 @@
 #include <linux/pagemap.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/magic.h>
 
 #include "sysfs.h"
 
-/* Random magic number */
-#define SYSFS_MAGIC 0x62656572
 
 static struct vfsmount *sysfs_mount;
 struct super_block * sysfs_sb = NULL;
@@ -53,7 +52,9 @@ static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
 	sysfs_sb = sb;
 
 	/* get root inode, initialize and unlock it */
+	mutex_lock(&sysfs_mutex);
 	inode = sysfs_get_inode(&sysfs_root);
+	mutex_unlock(&sysfs_mutex);
 	if (!inode) {
 		pr_debug("sysfs: could not get root inode\n");
 		return -ENOMEM;
