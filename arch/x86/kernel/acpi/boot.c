@@ -42,10 +42,6 @@
 #include <asm/mpspec.h>
 #include <asm/smp.h>
 
-#ifdef CONFIG_X86_LOCAL_APIC
-# include <mach_apic.h>
-#endif
-
 static int __initdata acpi_force = 0;
 u32 acpi_rsdt_forced;
 #ifdef	CONFIG_ACPI
@@ -56,16 +52,7 @@ int acpi_disabled = 1;
 EXPORT_SYMBOL(acpi_disabled);
 
 #ifdef	CONFIG_X86_64
-
-#include <asm/proto.h>
-
-#else				/* X86 */
-
-#ifdef	CONFIG_X86_LOCAL_APIC
-#include <mach_apic.h>
-#include <mach_mpparse.h>
-#endif				/* CONFIG_X86_LOCAL_APIC */
-
+# include <asm/proto.h>
 #endif				/* X86 */
 
 #define BAD_MADT_ENTRY(entry, end) (					    \
@@ -239,7 +226,8 @@ static int __init acpi_parse_madt(struct acpi_table_header *table)
 		       madt->address);
 	}
 
-	acpi_madt_oem_check(madt->header.oem_id, madt->header.oem_table_id);
+	default_acpi_madt_oem_check(madt->header.oem_id,
+				    madt->header.oem_table_id);
 
 	return 0;
 }
@@ -1347,7 +1335,7 @@ static void __init acpi_process_madt(void)
 		if (!error) {
 			acpi_lapic = 1;
 
-#ifdef CONFIG_X86_GENERICARCH
+#ifdef CONFIG_X86_BIGSMP
 			generic_bigsmp_probe();
 #endif
 			/*
@@ -1359,9 +1347,8 @@ static void __init acpi_process_madt(void)
 				acpi_ioapic = 1;
 
 				smp_found_config = 1;
-#ifdef CONFIG_X86_32
-				setup_apic_routing();
-#endif
+				if (apic->setup_apic_routing)
+					apic->setup_apic_routing();
 			}
 		}
 		if (error == -EINVAL) {

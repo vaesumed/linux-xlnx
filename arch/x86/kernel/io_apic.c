@@ -1,7 +1,7 @@
 /*
  *	Intel IO-APIC support for multi-Pentium hosts.
  *
- *	Copyright (C) 1997, 1998, 1999, 2000 Ingo Molnar, Hajnalka Szabo
+ *	Copyright (C) 1997, 1998, 1999, 2000, 2009 Ingo Molnar, Hajnalka Szabo
  *
  *	Many thanks to Stig Venaas for trying out countless experimental
  *	patches and reporting/debugging problems patiently!
@@ -62,9 +62,7 @@
 #include <asm/uv/uv_hub.h>
 #include <asm/uv/uv_irq.h>
 
-#include <mach_ipi.h>
-#include <mach_apic.h>
-#include <mach_apicdef.h>
+#include <asm/genapic.h>
 
 #define __apicdebuginit(type) static type __init
 
@@ -100,10 +98,19 @@ DECLARE_BITMAP(mp_bus_not_pci, MAX_MP_BUSSES);
 
 int skip_ioapic_setup;
 
+void arch_disable_smp_support(void)
+{
+#ifdef CONFIG_PCI
+	noioapicquirk = 1;
+	noioapicreroute = -1;
+#endif
+	skip_ioapic_setup = 1;
+}
+
 static int __init parse_noapic(char *str)
 {
 	/* disable IO-APIC */
-	disable_ioapic_setup();
+	arch_disable_smp_support();
 	return 0;
 }
 early_param("noapic", parse_noapic);
@@ -514,11 +521,11 @@ static void send_cleanup_vector(struct irq_cfg *cfg)
 		for_each_cpu_and(i, cfg->old_domain, cpu_online_mask)
 			cfg->move_cleanup_count++;
 		for_each_cpu_and(i, cfg->old_domain, cpu_online_mask)
-			send_IPI_mask(cpumask_of(i), IRQ_MOVE_CLEANUP_VECTOR);
+			apic->send_IPI_mask(cpumask_of(i), IRQ_MOVE_CLEANUP_VECTOR);
 	} else {
 		cpumask_and(cleanup_mask, cfg->old_domain, cpu_online_mask);
 		cfg->move_cleanup_count = cpumask_weight(cleanup_mask);
-		send_IPI_mask(cleanup_mask, IRQ_MOVE_CLEANUP_VECTOR);
+		apic->send_IPI_mask(cleanup_mask, IRQ_MOVE_CLEANUP_VECTOR);
 		free_cpumask_var(cleanup_mask);
 	}
 	cfg->move_in_progress = 0;
@@ -563,8 +570,9 @@ static int
 assign_irq_vector(int irq, struct irq_cfg *cfg, const struct cpumask *mask);
 
 /*
- * Either sets desc->affinity to a valid value, and returns cpu_mask_to_apicid
- * of that, or returns BAD_APICID and leaves desc->affinity untouched.
+ * Either sets desc->affinity to a valid value, and returns
+ * ->cpu_mask_to_apicid of that, or returns BAD_APICID and
+ * leaves desc->affinity untouched.
  */
 static unsigned int
 set_desc_affinity(struct irq_desc *desc, const struct cpumask *mask)
@@ -582,7 +590,8 @@ set_desc_affinity(struct irq_desc *desc, const struct cpumask *mask)
 
 	cpumask_and(desc->affinity, cfg->domain, mask);
 	set_extra_move_desc(desc, mask);
-	return cpu_mask_to_apicid_and(desc->affinity, cpu_online_mask);
+
+	return apic->cpu_mask_to_apicid_and(desc->affinity, cpu_online_mask);
 }
 
 static void
@@ -796,23 +805,6 @@ static void clear_IO_APIC (void)
 		for (pin = 0; pin < nr_ioapic_registers[apic]; pin++)
 			clear_IO_APIC_pin(apic, pin);
 }
-
-#if !defined(CONFIG_SMP) && defined(CONFIG_X86_32)
-void send_IPI_self(int vector)
-{
-	unsigned int cfg;
-
-	/*
-	 * Wait for idle.
-	 */
-	apic_wait_icr_idle();
-	cfg = APIC_DM_FIXED | APIC_DEST_SELF | vector | APIC_DEST_LOGICAL;
-	/*
-	 * Send the IPI. The write to APIC_ICR fires this off.
-	 */
-	apic_write(APIC_ICR, cfg);
-}
-#endif /* !CONFIG_SMP && CONFIG_X86_32*/
 
 #ifdef CONFIG_X86_32
 /*
@@ -1316,7 +1308,7 @@ __assign_irq_vector(int irq, struct irq_cfg *cfg, const struct cpumask *mask)
 		int new_cpu;
 		int vector, offset;
 
-		vector_allocation_domain(cpu, tmp_mask);
+		apic->vector_allocation_domain(cpu, tmp_mask);
 
 		vector = current_vector;
 		offset = current_offset;
@@ -1486,7 +1478,7 @@ static void ioapic_register_intr(int irq, struct irq_desc *desc, unsigned long t
 					      handle_edge_irq, "edge");
 }
 
-static int setup_ioapic_entry(int apic, int irq,
+static int setup_ioapic_entry(int apic_id, int irq,
 			      struct IO_APIC_route_entry *entry,
 			      unsigned int destination, int trigger,
 			      int polarity, int vector)
@@ -1498,25 +1490,25 @@ static int setup_ioapic_entry(int apic, int irq,
 
 #ifdef CONFIG_INTR_REMAP
 	if (intr_remapping_enabled) {
-		struct intel_iommu *iommu = map_ioapic_to_ir(apic);
+		struct intel_iommu *iommu = map_ioapic_to_ir(apic_id);
 		struct irte irte;
 		struct IR_IO_APIC_route_entry *ir_entry =
 			(struct IR_IO_APIC_route_entry *) entry;
 		int index;
 
 		if (!iommu)
-			panic("No mapping iommu for ioapic %d\n", apic);
+			panic("No mapping iommu for ioapic %d\n", apic_id);
 
 		index = alloc_irte(iommu, irq, 1);
 		if (index < 0)
-			panic("Failed to allocate IRTE for ioapic %d\n", apic);
+			panic("Failed to allocate IRTE for ioapic %d\n", apic_id);
 
 		memset(&irte, 0, sizeof(irte));
 
 		irte.present = 1;
-		irte.dst_mode = INT_DEST_MODE;
+		irte.dst_mode = apic->irq_dest_mode;
 		irte.trigger_mode = trigger;
-		irte.dlvry_mode = INT_DELIVERY_MODE;
+		irte.dlvry_mode = apic->irq_delivery_mode;
 		irte.vector = vector;
 		irte.dest_id = IRTE_DEST(destination);
 
@@ -1529,8 +1521,8 @@ static int setup_ioapic_entry(int apic, int irq,
 	} else
 #endif
 	{
-		entry->delivery_mode = INT_DELIVERY_MODE;
-		entry->dest_mode = INT_DEST_MODE;
+		entry->delivery_mode = apic->irq_delivery_mode;
+		entry->dest_mode = apic->irq_dest_mode;
 		entry->dest = destination;
 	}
 
@@ -1547,7 +1539,7 @@ static int setup_ioapic_entry(int apic, int irq,
 	return 0;
 }
 
-static void setup_IO_APIC_irq(int apic, int pin, unsigned int irq, struct irq_desc *desc,
+static void setup_IO_APIC_irq(int apic_id, int pin, unsigned int irq, struct irq_desc *desc,
 			      int trigger, int polarity)
 {
 	struct irq_cfg *cfg;
@@ -1559,22 +1551,22 @@ static void setup_IO_APIC_irq(int apic, int pin, unsigned int irq, struct irq_de
 
 	cfg = desc->chip_data;
 
-	if (assign_irq_vector(irq, cfg, TARGET_CPUS))
+	if (assign_irq_vector(irq, cfg, apic->target_cpus()))
 		return;
 
-	dest = cpu_mask_to_apicid_and(cfg->domain, TARGET_CPUS);
+	dest = apic->cpu_mask_to_apicid_and(cfg->domain, apic->target_cpus());
 
 	apic_printk(APIC_VERBOSE,KERN_DEBUG
 		    "IOAPIC[%d]: Set routing entry (%d-%d -> 0x%x -> "
 		    "IRQ %d Mode:%i Active:%i)\n",
-		    apic, mp_ioapics[apic].apicid, pin, cfg->vector,
+		    apic_id, mp_ioapics[apic_id].apicid, pin, cfg->vector,
 		    irq, trigger, polarity);
 
 
-	if (setup_ioapic_entry(mp_ioapics[apic].apicid, irq, &entry,
+	if (setup_ioapic_entry(mp_ioapics[apic_id].apicid, irq, &entry,
 			       dest, trigger, polarity, cfg->vector)) {
 		printk("Failed to setup ioapic entry for ioapic  %d, pin %d\n",
-		       mp_ioapics[apic].apicid, pin);
+		       mp_ioapics[apic_id].apicid, pin);
 		__clear_irq_vector(irq, cfg);
 		return;
 	}
@@ -1583,12 +1575,12 @@ static void setup_IO_APIC_irq(int apic, int pin, unsigned int irq, struct irq_de
 	if (irq < NR_IRQS_LEGACY)
 		disable_8259A_irq(irq);
 
-	ioapic_write_entry(apic, pin, entry);
+	ioapic_write_entry(apic_id, pin, entry);
 }
 
 static void __init setup_IO_APIC_irqs(void)
 {
-	int apic, pin, idx, irq;
+	int apic_id, pin, idx, irq;
 	int notcon = 0;
 	struct irq_desc *desc;
 	struct irq_cfg *cfg;
@@ -1596,19 +1588,19 @@ static void __init setup_IO_APIC_irqs(void)
 
 	apic_printk(APIC_VERBOSE, KERN_DEBUG "init IO_APIC IRQs\n");
 
-	for (apic = 0; apic < nr_ioapics; apic++) {
-		for (pin = 0; pin < nr_ioapic_registers[apic]; pin++) {
+	for (apic_id = 0; apic_id < nr_ioapics; apic_id++) {
+		for (pin = 0; pin < nr_ioapic_registers[apic_id]; pin++) {
 
-			idx = find_irq_entry(apic, pin, mp_INT);
+			idx = find_irq_entry(apic_id, pin, mp_INT);
 			if (idx == -1) {
 				if (!notcon) {
 					notcon = 1;
 					apic_printk(APIC_VERBOSE,
 						KERN_DEBUG " %d-%d",
-						mp_ioapics[apic].apicid, pin);
+						mp_ioapics[apic_id].apicid, pin);
 				} else
 					apic_printk(APIC_VERBOSE, " %d-%d",
-						mp_ioapics[apic].apicid, pin);
+						mp_ioapics[apic_id].apicid, pin);
 				continue;
 			}
 			if (notcon) {
@@ -1617,20 +1609,25 @@ static void __init setup_IO_APIC_irqs(void)
 				notcon = 0;
 			}
 
-			irq = pin_2_irq(idx, apic, pin);
-#ifdef CONFIG_X86_32
-			if (multi_timer_check(apic, irq))
+			irq = pin_2_irq(idx, apic_id, pin);
+
+			/*
+			 * Skip the timer IRQ if there's a quirk handler
+			 * installed and if it returns 1:
+			 */
+			if (apic->multi_timer_check &&
+					apic->multi_timer_check(apic_id, irq))
 				continue;
-#endif
+
 			desc = irq_to_desc_alloc_cpu(irq, cpu);
 			if (!desc) {
 				printk(KERN_INFO "can not get irq_desc for %d\n", irq);
 				continue;
 			}
 			cfg = desc->chip_data;
-			add_pin_to_irq_cpu(cfg, cpu, apic, pin);
+			add_pin_to_irq_cpu(cfg, cpu, apic_id, pin);
 
-			setup_IO_APIC_irq(apic, pin, irq, desc,
+			setup_IO_APIC_irq(apic_id, pin, irq, desc,
 					irq_trigger(idx), irq_polarity(idx));
 		}
 	}
@@ -1643,7 +1640,7 @@ static void __init setup_IO_APIC_irqs(void)
 /*
  * Set up the timer pin, possibly with the 8259A-master behind.
  */
-static void __init setup_timer_IRQ0_pin(unsigned int apic, unsigned int pin,
+static void __init setup_timer_IRQ0_pin(unsigned int apic_id, unsigned int pin,
 					int vector)
 {
 	struct IO_APIC_route_entry entry;
@@ -1659,10 +1656,10 @@ static void __init setup_timer_IRQ0_pin(unsigned int apic, unsigned int pin,
 	 * We use logical delivery to get the timer IRQ
 	 * to the first CPU.
 	 */
-	entry.dest_mode = INT_DEST_MODE;
+	entry.dest_mode = apic->irq_dest_mode;
 	entry.mask = 1;					/* mask IRQ now */
-	entry.dest = cpu_mask_to_apicid(TARGET_CPUS);
-	entry.delivery_mode = INT_DELIVERY_MODE;
+	entry.dest = apic->cpu_mask_to_apicid(apic->target_cpus());
+	entry.delivery_mode = apic->irq_delivery_mode;
 	entry.polarity = 0;
 	entry.trigger = 0;
 	entry.vector = vector;
@@ -1676,7 +1673,7 @@ static void __init setup_timer_IRQ0_pin(unsigned int apic, unsigned int pin,
 	/*
 	 * Add it to the IO-APIC irq-routing table:
 	 */
-	ioapic_write_entry(apic, pin, entry);
+	ioapic_write_entry(apic_id, pin, entry);
 }
 
 
@@ -2089,7 +2086,7 @@ static void __init setup_ioapic_ids_from_mpc(void)
 {
 	union IO_APIC_reg_00 reg_00;
 	physid_mask_t phys_id_present_map;
-	int apic;
+	int apic_id;
 	int i;
 	unsigned char old_id;
 	unsigned long flags;
@@ -2108,26 +2105,26 @@ static void __init setup_ioapic_ids_from_mpc(void)
 	 * This is broken; anything with a real cpu count has to
 	 * circumvent this idiocy regardless.
 	 */
-	phys_id_present_map = ioapic_phys_id_map(phys_cpu_present_map);
+	phys_id_present_map = apic->ioapic_phys_id_map(phys_cpu_present_map);
 
 	/*
 	 * Set the IOAPIC ID to the value stored in the MPC table.
 	 */
-	for (apic = 0; apic < nr_ioapics; apic++) {
+	for (apic_id = 0; apic_id < nr_ioapics; apic_id++) {
 
 		/* Read the register 0 value */
 		spin_lock_irqsave(&ioapic_lock, flags);
-		reg_00.raw = io_apic_read(apic, 0);
+		reg_00.raw = io_apic_read(apic_id, 0);
 		spin_unlock_irqrestore(&ioapic_lock, flags);
 
-		old_id = mp_ioapics[apic].apicid;
+		old_id = mp_ioapics[apic_id].apicid;
 
-		if (mp_ioapics[apic].apicid >= get_physical_broadcast()) {
+		if (mp_ioapics[apic_id].apicid >= get_physical_broadcast()) {
 			printk(KERN_ERR "BIOS bug, IO-APIC#%d ID is %d in the MPC table!...\n",
-				apic, mp_ioapics[apic].apicid);
+				apic_id, mp_ioapics[apic_id].apicid);
 			printk(KERN_ERR "... fixing up to %d. (tell your hw vendor)\n",
 				reg_00.bits.ID);
-			mp_ioapics[apic].apicid = reg_00.bits.ID;
+			mp_ioapics[apic_id].apicid = reg_00.bits.ID;
 		}
 
 		/*
@@ -2135,10 +2132,10 @@ static void __init setup_ioapic_ids_from_mpc(void)
 		 * system must have a unique ID or we get lots of nice
 		 * 'stuck on smp_invalidate_needed IPI wait' messages.
 		 */
-		if (check_apicid_used(phys_id_present_map,
-					mp_ioapics[apic].apicid)) {
+		if (apic->check_apicid_used(phys_id_present_map,
+					mp_ioapics[apic_id].apicid)) {
 			printk(KERN_ERR "BIOS bug, IO-APIC#%d ID %d is already used!...\n",
-				apic, mp_ioapics[apic].apicid);
+				apic_id, mp_ioapics[apic_id].apicid);
 			for (i = 0; i < get_physical_broadcast(); i++)
 				if (!physid_isset(i, phys_id_present_map))
 					break;
@@ -2147,13 +2144,13 @@ static void __init setup_ioapic_ids_from_mpc(void)
 			printk(KERN_ERR "... fixing up to %d. (tell your hw vendor)\n",
 				i);
 			physid_set(i, phys_id_present_map);
-			mp_ioapics[apic].apicid = i;
+			mp_ioapics[apic_id].apicid = i;
 		} else {
 			physid_mask_t tmp;
-			tmp = apicid_to_cpu_present(mp_ioapics[apic].apicid);
+			tmp = apic->apicid_to_cpu_present(mp_ioapics[apic_id].apicid);
 			apic_printk(APIC_VERBOSE, "Setting %d in the "
 					"phys_id_present_map\n",
-					mp_ioapics[apic].apicid);
+					mp_ioapics[apic_id].apicid);
 			physids_or(phys_id_present_map, phys_id_present_map, tmp);
 		}
 
@@ -2162,11 +2159,11 @@ static void __init setup_ioapic_ids_from_mpc(void)
 		 * We need to adjust the IRQ routing table
 		 * if the ID changed.
 		 */
-		if (old_id != mp_ioapics[apic].apicid)
+		if (old_id != mp_ioapics[apic_id].apicid)
 			for (i = 0; i < mp_irq_entries; i++)
 				if (mp_irqs[i].dstapic == old_id)
 					mp_irqs[i].dstapic
-						= mp_ioapics[apic].apicid;
+						= mp_ioapics[apic_id].apicid;
 
 		/*
 		 * Read the right value from the MPC table and
@@ -2174,20 +2171,20 @@ static void __init setup_ioapic_ids_from_mpc(void)
 		 */
 		apic_printk(APIC_VERBOSE, KERN_INFO
 			"...changing IO-APIC physical APIC ID to %d ...",
-			mp_ioapics[apic].apicid);
+			mp_ioapics[apic_id].apicid);
 
-		reg_00.bits.ID = mp_ioapics[apic].apicid;
+		reg_00.bits.ID = mp_ioapics[apic_id].apicid;
 		spin_lock_irqsave(&ioapic_lock, flags);
-		io_apic_write(apic, 0, reg_00.raw);
+		io_apic_write(apic_id, 0, reg_00.raw);
 		spin_unlock_irqrestore(&ioapic_lock, flags);
 
 		/*
 		 * Sanity check
 		 */
 		spin_lock_irqsave(&ioapic_lock, flags);
-		reg_00.raw = io_apic_read(apic, 0);
+		reg_00.raw = io_apic_read(apic_id, 0);
 		spin_unlock_irqrestore(&ioapic_lock, flags);
-		if (reg_00.bits.ID != mp_ioapics[apic].apicid)
+		if (reg_00.bits.ID != mp_ioapics[apic_id].apicid)
 			printk("could not set ID!\n");
 		else
 			apic_printk(APIC_VERBOSE, " ok.\n");
@@ -2290,7 +2287,7 @@ static int ioapic_retrigger_irq(unsigned int irq)
 	unsigned long flags;
 
 	spin_lock_irqsave(&vector_lock, flags);
-	send_IPI_mask(cpumask_of(cpumask_first(cfg->domain)), cfg->vector);
+	apic->send_IPI_mask(cpumask_of(cpumask_first(cfg->domain)), cfg->vector);
 	spin_unlock_irqrestore(&vector_lock, flags);
 
 	return 1;
@@ -2298,7 +2295,7 @@ static int ioapic_retrigger_irq(unsigned int irq)
 #else
 static int ioapic_retrigger_irq(unsigned int irq)
 {
-	send_IPI_self(irq_cfg(irq)->vector);
+	apic->send_IPI_self(irq_cfg(irq)->vector);
 
 	return 1;
 }
@@ -2362,7 +2359,7 @@ migrate_ioapic_irq_desc(struct irq_desc *desc, const struct cpumask *mask)
 
 	set_extra_move_desc(desc, mask);
 
-	dest = cpu_mask_to_apicid_and(cfg->domain, mask);
+	dest = apic->cpu_mask_to_apicid_and(cfg->domain, mask);
 
 	modify_ioapic_rte = desc->status & IRQ_LEVEL;
 	if (modify_ioapic_rte) {
@@ -2878,7 +2875,7 @@ static inline void __init check_timer(void)
 	 * get/set the timer IRQ vector:
 	 */
 	disable_8259A_irq(0);
-	assign_irq_vector(0, cfg, TARGET_CPUS);
+	assign_irq_vector(0, cfg, apic->target_cpus());
 
 	/*
 	 * As IRQ0 is to be enabled in the 8259A, the virtual
@@ -3196,7 +3193,7 @@ unsigned int create_irq_nr(unsigned int irq_want)
 
 		if (cfg_new->vector != 0)
 			continue;
-		if (__assign_irq_vector(new, cfg_new, TARGET_CPUS) == 0)
+		if (__assign_irq_vector(new, cfg_new, apic->target_cpus()) == 0)
 			irq = new;
 		break;
 	}
@@ -3262,11 +3259,11 @@ static int msi_compose_msg(struct pci_dev *pdev, unsigned int irq, struct msi_ms
 		return -ENXIO;
 
 	cfg = irq_cfg(irq);
-	err = assign_irq_vector(irq, cfg, TARGET_CPUS);
+	err = assign_irq_vector(irq, cfg, apic->target_cpus());
 	if (err)
 		return err;
 
-	dest = cpu_mask_to_apicid_and(cfg->domain, TARGET_CPUS);
+	dest = apic->cpu_mask_to_apicid_and(cfg->domain, apic->target_cpus());
 
 #ifdef CONFIG_INTR_REMAP
 	if (irq_remapped(irq)) {
@@ -3280,9 +3277,9 @@ static int msi_compose_msg(struct pci_dev *pdev, unsigned int irq, struct msi_ms
 		memset (&irte, 0, sizeof(irte));
 
 		irte.present = 1;
-		irte.dst_mode = INT_DEST_MODE;
+		irte.dst_mode = apic->irq_dest_mode;
 		irte.trigger_mode = 0; /* edge */
-		irte.dlvry_mode = INT_DELIVERY_MODE;
+		irte.dlvry_mode = apic->irq_delivery_mode;
 		irte.vector = cfg->vector;
 		irte.dest_id = IRTE_DEST(dest);
 
@@ -3300,10 +3297,10 @@ static int msi_compose_msg(struct pci_dev *pdev, unsigned int irq, struct msi_ms
 		msg->address_hi = MSI_ADDR_BASE_HI;
 		msg->address_lo =
 			MSI_ADDR_BASE_LO |
-			((INT_DEST_MODE == 0) ?
+			((apic->irq_dest_mode == 0) ?
 				MSI_ADDR_DEST_MODE_PHYSICAL:
 				MSI_ADDR_DEST_MODE_LOGICAL) |
-			((INT_DELIVERY_MODE != dest_LowestPrio) ?
+			((apic->irq_delivery_mode != dest_LowestPrio) ?
 				MSI_ADDR_REDIRECTION_CPU:
 				MSI_ADDR_REDIRECTION_LOWPRI) |
 			MSI_ADDR_DEST_ID(dest);
@@ -3311,7 +3308,7 @@ static int msi_compose_msg(struct pci_dev *pdev, unsigned int irq, struct msi_ms
 		msg->data =
 			MSI_DATA_TRIGGER_EDGE |
 			MSI_DATA_LEVEL_ASSERT |
-			((INT_DELIVERY_MODE != dest_LowestPrio) ?
+			((apic->irq_delivery_mode != dest_LowestPrio) ?
 				MSI_DATA_DELIVERY_FIXED:
 				MSI_DATA_DELIVERY_LOWPRI) |
 			MSI_DATA_VECTOR(cfg->vector);
@@ -3464,40 +3461,6 @@ static int setup_msi_irq(struct pci_dev *dev, struct msi_desc *msidesc, int irq)
 	dev_printk(KERN_DEBUG, &dev->dev, "irq %d for MSI/MSI-X\n", irq);
 
 	return 0;
-}
-
-int arch_setup_msi_irq(struct pci_dev *dev, struct msi_desc *msidesc)
-{
-	unsigned int irq;
-	int ret;
-	unsigned int irq_want;
-
-	irq_want = nr_irqs_gsi;
-	irq = create_irq_nr(irq_want);
-	if (irq == 0)
-		return -1;
-
-#ifdef CONFIG_INTR_REMAP
-	if (!intr_remapping_enabled)
-		goto no_ir;
-
-	ret = msi_alloc_irte(dev, irq, 1);
-	if (ret < 0)
-		goto error;
-no_ir:
-#endif
-	ret = setup_msi_irq(dev, msidesc, irq);
-	if (ret < 0) {
-		destroy_irq(irq);
-		return ret;
-	}
-	return 0;
-
-#ifdef CONFIG_INTR_REMAP
-error:
-	destroy_irq(irq);
-	return ret;
-#endif
 }
 
 int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
@@ -3733,12 +3696,13 @@ int arch_setup_ht_irq(unsigned int irq, struct pci_dev *dev)
 		return -ENXIO;
 
 	cfg = irq_cfg(irq);
-	err = assign_irq_vector(irq, cfg, TARGET_CPUS);
+	err = assign_irq_vector(irq, cfg, apic->target_cpus());
 	if (!err) {
 		struct ht_irq_msg msg;
 		unsigned dest;
 
-		dest = cpu_mask_to_apicid_and(cfg->domain, TARGET_CPUS);
+		dest = apic->cpu_mask_to_apicid_and(cfg->domain,
+						    apic->target_cpus());
 
 		msg.address_hi = HT_IRQ_HIGH_DEST_ID(dest);
 
@@ -3746,11 +3710,11 @@ int arch_setup_ht_irq(unsigned int irq, struct pci_dev *dev)
 			HT_IRQ_LOW_BASE |
 			HT_IRQ_LOW_DEST_ID(dest) |
 			HT_IRQ_LOW_VECTOR(cfg->vector) |
-			((INT_DEST_MODE == 0) ?
+			((apic->irq_dest_mode == 0) ?
 				HT_IRQ_LOW_DM_PHYSICAL :
 				HT_IRQ_LOW_DM_LOGICAL) |
 			HT_IRQ_LOW_RQEOI_EDGE |
-			((INT_DELIVERY_MODE != dest_LowestPrio) ?
+			((apic->irq_delivery_mode != dest_LowestPrio) ?
 				HT_IRQ_LOW_MT_FIXED :
 				HT_IRQ_LOW_MT_ARBITRATED) |
 			HT_IRQ_LOW_IRQ_MASKED;
@@ -3798,12 +3762,12 @@ int arch_enable_uv_irq(char *irq_name, unsigned int irq, int cpu, int mmr_blade,
 	BUG_ON(sizeof(struct uv_IO_APIC_route_entry) != sizeof(unsigned long));
 
 	entry->vector = cfg->vector;
-	entry->delivery_mode = INT_DELIVERY_MODE;
-	entry->dest_mode = INT_DEST_MODE;
+	entry->delivery_mode = apic->irq_delivery_mode;
+	entry->dest_mode = apic->irq_dest_mode;
 	entry->polarity = 0;
 	entry->trigger = 0;
 	entry->mask = 0;
-	entry->dest = cpu_mask_to_apicid(eligible_cpu);
+	entry->dest = apic->cpu_mask_to_apicid(eligible_cpu);
 
 	mmr_pnode = uv_blade_to_pnode(mmr_blade);
 	uv_write_global_mmr64(mmr_pnode, mmr_offset, mmr_value);
@@ -3897,7 +3861,7 @@ int __init io_apic_get_unique_id(int ioapic, int apic_id)
 	 */
 
 	if (physids_empty(apic_id_map))
-		apic_id_map = ioapic_phys_id_map(phys_cpu_present_map);
+		apic_id_map = apic->ioapic_phys_id_map(phys_cpu_present_map);
 
 	spin_lock_irqsave(&ioapic_lock, flags);
 	reg_00.raw = io_apic_read(ioapic, 0);
@@ -3913,10 +3877,10 @@ int __init io_apic_get_unique_id(int ioapic, int apic_id)
 	 * Every APIC in a system must have a unique ID or we get lots of nice
 	 * 'stuck on smp_invalidate_needed IPI wait' messages.
 	 */
-	if (check_apicid_used(apic_id_map, apic_id)) {
+	if (apic->check_apicid_used(apic_id_map, apic_id)) {
 
 		for (i = 0; i < get_physical_broadcast(); i++) {
-			if (!check_apicid_used(apic_id_map, i))
+			if (!apic->check_apicid_used(apic_id_map, i))
 				break;
 		}
 
@@ -3929,7 +3893,7 @@ int __init io_apic_get_unique_id(int ioapic, int apic_id)
 		apic_id = i;
 	}
 
-	tmp = apicid_to_cpu_present(apic_id);
+	tmp = apic->apicid_to_cpu_present(apic_id);
 	physids_or(apic_id_map, apic_id_map, tmp);
 
 	if (reg_00.bits.ID != apic_id) {
@@ -4022,7 +3986,7 @@ int acpi_get_override_irq(int bus_irq, int *trigger, int *polarity)
 /*
  * This function currently is only a helper for the i386 smp boot process where
  * we need to reprogram the ioredtbls to cater for the cpus which have come online
- * so mask in all cases should simply be TARGET_CPUS
+ * so mask in all cases should simply be apic->target_cpus()
  */
 #ifdef CONFIG_SMP
 void __init setup_ioapic_dest(void)
@@ -4063,7 +4027,7 @@ void __init setup_ioapic_dest(void)
 			    (IRQ_NO_BALANCING | IRQ_AFFINITY_SET))
 				mask = desc->affinity;
 			else
-				mask = TARGET_CPUS;
+				mask = apic->target_cpus();
 
 #ifdef CONFIG_INTR_REMAP
 			if (intr_remapping_enabled)
