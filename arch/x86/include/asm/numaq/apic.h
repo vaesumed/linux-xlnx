@@ -9,7 +9,7 @@
 
 static inline const cpumask_t *target_cpus(void)
 {
-	return &CPU_MASK_ALL;
+	return cpu_all_mask;
 }
 
 #define NO_BALANCE_IRQ (1)

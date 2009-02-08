@@ -13,7 +13,7 @@ static inline int apic_id_registered(void)
 
 static inline const cpumask_t *target_cpus_cluster(void)
 {
-	return &CPU_MASK_ALL;
+	return cpu_all_mask;
 }
 
 static inline const cpumask_t *target_cpus(void)
