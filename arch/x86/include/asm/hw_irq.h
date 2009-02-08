@@ -71,12 +71,6 @@ extern void setup_ioapic_dest(void);
 extern void enable_IO_APIC(void);
 #endif
 
-/* IPI functions */
-#ifdef CONFIG_X86_32
-extern void send_IPI_self(int vector);
-#endif
-extern void send_IPI(int dest, int vector);
-
 /* Statistics */
 extern atomic_t irq_err_count;
 extern atomic_t irq_mis_count;
@@ -84,21 +78,11 @@ extern atomic_t irq_mis_count;
 /* EISA */
 extern void eisa_set_level_irq(unsigned int irq);
 
-/* Voyager functions */
-extern asmlinkage void vic_cpi_interrupt(void);
-extern asmlinkage void vic_sys_interrupt(void);
-extern asmlinkage void vic_cmn_interrupt(void);
-extern asmlinkage void qic_timer_interrupt(void);
-extern asmlinkage void qic_invalidate_interrupt(void);
-extern asmlinkage void qic_reschedule_interrupt(void);
-extern asmlinkage void qic_enable_irq_interrupt(void);
-extern asmlinkage void qic_call_function_interrupt(void);
-
 /* SMP */
 extern void smp_apic_timer_interrupt(struct pt_regs *);
 extern void smp_spurious_interrupt(struct pt_regs *);
 extern void smp_error_interrupt(struct pt_regs *);
-#ifdef CONFIG_X86_SMP
+#ifdef CONFIG_SMP
 extern void smp_reschedule_interrupt(struct pt_regs *);
 extern void smp_call_function_interrupt(struct pt_regs *);
 extern void smp_call_function_single_interrupt(struct pt_regs *);
