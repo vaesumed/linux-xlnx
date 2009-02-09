@@ -1064,17 +1064,17 @@ static struct fifo_cfg __initdata mode_4_cfg[] = {
 { .hw_ep_num =  7, .style = FIFO_TX,   .maxpacket = 512, },
 { .hw_ep_num =  7, .style = FIFO_RX,   .maxpacket = 512, },
 { .hw_ep_num =  8, .style = FIFO_TX,   .maxpacket = 512, },
-{ .hw_ep_num =  8, .style = FIFO_RX,   .maxpacket = 512, },
+{ .hw_ep_num =  8, .style = FIFO_RX,   .maxpacket = 64, },
 { .hw_ep_num =  9, .style = FIFO_TX,   .maxpacket = 512, },
-{ .hw_ep_num =  9, .style = FIFO_RX,   .maxpacket = 512, },
+{ .hw_ep_num =  9, .style = FIFO_RX,   .maxpacket = 64, },
 { .hw_ep_num = 10, .style = FIFO_TX,   .maxpacket = 512, },
-{ .hw_ep_num = 10, .style = FIFO_RX,   .maxpacket = 512, },
-{ .hw_ep_num = 11, .style = FIFO_TX,   .maxpacket = 512, },
-{ .hw_ep_num = 11, .style = FIFO_RX,   .maxpacket = 512, },
-{ .hw_ep_num = 12, .style = FIFO_TX,   .maxpacket = 512, },
-{ .hw_ep_num = 12, .style = FIFO_RX,   .maxpacket = 512, },
-{ .hw_ep_num = 13, .style = FIFO_TX,   .maxpacket = 512, },
-{ .hw_ep_num = 13, .style = FIFO_RX,   .maxpacket = 512, },
+{ .hw_ep_num = 10, .style = FIFO_RX,   .maxpacket = 64, },
+{ .hw_ep_num = 11, .style = FIFO_TX,   .maxpacket = 256, },
+{ .hw_ep_num = 11, .style = FIFO_RX,   .maxpacket = 256, },
+{ .hw_ep_num = 12, .style = FIFO_TX,   .maxpacket = 256, },
+{ .hw_ep_num = 12, .style = FIFO_RX,   .maxpacket = 256, },
+{ .hw_ep_num = 13, .style = FIFO_TX,   .maxpacket = 256, },
+{ .hw_ep_num = 13, .style = FIFO_RX,   .maxpacket = 4096, },
 { .hw_ep_num = 14, .style = FIFO_RXTX, .maxpacket = 1024, },
 { .hw_ep_num = 15, .style = FIFO_RXTX, .maxpacket = 1024, },
 };
@@ -2151,6 +2151,8 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 
 	spin_lock_irqsave(&musb->lock, flags);
 
+	disable_irq(musb->nIrq);
+
 	if (is_peripheral_active(musb)) {
 		/* FIXME force disconnect unless we know USB will wake
 		 * the system up quickly enough to respond ...
@@ -2183,6 +2185,8 @@ static int musb_resume(struct platform_device *pdev)
 		musb->set_clock(musb->clock, 1);
 	else
 		clk_enable(musb->clock);
+
+	enable_irq(musb->nIrq);
 
 	/* for static cmos like DaVinci, register values were preserved
 	 * unless for some reason the whole soc powered down and we're
