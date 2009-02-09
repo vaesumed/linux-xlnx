@@ -198,6 +198,7 @@ static int trm290_dma_setup(ide_drive_t *drive)
 		rw = 2;
 
 	if (!(count = ide_build_dmatable(drive, rq))) {
+		ide_map_sg(drive, rq);
 		/* try PIO instead of DMA */
 		trm290_prepare_drive(drive, 0); /* select PIO xfer */
 		return 1;
@@ -277,9 +278,6 @@ static void __devinit init_hwif_trm290(ide_hwif_t *hwif)
 	if (reg & 0x10)
 		/* legacy mode */
 		hwif->irq = hwif->channel ? 15 : 14;
-	else if (!hwif->irq && hwif->mate && hwif->mate->irq)
-		/* sharing IRQ with mate */
-		hwif->irq = hwif->mate->irq;
 
 #if 1
 	{
