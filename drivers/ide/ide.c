@@ -183,6 +183,7 @@ static int ide_set_dev_param_mask(const char *s, struct kernel_param *kp)
 	int a, b, i, j = 1;
 	unsigned int *dev_param_mask = (unsigned int *)kp->arg;
 
+	/* controller . device (0 or 1) [ : 1 (set) | 0 (clear) ] */
 	if (sscanf(s, "%d.%d:%d", &a, &b, &j) != 3 &&
 	    sscanf(s, "%d.%d", &a, &b) != 2)
 		return -EINVAL;
@@ -195,7 +196,7 @@ static int ide_set_dev_param_mask(const char *s, struct kernel_param *kp)
 	if (j)
 		*dev_param_mask |= (1 << i);
 	else
-		*dev_param_mask &= (1 << i);
+		*dev_param_mask &= ~(1 << i);
 
 	return 0;
 }
@@ -238,6 +239,8 @@ static int ide_set_disk_chs(const char *str, struct kernel_param *kp)
 {
 	int a, b, c = 0, h = 0, s = 0, i, j = 1;
 
+	/* controller . device (0 or 1) : Cylinders , Heads , Sectors */
+	/* controller . device (0 or 1) : 1 (use CHS) | 0 (ignore CHS) */
 	if (sscanf(str, "%d.%d:%d,%d,%d", &a, &b, &c, &h, &s) != 5 &&
 	    sscanf(str, "%d.%d:%d", &a, &b, &j) != 3)
 		return -EINVAL;
@@ -253,7 +256,7 @@ static int ide_set_disk_chs(const char *str, struct kernel_param *kp)
 	if (j)
 		ide_disks |= (1 << i);
 	else
-		ide_disks &= (1 << i);
+		ide_disks &= ~(1 << i);
 
 	ide_disks_chs[i].cyl  = c;
 	ide_disks_chs[i].head = h;
@@ -315,6 +318,8 @@ static int ide_set_ignore_cable(const char *s, struct kernel_param *kp)
 {
 	int i, j = 1;
 
+	/* controller (ignore) */
+	/* controller : 1 (ignore) | 0 (use) */
 	if (sscanf(s, "%d:%d", &i, &j) != 2 && sscanf(s, "%d", &i) != 1)
 		return -EINVAL;
 
@@ -324,7 +329,7 @@ static int ide_set_ignore_cable(const char *s, struct kernel_param *kp)
 	if (j)
 		ide_ignore_cable |= (1 << i);
 	else
-		ide_ignore_cable &= (1 << i);
+		ide_ignore_cable &= ~(1 << i);
 
 	return 0;
 }
