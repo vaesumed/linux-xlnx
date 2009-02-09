@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) Gigabit Ethernet Linux driver
-  Copyright(c) 2007 Intel Corporation.
+  Copyright(c) 2007-2009 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -359,6 +359,7 @@ struct e1000_hw_stats {
 	u64 lenerrs;
 	u64 scvpc;
 	u64 hrmpc;
+	u64 doosync;
 };
 
 struct e1000_phy_stats {
@@ -422,25 +423,25 @@ struct e1000_mac_operations {
 };
 
 struct e1000_phy_operations {
-	s32  (*acquire_phy)(struct e1000_hw *);
+	s32  (*acquire)(struct e1000_hw *);
 	s32  (*check_reset_block)(struct e1000_hw *);
 	s32  (*force_speed_duplex)(struct e1000_hw *);
 	s32  (*get_cfg_done)(struct e1000_hw *hw);
 	s32  (*get_cable_length)(struct e1000_hw *);
 	s32  (*get_phy_info)(struct e1000_hw *);
-	s32  (*read_phy_reg)(struct e1000_hw *, u32, u16 *);
-	void (*release_phy)(struct e1000_hw *);
-	s32  (*reset_phy)(struct e1000_hw *);
+	s32  (*read_reg)(struct e1000_hw *, u32, u16 *);
+	void (*release)(struct e1000_hw *);
+	s32  (*reset)(struct e1000_hw *);
 	s32  (*set_d0_lplu_state)(struct e1000_hw *, bool);
 	s32  (*set_d3_lplu_state)(struct e1000_hw *, bool);
-	s32  (*write_phy_reg)(struct e1000_hw *, u32, u16);
+	s32  (*write_reg)(struct e1000_hw *, u32, u16);
 };
 
 struct e1000_nvm_operations {
-	s32  (*acquire_nvm)(struct e1000_hw *);
-	s32  (*read_nvm)(struct e1000_hw *, u16, u16, u16 *);
-	void (*release_nvm)(struct e1000_hw *);
-	s32  (*write_nvm)(struct e1000_hw *, u16, u16, u16 *);
+	s32  (*acquire)(struct e1000_hw *);
+	s32  (*read)(struct e1000_hw *, u16, u16, u16 *);
+	void (*release)(struct e1000_hw *);
+	s32  (*write)(struct e1000_hw *, u16, u16, u16 *);
 };
 
 struct e1000_info {
@@ -483,7 +484,6 @@ struct e1000_mac_info {
 	bool asf_firmware_present;
 	bool autoneg;
 	bool autoneg_failed;
-	bool disable_av;
 	bool disable_hw_init_bits;
 	bool get_link_status;
 	bool ifs_params_forced;
@@ -565,9 +565,12 @@ struct e1000_fc_info {
 	enum e1000_fc_type original_type;
 };
 
+struct e1000_dev_spec_82575 {
+	bool sgmii_active;
+};
+
 struct e1000_hw {
 	void *back;
-	void *dev_spec;
 
 	u8 __iomem *hw_addr;
 	u8 __iomem *flash_address;
@@ -580,7 +583,9 @@ struct e1000_hw {
 	struct e1000_bus_info  bus;
 	struct e1000_host_mng_dhcp_cookie mng_cookie;
 
-	u32 dev_spec_size;
+	union {
+		struct e1000_dev_spec_82575	_82575;
+	} dev_spec;
 
 	u16 device_id;
 	u16 subsystem_vendor_id;

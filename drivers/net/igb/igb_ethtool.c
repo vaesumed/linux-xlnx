@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) Gigabit Ethernet Linux driver
-  Copyright(c) 2007 Intel Corporation.
+  Copyright(c) 2007-2009 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -88,16 +88,11 @@ static const struct igb_stats igb_gstrings_stats[] = {
 	{ "rx_long_byte_count", IGB_STAT(stats.gorc) },
 	{ "rx_csum_offload_good", IGB_STAT(hw_csum_good) },
 	{ "rx_csum_offload_errors", IGB_STAT(hw_csum_err) },
-	{ "rx_header_split", IGB_STAT(rx_hdr_split) },
+	{ "tx_dma_out_of_sync", IGB_STAT(stats.doosync) },
 	{ "alloc_rx_buff_failed", IGB_STAT(alloc_rx_buff_failed) },
 	{ "tx_smbus", IGB_STAT(stats.mgptc) },
 	{ "rx_smbus", IGB_STAT(stats.mgprc) },
 	{ "dropped_smbus", IGB_STAT(stats.mgpdc) },
-#ifdef CONFIG_IGB_LRO
-	{ "lro_aggregated", IGB_STAT(lro_aggregated) },
-	{ "lro_flushed", IGB_STAT(lro_flushed) },
-	{ "lro_no_desc", IGB_STAT(lro_no_desc) },
-#endif
 };
 
 #define IGB_QUEUE_STATS_LEN \
@@ -293,15 +288,15 @@ static int igb_set_rx_csum(struct net_device *netdev, u32 data)
 
 static u32 igb_get_tx_csum(struct net_device *netdev)
 {
-	return (netdev->features & NETIF_F_HW_CSUM) != 0;
+	return (netdev->features & NETIF_F_IP_CSUM) != 0;
 }
 
 static int igb_set_tx_csum(struct net_device *netdev, u32 data)
 {
 	if (data)
-		netdev->features |= NETIF_F_HW_CSUM;
+		netdev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
 	else
-		netdev->features &= ~NETIF_F_HW_CSUM;
+		netdev->features &= ~(NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
 
 	return 0;
 }
@@ -310,15 +305,13 @@ static int igb_set_tso(struct net_device *netdev, u32 data)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
-	if (data)
+	if (data) {
 		netdev->features |= NETIF_F_TSO;
-	else
-		netdev->features &= ~NETIF_F_TSO;
-
-	if (data)
 		netdev->features |= NETIF_F_TSO6;
-	else
+	} else {
+		netdev->features &= ~NETIF_F_TSO;
 		netdev->features &= ~NETIF_F_TSO6;
+	}
 
 	dev_info(&adapter->pdev->dev, "TSO is %s\n",
 		 data ? "Enabled" : "Disabled");
@@ -598,12 +591,12 @@ static int igb_get_eeprom(struct net_device *netdev,
 		return -ENOMEM;
 
 	if (hw->nvm.type == e1000_nvm_eeprom_spi)
-		ret_val = hw->nvm.ops.read_nvm(hw, first_word,
+		ret_val = hw->nvm.ops.read(hw, first_word,
 					    last_word - first_word + 1,
 					    eeprom_buff);
 	else {
 		for (i = 0; i < last_word - first_word + 1; i++) {
-			ret_val = hw->nvm.ops.read_nvm(hw, first_word + i, 1,
+			ret_val = hw->nvm.ops.read(hw, first_word + i, 1,
 						    &eeprom_buff[i]);
 			if (ret_val)
 				break;
@@ -650,14 +643,14 @@ static int igb_set_eeprom(struct net_device *netdev,
 	if (eeprom->offset & 1) {
 		/* need read/modify/write of first changed EEPROM word */
 		/* only the second byte of the word is being modified */
-		ret_val = hw->nvm.ops.read_nvm(hw, first_word, 1,
+		ret_val = hw->nvm.ops.read(hw, first_word, 1,
 					    &eeprom_buff[0]);
 		ptr++;
 	}
 	if (((eeprom->offset + eeprom->len) & 1) && (ret_val == 0)) {
 		/* need read/modify/write of last changed EEPROM word */
 		/* only the first byte of the word is being modified */
-		ret_val = hw->nvm.ops.read_nvm(hw, last_word, 1,
+		ret_val = hw->nvm.ops.read(hw, last_word, 1,
 				   &eeprom_buff[last_word - first_word]);
 	}
 
@@ -670,7 +663,7 @@ static int igb_set_eeprom(struct net_device *netdev,
 	for (i = 0; i < last_word - first_word + 1; i++)
 		eeprom_buff[i] = cpu_to_le16(eeprom_buff[i]);
 
-	ret_val = hw->nvm.ops.write_nvm(hw, first_word,
+	ret_val = hw->nvm.ops.write(hw, first_word,
 				     last_word - first_word + 1, eeprom_buff);
 
 	/* Update the checksum over the first part of the EEPROM if needed
@@ -694,7 +687,7 @@ static void igb_get_drvinfo(struct net_device *netdev,
 
 	/* EEPROM image version # is reported as firmware version # for
 	 * 82575 controllers */
-	adapter->hw.nvm.ops.read_nvm(&adapter->hw, 5, 1, &eeprom_data);
+	adapter->hw.nvm.ops.read(&adapter->hw, 5, 1, &eeprom_data);
 	sprintf(firmware_version, "%d.%d-%d",
 		(eeprom_data & 0xF000) >> 12,
 		(eeprom_data & 0x0FF0) >> 4,
@@ -863,23 +856,26 @@ static struct igb_reg_test reg_test_82576[] = {
 	{ E1000_RDBAL(0),  0x100, 4, PATTERN_TEST, 0xFFFFFF80, 0xFFFFFFFF },
 	{ E1000_RDBAH(0),  0x100, 4, PATTERN_TEST, 0xFFFFFFFF, 0xFFFFFFFF },
 	{ E1000_RDLEN(0),  0x100, 4, PATTERN_TEST, 0x000FFFF0, 0x000FFFFF },
-	{ E1000_RDBAL(4),  0x40,  8, PATTERN_TEST, 0xFFFFFF80, 0xFFFFFFFF },
-	{ E1000_RDBAH(4),  0x40,  8, PATTERN_TEST, 0xFFFFFFFF, 0xFFFFFFFF },
-	{ E1000_RDLEN(4),  0x40,  8, PATTERN_TEST, 0x000FFFF0, 0x000FFFFF },
-	/* Enable all four RX queues before testing. */
-	{ E1000_RXDCTL(0), 0x100, 1,  WRITE_NO_TEST, 0, E1000_RXDCTL_QUEUE_ENABLE },
+	{ E1000_RDBAL(4),  0x40, 12, PATTERN_TEST, 0xFFFFFF80, 0xFFFFFFFF },
+	{ E1000_RDBAH(4),  0x40, 12, PATTERN_TEST, 0xFFFFFFFF, 0xFFFFFFFF },
+	{ E1000_RDLEN(4),  0x40, 12, PATTERN_TEST, 0x000FFFF0, 0x000FFFFF },
+	/* Enable all RX queues before testing. */
+	{ E1000_RXDCTL(0), 0x100, 4,  WRITE_NO_TEST, 0, E1000_RXDCTL_QUEUE_ENABLE },
+	{ E1000_RXDCTL(4), 0x40, 12,  WRITE_NO_TEST, 0, E1000_RXDCTL_QUEUE_ENABLE },
 	/* RDH is read-only for 82576, only test RDT. */
 	{ E1000_RDT(0),	   0x100, 4,  PATTERN_TEST, 0x0000FFFF, 0x0000FFFF },
+	{ E1000_RDT(4),	   0x40, 12,  PATTERN_TEST, 0x0000FFFF, 0x0000FFFF },
 	{ E1000_RXDCTL(0), 0x100, 4,  WRITE_NO_TEST, 0, 0 },
+	{ E1000_RXDCTL(4), 0x40, 12,  WRITE_NO_TEST, 0, 0 },
 	{ E1000_FCRTH,	   0x100, 1,  PATTERN_TEST, 0x0000FFF0, 0x0000FFF0 },
 	{ E1000_FCTTV,	   0x100, 1,  PATTERN_TEST, 0x0000FFFF, 0x0000FFFF },
 	{ E1000_TIPG,	   0x100, 1,  PATTERN_TEST, 0x3FFFFFFF, 0x3FFFFFFF },
 	{ E1000_TDBAL(0),  0x100, 4,  PATTERN_TEST, 0xFFFFFF80, 0xFFFFFFFF },
 	{ E1000_TDBAH(0),  0x100, 4,  PATTERN_TEST, 0xFFFFFFFF, 0xFFFFFFFF },
 	{ E1000_TDLEN(0),  0x100, 4,  PATTERN_TEST, 0x000FFFF0, 0x000FFFFF },
-	{ E1000_TDBAL(4),  0x40, 8,  PATTERN_TEST, 0xFFFFFF80, 0xFFFFFFFF },
-	{ E1000_TDBAH(4),  0x40, 8,  PATTERN_TEST, 0xFFFFFFFF, 0xFFFFFFFF },
-	{ E1000_TDLEN(4),  0x40, 8,  PATTERN_TEST, 0x000FFFF0, 0x000FFFFF },
+	{ E1000_TDBAL(4),  0x40, 12,  PATTERN_TEST, 0xFFFFFF80, 0xFFFFFFFF },
+	{ E1000_TDBAH(4),  0x40, 12,  PATTERN_TEST, 0xFFFFFFFF, 0xFFFFFFFF },
+	{ E1000_TDLEN(4),  0x40, 12,  PATTERN_TEST, 0x000FFFF0, 0x000FFFFF },
 	{ E1000_RCTL,	   0x100, 1,  SET_READ_TEST, 0xFFFFFFFF, 0x00000000 },
 	{ E1000_RCTL, 	   0x100, 1,  SET_READ_TEST, 0x04CFB0FE, 0x003FFFFB },
 	{ E1000_RCTL, 	   0x100, 1,  SET_READ_TEST, 0x04CFB0FE, 0xFFFFFFFF },
@@ -926,12 +922,13 @@ static struct igb_reg_test reg_test_82575[] = {
 static bool reg_pattern_test(struct igb_adapter *adapter, u64 *data,
 			     int reg, u32 mask, u32 write)
 {
+	struct e1000_hw *hw = &adapter->hw;
 	u32 pat, val;
 	u32 _test[] =
 		{0x5A5A5A5A, 0xA5A5A5A5, 0x00000000, 0xFFFFFFFF};
 	for (pat = 0; pat < ARRAY_SIZE(_test); pat++) {
-		writel((_test[pat] & write), (adapter->hw.hw_addr + reg));
-		val = readl(adapter->hw.hw_addr + reg);
+		wr32(reg, (_test[pat] & write));
+		val = rd32(reg);
 		if (val != (_test[pat] & write & mask)) {
 			dev_err(&adapter->pdev->dev, "pattern test reg %04X "
 				"failed: got 0x%08X expected 0x%08X\n",
@@ -946,9 +943,10 @@ static bool reg_pattern_test(struct igb_adapter *adapter, u64 *data,
 static bool reg_set_and_check(struct igb_adapter *adapter, u64 *data,
 			      int reg, u32 mask, u32 write)
 {
+	struct e1000_hw *hw = &adapter->hw;
 	u32 val;
-	writel((write & mask), (adapter->hw.hw_addr + reg));
-	val = readl(adapter->hw.hw_addr + reg);
+	wr32(reg, write & mask);
+	val = rd32(reg);
 	if ((write & mask) != (val & mask)) {
 		dev_err(&adapter->pdev->dev, "set/check reg %04X test failed:"
 			" got 0x%08X expected 0x%08X\n", reg,
@@ -1014,12 +1012,14 @@ static int igb_reg_test(struct igb_adapter *adapter, u64 *data)
 		for (i = 0; i < test->array_len; i++) {
 			switch (test->test_type) {
 			case PATTERN_TEST:
-				REG_PATTERN_TEST(test->reg + (i * test->reg_offset),
+				REG_PATTERN_TEST(test->reg +
+						(i * test->reg_offset),
 						test->mask,
 						test->write);
 				break;
 			case SET_READ_TEST:
-				REG_SET_AND_CHECK(test->reg + (i * test->reg_offset),
+				REG_SET_AND_CHECK(test->reg +
+						(i * test->reg_offset),
 						test->mask,
 						test->write);
 				break;
@@ -1061,7 +1061,7 @@ static int igb_eeprom_test(struct igb_adapter *adapter, u64 *data)
 	*data = 0;
 	/* Read and add up the contents of the EEPROM */
 	for (i = 0; i < (NVM_CHECKSUM_REG + 1); i++) {
-		if ((adapter->hw.nvm.ops.read_nvm(&adapter->hw, i, 1, &temp))
+		if ((adapter->hw.nvm.ops.read(&adapter->hw, i, 1, &temp))
 		    < 0) {
 			*data = 1;
 			break;
@@ -1091,16 +1091,17 @@ static int igb_intr_test(struct igb_adapter *adapter, u64 *data)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	struct net_device *netdev = adapter->netdev;
-	u32 mask, i = 0, shared_int = true;
+	u32 mask, ics_mask, i = 0, shared_int = true;
 	u32 irq = adapter->pdev->irq;
 
 	*data = 0;
 
 	/* Hook up test interrupt handler just for this test */
-	if (adapter->msix_entries) {
+	if (adapter->msix_entries)
 		/* NOTE: we don't test MSI-X interrupts here, yet */
 		return 0;
-	} else if (adapter->flags & IGB_FLAG_HAS_MSI) {
+
+	if (adapter->flags & IGB_FLAG_HAS_MSI) {
 		shared_int = false;
 		if (request_irq(irq, &igb_test_intr, 0, netdev->name, netdev)) {
 			*data = 1;
@@ -1116,15 +1117,30 @@ static int igb_intr_test(struct igb_adapter *adapter, u64 *data)
 	}
 	dev_info(&adapter->pdev->dev, "testing %s interrupt\n",
 		(shared_int ? "shared" : "unshared"));
-
 	/* Disable all the interrupts */
 	wr32(E1000_IMC, 0xFFFFFFFF);
 	msleep(10);
 
+	/* Define all writable bits for ICS */
+	switch(hw->mac.type) {
+	case e1000_82575:
+		ics_mask = 0x37F47EDD;
+		break;
+	case e1000_82576:
+		ics_mask = 0x77D4FBFD;
+		break;
+	default:
+		ics_mask = 0x7FFFFFFF;
+		break;
+	}
+
 	/* Test each interrupt */
-	for (; i < 10; i++) {
+	for (; i < 31; i++) {
 		/* Interrupt to test */
 		mask = 1 << i;
+
+		if (!(mask & ics_mask))
+			continue;
 
 		if (!shared_int) {
 			/* Disable the interrupt to be reported in
@@ -1134,8 +1150,12 @@ static int igb_intr_test(struct igb_adapter *adapter, u64 *data)
 			 * test failed.
 			 */
 			adapter->test_icr = 0;
-			wr32(E1000_IMC, ~mask & 0x00007FFF);
-			wr32(E1000_ICS, ~mask & 0x00007FFF);
+
+			/* Flush any pending interrupts */
+			wr32(E1000_ICR, ~0);
+
+			wr32(E1000_IMC, mask);
+			wr32(E1000_ICS, mask);
 			msleep(10);
 
 			if (adapter->test_icr & mask) {
@@ -1151,6 +1171,10 @@ static int igb_intr_test(struct igb_adapter *adapter, u64 *data)
 		 * test failed.
 		 */
 		adapter->test_icr = 0;
+
+		/* Flush any pending interrupts */
+		wr32(E1000_ICR, ~0);
+
 		wr32(E1000_IMS, mask);
 		wr32(E1000_ICS, mask);
 		msleep(10);
@@ -1168,11 +1192,15 @@ static int igb_intr_test(struct igb_adapter *adapter, u64 *data)
 			 * test failed.
 			 */
 			adapter->test_icr = 0;
-			wr32(E1000_IMC, ~mask & 0x00007FFF);
-			wr32(E1000_ICS, ~mask & 0x00007FFF);
+
+			/* Flush any pending interrupts */
+			wr32(E1000_ICR, ~0);
+
+			wr32(E1000_IMC, ~mask);
+			wr32(E1000_ICS, ~mask);
 			msleep(10);
 
-			if (adapter->test_icr) {
+			if (adapter->test_icr & mask) {
 				*data = 5;
 				break;
 			}
@@ -1180,7 +1208,7 @@ static int igb_intr_test(struct igb_adapter *adapter, u64 *data)
 	}
 
 	/* Disable all the interrupts */
-	wr32(E1000_IMC, 0xFFFFFFFF);
+	wr32(E1000_IMC, ~0);
 	msleep(10);
 
 	/* Unhook test interrupt handler */
@@ -1458,7 +1486,7 @@ static int igb_setup_loopback_test(struct igb_adapter *adapter)
 			 E1000_CTRL_TFCE |
 			 E1000_CTRL_LRST);
 		reg |= E1000_CTRL_SLU |
-		       E1000_CTRL_FD; 
+		       E1000_CTRL_FD;
 		wr32(E1000_CTRL, reg);
 
 		/* Unset switch control to serdes energy detect */
@@ -1921,18 +1949,6 @@ static void igb_get_ethtool_stats(struct net_device *netdev,
 	int stat_count = sizeof(struct igb_queue_stats) / sizeof(u64);
 	int j;
 	int i;
-#ifdef CONFIG_IGB_LRO
-	int aggregated = 0, flushed = 0, no_desc = 0;
-
-	for (i = 0; i < adapter->num_rx_queues; i++) {
-		aggregated += adapter->rx_ring[i].lro_mgr.stats.aggregated;
-		flushed += adapter->rx_ring[i].lro_mgr.stats.flushed;
-		no_desc += adapter->rx_ring[i].lro_mgr.stats.no_desc;
-	}
-	adapter->lro_aggregated = aggregated;
-	adapter->lro_flushed = flushed;
-	adapter->lro_no_desc = no_desc;
-#endif
 
 	igb_update_stats(adapter);
 	for (i = 0; i < IGB_GLOBAL_STATS_LEN; i++) {

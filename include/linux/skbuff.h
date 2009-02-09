@@ -1687,8 +1687,6 @@ extern int	       skb_shift(struct sk_buff *tgt, struct sk_buff *skb,
 				 int shiftlen);
 
 extern struct sk_buff *skb_segment(struct sk_buff *skb, int features);
-extern int	       skb_gro_receive(struct sk_buff **head,
-				       struct sk_buff *skb);
 
 static inline void *skb_header_pointer(const struct sk_buff *skb, int offset,
 				       int len, void *buffer)
@@ -1902,6 +1900,21 @@ static inline u16 skb_get_queue_mapping(struct sk_buff *skb)
 static inline void skb_copy_queue_mapping(struct sk_buff *to, const struct sk_buff *from)
 {
 	to->queue_mapping = from->queue_mapping;
+}
+
+static inline void skb_record_rx_queue(struct sk_buff *skb, u16 rx_queue)
+{
+	skb->queue_mapping = rx_queue + 1;
+}
+
+static inline u16 skb_get_rx_queue(struct sk_buff *skb)
+{
+	return skb->queue_mapping - 1;
+}
+
+static inline bool skb_rx_queue_recorded(struct sk_buff *skb)
+{
+	return (skb->queue_mapping != 0);
 }
 
 #ifdef CONFIG_XFRM

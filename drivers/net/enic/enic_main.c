@@ -411,8 +411,8 @@ static irqreturn_t enic_isr_legacy(int irq, void *data)
 	}
 
 	if (ENIC_TEST_INTR(pba, ENIC_INTX_WQ_RQ)) {
-		if (netif_rx_schedule_prep(&enic->napi))
-			__netif_rx_schedule(&enic->napi);
+		if (napi_schedule_prep(&enic->napi))
+			__napi_schedule(&enic->napi);
 	} else {
 		vnic_intr_unmask(&enic->intr[ENIC_INTX_WQ_RQ]);
 	}
@@ -440,7 +440,7 @@ static irqreturn_t enic_isr_msi(int irq, void *data)
 	 * writes).
 	 */
 
-	netif_rx_schedule(&enic->napi);
+	napi_schedule(&enic->napi);
 
 	return IRQ_HANDLED;
 }
@@ -450,7 +450,7 @@ static irqreturn_t enic_isr_msix_rq(int irq, void *data)
 	struct enic *enic = data;
 
 	/* schedule NAPI polling for RQ cleanup */
-	netif_rx_schedule(&enic->napi);
+	napi_schedule(&enic->napi);
 
 	return IRQ_HANDLED;
 }
@@ -570,11 +570,11 @@ static inline void enic_queue_wq_skb_tso(struct enic *enic,
 	 * to each TCP segment resulting from the TSO.
 	 */
 
-	if (skb->protocol == __constant_htons(ETH_P_IP)) {
+	if (skb->protocol == cpu_to_be16(ETH_P_IP)) {
 		ip_hdr(skb)->check = 0;
 		tcp_hdr(skb)->check = ~csum_tcpudp_magic(ip_hdr(skb)->saddr,
 			ip_hdr(skb)->daddr, 0, IPPROTO_TCP, 0);
-	} else if (skb->protocol == __constant_htons(ETH_P_IPV6)) {
+	} else if (skb->protocol == cpu_to_be16(ETH_P_IPV6)) {
 		tcp_hdr(skb)->check = ~csum_ipv6_magic(&ipv6_hdr(skb)->saddr,
 			&ipv6_hdr(skb)->daddr, 0, IPPROTO_TCP, 0);
 	}
@@ -1068,7 +1068,7 @@ static int enic_poll(struct napi_struct *napi, int budget)
 		if (netdev->features & NETIF_F_LRO)
 			lro_flush_all(&enic->lro_mgr);
 
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		vnic_intr_unmask(&enic->intr[ENIC_MSIX_RQ]);
 	}
 
@@ -1112,7 +1112,7 @@ static int enic_poll_msix(struct napi_struct *napi, int budget)
 		if (netdev->features & NETIF_F_LRO)
 			lro_flush_all(&enic->lro_mgr);
 
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		vnic_intr_unmask(&enic->intr[ENIC_MSIX_RQ]);
 	}
 
