@@ -271,7 +271,7 @@ struct additional_sensor_data {
 	const __u8 stream[4];
 };
 
-const static struct additional_sensor_data sensor_data[] = {
+static const struct additional_sensor_data sensor_data[] = {
     {				/* TAS5130A */
 	.data1 =
 		{0xd0, 0xbb, 0xd1, 0x28, 0xd2, 0x10, 0xd3, 0x10,
