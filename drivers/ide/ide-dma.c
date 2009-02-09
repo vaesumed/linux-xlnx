@@ -128,6 +128,7 @@ int ide_build_sglist(ide_drive_t *drive, struct request *rq)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	struct scatterlist *sg = hwif->sg_table;
+	int i;
 
 	ide_map_sg(drive, rq);
 
@@ -136,10 +137,12 @@ int ide_build_sglist(ide_drive_t *drive, struct request *rq)
 	else
 		hwif->sg_dma_direction = DMA_TO_DEVICE;
 
-	return dma_map_sg(hwif->dev, sg, hwif->sg_nents,
-			  hwif->sg_dma_direction);
+	i = dma_map_sg(hwif->dev, sg, hwif->sg_nents, hwif->sg_dma_direction);
+	if (i == 0)
+		ide_map_sg(drive, rq);
+
+	return i;
 }
-EXPORT_SYMBOL_GPL(ide_build_sglist);
 
 /**
  *	ide_destroy_dmatable	-	clean up DMA mapping
