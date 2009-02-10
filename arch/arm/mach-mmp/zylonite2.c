@@ -9,15 +9,27 @@
  */
 
 #include <linux/init.h>
+#include <linux/kernel.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <mach/addr-map.h>
+#include <mach/mfp-pxa168.h>
+#include <mach/pxa168.h>
 
 #include "common.h"
 
+static unsigned long zylonite2_pin_config[] __initdata = {
+	/* UART1 */
+	GPIO107_UART1_RXD,
+	GPIO108_UART1_TXD,
+};
+
 static void __init zylonite2_init(void)
 {
+	mfp_config(ARRAY_AND_SIZE(zylonite2_pin_config));
+
+	pxa168_add_uart(1);
 }
 
 MACHINE_START(ZYLONITE2, "PXA168-based Zylonite2 Development Platform")
