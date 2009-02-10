@@ -368,7 +368,7 @@
 	 * abstractions for the macros */
 	.macro		EXTR	reg1,start,length,reg2
 #ifdef CONFIG_64BIT
-	extrd,u		\reg1,32+\start,\length,\reg2
+	extrd,u		\reg1,32+(\start),\length,\reg2
 #else
 	extrw,u		\reg1,\start,\length,\reg2
 #endif
@@ -376,7 +376,7 @@
 
 	.macro		DEP	reg1,start,length,reg2
 #ifdef CONFIG_64BIT
-	depd		\reg1,32+\start,\length,\reg2
+	depd		\reg1,32+(\start),\length,\reg2
 #else
 	depw		\reg1,\start,\length,\reg2
 #endif
@@ -384,7 +384,7 @@
 
 	.macro		DEPI	val,start,length,reg
 #ifdef CONFIG_64BIT
-	depdi		\val,32+\start,\length,\reg
+	depdi		\val,32+(\start),\length,\reg
 #else
 	depwi		\val,\start,\length,\reg
 #endif
@@ -563,8 +563,8 @@
 
 	/* Get rid of prot bits and convert to page addr for iitlba */
 
-	depi		_PAGE_SIZE_ENCODING_DEFAULT,31,ASM_PFN_PTE_SHIFT,\pte
-	extru		\pte,24,25,\pte
+	depi		0,31,ASM_PFN_PTE_SHIFT,\pte
+	SHRREG		\pte,(ASM_PFN_PTE_SHIFT-(31-26)),\pte
 	.endm
 
 	/* This is for ILP32 PA2.0 only.  The TLB insertion needs
@@ -1337,8 +1337,8 @@ nadtlb_check_flush_11:
 
 	/* Get rid of prot bits and convert to page addr for idtlba */
 
-	depi		0,31,12,pte
-	extru		pte,24,25,pte
+	depi		0,31,ASM_PFN_PTE_SHIFT,pte
+	SHRREG		pte,(ASM_PFN_PTE_SHIFT-(31-26)),pte
 
 	mfsp		%sr1,t0  /* Save sr1 so we can use it in tlb inserts */
 	mtsp		spc,%sr1
