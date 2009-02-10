@@ -9,6 +9,7 @@
 #include <linux/mmiotrace.h>
 #include <linux/ftrace.h>
 #include <trace/boot.h>
+#include <trace/kmemtrace.h>
 
 enum trace_type {
 	__TRACE_FIRST_TYPE = 0,
@@ -16,7 +17,6 @@ enum trace_type {
 	TRACE_FN,
 	TRACE_CTX,
 	TRACE_WAKE,
-	TRACE_CONT,
 	TRACE_STACK,
 	TRACE_PRINT,
 	TRACE_SPECIAL,
@@ -29,9 +29,12 @@ enum trace_type {
 	TRACE_GRAPH_ENT,
 	TRACE_USER_STACK,
 	TRACE_HW_BRANCHES,
+	TRACE_KMEM_ALLOC,
+	TRACE_KMEM_FREE,
 	TRACE_POWER,
+	TRACE_BLK,
 
-	__TRACE_LAST_TYPE
+	__TRACE_LAST_TYPE,
 };
 
 /*
@@ -170,6 +173,24 @@ struct trace_power {
 	struct power_trace	state_data;
 };
 
+struct kmemtrace_alloc_entry {
+	struct trace_entry	ent;
+	enum kmemtrace_type_id type_id;
+	unsigned long call_site;
+	const void *ptr;
+	size_t bytes_req;
+	size_t bytes_alloc;
+	gfp_t gfp_flags;
+	int node;
+};
+
+struct kmemtrace_free_entry {
+	struct trace_entry	ent;
+	enum kmemtrace_type_id type_id;
+	unsigned long call_site;
+	const void *ptr;
+};
+
 /*
  * trace_flag_type is an enumeration that holds different
  * states when a trace occurs. These are:
@@ -178,7 +199,6 @@ struct trace_power {
  *  NEED_RESCED		- reschedule is requested
  *  HARDIRQ		- inside an interrupt handler
  *  SOFTIRQ		- inside a softirq handler
- *  CONT		- multiple entries hold the trace item
  */
 enum trace_flag_type {
 	TRACE_FLAG_IRQS_OFF		= 0x01,
@@ -186,7 +206,6 @@ enum trace_flag_type {
 	TRACE_FLAG_NEED_RESCHED		= 0x04,
 	TRACE_FLAG_HARDIRQ		= 0x08,
 	TRACE_FLAG_SOFTIRQ		= 0x10,
-	TRACE_FLAG_CONT			= 0x20,
 };
 
 #define TRACE_BUF_SIZE		1024
@@ -262,7 +281,6 @@ extern void __ftrace_bad_type(void);
 	do {								\
 		IF_ASSIGN(var, ent, struct ftrace_entry, TRACE_FN);	\
 		IF_ASSIGN(var, ent, struct ctx_switch_entry, 0);	\
-		IF_ASSIGN(var, ent, struct trace_field_cont, TRACE_CONT); \
 		IF_ASSIGN(var, ent, struct stack_entry, TRACE_STACK);	\
 		IF_ASSIGN(var, ent, struct userstack_entry, TRACE_USER_STACK);\
 		IF_ASSIGN(var, ent, struct print_entry, TRACE_PRINT);	\
@@ -280,6 +298,10 @@ extern void __ftrace_bad_type(void);
 			  TRACE_GRAPH_RET);		\
 		IF_ASSIGN(var, ent, struct hw_branch_entry, TRACE_HW_BRANCHES);\
  		IF_ASSIGN(var, ent, struct trace_power, TRACE_POWER); \
+		IF_ASSIGN(var, ent, struct kmemtrace_alloc_entry,	\
+			  TRACE_KMEM_ALLOC);	\
+		IF_ASSIGN(var, ent, struct kmemtrace_free_entry,	\
+			  TRACE_KMEM_FREE);	\
 		__ftrace_bad_type();					\
 	} while (0)
 
@@ -313,6 +335,7 @@ struct tracer_flags {
 /* Makes more easy to define a tracer opt */
 #define TRACER_OPT(s, b)	.name = #s, .bit = b
 
+
 /*
  * A specific tracer, represented by methods that operate on a trace array:
  */
@@ -340,6 +363,7 @@ struct tracer {
 	struct tracer		*next;
 	int			print_max;
 	struct tracer_flags 	*flags;
+	struct tracer_stat	*stats;
 };
 
 struct trace_seq {
@@ -371,6 +395,7 @@ struct trace_iterator {
 	cpumask_var_t		started;
 };
 
+int tracer_init(struct tracer *t, struct trace_array *tr);
 int tracing_is_enabled(void);
 void trace_wake_up(void);
 void tracing_reset(struct trace_array *tr, int cpu);
@@ -379,8 +404,23 @@ int tracing_open_generic(struct inode *inode, struct file *filp);
 struct dentry *tracing_init_dentry(void);
 void init_tracer_sysprof_debugfs(struct dentry *d_tracer);
 
+struct ring_buffer_event;
+
+struct ring_buffer_event *trace_buffer_lock_reserve(struct trace_array *tr,
+						    unsigned char type,
+						    unsigned long len,
+						    unsigned long flags,
+						    int pc);
+void trace_buffer_unlock_commit(struct trace_array *tr,
+				struct ring_buffer_event *event,
+				unsigned long flags, int pc);
+
 struct trace_entry *tracing_get_trace_entry(struct trace_array *tr,
 						struct trace_array_cpu *data);
+
+struct trace_entry *trace_find_next_entry(struct trace_iterator *iter,
+					  int *ent_cpu, u64 *ent_ts);
+
 void tracing_generic_entry_update(struct trace_entry *entry,
 				  unsigned long flags,
 				  int pc);
@@ -391,14 +431,12 @@ void ftrace(struct trace_array *tr,
 			    unsigned long parent_ip,
 			    unsigned long flags, int pc);
 void tracing_sched_switch_trace(struct trace_array *tr,
-				struct trace_array_cpu *data,
 				struct task_struct *prev,
 				struct task_struct *next,
 				unsigned long flags, int pc);
 void tracing_record_cmdline(struct task_struct *tsk);
 
 void tracing_sched_wakeup_trace(struct trace_array *tr,
-				struct trace_array_cpu *data,
 				struct task_struct *wakee,
 				struct task_struct *cur,
 				unsigned long flags, int pc);
@@ -408,14 +446,12 @@ void trace_special(struct trace_array *tr,
 		   unsigned long arg2,
 		   unsigned long arg3, int pc);
 void trace_function(struct trace_array *tr,
-		    struct trace_array_cpu *data,
 		    unsigned long ip,
 		    unsigned long parent_ip,
 		    unsigned long flags, int pc);
 
 void trace_graph_return(struct ftrace_graph_ret *trace);
 int trace_graph_entry(struct ftrace_graph_ent *trace);
-void trace_hw_branch(struct trace_array *tr, u64 from, u64 to);
 
 void tracing_start_cmdline_record(void);
 void tracing_stop_cmdline_record(void);
@@ -434,15 +470,11 @@ void update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu);
 void update_max_tr_single(struct trace_array *tr,
 			  struct task_struct *tsk, int cpu);
 
-extern cycle_t ftrace_now(int cpu);
+void __trace_stack(struct trace_array *tr,
+		   unsigned long flags,
+		   int skip, int pc);
 
-#ifdef CONFIG_FUNCTION_TRACER
-void tracing_start_function_trace(void);
-void tracing_stop_function_trace(void);
-#else
-# define tracing_start_function_trace()		do { } while (0)
-# define tracing_stop_function_trace()		do { } while (0)
-#endif
+extern cycle_t ftrace_now(int cpu);
 
 #ifdef CONFIG_CONTEXT_SWITCH_TRACER
 typedef void
@@ -456,9 +488,9 @@ struct tracer_switch_ops {
 	void				*private;
 	struct tracer_switch_ops	*next;
 };
-
-char *trace_find_cmdline(int pid);
 #endif /* CONFIG_CONTEXT_SWITCH_TRACER */
+
+extern char *trace_find_cmdline(int pid);
 
 #ifdef CONFIG_DYNAMIC_FTRACE
 extern unsigned long ftrace_update_tot_cnt;
@@ -488,15 +520,6 @@ extern int trace_selftest_startup_branch(struct tracer *trace,
 #endif /* CONFIG_FTRACE_STARTUP_TEST */
 
 extern void *head_page(struct trace_array_cpu *data);
-extern int trace_seq_printf(struct trace_seq *s, const char *fmt, ...);
-extern void trace_seq_print_cont(struct trace_seq *s,
-				 struct trace_iterator *iter);
-
-extern int
-seq_print_ip_sym(struct trace_seq *s, unsigned long ip,
-		unsigned long sym_flags);
-extern ssize_t trace_seq_to_user(struct trace_seq *s, char __user *ubuf,
-				 size_t cnt);
 extern long ns2usecs(cycle_t nsec);
 extern int
 trace_vprintk(unsigned long ip, int depth, const char *fmt, va_list args);
@@ -580,7 +603,8 @@ enum trace_iterator_flags {
 	TRACE_ITER_ANNOTATE		= 0x2000,
 	TRACE_ITER_USERSTACKTRACE       = 0x4000,
 	TRACE_ITER_SYM_USEROBJ          = 0x8000,
-	TRACE_ITER_PRINTK_MSGONLY	= 0x10000
+	TRACE_ITER_PRINTK_MSGONLY	= 0x10000,
+	TRACE_ITER_CONTEXT_INFO		= 0x20000 /* Print pid/cpu/time */
 };
 
 /*
