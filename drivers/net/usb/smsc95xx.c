@@ -55,7 +55,6 @@ struct smsc95xx_priv {
 
 struct usb_context {
 	struct usb_ctrlrequest req;
-	struct completion notify;
 	struct usbnet *dev;
 };
 
@@ -307,7 +306,7 @@ static int smsc95xx_write_eeprom(struct usbnet *dev, u32 offset, u32 length,
 	return 0;
 }
 
-static void smsc95xx_async_cmd_callback(struct urb *urb, struct pt_regs *regs)
+static void smsc95xx_async_cmd_callback(struct urb *urb)
 {
 	struct usb_context *usb_context = urb->context;
 	struct usbnet *dev = usb_context->dev;
@@ -315,8 +314,6 @@ static void smsc95xx_async_cmd_callback(struct urb *urb, struct pt_regs *regs)
 
 	if (status < 0)
 		devwarn(dev, "async callback failed with %d", status);
-
-	complete(&usb_context->notify);
 
 	kfree(usb_context);
 	usb_free_urb(urb);
@@ -348,11 +345,10 @@ static int smsc95xx_write_reg_async(struct usbnet *dev, u16 index, u32 *data)
 	usb_context->req.wValue = 00;
 	usb_context->req.wIndex = cpu_to_le16(index);
 	usb_context->req.wLength = cpu_to_le16(size);
-	init_completion(&usb_context->notify);
 
 	usb_fill_control_urb(urb, dev->udev, usb_sndctrlpipe(dev->udev, 0),
 		(void *)&usb_context->req, data, size,
-		(usb_complete_t)smsc95xx_async_cmd_callback,
+		smsc95xx_async_cmd_callback,
 		(void *)usb_context);
 
 	status = usb_submit_urb(urb, GFP_ATOMIC);
