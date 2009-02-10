@@ -41,6 +41,8 @@ module_param_named(modeset, i915_modeset, int, 0400);
 unsigned int i915_fbpercrtc = 0;
 module_param_named(fbpercrtc, i915_fbpercrtc, int, 0400);
 
+static struct drm_driver driver;
+
 static struct pci_device_id pciidlist[] = {
 	i915_PCI_IDS
 };
@@ -90,6 +92,36 @@ static int i915_resume(struct drm_device *dev)
 	intel_opregion_init(dev);
 
 	return 0;
+}
+
+static int __devinit
+i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+{
+	return drm_get_dev(pdev, ent, &driver);
+}
+
+static void
+i915_pci_remove(struct pci_dev *pdev)
+{
+	struct drm_device *dev = pci_get_drvdata(pdev);
+
+	drm_put_dev(dev);
+}
+
+static int
+i915_pci_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	struct drm_device *dev = pci_get_drvdata(pdev);
+
+	return i915_suspend(dev, state);
+}
+
+static int
+i915_pci_resume(struct pci_dev *pdev)
+{
+	struct drm_device *dev = pci_get_drvdata(pdev);
+
+	return i915_resume(dev);
 }
 
 static struct vm_operations_struct i915_gem_vm_ops = {
@@ -145,6 +177,12 @@ static struct drm_driver driver = {
 	.pci_driver = {
 		 .name = DRIVER_NAME,
 		 .id_table = pciidlist,
+		 .probe = i915_pci_probe,
+		 .remove = i915_pci_remove,
+#ifdef CONFIG_PM
+		 .resume = i915_pci_resume,
+		 .suspend = i915_pci_suspend,
+#endif
 	},
 
 	.name = DRIVER_NAME,

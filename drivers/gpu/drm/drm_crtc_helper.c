@@ -776,7 +776,8 @@ fail_set_mode:
 	set->crtc->enabled = save_enabled;
 	count = 0;
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head)
-		connector->encoder->crtc = save_crtcs[count++];
+		if (connector->encoder)
+			connector->encoder->crtc = save_crtcs[count++];
 fail_no_encoder:
 	kfree(save_crtcs);
 	count = 0;
