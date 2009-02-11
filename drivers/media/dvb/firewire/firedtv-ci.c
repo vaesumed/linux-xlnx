@@ -20,6 +20,11 @@
 #include "firedtv.h"
 #include "firedtv-ci.h"
 
+#define EN50221_TAG_APP_INFO_ENQUIRY	0x9f8020
+#define EN50221_TAG_CA_INFO_ENQUIRY	0x9f8030
+#define EN50221_TAG_CA_PMT		0x9f8032
+#define EN50221_TAG_ENTER_MENU		0x9f8022
+
 static int fdtv_ca_ready(struct firedtv_tuner_status *stat)
 {
 	return stat->ca_initialization_status	== 1 &&
@@ -102,10 +107,10 @@ static int fdtv_ca_get_msg(struct firedtv *fdtv, void *arg)
 	int err;
 
 	switch (fdtv->ca_last_command) {
-	case TAG_APP_INFO_ENQUIRY:
+	case EN50221_TAG_APP_INFO_ENQUIRY:
 		err = fdtv_ca_app_info(fdtv, arg);
 		break;
-	case TAG_CA_INFO_ENQUIRY:
+	case EN50221_TAG_CA_INFO_ENQUIRY:
 		err = fdtv_ca_info(fdtv, arg);
 		break;
 	default:
@@ -152,18 +157,18 @@ static int fdtv_ca_send_msg(struct firedtv *fdtv, void *arg)
 	fdtv->ca_last_command =
 		(msg->msg[0] << 16) + (msg->msg[1] << 8) + msg->msg[2];
 	switch (fdtv->ca_last_command) {
-	case TAG_CA_PMT:
+	case EN50221_TAG_CA_PMT:
 		err = fdtv_ca_pmt(fdtv, arg);
 		break;
-	case TAG_APP_INFO_ENQUIRY:
+	case EN50221_TAG_APP_INFO_ENQUIRY:
 		/* handled in ca_get_msg */
 		err = 0;
 		break;
-	case TAG_CA_INFO_ENQUIRY:
+	case EN50221_TAG_CA_INFO_ENQUIRY:
 		/* handled in ca_get_msg */
 		err = 0;
 		break;
-	case TAG_ENTER_MENU:
+	case EN50221_TAG_ENTER_MENU:
 		err = avc_ca_enter_menu(fdtv);
 		break;
 	default:

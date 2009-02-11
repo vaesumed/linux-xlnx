@@ -74,6 +74,8 @@
 #define SFE_VENDOR_TAG_CA_ENTER_MENU		0x07
 
 #define EN50221_LIST_MANAGEMENT_ONLY	0x03
+#define EN50221_TAG_APP_INFO		0x9f8021
+#define EN50221_TAG_CA_INFO		0x9f8031
 
 struct avc_command_frame {
 	int length;
@@ -795,9 +797,9 @@ int avc_ca_app_info(struct firedtv *fdtv, char *app_info, unsigned int *len)
 	/* FIXME: check response code and validate response data */
 
 	pos = get_ca_object_pos(r);
-	app_info[0] = (TAG_APP_INFO >> 16) & 0xFF;
-	app_info[1] = (TAG_APP_INFO >> 8) & 0xFF;
-	app_info[2] = (TAG_APP_INFO >> 0) & 0xFF;
+	app_info[0] = (EN50221_TAG_APP_INFO >> 16) & 0xff;
+	app_info[1] = (EN50221_TAG_APP_INFO >>  8) & 0xff;
+	app_info[2] = (EN50221_TAG_APP_INFO >>  0) & 0xff;
 	app_info[3] = 6 + r->operand[pos + 4];
 	app_info[4] = 0x01;
 	memcpy(&app_info[5], &r->operand[pos], 5 + r->operand[pos + 4]);
@@ -832,9 +834,9 @@ int avc_ca_info(struct firedtv *fdtv, char *app_info, unsigned int *len)
 		return -EIO;
 
 	pos = get_ca_object_pos(r);
-	app_info[0] = (TAG_CA_INFO >> 16) & 0xFF;
-	app_info[1] = (TAG_CA_INFO >> 8) & 0xFF;
-	app_info[2] = (TAG_CA_INFO >> 0) & 0xFF;
+	app_info[0] = (EN50221_TAG_CA_INFO >> 16) & 0xff;
+	app_info[1] = (EN50221_TAG_CA_INFO >>  8) & 0xff;
+	app_info[2] = (EN50221_TAG_CA_INFO >>  0) & 0xff;
 	app_info[3] = 2;
 	app_info[4] = r->operand[pos + 0];
 	app_info[5] = r->operand[pos + 1];
