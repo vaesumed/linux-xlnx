@@ -20,23 +20,28 @@
 #include "firedtv.h"
 #include "firedtv-ci.h"
 
-static int fdtv_ca_ready(ANTENNA_INPUT_INFO *info)
+#define EN50221_TAG_APP_INFO_ENQUIRY	0x9f8020
+#define EN50221_TAG_CA_INFO_ENQUIRY	0x9f8030
+#define EN50221_TAG_CA_PMT		0x9f8032
+#define EN50221_TAG_ENTER_MENU		0x9f8022
+
+static int fdtv_ca_ready(struct firedtv_tuner_status *stat)
 {
-	return info->CaInitializationStatus == 1 &&
-	       info->CaErrorFlag == 0 &&
-	       info->CaDvbFlag == 1 &&
-	       info->CaModulePresentStatus == 1;
+	return stat->ca_initialization_status	== 1 &&
+	       stat->ca_error_flag		== 0 &&
+	       stat->ca_dvb_flag		== 1 &&
+	       stat->ca_module_present_status	== 1;
 }
 
-static int fdtv_get_ca_flags(ANTENNA_INPUT_INFO *info)
+static int fdtv_get_ca_flags(struct firedtv_tuner_status *stat)
 {
 	int flags = 0;
 
-	if (info->CaModulePresentStatus == 1)
+	if (stat->ca_module_present_status == 1)
 		flags |= CA_CI_MODULE_PRESENT;
-	if (info->CaInitializationStatus == 1 &&
-	    info->CaErrorFlag == 0 &&
-	    info->CaDvbFlag == 1)
+	if (stat->ca_initialization_status == 1 &&
+	    stat->ca_error_flag            == 0 &&
+	    stat->ca_dvb_flag              == 1)
 		flags |= CA_CI_MODULE_READY;
 	return flags;
 }
@@ -59,17 +64,17 @@ static int fdtv_ca_get_caps(void *arg)
 
 static int fdtv_ca_get_slot_info(struct firedtv *fdtv, void *arg)
 {
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 	struct ca_slot_info *slot = arg;
 
-	if (avc_tuner_status(fdtv, &info))
+	if (avc_tuner_status(fdtv, &stat))
 		return -EFAULT;
 
 	if (slot->num != 0)
 		return -EFAULT;
 
 	slot->type = CA_CI;
-	slot->flags = fdtv_get_ca_flags(&info);
+	slot->flags = fdtv_get_ca_flags(&stat);
 	return 0;
 }
 
@@ -98,20 +103,20 @@ static int fdtv_ca_get_mmi(struct firedtv *fdtv, void *arg)
 
 static int fdtv_ca_get_msg(struct firedtv *fdtv, void *arg)
 {
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 	int err;
 
 	switch (fdtv->ca_last_command) {
-	case TAG_APP_INFO_ENQUIRY:
+	case EN50221_TAG_APP_INFO_ENQUIRY:
 		err = fdtv_ca_app_info(fdtv, arg);
 		break;
-	case TAG_CA_INFO_ENQUIRY:
+	case EN50221_TAG_CA_INFO_ENQUIRY:
 		err = fdtv_ca_info(fdtv, arg);
 		break;
 	default:
-		if (avc_tuner_status(fdtv, &info))
+		if (avc_tuner_status(fdtv, &stat))
 			err = -EFAULT;
-		else if (info.CaMmi == 1)
+		else if (stat.ca_mmi == 1)
 			err = fdtv_ca_get_mmi(fdtv, arg);
 		else {
 			printk(KERN_INFO "%s: Unhandled message 0x%08X\n",
@@ -152,18 +157,18 @@ static int fdtv_ca_send_msg(struct firedtv *fdtv, void *arg)
 	fdtv->ca_last_command =
 		(msg->msg[0] << 16) + (msg->msg[1] << 8) + msg->msg[2];
 	switch (fdtv->ca_last_command) {
-	case TAG_CA_PMT:
+	case EN50221_TAG_CA_PMT:
 		err = fdtv_ca_pmt(fdtv, arg);
 		break;
-	case TAG_APP_INFO_ENQUIRY:
+	case EN50221_TAG_APP_INFO_ENQUIRY:
 		/* handled in ca_get_msg */
 		err = 0;
 		break;
-	case TAG_CA_INFO_ENQUIRY:
+	case EN50221_TAG_CA_INFO_ENQUIRY:
 		/* handled in ca_get_msg */
 		err = 0;
 		break;
-	case TAG_ENTER_MENU:
+	case EN50221_TAG_ENTER_MENU:
 		err = avc_ca_enter_menu(fdtv);
 		break;
 	default:
@@ -179,7 +184,7 @@ static int fdtv_ca_ioctl(struct inode *inode, struct file *file,
 {
 	struct dvb_device *dvbdev = file->private_data;
 	struct firedtv *fdtv = dvbdev->priv;
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 	int err;
 
 	switch(cmd) {
@@ -205,7 +210,7 @@ static int fdtv_ca_ioctl(struct inode *inode, struct file *file,
 	}
 
 	/* FIXME Is this necessary? */
-	avc_tuner_status(fdtv, &info);
+	avc_tuner_status(fdtv, &stat);
 
 	return err;
 }
@@ -233,22 +238,22 @@ static struct dvb_device fdtv_ca = {
 
 int fdtv_ca_register(struct firedtv *fdtv)
 {
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 	int err;
 
-	if (avc_tuner_status(fdtv, &info))
+	if (avc_tuner_status(fdtv, &stat))
 		return -EINVAL;
 
-	if (!fdtv_ca_ready(&info))
+	if (!fdtv_ca_ready(&stat))
 		return -EFAULT;
 
 	err = dvb_register_device(&fdtv->adapter, &fdtv->cadev,
 				  &fdtv_ca, fdtv, DVB_DEVICE_CA);
 
-	if (info.CaApplicationInfo == 0)
+	if (stat.ca_application_info == 0)
 		printk(KERN_ERR "%s: CaApplicationInfo is not set.\n",
 		       __func__);
-	if (info.CaDateTimeRequest == 1)
+	if (stat.ca_date_time_request == 1)
 		avc_ca_get_time_date(fdtv, &fdtv->ca_time_interval);
 
 	return err;

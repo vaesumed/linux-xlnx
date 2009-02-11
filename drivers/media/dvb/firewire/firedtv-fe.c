@@ -49,6 +49,8 @@ static int fdtv_sleep(struct dvb_frontend *fe)
 	return 0;
 }
 
+#define LNBCONTROL_DONTCARE 0xff
+
 static int fdtv_diseqc_send_master_cmd(struct dvb_frontend *fe,
 					  struct dvb_diseqc_master_cmd *cmd)
 {
@@ -84,12 +86,12 @@ static int fdtv_set_voltage(struct dvb_frontend *fe,
 static int fdtv_read_status(struct dvb_frontend *fe, fe_status_t *status)
 {
 	struct firedtv *fdtv = fe->sec_priv;
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 
-	if (avc_tuner_status(fdtv, &info))
+	if (avc_tuner_status(fdtv, &stat))
 		return -EINVAL;
 
-	if (info.NoRF)
+	if (stat.no_rf)
 		*status = 0;
 	else
 		*status = FE_HAS_SIGNAL | FE_HAS_VITERBI | FE_HAS_SYNC |
@@ -100,39 +102,37 @@ static int fdtv_read_status(struct dvb_frontend *fe, fe_status_t *status)
 static int fdtv_read_ber(struct dvb_frontend *fe, u32 *ber)
 {
 	struct firedtv *fdtv = fe->sec_priv;
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 
-	if (avc_tuner_status(fdtv, &info))
+	if (avc_tuner_status(fdtv, &stat))
 		return -EINVAL;
 
-	*ber = info.BER[0] << 24 | info.BER[1] << 16 |
-	       info.BER[2] << 8 | info.BER[3];
+	*ber = stat.ber;
 	return 0;
 }
 
 static int fdtv_read_signal_strength (struct dvb_frontend *fe, u16 *strength)
 {
 	struct firedtv *fdtv = fe->sec_priv;
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 
-	if (avc_tuner_status(fdtv, &info))
+	if (avc_tuner_status(fdtv, &stat))
 		return -EINVAL;
 
-	*strength = info.SignalStrength << 8;
+	*strength = stat.signal_strength << 8;
 	return 0;
 }
 
 static int fdtv_read_snr(struct dvb_frontend *fe, u16 *snr)
 {
 	struct firedtv *fdtv = fe->sec_priv;
-	ANTENNA_INPUT_INFO info;
+	struct firedtv_tuner_status stat;
 
-	if (avc_tuner_status(fdtv, &info))
+	if (avc_tuner_status(fdtv, &stat))
 		return -EINVAL;
 
 	/* C/N[dB] = -10 * log10(snr / 65535) */
-	*snr = (info.CarrierNoiseRatio[0] << 8) + info.CarrierNoiseRatio[1];
-	*snr *= 257;
+	*snr = stat.carrier_noise_ratio * 257;
 	return 0;
 }
 
@@ -140,6 +140,8 @@ static int fdtv_read_uncorrected_blocks(struct dvb_frontend *fe, u32 *ucblocks)
 {
 	return -EOPNOTSUPP;
 }
+
+#define ACCEPTED 0x9
 
 static int fdtv_set_frontend(struct dvb_frontend *fe,
 				struct dvb_frontend_parameters *params)
