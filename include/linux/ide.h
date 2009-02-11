@@ -714,11 +714,11 @@ struct ide_port_ops {
 struct ide_dma_ops {
 	void	(*dma_host_set)(struct ide_drive_s *, int);
 	int	(*dma_setup)(struct ide_drive_s *, struct ide_cmd *);
-	void	(*dma_exec_cmd)(struct ide_drive_s *, u8);
 	void	(*dma_start)(struct ide_drive_s *);
 	int	(*dma_end)(struct ide_drive_s *);
 	int	(*dma_test_irq)(struct ide_drive_s *);
 	void	(*dma_lost_irq)(struct ide_drive_s *);
+	int	(*dma_expiry)(struct ide_drive_s *);
 	void	(*dma_timeout)(struct ide_drive_s *);
 	/*
 	 * The following method is optional and only required to be
@@ -1135,8 +1135,7 @@ void ide_kill_rq(ide_drive_t *, struct request *);
 void __ide_set_handler(ide_drive_t *, ide_handler_t *, unsigned int);
 void ide_set_handler(ide_drive_t *, ide_handler_t *, unsigned int);
 
-void ide_execute_command(ide_drive_t *, u8, ide_handler_t *, unsigned int,
-			 ide_expiry_t *);
+void ide_execute_command(ide_drive_t *, u8, ide_handler_t *, unsigned int);
 
 void ide_execute_pkt_cmd(ide_drive_t *);
 
@@ -1450,10 +1449,10 @@ int config_drive_for_dma(ide_drive_t *);
 int ide_build_dmatable(ide_drive_t *, struct ide_cmd *);
 void ide_dma_host_set(ide_drive_t *, int);
 int ide_dma_setup(ide_drive_t *, struct ide_cmd *);
-void ide_dma_exec_cmd(ide_drive_t *, u8);
 extern void ide_dma_start(ide_drive_t *);
 int ide_dma_end(ide_drive_t *);
 int ide_dma_test_irq(ide_drive_t *);
+int ide_dma_sff_expiry(ide_drive_t *);
 u8 ide_dma_sff_read_status(ide_hwif_t *);
 extern const struct ide_dma_ops sff_dma_ops;
 #else
