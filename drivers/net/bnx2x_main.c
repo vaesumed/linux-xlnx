@@ -1325,6 +1325,7 @@ static void bnx2x_tpa_stop(struct bnx2x *bp, struct bnx2x_fastpath *fp,
 
 		skb->protocol = eth_type_trans(skb, bp->dev);
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		skb_record_rx_queue(skb, queue);
 
 		{
 			struct iphdr *iph;
@@ -1654,7 +1655,7 @@ static irqreturn_t bnx2x_msix_fp_int(int irq, void *fp_cookie)
 	prefetch(&fp->status_blk->c_status_block.status_block_index);
 	prefetch(&fp->status_blk->u_status_block.status_block_index);
 
-	netif_rx_schedule(&bnx2x_fp(bp, index, napi));
+	napi_schedule(&bnx2x_fp(bp, index, napi));
 
 	return IRQ_HANDLED;
 }
@@ -1693,7 +1694,7 @@ static irqreturn_t bnx2x_interrupt(int irq, void *dev_instance)
 		prefetch(&fp->status_blk->c_status_block.status_block_index);
 		prefetch(&fp->status_blk->u_status_block.status_block_index);
 
-		netif_rx_schedule(&bnx2x_fp(bp, 0, napi));
+		napi_schedule(&bnx2x_fp(bp, 0, napi));
 
 		status &= ~mask;
 	}
@@ -9374,7 +9375,7 @@ static int bnx2x_poll(struct napi_struct *napi, int budget)
 #ifdef BNX2X_STOP_ON_ERROR
 poll_panic:
 #endif
-		netif_rx_complete(napi);
+		napi_complete(napi);
 
 		bnx2x_ack_sb(bp, FP_SB_ID(fp), USTORM_ID,
 			     le16_to_cpu(fp->fp_u_idx), IGU_INT_NOP, 1);

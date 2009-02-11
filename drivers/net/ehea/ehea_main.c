@@ -308,7 +308,7 @@ static struct net_device_stats *ehea_get_stats(struct net_device *dev)
 
 	memset(stats, 0, sizeof(*stats));
 
-	cb2 = kzalloc(PAGE_SIZE, GFP_ATOMIC);
+	cb2 = (void *)get_zeroed_page(GFP_ATOMIC);
 	if (!cb2) {
 		ehea_error("no mem for cb2");
 		goto out;
@@ -341,7 +341,7 @@ static struct net_device_stats *ehea_get_stats(struct net_device *dev)
 	stats->rx_packets = rx_packets;
 
 out_herr:
-	kfree(cb2);
+	free_page((unsigned long)cb2);
 out:
 	return stats;
 }
@@ -370,8 +370,6 @@ static void ehea_refill_rq1(struct ehea_port_res *pr, int index, int nr_of_wqes)
 							      EHEA_L_PKT_SIZE);
 			if (!skb_arr_rq1[index]) {
 				pr->rq1_skba.os_skbs = fill_wqes - i;
-				ehea_error("%s: no mem for skb/%d wqes filled",
-					   dev->name, i);
 				break;
 			}
 		}
@@ -387,26 +385,19 @@ static void ehea_refill_rq1(struct ehea_port_res *pr, int index, int nr_of_wqes)
 	ehea_update_rq1a(pr->qp, adder);
 }
 
-static int ehea_init_fill_rq1(struct ehea_port_res *pr, int nr_rq1a)
+static void ehea_init_fill_rq1(struct ehea_port_res *pr, int nr_rq1a)
 {
-	int ret = 0;
 	struct sk_buff **skb_arr_rq1 = pr->rq1_skba.arr;
 	struct net_device *dev = pr->port->netdev;
 	int i;
 
 	for (i = 0; i < pr->rq1_skba.len; i++) {
 		skb_arr_rq1[i] = netdev_alloc_skb(dev, EHEA_L_PKT_SIZE);
-		if (!skb_arr_rq1[i]) {
-			ehea_error("%s: no mem for skb/%d wqes filled",
-				   dev->name, i);
-			ret = -ENOMEM;
-			goto out;
-		}
+		if (!skb_arr_rq1[i])
+			break;
 	}
 	/* Ring doorbell */
 	ehea_update_rq1a(pr->qp, nr_rq1a);
-out:
-	return ret;
 }
 
 static int ehea_refill_rq_def(struct ehea_port_res *pr,
@@ -435,10 +426,12 @@ static int ehea_refill_rq_def(struct ehea_port_res *pr,
 		u64 tmp_addr;
 		struct sk_buff *skb = netdev_alloc_skb(dev, packet_size);
 		if (!skb) {
-			ehea_error("%s: no mem for skb/%d wqes filled",
-				   pr->port->netdev->name, i);
 			q_skba->os_skbs = fill_wqes - i;
-			ret = -ENOMEM;
+			if (q_skba->os_skbs == q_skba->len - 2) {
+				ehea_info("%s: rq%i ran dry - no mem for skb",
+					  pr->port->netdev->name, rq_nr);
+				ret = -ENOMEM;
+			}
 			break;
 		}
 		skb_reserve(skb, NET_IP_ALIGN);
@@ -830,7 +823,7 @@ static int ehea_poll(struct napi_struct *napi, int budget)
 	while ((rx != budget) || force_irq) {
 		pr->poll_counter = 0;
 		force_irq = 0;
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		ehea_reset_cq_ep(pr->recv_cq);
 		ehea_reset_cq_ep(pr->send_cq);
 		ehea_reset_cq_n1(pr->recv_cq);
@@ -841,7 +834,7 @@ static int ehea_poll(struct napi_struct *napi, int budget)
 		if (!cqe && !cqe_skb)
 			return rx;
 
-		if (!netif_rx_reschedule(napi))
+		if (!napi_reschedule(napi))
 			return rx;
 
 		cqe_skb = ehea_proc_cqes(pr, EHEA_POLL_MAX_CQES);
@@ -859,7 +852,7 @@ static void ehea_netpoll(struct net_device *dev)
 	int i;
 
 	for (i = 0; i < port->num_def_qps; i++)
-		netif_rx_schedule(&port->port_res[i].napi);
+		napi_schedule(&port->port_res[i].napi);
 }
 #endif
 
@@ -867,7 +860,7 @@ static irqreturn_t ehea_recv_irq_handler(int irq, void *param)
 {
 	struct ehea_port_res *pr = param;
 
-	netif_rx_schedule(&pr->napi);
+	napi_schedule(&pr->napi);
 
 	return IRQ_HANDLED;
 }
@@ -915,7 +908,7 @@ int ehea_sense_port_attr(struct ehea_port *port)
 	struct hcp_ehea_port_cb0 *cb0;
 
 	/* may be called via ehea_neq_tasklet() */
-	cb0 = kzalloc(PAGE_SIZE, GFP_ATOMIC);
+	cb0 = (void *)get_zeroed_page(GFP_ATOMIC);
 	if (!cb0) {
 		ehea_error("no mem for cb0");
 		ret = -ENOMEM;
@@ -996,7 +989,7 @@ int ehea_sense_port_attr(struct ehea_port *port)
 out_free:
 	if (ret || netif_msg_probe(port))
 		ehea_dump(cb0, sizeof(*cb0), "ehea_sense_port_attr");
-	kfree(cb0);
+	free_page((unsigned long)cb0);
 out:
 	return ret;
 }
@@ -1007,7 +1000,7 @@ int ehea_set_portspeed(struct ehea_port *port, u32 port_speed)
 	u64 hret;
 	int ret = 0;
 
-	cb4 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb4 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb4) {
 		ehea_error("no mem for cb4");
 		ret = -ENOMEM;
@@ -1075,7 +1068,7 @@ int ehea_set_portspeed(struct ehea_port *port, u32 port_speed)
 	if (!prop_carrier_state || (port->phy_link == EHEA_PHY_LINK_UP))
 		netif_carrier_on(port->netdev);
 
-	kfree(cb4);
+	free_page((unsigned long)cb4);
 out:
 	return ret;
 }
@@ -1201,11 +1194,11 @@ static int ehea_fill_port_res(struct ehea_port_res *pr)
 	int ret;
 	struct ehea_qp_init_attr *init_attr = &pr->qp->init_attr;
 
-	ret = ehea_init_fill_rq1(pr, init_attr->act_nr_rwqes_rq1
-				     - init_attr->act_nr_rwqes_rq2
-				     - init_attr->act_nr_rwqes_rq3 - 1);
+	ehea_init_fill_rq1(pr, init_attr->act_nr_rwqes_rq1
+			       - init_attr->act_nr_rwqes_rq2
+			       - init_attr->act_nr_rwqes_rq3 - 1);
 
-	ret |= ehea_refill_rq2(pr, init_attr->act_nr_rwqes_rq2 - 1);
+	ret = ehea_refill_rq2(pr, init_attr->act_nr_rwqes_rq2 - 1);
 
 	ret |= ehea_refill_rq3(pr, init_attr->act_nr_rwqes_rq3 - 1);
 
@@ -1302,7 +1295,7 @@ static int ehea_configure_port(struct ehea_port *port)
 	struct hcp_ehea_port_cb0 *cb0;
 
 	ret = -ENOMEM;
-	cb0 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb0 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb0)
 		goto out;
 
@@ -1338,7 +1331,7 @@ static int ehea_configure_port(struct ehea_port *port)
 	ret = 0;
 
 out_free:
-	kfree(cb0);
+	free_page((unsigned long)cb0);
 out:
 	return ret;
 }
@@ -1748,7 +1741,7 @@ static int ehea_set_mac_addr(struct net_device *dev, void *sa)
 		goto out;
 	}
 
-	cb0 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb0 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb0) {
 		ehea_error("no mem for cb0");
 		ret = -ENOMEM;
@@ -1793,7 +1786,7 @@ out_upregs:
 	ehea_update_bcmc_registrations();
 	spin_unlock(&ehea_bcmc_regs.lock);
 out_free:
-	kfree(cb0);
+	free_page((unsigned long)cb0);
 out:
 	return ret;
 }
@@ -1817,7 +1810,7 @@ static void ehea_promiscuous(struct net_device *dev, int enable)
 	if ((enable && port->promisc) || (!enable && !port->promisc))
 		return;
 
-	cb7 = kzalloc(PAGE_SIZE, GFP_ATOMIC);
+	cb7 = (void *)get_zeroed_page(GFP_ATOMIC);
 	if (!cb7) {
 		ehea_error("no mem for cb7");
 		goto out;
@@ -1836,7 +1829,7 @@ static void ehea_promiscuous(struct net_device *dev, int enable)
 
 	port->promisc = enable;
 out:
-	kfree(cb7);
+	free_page((unsigned long)cb7);
 	return;
 }
 
@@ -2217,7 +2210,7 @@ static void ehea_vlan_rx_register(struct net_device *dev,
 
 	port->vgrp = grp;
 
-	cb1 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb1 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb1) {
 		ehea_error("no mem for cb1");
 		goto out;
@@ -2228,7 +2221,7 @@ static void ehea_vlan_rx_register(struct net_device *dev,
 	if (hret != H_SUCCESS)
 		ehea_error("modify_ehea_port failed");
 
-	kfree(cb1);
+	free_page((unsigned long)cb1);
 out:
 	return;
 }
@@ -2241,7 +2234,7 @@ static void ehea_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
 	int index;
 	u64 hret;
 
-	cb1 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb1 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb1) {
 		ehea_error("no mem for cb1");
 		goto out;
@@ -2262,7 +2255,7 @@ static void ehea_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
 	if (hret != H_SUCCESS)
 		ehea_error("modify_ehea_port failed");
 out:
-	kfree(cb1);
+	free_page((unsigned long)cb1);
 	return;
 }
 
@@ -2276,7 +2269,7 @@ static void ehea_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
 
 	vlan_group_set_device(port->vgrp, vid, NULL);
 
-	cb1 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb1 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb1) {
 		ehea_error("no mem for cb1");
 		goto out;
@@ -2297,7 +2290,7 @@ static void ehea_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
 	if (hret != H_SUCCESS)
 		ehea_error("modify_ehea_port failed");
 out:
-	kfree(cb1);
+	free_page((unsigned long)cb1);
 	return;
 }
 
@@ -2309,7 +2302,7 @@ int ehea_activate_qp(struct ehea_adapter *adapter, struct ehea_qp *qp)
 	u64 dummy64 = 0;
 	struct hcp_modify_qp_cb0 *cb0;
 
-	cb0 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb0 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb0) {
 		ret = -ENOMEM;
 		goto out;
@@ -2372,7 +2365,7 @@ int ehea_activate_qp(struct ehea_adapter *adapter, struct ehea_qp *qp)
 
 	ret = 0;
 out:
-	kfree(cb0);
+	free_page((unsigned long)cb0);
 	return ret;
 }
 
@@ -2664,7 +2657,7 @@ int ehea_stop_qps(struct net_device *dev)
 	u64 dummy64 = 0;
 	u16 dummy16 = 0;
 
-	cb0 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb0 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb0) {
 		ret = -ENOMEM;
 		goto out;
@@ -2716,7 +2709,7 @@ int ehea_stop_qps(struct net_device *dev)
 
 	ret = 0;
 out:
-	kfree(cb0);
+	free_page((unsigned long)cb0);
 
 	return ret;
 }
@@ -2766,7 +2759,7 @@ int ehea_restart_qps(struct net_device *dev)
 	u64 dummy64 = 0;
 	u16 dummy16 = 0;
 
-	cb0 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb0 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb0) {
 		ret = -ENOMEM;
 		goto out;
@@ -2819,7 +2812,7 @@ int ehea_restart_qps(struct net_device *dev)
 		ehea_refill_rq3(pr, 0);
 	}
 out:
-	kfree(cb0);
+	free_page((unsigned long)cb0);
 
 	return ret;
 }
@@ -2950,7 +2943,7 @@ int ehea_sense_adapter_attr(struct ehea_adapter *adapter)
 	u64 hret;
 	int ret;
 
-	cb = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb) {
 		ret = -ENOMEM;
 		goto out;
@@ -2967,7 +2960,7 @@ int ehea_sense_adapter_attr(struct ehea_adapter *adapter)
 	ret = 0;
 
 out_herr:
-	kfree(cb);
+	free_page((unsigned long)cb);
 out:
 	return ret;
 }
@@ -2981,7 +2974,7 @@ int ehea_get_jumboframe_status(struct ehea_port *port, int *jumbo)
 	*jumbo = 0;
 
 	/* (Try to) enable *jumbo frames */
-	cb4 = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	cb4 = (void *)get_zeroed_page(GFP_KERNEL);
 	if (!cb4) {
 		ehea_error("no mem for cb4");
 		ret = -ENOMEM;
@@ -3009,7 +3002,7 @@ int ehea_get_jumboframe_status(struct ehea_port *port, int *jumbo)
 		} else
 			ret = -EINVAL;
 
-		kfree(cb4);
+		free_page((unsigned long)cb4);
 	}
 out:
 	return ret;
@@ -3069,6 +3062,22 @@ static void ehea_unregister_port(struct ehea_port *port)
 	of_device_unregister(&port->ofdev);
 }
 
+static const struct net_device_ops ehea_netdev_ops = {
+	.ndo_open		= ehea_open,
+	.ndo_stop		= ehea_stop,
+	.ndo_start_xmit		= ehea_start_xmit,
+#ifdef CONFIG_NET_POLL_CONTROLLER
+	.ndo_poll_controller	= ehea_netpoll,
+#endif
+	.ndo_get_stats		= ehea_get_stats,
+	.ndo_set_mac_address	= ehea_set_mac_addr,
+	.ndo_set_multicast_list	= ehea_set_multicast_list,
+	.ndo_change_mtu		= ehea_change_mtu,
+	.ndo_vlan_rx_register	= ehea_vlan_rx_register,
+	.ndo_vlan_rx_add_vid	= ehea_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid	= ehea_vlan_rx_kill_vid
+};
+
 struct ehea_port *ehea_setup_single_port(struct ehea_adapter *adapter,
 					 u32 logical_port_id,
 					 struct device_node *dn)
@@ -3121,19 +3130,9 @@ struct ehea_port *ehea_setup_single_port(struct ehea_adapter *adapter,
 	/* initialize net_device structure */
 	memcpy(dev->dev_addr, &port->mac_addr, ETH_ALEN);
 
-	dev->open = ehea_open;
-#ifdef CONFIG_NET_POLL_CONTROLLER
-	dev->poll_controller = ehea_netpoll;
-#endif
-	dev->stop = ehea_stop;
-	dev->hard_start_xmit = ehea_start_xmit;
-	dev->get_stats = ehea_get_stats;
-	dev->set_multicast_list = ehea_set_multicast_list;
-	dev->set_mac_address = ehea_set_mac_addr;
-	dev->change_mtu = ehea_change_mtu;
-	dev->vlan_rx_register = ehea_vlan_rx_register;
-	dev->vlan_rx_add_vid = ehea_vlan_rx_add_vid;
-	dev->vlan_rx_kill_vid = ehea_vlan_rx_kill_vid;
+	dev->netdev_ops = &ehea_netdev_ops;
+	ehea_set_ethtool_ops(dev);
+
 	dev->features = NETIF_F_SG | NETIF_F_FRAGLIST | NETIF_F_TSO
 		      | NETIF_F_HIGHDMA | NETIF_F_IP_CSUM | NETIF_F_HW_VLAN_TX
 		      | NETIF_F_HW_VLAN_RX | NETIF_F_HW_VLAN_FILTER
@@ -3142,7 +3141,6 @@ struct ehea_port *ehea_setup_single_port(struct ehea_adapter *adapter,
 	dev->watchdog_timeo = EHEA_WATCH_DOG_TIMEOUT;
 
 	INIT_WORK(&port->reset_task, ehea_reset_port);
-	ehea_set_ethtool_ops(dev);
 
 	ret = register_netdev(dev);
 	if (ret) {

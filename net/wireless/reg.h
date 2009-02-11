@@ -1,6 +1,8 @@
 #ifndef __NET_WIRELESS_REG_H
 #define __NET_WIRELESS_REG_H
 
+extern const struct ieee80211_regdomain *cfg80211_regdomain;
+
 bool is_world_regdom(const char *alpha2);
 bool reg_is_valid_request(const char *alpha2);
 
@@ -10,13 +12,6 @@ int regulatory_init(void);
 void regulatory_exit(void);
 
 int set_regdom(const struct ieee80211_regdomain *rd);
-
-enum environment_cap {
-	ENVIRON_ANY,
-	ENVIRON_INDOOR,
-	ENVIRON_OUTDOOR,
-};
-
 
 /**
  * __regulatory_hint - hint to the wireless core a regulatory domain
