@@ -324,8 +324,6 @@ static inline const struct cpumask *get_cpu_mask(unsigned int cpu)
 	[BITS_TO_LONGS(NR_CPUS)-1] = CPU_MASK_LAST_WORD			\
 } }
 
-#define CPU_MASK_ALL_PTR	(&CPU_MASK_ALL)
-
 #else
 
 #define CPU_MASK_ALL							\
@@ -333,10 +331,6 @@ static inline const struct cpumask *get_cpu_mask(unsigned int cpu)
 	[0 ... BITS_TO_LONGS(NR_CPUS)-2] = ~0UL,			\
 	[BITS_TO_LONGS(NR_CPUS)-1] = CPU_MASK_LAST_WORD			\
 } }
-
-/* cpu_mask_all is in init/main.c */
-extern cpumask_t cpu_mask_all;
-#define CPU_MASK_ALL_PTR	(&cpu_mask_all)
 
 #endif
 
@@ -482,16 +476,26 @@ int __next_cpu_nr(int n, const cpumask_t *srcp);
  *    only one CPU.
  */
 
-extern const struct cpumask *const cpu_possible_mask;
-extern const struct cpumask *const cpu_online_mask;
-extern const struct cpumask *const cpu_present_mask;
-extern const struct cpumask *const cpu_active_mask;
+#define cpu_possible_mask \
+	((const struct cpumask *)to_cpumask(__cpu_possible_bits))
+#define cpu_online_mask \
+	((const struct cpumask *)to_cpumask(__cpu_online_bits))
+#define cpu_present_mask \
+	((const struct cpumask *)to_cpumask(__cpu_present_bits))
+#define cpu_active_mask \
+	((const struct cpumask *)to_cpumask(__cpu_active_bits))
 
-/* These strip const, as traditionally they weren't const. */
-#define cpu_possible_map	(*(cpumask_t *)cpu_possible_mask)
-#define cpu_online_map		(*(cpumask_t *)cpu_online_mask)
-#define cpu_present_map		(*(cpumask_t *)cpu_present_mask)
-#define cpu_active_map		(*(cpumask_t *)cpu_active_mask)
+/* Deprecated non-const versions. */
+#define cpu_possible_map	(*to_cpumask(__cpu_possible_bits))
+#define cpu_online_map		(*to_cpumask(__cpu_online_bits))
+#define cpu_present_map		(*to_cpumask(__cpu_present_bits))
+#define cpu_active_map		(*to_cpumask(__cpu_active_bits))
+
+/* Don't use these directly: use cpu_*_mask, set_cpu_* or init_cpu_*. */
+extern unsigned long __cpu_possible_bits[];
+extern unsigned long __cpu_online_bits[];
+extern unsigned long __cpu_present_bits[];
+extern unsigned long __cpu_active_bits[];
 
 #if NR_CPUS > 1
 #define num_online_cpus()	cpumask_weight(cpu_online_mask)
