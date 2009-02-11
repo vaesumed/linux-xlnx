@@ -30,33 +30,6 @@ static LIST_HEAD(regulator_list);
 static LIST_HEAD(regulator_map_list);
 
 /*
- * struct regulator_dev
- *
- * Voltage / Current regulator class device. One for each regulator.
- */
-struct regulator_dev {
-	struct regulator_desc *desc;
-	int use_count;
-
-	/* lists we belong to */
-	struct list_head list; /* list of all regulators */
-	struct list_head slist; /* list of supplied regulators */
-
-	/* lists we own */
-	struct list_head consumer_list; /* consumers we supply */
-	struct list_head supply_list; /* regulators we supply */
-
-	struct blocking_notifier_head notifier;
-	struct mutex mutex; /* consumer lock */
-	struct module *owner;
-	struct device dev;
-	struct regulation_constraints *constraints;
-	struct regulator_dev *supply;	/* for tree */
-
-	void *reg_data;		/* regulator_dev data */
-};
-
-/*
  * struct regulator_map
  *
  * Used to provide symbolic supply names to devices.
@@ -311,6 +284,47 @@ static ssize_t regulator_state_show(struct device *dev,
 	return regulator_print_state(buf, _regulator_is_enabled(rdev));
 }
 static DEVICE_ATTR(state, 0444, regulator_state_show, NULL);
+
+static ssize_t regulator_status_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct regulator_dev *rdev = dev_get_drvdata(dev);
+	int status;
+	char *label;
+
+	status = rdev->desc->ops->get_status(rdev);
+	if (status < 0)
+		return status;
+
+	switch (status) {
+	case REGULATOR_STATUS_OFF:
+		label = "off";
+		break;
+	case REGULATOR_STATUS_ON:
+		label = "on";
+		break;
+	case REGULATOR_STATUS_ERROR:
+		label = "error";
+		break;
+	case REGULATOR_STATUS_FAST:
+		label = "fast";
+		break;
+	case REGULATOR_STATUS_NORMAL:
+		label = "normal";
+		break;
+	case REGULATOR_STATUS_IDLE:
+		label = "idle";
+		break;
+	case REGULATOR_STATUS_STANDBY:
+		label = "standby";
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	return sprintf(buf, "%s\n", label);
+}
+static DEVICE_ATTR(status, 0444, regulator_status_show, NULL);
 
 static ssize_t regulator_min_uA_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
@@ -817,6 +831,19 @@ static void unset_consumer_device_supply(struct regulator_dev *rdev,
 	}
 }
 
+static void unset_regulator_supplies(struct regulator_dev *rdev)
+{
+	struct regulator_map *node, *n;
+
+	list_for_each_entry_safe(node, n, &regulator_map_list, list) {
+		if (rdev == node->regulator) {
+			list_del(&node->list);
+			kfree(node);
+			return;
+		}
+	}
+}
+
 #define REG_STR_SIZE	32
 
 static struct regulator *create_regulator(struct regulator_dev *rdev,
@@ -1243,6 +1270,7 @@ int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
 	ret = rdev->desc->ops->set_voltage(rdev, min_uV, max_uV);
 
 out:
+	_notifier_call_chain(rdev, REGULATOR_EVENT_VOLTAGE_CHANGE, NULL);
 	mutex_unlock(&rdev->mutex);
 	return ret;
 }
@@ -1543,20 +1571,23 @@ int regulator_unregister_notifier(struct regulator *regulator,
 }
 EXPORT_SYMBOL_GPL(regulator_unregister_notifier);
 
-/* notify regulator consumers and downstream regulator consumers */
+/* notify regulator consumers and downstream regulator consumers.
+ * Note mutex must be held by caller.
+ */
 static void _notifier_call_chain(struct regulator_dev *rdev,
 				  unsigned long event, void *data)
 {
 	struct regulator_dev *_rdev;
 
 	/* call rdev chain first */
-	mutex_lock(&rdev->mutex);
 	blocking_notifier_call_chain(&rdev->notifier, event, NULL);
-	mutex_unlock(&rdev->mutex);
 
 	/* now notify regulator we supply */
-	list_for_each_entry(_rdev, &rdev->supply_list, slist)
-		_notifier_call_chain(_rdev, event, data);
+	list_for_each_entry(_rdev, &rdev->supply_list, slist) {
+	  mutex_lock(&_rdev->mutex);
+	  _notifier_call_chain(_rdev, event, data);
+	  mutex_unlock(&_rdev->mutex);
+	}
 }
 
 /**
@@ -1703,6 +1734,7 @@ EXPORT_SYMBOL_GPL(regulator_bulk_free);
  *
  * Called by regulator drivers to notify clients a regulator event has
  * occurred. We also notify regulator clients downstream.
+ * Note lock must be held by caller.
  */
 int regulator_notifier_call_chain(struct regulator_dev *rdev,
 				  unsigned long event, void *data)
@@ -1741,6 +1773,11 @@ static int add_regulator_attributes(struct regulator_dev *rdev)
 	}
 	if (ops->is_enabled) {
 		status = device_create_file(dev, &dev_attr_state);
+		if (status < 0)
+			return status;
+	}
+	if (ops->get_status) {
+		status = device_create_file(dev, &dev_attr_status);
 		if (status < 0)
 			return status;
 	}
@@ -1828,17 +1865,18 @@ static int add_regulator_attributes(struct regulator_dev *rdev)
  * regulator_register - register regulator
  * @regulator_desc: regulator to register
  * @dev: struct device for the regulator
+ * @init_data: platform provided init data, passed through by driver
  * @driver_data: private regulator data
  *
  * Called by regulator drivers to register a regulator.
  * Returns 0 on success.
  */
 struct regulator_dev *regulator_register(struct regulator_desc *regulator_desc,
-	struct device *dev, void *driver_data)
+	struct device *dev, struct regulator_init_data *init_data,
+	void *driver_data)
 {
 	static atomic_t regulator_no = ATOMIC_INIT(0);
 	struct regulator_dev *rdev;
-	struct regulator_init_data *init_data = dev->platform_data;
 	int ret, i;
 
 	if (regulator_desc == NULL)
@@ -1945,6 +1983,7 @@ void regulator_unregister(struct regulator_dev *rdev)
 		return;
 
 	mutex_lock(&regulator_list_mutex);
+	unset_regulator_supplies(rdev);
 	list_del(&rdev->list);
 	if (rdev->supply)
 		sysfs_remove_link(&rdev->dev.kobj, "supply");
