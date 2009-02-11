@@ -486,7 +486,7 @@ __ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e)
 	io_apic_write(apic, 0x10 + 2*pin, eu.w1);
 }
 
-static void ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e)
+void ioapic_write_entry(int apic, int pin, struct IO_APIC_route_entry e)
 {
 	unsigned long flags;
 	spin_lock_irqsave(&ioapic_lock, flags);
@@ -1478,10 +1478,10 @@ static void ioapic_register_intr(int irq, struct irq_desc *desc, unsigned long t
 					      handle_edge_irq, "edge");
 }
 
-static int setup_ioapic_entry(int apic_id, int irq,
-			      struct IO_APIC_route_entry *entry,
-			      unsigned int destination, int trigger,
-			      int polarity, int vector)
+int setup_ioapic_entry(int apic_id, int irq,
+		       struct IO_APIC_route_entry *entry,
+		       unsigned int destination, int trigger,
+		       int polarity, int vector)
 {
 	/*
 	 * add it to the IO-APIC irq-routing table:
@@ -1657,7 +1657,7 @@ static void __init setup_timer_IRQ0_pin(unsigned int apic_id, unsigned int pin,
 	 * to the first CPU.
 	 */
 	entry.dest_mode = apic->irq_dest_mode;
-	entry.mask = 1;					/* mask IRQ now */
+	entry.mask = 0;			/* don't mask IRQ for edge */
 	entry.dest = apic->cpu_mask_to_apicid(apic->target_cpus());
 	entry.delivery_mode = apic->irq_delivery_mode;
 	entry.polarity = 0;
@@ -2863,13 +2863,9 @@ static inline void __init check_timer(void)
 	int cpu = boot_cpu_id;
 	int apic1, pin1, apic2, pin2;
 	unsigned long flags;
-	unsigned int ver;
 	int no_pin1 = 0;
 
 	local_irq_save(flags);
-
-	ver = apic_read(APIC_LVR);
-	ver = GET_APIC_VERSION(ver);
 
 	/*
 	 * get/set the timer IRQ vector:
@@ -2889,7 +2885,13 @@ static inline void __init check_timer(void)
 	apic_write(APIC_LVT0, APIC_LVT_MASKED | APIC_DM_EXTINT);
 	init_8259A(1);
 #ifdef CONFIG_X86_32
-	timer_ack = (nmi_watchdog == NMI_IO_APIC && !APIC_INTEGRATED(ver));
+	{
+		unsigned int ver;
+
+		ver = apic_read(APIC_LVR);
+		ver = GET_APIC_VERSION(ver);
+		timer_ack = (nmi_watchdog == NMI_IO_APIC && !APIC_INTEGRATED(ver));
+	}
 #endif
 
 	pin1  = find_isa_irq_pin(0, mp_INT);
@@ -2928,8 +2930,17 @@ static inline void __init check_timer(void)
 		if (no_pin1) {
 			add_pin_to_irq_cpu(cfg, cpu, apic1, pin1);
 			setup_timer_IRQ0_pin(apic1, pin1, cfg->vector);
+		} else {
+			/* for edge trigger, setup_IO_APIC_irq already
+			 * leave it unmasked.
+			 * so only need to unmask if it is level-trigger
+			 * do we really have level trigger timer?
+			 */
+			int idx;
+			idx = find_irq_entry(apic1, pin1, mp_INT);
+			if (idx != -1 && irq_trigger(idx))
+				unmask_IO_APIC_irq_desc(desc);
 		}
-		unmask_IO_APIC_irq_desc(desc);
 		if (timer_irq_works()) {
 			if (nmi_watchdog == NMI_IO_APIC) {
 				setup_nmi();
@@ -2943,6 +2954,7 @@ static inline void __init check_timer(void)
 		if (intr_remapping_enabled)
 			panic("timer doesn't work through Interrupt-remapped IO-APIC");
 #endif
+		local_irq_disable();
 		clear_IO_APIC_pin(apic1, pin1);
 		if (!no_pin1)
 			apic_printk(APIC_QUIET, KERN_ERR "..MP-BIOS bug: "
@@ -2957,7 +2969,6 @@ static inline void __init check_timer(void)
 		 */
 		replace_pin_at_irq_cpu(cfg, cpu, apic1, pin1, apic2, pin2);
 		setup_timer_IRQ0_pin(apic2, pin2, cfg->vector);
-		unmask_IO_APIC_irq_desc(desc);
 		enable_8259A_irq(0);
 		if (timer_irq_works()) {
 			apic_printk(APIC_QUIET, KERN_INFO "....... works.\n");
@@ -2972,6 +2983,7 @@ static inline void __init check_timer(void)
 		/*
 		 * Cleanup, just in case ...
 		 */
+		local_irq_disable();
 		disable_8259A_irq(0);
 		clear_IO_APIC_pin(apic2, pin2);
 		apic_printk(APIC_QUIET, KERN_INFO "....... failed.\n");
@@ -2997,6 +3009,7 @@ static inline void __init check_timer(void)
 		apic_printk(APIC_QUIET, KERN_INFO "..... works.\n");
 		goto out;
 	}
+	local_irq_disable();
 	disable_8259A_irq(0);
 	apic_write(APIC_LVT0, APIC_LVT_MASKED | APIC_DM_FIXED | cfg->vector);
 	apic_printk(APIC_QUIET, KERN_INFO "..... failed.\n");
@@ -3014,6 +3027,7 @@ static inline void __init check_timer(void)
 		apic_printk(APIC_QUIET, KERN_INFO "..... works.\n");
 		goto out;
 	}
+	local_irq_disable();
 	apic_printk(APIC_QUIET, KERN_INFO "..... failed :(.\n");
 	panic("IO-APIC + timer doesn't work!  Boot with apic=debug and send a "
 		"report.  Then try booting with the 'noapic' option.\n");
@@ -3165,6 +3179,7 @@ static int __init ioapic_init_sysfs(void)
 
 device_initcall(ioapic_init_sysfs);
 
+static int nr_irqs_gsi = NR_IRQS_LEGACY;
 /*
  * Dynamic irq allocate and deallocation
  */
@@ -3179,11 +3194,11 @@ unsigned int create_irq_nr(unsigned int irq_want)
 	struct irq_desc *desc_new = NULL;
 
 	irq = 0;
+	if (irq_want < nr_irqs_gsi)
+		irq_want = nr_irqs_gsi;
+
 	spin_lock_irqsave(&vector_lock, flags);
 	for (new = irq_want; new < nr_irqs; new++) {
-		if (platform_legacy_irq(new))
-			continue;
-
 		desc_new = irq_to_desc_alloc_cpu(new, cpu);
 		if (!desc_new) {
 			printk(KERN_INFO "can not get irq_desc for %d\n", new);
@@ -3208,7 +3223,6 @@ unsigned int create_irq_nr(unsigned int irq_want)
 	return irq;
 }
 
-static int nr_irqs_gsi = NR_IRQS_LEGACY;
 int create_irq(void)
 {
 	unsigned int irq_want;
@@ -3479,9 +3493,9 @@ int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 	sub_handle = 0;
 	list_for_each_entry(msidesc, &dev->msi_list, list) {
 		irq = create_irq_nr(irq_want);
-		irq_want++;
 		if (irq == 0)
 			return -1;
+		irq_want = irq + 1;
 #ifdef CONFIG_INTR_REMAP
 		if (!intr_remapping_enabled)
 			goto no_ir;
@@ -3835,11 +3849,17 @@ int __init arch_probe_nr_irqs(void)
 {
 	int nr;
 
-	nr = ((8 * nr_cpu_ids) > (32 * nr_ioapics) ?
-		(NR_VECTORS + (8 * nr_cpu_ids)) :
-		(NR_VECTORS + (32 * nr_ioapics)));
+	if (nr_irqs > (NR_VECTORS * nr_cpu_ids))
+		nr_irqs = NR_VECTORS * nr_cpu_ids;
 
-	if (nr < nr_irqs && nr > nr_irqs_gsi)
+	nr = nr_irqs_gsi + 8 * nr_cpu_ids;
+#if defined(CONFIG_PCI_MSI) || defined(CONFIG_HT_IRQ)
+	/*
+	 * for MSI and HT dyn irq
+	 */
+	nr += nr_irqs_gsi * 16;
+#endif
+	if (nr < nr_irqs)
 		nr_irqs = nr;
 
 	return 0;
