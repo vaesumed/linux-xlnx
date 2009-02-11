@@ -86,13 +86,13 @@ void auide_outsw(unsigned long port, void *addr, u32 count)
 	ctp->cur_ptr = au1xxx_ddma_get_nextptr_virt(dp);
 }
 
-static void au1xxx_input_data(ide_drive_t *drive, struct request *rq,
+static void au1xxx_input_data(ide_drive_t *drive, struct ide_cmd *cmd,
 			      void *buf, unsigned int len)
 {
 	auide_insw(drive->hwif->io_ports.data_addr, buf, (len + 1) / 2);
 }
 
-static void au1xxx_output_data(ide_drive_t *drive, struct request *rq,
+static void au1xxx_output_data(ide_drive_t *drive, struct ide_cmd *cmd,
 			       void *buf, unsigned int len)
 {
 	auide_outsw(drive->hwif->io_ports.data_addr, buf, (len + 1) / 2);
@@ -211,20 +211,15 @@ static void auide_set_dma_mode(ide_drive_t *drive, const u8 speed)
 #ifdef CONFIG_BLK_DEV_IDE_AU1XXX_MDMA2_DBDMA
 static int auide_build_dmatable(ide_drive_t *drive)
 {
-	int i, iswrite, count = 0;
 	ide_hwif_t *hwif = drive->hwif;
 	struct request *rq = hwif->rq;
 	_auide_hwif *ahwif = &auide_hwif;
 	struct scatterlist *sg;
+	int i = hwif->cmd.sg_nents, iswrite, count = 0;
 
 	iswrite = (rq_data_dir(rq) == WRITE);
 	/* Save for interrupt context */
 	ahwif->drive = drive;
-
-	hwif->sg_nents = i = ide_build_sglist(drive, rq);
-
-	if (!i)
-		return 0;
 
 	/* fill the descriptors */
 	sg = hwif->sg_table;
@@ -286,12 +281,7 @@ static int auide_build_dmatable(ide_drive_t *drive)
 
 static int auide_dma_end(ide_drive_t *drive)
 {
-	ide_hwif_t *hwif = drive->hwif;
-
-	if (hwif->sg_nents) {
-		ide_destroy_dmatable(drive);
-		hwif->sg_nents = 0;
-	}
+	ide_destroy_dmatable(drive);
 
 	return 0;
 }
