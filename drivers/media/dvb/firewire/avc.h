@@ -21,115 +21,13 @@
 
 #include <linux/types.h>
 
-typedef struct
-{
-#ifdef __LITTLE_ENDIAN
-	__u8       RF_frequency_hByte:6;
-	__u8       raster_Frequency:2;//Bit7,6 raster frequency
-#else
-	__u8 raster_Frequency:2;
-	__u8 RF_frequency_hByte:6;
-#endif
-	__u8       RF_frequency_mByte;
-	__u8       RF_frequency_lByte;
-
-}FREQUENCY;
-
-typedef struct
-{
-#ifdef __LITTLE_ENDIAN
-  __u8      ActiveSystem;
-  __u8      reserved:5;
-  __u8      NoRF:1;
-  __u8      Moving:1;
-  __u8      Searching:1;
-
-  __u8      SelectedAntenna:7;
-  __u8      Input:1;
-
-  __u8      BER[4];
-
-  __u8      SignalStrength;
-  FREQUENCY Frequency;
-
-  __u8      ManDepInfoLength;
-
-  __u8 PowerSupply:1;
-  __u8 FrontEndPowerStatus:1;
-  __u8 reserved3:1;
-  __u8 AntennaError:1;
-  __u8 FrontEndError:1;
-  __u8 reserved2:3;
-
-  __u8 CarrierNoiseRatio[2];
-  __u8 reserved4[2];
-  __u8 PowerSupplyVoltage;
-  __u8 AntennaVoltage;
-  __u8 FirewireBusVoltage;
-
-  __u8 CaMmi:1;
-  __u8 reserved5:7;
-
-  __u8 reserved6:1;
-  __u8 CaInitializationStatus:1;
-  __u8 CaErrorFlag:1;
-  __u8 CaDvbFlag:1;
-  __u8 CaModulePresentStatus:1;
-  __u8 CaApplicationInfo:1;
-  __u8 CaDateTimeRequest:1;
-  __u8 CaPmtReply:1;
-
-#else
-  __u8 ActiveSystem;
-  __u8 Searching:1;
-  __u8 Moving:1;
-  __u8 NoRF:1;
-  __u8 reserved:5;
-
-  __u8 Input:1;
-  __u8 SelectedAntenna:7;
-
-  __u8 BER[4];
-
-  __u8 SignalStrength;
-  FREQUENCY Frequency;
-
-  __u8 ManDepInfoLength;
-
-  __u8 reserved2:3;
-  __u8 FrontEndError:1;
-  __u8 AntennaError:1;
-  __u8 reserved3:1;
-  __u8 FrontEndPowerStatus:1;
-  __u8 PowerSupply:1;
-
-  __u8 CarrierNoiseRatio[2];
-  __u8 reserved4[2];
-  __u8 PowerSupplyVoltage;
-  __u8 AntennaVoltage;
-  __u8 FirewireBusVoltage;
-
-  __u8 reserved5:7;
-  __u8 CaMmi:1;
-  __u8 CaPmtReply:1;
-  __u8 CaDateTimeRequest:1;
-  __u8 CaApplicationInfo:1;
-  __u8 CaModulePresentStatus:1;
-  __u8 CaDvbFlag:1;
-  __u8 CaErrorFlag:1;
-  __u8 CaInitializationStatus:1;
-  __u8 reserved6:1;
-
-#endif
-} ANTENNA_INPUT_INFO; // 22 Byte
-
 struct dvb_diseqc_master_cmd;
 struct dvb_frontend_parameters;
+struct firedtv_tuner_status;
 struct firedtv;
 
 int avc_recv(struct firedtv *fdtv, void *data, size_t length);
-int avc_tuner_status(struct firedtv *fdtv,
-		ANTENNA_INPUT_INFO *antenna_input_info);
+int avc_tuner_status(struct firedtv *fdtv, struct firedtv_tuner_status *stat);
 int avc_tuner_dsd(struct firedtv *fdtv,
 		struct dvb_frontend_parameters *params);
 int avc_tuner_set_pids(struct firedtv *fdtv, unsigned char pidc, u16 pid[]);

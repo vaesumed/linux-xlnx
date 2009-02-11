@@ -118,6 +118,35 @@
 #define TAG_EPG_ENQUIRY         	0x9f8f00
 #define TAG_EPG_REPLY           	0x9f8f01
 
+struct firedtv_tuner_status {
+	unsigned active_system:8;
+	unsigned searching:1;
+	unsigned moving:1;
+	unsigned no_rf:1;
+	unsigned input:1;
+	unsigned selected_antenna:7;
+	unsigned ber:32;
+	unsigned signal_strength:8;
+	unsigned raster_frequency:2;
+	unsigned rf_frequency:22;
+	unsigned man_dep_info_length:8;
+	unsigned front_end_error:1;
+	unsigned antenna_error:1;
+	unsigned front_end_power_status:1;
+	unsigned power_supply:1;
+	unsigned carrier_noise_ratio:16;
+	unsigned power_supply_voltage:8;
+	unsigned antenna_voltage:8;
+	unsigned firewire_bus_voltage:8;
+	unsigned ca_mmi:1;
+	unsigned ca_pmt_reply:1;
+	unsigned ca_date_time_request:1;
+	unsigned ca_application_info:1;
+	unsigned ca_module_present_status:1;
+	unsigned ca_dvb_flag:1;
+	unsigned ca_error_flag:1;
+	unsigned ca_initialization_status:1;
+};
 
 enum model_type {
 	FIREDTV_UNKNOWN = 0,

@@ -556,8 +556,9 @@ int avc_identify_subunit(struct firedtv *fdtv)
 	return 0;
 }
 
-int avc_tuner_status(struct firedtv *fdtv,
-		     ANTENNA_INPUT_INFO *antenna_input_info)
+#define SIZEOF_ANTENNA_INPUT_INFO 22
+
+int avc_tuner_status(struct firedtv *fdtv, struct firedtv_tuner_status *stat)
 {
 	char buffer[sizeof(struct avc_command_frame)];
 	struct avc_command_frame *c = (void *)buffer;
@@ -572,9 +573,9 @@ int avc_tuner_status(struct firedtv *fdtv,
 
 	c->operand[0] = DESCRIPTOR_TUNER_STATUS;
 	c->operand[1] = 0xff;	/* read_result_status */
-	c->operand[2] = 0x00;	/* reserver */
-	c->operand[3] = 0;	/* sizeof(ANTENNA_INPUT_INFO) >> 8; */
-	c->operand[4] = 0;	/* sizeof(ANTENNA_INPUT_INFO) & 0xFF; */
+	c->operand[2] = 0x00;	/* reserved */
+	c->operand[3] = 0;	/* SIZEOF_ANTENNA_INPUT_INFO >> 8; */
+	c->operand[4] = 0;	/* SIZEOF_ANTENNA_INPUT_INFO & 0xff; */
 	c->operand[5] = 0x00;
 	c->operand[6] = 0x00;
 
@@ -590,12 +591,45 @@ int avc_tuner_status(struct firedtv *fdtv,
 	}
 
 	length = r->operand[9];
-	if (r->operand[1] != 0x10 || length != sizeof(ANTENNA_INPUT_INFO)) {
+	if (r->operand[1] != 0x10 || length != SIZEOF_ANTENNA_INPUT_INFO) {
 		dev_err(&fdtv->ud->device, "got invalid tuner status\n");
 		return -EINVAL;
 	}
 
-	memcpy(antenna_input_info, &r->operand[10], length);
+	stat->active_system		= r->operand[10];
+	stat->searching			= r->operand[11] >> 7 & 1;
+	stat->moving			= r->operand[11] >> 6 & 1;
+	stat->no_rf			= r->operand[11] >> 5 & 1;
+	stat->input			= r->operand[12] >> 7 & 1;
+	stat->selected_antenna		= r->operand[12] & 0x7f;
+	stat->ber			= r->operand[13] << 24 |
+					  r->operand[14] << 16 |
+					  r->operand[15] << 8 |
+					  r->operand[16];
+	stat->signal_strength		= r->operand[17];
+	stat->raster_frequency		= r->operand[18] >> 6 & 2;
+	stat->rf_frequency		= (r->operand[18] & 0x3f) << 16 |
+					  r->operand[19] << 8 |
+					  r->operand[20];
+	stat->man_dep_info_length	= r->operand[21];
+	stat->front_end_error		= r->operand[22] >> 4 & 1;
+	stat->antenna_error		= r->operand[22] >> 3 & 1;
+	stat->front_end_power_status	= r->operand[22] >> 1 & 1;
+	stat->power_supply		= r->operand[22] & 1;
+	stat->carrier_noise_ratio	= r->operand[23] << 8 |
+					  r->operand[24];
+	stat->power_supply_voltage	= r->operand[27];
+	stat->antenna_voltage		= r->operand[28];
+	stat->firewire_bus_voltage	= r->operand[29];
+	stat->ca_mmi			= r->operand[30] & 1;
+	stat->ca_pmt_reply		= r->operand[31] >> 7 & 1;
+	stat->ca_date_time_request	= r->operand[31] >> 6 & 1;
+	stat->ca_application_info	= r->operand[31] >> 5 & 1;
+	stat->ca_module_present_status	= r->operand[31] >> 4 & 1;
+	stat->ca_dvb_flag		= r->operand[31] >> 3 & 1;
+	stat->ca_error_flag		= r->operand[31] >> 2 & 1;
+	stat->ca_initialization_status	= r->operand[31] >> 1 & 1;
+
 	return 0;
 }
 
