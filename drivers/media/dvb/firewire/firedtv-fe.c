@@ -141,6 +141,8 @@ static int fdtv_read_uncorrected_blocks(struct dvb_frontend *fe, u32 *ucblocks)
 	return -EOPNOTSUPP;
 }
 
+#define ACCEPTED 0x9
+
 static int fdtv_set_frontend(struct dvb_frontend *fe,
 				struct dvb_frontend_parameters *params)
 {
