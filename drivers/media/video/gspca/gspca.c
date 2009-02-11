@@ -38,15 +38,16 @@
 #include "gspca.h"
 
 /* global values */
-#define DEF_NURBS 2		/* default number of URBs */
+#define DEF_NURBS 3		/* default number of URBs */
+#if DEF_NURBS > MAX_NURBS
+#error "DEF_NURBS too big"
+#endif
 
 MODULE_AUTHOR("Jean-Francois Moine <http://moinejf.free.fr>");
 MODULE_DESCRIPTION("GSPCA USB Camera Driver");
 MODULE_LICENSE("GPL");
 
-#define DRIVER_VERSION_NUMBER	KERNEL_VERSION(2, 4, 0)
-
-static int video_nr = -1;
+#define DRIVER_VERSION_NUMBER	KERNEL_VERSION(2, 5, 0)
 
 #ifdef GSPCA_DEBUG
 int gspca_debug = D_ERR | D_PROBE;
@@ -126,7 +127,7 @@ static void fill_frame(struct gspca_dev *gspca_dev,
 			struct urb *urb)
 {
 	struct gspca_frame *frame;
-	__u8 *data;		/* address of data in the iso message */
+	u8 *data;		/* address of data in the iso message */
 	int i, len, st;
 	cam_pkt_op pkt_scan;
 
@@ -166,7 +167,7 @@ static void fill_frame(struct gspca_dev *gspca_dev,
 		/* let the packet be analyzed by the subdriver */
 		PDEBUG(D_PACK, "packet [%d] o:%d l:%d",
 			i, urb->iso_frame_desc[i].offset, len);
-		data = (__u8 *) urb->transfer_buffer
+		data = (u8 *) urb->transfer_buffer
 					+ urb->iso_frame_desc[i].offset;
 		pkt_scan(gspca_dev, frame, data, len);
 	}
@@ -182,8 +183,7 @@ static void fill_frame(struct gspca_dev *gspca_dev,
  *
  * Analyse each packet and call the subdriver for copy to the frame buffer.
  */
-static void isoc_irq(struct urb *urb
-)
+static void isoc_irq(struct urb *urb)
 {
 	struct gspca_dev *gspca_dev = (struct gspca_dev *) urb->context;
 
@@ -196,8 +196,7 @@ static void isoc_irq(struct urb *urb
 /*
  * bulk message interrupt from the USB device
  */
-static void bulk_irq(struct urb *urb
-)
+static void bulk_irq(struct urb *urb)
 {
 	struct gspca_dev *gspca_dev = (struct gspca_dev *) urb->context;
 	struct gspca_frame *frame;
@@ -322,6 +321,7 @@ static int gspca_is_compressed(__u32 format)
 	case V4L2_PIX_FMT_JPEG:
 	case V4L2_PIX_FMT_SPCA561:
 	case V4L2_PIX_FMT_PAC207:
+	case V4L2_PIX_FMT_MR97310A:
 		return 1;
 	}
 	return 0;
@@ -438,22 +438,16 @@ static void destroy_urbs(struct gspca_dev *gspca_dev)
  * look for an input transfer endpoint in an alternate setting
  */
 static struct usb_host_endpoint *alt_xfer(struct usb_host_interface *alt,
-					  __u8 epaddr,
 					  __u8 xfer)
 {
 	struct usb_host_endpoint *ep;
 	int i, attr;
 
-	epaddr |= USB_DIR_IN;
 	for (i = 0; i < alt->desc.bNumEndpoints; i++) {
 		ep = &alt->endpoint[i];
-		if (ep->desc.bEndpointAddress == epaddr) {
-			attr = ep->desc.bmAttributes
-						& USB_ENDPOINT_XFERTYPE_MASK;
-			if (attr == xfer)
-				return ep;
-			break;
-		}
+		attr = ep->desc.bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
+		if (attr == xfer)
+			return ep;
 	}
 	return NULL;
 }
@@ -479,7 +473,6 @@ static struct usb_host_endpoint *get_ep(struct gspca_dev *gspca_dev)
 	/* try isoc */
 	while (--i > 0) {			/* alt 0 is unusable */
 		ep = alt_xfer(&intf->altsetting[i],
-				gspca_dev->cam.epaddr,
 				USB_ENDPOINT_XFER_ISOC);
 		if (ep)
 			break;
@@ -488,7 +481,6 @@ static struct usb_host_endpoint *get_ep(struct gspca_dev *gspca_dev)
 	/* if no isoc, try bulk */
 	if (ep == NULL) {
 		ep = alt_xfer(&intf->altsetting[0],
-				gspca_dev->cam.epaddr,
 				USB_ENDPOINT_XFER_BULK);
 		if (ep == NULL) {
 			err("no transfer endpoint found");
@@ -617,8 +609,7 @@ static int gspca_init_transfer(struct gspca_dev *gspca_dev)
 		/* clear the bulk endpoint */
 		if (gspca_dev->alt == 0)	/* if bulk transfer */
 			usb_clear_halt(gspca_dev->dev,
-					usb_rcvintpipe(gspca_dev->dev,
-						 gspca_dev->cam.epaddr));
+					gspca_dev->urb[0]->pipe);
 
 		/* start the cam */
 		ret = gspca_dev->sd_desc->start(gspca_dev);
@@ -674,7 +665,8 @@ static void gspca_stream_off(struct gspca_dev *gspca_dev)
 	    && gspca_dev->sd_desc->stopN)
 		gspca_dev->sd_desc->stopN(gspca_dev);
 	destroy_urbs(gspca_dev);
-	gspca_set_alt0(gspca_dev);
+	if (gspca_dev->present)
+		gspca_set_alt0(gspca_dev);
 	if (gspca_dev->sd_desc->stop0)
 		gspca_dev->sd_desc->stop0(gspca_dev);
 	PDEBUG(D_STREAM, "stream off OK");
@@ -968,8 +960,7 @@ static int vidioc_querycap(struct file *file, void  *priv,
 			le16_to_cpu(gspca_dev->dev->descriptor.idVendor),
 			le16_to_cpu(gspca_dev->dev->descriptor.idProduct));
 	}
-	strncpy(cap->bus_info, gspca_dev->dev->bus->bus_name,
-		sizeof cap->bus_info);
+	usb_make_path(gspca_dev->dev, cap->bus_info, sizeof(cap->bus_info));
 	cap->version = DRIVER_VERSION_NUMBER;
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE
 			  | V4L2_CAP_STREAMING
@@ -1924,7 +1915,7 @@ int gspca_dev_probe(struct usb_interface *intf,
 	gspca_dev->present = 1;
 	ret = video_register_device(&gspca_dev->vdev,
 				  VFL_TYPE_GRABBER,
-				  video_nr);
+				  -1);
 	if (ret < 0) {
 		err("video_register_device err %d", ret);
 		goto out;
