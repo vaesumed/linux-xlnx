@@ -837,14 +837,7 @@ static int ide_port_setup_devices(ide_hwif_t *hwif)
 static int init_irq (ide_hwif_t *hwif)
 {
 	struct ide_io_ports *io_ports = &hwif->io_ports;
-	int sa = 0;
-
-#if defined(__mc68000__)
-	sa = IRQF_SHARED;
-#endif /* __mc68000__ */
-
-	if (hwif->chipset == ide_pci)
-		sa = IRQF_SHARED;
+	int sa = hwif->host->irq_flags;
 
 	if (io_ports->ctl_addr)
 		hwif->tp_ops->set_irq(hwif, 1);

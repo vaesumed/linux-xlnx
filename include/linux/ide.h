@@ -836,6 +836,9 @@ struct ide_host {
 	void		(*release_lock)(void);
 
 	unsigned long	host_flags;
+
+	int		irq_flags;
+
 	void		*host_priv;
 	ide_hwif_t	*cur_port;	/* for hosts requiring serialization */
 
@@ -1368,6 +1371,9 @@ struct ide_port_info {
 	u16			max_sectors;	/* if < than the default one */
 
 	u32			host_flags;
+
+	int			irq_flags;
+
 	u8			pio_mask;
 	u8			swdma_mask;
 	u8			mwdma_mask;
