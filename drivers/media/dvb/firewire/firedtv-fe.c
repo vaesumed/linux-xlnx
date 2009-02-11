@@ -49,6 +49,8 @@ static int fdtv_sleep(struct dvb_frontend *fe)
 	return 0;
 }
 
+#define LNBCONTROL_DONTCARE 0xff
+
 static int fdtv_diseqc_send_master_cmd(struct dvb_frontend *fe,
 					  struct dvb_diseqc_master_cmd *cmd)
 {

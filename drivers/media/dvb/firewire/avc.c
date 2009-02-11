@@ -73,6 +73,8 @@
 #define SFE_VENDOR_TAG_CA_MMI			0x05
 #define SFE_VENDOR_TAG_CA_ENTER_MENU		0x07
 
+#define EN50221_LIST_MANAGEMENT_ONLY	0x03
+
 struct avc_command_frame {
 	int length;
 	u8 ctype;
@@ -861,10 +863,10 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 	c->subunit = AVC_SUBUNIT_TYPE_TUNER | fdtv->subunit;
 	c->opcode  = AVC_OPCODE_VENDOR;
 
-	if (msg[0] != LIST_MANAGEMENT_ONLY) {
+	if (msg[0] != EN50221_LIST_MANAGEMENT_ONLY) {
 		dev_info(&fdtv->ud->device,
 			 "forcing list_management to ONLY\n");
-		msg[0] = LIST_MANAGEMENT_ONLY;
+		msg[0] = EN50221_LIST_MANAGEMENT_ONLY;
 	}
 	/* We take the cmd_id from the programme level only! */
 	list_management = msg[0];

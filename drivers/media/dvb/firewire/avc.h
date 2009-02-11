@@ -21,67 +21,6 @@
 
 #include <linux/types.h>
 
-/*************************************************************
-	Constants from EN510221
-**************************************************************/
-#define LIST_MANAGEMENT_ONLY 0x03
-
-/************************************************************
-	definition of structures
-*************************************************************/
-typedef struct {
-	   int           Nr_SourcePlugs;
-	   int 	         Nr_DestinationPlugs;
-} TunerInfo;
-
-/*************************************************************
-	AVCTuner list types
-**************************************************************/
-#define Multiplex_List   0x80
-#define Service_List     0x82
-
-/*************************************************************
-	AVCTuner object entries
-**************************************************************/
-#define Multiplex	 			0x80
-#define Service 	 			0x82
-#define Service_with_specified_components	0x83
-#define Preferred_components			0x90
-#define Component				0x84
-
-//AVCTuner DVB identifier service_ID
-#define DVB 0x20
-
-/*************************************************************
-						AVC descriptor types
-**************************************************************/
-
-#define Subunit_Identifier_Descriptor		 0x00
-#define Tuner_Status_Descriptor				 0x80
-
-typedef struct {
-	__u8          Subunit_Type;
-	__u8          Max_Subunit_ID;
-} SUBUNIT_INFO;
-
-/*************************************************************
-
-		AVCTuner DVB object IDs are 6 byte long
-
-**************************************************************/
-
-typedef struct {
-	__u8  Byte0;
-	__u8  Byte1;
-	__u8  Byte2;
-	__u8  Byte3;
-	__u8  Byte4;
-	__u8  Byte5;
-}OBJECT_ID;
-
-/*************************************************************
-						MULIPLEX Structs
-**************************************************************/
 typedef struct
 {
 #ifdef __LITTLE_ENDIAN
@@ -258,17 +197,11 @@ typedef struct
 #endif
 } ANTENNA_INPUT_INFO; // 22 Byte
 
-#define LNBCONTROL_DONTCARE 0xff
-
 struct dvb_diseqc_master_cmd;
 struct dvb_frontend_parameters;
 struct firedtv;
 
 int avc_recv(struct firedtv *fdtv, void *data, size_t length);
-
-int AVCTuner_DSIT(struct firedtv *fdtv, int Source_Plug,
-		struct dvb_frontend_parameters *params, __u8 *status);
-
 int avc_tuner_status(struct firedtv *fdtv,
 		ANTENNA_INPUT_INFO *antenna_input_info);
 int avc_tuner_dsd(struct firedtv *fdtv,
