@@ -241,29 +241,28 @@ static void avc_tuner_tuneqpsk(struct firedtv *fdtv,
 static void avc_tuner_dsd_dvb_c(struct dvb_frontend_parameters *params,
 				struct avc_command_frame *c)
 {
-	M_VALID_FLAGS flags;
-
-	flags.Bits.Modulation = params->u.qam.modulation != QAM_AUTO;
-	flags.Bits.FEC_inner = params->u.qam.fec_inner != FEC_AUTO;
-	flags.Bits.FEC_outer = 0;
-	flags.Bits.Symbol_Rate = 1;
-	flags.Bits.Frequency = 1;
-	flags.Bits.Orbital_Pos = 0;
-	flags.Bits.Polarisation = 0;
-	flags.Bits.reserved_fields = 0;
-	flags.Bits.reserved1 = 0;
-	flags.Bits.Network_ID = 0;
-
 	c->opcode = AVC_OPCODE_DSD;
 
-	c->operand[0]  = 0;    /* source plug */
-	c->operand[1]  = 0xd2; /* subfunction replace */
-	c->operand[2]  = 0x20; /* system id = DVB */
-	c->operand[3]  = 0x00; /* antenna number */
-	/* system_specific_multiplex selection_length */
-	c->operand[4]  = 0x11;
-	c->operand[5]  = flags.Valid_Word.ByteHi; /* valid_flags [0] */
-	c->operand[6]  = flags.Valid_Word.ByteLo; /* valid_flags [1] */
+	c->operand[0] = 0;    /* source plug */
+	c->operand[1] = 0xd2; /* subfunction replace */
+	c->operand[2] = 0x20; /* system id = DVB */
+	c->operand[3] = 0x00; /* antenna number */
+	c->operand[4] = 0x11; /* system_specific_multiplex selection_length */
+
+	/* multiplex_valid_flags, high byte */
+	c->operand[5] =   0 << 7 /* reserved */
+			| 0 << 6 /* Polarisation */
+			| 0 << 5 /* Orbital_Pos */
+			| 1 << 4 /* Frequency */
+			| 1 << 3 /* Symbol_Rate */
+			| 0 << 2 /* FEC_outer */
+			| (params->u.qam.fec_inner  != FEC_AUTO ? 1 << 1 : 0)
+			| (params->u.qam.modulation != QAM_AUTO ? 1 << 0 : 0);
+
+	/* multiplex_valid_flags, low byte */
+	c->operand[6] =   0 << 7 /* NetworkID */
+			| 0 << 0 /* reserved */ ;
+
 	c->operand[7]  = 0x00;
 	c->operand[8]  = 0x00;
 	c->operand[9]  = 0x00;
@@ -310,45 +309,41 @@ static void avc_tuner_dsd_dvb_c(struct dvb_frontend_parameters *params,
 static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 				struct avc_command_frame *c)
 {
-	M_VALID_FLAGS flags;
-
-	flags.Bits_T.GuardInterval =
-		params->u.ofdm.guard_interval != GUARD_INTERVAL_AUTO;
-	flags.Bits_T.CodeRateLPStream =
-		params->u.ofdm.code_rate_LP != FEC_AUTO;
-	flags.Bits_T.CodeRateHPStream =
-		params->u.ofdm.code_rate_HP != FEC_AUTO;
-	flags.Bits_T.HierarchyInfo =
-		params->u.ofdm.hierarchy_information != HIERARCHY_AUTO;
-	flags.Bits_T.Constellation =
-		params->u.ofdm.constellation != QAM_AUTO;
-	flags.Bits_T.Bandwidth =
-		params->u.ofdm.bandwidth != BANDWIDTH_AUTO;
-	flags.Bits_T.CenterFrequency = 1;
-	flags.Bits_T.reserved1 = 0;
-	flags.Bits_T.reserved2 = 0;
-	flags.Bits_T.OtherFrequencyFlag = 0;
-	flags.Bits_T.TransmissionMode =
-		params->u.ofdm.transmission_mode != TRANSMISSION_MODE_AUTO;
-	flags.Bits_T.NetworkId = 0;
+	struct dvb_ofdm_parameters *ofdm = &params->u.ofdm;
 
 	c->opcode = AVC_OPCODE_DSD;
 
-	c->operand[0]  = 0;    /* source plug */
-	c->operand[1]  = 0xd2; /* subfunction replace */
-	c->operand[2]  = 0x20; /* system id = DVB */
-	c->operand[3]  = 0x00; /* antenna number */
-	/* system_specific_multiplex selection_length */
-	c->operand[4]  = 0x0c;
-	c->operand[5]  = flags.Valid_Word.ByteHi; /* valid_flags [0] */
-	c->operand[6]  = flags.Valid_Word.ByteLo; /* valid_flags [1] */
+	c->operand[0] = 0;    /* source plug */
+	c->operand[1] = 0xd2; /* subfunction replace */
+	c->operand[2] = 0x20; /* system id = DVB */
+	c->operand[3] = 0x00; /* antenna number */
+	c->operand[4] = 0x0c; /* system_specific_multiplex selection_length */
+
+	/* multiplex_valid_flags, high byte */
+	c->operand[5] =
+	      0 << 7 /* reserved */
+	    | 1 << 6 /* CenterFrequency */
+	    | (ofdm->bandwidth      != BANDWIDTH_AUTO        ? 1 << 5 : 0)
+	    | (ofdm->constellation  != QAM_AUTO              ? 1 << 4 : 0)
+	    | (ofdm->hierarchy_information != HIERARCHY_AUTO ? 1 << 3 : 0)
+	    | (ofdm->code_rate_HP   != FEC_AUTO              ? 1 << 2 : 0)
+	    | (ofdm->code_rate_LP   != FEC_AUTO              ? 1 << 1 : 0)
+	    | (ofdm->guard_interval != GUARD_INTERVAL_AUTO   ? 1 << 0 : 0);
+
+	/* multiplex_valid_flags, low byte */
+	c->operand[6] =
+	      0 << 7 /* NetworkID */
+	    | (ofdm->transmission_mode != TRANSMISSION_MODE_AUTO ? 1 << 6 : 0)
+	    | 0 << 5 /* OtherFrequencyFlag */
+	    | 0 << 0 /* reserved */ ;
+
 	c->operand[7]  = 0x0;
 	c->operand[8]  = (params->frequency / 10) >> 24;
 	c->operand[9]  = ((params->frequency / 10) >> 16) & 0xff;
 	c->operand[10] = ((params->frequency / 10) >>  8) & 0xff;
 	c->operand[11] = (params->frequency / 10) & 0xff;
 
-	switch (params->u.ofdm.bandwidth) {
+	switch (ofdm->bandwidth) {
 	case BANDWIDTH_7_MHZ:	c->operand[12] = 0x20; break;
 	case BANDWIDTH_8_MHZ:
 	case BANDWIDTH_6_MHZ:	/* not defined by AVC spec */
@@ -356,14 +351,14 @@ static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 	default:		c->operand[12] = 0x00;
 	}
 
-	switch (params->u.ofdm.constellation) {
+	switch (ofdm->constellation) {
 	case QAM_16:	c->operand[13] = 1 << 6; break;
 	case QAM_64:	c->operand[13] = 2 << 6; break;
 	case QPSK:
 	default:	c->operand[13] = 0x00;
 	}
 
-	switch (params->u.ofdm.hierarchy_information) {
+	switch (ofdm->hierarchy_information) {
 	case HIERARCHY_1:	c->operand[13] |= 1 << 3; break;
 	case HIERARCHY_2:	c->operand[13] |= 2 << 3; break;
 	case HIERARCHY_4:	c->operand[13] |= 3 << 3; break;
@@ -372,7 +367,7 @@ static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 	default:		break;
 	}
 
-	switch (params->u.ofdm.code_rate_HP) {
+	switch (ofdm->code_rate_HP) {
 	case FEC_2_3:	c->operand[13] |= 1; break;
 	case FEC_3_4:	c->operand[13] |= 2; break;
 	case FEC_5_6:	c->operand[13] |= 3; break;
@@ -381,7 +376,7 @@ static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 	default:	break;
 	}
 
-	switch (params->u.ofdm.code_rate_LP) {
+	switch (ofdm->code_rate_LP) {
 	case FEC_2_3:	c->operand[14] = 1 << 5; break;
 	case FEC_3_4:	c->operand[14] = 2 << 5; break;
 	case FEC_5_6:	c->operand[14] = 3 << 5; break;
@@ -390,7 +385,7 @@ static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 	default:	c->operand[14] = 0x00; break;
 	}
 
-	switch (params->u.ofdm.guard_interval) {
+	switch (ofdm->guard_interval) {
 	case GUARD_INTERVAL_1_16:	c->operand[14] |= 1 << 3; break;
 	case GUARD_INTERVAL_1_8:	c->operand[14] |= 2 << 3; break;
 	case GUARD_INTERVAL_1_4:	c->operand[14] |= 3 << 3; break;
@@ -399,7 +394,7 @@ static void avc_tuner_dsd_dvb_t(struct dvb_frontend_parameters *params,
 	default:			break;
 	}
 
-	switch (params->u.ofdm.transmission_mode) {
+	switch (ofdm->transmission_mode) {
 	case TRANSMISSION_MODE_8K:	c->operand[14] |= 1 << 1; break;
 	case TRANSMISSION_MODE_2K:
 	case TRANSMISSION_MODE_AUTO:
