@@ -32,6 +32,7 @@
 #include <linux/delay.h>
 #include <linux/cache.h>
 #include <linux/interrupt.h>
+#include <linux/irqflags.h>
 #include <linux/cpu.h>
 #include <linux/timex.h>
 #include <linux/bootmem.h>
@@ -49,12 +50,6 @@
 #include <asm/cpu.h>
 #include <asm/vdso.h>
 #include "entry.h"
-
-/*
- * An array with a pointer the lowcore of every CPU.
- */
-struct _lowcore *lowcore_ptr[NR_CPUS];
-EXPORT_SYMBOL(lowcore_ptr);
 
 static struct task_struct *current_set[NR_CPUS];
 
@@ -81,9 +76,7 @@ void smp_send_stop(void)
 
 	/* Disable all interrupts/machine checks */
 	__load_psw_mask(psw_kernel_bits & ~PSW_MASK_MCHECK);
-
-	/* write magic number to zero page (absolute 0) */
-	lowcore_ptr[smp_processor_id()]->panic_magic = __PANIC_MAGIC;
+	trace_hardirqs_off();
 
 	/* stop all processors */
 	for_each_online_cpu(cpu) {
