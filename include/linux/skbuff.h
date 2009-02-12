@@ -29,9 +29,6 @@
 #include <linux/dmaengine.h>
 #include <linux/hrtimer.h>
 
-#define HAVE_ALLOC_SKB		/* For the drivers to know */
-#define HAVE_ALIGNABLE_SKB	/* Ditto 8)		   */
-
 /* Don't change this without changing skb_csum_unnecessary! */
 #define CHECKSUM_NONE 0
 #define CHECKSUM_UNNECESSARY 1
@@ -1287,7 +1284,7 @@ static inline int skb_network_offset(const struct sk_buff *skb)
  * The networking layer reserves some headroom in skb data (via
  * dev_alloc_skb). This is used to avoid having to reallocate skb data when
  * the header has to grow. In the default case, if the header has to grow
- * 16 bytes or less we avoid the reallocation.
+ * 32 bytes or less we avoid the reallocation.
  *
  * Unfortunately this headroom changes the DMA alignment of the resulting
  * network packet. As for NET_IP_ALIGN, this unaligned DMA is expensive
@@ -1295,11 +1292,11 @@ static inline int skb_network_offset(const struct sk_buff *skb)
  * perhaps setting it to a cacheline in size (since that will maintain
  * cacheline alignment of the DMA). It must be a power of 2.
  *
- * Various parts of the networking layer expect at least 16 bytes of
+ * Various parts of the networking layer expect at least 32 bytes of
  * headroom, you should not reduce this.
  */
 #ifndef NET_SKB_PAD
-#define NET_SKB_PAD	16
+#define NET_SKB_PAD	32
 #endif
 
 extern int ___pskb_trim(struct sk_buff *skb, unsigned int len);
@@ -1687,8 +1684,6 @@ extern int	       skb_shift(struct sk_buff *tgt, struct sk_buff *skb,
 				 int shiftlen);
 
 extern struct sk_buff *skb_segment(struct sk_buff *skb, int features);
-extern int	       skb_gro_receive(struct sk_buff **head,
-				       struct sk_buff *skb);
 
 static inline void *skb_header_pointer(const struct sk_buff *skb, int offset,
 				       int len, void *buffer)
@@ -1902,6 +1897,21 @@ static inline u16 skb_get_queue_mapping(struct sk_buff *skb)
 static inline void skb_copy_queue_mapping(struct sk_buff *to, const struct sk_buff *from)
 {
 	to->queue_mapping = from->queue_mapping;
+}
+
+static inline void skb_record_rx_queue(struct sk_buff *skb, u16 rx_queue)
+{
+	skb->queue_mapping = rx_queue + 1;
+}
+
+static inline u16 skb_get_rx_queue(struct sk_buff *skb)
+{
+	return skb->queue_mapping - 1;
+}
+
+static inline bool skb_rx_queue_recorded(struct sk_buff *skb)
+{
+	return (skb->queue_mapping != 0);
 }
 
 #ifdef CONFIG_XFRM
