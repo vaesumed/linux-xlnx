@@ -30,3 +30,7 @@ obj-$(CONFIG_INPUT_MIMIO)	+= mimio/
 obj-$(CONFIG_TRANZPORT)		+= frontier/
 obj-$(CONFIG_EPL)		+= epl/
 obj-$(CONFIG_ANDROID)		+= android/
+obj-$(CONFIG_DST)		+= dst/
+obj-$(CONFIG_STLC45XX)		+= stlc45xx/
+obj-$(CONFIG_USB_SERIAL_ATEN2011)	+= uc2322/
+obj-$(CONFIG_B3DFG)		+= b3dfg/
