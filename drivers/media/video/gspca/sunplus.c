@@ -22,6 +22,7 @@
 #define MODULE_NAME "sunplus"
 
 #include "gspca.h"
+#define QUANT_VAL 5		/* quantization table */
 #include "jpeg.h"
 
 MODULE_AUTHOR("Michel Xhaard <mxhaard@users.sourceforge.net>");
@@ -40,7 +41,6 @@ struct sd {
 	unsigned char colors;
 	unsigned char autogain;
 
-	char qindex;
 	char bridge;
 #define BRIDGE_SPCA504 0
 #define BRIDGE_SPCA504B 1
@@ -812,7 +812,6 @@ static int sd_config(struct gspca_dev *gspca_dev,
 	struct cam *cam;
 
 	cam = &gspca_dev->cam;
-	cam->epaddr = 0x01;
 
 	sd->bridge = id->driver_info >> 8;
 	sd->subtype = id->driver_info;
@@ -850,7 +849,6 @@ static int sd_config(struct gspca_dev *gspca_dev,
 		cam->nmodes = sizeof vga_mode2 / sizeof vga_mode2[0];
 		break;
 	}
-	sd->qindex = 5;			/* set the quantization table */
 	sd->brightness = sd_ctrls[SD_BRIGHTNESS].qctrl.default_value;
 	sd->contrast = sd_ctrls[SD_CONTRAST].qctrl.default_value;
 	sd->colors = sd_ctrls[SD_COLOR].qctrl.default_value;
@@ -1155,9 +1153,7 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 					ffd9, 2);
 
 		/* put the JPEG header in the new frame */
-		jpeg_put_header(gspca_dev, frame,
-				((struct sd *) gspca_dev)->qindex,
-				0x22);
+		jpeg_put_header(gspca_dev, frame, 0x22);
 	}
 
 	/* add 0x00 after 0xff */
@@ -1198,26 +1194,6 @@ static void setbrightness(struct gspca_dev *gspca_dev)
 	}
 }
 
-static void getbrightness(struct gspca_dev *gspca_dev)
-{
-	struct sd *sd = (struct sd *) gspca_dev;
-	__u16 brightness = 0;
-
-	switch (sd->bridge) {
-	default:
-/*	case BRIDGE_SPCA533: */
-/*	case BRIDGE_SPCA504B: */
-/*	case BRIDGE_SPCA504: */
-/*	case BRIDGE_SPCA504C: */
-		brightness = reg_r_12(gspca_dev, 0x00, 0x21a7, 2);
-		break;
-	case BRIDGE_SPCA536:
-		brightness = reg_r_12(gspca_dev, 0x00, 0x20f0, 2);
-		break;
-	}
-	sd->brightness = ((brightness & 0xff) - 128) % 255;
-}
-
 static void setcontrast(struct gspca_dev *gspca_dev)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
@@ -1233,24 +1209,6 @@ static void setcontrast(struct gspca_dev *gspca_dev)
 		break;
 	case BRIDGE_SPCA536:
 		reg_w_riv(dev, 0x0, 0x20f1, sd->contrast);
-		break;
-	}
-}
-
-static void getcontrast(struct gspca_dev *gspca_dev)
-{
-	struct sd *sd = (struct sd *) gspca_dev;
-
-	switch (sd->bridge) {
-	default:
-/*	case BRIDGE_SPCA533: */
-/*	case BRIDGE_SPCA504B: */
-/*	case BRIDGE_SPCA504: */
-/*	case BRIDGE_SPCA504C: */
-		sd->contrast = reg_r_12(gspca_dev, 0x00, 0x21a8, 2);
-		break;
-	case BRIDGE_SPCA536:
-		sd->contrast = reg_r_12(gspca_dev, 0x00, 0x20f1, 2);
 		break;
 	}
 }
@@ -1274,24 +1232,6 @@ static void setcolors(struct gspca_dev *gspca_dev)
 	}
 }
 
-static void getcolors(struct gspca_dev *gspca_dev)
-{
-	struct sd *sd = (struct sd *) gspca_dev;
-
-	switch (sd->bridge) {
-	default:
-/*	case BRIDGE_SPCA533: */
-/*	case BRIDGE_SPCA504B: */
-/*	case BRIDGE_SPCA504: */
-/*	case BRIDGE_SPCA504C: */
-		sd->colors = reg_r_12(gspca_dev, 0x00, 0x21ae, 2) >> 1;
-		break;
-	case BRIDGE_SPCA536:
-		sd->colors = reg_r_12(gspca_dev, 0x00, 0x20f6, 2) >> 1;
-		break;
-	}
-}
-
 static int sd_setbrightness(struct gspca_dev *gspca_dev, __s32 val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
@@ -1306,7 +1246,6 @@ static int sd_getbrightness(struct gspca_dev *gspca_dev, __s32 *val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
-	getbrightness(gspca_dev);
 	*val = sd->brightness;
 	return 0;
 }
@@ -1325,7 +1264,6 @@ static int sd_getcontrast(struct gspca_dev *gspca_dev, __s32 *val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
-	getcontrast(gspca_dev);
 	*val = sd->contrast;
 	return 0;
 }
@@ -1344,7 +1282,6 @@ static int sd_getcolors(struct gspca_dev *gspca_dev, __s32 *val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
-	getcolors(gspca_dev);
 	*val = sd->colors;
 	return 0;
 }
@@ -1465,8 +1402,10 @@ static struct usb_driver sd_driver = {
 /* -- module insert / remove -- */
 static int __init sd_mod_init(void)
 {
-	if (usb_register(&sd_driver) < 0)
-		return -1;
+	int ret;
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
 	PDEBUG(D_PROBE, "registered");
 	return 0;
 }
