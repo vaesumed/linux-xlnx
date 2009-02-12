@@ -2215,6 +2215,11 @@ M:	stefanr@s5r6.in-berlin.de
 L:	linux1394-devel@lists.sourceforge.net
 S:	Maintained
 
+INTEGRITY MEASUREMENT ARCHITECTURE (IMA)
+P:	Mimi Zohar
+M:	zohar@us.ibm.com
+S:	Supported
+
 IMS TWINTURBO FRAMEBUFFER DRIVER
 L:	linux-fbdev-devel@lists.sourceforge.net (moderated for non-subscribers)
 S:	Orphan
@@ -3868,6 +3873,7 @@ M:	jmorris@namei.org
 L:	linux-kernel@vger.kernel.org
 L:	linux-security-module@vger.kernel.org (suggested Cc:)
 T:	git kernel.org:pub/scm/linux/kernel/git/jmorris/security-testing-2.6.git
+W:	http://security.wiki.kernel.org/
 S:	Supported
 
 SECURITY CONTACT
