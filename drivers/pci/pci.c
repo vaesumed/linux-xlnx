@@ -657,7 +657,7 @@ static int pci_save_pcie_state(struct pci_dev *dev)
 
 	save_state = pci_find_saved_cap(dev, PCI_CAP_ID_EXP);
 	if (!save_state) {
-		dev_err(&dev->dev, "buffer not found in %s\n", __FUNCTION__);
+		dev_err(&dev->dev, "buffer not found in %s\n", __func__);
 		return -ENOMEM;
 	}
 	cap = (u16 *)&save_state->data[0];
@@ -700,7 +700,7 @@ static int pci_save_pcix_state(struct pci_dev *dev)
 
 	save_state = pci_find_saved_cap(dev, PCI_CAP_ID_PCIX);
 	if (!save_state) {
-		dev_err(&dev->dev, "buffer not found in %s\n", __FUNCTION__);
+		dev_err(&dev->dev, "buffer not found in %s\n", __func__);
 		return -ENOMEM;
 	}
 
@@ -1540,15 +1540,20 @@ void pci_release_region(struct pci_dev *pdev, int bar)
 }
 
 /**
- *	pci_request_region - Reserved PCI I/O and memory resource
+ *	__pci_request_region - Reserved PCI I/O and memory resource
  *	@pdev: PCI device whose resources are to be reserved
  *	@bar: BAR to be reserved
  *	@res_name: Name to be associated with resource.
+ *	@exclusive: whether the region access is exclusive or not
  *
  *	Mark the PCI region associated with PCI device @pdev BR @bar as
  *	being reserved by owner @res_name.  Do not access any
  *	address inside the PCI regions unless this call returns
  *	successfully.
+ *
+ *	If @exclusive is set, then the region is marked so that userspace
+ *	is explicitly not allowed to map the resource via /dev/mem or
+ * 	sysfs MMIO access.
  *
  *	Returns 0 on success, or %EBUSY on error.  A warning
  *	message is also printed on failure.
@@ -1588,12 +1593,12 @@ err_out:
 }
 
 /**
- *	pci_request_region - Reserved PCI I/O and memory resource
+ *	pci_request_region - Reserve PCI I/O and memory resource
  *	@pdev: PCI device whose resources are to be reserved
  *	@bar: BAR to be reserved
- *	@res_name: Name to be associated with resource.
+ *	@res_name: Name to be associated with resource
  *
- *	Mark the PCI region associated with PCI device @pdev BR @bar as
+ *	Mark the PCI region associated with PCI device @pdev BAR @bar as
  *	being reserved by owner @res_name.  Do not access any
  *	address inside the PCI regions unless this call returns
  *	successfully.
