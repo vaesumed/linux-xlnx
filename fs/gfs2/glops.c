@@ -12,7 +12,6 @@
 #include <linux/completion.h>
 #include <linux/buffer_head.h>
 #include <linux/gfs2_ondisk.h>
-#include <linux/lm_interface.h>
 #include <linux/bio.h>
 
 #include "gfs2.h"
@@ -38,19 +37,24 @@
 static void gfs2_ail_empty_gl(struct gfs2_glock *gl)
 {
 	struct gfs2_sbd *sdp = gl->gl_sbd;
-	unsigned int blocks;
 	struct list_head *head = &gl->gl_ail_list;
 	struct gfs2_bufdata *bd;
 	struct buffer_head *bh;
-	int error;
+	struct gfs2_trans tr;
 
-	blocks = atomic_read(&gl->gl_ail_count);
-	if (!blocks)
+	memset(&tr, 0, sizeof(tr));
+	tr.tr_revokes = atomic_read(&gl->gl_ail_count);
+
+	if (!tr.tr_revokes)
 		return;
 
-	error = gfs2_trans_begin(sdp, 0, blocks);
-	if (gfs2_assert_withdraw(sdp, !error))
-		return;
+	/* A shortened, inline version of gfs2_trans_begin() */
+	tr.tr_reserved = 1 + gfs2_struct2blk(sdp, tr.tr_revokes, sizeof(u64));
+	tr.tr_ip = (unsigned long)__builtin_return_address(0);
+	INIT_LIST_HEAD(&tr.tr_list_buf);
+	gfs2_log_reserve(sdp, tr.tr_reserved);
+	BUG_ON(current->journal_info);
+	current->journal_info = &tr;
 
 	gfs2_log_lock(sdp);
 	while (!list_empty(head)) {
@@ -390,18 +394,6 @@ static int trans_go_demote_ok(const struct gfs2_glock *gl)
 	return 0;
 }
 
-/**
- * quota_go_demote_ok - Check to see if it's ok to unlock a quota glock
- * @gl: the glock
- *
- * Returns: 1 if it's ok
- */
-
-static int quota_go_demote_ok(const struct gfs2_glock *gl)
-{
-	return !atomic_read(&gl->gl_lvb_count);
-}
-
 const struct gfs2_glock_operations gfs2_meta_glops = {
 	.go_xmote_th = meta_go_sync,
 	.go_type = LM_TYPE_META,
@@ -448,7 +440,6 @@ const struct gfs2_glock_operations gfs2_nondisk_glops = {
 };
 
 const struct gfs2_glock_operations gfs2_quota_glops = {
-	.go_demote_ok = quota_go_demote_ok,
 	.go_type = LM_TYPE_QUOTA,
 };
 
