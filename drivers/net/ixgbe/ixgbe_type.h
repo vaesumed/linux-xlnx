@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel 10 Gigabit PCI Express Linux driver
-  Copyright(c) 1999 - 2008 Intel Corporation.
+  Copyright(c) 1999 - 2009 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -34,6 +34,8 @@
 #define IXGBE_INTEL_VENDOR_ID   0x8086
 
 /* Device IDs */
+#define IXGBE_DEV_ID_82598               0x10B6
+#define IXGBE_DEV_ID_82598_BX            0x1508
 #define IXGBE_DEV_ID_82598AF_DUAL_PORT   0x10C6
 #define IXGBE_DEV_ID_82598AF_SINGLE_PORT 0x10C7
 #define IXGBE_DEV_ID_82598EB_SFP_LOM     0x10DB
@@ -719,6 +721,7 @@
 #define IXGBE_LED_OFF           0xF
 
 /* AUTOC Bit Masks */
+#define IXGBE_AUTOC_KX4_KX_SUPP_MASK 0xC0000000
 #define IXGBE_AUTOC_KX4_SUPP    0x80000000
 #define IXGBE_AUTOC_KX_SUPP     0x40000000
 #define IXGBE_AUTOC_PAUSE       0x30000000
@@ -767,6 +770,28 @@
 
 #define IXGBE_LINK_UP_TIME      90 /* 9.0 Seconds */
 #define IXGBE_AUTO_NEG_TIME     45 /* 4.5 Seconds */
+
+#define FIBER_LINK_UP_LIMIT     50
+
+/* PCS1GLSTA Bit Masks */
+#define IXGBE_PCS1GLSTA_LINK_OK         1
+#define IXGBE_PCS1GLSTA_SYNK_OK         0x10
+#define IXGBE_PCS1GLSTA_AN_COMPLETE     0x10000
+#define IXGBE_PCS1GLSTA_AN_PAGE_RX      0x20000
+#define IXGBE_PCS1GLSTA_AN_TIMED_OUT    0x40000
+#define IXGBE_PCS1GLSTA_AN_REMOTE_FAULT 0x80000
+#define IXGBE_PCS1GLSTA_AN_ERROR_RWS    0x100000
+
+#define IXGBE_PCS1GANA_SYM_PAUSE        0x80
+#define IXGBE_PCS1GANA_ASM_PAUSE        0x100
+
+/* PCS1GLCTL Bit Masks */
+#define IXGBE_PCS1GLCTL_AN_1G_TIMEOUT_EN  0x00040000 /* PCS 1G autoneg to en */
+#define IXGBE_PCS1GLCTL_FLV_LINK_UP     1
+#define IXGBE_PCS1GLCTL_FORCE_LINK      0x20
+#define IXGBE_PCS1GLCTL_LOW_LINK_LATCH  0x40
+#define IXGBE_PCS1GLCTL_AN_ENABLE       0x10000
+#define IXGBE_PCS1GLCTL_AN_RESTART      0x20000
 
 /* SW Semaphore Register bitmasks */
 #define IXGBE_SWSM_SMBI 0x00000001 /* Driver Semaphore bit */
@@ -819,6 +844,10 @@
 #define IXGBE_FW_PTR            0x0F
 #define IXGBE_PBANUM0_PTR       0x15
 #define IXGBE_PBANUM1_PTR       0x16
+#define IXGBE_PCIE_MSIX_82598_CAPS  0x62
+
+/* MSI-X capability fields masks */
+#define IXGBE_PCIE_MSIX_TBL_SZ_MASK     0x7FF
 
 /* Legacy EEPROM word offsets */
 #define IXGBE_ISCSI_BOOT_CAPS           0x0033
@@ -1263,7 +1292,7 @@ enum ixgbe_media_type {
 };
 
 /* Flow Control Settings */
-enum ixgbe_fc_type {
+enum ixgbe_fc_mode {
 	ixgbe_fc_none = 0,
 	ixgbe_fc_rx_pause,
 	ixgbe_fc_tx_pause,
@@ -1287,8 +1316,8 @@ struct ixgbe_fc_info {
 	u16 pause_time; /* Flow Control Pause timer */
 	bool send_xon; /* Flow control send XON */
 	bool strict_ieee; /* Strict IEEE mode */
-	enum ixgbe_fc_type type; /* Type of flow control */
-	enum ixgbe_fc_type original_type;
+	enum ixgbe_fc_mode current_mode; /* FC mode in effect */
+	enum ixgbe_fc_mode requested_mode; /* FC mode requested by caller */
 };
 
 /* Statistics counters collected by the MAC */
@@ -1449,11 +1478,12 @@ struct ixgbe_mac_info {
 	u32                             num_rar_entries;
 	u32                             max_tx_queues;
 	u32                             max_rx_queues;
-	u32                             link_attach_type;
-	u32                             link_mode_select;
-	bool                            link_settings_loaded;
+	u32                             max_msix_vectors;
+	u32                             orig_autoc;
+	u32                             orig_autoc2;
+	bool                            orig_link_settings_stored;
 	bool                            autoneg;
-	bool                            autoneg_failed;
+	bool                            autoneg_succeeded;
 };
 
 struct ixgbe_phy_info {
@@ -1467,6 +1497,7 @@ struct ixgbe_phy_info {
 	bool                            reset_disable;
 	ixgbe_autoneg_advertised        autoneg_advertised;
 	bool                            autoneg_wait_to_complete;
+	bool                            multispeed_fiber;
 };
 
 struct ixgbe_hw {
