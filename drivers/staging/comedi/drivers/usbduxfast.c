@@ -1298,7 +1298,7 @@ static int read_firmware(usbduxfastsub_t * usbduxfastsub, void *firmwarePtr,
 {
 	int i = 0;
 	unsigned char *fp = (char *)firmwarePtr;
-	unsigned char *firmwareBinary = NULL;
+	unsigned char *firmwareBinary;
 	int res = 0;
 	int maxAddr = 0;
 
@@ -1322,6 +1322,7 @@ static int read_firmware(usbduxfastsub_t * usbduxfastsub, void *firmwarePtr,
 			j++;
 			if (j >= sizeof(buf)) {
 				printk("comedi_: usbduxfast: bogus firmware file!\n");
+				kfree(firmwareBinary);
 				return -1;
 			}
 		}
@@ -1340,6 +1341,7 @@ static int read_firmware(usbduxfastsub_t * usbduxfastsub, void *firmwarePtr,
 
 		if (buf[0] != ':') {
 			printk("comedi_: usbduxfast: upload: not an ihex record: %s", buf);
+			kfree(firmwareBinary);
 			return -EFAULT;
 		}
 
@@ -1355,6 +1357,7 @@ static int read_firmware(usbduxfastsub_t * usbduxfastsub, void *firmwarePtr,
 
 		if (maxAddr >= FIRMWARE_MAX_LEN) {
 			printk("comedi_: usbduxfast: firmware upload goes beyond FX2 RAM boundaries.");
+			kfree(firmwareBinary);
 			return -EFAULT;
 		}
 		//printk("comedi_: usbduxfast: off=%x, len=%x:",off,len);
@@ -1369,6 +1372,7 @@ static int read_firmware(usbduxfastsub_t * usbduxfastsub, void *firmwarePtr,
 
 		if (type != 0) {
 			printk("comedi_: usbduxfast: unsupported record type: %u\n", type);
+			kfree(firmwareBinary);
 			return -EFAULT;
 		}
 
@@ -1671,14 +1675,14 @@ static int usbduxfast_detach(comedi_device * dev)
 {
 	usbduxfastsub_t *usbduxfastsub_tmp;
 
-#ifdef CONFIG_COMEDI_DEBUG
-	printk("comedi%d: usbduxfast: detach usb device\n", dev->minor);
-#endif
-
 	if (!dev) {
 		printk("comedi?: usbduxfast: detach without dev variable...\n");
 		return -EFAULT;
 	}
+
+#ifdef CONFIG_COMEDI_DEBUG
+	printk("comedi%d: usbduxfast: detach usb device\n", dev->minor);
+#endif
 
 	usbduxfastsub_tmp = dev->private;
 	if (!usbduxfastsub_tmp) {
