@@ -33,14 +33,6 @@
 #undef EXT4FS_DEBUG
 
 /*
- * Define EXT4_RESERVATION to reserve data blocks for expanding files
- */
-#define EXT4_DEFAULT_RESERVE_BLOCKS	8
-/*max window size: 1024(direct blocks) + 3([t,d]indirect blocks) */
-#define EXT4_MAX_RESERVE_BLOCKS		1027
-#define EXT4_RESERVE_WINDOW_NOT_ALLOCATED 0
-
-/*
  * Debug code
  */
 #ifdef EXT4FS_DEBUG
@@ -53,8 +45,6 @@
 #else
 #define ext4_debug(f, a...)	do {} while (0)
 #endif
-
-#define EXT4_MULTIBLOCK_ALLOCATOR	1
 
 /* prefer goal again. length */
 #define EXT4_MB_HINT_MERGE		1
@@ -869,7 +859,7 @@ static inline unsigned ext4_rec_len_from_disk(__le16 dlen)
 {
 	unsigned len = le16_to_cpu(dlen);
 
-	if (len == EXT4_MAX_REC_LEN)
+	if (len == EXT4_MAX_REC_LEN || len == 0)
 		return 1 << 16;
 	return len;
 }
