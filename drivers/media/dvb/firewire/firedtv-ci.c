@@ -183,7 +183,7 @@ static int fdtv_ca_ioctl(struct inode *inode, struct file *file,
 	struct firedtv_tuner_status stat;
 	int err;
 
-	switch(cmd) {
+	switch (cmd) {
 	case CA_RESET:
 		err = fdtv_ca_reset(fdtv);
 		break;

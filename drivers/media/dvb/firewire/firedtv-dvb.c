@@ -100,7 +100,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		goto out;
 	}
 
-	dvbdmxfeed->priv = (typeof(dvbdmxfeed->priv))c;
+	dvbdmxfeed->priv = (typeof(dvbdmxfeed->priv))(unsigned long)c;
 	fdtv->channel_pid[c] = dvbdmxfeed->pid;
 	collect_channels(fdtv, &pidc, pids);
 
@@ -153,7 +153,7 @@ int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	if (mutex_lock_interruptible(&fdtv->demux_mutex))
 		return -EINTR;
 
-	c = (typeof(c))dvbdmxfeed->priv;
+	c = (unsigned long)dvbdmxfeed->priv;
 	dealloc_channel(fdtv, c);
 	collect_channels(fdtv, &pidc, pids);
 
