@@ -13,6 +13,7 @@
 #include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
 
@@ -23,8 +24,6 @@
 #include <nodemgr.h> /* for ud->device in dev_printk */
 
 #include "firedtv.h"
-
-DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 static struct firedtv_channel *fdtv_channel_allocate(struct firedtv *fdtv)
 {
@@ -196,11 +195,13 @@ int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	return k;
 }
 
+DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
+
 int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev)
 {
 	int err;
 
-	err = DVB_REGISTER_ADAPTER(&fdtv->adapter,
+	err = dvb_register_adapter(&fdtv->adapter,
 				   fdtv_model_names[fdtv->type],
 				   THIS_MODULE, dev, adapter_nr);
 	if (err < 0)

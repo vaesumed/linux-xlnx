@@ -29,14 +29,6 @@
 #include <dvb_net.h>
 #include <dvbdev.h>
 
-#include <linux/version.h>
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
-#define DVB_REGISTER_ADAPTER(x, y, z, w, v) dvb_register_adapter(x, y, z, w, v)
-#else
-#define DVB_REGISTER_ADAPTER(x, y, z, w, v) dvb_register_adapter(x, y, z, w)
-#define DVB_DEFINE_MOD_OPT_ADAPTER_NR(x)
-#endif
-
 struct firedtv_tuner_status {
 	unsigned active_system:8;
 	unsigned searching:1;
