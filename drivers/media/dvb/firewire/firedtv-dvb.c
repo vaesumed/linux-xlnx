@@ -64,7 +64,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 {
 	struct firedtv *fdtv = dvbdmxfeed->demux->priv;
 	struct firedtv_channel *channel;
-	int pidc, k, ret;
+	int pidc, ret;
 	u16 pids[16];
 
 	switch (dvbdmxfeed->type) {
@@ -87,12 +87,6 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		case DMX_TS_PES_TELETEXT:
 		case DMX_TS_PES_PCR:
 		case DMX_TS_PES_OTHER:
-			/* FIXME: this loop looks unnecessary */
-			for (k = 0; k < 16; k++)
-				if (!fdtv->channel[k].active) {
-					fdtv->channel[k].pid = dvbdmxfeed->pid;
-					break;
-				}
 			channel = fdtv_channel_allocate(fdtv);
 			break;
 		default:
