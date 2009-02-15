@@ -100,12 +100,6 @@ struct firedtv {
 	struct work_struct	remote_ctrl_work;
 	struct input_dev	*remote_ctrl_dev;
 
-	struct firedtv_channel {
-		bool active;
-		int pid;
-	}			channel[16];
-	struct mutex		demux_mutex;
-
 	enum model_type		type;
 	char			subunit;
 	char			isochannel;
@@ -114,6 +108,10 @@ struct firedtv {
 
 	const struct firedtv_backend *backend;
 	void			*backend_data;
+
+	struct mutex		demux_mutex;
+	unsigned long		channel_active;
+	u16			channel_pid[16];
 
 	size_t			response_length;
 	u8			response[512];
