@@ -123,6 +123,10 @@ struct firedtv {
 extern const char *fdtv_model_names[];
 struct device;
 
+/* firedtv-ci.c */
+int fdtv_ca_register(struct firedtv *fdtv);
+void fdtv_ca_release(struct firedtv *fdtv);
+
 /* firedtv-dvb.c */
 int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed);
 int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
@@ -131,8 +135,37 @@ int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev);
 /* firedtv-fe.c */
 void fdtv_frontend_init(struct firedtv *fdtv);
 
+/* firedtv-rc.c */
+int fdtv_register_rc(struct firedtv *fdtv, struct device *dev);
+void fdtv_unregister_rc(struct firedtv *fdtv);
+void fdtv_handle_rc(struct firedtv *fdtv, unsigned int code);
+
 /* firedtv-1394.c */
 int setup_iso_channel(struct firedtv *fdtv);
 void tear_down_iso_channel(struct firedtv *fdtv);
+
+/* avc.h */
+struct dvb_diseqc_master_cmd;
+struct dvb_frontend_parameters;
+int avc_recv(struct firedtv *fdtv, void *data, size_t length);
+int avc_tuner_status(struct firedtv *fdtv, struct firedtv_tuner_status *stat);
+int avc_tuner_dsd(struct firedtv *fdtv, struct dvb_frontend_parameters *params);
+int avc_tuner_set_pids(struct firedtv *fdtv, unsigned char pidc, u16 pid[]);
+int avc_tuner_get_ts(struct firedtv *fdtv);
+int avc_identify_subunit(struct firedtv *fdtv);
+int avc_lnb_control(struct firedtv *fdtv, char voltage, char burst,
+		    char conttone, char nrdiseq,
+		    struct dvb_diseqc_master_cmd *diseqcmd);
+void avc_remote_ctrl_work(struct work_struct *work);
+int avc_register_remote_control(struct firedtv *fdtv);
+int avc_ca_app_info(struct firedtv *fdtv, char *app_info, unsigned int *len);
+int avc_ca_info(struct firedtv *fdtv, char *app_info, unsigned int *len);
+int avc_ca_reset(struct firedtv *fdtv);
+int avc_ca_pmt(struct firedtv *fdtv, char *app_info, int length);
+int avc_ca_get_time_date(struct firedtv *fdtv, int *interval);
+int avc_ca_enter_menu(struct firedtv *fdtv);
+int avc_ca_get_mmi(struct firedtv *fdtv, char *mmi_object, unsigned int *len);
+int cmp_establish_pp_connection(struct firedtv *fdtv, int plug, int channel);
+void cmp_break_pp_connection(struct firedtv *fdtv, int plug, int channel);
 
 #endif /* _FIREDTV_H */

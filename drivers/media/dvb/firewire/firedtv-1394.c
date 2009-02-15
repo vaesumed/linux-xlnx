@@ -35,10 +35,7 @@
 #include <iso.h>
 #include <nodemgr.h>
 
-#include "avc.h"
 #include "firedtv.h"
-#include "firedtv-ci.h"
-#include "firedtv-rc.h"
 
 /* list of all firedtv devices */
 static LIST_HEAD(fdtv_list);

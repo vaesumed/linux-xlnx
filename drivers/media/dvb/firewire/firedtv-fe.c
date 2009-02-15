@@ -20,7 +20,6 @@
 
 #include <nodemgr.h> /* for ud->device in dev_printk */
 
-#include "avc.h"
 #include "firedtv.h"
 
 static int fdtv_dvb_init(struct dvb_frontend *fe)

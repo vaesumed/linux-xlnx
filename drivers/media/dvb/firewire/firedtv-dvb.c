@@ -22,9 +22,7 @@
 
 #include <nodemgr.h> /* for ud->device in dev_printk */
 
-#include "avc.h"
 #include "firedtv.h"
-#include "firedtv-ci.h"
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 

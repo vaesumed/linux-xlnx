@@ -19,9 +19,7 @@
 
 #include <nodemgr.h> /* for ud->device in dev_printk */
 
-#include "avc.h"
 #include "firedtv.h"
-#include "firedtv-ci.h"
 
 #define EN50221_TAG_APP_INFO_ENQUIRY	0x9f8020
 #define EN50221_TAG_CA_INFO_ENQUIRY	0x9f8030
