@@ -10,15 +10,14 @@
  *	the License, or (at your option) any later version.
  */
 
+#include <linux/device.h>
 #include <linux/dvb/ca.h>
 #include <linux/fs.h>
 #include <linux/module.h>
 
 #include <dvbdev.h>
 
-#include "avc.h"
 #include "firedtv.h"
-#include "firedtv-ci.h"
 
 #define EN50221_TAG_APP_INFO_ENQUIRY	0x9f8020
 #define EN50221_TAG_CA_INFO_ENQUIRY	0x9f8030
@@ -82,8 +81,7 @@ static int fdtv_ca_app_info(struct firedtv *fdtv, void *arg)
 {
 	struct ca_msg *reply = arg;
 
-	return
-	    avc_ca_app_info(fdtv, reply->msg, &reply->length) ? -EFAULT : 0;
+	return avc_ca_app_info(fdtv, reply->msg, &reply->length) ? -EFAULT : 0;
 }
 
 static int fdtv_ca_info(struct firedtv *fdtv, void *arg)
@@ -97,8 +95,7 @@ static int fdtv_ca_get_mmi(struct firedtv *fdtv, void *arg)
 {
 	struct ca_msg *reply = arg;
 
-	return
-	    avc_ca_get_mmi(fdtv, reply->msg, &reply->length) ? -EFAULT : 0;
+	return avc_ca_get_mmi(fdtv, reply->msg, &reply->length) ? -EFAULT : 0;
 }
 
 static int fdtv_ca_get_msg(struct firedtv *fdtv, void *arg)
@@ -119,8 +116,8 @@ static int fdtv_ca_get_msg(struct firedtv *fdtv, void *arg)
 		else if (stat.ca_mmi == 1)
 			err = fdtv_ca_get_mmi(fdtv, arg);
 		else {
-			printk(KERN_INFO "%s: Unhandled message 0x%08X\n",
-			       __func__, fdtv->ca_last_command);
+			dev_info(fdtv->device, "unhandled CA message 0x%08x\n",
+				 fdtv->ca_last_command);
 			err = -EFAULT;
 		}
 	}
@@ -138,14 +135,13 @@ static int fdtv_ca_pmt(struct firedtv *fdtv, void *arg)
 	data_pos = 4;
 	if (msg->msg[3] & 0x80) {
 		data_length = 0;
-		for (i = 0; i < (msg->msg[3] & 0x7F); i++)
+		for (i = 0; i < (msg->msg[3] & 0x7f); i++)
 			data_length = (data_length << 8) + msg->msg[data_pos++];
 	} else {
 		data_length = msg->msg[3];
 	}
 
-	return avc_ca_pmt(fdtv, &msg->msg[data_pos], data_length) ?
-	       -EFAULT : 0;
+	return avc_ca_pmt(fdtv, &msg->msg[data_pos], data_length) ? -EFAULT : 0;
 }
 
 static int fdtv_ca_send_msg(struct firedtv *fdtv, void *arg)
@@ -172,8 +168,8 @@ static int fdtv_ca_send_msg(struct firedtv *fdtv, void *arg)
 		err = avc_ca_enter_menu(fdtv);
 		break;
 	default:
-		printk(KERN_ERR "%s: Unhandled unknown message 0x%08X\n",
-		       __func__, fdtv->ca_last_command);
+		dev_err(fdtv->device, "unhandled CA message 0x%08x\n",
+			fdtv->ca_last_command);
 		err = -EFAULT;
 	}
 	return err;
@@ -204,8 +200,7 @@ static int fdtv_ca_ioctl(struct inode *inode, struct file *file,
 		err = fdtv_ca_send_msg(fdtv, arg);
 		break;
 	default:
-		printk(KERN_INFO "%s: Unhandled ioctl, command: %u\n",__func__,
-		       cmd);
+		dev_info(fdtv->device, "unhandled CA ioctl %u\n", cmd);
 		err = -EOPNOTSUPP;
 	}
 
@@ -251,8 +246,7 @@ int fdtv_ca_register(struct firedtv *fdtv)
 				  &fdtv_ca, fdtv, DVB_DEVICE_CA);
 
 	if (stat.ca_application_info == 0)
-		printk(KERN_ERR "%s: CaApplicationInfo is not set.\n",
-		       __func__);
+		dev_err(fdtv->device, "CaApplicationInfo is not set\n");
 	if (stat.ca_date_time_request == 1)
 		avc_ca_get_time_date(fdtv, &fdtv->ca_time_interval);
 
