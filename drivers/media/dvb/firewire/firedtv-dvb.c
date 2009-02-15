@@ -13,15 +13,19 @@
 #include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 #include <linux/types.h>
+#include <linux/wait.h>
+#include <linux/workqueue.h>
 
+#include <dmxdev.h>
 #include <dvb_demux.h>
-#include <dvb_frontend.h>
 #include <dvbdev.h>
-
-#include <nodemgr.h> /* for ud->device in dev_printk */
+#include <dvb_frontend.h>
 
 #include "firedtv.h"
 
@@ -86,8 +90,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	case DMX_TYPE_SEC:
 		break;
 	default:
-		dev_err(&fdtv->ud->device,
-			"can't start dmx feed: invalid type %u\n",
+		dev_err(fdtv->device, "can't start dmx feed: invalid type %u\n",
 			dvbdmxfeed->type);
 		return -EINVAL;
 	}
@@ -107,7 +110,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 			channel = fdtv_channel_allocate(fdtv);
 			break;
 		default:
-			dev_err(&fdtv->ud->device,
+			dev_err(fdtv->device,
 				"can't start dmx feed: invalid pes type %u\n",
 				dvbdmxfeed->pes_type);
 			return -EINVAL;
@@ -117,7 +120,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	}
 
 	if (!channel) {
-		dev_err(&fdtv->ud->device, "can't start dmx feed: busy\n");
+		dev_err(fdtv->device, "can't start dmx feed: busy\n");
 		return -EBUSY;
 	}
 
@@ -126,7 +129,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 
 	if (fdtv_channel_collect(fdtv, &pidc, pids)) {
 		fdtv_channel_release(fdtv, channel);
-		dev_err(&fdtv->ud->device, "can't collect pids\n");
+		dev_err(fdtv->device, "can't collect pids\n");
 		return -EINTR;
 	}
 
@@ -134,14 +137,14 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		k = avc_tuner_get_ts(fdtv);
 		if (k) {
 			fdtv_channel_release(fdtv, channel);
-			dev_err(&fdtv->ud->device, "can't get TS\n");
+			dev_err(fdtv->device, "can't get TS\n");
 			return k;
 		}
 	} else {
 		k = avc_tuner_set_pids(fdtv, pidc, pids);
 		if (k) {
 			fdtv_channel_release(fdtv, channel);
-			dev_err(&fdtv->ud->device, "can't set PIDs\n");
+			dev_err(fdtv->device, "can't set PIDs\n");
 			return k;
 		}
 	}
@@ -197,13 +200,12 @@ int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
-int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev)
+int fdtv_dvb_register(struct firedtv *fdtv)
 {
 	int err;
 
-	err = dvb_register_adapter(&fdtv->adapter,
-				   fdtv_model_names[fdtv->type],
-				   THIS_MODULE, dev, adapter_nr);
+	err = dvb_register_adapter(&fdtv->adapter, fdtv_model_names[fdtv->type],
+				   THIS_MODULE, fdtv->device, adapter_nr);
 	if (err < 0)
 		goto fail_log;
 
@@ -249,8 +251,8 @@ int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev)
 
 	err = fdtv_ca_register(fdtv);
 	if (err)
-		dev_info(dev, "Conditional Access Module not enabled\n");
-
+		dev_info(fdtv->device,
+			 "Conditional Access Module not enabled\n");
 	return 0;
 
 fail_net_release:
@@ -265,6 +267,132 @@ fail_dmx_release:
 fail_unreg_adapter:
 	dvb_unregister_adapter(&fdtv->adapter);
 fail_log:
-	dev_err(dev, "DVB initialization failed\n");
+	dev_err(fdtv->device, "DVB initialization failed\n");
 	return err;
 }
+
+void fdtv_dvb_unregister(struct firedtv *fdtv)
+{
+	fdtv_ca_release(fdtv);
+	dvb_unregister_frontend(&fdtv->fe);
+	dvb_net_release(&fdtv->dvbnet);
+	fdtv->demux.dmx.close(&fdtv->demux.dmx);
+	fdtv->demux.dmx.remove_frontend(&fdtv->demux.dmx, &fdtv->frontend);
+	dvb_dmxdev_release(&fdtv->dmxdev);
+	dvb_dmx_release(&fdtv->demux);
+	dvb_unregister_adapter(&fdtv->adapter);
+}
+
+const char *fdtv_model_names[] = {
+	[FIREDTV_UNKNOWN] = "unknown type",
+	[FIREDTV_DVB_S]   = "FireDTV S/CI",
+	[FIREDTV_DVB_C]   = "FireDTV C/CI",
+	[FIREDTV_DVB_T]   = "FireDTV T/CI",
+	[FIREDTV_DVB_S2]  = "FireDTV S2  ",
+};
+
+struct firedtv *fdtv_alloc(struct device *dev,
+			   const struct firedtv_backend *backend,
+			   const char *name, size_t name_len)
+{
+	struct firedtv *fdtv;
+	int i;
+
+	fdtv = kzalloc(sizeof(*fdtv), GFP_KERNEL);
+	if (!fdtv)
+		return NULL;
+
+	dev->driver_data	= fdtv;
+	fdtv->device		= dev;
+	fdtv->isochannel	= -1;
+	fdtv->voltage		= 0xff;
+	fdtv->tone		= 0xff;
+	fdtv->backend		= backend;
+
+	mutex_init(&fdtv->avc_mutex);
+	init_waitqueue_head(&fdtv->avc_wait);
+	fdtv->avc_reply_received = true;
+	mutex_init(&fdtv->demux_mutex);
+	INIT_WORK(&fdtv->remote_ctrl_work, avc_remote_ctrl_work);
+
+	for (i = ARRAY_SIZE(fdtv_model_names); --i; )
+		if (strlen(fdtv_model_names[i]) <= name_len &&
+		    strncmp(name, fdtv_model_names[i], name_len) == 0)
+			break;
+	fdtv->type = i;
+
+	return fdtv;
+}
+
+#define MATCH_FLAGS (IEEE1394_MATCH_VENDOR_ID | IEEE1394_MATCH_MODEL_ID | \
+		     IEEE1394_MATCH_SPECIFIER_ID | IEEE1394_MATCH_VERSION)
+
+#define DIGITAL_EVERYWHERE_OUI	0x001287
+#define AVC_UNIT_SPEC_ID_ENTRY	0x00a02d
+#define AVC_SW_VERSION_ENTRY	0x010001
+
+static struct ieee1394_device_id fdtv_id_table[] = {
+	{
+		/* FloppyDTV S/CI and FloppyDTV S2 */
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000024,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
+	}, {
+		/* FloppyDTV T/CI */
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000025,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
+	}, {
+		/* FloppyDTV C/CI */
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000026,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
+	}, {
+		/* FireDTV S/CI and FloppyDTV S2 */
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000034,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
+	}, {
+		/* FireDTV T/CI */
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000035,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
+	}, {
+		/* FireDTV C/CI */
+		.match_flags	= MATCH_FLAGS,
+		.vendor_id	= DIGITAL_EVERYWHERE_OUI,
+		.model_id	= 0x000036,
+		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY,
+		.version	= AVC_SW_VERSION_ENTRY,
+	}, {}
+};
+MODULE_DEVICE_TABLE(ieee1394, fdtv_id_table);
+
+static int __init fdtv_init(void)
+{
+	return fdtv_1394_init(fdtv_id_table);
+}
+
+static void __exit fdtv_exit(void)
+{
+	fdtv_1394_exit();
+}
+
+module_init(fdtv_init);
+module_exit(fdtv_exit);
+
+MODULE_AUTHOR("Andreas Monitzer <andy@monitzer.com>");
+MODULE_AUTHOR("Ben Backx <ben@bbackx.com>");
+MODULE_DESCRIPTION("FireDTV DVB Driver");
+MODULE_LICENSE("GPL");
+MODULE_SUPPORTED_DEVICE("FireDTV DVB");

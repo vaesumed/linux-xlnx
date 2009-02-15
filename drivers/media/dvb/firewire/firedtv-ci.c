@@ -17,8 +17,6 @@
 
 #include <dvbdev.h>
 
-#include <nodemgr.h> /* for ud->device in dev_printk */
-
 #include "firedtv.h"
 
 #define EN50221_TAG_APP_INFO_ENQUIRY	0x9f8020
@@ -118,8 +116,7 @@ static int fdtv_ca_get_msg(struct firedtv *fdtv, void *arg)
 		else if (stat.ca_mmi == 1)
 			err = fdtv_ca_get_mmi(fdtv, arg);
 		else {
-			dev_info(&fdtv->ud->device,
-				 "unhandled CA message 0x%08x\n",
+			dev_info(fdtv->device, "unhandled CA message 0x%08x\n",
 				 fdtv->ca_last_command);
 			err = -EFAULT;
 		}
@@ -171,7 +168,7 @@ static int fdtv_ca_send_msg(struct firedtv *fdtv, void *arg)
 		err = avc_ca_enter_menu(fdtv);
 		break;
 	default:
-		dev_err(&fdtv->ud->device, "unhandled CA message 0x%08x\n",
+		dev_err(fdtv->device, "unhandled CA message 0x%08x\n",
 			fdtv->ca_last_command);
 		err = -EFAULT;
 	}
@@ -203,7 +200,7 @@ static int fdtv_ca_ioctl(struct inode *inode, struct file *file,
 		err = fdtv_ca_send_msg(fdtv, arg);
 		break;
 	default:
-		dev_info(&fdtv->ud->device, "unhandled CA ioctl %u\n", cmd);
+		dev_info(fdtv->device, "unhandled CA ioctl %u\n", cmd);
 		err = -EOPNOTSUPP;
 	}
 
@@ -249,7 +246,7 @@ int fdtv_ca_register(struct firedtv *fdtv)
 				  &fdtv_ca, fdtv, DVB_DEVICE_CA);
 
 	if (stat.ca_application_info == 0)
-		dev_err(&fdtv->ud->device, "CaApplicationInfo is not set\n");
+		dev_err(fdtv->device, "CaApplicationInfo is not set\n");
 	if (stat.ca_date_time_request == 1)
 		avc_ca_get_time_date(fdtv, &fdtv->ca_time_interval);
 

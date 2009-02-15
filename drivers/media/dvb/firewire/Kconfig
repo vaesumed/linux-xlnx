@@ -10,3 +10,10 @@ config DVB_FIREDTV
 
 	  To compile this driver as a module, say M here:
 	  the module will be called firedtv.
+
+if DVB_FIREDTV
+
+config DVB_FIREDTV_IEEE1394
+	def_bool IEEE1394
+
+endif # DVB_FIREDTV

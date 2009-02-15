@@ -18,8 +18,6 @@
 
 #include <dvb_frontend.h>
 
-#include <nodemgr.h> /* for ud->device in dev_printk */
-
 #include "firedtv.h"
 
 static int fdtv_dvb_init(struct dvb_frontend *fe)
@@ -33,19 +31,19 @@ static int fdtv_dvb_init(struct dvb_frontend *fe)
 	err = cmp_establish_pp_connection(fdtv, fdtv->subunit,
 					  fdtv->isochannel);
 	if (err) {
-		dev_err(&fdtv->ud->device,
+		dev_err(fdtv->device,
 			"could not establish point to point connection\n");
 		return err;
 	}
 
-	return setup_iso_channel(fdtv);
+	return fdtv->backend->start_iso(fdtv);
 }
 
 static int fdtv_sleep(struct dvb_frontend *fe)
 {
 	struct firedtv *fdtv = fe->sec_priv;
 
-	tear_down_iso_channel(fdtv);
+	fdtv->backend->stop_iso(fdtv);
 	cmp_break_pp_connection(fdtv, fdtv->subunit, fdtv->isochannel);
 	fdtv->isochannel = -1;
 	return 0;
@@ -238,7 +236,7 @@ void fdtv_frontend_init(struct firedtv *fdtv)
 		break;
 
 	default:
-		dev_err(&fdtv->ud->device, "no frontend for model type %d\n",
+		dev_err(fdtv->device, "no frontend for model type %d\n",
 			fdtv->type);
 	}
 	strcpy(fi->name, fdtv_model_names[fdtv->type]);
