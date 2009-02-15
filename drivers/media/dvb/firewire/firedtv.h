@@ -137,9 +137,16 @@ extern const char *fdtv_model_names[];
 void fdtv_frontend_init(struct firedtv *fdtv);
 
 /* firedtv-rc.c */
+#ifdef CONFIG_DVB_FIREDTV_INPUT
 int fdtv_register_rc(struct firedtv *fdtv, struct device *dev);
 void fdtv_unregister_rc(struct firedtv *fdtv);
 void fdtv_handle_rc(struct firedtv *fdtv, unsigned int code);
+#else
+static inline int fdtv_register_rc(struct firedtv *fdtv,
+				   struct device *dev) { return 0; }
+static inline void fdtv_unregister_rc(struct firedtv *fdtv) {}
+static inline void fdtv_handle_rc(struct firedtv *fdtv, unsigned int code) {}
+#endif
 
 /* firedtv-1394.c */
 #ifdef CONFIG_DVB_FIREDTV_IEEE1394
