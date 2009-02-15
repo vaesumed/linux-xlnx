@@ -135,8 +135,8 @@ int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 {
 	struct dvb_demux *demux = dvbdmxfeed->demux;
 	struct firedtv *fdtv = demux->priv;
-	struct firedtv_channel *c = dvbdmxfeed->priv;
-	int k, l;
+	struct firedtv_channel *channel = dvbdmxfeed->priv;
+	int pidc, ret;
 	u16 pids[16];
 
 	if (dvbdmxfeed->type == DMX_TYPE_TS &&
@@ -160,21 +160,14 @@ int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	if (mutex_lock_interruptible(&fdtv->demux_mutex))
 		return -EINTR;
 
-	/* list except channel to be removed */
-	for (k = 0, l = 0; k < 16; k++)
-		if (fdtv->channel[k].active) {
-			if (&fdtv->channel[k] != c)
-				pids[l++] = fdtv->channel[k].pid;
-			else
-				fdtv->channel[k].active = false;
-		}
+	fdtv_channel_release(fdtv, channel);
+	fdtv_channel_collect(fdtv, &pidc, pids);
 
-	k = avc_tuner_set_pids(fdtv, l, pids);
-	if (!k)
-		c->active = false;
+	ret = avc_tuner_set_pids(fdtv, pidc, pids);
 
 	mutex_unlock(&fdtv->demux_mutex);
-	return k;
+
+	return ret;
 }
 
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
