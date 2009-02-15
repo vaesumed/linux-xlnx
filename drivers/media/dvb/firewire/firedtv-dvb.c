@@ -31,58 +31,40 @@
 
 static struct firedtv_channel *fdtv_channel_allocate(struct firedtv *fdtv)
 {
-	struct firedtv_channel *c = NULL;
-	int k;
+	struct firedtv_channel *c;
+	int i;
 
-	if (mutex_lock_interruptible(&fdtv->demux_mutex))
-		return NULL;
-
-	for (k = 0; k < 16; k++)
-		if (!fdtv->channel[k].active) {
-			fdtv->channel[k].active = true;
-			c = &fdtv->channel[k];
+	for (i = 0, c = NULL; i < 16; i++)
+		if (!fdtv->channel[i].active) {
+			fdtv->channel[i].active = true;
+			c = &fdtv->channel[i];
 			break;
 		}
 
-	mutex_unlock(&fdtv->demux_mutex);
 	return c;
 }
 
-static int fdtv_channel_collect(struct firedtv *fdtv, int *pidc, u16 pid[])
+static void fdtv_channel_collect(struct firedtv *fdtv, int *pidc, u16 pid[])
 {
-	int k, l = 0;
+	int i, n;
 
-	if (mutex_lock_interruptible(&fdtv->demux_mutex))
-		return -EINTR;
-
-	for (k = 0; k < 16; k++)
-		if (fdtv->channel[k].active)
-			pid[l++] = fdtv->channel[k].pid;
-
-	mutex_unlock(&fdtv->demux_mutex);
-
-	*pidc = l;
-
-	return 0;
+	for (i = 0, n = 0; i < 16; i++)
+		if (fdtv->channel[i].active)
+			pid[n++] = fdtv->channel[i].pid;
+	*pidc = n;
 }
 
-static int fdtv_channel_release(struct firedtv *fdtv,
-				struct firedtv_channel *channel)
+static inline void fdtv_channel_release(struct firedtv *fdtv,
+					struct firedtv_channel *channel)
 {
-	if (mutex_lock_interruptible(&fdtv->demux_mutex))
-		return -EINTR;
-
 	channel->active = false;
-
-	mutex_unlock(&fdtv->demux_mutex);
-	return 0;
 }
 
 int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 {
 	struct firedtv *fdtv = dvbdmxfeed->demux->priv;
 	struct firedtv_channel *channel;
-	int pidc, k;
+	int pidc, k, ret;
 	u16 pids[16];
 
 	switch (dvbdmxfeed->type) {
@@ -94,6 +76,9 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 			dvbdmxfeed->type);
 		return -EINVAL;
 	}
+
+	if (mutex_lock_interruptible(&fdtv->demux_mutex))
+		return -EINTR;
 
 	if (dvbdmxfeed->type == DMX_TYPE_TS) {
 		switch (dvbdmxfeed->pes_type) {
@@ -114,7 +99,8 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 			dev_err(fdtv->device,
 				"can't start dmx feed: invalid pes type %u\n",
 				dvbdmxfeed->pes_type);
-			return -EINVAL;
+			ret = -EINVAL;
+			goto out;
 		}
 	} else {
 		channel = fdtv_channel_allocate(fdtv);
@@ -122,35 +108,33 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 
 	if (!channel) {
 		dev_err(fdtv->device, "can't start dmx feed: busy\n");
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
 	}
 
 	dvbdmxfeed->priv = channel;
 	channel->pid = dvbdmxfeed->pid;
-
-	if (fdtv_channel_collect(fdtv, &pidc, pids)) {
-		fdtv_channel_release(fdtv, channel);
-		dev_err(fdtv->device, "can't collect pids\n");
-		return -EINTR;
-	}
+	fdtv_channel_collect(fdtv, &pidc, pids);
 
 	if (dvbdmxfeed->pid == 8192) {
-		k = avc_tuner_get_ts(fdtv);
-		if (k) {
+		ret = avc_tuner_get_ts(fdtv);
+		if (ret) {
 			fdtv_channel_release(fdtv, channel);
 			dev_err(fdtv->device, "can't get TS\n");
-			return k;
+			goto out;
 		}
 	} else {
-		k = avc_tuner_set_pids(fdtv, pidc, pids);
-		if (k) {
+		ret = avc_tuner_set_pids(fdtv, pidc, pids);
+		if (ret) {
 			fdtv_channel_release(fdtv, channel);
 			dev_err(fdtv->device, "can't set PIDs\n");
-			return k;
+			goto out;
 		}
 	}
+out:
+	mutex_unlock(&fdtv->demux_mutex);
 
-	return 0;
+	return ret;
 }
 
 int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
