@@ -135,7 +135,6 @@ int setup_iso_channel(struct firedtv *fdtv)
 #define DIGITAL_EVERYWHERE_OUI   0x001287
 
 static struct ieee1394_device_id fdtv_id_table[] = {
-
 	{
 		/* FloppyDTV S/CI and FloppyDTV S2 */
 		.match_flags	= MATCH_FLAGS,
@@ -180,30 +179,23 @@ static struct ieee1394_device_id fdtv_id_table[] = {
 		.version	= AVC_SW_VERSION_ENTRY,
 	}, { }
 };
-
 MODULE_DEVICE_TABLE(ieee1394, fdtv_id_table);
 
-static void fcp_request(struct hpsb_host *host,
-			int nodeid,
-			int direction,
-			int cts,
-			u8 *data,
-			size_t length)
+static void fcp_request(struct hpsb_host *host, int nodeid, int direction,
+			int cts, u8 *data, size_t length)
 {
-	struct firedtv *fdtv = NULL;
-	struct firedtv *fdtv_entry;
+	struct firedtv *f, *fdtv = NULL;
 	unsigned long flags;
 
 	if (length > 0 && ((data[0] & 0xf0) >> 4) == 0) {
 
 		spin_lock_irqsave(&fdtv_list_lock, flags);
-		list_for_each_entry(fdtv_entry,&fdtv_list,list) {
-			if (fdtv_entry->ud->ne->host == host &&
-			    fdtv_entry->ud->ne->nodeid == nodeid &&
-			    (fdtv_entry->subunit == (data[1]&0x7) ||
-			     (fdtv_entry->subunit == 0 &&
-			      (data[1]&0x7) == 0x7))) {
-				fdtv=fdtv_entry;
+		list_for_each_entry(f, &fdtv_list, list) {
+			if (f->ud->ne->host == host &&
+			    f->ud->ne->nodeid == nodeid &&
+			    (f->subunit == (data[1] & 0x7) ||
+			     (f->subunit == 0 && (data[1] & 0x7) == 0x7))) {
+				fdtv = f;
 				break;
 			}
 		}
@@ -267,7 +259,6 @@ static int fdtv_probe(struct device *dev)
 	if (err)
 		goto fail_free;
 
-	INIT_LIST_HEAD(&fdtv->list);
 	spin_lock_irqsave(&fdtv_list_lock, flags);
 	list_add_tail(&fdtv->list, &fdtv_list);
 	spin_unlock_irqrestore(&fdtv_list_lock, flags);
@@ -282,7 +273,6 @@ static int fdtv_probe(struct device *dev)
 
 	avc_register_remote_control(fdtv);
 	return 0;
-
 fail:
 	spin_lock_irqsave(&fdtv_list_lock, flags);
 	list_del(&fdtv->list);
@@ -302,8 +292,7 @@ static int fdtv_remove(struct device *dev)
 	dvb_unregister_frontend(&fdtv->fe);
 	dvb_net_release(&fdtv->dvbnet);
 	fdtv->demux.dmx.close(&fdtv->demux.dmx);
-	fdtv->demux.dmx.remove_frontend(&fdtv->demux.dmx,
-					   &fdtv->frontend);
+	fdtv->demux.dmx.remove_frontend(&fdtv->demux.dmx, &fdtv->frontend);
 	dvb_dmxdev_release(&fdtv->dmxdev);
 	dvb_dmx_release(&fdtv->demux);
 	dvb_unregister_adapter(&fdtv->adapter);
@@ -334,11 +323,7 @@ static struct hpsb_protocol_driver fdtv_driver = {
 	.name		= "firedtv",
 	.id_table	= fdtv_id_table,
 	.update		= fdtv_update,
-
 	.driver         = {
-		//.name and .bus are filled in for us in more recent linux versions
-		//.name	= "FireDTV",
-		//.bus	= &ieee1394_bus_type,
 		.probe  = fdtv_probe,
 		.remove = fdtv_remove,
 	},

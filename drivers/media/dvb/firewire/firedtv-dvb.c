@@ -10,6 +10,7 @@
  *	the License, or (at your option) any later version.
  */
 
+#include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/mutex.h>
@@ -18,6 +19,8 @@
 #include <dvb_demux.h>
 #include <dvb_frontend.h>
 #include <dvbdev.h>
+
+#include <nodemgr.h> /* for ud->device in dev_printk */
 
 #include "avc.h"
 #include "firedtv.h"
@@ -63,7 +66,7 @@ static int fdtv_channel_collect(struct firedtv *fdtv, int *pidc, u16 pid[])
 }
 
 static int fdtv_channel_release(struct firedtv *fdtv,
-				   struct firedtv_channel *channel)
+				struct firedtv_channel *channel)
 {
 	if (mutex_lock_interruptible(&fdtv->demux_mutex))
 		return -EINTR;
@@ -76,9 +79,9 @@ static int fdtv_channel_release(struct firedtv *fdtv,
 
 int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 {
-	struct firedtv *fdtv = (struct firedtv*)dvbdmxfeed->demux->priv;
+	struct firedtv *fdtv = dvbdmxfeed->demux->priv;
 	struct firedtv_channel *channel;
-	int pidc,k;
+	int pidc, k;
 	u16 pids[16];
 
 	switch (dvbdmxfeed->type) {
@@ -86,8 +89,9 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	case DMX_TYPE_SEC:
 		break;
 	default:
-		printk(KERN_ERR "%s: invalid type %u\n",
-		       __func__, dvbdmxfeed->type);
+		dev_err(&fdtv->ud->device,
+			"can't start dmx feed: invalid type %u\n",
+			dvbdmxfeed->type);
 		return -EINVAL;
 	}
 
@@ -98,18 +102,17 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		case DMX_TS_PES_TELETEXT:
 		case DMX_TS_PES_PCR:
 		case DMX_TS_PES_OTHER:
-			//Dirty fix to keep fdtv->channel pid-list up to date
-			for(k=0;k<16;k++){
+			for (k = 0; k < 16; k++) {
 				if (!fdtv->channel[k].active)
-					fdtv->channel[k].pid =
-						dvbdmxfeed->pid;
+					fdtv->channel[k].pid = dvbdmxfeed->pid;
 					break;
 			}
 			channel = fdtv_channel_allocate(fdtv);
 			break;
 		default:
-			printk(KERN_ERR "%s: invalid pes type %u\n",
-			       __func__, dvbdmxfeed->pes_type);
+			dev_err(&fdtv->ud->device,
+				"can't start dmx feed: invalid pes type %u\n",
+				dvbdmxfeed->pes_type);
 			return -EINVAL;
 		}
 	} else {
@@ -117,7 +120,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	}
 
 	if (!channel) {
-		printk(KERN_ERR "%s: busy!\n", __func__);
+		dev_err(&fdtv->ud->device, "can't start dmx feed: busy\n");
 		return -EBUSY;
 	}
 
@@ -126,7 +129,7 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 
 	if (fdtv_channel_collect(fdtv, &pidc, pids)) {
 		fdtv_channel_release(fdtv, channel);
-		printk(KERN_ERR "%s: could not collect pids!\n", __func__);
+		dev_err(&fdtv->ud->device, "can't collect pids\n");
 		return -EINTR;
 	}
 
@@ -134,16 +137,14 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		k = avc_tuner_get_ts(fdtv);
 		if (k) {
 			fdtv_channel_release(fdtv, channel);
-			printk("%s: AVCTuner_GetTS failed with error %d\n",
-			       __func__, k);
+			dev_err(&fdtv->ud->device, "can't get TS\n");
 			return k;
 		}
 	} else {
 		k = avc_tuner_set_pids(fdtv, pidc, pids);
 		if (k) {
 			fdtv_channel_release(fdtv, channel);
-			printk("%s: AVCTuner_SetPIDs failed with error %d\n",
-			       __func__, k);
+			dev_err(&fdtv->ud->device, "can't set PIDs\n");
 			return k;
 		}
 	}
@@ -154,19 +155,18 @@ int fdtv_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 {
 	struct dvb_demux *demux = dvbdmxfeed->demux;
-	struct firedtv *fdtv = (struct firedtv*)demux->priv;
+	struct firedtv *fdtv = demux->priv;
 	struct firedtv_channel *c = dvbdmxfeed->priv;
 	int k, l;
 	u16 pids[16];
 
-	if (dvbdmxfeed->type == DMX_TYPE_TS && !((dvbdmxfeed->ts_type & TS_PACKET) &&
-				(demux->dmx.frontend->source != DMX_MEMORY_FE))) {
+	if (dvbdmxfeed->type == DMX_TYPE_TS &&
+	    !((dvbdmxfeed->ts_type & TS_PACKET) &&
+	      (demux->dmx.frontend->source != DMX_MEMORY_FE))) {
 
 		if (dvbdmxfeed->ts_type & TS_DECODER) {
-
 			if (dvbdmxfeed->pes_type >= DMX_TS_PES_OTHER ||
-				!demux->pesfilter[dvbdmxfeed->pes_type])
-
+			    !demux->pesfilter[dvbdmxfeed->pes_type])
 				return -EINVAL;
 
 			demux->pids[dvbdmxfeed->pes_type] |= 0x8000;
@@ -174,8 +174,7 @@ int fdtv_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 		}
 
 		if (!(dvbdmxfeed->ts_type & TS_DECODER &&
-			dvbdmxfeed->pes_type < DMX_TS_PES_OTHER))
-
+		      dvbdmxfeed->pes_type < DMX_TS_PES_OTHER))
 			return 0;
 	}
 
@@ -223,9 +222,9 @@ int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev)
 	if (err)
 		goto fail_unreg_adapter;
 
-	fdtv->dmxdev.filternum	= 16;
-	fdtv->dmxdev.demux		= &fdtv->demux.dmx;
-	fdtv->dmxdev.capabilities	= 0;
+	fdtv->dmxdev.filternum    = 16;
+	fdtv->dmxdev.demux        = &fdtv->demux.dmx;
+	fdtv->dmxdev.capabilities = 0;
 
 	err = dvb_dmxdev_init(&fdtv->dmxdev, &fdtv->adapter);
 	if (err)
@@ -233,13 +232,12 @@ int fdtv_dvbdev_init(struct firedtv *fdtv, struct device *dev)
 
 	fdtv->frontend.source = DMX_FRONTEND_0;
 
-	err = fdtv->demux.dmx.add_frontend(&fdtv->demux.dmx,
-					      &fdtv->frontend);
+	err = fdtv->demux.dmx.add_frontend(&fdtv->demux.dmx, &fdtv->frontend);
 	if (err)
 		goto fail_dmxdev_release;
 
 	err = fdtv->demux.dmx.connect_frontend(&fdtv->demux.dmx,
-						  &fdtv->frontend);
+					       &fdtv->frontend);
 	if (err)
 		goto fail_rem_frontend;
 
@@ -260,8 +258,7 @@ fail_net_release:
 	dvb_net_release(&fdtv->dvbnet);
 	fdtv->demux.dmx.close(&fdtv->demux.dmx);
 fail_rem_frontend:
-	fdtv->demux.dmx.remove_frontend(&fdtv->demux.dmx,
-					   &fdtv->frontend);
+	fdtv->demux.dmx.remove_frontend(&fdtv->demux.dmx, &fdtv->frontend);
 fail_dmxdev_release:
 	dvb_dmxdev_release(&fdtv->dmxdev);
 fail_dmx_release:
@@ -272,5 +269,3 @@ fail_log:
 	dev_err(dev, "DVB initialization failed\n");
 	return err;
 }
-
-

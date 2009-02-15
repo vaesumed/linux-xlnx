@@ -204,7 +204,7 @@ static void avc_tuner_tuneqpsk(struct firedtv *fdtv,
 	c->operand[8] = ((params->u.qpsk.symbol_rate / 1000) >> 8) & 0xff;
 	c->operand[9] = (params->u.qpsk.symbol_rate / 1000) & 0xff;
 
-	switch(params->u.qpsk.fec_inner) {
+	switch (params->u.qpsk.fec_inner) {
 	case FEC_1_2:	c->operand[10] = 0x1; break;
 	case FEC_2_3:	c->operand[10] = 0x2; break;
 	case FEC_3_4:	c->operand[10] = 0x3; break;
@@ -462,7 +462,7 @@ int avc_tuner_set_pids(struct firedtv *fdtv, unsigned char pidc, u16 pid[])
 	c->opcode  = AVC_OPCODE_DSD;
 
 	c->operand[0] = 0;	/* source plug */
-	c->operand[1] = 0xD2;	/* subfunction replace */
+	c->operand[1] = 0xd2;	/* subfunction replace */
 	c->operand[2] = 0x20;	/* system id = DVB */
 	c->operand[3] = 0x00;	/* antenna number */
 	c->operand[4] = 0x00;	/* system_specific_multiplex selection_length */
@@ -473,8 +473,8 @@ int avc_tuner_set_pids(struct firedtv *fdtv, unsigned char pidc, u16 pid[])
 		for (k = 0; k < pidc; k++) {
 			c->operand[pos++] = 0x13; /* flowfunction relay */
 			c->operand[pos++] = 0x80; /* dsd_sel_spec_valid_flags -> PID */
-			c->operand[pos++] = (pid[k] >> 8) & 0x1F;
-			c->operand[pos++] = pid[k] & 0xFF;
+			c->operand[pos++] = (pid[k] >> 8) & 0x1f;
+			c->operand[pos++] = pid[k] & 0xff;
 			c->operand[pos++] = 0x00; /* tableID */
 			c->operand[pos++] = 0x00; /* filter_length */
 		}
@@ -504,8 +504,8 @@ int avc_tuner_get_ts(struct firedtv *fdtv)
 	sl = fdtv->type == FIREDTV_DVB_T ? 0x0c : 0x11;
 
 	c->operand[0] = 0;	/* source plug */
-	c->operand[1] = 0xD2;	/* subfunction replace */
-	c->operand[2] = 0xFF;	/* status */
+	c->operand[1] = 0xd2;	/* subfunction replace */
+	c->operand[2] = 0xff;	/* status */
 	c->operand[3] = 0x20;	/* system id = DVB */
 	c->operand[4] = 0x00;	/* antenna number */
 	c->operand[5] = 0x0; 	/* system_specific_search_flags */
@@ -901,7 +901,7 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 	}
 	/* We take the cmd_id from the programme level only! */
 	list_management = msg[0];
-	program_info_length = ((msg[4] & 0x0F) << 8) + msg[5];
+	program_info_length = ((msg[4] & 0x0f) << 8) + msg[5];
 	if (program_info_length > 0)
 		program_info_length--; /* Remove pmt_cmd_id */
 	pmt_cmd_id = msg[6];
@@ -927,10 +927,10 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 	c->operand[15] = 0x01; /* Version number=0 + current/next=1 */
 	c->operand[16] = 0x00; /* Section number=0 */
 	c->operand[17] = 0x00; /* Last section number=0 */
-	c->operand[18] = 0x1F; /* PCR_PID=1FFF */
-	c->operand[19] = 0xFF;
+	c->operand[18] = 0x1f; /* PCR_PID=1FFF */
+	c->operand[19] = 0xff;
 	c->operand[20] = (program_info_length >> 8); /* Program info length */
-	c->operand[21] = (program_info_length & 0xFF);
+	c->operand[21] = (program_info_length & 0xff);
 
 	/* CA descriptors at programme level */
 	read_pos = 6;
@@ -951,12 +951,12 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 		c->operand[write_pos++] = msg[read_pos++];
 		c->operand[write_pos++] = msg[read_pos++];
 		es_info_length =
-			((msg[read_pos] & 0x0F) << 8) + msg[read_pos + 1];
+			((msg[read_pos] & 0x0f) << 8) + msg[read_pos + 1];
 		read_pos += 2;
 		if (es_info_length > 0)
 			es_info_length--; /* Remove pmt_cmd_id */
 		c->operand[write_pos++] = es_info_length >> 8;
-		c->operand[write_pos++] = es_info_length & 0xFF;
+		c->operand[write_pos++] = es_info_length & 0xff;
 		if (es_info_length > 0) {
 			pmt_cmd_id = msg[read_pos++];
 			if (pmt_cmd_id != 1 && pmt_cmd_id != 4)
@@ -981,10 +981,10 @@ int avc_ca_pmt(struct firedtv *fdtv, char *msg, int length)
 	c->operand[12] = write_pos - 13;
 
 	crc32_csum = crc32_be(0, &c->operand[10], c->operand[12] - 1);
-	c->operand[write_pos - 4] = (crc32_csum >> 24) & 0xFF;
-	c->operand[write_pos - 3] = (crc32_csum >> 16) & 0xFF;
-	c->operand[write_pos - 2] = (crc32_csum >>  8) & 0xFF;
-	c->operand[write_pos - 1] = (crc32_csum >>  0) & 0xFF;
+	c->operand[write_pos - 4] = (crc32_csum >> 24) & 0xff;
+	c->operand[write_pos - 3] = (crc32_csum >> 16) & 0xff;
+	c->operand[write_pos - 2] = (crc32_csum >>  8) & 0xff;
+	c->operand[write_pos - 1] = (crc32_csum >>  0) & 0xff;
 
 	c->length = ALIGN(3 + write_pos, 4);
 
