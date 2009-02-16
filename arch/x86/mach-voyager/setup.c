@@ -4,23 +4,22 @@
 
 #include <linux/init.h>
 #include <linux/interrupt.h>
-#include <asm/arch_hooks.h>
+#include <asm/apic.h>
 #include <asm/voyager.h>
 #include <asm/e820.h>
 #include <asm/io.h>
 #include <asm/setup.h>
+#include <asm/timer.h>
 #include <asm/cpu.h>
 
-void __init pre_intr_init_hook(void)
-{
-	init_ISA_irqs();
-}
-
-void __init intr_init_hook(void)
+static int __init voyager_intr_init(void)
 {
 #ifdef CONFIG_SMP
 	voyager_smp_intr_init();
 #endif
+
+	/* need to do the irq2 cascade setup */
+	return 0;
 }
 
 static void voyager_disable_tsc(void)
@@ -30,18 +29,10 @@ static void voyager_disable_tsc(void)
 	setup_clear_cpu_cap(X86_FEATURE_TSC);
 }
 
-void __init pre_setup_arch_hook(void)
+int __init voyager_pre_time_init(void)
 {
 	voyager_disable_tsc();
-}
-
-void __init pre_time_init_hook(void)
-{
-	voyager_disable_tsc();
-}
-
-void __init trap_init_hook(void)
-{
+	return 0;
 }
 
 static struct irqaction irq0 = {
@@ -51,18 +42,20 @@ static struct irqaction irq0 = {
 	.name = "timer"
 };
 
-void __init time_init_hook(void)
+static int __init voyager_time_init(void)
 {
 	irq0.mask = cpumask_of_cpu(safe_smp_processor_id());
 	setup_irq(0, &irq0);
+
+	/* return 1 to not do standard timer setup */
+	return 1;
 }
 
 /* Hook for machine specific memory setup. */
 
-char *__init machine_specific_memory_setup(void)
+static char *__init voyager_memory_setup(void)
 {
 	char *who;
-	int new_nr;
 
 	who = "NOT VOYAGER";
 
@@ -104,5 +97,27 @@ char *__init machine_specific_memory_setup(void)
 		return who;
 	}
 
-	return default_machine_specific_memory_setup();
+	return NULL;
+}
+
+static struct x86_quirks voyager_x86_quirks __initdata = {
+	.arch_time_init		= voyager_time_init,
+	.arch_intr_init		= voyager_intr_init,
+	.arch_pre_time_init	= voyager_pre_time_init,
+	.arch_memory_setup	= voyager_memory_setup,
+};
+
+void __init voyager_early_detect(void)
+{
+	if (!is_voyager())
+		return;
+
+	voyager_detect();
+
+	skip_ioapic_setup = 1;
+	voyager_disable_tsc();
+	disable_APIC();
+	voyager_smp_detect(&voyager_x86_quirks);
+	x86_quirks = &voyager_x86_quirks;
+
 }

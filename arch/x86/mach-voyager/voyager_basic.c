@@ -22,23 +22,25 @@
 #include <linux/sysrq.h>
 #include <linux/smp.h>
 #include <linux/nodemask.h>
+#include <linux/mca.h>
 #include <asm/io.h>
 #include <asm/voyager.h>
 #include <asm/vic.h>
 #include <linux/pm.h>
 #include <asm/tlbflush.h>
-#include <asm/arch_hooks.h>
+#include <asm/hpet.h>
 #include <asm/i8253.h>
-
-/*
- * Power off function, if any
- */
-void (*pm_power_off) (void);
-EXPORT_SYMBOL(pm_power_off);
+#include <asm/setup.h>
+#include <asm/timer.h>
+#include <asm/reboot.h>
 
 int voyager_level = 0;
 
 struct voyager_SUS *voyager_SUS = NULL;
+
+static void voyager_machine_emergency_restart(void);
+static void voyager_machine_restart(char *);
+static void voyager_mca_nmi_hook(void);
 
 #ifdef CONFIG_SMP
 static void voyager_dump(int dummy1, struct tty_struct *dummy3)
@@ -54,33 +56,41 @@ static struct sysrq_key_op sysrq_voyager_dump_op = {
 };
 #endif
 
-void voyager_detect(struct voyager_bios_info *bios)
+static void voyager_machine_shutdown(void)
 {
-	if (bios->len != NOT_VOYAGER_BIOS_SIG) {
-		int class = (bios->class_1 << 8)
-		    | (bios->class_2 & 0xff);
+	/* Need to skip the usual x86 shutdown */
+}
 
-		printk("Voyager System detected.\n"
-		       "        Class %x, Revision %d.%d\n",
-		       class, bios->major, bios->minor);
-		if (class == VOYAGER_LEVEL4)
-			voyager_level = 4;
-		else if (class < VOYAGER_LEVEL5_AND_ABOVE)
-			voyager_level = 3;
-		else
-			voyager_level = 5;
-		printk("        Architecture Level %d\n", voyager_level);
-		if (voyager_level < 4)
-			printk
-			    ("\n**WARNING**: Voyager HAL only supports Levels 4 and 5 Architectures at the moment\n\n");
-		/* install the power off handler */
-		pm_power_off = voyager_power_off;
+void voyager_detect(void)
+{
+	struct voyager_bios_info *bios = &boot_params.voyager_bios_info;
+
+	int class = (bios->class_1 << 8)
+		| (bios->class_2 & 0xff);
+
+	printk("Voyager System detected.\n"
+	       "        Class %x, Revision %d.%d\n",
+	       class, bios->major, bios->minor);
+	if (class == VOYAGER_LEVEL4)
+		voyager_level = 4;
+	else if (class < VOYAGER_LEVEL5_AND_ABOVE)
+		voyager_level = 3;
+	else
+		voyager_level = 5;
+	printk("        Architecture Level %d\n", voyager_level);
+	if (voyager_level < 4)
+		printk
+			("\n**WARNING**: Voyager HAL only supports Levels 4 and 5 Architectures at the moment\n\n");
+	/* install the power off handler */
+	pm_power_off = voyager_power_off;
+	machine_ops.emergency_restart = voyager_machine_emergency_restart;
+	machine_ops.restart = voyager_machine_restart;
+	machine_ops.shutdown = voyager_machine_shutdown;
+	mca_nmi_hook = voyager_mca_nmi_hook;
+	timer_ack = 0;
 #ifdef CONFIG_SMP
-		register_sysrq_key('v', &sysrq_voyager_dump_op);
+	register_sysrq_key('v', &sysrq_voyager_dump_op);
 #endif
-	} else {
-		printk("\n\n**WARNING**: No Voyager Subsystem Found\n");
-	}
 }
 
 void voyager_system_interrupt(int cpl, void *dev_id)
@@ -235,12 +245,7 @@ static inline void kb_wait(void)
 			break;
 }
 
-void machine_shutdown(void)
-{
-	/* Architecture specific shutdown needed before a kexec */
-}
-
-void machine_restart(char *cmd)
+static void voyager_machine_restart(char *cmd)
 {
 	printk("Voyager Warm Restart\n");
 	kb_wait();
@@ -265,13 +270,13 @@ void machine_restart(char *cmd)
 		halt();
 }
 
-void machine_emergency_restart(void)
+static void voyager_machine_emergency_restart(void)
 {
 	/*for now, just hook this to a warm restart */
 	machine_restart(NULL);
 }
 
-void mca_nmi_hook(void)
+static void voyager_mca_nmi_hook(void)
 {
 	__u8 dumpval __maybe_unused = inb(0xf823);
 	__u8 swnmi __maybe_unused = inb(0xf813);
@@ -296,16 +301,4 @@ void mca_nmi_hook(void)
 	       smp_processor_id());
 	show_stack(NULL, NULL);
 	show_state();
-}
-
-void machine_halt(void)
-{
-	/* treat a halt like a power off */
-	machine_power_off();
-}
-
-void machine_power_off(void)
-{
-	if (pm_power_off)
-		pm_power_off();
 }

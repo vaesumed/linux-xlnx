@@ -503,22 +503,19 @@ extern struct voyager_status voyager_status;
 /* functions exported by the voyager and voyager_smp modules */
 extern int voyager_cat_readb(__u8 module, __u8 asic, int reg);
 extern void voyager_cat_init(void);
-extern void voyager_detect(struct voyager_bios_info *);
-extern void voyager_trap_init(void);
-extern void voyager_setup_irqs(void);
+extern void voyager_early_detect(void);
+extern void voyager_detect(void);
 extern int voyager_memory_detect(int region, __u32 *addr, __u32 *length);
-extern void voyager_smp_intr_init(void);
 extern __u8 voyager_extended_cmos_read(__u16 cmos_address);
 extern void voyager_smp_dump(void);
 extern void voyager_timer_interrupt(void);
-extern void smp_local_timer_interrupt(void);
 extern void voyager_power_off(void);
-extern void smp_voyager_power_off(void *dummy);
 extern void voyager_restart(void);
 extern void voyager_cat_power_off(void);
 extern void voyager_cat_do_common_interrupt(void);
 extern void voyager_handle_nmi(void);
 extern void voyager_smp_intr_init(void);
+
 /* Commands for the following are */
 #define	VOYAGER_PSI_READ	0
 #define VOYAGER_PSI_WRITE	1
@@ -535,9 +532,19 @@ extern asmlinkage void qic_reschedule_interrupt(void);
 extern asmlinkage void qic_enable_irq_interrupt(void);
 extern asmlinkage void qic_call_function_interrupt(void);
 
+#ifdef CONFIG_SMP
+extern void voyager_smp_detect(struct x86_quirks *);
+#else
+static inline void voyager_smp_detect(struct x86_quirks *) { }
+#endif
+
 #else /* CONFIG_X86_VOYAGER */
 
 static inline void voyager_timer_interrupt(void)
+{
+}
+
+static inline void voyager_early_detect(void)
 {
 }
 

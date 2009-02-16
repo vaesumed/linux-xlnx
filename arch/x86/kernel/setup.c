@@ -99,6 +99,7 @@
 
 #include <asm/paravirt.h>
 #include <asm/hypervisor.h>
+#include <asm/voyager.h>
 
 #include <asm/percpu.h>
 #include <asm/topology.h>
@@ -684,6 +685,7 @@ void __init setup_arch(char **cmdline_p)
 #ifdef CONFIG_X86_32
 	memcpy(&boot_cpu_data, &new_cpu_data, sizeof(new_cpu_data));
 	visws_early_detect();
+	voyager_early_detect();
 #else
 	printk(KERN_INFO "Command line: %s\n", boot_command_line);
 #endif

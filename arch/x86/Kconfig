@@ -438,8 +438,8 @@ config X86_ES7000
 
 config X86_VOYAGER
 	bool "Voyager (NCR)"
-	depends on SMP && !PCI && BROKEN
-	depends on X86_32_NON_STANDARD
+	depends on SMP && X86_32_NON_STANDARD
+	select MCA
 	---help---
 	  Voyager is an MCA-based 32-way capable SMP architecture proprietary
 	  to NCR Corp.  Machine classes 345x/35xx/4100/51xx are Voyager-based.

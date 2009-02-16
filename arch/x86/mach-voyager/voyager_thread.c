@@ -110,6 +110,8 @@ static int thread(void *unused)
 
 static int __init voyager_thread_start(void)
 {
+	if (!is_voyager())
+		return 0;
 	voyager_thread = kthread_run(thread, NULL, "kvoyagerd");
 	if (IS_ERR(voyager_thread)) {
 		printk(KERN_ERR
@@ -121,7 +123,8 @@ static int __init voyager_thread_start(void)
 
 static void __exit voyager_thread_stop(void)
 {
-	kthread_stop(voyager_thread);
+	if (is_voyager())
+		kthread_stop(voyager_thread);
 }
 
 module_init(voyager_thread_start);
