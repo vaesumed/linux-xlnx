@@ -1817,20 +1817,12 @@ static struct snd_pci_quirk stac92hd71bxx_cfg_tbl[] = {
 		      "DFI LanParty", STAC_92HD71BXX_REF),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DFI, 0x3101,
 		      "DFI LanParty", STAC_92HD71BXX_REF),
-	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x30f2,
-		      "HP dv5", STAC_HP_M4),
-	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x30f4,
-		      "HP dv7", STAC_HP_DV5),
-	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x30f7,
-		      "HP dv4", STAC_HP_DV5),
-	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x30fc,
-		      "HP dv7", STAC_HP_M4),
-	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x3600,
-		      "HP dv5", STAC_HP_DV5),
-	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x3603,
-		      "HP dv5", STAC_HP_DV5),
+	SND_PCI_QUIRK_MASK(PCI_VENDOR_ID_HP, 0xfff0, 0x30f0,
+		      "HP dv4-7", STAC_HP_DV5),
+	SND_PCI_QUIRK_MASK(PCI_VENDOR_ID_HP, 0xfff0, 0x3600,
+		      "HP dv4-7", STAC_HP_DV5),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_HP, 0x361a,
-				"unknown HP", STAC_HP_M4),
+		      "HP mini 1000", STAC_HP_M4),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x0233,
 				"unknown Dell", STAC_DELL_M4_1),
 	SND_PCI_QUIRK(PCI_VENDOR_ID_DELL, 0x0234,
@@ -5169,6 +5161,10 @@ again:
 		spec->num_dmics = 1;
 		spec->num_smuxes = 0;
 		spec->num_dmuxes = 0;
+		break;
+	case STAC_HP_DV5:
+		stac_change_pin_config(codec, 0x0d, 0x90170010);
+		stac92xx_auto_set_pinctl(codec, 0x0d, AC_PINCTL_OUT_EN);
 		break;
 	};
 
