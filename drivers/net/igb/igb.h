@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) Gigabit Ethernet Linux driver
-  Copyright(c) 2007 Intel Corporation.
+  Copyright(c) 2007-2009 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -35,12 +35,6 @@
 #include "e1000_82575.h"
 
 struct igb_adapter;
-
-#ifdef CONFIG_IGB_LRO
-#include <linux/inet_lro.h>
-#define MAX_LRO_AGGR                      32
-#define MAX_LRO_DESCRIPTORS                8
-#endif
 
 /* Interrupt defines */
 #define IGB_MIN_DYN_ITR 3000
@@ -176,10 +170,6 @@ struct igb_ring {
 			struct napi_struct napi;
 			int set_itr;
 			struct igb_ring *buddy;
-#ifdef CONFIG_IGB_LRO
-			struct net_lro_mgr lro_mgr;
-			bool lro_used;
-#endif
 		};
 	};
 
@@ -248,7 +238,6 @@ struct igb_adapter {
 
 	u64 hw_csum_err;
 	u64 hw_csum_good;
-	u64 rx_hdr_split;
 	u32 alloc_rx_buff_failed;
 	bool rx_csum;
 	u32 gorc;
@@ -283,17 +272,7 @@ struct igb_adapter {
 	unsigned int flags;
 	u32 eeprom_wol;
 
-	/* for ioport free */
-	int bars;
-	int need_ioport;
-
 	struct igb_ring *multi_tx_table[IGB_MAX_TX_QUEUES];
-#ifdef CONFIG_IGB_LRO
-	unsigned int lro_max_aggr;
-	unsigned int lro_aggregated;
-	unsigned int lro_flushed;
-	unsigned int lro_no_desc;
-#endif
 	unsigned int tx_ring_count;
 	unsigned int rx_ring_count;
 };
@@ -301,9 +280,8 @@ struct igb_adapter {
 #define IGB_FLAG_HAS_MSI           (1 << 0)
 #define IGB_FLAG_MSI_ENABLE        (1 << 1)
 #define IGB_FLAG_DCA_ENABLED       (1 << 2)
-#define IGB_FLAG_IN_NETPOLL        (1 << 3)
-#define IGB_FLAG_QUAD_PORT_A       (1 << 4)
-#define IGB_FLAG_NEED_CTX_IDX      (1 << 5)
+#define IGB_FLAG_QUAD_PORT_A       (1 << 3)
+#define IGB_FLAG_NEED_CTX_IDX      (1 << 4)
 
 enum e1000_state_t {
 	__IGB_TESTING,
@@ -333,24 +311,24 @@ extern void igb_set_ethtool_ops(struct net_device *);
 
 static inline s32 igb_reset_phy(struct e1000_hw *hw)
 {
-	if (hw->phy.ops.reset_phy)
-		return hw->phy.ops.reset_phy(hw);
+	if (hw->phy.ops.reset)
+		return hw->phy.ops.reset(hw);
 
 	return 0;
 }
 
 static inline s32 igb_read_phy_reg(struct e1000_hw *hw, u32 offset, u16 *data)
 {
-	if (hw->phy.ops.read_phy_reg)
-		return hw->phy.ops.read_phy_reg(hw, offset, data);
+	if (hw->phy.ops.read_reg)
+		return hw->phy.ops.read_reg(hw, offset, data);
 
 	return 0;
 }
 
 static inline s32 igb_write_phy_reg(struct e1000_hw *hw, u32 offset, u16 data)
 {
-	if (hw->phy.ops.write_phy_reg)
-		return hw->phy.ops.write_phy_reg(hw, offset, data);
+	if (hw->phy.ops.write_reg)
+		return hw->phy.ops.write_reg(hw, offset, data);
 
 	return 0;
 }
