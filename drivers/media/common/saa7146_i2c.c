@@ -390,7 +390,8 @@ out:
 /* utility functions */
 static int saa7146_i2c_xfer(struct i2c_adapter* adapter, struct i2c_msg *msg, int num)
 {
-	struct saa7146_dev* dev = i2c_get_adapdata(adapter);
+	struct v4l2_device *v4l2_dev = i2c_get_adapdata(adapter);
+	struct saa7146_dev *dev = to_saa7146_dev(v4l2_dev);
 
 	/* use helper function to transfer data */
 	return saa7146_i2c_transfer(dev, msg, num, adapter->retries);
@@ -417,9 +418,8 @@ int saa7146_i2c_adapter_prepare(struct saa7146_dev *dev, struct i2c_adapter *i2c
 	dev->i2c_bitrate = bitrate;
 	saa7146_i2c_reset(dev);
 
-	if( NULL != i2c_adapter ) {
-		BUG_ON(!i2c_adapter->class);
-		i2c_set_adapdata(i2c_adapter,dev);
+	if (i2c_adapter) {
+		i2c_set_adapdata(i2c_adapter, &dev->v4l2_dev);
 		i2c_adapter->dev.parent    = &dev->pci->dev;
 		i2c_adapter->algo	   = &saa7146_algo;
 		i2c_adapter->algo_data     = NULL;

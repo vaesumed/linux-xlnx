@@ -98,6 +98,9 @@
 #define EM2820_BOARD_COMPRO_VIDEOMATE_FORYOU	  58
 #define EM2883_BOARD_HAUPPAUGE_WINTV_HVR_850	  60
 #define EM2820_BOARD_PROLINK_PLAYTV_BOX4_USB2	  61
+#define EM2820_BOARD_GADMEI_TVR200		  62
+#define EM2860_BOARD_KAIOMY_TVNPC_U2              63
+#define EM2860_BOARD_EASYCAP                      64
 
 /* Limits minimum and default number of buffers */
 #define EM28XX_MIN_BUF 4
