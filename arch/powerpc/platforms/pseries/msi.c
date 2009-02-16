@@ -71,11 +71,13 @@ static int rtas_change_msi(struct pci_dn *pdn, u32 func, u32 num_irqs)
 	} while (rtas_busy_delay(rc));
 
 	/*
-	 * If the RTAS call succeeded, check the number of irqs is actually
-	 * what we asked for. If not, return an error.
+	 * If the RTAS call succeeded, return the number of irqs allocated.
+	 * If not, make sure we return a negative error code.
 	 */
-	if (rc == 0 && rtas_ret[0] != num_irqs)
-		rc = -ENOSPC;
+	if (rc == 0)
+		rc = rtas_ret[0];
+	else if (rc > 0)
+		rc = -rc;
 
 	pr_debug("rtas_msi: ibm,change_msi(func=%d,num=%d), got %d rc = %d\n",
 		 func, num_irqs, rtas_ret[0], rc);
@@ -91,7 +93,7 @@ static void rtas_disable_msi(struct pci_dev *pdev)
 	if (!pdn)
 		return;
 
-	if (rtas_change_msi(pdn, RTAS_CHANGE_FN, 0))
+	if (rtas_change_msi(pdn, RTAS_CHANGE_FN, 0) != 0)
 		pr_debug("rtas_msi: Setting MSIs to 0 failed!\n");
 }
 
@@ -132,7 +134,7 @@ static void rtas_teardown_msi_irqs(struct pci_dev *pdev)
 	rtas_disable_msi(pdev);
 }
 
-static int check_req_msi(struct pci_dev *pdev, int nvec)
+static int check_req(struct pci_dev *pdev, int nvec, char *prop_name)
 {
 	struct device_node *dn;
 	struct pci_dn *pdn;
@@ -144,24 +146,34 @@ static int check_req_msi(struct pci_dev *pdev, int nvec)
 
 	dn = pdn->node;
 
-	req_msi = of_get_property(dn, "ibm,req#msi", NULL);
+	req_msi = of_get_property(dn, prop_name, NULL);
 	if (!req_msi) {
-		pr_debug("rtas_msi: No ibm,req#msi on %s\n", dn->full_name);
+		pr_debug("rtas_msi: No %s on %s\n", prop_name, dn->full_name);
 		return -ENOENT;
 	}
 
 	if (*req_msi < nvec) {
-		pr_debug("rtas_msi: ibm,req#msi requests < %d MSIs\n", nvec);
+		pr_debug("rtas_msi: %s requests < %d MSIs\n", prop_name, nvec);
 		return -ENOSPC;
 	}
 
 	return 0;
 }
 
+static int check_req_msi(struct pci_dev *pdev, int nvec)
+{
+	return check_req(pdev, nvec, "ibm,req#msi");
+}
+
+static int check_req_msix(struct pci_dev *pdev, int nvec)
+{
+	return check_req(pdev, nvec, "ibm,req#msi-x");
+}
+
 static int rtas_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
 	if (type == PCI_CAP_ID_MSIX)
-		pr_debug("rtas_msi: MSI-X untested, trying anyway.\n");
+		return check_req_msix(pdev, nvec);
 
 	return check_req_msi(pdev, nvec);
 }
@@ -185,21 +197,21 @@ static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	if (type == PCI_CAP_ID_MSI) {
 		rc = rtas_change_msi(pdn, RTAS_CHANGE_MSI_FN, nvec);
 
-		if (rc) {
+		if (rc < 0) {
 			pr_debug("rtas_msi: trying the old firmware call.\n");
 			rc = rtas_change_msi(pdn, RTAS_CHANGE_FN, nvec);
 		}
 	} else
 		rc = rtas_change_msi(pdn, RTAS_CHANGE_MSIX_FN, nvec);
 
-	if (rc) {
+	if (rc != nvec) {
 		pr_debug("rtas_msi: rtas_change_msi() failed\n");
 		return rc;
 	}
 
 	i = 0;
 	list_for_each_entry(entry, &pdev->msi_list, list) {
-		hwirq = rtas_query_irq_number(pdn, i);
+		hwirq = rtas_query_irq_number(pdn, i++);
 		if (hwirq < 0) {
 			pr_debug("rtas_msi: error (%d) getting hwirq\n", rc);
 			return hwirq;
@@ -234,8 +246,8 @@ static void rtas_msi_pci_irq_fixup(struct pci_dev *pdev)
 	}
 
 	/* No MSI -> MSIs can't have been assigned by fw, leave LSI */
-	if (check_req_msi(pdev, 1)) {
-		dev_dbg(&pdev->dev, "rtas_msi: no req#msi, nothing to do.\n");
+	if (check_req_msi(pdev, 1) && check_req_msix(pdev, 1)) {
+		dev_dbg(&pdev->dev, "rtas_msi: no req#msi/x, nothing to do.\n");
 		return;
 	}
 
