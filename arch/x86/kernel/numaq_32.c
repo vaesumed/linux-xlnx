@@ -363,7 +363,7 @@ numaq_store_NMI_vector(unsigned short *high, unsigned short *low)
 
 static inline const cpumask_t *numaq_target_cpus(void)
 {
-	return &CPU_MASK_ALL;
+	return cpu_all_mask;
 }
 
 static inline unsigned long
