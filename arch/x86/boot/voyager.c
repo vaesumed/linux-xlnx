@@ -19,9 +19,9 @@ int query_voyager(void)
 	u8 err;
 	u16 es, di;
 	/* Abuse the apm_bios_info area for this */
-	u8 *data_ptr = (u8 *)&boot_params.apm_bios_info;
+	u8 *data_ptr = (u8 *)&boot_params.voyager_bios_info;
 
-	data_ptr[0] = 0xff;	/* Flag on config not found(?) */
+	data_ptr[0] = NOT_VOYAGER_BIOS_SIG;
 
 	asm("pushw %%es ; "
 	    "int $0x15 ; "
@@ -33,6 +33,7 @@ int query_voyager(void)
 
 	if (err)
 		return -1;	/* Not Voyager */
+	printf("Voyager detected\n");
 
 	set_fs(es);
 	copy_from_fs(data_ptr, di, 7);	/* Table is 7 bytes apparently */

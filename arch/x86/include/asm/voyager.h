@@ -4,6 +4,9 @@
  *
  * Standard include definitions for the NCR Voyager system */
 
+#include <asm/voyager_bios.h>
+#include <asm/voyager_boot.h>
+
 #undef	VOYAGER_DEBUG
 #undef	VOYAGER_CAT_DEBUG
 
@@ -304,16 +307,6 @@ typedef struct voyager_asic_data_table {
 #	define PSI_SET_COLD_START	0x17
 
 
-
-struct voyager_bios_info {
-	__u8	len;
-	__u8	major;
-	__u8	minor;
-	__u8	debug;
-	__u8	num_classes;
-	__u8	class_1;
-	__u8	class_2;
-};
 
 /* The following structures and definitions are for the Kernel/SUS
  * interface these are needed to find out how SUS initialised any Quad

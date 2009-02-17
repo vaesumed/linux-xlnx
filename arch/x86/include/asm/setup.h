@@ -87,12 +87,12 @@ extern unsigned long saved_video_mode;
 #define paravirt_post_allocator_init()	do {} while (0)
 #endif
 
-#ifndef _SETUP
-
 /*
  * This is set up by the setup-routine at boot-time
  */
 extern struct boot_params boot_params;
+
+#ifndef _SETUP
 
 /*
  * Do NOT EVER look at the BIOS memory size location.

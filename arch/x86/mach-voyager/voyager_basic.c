@@ -56,7 +56,7 @@ static struct sysrq_key_op sysrq_voyager_dump_op = {
 
 void voyager_detect(struct voyager_bios_info *bios)
 {
-	if (bios->len != 0xff) {
+	if (bios->len != NOT_VOYAGER_BIOS_SIG) {
 		int class = (bios->class_1 << 8)
 		    | (bios->class_2 & 0xff);
 
