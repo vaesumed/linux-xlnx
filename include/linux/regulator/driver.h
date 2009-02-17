@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2007, 2008 Wolfson Microelectronics PLC.
  *
- * Author: Liam Girdwood <lg@opensource.wolfsonmicro.com>
+ * Author: Liam Girdwood <lrg@slimlogic.co.uk>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,6 +20,17 @@
 
 struct regulator_dev;
 struct regulator_init_data;
+
+enum regulator_status {
+	REGULATOR_STATUS_OFF,
+	REGULATOR_STATUS_ON,
+	REGULATOR_STATUS_ERROR,
+	/* fast/normal/idle/standby are flavors of "on" */
+	REGULATOR_STATUS_FAST,
+	REGULATOR_STATUS_NORMAL,
+	REGULATOR_STATUS_IDLE,
+	REGULATOR_STATUS_STANDBY,
+};
 
 /**
  * struct regulator_ops - regulator operations.
@@ -40,6 +51,7 @@ struct regulator_init_data;
  *
  * @set_mode: Set the operating mode for the regulator.
  * @get_mode: Get the current operating mode for the regulator.
+ * @get_status: Report the regulator status.
  * @get_optimum_mode: Get the most efficient operating mode for the regulator
  *                    when running with the specified parameters.
  *
@@ -71,6 +83,12 @@ struct regulator_ops {
 	/* get/set regulator operating mode (defined in regulator.h) */
 	int (*set_mode) (struct regulator_dev *, unsigned int mode);
 	unsigned int (*get_mode) (struct regulator_dev *);
+
+	/* report regulator status ... most other accessors report
+	 * control inputs, this reports results of combining inputs
+	 * from Linux (and other sources) with the actual load.
+	 */
+	int (*get_status)(struct regulator_dev *);
 
 	/* get most efficient regulator operating mode for load */
 	unsigned int (*get_optimum_mode) (struct regulator_dev *, int input_uV,
@@ -120,8 +138,41 @@ struct regulator_desc {
 	struct module *owner;
 };
 
+/*
+ * struct regulator_dev
+ *
+ * Voltage / Current regulator class device. One for each
+ * regulator.
+ *
+ * This should *not* be used directly by anything except the regulator
+ * core and notification injection (which should take the mutex and do
+ * no other direct access).
+ */
+struct regulator_dev {
+	struct regulator_desc *desc;
+	int use_count;
+
+	/* lists we belong to */
+	struct list_head list; /* list of all regulators */
+	struct list_head slist; /* list of supplied regulators */
+
+	/* lists we own */
+	struct list_head consumer_list; /* consumers we supply */
+	struct list_head supply_list; /* regulators we supply */
+
+	struct blocking_notifier_head notifier;
+	struct mutex mutex; /* consumer lock */
+	struct module *owner;
+	struct device dev;
+	struct regulation_constraints *constraints;
+	struct regulator_dev *supply;	/* for tree */
+
+	void *reg_data;		/* regulator_dev data */
+};
+
 struct regulator_dev *regulator_register(struct regulator_desc *regulator_desc,
-	struct device *dev, void *driver_data);
+	struct device *dev, struct regulator_init_data *init_data,
+	void *driver_data);
 void regulator_unregister(struct regulator_dev *rdev);
 
 int regulator_notifier_call_chain(struct regulator_dev *rdev,
