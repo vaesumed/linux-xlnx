@@ -183,6 +183,25 @@ struct em28xx_board em28xx_boards[] = {
 			.amux     = EM28XX_AMUX_LINE_IN,
 		} },
 	},
+	[EM2820_BOARD_GADMEI_TVR200] = {
+		.name         = "Gadmei TVR200",
+		.tuner_type   = TUNER_LG_PAL_NEW_TAPC,
+		.tda9887_conf = TDA9887_PRESENT,
+		.decoder      = EM28XX_SAA711X,
+		.input        = { {
+			.type     = EM28XX_VMUX_TELEVISION,
+			.vmux     = SAA7115_COMPOSITE2,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		}, {
+			.type     = EM28XX_VMUX_COMPOSITE1,
+			.vmux     = SAA7115_COMPOSITE0,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		}, {
+			.type     = EM28XX_VMUX_SVIDEO,
+			.vmux     = SAA7115_SVIDEO3,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		} },
+	},
 	[EM2820_BOARD_TERRATEC_CINERGY_250] = {
 		.name         = "Terratec Cinergy 250 USB",
 		.tuner_type   = TUNER_LG_PAL_NEW_TAPC,
@@ -1233,6 +1252,49 @@ struct em28xx_board em28xx_boards[] = {
 			.amux     = EM28XX_AMUX_LINE_IN,
 		} },
 	},
+	[EM2860_BOARD_KAIOMY_TVNPC_U2] = {
+		.name	      = "Kaiomy TVnPC U2",
+		.vchannels    = 3,
+		.tuner_type   = TUNER_XC2028,
+		.tuner_addr   = 0x61,
+		.mts_firmware = 1,
+		.decoder      = EM28XX_TVP5150,
+		.tuner_gpio   = default_tuner_gpio,
+		.ir_codes     = ir_codes_kaiomy,
+		.input          = { {
+			.type     = EM28XX_VMUX_TELEVISION,
+			.vmux     = TVP5150_COMPOSITE0,
+			.amux     = EM28XX_AMUX_VIDEO,
+
+		}, {
+			.type     = EM28XX_VMUX_COMPOSITE1,
+			.vmux     = TVP5150_COMPOSITE1,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		}, {
+			.type     = EM28XX_VMUX_SVIDEO,
+			.vmux     = TVP5150_SVIDEO,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		} },
+		.radio		= {
+			.type     = EM28XX_RADIO,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		}
+	},
+	[EM2860_BOARD_EASYCAP] = {
+		.name         = "Easy Cap Capture DC-60",
+		.vchannels    = 2,
+		.tuner_type   = TUNER_ABSENT,
+		.decoder      = EM28XX_SAA711X,
+		.input           = { {
+			.type     = EM28XX_VMUX_COMPOSITE1,
+			.vmux     = SAA7115_COMPOSITE0,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		}, {
+			.type     = EM28XX_VMUX_SVIDEO,
+			.vmux     = SAA7115_SVIDEO3,
+			.amux     = EM28XX_AMUX_LINE_IN,
+		} },
+	},
 };
 const unsigned int em28xx_bcount = ARRAY_SIZE(em28xx_boards);
 
@@ -1260,6 +1322,8 @@ struct usb_device_id em28xx_id_table [] = {
 			.driver_info = EM2820_BOARD_UNKNOWN },
 	{ USB_DEVICE(0xeb1a, 0xe300),
 			.driver_info = EM2861_BOARD_KWORLD_PVRTV_300U },
+	{ USB_DEVICE(0xeb1a, 0xe303),
+			.driver_info = EM2860_BOARD_KAIOMY_TVNPC_U2 },
 	{ USB_DEVICE(0xeb1a, 0xe305),
 			.driver_info = EM2880_BOARD_KWORLD_DVB_305U },
 	{ USB_DEVICE(0xeb1a, 0xe310),
@@ -1349,6 +1413,7 @@ static struct em28xx_hash_table em28xx_i2c_hash[] = {
 	{0xb06a32c3, EM2800_BOARD_TERRATEC_CINERGY_200, TUNER_LG_PAL_NEW_TAPC},
 	{0xf51200e3, EM2800_BOARD_VGEAR_POCKETTV, TUNER_LG_PAL_NEW_TAPC},
 	{0x1ba50080, EM2860_BOARD_POINTNIX_INTRAORAL_CAMERA, TUNER_ABSENT},
+	{0xc51200e3, EM2820_BOARD_GADMEI_TVR200, TUNER_LG_PAL_NEW_TAPC},
 };
 
 int em28xx_tuner_callback(void *ptr, int component, int command, int arg)
@@ -1504,6 +1569,24 @@ void em28xx_pre_card_setup(struct em28xx *dev)
 		/* enables audio for that devices */
 		em28xx_write_reg(dev, EM28XX_R08_GPIO, 0xfd);
 		break;
+
+	case EM2860_BOARD_KAIOMY_TVNPC_U2:
+		em28xx_write_regs(dev, EM28XX_R0F_XCLK, "\x07", 1);
+		em28xx_write_regs(dev, EM28XX_R06_I2C_CLK, "\x40", 1);
+		em28xx_write_regs(dev, 0x0d, "\x42", 1);
+		em28xx_write_regs(dev, 0x08, "\xfd", 1);
+		msleep(10);
+		em28xx_write_regs(dev, 0x08, "\xff", 1);
+		msleep(10);
+		em28xx_write_regs(dev, 0x08, "\x7f", 1);
+		msleep(10);
+		em28xx_write_regs(dev, 0x08, "\x6b", 1);
+
+		break;
+	case EM2860_BOARD_EASYCAP:
+		em28xx_write_regs(dev, 0x08, "\xf8", 1);
+		break;
+
 	}
 
 	em28xx_gpio_set(dev, dev->board.tuner_gpio);
@@ -1610,7 +1693,7 @@ static int em28xx_hint_board(struct em28xx *dev)
 			em28xx_errdev("If the board were missdetected, "
 				      "please email this log to:\n");
 			em28xx_errdev("\tV4L Mailing List "
-				      " <video4linux-list@redhat.com>\n");
+				      " <linux-media@vger.kernel.org>\n");
 			em28xx_errdev("Board detected as %s\n",
 				      em28xx_boards[dev->model].name);
 
@@ -1642,7 +1725,7 @@ static int em28xx_hint_board(struct em28xx *dev)
 			em28xx_errdev("If the board were missdetected, "
 				      "please email this log to:\n");
 			em28xx_errdev("\tV4L Mailing List "
-				      " <video4linux-list@redhat.com>\n");
+				      " <linux-media@vger.kernel.org>\n");
 			em28xx_errdev("Board detected as %s\n",
 				      em28xx_boards[dev->model].name);
 
@@ -1655,7 +1738,7 @@ static int em28xx_hint_board(struct em28xx *dev)
 	em28xx_errdev("You may try to use card=<n> insmod option to "
 		      "workaround that.\n");
 	em28xx_errdev("Please send an email with this log to:\n");
-	em28xx_errdev("\tV4L Mailing List <video4linux-list@redhat.com>\n");
+	em28xx_errdev("\tV4L Mailing List <linux-media@vger.kernel.org>\n");
 	em28xx_errdev("Board eeprom hash is 0x%08lx\n", dev->hash);
 	em28xx_errdev("Board i2c devicelist hash is 0x%08lx\n", dev->i2c_hash);
 
