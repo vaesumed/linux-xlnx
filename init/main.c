@@ -651,7 +651,6 @@ asmlinkage void __init start_kernel(void)
 	page_cgroup_init();
 	mem_init();
 	enable_debug_pagealloc();
-	cpu_hotplug_init();
 	kmem_cache_init();
 	kmemtrace_init();
 	debug_objects_mem_init();
