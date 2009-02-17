@@ -146,7 +146,7 @@ static int convert_apicid_to_cpu(int apic_id)
 	return -1;
 }
 
-int safe_smp_processor_id(void)
+int apic_safe_smp_processor_id(void)
 {
 	int apicid, cpuid;
 

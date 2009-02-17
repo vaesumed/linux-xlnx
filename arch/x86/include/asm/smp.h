@@ -60,6 +60,8 @@ struct smp_ops {
 
 	void (*send_call_func_ipi)(const struct cpumask *mask);
 	void (*send_call_func_single_ipi)(int cpu);
+	int (*hard_smp_processor_id)(void);
+	int (*safe_smp_processor_id)(void);
 };
 
 /* Globals due to paravirt */
@@ -159,7 +161,11 @@ extern unsigned disabled_cpus __cpuinitdata;
  * so this is correct in the x86 case.
  */
 #define raw_smp_processor_id() (percpu_read(cpu_number))
-extern int safe_smp_processor_id(void);
+int apic_safe_smp_processor_id(void);
+static inline int safe_smp_processor_id(void)
+{
+	return smp_ops.safe_smp_processor_id();
+}
 
 #elif defined(CONFIG_X86_64_SMP)
 #define raw_smp_processor_id() (percpu_read(cpu_number))
@@ -171,6 +177,15 @@ extern int safe_smp_processor_id(void);
 	ti->cpu;							\
 })
 #define safe_smp_processor_id()		smp_processor_id()
+/*
+ * dummy function for smp_ops.safe_smp_processor_id() which is unused
+ * on x86_64.  This will also break the build if the definition leaks
+ * outside of the guards in kernel/apic/ipi.c on x86_64
+ */
+static inline int apic_safe_smp_processor_id(void)
+{
+	return 0;
+}
 
 #endif
 
@@ -185,7 +200,10 @@ static inline int logical_smp_processor_id(void)
 
 #endif
 
-extern int hard_smp_processor_id(void);
+static inline int hard_smp_processor_id(void)
+{
+	return smp_ops.hard_smp_processor_id();
+}
 
 #else /* CONFIG_X86_LOCAL_APIC */
 

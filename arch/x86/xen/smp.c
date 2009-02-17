@@ -454,6 +454,11 @@ static irqreturn_t xen_call_function_single_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int xen_hard_smp_processor_id(void)
+{
+	return smp_processor_id();
+}
+
 static const struct smp_ops xen_smp_ops __initdata = {
 	.smp_prepare_boot_cpu = xen_smp_prepare_boot_cpu,
 	.smp_prepare_cpus = xen_smp_prepare_cpus,
@@ -469,6 +474,8 @@ static const struct smp_ops xen_smp_ops __initdata = {
 
 	.send_call_func_ipi = xen_smp_send_call_function_ipi,
 	.send_call_func_single_ipi = xen_smp_send_call_function_single_ipi,
+	.hard_smp_processor_id = xen_hard_smp_processor_id,
+	.safe_smp_processor_id = apic_safe_smp_processor_id,
 };
 
 void __init xen_smp_init(void)

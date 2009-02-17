@@ -1930,11 +1930,6 @@ void __cpuinit generic_processor_info(int apicid, int version)
 	set_cpu_present(cpu, true);
 }
 
-int hard_smp_processor_id(void)
-{
-	return read_apic_id();
-}
-
 void default_init_apic_ldr(void)
 {
 	unsigned long val;
