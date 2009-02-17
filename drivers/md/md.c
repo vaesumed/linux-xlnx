@@ -817,7 +817,7 @@ static int super_90_validate(mddev_t *mddev, mdk_rdev_t *rdev)
 		mddev->clevel[0] = 0;
 		mddev->layout = sb->layout;
 		mddev->raid_disks = sb->raid_disks;
-		mddev->size = sb->size;
+		mddev->dev_sectors = sb->size * 2;
 		mddev->events = ev1;
 		mddev->bitmap_offset = 0;
 		mddev->default_bitmap_offset = MD_SB_BYTES >> 9;
@@ -931,7 +931,7 @@ static void super_90_sync(mddev_t *mddev, mdk_rdev_t *rdev)
 
 	sb->ctime = mddev->ctime;
 	sb->level = mddev->level;
-	sb->size  = mddev->size;
+	sb->size = mddev->dev_sectors / 2;
 	sb->raid_disks = mddev->raid_disks;
 	sb->md_minor = mddev->md_minor;
 	sb->not_persistent = 0;
@@ -1029,7 +1029,7 @@ static void super_90_sync(mddev_t *mddev, mdk_rdev_t *rdev)
 static unsigned long long
 super_90_rdev_size_change(mdk_rdev_t *rdev, sector_t num_sectors)
 {
-	if (num_sectors && num_sectors < rdev->mddev->size * 2)
+	if (num_sectors && num_sectors < rdev->mddev->dev_sectors)
 		return 0; /* component must fit device */
 	if (rdev->mddev->bitmap_offset)
 		return 0; /* can't move bitmap */
@@ -1221,7 +1221,7 @@ static int super_1_validate(mddev_t *mddev, mdk_rdev_t *rdev)
 		mddev->clevel[0] = 0;
 		mddev->layout = le32_to_cpu(sb->layout);
 		mddev->raid_disks = le32_to_cpu(sb->raid_disks);
-		mddev->size = le64_to_cpu(sb->size)/2;
+		mddev->dev_sectors = le64_to_cpu(sb->size);
 		mddev->events = ev1;
 		mddev->bitmap_offset = 0;
 		mddev->default_bitmap_offset = 1024 >> 9;
@@ -1317,7 +1317,7 @@ static void super_1_sync(mddev_t *mddev, mdk_rdev_t *rdev)
 	sb->cnt_corrected_read = cpu_to_le32(atomic_read(&rdev->corrected_errors));
 
 	sb->raid_disks = cpu_to_le32(mddev->raid_disks);
-	sb->size = cpu_to_le64(mddev->size<<1);
+	sb->size = cpu_to_le64(mddev->dev_sectors);
 
 	if (mddev->bitmap && mddev->bitmap_file == NULL) {
 		sb->bitmap_offset = cpu_to_le32((__u32)mddev->bitmap_offset);
@@ -1375,7 +1375,7 @@ super_1_rdev_size_change(mdk_rdev_t *rdev, sector_t num_sectors)
 {
 	struct mdp_superblock_1 *sb;
 	sector_t max_sectors;
-	if (num_sectors && num_sectors < rdev->mddev->size * 2)
+	if (num_sectors && num_sectors < rdev->mddev->dev_sectors)
 		return 0; /* component must fit device */
 	if (rdev->sb_start < rdev->data_offset) {
 		/* minor versions 1 and 2; superblock before data */
@@ -1491,8 +1491,9 @@ static int bind_rdev_to_array(mdk_rdev_t * rdev, mddev_t * mddev)
 	if (find_rdev(mddev, rdev->bdev->bd_dev))
 		return -EEXIST;
 
-	/* make sure rdev->size exceeds mddev->size */
-	if (rdev->size && (mddev->size == 0 || rdev->size < mddev->size)) {
+	/* make sure rdev->size exceeds mddev->dev_sectors / 2 */
+	if (rdev->size && (mddev->dev_sectors == 0 ||
+			rdev->size < mddev->dev_sectors / 2)) {
 		if (mddev->pers) {
 			/* Cannot change size, so fail
 			 * If mddev->level <= 0, then we don't care
@@ -1501,7 +1502,7 @@ static int bind_rdev_to_array(mdk_rdev_t * rdev, mddev_t * mddev)
 			if (mddev->level > 0)
 				return -ENOSPC;
 		} else
-			mddev->size = rdev->size;
+			mddev->dev_sectors = rdev->size * 2;
 	}
 
 	/* Verify rdev->desc_nr is unique.
@@ -2244,7 +2245,7 @@ rdev_size_store(mdk_rdev_t *rdev, const char *buf, size_t len)
 			size -= rdev->data_offset/2;
 		}
 	}
-	if (size < my_mddev->size)
+	if (size < my_mddev->dev_sectors / 2)
 		return -EINVAL; /* component must fit device */
 
 	rdev->size = size;
@@ -2810,7 +2811,7 @@ array_state_show(mddev_t *mddev, char *page)
 	else {
 		if (list_empty(&mddev->disks) &&
 		    mddev->raid_disks == 0 &&
-		    mddev->size == 0)
+		    mddev->dev_sectors == 0)
 			st = clear;
 		else
 			st = inactive;
@@ -3017,7 +3018,8 @@ __ATTR(bitmap_set_bits, S_IWUSR, null_show, bitmap_store);
 static ssize_t
 size_show(mddev_t *mddev, char *page)
 {
-	return sprintf(page, "%llu\n", (unsigned long long)mddev->size);
+	return sprintf(page, "%llu\n",
+		(unsigned long long)mddev->dev_sectors / 2);
 }
 
 static int update_size(mddev_t *mddev, sector_t num_sectors);
@@ -3029,20 +3031,19 @@ size_store(mddev_t *mddev, const char *buf, size_t len)
 	 * not increase it (except from 0).
 	 * If array is active, we can try an on-line resize
 	 */
-	char *e;
-	int err = 0;
-	unsigned long long size = simple_strtoull(buf, &e, 10);
-	if (!*buf || *buf == '\n' ||
-	    (*e && *e != '\n'))
-		return -EINVAL;
+	unsigned long long sectors;
+	int err = strict_strtoull(buf, 10, &sectors);
 
+	if (err < 0)
+		return err;
+	sectors *= 2;
 	if (mddev->pers) {
-		err = update_size(mddev, size * 2);
+		err = update_size(mddev, sectors);
 		md_update_sb(mddev, 1);
 	} else {
-		if (mddev->size == 0 ||
-		    mddev->size > size)
-			mddev->size = size;
+		if (mddev->dev_sectors == 0 ||
+		    mddev->dev_sectors > sectors)
+			mddev->dev_sectors = sectors;
 		else
 			err = -ENOSPC;
 	}
@@ -3307,15 +3308,15 @@ static struct md_sysfs_entry md_sync_speed = __ATTR_RO(sync_speed);
 static ssize_t
 sync_completed_show(mddev_t *mddev, char *page)
 {
-	unsigned long max_blocks, resync;
+	unsigned long max_sectors, resync;
 
 	if (test_bit(MD_RECOVERY_SYNC, &mddev->recovery))
-		max_blocks = mddev->resync_max_sectors;
+		max_sectors = mddev->resync_max_sectors;
 	else
-		max_blocks = mddev->size << 1;
+		max_sectors = mddev->dev_sectors;
 
 	resync = (mddev->curr_resync - atomic_read(&mddev->recovery_active));
-	return sprintf(page, "%lu / %lu\n", resync, max_blocks);
+	return sprintf(page, "%lu / %lu\n", resync, max_sectors);
 }
 
 static struct md_sysfs_entry md_sync_completed = __ATTR_RO(sync_completed);
@@ -3790,11 +3791,11 @@ static int do_md_run(mddev_t * mddev)
 
 		/* perform some consistency tests on the device.
 		 * We don't want the data to overlap the metadata,
-		 * Internal Bitmap issues has handled elsewhere.
+		 * Internal Bitmap issues have been handled elsewhere.
 		 */
 		if (rdev->data_offset < rdev->sb_start) {
-			if (mddev->size &&
-			    rdev->data_offset + mddev->size*2
+			if (mddev->dev_sectors &&
+			    rdev->data_offset + mddev->dev_sectors
 			    > rdev->sb_start) {
 				printk("md: %s: data overlaps metadata\n",
 				       mdname(mddev));
@@ -3876,7 +3877,9 @@ static int do_md_run(mddev_t * mddev)
 	}
 
 	mddev->recovery = 0;
-	mddev->resync_max_sectors = mddev->size << 1; /* may be over-ridden by personality */
+	/* may be over-ridden by personality */
+	mddev->resync_max_sectors = mddev->dev_sectors;
+
 	mddev->barriers_work = 1;
 	mddev->ok_start_degraded = start_dirty_degraded;
 
@@ -4132,7 +4135,7 @@ static int do_md_stop(mddev_t * mddev, int mode, int is_open)
 		export_array(mddev);
 
 		mddev->array_sectors = 0;
-		mddev->size = 0;
+		mddev->dev_sectors = 0;
 		mddev->raid_disks = 0;
 		mddev->recovery_cp = 0;
 		mddev->resync_min = 0;
@@ -4338,8 +4341,8 @@ static int get_array_info(mddev_t * mddev, void __user * arg)
 	info.patch_version = MD_PATCHLEVEL_VERSION;
 	info.ctime         = mddev->ctime;
 	info.level         = mddev->level;
-	info.size          = mddev->size;
-	if (info.size != mddev->size) /* overflow */
+	info.size          = mddev->dev_sectors / 2;
+	if (info.size != mddev->dev_sectors / 2) /* overflow */
 		info.size = -1;
 	info.nr_disks      = nr;
 	info.raid_disks    = mddev->raid_disks;
@@ -4789,7 +4792,7 @@ static int set_array_info(mddev_t * mddev, mdu_array_info_t *info)
 
 	mddev->level         = info->level;
 	mddev->clevel[0]     = 0;
-	mddev->size          = info->size;
+	mddev->dev_sectors   = 2 * (sector_t)info->size;
 	mddev->raid_disks    = info->raid_disks;
 	/* don't set md_minor, it is determined by which /dev/md* was
 	 * openned
@@ -4927,12 +4930,18 @@ static int update_array_info(mddev_t *mddev, mdu_array_info_t *info)
 		)
 		return -EINVAL;
 	/* Check there is only one change */
-	if (info->size >= 0 && mddev->size != info->size) cnt++;
-	if (mddev->raid_disks != info->raid_disks) cnt++;
-	if (mddev->layout != info->layout) cnt++;
-	if ((state ^ info->state) & (1<<MD_SB_BITMAP_PRESENT)) cnt++;
-	if (cnt == 0) return 0;
-	if (cnt > 1) return -EINVAL;
+	if (info->size >= 0 && mddev->dev_sectors / 2 != info->size)
+		cnt++;
+	if (mddev->raid_disks != info->raid_disks)
+		cnt++;
+	if (mddev->layout != info->layout)
+		cnt++;
+	if ((state ^ info->state) & (1<<MD_SB_BITMAP_PRESENT))
+		cnt++;
+	if (cnt == 0)
+		return 0;
+	if (cnt > 1)
+		return -EINVAL;
 
 	if (mddev->layout != info->layout) {
 		/* Change layout
@@ -4944,7 +4953,7 @@ static int update_array_info(mddev_t *mddev, mdu_array_info_t *info)
 		else
 			return mddev->pers->reconfig(mddev, info->layout, -1);
 	}
-	if (info->size >= 0 && mddev->size != info->size)
+	if (info->size >= 0 && mddev->dev_sectors / 2 != info->size)
 		rv = update_size(mddev, (sector_t)info->size * 2);
 
 	if (mddev->raid_disks    != info->raid_disks)
@@ -5444,7 +5453,7 @@ static void status_resync(struct seq_file *seq, mddev_t * mddev)
 	if (test_bit(MD_RECOVERY_SYNC, &mddev->recovery))
 		max_blocks = mddev->resync_max_sectors >> 1;
 	else
-		max_blocks = mddev->size;
+		max_blocks = mddev->dev_sectors / 2;
 
 	/*
 	 * Should not happen.
@@ -6020,10 +6029,10 @@ void md_do_sync(mddev_t *mddev)
 			j = mddev->recovery_cp;
 
 	} else if (test_bit(MD_RECOVERY_RESHAPE, &mddev->recovery))
-		max_sectors = mddev->size << 1;
+		max_sectors = mddev->dev_sectors;
 	else {
 		/* recovery follows the physical size of devices */
-		max_sectors = mddev->size << 1;
+		max_sectors = mddev->dev_sectors;
 		j = MaxSector;
 		list_for_each_entry(rdev, &mddev->disks, same_set)
 			if (rdev->raid_disk >= 0 &&
