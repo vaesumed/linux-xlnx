@@ -3,10 +3,14 @@
  * Author: J.E.J.Bottomley@HansenPartnership.com
  *
  * Standard include definitions for the NCR Voyager system */
+#ifndef _ASM_VOYAGER_H
+#define _ASM_VOYAGER_H
 
 #include <asm/voyager_bios.h>
 #include <asm/voyager_boot.h>
 #include <asm/voyager_vectors.h>
+
+#ifdef CONFIG_X86_VOYAGER
 
 #undef	VOYAGER_DEBUG
 #undef	VOYAGER_CAT_DEBUG
@@ -530,3 +534,13 @@ extern asmlinkage void qic_invalidate_interrupt(void);
 extern asmlinkage void qic_reschedule_interrupt(void);
 extern asmlinkage void qic_enable_irq_interrupt(void);
 extern asmlinkage void qic_call_function_interrupt(void);
+
+#else /* CONFIG_X86_VOYAGER */
+
+static inline void voyager_timer_interrupt(void)
+{
+}
+
+#endif /* CONFIG_X86_VOYAGER */
+
+#endif

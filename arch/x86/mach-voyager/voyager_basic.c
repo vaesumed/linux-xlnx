@@ -161,6 +161,9 @@ int __init voyager_memory_detect(int region, __u32 * start, __u32 * length)
  * internal timer (The QIC does, but that's another story). */
 void voyager_timer_interrupt(void)
 {
+	if (!is_voyager())
+		return;
+
 	if ((jiffies & 0x3ff) == 0) {
 
 		/* There seems to be something flaky in either
