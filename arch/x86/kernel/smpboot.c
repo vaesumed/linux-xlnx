@@ -357,7 +357,7 @@ void __cpuinit smp_store_cpu_info(int id)
 
 	copy_cpuinfo_x86(c, &boot_cpu_data);
 	c->cpu_index = id;
-	if (id != 0)
+	if (id != boot_cpu_id)
 		identify_secondary_cpu(c);
 }
 
