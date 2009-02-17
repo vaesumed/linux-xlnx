@@ -82,7 +82,6 @@
 #include <asm/io_apic.h>
 #include <asm/ist.h>
 #include <asm/vmi.h>
-#include <asm/setup_arch.h>
 #include <asm/bios_ebda.h>
 #include <asm/cacheflush.h>
 #include <asm/processor.h>
@@ -106,10 +105,6 @@
 #include <asm/apicdef.h>
 #ifdef CONFIG_X86_64
 #include <asm/numa_64.h>
-#endif
-
-#ifndef ARCH_SETUP
-#define ARCH_SETUP
 #endif
 
 /*
@@ -738,8 +733,6 @@ void __init setup_arch(char **cmdline_p)
 		efi_reserve_early();
 	}
 #endif
-
-	ARCH_SETUP
 
 	setup_memory_map();
 	parse_setup_data();
