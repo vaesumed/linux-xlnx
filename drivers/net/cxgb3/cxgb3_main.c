@@ -338,7 +338,7 @@ static void free_irq_resources(struct adapter *adapter)
 
 		free_irq(adapter->msix_info[0].vec, adapter);
 		for_each_port(adapter, i)
-		    n += adap2pinfo(adapter, i)->nqsets;
+			n += adap2pinfo(adapter, i)->nqsets;
 
 		for (i = 0; i < n; ++i)
 			free_irq(adapter->msix_info[i + 1].vec,
@@ -508,19 +508,9 @@ static void set_qset_lro(struct net_device *dev, int qset_idx, int val)
 {
 	struct port_info *pi = netdev_priv(dev);
 	struct adapter *adapter = pi->adapter;
-	int i, lro_on = 1;
 
 	adapter->params.sge.qset[qset_idx].lro = !!val;
 	adapter->sge.qs[qset_idx].lro_enabled = !!val;
-
-	/* let ethtool report LRO on only if all queues are LRO enabled */
-	for (i = pi->first_qset; i < pi->first_qset + pi->nqsets; ++i)
-		lro_on &= adapter->params.sge.qset[i].lro;
-
-	if (lro_on)
-		dev->features |= NETIF_F_LRO;
-	else
-		dev->features &= ~NETIF_F_LRO;
 }
 
 /**
@@ -1433,9 +1423,9 @@ static void get_stats(struct net_device *dev, struct ethtool_stats *stats,
 	*data++ = collect_sge_port_stats(adapter, pi, SGE_PSTAT_VLANINS);
 	*data++ = collect_sge_port_stats(adapter, pi, SGE_PSTAT_TX_CSUM);
 	*data++ = collect_sge_port_stats(adapter, pi, SGE_PSTAT_RX_CSUM_GOOD);
-	*data++ = collect_sge_port_stats(adapter, pi, SGE_PSTAT_LRO_AGGR);
-	*data++ = collect_sge_port_stats(adapter, pi, SGE_PSTAT_LRO_FLUSHED);
-	*data++ = collect_sge_port_stats(adapter, pi, SGE_PSTAT_LRO_NO_DESC);
+	*data++ = 0;
+	*data++ = 0;
+	*data++ = 0;
 	*data++ = s->rx_cong_drops;
 
 	*data++ = s->num_toggled;
@@ -1826,28 +1816,6 @@ static void get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 	memset(&wol->sopass, 0, sizeof(wol->sopass));
 }
 
-static int cxgb3_set_flags(struct net_device *dev, u32 data)
-{
-	struct port_info *pi = netdev_priv(dev);
-	int i;
-
-	if (data & ETH_FLAG_LRO) {
-		if (!(pi->rx_offload & T3_RX_CSUM))
-			return -EINVAL;
-
-		pi->rx_offload |= T3_LRO;
-		for (i = pi->first_qset; i < pi->first_qset + pi->nqsets; i++)
-			set_qset_lro(dev, i, 1);
-
-	} else {
-		pi->rx_offload &= ~T3_LRO;
-		for (i = pi->first_qset; i < pi->first_qset + pi->nqsets; i++)
-			set_qset_lro(dev, i, 0);
-	}
-
-	return 0;
-}
-
 static const struct ethtool_ops cxgb_ethtool_ops = {
 	.get_settings = get_settings,
 	.set_settings = set_settings,
@@ -1877,8 +1845,6 @@ static const struct ethtool_ops cxgb_ethtool_ops = {
 	.get_regs = get_regs,
 	.get_wol = get_wol,
 	.set_tso = ethtool_op_set_tso,
-	.get_flags = ethtool_op_get_flags,
-	.set_flags = cxgb3_set_flags,
 };
 
 static int in_range(int val, int lo, int hi)
@@ -2576,6 +2542,12 @@ static int t3_adapter_error(struct adapter *adapter, int reset)
 {
 	int i, ret = 0;
 
+	if (is_offload(adapter) &&
+	    test_bit(OFFLOAD_DEVMAP_BIT, &adapter->open_device_map)) {
+		cxgb3_err_notify(&adapter->tdev, OFFLOAD_STATUS_DOWN, 0);
+		offload_close(&adapter->tdev);
+	}
+
 	/* Stop all ports */
 	for_each_port(adapter, i) {
 		struct net_device *netdev = adapter->port[i];
@@ -2583,10 +2555,6 @@ static int t3_adapter_error(struct adapter *adapter, int reset)
 		if (netif_running(netdev))
 			cxgb_close(netdev);
 	}
-
-	if (is_offload(adapter) &&
-	    test_bit(OFFLOAD_DEVMAP_BIT, &adapter->open_device_map))
-		offload_close(&adapter->tdev);
 
 	/* Stop SGE timers */
 	t3_stop_sge_timers(adapter);
@@ -2639,6 +2607,9 @@ static void t3_resume_ports(struct adapter *adapter)
 			}
 		}
 	}
+
+	if (is_offload(adapter) && !ofld_disable)
+		cxgb3_err_notify(&adapter->tdev, OFFLOAD_STATUS_UP, 0);
 }
 
 /*
@@ -2752,7 +2723,7 @@ static void set_nqsets(struct adapter *adap)
 	int i, j = 0;
 	int num_cpus = num_online_cpus();
 	int hwports = adap->params.nports;
-	int nqsets = SGE_QSETS;
+	int nqsets = adap->msix_nvectors - 1;
 
 	if (adap->params.rev > 0 && adap->flags & USING_MSIX) {
 		if (hwports == 2 &&
@@ -2781,18 +2752,25 @@ static void set_nqsets(struct adapter *adap)
 static int __devinit cxgb_enable_msix(struct adapter *adap)
 {
 	struct msix_entry entries[SGE_QSETS + 1];
+	int vectors;
 	int i, err;
 
-	for (i = 0; i < ARRAY_SIZE(entries); ++i)
+	vectors = ARRAY_SIZE(entries);
+	for (i = 0; i < vectors; ++i)
 		entries[i].entry = i;
 
-	err = pci_enable_msix(adap->pdev, entries, ARRAY_SIZE(entries));
+	while ((err = pci_enable_msix(adap->pdev, entries, vectors)) > 0)
+		vectors = err;
+
+	if (!err && vectors < (adap->params.nports + 1))
+		err = -1;
+
 	if (!err) {
-		for (i = 0; i < ARRAY_SIZE(entries); ++i)
+		for (i = 0; i < vectors; ++i)
 			adap->msix_info[i].vec = entries[i].vector;
-	} else if (err > 0)
-		dev_info(&adap->pdev->dev,
-		       "only %d MSI-X vectors left, not using MSI-X\n", err);
+		adap->msix_nvectors = vectors;
+	}
+
 	return err;
 }
 
@@ -2960,7 +2938,7 @@ static int __devinit init_one(struct pci_dev *pdev,
 		netdev->mem_end = mmio_start + mmio_len - 1;
 		netdev->features |= NETIF_F_SG | NETIF_F_IP_CSUM | NETIF_F_TSO;
 		netdev->features |= NETIF_F_LLTX;
-		netdev->features |= NETIF_F_LRO;
+		netdev->features |= NETIF_F_GRO;
 		if (pci_using_dac)
 			netdev->features |= NETIF_F_HIGHDMA;
 
