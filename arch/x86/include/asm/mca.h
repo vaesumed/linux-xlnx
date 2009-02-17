@@ -4,6 +4,9 @@
 #ifndef _ASM_X86_MCA_H
 #define _ASM_X86_MCA_H
 
+/* hook for the bus chain of the MCA NMI */
+extern void (*mca_nmi_hook)(void);
+
 /* Maximal number of MCA slots - actually, some machines have less, but
  * they all have sufficient number of POS registers to cover 8.
  */
