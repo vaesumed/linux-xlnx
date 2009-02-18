@@ -833,10 +833,7 @@ static int ocfs2_unlink(struct inode *dir,
 	child_locked = 1;
 
 	if (S_ISDIR(inode->i_mode)) {
-	       	if (!ocfs2_empty_dir(inode)) {
-			status = -ENOTEMPTY;
-			goto leave;
-		} else if (inode->i_nlink != 2) {
+		if (inode->i_nlink != 2 || !ocfs2_empty_dir(inode)) {
 			status = -ENOTEMPTY;
 			goto leave;
 		}
@@ -1279,8 +1276,8 @@ static int ocfs2_rename(struct inode *old_dir,
 
 	if (target_exists) {
 		if (S_ISDIR(new_inode->i_mode)) {
-			if (!ocfs2_empty_dir(new_inode) ||
-			    new_inode->i_nlink != 2) {
+			if (new_inode->i_nlink != 2 ||
+			    !ocfs2_empty_dir(new_inode)) {
 				status = -ENOTEMPTY;
 				goto bail;
 			}
