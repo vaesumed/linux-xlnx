@@ -70,10 +70,6 @@
 #include <linux/uaccess.h>
 #include <asm/byteorder.h>
 
-#ifdef SIOCETHTOOL
-#include <linux/ethtool.h>
-#endif
-
 #include <net/iw_handler.h>
 #include <net/net_namespace.h>
 
