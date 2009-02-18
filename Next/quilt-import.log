@@ -1,0 +1,67 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.29-rc5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard d2f8d7ee1a9b4650b4e43325b321801264f7c37a
+HEAD is now at d2f8d7e Linux 2.6.29-rc5
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-f71882fg-avoid-misleading-error-message.patch
+hwmon-superio-fix-acpi-resource-check-error-handling.patch
+maintainers-switch-hdaps-to-frank-seidel.patch
+hwmon-ds1621-01-reorder-functions.patch
+hwmon-ds1621-02-simplify-reg-access.patch
+hwmon-ds1621-03-avoid-unneeded-register-access.patch
+hwmon-ds1621-04-cleanup-documentation.patch
+hwmon-hdaps-inversion-of-separate-axis.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 3f84ccc...df566a4 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.29-rc5
+$ cd ../quilt-tmp
+$ git reset --hard d2f8d7ee1a9b4650b4e43325b321801264f7c37a
+HEAD is now at d2f8d7e Linux 2.6.29-rc5
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+cpumask:partial-revert-powernow-k8.patch
+cpumask:use-cpumap-accessors-alpha.patch
+cpumask:fix-cpu_online_map-etc-assignment.patch
+cpumask:remove-address-of-CPU_MASK_ALL.patch
+virtio:net_allow_setting_the_mac_address_of_the_nic.patch
+virtio:fix_bad_ring_start_us_and_end_use_macros.patch
+virtio:fix-ring-macros-harder.patch
+cpumask:sched_rt-no-alloc.patch
+misc:kthread-dont-use-find_task_by_pid_ns.patch
+misc:remove-start_kernel-prototypes.patch
+param:fix-charp-sysfs-write.patch
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+ksplice:make_find_symbol_return_a_struct_kernel_symbol.patch
+module:module_address.patch
+module:remove-module_text_address.patch
+misc:strstarts.patch
+module:use-strstarts.patch
+ksplice:add_functions_for_walking_kallsyms_symbols.patch
+module:export_symbols_needed_for_ksplice.patch
+module:clarify-try_to_force_load-message.patch
+module:dont-load-__versions-section.patch
+module:version-modversion_info.patch
+module:invbool-takes-a-bool.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+module:create_a_request_nowait.patch
+module:create_a_request_nowait-fix.patch
+module:use_the_new_request_module_nowait_in_the_hid_driver.patch
+module:use_the_new_request_module_nowait_in_drivers_media.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 1b779d7...13d4b25 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series staging
