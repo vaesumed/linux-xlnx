@@ -30,10 +30,9 @@
 #include <mach/hardware.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
+
+#include <mach/pxa27x.h>
 #include <mach/magician.h>
-#include <mach/mfp-pxa27x.h>
-#include <mach/pxa-regs.h>
-#include <mach/pxa2xx-regs.h>
 #include <mach/pxafb.h>
 #include <mach/i2c.h>
 #include <mach/mmc.h>
@@ -204,7 +203,7 @@ static struct platform_device gpio_keys = {
 static struct resource egpio_resources[] = {
 	[0] = {
 		.start = PXA_CS3_PHYS,
-		.end   = PXA_CS3_PHYS + 0x20,
+		.end   = PXA_CS3_PHYS + 0x20 - 1,
 		.flags = IORESOURCE_MEM,
 	},
 	[1] = {
@@ -435,7 +434,7 @@ static struct gpio_led gpio_leds[] = {
 	},
 	{
 		.name = "magician::phone_bl",
-		.default_trigger = "none",
+		.default_trigger = "backlight",
 		.gpio = GPIO103_MAGICIAN_LED_KP,
 	},
 };
@@ -482,8 +481,6 @@ static struct pasic3_led pasic3_leds[] = {
 		.mask   = PASIC3_MASK_LED2,
 	},
 };
-
-static struct platform_device pasic3;
 
 static struct pasic3_leds_machinfo pasic3_leds_info = {
 	.num_leds   = ARRAY_SIZE(pasic3_leds),
@@ -626,13 +623,15 @@ static struct pda_power_pdata power_supply_info = {
 static struct resource power_supply_resources[] = {
 	[0] = {
 		.name  = "ac",
-		.flags = IORESOURCE_IRQ,
+		.flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHEDGE |
+		         IORESOURCE_IRQ_LOWEDGE,
 		.start = IRQ_MAGICIAN_VBUS,
 		.end   = IRQ_MAGICIAN_VBUS,
 	},
 	[1] = {
 		.name  = "usb",
-		.flags = IORESOURCE_IRQ,
+		.flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHEDGE |
+		         IORESOURCE_IRQ_LOWEDGE,
 		.start = IRQ_MAGICIAN_VBUS,
 		.end   = IRQ_MAGICIAN_VBUS,
 	},
