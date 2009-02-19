@@ -2284,7 +2284,6 @@ static int serdes_init_10g_serdes(struct niu *np)
 	struct niu_link_config *lp = &np->link_config;
 	unsigned long ctrl_reg, test_cfg_reg, pll_cfg, i;
 	u64 ctrl_val, test_cfg_val, sig, mask, val;
-	int err;
 	u64 reset_val;
 
 	switch (np->port) {
@@ -2337,6 +2336,7 @@ static int serdes_init_10g_serdes(struct niu *np)
 	/* Initialize all 4 lanes of the SERDES.  */
 	for (i = 0; i < 4; i++) {
 		u32 rxtx_ctrl, glue0;
+		int err;
 
 		err = esr_read_rxtx_ctrl(np, i, &rxtx_ctrl);
 		if (err)
@@ -3390,6 +3390,7 @@ static int niu_process_rx_pkt(struct niu *np, struct rx_ring_info *rp)
 	rp->rx_bytes += skb->len;
 
 	skb->protocol = eth_type_trans(skb, np->dev);
+	skb_record_rx_queue(skb, rp->rx_channel);
 	netif_receive_skb(skb);
 
 	return num_rcr;
@@ -3669,7 +3670,7 @@ static int niu_poll(struct napi_struct *napi, int budget)
 	work_done = niu_poll_core(np, lp, budget);
 
 	if (work_done < budget) {
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		niu_ldg_rearm(np, lp, 1);
 	}
 	return work_done;
@@ -4088,12 +4089,12 @@ static void __niu_fastpath_interrupt(struct niu *np, int ldg, u64 v0)
 static void niu_schedule_napi(struct niu *np, struct niu_ldg *lp,
 			      u64 v0, u64 v1, u64 v2)
 {
-	if (likely(netif_rx_schedule_prep(&lp->napi))) {
+	if (likely(napi_schedule_prep(&lp->napi))) {
 		lp->v0 = v0;
 		lp->v1 = v1;
 		lp->v2 = v2;
 		__niu_fastpath_interrupt(np, lp->ldg_num, v0);
-		__netif_rx_schedule(&lp->napi);
+		__napi_schedule(&lp->napi);
 	}
 }
 
@@ -6446,11 +6447,11 @@ static u64 niu_compute_tx_flags(struct sk_buff *skb, struct ethhdr *ehdr,
 
 	ipv6 = ihl = 0;
 	switch (skb->protocol) {
-	case __constant_htons(ETH_P_IP):
+	case cpu_to_be16(ETH_P_IP):
 		ip_proto = ip_hdr(skb)->protocol;
 		ihl = ip_hdr(skb)->ihl;
 		break;
-	case __constant_htons(ETH_P_IPV6):
+	case cpu_to_be16(ETH_P_IPV6):
 		ip_proto = ipv6_hdr(skb)->nexthdr;
 		ihl = (40 >> 2);
 		ipv6 = 1;
