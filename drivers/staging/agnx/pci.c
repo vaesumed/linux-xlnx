@@ -286,10 +286,10 @@ static void agnx_stop(struct ieee80211_hw *dev)
 	rings_free(priv);
 }
 
-static int agnx_config(struct ieee80211_hw *dev,
-		       struct ieee80211_conf *conf)
+static int agnx_config(struct ieee80211_hw *dev, u32 changed)
 {
 	struct agnx_priv *priv = dev->priv;
+	struct ieee80211_conf *conf = &dev->conf;
 	int channel = ieee80211_frequency_to_channel(conf->channel->center_freq);
 	AGNX_TRACE;
 
@@ -434,11 +434,12 @@ static struct ieee80211_ops agnx_ops = {
 static void __devexit agnx_pci_remove(struct pci_dev *pdev)
 {
 	struct ieee80211_hw *dev = pci_get_drvdata(pdev);
-	struct agnx_priv *priv = dev->priv;
+	struct agnx_priv *priv;
 	AGNX_TRACE;
 
 	if (!dev)
 		return;
+	priv = dev->priv;
 	ieee80211_unregister_hw(dev);
 	pci_iounmap(pdev, priv->ctl);
 	pci_iounmap(pdev, priv->data);
