@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2006 - 2008 NetEffect, Inc. All rights reserved.
+* Copyright (c) 2006 - 2009 Intel-NE, Inc.  All rights reserved.
 *
 * This software is available to you under a choice of one of two
 * licenses.  You may choose to be licensed under the terms of the GNU
@@ -61,6 +61,7 @@ enum pci_regs {
 	NES_CQ_ACK = 0x0034,
 	NES_WQE_ALLOC = 0x0040,
 	NES_CQE_ALLOC = 0x0044,
+	NES_AEQ_ALLOC = 0x0048
 };
 
 enum indexed_regs {
