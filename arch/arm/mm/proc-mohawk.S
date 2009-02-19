@@ -395,6 +395,32 @@ cpu_pxa168_name:
 
 	.section ".proc.info.init", #alloc, #execinstr
 
+#ifdef CONFIG_CPU_MOHAWK_OLD_ID
+	.type	__mohawk_old_id_proc_info,#object
+	.long	0x41159260
+	.long	0xfffffff0
+	.long   PMD_TYPE_SECT | \
+		PMD_SECT_BUFFERABLE | \
+		PMD_SECT_CACHEABLE | \
+		PMD_BIT4 | \
+		PMD_SECT_AP_WRITE | \
+		PMD_SECT_AP_READ
+	.long   PMD_TYPE_SECT | \
+		PMD_BIT4 | \
+		PMD_SECT_AP_WRITE | \
+		PMD_SECT_AP_READ
+	b	__mohawk_setup
+	.long	cpu_arch_name
+	.long	cpu_elf_name
+	.long	HWCAP_SWP|HWCAP_HALF|HWCAP_THUMB|HWCAP_FAST_MULT|HWCAP_EDSP
+	.long	cpu_mohawk_name
+	.long	mohawk_processor_functions
+	.long	v4wbi_tlb_fns
+	.long	v4wb_user_fns
+	.long	mohawk_cache_fns
+	.size	__pxa168_proc_info, . - __pxa168_proc_info
+#endif
+
 	.type	__pxa168_proc_info,#object
 __pxa168_proc_info:
 	.long	0x56158400			@ Marvell PXA168
