@@ -636,8 +636,13 @@ proc_types:
 		b	__armv4_mmu_cache_off
 		b	__armv4_mmu_cache_flush
 
+#ifdef CONFIG_CPU_MOHAWK_OLD_ID
+		.word	0x41159260		@ ARM926T (Marvell Mohawk)
+		.word	0xfffffff0
+#else
 		.word	0x56158000		@ PXA168
 		.word	0xfffff000
+#endif
 		b __armv4_mmu_cache_on
 		b __armv4_mmu_cache_off
 		b __armv5tej_mmu_cache_flush
