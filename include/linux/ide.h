@@ -347,6 +347,7 @@ struct ide_cmd {
 	int			protocol;
 
 	int			sg_nents;	  /* number of sg entries */
+	int			orig_sg_nents;
 	int			sg_dma_direction; /* DMA transfer direction */
 
 	unsigned int		nbytes;
