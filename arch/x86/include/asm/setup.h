@@ -34,8 +34,6 @@ struct x86_quirks {
 	void (*prefill_possible_map)(void);
 };
 
-extern void x86_quirk_intr_init(void);
-
 extern void x86_quirk_trap_init(void);
 
 extern void x86_quirk_pre_time_init(void);

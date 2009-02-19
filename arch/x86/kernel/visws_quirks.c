@@ -645,12 +645,6 @@ static struct irqaction master_action = {
 	.name =		"PIIX4-8259",
 };
 
-static struct irqaction cascade_action = {
-	.handler = 	no_action,
-	.name =		"cascade",
-};
-
-
 void init_VISWS_APIC_irqs(void)
 {
 	int i;
@@ -683,5 +677,4 @@ void init_VISWS_APIC_irqs(void)
 	}
 
 	setup_irq(CO_IRQ_8259, &master_action);
-	setup_irq(2, &cascade_action);
 }

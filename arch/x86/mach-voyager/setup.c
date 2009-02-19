@@ -16,22 +16,11 @@ void __init pre_intr_init_hook(void)
 	init_ISA_irqs();
 }
 
-/*
- * IRQ2 is cascade interrupt to second interrupt controller
- */
-static struct irqaction irq2 = {
-	.handler = no_action,
-	.mask = CPU_MASK_NONE,
-	.name = "cascade",
-};
-
 void __init intr_init_hook(void)
 {
 #ifdef CONFIG_SMP
 	voyager_smp_intr_init();
 #endif
-
-	setup_irq(2, &irq2);
 }
 
 static void voyager_disable_tsc(void)
