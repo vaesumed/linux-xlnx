@@ -51,8 +51,6 @@
 
 #include "wm8753.h"
 
-#define WM8753_VERSION "0.16"
-
 static int caps_charge = 2000;
 module_param(caps_charge, int, 0);
 MODULE_PARM_DESC(caps_charge, "WM8753 cap charge time (msecs)");
@@ -97,7 +95,7 @@ static inline unsigned int wm8753_read_reg_cache(struct snd_soc_codec *codec,
 	unsigned int reg)
 {
 	u16 *cache = codec->reg_cache;
-	if (reg < 1 || reg > (ARRAY_SIZE(wm8753_reg) + 1))
+	if (reg < 1 || reg >= (ARRAY_SIZE(wm8753_reg) + 1))
 		return -1;
 	return cache[reg - 1];
 }
@@ -109,7 +107,7 @@ static inline void wm8753_write_reg_cache(struct snd_soc_codec *codec,
 	unsigned int reg, unsigned int value)
 {
 	u16 *cache = codec->reg_cache;
-	if (reg < 1 || reg > 0x3f)
+	if (reg < 1 || reg >= (ARRAY_SIZE(wm8753_reg) + 1))
 		return;
 	cache[reg - 1] = value;
 }
@@ -338,21 +336,6 @@ SOC_ENUM_EXT("DAI Mode", wm8753_enum[26], wm8753_get_dai, wm8753_set_dai),
 SOC_ENUM("ADC Data Select", wm8753_enum[27]),
 SOC_ENUM("ROUT2 Phase", wm8753_enum[28]),
 };
-
-/* add non dapm controls */
-static int wm8753_add_controls(struct snd_soc_codec *codec)
-{
-	int err, i;
-
-	for (i = 0; i < ARRAY_SIZE(wm8753_snd_controls); i++) {
-		err = snd_ctl_add(codec->card,
-				snd_soc_cnew(&wm8753_snd_controls[i],
-						codec, NULL));
-		if (err < 0)
-			return err;
-	}
-	return 0;
-}
 
 /*
  * _DAPM_ Controls
@@ -927,7 +910,7 @@ static int wm8753_pcm_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	struct wm8753_priv *wm8753 = codec->private_data;
 	u16 voice = wm8753_read_reg_cache(codec, WM8753_PCM) & 0x01f3;
 	u16 srate = wm8753_read_reg_cache(codec, WM8753_SRATE1) & 0x017f;
@@ -1161,7 +1144,7 @@ static int wm8753_i2s_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	struct wm8753_priv *wm8753 = codec->private_data;
 	u16 srate = wm8753_read_reg_cache(codec, WM8753_SRATE1) & 0x01c0;
 	u16 hifi = wm8753_read_reg_cache(codec, WM8753_HIFI) & 0x01f3;
@@ -1466,30 +1449,35 @@ static void wm8753_set_dai_mode(struct snd_soc_codec *codec, unsigned int mode)
 	if (mode < 4) {
 		int playback_active, capture_active, codec_active, pop_wait;
 		void *private_data;
+		struct list_head list;
 
 		playback_active = wm8753_dai[0].playback.active;
 		capture_active = wm8753_dai[0].capture.active;
 		codec_active = wm8753_dai[0].active;
 		private_data = wm8753_dai[0].private_data;
 		pop_wait = wm8753_dai[0].pop_wait;
+		list = wm8753_dai[0].list;
 		wm8753_dai[0] = wm8753_all_dai[mode << 1];
 		wm8753_dai[0].playback.active = playback_active;
 		wm8753_dai[0].capture.active = capture_active;
 		wm8753_dai[0].active = codec_active;
 		wm8753_dai[0].private_data = private_data;
 		wm8753_dai[0].pop_wait = pop_wait;
+		wm8753_dai[0].list = list;
 
 		playback_active = wm8753_dai[1].playback.active;
 		capture_active = wm8753_dai[1].capture.active;
 		codec_active = wm8753_dai[1].active;
 		private_data = wm8753_dai[1].private_data;
 		pop_wait = wm8753_dai[1].pop_wait;
+		list = wm8753_dai[1].list;
 		wm8753_dai[1] = wm8753_all_dai[(mode << 1) + 1];
 		wm8753_dai[1].playback.active = playback_active;
 		wm8753_dai[1].capture.active = capture_active;
 		wm8753_dai[1].active = codec_active;
 		wm8753_dai[1].private_data = private_data;
 		wm8753_dai[1].pop_wait = pop_wait;
+		wm8753_dai[1].list = list;
 	}
 	wm8753_dai[0].codec = codec;
 	wm8753_dai[1].codec = codec;
@@ -1505,7 +1493,7 @@ static void wm8753_work(struct work_struct *work)
 static int wm8753_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 
 	/* we only need to suspend if we are a valid card */
 	if (!codec->card)
@@ -1518,7 +1506,7 @@ static int wm8753_suspend(struct platform_device *pdev, pm_message_t state)
 static int wm8753_resume(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int i;
 	u8 data[2];
 	u16 *cache = codec->reg_cache;
@@ -1555,7 +1543,7 @@ static int wm8753_resume(struct platform_device *pdev)
  */
 static int wm8753_init(struct snd_soc_device *socdev)
 {
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int reg, ret = 0;
 
 	codec->name = "WM8753";
@@ -1610,7 +1598,8 @@ static int wm8753_init(struct snd_soc_device *socdev)
 	reg = wm8753_read_reg_cache(codec, WM8753_RINVOL);
 	wm8753_write(codec, WM8753_RINVOL, reg | 0x0100);
 
-	wm8753_add_controls(codec);
+	snd_soc_add_controls(codec, wm8753_snd_controls,
+				ARRAY_SIZE(wm8753_snd_controls));
 	wm8753_add_widgets(codec);
 	ret = snd_soc_init_card(socdev);
 	if (ret < 0) {
@@ -1645,7 +1634,7 @@ static int wm8753_i2c_probe(struct i2c_client *i2c,
 			    const struct i2c_device_id *id)
 {
 	struct snd_soc_device *socdev = wm8753_socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int ret;
 
 	i2c_set_clientdata(i2c, codec);
@@ -1726,7 +1715,7 @@ err_driver:
 static int __devinit wm8753_spi_probe(struct spi_device *spi)
 {
 	struct snd_soc_device *socdev = wm8753_socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int ret;
 
 	codec->control_data = spi;
@@ -1787,8 +1776,6 @@ static int wm8753_probe(struct platform_device *pdev)
 	struct wm8753_priv *wm8753;
 	int ret = 0;
 
-	pr_info("WM8753 Audio Codec %s", WM8753_VERSION);
-
 	setup = socdev->codec_data;
 	codec = kzalloc(sizeof(struct snd_soc_codec), GFP_KERNEL);
 	if (codec == NULL)
@@ -1801,7 +1788,7 @@ static int wm8753_probe(struct platform_device *pdev)
 	}
 
 	codec->private_data = wm8753;
-	socdev->codec = codec;
+	socdev->card->codec = codec;
 	mutex_init(&codec->mutex);
 	INIT_LIST_HEAD(&codec->dapm_widgets);
 	INIT_LIST_HEAD(&codec->dapm_paths);
@@ -1853,7 +1840,7 @@ static int run_delayed_work(struct delayed_work *dwork)
 static int wm8753_remove(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 
 	if (codec->control_data)
 		wm8753_set_bias_level(codec, SND_SOC_BIAS_OFF);
