@@ -1932,8 +1932,8 @@ static void p54_configure_filter(struct ieee80211_hw *dev,
 	struct p54_common *priv = dev->priv;
 
 	*total_flags &= FIF_PROMISC_IN_BSS |
-			(*total_flags & FIF_PROMISC_IN_BSS) ?
-				FIF_FCSFAIL : 0;
+			(*total_flags & FIF_PROMISC_IN_BSS ?
+				FIF_FCSFAIL : 0);
 
 	priv->filter_flags = *total_flags;
 
