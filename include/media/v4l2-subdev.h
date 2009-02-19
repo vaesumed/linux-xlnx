@@ -78,6 +78,9 @@ struct v4l2_subdev_core_ops {
 	int (*queryctrl)(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc);
 	int (*g_ctrl)(struct v4l2_subdev *sd, struct v4l2_control *ctrl);
 	int (*s_ctrl)(struct v4l2_subdev *sd, struct v4l2_control *ctrl);
+	int (*g_ext_ctrls)(struct v4l2_subdev *sd, struct v4l2_ext_controls *ctrls);
+	int (*s_ext_ctrls)(struct v4l2_subdev *sd, struct v4l2_ext_controls *ctrls);
+	int (*try_ext_ctrls)(struct v4l2_subdev *sd, struct v4l2_ext_controls *ctrls);
 	int (*querymenu)(struct v4l2_subdev *sd, struct v4l2_querymenu *qm);
 	long (*ioctl)(struct v4l2_subdev *sd, unsigned int cmd, void *arg);
 #ifdef CONFIG_VIDEO_ADV_DEBUG
@@ -112,6 +115,8 @@ struct v4l2_subdev_video_ops {
 	int (*g_vbi_data)(struct v4l2_subdev *sd, struct v4l2_sliced_vbi_data *vbi_data);
 	int (*g_sliced_vbi_cap)(struct v4l2_subdev *sd, struct v4l2_sliced_vbi_cap *cap);
 	int (*s_std_output)(struct v4l2_subdev *sd, v4l2_std_id std);
+	int (*querystd)(struct v4l2_subdev *sd, v4l2_std_id *std);
+	int (*g_input_status)(struct v4l2_subdev *sd, u32 *status);
 	int (*s_stream)(struct v4l2_subdev *sd, int enable);
 	int (*s_fmt)(struct v4l2_subdev *sd, struct v4l2_format *fmt);
 	int (*g_fmt)(struct v4l2_subdev *sd, struct v4l2_format *fmt);
