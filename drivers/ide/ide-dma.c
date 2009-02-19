@@ -143,6 +143,10 @@ int ide_build_sglist(ide_drive_t *drive, struct ide_cmd *cmd)
 	i = dma_map_sg(hwif->dev, sg, cmd->sg_nents, cmd->sg_dma_direction);
 	if (i == 0)
 		ide_map_sg(drive, cmd);
+	else {
+		cmd->orig_sg_nents = cmd->sg_nents;
+		cmd->sg_nents = i;
+	}
 
 	return i;
 }
@@ -163,7 +167,7 @@ void ide_destroy_dmatable(ide_drive_t *drive)
 	ide_hwif_t *hwif = drive->hwif;
 	struct ide_cmd *cmd = &hwif->cmd;
 
-	dma_unmap_sg(hwif->dev, hwif->sg_table, cmd->sg_nents,
+	dma_unmap_sg(hwif->dev, hwif->sg_table, cmd->orig_sg_nents,
 		     cmd->sg_dma_direction);
 }
 EXPORT_SYMBOL_GPL(ide_destroy_dmatable);
