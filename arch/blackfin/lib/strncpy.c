@@ -6,6 +6,8 @@
  * Licensed under the GPL-2 or later.
  */
 
+#include <linux/types.h>
+char *strncpy(char *dest, const char *src, size_t n);
 #define strncpy __inline_strncpy
 #include <asm/string.h>
 #undef strncpy
