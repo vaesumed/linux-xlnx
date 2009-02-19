@@ -15,6 +15,7 @@
 #include <linux/crc32.h>
 #include <linux/delay.h>
 #include <linux/device.h>
+#include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
@@ -113,7 +114,7 @@ static int __avc_write(struct firedtv *fdtv,
 		 */
 		if (wait_event_timeout(fdtv->avc_wait,
 				       fdtv->avc_reply_received,
-				       HZ / 5) != 0) {
+				       msecs_to_jiffies(200)) != 0) {
 			r->length = fdtv->response_length;
 			memcpy(&r->response, fdtv->response, r->length);
 
