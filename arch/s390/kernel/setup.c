@@ -74,9 +74,17 @@ EXPORT_SYMBOL(uaccess);
  * Machine setup..
  */
 unsigned int console_mode = 0;
+EXPORT_SYMBOL(console_mode);
+
 unsigned int console_devno = -1;
+EXPORT_SYMBOL(console_devno);
+
 unsigned int console_irq = -1;
+EXPORT_SYMBOL(console_irq);
+
 unsigned long machine_flags;
+EXPORT_SYMBOL(machine_flags);
+
 unsigned long elf_hwcap = 0;
 char elf_platform[ELF_PLATFORM_SIZE];
 
@@ -85,6 +93,10 @@ volatile int __cpu_logical_map[NR_CPUS]; /* logical cpu to cpu address */
 
 int __initdata memory_end_set;
 unsigned long __initdata memory_end;
+
+/* An array with a pointer to the lowcore of every CPU. */
+struct _lowcore *lowcore_ptr[NR_CPUS];
+EXPORT_SYMBOL(lowcore_ptr);
 
 /*
  * This is set up by the setup-routine at boot-time
@@ -289,11 +301,7 @@ static int __init early_parse_mem(char *p)
 early_param("mem", early_parse_mem);
 
 #ifdef CONFIG_S390_SWITCH_AMODE
-#ifdef CONFIG_PGSTE
-unsigned int switch_amode = 1;
-#else
 unsigned int switch_amode = 0;
-#endif
 EXPORT_SYMBOL_GPL(switch_amode);
 
 static int set_amode_and_uaccess(unsigned long user_amode,
@@ -434,6 +442,7 @@ setup_lowcore(void)
 	lc->vdso_per_cpu_data = (unsigned long) &lc->paste[0];
 #endif
 	set_prefix((u32)(unsigned long) lc);
+	lowcore_ptr[0] = lc;
 }
 
 static void __init
