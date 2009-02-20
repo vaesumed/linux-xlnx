@@ -2747,7 +2747,6 @@ void *__kmalloc_node(size_t size, gfp_t flags, int node)
 	void *ret;
 
 	if (unlikely(size > SLUB_MAX_SIZE)) {
-	if (unlikely(size > PAGE_SIZE)) {
 		ret = kmalloc_large_node(size, flags, node);
 
 		kmemtrace_mark_alloc_node(KMEMTRACE_TYPE_KMALLOC,
