@@ -72,7 +72,7 @@
 #define VD
 #endif
 
-#ifdef CONFIG_IWLAGN_SPECTRUM_MEASUREMENT
+#ifdef CONFIG_IWLWIFI_SPECTRUM_MEASUREMENT
 #define VS "s"
 #else
 #define VS
@@ -3370,7 +3370,7 @@ static DEVICE_ATTR(statistics, S_IRUGO, show_statistics, NULL);
 
 static void iwl_setup_deferred_work(struct iwl_priv *priv)
 {
-	priv->workqueue = create_workqueue(DRV_NAME);
+	priv->workqueue = create_singlethread_workqueue(DRV_NAME);
 
 	init_waitqueue_head(&priv->wait_command_queue);
 
@@ -3612,7 +3612,7 @@ static int iwl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	err = sysfs_create_group(&pdev->dev.kobj, &iwl_attribute_group);
 	if (err) {
 		IWL_ERR(priv, "failed to create sysfs device attributes\n");
-		goto out_uninit_drv;
+		goto out_free_irq;
 	}
 
 	iwl_setup_deferred_work(priv);
@@ -3657,10 +3657,10 @@ static int iwl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
  out_remove_sysfs:
 	sysfs_remove_group(&pdev->dev.kobj, &iwl_attribute_group);
+ out_free_irq:
+	free_irq(priv->pci_dev->irq, priv);
  out_disable_msi:
 	pci_disable_msi(priv->pci_dev);
-	pci_disable_device(priv->pci_dev);
- out_uninit_drv:
 	iwl_uninit_drv(priv);
  out_free_eeprom:
 	iwl_eeprom_free(priv);
