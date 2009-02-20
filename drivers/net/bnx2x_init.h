@@ -1,6 +1,6 @@
 /* bnx2x_init.h: Broadcom Everest network driver.
  *
- * Copyright (c) 2007-2008 Broadcom Corporation
+ * Copyright (c) 2007-2009 Broadcom Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -274,6 +274,9 @@ static void bnx2x_init_wr_wb(struct bnx2x *bp, u32 addr, const u32 *data,
 		rc = bnx2x_gunzip(bp, (u8 *)data, len);
 		if (rc) {
 			BNX2X_ERR("gunzip failed ! rc %d\n", rc);
+#ifdef __BIG_ENDIAN
+			kfree(temp);
+#endif
 			return;
 		}
 		len = bp->gunzip_outlen;
@@ -426,57 +429,57 @@ struct arb_line {
 
 /* derived configuration for each read queue for each max request size */
 static const struct arb_line read_arb_data[NUM_RD_Q][MAX_RD_ORD + 1] = {
-	{{8 , 64 , 25}, {16 , 64 , 25}, {32 , 64 , 25}, {64 , 64 , 41} },
-	{{4 , 8 , 4},   {4 , 8 , 4},    {4 , 8 , 4},    {4 , 8 , 4} },
-	{{4 , 3 , 3},   {4 , 3 , 3},    {4 , 3 , 3},    {4 , 3 , 3} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {16 , 3 , 11},  {16 , 3 , 11} },
-	{{8 , 64 , 25}, {16 , 64 , 25}, {32 , 64 , 25}, {64 , 64 , 41} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {64 , 3 , 41} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {64 , 3 , 41} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {64 , 3 , 41} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {64 , 3 , 41} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 3 , 6},   {16 , 3 , 11},  {32 , 3 , 21},  {32 , 3 , 21} },
-	{{8 , 64 , 25}, {16 , 64 , 41}, {32 , 64 , 81}, {64 , 64 , 120} }
+/* 1 */	{ {8, 64, 25}, {16, 64, 25}, {32, 64, 25}, {64, 64, 41} },
+	{ {4, 8,  4},  {4,  8,  4},  {4,  8,  4},  {4,  8,  4}  },
+	{ {4, 3,  3},  {4,  3,  3},  {4,  3,  3},  {4,  3,  3}  },
+	{ {8, 3,  6},  {16, 3,  11}, {16, 3,  11}, {16, 3,  11} },
+	{ {8, 64, 25}, {16, 64, 25}, {32, 64, 25}, {64, 64, 41} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {64, 3,  41} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {64, 3,  41} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {64, 3,  41} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {64, 3,  41} },
+/* 10 */{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+/* 20 */{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 3,  6},  {16, 3,  11}, {32, 3,  21}, {32, 3,  21} },
+	{ {8, 64, 25}, {16, 64, 41}, {32, 64, 81}, {64, 64, 120} }
 };
 
 /* derived configuration for each write queue for each max request size */
 static const struct arb_line write_arb_data[NUM_WR_Q][MAX_WR_ORD + 1] = {
-	{{4 , 6 , 3},   {4 , 6 , 3},    {4 , 6 , 3} },
-	{{4 , 2 , 3},   {4 , 2 , 3},    {4 , 2 , 3} },
-	{{8 , 2 , 6},   {16 , 2 , 11},  {16 , 2 , 11} },
-	{{8 , 2 , 6},   {16 , 2 , 11},  {32 , 2 , 21} },
-	{{8 , 2 , 6},   {16 , 2 , 11},  {32 , 2 , 21} },
-	{{8 , 2 , 6},   {16 , 2 , 11},  {32 , 2 , 21} },
-	{{8 , 64 , 25}, {16 , 64 , 25}, {32 , 64 , 25} },
-	{{8 , 2 , 6},   {16 , 2 , 11},  {16 , 2 , 11} },
-	{{8 , 2 , 6},   {16 , 2 , 11},  {16 , 2 , 11} },
-	{{8 , 9 , 6},   {16 , 9 , 11},  {32 , 9 , 21} },
-	{{8 , 47 , 19}, {16 , 47 , 19}, {32 , 47 , 21} },
-	{{8 , 9 , 6},   {16 , 9 , 11},  {16 , 9 , 11} },
-	{{8 , 64 , 25}, {16 , 64 , 41}, {32 , 64 , 81} }
+/* 1 */	{ {4, 6,  3},  {4,  6,  3},  {4,  6,  3} },
+	{ {4, 2,  3},  {4,  2,  3},  {4,  2,  3} },
+	{ {8, 2,  6},  {16, 2,  11}, {16, 2,  11} },
+	{ {8, 2,  6},  {16, 2,  11}, {32, 2,  21} },
+	{ {8, 2,  6},  {16, 2,  11}, {32, 2,  21} },
+	{ {8, 2,  6},  {16, 2,  11}, {32, 2,  21} },
+	{ {8, 64, 25}, {16, 64, 25}, {32, 64, 25} },
+	{ {8, 2,  6},  {16, 2,  11}, {16, 2,  11} },
+	{ {8, 2,  6},  {16, 2,  11}, {16, 2,  11} },
+/* 10 */{ {8, 9,  6},  {16, 9,  11}, {32, 9,  21} },
+	{ {8, 47, 19}, {16, 47, 19}, {32, 47, 21} },
+	{ {8, 9,  6},  {16, 9,  11}, {16, 9,  11} },
+	{ {8, 64, 25}, {16, 64, 41}, {32, 64, 81} }
 };
 
 /* register addresses for read queues */
 static const struct arb_line read_arb_addr[NUM_RD_Q-1] = {
-	{PXP2_REG_RQ_BW_RD_L0, PXP2_REG_RQ_BW_RD_ADD0,
+/* 1 */	{PXP2_REG_RQ_BW_RD_L0, PXP2_REG_RQ_BW_RD_ADD0,
 		PXP2_REG_RQ_BW_RD_UBOUND0},
 	{PXP2_REG_PSWRQ_BW_L1, PXP2_REG_PSWRQ_BW_ADD1,
 		PXP2_REG_PSWRQ_BW_UB1},
@@ -494,7 +497,7 @@ static const struct arb_line read_arb_addr[NUM_RD_Q-1] = {
 		PXP2_REG_PSWRQ_BW_UB7},
 	{PXP2_REG_PSWRQ_BW_L8, PXP2_REG_PSWRQ_BW_ADD8,
 		PXP2_REG_PSWRQ_BW_UB8},
-	{PXP2_REG_PSWRQ_BW_L9, PXP2_REG_PSWRQ_BW_ADD9,
+/* 10 */{PXP2_REG_PSWRQ_BW_L9, PXP2_REG_PSWRQ_BW_ADD9,
 		PXP2_REG_PSWRQ_BW_UB9},
 	{PXP2_REG_PSWRQ_BW_L10, PXP2_REG_PSWRQ_BW_ADD10,
 		PXP2_REG_PSWRQ_BW_UB10},
@@ -514,7 +517,7 @@ static const struct arb_line read_arb_addr[NUM_RD_Q-1] = {
 		PXP2_REG_RQ_BW_RD_UBOUND17},
 	{PXP2_REG_RQ_BW_RD_L18, PXP2_REG_RQ_BW_RD_ADD18,
 		PXP2_REG_RQ_BW_RD_UBOUND18},
-	{PXP2_REG_RQ_BW_RD_L19, PXP2_REG_RQ_BW_RD_ADD19,
+/* 20 */{PXP2_REG_RQ_BW_RD_L19, PXP2_REG_RQ_BW_RD_ADD19,
 		PXP2_REG_RQ_BW_RD_UBOUND19},
 	{PXP2_REG_RQ_BW_RD_L20, PXP2_REG_RQ_BW_RD_ADD20,
 		PXP2_REG_RQ_BW_RD_UBOUND20},
@@ -536,7 +539,7 @@ static const struct arb_line read_arb_addr[NUM_RD_Q-1] = {
 
 /* register addresses for write queues */
 static const struct arb_line write_arb_addr[NUM_WR_Q-1] = {
-	{PXP2_REG_PSWRQ_BW_L1, PXP2_REG_PSWRQ_BW_ADD1,
+/* 1 */	{PXP2_REG_PSWRQ_BW_L1, PXP2_REG_PSWRQ_BW_ADD1,
 		PXP2_REG_PSWRQ_BW_UB1},
 	{PXP2_REG_PSWRQ_BW_L2, PXP2_REG_PSWRQ_BW_ADD2,
 		PXP2_REG_PSWRQ_BW_UB2},
@@ -554,7 +557,7 @@ static const struct arb_line write_arb_addr[NUM_WR_Q-1] = {
 		PXP2_REG_PSWRQ_BW_UB10},
 	{PXP2_REG_PSWRQ_BW_L11, PXP2_REG_PSWRQ_BW_ADD11,
 		PXP2_REG_PSWRQ_BW_UB11},
-	{PXP2_REG_PSWRQ_BW_L28, PXP2_REG_PSWRQ_BW_ADD28,
+/* 10 */{PXP2_REG_PSWRQ_BW_L28, PXP2_REG_PSWRQ_BW_ADD28,
 		PXP2_REG_PSWRQ_BW_UB28},
 	{PXP2_REG_RQ_BW_WR_L29, PXP2_REG_RQ_BW_WR_ADD29,
 		PXP2_REG_RQ_BW_WR_UBOUND29},
@@ -572,7 +575,12 @@ static void bnx2x_init_pxp(struct bnx2x *bp)
 			     bp->pcie_cap + PCI_EXP_DEVCTL, &devctl);
 	DP(NETIF_MSG_HW, "read 0x%x from devctl\n", devctl);
 	w_order = ((devctl & PCI_EXP_DEVCTL_PAYLOAD) >> 5);
-	r_order = ((devctl & PCI_EXP_DEVCTL_READRQ) >> 12);
+	if (bp->mrrs == -1)
+		r_order = ((devctl & PCI_EXP_DEVCTL_READRQ) >> 12);
+	else {
+		DP(NETIF_MSG_HW, "force read order to %d\n", bp->mrrs);
+		r_order = bp->mrrs;
+	}
 
 	if (r_order > MAX_RD_ORD) {
 		DP(NETIF_MSG_HW, "read order of %d  order adjusted to %d\n",
@@ -647,17 +655,18 @@ static void bnx2x_init_pxp(struct bnx2x *bp)
 	REG_WR(bp, PXP2_REG_WR_USDMDP_TH, (0x18 << w_order));
 
 	if (CHIP_IS_E1H(bp)) {
-		REG_WR(bp, PXP2_REG_WR_HC_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_USDM_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_CSDM_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_TSDM_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_XSDM_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_QM_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_TM_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_SRC_MPS, w_order+1);
-		REG_WR(bp, PXP2_REG_WR_DBG_MPS, w_order+1);
+		val = ((w_order == 0) ? 2 : 3);
+		REG_WR(bp, PXP2_REG_WR_HC_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_USDM_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_CSDM_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_TSDM_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_XSDM_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_QM_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_TM_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_SRC_MPS, val);
+		REG_WR(bp, PXP2_REG_WR_DBG_MPS, val);
 		REG_WR(bp, PXP2_REG_WR_DMAE_MPS, 2); /* DMAE is special */
-		REG_WR(bp, PXP2_REG_WR_CDU_MPS, w_order+1);
+		REG_WR(bp, PXP2_REG_WR_CDU_MPS, val);
 	}
 }
 
