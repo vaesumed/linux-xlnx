@@ -507,7 +507,7 @@ int ocfs2_calc_xattr_init(struct inode *dir,
 			  struct ocfs2_security_xattr_info *si,
 			  int *want_clusters,
 			  int *xattr_credits,
-			  struct ocfs2_alloc_context **xattr_ac)
+			  int *want_meta)
 {
 	int ret = 0;
 	struct ocfs2_super *osb = OCFS2_SB(dir->i_sb);
@@ -545,11 +545,7 @@ int ocfs2_calc_xattr_init(struct inode *dir,
 	 */
 	if (dir->i_sb->s_blocksize == OCFS2_MIN_BLOCKSIZE ||
 	    (s_size + a_size) > OCFS2_XATTR_FREE_IN_IBODY) {
-		ret = ocfs2_reserve_new_metadata_blocks(osb, 1, xattr_ac);
-		if (ret) {
-			mlog_errno(ret);
-			return ret;
-		}
+		*want_meta = *want_meta + 1;
 		*xattr_credits += OCFS2_XATTR_BLOCK_CREATE_CREDITS;
 	}
 
@@ -2592,8 +2588,9 @@ static int __ocfs2_xattr_set_handle(struct inode *inode,
 
 	if (!ret) {
 		/* Update inode ctime. */
-		ret = ocfs2_journal_access(ctxt->handle, inode, xis->inode_bh,
-					   OCFS2_JOURNAL_ACCESS_WRITE);
+		ret = ocfs2_journal_access_di(ctxt->handle, inode,
+					      xis->inode_bh,
+					      OCFS2_JOURNAL_ACCESS_WRITE);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
