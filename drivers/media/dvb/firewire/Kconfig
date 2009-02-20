@@ -17,6 +17,6 @@ config DVB_FIREDTV_IEEE1394
 	def_bool IEEE1394
 
 config DVB_FIREDTV_INPUT
-	def_bool INPUT
+	def_bool INPUT = y || (INPUT = m && DVB_FIREDTV = m)
 
 endif # DVB_FIREDTV
