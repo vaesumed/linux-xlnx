@@ -271,21 +271,6 @@ static const struct snd_kcontrol_new uda1380_snd_controls[] = {
 	SOC_SINGLE("AGC Switch", UDA1380_AGC, 0, 1, 0),
 };
 
-/* add non dapm controls */
-static int uda1380_add_controls(struct snd_soc_codec *codec)
-{
-	int err, i;
-
-	for (i = 0; i < ARRAY_SIZE(uda1380_snd_controls); i++) {
-		err = snd_ctl_add(codec->card,
-			snd_soc_cnew(&uda1380_snd_controls[i], codec, NULL));
-		if (err < 0)
-			return err;
-	}
-
-	return 0;
-}
-
 /* Input mux */
 static const struct snd_kcontrol_new uda1380_input_mux_control =
 	SOC_DAPM_ENUM("Route", uda1380_input_sel_enum);
@@ -371,7 +356,7 @@ static int uda1380_add_widgets(struct snd_soc_codec *codec)
 	return 0;
 }
 
-static int uda1380_set_dai_fmt(struct snd_soc_dai *codec_dai,
+static int uda1380_set_dai_fmt_both(struct snd_soc_dai *codec_dai,
 		unsigned int fmt)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
@@ -381,16 +366,70 @@ static int uda1380_set_dai_fmt(struct snd_soc_dai *codec_dai,
 	iface = uda1380_read_reg_cache(codec, UDA1380_IFACE);
 	iface &= ~(R01_SFORI_MASK | R01_SIM | R01_SFORO_MASK);
 
-	/* FIXME: how to select I2S for DATAO and MSB for DATAI correctly? */
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
 		iface |= R01_SFORI_I2S | R01_SFORO_I2S;
 		break;
 	case SND_SOC_DAIFMT_LSB:
-		iface |= R01_SFORI_LSB16 | R01_SFORO_I2S;
+		iface |= R01_SFORI_LSB16 | R01_SFORO_LSB16;
 		break;
 	case SND_SOC_DAIFMT_MSB:
-		iface |= R01_SFORI_MSB | R01_SFORO_I2S;
+		iface |= R01_SFORI_MSB | R01_SFORO_MSB;
+	}
+
+	if ((fmt & SND_SOC_DAIFMT_MASTER_MASK) == SND_SOC_DAIFMT_CBM_CFM)
+		iface |= R01_SIM;
+
+	uda1380_write(codec, UDA1380_IFACE, iface);
+
+	return 0;
+}
+
+static int uda1380_set_dai_fmt_playback(struct snd_soc_dai *codec_dai,
+		unsigned int fmt)
+{
+	struct snd_soc_codec *codec = codec_dai->codec;
+	int iface;
+
+	/* set up DAI based upon fmt */
+	iface = uda1380_read_reg_cache(codec, UDA1380_IFACE);
+	iface &= ~R01_SFORI_MASK;
+
+	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
+	case SND_SOC_DAIFMT_I2S:
+		iface |= R01_SFORI_I2S;
+		break;
+	case SND_SOC_DAIFMT_LSB:
+		iface |= R01_SFORI_LSB16;
+		break;
+	case SND_SOC_DAIFMT_MSB:
+		iface |= R01_SFORI_MSB;
+	}
+
+	uda1380_write(codec, UDA1380_IFACE, iface);
+
+	return 0;
+}
+
+static int uda1380_set_dai_fmt_capture(struct snd_soc_dai *codec_dai,
+		unsigned int fmt)
+{
+	struct snd_soc_codec *codec = codec_dai->codec;
+	int iface;
+
+	/* set up DAI based upon fmt */
+	iface = uda1380_read_reg_cache(codec, UDA1380_IFACE);
+	iface &= ~(R01_SIM | R01_SFORO_MASK);
+
+	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
+	case SND_SOC_DAIFMT_I2S:
+		iface |= R01_SFORO_I2S;
+		break;
+	case SND_SOC_DAIFMT_LSB:
+		iface |= R01_SFORO_LSB16;
+		break;
+	case SND_SOC_DAIFMT_MSB:
+		iface |= R01_SFORO_MSB;
 	}
 
 	if ((fmt & SND_SOC_DAIFMT_MASTER_MASK) == SND_SOC_DAIFMT_CBM_CFM)
@@ -412,7 +451,7 @@ static int uda1380_pcm_prepare(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int reg, reg_start, reg_end, clk;
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
@@ -433,8 +472,8 @@ static int uda1380_pcm_prepare(struct snd_pcm_substream *substream,
 		uda1380_write(codec, reg, uda1380_read_reg_cache(codec, reg));
 	}
 
-	/* FIXME enable DAC_CLK */
-	uda1380_write(codec, UDA1380_CLK, clk | R00_DAC_CLK);
+	/* FIXME restore DAC_CLK */
+	uda1380_write(codec, UDA1380_CLK, clk);
 
 	return 0;
 }
@@ -445,7 +484,7 @@ static int uda1380_pcm_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	u16 clk = uda1380_read_reg_cache(codec, UDA1380_CLK);
 
 	/* set WSPLL power and divider if running from this clock */
@@ -484,7 +523,7 @@ static void uda1380_pcm_shutdown(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_device *socdev = rtd->socdev;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	u16 clk = uda1380_read_reg_cache(codec, UDA1380_CLK);
 
 	/* shut down WSPLL power if running from this clock */
@@ -564,7 +603,7 @@ struct snd_soc_dai uda1380_dai[] = {
 		.shutdown = uda1380_pcm_shutdown,
 		.prepare = uda1380_pcm_prepare,
 		.digital_mute = uda1380_mute,
-		.set_fmt = uda1380_set_dai_fmt,
+		.set_fmt = uda1380_set_dai_fmt_both,
 	},
 },
 { /* playback only - dual interface */
@@ -581,7 +620,7 @@ struct snd_soc_dai uda1380_dai[] = {
 		.shutdown = uda1380_pcm_shutdown,
 		.prepare = uda1380_pcm_prepare,
 		.digital_mute = uda1380_mute,
-		.set_fmt = uda1380_set_dai_fmt,
+		.set_fmt = uda1380_set_dai_fmt_playback,
 	},
 },
 { /* capture only - dual interface*/
@@ -597,7 +636,7 @@ struct snd_soc_dai uda1380_dai[] = {
 		.hw_params = uda1380_pcm_hw_params,
 		.shutdown = uda1380_pcm_shutdown,
 		.prepare = uda1380_pcm_prepare,
-		.set_fmt = uda1380_set_dai_fmt,
+		.set_fmt = uda1380_set_dai_fmt_capture,
 	},
 },
 };
@@ -606,7 +645,7 @@ EXPORT_SYMBOL_GPL(uda1380_dai);
 static int uda1380_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 
 	uda1380_set_bias_level(codec, SND_SOC_BIAS_OFF);
 	return 0;
@@ -615,7 +654,7 @@ static int uda1380_suspend(struct platform_device *pdev, pm_message_t state)
 static int uda1380_resume(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int i;
 	u8 data[2];
 	u16 *cache = codec->reg_cache;
@@ -637,7 +676,7 @@ static int uda1380_resume(struct platform_device *pdev)
  */
 static int uda1380_init(struct snd_soc_device *socdev, int dac_clk)
 {
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int ret = 0;
 
 	codec->name = "UDA1380";
@@ -675,7 +714,8 @@ static int uda1380_init(struct snd_soc_device *socdev, int dac_clk)
 	}
 
 	/* uda1380 init */
-	uda1380_add_controls(codec);
+	snd_soc_add_controls(codec, uda1380_snd_controls,
+				ARRAY_SIZE(uda1380_snd_controls));
 	uda1380_add_widgets(codec);
 	ret = snd_soc_init_card(socdev);
 	if (ret < 0) {
@@ -702,7 +742,7 @@ static int uda1380_i2c_probe(struct i2c_client *i2c,
 {
 	struct snd_soc_device *socdev = uda1380_socdev;
 	struct uda1380_setup_data *setup = socdev->codec_data;
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 	int ret;
 
 	i2c_set_clientdata(i2c, codec);
@@ -793,7 +833,7 @@ static int uda1380_probe(struct platform_device *pdev)
 	if (codec == NULL)
 		return -ENOMEM;
 
-	socdev->codec = codec;
+	socdev->card->codec = codec;
 	mutex_init(&codec->mutex);
 	INIT_LIST_HEAD(&codec->dapm_widgets);
 	INIT_LIST_HEAD(&codec->dapm_paths);
@@ -817,7 +857,7 @@ static int uda1380_probe(struct platform_device *pdev)
 static int uda1380_remove(struct platform_device *pdev)
 {
 	struct snd_soc_device *socdev = platform_get_drvdata(pdev);
-	struct snd_soc_codec *codec = socdev->codec;
+	struct snd_soc_codec *codec = socdev->card->codec;
 
 	if (codec->control_data)
 		uda1380_set_bias_level(codec, SND_SOC_BIAS_OFF);
