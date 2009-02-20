@@ -3010,14 +3010,14 @@ static int radeon_cp_getparam(struct drm_device *dev, void *data, struct drm_fil
 		break;
 	case RADEON_PARAM_LAST_FRAME:
 		dev_priv->stats.last_frame_reads++;
-		value = GET_SCRATCH(0);
+		value = GET_SCRATCH(dev_priv, 0);
 		break;
 	case RADEON_PARAM_LAST_DISPATCH:
-		value = GET_SCRATCH(1);
+		value = GET_SCRATCH(dev_priv, 1);
 		break;
 	case RADEON_PARAM_LAST_CLEAR:
 		dev_priv->stats.last_clear_reads++;
-		value = GET_SCRATCH(2);
+		value = GET_SCRATCH(dev_priv, 2);
 		break;
 	case RADEON_PARAM_IRQ_NR:
 		value = drm_dev_to_irq(dev);
@@ -3155,6 +3155,7 @@ void radeon_driver_preclose(struct drm_device *dev, struct drm_file *file_priv)
 
 void radeon_driver_lastclose(struct drm_device *dev)
 {
+	radeon_surfaces_release(PCIGART_FILE_PRIV, dev->dev_private);
 	radeon_do_release(dev);
 }
 
