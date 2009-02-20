@@ -87,8 +87,6 @@ static int __devinit pcie_portdrv_probe (struct pci_dev *dev,
 
 	pci_save_state(dev);
 
-	pci_enable_pcie_error_reporting(dev);
-
 	return 0;
 }
 
