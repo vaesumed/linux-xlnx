@@ -2418,7 +2418,7 @@ nfsd4_delegreturn(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	status = nfserr_stale_stateid;
 	if (STALE_STATEID(stateid)) 
 		goto out;
-	status = nfs_ok;
+	status = nfserr_bad_stateid;
 	if (is_delegation_stateid(stateid))
 		goto out;
 	status = nfserr_bad_stateid;
