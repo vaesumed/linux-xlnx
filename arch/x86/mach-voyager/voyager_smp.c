@@ -70,7 +70,7 @@ cpumask_t phys_cpu_present_map = CPU_MASK_NONE;
 /* The internal functions */
 static void send_CPI(__u32 cpuset, __u8 cpi);
 static void ack_CPI(__u8 cpi);
-static int ack_QIC_CPI(__u8 cpi);
+static inline void ack_QIC_CPI(__u8 cpi);
 static void ack_special_QIC_CPI(__u8 cpi);
 static void ack_VIC_CPI(__u8 cpi);
 static void send_CPI_allbutself(__u8 cpi);
@@ -433,14 +433,9 @@ static void __init start_secondary(void *unused)
 
 	qic_setup();
 
-	if (is_cpu_quad() && !is_cpu_vic_boot()) {
+	if (is_cpu_quad() && !is_cpu_vic_boot())
 		/* clear the boot CPI */
-		__u8 dummy;
-
-		dummy =
-		    voyager_quad_cpi_addr[cpuid]->qic_cpi[VIC_CPU_BOOT_CPI].cpi;
-		printk("read dummy %d\n", dummy);
-	}
+		readw(&voyager_quad_cpi_addr[cpuid]->qic_cpi[VIC_CPU_BOOT_CPI].cpi);
 
 	/* lower the mask to receive CPIs */
 	vic_enable_cpi();
@@ -603,9 +598,7 @@ static void __init do_boot_cpu(__u8 cpu)
 		cpu_set(cpu, cpu_present_map);
 	} else {
 		printk("CPU%d FAILED TO BOOT: ", cpu);
-		if (*
-		    ((volatile unsigned char *)phys_to_virt(start_phys_address))
-		    == 0xA5)
+		if (readb(phys_to_virt(start_phys_address)) == 0xA5)
 			printk("Stuck.\n");
 		else
 			printk("Not responding.\n");
@@ -1306,18 +1299,15 @@ static void send_CPI(__u32 cpuset, __u8 cpi)
 
 /* Acknowledge receipt of CPI in the QIC, clear in QIC hardware and
  * set the cache line to shared by reading it.
- *
- * DON'T make this inline otherwise the cache line read will be
- * optimised away
  * */
-static int ack_QIC_CPI(__u8 cpi)
+static inline void ack_QIC_CPI(__u8 cpi)
 {
 	__u8 cpu = hard_smp_processor_id();
 
 	cpi &= 7;
 
 	outb(1 << cpi, QIC_INTERRUPT_CLEAR1);
-	return voyager_quad_cpi_addr[cpu]->qic_cpi[cpi].cpi;
+	readw(&voyager_quad_cpi_addr[cpu]->qic_cpi[cpi].cpi);
 }
 
 static void ack_special_QIC_CPI(__u8 cpi)
