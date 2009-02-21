@@ -784,9 +784,7 @@ void __init setup_arch(char **cmdline_p)
 	reserve_early_setup_data();
 
 	if (acpi_mps_check()) {
-#ifdef CONFIG_X86_LOCAL_APIC
-		disable_apic = 1;
-#endif
+		disable_APIC();
 		setup_clear_cpu_cap(X86_FEATURE_APIC);
 	}
 

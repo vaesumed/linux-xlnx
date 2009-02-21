@@ -225,6 +225,9 @@ void __init generic_bigsmp_probe(void)
 
 void __init generic_apic_probe(void)
 {
+	if (disable_apic)
+		return;
+
 	if (!cmdline_apic) {
 		int i;
 		for (i = 0; apic_probe[i]; i++) {

@@ -1578,6 +1578,9 @@ void __init init_apic_mappings(void)
 {
 	unsigned int new_apicid;
 
+	if (disable_apic)
+		return;
+
 	if (x2apic_mode) {
 		boot_cpu_physical_apicid = read_apic_id();
 		return;
