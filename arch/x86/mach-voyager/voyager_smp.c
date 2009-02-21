@@ -1266,6 +1266,8 @@ void __init voyager_smp_intr_init(void)
 	QIC_SET_GATE(QIC_RESCHEDULE_CPI, qic_reschedule_interrupt);
 	QIC_SET_GATE(QIC_ENABLE_IRQ_CPI, qic_enable_irq_interrupt);
 	QIC_SET_GATE(QIC_CALL_FUNCTION_CPI, qic_call_function_interrupt);
+	QIC_SET_GATE(QIC_CALL_FUNCTION_SINGLE_CPI,
+		     qic_call_function_single_interrupt);
 
 	/* now put the VIC descriptor into the first 48 IRQs
 	 *
