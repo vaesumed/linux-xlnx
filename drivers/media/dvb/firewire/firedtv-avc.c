@@ -20,6 +20,7 @@
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
 #include <linux/string.h>
+#include <linux/stringify.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
 
@@ -88,6 +89,78 @@ struct avc_response_frame {
 	u8 operand[509];
 };
 
+#define AVC_DEBUG_FCP_SUBACTIONS	1
+#define AVC_DEBUG_FCP_PAYLOADS		2
+
+static int avc_debug;
+module_param_named(debug, avc_debug, int, 0644);
+MODULE_PARM_DESC(debug, "Verbose logging (default = 0"
+	", FCP subactions = "	__stringify(AVC_DEBUG_FCP_SUBACTIONS)
+	", FCP payloads = "	__stringify(AVC_DEBUG_FCP_PAYLOADS)
+	", or all = -1)");
+
+static const char *debug_fcp_ctype(unsigned int ctype)
+{
+	static const char *ctypes[] = {
+		[0x0] = "CONTROL",		[0x1] = "STATUS",
+		[0x2] = "SPECIFIC INQUIRY",	[0x3] = "NOTIFY",
+		[0x4] = "GENERAL INQUIRY",	[0x8] = "NOT IMPLEMENTED",
+		[0x9] = "ACCEPTED",		[0xa] = "REJECTED",
+		[0xb] = "IN TRANSITION",	[0xc] = "IMPLEMENTED/STABLE",
+		[0xd] = "CHANGED",		[0xf] = "INTERIM",
+	};
+	const char *ret = ctype < ARRAY_SIZE(ctypes) ? ctypes[ctype] : NULL;
+
+	return ret ? ret : "?";
+}
+
+static const char *debug_fcp_opcode(unsigned int opcode,
+				    const u8 *data, size_t length)
+{
+	switch (opcode) {
+	case AVC_OPCODE_VENDOR:			break;
+	case AVC_OPCODE_READ_DESCRIPTOR:	return "ReadDescriptor";
+	case AVC_OPCODE_DSIT:			return "DirectSelectInfo.Type";
+	case AVC_OPCODE_DSD:			return "DirectSelectData";
+	default:				return "?";
+	}
+
+	if (length < 7 ||
+	    data[3] != SFE_VENDOR_DE_COMPANYID_0 ||
+	    data[4] != SFE_VENDOR_DE_COMPANYID_1 ||
+	    data[5] != SFE_VENDOR_DE_COMPANYID_2)
+		return "Vendor";
+
+	switch (data[6]) {
+	case SFE_VENDOR_OPCODE_REGISTER_REMOTE_CONTROL:	return "RegisterRC";
+	case SFE_VENDOR_OPCODE_LNB_CONTROL:		return "LNBControl";
+	case SFE_VENDOR_OPCODE_TUNE_QPSK:		return "TuneQPSK";
+	case SFE_VENDOR_OPCODE_HOST2CA:			return "Host2CA";
+	case SFE_VENDOR_OPCODE_CA2HOST:			return "CA2Host";
+	}
+	return "Vendor";
+}
+
+static void debug_fcp(const u8 *data, size_t length)
+{
+	unsigned int subunit_type, subunit_id, op;
+	const char *prefix = data[0] > 7 ? "FCP <- " : "FCP -> ";
+
+	if (avc_debug & AVC_DEBUG_FCP_SUBACTIONS) {
+		subunit_type = data[1] >> 3;
+		subunit_id = data[1] & 7;
+		op = subunit_type == 0x1e || subunit_id == 5 ? ~0 : data[2];
+		printk(KERN_INFO "%ssu=%x.%x l=%d: %-8s - %s\n",
+		       prefix, subunit_type, subunit_id, length,
+		       debug_fcp_ctype(data[0]),
+		       debug_fcp_opcode(op, data, length));
+	}
+
+	if (avc_debug & AVC_DEBUG_FCP_PAYLOADS)
+		print_hex_dump(KERN_INFO, prefix, DUMP_PREFIX_NONE, 16, 1,
+			       data, length, false);
+}
+
 static int __avc_write(struct firedtv *fdtv,
 		const struct avc_command_frame *c, struct avc_response_frame *r)
 {
@@ -97,6 +170,9 @@ static int __avc_write(struct firedtv *fdtv,
 		fdtv->avc_reply_received = false;
 
 	for (retry = 0; retry < 6; retry++) {
+		if (unlikely(avc_debug))
+			debug_fcp(&c->ctype, c->length);
+
 		err = fdtv->backend->write(fdtv, FCP_COMMAND_REGISTER,
 					   (void *)&c->ctype, c->length);
 		if (err) {
@@ -143,6 +219,9 @@ int avc_recv(struct firedtv *fdtv, void *data, size_t length)
 {
 	struct avc_response_frame *r =
 			data - offsetof(struct avc_response_frame, response);
+
+	if (unlikely(avc_debug))
+		debug_fcp(data, length);
 
 	if (length >= 8 &&
 	    r->operand[0] == SFE_VENDOR_DE_COMPANYID_0 &&
