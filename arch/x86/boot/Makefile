@@ -31,6 +31,7 @@ setup-y		+= header.o main.o mca.o memory.o pm.o pmjump.o
 setup-y		+= printf.o regs.o string.o tty.o video.o video-mode.o
 setup-y		+= version.o
 setup-$(CONFIG_X86_APM_BOOT) += apm.o
+setup-$(CONFIG_X86_VOYAGER) += voyager.o
 
 # The link order of the video-*.o modules can matter.  In particular,
 # video-vga.o *must* be listed first, followed by video-vesa.o.
