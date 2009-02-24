@@ -47,7 +47,6 @@ struct kmem_cache_cpu {
 struct kmem_cache_node {
 	spinlock_t list_lock;	/* Protect partial list and nr_partial */
 	unsigned long nr_partial;
-	unsigned long min_partial;
 	struct list_head partial;
 #ifdef CONFIG_SLUB_DEBUG
 	atomic_long_t nr_slabs;
@@ -90,6 +89,7 @@ struct kmem_cache {
 	void (*ctor)(void *);
 	int inuse;		/* Offset to metadata */
 	int align;		/* Alignment */
+	unsigned long min_partial;
 	const char *name;	/* Name (only for display!) */
 	struct list_head list;	/* List of slab caches */
 #ifdef CONFIG_SLUB_DEBUG
@@ -130,9 +130,9 @@ struct kmem_cache {
  * This should be dropped to PAGE_SIZE / 2 once the page allocator
  * "fastpath" becomes competitive with the slab allocator fastpaths.
  */
-#define SLUB_MAX_SIZE (PAGE_SIZE)
+#define SLUB_MAX_SIZE (2 * PAGE_SIZE)
 
-#define SLUB_PAGE_SHIFT (PAGE_SHIFT + 1)
+#define SLUB_PAGE_SHIFT (PAGE_SHIFT + 2)
 
 /*
  * We keep the general caches in an array of slab caches that are used for
