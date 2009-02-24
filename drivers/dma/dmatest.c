@@ -433,10 +433,10 @@ static void __exit dmatest_exit(void)
 
 	list_for_each_entry_safe(dtc, _dtc, &dmatest_channels, node) {
 		list_del(&dtc->node);
-		dmatest_cleanup_channel(dtc);
 		pr_debug("dmatest: dropped channel %s\n",
 			 dma_chan_name(dtc->chan));
 		dma_release_channel(dtc->chan);
+		dmatest_cleanup_channel(dtc);
 	}
 }
 module_exit(dmatest_exit);
