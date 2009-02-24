@@ -939,8 +939,6 @@ static int init_irq (ide_hwif_t *hwif)
 	struct ide_io_ports *io_ports = &hwif->io_ports;
 	int sa = 0;
 
-	mutex_lock(&ide_cfg_mtx);
-
 #if defined(__mc68000__)
 	sa = IRQF_SHARED;
 #endif /* __mc68000__ */
@@ -974,10 +972,8 @@ static int init_irq (ide_hwif_t *hwif)
 		printk(KERN_CONT " (serialized)");
 	printk(KERN_CONT "\n");
 
-	mutex_unlock(&ide_cfg_mtx);
 	return 0;
 out_up:
-	mutex_unlock(&ide_cfg_mtx);
 	return 1;
 }
 
