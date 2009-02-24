@@ -34,14 +34,9 @@ static struct {
 	 * an ongoing cpu hotplug operation.
 	 */
 	int refcount;
-} cpu_hotplug;
-
-void __init cpu_hotplug_init(void)
-{
-	cpu_hotplug.active_writer = NULL;
-	mutex_init(&cpu_hotplug.lock);
-	cpu_hotplug.refcount = 0;
-}
+} cpu_hotplug = {
+	.lock = __MUTEX_INITIALIZER(cpu_hotplug.lock),
+};
 
 #ifdef CONFIG_HOTPLUG_CPU
 
@@ -565,3 +560,13 @@ void init_cpu_online(const struct cpumask *src)
 {
 	cpumask_copy(to_cpumask(cpu_online_bits), src);
 }
+
+/* Deprecated accessors. */
+struct cpumask *_cpu_possible_mask_nonconst = to_cpumask(cpu_possible_bits);
+EXPORT_SYMBOL(_cpu_possible_mask_nonconst);
+struct cpumask *_cpu_online_mask_nonconst = to_cpumask(cpu_online_bits);
+EXPORT_SYMBOL(_cpu_online_mask_nonconst);
+struct cpumask *_cpu_present_mask_nonconst = to_cpumask(cpu_present_bits);
+EXPORT_SYMBOL(_cpu_present_mask_nonconst);
+struct cpumask *_cpu_active_mask_nonconst = to_cpumask(cpu_active_bits);
+EXPORT_SYMBOL(_cpu_active_mask_nonconst);
