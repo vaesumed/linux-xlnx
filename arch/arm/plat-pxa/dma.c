@@ -1,5 +1,5 @@
 /*
- *  linux/arch/arm/mach-pxa/dma.c
+ *  linux/arch/arm/plat-pxa/dma.c
  *
  *  PXA DMA registration and IRQ dispatching
  *
@@ -23,8 +23,6 @@
 #include <mach/hardware.h>
 #include <mach/dma.h>
 
-#include <mach/pxa-regs.h>
-
 struct dma_channel {
 	char *name;
 	pxa_dma_prio prio;
@@ -36,8 +34,8 @@ static struct dma_channel *dma_channels;
 static int num_dma_channels;
 
 int pxa_request_dma (char *name, pxa_dma_prio prio,
-			 void (*irq_handler)(int, void *),
-		 	 void *data)
+			void (*irq_handler)(int, void *),
+			void *data)
 {
 	unsigned long flags;
 	int i, found = 0;
@@ -113,7 +111,7 @@ static irqreturn_t dma_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-int __init pxa_init_dma(int num_ch)
+int __init pxa_init_dma(int irq, int num_ch)
 {
 	int i, ret;
 
@@ -131,7 +129,7 @@ int __init pxa_init_dma(int num_ch)
 		dma_channels[i].prio = min((i & 0xf) >> 2, DMA_PRIO_LOW);
 	}
 
-	ret = request_irq(IRQ_DMA, dma_irq_handler, IRQF_DISABLED, "DMA", NULL);
+	ret = request_irq(irq, dma_irq_handler, IRQF_DISABLED, "DMA", NULL);
 	if (ret) {
 		printk (KERN_CRIT "Wow!  Can't register IRQ for DMA\n");
 		kfree(dma_channels);
