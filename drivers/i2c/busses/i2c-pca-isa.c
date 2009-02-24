@@ -49,7 +49,8 @@ static void pca_isa_writebyte(void *pd, int reg, int val)
 {
 #ifdef DEBUG_IO
 	static char *names[] = { "T/O", "DAT", "ADR", "CON" };
-	printk("*** write %s at %#lx <= %#04x\n", names[reg], base+reg, val);
+	printk(KERN_DEBUG "*** write %s at %#lx <= %#04x\n", names[reg],
+	       base+reg, val);
 #endif
 	outb(val, base+reg);
 }
@@ -60,7 +61,7 @@ static int pca_isa_readbyte(void *pd, int reg)
 #ifdef DEBUG_IO
 	{
 		static char *names[] = { "STA", "DAT", "ADR", "CON" };
-		printk("*** read  %s => %#04x\n", names[reg], res);
+		printk(KERN_DEBUG "*** read  %s => %#04x\n", names[reg], res);
 	}
 #endif
 	return res;
@@ -103,7 +104,7 @@ static struct i2c_adapter pca_isa_ops = {
 	.owner          = THIS_MODULE,
 	.algo_data	= &pca_isa_data,
 	.name		= "PCA9564 ISA Adapter",
-	.timeout	= 100,
+	.timeout	= HZ,
 };
 
 static int __devinit pca_isa_match(struct device *dev, unsigned int id)
