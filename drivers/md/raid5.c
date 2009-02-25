@@ -4467,8 +4467,7 @@ abort:
 		kfree(conf->stripe_hashtbl);
 		kfree(conf);
 	}
-	if (mddev->thread)
-		md_unregister_thread(mddev->thread);
+	md_unregister_thread(mddev->thread);
 	mddev->private = NULL;
 	printk(KERN_ALERT "raid5: failed to run raid set %s\n", mdname(mddev));
 	return -EIO;
