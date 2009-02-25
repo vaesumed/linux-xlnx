@@ -177,19 +177,23 @@ acpi_tb_print_table_header(acpi_physical_address address,
 			   struct acpi_table_header *header)
 {
 
+	/*
+	 * The reason that the Address is cast to a void pointer is so that we
+	 * can use %p which will work properly on both 32-bit and 64-bit hosts.
+	 */
 	if (ACPI_COMPARE_NAME(header->signature, ACPI_SIG_FACS)) {
 
-		/* FACS only has signature and length fields of common table header */
+		/* FACS only has signature and length fields */
 
-		ACPI_INFO((AE_INFO, "%4.4s %08lX, %04X",
-			   header->signature, (unsigned long)address,
+		ACPI_INFO((AE_INFO, "%4.4s %p %05X",
+			   header->signature, ACPI_CAST_PTR(void, address),
 			   header->length));
 	} else if (ACPI_COMPARE_NAME(header->signature, ACPI_SIG_RSDP)) {
 
 		/* RSDP has no common fields */
 
-		ACPI_INFO((AE_INFO, "RSDP %08lX, %04X (r%d %6.6s)",
-			   (unsigned long)address,
+		ACPI_INFO((AE_INFO, "RSDP %p %05X (v%.2d %6.6s)",
+			   ACPI_CAST_PTR (void, address),
 			   (ACPI_CAST_PTR(struct acpi_table_rsdp, header)->
 			    revision >
 			    0) ? ACPI_CAST_PTR(struct acpi_table_rsdp,
@@ -202,8 +206,8 @@ acpi_tb_print_table_header(acpi_physical_address address,
 		/* Standard ACPI table with full common header */
 
 		ACPI_INFO((AE_INFO,
-			   "%4.4s %08lX, %04X (r%d %6.6s %8.8s %8X %4.4s %8X)",
-			   header->signature, (unsigned long)address,
+			   "%4.4s %p %05X (v%.2d %6.6s %8.8s %08X %4.4s %08X)",
+			   header->signature, ACPI_CAST_PTR (void, address),
 			   header->length, header->revision, header->oem_id,
 			   header->oem_table_id, header->oem_revision,
 			   header->asl_compiler_id,
@@ -413,7 +417,8 @@ acpi_tb_get_root_table_entry(u8 *table_entry, u32 table_entry_size)
 	} else {
 		/*
 		 * 32-bit platform, XSDT: Truncate 64-bit to 32-bit and return
-		 * 64-bit platform, XSDT: Move (unaligned) 64-bit to local, return 64-bit
+		 * 64-bit platform, XSDT: Move (unaligned) 64-bit to local,
+		 *  return 64-bit
 		 */
 		ACPI_MOVE_64_TO_64(&address64, table_entry);
 
@@ -423,7 +428,8 @@ acpi_tb_get_root_table_entry(u8 *table_entry, u32 table_entry_size)
 			/* Will truncate 64-bit address to 32 bits, issue warning */
 
 			ACPI_WARNING((AE_INFO,
-				      "64-bit Physical Address in XSDT is too large (%8.8X%8.8X), truncating",
+				      "64-bit Physical Address in XSDT is too large (%8.8X%8.8X),"
+				      " truncating",
 				      ACPI_FORMAT_UINT64(address64)));
 		}
 #endif
@@ -546,13 +552,12 @@ acpi_tb_parse_root_table(acpi_physical_address rsdp_address)
 
 	/* Calculate the number of tables described in the root table */
 
-	table_count =
-	    (u32) ((table->length -
-		    sizeof(struct acpi_table_header)) / table_entry_size);
-
+	table_count = (u32)((table->length - sizeof(struct acpi_table_header)) /
+			    table_entry_size);
 	/*
-	 * First two entries in the table array are reserved for the DSDT and FACS,
-	 * which are not actually present in the RSDT/XSDT - they come from the FADT
+	 * First two entries in the table array are reserved for the DSDT
+	 * and FACS, which are not actually present in the RSDT/XSDT - they
+	 * come from the FADT
 	 */
 	table_entry =
 	    ACPI_CAST_PTR(u8, table) + sizeof(struct acpi_table_header);
