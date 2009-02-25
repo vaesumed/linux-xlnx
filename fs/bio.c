@@ -1415,8 +1415,7 @@ static void bio_pair_end_2(struct bio *bi, int err)
 }
 
 /*
- * split a bio - only worry about a bio with a single page
- * in it's iovec
+ * split a bio - only worry about a bio with a single page in its iovec
  */
 struct bio_pair *bio_split(struct bio *bi, int first_sectors)
 {
