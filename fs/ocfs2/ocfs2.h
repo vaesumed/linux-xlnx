@@ -340,6 +340,9 @@ struct ocfs2_super
 
 	unsigned int			osb_dx_mask;
 	u32				osb_dx_seed[4];
+
+	/* used to protect metaecc calculation check of xattr. */
+	spinlock_t osb_xattr_lock;
 };
 
 #define OCFS2_SB(sb)	    ((struct ocfs2_super *)(sb)->s_fs_info)
