@@ -43,6 +43,7 @@
 #define SMB_COM_CREATE_DIRECTORY      0x00 /* trivial response */
 #define SMB_COM_DELETE_DIRECTORY      0x01 /* trivial response */
 #define SMB_COM_CLOSE                 0x04 /* triv req/rsp, timestamp ignored */
+#define SMB_COM_FLUSH                 0x05 /* triv req/rsp */
 #define SMB_COM_DELETE                0x06 /* trivial response */
 #define SMB_COM_RENAME                0x07 /* trivial response */
 #define SMB_COM_QUERY_INFORMATION     0x08 /* aka getattr */
@@ -789,6 +790,12 @@ typedef struct smb_com_close_rsp {
 	struct smb_hdr hdr;	/* wct = 0 */
 	__u16 ByteCount;	/* bct = 0 */
 } __attribute__((packed)) CLOSE_RSP;
+
+typedef struct smb_com_flush_req {
+	struct smb_hdr hdr;	/* wct = 1 */
+	__u16 FileID;
+	__u16 ByteCount;	/* 0 */
+} __attribute__((packed)) FLUSH_REQ;
 
 typedef struct smb_com_findclose_req {
 	struct smb_hdr hdr; /* wct = 1 */
@@ -1924,19 +1931,19 @@ typedef struct smb_com_transaction2_get_dfs_refer_req {
 #define DFS_TYPE_ROOT 0x0001
 
 /* Referral Entry Flags */
-#define DFS_NAME_LIST_REF 0x0200
+#define DFS_NAME_LIST_REF 0x0200 /* set for domain or DC referral responses */
+#define DFS_TARGET_SET_BOUNDARY 0x0400 /* only valid with version 4 dfs req */
 
-typedef struct dfs_referral_level_3 {
-	__le16 VersionNumber;
+typedef struct dfs_referral_level_3 { /* version 4 is same, + one flag bit */
+	__le16 VersionNumber;  /* must be 3 or 4 */
 	__le16 Size;
 	__le16 ServerType; /* 0x0001 = root targets; 0x0000 = link targets */
-	__le16 ReferralEntryFlags; /* 0x0200 bit set only for domain
-				      or DC referral responce */
+	__le16 ReferralEntryFlags;
 	__le32 TimeToLive;
 	__le16 DfsPathOffset;
 	__le16 DfsAlternatePathOffset;
 	__le16 NetworkAddressOffset; /* offset of the link target */
-	__le16 ServiceSiteGuid;
+	__u8   ServiceSiteGuid[16];  /* MBZ, ignored */
 } __attribute__((packed)) REFERRAL3;
 
 typedef struct smb_com_transaction_get_dfs_refer_rsp {
@@ -1946,15 +1953,15 @@ typedef struct smb_com_transaction_get_dfs_refer_rsp {
 	__u8 Pad;
 	__le16 PathConsumed;
 	__le16 NumberOfReferrals;
-	__le16 DFSFlags;
-	__u16 Pad2;
+	__le32 DFSFlags;
 	REFERRAL3 referrals[1];	/* array of level 3 dfs_referral structures */
 	/* followed by the strings pointed to by the referral structures */
 } __attribute__((packed)) TRANSACTION2_GET_DFS_REFER_RSP;
 
 /* DFS Flags */
-#define DFSREF_REFERRAL_SERVER  0x0001
-#define DFSREF_STORAGE_SERVER   0x0002
+#define DFSREF_REFERRAL_SERVER  0x00000001 /* all targets are DFS roots */
+#define DFSREF_STORAGE_SERVER   0x00000002 /* no further ref requests needed */
+#define DFSREF_TARGET_FAILBACK  0x00000004 /* only for DFS referral version 4 */
 
 /* IOCTL information */
 /*
