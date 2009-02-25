@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel 10 Gigabit PCI Express Linux driver
-  Copyright(c) 1999 - 2008 Intel Corporation.
+  Copyright(c) 1999 - 2009 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -31,7 +31,6 @@
 #include <linux/types.h>
 #include <linux/pci.h>
 #include <linux/netdevice.h>
-#include <linux/inet_lro.h>
 #include <linux/aer.h>
 
 #include "ixgbe_type.h"
@@ -88,9 +87,6 @@
 #define IXGBE_TX_FLAGS_VLAN_PRIO_MASK   0x0000e000
 #define IXGBE_TX_FLAGS_VLAN_SHIFT	16
 
-#define IXGBE_MAX_LRO_DESCRIPTORS       8
-#define IXGBE_MAX_LRO_AGGREGATE         32
-
 /* wrapper around a pointer to a socket buffer,
  * so a DMA handle can be stored along with the buffer */
 struct ixgbe_tx_buffer {
@@ -142,8 +138,6 @@ struct ixgbe_ring {
 	/* cpu for tx queue */
 	int cpu;
 #endif
-	struct net_lro_mgr lro_mgr;
-	bool lro_used;
 	struct ixgbe_queue_stats stats;
 	u16 v_idx; /* maps directly to the index for this ring in the hardware
 	           * vector array, can also be used for finding the bit in EICR
@@ -210,9 +204,13 @@ struct ixgbe_q_vector {
 #define OTHER_VECTOR 1
 #define NON_Q_VECTORS (OTHER_VECTOR)
 
-#define MAX_MSIX_Q_VECTORS 16
+#define MAX_MSIX_VECTORS_82598 18
+#define MAX_MSIX_Q_VECTORS_82598 16
+
+#define MAX_MSIX_Q_VECTORS MAX_MSIX_Q_VECTORS_82598
+#define MAX_MSIX_COUNT MAX_MSIX_VECTORS_82598
+
 #define MIN_MSIX_Q_VECTORS 2
-#define MAX_MSIX_COUNT (MAX_MSIX_Q_VECTORS + NON_Q_VECTORS)
 #define MIN_MSIX_COUNT (MIN_MSIX_Q_VECTORS + NON_Q_VECTORS)
 
 /* board specific private data structure */
@@ -250,6 +248,7 @@ struct ixgbe_adapter {
 	u64 hw_csum_rx_good;
 	u64 non_eop_descs;
 	int num_msix_vectors;
+	int max_msix_q_vectors;         /* true count of q_vectors for device */
 	struct ixgbe_ring_feature ring_feature[3];
 	struct msix_entry *msix_entries;
 
@@ -301,9 +300,6 @@ struct ixgbe_adapter {
 
 	unsigned long state;
 	u64 tx_busy;
-	u64 lro_aggregated;
-	u64 lro_flushed;
-	u64 lro_no_desc;
 	unsigned int tx_ring_count;
 	unsigned int rx_ring_count;
 
@@ -314,6 +310,8 @@ struct ixgbe_adapter {
 	struct work_struct watchdog_task;
 	struct work_struct sfp_task;
 	struct timer_list sfp_timer;
+
+	u16 eeprom_version;
 };
 
 enum ixbge_state_t {

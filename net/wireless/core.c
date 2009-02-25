@@ -240,6 +240,8 @@ struct wiphy *wiphy_new(struct cfg80211_ops *ops, int sizeof_priv)
 	mutex_init(&drv->mtx);
 	mutex_init(&drv->devlist_mtx);
 	INIT_LIST_HEAD(&drv->netdev_list);
+	spin_lock_init(&drv->bss_lock);
+	INIT_LIST_HEAD(&drv->bss_list);
 
 	device_initialize(&drv->wiphy.dev);
 	drv->wiphy.dev.class = &ieee80211_class;
@@ -259,6 +261,9 @@ int wiphy_register(struct wiphy *wiphy)
 	int i;
 	u16 ifmodes = wiphy->interface_modes;
 
+	if (WARN_ON(wiphy->max_scan_ssids < 1))
+		return -EINVAL;
+
 	/* sanity check ifmodes */
 	WARN_ON(!ifmodes);
 	ifmodes &= ((1 << __NL80211_IFTYPE_AFTER_LAST) - 1) & ~1;
@@ -273,10 +278,16 @@ int wiphy_register(struct wiphy *wiphy)
 
 		sband->band = band;
 
-		if (!sband->n_channels || !sband->n_bitrates) {
-			WARN_ON(1);
+		if (WARN_ON(!sband->n_channels || !sband->n_bitrates))
 			return -EINVAL;
-		}
+
+		/*
+		 * Since we use a u32 for rate bitmaps in
+		 * ieee80211_get_response_rate, we cannot
+		 * have more than 32 legacy rates.
+		 */
+		if (WARN_ON(sband->n_bitrates > 32))
+			return -EINVAL;
 
 		for (i = 0; i < sband->n_channels; i++) {
 			sband->channels[i].orig_flags =
@@ -361,8 +372,11 @@ EXPORT_SYMBOL(wiphy_unregister);
 
 void cfg80211_dev_free(struct cfg80211_registered_device *drv)
 {
+	struct cfg80211_internal_bss *scan, *tmp;
 	mutex_destroy(&drv->mtx);
 	mutex_destroy(&drv->devlist_mtx);
+	list_for_each_entry_safe(scan, tmp, &drv->bss_list, list)
+		cfg80211_put_bss(&scan->pub);
 	kfree(drv);
 }
 

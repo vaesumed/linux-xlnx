@@ -860,7 +860,7 @@ static int tg3_bmcr_reset(struct tg3 *tp)
 
 static int tg3_mdio_read(struct mii_bus *bp, int mii_id, int reg)
 {
-	struct tg3 *tp = (struct tg3 *)bp->priv;
+	struct tg3 *tp = bp->priv;
 	u32 val;
 
 	if (tp->tg3_flags3 & TG3_FLG3_MDIOBUS_PAUSED)
@@ -874,7 +874,7 @@ static int tg3_mdio_read(struct mii_bus *bp, int mii_id, int reg)
 
 static int tg3_mdio_write(struct mii_bus *bp, int mii_id, int reg, u16 val)
 {
-	struct tg3 *tp = (struct tg3 *)bp->priv;
+	struct tg3 *tp = bp->priv;
 
 	if (tp->tg3_flags3 & TG3_FLG3_MDIOBUS_PAUSED)
 		return -EAGAIN;
@@ -4460,7 +4460,7 @@ static int tg3_poll(struct napi_struct *napi, int budget)
 			sblk->status &= ~SD_STATUS_UPDATED;
 
 		if (likely(!tg3_has_work(tp))) {
-			netif_rx_complete(napi);
+			napi_complete(napi);
 			tg3_restart_ints(tp);
 			break;
 		}
@@ -4470,7 +4470,7 @@ static int tg3_poll(struct napi_struct *napi, int budget)
 
 tx_recovery:
 	/* work_done is guaranteed to be less than budget. */
-	netif_rx_complete(napi);
+	napi_complete(napi);
 	schedule_work(&tp->reset_task);
 	return work_done;
 }
@@ -4519,7 +4519,7 @@ static irqreturn_t tg3_msi_1shot(int irq, void *dev_id)
 	prefetch(&tp->rx_rcb[tp->rx_rcb_ptr]);
 
 	if (likely(!tg3_irq_sync(tp)))
-		netif_rx_schedule(&tp->napi);
+		napi_schedule(&tp->napi);
 
 	return IRQ_HANDLED;
 }
@@ -4544,7 +4544,7 @@ static irqreturn_t tg3_msi(int irq, void *dev_id)
 	 */
 	tw32_mailbox(MAILBOX_INTERRUPT_0 + TG3_64BIT_REG_LOW, 0x00000001);
 	if (likely(!tg3_irq_sync(tp)))
-		netif_rx_schedule(&tp->napi);
+		napi_schedule(&tp->napi);
 
 	return IRQ_RETVAL(1);
 }
@@ -4586,7 +4586,7 @@ static irqreturn_t tg3_interrupt(int irq, void *dev_id)
 	sblk->status &= ~SD_STATUS_UPDATED;
 	if (likely(tg3_has_work(tp))) {
 		prefetch(&tp->rx_rcb[tp->rx_rcb_ptr]);
-		netif_rx_schedule(&tp->napi);
+		napi_schedule(&tp->napi);
 	} else {
 		/* No work, shared interrupt perhaps?  re-enable
 		 * interrupts, and flush that PCI write
@@ -4632,7 +4632,7 @@ static irqreturn_t tg3_interrupt_tagged(int irq, void *dev_id)
 	tw32_mailbox_f(MAILBOX_INTERRUPT_0 + TG3_64BIT_REG_LOW, 0x00000001);
 	if (tg3_irq_sync(tp))
 		goto out;
-	if (netif_rx_schedule_prep(&tp->napi)) {
+	if (napi_schedule_prep(&tp->napi)) {
 		prefetch(&tp->rx_rcb[tp->rx_rcb_ptr]);
 		/* Update last_tag to mark that this status has been
 		 * seen. Because interrupt may be shared, we may be
@@ -4640,7 +4640,7 @@ static irqreturn_t tg3_interrupt_tagged(int irq, void *dev_id)
 		 * if tg3_poll() is not scheduled.
 		 */
 		tp->last_tag = sblk->status_tag;
-		__netif_rx_schedule(&tp->napi);
+		__napi_schedule(&tp->napi);
 	}
 out:
 	return IRQ_RETVAL(handled);
