@@ -719,15 +719,16 @@ static int c2_pseudo_change_mtu(struct net_device *netdev, int new_mtu)
 	return ret;
 }
 
+static const struct net_device_ops c2_netdev_ops = {
+	.ndo_open       = c2_pseudo_up,
+	.ndo_stop       = c2_pseudo_down,
+	.ndo_start_xmit = c2_pseudo_xmit_frame,
+	.ndo_change_mtu = c2_pseudo_change_mtu,
+};
+
 static void setup(struct net_device *netdev)
 {
-	netdev->open = c2_pseudo_up;
-	netdev->stop = c2_pseudo_down;
-	netdev->hard_start_xmit = c2_pseudo_xmit_frame;
-	netdev->get_stats = NULL;
-	netdev->tx_timeout = NULL;
-	netdev->set_mac_address = NULL;
-	netdev->change_mtu = c2_pseudo_change_mtu;
+	netdev->netdev_ops = &c2_netdev_ops;
 	netdev->watchdog_timeo = 0;
 	netdev->type = ARPHRD_ETHER;
 	netdev->mtu = 1500;
