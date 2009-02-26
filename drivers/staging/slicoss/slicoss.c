@@ -2242,7 +2242,6 @@ static int slic_card_download(struct adapter *adapter)
 	__iomem struct slic_regs *slic_regs = adapter->slic_regs;
 	u32 instruction;
 	u32 baseaddress;
-	u32 failure;
 	u32 i;
 	u32 numsects = 0;
 	u32 sectsize[3];
@@ -2325,18 +2324,6 @@ static int slic_card_download(struct adapter *adapter)
 			WRITE_REG(slic_regs->slic_wcs, instruction, FLUSH);
 			instruction = *(u32 *)(fw->data + index);
 			index += 4;
-
-			/* Check SRAM location zero. If it is non-zero. Abort.*/
-/*			failure = readl((u32 __iomem *)&slic_regs->slic_reset);
-			if (failure) {
-				DBG_MSG
-				    ("slicoss: %s FAILURE EXIT codeaddr[%x] "
-				    "thissectionsize[%x] failure[%x]\n",
-				     __func__, codeaddr, thissectionsize,
-				     failure);
-				release_firmware(fw);
-				return -EIO;
-			}*/
 		}
 	}
 /*    DBG_MSG ("slicoss: Compare done\n");*/
