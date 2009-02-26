@@ -30,6 +30,7 @@
 #include "cx18-mailbox.h"
 #include "cx18-controls.h"
 
+/* Must be sorted from low to high control ID! */
 static const u32 user_ctrls[] = {
 	V4L2_CID_USER_CLASS,
 	V4L2_CID_BRIGHTNESS,
@@ -178,8 +179,8 @@ static int cx18_setup_vbi_fmt(struct cx18 *cx, enum v4l2_mpeg_stream_vbi_fmt fmt
 		int i;
 
 		for (i = 0; i < CX18_VBI_FRAMES; i++) {
-			/* Yuck, hardcoded. Needs to be a define */
-			cx->vbi.sliced_mpeg_data[i] = kmalloc(2049, GFP_KERNEL);
+			cx->vbi.sliced_mpeg_data[i] =
+			       kmalloc(CX18_SLICED_MPEG_DATA_BUFSZ, GFP_KERNEL);
 			if (cx->vbi.sliced_mpeg_data[i] == NULL) {
 				while (--i >= 0) {
 					kfree(cx->vbi.sliced_mpeg_data[i]);

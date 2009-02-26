@@ -169,9 +169,14 @@ static void cx18_av_initialize(struct cx18 *cx)
 	/* Set VGA_TRACK_RANGE to 0x20 */
 	cx18_av_and_or4(cx, CXADEC_DFE_CTRL2, 0xFFFF00FF, 0x00002000);
 
-	/* Enable VBI capture */
-	cx18_av_write4(cx, CXADEC_OUT_CTRL1, 0x4010253F);
-	/* cx18_av_write4(cx, CXADEC_OUT_CTRL1, 0x4010253E); */
+	/*
+	 * Initial VBI setup
+	 * VIP-1.1, 10 bit mode, enable Raw, disable sliced,
+	 * don't clamp raw samples when codes are in use, 1 byte user D-words,
+	 * IDID0 has line #, RP code V bit transition on VBLANK, data during
+	 * blanking intervals
+	 */
+	cx18_av_write4(cx, CXADEC_OUT_CTRL1, 0x4013252e);
 
 	/* Set the video input.
 	   The setting in MODE_CTRL gets lost when we do the above setup */
@@ -213,6 +218,7 @@ void cx18_av_std_setup(struct cx18 *cx)
 		cx18_av_write(cx, 0x49f, 0x14);
 
 	if (std & V4L2_STD_625_50) {
+		/* FIXME - revisit these for Sliced VBI */
 		hblank = 132;
 		hactive = 720;
 		burst = 93;
@@ -236,13 +242,34 @@ void cx18_av_std_setup(struct cx18 *cx)
 			sc = 672351;
 		}
 	} else {
+		/*
+		 * The following relationships of half line counts should hold:
+		 * 525 = vsync + vactive + vblank656
+		 * 12 = vblank656 - vblank
+		 *
+		 * vsync:     always 6 half-lines of vsync pulses
+		 * vactive:   half lines of active video
+		 * vblank656: half lines, after line 3, of blanked video
+		 * vblank:    half lines, after line 9, of blanked video
+		 *
+		 * vblank656 starts counting from the falling edge of the first
+		 * 	vsync pulse (start of line 4)
+		 * vblank starts counting from the after the 6 vsync pulses and
+		 * 	6 equalization pulses (start of line 10)
+		 *
+		 * For 525 line systems the driver will extract VBI information
+		 * from lines 10 through 21.  To avoid the EAV RP code from
+		 * toggling at the start of hblank at line 22, where sliced VBI
+		 * data from line 21 is stuffed, also treat line 22 as blanked.
+		 */
+		vblank656 = 38; /* lines  4 through  22 */
+		vblank = 26;	/* lines 10 through  22 */
+		vactive = 481;  /* lines 23 through 262.5 */
+
 		hactive = 720;
 		hblank = 122;
-		vactive = 487;
 		luma_lpf = 1;
 		uv_lpf = 1;
-		vblank = 26;
-		vblank656 = 26;
 
 		src_decimation = 0x21f;
 		if (std == V4L2_STD_PAL_60) {
@@ -325,14 +352,14 @@ void cx18_av_std_setup(struct cx18 *cx)
 	cx18_av_write(cx, 0x47d, 0xff & sc >> 8);
 	cx18_av_write(cx, 0x47e, 0xff & sc >> 16);
 
-	/* Sets VBI parameters */
 	if (std & V4L2_STD_625_50) {
-		cx18_av_write(cx, 0x47f, 0x01);
-		state->vbi_line_offset = 5;
+		state->slicer_line_delay = 1;
+		state->slicer_line_offset = (6 + state->slicer_line_delay - 2);
 	} else {
-		cx18_av_write(cx, 0x47f, 0x00);
-		state->vbi_line_offset = 8;
+		state->slicer_line_delay = 0;
+		state->slicer_line_offset = (10 + state->slicer_line_delay - 2);
 	}
+	cx18_av_write(cx, 0x47f, state->slicer_line_delay);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -548,7 +575,7 @@ static int set_v4lctrl(struct cx18 *cx, struct v4l2_control *ctrl)
 		break;
 
 	case V4L2_CID_HUE:
-		if (ctrl->value < -127 || ctrl->value > 127) {
+		if (ctrl->value < -128 || ctrl->value > 127) {
 			CX18_ERR("invalid hue setting %d\n", ctrl->value);
 			return -ERANGE;
 		}
@@ -680,19 +707,45 @@ static int set_v4lfmt(struct cx18 *cx, struct v4l2_format *fmt)
 
 /* ----------------------------------------------------------------------- */
 
+static int valid_av_cmd(unsigned int cmd)
+{
+	switch (cmd) {
+	/* All commands supported by cx18_av_cmd() */
+	case VIDIOC_INT_DECODE_VBI_LINE:
+	case VIDIOC_INT_AUDIO_CLOCK_FREQ:
+	case VIDIOC_STREAMON:
+	case VIDIOC_STREAMOFF:
+	case VIDIOC_LOG_STATUS:
+	case VIDIOC_G_CTRL:
+	case VIDIOC_S_CTRL:
+	case VIDIOC_QUERYCTRL:
+	case VIDIOC_G_STD:
+	case VIDIOC_S_STD:
+	case AUDC_SET_RADIO:
+	case VIDIOC_INT_G_VIDEO_ROUTING:
+	case VIDIOC_INT_S_VIDEO_ROUTING:
+	case VIDIOC_INT_G_AUDIO_ROUTING:
+	case VIDIOC_INT_S_AUDIO_ROUTING:
+	case VIDIOC_S_FREQUENCY:
+	case VIDIOC_G_TUNER:
+	case VIDIOC_S_TUNER:
+	case VIDIOC_G_FMT:
+	case VIDIOC_S_FMT:
+	case VIDIOC_INT_RESET:
+		return 1;
+	default:
+		return 0;
+	}
+	return 0;
+}
+
 int cx18_av_cmd(struct cx18 *cx, unsigned int cmd, void *arg)
 {
 	struct cx18_av_state *state = &cx->av_state;
 	struct v4l2_tuner *vt = arg;
 	struct v4l2_routing *route = arg;
 
-	/* ignore these commands */
-	switch (cmd) {
-	case TUNER_SET_TYPE_ADDR:
-		return 0;
-	}
-
-	if (!state->is_initialized) {
+	if (!state->is_initialized && valid_av_cmd(cmd)) {
 		CX18_DEBUG_INFO("cmd %08x triggered fw load\n", cmd);
 		/* initialize on first use */
 		state->is_initialized = 1;
