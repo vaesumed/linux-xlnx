@@ -940,11 +940,6 @@ static int init_irq (ide_hwif_t *hwif)
 	int sa = 0;
 
 	mutex_lock(&ide_cfg_mtx);
-	spin_lock_init(&hwif->lock);
-
-	init_timer(&hwif->timer);
-	hwif->timer.function = &ide_timer_expiry;
-	hwif->timer.data = (unsigned long)hwif;
 
 #if defined(__mc68000__)
 	sa = IRQF_SHARED;
@@ -1300,6 +1295,12 @@ static void ide_init_port_data(ide_hwif_t *hwif, unsigned int index)
 	hwif->name[1]	= 'd';
 	hwif->name[2]	= 'e';
 	hwif->name[3]	= '0' + index;
+
+	spin_lock_init(&hwif->lock);
+
+	init_timer(&hwif->timer);
+	hwif->timer.function = &ide_timer_expiry;
+	hwif->timer.data = (unsigned long)hwif;
 
 	init_completion(&hwif->gendev_rel_comp);
 
