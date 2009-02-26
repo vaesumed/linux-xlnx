@@ -41,7 +41,7 @@ static int irq = -1;
 
 /* Data sheet recommends 59kHz for 100kHz operation due to variation
  * in the actual clock rate */
-static int clock  = I2C_PCA_CON_59kHz;
+static int clock  = 59000;
 
 static wait_queue_head_t pca_wait;
 
@@ -49,7 +49,8 @@ static void pca_isa_writebyte(void *pd, int reg, int val)
 {
 #ifdef DEBUG_IO
 	static char *names[] = { "T/O", "DAT", "ADR", "CON" };
-	printk("*** write %s at %#lx <= %#04x\n", names[reg], base+reg, val);
+	printk(KERN_DEBUG "*** write %s at %#lx <= %#04x\n", names[reg],
+	       base+reg, val);
 #endif
 	outb(val, base+reg);
 }
@@ -60,7 +61,7 @@ static int pca_isa_readbyte(void *pd, int reg)
 #ifdef DEBUG_IO
 	{
 		static char *names[] = { "STA", "DAT", "ADR", "CON" };
-		printk("*** read  %s => %#04x\n", names[reg], res);
+		printk(KERN_DEBUG "*** read  %s => %#04x\n", names[reg], res);
 	}
 #endif
 	return res;
@@ -102,7 +103,7 @@ static struct i2c_algo_pca_data pca_isa_data = {
 static struct i2c_adapter pca_isa_ops = {
 	.owner          = THIS_MODULE,
 	.algo_data	= &pca_isa_data,
-	.name		= "PCA9564 ISA Adapter",
+	.name		= "PCA9564/PCA9665 ISA Adapter",
 	.timeout	= 100,
 };
 
@@ -195,7 +196,7 @@ static void __exit pca_isa_exit(void)
 }
 
 MODULE_AUTHOR("Ian Campbell <icampbell@arcom.com>");
-MODULE_DESCRIPTION("ISA base PCA9564 driver");
+MODULE_DESCRIPTION("ISA base PCA9564/PCA9665 driver");
 MODULE_LICENSE("GPL");
 
 module_param(base, ulong, 0);
@@ -204,7 +205,13 @@ MODULE_PARM_DESC(base, "I/O base address");
 module_param(irq, int, 0);
 MODULE_PARM_DESC(irq, "IRQ");
 module_param(clock, int, 0);
-MODULE_PARM_DESC(clock, "Clock rate as described in table 1 of PCA9564 datasheet");
+MODULE_PARM_DESC(clock, "Clock rate in hertz.\n\t\t"
+		"For PCA9564: 330000,288000,217000,146000,"
+		"88000,59000,44000,36000\n"
+		"\t\tFor PCA9665:\tStandard: 60300 - 100099\n"
+		"\t\t\t\tFast: 100100 - 400099\n"
+		"\t\t\t\tFast+: 400100 - 10000099\n"
+		"\t\t\t\tTurbo: Up to 1265800");
 
 module_init(pca_isa_init);
 module_exit(pca_isa_exit);
