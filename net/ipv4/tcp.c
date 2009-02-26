@@ -2478,23 +2478,23 @@ struct sk_buff **tcp_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 	struct tcphdr *th2;
 	unsigned int thlen;
 	unsigned int flags;
-	unsigned int total;
 	unsigned int mss = 1;
 	int flush = 1;
+	int i;
 
-	if (!pskb_may_pull(skb, sizeof(*th)))
+	th = skb_gro_header(skb, sizeof(*th));
+	if (unlikely(!th))
 		goto out;
 
-	th = tcp_hdr(skb);
 	thlen = th->doff * 4;
 	if (thlen < sizeof(*th))
 		goto out;
 
-	if (!pskb_may_pull(skb, thlen))
+	th = skb_gro_header(skb, thlen);
+	if (unlikely(!th))
 		goto out;
 
-	th = tcp_hdr(skb);
-	__skb_pull(skb, thlen);
+	skb_gro_pull(skb, thlen);
 
 	flags = tcp_flag_word(th);
 
@@ -2504,7 +2504,7 @@ struct sk_buff **tcp_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 
 		th2 = tcp_hdr(p);
 
-		if (th->source != th2->source || th->dest != th2->dest) {
+		if ((th->source ^ th2->source) | (th->dest ^ th2->dest)) {
 			NAPI_GRO_CB(p)->same_flow = 0;
 			continue;
 		}
@@ -2519,14 +2519,15 @@ found:
 	flush |= flags & TCP_FLAG_CWR;
 	flush |= (flags ^ tcp_flag_word(th2)) &
 		  ~(TCP_FLAG_CWR | TCP_FLAG_FIN | TCP_FLAG_PSH);
-	flush |= th->ack_seq != th2->ack_seq || th->window != th2->window;
-	flush |= memcmp(th + 1, th2 + 1, thlen - sizeof(*th));
+	flush |= (th->ack_seq ^ th2->ack_seq) | (th->window ^ th2->window);
+	for (i = sizeof(*th); !flush && i < thlen; i += 4)
+		flush |= *(u32 *)((u8 *)th + i) ^
+			 *(u32 *)((u8 *)th2 + i);
 
-	total = p->len;
 	mss = skb_shinfo(p)->gso_size;
 
-	flush |= skb->len > mss || skb->len <= 0;
-	flush |= ntohl(th2->seq) + total != ntohl(th->seq);
+	flush |= (skb_gro_len(skb) > mss) | !skb_gro_len(skb);
+	flush |= (ntohl(th2->seq) + skb_gro_len(p)) ^ ntohl(th->seq);
 
 	if (flush || skb_gro_receive(head, skb)) {
 		mss = 1;
@@ -2538,7 +2539,7 @@ found:
 	tcp_flag_word(th2) |= flags & (TCP_FLAG_FIN | TCP_FLAG_PSH);
 
 out_check_final:
-	flush = skb->len < mss;
+	flush = skb_gro_len(skb) < mss;
 	flush |= flags & (TCP_FLAG_URG | TCP_FLAG_PSH | TCP_FLAG_RST |
 			  TCP_FLAG_SYN | TCP_FLAG_FIN);
 

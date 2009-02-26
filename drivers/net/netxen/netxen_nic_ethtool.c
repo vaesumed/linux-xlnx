@@ -473,78 +473,6 @@ netxen_nic_get_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
 	return 0;
 }
 
-#if 0
-static int
-netxen_nic_set_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
-			u8 * bytes)
-{
-	struct netxen_adapter *adapter = netdev_priv(dev);
-	int offset = eeprom->offset;
-	static int flash_start;
-	static int ready_to_flash;
-	int ret;
-
-	if (flash_start == 0) {
-		netxen_halt_pegs(adapter);
-		ret = netxen_flash_unlock(adapter);
-		if (ret < 0) {
-			printk(KERN_ERR "%s: Flash unlock failed.\n",
-				netxen_nic_driver_name);
-			return ret;
-		}
-		printk(KERN_INFO "%s: flash unlocked. \n",
-			netxen_nic_driver_name);
-		ret = netxen_flash_erase_secondary(adapter);
-		if (ret != FLASH_SUCCESS) {
-			printk(KERN_ERR "%s: Flash erase failed.\n",
-				netxen_nic_driver_name);
-			return ret;
-		}
-		printk(KERN_INFO "%s: secondary flash erased successfully.\n",
-			netxen_nic_driver_name);
-		flash_start = 1;
-		return 0;
-	}
-
-	if (offset == NETXEN_BOOTLD_START) {
-		ret = netxen_flash_erase_primary(adapter);
-		if (ret != FLASH_SUCCESS) {
-			printk(KERN_ERR "%s: Flash erase failed.\n",
-				netxen_nic_driver_name);
-			return ret;
-		}
-
-		ret = netxen_rom_se(adapter, NETXEN_USER_START);
-		if (ret != FLASH_SUCCESS)
-			return ret;
-		ret = netxen_rom_se(adapter, NETXEN_FIXED_START);
-		if (ret != FLASH_SUCCESS)
-			return ret;
-
-		printk(KERN_INFO "%s: primary flash erased successfully\n",
-			netxen_nic_driver_name);
-
-		ret = netxen_backup_crbinit(adapter);
-		if (ret != FLASH_SUCCESS) {
-			printk(KERN_ERR "%s: CRBinit backup failed.\n",
-				netxen_nic_driver_name);
-			return ret;
-		}
-		printk(KERN_INFO "%s: CRBinit backup done.\n",
-			netxen_nic_driver_name);
-		ready_to_flash = 1;
-	}
-
-	if (!ready_to_flash) {
-		printk(KERN_ERR "%s: Invalid write sequence, returning...\n",
-			netxen_nic_driver_name);
-		return -EINVAL;
-	}
-
-	return netxen_rom_fast_write_words(adapter, offset, bytes, eeprom->len);
-}
-#endif /* 0 */
-
 static void
 netxen_nic_get_ringparam(struct net_device *dev, struct ethtool_ringparam *ring)
 {
@@ -810,6 +738,53 @@ static int netxen_nic_set_tso(struct net_device *dev, u32 data)
 	return 0;
 }
 
+static void
+netxen_nic_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
+{
+	struct netxen_adapter *adapter = netdev_priv(dev);
+	u32 wol_cfg = 0;
+
+	wol->supported = 0;
+	wol->wolopts = 0;
+
+	if (NX_IS_REVISION_P2(adapter->ahw.revision_id))
+		return;
+
+	wol_cfg = netxen_nic_reg_read(adapter, NETXEN_WOL_CONFIG_NV);
+	if (wol_cfg & (1UL << adapter->portnum))
+		wol->supported |= WAKE_MAGIC;
+
+	wol_cfg = netxen_nic_reg_read(adapter, NETXEN_WOL_CONFIG);
+	if (wol_cfg & (1UL << adapter->portnum))
+		wol->wolopts |= WAKE_MAGIC;
+}
+
+static int
+netxen_nic_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
+{
+	struct netxen_adapter *adapter = netdev_priv(dev);
+	u32 wol_cfg = 0;
+
+	if (NX_IS_REVISION_P2(adapter->ahw.revision_id))
+		return -EOPNOTSUPP;
+
+	if (wol->wolopts & ~WAKE_MAGIC)
+		return -EOPNOTSUPP;
+
+	wol_cfg = netxen_nic_reg_read(adapter, NETXEN_WOL_CONFIG_NV);
+	if (!(wol_cfg & (1 << adapter->portnum)))
+		return -EOPNOTSUPP;
+
+	wol_cfg = netxen_nic_reg_read(adapter, NETXEN_WOL_CONFIG);
+	if (wol->wolopts & WAKE_MAGIC)
+		wol_cfg |= 1UL << adapter->portnum;
+	else
+		wol_cfg &= ~(1UL << adapter->portnum);
+	netxen_nic_reg_write(adapter, NETXEN_WOL_CONFIG, wol_cfg);
+
+	return 0;
+}
+
 /*
  * Set the coalescing parameters. Currently only normal is supported.
  * If rx_coalesce_usecs == 0 or rx_max_coalesced_frames == 0 then set the
@@ -906,9 +881,6 @@ struct ethtool_ops netxen_nic_ethtool_ops = {
 	.get_link = ethtool_op_get_link,
 	.get_eeprom_len = netxen_nic_get_eeprom_len,
 	.get_eeprom = netxen_nic_get_eeprom,
-#if 0
-	.set_eeprom = netxen_nic_set_eeprom,
-#endif
 	.get_ringparam = netxen_nic_get_ringparam,
 	.get_pauseparam = netxen_nic_get_pauseparam,
 	.set_pauseparam = netxen_nic_set_pauseparam,
@@ -916,6 +888,8 @@ struct ethtool_ops netxen_nic_ethtool_ops = {
 	.set_sg = ethtool_op_set_sg,
 	.get_tso = netxen_nic_get_tso,
 	.set_tso = netxen_nic_set_tso,
+	.get_wol = netxen_nic_get_wol,
+	.set_wol = netxen_nic_set_wol,
 	.self_test = netxen_nic_diag_test,
 	.get_strings = netxen_nic_get_strings,
 	.get_ethtool_stats = netxen_nic_get_ethtool_stats,
