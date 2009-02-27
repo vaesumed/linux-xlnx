@@ -47,10 +47,6 @@
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
 
-#ifdef CONFIG_X86
-#include <asm/msidef.h>
-#endif
-
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 #include "coalesced_mmio.h"
 #endif
@@ -85,57 +81,6 @@ static long kvm_vcpu_ioctl(struct file *file, unsigned int ioctl,
 static bool kvm_rebooting;
 
 #ifdef KVM_CAP_DEVICE_ASSIGNMENT
-
-#ifdef CONFIG_X86
-static void assigned_device_msi_dispatch(struct kvm_assigned_dev_kernel *dev)
-{
-	int vcpu_id;
-	struct kvm_vcpu *vcpu;
-	struct kvm_ioapic *ioapic = ioapic_irqchip(dev->kvm);
-	int dest_id = (dev->guest_msi.address_lo & MSI_ADDR_DEST_ID_MASK)
-			>> MSI_ADDR_DEST_ID_SHIFT;
-	int vector = (dev->guest_msi.data & MSI_DATA_VECTOR_MASK)
-			>> MSI_DATA_VECTOR_SHIFT;
-	int dest_mode = test_bit(MSI_ADDR_DEST_MODE_SHIFT,
-				(unsigned long *)&dev->guest_msi.address_lo);
-	int trig_mode = test_bit(MSI_DATA_TRIGGER_SHIFT,
-				(unsigned long *)&dev->guest_msi.data);
-	int delivery_mode = test_bit(MSI_DATA_DELIVERY_MODE_SHIFT,
-				(unsigned long *)&dev->guest_msi.data);
-	u32 deliver_bitmask;
-
-	BUG_ON(!ioapic);
-
-	deliver_bitmask = kvm_ioapic_get_delivery_bitmask(ioapic,
-				dest_id, dest_mode);
-	/* IOAPIC delivery mode value is the same as MSI here */
-	switch (delivery_mode) {
-	case IOAPIC_LOWEST_PRIORITY:
-		vcpu = kvm_get_lowest_prio_vcpu(ioapic->kvm, vector,
-				deliver_bitmask);
-		if (vcpu != NULL)
-			kvm_apic_set_irq(vcpu, vector, trig_mode);
-		else
-			printk(KERN_INFO "kvm: null lowest priority vcpu!\n");
-		break;
-	case IOAPIC_FIXED:
-		for (vcpu_id = 0; deliver_bitmask != 0; vcpu_id++) {
-			if (!(deliver_bitmask & (1 << vcpu_id)))
-				continue;
-			deliver_bitmask &= ~(1 << vcpu_id);
-			vcpu = ioapic->kvm->vcpus[vcpu_id];
-			if (vcpu)
-				kvm_apic_set_irq(vcpu, vector, trig_mode);
-		}
-		break;
-	default:
-		printk(KERN_INFO "kvm: unsupported MSI delivery mode\n");
-	}
-}
-#else
-static void assigned_device_msi_dispatch(struct kvm_assigned_dev_kernel *dev) {}
-#endif
-
 static struct kvm_assigned_dev_kernel *kvm_find_assigned_dev(struct list_head *head,
 						      int assigned_dev_id)
 {
@@ -150,28 +95,69 @@ static struct kvm_assigned_dev_kernel *kvm_find_assigned_dev(struct list_head *h
 	return NULL;
 }
 
+static int find_index_from_host_irq(struct kvm_assigned_dev_kernel
+				    *assigned_dev, int irq)
+{
+	int i, index;
+	struct msix_entry *host_msix_entries;
+
+	host_msix_entries = assigned_dev->host_msix_entries;
+
+	index = -1;
+	for (i = 0; i < assigned_dev->entries_nr; i++)
+		if (irq == host_msix_entries[i].vector) {
+			index = i;
+			break;
+		}
+	if (index < 0) {
+		printk(KERN_WARNING "Fail to find correlated MSI-X entry!\n");
+		return 0;
+	}
+
+	return index;
+}
+
 static void kvm_assigned_dev_interrupt_work_handler(struct work_struct *work)
 {
 	struct kvm_assigned_dev_kernel *assigned_dev;
+	struct kvm *kvm;
+	int irq, i;
 
 	assigned_dev = container_of(work, struct kvm_assigned_dev_kernel,
 				    interrupt_work);
+	kvm = assigned_dev->kvm;
 
 	/* This is taken to safely inject irq inside the guest. When
 	 * the interrupt injection (or the ioapic code) uses a
 	 * finer-grained lock, update this
 	 */
-	mutex_lock(&assigned_dev->kvm->lock);
-	if (assigned_dev->irq_requested_type & KVM_ASSIGNED_DEV_GUEST_INTX)
-		kvm_set_irq(assigned_dev->kvm,
-			    assigned_dev->irq_source_id,
+	mutex_lock(&kvm->lock);
+	if (assigned_dev->irq_requested_type & KVM_ASSIGNED_DEV_MSIX) {
+		struct kvm_guest_msix_entry *guest_entries =
+			assigned_dev->guest_msix_entries;
+		for (i = 0; i < assigned_dev->entries_nr; i++) {
+			if (!(guest_entries[i].flags &
+					KVM_ASSIGNED_MSIX_PENDING))
+				continue;
+			guest_entries[i].flags &= ~KVM_ASSIGNED_MSIX_PENDING;
+			kvm_set_irq(assigned_dev->kvm,
+				    assigned_dev->irq_source_id,
+				    guest_entries[i].vector, 1);
+			irq = assigned_dev->host_msix_entries[i].vector;
+			if (irq != 0)
+				enable_irq(irq);
+			assigned_dev->host_irq_disabled = false;
+		}
+	} else {
+		kvm_set_irq(assigned_dev->kvm, assigned_dev->irq_source_id,
 			    assigned_dev->guest_irq, 1);
-	else if (assigned_dev->irq_requested_type &
+		if (assigned_dev->irq_requested_type &
 				KVM_ASSIGNED_DEV_GUEST_MSI) {
-		assigned_device_msi_dispatch(assigned_dev);
-		enable_irq(assigned_dev->host_irq);
-		assigned_dev->host_irq_disabled = false;
+			enable_irq(assigned_dev->host_irq);
+			assigned_dev->host_irq_disabled = false;
+		}
 	}
+
 	mutex_unlock(&assigned_dev->kvm->lock);
 }
 
@@ -179,6 +165,14 @@ static irqreturn_t kvm_assigned_dev_intr(int irq, void *dev_id)
 {
 	struct kvm_assigned_dev_kernel *assigned_dev =
 		(struct kvm_assigned_dev_kernel *) dev_id;
+
+	if (assigned_dev->irq_requested_type == KVM_ASSIGNED_DEV_MSIX) {
+		int index = find_index_from_host_irq(assigned_dev, irq);
+		if (index < 0)
+			return IRQ_HANDLED;
+		assigned_dev->guest_msix_entries[index].flags |=
+			KVM_ASSIGNED_MSIX_PENDING;
+	}
 
 	schedule_work(&assigned_dev->interrupt_work);
 
@@ -242,13 +236,33 @@ static void kvm_free_assigned_irq(struct kvm *kvm,
 	 * now, the kvm state is still legal for probably we also have to wait
 	 * interrupt_work done.
 	 */
-	disable_irq_nosync(assigned_dev->host_irq);
-	cancel_work_sync(&assigned_dev->interrupt_work);
+	if (assigned_dev->irq_requested_type & KVM_ASSIGNED_DEV_MSIX) {
+		int i;
+		for (i = 0; i < assigned_dev->entries_nr; i++)
+			disable_irq_nosync(assigned_dev->
+					   host_msix_entries[i].vector);
 
-	free_irq(assigned_dev->host_irq, (void *)assigned_dev);
+		cancel_work_sync(&assigned_dev->interrupt_work);
 
-	if (assigned_dev->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI)
-		pci_disable_msi(assigned_dev->dev);
+		for (i = 0; i < assigned_dev->entries_nr; i++)
+			free_irq(assigned_dev->host_msix_entries[i].vector,
+				 (void *)assigned_dev);
+
+		assigned_dev->entries_nr = 0;
+		kfree(assigned_dev->host_msix_entries);
+		kfree(assigned_dev->guest_msix_entries);
+		pci_disable_msix(assigned_dev->dev);
+	} else {
+		/* Deal with MSI and INTx */
+		disable_irq_nosync(assigned_dev->host_irq);
+		cancel_work_sync(&assigned_dev->interrupt_work);
+
+		free_irq(assigned_dev->host_irq, (void *)assigned_dev);
+
+		if (assigned_dev->irq_requested_type &
+				KVM_ASSIGNED_DEV_HOST_MSI)
+			pci_disable_msi(assigned_dev->dev);
+	}
 
 	assigned_dev->irq_requested_type = 0;
 }
@@ -331,18 +345,24 @@ static int assigned_device_update_msi(struct kvm *kvm,
 {
 	int r;
 
+	adev->guest_irq = airq->guest_irq;
 	if (airq->flags & KVM_DEV_IRQ_ASSIGN_ENABLE_MSI) {
 		/* x86 don't care upper address of guest msi message addr */
 		adev->irq_requested_type |= KVM_ASSIGNED_DEV_GUEST_MSI;
 		adev->irq_requested_type &= ~KVM_ASSIGNED_DEV_GUEST_INTX;
-		adev->guest_msi.address_lo = airq->guest_msi.addr_lo;
-		adev->guest_msi.data = airq->guest_msi.data;
 		adev->ack_notifier.gsi = -1;
 	} else if (msi2intx) {
 		adev->irq_requested_type |= KVM_ASSIGNED_DEV_GUEST_INTX;
 		adev->irq_requested_type &= ~KVM_ASSIGNED_DEV_GUEST_MSI;
-		adev->guest_irq = airq->guest_irq;
 		adev->ack_notifier.gsi = airq->guest_irq;
+	} else {
+		/*
+		 * Guest require to disable device MSI, we disable MSI and
+		 * re-enable INTx by default again. Notice it's only for
+		 * non-msi2intx.
+		 */
+		assigned_device_update_intx(kvm, adev, airq);
+		return 0;
 	}
 
 	if (adev->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI)
@@ -373,12 +393,67 @@ static int assigned_device_update_msi(struct kvm *kvm,
 }
 #endif
 
+#ifdef __KVM_HAVE_MSIX
+static int assigned_device_update_msix(struct kvm *kvm,
+			struct kvm_assigned_dev_kernel *adev,
+			struct kvm_assigned_irq *airq)
+{
+	/* TODO Deal with KVM_DEV_IRQ_ASSIGNED_MASK_MSIX */
+	int i, r;
+
+	adev->ack_notifier.gsi = -1;
+
+	if (irqchip_in_kernel(kvm)) {
+		if (airq->flags & KVM_DEV_IRQ_ASSIGN_MASK_MSIX)
+			return -ENOTTY;
+
+		if (!(airq->flags & KVM_DEV_IRQ_ASSIGN_ENABLE_MSIX)) {
+			/* Guest disable MSI-X */
+			kvm_free_assigned_irq(kvm, adev);
+			if (msi2intx) {
+				pci_enable_msi(adev->dev);
+				if (adev->dev->msi_enabled)
+					return assigned_device_update_msi(kvm,
+							adev, airq);
+			}
+			return assigned_device_update_intx(kvm, adev, airq);
+		}
+
+		/* host_msix_entries and guest_msix_entries should have been
+		 * initialized */
+		if (adev->entries_nr == 0)
+			return -EINVAL;
+
+		kvm_free_assigned_irq(kvm, adev);
+
+		r = pci_enable_msix(adev->dev, adev->host_msix_entries,
+				    adev->entries_nr);
+		if (r)
+			return r;
+
+		for (i = 0; i < adev->entries_nr; i++) {
+			r = request_irq((adev->host_msix_entries + i)->vector,
+					kvm_assigned_dev_intr, 0,
+					"kvm_assigned_msix_device",
+					(void *)adev);
+			if (r)
+				return r;
+		}
+	}
+
+	adev->irq_requested_type |= KVM_ASSIGNED_DEV_MSIX;
+
+	return 0;
+}
+#endif
+
 static int kvm_vm_ioctl_assign_irq(struct kvm *kvm,
 				   struct kvm_assigned_irq
 				   *assigned_irq)
 {
 	int r = 0;
 	struct kvm_assigned_dev_kernel *match;
+	u32 current_flags = 0, changed_flags;
 
 	mutex_lock(&kvm->lock);
 
@@ -416,8 +491,25 @@ static int kvm_vm_ioctl_assign_irq(struct kvm *kvm,
 		}
 	}
 
-	if ((!msi2intx &&
-	     (assigned_irq->flags & KVM_DEV_IRQ_ASSIGN_ENABLE_MSI)) ||
+	if (match->irq_requested_type & KVM_ASSIGNED_DEV_MSIX)
+		current_flags |= KVM_DEV_IRQ_ASSIGN_ENABLE_MSIX;
+	else if ((match->irq_requested_type & KVM_ASSIGNED_DEV_HOST_MSI) &&
+		 (match->irq_requested_type & KVM_ASSIGNED_DEV_GUEST_MSI))
+		current_flags |= KVM_DEV_IRQ_ASSIGN_ENABLE_MSI;
+
+	changed_flags = assigned_irq->flags ^ current_flags;
+
+#ifdef __KVM_HAVE_MSIX
+	if (changed_flags & KVM_DEV_IRQ_ASSIGN_MSIX_ACTION) {
+		r = assigned_device_update_msix(kvm, match, assigned_irq);
+		if (r) {
+			printk(KERN_WARNING "kvm: failed to execute "
+					"MSI-X action!\n");
+			goto out_release;
+		}
+	} else
+#endif
+	if ((changed_flags & KVM_DEV_IRQ_ASSIGN_MSI_ACTION) ||
 	    (msi2intx && match->dev->msi_enabled)) {
 #ifdef CONFIG_X86
 		r = assigned_device_update_msi(kvm, match, assigned_irq);
@@ -563,7 +655,7 @@ static int kvm_vm_ioctl_deassign_device(struct kvm *kvm,
 		goto out;
 	}
 
-	if (assigned_dev->flags & KVM_DEV_ASSIGN_ENABLE_IOMMU)
+	if (match->flags & KVM_DEV_ASSIGN_ENABLE_IOMMU)
 		kvm_deassign_device(kvm, match);
 
 	kvm_free_assigned_device(kvm, match);
@@ -581,8 +673,10 @@ static inline int valid_vcpu(int n)
 
 inline int kvm_is_mmio_pfn(pfn_t pfn)
 {
-	if (pfn_valid(pfn))
-		return PageReserved(pfn_to_page(pfn));
+	if (pfn_valid(pfn)) {
+		struct page *page = compound_head(pfn_to_page(pfn));
+		return PageReserved(page);
+	}
 
 	return true;
 }
@@ -828,6 +922,10 @@ static struct kvm *kvm_create_vm(void)
 
 	if (IS_ERR(kvm))
 		goto out;
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
+	INIT_LIST_HEAD(&kvm->irq_routing);
+	INIT_HLIST_HEAD(&kvm->mask_notifier_list);
+#endif
 
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	page = alloc_page(GFP_KERNEL | __GFP_ZERO);
@@ -909,6 +1007,7 @@ static void kvm_destroy_vm(struct kvm *kvm)
 	spin_lock(&kvm_lock);
 	list_del(&kvm->vm_list);
 	spin_unlock(&kvm_lock);
+	kvm_free_irq_routing(kvm);
 	kvm_io_bus_destroy(&kvm->pio_bus);
 	kvm_io_bus_destroy(&kvm->mmio_bus);
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
@@ -1634,6 +1733,88 @@ static int kvm_vcpu_ioctl_set_sigmask(struct kvm_vcpu *vcpu, sigset_t *sigset)
 	return 0;
 }
 
+#ifdef __KVM_HAVE_MSIX
+static int kvm_vm_ioctl_set_msix_nr(struct kvm *kvm,
+				    struct kvm_assigned_msix_nr *entry_nr)
+{
+	int r = 0;
+	struct kvm_assigned_dev_kernel *adev;
+
+	mutex_lock(&kvm->lock);
+
+	adev = kvm_find_assigned_dev(&kvm->arch.assigned_dev_head,
+				      entry_nr->assigned_dev_id);
+	if (!adev) {
+		r = -EINVAL;
+		goto msix_nr_out;
+	}
+
+	if (adev->entries_nr == 0) {
+		adev->entries_nr = entry_nr->entry_nr;
+		if (adev->entries_nr == 0 ||
+		    adev->entries_nr >= KVM_MAX_MSIX_PER_DEV) {
+			r = -EINVAL;
+			goto msix_nr_out;
+		}
+
+		adev->host_msix_entries = kzalloc(sizeof(struct msix_entry) *
+						entry_nr->entry_nr,
+						GFP_KERNEL);
+		if (!adev->host_msix_entries) {
+			r = -ENOMEM;
+			goto msix_nr_out;
+		}
+		adev->guest_msix_entries = kzalloc(
+				sizeof(struct kvm_guest_msix_entry) *
+				entry_nr->entry_nr, GFP_KERNEL);
+		if (!adev->guest_msix_entries) {
+			kfree(adev->host_msix_entries);
+			r = -ENOMEM;
+			goto msix_nr_out;
+		}
+	} else /* Not allowed set MSI-X number twice */
+		r = -EINVAL;
+msix_nr_out:
+	mutex_unlock(&kvm->lock);
+	return r;
+}
+
+static int kvm_vm_ioctl_set_msix_entry(struct kvm *kvm,
+				       struct kvm_assigned_msix_entry *entry)
+{
+	int r = 0, i;
+	struct kvm_assigned_dev_kernel *adev;
+
+	mutex_lock(&kvm->lock);
+
+	adev = kvm_find_assigned_dev(&kvm->arch.assigned_dev_head,
+				      entry->assigned_dev_id);
+
+	if (!adev) {
+		r = -EINVAL;
+		goto msix_entry_out;
+	}
+
+	for (i = 0; i < adev->entries_nr; i++)
+		if (adev->guest_msix_entries[i].vector == 0 ||
+		    adev->guest_msix_entries[i].entry == entry->entry) {
+			adev->guest_msix_entries[i].entry = entry->entry;
+			adev->guest_msix_entries[i].vector = entry->gsi;
+			adev->host_msix_entries[i].entry = entry->entry;
+			break;
+		}
+	if (i == adev->entries_nr) {
+		r = -ENOSPC;
+		goto msix_entry_out;
+	}
+
+msix_entry_out:
+	mutex_unlock(&kvm->lock);
+
+	return r;
+}
+#endif
+
 static long kvm_vcpu_ioctl(struct file *filp,
 			   unsigned int ioctl, unsigned long arg)
 {
@@ -1755,13 +1936,13 @@ out_free2:
 		r = 0;
 		break;
 	}
-	case KVM_DEBUG_GUEST: {
-		struct kvm_debug_guest dbg;
+	case KVM_SET_GUEST_DEBUG: {
+		struct kvm_guest_debug dbg;
 
 		r = -EFAULT;
 		if (copy_from_user(&dbg, argp, sizeof dbg))
 			goto out;
-		r = kvm_arch_vcpu_ioctl_debug_guest(vcpu, &dbg);
+		r = kvm_arch_vcpu_ioctl_set_guest_debug(vcpu, &dbg);
 		if (r)
 			goto out;
 		r = 0;
@@ -1929,6 +2110,58 @@ static long kvm_vm_ioctl(struct file *filp,
 		break;
 	}
 #endif
+#ifdef KVM_CAP_IRQ_ROUTING
+	case KVM_SET_GSI_ROUTING: {
+		struct kvm_irq_routing routing;
+		struct kvm_irq_routing __user *urouting;
+		struct kvm_irq_routing_entry *entries;
+
+		r = -EFAULT;
+		if (copy_from_user(&routing, argp, sizeof(routing)))
+			goto out;
+		r = -EINVAL;
+		if (routing.nr >= KVM_MAX_IRQ_ROUTES)
+			goto out;
+		if (routing.flags)
+			goto out;
+		r = -ENOMEM;
+		entries = vmalloc(routing.nr * sizeof(*entries));
+		if (!entries)
+			goto out;
+		r = -EFAULT;
+		urouting = argp;
+		if (copy_from_user(entries, urouting->entries,
+				   routing.nr * sizeof(*entries)))
+			goto out_free_irq_routing;
+		r = kvm_set_irq_routing(kvm, entries, routing.nr,
+					routing.flags);
+	out_free_irq_routing:
+		vfree(entries);
+		break;
+	}
+#ifdef __KVM_HAVE_MSIX
+	case KVM_ASSIGN_SET_MSIX_NR: {
+		struct kvm_assigned_msix_nr entry_nr;
+		r = -EFAULT;
+		if (copy_from_user(&entry_nr, argp, sizeof entry_nr))
+			goto out;
+		r = kvm_vm_ioctl_set_msix_nr(kvm, &entry_nr);
+		if (r)
+			goto out;
+		break;
+	}
+	case KVM_ASSIGN_SET_MSIX_ENTRY: {
+		struct kvm_assigned_msix_entry entry;
+		r = -EFAULT;
+		if (copy_from_user(&entry, argp, sizeof entry))
+			goto out;
+		r = kvm_vm_ioctl_set_msix_entry(kvm, &entry);
+		if (r)
+			goto out;
+		break;
+	}
+#endif
+#endif /* KVM_CAP_IRQ_ROUTING */
 	default:
 		r = kvm_arch_vm_ioctl(filp, ioctl, arg);
 	}
@@ -1995,6 +2228,10 @@ static long kvm_dev_ioctl_check_extension_generic(long arg)
 	case KVM_CAP_USER_MEMORY:
 	case KVM_CAP_DESTROY_MEMORY_REGION_WORKS:
 		return 1;
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
+	case KVM_CAP_IRQ_ROUTING:
+		return 1;
+#endif
 	default:
 		break;
 	}
