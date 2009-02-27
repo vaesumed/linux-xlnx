@@ -4,8 +4,8 @@
 #include <linux/wireless.h>
 
 #include "bssdscpt.h"
-#include "mto.h"
 #include "wbhal_s.h"
+#include "mto.h"
 
 #define WBLINUX_PACKET_ARRAY_SIZE (ETHERNET_TX_DESCRIPTORS*4)
 
@@ -20,7 +20,7 @@ struct wbsoft_priv {
 	MLME_FRAME sMlmeFrame;	// connect to peerSTA parameters
 
 	MTO_PARAMETERS sMtoPara;	// MTO_struct ...
-	hw_data_t sHwData;	//For HAL
+	struct hw_data sHwData;	//For HAL
 	MDS Mds;
 
 	spinlock_t SpinLock;

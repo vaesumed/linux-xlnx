@@ -3161,7 +3161,7 @@ void rtl8180_prepare_beacon(struct net_device *dev)
 		return ;
 
 	}
-	//while(! *tail & (1<<31)){
+	//while(! (*tail & (1<<31))){
 		*tail= 0; // zeroes header
 
 		*tail = *tail| (1<<29) ; //fist segment of the packet
@@ -6161,10 +6161,10 @@ static void __exit rtl8180_pci_module_exit(void)
 {
 	pci_unregister_driver (&rtl8180_pci_driver);
 	rtl8180_proc_module_remove();
-	ieee80211_crypto_deinit();
 	ieee80211_crypto_tkip_exit();
 	ieee80211_crypto_ccmp_exit();
 	ieee80211_crypto_wep_exit();
+	ieee80211_crypto_deinit();
 	DMESG("Exiting");
 }
 
