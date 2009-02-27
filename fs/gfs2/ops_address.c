@@ -19,7 +19,6 @@
 #include <linux/writeback.h>
 #include <linux/swap.h>
 #include <linux/gfs2_ondisk.h>
-#include <linux/lm_interface.h>
 #include <linux/backing-dev.h>
 
 #include "gfs2.h"
@@ -442,6 +441,7 @@ static int stuffed_readpage(struct gfs2_inode *ip, struct page *page)
 	 */
 	if (unlikely(page->index)) {
 		zero_user(page, 0, PAGE_CACHE_SIZE);
+		SetPageUptodate(page);
 		return 0;
 	}
 
