@@ -109,6 +109,7 @@ static void clear_hwdep_elements(struct hda_codec *codec)
 	for (i = 0; i < codec->hints.used; i++, head++)
 		kfree(*head);
 	snd_array_free(&codec->hints);
+	snd_array_free(&codec->user_pins);
 }
 
 static void hwdep_free(struct snd_hwdep *hwdep)
@@ -141,6 +142,7 @@ int /*__devinit*/ snd_hda_create_hwdep(struct hda_codec *codec)
 
 	snd_array_init(&codec->init_verbs, sizeof(struct hda_verb), 32);
 	snd_array_init(&codec->hints, sizeof(char *), 32);
+	snd_array_init(&codec->user_pins, sizeof(struct hda_pincfg), 16);
 
 	return 0;
 }
@@ -153,7 +155,13 @@ int /*__devinit*/ snd_hda_create_hwdep(struct hda_codec *codec)
 
 static int clear_codec(struct hda_codec *codec)
 {
-	snd_hda_codec_reset(codec);
+	int err;
+
+	err = snd_hda_codec_reset(codec);
+	if (err < 0) {
+		snd_printk(KERN_ERR "The codec is being used, can't free.\n");
+		return err;
+	}
 	clear_hwdep_elements(codec);
 	return 0;
 }
@@ -163,7 +171,12 @@ static int reconfig_codec(struct hda_codec *codec)
 	int err;
 
 	snd_printk(KERN_INFO "hda-codec: reconfiguring\n");
-	snd_hda_codec_reset(codec);
+	err = snd_hda_codec_reset(codec);
+	if (err < 0) {
+		snd_printk(KERN_ERR
+			   "The codec is being used, can't reconfigure.\n");
+		return err;
+	}
 	err = snd_hda_codec_configure(codec);
 	if (err < 0)
 		return err;
@@ -316,6 +329,67 @@ static ssize_t hints_store(struct device *dev,
 	return count;
 }
 
+static ssize_t pin_configs_show(struct hda_codec *codec,
+				struct snd_array *list,
+				char *buf)
+{
+	int i, len = 0;
+	for (i = 0; i < list->used; i++) {
+		struct hda_pincfg *pin = snd_array_elem(list, i);
+		len += sprintf(buf + len, "0x%02x 0x%08x\n",
+			       pin->nid, pin->cfg);
+	}
+	return len;
+}
+
+static ssize_t init_pin_configs_show(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct snd_hwdep *hwdep = dev_get_drvdata(dev);
+	struct hda_codec *codec = hwdep->private_data;
+	return pin_configs_show(codec, &codec->init_pins, buf);
+}
+
+static ssize_t user_pin_configs_show(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct snd_hwdep *hwdep = dev_get_drvdata(dev);
+	struct hda_codec *codec = hwdep->private_data;
+	return pin_configs_show(codec, &codec->user_pins, buf);
+}
+
+static ssize_t driver_pin_configs_show(struct device *dev,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	struct snd_hwdep *hwdep = dev_get_drvdata(dev);
+	struct hda_codec *codec = hwdep->private_data;
+	return pin_configs_show(codec, &codec->driver_pins, buf);
+}
+
+#define MAX_PIN_CONFIGS		32
+
+static ssize_t user_pin_configs_store(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
+{
+	struct snd_hwdep *hwdep = dev_get_drvdata(dev);
+	struct hda_codec *codec = hwdep->private_data;
+	int nid, cfg;
+	int err;
+
+	if (sscanf(buf, "%i %i", &nid, &cfg) != 2)
+		return -EINVAL;
+	if (!nid)
+		return -EINVAL;
+	err = snd_hda_add_pincfg(codec, &codec->user_pins, nid, cfg);
+	if (err < 0)
+		return err;
+	return count;
+}
+
 #define CODEC_ATTR_RW(type) \
 	__ATTR(type, 0644, type##_show, type##_store)
 #define CODEC_ATTR_RO(type) \
@@ -333,6 +407,9 @@ static struct device_attribute codec_attrs[] = {
 	CODEC_ATTR_RW(modelname),
 	CODEC_ATTR_WO(init_verbs),
 	CODEC_ATTR_WO(hints),
+	CODEC_ATTR_RO(init_pin_configs),
+	CODEC_ATTR_RW(user_pin_configs),
+	CODEC_ATTR_RO(driver_pin_configs),
 	CODEC_ATTR_WO(reconfig),
 	CODEC_ATTR_WO(clear),
 };
