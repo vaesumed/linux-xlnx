@@ -293,6 +293,55 @@ static struct ocfs2_extent_tree_operations ocfs2_xattr_tree_et_ops = {
 	.eo_fill_max_leaf_clusters = ocfs2_xattr_tree_fill_max_leaf_clusters,
 };
 
+static void ocfs2_dx_root_set_last_eb_blk(struct ocfs2_extent_tree *et,
+					  u64 blkno)
+{
+	struct ocfs2_dx_root_block *dx_root = et->et_object;
+
+	dx_root->dr_last_eb_blk = cpu_to_le64(blkno);
+}
+
+static u64 ocfs2_dx_root_get_last_eb_blk(struct ocfs2_extent_tree *et)
+{
+	struct ocfs2_dx_root_block *dx_root = et->et_object;
+
+	return le64_to_cpu(dx_root->dr_last_eb_blk);
+}
+
+static void ocfs2_dx_root_update_clusters(struct inode *inode,
+					  struct ocfs2_extent_tree *et,
+					  u32 clusters)
+{
+	struct ocfs2_dx_root_block *dx_root = et->et_object;
+
+	le32_add_cpu(&dx_root->dr_clusters, clusters);
+}
+
+static int ocfs2_dx_root_sanity_check(struct inode *inode,
+				      struct ocfs2_extent_tree *et)
+{
+	struct ocfs2_dx_root_block *dx_root = et->et_object;
+
+	BUG_ON(!OCFS2_IS_VALID_DX_ROOT(dx_root));
+
+	return 0;
+}
+
+static void ocfs2_dx_root_fill_root_el(struct ocfs2_extent_tree *et)
+{
+	struct ocfs2_dx_root_block *dx_root = et->et_object;
+
+	et->et_root_el = &dx_root->dr_list;
+}
+
+static struct ocfs2_extent_tree_operations ocfs2_dx_root_et_ops = {
+	.eo_set_last_eb_blk	= ocfs2_dx_root_set_last_eb_blk,
+	.eo_get_last_eb_blk	= ocfs2_dx_root_get_last_eb_blk,
+	.eo_update_clusters	= ocfs2_dx_root_update_clusters,
+	.eo_sanity_check	= ocfs2_dx_root_sanity_check,
+	.eo_fill_root_el	= ocfs2_dx_root_fill_root_el,
+};
+
 static void __ocfs2_init_extent_tree(struct ocfs2_extent_tree *et,
 				     struct inode *inode,
 				     struct buffer_head *bh,
@@ -336,6 +385,14 @@ void ocfs2_init_xattr_value_extent_tree(struct ocfs2_extent_tree *et,
 {
 	__ocfs2_init_extent_tree(et, inode, vb->vb_bh, vb->vb_access, vb,
 				 &ocfs2_xattr_value_et_ops);
+}
+
+void ocfs2_init_dx_root_extent_tree(struct ocfs2_extent_tree *et,
+				    struct inode *inode,
+				    struct buffer_head *bh)
+{
+	__ocfs2_init_extent_tree(et, inode, bh, ocfs2_journal_access_dr,
+				 NULL, &ocfs2_dx_root_et_ops);
 }
 
 static inline void ocfs2_et_set_last_eb_blk(struct ocfs2_extent_tree *et,
@@ -4796,6 +4853,29 @@ out:
 	return ret;
 }
 
+static int ocfs2_replace_extent_rec(struct inode *inode,
+				    handle_t *handle,
+				    struct ocfs2_path *path,
+				    struct ocfs2_extent_list *el,
+				    int split_index,
+				    struct ocfs2_extent_rec *split_rec)
+{
+	int ret;
+
+	ret = ocfs2_path_bh_journal_access(handle, inode, path,
+					   path_num_items(path) - 1);
+	if (ret) {
+		mlog_errno(ret);
+		goto out;
+	}
+
+	el->l_recs[split_index] = *split_rec;
+
+	ocfs2_journal_dirty(handle, path_leaf_bh(path));
+out:
+	return ret;
+}
+
 /*
  * Mark part or all of the extent record at split_index in the leaf
  * pointed to by path as written. This removes the unwritten
@@ -4885,7 +4965,9 @@ static int __ocfs2_mark_extent_written(struct inode *inode,
 
 	if (ctxt.c_contig_type == CONTIG_NONE) {
 		if (ctxt.c_split_covers_rec)
-			el->l_recs[split_index] = *split_rec;
+			ret = ocfs2_replace_extent_rec(inode, handle,
+						       path, el,
+						       split_index, split_rec);
 		else
 			ret = ocfs2_split_and_insert(inode, handle, path, et,
 						     &last_eb_bh, split_index,
