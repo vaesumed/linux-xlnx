@@ -182,7 +182,6 @@ static int efx_process_channel(struct efx_channel *channel, int rx_quota)
 		channel->rx_pkt = NULL;
 	}
 
-	efx_flush_lro(channel);
 	efx_rx_strategy(channel);
 
 	efx_fast_push_rx_descriptors(&efx->rx_queue[channel->channel]);
@@ -225,11 +224,11 @@ static int efx_poll(struct napi_struct *napi, int budget)
 
 	if (rx_packets < budget) {
 		/* There is no race here; although napi_disable() will
-		 * only wait for netif_rx_complete(), this isn't a problem
+		 * only wait for napi_complete(), this isn't a problem
 		 * since efx_channel_processed() will have no effect if
 		 * interrupts have already been disabled.
 		 */
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		efx_channel_processed(channel);
 	}
 
@@ -1276,18 +1275,11 @@ static int efx_ioctl(struct net_device *net_dev, struct ifreq *ifr, int cmd)
 static int efx_init_napi(struct efx_nic *efx)
 {
 	struct efx_channel *channel;
-	int rc;
 
 	efx_for_each_channel(channel, efx) {
 		channel->napi_dev = efx->net_dev;
-		rc = efx_lro_init(&channel->lro_mgr, efx);
-		if (rc)
-			goto err;
 	}
 	return 0;
- err:
-	efx_fini_napi(efx);
-	return rc;
 }
 
 static void efx_fini_napi(struct efx_nic *efx)
@@ -1295,7 +1287,6 @@ static void efx_fini_napi(struct efx_nic *efx)
 	struct efx_channel *channel;
 
 	efx_for_each_channel(channel, efx) {
-		efx_lro_fini(&channel->lro_mgr);
 		channel->napi_dev = NULL;
 	}
 }
@@ -2127,7 +2118,7 @@ static int __devinit efx_pci_probe(struct pci_dev *pci_dev,
 	net_dev->features |= (NETIF_F_IP_CSUM | NETIF_F_SG |
 			      NETIF_F_HIGHDMA | NETIF_F_TSO);
 	if (lro)
-		net_dev->features |= NETIF_F_LRO;
+		net_dev->features |= NETIF_F_GRO;
 	/* Mask for features that also apply to VLAN devices */
 	net_dev->vlan_features |= (NETIF_F_ALL_CSUM | NETIF_F_SG |
 				   NETIF_F_HIGHDMA | NETIF_F_TSO);
