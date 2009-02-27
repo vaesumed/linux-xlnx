@@ -98,6 +98,10 @@
 #define EM2820_BOARD_COMPRO_VIDEOMATE_FORYOU	  58
 #define EM2883_BOARD_HAUPPAUGE_WINTV_HVR_850	  60
 #define EM2820_BOARD_PROLINK_PLAYTV_BOX4_USB2	  61
+#define EM2820_BOARD_GADMEI_TVR200		  62
+#define EM2860_BOARD_KAIOMY_TVNPC_U2              63
+#define EM2860_BOARD_EASYCAP                      64
+#define EM2820_BOARD_IODATA_GVMVP_SZ		  65
 
 /* Limits minimum and default number of buffers */
 #define EM28XX_MIN_BUF 4
@@ -109,6 +113,10 @@
 /* Params for validated field */
 #define EM28XX_BOARD_NOT_VALIDATED 1
 #define EM28XX_BOARD_VALIDATED	   0
+
+/* Params for em28xx_cmd() audio */
+#define EM28XX_START_AUDIO      1
+#define EM28XX_STOP_AUDIO       0
 
 /* maximum number of em28xx boards */
 #define EM28XX_MAXBOARDS 4 /*FIXME: should be bigger */
@@ -154,7 +162,8 @@
 */
 
 /* time to wait when stopping the isoc transfer */
-#define EM28XX_URB_TIMEOUT       msecs_to_jiffies(EM28XX_NUM_BUFS * EM28XX_NUM_PACKETS)
+#define EM28XX_URB_TIMEOUT \
+			msecs_to_jiffies(EM28XX_NUM_BUFS * EM28XX_NUM_PACKETS)
 
 /* time in msecs to wait for i2c writes to finish */
 #define EM2800_I2C_WRITE_TIMEOUT 20
@@ -420,7 +429,7 @@ struct em28xx_audio {
 	unsigned int hwptr_done_capture;
 	struct snd_card            *sndcard;
 
-	int users, shutdown;
+	int users;
 	enum em28xx_stream_state capture_stream;
 	spinlock_t slock;
 };
@@ -523,7 +532,8 @@ struct em28xx {
 	int num_alt;		/* Number of alternative settings */
 	unsigned int *alt_max_pkt_size;	/* array of wMaxPacketSize */
 	struct urb *urb[EM28XX_NUM_BUFS];	/* urb for isoc transfers */
-	char *transfer_buffer[EM28XX_NUM_BUFS];	/* transfer buffers for isoc transfer */
+	char *transfer_buffer[EM28XX_NUM_BUFS];	/* transfer buffers for isoc
+						   transfer */
 	char urb_buf[URB_MAX_CTRL_SIZE];	/* urb control msg buffer */
 
 	/* helper funcs that call usb_control_msg */
