@@ -33,14 +33,6 @@
 #undef EXT4FS_DEBUG
 
 /*
- * Define EXT4_RESERVATION to reserve data blocks for expanding files
- */
-#define EXT4_DEFAULT_RESERVE_BLOCKS	8
-/*max window size: 1024(direct blocks) + 3([t,d]indirect blocks) */
-#define EXT4_MAX_RESERVE_BLOCKS		1027
-#define EXT4_RESERVE_WINDOW_NOT_ALLOCATED 0
-
-/*
  * Debug code
  */
 #ifdef EXT4FS_DEBUG
@@ -53,8 +45,6 @@
 #else
 #define ext4_debug(f, a...)	do {} while (0)
 #endif
-
-#define EXT4_MULTIBLOCK_ALLOCATOR	1
 
 /* prefer goal again. length */
 #define EXT4_MB_HINT_MERGE		1
@@ -249,6 +239,30 @@ struct flex_groups {
 #define EXT4_FL_USER_VISIBLE		0x000BDFFF /* User visible flags */
 #define EXT4_FL_USER_MODIFIABLE		0x000B80FF /* User modifiable flags */
 
+/* Flags that should be inherited by new inodes from their parent. */
+#define EXT4_FL_INHERITED (EXT4_SECRM_FL | EXT4_UNRM_FL | EXT4_COMPR_FL |\
+			   EXT4_SYNC_FL | EXT4_IMMUTABLE_FL | EXT4_APPEND_FL |\
+			   EXT4_NODUMP_FL | EXT4_NOATIME_FL |\
+			   EXT4_NOCOMPR_FL | EXT4_JOURNAL_DATA_FL |\
+			   EXT4_NOTAIL_FL | EXT4_DIRSYNC_FL)
+
+/* Flags that are appropriate for regular files (all but dir-specific ones). */
+#define EXT4_REG_FLMASK (~(EXT4_DIRSYNC_FL | EXT4_TOPDIR_FL))
+
+/* Flags that are appropriate for non-directories/regular files. */
+#define EXT4_OTHER_FLMASK (EXT4_NODUMP_FL | EXT4_NOATIME_FL)
+
+/* Mask out flags that are inappropriate for the given type of inode. */
+static inline __u32 ext4_mask_flags(umode_t mode, __u32 flags)
+{
+	if (S_ISDIR(mode))
+		return flags;
+	else if (S_ISREG(mode))
+		return flags & EXT4_REG_FLMASK;
+	else
+		return flags & EXT4_OTHER_FLMASK;
+}
+
 /*
  * Inode dynamic state flags
  */
@@ -256,6 +270,7 @@ struct flex_groups {
 #define EXT4_STATE_NEW			0x00000002 /* inode is newly created */
 #define EXT4_STATE_XATTR		0x00000004 /* has in-inode xattrs */
 #define EXT4_STATE_NO_EXPAND		0x00000008 /* No space for expansion */
+#define EXT4_STATE_DA_ALLOC_CLOSE	0x00000010 /* Alloc DA blks on close */
 
 /* Used to pass group descriptor data when online resize is done */
 struct ext4_new_group_input {
@@ -303,7 +318,9 @@ struct ext4_new_group_data {
 #define EXT4_IOC_GROUP_EXTEND		_IOW('f', 7, unsigned long)
 #define EXT4_IOC_GROUP_ADD		_IOW('f', 8, struct ext4_new_group_input)
 #define EXT4_IOC_MIGRATE		_IO('f', 9)
+ /* note ioctl 10 reserved for an early version of the FIEMAP ioctl */
  /* note ioctl 11 reserved for filesystem-independent FIEMAP ioctl */
+#define EXT4_IOC_ALLOC_DA_BLKS		_IO('f', 12)
 
 /*
  * ioctl commands in 32 bit emulation
@@ -814,6 +831,12 @@ static inline int ext4_valid_inum(struct super_block *sb, unsigned long ino)
 #define EXT4_DEF_MAX_BATCH_TIME	15000 /* 15ms */
 
 /*
+ * Minimum number of groups in a flexgroup before we separate out
+ * directories into the first block group of a flexgroup
+ */
+#define EXT4_FLEX_SIZE_DIR_ALLOC_SCHEME	4
+
+/*
  * Structure of a directory entry
  */
 #define EXT4_NAME_LEN 255
@@ -864,24 +887,6 @@ struct ext4_dir_entry_2 {
 #define EXT4_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXT4_DIR_ROUND) & \
 					 ~EXT4_DIR_ROUND)
 #define EXT4_MAX_REC_LEN		((1<<16)-1)
-
-static inline unsigned ext4_rec_len_from_disk(__le16 dlen)
-{
-	unsigned len = le16_to_cpu(dlen);
-
-	if (len == EXT4_MAX_REC_LEN || len == 0)
-		return 1 << 16;
-	return len;
-}
-
-static inline __le16 ext4_rec_len_to_disk(unsigned len)
-{
-	if (len == (1 << 16))
-		return cpu_to_le16(EXT4_MAX_REC_LEN);
-	else if (len > (1 << 16))
-		BUG();
-	return cpu_to_le16(len);
-}
 
 /*
  * Hash Tree Directory indexing
@@ -1092,6 +1097,7 @@ extern int ext4_can_truncate(struct inode *inode);
 extern void ext4_truncate(struct inode *);
 extern void ext4_set_inode_flags(struct inode *);
 extern void ext4_get_inode_flags(struct ext4_inode_info *);
+extern int ext4_alloc_da_blocks(struct inode *inode);
 extern void ext4_set_aops(struct inode *inode);
 extern int ext4_writepage_trans_blocks(struct inode *);
 extern int ext4_meta_trans_blocks(struct inode *, int nrblocks, int idxblocks);
@@ -1107,7 +1113,10 @@ extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
 
 /* migrate.c */
 extern int ext4_ext_migrate(struct inode *);
+
 /* namei.c */
+extern unsigned int ext4_rec_len_from_disk(__le16 dlen, unsigned blocksize);
+extern __le16 ext4_rec_len_to_disk(unsigned len, unsigned blocksize);
 extern int ext4_orphan_add(handle_t *, struct inode *);
 extern int ext4_orphan_del(handle_t *, struct inode *);
 extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
