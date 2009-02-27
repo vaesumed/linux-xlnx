@@ -343,6 +343,9 @@ struct ocfs2_super
 
 	/* used to protect metaecc calculation check of xattr. */
 	spinlock_t osb_xattr_lock;
+
+	/* the group we used to allocate inodes. */
+	u64				osb_inode_alloc_group;
 };
 
 #define OCFS2_SB(sb)	    ((struct ocfs2_super *)(sb)->s_fs_info)
