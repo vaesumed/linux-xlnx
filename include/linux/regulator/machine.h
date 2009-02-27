@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2007, 2008 Wolfson Microelectronics PLC.
  *
- * Author: Liam Girdwood <lg@opensource.wolfsonmicro.com>
+ * Author: Liam Girdwood <lrg@slimlogic.co.uk>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -83,6 +83,7 @@ struct regulator_state {
  * @state_standby: State for regulator when system is suspended in standby
  *                 mode.
  * @initial_state: Suspend state to set by default.
+ * @initial_mode: Mode to set at startup.
  */
 struct regulation_constraints {
 
@@ -110,6 +111,9 @@ struct regulation_constraints {
 	struct regulator_state state_mem;
 	struct regulator_state state_standby;
 	suspend_state_t initial_state; /* suspend state to set at init */
+
+	/* mode to set on startup */
+	unsigned int initial_mode;
 
 	/* constriant flags */
 	unsigned always_on:1;	/* regulator never off when system is on */
