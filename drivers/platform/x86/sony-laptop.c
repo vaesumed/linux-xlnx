@@ -816,10 +816,10 @@ struct sony_nc_event {
 
 static struct sony_nc_event *sony_nc_events;
 
-/* Vaio C* --maybe also FE*, N* and AR* ?-- special init sequence
- * for Fn keys
+/* Some Vaio models require additional steps to enable
+ * Fn keys
  */
-static int sony_nc_C_enable(const struct dmi_system_id *id)
+static int sony_SNC_enable_cb(const struct dmi_system_id *id)
 {
 	int result = 0;
 
@@ -840,7 +840,7 @@ static int sony_nc_C_enable(const struct dmi_system_id *id)
 	return 0;
 }
 
-static struct sony_nc_event sony_C_events[] = {
+static struct sony_nc_event sony_SNC_events[] = {
 	{ 0x81, SONYPI_EVENT_FNKEY_F1 },
 	{ 0x01, SONYPI_EVENT_FNKEY_RELEASED },
 	{ 0x82, SONYPI_EVENT_FNKEY_F2 },
@@ -869,8 +869,8 @@ static struct sony_nc_event sony_C_events[] = {
 static const struct dmi_system_id sony_nc_ids[] = {
 		{
 			.ident = "Sony Vaio FE Series",
-			.callback = sony_nc_C_enable,
-			.driver_data = sony_C_events,
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-FE"),
@@ -878,8 +878,8 @@ static const struct dmi_system_id sony_nc_ids[] = {
 		},
 		{
 			.ident = "Sony Vaio FW Series",
-			.callback = sony_nc_C_enable,
-			.driver_data = sony_C_events,
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-FW"),
@@ -887,8 +887,8 @@ static const struct dmi_system_id sony_nc_ids[] = {
 		},
 		{
 			.ident = "Sony Vaio FZ Series",
-			.callback = sony_nc_C_enable,
-			.driver_data = sony_C_events,
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-FZ"),
@@ -896,8 +896,8 @@ static const struct dmi_system_id sony_nc_ids[] = {
 		},
 		{
 			.ident = "Sony Vaio C Series",
-			.callback = sony_nc_C_enable,
-			.driver_data = sony_C_events,
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-C"),
@@ -905,8 +905,8 @@ static const struct dmi_system_id sony_nc_ids[] = {
 		},
 		{
 			.ident = "Sony Vaio N Series",
-			.callback = sony_nc_C_enable,
-			.driver_data = sony_C_events,
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-N"),
@@ -914,8 +914,8 @@ static const struct dmi_system_id sony_nc_ids[] = {
 		},
 		{
 			.ident = "Sony Vaio Z Series",
-			.callback = sony_nc_C_enable,
-			.driver_data = sony_C_events,
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-Z"),
