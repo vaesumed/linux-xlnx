@@ -843,16 +843,25 @@ static int sony_nc_C_enable(const struct dmi_system_id *id)
 static struct sony_nc_event sony_C_events[] = {
 	{ 0x81, SONYPI_EVENT_FNKEY_F1 },
 	{ 0x01, SONYPI_EVENT_FNKEY_RELEASED },
+	{ 0x82, SONYPI_EVENT_FNKEY_F2 },
+	{ 0x02, SONYPI_EVENT_FNKEY_RELEASED },
 	{ 0x85, SONYPI_EVENT_FNKEY_F5 },
 	{ 0x05, SONYPI_EVENT_FNKEY_RELEASED },
+	{ 0x85, SONYPI_EVENT_FNKEY_F5 },
 	{ 0x86, SONYPI_EVENT_FNKEY_F6 },
 	{ 0x06, SONYPI_EVENT_FNKEY_RELEASED },
 	{ 0x87, SONYPI_EVENT_FNKEY_F7 },
 	{ 0x07, SONYPI_EVENT_FNKEY_RELEASED },
+	{ 0x89, SONYPI_EVENT_FNKEY_F9 },
+	{ 0x09, SONYPI_EVENT_FNKEY_RELEASED },
 	{ 0x8A, SONYPI_EVENT_FNKEY_F10 },
 	{ 0x0A, SONYPI_EVENT_FNKEY_RELEASED },
 	{ 0x8C, SONYPI_EVENT_FNKEY_F12 },
 	{ 0x0C, SONYPI_EVENT_FNKEY_RELEASED },
+	{ 0x90, SONYPI_EVENT_PKEY_P1 },
+	{ 0x10, SONYPI_EVENT_FNKEY_RELEASED },
+	{ 0xA1, SONYPI_EVENT_PKEY_P2 },
+	{ 0x21, SONYPI_EVENT_FNKEY_RELEASED },
 	{ 0, 0 },
 };
 
@@ -865,6 +874,15 @@ static const struct dmi_system_id sony_nc_ids[] = {
 			.matches = {
 				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-FE"),
+			},
+		},
+		{
+			.ident = "Sony Vaio FW Series",
+			.callback = sony_nc_C_enable,
+			.driver_data = sony_C_events,
+			.matches = {
+				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
+				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-FW"),
 			},
 		},
 		{
