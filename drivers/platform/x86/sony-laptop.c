@@ -921,6 +921,15 @@ static const struct dmi_system_id sony_nc_ids[] = {
 				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-Z"),
 			},
 		},
+		{
+			.ident = "Sony Vaio SR Series",
+			.callback = sony_SNC_enable_cb,
+			.driver_data = sony_SNC_events,
+			.matches = {
+				DMI_MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
+				DMI_MATCH(DMI_PRODUCT_NAME, "VGN-SR"),
+			},
+		},
 		{ }
 };
 
