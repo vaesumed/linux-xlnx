@@ -460,9 +460,11 @@ static int tw9910_mask_set(struct i2c_client *client, u8 command,
 			   u8 mask, u8 set)
 {
 	s32 val = i2c_smbus_read_byte_data(client, command);
+	if (val < 0)
+		return val;
 
 	val &= ~mask;
-	val |=  set;
+	val |= set & mask;
 
 	return i2c_smbus_write_byte_data(client, command, val);
 }
@@ -645,6 +647,19 @@ static int tw9910_set_fmt(struct soc_camera_device *icd, __u32 pixfmt,
 	struct tw9910_priv *priv = container_of(icd, struct tw9910_priv, icd);
 	int                 ret  = -EINVAL;
 	u8                  val;
+	int                 i;
+
+	/*
+	 * check color format
+	 */
+	for (i = 0 ; i < ARRAY_SIZE(tw9910_color_fmt) ; i++) {
+		if (pixfmt == tw9910_color_fmt[i].fourcc) {
+			ret = 0;
+			break;
+		}
+	}
+	if (ret < 0)
+		goto tw9910_set_fmt_error;
 
 	/*
 	 * select suitable norm
