@@ -6,6 +6,8 @@
  * Licensed under the GPL-2 or later.
  */
 
+#include <linux/types.h>
+int strncmp(const char *cs, const char *ct, size_t count);
 #define strncmp __inline_strncmp
 #include <asm/string.h>
 #undef strncmp
