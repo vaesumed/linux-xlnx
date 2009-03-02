@@ -3079,7 +3079,9 @@ static void __gather_stats(void *arg)
 	spin_unlock(&gather->lock);
 }
 
-static void gather_stats(struct kmem_cache *s, struct stats_gather *stats)
+/* must be called with slqb_lock held */
+static void gather_stats_locked(struct kmem_cache *s,
+				struct stats_gather *stats)
 {
 #ifdef CONFIG_NUMA
 	int node;
@@ -3088,8 +3090,6 @@ static void gather_stats(struct kmem_cache *s, struct stats_gather *stats)
 	memset(stats, 0, sizeof(struct stats_gather));
 	stats->s = s;
 	spin_lock_init(&stats->lock);
-
-	down_read(&slqb_lock); /* hold off hotplug */
 
 	on_each_cpu(__gather_stats, stats, 1);
 
@@ -3119,9 +3119,14 @@ static void gather_stats(struct kmem_cache *s, struct stats_gather *stats)
 	}
 #endif
 
-	up_read(&slqb_lock);
-
 	stats->nr_objects = stats->nr_slabs * s->objects;
+}
+
+static void gather_stats(struct kmem_cache *s, struct stats_gather *stats)
+{
+	down_read(&slqb_lock); /* hold off hotplug */
+	gather_stats_locked(s, stats);
+	up_read(&slqb_lock);
 }
 #endif
 
@@ -3175,7 +3180,7 @@ static int s_show(struct seq_file *m, void *p)
 
 	s = list_entry(p, struct kmem_cache, list);
 
-	gather_stats(s, &stats);
+	gather_stats_locked(s, &stats);
 
 	seq_printf(m, "%-17s %6lu %6lu %6u %4u %4d", s->name, stats.nr_inuse,
 			stats.nr_objects, s->size, s->objects, (1 << s->order));
