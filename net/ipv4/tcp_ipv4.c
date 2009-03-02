@@ -2355,7 +2355,7 @@ struct sk_buff **tcp4_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 
 	switch (skb->ip_summed) {
 	case CHECKSUM_COMPLETE:
-		if (!tcp_v4_check(skb->len, iph->saddr, iph->daddr,
+		if (!tcp_v4_check(skb_gro_len(skb), iph->saddr, iph->daddr,
 				  skb->csum)) {
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
 			break;
@@ -2443,7 +2443,7 @@ static struct pernet_operations __net_initdata tcp_sk_ops = {
 void __init tcp_v4_init(void)
 {
 	inet_hashinfo_init(&tcp_hashinfo);
-	if (register_pernet_device(&tcp_sk_ops))
+	if (register_pernet_subsys(&tcp_sk_ops))
 		panic("Failed to create the TCP control socket.\n");
 }
 
