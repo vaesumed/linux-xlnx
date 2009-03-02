@@ -223,10 +223,16 @@ int param_set_charp(const char *val, struct kernel_param *kp)
 	if (kp->perm & KPARAM_KMALLOCED)
 		kfree(*(char **)kp->arg);
 
-	kp->perm |= KPARAM_KMALLOCED;
-	*(char **)kp->arg = kstrdup(val, GFP_KERNEL);
-	if (!kp->arg)
-		return -ENOMEM;
+	/* This is a hack.  We can't need to strdup in early boot, and we
+	 * don't need to; this mangled commandline is preserved. */
+	if (slab_is_available()) {
+		kp->perm |= KPARAM_KMALLOCED;
+		*(char **)kp->arg = kstrdup(val, GFP_KERNEL);
+		if (!kp->arg)
+			return -ENOMEM;
+	} else
+		*(const char **)kp->arg = val;
+
 	return 0;
 }
 
