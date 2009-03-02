@@ -156,11 +156,7 @@ static inline struct zone *slqb_page_zone(struct slqb_page *page)
 
 static inline int virt_to_nid(const void *addr)
 {
-#ifdef virt_to_page_fast
-	return page_to_nid(virt_to_page_fast(addr));
-#else
 	return page_to_nid(virt_to_page(addr));
-#endif
 }
 
 static inline struct slqb_page *virt_to_head_slqb_page(const void *addr)
