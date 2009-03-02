@@ -368,7 +368,7 @@ static void maple_attach_driver(struct maple_device *mdev)
 		/* Do this silently - as not a real device */
 		function = 0;
 		mdev->driver = &maple_unsupported_device;
-		sprintf(mdev->dev.bus_id, "%d:0.port", mdev->port);
+		dev_set_name(&mdev->dev, "%d:0.port", mdev->port);
 
 	} else {
 
@@ -381,8 +381,8 @@ static void maple_attach_driver(struct maple_device *mdev)
 			dev_info(&mdev->dev, "no driver found\n");
 			mdev->driver = &maple_unsupported_device;
 		}
-		sprintf(mdev->dev.bus_id, "%d:0%d.%lX", mdev->port,
-			mdev->unit, function);
+		dev_set_name(&mdev->dev, "%d:0%d.%lX", mdev->port,
+			     mdev->unit, function);
 	}
 
 	mdev->function = function;
@@ -789,7 +789,7 @@ struct bus_type maple_bus_type = {
 EXPORT_SYMBOL_GPL(maple_bus_type);
 
 static struct device maple_bus = {
-	.bus_id = "maple",
+	.init_name = "maple",
 	.release = maple_bus_release,
 };
 
