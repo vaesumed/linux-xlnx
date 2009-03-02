@@ -76,7 +76,6 @@ static irqreturn_t c2_interrupt(int irq, void *dev_id);
 static void c2_tx_timeout(struct net_device *netdev);
 static int c2_change_mtu(struct net_device *netdev, int new_mtu);
 static void c2_reset(struct c2_port *c2_port);
-static struct net_device_stats *c2_get_stats(struct net_device *netdev);
 
 static struct pci_device_id c2_pci_table[] = {
 	{ PCI_DEVICE(0x18b8, 0xb001) },
@@ -531,7 +530,6 @@ static void c2_rx_interrupt(struct net_device *netdev)
 
 		netif_rx(skb);
 
-		netdev->last_rx = jiffies;
 		c2_port->netstats.rx_packets++;
 		c2_port->netstats.rx_bytes += buflen;
 	}
@@ -880,6 +878,17 @@ static int c2_change_mtu(struct net_device *netdev, int new_mtu)
 	return ret;
 }
 
+static const struct net_device_ops c2_netdev_ops = {
+	.ndo_open 	     = c2_up,
+	.ndo_stop	     = c2_down,
+	.ndo_start_xmit      = c2_xmit_frame,
+	.ndo_get_stats	     = c2_get_stats,
+	.ndo_tx_timeout	     = c2_tx_timeout,
+	.ndo_change_mtu	     = c2_change_mtu,
+	.ndo_set_mac_address = eth_mac_addr,
+	.ndo_validate_addr   = eth_validate_addr,
+};
+
 /* Initialize network device */
 static struct net_device *c2_devinit(struct c2_dev *c2dev,
 				     void __iomem * mmio_addr)
@@ -894,12 +903,7 @@ static struct net_device *c2_devinit(struct c2_dev *c2dev,
 
 	SET_NETDEV_DEV(netdev, &c2dev->pcidev->dev);
 
-	netdev->open = c2_up;
-	netdev->stop = c2_down;
-	netdev->hard_start_xmit = c2_xmit_frame;
-	netdev->get_stats = c2_get_stats;
-	netdev->tx_timeout = c2_tx_timeout;
-	netdev->change_mtu = c2_change_mtu;
+	netdev->netdev_ops = &c2_netdev_ops;
 	netdev->watchdog_timeo = C2_TX_TIMEOUT;
 	netdev->irq = c2dev->pcidev->irq;
 
