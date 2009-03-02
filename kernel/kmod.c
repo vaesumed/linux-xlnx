@@ -64,8 +64,7 @@ char modprobe_path[KMOD_PATH_LEN] = "/sbin/modprobe";
  * If module auto-loading support is disabled then this function
  * becomes a no-operation.
  */
-
-int __request_module(int wait, const char *fmt, ...)
+int __request_module(bool wait, const char *fmt, ...)
 {
 	va_list args;
 	char module_name[MODULE_NAME_LEN];
