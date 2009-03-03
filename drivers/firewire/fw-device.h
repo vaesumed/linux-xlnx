@@ -19,10 +19,17 @@
 #ifndef __fw_device_h
 #define __fw_device_h
 
+#include <linux/device.h>
 #include <linux/fs.h>
-#include <linux/cdev.h>
 #include <linux/idr.h>
+#include <linux/kernel.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/rwsem.h>
+#include <linux/sysfs.h>
+#include <linux/types.h>
+#include <linux/workqueue.h>
+
 #include <asm/atomic.h>
 
 enum fw_device_state {
@@ -37,6 +44,9 @@ struct fw_attribute_group {
 	struct attribute_group group;
 	struct attribute *attrs[11];
 };
+
+struct fw_node;
+struct fw_card;
 
 /*
  * Note, fw_device.generation always has to be read before fw_device.node_id.
@@ -64,7 +74,10 @@ struct fw_device {
 	bool cmc;
 	struct fw_card *card;
 	struct device device;
+
+	struct mutex client_list_mutex;
 	struct list_head client_list;
+
 	u32 *config_rom;
 	size_t config_rom_length;
 	int config_rom_retries;
@@ -176,8 +189,7 @@ struct fw_driver {
 	const struct fw_device_id *id_table;
 };
 
-static inline struct fw_driver *
-fw_driver(struct device_driver *drv)
+static inline struct fw_driver *fw_driver(struct device_driver *drv)
 {
 	return container_of(drv, struct fw_driver, driver);
 }
