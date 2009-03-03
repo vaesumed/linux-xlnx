@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003 - 2006 NetXen, Inc.
+ * Copyright (C) 2003 - 2009 NetXen, Inc.
  * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,9 +22,10 @@
  *
  * Contact Information:
  *    info@netxen.com
- * NetXen,
- * 3965 Freedom Circle, Fourth floor,
- * Santa Clara, CA 95054
+ * NetXen Inc,
+ * 18922 Forge Drive
+ * Cupertino, CA 95014-0701
+ *
  */
 
 #ifndef _NETXEN_NIC_H_
@@ -711,6 +712,15 @@ typedef enum {
 	NETXEN_USER_START = 0x3E8000,	/* User defined region for new boards */
 	NETXEN_FIXED_START = 0x3F0000	/* backup of crbinit */
 } netxen_flash_map_t;
+
+#define NX_FW_VERSION_OFFSET	(NETXEN_USER_START+0x408)
+#define NX_FW_SIZE_OFFSET	(NETXEN_USER_START+0x40c)
+#define NX_BIOS_VERSION_OFFSET	(NETXEN_USER_START+0x83c)
+#define NX_FW_MAGIC_OFFSET	(NETXEN_BRDCFG_START+0x128)
+#define NX_FW_MIN_SIZE		(0x3fffff)
+#define NX_P2_MN_ROMIMAGE	"nxromimg.bin"
+#define NX_P3_CT_ROMIMAGE	"nx3fwct.bin"
+#define NX_P3_MN_ROMIMAGE	"nx3fwmn.bin"
 
 #define NETXEN_USER_START_OLD NETXEN_PXE_START	/* for backward compatibility */
 
