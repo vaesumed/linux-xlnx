@@ -49,9 +49,9 @@ struct mdk_rdev_s
 {
 	struct list_head same_set;	/* RAID devices within the same set */
 
-	sector_t size;			/* Device size (in blocks) */
+	sector_t sectors;		/* Device size (in 512bytes sectors) */
 	mddev_t *mddev;			/* RAID array if running */
-	long last_events;		/* IO event timestamp */
+	int last_events;		/* IO event timestamp */
 
 	struct block_device *bdev;	/* block device handle */
 
@@ -132,6 +132,8 @@ struct mddev_s
 #define MD_CHANGE_CLEAN 1	/* transition to or from 'clean' */
 #define MD_CHANGE_PENDING 2	/* superblock update in progress */
 
+	int				suspended;
+	atomic_t			active_io;
 	int				ro;
 
 	struct gendisk			*gendisk;
@@ -155,7 +157,8 @@ struct mddev_s
 	char				clevel[16];
 	int				raid_disks;
 	int				max_disks;
-	sector_t			size; /* used size of component devices */
+	sector_t			dev_sectors; 	/* used size of
+							 * component devices */
 	sector_t			array_sectors; /* exported array size */
 	__u64				events;
 
@@ -172,6 +175,13 @@ struct mddev_s
 	struct mdk_thread_s		*thread;	/* management thread */
 	struct mdk_thread_s		*sync_thread;	/* doing resync or reconstruct */
 	sector_t			curr_resync;	/* last block scheduled */
+	/* As resync requests can complete out of order, we cannot easily track
+	 * how much resync has been completed.  So we occasionally pause until
+	 * everything completes, then set curr_resync_completed to curr_resync.
+	 * As such it may be well behind the real resync mark, but it is a value
+	 * we are certain of.
+	 */
+	sector_t			curr_resync_completed;
 	unsigned long			resync_mark;	/* a recent timestamp */
 	sector_t			resync_mark_cnt;/* blocks written at resync_mark */
 	sector_t			curr_mark_cnt; /* blocks scheduled now */
@@ -324,6 +334,16 @@ struct mdk_personality
 	 * others - reserved
 	 */
 	void (*quiesce) (mddev_t *mddev, int state);
+	/* takeover is used to transition an array from one
+	 * personality to another.  The new personality must be able
+	 * to handle the data in the current layout.
+	 * e.g. 2drive raid1 -> 2drive raid5
+	 *      ndrive raid5 -> degraded n+1drive raid6 with special layout
+	 * If the takeover succeeds, a new 'private' structure is returned.
+	 * This needs to be installed and then ->run used to activate the
+	 * array.
+	 */
+	void *(*takeover) (mddev_t *mddev);
 };
 
 
