@@ -1283,6 +1283,12 @@ const char *pvr2_hdw_get_bus_info(struct pvr2_hdw *hdw)
 }
 
 
+const char *pvr2_hdw_get_device_identifier(struct pvr2_hdw *hdw)
+{
+	return hdw->identifier;
+}
+
+
 unsigned long pvr2_hdw_get_cur_freq(struct pvr2_hdw *hdw)
 {
 	return hdw->freqSelector ? hdw->freqValTelevision : hdw->freqValRadio;
@@ -2024,6 +2030,19 @@ static void pvr2_hdw_setup_low(struct pvr2_hdw *hdw)
 		hdw->std_mask_eeprom = V4L2_STD_ALL;
 	}
 
+	if (hdw->serial_number) {
+		idx = scnprintf(hdw->identifier, sizeof(hdw->identifier) - 1,
+				"sn-%lu", hdw->serial_number);
+	} else if (hdw->unit_number >= 0) {
+		idx = scnprintf(hdw->identifier, sizeof(hdw->identifier) - 1,
+				"unit-%c",
+				hdw->unit_number + 'a');
+	} else {
+		idx = scnprintf(hdw->identifier, sizeof(hdw->identifier) - 1,
+				"unit-??");
+	}
+	hdw->identifier[idx] = 0;
+
 	pvr2_hdw_setup_std(hdw);
 
 	if (!get_default_tuner_type(hdw)) {
@@ -2393,10 +2412,7 @@ struct pvr2_hdw *pvr2_hdw_create(struct usb_interface *intf,
 	hdw->usb_intf = intf;
 	hdw->usb_dev = interface_to_usbdev(intf);
 
-	scnprintf(hdw->bus_info,sizeof(hdw->bus_info),
-		  "usb %s address %d",
-		  dev_name(&hdw->usb_dev->dev),
-		  hdw->usb_dev->devnum);
+	usb_make_path(hdw->usb_dev, hdw->bus_info, sizeof(hdw->bus_info));
 
 	ifnum = hdw->usb_intf->cur_altsetting->desc.bInterfaceNumber;
 	usb_set_interface(hdw->usb_dev,ifnum,0);
