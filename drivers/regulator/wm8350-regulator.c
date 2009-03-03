@@ -1031,18 +1031,30 @@ static unsigned int wm8350_dcdc_get_mode(struct regulator_dev *rdev)
 	int dcdc = rdev_get_id(rdev);
 	u16 mask, sleep, active, force;
 	int mode = REGULATOR_MODE_NORMAL;
+	int reg;
 
-	if (dcdc < WM8350_DCDC_1 || dcdc > WM8350_DCDC_6)
+	switch (dcdc) {
+	case WM8350_DCDC_1:
+		reg = WM8350_DCDC1_FORCE_PWM;
+		break;
+	case WM8350_DCDC_3:
+		reg = WM8350_DCDC3_FORCE_PWM;
+		break;
+	case WM8350_DCDC_4:
+		reg = WM8350_DCDC4_FORCE_PWM;
+		break;
+	case WM8350_DCDC_6:
+		reg = WM8350_DCDC6_FORCE_PWM;
+		break;
+	default:
 		return -EINVAL;
-
-	if (dcdc == WM8350_DCDC_2 || dcdc == WM8350_DCDC_5)
-		return -EINVAL;
+	}
 
 	mask = 1 << (dcdc - WM8350_DCDC_1);
 	active = wm8350_reg_read(wm8350, WM8350_DCDC_ACTIVE_OPTIONS) & mask;
+	force = wm8350_reg_read(wm8350, reg) & WM8350_DCDC1_FORCE_PWM_ENA;
 	sleep = wm8350_reg_read(wm8350, WM8350_DCDC_SLEEP_OPTIONS) & mask;
-	force = wm8350_reg_read(wm8350, WM8350_DCDC1_FORCE_PWM)
-	    & WM8350_DCDC1_FORCE_PWM_ENA;
+
 	dev_dbg(wm8350->dev, "mask %x active %x sleep %x force %x",
 		mask, active, sleep, force);
 
@@ -1293,6 +1305,7 @@ static void pmic_uv_handler(struct wm8350 *wm8350, int irq, void *data)
 {
 	struct regulator_dev *rdev = (struct regulator_dev *)data;
 
+	mutex_lock(&rdev->mutex);
 	if (irq == WM8350_IRQ_CS1 || irq == WM8350_IRQ_CS2)
 		regulator_notifier_call_chain(rdev,
 					      REGULATOR_EVENT_REGULATION_OUT,
@@ -1301,6 +1314,7 @@ static void pmic_uv_handler(struct wm8350 *wm8350, int irq, void *data)
 		regulator_notifier_call_chain(rdev,
 					      REGULATOR_EVENT_UNDER_VOLTAGE,
 					      wm8350);
+	mutex_unlock(&rdev->mutex);
 }
 
 static int wm8350_regulator_probe(struct platform_device *pdev)
@@ -1333,9 +1347,9 @@ static int wm8350_regulator_probe(struct platform_device *pdev)
 		break;
 	}
 
-
 	/* register regulator */
 	rdev = regulator_register(&wm8350_reg[pdev->id], &pdev->dev,
+				  pdev->dev.platform_data,
 				  dev_get_drvdata(&pdev->dev));
 	if (IS_ERR(rdev)) {
 		dev_err(&pdev->dev, "failed to register %s\n",
