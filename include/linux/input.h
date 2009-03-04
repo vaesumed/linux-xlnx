@@ -263,7 +263,7 @@ struct input_absinfo {
 #define KEY_MENU		139	/* Menu (show menu) */
 #define KEY_CALC		140	/* AL Calculator */
 #define KEY_SETUP		141
-#define KEY_SLEEP		142	/* SC System Sleep */
+#define KEY_SLEEP		142	/* SC System Sleep (either RAM or disk) */
 #define KEY_WAKEUP		143	/* System Wake Up */
 #define KEY_FILE		144	/* AL Local Machine Browser */
 #define KEY_SENDFILE		145
@@ -324,7 +324,7 @@ struct input_absinfo {
 #define KEY_PROG3		202
 #define KEY_PROG4		203
 #define KEY_DASHBOARD		204	/* AL Dashboard */
-#define KEY_SUSPEND		205
+#define KEY_SUSPEND		205	/* Sleep state, typically to RAM */
 #define KEY_CLOSE		206	/* AC Close */
 #define KEY_PLAY		207
 #define KEY_FASTFORWARD		208
@@ -374,6 +374,8 @@ struct input_absinfo {
 #define KEY_DISPLAY_OFF		245	/* display device to off state */
 
 #define KEY_WIMAX		246
+
+#define KEY_HIBERNATE		247	/* Sleep state, typically to disk */
 
 /* Range 248 - 255 is reserved for special needs of AT keyboard driver */
 
