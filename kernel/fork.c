@@ -1216,7 +1216,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * to ensure it is on a valid CPU (and if not, just force it back to
 	 * parent's CPU). This avoids alot of nasty races.
 	 */
-	p->cpus_allowed = current->cpus_allowed;
+	cpumask_copy(tsk_cpumask(p), tsk_cpumask(current));
 	p->rt.nr_cpus_allowed = current->rt.nr_cpus_allowed;
 	if (unlikely(!cpu_isset(task_cpu(p), p->cpus_allowed) ||
 			!cpu_online(task_cpu(p))))
