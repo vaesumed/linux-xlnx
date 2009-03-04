@@ -1,5 +1,5 @@
 /*
-	Copyright (C) 2004 - 2008 rt2x00 SourceForge Project
+	Copyright (C) 2004 - 2009 rt2x00 SourceForge Project
 	<http://rt2x00.serialmonkey.com>
 
 	This program is free software; you can redistribute it and/or modify
@@ -130,9 +130,11 @@ struct rt2x00debug_intf {
 };
 
 void rt2x00debug_update_crypto(struct rt2x00_dev *rt2x00dev,
-			       enum cipher cipher, enum rx_crypto status)
+			       struct rxdone_entry_desc *rxdesc)
 {
 	struct rt2x00debug_intf *intf = rt2x00dev->debugfs_intf;
+	enum cipher cipher = rxdesc->cipher;
+	enum rx_crypto status = rxdesc->cipher_status;
 
 	if (cipher == CIPHER_TKIP_NO_MIC)
 		cipher = CIPHER_TKIP;
@@ -433,10 +435,11 @@ static ssize_t rt2x00debug_read_##__name(struct file *file,	\
 	if (index >= debug->__name.word_count)			\
 		return -EINVAL;					\
 								\
+	index += (debug->__name.word_base /			\
+		  debug->__name.word_size);			\
+								\
 	if (debug->__name.flags & RT2X00DEBUGFS_OFFSET)		\
 		index *= debug->__name.word_size;		\
-								\
-	index += debug->__name.word_base;			\
 								\
 	debug->__name.read(intf->rt2x00dev, index, &value);	\
 								\
@@ -474,10 +477,11 @@ static ssize_t rt2x00debug_write_##__name(struct file *file,	\
 	size = strlen(line);					\
 	value = simple_strtoul(line, NULL, 0);			\
 								\
+	index += (debug->__name.word_base /			\
+		  debug->__name.word_size);			\
+								\
 	if (debug->__name.flags & RT2X00DEBUGFS_OFFSET)		\
 		index *= debug->__name.word_size;		\
-								\
-	index += debug->__name.word_base;			\
 								\
 	debug->__name.write(intf->rt2x00dev, index, value);	\
 								\
