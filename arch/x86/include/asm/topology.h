@@ -241,7 +241,7 @@ struct pci_bus;
 void set_pci_bus_resources_arch_default(struct pci_bus *b);
 
 #ifdef CONFIG_SMP
-#define mc_capable()	(cpus_weight(per_cpu(cpu_core_map, 0)) != nr_cpu_ids)
+#define mc_capable()	(cpumask_weight(cpu_core_mask(0)) != nr_cpu_ids)
 #define smt_capable()			(smp_num_siblings > 1)
 #endif
 
