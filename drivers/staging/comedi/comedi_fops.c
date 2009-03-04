@@ -59,6 +59,12 @@ int comedi_debug;
 module_param(comedi_debug, int, 0644);
 #endif
 
+int comedi_autoconfig = 1;
+module_param(comedi_autoconfig, bool, 0444);
+
+int comedi_num_legacy_minors = 0;
+module_param(comedi_num_legacy_minors, int, 0444);
+
 static DEFINE_SPINLOCK(comedi_file_info_table_lock);
 static struct comedi_device_file_info
     *comedi_file_info_table[COMEDI_NUM_MINORS];
@@ -98,8 +104,12 @@ static int comedi_ioctl(struct inode *inode, struct file *file,
 	const unsigned minor = iminor(file->f_dentry->d_inode);
 	struct comedi_device_file_info *dev_file_info =
 	    comedi_get_device_file_info(minor);
-	comedi_device *dev = dev_file_info->device;
+	comedi_device *dev;
 	int rc;
+
+	if (dev_file_info == NULL || dev_file_info->device == NULL)
+		return -ENODEV;
+	dev = dev_file_info->device;
 
 	mutex_lock(&dev->mutex);
 
@@ -1747,11 +1757,11 @@ void do_become_nonbusy(comedi_device *dev, comedi_subdevice *s)
 
 static int comedi_open(struct inode *inode, struct file *file)
 {
-	char mod[32];
 	const unsigned minor = iminor(inode);
 	struct comedi_device_file_info *dev_file_info =
 	    comedi_get_device_file_info(minor);
-	comedi_device *dev = dev_file_info->device;
+	comedi_device *dev = dev_file_info ? dev_file_info->device : NULL;
+
 	if (dev == NULL) {
 		DPRINTK("invalid minor number\n");
 		return -ENODEV;
@@ -1783,10 +1793,9 @@ static int comedi_open(struct inode *inode, struct file *file)
 
 	dev->in_request_module = 1;
 
-	sprintf(mod, "char-major-%i-%i", COMEDI_MAJOR, dev->minor);
 #ifdef CONFIG_KMOD
 	mutex_unlock(&dev->mutex);
-	request_module(mod);
+	request_module("char-major-%i-%i", COMEDI_MAJOR, dev->minor);
 	mutex_lock(&dev->mutex);
 #endif
 
@@ -1893,7 +1902,7 @@ static void comedi_cleanup_legacy_minors(void)
 {
 	unsigned i;
 
-	for (i = 0; i < COMEDI_NUM_LEGACY_MINORS; i++)
+	for (i = 0; i < comedi_num_legacy_minors; i++)
 		comedi_free_board_minor(i);
 }
 
@@ -1904,6 +1913,22 @@ static int __init comedi_init(void)
 
 	printk(KERN_INFO "comedi: version " COMEDI_RELEASE
 	       " - http://www.comedi.org\n");
+
+	if (comedi_num_legacy_minors < 0 ||
+	    comedi_num_legacy_minors > COMEDI_NUM_BOARD_MINORS) {
+		printk(KERN_ERR "comedi: error: invalid value for module "
+		       "parameter \"comedi_num_legacy_minors\".  Valid values "
+		       "are 0 through %i.\n", COMEDI_NUM_BOARD_MINORS);
+		return -EINVAL;
+	}
+
+	/*
+	 * comedi is unusable if both comedi_autoconfig and
+	 * comedi_num_legacy_minors are zero, so we might as well adjust the
+	 * defaults in that case
+	 */
+	if (comedi_autoconfig == 0 && comedi_num_legacy_minors == 0)
+		comedi_num_legacy_minors = 16;
 
 	memset(comedi_file_info_table, 0,
 	       sizeof(struct comedi_device_file_info *) * COMEDI_NUM_MINORS);
@@ -1933,7 +1958,7 @@ static int __init comedi_init(void)
 	comedi_proc_init();
 
 	/* create devices files for legacy/manual use */
-	for (i = 0; i < COMEDI_NUM_LEGACY_MINORS; i++) {
+	for (i = 0; i < comedi_num_legacy_minors; i++) {
 		int minor;
 		minor = comedi_alloc_board_minor(NULL);
 		if (minor < 0) {
@@ -2182,7 +2207,7 @@ int comedi_alloc_subdevice_minor(comedi_device *dev, comedi_subdevice *s)
 	info->read_subdevice = s;
 	info->write_subdevice = s;
 	comedi_spin_lock_irqsave(&comedi_file_info_table_lock, flags);
-	for (i = COMEDI_FIRST_SUBDEVICE_MINOR; i < COMEDI_NUM_BOARD_MINORS; ++i) {
+	for (i = COMEDI_FIRST_SUBDEVICE_MINOR; i < COMEDI_NUM_MINORS; ++i) {
 		if (comedi_file_info_table[i] == NULL) {
 			comedi_file_info_table[i] = info;
 			break;
