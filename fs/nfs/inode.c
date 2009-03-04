@@ -46,6 +46,7 @@
 #include "delegation.h"
 #include "iostat.h"
 #include "internal.h"
+#include "fscache.h"
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
@@ -109,6 +110,7 @@ void nfs_clear_inode(struct inode *inode)
 	BUG_ON(!list_empty(&NFS_I(inode)->open_files));
 	nfs_zap_acl_cache(inode);
 	nfs_access_zap_cache(inode);
+	nfs_fscache_release_inode_cookie(inode);
 }
 
 /**
@@ -327,6 +329,8 @@ nfs_fhget(struct super_block *sb, struct nfs_fh *fh, struct nfs_fattr *fattr)
 		nfsi->attrtimeo_timestamp = now;
 		memset(nfsi->cookieverf, 0, sizeof(nfsi->cookieverf));
 		nfsi->access_cache = RB_ROOT;
+
+		nfs_fscache_init_inode_cookie(inode);
 
 		unlock_new_inode(inode);
 	} else
@@ -642,6 +646,7 @@ int nfs_open(struct inode *inode, struct file *filp)
 	ctx->mode = filp->f_mode;
 	nfs_file_set_open_context(filp, ctx);
 	put_nfs_open_context(ctx);
+	nfs_fscache_set_inode_cookie(inode, filp);
 	return 0;
 }
 
@@ -745,6 +750,7 @@ static int nfs_invalidate_mapping_nolock(struct inode *inode, struct address_spa
 		memset(nfsi->cookieverf, 0, sizeof(nfsi->cookieverf));
 	spin_unlock(&inode->i_lock);
 	nfs_inc_stats(inode, NFSIOS_DATAINVALIDATE);
+	nfs_fscache_reset_inode_cookie(inode);
 	dfprintk(PAGECACHE, "NFS: (%s/%Ld) data cache invalidated\n",
 			inode->i_sb->s_id, (long long)NFS_FILEID(inode));
 	return 0;
@@ -975,6 +981,7 @@ int nfs_refresh_inode(struct inode *inode, struct nfs_fattr *fattr)
 	spin_lock(&inode->i_lock);
 	status = nfs_refresh_inode_locked(inode, fattr);
 	spin_unlock(&inode->i_lock);
+
 	return status;
 }
 
@@ -1121,7 +1128,8 @@ static int nfs_update_inode(struct inode *inode, struct nfs_fattr *fattr)
 	} else if (nfsi->change_attr != fattr->change_attr) {
 		dprintk("NFS: change_attr change on server for file %s/%ld\n",
 				inode->i_sb->s_id, inode->i_ino);
-		invalid |= NFS_INO_INVALID_ATTR|NFS_INO_INVALID_DATA|NFS_INO_INVALID_ACCESS|NFS_INO_INVALID_ACL;
+		invalid |= NFS_INO_INVALID_ATTR|NFS_INO_INVALID_DATA |
+			NFS_INO_INVALID_ACCESS|NFS_INO_INVALID_ACL;
 		if (S_ISDIR(inode->i_mode))
 			nfs_force_lookup_revalidate(inode);
 	}
@@ -1337,6 +1345,10 @@ static int __init init_nfs_fs(void)
 {
 	int err;
 
+	err = nfs_fscache_register();
+	if (err < 0)
+		goto out7;
+
 	err = nfsiod_start();
 	if (err)
 		goto out6;
@@ -1389,6 +1401,8 @@ out4:
 out5:
 	nfsiod_stop();
 out6:
+	nfs_fscache_unregister();
+out7:
 	return err;
 }
 
@@ -1399,6 +1413,7 @@ static void __exit exit_nfs_fs(void)
 	nfs_destroy_readpagecache();
 	nfs_destroy_inodecache();
 	nfs_destroy_nfspagecache();
+	nfs_fscache_unregister();
 #ifdef CONFIG_PROC_FS
 	rpc_proc_unregister("nfs");
 #endif
