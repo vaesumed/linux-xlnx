@@ -31,7 +31,7 @@
 #ifdef CONFIG_X86_PAT
 int __read_mostly pat_enabled = 1;
 
-void __cpuinit pat_disable(char *reason)
+void __cpuinit pat_disable(const char *reason)
 {
 	pat_enabled = 0;
 	printk(KERN_INFO "%s\n", reason);
@@ -43,6 +43,11 @@ static int __init nopat(char *str)
 	return 0;
 }
 early_param("nopat", nopat);
+#else
+static inline void pat_disable(const char *reason)
+{
+	(void)reason;
+}
 #endif
 
 
@@ -79,16 +84,20 @@ void pat_init(void)
 	if (!pat_enabled)
 		return;
 
-	/* Paranoia check. */
-	if (!cpu_has_pat && boot_pat_state) {
-		/*
-		 * If this happens we are on a secondary CPU, but
-		 * switched to PAT on the boot CPU. We have no way to
-		 * undo PAT.
-		 */
-		printk(KERN_ERR "PAT enabled, "
-		       "but not supported by secondary CPU\n");
-		BUG();
+	if (!cpu_has_pat) {
+		if (!boot_pat_state) {
+			pat_disable("PAT not supported by CPU.");
+			return;
+		} else {
+			/*
+			 * If this happens we are on a secondary CPU, but
+			 * switched to PAT on the boot CPU. We have no way to
+			 * undo PAT.
+			 */
+			printk(KERN_ERR "PAT enabled, "
+			       "but not supported by secondary CPU\n");
+			BUG();
+		}
 	}
 
 	/* Set PWT to Write-Combining. All other bits stay the same */
