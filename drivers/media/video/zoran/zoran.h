@@ -31,6 +31,8 @@
 #ifndef _BUZ_H_
 #define _BUZ_H_
 
+#include <media/v4l2-device.h>
+
 struct zoran_requestbuffers {
 	unsigned long count;	/* Number of buffers for MJPEG grabbing */
 	unsigned long size;	/* Size PER BUFFER in bytes */
@@ -170,8 +172,6 @@ Private IOCTL to set up for displaying MJPEG
 #endif
 #define   V4L_MASK_FRAME   (V4L_MAX_FRAME - 1)
 
-#define MAX_KMALLOC_MEM (128*1024)
-
 #include "zr36057.h"
 
 enum card_type {
@@ -240,9 +240,6 @@ enum gpcs_type {
 
 struct zoran_format {
 	char *name;
-#ifdef CONFIG_VIDEO_V4L1_COMPAT
-	int palette;
-#endif
 	__u32 fourcc;
 	int colorspace;
 	int depth;
@@ -312,7 +309,6 @@ struct zoran_jpg_struct {
 	struct zoran_jpg_buffer buffer[BUZ_MAX_FRAME];	/* buffers */
 	int num_buffers, buffer_size;
 	u8 allocated;		/* Flag if buffers are allocated  */
-	u8 ready_to_be_freed;	/* hack - see zoran_driver.c */
 	u8 need_contiguous;	/* Flag if contiguous buffers are needed */
 };
 
@@ -321,7 +317,6 @@ struct zoran_v4l_struct {
 	struct zoran_v4l_buffer buffer[VIDEO_MAX_FRAME];	/* buffers */
 	int num_buffers, buffer_size;
 	u8 allocated;		/* Flag if buffers are allocated  */
-	u8 ready_to_be_freed;	/* hack - see zoran_driver.c */
 };
 
 struct zoran;
@@ -346,7 +341,12 @@ struct zoran_fh {
 struct card_info {
 	enum card_type type;
 	char name[32];
-	u16 i2c_decoder, i2c_encoder;			/* I2C types */
+	const char *i2c_decoder;	/* i2c decoder device */
+	const char *mod_decoder;	/* i2c decoder module */
+	const unsigned short *addrs_decoder;
+	const char *i2c_encoder;	/* i2c encoder device */
+	const char *mod_encoder;	/* i2c encoder module */
+	const unsigned short *addrs_encoder;
 	u16 video_vfe, video_codec;			/* videocodec types */
 	u16 audio_chip;					/* audio type */
 
@@ -356,7 +356,7 @@ struct card_info {
 		char name[32];
 	} input[BUZ_MAX_INPUT];
 
-	int norms;
+	v4l2_std_id norms;
 	struct tvnorm *tvn[3];	/* supported TV norms */
 
 	u32 jpeg_int;		/* JPEG interrupt */
@@ -377,14 +377,15 @@ struct card_info {
 };
 
 struct zoran {
+	struct v4l2_device v4l2_dev;
 	struct video_device *video_dev;
 
 	struct i2c_adapter i2c_adapter;	/* */
 	struct i2c_algo_bit_data i2c_algo;	/* */
 	u32 i2cbr;
 
-	struct i2c_client *decoder;	/* video decoder i2c client */
-	struct i2c_client *encoder;	/* video encoder i2c client */
+	struct v4l2_subdev *decoder;	/* video decoder sub-device */
+	struct v4l2_subdev *encoder;	/* video encoder sub-device */
 
 	struct videocodec *codec;	/* video codec */
 	struct videocodec *vfe;	/* video front end */
@@ -405,9 +406,15 @@ struct zoran {
 	spinlock_t spinlock;	/* Spinlock */
 
 	/* Video for Linux parameters */
-	int input, norm;	/* card's norm and input - norm=VIDEO_MODE_* */
-	int hue, saturation, contrast, brightness;	/* Current picture params */
-	struct video_buffer buffer;	/* Current buffer params */
+	int input;	/* card's norm and input - norm=VIDEO_MODE_* */
+	v4l2_std_id norm;
+
+	/* Current buffer params */
+	void    *vbuf_base;
+	int     vbuf_height, vbuf_width;
+	int     vbuf_depth;
+	int     vbuf_bytesperline;
+
 	struct zoran_overlay_settings overlay_settings;
 	u32 *overlay_mask;	/* overlay mask */
 	enum zoran_lock_activity overlay_active;	/* feature currently in use? */
@@ -487,6 +494,11 @@ struct zoran {
 
 	wait_queue_head_t test_q;
 };
+
+static inline struct zoran *to_zoran(struct v4l2_device *v4l2_dev)
+{
+	return container_of(v4l2_dev, struct zoran, v4l2_dev);
+}
 
 /* There was something called _ALPHA_BUZ that used the PCI address instead of
  * the kernel iomapped address for btread/btwrite.  */
