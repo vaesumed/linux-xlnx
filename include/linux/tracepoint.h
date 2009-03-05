@@ -153,4 +153,11 @@ static inline void tracepoint_synchronize_unregister(void)
 	synchronize_sched();
 }
 
+#define PARAMS(args...) args
+#define TRACE_FORMAT(name, proto, args, fmt)		\
+	DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
+
+#define TRACE_EVENT_FORMAT(name, proto, args, fmt, struct, tpfmt)	\
+	TRACE_FORMAT(name, PARAMS(proto), PARAMS(args), PARAMS(fmt))
+
 #endif
