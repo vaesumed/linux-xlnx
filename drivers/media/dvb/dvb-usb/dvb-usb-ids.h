@@ -55,6 +55,7 @@
 #define USB_VID_GIGABYTE			0x1044
 #define USB_VID_YUAN				0x1164
 #define USB_VID_XTENSIONS			0x1ae7
+#define USB_VID_SONY				0x1415
 
 /* Product IDs */
 #define USB_PID_ADSTECH_USB2_COLD			0xa333
@@ -97,6 +98,7 @@
 #define USB_PID_GRANDTEC_DVBT_USB_WARM			0x0fa1
 #define USB_PID_KWORLD_399U				0xe399
 #define USB_PID_KWORLD_395U				0xe396
+#define USB_PID_KWORLD_395U_2				0xe39b
 #define USB_PID_KWORLD_PC160_2T				0xc160
 #define USB_PID_KWORLD_VSTREAM_COLD			0x17de
 #define USB_PID_KWORLD_VSTREAM_WARM			0x17df
@@ -232,9 +234,11 @@
 #define USB_PID_ASUS_U3100				0x173f
 #define USB_PID_YUAN_EC372S				0x1edc
 #define USB_PID_YUAN_STK7700PH				0x1f08
+#define USB_PID_YUAN_PD378S				0x2edc
 #define USB_PID_DW2102					0x2102
 #define USB_PID_XTENSIONS_XD_380			0x0381
 #define USB_PID_TELESTAR_STARSTICK_2			0x8000
 #define USB_PID_MSI_DIGI_VOX_MINI_III                   0x8807
+#define USB_PID_SONY_PLAYTV				0x0003
 
 #endif
