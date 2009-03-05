@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003 - 2006 NetXen, Inc.
+ * Copyright (C) 2003 - 2009 NetXen, Inc.
  * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,12 +22,9 @@
  *
  * Contact Information:
  *    info@netxen.com
- * NetXen,
- * 3965 Freedom Circle, Fourth floor,
- * Santa Clara, CA 95054
- *
- *
- *  Main source file for NetXen NIC Driver on Linux
+ * NetXen Inc,
+ * 18922 Forge Drive
+ * Cupertino, CA 95014-0701
  *
  */
 
@@ -169,50 +166,61 @@ static inline void netxen_nic_enable_int(struct netxen_adapter *adapter)
 static int nx_set_dma_mask(struct netxen_adapter *adapter, uint8_t revision_id)
 {
 	struct pci_dev *pdev = adapter->pdev;
-	int err;
-	uint64_t mask;
+	uint64_t mask, cmask;
 
-#ifdef CONFIG_IA64
-	adapter->dma_mask = DMA_32BIT_MASK;
-#else
-	if (revision_id >= NX_P3_B0) {
-		/* should go to DMA_64BIT_MASK */
-		adapter->dma_mask = DMA_39BIT_MASK;
-		mask = DMA_39BIT_MASK;
-	} else if (revision_id == NX_P3_A2) {
-		adapter->dma_mask = DMA_39BIT_MASK;
-		mask = DMA_39BIT_MASK;
-	} else if (revision_id == NX_P2_C1) {
-		adapter->dma_mask = DMA_35BIT_MASK;
-		mask = DMA_35BIT_MASK;
-	} else {
-		adapter->dma_mask = DMA_32BIT_MASK;
-		mask = DMA_32BIT_MASK;
-		goto set_32_bit_mask;
-	}
+	adapter->pci_using_dac = 0;
 
+	mask = DMA_32BIT_MASK;
 	/*
 	 * Consistent DMA mask is set to 32 bit because it cannot be set to
 	 * 35 bits. For P3 also leave it at 32 bits for now. Only the rings
 	 * come off this pool.
 	 */
+	cmask = DMA_32BIT_MASK;
+
+#ifndef CONFIG_IA64
+	if (revision_id >= NX_P3_B0)
+		mask = DMA_39BIT_MASK;
+	else if (revision_id == NX_P2_C1)
+		mask = DMA_35BIT_MASK;
+#endif
 	if (pci_set_dma_mask(pdev, mask) == 0 &&
-		pci_set_consistent_dma_mask(pdev, DMA_32BIT_MASK) == 0) {
+		pci_set_consistent_dma_mask(pdev, cmask) == 0) {
 		adapter->pci_using_dac = 1;
 		return 0;
 	}
-set_32_bit_mask:
-#endif /* CONFIG_IA64 */
 
-	err = pci_set_dma_mask(pdev, DMA_32BIT_MASK);
-	if (!err)
-		err = pci_set_consistent_dma_mask(pdev, DMA_32BIT_MASK);
-	if (err) {
-		DPRINTK(ERR, "No usable DMA configuration, aborting:%d\n", err);
-		return err;
+	return -EIO;
+}
+
+/* Update addressable range if firmware supports it */
+static int
+nx_update_dma_mask(struct netxen_adapter *adapter)
+{
+	int change, shift, err;
+	uint64_t mask, old_mask;
+	struct pci_dev *pdev = adapter->pdev;
+
+	change = 0;
+
+	shift = netxen_nic_reg_read(adapter, CRB_DMA_SHIFT);
+	if (shift >= 32)
+		return 0;
+
+	if (NX_IS_REVISION_P3(adapter->ahw.revision_id) && (shift > 9))
+		change = 1;
+	else if ((adapter->ahw.revision_id == NX_P2_C1) && (shift <= 4))
+		change = 1;
+
+	if (change) {
+		old_mask = pdev->dma_mask;
+		mask = (1ULL<<(32+shift)) - 1;
+
+		err = pci_set_dma_mask(pdev, mask);
+		if (err)
+			return pci_set_dma_mask(pdev, old_mask);
 	}
 
-	adapter->pci_using_dac = 0;
 	return 0;
 }
 
@@ -457,37 +465,272 @@ static const struct net_device_ops netxen_netdev_ops = {
 #endif
 };
 
-/*
- * netxen_nic_probe()
- *
- * The Linux system will invoke this after identifying the vendor ID and
- * device Id in the pci_tbl supported by this module.
- *
- * A quad port card has one operational PCI config space, (function 0),
- * which is used to access all four ports.
- *
- * This routine will initialize the adapter, and setup the global parameters
- * along with the port's specific structure.
- */
+static void
+netxen_setup_intr(struct netxen_adapter *adapter)
+{
+	struct netxen_legacy_intr_set *legacy_intrp;
+	struct pci_dev *pdev = adapter->pdev;
+
+	adapter->flags &= ~(NETXEN_NIC_MSI_ENABLED | NETXEN_NIC_MSIX_ENABLED);
+	adapter->intr_scheme = -1;
+	adapter->msi_mode = -1;
+
+	if (adapter->ahw.revision_id >= NX_P3_B0)
+		legacy_intrp = &legacy_intr[adapter->ahw.pci_func];
+	else
+		legacy_intrp = &legacy_intr[0];
+	adapter->legacy_intr.int_vec_bit = legacy_intrp->int_vec_bit;
+	adapter->legacy_intr.tgt_status_reg = legacy_intrp->tgt_status_reg;
+	adapter->legacy_intr.tgt_mask_reg = legacy_intrp->tgt_mask_reg;
+	adapter->legacy_intr.pci_int_reg = legacy_intrp->pci_int_reg;
+
+	netxen_set_msix_bit(pdev, 0);
+
+	if (adapter->msix_supported) {
+
+		netxen_init_msix_entries(adapter);
+		if (pci_enable_msix(pdev, adapter->msix_entries,
+					MSIX_ENTRIES_PER_ADAPTER))
+			goto request_msi;
+
+		adapter->flags |= NETXEN_NIC_MSIX_ENABLED;
+		netxen_set_msix_bit(pdev, 1);
+		dev_info(&pdev->dev, "using msi-x interrupts\n");
+
+	} else {
+request_msi:
+		if (use_msi && !pci_enable_msi(pdev)) {
+			adapter->flags |= NETXEN_NIC_MSI_ENABLED;
+			dev_info(&pdev->dev, "using msi interrupts\n");
+		} else
+			dev_info(&pdev->dev, "using legacy interrupts\n");
+	}
+}
+
+static void
+netxen_teardown_intr(struct netxen_adapter *adapter)
+{
+	if (adapter->flags & NETXEN_NIC_MSIX_ENABLED)
+		pci_disable_msix(adapter->pdev);
+	if (adapter->flags & NETXEN_NIC_MSI_ENABLED)
+		pci_disable_msi(adapter->pdev);
+}
+
+static void
+netxen_cleanup_pci_map(struct netxen_adapter *adapter)
+{
+	if (adapter->ahw.db_base != NULL)
+		iounmap(adapter->ahw.db_base);
+	if (adapter->ahw.pci_base0 != NULL)
+		iounmap(adapter->ahw.pci_base0);
+	if (adapter->ahw.pci_base1 != NULL)
+		iounmap(adapter->ahw.pci_base1);
+	if (adapter->ahw.pci_base2 != NULL)
+		iounmap(adapter->ahw.pci_base2);
+}
+
+static int
+netxen_setup_pci_map(struct netxen_adapter *adapter)
+{
+	void __iomem *mem_ptr0 = NULL;
+	void __iomem *mem_ptr1 = NULL;
+	void __iomem *mem_ptr2 = NULL;
+	void __iomem *db_ptr = NULL;
+
+	unsigned long first_page_group_end;
+	unsigned long first_page_group_start;
+	unsigned long mem_base, mem_len, db_base, db_len = 0, pci_len0 = 0;
+
+	struct pci_dev *pdev = adapter->pdev;
+	int pci_func = adapter->ahw.pci_func;
+
+	int err = 0;
+
+	/*
+	 * Set the CRB window to invalid. If any register in window 0 is
+	 * accessed it should set the window to 0 and then reset it to 1.
+	 */
+	adapter->curr_window = 255;
+	adapter->ahw.qdr_sn_window = -1;
+	adapter->ahw.ddr_mn_window = -1;
+
+	/* remap phys address */
+	mem_base = pci_resource_start(pdev, 0);	/* 0 is for BAR 0 */
+	mem_len = pci_resource_len(pdev, 0);
+	pci_len0 = 0;
+
+	adapter->hw_write_wx = netxen_nic_hw_write_wx_128M;
+	adapter->hw_read_wx = netxen_nic_hw_read_wx_128M;
+	adapter->pci_read_immediate = netxen_nic_pci_read_immediate_128M;
+	adapter->pci_write_immediate = netxen_nic_pci_write_immediate_128M;
+	adapter->pci_read_normalize = netxen_nic_pci_read_normalize_128M;
+	adapter->pci_write_normalize = netxen_nic_pci_write_normalize_128M;
+	adapter->pci_set_window = netxen_nic_pci_set_window_128M;
+	adapter->pci_mem_read = netxen_nic_pci_mem_read_128M;
+	adapter->pci_mem_write = netxen_nic_pci_mem_write_128M;
+
+	/* 128 Meg of memory */
+	if (mem_len == NETXEN_PCI_128MB_SIZE) {
+		mem_ptr0 = ioremap(mem_base, FIRST_PAGE_GROUP_SIZE);
+		mem_ptr1 = ioremap(mem_base + SECOND_PAGE_GROUP_START,
+				SECOND_PAGE_GROUP_SIZE);
+		mem_ptr2 = ioremap(mem_base + THIRD_PAGE_GROUP_START,
+				THIRD_PAGE_GROUP_SIZE);
+		first_page_group_start = FIRST_PAGE_GROUP_START;
+		first_page_group_end   = FIRST_PAGE_GROUP_END;
+	} else if (mem_len == NETXEN_PCI_32MB_SIZE) {
+		mem_ptr1 = ioremap(mem_base, SECOND_PAGE_GROUP_SIZE);
+		mem_ptr2 = ioremap(mem_base + THIRD_PAGE_GROUP_START -
+			SECOND_PAGE_GROUP_START, THIRD_PAGE_GROUP_SIZE);
+		first_page_group_start = 0;
+		first_page_group_end   = 0;
+	} else if (mem_len == NETXEN_PCI_2MB_SIZE) {
+		adapter->hw_write_wx = netxen_nic_hw_write_wx_2M;
+		adapter->hw_read_wx = netxen_nic_hw_read_wx_2M;
+		adapter->pci_read_immediate = netxen_nic_pci_read_immediate_2M;
+		adapter->pci_write_immediate =
+			netxen_nic_pci_write_immediate_2M;
+		adapter->pci_read_normalize = netxen_nic_pci_read_normalize_2M;
+		adapter->pci_write_normalize =
+			netxen_nic_pci_write_normalize_2M;
+		adapter->pci_set_window = netxen_nic_pci_set_window_2M;
+		adapter->pci_mem_read = netxen_nic_pci_mem_read_2M;
+		adapter->pci_mem_write = netxen_nic_pci_mem_write_2M;
+
+		mem_ptr0 = pci_ioremap_bar(pdev, 0);
+		if (mem_ptr0 == NULL) {
+			dev_err(&pdev->dev, "failed to map PCI bar 0\n");
+			return -EIO;
+		}
+		pci_len0 = mem_len;
+		first_page_group_start = 0;
+		first_page_group_end   = 0;
+
+		adapter->ahw.ddr_mn_window = 0;
+		adapter->ahw.qdr_sn_window = 0;
+
+		adapter->ahw.mn_win_crb = 0x100000 + PCIX_MN_WINDOW +
+			(pci_func * 0x20);
+		adapter->ahw.ms_win_crb = 0x100000 + PCIX_SN_WINDOW;
+		if (pci_func < 4)
+			adapter->ahw.ms_win_crb += (pci_func * 0x20);
+		else
+			adapter->ahw.ms_win_crb +=
+					0xA0 + ((pci_func - 4) * 0x10);
+	} else {
+		return -EIO;
+	}
+
+	dev_info(&pdev->dev, "%dMB memory map\n", (int)(mem_len>>20));
+
+	adapter->ahw.pci_base0 = mem_ptr0;
+	adapter->ahw.pci_len0 = pci_len0;
+	adapter->ahw.first_page_group_start = first_page_group_start;
+	adapter->ahw.first_page_group_end   = first_page_group_end;
+	adapter->ahw.pci_base1 = mem_ptr1;
+	adapter->ahw.pci_base2 = mem_ptr2;
+
+	if (NX_IS_REVISION_P3(adapter->ahw.revision_id))
+		goto skip_doorbell;
+
+	db_base = pci_resource_start(pdev, 4);	/* doorbell is on bar 4 */
+	db_len = pci_resource_len(pdev, 4);
+
+	if (db_len == 0) {
+		printk(KERN_ERR "%s: doorbell is disabled\n",
+				netxen_nic_driver_name);
+		err = -EIO;
+		goto err_out;
+	}
+
+	db_ptr = ioremap(db_base, NETXEN_DB_MAPSIZE_BYTES);
+	if (!db_ptr) {
+		printk(KERN_ERR "%s: Failed to allocate doorbell map.",
+				netxen_nic_driver_name);
+		err = -EIO;
+		goto err_out;
+	}
+
+skip_doorbell:
+	adapter->ahw.db_base = db_ptr;
+	adapter->ahw.db_len = db_len;
+	return 0;
+
+err_out:
+	netxen_cleanup_pci_map(adapter);
+	return err;
+}
+
+static int
+netxen_start_firmware(struct netxen_adapter *adapter)
+{
+	int val, err, first_boot;
+	struct pci_dev *pdev = adapter->pdev;
+
+	first_boot = adapter->pci_read_normalize(adapter,
+			NETXEN_CAM_RAM(0x1fc));
+
+	err = netxen_check_hw_init(adapter, first_boot);
+	if (err) {
+		dev_err(&pdev->dev, "error in init HW init sequence\n");
+		return err;
+	}
+
+	if (first_boot != 0x55555555) {
+		adapter->pci_write_normalize(adapter,
+					CRB_CMDPEG_STATE, 0);
+		netxen_pinit_from_rom(adapter, 0);
+		msleep(1);
+	}
+
+	netxen_nic_reg_write(adapter, CRB_DMA_SHIFT, 0x55555555);
+	if (NX_IS_REVISION_P3(adapter->ahw.revision_id))
+		netxen_set_port_mode(adapter);
+
+	netxen_load_firmware(adapter);
+
+	if (NX_IS_REVISION_P2(adapter->ahw.revision_id)) {
+
+		/* Initialize multicast addr pool owners */
+		val = 0x7654;
+		if (adapter->ahw.board_type == NETXEN_NIC_XGBE)
+			val |= 0x0f000000;
+		netxen_crb_writelit_adapter(adapter,
+				NETXEN_MAC_ADDR_CNTL_REG, val);
+
+	}
+
+	err = netxen_initialize_adapter_offload(adapter);
+	if (err)
+		return err;
+
+	/*
+	 * Tell the hardware our version number.
+	 */
+	val = (_NETXEN_NIC_LINUX_MAJOR << 16)
+		| ((_NETXEN_NIC_LINUX_MINOR << 8))
+		| (_NETXEN_NIC_LINUX_SUBVERSION);
+	adapter->pci_write_normalize(adapter, CRB_DRIVER_VERSION, val);
+
+	/* Handshake with the card before we register the devices. */
+	err = netxen_phantom_init(adapter, NETXEN_NIC_PEG_TUNE);
+	if (err) {
+		netxen_free_adapter_offload(adapter);
+		return err;
+	}
+
+	return 0;
+}
+
 static int __devinit
 netxen_nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct net_device *netdev = NULL;
 	struct netxen_adapter *adapter = NULL;
-	void __iomem *mem_ptr0 = NULL;
-	void __iomem *mem_ptr1 = NULL;
-	void __iomem *mem_ptr2 = NULL;
-	unsigned long first_page_group_end;
-	unsigned long first_page_group_start;
-
-
-	u8 __iomem *db_ptr = NULL;
-	unsigned long mem_base, mem_len, db_base, db_len, pci_len0 = 0;
 	int i = 0, err;
-	int first_driver, first_boot;
+	int first_driver;
 	u32 val;
 	int pci_func_id = PCI_FUNC(pdev->devfn);
-	struct netxen_legacy_intr_set *legacy_intrp;
 	uint8_t revision_id;
 
 	if (pci_func_id == 0)
@@ -542,126 +785,13 @@ netxen_nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err_out_free_netdev;
 
 	rwlock_init(&adapter->adapter_lock);
-	adapter->ahw.qdr_sn_window = -1;
-	adapter->ahw.ddr_mn_window = -1;
 
-	/* remap phys address */
-	mem_base = pci_resource_start(pdev, 0);	/* 0 is for BAR 0 */
-	mem_len = pci_resource_len(pdev, 0);
-	pci_len0 = 0;
-
-	adapter->hw_write_wx = netxen_nic_hw_write_wx_128M;
-	adapter->hw_read_wx = netxen_nic_hw_read_wx_128M;
-	adapter->pci_read_immediate = netxen_nic_pci_read_immediate_128M;
-	adapter->pci_write_immediate = netxen_nic_pci_write_immediate_128M;
-	adapter->pci_read_normalize = netxen_nic_pci_read_normalize_128M;
-	adapter->pci_write_normalize = netxen_nic_pci_write_normalize_128M;
-	adapter->pci_set_window = netxen_nic_pci_set_window_128M;
-	adapter->pci_mem_read = netxen_nic_pci_mem_read_128M;
-	adapter->pci_mem_write = netxen_nic_pci_mem_write_128M;
-
-	/* 128 Meg of memory */
-	if (mem_len == NETXEN_PCI_128MB_SIZE) {
-		mem_ptr0 = ioremap(mem_base, FIRST_PAGE_GROUP_SIZE);
-		mem_ptr1 = ioremap(mem_base + SECOND_PAGE_GROUP_START,
-				SECOND_PAGE_GROUP_SIZE);
-		mem_ptr2 = ioremap(mem_base + THIRD_PAGE_GROUP_START,
-				THIRD_PAGE_GROUP_SIZE);
-		first_page_group_start = FIRST_PAGE_GROUP_START;
-		first_page_group_end   = FIRST_PAGE_GROUP_END;
-	} else if (mem_len == NETXEN_PCI_32MB_SIZE) {
-		mem_ptr1 = ioremap(mem_base, SECOND_PAGE_GROUP_SIZE);
-		mem_ptr2 = ioremap(mem_base + THIRD_PAGE_GROUP_START -
-			SECOND_PAGE_GROUP_START, THIRD_PAGE_GROUP_SIZE);
-		first_page_group_start = 0;
-		first_page_group_end   = 0;
-	} else if (mem_len == NETXEN_PCI_2MB_SIZE) {
-		adapter->hw_write_wx = netxen_nic_hw_write_wx_2M;
-		adapter->hw_read_wx = netxen_nic_hw_read_wx_2M;
-		adapter->pci_read_immediate = netxen_nic_pci_read_immediate_2M;
-		adapter->pci_write_immediate =
-			netxen_nic_pci_write_immediate_2M;
-		adapter->pci_read_normalize = netxen_nic_pci_read_normalize_2M;
-		adapter->pci_write_normalize =
-			netxen_nic_pci_write_normalize_2M;
-		adapter->pci_set_window = netxen_nic_pci_set_window_2M;
-		adapter->pci_mem_read = netxen_nic_pci_mem_read_2M;
-		adapter->pci_mem_write = netxen_nic_pci_mem_write_2M;
-
-		mem_ptr0 = pci_ioremap_bar(pdev, 0);
-		if (mem_ptr0 == NULL) {
-			dev_err(&pdev->dev, "failed to map PCI bar 0\n");
-			return -EIO;
-		}
-
-		pci_len0 = mem_len;
-		first_page_group_start = 0;
-		first_page_group_end   = 0;
-
-		adapter->ahw.ddr_mn_window = 0;
-		adapter->ahw.qdr_sn_window = 0;
-
-		adapter->ahw.mn_win_crb = 0x100000 + PCIX_MN_WINDOW +
-			(pci_func_id * 0x20);
-		adapter->ahw.ms_win_crb = 0x100000 + PCIX_SN_WINDOW;
-		if (pci_func_id < 4)
-			adapter->ahw.ms_win_crb += (pci_func_id * 0x20);
-		else
-			adapter->ahw.ms_win_crb +=
-					0xA0 + ((pci_func_id - 4) * 0x10);
-	} else {
-		err = -EIO;
+	err = netxen_setup_pci_map(adapter);
+	if (err)
 		goto err_out_free_netdev;
-	}
-
-	dev_info(&pdev->dev, "%dMB memory map\n", (int)(mem_len>>20));
-
-	db_base = pci_resource_start(pdev, 4);	/* doorbell is on bar 4 */
-	db_len = pci_resource_len(pdev, 4);
-
-	if (db_len == 0) {
-		printk(KERN_ERR "%s: doorbell is disabled\n",
-				netxen_nic_driver_name);
-		err = -EIO;
-		goto err_out_iounmap;
-	}
-	DPRINTK(INFO, "doorbell ioremap from %lx a size of %lx\n", db_base,
-		db_len);
-
-	db_ptr = ioremap(db_base, NETXEN_DB_MAPSIZE_BYTES);
-	if (!db_ptr) {
-		printk(KERN_ERR "%s: Failed to allocate doorbell map.",
-				netxen_nic_driver_name);
-		err = -EIO;
-		goto err_out_iounmap;
-	}
-	DPRINTK(INFO, "doorbell ioremaped at %p\n", db_ptr);
-
-	adapter->ahw.pci_base0 = mem_ptr0;
-	adapter->ahw.pci_len0 = pci_len0;
-	adapter->ahw.first_page_group_start = first_page_group_start;
-	adapter->ahw.first_page_group_end   = first_page_group_end;
-	adapter->ahw.pci_base1 = mem_ptr1;
-	adapter->ahw.pci_base2 = mem_ptr2;
-	adapter->ahw.db_base = db_ptr;
-	adapter->ahw.db_len = db_len;
 
 	netif_napi_add(netdev, &adapter->napi,
 			netxen_nic_poll, NETXEN_NETDEV_WEIGHT);
-
-	if (revision_id >= NX_P3_B0)
-		legacy_intrp = &legacy_intr[pci_func_id];
-	else
-		legacy_intrp = &legacy_intr[0];
-
-	adapter->legacy_intr.int_vec_bit = legacy_intrp->int_vec_bit;
-	adapter->legacy_intr.tgt_status_reg = legacy_intrp->tgt_status_reg;
-	adapter->legacy_intr.tgt_mask_reg = legacy_intrp->tgt_mask_reg;
-	adapter->legacy_intr.pci_int_reg = legacy_intrp->pci_int_reg;
-
-	/* this will be read from FW later */
-	adapter->intr_scheme = -1;
-	adapter->msi_mode = -1;
 
 	/* This will be reset for mezz cards  */
 	adapter->portnum = pci_func_id;
@@ -692,12 +822,6 @@ netxen_nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		netdev->features |= NETIF_F_HIGHDMA;
 		netdev->vlan_features |= NETIF_F_HIGHDMA;
 	}
-
-	/*
-	 * Set the CRB window to invalid. If any register in window 0 is
-	 * accessed it should set the window to 0 and then reset it to 1.
-	 */
-	adapter->curr_window = 255;
 
 	if (netxen_nic_get_board_info(adapter) != 0) {
 		printk("%s: Error getting board config info.\n",
@@ -735,56 +859,12 @@ netxen_nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	if (first_driver) {
-		first_boot = adapter->pci_read_normalize(adapter,
-				NETXEN_CAM_RAM(0x1fc));
-
-		err = netxen_check_hw_init(adapter, first_boot);
-		if (err) {
-			printk(KERN_ERR "%s: error in init HW init sequence\n",
-					netxen_nic_driver_name);
-			goto err_out_iounmap;
-		}
-
-		if (NX_IS_REVISION_P3(revision_id))
-			netxen_set_port_mode(adapter);
-
-		if (first_boot != 0x55555555) {
-			adapter->pci_write_normalize(adapter,
-						CRB_CMDPEG_STATE, 0);
-			netxen_pinit_from_rom(adapter, 0);
-			msleep(1);
-		}
-		netxen_load_firmware(adapter);
-
-		if (NX_IS_REVISION_P2(revision_id)) {
-
-			/* Initialize multicast addr pool owners */
-			val = 0x7654;
-			if (adapter->ahw.board_type == NETXEN_NIC_XGBE)
-				val |= 0x0f000000;
-			netxen_crb_writelit_adapter(adapter,
-					NETXEN_MAC_ADDR_CNTL_REG, val);
-
-		}
-
-		err = netxen_initialize_adapter_offload(adapter);
+		err = netxen_start_firmware(adapter);
 		if (err)
 			goto err_out_iounmap;
+	}
 
-		/*
-		 * Tell the hardware our version number.
-		 */
-		i = (_NETXEN_NIC_LINUX_MAJOR << 16)
-			| ((_NETXEN_NIC_LINUX_MINOR << 8))
-			| (_NETXEN_NIC_LINUX_SUBVERSION);
-		adapter->pci_write_normalize(adapter, CRB_DRIVER_VERSION, i);
-
-		/* Handshake with the card before we register the devices. */
-		err = netxen_phantom_init(adapter, NETXEN_NIC_PEG_TUNE);
-		if (err)
-			goto err_out_free_offload;
-
-	}	/* first_driver */
+	nx_update_dma_mask(adapter);
 
 	netxen_nic_flash_print(adapter);
 
@@ -811,32 +891,7 @@ netxen_nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	netxen_set_msix_bit(pdev, 0);
 
-	if (NX_IS_REVISION_P3(revision_id)) {
-		if ((mem_len != NETXEN_PCI_128MB_SIZE) &&
-			mem_len != NETXEN_PCI_2MB_SIZE)
-			adapter->msix_supported = 0;
-	}
-
-	if (adapter->msix_supported) {
-
-		netxen_init_msix_entries(adapter);
-
-		if (pci_enable_msix(pdev, adapter->msix_entries,
-					MSIX_ENTRIES_PER_ADAPTER))
-			goto request_msi;
-
-		adapter->flags |= NETXEN_NIC_MSIX_ENABLED;
-		netxen_set_msix_bit(pdev, 1);
-		dev_info(&pdev->dev, "using msi-x interrupts\n");
-
-	} else {
-request_msi:
-		if (use_msi && !pci_enable_msi(pdev)) {
-			adapter->flags |= NETXEN_NIC_MSI_ENABLED;
-			dev_info(&pdev->dev, "using msi interrupts\n");
-		} else
-			dev_info(&pdev->dev, "using legacy interrupts\n");
-	}
+	netxen_setup_intr(adapter);
 
 	if (adapter->flags & NETXEN_NIC_MSIX_ENABLED)
 		netdev->irq = adapter->msix_entries[0].vector;
@@ -884,25 +939,13 @@ request_msi:
 	return 0;
 
 err_out_disable_msi:
-	if (adapter->flags & NETXEN_NIC_MSIX_ENABLED)
-		pci_disable_msix(pdev);
-	if (adapter->flags & NETXEN_NIC_MSI_ENABLED)
-		pci_disable_msi(pdev);
+	netxen_teardown_intr(adapter);
 
-err_out_free_offload:
 	if (first_driver)
 		netxen_free_adapter_offload(adapter);
 
 err_out_iounmap:
-	if (db_ptr)
-		iounmap(db_ptr);
-
-	if (mem_ptr0)
-		iounmap(mem_ptr0);
-	if (mem_ptr1)
-		iounmap(mem_ptr1);
-	if (mem_ptr2)
-		iounmap(mem_ptr2);
+	netxen_cleanup_pci_map(adapter);
 
 err_out_free_netdev:
 	free_netdev(netdev);
@@ -944,17 +987,9 @@ static void __devexit netxen_nic_remove(struct pci_dev *pdev)
 	if (adapter->irq)
 		free_irq(adapter->irq, adapter);
 
-	if (adapter->flags & NETXEN_NIC_MSIX_ENABLED)
-		pci_disable_msix(pdev);
-	if (adapter->flags & NETXEN_NIC_MSI_ENABLED)
-		pci_disable_msi(pdev);
+	netxen_teardown_intr(adapter);
 
-	iounmap(adapter->ahw.db_base);
-	iounmap(adapter->ahw.pci_base0);
-	if (adapter->ahw.pci_base1 != NULL)
-		iounmap(adapter->ahw.pci_base1);
-	if (adapter->ahw.pci_base2 != NULL)
-		iounmap(adapter->ahw.pci_base2);
+	netxen_cleanup_pci_map(adapter);
 
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
@@ -1117,7 +1152,7 @@ static bool netxen_tso_check(struct net_device *netdev,
 	__be16 protocol = skb->protocol;
 	u16 flags = 0;
 
-	if (protocol == __constant_htons(ETH_P_8021Q)) {
+	if (protocol == cpu_to_be16(ETH_P_8021Q)) {
 		struct vlan_ethhdr *vh = (struct vlan_ethhdr *)skb->data;
 		protocol = vh->h_vlan_encapsulated_proto;
 		flags = FLAGS_VLAN_TAGGED;
@@ -1130,21 +1165,21 @@ static bool netxen_tso_check(struct net_device *netdev,
 		desc->total_hdr_length =
 			skb_transport_offset(skb) + tcp_hdrlen(skb);
 
-		opcode = (protocol == __constant_htons(ETH_P_IPV6)) ?
+		opcode = (protocol == cpu_to_be16(ETH_P_IPV6)) ?
 				TX_TCP_LSO6 : TX_TCP_LSO;
 		tso = true;
 
 	} else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		u8 l4proto;
 
-		if (protocol == __constant_htons(ETH_P_IP)) {
+		if (protocol == cpu_to_be16(ETH_P_IP)) {
 			l4proto = ip_hdr(skb)->protocol;
 
 			if (l4proto == IPPROTO_TCP)
 				opcode = TX_TCP_PKT;
 			else if(l4proto == IPPROTO_UDP)
 				opcode = TX_UDP_PKT;
-		} else if (protocol == __constant_htons(ETH_P_IPV6)) {
+		} else if (protocol == cpu_to_be16(ETH_P_IPV6)) {
 			l4proto = ipv6_hdr(skb)->nexthdr;
 
 			if (l4proto == IPPROTO_TCP)
@@ -1595,7 +1630,7 @@ static int netxen_nic_poll(struct napi_struct *napi, int budget)
 	}
 
 	if ((work_done < budget) && tx_complete) {
-		netif_rx_complete(&adapter->napi);
+		napi_complete(&adapter->napi);
 		netxen_nic_enable_int(adapter);
 	}
 
