@@ -335,12 +335,9 @@ static int do_irqd(void *__desc)
 	int thrprio = desc->thr_prio;
 	int thrmask = 1 << thrprio;
 	int cpu = smp_processor_id();
-	cpumask_t cpumask;
 
 	sigfillset(&current->blocked);
 	current->flags |= PF_NOFREEZE;
-	cpumask = cpumask_of_cpu(cpu);
-	set_cpus_allowed(current, cpumask);
 	ipipe_setscheduler_root(current, SCHED_FIFO, 50 + thrprio);
 
 	while (!kthread_should_stop()) {
@@ -396,7 +393,8 @@ int ipipe_start_irq_thread(unsigned irq, struct irq_desc *desc)
 		printk(KERN_ERR "irqd: could not create IRQ thread %d!\n", irq);
 		return -ENOMEM;
 	}
-
+	/* FIXME: Why bind it to this cpu? */
+	kthread_bind(desc->thread, smp_processor_id());
 	wake_up_process(desc->thread);
 
 	desc->thr_handler = ipipe_root_domain->irqs[irq].handler;

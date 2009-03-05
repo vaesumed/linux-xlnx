@@ -217,10 +217,6 @@ static inline cpumask_t node_to_cpumask(int node)
 {
 	return cpu_online_map;
 }
-static inline int node_to_first_cpu(int node)
-{
-	return first_cpu(cpu_online_map);
-}
 
 static inline void setup_node_to_cpumask_map(void) { }
 
@@ -236,14 +232,6 @@ static inline void setup_node_to_cpumask_map(void) { }
 #endif
 
 #include <asm-generic/topology.h>
-
-#ifdef CONFIG_NUMA
-/* Returns the number of the first CPU on Node 'node'. */
-static inline int node_to_first_cpu(int node)
-{
-	return cpumask_first(cpumask_of_node(node));
-}
-#endif
 
 extern cpumask_t cpu_coregroup_map(int cpu);
 extern const struct cpumask *cpu_coregroup_mask(int cpu);
@@ -268,7 +256,7 @@ struct pci_bus;
 void set_pci_bus_resources_arch_default(struct pci_bus *b);
 
 #ifdef CONFIG_SMP
-#define mc_capable()	(cpus_weight(per_cpu(cpu_core_map, 0)) != nr_cpu_ids)
+#define mc_capable()	(cpumask_weight(cpu_core_mask(0)) != nr_cpu_ids)
 #define smt_capable()			(smp_num_siblings > 1)
 #endif
 
