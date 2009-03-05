@@ -25,6 +25,8 @@
 #ifndef _CX18_AV_CORE_H_
 #define _CX18_AV_CORE_H_
 
+#include <media/v4l2-device.h>
+
 struct cx18;
 
 enum cx18_av_video_input {
@@ -73,17 +75,35 @@ enum cx18_av_audio_input {
 };
 
 struct cx18_av_state {
+	struct v4l2_subdev sd;
 	int radio;
 	v4l2_std_id std;
 	enum cx18_av_video_input vid_input;
 	enum cx18_av_audio_input aud_input;
 	u32 audclk_freq;
 	int audmode;
-	int vbi_line_offset;
 	int default_volume;
 	u32 id;
 	u32 rev;
 	int is_initialized;
+
+	/*
+	 * The VBI slicer starts operating and counting lines, begining at
+	 * slicer line count of 1, at D lines after the deassertion of VRESET
+	 * This staring field line, S, is 6 or 10 for 625 or 525 line systems.
+	 * Sliced ancillary data captured on VBI slicer line M is sent at the
+	 * beginning of the next VBI slicer line, VBI slicer line count N = M+1.
+	 * Thus when the VBI slicer reports a VBI slicer line number with
+	 * ancillary data, the IDID0 byte indicates VBI slicer line N.
+	 * The actual field line that the captured data comes from is
+	 * L = M+(S+D-1) = N-1+(S+D-1) = N + (S+D-2).
+	 *
+	 * D is the slicer_line_delay value programmed into register 0x47f.
+	 * (S+D-2) is the slicer_line_offset used to convert slicer reported
+	 * line counts to actual field lines.
+	 */
+	int slicer_line_delay;
+	int slicer_line_offset;
 };
 
 
@@ -298,6 +318,16 @@ struct cx18_av_state {
 #define CXADEC_SELECT_AUDIO_STANDARD_FM    0xF9  /* FM radio */
 #define CXADEC_SELECT_AUDIO_STANDARD_AUTO  0xFF  /* Auto detect */
 
+static inline struct cx18_av_state *to_cx18_av_state(struct v4l2_subdev *sd)
+{
+	return container_of(sd, struct cx18_av_state, sd);
+}
+
+enum cx18_av_subdev_init_arg {
+	CX18_AV_INIT_NORMAL = 0,
+	CX18_AV_INIT_PLLS = 1,
+};
+
 /* ----------------------------------------------------------------------- */
 /* cx18_av-core.c 							   */
 int cx18_av_write(struct cx18 *cx, u16 addr, u8 value);
@@ -310,8 +340,9 @@ u8 cx18_av_read(struct cx18 *cx, u16 addr);
 u32 cx18_av_read4(struct cx18 *cx, u16 addr);
 int cx18_av_and_or(struct cx18 *cx, u16 addr, unsigned mask, u8 value);
 int cx18_av_and_or4(struct cx18 *cx, u16 addr, u32 mask, u32 value);
-int cx18_av_cmd(struct cx18 *cx, unsigned int cmd, void *arg);
 void cx18_av_std_setup(struct cx18 *cx);
+
+int cx18_av_probe(struct cx18 *cx);
 
 /* ----------------------------------------------------------------------- */
 /* cx18_av-firmware.c                                                      */

@@ -51,6 +51,9 @@
 
 #include "zl10353.h"
 
+#include "zl10036.h"
+#include "mt312.h"
+
 MODULE_AUTHOR("Gerd Knorr <kraxel@bytesex.org> [SuSE Labs]");
 MODULE_LICENSE("GPL");
 
@@ -189,7 +192,7 @@ static int mt352_pinnacle_tuner_set_params(struct dvb_frontend* fe,
 	if (fe->ops.i2c_gate_ctrl)
 		fe->ops.i2c_gate_ctrl(fe, 1);
 	i2c_transfer(&dev->i2c_adap, &msg, 1);
-	saa7134_i2c_call_clients(dev,VIDIOC_S_FREQUENCY,&f);
+	saa_call_all(dev, tuner, s_frequency, &f);
 	msg.buf = on;
 	if (fe->ops.i2c_gate_ctrl)
 		fe->ops.i2c_gate_ctrl(fe, 1);
@@ -949,6 +952,17 @@ static struct nxt200x_config kworldatsc110 = {
 	.demod_address    = 0x0a,
 };
 
+/* ------------------------------------------------------------------ */
+
+static struct mt312_config avertv_a700_mt312 = {
+	.demod_address = 0x0e,
+	.voltage_inverted = 1,
+};
+
+static struct zl10036_config avertv_a700_tuner = {
+	.tuner_address = 0x60,
+};
+
 /* ==================================================================
  * Core code
  */
@@ -1375,6 +1389,19 @@ static int dvb_init(struct saa7134_dev *dev)
 				   TUNER_PHILIPS_FMD1216ME_MK3);
 		}
 		break;
+	case SAA7134_BOARD_AVERMEDIA_A700_PRO:
+	case SAA7134_BOARD_AVERMEDIA_A700_HYBRID:
+		/* Zarlink ZL10313 */
+		fe0->dvb.frontend = dvb_attach(mt312_attach,
+			&avertv_a700_mt312, &dev->i2c_adap);
+		if (fe0->dvb.frontend) {
+			if (dvb_attach(zl10036_attach, fe0->dvb.frontend,
+					&avertv_a700_tuner, &dev->i2c_adap) == NULL) {
+				wprintk("%s: No zl10036 found!\n",
+					__func__);
+			}
+		}
+		break;
 	default:
 		wprintk("Huh? unknown DVB card?\n");
 		break;
@@ -1448,7 +1475,7 @@ static int dvb_fini(struct saa7134_dev *dev)
 		tda9887_cfg.priv  = &on;
 
 		/* otherwise we don't detect the tuner on next insmod */
-		saa7134_i2c_call_clients(dev, TUNER_SET_CONFIG, &tda9887_cfg);
+		saa_call_all(dev, tuner, s_config, &tda9887_cfg);
 	} else if (dev->board == SAA7134_BOARD_MEDION_MD8800_QUADRO) {
 		if ((dev->eedata[2] == 0x07) && use_frontend) {
 			/* turn off the 2nd lnb supply */
