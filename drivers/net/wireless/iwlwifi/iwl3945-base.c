@@ -407,6 +407,8 @@ static int iwl3945_commit_rxon(struct iwl_priv *priv)
 	staging_rxon->reserved4 = 0;
 	staging_rxon->reserved5 = 0;
 
+	iwl_set_rxon_hwcrypto(priv, !priv->hw_params.sw_crypto);
+
 	/* Apply the new configuration */
 	rc = iwl_send_cmd_pdu(priv, REPLY_RXON,
 			      sizeof(struct iwl3945_rxon_cmd),
@@ -456,25 +458,24 @@ static int iwl3945_commit_rxon(struct iwl_priv *priv)
 	return 0;
 }
 
-static int iwl3945_update_sta_key_info(struct iwl_priv *priv,
+static int iwl3945_set_ccmp_dynamic_key_info(struct iwl_priv *priv,
 				   struct ieee80211_key_conf *keyconf,
 				   u8 sta_id)
 {
 	unsigned long flags;
 	__le16 key_flags = 0;
+	int ret;
 
-	switch (keyconf->alg) {
-	case ALG_CCMP:
-		key_flags |= STA_KEY_FLG_CCMP;
-		key_flags |= cpu_to_le16(
-				keyconf->keyidx << STA_KEY_FLG_KEYID_POS);
-		key_flags &= ~STA_KEY_FLG_INVALID;
-		break;
-	case ALG_TKIP:
-	case ALG_WEP:
-	default:
-		return -EINVAL;
-	}
+	key_flags |= (STA_KEY_FLG_CCMP | STA_KEY_FLG_MAP_KEY_MSK);
+	key_flags |= cpu_to_le16(keyconf->keyidx << STA_KEY_FLG_KEYID_POS);
+
+	if (sta_id == priv->hw_params.bcast_sta_id)
+		key_flags |= STA_KEY_MULTICAST_MSK;
+
+	keyconf->flags |= IEEE80211_KEY_FLAG_GENERATE_IV;
+	keyconf->hw_key_idx = keyconf->keyidx;
+	key_flags &= ~STA_KEY_FLG_INVALID;
+
 	spin_lock_irqsave(&priv->sta_lock, flags);
 	priv->stations_39[sta_id].keyinfo.alg = keyconf->alg;
 	priv->stations_39[sta_id].keyinfo.keylen = keyconf->keylen;
@@ -483,16 +484,43 @@ static int iwl3945_update_sta_key_info(struct iwl_priv *priv,
 
 	memcpy(priv->stations_39[sta_id].sta.key.key, keyconf->key,
 	       keyconf->keylen);
+
+	if ((priv->stations[sta_id].sta.key.key_flags & STA_KEY_FLG_ENCRYPT_MSK)
+			== STA_KEY_FLG_NO_ENC)
+		priv->stations[sta_id].sta.key.key_offset =
+				 iwl_get_free_ucode_key_index(priv);
+	/* else, we are overriding an existing key => no need to allocated room
+	* in uCode. */
+
+	WARN(priv->stations[sta_id].sta.key.key_offset == WEP_INVALID_OFFSET,
+		"no space for a new key");
+
 	priv->stations_39[sta_id].sta.key.key_flags = key_flags;
 	priv->stations_39[sta_id].sta.sta.modify_mask = STA_MODIFY_KEY_MASK;
 	priv->stations_39[sta_id].sta.mode = STA_CONTROL_MODIFY_MSK;
 
+	IWL_DEBUG_INFO(priv, "hwcrypto: modify ucode station key info\n");
+
+	ret = iwl_send_add_sta(priv,
+		(struct iwl_addsta_cmd *)&priv->stations_39[sta_id].sta, CMD_ASYNC);
+
 	spin_unlock_irqrestore(&priv->sta_lock, flags);
 
-	IWL_DEBUG_INFO(priv, "hwcrypto: modify ucode station key info\n");
-	iwl_send_add_sta(priv,
-		(struct iwl_addsta_cmd *)&priv->stations_39[sta_id].sta, 0);
-	return 0;
+	return ret;
+}
+
+static int iwl3945_set_tkip_dynamic_key_info(struct iwl_priv *priv,
+				  struct ieee80211_key_conf *keyconf,
+				  u8 sta_id)
+{
+	return -EOPNOTSUPP;
+}
+
+static int iwl3945_set_wep_dynamic_key_info(struct iwl_priv *priv,
+				  struct ieee80211_key_conf *keyconf,
+				  u8 sta_id)
+{
+	return -EOPNOTSUPP;
 }
 
 static int iwl3945_clear_sta_key_info(struct iwl_priv *priv, u8 sta_id)
@@ -512,6 +540,52 @@ static int iwl3945_clear_sta_key_info(struct iwl_priv *priv, u8 sta_id)
 	iwl_send_add_sta(priv,
 		(struct iwl_addsta_cmd *)&priv->stations_39[sta_id].sta, 0);
 	return 0;
+}
+
+int iwl3945_set_dynamic_key(struct iwl_priv *priv,
+			struct ieee80211_key_conf *keyconf, u8 sta_id)
+{
+	int ret = 0;
+
+	keyconf->hw_key_idx = HW_KEY_DYNAMIC;
+
+	switch (keyconf->alg) {
+	case ALG_CCMP:
+		ret = iwl3945_set_ccmp_dynamic_key_info(priv, keyconf, sta_id);
+		break;
+	case ALG_TKIP:
+		ret = iwl3945_set_tkip_dynamic_key_info(priv, keyconf, sta_id);
+		break;
+	case ALG_WEP:
+		ret = iwl3945_set_wep_dynamic_key_info(priv, keyconf, sta_id);
+		break;
+	default:
+		IWL_ERR(priv,"Unknown alg: %s alg = %d\n", __func__, keyconf->alg);
+		ret = -EINVAL;
+	}
+
+	IWL_DEBUG_WEP(priv, "Set dynamic key: alg= %d len=%d idx=%d sta=%d ret=%d\n",
+		      keyconf->alg, keyconf->keylen, keyconf->keyidx,
+		      sta_id, ret);
+
+	return ret;
+}
+
+static int iwl3945_remove_static_key(struct iwl_priv *priv)
+{
+	int ret = -EOPNOTSUPP;
+
+	return ret;
+}
+
+static int iwl3945_set_static_key(struct iwl_priv *priv,
+				struct ieee80211_key_conf *key)
+{
+	if (key->alg == ALG_WEP)
+		return -EOPNOTSUPP;
+
+	IWL_ERR(priv, "Static key invalid: alg %d\n", key->alg);
+	return -EINVAL;
 }
 
 static void iwl3945_clear_free_frames(struct iwl_priv *priv)
@@ -614,48 +688,6 @@ static void iwl3945_unset_hw_params(struct iwl_priv *priv)
 				    priv->shared_virt,
 				    priv->shared_phys);
 }
-
-/*
- * QoS  support
-*/
-static int iwl3945_send_qos_params_command(struct iwl_priv *priv,
-				       struct iwl_qosparam_cmd *qos)
-{
-
-	return iwl_send_cmd_pdu(priv, REPLY_QOS_PARAM,
-				sizeof(struct iwl_qosparam_cmd), qos);
-}
-
-static void iwl3945_activate_qos(struct iwl_priv *priv, u8 force)
-{
-	unsigned long flags;
-
-	if (test_bit(STATUS_EXIT_PENDING, &priv->status))
-		return;
-
-	spin_lock_irqsave(&priv->lock, flags);
-	priv->qos_data.def_qos_parm.qos_flags = 0;
-
-	if (priv->qos_data.qos_cap.q_AP.queue_request &&
-	    !priv->qos_data.qos_cap.q_AP.txop_request)
-		priv->qos_data.def_qos_parm.qos_flags |=
-			QOS_PARAM_FLG_TXOP_TYPE_MSK;
-
-	if (priv->qos_data.qos_active)
-		priv->qos_data.def_qos_parm.qos_flags |=
-			QOS_PARAM_FLG_UPDATE_EDCA_MSK;
-
-	spin_unlock_irqrestore(&priv->lock, flags);
-
-	if (force || iwl_is_associated(priv)) {
-		IWL_DEBUG_QOS(priv, "send QoS cmd with QoS active %d \n",
-			      priv->qos_data.qos_active);
-
-		iwl3945_send_qos_params_command(priv,
-				&(priv->qos_data.def_qos_parm));
-	}
-}
-
 
 #define MAX_UCODE_BEACON_INTERVAL	1024
 #define INTEL_CONN_LISTEN_INTERVAL	cpu_to_le16(0xA)
@@ -766,11 +798,11 @@ static void iwl3945_build_tx_cmd_hwcrypto(struct iwl_priv *priv,
 				      struct ieee80211_tx_info *info,
 				      struct iwl_cmd *cmd,
 				      struct sk_buff *skb_frag,
-				      int last_frag)
+				      int sta_id)
 {
 	struct iwl3945_tx_cmd *tx = (struct iwl3945_tx_cmd *)cmd->cmd.payload;
 	struct iwl3945_hw_key *keyinfo =
-	    &priv->stations_39[info->control.hw_key->hw_key_idx].keyinfo;
+	    &priv->stations_39[sta_id].keyinfo;
 
 	switch (keyinfo->alg) {
 	case ALG_CCMP:
@@ -780,15 +812,6 @@ static void iwl3945_build_tx_cmd_hwcrypto(struct iwl_priv *priv,
 		break;
 
 	case ALG_TKIP:
-#if 0
-		tx->sec_ctl = TX_CMD_SEC_TKIP;
-
-		if (last_frag)
-			memcpy(tx->tkip_mic.byte, skb_frag->tail - 8,
-			       8);
-		else
-			memset(tx->tkip_mic.byte, 0, 8);
-#endif
 		break;
 
 	case ALG_WEP:
@@ -1088,7 +1111,7 @@ static int iwl3945_tx_skb(struct iwl_priv *priv, struct sk_buff *skb)
 						   txcmd_phys, len, 1, 0);
 
 	if (info->control.hw_key)
-		iwl3945_build_tx_cmd_hwcrypto(priv, info, out_cmd, skb, 0);
+		iwl3945_build_tx_cmd_hwcrypto(priv, info, out_cmd, skb, sta_id);
 
 	/* Set up TFD's 2nd entry to point directly to remainder of skb,
 	 * if any (802.11 null frames have no payload). */
@@ -3598,7 +3621,7 @@ static void iwl3945_post_associate(struct iwl_priv *priv)
 		break;
 	}
 
-	iwl3945_activate_qos(priv, 0);
+	iwl_activate_qos(priv, 0);
 
 	/* we have just associated, don't start scan too early */
 	priv->next_scan_jiffies = jiffies + IWL_DELAY_NEXT_SCAN;
@@ -4110,8 +4133,9 @@ static int iwl3945_mac_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 {
 	struct iwl_priv *priv = hw->priv;
 	const u8 *addr;
-	int ret;
-	u8 sta_id;
+	int ret = 0;
+	u8 sta_id = IWL_INVALID_STATION;
+	u8 static_key;
 
 	IWL_DEBUG_MAC80211(priv, "enter\n");
 
@@ -4121,43 +4145,41 @@ static int iwl3945_mac_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	}
 
 	addr = sta ? sta->addr : iwl_bcast_addr;
-	sta_id = iwl3945_hw_find_station(priv, addr);
-	if (sta_id == IWL_INVALID_STATION) {
-		IWL_DEBUG_MAC80211(priv, "leave - %pM not in station map.\n",
-				   addr);
-		return -EINVAL;
+	static_key = !iwl_is_associated(priv);
+
+	if (!static_key) {
+		sta_id = iwl3945_hw_find_station(priv, addr);
+		if (sta_id == IWL_INVALID_STATION) {
+			IWL_DEBUG_MAC80211(priv, "leave - %pMnot in station map.\n",
+					    addr);
+			return -EINVAL;
+		}
 	}
 
 	mutex_lock(&priv->mutex);
-
 	iwl_scan_cancel_timeout(priv, 100);
+	mutex_unlock(&priv->mutex);
 
 	switch (cmd) {
-	case  SET_KEY:
-		ret = iwl3945_update_sta_key_info(priv, key, sta_id);
-		if (!ret) {
-			iwl_set_rxon_hwcrypto(priv, 1);
-			iwl3945_commit_rxon(priv);
-			key->hw_key_idx = sta_id;
-			IWL_DEBUG_MAC80211(priv,
-				"set_key success, using hwcrypto\n");
-			key->flags |= IEEE80211_KEY_FLAG_GENERATE_IV;
-		}
+	case SET_KEY:
+		if (static_key)
+			ret = iwl3945_set_static_key(priv, key);
+		else
+			ret = iwl3945_set_dynamic_key(priv, key, sta_id);
+		IWL_DEBUG_MAC80211(priv, "enable hwcrypto key\n");
 		break;
 	case DISABLE_KEY:
-		ret = iwl3945_clear_sta_key_info(priv, sta_id);
-		if (!ret) {
-			iwl_set_rxon_hwcrypto(priv, 0);
-			iwl3945_commit_rxon(priv);
-			IWL_DEBUG_MAC80211(priv, "disable hwcrypto key\n");
-		}
+		if (static_key)
+			ret = iwl3945_remove_static_key(priv);
+		else
+			ret = iwl3945_clear_sta_key_info(priv, sta_id);
+		IWL_DEBUG_MAC80211(priv, "disable hwcrypto key\n");
 		break;
 	default:
 		ret = -EINVAL;
 	}
 
 	IWL_DEBUG_MAC80211(priv, "leave\n");
-	mutex_unlock(&priv->mutex);
 
 	return ret;
 }
@@ -4198,9 +4220,9 @@ static int iwl3945_mac_conf_tx(struct ieee80211_hw *hw, u16 queue,
 
 	mutex_lock(&priv->mutex);
 	if (priv->iw_mode == NL80211_IFTYPE_AP)
-		iwl3945_activate_qos(priv, 1);
+		iwl_activate_qos(priv, 1);
 	else if (priv->assoc_id && iwl_is_associated(priv))
-		iwl3945_activate_qos(priv, 0);
+		iwl_activate_qos(priv, 0);
 
 	mutex_unlock(&priv->mutex);
 
@@ -4305,6 +4327,7 @@ static int iwl3945_mac_beacon_update(struct ieee80211_hw *hw, struct sk_buff *sk
 {
 	struct iwl_priv *priv = hw->priv;
 	unsigned long flags;
+	__le64 timestamp;
 
 	IWL_DEBUG_MAC80211(priv, "enter\n");
 
@@ -4326,6 +4349,8 @@ static int iwl3945_mac_beacon_update(struct ieee80211_hw *hw, struct sk_buff *sk
 	priv->ibss_beacon = skb;
 
 	priv->assoc_id = 0;
+	timestamp = ((struct ieee80211_mgmt *)skb->data)->u.beacon.timestamp;
+	priv->timestamp = le64_to_cpu(timestamp);
 
 	IWL_DEBUG_MAC80211(priv, "leave\n");
 	spin_unlock_irqrestore(&priv->lock, flags);
@@ -4941,19 +4966,53 @@ static int iwl3945_init_drv(struct iwl_priv *priv)
 	}
 	iwl3945_init_hw_rates(priv, priv->ieee_rates);
 
-	if (priv->bands[IEEE80211_BAND_2GHZ].n_channels)
-		priv->hw->wiphy->bands[IEEE80211_BAND_2GHZ] =
-			&priv->bands[IEEE80211_BAND_2GHZ];
-	if (priv->bands[IEEE80211_BAND_5GHZ].n_channels)
-		priv->hw->wiphy->bands[IEEE80211_BAND_5GHZ] =
-			&priv->bands[IEEE80211_BAND_5GHZ];
-
 	return 0;
 
 err_free_channel_map:
 	iwl_free_channel_map(priv);
 err:
 	return ret;
+}
+
+static int iwl3945_setup_mac(struct iwl_priv *priv)
+{
+	int ret;
+	struct ieee80211_hw *hw = priv->hw;
+
+	hw->rate_control_algorithm = "iwl-3945-rs";
+	hw->sta_data_size = sizeof(struct iwl3945_sta_priv);
+
+	/* Tell mac80211 our characteristics */
+	hw->flags = IEEE80211_HW_SIGNAL_DBM |
+		    IEEE80211_HW_NOISE_DBM;
+
+	hw->wiphy->interface_modes =
+		BIT(NL80211_IFTYPE_STATION) |
+		BIT(NL80211_IFTYPE_ADHOC);
+
+	hw->wiphy->custom_regulatory = true;
+
+	/* Default value; 4 EDCA QOS priorities */
+	hw->queues = 4;
+
+	hw->conf.beacon_int = 100;
+
+	if (priv->bands[IEEE80211_BAND_2GHZ].n_channels)
+		priv->hw->wiphy->bands[IEEE80211_BAND_2GHZ] =
+			&priv->bands[IEEE80211_BAND_2GHZ];
+
+	if (priv->bands[IEEE80211_BAND_5GHZ].n_channels)
+		priv->hw->wiphy->bands[IEEE80211_BAND_5GHZ] =
+			&priv->bands[IEEE80211_BAND_5GHZ];
+
+	ret = ieee80211_register_hw(priv->hw);
+	if (ret) {
+		IWL_ERR(priv, "Failed to register hw (error %d)\n", ret);
+		return ret;
+	}
+	priv->mac80211_registered = 1;
+
+	return 0;
 }
 
 static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
@@ -4986,7 +5045,7 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 			"invalid queues_num, should be between %d and %d\n",
 			IWL_MIN_NUM_QUEUES, IWL39_MAX_NUM_QUEUES);
 		err = -EINVAL;
-		goto out;
+		goto out_ieee80211_free_hw;
 	}
 
 	/*
@@ -5007,23 +5066,6 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	priv->debug_level = iwl3945_mod_params.debug;
 	atomic_set(&priv->restrict_refcnt, 0);
 #endif
-	hw->rate_control_algorithm = "iwl-3945-rs";
-	hw->sta_data_size = sizeof(struct iwl3945_sta_priv);
-
-	/* Tell mac80211 our characteristics */
-	hw->flags = IEEE80211_HW_SIGNAL_DBM |
-		    IEEE80211_HW_NOISE_DBM;
-
-	hw->wiphy->interface_modes =
-		BIT(NL80211_IFTYPE_STATION) |
-		BIT(NL80211_IFTYPE_ADHOC);
-
-	hw->wiphy->custom_regulatory = true;
-
-	hw->wiphy->max_scan_ssids = 1;
-
-	/* 4 EDCA QOS priorities */
-	hw->queues = 4;
 
 	/***************************
 	 * 2. Initializing PCI bus
@@ -5080,7 +5122,7 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	err = iwl_eeprom_init(priv);
 	if (err) {
 		IWL_ERR(priv, "Unable to init EEPROM\n");
-		goto out_remove_sysfs;
+		goto out_iounmap;
 	}
 	/* MAC Address location in EEPROM same for 3945/4965 */
 	eeprom = (struct iwl3945_eeprom *)priv->eeprom;
@@ -5094,7 +5136,7 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	/* Device-specific setup */
 	if (iwl3945_hw_set_hw_params(priv)) {
 		IWL_ERR(priv, "failed to set hw settings\n");
-		goto out_iounmap;
+		goto out_eeprom_free;
 	}
 
 	/***********************
@@ -5104,7 +5146,7 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	err = iwl3945_init_drv(priv);
 	if (err) {
 		IWL_ERR(priv, "initializing driver failed\n");
-		goto out_free_geos;
+		goto out_unset_hw_params;
 	}
 
 	IWL_INFO(priv, "Detected Intel Wireless WiFi Link %s\n",
@@ -5154,19 +5196,18 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	 * 9. Setup and Register mac80211
 	 * *******************************/
 
-	err = ieee80211_register_hw(priv->hw);
-	if (err) {
-		IWL_ERR(priv, "Failed to register network device: %d\n", err);
-		goto  out_remove_sysfs;
-	}
+	iwl_enable_interrupts(priv);
 
-	priv->hw->conf.beacon_int = 100;
-	priv->mac80211_registered = 1;
+	err = iwl3945_setup_mac(priv);
+	if (err)
+		goto  out_remove_sysfs;
 
 	err = iwl_rfkill_init(priv);
 	if (err)
 		IWL_ERR(priv, "Unable to initialize RFKILL system. "
 				  "Ignoring error: %d\n", err);
+	else
+		iwl_rfkill_set_hw_state(priv);
 
 	/* Start monitoring the killswitch */
 	queue_delayed_work(priv->workqueue, &priv->rfkill_poll,
@@ -5175,17 +5216,19 @@ static int iwl3945_pci_probe(struct pci_dev *pdev, const struct pci_device_id *e
 	return 0;
 
  out_remove_sysfs:
-	sysfs_remove_group(&pdev->dev.kobj, &iwl3945_attribute_group);
- out_free_geos:
-	iwlcore_free_geos(priv);
-
- out_release_irq:
-	free_irq(priv->pci_dev->irq, priv);
 	destroy_workqueue(priv->workqueue);
 	priv->workqueue = NULL;
-	iwl3945_unset_hw_params(priv);
+	sysfs_remove_group(&pdev->dev.kobj, &iwl3945_attribute_group);
+ out_release_irq:
+	free_irq(priv->pci_dev->irq, priv);
  out_disable_msi:
 	pci_disable_msi(priv->pci_dev);
+	iwlcore_free_geos(priv);
+	iwl_free_channel_map(priv);
+ out_unset_hw_params:
+	iwl3945_unset_hw_params(priv);
+ out_eeprom_free:
+	iwl_eeprom_free(priv);
  out_iounmap:
 	pci_iounmap(pdev, priv->hw_base);
  out_pci_release_regions:
