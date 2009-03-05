@@ -41,6 +41,7 @@ struct net {
 
 	struct proc_dir_entry 	*proc_net;
 	struct proc_dir_entry 	*proc_net_stat;
+	struct vfsmount		*proc_mnt;
 
 #ifdef CONFIG_SYSCTL
 	struct ctl_table_set	sysctls;
