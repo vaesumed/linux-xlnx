@@ -478,8 +478,6 @@ static int sgiioc4_build_dmatable(ide_drive_t *drive, struct ide_cmd *cmd)
 	}
 
 use_pio_instead:
-	ide_destroy_dmatable(drive);
-
 	return 0;		/* revert to PIO for this request */
 }
 
@@ -488,11 +486,9 @@ static int sgiioc4_dma_setup(ide_drive_t *drive, struct ide_cmd *cmd)
 	int ddir;
 	u8 write = !!(cmd->tf_flags & IDE_TFLAG_WRITE);
 
-	if (sgiioc4_build_dmatable(drive, cmd) == 0) {
+	if (sgiioc4_build_dmatable(drive, cmd) == 0)
 		/* try PIO instead of DMA */
-		ide_map_sg(drive, cmd);
 		return 1;
-	}
 
 	if (write)
 		/* Writes TO the IOC4 FROM Main Memory */
