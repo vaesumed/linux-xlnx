@@ -52,7 +52,7 @@ void arch_task_cache_init(void)
         task_xstate_cachep =
         	kmem_cache_create("task_xstate", xstate_size,
 				  __alignof__(union thread_xstate),
-				  SLAB_PANIC, NULL);
+				  SLAB_PANIC | SLAB_NOTRACK, NULL);
 }
 
 /*
@@ -350,7 +350,7 @@ static void c1e_idle(void)
 
 void __cpuinit select_idle_routine(const struct cpuinfo_x86 *c)
 {
-#ifdef CONFIG_X86_SMP
+#ifdef CONFIG_SMP
 	if (pm_idle == poll_idle && smp_num_siblings > 1) {
 		printk(KERN_WARNING "WARNING: polling idle and HT enabled,"
 			" performance may degrade.\n");

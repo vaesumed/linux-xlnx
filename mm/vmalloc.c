@@ -1267,6 +1267,7 @@ EXPORT_SYMBOL(vfree);
 void vunmap(const void *addr)
 {
 	BUG_ON(in_interrupt());
+	might_sleep();
 	__vunmap(addr, 0);
 }
 EXPORT_SYMBOL(vunmap);
@@ -1285,6 +1286,8 @@ void *vmap(struct page **pages, unsigned int count,
 		unsigned long flags, pgprot_t prot)
 {
 	struct vm_struct *area;
+
+	might_sleep();
 
 	if (count > num_physpages)
 		return NULL;
