@@ -27,40 +27,33 @@ static int pci_msi_enable = 1;
 
 /* Arch hooks */
 
-int __attribute__ ((weak))
-arch_msi_check_device(struct pci_dev *dev, int nvec, int type)
+#ifndef arch_msi_check_device
+int arch_msi_check_device(struct pci_dev *dev, int nvec, int type)
 {
 	return 0;
 }
+#endif
 
-int __attribute__ ((weak))
-arch_setup_msi_irq(struct pci_dev *dev, struct msi_desc *entry)
-{
-	return 0;
-}
-
-int __attribute__ ((weak))
-arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+#ifndef arch_setup_msi_irqs
+int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 {
 	struct msi_desc *entry;
 	int ret;
 
 	list_for_each_entry(entry, &dev->msi_list, list) {
 		ret = arch_setup_msi_irq(dev, entry);
-		if (ret)
+		if (ret < 0)
 			return ret;
+		if (ret > 0)
+			return -ENOSPC;
 	}
 
 	return 0;
 }
+#endif
 
-void __attribute__ ((weak)) arch_teardown_msi_irq(unsigned int irq)
-{
-	return;
-}
-
-void __attribute__ ((weak))
-arch_teardown_msi_irqs(struct pci_dev *dev)
+#ifndef arch_teardown_msi_irqs
+void arch_teardown_msi_irqs(struct pci_dev *dev)
 {
 	struct msi_desc *entry;
 
@@ -69,6 +62,7 @@ arch_teardown_msi_irqs(struct pci_dev *dev)
 			arch_teardown_msi_irq(entry->irq);
 	}
 }
+#endif
 
 static void __msi_set_enable(struct pci_dev *dev, int pos, int enable)
 {
@@ -495,7 +489,9 @@ static int msix_capability_init(struct pci_dev *dev,
 	}
 
 	ret = arch_setup_msi_irqs(dev, nvec, PCI_CAP_ID_MSIX);
-	if (ret) {
+	if (ret < 0) {
+		/* If we had some success report the number of irqs
+		 * we succeeded in setting up. */
 		int avail = 0;
 		list_for_each_entry(entry, &dev->msi_list, list) {
 			if (entry->irq != 0) {
@@ -503,14 +499,13 @@ static int msix_capability_init(struct pci_dev *dev,
 			}
 		}
 
-		msi_free_irqs(dev);
+		if (avail != 0)
+			ret = avail;
+	}
 
-		/* If we had some success report the number of irqs
-		 * we succeeded in setting up.
-		 */
-		if (avail == 0)
-			avail = ret;
-		return avail;
+	if (ret) {
+		msi_free_irqs(dev);
+		return ret;
 	}
 
 	i = 0;
@@ -675,6 +670,23 @@ static int msi_free_irqs(struct pci_dev* dev)
 }
 
 /**
+ * pci_msix_table_size - return the number of device's MSI-X table entries
+ * @dev: pointer to the pci_dev data structure of MSI-X device function
+ */
+int pci_msix_table_size(struct pci_dev *dev)
+{
+	int pos;
+	u16 control;
+
+	pos = pci_find_capability(dev, PCI_CAP_ID_MSIX);
+	if (!pos)
+		return 0;
+
+	pci_read_config_word(dev, msi_control_reg(pos), &control);
+	return multi_msix_capable(control);
+}
+
+/**
  * pci_enable_msix - configure device's MSI-X capability structure
  * @dev: pointer to the pci_dev data structure of MSI-X device function
  * @entries: pointer to an array of MSI-X entries
@@ -691,9 +703,8 @@ static int msi_free_irqs(struct pci_dev* dev)
  **/
 int pci_enable_msix(struct pci_dev* dev, struct msix_entry *entries, int nvec)
 {
-	int status, pos, nr_entries;
+	int status, nr_entries;
 	int i, j;
-	u16 control;
 
 	if (!entries)
  		return -EINVAL;
@@ -702,9 +713,7 @@ int pci_enable_msix(struct pci_dev* dev, struct msix_entry *entries, int nvec)
 	if (status)
 		return status;
 
-	pos = pci_find_capability(dev, PCI_CAP_ID_MSIX);
-	pci_read_config_word(dev, msi_control_reg(pos), &control);
-	nr_entries = multi_msix_capable(control);
+	nr_entries = pci_msix_table_size(dev);
 	if (nvec > nr_entries)
 		return -EINVAL;
 
