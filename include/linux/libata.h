@@ -275,7 +275,7 @@ enum {
 	 * advised to wait only for the following duration before
 	 * doing SRST.
 	 */
-	ATA_TMOUT_PMP_SRST_WAIT	= 1000,
+	ATA_TMOUT_PMP_SRST_WAIT	= 5000,
 
 	/* ATA bus states */
 	BUS_UNKNOWN		= 0,
@@ -530,6 +530,7 @@ struct ata_queued_cmd {
 	unsigned long		flags;		/* ATA_QCFLAG_xxx */
 	unsigned int		tag;
 	unsigned int		n_elem;
+	unsigned int		orig_n_elem;
 
 	int			dma_dir;
 
@@ -750,7 +751,8 @@ struct ata_port {
 	acpi_handle		acpi_handle;
 	struct ata_acpi_gtm	__acpi_init_gtm; /* use ata_acpi_init_gtm() */
 #endif
-	u8			sector_buf[ATA_SECT_SIZE]; /* owned by EH */
+	/* owned by EH */
+	u8			sector_buf[ATA_SECT_SIZE] ____cacheline_aligned;
 };
 
 /* The following initializer overrides a method to NULL whether one of
@@ -1005,6 +1007,9 @@ extern int ata_cable_80wire(struct ata_port *ap);
 extern int ata_cable_sata(struct ata_port *ap);
 extern int ata_cable_ignore(struct ata_port *ap);
 extern int ata_cable_unknown(struct ata_port *ap);
+
+extern void ata_pio_queue_task(struct ata_port *ap, void *data,
+			       unsigned long delay);
 
 /* Timing helpers */
 extern unsigned int ata_pio_need_iordy(const struct ata_device *);
