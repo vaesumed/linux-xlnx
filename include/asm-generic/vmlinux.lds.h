@@ -61,6 +61,14 @@
 #define BRANCH_PROFILE()
 #endif
 
+#ifdef CONFIG_EVENT_TRACER
+#define FTRACE_EVENTS()	VMLINUX_SYMBOL(__start_ftrace_events) = .;	\
+			*(_ftrace_events)				\
+			VMLINUX_SYMBOL(__stop_ftrace_events) = .;
+#else
+#define FTRACE_EVENTS()
+#endif
+
 /* .data section */
 #define DATA_DATA							\
 	*(.data)							\
@@ -86,7 +94,8 @@
 	*(__verbose)                                                    \
 	VMLINUX_SYMBOL(__stop___verbose) = .;				\
 	LIKELY_PROFILE()		       				\
-	BRANCH_PROFILE()
+	BRANCH_PROFILE()						\
+	FTRACE_EVENTS()
 
 #define RO_DATA(align)							\
 	. = ALIGN((align));						\
