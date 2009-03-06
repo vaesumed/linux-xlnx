@@ -376,6 +376,9 @@ int efx_hard_start_xmit(struct sk_buff *skb, struct net_device *net_dev)
 	struct efx_nic *efx = netdev_priv(net_dev);
 	struct efx_tx_queue *tx_queue;
 
+	if (unlikely(efx->port_inhibited))
+		return NETDEV_TX_BUSY;
+
 	if (likely(skb->ip_summed == CHECKSUM_PARTIAL))
 		tx_queue = &efx->tx_queue[EFX_TX_QUEUE_OFFLOAD_CSUM];
 	else
@@ -397,7 +400,7 @@ void efx_xmit_done(struct efx_tx_queue *tx_queue, unsigned int index)
 	 * separates the update of read_count from the test of
 	 * stopped. */
 	smp_mb();
-	if (unlikely(tx_queue->stopped)) {
+	if (unlikely(tx_queue->stopped) && likely(efx->port_enabled)) {
 		fill_level = tx_queue->insert_count - tx_queue->read_count;
 		if (fill_level < EFX_NETDEV_TX_THRESHOLD(tx_queue)) {
 			EFX_BUG_ON_PARANOID(!efx_dev_registered(efx));

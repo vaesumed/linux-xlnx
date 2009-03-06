@@ -936,8 +936,7 @@ static void packetizeRx(struct hso_net *odev, unsigned char *ip_pkt,
 			if (!odev->rx_buf_missing) {
 				/* Packet is complete. Inject into stack. */
 				/* We have IP packet here */
-				odev->skb_rx_buf->protocol =
-						__constant_htons(ETH_P_IP);
+				odev->skb_rx_buf->protocol = cpu_to_be16(ETH_P_IP);
 				/* don't check it */
 				odev->skb_rx_buf->ip_summed =
 					CHECKSUM_UNNECESSARY;
@@ -1247,7 +1246,7 @@ static void hso_std_serial_read_bulk_callback(struct urb *urb)
  * This needs to be a tasklet otherwise we will
  * end up recursively calling this function.
  */
-void hso_unthrottle_tasklet(struct hso_serial *serial)
+static void hso_unthrottle_tasklet(struct hso_serial *serial)
 {
 	unsigned long flags;
 
@@ -1266,7 +1265,7 @@ static	void hso_unthrottle(struct tty_struct *tty)
 	tasklet_hi_schedule(&serial->unthrottle_tasklet);
 }
 
-void hso_unthrottle_workfunc(struct work_struct *work)
+static void hso_unthrottle_workfunc(struct work_struct *work)
 {
 	struct hso_serial *serial =
 	    container_of(work, struct hso_serial,
@@ -1465,9 +1464,9 @@ static int hso_serial_chars_in_buffer(struct tty_struct *tty)
 
 	return chars;
 }
-int tiocmget_submit_urb(struct hso_serial *serial,
-			struct hso_tiocmget  *tiocmget,
-			struct usb_device *usb)
+static int tiocmget_submit_urb(struct hso_serial *serial,
+			       struct hso_tiocmget *tiocmget,
+			       struct usb_device *usb)
 {
 	int result;
 
@@ -2364,12 +2363,6 @@ exit:
 	return -1;
 }
 
-/* Frees a general hso device */
-static void hso_free_device(struct hso_device *hso_dev)
-{
-	kfree(hso_dev);
-}
-
 /* Creates a general hso device */
 static struct hso_device *hso_create_device(struct usb_interface *intf,
 					    int port_spec)
@@ -2432,7 +2425,7 @@ static void hso_free_net_device(struct hso_device *hso_dev)
 		free_netdev(hso_net->net);
 	}
 
-	hso_free_device(hso_dev);
+	kfree(hso_dev);
 }
 
 /* initialize the network interface */
@@ -2646,7 +2639,7 @@ static void hso_free_serial_device(struct hso_device *hso_dev)
 	}
 	hso_free_tiomget(serial);
 	kfree(serial);
-	hso_free_device(hso_dev);
+	kfree(hso_dev);
 }
 
 /* Creates a bulk AT channel */
@@ -2727,7 +2720,7 @@ exit2:
 exit:
 	hso_free_tiomget(serial);
 	kfree(serial);
-	hso_free_device(hso_dev);
+	kfree(hso_dev);
 	return NULL;
 }
 
@@ -2786,7 +2779,7 @@ exit:
 		kfree(serial);
 	}
 	if (hso_dev)
-		hso_free_device(hso_dev);
+		kfree(hso_dev);
 	return NULL;
 
 }
@@ -2979,8 +2972,6 @@ static int hso_probe(struct usb_interface *interface,
 		goto exit;
 	}
 
-	usb_driver_claim_interface(&hso_driver, interface, hso_dev);
-
 	/* save our data pointer in this device */
 	usb_set_intfdata(interface, hso_dev);
 
@@ -2998,8 +2989,6 @@ static void hso_disconnect(struct usb_interface *interface)
 
 	/* remove reference of our private data */
 	usb_set_intfdata(interface, NULL);
-
-	usb_driver_release_interface(&hso_driver, interface);
 }
 
 static void async_get_intf(struct work_struct *data)
