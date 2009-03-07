@@ -71,6 +71,7 @@
 #include "config.c"
 #include "epautoconf.c"
 
+#include "f_iso.c"
 #include "f_sourcesink.c"
 #include "f_loopback.c"
 
@@ -92,6 +93,14 @@ module_param(buflen, uint, 0);
 static int loopdefault = 0;
 module_param(loopdefault, bool, S_IRUGO|S_IWUSR);
 
+/*
+ * Normally the "iso" configuration is third (index 2) so
+ * it's not the default.  Here's where to change that order, to
+ * work better with hosts where config changes are problematic or
+ * controllers (like original superh) that only support one config.
+ */
+static int isodefault;
+module_param(isodefault, bool, S_IRUGO|S_IWUSR);
 /*-------------------------------------------------------------------------*/
 
 /* Thanks to NetChip Technologies for donating this product ID.
@@ -118,7 +127,7 @@ static struct usb_device_descriptor device_desc = {
 
 	.idVendor =		cpu_to_le16(DRIVER_VENDOR_NUM),
 	.idProduct =		cpu_to_le16(DRIVER_PRODUCT_NUM),
-	.bNumConfigurations =	2,
+	.bNumConfigurations =	3,
 };
 
 #ifdef CONFIG_USB_OTG
@@ -244,12 +253,22 @@ static int __init zero_bind(struct usb_composite_dev *cdev)
 	 */
 	if (loopdefault) {
 		loopback_add(cdev);
-		if (!gadget_is_sh(gadget))
+		if (!gadget_is_sh(gadget)) {
 			sourcesink_add(cdev);
+			iso_sourcesink_add(cdev);
+		}
+	} else if (isodefault) {
+		iso_sourcesink_add(cdev);
+		if (!gadget_is_sh(gadget)) {
+			sourcesink_add(cdev);
+			loopback_add(cdev);
+		}
 	} else {
 		sourcesink_add(cdev);
-		if (!gadget_is_sh(gadget))
+		if (!gadget_is_sh(gadget)) {
 			loopback_add(cdev);
+			iso_sourcesink_add(cdev);
+		}
 	}
 
 	gcnum = usb_gadget_controller_number(gadget);
