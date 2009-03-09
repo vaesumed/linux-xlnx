@@ -204,10 +204,6 @@ static inline cpumask_t node_to_cpumask(int node)
 {
 	return cpu_online_map;
 }
-static inline int node_to_first_cpu(int node)
-{
-	return first_cpu(cpu_online_map);
-}
 
 /*
  * Replace default node_to_cpumask_ptr with optimized version
@@ -221,14 +217,6 @@ static inline int node_to_first_cpu(int node)
 #endif
 
 #include <asm-generic/topology.h>
-
-#ifdef CONFIG_NUMA
-/* Returns the number of the first CPU on Node 'node'. */
-static inline int node_to_first_cpu(int node)
-{
-	return cpumask_first(cpumask_of_node(node));
-}
-#endif
 
 extern cpumask_t cpu_coregroup_map(int cpu);
 extern const struct cpumask *cpu_coregroup_mask(int cpu);
