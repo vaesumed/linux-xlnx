@@ -293,7 +293,7 @@ static ide_startstop_t ide_floppy_do_request(ide_drive_t *drive,
 
 	cmd.rq = rq;
 
-	ide_init_sg_cmd(&cmd, rq->nr_sectors);
+	ide_init_sg_cmd(&cmd, rq->nr_sectors << 9);
 	ide_map_sg(drive, &cmd);
 
 	pc->sg = hwif->sg_table;
