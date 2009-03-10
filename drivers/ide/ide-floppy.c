@@ -282,8 +282,10 @@ static ide_startstop_t ide_floppy_do_request(ide_drive_t *drive,
 
 	cmd.rq = rq;
 
-	ide_init_sg_cmd(&cmd, pc->req_xfer);
-	ide_map_sg(drive, &cmd);
+	if (pc->req_xfer) {
+		ide_init_sg_cmd(&cmd, pc->req_xfer);
+		ide_map_sg(drive, &cmd);
+	}
 
 	pc->rq = rq;
 
