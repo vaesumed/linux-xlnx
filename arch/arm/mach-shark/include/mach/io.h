@@ -13,7 +13,7 @@
 
 #define IO_SPACE_LIMIT 0xffffffff
 
-#define __io(a)                 ((void __iomem *)(0xe0000000 + (a)))
+#define __io(a)		__typesafe_io(0xe0000000 + (a))
 
 #define __mem_pci(addr) (addr)
 
