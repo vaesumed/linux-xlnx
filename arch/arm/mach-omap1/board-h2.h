@@ -1,9 +1,9 @@
 /*
- * arch/arm/plat-omap/include/mach/board-2430sdp.h
+ * arch/arm/mach-omap1/board-h2.h
  *
- * Hardware definitions for TI OMAP2430 SDP board.
+ * Hardware definitions for TI OMAP1610 H2 board.
  *
- * Based on board-h4.h by Dirk Behme <dirk.behme@de.bosch.com>
+ * Cleanup for Linux-2.6 by Dirk Behme <dirk.behme@de.bosch.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -26,16 +26,13 @@
  * 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __ASM_ARCH_OMAP_2430SDP_H
-#define __ASM_ARCH_OMAP_2430SDP_H
+#ifndef __ASM_ARCH_OMAP_H2_H
+#define __ASM_ARCH_OMAP_H2_H
 
-/* Placeholder for 2430SDP specific defines */
-#define OMAP24XX_ETHR_START		0x08000300
-#define OMAP24XX_ETHR_GPIO_IRQ		149
-#define SDP2430_CS0_BASE		0x04000000
+#define H2_TPS_GPIO_BASE		(OMAP_MAX_GPIO_LINES + 16 /* MPUIO */)
+#	define H2_TPS_GPIO_MMC_PWR_EN	(H2_TPS_GPIO_BASE + 3)
 
-/* Function prototypes */
-extern void sdp2430_flash_init(void);
-extern void sdp2430_usb_init(void);
+extern void h2_mmc_init(void);
 
-#endif /* __ASM_ARCH_OMAP_2430SDP_H */
+#endif /*  __ASM_ARCH_OMAP_H2_H */
+
