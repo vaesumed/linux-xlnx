@@ -112,7 +112,11 @@
 #define VCPU_STRUCT_SHIFT	16
 #define VCPU_STRUCT_SIZE	(__IA64_UL_CONST(1) << VCPU_STRUCT_SHIFT)
 
-#define KVM_STK_OFFSET		VCPU_STRUCT_SIZE
+/*
+ * This must match KVM_IA64_VCPU_STACK_{SHIFT,SIZE} arch/ia64/include/asm/kvm.h
+ */
+#define KVM_STK_SHIFT		16
+#define KVM_STK_OFFSET		(__IA64_UL_CONST(1)<< KVM_STK_SHIFT)
 
 #define KVM_VM_STRUCT_SHIFT	19
 #define KVM_VM_STRUCT_SIZE	(__IA64_UL_CONST(1) << KVM_VM_STRUCT_SHIFT)
@@ -153,10 +157,10 @@ struct kvm_vm_data {
 	struct kvm_vcpu_data vcpu_data[KVM_MAX_VCPUS];
 };
 
-#define VCPU_BASE(n)	KVM_VM_DATA_BASE + \
-				offsetof(struct kvm_vm_data, vcpu_data[n])
-#define VM_BASE		KVM_VM_DATA_BASE + \
-				offsetof(struct kvm_vm_data, kvm_vm_struct)
+#define VCPU_BASE(n)	(KVM_VM_DATA_BASE + \
+				offsetof(struct kvm_vm_data, vcpu_data[n]))
+#define KVM_VM_BASE	(KVM_VM_DATA_BASE + \
+				offsetof(struct kvm_vm_data, kvm_vm_struct))
 #define KVM_MEM_DIRTY_LOG_BASE	KVM_VM_DATA_BASE + \
 				offsetof(struct kvm_vm_data, kvm_mem_dirty_log)
 
@@ -235,8 +239,6 @@ struct kvm_vm_data {
 
 struct kvm;
 struct kvm_vcpu;
-struct kvm_guest_debug{
-};
 
 struct kvm_mmio_req {
 	uint64_t addr;          /*  physical address		*/
@@ -462,6 +464,8 @@ struct kvm_arch {
 	unsigned long	metaphysical_rr4;
 	unsigned long	vmm_init_rr;
 
+	int		online_vcpus;
+
 	struct kvm_ioapic *vioapic;
 	struct kvm_vm_stat stat;
 	struct kvm_sal_data rdv_sal_data;
@@ -581,7 +585,6 @@ int kvm_emulate_halt(struct kvm_vcpu *vcpu);
 int kvm_pal_emul(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run);
 void kvm_sal_emul(struct kvm_vcpu *vcpu);
 
-static inline void kvm_inject_nmi(struct kvm_vcpu *vcpu) {}
 #endif /* __ASSEMBLY__*/
 
 #endif
