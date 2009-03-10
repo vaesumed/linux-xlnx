@@ -20,7 +20,6 @@
  * related to the winbits and memlevel parameters.
  */
 
-#define pr_fmt(fmt)	"%s: " fmt, __func__
 
 #include <linux/init.h>
 #include <linux/module.h>
