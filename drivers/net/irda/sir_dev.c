@@ -753,7 +753,8 @@ static int sirdev_alloc_buffers(struct sir_dev *dev)
 	dev->rx_buff.truesize = IRDA_SKB_MAX_MTU; 
 
 	/* Bootstrap ZeroCopy Rx */
-	dev->rx_buff.skb = __dev_alloc_skb(dev->rx_buff.truesize, GFP_KERNEL);
+	dev->rx_buff.skb = __netdev_alloc_skb(dev->netdev, dev->rx_buff.truesize,
+					      GFP_KERNEL);
 	if (dev->rx_buff.skb == NULL)
 		return -ENOMEM;
 	skb_reserve(dev->rx_buff.skb, 1);
@@ -779,8 +780,7 @@ static int sirdev_alloc_buffers(struct sir_dev *dev)
 
 static void sirdev_free_buffers(struct sir_dev *dev)
 {
-	if (dev->rx_buff.skb)
-		kfree_skb(dev->rx_buff.skb);
+	kfree_skb(dev->rx_buff.skb);
 	kfree(dev->tx_buff.head);
 	dev->rx_buff.head = dev->tx_buff.head = NULL;
 	dev->rx_buff.skb = NULL;
