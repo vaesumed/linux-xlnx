@@ -3,7 +3,7 @@ config DVB_FE_CUSTOMISE
 	depends on DVB_CORE
 	default N
 	help
-	  This allows the user to select/deselect frontend drivers for their 
+	  This allows the user to select/deselect frontend drivers for their
 	  hardware from the build.
 
 	  Use this option with care as deselecting frontends which are in fact
@@ -14,7 +14,7 @@ config DVB_FE_CUSTOMISE
 
 if DVB_FE_CUSTOMISE
 
-menu "Customise DVB Frontends" 
+menu "Customise DVB Frontends"
 
 comment "Multistandard (satellite) frontends"
 	depends on DVB_CORE
@@ -313,6 +313,13 @@ config DVB_TDA10048
 	help
 	  A DVB-T tuner module. Say Y when you want to support this frontend.
 
+config DVB_AF9013
+	tristate "Afatech AF9013 demodulator"
+	depends on DVB_CORE && I2C
+	default m if DVB_FE_CUSTOMISE
+	help
+	  Say Y when you want to support this frontend.
+
 comment "DVB-C (cable) frontends"
 	depends on DVB_CORE
 
@@ -503,13 +510,6 @@ comment "Tools to develop new frontends"
 config DVB_DUMMY_FE
 	tristate "Dummy frontend driver"
 	default n
-
-config DVB_AF9013
-	tristate "Afatech AF9013 demodulator"
-	depends on DVB_CORE && I2C
-	default m if DVB_FE_CUSTOMISE
-	help
-	  Say Y when you want to support this frontend.
 endmenu
 
 endif
