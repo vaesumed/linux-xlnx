@@ -763,7 +763,7 @@ static int cx25840_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 		break;
 
 	case V4L2_CID_HUE:
-		if (ctrl->value < -127 || ctrl->value > 127) {
+		if (ctrl->value < -128 || ctrl->value > 127) {
 			v4l_err(client, "invalid hue setting %d\n", ctrl->value);
 			return -ERANGE;
 		}
@@ -1101,6 +1101,16 @@ static void log_audio_status(struct i2c_client *client)
 
 /* ----------------------------------------------------------------------- */
 
+/* This init operation must be called to load the driver's firmware.
+   Without this the audio standard detection will fail and you will
+   only get mono.
+
+   Since loading the firmware is often problematic when the driver is
+   compiled into the kernel I recommend postponing calling this function
+   until the first open of the video device. Another reason for
+   postponing it is that loading this firmware takes a long time (seconds)
+   due to the slow i2c bus speed. So it will speed up the boot process if
+   you can avoid loading the fw as long as the video device isn't used.  */
 static int cx25840_init(struct v4l2_subdev *sd, u32 val)
 {
 	struct cx25840_state *state = to_state(sd);
@@ -1195,10 +1205,12 @@ static int cx25840_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 
 	switch (qc->id) {
 	case V4L2_CID_BRIGHTNESS:
+		return v4l2_ctrl_query_fill(qc, 0, 255, 1, 128);
 	case V4L2_CID_CONTRAST:
 	case V4L2_CID_SATURATION:
+		return v4l2_ctrl_query_fill(qc, 0, 127, 1, 64);
 	case V4L2_CID_HUE:
-		return v4l2_ctrl_query_fill_std(qc);
+		return v4l2_ctrl_query_fill(qc, -128, 127, 1, 0);
 	default:
 		break;
 	}
@@ -1210,10 +1222,11 @@ static int cx25840_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 		return v4l2_ctrl_query_fill(qc, 0, 65535,
 				65535 / 100, state->default_volume);
 	case V4L2_CID_AUDIO_MUTE:
+		return v4l2_ctrl_query_fill(qc, 0, 1, 1, 0);
 	case V4L2_CID_AUDIO_BALANCE:
 	case V4L2_CID_AUDIO_BASS:
 	case V4L2_CID_AUDIO_TREBLE:
-		return v4l2_ctrl_query_fill_std(qc);
+		return v4l2_ctrl_query_fill(qc, 0, 65535, 65535 / 100, 32768);
 	default:
 		return -EINVAL;
 	}
