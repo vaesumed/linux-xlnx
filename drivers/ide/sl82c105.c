@@ -189,14 +189,13 @@ static void sl82c105_dma_start(ide_drive_t *drive)
 	ide_dma_start(drive);
 }
 
-static void sl82c105_dma_timeout(ide_drive_t *drive)
+static void sl82c105_dma_clear(ide_drive_t *drive)
 {
 	struct pci_dev *dev = to_pci_dev(drive->hwif->dev);
 
-	DBG(("sl82c105_dma_timeout(drive:%s)\n", drive->name));
+	DBG(("sl82c105_dma_clear(drive:%s)\n", drive->name));
 
 	sl82c105_reset_host(dev);
-	ide_dma_timeout(drive);
 }
 
 static int sl82c105_dma_end(ide_drive_t *drive)
@@ -271,7 +270,7 @@ static u8 sl82c105_bridge_revision(struct pci_dev *dev)
  * channel 0 here at least, but channel 1 has to be enabled by
  * firmware or arch code. We still set both to 16 bits mode.
  */
-static unsigned int init_chipset_sl82c105(struct pci_dev *dev)
+static int init_chipset_sl82c105(struct pci_dev *dev)
 {
 	u32 val;
 
@@ -281,7 +280,7 @@ static unsigned int init_chipset_sl82c105(struct pci_dev *dev)
 	val |= CTRL_P0EN | CTRL_P0F16 | CTRL_P1F16;
 	pci_write_config_dword(dev, 0x40, val);
 
-	return dev->irq;
+	return 0;
 }
 
 static const struct ide_port_ops sl82c105_port_ops = {
@@ -293,12 +292,12 @@ static const struct ide_port_ops sl82c105_port_ops = {
 static const struct ide_dma_ops sl82c105_dma_ops = {
 	.dma_host_set		= ide_dma_host_set,
 	.dma_setup		= ide_dma_setup,
-	.dma_exec_cmd		= ide_dma_exec_cmd,
 	.dma_start		= sl82c105_dma_start,
 	.dma_end		= sl82c105_dma_end,
 	.dma_test_irq		= ide_dma_test_irq,
 	.dma_lost_irq		= sl82c105_dma_lost_irq,
-	.dma_timeout		= sl82c105_dma_timeout,
+	.dma_timer_expiry	= ide_dma_sff_timer_expiry,
+	.dma_clear		= sl82c105_dma_clear,
 	.dma_sff_read_status	= ide_dma_sff_read_status,
 };
 
