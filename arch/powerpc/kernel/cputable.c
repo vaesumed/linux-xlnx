@@ -35,6 +35,10 @@ const char *powerpc_base_platform;
  * and ppc64
  */
 #ifdef CONFIG_PPC32
+extern void __setup_cpu_e200(unsigned long offset, struct cpu_spec* spec);
+extern void __setup_cpu_e500v1(unsigned long offset, struct cpu_spec* spec);
+extern void __setup_cpu_e500v2(unsigned long offset, struct cpu_spec* spec);
+extern void __setup_cpu_e500mc(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_440ep(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_440epx(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_440gx(unsigned long offset, struct cpu_spec* spec);
@@ -43,6 +47,7 @@ extern void __setup_cpu_440spe(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_440x5(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_460ex(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_460gt(unsigned long offset, struct cpu_spec* spec);
+extern void __setup_cpu_460sx(unsigned long offset, struct cpu_spec *spec);
 extern void __setup_cpu_603(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_604(unsigned long offset, struct cpu_spec* spec);
 extern void __setup_cpu_750(unsigned long offset, struct cpu_spec* spec);
@@ -1634,6 +1639,19 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.machine_check		= machine_check_440A,
 		.platform		= "ppc440",
 	},
+	{ /* 460SX */
+		.pvr_mask		= 0xffffff00,
+		.pvr_value		= 0x13541800,
+		.cpu_name		= "460SX",
+		.cpu_features		= CPU_FTRS_44X,
+		.cpu_user_features	= COMMON_USER_BOOKE,
+		.mmu_features		= MMU_FTR_TYPE_44x,
+		.icache_bsize		= 32,
+		.dcache_bsize		= 32,
+		.cpu_setup		= __setup_cpu_460sx,
+		.machine_check		= machine_check_440A,
+		.platform		= "ppc440",
+	},
 	{	/* default match */
 		.pvr_mask		= 0x00000000,
 		.pvr_value		= 0x00000000,
@@ -1687,6 +1705,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 			PPC_FEATURE_UNIFIED_CACHE,
 		.mmu_features		= MMU_FTR_TYPE_FSL_E,
 		.dcache_bsize		= 32,
+		.cpu_setup		= __setup_cpu_e200,
 		.machine_check		= machine_check_e200,
 		.platform		= "ppc5554",
 	}
@@ -1706,6 +1725,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.num_pmcs		= 4,
 		.oprofile_cpu_type	= "ppc/e500",
 		.oprofile_type		= PPC_OPROFILE_FSL_EMB,
+		.cpu_setup		= __setup_cpu_e500v1,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppc8540",
 	},
@@ -1724,6 +1744,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.num_pmcs		= 4,
 		.oprofile_cpu_type	= "ppc/e500",
 		.oprofile_type		= PPC_OPROFILE_FSL_EMB,
+		.cpu_setup		= __setup_cpu_e500v2,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppc8548",
 	},
@@ -1739,6 +1760,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.num_pmcs		= 4,
 		.oprofile_cpu_type	= "ppc/e500", /* xxx - galak, e500mc? */
 		.oprofile_type		= PPC_OPROFILE_FSL_EMB,
+		.cpu_setup		= __setup_cpu_e500mc,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppce500mc",
 	},
