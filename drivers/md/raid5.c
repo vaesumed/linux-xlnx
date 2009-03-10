@@ -4479,8 +4479,7 @@ static int run(mddev_t *mddev)
 
 	return 0;
 abort:
-	if (mddev->thread)
-		md_unregister_thread(mddev->thread);
+	md_unregister_thread(mddev->thread);
 	if (conf) {
 		shrink_stripes(conf);
 		print_raid5_conf(conf);
