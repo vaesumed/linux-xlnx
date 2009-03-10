@@ -195,7 +195,7 @@ static void ack_bcm1480_irq(unsigned int irq)
 		if (pending) {
 #ifdef CONFIG_SMP
 			int i;
-			for (i=0; i<NR_CPUS; i++) {
+			for (i = 0; i < nr_cpu_ids; i++) {
 				/*
 				 * Clear for all CPUs so an affinity switch
 				 * doesn't find an old status

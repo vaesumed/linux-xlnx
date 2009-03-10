@@ -500,9 +500,8 @@ smp_cpus_done(unsigned int max_cpus)
 	int cpu;
 	unsigned long bogosum = 0;
 
-	for(cpu = 0; cpu < NR_CPUS; cpu++) 
-		if (cpu_online(cpu))
-			bogosum += cpu_data[cpu].loops_per_jiffy;
+	for_each_online_cpu(cpu)
+		bogosum += cpu_data[cpu].loops_per_jiffy;
 	
 	printk(KERN_INFO "SMP: Total of %d processors activated "
 	       "(%lu.%02lu BogoMIPS).\n",
@@ -548,16 +547,16 @@ setup_profiling_timer(unsigned int multiplier)
 
 
 static void
-send_ipi_message(cpumask_t to_whom, enum ipi_message_type operation)
+send_ipi_message(const struct cpumask *to_whom, enum ipi_message_type operation)
 {
 	int i;
 
 	mb();
-	for_each_cpu_mask(i, to_whom)
+	for_each_cpu(i, to_whom)
 		set_bit(operation, &ipi_data[i].bits);
 
 	mb();
-	for_each_cpu_mask(i, to_whom)
+	for_each_cpu(i, to_whom)
 		wripir(i);
 }
 
@@ -624,7 +623,7 @@ smp_send_reschedule(int cpu)
 		printk(KERN_WARNING
 		       "smp_send_reschedule: Sending IPI to self.\n");
 #endif
-	send_ipi_message(cpumask_of_cpu(cpu), IPI_RESCHEDULE);
+	send_ipi_message(cpumask_of(cpu), IPI_RESCHEDULE);
 }
 
 void
@@ -636,17 +635,17 @@ smp_send_stop(void)
 	if (hard_smp_processor_id() != boot_cpu_id)
 		printk(KERN_WARNING "smp_send_stop: Not on boot cpu.\n");
 #endif
-	send_ipi_message(to_whom, IPI_CPU_STOP);
+	send_ipi_message(&to_whom, IPI_CPU_STOP);
 }
 
-void arch_send_call_function_ipi(cpumask_t mask)
+void arch_send_call_function_ipi_mask(const struct cpumask *mask)
 {
 	send_ipi_message(mask, IPI_CALL_FUNC);
 }
 
 void arch_send_call_function_single_ipi(int cpu)
 {
-	send_ipi_message(cpumask_of_cpu(cpu), IPI_CALL_FUNC_SINGLE);
+	send_ipi_message(cpumask_of(cpu), IPI_CALL_FUNC_SINGLE);
 }
 
 static void
@@ -701,8 +700,8 @@ flush_tlb_mm(struct mm_struct *mm)
 		flush_tlb_current(mm);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
-				if (!cpu_online(cpu) || cpu == this_cpu)
+			for_each_online_cpu(cpu) {
+				if (cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
 					mm->context[cpu] = 0;
@@ -750,8 +749,8 @@ flush_tlb_page(struct vm_area_struct *vma, unsigned long addr)
 		flush_tlb_current_page(mm, vma, addr);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
-				if (!cpu_online(cpu) || cpu == this_cpu)
+			for_each_online_cpu(cpu) {
+				if (cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
 					mm->context[cpu] = 0;
@@ -806,8 +805,8 @@ flush_icache_user_range(struct vm_area_struct *vma, struct page *page,
 		__load_new_mm_context(mm);
 		if (atomic_read(&mm->mm_users) <= 1) {
 			int cpu, this_cpu = smp_processor_id();
-			for (cpu = 0; cpu < NR_CPUS; cpu++) {
-				if (!cpu_online(cpu) || cpu == this_cpu)
+			for_each_online_cpu(cpu) {
+				if (cpu == this_cpu)
 					continue;
 				if (mm->context[cpu])
 					mm->context[cpu] = 0;

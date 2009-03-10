@@ -808,9 +808,9 @@ static void smp_start_sync_tick_client(int cpu)
 
 extern unsigned long xcall_call_function;
 
-void arch_send_call_function_ipi(cpumask_t mask)
+void arch_send_call_function_ipi_mask(const struct cpumask *mask)
 {
-	xcall_deliver((u64) &xcall_call_function, 0, 0, &mask);
+	xcall_deliver((u64) &xcall_call_function, 0, 0, mask);
 }
 
 extern unsigned long xcall_call_function_single;
@@ -850,7 +850,7 @@ static void tsb_sync(void *info)
 
 void smp_tsb_sync(struct mm_struct *mm)
 {
-	smp_call_function_mask(mm->cpu_vm_mask, tsb_sync, mm, 1);
+	smp_call_function_many(&mm->cpu_vm_mask, tsb_sync, mm, 1);
 }
 
 extern unsigned long xcall_flush_tlb_mm;
