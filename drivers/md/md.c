@@ -4831,6 +4831,12 @@ static int set_array_info(mddev_t * mddev, mdu_array_info_t *info)
 	return 0;
 }
 
+void md_set_size(mddev_t *mddev, sector_t array_sectors)
+{
+	mddev->array_sectors = array_sectors;
+}
+EXPORT_SYMBOL(md_set_size);
+
 static int update_size(mddev_t *mddev, sector_t num_sectors)
 {
 	mdk_rdev_t *rdev;

@@ -2196,7 +2196,7 @@ static int run(mddev_t *mddev)
 	/*
 	 * Ok, everything is just fine now
 	 */
-	mddev->array_sectors = raid10_size(mddev, 0, 0);
+	md_set_size(mddev, raid10_size(mddev, 0, 0));
 	mddev->resync_max_sectors = mddev->array_sectors;
 
 	mddev->queue->unplug_fn = raid10_unplug;
