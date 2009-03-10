@@ -3995,6 +3995,21 @@ static struct attribute_group raid5_attrs_group = {
 	.attrs = raid5_attrs,
 };
 
+static sector_t
+raid5_size(mddev_t *mddev, sector_t sectors, int raid_disks)
+{
+	raid5_conf_t *conf = mddev_to_conf(mddev);
+	int chunk_size = mddev->chunk_size;
+
+	if (!sectors)
+		sectors = mddev->dev_sectors;
+	if (!raid_disks)
+		raid_disks = conf->previous_raid_disks;
+
+	sectors &= ~(chunk_size / 512 - 1);
+	return sectors * (raid_disks - conf->max_degraded);
+}
+
 static int run(mddev_t *mddev)
 {
 	raid5_conf_t *conf;
@@ -4254,8 +4269,7 @@ static int run(mddev_t *mddev)
 	mddev->queue->backing_dev_info.congested_data = mddev;
 	mddev->queue->backing_dev_info.congested_fn = raid5_congested;
 
-	mddev->array_sectors = mddev->dev_sectors *
-		(conf->previous_raid_disks - conf->max_degraded);
+	mddev->array_sectors = raid5_size(mddev, 0, 0);
 
 	blk_queue_merge_bvec(mddev->queue, raid5_mergeable_bvec);
 
@@ -4475,11 +4489,8 @@ static int raid5_resize(mddev_t *mddev, sector_t sectors)
 	 * any io in the removed space completes, but it hardly seems
 	 * worth it.
 	 */
-	raid5_conf_t *conf = mddev_to_conf(mddev);
-
 	sectors &= ~((sector_t)mddev->chunk_size/512 - 1);
-	mddev->array_sectors = sectors * (mddev->raid_disks
-					  - conf->max_degraded);
+	mddev->array_sectors = raid5_size(mddev, sectors, mddev->raid_disks);
 	set_capacity(mddev->gendisk, mddev->array_sectors);
 	mddev->changed = 1;
 	if (sectors > mddev->dev_sectors && mddev->recovery_cp == MaxSector) {
@@ -4615,10 +4626,12 @@ static void end_reshape(raid5_conf_t *conf)
 	struct block_device *bdev;
 
 	if (!test_bit(MD_RECOVERY_INTR, &conf->mddev->recovery)) {
-		conf->mddev->array_sectors = conf->mddev->dev_sectors *
-			(conf->raid_disks - conf->max_degraded);
-		set_capacity(conf->mddev->gendisk, conf->mddev->array_sectors);
-		conf->mddev->changed = 1;
+		mddev_t *mddev = conf->mddev;
+
+		mddev->array_sectors = raid5_size(mddev, 0, conf->raid_disks);
+		set_capacity(mddev->gendisk, mddev->array_sectors);
+		mddev->changed = 1;
+		conf->previous_raid_disks = conf->raid_disks;
 
 		bdev = bdget_disk(conf->mddev->gendisk, 0);
 		if (bdev) {
@@ -4690,6 +4703,7 @@ static struct mdk_personality raid6_personality =
 	.spare_active	= raid5_spare_active,
 	.sync_request	= sync_request,
 	.resize		= raid5_resize,
+	.size		= raid5_size,
 #ifdef CONFIG_MD_RAID5_RESHAPE
 	.check_reshape	= raid5_check_reshape,
 	.start_reshape  = raid5_start_reshape,
@@ -4711,6 +4725,7 @@ static struct mdk_personality raid5_personality =
 	.spare_active	= raid5_spare_active,
 	.sync_request	= sync_request,
 	.resize		= raid5_resize,
+	.size		= raid5_size,
 #ifdef CONFIG_MD_RAID5_RESHAPE
 	.check_reshape	= raid5_check_reshape,
 	.start_reshape  = raid5_start_reshape,
@@ -4733,6 +4748,7 @@ static struct mdk_personality raid4_personality =
 	.spare_active	= raid5_spare_active,
 	.sync_request	= sync_request,
 	.resize		= raid5_resize,
+	.size		= raid5_size,
 #ifdef CONFIG_MD_RAID5_RESHAPE
 	.check_reshape	= raid5_check_reshape,
 	.start_reshape  = raid5_start_reshape,
