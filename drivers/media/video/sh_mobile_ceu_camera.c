@@ -101,6 +101,30 @@ struct sh_mobile_ceu_dev {
 	const struct soc_camera_data_format *camera_fmt;
 };
 
+static unsigned long make_bus_param(struct sh_mobile_ceu_dev *pcdev)
+{
+	unsigned long flags;
+
+	flags = SOCAM_MASTER |
+		SOCAM_PCLK_SAMPLE_RISING |
+		SOCAM_HSYNC_ACTIVE_HIGH |
+		SOCAM_HSYNC_ACTIVE_LOW |
+		SOCAM_VSYNC_ACTIVE_HIGH |
+		SOCAM_VSYNC_ACTIVE_LOW |
+		SOCAM_DATA_ACTIVE_HIGH;
+
+	if (pcdev->pdata->flags & SH_CEU_FLAG_USE_8BIT_BUS)
+		flags |= SOCAM_DATAWIDTH_8;
+
+	if (pcdev->pdata->flags & SH_CEU_FLAG_USE_16BIT_BUS)
+		flags |= SOCAM_DATAWIDTH_16;
+
+	if (flags & SOCAM_DATAWIDTH_MASK)
+		return flags;
+
+	return 0;
+}
+
 static void ceu_write(struct sh_mobile_ceu_dev *priv,
 		      unsigned long reg_offs, u32 data)
 {
@@ -396,7 +420,7 @@ static int sh_mobile_ceu_set_bus_param(struct soc_camera_device *icd,
 
 	camera_flags = icd->ops->query_bus_param(icd);
 	common_flags = soc_camera_bus_param_compatible(camera_flags,
-						       pcdev->pdata->flags);
+						       make_bus_param(pcdev));
 	if (!common_flags)
 		return -EINVAL;
 
@@ -517,7 +541,7 @@ static int sh_mobile_ceu_try_bus_param(struct soc_camera_device *icd)
 
 	camera_flags = icd->ops->query_bus_param(icd);
 	common_flags = soc_camera_bus_param_compatible(camera_flags,
-						       pcdev->pdata->flags);
+						       make_bus_param(pcdev));
 	if (!common_flags)
 		return -EINVAL;
 
@@ -562,11 +586,29 @@ static int sh_mobile_ceu_get_formats(struct soc_camera_device *icd, int idx,
 	if (ret < 0)
 		return 0;
 
+	/* Beginning of a pass */
+	if (!idx)
+		icd->host_priv = NULL;
+
 	switch (icd->formats[idx].fourcc) {
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_VYUY:
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
+		if (icd->host_priv)
+			goto add_single_format;
+
+		/*
+		 * Our case is simple so far: for any of the above four camera
+		 * formats we add all our four synthesized NV* formats, so,
+		 * just marking the device with a single flag suffices. If
+		 * the format generation rules are more complex, you would have
+		 * to actually hang your already added / counted formats onto
+		 * the host_priv pointer and check whether the format you're
+		 * going to add now is already there.
+		 */
+		icd->host_priv = (void *)sh_mobile_ceu_formats;
+
 		n = ARRAY_SIZE(sh_mobile_ceu_formats);
 		formats += n;
 		for (k = 0; xlate && k < n; k++) {
@@ -579,6 +621,7 @@ static int sh_mobile_ceu_get_formats(struct soc_camera_device *icd, int idx,
 				icd->formats[idx].name);
 		}
 	default:
+add_single_format:
 		/* Generic pass-through */
 		formats++;
 		if (xlate) {
