@@ -70,13 +70,12 @@ void __init smp_cpus_done(unsigned int max_cpus)
 	extern void smp4m_smp_done(void);
 	extern void smp4d_smp_done(void);
 	unsigned long bogosum = 0;
-	int cpu, num;
+	int cpu, num = 0;
 
-	for (cpu = 0, num = 0; cpu < NR_CPUS; cpu++)
-		if (cpu_online(cpu)) {
-			num++;
-			bogosum += cpu_data(cpu).udelay_val;
-		}
+	for_each_online_cpu(cpu) {
+		num++;
+		bogosum += cpu_data(cpu).udelay_val;
+	}
 
 	printk("Total of %d processors activated (%lu.%02lu BogoMIPS).\n",
 		num, bogosum/(500000/HZ),
@@ -332,8 +331,8 @@ void __init smp_setup_cpu_possible_map(void)
 	instance = 0;
 	while (!cpu_find_by_instance(instance, NULL, &mid)) {
 		if (mid < NR_CPUS) {
-			cpu_set(mid, cpu_possible_map);
-			cpu_set(mid, cpu_present_map);
+			set_cpu_possible(mid, true);
+			set_cpu_present(mid, true);
 		}
 		instance++;
 	}
@@ -351,8 +350,8 @@ void __init smp_prepare_boot_cpu(void)
 		printk("boot cpu id != 0, this could work but is untested\n");
 
 	current_thread_info()->cpu = cpuid;
-	cpu_set(cpuid, cpu_online_map);
-	cpu_set(cpuid, cpu_possible_map);
+	set_cpu_online(cpuid, true);
+	set_cpu_possible(cpuid, true);
 }
 
 int __cpuinit __cpu_up(unsigned int cpu)
