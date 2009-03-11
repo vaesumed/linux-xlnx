@@ -27,6 +27,7 @@
 #include <linux/types.h>
 #include <linux/kallsyms.h>
 #include <linux/mm.h>
+#include <linux/net.h>
 #include <linux/slab.h>
 #include <linux/smp_lock.h>
 #include <linux/utsname.h>
@@ -988,8 +989,9 @@ call_bind_status(struct rpc_task *task)
 		task->tk_action = call_bind;
 		return;
 	default:
-		dprintk("RPC: %5u unrecognized rpcbind error (%d)\n",
-				task->tk_pid, -task->tk_status);
+		if (net_ratelimit())
+			printk("RPC: %5u unrecognized rpcbind error (%d)\n",
+					task->tk_pid, -task->tk_status);
 	}
 
 	rpc_exit(task, status);
@@ -1044,6 +1046,9 @@ call_connect_status(struct rpc_task *task)
 		task->tk_action = call_timeout;
 		break;
 	default:
+		if (net_ratelimit())
+			printk("RPC: %5u unrecognized connect error (%d)\n",
+					task->tk_pid, status);
 		rpc_exit(task, -EIO);
 	}
 }
