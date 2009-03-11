@@ -3543,6 +3543,14 @@ M:	linux@arm.linux.org.uk
 L:	linux-arm-kernel@lists.arm.linux.org.uk	(subscribers-only)
 S:	Maintained
 
+PXA168 SUPPORT
+P:	Eric Miao
+M:	eric.miao@marvell.com
+P:	Jason Chagas
+M:	jason.chagas@marvell.com
+L:	linux-arm-kernel@lists.arm.linux.org.uk	(subscribers-only)
+S:	Supported
+
 PXA MMCI DRIVER
 S:	Orphan
 
