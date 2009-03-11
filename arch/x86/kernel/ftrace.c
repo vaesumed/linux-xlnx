@@ -18,6 +18,7 @@
 #include <linux/init.h>
 #include <linux/list.h>
 
+#include <asm/cacheflush.h>
 #include <asm/ftrace.h>
 #include <linux/ftrace.h>
 #include <asm/nops.h>
@@ -25,6 +26,18 @@
 
 
 #ifdef CONFIG_DYNAMIC_FTRACE
+
+int ftrace_arch_code_modify_prepare(void)
+{
+	set_kernel_text_rw();
+	return 0;
+}
+
+int ftrace_arch_code_modify_post_process(void)
+{
+	set_kernel_text_ro();
+	return 0;
+}
 
 union ftrace_code_union {
 	char code[MCOUNT_INSN_SIZE];
@@ -82,7 +95,7 @@ static unsigned char *ftrace_call_replace(unsigned long ip, unsigned long addr)
  * are the same as what exists.
  */
 
-static atomic_t in_nmi = ATOMIC_INIT(0);
+static atomic_t nmi_running = ATOMIC_INIT(0);
 static int mod_code_status;		/* holds return value of text write */
 static int mod_code_write;		/* set when NMI should do the write */
 static void *mod_code_ip;		/* holds the IP to write to */
@@ -111,12 +124,16 @@ static void ftrace_mod_code(void)
 	 */
 	mod_code_status = probe_kernel_write(mod_code_ip, mod_code_newcode,
 					     MCOUNT_INSN_SIZE);
+
+	/* if we fail, then kill any new writers */
+	if (mod_code_status)
+		mod_code_write = 0;
 }
 
 void ftrace_nmi_enter(void)
 {
-	atomic_inc(&in_nmi);
-	/* Must have in_nmi seen before reading write flag */
+	atomic_inc(&nmi_running);
+	/* Must have nmi_running seen before reading write flag */
 	smp_mb();
 	if (mod_code_write) {
 		ftrace_mod_code();
@@ -126,22 +143,21 @@ void ftrace_nmi_enter(void)
 
 void ftrace_nmi_exit(void)
 {
-	/* Finish all executions before clearing in_nmi */
+	/* Finish all executions before clearing nmi_running */
 	smp_wmb();
-	atomic_dec(&in_nmi);
+	atomic_dec(&nmi_running);
 }
 
 static void wait_for_nmi(void)
 {
-	int waited = 0;
+	if (!atomic_read(&nmi_running))
+		return;
 
-	while (atomic_read(&in_nmi)) {
-		waited = 1;
+	do {
 		cpu_relax();
-	}
+	} while (atomic_read(&nmi_running));
 
-	if (waited)
-		nmi_wait_count++;
+	nmi_wait_count++;
 }
 
 static int
@@ -368,25 +384,6 @@ int ftrace_disable_ftrace_graph_caller(void)
 	return ftrace_mod_jmp(ip, old_offset, new_offset);
 }
 
-#else /* CONFIG_DYNAMIC_FTRACE */
-
-/*
- * These functions are picked from those used on
- * this page for dynamic ftrace. They have been
- * simplified to ignore all traces in NMI context.
- */
-static atomic_t in_nmi;
-
-void ftrace_nmi_enter(void)
-{
-	atomic_inc(&in_nmi);
-}
-
-void ftrace_nmi_exit(void)
-{
-	atomic_dec(&in_nmi);
-}
-
 #endif /* !CONFIG_DYNAMIC_FTRACE */
 
 /*
@@ -403,7 +400,7 @@ void prepare_ftrace_return(unsigned long *parent, unsigned long self_addr)
 				&return_to_handler;
 
 	/* Nmi's are currently unsupported */
-	if (unlikely(atomic_read(&in_nmi)))
+	if (unlikely(in_nmi()))
 		return;
 
 	if (unlikely(atomic_read(&current->tracing_graph_pause)))
@@ -439,14 +436,7 @@ void prepare_ftrace_return(unsigned long *parent, unsigned long self_addr)
 		return;
 	}
 
-	if (unlikely(!__kernel_text_address(old))) {
-		ftrace_graph_stop();
-		*parent = old;
-		WARN_ON(1);
-		return;
-	}
-
-	calltime = cpu_clock(raw_smp_processor_id());
+	calltime = trace_clock_local();
 
 	if (ftrace_push_return_trace(old, calltime,
 				self_addr, &trace.depth) == -EBUSY) {
