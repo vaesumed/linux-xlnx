@@ -552,7 +552,6 @@ static void __devinit ps3vram_proc_init(struct ps3_system_bus_device *dev)
 		return;
 	}
 
-	pde->owner = THIS_MODULE;
 	pde->data = priv;
 }
 
