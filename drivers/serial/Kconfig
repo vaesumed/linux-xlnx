@@ -91,7 +91,7 @@ config SERIAL_8250_PCI
 
 config SERIAL_8250_PNP
 	tristate "8250/16550 PNP device support" if EMBEDDED
-	depends on SERIAL_8250 && PNP
+	depends on SERIAL_8250 && PNP && ! SERIAL_8250_CONSOLE
 	default SERIAL_8250
 	help
 	  This builds standard PNP serial support. You may be able to
