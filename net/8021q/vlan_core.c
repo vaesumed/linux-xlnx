@@ -89,7 +89,9 @@ static int vlan_gro_common(struct napi_struct *napi, struct vlan_group *grp,
 		goto drop;
 
 	for (p = napi->gro_list; p; p = p->next) {
-		NAPI_GRO_CB(p)->same_flow = p->dev == skb->dev;
+		NAPI_GRO_CB(p)->same_flow =
+			p->dev == skb->dev && !compare_ether_header(
+				skb_mac_header(p), skb_gro_mac_header(skb));
 		NAPI_GRO_CB(p)->flush = 0;
 	}
 
@@ -102,25 +104,12 @@ drop:
 int vlan_gro_receive(struct napi_struct *napi, struct vlan_group *grp,
 		     unsigned int vlan_tci, struct sk_buff *skb)
 {
-	int err = NET_RX_SUCCESS;
+	skb_gro_reset_offset(skb);
 
 	if (netpoll_receive_skb(skb))
 		return NET_RX_DROP;
 
-	switch (vlan_gro_common(napi, grp, vlan_tci, skb)) {
-	case -1:
-		return netif_receive_skb(skb);
-
-	case 2:
-		err = NET_RX_DROP;
-		/* fall through */
-
-	case 1:
-		kfree_skb(skb);
-		break;
-	}
-
-	return err;
+	return napi_skb_finish(vlan_gro_common(napi, grp, vlan_tci, skb), skb);
 }
 EXPORT_SYMBOL(vlan_gro_receive);
 
@@ -128,30 +117,14 @@ int vlan_gro_frags(struct napi_struct *napi, struct vlan_group *grp,
 		   unsigned int vlan_tci, struct napi_gro_fraginfo *info)
 {
 	struct sk_buff *skb = napi_fraginfo_skb(napi, info);
-	int err = NET_RX_DROP;
 
 	if (!skb)
-		goto out;
+		return NET_RX_DROP;
 
 	if (netpoll_receive_skb(skb))
-		goto out;
+		return NET_RX_DROP;
 
-	err = NET_RX_SUCCESS;
-
-	switch (vlan_gro_common(napi, grp, vlan_tci, skb)) {
-	case -1:
-		return netif_receive_skb(skb);
-
-	case 2:
-		err = NET_RX_DROP;
-		/* fall through */
-
-	case 1:
-		napi_reuse_skb(napi, skb);
-		break;
-	}
-
-out:
-	return err;
+	return napi_frags_finish(napi, skb,
+				 vlan_gro_common(napi, grp, vlan_tci, skb));
 }
 EXPORT_SYMBOL(vlan_gro_frags);

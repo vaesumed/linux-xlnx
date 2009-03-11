@@ -194,8 +194,8 @@ out:
 	return 0;
 }
 
-static struct packet_type edsa_packet_type = {
-	.type	= __constant_htons(ETH_P_EDSA),
+static struct packet_type edsa_packet_type __read_mostly = {
+	.type	= cpu_to_be16(ETH_P_EDSA),
 	.func	= edsa_rcv,
 };
 

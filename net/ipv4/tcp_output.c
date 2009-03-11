@@ -441,10 +441,8 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			*ptr++ = htonl(sp[this_sack].end_seq);
 		}
 
-		if (tp->rx_opt.dsack) {
+		if (tp->rx_opt.dsack)
 			tp->rx_opt.dsack = 0;
-			tp->rx_opt.eff_sacks = tp->rx_opt.num_sacks;
-		}
 	}
 }
 
@@ -550,6 +548,7 @@ static unsigned tcp_established_options(struct sock *sk, struct sk_buff *skb,
 	struct tcp_skb_cb *tcb = skb ? TCP_SKB_CB(skb) : NULL;
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned size = 0;
+	unsigned int eff_sacks;
 
 #ifdef CONFIG_TCP_MD5SIG
 	*md5 = tp->af_specific->md5_lookup(sk, sk);
@@ -568,10 +567,11 @@ static unsigned tcp_established_options(struct sock *sk, struct sk_buff *skb,
 		size += TCPOLEN_TSTAMP_ALIGNED;
 	}
 
-	if (unlikely(tp->rx_opt.eff_sacks)) {
+	eff_sacks = tp->rx_opt.num_sacks + tp->rx_opt.dsack;
+	if (unlikely(eff_sacks)) {
 		const unsigned remaining = MAX_TCP_OPTION_SPACE - size;
 		opts->num_sack_blocks =
-			min_t(unsigned, tp->rx_opt.eff_sacks,
+			min_t(unsigned, eff_sacks,
 			      (remaining - TCPOLEN_SACK_BASE_ALIGNED) /
 			      TCPOLEN_SACK_PERBLOCK);
 		size += TCPOLEN_SACK_BASE_ALIGNED +
@@ -663,10 +663,14 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	th->urg_ptr		= 0;
 
 	/* The urg_mode check is necessary during a below snd_una win probe */
-	if (unlikely(tcp_urg_mode(tp) &&
-		     between(tp->snd_up, tcb->seq + 1, tcb->seq + 0xFFFF))) {
-		th->urg_ptr		= htons(tp->snd_up - tcb->seq);
-		th->urg			= 1;
+	if (unlikely(tcp_urg_mode(tp) && before(tcb->seq, tp->snd_up))) {
+		if (before(tp->snd_up, tcb->seq + 0x10000)) {
+			th->urg_ptr = htons(tp->snd_up - tcb->seq);
+			th->urg = 1;
+		} else if (after(tcb->seq + 0xFFFF, tp->snd_nxt)) {
+			th->urg_ptr = 0xFFFF;
+			th->urg = 1;
+		}
 	}
 
 	tcp_options_write((__be32 *)(th + 1), tp, &opts, &md5_hash_location);
@@ -763,11 +767,10 @@ int tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
 	struct sk_buff *buff;
 	int nsize, old_factor;
 	int nlen;
-	u16 flags;
+	u8 flags;
 
 	BUG_ON(len > skb->len);
 
-	tcp_clear_retrans_hints_partial(tp);
 	nsize = skb_headlen(skb) - len;
 	if (nsize < 0)
 		nsize = 0;
@@ -850,6 +853,12 @@ int tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
 			tcp_verify_left_out(tp);
 		}
 		tcp_adjust_fackets_out(sk, skb, diff);
+
+		if (tp->lost_skb_hint &&
+		    before(TCP_SKB_CB(skb)->seq,
+			   TCP_SKB_CB(tp->lost_skb_hint)->seq) &&
+		    (tcp_is_fack(tp) || TCP_SKB_CB(skb)->sacked))
+			tp->lost_cnt_hint -= diff;
 	}
 
 	/* Link BUFF into the send queue. */
@@ -1273,7 +1282,7 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 {
 	struct sk_buff *buff;
 	int nlen = skb->len - len;
-	u16 flags;
+	u8 flags;
 
 	/* All of a TSO frame must be composed of paged data.  */
 	if (skb->len != skb->data_len)
@@ -1352,6 +1361,10 @@ static int tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb)
 	if (limit >= sk->sk_gso_max_size)
 		goto send_now;
 
+	/* Middle in queue won't get any more data, full sendable already? */
+	if ((skb != tcp_write_queue_tail(sk)) && (limit >= skb->len))
+		goto send_now;
+
 	if (sysctl_tcp_tso_win_divisor) {
 		u32 chunk = min(tp->snd_wnd, tp->snd_cwnd * tp->mss_cache);
 
@@ -1405,7 +1418,7 @@ static int tcp_mtu_probe(struct sock *sk)
 	    icsk->icsk_mtup.probe_size ||
 	    inet_csk(sk)->icsk_ca_state != TCP_CA_Open ||
 	    tp->snd_cwnd < 11 ||
-	    tp->rx_opt.eff_sacks)
+	    tp->rx_opt.num_sacks || tp->rx_opt.dsack)
 		return -1;
 
 	/* Very simple search strategy: just double the MSS. */
@@ -1754,11 +1767,9 @@ static void tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *next_skb = tcp_write_queue_next(sk, skb);
 	int skb_size, next_skb_size;
-	u16 flags;
 
 	skb_size = skb->len;
 	next_skb_size = next_skb->len;
-	flags = TCP_SKB_CB(skb)->flags;
 
 	BUG_ON(tcp_skb_pcount(skb) != 1 || tcp_skb_pcount(next_skb) != 1);
 
@@ -1778,9 +1789,8 @@ static void tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 	/* Update sequence range on original skb. */
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(next_skb)->end_seq;
 
-	/* Merge over control information. */
-	flags |= TCP_SKB_CB(next_skb)->flags; /* This moves PSH/FIN etc. over */
-	TCP_SKB_CB(skb)->flags = flags;
+	/* Merge over control information. This moves PSH/FIN etc. over */
+	TCP_SKB_CB(skb)->flags |= TCP_SKB_CB(next_skb)->flags;
 
 	/* All done, get rid of second SKB and account for it so
 	 * packet counting does not break.
@@ -1908,6 +1918,8 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 	if (skb->len > cur_mss) {
 		if (tcp_fragment(sk, skb, cur_mss, cur_mss))
 			return -ENOMEM; /* We'll try again later. */
+	} else {
+		tcp_init_tso_segs(sk, skb, cur_mss);
 	}
 
 	tcp_retrans_try_collapse(sk, skb, cur_mss);
@@ -2061,7 +2073,7 @@ begin_fwd:
 			goto begin_fwd;
 
 		} else if (!(sacked & TCPCB_LOST)) {
-			if (hole == NULL && !(sacked & TCPCB_SACKED_RETRANS))
+			if (hole == NULL && !(sacked & (TCPCB_SACKED_RETRANS|TCPCB_SACKED_ACKED)))
 				hole = skb;
 			continue;
 
@@ -2325,7 +2337,7 @@ static void tcp_connect_init(struct sock *sk)
 	sk->sk_err = 0;
 	sock_reset_flag(sk, SOCK_DONE);
 	tp->snd_wnd = 0;
-	tcp_init_wl(tp, tp->write_seq, 0);
+	tcp_init_wl(tp, 0);
 	tp->snd_una = tp->write_seq;
 	tp->snd_sml = tp->write_seq;
 	tp->snd_up = tp->write_seq;
