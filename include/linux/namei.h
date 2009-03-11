@@ -68,6 +68,8 @@ extern int kern_path(const char *, unsigned, struct path *);
 extern int path_lookup(const char *, unsigned, struct nameidata *);
 extern int vfs_path_lookup(struct dentry *, struct vfsmount *,
 			   const char *, unsigned int, struct nameidata *);
+extern int vfs_remote_path_lookup(struct dentry *, struct vfsmount *,
+		const char *, unsigned int , struct nameidata *);
 
 extern int path_lookup_open(int dfd, const char *name, unsigned lookup_flags, struct nameidata *, int open_flags);
 extern struct file *lookup_instantiate_filp(struct nameidata *nd, struct dentry *dentry,
