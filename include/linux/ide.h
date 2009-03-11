@@ -767,9 +767,6 @@ typedef struct hwif_s {
 	int sg_nents;			/* Current number of entries in it */
 	int sg_dma_direction;		/* dma transfer direction */
 
-	/* data phase of the active command (currently only valid for PIO/DMA) */
-	int		data_phase;
-
 	struct ide_task_s task;		/* current command */
 
 	unsigned int nsect;
