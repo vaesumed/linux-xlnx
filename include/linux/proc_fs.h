@@ -41,9 +41,6 @@ enum {
  * while parent/subdir create the directory structure (every
  * /proc file has a parent, but "subdir" is NULL for all
  * non-directory entries).
- *
- * "owner" is used to protect module
- * from unloading while proc_dir_entry is in use
  */
 
 typedef	int (read_proc_t)(char *page, char **start, off_t off,
@@ -70,7 +67,6 @@ struct proc_dir_entry {
 	 * somewhere.
 	 */
 	const struct file_operations *proc_fops;
-	struct module *owner;
 	struct proc_dir_entry *next, *parent, *subdir;
 	void *data;
 	read_proc_t *read_proc;
@@ -101,6 +97,7 @@ extern spinlock_t proc_subdir_lock;
 
 extern void proc_root_init(void);
 
+void proc_shrink_automounts(void);
 void proc_flush_task(struct task_struct *task);
 struct dentry *proc_pid_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *);
 int proc_pid_readdir(struct file * filp, void * dirent, filldir_t filldir);
@@ -207,6 +204,10 @@ static inline void proc_flush_task(struct task_struct *task)
 {
 }
 
+static inline void proc_shrink_automounts(void)
+{
+}
+
 static inline struct proc_dir_entry *create_proc_entry(const char *name,
 	mode_t mode, struct proc_dir_entry *parent) { return NULL; }
 static inline struct proc_dir_entry *proc_create(const char *name,
@@ -297,11 +298,6 @@ static inline struct proc_inode *PROC_I(const struct inode *inode)
 static inline struct proc_dir_entry *PDE(const struct inode *inode)
 {
 	return PROC_I(inode)->pde;
-}
-
-static inline struct net *PDE_NET(struct proc_dir_entry *pde)
-{
-	return pde->parent->data;
 }
 
 struct proc_maps_private {
