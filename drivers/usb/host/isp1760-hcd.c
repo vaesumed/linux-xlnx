@@ -644,7 +644,7 @@ static void transform_add_int(struct isp1760_hcd *priv, struct isp1760_qh *qh,
 
 	if (urb->dev->speed != USB_SPEED_HIGH) {
 		/* split */
-		ptd->dw5 = __constant_cpu_to_le32(0x1c);
+		ptd->dw5 = cpu_to_le32(0x1c);
 
 		if (qh->period >= 32)
 			period = qh->period / 2;
@@ -1054,7 +1054,7 @@ static void do_atl_int(struct usb_hcd *usb_hcd)
 			priv_write_copy(priv, (u32 *)&ptd, usb_hcd->regs +
 					atl_regs, sizeof(ptd));
 
-			ptd.dw0 |= __constant_cpu_to_le32(PTD_VALID);
+			ptd.dw0 |= cpu_to_le32(PTD_VALID);
 			priv_write_copy(priv, (u32 *)&ptd, usb_hcd->regs +
 					atl_regs, sizeof(ptd));
 
@@ -2235,9 +2235,10 @@ void deinit_kmem_cache(void)
 	kmem_cache_destroy(qh_cachep);
 }
 
-struct usb_hcd *isp1760_register(u64 res_start, u64 res_len, int irq,
-		u64 irqflags, struct device *dev, const char *busname,
-		unsigned int devflags)
+struct usb_hcd *isp1760_register(phys_addr_t res_start, resource_size_t res_len,
+				 int irq, unsigned long irqflags,
+				 struct device *dev, const char *busname,
+				 unsigned int devflags)
 {
 	struct usb_hcd *hcd;
 	struct isp1760_hcd *priv;
