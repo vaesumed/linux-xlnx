@@ -166,6 +166,22 @@ int squashfs_read_data(struct super_block *sb, void **buffer, u64 index,
 
 		bytes = length;
 		do {
+			if (msblk->stream.avail_out == 0) {
+				if (page < pages) {
+					msblk->stream.next_out = buffer[page++];
+					msblk->stream.avail_out =
+								PAGE_CACHE_SIZE;
+				} else if (msblk->stream.avail_in > 0
+								|| bytes == 0) {
+					ERROR("zlib_inflate tried to "
+						"decompress too much data, "
+						"expected %d bytes.  Zlib "
+						"data probably corrupt\n",
+						srclength);
+					goto release_mutex;
+				}
+			}
+
 			if (msblk->stream.avail_in == 0 && k < b) {
 				avail = min(bytes, msblk->devblksize - offset);
 				bytes -= avail;
@@ -182,19 +198,6 @@ int squashfs_read_data(struct super_block *sb, void **buffer, u64 index,
 				msblk->stream.next_in = bh[k]->b_data + offset;
 				msblk->stream.avail_in = avail;
 				offset = 0;
-			}
-
-			if (msblk->stream.avail_out == 0) {
-				if (page == pages) {
-					ERROR("zlib_inflate tried to "
-						"decompress too much data, "
-						"expected %d bytes.  Zlib "
-						"data probably corrupt\n",
-						srclength);
-					goto release_mutex;
-				}
-				msblk->stream.next_out = buffer[page++];
-				msblk->stream.avail_out = PAGE_CACHE_SIZE;
 			}
 
 			if (!zlib_init) {
