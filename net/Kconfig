@@ -171,6 +171,7 @@ endif
 
 source "net/dccp/Kconfig"
 source "net/sctp/Kconfig"
+source "net/rds/Kconfig"
 source "net/tipc/Kconfig"
 source "net/atm/Kconfig"
 source "net/802/Kconfig"
@@ -185,6 +186,7 @@ source "net/x25/Kconfig"
 source "net/lapb/Kconfig"
 source "net/econet/Kconfig"
 source "net/wanrouter/Kconfig"
+source "net/phonet/Kconfig"
 source "net/sched/Kconfig"
 source "net/dcb/Kconfig"
 
@@ -229,7 +231,6 @@ source "net/can/Kconfig"
 source "net/irda/Kconfig"
 source "net/bluetooth/Kconfig"
 source "net/rxrpc/Kconfig"
-source "net/phonet/Kconfig"
 
 config FIB_RULES
 	bool

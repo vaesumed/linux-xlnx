@@ -399,7 +399,7 @@ struct sock *tcp_create_openreq_child(struct sock *sk, struct request_sock *req,
 
 		tcp_prequeue_init(newtp);
 
-		tcp_init_wl(newtp, treq->snt_isn, treq->rcv_isn);
+		tcp_init_wl(newtp, treq->rcv_isn);
 
 		newtp->srtt = 0;
 		newtp->mdev = TCP_TIMEOUT_INIT;
@@ -434,9 +434,8 @@ struct sock *tcp_create_openreq_child(struct sock *sk, struct request_sock *req,
 		newtp->rx_opt.saw_tstamp = 0;
 
 		newtp->rx_opt.dsack = 0;
-		newtp->rx_opt.eff_sacks = 0;
-
 		newtp->rx_opt.num_sacks = 0;
+
 		newtp->urg_data = 0;
 
 		if (sock_flag(newsk, SOCK_KEEPOPEN))

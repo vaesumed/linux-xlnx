@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003 - 2006 NetXen, Inc.
+ * Copyright (C) 2003 - 2009 NetXen, Inc.
  * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,9 +22,10 @@
  *
  * Contact Information:
  *    info@netxen.com
- * NetXen,
- * 3965 Freedom Circle, Fourth floor,
- * Santa Clara, CA 95054
+ * NetXen Inc,
+ * 18922 Forge Drive
+ * Cupertino, CA 95014-0701
+ *
  */
 
 #ifndef _NETXEN_NIC_H_
@@ -89,7 +90,6 @@
 	(sizeof(struct netxen_rx_buffer) * rds_ring->max_rx_desc_count)
 #define find_diff_among(a,b,range) ((a)<(b)?((b)-(a)):((b)+(range)-(a)))
 
-#define NETXEN_NETDEV_STATUS		0x1
 #define NETXEN_RCV_PRODUCER_OFFSET	0
 #define NETXEN_RCV_PEG_DB_ID		2
 #define NETXEN_HOST_DUMMY_DMA_SIZE 1024
@@ -357,10 +357,7 @@ struct cmd_desc_type0 {
 		__le64 addr_buffer1;
 	};
 
-	__le16 buffer1_length;
-	__le16 buffer2_length;
-	__le16 buffer3_length;
-	__le16 buffer4_length;
+	__le16 buffer_length[4];
 
 	union {
 		struct {
@@ -391,11 +388,8 @@ struct rcv_desc {
 #define STATUS_CKSUM_OK		(2)
 
 /* owner bits of status_desc */
-#define STATUS_OWNER_HOST	(0x1)
-#define STATUS_OWNER_PHANTOM	(0x2)
-
-#define NETXEN_PROT_IP		(1)
-#define NETXEN_PROT_UNKNOWN	(0)
+#define STATUS_OWNER_HOST	(0x1ULL << 56)
+#define STATUS_OWNER_PHANTOM	(0x2ULL << 56)
 
 /* Note: sizeof(status_desc) should always be a mutliple of 2 */
 
@@ -420,15 +414,6 @@ struct rcv_desc {
 	(((sts_data) >> 48) & 0x1F)
 #define netxen_get_sts_opcode(sts_data)	\
 	(((sts_data) >> 58) & 0x03F)
-
-#define netxen_get_sts_owner(status_desc)	\
-	((le64_to_cpu((status_desc)->status_desc_data) >> 56) & 0x03)
-#define netxen_set_sts_owner(status_desc, val)	{ \
-	(status_desc)->status_desc_data = \
-		((status_desc)->status_desc_data & \
-		~cpu_to_le64(0x3ULL << 56)) | \
-		cpu_to_le64((u64)((val) & 0x3) << 56); \
-}
 
 struct status_desc {
 	/* Bit pattern: 0-3 port, 4-7 status, 8-11 type, 12-27 total_length
@@ -712,6 +697,15 @@ typedef enum {
 	NETXEN_FIXED_START = 0x3F0000	/* backup of crbinit */
 } netxen_flash_map_t;
 
+#define NX_FW_VERSION_OFFSET	(NETXEN_USER_START+0x408)
+#define NX_FW_SIZE_OFFSET	(NETXEN_USER_START+0x40c)
+#define NX_BIOS_VERSION_OFFSET	(NETXEN_USER_START+0x83c)
+#define NX_FW_MAGIC_OFFSET	(NETXEN_BRDCFG_START+0x128)
+#define NX_FW_MIN_SIZE		(0x3fffff)
+#define NX_P2_MN_ROMIMAGE	"nxromimg.bin"
+#define NX_P3_CT_ROMIMAGE	"nx3fwct.bin"
+#define NX_P3_MN_ROMIMAGE	"nx3fwmn.bin"
+
 #define NETXEN_USER_START_OLD NETXEN_PXE_START	/* for backward compatibility */
 
 #define NETXEN_FLASH_START		(NETXEN_CRBINIT_START)
@@ -800,21 +794,19 @@ struct netxen_hardware_context {
 	void __iomem *pci_base0;
 	void __iomem *pci_base1;
 	void __iomem *pci_base2;
-	unsigned long first_page_group_end;
-	unsigned long first_page_group_start;
 	void __iomem *db_base;
 	unsigned long db_len;
 	unsigned long pci_len0;
 
-	u8 cut_through;
 	int qdr_sn_window;
 	int ddr_mn_window;
 	unsigned long mn_win_crb;
 	unsigned long ms_win_crb;
 
+	u8 cut_through;
 	u8 revision_id;
-	u16 board_type;
-	struct netxen_board_info boardcfg;
+	u16 port_type;
+	int board_type;
 	u32 linkup;
 	/* Address of cmd ring in Phantom */
 	struct cmd_desc_type0 *cmd_desc_head;
@@ -1246,8 +1238,6 @@ struct netxen_adapter {
 	u32 crb_win;
 	rwlock_t adapter_lock;
 
-	uint64_t dma_mask;
-
 	u32 cmd_producer;
 	__le32 *cmd_consumer;
 	u32 last_cmd_consumer;
@@ -1267,6 +1257,7 @@ struct netxen_adapter {
 	u32 temp;
 
 	u32 fw_major;
+	u32 fw_version;
 
 	u8 msix_supported;
 	u8 max_possible_rss_rings;
@@ -1279,7 +1270,6 @@ struct netxen_adapter {
 	u16 state;
 	u16 link_autoneg;
 	int rx_csum;
-	int status;
 
 	struct netxen_cmd_buffer *cmd_buf_arr;	/* Command buffers for xmit */
 
@@ -1287,7 +1277,7 @@ struct netxen_adapter {
 	 * Receive instances. These can be either one per port,
 	 * or one per peg, etc.
 	 */
-	struct netxen_recv_context recv_ctx[MAX_RCV_CTX];
+	struct netxen_recv_context recv_ctx;
 
 	int is_up;
 	struct netxen_dummy_dma dummy_dma;
@@ -1398,6 +1388,7 @@ void netxen_nic_write_w1(struct netxen_adapter *adapter, u32 index, u32 value);
 void netxen_nic_read_w1(struct netxen_adapter *adapter, u32 index, u32 *value);
 
 int netxen_nic_get_board_info(struct netxen_adapter *adapter);
+void netxen_nic_get_firmware_info(struct netxen_adapter *adapter);
 
 int netxen_nic_hw_read_wx_128M(struct netxen_adapter *adapter,
 		ulong off, void *data, int len);
@@ -1471,10 +1462,9 @@ void netxen_initialize_adapter_ops(struct netxen_adapter *adapter);
 int netxen_init_firmware(struct netxen_adapter *adapter);
 void netxen_nic_clear_stats(struct netxen_adapter *adapter);
 void netxen_watchdog_task(struct work_struct *work);
-void netxen_post_rx_buffers(struct netxen_adapter *adapter, u32 ctx,
-			    u32 ringid);
+void netxen_post_rx_buffers(struct netxen_adapter *adapter, u32 ringid);
 int netxen_process_cmd_ring(struct netxen_adapter *adapter);
-u32 netxen_process_rcv_ring(struct netxen_adapter *adapter, int ctx, int max);
+int netxen_process_rcv_ring(struct netxen_adapter *adapter, int max);
 void netxen_p2_nic_set_multi(struct net_device *netdev);
 void netxen_p3_nic_set_multi(struct net_device *netdev);
 void netxen_p3_free_mac_list(struct netxen_adapter *adapter);
