@@ -287,11 +287,6 @@ struct ocfs2_super
 
 	u64 la_last_gd;
 
-#ifdef CONFIG_OCFS2_FS_STATS
-	struct dentry *local_alloc_debug;
-	char *local_alloc_debug_buf;
-#endif
-
 	/* Next three fields are for local node slot recovery during
 	 * mount. */
 	int dirty;
@@ -308,6 +303,7 @@ struct ocfs2_super
 	struct ocfs2_dlm_debug *osb_dlm_debug;
 
 	struct dentry *osb_debug_root;
+	struct dentry *osb_ctxt;
 
 	wait_queue_head_t recovery_event;
 
@@ -344,6 +340,12 @@ struct ocfs2_super
 
 	/* used to protect metaecc calculation check of xattr. */
 	spinlock_t osb_xattr_lock;
+
+	unsigned int			osb_dx_mask;
+	u32				osb_dx_seed[4];
+
+	/* the group we used to allocate inodes. */
+	u64				osb_inode_alloc_group;
 };
 
 #define OCFS2_SB(sb)	    ((struct ocfs2_super *)(sb)->s_fs_info)
@@ -400,6 +402,51 @@ static inline int ocfs2_meta_ecc(struct ocfs2_super *osb)
 	if (osb->s_feature_incompat & OCFS2_FEATURE_INCOMPAT_META_ECC)
 		return 1;
 	return 0;
+}
+
+static inline int ocfs2_supports_indexed_dirs(struct ocfs2_super *osb)
+{
+	if (osb->s_feature_incompat & OCFS2_FEATURE_INCOMPAT_INDEXED_DIRS)
+		return 1;
+	return 0;
+}
+
+static inline unsigned int ocfs2_link_max(struct ocfs2_super *osb)
+{
+	if (ocfs2_supports_indexed_dirs(osb))
+		return OCFS2_DX_LINK_MAX;
+	return OCFS2_LINK_MAX;
+}
+
+static inline unsigned int ocfs2_read_links_count(struct ocfs2_dinode *di)
+{
+	u32 nlink = le16_to_cpu(di->i_links_count);
+	u32 hi = le16_to_cpu(di->i_links_count_hi);
+
+	if (di->i_dyn_features & cpu_to_le16(OCFS2_INDEXED_DIR_FL))
+		nlink |= (hi << OCFS2_LINKS_HI_SHIFT);
+
+	return nlink;
+}
+
+static inline void ocfs2_set_links_count(struct ocfs2_dinode *di, u32 nlink)
+{
+	u16 lo, hi;
+
+	lo = nlink;
+	hi = nlink >> OCFS2_LINKS_HI_SHIFT;
+
+	di->i_links_count = cpu_to_le16(lo);
+	di->i_links_count_hi = cpu_to_le16(hi);
+}
+
+static inline void ocfs2_add_links_count(struct ocfs2_dinode *di, int n)
+{
+	u32 links = ocfs2_read_links_count(di);
+
+	links += n;
+
+	ocfs2_set_links_count(di, links);
 }
 
 /* set / clear functions because cluster events can make these happen
@@ -482,6 +529,12 @@ static inline int ocfs2_uses_extended_slot_map(struct ocfs2_super *osb)
 #define OCFS2_IS_VALID_DIR_TRAILER(ptr)					\
 	(!strcmp((ptr)->db_signature, OCFS2_DIR_TRAILER_SIGNATURE))
 
+#define OCFS2_IS_VALID_DX_ROOT(ptr)					\
+	(!strcmp((ptr)->dr_signature, OCFS2_DX_ROOT_SIGNATURE))
+
+#define OCFS2_IS_VALID_DX_LEAF(ptr)					\
+	(!strcmp((ptr)->dl_signature, OCFS2_DX_LEAF_SIGNATURE))
+
 static inline unsigned long ino_from_blkno(struct super_block *sb,
 					   u64 blkno)
 {
@@ -530,6 +583,16 @@ static inline u64 ocfs2_clusters_to_bytes(struct super_block *sb,
 					  u32 clusters)
 {
 	return (u64)clusters << OCFS2_SB(sb)->s_clustersize_bits;
+}
+
+static inline u64 ocfs2_block_to_cluster_start(struct super_block *sb,
+					       u64 blocks)
+{
+	int bits = OCFS2_SB(sb)->s_clustersize_bits - sb->s_blocksize_bits;
+	unsigned int clusters;
+
+	clusters = ocfs2_blocks_to_clusters(sb, blocks);
+	return (u64)clusters << bits;
 }
 
 static inline u64 ocfs2_align_bytes_to_clusters(struct super_block *sb,
