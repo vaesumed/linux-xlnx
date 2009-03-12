@@ -1005,7 +1005,7 @@ nfsd4_decode_noop(struct nfsd4_compoundargs *argp, void *p)
 static __be32
 nfsd4_decode_notsupp(struct nfsd4_compoundargs *argp, void *p)
 {
-	return nfserr_opnotsupp;
+	return nfserr_notsupp;
 }
 
 typedef __be32(*nfsd4_dec)(struct nfsd4_compoundargs *argp, void *);
@@ -2596,6 +2596,7 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 	[OP_LOOKUPP]		= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_NVERIFY]		= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_OPEN]		= (nfsd4_enc)nfsd4_encode_open,
+	[OP_OPENATTR]		= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_OPEN_CONFIRM]	= (nfsd4_enc)nfsd4_encode_open_confirm,
 	[OP_OPEN_DOWNGRADE]	= (nfsd4_enc)nfsd4_encode_open_downgrade,
 	[OP_PUTFH]		= (nfsd4_enc)nfsd4_encode_noop,
