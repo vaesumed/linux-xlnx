@@ -137,7 +137,7 @@ int acpi_processor_ffh_cstate_probe(unsigned int cpu,
 	/* Run acpi_processor_ffh_cstate_probe_cpu() on the target CPU */
 
 	retval = smp_call_function_single(cpu,
-				acpi_processor_ffh_cstate_probe_cpu, cx, 1);
+				acpi_processor_ffh_cstate_probe_cpu, &cxcc, 1);
 	if (retval == 0) {
 		retval = cxcc.retval;
 		if (retval == 0) {
