@@ -21,6 +21,8 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 
+#include <asm/irq.h>
+
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/initval.h>
@@ -221,9 +223,9 @@ static int pxa_ssp_startup(struct snd_pcm_substream *substream,
 	int ret = 0;
 
 	if (!cpu_dai->active) {
-		ret = ssp_init(&priv->dev, cpu_dai->id + 1, SSP_NO_IRQ);
-		if (ret < 0)
-			return ret;
+		priv->dev.port = cpu_dai->id + 1;
+		priv->dev.irq = NO_IRQ;
+		clk_enable(priv->dev.ssp->clk);
 		ssp_disable(&priv->dev);
 	}
 	return ret;
@@ -238,7 +240,7 @@ static void pxa_ssp_shutdown(struct snd_pcm_substream *substream,
 
 	if (!cpu_dai->active) {
 		ssp_disable(&priv->dev);
-		ssp_exit(&priv->dev);
+		clk_disable(priv->dev.ssp->clk);
 	}
 }
 
@@ -298,7 +300,7 @@ static int pxa_ssp_set_dai_sysclk(struct snd_soc_dai *cpu_dai,
 	int val;
 
 	u32 sscr0 = ssp_read_reg(ssp, SSCR0) &
-		~(SSCR0_ECS |  SSCR0_NCS | SSCR0_MOD | SSCR0_ADC);
+		~(SSCR0_ECS |  SSCR0_NCS | SSCR0_MOD | SSCR0_ACS);
 
 	dev_dbg(&ssp->pdev->dev,
 		"pxa_ssp_set_dai_sysclk id: %d, clk_id %d, freq %d\n",
@@ -326,7 +328,7 @@ static int pxa_ssp_set_dai_sysclk(struct snd_soc_dai *cpu_dai,
 	case PXA_SSP_CLK_AUDIO:
 		priv->sysclk = 0;
 		ssp_set_scr(&priv->dev, 1);
-		sscr0 |= SSCR0_ADC;
+		sscr0 |= SSCR0_ACS;
 		break;
 	default:
 		return -ENODEV;
@@ -520,9 +522,20 @@ static int pxa_ssp_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 	u32 sscr1;
 	u32 sspsp;
 
+	/* check if we need to change anything at all */
+	if (priv->dai_fmt == fmt)
+		return 0;
+
+	/* we can only change the settings if the port is not in use */
+	if (ssp_read_reg(ssp, SSCR0) & SSCR0_SSE) {
+		dev_err(&ssp->pdev->dev,
+			"can't change hardware dai format: stream is in use");
+		return -EINVAL;
+	}
+
 	/* reset port settings */
 	sscr0 = ssp_read_reg(ssp, SSCR0) &
-		(SSCR0_ECS |  SSCR0_NCS | SSCR0_MOD | SSCR0_ADC);
+		(SSCR0_ECS |  SSCR0_NCS | SSCR0_MOD | SSCR0_ACS);
 	sscr1 = SSCR1_RxTresh(8) | SSCR1_TxTresh(7);
 	sspsp = 0;
 
@@ -642,8 +655,7 @@ static int pxa_ssp_hw_params(struct snd_pcm_substream *substream,
 			sscr0 |= SSCR0_FPCKE;
 #endif
 		sscr0 |= SSCR0_DataSize(16);
-		if (params_channels(params) > 1)
-			sscr0 |= SSCR0_EDSS;
+		/* use network mode (2 slots) for 16 bit stereo */
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
 		sscr0 |= (SSCR0_EDSS | SSCR0_DataSize(8));
@@ -751,7 +763,7 @@ static int pxa_ssp_probe(struct platform_device *pdev,
 	if (!priv)
 		return -ENOMEM;
 
-	priv->dev.ssp = ssp_request(dai->id, "SoC audio");
+	priv->dev.ssp = ssp_request(dai->id + 1, "SoC audio");
 	if (priv->dev.ssp == NULL) {
 		ret = -ENODEV;
 		goto err_priv;

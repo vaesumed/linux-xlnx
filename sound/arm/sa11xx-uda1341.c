@@ -887,9 +887,10 @@ static int __devinit sa11xx_uda1341_probe(struct platform_device *devptr)
 	struct sa11xx_uda1341 *chip;
 
 	/* register the soundcard */
-	card = snd_card_new(-1, id, THIS_MODULE, sizeof(struct sa11xx_uda1341));
-	if (card == NULL)
-		return -ENOMEM;
+	err = snd_card_create(-1, id, THIS_MODULE,
+			      sizeof(struct sa11xx_uda1341), &card);
+	if (err < 0)
+		return err;
 
 	chip = card->private_data;
 	spin_lock_init(&chip->s[0].dma_lock);
@@ -914,7 +915,7 @@ static int __devinit sa11xx_uda1341_probe(struct platform_device *devptr)
 	snd_card_set_dev(card, &devptr->dev);
 
 	if ((err = snd_card_register(card)) == 0) {
-		printk( KERN_INFO "iPAQ audio support initialized\n" );
+		printk(KERN_INFO "iPAQ audio support initialized\n");
 		platform_set_drvdata(devptr, card);
 		return 0;
 	}
