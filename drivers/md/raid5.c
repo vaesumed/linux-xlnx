@@ -2835,10 +2835,9 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 				struct r6_state *r6s, struct page *tmp_page,
 				int disks)
 {
-	int i;
-	struct r5dev *devs[2] = {NULL, NULL};
 	int pd_idx = sh->pd_idx;
 	int qd_idx = r6s->qd_idx;
+	struct r5dev *dev;
 
 	set_bit(STRIPE_HANDLE, &sh->state);
 
@@ -2873,6 +2872,10 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 			clear_bit(R5_UPTODATE, &sh->dev[qd_idx].flags);
 			s->uptodate--;
 		}
+
+		/* discard potentially stale zero_sum_result */
+		sh->ops.zero_sum_result = 0;
+
 		if (sh->check_state >= check_state_run &&
 		    sh->check_state <= check_state_run_pq) {
 			set_bit(STRIPE_OP_CHECK, &s->ops_request);
@@ -2881,45 +2884,44 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 
 		/* we have 2-disk failure */
 		BUG_ON(s->failed != 2);
-		devs[0] = &sh->dev[r6s->failed_num[0]];
-		devs[1] = &sh->dev[r6s->failed_num[1]];
 		/* fall through */
 	case check_state_compute_result:
 		sh->check_state = check_state_idle;
-
-		BUG_ON((devs[0] && !devs[1]) ||
-		       (!devs[0] && devs[1]));
-
-		BUG_ON(s->uptodate < (disks - 1));
-
-		if (!devs[0]) {
-			if (s->failed >= 1)
-				devs[0] = &sh->dev[r6s->failed_num[0]];
-			else
-				devs[0] = &sh->dev[pd_idx];
-		}
-		if (!devs[1]) {
-			if (s->failed >= 2)
-				devs[1] = &sh->dev[r6s->failed_num[1]];
-			else
-				devs[1] = &sh->dev[qd_idx];
-		}
-
-		BUG_ON(!test_bit(R5_UPTODATE, &devs[0]->flags) &&
-		       !test_bit(R5_UPTODATE, &devs[1]->flags));
 
 		/* check that a write has not made the stripe insync */
 		if (test_bit(STRIPE_INSYNC, &sh->state))
 			break;
 
-		for (i = 0; i < 2; i++)
-			if (test_bit(R5_UPTODATE, &devs[i]->flags)) {
-				s->locked++;
-				set_bit(R5_LOCKED, &devs[i]->flags);
-				set_bit(R5_Wantwrite, &devs[i]->flags);
-			}
-
+		/* now write out any block on a failed drive,
+		 * or P or Q if they were recomputed
+		 */
+		BUG_ON(s->uptodate < disks);
+		if (s->failed == 2) {
+			dev = &sh->dev[r6s->failed_num[1]];
+			s->locked++;
+			set_bit(R5_LOCKED, &dev->flags);
+			set_bit(R5_Wantwrite, &dev->flags);
+		}
+		if (s->failed >= 1) {
+			dev = &sh->dev[r6s->failed_num[0]];
+			s->locked++;
+			set_bit(R5_LOCKED, &dev->flags);
+			set_bit(R5_Wantwrite, &dev->flags);
+		}
+		if (sh->ops.zero_sum_result & SUM_CHECK_P_RESULT) {
+			dev = &sh->dev[pd_idx];
+			s->locked++;
+			set_bit(R5_LOCKED, &dev->flags);
+			set_bit(R5_Wantwrite, &dev->flags);
+		}
+		if (sh->ops.zero_sum_result & SUM_CHECK_Q_RESULT) {
+			dev = &sh->dev[qd_idx];
+			s->locked++;
+			set_bit(R5_LOCKED, &dev->flags);
+			set_bit(R5_Wantwrite, &dev->flags);
+		}
 		clear_bit(STRIPE_DEGRADED, &sh->state);
+
 		set_bit(STRIPE_INSYNC, &sh->state);
 		break;
 	case check_state_run:
@@ -2929,12 +2931,6 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 	case check_state_check_result:
 		sh->check_state = check_state_idle;
 
-		/* if a failure occurred during the check operation, leave
-		 * STRIPE_INSYNC not set and let the stripe be handled again
-		 */
-		if (s->failed > 1)
-			break;
-
 		/* handle a successful check operation, if parity is correct
 		 * we are done.  Otherwise update the mismatch count and repair
 		 * parity if !MD_RECOVERY_CHECK
@@ -2943,8 +2939,17 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 			/* both parities are correct */
 			if (!s->failed)
 				set_bit(STRIPE_INSYNC, &sh->state);
-			else
+			else {
+				/* in contrast to the raid5 case we can validate
+				 * parity, but still have a failure to write back
+				 */
 				sh->check_state = check_state_compute_result;
+				/* Returning at this point means that we may go
+				 * off and bring p and/or q uptodate again so
+				 * we make sure to check zero_sum_result again
+				 * to verify if p or q need writeback
+				 */
+			}
 		} else {
 			conf->mddev->resync_mismatches += STRIPE_SECTORS;
 			if (test_bit(MD_RECOVERY_CHECK, &conf->mddev->recovery))
