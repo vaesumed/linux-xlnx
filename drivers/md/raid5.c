@@ -707,12 +707,11 @@ static int set_syndrome_sources(struct page **srcs, struct stripe_head *sh)
 		int slot = raid6_idx_to_slot(i, sh, &count, syndrome_disks);
 
 		srcs[slot] = sh->dev[i].page;
-		if (slot < syndrome_disks &&
-		    !test_bit(R5_UPTODATE, &sh->dev[i].flags)) {
-			pr_err("block %d/%d not uptodate "
-			       "on parity calc\n", i, count);
-			BUG();
-		}
+		/* R5_UPTODATE hasn't been set yet, and
+		 * R5_Wantdrain has been cleared already so
+		 * we have to just trust that this page will be
+		 * OK by the time this data is used.
+		 */
 
 		i = raid6_next_disk(i, disks);
 	} while (i != d0_idx);
@@ -727,7 +726,7 @@ ops_run_compute6_1(struct stripe_head *sh)
 	int disks = sh->disks;
 	int syndrome_disks = sh->ddf_layout ? disks : (disks - 2);
 	struct page *srcs[syndrome_disks+2];
-	int target = sh->ops.target;
+	int target;
 	int qd_idx = sh->qd_idx;
 	struct dma_async_tx_descriptor *tx;
 	struct r5dev *tgt;
@@ -738,8 +737,14 @@ ops_run_compute6_1(struct stripe_head *sh)
 	pr_debug("%s: stripe %llu block: %d\n",
 		__func__, (unsigned long long)sh->sector, target);
 
-	/* we should only have one valid target */
-	BUG_ON(sh->ops.target < 0 || sh->ops.target2 >= 0);
+	if (sh->ops.target < 0)
+		target = sh->ops.target2;
+	else if (sh->ops.target2 < 0)
+		target = sh->ops.target;
+	else
+		/* we should only have one valid target */
+		BUG();
+	BUG_ON(target < 0);
 	tgt = &sh->dev[target];
 	BUG_ON(!test_bit(R5_Wantcompute, &tgt->flags));
 	dest = tgt->page;
@@ -2641,7 +2646,7 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 		/* now write out any block on a failed drive,
 		 * or P or Q if they were recomputed
 		 */
-		BUG_ON(s->uptodate < disks);
+		BUG_ON(s->uptodate < disks - 1); /* We don't need Q to recover */
 		if (s->failed == 2) {
 			dev = &sh->dev[r6s->failed_num[1]];
 			s->locked++;
@@ -2710,15 +2715,32 @@ static void handle_parity_checks6(raid5_conf_t *conf, struct stripe_head *sh,
 						&sh->dev[pd_idx].flags);
 					sh->ops.target = pd_idx;
 					s->uptodate++;
-				} else
+				} else {
+					/* P is correct */
 					sh->ops.target = -1;
+					if (!test_bit(R5_UPTODATE,
+						      &sh->dev[pd_idx].flags)) {
+						set_bit(R5_UPTODATE,
+							&sh->dev[pd_idx].flags);
+						s->uptodate++;
+					}
+						      
+				}
 				if (sh->ops.zero_sum_result & SUM_CHECK_Q_RESULT) {
 					set_bit(R5_Wantcompute,
 						&sh->dev[qd_idx].flags);
 					sh->ops.target2 = qd_idx;
 					s->uptodate++;
-				} else
+				} else {
+					/* Q is correct */
 					sh->ops.target2 = -1;
+					if (!test_bit(R5_UPTODATE,
+						      &sh->dev[qd_idx].flags)) {
+						set_bit(R5_UPTODATE,
+							&sh->dev[qd_idx].flags);
+						s->uptodate++;
+					}
+				}
 			}
 		}
 		break;
