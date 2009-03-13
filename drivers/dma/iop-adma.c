@@ -697,6 +697,100 @@ iop_adma_prep_dma_zero_sum(struct dma_chan *chan, dma_addr_t *dma_src,
 	return sw_desc ? &sw_desc->async_tx : NULL;
 }
 
+static struct dma_async_tx_descriptor *
+iop_adma_prep_dma_pq(struct dma_chan *chan, dma_addr_t *dst, dma_addr_t *src,
+		     unsigned int src_cnt, unsigned char *scf, size_t len,
+		     unsigned long flags)
+{
+	struct iop_adma_chan *iop_chan = to_iop_adma_chan(chan);
+	struct iop_adma_desc_slot *sw_desc, *g;
+	int slot_cnt, slots_per_op;
+
+	if (unlikely(!len))
+		return NULL;
+	BUG_ON(unlikely(len > IOP_ADMA_XOR_MAX_BYTE_COUNT));
+
+	dev_dbg(iop_chan->device->common.dev,
+		"%s src_cnt: %d len: %u flags: %lx\n",
+		__func__, src_cnt, len, flags);
+
+	spin_lock_bh(&iop_chan->lock);
+	slot_cnt = iop_chan_pq_slot_count(len, src_cnt, &slots_per_op);
+	sw_desc = iop_adma_alloc_slots(iop_chan, slot_cnt, slots_per_op);
+	if (sw_desc) {
+		int src_cont; /* for continuations */
+
+		g = sw_desc->group_head;
+		iop_desc_init_pq(g, src_cnt, flags);
+		iop_desc_set_byte_count(g, iop_chan, len);
+		iop_desc_set_pq_addr(g, dst);
+		if (flags & DMA_PREP_CONTINUE)
+			sw_desc->unmap_src_cnt = src_cnt + 3;
+		else
+			sw_desc->unmap_src_cnt = src_cnt;
+		sw_desc->unmap_len = len;
+		sw_desc->async_tx.flags = flags;
+		src_cont = src_cnt;
+		while (src_cnt--)
+			iop_desc_set_pq_src_addr(g, src_cnt, src[src_cnt],
+						 scf[src_cnt]);
+		if (flags & DMA_PREP_CONTINUE) {
+			/* we are continuing a previous operation so factor in
+			 * the old p and q values, see the comment for
+			 * dma_maxpq
+			 */
+			iop_desc_set_pq_src_addr(g, src_cont, dst[0], 0);
+			iop_desc_set_pq_src_addr(g, src_cont+1, dst[1], 1);
+			iop_desc_set_pq_src_addr(g, src_cont+2, dst[1], 0);
+		}
+	}
+	spin_unlock_bh(&iop_chan->lock);
+
+	return sw_desc ? &sw_desc->async_tx : NULL;
+}
+
+static struct dma_async_tx_descriptor *
+iop_adma_prep_dma_pq_zero_sum(struct dma_chan *chan, dma_addr_t *src,
+			      unsigned int src_cnt, unsigned char *scf,
+			      size_t len, enum sum_check_flags *pqres,
+			      unsigned long flags)
+{
+	struct iop_adma_chan *iop_chan = to_iop_adma_chan(chan);
+	struct iop_adma_desc_slot *sw_desc, *g;
+	int slot_cnt, slots_per_op;
+
+	if (unlikely(!len))
+		return NULL;
+
+	dev_dbg(iop_chan->device->common.dev, "%s src_cnt: %d len: %u\n",
+		__func__, src_cnt, len);
+
+	spin_lock_bh(&iop_chan->lock);
+	slot_cnt = iop_chan_pq_zero_sum_slot_count(len, src_cnt + 2, &slots_per_op);
+	sw_desc = iop_adma_alloc_slots(iop_chan, slot_cnt, slots_per_op);
+	if (sw_desc) {
+		int pq_idx = src_cnt;
+
+		g = sw_desc->group_head;
+		iop_desc_init_pq_zero_sum(g, src_cnt, flags);
+		iop_desc_set_pq_zero_sum_byte_count(g, len);
+		g->pq_check_result = pqres;
+		pr_debug("\t%s: g->pq_check_result: %p\n",
+			__func__, g->pq_check_result);
+		sw_desc->unmap_src_cnt = src_cnt;
+		sw_desc->unmap_len = len;
+		sw_desc->async_tx.flags = flags;
+		while (src_cnt--)
+			iop_desc_set_pq_zero_sum_src_addr(g, src_cnt,
+							  src[src_cnt],
+							  scf[src_cnt]);
+		iop_desc_set_pq_zero_sum_addr(g, pq_idx, src);
+	}
+	spin_unlock_bh(&iop_chan->lock);
+
+	return sw_desc ? &sw_desc->async_tx : NULL;
+}
+
 static void iop_adma_free_chan_resources(struct dma_chan *chan)
 {
 	struct iop_adma_chan *iop_chan = to_iop_adma_chan(chan);
@@ -1196,6 +1290,13 @@ static int __devinit iop_adma_probe(struct platform_device *pdev)
 	if (dma_has_cap(DMA_ZERO_SUM, dma_dev->cap_mask))
 		dma_dev->device_prep_dma_zero_sum =
 			iop_adma_prep_dma_zero_sum;
+	if (dma_has_cap(DMA_PQ, dma_dev->cap_mask)) {
+		dma_set_maxpq(dma_dev, iop_adma_get_max_pq(), 0);
+		dma_dev->device_prep_dma_pq = iop_adma_prep_dma_pq;
+	}
+	if (dma_has_cap(DMA_PQ_ZERO_SUM, dma_dev->cap_mask))
+		dma_dev->device_prep_dma_pqzero_sum =
+			iop_adma_prep_dma_pq_zero_sum;
 	if (dma_has_cap(DMA_INTERRUPT, dma_dev->cap_mask))
 		dma_dev->device_prep_dma_interrupt =
 			iop_adma_prep_dma_interrupt;
