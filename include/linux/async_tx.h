@@ -169,5 +169,17 @@ async_syndrome_zero_sum(struct page **blocks, unsigned int offset, int src_cnt,
 			struct dma_async_tx_descriptor *depend_tx,
 			dma_async_tx_callback cb_fn, void *cb_param);
 
+struct dma_async_tx_descriptor *
+async_r6_dd_recov(int src_num, size_t bytes, int faila, int failb,
+		  struct page **ptrs, enum async_tx_flags flags,
+		  struct dma_async_tx_descriptor *depend_tx,
+		  dma_async_tx_callback callback, void *callback_param);
+
+struct dma_async_tx_descriptor *
+async_r6_dp_recov(int src_num, size_t bytes, int faila, struct page **ptrs,
+		  enum async_tx_flags flags,
+		  struct dma_async_tx_descriptor *depend_tx,
+		  dma_async_tx_callback callback, void *callback_param);
+
 void async_tx_quiesce(struct dma_async_tx_descriptor **tx);
 #endif /* _ASYNC_TX_H_ */
