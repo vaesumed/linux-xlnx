@@ -59,12 +59,15 @@ struct dma_chan_ref {
  * @ASYNC_TX_ACK: immediately ack the descriptor, precludes setting up a
  * dependency chain
  * @ASYNC_TX_DEP_ACK: ack the dependency descriptor.  Useful for chaining.
+ * @ASYNC_TX_ASYNC_ONLY: if set then try to perform operation requested only in
+ * the asynchronous mode. Useful for R6 recovery.
  */
 enum async_tx_flags {
 	ASYNC_TX_XOR_ZERO_DST	 = (1 << 0),
 	ASYNC_TX_XOR_DROP_DST	 = (1 << 1),
-	ASYNC_TX_ACK		 = (1 << 3),
-	ASYNC_TX_DEP_ACK	 = (1 << 4),
+	ASYNC_TX_ACK		 = (1 << 2),
+	ASYNC_TX_DEP_ACK	 = (1 << 3),
+	ASYNC_TX_ASYNC_ONLY	 = (1 << 4),
 };
 
 #ifdef CONFIG_DMA_ENGINE
@@ -139,6 +142,32 @@ struct dma_async_tx_descriptor *
 async_trigger_callback(enum async_tx_flags flags,
 	struct dma_async_tx_descriptor *depend_tx,
 	dma_async_tx_callback cb_fn, void *cb_fn_param);
+
+struct dma_async_tx_descriptor *
+async_pq(struct page **blocks, unsigned int offset, int src_cnt,
+	 unsigned char *scfs, size_t len, enum async_tx_flags flags,
+	 struct dma_async_tx_descriptor *depend_tx,
+	 dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_gen_syndrome(struct page **blocks, unsigned int offset, int src_cnt,
+		   size_t len, enum async_tx_flags flags,
+		   struct dma_async_tx_descriptor *depend_tx,
+		   dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_pq_zero_sum(struct page **blocks, unsigned int offset, int src_cnt,
+		  unsigned char *scfs, size_t len, enum sum_check_flags *pqres,
+		  enum async_tx_flags flags,
+		  struct dma_async_tx_descriptor *depend_tx,
+		  dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_syndrome_zero_sum(struct page **blocks, unsigned int offset, int src_cnt,
+			size_t len, enum sum_check_flags *pqres,
+			enum async_tx_flags flags,
+			struct dma_async_tx_descriptor *depend_tx,
+			dma_async_tx_callback cb_fn, void *cb_param);
 
 void async_tx_quiesce(struct dma_async_tx_descriptor **tx);
 #endif /* _ASYNC_TX_H_ */
