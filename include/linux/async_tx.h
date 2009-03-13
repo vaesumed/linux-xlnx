@@ -119,7 +119,7 @@ async_xor(struct page *dest, struct page **src_list, unsigned int offset,
 struct dma_async_tx_descriptor *
 async_xor_zero_sum(struct page *dest, struct page **src_list,
 	unsigned int offset, int src_cnt, size_t len,
-	u32 *result, enum async_tx_flags flags,
+	enum sum_check_flags *result, enum async_tx_flags flags,
 	struct dma_async_tx_descriptor *depend_tx,
 	dma_async_tx_callback cb_fn, void *cb_fn_param);
 
