@@ -22,7 +22,7 @@
  * bracked this with preempt_disable/enable or in a lock)
  */
 
-#include "raid6.h"
+#include <linux/raid/raid6.h>
 
 #ifdef CONFIG_ALTIVEC
 

@@ -104,8 +104,8 @@ void raid6_dual_recov(int disks, size_t bytes, int faila, int failb, void **ptrs
 # define jiffies	raid6_jiffies()
 # define printk 	printf
 # define GFP_KERNEL	0
-# define __get_free_pages(x,y)	((unsigned long)mmap(NULL, PAGE_SIZE << (y), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0))
-# define free_pages(x,y)	munmap((void *)(x), (y)*PAGE_SIZE)
+# define __get_free_pages(x, y)	((unsigned long)mmap(NULL, PAGE_SIZE << (y), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0))
+# define free_pages(x, y)	munmap((void *)(x), (y)*PAGE_SIZE)
 
 static inline void cpu_relax(void)
 {

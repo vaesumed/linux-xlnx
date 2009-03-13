@@ -18,7 +18,7 @@
  * the syndrome.)
  */
 
-#include "raid6.h"
+#include <linux/raid/raid6.h>
 
 /* Recover two failed data blocks. */
 void raid6_2data_recov(int disks, size_t bytes, int faila, int failb,
@@ -98,8 +98,10 @@ void raid6_datap_recov(int disks, size_t bytes, int faila, void **ptrs)
 	}
 }
 
-
-#ifndef __KERNEL__		/* Testing only */
+#ifdef __KERNEL__
+EXPORT_SYMBOL_GPL(raid6_2data_recov);
+EXPORT_SYMBOL_GPL(raid6_datap_recov);
+#else 		/* Testing only */
 
 /* Recover two failed blocks. */
 void raid6_dual_recov(int disks, size_t bytes, int faila, int failb, void **ptrs)
