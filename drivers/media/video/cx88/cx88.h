@@ -231,6 +231,7 @@ extern struct sram_channel cx88_sram_channels[];
 #define CX88_BOARD_SATTRADE_ST4200         76
 #define CX88_BOARD_TBS_8910                77
 #define CX88_BOARD_PROF_6200               78
+#define CX88_BOARD_TERRATEC_CINERGY_HT_PCI_MKII 79
 
 enum cx88_itype {
 	CX88_VMUX_COMPOSITE1 = 1,
@@ -302,7 +303,6 @@ struct cx88_dmaqueue {
 	struct btcx_riscmem    stopper;
 	u32                    count;
 };
-struct cx88_core;
 
 struct cx88_core {
 	struct list_head           devlist;
