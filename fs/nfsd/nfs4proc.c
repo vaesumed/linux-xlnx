@@ -103,11 +103,13 @@ do_open_lookup(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nfsd4_o
 					(u32 *)open->op_verf.data,
 					&open->op_truncate, &created);
 
-		/* If we ever decide to use different attrs to store the
-		 * verifier in nfsd_create_v3, then we'll need to change this
+		/*
+		 * Following rfc 3530 14.2.16, use the returned bitmask
+		 * to indicate which attributes we used to store the
+		 * verifier:
 		 */
 		if (open->op_createmode == NFS4_CREATE_EXCLUSIVE && status == 0)
-			open->op_bmval[1] |= (FATTR4_WORD1_TIME_ACCESS |
+			open->op_bmval[1] = (FATTR4_WORD1_TIME_ACCESS |
 						FATTR4_WORD1_TIME_MODIFY);
 	} else {
 		status = nfsd_lookup(rqstp, current_fh,
@@ -118,13 +120,11 @@ do_open_lookup(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nfsd4_o
 		goto out;
 
 	set_change_info(&open->op_cinfo, current_fh);
+	fh_dup2(current_fh, &resfh);
 
 	/* set reply cache */
-	fh_dup2(current_fh, &resfh);
-	open->op_stateowner->so_replay.rp_openfh_len = resfh.fh_handle.fh_size;
-	memcpy(open->op_stateowner->so_replay.rp_openfh,
-			&resfh.fh_handle.fh_base, resfh.fh_handle.fh_size);
-
+	fh_copy_shallow(&open->op_stateowner->so_replay.rp_openfh,
+			&resfh.fh_handle);
 	if (!created)
 		status = do_open_permission(rqstp, current_fh, open,
 					    NFSD_MAY_NOP);
@@ -150,10 +150,8 @@ do_open_fhandle(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nfsd4_
 	memset(&open->op_cinfo, 0, sizeof(struct nfsd4_change_info));
 
 	/* set replay cache */
-	open->op_stateowner->so_replay.rp_openfh_len = current_fh->fh_handle.fh_size;
-	memcpy(open->op_stateowner->so_replay.rp_openfh,
-		&current_fh->fh_handle.fh_base,
-		current_fh->fh_handle.fh_size);
+	fh_copy_shallow(&open->op_stateowner->so_replay.rp_openfh,
+			&current_fh->fh_handle);
 
 	open->op_truncate = (open->op_iattr.ia_valid & ATTR_SIZE) &&
 		(open->op_iattr.ia_size == 0);
@@ -185,9 +183,8 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if (status == nfserr_replay_me) {
 		struct nfs4_replay *rp = &open->op_stateowner->so_replay;
 		fh_put(&cstate->current_fh);
-		cstate->current_fh.fh_handle.fh_size = rp->rp_openfh_len;
-		memcpy(&cstate->current_fh.fh_handle.fh_base, rp->rp_openfh,
-				rp->rp_openfh_len);
+		fh_copy_shallow(&cstate->current_fh.fh_handle,
+				&rp->rp_openfh);
 		status = fh_verify(rqstp, &cstate->current_fh, 0, NFSD_MAY_NOP);
 		if (status)
 			dprintk("nfsd4_open: replay failed"
@@ -522,7 +519,7 @@ nfsd4_read(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	/* check stateid */
 	if ((status = nfs4_preprocess_stateid_op(&cstate->current_fh,
 				&read->rd_stateid,
-				CHECK_FH | RD_STATE, &read->rd_filp))) {
+				RD_STATE, &read->rd_filp))) {
 		dprintk("NFSD: nfsd4_read: couldn't process stateid!\n");
 		goto out;
 	}
@@ -654,7 +651,7 @@ nfsd4_setattr(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if (setattr->sa_iattr.ia_valid & ATTR_SIZE) {
 		nfs4_lock_state();
 		status = nfs4_preprocess_stateid_op(&cstate->current_fh,
-			&setattr->sa_stateid, CHECK_FH | WR_STATE, NULL);
+			&setattr->sa_stateid, WR_STATE, NULL);
 		nfs4_unlock_state();
 		if (status) {
 			dprintk("NFSD: nfsd4_setattr: couldn't process stateid!\n");
@@ -685,6 +682,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	struct file *filp = NULL;
 	u32 *p;
 	__be32 status = nfs_ok;
+	unsigned long cnt;
 
 	/* no need to check permission - this will be done in nfsd_write() */
 
@@ -693,7 +691,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	nfs4_lock_state();
 	status = nfs4_preprocess_stateid_op(&cstate->current_fh, stateid,
-					CHECK_FH | WR_STATE, &filp);
+					WR_STATE, &filp);
 	if (filp)
 		get_file(filp);
 	nfs4_unlock_state();
@@ -703,7 +701,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		return status;
 	}
 
-	write->wr_bytes_written = write->wr_buflen;
+	cnt = write->wr_buflen;
 	write->wr_how_written = write->wr_stable_how;
 	p = (u32 *)write->wr_verifier.data;
 	*p++ = nfssvc_boot.tv_sec;
@@ -711,9 +709,11 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	status =  nfsd_write(rqstp, &cstate->current_fh, filp,
 			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
-			     write->wr_buflen, &write->wr_how_written);
+			     &cnt, &write->wr_how_written);
 	if (filp)
 		fput(filp);
+
+	write->wr_bytes_written = cnt;
 
 	if (status == nfserr_symlink)
 		status = nfserr_inval;
@@ -1045,7 +1045,7 @@ static struct nfsd4_operation nfsd4_ops[OP_RELEASE_LOCKOWNER+1] = {
 		.op_name = "OP_PUTFH",
 	},
 	[OP_PUTPUBFH] = {
-		/* unsupported, just for future reference: */
+		.op_func = (nfsd4op_func)nfsd4_putrootfh,
 		.op_flags = ALLOWED_WITHOUT_FH | ALLOWED_ON_ABSENT_FS,
 		.op_name = "OP_PUTPUBFH",
 	},
