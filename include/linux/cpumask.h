@@ -487,11 +487,15 @@ extern const struct cpumask *const cpu_online_mask;
 extern const struct cpumask *const cpu_present_mask;
 extern const struct cpumask *const cpu_active_mask;
 
-/* These strip const, as traditionally they weren't const. */
-#define cpu_possible_map	(*(cpumask_t *)cpu_possible_mask)
-#define cpu_online_map		(*(cpumask_t *)cpu_online_mask)
-#define cpu_present_map		(*(cpumask_t *)cpu_present_mask)
-#define cpu_active_map		(*(cpumask_t *)cpu_active_mask)
+/* Deprecated: use cpu_*_mask and set_cpu_*(). */
+#define cpu_possible_map	(*_cpu_possible_mask_nonconst)
+#define cpu_online_map		(*_cpu_online_mask_nonconst)
+#define cpu_present_map		(*_cpu_present_mask_nonconst)
+#define cpu_active_map		(*_cpu_active_mask_nonconst)
+extern struct cpumask *_cpu_possible_mask_nonconst;
+extern struct cpumask *_cpu_online_mask_nonconst;
+extern struct cpumask *_cpu_present_mask_nonconst;
+extern struct cpumask *_cpu_active_mask_nonconst;
 
 #if NR_CPUS > 1
 #define num_online_cpus()	cpumask_weight(cpu_online_mask)
