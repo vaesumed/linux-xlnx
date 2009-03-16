@@ -604,13 +604,6 @@ static int wm8971_set_bias_level(struct snd_soc_codec *codec,
 #define WM8971_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE |\
 	SNDRV_PCM_FMTBIT_S24_LE)
 
-static struct snd_soc_dai_ops wm8971_dai_ops = {
-	.hw_params	= wm8971_pcm_hw_params,
-	.digital_mute	= wm8971_mute,
-	.set_fmt	= wm8971_set_dai_fmt,
-	.set_sysclk	= wm8971_set_dai_sysclk,
-};
-
 struct snd_soc_dai wm8971_dai = {
 	.name = "WM8971",
 	.playback = {
@@ -625,7 +618,12 @@ struct snd_soc_dai wm8971_dai = {
 		.channels_max = 2,
 		.rates = WM8971_RATES,
 		.formats = WM8971_FORMATS,},
-	.ops = &wm8971_dai_ops,
+	.ops = {
+		.hw_params = wm8971_pcm_hw_params,
+		.digital_mute = wm8971_mute,
+		.set_fmt = wm8971_set_dai_fmt,
+		.set_sysclk = wm8971_set_dai_sysclk,
+	},
 };
 EXPORT_SYMBOL_GPL(wm8971_dai);
 

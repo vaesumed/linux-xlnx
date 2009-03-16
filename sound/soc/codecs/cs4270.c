@@ -502,13 +502,6 @@ static const struct snd_kcontrol_new cs4270_snd_controls[] = {
  */
 static struct snd_soc_codec *cs4270_codec;
 
-static struct snd_soc_dai_ops cs4270_dai_ops = {
-	.hw_params	= cs4270_hw_params,
-	.set_sysclk	= cs4270_set_dai_sysclk,
-	.set_fmt	= cs4270_set_dai_fmt,
-	.digital_mute	= cs4270_mute,
-};
-
 struct snd_soc_dai cs4270_dai = {
 	.name = "cs4270",
 	.playback = {
@@ -525,7 +518,12 @@ struct snd_soc_dai cs4270_dai = {
 		.rates = 0,
 		.formats = CS4270_FORMATS,
 	},
-	.ops = &cs4270_dai_ops,
+	.ops = {
+		.hw_params = cs4270_hw_params,
+		.set_sysclk = cs4270_set_dai_sysclk,
+		.set_fmt = cs4270_set_dai_fmt,
+		.digital_mute = cs4270_mute,
+	},
 };
 EXPORT_SYMBOL_GPL(cs4270_dai);
 

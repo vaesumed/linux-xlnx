@@ -517,14 +517,6 @@ static int ac97_aux_prepare(struct snd_pcm_substream *substream,
 		SNDRV_PCM_RATE_22050 | SNDRV_PCM_RATE_44100 |\
 		SNDRV_PCM_RATE_48000)
 
-static struct snd_soc_dai_ops wm9712_dai_ops_hifi = {
-	.prepare	= ac97_prepare,
-};
-
-static struct snd_soc_dai_ops wm9712_dai_ops_aux = {
-	.prepare	= ac97_aux_prepare,
-};
-
 struct snd_soc_dai wm9712_dai[] = {
 {
 	.name = "AC97 HiFi",
@@ -541,7 +533,8 @@ struct snd_soc_dai wm9712_dai[] = {
 		.channels_max = 2,
 		.rates = WM9712_AC97_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &wm9712_dai_ops_hifi,
+	.ops = {
+		.prepare = ac97_prepare,},
 },
 {
 	.name = "AC97 Aux",
@@ -551,7 +544,8 @@ struct snd_soc_dai wm9712_dai[] = {
 		.channels_max = 1,
 		.rates = WM9712_AC97_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &wm9712_dai_ops_aux,
+	.ops = {
+		.prepare = ac97_aux_prepare,},
 }
 };
 EXPORT_SYMBOL_GPL(wm9712_dai);

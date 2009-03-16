@@ -164,10 +164,6 @@ static int pxa2xx_ac97_hw_mic_params(struct snd_pcm_substream *substream,
 		SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 | SNDRV_PCM_RATE_44100 | \
 		SNDRV_PCM_RATE_48000)
 
-static struct snd_soc_dai_ops pxa_ac97_dai_ops = {
-	.hw_params	= pxa2xx_ac97_hw_params,
-};
-
 /*
  * There is only 1 physical AC97 interface for pxa2xx, but it
  * has extra fifo's that can be used for aux DACs and ADCs.
@@ -193,7 +189,8 @@ struct snd_soc_dai pxa_ac97_dai[] = {
 		.channels_max = 2,
 		.rates = PXA2XX_AC97_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &pxa_ac97_dai_ops,
+	.ops = {
+		.hw_params = pxa2xx_ac97_hw_params,},
 },
 {
 	.name = "pxa2xx-ac97-aux",
@@ -211,7 +208,8 @@ struct snd_soc_dai pxa_ac97_dai[] = {
 		.channels_max = 1,
 		.rates = PXA2XX_AC97_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &pxa_ac97_dai_ops,
+	.ops = {
+		.hw_params = pxa2xx_ac97_hw_aux_params,},
 },
 {
 	.name = "pxa2xx-ac97-mic",
@@ -223,7 +221,8 @@ struct snd_soc_dai pxa_ac97_dai[] = {
 		.channels_max = 1,
 		.rates = PXA2XX_AC97_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &pxa_ac97_dai_ops,
+	.ops = {
+		.hw_params = pxa2xx_ac97_hw_mic_params,},
 },
 };
 

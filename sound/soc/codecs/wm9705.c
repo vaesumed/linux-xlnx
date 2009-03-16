@@ -269,10 +269,6 @@ static int ac97_prepare(struct snd_pcm_substream *substream,
 			SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 | \
 			SNDRV_PCM_RATE_48000)
 
-static struct snd_soc_dai_ops wm9705_dai_ops = {
-	.prepare	= ac97_prepare,
-};
-
 struct snd_soc_dai wm9705_dai[] = {
 	{
 		.name = "AC97 HiFi",
@@ -291,7 +287,9 @@ struct snd_soc_dai wm9705_dai[] = {
 			.rates = WM9705_AC97_RATES,
 			.formats = SNDRV_PCM_FMTBIT_S16_LE,
 		},
-		.ops = &wm9705_dai_ops,
+		.ops = {
+			.prepare = ac97_prepare,
+		},
 	},
 	{
 		.name = "AC97 Aux",

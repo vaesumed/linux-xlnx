@@ -579,27 +579,6 @@ static int uda1380_set_bias_level(struct snd_soc_codec *codec,
 		       SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |\
 		       SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000)
 
-static struct snd_soc_dai_ops uda1380_dai_ops = {
-	.hw_params	= uda1380_pcm_hw_params,
-	.shutdown	= uda1380_pcm_shutdown,
-	.trigger	= uda1380_trigger,
-	.set_fmt	= uda1380_set_dai_fmt_both,
-};
-
-static struct snd_soc_dai_ops uda1380_dai_ops_playback = {
-	.hw_params	= uda1380_pcm_hw_params,
-	.shutdown	= uda1380_pcm_shutdown,
-	.trigger	= uda1380_trigger,
-	.set_fmt	= uda1380_set_dai_fmt_playback,
-};
-
-static struct snd_soc_dai_ops uda1380_dai_ops_capture = {
-	.hw_params	= uda1380_pcm_hw_params,
-	.shutdown	= uda1380_pcm_shutdown,
-	.trigger	= uda1380_trigger,
-	.set_fmt	= uda1380_set_dai_fmt_capture,
-};
-
 struct snd_soc_dai uda1380_dai[] = {
 {
 	.name = "UDA1380",
@@ -615,7 +594,12 @@ struct snd_soc_dai uda1380_dai[] = {
 		.channels_max = 2,
 		.rates = UDA1380_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &uda1380_dai_ops,
+	.ops = {
+		.trigger = uda1380_trigger,
+		.hw_params = uda1380_pcm_hw_params,
+		.shutdown = uda1380_pcm_shutdown,
+		.set_fmt = uda1380_set_dai_fmt_both,
+	},
 },
 { /* playback only - dual interface */
 	.name = "UDA1380",
@@ -626,7 +610,12 @@ struct snd_soc_dai uda1380_dai[] = {
 		.rates = UDA1380_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,
 	},
-	.ops = &uda1380_dai_ops_playback,
+	.ops = {
+		.trigger = uda1380_trigger,
+		.hw_params = uda1380_pcm_hw_params,
+		.shutdown = uda1380_pcm_shutdown,
+		.set_fmt = uda1380_set_dai_fmt_playback,
+	},
 },
 { /* capture only - dual interface*/
 	.name = "UDA1380",
@@ -637,7 +626,12 @@ struct snd_soc_dai uda1380_dai[] = {
 		.rates = UDA1380_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,
 	},
-	.ops = &uda1380_dai_ops_capture,
+	.ops = {
+		.trigger = uda1380_trigger,
+		.hw_params = uda1380_pcm_hw_params,
+		.shutdown = uda1380_pcm_shutdown,
+		.set_fmt = uda1380_set_dai_fmt_capture,
+	},
 },
 };
 EXPORT_SYMBOL_GPL(uda1380_dai);

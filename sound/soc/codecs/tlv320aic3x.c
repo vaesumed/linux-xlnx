@@ -1088,13 +1088,6 @@ EXPORT_SYMBOL_GPL(aic3x_button_pressed);
 #define AIC3X_FORMATS	(SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
 			 SNDRV_PCM_FMTBIT_S24_3LE | SNDRV_PCM_FMTBIT_S32_LE)
 
-static struct snd_soc_dai_ops aic3x_dai_ops = {
-	.hw_params	= aic3x_hw_params,
-	.digital_mute	= aic3x_mute,
-	.set_sysclk	= aic3x_set_dai_sysclk,
-	.set_fmt	= aic3x_set_dai_fmt,
-};
-
 struct snd_soc_dai aic3x_dai = {
 	.name = "tlv320aic3x",
 	.playback = {
@@ -1109,7 +1102,12 @@ struct snd_soc_dai aic3x_dai = {
 		.channels_max = 2,
 		.rates = AIC3X_RATES,
 		.formats = AIC3X_FORMATS,},
-	.ops = &aic3x_dai_ops,
+	.ops = {
+		.hw_params = aic3x_hw_params,
+		.digital_mute = aic3x_mute,
+		.set_sysclk = aic3x_set_dai_sysclk,
+		.set_fmt = aic3x_set_dai_fmt,
+	}
 };
 EXPORT_SYMBOL_GPL(aic3x_dai);
 

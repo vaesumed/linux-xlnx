@@ -1005,27 +1005,6 @@ static int ac97_aux_prepare(struct snd_pcm_substream *substream,
 	(SNDRV_PCM_FORMAT_S16_LE | SNDRV_PCM_FORMAT_S20_3LE | \
 	 SNDRV_PCM_FORMAT_S24_LE)
 
-static struct snd_soc_dai_ops wm9713_dai_ops_hifi = {
-	.prepare	= ac97_hifi_prepare,
-	.set_clkdiv	= wm9713_set_dai_clkdiv,
-	.set_pll	= wm9713_set_dai_pll,
-};
-
-static struct snd_soc_dai_ops wm9713_dai_ops_aux = {
-	.prepare	= ac97_aux_prepare,
-	.set_clkdiv	= wm9713_set_dai_clkdiv,
-	.set_pll	= wm9713_set_dai_pll,
-};
-
-static struct snd_soc_dai_ops wm9713_dai_ops_voice = {
-	.hw_params	= wm9713_pcm_hw_params,
-	.shutdown	= wm9713_voiceshutdown,
-	.set_clkdiv	= wm9713_set_dai_clkdiv,
-	.set_pll	= wm9713_set_dai_pll,
-	.set_fmt	= wm9713_set_dai_fmt,
-	.set_tristate	= wm9713_set_dai_tristate,
-};
-
 struct snd_soc_dai wm9713_dai[] = {
 {
 	.name = "AC97 HiFi",
@@ -1042,7 +1021,10 @@ struct snd_soc_dai wm9713_dai[] = {
 		.channels_max = 2,
 		.rates = WM9713_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &wm9713_dai_ops_hifi,
+	.ops = {
+		.prepare = ac97_hifi_prepare,
+		.set_clkdiv = wm9713_set_dai_clkdiv,
+		.set_pll = wm9713_set_dai_pll,},
 	},
 	{
 	.name = "AC97 Aux",
@@ -1052,7 +1034,10 @@ struct snd_soc_dai wm9713_dai[] = {
 		.channels_max = 1,
 		.rates = WM9713_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,},
-	.ops = &wm9713_dai_ops_aux,
+	.ops = {
+		.prepare = ac97_aux_prepare,
+		.set_clkdiv = wm9713_set_dai_clkdiv,
+		.set_pll = wm9713_set_dai_pll,},
 	},
 	{
 	.name = "WM9713 Voice",
@@ -1068,7 +1053,14 @@ struct snd_soc_dai wm9713_dai[] = {
 		.channels_max = 2,
 		.rates = WM9713_PCM_RATES,
 		.formats = WM9713_PCM_FORMATS,},
-	.ops = &wm9713_dai_ops_voice,
+	.ops = {
+		.hw_params = wm9713_pcm_hw_params,
+		.shutdown = wm9713_voiceshutdown,
+		.set_clkdiv = wm9713_set_dai_clkdiv,
+		.set_pll = wm9713_set_dai_pll,
+		.set_fmt = wm9713_set_dai_fmt,
+		.set_tristate = wm9713_set_dai_tristate,
+	},
 	},
 };
 EXPORT_SYMBOL_GPL(wm9713_dai);

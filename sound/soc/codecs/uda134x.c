@@ -431,15 +431,6 @@ SOC_ENUM("PCM Playback De-emphasis", uda134x_mixer_enum[1]),
 SOC_SINGLE("DC Filter Enable Switch", UDA134X_STATUS0, 0, 1, 0),
 };
 
-static struct snd_soc_dai_ops uda134x_dai_ops = {
-	.startup	= uda134x_startup,
-	.shutdown	= uda134x_shutdown,
-	.hw_params	= uda134x_hw_params,
-	.digital_mute	= uda134x_mute,
-	.set_sysclk	= uda134x_set_dai_sysclk,
-	.set_fmt	= uda134x_set_dai_fmt,
-};
-
 struct snd_soc_dai uda134x_dai = {
 	.name = "UDA134X",
 	/* playback capabilities */
@@ -459,7 +450,14 @@ struct snd_soc_dai uda134x_dai = {
 		.formats = UDA134X_FORMATS,
 	},
 	/* pcm operations */
-	.ops = &uda134x_dai_ops,
+	.ops = {
+		.startup = uda134x_startup,
+		.shutdown = uda134x_shutdown,
+		.hw_params = uda134x_hw_params,
+		.digital_mute = uda134x_mute,
+		.set_sysclk = uda134x_set_dai_sysclk,
+		.set_fmt = uda134x_set_dai_fmt,
+	}
 };
 EXPORT_SYMBOL(uda134x_dai);
 
