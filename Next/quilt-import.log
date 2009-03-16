@@ -1,0 +1,371 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing device-mapper based on v2.6.29-rc7-188-gebdcc81
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard ebdcc81c71937b30e09110c02a1e8a21fa770b6f
+HEAD is now at ebdcc81 Merge branch 'drm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-ioctl-validate-name-length-when-renaming.patch
+dm-table-rework-reference-counting-fix.patch
+dm-io-respect-BIO_MAX_PAGES-limit.patch
+dm-crypt-fix-kcryptd_async_done-parameter.patch
+dm-crypt-wait-for-endio-to-complete-before-destruction.patch
+dm-target-use-module-refcount-directly.patch
+dm-target-remove-struct-tt_internal.patch
+dm-crypt-use-kzfree.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + afadd588...c155416 master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.29-rc8
+$ cd ../quilt-tmp
+$ git reset --hard 041b62374c7fedc11a8a1eeda2868612d3d1436c
+HEAD is now at 041b623 Linus 2.6.29-rc8
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ds1621-01-reorder-functions.patch
+hwmon-ds1621-02-simplify-reg-access.patch
+hwmon-ds1621-03-avoid-unneeded-register-access.patch
+hwmon-ds1621-04-cleanup-documentation.patch
+hwmon-hdaps-01-inversion-of-separate-axis.patch
+hwmon-hdaps-02-fix-thinkpad-x41-axis-inversion.patch
+hwmon-w83627ehf-01-invert-fan-pin-logic.patch
+hwmon-w83627ehf-02-add-support-for-w83667hg.patch
+hwmon-w83627ehf-03-fix-temp3-vs-in6.patch
+hwmon-pcf8591-move-to-hwmon.patch
+hwmon-sysfs-interface-chassis-intrusion.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + b104276...4d1533a master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Importing ide based on 7a203f3b089be4410fe065dd9927027eade94557
+$ cd ../quilt-tmp
+$ git reset --hard 7a203f3b089be4410fe065dd9927027eade94557
+HEAD is now at 7a203f3 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/drzeus/mmc
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-floppy-do-not-map-dataless-cmds-to-an-sg.patch
+ide-save-the-returned-value-of-dma_map_sg.patch
+ide-fix-ide_dflag_no_io_32bit-handling.patch
+ide-move-ide_pktcmd_tf_load-to-ide-atapi-c.patch
+ide-no-need-to-touch-local-irqs-in-ide_probe_port.patch
+ide-move-lock-and-timer-init-from-init_irq-to-ide_init_port_data.patch
+ide-init_irq-doesnt-need-to-hold-ide_cfg_mtx.patch
+ide-remove-superfluous-check-from-ide_proc_port_register_devices.patch
+ide-acpi-no-need-to-zero-acpidata-for-devices.patch
+ide-acpi-init-acpi-handles-early-for-devices.patch
+ide-add-ide_for_each_present_dev-iterator.patch
+ide-sanitize-acpi-initialization.patch
+ide-acpi-cleanup-do_drive_get_gtf.patch
+ide-acpi-cleanup-do_drive_set_taskfiles.patch
+ide-acpi-remove-taskfile_load_raw.patch
+ide-remove-stale-comments-from-drive_is_ready.patch
+ide-unexport-ide_devset_execute.patch
+ide-move-drive_is_ready-to-ide-io-c.patch
+ide-move-ide_dma_timeout_retry-to-ide-dma-c.patch
+ide-remove-ide_do_drive_cmd.patch
+ide-factor-out-processing-of-special-commands-from-ide_special_rq.patch
+ide-move-ide_do_park_unpark-to-ide-park-c.patch
+ide-move-device-settings-code-to-ide-devsets-c.patch
+ide-move-xfer-mode-tuning-to-ide-xfer-mode-c.patch
+ide-move-ide_read_bcount_and_ireason-to-ide-atapi-c.patch
+ide-move-standard-io-code-to-ide-io-std-c.patch
+ide-fix-printk-levels-in-atapi_-reset_pollfunc.patch
+ide-fix-comments-in-ide_config_drive_speed.patch
+ide-checkpatch-pl-fixes-for-ide-iops-c.patch
+ide-move-error-handling-code-to-ide-eh-c-v2.patch
+mn10300-add-pci_get_legacy_ide_irq-to-asm-pci-h.patch
+amd74xx-use-ide_pci_is_in_compatibility_mode.patch
+ns87415-use-pci_get_legacy_ide_irq.patch
+ns87415-small-init_hwif-cleanup.patch
+trm290-small-init_hwif-cleanup.patch
+ide-handle-ide_hflag_-force-_legacy_irqs-in-ide_pci_init_-one-two-.patch
+ide-use-pci_get_legacy_ide_irq-in-ide_pci_init_-one-two-.patch
+ide-use-ide_pci_is_in_compatibility_mode-in-ide_pci_init_-one-two-.patch
+ide-remove-no-longer-needed-ide_hflag_-force-_legacy_irqs.patch
+amd74xx-remove-no-longer-needed-init_hwif-method.patch
+ide-remove-no-longer-needed-irq-fallback-code-from-hwif_init.patch
+ide-remove-no-longer-needed-irq-auto-probing-from-try_to_identify-v2.patch
+ide-remove-try_to_identify-wrapper.patch
+ide-fix-init_chipset-method-to-return-int.patch
+ide-remove-pciirq-argument-from-ide_pci_setup_ports.patch
+frv-remove-asm-ide-h.patch
+mn10300-remove-asm-ide-h.patch
+ide-fix-kmalloc-failure-handling-in-ide_driveid_update.patch
+ide-propagate-altstatus-workarounds-to-ide_driveid_update.patch
+ide-shorten-timeout-value-in-ide_driveid_update.patch
+ide-remove-broken-exabytenest-support.patch
+ide-classify-device-type-in-do_probe.patch
+ide-sanitize-select_mask-usage-in-ide_driveid_update.patch
+ide-clear-drive-irq-after-re-enabling-local-irqs-in-ide_driveid_update.patch
+ide-use-try_to_identify-in-ide_driveid_update.patch
+icside-use-struct-ide_port_info-also-for-pcb-version-5.patch
+ide_arm-use-struct-ide_port_info.patch
+ide-generic-use-struct-ide_port_info.patch
+ide-pnp-use-struct-ide_port_info.patch
+buddha-use-struct-ide_port_info.patch
+macide-use-struct-ide_port_info.patch
+ide-move-rqsize-init-from-init_irq-to-ide_init_port.patch
+ide-improve-debugging-scheme.patch
+ide-remove-ide_arch_intr-v2.patch
+ide-remove-ide_arch_lock-v2.patch
+ide-make-m68k-host-drivers-use-ide_hflag_mmio.patch
+m68k-cleanup-asm-ide-h.patch
+ide-palm_bk3710-use-ioremap-instead-of-arch-specific-io_address.patch
+ide-cd-use-ide_drive_t-s-rq-in-cdrom_queue_request_sense.patch
+at91_ide-use-readsw-writesw-directly.patch
+ide-include-asm-ide-h-only-when-needed.patch
+scc_pata-remove-declare_scc_dev-macro-v2.patch
+ide-fix-memleak-on-failure-in-probe_for_drive.patch
+ide-fix-error-message-in-pre_task_out_intr.patch
+ide-allow-host-drivers-to-specify-irq-flags.patch
+ide-remove-now-superfluous-check-from-ide_host_register.patch
+ide-add-ide_hflag_dtc2278-host-flag.patch
+ide-add-ide_hflag_4drives-host-flag.patch
+ide-add-flagged_tf_flags-to-struct-ide_taskfile-v2.patch
+ide-complete-power-step-in-ide_complete_pm_request.patch
+ide-factor-out-completion-of-taskfile-from-ide_end_drive_cmd.patch
+ide-move-request-type-specific-code-from-ide_end_drive_cmd-to-the-callers-v3.patch
+ide-no-need-to-read-status-and-error-registers-for-empty-taskfile-requests.patch
+ide-remove-data_phase-field-from-ide_hwif_t.patch
+Context reduced to (2/2) to apply fragment at 769
+ide-move-smart_enable-call-out-from-get_smart_data.patch
+icside-icside_dma_setup-fixes.patch
+trm290-trm290_dma_setup-fix.patch
+au1xxx-ide-auide_dma_end-cleanup.patch
+ide-remove-no-longer-needed-pc_flag_timedout-packet-command-flag.patch
+ide-floppy-remove-stale-check-from-ide_floppy_end_request.patch
+ide-tape-remove-superfluous-tape-lock.patch
+ide-move-failed_pc-to-ide_drive_t.patch
+ide-use-end_request-only-for-private-device-driver-requests.patch
+ide-floppy-tape-cleanup-ide-_end_request.patch
+Context reduced to (2/2) to apply fragment at 305
+ide-remove-end_request-method.patch
+ide-return-request-status-from-pc_callback-method.patch
+ide-use-blk_fs_request-check-in-ide-taskfile-c.patch
+ide-call-ide_build_sglist-prior-to-dma_setup-v2.patch
+ide-remove-ide_task_t-typedef.patch
+Context reduced to (2/2) to apply fragment at 776
+ide-pass-command-instead-of-request-to-ide_pio_datablock.patch
+ide-move-command-related-fields-from-ide_hwif_t-to-struct-ide_cmd.patch
+ide-set-ide_tflag_write-basing-on-data-phase-used-in-ide_taskfile_ioctl.patch
+ide-use-ata_tf_protocols-enums.patch
+Context reduced to (2/2) to apply fragment at 345
+ide-merge-task_in-out_intr.patch
+ide-inline-task_in_unexpected-into-task_pio_intr.patch
+ide-unify-exit-paths-in-task_pio_intr.patch
+ide-task_error-to-ide_error_cmd.patch
+ide-use-ide_complete_cmd-for-head-unload-commands.patch
+ide-use-ide_complete_cmd-for-req_unpark_heads.patch
+ide-sanitize-ide_finish_cmd.patch
+ide-make-ide_special_rq-bug-on-unknown-requests.patch
+ide-add-ide_end_rq-v2.patch
+ide-sanitize-ide_end_rq.patch
+ide-pass-error-value-to-ide_complete_rq.patch
+ide-move-rq-errors-quirk-out-from-ide_end_request.patch
+ide-remove-bug-from-ide_complete_rq.patch
+ide-pass-number-of-bytes-to-complete-to-ide_complete_rq.patch
+ide-use-ide_end_rq-in-ide_complete_rq.patch
+ide-remove-ide_end_request.patch
+ide-pass-command-to-ide_map_sg.patch
+ide-use-do_rw_taskfile-for-ata_cmd_packet-commands.patch
+ide-set-hwif-expiry-prior-to-calling-__-ide_set_handler.patch
+ide-add-dma_timer_expiry-method-and-remove-dma_exec_cmd-one.patch
+ide-remove-ide_execute_pkt_cmd.patch
+ide-keep-track-of-number-of-bytes-instead-of-sectors-in-struct-ide_cmd.patch
+ide-add-support-for-arbitrary-transfer-lengths-to-ide_pio_bytes.patch
+ide-use-pagehighmem-instead-of-ifdefs-in-ide_pio_bytes.patch
+ide-cd-remove-dead-urls.patch
+ide-cd-use-ide_end_rq-also-for-non-fs-requests.patch
+ide-cd-remove-dead-code-from-cdrom_decode_status.patch
+ide-cd-remove-needless-ide_dump_status_no_sense-wrapper.patch
+ide-cd-remove-no-longer-needed-ignore-module-parameter.patch
+ide-cd-factor-out-failed-request-completion-from-cdrom_end_request.patch
+ide-cd-unify-ide_cd_do_request-exit-paths.patch
+ide-cd-move-setting-req_failed-flag-out-from-end_request-exit-path.patch
+ide-cd-unify-cdrom_newpc_intr-exit-paths.patch
+ide-cd-remove-cdrom_end_request.patch
+ide-cd-kill-whole-failed-request-in-ide_cd_do_request.patch
+ide-cd-cleanup-ide_cd_do_request.patch
+ide-cd-use-scatterlists-for-pio-transfers-fs-requests.patch
+ide-cd-fix-non-sector_size-multiples-pio-transfers-for-fs-requests.patch
+ide-cd-merge-ide_cd_prepare_rw_request-into-cdrom_start_rw.patch
+ide-cd-use-scatterlists-for-pio-transfers-non-fs-requests.patch
+ide-cd-use-common-completion-path-for-dma-requests-in-cdrom_newpc_intr.patch
+ide-cd-unify-transfer-padding-in-cdrom_newpc_intr.patch
+ide-cd-minor-ide_cdrom_setup-cleanup.patch
+ide-add-dma_clear-method-and-remove-dma_timeout-one.patch
+ide-inline-ide_dma_timeout-into-ide_dma_timeout_retry.patch
+ide-destroy-dma-mappings-after-ending-dma.patch
+ide-add-ide_dma_prepare-helper.patch
+ns87415-use-custom-dma_start-end-to-handle-ns87415_prepare_drive.patch
+trm290-use-custom-dma_start-end-to-handle-trm290_prepare_drive.patch
+ide-add-dma_check-method.patch
+ide-move-ide_map_sg-call-out-of-dma_setup-method-take-2.patch
+ide-set-clear-drive-waiting_for_dma-flag-in-the-core-code.patch
+ide-sanitize-ide_build_sglist-and-ide_destroy_dmatable.patch
+ide-generic-remove-no-longer-needed-sysfs-interface.patch
+ide-merge-ide_arm-and-ide_generic-host-drivers.patch
+ide-fix-locking-in-drive_release_dev.patch
+ide-decrease-size-of-pc_buf-field-in-struct-ide_atapi_pc.patch
+ide-remove-config_blk_dev_idedoubler-config-option.patch
+ide-floppy-tape-fix-padding-for-pio-transfers.patch
+ide-floppy-use-ide_pio_bytes.patch
+au1xxx-ide-auide_-in-out-sw-should-be-static.patch
+ide-identify-data-word-53-bit-1-doesnt-cover-words-62-and-63-take-3.patch
+ide-iops-only-clear-dma-words-on-setting-dma-mode.patch
+ide-add-support-for-cfa-specified-transfer-modes-take-3.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 0ea5594...cf58f87 master     -> quilt/ide  (forced update)
+Importing rr based on v2.6.29-rc7-188-gebdcc81
+$ cd ../quilt-tmp
+$ git reset --hard ebdcc81c71937b30e09110c02a1e8a21fa770b6f
+HEAD is now at ebdcc81 Merge branch 'drm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+cpumask:task_cpumask.patch
+cpumask:mm_cpumask.patch
+cpumask:remove-pcibus_to_cpumask-alpha.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-alpha.patch
+cpumask:arch_send_call_function_ipi_mask-alpha.patch
+cpumask:use-smp_call_function_many-arm.patch
+cpumask:arch_send_call_function_ipi_mask-arm.patch
+cpumask:use-cpumap-accessors-arm.patch
+blackfin:allow-inline-str-ops-in-linux-string.h.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-cris.patch
+cpumask:use-cpumap-accessors-cris.patch
+cpumask:remove-pcibus_to_cpumask-ia64.patch
+cpumask:arch_send_call_function_ipi_mask-ia64.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-ia64.patch
+cpumask:use-cpumap-accessors-ia64.patch
+cpumask:arch_send_call_function_ipi_mask-m32r.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-m32r.patch
+cpumask:use-cpumap-accessors-m32r.patch
+cpumask:remove-pcibus_to_cpumask-mips.patch
+cpumask:arch_send_call_function_ipi_mask-mips.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-mips.patch
+cpumask:use-cpumap-accessors-mips.patch
+cpumask:remove-address-of-CPU_MASK_ALL-mips.patch
+cpumask:arch_send_call_function_ipi_mask-parisc.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-parisc.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:20: trailing whitespace.
+	if (next_cpu >= nr_cpu_ids) 
+warning: 1 line adds whitespace errors.
+cpumask:use-cpumap-accessors-parisc.patch
+cpumask:remove-cpumask-games-arch-powerpc-kernel-sysfs.c.patch
+cpumask:smp_call_function-in-powerpc-sysfs.patch
+cpumask:remove-pcibus_to_cpumask-powerpc.patch
+cpumask:arch_send_call_function_ipi_mask-powerpc.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-powerpc.patch
+cpumask:use-cpumap-accessors-powerpc.patch
+cpumask:remove-cpu_coregroup_map-s390.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-s390.patch
+cpumask:use-cpumap-accessors-s390.patch
+cpumask:cpumask_of_pcibus-sh.patch
+cpumask:remove-pcibus_to_cpumask-sh.patch
+cpumask:arch_send_call_function_ipi_mask-sh.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-sh.patch
+cpumask:use-cpumap-accessors-sh.patch
+cpumask:use-smp_call_function_many-sparc64.patch
+cpumask:arch_send_call_function_ipi_mask-sparc.patch
+cpumask:use-cpumap-accessors-sparc.patch
+cpumask:use-cpumap-accessors-sparc64.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-sparc64.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-sparc.patch
+cpumask:remove-cpu_coregroup_map-sparc.patch
+cpumask:remove-pcibus_to_cpumask-sparc.patch
+cpumask:remove-address-of-CPU_MASK_ALL-sparc.patch
+cpumask:all-ops-compare-against-nr_cpu_ids-um.patch
+cpumask:use-cpumap-accessors-um.patch
+param:fix-charp-sysfs-write.patch
+cpumask:fix-cpu_online_map-etc-assignment.patch
+cpumask:remove-address-of-CPU_MASK_ALL-core.patch
+virtio:net_allow_setting_the_mac_address_of_the_nic.patch
+virtio:fix_bad_ring_start_us_and_end_use_macros.patch
+virtio:fix-ring-macros-harder.patch
+cpumask:sched_rt-no-alloc.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+kthread:dont-use-find_task_by_pid_ns.patch
+kthread:move-sched-realeted-initialization-from-kthreadd-context.patch
+work_on_cpu:rewrite-it-to-create-a-kernel-thread-on-demand.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu-fix.patch
+arch-x86-kernel-cpu-cpufreq-acpi-cpufreqc-avoid-using-work_on_cpu.patch
+arch-x86-kernel-cpu-mcheck-mce_amd_64c-avoid-using-work_on_cpu.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-ich.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-powernow-k8.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-centrino.c.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+ksplice:make_find_symbol_return_a_struct_kernel_symbol.patch
+module:module_address.patch
+module:remove-module_text_address.patch
+arm:allow-inline-str-ops-in-linux-string.h.patch
+s390:allow-inline-str-ops-in-linux-string.h.patch
+misc:strstarts.patch
+module:use-strstarts.patch
+ksplice:add_functions_for_walking_kallsyms_symbols.patch
+module:export_symbols_needed_for_ksplice.patch
+module:clarify-try_to_force_load-message.patch
+module:dont-load-__versions-section.patch
+module:version-modversion_info.patch
+module:invbool-takes-a-bool.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+module:create_a_request_nowait.patch
+module:create_a_request_nowait-fix.patch
+module:use_the_new_request_module_nowait_in_the_hid_driver.patch
+module:use_the_new_request_module_nowait_in_drivers_media.patch
+module:no-stop_machine-on-load.patch
+cpumask:fix-seq_cpumask_list.patch
+cpumask:remove-node_to_first_cpu.patch
+cpumask:use-cpumap-accessors-main.patch
+cpumask:remove-CPU_MASK_ALL_PTR.patch
+cpumask:remove-cpu_mask_all.patch
+cpumask:remove-pcibus_to_cpumask-generic.patch
+cpumask:dont-refer-to-cpu_sibling_map-and-cpu_core_map.patch
+cpumask:irqaction-remove-unnecessary-initializers.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + cc7f0e0...beaa196 master     -> quilt/rr  (forced update)
+Importing ttydev based on 16b71fdf97599f1b1b7f38418ee9922d9f117396
+$ cd ../quilt-tmp
+$ git reset --hard 16b71fdf97599f1b1b7f38418ee9922d9f117396
+HEAD is now at 16b71fd i810: fix kernel crash fix when struct fb_var_screeninfo is supplied
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+serial-8250-pnp-console
+serial-8250-wacom-2
+serial-8250-pnp-new
+jsm-return-clean
+netmos-quirk
+pty-umount-lock
+cpu-uart-fix-noncon
+tty-blackfin-relax-1
+tty-blackfin-relax-2
+tty-blackfin-538-uart3
+tty-blackfin-flags-type
+tty-blackfin-fix-pio-compile
+tty-blackfin-fix-dma-ring
+tty-blackfin-timing-anom
+autoload-applicom
+autoload-cyclades
+autoload-specialix
+autoload-cdc-acm
+autoload-riscom8
+tty-rio-precedence
+vcs-sysfs
+tty-jsm-initfunc
+tty-icon-clean-vars
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 6c13408...449de10 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
