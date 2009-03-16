@@ -451,7 +451,7 @@ static inline int pud_bad(pud_t pud)	 { return 0; }
 static inline int pgd_present(pgd_t pgd)
 {
 	if ((pgd_val(pgd) & _REGION_ENTRY_TYPE_MASK) < _REGION_ENTRY_TYPE_R2)
-		return 1;
+		return (pgd_val(pgd) & PGDIR_MASK) == 0;
 	return (pgd_val(pgd) & _REGION_ENTRY_ORIGIN) != 0UL;
 }
 
@@ -478,7 +478,7 @@ static inline int pgd_bad(pgd_t pgd)
 static inline int pud_present(pud_t pud)
 {
 	if ((pud_val(pud) & _REGION_ENTRY_TYPE_MASK) < _REGION_ENTRY_TYPE_R3)
-		return 1;
+		return (pud_val(pud) & PUD_MASK) == 0;
 	return (pud_val(pud) & _REGION_ENTRY_ORIGIN) != 0UL;
 }
 
