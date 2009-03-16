@@ -35,11 +35,6 @@
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
 
-#ifdef CONFIG_VIDEO_V4L1_COMPAT
-/* Include V4L1 specific functions. Should be removed soon */
-#include <linux/videodev.h>
-#endif
-
 MODULE_DESCRIPTION("v4l2 driver module for cx23885 based TV cards");
 MODULE_AUTHOR("Steven Toth <stoth@linuxtv.org>");
 MODULE_LICENSE("GPL");
@@ -244,6 +239,7 @@ static struct cx23885_ctrl cx23885_ctls[] = {
 };
 static const int CX23885_CTLS = ARRAY_SIZE(cx23885_ctls);
 
+/* Must be sorted from low to high control ID! */
 static const u32 cx23885_user_ctrls[] = {
 	V4L2_CID_USER_CLASS,
 	V4L2_CID_BRIGHTNESS,
