@@ -98,6 +98,7 @@ acpi_status acpi_ut_osi_implementation(struct acpi_walk_state *walk_state)
 	acpi_status status;
 	union acpi_operand_object *string_desc;
 	union acpi_operand_object *return_desc;
+	u32 return_value;
 	u32 i;
 
 	ACPI_FUNCTION_TRACE(ut_osi_implementation);
@@ -116,19 +117,20 @@ acpi_status acpi_ut_osi_implementation(struct acpi_walk_state *walk_state)
 		return_ACPI_STATUS(AE_NO_MEMORY);
 	}
 
-	/* Default return value is 0, NOT-SUPPORTED */
+	/* Default return value is 0, NOT SUPPORTED */
 
-	return_desc->integer.value = 0;
-	walk_state->return_desc = return_desc;
+	return_value = 0;
 
 	/* Compare input string to static table of supported interfaces */
 
 	for (i = 0; i < ACPI_ARRAY_LENGTH(acpi_interfaces_supported); i++) {
-		if (!ACPI_STRCMP
-		    (string_desc->string.pointer,
-		     acpi_interfaces_supported[i])) {
-			return_desc->integer.value = ACPI_UINT32_MAX;
-			goto done;
+		if (!ACPI_STRCMP(string_desc->string.pointer,
+				 acpi_interfaces_supported[i])) {
+
+			/* The interface is supported */
+
+			return_value = ACPI_UINT32_MAX;
+			goto exit;
 		}
 	}
 
@@ -139,15 +141,22 @@ acpi_status acpi_ut_osi_implementation(struct acpi_walk_state *walk_state)
 	 */
 	status = acpi_os_validate_interface(string_desc->string.pointer);
 	if (ACPI_SUCCESS(status)) {
-		return_desc->integer.value = ACPI_UINT32_MAX;
+
+		/* The interface is supported */
+
+		return_value = ACPI_UINT32_MAX;
 	}
 
-done:
-	ACPI_DEBUG_PRINT_RAW((ACPI_DB_INFO, "ACPI: BIOS _OSI(%s) %ssupported\n",
-		string_desc->string.pointer,
-		return_desc->integer.value == 0 ? "not-" : ""));
+exit:
+	ACPI_DEBUG_PRINT_RAW ((ACPI_DB_INFO,
+		"ACPI: BIOS _OSI(%s) is %ssupported\n",
+		string_desc->string.pointer, return_value == 0 ? "not " : ""));
 
-	return_ACPI_STATUS(AE_OK);
+	/* Complete the return value */
+
+	return_desc->integer.value = return_value;
+	walk_state->return_desc = return_desc;
+	return_ACPI_STATUS (AE_OK);
 }
 
 /*******************************************************************************
@@ -248,7 +257,7 @@ acpi_ut_evaluate_object(struct acpi_namespace_node *prefix_node,
 
 	/* Map the return object type to the bitmapped type */
 
-	switch (ACPI_GET_OBJECT_TYPE(info->return_object)) {
+	switch ((info->return_object)->common.type) {
 	case ACPI_TYPE_INTEGER:
 		return_btype = ACPI_BTYPE_INTEGER;
 		break;
@@ -418,7 +427,7 @@ acpi_ut_execute_HID(struct acpi_namespace_node *device_node,
 		return_ACPI_STATUS(status);
 	}
 
-	if (ACPI_GET_OBJECT_TYPE(obj_desc) == ACPI_TYPE_INTEGER) {
+	if (obj_desc->common.type == ACPI_TYPE_INTEGER) {
 
 		/* Convert the Numeric HID to string */
 
@@ -459,7 +468,7 @@ acpi_ut_translate_one_cid(union acpi_operand_object *obj_desc,
 			  struct acpi_compatible_id *one_cid)
 {
 
-	switch (ACPI_GET_OBJECT_TYPE(obj_desc)) {
+	switch (obj_desc->common.type) {
 	case ACPI_TYPE_INTEGER:
 
 		/* Convert the Numeric CID to string */
@@ -527,7 +536,7 @@ acpi_ut_execute_CID(struct acpi_namespace_node * device_node,
 	/* Get the number of _CIDs returned */
 
 	count = 1;
-	if (ACPI_GET_OBJECT_TYPE(obj_desc) == ACPI_TYPE_PACKAGE) {
+	if (obj_desc->common.type == ACPI_TYPE_PACKAGE) {
 		count = obj_desc->package.count;
 	}
 
@@ -555,7 +564,7 @@ acpi_ut_execute_CID(struct acpi_namespace_node * device_node,
 
 	/* The _CID object can be either a single CID or a package (list) of CIDs */
 
-	if (ACPI_GET_OBJECT_TYPE(obj_desc) == ACPI_TYPE_PACKAGE) {
+	if (obj_desc->common.type == ACPI_TYPE_PACKAGE) {
 
 		/* Translate each package element */
 
@@ -620,7 +629,7 @@ acpi_ut_execute_UID(struct acpi_namespace_node *device_node,
 		return_ACPI_STATUS(status);
 	}
 
-	if (ACPI_GET_OBJECT_TYPE(obj_desc) == ACPI_TYPE_INTEGER) {
+	if (obj_desc->common.type == ACPI_TYPE_INTEGER) {
 
 		/* Convert the Numeric UID to string */
 
