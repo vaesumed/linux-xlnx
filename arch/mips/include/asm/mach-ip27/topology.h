@@ -26,11 +26,9 @@ extern struct cpuinfo_ip27 sn_cpu_info[NR_CPUS];
 #define parent_node(node)	(node)
 #define node_to_cpumask(node)	(hub_data(node)->h_cpus)
 #define cpumask_of_node(node)	(&hub_data(node)->h_cpus)
-#define node_to_first_cpu(node)	(cpumask_first(cpumask_of_node(node)))
 struct pci_bus;
 extern int pcibus_to_node(struct pci_bus *);
 
-#define pcibus_to_cpumask(bus)	(cpu_online_map)
 #define cpumask_of_pcibus(bus)	(cpu_online_mask)
 
 extern unsigned char __node_distances[MAX_COMPACT_NODES][MAX_COMPACT_NODES];
