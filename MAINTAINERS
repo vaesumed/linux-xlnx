@@ -2893,6 +2893,12 @@ M:	buytenh@marvell.com
 L:	netdev@vger.kernel.org
 S:	Supported
 
+MARVELL SOC MMC/SD/SDIO CONTROLLER DRIVER
+P:	Nicolas Pitre
+M:	nico@cam.org
+L:	linux-kernel@vger.kernel.org
+S:	Maintained
+
 MARVELL YUKON / SYSKONNECT DRIVER
 P:	Mirko Lindner
 M:	mlindner@syskonnect.de
@@ -3838,7 +3844,7 @@ S:	Maintained
 SECURE DIGITAL HOST CONTROLLER INTERFACE (SDHCI) DRIVER
 P:	Pierre Ossman
 M:	drzeus-sdhci@drzeus.cx
-L:	sdhci-devel@list.drzeus.cx
+L:	sdhci-devel@lists.ossman.eu
 S:	Maintained
 
 SECURITY SUBSYSTEM
