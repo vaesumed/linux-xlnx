@@ -28,11 +28,20 @@ static int __init hid_dummy_init(void)
 #ifdef CONFIG_HID_DELL_MODULE
 	HID_COMPAT_CALL_DRIVER(dell);
 #endif
+#ifdef CONFIG_DRAGONRISE_FF_MODULE
+	HID_COMPAT_CALL_DRIVER(dragonrise);
+#endif
 #ifdef CONFIG_HID_EZKEY_MODULE
 	HID_COMPAT_CALL_DRIVER(ezkey);
 #endif
+#ifdef CONFIG_HID_KYE_MODULE
+	HID_COMPAT_CALL_DRIVER(kye);
+#endif
 #ifdef CONFIG_HID_GYRATION_MODULE
 	HID_COMPAT_CALL_DRIVER(gyration);
+#endif
+#ifdef CONFIG_HID_KENSINGTON_MODULE
+	HID_COMPAT_CALL_DRIVER(kensington);
 #endif
 #ifdef CONFIG_HID_LOGITECH_MODULE
 	HID_COMPAT_CALL_DRIVER(logitech);
