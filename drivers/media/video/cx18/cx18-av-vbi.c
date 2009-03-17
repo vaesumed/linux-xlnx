@@ -24,6 +24,52 @@
 
 #include "cx18-driver.h"
 
+/*
+ * For sliced VBI output, we set up to use VIP-1.1, 8-bit mode,
+ * NN counts 1 byte Dwords, an IDID with the VBI line # in it.
+ * Thus, according to the VIP-2 Spec, our VBI ancillary data lines
+ * (should!) look like:
+ *	4 byte EAV code:          0xff 0x00 0x00 0xRP
+ *	unknown number of possible idle bytes
+ *	3 byte Anc data preamble: 0x00 0xff 0xff
+ *	1 byte data identifier:   ne010iii (parity bits, 010, DID bits)
+ *	1 byte secondary data id: nessssss (parity bits, SDID bits)
+ *	1 byte data word count:   necccccc (parity bits, NN Dword count)
+ *	2 byte Internal DID:	  VBI-line-# 0x80
+ *	NN data bytes
+ *	1 byte checksum
+ *	Fill bytes needed to fil out to 4*NN bytes of payload
+ *
+ * The RP codes for EAVs when in VIP-1.1 mode, not in raw mode, &
+ * in the vertical blanking interval are:
+ *	0xb0 (Task         0 VerticalBlank HorizontalBlank 0 0 0 0)
+ *	0xf0 (Task EvenField VerticalBlank HorizontalBlank 0 0 0 0)
+ *
+ * Since the V bit is only allowed to toggle in the EAV RP code, just
+ * before the first active region line and for active lines, they are:
+ *	0x90 (Task         0 0 HorizontalBlank 0 0 0 0)
+ *	0xd0 (Task EvenField 0 HorizontalBlank 0 0 0 0)
+ *
+ * The user application DID bytes we care about are:
+ *	0x91 (1 0 010        0 !ActiveLine AncDataPresent)
+ *	0x55 (0 1 010 2ndField !ActiveLine AncDataPresent)
+ *
+ */
+static const u8 sliced_vbi_did[2] = { 0x91, 0x55 };
+
+struct vbi_anc_data {
+	/* u8 eav[4]; */
+	/* u8 idle[]; Variable number of idle bytes */
+	u8 preamble[3];
+	u8 did;
+	u8 sdid;
+	u8 data_count;
+	u8 idid[2];
+	u8 payload[1]; /* data_count of payload */
+	/* u8 checksum; */
+	/* u8 fill[]; Variable number of fill bytes */
+};
+
 static int odd_parity(u8 c)
 {
 	c ^= (c >> 4);
@@ -136,7 +182,6 @@ int cx18_av_vbi(struct cx18 *cx, unsigned int cmd, void *arg)
 	case VIDIOC_S_FMT:
 	{
 		int is_pal = !(state->std & V4L2_STD_525_60);
-		int vbi_offset = is_pal ? 1 : 0;
 		int i, x;
 		u8 lcr[24];
 
@@ -153,7 +198,7 @@ int cx18_av_vbi(struct cx18 *cx, unsigned int cmd, void *arg)
 			cx18_av_std_setup(cx);
 
 			/* VBI Offset */
-			cx18_av_write(cx, 0x47f, vbi_offset);
+			cx18_av_write(cx, 0x47f, state->slicer_line_delay);
 			cx18_av_write(cx, 0x404, 0x2e);
 			break;
 		}
@@ -167,8 +212,9 @@ int cx18_av_vbi(struct cx18 *cx, unsigned int cmd, void *arg)
 		/* Sliced VBI */
 		cx18_av_write(cx, 0x404, 0x32);	/* Ancillary data */
 		cx18_av_write(cx, 0x406, 0x13);
-		cx18_av_write(cx, 0x47f, vbi_offset);
+		cx18_av_write(cx, 0x47f, state->slicer_line_delay);
 
+		/* Force impossible lines to 0 */
 		if (is_pal) {
 			for (i = 0; i <= 6; i++)
 				svbi->service_lines[0][i] =
@@ -183,6 +229,7 @@ int cx18_av_vbi(struct cx18 *cx, unsigned int cmd, void *arg)
 					svbi->service_lines[1][i] = 0;
 		}
 
+		/* Build register values for requested service lines */
 		for (i = 7; i <= 23; i++) {
 			for (x = 0; x <= 1; x++) {
 				switch (svbi->service_lines[1-x][i]) {
@@ -213,54 +260,61 @@ int cx18_av_vbi(struct cx18 *cx, unsigned int cmd, void *arg)
 		}
 
 		cx18_av_write(cx, 0x43c, 0x16);
-		cx18_av_write(cx, 0x474, is_pal ? 0x2a : 0x22);
+		/* FIXME - should match vblank set in cx18_av_std_setup() */
+		cx18_av_write(cx, 0x474, is_pal ? 0x2a : 26);
 		break;
 	}
 
 	case VIDIOC_INT_DECODE_VBI_LINE:
 	{
 		struct v4l2_decode_vbi_line *vbi = arg;
-		u8 *p = vbi->p;
-		int id1, id2, l, err = 0;
+		u8 *p;
+		struct vbi_anc_data *anc = (struct vbi_anc_data *) vbi->p;
+		int did, sdid, l, err = 0;
 
-		if (p[0] || p[1] != 0xff || p[2] != 0xff ||
-		    (p[3] != 0x55 && p[3] != 0x91)) {
+		/*
+		 * Check for the ancillary data header for sliced VBI
+		 */
+		if (anc->preamble[0] ||
+		    anc->preamble[1] != 0xff || anc->preamble[2] != 0xff ||
+		    (anc->did != sliced_vbi_did[0] &&
+		     anc->did != sliced_vbi_did[1])) {
 			vbi->line = vbi->type = 0;
 			break;
 		}
 
-		p += 4;
-		id1 = p[-1];
-		id2 = p[0] & 0xf;
-		l = p[2] & 0x3f;
-		l += state->vbi_line_offset;
-		p += 4;
+		did = anc->did;
+		sdid = anc->sdid & 0xf;
+		l = anc->idid[0] & 0x3f;
+		l += state->slicer_line_offset;
+		p = anc->payload;
 
-		switch (id2) {
+		/* Decode the SDID set by the slicer */
+		switch (sdid) {
 		case 1:
-			id2 = V4L2_SLICED_TELETEXT_B;
+			sdid = V4L2_SLICED_TELETEXT_B;
 			break;
 		case 4:
-			id2 = V4L2_SLICED_WSS_625;
+			sdid = V4L2_SLICED_WSS_625;
 			break;
 		case 6:
-			id2 = V4L2_SLICED_CAPTION_525;
+			sdid = V4L2_SLICED_CAPTION_525;
 			err = !odd_parity(p[0]) || !odd_parity(p[1]);
 			break;
 		case 9:
-			id2 = V4L2_SLICED_VPS;
+			sdid = V4L2_SLICED_VPS;
 			if (decode_vps(p, p) != 0)
 				err = 1;
 			break;
 		default:
-			id2 = 0;
+			sdid = 0;
 			err = 1;
 			break;
 		}
 
-		vbi->type = err ? 0 : id2;
+		vbi->type = err ? 0 : sdid;
 		vbi->line = err ? 0 : l;
-		vbi->is_second_field = err ? 0 : (id1 == 0x55);
+		vbi->is_second_field = err ? 0 : (did == sliced_vbi_did[1]);
 		vbi->p = p;
 		break;
 	}
