@@ -422,8 +422,8 @@ void smtc_prepare_cpus(int cpus)
 	if (vpelimit > 0 && nvpe > vpelimit)
 		nvpe = vpelimit;
 	ntc = ((val & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1;
-	if (ntc > NR_CPUS)
-		ntc = NR_CPUS;
+	if (ntc > nr_cpu_ids)
+		ntc = nr_cpu_ids;
 	if (tclimit > 0 && ntc > tclimit)
 		ntc = tclimit;
 	slop = ntc % nvpe;
@@ -701,7 +701,7 @@ void smtc_forward_irq(unsigned int irq)
 	 */
 
 	/* If no one is eligible, service locally */
-	if (target >= NR_CPUS) {
+	if (target >= nr_cpu_ids) {
 		do_IRQ_no_affinity(irq);
 		return;
 	}
