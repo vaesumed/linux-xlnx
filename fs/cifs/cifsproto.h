@@ -92,6 +92,9 @@ extern u64 cifs_UnixTimeToNT(struct timespec);
 extern __le64 cnvrtDosCifsTm(__u16 date, __u16 time);
 extern struct timespec cnvrtDosUnixTm(__u16 date, __u16 time);
 
+extern int cifs_posix_open(char *full_path, struct inode **pinode,
+			   struct super_block *sb, int mode, int oflags,
+			   int *poplock, __u16 *pnetfid, int xid);
 extern void posix_fill_in_inode(struct inode *tmp_inode,
 				FILE_UNIX_BASIC_INFO *pData, int isNewInode);
 extern struct inode *cifs_new_inode(struct super_block *sb, __u64 *inum);
@@ -279,6 +282,9 @@ extern int CIFSPOSIXCreate(const int xid, struct cifsTconInfo *tcon,
 			__u32 *pOplock, const char *name,
 			const struct nls_table *nls_codepage, int remap);
 extern int CIFSSMBClose(const int xid, struct cifsTconInfo *tcon,
+			const int smb_file_id);
+
+extern int CIFSSMBFlush(const int xid, struct cifsTconInfo *tcon,
 			const int smb_file_id);
 
 extern int CIFSSMBRead(const int xid, struct cifsTconInfo *tcon,
