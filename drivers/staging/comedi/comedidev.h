@@ -26,7 +26,6 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/kdev_t.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
@@ -36,7 +35,6 @@
 #include <linux/mm.h>
 #include <linux/init.h>
 #include <linux/vmalloc.h>
-#include <linux/mm.h>
 #include "interrupt.h"
 #include <linux/dma-mapping.h>
 #include <linux/uaccess.h>
@@ -120,7 +118,6 @@
 #define PCI_VENDOR_ID_MEILHAUS		0x1402
 
 #define COMEDI_NUM_MINORS 0x100
-#define COMEDI_NUM_LEGACY_MINORS 0x10
 #define COMEDI_NUM_BOARD_MINORS 0x30
 #define COMEDI_FIRST_SUBDEVICE_MINOR COMEDI_NUM_BOARD_MINORS
 
@@ -531,6 +528,9 @@ int comedi_alloc_subdevice_minor(comedi_device *dev, comedi_subdevice *s);
 void comedi_free_subdevice_minor(comedi_subdevice *s);
 int comedi_pci_auto_config(struct pci_dev *pcidev, const char *board_name);
 void comedi_pci_auto_unconfig(struct pci_dev *pcidev);
+struct usb_device;	/* forward declaration */
+int comedi_usb_auto_config(struct usb_device *usbdev, const char *board_name);
+void comedi_usb_auto_unconfig(struct usb_device *usbdev);
 
 #include "comedi_rt.h"
 
