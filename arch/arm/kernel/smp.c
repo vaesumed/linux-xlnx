@@ -526,20 +526,17 @@ int setup_profiling_timer(unsigned int multiplier)
 	return -EINVAL;
 }
 
-static int
-on_each_cpu_mask(void (*func)(void *), void *info, int wait, cpumask_t mask)
+static void
+on_each_cpu_mask(void (*func)(void *), void *info, int wait,
+		 const struct cpumask *mask)
 {
-	int ret = 0;
-
 	preempt_disable();
 
-	ret = smp_call_function_mask(mask, func, info, wait);
-	if (cpu_isset(smp_processor_id(), mask))
+	smp_call_function_many(mask, func, info, wait);
+	if (cpumask_test_cpu(smp_processor_id(), mask))
 		func(info);
 
 	preempt_enable();
-
-	return ret;
 }
 
 /**********************************************************************/
@@ -600,20 +597,17 @@ void flush_tlb_all(void)
 
 void flush_tlb_mm(struct mm_struct *mm)
 {
-	cpumask_t mask = mm->cpu_vm_mask;
-
-	on_each_cpu_mask(ipi_flush_tlb_mm, mm, 1, mask);
+	on_each_cpu_mask(ipi_flush_tlb_mm, mm, 1, &mm->cpu_vm_mask);
 }
 
 void flush_tlb_page(struct vm_area_struct *vma, unsigned long uaddr)
 {
-	cpumask_t mask = vma->vm_mm->cpu_vm_mask;
 	struct tlb_args ta;
 
 	ta.ta_vma = vma;
 	ta.ta_start = uaddr;
 
-	on_each_cpu_mask(ipi_flush_tlb_page, &ta, 1, mask);
+	on_each_cpu_mask(ipi_flush_tlb_page, &ta, 1, &vma->vm_mm->cpu_vm_mask);
 }
 
 void flush_tlb_kernel_page(unsigned long kaddr)
@@ -628,14 +622,13 @@ void flush_tlb_kernel_page(unsigned long kaddr)
 void flush_tlb_range(struct vm_area_struct *vma,
                      unsigned long start, unsigned long end)
 {
-	cpumask_t mask = vma->vm_mm->cpu_vm_mask;
 	struct tlb_args ta;
 
 	ta.ta_vma = vma;
 	ta.ta_start = start;
 	ta.ta_end = end;
 
-	on_each_cpu_mask(ipi_flush_tlb_range, &ta, 1, mask);
+	on_each_cpu_mask(ipi_flush_tlb_range, &ta, 1, &vma->vm_mm->cpu_vm_mask);
 }
 
 void flush_tlb_kernel_range(unsigned long start, unsigned long end)
