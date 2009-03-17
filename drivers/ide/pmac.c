@@ -404,7 +404,6 @@ kauai_lookup_timing(struct kauai_timing* table, int cycle_time)
 #define IDE_WAKEUP_DELAY	(1*HZ)
 
 static int pmac_ide_init_dma(ide_hwif_t *, const struct ide_port_info *);
-static int pmac_ide_build_dmatable(ide_drive_t *drive, struct request *rq);
 static void pmac_ide_selectproc(ide_drive_t *drive);
 static void pmac_ide_kauai_selectproc(ide_drive_t *drive);
 
@@ -1422,17 +1421,16 @@ out:
  * pmac_ide_build_dmatable builds the DBDMA command list
  * for a transfer and sets the DBDMA channel to point to it.
  */
-static int
-pmac_ide_build_dmatable(ide_drive_t *drive, struct request *rq)
+static int pmac_ide_build_dmatable(ide_drive_t *drive, struct ide_cmd *cmd)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	pmac_ide_hwif_t *pmif =
 		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
 	struct dbdma_cmd *table;
-	int i, count = 0;
 	volatile struct dbdma_regs __iomem *dma = pmif->dma_regs;
 	struct scatterlist *sg;
-	int wr = (rq_data_dir(rq) == WRITE);
+	int wr = !!(cmd->tf_flags & IDE_TFLAG_WRITE);
+	int i = cmd->sg_nents, count = 0;
 
 	/* DMA table is already aligned */
 	table = (struct dbdma_cmd *) pmif->dma_table_cpu;
@@ -1441,11 +1439,6 @@ pmac_ide_build_dmatable(ide_drive_t *drive, struct request *rq)
 	writel((RUN|PAUSE|FLUSH|WAKE|DEAD) << 16, &dma->control);
 	while (readl(&dma->status) & RUN)
 		udelay(1);
-
-	hwif->sg_nents = i = ide_build_sglist(drive, rq);
-
-	if (!i)
-		return 0;
 
 	/* Build DBDMA commands list */
 	sg = hwif->sg_table;
@@ -1462,7 +1455,7 @@ pmac_ide_build_dmatable(ide_drive_t *drive, struct request *rq)
 				       "switching to PIO on Ohare chipset\n", drive->name);
 				pmif->broken_dma_warn = 1;
 			}
-			goto use_pio_instead;
+			return 0;
 		}
 		while (cur_len) {
 			unsigned int tc = (cur_len < 0xfe00)? cur_len: 0xfe00;
@@ -1470,7 +1463,7 @@ pmac_ide_build_dmatable(ide_drive_t *drive, struct request *rq)
 			if (count++ >= MAX_DCMDS) {
 				printk(KERN_WARNING "%s: DMA table too small\n",
 				       drive->name);
-				goto use_pio_instead;
+				return 0;
 			}
 			st_le16(&table->command, wr? OUTPUT_MORE: INPUT_MORE);
 			st_le16(&table->req_count, tc);
@@ -1499,9 +1492,6 @@ pmac_ide_build_dmatable(ide_drive_t *drive, struct request *rq)
 
 	printk(KERN_DEBUG "%s: empty DMA table?\n", drive->name);
 
-use_pio_instead:
-	ide_destroy_dmatable(drive);
-
 	return 0; /* revert to PIO for this request */
 }
 
@@ -1509,37 +1499,25 @@ use_pio_instead:
  * Prepare a DMA transfer. We build the DMA table, adjust the timings for
  * a read on KeyLargo ATA/66 and mark us as waiting for DMA completion
  */
-static int
-pmac_ide_dma_setup(ide_drive_t *drive)
+static int pmac_ide_dma_setup(ide_drive_t *drive, struct ide_cmd *cmd)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	pmac_ide_hwif_t *pmif =
 		(pmac_ide_hwif_t *)dev_get_drvdata(hwif->gendev.parent);
-	struct request *rq = hwif->rq;
 	u8 unit = drive->dn & 1, ata4 = (pmif->kind == controller_kl_ata4);
+	u8 write = !!(cmd->tf_flags & IDE_TFLAG_WRITE);
 
-	if (!pmac_ide_build_dmatable(drive, rq)) {
-		ide_map_sg(drive, rq);
+	if (pmac_ide_build_dmatable(drive, cmd) == 0)
 		return 1;
-	}
 
 	/* Apple adds 60ns to wrDataSetup on reads */
 	if (ata4 && (pmif->timings[unit] & TR_66_UDMA_EN)) {
-		writel(pmif->timings[unit] + (!rq_data_dir(rq) ? 0x00800000UL : 0),
+		writel(pmif->timings[unit] + (write ? 0 : 0x00800000UL),
 			PMAC_IDE_REG(IDE_TIMING_CONFIG));
 		(void)readl(PMAC_IDE_REG(IDE_TIMING_CONFIG));
 	}
 
-	drive->waiting_for_dma = 1;
-
 	return 0;
-}
-
-static void
-pmac_ide_dma_exec_cmd(ide_drive_t *drive, u8 command)
-{
-	/* issue cmd to drive */
-	ide_execute_command(drive, command, &ide_dma_intr, 2*WAIT_CMD, NULL);
 }
 
 /*
@@ -1573,11 +1551,8 @@ pmac_ide_dma_end (ide_drive_t *drive)
 	volatile struct dbdma_regs __iomem *dma = pmif->dma_regs;
 	u32 dstat;
 
-	drive->waiting_for_dma = 0;
 	dstat = readl(&dma->status);
 	writel(((RUN|WAKE|DEAD) << 16), &dma->control);
-
-	ide_destroy_dmatable(drive);
 
 	/* verify good dma status. we don't check for ACTIVE beeing 0. We should...
 	 * in theory, but with ATAPI decices doing buffer underruns, that would
@@ -1662,11 +1637,9 @@ pmac_ide_dma_lost_irq (ide_drive_t *drive)
 static const struct ide_dma_ops pmac_dma_ops = {
 	.dma_host_set		= pmac_ide_dma_host_set,
 	.dma_setup		= pmac_ide_dma_setup,
-	.dma_exec_cmd		= pmac_ide_dma_exec_cmd,
 	.dma_start		= pmac_ide_dma_start,
 	.dma_end		= pmac_ide_dma_end,
 	.dma_test_irq		= pmac_ide_dma_test_irq,
-	.dma_timeout		= ide_dma_timeout,
 	.dma_lost_irq		= pmac_ide_dma_lost_irq,
 };
 

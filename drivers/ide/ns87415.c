@@ -61,12 +61,12 @@ static u8 superio_dma_sff_read_status(ide_hwif_t *hwif)
 	return superio_ide_inb(hwif->dma_base + ATA_DMA_STATUS);
 }
 
-static void superio_tf_read(ide_drive_t *drive, ide_task_t *task)
+static void superio_tf_read(ide_drive_t *drive, struct ide_cmd *cmd)
 {
 	struct ide_io_ports *io_ports = &drive->hwif->io_ports;
-	struct ide_taskfile *tf = &task->tf;
+	struct ide_taskfile *tf = &cmd->tf;
 
-	if (task->tf_flags & IDE_TFLAG_IN_DATA) {
+	if (cmd->ftf_flags & IDE_FTFLAG_IN_DATA) {
 		u16 data = inw(io_ports->data_addr);
 
 		tf->data = data & 0xff;
@@ -74,33 +74,33 @@ static void superio_tf_read(ide_drive_t *drive, ide_task_t *task)
 	}
 
 	/* be sure we're looking at the low order bits */
-	outb(ATA_DEVCTL_OBS & ~0x80, io_ports->ctl_addr);
+	outb(ATA_DEVCTL_OBS, io_ports->ctl_addr);
 
-	if (task->tf_flags & IDE_TFLAG_IN_FEATURE)
+	if (cmd->tf_flags & IDE_TFLAG_IN_FEATURE)
 		tf->feature = inb(io_ports->feature_addr);
-	if (task->tf_flags & IDE_TFLAG_IN_NSECT)
+	if (cmd->tf_flags & IDE_TFLAG_IN_NSECT)
 		tf->nsect  = inb(io_ports->nsect_addr);
-	if (task->tf_flags & IDE_TFLAG_IN_LBAL)
+	if (cmd->tf_flags & IDE_TFLAG_IN_LBAL)
 		tf->lbal   = inb(io_ports->lbal_addr);
-	if (task->tf_flags & IDE_TFLAG_IN_LBAM)
+	if (cmd->tf_flags & IDE_TFLAG_IN_LBAM)
 		tf->lbam   = inb(io_ports->lbam_addr);
-	if (task->tf_flags & IDE_TFLAG_IN_LBAH)
+	if (cmd->tf_flags & IDE_TFLAG_IN_LBAH)
 		tf->lbah   = inb(io_ports->lbah_addr);
-	if (task->tf_flags & IDE_TFLAG_IN_DEVICE)
+	if (cmd->tf_flags & IDE_TFLAG_IN_DEVICE)
 		tf->device = superio_ide_inb(io_ports->device_addr);
 
-	if (task->tf_flags & IDE_TFLAG_LBA48) {
-		outb(ATA_DEVCTL_OBS | 0x80, io_ports->ctl_addr);
+	if (cmd->tf_flags & IDE_TFLAG_LBA48) {
+		outb(ATA_HOB | ATA_DEVCTL_OBS, io_ports->ctl_addr);
 
-		if (task->tf_flags & IDE_TFLAG_IN_HOB_FEATURE)
+		if (cmd->tf_flags & IDE_TFLAG_IN_HOB_FEATURE)
 			tf->hob_feature = inb(io_ports->feature_addr);
-		if (task->tf_flags & IDE_TFLAG_IN_HOB_NSECT)
+		if (cmd->tf_flags & IDE_TFLAG_IN_HOB_NSECT)
 			tf->hob_nsect   = inb(io_ports->nsect_addr);
-		if (task->tf_flags & IDE_TFLAG_IN_HOB_LBAL)
+		if (cmd->tf_flags & IDE_TFLAG_IN_HOB_LBAL)
 			tf->hob_lbal    = inb(io_ports->lbal_addr);
-		if (task->tf_flags & IDE_TFLAG_IN_HOB_LBAM)
+		if (cmd->tf_flags & IDE_TFLAG_IN_HOB_LBAM)
 			tf->hob_lbam    = inb(io_ports->lbam_addr);
-		if (task->tf_flags & IDE_TFLAG_IN_HOB_LBAH)
+		if (cmd->tf_flags & IDE_TFLAG_IN_HOB_LBAH)
 			tf->hob_lbah    = inb(io_ports->lbah_addr);
 	}
 }
@@ -196,12 +196,17 @@ static void ns87415_selectproc (ide_drive_t *drive)
 			      !!(drive->dev_flags & IDE_DFLAG_USING_DMA));
 }
 
+static void ns87415_dma_start(ide_drive_t *drive)
+{
+	ns87415_prepare_drive(drive, 1);
+	ide_dma_start(drive);
+}
+
 static int ns87415_dma_end(ide_drive_t *drive)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	u8 dma_stat = 0, dma_cmd = 0;
 
-	drive->waiting_for_dma = 0;
 	dma_stat = hwif->dma_ops->dma_sff_read_status(hwif);
 	/* get DMA command mode */
 	dma_cmd = inb(hwif->dma_base + ATA_DMA_CMD);
@@ -210,21 +215,11 @@ static int ns87415_dma_end(ide_drive_t *drive)
 	/* from ERRATA: clear the INTR & ERROR bits */
 	dma_cmd = inb(hwif->dma_base + ATA_DMA_CMD);
 	outb(dma_cmd | 6, hwif->dma_base + ATA_DMA_CMD);
-	/* and free any DMA resources */
-	ide_destroy_dmatable(drive);
+
+	ns87415_prepare_drive(drive, 0);
+
 	/* verify good DMA status */
 	return (dma_stat & 7) != 4;
-}
-
-static int ns87415_dma_setup(ide_drive_t *drive)
-{
-	/* select DMA xfer */
-	ns87415_prepare_drive(drive, 1);
-	if (!ide_dma_setup(drive))
-		return 0;
-	/* DMA failed: select PIO xfer */
-	ns87415_prepare_drive(drive, 0);
-	return 1;
 }
 
 static void __devinit init_hwif_ns87415 (ide_hwif_t *hwif)
@@ -286,9 +281,7 @@ static void __devinit init_hwif_ns87415 (ide_hwif_t *hwif)
 	}
 
 	if (!using_inta)
-		hwif->irq = __ide_default_irq(hwif->io_ports.data_addr);
-	else if (!hwif->irq && hwif->mate && hwif->mate->irq)
-		hwif->irq = hwif->mate->irq;	/* share IRQ with mate */
+		hwif->irq = pci_get_legacy_ide_irq(dev, hwif->channel);
 
 	if (!hwif->dma_base)
 		return;
@@ -302,13 +295,12 @@ static const struct ide_port_ops ns87415_port_ops = {
 
 static const struct ide_dma_ops ns87415_dma_ops = {
 	.dma_host_set		= ide_dma_host_set,
-	.dma_setup		= ns87415_dma_setup,
-	.dma_exec_cmd		= ide_dma_exec_cmd,
-	.dma_start		= ide_dma_start,
+	.dma_setup		= ide_dma_setup,
+	.dma_start		= ns87415_dma_start,
 	.dma_end		= ns87415_dma_end,
 	.dma_test_irq		= ide_dma_test_irq,
 	.dma_lost_irq		= ide_dma_lost_irq,
-	.dma_timeout		= ide_dma_timeout,
+	.dma_timer_expiry	= ide_dma_sff_timer_expiry,
 	.dma_sff_read_status	= superio_dma_sff_read_status,
 };
 
