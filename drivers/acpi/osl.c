@@ -134,6 +134,68 @@ static struct osi_linux {
 	unsigned int	cmdline:1;
 	unsigned int	known:1;
 } osi_linux = { 0, 0, 0, 0};
+/* Check of resource interference between native drivers and ACPI
+ * OperationRegions (SystemIO and System Memory only).
+ * IO ports and memory declared in ACPI might be used by the ACPI subsystem
+ * in arbitrary AML code and can interfere with legacy drivers.
+ * acpi_enforce_resources= can be set to:
+ *
+ *   - strict           (2)
+ *     -> further driver trying to access the resources will not load
+ *   - lax (default)    (1)
+ *     -> further driver trying to access the resources will load, but you
+ *     get a system message that something might go wrong...
+ *
+ *   - no               (0)
+ *     -> ACPI Operation Region resources will not be registered
+ *
+ */
+
+#define ENFORCE_RESOURCES_STRICT 2
+#define ENFORCE_RESOURCES_LAX    1
+#define ENFORCE_RESOURCES_NO     0
+
+static unsigned int acpi_enforce_resources = ENFORCE_RESOURCES_LAX;
+static struct dmi_system_id __initdata acpi_resources_dmi_table[] = {
+	{
+	.ident = "Asus EEEPC-901",
+	.matches = {
+		DMI_MATCH(DMI_BOARD_VENDOR, "ASUSTeK Computer INC."),
+		DMI_MATCH(DMI_BOARD_NAME, "901"),
+		},
+	},
+	{
+	.ident = "Asus P6T DELUXE",
+	.matches = {
+		DMI_MATCH(DMI_BOARD_VENDOR, "ASUSTeK Computer INC."),
+		DMI_MATCH(DMI_BOARD_NAME, "P6T DELUXE"),
+		},
+	},
+	{
+	.ident = "Asus EEEPC-702",
+	.matches = {
+		DMI_MATCH(DMI_PRODUCT_NAME, "Eee PC"),
+		DMI_MATCH(DMI_BOARD_VENDOR, "ASUSTeK Computer INC."),
+		DMI_MATCH(DMI_BOARD_NAME, "702"),
+		},
+	},
+	{
+	.ident = "Dell 1537",
+	.matches = {
+		DMI_MATCH(DMI_PRODUCT_NAME, "Studio 1537"),
+		DMI_MATCH(DMI_BOARD_VENDOR, "Dell Inc."),
+		DMI_MATCH(DMI_BOARD_NAME, "0P132H"),
+		},
+	},
+	{
+	.ident = "Asus EEEPC-900",
+	.matches = {
+		DMI_MATCH(DMI_BOARD_VENDOR, "ASUSTeK Computer INC."),
+		DMI_MATCH(DMI_BOARD_NAME, "900"),
+		},
+	},
+	{},
+};
 
 static void __init acpi_request_region (struct acpi_generic_address *addr,
 	unsigned int length, char *desc)
@@ -178,6 +240,14 @@ static int __init acpi_reserve_resources(void)
 	if (!(acpi_gbl_FADT.gpe1_block_length & 0x1))
 		acpi_request_region(&acpi_gbl_FADT.xgpe1_block,
 			       acpi_gbl_FADT.gpe1_block_length, "ACPI GPE1_BLK");
+
+	/*
+	 * Only when the ACPI is enabled, the dmi table will be checked. If
+	 * the system falls into the dmi check table, the strict resource
+	 * check will be used.
+	 */
+	if (!acpi_disabled && dmi_check_system(acpi_resources_dmi_table))
+		acpi_enforce_resources = ENFORCE_RESOURCES_STRICT;
 
 	return 0;
 }
@@ -1064,28 +1134,6 @@ static int __init acpi_wake_gpes_always_on_setup(char *str)
 
 __setup("acpi_wake_gpes_always_on", acpi_wake_gpes_always_on_setup);
 
-/* Check of resource interference between native drivers and ACPI
- * OperationRegions (SystemIO and System Memory only).
- * IO ports and memory declared in ACPI might be used by the ACPI subsystem
- * in arbitrary AML code and can interfere with legacy drivers.
- * acpi_enforce_resources= can be set to:
- *
- *   - strict           (2)
- *     -> further driver trying to access the resources will not load
- *   - lax (default)    (1)
- *     -> further driver trying to access the resources will load, but you
- *     get a system message that something might go wrong...
- *
- *   - no               (0)
- *     -> ACPI Operation Region resources will not be registered
- *
- */
-#define ENFORCE_RESOURCES_STRICT 2
-#define ENFORCE_RESOURCES_LAX    1
-#define ENFORCE_RESOURCES_NO     0
-
-static unsigned int acpi_enforce_resources = ENFORCE_RESOURCES_LAX;
-
 static int __init acpi_enforce_resources_setup(char *str)
 {
 	if (str == NULL || *str == '\0')
@@ -1324,54 +1372,6 @@ acpi_os_validate_interface (char *interface)
 	return AE_SUPPORT;
 }
 
-#ifdef	CONFIG_X86
-
-struct aml_port_desc {
-	uint	start;
-	uint	end;
-	char*   name;
-	char	warned;
-};
-
-static struct aml_port_desc aml_invalid_port_list[] = {
-	{0x20, 0x21, "PIC0", 0},
-	{0xA0, 0xA1, "PIC1", 0},
-	{0x4D0, 0x4D1, "ELCR", 0}
-};
-
-/*
- * valid_aml_io_address()
- *
- * if valid, return true
- * else invalid, warn once, return false
- */
-static bool valid_aml_io_address(uint address, uint length)
-{
-	int i;
-	int entries = sizeof(aml_invalid_port_list) / sizeof(struct aml_port_desc);
-
-	for (i = 0; i < entries; ++i) {
-		if ((address >= aml_invalid_port_list[i].start &&
-			address <= aml_invalid_port_list[i].end) ||
-			(address + length >= aml_invalid_port_list[i].start &&
-			address  + length <= aml_invalid_port_list[i].end))
-		{
-			if (!aml_invalid_port_list[i].warned)
-			{
-				printk(KERN_ERR "ACPI: Denied BIOS AML access"
-					" to invalid port 0x%x+0x%x (%s)\n",
-					address, length,
-					aml_invalid_port_list[i].name);
-				aml_invalid_port_list[i].warned = 1;
-			}
-			return false;	/* invalid */
-		}
-	}
-	return true;	/* valid */
-}
-#else
-static inline bool valid_aml_io_address(uint address, uint length) { return true; }
-#endif
 /******************************************************************************
  *
  * FUNCTION:    acpi_os_validate_address
@@ -1401,8 +1401,6 @@ acpi_os_validate_address (
 
 	switch (space_id) {
 	case ACPI_ADR_SPACE_SYSTEM_IO:
-		if (!valid_aml_io_address(address, length))
-			return AE_AML_ILLEGAL_ADDRESS;
 	case ACPI_ADR_SPACE_SYSTEM_MEMORY:
 		/* Only interference checks against SystemIO and SytemMemory
 		   are needed */
