@@ -421,8 +421,8 @@ static int lapbeth_device_event(struct notifier_block *this,
 
 /* ------------------------------------------------------------------------ */
 
-static struct packet_type lapbeth_packet_type = {
-	.type = __constant_htons(ETH_P_DEC),
+static struct packet_type lapbeth_packet_type __read_mostly = {
+	.type = cpu_to_be16(ETH_P_DEC),
 	.func = lapbeth_rcv,
 };
 
@@ -430,7 +430,8 @@ static struct notifier_block lapbeth_dev_notifier = {
 	.notifier_call = lapbeth_device_event,
 };
 
-static char banner[] __initdata = KERN_INFO "LAPB Ethernet driver version 0.02\n";
+static const char banner[] __initconst =
+	KERN_INFO "LAPB Ethernet driver version 0.02\n";
 
 static int __init lapbeth_init_driver(void)
 {

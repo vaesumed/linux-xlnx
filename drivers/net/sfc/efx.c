@@ -182,7 +182,6 @@ static int efx_process_channel(struct efx_channel *channel, int rx_quota)
 		channel->rx_pkt = NULL;
 	}
 
-	efx_flush_lro(channel);
 	efx_rx_strategy(channel);
 
 	efx_fast_push_rx_descriptors(&efx->rx_queue[channel->channel]);
@@ -225,11 +224,11 @@ static int efx_poll(struct napi_struct *napi, int budget)
 
 	if (rx_packets < budget) {
 		/* There is no race here; although napi_disable() will
-		 * only wait for netif_rx_complete(), this isn't a problem
+		 * only wait for napi_complete(), this isn't a problem
 		 * since efx_channel_processed() will have no effect if
 		 * interrupts have already been disabled.
 		 */
-		netif_rx_complete(napi);
+		napi_complete(napi);
 		efx_channel_processed(channel);
 	}
 
@@ -558,6 +557,8 @@ static void efx_link_status_changed(struct efx_nic *efx)
 
 }
 
+static void efx_fini_port(struct efx_nic *efx);
+
 /* This call reinitialises the MAC to pick up new PHY settings. The
  * caller must hold the mac_lock */
 void __efx_reconfigure_port(struct efx_nic *efx)
@@ -593,8 +594,8 @@ void __efx_reconfigure_port(struct efx_nic *efx)
 
 fail:
 	EFX_ERR(efx, "failed to reconfigure MAC\n");
-	efx->phy_op->fini(efx);
-	efx->port_initialized = false;
+	efx->port_enabled = false;
+	efx_fini_port(efx);
 }
 
 /* Reinitialise the MAC to pick up new PHY settings, even if the port is
@@ -1276,18 +1277,11 @@ static int efx_ioctl(struct net_device *net_dev, struct ifreq *ifr, int cmd)
 static int efx_init_napi(struct efx_nic *efx)
 {
 	struct efx_channel *channel;
-	int rc;
 
 	efx_for_each_channel(channel, efx) {
 		channel->napi_dev = efx->net_dev;
-		rc = efx_lro_init(&channel->lro_mgr, efx);
-		if (rc)
-			goto err;
 	}
 	return 0;
- err:
-	efx_fini_napi(efx);
-	return rc;
 }
 
 static void efx_fini_napi(struct efx_nic *efx)
@@ -1295,7 +1289,6 @@ static void efx_fini_napi(struct efx_nic *efx)
 	struct efx_channel *channel;
 
 	efx_for_each_channel(channel, efx) {
-		efx_lro_fini(&channel->lro_mgr);
 		channel->napi_dev = NULL;
 	}
 }
@@ -1683,7 +1676,8 @@ int efx_reset_up(struct efx_nic *efx, enum reset_type method,
 			rc = efx->phy_op->init(efx);
 			if (rc)
 				ok = false;
-		} else
+		}
+		if (!ok)
 			efx->port_initialized = false;
 	}
 
@@ -1864,8 +1858,8 @@ static struct efx_phy_operations efx_dummy_phy_operations = {
 
 static struct efx_board efx_dummy_board_info = {
 	.init		= efx_port_dummy_op_int,
-	.init_leds	= efx_port_dummy_op_int,
-	.set_fault_led	= efx_port_dummy_op_blink,
+	.init_leds	= efx_port_dummy_op_void,
+	.set_id_led	= efx_port_dummy_op_blink,
 	.monitor	= efx_port_dummy_op_int,
 	.blink		= efx_port_dummy_op_blink,
 	.fini		= efx_port_dummy_op_void,
@@ -2127,7 +2121,7 @@ static int __devinit efx_pci_probe(struct pci_dev *pci_dev,
 	net_dev->features |= (NETIF_F_IP_CSUM | NETIF_F_SG |
 			      NETIF_F_HIGHDMA | NETIF_F_TSO);
 	if (lro)
-		net_dev->features |= NETIF_F_LRO;
+		net_dev->features |= NETIF_F_GRO;
 	/* Mask for features that also apply to VLAN devices */
 	net_dev->vlan_features |= (NETIF_F_ALL_CSUM | NETIF_F_SG |
 				   NETIF_F_HIGHDMA | NETIF_F_TSO);
