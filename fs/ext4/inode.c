@@ -2754,6 +2754,17 @@ static int ext4_da_write_end(struct file *file,
 		   "dev %s ino %lu pos %llu len %u copied %u",
 		   inode->i_sb->s_id, inode->i_ino,
 		   (unsigned long long) pos, len, copied);
+
+	if (test_opt(inode->i_sb, DATA_FLAGS) ==
+	    EXT4_MOUNT_ALLOC_COMMIT_DATA) {
+		ret = ext4_jbd2_file_inode(handle, inode);
+		if (ret)
+			goto errout;
+		ret = ext4_mark_inode_dirty(handle, inode);
+		if (ret)
+			goto errout;
+	}
+
 	start = pos & (PAGE_CACHE_SIZE - 1);
 	end = start + copied - 1;
 
@@ -2791,6 +2802,7 @@ static int ext4_da_write_end(struct file *file,
 	copied = ret2;
 	if (ret2 < 0)
 		ret = ret2;
+errout:
 	ret2 = ext4_journal_stop(handle);
 	if (!ret)
 		ret = ret2;
