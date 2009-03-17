@@ -817,6 +817,8 @@ const struct address_space_operations ext2_nobh_aops = {
 	.direct_IO		= ext2_direct_IO,
 	.writepages		= ext2_writepages,
 	.migratepage		= buffer_migrate_page,
+	.write_one_page		= generic_file_buffered_write_one_page,
+	.write_one_page		= generic_file_buffered_write_one_page,
 };
 
 /*
