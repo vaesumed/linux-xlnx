@@ -103,7 +103,7 @@ static void xen_vcpu_setup(int cpu)
 
 	vcpup = &per_cpu(xen_vcpu_info, cpu);
 
-	info.mfn = virt_to_mfn(vcpup);
+	info.mfn = arbitrary_virt_to_mfn(vcpup);
 	info.offset = offset_in_page(vcpup);
 
 	printk(KERN_DEBUG "trying to map vcpu_info %d at %p, mfn %llx, offset %d\n",
@@ -301,8 +301,10 @@ static void xen_load_gdt(const struct desc_ptr *dtr)
 	frames = mcs.args;
 
 	for (f = 0; va < dtr->address + size; va += PAGE_SIZE, f++) {
-		frames[f] = virt_to_mfn(va);
+		frames[f] = arbitrary_virt_to_mfn((void *)va);
+
 		make_lowmem_page_readonly((void *)va);
+		make_lowmem_page_readonly(mfn_to_virt(frames[f]));
 	}
 
 	MULTI_set_gdt(mcs.mc, frames, size / sizeof(struct desc_struct));
@@ -314,7 +316,7 @@ static void load_TLS_descriptor(struct thread_struct *t,
 				unsigned int cpu, unsigned int i)
 {
 	struct desc_struct *gdt = get_cpu_gdt_table(cpu);
-	xmaddr_t maddr = virt_to_machine(&gdt[GDT_ENTRY_TLS_MIN+i]);
+	xmaddr_t maddr = arbitrary_virt_to_machine(&gdt[GDT_ENTRY_TLS_MIN+i]);
 	struct multicall_space mc = __xen_mc_entry(0);
 
 	MULTI_update_descriptor(mc.mc, maddr.maddr, t->tls_array[i]);
@@ -488,7 +490,7 @@ static void xen_write_gdt_entry(struct desc_struct *dt, int entry,
 		break;
 
 	default: {
-		xmaddr_t maddr = virt_to_machine(&dt[entry]);
+		xmaddr_t maddr = arbitrary_virt_to_machine(&dt[entry]);
 
 		xen_mc_flush();
 		if (HYPERVISOR_update_descriptor(maddr.maddr, *(u64 *)desc))
@@ -554,14 +556,15 @@ static u32 xen_safe_apic_wait_icr_idle(void)
         return 0;
 }
 
-static struct apic_ops xen_basic_apic_ops = {
-	.read = xen_apic_read,
-	.write = xen_apic_write,
-	.icr_read = xen_apic_icr_read,
-	.icr_write = xen_apic_icr_write,
-	.wait_icr_idle = xen_apic_wait_icr_idle,
-	.safe_wait_icr_idle = xen_safe_apic_wait_icr_idle,
-};
+static void set_xen_basic_apic_ops(void)
+{
+	apic->read = xen_apic_read;
+	apic->write = xen_apic_write;
+	apic->icr_read = xen_apic_icr_read;
+	apic->icr_write = xen_apic_icr_write;
+	apic->wait_icr_idle = xen_apic_wait_icr_idle;
+	apic->safe_wait_icr_idle = xen_safe_apic_wait_icr_idle;
+}
 
 #endif
 
@@ -898,7 +901,7 @@ asmlinkage void __init xen_start_kernel(void)
 	/*
 	 * set up the basic apic ops.
 	 */
-	apic_ops = &xen_basic_apic_ops;
+	set_xen_basic_apic_ops();
 #endif
 
 	if (xen_feature(XENFEAT_mmu_pt_update_preserve_ad)) {
