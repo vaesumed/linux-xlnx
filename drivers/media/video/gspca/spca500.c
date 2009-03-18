@@ -22,6 +22,7 @@
 #define MODULE_NAME "spca500"
 
 #include "gspca.h"
+#define QUANT_VAL 5		/* quantization table */
 #include "jpeg.h"
 
 MODULE_AUTHOR("Michel Xhaard <mxhaard@users.sourceforge.net>");
@@ -39,7 +40,6 @@ struct sd {
 	unsigned char contrast;
 	unsigned char colors;
 
-	char qindex;
 	char subtype;
 #define AgfaCl20 0
 #define AiptekPocketDV 1
@@ -629,7 +629,6 @@ static int sd_config(struct gspca_dev *gspca_dev,
 	struct cam *cam;
 
 	cam = &gspca_dev->cam;
-	cam->epaddr = 0x01;
 	sd->subtype = id->driver_info;
 	if (sd->subtype != LogitechClickSmart310) {
 		cam->cam_mode = vga_mode;
@@ -638,7 +637,6 @@ static int sd_config(struct gspca_dev *gspca_dev,
 		cam->cam_mode = sif_mode;
 		cam->nmodes = ARRAY_SIZE(sif_mode);
 	}
-	sd->qindex = 5;
 	sd->brightness = BRIGHTNESS_DEF;
 	sd->contrast = CONTRAST_DEF;
 	sd->colors = COLOR_DEF;
@@ -713,7 +711,8 @@ static int sd_start(struct gspca_dev *gspca_dev)
 		write_vector(gspca_dev, spca500_visual_defaults);
 		spca500_setmode(gspca_dev, xmult, ymult);
 		/* enable drop packet */
-		reg_w(gspca_dev, 0x00, 0x850a, 0x0001);
+		err = reg_w(gspca_dev, 0x00, 0x850a, 0x0001);
+		if (err < 0)
 			PDEBUG(D_ERR, "failed to enable drop packet");
 		reg_w(gspca_dev, 0x00, 0x8880, 3);
 		err = spca50x_setup_qtable(gspca_dev,
@@ -901,7 +900,7 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 					ffd9, 2);
 
 		/* put the JPEG header in the new frame */
-		jpeg_put_header(gspca_dev, frame, sd->qindex, 0x22);
+		jpeg_put_header(gspca_dev, frame, 0x22);
 
 		data += SPCA500_OFFSET_DATA;
 		len -= SPCA500_OFFSET_DATA;
@@ -937,16 +936,6 @@ static void setbrightness(struct gspca_dev *gspca_dev)
 			(__u8) (sd->brightness - 128));
 }
 
-static void getbrightness(struct gspca_dev *gspca_dev)
-{
-	struct sd *sd = (struct sd *) gspca_dev;
-	int ret;
-
-	ret = reg_r_12(gspca_dev, 0x00, 0x8167, 1);
-	if (ret >= 0)
-		sd->brightness = ret + 128;
-}
-
 static void setcontrast(struct gspca_dev *gspca_dev)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
@@ -954,31 +943,11 @@ static void setcontrast(struct gspca_dev *gspca_dev)
 	reg_w(gspca_dev, 0x00, 0x8168, sd->contrast);
 }
 
-static void getcontrast(struct gspca_dev *gspca_dev)
-{
-	struct sd *sd = (struct sd *) gspca_dev;
-	int ret;
-
-	ret = reg_r_12(gspca_dev, 0x0, 0x8168, 1);
-	if (ret >= 0)
-		sd->contrast = ret;
-}
-
 static void setcolors(struct gspca_dev *gspca_dev)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
 	reg_w(gspca_dev, 0x00, 0x8169, sd->colors);
-}
-
-static void getcolors(struct gspca_dev *gspca_dev)
-{
-	struct sd *sd = (struct sd *) gspca_dev;
-	int ret;
-
-	ret = reg_r_12(gspca_dev, 0x0, 0x8169, 1);
-	if (ret >= 0)
-		sd->colors = ret;
 }
 
 static int sd_setbrightness(struct gspca_dev *gspca_dev, __s32 val)
@@ -995,7 +964,6 @@ static int sd_getbrightness(struct gspca_dev *gspca_dev, __s32 *val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
-	getbrightness(gspca_dev);
 	*val = sd->brightness;
 	return 0;
 }
@@ -1014,7 +982,6 @@ static int sd_getcontrast(struct gspca_dev *gspca_dev, __s32 *val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
-	getcontrast(gspca_dev);
 	*val = sd->contrast;
 	return 0;
 }
@@ -1033,7 +1000,6 @@ static int sd_getcolors(struct gspca_dev *gspca_dev, __s32 *val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
-	getcolors(gspca_dev);
 	*val = sd->colors;
 	return 0;
 }
@@ -1093,8 +1059,10 @@ static struct usb_driver sd_driver = {
 /* -- module insert / remove -- */
 static int __init sd_mod_init(void)
 {
-	if (usb_register(&sd_driver) < 0)
-		return -1;
+	int ret;
+	ret = usb_register(&sd_driver);
+	if (ret < 0)
+		return ret;
 	PDEBUG(D_PROBE, "registered");
 	return 0;
 }

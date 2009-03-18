@@ -344,6 +344,7 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_SPCA508  v4l2_fourcc('S', '5', '0', '8') /* YUVY per line */
 #define V4L2_PIX_FMT_SPCA561  v4l2_fourcc('S', '5', '6', '1') /* compressed GBRG bayer */
 #define V4L2_PIX_FMT_PAC207   v4l2_fourcc('P', '2', '0', '7') /* compressed BGGR bayer */
+#define V4L2_PIX_FMT_MR97310A v4l2_fourcc('M', '3', '1', '0') /* compressed BGGR bayer */
 #define V4L2_PIX_FMT_PJPG     v4l2_fourcc('P', 'J', 'P', 'G') /* Pixart 73xx JPEG */
 #define V4L2_PIX_FMT_YVYU    v4l2_fourcc('Y', 'V', 'Y', 'U') /* 16  YVU 4:2:2     */
 
@@ -829,6 +830,7 @@ struct v4l2_querymenu {
 #define V4L2_CTRL_FLAG_UPDATE 		0x0008
 #define V4L2_CTRL_FLAG_INACTIVE 	0x0010
 #define V4L2_CTRL_FLAG_SLIDER 		0x0020
+#define V4L2_CTRL_FLAG_WRITE_ONLY 	0x0040
 
 /*  Query flag, to be ORed with the control ID */
 #define V4L2_CTRL_FLAG_NEXT_CTRL	0x80000000
@@ -879,8 +881,15 @@ enum v4l2_power_line_frequency {
 #define V4L2_CID_BACKLIGHT_COMPENSATION 	(V4L2_CID_BASE+28)
 #define V4L2_CID_CHROMA_AGC                     (V4L2_CID_BASE+29)
 #define V4L2_CID_COLOR_KILLER                   (V4L2_CID_BASE+30)
+#define V4L2_CID_COLORFX			(V4L2_CID_BASE+31)
+enum v4l2_colorfx {
+	V4L2_COLORFX_NONE	= 0,
+	V4L2_COLORFX_BW		= 1,
+	V4L2_COLORFX_SEPIA	= 2,
+};
+
 /* last CID + 1 */
-#define V4L2_CID_LASTP1                         (V4L2_CID_BASE+31)
+#define V4L2_CID_LASTP1                         (V4L2_CID_BASE+32)
 
 /*  MPEG-class control IDs defined by V4L2 */
 #define V4L2_CID_MPEG_BASE 			(V4L2_CTRL_CLASS_MPEG | 0x900)
@@ -1403,14 +1412,6 @@ struct v4l2_dbg_chip_ident {
 	__u32 revision;    /* chip revision, chip specific */
 } __attribute__ ((packed));
 
-/* VIDIOC_G_CHIP_IDENT_OLD: Deprecated, do not use */
-struct v4l2_chip_ident_old {
-	__u32 match_type;  /* Match type */
-	__u32 match_chip;  /* Match this chip, meaning determined by match_type */
-	__u32 ident;       /* chip identifier as specified in <media/v4l2-chip-ident.h> */
-	__u32 revision;    /* chip revision, chip specific */
-};
-
 /*
  *	I O C T L   C O D E S   F O R   V I D E O   D E V I C E S
  *
@@ -1488,8 +1489,6 @@ struct v4l2_chip_ident_old {
 /* Experimental, meant for debugging, testing and internal use.
    Never use this ioctl in applications! */
 #define VIDIOC_DBG_G_CHIP_IDENT _IOWR('V', 81, struct v4l2_dbg_chip_ident)
-/* This is deprecated and will go away in 2.6.30 */
-#define VIDIOC_G_CHIP_IDENT_OLD _IOWR('V', 81, struct v4l2_chip_ident_old)
 #endif
 
 #define VIDIOC_S_HW_FREQ_SEEK	 _IOW('V', 82, struct v4l2_hw_freq_seek)
