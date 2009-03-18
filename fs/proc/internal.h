@@ -58,8 +58,16 @@ extern const struct file_operations proc_numa_maps_operations;
 extern const struct file_operations proc_smaps_operations;
 extern const struct file_operations proc_clear_refs_operations;
 extern const struct file_operations proc_pagemap_operations;
-extern const struct file_operations proc_net_operations;
 extern const struct inode_operations proc_net_inode_operations;
+
+#ifdef CONFIG_NET
+int proc_net_revalidate(struct task_struct *tsk, struct dentry *dentry, struct nameidata *nd);
+#else
+static inline int proc_net_revalidate(struct task_struct *tsk, struct dentry *dentry, struct nameidata *nd)
+{
+	return 1;
+}
+#endif
 
 void free_proc_entry(struct proc_dir_entry *de);
 
@@ -84,6 +92,9 @@ struct dentry *proc_lookup_de(struct proc_dir_entry *de, struct inode *ino,
 		struct dentry *dentry);
 int proc_readdir_de(struct proc_dir_entry *de, struct file *filp, void *dirent,
 		filldir_t filldir);
+struct proc_dir_entry *proc_create_root(void);
+void release_proc_entry(struct proc_dir_entry *de);
+extern const struct super_operations proc_sops;
 
 struct pde_opener {
 	struct inode *inode;
@@ -91,3 +102,6 @@ struct pde_opener {
 	int (*release)(struct inode *, struct file *);
 	struct list_head lh;
 };
+void pde_users_dec(struct proc_dir_entry *pde);
+
+extern struct list_head proc_automounts;
