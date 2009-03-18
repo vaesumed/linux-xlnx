@@ -66,8 +66,7 @@ struct nfs4_cb_recall {
 	u32			cbr_ident;
 	int			cbr_trunc;
 	stateid_t		cbr_stateid;
-	u32			cbr_fhlen;
-	char			cbr_fhval[NFS4_FHSIZE];
+	struct knfsd_fh		cbr_fh;
 	struct nfs4_delegation	*cbr_dp;
 };
 
@@ -86,8 +85,7 @@ struct nfs4_delegation {
 };
 
 #define dl_stateid      dl_recall.cbr_stateid
-#define dl_fhlen        dl_recall.cbr_fhlen
-#define dl_fhval        dl_recall.cbr_fhval
+#define dl_fh           dl_recall.cbr_fh
 
 /* client delegation callback info */
 struct nfs4_callback {
@@ -168,8 +166,7 @@ struct nfs4_replay {
 	unsigned int		rp_buflen;
 	char			*rp_buf;
 	unsigned		intrp_allocated;
-	int			rp_openfh_len;
-	char			rp_openfh[NFS4_FHSIZE];
+	struct knfsd_fh		rp_openfh;
 	char			rp_ibuf[NFSD4_REPLAY_ISIZE];
 };
 
@@ -217,7 +214,7 @@ struct nfs4_stateowner {
 *      share_acces, share_deny on the file.
 */
 struct nfs4_file {
-	struct kref		fi_ref;
+	atomic_t		fi_ref;
 	struct list_head        fi_hash;    /* hash by "struct inode *" */
 	struct list_head        fi_stateids;
 	struct list_head	fi_delegations;
@@ -259,14 +256,12 @@ struct nfs4_stateid {
 };
 
 /* flags for preprocess_seqid_op() */
-#define CHECK_FH                0x00000001
 #define CONFIRM                 0x00000002
 #define OPEN_STATE              0x00000004
 #define LOCK_STATE              0x00000008
 #define RD_STATE	        0x00000010
 #define WR_STATE	        0x00000020
 #define CLOSE_STATE             0x00000040
-#define DELEG_RET               0x00000080
 
 #define seqid_mutating_err(err)                       \
 	(((err) != nfserr_stale_clientid) &&    \
