@@ -1,0 +1,4 @@
+config DRM_PSB
+	tristate "psb drm"
+	depends on DRM
+	default N
