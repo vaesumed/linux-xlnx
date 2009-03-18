@@ -150,8 +150,8 @@ static int omap_wdt_open(struct inode *inode, struct file *file)
 		clk_enable(wdev->armwdt_ck);	/* Enable the clock */
 
 	if (cpu_is_omap24xx() || cpu_is_omap34xx()) {
-		clk_enable(wdev->mpu_wdt_ick);    /* Enable the interface clock */
-		clk_enable(wdev->mpu_wdt_fck);    /* Enable the functional clock */
+		clk_enable(wdev->mpu_wdt_ick); /* Enable the interface clock */
+		clk_enable(wdev->mpu_wdt_fck); /* Enable the functional clock */
 	}
 
 	/* initialize prescaler */
