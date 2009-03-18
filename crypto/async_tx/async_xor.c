@@ -30,11 +30,8 @@
 #include <linux/raid/xor.h>
 #include <linux/async_tx.h>
 
-/* do_async_xor - dma map the pages and perform the xor with an engine.
- * 	This routine is marked __always_inline so it can be compiled away
- * 	when CONFIG_DMA_ENGINE=n
- */
-static __always_inline struct dma_async_tx_descriptor *
+/* do_async_xor - dma map the pages and perform the xor with an engine */
+static __async_inline struct dma_async_tx_descriptor *
 do_async_xor(struct dma_chan *chan, struct page *dest, struct page **src_list,
 	     unsigned int offset, int src_cnt, size_t len,
 	     enum async_tx_flags flags,
@@ -42,7 +39,7 @@ do_async_xor(struct dma_chan *chan, struct page *dest, struct page **src_list,
 	     dma_async_tx_callback cb_fn, void *cb_param)
 {
 	struct dma_device *dma = chan->device;
-	dma_addr_t *dma_src = (dma_addr_t *) src_list;
+	dma_addr_t dma_src[src_cnt];
 	struct dma_async_tx_descriptor *tx = NULL;
 	int src_off = 0;
 	int i;
@@ -68,7 +65,7 @@ do_async_xor(struct dma_chan *chan, struct page *dest, struct page **src_list,
 	while (src_cnt) {
 		async_flags = flags;
 		dma_flags = 0;
-		xor_src_cnt = min(src_cnt, dma->max_xor);
+		xor_src_cnt = min(src_cnt, (int)dma->max_xor);
 		/* if we are submitting additional xors, leave the chain open,
 		 * clear the callback parameters, and leave the destination
 		 * buffer mapped
@@ -241,7 +238,7 @@ static int page_is_zero(struct page *p, unsigned int offset, size_t len)
 struct dma_async_tx_descriptor *
 async_xor_zero_sum(struct page *dest, struct page **src_list,
 	unsigned int offset, int src_cnt, size_t len,
-	u32 *result, enum async_tx_flags flags,
+	enum sum_check_flags *result, enum async_tx_flags flags,
 	struct dma_async_tx_descriptor *depend_tx,
 	dma_async_tx_callback cb_fn, void *cb_param)
 {
@@ -254,7 +251,7 @@ async_xor_zero_sum(struct page *dest, struct page **src_list,
 	BUG_ON(src_cnt <= 1);
 
 	if (device && src_cnt <= device->max_xor) {
-		dma_addr_t *dma_src = (dma_addr_t *) src_list;
+		dma_addr_t dma_src[src_cnt];
 		unsigned long dma_prep_flags = cb_fn ? DMA_PREP_INTERRUPT : 0;
 		int i;
 
@@ -292,7 +289,7 @@ async_xor_zero_sum(struct page *dest, struct page **src_list,
 
 		async_tx_quiesce(&tx);
 
-		*result = page_is_zero(dest, offset, len) ? 0 : 1;
+		*result = !page_is_zero(dest, offset, len) << SUM_CHECK_P;
 
 		async_tx_sync_epilog(cb_fn, cb_param);
 	}
@@ -303,16 +300,6 @@ EXPORT_SYMBOL_GPL(async_xor_zero_sum);
 
 static int __init async_xor_init(void)
 {
-	#ifdef CONFIG_DMA_ENGINE
-	/* To conserve stack space the input src_list (array of page pointers)
-	 * is reused to hold the array of dma addresses passed to the driver.
-	 * This conversion is only possible when dma_addr_t is less than the
-	 * the size of a pointer.  HIGHMEM64G is known to violate this
-	 * assumption.
-	 */
-	BUILD_BUG_ON(sizeof(dma_addr_t) > sizeof(struct page *));
-	#endif
-
 	return 0;
 }
 

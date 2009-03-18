@@ -21,6 +21,15 @@
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 
+/* on architectures without dma-mapping capabilities we need to ensure
+ * that the asynchronous path compiles away
+ */
+#ifdef CONFIG_HAS_DMA
+#define __async_inline
+#else
+#define __async_inline __always_inline
+#endif
+
 /**
  * dma_chan_ref - object used to manage dma channels received from the
  *   dmaengine core.
@@ -50,12 +59,15 @@ struct dma_chan_ref {
  * @ASYNC_TX_ACK: immediately ack the descriptor, precludes setting up a
  * dependency chain
  * @ASYNC_TX_DEP_ACK: ack the dependency descriptor.  Useful for chaining.
+ * @ASYNC_TX_ASYNC_ONLY: if set then try to perform operation requested only in
+ * the asynchronous mode. Useful for R6 recovery.
  */
 enum async_tx_flags {
 	ASYNC_TX_XOR_ZERO_DST	 = (1 << 0),
 	ASYNC_TX_XOR_DROP_DST	 = (1 << 1),
-	ASYNC_TX_ACK		 = (1 << 3),
-	ASYNC_TX_DEP_ACK	 = (1 << 4),
+	ASYNC_TX_ACK		 = (1 << 2),
+	ASYNC_TX_DEP_ACK	 = (1 << 3),
+	ASYNC_TX_ASYNC_ONLY	 = (1 << 4),
 };
 
 #ifdef CONFIG_DMA_ENGINE
@@ -110,7 +122,7 @@ async_xor(struct page *dest, struct page **src_list, unsigned int offset,
 struct dma_async_tx_descriptor *
 async_xor_zero_sum(struct page *dest, struct page **src_list,
 	unsigned int offset, int src_cnt, size_t len,
-	u32 *result, enum async_tx_flags flags,
+	enum sum_check_flags *result, enum async_tx_flags flags,
 	struct dma_async_tx_descriptor *depend_tx,
 	dma_async_tx_callback cb_fn, void *cb_fn_param);
 
@@ -130,6 +142,44 @@ struct dma_async_tx_descriptor *
 async_trigger_callback(enum async_tx_flags flags,
 	struct dma_async_tx_descriptor *depend_tx,
 	dma_async_tx_callback cb_fn, void *cb_fn_param);
+
+struct dma_async_tx_descriptor *
+async_pq(struct page **blocks, unsigned int offset, int src_cnt,
+	 unsigned char *scfs, size_t len, enum async_tx_flags flags,
+	 struct dma_async_tx_descriptor *depend_tx,
+	 dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_gen_syndrome(struct page **blocks, unsigned int offset, int src_cnt,
+		   size_t len, enum async_tx_flags flags,
+		   struct dma_async_tx_descriptor *depend_tx,
+		   dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_pq_zero_sum(struct page **blocks, unsigned int offset, int src_cnt,
+		  unsigned char *scfs, size_t len, enum sum_check_flags *pqres,
+		  enum async_tx_flags flags,
+		  struct dma_async_tx_descriptor *depend_tx,
+		  dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_syndrome_zero_sum(struct page **blocks, unsigned int offset, int src_cnt,
+			size_t len, enum sum_check_flags *pqres,
+			enum async_tx_flags flags,
+			struct dma_async_tx_descriptor *depend_tx,
+			dma_async_tx_callback cb_fn, void *cb_param);
+
+struct dma_async_tx_descriptor *
+async_r6_dd_recov(int src_num, size_t bytes, int faila, int failb,
+		  struct page **ptrs, enum async_tx_flags flags,
+		  struct dma_async_tx_descriptor *depend_tx,
+		  dma_async_tx_callback callback, void *callback_param);
+
+struct dma_async_tx_descriptor *
+async_r6_dp_recov(int src_num, size_t bytes, int faila, struct page **ptrs,
+		  enum async_tx_flags flags,
+		  struct dma_async_tx_descriptor *depend_tx,
+		  dma_async_tx_callback callback, void *callback_param);
 
 void async_tx_quiesce(struct dma_async_tx_descriptor **tx);
 #endif /* _ASYNC_TX_H_ */
