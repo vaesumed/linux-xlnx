@@ -48,62 +48,10 @@
 struct rb532_cf_info {
 	void __iomem	*iobase;
 	unsigned int	gpio_line;
-	int		frozen;
 	unsigned int	irq;
 };
 
 /* ------------------------------------------------------------------------ */
-
-static inline void rb532_pata_finish_io(struct ata_port *ap)
-{
-	struct ata_host *ah = ap->host;
-	struct rb532_cf_info *info = ah->private_data;
-
-	/* FIXME: Keep previous delay. If this is merely a fence then
-	   ata_sff_sync might be sufficient. */
-	ata_sff_dma_pause(ap);
-	ndelay(RB500_CF_IO_DELAY);
-}
-
-static void rb532_pata_exec_command(struct ata_port *ap,
-				const struct ata_taskfile *tf)
-{
-	writeb(tf->command, ap->ioaddr.command_addr);
-	rb532_pata_finish_io(ap);
-}
-
-static unsigned int rb532_pata_data_xfer(struct ata_device *adev, unsigned char *buf,
-				unsigned int buflen, int write_data)
-{
-	struct ata_port *ap = adev->link->ap;
-	void __iomem *ioaddr = ap->ioaddr.data_addr;
-	int retlen = buflen;
-
-	if (write_data) {
-		for (; buflen > 0; buflen--, buf++)
-			writeb(*buf, ioaddr);
-	} else {
-		for (; buflen > 0; buflen--, buf++)
-			*buf = readb(ioaddr);
-	}
-
-	rb532_pata_finish_io(adev->link->ap);
-	return retlen;
-}
-
-static void rb532_pata_freeze(struct ata_port *ap)
-{
-	struct rb532_cf_info *info = ap->host->private_data;
-
-	info->frozen = 1;
-}
-
-static void rb532_pata_thaw(struct ata_port *ap)
-{
-	struct rb532_cf_info *info = ap->host->private_data;
-
-	info->frozen = 0;
-}
 
 static irqreturn_t rb532_pata_irq_handler(int irq, void *dev_instance)
 {
@@ -112,8 +60,7 @@ static irqreturn_t rb532_pata_irq_handler(int irq, void *dev_instance)
 
 	if (gpio_get_value(info->gpio_line)) {
 		set_irq_type(info->irq, IRQ_TYPE_LEVEL_LOW);
-		if (!info->frozen)
-			ata_sff_interrupt(info->irq, dev_instance);
+		ata_sff_interrupt(info->irq, dev_instance);
 	} else {
 		set_irq_type(info->irq, IRQ_TYPE_LEVEL_HIGH);
 	}
@@ -123,10 +70,7 @@ static irqreturn_t rb532_pata_irq_handler(int irq, void *dev_instance)
 
 static struct ata_port_operations rb532_pata_port_ops = {
 	.inherits		= &ata_sff_port_ops,
-	.sff_exec_command	= rb532_pata_exec_command,
-	.sff_data_xfer		= rb532_pata_data_xfer,
-	.freeze			= rb532_pata_freeze,
-	.thaw			= rb532_pata_thaw,
+	.sff_data_xfer		= ata_sff_data_xfer32,
 };
 
 /* ------------------------------------------------------------------------ */
