@@ -643,7 +643,8 @@ static ssize_t show_##file_name						\
 static ssize_t show_cache_disable(struct _cpuid4_info *this_leaf, char *buf,
 		 unsigned int index)
 {
-	int node = cpu_to_node(first_cpu(this_leaf->shared_cpu_map));
+	int cpu = cpumask_first(to_cpumask(this_leaf->shared_cpu_map));
+	int node = cpu_to_node(cpu);
 	struct pci_dev *dev = k8_northbridges[node];
 	unsigned int reg = 0;
 
@@ -665,7 +666,8 @@ static ssize_t
 store_cache_disable(struct _cpuid4_info *this_leaf, const char *buf,
 		 size_t count, unsigned int index)
 {
-	int node = cpu_to_node(first_cpu(this_leaf->shared_cpu_map));
+	int cpu = cpumask_first(to_cpumask(this_leaf->shared_cpu_map));
+	int node = cpu_to_node(cpu);
 	struct pci_dev *dev = k8_northbridges[node];
 	unsigned long val = 0;
 	unsigned int scrubber = 0;
