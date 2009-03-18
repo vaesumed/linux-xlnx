@@ -19,9 +19,6 @@
 #define RAID6_USE_EMPTY_ZERO_PAGE 0
 #include <linux/blkdev.h>
 
-/* Additional compute_parity mode -- updates the parity w/o LOCKING */
-#define UPDATE_PARITY	4
-
 /* We need a pre-zeroed page... if we don't want to use the kernel-provided
    one define it here */
 #if RAID6_USE_EMPTY_ZERO_PAGE
