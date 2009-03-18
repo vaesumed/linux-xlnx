@@ -169,6 +169,17 @@ void free_nsproxy(struct nsproxy *ns)
 }
 
 /*
+ * Unshare just the current->nsproxy itself.
+ */
+struct nsproxy *unshare_current_nsproxy(void)
+{
+	if (!capable(CAP_SYS_ADMIN))
+		return ERR_PTR(-EPERM);
+
+	return create_new_namespaces(0, current, current->fs);
+}
+
+/*
  * Called from unshare. Unshare all the namespaces part of nsproxy.
  * On success, returns the new nsproxy.
  */
