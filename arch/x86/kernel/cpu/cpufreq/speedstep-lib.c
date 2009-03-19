@@ -205,7 +205,7 @@ static unsigned int pentium4_get_frequency(void)
 	return (fsb * mult);
 }
 
-
+/* Warning: may get called from smp_call_function_single. */
 unsigned int speedstep_get_processor_frequency(unsigned int processor)
 {
 	switch (processor) {
