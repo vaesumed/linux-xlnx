@@ -3,14 +3,6 @@
 
 #include "iodev.h"
 
-struct kvm_kpit_timer {
-	struct hrtimer timer;
-	int irq;
-	s64 period; /* unit: ns */
-	s64 scheduled;
-	atomic_t pending;
-};
-
 struct kvm_kpit_channel_state {
 	u32 count; /* can be 65536 */
 	u16 latched_count;
@@ -29,7 +21,8 @@ struct kvm_kpit_channel_state {
 
 struct kvm_kpit_state {
 	struct kvm_kpit_channel_state channels[3];
-	struct kvm_kpit_timer pit_timer;
+	struct kvm_timer pit_timer;
+	bool is_periodic;
 	u32    speaker_data_on;
 	struct mutex lock;
 	struct kvm_pit *pit;
@@ -45,6 +38,7 @@ struct kvm_pit {
 	struct kvm *kvm;
 	struct kvm_kpit_state pit_state;
 	int irq_source_id;
+	struct kvm_irq_mask_notifier mask_notifier;
 };
 
 #define KVM_PIT_BASE_ADDRESS	    0x40
