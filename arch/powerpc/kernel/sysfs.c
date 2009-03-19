@@ -135,22 +135,22 @@ void ppc_enable_pmcs(void)
 EXPORT_SYMBOL(ppc_enable_pmcs);
 
 #define SYSFS_PMCSETUP(NAME, ADDRESS) \
-static long read_##NAME(void *junk) \
+static void read_##NAME(void *val) \
 { \
-	return mfspr(ADDRESS); \
+	*(unsigned long *)val = mfspr(ADDRESS);	\
 } \
-static long write_##NAME(void *val) \
+static void write_##NAME(void *val) \
 { \
 	ppc_enable_pmcs(); \
-	mtspr(ADDRESS, (unsigned long)val);	\
-	return 0; \
+	mtspr(ADDRESS, *(unsigned long *)val);	\
 } \
 static ssize_t show_##NAME(struct sys_device *dev, \
 			struct sysdev_attribute *attr, \
 			char *buf) \
 { \
 	struct cpu *cpu = container_of(dev, struct cpu, sysdev); \
-	unsigned long val = work_on_cpu(cpu->sysdev.id, read_##NAME, NULL); \
+	unsigned long val; \
+	smp_call_function_single(cpu->sysdev.id, read_##NAME, &val, 1);	\
 	return sprintf(buf, "%lx\n", val); \
 } \
 static ssize_t __used \
@@ -162,7 +162,7 @@ static ssize_t __used \
 	int ret = sscanf(buf, "%lx", &val); \
 	if (ret != 1) \
 		return -EINVAL; \
-	work_on_cpu(cpu->sysdev.id, write_##NAME, (void *)val);	\
+	smp_call_function_single(cpu->sysdev.id, write_##NAME, &val, 1); \
 	return count; \
 }
 
