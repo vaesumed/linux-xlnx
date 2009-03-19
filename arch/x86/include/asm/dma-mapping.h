@@ -6,6 +6,7 @@
  * Documentation/DMA-API.txt for documentation.
  */
 
+#include <linux/kmemcheck.h>
 #include <linux/scatterlist.h>
 #include <linux/dma-attrs.h>
 #include <asm/io.h>
@@ -57,6 +58,7 @@ dma_map_single(struct device *hwdev, void *ptr, size_t size,
 {
 	struct dma_map_ops *ops = get_dma_ops(hwdev);
 
+	kmemcheck_mark_initialized(ptr, size);
 	BUG_ON(!valid_dma_direction(dir));
 	return ops->map_page(hwdev, virt_to_page(ptr),
 			     (unsigned long)ptr & ~PAGE_MASK, size,
@@ -80,6 +82,11 @@ dma_map_sg(struct device *hwdev, struct scatterlist *sg,
 {
 	struct dma_map_ops *ops = get_dma_ops(hwdev);
 
+	struct scatterlist *s;
+	int i;
+
+	for_each_sg(sg, s, nents, i)
+		kmemcheck_mark_initialized(sg_virt(s), s->length);
 	BUG_ON(!valid_dma_direction(dir));
 	return ops->map_sg(hwdev, sg, nents, dir, NULL);
 }
@@ -178,6 +185,7 @@ static inline dma_addr_t dma_map_page(struct device *dev, struct page *page,
 {
 	struct dma_map_ops *ops = get_dma_ops(dev);
 
+	kmemcheck_mark_initialized(page_address(page) + offset, size);
 	BUG_ON(!valid_dma_direction(dir));
 	return ops->map_page(dev, page, offset, size, dir, NULL);
 }
