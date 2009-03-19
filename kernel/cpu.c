@@ -565,3 +565,13 @@ void init_cpu_online(const struct cpumask *src)
 {
 	cpumask_copy(to_cpumask(cpu_online_bits), src);
 }
+
+/* Deprecated accessors. */
+struct cpumask *_cpu_possible_mask_nonconst = to_cpumask(cpu_possible_bits);
+EXPORT_SYMBOL(_cpu_possible_mask_nonconst);
+struct cpumask *_cpu_online_mask_nonconst = to_cpumask(cpu_online_bits);
+EXPORT_SYMBOL(_cpu_online_mask_nonconst);
+struct cpumask *_cpu_present_mask_nonconst = to_cpumask(cpu_present_bits);
+EXPORT_SYMBOL(_cpu_present_mask_nonconst);
+struct cpumask *_cpu_active_mask_nonconst = to_cpumask(cpu_active_bits);
+EXPORT_SYMBOL(_cpu_active_mask_nonconst);
