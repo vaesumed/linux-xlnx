@@ -700,6 +700,8 @@ static int init_constants_sb(struct ubifs_info *c)
 	if (err)
 		return err;
 
+	/* Initialize effective LEB size used in budgeting calculations */
+	c->idx_leb_size = c->leb_size - c->max_idx_node_sz;
 	return 0;
 }
 
@@ -716,6 +718,7 @@ static void init_constants_master(struct ubifs_info *c)
 	long long tmp64;
 
 	c->min_idx_lebs = ubifs_calc_min_idx_lebs(c);
+	c->report_rp_size = ubifs_reported_space(c, c->rp_size);
 
 	/*
 	 * Calculate total amount of FS blocks. This number is not used
@@ -1318,11 +1321,15 @@ static int mount_ubifs(struct ubifs_info *c)
 		else {
 			c->need_recovery = 0;
 			ubifs_msg("recovery completed");
-			/* GC LEB has to be empty and taken at this point */
-			ubifs_assert(c->lst.taken_empty_lebs == 1);
+			/*
+			 * GC LEB has to be empty and taken at this point. But
+			 * the journal head LEBs may also be accounted as
+			 * "empty taken" if they are empty.
+			 */
+			ubifs_assert(c->lst.taken_empty_lebs > 0);
 		}
 	} else
-		ubifs_assert(c->lst.taken_empty_lebs == 1);
+		ubifs_assert(c->lst.taken_empty_lebs > 0);
 
 	err = dbg_check_filesystem(c);
 	if (err)
@@ -1775,7 +1782,7 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 		c->bu.buf = NULL;
 	}
 
-	ubifs_assert(c->lst.taken_empty_lebs == 1);
+	ubifs_assert(c->lst.taken_empty_lebs > 0);
 	return 0;
 }
 
