@@ -52,7 +52,7 @@ int irq_select_affinity(unsigned int irq)
 
 	while (!cpu_possible(cpu) ||
 	       !cpumask_test_cpu(cpu, irq_default_affinity))
-		cpu = (cpu < (NR_CPUS-1) ? cpu + 1 : 0);
+		cpu = (cpu < (nr_cpu_ids-1) ? cpu + 1 : 0);
 	last_cpu = cpu;
 
 	irq_desc[irq].affinity = cpumask_of_cpu(cpu);
