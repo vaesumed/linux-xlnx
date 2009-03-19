@@ -181,6 +181,12 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 	}
 
 	this_node = acpi_ns_map_handle_to_node(obj_handle);
+	if (!this_node) {
+		ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Invalid object handle %p\n",
+				  obj_handle));
+		return (AE_OK);
+	}
+
 	type = this_node->type;
 
 	/* Check if the owner matches */
@@ -509,7 +515,7 @@ acpi_ns_dump_one_object(acpi_handle obj_handle,
 
 		case ACPI_DESC_TYPE_OPERAND:
 
-			obj_type = ACPI_GET_OBJECT_TYPE(obj_desc);
+			obj_type = obj_desc->common.type;
 
 			if (obj_type > ACPI_TYPE_LOCAL_MAX) {
 				acpi_os_printf
