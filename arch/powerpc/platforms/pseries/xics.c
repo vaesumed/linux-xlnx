@@ -165,7 +165,7 @@ static int get_irq_server(unsigned int virq, unsigned int strict_check)
 
 		server = first_cpu(tmp);
 
-		if (server < NR_CPUS)
+		if (server < nr_cpu_ids)
 			return get_hard_smp_processor_id(server);
 
 		if (strict_check)

@@ -221,7 +221,7 @@ static void pseries_remove_processor(struct device_node *np)
 			set_hard_smp_processor_id(cpu, -1);
 			break;
 		}
-		if (cpu == NR_CPUS)
+		if (cpu >= nr_cpu_ids)
 			printk(KERN_WARNING "Could not find cpu to remove "
 			       "with physical id 0x%x\n", intserv[i]);
 	}
