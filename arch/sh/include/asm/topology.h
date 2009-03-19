@@ -40,6 +40,9 @@
 					CPU_MASK_ALL : \
 					node_to_cpumask(pcibus_to_node(bus)) \
 				)
+#define cpumask_of_pcibus(bus)	(pcibus_to_node(bus) == -1 ? \
+				 cpu_all_mask : \
+				 cpumask_of_node(pcibus_to_node(bus)))
 #endif
 
 #include <asm-generic/topology.h>
