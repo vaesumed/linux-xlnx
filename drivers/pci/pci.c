@@ -657,7 +657,7 @@ static int pci_save_pcie_state(struct pci_dev *dev)
 
 	save_state = pci_find_saved_cap(dev, PCI_CAP_ID_EXP);
 	if (!save_state) {
-		dev_err(&dev->dev, "buffer not found in %s\n", __FUNCTION__);
+		dev_err(&dev->dev, "buffer not found in %s\n", __func__);
 		return -ENOMEM;
 	}
 	cap = (u16 *)&save_state->data[0];
@@ -700,7 +700,7 @@ static int pci_save_pcix_state(struct pci_dev *dev)
 
 	save_state = pci_find_saved_cap(dev, PCI_CAP_ID_PCIX);
 	if (!save_state) {
-		dev_err(&dev->dev, "buffer not found in %s\n", __FUNCTION__);
+		dev_err(&dev->dev, "buffer not found in %s\n", __func__);
 		return -ENOMEM;
 	}
 
@@ -1484,7 +1484,7 @@ pci_get_interrupt_pin(struct pci_dev *dev, struct pci_dev **bridge)
 	if (!pin)
 		return -1;
 
-	while (dev->bus->self) {
+	while (dev->bus->parent) {
 		pin = pci_swizzle_interrupt_pin(dev, pin);
 		dev = dev->bus->self;
 	}
@@ -1504,7 +1504,7 @@ u8 pci_common_swizzle(struct pci_dev *dev, u8 *pinp)
 {
 	u8 pin = *pinp;
 
-	while (dev->bus->self) {
+	while (dev->bus->parent) {
 		pin = pci_swizzle_interrupt_pin(dev, pin);
 		dev = dev->bus->self;
 	}
@@ -2028,18 +2028,24 @@ static int __pcie_flr(struct pci_dev *dev, int probe)
 	pci_block_user_cfg_access(dev);
 
 	/* Wait for Transaction Pending bit clean */
+	pci_read_config_word(dev, exppos + PCI_EXP_DEVSTA, &status);
+	if (!(status & PCI_EXP_DEVSTA_TRPND))
+		goto transaction_done;
+
 	msleep(100);
 	pci_read_config_word(dev, exppos + PCI_EXP_DEVSTA, &status);
-	if (status & PCI_EXP_DEVSTA_TRPND) {
-		dev_info(&dev->dev, "Busy after 100ms while trying to reset; "
-			"sleeping for 1 second\n");
-		ssleep(1);
-		pci_read_config_word(dev, exppos + PCI_EXP_DEVSTA, &status);
-		if (status & PCI_EXP_DEVSTA_TRPND)
-			dev_info(&dev->dev, "Still busy after 1s; "
-				"proceeding with reset anyway\n");
-	}
+	if (!(status & PCI_EXP_DEVSTA_TRPND))
+		goto transaction_done;
 
+	dev_info(&dev->dev, "Busy after 100ms while trying to reset; "
+			"sleeping for 1 second\n");
+	ssleep(1);
+	pci_read_config_word(dev, exppos + PCI_EXP_DEVSTA, &status);
+	if (status & PCI_EXP_DEVSTA_TRPND)
+		dev_info(&dev->dev, "Still busy after 1s; "
+				"proceeding with reset anyway\n");
+
+transaction_done:
 	pci_write_config_word(dev, exppos + PCI_EXP_DEVCTL,
 				PCI_EXP_DEVCTL_BCR_FLR);
 	mdelay(100);
@@ -2066,18 +2072,24 @@ static int __pci_af_flr(struct pci_dev *dev, int probe)
 	pci_block_user_cfg_access(dev);
 
 	/* Wait for Transaction Pending bit clean */
+	pci_read_config_byte(dev, cappos + PCI_AF_STATUS, &status);
+	if (!(status & PCI_AF_STATUS_TP))
+		goto transaction_done;
+
 	msleep(100);
 	pci_read_config_byte(dev, cappos + PCI_AF_STATUS, &status);
-	if (status & PCI_AF_STATUS_TP) {
-		dev_info(&dev->dev, "Busy after 100ms while trying to"
-				" reset; sleeping for 1 second\n");
-		ssleep(1);
-		pci_read_config_byte(dev,
-				cappos + PCI_AF_STATUS, &status);
-		if (status & PCI_AF_STATUS_TP)
-			dev_info(&dev->dev, "Still busy after 1s; "
-					"proceeding with reset anyway\n");
-	}
+	if (!(status & PCI_AF_STATUS_TP))
+		goto transaction_done;
+
+	dev_info(&dev->dev, "Busy after 100ms while trying to"
+			" reset; sleeping for 1 second\n");
+	ssleep(1);
+	pci_read_config_byte(dev, cappos + PCI_AF_STATUS, &status);
+	if (status & PCI_AF_STATUS_TP)
+		dev_info(&dev->dev, "Still busy after 1s; "
+				"proceeding with reset anyway\n");
+
+transaction_done:
 	pci_write_config_byte(dev, cappos + PCI_AF_CTRL, PCI_AF_CTRL_FLR);
 	mdelay(100);
 
