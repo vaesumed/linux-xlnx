@@ -241,6 +241,7 @@ int param_get_charp(char *buffer, struct kernel_param *kp)
 	return sprintf(buffer, "%s", *((char **)kp->arg));
 }
 
+/* Actually could be a bool or an int. */
 int param_set_bool(const char *val, struct kernel_param *kp)
 {
 	/* No equals means "set"... */
@@ -249,10 +250,10 @@ int param_set_bool(const char *val, struct kernel_param *kp)
 	/* One of =[yYnN01] */
 	switch (val[0]) {
 	case 'y': case 'Y': case '1':
-		*(int *)kp->arg = 1;
+		memset(kp->arg, 0xff, kp->size);
 		return 0;
 	case 'n': case 'N': case '0':
-		*(int *)kp->arg = 0;
+		memset(kp->arg, 0, kp->size);
 		return 0;
 	}
 	return -EINVAL;
@@ -260,16 +261,25 @@ int param_set_bool(const char *val, struct kernel_param *kp)
 
 int param_get_bool(char *buffer, struct kernel_param *kp)
 {
+	bool val;
+	if (sizeof(kp->arg) == sizeof(int))
+		val = *(int *)kp->arg;
+	else
+		val = *(bool *)kp->arg;
+
 	/* Y and N chosen as being relatively non-coder friendly */
-	return sprintf(buffer, "%c", (*(int *)kp->arg) ? 'Y' : 'N');
+	return sprintf(buffer, "%c", val ? 'Y' : 'N');
 }
 
+/* This one must be bool. */
 int param_set_invbool(const char *val, struct kernel_param *kp)
 {
-	int boolval, ret;
+	int ret;
+	bool boolval;
 	struct kernel_param dummy;
 
 	dummy.arg = &boolval;
+	dummy.size = sizeof(boolval);
 	ret = param_set_bool(val, &dummy);
 	if (ret == 0)
 		*(bool *)kp->arg = !boolval;
