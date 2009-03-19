@@ -149,23 +149,16 @@ void saa7134_set_gpio(struct saa7134_dev *dev, int bit_no, int value)
 /* delayed request_module                                      */
 
 #if defined(CONFIG_MODULES) && defined(MODULE)
-
-static void request_module_async(struct work_struct *work){
-	struct saa7134_dev* dev = container_of(work, struct saa7134_dev, request_module_wk);
-	if (card_is_empress(dev))
-		request_module("saa7134-empress");
-	if (card_is_dvb(dev))
-		request_module("saa7134-dvb");
-	if (alsa)
-		request_module("saa7134-alsa");
-	if (oss)
-		request_module("saa7134-oss");
-}
-
 static void request_submodules(struct saa7134_dev *dev)
 {
-	INIT_WORK(&dev->request_module_wk, request_module_async);
-	schedule_work(&dev->request_module_wk);
+	if (card_is_empress(dev))
+		request_module_nowait("saa7134-empress");
+	if (card_is_dvb(dev))
+		request_module_nowait("saa7134-dvb");
+	if (alsa)
+		request_module_nowait("saa7134-alsa");
+	if (oss)
+		request_module_nowait("saa7134-oss");
 }
 
 #else
