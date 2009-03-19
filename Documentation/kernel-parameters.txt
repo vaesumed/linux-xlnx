@@ -1041,6 +1041,10 @@ and is between 256 and 4096 characters. It is defined in the file
 			Configure the RouterBoard 532 series on-chip
 			Ethernet adapter MAC address.
 
+	kmemleak=	[KNL] Boot-time kmemleak enable/disable
+			Valid arguments: on, off
+			Default: on
+
 	kmemtrace.enable=	[KNL,KMEMTRACE] Format: { yes | no }
 				Controls whether kmemtrace is enabled
 				at boot-time.
