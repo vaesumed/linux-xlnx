@@ -314,8 +314,8 @@ static int __init smp_psurge_probe(void)
 	 * device tree for them, and smp_setup_cpu_maps hasn't
 	 * set their bits in cpu_possible_map and cpu_present_map.
 	 */
-	if (ncpus > NR_CPUS)
-		ncpus = NR_CPUS;
+	if (ncpus > nr_cpu_ids)
+		ncpus = nr_cpu_ids;
 	for (i = 1; i < ncpus ; ++i) {
 		cpu_set(i, cpu_present_map);
 		set_hard_smp_processor_id(i, i);
