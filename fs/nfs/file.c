@@ -65,11 +65,7 @@ const struct file_operations nfs_file_operations = {
 	.write		= do_sync_write,
 	.aio_read	= nfs_file_read,
 	.aio_write	= nfs_file_write,
-#ifdef CONFIG_MMU
 	.mmap		= nfs_file_mmap,
-#else
-	.mmap		= generic_file_mmap,
-#endif
 	.open		= nfs_file_open,
 	.flush		= nfs_file_flush,
 	.release	= nfs_file_release,
@@ -305,11 +301,13 @@ nfs_file_mmap(struct file * file, struct vm_area_struct * vma)
 	dprintk("NFS: mmap(%s/%s)\n",
 		dentry->d_parent->d_name.name, dentry->d_name.name);
 
-	status = nfs_revalidate_mapping(inode, file->f_mapping);
+	/* Note: generic_file_mmap() returns ENOSYS on nommu systems
+	 *       so we call that before revalidating the mapping
+	 */
+	status = generic_file_mmap(file, vma);
 	if (!status) {
 		vma->vm_ops = &nfs_file_vm_ops;
-		vma->vm_flags |= VM_CAN_NONLINEAR;
-		file_accessed(file);
+		status = nfs_revalidate_mapping(inode, file->f_mapping);
 	}
 	return status;
 }
@@ -354,6 +352,15 @@ static int nfs_write_begin(struct file *file, struct address_space *mapping,
 		file->f_path.dentry->d_parent->d_name.name,
 		file->f_path.dentry->d_name.name,
 		mapping->host->i_ino, len, (long long) pos);
+
+	/*
+	 * Prevent starvation issues if someone is doing a consistency
+	 * sync-to-disk
+	 */
+	ret = wait_on_bit(&NFS_I(mapping->host)->flags, NFS_INO_FLUSHING,
+			nfs_wait_bit_killable, TASK_KILLABLE);
+	if (ret)
+		return ret;
 
 	page = grab_cache_page_write_begin(mapping, index, flags);
 	if (!page)
