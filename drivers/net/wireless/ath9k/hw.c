@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Atheros Communications Inc.
+ * Copyright (c) 2008-2009 Atheros Communications Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -588,6 +588,10 @@ static int ath9k_hw_post_attach(struct ath_hw *ah)
 	ecode = ath9k_hw_eeprom_attach(ah);
 	if (ecode != 0)
 		return ecode;
+
+	DPRINTF(ah->ah_sc, ATH_DBG_CONFIG, "Eeprom VER: %d, REV: %d\n",
+		ah->eep_ops->get_eeprom_ver(ah), ah->eep_ops->get_eeprom_rev(ah));
+
 	ecode = ath9k_hw_rfattach(ah);
 	if (ecode != 0)
 		return ecode;
@@ -2273,11 +2277,7 @@ int ath9k_hw_reset(struct ath_hw *ah, struct ath9k_channel *chan,
 	else
 		ath9k_hw_spur_mitigate(ah, chan);
 
-	if (!ah->eep_ops->set_board_values(ah, chan)) {
-		DPRINTF(ah->ah_sc, ATH_DBG_EEPROM,
-			"error setting board options\n");
-		return -EIO;
-	}
+	ah->eep_ops->set_board_values(ah, chan);
 
 	ath9k_hw_decrease_chain_power(ah, chan);
 

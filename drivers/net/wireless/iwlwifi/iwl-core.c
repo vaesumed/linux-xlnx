@@ -591,10 +591,10 @@ static u8 iwl_is_channel_extension(struct iwl_priv *priv,
 
 	if (extension_chan_offset == IEEE80211_HT_PARAM_CHA_SEC_ABOVE)
 		return !(ch_info->fat_extension_channel &
-					IEEE80211_CHAN_NO_FAT_ABOVE);
+					IEEE80211_CHAN_NO_HT40PLUS);
 	else if (extension_chan_offset == IEEE80211_HT_PARAM_CHA_SEC_BELOW)
 		return !(ch_info->fat_extension_channel &
-					IEEE80211_CHAN_NO_FAT_BELOW);
+					IEEE80211_CHAN_NO_HT40MINUS);
 
 	return 0;
 }
@@ -1298,6 +1298,7 @@ int iwl_setup_mac(struct iwl_priv *priv)
 	hw->flags = IEEE80211_HW_SIGNAL_DBM |
 		    IEEE80211_HW_NOISE_DBM |
 		    IEEE80211_HW_AMPDU_AGGREGATION |
+		    IEEE80211_HW_SPECTRUM_MGMT |
 		    IEEE80211_HW_SUPPORTS_PS;
 	hw->wiphy->interface_modes =
 		BIT(NL80211_IFTYPE_STATION) |
@@ -1436,6 +1437,10 @@ int iwl_set_tx_power(struct iwl_priv *priv, s8 tx_power, bool force)
 		force = true;
 
 	priv->tx_power_user_lmt = tx_power;
+
+	/* if nic is not up don't send command */
+	if (!iwl_is_ready_rf(priv))
+		return ret;
 
 	if (force && priv->cfg->ops->lib->send_tx_power)
 		ret = priv->cfg->ops->lib->send_tx_power(priv);
