@@ -2257,7 +2257,7 @@ void trace_softirqs_off(unsigned long ip)
 		debug_atomic_inc(&redundant_softirqs_off);
 }
 
-void lockdep_trace_alloc(gfp_t gfp_mask)
+static void __lockdep_trace_alloc(gfp_t gfp_mask)
 {
 	struct task_struct *curr = current;
 
@@ -2280,6 +2280,20 @@ void lockdep_trace_alloc(gfp_t gfp_mask)
 		return;
 
 	mark_held_locks(curr, RECLAIM_FS);
+}
+
+void lockdep_trace_alloc(gfp_t gfp_mask)
+{
+	unsigned long flags;
+
+	if (unlikely(current->lockdep_recursion))
+		return;
+
+	raw_local_irq_save(flags);
+	current->lockdep_recursion = 1;
+	__lockdep_trace_alloc(gfp_mask);
+	current->lockdep_recursion = 0;
+	raw_local_irq_restore(flags);
 }
 
 static int mark_irqflags(struct task_struct *curr, struct held_lock *hlock)
