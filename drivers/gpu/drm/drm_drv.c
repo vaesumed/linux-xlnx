@@ -348,6 +348,8 @@ static int __init drm_core_init(void)
 
 	DRM_INFO("Initialized %s %d.%d.%d %s\n",
 		 CORE_NAME, CORE_MAJOR, CORE_MINOR, CORE_PATCHLEVEL, CORE_DATE);
+	drm_global_init();
+
 	return 0;
 err_p3:
 	drm_sysfs_destroy();
@@ -361,6 +363,7 @@ err_p1:
 
 static void __exit drm_core_exit(void)
 {
+	drm_global_release();
 	remove_proc_entry("dri", NULL);
 	debugfs_remove(drm_debugfs_root);
 	drm_sysfs_destroy();
@@ -414,6 +417,12 @@ static int drm_version(struct drm_device *dev, void *data,
  */
 int drm_ioctl(struct inode *inode, struct file *filp,
 	      unsigned int cmd, unsigned long arg)
+{
+	return drm_unlocked_ioctl(filp, cmd, arg);
+}
+EXPORT_SYMBOL(drm_ioctl);
+
+long drm_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_device *dev = file_priv->minor->dev;
@@ -490,8 +499,7 @@ int drm_ioctl(struct inode *inode, struct file *filp,
 		DRM_DEBUG("ret = %x\n", retcode);
 	return retcode;
 }
-
-EXPORT_SYMBOL(drm_ioctl);
+EXPORT_SYMBOL(drm_unlocked_ioctl);
 
 struct drm_local_map *drm_getsarea(struct drm_device *dev)
 {

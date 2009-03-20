@@ -86,6 +86,7 @@ struct drm_device;
 
 #include "drm_os_linux.h"
 #include "drm_hashtab.h"
+#include "drm_mm.h"
 
 /***********************************************************************/
 /** \name DRM template customization defaults */
@@ -499,26 +500,6 @@ struct drm_sg_mem {
 struct drm_sigdata {
 	int context;
 	struct drm_hw_lock *lock;
-};
-
-
-/*
- * Generic memory manager structs
- */
-
-struct drm_mm_node {
-	struct list_head fl_entry;
-	struct list_head ml_entry;
-	int free;
-	unsigned long start;
-	unsigned long size;
-	struct drm_mm *mm;
-	void *private;
-};
-
-struct drm_mm {
-	struct list_head fl_entry;
-	struct list_head ml_entry;
 };
 
 
@@ -1096,6 +1077,8 @@ extern int drm_init(struct drm_driver *driver);
 extern void drm_exit(struct drm_driver *driver);
 extern int drm_ioctl(struct inode *inode, struct file *filp,
 		     unsigned int cmd, unsigned long arg);
+extern long drm_unlocked_ioctl(struct file *filp,
+			       unsigned int cmd, unsigned long arg);
 extern long drm_compat_ioctl(struct file *filp,
 			     unsigned int cmd, unsigned long arg);
 extern int drm_lastclose(struct drm_device *dev);
@@ -1385,22 +1368,6 @@ extern char *drm_get_connector_status_name(enum drm_connector_status status);
 extern int drm_sysfs_connector_add(struct drm_connector *connector);
 extern void drm_sysfs_connector_remove(struct drm_connector *connector);
 
-/*
- * Basic memory manager support (drm_mm.c)
- */
-extern struct drm_mm_node *drm_mm_get_block(struct drm_mm_node * parent,
-				       unsigned long size,
-				       unsigned alignment);
-extern void drm_mm_put_block(struct drm_mm_node * cur);
-extern struct drm_mm_node *drm_mm_search_free(const struct drm_mm *mm, unsigned long size,
-					 unsigned alignment, int best_match);
-extern int drm_mm_init(struct drm_mm *mm, unsigned long start, unsigned long size);
-extern void drm_mm_takedown(struct drm_mm *mm);
-extern int drm_mm_clean(struct drm_mm *mm);
-extern unsigned long drm_mm_tail_space(struct drm_mm *mm);
-extern int drm_mm_remove_space_from_tail(struct drm_mm *mm, unsigned long size);
-extern int drm_mm_add_space_to_tail(struct drm_mm *mm, unsigned long size);
-
 /* Graphics Execution Manager library functions (drm_gem.c) */
 int drm_gem_init(struct drm_device *dev);
 void drm_gem_destroy(struct drm_device *dev);
@@ -1526,6 +1493,26 @@ extern void *drm_calloc(size_t nmemb, size_t size, int area);
 #endif
 
 /*@}*/
+
+enum drm_global_types {
+	DRM_GLOBAL_TTM_MEM = 0,
+	DRM_GLOBAL_TTM_BO,
+	DRM_GLOBAL_TTM_OBJECT,
+	DRM_GLOBAL_NUM
+};
+
+struct drm_global_reference {
+	enum drm_global_types global_type;
+	size_t size;
+	void *object;
+	int (*init) (struct drm_global_reference *);
+	void (*release) (struct drm_global_reference *);
+};
+
+extern void drm_global_init(void);
+extern void drm_global_release(void);
+extern int drm_global_item_ref(struct drm_global_reference *ref);
+extern void drm_global_item_unref(struct drm_global_reference *ref);
 
 #endif				/* __KERNEL__ */
 #endif
