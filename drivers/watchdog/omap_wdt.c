@@ -145,8 +145,8 @@ static int omap_wdt_open(struct inode *inode, struct file *file)
 	if (test_and_set_bit(1, (unsigned long *)&(wdev->omap_wdt_users)))
 		return -EBUSY;
 
-	clk_enable(wdev->ick);    /* Enable the interface clock */
-	clk_enable(wdev->fck);    /* Enable the functional clock */
+	clk_enable(wdev->ick);	/* Enable the interface clock */
+	clk_enable(wdev->fck);	/* Enable the functional clock */
 
 	/* initialize prescaler */
 	while (__raw_readl(base + OMAP_WATCHDOG_WPS) & 0x01)
