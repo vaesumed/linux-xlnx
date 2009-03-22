@@ -152,6 +152,7 @@ struct exofs_dir_entry *exofs_find_entry(struct inode *, struct dentry *,
 					 struct page **);
 int exofs_empty_dir(struct inode *);
 struct exofs_dir_entry *exofs_dotdot(struct inode *, struct page **);
+ino_t exofs_parent_ino(struct dentry *child);
 int exofs_set_link(struct inode *, struct exofs_dir_entry *, struct page *,
 		    struct inode *);
 
@@ -174,6 +175,7 @@ extern const struct inode_operations exofs_special_inode_operations;
 
 /* super.c           */
 extern const struct super_operations exofs_sops;
+extern const struct export_operations exofs_export_ops;
 
 /* symlink.c         */
 extern const struct inode_operations exofs_symlink_inode_operations;
