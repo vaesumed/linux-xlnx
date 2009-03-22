@@ -429,7 +429,7 @@ static void tx4939ide_tf_load_fixup(ide_drive_t *drive)
 	 * Fix ATA100 CORE System Control Register. (The write to the
 	 * Device/Head register may write wrong data to the System
 	 * Control Register)
-	 * While Sys_Ctl is written here, selectproc is not needed.
+	 * While Sys_Ctl is written here, dev_select() is not needed.
 	 */
 	tx4939ide_writew(sysctl, base, TX4939IDE_Sys_Ctl);
 }
