@@ -1,5 +1,5 @@
 config PPC_PSERIES
-	depends on PPC_MULTIPLATFORM && PPC64
+	depends on PPC64 && PPC_BOOK3S
 	bool "IBM pSeries & new (POWER5-based) iSeries"
 	select MPIC
 	select PPC_I8259
@@ -24,6 +24,11 @@ config EEH
 	bool "PCI Extended Error Handling (EEH)" if EMBEDDED
 	depends on PPC_PSERIES && PCI
 	default y if !EMBEDDED
+
+config PSERIES_MSI
+       bool
+       depends on PCI_MSI && EEH
+       default y
 
 config SCANLOG
 	tristate "Scanlog dump interface"
