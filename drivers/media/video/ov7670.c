@@ -16,7 +16,7 @@
 #include <linux/videodev2.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-chip-ident.h>
-#include <media/v4l2-i2c-drv.h>
+#include <media/v4l2-i2c-drv-legacy.h>
 
 
 MODULE_AUTHOR("Jonathan Corbet <corbet@lwn.net>");
@@ -961,7 +961,7 @@ static void ov7670_calc_cmatrix(struct ov7670_info *info,
 
 
 
-static int ov7670_s_sat(struct v4l2_subdev *sd, int value)
+static int ov7670_t_sat(struct v4l2_subdev *sd, int value)
 {
 	struct ov7670_info *info = to_state(sd);
 	int matrix[CMATRIX_LEN];
@@ -973,7 +973,7 @@ static int ov7670_s_sat(struct v4l2_subdev *sd, int value)
 	return ret;
 }
 
-static int ov7670_g_sat(struct v4l2_subdev *sd, __s32 *value)
+static int ov7670_q_sat(struct v4l2_subdev *sd, __s32 *value)
 {
 	struct ov7670_info *info = to_state(sd);
 
@@ -981,7 +981,7 @@ static int ov7670_g_sat(struct v4l2_subdev *sd, __s32 *value)
 	return 0;
 }
 
-static int ov7670_s_hue(struct v4l2_subdev *sd, int value)
+static int ov7670_t_hue(struct v4l2_subdev *sd, int value)
 {
 	struct ov7670_info *info = to_state(sd);
 	int matrix[CMATRIX_LEN];
@@ -996,7 +996,7 @@ static int ov7670_s_hue(struct v4l2_subdev *sd, int value)
 }
 
 
-static int ov7670_g_hue(struct v4l2_subdev *sd, __s32 *value)
+static int ov7670_q_hue(struct v4l2_subdev *sd, __s32 *value)
 {
 	struct ov7670_info *info = to_state(sd);
 
@@ -1023,7 +1023,7 @@ static unsigned char ov7670_abs_to_sm(unsigned char v)
 	return (128 - v) | 0x80;
 }
 
-static int ov7670_s_brightness(struct v4l2_subdev *sd, int value)
+static int ov7670_t_brightness(struct v4l2_subdev *sd, int value)
 {
 	unsigned char com8 = 0, v;
 	int ret;
@@ -1036,7 +1036,7 @@ static int ov7670_s_brightness(struct v4l2_subdev *sd, int value)
 	return ret;
 }
 
-static int ov7670_g_brightness(struct v4l2_subdev *sd, __s32 *value)
+static int ov7670_q_brightness(struct v4l2_subdev *sd, __s32 *value)
 {
 	unsigned char v = 0;
 	int ret = ov7670_read(sd, REG_BRIGHT, &v);
@@ -1045,12 +1045,12 @@ static int ov7670_g_brightness(struct v4l2_subdev *sd, __s32 *value)
 	return ret;
 }
 
-static int ov7670_s_contrast(struct v4l2_subdev *sd, int value)
+static int ov7670_t_contrast(struct v4l2_subdev *sd, int value)
 {
 	return ov7670_write(sd, REG_CONTRAS, (unsigned char) value);
 }
 
-static int ov7670_g_contrast(struct v4l2_subdev *sd, __s32 *value)
+static int ov7670_q_contrast(struct v4l2_subdev *sd, __s32 *value)
 {
 	unsigned char v = 0;
 	int ret = ov7670_read(sd, REG_CONTRAS, &v);
@@ -1059,7 +1059,7 @@ static int ov7670_g_contrast(struct v4l2_subdev *sd, __s32 *value)
 	return ret;
 }
 
-static int ov7670_g_hflip(struct v4l2_subdev *sd, __s32 *value)
+static int ov7670_q_hflip(struct v4l2_subdev *sd, __s32 *value)
 {
 	int ret;
 	unsigned char v = 0;
@@ -1070,7 +1070,7 @@ static int ov7670_g_hflip(struct v4l2_subdev *sd, __s32 *value)
 }
 
 
-static int ov7670_s_hflip(struct v4l2_subdev *sd, int value)
+static int ov7670_t_hflip(struct v4l2_subdev *sd, int value)
 {
 	unsigned char v = 0;
 	int ret;
@@ -1087,7 +1087,7 @@ static int ov7670_s_hflip(struct v4l2_subdev *sd, int value)
 
 
 
-static int ov7670_g_vflip(struct v4l2_subdev *sd, __s32 *value)
+static int ov7670_q_vflip(struct v4l2_subdev *sd, __s32 *value)
 {
 	int ret;
 	unsigned char v = 0;
@@ -1098,7 +1098,7 @@ static int ov7670_g_vflip(struct v4l2_subdev *sd, __s32 *value)
 }
 
 
-static int ov7670_s_vflip(struct v4l2_subdev *sd, int value)
+static int ov7670_t_vflip(struct v4l2_subdev *sd, int value)
 {
 	unsigned char v = 0;
 	int ret;
@@ -1113,62 +1113,144 @@ static int ov7670_s_vflip(struct v4l2_subdev *sd, int value)
 	return ret;
 }
 
+
+static struct ov7670_control {
+	struct v4l2_queryctrl qc;
+	int (*query)(struct v4l2_subdev *sd, __s32 *value);
+	int (*tweak)(struct v4l2_subdev *sd, int value);
+} ov7670_controls[] =
+{
+	{
+		.qc = {
+			.id = V4L2_CID_BRIGHTNESS,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Brightness",
+			.minimum = 0,
+			.maximum = 255,
+			.step = 1,
+			.default_value = 0x80,
+			.flags = V4L2_CTRL_FLAG_SLIDER
+		},
+		.tweak = ov7670_t_brightness,
+		.query = ov7670_q_brightness,
+	},
+	{
+		.qc = {
+			.id = V4L2_CID_CONTRAST,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Contrast",
+			.minimum = 0,
+			.maximum = 127,
+			.step = 1,
+			.default_value = 0x40,   /* XXX ov7670 spec */
+			.flags = V4L2_CTRL_FLAG_SLIDER
+		},
+		.tweak = ov7670_t_contrast,
+		.query = ov7670_q_contrast,
+	},
+	{
+		.qc = {
+			.id = V4L2_CID_SATURATION,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Saturation",
+			.minimum = 0,
+			.maximum = 256,
+			.step = 1,
+			.default_value = 0x80,
+			.flags = V4L2_CTRL_FLAG_SLIDER
+		},
+		.tweak = ov7670_t_sat,
+		.query = ov7670_q_sat,
+	},
+	{
+		.qc = {
+			.id = V4L2_CID_HUE,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "HUE",
+			.minimum = -180,
+			.maximum = 180,
+			.step = 5,
+			.default_value = 0,
+			.flags = V4L2_CTRL_FLAG_SLIDER
+		},
+		.tweak = ov7670_t_hue,
+		.query = ov7670_q_hue,
+	},
+	{
+		.qc = {
+			.id = V4L2_CID_VFLIP,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.name = "Vertical flip",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 1,
+			.default_value = 0,
+		},
+		.tweak = ov7670_t_vflip,
+		.query = ov7670_q_vflip,
+	},
+	{
+		.qc = {
+			.id = V4L2_CID_HFLIP,
+			.type = V4L2_CTRL_TYPE_BOOLEAN,
+			.name = "Horizontal mirror",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 1,
+			.default_value = 0,
+		},
+		.tweak = ov7670_t_hflip,
+		.query = ov7670_q_hflip,
+	},
+};
+#define N_CONTROLS (ARRAY_SIZE(ov7670_controls))
+
+static struct ov7670_control *ov7670_find_control(__u32 id)
+{
+	int i;
+
+	for (i = 0; i < N_CONTROLS; i++)
+		if (ov7670_controls[i].qc.id == id)
+			return ov7670_controls + i;
+	return NULL;
+}
+
+
 static int ov7670_queryctrl(struct v4l2_subdev *sd,
 		struct v4l2_queryctrl *qc)
 {
-	/* Fill in min, max, step and default value for these controls. */
-	switch (qc->id) {
-	case V4L2_CID_BRIGHTNESS:
-		return v4l2_ctrl_query_fill(qc, 0, 255, 1, 128);
-	case V4L2_CID_CONTRAST:
-		return v4l2_ctrl_query_fill(qc, 0, 127, 1, 64);
-	case V4L2_CID_VFLIP:
-	case V4L2_CID_HFLIP:
-		return v4l2_ctrl_query_fill(qc, 0, 1, 1, 0);
-	case V4L2_CID_SATURATION:
-		return v4l2_ctrl_query_fill(qc, 0, 256, 1, 128);
-	case V4L2_CID_HUE:
-		return v4l2_ctrl_query_fill(qc, -180, 180, 5, 0);
-	}
-	return -EINVAL;
+	struct ov7670_control *ctrl = ov7670_find_control(qc->id);
+
+	if (ctrl == NULL)
+		return -EINVAL;
+	*qc = ctrl->qc;
+	return 0;
 }
 
 static int ov7670_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
-	switch (ctrl->id) {
-	case V4L2_CID_BRIGHTNESS:
-		return ov7670_g_brightness(sd, &ctrl->value);
-	case V4L2_CID_CONTRAST:
-		return ov7670_g_contrast(sd, &ctrl->value);
-	case V4L2_CID_SATURATION:
-		return ov7670_g_sat(sd, &ctrl->value);
-	case V4L2_CID_HUE:
-		return ov7670_g_hue(sd, &ctrl->value);
-	case V4L2_CID_VFLIP:
-		return ov7670_g_vflip(sd, &ctrl->value);
-	case V4L2_CID_HFLIP:
-		return ov7670_g_hflip(sd, &ctrl->value);
-	}
-	return -EINVAL;
+	struct ov7670_control *octrl = ov7670_find_control(ctrl->id);
+	int ret;
+
+	if (octrl == NULL)
+		return -EINVAL;
+	ret = octrl->query(sd, &ctrl->value);
+	if (ret >= 0)
+		return 0;
+	return ret;
 }
 
 static int ov7670_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
-	switch (ctrl->id) {
-	case V4L2_CID_BRIGHTNESS:
-		return ov7670_s_brightness(sd, ctrl->value);
-	case V4L2_CID_CONTRAST:
-		return ov7670_s_contrast(sd, ctrl->value);
-	case V4L2_CID_SATURATION:
-		return ov7670_s_sat(sd, ctrl->value);
-	case V4L2_CID_HUE:
-		return ov7670_s_hue(sd, ctrl->value);
-	case V4L2_CID_VFLIP:
-		return ov7670_s_vflip(sd, ctrl->value);
-	case V4L2_CID_HFLIP:
-		return ov7670_s_hflip(sd, ctrl->value);
-	}
-	return -EINVAL;
+	struct ov7670_control *octrl = ov7670_find_control(ctrl->id);
+	int ret;
+
+	if (octrl == NULL)
+		return -EINVAL;
+	ret = octrl->tweak(sd, ctrl->value);
+	if (ret >= 0)
+		return 0;
+	return ret;
 }
 
 static int ov7670_g_chip_ident(struct v4l2_subdev *sd,
@@ -1177,6 +1259,11 @@ static int ov7670_g_chip_ident(struct v4l2_subdev *sd,
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	return v4l2_chip_ident_i2c_client(client, chip, V4L2_IDENT_OV7670, 0);
+}
+
+static int ov7670_command(struct i2c_client *client, unsigned cmd, void *arg)
+{
+	return v4l2_subdev_command(i2c_get_clientdata(client), cmd, arg);
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1212,6 +1299,11 @@ static int ov7670_probe(struct i2c_client *client,
 	struct ov7670_info *info;
 	int ret;
 
+	/*
+	 * For now: only deal with adapters we recognize.
+	 */
+	if (client->adapter->id != I2C_HW_SMBUS_CAFE)
+		return -ENODEV;
 	info = kzalloc(sizeof(struct ov7670_info), GFP_KERNEL);
 	if (info == NULL)
 		return -ENOMEM;
@@ -1254,7 +1346,9 @@ MODULE_DEVICE_TABLE(i2c, ov7670_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "ov7670",
+	.command = ov7670_command,
 	.probe = ov7670_probe,
 	.remove = ov7670_remove,
+	.legacy_class = I2C_CLASS_TV_ANALOG,
 	.id_table = ov7670_id,
 };
