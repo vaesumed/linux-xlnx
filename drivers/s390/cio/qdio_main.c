@@ -380,11 +380,11 @@ inline void qdio_stop_polling(struct qdio_q *q)
 
 	/* show the card that we are not polling anymore */
 	if (is_qebsm(q)) {
-		set_buf_states(q, q->last_move_ftc, SLSB_P_INPUT_NOT_INIT,
+		set_buf_states(q, q->u.in.ack_start, SLSB_P_INPUT_NOT_INIT,
 			       q->u.in.ack_count);
 		q->u.in.ack_count = 0;
 	} else
-		set_buf_state(q, q->last_move_ftc, SLSB_P_INPUT_NOT_INIT);
+		set_buf_state(q, q->u.in.ack_start, SLSB_P_INPUT_NOT_INIT);
 }
 
 static void announce_buffer_error(struct qdio_q *q, int count)
@@ -419,15 +419,15 @@ static inline void inbound_primed(struct qdio_q *q, int count)
 		if (!q->u.in.polling) {
 			q->u.in.polling = 1;
 			q->u.in.ack_count = count;
-			q->last_move_ftc = q->first_to_check;
+			q->u.in.ack_start = q->first_to_check;
 			return;
 		}
 
 		/* delete the previous ACK's */
-		set_buf_states(q, q->last_move_ftc, SLSB_P_INPUT_NOT_INIT,
+		set_buf_states(q, q->u.in.ack_start, SLSB_P_INPUT_NOT_INIT,
 			       q->u.in.ack_count);
 		q->u.in.ack_count = count;
-		q->last_move_ftc = q->first_to_check;
+		q->u.in.ack_start = q->first_to_check;
 		return;
 	}
 
@@ -439,14 +439,13 @@ static inline void inbound_primed(struct qdio_q *q, int count)
 	if (q->u.in.polling) {
 		/* reset the previous ACK but first set the new one */
 		set_buf_state(q, new, SLSB_P_INPUT_ACK);
-		set_buf_state(q, q->last_move_ftc, SLSB_P_INPUT_NOT_INIT);
-	}
-	else {
+		set_buf_state(q, q->u.in.ack_start, SLSB_P_INPUT_NOT_INIT);
+	} else {
 		q->u.in.polling = 1;
-		set_buf_state(q, q->first_to_check, SLSB_P_INPUT_ACK);
+		set_buf_state(q, new, SLSB_P_INPUT_ACK);
 	}
 
-	q->last_move_ftc = new;
+	q->u.in.ack_start = new;
 	count--;
 	if (!count)
 		return;
@@ -455,7 +454,7 @@ static inline void inbound_primed(struct qdio_q *q, int count)
 	 * Need to change all PRIMED buffers to NOT_INIT, otherwise
 	 * we're loosing initiative in the thinint code.
 	 */
-	set_buf_states(q, next_buf(q->first_to_check), SLSB_P_INPUT_NOT_INIT,
+	set_buf_states(q, q->first_to_check, SLSB_P_INPUT_NOT_INIT,
 		       count);
 }
 
@@ -523,7 +522,8 @@ int qdio_inbound_q_moved(struct qdio_q *q)
 
 	bufnr = get_inbound_buffer_frontier(q);
 
-	if ((bufnr != q->last_move_ftc) || q->qdio_error) {
+	if ((bufnr != q->last_move) || q->qdio_error) {
+		q->last_move = bufnr;
 		if (!need_siga_sync(q) && !pci_out_supported(q))
 			q->u.in.timestamp = get_usecs();
 
@@ -698,8 +698,8 @@ static inline int qdio_outbound_q_moved(struct qdio_q *q)
 
 	bufnr = get_outbound_buffer_frontier(q);
 
-	if ((bufnr != q->last_move_ftc) || q->qdio_error) {
-		q->last_move_ftc = bufnr;
+	if ((bufnr != q->last_move) || q->qdio_error) {
+		q->last_move = bufnr;
 		DBF_DEV_EVENT(DBF_INFO, q->irq_ptr, "out moved:%1d", q->nr);
 		return 1;
 	} else
@@ -744,7 +744,7 @@ static void qdio_kick_outbound_handler(struct qdio_q *q)
 	int start, end, count;
 
 	start = q->first_to_kick;
-	end = q->last_move_ftc;
+	end = q->last_move;
 	if (end >= start)
 		count = end - start;
 	else
@@ -760,7 +760,7 @@ static void qdio_kick_outbound_handler(struct qdio_q *q)
 		   q->irq_ptr->int_parm);
 
 	/* for the next time: */
-	q->first_to_kick = q->last_move_ftc;
+	q->first_to_kick = q->last_move;
 	q->qdio_error = 0;
 }
 
@@ -778,21 +778,17 @@ static void __qdio_outbound_processing(struct qdio_q *q)
 
 	spin_unlock_irqrestore(&q->lock, flags);
 
-	if (queue_type(q) == QDIO_ZFCP_QFMT) {
+	if (queue_type(q) == QDIO_ZFCP_QFMT)
 		if (!pci_out_supported(q) && !qdio_outbound_q_done(q))
-			tasklet_schedule(&q->tasklet);
-		return;
-	}
+			goto sched;
 
 	/* bail out for HiperSockets unicast queues */
 	if (queue_type(q) == QDIO_IQDIO_QFMT && !multicast_outbound(q))
 		return;
 
 	if ((queue_type(q) == QDIO_IQDIO_QFMT) &&
-	    (atomic_read(&q->nr_buf_used)) > QDIO_IQDIO_POLL_LVL) {
-		tasklet_schedule(&q->tasklet);
-		return;
-	}
+	    (atomic_read(&q->nr_buf_used)) > QDIO_IQDIO_POLL_LVL)
+		goto sched;
 
 	if (q->u.out.pci_out_enabled)
 		return;
@@ -810,6 +806,12 @@ static void __qdio_outbound_processing(struct qdio_q *q)
 			qdio_perf_stat_inc(&perf_stats.debug_tl_out_timer);
 		}
 	}
+	return;
+
+sched:
+	if (unlikely(q->irq_ptr->state == QDIO_IRQ_STATE_STOPPED))
+		return;
+	tasklet_schedule(&q->tasklet);
 }
 
 /* outbound tasklet */
@@ -822,6 +824,9 @@ void qdio_outbound_processing(unsigned long data)
 void qdio_outbound_timer(unsigned long data)
 {
 	struct qdio_q *q = (struct qdio_q *)data;
+
+	if (unlikely(q->irq_ptr->state == QDIO_IRQ_STATE_STOPPED))
+		return;
 	tasklet_schedule(&q->tasklet);
 }
 
@@ -862,6 +867,9 @@ static void qdio_int_handler_pci(struct qdio_irq *irq_ptr)
 {
 	int i;
 	struct qdio_q *q;
+
+	if (unlikely(irq_ptr->state == QDIO_IRQ_STATE_STOPPED))
+		return;
 
 	qdio_perf_stat_inc(&perf_stats.pci_int);
 
@@ -1065,8 +1073,9 @@ EXPORT_SYMBOL_GPL(qdio_get_ssqd_desc);
  * @cdev: associated ccw device
  * @how: use halt or clear to shutdown
  *
- * This function calls qdio_shutdown() for @cdev with method @how
- * and on success qdio_free() for @cdev.
+ * This function calls qdio_shutdown() for @cdev with method @how.
+ * and qdio_free(). The qdio_free() return value is ignored since
+ * !irq_ptr is already checked.
  */
 int qdio_cleanup(struct ccw_device *cdev, int how)
 {
@@ -1077,8 +1086,8 @@ int qdio_cleanup(struct ccw_device *cdev, int how)
 		return -ENODEV;
 
 	rc = qdio_shutdown(cdev, how);
-	if (rc == 0)
-		rc = qdio_free(cdev);
+
+	qdio_free(cdev);
 	return rc;
 }
 EXPORT_SYMBOL_GPL(qdio_cleanup);
@@ -1090,11 +1099,11 @@ static void qdio_shutdown_queues(struct ccw_device *cdev)
 	int i;
 
 	for_each_input_queue(irq_ptr, q, i)
-		tasklet_disable(&q->tasklet);
+		tasklet_kill(&q->tasklet);
 
 	for_each_output_queue(irq_ptr, q, i) {
-		tasklet_disable(&q->tasklet);
 		del_timer(&q->u.out.timer);
+		tasklet_kill(&q->tasklet);
 	}
 }
 
@@ -1112,6 +1121,7 @@ int qdio_shutdown(struct ccw_device *cdev, int how)
 	if (!irq_ptr)
 		return -ENODEV;
 
+	BUG_ON(irqs_disabled());
 	DBF_EVENT("qshutdown:%4x", cdev->private->schid.sch_no);
 
 	mutex_lock(&irq_ptr->setup_mutex);
@@ -1123,6 +1133,12 @@ int qdio_shutdown(struct ccw_device *cdev, int how)
 		mutex_unlock(&irq_ptr->setup_mutex);
 		return 0;
 	}
+
+	/*
+	 * Indicate that the device is going down. Scheduling the queue
+	 * tasklets is forbidden from here on.
+	 */
+	qdio_set_state(irq_ptr, QDIO_IRQ_STATE_STOPPED);
 
 	tiqdio_remove_input_queues(irq_ptr);
 	qdio_shutdown_queues(cdev);
@@ -1403,9 +1419,8 @@ int qdio_activate(struct ccw_device *cdev)
 	switch (irq_ptr->state) {
 	case QDIO_IRQ_STATE_STOPPED:
 	case QDIO_IRQ_STATE_ERR:
-		mutex_unlock(&irq_ptr->setup_mutex);
-		qdio_shutdown(cdev, QDIO_FLAG_CLEANUP_USING_CLEAR);
-		return -EIO;
+		rc = -EIO;
+		break;
 	default:
 		qdio_set_state(irq_ptr, QDIO_IRQ_STATE_ACTIVE);
 		rc = 0;
@@ -1456,19 +1471,18 @@ static void handle_inbound(struct qdio_q *q, unsigned int callflags,
 		q->u.in.polling = 0;
 		q->u.in.ack_count = 0;
 		goto set;
-	} else if (buf_in_between(q->last_move_ftc, bufnr, count)) {
+	} else if (buf_in_between(q->u.in.ack_start, bufnr, count)) {
 		if (is_qebsm(q)) {
-			/* partial overwrite, just update last_move_ftc */
+			/* partial overwrite, just update ack_start */
 			diff = add_buf(bufnr, count);
-			diff = sub_buf(diff, q->last_move_ftc);
+			diff = sub_buf(diff, q->u.in.ack_start);
 			q->u.in.ack_count -= diff;
 			if (q->u.in.ack_count <= 0) {
 				q->u.in.polling = 0;
 				q->u.in.ack_count = 0;
-				/* TODO: must we set last_move_ftc to something meaningful? */
 				goto set;
 			}
-			q->last_move_ftc = add_buf(q->last_move_ftc, diff);
+			q->u.in.ack_start = add_buf(q->u.in.ack_start, diff);
 		}
 		else
 			/* the only ACK will be deleted, so stop polling */
@@ -1556,7 +1570,6 @@ static void handle_outbound(struct qdio_q *q, unsigned int callflags,
 		qdio_perf_stat_inc(&perf_stats.fast_requeue);
 	}
 out:
-	/* Fixme: could wait forever if called from process context */
 	tasklet_schedule(&q->tasklet);
 }
 
