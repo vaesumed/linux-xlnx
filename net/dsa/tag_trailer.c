@@ -111,8 +111,8 @@ out:
 	return 0;
 }
 
-static struct packet_type trailer_packet_type = {
-	.type	= __constant_htons(ETH_P_TRAILER),
+static struct packet_type trailer_packet_type __read_mostly = {
+	.type	= cpu_to_be16(ETH_P_TRAILER),
 	.func	= trailer_rcv,
 };
 
