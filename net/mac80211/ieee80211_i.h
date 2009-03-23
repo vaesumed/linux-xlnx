@@ -256,6 +256,7 @@ struct mesh_preq_queue {
 #define IEEE80211_STA_TKIP_WEP_USED	BIT(14)
 #define IEEE80211_STA_CSA_RECEIVED	BIT(15)
 #define IEEE80211_STA_MFP_ENABLED	BIT(16)
+#define IEEE80211_STA_EXT_SME		BIT(17)
 /* flags for MLME request */
 #define IEEE80211_STA_REQ_SCAN 0
 #define IEEE80211_STA_REQ_DIRECT_PROBE 1
@@ -266,6 +267,7 @@ struct mesh_preq_queue {
 #define IEEE80211_AUTH_ALG_OPEN BIT(0)
 #define IEEE80211_AUTH_ALG_SHARED_KEY BIT(1)
 #define IEEE80211_AUTH_ALG_LEAP BIT(2)
+#define IEEE80211_AUTH_ALG_FT BIT(3)
 
 struct ieee80211_if_managed {
 	struct timer_list timer;
@@ -321,20 +323,8 @@ struct ieee80211_if_managed {
 	int wmm_last_param_set;
 
 	/* Extra IE data for management frames */
-	u8 *ie_probereq;
-	size_t ie_probereq_len;
-	u8 *ie_proberesp;
-	size_t ie_proberesp_len;
-	u8 *ie_auth;
-	size_t ie_auth_len;
-	u8 *ie_assocreq;
-	size_t ie_assocreq_len;
-	u8 *ie_reassocreq;
-	size_t ie_reassocreq_len;
-	u8 *ie_deauth;
-	size_t ie_deauth_len;
-	u8 *ie_disassoc;
-	size_t ie_disassoc_len;
+	u8 *sme_auth_ie;
+	size_t sme_auth_ie_len;
 };
 
 enum ieee80211_ibss_flags {
@@ -598,6 +588,7 @@ enum queue_stop_reason {
 	IEEE80211_QUEUE_STOP_REASON_PS,
 	IEEE80211_QUEUE_STOP_REASON_CSA,
 	IEEE80211_QUEUE_STOP_REASON_AGGREGATION,
+	IEEE80211_QUEUE_STOP_REASON_SUSPEND,
 };
 
 struct ieee80211_master_priv {
@@ -774,6 +765,7 @@ struct ieee80211_local {
 		struct dentry *total_ps_buffered;
 		struct dentry *wep_iv;
 		struct dentry *tsf;
+		struct dentry *reset;
 		struct dentry *statistics;
 		struct local_debugfsdentries_statsdentries {
 			struct dentry *transmitted_fragment_count;
@@ -969,7 +961,7 @@ ieee80211_scan_rx(struct ieee80211_sub_if_data *sdata,
 		  struct sk_buff *skb,
 		  struct ieee80211_rx_status *rx_status);
 int ieee80211_sta_set_extra_ie(struct ieee80211_sub_if_data *sdata,
-			       char *ie, size_t len);
+			       const char *ie, size_t len);
 
 void ieee80211_mlme_notify_scan_completed(struct ieee80211_local *local);
 void ieee80211_scan_failed(struct ieee80211_local *local);
@@ -1053,8 +1045,19 @@ void ieee80211_handle_pwr_constr(struct ieee80211_sub_if_data *sdata,
 				 u8 pwr_constr_elem_len);
 
 /* Suspend/resume */
+#ifdef CONFIG_PM
 int __ieee80211_suspend(struct ieee80211_hw *hw);
 int __ieee80211_resume(struct ieee80211_hw *hw);
+#else
+static inline int __ieee80211_suspend(struct ieee80211_hw *hw)
+{
+	return 0;
+}
+static inline int __ieee80211_resume(struct ieee80211_hw *hw)
+{
+	return 0;
+}
+#endif
 
 /* utility functions/constants */
 extern void *mac80211_wiphy_privid; /* for wiphy privid */

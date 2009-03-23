@@ -97,7 +97,7 @@ struct ieee80211_ht_bss_info {
  *	for A-MPDU operation.
  */
 enum ieee80211_max_queues {
-	IEEE80211_MAX_QUEUES =		16,
+	IEEE80211_MAX_QUEUES =		4,
 	IEEE80211_MAX_AMPDU_QUEUES =	16,
 };
 
@@ -520,12 +520,6 @@ enum ieee80211_conf_flags {
 	IEEE80211_CONF_PS		= (1<<1),
 };
 
-/* XXX: remove all this once drivers stop trying to use it */
-static inline int __deprecated __IEEE80211_CONF_SHORT_SLOT_TIME(void)
-{
-	return 0;
-}
-#define IEEE80211_CONF_SHORT_SLOT_TIME (__IEEE80211_CONF_SHORT_SLOT_TIME())
 
 /**
  * enum ieee80211_conf_changed - denotes which configuration changed
@@ -1015,11 +1009,6 @@ static inline void SET_IEEE80211_DEV(struct ieee80211_hw *hw, struct device *dev
 static inline void SET_IEEE80211_PERM_ADDR(struct ieee80211_hw *hw, u8 *addr)
 {
 	memcpy(hw->wiphy->perm_addr, addr, ETH_ALEN);
-}
-
-static inline int ieee80211_num_regular_queues(struct ieee80211_hw *hw)
-{
-	return hw->queues;
 }
 
 static inline struct ieee80211_rate *
