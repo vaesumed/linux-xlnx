@@ -11,9 +11,9 @@
 #endif /* __ASSEMBLY__ */
 
 #ifdef CONFIG_PPC_64K_PAGES
-#include <asm/pgtable-64k.h>
+#include <asm/pgtable-ppc64-64k.h>
 #else
-#include <asm/pgtable-4k.h>
+#include <asm/pgtable-ppc64-4k.h>
 #endif
 
 #define FIRST_USER_ADDRESS	0
@@ -25,6 +25,8 @@
                 	    PUD_INDEX_SIZE + PGD_INDEX_SIZE + PAGE_SHIFT)
 #define PGTABLE_RANGE (ASM_CONST(1) << PGTABLE_EADDR_SIZE)
 
+
+/* Some sanity checking */
 #if TASK_SIZE_USER64 > PGTABLE_RANGE
 #error TASK_SIZE_USER64 exceeds pagetable range
 #endif
@@ -32,7 +34,6 @@
 #if TASK_SIZE_USER64 > (1UL << (USER_ESID_BITS + SID_SHIFT))
 #error TASK_SIZE_USER64 exceeds user VSID range
 #endif
-
 
 /*
  * Define the address range of the vmalloc VM area.
@@ -76,29 +77,26 @@
 
 
 /*
- * Common bits in a linux-style PTE.  These match the bits in the
- * (hardware-defined) PowerPC PTE as closely as possible. Additional
- * bits may be defined in pgtable-*.h
+ * Include the PTE bits definitions
  */
-#define _PAGE_PRESENT	0x0001 /* software: pte contains a translation */
-#define _PAGE_USER	0x0002 /* matches one of the PP bits */
-#define _PAGE_FILE	0x0002 /* (!present only) software: pte holds file offset */
-#define _PAGE_EXEC	0x0004 /* No execute on POWER4 and newer (we invert) */
-#define _PAGE_GUARDED	0x0008
-#define _PAGE_COHERENT	0x0010 /* M: enforce memory coherence (SMP systems) */
-#define _PAGE_NO_CACHE	0x0020 /* I: cache inhibit */
-#define _PAGE_WRITETHRU	0x0040 /* W: cache write-through */
-#define _PAGE_DIRTY	0x0080 /* C: page changed */
-#define _PAGE_ACCESSED	0x0100 /* R: page referenced */
-#define _PAGE_RW	0x0200 /* software: user write access allowed */
-#define _PAGE_BUSY	0x0800 /* software: PTE & hash are busy */
+#include <asm/pte-hash64.h>
 
-/* Strong Access Ordering */
-#define _PAGE_SAO	(_PAGE_WRITETHRU | _PAGE_NO_CACHE | _PAGE_COHERENT)
+/* To make some generic powerpc code happy */
+#ifndef _PAGE_HWEXEC
+#define _PAGE_HWEXEC		0
+#endif
 
-#define _PAGE_BASE	(_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_COHERENT)
+/* Some other useful definitions */
+#define PTE_RPN_MAX	(1UL << (64 - PTE_RPN_SHIFT))
+#define PTE_RPN_MASK	(~((1UL<<PTE_RPN_SHIFT)-1))
 
-#define _PAGE_WRENABLE	(_PAGE_RW | _PAGE_DIRTY)
+/* _PAGE_CHG_MASK masks of bits that are to be preserved accross
+ * pgprot changes
+ */
+#define _PAGE_CHG_MASK	(PTE_RPN_MASK | _PAGE_HPTEFLAGS | _PAGE_DIRTY | \
+                         _PAGE_ACCESSED | _PAGE_SPECIAL)
+
+
 
 /* __pgprot defined in arch/powerpc/include/asm/page.h */
 #define PAGE_NONE	__pgprot(_PAGE_PRESENT | _PAGE_ACCESSED)
@@ -117,13 +115,8 @@
 #define PAGE_AGP	__pgprot(_PAGE_BASE | _PAGE_WRENABLE | _PAGE_NO_CACHE)
 #define HAVE_PAGE_AGP
 
-#define PAGE_PROT_BITS	(_PAGE_GUARDED | _PAGE_COHERENT | \
-			 _PAGE_NO_CACHE | _PAGE_WRITETHRU |		\
-			 _PAGE_4K_PFN | _PAGE_RW | _PAGE_USER |		\
-			 _PAGE_ACCESSED | _PAGE_DIRTY | _PAGE_EXEC)
-/* PTEIDX nibble */
-#define _PTEIDX_SECONDARY	0x8
-#define _PTEIDX_GROUP_IX	0x7
+/* We always have _PAGE_SPECIAL on 64 bit */
+#define __HAVE_ARCH_PTE_SPECIAL
 
 
 /*
@@ -159,6 +152,38 @@
 #endif /* CONFIG_PPC_MM_SLICES */
 
 #ifndef __ASSEMBLY__
+
+/*
+ * This is the default implementation of various PTE accessors, it's
+ * used in all cases except Book3S with 64K pages where we have a
+ * concept of sub-pages
+ */
+#ifndef __real_pte
+
+#ifdef STRICT_MM_TYPECHECKS
+#define __real_pte(e,p)		((real_pte_t){(e)})
+#define __rpte_to_pte(r)	((r).pte)
+#else
+#define __real_pte(e,p)		(e)
+#define __rpte_to_pte(r)	(__pte(r))
+#endif
+#define __rpte_to_hidx(r,index)	(pte_val(__rpte_to_pte(r)) >> 12)
+
+#define pte_iterate_hashed_subpages(rpte, psize, va, index, shift)       \
+	do {							         \
+		index = 0;					         \
+		shift = mmu_psize_defs[psize].shift;		         \
+
+#define pte_iterate_hashed_end() } while(0)
+
+#ifdef CONFIG_PPC_HAS_HASH_64K
+#define pte_pagesize_index(mm, addr, pte)	get_slice_psize(mm, addr)
+#else
+#define pte_pagesize_index(mm, addr, pte)	MMU_PAGE_4K
+#endif
+
+#endif /* __real_pte */
+
 
 /*
  * Conversion functions: convert a page and protection to a page entry,
@@ -285,6 +310,10 @@ static inline unsigned long pte_update(struct mm_struct *mm,
 	: "r" (ptep), "r" (clr), "m" (*ptep), "i" (_PAGE_BUSY)
 	: "cc" );
 
+	/* huge pages use the old page table lock */
+	if (!huge)
+		assert_pte_locked(mm, addr);
+
 	if (old & _PAGE_HASHPTE)
 		hpte_need_flush(mm, addr, ptep, old, huge);
 	return old;
@@ -359,23 +388,11 @@ static inline void pte_clear(struct mm_struct *mm, unsigned long addr,
 	pte_update(mm, addr, ptep, ~0UL, 0);
 }
 
-/*
- * set_pte stores a linux PTE into the linux page table.
- */
-static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
-			      pte_t *ptep, pte_t pte)
-{
-	if (pte_present(*ptep))
-		pte_clear(mm, addr, ptep);
-	pte = __pte(pte_val(pte) & ~_PAGE_HPTEFLAGS);
-	*ptep = pte;
-}
 
 /* Set the dirty and/or accessed bits atomically in a linux PTE, this
  * function doesn't need to flush the hash entry
  */
-#define __HAVE_ARCH_PTEP_SET_ACCESS_FLAGS
-static inline void __ptep_set_access_flags(pte_t *ptep, pte_t entry, int dirty)
+static inline void __ptep_set_access_flags(pte_t *ptep, pte_t entry)
 {
 	unsigned long bits = pte_val(entry) &
 		(_PAGE_DIRTY | _PAGE_ACCESSED | _PAGE_RW | _PAGE_EXEC);
@@ -392,15 +409,6 @@ static inline void __ptep_set_access_flags(pte_t *ptep, pte_t entry, int dirty)
 	:"r" (bits), "r" (ptep), "m" (*ptep), "i" (_PAGE_BUSY)
 	:"cc");
 }
-#define  ptep_set_access_flags(__vma, __address, __ptep, __entry, __dirty) \
-({									   \
-	int __changed = !pte_same(*(__ptep), __entry);			   \
-	if (__changed) {						   \
-		__ptep_set_access_flags(__ptep, __entry, __dirty);    	   \
-		flush_tlb_page_nohash(__vma, __address);		   \
-	}								   \
-	__changed;							   \
-})
 
 #define __HAVE_ARCH_PTE_SAME
 #define pte_same(A,B)	(((pte_val(A) ^ pte_val(B)) & ~_PAGE_HPTEFLAGS) == 0)
