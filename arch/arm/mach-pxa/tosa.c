@@ -36,8 +36,8 @@
 
 #include <asm/setup.h>
 #include <asm/mach-types.h>
-#include <mach/pxa2xx-regs.h>
-#include <mach/mfp-pxa25x.h>
+
+#include <mach/pxa25x.h>
 #include <mach/reset.h>
 #include <mach/irda.h>
 #include <mach/i2c.h>
@@ -876,10 +876,10 @@ static struct platform_device *devices[] __initdata = {
 
 static void tosa_poweroff(void)
 {
-	arm_machine_restart('g');
+	arm_machine_restart('g', NULL);
 }
 
-static void tosa_restart(char mode)
+static void tosa_restart(char mode, const char *cmd)
 {
 	/* Bootloader magic for a reboot */
 	if((MSC0 & 0xffff0000) == 0x7ff00000)
