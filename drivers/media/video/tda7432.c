@@ -421,12 +421,14 @@ static int tda7432_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 static int tda7432_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 {
 	switch (qc->id) {
-	case V4L2_CID_AUDIO_MUTE:
 	case V4L2_CID_AUDIO_VOLUME:
+		return v4l2_ctrl_query_fill(qc, 0, 65535, 65535 / 100, 58880);
+	case V4L2_CID_AUDIO_MUTE:
+		return v4l2_ctrl_query_fill(qc, 0, 1, 1, 0);
 	case V4L2_CID_AUDIO_BALANCE:
 	case V4L2_CID_AUDIO_BASS:
 	case V4L2_CID_AUDIO_TREBLE:
-		return v4l2_ctrl_query_fill_std(qc);
+		return v4l2_ctrl_query_fill(qc, 0, 65535, 65535 / 100, 32768);
 	}
 	return -EINVAL;
 }
@@ -498,7 +500,6 @@ MODULE_DEVICE_TABLE(i2c, tda7432_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "tda7432",
-	.driverid = I2C_DRIVERID_TDA7432,
 	.command = tda7432_command,
 	.probe = tda7432_probe,
 	.remove = tda7432_remove,

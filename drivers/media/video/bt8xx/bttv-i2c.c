@@ -231,7 +231,8 @@ bttv_i2c_readbytes(struct bttv *btv, const struct i2c_msg *msg, int last)
 
 static int bttv_i2c_xfer(struct i2c_adapter *i2c_adap, struct i2c_msg *msgs, int num)
 {
-	struct bttv *btv = i2c_get_adapdata(i2c_adap);
+	struct v4l2_device *v4l2_dev = i2c_get_adapdata(i2c_adap);
+	struct bttv *btv = to_bttv(v4l2_dev);
 	int retval = 0;
 	int i;
 
@@ -267,7 +268,8 @@ static const struct i2c_algorithm bttv_algo = {
 
 static int attach_inform(struct i2c_client *client)
 {
-	struct bttv *btv = i2c_get_adapdata(client->adapter);
+	struct v4l2_device *v4l2_dev = i2c_get_adapdata(client->adapter);
+	struct bttv *btv = to_bttv(v4l2_dev);
 	int addr=ADDR_UNSET;
 
 
@@ -286,12 +288,10 @@ static int attach_inform(struct i2c_client *client)
 		btv->i2c_msp34xx_client = client;
 	if (client->driver->id == I2C_DRIVERID_TVAUDIO)
 		btv->i2c_tvaudio_client = client;
-	if (btv->tuner_type != UNSET) {
+	if (btv->tuner_type != TUNER_ABSENT) {
 		struct tuner_setup tun_setup;
 
-		if ((addr==ADDR_UNSET) ||
-				(addr==client->addr)) {
-
+		if (addr == ADDR_UNSET || addr == client->addr) {
 			tun_setup.mode_mask = T_ANALOG_TV | T_DIGITAL_TV | T_RADIO;
 			tun_setup.type = btv->tuner_type;
 			tun_setup.addr = addr;
@@ -425,7 +425,7 @@ int __devinit init_bttv_i2c(struct bttv *btv)
 		 "bt%d #%d [%s]", btv->id, btv->c.nr,
 		 btv->use_i2c_hw ? "hw" : "sw");
 
-	i2c_set_adapdata(&btv->c.i2c_adap, btv);
+	i2c_set_adapdata(&btv->c.i2c_adap, &btv->c.v4l2_dev);
 	btv->i2c_client.adapter = &btv->c.i2c_adap;
 
 	if (bttv_tvcards[btv->c.type].no_video)
@@ -441,7 +441,7 @@ int __devinit init_bttv_i2c(struct bttv *btv)
 		btv->i2c_rc = i2c_bit_add_bus(&btv->c.i2c_adap);
 	}
 	if (0 == btv->i2c_rc && i2c_scan)
-		do_i2c_scan(btv->c.name,&btv->i2c_client);
+		do_i2c_scan(btv->c.v4l2_dev.name, &btv->i2c_client);
 	return btv->i2c_rc;
 }
 
