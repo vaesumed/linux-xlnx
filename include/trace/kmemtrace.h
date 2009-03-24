@@ -12,7 +12,13 @@
 #include <linux/tracepoint.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_KMEMTRACE
 extern void kmemtrace_init(void);
+#else
+static inline void kmemtrace_init(void)
+{
+}
+#endif
 
 DECLARE_TRACE(kmalloc,
 	      TP_PROTO(unsigned long call_site,
