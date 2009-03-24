@@ -17,21 +17,6 @@
 #include "trace_output.h"
 #include "trace.h"
 
-/* Tracepoints definitions. */
-DEFINE_TRACE(kmalloc);
-DEFINE_TRACE(kmem_cache_alloc);
-DEFINE_TRACE(kmalloc_node);
-DEFINE_TRACE(kmem_cache_alloc_node);
-DEFINE_TRACE(kfree);
-DEFINE_TRACE(kmem_cache_free);
-
-EXPORT_TRACEPOINT_SYMBOL(kmalloc);
-EXPORT_TRACEPOINT_SYMBOL(kmem_cache_alloc);
-EXPORT_TRACEPOINT_SYMBOL(kmalloc_node);
-EXPORT_TRACEPOINT_SYMBOL(kmem_cache_alloc_node);
-EXPORT_TRACEPOINT_SYMBOL(kfree);
-EXPORT_TRACEPOINT_SYMBOL(kmem_cache_free);
-
 /* Select an alternative, minimalistic output than the original one */
 #define TRACE_KMEM_OPT_MINIMAL	0x1
 
