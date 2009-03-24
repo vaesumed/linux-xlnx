@@ -2230,24 +2230,6 @@ ssize_t simple_attr_read(struct file *file, char __user *buf,
 ssize_t simple_attr_write(struct file *file, const char __user *buf,
 			  size_t len, loff_t *ppos);
 
-
-#ifdef CONFIG_SECURITY
-/*
- * These need to be macros because we cannot include <linux/gfp.h> in this
- * header file.
- */
-#define alloc_secdata()       (char *)get_zeroed_page(GFP_KERNEL)
-#define free_secdata(secdata) free_page((unsigned long) secdata)
-#else
-static inline char *alloc_secdata(void)
-{
-	return (char *)1;
-}
-
-static inline void free_secdata(void *secdata)
-{ }
-#endif	/* CONFIG_SECURITY */
-
 struct ctl_table;
 int proc_nr_files(struct ctl_table *table, int write, struct file *filp,
 		  void __user *buffer, size_t *lenp, loff_t *ppos);
