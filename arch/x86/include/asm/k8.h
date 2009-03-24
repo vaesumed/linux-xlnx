@@ -6,7 +6,11 @@
 extern struct pci_device_id k8_nb_ids[];
 
 extern int early_is_k8_nb(u32 value);
+#ifdef CONFIG_K8_NB
 extern struct pci_dev **k8_northbridges;
+#else
+struct pci_dev **k8_northbridges;
+#endif
 extern int num_k8_northbridges;
 extern int cache_k8_northbridges(void);
 extern void k8_flush_garts(void);
