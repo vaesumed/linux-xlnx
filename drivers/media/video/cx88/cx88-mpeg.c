@@ -50,20 +50,12 @@ MODULE_PARM_DESC(debug,"enable debug messages [mpeg]");
 	printk(KERN_DEBUG "%s/2-mpeg: " fmt, core->name, ## arg)
 
 #if defined(CONFIG_MODULES) && defined(MODULE)
-static void request_module_async(struct work_struct *work)
-{
-	struct cx8802_dev *dev=container_of(work, struct cx8802_dev, request_module_wk);
-
-	if (dev->core->board.mpeg & CX88_MPEG_DVB)
-		request_module("cx88-dvb");
-	if (dev->core->board.mpeg & CX88_MPEG_BLACKBIRD)
-		request_module("cx88-blackbird");
-}
-
 static void request_modules(struct cx8802_dev *dev)
 {
-	INIT_WORK(&dev->request_module_wk, request_module_async);
-	schedule_work(&dev->request_module_wk);
+	if (dev->core->board.mpeg & CX88_MPEG_DVB)
+		request_module_nowait("cx88-dvb");
+	if (dev->core->board.mpeg & CX88_MPEG_BLACKBIRD)
+		request_module_nowait("cx88-blackbird");
 }
 #else
 #define request_modules(dev)

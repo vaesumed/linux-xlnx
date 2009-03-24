@@ -1849,6 +1849,10 @@ static int __init hid_init(void)
 	if (ret)
 		goto err_bus;
 
+#ifdef CONFIG_HID_COMPAT
+	request_module_nowait("hid-dummy");
+#endif
+
 	return 0;
 err_bus:
 	bus_unregister(&hid_bus_type);
