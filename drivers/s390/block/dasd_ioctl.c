@@ -146,7 +146,7 @@ static int dasd_format(struct dasd_block *block, struct format_data_t *fdata)
 	}
 
 	DBF_DEV_EVENT(DBF_NOTICE, base,
-		      "formatting units %d to %d (%d B blocks) flags %d",
+		      "formatting units %u to %u (%u B blocks) flags %u",
 		      fdata->start_unit,
 		      fdata->stop_unit, fdata->blksize, fdata->intensity);
 
@@ -170,7 +170,7 @@ static int dasd_format(struct dasd_block *block, struct format_data_t *fdata)
 		if (rc) {
 			if (rc != -ERESTARTSYS)
 				DEV_MESSAGE(KERN_ERR, base,
-					    " Formatting of unit %d failed "
+					    " Formatting of unit %u failed "
 					    "with rc = %d",
 					    fdata->start_unit, rc);
 			return rc;
@@ -365,9 +365,9 @@ static int dasd_ioctl_readall_cmb(struct dasd_block *block, unsigned int cmd,
 	return ret;
 }
 
-int
-dasd_ioctl(struct block_device *bdev, fmode_t mode,
-	   unsigned int cmd, unsigned long arg)
+static int
+dasd_do_ioctl(struct block_device *bdev, fmode_t mode,
+	      unsigned int cmd, unsigned long arg)
 {
 	struct dasd_block *block = bdev->bd_disk->private_data;
 	void __user *argp = (void __user *)arg;
@@ -419,4 +419,15 @@ dasd_ioctl(struct block_device *bdev, fmode_t mode,
 
 		return -EINVAL;
 	}
+}
+
+int dasd_ioctl(struct block_device *bdev, fmode_t mode,
+	       unsigned int cmd, unsigned long arg)
+{
+	int rc;
+
+	lock_kernel();
+	rc = dasd_do_ioctl(bdev, mode, cmd, arg);
+	unlock_kernel();
+	return rc;
 }
