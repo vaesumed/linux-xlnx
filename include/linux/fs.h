@@ -8,7 +8,6 @@
 
 #include <linux/limits.h>
 #include <linux/ioctl.h>
-#include <linux/gfp.h>
 
 /*
  * It's silly to have NR_OPEN bigger than NR_FILE, but you can change
@@ -2233,15 +2232,12 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 
 
 #ifdef CONFIG_SECURITY
-static inline char *alloc_secdata(void)
-{
-	return (char *)get_zeroed_page(GFP_KERNEL);
-}
-
-static inline void free_secdata(void *secdata)
-{
-	free_page((unsigned long)secdata);
-}
+/*
+ * These need to be macros because we cannot include <linux/gfp.h> in this
+ * header file.
+ */
+#define alloc_secdata()       (char *)get_zeroed_page(GFP_KERNEL)
+#define free_secdata(secdata) free_page((unsigned long) secdata)
 #else
 static inline char *alloc_secdata(void)
 {
