@@ -5,7 +5,7 @@
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
  *   the Free Software Foundation, Inc., 53 Temple Place Ste 330,
- *   Bostom MA 02111-1307, USA; either version 2 of the License, or
+ *   Boston MA 02111-1307, USA; either version 2 of the License, or
  *   (at your option) any later version; incorporated herein by reference.
  *
  * ----------------------------------------------------------------------- */
@@ -17,14 +17,7 @@
 
 /* Set to 1 to use kernel-wide empty_zero_page */
 #define RAID6_USE_EMPTY_ZERO_PAGE 0
-
-#include <linux/raid/md.h>
-#include <linux/raid/raid5.h>
-
-typedef raid5_conf_t raid6_conf_t; /* Same configuration */
-
-/* Additional compute_parity mode -- updates the parity w/o LOCKING */
-#define UPDATE_PARITY	4
+#include <linux/blkdev.h>
 
 /* We need a pre-zeroed page... if we don't want to use the kernel-provided
    one define it here */
