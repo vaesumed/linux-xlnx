@@ -19,6 +19,38 @@ static struct hlist_head event_hash[EVENT_HASHSIZE] __read_mostly;
 
 static int next_event_type = __TRACE_LAST_TYPE + 1;
 
+enum print_line_t trace_print_bprintk_msg_only(struct trace_iterator *iter)
+{
+	struct trace_seq *s = &iter->seq;
+	struct trace_entry *entry = iter->ent;
+	struct bprint_entry *field;
+	int ret;
+
+	trace_assign_type(field, entry);
+
+	ret = trace_seq_bprintf(s, field->fmt, field->buf);
+	if (!ret)
+		return TRACE_TYPE_PARTIAL_LINE;
+
+	return TRACE_TYPE_HANDLED;
+}
+
+enum print_line_t trace_print_printk_msg_only(struct trace_iterator *iter)
+{
+	struct trace_seq *s = &iter->seq;
+	struct trace_entry *entry = iter->ent;
+	struct print_entry *field;
+	int ret;
+
+	trace_assign_type(field, entry);
+
+	ret = trace_seq_printf(s, "%s", field->buf);
+	if (!ret)
+		return TRACE_TYPE_PARTIAL_LINE;
+
+	return TRACE_TYPE_HANDLED;
+}
+
 /**
  * trace_seq_printf - sequence printing of trace information
  * @s: trace sequence descriptor
@@ -133,6 +165,19 @@ int trace_seq_putmem_hex(struct trace_seq *s, void *mem, size_t len)
 	hex[j++] = ' ';
 
 	return trace_seq_putmem(s, hex, j);
+}
+
+void *trace_seq_reserve(struct trace_seq *s, size_t len)
+{
+	void *ret;
+
+	if (len > ((PAGE_SIZE - 1) - s->len))
+		return NULL;
+
+	ret = s->buffer + s->len;
+	s->len += len;
+
+	return ret;
 }
 
 int trace_seq_path(struct trace_seq *s, struct path *path)
@@ -448,6 +493,11 @@ int register_ftrace_event(struct trace_event *event)
 	int ret = 0;
 
 	mutex_lock(&trace_event_mutex);
+
+	if (!event) {
+		ret = next_event_type++;
+		goto out;
+	}
 
 	if (!event->type)
 		event->type = next_event_type++;
