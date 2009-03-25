@@ -52,10 +52,10 @@
 #define ESB_LOCK_REG    0x68            /* WDT lock register                 */
 
 /* Memory mapped registers */
-#define ESB_TIMER1_REG  BASEADDR + 0x00 /* Timer1 value after each reset     */
-#define ESB_TIMER2_REG  BASEADDR + 0x04 /* Timer2 value after each reset     */
-#define ESB_GINTSR_REG  BASEADDR + 0x08 /* General Interrupt Status Register */
-#define ESB_RELOAD_REG  BASEADDR + 0x0c /* Reload register                   */
+#define ESB_TIMER1_REG (BASEADDR + 0x00)/* Timer1 value after each reset     */
+#define ESB_TIMER2_REG (BASEADDR + 0x04)/* Timer2 value after each reset     */
+#define ESB_GINTSR_REG (BASEADDR + 0x08)/* General Interrupt Status Register */
+#define ESB_RELOAD_REG (BASEADDR + 0x0c)/* Reload register                   */
 
 /* Lock register bits */
 #define ESB_WDT_FUNC    (0x01 << 2)   /* Watchdog functionality            */
@@ -68,6 +68,7 @@
 #define ESB_WDT_INTTYPE (0x11 << 0)   /* Interrupt type on timer1 timeout  */
 
 /* Reload register bits */
+#define ESB_WDT_TIMEOUT (0x01 << 9)    /* Watchdog timed out                */
 #define ESB_WDT_RELOAD  (0x01 << 8)    /* prevent timeout                   */
 
 /* Magic constants */
@@ -87,7 +88,6 @@ static struct platform_device *esb_platform_device;
 /* 30 sec default heartbeat (1 < heartbeat < 2*1023) */
 #define WATCHDOG_HEARTBEAT 30
 static int heartbeat = WATCHDOG_HEARTBEAT;  /* in seconds */
-
 module_param(heartbeat, int, 0);
 MODULE_PARM_DESC(heartbeat,
 		"Watchdog heartbeat in seconds. (1<heartbeat<2046, default="
@@ -282,7 +282,7 @@ static long esb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 					sizeof(ident)) ? -EFAULT : 0;
 
 	case WDIOC_GETSTATUS:
-		return put_user(esb_timer_read(), p);
+		return put_user(0, p);
 
 	case WDIOC_GETBOOTSTATUS:
 		return put_user(triggered, p);
@@ -412,11 +412,12 @@ static unsigned char __devinit esb_getdevice(void)
 		/* Check if the watchdog was previously triggered */
 		esb_unlock_registers();
 		val2 = readw(ESB_RELOAD_REG);
-		triggered = (val2 & (0x01 << 9) >> 9);
+		if (val2 & ESB_WDT_TIMEOUT)
+			triggered = WDIOF_CARDRESET;
 
 		/* Reset trigger flag and timers */
 		esb_unlock_registers();
-		writew((0x11 << 8), ESB_RELOAD_REG);
+		writew((ESB_WDT_TIMEOUT | ESB_WDT_RELOAD), ESB_RELOAD_REG);
 
 		/* Done */
 		return 1;
@@ -448,6 +449,7 @@ static int __devinit esb_probe(struct platform_device *dev)
 								heartbeat);
 	}
 
+	esb_timer_stop();
 	ret = misc_register(&esb_miscdev);
 	if (ret != 0) {
 		printk(KERN_ERR PFX
@@ -455,7 +457,6 @@ static int __devinit esb_probe(struct platform_device *dev)
 							WATCHDOG_MINOR, ret);
 		goto err_unmap;
 	}
-	esb_timer_stop();
 	printk(KERN_INFO PFX
 		"initialized (0x%p). heartbeat=%d sec (nowayout=%d)\n",
 						BASEADDR, heartbeat, nowayout);
