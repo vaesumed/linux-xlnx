@@ -449,6 +449,7 @@ static int __devinit esb_probe(struct platform_device *dev)
 								heartbeat);
 	}
 
+	esb_timer_stop();
 	ret = misc_register(&esb_miscdev);
 	if (ret != 0) {
 		printk(KERN_ERR PFX
@@ -456,7 +457,6 @@ static int __devinit esb_probe(struct platform_device *dev)
 							WATCHDOG_MINOR, ret);
 		goto err_unmap;
 	}
-	esb_timer_stop();
 	printk(KERN_INFO PFX
 		"initialized (0x%p). heartbeat=%d sec (nowayout=%d)\n",
 						BASEADDR, heartbeat, nowayout);
