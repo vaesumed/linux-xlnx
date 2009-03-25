@@ -82,11 +82,12 @@ static void bcm1480_send_ipi_single(int cpu, unsigned int action)
 	__raw_writeq((((u64)action)<< 48), mailbox_0_set_regs[cpu]);
 }
 
-static void bcm1480_send_ipi_mask(cpumask_t mask, unsigned int action)
+static void bcm1480_send_ipi_mask(const struct cpumask *mask,
+				  unsigned int action)
 {
 	unsigned int i;
 
-	for_each_cpu_mask(i, mask)
+	for_each_cpu(i, mask)
 		bcm1480_send_ipi_single(i, action);
 }
 
@@ -150,7 +151,7 @@ static void __init bcm1480_smp_setup(void)
 	__cpu_number_map[0] = 0;
 	__cpu_logical_map[0] = 0;
 
-	for (i = 1, num = 0; i < NR_CPUS; i++) {
+	for (i = 1, num = 0; i < nr_cpu_ids; i++) {
 		if (cfe_cpu_stop(i) == 0) {
 			cpu_set(i, cpu_possible_map);
 			__cpu_number_map[i] = ++num;
