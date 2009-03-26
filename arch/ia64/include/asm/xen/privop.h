@@ -55,6 +55,8 @@
 #define XSI_BANK1_R16			(XSI_BASE + XSI_BANK1_R16_OFS)
 #define XSI_BANKNUM			(XSI_BASE + XSI_BANKNUM_OFS)
 #define XSI_IHA				(XSI_BASE + XSI_IHA_OFS)
+#define XSI_ITC_OFFSET			(XSI_BASE + XSI_ITC_OFFSET_OFS)
+#define XSI_ITC_LAST			(XSI_BASE + XSI_ITC_LAST_OFS)
 #endif
 
 #ifndef __ASSEMBLY__
@@ -80,8 +82,10 @@ extern unsigned long xen_thash(unsigned long addr);
 extern unsigned long xen_get_cpuid(int index);
 extern unsigned long xen_get_pmd(int index);
 
+#ifndef ASM_SUPPORTED
 extern unsigned long xen_get_eflag(void);	/* see xen_ia64_getreg */
 extern void xen_set_eflag(unsigned long);	/* see xen_ia64_setreg */
+#endif
 
 /************************************************/
 /* Instructions paravirtualized for performance */
@@ -106,6 +110,7 @@ extern void xen_set_eflag(unsigned long);	/* see xen_ia64_setreg */
 #define xen_get_virtual_pend()		\
 	(*(((uint8_t *)XEN_MAPPEDREGS->interrupt_mask_addr) - 1))
 
+#ifndef ASM_SUPPORTED
 /* Although all privileged operations can be left to trap and will
  * be properly handled by Xen, some are frequent enough that we use
  * hyperprivops for performance. */
@@ -123,6 +128,7 @@ extern void xen_set_rr0_to_rr4(unsigned long val0, unsigned long val1,
 			       unsigned long val4);
 extern void xen_set_kr(unsigned long index, unsigned long val);
 extern void xen_ptcga(unsigned long addr, unsigned long size);
+#endif /* !ASM_SUPPORTED */
 
 #endif /* !__ASSEMBLY__ */
 
