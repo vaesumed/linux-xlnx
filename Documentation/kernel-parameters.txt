@@ -830,6 +830,9 @@ and is between 256 and 4096 characters. It is defined in the file
 
 	hvc_iucv=	[S390] Number of z/VM IUCV hypervisor console (HVC)
 			       terminal devices. Valid values: 0..8
+	hvc_iucv_allow=	[S390] Comma-separated list of z/VM user IDs.
+			       If specified, z/VM IUCV HVC accepts connections
+			       from listed z/VM user IDs only.
 
 	i2c_bus=	[HW] Override the default board specific I2C bus speed
 			     or register an additional I2C bus that is not
