@@ -1,0 +1,42 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.29
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 8e0ee43bc2c3e19db56a4adaa9a9b04ce885cd84
+HEAD is now at 8e0ee43 Linux 2.6.29
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-how-to-instantiate-devices.patch
+i2c-update-checkpatch-deprecated-functions.patch
+i2c-document-client-auto-removal.patch
+i2c-nforce2-add-MCP79-support.patch
+eeprom-at24-remove-EXPERIMENTAL.patch
+i2c-algo-pcf-01-style-cleanups.patch
+i2c-algo-pcf-02-handle-timeout-correctly.patch
+i2c-add-missing-KERN-constants-to-printks.patch
+i2c-set-default-timeout-value.patch
+i2c-adapter-timeout-is-in-jiffies.patch
+i2c-davinci-fix-timeout.patch
+i2c-algo-pca-01-adapt-debug-macros-for-KERN-constants.patch
+i2c-algo-pca-02-add-pca9665-support.patch
+i2c-algo-pca-03-rework-waiting-for-a-free-bus.patch
+i2c-algo-pca-04-use-timeout-for-checking-the-state-machine.patch
+i2c-pca-platform-use-defaults-if-no-platform_data-given.patch
+i2c-piix4-add-support-for-sb800.patch
+i2c-piix4-add-support-for-broadcom-ht1100.patch
+i2c-core-some-style-cleanups.patch
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 6e16065...9da5319 master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
