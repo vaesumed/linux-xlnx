@@ -255,7 +255,7 @@ static DECLARE_WAIT_QUEUE_HEAD(trace_wait);
 
 /* trace_flags holds trace_options default values */
 unsigned long trace_flags = TRACE_ITER_PRINT_PARENT | TRACE_ITER_PRINTK |
-	TRACE_ITER_ANNOTATE | TRACE_ITER_CONTEXT_INFO;
+	TRACE_ITER_ANNOTATE | TRACE_ITER_CONTEXT_INFO | TRACE_ITER_SLEEP_TIME;
 
 /**
  * trace_wake_up - wake up tasks waiting for trace input
@@ -316,6 +316,7 @@ static const char *trace_options[] = {
 	"context-info",
 	"latency-format",
 	"global-clock",
+	"sleep-time",
 	NULL
 };
 
@@ -382,7 +383,7 @@ ssize_t trace_seq_to_user(struct trace_seq *s, char __user *ubuf, size_t cnt)
 	return cnt;
 }
 
-ssize_t trace_seq_to_buffer(struct trace_seq *s, void *buf, size_t cnt)
+static ssize_t trace_seq_to_buffer(struct trace_seq *s, void *buf, size_t cnt)
 {
 	int len;
 	void *ret;
@@ -3512,6 +3513,9 @@ struct dentry *tracing_init_dentry(void)
 
 	if (d_tracer)
 		return d_tracer;
+
+	if (!debugfs_initialized())
+		return NULL;
 
 	d_tracer = debugfs_create_dir("tracing", NULL);
 
