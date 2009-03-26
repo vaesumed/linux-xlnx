@@ -610,6 +610,9 @@ static int smack_inode_setxattr(struct dentry *dentry, const char *name,
 	    strcmp(name, XATTR_NAME_SMACKIPOUT) == 0) {
 		if (!capable(CAP_MAC_ADMIN))
 			rc = -EPERM;
+		/* a label cannot begin with '-' */
+		if (size >= 0 && *((char *)value) == '-')
+			rc = -EINVAL;
 	} else
 		rc = cap_inode_setxattr(dentry, name, value, size, flags);
 
@@ -1324,9 +1327,13 @@ static char *smack_host_label(struct sockaddr_in *sip)
 		 * so we have found the most specific match
 		 */
 		if ((&snp->smk_host.sin_addr)->s_addr  ==
-			(siap->s_addr & (&snp->smk_mask)->s_addr))
-			return snp->smk_label;
+			(siap->s_addr & (&snp->smk_mask)->s_addr)) {
+			/* we have found the special CIPSO option */
+			if (snp->smk_label == smack_cipso_option)
+				return NULL;
 
+			return snp->smk_label;
+		}
 	return NULL;
 }
 
