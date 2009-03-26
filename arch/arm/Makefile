@@ -85,6 +85,10 @@ else
 CFLAGS_ABI	:=$(call cc-option,-mapcs-32,-mabi=apcs-gnu) $(call cc-option,-mno-thumb-interwork,)
 endif
 
+ifeq ($(CONFIG_ARM_UNWIND),y)
+CFLAGS_ABI	+=-funwind-tables
+endif
+
 # Need -Uarm for gcc < 3.x
 KBUILD_CFLAGS	+=$(CFLAGS_ABI) $(arch-y) $(tune-y) $(call cc-option,-mshort-load-bytes,$(call cc-option,-malignment-traps,)) -msoft-float -Uarm
 KBUILD_AFLAGS	+=$(CFLAGS_ABI) $(arch-y) $(tune-y) -msoft-float
@@ -105,6 +109,8 @@ ifeq ($(CONFIG_ARCH_SA1100),y)
  textofs-$(CONFIG_SA1111)	   := 0x00208000
 endif
  machine-$(CONFIG_ARCH_PXA)	   := pxa
+ machine-$(CONFIG_ARCH_MMP)	   := mmp
+    plat-$(CONFIG_PLAT_PXA)	   := pxa
  machine-$(CONFIG_ARCH_L7200)	   := l7200
  machine-$(CONFIG_ARCH_INTEGRATOR) := integrator
  textofs-$(CONFIG_ARCH_CLPS711X)   := 0x00028000

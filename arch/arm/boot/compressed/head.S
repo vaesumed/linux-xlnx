@@ -27,6 +27,12 @@
 		.macro	writeb, ch, rb
 		mcr	p14, 0, \ch, c0, c5, 0
 		.endm
+#elif defined(CONFIG_CPU_XSCALE)
+		.macro	loadsp, rb
+		.endm
+		.macro	writeb, ch, rb
+		mcr	p14, 0, \ch, c8, c0, 0
+		.endm
 #else
 		.macro	loadsp, rb
 		.endm
@@ -623,6 +629,18 @@ proc_types:
 		b	__armv4_mmu_cache_on
 		b	__armv4_mmu_cache_off
 		b	__armv4_mmu_cache_flush
+
+		.word	0x56056930
+		.word	0xff0ffff0		@ PXA935
+		b	__armv4_mmu_cache_on
+		b	__armv4_mmu_cache_off
+		b	__armv4_mmu_cache_flush
+
+		.word	0x56158000		@ PXA168
+		.word	0xfffff000
+		b __armv4_mmu_cache_on
+		b __armv4_mmu_cache_off
+		b __armv5tej_mmu_cache_flush
 
 		.word	0x56056930
 		.word	0xff0ffff0		@ PXA935

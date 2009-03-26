@@ -16,6 +16,7 @@ obj-$(CONFIG_MODULES)		+= proc-syms.o
 
 obj-$(CONFIG_ALIGNMENT_TRAP)	+= alignment.o
 obj-$(CONFIG_DISCONTIGMEM)	+= discontig.o
+obj-$(CONFIG_HIGHMEM)		+= highmem.o
 
 obj-$(CONFIG_CPU_ABRT_NOMMU)	+= abort-nommu.o
 obj-$(CONFIG_CPU_ABRT_EV4)	+= abort-ev4.o
@@ -70,6 +71,7 @@ obj-$(CONFIG_CPU_SA110)		+= proc-sa110.o
 obj-$(CONFIG_CPU_SA1100)	+= proc-sa1100.o
 obj-$(CONFIG_CPU_XSCALE)	+= proc-xscale.o
 obj-$(CONFIG_CPU_XSC3)		+= proc-xsc3.o
+obj-$(CONFIG_CPU_MOHAWK)	+= proc-mohawk.o
 obj-$(CONFIG_CPU_FEROCEON)	+= proc-feroceon.o
 obj-$(CONFIG_CPU_V6)		+= proc-v6.o
 obj-$(CONFIG_CPU_V7)		+= proc-v7.o
