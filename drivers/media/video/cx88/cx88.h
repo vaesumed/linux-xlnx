@@ -25,7 +25,7 @@
 #include <linux/videodev2.h>
 #include <linux/kdev_t.h>
 
-#include <media/v4l2-common.h>
+#include <media/v4l2-device.h>
 #include <media/tuner.h>
 #include <media/tveeprom.h>
 #include <media/videobuf-dma-sg.h>
@@ -231,6 +231,7 @@ extern struct sram_channel cx88_sram_channels[];
 #define CX88_BOARD_SATTRADE_ST4200         76
 #define CX88_BOARD_TBS_8910                77
 #define CX88_BOARD_PROF_6200               78
+#define CX88_BOARD_TERRATEC_CINERGY_HT_PCI_MKII 79
 
 enum cx88_itype {
 	CX88_VMUX_COMPOSITE1 = 1,
@@ -302,7 +303,6 @@ struct cx88_dmaqueue {
 	struct btcx_riscmem    stopper;
 	u32                    count;
 };
-struct cx88_core;
 
 struct cx88_core {
 	struct list_head           devlist;
@@ -327,6 +327,7 @@ struct cx88_core {
 	u32                        i2c_state, i2c_rc;
 
 	/* config info -- analog */
+	struct v4l2_device 	   v4l2_dev;
 	unsigned int               boardnr;
 	struct cx88_board	   board;
 
@@ -364,6 +365,11 @@ struct cx88_core {
 	int			   active_ref;
 	int			   active_fe_id;
 };
+
+static inline struct cx88_core *to_core(struct v4l2_device *v4l2_dev)
+{
+	return container_of(v4l2_dev, struct cx88_core, v4l2_dev);
+}
 
 struct cx8800_dev;
 struct cx8802_dev;
