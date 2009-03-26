@@ -452,7 +452,6 @@ static int __devinit agnx_pci_probe(struct pci_dev *pdev,
 {
 	struct ieee80211_hw *dev;
 	struct agnx_priv *priv;
-	u32 mem_len0, mem_len1;
 	int err;
 	DECLARE_MAC_BUF(mac);
 
@@ -461,9 +460,6 @@ static int __devinit agnx_pci_probe(struct pci_dev *pdev,
 		dev_err(&pdev->dev, "can't enable pci device\n");
 		return err;
 	}
-
-	mem_len0 = pci_resource_len(pdev, 0);
-	mem_len1 = pci_resource_len(pdev, 1);
 
 	err = pci_request_regions(pdev, "agnx-pci");
 	if (err) {
@@ -493,13 +489,13 @@ static int __devinit agnx_pci_probe(struct pci_dev *pdev,
 	spin_lock_init(&priv->lock);
 	priv->init_status = AGNX_UNINIT;
 
-	priv->ctl = pci_iomap(pdev, 0, mem_len0);
+	priv->ctl = pci_iomap(pdev, 0, 0);
 /*	dev_dbg(&pdev->dev, "MEM1 mapped address is 0x%p\n", priv->ctl); */
 	if (!priv->ctl) {
 		dev_err(&pdev->dev, "can't map device memory\n");
 		goto err_free_dev;
 	}
-	priv->data = pci_iomap(pdev, 1, mem_len1);
+	priv->data = pci_iomap(pdev, 1, 0);
 	if (!priv->data) {
 		dev_err(&pdev->dev, "can't map device memory\n");
 		goto err_iounmap2;
