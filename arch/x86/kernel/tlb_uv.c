@@ -15,12 +15,10 @@
 #include <asm/uv/uv_mmrs.h>
 #include <asm/uv/uv_hub.h>
 #include <asm/uv/uv_bau.h>
-#include <asm/genapic.h>
+#include <asm/apic.h>
 #include <asm/idle.h>
 #include <asm/tsc.h>
 #include <asm/irq_vectors.h>
-
-#include <mach_apic.h>
 
 static struct bau_control	**uv_bau_table_bases __read_mostly;
 static int			uv_bau_retry_limit __read_mostly;
@@ -315,8 +313,6 @@ const struct cpumask *uv_flush_tlb_others(const struct cpumask *cpumask,
 	int this_blade;
 	int locals = 0;
 	struct bau_desc *bau_desc;
-
-	WARN_ON(!in_atomic());
 
 	cpumask_andnot(flush_mask, cpumask, cpumask_of(cpu));
 

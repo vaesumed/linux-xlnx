@@ -276,6 +276,13 @@ void set_phys_to_machine(unsigned long pfn, unsigned long mfn)
 	p2m_top[topidx][idx] = mfn;
 }
 
+unsigned long arbitrary_virt_to_mfn(void *vaddr)
+{
+	xmaddr_t maddr = arbitrary_virt_to_machine(vaddr);
+
+	return PFN_DOWN(maddr.maddr);
+}
+
 xmaddr_t arbitrary_virt_to_machine(void *vaddr)
 {
 	unsigned long address = (unsigned long)vaddr;
@@ -1273,8 +1280,6 @@ static void xen_flush_tlb_others(const struct cpumask *cpus,
 	/* Remove us, and any offline CPUS. */
 	cpumask_and(to_cpumask(args->mask), cpus, cpu_online_mask);
 	cpumask_clear_cpu(smp_processor_id(), to_cpumask(args->mask));
-	if (unlikely(cpumask_empty(to_cpumask(args->mask))))
-		goto issue;
 
 	if (va == TLB_FLUSH_ALL) {
 		args->op.cmd = MMUEXT_TLB_FLUSH_MULTI;
@@ -1285,7 +1290,6 @@ static void xen_flush_tlb_others(const struct cpumask *cpus,
 
 	MULTI_mmuext_op(mcs.mc, &args->op, 1, NULL, DOMID_SELF);
 
-issue:
 	xen_mc_issue(PARAVIRT_LAZY_MMU);
 }
 

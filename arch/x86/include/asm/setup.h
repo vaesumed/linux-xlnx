@@ -1,6 +1,8 @@
 #ifndef _ASM_X86_SETUP_H
 #define _ASM_X86_SETUP_H
 
+#ifdef __KERNEL__
+
 #define COMMAND_LINE_SIZE 2048
 
 #ifndef __ASSEMBLY__
@@ -11,6 +13,7 @@
 struct mpc_cpu;
 struct mpc_bus;
 struct mpc_oemtable;
+
 struct x86_quirks {
 	int (*arch_pre_time_init)(void);
 	int (*arch_time_init)(void);
@@ -26,14 +29,19 @@ struct x86_quirks {
 	void (*mpc_oem_bus_info)(struct mpc_bus *m, char *name);
 	void (*mpc_oem_pci_bus)(struct mpc_bus *m);
 	void (*smp_read_mpc_oem)(struct mpc_oemtable *oemtable,
-                                    unsigned short oemsize);
+				unsigned short oemsize);
 	int (*setup_ioapic_ids)(void);
-	int (*update_genapic)(void);
 };
 
-#endif /* __ASSEMBLY__ */
+extern void x86_quirk_pre_intr_init(void);
+extern void x86_quirk_intr_init(void);
 
-#ifdef __KERNEL__
+extern void x86_quirk_trap_init(void);
+
+extern void x86_quirk_pre_time_init(void);
+extern void x86_quirk_time_init(void);
+
+#endif /* __ASSEMBLY__ */
 
 #ifdef __i386__
 
@@ -56,7 +64,11 @@ struct x86_quirks {
 #include <asm/bootparam.h>
 
 /* Interrupt control for vSMPowered x86_64 systems */
+#ifdef CONFIG_X86_VSMP
 void vsmp_init(void);
+#else
+static inline void vsmp_init(void) { }
+#endif
 
 void setup_bios_corruption_check(void);
 
@@ -68,8 +80,6 @@ static inline void visws_early_detect(void) { }
 static inline int is_visws_box(void) { return 0; }
 #endif
 
-extern int wakeup_secondary_cpu_via_nmi(int apicid, unsigned long start_eip);
-extern int wakeup_secondary_cpu_via_init(int apicid, unsigned long start_eip);
 extern struct x86_quirks *x86_quirks;
 extern unsigned long saved_video_mode;
 
