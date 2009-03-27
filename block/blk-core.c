@@ -933,8 +933,6 @@ EXPORT_SYMBOL(blk_start_queueing);
  */
 void blk_requeue_request(struct request_queue *q, struct request *rq)
 {
-	unsigned long wait_for = (rq->retries + 1) * rq->timeout;
-
 	blk_delete_timer(rq);
 	blk_clear_rq_complete(rq);
 	trace_block_rq_requeue(q, rq);
@@ -942,13 +940,7 @@ void blk_requeue_request(struct request_queue *q, struct request *rq)
 	if (blk_rq_tagged(rq))
 		blk_queue_end_tag(q, rq);
 
-	if (time_before(rq->start_time + wait_for, jiffies)) {
-		printk(KERN_ERR "%s: timing out command, waited %lus\n",
-		       rq->rq_disk ? rq->rq_disk->disk_name : "?",
-		       wait_for/HZ);
-		blk_end_request(rq, -EIO, blk_rq_bytes(rq));
-	} else
-		elv_requeue_request(q, rq);
+	elv_requeue_request(q, rq);
 }
 EXPORT_SYMBOL(blk_requeue_request);
 
