@@ -26,7 +26,7 @@
 #include <linux/security.h>
 #include <linux/ima.h>
 #include <linux/syscalls.h>
-#include <linux/mount.h>
+#include <linux/mnt_namespace.h>
 #include <linux/audit.h>
 #include <linux/capability.h>
 #include <linux/file.h>
@@ -1120,6 +1120,79 @@ int vfs_path_lookup(struct dentry *dentry, struct vfsmount *mnt,
 	return retval;
 
 }
+
+/**
+ * vfs_remote_path_lookup - look up a path in a remote server namespace
+ * @dentry:  pointer to dentry of the base directory
+ * @mnt: pointer to vfs mount of the base directory
+ * @name: pointer to file name
+ * @flags: lookup flags
+ * @nd: pointer to nameidata
+ *
+ * This function creates a private mount namespace and sets 'mnt' as the
+ * root volume before looking up the path 'name'.
+ * It is intended for use by filesystems like NFSv4, which has a mount
+ * path that is relative to a remote server's namespace, and where walking
+ * that path may involve following referrals/links to volumes that reside
+ * on yet other servers. The resulting in-kernel automount can now be
+ * done safely as it affects the private namespace only.
+ */
+int vfs_remote_path_lookup(struct dentry *dentry,
+		struct vfsmount *mnt, const char *name,
+		unsigned int flags, struct nameidata *nd)
+{
+	struct nsproxy *new_nsproxy, *orig_nsproxy;
+	struct mnt_namespace *new_mnt_ns;
+	struct fs_struct *new_fs, *orig_fs;
+	int error = -ENOMEM;
+
+	new_fs = copy_fs_struct(current->fs);
+	if (new_fs == NULL)
+		goto out_err;
+
+	new_mnt_ns = create_private_mnt_ns(mnt, new_fs);
+	if (new_mnt_ns == NULL)
+		goto out_put_fs_struct;
+
+	/* Create a private copy of current->nsproxy */
+	new_nsproxy = unshare_current_nsproxy();
+	error = PTR_ERR(new_nsproxy);
+	if (IS_ERR(new_nsproxy))
+		goto out_put_mnt_ns;
+
+	/* ...and substitute the private mount namespace */
+	put_mnt_ns(new_nsproxy->mnt_ns);
+	new_nsproxy->mnt_ns = new_mnt_ns;
+	get_mnt_ns(new_mnt_ns);
+
+	/* Save the old nsproxy */
+	orig_nsproxy = current->nsproxy;
+	get_nsproxy(orig_nsproxy);
+
+	/* Pivot into the new mount namespace */
+	switch_task_namespaces(current, new_nsproxy);
+	task_lock(current);
+	orig_fs = current->fs;
+	current->fs = new_fs;
+	task_unlock(current);
+
+	error = vfs_path_lookup(dentry, mnt, name, flags, nd);
+
+	/* Pivot back into the original namespace */
+	task_lock(current);
+	current->fs = orig_fs;
+	task_unlock(current);
+	switch_task_namespaces(current, orig_nsproxy);
+
+out_put_mnt_ns:
+	put_mnt_ns(new_mnt_ns);
+
+out_put_fs_struct:
+	put_fs_struct(new_fs);
+out_err:
+	return error;
+}
+EXPORT_SYMBOL_GPL(vfs_remote_path_lookup);
 
 /**
  * path_lookup_open - lookup a file path with open intent
