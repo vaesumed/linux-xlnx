@@ -313,9 +313,10 @@ static int tda9875_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc)
 {
 	switch (qc->id) {
 	case V4L2_CID_AUDIO_VOLUME:
+		return v4l2_ctrl_query_fill(qc, 0, 65535, 65535 / 100, 58880);
 	case V4L2_CID_AUDIO_BASS:
 	case V4L2_CID_AUDIO_TREBLE:
-		return v4l2_ctrl_query_fill_std(qc);
+		return v4l2_ctrl_query_fill(qc, 0, 65535, 65535 / 100, 32768);
 	}
 	return -EINVAL;
 }
@@ -401,7 +402,6 @@ MODULE_DEVICE_TABLE(i2c, tda9875_id);
 
 static struct v4l2_i2c_driver_data v4l2_i2c_data = {
 	.name = "tda9875",
-	.driverid = I2C_DRIVERID_TDA9875,
 	.command = tda9875_command,
 	.probe = tda9875_probe,
 	.remove = tda9875_remove,
