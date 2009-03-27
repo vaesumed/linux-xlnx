@@ -222,7 +222,7 @@ fail:
 	return error;
 }
 
-static int ipv4_rcv_saddr_equal(const struct sock *sk1, const struct sock *sk2)
+int ipv4_rcv_saddr_equal(const struct sock *sk1, const struct sock *sk2)
 {
 	struct inet_sock *inet1 = inet_sk(sk1), *inet2 = inet_sk(sk2);
 
@@ -596,6 +596,7 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		return -EOPNOTSUPP;
 
 	ipc.opt = NULL;
+	ipc.shtx.flags = 0;
 
 	if (up->pending) {
 		/*
@@ -643,6 +644,9 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	ipc.addr = inet->saddr;
 
 	ipc.oif = sk->sk_bound_dev_if;
+	err = sock_tx_timestamp(msg, sk, &ipc.shtx);
+	if (err)
+		return err;
 	if (msg->msg_controllen) {
 		err = ip_cmsg_send(sock_net(sk), msg, &ipc);
 		if (err)
@@ -1180,7 +1184,7 @@ static int __udp4_lib_mcast_deliver(struct net *net, struct sk_buff *skb,
 			sk = sknext;
 		} while (sknext);
 	} else
-		kfree_skb(skb);
+		consume_skb(skb);
 	spin_unlock(&hslot->lock);
 	return 0;
 }
@@ -1819,6 +1823,7 @@ EXPORT_SYMBOL(udp_lib_getsockopt);
 EXPORT_SYMBOL(udp_lib_setsockopt);
 EXPORT_SYMBOL(udp_poll);
 EXPORT_SYMBOL(udp_lib_get_port);
+EXPORT_SYMBOL(ipv4_rcv_saddr_equal);
 
 #ifdef CONFIG_PROC_FS
 EXPORT_SYMBOL(udp_proc_register);
