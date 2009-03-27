@@ -603,13 +603,10 @@ blk_init_queue_node(request_fn_proc *rfn, spinlock_t *lock, int node_id)
 	q->queue_flags		= QUEUE_FLAG_DEFAULT;
 	q->queue_lock		= lock;
 
-	blk_queue_segment_boundary(q, BLK_SEG_BOUNDARY_MASK);
-
+	/*
+	 * This also sets hw/phys segments, boundary and size
+	 */
 	blk_queue_make_request(q, __make_request);
-	blk_queue_max_segment_size(q, MAX_SEGMENT_SIZE);
-
-	blk_queue_max_hw_segments(q, MAX_HW_SEGMENTS);
-	blk_queue_max_phys_segments(q, MAX_PHYS_SEGMENTS);
 
 	q->sg_reserved_size = INT_MAX;
 
@@ -735,7 +732,6 @@ static void freed_request(struct request_queue *q, int rw, int priv)
 		__freed_request(q, rw ^ 1);
 }
 
-#define blkdev_free_rq(list) list_entry((list)->next, struct request, queuelist)
 /*
  * Get a free request, queue_lock must be held.
  * Returns NULL on failure, with queue_lock held.
@@ -937,6 +933,8 @@ EXPORT_SYMBOL(blk_start_queueing);
  */
 void blk_requeue_request(struct request_queue *q, struct request *rq)
 {
+	unsigned long wait_for = (rq->retries + 1) * rq->timeout;
+
 	blk_delete_timer(rq);
 	blk_clear_rq_complete(rq);
 	trace_block_rq_requeue(q, rq);
@@ -944,7 +942,13 @@ void blk_requeue_request(struct request_queue *q, struct request *rq)
 	if (blk_rq_tagged(rq))
 		blk_queue_end_tag(q, rq);
 
-	elv_requeue_request(q, rq);
+	if (time_before(rq->start_time + wait_for, jiffies)) {
+		printk(KERN_ERR "%s: timing out command, waited %lus\n",
+		       rq->rq_disk ? rq->rq_disk->disk_name : "?",
+		       wait_for/HZ);
+		blk_end_request(rq, -EIO, blk_rq_bytes(rq));
+	} else
+		elv_requeue_request(q, rq);
 }
 EXPORT_SYMBOL(blk_requeue_request);
 
@@ -1065,6 +1069,9 @@ void __blk_put_request(struct request_queue *q, struct request *req)
 		return;
 
 	elv_completed_request(q, req);
+
+	/* this is a bio leak */
+	WARN_ON(req->bio != NULL);
 
 	/*
 	 * Request may not have originated from ll_rw_blk. if not,
