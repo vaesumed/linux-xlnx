@@ -164,11 +164,11 @@ static void vhpt_insert(u64 pte, u64 itir, u64 ifa, u64 gpte)
 	unsigned long ps, gpaddr;
 
 	ps = itir_ps(itir);
-
-	gpaddr = ((gpte & _PAGE_PPN_MASK) >> ps << ps) |
-		(ifa & ((1UL << ps) - 1));
-
 	rr.val = ia64_get_rr(ifa);
+
+	 gpaddr = ((gpte & _PAGE_PPN_MASK) >> ps << ps) |
+					(ifa & ((1UL << ps) - 1));
+
 	head = (struct thash_data *)ia64_thash(ifa);
 	head->etag = INVALID_TI_TAG;
 	ia64_mf();
@@ -254,7 +254,8 @@ u64 guest_vhpt_lookup(u64 iha, u64 *pte)
 			"(p7) st8 [%2]=r9;;"
 			"ssm psr.ic;;"
 			"srlz.d;;"
-			/* "ssm psr.i;;" Once interrupts in vmm open, need fix*/
+			"ssm psr.i;;"
+			"srlz.d;;"
 			: "=r"(ret) : "r"(iha), "r"(pte):"memory");
 
 	return ret;
@@ -413,16 +414,14 @@ u64 translate_phy_pte(u64 *pte, u64 itir, u64 va)
 
 /*
  * Purge overlap TCs and then insert the new entry to emulate itc ops.
- *    Notes: Only TC entry can purge and insert.
- *    1 indicates this is MMIO
+ * Notes: Only TC entry can purge and insert.
  */
-int thash_purge_and_insert(struct kvm_vcpu *v, u64 pte, u64 itir,
+void  thash_purge_and_insert(struct kvm_vcpu *v, u64 pte, u64 itir,
 						u64 ifa, int type)
 {
 	u64 ps;
 	u64 phy_pte, io_mask, index;
 	union ia64_rr vrr, mrr;
-	int ret = 0;
 
 	ps = itir_ps(itir);
 	vrr.val = vcpu_get_rr(v, ifa);
@@ -442,25 +441,19 @@ int thash_purge_and_insert(struct kvm_vcpu *v, u64 pte, u64 itir,
 		phy_pte &= ~_PAGE_MA_MASK;
 	}
 
-	if (pte & VTLB_PTE_IO)
-		ret = 1;
-
 	vtlb_purge(v, ifa, ps);
 	vhpt_purge(v, ifa, ps);
 
-	if (ps == mrr.ps) {
-		if (!(pte&VTLB_PTE_IO)) {
-			vhpt_insert(phy_pte, itir, ifa, pte);
-		} else {
-			vtlb_insert(v, pte, itir, ifa);
-			vcpu_quick_region_set(VMX(v, tc_regions), ifa);
-		}
-	} else if (ps > mrr.ps) {
+	if ((ps != mrr.ps) || (pte & VTLB_PTE_IO)) {
 		vtlb_insert(v, pte, itir, ifa);
 		vcpu_quick_region_set(VMX(v, tc_regions), ifa);
-		if (!(pte&VTLB_PTE_IO))
-			vhpt_insert(phy_pte, itir, ifa, pte);
-	} else {
+	}
+	if (pte & VTLB_PTE_IO)
+		return;
+
+	if (ps >= mrr.ps)
+		vhpt_insert(phy_pte, itir, ifa, pte);
+	else {
 		u64 psr;
 		phy_pte  &= ~PAGE_FLAGS_RV_MASK;
 		psr = ia64_clear_ic();
@@ -471,7 +464,6 @@ int thash_purge_and_insert(struct kvm_vcpu *v, u64 pte, u64 itir,
 	if (!(pte&VTLB_PTE_IO))
 		mark_pages_dirty(v, pte, ps);
 
-	return ret;
 }
 
 /*
@@ -511,7 +503,6 @@ void thash_purge_all(struct kvm_vcpu *v)
 	local_flush_tlb_all();
 }
 
-
 /*
  * Lookup the hash table and its collision chain to find an entry
  * covering this address rid:va or the entry.
@@ -519,7 +510,6 @@ void thash_purge_all(struct kvm_vcpu *v)
  * INPUT:
  *  in: TLB format for both VHPT & TLB.
  */
-
 struct thash_data *vtlb_lookup(struct kvm_vcpu *v, u64 va, int is_data)
 {
 	struct thash_data  *cch;
@@ -549,7 +539,6 @@ struct thash_data *vtlb_lookup(struct kvm_vcpu *v, u64 va, int is_data)
 	return NULL;
 }
 
-
 /*
  * Initialize internal control data before service.
  */
@@ -575,6 +564,10 @@ void thash_init(struct thash_cb *hcb, u64 sz)
 u64 kvm_get_mpt_entry(u64 gpfn)
 {
 	u64 *base = (u64 *) KVM_P2M_BASE;
+
+	if (gpfn >= (KVM_P2M_SIZE >> 3))
+		panic_vm(current_vcpu, "Invalid gpfn =%lx\n", gpfn);
+
 	return *(base + gpfn);
 }
 
@@ -590,7 +583,6 @@ u64 kvm_gpa_to_mpa(u64 gpa)
 	u64 pte = kvm_lookup_mpa(gpa >> PAGE_SHIFT);
 	return (pte >> PAGE_SHIFT << PAGE_SHIFT) | (gpa & ~PAGE_MASK);
 }
-
 
 /*
  * Fetch guest bundle code.
@@ -632,7 +624,6 @@ int fetch_code(struct kvm_vcpu *vcpu, u64 gip, IA64_BUNDLE *pbundle)
 
 	return IA64_NO_FAULT;
 }
-
 
 void kvm_init_vhpt(struct kvm_vcpu *v)
 {

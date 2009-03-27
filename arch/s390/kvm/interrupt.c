@@ -318,6 +318,12 @@ int kvm_cpu_has_interrupt(struct kvm_vcpu *vcpu)
 	return rc;
 }
 
+int kvm_arch_interrupt_allowed(struct kvm_vcpu *vcpu)
+{
+	/* do real check here */
+	return 1;
+}
+
 int kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu)
 {
 	return 0;
@@ -555,9 +561,14 @@ int kvm_s390_inject_vcpu(struct kvm_vcpu *vcpu,
 		VCPU_EVENT(vcpu, 3, "inject: program check %d (from user)",
 			   s390int->parm);
 		break;
+	case KVM_S390_SIGP_SET_PREFIX:
+		inti->prefix.address = s390int->parm;
+		inti->type = s390int->type;
+		VCPU_EVENT(vcpu, 3, "inject: set prefix to %x (from user)",
+			   s390int->parm);
+		break;
 	case KVM_S390_SIGP_STOP:
 	case KVM_S390_RESTART:
-	case KVM_S390_SIGP_SET_PREFIX:
 	case KVM_S390_INT_EMERGENCY:
 		VCPU_EVENT(vcpu, 3, "inject: type %x", s390int->type);
 		inti->type = s390int->type;
