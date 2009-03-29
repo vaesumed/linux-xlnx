@@ -297,17 +297,25 @@ nfs4_xdr_enc_cb_null(struct rpc_rqst *req, __be32 *p)
 	return 0;
 }
 
+static u32
+nfs4_xdr_minorversion(struct nfs4_rpc_args *rpc_args)
+{
+#if defined(CONFIG_NFSD_V4_1)
+	if (rpc_args->args_seq)
+		return rpc_args->args_seq->cbs_minorversion;
+#endif /* CONFIG_NFSD_V4_1 */
+	return 0;
+}
+
 static int
 nfs4_xdr_enc_cb_recall(struct rpc_rqst *req, __be32 *p,
 		       struct nfs4_rpc_args *rpc_args)
 {
 	struct xdr_stream xdr;
 	struct nfs4_cb_recall *args = rpc_args->args_op;
-	struct nfs4_callback *cb =
-		(struct nfs4_callback *)req->rq_task->tk_client->cl_private;
 	struct nfs4_cb_compound_hdr hdr = {
 		.ident = args->cbr_ident,
-		.minorversion = cb->cb_minorversion,
+		.minorversion = nfs4_xdr_minorversion(rpc_args),
 	};
 
 	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
@@ -362,14 +370,12 @@ static int
 decode_cb_sequence(struct xdr_stream *xdr, struct nfsd4_cb_sequence *res,
 		   struct rpc_rqst *rqstp)
 {
-	struct nfs4_callback *cb =
-		(struct nfs4_callback *)rqstp->rq_task->tk_client->cl_private;
 	struct nfs4_sessionid id;
 	int status;
 	u32 dummy;
 	__be32 *p;
 
-	if (cb->cb_minorversion == 0)
+	if (res->cbs_minorversion == 0)
 		return 0;
 
 	status = decode_cb_op_hdr(xdr, OP_CB_SEQUENCE);
@@ -570,7 +576,6 @@ static int do_probe_callback(void *data)
 		goto out_release_client;
 
 	cb->cb_client = client;
-	client->cl_private = cb;
 	atomic_set(&cb->cb_set, 1);
 	put_nfs4_client(clp);
 	return 0;
@@ -625,6 +630,7 @@ nfs41_cb_sequence_setup(struct nfs4_client *clp, struct nfsd4_cb_sequence *args)
 		ptr[0], ptr[1], ptr[2], ptr[3]);
 
 	mutex_lock(&clp->cl_cb_mutex);
+	args->cbs_minorversion = clp->cl_callback.cb_minorversion;
 	args->cbs_clp = clp;
 	clp->cl_cb_seq_nr++;
 	return 0;

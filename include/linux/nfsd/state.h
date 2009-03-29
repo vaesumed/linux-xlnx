@@ -63,6 +63,7 @@ typedef struct {
 
 struct nfsd4_cb_sequence {
 	/* args/res */
+	u32			cbs_minorversion;
 	struct nfs4_client	*cbs_clp;
 };
 
