@@ -1418,7 +1418,8 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		if (cr_ses->flags & SESSION4_BACK_CHAN) {
 			unconf->cl_cb_xprt = rqstp->rq_xprt;
 			svc_xprt_get(unconf->cl_cb_xprt);
-			unconf->cl_callback.cb_minorversion = 1;
+			unconf->cl_callback.cb_minorversion =
+				cstate->minorversion;
 			unconf->cl_cb_seq_nr = 0;
 			unconf->cl_callback.cb_prog = cr_ses->callback_prog;
 			nfsd4_probe_callback(unconf);
