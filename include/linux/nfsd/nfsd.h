@@ -23,7 +23,11 @@
 /*
  * nfsd version
  */
+#if defined(CONFIG_NFSD_V4_1)
+#define NFSD_SUPPORTED_MINOR_VERSION	1
+#else /* CONFIG_NFSD_V4_1 */
 #define NFSD_SUPPORTED_MINOR_VERSION	0
+#endif /* CONFIG_NFSD_V4_1 */
 
 /*
  * Flags for nfsd_permission
@@ -249,7 +253,44 @@ void		nfsd_lockd_shutdown(void);
 #define	nfserr_cb_path_down	cpu_to_be32(NFSERR_CB_PATH_DOWN)
 #define	nfserr_locked		cpu_to_be32(NFSERR_LOCKED)
 #define	nfserr_wrongsec		cpu_to_be32(NFSERR_WRONGSEC)
-#define	nfserr_replay_me	cpu_to_be32(NFSERR_REPLAY_ME)
+#define nfserr_badiomode		cpu_to_be32(NFS4ERR_BADIOMODE)
+#define nfserr_badlayout		cpu_to_be32(NFS4ERR_BADLAYOUT)
+#define nfserr_bad_session_digest	cpu_to_be32(NFS4ERR_BAD_SESSION_DIGEST)
+#define nfserr_badsession		cpu_to_be32(NFS4ERR_BADSESSION)
+#define nfserr_badslot			cpu_to_be32(NFS4ERR_BADSLOT)
+#define nfserr_complete_already		cpu_to_be32(NFS4ERR_COMPLETE_ALREADY)
+#define nfserr_conn_not_bound_to_session cpu_to_be32(NFS4ERR_CONN_NOT_BOUND_TO_SESSION)
+#define nfserr_deleg_already_wanted	cpu_to_be32(NFS4ERR_DELEG_ALREADY_WANTED)
+#define nfserr_back_chan_busy		cpu_to_be32(NFS4ERR_BACK_CHAN_BUSY)
+#define nfserr_layouttrylater		cpu_to_be32(NFS4ERR_LAYOUTTRYLATER)
+#define nfserr_layoutunavailable	cpu_to_be32(NFS4ERR_LAYOUTUNAVAILABLE)
+#define nfserr_nomatching_layout	cpu_to_be32(NFS4ERR_NOMATCHING_LAYOUT)
+#define nfserr_recallconflict		cpu_to_be32(NFS4ERR_RECALLCONFLICT)
+#define nfserr_unknown_layouttype	cpu_to_be32(NFS4ERR_UNKNOWN_LAYOUTTYPE)
+#define nfserr_seq_misordered		cpu_to_be32(NFS4ERR_SEQ_MISORDERED)
+#define nfserr_sequence_pos		cpu_to_be32(NFS4ERR_SEQUENCE_POS)
+#define nfserr_req_too_big		cpu_to_be32(NFS4ERR_REQ_TOO_BIG)
+#define nfserr_rep_too_big		cpu_to_be32(NFS4ERR_REP_TOO_BIG)
+#define nfserr_rep_too_big_to_cache	cpu_to_be32(NFS4ERR_REP_TOO_BIG_TO_CACHE)
+#define nfserr_retry_uncached_rep	cpu_to_be32(NFS4ERR_RETRY_UNCACHED_REP)
+#define nfserr_unsafe_compound		cpu_to_be32(NFS4ERR_UNSAFE_COMPOUND)
+#define nfserr_too_many_ops		cpu_to_be32(NFS4ERR_TOO_MANY_OPS)
+#define nfserr_op_not_in_session	cpu_to_be32(NFS4ERR_OP_NOT_IN_SESSION)
+#define nfserr_hash_alg_unsupp		cpu_to_be32(NFS4ERR_HASH_ALG_UNSUPP)
+#define nfserr_clientid_busy		cpu_to_be32(NFS4ERR_CLIENTID_BUSY)
+#define nfserr_pnfs_io_hole		cpu_to_be32(NFS4ERR_PNFS_IO_HOLE)
+#define nfserr_seq_false_retry		cpu_to_be32(NFS4ERR_SEQ_FALSE_RETRY)
+#define nfserr_bad_high_slot		cpu_to_be32(NFS4ERR_BAD_HIGH_SLOT)
+#define nfserr_deadsession		cpu_to_be32(NFS4ERR_DEADSESSION)
+#define nfserr_encr_alg_unsupp		cpu_to_be32(NFS4ERR_ENCR_ALG_UNSUPP)
+#define nfserr_pnfs_no_layout		cpu_to_be32(NFS4ERR_PNFS_NO_LAYOUT)
+#define nfserr_not_only_op		cpu_to_be32(NFS4ERR_NOT_ONLY_OP)
+#define nfserr_wrong_cred		cpu_to_be32(NFS4ERR_WRONG_CRED)
+#define nfserr_wrong_type		cpu_to_be32(NFS4ERR_WRONG_TYPE)
+#define nfserr_dirdeleg_unavail		cpu_to_be32(NFS4ERR_DIRDELEG_UNAVAIL)
+#define nfserr_reject_deleg		cpu_to_be32(NFS4ERR_REJECT_DELEG)
+#define nfserr_returnconflict		cpu_to_be32(NFS4ERR_RETURNCONFLICT)
+#define nfserr_deleg_revoked		cpu_to_be32(NFS4ERR_DELEG_REVOKED)
 
 /* error codes for internal use */
 /* if a request fails due to kmalloc failure, it gets dropped.
@@ -258,6 +299,10 @@ void		nfsd_lockd_shutdown(void);
 #define	nfserr_dropit		cpu_to_be32(30000)
 /* end-of-file indicator in readdir */
 #define	nfserr_eof		cpu_to_be32(30001)
+/* replay detected */
+#define	nfserr_replay_me	cpu_to_be32(11001)
+/* nfs41 replay detected */
+#define	nfserr_replay_cache	cpu_to_be32(11002)
 
 /* Check for dir entries '.' and '..' */
 #define isdotent(n, l)	(l < 3 && n[0] == '.' && (l == 1 || n[1] == '.'))
@@ -300,7 +345,7 @@ extern struct timeval	nfssvc_boot;
  *    TIME_BACKUP   (unlikely to be supported any time soon)
  *    TIME_CREATE   (unlikely to be supported any time soon)
  */
-#define NFSD_SUPPORTED_ATTRS_WORD0                                                          \
+#define NFSD4_SUPPORTED_ATTRS_WORD0                                                         \
 (FATTR4_WORD0_SUPPORTED_ATTRS   | FATTR4_WORD0_TYPE         | FATTR4_WORD0_FH_EXPIRE_TYPE   \
  | FATTR4_WORD0_CHANGE          | FATTR4_WORD0_SIZE         | FATTR4_WORD0_LINK_SUPPORT     \
  | FATTR4_WORD0_SYMLINK_SUPPORT | FATTR4_WORD0_NAMED_ATTR   | FATTR4_WORD0_FSID             \
@@ -312,13 +357,63 @@ extern struct timeval	nfssvc_boot;
  | FATTR4_WORD0_MAXFILESIZE     | FATTR4_WORD0_MAXLINK      | FATTR4_WORD0_MAXNAME          \
  | FATTR4_WORD0_MAXREAD         | FATTR4_WORD0_MAXWRITE     | FATTR4_WORD0_ACL)
 
-#define NFSD_SUPPORTED_ATTRS_WORD1                                                          \
+#define NFSD4_SUPPORTED_ATTRS_WORD1                                                         \
 (FATTR4_WORD1_MODE              | FATTR4_WORD1_NO_TRUNC     | FATTR4_WORD1_NUMLINKS         \
  | FATTR4_WORD1_OWNER	        | FATTR4_WORD1_OWNER_GROUP  | FATTR4_WORD1_RAWDEV           \
  | FATTR4_WORD1_SPACE_AVAIL     | FATTR4_WORD1_SPACE_FREE   | FATTR4_WORD1_SPACE_TOTAL      \
  | FATTR4_WORD1_SPACE_USED      | FATTR4_WORD1_TIME_ACCESS  | FATTR4_WORD1_TIME_ACCESS_SET  \
  | FATTR4_WORD1_TIME_DELTA   | FATTR4_WORD1_TIME_METADATA    \
  | FATTR4_WORD1_TIME_MODIFY     | FATTR4_WORD1_TIME_MODIFY_SET | FATTR4_WORD1_MOUNTED_ON_FILEID)
+
+#define NFSD4_SUPPORTED_ATTRS_WORD2 0
+
+#define NFSD4_1_SUPPORTED_ATTRS_WORD0 \
+	NFSD4_SUPPORTED_ATTRS_WORD0
+
+#define NFSD4_1_SUPPORTED_ATTRS_WORD1 \
+	NFSD4_SUPPORTED_ATTRS_WORD1
+
+#define NFSD4_1_SUPPORTED_ATTRS_WORD2 \
+	(NFSD4_SUPPORTED_ATTRS_WORD2 | FATTR4_WORD2_SUPPATTR_EXCLCREAT)
+
+#if defined(CONFIG_NFSD_V4_1)
+
+/* The percent of nr_free_buffer_pages used by the V4.1 server DRC */
+#define NFSD_DRC_SIZE_SHIFT	7
+
+static inline u32 nfsd_suppattrs0(u32 minorversion)
+{
+	return minorversion ? NFSD4_1_SUPPORTED_ATTRS_WORD0
+			    : NFSD4_SUPPORTED_ATTRS_WORD0;
+}
+
+static inline u32 nfsd_suppattrs1(u32 minorversion)
+{
+	return minorversion ? NFSD4_1_SUPPORTED_ATTRS_WORD1
+			    : NFSD4_SUPPORTED_ATTRS_WORD1;
+}
+
+static inline u32 nfsd_suppattrs2(u32 minorversion)
+{
+	return minorversion ? NFSD4_1_SUPPORTED_ATTRS_WORD2
+			    : NFSD4_SUPPORTED_ATTRS_WORD2;
+}
+#else  /* CONFIG_NFSD_V4_1 */
+static inline u32 nfsd_suppattrs0(u32 minorversion)
+{
+	return NFSD4_SUPPORTED_ATTRS_WORD0;
+}
+
+static inline u32 nfsd_suppattrs1(u32 minorversion)
+{
+	return NFSD4_SUPPORTED_ATTRS_WORD1;
+}
+
+static inline u32 nfsd_suppattrs2(u32 minorversion)
+{
+	return NFSD4_SUPPORTED_ATTRS_WORD2;
+}
+#endif /* CONFIG_NFSD_V4_1 */
 
 /* These will return ERR_INVAL if specified in GETATTR or READDIR. */
 #define NFSD_WRITEONLY_ATTRS_WORD1							    \
@@ -330,6 +425,19 @@ extern struct timeval	nfssvc_boot;
 #define NFSD_WRITEABLE_ATTRS_WORD1                                                          \
 (FATTR4_WORD1_MODE              | FATTR4_WORD1_OWNER         | FATTR4_WORD1_OWNER_GROUP     \
  | FATTR4_WORD1_TIME_ACCESS_SET | FATTR4_WORD1_TIME_MODIFY_SET)
+#define NFSD_WRITEABLE_ATTRS_WORD2 0
+
+#define NFSD_SUPPATTR_EXCLCREAT_WORD0 \
+	NFSD_WRITEABLE_ATTRS_WORD0
+/*
+ * we currently store the exclusive create verifier in the v_{a,m}time
+ * attributes so the client can't set these at create time using EXCLUSIVE4_1
+ */
+#define NFSD_SUPPATTR_EXCLCREAT_WORD1 \
+	(NFSD_WRITEABLE_ATTRS_WORD1 & \
+	 ~(FATTR4_WORD1_TIME_ACCESS_SET | FATTR4_WORD1_TIME_MODIFY_SET))
+#define NFSD_SUPPATTR_EXCLCREAT_WORD2 \
+	NFSD_WRITEABLE_ATTRS_WORD2
 
 #endif /* CONFIG_NFSD_V4 */
 
