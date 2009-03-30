@@ -441,9 +441,11 @@ nfs4_xdr_dec_cb_recall(struct rpc_rqst *rqstp, __be32 *p,
 	status = decode_cb_compound_hdr(&xdr, &hdr);
 	if (status)
 		goto out;
-	status = decode_cb_sequence(&xdr, rpc_res->res_seq, rqstp);
-	if (status)
-		goto out;
+	if (rpc_res && rpc_res->res_seq) {
+		status = decode_cb_sequence(&xdr, rpc_res->res_seq, rqstp);
+		if (status)
+			goto out;
+	}
 	status = decode_cb_op_hdr(&xdr, OP_CB_RECALL);
 out:
 	return status;
