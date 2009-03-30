@@ -1809,24 +1809,15 @@ void em28xx_card_setup(struct em28xx *dev)
 
 
 #if defined(CONFIG_MODULES) && defined(MODULE)
-static void request_module_async(struct work_struct *work)
-{
-	struct em28xx *dev = container_of(work,
-			     struct em28xx, request_module_wk);
-
-	if (dev->has_audio_class)
-		request_module("snd-usb-audio");
-	else if (dev->has_alsa_audio)
-		request_module("em28xx-alsa");
-
-	if (dev->board.has_dvb)
-		request_module("em28xx-dvb");
-}
-
 static void request_modules(struct em28xx *dev)
 {
-	INIT_WORK(&dev->request_module_wk, request_module_async);
-	schedule_work(&dev->request_module_wk);
+	if (dev->has_audio_class)
+		request_module_nowait("snd-usb-audio");
+	else if (dev->has_alsa_audio)
+		request_module_nowait("em28xx-alsa");
+
+	if (dev->board.has_dvb)
+		request_module_nowait("em28xx-dvb");
 }
 #else
 #define request_modules(dev)

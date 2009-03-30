@@ -482,8 +482,6 @@ struct saa7134_dev {
 	struct mutex               lock;
 	spinlock_t                 slock;
 	struct v4l2_prio_state     prio;
-	/* workstruct for loading modules */
-	struct work_struct request_module_wk;
 
 	/* insmod option/autodetected */
 	int                        autodetected;
