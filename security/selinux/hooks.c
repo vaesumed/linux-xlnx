@@ -713,7 +713,8 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 		goto out;
 	}
 
-	if (strcmp(sb->s_type->name, "proc") == 0)
+	/* "proc", "proc/net" */
+	if (strncmp(sb->s_type->name, "proc", 4) == 0)
 		sbsec->flags |= SE_SBPROC;
 
 	/* Determine the labeling behavior to use for this filesystem type. */
@@ -1174,16 +1175,18 @@ static inline u16 socket_type_to_security_class(int family, int type, int protoc
 }
 
 #ifdef CONFIG_PROC_FS
-static int selinux_proc_get_sid(struct proc_dir_entry *de,
+static int selinux_proc_get_sid(struct super_block *sb,
+				struct proc_dir_entry *de,
 				u16 tclass,
 				u32 *sid)
 {
 	int buflen, rc;
 	char *buffer, *path, *end;
 
+	rc = -ENOMEM;
 	buffer = (char *)__get_free_page(GFP_KERNEL);
 	if (!buffer)
-		return -ENOMEM;
+		goto out;
 
 	buflen = PAGE_SIZE;
 	end = buffer+buflen;
@@ -1194,19 +1197,32 @@ static int selinux_proc_get_sid(struct proc_dir_entry *de,
 	while (de && de != de->parent) {
 		buflen -= de->namelen + 1;
 		if (buflen < 0)
-			break;
+			goto out_free;
 		end -= de->namelen;
 		memcpy(end, de->name, de->namelen);
 		*--end = '/';
 		path = end;
 		de = de->parent;
 	}
+	if (strcmp(sb->s_type->name, "proc") != 0) {
+		const char *name = sb->s_type->name + 4;
+		int namelen = strlen(name);
+		buflen -= namelen;
+		if (buflen < 0)
+			goto out_free;
+		end -= namelen;
+		memcpy(end, name, namelen);
+		path = end;
+	}
 	rc = security_genfs_sid("proc", path, tclass, sid);
+out_free:
 	free_page((unsigned long)buffer);
+out:
 	return rc;
 }
 #else
-static int selinux_proc_get_sid(struct proc_dir_entry *de,
+static int selinux_proc_get_sid(struct super_block *sb,
+				struct proc_dir_entry *de,
 				u16 tclass,
 				u32 *sid)
 {
@@ -1372,7 +1388,8 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 			struct proc_inode *proci = PROC_I(inode);
 			if (proci->pde) {
 				isec->sclass = inode_mode_to_security_class(inode->i_mode);
-				rc = selinux_proc_get_sid(proci->pde,
+				rc = selinux_proc_get_sid(inode->i_sb,
+							  proci->pde,
 							  isec->sclass,
 							  &sid);
 				if (rc)
