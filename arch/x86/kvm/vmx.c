@@ -38,20 +38,20 @@
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
-static int bypass_guest_pf = 1;
-module_param(bypass_guest_pf, bool, 0);
+static int __read_mostly bypass_guest_pf = 1;
+module_param(bypass_guest_pf, bool, S_IRUGO);
 
-static int enable_vpid = 1;
-module_param(enable_vpid, bool, 0);
+static int __read_mostly enable_vpid = 1;
+module_param_named(vpid, enable_vpid, bool, 0444);
 
-static int flexpriority_enabled = 1;
-module_param(flexpriority_enabled, bool, 0);
+static int __read_mostly flexpriority_enabled = 1;
+module_param_named(flexpriority, flexpriority_enabled, bool, S_IRUGO);
 
-static int enable_ept = 1;
-module_param(enable_ept, bool, 0);
+static int __read_mostly enable_ept = 1;
+module_param_named(ept, enable_ept, bool, S_IRUGO);
 
-static int emulate_invalid_guest_state = 0;
-module_param(emulate_invalid_guest_state, bool, 0);
+static int __read_mostly emulate_invalid_guest_state = 0;
+module_param(emulate_invalid_guest_state, bool, S_IRUGO);
 
 struct vmcs {
 	u32 revision_id;
@@ -111,9 +111,10 @@ static DEFINE_PER_CPU(struct vmcs *, vmxarea);
 static DEFINE_PER_CPU(struct vmcs *, current_vmcs);
 static DEFINE_PER_CPU(struct list_head, vcpus_on_cpu);
 
-static struct page *vmx_io_bitmap_a;
-static struct page *vmx_io_bitmap_b;
-static struct page *vmx_msr_bitmap;
+static unsigned long *vmx_io_bitmap_a;
+static unsigned long *vmx_io_bitmap_b;
+static unsigned long *vmx_msr_bitmap_legacy;
+static unsigned long *vmx_msr_bitmap_longmode;
 
 static DECLARE_BITMAP(vmx_vpid_bitmap, VMX_NR_VPIDS);
 static DEFINE_SPINLOCK(vmx_vpid_lock);
@@ -236,9 +237,7 @@ static inline int cpu_has_secondary_exec_ctrls(void)
 
 static inline bool cpu_has_vmx_virtualize_apic_accesses(void)
 {
-	return flexpriority_enabled
-		&& (vmcs_config.cpu_based_2nd_exec_ctrl &
-		    SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES);
+	return flexpriority_enabled;
 }
 
 static inline int cpu_has_vmx_invept_individual_addr(void)
@@ -260,11 +259,6 @@ static inline int cpu_has_vmx_ept(void)
 {
 	return (vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_ENABLE_EPT);
-}
-
-static inline int vm_need_ept(void)
-{
-	return (cpu_has_vmx_ept() && enable_ept);
 }
 
 static inline int vm_need_virtualize_apic_accesses(struct kvm *kvm)
@@ -381,7 +375,7 @@ static inline void ept_sync_global(void)
 
 static inline void ept_sync_context(u64 eptp)
 {
-	if (vm_need_ept()) {
+	if (enable_ept) {
 		if (cpu_has_vmx_invept_context())
 			__invept(VMX_EPT_EXTENT_CONTEXT, eptp, 0);
 		else
@@ -391,7 +385,7 @@ static inline void ept_sync_context(u64 eptp)
 
 static inline void ept_sync_individual_addr(u64 eptp, gpa_t gpa)
 {
-	if (vm_need_ept()) {
+	if (enable_ept) {
 		if (cpu_has_vmx_invept_individual_addr())
 			__invept(VMX_EPT_EXTENT_INDIVIDUAL_ADDR,
 					eptp, gpa);
@@ -490,7 +484,7 @@ static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 	}
 	if (vcpu->arch.rmode.active)
 		eb = ~0;
-	if (vm_need_ept())
+	if (enable_ept)
 		eb &= ~(1u << PF_VECTOR); /* bypass_guest_pf = 0 */
 	vmcs_write32(EXCEPTION_BITMAP, eb);
 }
@@ -812,6 +806,7 @@ static void move_msr_up(struct vcpu_vmx *vmx, int from, int to)
 static void setup_msrs(struct vcpu_vmx *vmx)
 {
 	int save_nmsrs;
+	unsigned long *msr_bitmap;
 
 	vmx_load_host_state(vmx);
 	save_nmsrs = 0;
@@ -847,6 +842,15 @@ static void setup_msrs(struct vcpu_vmx *vmx)
 		__find_msr_index(vmx, MSR_KERNEL_GS_BASE);
 #endif
 	vmx->msr_offset_efer = __find_msr_index(vmx, MSR_EFER);
+
+	if (cpu_has_vmx_msr_bitmap()) {
+		if (is_long_mode(&vmx->vcpu))
+			msr_bitmap = vmx_msr_bitmap_longmode;
+		else
+			msr_bitmap = vmx_msr_bitmap_legacy;
+
+		vmcs_write64(MSR_BITMAP, __pa(msr_bitmap));
+	}
 }
 
 /*
@@ -1191,6 +1195,15 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 		      vmx_capability.ept, vmx_capability.vpid);
 	}
 
+	if (!cpu_has_vmx_vpid())
+		enable_vpid = 0;
+
+	if (!cpu_has_vmx_ept())
+		enable_ept = 0;
+
+	if (!(vmcs_config.cpu_based_2nd_exec_ctrl & SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES))
+		flexpriority_enabled = 0;
+
 	min = 0;
 #ifdef CONFIG_X86_64
 	min |= VM_EXIT_HOST_ADDR_SPACE_SIZE;
@@ -1485,7 +1498,7 @@ static void exit_lmode(struct kvm_vcpu *vcpu)
 static void vmx_flush_tlb(struct kvm_vcpu *vcpu)
 {
 	vpid_sync_vcpu_all(to_vmx(vcpu));
-	if (vm_need_ept())
+	if (enable_ept)
 		ept_sync_context(construct_eptp(vcpu->arch.mmu.root_hpa));
 }
 
@@ -1570,7 +1583,7 @@ static void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	}
 #endif
 
-	if (vm_need_ept())
+	if (enable_ept)
 		ept_update_paging_mode_cr0(&hw_cr0, cr0, vcpu);
 
 	vmcs_writel(CR0_READ_SHADOW, cr0);
@@ -1599,7 +1612,7 @@ static void vmx_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	u64 eptp;
 
 	guest_cr3 = cr3;
-	if (vm_need_ept()) {
+	if (enable_ept) {
 		eptp = construct_eptp(cr3);
 		vmcs_write64(EPT_POINTER, eptp);
 		ept_sync_context(eptp);
@@ -1620,7 +1633,7 @@ static void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 		    KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON);
 
 	vcpu->arch.cr4 = cr4;
-	if (vm_need_ept())
+	if (enable_ept)
 		ept_update_paging_mode_cr4(&hw_cr4, vcpu);
 
 	vmcs_writel(CR4_READ_SHADOW, cr4);
@@ -1982,7 +1995,7 @@ static int init_rmode_identity_map(struct kvm *kvm)
 	pfn_t identity_map_pfn;
 	u32 tmp;
 
-	if (!vm_need_ept())
+	if (!enable_ept)
 		return 1;
 	if (unlikely(!kvm->arch.ept_identity_pagetable)) {
 		printk(KERN_ERR "EPT: identity-mapping pagetable "
@@ -2071,7 +2084,7 @@ static void allocate_vpid(struct vcpu_vmx *vmx)
 	int vpid;
 
 	vmx->vpid = 0;
-	if (!enable_vpid || !cpu_has_vmx_vpid())
+	if (!enable_vpid)
 		return;
 	spin_lock(&vmx_vpid_lock);
 	vpid = find_first_zero_bit(vmx_vpid_bitmap, VMX_NR_VPIDS);
@@ -2082,9 +2095,9 @@ static void allocate_vpid(struct vcpu_vmx *vmx)
 	spin_unlock(&vmx_vpid_lock);
 }
 
-static void vmx_disable_intercept_for_msr(struct page *msr_bitmap, u32 msr)
+static void __vmx_disable_intercept_for_msr(unsigned long *msr_bitmap, u32 msr)
 {
-	void *va;
+	int f = sizeof(unsigned long);
 
 	if (!cpu_has_vmx_msr_bitmap())
 		return;
@@ -2094,16 +2107,21 @@ static void vmx_disable_intercept_for_msr(struct page *msr_bitmap, u32 msr)
 	 * have the write-low and read-high bitmap offsets the wrong way round.
 	 * We can control MSRs 0x00000000-0x00001fff and 0xc0000000-0xc0001fff.
 	 */
-	va = kmap(msr_bitmap);
 	if (msr <= 0x1fff) {
-		__clear_bit(msr, va + 0x000); /* read-low */
-		__clear_bit(msr, va + 0x800); /* write-low */
+		__clear_bit(msr, msr_bitmap + 0x000 / f); /* read-low */
+		__clear_bit(msr, msr_bitmap + 0x800 / f); /* write-low */
 	} else if ((msr >= 0xc0000000) && (msr <= 0xc0001fff)) {
 		msr &= 0x1fff;
-		__clear_bit(msr, va + 0x400); /* read-high */
-		__clear_bit(msr, va + 0xc00); /* write-high */
+		__clear_bit(msr, msr_bitmap + 0x400 / f); /* read-high */
+		__clear_bit(msr, msr_bitmap + 0xc00 / f); /* write-high */
 	}
-	kunmap(msr_bitmap);
+}
+
+static void vmx_disable_intercept_for_msr(u32 msr, bool longmode_only)
+{
+	if (!longmode_only)
+		__vmx_disable_intercept_for_msr(vmx_msr_bitmap_legacy, msr);
+	__vmx_disable_intercept_for_msr(vmx_msr_bitmap_longmode, msr);
 }
 
 /*
@@ -2121,11 +2139,11 @@ static int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	u32 exec_control;
 
 	/* I/O */
-	vmcs_write64(IO_BITMAP_A, page_to_phys(vmx_io_bitmap_a));
-	vmcs_write64(IO_BITMAP_B, page_to_phys(vmx_io_bitmap_b));
+	vmcs_write64(IO_BITMAP_A, __pa(vmx_io_bitmap_a));
+	vmcs_write64(IO_BITMAP_B, __pa(vmx_io_bitmap_b));
 
 	if (cpu_has_vmx_msr_bitmap())
-		vmcs_write64(MSR_BITMAP, page_to_phys(vmx_msr_bitmap));
+		vmcs_write64(MSR_BITMAP, __pa(vmx_msr_bitmap_legacy));
 
 	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 22.3.1.5 */
 
@@ -2141,7 +2159,7 @@ static int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 				CPU_BASED_CR8_LOAD_EXITING;
 #endif
 	}
-	if (!vm_need_ept())
+	if (!enable_ept)
 		exec_control |= CPU_BASED_CR3_STORE_EXITING |
 				CPU_BASED_CR3_LOAD_EXITING  |
 				CPU_BASED_INVLPG_EXITING;
@@ -2154,7 +2172,7 @@ static int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 				~SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES;
 		if (vmx->vpid == 0)
 			exec_control &= ~SECONDARY_EXEC_ENABLE_VPID;
-		if (!vm_need_ept())
+		if (!enable_ept)
 			exec_control &= ~SECONDARY_EXEC_ENABLE_EPT;
 		vmcs_write32(SECONDARY_VM_EXEC_CONTROL, exec_control);
 	}
@@ -2473,16 +2491,10 @@ static void vmx_update_window_states(struct kvm_vcpu *vcpu)
 				 GUEST_INTR_STATE_MOV_SS)));
 }
 
-static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
+static int vmx_interrupt_allowed(struct kvm_vcpu *vcpu)
 {
-	int word_index = __ffs(vcpu->arch.irq_summary);
-	int bit_index = __ffs(vcpu->arch.irq_pending[word_index]);
-	int irq = word_index * BITS_PER_LONG + bit_index;
-
-	clear_bit(bit_index, &vcpu->arch.irq_pending[word_index]);
-	if (!vcpu->arch.irq_pending[word_index])
-		clear_bit(word_index, &vcpu->arch.irq_summary);
-	kvm_queue_interrupt(vcpu, irq);
+	vmx_update_window_states(vcpu);
+	return vcpu->arch.interrupt_window_open;
 }
 
 static void do_interrupt_requests(struct kvm_vcpu *vcpu,
@@ -2518,7 +2530,7 @@ static void do_interrupt_requests(struct kvm_vcpu *vcpu,
 
 	if (vcpu->arch.interrupt_window_open) {
 		if (vcpu->arch.irq_summary && !vcpu->arch.interrupt.pending)
-			kvm_do_inject_irq(vcpu);
+			kvm_queue_interrupt(vcpu, kvm_pop_irq(vcpu));
 
 		if (vcpu->arch.interrupt.pending)
 			vmx_inject_irq(vcpu, vcpu->arch.interrupt.nr);
@@ -2603,8 +2615,7 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 	if (!irqchip_in_kernel(vcpu->kvm) && is_external_interrupt(vect_info)) {
 		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;
-		set_bit(irq, vcpu->arch.irq_pending);
-		set_bit(irq / BITS_PER_LONG, &vcpu->arch.irq_summary);
+		kvm_push_irq(vcpu, irq);
 	}
 
 	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == INTR_TYPE_NMI_INTR)
@@ -2628,7 +2639,7 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
 	if (is_page_fault(intr_info)) {
 		/* EPT won't cause page fault directly */
-		if (vm_need_ept())
+		if (enable_ept)
 			BUG();
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 		KVMTRACE_3D(PAGE_FAULT, vcpu, error_code, (u32)cr2,
@@ -2980,7 +2991,7 @@ static int handle_vmcall(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	u64 exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+	unsigned long exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 
 	kvm_mmu_invlpg(vcpu, exit_qualification);
 	skip_emulated_instruction(vcpu);
@@ -2996,11 +3007,11 @@ static int handle_wbinvd(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int handle_apic_access(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	u64 exit_qualification;
+	unsigned long exit_qualification;
 	enum emulation_result er;
 	unsigned long offset;
 
-	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 	offset = exit_qualification & 0xffful;
 
 	er = emulate_instruction(vcpu, kvm_run, 0, 0, 0);
@@ -3051,11 +3062,11 @@ static int handle_task_switch(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int handle_ept_violation(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	u64 exit_qualification;
+	unsigned long exit_qualification;
 	gpa_t gpa;
 	int gla_validity;
 
-	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 
 	if (exit_qualification & (1 << 6)) {
 		printk(KERN_ERR "EPT: GPA exceeds GAW!\n");
@@ -3067,7 +3078,7 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		printk(KERN_ERR "EPT: Handling EPT violation failed!\n");
 		printk(KERN_ERR "EPT: GPA: 0x%lx, GVA: 0x%lx\n",
 			(long unsigned int)vmcs_read64(GUEST_PHYSICAL_ADDRESS),
-			(long unsigned int)vmcs_read64(GUEST_LINEAR_ADDRESS));
+			vmcs_readl(GUEST_LINEAR_ADDRESS));
 		printk(KERN_ERR "EPT: Exit qualification is 0x%lx\n",
 			(long unsigned int)exit_qualification);
 		kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
@@ -3159,7 +3170,7 @@ static const int kvm_vmx_max_exit_handlers =
  * The guest has exited.  See if we can fix it or if we need userspace
  * assistance.
  */
-static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
+static int vmx_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 {
 	u32 exit_reason = vmcs_read32(VM_EXIT_REASON);
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -3178,7 +3189,7 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 
 	/* Access CR3 don't cause VMExit in paging mode, so we need
 	 * to sync with guest real CR3. */
-	if (vm_need_ept() && is_paging(vcpu)) {
+	if (enable_ept && is_paging(vcpu)) {
 		vcpu->arch.cr3 = vmcs_readl(GUEST_CR3);
 		ept_load_pdptrs(vcpu);
 	}
@@ -3593,7 +3604,7 @@ static struct kvm_vcpu *vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 		if (alloc_apic_access_page(kvm) != 0)
 			goto free_vmcs;
 
-	if (vm_need_ept())
+	if (enable_ept)
 		if (alloc_identity_pagetable(kvm) != 0)
 			goto free_vmcs;
 
@@ -3678,7 +3689,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.tlb_flush = vmx_flush_tlb,
 
 	.run = vmx_vcpu_run,
-	.handle_exit = kvm_handle_exit,
+	.handle_exit = vmx_handle_exit,
 	.skip_emulated_instruction = skip_emulated_instruction,
 	.patch_hypercall = vmx_patch_hypercall,
 	.get_irq = vmx_get_irq,
@@ -3687,7 +3698,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.exception_injected = vmx_exception_injected,
 	.inject_pending_irq = vmx_intr_assist,
 	.inject_pending_vectors = do_interrupt_requests,
-
+	.interrupt_allowed = vmx_interrupt_allowed,
 	.set_tss_addr = vmx_set_tss_addr,
 	.get_tdp_level = get_ept_level,
 	.get_mt_mask_shift = vmx_get_mt_mask_shift,
@@ -3695,55 +3706,56 @@ static struct kvm_x86_ops vmx_x86_ops = {
 
 static int __init vmx_init(void)
 {
-	void *va;
 	int r;
 
-	vmx_io_bitmap_a = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
+	vmx_io_bitmap_a = (unsigned long *)__get_free_page(GFP_KERNEL);
 	if (!vmx_io_bitmap_a)
 		return -ENOMEM;
 
-	vmx_io_bitmap_b = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
+	vmx_io_bitmap_b = (unsigned long *)__get_free_page(GFP_KERNEL);
 	if (!vmx_io_bitmap_b) {
 		r = -ENOMEM;
 		goto out;
 	}
 
-	vmx_msr_bitmap = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
-	if (!vmx_msr_bitmap) {
+	vmx_msr_bitmap_legacy = (unsigned long *)__get_free_page(GFP_KERNEL);
+	if (!vmx_msr_bitmap_legacy) {
 		r = -ENOMEM;
 		goto out1;
+	}
+
+	vmx_msr_bitmap_longmode = (unsigned long *)__get_free_page(GFP_KERNEL);
+	if (!vmx_msr_bitmap_longmode) {
+		r = -ENOMEM;
+		goto out2;
 	}
 
 	/*
 	 * Allow direct access to the PC debug port (it is often used for I/O
 	 * delays, but the vmexits simply slow things down).
 	 */
-	va = kmap(vmx_io_bitmap_a);
-	memset(va, 0xff, PAGE_SIZE);
-	clear_bit(0x80, va);
-	kunmap(vmx_io_bitmap_a);
+	memset(vmx_io_bitmap_a, 0xff, PAGE_SIZE);
+	clear_bit(0x80, vmx_io_bitmap_a);
 
-	va = kmap(vmx_io_bitmap_b);
-	memset(va, 0xff, PAGE_SIZE);
-	kunmap(vmx_io_bitmap_b);
+	memset(vmx_io_bitmap_b, 0xff, PAGE_SIZE);
 
-	va = kmap(vmx_msr_bitmap);
-	memset(va, 0xff, PAGE_SIZE);
-	kunmap(vmx_msr_bitmap);
+	memset(vmx_msr_bitmap_legacy, 0xff, PAGE_SIZE);
+	memset(vmx_msr_bitmap_longmode, 0xff, PAGE_SIZE);
 
 	set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */
 
 	r = kvm_init(&vmx_x86_ops, sizeof(struct vcpu_vmx), THIS_MODULE);
 	if (r)
-		goto out2;
+		goto out3;
 
-	vmx_disable_intercept_for_msr(vmx_msr_bitmap, MSR_FS_BASE);
-	vmx_disable_intercept_for_msr(vmx_msr_bitmap, MSR_GS_BASE);
-	vmx_disable_intercept_for_msr(vmx_msr_bitmap, MSR_IA32_SYSENTER_CS);
-	vmx_disable_intercept_for_msr(vmx_msr_bitmap, MSR_IA32_SYSENTER_ESP);
-	vmx_disable_intercept_for_msr(vmx_msr_bitmap, MSR_IA32_SYSENTER_EIP);
+	vmx_disable_intercept_for_msr(MSR_FS_BASE, false);
+	vmx_disable_intercept_for_msr(MSR_GS_BASE, false);
+	vmx_disable_intercept_for_msr(MSR_KERNEL_GS_BASE, true);
+	vmx_disable_intercept_for_msr(MSR_IA32_SYSENTER_CS, false);
+	vmx_disable_intercept_for_msr(MSR_IA32_SYSENTER_ESP, false);
+	vmx_disable_intercept_for_msr(MSR_IA32_SYSENTER_EIP, false);
 
-	if (vm_need_ept()) {
+	if (enable_ept) {
 		bypass_guest_pf = 0;
 		kvm_mmu_set_base_ptes(VMX_EPT_READABLE_MASK |
 			VMX_EPT_WRITABLE_MASK);
@@ -3761,20 +3773,23 @@ static int __init vmx_init(void)
 
 	return 0;
 
+out3:
+	free_page((unsigned long)vmx_msr_bitmap_longmode);
 out2:
-	__free_page(vmx_msr_bitmap);
+	free_page((unsigned long)vmx_msr_bitmap_legacy);
 out1:
-	__free_page(vmx_io_bitmap_b);
+	free_page((unsigned long)vmx_io_bitmap_b);
 out:
-	__free_page(vmx_io_bitmap_a);
+	free_page((unsigned long)vmx_io_bitmap_a);
 	return r;
 }
 
 static void __exit vmx_exit(void)
 {
-	__free_page(vmx_msr_bitmap);
-	__free_page(vmx_io_bitmap_b);
-	__free_page(vmx_io_bitmap_a);
+	free_page((unsigned long)vmx_msr_bitmap_legacy);
+	free_page((unsigned long)vmx_msr_bitmap_longmode);
+	free_page((unsigned long)vmx_io_bitmap_b);
+	free_page((unsigned long)vmx_io_bitmap_a);
 
 	kvm_exit();
 }
