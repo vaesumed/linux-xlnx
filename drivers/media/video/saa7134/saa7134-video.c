@@ -31,11 +31,6 @@
 #include "saa7134.h"
 #include <media/v4l2-common.h>
 
-#ifdef CONFIG_VIDEO_V4L1_COMPAT
-/* Include V4L1 specific functions. Should be removed soon */
-#include <linux/videodev.h>
-#endif
-
 /* ------------------------------------------------------------------ */
 
 unsigned int video_debug;
@@ -452,6 +447,7 @@ static const struct v4l2_queryctrl video_ctrls[] = {
 		.name          = "y offset odd field",
 		.minimum       = 0,
 		.maximum       = 128,
+		.step          = 1,
 		.default_value = 0,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
 	},{
@@ -459,6 +455,7 @@ static const struct v4l2_queryctrl video_ctrls[] = {
 		.name          = "y offset even field",
 		.minimum       = 0,
 		.maximum       = 128,
+		.step          = 1,
 		.default_value = 0,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
 	},{
@@ -627,10 +624,10 @@ void saa7134_set_tvnorm_hw(struct saa7134_dev *dev)
 	saa7134_set_decoder(dev);
 
 	if (card_in(dev, dev->ctl_input).tv)
-		saa7134_i2c_call_clients(dev, VIDIOC_S_STD, &dev->tvnorm->id);
+		saa_call_all(dev, tuner, s_std, dev->tvnorm->id);
 	/* Set the correct norm for the saa6752hs. This function
 	   does nothing if there is no saa6752hs. */
-	saa7134_i2c_call_saa6752(dev, VIDIOC_S_STD, &dev->tvnorm->id);
+	saa_call_empress(dev, tuner, s_std, dev->tvnorm->id);
 }
 
 static void set_h_prescale(struct saa7134_dev *dev, int task, int prescale)
@@ -1266,8 +1263,7 @@ int saa7134_s_ctrl_internal(struct saa7134_dev *dev,  struct saa7134_fh *fh, str
 			else
 				dev->tda9887_conf &= ~TDA9887_AUTOMUTE;
 
-			saa7134_i2c_call_clients(dev, TUNER_SET_CONFIG,
-						 &tda9887_cfg);
+			saa_call_all(dev, tuner, s_config, &tda9887_cfg);
 		}
 		break;
 	}
@@ -1334,7 +1330,7 @@ static int video_open(struct file *file)
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	int radio = 0;
 
-	lock_kernel();
+	mutex_lock(&saa7134_devlist_lock);
 	list_for_each_entry(dev, &saa7134_devlist, devlist) {
 		if (dev->video_dev && (dev->video_dev->minor == minor))
 			goto found;
@@ -1347,19 +1343,20 @@ static int video_open(struct file *file)
 			goto found;
 		}
 	}
-	unlock_kernel();
+	mutex_unlock(&saa7134_devlist_lock);
 	return -ENODEV;
- found:
+
+found:
+	mutex_unlock(&saa7134_devlist_lock);
 
 	dprintk("open minor=%d radio=%d type=%s\n",minor,radio,
 		v4l2_type_names[type]);
 
 	/* allocate + initialize per filehandle data */
 	fh = kzalloc(sizeof(*fh),GFP_KERNEL);
-	if (NULL == fh) {
-		unlock_kernel();
+	if (NULL == fh)
 		return -ENOMEM;
-	}
+
 	file->private_data = fh;
 	fh->dev      = dev;
 	fh->radio    = radio;
@@ -1387,12 +1384,11 @@ static int video_open(struct file *file)
 	if (fh->radio) {
 		/* switch to radio mode */
 		saa7134_tvaudio_setinput(dev,&card(dev).radio);
-		saa7134_i2c_call_clients(dev,AUDC_SET_RADIO, NULL);
+		saa_call_all(dev, tuner, s_radio);
 	} else {
 		/* switch to video/vbi mode */
 		video_mux(dev,dev->ctl_input);
 	}
-	unlock_kernel();
 	return 0;
 }
 
@@ -1498,7 +1494,7 @@ static int video_release(struct file *file)
 	saa_andorb(SAA7134_OFMT_DATA_A, 0x1f, 0);
 	saa_andorb(SAA7134_OFMT_DATA_B, 0x1f, 0);
 
-	saa7134_i2c_call_clients(dev, TUNER_SET_STANDBY, NULL);
+	saa_call_all(dev, core, s_standby, 0);
 
 	/* free stuff */
 	videobuf_mmap_free(&fh->cap);
@@ -2041,7 +2037,7 @@ static int saa7134_s_frequency(struct file *file, void *priv,
 	mutex_lock(&dev->lock);
 	dev->ctl_freq = f->frequency;
 
-	saa7134_i2c_call_clients(dev, VIDIOC_S_FREQUENCY, f);
+	saa_call_all(dev, tuner, s_frequency, f);
 
 	saa7134_tvaudio_do_scan(dev);
 	mutex_unlock(&dev->lock);
@@ -2299,7 +2295,7 @@ static int radio_g_tuner(struct file *file, void *priv,
 	strcpy(t->name, "Radio");
 	t->type = V4L2_TUNER_RADIO;
 
-	saa7134_i2c_call_clients(dev, VIDIOC_G_TUNER, t);
+	saa_call_all(dev, tuner, g_tuner, t);
 	if (dev->input->amux == TV) {
 		t->signal = 0xf800 - ((saa_readb(0x581) & 0x1f) << 11);
 		t->rxsubchans = (saa_readb(0x529) & 0x08) ?
@@ -2316,7 +2312,7 @@ static int radio_s_tuner(struct file *file, void *priv,
 	if (0 != t->index)
 		return -EINVAL;
 
-	saa7134_i2c_call_clients(dev, VIDIOC_S_TUNER, t);
+	saa_call_all(dev, tuner, s_tuner, t);
 	return 0;
 }
 

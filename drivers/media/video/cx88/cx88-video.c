@@ -41,11 +41,6 @@
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
 
-#ifdef CONFIG_VIDEO_V4L1_COMPAT
-/* Include V4L1 specific functions. Should be removed soon */
-#include <linux/videodev.h>
-#endif
-
 MODULE_DESCRIPTION("v4l2 driver module for cx2388x based TV cards");
 MODULE_AUTHOR("Gerd Knorr <kraxel@bytesex.org> [SuSE Labs]");
 MODULE_LICENSE("GPL");
@@ -298,6 +293,7 @@ static struct cx88_ctrl cx8800_ctls[] = {
 };
 static const int CX8800_CTLS = ARRAY_SIZE(cx8800_ctls);
 
+/* Must be sorted from low to high control ID! */
 const u32 cx88_user_ctrls[] = {
 	V4L2_CID_USER_CLASS,
 	V4L2_CID_BRIGHTNESS,
@@ -1276,15 +1272,12 @@ int cx88_enum_input (struct cx88_core  *core,struct v4l2_input *i)
 		[ CX88_VMUX_DVB        ] = "DVB",
 		[ CX88_VMUX_DEBUG      ] = "for debug only",
 	};
-	unsigned int n;
+	unsigned int n = i->index;
 
-	n = i->index;
 	if (n >= 4)
 		return -EINVAL;
 	if (0 == INPUT(n).type)
 		return -EINVAL;
-	memset(i,0,sizeof(*i));
-	i->index = n;
 	i->type  = V4L2_INPUT_TYPE_CAMERA;
 	strcpy(i->name,iname[INPUT(n).type]);
 	if ((CX88_VMUX_TELEVISION == INPUT(n).type) ||
@@ -1520,7 +1513,6 @@ static int radio_g_audio (struct file *file, void *priv, struct v4l2_audio *a)
 	if (unlikely(a->index))
 		return -EINVAL;
 
-	memset(a,0,sizeof(*a));
 	strcpy(a->name,"Radio");
 	return 0;
 }
