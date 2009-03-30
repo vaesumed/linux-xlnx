@@ -76,7 +76,7 @@ int __kernel_text_address(unsigned long addr)
 {
 	if (core_kernel_text(addr))
 		return 1;
-	if (__module_text_address(addr))
+	if (is_module_text_address(addr))
 		return 1;
 	/*
 	 * There might be init symbols in saved stacktraces.
@@ -95,7 +95,7 @@ int kernel_text_address(unsigned long addr)
 {
 	if (core_kernel_text(addr))
 		return 1;
-	return module_text_address(addr) != NULL;
+	return is_module_text_address(addr);
 }
 
 /*
@@ -111,5 +111,5 @@ int func_ptr_is_kernel_text(void *ptr)
 	addr = (unsigned long) dereference_function_descriptor(ptr);
 	if (core_kernel_text(addr))
 		return 1;
-	return module_text_address(addr) != NULL;
+	return is_module_text_address(addr);
 }
