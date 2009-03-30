@@ -1022,7 +1022,7 @@ static void rcu_free_slab(struct rcu_head *h)
 {
 	struct slqb_page *page;
 
-	page = container_of((struct list_head *)h, struct slqb_page, lru);
+	page = container_of(h, struct slqb_page, rcu_head);
 	__free_slab(page->list->cache, page);
 }
 
