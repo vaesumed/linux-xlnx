@@ -1,0 +1,208 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing device-mapper based on v2.6.29
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 8e0ee43bc2c3e19db56a4adaa9a9b04ce885cd84
+HEAD is now at 8e0ee43 Linux 2.6.29
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-preserve-bi_io_vec-when-resubmitting-bios.patch
+dm-raid1-switch-read_record-from-kmalloc-to-slab-to-save-memory.patch
+dm-io-make-sync_io-uninterruptible.patch
+dm-snapshot-refactor-__find_pending_exception.patch
+dm-snapshot-avoid-dropping-lock-in-__find_pending_exception.patch
+dm-snapshot-avoid-having-two-exceptions-for-the-same-chunk.patch
+dm-target-use-module-refcount-directly.patch
+dm-path-selector-use-module-refcount-directly.patch
+dm-table-fix-upgrade-mode-race.patch
+dm-target-remove-struct-tt_internal.patch
+dm-crypt-use-kzfree.patch
+dm-log-use-standard-kernel-module-refcount.patch
+dm-log-remove-struct-dm_dirty_log_internal.patch
+dm-exception-store-separate-type-from-instance.patch
+dm-raid1-add-is_remote_recovering-hook-for-clusters.patch
+dm-exception-store-introduce-registry.patch
+dm-exception-store-move-dm_target-pointer.patch
+dm-exception-store-move-chunk_fields.patch
+dm-exception-store-move-cow-pointer.patch
+dm-snapshot-remove-dm_snap-header-use.patch
+dm-snapshot-remove-dm_snap-header.patch
+dm-snapshot-use-DMEMIT-macro-for-status.patch
+dm-snapshot-move-ctr-parsing-to-exception-store.patch
+dm-snapshot-move-status-to-exception-store.patch
+dm-snapshot-persistent-fix-dtr-cleanup.patch
+dm-bio-list-add-bio_list_add_head.patch
+dm-remove-unnecessary-work-queue-type-field.patch
+dm-remove-unnecessary-work-queue-context-field.patch
+dm-remove-unnecessary-struct-dm_wq_req.patch
+dm-rename-__split_bio.patch
+dm-move-bio_io_error-into-__split_and_process_bio.patch
+dm-merge-__flush_deferred_io-into-caller.patch
+dm-allow-uninterruptible-wait-for-pending-io.patch
+dm-merge-pushback-and-deferred-bio-lists.patch
+dm-move-wait-queue-declaration.patch
+dm-set-queue-ordered-mode.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 0e9ad06...472c495 master     -> quilt/device-mapper  (forced update)
+Importing i2c based on 2.6.29-git3
+$ cd ../quilt-tmp
+$ git reset --hard 5d80f8e5a9dc9c9a94d4aeaa567e219a808b8a4a
+HEAD is now at 5d80f8e Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-how-to-instantiate-devices.patch
+i2c-update-checkpatch-deprecated-functions.patch
+i2c-document-client-auto-removal.patch
+i2c-nforce2-add-MCP79-support.patch
+eeprom-at24-remove-EXPERIMENTAL.patch
+i2c-algo-pcf-01-style-cleanups.patch
+i2c-algo-pcf-02-handle-timeout-correctly.patch
+i2c-add-missing-KERN-constants-to-printks.patch
+i2c-set-default-timeout-value.patch
+i2c-adapter-timeout-is-in-jiffies.patch
+i2c-davinci-fix-timeout.patch
+i2c-algo-pca-01-adapt-debug-macros-for-KERN-constants.patch
+i2c-algo-pca-02-add-pca9665-support.patch
+i2c-algo-pca-03-rework-waiting-for-a-free-bus.patch
+i2c-algo-pca-04-use-timeout-for-checking-the-state-machine.patch
+i2c-pca-platform-use-defaults-if-no-platform_data-given.patch
+i2c-piix4-add-support-for-sb800.patch
+i2c-piix4-add-support-for-broadcom-ht1100.patch
+i2c-core-some-style-cleanups.patch
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 9da5319...00f6d91 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-git3
+$ cd ../quilt-tmp
+$ git reset --hard 5d80f8e5a9dc9c9a94d4aeaa567e219a808b8a4a
+HEAD is now at 5d80f8e Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ds1621-01-reorder-functions.patch
+hwmon-ds1621-02-simplify-reg-access.patch
+hwmon-ds1621-03-avoid-unneeded-register-access.patch
+hwmon-ds1621-04-cleanup-documentation.patch
+hwmon-hdaps-01-inversion-of-separate-axis.patch
+hwmon-hdaps-02-fix-thinkpad-x41-axis-inversion.patch
+hwmon-w83627ehf-01-invert-fan-pin-logic.patch
+hwmon-w83627ehf-02-add-support-for-w83667hg.patch
+hwmon-w83627ehf-03-fix-temp3-vs-in6.patch
+hwmon-pcf8591-move-to-hwmon.patch
+hwmon-sysfs-interface-chassis-intrusion.patch
+dmi-let-dmi_walk-users-pass-private-data.patch
+i2c-i801-detect-fsc-chips.patch
+hwmon-fschmd-01-add-syleus-support.patch
+hwmon-fschmd-02-add-hades-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + d3b2553...5be4726 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.29
+$ cd ../quilt-tmp
+$ git reset --hard 8e0ee43bc2c3e19db56a4adaa9a9b04ce885cd84
+HEAD is now at 8e0ee43 Linux 2.6.29
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:fix_bad_ring_start_us_and_end_use_macros.patch
+virtio:fix-ring-macros-harder.patch
+lguest:fix-spurious-BUG_ON-bad-pgtable.patch
+lguest:pte_update.patch
+lguest:allow_us_to_use_kvm_hypercalls.patch
+lguest:use_bool_instead_of_int.patch
+lguest:barrier-harder.patch
+param:fix-charp-sysfs-write.patch
+module:kernel_c_fix_an_unused_goto_label.patch
+ksplice:make_find_symbol_return_a_struct_kernel_symbol.patch
+module:module_address.patch
+module:remove-module_text_address.patch
+ksplice:add_functions_for_walking_kallsyms_symbols.patch
+module:export_symbols_needed_for_ksplice.patch
+module:clarify-try_to_force_load-message.patch
+module:dont-load-__versions-section.patch
+module:version-modversion_info.patch
+module:create_a_request_nowait.patch
+module:use_the_new_request_module_nowait_in_the_hid_driver.patch
+module:use_the_new_request_module_nowait_in_drivers_media.patch
+module:no-stop_machine-on-load.patch
+cpumask:remove-address-of-CPU_MASK_ALL-core.patch
+cpumask:fix-seq_cpumask_list.patch
+cpumask:remove-node_to_first_cpu.patch
+cpumask:use-cpumap-accessors-main.patch
+cpumask:use-mm_cpumask-core.patch
+cpumask:irqaction-remove-unnecessary-initializers.patch
+cpumask:core-use-new-functions.patch
+cpumask:rcutorture.patch
+cpumask:core-remove-cpumask_t-usage.patch
+cpumask:remove-pcibus_to_cpumask-generic.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+kthread:dont-use-find_task_by_pid_ns.patch
+kthread:move-sched-realeted-initialization-from-kthreadd-context.patch
+work_on_cpu:rewrite-it-to-create-a-kernel-thread-on-demand.patch
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+arm:allow-inline-str-ops-in-linux-string.h.patch
+misc:strstarts.patch
+module:use-strstarts.patch
+module:invbool-takes-a-bool.patch
+module:param-flags.patch
+module:__same_type.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + a0c6196...b214363 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.29-git4
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 07d43ba98621f08e252a48c96b258b4d572b0257
+HEAD is now at 07d43ba Merge branch 'i2c-for-linus' of git://jdelvare.pck.nerim.net/jdelvare-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 00f6d91...183784a master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-git4
+$ cd ../quilt-tmp
+$ git reset --hard 07d43ba98621f08e252a48c96b258b4d572b0257
+HEAD is now at 07d43ba Merge branch 'i2c-for-linus' of git://jdelvare.pck.nerim.net/jdelvare-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ds1621-01-reorder-functions.patch
+hwmon-ds1621-02-simplify-reg-access.patch
+hwmon-ds1621-03-avoid-unneeded-register-access.patch
+hwmon-ds1621-04-cleanup-documentation.patch
+hwmon-hdaps-01-inversion-of-separate-axis.patch
+hwmon-hdaps-02-fix-thinkpad-x41-axis-inversion.patch
+hwmon-w83627ehf-01-invert-fan-pin-logic.patch
+hwmon-w83627ehf-02-add-support-for-w83667hg.patch
+hwmon-w83627ehf-03-fix-temp3-vs-in6.patch
+hwmon-pcf8591-move-to-hwmon.patch
+hwmon-sysfs-interface-chassis-intrusion.patch
+dmi-let-dmi_walk-users-pass-private-data.patch
+i2c-i801-detect-fsc-chips.patch
+hwmon-fschmd-01-add-syleus-support.patch
+hwmon-fschmd-02-add-hades-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 5be4726...60983a8 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
