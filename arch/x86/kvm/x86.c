@@ -630,10 +630,12 @@ static void kvm_write_guest_time(struct kvm_vcpu *v)
 	if ((!vcpu->time_page))
 		return;
 
+	preempt_disable();
 	if (unlikely(vcpu->hv_clock_tsc_khz != __get_cpu_var(cpu_tsc_khz))) {
 		kvm_set_time_scale(__get_cpu_var(cpu_tsc_khz), &vcpu->hv_clock);
 		vcpu->hv_clock_tsc_khz = __get_cpu_var(cpu_tsc_khz);
 	}
+	preempt_enable();
 
 	/* Keep irq disabled to prevent changes to the clock */
 	local_irq_save(flags);
@@ -889,6 +891,8 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, u32 msr, u64 *pdata)
 	case MSR_IA32_LASTINTFROMIP:
 	case MSR_IA32_LASTINTTOIP:
 	case MSR_VM_HSAVE_PA:
+	case MSR_P6_EVNTSEL0:
+	case MSR_P6_EVNTSEL1:
 		data = 0;
 		break;
 	case MSR_MTRRcap:
@@ -1020,6 +1024,7 @@ int kvm_dev_ioctl_check_extension(long ext)
 	case KVM_CAP_SYNC_MMU:
 	case KVM_CAP_REINJECT_CONTROL:
 	case KVM_CAP_IRQ_INJECT_STATUS:
+	case KVM_CAP_ASSIGN_DEV_IRQ:
 		r = 1;
 		break;
 	case KVM_CAP_COALESCED_MMIO:
@@ -3121,9 +3126,6 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		}
 	}
 
-	clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
-	kvm_inject_pending_timer_irqs(vcpu);
-
 	preempt_disable();
 
 	kvm_x86_ops->prepare_guest_switch(vcpu);
@@ -3223,6 +3225,7 @@ out:
 	return r;
 }
 
+
 static int __vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	int r;
@@ -3249,29 +3252,42 @@ static int __vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 			kvm_vcpu_block(vcpu);
 			down_read(&vcpu->kvm->slots_lock);
 			if (test_and_clear_bit(KVM_REQ_UNHALT, &vcpu->requests))
-				if (vcpu->arch.mp_state == KVM_MP_STATE_HALTED)
+			{
+				switch(vcpu->arch.mp_state) {
+				case KVM_MP_STATE_HALTED:
 					vcpu->arch.mp_state =
-							KVM_MP_STATE_RUNNABLE;
-			if (vcpu->arch.mp_state != KVM_MP_STATE_RUNNABLE)
-				r = -EINTR;
+						KVM_MP_STATE_RUNNABLE;
+				case KVM_MP_STATE_RUNNABLE:
+					break;
+				case KVM_MP_STATE_SIPI_RECEIVED:
+				default:
+					r = -EINTR;
+					break;
+				}
+			}
 		}
 
-		if (r > 0) {
-			if (dm_request_for_irq_injection(vcpu, kvm_run)) {
-				r = -EINTR;
-				kvm_run->exit_reason = KVM_EXIT_INTR;
-				++vcpu->stat.request_irq_exits;
-			}
-			if (signal_pending(current)) {
-				r = -EINTR;
-				kvm_run->exit_reason = KVM_EXIT_INTR;
-				++vcpu->stat.signal_exits;
-			}
-			if (need_resched()) {
-				up_read(&vcpu->kvm->slots_lock);
-				kvm_resched(vcpu);
-				down_read(&vcpu->kvm->slots_lock);
-			}
+		if (r <= 0)
+			break;
+
+		clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
+		if (kvm_cpu_has_pending_timer(vcpu))
+			kvm_inject_pending_timer_irqs(vcpu);
+
+		if (dm_request_for_irq_injection(vcpu, kvm_run)) {
+			r = -EINTR;
+			kvm_run->exit_reason = KVM_EXIT_INTR;
+			++vcpu->stat.request_irq_exits;
+		}
+		if (signal_pending(current)) {
+			r = -EINTR;
+			kvm_run->exit_reason = KVM_EXIT_INTR;
+			++vcpu->stat.signal_exits;
+		}
+		if (need_resched()) {
+			up_read(&vcpu->kvm->slots_lock);
+			kvm_resched(vcpu);
+			down_read(&vcpu->kvm->slots_lock);
 		}
 	}
 
@@ -4159,6 +4175,11 @@ EXPORT_SYMBOL_GPL(kvm_put_guest_fpu);
 
 void kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
 {
+	if (vcpu->arch.time_page) {
+		kvm_release_page_dirty(vcpu->arch.time_page);
+		vcpu->arch.time_page = NULL;
+	}
+
 	kvm_x86_ops->vcpu_free(vcpu);
 }
 
@@ -4446,4 +4467,9 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 	if (vcpu->guest_mode && vcpu->cpu != cpu)
 		smp_call_function_single(ipi_pcpu, vcpu_kick_intr, vcpu, 0);
 	put_cpu();
+}
+
+int kvm_arch_interrupt_allowed(struct kvm_vcpu *vcpu)
+{
+	return kvm_x86_ops->interrupt_allowed(vcpu);
 }
