@@ -1,0 +1,165 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.29-git6
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 0d34fb8e93ceba7b6dad0062dbb4a0813bacd75b
+HEAD is now at 0d34fb8 Merge branch 'bzip2-lzma-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/x86/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 183784a...0184167 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-git6
+$ cd ../quilt-tmp
+$ git reset --hard 0d34fb8e93ceba7b6dad0062dbb4a0813bacd75b
+HEAD is now at 0d34fb8 Merge branch 'bzip2-lzma-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/x86/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ds1621-01-reorder-functions.patch
+hwmon-ds1621-02-simplify-reg-access.patch
+hwmon-ds1621-03-avoid-unneeded-register-access.patch
+hwmon-ds1621-04-cleanup-documentation.patch
+hwmon-hdaps-01-inversion-of-separate-axis.patch
+hwmon-hdaps-02-fix-thinkpad-x41-axis-inversion.patch
+hwmon-w83627ehf-01-invert-fan-pin-logic.patch
+hwmon-w83627ehf-02-add-support-for-w83667hg.patch
+hwmon-w83627ehf-03-fix-temp3-vs-in6.patch
+hwmon-pcf8591-move-to-hwmon.patch
+hwmon-sysfs-interface-chassis-intrusion.patch
+dmi-let-dmi_walk-users-pass-private-data.patch
+i2c-i801-detect-fsc-chips.patch
+hwmon-fschmd-01-add-syleus-support.patch
+hwmon-fschmd-02-add-hades-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 60983a8...da4ceab master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Importing ide based on e1c502482853f84606928f5a2f2eb6da1993cda1
+$ cd ../quilt-tmp
+$ git reset --hard e1c502482853f84606928f5a2f2eb6da1993cda1
+HEAD is now at e1c5024 Merge branch 'reiserfs-updates' from Jeff Mahoney
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-add-support-for-arbitrary-transfer-lengths-to-ide_pio_bytes.patch
+ide-use-pagehighmem-instead-of-ifdefs-in-ide_pio_bytes.patch
+ide-cd-remove-dead-urls.patch
+ide-cd-use-ide_end_rq-also-for-non-fs-requests.patch
+ide-cd-remove-dead-code-from-cdrom_decode_status.patch
+ide-cd-remove-needless-ide_dump_status_no_sense-wrapper.patch
+ide-cd-remove-no-longer-needed-ignore-module-parameter.patch
+ide-cd-factor-out-failed-request-completion-from-cdrom_end_request.patch
+ide-cd-unify-ide_cd_do_request-exit-paths.patch
+ide-cd-move-setting-req_failed-flag-out-from-end_request-exit-path.patch
+ide-cd-unify-cdrom_newpc_intr-exit-paths.patch
+ide-cd-remove-cdrom_end_request.patch
+ide-cd-kill-whole-failed-request-in-ide_cd_do_request.patch
+ide-cd-cleanup-ide_cd_do_request.patch
+ide-cd-use-scatterlists-for-pio-transfers-fs-requests.patch
+ide-cd-fix-non-sector_size-multiples-pio-transfers-for-fs-requests.patch
+ide-cd-merge-ide_cd_prepare_rw_request-into-cdrom_start_rw.patch
+ide-cd-use-scatterlists-for-pio-transfers-non-fs-requests.patch
+ide-cd-use-common-completion-path-for-dma-requests-in-cdrom_newpc_intr.patch
+ide-cd-unify-transfer-padding-in-cdrom_newpc_intr.patch
+ide-cd-minor-ide_cdrom_setup-cleanup.patch
+ide-add-dma_clear-method-and-remove-dma_timeout-one.patch
+ide-inline-ide_dma_timeout-into-ide_dma_timeout_retry.patch
+ide-destroy-dma-mappings-after-ending-dma.patch
+ide-add-ide_dma_prepare-helper.patch
+ns87415-use-custom-dma_start-end-to-handle-ns87415_prepare_drive.patch
+trm290-use-custom-dma_start-end-to-handle-trm290_prepare_drive.patch
+ide-add-dma_check-method.patch
+ide-move-ide_map_sg-call-out-of-dma_setup-method-take-2.patch
+ide-set-clear-drive-waiting_for_dma-flag-in-the-core-code.patch
+ide-sanitize-ide_build_sglist-and-ide_destroy_dmatable.patch
+ide-generic-remove-no-longer-needed-sysfs-interface.patch
+ide-merge-ide_arm-and-ide_generic-host-drivers.patch
+ide-fix-locking-in-drive_release_dev.patch
+ide-decrease-size-of-pc_buf-field-in-struct-ide_atapi_pc.patch
+ide-remove-config_blk_dev_idedoubler-config-option.patch
+ide-floppy-tape-fix-padding-for-pio-transfers.patch
+ide-floppy-use-ide_pio_bytes.patch
+au1xxx-ide-auide_-in-out-sw-should-be-static.patch
+ide-identify-data-word-53-bit-1-doesnt-cover-words-62-and-63-take-3.patch
+ide-iops-only-clear-dma-words-on-setting-dma-mode.patch
+ide-add-support-for-cfa-specified-transfer-modes-take-3.patch
+ide-disk-use-ata_err.patch
+ide-use-ata_hob.patch
+ide-turn-set_irq-method-into-write_devctl-method.patch
+ide-rename-ide_tflag_in_-hob_-feature.patch
+ide-io-std-shorten-ide_-in-out-put_data.patch
+ide-call--in-out-put_data-methods-from-tf_-read-load--methods-take-2.patch
+ide-move-data-register-access-out-of-tf_-read-load--methods-take-2.patch
+maintainers-move-ide-floppy-tape-entries-to-credits-take-2.patch
+ide-turn-selectproc-method-into-dev_select-method-take-5.patch
+ide-inline-select_drive.patch
+ide-pmac-ide-cable-detection-on-apple-powerbook.patch
+ide-be-able-to-build-pmac-driver-without-ide-built-in.patch
+ide-fix-code-dealing-with-sleeping-devices-in-do_ide_request.patch
+ide-floppy-do-not-complete-rq-s-prematurely.patch
+ide-drivers_ide_ide-atapi-c-needs-linux_scatterlist.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 433121b...a9128f0 master     -> quilt/ide  (forced update)
+Importing rr based on v2.6.29-5093-gc31f403
+$ cd ../quilt-tmp
+$ git reset --hard c31f403de62415c738ddc9e673cf8e722c82f861
+HEAD is now at c31f403 Merge branch 'futexes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+virtio:fix_bad_ring_start_us_and_end_use_macros.patch
+virtio:fix-ring-macros-harder.patch
+lguest:fix-spurious-BUG_ON-bad-pgtable.patch
+lguest:pte_update.patch
+lguest:allow_us_to_use_kvm_hypercalls.patch
+lguest:use_bool_instead_of_int.patch
+lguest:barrier-harder.patch
+param:fix-charp-sysfs-write.patch
+module:kernel_c_fix_an_unused_goto_label.patch
+ksplice:make_find_symbol_return_a_struct_kernel_symbol.patch
+module:module_address.patch
+module:remove-module_text_address.patch
+ksplice:add_functions_for_walking_kallsyms_symbols.patch
+module:export_symbols_needed_for_ksplice.patch
+module:clarify-try_to_force_load-message.patch
+module:dont-load-__versions-section.patch
+module:version-modversion_info.patch
+module:create_a_request_nowait.patch
+module:use_the_new_request_module_nowait_in_the_hid_driver.patch
+module:use_the_new_request_module_nowait_in_drivers_media.patch
+module:no-stop_machine-on-load.patch
+cpumask:remove-address-of-CPU_MASK_ALL-core.patch
+cpumask:fix-seq_cpumask_list.patch
+cpumask:remove-node_to_first_cpu.patch
+cpumask:use-cpumap-accessors-main.patch
+cpumask:use-mm_cpumask-core.patch
+cpumask:irqaction-remove-unnecessary-initializers.patch
+cpumask:core-use-new-functions.patch
+cpumask:rcutorture.patch
+cpumask:core-remove-cpumask_t-usage.patch
+cpumask:remove-pcibus_to_cpumask-generic.patch
+cpumask:oprofile_thou_shalt_not_call_exit_functions_from_init_functions.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+kthread:dont-use-find_task_by_pid_ns.patch
+kthread:move-sched-realeted-initialization-from-kthreadd-context.patch
+work_on_cpu:rewrite-it-to-create-a-kernel-thread-on-demand.patch
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+arm:allow-inline-str-ops-in-linux-string.h.patch
+misc:strstarts.patch
+module:use-strstarts.patch
+module:invbool-takes-a-bool.patch
+module:param-flags.patch
+module:__same_type.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + b214363...4e21092 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
