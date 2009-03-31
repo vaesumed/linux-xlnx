@@ -493,8 +493,6 @@ struct saa7134_dev {
 	spinlock_t                 slock;
 	struct v4l2_prio_state     prio;
 	struct v4l2_device         v4l2_dev;
-	/* workstruct for loading modules */
-	struct work_struct request_module_wk;
 
 	/* insmod option/autodetected */
 	int                        autodetected;
