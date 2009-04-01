@@ -398,16 +398,7 @@ static struct dmi_system_id __initdata acpisleep_dmi_table[] = {
 	},
 	{
 	.callback = init_old_suspend_ordering,
-	.ident = "Pansonic CF51-2L",
-	.matches = {
-		DMI_MATCH(DMI_BOARD_VENDOR,
-				"Matsushita Electric Industrial Co.,Ltd."),
-		DMI_MATCH(DMI_BOARD_NAME, "CF51-2L"),
-		},
-	},
-	{
-	.callback = init_old_suspend_ordering,
-	.ident = "Pansonic CF51-2L",
+	.ident = "Panasonic CF51-2L",
 	.matches = {
 		DMI_MATCH(DMI_BOARD_VENDOR,
 				"Matsushita Electric Industrial Co.,Ltd."),
