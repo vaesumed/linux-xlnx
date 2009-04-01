@@ -537,7 +537,6 @@ void __init of_fill_in_cpu_data(void)
 	if (tlb_type == hypervisor)
 		return;
 
-	of_populate_present_mask();
 	of_iterate_over_cpus(fill_in_one_cpu, NULL);
 
 	smp_fill_in_sib_core_maps();
