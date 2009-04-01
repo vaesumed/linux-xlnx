@@ -9,6 +9,9 @@ config PARISC
 	def_bool y
 	select HAVE_IDE
 	select HAVE_OPROFILE
+	select HAVE_FUNCTION_TRACER if 64BIT
+	select HAVE_FUNCTION_GRAPH_TRACER if 64BIT
+	select HAVE_FUNCTION_TRACE_MCOUNT_TEST if 64BIT
 	select RTC_CLASS
 	select RTC_DRV_PARISC
 	select INIT_ALL_POSSIBLE
@@ -75,6 +78,9 @@ config GENERIC_HARDIRQS
 config GENERIC_IRQ_PROBE
 	def_bool y
 
+config HAVE_LATENCYTOP_SUPPORT
+        def_bool y
+
 config IRQ_PER_CPU
 	bool
 	default y
@@ -82,6 +88,9 @@ config IRQ_PER_CPU
 # unless you want to implement ACPI on PA-RISC ... ;-)
 config PM
 	bool
+
+config STACKTRACE_SUPPORT
+	def_bool y
 
 config ISA_DMA_API
 	bool
