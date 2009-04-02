@@ -1595,7 +1595,6 @@ static int mmc_omap_resume(struct platform_device *pdev)
 #endif
 
 static struct platform_driver mmc_omap_driver = {
-	.probe		= mmc_omap_probe,
 	.remove		= mmc_omap_remove,
 	.suspend	= mmc_omap_suspend,
 	.resume		= mmc_omap_resume,
@@ -1607,7 +1606,7 @@ static struct platform_driver mmc_omap_driver = {
 
 static int __init mmc_omap_init(void)
 {
-	return platform_driver_register(&mmc_omap_driver);
+	return platform_driver_probe(&mmc_omap_driver, mmc_omap_probe);
 }
 
 static void __exit mmc_omap_exit(void)
