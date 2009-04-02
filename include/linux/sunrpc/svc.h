@@ -95,6 +95,10 @@ struct svc_serv {
 	struct module *		sv_module;	/* optional module to count when
 						 * adding threads */
 	svc_thread_fn		sv_function;	/* main function for threads */
+#if defined(CONFIG_NFSD_V4_1)
+	unsigned int		sv_drc_max_pages; /* Total pages for DRC */
+	unsigned int		sv_drc_pages_used;/* DRC pages used */
+#endif /* CONFIG_NFSD_V4_1 */
 };
 
 /*
@@ -230,6 +234,7 @@ struct svc_rqst {
 	struct svc_cred		rq_cred;	/* auth info */
 	void *			rq_xprt_ctxt;	/* transport specific context ptr */
 	struct svc_deferred_req*rq_deferred;	/* deferred request we are replaying */
+	int			rq_usedeferral;	/* use deferral */
 
 	size_t			rq_xprt_hlen;	/* xprt header len */
 	struct xdr_buf		rq_arg;
