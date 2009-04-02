@@ -32,6 +32,7 @@
 #include <linux/file.h>
 #include <linux/fcntl.h>
 #include <linux/device_cgroup.h>
+#include <linux/fs_struct.h>
 #include <asm/uaccess.h>
 
 #define ACC_MODE(x) ("\000\004\002\006"[(x)&O_ACCMODE])
@@ -1152,7 +1153,7 @@ int vfs_remote_path_lookup(struct dentry *dentry,
 
 	new_mnt_ns = create_private_mnt_ns(mnt, new_fs);
 	if (new_mnt_ns == NULL)
-		goto out_put_fs_struct;
+		goto out_free_fs_struct;
 
 	/* Create a private copy of current->nsproxy */
 	new_nsproxy = unshare_current_nsproxy();
@@ -1187,8 +1188,8 @@ int vfs_remote_path_lookup(struct dentry *dentry,
 out_put_mnt_ns:
 	put_mnt_ns(new_mnt_ns);
 
-out_put_fs_struct:
-	put_fs_struct(new_fs);
+out_free_fs_struct:
+	free_fs_struct(new_fs);
 out_err:
 	return error;
 }
@@ -1651,7 +1652,7 @@ static int __open_namei_create(struct nameidata *nd, struct path *path,
 	struct dentry *dir = nd->path.dentry;
 
 	if (!IS_POSIXACL(dir->d_inode))
-		mode &= ~current->fs->umask;
+		mode &= ~current_umask();
 	error = security_path_mknod(&nd->path, path->dentry, mode, 0);
 	if (error)
 		goto out_unlock;
@@ -2062,7 +2063,7 @@ SYSCALL_DEFINE4(mknodat, int, dfd, const char __user *, filename, int, mode,
 		goto out_unlock;
 	}
 	if (!IS_POSIXACL(nd.path.dentry->d_inode))
-		mode &= ~current->fs->umask;
+		mode &= ~current_umask();
 	error = may_mknod(mode);
 	if (error)
 		goto out_dput;
@@ -2140,7 +2141,7 @@ SYSCALL_DEFINE3(mkdirat, int, dfd, const char __user *, pathname, int, mode)
 		goto out_unlock;
 
 	if (!IS_POSIXACL(nd.path.dentry->d_inode))
-		mode &= ~current->fs->umask;
+		mode &= ~current_umask();
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto out_dput;
@@ -2970,10 +2971,3 @@ EXPORT_SYMBOL(vfs_symlink);
 EXPORT_SYMBOL(vfs_unlink);
 EXPORT_SYMBOL(dentry_unhash);
 EXPORT_SYMBOL(generic_readlink);
-
-/* to be mentioned only in INIT_TASK */
-struct fs_struct init_fs = {
-	.count		= ATOMIC_INIT(1),
-	.lock		= __RW_LOCK_UNLOCKED(init_fs.lock),
-	.umask		= 0022,
-};

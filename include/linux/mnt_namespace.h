@@ -22,6 +22,8 @@ struct proc_mounts {
 	int event;
 };
 
+struct fs_struct;
+
 extern struct mnt_namespace *create_private_mnt_ns(struct vfsmount *,
 		struct fs_struct *);
 extern struct mnt_namespace *copy_mnt_ns(unsigned long, struct mnt_namespace *,
