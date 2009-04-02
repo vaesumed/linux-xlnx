@@ -276,7 +276,8 @@ int cifs_get_inode_info_unix(struct inode **pinode,
 
 	/* get new inode */
 	if (*pinode == NULL) {
-		*pinode = cifs_new_inode(sb, &find_data.UniqueId);
+		__u64 unique_id = le64_to_cpu(find_data.UniqueId);
+		*pinode = cifs_new_inode(sb, &unique_id);
 		if (*pinode == NULL) {
 			rc = -ENOMEM;
 			goto cgiiu_exit;
@@ -1138,6 +1139,7 @@ int cifs_mkdir(struct inode *inode, struct dentry *direntry, int mode)
 			cFYI(1, ("posix mkdir returned 0x%x", rc));
 			d_drop(direntry);
 		} else {
+			__u64 unique_id;
 			if (pInfo->Type == cpu_to_le32(-1)) {
 				/* no return info, go query for it */
 				kfree(pInfo);
@@ -1151,8 +1153,8 @@ int cifs_mkdir(struct inode *inode, struct dentry *direntry, int mode)
 			else
 				direntry->d_op = &cifs_dentry_ops;
 
-			newinode = cifs_new_inode(inode->i_sb,
-						  &pInfo->UniqueId);
+			unique_id = le64_to_cpu(pInfo->UniqueId);
+			newinode = cifs_new_inode(inode->i_sb, &unique_id);
 			if (newinode == NULL) {
 				kfree(pInfo);
 				goto mkdir_get_info;
@@ -1792,20 +1794,21 @@ cifs_setattr_unix(struct dentry *direntry, struct iattr *attrs)
 		goto out;
 	}
 
-	if ((attrs->ia_valid & ATTR_MTIME) || (attrs->ia_valid & ATTR_SIZE)) {
-		/*
-		   Flush data before changing file size or changing the last
-		   write time of the file on the server. If the
-		   flush returns error, store it to report later and continue.
-		   BB: This should be smarter. Why bother flushing pages that
-		   will be truncated anyway? Also, should we error out here if
-		   the flush returns error?
-		 */
-		rc = filemap_write_and_wait(inode->i_mapping);
-		if (rc != 0) {
-			cifsInode->write_behind_rc = rc;
-			rc = 0;
-		}
+	/*
+	 * Attempt to flush data before changing attributes. We need to do
+	 * this for ATTR_SIZE and ATTR_MTIME for sure, and if we change the
+	 * ownership or mode then we may also need to do this. Here, we take
+	 * the safe way out and just do the flush on all setattr requests. If
+	 * the flush returns error, store it to report later and continue.
+	 *
+	 * BB: This should be smarter. Why bother flushing pages that
+	 * will be truncated anyway? Also, should we error out here if
+	 * the flush returns error?
+	 */
+	rc = filemap_write_and_wait(inode->i_mapping);
+	if (rc != 0) {
+		cifsInode->write_behind_rc = rc;
+		rc = 0;
 	}
 
 	if (attrs->ia_valid & ATTR_SIZE) {
@@ -1903,20 +1906,21 @@ cifs_setattr_nounix(struct dentry *direntry, struct iattr *attrs)
 		return -ENOMEM;
 	}
 
-	if ((attrs->ia_valid & ATTR_MTIME) || (attrs->ia_valid & ATTR_SIZE)) {
-		/*
-		   Flush data before changing file size or changing the last
-		   write time of the file on the server. If the
-		   flush returns error, store it to report later and continue.
-		   BB: This should be smarter. Why bother flushing pages that
-		   will be truncated anyway? Also, should we error out here if
-		   the flush returns error?
-		 */
-		rc = filemap_write_and_wait(inode->i_mapping);
-		if (rc != 0) {
-			cifsInode->write_behind_rc = rc;
-			rc = 0;
-		}
+	/*
+	 * Attempt to flush data before changing attributes. We need to do
+	 * this for ATTR_SIZE and ATTR_MTIME for sure, and if we change the
+	 * ownership or mode then we may also need to do this. Here, we take
+	 * the safe way out and just do the flush on all setattr requests. If
+	 * the flush returns error, store it to report later and continue.
+	 *
+	 * BB: This should be smarter. Why bother flushing pages that
+	 * will be truncated anyway? Also, should we error out here if
+	 * the flush returns error?
+	 */
+	rc = filemap_write_and_wait(inode->i_mapping);
+	if (rc != 0) {
+		cifsInode->write_behind_rc = rc;
+		rc = 0;
 	}
 
 	if (attrs->ia_valid & ATTR_SIZE) {
