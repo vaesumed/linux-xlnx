@@ -62,6 +62,17 @@ void acpi_table_print_madt_entry(struct acpi_subtable_header *header)
 		}
 		break;
 
+	case ACPI_MADT_TYPE_LOCAL_X2APIC:
+		{
+			struct acpi_madt_local_x2apic *p =
+			    (struct acpi_madt_local_x2apic *)header;
+			printk(KERN_INFO PREFIX
+			       "X2APIC (apic_id[0x%02x] uid[0x%02x] %s)\n",
+			       p->local_apic_id, p->uid,
+			       (p->lapic_flags & ACPI_MADT_ENABLED) ? "enabled" : "disabled");
+		}
+		break;
+
 	case ACPI_MADT_TYPE_IO_APIC:
 		{
 			struct acpi_madt_io_apic *p =
@@ -110,6 +121,19 @@ void acpi_table_print_madt_entry(struct acpi_subtable_header *header)
 			printk(KERN_INFO PREFIX
 			       "LAPIC_NMI (acpi_id[0x%02x] %s %s lint[0x%x])\n",
 			       p->processor_id,
+			       mps_inti_flags_polarity[p->inti_flags & ACPI_MADT_POLARITY_MASK	],
+			       mps_inti_flags_trigger[(p->inti_flags & ACPI_MADT_TRIGGER_MASK) >> 2],
+			       p->lint);
+		}
+		break;
+
+	case ACPI_MADT_TYPE_LOCAL_X2APIC_NMI:
+		{
+			struct acpi_madt_local_x2apic_nmi *p =
+			    (struct acpi_madt_local_x2apic_nmi *)header;
+			printk(KERN_INFO PREFIX
+			       "X2APIC_NMI (uid[0x%02x] %s %s lint[0x%x])\n",
+			       p->uid,
 			       mps_inti_flags_polarity[p->inti_flags & ACPI_MADT_POLARITY_MASK	],
 			       mps_inti_flags_trigger[(p->inti_flags & ACPI_MADT_TRIGGER_MASK) >> 2],
 			       p->lint);
