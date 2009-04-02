@@ -180,7 +180,7 @@ asmlinkage void __do_softirq(void)
 	account_system_vtime(current);
 
 	__local_bh_disable((unsigned long)__builtin_return_address(0));
-	trace_softirq_enter();
+	lockdep_softirq_enter();
 
 	cpu = smp_processor_id();
 restart:
@@ -220,7 +220,7 @@ restart:
 	if (pending)
 		wakeup_softirqd();
 
-	trace_softirq_exit();
+	lockdep_softirq_exit();
 
 	account_system_vtime(current);
 	_local_bh_enable();
@@ -361,6 +361,17 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
 
 EXPORT_SYMBOL(__tasklet_hi_schedule);
 
+void __tasklet_hi_schedule_first(struct tasklet_struct *t)
+{
+	BUG_ON(!irqs_disabled());
+
+	t->next = __get_cpu_var(tasklet_hi_vec).head;
+	__get_cpu_var(tasklet_hi_vec).head = t;
+	__raise_softirq_irqoff(HI_SOFTIRQ);
+}
+
+EXPORT_SYMBOL(__tasklet_hi_schedule_first);
+
 static void tasklet_action(struct softirq_action *a)
 {
 	struct tasklet_struct *list;
@@ -496,7 +507,7 @@ static int __try_remote_softirq(struct call_single_data *cp, int cpu, int softir
 		cp->flags = 0;
 		cp->priv = softirq;
 
-		__smp_call_function_single(cpu, cp);
+		__smp_call_function_single(cpu, cp, 0);
 		return 0;
 	}
 	return 1;
