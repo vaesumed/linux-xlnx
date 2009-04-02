@@ -1,0 +1,100 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing device-mapper based on v2.6.29-6608-g15f7176
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 15f7176eb1cccec0a332541285ee752b935c1c85
+HEAD is now at 15f7176 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-preserve-bi_io_vec-when-resubmitting-bios.patch
+dm-raid1-switch-read_record-from-kmalloc-to-slab-to-save-memory.patch
+dm-io-make-sync_io-uninterruptible.patch
+dm-snapshot-refactor-__find_pending_exception.patch
+dm-snapshot-avoid-dropping-lock-in-__find_pending_exception.patch
+dm-snapshot-avoid-having-two-exceptions-for-the-same-chunk.patch
+dm-target-use-module-refcount-directly.patch
+dm-path-selector-use-module-refcount-directly.patch
+dm-table-fix-upgrade-mode-race.patch
+dm-target-remove-struct-tt_internal.patch
+dm-crypt-use-kzfree.patch
+dm-log-use-standard-kernel-module-refcount.patch
+dm-log-remove-struct-dm_dirty_log_internal.patch
+dm-exception-store-separate-type-from-instance.patch
+dm-raid1-add-is_remote_recovering-hook-for-clusters.patch
+dm-exception-store-introduce-registry.patch
+dm-exception-store-move-dm_target-pointer.patch
+dm-exception-store-move-chunk_fields.patch
+dm-exception-store-move-cow-pointer.patch
+dm-snapshot-remove-dm_snap-header-use.patch
+dm-snapshot-remove-dm_snap-header.patch
+dm-snapshot-use-DMEMIT-macro-for-status.patch
+dm-snapshot-move-ctr-parsing-to-exception-store.patch
+dm-snapshot-move-status-to-exception-store.patch
+dm-snapshot-persistent-fix-dtr-cleanup.patch
+dm-bio-list-add-bio_list_add_head.patch
+dm-remove-unnecessary-work-queue-type-field.patch
+dm-remove-unnecessary-work-queue-context-field.patch
+dm-remove-unnecessary-struct-dm_wq_req.patch
+dm-rename-__split_bio.patch
+dm-move-bio_io_error-into-__split_and_process_bio.patch
+dm-merge-__flush_deferred_io-into-caller.patch
+dm-allow-uninterruptible-wait-for-pending-io.patch
+dm-merge-pushback-and-deferred-bio-lists.patch
+dm-move-wait-queue-declaration.patch
+dm-set-queue-ordered-mode.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 472c495...84bdd7d master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.29-git8
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 15f7176eb1cccec0a332541285ee752b935c1c85
+HEAD is now at 15f7176 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Randy Dunlap <randy.dunlap@oracle.com> --patches ../quilt/kernel-doc
+docum-kernprms-alpha6.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/kernel-doc
+From ../quilt-tmp
+ + 7144566...3fd9bb7 master     -> quilt/kernel-doc  (forced update)
+Importing ide based on e1c502482853f84606928f5a2f2eb6da1993cda1
+$ cd ../quilt-tmp
+$ git reset --hard e1c502482853f84606928f5a2f2eb6da1993cda1
+HEAD is now at e1c5024 Merge branch 'reiserfs-updates' from Jeff Mahoney
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+isd200-make-it-struct-hd_driveid-free.patch
+Context reduced to (1/1) to apply fragment at 48
+ubd_kern-make-it-struct-hd_driveid-free.patch
+xsysace-make-it-struct-hd_driveid-free.patch
+include-linux-hdreg-h-cover-struct-hd_driveid-with-ifndef-endif-__kernel__.patch
+isd200-win_-to-ata_cmd_.patch
+aoe-win_-to-ata_cmd_.patch
+include-linux-hdreg-h-cover-win_-and-friends-with-ifndef-endif-__kernel__.patch
+isd200-use-ata_-defines-instead-of-_stat-and-_err-ones.patch
+include-linux-hdreg-h-remove-unused-defines.patch
+remove-linux-ata-h-include-from-linux-hdreg-h.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 7036464...919a3dc master     -> quilt/ide  (forced update)
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
