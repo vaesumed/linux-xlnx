@@ -880,6 +880,17 @@ static inline int pcie_aspm_enabled(void)
 extern int pcie_aspm_enabled(void);
 #endif
 
+#ifndef CONFIG_PCIE_ECRC
+static inline int pcie_set_ecrc_checking(struct pci_dev *dev)
+{
+	return 0;
+}
+static inline void pcie_ecrc_get_policy(char *str) {};
+#else
+extern int pcie_set_ecrc_checking(struct pci_dev *dev);
+extern void pcie_ecrc_get_policy(char *str);
+#endif
+
 #define pci_enable_msi(pdev)	pci_enable_msi_block(pdev, 1)
 
 #ifdef CONFIG_HT_IRQ

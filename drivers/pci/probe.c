@@ -984,6 +984,9 @@ static void pci_init_capabilities(struct pci_dev *dev)
 
 	/* Single Root I/O Virtualization */
 	pci_iov_init(dev);
+
+	/* PCIe end-to-end CRC checking */
+	pcie_set_ecrc_checking(dev);
 }
 
 void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
