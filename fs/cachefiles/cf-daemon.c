@@ -21,6 +21,7 @@
 #include <linux/mount.h>
 #include <linux/statfs.h>
 #include <linux/ctype.h>
+#include <linux/fs_struct.h>
 #include "cf-internal.h"
 
 static int cachefiles_daemon_open(struct inode *, struct file *);
