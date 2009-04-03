@@ -724,7 +724,7 @@ static int mxcmci_probe(struct platform_device *pdev)
 		goto out_clk_put;
 	}
 
-	mmc->f_min = clk_get_rate(host->clk) >> 7;
+	mmc->f_min = clk_get_rate(host->clk) >> 16;
 	mmc->f_max = clk_get_rate(host->clk) >> 1;
 
 	/* recommended in data sheet */
