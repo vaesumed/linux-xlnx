@@ -45,10 +45,21 @@
 #define XDR_LEN(n)                     (((n) + 3) & ~3)
 
 struct nfsd4_compound_state {
-	struct svc_fh current_fh;
-	struct svc_fh save_fh;
-	struct nfs4_stateowner *replay_owner;
+	struct svc_fh		current_fh;
+	struct svc_fh		save_fh;
+	struct nfs4_stateowner	*replay_owner;
+	/* For sessions DRC */
+	struct nfsd4_slot	*slot;
+	__be32			*statp;
+	size_t			iovlen;
+	u32			minorversion;
+	u32			status;
 };
+
+static inline bool nfsd4_has_session(struct nfsd4_compound_state *cs)
+{
+	return cs->slot != NULL;
+}
 
 struct nfsd4_change_info {
 	u32		atomic;
@@ -90,7 +101,7 @@ struct nfsd4_create {
 			u32 specdata2;
 		} dev;    /* NF4BLK, NF4CHR */
 	} u;
-	u32		cr_bmval[2];        /* request */
+	u32		cr_bmval[3];        /* request */
 	struct iattr	cr_iattr;           /* request */
 	struct nfsd4_change_info  cr_cinfo; /* response */
 	struct nfs4_acl *cr_acl;
@@ -105,7 +116,7 @@ struct nfsd4_delegreturn {
 };
 
 struct nfsd4_getattr {
-	u32		ga_bmval[2];        /* request */
+	u32		ga_bmval[3];        /* request */
 	struct svc_fh	*ga_fhp;            /* response */
 };
 
@@ -206,11 +217,9 @@ struct nfsd4_open {
 	stateid_t       op_delegate_stateid; /* request - response */
 	u32		op_create;     	    /* request */
 	u32		op_createmode;      /* request */
-	u32		op_bmval[2];        /* request */
-	union {                             /* request */
-		struct iattr	iattr;                      /* UNCHECKED4,GUARDED4 */
-		nfs4_verifier	verf;                                /* EXCLUSIVE4 */
-	} u;
+	u32		op_bmval[3];        /* request */
+	struct iattr	iattr;              /* UNCHECKED4, GUARDED4, EXCLUSIVE4_1 */
+	nfs4_verifier	verf;               /* EXCLUSIVE4 */
 	clientid_t	op_clientid;        /* request */
 	struct xdr_netobj op_owner;           /* request */
 	u32		op_seqid;           /* request */
@@ -224,8 +233,8 @@ struct nfsd4_open {
 	struct nfs4_stateowner *op_stateowner; /* used during processing */
 	struct nfs4_acl *op_acl;
 };
-#define op_iattr	u.iattr
-#define op_verf		u.verf
+#define op_iattr	iattr
+#define op_verf		verf
 
 struct nfsd4_open_confirm {
 	stateid_t	oc_req_stateid		/* request */;
@@ -259,7 +268,7 @@ struct nfsd4_readdir {
 	nfs4_verifier	rd_verf;            /* request */
 	u32		rd_dircount;        /* request */
 	u32		rd_maxcount;        /* request */
-	u32		rd_bmval[2];        /* request */
+	u32		rd_bmval[3];        /* request */
 	struct svc_rqst *rd_rqstp;          /* response */
 	struct svc_fh * rd_fhp;             /* response */
 
@@ -301,7 +310,7 @@ struct nfsd4_secinfo {
 
 struct nfsd4_setattr {
 	stateid_t	sa_stateid;         /* request */
-	u32		sa_bmval[2];        /* request */
+	u32		sa_bmval[3];        /* request */
 	struct iattr	sa_iattr;           /* request */
 	struct nfs4_acl *sa_acl;
 };
@@ -327,7 +336,7 @@ struct nfsd4_setclientid_confirm {
 
 /* also used for NVERIFY */
 struct nfsd4_verify {
-	u32		ve_bmval[2];        /* request */
+	u32		ve_bmval[3];        /* request */
 	u32		ve_attrlen;         /* request */
 	char *		ve_attrval;         /* request */
 };
@@ -343,6 +352,57 @@ struct nfsd4_write {
 	u32		wr_how_written;     /* response */
 	nfs4_verifier	wr_verifier;        /* response */
 };
+
+#if defined(CONFIG_NFSD_V4_1)
+struct nfsd4_exchange_id {
+	nfs4_verifier	verifier;
+	u32		id_len;
+	char		*id;
+	u32		flags;
+	clientid_t	clientid;
+	u32		seqid;
+	int		spa_how;
+};
+
+struct nfsd4_channel_attrs {
+	u32		headerpadsz;
+	u32		maxreq_sz;
+	u32		maxresp_sz;
+	u32		maxresp_cached;
+	u32		maxops;
+	u32		maxreqs;
+	u32		nr_rdma_attrs;
+	u32		rdma_attrs;
+};
+
+struct nfsd4_create_session {
+	clientid_t		clientid;
+	struct nfs4_sessionid	sessionid;
+	u32			seqid;
+	u32			flags;
+	struct nfsd4_channel_attrs fore_channel;
+	struct nfsd4_channel_attrs back_channel;
+	u32			callback_prog;
+	u32			uid;
+	u32			gid;
+};
+
+struct nfsd4_sequence {
+	struct nfs4_sessionid	sessionid;		/* request/response */
+	u32			seqid;			/* request/response */
+	u32			slotid;			/* request/response */
+	u32			maxslots;		/* request/response */
+	u32			cachethis;		/* request */
+#if 0
+	u32			target_maxslots;	/* response */
+	u32			status_flags;		/* response */
+#endif /* not yet */
+};
+
+struct nfsd4_destroy_session {
+	struct nfs4_sessionid	sessionid;
+};
+#endif /* CONFIG_NFSD_V4_1 */
 
 struct nfsd4_op {
 	int					opnum;
@@ -378,6 +438,12 @@ struct nfsd4_op {
 		struct nfsd4_verify		verify;
 		struct nfsd4_write		write;
 		struct nfsd4_release_lockowner	release_lockowner;
+#if defined(CONFIG_NFSD_V4_1)
+		struct nfsd4_exchange_id	exchange_id;
+		struct nfsd4_create_session	create_session;
+		struct nfsd4_destroy_session	destroy_session;
+		struct nfsd4_sequence		sequence;
+#endif /* CONFIG_NFSD_V4_1 */
 	} u;
 	struct nfs4_replay *			replay;
 };
@@ -416,8 +482,21 @@ struct nfsd4_compoundres {
 	u32				taglen;
 	char *				tag;
 	u32				opcnt;
-	__be32 *			tagp; /* where to encode tag and  opcount */
+	__be32 *			tagp; /* tag, opcount encode location */
+	struct nfsd4_compound_state	cstate;
 };
+
+static inline u32 nfsd4_is_solo_sequence(struct nfsd4_compoundres *resp)
+{
+	struct nfsd4_compoundargs *args = resp->rqstp->rq_argp;
+	return args->opcnt == 1 ? 1 : 0;
+}
+
+static inline u32 nfsd4_no_page_in_cache(struct nfsd4_compoundres *resp)
+{
+	return (resp->cstate.slot->sl_cache_entry.ce_cachethis == 0 ||
+			nfsd4_is_solo_sequence(resp));
+}
 
 #define NFS4_SVC_XDRSIZE		sizeof(struct nfsd4_compoundargs)
 
@@ -448,7 +527,25 @@ extern __be32 nfsd4_setclientid(struct svc_rqst *rqstp,
 extern __be32 nfsd4_setclientid_confirm(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *,
 		struct nfsd4_setclientid_confirm *setclientid_confirm);
-extern __be32 nfsd4_process_open1(struct nfsd4_open *open);
+#if defined(CONFIG_NFSD_V4_1)
+extern void nfsd4_set_cache_entry(struct nfsd4_compoundres *resp);
+extern __be32 nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
+		struct nfsd4_sequence *seq);
+extern __be32 nfsd4_exchange_id(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *,
+struct nfsd4_exchange_id *);
+		extern __be32 nfsd4_create_session(struct svc_rqst *,
+		struct nfsd4_compound_state *,
+		struct nfsd4_create_session *);
+extern __be32 nfsd4_sequence(struct svc_rqst *,
+		struct nfsd4_compound_state *,
+		struct nfsd4_sequence *);
+extern __be32 nfsd4_destroy_session(struct svc_rqst *,
+		struct nfsd4_compound_state *,
+		struct nfsd4_destroy_session *);
+#endif /* CONFIG_NFSD_V4_1 */
+extern __be32 nfsd4_process_open1(struct svc_rqst *rqstp,
+		struct nfsd4_open *open);
 extern __be32 nfsd4_process_open2(struct svc_rqst *rqstp,
 		struct svc_fh *current_fh, struct nfsd4_open *open);
 extern __be32 nfsd4_open_confirm(struct svc_rqst *rqstp,

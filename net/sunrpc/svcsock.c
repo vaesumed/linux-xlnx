@@ -49,6 +49,7 @@
 #include <linux/sunrpc/msg_prot.h>
 #include <linux/sunrpc/svcsock.h>
 #include <linux/sunrpc/stats.h>
+#include <linux/sunrpc/xprt.h>
 
 #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
 
@@ -345,7 +346,6 @@ static void svc_sock_setbufsize(struct socket *sock, unsigned int snd,
 	lock_sock(sock->sk);
 	sock->sk->sk_sndbuf = snd * 2;
 	sock->sk->sk_rcvbuf = rcv * 2;
-	sock->sk->sk_userlocks |= SOCK_SNDBUF_LOCK|SOCK_RCVBUF_LOCK;
 	release_sock(sock->sk);
 #endif
 }
@@ -791,28 +791,14 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	int		len;
 	struct kvec *vec;
 	int pnum, vlen;
+#if defined(CONFIG_NFSD_V4_1)
+	struct rpc_rqst *req = NULL;
+#endif
 
 	dprintk("svc: tcp_recv %p data %d conn %d close %d\n",
 		svsk, test_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags),
 		test_bit(XPT_CONN, &svsk->sk_xprt.xpt_flags),
 		test_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags));
-
-	if (test_and_clear_bit(XPT_CHNGBUF, &svsk->sk_xprt.xpt_flags))
-		/* sndbuf needs to have room for one request
-		 * per thread, otherwise we can stall even when the
-		 * network isn't a bottleneck.
-		 *
-		 * We count all threads rather than threads in a
-		 * particular pool, which provides an upper bound
-		 * on the number of threads which will access the socket.
-		 *
-		 * rcvbuf just needs to be able to hold a few requests.
-		 * Normally they will be removed from the queue
-		 * as soon a a complete request arrives.
-		 */
-		svc_sock_setbufsize(svsk->sk_sock,
-				    (serv->sv_nrthreads+3) * serv->sv_max_mesg,
-				    3 * serv->sv_max_mesg);
 
 	clear_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags);
 
@@ -874,12 +860,73 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	len = svsk->sk_reclen;
 	set_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags);
 
+	/*
+	 * We have enough data for the whole tcp record. Let's try and read the
+	 * first 8 bytes to get the xid and the call direction. We can use this
+	 * to figure out if this is a call or a reply to a callback. If
+	 * sk_reclen is < 8 (xid and calldir), then this is a malformed packet.
+	 * In that case, don't bother with the calldir and just read the data.
+	 * It will be rejected in svc_process.
+	 */
+
 	vec = rqstp->rq_vec;
 	vec[0] = rqstp->rq_arg.head[0];
 	vlen = PAGE_SIZE;
+
+	if (len >= 8) {
+		u32 *p;
+		u32 xid;
+		u32 calldir;
+
+		len = svc_recvfrom(rqstp, vec, 1, 8);
+		if (len < 0)
+			goto error;
+
+		p = (u32 *)rqstp->rq_arg.head[0].iov_base;
+		xid = *p++;
+		calldir = *p;
+
+#if defined(CONFIG_NFSD_V4_1)
+		if (calldir) {
+			/* REPLY */
+			if (svsk->sk_bc_xprt)
+				req = xprt_lookup_rqst(svsk->sk_bc_xprt, xid);
+			if (req) {
+				memcpy(&req->rq_private_buf, &req->rq_rcv_buf,
+					sizeof(struct xdr_buf));
+				/* copy the xid and call direction */
+				memcpy(req->rq_private_buf.head[0].iov_base,
+					rqstp->rq_arg.head[0].iov_base, 8);
+				vec[0] = req->rq_private_buf.head[0];
+			} else
+				printk(KERN_NOTICE
+					"%s: Got unrecognized reply: "
+					"calldir 0x%x sk_bc_xprt %p xid %08x\n",
+					__func__, ntohl(calldir),
+					svsk->sk_bc_xprt, xid);
+		}
+
+		if (!calldir || !req)
+			vec[0] = rqstp->rq_arg.head[0];
+
+#else /* CONFIG_NFSD_V4_1 */
+		vec[0] = rqstp->rq_arg.head[0];
+#endif /* CONFIG_NFSD_V4_1 */
+		vec[0].iov_base += 8;
+		vec[0].iov_len -= 8;
+		len = svsk->sk_reclen - 8;
+		vlen -= 8;
+	}
+
 	pnum = 1;
 	while (vlen < len) {
+#if defined(CONFIG_NFSD_V4_1)
+		vec[pnum].iov_base = (req) ?
+			page_address(req->rq_private_buf.pages[pnum - 1]) :
+			page_address(rqstp->rq_pages[pnum]);
+#else /* CONFIG_NFSD_V4_1 */
 		vec[pnum].iov_base = page_address(rqstp->rq_pages[pnum]);
+#endif /* CONFIG_NFSD_V4_1 */
 		vec[pnum].iov_len = PAGE_SIZE;
 		pnum++;
 		vlen += PAGE_SIZE;
@@ -891,6 +938,18 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	if (len < 0)
 		goto error;
 
+	/*
+	 * Account for the 8 bytes we read earlier
+	 */
+	len += 8;
+
+#if defined(CONFIG_NFSD_V4_1)
+	if (req) {
+		xprt_complete_rqst(req->rq_task, len);
+		len = 0;
+		goto out;
+	}
+#endif /* CONFIG_NFSD_V4_1 */
 	dprintk("svc: TCP complete record (%d bytes)\n", len);
 	rqstp->rq_arg.len = len;
 	rqstp->rq_arg.page_base = 0;
@@ -903,6 +962,10 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 
 	rqstp->rq_xprt_ctxt   = NULL;
 	rqstp->rq_prot	      = IPPROTO_TCP;
+
+#if defined(CONFIG_NFSD_V4_1)
+out:
+#endif /* CONFIG_NFSD_V4_1 */
 
 	/* Reset TCP read info */
 	svsk->sk_reclen = 0;
@@ -1061,15 +1124,6 @@ static void svc_tcp_init(struct svc_sock *svsk, struct svc_serv *serv)
 
 		tcp_sk(sk)->nonagle |= TCP_NAGLE_OFF;
 
-		/* initialise setting must have enough space to
-		 * receive and respond to one request.
-		 * svc_tcp_recvfrom will re-adjust if necessary
-		 */
-		svc_sock_setbufsize(svsk->sk_sock,
-				    3 * svsk->sk_xprt.xpt_server->sv_max_mesg,
-				    3 * svsk->sk_xprt.xpt_server->sv_max_mesg);
-
-		set_bit(XPT_CHNGBUF, &svsk->sk_xprt.xpt_flags);
 		set_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags);
 		if (sk->sk_state != TCP_ESTABLISHED)
 			set_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags);
@@ -1139,8 +1193,14 @@ static struct svc_sock *svc_setup_socket(struct svc_serv *serv,
 	/* Initialize the socket */
 	if (sock->type == SOCK_DGRAM)
 		svc_udp_init(svsk, serv);
-	else
+	else {
+		/* initialise setting must have enough space to
+		 * receive and respond to one request.
+		 */
+		svc_sock_setbufsize(svsk->sk_sock, 4 * serv->sv_max_mesg,
+					4 * serv->sv_max_mesg);
 		svc_tcp_init(svsk, serv);
+	}
 
 	dprintk("svc: svc_setup_socket created %p (inet %p)\n",
 				svsk, svsk->sk_sk);
