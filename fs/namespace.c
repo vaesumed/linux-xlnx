@@ -1969,6 +1969,21 @@ dput_out:
 	return retval;
 }
 
+static struct mnt_namespace *alloc_mnt_ns(void)
+{
+	struct mnt_namespace *new_ns;
+
+	new_ns = kmalloc(sizeof(struct mnt_namespace), GFP_KERNEL);
+	if (!new_ns)
+		return ERR_PTR(-ENOMEM);
+	atomic_set(&new_ns->count, 1);
+	new_ns->root = NULL;
+	INIT_LIST_HEAD(&new_ns->list);
+	init_waitqueue_head(&new_ns->poll);
+	new_ns->event = 0;
+	return new_ns;
+}
+
 /*
  * Allocate a new namespace structure and populate it with contents
  * copied from the namespace of the passed in task structure.
@@ -1980,14 +1995,9 @@ static struct mnt_namespace *dup_mnt_ns(struct mnt_namespace *mnt_ns,
 	struct vfsmount *rootmnt = NULL, *pwdmnt = NULL;
 	struct vfsmount *p, *q;
 
-	new_ns = kmalloc(sizeof(struct mnt_namespace), GFP_KERNEL);
-	if (!new_ns)
-		return ERR_PTR(-ENOMEM);
-
-	atomic_set(&new_ns->count, 1);
-	INIT_LIST_HEAD(&new_ns->list);
-	init_waitqueue_head(&new_ns->poll);
-	new_ns->event = 0;
+	new_ns = alloc_mnt_ns();
+	if (IS_ERR(new_ns))
+		return new_ns;
 
 	down_write(&namespace_sem);
 	/* First pass: copy the tree topology */
@@ -2048,6 +2058,36 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
 	new_ns = dup_mnt_ns(ns, new_fs);
 
 	put_mnt_ns(ns);
+	return new_ns;
+}
+
+struct mnt_namespace *create_private_mnt_ns(struct vfsmount *mnt_root,
+		struct fs_struct *fs)
+{
+	struct mnt_namespace *new_ns;
+
+	new_ns = alloc_mnt_ns();
+	if (IS_ERR(new_ns))
+		return new_ns;
+
+	/* We're starting a completely fresh namespace, so we shouldn't need
+	 * to lock
+	 */
+	mnt_root->mnt_ns = new_ns;
+	new_ns->root = mnt_root;
+	list_add(&new_ns->list, &new_ns->root->mnt_list);
+
+	/* Also assume that the fs_struct is private, hence no locks... */
+	if (fs) {
+		dput(fs->pwd.dentry);
+		mntput(fs->pwd.mnt);
+		dput(fs->root.dentry);
+		mntput(fs->root.mnt);
+		fs->root.mnt = mntget(new_ns->root);
+		fs->root.dentry = dget(new_ns->root->mnt_root);
+		fs->pwd.mnt = mntget(new_ns->root);
+		fs->pwd.dentry = dget(new_ns->root->mnt_root);
+	}
 	return new_ns;
 }
 
