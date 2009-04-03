@@ -1,0 +1,55 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.29-git9
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 833bb3046b6cb320e775ea2160ddca87d53260d5
+HEAD is now at 833bb30 serial: fixup /proc/tty/driver/serial after proc_fops conversion
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 0184167...b7bb5d0 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-git9
+	quilt series is empty
+$ git update-ref refs/heads/quilt/jdelvare-hwmon 833bb3046b6cb320e775ea2160ddca87d53260d5
+Unchanged quilt series kernel-doc
+Importing ide based on e1c502482853f84606928f5a2f2eb6da1993cda1
+$ cd ../quilt-tmp
+$ git reset --hard e1c502482853f84606928f5a2f2eb6da1993cda1
+HEAD is now at e1c5024 Merge branch 'reiserfs-updates' from Jeff Mahoney
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-host-drivers-that-need-irqf_shared.patch
+ide-falconide_q40ide-use-__ide_mm_-in-out-sw-for-data-transfer.patch
+ide-remove-wmb-from-ide-dma-sff-c-and-scc_pata-c.patch
+Context reduced to (1/1) to apply fragment at 290
+error: patch failed: drivers/ide/ide-dma-sff.c:304
+error: drivers/ide/ide-dma-sff.c: patch does not apply
+Context reduced to (1/1) to apply fragment at 369
+
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.29-git9
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 833bb3046b6cb320e775ea2160ddca87d53260d5
+HEAD is now at 833bb30 serial: fixup /proc/tty/driver/serial after proc_fops conversion
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + b7bb5d0...87aa57a master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-git9
+	quilt series is empty
+$ git update-ref refs/heads/quilt/jdelvare-hwmon 833bb3046b6cb320e775ea2160ddca87d53260d5
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
