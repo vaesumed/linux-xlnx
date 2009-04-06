@@ -265,35 +265,60 @@ static void ide_cd_complete_failed_rq(ide_drive_t *drive, struct request *rq)
 		cdrom_analyze_sense_data(drive, NULL, sense);
 }
 
+
 /*
+ * Allow the drive 5 seconds to recover; some devices will return NOT_READY
+ * while flushing data from cache.
+ *
+ * returns: 0 failed (write timeout expired)
+ *	    1 success
+ */
+static int ide_cd_breathe(ide_drive_t *drive, struct request *rq)
+{
+
+	struct cdrom_info *info = drive->driver_data;
+
+	if (!rq->errors)
+		info->write_timeout = jiffies +	ATAPI_WAIT_WRITE_BUSY;
+
+	rq->errors = 1;
+
+	if (time_after(jiffies, info->write_timeout))
+		return 0;
+	else {
+		struct request_queue *q = drive->queue;
+		unsigned long flags;
+
+		/*
+		 * take a breather relying on the unplug timer to kick us again
+		 */
+
+		spin_lock_irqsave(q->queue_lock, flags);
+		blk_plug_device(q);
+		spin_unlock_irqrestore(q->queue_lock, flags);
+
+		return 1;
+	}
+}
+
+/**
  * Returns:
  * 0: if the request should be continued.
  * 1: if the request will be going through error recovery.
  * 2: if the request should be ended.
  */
-static int cdrom_decode_status(ide_drive_t *drive, int good_stat, int *stat_ret)
+static int cdrom_decode_status(ide_drive_t *drive, u8 stat)
 {
 	ide_hwif_t *hwif = drive->hwif;
 	struct request *rq = hwif->rq;
-	int stat, err, sense_key;
-
-	/* check for errors */
-	stat = hwif->tp_ops->read_status(hwif);
-
-	if (stat_ret)
-		*stat_ret = stat;
-
-	if (OK_STAT(stat, good_stat, BAD_R_STAT))
-		return 0;
+	int err, sense_key;
 
 	/* get the IDE error register */
 	err = ide_read_error(drive);
 	sense_key = err >> 4;
 
-	ide_debug_log(IDE_DBG_RQ, "stat: 0x%x, good_stat: 0x%x, cmd[0]: 0x%x, "
-				  "rq->cmd_type: 0x%x, err: 0x%x",
-				  stat, good_stat, rq->cmd[0], rq->cmd_type,
-				  err);
+	ide_debug_log(IDE_DBG_RQ, "cmd[0]: 0x%x, rq->cmd_type: 0x%x, err: 0x%x",
+				  rq->cmd[0], rq->cmd_type, err);
 
 	if (blk_sense_request(rq)) {
 		/*
@@ -359,36 +384,11 @@ static int cdrom_decode_status(ide_drive_t *drive, int good_stat, int *stat_ret)
 				/* fail the request */
 				printk(KERN_ERR PFX "%s: tray open\n",
 						drive->name);
-				do_end_request = 1;
 			} else {
-				struct cdrom_info *info = drive->driver_data;
-
-				/*
-				 * Allow the drive 5 seconds to recover, some
-				 * devices will return this error while flushing
-				 * data from cache.
-				 */
-				if (!rq->errors)
-					info->write_timeout = jiffies +
-							ATAPI_WAIT_WRITE_BUSY;
-				rq->errors = 1;
-				if (time_after(jiffies, info->write_timeout))
-					do_end_request = 1;
-				else {
-					struct request_queue *q = drive->queue;
-					unsigned long flags;
-
-					/*
-					 * take a breather relying on the unplug
-					 * timer to kick us again
-					 */
-					spin_lock_irqsave(q->queue_lock, flags);
-					blk_plug_device(q);
-					spin_unlock_irqrestore(q->queue_lock, flags);
-
+				if (ide_cd_breathe(drive, rq))
 					return 1;
-				}
 			}
+			do_end_request = 1;
 		} else if (sense_key == UNIT_ATTENTION) {
 			/* media change */
 			cdrom_saw_media_change(drive);
@@ -624,12 +624,12 @@ static ide_startstop_t cdrom_newpc_intr(ide_drive_t *drive)
 	struct ide_cmd *cmd = &hwif->cmd;
 	struct request *rq = hwif->rq;
 	ide_expiry_t *expiry = NULL;
-	int dma_error = 0, dma, stat, thislen, uptodate = 0;
+	int dma_error = 0, dma, thislen, uptodate = 0;
 	int write = (rq_data_dir(rq) == WRITE) ? 1 : 0, rc, nsectors;
 	int sense = blk_sense_request(rq);
 	unsigned int timeout;
 	u16 len;
-	u8 ireason;
+	u8 ireason, stat;
 
 	ide_debug_log(IDE_DBG_PC, "cmd[0]: 0x%x, write: 0x%x",
 				  rq->cmd[0], write);
@@ -648,11 +648,16 @@ static ide_startstop_t cdrom_newpc_intr(ide_drive_t *drive)
 		}
 	}
 
-	rc = cdrom_decode_status(drive, 0, &stat);
-	if (rc) {
-		if (rc == 2)
-			goto out_end;
-		return ide_stopped;
+	/* check status */
+	stat = hwif->tp_ops->read_status(hwif);
+
+	if (!OK_STAT(stat, 0, BAD_R_STAT)) {
+		rc = cdrom_decode_status(drive, stat);
+		if (rc) {
+			if (rc == 2)
+				goto out_end;
+			return ide_stopped;
+		}
 	}
 
 	/* using dma, transfer is complete now */
