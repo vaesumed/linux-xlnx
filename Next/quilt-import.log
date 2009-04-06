@@ -1,0 +1,78 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing device-mapper based on v2.6.29-7764-g20bec8a
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 20bec8ab1458c24bed0d5492ee15d87807fc415a
+HEAD is now at 20bec8a Merge branch 'ext3-latency-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/tytso/ext4
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-add-integrity-support.patch
+dm-remove-limited-barrier-support.patch
+dm-rearrange-dm_wq_work.patch
+dm-split-DMF_BLOCK_IO-flag-into-two.patch
+dm-simplify-dm_request-loop.patch
+dm-rework-queueing-and-suspension.patch
+dm-remove-dm_request-loop.patch
+dm-implement-basic-barrier-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 2bdcde8...108268c master     -> quilt/device-mapper  (forced update)
+Importing i2c based on 2.6.29-git12
+$ cd ../quilt-tmp
+$ git reset --hard 6bb597507f9839b13498781e481f5458aea33620
+HEAD is now at 6bb5975 Merge branch 'x86-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-voodoo3-deprecate.patch
+i2c-deprecate-client-register.patch
+i2c-delete-unused-ids.patch
+i2c-algo-sgi-delete.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + b2bec75...d0bdd47 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.29-git12
+$ cd ../quilt-tmp
+$ git reset --hard 6bb597507f9839b13498781e481f5458aea33620
+HEAD is now at 6bb5975 Merge branch 'x86-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-lm95241-convert-to-new-i2c.patch
+hwmon-asus_atk0110-new-driver.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+   833bb30..48a1ebf  master     -> quilt/jdelvare-hwmon
+Importing kernel-doc based on 2.6.29-git11
+$ cd ../quilt-tmp
+$ git reset --hard 20bec8ab1458c24bed0d5492ee15d87807fc415a
+HEAD is now at 20bec8a Merge branch 'ext3-latency-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/tytso/ext4
+$ git quiltimport --author Randy Dunlap <randy.dunlap@oracle.com> --patches ../quilt/kernel-doc
+docum-kernprms-alpha7.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/kernel-doc
+From ../quilt-tmp
+ + 32a316f...b463a50 master     -> quilt/kernel-doc  (forced update)
+Importing ide based on 6bb597507f9839b13498781e481f5458aea33620
+$ cd ../quilt-tmp
+$ git reset --hard 6bb597507f9839b13498781e481f5458aea33620
+HEAD is now at 6bb5975 Merge branch 'x86-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-host-drivers-that-need-irqf_shared.patch
+ide-falconide_q40ide-use-__ide_mm_-in-out-sw-for-data-transfer.patch
+ide-remove-wmb-from-ide-dma-sff-c-and-scc_pata-c.patch
+tx4939ide-remove-wmb.patch
+ide-h8300-remove-mm_-inw-outw.patch
+at91_ide-remove-custom-tf_-read-load-methods.patch
+ide-h8300-remove-custom-tf_-read-load-methods.patch
+ide-cd-move_status_checking_into_the_irq_handler.patch
+ide-cd-carve_out_an_ide_cd_breathe-helper_for_fs_write_requests.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 919a3dc...0346908 master     -> quilt/ide  (forced update)
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
