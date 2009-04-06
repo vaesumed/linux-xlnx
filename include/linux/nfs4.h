@@ -379,7 +379,13 @@ enum opentype4 {
 enum createmode4 {
 	NFS4_CREATE_UNCHECKED = 0,
 	NFS4_CREATE_GUARDED = 1,
-	NFS4_CREATE_EXCLUSIVE = 2
+	NFS4_CREATE_EXCLUSIVE = 2,
+	/*
+	 * New to NFSv4.1. If session is persistent,
+	 * GUARDED4 MUST be used. Otherwise, use
+	 * EXCLUSIVE4_1 instead of EXCLUSIVE4.
+	 */
+	NFS4_CREATE_EXCLUSIVE4_1 = 3
 };
 
 enum limit_by4 {
@@ -415,6 +421,8 @@ enum lock_type4 {
 #define FATTR4_WORD0_UNIQUE_HANDLES     (1UL << 9)
 #define FATTR4_WORD0_LEASE_TIME         (1UL << 10)
 #define FATTR4_WORD0_RDATTR_ERROR       (1UL << 11)
+/* Mandatory in NFSv4.1 */
+#define FATTR4_WORD2_SUPPATTR_EXCLCREAT (1UL << 11)
 
 /* Recommended Attributes */
 #define FATTR4_WORD0_ACL                (1UL << 12)
