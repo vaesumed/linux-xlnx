@@ -984,6 +984,9 @@ static void pci_init_capabilities(struct pci_dev *dev)
 
 	/* Single Root I/O Virtualization */
 	pci_iov_init(dev);
+
+	/* PCIe end-to-end CRC checking */
+	pcie_set_ecrc_checking(dev);
 }
 
 void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
@@ -1220,7 +1223,7 @@ EXPORT_SYMBOL(pci_scan_bus_parented);
  *
  * Returns the max number of subordinate bus discovered.
  */
-unsigned int __devinit pci_rescan_bus(struct pci_bus *bus)
+unsigned int __ref pci_rescan_bus(struct pci_bus *bus)
 {
 	unsigned int max;
 	struct pci_dev *dev;

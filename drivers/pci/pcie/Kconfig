@@ -46,3 +46,15 @@ config PCIEASPM_DEBUG
 	help
 	  This enables PCI Express ASPM debug support. It will add per-device
 	  interface to control ASPM.
+
+#
+# PCI Express ECRC
+#
+config PCIE_ECRC
+	bool "PCI Express ECRC support"
+	depends on PCI
+	help
+	  Enables PCI Express ECRC (transaction layer end-to-end CRC
+	  checking)
+
+	  When in doubt, say N.

@@ -674,6 +674,11 @@ int __must_check pci_reenable_device(struct pci_dev *);
 int __must_check pcim_enable_device(struct pci_dev *pdev);
 void pcim_pin_device(struct pci_dev *pdev);
 
+static inline int pci_is_enabled(struct pci_dev *pdev)
+{
+	return (atomic_read(&pdev->enable_cnt) > 0);
+}
+
 static inline int pci_is_managed(struct pci_dev *pdev)
 {
 	return pdev->is_managed;
@@ -873,6 +878,17 @@ static inline int pcie_aspm_enabled(void)
 }
 #else
 extern int pcie_aspm_enabled(void);
+#endif
+
+#ifndef CONFIG_PCIE_ECRC
+static inline int pcie_set_ecrc_checking(struct pci_dev *dev)
+{
+	return 0;
+}
+static inline void pcie_ecrc_get_policy(char *str) {};
+#else
+extern int pcie_set_ecrc_checking(struct pci_dev *dev);
+extern void pcie_ecrc_get_policy(char *str);
 #endif
 
 #define pci_enable_msi(pdev)	pci_enable_msi_block(pdev, 1)
