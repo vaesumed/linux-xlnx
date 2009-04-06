@@ -104,6 +104,7 @@ config FUNCTION_GRAPH_TRACER
 	  the return value. This is done by setting the current return 
 	  address on the current task structure into a stack of calls.
 
+
 config IRQSOFF_TRACER
 	bool "Interrupts-off Latency Tracer"
 	default n
@@ -374,6 +375,20 @@ config DYNAMIC_FTRACE
 	 wakes up once a second and checks to see if any ftrace calls
 	 were made. If so, it runs stop_machine (stops all CPUS)
 	 and modifies the code to jump over the call to ftrace.
+
+config FUNCTION_PROFILER
+	bool "Kernel function profiler"
+	depends on FUNCTION_TRACER
+	default n
+	help
+	 This option enables the kernel function profiler. A file is created
+	 in debugfs called function_profile_enabled which defaults to zero.
+	 When a 1 is echoed into this file profiling begins, and when a
+	 zero is entered, profiling stops. A file in the trace_stats
+	 directory called functions, that show the list of functions that
+	 have been hit and their counters.
+
+	 If in doubt, say N
 
 config FTRACE_MCOUNT_RECORD
 	def_bool y
