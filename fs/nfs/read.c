@@ -371,7 +371,7 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	argp->offset += resp->count;
 	argp->pgbase += resp->count;
 	argp->count -= resp->count;
-	nfs4_restart_rpc(task, NFS_SERVER(data->inode)->nfs_client);
+	rpc_restart_call(task);
 	return;
 out:
 	nfs4_sequence_free_slot(NFS_SERVER(data->inode)->nfs_client,
