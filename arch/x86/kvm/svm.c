@@ -19,6 +19,7 @@
 #include "irq.h"
 #include "mmu.h"
 #include "kvm_cache_regs.h"
+#include "x86.h"
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -130,24 +131,6 @@ static u32 msrpm_ranges[] = {0, 0xc0000000, 0xc0010000};
 static inline u32 svm_has(u32 feat)
 {
 	return svm_features & feat;
-}
-
-static inline u8 pop_irq(struct kvm_vcpu *vcpu)
-{
-	int word_index = __ffs(vcpu->arch.irq_summary);
-	int bit_index = __ffs(vcpu->arch.irq_pending[word_index]);
-	int irq = word_index * BITS_PER_LONG + bit_index;
-
-	clear_bit(bit_index, &vcpu->arch.irq_pending[word_index]);
-	if (!vcpu->arch.irq_pending[word_index])
-		clear_bit(word_index, &vcpu->arch.irq_summary);
-	return irq;
-}
-
-static inline void push_irq(struct kvm_vcpu *vcpu, u8 irq)
-{
-	set_bit(irq, vcpu->arch.irq_pending);
-	set_bit(irq / BITS_PER_LONG, &vcpu->arch.irq_summary);
 }
 
 static inline void clgi(void)
@@ -1114,7 +1097,7 @@ static int pf_interception(struct vcpu_svm *svm, struct kvm_run *kvm_run)
 	if (!irqchip_in_kernel(kvm) &&
 	    is_external_interrupt(exit_int_info)) {
 		event_injection = true;
-		push_irq(&svm->vcpu, exit_int_info & SVM_EVTINJ_VEC_MASK);
+		kvm_push_irq(&svm->vcpu, exit_int_info & SVM_EVTINJ_VEC_MASK);
 	}
 
 	fault_address  = svm->vmcb->control.exit_info_2;
@@ -1840,17 +1823,28 @@ static int task_switch_interception(struct vcpu_svm *svm,
 				    struct kvm_run *kvm_run)
 {
 	u16 tss_selector;
+	int reason;
+	int int_type = svm->vmcb->control.exit_int_info &
+		SVM_EXITINTINFO_TYPE_MASK;
 
 	tss_selector = (u16)svm->vmcb->control.exit_info_1;
+
 	if (svm->vmcb->control.exit_info_2 &
 	    (1ULL << SVM_EXITINFOSHIFT_TS_REASON_IRET))
-		return kvm_task_switch(&svm->vcpu, tss_selector,
-				       TASK_SWITCH_IRET);
-	if (svm->vmcb->control.exit_info_2 &
-	    (1ULL << SVM_EXITINFOSHIFT_TS_REASON_JMP))
-		return kvm_task_switch(&svm->vcpu, tss_selector,
-				       TASK_SWITCH_JMP);
-	return kvm_task_switch(&svm->vcpu, tss_selector, TASK_SWITCH_CALL);
+		reason = TASK_SWITCH_IRET;
+	else if (svm->vmcb->control.exit_info_2 &
+		 (1ULL << SVM_EXITINFOSHIFT_TS_REASON_JMP))
+		reason = TASK_SWITCH_JMP;
+	else if (svm->vmcb->control.exit_int_info & SVM_EXITINTINFO_VALID)
+		reason = TASK_SWITCH_GATE;
+	else
+		reason = TASK_SWITCH_CALL;
+
+
+	if (reason != TASK_SWITCH_GATE || int_type == SVM_EXITINTINFO_TYPE_SOFT)
+		skip_emulated_instruction(&svm->vcpu);
+
+	return kvm_task_switch(&svm->vcpu, tss_selector, reason);
 }
 
 static int cpuid_interception(struct vcpu_svm *svm, struct kvm_run *kvm_run)
@@ -2285,6 +2279,15 @@ static void update_cr8_intercept(struct kvm_vcpu *vcpu)
 		vmcb->control.intercept_cr_write |= INTERCEPT_CR8_MASK;
 }
 
+static int svm_interrupt_allowed(struct kvm_vcpu *vcpu)
+{
+	struct vcpu_svm *svm = to_svm(vcpu);
+	struct vmcb *vmcb = svm->vmcb;
+	return (vmcb->save.rflags & X86_EFLAGS_IF) &&
+		!(vmcb->control.int_state & SVM_INTERRUPT_SHADOW_MASK) &&
+		(svm->vcpu.arch.hflags & HF_GIF_MASK);
+}
+
 static void svm_intr_assist(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
@@ -2334,7 +2337,7 @@ static void kvm_reput_irq(struct vcpu_svm *svm)
 	if ((control->int_ctl & V_IRQ_MASK)
 	    && !irqchip_in_kernel(svm->vcpu.kvm)) {
 		control->int_ctl &= ~V_IRQ_MASK;
-		push_irq(&svm->vcpu, control->int_vector);
+		kvm_push_irq(&svm->vcpu, control->int_vector);
 	}
 
 	svm->vcpu.arch.interrupt_window_open =
@@ -2344,15 +2347,7 @@ static void kvm_reput_irq(struct vcpu_svm *svm)
 
 static void svm_do_inject_vector(struct vcpu_svm *svm)
 {
-	struct kvm_vcpu *vcpu = &svm->vcpu;
-	int word_index = __ffs(vcpu->arch.irq_summary);
-	int bit_index = __ffs(vcpu->arch.irq_pending[word_index]);
-	int irq = word_index * BITS_PER_LONG + bit_index;
-
-	clear_bit(bit_index, &vcpu->arch.irq_pending[word_index]);
-	if (!vcpu->arch.irq_pending[word_index])
-		clear_bit(word_index, &vcpu->arch.irq_summary);
-	svm_inject_irq(svm, irq);
+	svm_inject_irq(svm, kvm_pop_irq(&svm->vcpu));
 }
 
 static void do_interrupt_requests(struct kvm_vcpu *vcpu,
@@ -2672,6 +2667,7 @@ static struct kvm_x86_ops svm_x86_ops = {
 	.exception_injected = svm_exception_injected,
 	.inject_pending_irq = svm_intr_assist,
 	.inject_pending_vectors = do_interrupt_requests,
+	.interrupt_allowed = svm_interrupt_allowed,
 
 	.set_tss_addr = svm_set_tss_addr,
 	.get_tdp_level = get_npt_level,
