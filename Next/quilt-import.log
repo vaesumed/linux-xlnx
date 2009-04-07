@@ -1,0 +1,123 @@
+Importing driver-core.current based on 2.6.29-git13
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 0221c81b1b8eb0cbb6b30a0ced52ead32d2b4e4c
+HEAD is now at 0221c81 Merge branch 'audit.b62' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/audit-current
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+sysfs-don-t-use-global-workqueue-in-sysfs_schedule_callback.patch
+driver-core-fix-driver_match_device.patch
+driver-core-allow-non-root-users-to-listen-to-uevents.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+   8e0ee43..87cd565  master     -> quilt/driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ cd ../quilt-tmp
+$ git reset --hard 87cd565c38f65c715ad5a1896a5b36350da7f1aa
+HEAD is now at 87cd565 driver core: allow non-root users to listen to uevents
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-gadget-fix-ethernet-link-reports-to-ethtool.patch
+usb-cdc-acm-zydas-1602-identifier-needed.patch
+usb-tty-pl2303-needs-identifiers-for-siemens-s81-as-well-as-ef81.patch
+usb-ftdi_sio-add-vendor-project-id-for-jeti-specbos-1201-spectrometer.patch
+usb-symbol-remove-various-bits-of-left-over-junk.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 4c5e9f0...66c0dc7 master     -> quilt/usb.current  (forced update)
+Importing device-mapper based on v2.6.29-7764-g20bec8a
+$ cd ../quilt-tmp
+$ git reset --hard 20bec8ab1458c24bed0d5492ee15d87807fc415a
+HEAD is now at 20bec8a Merge branch 'ext3-latency-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/tytso/ext4
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-add-integrity-support.patch
+dm-remove-limited-barrier-support.patch
+dm-rearrange-dm_wq_work.patch
+dm-split-DMF_BLOCK_IO-flag-into-two.patch
+dm-simplify-dm_request-loop.patch
+dm-rework-queueing-and-suspension.patch
+dm-remove-dm_request-loop.patch
+dm-implement-basic-barrier-support.patch
+dm-kcopyd-prepare-for-callback-race-fix.patch
+dm-kcopyd-fix-callback-race.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 108268c...88d4047 master     -> quilt/device-mapper  (forced update)
+Importing i2c based on 2.6.29-git13
+$ cd ../quilt-tmp
+$ git reset --hard 0221c81b1b8eb0cbb6b30a0ced52ead32d2b4e4c
+HEAD is now at 0221c81 Merge branch 'audit.b62' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/audit-current
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-deprecate-client-register.patch
+i2c-delete-unused-ids.patch
+i2c-algo-sgi-delete.patch
+i2c-voodoo3-deprecate.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + d0bdd47...d0df01a master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 20bec8ab1458c24bed0d5492ee15d87807fc415a
+$ cd ../quilt-tmp
+$ git reset --hard 20bec8ab1458c24bed0d5492ee15d87807fc415a
+HEAD is now at 20bec8a Merge branch 'ext3-latency-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/tytso/ext4
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+ide-fix-host-drivers-that-need-irqf_shared.patch
+ide-falconide_q40ide-use-__ide_mm_-in-out-sw-for-data-transfer.patch
+ide-remove-wmb-from-ide-dma-sff-c-and-scc_pata-c.patch
+tx4939ide-remove-wmb.patch
+ide-h8300-remove-mm_-inw-outw.patch
+at91_ide-remove-custom-tf_-read-load-methods.patch
+ide-h8300-remove-custom-tf_-read-load-methods.patch
+ide-cd-move_status_checking_into_the_irq_handler.patch
+ide-cd-carve_out_an_ide_cd_breathe-helper_for_fs_write_requests.patch
+tx493-89-ide-remove-big-endian-version-of-tx493-89-ide_tf_-load-read-.patch
+tx4939ide-fix-tx4939ide_-in-out-put_data_swap-argument.patch
+at91_ide-remove-unused-include-linux-version-h.patch
+ide-cd-respect-req_quiet-for-fs-requests-in-cdrom_decode_status.patch
+ide-cd-update-debugging-support.patch
+ide-cd-convert-cdrom_decode_status-to-use-switch-statements.patch
+ide-cd-unify-handling-of-fs-and-pc-requests-in-cdrom_decode_status.patch
+ide-cd-fix-intendation-in-cdrom_decode_status.patch
+ide-replace-ide_tflag_--flags-by-ide_valid_-.patch
+ide-simplify-struct-ide_taskfile.patch
+ide-move-common-code-out-of-tf_load-method.patch
+ide-call-write_devctl-method-from-tf_read-method.patch
+ide-refactor-tf_load-method.patch
+ide-refactor-tf_read-method.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 0346908...f3e9dfe master     -> quilt/ide  (forced update)
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core 66c0dc7faa527c43090dd53264ad5de95b3b18fc
+Importing usb based on quilt/driver-core
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb 66c0dc7faa527c43090dd53264ad5de95b3b18fc
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 66c0dc7faa527c43090dd53264ad5de95b3b18fc
+HEAD is now at 66c0dc7 USB: symbol: Remove various bits of left over junk
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-at76-convert-to-netdev_ops.patch
+staging-epl-convert-to-netdev_ops.patch
+staging-et131x-convert-to-netdev_ops.patch
+staging-otus-convert-to-netdev_ops.patch
+staging-rt2860-convert-to-netdev_ops.patch
+staging-rt2870-convert-to-netdev_ops.patch
+staging-rt3070-convert-to-netdev_ops.patch
+staging-slicoss-convert-to-netdev_ops.patch
+staging-sxg-convert-to-netdev_ops.patch
+staging-wlan-ng-convert-to-netdev_ops.patch
+staging-line6-convert-to-snd_card_create.patch
+staging-rt2870-add-id-for-sitecom-wl-315.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 99dff82...41ef70e master     -> quilt/staging  (forced update)
