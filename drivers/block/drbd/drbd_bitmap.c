@@ -78,8 +78,8 @@ struct drbd_bitmap {
 };
 
 /* definition of bits in bm_flags */
-#define BM_LOCKED 0
-#define BM_MD_IO_ERROR (BITS_PER_LONG-1) /* 31? 63? */
+#define BM_LOCKED       0
+#define BM_MD_IO_ERROR  1
 
 static inline int bm_is_locked(struct drbd_bitmap *b)
 {
@@ -147,23 +147,6 @@ void drbd_bm_unlock(struct drbd_conf *mdev)
 	b->bm_task = NULL;
 	up(&b->bm_change);
 }
-
-#define bm_end_info(ignored...)	((void)(0))
-
-#if 0
-#define catch_oob_access_start() do {	\
-	do {				\
-		if ((bm-p_addr) >= PAGE_SIZE/sizeof(long)) { \
-			printk(KERN_ALERT "drbd_bitmap.c:%u %s: p_addr:%p bm:%p %d\n", \
-					__LINE__ , __func__ , p_addr, bm, (bm-p_addr)); \
-			break;		\
-		}
-#define catch_oob_access_end()	\
-	} while (0); } while (0)
-#else
-#define catch_oob_access_start() do {
-#define catch_oob_access_end() } while (0)
-#endif
 
 /* word offset to long pointer */
 STATIC unsigned long *__bm_map_paddr(struct drbd_bitmap *b, unsigned long offset, const enum km_type km)
@@ -345,18 +328,14 @@ STATIC int bm_clear_surplus(struct drbd_bitmap *b)
 	p_addr = bm_map_paddr(b, w);
 	bm = p_addr + MLPP(w);
 	if (w < b->bm_words) {
-		catch_oob_access_start();
 		cleared = hweight_long(*bm & ~mask);
 		*bm &= mask;
-		catch_oob_access_end();
 		w++; bm++;
 	}
 
 	if (w < b->bm_words) {
-		catch_oob_access_start();
 		cleared += hweight_long(*bm);
 		*bm = 0;
-		catch_oob_access_end();
 	}
 	bm_unmap(p_addr);
 	return cleared;
@@ -371,16 +350,12 @@ STATIC void bm_set_surplus(struct drbd_bitmap *b)
 	p_addr = bm_map_paddr(b, w);
 	bm = p_addr + MLPP(w);
 	if (w < b->bm_words) {
-		catch_oob_access_start();
 		*bm |= ~mask;
 		bm++; w++;
-		catch_oob_access_end();
 	}
 
 	if (w < b->bm_words) {
-		catch_oob_access_start();
 		*bm = ~(0UL);
-		catch_oob_access_end();
 	}
 	bm_unmap(p_addr);
 }
@@ -396,13 +371,11 @@ STATIC unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endia
 		p_addr = bm_map_paddr(b, offset);
 		bm = p_addr + MLPP(offset);
 		while (i--) {
-			catch_oob_access_start();
 #ifndef __LITTLE_ENDIAN
 			if (swap_endian)
 				*bm = lel_to_cpu(*bm);
 #endif
 			bits += hweight_long(*bm++);
-			catch_oob_access_end();
 		}
 		bm_unmap(p_addr);
 		offset += do_now;
@@ -463,14 +436,12 @@ STATIC void bm_memset(struct drbd_bitmap *b, size_t offset, int c, size_t len)
 		do_now = min_t(size_t, ALIGN(offset + 1, LWPP), end) - offset;
 		p_addr = bm_map_paddr(b, offset);
 		bm = p_addr + MLPP(offset);
-		catch_oob_access_start();
 		if (bm+do_now > p_addr + LWPP) {
 			printk(KERN_ALERT "drbd: BUG BUG BUG! p_addr:%p bm:%p do_now:%d\n",
 			       p_addr, bm, (int)do_now);
 			break; /* breaks to after catch_oob_access_end() only! */
 		}
 		memset(bm, c, do_now * sizeof(long));
-		catch_oob_access_end();
 		bm_unmap(p_addr);
 		offset += do_now;
 	}
@@ -573,16 +544,13 @@ int drbd_bm_resize(struct drbd_conf *mdev, sector_t capacity)
 
 	p_addr = bm_map_paddr(b, words);
 	bm = p_addr + MLPP(words);
-	catch_oob_access_start();
 	*bm = DRBD_MAGIC;
-	catch_oob_access_end();
 	bm_unmap(p_addr);
 
 	(void)bm_clear_surplus(b);
 	if (!growing)
 		b->bm_set = bm_count_bits(b);
 
-	bm_end_info(mdev, __func__);
 	spin_unlock_irq(&b->bm_lock);
 	if (opages != npages)
 		vfree(opages);
@@ -669,12 +637,10 @@ void drbd_bm_merge_lel(struct drbd_conf *mdev, size_t offset, size_t number,
 		bm = p_addr + MLPP(offset);
 		offset += do_now;
 		while (do_now--) {
-			catch_oob_access_start();
 			bits = hweight_long(*bm);
 			word = *bm | lel_to_cpu(*buffer++);
 			*bm++ = word;
 			b->bm_set += hweight_long(word) - bits;
-			catch_oob_access_end();
 		}
 		bm_unmap(p_addr);
 	}
@@ -683,10 +649,9 @@ void drbd_bm_merge_lel(struct drbd_conf *mdev, size_t offset, size_t number,
 	 * where we _know_ that we are 64 bit aligned,
 	 * and know that this function is used in this way, too...
 	 */
-	if (end == b->bm_words) {
+	if (end == b->bm_words)
 		b->bm_set -= bm_clear_surplus(b);
-		bm_end_info(mdev, __func__);
-	}
+
 	spin_unlock_irq(&b->bm_lock);
 }
 
@@ -719,11 +684,8 @@ void drbd_bm_get_lel(struct drbd_conf *mdev, size_t offset, size_t number,
 			p_addr = bm_map_paddr(b, offset);
 			bm = p_addr + MLPP(offset);
 			offset += do_now;
-			while (do_now--) {
-				catch_oob_access_start();
+			while (do_now--)
 				*buffer++ = cpu_to_lel(*bm++);
-				catch_oob_access_end();
-			}
 			bm_unmap(p_addr);
 		}
 	}
@@ -1249,11 +1211,8 @@ int drbd_bm_e_weight(struct drbd_conf *mdev, unsigned long enr)
 		int n = e-s;
 		p_addr = bm_map_paddr(b, s);
 		bm = p_addr + MLPP(s);
-		while (n--) {
-			catch_oob_access_start();
+		while (n--)
 			count += hweight_long(*bm++);
-			catch_oob_access_end();
-		}
 		bm_unmap(p_addr);
 	} else {
 		ERR("start offset (%d) too large in drbd_bm_e_weight\n", s);
@@ -1288,10 +1247,8 @@ unsigned long drbd_bm_ALe_set_all(struct drbd_conf *mdev, unsigned long al_enr)
 		p_addr = bm_map_paddr(b, s);
 		bm = p_addr + MLPP(s);
 		while (i--) {
-			catch_oob_access_start();
 			count += hweight_long(*bm);
 			*bm = -1UL;
-			catch_oob_access_end();
 			bm++;
 		}
 		bm_unmap(p_addr);
