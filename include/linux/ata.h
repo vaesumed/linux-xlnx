@@ -788,6 +788,25 @@ static inline int ata_drive_40wire_relaxed(const u16 *dev_id)
 	return 1;
 }
 
+/*
+ * ATA supports sector sizes up to 2^33 - 1.  The reported sector size may
+ * not be a power of two.  The extra bytes are used for user-visible data
+ * integrity calculations.  Note this is not the same as the ECC which is
+ * accessed through the SCT Command Transport or READ / WRITE LONG.
+ */
+static inline u64 ata_id_sect_size(const u16 *id)
+{
+	u16 word_106 = id[106];
+	u64 sz;
+
+	if ((word_106 & 0xc000) != 0x4000)
+		return ATA_SECT_SIZE;
+	if (!(word_106 & (1 << 12)))
+		return ATA_SECT_SIZE;
+	sz = (id[117] | ((u64)id[118] << 16)) * 2;
+	return sz;
+}
+
 static inline int atapi_cdb_len(const u16 *dev_id)
 {
 	u16 tmp = dev_id[ATA_ID_CONFIG] & 0x3;

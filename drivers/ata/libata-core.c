@@ -2387,6 +2387,7 @@ int ata_dev_configure(struct ata_device *dev)
 	dev->max_sectors = 0;
 	dev->cdb_len = 0;
 	dev->n_sectors = 0;
+	dev->sect_size = ATA_SECT_SIZE;
 	dev->cylinders = 0;
 	dev->heads = 0;
 	dev->sectors = 0;
@@ -2427,6 +2428,16 @@ int ata_dev_configure(struct ata_device *dev)
 		}
 
 		dev->n_sectors = ata_id_n_sectors(id);
+
+		if (dev->sect_size != ata_id_sect_size(id)) {
+			ata_dev_printk(dev, KERN_ERR,
+				       "internal sector size %lld does not "
+				       "match drive-supplied size %lld\n",
+				       dev->sect_size,
+				       ata_id_sect_size(id));
+			rc = -EINVAL;
+			goto err_out_nosup;
+		}
 
 		/* get current R/W Multiple count setting */
 		if ((dev->id[47] >> 8) == 0x80 && (dev->id[59] & 0x100)) {
