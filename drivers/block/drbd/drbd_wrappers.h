@@ -114,4 +114,3 @@ static inline void drbd_plug_device(struct drbd_conf *mdev)
 # undef __cond_lock
 # define __cond_lock(x,c) (c)
 #endif
-

@@ -792,6 +792,10 @@ int __drbd_set_state(struct drbd_conf *mdev,
 			ns.pdsk = DUnknown;
 	}
 
+	/* Clear the aftr_isp when becomming Unconfigured */
+	if (ns.conn == StandAlone && ns.disk == Diskless && ns.role == Secondary)
+		ns.aftr_isp = 0;
+
 	if (ns.conn <= Disconnecting && ns.disk == Diskless)
 		ns.pdsk = DUnknown;
 
@@ -1215,8 +1219,11 @@ STATIC void after_state_ch(struct drbd_conf *mdev, union drbd_state_t os,
 
 	/* Terminate worker thread if we are unconfigured - it will be
 	   restarted as needed... */
-	if (ns.disk == Diskless && ns.conn == StandAlone && ns.role == Secondary)
+	if (ns.disk == Diskless && ns.conn == StandAlone && ns.role == Secondary) {
+		if (os.aftr_isp != ns.aftr_isp)
+			resume_next_sg(mdev);
 		drbd_thread_stop_nowait(&mdev->worker);
+	}
 
 	drbd_md_sync(mdev);
 }
@@ -2856,8 +2863,8 @@ STATIC void drbd_cleanup(void)
 }
 
 /**
- * drbd_congested: Returns 1<<BDI_write_congested and/or
- * 1<<BDI_read_congested if we are congested. This interface is known
+ * drbd_congested: Returns 1<<BDI_async_congested and/or
+ * 1<<BDI_sync_congested if we are congested. This interface is known
  * to be used by pdflush.
  */
 static int drbd_congested(void *congested_data, int bdi_bits)
@@ -2878,15 +2885,13 @@ static int drbd_congested(void *congested_data, int bdi_bits)
 		q = bdev_get_queue(mdev->bc->backing_bdev);
 		r = bdi_congested(&q->backing_dev_info, bdi_bits);
 		dec_local(mdev);
-		if (r) {
+		if (r)
 			reason = 'b';
-			goto out;
-		}
 	}
 
-	if (bdi_bits & (1 << BDI_write_congested) && test_bit(NET_CONGESTED, &mdev->flags)) {
-		r = (1 << BDI_write_congested);
-		reason = 'n';
+	if (bdi_bits & (1 << BDI_async_congested) && test_bit(NET_CONGESTED, &mdev->flags)) {
+		r |= (1 << BDI_async_congested);
+		reason = reason == 'b' ? 'a' : 'n';
 	}
 
 out:
@@ -3593,6 +3598,8 @@ _drbd_fault_str(unsigned int type) {
 		"Data write",
 		"Data read",
 		"Data read ahead",
+		"BM allocation",
+		"EE allocation"
 	};
 
 	return (type < DRBD_FAULT_MAX) ? _faults[type] : "**Unknown**";
