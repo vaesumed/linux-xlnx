@@ -178,6 +178,12 @@ EXPORT_SYMBOL_GPL(ide_pci_clk);
 module_param_named(pci_clock, ide_pci_clk, int, 0);
 MODULE_PARM_DESC(pci_clock, "PCI bus clock frequency (in MHz)");
 
+int ide_trim = 0;
+EXPORT_SYMBOL_GPL(ide_trim);
+
+module_param_named(trim, ide_trim, int, 0);
+MODULE_PARM_DESC(trim, "TRIM support (0=off, 1=on)");
+
 static int ide_set_dev_param_mask(const char *s, struct kernel_param *kp)
 {
 	int a, b, i, j = 1;

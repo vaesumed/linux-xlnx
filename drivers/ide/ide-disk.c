@@ -97,35 +97,38 @@ static ide_startstop_t __ide_do_rw_disk(ide_drive_t *drive, struct request *rq,
 	}
 
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
+	cmd.valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd.valid.in.tf  = IDE_VALID_IN_TF  | IDE_VALID_DEVICE;
 
 	if (drive->dev_flags & IDE_DFLAG_LBA) {
 		if (lba48) {
 			pr_debug("%s: LBA=0x%012llx\n", drive->name,
 					(unsigned long long)block);
 
-			tf->hob_nsect = (nsectors >> 8) & 0xff;
-			tf->hob_lbal  = (u8)(block >> 24);
-			if (sizeof(block) != 4) {
-				tf->hob_lbam = (u8)((u64)block >> 32);
-				tf->hob_lbah = (u8)((u64)block >> 40);
-			}
-
 			tf->nsect  = nsectors & 0xff;
 			tf->lbal   = (u8) block;
 			tf->lbam   = (u8)(block >>  8);
 			tf->lbah   = (u8)(block >> 16);
+			tf->device = ATA_LBA;
 
-			cmd.tf_flags |= (IDE_TFLAG_LBA48 | IDE_TFLAG_HOB);
+			tf = &cmd.hob;
+			tf->nsect = (nsectors >> 8) & 0xff;
+			tf->lbal  = (u8)(block >> 24);
+			if (sizeof(block) != 4) {
+				tf->lbam = (u8)((u64)block >> 32);
+				tf->lbah = (u8)((u64)block >> 40);
+			}
+
+			cmd.valid.out.hob = IDE_VALID_OUT_HOB;
+			cmd.valid.in.hob  = IDE_VALID_IN_HOB;
+			cmd.tf_flags |= IDE_TFLAG_LBA48;
 		} else {
 			tf->nsect  = nsectors & 0xff;
 			tf->lbal   = block;
 			tf->lbam   = block >>= 8;
 			tf->lbah   = block >>= 8;
-			tf->device = (block >> 8) & 0xf;
+			tf->device = ((block >> 8) & 0xf) | ATA_LBA;
 		}
-
-		tf->device |= ATA_LBA;
 	} else {
 		unsigned int sect, head, cyl, track;
 
@@ -220,15 +223,19 @@ static u64 idedisk_read_native_max_address(ide_drive_t *drive, int lba48)
 		tf->command = ATA_CMD_READ_NATIVE_MAX;
 	tf->device  = ATA_LBA;
 
-	cmd.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
-	if (lba48)
-		cmd.tf_flags |= (IDE_TFLAG_LBA48 | IDE_TFLAG_HOB);
+	cmd.valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd.valid.in.tf  = IDE_VALID_IN_TF  | IDE_VALID_DEVICE;
+	if (lba48) {
+		cmd.valid.out.hob = IDE_VALID_OUT_HOB;
+		cmd.valid.in.hob  = IDE_VALID_IN_HOB;
+		cmd.tf_flags = IDE_TFLAG_LBA48;
+	}
 
 	ide_no_data_taskfile(drive, &cmd);
 
 	/* if OK, compute maximum address value */
 	if (!(tf->status & ATA_ERR))
-		addr = ide_get_lba_addr(tf, lba48) + 1;
+		addr = ide_get_lba_addr(&cmd, lba48) + 1;
 
 	return addr;
 }
@@ -250,9 +257,9 @@ static u64 idedisk_set_max_address(ide_drive_t *drive, u64 addr_req, int lba48)
 	tf->lbam     = (addr_req >>= 8) & 0xff;
 	tf->lbah     = (addr_req >>= 8) & 0xff;
 	if (lba48) {
-		tf->hob_lbal = (addr_req >>= 8) & 0xff;
-		tf->hob_lbam = (addr_req >>= 8) & 0xff;
-		tf->hob_lbah = (addr_req >>= 8) & 0xff;
+		cmd.hob.lbal = (addr_req >>= 8) & 0xff;
+		cmd.hob.lbam = (addr_req >>= 8) & 0xff;
+		cmd.hob.lbah = (addr_req >>= 8) & 0xff;
 		tf->command  = ATA_CMD_SET_MAX_EXT;
 	} else {
 		tf->device   = (addr_req >>= 8) & 0x0f;
@@ -260,15 +267,19 @@ static u64 idedisk_set_max_address(ide_drive_t *drive, u64 addr_req, int lba48)
 	}
 	tf->device |= ATA_LBA;
 
-	cmd.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
-	if (lba48)
-		cmd.tf_flags |= (IDE_TFLAG_LBA48 | IDE_TFLAG_HOB);
+	cmd.valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd.valid.in.tf  = IDE_VALID_IN_TF  | IDE_VALID_DEVICE;
+	if (lba48) {
+		cmd.valid.out.hob = IDE_VALID_OUT_HOB;
+		cmd.valid.in.hob  = IDE_VALID_IN_HOB;
+		cmd.tf_flags = IDE_TFLAG_LBA48;
+	}
 
 	ide_no_data_taskfile(drive, &cmd);
 
 	/* if OK, compute maximum address value */
 	if (!(tf->status & ATA_ERR))
-		addr_set = ide_get_lba_addr(tf, lba48) + 1;
+		addr_set = ide_get_lba_addr(&cmd, lba48) + 1;
 
 	return addr_set;
 }
@@ -395,13 +406,61 @@ static void idedisk_prepare_flush(struct request_queue *q, struct request *rq)
 		cmd->tf.command = ATA_CMD_FLUSH_EXT;
 	else
 		cmd->tf.command = ATA_CMD_FLUSH;
-	cmd->tf_flags = IDE_TFLAG_OUT_TF | IDE_TFLAG_OUT_DEVICE |
-			IDE_TFLAG_DYN;
+	cmd->valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd->tf_flags = IDE_TFLAG_DYN;
 	cmd->protocol = ATA_PROT_NODATA;
 
 	rq->cmd_type = REQ_TYPE_ATA_TASKFILE;
 	rq->cmd_flags |= REQ_SOFTBARRIER;
 	rq->special = cmd;
+}
+
+static int idedisk_prepare_discard(struct request_queue *q, struct request *rq)
+{
+	struct ide_cmd *cmd;
+	struct page *page;
+	struct bio *bio = rq->bio;
+	unsigned int size;
+
+	page = alloc_page(GFP_KERNEL);
+	if (!page)
+		goto error;
+
+	cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
+	if (!cmd)
+		goto free_page;
+
+	size = ata_set_lba_range_entries(page_address(page), PAGE_SIZE / 8,
+					 bio->bi_sector, bio_sectors(bio));
+	bio->bi_size = 0;
+
+	if (bio_add_pc_page(q, bio, page, size, 0) < size)
+		goto free_task;
+
+	cmd->tf.command = ATA_CMD_DSM;
+	cmd->tf.feature = ATA_DSM_TRIM;
+	cmd->tf.nsect   = size / 512;
+	cmd->hob.nsect  = (size / 512) >> 8;
+	cmd->tf.device  = ATA_LBA;
+
+	cmd->valid.out.tf  = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd->valid.out.hob = IDE_VALID_OUT_HOB;
+
+	cmd->tf_flags = IDE_TFLAG_LBA48 | IDE_TFLAG_WRITE | IDE_TFLAG_DYN;
+	cmd->protocol = ATA_PROT_DMA;
+
+	rq->cmd_type = REQ_TYPE_ATA_TASKFILE;
+	rq->special = cmd;
+	rq->nr_sectors = size / 512;
+
+	return 0;
+
+ free_task:
+	kfree(cmd);
+ free_page:
+	__free_page(page);
+ error:
+	return -ENOMEM;
 }
 
 ide_devset_get(multcount, mult_count);
@@ -457,7 +516,8 @@ static int ide_do_setfeature(ide_drive_t *drive, u8 feature, u8 nsect)
 	cmd.tf.feature = feature;
 	cmd.tf.nsect   = nsect;
 	cmd.tf.command = ATA_CMD_SET_FEATURES;
-	cmd.tf_flags   = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
+	cmd.valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd.valid.in.tf  = IDE_VALID_IN_TF  | IDE_VALID_DEVICE;
 
 	return ide_no_data_taskfile(drive, &cmd);
 }
@@ -533,7 +593,8 @@ static int do_idedisk_flushcache(ide_drive_t *drive)
 		cmd.tf.command = ATA_CMD_FLUSH_EXT;
 	else
 		cmd.tf.command = ATA_CMD_FLUSH;
-	cmd.tf_flags = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
+	cmd.valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd.valid.in.tf  = IDE_VALID_IN_TF  | IDE_VALID_DEVICE;
 
 	return ide_no_data_taskfile(drive, &cmd);
 }
@@ -592,6 +653,8 @@ static int ide_disk_check(ide_drive_t *drive, const char *s)
 {
 	return 1;
 }
+
+extern int ide_trim;
 
 static void ide_disk_setup(ide_drive_t *drive)
 {
@@ -680,6 +743,9 @@ static void ide_disk_setup(ide_drive_t *drive)
 
 	set_wcache(drive, 1);
 
+	if (ata_id_has_trim(id) && ide_trim)
+		blk_queue_set_discard(q, idedisk_prepare_discard);
+
 	if ((drive->dev_flags & IDE_DFLAG_LBA) == 0 &&
 	    (drive->head == 0 || drive->head > 16)) {
 		printk(KERN_ERR "%s: invalid geometry: %d physical heads?\n",
@@ -715,7 +781,8 @@ static int ide_disk_set_doorlock(ide_drive_t *drive, struct gendisk *disk,
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.tf.command = on ? ATA_CMD_MEDIA_LOCK : ATA_CMD_MEDIA_UNLOCK;
-	cmd.tf_flags   = IDE_TFLAG_TF | IDE_TFLAG_DEVICE;
+	cmd.valid.out.tf = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd.valid.in.tf  = IDE_VALID_IN_TF  | IDE_VALID_DEVICE;
 
 	ret = ide_no_data_taskfile(drive, &cmd);
 
