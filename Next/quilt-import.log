@@ -1,0 +1,105 @@
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 8863a287af68f2c4143364cb50c888c418f71c15
+HEAD is now at 8863a28 driver core: allow non-root users to listen to uevents
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-gadget-fix-ethernet-link-reports-to-ethtool.patch
+usb-ftdi_sio-add-vendor-project-id-for-jeti-specbos-1201-spectrometer.patch
+usb-option-add-ids-for-d-link-dwm-652-3.5g-modem.patch
+usb-qcserial-add-extra-device-ids.patch
+usb-fix-oops-in-cdc-wdm-in-case-of-malformed-descriptors.patch
+usb-musb_host-minor-enqueue-locking-fix.patch
+usb-usb-storage-augment-unusual_devs-entry-for-simple-tech-datafab.patch
+usb-musb_host-fix-ep0-fifo-flushing.patch
+usb-musb-bugfixes-for-multi-packet-txdma-support.patch
+usb-musb-sanitize-clearing-txcsr-dma-bits.patch
+usb-musb-fix-isochronous-txdma.patch
+usb-musb-fix-possible-panic-while-resuming.patch
+revert-usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 776416f...e8f409d master     -> quilt/usb.current  (forced update)
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc1
+$ cd ../quilt-tmp
+$ git reset --hard 577c9c456f0e1371cbade38eaf91ae8e8a308555
+HEAD is now at 577c9c4 Linux 2.6.30-rc1
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-algo-pca-fix-uninitialized-state.patch
+i2c-voodoo3-deprecate.patch
+i2c-fix-sparse-warnings-for-I2C_BOARD_INFO.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 6b9daf2...8997f97 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc1
+$ cd ../quilt-tmp
+$ git reset --hard 577c9c456f0e1371cbade38eaf91ae8e8a308555
+HEAD is now at 577c9c4 Linux 2.6.30-rc1
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 5bd654e...7c4ede9 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core e8f409db48e79fadf4c8a2a4bef33764dcc756d5
+Importing usb based on quilt/driver-core
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb e8f409db48e79fadf4c8a2a4bef33764dcc756d5
+Importing staging based on quilt/usb
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard e8f409db48e79fadf4c8a2a4bef33764dcc756d5
+HEAD is now at e8f409d USB: usb-serial ch341: support for DTR/RTS/CTS
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-at76-convert-to-netdev_ops.patch
+staging-epl-convert-to-netdev_ops.patch
+staging-et131x-convert-to-netdev_ops.patch
+staging-otus-convert-to-netdev_ops.patch
+staging-rt2860-convert-to-netdev_ops.patch
+staging-rt2870-convert-to-netdev_ops.patch
+staging-rt3070-convert-to-netdev_ops.patch
+staging-slicoss-convert-to-netdev_ops.patch
+staging-sxg-convert-to-netdev_ops.patch
+staging-wlan-ng-convert-to-netdev_ops.patch
+staging-line6-convert-to-snd_card_create.patch
+staging-rt2870-add-id-for-sitecom-wl-315.patch
+staging-aten2011-clean-up-some-tty-bits.patch
+staging-binder-remove-vm_exec-check.patch
+staging-binder-don-t-create-two-proc-entries-with-the-same-name-if-the-driver-is-opened-twice-in-one-process.patch
+staging-binder-mmap-fixes.patch
+staging-binder-add-more-offset-validation.patch
+staging-binder-keep-a-reference-to-the-files_struct-while-the-driver-is-mmapped.patch
+staging-binder-cast-to-uintptr_t-instead-of-size_t-when-aligning-pointers.patch
+staging-binder-prevent-the-wrong-thread-from-adding-a-transaction-to-the-stack.patch
+staging-binder-defer-flush-and-release-operations-to-avoid-deadlocks.patch
+staging-stlc45xx-should-depend-on-generic_hardirqs.patch
+revert-staging-slicoss-use-gfp_kernel-where-possible.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 5ce618b...30738f4 master     -> quilt/staging  (forced update)
