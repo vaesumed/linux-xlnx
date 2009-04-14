@@ -1,5 +1,5 @@
 /*
-   lru_cache.c
+   lru_cache.h
 
    This file is part of DRBD by Philipp Reisner and Lars Ellenberg.
 
