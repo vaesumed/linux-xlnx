@@ -17,7 +17,7 @@
 #include <linux/bitops.h>
 #include <linux/mutex.h>
 #include <linux/kthread.h>
-#include <linux/highmem.h>
+
 #include <linux/firmware.h>
 #include "base.h"
 
@@ -45,10 +45,7 @@ struct firmware_priv {
 	struct bin_attribute attr_data;
 	struct firmware *fw;
 	unsigned long status;
-	struct page **pages;
-	int nr_pages;
-	int page_array_size;
-	const char *vdata;
+	int alloc_size;
 	struct timer_list timeout;
 };
 
@@ -144,7 +141,6 @@ static ssize_t firmware_loading_store(struct device *dev,
 {
 	struct firmware_priv *fw_priv = dev_get_drvdata(dev);
 	int loading = simple_strtol(buf, NULL, 10);
-	int i;
 
 	switch (loading) {
 	case 1:
@@ -155,30 +151,13 @@ static ssize_t firmware_loading_store(struct device *dev,
 		}
 		vfree(fw_priv->fw->data);
 		fw_priv->fw->data = NULL;
-		for (i = 0; i < fw_priv->nr_pages; i++)
-			__free_page(fw_priv->pages[i]);
-		kfree(fw_priv->pages);
-		fw_priv->pages = NULL;
-		fw_priv->page_array_size = 0;
-		fw_priv->nr_pages = 0;
 		fw_priv->fw->size = 0;
+		fw_priv->alloc_size = 0;
 		set_bit(FW_STATUS_LOADING, &fw_priv->status);
 		mutex_unlock(&fw_lock);
 		break;
 	case 0:
 		if (test_bit(FW_STATUS_LOADING, &fw_priv->status)) {
-			vfree(fw_priv->fw->data);
-			fw_priv->fw->data = vmap(fw_priv->pages,
-						 fw_priv->nr_pages,
-						 0, PAGE_KERNEL_RO);
-			if (!fw_priv->fw->data) {
-				dev_err(dev, "%s: vmap() failed\n", __func__);
-				goto err;
-			}
-			/* Pages will be freed by vfree() */
-			fw_priv->pages = NULL;
-			fw_priv->page_array_size = 0;
-			fw_priv->nr_pages = 0;
 			complete(&fw_priv->completion);
 			clear_bit(FW_STATUS_LOADING, &fw_priv->status);
 			break;
@@ -188,7 +167,6 @@ static ssize_t firmware_loading_store(struct device *dev,
 		dev_err(dev, "%s: unexpected value (%d)\n", __func__, loading);
 		/* fallthrough */
 	case -1:
-	err:
 		fw_load_abort(fw_priv);
 		break;
 	}
@@ -213,28 +191,8 @@ firmware_data_read(struct kobject *kobj, struct bin_attribute *bin_attr,
 		ret_count = -ENODEV;
 		goto out;
 	}
-	if (offset > fw->size)
-		return 0;
-	if (count > fw->size - offset)
-		count = fw->size - offset;
-
-	ret_count = count;
-
-	while (count) {
-		void *page_data;
-		int page_nr = offset >> PAGE_SHIFT;
-		int page_ofs = offset & (PAGE_SIZE-1);
-		int page_cnt = min(PAGE_SIZE - page_ofs, count);
-
-		page_data = kmap(fw_priv->pages[page_nr]);
-
-		memcpy(buffer, page_data + page_ofs, page_cnt);
-
-		kunmap(page_data);
-		buffer += page_cnt;
-		offset += page_cnt;
-		count -= page_cnt;
-	}
+	ret_count = memory_read_from_buffer(buffer, count, &offset,
+						fw->data, fw->size);
 out:
 	mutex_unlock(&fw_lock);
 	return ret_count;
@@ -243,39 +201,27 @@ out:
 static int
 fw_realloc_buffer(struct firmware_priv *fw_priv, int min_size)
 {
-	int pages_needed = ALIGN(min_size, PAGE_SIZE) >> PAGE_SHIFT;
+	u8 *new_data;
+	int new_size = fw_priv->alloc_size;
 
-	/* If the array of pages is too small, grow it... */
-	if (fw_priv->page_array_size < pages_needed) {
-		int new_array_size = max(pages_needed,
-					 fw_priv->page_array_size * 2);
-		struct page **new_pages;
+	if (min_size <= fw_priv->alloc_size)
+		return 0;
 
-		new_pages = kmalloc(new_array_size * sizeof(void *),
-				    GFP_KERNEL);
-		if (!new_pages) {
-			fw_load_abort(fw_priv);
-			return -ENOMEM;
-		}
-		memcpy(new_pages, fw_priv->pages,
-		       fw_priv->page_array_size * sizeof(void *));
-		memset(&new_pages[fw_priv->page_array_size], 0, sizeof(void *) *
-		       (new_array_size - fw_priv->page_array_size));
-		kfree(fw_priv->pages);
-		fw_priv->pages = new_pages;
-		fw_priv->page_array_size = new_array_size;
+	new_size = ALIGN(min_size, PAGE_SIZE);
+	new_data = vmalloc(new_size);
+	if (!new_data) {
+		printk(KERN_ERR "%s: unable to alloc buffer\n", __func__);
+		/* Make sure that we don't keep incomplete data */
+		fw_load_abort(fw_priv);
+		return -ENOMEM;
 	}
-
-	while (fw_priv->nr_pages < pages_needed) {
-		fw_priv->pages[fw_priv->nr_pages] =
-			alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
-
-		if (!fw_priv->pages[fw_priv->nr_pages]) {
-			fw_load_abort(fw_priv);
-			return -ENOMEM;
-		}
-		fw_priv->nr_pages++;
+	fw_priv->alloc_size = new_size;
+	if (fw_priv->fw->data) {
+		memcpy(new_data, fw_priv->fw->data, fw_priv->fw->size);
+		vfree(fw_priv->fw->data);
 	}
+	fw_priv->fw->data = new_data;
+	BUG_ON(min_size > fw_priv->alloc_size);
 	return 0;
 }
 
@@ -312,25 +258,10 @@ firmware_data_write(struct kobject *kobj, struct bin_attribute *bin_attr,
 	if (retval)
 		goto out;
 
+	memcpy((u8 *)fw->data + offset, buffer, count);
+
+	fw->size = max_t(size_t, offset + count, fw->size);
 	retval = count;
-
-	while (count) {
-		void *page_data;
-		int page_nr = offset >> PAGE_SHIFT;
-		int page_ofs = offset & (PAGE_SIZE - 1);
-		int page_cnt = min(PAGE_SIZE - page_ofs, count);
-
-		page_data = kmap(fw_priv->pages[page_nr]);
-
-		memcpy(page_data + page_ofs, buffer, page_cnt);
-
-		kunmap(page_data);
-		buffer += page_cnt;
-		offset += page_cnt;
-		count -= page_cnt;
-	}
-
-	fw->size = max_t(size_t, offset, fw->size);
 out:
 	mutex_unlock(&fw_lock);
 	return retval;
@@ -346,11 +277,7 @@ static struct bin_attribute firmware_attr_data_tmpl = {
 static void fw_dev_release(struct device *dev)
 {
 	struct firmware_priv *fw_priv = dev_get_drvdata(dev);
-	int i;
 
-	for (i = 0; i < fw_priv->nr_pages; i++)
-		__free_page(fw_priv->pages[i]);
-	kfree(fw_priv->pages);
 	kfree(fw_priv);
 	kfree(dev);
 
