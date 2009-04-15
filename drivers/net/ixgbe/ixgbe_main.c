@@ -47,7 +47,7 @@ char ixgbe_driver_name[] = "ixgbe";
 static const char ixgbe_driver_string[] =
                               "Intel(R) 10 Gigabit PCI Express Network Driver";
 
-#define DRV_VERSION "2.0.8-k2"
+#define DRV_VERSION "2.0.16-k2"
 const char ixgbe_driver_version[] = DRV_VERSION;
 static char ixgbe_copyright[] = "Copyright (c) 1999-2009 Intel Corporation.";
 
@@ -3917,7 +3917,7 @@ static void ixgbe_sfp_config_module_task(struct work_struct *work)
 	}
 	hw->mac.ops.setup_sfp(hw);
 
-	if (!adapter->flags & IXGBE_FLAG_IN_SFP_LINK_TASK)
+	if (!(adapter->flags & IXGBE_FLAG_IN_SFP_LINK_TASK))
 		/* This will also work for DA Twinax connections */
 		schedule_work(&adapter->multispeed_fiber_task);
 	adapter->flags &= ~IXGBE_FLAG_IN_SFP_MOD_TASK;
@@ -4630,7 +4630,11 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 
 	/* reset_hw fills in the perm_addr as well */
 	err = hw->mac.ops.reset_hw(hw);
-	if (err) {
+	if (err == IXGBE_ERR_SFP_NOT_SUPPORTED) {
+		dev_err(&adapter->pdev->dev, "failed to load because an "
+		        "unsupported SFP+ module type was detected.\n");
+		goto err_sw_init;
+	} else if (err) {
 		dev_err(&adapter->pdev->dev, "HW Init failed: %d\n", err);
 		goto err_sw_init;
 	}
@@ -4702,6 +4706,9 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 	}
 	device_init_wakeup(&adapter->pdev->dev, true);
 	device_set_wakeup_enable(&adapter->pdev->dev, adapter->wol);
+
+	/* pick up the PCI bus settings for reporting later */
+	hw->mac.ops.get_bus_info(hw);
 
 	/* print bus type/speed/width info */
 	dev_info(&pdev->dev, "(PCI Express:%s:%s) %pM\n",
