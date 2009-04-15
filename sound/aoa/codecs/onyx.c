@@ -47,7 +47,7 @@ MODULE_DESCRIPTION("pcm3052 (onyx) codec driver for snd-aoa");
 struct onyx {
 	/* cache registers 65 to 80, they are write-only! */
 	u8			cache[16];
-	struct i2c_client	i2c;
+	struct i2c_client	*i2c;
 	struct aoa_codec	codec;
 	u32			initialised:1,
 				spdif_locked:1,
@@ -72,7 +72,7 @@ static int onyx_read_register(struct onyx *onyx, u8 reg, u8 *value)
 		*value = onyx->cache[reg-FIRSTREGISTER];
 		return 0;
 	}
-	v = i2c_smbus_read_byte_data(&onyx->i2c, reg);
+	v = i2c_smbus_read_byte_data(onyx->i2c, reg);
 	if (v < 0)
 		return -1;
 	*value = (u8)v;
@@ -84,7 +84,7 @@ static int onyx_write_register(struct onyx *onyx, u8 reg, u8 value)
 {
 	int result;
 
-	result = i2c_smbus_write_byte_data(&onyx->i2c, reg, value);
+	result = i2c_smbus_write_byte_data(onyx->i2c, reg, value);
 	if (!result)
 		onyx->cache[reg-FIRSTREGISTER] = value;
 	return result;
@@ -996,12 +996,42 @@ static void onyx_exit_codec(struct aoa_codec *codec)
 	onyx->codec.soundbus_dev->detach_codec(onyx->codec.soundbus_dev, onyx);
 }
 
-static struct i2c_driver onyx_driver;
-
 static int onyx_create(struct i2c_adapter *adapter,
 		       struct device_node *node,
 		       int addr)
 {
+	struct i2c_board_info info;
+	struct i2c_client *client;
+
+	memset(&info, 0, sizeof(struct i2c_board_info));
+	strlcpy(info.type, "aoa_codec_onyx", I2C_NAME_SIZE);
+	if (node) {
+		info.addr = addr;
+		info.platform_data = node;
+		client = i2c_new_device(adapter, &info);
+	} else {
+		/* probe both possible addresses for the onyx chip */
+		unsigned short probe_onyx[] = {
+			0x46, 0x47, I2C_CLIENT_END
+		};
+
+		client = i2c_new_probed_device(adapter, &info, probe_onyx);
+	}
+	if (!client)
+		return -ENODEV;
+
+	/*
+	 * Let i2c-core delete that device on driver removal.
+	 * This is safe because i2c-core holds the core_lock mutex for us.
+	 */
+	list_add_tail(&client->detected, &client->driver->clients);
+	return 0;
+}
+
+static int onyx_i2c_probe(struct i2c_client *client,
+			  const struct i2c_device_id *id)
+{
+	struct device_node *node = client->dev.platform_data;
 	struct onyx *onyx;
 	u8 dummy;
 
@@ -1011,20 +1041,12 @@ static int onyx_create(struct i2c_adapter *adapter,
 		return -ENOMEM;
 
 	mutex_init(&onyx->mutex);
-	onyx->i2c.driver = &onyx_driver;
-	onyx->i2c.adapter = adapter;
-	onyx->i2c.addr = addr & 0x7f;
-	strlcpy(onyx->i2c.name, "onyx audio codec", I2C_NAME_SIZE);
-
-	if (i2c_attach_client(&onyx->i2c)) {
-		printk(KERN_ERR PFX "failed to attach to i2c\n");
-		goto fail;
-	}
+	onyx->i2c = client;
+	i2c_set_clientdata(client, onyx);
 
 	/* we try to read from register ONYX_REG_CONTROL
 	 * to check if the codec is present */
 	if (onyx_read_register(onyx, ONYX_REG_CONTROL, &dummy) != 0) {
-		i2c_detach_client(&onyx->i2c);
 		printk(KERN_ERR PFX "failed to read control register\n");
 		goto fail;
 	}
@@ -1036,7 +1058,6 @@ static int onyx_create(struct i2c_adapter *adapter,
 	onyx->codec.node = of_node_get(node);
 
 	if (aoa_codec_register(&onyx->codec)) {
-		i2c_detach_client(&onyx->i2c);
 		goto fail;
 	}
 	printk(KERN_DEBUG PFX "created and attached onyx instance\n");
@@ -1074,19 +1095,13 @@ static int onyx_i2c_attach(struct i2c_adapter *adapter)
 		return -ENODEV;
 
 	printk(KERN_DEBUG PFX "found k2-i2c, checking if onyx chip is on it\n");
-	/* probe both possible addresses for the onyx chip */
-	if (onyx_create(adapter, NULL, 0x46) == 0)
-		return 0;
-	return onyx_create(adapter, NULL, 0x47);
+	return onyx_create(adapter, NULL, 0);
 }
 
-static int onyx_i2c_detach(struct i2c_client *client)
+static int onyx_i2c_remove(struct i2c_client *client)
 {
-	struct onyx *onyx = container_of(client, struct onyx, i2c);
-	int err;
+	struct onyx *onyx = i2c_get_clientdata(client);
 
-	if ((err = i2c_detach_client(client)))
-		return err;
 	aoa_codec_unregister(&onyx->codec);
 	of_node_put(onyx->codec.node);
 	if (onyx->codec_info)
@@ -1095,13 +1110,20 @@ static int onyx_i2c_detach(struct i2c_client *client)
 	return 0;
 }
 
+static const struct i2c_device_id onyx_i2c_id[] = {
+	{ "aoa_codec_onyx", 0 },
+	{ }
+};
+
 static struct i2c_driver onyx_driver = {
 	.driver = {
 		.name = "aoa_codec_onyx",
 		.owner = THIS_MODULE,
 	},
 	.attach_adapter = onyx_i2c_attach,
-	.detach_client = onyx_i2c_detach,
+	.probe = onyx_i2c_probe,
+	.remove = onyx_i2c_remove,
+	.id_table = onyx_i2c_id,
 };
 
 static int __init onyx_init(void)
