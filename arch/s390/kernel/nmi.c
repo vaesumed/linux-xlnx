@@ -10,12 +10,13 @@
 
 #include <linux/init.h>
 #include <linux/errno.h>
+#include <linux/hardirq.h>
 #include <linux/time.h>
 #include <linux/module.h>
 #include <asm/lowcore.h>
 #include <asm/smp.h>
 #include <asm/etr.h>
-#include <asm/cpu.h>
+#include <asm/cputime.h>
 #include <asm/nmi.h>
 #include <asm/crw.h>
 
@@ -253,7 +254,7 @@ void notrace s390_do_machine_check(struct pt_regs *regs)
 	struct mci *mci;
 	int umode;
 
-	lockdep_off();
+	nmi_enter();
 	s390_idle_check();
 
 	mci = (struct mci *) &S390_lowcore.mcck_interruption_code;
@@ -363,7 +364,7 @@ void notrace s390_do_machine_check(struct pt_regs *regs)
 		mcck->warning = 1;
 		set_thread_flag(TIF_MCCK_PENDING);
 	}
-	lockdep_on();
+	nmi_exit();
 }
 
 static int __init machine_check_init(void)
