@@ -1,0 +1,27 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc1-git6
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 2e1c63b7ed36532b68f0eddd6a184d7ba1013b89
+HEAD is now at 2e1c63b Merge branch 'for-rc1/xen/core' of git://git.kernel.org/pub/scm/linux/kernel/git/jeremy/xen
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+sound-aoa-codecs-convert-to-new-style.patch
+sound-ppc-keywest-01-convert-to-new-style.patch
+sound-ppc-keywest-02-cleanup-i2c_device_name.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 6f4e256...6d53ce2 master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
