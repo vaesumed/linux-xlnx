@@ -214,13 +214,8 @@ static struct ads7846_platform_data poodle_ads7846_info = {
 	.gpio_pendown		= POODLE_GPIO_TP_INT,
 };
 
-static void ads7846_cs(u32 command)
-{
-	gpio_set_value(POODLE_GPIO_TP_CS, !(command == PXA2XX_CS_ASSERT));
-}
-
 static struct pxa2xx_spi_chip poodle_ads7846_chip = {
-	.cs_control		= ads7846_cs,
+	.gpio_cs	= POODLE_GPIO_TP_CS,
 };
 
 static struct spi_board_info poodle_spi_devices[] = {
@@ -236,14 +231,6 @@ static struct spi_board_info poodle_spi_devices[] = {
 
 static void __init poodle_init_spi(void)
 {
-	int err;
-
-	err = gpio_request(POODLE_GPIO_TP_CS, "ADS7846_CS");
-	if (err)
-		return;
-
-	gpio_direction_output(POODLE_GPIO_TP_CS, 1);
-
 	pxa2xx_set_spi_info(1, &poodle_spi_info);
 	spi_register_board_info(ARRAY_AND_SIZE(poodle_spi_devices));
 }
@@ -407,10 +394,13 @@ static struct pxafb_mode_info poodle_fb_mode = {
 	.sync		= FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
 };
 
+extern void locomolcd_power(int on);
+
 static struct pxafb_mach_info poodle_fb_info = {
 	.modes		= &poodle_fb_mode,
 	.num_modes	= 1,
 	.lcd_conn	= LCD_COLOR_TFT_16BPP,
+	.pxafb_lcd_power	= locomolcd_power,
 };
 
 static struct mtd_partition sharpsl_nand_partitions[] = {
