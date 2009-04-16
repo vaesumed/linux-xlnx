@@ -552,6 +552,7 @@ s32 ixgbe_identify_sfp_module_generic(struct ixgbe_hw *hw)
 {
 	s32 status = IXGBE_ERR_PHY_ADDR_INVALID;
 	u32 vendor_oui = 0;
+	enum ixgbe_sfp_type stored_sfp_type = hw->phy.sfp_type;
 	u8 identifier = 0;
 	u8 comp_codes_1g = 0;
 	u8 comp_codes_10g = 0;
@@ -620,8 +621,18 @@ s32 ixgbe_identify_sfp_module_generic(struct ixgbe_hw *hw)
 				hw->phy.sfp_type = ixgbe_sfp_type_unknown;
 		}
 
+		if (hw->phy.sfp_type != stored_sfp_type)
+			hw->phy.sfp_setup_needed = true;
+
+		/* Determine if the SFP+ PHY is dual speed or not. */
+		if (((comp_codes_1g & IXGBE_SFF_1GBASESX_CAPABLE) &&
+		   (comp_codes_10g & IXGBE_SFF_10GBASESR_CAPABLE)) ||
+		   ((comp_codes_1g & IXGBE_SFF_1GBASELX_CAPABLE) &&
+		   (comp_codes_10g & IXGBE_SFF_10GBASELR_CAPABLE)))
+			hw->phy.multispeed_fiber = true;
+
 		/* Determine PHY vendor */
-		if (hw->phy.type == ixgbe_phy_unknown) {
+		if (hw->phy.type != ixgbe_phy_nl) {
 			hw->phy.id = identifier;
 			hw->phy.ops.read_i2c_eeprom(hw,
 			                            IXGBE_SFF_VENDOR_OUI_BYTE0,
@@ -671,9 +682,9 @@ s32 ixgbe_identify_sfp_module_generic(struct ixgbe_hw *hw)
 			goto out;
 		}
 
-		hw->eeprom.ops.read(hw, IXGBE_PHY_ENFORCE_INTEL_SFP_OFFSET,
-		                    &enforce_sfp);
-		if (!(enforce_sfp & IXGBE_PHY_ALLOW_ANY_SFP)) {
+		/* This is guaranteed to be 82599, no need to check for NULL */
+		hw->mac.ops.get_device_caps(hw, &enforce_sfp);
+		if (!(enforce_sfp & IXGBE_DEVICE_CAPS_ALLOW_ANY_SFP)) {
 			/* Make sure we're a supported PHY type */
 			if (hw->phy.type == ixgbe_phy_sfp_intel) {
 				status = 0;
