@@ -415,6 +415,54 @@ static void idedisk_prepare_flush(struct request_queue *q, struct request *rq)
 	rq->special = cmd;
 }
 
+static int idedisk_prepare_discard(struct request_queue *q, struct request *rq)
+{
+	struct ide_cmd *cmd;
+	struct page *page;
+	struct bio *bio = rq->bio;
+	unsigned int size;
+
+	page = alloc_page(GFP_KERNEL);
+	if (!page)
+		goto error;
+
+	cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
+	if (!cmd)
+		goto free_page;
+
+	size = ata_set_lba_range_entries(page_address(page), PAGE_SIZE / 8,
+					 bio->bi_sector, bio_sectors(bio));
+	bio->bi_size = 0;
+
+	if (bio_add_pc_page(q, bio, page, size, 0) < size)
+		goto free_task;
+
+	cmd->tf.command = ATA_CMD_DSM;
+	cmd->tf.feature = ATA_DSM_TRIM;
+	cmd->tf.nsect   = size / 512;
+	cmd->hob.nsect  = (size / 512) >> 8;
+	cmd->tf.device  = ATA_LBA;
+
+	cmd->valid.out.tf  = IDE_VALID_OUT_TF | IDE_VALID_DEVICE;
+	cmd->valid.out.hob = IDE_VALID_OUT_HOB;
+
+	cmd->tf_flags = IDE_TFLAG_LBA48 | IDE_TFLAG_WRITE | IDE_TFLAG_DYN;
+	cmd->protocol = ATA_PROT_DMA;
+
+	rq->cmd_type = REQ_TYPE_ATA_TASKFILE;
+	rq->special = cmd;
+	rq->nr_sectors = size / 512;
+
+	return 0;
+
+ free_task:
+	kfree(cmd);
+ free_page:
+	__free_page(page);
+ error:
+	return -ENOMEM;
+}
+
 ide_devset_get(multcount, mult_count);
 
 /*
@@ -606,6 +654,8 @@ static int ide_disk_check(ide_drive_t *drive, const char *s)
 	return 1;
 }
 
+extern int ide_trim;
+
 static void ide_disk_setup(ide_drive_t *drive)
 {
 	struct ide_disk_obj *idkp = drive->driver_data;
@@ -692,6 +742,9 @@ static void ide_disk_setup(ide_drive_t *drive)
 		drive->dev_flags |= IDE_DFLAG_WCACHE;
 
 	set_wcache(drive, 1);
+
+	if (ata_id_has_trim(id) && ide_trim)
+		blk_queue_set_discard(q, idedisk_prepare_discard);
 
 	if ((drive->dev_flags & IDE_DFLAG_LBA) == 0 &&
 	    (drive->head == 0 || drive->head > 16)) {
