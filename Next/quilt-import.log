@@ -1,0 +1,149 @@
+Importing driver-core.current based on 2.6.30-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 0882e8dd3aad33eca41696d463bb896e6c8817eb
+HEAD is now at 0882e8d Linux 2.6.30-rc2
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+sysfs-don-t-use-global-workqueue-in-sysfs_schedule_callback.patch
+driver-core-fix-driver_match_device.patch
+driver-core-allow-non-root-users-to-listen-to-uevents.patch
+sysfs-sysfs-poll-keep-the-poll-rule-of-regular-file.patch
+proc-mounts_poll-make-consistent-to-mdstat_poll.patch
+driver-core-early-platform-driver.patch
+dynamic-debug-resurrect-old-pr_debug-semantics-as-pr_devel.patch
+driver-core-prevent-device_for_each_child-from-oopsing.patch
+driver-core-remove-pr_fmt-from-dynamic_dev_dbg-printk.patch
+uio-fix-specific-device-driver-missing-statement-for-depmod.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+ + 92b7e1a...ae7ad98 master     -> quilt/driver-core.current  (forced update)
+Importing usb.current based on quilt/driver-core.current
+$ cd ../quilt-tmp
+$ git reset --hard ae7ad9808811114ece9573259ddddfd4ebebc039
+HEAD is now at ae7ad98 UIO: fix specific device driver missing statement for depmod
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-gadget-fix-ethernet-link-reports-to-ethtool.patch
+usb-ftdi_sio-add-vendor-project-id-for-jeti-specbos-1201-spectrometer.patch
+usb-option-add-ids-for-d-link-dwm-652-3.5g-modem.patch
+usb-qcserial-add-extra-device-ids.patch
+usb-fix-oops-in-cdc-wdm-in-case-of-malformed-descriptors.patch
+usb-musb_host-minor-enqueue-locking-fix.patch
+usb-usb-storage-augment-unusual_devs-entry-for-simple-tech-datafab.patch
+usb-musb_host-fix-ep0-fifo-flushing.patch
+usb-musb-bugfixes-for-multi-packet-txdma-support.patch
+usb-musb-sanitize-clearing-txcsr-dma-bits.patch
+usb-musb-fix-isochronous-txdma.patch
+usb-musb-fix-possible-panic-while-resuming.patch
+revert-usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+usb-storage-fix-mistake-in-makefile.patch
+usb-add-device-id-for-motorola-v950-renegade-phone.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + e587ba1a...3c31eff master     -> quilt/usb.current  (forced update)
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc2
+$ cd ../quilt-tmp
+$ git reset --hard 0882e8dd3aad33eca41696d463bb896e6c8817eb
+HEAD is now at 0882e8d Linux 2.6.30-rc2
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+sound-aoa-codecs-convert-to-new-style.patch
+sound-ppc-keywest-01-convert-to-new-style.patch
+sound-ppc-keywest-02-cleanup-i2c_device_name.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 6d53ce2...0269c95 master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Importing rr based on v2.6.30-rc1-204-gb0cbc86
+$ cd ../quilt-tmp
+$ git reset --hard b0cbc861a3c05e634520b049b5cc27ad6febb51f
+HEAD is now at b0cbc86 Revert "ACPI battery: fix async boot oops"
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+lguest:document-PAE-requirement.patch
+lguest:use_kvm_hypercalls-pageflush.patch
+lguest:LOAD_GDT_ENTRY.patch
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+module:invbool-takes-a-bool.patch
+module:param-flags.patch
+module:__same_type.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+arch-x86-kernel-cpu-cpufreq-acpi-cpufreqc-avoid-using-work_on_cpu.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-ich.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-powernow-k8.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-centrino.c.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 8a96932...7a5e82c master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core 3c31effcecca3a3ebc48c2e64b48cc5696222dfc
+Importing usb based on quilt/driver-core
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb 3c31effcecca3a3ebc48c2e64b48cc5696222dfc
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 3c31effcecca3a3ebc48c2e64b48cc5696222dfc
+HEAD is now at 3c31eff USB device codes for Motorola phone.
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-at76-convert-to-netdev_ops.patch
+staging-epl-convert-to-netdev_ops.patch
+staging-et131x-convert-to-netdev_ops.patch
+staging-otus-convert-to-netdev_ops.patch
+staging-rt2860-convert-to-netdev_ops.patch
+staging-rt2870-convert-to-netdev_ops.patch
+staging-rt3070-convert-to-netdev_ops.patch
+staging-slicoss-convert-to-netdev_ops.patch
+staging-sxg-convert-to-netdev_ops.patch
+staging-wlan-ng-convert-to-netdev_ops.patch
+staging-line6-convert-to-snd_card_create.patch
+staging-rt2870-add-id-for-sitecom-wl-315.patch
+staging-aten2011-clean-up-some-tty-bits.patch
+staging-binder-remove-vm_exec-check.patch
+staging-binder-don-t-create-two-proc-entries-with-the-same-name-if-the-driver-is-opened-twice-in-one-process.patch
+staging-binder-mmap-fixes.patch
+staging-binder-add-more-offset-validation.patch
+staging-binder-keep-a-reference-to-the-files_struct-while-the-driver-is-mmapped.patch
+staging-binder-cast-to-uintptr_t-instead-of-size_t-when-aligning-pointers.patch
+staging-binder-prevent-the-wrong-thread-from-adding-a-transaction-to-the-stack.patch
+staging-binder-defer-flush-and-release-operations-to-avoid-deadlocks.patch
+staging-stlc45xx-should-depend-on-generic_hardirqs.patch
+revert-staging-slicoss-use-gfp_kernel-where-possible.patch
+staging-pohmelfs-populate-dentry-cache-when-receiving-the-new-readdir-entry.patch
+staging-pohmelfs-move-parent-lock-to-the-place-where-we-really-have-to-send-a-lookup-request-to-the-server.patch
+staging-pohmelfs-disable-read-lock-in-pohmelfs_getattr.patch
+staging-pohmelfs-added-need_lock-variable-into-debug-print.patch
+staging-pohmelfs-set-netfs_inode_remote_synced-and-clear-netfs_inode_owned-bits-in-the-root-inode.patch
+staging-pohmelfs-extend-remount-option.patch
+staging-pohmelfs-sync-fs-before-killing-it-since-dentry-cache-is-shrunk-before-writeback-is-invoked-via-generic_shutdown_super.patch
+staging-pohmelfs-reduce-debugging-noise-about-non-existing-objects.patch
+staging-pohmelfs-use-wait_on_page_timeout-when-waiting-for-remote-directory-sync-instead-of-hardcoded-25-seconds.patch
+staging-pohmelfs-drop-ftrans-debugging-code.patch
+staging-pohmelfs-added-show_stats-callback.patch
+staging-pohmelfs-added-io-permissions-and-priorities.patch
+staging-pohmelfs-add-load-balancing-between-network-states-with-the-same-priority.patch
+staging-sxg-fire-watchdog-timer-at-end-of-open-routine-to-change-the-link.patch
+staging-sxg-use-correct-queue_id-for-transmitting-non-tcp-packets.patch
+staging-sxg-fix-sleep-in-atomic-context-warning-while-loading-driver.patch
+staging-sxg-fix-leaks-and-checksum-errors-in-transmit-code-path.patch
+staging-go7007-fix-build-issues.patch
+staging-otus-zdusb.c-additional-usb-idnetifier.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + c0eaaad...5438af0 master     -> quilt/staging  (forced update)
