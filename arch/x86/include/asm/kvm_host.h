@@ -185,6 +185,7 @@ union kvm_mmu_page_role {
 		unsigned access:3;
 		unsigned invalid:1;
 		unsigned cr4_pge:1;
+		unsigned nxe:1;
 	};
 };
 
@@ -261,6 +262,7 @@ struct kvm_mmu {
 	union kvm_mmu_page_role base_role;
 
 	u64 *pae_root;
+	u64 rsvd_bits_mask[2][4];
 };
 
 struct kvm_vcpu_arch {
@@ -286,6 +288,7 @@ struct kvm_vcpu_arch {
 	u64 shadow_efer;
 	u64 apic_base;
 	struct kvm_lapic *apic;    /* kernel irqchip context */
+	int32_t apic_arb_prio;
 	int mp_state;
 	int sipi_vector;
 	u64 ia32_misc_enable_msr;
@@ -400,7 +403,6 @@ struct kvm_arch{
 	struct hlist_head irq_ack_notifier_list;
 	int vapics_in_nmi_mode;
 
-	int round_robin_prev_vcpu;
 	unsigned int tss_addr;
 	struct page *apic_access_page;
 
@@ -521,7 +523,7 @@ struct kvm_x86_ops {
 	void (*inject_pending_irq)(struct kvm_vcpu *vcpu);
 	void (*inject_pending_vectors)(struct kvm_vcpu *vcpu,
 				       struct kvm_run *run);
-
+	int (*interrupt_allowed)(struct kvm_vcpu *vcpu);
 	int (*set_tss_addr)(struct kvm *kvm, unsigned int addr);
 	int (*get_tdp_level)(void);
 	int (*get_mt_mask_shift)(void);
@@ -791,5 +793,6 @@ asmlinkage void kvm_handle_fault_on_reboot(void);
 #define KVM_ARCH_WANT_MMU_NOTIFIER
 int kvm_unmap_hva(struct kvm *kvm, unsigned long hva);
 int kvm_age_hva(struct kvm *kvm, unsigned long hva);
+int cpuid_maxphyaddr(struct kvm_vcpu *vcpu);
 
 #endif /* _ASM_X86_KVM_HOST_H */
