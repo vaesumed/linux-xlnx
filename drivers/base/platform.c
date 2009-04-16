@@ -253,7 +253,8 @@ int platform_device_add(struct platform_device *pdev)
 	* long time, so we allow the two cases coexist to make
 	* this kind of fix more easily*/
 	if (pdev->platform_data && pdev->dev.platform_data) {
-		printk(KERN_ERR
+		if (pdev->platform_data != pdev->dev.platform_data)
+			printk(KERN_ERR
 			       "%s: use which platform_data?\n",
 			       dev_name(&pdev->dev));
 	} else if (pdev->platform_data) {
