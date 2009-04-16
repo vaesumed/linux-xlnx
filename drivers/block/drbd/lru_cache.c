@@ -48,6 +48,8 @@ static inline void lc_init(struct lru_cache *lc,
 	struct lc_element *e;
 	unsigned int i;
 
+	BUG_ON(!e_count);
+
 	memset(lc, 0, bytes);
 	INIT_LIST_HEAD(&lc->in_use);
 	INIT_LIST_HEAD(&lc->lru);
@@ -138,7 +140,6 @@ struct lc_element *lc_find(struct lru_cache *lc, unsigned int enr)
 	struct lc_element *e;
 
 	BUG_ON(!lc);
-	BUG_ON(!lc->nr_elements);
 	hlist_for_each_entry(e, n, lc->slot + lc_hash_fn(lc, enr), colision) {
 		if (e->lc_number == enr)
 			return e;

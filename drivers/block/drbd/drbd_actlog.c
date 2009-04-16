@@ -107,7 +107,7 @@ STATIC int _drbd_md_sync_page_io(struct drbd_conf *mdev,
 	 * don't try again for ANY return value != 0 */
 	if (unlikely(bio_barrier(bio) && !ok)) {
 		/* Try again with no barrier */
-		drbd_WARN("Barriers not supported on meta data device - disabling\n");
+		dev_warn(DEV, "Barriers not supported on meta data device - disabling\n");
 		set_bit(MD_NO_BARRIER, &mdev->flags);
 		rw &= ~(1 << BIO_RW_BARRIER);
 		bio_put(bio);
@@ -150,7 +150,7 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 						   sector, READ, hardsect);
 
 			if (unlikely(!ok)) {
-				ERR("drbd_md_sync_page_io(,%llus,"
+				dev_err(DEV, "drbd_md_sync_page_io(,%llus,"
 				    "READ [hardsect!=512]) failed!\n",
 				    (unsigned long long)sector);
 				return 0;
@@ -162,13 +162,13 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 
 	if (sector < drbd_md_first_sector(bdev) ||
 	    sector > drbd_md_last_sector(bdev))
-		ALERT("%s [%d]:%s(,%llus,%s) out of range md access!\n",
+		dev_alert(DEV, "%s [%d]:%s(,%llus,%s) out of range md access!\n",
 		     current->comm, current->pid, __func__,
 		     (unsigned long long)sector, rw ? "WRITE" : "READ");
 
 	ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector, rw, hardsect);
 	if (unlikely(!ok)) {
-		ERR("drbd_md_sync_page_io(,%llus,%s) failed!\n",
+		dev_err(DEV, "drbd_md_sync_page_io(,%llus,%s) failed!\n",
 		    (unsigned long long)sector, rw ? "WRITE" : "READ");
 		return 0;
 	}
@@ -206,9 +206,9 @@ struct lc_element *_al_get(struct drbd_conf *mdev, unsigned int enr)
 	/*
 	if (!al_ext) {
 		if (al_flags & LC_STARVING)
-			drbd_WARN("Have to wait for LRU element (AL too small?)\n");
+			dev_warn(DEV, "Have to wait for LRU element (AL too small?)\n");
 		if (al_flags & LC_DIRTY)
-			drbd_WARN("Ongoing AL update (AL device too slow?)\n");
+			dev_warn(DEV, "Ongoing AL update (AL device too slow?)\n");
 	}
 	*/
 
@@ -224,7 +224,7 @@ void drbd_al_begin_io(struct drbd_conf *mdev, sector_t sector)
 	D_ASSERT(atomic_read(&mdev->local_cnt) > 0);
 
 	MTRACE(TraceTypeALExts, TraceLvlMetrics,
-	       INFO("al_begin_io( sec=%llus (al_enr=%u) (rs_enr=%d) )\n",
+	       dev_info(DEV, "al_begin_io( sec=%llus (al_enr=%u) (rs_enr=%d) )\n",
 		    (unsigned long long) sector, enr,
 		    (int)BM_SECT_TO_EXT(sector));
 	       );
@@ -261,7 +261,7 @@ void drbd_al_complete_io(struct drbd_conf *mdev, sector_t sector)
 	unsigned long flags;
 
 	MTRACE(TraceTypeALExts, TraceLvlMetrics,
-	       INFO("al_complete_io( sec=%llus (al_enr=%u) (rs_enr=%d) )\n",
+	       dev_info(DEV, "al_complete_io( sec=%llus (al_enr=%u) (rs_enr=%d) )\n",
 		    (unsigned long long) sector, enr,
 		    (int)BM_SECT_TO_EXT(sector));
 	       );
@@ -272,7 +272,7 @@ void drbd_al_complete_io(struct drbd_conf *mdev, sector_t sector)
 
 	if (!extent) {
 		spin_unlock_irqrestore(&mdev->al_lock, flags);
-		ERR("al_complete_io() called on inactive extent %u\n", enr);
+		dev_err(DEV, "al_complete_io() called on inactive extent %u\n", enr);
 		return;
 	}
 
@@ -297,7 +297,7 @@ w_al_write_transaction(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 	u32 xor_sum = 0;
 
 	if (!inc_local(mdev)) {
-		ERR("inc_local() failed in w_al_write_transaction\n");
+		dev_err(DEV, "inc_local() failed in w_al_write_transaction\n");
 		complete(&((struct update_al_work *)w)->event);
 		return 1;
 	}
@@ -448,14 +448,14 @@ int drbd_al_read_log(struct drbd_conf *mdev, struct drbd_backing_dev *bdev)
 	}
 
 	if (from == -1 || to == -1) {
-		drbd_WARN("No usable activity log found.\n");
+		dev_warn(DEV, "No usable activity log found.\n");
 
 		mutex_unlock(&mdev->md_io_mutex);
 		return 1;
 	}
 
 	/* Read the valid transactions.
-	 * INFO("Reading from %d to %d.\n",from,to); */
+	 * dev_info(DEV, "Reading from %d to %d.\n",from,to); */
 	i = from;
 	while (1) {
 		int j, pos;
@@ -508,7 +508,7 @@ cancel:
 	/* ok, we are done with it */
 	mutex_unlock(&mdev->md_io_mutex);
 
-	INFO("Found %d transactions (%d active extents) in activity log.\n",
+	dev_info(DEV, "Found %d transactions (%d active extents) in activity log.\n",
 	     transactions, active_extents);
 
 	return 1;
@@ -710,7 +710,7 @@ void drbd_al_to_on_disk_bm(struct drbd_conf *mdev)
 	kfree(bios);
 
  submit_one_by_one:
-	drbd_WARN("Using the slow drbd_al_to_on_disk_bm()\n");
+	dev_warn(DEV, "Using the slow drbd_al_to_on_disk_bm()\n");
 
 	for (i = 0; i < mdev->act_log->nr_elements; i++) {
 		enr = lc_entry(mdev->act_log, i)->lc_number;
@@ -749,7 +749,7 @@ void drbd_al_apply_to_bm(struct drbd_conf *mdev)
 	lc_unlock(mdev->act_log);
 	wake_up(&mdev->al_wait);
 
-	INFO("Marked additional %s as out-of-sync based on AL.\n",
+	dev_info(DEV, "Marked additional %s as out-of-sync based on AL.\n",
 	     ppsize(ppb, Bit2KB(add)));
 }
 
@@ -765,7 +765,7 @@ static inline int _try_lc_del(struct drbd_conf *mdev, struct lc_element *al_ext)
 
 	MTRACE(TraceTypeALExts, TraceLvlMetrics,
 		if (unlikely(!rv))
-			INFO("Waiting for extent in drbd_al_shrink()\n");
+			dev_info(DEV, "Waiting for extent in drbd_al_shrink()\n");
 	       );
 
 	return rv;
@@ -799,7 +799,7 @@ STATIC int w_update_odbm(struct drbd_conf *mdev, struct drbd_work *w, int unused
 
 	if (!inc_local(mdev)) {
 		if (__ratelimit(&drbd_ratelimit_state))
-			drbd_WARN("Can not update on disk bitmap, local IO disabled.\n");
+			dev_warn(DEV, "Can not update on disk bitmap, local IO disabled.\n");
 		return 1;
 	}
 
@@ -852,7 +852,7 @@ STATIC void drbd_try_clear_on_disk_bm(struct drbd_conf *mdev, sector_t sector,
 			else
 				ext->rs_failed += count;
 			if (ext->rs_left < ext->rs_failed) {
-				ERR("BAD! sector=%llus enr=%u rs_left=%d "
+				dev_err(DEV, "BAD! sector=%llus enr=%u rs_left=%d "
 				    "rs_failed=%d count=%d\n",
 				     (unsigned long long)sector,
 				     ext->lce.lc_number, ext->rs_left,
@@ -872,14 +872,14 @@ STATIC void drbd_try_clear_on_disk_bm(struct drbd_conf *mdev, sector_t sector,
 			 */
 			int rs_left = drbd_bm_e_weight(mdev, enr);
 			if (ext->flags != 0) {
-				drbd_WARN("changing resync lce: %d[%u;%02lx]"
+				dev_warn(DEV, "changing resync lce: %d[%u;%02lx]"
 				     " -> %d[%u;00]\n",
 				     ext->lce.lc_number, ext->rs_left,
 				     ext->flags, enr, rs_left);
 				ext->flags = 0;
 			}
 			if (ext->rs_failed) {
-				drbd_WARN("Kicking resync_lru element enr=%u "
+				dev_warn(DEV, "Kicking resync_lru element enr=%u "
 				     "out with rs_failed=%d\n",
 				     ext->lce.lc_number, ext->rs_failed);
 				set_bit(WRITE_BM_AFTER_RESYNC, &mdev->flags);
@@ -900,12 +900,12 @@ STATIC void drbd_try_clear_on_disk_bm(struct drbd_conf *mdev, sector_t sector,
 				udw->w.cb = w_update_odbm;
 				drbd_queue_work_front(&mdev->data.work, &udw->w);
 			} else {
-				drbd_WARN("Could not kmalloc an udw\n");
+				dev_warn(DEV, "Could not kmalloc an udw\n");
 				set_bit(WRITE_BM_AFTER_RESYNC, &mdev->flags);
 			}
 		}
 	} else {
-		ERR("lc_get() failed! locked=%d/%d flags=%lu\n",
+		dev_err(DEV, "lc_get() failed! locked=%d/%d flags=%lu\n",
 		    mdev->resync_locked,
 		    mdev->resync->nr_elements,
 		    mdev->resync->flags);
@@ -930,7 +930,7 @@ void __drbd_set_in_sync(struct drbd_conf *mdev, sector_t sector, int size,
 	unsigned long flags;
 
 	if (size <= 0 || (size & 0x1ff) != 0 || size > DRBD_MAX_SEGMENT_SIZE) {
-		ERR("drbd_set_in_sync: sector=%llus size=%d nonsense!\n",
+		dev_err(DEV, "drbd_set_in_sync: sector=%llus size=%d nonsense!\n",
 				(unsigned long long)sector, size);
 		return;
 	}
@@ -954,7 +954,7 @@ void __drbd_set_in_sync(struct drbd_conf *mdev, sector_t sector, int size,
 	sbnr = BM_SECT_TO_BIT(sector + BM_SECT_PER_BIT-1);
 
 	MTRACE(TraceTypeResync, TraceLvlMetrics,
-	       INFO("drbd_set_in_sync: sector=%llus size=%u sbnr=%lu ebnr=%lu\n",
+	       dev_info(DEV, "drbd_set_in_sync: sector=%llus size=%u sbnr=%lu ebnr=%lu\n",
 		    (unsigned long long)sector, size, sbnr, ebnr);
 	    );
 
@@ -1009,7 +1009,7 @@ void __drbd_set_out_of_sync(struct drbd_conf *mdev, sector_t sector, int size,
 	struct bm_extent *ext;
 
 	if (size <= 0 || (size & 0x1ff) != 0 || size > DRBD_MAX_SEGMENT_SIZE) {
-		ERR("sector: %llus, size: %d\n",
+		dev_err(DEV, "sector: %llus, size: %d\n",
 			(unsigned long long)sector, size);
 		return;
 	}
@@ -1033,7 +1033,7 @@ void __drbd_set_out_of_sync(struct drbd_conf *mdev, sector_t sector, int size,
 	ebnr = BM_SECT_TO_BIT(esector);
 
 	MTRACE(TraceTypeResync, TraceLvlMetrics,
-	       INFO("drbd_set_out_of_sync: sector=%llus size=%u "
+	       dev_info(DEV, "drbd_set_out_of_sync: sector=%llus size=%u "
 		    "sbnr=%lu ebnr=%lu\n",
 		    (unsigned long long)sector, size, sbnr, ebnr);
 	    );
@@ -1084,7 +1084,7 @@ struct bm_extent *_bme_get(struct drbd_conf *mdev, unsigned int enr)
 
 	if (!bm_ext) {
 		if (rs_flags & LC_STARVING)
-			drbd_WARN("Have to wait for element"
+			dev_warn(DEV, "Have to wait for element"
 			     " (resync LRU too small?)\n");
 		BUG_ON(rs_flags & LC_DIRTY);
 	}
@@ -1111,7 +1111,7 @@ static inline int _is_in_al(struct drbd_conf *mdev, unsigned int enr)
 
 	/*
 	if (unlikely(rv)) {
-		INFO("Delaying sync read until app's write is done\n");
+		dev_info(DEV, "Delaying sync read until app's write is done\n");
 	}
 	*/
 	return rv;
@@ -1134,7 +1134,7 @@ int drbd_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 	int i, sig;
 
 	MTRACE(TraceTypeResync, TraceLvlAll,
-	       INFO("drbd_rs_begin_io: sector=%llus (rs_end=%d)\n",
+	       dev_info(DEV, "drbd_rs_begin_io: sector=%llus (rs_end=%d)\n",
 		    (unsigned long long)sector, enr);
 	    );
 
@@ -1184,7 +1184,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 	int i;
 
 	MTRACE(TraceTypeResync, TraceLvlAll,
-	       INFO("drbd_try_rs_begin_io: sector=%llus\n",
+	       dev_info(DEV, "drbd_try_rs_begin_io: sector=%llus\n",
 		    (unsigned long long)sector);
 	    );
 
@@ -1204,7 +1204,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 		 * we also have to wake_up
 		 */
 		MTRACE(TraceTypeResync, TraceLvlAll,
-			INFO("dropping %u, aparently got 'synced' "
+			dev_info(DEV, "dropping %u, aparently got 'synced' "
 			     "by application io\n", mdev->resync_wenr);
 		);
 		bm_ext = (struct bm_extent *)
@@ -1218,7 +1218,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 				mdev->resync_locked--;
 			wake_up(&mdev->al_wait);
 		} else {
-			ALERT("LOGIC BUG\n");
+			dev_alert(DEV, "LOGIC BUG\n");
 		}
 	}
 	bm_ext = (struct bm_extent *)lc_try_get(mdev->resync, enr);
@@ -1233,7 +1233,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 			 * so we tried again.
 			 * drop the extra reference. */
 			MTRACE(TraceTypeResync, TraceLvlAll,
-				INFO("dropping extra reference on %u\n", enr);
+				dev_info(DEV, "dropping extra reference on %u\n", enr);
 			);
 			bm_ext->lce.refcnt--;
 			D_ASSERT(bm_ext->lce.refcnt > 0);
@@ -1242,7 +1242,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 	} else {
 		if (mdev->resync_locked > mdev->resync->nr_elements-3) {
 			MTRACE(TraceTypeResync, TraceLvlAll,
-				INFO("resync_locked = %u!\n", mdev->resync_locked);
+				dev_info(DEV, "resync_locked = %u!\n", mdev->resync_locked);
 			);
 			goto try_again;
 		}
@@ -1250,7 +1250,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 		if (!bm_ext) {
 			const unsigned long rs_flags = mdev->resync->flags;
 			if (rs_flags & LC_STARVING)
-				drbd_WARN("Have to wait for element"
+				dev_warn(DEV, "Have to wait for element"
 				     " (resync LRU too small?)\n");
 			BUG_ON(rs_flags & LC_DIRTY);
 			goto try_again;
@@ -1269,7 +1269,7 @@ int drbd_try_rs_begin_io(struct drbd_conf *mdev, sector_t sector)
 	}
 check_al:
 	MTRACE(TraceTypeResync, TraceLvlAll,
-		INFO("checking al for %u\n", enr);
+		dev_info(DEV, "checking al for %u\n", enr);
 	);
 	for (i = 0; i < AL_EXT_PER_BM_SECT; i++) {
 		if (unlikely(al_enr+i == mdev->act_log->new_number))
@@ -1285,7 +1285,7 @@ proceed:
 
 try_again:
 	MTRACE(TraceTypeResync, TraceLvlAll,
-		INFO("need to try again for %u\n", enr);
+		dev_info(DEV, "need to try again for %u\n", enr);
 	);
 	if (bm_ext)
 		mdev->resync_wenr = enr;
@@ -1300,7 +1300,7 @@ void drbd_rs_complete_io(struct drbd_conf *mdev, sector_t sector)
 	unsigned long flags;
 
 	MTRACE(TraceTypeResync, TraceLvlAll,
-	       INFO("drbd_rs_complete_io: sector=%llus (rs_enr=%d)\n",
+	       dev_info(DEV, "drbd_rs_complete_io: sector=%llus (rs_enr=%d)\n",
 		    (long long)sector, enr);
 	    );
 
@@ -1308,13 +1308,13 @@ void drbd_rs_complete_io(struct drbd_conf *mdev, sector_t sector)
 	bm_ext = (struct bm_extent *) lc_find(mdev->resync, enr);
 	if (!bm_ext) {
 		spin_unlock_irqrestore(&mdev->al_lock, flags);
-		ERR("drbd_rs_complete_io() called, but extent not found\n");
+		dev_err(DEV, "drbd_rs_complete_io() called, but extent not found\n");
 		return;
 	}
 
 	if (bm_ext->lce.refcnt == 0) {
 		spin_unlock_irqrestore(&mdev->al_lock, flags);
-		ERR("drbd_rs_complete_io(,%llu [=%u]) called, "
+		dev_err(DEV, "drbd_rs_complete_io(,%llu [=%u]) called, "
 		    "but refcnt is 0!?\n",
 		    (unsigned long long)sector, enr);
 		return;
@@ -1337,7 +1337,7 @@ void drbd_rs_complete_io(struct drbd_conf *mdev, sector_t sector)
 void drbd_rs_cancel_all(struct drbd_conf *mdev)
 {
 	MTRACE(TraceTypeResync, TraceLvlMetrics,
-	       INFO("drbd_rs_cancel_all\n");
+	       dev_info(DEV, "drbd_rs_cancel_all\n");
 	    );
 
 	spin_lock_irq(&mdev->al_lock);
@@ -1364,7 +1364,7 @@ int drbd_rs_del_all(struct drbd_conf *mdev)
 	int i;
 
 	MTRACE(TraceTypeResync, TraceLvlMetrics,
-	       INFO("drbd_rs_del_all\n");
+	       dev_info(DEV, "drbd_rs_del_all\n");
 	    );
 
 	spin_lock_irq(&mdev->al_lock);
@@ -1376,7 +1376,7 @@ int drbd_rs_del_all(struct drbd_conf *mdev)
 			if (bm_ext->lce.lc_number == LC_FREE)
 				continue;
 			if (bm_ext->lce.lc_number == mdev->resync_wenr) {
-				INFO("dropping %u in drbd_rs_del_all, apparently"
+				dev_info(DEV, "dropping %u in drbd_rs_del_all, apparently"
 				     " got 'synced' by application io\n",
 				     mdev->resync_wenr);
 				D_ASSERT(!test_bit(BME_LOCKED, &bm_ext->flags));
@@ -1386,7 +1386,7 @@ int drbd_rs_del_all(struct drbd_conf *mdev)
 				lc_put(mdev->resync, &bm_ext->lce);
 			}
 			if (bm_ext->lce.refcnt != 0) {
-				INFO("Retrying drbd_rs_del_all() later. "
+				dev_info(DEV, "Retrying drbd_rs_del_all() later. "
 				     "refcnt=%d\n", bm_ext->lce.refcnt);
 				dec_local(mdev);
 				spin_unlock_irq(&mdev->al_lock);
@@ -1418,12 +1418,12 @@ void drbd_rs_failed_io(struct drbd_conf *mdev, sector_t sector, int size)
 	int wake_up = 0;
 
 	MTRACE(TraceTypeResync, TraceLvlSummary,
-	       INFO("drbd_rs_failed_io: sector=%llus, size=%u\n",
+	       dev_info(DEV, "drbd_rs_failed_io: sector=%llus, size=%u\n",
 		    (unsigned long long)sector, size);
 	    );
 
 	if (size <= 0 || (size & 0x1ff) != 0 || size > DRBD_MAX_SEGMENT_SIZE) {
-		ERR("drbd_rs_failed_io: sector=%llus size=%d nonsense!\n",
+		dev_err(DEV, "drbd_rs_failed_io: sector=%llus size=%d nonsense!\n",
 				(unsigned long long)sector, size);
 		return;
 	}

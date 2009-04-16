@@ -80,6 +80,12 @@ static inline void drbd_plug_device(struct drbd_conf *mdev)
 	spin_unlock_irq(q->queue_lock);
 }
 
+static inline int drbd_crypto_is_hash(struct crypto_tfm *tfm)
+{
+        return (crypto_tfm_alg_type(tfm) & CRYPTO_ALG_TYPE_HASH_MASK)
+                == CRYPTO_ALG_TYPE_HASH;
+}
+
 #ifndef __CHECKER__
 # undef __cond_lock
 # define __cond_lock(x,c) (c)

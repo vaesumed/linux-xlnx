@@ -57,7 +57,7 @@ STATIC int name ## _from_tags(struct drbd_conf *mdev, \
 		fields \
 		default: \
 			if (tag & T_MANDATORY) { \
-				ERR("Unknown tag: %d\n", tag_number(tag)); \
+				dev_err(DEV, "Unknown tag: %d\n", tag_number(tag)); \
 				return 0; \
 			} \
 		} \
@@ -80,7 +80,7 @@ STATIC int name ## _from_tags(struct drbd_conf *mdev, \
 #define NL_STRING(pn, pr, member, len) \
 	case pn: /* D_ASSERT( tag_type(tag) == TT_STRING ); */ \
 		if (dlen > len) { \
-			ERR("arg too long: %s (%u wanted, max len: %u bytes)\n", \
+			dev_err(DEV, "arg too long: %s (%u wanted, max len: %u bytes)\n", \
 				#member, dlen, (unsigned int)len); \
 			return 0; \
 		} \
@@ -181,16 +181,16 @@ int drbd_khelper(struct drbd_conf *mdev, char *cmd)
 
 	snprintf(mb, 12, "minor-%d", mdev_to_minor(mdev));
 
-	INFO("helper command: %s %s %s\n", usermode_helper, cmd, mb);
+	dev_info(DEV, "helper command: %s %s %s\n", usermode_helper, cmd, mb);
 
 	drbd_bcast_ev_helper(mdev, cmd);
 	ret = call_usermodehelper(usermode_helper, argv, envp, 1);
 	if (ret)
-		drbd_WARN("helper command: %s %s %s exit code %u (0x%x)\n",
+		dev_warn(DEV, "helper command: %s %s %s exit code %u (0x%x)\n",
 				usermode_helper, cmd, mb,
 				(ret >> 8) & 0xff, ret);
 	else
-		INFO("helper command: %s %s %s exit code %u (0x%x)\n",
+		dev_info(DEV, "helper command: %s %s %s exit code %u (0x%x)\n",
 				usermode_helper, cmd, mb,
 				(ret >> 8) & 0xff, ret);
 
@@ -213,7 +213,7 @@ enum drbd_disk_state drbd_try_outdate_peer(struct drbd_conf *mdev)
 		fp = mdev->bc->dc.fencing;
 		dec_local(mdev);
 	} else {
-		drbd_WARN("Not fencing peer, I'm not even Consistent myself.\n");
+		dev_warn(DEV, "Not fencing peer, I'm not even Consistent myself.\n");
 		return mdev->state.pdsk;
 	}
 
@@ -240,24 +240,24 @@ enum drbd_disk_state drbd_try_outdate_peer(struct drbd_conf *mdev)
 		 * This is useful when an unconnected Secondary is asked to
 		 * become Primary, but findes the other peer being active. */
 		ex_to_string = "peer is active";
-		drbd_WARN("Peer is primary, outdating myself.\n");
+		dev_warn(DEV, "Peer is primary, outdating myself.\n");
 		nps = DUnknown;
 		_drbd_request_state(mdev, NS(disk, Outdated), ChgWaitComplete);
 		break;
 	case 7:
 		if (fp != Stonith)
-			ERR("fence-peer() = 7 && fencing != Stonith !!!\n");
+			dev_err(DEV, "fence-peer() = 7 && fencing != Stonith !!!\n");
 		ex_to_string = "peer was stonithed";
 		nps = Outdated;
 		break;
 	default:
 		/* The script is broken ... */
 		nps = DUnknown;
-		ERR("fence-peer helper broken, returned %d\n", (r>>8)&0xff);
+		dev_err(DEV, "fence-peer helper broken, returned %d\n", (r>>8)&0xff);
 		return nps;
 	}
 
-	INFO("fence-peer helper returned %d (%s)\n",
+	dev_info(DEV, "fence-peer helper returned %d (%s)\n",
 			(r>>8) & 0xff, ex_to_string);
 	return nps;
 }
@@ -322,7 +322,7 @@ int drbd_set_role(struct drbd_conf *mdev, enum drbd_role new_role, int force)
 			nps = drbd_try_outdate_peer(mdev);
 
 			if (force && nps > Outdated) {
-				drbd_WARN("Forced into split brain situation!\n");
+				dev_warn(DEV, "Forced into split brain situation!\n");
 				nps = Outdated;
 			}
 
@@ -350,7 +350,7 @@ int drbd_set_role(struct drbd_conf *mdev, enum drbd_role new_role, int force)
 	}
 
 	if (forced)
-		drbd_WARN("Forced to consider local data as UpToDate!\n");
+		dev_warn(DEV, "Forced to consider local data as UpToDate!\n");
 
 	fsync_bdev(mdev->this_bdev);
 
@@ -560,10 +560,10 @@ enum determin_dev_size_enum drbd_determin_dev_size(struct drbd_conf *mdev) __mus
 			/* currently there is only one error: ENOMEM! */
 			size = drbd_bm_capacity(mdev)>>1;
 			if (size == 0) {
-				ERR("OUT OF MEMORY! "
+				dev_err(DEV, "OUT OF MEMORY! "
 				    "Could not allocate bitmap!\n");
 			} else {
-				ERR("BM resizing failed. "
+				dev_err(DEV, "BM resizing failed. "
 				    "Leaving size unchanged at size = %lu KB\n",
 				    (unsigned long)size);
 			}
@@ -572,7 +572,7 @@ enum determin_dev_size_enum drbd_determin_dev_size(struct drbd_conf *mdev) __mus
 		/* racy, see comments above. */
 		drbd_set_my_capacity(mdev, size);
 		mdev->bc->md.la_size_sect = size;
-		INFO("size = %s (%llu KB)\n", ppsize(ppb, size>>1),
+		dev_info(DEV, "size = %s (%llu KB)\n", ppsize(ppb, size>>1),
 		     (unsigned long long)size>>1);
 	}
 	if (rv == dev_size_error)
@@ -584,13 +584,13 @@ enum determin_dev_size_enum drbd_determin_dev_size(struct drbd_conf *mdev) __mus
 		|| prev_size	   != mdev->bc->md.md_size_sect;
 
 	if (md_moved) {
-		drbd_WARN("Moving meta-data.\n");
+		dev_warn(DEV, "Moving meta-data.\n");
 		/* assert: (flexible) internal meta data */
 	}
 
 	if (la_size_changed || md_moved) {
 		drbd_al_shrink(mdev); /* All extents inactive. */
-		INFO("Writing the whole bitmap, size changed\n");
+		dev_info(DEV, "Writing the whole bitmap, size changed\n");
 		rv = drbd_bitmap_io(mdev, &drbd_bm_write, "size changed");
 		drbd_md_mark_dirty(mdev);
 	}
@@ -636,11 +636,11 @@ drbd_new_dev_size(struct drbd_conf *mdev, struct drbd_backing_dev *bdev)
 	}
 
 	if (size == 0)
-		ERR("Both nodes diskless!\n");
+		dev_err(DEV, "Both nodes diskless!\n");
 
 	if (u_size) {
 		if (u_size > size)
-			ERR("Requested disk size is too big (%lu > %lu)\n",
+			dev_err(DEV, "Requested disk size is too big (%lu > %lu)\n",
 			    (unsigned long)u_size>>1, (unsigned long)size>>1);
 		else
 			size = u_size;
@@ -676,7 +676,7 @@ STATIC int drbd_check_al_size(struct drbd_conf *mdev)
 		     sizeof(struct lc_element), mdev);
 
 	if (n == NULL) {
-		ERR("Cannot allocate act_log lru!\n");
+		dev_err(DEV, "Cannot allocate act_log lru!\n");
 		return -ENOMEM;
 	}
 	spin_lock_irq(&mdev->al_lock);
@@ -684,7 +684,7 @@ STATIC int drbd_check_al_size(struct drbd_conf *mdev)
 		for (i = 0; i < t->nr_elements; i++) {
 			e = lc_entry(t, i);
 			if (e->refcnt)
-				ERR("refcnt(%d)==%d\n",
+				dev_err(DEV, "refcnt(%d)==%d\n",
 				    e->lc_number, e->refcnt);
 			in_use += e->refcnt;
 		}
@@ -693,7 +693,7 @@ STATIC int drbd_check_al_size(struct drbd_conf *mdev)
 		mdev->act_log = n;
 	spin_unlock_irq(&mdev->al_lock);
 	if (in_use) {
-		ERR("Activity log still in use!\n");
+		dev_err(DEV, "Activity log still in use!\n");
 		lc_free(n);
 		return -EBUSY;
 	} else {
@@ -756,12 +756,12 @@ void drbd_setup_queue_param(struct drbd_conf *mdev, unsigned int max_seg_s) __mu
 	       );
 
 	if (b->merge_bvec_fn)
-		drbd_WARN("Backing device's merge_bvec_fn() = %p\n",
+		dev_warn(DEV, "Backing device's merge_bvec_fn() = %p\n",
 		     b->merge_bvec_fn);
-	INFO("max_segment_size ( = BIO size ) = %u\n", q->max_segment_size);
+	dev_info(DEV, "max_segment_size ( = BIO size ) = %u\n", q->max_segment_size);
 
 	if (q->backing_dev_info.ra_pages != b->backing_dev_info.ra_pages) {
-		INFO("Adjusting my ra_pages to backing device's (%lu -> %lu)\n",
+		dev_info(DEV, "Adjusting my ra_pages to backing device's (%lu -> %lu)\n",
 		     q->backing_dev_info.ra_pages,
 		     b->backing_dev_info.ra_pages);
 		q->backing_dev_info.ra_pages = b->backing_dev_info.ra_pages;
@@ -800,7 +800,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		if (nbc == NULL)
 			break;
 		if (ntries++ >= 5) {
-			drbd_WARN("drbd_nl_disk_conf: mdev->bc not NULL.\n");
+			dev_warn(DEV, "drbd_nl_disk_conf: mdev->bc not NULL.\n");
 			retcode = HaveDiskConfig;
 			goto fail;
 		}
@@ -842,7 +842,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 
 	nbc->lo_file = filp_open(nbc->dc.backing_dev, O_RDWR, 0);
 	if (IS_ERR(nbc->lo_file)) {
-		ERR("open(\"%s\") failed with %ld\n", nbc->dc.backing_dev,
+		dev_err(DEV, "open(\"%s\") failed with %ld\n", nbc->dc.backing_dev,
 		    PTR_ERR(nbc->lo_file));
 		nbc->lo_file = NULL;
 		retcode = LDNameInvalid;
@@ -858,7 +858,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 
 	nbc->md_file = filp_open(nbc->dc.meta_dev, O_RDWR, 0);
 	if (IS_ERR(nbc->md_file)) {
-		ERR("open(\"%s\") failed with %ld\n", nbc->dc.meta_dev,
+		dev_err(DEV, "open(\"%s\") failed with %ld\n", nbc->dc.meta_dev,
 		    PTR_ERR(nbc->md_file));
 		nbc->md_file = NULL;
 		retcode = MDNameInvalid;
@@ -916,7 +916,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	drbd_md_set_sector_offsets(mdev, nbc);
 
 	if (drbd_get_max_capacity(nbc) < nbc->dc.disk_size) {
-		ERR("max capacity %llu smaller than disk size %llu\n",
+		dev_err(DEV, "max capacity %llu smaller than disk size %llu\n",
 			(unsigned long long) drbd_get_max_capacity(nbc),
 			(unsigned long long) nbc->dc.disk_size);
 		retcode = LDDeviceTooSmall;
@@ -933,13 +933,13 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	}
 
 	if (drbd_get_capacity(nbc->md_bdev) > max_possible_sectors)
-		drbd_WARN("truncating very big lower level device "
+		dev_warn(DEV, "truncating very big lower level device "
 		     "to currently maximum possible %llu sectors\n",
 		     (unsigned long long) max_possible_sectors);
 
 	if (drbd_get_capacity(nbc->md_bdev) < min_md_device_sectors) {
 		retcode = MDDeviceTooSmall;
-		drbd_WARN("refusing attach: md-device too small, "
+		dev_warn(DEV, "refusing attach: md-device too small, "
 		     "at least %llu sectors needed for this meta-disk type\n",
 		     (unsigned long long) min_md_device_sectors);
 		goto release_bdev2_fail;
@@ -975,7 +975,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	if (mdev->state.conn < Connected &&
 	    mdev->state.role == Primary &&
 	    (mdev->ed_uuid & ~((u64)1)) != (nbc->md.uuid[Current] & ~((u64)1))) {
-		ERR("Can only attach to data with current UUID=%016llX\n",
+		dev_err(DEV, "Can only attach to data with current UUID=%016llX\n",
 		    (unsigned long long)mdev->ed_uuid);
 		retcode = DataOfWrongCurrent;
 		goto force_diskless_dec;
@@ -990,7 +990,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	/* Prevent shrinking of consistent devices ! */
 	if (drbd_md_test_flag(nbc, MDF_Consistent) &&
 	   drbd_new_dev_size(mdev, nbc) < nbc->md.la_size_sect) {
-		drbd_WARN("refusing to truncate a consistent device\n");
+		dev_warn(DEV, "refusing to truncate a consistent device\n");
 		retcode = LDDeviceTooSmall;
 		goto force_diskless_dec;
 	}
@@ -1011,9 +1011,9 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 			if (!page)
 				goto force_diskless_dec;
 
-			drbd_WARN("Meta data's bdev hardsect = %d != %d\n",
+			dev_warn(DEV, "Meta data's bdev hardsect = %d != %d\n",
 			     hardsect, MD_HARDSECT);
-			drbd_WARN("Workaround engaged (has performace impact).\n");
+			dev_warn(DEV, "Workaround engaged (has performace impact).\n");
 
 			mdev->md_io_tmpp = page;
 		}
@@ -1084,7 +1084,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		set_bit(RESYNC_AFTER_NEG, &mdev->flags);
 
 	if (drbd_md_test_flag(mdev->bc, MDF_FullSync)) {
-		INFO("Assuming that all blocks are out of sync "
+		dev_info(DEV, "Assuming that all blocks are out of sync "
 		     "(aka FullSync)\n");
 		if (drbd_bitmap_io(mdev, &drbd_bmio_set_n_write, "set_n_write from attaching")) {
 			retcode = MDIOError;
@@ -1197,8 +1197,6 @@ STATIC int drbd_nl_detach(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	return 0;
 }
 
-#define HMAC_NAME_L 20
-
 STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			    struct drbd_nl_cfg_reply *reply)
 {
@@ -1211,7 +1209,7 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	struct hlist_head *new_tl_hash = NULL;
 	struct hlist_head *new_ee_hash = NULL;
 	struct drbd_conf *odev;
-	char hmac_name[HMAC_NAME_L];
+	char hmac_name[CRYPTO_MAX_ALG_NAME];
 	void *int_dig_out = NULL;
 	void *int_dig_in = NULL;
 	void *int_dig_vv = NULL;
@@ -1295,7 +1293,7 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 #undef O_PORT
 
 	if (new_conf->cram_hmac_alg[0] != 0) {
-		snprintf(hmac_name, HMAC_NAME_L, "hmac(%s)",
+		snprintf(hmac_name, CRYPTO_MAX_ALG_NAME, "hmac(%s)",
 			new_conf->cram_hmac_alg);
 		tfm = crypto_alloc_hash(hmac_name, 0, CRYPTO_ALG_ASYNC);
 		if (IS_ERR(tfm)) {
@@ -1319,7 +1317,7 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			goto fail;
 		}
 
-		if (crypto_tfm_alg_type(crypto_hash_tfm(integrity_w_tfm)) != CRYPTO_ALG_TYPE_DIGEST) {
+		if (!drbd_crypto_is_hash(crypto_hash_tfm(integrity_w_tfm))) {
 			retcode=IntegrityAlgNotDigest;
 			goto fail;
 		}
@@ -1508,7 +1506,7 @@ void resync_after_online_grow(struct drbd_conf *mdev)
 {
 	int iass; /* I am sync source */
 
-	INFO("Resync of new storage after online grow\n");
+	dev_info(DEV, "Resync of new storage after online grow\n");
 	if (mdev->state.role != mdev->state.peer)
 		iass = (mdev->state.role == Primary);
 	else
@@ -1639,7 +1637,7 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 			goto fail;
 		}
 
-		if (crypto_tfm_alg_type(crypto_hash_tfm(csums_tfm)) != CRYPTO_ALG_TYPE_DIGEST) {
+		if (!drbd_crypto_is_hash(crypto_hash_tfm(csums_tfm))) {
 			retcode = CSUMSAlgNotDigest;
 			goto fail;
 		}
@@ -1663,7 +1661,7 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 			goto fail;
 		}
 
-		if (crypto_tfm_alg_type(crypto_hash_tfm(verify_tfm)) != CRYPTO_ALG_TYPE_DIGEST) {
+		if (!drbd_crypto_is_hash(crypto_hash_tfm(verify_tfm))) {
 			retcode = VERIFYAlgNotDigest;
 			goto fail;
 		}
@@ -1672,7 +1670,7 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	if (sc.cpu_mask[0] != 0) {
 		err = __bitmap_parse(sc.cpu_mask, 32, 0, (unsigned long *)&n_cpu_mask, NR_CPUS);
 		if (err) {
-			drbd_WARN("__bitmap_parse() failed with %d\n", err);
+			dev_warn(DEV, "__bitmap_parse() failed with %d\n", err);
 			retcode = CPUMaskParseFailed;
 			goto fail;
 		}
@@ -1682,7 +1680,7 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	ERR_IF (sc.al_extents < 7) sc.al_extents = 127; /* arbitrary minimum */
 #define AL_MAX ((MD_AL_MAX_SIZE-1) * AL_EXTENTS_PT)
 	if (sc.al_extents > AL_MAX) {
-		ERR("sc.al_extents > %d\n", AL_MAX);
+		dev_err(DEV, "sc.al_extents > %d\n", AL_MAX);
 		sc.al_extents = AL_MAX;
 	}
 #undef AL_MAX
@@ -1933,6 +1931,7 @@ STATIC int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 			      struct drbd_nl_cfg_reply *reply)
 {
 	int retcode = NoError;
+	int skip_initial_sync = 0;
 	int err;
 
 	struct new_c_uuid args;
@@ -1945,14 +1944,19 @@ STATIC int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 
 	mutex_lock(&mdev->state_mutex); /* Protects us against serialized state changes. */
 
-	if (mdev->state.conn >= Connected) {
-		retcode = MayNotBeConnected;
-		goto out;
-	}
-
 	if (!inc_local(mdev)) {
 		retcode = HaveNoDiskConfig;
 		goto out;
+	}
+
+	/* this is "skip initial sync", assume to be clean */
+	if (mdev->state.conn == Connected && mdev->agreed_pro_version >= 90 &&
+	    mdev->bc->md.uuid[Current] == UUID_JUST_CREATED && args.clear_bm) {
+		dev_info(DEV, "Preparing to skip initial sync\n");
+		skip_initial_sync = 1;
+	} else if (mdev->state.conn >= Connected) {
+		retcode = MayNotBeConnected;
+		goto out_dec;
 	}
 
 	drbd_uuid_set(mdev, Bitmap, 0); /* Rotate Bitmap to History 1, etc... */
@@ -1961,12 +1965,19 @@ STATIC int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 	if (args.clear_bm) {
 		err = drbd_bitmap_io(mdev, &drbd_bmio_clear_n_write, "clear_n_write from new_c_uuid");
 		if (err) {
-			ERR("Writing bitmap failed with %d\n",err);
+			dev_err(DEV, "Writing bitmap failed with %d\n",err);
 			retcode = MDIOError;
+		}
+		if (skip_initial_sync) {
+			drbd_send_uuids_skip_initial_sync(mdev);
+			_drbd_uuid_set(mdev, Bitmap, 0);
+			_drbd_set_state(_NS2(mdev, disk, UpToDate, pdsk, UpToDate),
+					ChgStateVerbose, NULL);
 		}
 	}
 
 	drbd_md_sync(mdev);
+out_dec:
 	dec_local(mdev);
 out:
 	mutex_unlock(&mdev->state_mutex);
@@ -2191,7 +2202,7 @@ void drbd_bcast_state(struct drbd_conf *mdev, union drbd_state_t state)
 		(struct drbd_nl_cfg_reply *)cn_reply->data;
 	unsigned short *tl = reply->tag_list;
 
-	/* drbd_WARN("drbd_bcast_state() got called\n"); */
+	/* dev_warn(DEV, "drbd_bcast_state() got called\n"); */
 
 	tl = get_state_to_tags(mdev, (struct get_state *)&state, tl);
 	*tl++ = TT_END; /* Close the tag list */
@@ -2226,7 +2237,7 @@ void drbd_bcast_ev_helper(struct drbd_conf *mdev, char *helper_name)
 	unsigned short *tl = reply->tag_list;
 	int str_len;
 
-	/* drbd_WARN("drbd_bcast_state() got called\n"); */
+	/* dev_warn(DEV, "drbd_bcast_state() got called\n"); */
 
 	str_len = strlen(helper_name)+1;
 	*tl++ = T_helper;
@@ -2280,7 +2291,7 @@ void drbd_bcast_ee(struct drbd_conf *mdev,
 		, GFP_KERNEL);
 
 	if (!cn_reply) {
-		ERR("could not kmalloc buffer for drbd_bcast_ee, sector %llu, size %u\n",
+		dev_err(DEV, "could not kmalloc buffer for drbd_bcast_ee, sector %llu, size %u\n",
 				(unsigned long long)e->sector, e->size);
 		return;
 	}
