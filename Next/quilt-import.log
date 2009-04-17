@@ -1,0 +1,157 @@
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard ae7ad9808811114ece9573259ddddfd4ebebc039
+HEAD is now at ae7ad98 UIO: fix specific device driver missing statement for depmod
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-gadget-fix-ethernet-link-reports-to-ethtool.patch
+usb-ftdi_sio-add-vendor-project-id-for-jeti-specbos-1201-spectrometer.patch
+usb-option-add-ids-for-d-link-dwm-652-3.5g-modem.patch
+usb-qcserial-add-extra-device-ids.patch
+usb-fix-oops-in-cdc-wdm-in-case-of-malformed-descriptors.patch
+usb-musb_host-minor-enqueue-locking-fix.patch
+usb-usb-storage-augment-unusual_devs-entry-for-simple-tech-datafab.patch
+usb-musb_host-fix-ep0-fifo-flushing.patch
+usb-musb-bugfixes-for-multi-packet-txdma-support.patch
+usb-musb-sanitize-clearing-txcsr-dma-bits.patch
+usb-musb-fix-isochronous-txdma.patch
+usb-musb-fix-possible-panic-while-resuming.patch
+revert-usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+usb-usb-serial-ch341-support-for-dtr-rts-cts.patch
+usb-storage-fix-mistake-in-makefile.patch
+usb-add-device-id-for-motorola-v950-renegade-phone.patch
+usb-add-reset-endpoint-operations.patch
+usb-whci-hcd-provide-a-endpoint_reset-method.patch
+usb-whci-hcd-check-return-value-of-usb_hcd_link_urb_to_ep.patch
+wusb-disconnect-all-devices-when-stopping-a-wusb-hcd.patch
+wusb-fix-oops-when-completing-urbs-for-disconnected-devices.patch
+wusb-correct-format-of-wusb_chid-sysfs-file.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 3c31eff...cf519b1 master     -> quilt/usb.current  (forced update)
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc2-git1
+$ cd ../quilt-tmp
+$ git reset --hard 3ee8da87ba6151ec91b2b8bbd27633bb248ea0d5
+HEAD is now at 3ee8da8 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tiwai/sound-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+sound-aoa-codecs-convert-to-new-style.patch
+sound-ppc-keywest-01-convert-to-new-style.patch
+sound-ppc-keywest-02-cleanup-i2c_device_name.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 0269c95...43b096a master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing ide based on 35c80d5f400f68f2eccf3069d1c068e154bde9c9
+$ cd ../quilt-tmp
+$ git reset --hard 35c80d5f400f68f2eccf3069d1c068e154bde9c9
+HEAD is now at 35c80d5 Add block_write_full_page_endio for passing endio handler
+$ git quiltimport --author Bartlomiej Zolnierkiewicz <bzolnier@gmail.com> --patches ../quilt/ide
+hpt366-fix-hpt370-dma-timeouts.patch
+hpt366-use-ata_dma_--constants.patch
+ide-remove-void-casts.patch
+ide-fix-barriers-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ide
+From ../quilt-tmp
+ + 1af0909...242072d master     -> quilt/ide  (forced update)
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard cf519b1cc819ca20a9236f4022e6e2a505bcd37e
+HEAD is now at cf519b1 WUSB: correct format of wusb_chid sysfs file
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-set-default-sysfs_deprecated-n.patch
+sched-delayed-cleanup-of-user_struct.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 3c31eff...b6e999b master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard b6e999b627d7c450a16ed1794d341be704079715
+HEAD is now at b6e999b sched: delayed cleanup of user_struct
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+musb_gadget-fix-unhandled-endpoint-0-irqs.patch
+musb_gadget-suppress-parasitic-tx-interrupts-with-cppi.patch
+musb_host-refactor-musb_save_toggle.patch
+musb_host-factor-out-musb_ep_-get-set-_qh.patch
+musb_host-simplify-check-for-active-urb.patch
+musb_host-streamline-musb_cleanup_urb-calls.patch
+musb_host-refactor-urb-giveback.patch
+musb-split-out-cppi-interrupt-handler.patch
+usb-move-twl4030_usb-s-probe-function-to-.devinit.text.patch
+usb-move-r8a66597_hcd-s-probe-function-to-.devinit.text.patch
+usb-move-orion-ehci-s-probe-function-to-.devinit.text.patch
+usb-twl4030-usb-fix-minor-reporting-goofage.patch
+usb-nop-usb-xceiv-behave-when-linked-as-a-module.patch
+musb-proper-hookup-to-transceiver-drivers.patch
+musb-otg-timer-cleanup.patch
+musb-make-initial-hnp-roleswitch-work.patch
+musb-support-disconnect-after-hnp-roleswitch.patch
+musb-use-dma-mode-1-for-tx-if-transfer-size-equals-maxpacket.patch
+musb-add-high-bandwidth-iso-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + 3c31eff...12f417eb master     -> quilt/usb  (forced update)
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 12f417eb34d9439287516cb04c6b47b2f2ab297f
+HEAD is now at 12f417eb musb: add high bandwidth ISO support
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-at76-convert-to-netdev_ops.patch
+staging-epl-convert-to-netdev_ops.patch
+staging-et131x-convert-to-netdev_ops.patch
+staging-otus-convert-to-netdev_ops.patch
+staging-rt2860-convert-to-netdev_ops.patch
+staging-rt2870-convert-to-netdev_ops.patch
+staging-rt3070-convert-to-netdev_ops.patch
+staging-slicoss-convert-to-netdev_ops.patch
+staging-sxg-convert-to-netdev_ops.patch
+staging-wlan-ng-convert-to-netdev_ops.patch
+staging-line6-convert-to-snd_card_create.patch
+staging-rt2870-add-id-for-sitecom-wl-315.patch
+staging-aten2011-clean-up-some-tty-bits.patch
+staging-binder-remove-vm_exec-check.patch
+staging-binder-don-t-create-two-proc-entries-with-the-same-name-if-the-driver-is-opened-twice-in-one-process.patch
+staging-binder-mmap-fixes.patch
+staging-binder-add-more-offset-validation.patch
+staging-binder-keep-a-reference-to-the-files_struct-while-the-driver-is-mmapped.patch
+staging-binder-cast-to-uintptr_t-instead-of-size_t-when-aligning-pointers.patch
+staging-binder-prevent-the-wrong-thread-from-adding-a-transaction-to-the-stack.patch
+staging-binder-defer-flush-and-release-operations-to-avoid-deadlocks.patch
+staging-stlc45xx-should-depend-on-generic_hardirqs.patch
+revert-staging-slicoss-use-gfp_kernel-where-possible.patch
+staging-pohmelfs-populate-dentry-cache-when-receiving-the-new-readdir-entry.patch
+staging-pohmelfs-move-parent-lock-to-the-place-where-we-really-have-to-send-a-lookup-request-to-the-server.patch
+staging-pohmelfs-disable-read-lock-in-pohmelfs_getattr.patch
+staging-pohmelfs-added-need_lock-variable-into-debug-print.patch
+staging-pohmelfs-set-netfs_inode_remote_synced-and-clear-netfs_inode_owned-bits-in-the-root-inode.patch
+staging-pohmelfs-extend-remount-option.patch
+staging-pohmelfs-sync-fs-before-killing-it-since-dentry-cache-is-shrunk-before-writeback-is-invoked-via-generic_shutdown_super.patch
+staging-pohmelfs-reduce-debugging-noise-about-non-existing-objects.patch
+staging-pohmelfs-use-wait_on_page_timeout-when-waiting-for-remote-directory-sync-instead-of-hardcoded-25-seconds.patch
+staging-pohmelfs-drop-ftrans-debugging-code.patch
+staging-pohmelfs-added-show_stats-callback.patch
+staging-pohmelfs-added-io-permissions-and-priorities.patch
+staging-pohmelfs-add-load-balancing-between-network-states-with-the-same-priority.patch
+staging-sxg-fire-watchdog-timer-at-end-of-open-routine-to-change-the-link.patch
+staging-sxg-use-correct-queue_id-for-transmitting-non-tcp-packets.patch
+staging-sxg-fix-sleep-in-atomic-context-warning-while-loading-driver.patch
+staging-sxg-fix-leaks-and-checksum-errors-in-transmit-code-path.patch
+staging-go7007-fix-build-issues.patch
+staging-otus-zdusb.c-additional-usb-idnetifier.patch
+staging-slicoss-update-readme.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 5438af0...411d0c7 master     -> quilt/staging  (forced update)
