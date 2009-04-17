@@ -31,6 +31,7 @@
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/connector.h>
+#include <linux/drbd_config.h>
 #include <linux/drbd.h>
 #include <linux/blkpg.h>
 #include <linux/cpumask.h>

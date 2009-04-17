@@ -25,7 +25,6 @@
 */
 #ifndef DRBD_H
 #define DRBD_H
-#include <linux/drbd_config.h>
 #include <linux/connector.h>
 
 #include <asm/types.h>
@@ -39,9 +38,9 @@
 #include <limits.h>
 
 /* Altough the Linux source code makes a difference between
-   generic endiness and the bitfields' endianess, there is no
-   architecture as of Linux-2.6.24-rc4 where the bitfileds' endianess
-   does not match the generic endianess. */
+   generic endianness and the bitfields' endianness, there is no
+   architecture as of Linux-2.6.24-rc4 where the bitfileds' endianness
+   does not match the generic endianness. */
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define __LITTLE_ENDIAN_BITFIELD
@@ -86,8 +85,7 @@ enum after_sb_handler {
 	Violently
 };
 
-/* KEEP the order, do not delete or insert!
- * Or change the API_VERSION, too. */
+/* KEEP the order, do not delete or insert. Only append. */
 enum ret_codes {
 	RetCodeBase = 100,
 	NoError,         /* 101 ... */
@@ -246,13 +244,6 @@ union drbd_state_t {
 #else
 # error "this endianess is not supported"
 #endif
-#ifndef DRBD_DEBUG_STATE_CHANGES
-#define DRBD_DEBUG_STATE_CHANGES 0
-#endif
-#if DRBD_DEBUG_STATE_CHANGES
-		unsigned int line;
-		const char *func;
-#endif
 	};
 	unsigned int i;
 };
@@ -289,10 +280,6 @@ extern const char *conns_to_name(enum drbd_conns);
 extern const char *roles_to_name(enum drbd_role);
 extern const char *disks_to_name(enum drbd_disk_state);
 extern const char *set_st_err_name(enum set_st_err);
-
-#ifndef BDEVNAME_SIZE
-# define BDEVNAME_SIZE 32
-#endif
 
 #define SHARED_SECRET_MAX 64
 
