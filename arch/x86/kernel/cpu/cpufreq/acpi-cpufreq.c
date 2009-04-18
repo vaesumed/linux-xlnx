@@ -68,10 +68,15 @@ struct acpi_cpufreq_data {
 	unsigned int max_freq;
 	unsigned int resume;
 	unsigned int cpu_feature;
-	u64 saved_aperf, saved_mperf;
 };
 
 static DEFINE_PER_CPU(struct acpi_cpufreq_data *, drv_data);
+
+struct acpi_msr_data {
+	u64 saved_aperf, saved_mperf;
+};
+
+static DEFINE_PER_CPU(struct acpi_msr_data, msr_data);
 
 DEFINE_TRACE(power_mark);
 
@@ -204,7 +209,13 @@ static void drv_read(struct drv_cmd *cmd)
 
 static void drv_write(struct drv_cmd *cmd)
 {
+	int this_cpu;
+
+	this_cpu = get_cpu();
+	if (cpumask_test_cpu(this_cpu, cmd->mask))
+		do_drv_write(cmd);
 	smp_call_function_many(cmd->mask, do_drv_write, cmd, 1);
+	put_cpu();
 }
 
 static u32 get_cur_val(const struct cpumask *mask)
@@ -281,11 +292,11 @@ static unsigned int get_measured_perf(struct cpufreq_policy *policy,
 		return 0;
 
 	cur.aperf.whole = readin.aperf.whole -
-				per_cpu(drv_data, cpu)->saved_aperf;
+				per_cpu(msr_data, cpu).saved_aperf;
 	cur.mperf.whole = readin.mperf.whole -
-				per_cpu(drv_data, cpu)->saved_mperf;
-	per_cpu(drv_data, cpu)->saved_aperf = readin.aperf.whole;
-	per_cpu(drv_data, cpu)->saved_mperf = readin.mperf.whole;
+				per_cpu(msr_data, cpu).saved_mperf;
+	per_cpu(msr_data, cpu).saved_aperf = readin.aperf.whole;
+	per_cpu(msr_data, cpu).saved_mperf = readin.mperf.whole;
 
 #ifdef __i386__
 	/*
