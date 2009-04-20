@@ -23,7 +23,7 @@
 #include <asm/s390_ext.h>
 #include <asm/timer.h>
 #include <asm/irq_regs.h>
-#include <asm/cpu.h>
+#include <asm/cputime.h>
 
 static ext_int_info_t ext_int_info_timer;
 
@@ -238,6 +238,22 @@ void vtime_stop_cpu(void)
 			  "a" (&vq->idle), "m" (psw)
 			: "memory", "cc", "1");
 	}
+}
+
+cputime64_t s390_get_idle_time(int cpu)
+{
+	struct s390_idle_data *idle;
+	unsigned long long now, idle_time, idle_enter;
+
+	idle = &per_cpu(s390_idle, cpu);
+	spin_lock(&idle->lock);
+	now = get_clock();
+	idle_time = 0;
+	idle_enter = idle->idle_enter;
+	if (idle_enter != 0ULL && idle_enter < now)
+		idle_time = now - idle_enter;
+	spin_unlock(&idle->lock);
+	return idle_time;
 }
 
 /*
