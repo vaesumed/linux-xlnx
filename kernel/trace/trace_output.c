@@ -19,6 +19,16 @@ static struct hlist_head event_hash[EVENT_HASHSIZE] __read_mostly;
 
 static int next_event_type = __TRACE_LAST_TYPE + 1;
 
+void trace_print_seq(struct seq_file *m, struct trace_seq *s)
+{
+	int len = s->len >= PAGE_SIZE ? PAGE_SIZE - 1 : s->len;
+
+	s->buffer[len] = 0;
+	seq_puts(m, s->buffer);
+
+	trace_seq_init(s);
+}
+
 enum print_line_t trace_print_bprintk_msg_only(struct trace_iterator *iter)
 {
 	struct trace_seq *s = &iter->seq;
@@ -84,6 +94,7 @@ trace_seq_printf(struct trace_seq *s, const char *fmt, ...)
 
 	return len;
 }
+EXPORT_SYMBOL_GPL(trace_seq_printf);
 
 int trace_seq_bprintf(struct trace_seq *s, const char *fmt, const u32 *binary)
 {
@@ -528,6 +539,7 @@ int register_ftrace_event(struct trace_event *event)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(register_ftrace_event);
 
 /**
  * unregister_ftrace_event - remove a no longer used event
@@ -541,6 +553,7 @@ int unregister_ftrace_event(struct trace_event *event)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(unregister_ftrace_event);
 
 /*
  * Standard events
