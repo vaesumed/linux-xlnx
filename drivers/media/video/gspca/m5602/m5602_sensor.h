@@ -21,6 +21,9 @@
 
 #include "m5602_bridge.h"
 
+#define M5602_V4L2_CID_GREEN_BALANCE	(V4L2_CID_PRIVATE_BASE + 0)
+#define M5602_V4L2_CID_NOISE_SUPPRESION	(V4L2_CID_PRIVATE_BASE + 1)
+
 /* Enumerates all supported sensors */
 enum sensors {
 	OV9650_SENSOR	= 1,
@@ -61,9 +64,6 @@ struct m5602_sensor {
 
 	/* Executed when the device is disconnected */
 	void (*disconnect)(struct sd *sd);
-
-	/* Performs a power down sequence */
-	int (*power_down)(struct sd *sd);
 };
 
 #endif
