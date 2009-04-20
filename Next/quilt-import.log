@@ -1,0 +1,59 @@
+Importing driver-core.current based on 2.6.30-rc2
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current 0882e8dd3aad33eca41696d463bb896e6c8817eb
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current 0882e8dd3aad33eca41696d463bb896e6c8817eb
+Importing device-mapper based on v2.6.30-rc2-195-g9f76208
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper 9f76208c33984ab777eace5d07a4e36e88703e02
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series ide
+Unchanged quilt series rr
+Importing ttydev based on 9f76208c33984ab777eace5d07a4e36e88703e02
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 9f76208c33984ab777eace5d07a4e36e88703e02
+HEAD is now at 9f76208 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-usb-aten2011-clean
+cyclades-firmware-ze
+cyclades-fw-dontreset
+cyclades-remove-spare-null-check
+tty-port-carrierclose
+tty-port-drain-delay
+tty-usb-use-port
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:310: trailing whitespace.
+	else 
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:1989: trailing whitespace.
+	serial_do_down(port);		
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2015: trailing whitespace.
+	return 1;	
+warning: 3 lines add whitespace errors.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + c946e60...97c5824 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard 0882e8dd3aad33eca41696d463bb896e6c8817eb
+HEAD is now at 0882e8d Linux 2.6.30-rc2
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-set-default-sysfs_deprecated-n.patch
+sched-delayed-cleanup-of-user_struct.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + b6e999b...a255b89 master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard a255b892ced8a04b7cce8f8017c210a1810dba10
+HEAD is now at a255b89 sched: delayed cleanup of user_struct
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+musb_gadget-fix-unhandled-endpoint-0-irqs.patch
+musb_gadget-suppress-parasitic-tx-interrupts-with-cppi.patch
+error: patch failed: drivers/usb/musb/musb_gadget.c:349
+error: drivers/usb/musb/musb_gadget.c: patch does not apply
