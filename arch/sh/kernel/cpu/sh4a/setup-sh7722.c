@@ -256,7 +256,6 @@ static int __init sh7722_devices_setup(void)
 {
 	clk_always_enable("uram0"); /* URAM */
 	clk_always_enable("xymem0"); /* XYMEM */
-	clk_always_enable("rtc0"); /* RTC */
 	clk_always_enable("veu0"); /* VEU */
 	clk_always_enable("vpu0"); /* VPU */
 	clk_always_enable("jpu0"); /* JPU */
@@ -269,6 +268,16 @@ static int __init sh7722_devices_setup(void)
 				    ARRAY_SIZE(sh7722_devices));
 }
 __initcall(sh7722_devices_setup);
+
+static struct platform_device *sh7722_early_devices[] __initdata = {
+	&cmt_device,
+};
+
+void __init plat_early_device_setup(void)
+{
+	early_platform_add_devices(sh7722_early_devices,
+				   ARRAY_SIZE(sh7722_early_devices));
+}
 
 enum {
 	UNUSED=0,
