@@ -1830,7 +1830,7 @@ azx_attach_pcm_stream(struct hda_bus *bus, struct hda_codec *codec,
 			  &pcm);
 	if (err < 0)
 		return err;
-	strcpy(pcm->name, cpcm->name);
+	strlcpy(pcm->name, cpcm->name, sizeof(pcm->name));
 	apcm = kzalloc(sizeof(*apcm), GFP_KERNEL);
 	if (apcm == NULL)
 		return -ENOMEM;
@@ -2358,9 +2358,11 @@ static int __devinit azx_create(struct snd_card *card, struct pci_dev *pci,
 	}
 
 	strcpy(card->driver, "HDA-Intel");
-	strcpy(card->shortname, driver_short_names[chip->driver_type]);
-	sprintf(card->longname, "%s at 0x%lx irq %i",
-		card->shortname, chip->addr, chip->irq);
+	strlcpy(card->shortname, driver_short_names[chip->driver_type],
+		sizeof(card->shortname));
+	snprintf(card->longname, sizeof(card->longname),
+		 "%s at 0x%lx irq %i",
+		 card->shortname, chip->addr, chip->irq);
 
 	*rchip = chip;
 	return 0;
@@ -2513,6 +2515,11 @@ static struct pci_device_id azx_ids[] = {
 	{ PCI_DEVICE(0x10de, 0x0d97), .driver_data = AZX_DRIVER_NVIDIA },
 	/* Teradici */
 	{ PCI_DEVICE(0x6549, 0x1200), .driver_data = AZX_DRIVER_TERA },
+	/* Creative X-Fi (CA0110-IBG) */
+	{ PCI_DEVICE(PCI_VENDOR_ID_CREATIVE, PCI_ANY_ID),
+	  .class = PCI_CLASS_MULTIMEDIA_HD_AUDIO << 8,
+	  .class_mask = 0xffffff,
+	  .driver_data = AZX_DRIVER_GENERIC },
 	/* AMD Generic, PCI class code and Vendor ID for HD Audio */
 	{ PCI_DEVICE(PCI_VENDOR_ID_ATI, PCI_ANY_ID),
 	  .class = PCI_CLASS_MULTIMEDIA_HD_AUDIO << 8,
