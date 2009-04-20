@@ -77,7 +77,12 @@ config TRACING_SUPPORT
 
 if TRACING_SUPPORT
 
-menu "Tracers"
+menuconfig FTRACE
+	bool "Tracers"
+	help
+	 Enable the kernel tracing infrastructure.
+
+if FTRACE
 
 config FUNCTION_TRACER
 	bool "Kernel Function Tracer"
@@ -178,13 +183,17 @@ config CONTEXT_SWITCH_TRACER
 	  This tracer gets called from the context switch and records
 	  all switching of tasks.
 
-config EVENT_TRACER
+config ENABLE_EVENT_TRACING
 	bool "Trace various events in the kernel"
 	select TRACING
 	help
 	  This tracer hooks to various trace points in the kernel
 	  allowing the user to pick and choose which trace point they
 	  want to trace.
+
+	  Note, all tracers enable event tracing. This option is
+	  only a convenience to enable event tracing when no other
+	  tracers are selected.
 
 config FTRACE_SYSCALLS
 	bool "Trace syscalls"
@@ -212,8 +221,36 @@ config BOOT_TRACER
 	  to enable this on bootup.
 
 config TRACE_BRANCH_PROFILING
-	bool "Trace likely/unlikely profiler"
+	bool
 	select TRACING
+
+choice
+	prompt "Branch Profiling"
+	default BRANCH_PROFILE_NONE
+	help
+	 The branch profiling is a software profiler. It will add hooks
+	 into the C conditionals to test which path a branch takes.
+
+	 The likely/unlikely profiler only looks at the conditions that
+	 are annotated with a likely or unlikely macro.
+
+	 The "all branch" profiler will profile every if statement in the
+	 kernel. This profiler will also enable the likely/unlikely
+	 profiler as well.
+
+	 Either of the above profilers add a bit of overhead to the system.
+	 If unsure choose "No branch profiling".
+
+config BRANCH_PROFILE_NONE
+	bool "No branch profiling"
+	help
+	 No branch profiling. Branch profiling adds a bit of overhead.
+	 Only enable it if you want to analyse the branching behavior.
+	 Otherwise keep it disabled.
+
+config PROFILE_ANNOTATED_BRANCHES
+	bool "Trace likely/unlikely profiler"
+	select TRACE_BRANCH_PROFILING
 	help
 	  This tracer profiles all the the likely and unlikely macros
 	  in the kernel. It will display the results in:
@@ -223,11 +260,9 @@ config TRACE_BRANCH_PROFILING
 	  Note: this will add a significant overhead, only turn this
 	  on if you need to profile the system's use of these macros.
 
-	  Say N if unsure.
-
 config PROFILE_ALL_BRANCHES
 	bool "Profile all if conditionals"
-	depends on TRACE_BRANCH_PROFILING
+	select TRACE_BRANCH_PROFILING
 	help
 	  This tracer profiles all branch conditions. Every if ()
 	  taken in the kernel is recorded whether it hit or miss.
@@ -235,11 +270,12 @@ config PROFILE_ALL_BRANCHES
 
 	  /debugfs/tracing/profile_branch
 
+	  This option also enables the likely/unlikely profiler.
+
 	  This configuration, when enabled, will impose a great overhead
 	  on the system. This should only be enabled when the system
 	  is to be analyzed
-
-	  Say N if unsure.
+endchoice
 
 config TRACING_BRANCHES
 	bool
@@ -435,7 +471,7 @@ config MMIOTRACE_TEST
 
 	  Say N, unless you absolutely know what you are doing.
 
-endmenu
+endif # FTRACE
 
 endif # TRACING_SUPPORT
 

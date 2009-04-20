@@ -1483,7 +1483,9 @@ rb_reserve_next_event(struct ring_buffer_per_cpu *cpu_buffer,
 
 static int trace_irq_level(void)
 {
-	return hardirq_count() + softirq_count() + in_nmi();
+	return (hardirq_count() >> HARDIRQ_SHIFT) +
+		(softirq_count() >> + SOFTIRQ_SHIFT) +
+		!!in_nmi();
 }
 
 static int trace_recursive_lock(void)
@@ -1665,7 +1667,6 @@ static inline void rb_event_discard(struct ring_buffer_event *event)
 void ring_buffer_event_discard(struct ring_buffer_event *event)
 {
 	rb_event_discard(event);
-	trace_recursive_unlock();
 }
 EXPORT_SYMBOL_GPL(ring_buffer_event_discard);
 
