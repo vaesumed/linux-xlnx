@@ -267,7 +267,6 @@ static struct platform_device *sh7723_devices[] __initdata = {
 static int __init sh7723_devices_setup(void)
 {
 	clk_always_enable("meram0"); /* MERAM */
-	clk_always_enable("rtc0"); /* RTC */
 	clk_always_enable("veu1"); /* VEU2H1 */
 	clk_always_enable("veu0"); /* VEU2H0 */
 	clk_always_enable("vpu0"); /* VPU */
@@ -280,6 +279,16 @@ static int __init sh7723_devices_setup(void)
 				    ARRAY_SIZE(sh7723_devices));
 }
 __initcall(sh7723_devices_setup);
+
+static struct platform_device *sh7723_early_devices[] __initdata = {
+	&cmt_device,
+};
+
+void __init plat_early_device_setup(void)
+{
+	early_platform_add_devices(sh7723_early_devices,
+				   ARRAY_SIZE(sh7723_early_devices));
+}
 
 enum {
 	UNUSED=0,
