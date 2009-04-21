@@ -241,9 +241,11 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 		if (retval)
 			goto bailout_interface_put;
 	}
-
 	mutex_unlock(&port->mutex);
-	return 0;
+	/* Now do the correct tty layer semantics */
+	retval = tty_port_block_til_ready(&port->port, tty, filp);
+	if (retval == 0)
+		return 0;
 
 bailout_interface_put:
 	usb_autopm_put_interface(serial->interface);
@@ -259,52 +261,44 @@ bailout_kref_put:
 	return retval;
 }
 
+static void serial_do_down(struct usb_serial_port *port)
+{
+	struct usb_serial_driver *drv = port->serial->type;
+	/* The console is magical, do not hang up the console hardware
+	   or there will be tears */
+
+	if (port->console)
+		return;
+
+	mutex_lock(&port->mutex);
+	if (drv->close)
+		drv->close(port);
+	usb_autopm_put_interface(port->serial->interface);
+	module_put(port->serial->type->driver.owner);
+	mutex_unlock(&port->mutex);
+}
+
 static void serial_close(struct tty_struct *tty, struct file *filp)
 {
 	struct usb_serial_port *port = tty->driver_data;
 
-	if (!port)
-		return;
-
 	dbg("%s - port %d", __func__, port->number);
 
-	mutex_lock(&port->mutex);
 
-	if (port->port.count == 0) {
-		mutex_unlock(&port->mutex);
+	if (tty_port_close_start(&port->port, tty, filp) == 0)
 		return;
-	}
 
-	if (port->port.count == 1)
-		/* only call the device specific close if this
-		 * port is being closed by the last owner. Ensure we do
-		 * this before we drop the port count. The call is protected
-		 * by the port mutex
-		 */
-		port->serial->type->close(tty, port, filp);
+	serial_do_down(port);		
+	tty_port_close_end(&port->port, tty);
+	usb_serial_put(port->serial);
+	tty_port_tty_set(&port->port, NULL);
+}
 
-	if (port->port.count == (port->console ? 2 : 1)) {
-		struct tty_struct *tty = tty_port_tty_get(&port->port);
-		if (tty) {
-			/* We must do this before we drop the port count to
-			   zero. */
-			if (tty->driver_data)
-				tty->driver_data = NULL;
-			tty_port_tty_set(&port->port, NULL);
-			tty_kref_put(tty);
-		}
-	}
-
-	if (port->port.count == 1) {
-		mutex_lock(&port->serial->disc_mutex);
-		if (!port->serial->disconnected)
-			usb_autopm_put_interface(port->serial->interface);
-		mutex_unlock(&port->serial->disc_mutex);
-		module_put(port->serial->type->driver.owner);
-	}
-	--port->port.count;
-
-	mutex_unlock(&port->mutex);
+static void serial_hangup(struct tty_struct *tty)
+{
+	struct usb_serial_port *port = tty->driver_data;
+	serial_do_down(port);
+	tty_port_hangup(&port->port);
 	usb_serial_put(port->serial);
 }
 
@@ -632,6 +626,29 @@ static struct usb_serial_driver *search_serial_device(
 	return NULL;
 }
 
+static int serial_carrier_raised(struct tty_port *port)
+{
+	struct usb_serial_port *p = container_of(port, struct usb_serial_port, port);
+	struct usb_serial_driver *drv = p->serial->type;
+	if (drv->carrier_raised)
+		return drv->carrier_raised(p);
+	/* No carrier control - don't block */
+	return 1;	
+}
+
+static void serial_dtr_rts(struct tty_port *port, int on)
+{
+	struct usb_serial_port *p = container_of(port, struct usb_serial_port, port);
+	struct usb_serial_driver *drv = p->serial->type;
+	if (drv->dtr_rts)
+		drv->dtr_rts(p, on);
+}
+
+static const struct tty_port_operations serial_port_ops = {
+	.carrier_raised = serial_carrier_raised,
+	.dtr_rts = serial_dtr_rts,
+};
+
 int usb_serial_probe(struct usb_interface *interface,
 			       const struct usb_device_id *id)
 {
@@ -825,6 +842,7 @@ int usb_serial_probe(struct usb_interface *interface,
 		if (!port)
 			goto probe_error;
 		tty_port_init(&port->port);
+		port->port.ops = &serial_port_ops;
 		port->serial = serial;
 		spin_lock_init(&port->lock);
 		mutex_init(&port->mutex);
@@ -1048,6 +1066,9 @@ void usb_serial_disconnect(struct usb_interface *interface)
 		if (port) {
 			struct tty_struct *tty = tty_port_tty_get(&port->port);
 			if (tty) {
+				/* The hangup will occur asynchronously but
+				   the object refcounts will sort out all the
+				   cleanup */
 				tty_hangup(tty);
 				tty_kref_put(tty);
 			}
@@ -1102,6 +1123,7 @@ static const struct tty_operations serial_ops = {
 	.open =			serial_open,
 	.close =		serial_close,
 	.write =		serial_write,
+	.hangup = 		serial_hangup,
 	.write_room =		serial_write_room,
 	.ioctl =		serial_ioctl,
 	.set_termios =		serial_set_termios,
@@ -1113,6 +1135,7 @@ static const struct tty_operations serial_ops = {
 	.tiocmset =		serial_tiocmset,
 	.proc_fops =		&serial_proc_fops,
 };
+
 
 struct tty_driver *usb_serial_tty_driver;
 
