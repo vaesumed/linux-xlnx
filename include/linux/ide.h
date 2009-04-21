@@ -26,6 +26,9 @@
 #include <asm/io.h>
 #include <asm/mutex.h>
 
+/* for request_sense */
+#include <linux/cdrom.h>
+
 #if defined(CONFIG_CRIS) || defined(CONFIG_FRV) || defined(CONFIG_MN10300)
 # define SUPPORT_VLB_SYNC 0
 #else
@@ -324,7 +327,6 @@ struct ide_cmd {
 	unsigned int		cursg_ofs;
 
 	struct request		*rq;		/* copy of request */
-	void			*special;	/* valid_t generally */
 };
 
 /* ATAPI packet command flags */
@@ -602,7 +604,11 @@ struct ide_drive_s {
 	unsigned long atapi_flags;
 
 	struct ide_atapi_pc request_sense_pc;
-	struct request request_sense_rq;
+
+	/* current sense rq and buffer */
+	bool sense_rq_armed;
+	struct request sense_rq;
+	struct request_sense sense_data;
 };
 
 typedef struct ide_drive_s ide_drive_t;
@@ -1174,7 +1180,10 @@ int ide_do_test_unit_ready(ide_drive_t *, struct gendisk *);
 int ide_do_start_stop(ide_drive_t *, struct gendisk *, int);
 int ide_set_media_lock(ide_drive_t *, struct gendisk *, int);
 void ide_create_request_sense_cmd(ide_drive_t *, struct ide_atapi_pc *);
-void ide_retry_pc(ide_drive_t *, struct gendisk *);
+void ide_retry_pc(ide_drive_t *drive);
+
+void ide_prep_sense(ide_drive_t *drive, struct request *rq);
+int ide_queue_sense_rq(ide_drive_t *drive, void *special);
 
 int ide_cd_expiry(ide_drive_t *);
 
