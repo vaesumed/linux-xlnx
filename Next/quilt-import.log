@@ -1,0 +1,171 @@
+Importing driver-core.current based on 2.6.30-rc2-git6
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current d91dfbb41bb2e9bdbfbd2cc7078ed7436eab027a
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current d91dfbb41bb2e9bdbfbd2cc7078ed7436eab027a
+Importing device-mapper based on v2.6.30-rc2-195-g9f76208
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 9f76208c33984ab777eace5d07a4e36e88703e02
+HEAD is now at 9f76208 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+   9f76208..d50f729  master     -> quilt/device-mapper
+Importing i2c based on 2.6.30-rc2-git6
+$ cd ../quilt-tmp
+$ git reset --hard d91dfbb41bb2e9bdbfbd2cc7078ed7436eab027a
+HEAD is now at d91dfbb Merge git://git.kernel.org/pub/scm/linux/kernel/git/rusty/linux-2.6-lguest-and-virtio
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+sound-aoa-codecs-convert-to-new-style.patch
+sound-ppc-keywest-01-convert-to-new-style.patch
+sound-ppc-keywest-02-cleanup-i2c_device_name.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 43b096a...9a01412 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc2-git6
+$ cd ../quilt-tmp
+$ git reset --hard d91dfbb41bb2e9bdbfbd2cc7078ed7436eab027a
+HEAD is now at d91dfbb Merge git://git.kernel.org/pub/scm/linux/kernel/git/rusty/linux-2.6-lguest-and-virtio
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 7c4ede9...b1e304c master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard d91dfbb41bb2e9bdbfbd2cc7078ed7436eab027a
+HEAD is now at d91dfbb Merge git://git.kernel.org/pub/scm/linux/kernel/git/rusty/linux-2.6-lguest-and-virtio
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-set-default-sysfs_deprecated-n.patch
+sched-delayed-cleanup-of-user_struct.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + a255b89...c16c6bd master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard c16c6bd5c3169eb9d051d2f372b7794bbc6e3b19
+HEAD is now at c16c6bd sched: delayed cleanup of user_struct
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+musb_gadget-fix-unhandled-endpoint-0-irqs.patch
+musb_gadget-suppress-parasitic-tx-interrupts-with-cppi.patch
+musb_host-refactor-musb_save_toggle.patch
+musb_host-factor-out-musb_ep_-get-set-_qh.patch
+musb_host-simplify-check-for-active-urb.patch
+musb_host-streamline-musb_cleanup_urb-calls.patch
+musb_host-refactor-urb-giveback.patch
+musb-split-out-cppi-interrupt-handler.patch
+usb-move-twl4030_usb-s-probe-function-to-.devinit.text.patch
+usb-move-r8a66597_hcd-s-probe-function-to-.devinit.text.patch
+usb-move-orion-ehci-s-probe-function-to-.devinit.text.patch
+usb-twl4030-usb-fix-minor-reporting-goofage.patch
+usb-nop-usb-xceiv-behave-when-linked-as-a-module.patch
+musb-proper-hookup-to-transceiver-drivers.patch
+musb-otg-timer-cleanup.patch
+musb-make-initial-hnp-roleswitch-work.patch
+musb-support-disconnect-after-hnp-roleswitch.patch
+musb-use-dma-mode-1-for-tx-if-transfer-size-equals-maxpacket.patch
+musb-add-high-bandwidth-iso-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + 12f417eb...ad23a5f master     -> quilt/usb  (forced update)
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard ad23a5f7b4f17cec0c2271c26d07d93998956be6
+HEAD is now at ad23a5f musb: add high bandwidth ISO support
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-comedi-remove-ni_board-typedef.patch
+staging-comedi-remove-ni_private-typedef.patch
+staging-comedi-remove-local_info_t-typedef-in-ni_labpc_cs.patch
+staging-comedi-remove-dio24_board_struct-typedef.patch
+staging-comedi-remove-local_info_t-typedef-in-ni_daq_dio24.patch
+staging-comedi-remove-byte-and-pbyte-typedefs-in-addi-data.patch
+staging-comedi-remove-short-and-pshort-typedefs-in-addi-data.patch
+staging-comedi-remove-ushort-and-pushort-typedefs-in-addi-data.patch
+staging-comedi-remove-word-and-pword-typedefs-in-addi-data.patch
+staging-comedi-remove-int-and-pint-typedefs-in-addi-data.patch
+staging-comedi-remove-uint-and-puint-typedefs-in-addi-data.patch
+staging-comedi-remove-long-and-plong-typedefs-in-addi-data.patch
+staging-comedi-remove-ulong-and-pulong-typedefs-in-addi-data.patch
+staging-comedi-remove-dword-and-pdword-typedefs-in-addi-data.patch
+staging-comedi-remove-ulong_ptr-typedef-in-addi-data.patch
+staging-comedi-remove-pcrange-typedef-in-addi-data.patch
+staging-comedi-remove-boardtype-typedef-in-addi-data.patch
+staging-comedi-remove-str_moduleinfo-typedef-in-addi-data.patch
+staging-comedi-remove-addi_private-typedef-in-addi-data.patch
+staging-comedi-remove-str_mainheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_digitalinputheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_digitaloutputheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_timerdetails-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_timermainheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_analogreadinformation-typedef-in-addi-data-hwdrv_apci3120.h.patch
+staging-comedi-remove-str_module-typedef-in-addi-data-hwdrv_apci3200.h.patch
+staging-comedi-remove-str_boardinfos-typedef-in-addi-data-hwdrv_apci3200.patch
+staging-comedi-remove-str_addidata_rtdstruct-typedef-in-addi-data-hwdrv_apci3200.patch
+staging-comedi-remove-labpc_board_struct-typedef.patch
+staging-comedi-remove-labpc_private-typedef.patch
+staging-comedi-remove-str_analoginputheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-c99-comments-in-8253.h.patch
+staging-comedi-remove-c99-comments-in-acl7225b.c.patch
+staging-comedi-remove-c99-comments-in-apci1710_82x54.c.patch
+staging-comedi-remove-c99-comments-in-das1800.c.patch
+staging-comedi-remove-c99-comments-in-pcl818.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci1500.c.patch
+staging-comedi-remove-c99-comments-in-apci1710_pwm.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci1564.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci3200.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci3120.c.patch
+staging-comedi-remove-c99-comments-in-adl_pci6208.c.patch
+staging-comedi-remove-c99-comments-in-adl_pci9118.c.patch
+staging-comedi-remove-c99-comments-in-adv_pci1723.c.patch
+staging-comedi-remove-c99-comments-in-c6xdigio.c.patch
+staging-comedi-remove-c99-comments-in-cb_pcidas64.c.patch
+staging-comedi-remove-c99-comments-in-cb_pcidas.c.patch
+staging-comedi-remove-c99-comments-in-cb_pcimdas.c.patch
+staging-comedi-remove-c99-comments-in-gsc_hpdi.c.patch
+staging-comedi-remove-c99-comments-in-mpc624.c.patch
+staging-comedi-remove-c99-comments-in-ni_at_a2150.c.patch
+staging-comedi-remove-c99-comments-in-ni_labpc.c.patch
+staging-comedi-remove-c99-comments-in-pcl724.c.patch
+staging-comedi-remove-c99-comments-in-pcl816.c.patch
+staging-comedi-remove-c99-comments-in-s526.c.patch
+staging-comedi-remove-interrupt.h.patch
+staging-comedi-remove-c99-comments.patch
+staging-comedi-finish-removing-ni_private-typedef.patch
+staging-comedi-pcmcia_parse_tuple-now-has-two-arguments-not-three.patch
+staging-comedi-fix-build-errors-in-pcmcia-comedi-drivers.patch
+staging-comedi-set-pci-and-pcmcia-defines.patch
+staging-comedi-fixed-kconfig-option-for-comedi_pcmcia_drivers.patch
+staging-comedi-pcl818-fix-option-handling-for-fifo-mode.patch
+staging-comedi-pcl818-tidy-up-ai-command-after-channel-dropout-or-similar-error.patch
+staging-comedi-ni_600x-added-support-for-comedi_poll.patch
+staging-comedi-work-around-malformed-rtai_version_code.patch
+staging-comedi-undo-stupid-commit-made-3-months-ago.patch
+staging-comedi-amplc_pc236-corrected-documentation.patch
+staging-comedi-added-sysfs-attribute-files-for-setting-and-querying-subdevice-buffer-sizes.patch
+staging-comedi-jr3_pci-use-struct-device-from-pci_dev-for-firmware-loading.patch
+staging-agnx-probe-cleanup.patch
+staging-agnx-remove-memlens-from-probe.patch
+staging-agnx-fix-fail-paths-in-probe.patch
+staging-agnx-fix-bssid-compiler-warnings.patch
+staging-meilhaus-switch-to-misc-device.patch
+staging-meilhaus-annotate-cpi-functions.patch
+staging-meilhaus-move-tables-to-.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 411d0c7...f8c1baa master     -> quilt/staging  (forced update)
