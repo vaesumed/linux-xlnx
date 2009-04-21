@@ -132,6 +132,7 @@ struct bio {
  * top 4 bits of bio flags indicate the pool this bio came from
  */
 #define BIO_POOL_BITS		(4)
+#define BIO_POOL_NONE		((1UL << BIO_POOL_BITS) - 1)
 #define BIO_POOL_OFFSET		(BITS_PER_LONG - BIO_POOL_BITS)
 #define BIO_POOL_MASK		(1UL << BIO_POOL_OFFSET)
 #define BIO_POOL_IDX(bio)	((bio)->bi_flags >> BIO_POOL_OFFSET)	
@@ -505,7 +506,7 @@ static inline int bio_has_data(struct bio *bio)
 }
 
 /*
- * BIO list managment for use by remapping drivers (e.g. DM or MD).
+ * BIO list management for use by remapping drivers (e.g. DM or MD) and loop.
  *
  * A bio_list anchors a singly-linked list of bios chained through the bi_next
  * member of the bio.  The bio_list also caches the last list member to allow
