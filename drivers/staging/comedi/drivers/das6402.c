@@ -151,7 +151,7 @@ static void das6402_setcounter(struct comedi_device * dev)
 	outb_p(p, dev->iobase + 14);
 }
 
-static irqreturn_t intr_handler(int irq, void *d PT_REGS_ARG)
+static irqreturn_t intr_handler(int irq, void *d)
 {
 	struct comedi_device *dev = d;
 	struct comedi_subdevice *s = dev->subdevices;
@@ -342,7 +342,7 @@ static int das6402_attach(struct comedi_device * dev, struct comedi_devconfig * 
 	s->type = COMEDI_SUBD_AI;
 	s->subdev_flags = SDF_READABLE | SDF_GROUND;
 	s->n_chan = 8;
-	//s->trig[2]=das6402_ai_mode2;
+	/* s->trig[2]=das6402_ai_mode2; */
 	s->cancel = das6402_ai_cancel;
 	s->maxdata = (1 << 12) - 1;
 	s->len_chanlist = 16;	/* ? */

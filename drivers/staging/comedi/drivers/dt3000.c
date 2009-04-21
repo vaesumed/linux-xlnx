@@ -345,9 +345,9 @@ static void dt3k_writesingle(struct comedi_device * dev, unsigned int subsys,
 
 static int debug_n_ints = 0;
 
-// FIXME! Assumes shared interrupt is for this card.
-// What's this debug_n_ints stuff? Obviously needs some work...
-static irqreturn_t dt3k_interrupt(int irq, void *d PT_REGS_ARG)
+/* FIXME! Assumes shared interrupt is for this card. */
+/* What's this debug_n_ints stuff? Obviously needs some work... */
+static irqreturn_t dt3k_interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
 	struct comedi_subdevice *s;

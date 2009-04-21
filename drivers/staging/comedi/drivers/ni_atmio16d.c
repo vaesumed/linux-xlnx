@@ -127,7 +127,7 @@ static const struct atmio16_board_t atmio16_boards[] = {
 /* function prototypes */
 static int atmio16d_attach(struct comedi_device * dev, struct comedi_devconfig * it);
 static int atmio16d_detach(struct comedi_device * dev);
-static irqreturn_t atmio16d_interrupt(int irq, void *d PT_REGS_ARG);
+static irqreturn_t atmio16d_interrupt(int irq, void *d);
 static int atmio16d_ai_cmdtest(struct comedi_device * dev, struct comedi_subdevice * s,
 	struct comedi_cmd * cmd);
 static int atmio16d_ai_cmd(struct comedi_device * dev, struct comedi_subdevice * s);
@@ -257,12 +257,12 @@ static void reset_atmio16d(struct comedi_device * dev)
 	outw(2048, dev->iobase + DAC1_REG);
 }
 
-static irqreturn_t atmio16d_interrupt(int irq, void *d PT_REGS_ARG)
+static irqreturn_t atmio16d_interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
 	struct comedi_subdevice *s = dev->subdevices + 0;
 
-//      printk("atmio16d_interrupt!\n");
+/* printk("atmio16d_interrupt!\n"); */
 
 	comedi_buf_put(s->async, inw(dev->iobase + AD_FIFO_REG));
 
@@ -542,9 +542,9 @@ static int atmio16d_ai_insn_read(struct comedi_device * dev, struct comedi_subde
 	gain = CR_RANGE(insn->chanspec);
 
 	/* reset the Analog input circuitry */
-	//outw( 0, dev->iobase+AD_CLEAR_REG );
+	/* outw( 0, dev->iobase+AD_CLEAR_REG ); */
 	/* reset the Analog Input MUX Counter to 0 */
-	//outw( 0, dev->iobase+MUX_CNTR_REG );
+	/* outw( 0, dev->iobase+MUX_CNTR_REG ); */
 
 	/* set the Input MUX gain */
 	outw(chan | (gain << 6), dev->iobase + MUX_GAIN_REG);

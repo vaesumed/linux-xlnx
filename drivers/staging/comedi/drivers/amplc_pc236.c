@@ -27,7 +27,7 @@ Driver: amplc_pc236
 Description: Amplicon PC36AT, PCI236
 Author: Ian Abbott <abbotti@mev.co.uk>
 Devices: [Amplicon] PC36AT (pc36at), PCI236 (pci236 or amplc_pc236)
-Updated: Wed, 22 Oct 2008 13:40:03 +0100
+Updated: Wed, 01 Apr 2009 15:41:25 +0100
 Status: works
 
 Configuration options - PC36AT:
@@ -45,12 +45,14 @@ as subdevice 0.
 
 Subdevice 1 pretends to be a digital input device, but it always returns
 0 when read. However, if you run a command with scan_begin_src=TRIG_EXT,
-a rising edge on port C bit 7 acts as an external trigger, which can be
+a rising edge on port C bit 3 acts as an external trigger, which can be
 used to wake up tasks.  This is like the comedi_parport device, but the
 only way to physically disable the interrupt on the PC36AT is to remove
 the IRQ jumper.  If no interrupt is connected, then subdevice 1 is
 unused.
 */
+
+#include <linux/interrupt.h>
 
 #include "../comedidev.h"
 
@@ -194,7 +196,7 @@ static int pc236_intr_cmdtest(struct comedi_device * dev, struct comedi_subdevic
 	struct comedi_cmd * cmd);
 static int pc236_intr_cmd(struct comedi_device * dev, struct comedi_subdevice * s);
 static int pc236_intr_cancel(struct comedi_device * dev, struct comedi_subdevice * s);
-static irqreturn_t pc236_interrupt(int irq, void *d PT_REGS_ARG);
+static irqreturn_t pc236_interrupt(int irq, void *d);
 
 /*
  * This function looks for a PCI device matching the requested board name,
@@ -638,7 +640,7 @@ static int pc236_intr_cancel(struct comedi_device * dev, struct comedi_subdevice
  * Interrupt service routine.
  * Based on the comedi_parport driver.
  */
-static irqreturn_t pc236_interrupt(int irq, void *d PT_REGS_ARG)
+static irqreturn_t pc236_interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
 	struct comedi_subdevice *s = dev->subdevices + 1;

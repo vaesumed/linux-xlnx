@@ -66,7 +66,7 @@ See the notes in the ni_atmio.o driver.
 
 #define MAX_N_CALDACS 32
 
-static const ni_board ni_boards[] = {
+static const struct ni_board_struct ni_boards[] = {
       {device_id:0x010d,
 	      name:	"DAQCard-ai-16xe-50",
 	      n_adchan:16,
@@ -344,7 +344,7 @@ static void mio_cs_config(struct pcmcia_device *link)
 		manfid = le16_to_cpu(buf[0]);
 		prodid = le16_to_cpu(buf[1]);
 	}
-	//printk("manfid = 0x%04x, 0x%04x\n",manfid,prodid);
+	/* printk("manfid = 0x%04x, 0x%04x\n",manfid,prodid); */
 
 	tuple.DesiredTuple = CISTPL_CFTABLE_ENTRY;
 	tuple.Attributes = 0;
@@ -381,7 +381,7 @@ static void mio_cs_config(struct pcmcia_device *link)
 		for (base = 0x000; base < 0x400; base += 0x20) {
 			link->io.BasePort1 = base;
 			ret = pcmcia_request_io(link, &link->io);
-			//printk("RequestIO 0x%02x\n",ret);
+			/* printk("RequestIO 0x%02x\n",ret); */
 			if (!ret)
 				break;
 		}
@@ -393,12 +393,12 @@ static void mio_cs_config(struct pcmcia_device *link)
 	if (ret) {
 		printk("pcmcia_request_irq() returned error: %i\n", ret);
 	}
-	//printk("RequestIRQ 0x%02x\n",ret);
+	/* printk("RequestIRQ 0x%02x\n",ret); */
 
 	link->conf.ConfigIndex = 1;
 
 	ret = pcmcia_request_configuration(link, &link->conf);
-	//printk("RequestConfiguration %d\n",ret);
+	/* printk("RequestConfiguration %d\n",ret); */
 
 	link->dev_node = &dev_node;
 }

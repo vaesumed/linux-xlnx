@@ -54,7 +54,7 @@ You shoud also find the complete GPL in the COPYING file accompanying this sourc
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT   i_APCI3XXX_TestConversionStarted                 |
+| Function Name     : int   i_APCI3XXX_TestConversionStarted                 |
 |                          (struct comedi_device    *dev)                           |
 +----------------------------------------------------------------------------+
 | Task                Test if any conversion started                         |
@@ -79,7 +79,7 @@ int i_APCI3XXX_TestConversionStarted(struct comedi_device * dev)
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT   i_APCI3XXX_AnalogInputConfigOperatingMode        |
+| Function Name     : int   i_APCI3XXX_AnalogInputConfigOperatingMode        |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -87,9 +87,9 @@ int i_APCI3XXX_TestConversionStarted(struct comedi_device * dev)
 +----------------------------------------------------------------------------+
 | Task           Converting mode and convert time selection                  |
 +----------------------------------------------------------------------------+
-| Input Parameters  : b_SingleDiff  = (BYTE)  data[1];                       |
-|                     b_TimeBase    = (BYTE)  data[2]; (0: ns, 1:micros 2:ms)|
-|                    dw_ReloadValue = (DWORD) data[3];                       |
+| Input Parameters  : b_SingleDiff  = (unsigned char)  data[1];                       |
+|                     b_TimeBase    = (unsigned char)  data[2]; (0: ns, 1:micros 2:ms)|
+|                    dw_ReloadValue = (unsigned int) data[3];                       |
 |                     ........                                               |
 +----------------------------------------------------------------------------+
 | Output Parameters : -                                                      |
@@ -108,11 +108,11 @@ int i_APCI3XXX_TestConversionStarted(struct comedi_device * dev)
 int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_TimeBase = 0;
-	BYTE b_SingleDiff = 0;
-	DWORD dw_ReloadValue = 0;
-	DWORD dw_TestReloadValue = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_TimeBase = 0;
+	unsigned char b_SingleDiff = 0;
+	unsigned int dw_ReloadValue = 0;
+	unsigned int dw_TestReloadValue = 0;
 
 	/************************/
 	/* Test the buffer size */
@@ -123,19 +123,19 @@ int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 		/* Get the Singel/Diff flag */
 	   /****************************/
 
-		b_SingleDiff = (BYTE) data[1];
+		b_SingleDiff = (unsigned char) data[1];
 
 	   /****************************/
 		/* Get the time base unitiy */
 	   /****************************/
 
-		b_TimeBase = (BYTE) data[2];
+		b_TimeBase = (unsigned char) data[2];
 
 	   /*************************************/
 		/* Get the convert time reload value */
 	   /*************************************/
 
-		dw_ReloadValue = (DWORD) data[3];
+		dw_ReloadValue = (unsigned int) data[3];
 
 	   /**********************/
 		/* Test the time base */
@@ -186,7 +186,7 @@ int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 								devpriv->
 									ui_EocEosConversionTime
 									=
-									(UINT)
+									(unsigned int)
 									dw_ReloadValue;
 								devpriv->
 									b_EocEosConversionTimeBase
@@ -204,7 +204,7 @@ int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 								/* Set the convert timing unit */
 			      /*******************************/
 
-								writel((DWORD)
+								writel((unsigned int)
 									b_TimeBase,
 									(void *)
 									(devpriv->
@@ -273,7 +273,7 @@ int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT   i_APCI3XXX_InsnConfigAnalogInput                 |
+| Function Name     : int   i_APCI3XXX_InsnConfigAnalogInput                 |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -281,9 +281,9 @@ int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 +----------------------------------------------------------------------------+
 | Task           Converting mode and convert time selection                  |
 +----------------------------------------------------------------------------+
-| Input Parameters  : b_ConvertMode = (BYTE)  data[0];                       |
-|                     b_TimeBase    = (BYTE)  data[1]; (0: ns, 1:micros 2:ms)|
-|                    dw_ReloadValue = (DWORD) data[2];                       |
+| Input Parameters  : b_ConvertMode = (unsigned char)  data[0];                       |
+|                     b_TimeBase    = (unsigned char)  data[1]; (0: ns, 1:micros 2:ms)|
+|                    dw_ReloadValue = (unsigned int) data[2];                       |
 |                     ........                                               |
 +----------------------------------------------------------------------------+
 | Output Parameters : -                                                      |
@@ -298,14 +298,14 @@ int i_APCI3XXX_AnalogInputConfigOperatingMode(struct comedi_device * dev,
 int i_APCI3XXX_InsnConfigAnalogInput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
+	int i_ReturnValue = insn->n;
 
 	/************************/
 	/* Test the buffer size */
 	/************************/
 
 	if (insn->n >= 1) {
-		switch ((BYTE) data[0]) {
+		switch ((unsigned char) data[0]) {
 		case APCI3XXX_CONFIGURATION:
 			i_ReturnValue =
 				i_APCI3XXX_AnalogInputConfigOperatingMode(dev,
@@ -331,7 +331,7 @@ int i_APCI3XXX_InsnConfigAnalogInput(struct comedi_device * dev,
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT   i_APCI3XXX_InsnReadAnalogInput                   |
+| Function Name     : int   i_APCI3XXX_InsnReadAnalogInput                   |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -358,13 +358,13 @@ int i_APCI3XXX_InsnConfigAnalogInput(struct comedi_device * dev,
 int i_APCI3XXX_InsnReadAnalogInput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_Configuration = (BYTE) CR_RANGE(insn->chanspec);
-	BYTE b_Channel = (BYTE) CR_CHAN(insn->chanspec);
-	DWORD dw_Temp = 0;
-	DWORD dw_Configuration = 0;
-	DWORD dw_AcquisitionCpt = 0;
-	BYTE b_Interrupt = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_Configuration = (unsigned char) CR_RANGE(insn->chanspec);
+	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
+	unsigned int dw_Temp = 0;
+	unsigned int dw_Configuration = 0;
+	unsigned int dw_AcquisitionCpt = 0;
+	unsigned char b_Interrupt = 0;
 
 	/*************************************/
 	/* Test if operating mode configured */
@@ -449,8 +449,8 @@ int i_APCI3XXX_InsnReadAnalogInput(struct comedi_device * dev,
 
 					dw_Configuration =
 						(b_Configuration & 3) |
-						((DWORD) (b_Configuration >> 2)
-						<< 6) | ((DWORD) devpriv->
+						((unsigned int) (b_Configuration >> 2)
+						<< 6) | ((unsigned int) devpriv->
 						b_SingelDiff << 7);
 
 		    /***************************/
@@ -468,7 +468,7 @@ int i_APCI3XXX_InsnReadAnalogInput(struct comedi_device * dev,
 					writel(dw_Temp | 0x100UL,
 						(void *)(devpriv->dw_AiBase +
 							4));
-					writel((DWORD) b_Channel,
+					writel((unsigned int) b_Channel,
 						(void *)(devpriv->dw_AiBase +
 							0));
 
@@ -607,8 +607,8 @@ int i_APCI3XXX_InsnReadAnalogInput(struct comedi_device * dev,
 void v_APCI3XXX_Interrupt(int irq, void *d)
 {
 	struct comedi_device *dev = d;
-	BYTE b_CopyCpt = 0;
-	DWORD dw_Status = 0;
+	unsigned char b_CopyCpt = 0;
+	unsigned int dw_Status = 0;
 
 	/***************************/
 	/* Test if interrupt occur */
@@ -635,7 +635,7 @@ void v_APCI3XXX_Interrupt(int irq, void *d)
 				b_CopyCpt < devpriv->ui_AiNbrofChannels;
 				b_CopyCpt++) {
 				devpriv->ui_AiReadData[b_CopyCpt] =
-					(UINT) readl((void *)(devpriv->
+					(unsigned int) readl((void *)(devpriv->
 						dw_AiBase + 28));
 			}
 
@@ -662,7 +662,7 @@ void v_APCI3XXX_Interrupt(int irq, void *d)
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT   i_APCI3XXX_InsnWriteAnalogOutput                 |
+| Function Name     : int   i_APCI3XXX_InsnWriteAnalogOutput                 |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -687,10 +687,10 @@ void v_APCI3XXX_Interrupt(int irq, void *d)
 int i_APCI3XXX_InsnWriteAnalogOutput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	BYTE b_Range = (BYTE) CR_RANGE(insn->chanspec);
-	BYTE b_Channel = (BYTE) CR_CHAN(insn->chanspec);
-	DWORD dw_Status = 0;
-	INT i_ReturnValue = insn->n;
+	unsigned char b_Range = (unsigned char) CR_RANGE(insn->chanspec);
+	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
+	unsigned int dw_Status = 0;
+	int i_ReturnValue = insn->n;
 
 	/************************/
 	/* Test the buffer size */
@@ -768,7 +768,7 @@ int i_APCI3XXX_InsnWriteAnalogOutput(struct comedi_device * dev,
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT   i_APCI3XXX_InsnConfigInitTTLIO                   |
+| Function Name     : int   i_APCI3XXX_InsnConfigInitTTLIO                   |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -778,8 +778,8 @@ int i_APCI3XXX_InsnWriteAnalogOutput(struct comedi_device * dev,
 |                for you call any other function witch access of TTL.        |
 |                APCI3XXX_TTL_INIT_DIRECTION_PORT2(user inputs for direction)|
 +----------------------------------------------------------------------------+
-| Input Parameters  : b_InitType    = (BYTE) data[0];                        |
-|                     b_Port2Mode   = (BYTE) data[1];                        |
+| Input Parameters  : b_InitType    = (unsigned char) data[0];                        |
+|                     b_Port2Mode   = (unsigned char) data[1];                        |
 +----------------------------------------------------------------------------+
 | Output Parameters : -                                                      |
 +----------------------------------------------------------------------------+
@@ -794,8 +794,8 @@ int i_APCI3XXX_InsnWriteAnalogOutput(struct comedi_device * dev,
 int i_APCI3XXX_InsnConfigInitTTLIO(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_Command = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_Command = 0;
 
 	/************************/
 	/* Test the buffer size */
@@ -806,7 +806,7 @@ int i_APCI3XXX_InsnConfigInitTTLIO(struct comedi_device * dev,
 		/* Get the command */
 		/* **************** */
 
-		b_Command = (BYTE) data[0];
+		b_Command = (unsigned char) data[0];
 
 	   /********************/
 		/* Test the command */
@@ -899,7 +899,7 @@ int i_APCI3XXX_InsnConfigInitTTLIO(struct comedi_device * dev,
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT     i_APCI3XXX_InsnBitsTTLIO                       |
+| Function Name     : int     i_APCI3XXX_InsnBitsTTLIO                       |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -922,11 +922,11 @@ int i_APCI3XXX_InsnConfigInitTTLIO(struct comedi_device * dev,
 int i_APCI3XXX_InsnBitsTTLIO(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_ChannelCpt = 0;
-	DWORD dw_ChannelMask = 0;
-	DWORD dw_BitMask = 0;
-	DWORD dw_Status = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_ChannelCpt = 0;
+	unsigned int dw_ChannelMask = 0;
+	unsigned int dw_BitMask = 0;
+	unsigned int dw_Status = 0;
 
 	/************************/
 	/* Test the buffer size */
@@ -1056,7 +1056,7 @@ int i_APCI3XXX_InsnBitsTTLIO(struct comedi_device * dev,
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT i_APCI3XXX_InsnReadTTLIO                           |
+| Function Name     : int i_APCI3XXX_InsnReadTTLIO                           |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -1077,8 +1077,8 @@ int i_APCI3XXX_InsnBitsTTLIO(struct comedi_device * dev,
 int i_APCI3XXX_InsnReadTTLIO(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	BYTE b_Channel = (BYTE) CR_CHAN(insn->chanspec);
-	INT i_ReturnValue = insn->n;
+	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
+	int i_ReturnValue = insn->n;
 	unsigned int *pls_ReadData = data;
 
 	/************************/
@@ -1168,7 +1168,7 @@ int i_APCI3XXX_InsnReadTTLIO(struct comedi_device * dev,
 
 /*
 +----------------------------------------------------------------------------+
-| Function Name     : INT     i_APCI3XXX_InsnWriteTTLIO                      |
+| Function Name     : int     i_APCI3XXX_InsnWriteTTLIO                      |
 |                          (struct comedi_device    *dev,                           |
 |                           struct comedi_subdevice *s,                             |
 |                           struct comedi_insn      *insn,                          |
@@ -1190,17 +1190,17 @@ int i_APCI3XXX_InsnReadTTLIO(struct comedi_device * dev,
 int i_APCI3XXX_InsnWriteTTLIO(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_Channel = (BYTE) CR_CHAN(insn->chanspec);
-	BYTE b_State = 0;
-	DWORD dw_Status = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
+	unsigned char b_State = 0;
+	unsigned int dw_Status = 0;
 
 	/************************/
 	/* Test the buffer size */
 	/************************/
 
 	if (insn->n >= 1) {
-		b_State = (BYTE) data[0];
+		b_State = (unsigned char) data[0];
 
 	   /***********************/
 		/* Test if read port 0 */
@@ -1301,9 +1301,9 @@ int i_APCI3XXX_InsnWriteTTLIO(struct comedi_device * dev,
 int i_APCI3XXX_InsnReadDigitalInput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_Channel = (BYTE) CR_CHAN(insn->chanspec);
-	DWORD dw_Temp = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_Channel = (unsigned char) CR_CHAN(insn->chanspec);
+	unsigned int dw_Temp = 0;
 
 	/***************************/
 	/* Test the channel number */
@@ -1359,8 +1359,8 @@ int i_APCI3XXX_InsnReadDigitalInput(struct comedi_device * dev,
 int i_APCI3XXX_InsnBitsDigitalInput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	DWORD dw_Temp = 0;
+	int i_ReturnValue = insn->n;
+	unsigned int dw_Temp = 0;
 
 	/************************/
 	/* Test the buffer size */
@@ -1412,11 +1412,11 @@ int i_APCI3XXX_InsnBitsDigitalInput(struct comedi_device * dev,
 int i_APCI3XXX_InsnBitsDigitalOutput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_ChannelCpt = 0;
-	DWORD dw_ChannelMask = 0;
-	DWORD dw_BitMask = 0;
-	DWORD dw_Status = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_ChannelCpt = 0;
+	unsigned int dw_ChannelMask = 0;
+	unsigned int dw_BitMask = 0;
+	unsigned int dw_Status = 0;
 
 	/************************/
 	/* Test the buffer size */
@@ -1508,10 +1508,10 @@ int i_APCI3XXX_InsnBitsDigitalOutput(struct comedi_device * dev,
 int i_APCI3XXX_InsnWriteDigitalOutput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_Channel = CR_CHAN(insn->chanspec);
-	BYTE b_State = 0;
-	DWORD dw_Status = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_Channel = CR_CHAN(insn->chanspec);
+	unsigned char b_State = 0;
+	unsigned int dw_Status = 0;
 
 	/************************/
 	/* Test the buffer size */
@@ -1527,7 +1527,7 @@ int i_APCI3XXX_InsnWriteDigitalOutput(struct comedi_device * dev,
 			/* Get the command */
 	      /*******************/
 
-			b_State = (BYTE) data[0];
+			b_State = (unsigned char) data[0];
 
 	      /********************************/
 			/* Read the digital output port */
@@ -1583,9 +1583,9 @@ int i_APCI3XXX_InsnWriteDigitalOutput(struct comedi_device * dev,
 int i_APCI3XXX_InsnReadDigitalOutput(struct comedi_device * dev,
 	struct comedi_subdevice * s, struct comedi_insn * insn, unsigned int * data)
 {
-	INT i_ReturnValue = insn->n;
-	BYTE b_Channel = CR_CHAN(insn->chanspec);
-	DWORD dw_Status = 0;
+	int i_ReturnValue = insn->n;
+	unsigned char b_Channel = CR_CHAN(insn->chanspec);
+	unsigned int dw_Status = 0;
 
 	/************************/
 	/* Test the buffer size */

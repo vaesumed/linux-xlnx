@@ -108,7 +108,7 @@ static const struct comedi_lrange das16cs_ai_range = { 4, {
 	}
 };
 
-static irqreturn_t das16cs_interrupt(int irq, void *d PT_REGS_ARG);
+static irqreturn_t das16cs_interrupt(int irq, void *d);
 static int das16cs_ai_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
 	struct comedi_insn * insn, unsigned int * data);
 static int das16cs_ai_cmd(struct comedi_device * dev, struct comedi_subdevice * s);
@@ -276,9 +276,9 @@ static int das16cs_detach(struct comedi_device * dev)
 	return 0;
 }
 
-static irqreturn_t das16cs_interrupt(int irq, void *d PT_REGS_ARG)
+static irqreturn_t das16cs_interrupt(int irq, void *d)
 {
-	//struct comedi_device *dev = d;
+	/* struct comedi_device *dev = d; */
 	return IRQ_HANDLED;
 }
 
@@ -773,7 +773,7 @@ static void das16cs_pcmcia_config(struct pcmcia_device *link)
 	if ((last_ret = pcmcia_get_tuple_data(link, &tuple)) != 0)
 		goto cs_failed;
 	last_fn = ParseTuple;
-	if ((last_ret = pcmcia_parse_tuple(link, &tuple, &parse)) != 0)
+	if ((last_ret = pcmcia_parse_tuple(&tuple, &parse)) != 0)
 		goto cs_failed;
 	link->conf.ConfigBase = parse.config.base;
 	link->conf.Present = parse.config.rmask[0];
@@ -798,7 +798,7 @@ static void das16cs_pcmcia_config(struct pcmcia_device *link)
 		cistpl_cftable_entry_t *cfg = &(parse.cftable_entry);
 		if (pcmcia_get_tuple_data(link, &tuple))
 			goto next_entry;
-		if (pcmcia_parse_tuple(link, &tuple, &parse))
+		if (pcmcia_parse_tuple(&tuple, &parse))
 			goto next_entry;
 
 		if (cfg->flags & CISTPL_CFTABLE_DEFAULT)
@@ -973,4 +973,4 @@ void __exit cleanup_module(void)
 
 #else
 COMEDI_INITCLEANUP(driver_das16cs);
-#endif //CONFIG_PCMCIA
+#endif /* CONFIG_PCMCIA */
