@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2008 Nokia Corporation
  *
- * Contact: Jarkko Nikula <jarkko.nikula@nokia.com>
+ * Contact: Jarkko Nikula <jhnikula@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -383,10 +383,9 @@ static int __init n810_soc_init(void)
 	clk_set_parent(sys_clkout2_src, func96m_clk);
 	clk_set_rate(sys_clkout2, 12000000);
 
-	if (gpio_request(N810_HEADSET_AMP_GPIO, "hs_amp") < 0)
-		BUG();
-	if (gpio_request(N810_SPEAKER_AMP_GPIO, "spk_amp") < 0)
-		BUG();
+	BUG_ON((gpio_request(N810_HEADSET_AMP_GPIO, "hs_amp") < 0) ||
+	       (gpio_request(N810_SPEAKER_AMP_GPIO, "spk_amp") < 0));
+
 	gpio_direction_output(N810_HEADSET_AMP_GPIO, 0);
 	gpio_direction_output(N810_SPEAKER_AMP_GPIO, 0);
 
@@ -417,6 +416,6 @@ static void __exit n810_soc_exit(void)
 module_init(n810_soc_init);
 module_exit(n810_soc_exit);
 
-MODULE_AUTHOR("Jarkko Nikula <jarkko.nikula@nokia.com>");
+MODULE_AUTHOR("Jarkko Nikula <jhnikula@gmail.com>");
 MODULE_DESCRIPTION("ALSA SoC Nokia N810");
 MODULE_LICENSE("GPL");
