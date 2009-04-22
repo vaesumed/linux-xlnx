@@ -181,8 +181,8 @@ struct board_private_struct {
  * the board, and also about the kernel module that contains
  * the device code.
  */
-static int attach(struct comedi_device * dev, struct comedi_devconfig * it);
-static int detach(struct comedi_device * dev);
+static int attach(struct comedi_device *dev, struct comedi_devconfig *it);
+static int detach(struct comedi_device *dev);
 static struct comedi_driver cb_pcimdda_driver = {
       driver_name:"cb_pcimdda",
       module:THIS_MODULE,
@@ -197,10 +197,10 @@ MODULE_DESCRIPTION("Comedi low-level driver for the Computerboards PCIM-DDA "
 MODULE_LICENSE("GPL");
 COMEDI_PCI_INITCLEANUP_NOMODULE(cb_pcimdda_driver, pci_table);
 
-static int ao_winsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data);
-static int ao_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data);
+static int ao_winsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data);
+static int ao_rinsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data);
 
 /*---------------------------------------------------------------------------
   HELPER FUNCTION DECLARATIONS
@@ -226,7 +226,7 @@ static inline unsigned int figure_out_maxdata(int bits)
  *
  *  Otherwise, returns a -errno on error
  */
-static int probe(struct comedi_device * dev, const struct comedi_devconfig * it);
+static int probe(struct comedi_device *dev, const struct comedi_devconfig *it);
 
 /*---------------------------------------------------------------------------
   FUNCTION DEFINITIONS
@@ -238,7 +238,7 @@ static int probe(struct comedi_device * dev, const struct comedi_devconfig * it)
  * in the driver structure, dev->board_ptr contains that
  * address.
  */
-static int attach(struct comedi_device * dev, struct comedi_devconfig * it)
+static int attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	struct comedi_subdevice *s;
 	int err;
@@ -326,7 +326,7 @@ static int attach(struct comedi_device * dev, struct comedi_devconfig * it)
  * allocated by _attach().  dev->private and dev->subdevices are
  * deallocated automatically by the core.
  */
-static int detach(struct comedi_device * dev)
+static int detach(struct comedi_device *dev)
 {
 	if (devpriv) {
 
@@ -352,8 +352,8 @@ static int detach(struct comedi_device * dev)
 	return 0;
 }
 
-static int ao_winsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int ao_winsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	int i;
 	int chan = CR_CHAN(insn->chanspec);
@@ -391,8 +391,8 @@ static int ao_winsn(struct comedi_device * dev, struct comedi_subdevice * s,
    all AO channels update simultaneously.  This is useful for some control
    applications, I would imagine.
 */
-static int ao_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int ao_rinsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	int i;
 	int chan = CR_CHAN(insn->chanspec);
@@ -425,7 +425,7 @@ static int ao_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
  *
  *  Otherwise, returns a -errno on error
  */
-static int probe(struct comedi_device * dev, const struct comedi_devconfig * it)
+static int probe(struct comedi_device *dev, const struct comedi_devconfig *it)
 {
 	struct pci_dev *pcidev;
 	int index;
@@ -434,16 +434,16 @@ static int probe(struct comedi_device * dev, const struct comedi_devconfig * it)
 	for (pcidev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, NULL);
 		pcidev != NULL;
 		pcidev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, pcidev)) {
-		// is it not a computer boards card?
+		/*  is it not a computer boards card? */
 		if (pcidev->vendor != PCI_VENDOR_ID_COMPUTERBOARDS)
 			continue;
-		// loop through cards supported by this driver
+		/*  loop through cards supported by this driver */
 		for (index = 0; index < N_BOARDS; index++) {
 			if (boards[index].device_id != pcidev->device)
 				continue;
-			// was a particular bus/slot requested?
+			/*  was a particular bus/slot requested? */
 			if (it->options[0] || it->options[1]) {
-				// are we on the wrong bus/slot?
+				/*  are we on the wrong bus/slot? */
 				if (pcidev->bus->number != it->options[0] ||
 					PCI_SLOT(pcidev->devfn) !=
 					it->options[1]) {

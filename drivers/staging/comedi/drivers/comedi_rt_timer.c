@@ -70,12 +70,12 @@ TODO:
 #define RTLINUX_VERSION_CODE 0
 #endif
 #ifndef RTLINUX_VERSION
-#define RTLINUX_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
+#define RTLINUX_VERSION(a, b, c) (((a) << 16) + ((b) << 8) + (c))
 #endif
 
-// begin hack to workaround broken HRT_TO_8254() function on rtlinux
-#if RTLINUX_VERSION_CODE <= RTLINUX_VERSION(3,0,100)
-// this function sole purpose is to divide a long long by 838
+/* begin hack to workaround broken HRT_TO_8254() function on rtlinux */
+#if RTLINUX_VERSION_CODE <= RTLINUX_VERSION(3, 0, 100)
+/* this function sole purpose is to divide a long long by 838 */
 static inline RTIME nano2count(long long ns)
 {
 	do_div(ns, 838);
@@ -91,29 +91,52 @@ static inline RTIME nano2count(long long ns)
 
 #define nano2count(x) HRT_TO_8254(x)
 #endif
-// end hack
+/* end hack */
 
-// rtl-rtai compatibility
+/* rtl-rtai compatibility */
 #define rt_task_wait_period() rt_task_wait()
 #define rt_pend_linux_srq(irq) rtl_global_pend_irq(irq)
 #define rt_free_srq(irq) rtl_free_soft_irq(irq)
-#define rt_request_srq(x,y,z) rtl_get_soft_irq(y,"timer")
-#define rt_task_init(a,b,c,d,e,f,g) rt_task_init(a,b,c,d,(e)+1)
+#define rt_request_srq(x, y, z) rtl_get_soft_irq(y, "timer")
+#define rt_task_init(a, b, c, d, e, f, g) rt_task_init(a, b, c, d, (e)+1)
 #define rt_task_resume(x) rt_task_wakeup(x)
 #define rt_set_oneshot_mode()
 #define start_rt_timer(x)
 #define stop_rt_timer()
 
+#define comedi_rt_task_context_t	int
+
 #endif
 #ifdef CONFIG_COMEDI_RTAI
 #include <rtai.h>
 #include <rtai_sched.h>
+#include <rtai_version.h>
 
-#if RTAI_VERSION_CODE < RTAI_MANGLE_VERSION(3,3,0)
+/* RTAI_VERSION_CODE doesn't work for rtai-3.6-cv and other strange versions.
+ * These are characterized by CONFIG_RTAI_REVISION_LEVEL being defined as an
+ * empty macro and CONFIG_RTAI_VERSION_MINOR being defined as something like
+ * '6-cv' or '7-test1'.  The problem has been noted by the RTAI folks and they
+ * promise not to do it again. :-) Try and work around it here. */
+#if !(CONFIG_RTAI_REVISION_LEVEL + 0)
+#undef CONFIG_RTAI_REVISION_LEVEL
+#define CONFIG_RTAI_REVISION_LEVEL	0
+#define cv	0
+#define test1	0
+#define test2	0
+#define test3	0
+#endif
+
+#if RTAI_VERSION_CODE < RTAI_MANGLE_VERSION(3, 3, 0)
 #define comedi_rt_task_context_t	int
 #else
 #define comedi_rt_task_context_t	long
 #endif
+
+/* Finished checking RTAI_VERSION_CODE. */
+#undef cv
+#undef test1
+#undef test2
+#undef test3
 
 #endif
 
@@ -122,55 +145,57 @@ static inline RTIME nano2count(long long ns)
  * task period because analog input tends to be slow. */
 #define SPEED_LIMIT 100000	/* in nanoseconds */
 
-static int timer_attach(struct comedi_device * dev, struct comedi_devconfig * it);
-static int timer_detach(struct comedi_device * dev);
-static int timer_inttrig(struct comedi_device * dev, struct comedi_subdevice * s,
+static int timer_attach(struct comedi_device *dev, struct comedi_devconfig *it);
+static int timer_detach(struct comedi_device *dev);
+static int timer_inttrig(struct comedi_device *dev, struct comedi_subdevice *s,
 	unsigned int trig_num);
-static int timer_start_cmd(struct comedi_device * dev, struct comedi_subdevice * s);
+static int timer_start_cmd(struct comedi_device *dev, struct comedi_subdevice *s);
 
 static struct comedi_driver driver_timer = {
       module:THIS_MODULE,
       driver_name:"comedi_rt_timer",
       attach:timer_attach,
       detach:timer_detach,
-//      open:           timer_open,
+/* open:           timer_open, */
 };
 
 COMEDI_INITCLEANUP(driver_timer);
 
 struct timer_private {
-	comedi_t *device;	// device we are emulating commands for
-	int subd;		// subdevice we are emulating commands for
-	RT_TASK *rt_task;	// rt task that starts scans
-	RT_TASK *scan_task;	// rt task that controls conversion timing in a scan
+	comedi_t *device;	/*  device we are emulating commands for */
+	int subd;		/*  subdevice we are emulating commands for */
+	RT_TASK *rt_task;	/*  rt task that starts scans */
+	RT_TASK *scan_task;	/*  rt task that controls conversion timing in a scan */
 	/* io_function can point to either an input or output function
 	 * depending on what kind of subdevice we are emulating for */
-	int (*io_function) (struct comedi_device * dev, struct comedi_cmd * cmd,
+	int (*io_function) (struct comedi_device *dev, struct comedi_cmd *cmd,
 		unsigned int index);
-	// RTIME has units of 1 = 838 nanoseconds
-	// time at which first scan started, used to check scan timing
+/*
+* RTIME has units of 1 = 838 nanoseconds time at which first scan
+* started, used to check scan timing
+*/
 	RTIME start;
-	// time between scans
+	/*  time between scans */
 	RTIME scan_period;
-	// time between conversions in a scan
+	/*  time between conversions in a scan */
 	RTIME convert_period;
-	// flags
-	volatile int stop;	// indicates we should stop
-	volatile int rt_task_active;	// indicates rt_task is servicing a struct comedi_cmd
-	volatile int scan_task_active;	// indicates scan_task is servicing a struct comedi_cmd
+	/*  flags */
+	volatile int stop;	/*  indicates we should stop */
+	volatile int rt_task_active;	/*  indicates rt_task is servicing a struct comedi_cmd */
+	volatile int scan_task_active;	/*  indicates scan_task is servicing a struct comedi_cmd */
 	unsigned timer_running:1;
 };
 #define devpriv ((struct timer_private *)dev->private)
 
-static int timer_cancel(struct comedi_device * dev, struct comedi_subdevice * s)
+static int timer_cancel(struct comedi_device *dev, struct comedi_subdevice *s)
 {
 	devpriv->stop = 1;
 
 	return 0;
 }
 
-// checks for scan timing error
-inline static int check_scan_timing(struct comedi_device * dev,
+/* checks for scan timing error */
+inline static int check_scan_timing(struct comedi_device *dev,
 	unsigned long long scan)
 {
 	RTIME now, timing_error;
@@ -186,8 +211,8 @@ inline static int check_scan_timing(struct comedi_device * dev,
 	return 0;
 }
 
-// checks for conversion timing error
-inline static int check_conversion_timing(struct comedi_device * dev,
+/* checks for conversion timing error */
+inline static int check_conversion_timing(struct comedi_device *dev,
 	RTIME scan_start, unsigned int conversion)
 {
 	RTIME now, timing_error;
@@ -205,8 +230,8 @@ inline static int check_conversion_timing(struct comedi_device * dev,
 	return 0;
 }
 
-// devpriv->io_function for an input subdevice
-static int timer_data_read(struct comedi_device * dev, struct comedi_cmd * cmd,
+/* devpriv->io_function for an input subdevice */
+static int timer_data_read(struct comedi_device *dev, struct comedi_cmd *cmd,
 	unsigned int index)
 {
 	struct comedi_subdevice *s = dev->read_subdev;
@@ -230,8 +255,8 @@ static int timer_data_read(struct comedi_device * dev, struct comedi_cmd * cmd,
 	return 0;
 }
 
-// devpriv->io_function for an output subdevice
-static int timer_data_write(struct comedi_device * dev, struct comedi_cmd * cmd,
+/* devpriv->io_function for an output subdevice */
+static int timer_data_write(struct comedi_device *dev, struct comedi_cmd *cmd,
 	unsigned int index)
 {
 	struct comedi_subdevice *s = dev->write_subdev;
@@ -265,8 +290,8 @@ static int timer_data_write(struct comedi_device * dev, struct comedi_cmd * cmd,
 	return 0;
 }
 
-// devpriv->io_function for DIO subdevices
-static int timer_dio_read(struct comedi_device * dev, struct comedi_cmd * cmd,
+/* devpriv->io_function for DIO subdevices */
+static int timer_dio_read(struct comedi_device *dev, struct comedi_cmd *cmd,
 	unsigned int index)
 {
 	struct comedi_subdevice *s = dev->read_subdev;
@@ -287,7 +312,7 @@ static int timer_dio_read(struct comedi_device * dev, struct comedi_cmd * cmd,
 	return 0;
 }
 
-// performs scans
+/* performs scans */
 static void scan_task_func(comedi_rt_task_context_t d)
 {
 	struct comedi_device *dev = (struct comedi_device *) d;
@@ -298,14 +323,14 @@ static void scan_task_func(comedi_rt_task_context_t d)
 	unsigned long long n;
 	RTIME scan_start;
 
-	// every struct comedi_cmd causes one execution of while loop
+	/*  every struct comedi_cmd causes one execution of while loop */
 	while (1) {
 		devpriv->scan_task_active = 1;
-		// each for loop completes one scan
+		/*  each for loop completes one scan */
 		for (n = 0; n < cmd->stop_arg || cmd->stop_src == TRIG_NONE;
 			n++) {
 			if (n) {
-				// suspend task until next scan
+				/*  suspend task until next scan */
 				ret = rt_task_suspend(devpriv->scan_task);
 				if (ret < 0) {
 					comedi_error(dev,
@@ -314,7 +339,7 @@ static void scan_task_func(comedi_rt_task_context_t d)
 					goto cleanup;
 				}
 			}
-			// check if stop flag was set (by timer_cancel())
+			/*  check if stop flag was set (by timer_cancel()) */
 			if (devpriv->stop)
 				goto cleanup;
 			ret = check_scan_timing(dev, n);
@@ -324,7 +349,7 @@ static void scan_task_func(comedi_rt_task_context_t d)
 			}
 			scan_start = rt_get_time();
 			for (i = 0; i < cmd->scan_end_arg; i++) {
-				// conversion timing
+				/*  conversion timing */
 				if (cmd->convert_src == TRIG_TIMER && i) {
 					rt_task_wait_period();
 					ret = check_conversion_timing(dev,
@@ -353,7 +378,7 @@ static void scan_task_func(comedi_rt_task_context_t d)
 		comedi_event(dev, s);
 		async->events = 0;
 		devpriv->scan_task_active = 0;
-		// suspend task until next struct comedi_cmd
+		/*  suspend task until next struct comedi_cmd */
 		rt_task_suspend(devpriv->scan_task);
 	}
 }
@@ -366,7 +391,7 @@ static void timer_task_func(comedi_rt_task_context_t d)
 	int ret;
 	unsigned long long n;
 
-	// every struct comedi_cmd causes one execution of while loop
+	/*  every struct comedi_cmd causes one execution of while loop */
 	while (1) {
 		devpriv->rt_task_active = 1;
 		devpriv->scan_task_active = 1;
@@ -374,7 +399,7 @@ static void timer_task_func(comedi_rt_task_context_t d)
 
 		for (n = 0; n < cmd->stop_arg || cmd->stop_src == TRIG_NONE;
 			n++) {
-			// scan timing
+			/*  scan timing */
 			if (n)
 				rt_task_wait_period();
 			if (devpriv->scan_task_active == 0) {
@@ -391,13 +416,13 @@ static void timer_task_func(comedi_rt_task_context_t d)
 	      cleanup:
 
 		devpriv->rt_task_active = 0;
-		// suspend until next struct comedi_cmd
+		/*  suspend until next struct comedi_cmd */
 		rt_task_suspend(devpriv->rt_task);
 	}
 }
 
-static int timer_insn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int timer_insn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	struct comedi_insn xinsn = *insn;
 
@@ -407,7 +432,7 @@ static int timer_insn(struct comedi_device * dev, struct comedi_subdevice * s,
 	return comedi_do_insn(devpriv->device, &xinsn);
 }
 
-static int cmdtest_helper(struct comedi_cmd * cmd,
+static int cmdtest_helper(struct comedi_cmd *cmd,
 	unsigned int start_src,
 	unsigned int scan_begin_src,
 	unsigned int convert_src,
@@ -444,8 +469,8 @@ static int cmdtest_helper(struct comedi_cmd * cmd,
 	return err;
 }
 
-static int timer_cmdtest(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_cmd * cmd)
+static int timer_cmdtest(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_cmd *cmd)
 {
 	int err = 0;
 	unsigned int start_src = 0;
@@ -485,7 +510,7 @@ static int timer_cmdtest(struct comedi_device * dev, struct comedi_subdevice * s
 		return 2;
 
 	/* step 3: make sure arguments are trivially compatible */
-	// limit frequency, this is fairly arbitrary
+	/*  limit frequency, this is fairly arbitrary */
 	if (cmd->scan_begin_src == TRIG_TIMER) {
 		if (cmd->scan_begin_arg < SPEED_LIMIT) {
 			cmd->scan_begin_arg = SPEED_LIMIT;
@@ -498,7 +523,7 @@ static int timer_cmdtest(struct comedi_device * dev, struct comedi_subdevice * s
 			err++;
 		}
 	}
-	// make sure conversion and scan frequencies are compatible
+	/*  make sure conversion and scan frequencies are compatible */
 	if (cmd->convert_src == TRIG_TIMER && cmd->scan_begin_src == TRIG_TIMER) {
 		if (cmd->convert_arg * cmd->scan_end_arg > cmd->scan_begin_arg) {
 			cmd->scan_begin_arg =
@@ -516,7 +541,7 @@ static int timer_cmdtest(struct comedi_device * dev, struct comedi_subdevice * s
 	return 0;
 }
 
-static int timer_cmd(struct comedi_device * dev, struct comedi_subdevice * s)
+static int timer_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 {
 	int ret;
 	struct comedi_cmd *cmd = &s->async->cmd;
@@ -524,7 +549,7 @@ static int timer_cmd(struct comedi_device * dev, struct comedi_subdevice * s)
 	/* hack attack: drivers are not supposed to do this: */
 	dev->rt = 1;
 
-	// make sure tasks have finished cleanup of last struct comedi_cmd
+	/*  make sure tasks have finished cleanup of last struct comedi_cmd */
 	if (devpriv->rt_task_active || devpriv->scan_task_active)
 		return -EBUSY;
 
@@ -567,7 +592,7 @@ static int timer_cmd(struct comedi_device * dev, struct comedi_subdevice * s)
 	return 0;
 }
 
-static int timer_inttrig(struct comedi_device * dev, struct comedi_subdevice * s,
+static int timer_inttrig(struct comedi_device *dev, struct comedi_subdevice *s,
 	unsigned int trig_num)
 {
 	if (trig_num != 0)
@@ -578,7 +603,7 @@ static int timer_inttrig(struct comedi_device * dev, struct comedi_subdevice * s
 	return timer_start_cmd(dev, s);
 }
 
-static int timer_start_cmd(struct comedi_device * dev, struct comedi_subdevice * s)
+static int timer_start_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 {
 	struct comedi_async *async = s->async;
 	struct comedi_cmd *cmd = &async->cmd;
@@ -607,7 +632,7 @@ static int timer_start_cmd(struct comedi_device * dev, struct comedi_subdevice *
 	return 0;
 }
 
-static int timer_attach(struct comedi_device * dev, struct comedi_devconfig * it)
+static int timer_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	int ret;
 	struct comedi_subdevice *s, *emul_s;
@@ -636,7 +661,7 @@ static int timer_attach(struct comedi_device * dev, struct comedi_devconfig * it
 	emul_dev = devpriv->device;
 	emul_s = emul_dev->subdevices + devpriv->subd;
 
-	// input or output subdevice
+	/*  input or output subdevice */
 	s = dev->subdevices + 0;
 	s->type = emul_s->type;
 	s->subdev_flags = emul_s->subdev_flags;	/* SDF_GROUND (to fool check_driver) */
@@ -681,7 +706,7 @@ static int timer_attach(struct comedi_device * dev, struct comedi_devconfig * it
 
 	devpriv->rt_task = kzalloc(sizeof(RT_TASK), GFP_KERNEL);
 
-	// initialize real-time tasks
+	/*  initialize real-time tasks */
 	ret = rt_task_init(devpriv->rt_task, timer_task_func,
 		(comedi_rt_task_context_t) dev, 3000, timer_priority, 0, 0);
 	if (ret < 0) {
@@ -705,8 +730,8 @@ static int timer_attach(struct comedi_device * dev, struct comedi_devconfig * it
 	return 1;
 }
 
-// free allocated resources
-static int timer_detach(struct comedi_device * dev)
+/* free allocated resources */
+static int timer_detach(struct comedi_device *dev)
 {
 	printk("comedi%d: timer: remove\n", dev->minor);
 
