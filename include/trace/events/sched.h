@@ -1,9 +1,8 @@
+#if !defined(_TRACE_SCHED_H) || defined(TRACE_HEADER_MULTI_READ)
+#define _TRACE_SCHED_H
 
-/* use <trace/sched.h> instead */
-#ifndef TRACE_EVENT
-# error Do not include this file directly.
-# error Unless you know what you are doing.
-#endif
+#include <linux/sched.h>
+#include <linux/tracepoint.h>
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM sched
@@ -334,4 +333,7 @@ TRACE_EVENT(sched_signal_send,
 		  __entry->sig, __entry->comm, __entry->pid)
 );
 
-#undef TRACE_SYSTEM
+#endif /* _TRACE_SCHED_H */
+
+/* This part must be outside protection */
+#include <trace/define_trace.h>
