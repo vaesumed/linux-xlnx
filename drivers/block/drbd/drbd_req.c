@@ -93,9 +93,9 @@ STATIC void _print_req_mod(struct drbd_request *req, enum drbd_req_event what)
 
 # ifdef ENABLE_DYNAMIC_TRACE
 #  define print_rq_state(R, T) \
-	MTRACE(TraceTypeRq, TraceLvlMetrics, _print_rq_state(R, T);)
+	MTRACE(TRACE_TYPE_RQ, TRACE_LVL_METRICS, _print_rq_state(R, T);)
 #  define print_req_mod(T, W)  \
-	MTRACE(TraceTypeRq, TraceLvlMetrics, _print_req_mod(T, W);)
+	MTRACE(TRACE_TYPE_RQ, TRACE_LVL_METRICS, _print_req_mod(T, W);)
 # else
 #  define print_rq_state(R, T) _print_rq_state(R, T)
 #  define print_req_mod(T, W)  _print_req_mod(T, W)
@@ -166,7 +166,7 @@ static void _req_is_done(struct drbd_conf *mdev, struct drbd_request *req, const
 		 * we would forget to resync the corresponding extent.
 		 */
 		if (s & RQ_LOCAL_MASK) {
-			if (inc_local_if_state(mdev, Failed)) {
+			if (inc_local_if_state(mdev, D_FAILED)) {
 				drbd_al_complete_io(mdev, req->sector);
 				dec_local(mdev);
 			} else if (__ratelimit(&drbd_ratelimit_state)) {
@@ -207,7 +207,7 @@ static void _req_is_done(struct drbd_conf *mdev, struct drbd_request *req, const
 
 static void queue_barrier(struct drbd_conf *mdev)
 {
-	struct drbd_barrier *b;
+	struct drbd_tl_epoch *b;
 
 	/* We are within the req_lock. Once we queued the barrier for sending,
 	 * we set the CREATE_BARRIER bit. It is cleared as soon as a new
@@ -217,7 +217,7 @@ static void queue_barrier(struct drbd_conf *mdev)
 	if (test_bit(CREATE_BARRIER, &mdev->flags))
 		return;
 
-	b = mdev->newest_barrier;
+	b = mdev->newest_tle;
 	b->w.cb = w_send_barrier;
 	/* inc_ap_pending done here, so we won't
 	 * get imbalanced on connection loss.
@@ -233,14 +233,14 @@ static void _about_to_complete_local_write(struct drbd_conf *mdev,
 {
 	const unsigned long s = req->rq_state;
 	struct drbd_request *i;
-	struct Tl_epoch_entry *e;
+	struct drbd_epoch_entry *e;
 	struct hlist_node *n;
 	struct hlist_head *slot;
 
 	/* before we can signal completion to the upper layers,
 	 * we may need to close the current epoch */
-	if (mdev->state.conn >= Connected &&
-	    req->epoch == mdev->newest_barrier->br_number)
+	if (mdev->state.conn >= C_CONNECTED &&
+	    req->epoch == mdev->newest_tle->br_number)
 		queue_barrier(mdev);
 
 	/* we need to do the conflict detection stuff,
@@ -269,7 +269,7 @@ static void _about_to_complete_local_write(struct drbd_conf *mdev,
 		 *
 		 * currently, there can be only _one_ such ee
 		 * (well, or some more, which would be pending
-		 * DiscardAck not yet sent by the asender...),
+		 * P_DISCARD_ACK not yet sent by the asender...),
 		 * since we block the receiver thread upon the
 		 * first conflict detection, which will wait on
 		 * misc_wait.  maybe we want to assert that?
@@ -324,8 +324,8 @@ void _req_may_be_done(struct drbd_request *req, int error)
 
 	if (req->master_bio) {
 		/* this is data_received (remote read)
-		 * or protocol C WriteAck
-		 * or protocol B RecvAck
+		 * or protocol C P_WRITE_ACK
+		 * or protocol B P_RECV_ACK
 		 * or protocol A "handed_over_to_network" (SendAck)
 		 * or canceled or failed,
 		 * or killed from the transfer log due to connection loss.
@@ -367,8 +367,8 @@ void _req_may_be_done(struct drbd_request *req, int error)
 
 	if ((s & RQ_NET_MASK) == 0 || (s & RQ_NET_DONE)) {
 		/* this is disconnected (local only) operation,
-		 * or protocol C WriteAck,
-		 * or protocol A or B BarrierAck,
+		 * or protocol C P_WRITE_ACK,
+		 * or protocol A or B P_BARRIER_ACK,
 		 * or killed from the transfer log due to connection loss. */
 		_req_is_done(mdev, req, rw);
 	}
@@ -405,7 +405,7 @@ STATIC int _req_conflicts(struct drbd_request *req)
 	const sector_t sector = req->sector;
 	const int size = req->size;
 	struct drbd_request *i;
-	struct Tl_epoch_entry *e;
+	struct drbd_epoch_entry *e;
 	struct hlist_node *n;
 	struct hlist_head *slot;
 
@@ -624,12 +624,12 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 		 * just after it grabs the req_lock */
 		D_ASSERT(test_bit(CREATE_BARRIER, &mdev->flags) == 0);
 
-		req->epoch = mdev->newest_barrier->br_number;
+		req->epoch = mdev->newest_tle->br_number;
 		list_add_tail(&req->tl_requests,
-				&mdev->newest_barrier->requests);
+				&mdev->newest_tle->requests);
 
 		/* increment size of current epoch */
-		mdev->newest_barrier->n_req++;
+		mdev->newest_tle->n_req++;
 
 		/* queue work item to send data */
 		D_ASSERT(req->rq_state & RQ_NET_PENDING);
@@ -638,7 +638,7 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 		drbd_queue_work(&mdev->data.work, &req->w);
 
 		/* close the epoch, in case it outgrew the limit */
-		if (mdev->newest_barrier->n_req >= mdev->net_conf->max_epoch_size)
+		if (mdev->newest_tle->n_req >= mdev->net_conf->max_epoch_size)
 			queue_barrier(mdev);
 
 		break;
@@ -709,7 +709,7 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 		 * A barrier request is expected to have forced all prior
 		 * requests onto stable storage, so completion of a barrier
 		 * request could set NET_DONE right here, and not wait for the
-		 * BarrierAck, but that is an unecessary optimisation. */
+		 * P_BARRIER_ACK, but that is an unecessary optimisation. */
 
 		/* this makes it effectively the same as for: */
 	case recv_acked_by_peer:
@@ -770,13 +770,13 @@ STATIC int drbd_may_do_local_read(struct drbd_conf *mdev, sector_t sector, int s
 	unsigned long sbnr, ebnr;
 	sector_t esector, nr_sectors;
 
-	if (mdev->state.disk == UpToDate)
+	if (mdev->state.disk == D_UP_TO_DATE)
 		return 1;
-	if (mdev->state.disk >= Outdated)
+	if (mdev->state.disk >= D_OUTDATED)
 		return 0;
-	if (mdev->state.disk <  Inconsistent)
+	if (mdev->state.disk <  D_INCONSISTENT)
 		return 0;
-	/* state.disk == Inconsistent   We will have a look at the BitMap */
+	/* state.disk == D_INCONSISTENT   We will have a look at the BitMap */
 	nr_sectors = drbd_get_capacity(mdev->this_bdev);
 	esector = sector + (size >> 9) - 1;
 
@@ -794,7 +794,7 @@ STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 	const int rw = bio_rw(bio);
 	const int size = bio->bi_size;
 	const sector_t sector = bio->bi_sector;
-	struct drbd_barrier *b = NULL;
+	struct drbd_tl_epoch *b = NULL;
 	struct drbd_request *req;
 	int local, remote;
 	int err = -EIO;
@@ -834,18 +834,18 @@ STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 				dec_local(mdev);
 			}
 		}
-		remote = !local && mdev->state.pdsk >= UpToDate;
+		remote = !local && mdev->state.pdsk >= D_UP_TO_DATE;
 	}
 
 	/* If we have a disk, but a READA request is mapped to remote,
-	 * we are Primary, Inconsistent, SyncTarget.
+	 * we are R_PRIMARY, D_INCONSISTENT, SyncTarget.
 	 * Just fail that READA request right here.
 	 *
 	 * THINK: maybe fail all READA when not local?
 	 *        or make this configurable...
 	 *        if network is slow, READA won't do any good.
 	 */
-	if (rw == READA && mdev->state.disk >= Inconsistent && !local) {
+	if (rw == READA && mdev->state.disk >= D_INCONSISTENT && !local) {
 		err = -EWOULDBLOCK;
 		goto fail_and_free_req;
 	}
@@ -858,9 +858,9 @@ STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 	if (rw == WRITE && local)
 		drbd_al_begin_io(mdev, sector);
 
-	remote = remote && (mdev->state.pdsk == UpToDate ||
-			    (mdev->state.pdsk == Inconsistent &&
-			     mdev->state.conn >= Connected));
+	remote = remote && (mdev->state.pdsk == D_UP_TO_DATE ||
+			    (mdev->state.pdsk == D_INCONSISTENT &&
+			     mdev->state.conn >= C_CONNECTED));
 
 	if (!(local || remote)) {
 		dev_err(DEV, "IO ERROR: neither local nor remote disk\n");
@@ -868,16 +868,16 @@ STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 	}
 
 	/* For WRITE request, we have to make sure that we have an
-	 * unused_spare_barrier, in case we need to start a new epoch.
+	 * unused_spare_tle, in case we need to start a new epoch.
 	 * I try to be smart and avoid to pre-allocate always "just in case",
 	 * but there is a race between testing the bit and pointer outside the
 	 * spinlock, and grabbing the spinlock.
 	 * if we lost that race, we retry.  */
 	if (rw == WRITE && remote &&
-	    mdev->unused_spare_barrier == NULL &&
+	    mdev->unused_spare_tle == NULL &&
 	    test_bit(CREATE_BARRIER, &mdev->flags)) {
 allocate_barrier:
-		b = kmalloc(sizeof(struct drbd_barrier), GFP_NOIO);
+		b = kmalloc(sizeof(struct drbd_tl_epoch), GFP_NOIO);
 		if (!b) {
 			dev_err(DEV, "Failed to alloc barrier.\n");
 			err = -ENOMEM;
@@ -889,9 +889,9 @@ allocate_barrier:
 	spin_lock_irq(&mdev->req_lock);
 
 	if (remote) {
-		remote = (mdev->state.pdsk == UpToDate ||
-			    (mdev->state.pdsk == Inconsistent &&
-			     mdev->state.conn >= Connected));
+		remote = (mdev->state.pdsk == D_UP_TO_DATE ||
+			    (mdev->state.pdsk == D_INCONSISTENT &&
+			     mdev->state.conn >= C_CONNECTED));
 		if (!remote)
 			dev_warn(DEV, "lost connection while grabbing the req_lock!\n");
 		if (!(local || remote)) {
@@ -901,12 +901,12 @@ allocate_barrier:
 		}
 	}
 
-	if (b && mdev->unused_spare_barrier == NULL) {
-		mdev->unused_spare_barrier = b;
+	if (b && mdev->unused_spare_tle == NULL) {
+		mdev->unused_spare_tle = b;
 		b = NULL;
 	}
 	if (rw == WRITE && remote &&
-	    mdev->unused_spare_barrier == NULL &&
+	    mdev->unused_spare_tle == NULL &&
 	    test_bit(CREATE_BARRIER, &mdev->flags)) {
 		/* someone closed the current epoch
 		 * while we were grabbing the spinlock */
@@ -928,10 +928,10 @@ allocate_barrier:
 	 * barrier packet.  To get the write ordering right, we only have to
 	 * make sure that, if this is a write request and it triggered a
 	 * barrier packet, this request is queued within the same spinlock. */
-	if (remote && mdev->unused_spare_barrier &&
+	if (remote && mdev->unused_spare_tle &&
 	    test_and_clear_bit(CREATE_BARRIER, &mdev->flags)) {
-		_tl_add_barrier(mdev, mdev->unused_spare_barrier);
-		mdev->unused_spare_barrier = NULL;
+		_tl_add_barrier(mdev, mdev->unused_spare_tle);
+		mdev->unused_spare_tle = NULL;
 	} else {
 		D_ASSERT(!(remote && rw == WRITE &&
 			   test_bit(CREATE_BARRIER, &mdev->flags)));
@@ -988,7 +988,7 @@ allocate_barrier:
 	/* NOTE remote first: to get the concurrent write detection right,
 	 * we must register the request before start of local IO.  */
 	if (remote) {
-		/* either WRITE and Connected,
+		/* either WRITE and C_CONNECTED,
 		 * or READ, and no local disk,
 		 * or READ, but not in sync.
 		 */
@@ -1044,11 +1044,11 @@ fail_and_free_req:
 static int drbd_fail_request_early(struct drbd_conf *mdev, int is_write)
 {
 	/* Unconfigured */
-	if (mdev->state.conn == Disconnecting &&
-	    mdev->state.disk == Diskless)
+	if (mdev->state.conn == C_DISCONNECTING &&
+	    mdev->state.disk == D_DISKLESS)
 		return 1;
 
-	if (mdev->state.role != Primary &&
+	if (mdev->state.role != R_PRIMARY &&
 		(!allow_oos || is_write)) {
 		if (__ratelimit(&drbd_ratelimit_state)) {
 			dev_err(DEV, "Process %s[%u] tried to %s; "
@@ -1069,7 +1069,7 @@ static int drbd_fail_request_early(struct drbd_conf *mdev, int is_write)
 	 * to serialize state changes, this is racy, since we may lose
 	 * the connection *after* we test for the cstate.
 	 */
-	if (mdev->state.disk < UpToDate && mdev->state.pdsk < UpToDate) {
+	if (mdev->state.disk < D_UP_TO_DATE && mdev->state.pdsk < D_UP_TO_DATE) {
 		if (__ratelimit(&drbd_ratelimit_state))
 			dev_err(DEV, "Sorry, I have no access to good data anymore.\n");
 		return 1;
