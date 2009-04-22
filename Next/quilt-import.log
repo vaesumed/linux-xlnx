@@ -1,0 +1,239 @@
+Importing driver-core.current based on 2.6.30-rc2-git7
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard a939b96cccdb65df80a52447ec8e4a6d79c56dbb
+HEAD is now at a939b96 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/suspend-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+driver-core-platform-do-not-complain-for-platform_data-added-by-platform_device_add_data.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+   d91dfbb..9f3f498  master     -> quilt/driver-core.current
+Importing usb.current based on quilt/driver-core.current
+$ cd ../quilt-tmp
+$ git reset --hard 9f3f4989f44378a7ef447ad3d999350b7864ec59
+HEAD is now at 9f3f498 Driver core: platform: Do not complain for platform_data added by platform_device_add_data()
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-serial-fix-lifetime-and-locking-problems.patch
+usb-unusual-device-support-for-gold-mp3-player-energy.patch
+usb-gadget-mips-ci13xxx-udc-bugfixes.patch
+usb-musb-remove-my-email-address-from-few-musb-related-drivers.patch
+usb-musb-fix-build-when-config_pm.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+   d91dfbb..1ed08b4  master     -> quilt/usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc2-git7
+$ cd ../quilt-tmp
+$ git reset --hard a939b96cccdb65df80a52447ec8e4a6d79c56dbb
+HEAD is now at a939b96 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/suspend-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+staging-go7007-convert-to-new-style-i2c.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+i2c-remove-void-casts.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 9a01412...afc7055 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc2-git7
+$ cd ../quilt-tmp
+$ git reset --hard a939b96cccdb65df80a52447ec8e4a6d79c56dbb
+HEAD is now at a939b96 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/suspend-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + b1e304c...f929ab9 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing ttydev based on 9f76208c33984ab777eace5d07a4e36e88703e02
+$ cd ../quilt-tmp
+$ git reset --hard 9f76208c33984ab777eace5d07a4e36e88703e02
+HEAD is now at 9f76208 Merge branch 'tracing-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-usb-aten2011-clean
+cyclades-firmware-ze
+cyclades-fw-dontreset
+cyclades-remove-spare-null-check
+tty-port-carrierclose
+tty-port-drain-delay
+tty-usb-use-port
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:310: trailing whitespace.
+	else 
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2104: trailing whitespace.
+	serial_do_down(port);		
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2130: trailing whitespace.
+	return 1;	
+warning: 3 lines add whitespace errors.
+tty-usb-acm-port
+synclink-pio-mode
+serial-ite-niels
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 97c5824...e4156ed master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard 1ed08b4d235d1e201e2ffb52e38606601cfd73bf
+HEAD is now at 1ed08b4 USB: musb: fix build when !CONFIG_PM
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-set-default-sysfs_deprecated-n.patch
+sched-delayed-cleanup-of-user_struct.patch
+driver-core-warn-driver-authors-about-adding-device-attributes.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + c16c6bd...533de5d master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard 533de5d6710b5753b4f872ef316aea887dea7e86
+HEAD is now at 533de5d Driver Core: Warn driver authors about adding device attributes
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+musb_gadget-fix-unhandled-endpoint-0-irqs.patch
+musb_gadget-suppress-parasitic-tx-interrupts-with-cppi.patch
+musb_host-refactor-musb_save_toggle.patch
+musb_host-factor-out-musb_ep_-get-set-_qh.patch
+musb_host-simplify-check-for-active-urb.patch
+musb_host-streamline-musb_cleanup_urb-calls.patch
+musb_host-refactor-urb-giveback.patch
+musb-split-out-cppi-interrupt-handler.patch
+usb-move-twl4030_usb-s-probe-function-to-.devinit.text.patch
+usb-move-r8a66597_hcd-s-probe-function-to-.devinit.text.patch
+usb-move-orion-ehci-s-probe-function-to-.devinit.text.patch
+usb-twl4030-usb-fix-minor-reporting-goofage.patch
+usb-nop-usb-xceiv-behave-when-linked-as-a-module.patch
+musb-proper-hookup-to-transceiver-drivers.patch
+musb-otg-timer-cleanup.patch
+musb-make-initial-hnp-roleswitch-work.patch
+musb-support-disconnect-after-hnp-roleswitch.patch
+musb-use-dma-mode-1-for-tx-if-transfer-size-equals-maxpacket.patch
+musb-add-high-bandwidth-iso-support.patch
+usb-serial-ftdi-add-high-speed-device-support.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + ad23a5f...8c423a8d master     -> quilt/usb  (forced update)
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 8c423a8d140e486a1963c4361b6c50139887c83c
+HEAD is now at 8c423a8d USB: serial: FTDI: add high speed device support
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-w35und-unregister-device-from-the-ieee80211-stack-upon-disconnect.patch
+staging-rt2870-new-device-id.patch
+staging-comedi-remove-ni_board-typedef.patch
+staging-comedi-remove-ni_private-typedef.patch
+staging-comedi-remove-local_info_t-typedef-in-ni_labpc_cs.patch
+staging-comedi-remove-dio24_board_struct-typedef.patch
+staging-comedi-remove-local_info_t-typedef-in-ni_daq_dio24.patch
+staging-comedi-remove-byte-and-pbyte-typedefs-in-addi-data.patch
+staging-comedi-remove-short-and-pshort-typedefs-in-addi-data.patch
+staging-comedi-remove-ushort-and-pushort-typedefs-in-addi-data.patch
+staging-comedi-remove-word-and-pword-typedefs-in-addi-data.patch
+staging-comedi-remove-int-and-pint-typedefs-in-addi-data.patch
+staging-comedi-remove-uint-and-puint-typedefs-in-addi-data.patch
+staging-comedi-remove-long-and-plong-typedefs-in-addi-data.patch
+staging-comedi-remove-ulong-and-pulong-typedefs-in-addi-data.patch
+staging-comedi-remove-dword-and-pdword-typedefs-in-addi-data.patch
+staging-comedi-remove-ulong_ptr-typedef-in-addi-data.patch
+staging-comedi-remove-pcrange-typedef-in-addi-data.patch
+staging-comedi-remove-boardtype-typedef-in-addi-data.patch
+staging-comedi-remove-str_moduleinfo-typedef-in-addi-data.patch
+staging-comedi-remove-addi_private-typedef-in-addi-data.patch
+staging-comedi-remove-str_mainheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_digitalinputheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_digitaloutputheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_timerdetails-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_timermainheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-str_analogreadinformation-typedef-in-addi-data-hwdrv_apci3120.h.patch
+staging-comedi-remove-str_module-typedef-in-addi-data-hwdrv_apci3200.h.patch
+staging-comedi-remove-str_boardinfos-typedef-in-addi-data-hwdrv_apci3200.patch
+staging-comedi-remove-str_addidata_rtdstruct-typedef-in-addi-data-hwdrv_apci3200.patch
+staging-comedi-remove-labpc_board_struct-typedef.patch
+staging-comedi-remove-labpc_private-typedef.patch
+staging-comedi-remove-str_analoginputheader-typedef-in-addi-data-addi_eeprom.c.patch
+staging-comedi-remove-c99-comments-in-8253.h.patch
+staging-comedi-remove-c99-comments-in-acl7225b.c.patch
+staging-comedi-remove-c99-comments-in-apci1710_82x54.c.patch
+staging-comedi-remove-c99-comments-in-das1800.c.patch
+staging-comedi-remove-c99-comments-in-pcl818.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci1500.c.patch
+staging-comedi-remove-c99-comments-in-apci1710_pwm.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci1564.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci3200.c.patch
+staging-comedi-remove-c99-comments-in-hwdrv_apci3120.c.patch
+staging-comedi-remove-c99-comments-in-adl_pci6208.c.patch
+staging-comedi-remove-c99-comments-in-adl_pci9118.c.patch
+staging-comedi-remove-c99-comments-in-adv_pci1723.c.patch
+staging-comedi-remove-c99-comments-in-c6xdigio.c.patch
+staging-comedi-remove-c99-comments-in-cb_pcidas64.c.patch
+staging-comedi-remove-c99-comments-in-cb_pcidas.c.patch
+staging-comedi-remove-c99-comments-in-cb_pcimdas.c.patch
+staging-comedi-remove-c99-comments-in-gsc_hpdi.c.patch
+staging-comedi-remove-c99-comments-in-mpc624.c.patch
+staging-comedi-remove-c99-comments-in-ni_at_a2150.c.patch
+staging-comedi-remove-c99-comments-in-ni_labpc.c.patch
+staging-comedi-remove-c99-comments-in-pcl724.c.patch
+staging-comedi-remove-c99-comments-in-pcl816.c.patch
+staging-comedi-remove-c99-comments-in-s526.c.patch
+staging-comedi-remove-interrupt.h.patch
+staging-comedi-remove-c99-comments.patch
+staging-comedi-finish-removing-ni_private-typedef.patch
+staging-comedi-pcmcia_parse_tuple-now-has-two-arguments-not-three.patch
+staging-comedi-fix-build-errors-in-pcmcia-comedi-drivers.patch
+staging-comedi-set-pci-and-pcmcia-defines.patch
+staging-comedi-fixed-kconfig-option-for-comedi_pcmcia_drivers.patch
+staging-comedi-pcl818-fix-option-handling-for-fifo-mode.patch
+staging-comedi-pcl818-tidy-up-ai-command-after-channel-dropout-or-similar-error.patch
+staging-comedi-ni_600x-added-support-for-comedi_poll.patch
+staging-comedi-work-around-malformed-rtai_version_code.patch
+staging-comedi-undo-stupid-commit-made-3-months-ago.patch
+staging-comedi-amplc_pc236-corrected-documentation.patch
+staging-comedi-added-sysfs-attribute-files-for-setting-and-querying-subdevice-buffer-sizes.patch
+staging-comedi-jr3_pci-use-struct-device-from-pci_dev-for-firmware-loading.patch
+staging-comedi-replace-__function__-usages.patch
+staging-comedi-remove-dupilcated-include.patch
+staging-comedi-fix-foo-bar-should-be-foo-bar.patch
+staging-comedi-add-spaces-after-commas.patch
+staging-comedi-fix-spacing-around-parens.patch
+staging-comedi-change-space-indentation-to-tabs.patch
+staging-agnx-probe-cleanup.patch
+staging-agnx-remove-memlens-from-probe.patch
+staging-agnx-fix-fail-paths-in-probe.patch
+staging-agnx-fix-bssid-compiler-warnings.patch
+staging-meilhaus-switch-to-misc-device.patch
+staging-meilhaus-annotate-cpi-functions.patch
+staging-meilhaus-move-tables-to-.c.patch
+staging-sxg-replace-__function__-usages.patch
+staging-rt3070-replace-__function__-usages.patch
+staging-rt2860-don-t-call-sprintf-with-overlapping-input-and-output.patch
+staging-rt2870-don-t-call-sprintf-with-overlapping-input-and-output.patch
+staging-rspiusb-make-driver-compile.patch
+staging-rtl8187se-use-to_delayed_work.patch
+staging-rt3070-remove-dupilcated-include.patch
+staging-remove-unused-include-linux-version.h-s.patch
+staging-agnx-replace-print_mac-with-pm.patch
+staging-stlc45xx-replace-print_mac-with-pm.patch
+staging-winbond-boolean-negation-and-bitwise-operation-in-wrong-order.patch
+staging-w35und-remove-unused-code-from-wbsoft_configure_filter.patch
+staging-w35und-replace-switch-error-handling-with-gotos-in-wb35_hw_init.patch
+staging-w35und-move-hal_init_hardware-and-hal_halt-int-wbusb.c.patch
+staging-w35und-simplify-error-handling-in-wb35_hw_init.patch
+staging-w35und-simplify-hal_init_hardware-error-handling.patch
+staging-w35und-more-simplify-hal_init_hardware-error-handling.patch
+staging-w35und-simplify-hal_init_hardware-and-hal_halt.patch
+staging-w35und-clean-up-comments-in-wbusb.c.patch
+staging-w35und-inline-hal_set_phy_type-to-wb35_hw_init.patch
+staging-w35und-reformat-wbusb.c.patch
+staging-w35und-remove-module_author.patch
+staging-w35und-make-led-lookup-tables-static.patch
+staging-w35und-reformat-wbhal.c.patch
+staging-w35und-merge-wbhal.c-to-wbusb.c.patch
+staging-w35und-inline-hal_set_rf_power-to-mto.c.patch
+staging-w35und-merge-rest-of-wbhal.c-to-phy_calibration.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + f8c1baa...b783194 master     -> quilt/staging  (forced update)
