@@ -752,6 +752,11 @@ static int hpet_clocksource_register(void)
 	u64 start, now;
 	cycle_t t1;
 
+	if (hpet_is_forced_old_ich()) {
+		printk(KERN_WARNING "hpet: hpet=force on old ICH enables clockevents,"
+				" but not clocksource.\n");
+		return -ENODEV;
+	}
 	/* Start the counter */
 	hpet_restart_counter();
 
