@@ -280,7 +280,7 @@ static void mg_bad_rw_intr(struct mg_host *host)
 	if (req != NULL)
 		if (++req->errors >= MG_MAX_ERRORS ||
 				host->error == MG_ERR_TIMEOUT)
-			end_request(req, 0);
+			__blk_end_request_cur(req, -EIO);
 }
 
 static unsigned int mg_out(struct mg_host *host,
@@ -346,7 +346,7 @@ static void mg_read(struct request *req)
 
 		if (req->current_nr_sectors <= 0) {
 			MG_DBG("remain : %d sects\n", remains);
-			end_request(req, 1);
+			__blk_end_request_cur(req, 0);
 			if (remains > 0)
 				req = elv_next_request(host->breq);
 		}
@@ -390,7 +390,7 @@ static void mg_write(struct request *req)
 
 		if (req->current_nr_sectors <= 0) {
 			MG_DBG("remain : %d sects\n", remains);
-			end_request(req, 1);
+			__blk_end_request_cur(req, 0);
 			if (remains > 0)
 				req = elv_next_request(host->breq);
 		}
@@ -443,7 +443,7 @@ ok_to_read:
 
 	/* let know if current segment done */
 	if (req->current_nr_sectors <= 0)
-		end_request(req, 1);
+		__blk_end_request_cur(req, 0);
 
 	/* set handler if read remains */
 	if (i > 0) {
@@ -492,7 +492,7 @@ ok_to_write:
 
 	/* let know if current segment or all done */
 	if (!i || (req->bio && req->current_nr_sectors <= 0))
-		end_request(req, 1);
+		__blk_end_request_cur(req, 0);
 
 	/* write 1 sector and set handler if remains */
 	if (i > 0) {
@@ -554,7 +554,7 @@ static void mg_request_poll(struct request_queue *q)
 			default:
 				printk(KERN_WARNING "%s:%d unknown command\n",
 						__func__, __LINE__);
-				end_request(req, 0);
+				__blk_end_request_cur(req, -EIO);
 				break;
 			}
 		}
@@ -608,7 +608,7 @@ static unsigned int mg_issue_req(struct request *req,
 	default:
 		printk(KERN_WARNING "%s:%d unknown command\n",
 				__func__, __LINE__);
-		end_request(req, 0);
+		__blk_end_request_cur(req, -EIO);
 		break;
 	}
 	return MG_ERR_NONE;
@@ -646,7 +646,7 @@ static void mg_request(struct request_queue *q)
 					"%s: bad access: sector=%d, count=%d\n",
 					req->rq_disk->disk_name,
 					sect_num, sect_cnt);
-			end_request(req, 0);
+			__blk_end_request_cur(req, -EIO);
 			continue;
 		}
 
