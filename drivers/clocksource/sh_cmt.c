@@ -47,6 +47,7 @@ struct sh_cmt_priv {
 	unsigned long rate;
 	spinlock_t lock;
 	struct clock_event_device ced;
+	struct clocksource cs;
 	unsigned long total_cycles;
 };
 
@@ -376,6 +377,68 @@ static void sh_cmt_stop(struct sh_cmt_priv *p, unsigned long flag)
 	spin_unlock_irqrestore(&p->lock, flags);
 }
 
+static struct sh_cmt_priv *cs_to_sh_cmt(struct clocksource *cs)
+{
+	return container_of(cs, struct sh_cmt_priv, cs);
+}
+
+static cycle_t sh_cmt_clocksource_read(struct clocksource *cs)
+{
+	struct sh_cmt_priv *p = cs_to_sh_cmt(cs);
+	unsigned long flags, raw;
+	unsigned long value;
+	int has_wrapped;
+
+	spin_lock_irqsave(&p->lock, flags);
+	value = p->total_cycles;
+	raw = sh_cmt_get_counter(p, &has_wrapped);
+
+	if (unlikely(has_wrapped))
+		raw = p->match_value;
+	spin_unlock_irqrestore(&p->lock, flags);
+
+	return value + raw;
+}
+
+static int sh_cmt_clocksource_enable(struct clocksource *cs)
+{
+	struct sh_cmt_priv *p = cs_to_sh_cmt(cs);
+	int ret;
+
+	p->total_cycles = 0;
+
+	ret = sh_cmt_start(p, FLAG_CLOCKSOURCE);
+	if (ret)
+		return ret;
+
+	/* TODO: calculate good shift from rate and counter bit width */
+	cs->shift = 0;
+	cs->mult = clocksource_hz2mult(p->rate, cs->shift);
+	return 0;
+}
+
+static void sh_cmt_clocksource_disable(struct clocksource *cs)
+{
+	sh_cmt_stop(cs_to_sh_cmt(cs), FLAG_CLOCKSOURCE);
+}
+
+static int sh_cmt_register_clocksource(struct sh_cmt_priv *p,
+				       char *name, unsigned long rating)
+{
+	struct clocksource *cs = &p->cs;
+
+	cs->name = name;
+	cs->rating = rating;
+	cs->read = sh_cmt_clocksource_read;
+	cs->enable = sh_cmt_clocksource_enable;
+	cs->disable = sh_cmt_clocksource_disable;
+	cs->mask = CLOCKSOURCE_MASK(sizeof(unsigned long) * 8);
+	cs->flags = CLOCK_SOURCE_IS_CONTINUOUS;
+	pr_info("sh_cmt: %s used as clock source\n", cs->name);
+	clocksource_register(cs);
+	return 0;
+}
+
 static struct sh_cmt_priv *ced_to_sh_cmt(struct clock_event_device *ced)
 {
 	return container_of(ced, struct sh_cmt_priv, ced);
@@ -483,6 +546,9 @@ int sh_cmt_register(struct sh_cmt_priv *p, char *name,
 	if (clockevent_rating)
 		sh_cmt_register_clockevent(p, name, clockevent_rating);
 
+	if (clocksource_rating)
+		sh_cmt_register_clocksource(p, name, clocksource_rating);
+
 	return 0;
 }
 
@@ -566,9 +632,19 @@ static int sh_cmt_setup(struct sh_cmt_priv *p, struct platform_device *pdev)
 static int __devinit sh_cmt_probe(struct platform_device *pdev)
 {
 	struct sh_cmt_priv *p = platform_get_drvdata(pdev);
+	struct sh_cmt_config *cfg = pdev->dev.platform_data;
 	int ret;
 
-	p = kmalloc(sizeof(*p), GFP_KERNEL);
+	if (p) {
+		pr_info("sh_cmt: %s kept as earlytimer\n", cfg->name);
+		return 0;
+	}
+
+	if (is_early_platform_device(pdev))
+		p = alloc_bootmem(sizeof(*p));
+	else
+		p = kmalloc(sizeof(*p), GFP_KERNEL);
+
 	if (p == NULL) {
 		dev_err(&pdev->dev, "failed to allocate driver data\n");
 		return -ENOMEM;
@@ -576,7 +652,10 @@ static int __devinit sh_cmt_probe(struct platform_device *pdev)
 
 	ret = sh_cmt_setup(p, pdev);
 	if (ret) {
-		kfree(p);
+		if (is_early_platform_device(pdev))
+			free_bootmem(__pa(p), sizeof(*p));
+		else
+			kfree(p);
 
 		platform_set_drvdata(pdev, NULL);
 	}
@@ -606,6 +685,7 @@ static void __exit sh_cmt_exit(void)
 	platform_driver_unregister(&sh_cmt_device_driver);
 }
 
+early_platform_init("earlytimer", &sh_cmt_device_driver);
 module_init(sh_cmt_init);
 module_exit(sh_cmt_exit);
 
