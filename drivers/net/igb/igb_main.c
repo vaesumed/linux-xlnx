@@ -942,6 +942,8 @@ int igb_up(struct igb_adapter *adapter)
 	rd32(E1000_ICR);
 	igb_irq_enable(adapter);
 
+	netif_tx_start_all_queues(adapter->netdev);
+
 	/* Fire a link change interrupt to start the watchdog. */
 	wr32(E1000_ICS, E1000_ICS_LSC);
 	return 0;
@@ -1442,14 +1444,13 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	 * driver. */
 	igb_get_hw_control(adapter);
 
-	/* tell the stack to leave us alone until igb_open() is called */
-	netif_carrier_off(netdev);
-	netif_tx_stop_all_queues(netdev);
-
 	strcpy(netdev->name, "eth%d");
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;
+
+	/* carrier off reporting is important to ethtool even BEFORE open */
+	netif_carrier_off(netdev);
 
 #ifdef CONFIG_IGB_DCA
 	if (dca_add_requester(&pdev->dev) == 0) {
@@ -1698,6 +1699,8 @@ static int igb_open(struct net_device *netdev)
 	/* disallow open during test */
 	if (test_bit(__IGB_TESTING, &adapter->state))
 		return -EBUSY;
+
+	netif_carrier_off(netdev);
 
 	/* allocate transmit descriptors */
 	err = igb_setup_all_tx_resources(adapter);
@@ -2663,7 +2666,6 @@ static void igb_watchdog_task(struct work_struct *work)
 			}
 
 			netif_carrier_on(netdev);
-			netif_tx_wake_all_queues(netdev);
 
 			igb_ping_all_vfs(adapter);
 
@@ -2680,7 +2682,6 @@ static void igb_watchdog_task(struct work_struct *work)
 			printk(KERN_INFO "igb: %s NIC Link is Down\n",
 			       netdev->name);
 			netif_carrier_off(netdev);
-			netif_tx_stop_all_queues(netdev);
 
 			igb_ping_all_vfs(adapter);
 
