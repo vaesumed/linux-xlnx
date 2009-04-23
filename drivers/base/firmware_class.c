@@ -279,7 +279,7 @@ static void fw_dev_release(struct device *dev)
 	struct firmware_priv *fw_priv = dev_get_drvdata(dev);
 
 	kfree(fw_priv);
-	kfree(dev);
+	put_device(dev);
 
 	module_put(THIS_MODULE);
 }
@@ -323,14 +323,16 @@ static int fw_register_device(struct device **dev_p, const char *fw_name,
 	retval = device_register(f_dev);
 	if (retval) {
 		dev_err(device, "%s: device_register failed\n", __func__);
-		goto error_kfree;
+		put_device(f_dev);
+		goto error_kfree1;
 	}
 	*dev_p = f_dev;
 	return 0;
 
 error_kfree:
-	kfree(fw_priv);
 	kfree(f_dev);
+error_kfree1:
+	kfree(fw_priv);
 	return retval;
 }
 
