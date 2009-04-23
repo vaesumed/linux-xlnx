@@ -253,11 +253,6 @@ static void old_ich_force_enable_hpet(struct pci_dev *dev)
 	dev_printk(KERN_DEBUG, &dev->dev, "Failed to force enable HPET\n");
 }
 
-int hpet_is_forced_old_ich()
-{
-	return (force_hpet_resume_type == OLD_ICH_FORCE_HPET_RESUME);
-}
-
 /*
  * Undocumented chipset features. Make sure that the user enforced
  * this.
