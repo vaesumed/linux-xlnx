@@ -62,18 +62,18 @@ Copy/pasted/hacked from pcm724.c
 #define CR_A_MODE(a)	((a)<<5)
 #define CR_CW		0x80
 
-static int pcm3724_attach(struct comedi_device * dev, struct comedi_devconfig * it);
-static int pcm3724_detach(struct comedi_device * dev);
+static int pcm3724_attach(struct comedi_device *dev, struct comedi_devconfig *it);
+static int pcm3724_detach(struct comedi_device *dev);
 
 struct pcm3724_board {
-	const char *name;	// driver name
-	int dio;		// num of DIO
-	int numofports;		// num of 8255 subdevices
-	unsigned int IRQbits;	// allowed interrupts
-	unsigned int io_range;	// len of IO space
+	const char *name;	/*  driver name */
+	int dio;		/*  num of DIO */
+	int numofports;		/*  num of 8255 subdevices */
+	unsigned int IRQbits;	/*  allowed interrupts */
+	unsigned int io_range;	/*  len of IO space */
 };
 
-//used to track configured dios
+/* used to track configured dios */
 struct priv_pcm3724 {
 	int dio_1;
 	int dio_2;
@@ -98,25 +98,25 @@ static struct comedi_driver driver_pcm3724 = {
 
 COMEDI_INITCLEANUP(driver_pcm3724);
 
-//          (setq c-basic-offset 8)
+/* (setq c-basic-offset 8) */
 
 static int subdev_8255_cb(int dir, int port, int data, unsigned long arg)
 {
 	unsigned long iobase = arg;
 	unsigned char inbres;
-	//printk("8255cb %d %d %d %lx\n", dir,port,data,arg);
+	/* printk("8255cb %d %d %d %lx\n", dir,port,data,arg); */
 	if (dir) {
-		//printk("8255 cb   outb(%x, %lx)\n", data, iobase+port);
+		/* printk("8255 cb   outb(%x, %lx)\n", data, iobase+port); */
 		outb(data, iobase + port);
 		return 0;
 	} else {
 		inbres = inb(iobase + port);
-		//printk("8255 cb   inb(%lx) = %x\n", iobase+port, inbres);
+		/* printk("8255 cb   inb(%lx) = %x\n", iobase+port, inbres); */
 		return inbres;
 	}
 }
 
-static int compute_buffer(int config, int devno, struct comedi_subdevice * s)
+static int compute_buffer(int config, int devno, struct comedi_subdevice *s)
 {
 	/* 1 in io_bits indicates output */
 	if (s->io_bits & 0x0000ff) {
@@ -143,7 +143,7 @@ static int compute_buffer(int config, int devno, struct comedi_subdevice * s)
 	return config;
 }
 
-static void do_3724_config(struct comedi_device * dev, struct comedi_subdevice * s,
+static void do_3724_config(struct comedi_device *dev, struct comedi_subdevice *s,
 	int chanspec)
 {
 	int config;
@@ -173,11 +173,11 @@ static void do_3724_config(struct comedi_device * dev, struct comedi_subdevice *
 		port_8255_cfg = dev->iobase + SIZE_8255 + _8255_CR;
 	}
 	outb(buffer_config, dev->iobase + 8);	/* update buffer register */
-	//printk("pcm3724 buffer_config (%lx) %d, %x\n", dev->iobase + _8255_CR, chanspec, buffer_config);
+	/* printk("pcm3724 buffer_config (%lx) %d, %x\n", dev->iobase + _8255_CR, chanspec, buffer_config); */
 	outb(config, port_8255_cfg);
 }
 
-static void enable_chan(struct comedi_device * dev, struct comedi_subdevice * s, int chanspec)
+static void enable_chan(struct comedi_device *dev, struct comedi_subdevice *s, int chanspec)
 {
 	unsigned int mask;
 	int gatecfg;
@@ -187,9 +187,9 @@ static void enable_chan(struct comedi_device * dev, struct comedi_subdevice * s,
 	priv = (struct priv_pcm3724 *) (dev->private);
 
 	mask = 1 << CR_CHAN(chanspec);
-	if (s == dev->subdevices) {	// subdev 0
+	if (s == dev->subdevices) {	/*  subdev 0 */
 		priv->dio_1 |= mask;
-	} else {		//subdev 1
+	} else {		/* subdev 1 */
 		priv->dio_2 |= mask;
 	}
 	if (priv->dio_1 & 0xff0000) {
@@ -210,13 +210,13 @@ static void enable_chan(struct comedi_device * dev, struct comedi_subdevice * s,
 	if (priv->dio_2 & 0xff) {
 		gatecfg |= GATE_A1;
 	}
-	//      printk("gate control %x\n", gatecfg);
+	/*       printk("gate control %x\n", gatecfg); */
 	outb(gatecfg, dev->iobase + 9);
 }
 
 /* overriding the 8255 insn config */
-static int subdev_3724_insn_config(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int subdev_3724_insn_config(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	unsigned int mask;
 	unsigned int bits;
@@ -252,7 +252,7 @@ static int subdev_3724_insn_config(struct comedi_device * dev, struct comedi_sub
 	return 1;
 }
 
-static int pcm3724_attach(struct comedi_device * dev, struct comedi_devconfig * it)
+static int pcm3724_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	unsigned long iobase;
 	unsigned int iorange;
@@ -290,7 +290,7 @@ static int pcm3724_attach(struct comedi_device * dev, struct comedi_devconfig * 
 	return 0;
 }
 
-static int pcm3724_detach(struct comedi_device * dev)
+static int pcm3724_detach(struct comedi_device *dev)
 {
 	int i;
 

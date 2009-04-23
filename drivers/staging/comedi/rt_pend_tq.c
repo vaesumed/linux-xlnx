@@ -28,8 +28,8 @@ int rt_pend_tq_irq = 0;
 DEFINE_SPINLOCK(rt_pend_tq_lock);
 
 /* WARNING: following code not checked against race conditions yet. */
-#define INC_CIRCULAR_PTR(ptr,begin,size) do {if(++(ptr)>=(begin)+(size)) (ptr)=(begin); } while(0)
-#define DEC_CIRCULAR_PTR(ptr,begin,size) do {if(--(ptr)<(begin)) (ptr)=(begin)+(size)-1; } while(0)
+#define INC_CIRCULAR_PTR (ptr, begin, size) do {if (++ (ptr)>= (begin)+ (size)) (ptr)= (begin); } while (0)
+#define DEC_CIRCULAR_PTR (ptr, begin, size) do {if (-- (ptr)< (begin)) (ptr)= (begin)+ (size)-1; } while (0)
 
 int rt_pend_call(void (*func) (int arg1, void *arg2), int arg1, void *arg2)
 {
@@ -69,7 +69,7 @@ void rt_pend_irq_handler(void)
 #elif defined(CONFIG_COMEDI_FUSION)
 void rt_pend_irq_handler(void *cookie)
 #elif defined(CONFIG_COMEDI_RTL)
-void rt_pend_irq_handler(int irq, void *dev PT_REGS_ARG)
+void rt_pend_irq_handler(int irq, void *dev)
 #endif
 {
 	while (rt_pend_head != rt_pend_tail) {
