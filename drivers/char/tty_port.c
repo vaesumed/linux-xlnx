@@ -137,7 +137,7 @@ int tty_port_carrier_raised(struct tty_port *port)
 EXPORT_SYMBOL(tty_port_carrier_raised);
 
 /**
- *	tty_port_raise_dtr_rts	-	Riase DTR/RTS
+ *	tty_port_raise_dtr_rts	-	Raise DTR/RTS
  *	@port: tty port
  *
  *	Wrapper for the DTR/RTS raise logic. For the moment this is used
@@ -147,10 +147,26 @@ EXPORT_SYMBOL(tty_port_carrier_raised);
 
 void tty_port_raise_dtr_rts(struct tty_port *port)
 {
-	if (port->ops->raise_dtr_rts)
-		port->ops->raise_dtr_rts(port);
+	if (port->ops->dtr_rts)
+		port->ops->dtr_rts(port, 1);
 }
 EXPORT_SYMBOL(tty_port_raise_dtr_rts);
+
+/**
+ *	tty_port_lower_dtr_rts	-	Lower DTR/RTS
+ *	@port: tty port
+ *
+ *	Wrapper for the DTR/RTS raise logic. For the moment this is used
+ *	to hide some internal details. This will eventually become entirely
+ *	internal to the tty port.
+ */
+
+void tty_port_lower_dtr_rts(struct tty_port *port)
+{
+	if (port->ops->dtr_rts)
+		port->ops->dtr_rts(port, 0);
+}
+EXPORT_SYMBOL(tty_port_lower_dtr_rts);
 
 /**
  *	tty_port_block_til_ready	-	Waiting logic for tty open
@@ -167,7 +183,7 @@ EXPORT_SYMBOL(tty_port_raise_dtr_rts);
  *		- port flags and counts
  *
  *	The passed tty_port must implement the carrier_raised method if it can
- *	do carrier detect and the raise_dtr_rts method if it supports software
+ *	do carrier detect and the dtr_rts method if it supports software
  *	management of these lines. Note that the dtr/rts raise is done each
  *	iteration as a hangup may have previously dropped them while we wait.
  */
@@ -292,6 +308,17 @@ int tty_port_close_start(struct tty_port *port, struct tty_struct *tty, struct f
 	if (port->flags & ASYNC_INITIALIZED &&
 			port->closing_wait != ASYNC_CLOSING_WAIT_NONE)
 		tty_wait_until_sent(tty, port->closing_wait);
+	if (port->drain_delay) {
+		unsigned int bps = tty_get_baud_rate(tty);
+		long timeout;
+
+		if (bps > 1200)
+			timeout = max_t(long, (HZ * 10 * port->drain_delay) / bps,
+								HZ / 10);
+		else
+			timeout = 2 * HZ;
+		schedule_timeout_interruptible(timeout);
+	}
 	return 1;
 }
 EXPORT_SYMBOL(tty_port_close_start);
@@ -301,6 +328,9 @@ void tty_port_close_end(struct tty_port *port, struct tty_struct *tty)
 	unsigned long flags;
 
 	tty_ldisc_flush(tty);
+
+	if (tty->termios->c_cflag & HUPCL)
+		tty_port_lower_dtr_rts(port);
 
 	spin_lock_irqsave(&port->lock, flags);
 	tty->closing = 0;
