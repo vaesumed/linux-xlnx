@@ -71,7 +71,6 @@ config DRM_I915
 	select FB_CFB_COPYAREA
 	select FB_CFB_IMAGEBLIT
 	select FB
-	select ACPI_VIDEO if ACPI
 	tristate "i915 driver"
 	help
 	  Choose this option if you have a system that has Intel 830M, 845G,
