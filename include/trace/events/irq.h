@@ -1,9 +1,8 @@
+#if !defined(_TRACE_IRQ_H) || defined(TRACE_HEADER_MULTI_READ)
+#define _TRACE_IRQ_H
 
-/* use <trace/irq.h> instead */
-#ifndef TRACE_FORMAT
-# error Do not include this file directly.
-# error Unless you know what you are doing.
-#endif
+#include <linux/tracepoint.h>
+#include <linux/interrupt.h>
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM irq
@@ -52,4 +51,7 @@ TRACE_FORMAT(softirq_exit,
 	TP_FMT("softirq=%d action=%s", (int)(h - vec), softirq_to_name[h-vec])
 	);
 
-#undef TRACE_SYSTEM
+#endif /*  _TRACE_IRQ_H */
+
+/* This part must be outside protection */
+#include <trace/define_trace.h>
