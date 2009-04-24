@@ -1043,7 +1043,7 @@ int check_unsafe_exec(struct linux_binprm *bprm)
 		if (t->fs == p->fs)
 			n_fs++;
 	}
-	rcu_read_lock();
+	rcu_read_unlock();
 
 	if (p->fs->users > n_fs) {
 		bprm->unsafe |= LSM_UNSAFE_SHARE;
