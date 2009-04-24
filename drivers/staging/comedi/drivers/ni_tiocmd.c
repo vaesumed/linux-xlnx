@@ -96,7 +96,7 @@ static void ni_tio_configure_dma(struct ni_gpct *counter, short enable,
 	}
 }
 
-static int ni_tio_input_inttrig(struct comedi_device * dev, struct comedi_subdevice * s,
+static int ni_tio_input_inttrig(struct comedi_device *dev, struct comedi_subdevice *s,
 	unsigned int trignum)
 {
 	unsigned long flags;
@@ -365,7 +365,7 @@ static int should_ack_gate(struct ni_gpct *counter)
 
 	switch (counter->counter_dev->variant) {
 	case ni_gpct_variant_m_series:
-	case ni_gpct_variant_660x:	// not sure if 660x really supports gate interrupts (the bits are not listed in register-level manual)
+	case ni_gpct_variant_660x:	/*  not sure if 660x really supports gate interrupts (the bits are not listed in register-level manual) */
 		return 1;
 		break;
 	case ni_gpct_variant_e_series:

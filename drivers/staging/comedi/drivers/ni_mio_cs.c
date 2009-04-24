@@ -66,7 +66,7 @@ See the notes in the ni_atmio.o driver.
 
 #define MAX_N_CALDACS 32
 
-static const ni_board ni_boards[] = {
+static const struct ni_board_struct ni_boards[] = {
       {device_id:0x010d,
 	      name:	"DAQCard-ai-16xe-50",
 	      n_adchan:16,
@@ -183,11 +183,11 @@ struct ni_private {
 
 /* How we access registers */
 
-#define ni_writel(a,b)		(outl((a),(b)+dev->iobase))
+#define ni_writel(a, b)		(outl((a), (b)+dev->iobase))
 #define ni_readl(a)		(inl((a)+dev->iobase))
-#define ni_writew(a,b)		(outw((a),(b)+dev->iobase))
+#define ni_writew(a, b)		(outw((a), (b)+dev->iobase))
 #define ni_readw(a)		(inw((a)+dev->iobase))
-#define ni_writeb(a,b)		(outb((a),(b)+dev->iobase))
+#define ni_writeb(a, b)		(outb((a), (b)+dev->iobase))
 #define ni_readb(a)		(inb((a)+dev->iobase))
 
 /* How we access windowed registers */
@@ -196,7 +196,7 @@ struct ni_private {
  * read/written directly in the I/O space of the board.  The
  * DAQCard devices map the low 8 STC registers to iobase+addr*2. */
 
-static void mio_cs_win_out(struct comedi_device * dev, uint16_t data, int addr)
+static void mio_cs_win_out(struct comedi_device *dev, uint16_t data, int addr)
 {
 	unsigned long flags;
 
@@ -210,7 +210,7 @@ static void mio_cs_win_out(struct comedi_device * dev, uint16_t data, int addr)
 	comedi_spin_unlock_irqrestore(&devpriv->window_lock, flags);
 }
 
-static uint16_t mio_cs_win_in(struct comedi_device * dev, int addr)
+static uint16_t mio_cs_win_in(struct comedi_device *dev, int addr)
 {
 	unsigned long flags;
 	uint16_t ret;
@@ -227,8 +227,8 @@ static uint16_t mio_cs_win_in(struct comedi_device * dev, int addr)
 	return ret;
 }
 
-static int mio_cs_attach(struct comedi_device * dev, struct comedi_devconfig * it);
-static int mio_cs_detach(struct comedi_device * dev);
+static int mio_cs_attach(struct comedi_device *dev, struct comedi_devconfig *it);
+static int mio_cs_detach(struct comedi_device *dev);
 static struct comedi_driver driver_ni_mio_cs = {
       driver_name:"ni_mio_cs",
       module:THIS_MODULE,
@@ -238,11 +238,11 @@ static struct comedi_driver driver_ni_mio_cs = {
 
 #include "ni_mio_common.c"
 
-static int ni_getboardtype(struct comedi_device * dev, struct pcmcia_device *link);
+static int ni_getboardtype(struct comedi_device *dev, struct pcmcia_device *link);
 
 /* clean up allocated resources */
 /* called when driver is removed */
-static int mio_cs_detach(struct comedi_device * dev)
+static int mio_cs_detach(struct comedi_device *dev)
 {
 	mio_common_detach(dev);
 
@@ -344,7 +344,7 @@ static void mio_cs_config(struct pcmcia_device *link)
 		manfid = le16_to_cpu(buf[0]);
 		prodid = le16_to_cpu(buf[1]);
 	}
-	//printk("manfid = 0x%04x, 0x%04x\n",manfid,prodid);
+	/* printk("manfid = 0x%04x, 0x%04x\n",manfid,prodid); */
 
 	tuple.DesiredTuple = CISTPL_CFTABLE_ENTRY;
 	tuple.Attributes = 0;
@@ -381,7 +381,7 @@ static void mio_cs_config(struct pcmcia_device *link)
 		for (base = 0x000; base < 0x400; base += 0x20) {
 			link->io.BasePort1 = base;
 			ret = pcmcia_request_io(link, &link->io);
-			//printk("RequestIO 0x%02x\n",ret);
+			/* printk("RequestIO 0x%02x\n",ret); */
 			if (!ret)
 				break;
 		}
@@ -393,17 +393,17 @@ static void mio_cs_config(struct pcmcia_device *link)
 	if (ret) {
 		printk("pcmcia_request_irq() returned error: %i\n", ret);
 	}
-	//printk("RequestIRQ 0x%02x\n",ret);
+	/* printk("RequestIRQ 0x%02x\n",ret); */
 
 	link->conf.ConfigIndex = 1;
 
 	ret = pcmcia_request_configuration(link, &link->conf);
-	//printk("RequestConfiguration %d\n",ret);
+	/* printk("RequestConfiguration %d\n",ret); */
 
 	link->dev_node = &dev_node;
 }
 
-static int mio_cs_attach(struct comedi_device * dev, struct comedi_devconfig * it)
+static int mio_cs_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	struct pcmcia_device *link;
 	unsigned int irq;
@@ -468,7 +468,7 @@ static int mio_cs_attach(struct comedi_device * dev, struct comedi_devconfig * i
 	return 0;
 }
 
-static int get_prodid(struct comedi_device * dev, struct pcmcia_device *link)
+static int get_prodid(struct comedi_device *dev, struct pcmcia_device *link)
 {
 	tuple_t tuple;
 	u_short buf[128];
@@ -487,7 +487,7 @@ static int get_prodid(struct comedi_device * dev, struct pcmcia_device *link)
 	return prodid;
 }
 
-static int ni_getboardtype(struct comedi_device * dev, struct pcmcia_device *link)
+static int ni_getboardtype(struct comedi_device *dev, struct pcmcia_device *link)
 {
 	int id;
 	int i;

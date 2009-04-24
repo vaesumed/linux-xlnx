@@ -89,8 +89,8 @@ struct das16cs_private {
 };
 #define devpriv ((struct das16cs_private *)dev->private)
 
-static int das16cs_attach(struct comedi_device * dev, struct comedi_devconfig * it);
-static int das16cs_detach(struct comedi_device * dev);
+static int das16cs_attach(struct comedi_device *dev, struct comedi_devconfig *it);
+static int das16cs_detach(struct comedi_device *dev);
 static struct comedi_driver driver_das16cs = {
       driver_name:"cb_das16_cs",
       module:THIS_MODULE,
@@ -108,7 +108,7 @@ static const struct comedi_lrange das16cs_ai_range = { 4, {
 	}
 };
 
-static irqreturn_t das16cs_interrupt(int irq, void *d PT_REGS_ARG);
+static irqreturn_t das16cs_interrupt(int irq, void *d);
 static int das16cs_ai_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
 	struct comedi_insn * insn, unsigned int * data);
 static int das16cs_ai_cmd(struct comedi_device * dev, struct comedi_subdevice * s);
@@ -165,7 +165,7 @@ static const struct das16cs_board *das16cs_probe(struct comedi_device * dev,
 	return NULL;
 }
 
-static int das16cs_attach(struct comedi_device * dev, struct comedi_devconfig * it)
+static int das16cs_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	struct pcmcia_device *link;
 	struct comedi_subdevice *s;
@@ -265,7 +265,7 @@ static int das16cs_attach(struct comedi_device * dev, struct comedi_devconfig * 
 	return 1;
 }
 
-static int das16cs_detach(struct comedi_device * dev)
+static int das16cs_detach(struct comedi_device *dev)
 {
 	printk("comedi%d: das16cs: remove\n", dev->minor);
 
@@ -276,9 +276,9 @@ static int das16cs_detach(struct comedi_device * dev)
 	return 0;
 }
 
-static irqreturn_t das16cs_interrupt(int irq, void *d PT_REGS_ARG)
+static irqreturn_t das16cs_interrupt(int irq, void *d)
 {
-	//struct comedi_device *dev = d;
+	/* struct comedi_device *dev = d; */
 	return IRQ_HANDLED;
 }
 
@@ -286,8 +286,8 @@ static irqreturn_t das16cs_interrupt(int irq, void *d PT_REGS_ARG)
  * "instructions" read/write data in "one-shot" or "software-triggered"
  * mode.
  */
-static int das16cs_ai_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_ai_rinsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	int i;
 	int to;
@@ -328,13 +328,13 @@ static int das16cs_ai_rinsn(struct comedi_device * dev, struct comedi_subdevice 
 	return i;
 }
 
-static int das16cs_ai_cmd(struct comedi_device * dev, struct comedi_subdevice * s)
+static int das16cs_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 {
 	return -EINVAL;
 }
 
-static int das16cs_ai_cmdtest(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_cmd * cmd)
+static int das16cs_ai_cmdtest(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_cmd *cmd)
 {
 	int err = 0;
 	int tmp;
@@ -489,8 +489,8 @@ static int das16cs_ai_cmdtest(struct comedi_device * dev, struct comedi_subdevic
 	return 0;
 }
 
-static int das16cs_ao_winsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_ao_winsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	int i;
 	int chan = CR_CHAN(insn->chanspec);
@@ -535,8 +535,8 @@ static int das16cs_ao_winsn(struct comedi_device * dev, struct comedi_subdevice 
 
 /* AO subdevices should have a read insn as well as a write insn.
  * Usually this means copying a value stored in devpriv. */
-static int das16cs_ao_rinsn(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_ao_rinsn(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	int i;
 	int chan = CR_CHAN(insn->chanspec);
@@ -552,8 +552,8 @@ static int das16cs_ao_rinsn(struct comedi_device * dev, struct comedi_subdevice 
  * useful to applications if you implement the insn_bits interface.
  * This allows packed reading/writing of the DIO channels.  The
  * comedi core can convert between insn_bits and insn_read/write */
-static int das16cs_dio_insn_bits(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_dio_insn_bits(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	if (insn->n != 2)
 		return -EINVAL;
@@ -572,8 +572,8 @@ static int das16cs_dio_insn_bits(struct comedi_device * dev, struct comedi_subde
 	return 2;
 }
 
-static int das16cs_dio_insn_config(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_dio_insn_config(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	int chan = CR_CHAN(insn->chanspec);
 	int bits;
@@ -610,14 +610,14 @@ static int das16cs_dio_insn_config(struct comedi_device * dev, struct comedi_sub
 	return insn->n;
 }
 
-static int das16cs_timer_insn_read(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_timer_insn_read(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	return -EINVAL;
 }
 
-static int das16cs_timer_insn_config(struct comedi_device * dev, struct comedi_subdevice * s,
-	struct comedi_insn * insn, unsigned int * data)
+static int das16cs_timer_insn_config(struct comedi_device *dev, struct comedi_subdevice *s,
+	struct comedi_insn *insn, unsigned int *data)
 {
 	return -EINVAL;
 }
@@ -773,7 +773,7 @@ static void das16cs_pcmcia_config(struct pcmcia_device *link)
 	if ((last_ret = pcmcia_get_tuple_data(link, &tuple)) != 0)
 		goto cs_failed;
 	last_fn = ParseTuple;
-	if ((last_ret = pcmcia_parse_tuple(link, &tuple, &parse)) != 0)
+	if ((last_ret = pcmcia_parse_tuple(&tuple, &parse)) != 0)
 		goto cs_failed;
 	link->conf.ConfigBase = parse.config.base;
 	link->conf.Present = parse.config.rmask[0];
@@ -798,7 +798,7 @@ static void das16cs_pcmcia_config(struct pcmcia_device *link)
 		cistpl_cftable_entry_t *cfg = &(parse.cftable_entry);
 		if (pcmcia_get_tuple_data(link, &tuple))
 			goto next_entry;
-		if (pcmcia_parse_tuple(link, &tuple, &parse))
+		if (pcmcia_parse_tuple(&tuple, &parse))
 			goto next_entry;
 
 		if (cfg->flags & CISTPL_CFTABLE_DEFAULT)
@@ -973,4 +973,4 @@ void __exit cleanup_module(void)
 
 #else
 COMEDI_INITCLEANUP(driver_das16cs);
-#endif //CONFIG_PCMCIA
+#endif /* CONFIG_PCMCIA */

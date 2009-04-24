@@ -101,17 +101,17 @@ If you do not specify any options, they will default to
 
 // available ranges through the PGA gains
 static const struct comedi_lrange range_adq12b_ai_bipolar = { 4, {
-        BIP_RANGE( 5 ),
-        BIP_RANGE( 2 ),
-        BIP_RANGE( 1 ),
-        BIP_RANGE( 0.5 )
+        BIP_RANGE(5),
+        BIP_RANGE(2),
+        BIP_RANGE(1),
+        BIP_RANGE(0.5)
 }};
 
 static const struct comedi_lrange range_adq12b_ai_unipolar = { 4, {
-        UNI_RANGE( 5 ),
-        UNI_RANGE( 2 ),
-        UNI_RANGE( 1 ),
-        UNI_RANGE( 0.5 )
+        UNI_RANGE(5),
+        UNI_RANGE(2),
+        UNI_RANGE(1),
+        UNI_RANGE(0.5)
 }};
 
 
@@ -162,7 +162,7 @@ struct adq12b_private {
  * the board, and also about the kernel module that contains
  * the device code.
  */
-static int adq12b_attach(struct comedi_device *dev,struct comedi_devconfig *it);
+static int adq12b_attach(struct comedi_device *dev, struct comedi_devconfig *it);
 static int adq12b_detach(struct comedi_device *dev);
 static struct comedi_driver driver_adq12b={
         driver_name:    "adq12b",
@@ -174,9 +174,9 @@ static struct comedi_driver driver_adq12b={
         num_names:      sizeof(adq12b_boards) / sizeof(struct adq12b_board),
 };
 
-static int adq12b_ai_rinsn(struct comedi_device *dev,struct comedi_subdevice *s,struct comedi_insn *insn,unsigned int *data);
-static int adq12b_di_insn_bits(struct comedi_device *dev,struct comedi_subdevice *s, struct comedi_insn *insn,unsigned int *data);
-static int adq12b_do_insn_bits(struct comedi_device *dev,struct comedi_subdevice *s, struct comedi_insn *insn,unsigned int *data);
+static int adq12b_ai_rinsn(struct comedi_device *dev, struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data);
+static int adq12b_di_insn_bits(struct comedi_device *dev, struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data);
+static int adq12b_do_insn_bits(struct comedi_device *dev, struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data);
 
 /*
  * Attach is called by the Comedi core to configure the driver
@@ -184,7 +184,7 @@ static int adq12b_do_insn_bits(struct comedi_device *dev,struct comedi_subdevice
  * in the driver structure, dev->board_ptr contains that
  * address.
  */
-static int adq12b_attach(struct comedi_device *dev,struct comedi_devconfig *it)
+static int adq12b_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
         struct comedi_subdevice *s;
         unsigned long iobase;
@@ -194,7 +194,7 @@ static int adq12b_attach(struct comedi_device *dev,struct comedi_devconfig *it)
         unipolar = it->options[1];
         differential = it->options[2];
 
-        printk("comedi%d: adq12b called with options base=0x%03lx, %s and %s\n",dev->minor, iobase, (unipolar==1)?"unipolar":"bipolar", (differential==1)?"differential":"single-ended");
+        printk("comedi%d: adq12b called with options base=0x%03lx, %s and %s\n", dev->minor, iobase, (unipolar==1)?"unipolar":"bipolar", (differential==1) ? "differential" : "single-ended");
 
         /* if no address was specified, try the default 0x300 */
         if (iobase == 0) {
@@ -219,7 +219,7 @@ static int adq12b_attach(struct comedi_device *dev,struct comedi_devconfig *it)
  * Allocate the private structure area.  alloc_private() is a
  * convenient macro defined in comedidev.h.
  */
-        if(alloc_private(dev, sizeof(struct adq12b_private)) < 0)
+        if (alloc_private (dev, sizeof (struct adq12b_private)) < 0)
           return -ENOMEM;
 
 /* fill in devpriv structure */
@@ -236,7 +236,7 @@ static int adq12b_attach(struct comedi_device *dev,struct comedi_devconfig *it)
  * Allocate the subdevice structures.  alloc_subdevice() is a
  * convenient macro defined in comedidev.h.
  */
-        if(alloc_subdevices(dev, 3)<0)
+        if (alloc_subdevices (dev, 3)<0)
            return -ENOMEM;
 
         s = dev->subdevices+0;
@@ -304,7 +304,7 @@ static int adq12b_detach(struct comedi_device *dev)
 
         kfree(devpriv);
 
-        printk("comedi%d: adq12b: removed\n",dev->minor);
+        printk("comedi%d: adq12b: removed\n", dev->minor);
 
         return 0;
 }
@@ -314,7 +314,7 @@ static int adq12b_detach(struct comedi_device *dev)
  * mode.
  */
 
-static int adq12b_ai_rinsn(struct comedi_device *dev,struct comedi_subdevice *s,struct comedi_insn *insn,unsigned int *data)
+static int adq12b_ai_rinsn(struct comedi_device *dev, struct comedi_subdevice *s, struct comedi_insn *insn, unsigned int *data)
 {
         int n, i;
         int range, channel;
@@ -332,7 +332,7 @@ static int adq12b_ai_rinsn(struct comedi_device *dev,struct comedi_subdevice *s,
         status = inb(dev->iobase + ADQ12B_ADLOW);
 
         /* convert n samples */
-        for(n=0; n < insn->n; n++){
+        for (n=0; n < insn->n; n++){
 
           /* wait for end of convertion */
 	  i = 0;
@@ -357,7 +357,7 @@ static int adq12b_ai_rinsn(struct comedi_device *dev,struct comedi_subdevice *s,
 }
 
 
-static int adq12b_di_insn_bits(struct comedi_device *dev,struct comedi_subdevice *s, 	struct comedi_insn *insn,unsigned int *data)
+static int adq12b_di_insn_bits(struct comedi_device *dev, struct comedi_subdevice *s, 	struct comedi_insn *insn, unsigned int *data)
 {
 
         /* only bits 0-4 have information about digital inputs */
@@ -367,7 +367,7 @@ static int adq12b_di_insn_bits(struct comedi_device *dev,struct comedi_subdevice
 }
 
 
-static int adq12b_do_insn_bits(struct comedi_device *dev,struct comedi_subdevice *s, 	struct comedi_insn *insn,unsigned int *data)
+static int adq12b_do_insn_bits(struct comedi_device *dev, struct comedi_subdevice *s, 	struct comedi_insn *insn, unsigned int *data)
 {
         int channel;
 
