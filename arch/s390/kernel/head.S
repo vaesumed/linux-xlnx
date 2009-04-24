@@ -63,7 +63,7 @@
 	.org   0x100
 #
 # subroutine for loading from tape
-# Paramters:
+# Parameters:
 #  R1 = device number
 #  R2 = load address
 .Lloader:
