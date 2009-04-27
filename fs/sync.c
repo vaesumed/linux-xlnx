@@ -26,10 +26,11 @@ static void do_sync(unsigned long wait)
 	wakeup_pdflush(0);
 	sync_inodes(0);		/* All mappings, inodes and their blockdevs */
 	vfs_dq_sync(NULL);
+	sync_inodes(wait);	/* Mappings, inodes and blockdevs, again. */
 	sync_supers();		/* Write the superblocks */
 	sync_filesystems(0);	/* Start syncing the filesystems */
 	sync_filesystems(wait);	/* Waitingly sync the filesystems */
-	sync_inodes(wait);	/* Mappings, inodes and blockdevs, again. */
+	sync_blockdevs();
 	if (!wait)
 		printk("Emergency Sync complete\n");
 	if (unlikely(laptop_mode))
