@@ -872,6 +872,7 @@ __setup("slqb_debug", setup_slqb_debug);
 static int __init setup_slqb_min_order(char *str)
 {
 	get_option(&str, &slqb_min_order);
+	slqb_min_order = min(slqb_min_order, MAX_ORDER - 1);
 
 	return 1;
 }
@@ -1840,8 +1841,8 @@ static int calculate_order(int size)
 	 * This size cannot fit in order-1. Allow bigger orders, but
 	 * forget about trying to save space.
 	 */
-	order = slab_order(size, MAX_ORDER, 0);
-	if (order <= MAX_ORDER)
+	order = slab_order(size, MAX_ORDER - 1, 0);
+	if (order < MAX_ORDER)
 		return order;
 
 	return -ENOSYS;
