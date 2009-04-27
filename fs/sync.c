@@ -12,7 +12,7 @@
 #include <linux/linkage.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
-#include <linux/buffer_head.h>
+#include <linux/async.h>
 
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
@@ -24,7 +24,7 @@
  * case write_inode() functions do sync_dirty_buffer() and thus effectively
  * write one block at a time.
  */
-static int __fsync_super(struct super_block *sb, int wait)
+static int __sync_filesystem(struct super_block *sb, int wait)
 {
 	vfs_dq_sync(sb);
 	sync_inodes_sb(sb, wait);
@@ -42,16 +42,16 @@ static int __fsync_super(struct super_block *sb, int wait)
  * superblock.  Filesystem data as well as the underlying block
  * device.  Takes the superblock lock.
  */
-int fsync_super(struct super_block *sb)
+int sync_filesystem(struct super_block *sb)
 {
 	int ret;
 
-	ret = __fsync_super(sb, 0);
+	ret = __sync_filesystem(sb, 0);
 	if (ret < 0)
 		return ret;
-	return __fsync_super(sb, 1);
+	return __sync_filesystem(sb, 1);
 }
-EXPORT_SYMBOL_GPL(fsync_super);
+EXPORT_SYMBOL_GPL(sync_filesystem);
 
 /*
  * Sync all the data for all the filesystems (called by sys_sync() and
@@ -92,7 +92,7 @@ restart:
 		down_read(&sb->s_umount);
 		async_synchronize_full_domain(&sb->s_async_list);
 		if (sb->s_root)
-			__fsync_super(sb, wait);
+			__sync_filesystem(sb, wait);
 		up_read(&sb->s_umount);
 		/* restart only when sb is no longer on the list */
 		spin_lock(&sb_lock);
