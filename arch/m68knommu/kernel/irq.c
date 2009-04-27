@@ -34,6 +34,8 @@ void ack_bad_irq(unsigned int irq)
 	printk(KERN_ERR "IRQ: unexpected irq=%d\n", irq);
 }
 
+#if !defined(CONFIG_M520x)
+
 static struct irq_chip m_irq_chip = {
 	.name		= "M68K-INTC",
 	.enable		= enable_vector,
@@ -54,6 +56,8 @@ void __init init_IRQ(void)
 		irq_desc[irq].chip = &m_irq_chip;
 	}
 }
+
+#endif
 
 int show_interrupts(struct seq_file *p, void *v)
 {
