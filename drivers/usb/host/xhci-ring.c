@@ -398,6 +398,7 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 	union xhci_trb *event_trb;
 	struct urb *urb;
 	int status = -EINPROGRESS;
+	ktime_t stop_time;
 
 	xdev = xhci->devs[TRB_TO_SLOT_ID(event->flags)];
 	if (!xdev) {
@@ -437,6 +438,7 @@ static int handle_tx_event(struct xhci_hcd *xhci,
 		xhci_err(xhci, "ERROR Transfer event TRB DMA ptr not part of current TD\n");
 		return -ESHUTDOWN;
 	}
+	stop_time = ktime_get();
 	event_trb = &event_seg->trbs[(event_dma - event_seg->dma) / sizeof(*event_trb)];
 	xhci_dbg(xhci, "Event TRB with TRB type ID %u\n",
 			(unsigned int) (event->flags & TRB_TYPE_BITMASK)>>10);
@@ -602,6 +604,11 @@ cleanup:
 
 	/* FIXME for multi-TD URBs (who have buffers bigger than 64MB) */
 	if (urb) {
+#ifdef CONFIG_USB_HCD_STAT
+		hcd_stat_update(xhci->tp_stat, urb->actual_length,
+				ktime_sub(stop_time, td->start_time));
+#endif
+
 		usb_hcd_unlink_urb_from_ep(xhci_to_hcd(xhci), urb);
 		spin_unlock(&xhci->lock);
 		usb_hcd_giveback_urb(xhci_to_hcd(xhci), urb, status);
@@ -832,6 +839,9 @@ void giveback_first_trb(struct xhci_hcd *xhci, int slot_id,
 	wmb();
 	start_trb->field[3] |= start_cycle;
 	field = xhci_readl(xhci, &xhci->dba->doorbell[slot_id]) & DB_MASK;
+#ifdef CONFIG_USB_HCD_STAT
+	td->start_time = ktime_get();
+#endif
 	xhci_writel(xhci, field | EPI_TO_DB(ep_index),
 			&xhci->dba->doorbell[slot_id]);
 	/* Flush PCI posted writes */
