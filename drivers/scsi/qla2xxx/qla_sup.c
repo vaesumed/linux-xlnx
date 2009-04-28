@@ -219,8 +219,8 @@ qla2x00_write_nvram_word(struct qla_hw_data *ha, uint32_t addr, uint16_t data)
 	wait_cnt = NVR_WAIT_CNT;
 	do {
 		if (!--wait_cnt) {
-			DEBUG9_10(printk("%s(%ld): NVRAM didn't go ready...\n",
-			    __func__, vha->host_no));
+			DEBUG9_10(qla_printk(KERN_WARNING, ha,
+			    "NVRAM didn't go ready...\n"));
 			break;
 		}
 		NVRAM_DELAY();
@@ -349,7 +349,7 @@ qla2x00_clear_nvram_protection(struct qla_hw_data *ha)
 		wait_cnt = NVR_WAIT_CNT;
 		do {
 			if (!--wait_cnt) {
-				DEBUG9_10(qla_printk(
+				DEBUG9_10(qla_printk(KERN_WARNING, ha,
 				    "NVRAM didn't go ready...\n"));
 				break;
 			}
@@ -408,7 +408,8 @@ qla2x00_set_nvram_protection(struct qla_hw_data *ha, int stat)
 	wait_cnt = NVR_WAIT_CNT;
 	do {
 		if (!--wait_cnt) {
-			DEBUG9_10(qla_printk("NVRAM didn't go ready...\n"));
+			DEBUG9_10(qla_printk(KERN_WARNING, ha,
+			    "NVRAM didn't go ready...\n"));
 			break;
 		}
 		NVRAM_DELAY();
@@ -701,30 +702,30 @@ qla2xxx_get_flt_info(scsi_qla_host_t *vha, uint32_t flt_addr)
 			break;
 		case FLT_REG_VPD_0:
 			ha->flt_region_vpd_nvram = start;
-			if (!(PCI_FUNC(ha->pdev->devfn) & 1))
+			if (ha->flags.port0)
 				ha->flt_region_vpd = start;
 			break;
 		case FLT_REG_VPD_1:
-			if (PCI_FUNC(ha->pdev->devfn) & 1)
+			if (!ha->flags.port0)
 				ha->flt_region_vpd = start;
 			break;
 		case FLT_REG_NVRAM_0:
-			if (!(PCI_FUNC(ha->pdev->devfn) & 1))
+			if (ha->flags.port0)
 				ha->flt_region_nvram = start;
 			break;
 		case FLT_REG_NVRAM_1:
-			if (PCI_FUNC(ha->pdev->devfn) & 1)
+			if (!ha->flags.port0)
 				ha->flt_region_nvram = start;
 			break;
 		case FLT_REG_FDT:
 			ha->flt_region_fdt = start;
 			break;
 		case FLT_REG_NPIV_CONF_0:
-			if (!(PCI_FUNC(ha->pdev->devfn) & 1))
+			if (ha->flags.port0)
 				ha->flt_region_npiv_conf = start;
 			break;
 		case FLT_REG_NPIV_CONF_1:
-			if (PCI_FUNC(ha->pdev->devfn) & 1)
+			if (!ha->flags.port0)
 				ha->flt_region_npiv_conf = start;
 			break;
 		}
@@ -744,12 +745,12 @@ no_flash_data:
 	ha->flt_region_fw = def_fw[def];
 	ha->flt_region_boot = def_boot[def];
 	ha->flt_region_vpd_nvram = def_vpd_nvram[def];
-	ha->flt_region_vpd = !(PCI_FUNC(ha->pdev->devfn) & 1) ?
+	ha->flt_region_vpd = ha->flags.port0 ?
 	    def_vpd0[def]: def_vpd1[def];
-	ha->flt_region_nvram = !(PCI_FUNC(ha->pdev->devfn) & 1) ?
+	ha->flt_region_nvram = ha->flags.port0 ?
 	    def_nvram0[def]: def_nvram1[def];
 	ha->flt_region_fdt = def_fdt[def];
-	ha->flt_region_npiv_conf = !(PCI_FUNC(ha->pdev->devfn) & 1) ?
+	ha->flt_region_npiv_conf = ha->flags.port0 ?
 	    def_npiv_conf0[def]: def_npiv_conf1[def];
 done:
 	DEBUG2(qla_printk(KERN_DEBUG, ha, "FLT[%s]: boot=0x%x fw=0x%x "
@@ -919,6 +920,7 @@ qla2xxx_flash_npiv_conf(scsi_qla_host_t *vha)
 
 	entry = data + sizeof(struct qla_npiv_header);
 	cnt = le16_to_cpu(hdr.entries);
+	ha->flex_port_count = cnt;
 	for (i = 0; cnt; cnt--, entry++, i++) {
 		uint16_t flags;
 		struct fc_vport_identifiers vid;
@@ -1079,8 +1081,9 @@ qla24xx_write_flash_data(scsi_qla_host_t *vha, uint32_t *dwptr, uint32_t faddr,
 				    0xff0000) | ((fdata >> 16) & 0xff));
 			ret = qla24xx_erase_sector(vha, fdata);
 			if (ret != QLA_SUCCESS) {
-				DEBUG9(qla_printk("Unable to erase sector: "
-				    "address=%x.\n", faddr));
+				DEBUG9(qla_printk(KERN_WARNING, ha,
+				    "Unable to erase sector: address=%x.\n",
+				    faddr));
 				break;
 			}
 		}
@@ -1240,8 +1243,9 @@ qla24xx_write_nvram_data(scsi_qla_host_t *vha, uint8_t *buf, uint32_t naddr,
 		ret = qla24xx_write_flash_dword(ha,
 		    nvram_data_addr(ha, naddr), cpu_to_le32(*dwptr));
 		if (ret != QLA_SUCCESS) {
-			DEBUG9(qla_printk("Unable to program nvram address=%x "
-			    "data=%x.\n", naddr, *dwptr));
+			DEBUG9(qla_printk(KERN_WARNING, ha,
+			    "Unable to program nvram address=%x data=%x.\n",
+			    naddr, *dwptr));
 			break;
 		}
 	}

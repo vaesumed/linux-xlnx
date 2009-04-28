@@ -97,7 +97,7 @@ qla2x00_sysfs_read_nvram(struct kobject *kobj,
 		return 0;
 
 	if (IS_NOCACHE_VPD_TYPE(ha))
-		ha->isp_ops->read_optrom(vha, ha->vpd, ha->flt_region_nvram << 2,
+		ha->isp_ops->read_optrom(vha, ha->nvram, ha->flt_region_nvram << 2,
 		    ha->nvram_size);
 	return memory_read_from_buffer(buf, count, &off, ha->nvram,
 					ha->nvram_size);
@@ -1088,6 +1088,33 @@ qla2x00_flash_block_size_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "0x%x\n", ha->fdt_block_size);
 }
 
+static ssize_t
+qla2x00_vlan_id_show(struct device *dev, struct device_attribute *attr,
+    char *buf)
+{
+	scsi_qla_host_t *vha = shost_priv(class_to_shost(dev));
+
+	if (!IS_QLA81XX(vha->hw))
+		return snprintf(buf, PAGE_SIZE, "\n");
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", vha->fcoe_vlan_id);
+}
+
+static ssize_t
+qla2x00_vn_port_mac_address_show(struct device *dev,
+    struct device_attribute *attr, char *buf)
+{
+	scsi_qla_host_t *vha = shost_priv(class_to_shost(dev));
+
+	if (!IS_QLA81XX(vha->hw))
+		return snprintf(buf, PAGE_SIZE, "\n");
+
+	return snprintf(buf, PAGE_SIZE, "%02x:%02x:%02x:%02x:%02x:%02x\n",
+	    vha->fcoe_vn_port_mac[5], vha->fcoe_vn_port_mac[4],
+	    vha->fcoe_vn_port_mac[3], vha->fcoe_vn_port_mac[2],
+	    vha->fcoe_vn_port_mac[1], vha->fcoe_vn_port_mac[0]);
+}
+
 static DEVICE_ATTR(driver_version, S_IRUGO, qla2x00_drvr_version_show, NULL);
 static DEVICE_ATTR(fw_version, S_IRUGO, qla2x00_fw_version_show, NULL);
 static DEVICE_ATTR(serial_num, S_IRUGO, qla2x00_serial_num_show, NULL);
@@ -1116,6 +1143,9 @@ static DEVICE_ATTR(mpi_version, S_IRUGO, qla2x00_mpi_version_show, NULL);
 static DEVICE_ATTR(phy_version, S_IRUGO, qla2x00_phy_version_show, NULL);
 static DEVICE_ATTR(flash_block_size, S_IRUGO, qla2x00_flash_block_size_show,
 		   NULL);
+static DEVICE_ATTR(vlan_id, S_IRUGO, qla2x00_vlan_id_show, NULL);
+static DEVICE_ATTR(vn_port_mac_address, S_IRUGO,
+		   qla2x00_vn_port_mac_address_show, NULL);
 
 struct device_attribute *qla2x00_host_attrs[] = {
 	&dev_attr_driver_version,
@@ -1138,6 +1168,8 @@ struct device_attribute *qla2x00_host_attrs[] = {
 	&dev_attr_mpi_version,
 	&dev_attr_phy_version,
 	&dev_attr_flash_block_size,
+	&dev_attr_vlan_id,
+	&dev_attr_vn_port_mac_address,
 	NULL,
 };
 
@@ -1437,11 +1469,12 @@ static int
 qla24xx_vport_create(struct fc_vport *fc_vport, bool disable)
 {
 	int	ret = 0;
-	int	cnt = 0;
-	uint8_t	qos = QLA_DEFAULT_QUE_QOS;
+	uint8_t	qos = 0;
 	scsi_qla_host_t *base_vha = shost_priv(fc_vport->shost);
 	scsi_qla_host_t *vha = NULL;
 	struct qla_hw_data *ha = base_vha->hw;
+	uint16_t options = 0;
+	int	cnt;
 
 	ret = qla24xx_vport_create_req_sanity_check(fc_vport);
 	if (ret) {
@@ -1497,23 +1530,35 @@ qla24xx_vport_create(struct fc_vport *fc_vport, bool disable)
 
 	qla24xx_vport_disable(fc_vport, disable);
 
-	/* Create a queue pair for the vport */
-	if (ha->mqenable) {
-		if (ha->npiv_info) {
-			for (; cnt < ha->nvram_npiv_size; cnt++) {
-				if (ha->npiv_info[cnt].port_name ==
-					vha->port_name &&
-					ha->npiv_info[cnt].node_name ==
-					vha->node_name) {
-					qos = ha->npiv_info[cnt].q_qos;
-					break;
-				}
-			}
+	ret = 0;
+	if (ha->cur_vport_count <= ha->flex_port_count || ql2xmultique_tag
+		|| ha->max_req_queues == 1 || !ha->npiv_info)
+		goto vport_queue;
+	/* Create a request queue in QoS mode for the vport */
+	for (cnt = ha->flex_port_count; cnt < ha->nvram_npiv_size; cnt++) {
+		if (ha->npiv_info[cnt].port_name == vha->port_name &&
+			ha->npiv_info[cnt].node_name == vha->node_name) {
+			qos = ha->npiv_info[cnt].q_qos;
+			break;
 		}
-		qla25xx_create_queues(vha, qos);
+	}
+	if (qos) {
+		ret = qla25xx_create_req_que(ha, options, vha->vp_idx, 0, 0,
+			qos);
+		if (!ret)
+			qla_printk(KERN_WARNING, ha,
+			"Can't create request queue for vp_idx:%d\n",
+			vha->vp_idx);
+		else
+			DEBUG2(qla_printk(KERN_INFO, ha,
+			"Request Que:%d created for vp_idx:%d\n",
+			ret, vha->vp_idx));
 	}
 
+vport_queue:
+	vha->req = ha->req_q_map[ret];
 	return 0;
+
 vport_create_failed_2:
 	qla24xx_disable_vp(vha);
 	qla24xx_deallocate_vp_id(vha);
@@ -1554,8 +1599,8 @@ qla24xx_vport_delete(struct fc_vport *fc_vport)
 		    vha->host_no, vha->vp_idx, vha));
         }
 
-	if (ha->mqenable) {
-		if (qla25xx_delete_queues(vha, 0) != QLA_SUCCESS)
+	if (vha->req->id && !ql2xmultique_tag) {
+		if (qla25xx_delete_req_que(vha, vha->req) != QLA_SUCCESS)
 			qla_printk(KERN_WARNING, ha,
 				"Queue delete failed.\n");
 	}
