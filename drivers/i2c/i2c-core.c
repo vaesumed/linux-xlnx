@@ -457,8 +457,9 @@ static int i2c_register_adapter(struct i2c_adapter *adap)
 	 */
 	if (adap->dev.parent == NULL) {
 		adap->dev.parent = &platform_bus;
-		pr_debug("I2C adapter driver [%s] forgot to specify "
-			 "physical device\n", adap->name);
+		pr_warning("I2C adapter driver [%s] forgot to specify "
+			   "physical device\n", adap->name);
+		pr_warning("Fix it now, it will soon break!\n");
 	}
 
 	/* Set default timeout to 1 second if not already set */
