@@ -128,10 +128,6 @@ KBUILD_CFLAGS += -Iarch/$(ARCH)/mach-$(MACHINE)/include
 
 KBUILD_CPPFLAGS	+= $(patsubst %,-I$(srctree)/%include,$(machdirs))
 
-CLEAN_FILES += \
-	arch/$(ARCH)/include/asm/asm-offsets.h \
-	arch/$(ARCH)/kernel/asm-offsets.s \
-
 archclean:
 	$(Q)$(MAKE) $(clean)=$(boot)
 

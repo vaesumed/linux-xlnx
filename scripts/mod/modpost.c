@@ -942,8 +942,7 @@ static int section_mismatch(const char *fromsec, const char *tosec)
  *           *probe_one, *_console, *_timer
  *
  * Pattern 3:
- *   Whitelist all refereces from .text.head to .init.data
- *   Whitelist all refereces from .text.head to .init.text
+ *   Whitelist all references from .head.text to any init section
  *
  * Pattern 4:
  *   Some symbols belong to init section but still it is ok to reference
@@ -2008,6 +2007,7 @@ static void read_markers(const char *fname)
 		if (!mod->skip)
 			add_marker(mod, marker, fmt);
 	}
+	release_file(file, size);
 	return;
 fail:
 	fatal("parse error in markers list file\n");
