@@ -1800,7 +1800,7 @@ extern struct vfsmount *kern_mount_data(struct file_system_type *, void *data);
 extern int may_umount_tree(struct vfsmount *);
 extern int may_umount(struct vfsmount *);
 extern long do_mount(char *, char *, char *, unsigned long, void *);
-extern struct vfsmount *collect_mounts(struct vfsmount *, struct dentry *);
+extern struct vfsmount *collect_mounts(struct path *);
 extern void drop_collected_mounts(struct vfsmount *);
 
 extern int vfs_statfs(struct dentry *, struct kstatfs *);
@@ -2118,7 +2118,7 @@ extern struct file *create_write_pipe(int flags);
 extern void free_write_pipe(struct file *);
 
 extern struct file *do_filp_open(int dfd, const char *pathname,
-		int open_flag, int mode);
+		int open_flag, int mode, int acc_mode);
 extern int may_open(struct path *, int, int);
 
 extern int kernel_read(struct file *, unsigned long, char *, unsigned long);
