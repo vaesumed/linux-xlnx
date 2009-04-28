@@ -21,6 +21,7 @@ obj-y				+= gpio-config.o
 # PM support
 
 obj-$(CONFIG_PM)		+= pm.o
+obj-$(CONFIG_PM)		+= pm-gpio.o
 obj-$(CONFIG_S3C2410_PM_CHECK)	+= pm-check.o
 
 # devices
@@ -30,3 +31,4 @@ obj-$(CONFIG_S3C_DEV_HSMMC1)	+= dev-hsmmc1.o
 obj-y				+= dev-i2c0.o
 obj-$(CONFIG_S3C_DEV_I2C1)	+= dev-i2c1.o
 obj-$(CONFIG_S3C_DEV_FB)	+= dev-fb.o
+obj-$(CONFIG_S3C_DEV_USB_HOST)	+= dev-usb.o
