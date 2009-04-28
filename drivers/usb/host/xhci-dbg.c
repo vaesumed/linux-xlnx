@@ -20,6 +20,12 @@
  * Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <linux/debugfs.h>
+#include <linux/stringify.h>
+
+#ifdef CONFIG_USB_HCD_STAT
+#include "hcd-dbg.h"
+#endif
 #include "xhci.h"
 
 #define XHCI_INIT_VALUE 0x0
@@ -488,4 +494,28 @@ void xhci_dbg_ctx(struct xhci_hcd *xhci, struct xhci_device_control *ctx, dma_ad
 			dma += field_size;
 		}
 	}
+}
+
+void xhci_debugfs_remove(struct xhci_hcd *xhci)
+{
+#ifdef CONFIG_USB_HCD_STAT
+	hcd_stat_free(xhci->tp_stat);
+	xhci->tp_stat = NULL;
+#endif
+	debugfs_remove(xhci->dtry_dir);
+}
+
+int xhci_debugfs_add(struct xhci_hcd *xhci)
+{
+	xhci->dtry_dir = debugfs_create_dir("xhci", NULL);
+	if (!xhci->dtry_dir)
+		return -ENOMEM;
+
+#ifdef CONFIG_USB_HCD_STAT
+	xhci->tp_stat = hcd_stat_alloc(xhci->dtry_dir, "tp-stats", GFP_KERNEL);
+	if (!xhci->tp_stat)
+		return -ENOMEM;
+#endif
+
+	return 0;
 }

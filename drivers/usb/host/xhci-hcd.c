@@ -211,6 +211,11 @@ int xhci_init(struct usb_hcd *hcd)
 
 	xhci_dbg(xhci, "xhci_init\n");
 	spin_lock_init(&xhci->lock);
+	if (xhci_debugfs_add(xhci) < 0) {
+		xhci_warn(xhci, "Could not create debug files\n");
+		xhci_debugfs_remove(xhci);
+		return -ENOMEM;
+	}
 	retval = xhci_mem_init(xhci, GFP_KERNEL);
 	xhci_dbg(xhci, "Finished xhci_init\n");
 
@@ -482,6 +487,7 @@ void xhci_stop(struct usb_hcd *hcd)
 	xhci_mem_cleanup(xhci);
 	xhci_dbg(xhci, "xhci_stop completed - status = %x\n",
 		    xhci_readl(xhci, &xhci->op_regs->status));
+	xhci_debugfs_remove(xhci);
 }
 
 /*
