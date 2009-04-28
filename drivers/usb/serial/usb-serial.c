@@ -137,9 +137,21 @@ static void destroy_serial(struct kref *kref)
 
 	dbg("%s - %s", __func__, serial->type->description);
 
+	serial->type->shutdown(serial);
+
 	/* return the minor range that this device had */
 	if (serial->minor != SERIAL_TTY_NO_MINOR)
 		return_serial(serial);
+
+	for (i = 0; i < serial->num_ports; ++i)
+		serial->port[i]->port.count = 0;
+
+	/* the ports are cleaned up and released in port_release() */
+	for (i = 0; i < serial->num_ports; ++i)
+		if (serial->port[i]->dev.parent != NULL) {
+			device_unregister(&serial->port[i]->dev);
+			serial->port[i] = NULL;
+		}
 
 	/* If this is a "fake" port, we have to clean it up here, as it will
 	 * not get cleaned up in port_release() as it was never registered with
@@ -175,7 +187,7 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 	struct usb_serial *serial;
 	struct usb_serial_port *port;
 	unsigned int portNumber;
-	int retval = 0;
+	int retval;
 
 	dbg("%s", __func__);
 
@@ -186,24 +198,21 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 		return -ENODEV;
 	}
 
-	mutex_lock(&serial->disc_mutex);
 	portNumber = tty->index - serial->minor;
 	port = serial->port[portNumber];
-	if (!port || serial->disconnected)
+	if (!port) {
 		retval = -ENODEV;
-	else
-		get_device(&port->dev);
-	/*
-	 * Note: Our locking order requirement does not allow port->mutex
-	 * to be acquired while serial->disc_mutex is held.
-	 */
-	mutex_unlock(&serial->disc_mutex);
-	if (retval)
-		goto bailout_serial_put;
+		goto bailout_kref_put;
+	}
+
+	if (port->serial->disconnected) {
+		retval = -ENODEV;
+		goto bailout_kref_put;
+	}
 
 	if (mutex_lock_interruptible(&port->mutex)) {
 		retval = -ERESTARTSYS;
-		goto bailout_port_put;
+		goto bailout_kref_put;
 	}
 
 	++port->port.count;
@@ -223,100 +232,74 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 			goto bailout_mutex_unlock;
 		}
 
-		mutex_lock(&serial->disc_mutex);
-		if (serial->disconnected)
-			retval = -ENODEV;
-		else
-			retval = usb_autopm_get_interface(serial->interface);
+		retval = usb_autopm_get_interface(serial->interface);
 		if (retval)
 			goto bailout_module_put;
-
 		/* only call the device specific open if this
 		 * is the first time the port is opened */
 		retval = serial->type->open(tty, port, filp);
 		if (retval)
 			goto bailout_interface_put;
-		mutex_unlock(&serial->disc_mutex);
 	}
-
 	mutex_unlock(&port->mutex);
-	return 0;
+	/* Now do the correct tty layer semantics */
+	retval = tty_port_block_til_ready(&port->port, tty, filp);
+	if (retval == 0)
+		return 0;
 
 bailout_interface_put:
 	usb_autopm_put_interface(serial->interface);
 bailout_module_put:
-	mutex_unlock(&serial->disc_mutex);
 	module_put(serial->type->driver.owner);
 bailout_mutex_unlock:
 	port->port.count = 0;
 	tty->driver_data = NULL;
 	tty_port_tty_set(&port->port, NULL);
 	mutex_unlock(&port->mutex);
-bailout_port_put:
-	put_device(&port->dev);
-bailout_serial_put:
+bailout_kref_put:
 	usb_serial_put(serial);
 	return retval;
+}
+
+static void serial_do_down(struct usb_serial_port *port)
+{
+	struct usb_serial_driver *drv = port->serial->type;
+	/* The console is magical, do not hang up the console hardware
+	   or there will be tears */
+
+	if (port->console)
+		return;
+
+	mutex_lock(&port->mutex);
+	if (drv->close)
+		drv->close(port);
+	usb_autopm_put_interface(port->serial->interface);
+	module_put(port->serial->type->driver.owner);
+	mutex_unlock(&port->mutex);
 }
 
 static void serial_close(struct tty_struct *tty, struct file *filp)
 {
 	struct usb_serial_port *port = tty->driver_data;
-	struct usb_serial *serial;
-	struct module *owner;
-	int count;
-
-	if (!port)
-		return;
 
 	dbg("%s - port %d", __func__, port->number);
 
-	mutex_lock(&port->mutex);
-	serial = port->serial;
-	owner = serial->type->driver.owner;
 
-	if (port->port.count == 0) {
-		mutex_unlock(&port->mutex);
+	if (tty_port_close_start(&port->port, tty, filp) == 0)
 		return;
-	}
 
-	if (port->port.count == 1)
-		/* only call the device specific close if this
-		 * port is being closed by the last owner. Ensure we do
-		 * this before we drop the port count. The call is protected
-		 * by the port mutex
-		 */
-		serial->type->close(tty, port, filp);
+	serial_do_down(port);		
+	tty_port_close_end(&port->port, tty);
+	usb_serial_put(port->serial);
+	tty_port_tty_set(&port->port, NULL);
+}
 
-	if (port->port.count == (port->console ? 2 : 1)) {
-		struct tty_struct *tty = tty_port_tty_get(&port->port);
-		if (tty) {
-			/* We must do this before we drop the port count to
-			   zero. */
-			if (tty->driver_data)
-				tty->driver_data = NULL;
-			tty_port_tty_set(&port->port, NULL);
-			tty_kref_put(tty);
-		}
-	}
-
-	--port->port.count;
-	count = port->port.count;
-	mutex_unlock(&port->mutex);
-	put_device(&port->dev);
-
-	/* Mustn't dereference port any more */
-	if (count == 0) {
-		mutex_lock(&serial->disc_mutex);
-		if (!serial->disconnected)
-			usb_autopm_put_interface(serial->interface);
-		mutex_unlock(&serial->disc_mutex);
-	}
-	usb_serial_put(serial);
-
-	/* Mustn't dereference serial any more */
-	if (count == 0)
-		module_put(owner);
+static void serial_hangup(struct tty_struct *tty)
+{
+	struct usb_serial_port *port = tty->driver_data;
+	serial_do_down(port);
+	tty_port_hangup(&port->port);
+	usb_serial_put(port->serial);
 }
 
 static int serial_write(struct tty_struct *tty, const unsigned char *buf,
@@ -560,13 +543,7 @@ static void kill_traffic(struct usb_serial_port *port)
 
 static void port_free(struct usb_serial_port *port)
 {
-	/*
-	 * Stop all the traffic before cancelling the work, so that
-	 * nobody will restart it by calling usb_serial_port_softint.
-	 */
 	kill_traffic(port);
-	cancel_work_sync(&port->work);
-
 	usb_free_urb(port->read_urb);
 	usb_free_urb(port->write_urb);
 	usb_free_urb(port->interrupt_in_urb);
@@ -575,6 +552,7 @@ static void port_free(struct usb_serial_port *port)
 	kfree(port->bulk_out_buffer);
 	kfree(port->interrupt_in_buffer);
 	kfree(port->interrupt_out_buffer);
+	flush_scheduled_work();		/* port->work */
 	kfree(port);
 }
 
@@ -647,6 +625,29 @@ static struct usb_serial_driver *search_serial_device(
 
 	return NULL;
 }
+
+static int serial_carrier_raised(struct tty_port *port)
+{
+	struct usb_serial_port *p = container_of(port, struct usb_serial_port, port);
+	struct usb_serial_driver *drv = p->serial->type;
+	if (drv->carrier_raised)
+		return drv->carrier_raised(p);
+	/* No carrier control - don't block */
+	return 1;	
+}
+
+static void serial_dtr_rts(struct tty_port *port, int on)
+{
+	struct usb_serial_port *p = container_of(port, struct usb_serial_port, port);
+	struct usb_serial_driver *drv = p->serial->type;
+	if (drv->dtr_rts)
+		drv->dtr_rts(p, on);
+}
+
+static const struct tty_port_operations serial_port_ops = {
+	.carrier_raised = serial_carrier_raised,
+	.dtr_rts = serial_dtr_rts,
+};
 
 int usb_serial_probe(struct usb_interface *interface,
 			       const struct usb_device_id *id)
@@ -841,6 +842,7 @@ int usb_serial_probe(struct usb_interface *interface,
 		if (!port)
 			goto probe_error;
 		tty_port_init(&port->port);
+		port->port.ops = &serial_port_ops;
 		port->serial = serial;
 		spin_lock_init(&port->lock);
 		mutex_init(&port->mutex);
@@ -1059,36 +1061,23 @@ void usb_serial_disconnect(struct usb_interface *interface)
 	usb_set_intfdata(interface, NULL);
 	/* must set a flag, to signal subdrivers */
 	serial->disconnected = 1;
-	mutex_unlock(&serial->disc_mutex);
-
-	/* Unfortunately, many of the sub-drivers expect the port structures
-	 * to exist when their shutdown method is called, so we have to go
-	 * through this awkward two-step unregistration procedure.
-	 */
 	for (i = 0; i < serial->num_ports; ++i) {
 		port = serial->port[i];
 		if (port) {
 			struct tty_struct *tty = tty_port_tty_get(&port->port);
 			if (tty) {
+				/* The hangup will occur asynchronously but
+				   the object refcounts will sort out all the
+				   cleanup */
 				tty_hangup(tty);
 				tty_kref_put(tty);
 			}
 			kill_traffic(port);
-			cancel_work_sync(&port->work);
-			device_del(&port->dev);
 		}
 	}
-	serial->type->shutdown(serial);
-	for (i = 0; i < serial->num_ports; ++i) {
-		port = serial->port[i];
-		if (port) {
-			put_device(&port->dev);
-			serial->port[i] = NULL;
-		}
-	}
-
 	/* let the last holder of this object
 	 * cause it to be cleaned up */
+	mutex_unlock(&serial->disc_mutex);
 	usb_serial_put(serial);
 	dev_info(dev, "device disconnected\n");
 }
@@ -1134,6 +1123,7 @@ static const struct tty_operations serial_ops = {
 	.open =			serial_open,
 	.close =		serial_close,
 	.write =		serial_write,
+	.hangup = 		serial_hangup,
 	.write_room =		serial_write_room,
 	.ioctl =		serial_ioctl,
 	.set_termios =		serial_set_termios,
@@ -1145,6 +1135,7 @@ static const struct tty_operations serial_ops = {
 	.tiocmset =		serial_tiocmset,
 	.proc_fops =		&serial_proc_fops,
 };
+
 
 struct tty_driver *usb_serial_tty_driver;
 

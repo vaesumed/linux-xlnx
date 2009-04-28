@@ -1737,14 +1737,6 @@ static irqreturn_t cyz_interrupt(int irq, void *dev_id)
 {
 	struct cyclades_card *cinfo = dev_id;
 
-	if (unlikely(cinfo == NULL)) {
-#ifdef CY_DEBUG_INTERRUPTS
-		printk(KERN_DEBUG "cyz_interrupt: spurious interrupt %d\n",
-									irq);
-#endif
-		return IRQ_NONE;	/* spurious interrupt */
-	}
-
 	if (unlikely(!ISZLOADED(*cinfo))) {
 #ifdef CY_DEBUG_INTERRUPTS
 		printk(KERN_DEBUG "cyz_interrupt: board not yet loaded "
@@ -4932,8 +4924,6 @@ static int __devinit cyz_load_fw(struct pci_dev *pdev, void __iomem *base_addr,
 	cy_writel(&ctl_addr->intr_ctrl_stat, readl(&ctl_addr->intr_ctrl_stat) |
 			0x00030800UL);
 
-	plx_init(pdev, irq, ctl_addr);
-
 	return 0;
 err_rel:
 	release_firmware(fw);
@@ -5043,6 +5033,7 @@ static int __devinit cy_pci_probe(struct pci_dev *pdev,
 			nchan = ZE_V1_NPORTS;
 		} else {
 			card_name = "Cyclades-8Zo";
+			nchan = 8;
 
 #ifdef CY_PCI_DEBUG
 			if (mailbox == ZO_V1) {
@@ -5065,15 +5056,11 @@ static int __devinit cy_pci_probe(struct pci_dev *pdev,
 			 */
 			if ((mailbox == ZO_V1) || (mailbox == ZO_V2))
 				cy_writel(addr2 + ID_ADDRESS, 0L);
-
-			retval = cyz_load_fw(pdev, addr2, addr0, irq);
-			if (retval)
-				goto err_unmap;
-			/* This must be a Cyclades-8Zo/PCI.  The extendable
-			   version will have a different device_id and will
-			   be allocated its maximum number of ports. */
-			nchan = 8;
 		}
+
+		retval = cyz_load_fw(pdev, addr2, addr0, irq);
+		if (retval)
+			goto err_unmap;
 	}
 
 	if ((cy_next_channel + nchan) > NR_PORTS) {

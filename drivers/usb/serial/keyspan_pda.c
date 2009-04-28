@@ -701,18 +701,23 @@ error:
 	return rc;
 }
 
-
-static void keyspan_pda_close(struct tty_struct *tty,
-			struct usb_serial_port *port, struct file *filp)
+static void keyspan_pda_rts_dtr(struct usb_serial_port *port, int on)
 {
 	struct usb_serial *serial = port->serial;
 
 	if (serial->dev) {
-		/* the normal serial device seems to always shut
-		   off DTR and RTS now */
-		if (tty->termios->c_cflag & HUPCL)
+		if (on)
+			keyspan_pda_set_modem_info(serial, (1<<7) | (1<< 2));
+		else
 			keyspan_pda_set_modem_info(serial, 0);
+	}
+}
 
+static void keyspan_pda_close(struct usb_serial_port *port)
+{
+	struct usb_serial *serial = port->serial;
+
+	if (serial->dev) {
 		/* shutdown our bulk reads and writes */
 		usb_kill_urb(port->write_urb);
 		usb_kill_urb(port->interrupt_in_urb);
