@@ -34,6 +34,7 @@
 #include <linux/usb.h>
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
+#include <linux/debugfs.h>
 
 #include <asm/io.h>
 #include <linux/scatterlist.h>
@@ -1001,6 +1002,35 @@ static struct notifier_block usb_bus_nb = {
 	.notifier_call = usb_bus_notify,
 };
 
+struct dentry *usb_debug_root;
+EXPORT_SYMBOL_GPL(usb_debug_root);
+
+struct dentry *usb_debug_devices;
+
+static int usb_debugfs_init(void)
+{
+	usb_debug_root = debugfs_create_dir("usb", NULL);
+	if (!usb_debug_root)
+		return -ENOENT;
+
+	usb_debug_devices = debugfs_create_file("devices", 0444,
+						usb_debug_root, NULL,
+						&usbfs_devices_fops);
+	if (!usb_debug_devices) {
+		debugfs_remove(usb_debug_root);
+		usb_debug_root = NULL;
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
+static void usb_debugfs_cleanup(void)
+{
+	debugfs_remove(usb_debug_devices);
+	debugfs_remove(usb_debug_root);
+}
+
 /*
  * Init
  */
@@ -1012,6 +1042,10 @@ static int __init usb_init(void)
 		return 0;
 	}
 
+	retval = usb_debugfs_init();
+	if (retval)
+		goto out;
+
 	retval = ksuspend_usb_init();
 	if (retval)
 		goto out;
@@ -1021,9 +1055,6 @@ static int __init usb_init(void)
 	retval = bus_register_notifier(&usb_bus_type, &usb_bus_nb);
 	if (retval)
 		goto bus_notifier_failed;
-	retval = usb_host_init();
-	if (retval)
-		goto host_init_failed;
 	retval = usb_major_init();
 	if (retval)
 		goto major_init_failed;
@@ -1053,8 +1084,6 @@ usb_devio_init_failed:
 driver_register_failed:
 	usb_major_cleanup();
 major_init_failed:
-	usb_host_cleanup();
-host_init_failed:
 	bus_unregister_notifier(&usb_bus_type, &usb_bus_nb);
 bus_notifier_failed:
 	bus_unregister(&usb_bus_type);
@@ -1079,10 +1108,10 @@ static void __exit usb_exit(void)
 	usb_deregister(&usbfs_driver);
 	usb_devio_cleanup();
 	usb_hub_cleanup();
-	usb_host_cleanup();
 	bus_unregister_notifier(&usb_bus_type, &usb_bus_nb);
 	bus_unregister(&usb_bus_type);
 	ksuspend_usb_cleanup();
+	usb_debugfs_cleanup();
 }
 
 subsys_initcall(usb_init);
