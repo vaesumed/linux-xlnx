@@ -35,7 +35,6 @@
 #include <linux/mm.h>
 #include <linux/init.h>
 #include <linux/vmalloc.h>
-#include "interrupt.h"
 #include <linux/dma-mapping.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
@@ -264,7 +263,6 @@ struct comedi_device {
 	const char *board_name;
 	const void *board_ptr;
 	int attached;
-	int rt;
 	spinlock_t spinlock;
 	struct mutex mutex;
 	int in_request_module;
@@ -524,6 +522,17 @@ struct usb_device;	/* forward declaration */
 int comedi_usb_auto_config(struct usb_device *usbdev, const char *board_name);
 void comedi_usb_auto_unconfig(struct usb_device *usbdev);
 
-#include "comedi_rt.h"
+#ifdef CONFIG_COMEDI_PCI_DRIVERS
+	#define CONFIG_COMEDI_PCI
+#endif
+#ifdef CONFIG_COMEDI_PCI_DRIVERS_MODULE
+	#define CONFIG_COMEDI_PCI
+#endif
+#ifdef CONFIG_COMEDI_PCMCIA_DRIVERS
+	#define CONFIG_COMEDI_PCMCIA
+#endif
+#ifdef CONFIG_COMEDI_PCMCIA_DRIVERS_MODULE
+	#define CONFIG_COMEDI_PCMCIA
+#endif
 
 #endif /* _COMEDIDEV_H */

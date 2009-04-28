@@ -65,7 +65,6 @@
 #include <linux/vmalloc.h>
 
 
-#include <linux/wireless.h>
 #include <net/iw_handler.h>
 
 // load firmware
@@ -124,7 +123,7 @@ typedef int (*HARD_START_XMIT_FUNC)(struct sk_buff *skb, struct net_device *net_
 #define RT_MOD_INC_USE_COUNT() \
 	if (!try_module_get(THIS_MODULE)) \
 	{ \
-		DBGPRINT(RT_DEBUG_ERROR, ("%s: cannot reserve module\n", __FUNCTION__)); \
+		DBGPRINT(RT_DEBUG_ERROR, ("%s: cannot reserve module\n", __func__)); \
 		return -1; \
 	}
 
