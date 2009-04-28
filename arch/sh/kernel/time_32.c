@@ -17,7 +17,9 @@
 #include <linux/sched.h>
 #include <linux/clockchips.h>
 #include <linux/mc146818rtc.h>	/* for rtc_lock */
+#include <linux/platform_device.h>
 #include <linux/smp.h>
+#include <linux/rtc.h>
 #include <asm/clock.h>
 #include <asm/rtc.h>
 #include <asm/timer.h>
@@ -43,6 +45,28 @@ static int null_rtc_set_time(const time_t secs)
 
 void (*rtc_sh_get_time)(struct timespec *) = null_rtc_get_time;
 int (*rtc_sh_set_time)(const time_t) = null_rtc_set_time;
+
+unsigned int get_rtc_time(struct rtc_time *tm)
+{
+	if (rtc_sh_get_time != null_rtc_get_time) {
+		struct timespec tv;
+
+		rtc_sh_get_time(&tv);
+		rtc_time_to_tm(tv.tv_sec, tm);
+	}
+
+	return RTC_24H;
+}
+EXPORT_SYMBOL(get_rtc_time);
+
+int set_rtc_time(struct rtc_time *tm)
+{
+	unsigned long secs;
+
+	rtc_tm_to_time(tm, &secs);
+	return rtc_sh_set_time(secs);
+}
+EXPORT_SYMBOL(set_rtc_time);
 
 #ifndef CONFIG_GENERIC_TIME
 void do_gettimeofday(struct timeval *tv)
@@ -227,6 +251,14 @@ void __init time_init(void)
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
 	local_timer_setup(smp_processor_id());
 #endif
+
+	/*
+	 * Make sure all compiled-in early timers register themselves.
+	 * Run probe() for one "earlytimer" device.
+	 */
+	early_platform_driver_register_all("earlytimer");
+	if (early_platform_driver_probe("earlytimer", 1, 0))
+		return;
 
 	/*
 	 * Find the timer to use as the system timer, it will be
