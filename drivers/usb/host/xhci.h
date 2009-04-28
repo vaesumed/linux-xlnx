@@ -897,6 +897,9 @@ struct xhci_td {
 	struct list_head	td_list;
 	struct urb		*urb;
 	union xhci_trb		*last_trb;
+#ifdef CONFIG_USB_HCD_STAT
+	ktime_t			start_time;
+#endif
 };
 
 struct xhci_segment {
@@ -1013,6 +1016,11 @@ struct xhci_hcd {
 	int			noops_submitted;
 	int			noops_handled;
 	int			error_bitmask;
+	struct dentry		*dtry_dir;
+#ifdef CONFIG_USB_HCD_STAT
+	/* Throughput statistics - maybe later we'll have one per endpoint */
+	struct hcd_stat	*tp_stat;
+#endif
 };
 
 /* For testing purposes */
@@ -1073,6 +1081,8 @@ void xhci_dbg_erst(struct xhci_hcd *xhci, struct xhci_erst *erst);
 void xhci_dbg_cmd_ptrs(struct xhci_hcd *xhci);
 void xhci_dbg_ring_ptrs(struct xhci_hcd *xhci, struct xhci_ring *ring);
 void xhci_dbg_ctx(struct xhci_hcd *xhci, struct xhci_device_control *ctx, dma_addr_t dma, unsigned int last_ep);
+int xhci_debugfs_add(struct xhci_hcd *xhci);
+void xhci_debugfs_remove(struct xhci_hcd *xhci);
 
 /* xHCI memory managment */
 void xhci_mem_cleanup(struct xhci_hcd *xhci);
