@@ -12,7 +12,6 @@
 #include <linux/linkage.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
-#include <linux/async.h>
 
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
@@ -94,7 +93,6 @@ restart:
 		sb->s_count++;
 		spin_unlock(&sb_lock);
 		down_read(&sb->s_umount);
-		async_synchronize_full_domain(&sb->s_async_list);
 		if (sb->s_root)
 			__sync_filesystem(sb, wait);
 		up_read(&sb->s_umount);
