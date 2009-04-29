@@ -302,9 +302,10 @@ static int agnx_config(struct ieee80211_hw *dev, u32 changed)
 	return 0;
 }
 
-static int agnx_config_interface(struct ieee80211_hw *dev,
+static void agnx_bss_info_changed(struct ieee80211_hw *dev,
 				 struct ieee80211_vif *vif,
-				 struct ieee80211_if_conf *conf)
+				 struct ieee80211_bss_conf *info,
+				 u32 changes)
 {
 	struct agnx_priv *priv = dev->priv;
 	void __iomem *ctl = priv->ctl;
@@ -312,17 +313,17 @@ static int agnx_config_interface(struct ieee80211_hw *dev,
 
 	spin_lock(&priv->lock);
 
-	if (memcmp(conf->bssid, priv->bssid, ETH_ALEN)) {
-		agnx_set_bssid(priv, conf->bssid);
-		memcpy(priv->bssid, conf->bssid, ETH_ALEN);
-		hash_write(priv, conf->bssid, BSSID_STAID);
+	if ((changes & BSS_CHANGED_BSSID) ||
+		memcmp(info->bssid, priv->bssid, ETH_ALEN)) {
+		agnx_set_bssid(priv, info->bssid);
+		memcpy(priv->bssid, info->bssid, ETH_ALEN);
+		hash_write(priv, info->bssid, BSSID_STAID);
 		sta_init(priv, BSSID_STAID);
 		/* FIXME needed? */
 		sta_power_init(priv, BSSID_STAID);
 		agnx_write32(ctl, AGNX_BM_MTSM, 0xff & ~0x1);
 	}
 	spin_unlock(&priv->lock);
-	return 0;
 } /* agnx_config_interface */
 
 
@@ -421,7 +422,7 @@ static struct ieee80211_ops agnx_ops = {
 	.add_interface		= agnx_add_interface,
 	.remove_interface	= agnx_remove_interface,
 	.config			= agnx_config,
-	.config_interface	= agnx_config_interface,
+	.bss_info_changed	= agnx_bss_info_changed,
 	.configure_filter	= agnx_configure_filter,
 	.get_stats		= agnx_get_stats,
 	.get_tx_stats		= agnx_get_tx_stats,
