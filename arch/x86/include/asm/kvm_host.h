@@ -185,6 +185,7 @@ union kvm_mmu_page_role {
 		unsigned access:3;
 		unsigned invalid:1;
 		unsigned cr4_pge:1;
+		unsigned nxe:1;
 	};
 };
 
@@ -212,7 +213,6 @@ struct kvm_mmu_page {
 	int multimapped;         /* More than one parent_pte? */
 	int root_count;          /* Currently serving as active root */
 	bool unsync;
-	bool global;
 	unsigned int unsync_children;
 	union {
 		u64 *parent_pte;               /* !multimapped */
@@ -261,6 +261,7 @@ struct kvm_mmu {
 	union kvm_mmu_page_role base_role;
 
 	u64 *pae_root;
+	u64 rsvd_bits_mask[2][4];
 };
 
 struct kvm_vcpu_arch {
@@ -286,6 +287,7 @@ struct kvm_vcpu_arch {
 	u64 shadow_efer;
 	u64 apic_base;
 	struct kvm_lapic *apic;    /* kernel irqchip context */
+	int32_t apic_arb_prio;
 	int mp_state;
 	int sipi_vector;
 	u64 ia32_misc_enable_msr;
@@ -392,7 +394,6 @@ struct kvm_arch{
 	 */
 	struct list_head active_mmu_pages;
 	struct list_head assigned_dev_head;
-	struct list_head oos_global_pages;
 	struct iommu_domain *iommu_domain;
 	struct kvm_pic *vpic;
 	struct kvm_ioapic *vioapic;
@@ -400,7 +401,6 @@ struct kvm_arch{
 	struct hlist_head irq_ack_notifier_list;
 	int vapics_in_nmi_mode;
 
-	int round_robin_prev_vcpu;
 	unsigned int tss_addr;
 	struct page *apic_access_page;
 
@@ -423,7 +423,6 @@ struct kvm_vm_stat {
 	u32 mmu_recycled;
 	u32 mmu_cache_miss;
 	u32 mmu_unsync;
-	u32 mmu_unsync_global;
 	u32 remote_tlb_flush;
 	u32 lpages;
 };
@@ -521,7 +520,7 @@ struct kvm_x86_ops {
 	void (*inject_pending_irq)(struct kvm_vcpu *vcpu);
 	void (*inject_pending_vectors)(struct kvm_vcpu *vcpu,
 				       struct kvm_run *run);
-
+	int (*interrupt_allowed)(struct kvm_vcpu *vcpu);
 	int (*set_tss_addr)(struct kvm *kvm, unsigned int addr);
 	int (*get_tdp_level)(void);
 	int (*get_mt_mask_shift)(void);
@@ -563,6 +562,7 @@ enum emulation_result {
 
 #define EMULTYPE_NO_DECODE	    (1 << 0)
 #define EMULTYPE_TRAP_UD	    (1 << 1)
+#define EMULTYPE_SKIP		    (1 << 2)
 int emulate_instruction(struct kvm_vcpu *vcpu, struct kvm_run *run,
 			unsigned long cr2, u16 error_code, int emulation_type);
 void kvm_report_emulation_failure(struct kvm_vcpu *cvpu, const char *context);
@@ -638,7 +638,6 @@ void __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
 int kvm_mmu_load(struct kvm_vcpu *vcpu);
 void kvm_mmu_unload(struct kvm_vcpu *vcpu);
 void kvm_mmu_sync_roots(struct kvm_vcpu *vcpu);
-void kvm_mmu_sync_global(struct kvm_vcpu *vcpu);
 
 int kvm_emulate_hypercall(struct kvm_vcpu *vcpu);
 
@@ -791,5 +790,6 @@ asmlinkage void kvm_handle_fault_on_reboot(void);
 #define KVM_ARCH_WANT_MMU_NOTIFIER
 int kvm_unmap_hva(struct kvm *kvm, unsigned long hva);
 int kvm_age_hva(struct kvm *kvm, unsigned long hva);
+int cpuid_maxphyaddr(struct kvm_vcpu *vcpu);
 
 #endif /* _ASM_X86_KVM_HOST_H */
