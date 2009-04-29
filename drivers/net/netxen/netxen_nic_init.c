@@ -108,42 +108,6 @@ static void crb_addr_transform_setup(void)
 	crb_addr_transform(I2C0);
 }
 
-int netxen_init_firmware(struct netxen_adapter *adapter)
-{
-	u32 state = 0, loops = 0, err = 0;
-
-	/* Window 1 call */
-	state = adapter->pci_read_normalize(adapter, CRB_CMDPEG_STATE);
-
-	if (state == PHAN_INITIALIZE_ACK)
-		return 0;
-
-	while (state != PHAN_INITIALIZE_COMPLETE && loops < 2000) {
-		msleep(1);
-		/* Window 1 call */
-		state = adapter->pci_read_normalize(adapter, CRB_CMDPEG_STATE);
-
-		loops++;
-	}
-	if (loops >= 2000) {
-		printk(KERN_ERR "Cmd Peg initialization not complete:%x.\n",
-		       state);
-		err = -EIO;
-		return err;
-	}
-	/* Window 1 call */
-	adapter->pci_write_normalize(adapter,
-			CRB_NIC_CAPABILITIES_HOST, INTR_SCHEME_PERPORT);
-	adapter->pci_write_normalize(adapter,
-			CRB_NIC_MSI_MODE_HOST, MSI_MODE_MULTIFUNC);
-	adapter->pci_write_normalize(adapter,
-			CRB_MPORT_MODE, MPORT_MULTI_FUNCTION_MODE);
-	adapter->pci_write_normalize(adapter,
-			CRB_CMDPEG_STATE, PHAN_INITIALIZE_ACK);
-
-	return err;
-}
-
 void netxen_release_rx_buffers(struct netxen_adapter *adapter)
 {
 	struct netxen_recv_context *recv_ctx;
@@ -173,9 +137,10 @@ void netxen_release_tx_buffers(struct netxen_adapter *adapter)
 	struct netxen_cmd_buffer *cmd_buf;
 	struct netxen_skb_frag *buffrag;
 	int i, j;
+	struct nx_host_tx_ring *tx_ring = &adapter->tx_ring;
 
-	cmd_buf = adapter->cmd_buf_arr;
-	for (i = 0; i < adapter->num_txd; i++) {
+	cmd_buf = tx_ring->cmd_buf_arr;
+	for (i = 0; i < tx_ring->num_desc; i++) {
 		buffrag = cmd_buf->frag_array;
 		if (buffrag->dma) {
 			pci_unmap_single(adapter->pdev, buffrag->dma,
@@ -203,6 +168,7 @@ void netxen_free_sw_resources(struct netxen_adapter *adapter)
 {
 	struct netxen_recv_context *recv_ctx;
 	struct nx_host_rds_ring *rds_ring;
+	struct nx_host_tx_ring *tx_ring;
 	int ring;
 
 	recv_ctx = &adapter->recv_ctx;
@@ -214,8 +180,9 @@ void netxen_free_sw_resources(struct netxen_adapter *adapter)
 		}
 	}
 
-	if (adapter->cmd_buf_arr)
-		vfree(adapter->cmd_buf_arr);
+	tx_ring = &adapter->tx_ring;
+	if (tx_ring->cmd_buf_arr)
+		vfree(tx_ring->cmd_buf_arr);
 	return;
 }
 
@@ -224,21 +191,24 @@ int netxen_alloc_sw_resources(struct netxen_adapter *adapter)
 	struct netxen_recv_context *recv_ctx;
 	struct nx_host_rds_ring *rds_ring;
 	struct nx_host_sds_ring *sds_ring;
+	struct nx_host_tx_ring *tx_ring = &adapter->tx_ring;
 	struct netxen_rx_buffer *rx_buf;
 	int ring, i, num_rx_bufs;
 
 	struct netxen_cmd_buffer *cmd_buf_arr;
 	struct net_device *netdev = adapter->netdev;
+	struct pci_dev *pdev = adapter->pdev;
 
+	tx_ring->num_desc = adapter->num_txd;
 	cmd_buf_arr =
-		(struct netxen_cmd_buffer *)vmalloc(TX_BUFF_RINGSIZE(adapter));
+		(struct netxen_cmd_buffer *)vmalloc(TX_BUFF_RINGSIZE(tx_ring));
 	if (cmd_buf_arr == NULL) {
-		printk(KERN_ERR "%s: Failed to allocate cmd buffer ring\n",
+		dev_err(&pdev->dev, "%s: failed to allocate cmd buffer ring\n",
 		       netdev->name);
 		return -ENOMEM;
 	}
-	memset(cmd_buf_arr, 0, TX_BUFF_RINGSIZE(adapter));
-	adapter->cmd_buf_arr = cmd_buf_arr;
+	memset(cmd_buf_arr, 0, TX_BUFF_RINGSIZE(tx_ring));
+	tx_ring->cmd_buf_arr = cmd_buf_arr;
 
 	recv_ctx = &adapter->recv_ctx;
 	for (ring = 0; ring < adapter->max_rds_rings; ring++) {
@@ -307,8 +277,6 @@ int netxen_alloc_sw_resources(struct netxen_adapter *adapter)
 	for (ring = 0; ring < adapter->max_sds_rings; ring++) {
 		sds_ring = &recv_ctx->sds_rings[ring];
 		sds_ring->irq = adapter->msix_entries[ring].vector;
-		sds_ring->clean_tx = (ring == 0);
-		sds_ring->post_rxd = (ring == 0);
 		sds_ring->adapter = adapter;
 		sds_ring->num_desc = adapter->num_rxd;
 
@@ -400,8 +368,7 @@ static int rom_lock(struct netxen_adapter *adapter)
 
 	while (!done) {
 		/* acquire semaphore2 from PCI HW block */
-		netxen_nic_read_w0(adapter, NETXEN_PCIE_REG(PCIE_SEM2_LOCK),
-				   &done);
+		done = NXRD32(adapter, NETXEN_PCIE_REG(PCIE_SEM2_LOCK));
 		if (done == 1)
 			break;
 		if (timeout >= rom_lock_timeout)
@@ -418,7 +385,7 @@ static int rom_lock(struct netxen_adapter *adapter)
 				cpu_relax();	/*This a nop instr on i386 */
 		}
 	}
-	netxen_nic_reg_write(adapter, NETXEN_ROM_LOCK_ID, ROM_LOCK_DRIVER);
+	NXWR32(adapter, NETXEN_ROM_LOCK_ID, ROM_LOCK_DRIVER);
 	return 0;
 }
 
@@ -430,7 +397,7 @@ static int netxen_wait_rom_done(struct netxen_adapter *adapter)
 	cond_resched();
 
 	while (done == 0) {
-		done = netxen_nic_reg_read(adapter, NETXEN_ROMUSB_GLB_STATUS);
+		done = NXRD32(adapter, NETXEN_ROMUSB_GLB_STATUS);
 		done &= 2;
 		timeout++;
 		if (timeout >= rom_max_timeout) {
@@ -443,30 +410,28 @@ static int netxen_wait_rom_done(struct netxen_adapter *adapter)
 
 static void netxen_rom_unlock(struct netxen_adapter *adapter)
 {
-	u32 val;
-
 	/* release semaphore2 */
-	netxen_nic_read_w0(adapter, NETXEN_PCIE_REG(PCIE_SEM2_UNLOCK), &val);
+	NXRD32(adapter, NETXEN_PCIE_REG(PCIE_SEM2_UNLOCK));
 
 }
 
 static int do_rom_fast_read(struct netxen_adapter *adapter,
 			    int addr, int *valp)
 {
-	netxen_nic_reg_write(adapter, NETXEN_ROMUSB_ROM_ADDRESS, addr);
-	netxen_nic_reg_write(adapter, NETXEN_ROMUSB_ROM_DUMMY_BYTE_CNT, 0);
-	netxen_nic_reg_write(adapter, NETXEN_ROMUSB_ROM_ABYTE_CNT, 3);
-	netxen_nic_reg_write(adapter, NETXEN_ROMUSB_ROM_INSTR_OPCODE, 0xb);
+	NXWR32(adapter, NETXEN_ROMUSB_ROM_ADDRESS, addr);
+	NXWR32(adapter, NETXEN_ROMUSB_ROM_DUMMY_BYTE_CNT, 0);
+	NXWR32(adapter, NETXEN_ROMUSB_ROM_ABYTE_CNT, 3);
+	NXWR32(adapter, NETXEN_ROMUSB_ROM_INSTR_OPCODE, 0xb);
 	if (netxen_wait_rom_done(adapter)) {
 		printk("Error waiting for rom done\n");
 		return -EIO;
 	}
 	/* reset abyte_cnt and dummy_byte_cnt */
-	netxen_nic_reg_write(adapter, NETXEN_ROMUSB_ROM_ABYTE_CNT, 0);
+	NXWR32(adapter, NETXEN_ROMUSB_ROM_ABYTE_CNT, 0);
 	udelay(10);
-	netxen_nic_reg_write(adapter, NETXEN_ROMUSB_ROM_DUMMY_BYTE_CNT, 0);
+	NXWR32(adapter, NETXEN_ROMUSB_ROM_DUMMY_BYTE_CNT, 0);
 
-	*valp = netxen_nic_reg_read(adapter, NETXEN_ROMUSB_ROM_RDATA);
+	*valp = NXRD32(adapter, NETXEN_ROMUSB_ROM_RDATA);
 	return 0;
 }
 
@@ -530,8 +495,7 @@ int netxen_pinit_from_rom(struct netxen_adapter *adapter, int verbose)
 
 	/* resetall */
 	rom_lock(adapter);
-	netxen_crb_writelit_adapter(adapter, NETXEN_ROMUSB_GLB_SW_RESET,
-				    0xffffffff);
+	NXWR32(adapter, NETXEN_ROMUSB_GLB_SW_RESET, 0xffffffff);
 	netxen_rom_unlock(adapter);
 
 	if (verbose) {
@@ -655,7 +619,7 @@ int netxen_pinit_from_rom(struct netxen_adapter *adapter, int verbose)
 			}
 		}
 
-		adapter->hw_write_wx(adapter, off, &buf[i].data, 4);
+		NXWR32(adapter, off, buf[i].data);
 
 		msleep(init_delay);
 	}
@@ -665,33 +629,31 @@ int netxen_pinit_from_rom(struct netxen_adapter *adapter, int verbose)
 
 	/* unreset_net_cache */
 	if (NX_IS_REVISION_P2(adapter->ahw.revision_id)) {
-		adapter->hw_read_wx(adapter,
-				NETXEN_ROMUSB_GLB_SW_RESET, &val, 4);
-		netxen_crb_writelit_adapter(adapter,
-				NETXEN_ROMUSB_GLB_SW_RESET, (val & 0xffffff0f));
+		val = NXRD32(adapter, NETXEN_ROMUSB_GLB_SW_RESET);
+		NXWR32(adapter, NETXEN_ROMUSB_GLB_SW_RESET, (val & 0xffffff0f));
 	}
 
 	/* p2dn replyCount */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_D + 0xec, 0x1e);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_D + 0xec, 0x1e);
 	/* disable_peg_cache 0 */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_D + 0x4c, 8);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_D + 0x4c, 8);
 	/* disable_peg_cache 1 */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_I + 0x4c, 8);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_I + 0x4c, 8);
 
 	/* peg_clr_all */
 
 	/* peg_clr 0 */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_0 + 0x8, 0);
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_0 + 0xc, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_0 + 0x8, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_0 + 0xc, 0);
 	/* peg_clr 1 */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_1 + 0x8, 0);
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_1 + 0xc, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_1 + 0x8, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_1 + 0xc, 0);
 	/* peg_clr 2 */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_2 + 0x8, 0);
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_2 + 0xc, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_2 + 0x8, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_2 + 0xc, 0);
 	/* peg_clr 3 */
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_3 + 0x8, 0);
-	netxen_crb_writelit_adapter(adapter, NETXEN_CRB_PEG_NET_3 + 0xc, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_3 + 0x8, 0);
+	NXWR32(adapter, NETXEN_CRB_PEG_NET_3 + 0xc, 0);
 	return 0;
 }
 
@@ -715,12 +677,12 @@ int netxen_initialize_adapter_offload(struct netxen_adapter *adapter)
 	hi = (addr >> 32) & 0xffffffff;
 	lo = addr & 0xffffffff;
 
-	adapter->pci_write_normalize(adapter, CRB_HOST_DUMMY_BUF_ADDR_HI, hi);
-	adapter->pci_write_normalize(adapter, CRB_HOST_DUMMY_BUF_ADDR_LO, lo);
+	NXWR32(adapter, CRB_HOST_DUMMY_BUF_ADDR_HI, hi);
+	NXWR32(adapter, CRB_HOST_DUMMY_BUF_ADDR_LO, lo);
 
 	if (NX_IS_REVISION_P3(adapter->ahw.revision_id)) {
 		uint32_t temp = 0;
-		adapter->hw_write_wx(adapter, CRB_HOST_DUMMY_BUF, &temp, 4);
+		NXWR32(adapter, CRB_HOST_DUMMY_BUF, temp);
 	}
 
 	return 0;
@@ -762,8 +724,7 @@ int netxen_phantom_init(struct netxen_adapter *adapter, int pegtune_val)
 
 	if (!pegtune_val) {
 		do {
-			val = adapter->pci_read_normalize(adapter,
-					CRB_CMDPEG_STATE);
+			val = NXRD32(adapter, CRB_CMDPEG_STATE);
 
 			if (val == PHAN_INITIALIZE_COMPLETE ||
 				val == PHAN_INITIALIZE_ACK)
@@ -774,7 +735,7 @@ int netxen_phantom_init(struct netxen_adapter *adapter, int pegtune_val)
 		} while (--retries);
 
 		if (!retries) {
-			pegtune_val = adapter->pci_read_normalize(adapter,
+			pegtune_val = NXRD32(adapter,
 					NETXEN_ROMUSB_GLB_PEGTUNE_DONE);
 			printk(KERN_WARNING "netxen_phantom_init: init failed, "
 					"pegtune_val=%x\n", pegtune_val);
@@ -785,13 +746,14 @@ int netxen_phantom_init(struct netxen_adapter *adapter, int pegtune_val)
 	return 0;
 }
 
-int netxen_receive_peg_ready(struct netxen_adapter *adapter)
+static int
+netxen_receive_peg_ready(struct netxen_adapter *adapter)
 {
 	u32 val = 0;
 	int retries = 2000;
 
 	do {
-		val = adapter->pci_read_normalize(adapter, CRB_RCVPEG_STATE);
+		val = NXRD32(adapter, CRB_RCVPEG_STATE);
 
 		if (val == PHAN_PEG_RCV_INITIALIZED)
 			return 0;
@@ -807,6 +769,93 @@ int netxen_receive_peg_ready(struct netxen_adapter *adapter)
 	}
 
 	return 0;
+}
+
+int netxen_init_firmware(struct netxen_adapter *adapter)
+{
+	int err;
+
+	err = netxen_receive_peg_ready(adapter);
+	if (err)
+		return err;
+
+	NXWR32(adapter, CRB_NIC_CAPABILITIES_HOST, INTR_SCHEME_PERPORT);
+	NXWR32(adapter, CRB_NIC_MSI_MODE_HOST, MSI_MODE_MULTIFUNC);
+	NXWR32(adapter, CRB_MPORT_MODE, MPORT_MULTI_FUNCTION_MODE);
+	NXWR32(adapter, CRB_CMDPEG_STATE, PHAN_INITIALIZE_ACK);
+
+	if (adapter->fw_version >= NETXEN_VERSION_CODE(4, 0, 222)) {
+		adapter->capabilities = NXRD32(adapter, CRB_FW_CAPABILITIES_1);
+	}
+
+	return err;
+}
+
+static void
+netxen_handle_linkevent(struct netxen_adapter *adapter, nx_fw_msg_t *msg)
+{
+	u32 cable_OUI;
+	u16 cable_len;
+	u16 link_speed;
+	u8  link_status, module, duplex, autoneg;
+	struct net_device *netdev = adapter->netdev;
+
+	adapter->has_link_events = 1;
+
+	cable_OUI = msg->body[1] & 0xffffffff;
+	cable_len = (msg->body[1] >> 32) & 0xffff;
+	link_speed = (msg->body[1] >> 48) & 0xffff;
+
+	link_status = msg->body[2] & 0xff;
+	duplex = (msg->body[2] >> 16) & 0xff;
+	autoneg = (msg->body[2] >> 24) & 0xff;
+
+	module = (msg->body[2] >> 8) & 0xff;
+	if (module == LINKEVENT_MODULE_TWINAX_UNSUPPORTED_CABLE) {
+		printk(KERN_INFO "%s: unsupported cable: OUI 0x%x, length %d\n",
+				netdev->name, cable_OUI, cable_len);
+	} else if (module == LINKEVENT_MODULE_TWINAX_UNSUPPORTED_CABLELEN) {
+		printk(KERN_INFO "%s: unsupported cable length %d\n",
+				netdev->name, cable_len);
+	}
+
+	netxen_advert_link_change(adapter, link_status);
+
+	/* update link parameters */
+	if (duplex == LINKEVENT_FULL_DUPLEX)
+		adapter->link_duplex = DUPLEX_FULL;
+	else
+		adapter->link_duplex = DUPLEX_HALF;
+	adapter->module_type = module;
+	adapter->link_autoneg = autoneg;
+	adapter->link_speed = link_speed;
+}
+
+static void
+netxen_handle_fw_message(int desc_cnt, int index,
+		struct nx_host_sds_ring *sds_ring)
+{
+	nx_fw_msg_t msg;
+	struct status_desc *desc;
+	int i = 0, opcode;
+
+	while (desc_cnt > 0 && i < 8) {
+		desc = &sds_ring->desc_head[index];
+		msg.words[i++] = le64_to_cpu(desc->status_desc_data[0]);
+		msg.words[i++] = le64_to_cpu(desc->status_desc_data[1]);
+
+		index = get_next_index(index, sds_ring->num_desc);
+		desc_cnt--;
+	}
+
+	opcode = netxen_get_nic_msg_opcode(msg.body[0]);
+	switch (opcode) {
+	case NX_NIC_C2H_OPCODE_GET_LINKEVENT_RESPONSE:
+		netxen_handle_linkevent(sds_ring->adapter, &msg);
+		break;
+	default:
+		break;
+	}
 }
 
 static int
@@ -874,7 +923,8 @@ no_skb:
 
 static struct netxen_rx_buffer *
 netxen_process_rcv(struct netxen_adapter *adapter,
-		int ring, int index, int length, int cksum, int pkt_offset)
+		int ring, int index, int length, int cksum, int pkt_offset,
+		struct nx_host_sds_ring *sds_ring)
 {
 	struct net_device *netdev = adapter->netdev;
 	struct netxen_recv_context *recv_ctx = &adapter->recv_ctx;
@@ -902,7 +952,7 @@ netxen_process_rcv(struct netxen_adapter *adapter,
 
 	skb->protocol = eth_type_trans(skb, netdev);
 
-	netif_receive_skb(skb);
+	napi_gro_receive(&sds_ring->napi, skb);
 
 	adapter->stats.no_rcv++;
 	adapter->stats.rxbytes += length;
@@ -927,20 +977,34 @@ netxen_process_rcv_ring(struct nx_host_sds_ring *sds_ring, int max)
 
 	int count = 0;
 	u64 sts_data;
-	int opcode, ring, index, length, cksum, pkt_offset;
+	int opcode, ring, index, length, cksum, pkt_offset, desc_cnt;
 
 	while (count < max) {
 		desc = &sds_ring->desc_head[consumer];
-		sts_data = le64_to_cpu(desc->status_desc_data);
+		sts_data = le64_to_cpu(desc->status_desc_data[0]);
 
 		if (!(sts_data & STATUS_OWNER_HOST))
 			break;
 
+		desc_cnt = netxen_get_sts_desc_cnt(sts_data);
 		ring   = netxen_get_sts_type(sts_data);
+
 		if (ring > RCV_RING_JUMBO)
-			continue;
+			goto skip;
 
 		opcode = netxen_get_sts_opcode(sts_data);
+
+		switch (opcode) {
+		case NETXEN_NIC_RXPKT_DESC:
+		case NETXEN_OLD_RXPKT_DESC:
+			break;
+		case NETXEN_NIC_RESPONSE_DESC:
+			netxen_handle_fw_message(desc_cnt, consumer, sds_ring);
+		default:
+			goto skip;
+		}
+
+		WARN_ON(desc_cnt > 1);
 
 		index  = netxen_get_sts_refhandle(sts_data);
 		length = netxen_get_sts_totallength(sts_data);
@@ -948,14 +1012,18 @@ netxen_process_rcv_ring(struct nx_host_sds_ring *sds_ring, int max)
 		pkt_offset = netxen_get_sts_pkt_offset(sts_data);
 
 		rxbuf = netxen_process_rcv(adapter, ring, index,
-				length, cksum, pkt_offset);
+				length, cksum, pkt_offset, sds_ring);
 
 		if (rxbuf)
 			list_add_tail(&rxbuf->list, &sds_ring->free_list[ring]);
 
-		desc->status_desc_data = cpu_to_le64(STATUS_OWNER_PHANTOM);
-
-		consumer = get_next_index(consumer, sds_ring->num_desc);
+skip:
+		for (; desc_cnt > 0; desc_cnt--) {
+			desc = &sds_ring->desc_head[consumer];
+			desc->status_desc_data[0] =
+				cpu_to_le64(STATUS_OWNER_PHANTOM);
+			consumer = get_next_index(consumer, sds_ring->num_desc);
+		}
 		count++;
 	}
 
@@ -980,8 +1048,7 @@ netxen_process_rcv_ring(struct nx_host_sds_ring *sds_ring, int max)
 
 	if (count) {
 		sds_ring->consumer = consumer;
-		adapter->pci_write_normalize(adapter,
-				sds_ring->crb_sts_consumer, consumer);
+		NXWR32(adapter, sds_ring->crb_sts_consumer, consumer);
 	}
 
 	return count;
@@ -990,23 +1057,24 @@ netxen_process_rcv_ring(struct nx_host_sds_ring *sds_ring, int max)
 /* Process Command status ring */
 int netxen_process_cmd_ring(struct netxen_adapter *adapter)
 {
-	u32 last_consumer, consumer;
+	u32 sw_consumer, hw_consumer;
 	int count = 0, i;
 	struct netxen_cmd_buffer *buffer;
 	struct pci_dev *pdev = adapter->pdev;
 	struct net_device *netdev = adapter->netdev;
 	struct netxen_skb_frag *frag;
 	int done = 0;
+	struct nx_host_tx_ring *tx_ring = &adapter->tx_ring;
 
 	if (!spin_trylock(&adapter->tx_clean_lock))
 		return 1;
 
-	last_consumer = adapter->last_cmd_consumer;
-	barrier(); /* cmd_consumer can change underneath */
-	consumer = le32_to_cpu(*(adapter->cmd_consumer));
+	sw_consumer = tx_ring->sw_consumer;
+	barrier(); /* hw_consumer can change underneath */
+	hw_consumer = le32_to_cpu(*(tx_ring->hw_consumer));
 
-	while (last_consumer != consumer) {
-		buffer = &adapter->cmd_buf_arr[last_consumer];
+	while (sw_consumer != hw_consumer) {
+		buffer = &tx_ring->cmd_buf_arr[sw_consumer];
 		if (buffer->skb) {
 			frag = &buffer->frag_array[0];
 			pci_unmap_single(pdev, frag->dma, frag->length,
@@ -1024,14 +1092,13 @@ int netxen_process_cmd_ring(struct netxen_adapter *adapter)
 			buffer->skb = NULL;
 		}
 
-		last_consumer = get_next_index(last_consumer,
-					       adapter->num_txd);
+		sw_consumer = get_next_index(sw_consumer, tx_ring->num_desc);
 		if (++count >= MAX_STATUS_HANDLE)
 			break;
 	}
 
 	if (count) {
-		adapter->last_cmd_consumer = last_consumer;
+		tx_ring->sw_consumer = sw_consumer;
 		smp_mb();
 		if (netif_queue_stopped(netdev) && netif_running(netdev)) {
 			netif_tx_lock(netdev);
@@ -1053,9 +1120,9 @@ int netxen_process_cmd_ring(struct netxen_adapter *adapter)
 	 * There is still a possible race condition and the host could miss an
 	 * interrupt. The card has to take care of this.
 	 */
-	barrier(); /* cmd_consumer can change underneath */
-	consumer = le32_to_cpu(*(adapter->cmd_consumer));
-	done = (last_consumer == consumer);
+	barrier(); /* hw_consumer can change underneath */
+	hw_consumer = le32_to_cpu(*(tx_ring->hw_consumer));
+	done = (sw_consumer == hw_consumer);
 	spin_unlock(&adapter->tx_clean_lock);
 
 	return (done);
@@ -1099,8 +1166,7 @@ netxen_post_rx_buffers(struct netxen_adapter *adapter, u32 ringid,
 
 	if (count) {
 		rds_ring->producer = producer;
-		adapter->pci_write_normalize(adapter,
-				rds_ring->crb_rcv_producer,
+		NXWR32(adapter, rds_ring->crb_rcv_producer,
 				(producer-1) & (rds_ring->num_desc-1));
 
 		if (adapter->fw_major < 4) {
@@ -1160,8 +1226,7 @@ netxen_post_rx_buffers_nodb(struct netxen_adapter *adapter,
 
 	if (count) {
 		rds_ring->producer = producer;
-		adapter->pci_write_normalize(adapter,
-			rds_ring->crb_rcv_producer,
+		NXWR32(adapter, rds_ring->crb_rcv_producer,
 				(producer - 1) & (rds_ring->num_desc - 1));
 			wmb();
 	}
