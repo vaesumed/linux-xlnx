@@ -92,6 +92,7 @@ MODULE_PARM_DESC(allow_oos, "DONT USE!");
 /* thanks to these macros, if compiled into the kernel (not-module),
  * this becomes the boot parameter drbd.minor_count */
 module_param(minor_count, uint, 0444);
+module_param(disable_sendpage, bool, 0644);
 module_param(allow_oos, bool, 0);
 module_param(cn_idx, uint, 0444);
 
@@ -112,6 +113,7 @@ module_param(fault_devs, int, 0644);
 
 /* module parameter, defined */
 unsigned int minor_count = 32;
+int disable_sendpage;
 int allow_oos;
 unsigned int cn_idx = CN_IDX_DRBD;
 
@@ -931,6 +933,20 @@ int __drbd_set_state(struct drbd_conf *mdev,
 		dev_info(DEV, "%s\n", pb);
 	}
 
+	/* solve the race between becoming unconfigured,
+	 * worker doing the cleanup, and
+	 * admin reconfiguring us:
+	 * on (re)configure, first set CONFIG_PENDING,
+	 * then wait for a potentially exiting worker,
+	 * start the worker, and schedule one no_op.
+	 * then proceed with configuration.
+	 */
+	if (ns.disk == D_DISKLESS &&
+	    ns.conn == C_STANDALONE &&
+	    ns.role == R_SECONDARY &&
+	    !test_and_set_bit(CONFIG_PENDING, &mdev->flags))
+		set_bit(DEVICE_DYING, &mdev->flags);
+
 	mdev->state.i = ns.i;
 	wake_up(&mdev->misc_wait);
 	wake_up(&mdev->state_wait);
@@ -1192,9 +1208,9 @@ STATIC void after_state_ch(struct drbd_conf *mdev, union drbd_state os,
 		mdev->resync = NULL;
 		lc_free(mdev->act_log);
 		mdev->act_log = NULL;
-		__no_warn(local, drbd_free_bc(mdev->bc););
-		wmb(); /* see begin of drbd_nl_disk_conf() */
-		__no_warn(local, mdev->bc = NULL;);
+		__no_warn(local,
+			drbd_free_bc(mdev->bc);
+			mdev->bc = NULL;);
 
 		if (mdev->md_io_tmpp)
 			__free_page(mdev->md_io_tmpp);
@@ -1219,10 +1235,14 @@ STATIC void after_state_ch(struct drbd_conf *mdev, union drbd_state os,
 
 	/* Terminate worker thread if we are unconfigured - it will be
 	   restarted as needed... */
-	if (ns.disk == D_DISKLESS && ns.conn == C_STANDALONE && ns.role == R_SECONDARY) {
+	if (ns.disk == D_DISKLESS &&
+	    ns.conn == C_STANDALONE &&
+	    ns.role == R_SECONDARY) {
 		if (os.aftr_isp != ns.aftr_isp)
 			resume_next_sg(mdev);
-		drbd_thread_stop_nowait(&mdev->worker);
+		/* set in __drbd_set_state, unless CONFIG_PENDING was set */
+		if (test_bit(DEVICE_DYING, &mdev->flags))
+			drbd_thread_stop_nowait(&mdev->worker);
 	}
 
 	drbd_md_sync(mdev);
@@ -1327,6 +1347,7 @@ int drbd_thread_start(struct drbd_thread *thi)
 		thi->t_state = Restarting;
 		dev_info(DEV, "Restarting %s thread (from %s [%d])\n",
 				me, current->comm, current->pid);
+		/* fall through */
 	case Running:
 	case Restarting:
 	default:
@@ -1704,102 +1725,6 @@ int drbd_send_sr_reply(struct drbd_conf *mdev, int retcode)
 			     (struct p_header *)&p, sizeof(p));
 }
 
-/* returns
- * positive: number of payload bytes needed in this packet.
- * zero: incompressible.  */
-int fill_bitmap_rle_bytes(struct drbd_conf *mdev,
-	struct p_compressed_bm *p,
-	struct bm_xfer_ctx *c)
-{
-	unsigned long plain_bits;
-	unsigned long tmp;
-	unsigned long rl;
-	void *buffer;
-	unsigned n;
-	unsigned len;
-	unsigned toggle;
-
-	/* may we use this feature? */
-	if ((mdev->sync_conf.use_rle_encoding == 0) ||
-		(mdev->agreed_pro_version < 90))
-			return 0;
-
-	if (c->bit_offset >= c->bm_bits)
-		return 0; /* nothing to do. */
-
-	/* use at most thus many bytes */
-	len = BM_PACKET_VLI_BYTES_MAX;
-	buffer = p->code;
-	/* plain bits covered in this code string */
-	plain_bits = 0;
-
-	/* p->encoding & 0x80 stores whether the first
-	 * run length is set.
-	 * bit offset is implicit.
-	 * start with toggle == 2 to be able to tell the first iteration */
-	toggle = 2;
-
-	/* see how much plain bits we can stuff into one packet
-	 * using RLE and VLI. */
-	do {
-		tmp = (toggle == 0) ? _drbd_bm_find_next_zero(mdev, c->bit_offset)
-				    : _drbd_bm_find_next(mdev, c->bit_offset);
-		if (tmp == -1UL)
-			tmp = c->bm_bits;
-		rl = tmp - c->bit_offset;
-
-		if (toggle == 2) { /* first iteration */
-			if (rl == 0) {
-				/* the first checked bit was set,
-				 * store start value, */
-				DCBP_set_start(p, 1);
-				/* but skip encoding of zero run length */
-				toggle = !toggle;
-				continue;
-			}
-			DCBP_set_start(p, 0);
-		}
-
-		/* paranoia: catch zero runlength.
-		 * can only happen if bitmap is modified while we scan it. */
-		if (rl == 0) {
-			dev_err(DEV, "unexpected zero runlength while encoding bitmap "
-			    "t:%u bo:%lu\n", toggle, c->bit_offset);
-			return -1;
-		}
-
-		n = vli_encode_bytes(buffer, rl, len);
-		if (n == 0) /* buffer full */
-			break;
-
-		toggle = !toggle;
-		buffer += n;
-		len -= n;
-		plain_bits += rl;
-		c->bit_offset = tmp;
-	} while (len && c->bit_offset < c->bm_bits);
-
-	len = BM_PACKET_VLI_BYTES_MAX - len;
-
-	if (plain_bits < (len << 3)) {
-		/* incompressible with this method.
-		 * we need to rewind both word and bit position. */
-		c->bit_offset -= plain_bits;
-		bm_xfer_ctx_bit_to_word_offset(c);
-		c->bit_offset = c->word_offset * BITS_PER_LONG;
-		return 0;
-	}
-
-	/* RLE + VLI was able to compress it just fine.
-	 * update c->word_offset. */
-	bm_xfer_ctx_bit_to_word_offset(c);
-
-	/* store pad_bits */
-	DCBP_set_pad_bits(p, 0);
-
-	return len;
-}
-
 int fill_bitmap_rle_bits(struct drbd_conf *mdev,
 	struct p_compressed_bm *p,
 	struct bm_xfer_ctx *c)
@@ -1826,8 +1751,7 @@ int fill_bitmap_rle_bits(struct drbd_conf *mdev,
 	/* plain bits covered in this code string */
 	plain_bits = 0;
 
-	/* p->encoding & 0x80 stores whether the first
-	 * run length is set.
+	/* p->encoding & 0x80 stores whether the first run length is set.
 	 * bit offset is implicit.
 	 * start with toggle == 2 to be able to tell the first iteration */
 	toggle = 2;
@@ -1904,15 +1828,13 @@ send_bitmap_rle_or_plain(struct drbd_conf *mdev,
 	int len;
 	int ok;
 
-	if (0)
-		len = fill_bitmap_rle_bytes(mdev, p, c);
-	else
-		len = fill_bitmap_rle_bits(mdev, p, c);
+	len = fill_bitmap_rle_bits(mdev, p, c);
 
 	if (len < 0)
 		return FAILED;
+
 	if (len) {
-		DCBP_set_code(p, 0 ? RLE_VLI_Bytes : RLE_VLI_BitsFibD_3_5);
+		DCBP_set_code(p, RLE_VLI_Bits);
 		ok = _drbd_send_cmd(mdev, mdev->data.socket, P_COMPRESSED_BITMAP, h,
 			sizeof(*p) + len, 0);
 
@@ -2191,7 +2113,7 @@ STATIC int _drbd_no_send_page(struct drbd_conf *mdev, struct page *page,
 	kunmap(page);
 	if (sent == size)
 		mdev->send_cnt += size>>9;
-	return sent;
+	return sent == size;
 }
 
 int _drbd_send_page(struct drbd_conf *mdev, struct page *page,
@@ -2201,21 +2123,14 @@ int _drbd_send_page(struct drbd_conf *mdev, struct page *page,
 	int sent, ok;
 	int len = size;
 
-	/* PARANOIA. if this ever triggers,
-	 * something in the layers above us is really kaputt.
-	 *one roundtrip later:
-	 * doh. it triggered. so XFS _IS_ really kaputt ...
-	 * oh well...
-	 */
-	if ((page_count(page) < 1) || PageSlab(page)) {
-		/* e.g. XFS meta- & log-data is in slab pages, which have a
-		 * page_count of 0 and/or have PageSlab() set...
-		 */
-		sent = _drbd_no_send_page(mdev, page, offset, size);
-		if (likely(sent > 0))
-			len -= sent;
-		goto out;
-	}
+	/* e.g. XFS meta- & log-data is in slab pages, which have a
+	 * page_count of 0 and/or have PageSlab() set.
+	 * we cannot use send_page for those, as that does get_page();
+	 * put_page(); and would cause either a VM_BUG directly, or
+	 * __page_cache_release a page that would actually still be referenced
+	 * by someone, leading to some obscure delayed Oops somewhere else. */
+	if (disable_sendpage || (page_count(page) < 1) || PageSlab(page))
+		return _drbd_no_send_page(mdev, page, offset, size);
 
 	drbd_update_congested(mdev);
 	set_fs(KERNEL_DS);
@@ -2241,7 +2156,6 @@ int _drbd_send_page(struct drbd_conf *mdev, struct page *page,
 	set_fs(oldfs);
 	clear_bit(NET_CONGESTED, &mdev->flags);
 
-out:
 	ok = (len == 0);
 	if (likely(ok))
 		mdev->send_cnt += size>>9;
@@ -2643,8 +2557,11 @@ void drbd_mdev_cleanup(struct drbd_conf *mdev)
 	D_ASSERT(mdev->net_conf == NULL);
 
 	drbd_set_my_capacity(mdev, 0);
-	drbd_bm_resize(mdev, 0);
-	drbd_bm_cleanup(mdev);
+	if (mdev->bitmap) {
+		/* maybe never allocated. */
+		drbd_bm_resize(mdev, 0);
+		drbd_bm_cleanup(mdev);
+	}
 
 	drbd_free_resources(mdev);
 

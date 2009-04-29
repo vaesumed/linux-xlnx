@@ -58,6 +58,7 @@
 
 /* module parameter, defined in drbd_main.c */
 extern unsigned int minor_count;
+extern int disable_sendpage;
 extern int allow_oos;
 extern unsigned int cn_idx;
 
@@ -525,12 +526,10 @@ struct p_discard {
 /* Valid values for the encoding field.
  * Bump proto version when changing this. */
 enum drbd_bitmap_code {
-	RLE_VLI_Bytes = 0,
-	RLE_VLI_BitsFibD_0_1 = 1,
-	RLE_VLI_BitsFibD_1_1 = 2,
-	RLE_VLI_BitsFibD_1_2 = 3,
-	RLE_VLI_BitsFibD_2_3 = 4,
-	RLE_VLI_BitsFibD_3_5 = 5,
+	/* RLE_VLI_Bytes = 0,
+	 * and other bit variants had been defined during
+	 * algorithm evaluation. */
+	RLE_VLI_Bits = 2,
 };
 
 struct p_compressed_bm {
@@ -777,6 +776,13 @@ enum {
 	BITMAP_IO_QUEUED,       /* Started bitmap IO */
 	RESYNC_AFTER_NEG,       /* Resync after online grow after the attach&negotiate finished. */
 	NET_CONGESTED,		/* The data socket is congested */
+
+	CONFIG_PENDING,		/* serialization of (re)configuration requests.
+				 * if set, also prevents the device from dying */
+	DEVICE_DYING,		/* device became unconfigured,
+				 * but worker thread is still handling the cleanup.
+				 * reconfiguring (nl_disk_conf, nl_net_conf) is dissalowed,
+				 * while this is set. */
 };
 
 struct drbd_bitmap; /* opaque for drbd_conf */

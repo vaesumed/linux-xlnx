@@ -27,7 +27,6 @@
 #include <linux/module.h>
 #include <linux/in.h>
 #include <linux/fs.h>
-#include <linux/buffer_head.h> /* for fsync_bdev */
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/connector.h>
@@ -353,8 +352,6 @@ int drbd_set_role(struct drbd_conf *mdev, enum drbd_role new_role, int force)
 	if (forced)
 		dev_warn(DEV, "Forced to consider local data as UpToDate!\n");
 
-	fsync_bdev(mdev->this_bdev);
-
 	/* Wait until nothing is on the fly :) */
 	wait_event(mdev->misc_wait, atomic_read(&mdev->ap_pending_cnt) == 0);
 
@@ -493,18 +490,15 @@ char *ppsize(char *buf, unsigned long long size)
  *  waits for ap_bio_cnt == 0. -> deadlock.
  * but this cannot happen, actually, because:
  *  R_PRIMARY D_INCONSISTENT, and peer's disk is unreachable
- *  (not connected, *  or bad/no disk on peer):
+ *  (not connected, or bad/no disk on peer):
  *  see drbd_fail_request_early, ap_bio_cnt is zero.
  *  R_PRIMARY D_INCONSISTENT, and C_SYNC_TARGET:
  *  peer may not initiate a resize.
  */
 void drbd_suspend_io(struct drbd_conf *mdev)
 {
-	int in_flight;
 	set_bit(SUSPEND_IO, &mdev->flags);
-	in_flight = atomic_read(&mdev->ap_bio_cnt);
-	if (in_flight)
-		wait_event(mdev->misc_wait, !atomic_read(&mdev->ap_bio_cnt));
+	wait_event(mdev->misc_wait, !atomic_read(&mdev->ap_bio_cnt));
 }
 
 void drbd_resume_io(struct drbd_conf *mdev)
@@ -761,6 +755,36 @@ void drbd_setup_queue_param(struct drbd_conf *mdev, unsigned int max_seg_s) __mu
 	}
 }
 
+/* serialize deconfig (worker exiting, doing cleanup)
+ * and reconfig (drbdsetup disk, drbdsetup net)
+ *
+ * wait for a potentially exiting worker, then restart it,
+ * or start a new one.
+ */
+static void drbd_reconfig_start(struct drbd_conf *mdev)
+{
+	wait_event(mdev->state_wait, test_and_set_bit(CONFIG_PENDING, &mdev->flags));
+	wait_event(mdev->state_wait, !test_bit(DEVICE_DYING, &mdev->flags));
+	drbd_thread_start(&mdev->worker);
+}
+
+/* if still unconfigured, stops worker again.
+ * if configured now, clears CONFIG_PENDING.
+ * wakes potential waiters */
+static void drbd_reconfig_done(struct drbd_conf *mdev)
+{
+	spin_lock_irq(&mdev->req_lock);
+	if (mdev->state.disk == D_DISKLESS &&
+	    mdev->state.conn == C_STANDALONE &&
+	    mdev->state.role == R_SECONDARY) {
+		set_bit(DEVICE_DYING, &mdev->flags);
+		drbd_thread_stop_nowait(&mdev->worker);
+	} else
+		clear_bit(CONFIG_PENDING, &mdev->flags);
+	spin_unlock_irq(&mdev->req_lock);
+	wake_up(&mdev->state_wait);
+}
+
 /* does always return 0;
  * interesting return code is in reply->ret_code */
 STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
@@ -774,31 +798,16 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	struct inode *inode, *inode2;
 	struct lru_cache *resync_lru = NULL;
 	union drbd_state ns, os;
-	int rv, ntries = 0;
+	int rv;
 	int cp_discovered = 0;
 	int hardsect;
+
+	drbd_reconfig_start(mdev);
 
 	/* if you want to reconfigure, please tear down first */
 	if (mdev->state.disk > D_DISKLESS) {
 		retcode = ERR_DISK_CONFIGURED;
 		goto fail;
-	}
-
-	/*
-	* We may have gotten here very quickly from a detach. Wait for a bit
-	* then fail.
-	*/
-	while (1) {
-		__no_warn(local, nbc = mdev->bc;);
-		if (nbc == NULL)
-			break;
-		if (ntries++ >= 5) {
-			dev_warn(DEV, "drbd_nl_disk_conf: mdev->bc not NULL.\n");
-			retcode = ERR_DISK_CONFIGURED;
-			goto fail;
-		}
-		__set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(HZ/10);
 	}
 
 	nbc = kmalloc(sizeof(struct drbd_backing_dev), GFP_KERNEL);
@@ -808,17 +817,11 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	}
 
 	memset(&nbc->md, 0, sizeof(struct drbd_md));
-
-	if (!(nlp->flags & DRBD_NL_SET_DEFAULTS) && inc_local(mdev)) {
-		memcpy(&nbc->dc, &mdev->bc->dc, sizeof(struct disk_conf));
-		dec_local(mdev);
-	} else {
-		memset(&nbc->dc, 0, sizeof(struct disk_conf));
-		nbc->dc.disk_size   = DRBD_DISK_SIZE_SECT_DEF;
-		nbc->dc.on_io_error = DRBD_ON_IO_ERROR_DEF;
-		nbc->dc.fencing     = DRBD_FENCING_DEF;
-		nbc->dc.max_bio_bvecs = DRBD_MAX_BIO_BVECS_DEF;
-	}
+	memset(&nbc->dc, 0, sizeof(struct disk_conf));
+	nbc->dc.disk_size     = DRBD_DISK_SIZE_SECT_DEF;
+	nbc->dc.on_io_error   = DRBD_ON_IO_ERROR_DEF;
+	nbc->dc.fencing       = DRBD_FENCING_DEF;
+	nbc->dc.max_bio_bvecs = DRBD_MAX_BIO_BVECS_DEF;
 
 	if (!disk_conf_from_tags(mdev, nlp->tag_list, &nbc->dc)) {
 		retcode = ERR_MANDATORY_TAG;
@@ -882,13 +885,6 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		goto release_bdev_fail;
 	}
 
-	if (!mdev->bitmap) {
-		if (drbd_bm_init(mdev)) {
-			retcode = ERR_NOMEM;
-			goto release_bdev_fail;
-		}
-	}
-
 	nbc->md_bdev = inode2->i_bdev;
 	if (bd_claim(nbc->md_bdev,
 		     (nbc->dc.meta_dev_idx == DRBD_MD_INDEX_INTERNAL ||
@@ -949,7 +945,9 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	nbc->known_size = drbd_get_capacity(nbc->backing_bdev);
 
 	drbd_suspend_io(mdev);
+	/* also wait for the last barrier ack. */
 	wait_event(mdev->misc_wait, !atomic_read(&mdev->ap_pending_cnt));
+
 	retcode = _drbd_request_state(mdev, NS(disk, D_ATTACHING), CS_VERBOSE);
 	drbd_resume_io(mdev);
 	if (retcode < SS_SUCCESS)
@@ -958,8 +956,14 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	if (!inc_local_if_state(mdev, D_ATTACHING))
 		goto force_diskless;
 
-	drbd_thread_start(&mdev->worker);
 	drbd_md_set_sector_offsets(mdev, nbc);
+
+	if (!mdev->bitmap) {
+		if (drbd_bm_init(mdev)) {
+			retcode = ERR_NOMEM;
+			goto force_diskless_dec;
+		}
+	}
 
 	retcode = drbd_md_read(mdev, nbc);
 	if (retcode != NO_ERROR)
@@ -1150,6 +1154,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	kobject_uevent(&disk_to_dev(mdev->vdisk)->kobj, KOBJ_CHANGE);
 	dec_local(mdev);
 	reply->ret_code = retcode;
+	drbd_reconfig_done(mdev);
 	return 0;
 
  force_diskless_dec:
@@ -1175,18 +1180,14 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		lc_free(resync_lru);
 
 	reply->ret_code = retcode;
+	drbd_reconfig_done(mdev);
 	return 0;
 }
 
 STATIC int drbd_nl_detach(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			  struct drbd_nl_cfg_reply *reply)
 {
-	fsync_bdev(mdev->this_bdev);
 	reply->ret_code = drbd_request_state(mdev, NS(disk, D_DISKLESS));
-
-	__set_current_state(TASK_INTERRUPTIBLE);
-	schedule_timeout(HZ/20); /* 50ms; Time for worker to finally terminate */
-
 	return 0;
 }
 
@@ -1208,6 +1209,8 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	void *int_dig_vv = NULL;
 	struct sockaddr *new_my_addr, *new_peer_addr, *taken_addr;
 
+	drbd_reconfig_start(mdev);
+
 	if (mdev->state.conn > C_STANDALONE) {
 		retcode = ERR_NET_CONFIGURED;
 		goto fail;
@@ -1219,28 +1222,23 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 		goto fail;
 	}
 
-	if (!(nlp->flags & DRBD_NL_SET_DEFAULTS) && inc_net(mdev)) {
-		memcpy(new_conf, mdev->net_conf, sizeof(struct net_conf));
-		dec_net(mdev);
-	} else {
-		memset(new_conf, 0, sizeof(struct net_conf));
-		new_conf->timeout	   = DRBD_TIMEOUT_DEF;
-		new_conf->try_connect_int  = DRBD_CONNECT_INT_DEF;
-		new_conf->ping_int	   = DRBD_PING_INT_DEF;
-		new_conf->max_epoch_size   = DRBD_MAX_EPOCH_SIZE_DEF;
-		new_conf->max_buffers	   = DRBD_MAX_BUFFERS_DEF;
-		new_conf->unplug_watermark = DRBD_UNPLUG_WATERMARK_DEF;
-		new_conf->sndbuf_size	   = DRBD_SNDBUF_SIZE_DEF;
-		new_conf->ko_count	   = DRBD_KO_COUNT_DEF;
-		new_conf->after_sb_0p	   = DRBD_AFTER_SB_0P_DEF;
-		new_conf->after_sb_1p	   = DRBD_AFTER_SB_1P_DEF;
-		new_conf->after_sb_2p	   = DRBD_AFTER_SB_2P_DEF;
-		new_conf->want_lose	   = 0;
-		new_conf->two_primaries    = 0;
-		new_conf->wire_protocol    = DRBD_PROT_C;
-		new_conf->ping_timeo	   = DRBD_PING_TIMEO_DEF;
-		new_conf->rr_conflict	   = DRBD_RR_CONFLICT_DEF;
-	}
+	memset(new_conf, 0, sizeof(struct net_conf));
+	new_conf->timeout	   = DRBD_TIMEOUT_DEF;
+	new_conf->try_connect_int  = DRBD_CONNECT_INT_DEF;
+	new_conf->ping_int	   = DRBD_PING_INT_DEF;
+	new_conf->max_epoch_size   = DRBD_MAX_EPOCH_SIZE_DEF;
+	new_conf->max_buffers	   = DRBD_MAX_BUFFERS_DEF;
+	new_conf->unplug_watermark = DRBD_UNPLUG_WATERMARK_DEF;
+	new_conf->sndbuf_size	   = DRBD_SNDBUF_SIZE_DEF;
+	new_conf->ko_count	   = DRBD_KO_COUNT_DEF;
+	new_conf->after_sb_0p	   = DRBD_AFTER_SB_0P_DEF;
+	new_conf->after_sb_1p	   = DRBD_AFTER_SB_1P_DEF;
+	new_conf->after_sb_2p	   = DRBD_AFTER_SB_2P_DEF;
+	new_conf->want_lose	   = 0;
+	new_conf->two_primaries    = 0;
+	new_conf->wire_protocol    = DRBD_PROT_C;
+	new_conf->ping_timeo	   = DRBD_PING_TIMEO_DEF;
+	new_conf->rr_conflict	   = DRBD_RR_CONFLICT_DEF;
 
 	if (!net_conf_from_tags(mdev, nlp->tag_list, new_conf)) {
 		retcode = ERR_MANDATORY_TAG;
@@ -1367,7 +1365,12 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 		}
 	}
 
-	D_ASSERT(mdev->net_conf == NULL);
+	spin_lock_irq(&mdev->req_lock);
+	if (mdev->net_conf != NULL) {
+		retcode = ERR_NET_CONFIGURED;
+		spin_unlock_irq(&mdev->req_lock);
+		goto fail;
+	}
 	mdev->net_conf = new_conf;
 
 	mdev->send_cnt = 0;
@@ -1400,13 +1403,13 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	mdev->int_dig_out=int_dig_out;
 	mdev->int_dig_in=int_dig_in;
 	mdev->int_dig_vv=int_dig_vv;
+	spin_unlock_irq(&mdev->req_lock);
 
 	retcode = _drbd_request_state(mdev, NS(conn, C_UNCONNECTED), CS_VERBOSE);
-	if (retcode >= SS_SUCCESS)
-		drbd_thread_start(&mdev->worker);
 
 	kobject_uevent(&disk_to_dev(mdev->vdisk)->kobj, KOBJ_CHANGE);
 	reply->ret_code = retcode;
+	drbd_reconfig_done(mdev);
 	return 0;
 
 fail:
@@ -1421,6 +1424,7 @@ fail:
 	kfree(new_conf);
 
 	reply->ret_code = retcode;
+	drbd_reconfig_done(mdev);
 	return 0;
 }
 
@@ -1938,8 +1942,10 @@ STATIC int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 		if (skip_initial_sync) {
 			drbd_send_uuids_skip_initial_sync(mdev);
 			_drbd_uuid_set(mdev, UI_BITMAP, 0);
+			spin_lock_irq(&mdev->req_lock);
 			_drbd_set_state(_NS2(mdev, disk, D_UP_TO_DATE, pdsk, D_UP_TO_DATE),
 					CS_VERBOSE, NULL);
+			spin_unlock_irq(&mdev->req_lock);
 		}
 	}
 

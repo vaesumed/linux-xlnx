@@ -115,10 +115,10 @@ void drbd_bm_lock(struct drbd_conf *mdev, char *why)
 	trylock_failed = down_trylock(&b->bm_change);
 
 	if (trylock_failed) {
-		dev_dbg(DEV, "%s going to '%s' but bitmap already locked for '%s' by %s\n",
+		dev_warn(DEV, "%s going to '%s' but bitmap already locked for '%s' by %s\n",
 		    current == mdev->receiver.task ? "receiver" :
 		    current == mdev->asender.task  ? "asender"  :
-		    current == mdev->worker.task   ? "worker"   : "?",
+		    current == mdev->worker.task   ? "worker"   : current->comm,
 		    why, b->bm_why ?: "?",
 		    b->bm_task == mdev->receiver.task ? "receiver" :
 		    b->bm_task == mdev->asender.task  ? "asender"  :

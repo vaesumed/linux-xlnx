@@ -3225,105 +3225,55 @@ recv_bm_rle_bits(struct drbd_conf *mdev,
 	return (s == c->bm_bits) ? DONE : OK;
 }
 
-
-static enum receive_bitmap_ret
-recv_bm_rle_bytes(struct drbd_conf *mdev,
-		struct p_compressed_bm *p,
-		struct bm_xfer_ctx *c)
-{
-	u64 rl;
-	unsigned char *buf = p->code;
-	unsigned long s;
-	unsigned long e;
-	int len = p->head.length - (p->code - p->head.payload);
-	int toggle;
-	int n;
-
-	s = c->bit_offset;
-
-	/* decoding.  the payload of bitmap rle packets is VLI encoded
-	 * runlength of set and unset bits, starting with set/unset as defined
-	 * in p->encoding & 0x80. */
-	for (toggle = DCBP_get_start(p); len; s += rl, toggle = !toggle) {
-		if (s >= c->bm_bits) {
-			dev_err(DEV, "bitmap overflow (s:%lu) while decoding bitmap RLE packet\n", s);
-			return FAILED;
-		}
-
-		n = vli_decode_bytes(&rl, buf, len);
-		if (n == 0) /* incomplete buffer! */
-			return FAILED;
-		buf += n;
-		len -= n;
-
-		if (rl == 0) {
-			dev_err(DEV, "unexpected zero runlength while decoding bitmap RLE packet\n");
-			return FAILED;
-		}
-
-		/* unset bits: ignore, because of x | 0 == x. */
-		if (!toggle)
-			continue;
-
-		/* set bits: merge into bitmap. */
-		e = s + rl -1;
-		if (e >= c->bm_bits) {
-			dev_err(DEV, "bitmap overflow (e:%lu) while decoding bitmap RLE packet\n", e);
-			return FAILED;
-		}
-		_drbd_bm_set_bits(mdev, s, e);
-	}
-
-	c->bit_offset = s;
-	bm_xfer_ctx_bit_to_word_offset(c);
-
-	return (s == c->bm_bits) ? DONE : OK;
-}
-
 static enum receive_bitmap_ret
 decode_bitmap_c(struct drbd_conf *mdev,
 		struct p_compressed_bm *p,
 		struct bm_xfer_ctx *c)
 {
-	switch (DCBP_get_code(p)) {
-	/* no default! I want the compiler to warn me! */
-	case RLE_VLI_BitsFibD_0_1:
-	case RLE_VLI_BitsFibD_1_1:
-	case RLE_VLI_BitsFibD_1_2:
-	case RLE_VLI_BitsFibD_2_3:
-		break; /* TODO */
-	case RLE_VLI_BitsFibD_3_5:
+	if (DCBP_get_code(p) == RLE_VLI_Bits)
 		return recv_bm_rle_bits(mdev, p, c);
-	case RLE_VLI_Bytes:
-		return recv_bm_rle_bytes(mdev, p, c);
-	}
+
+	/* other variants had been implemented for evaluation,
+	 * but have been dropped as this one turned out to be "best"
+	 * during all our tests. */
+
 	dev_err(DEV, "receive_bitmap_c: unknown encoding %u\n", p->encoding);
+	drbd_force_state(mdev, NS(conn, C_PROTOCOL_ERROR));
 	return FAILED;
 }
 
 void INFO_bm_xfer_stats(struct drbd_conf *mdev,
 		const char *direction, struct bm_xfer_ctx *c)
 {
-	unsigned plain_would_take = sizeof(struct p_header) *
+	/* what would it take to transfer it "plaintext" */
+	unsigned plain = sizeof(struct p_header) *
 		((c->bm_words+BM_PACKET_WORDS-1)/BM_PACKET_WORDS+1)
 		+ c->bm_words * sizeof(long);
 	unsigned total = c->bytes[0] + c->bytes[1];
-	unsigned q, r;
+	unsigned r;
 
 	/* total can not be zero. but just in case: */
 	if (total == 0)
 		return;
 
-	q = plain_would_take / total;
-	r = plain_would_take % total;
-	r = (r > UINT_MAX/100) ? (r / (total+99/100)) : (100 * r / total);
+	/* don't report if not compressed */
+	if (total >= plain)
+		return;
 
+	/* total < plain. check for overflow, still */
+	r = (total > UINT_MAX/1000) ? (total / (plain/1000))
+		                    : (1000 * total / plain);
+
+	if (r > 1000)
+		r = 1000;
+
+	r = 1000 - r;
 	dev_info(DEV, "%s bitmap stats [Bytes(packets)]: plain %u(%u), RLE %u(%u), "
-	     "total %u; compression factor: %u.%02u\n",
+	     "total %u; compression: %u.%u%%\n",
 			direction,
 			c->bytes[1], c->packets[1],
 			c->bytes[0], c->packets[0],
-			total, q, r);
+			total, r/10, r % 10);
 }
 
 /* Since we are processing the bitfield from lower addresses to higher,
@@ -3689,9 +3639,9 @@ STATIC void drbd_disconnect(struct drbd_conf *mdev)
 	 * we already released the socket!? */
 	i = atomic_read(&mdev->pp_in_use);
 	if (i)
-		dev_dbg(DEV, "pp_in_use = %u, expected 0\n", i);
+		dev_info(DEV, "pp_in_use = %u, expected 0\n", i);
 	if (!list_empty(&mdev->net_ee))
-		dev_dbg(DEV, "net_ee not empty!\n");
+		dev_info(DEV, "net_ee not empty!\n");
 
 	D_ASSERT(list_empty(&mdev->read_ee));
 	D_ASSERT(list_empty(&mdev->active_ee));
