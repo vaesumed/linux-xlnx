@@ -31,11 +31,6 @@ extern const char *drbd_buildtag(void);
 #define DBG_ALL_SYMBOLS /* no static functs, improves quality of OOPS traces */
 #endif
 
-/* Define this to enable dynamic tracing controlled by module parameters
- * at run time. This enables ALL use of dynamic tracing including packet
- * and bio dumping, etc */
-#define ENABLE_DYNAMIC_TRACE
-
 /* Enable fault insertion code */
 #define DRBD_ENABLE_FAULTS
 

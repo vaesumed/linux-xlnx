@@ -1,3 +1,6 @@
+#ifndef _DRBD_WRAPPERS_H
+#define _DRBD_WRAPPERS_H
+
 #include <linux/ctype.h>
 #include <linux/mm.h>
 
@@ -89,4 +92,6 @@ static inline int drbd_crypto_is_hash(struct crypto_tfm *tfm)
 #ifndef __CHECKER__
 # undef __cond_lock
 # define __cond_lock(x,c) (c)
+#endif
+
 #endif

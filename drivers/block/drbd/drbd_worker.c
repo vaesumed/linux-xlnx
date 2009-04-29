@@ -43,6 +43,7 @@
 #include <linux/drbd.h>
 #include "drbd_int.h"
 #include "drbd_req.h"
+#include "drbd_tracing.h"
 
 #define SLEEP_TIME (HZ/10)
 
@@ -88,7 +89,7 @@ void drbd_md_io_complete(struct bio *bio, int error)
 
 	md_io->error = error;
 
-	dump_internal_bio("Md", md_io->mdev, bio, 1);
+	trace_drbd_bio(md_io->mdev, "Md", bio, 1, NULL);
 
 	complete(&md_io->event);
 }
@@ -116,7 +117,7 @@ void drbd_endio_read_sec(struct bio *bio, int error) __releases(local)
 
 	D_ASSERT(e->block_id != ID_VACANT);
 
-	dump_internal_bio("Sec", mdev, bio, 1);
+	trace_drbd_bio(mdev, "Sec", bio, 1, NULL);
 
 	spin_lock_irqsave(&mdev->req_lock, flags);
 	mdev->read_cnt += e->size >> 9;
@@ -129,10 +130,7 @@ void drbd_endio_read_sec(struct bio *bio, int error) __releases(local)
 	drbd_queue_work(&mdev->data.work, &e->w);
 	dec_local(mdev);
 
-	MTRACE(TRACE_TYPE_EE, TRACE_LVL_ALL,
-	       dev_info(DEV, "Moved EE (READ) to worker sec=%llus size=%u ee=%p\n",
-		    (unsigned long long)e->sector, e->size, e);
-	       );
+	trace_drbd_ee(mdev, e, "read completed");
 }
 
 /* writes on behalf of the partner, or resync writes,
@@ -175,7 +173,7 @@ void drbd_endio_write_sec(struct bio *bio, int error) __releases(local)
 
 	D_ASSERT(e->block_id != ID_VACANT);
 
-	dump_internal_bio("Sec", mdev, bio, 1);
+	trace_drbd_bio(mdev, "Sec", bio, 1, NULL);
 
 	spin_lock_irqsave(&mdev->req_lock, flags);
 	mdev->writ_cnt += e->size >> 9;
@@ -191,10 +189,7 @@ void drbd_endio_write_sec(struct bio *bio, int error) __releases(local)
 	list_del(&e->w.list); /* has been on active_ee or sync_ee */
 	list_add_tail(&e->w.list, &mdev->done_ee);
 
-	MTRACE(TRACE_TYPE_EE, TRACE_LVL_ALL,
-	       dev_info(DEV, "Moved EE (WRITE) to done_ee sec=%llus size=%u ee=%p\n",
-		    (unsigned long long)e->sector, e->size, e);
-	       );
+	trace_drbd_ee(mdev, e, "write completed");
 
 	/* No hlist_del_init(&e->colision) here, we did not send the Ack yet,
 	 * neither did we wake possibly waiting conflicting requests.
@@ -241,7 +236,7 @@ void drbd_endio_pri(struct bio *bio, int error)
 		error = -EIO;
 	}
 
-	dump_internal_bio("Pri", mdev, bio, 1);
+	trace_drbd_bio(mdev, "Pri", bio, 1, NULL);
 
 	/* to avoid recursion in _req_mod */
 	what = error
@@ -1265,10 +1260,8 @@ void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side)
 	union drbd_state ns;
 	int r;
 
-	MTRACE(TRACE_TYPE_RESYNC, TRACE_LVL_SUMMARY,
-	       dev_info(DEV, "Resync starting: side=%s\n",
-			side == C_SYNC_TARGET ? "SyncTarget" : "SyncSource");
-	       );
+	trace_drbd_resync(mdev, TRACE_LVL_SUMMARY, "Resync starting: side=%s\n",
+			  side == C_SYNC_TARGET ? "SyncTarget" : "SyncSource");
 
 	drbd_bm_recount_bits(mdev);
 
