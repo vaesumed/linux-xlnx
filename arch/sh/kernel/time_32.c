@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 1999  Tetsuya Okada & Niibe Yutaka
  *  Copyright (C) 2000  Philipp Rumpf <prumpf@tux.org>
- *  Copyright (C) 2002 - 2008  Paul Mundt
+ *  Copyright (C) 2002 - 2009  Paul Mundt
  *  Copyright (C) 2002  M. R. Brown  <mrbrown@linux-sh.org>
  *
  *  Some code taken from i386 version.
@@ -17,7 +17,9 @@
 #include <linux/sched.h>
 #include <linux/clockchips.h>
 #include <linux/mc146818rtc.h>	/* for rtc_lock */
+#include <linux/platform_device.h>
 #include <linux/smp.h>
+#include <linux/rtc.h>
 #include <asm/clock.h>
 #include <asm/rtc.h>
 #include <asm/timer.h>
@@ -43,6 +45,43 @@ static int null_rtc_set_time(const time_t secs)
 
 void (*rtc_sh_get_time)(struct timespec *) = null_rtc_get_time;
 int (*rtc_sh_set_time)(const time_t) = null_rtc_set_time;
+
+unsigned int get_rtc_time(struct rtc_time *tm)
+{
+	if (rtc_sh_get_time != null_rtc_get_time) {
+		struct timespec tv;
+
+		rtc_sh_get_time(&tv);
+		rtc_time_to_tm(tv.tv_sec, tm);
+	}
+
+	return RTC_24H;
+}
+EXPORT_SYMBOL(get_rtc_time);
+
+int set_rtc_time(struct rtc_time *tm)
+{
+	unsigned long secs;
+
+	rtc_tm_to_time(tm, &secs);
+	return rtc_sh_set_time(secs);
+}
+EXPORT_SYMBOL(set_rtc_time);
+
+static int __init rtc_generic_init(void)
+{
+	struct platform_device *pdev;
+
+	if (rtc_sh_get_time == null_rtc_get_time)
+		return -ENODEV;
+
+	pdev = platform_device_register_simple("rtc-generic", -1, NULL, 0);
+	if (IS_ERR(pdev))
+		return PTR_ERR(pdev);
+
+	return 0;
+}
+module_init(rtc_generic_init);
 
 #ifndef CONFIG_GENERIC_TIME
 void do_gettimeofday(struct timeval *tv)
@@ -213,6 +252,27 @@ unsigned long long sched_clock(void)
 }
 #endif
 
+static void __init sh_late_time_init(void)
+{
+	/*
+	 * Make sure all compiled-in early timers register themselves.
+	 * Run probe() for one "earlytimer" device.
+	 */
+	early_platform_driver_register_all("earlytimer");
+	if (early_platform_driver_probe("earlytimer", 1, 0))
+		return;
+
+	/*
+	 * Find the timer to use as the system timer, it will be
+	 * initialized for us.
+	 */
+	sys_timer = get_sys_timer();
+	if (unlikely(!sys_timer))
+		panic("System timer missing.\n");
+
+	printk(KERN_INFO "Using %s for system timer\n", sys_timer->name);
+}
+
 void __init time_init(void)
 {
 	if (board_time_init)
@@ -228,13 +288,6 @@ void __init time_init(void)
 	local_timer_setup(smp_processor_id());
 #endif
 
-	/*
-	 * Find the timer to use as the system timer, it will be
-	 * initialized for us.
-	 */
-	sys_timer = get_sys_timer();
-	if (unlikely(!sys_timer))
-		panic("System timer missing.\n");
-
-	printk(KERN_INFO "Using %s for system timer\n", sys_timer->name);
+	late_time_init = sh_late_time_init;
 }
+
