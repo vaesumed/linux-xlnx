@@ -695,6 +695,18 @@ static int bond_check_dev_link(struct bonding *bond, struct net_device *slave_de
 	if (bond->params.use_carrier)
 		return netif_carrier_ok(slave_dev) ? BMSR_LSTATUS : 0;
 
+	/* Try to get link status using Ethtool first. */
+	if (slave_dev->ethtool_ops) {
+		if (slave_dev->ethtool_ops->get_link) {
+			u32 link;
+
+			link = slave_dev->ethtool_ops->get_link(slave_dev);
+
+			return link ? BMSR_LSTATUS : 0;
+		}
+	}
+
+	/* Ethtool can't be used, fallback to MII ioclts. */
 	ioctl = slave_ops->ndo_do_ioctl;
 	if (ioctl) {
 		/* TODO: set pointer to correct ioctl on a per team member */
@@ -717,20 +729,6 @@ static int bond_check_dev_link(struct bonding *bond, struct net_device *slave_de
 			if (IOCTL(slave_dev, &ifr, SIOCGMIIREG) == 0) {
 				return (mii->val_out & BMSR_LSTATUS);
 			}
-		}
-	}
-
-	/*
-	 * Some drivers cache ETHTOOL_GLINK for a period of time so we only
-	 * attempt to get link status from it if the above MII ioctls fail.
-	 */
-	if (slave_dev->ethtool_ops) {
-		if (slave_dev->ethtool_ops->get_link) {
-			u32 link;
-
-			link = slave_dev->ethtool_ops->get_link(slave_dev);
-
-			return link ? BMSR_LSTATUS : 0;
 		}
 	}
 
@@ -2249,6 +2247,9 @@ static int bond_miimon_inspect(struct bonding *bond)
 {
 	struct slave *slave;
 	int i, link_state, commit = 0;
+	bool ignore_updelay;
+
+	ignore_updelay = !bond->curr_active_slave ? true : false;
 
 	bond_for_each_slave(bond, slave, i) {
 		slave->new_link = BOND_LINK_NOCHANGE;
@@ -2313,6 +2314,7 @@ static int bond_miimon_inspect(struct bonding *bond)
 				       ": %s: link status up for "
 				       "interface %s, enabling it in %d ms.\n",
 				       bond->dev->name, slave->dev->name,
+				       ignore_updelay ? 0 :
 				       bond->params.updelay *
 				       bond->params.miimon);
 			}
@@ -2331,9 +2333,13 @@ static int bond_miimon_inspect(struct bonding *bond)
 				continue;
 			}
 
+			if (ignore_updelay)
+				slave->delay = 0;
+
 			if (slave->delay <= 0) {
 				slave->new_link = BOND_LINK_UP;
 				commit++;
+				ignore_updelay = false;
 				continue;
 			}
 
