@@ -30,6 +30,7 @@ config SUPERH32
 	select HAVE_DYNAMIC_FTRACE
 	select HAVE_ARCH_KGDB
 	select ARCH_HIBERNATION_POSSIBLE if MMU
+	select RTC_LIB
 
 config SUPERH64
 	def_bool ARCH = "sh64"
@@ -347,6 +348,16 @@ config CPU_SUBTYPE_SH7723
 	help
 	  Select SH7723 if you have an SH-MobileR2 CPU.
 
+config CPU_SUBTYPE_SH7724
+	bool "Support SH7724 processor"
+	select CPU_SH4A
+	select CPU_SHX2
+	select ARCH_SHMOBILE
+	select ARCH_SPARSEMEM_ENABLE
+	select SYS_SUPPORTS_CMT
+	help
+	  Select SH7724 if you have an SH-MobileR2R CPU.
+
 config CPU_SUBTYPE_SH7763
 	bool "Support SH7763 processor"
 	select CPU_SH4A
@@ -466,10 +477,11 @@ config SH_TIMER_CMT
 	bool "CMT clockevents driver"
 	depends on SYS_SUPPORTS_CMT && !SH_CMT
 	select GENERIC_CLOCKEVENTS
+	select GENERIC_TIME
 
 config SH_MTU2
 	bool "MTU2 timer support"
-	depends on CPU_SH2A
+	depends on CPU_SH2A && !GENERIC_TIME
 	default y
 	help
 	  This enables the use of the MTU2 as the system timer.
@@ -495,6 +507,7 @@ config SH_PCLK_FREQ
 			      CPU_SUBTYPE_SH7203 || CPU_SUBTYPE_SH7206 || \
 			      CPU_SUBTYPE_SH7263 || CPU_SUBTYPE_MXG    || \
 			      CPU_SUBTYPE_SH7786
+	default "41666666" if CPU_SUBTYPE_SH7724
 	default "60000000" if CPU_SUBTYPE_SH7751 || CPU_SUBTYPE_SH7751R
 	default "66000000" if CPU_SUBTYPE_SH4_202
 	default "50000000"
