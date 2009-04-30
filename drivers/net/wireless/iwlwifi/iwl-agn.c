@@ -2895,7 +2895,7 @@ static int iwl_mac_beacon_update(struct ieee80211_hw *hw, struct sk_buff *skb)
 static ssize_t show_debug_level(struct device *d,
 				struct device_attribute *attr, char *buf)
 {
-	struct iwl_priv *priv = d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 
 	return sprintf(buf, "0x%08X\n", priv->debug_level);
 }
@@ -2903,7 +2903,7 @@ static ssize_t store_debug_level(struct device *d,
 				struct device_attribute *attr,
 				 const char *buf, size_t count)
 {
-	struct iwl_priv *priv = d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 	unsigned long val;
 	int ret;
 
@@ -2926,7 +2926,7 @@ static DEVICE_ATTR(debug_level, S_IWUSR | S_IRUGO,
 static ssize_t show_version(struct device *d,
 				struct device_attribute *attr, char *buf)
 {
-	struct iwl_priv *priv = d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 	struct iwl_alive_resp *palive = &priv->card_alive;
 	ssize_t pos = 0;
 	u16 eeprom_ver;
@@ -2957,7 +2957,7 @@ static DEVICE_ATTR(version, S_IWUSR | S_IRUGO, show_version, NULL);
 static ssize_t show_temperature(struct device *d,
 				struct device_attribute *attr, char *buf)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 
 	if (!iwl_is_alive(priv))
 		return -EAGAIN;
@@ -2970,7 +2970,7 @@ static DEVICE_ATTR(temperature, S_IRUGO, show_temperature, NULL);
 static ssize_t show_tx_power(struct device *d,
 			     struct device_attribute *attr, char *buf)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 
 	if (!iwl_is_ready_rf(priv))
 		return sprintf(buf, "off\n");
@@ -2982,7 +2982,7 @@ static ssize_t store_tx_power(struct device *d,
 			      struct device_attribute *attr,
 			      const char *buf, size_t count)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 	unsigned long val;
 	int ret;
 
@@ -3000,7 +3000,7 @@ static DEVICE_ATTR(tx_power, S_IWUSR | S_IRUGO, show_tx_power, store_tx_power);
 static ssize_t show_flags(struct device *d,
 			  struct device_attribute *attr, char *buf)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 
 	return sprintf(buf, "0x%04X\n", priv->active_rxon.flags);
 }
@@ -3009,7 +3009,7 @@ static ssize_t store_flags(struct device *d,
 			   struct device_attribute *attr,
 			   const char *buf, size_t count)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 	unsigned long val;
 	u32 flags;
 	int ret = strict_strtoul(buf, 0, &val);
@@ -3038,7 +3038,7 @@ static DEVICE_ATTR(flags, S_IWUSR | S_IRUGO, show_flags, store_flags);
 static ssize_t show_filter_flags(struct device *d,
 				 struct device_attribute *attr, char *buf)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 
 	return sprintf(buf, "0x%04X\n",
 		le32_to_cpu(priv->active_rxon.filter_flags));
@@ -3048,7 +3048,7 @@ static ssize_t store_filter_flags(struct device *d,
 				  struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)d->driver_data;
+	struct iwl_priv *priv = dev_get_drvdata(d);
 	unsigned long val;
 	u32 filter_flags;
 	int ret = strict_strtoul(buf, 0, &val);
