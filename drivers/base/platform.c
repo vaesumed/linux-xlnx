@@ -253,7 +253,8 @@ int platform_device_add(struct platform_device *pdev)
 	* long time, so we allow the two cases coexist to make
 	* this kind of fix more easily*/
 	if (pdev->platform_data && pdev->dev.platform_data) {
-		printk(KERN_ERR
+		if (pdev->platform_data != pdev->dev.platform_data)
+			printk(KERN_ERR
 			       "%s: use which platform_data?\n",
 			       dev_name(&pdev->dev));
 	} else if (pdev->platform_data) {
@@ -1028,7 +1029,7 @@ static __initdata LIST_HEAD(early_platform_device_list);
 
 /**
  * early_platform_driver_register
- * @edrv: early_platform driver structure
+ * @epdrv: early_platform driver structure
  * @buf: string passed from early_param()
  */
 int __init early_platform_driver_register(struct early_platform_driver *epdrv,
@@ -1112,7 +1113,7 @@ void __init early_platform_driver_register_all(char *class_str)
 
 /**
  * early_platform_match
- * @edrv: early platform driver structure
+ * @epdrv: early platform driver structure
  * @id: id to match against
  */
 static  __init struct platform_device *
@@ -1130,7 +1131,7 @@ early_platform_match(struct early_platform_driver *epdrv, int id)
 
 /**
  * early_platform_left
- * @edrv: early platform driver structure
+ * @epdrv: early platform driver structure
  * @id: return true if id or above exists
  */
 static  __init int early_platform_left(struct early_platform_driver *epdrv,
