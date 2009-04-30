@@ -2185,8 +2185,11 @@ static void *kmem_cache_dyn_array_alloc(int ids)
 {
 	size_t size = sizeof(void *) * ids;
 
+	BUG_ON(!size);
+
 	if (unlikely(!slab_is_available())) {
 		static void *nextmem;
+		static size_t nextleft;
 		void *ret;
 
 		/*
@@ -2194,16 +2197,16 @@ static void *kmem_cache_dyn_array_alloc(int ids)
 		 * never get freed by definition so we can do it rather
 		 * simply.
 		 */
-		if (!nextmem) {
-			nextmem = alloc_pages_exact(size, GFP_KERNEL);
-			if (!nextmem)
-				return NULL;
+		if (size > nextleft) {
+                        nextmem = alloc_pages_exact(size, GFP_KERNEL);
+                        if (!nextmem)
+                                return NULL;
+			nextleft = roundup(size, PAGE_SIZE);
 		}
+
 		ret = nextmem;
-		nextmem = (void *)((unsigned long)ret + size);
-		if ((unsigned long)ret >> PAGE_SHIFT !=
-				(unsigned long)nextmem >> PAGE_SHIFT)
-			nextmem = NULL;
+		nextleft -= size;
+		nextmem += size;
 		memset(ret, 0, size);
 		return ret;
 	} else {
