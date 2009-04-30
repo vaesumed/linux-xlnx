@@ -22,9 +22,12 @@
 #include <linux/uaccess.h>
 #include <linux/module.h>
 #include <linux/ctype.h>
+#include <linux/mutex.h>
 
 #include "trace.h"
 #include "trace_output.h"
+
+static DEFINE_MUTEX(filter_mutex);
 
 static int filter_pred_64(struct filter_pred *pred, void *event)
 {
@@ -82,25 +85,27 @@ static int filter_pred_string(struct filter_pred *pred, void *event)
 	return match;
 }
 
+static int filter_pred_none(struct filter_pred *pred, void *event)
+{
+	return 0;
+}
+
 /* return 1 if event matches, 0 otherwise (discard) */
 int filter_match_preds(struct ftrace_event_call *call, void *rec)
 {
 	int i, matched, and_failed = 0;
 	struct filter_pred *pred;
 
-	for (i = 0; i < MAX_FILTER_PRED; i++) {
-		if (call->preds[i]) {
-			pred = call->preds[i];
-			if (and_failed && !pred->or)
-				continue;
-			matched = pred->fn(pred, rec);
-			if (!matched && !pred->or) {
-				and_failed = 1;
-				continue;
-			} else if (matched && pred->or)
-				return 1;
-		} else
-			break;
+	for (i = 0; i < call->n_preds; i++) {
+		pred = call->preds[i];
+		if (and_failed && !pred->or)
+			continue;
+		matched = pred->fn(pred, rec);
+		if (!matched && !pred->or) {
+			and_failed = 1;
+			continue;
+		} else if (matched && pred->or)
+			return 1;
 	}
 
 	if (and_failed)
@@ -108,33 +113,47 @@ int filter_match_preds(struct ftrace_event_call *call, void *rec)
 
 	return 1;
 }
+EXPORT_SYMBOL_GPL(filter_match_preds);
 
-void filter_print_preds(struct filter_pred **preds, struct trace_seq *s)
+static void __filter_print_preds(struct filter_pred **preds, int n_preds,
+				 struct trace_seq *s)
 {
 	char *field_name;
 	struct filter_pred *pred;
 	int i;
 
-	if (!preds) {
+	if (!n_preds) {
 		trace_seq_printf(s, "none\n");
 		return;
 	}
 
-	for (i = 0; i < MAX_FILTER_PRED; i++) {
-		if (preds[i]) {
-			pred = preds[i];
-			field_name = pred->field_name;
-			if (i)
-				trace_seq_printf(s, pred->or ? "|| " : "&& ");
-			trace_seq_printf(s, "%s ", field_name);
-			trace_seq_printf(s, pred->not ? "!= " : "== ");
-			if (pred->str_val)
-				trace_seq_printf(s, "%s\n", pred->str_val);
-			else
-				trace_seq_printf(s, "%llu\n", pred->val);
-		} else
-			break;
+	for (i = 0; i < n_preds; i++) {
+		pred = preds[i];
+		field_name = pred->field_name;
+		if (i)
+			trace_seq_printf(s, pred->or ? "|| " : "&& ");
+		trace_seq_printf(s, "%s ", field_name);
+		trace_seq_printf(s, pred->not ? "!= " : "== ");
+		if (pred->str_len)
+			trace_seq_printf(s, "%s\n", pred->str_val);
+		else
+			trace_seq_printf(s, "%llu\n", pred->val);
 	}
+}
+
+void filter_print_preds(struct ftrace_event_call *call, struct trace_seq *s)
+{
+	mutex_lock(&filter_mutex);
+	__filter_print_preds(call->preds, call->n_preds, s);
+	mutex_unlock(&filter_mutex);
+}
+
+void filter_print_subsystem_preds(struct event_subsystem *system,
+				  struct trace_seq *s)
+{
+	mutex_lock(&filter_mutex);
+	__filter_print_preds(system->preds, system->n_preds, s);
+	mutex_unlock(&filter_mutex);
 }
 
 static struct ftrace_event_field *
@@ -156,66 +175,129 @@ void filter_free_pred(struct filter_pred *pred)
 		return;
 
 	kfree(pred->field_name);
-	kfree(pred->str_val);
 	kfree(pred);
 }
 
-void filter_free_preds(struct ftrace_event_call *call)
+static void filter_clear_pred(struct filter_pred *pred)
+{
+	kfree(pred->field_name);
+	pred->field_name = NULL;
+	pred->str_len = 0;
+}
+
+static int filter_set_pred(struct filter_pred *dest,
+			   struct filter_pred *src,
+			   filter_pred_fn_t fn)
+{
+	*dest = *src;
+	dest->field_name = kstrdup(src->field_name, GFP_KERNEL);
+	if (!dest->field_name)
+		return -ENOMEM;
+	dest->fn = fn;
+
+	return 0;
+}
+
+static void __filter_disable_preds(struct ftrace_event_call *call)
 {
 	int i;
 
-	if (call->preds) {
-		for (i = 0; i < MAX_FILTER_PRED; i++)
+	call->n_preds = 0;
+
+	for (i = 0; i < MAX_FILTER_PRED; i++)
+		call->preds[i]->fn = filter_pred_none;
+}
+
+void filter_disable_preds(struct ftrace_event_call *call)
+{
+	mutex_lock(&filter_mutex);
+	__filter_disable_preds(call);
+	mutex_unlock(&filter_mutex);
+}
+
+int init_preds(struct ftrace_event_call *call)
+{
+	struct filter_pred *pred;
+	int i;
+
+	call->n_preds = 0;
+
+	call->preds = kzalloc(MAX_FILTER_PRED * sizeof(pred), GFP_KERNEL);
+	if (!call->preds)
+		return -ENOMEM;
+
+	for (i = 0; i < MAX_FILTER_PRED; i++) {
+		pred = kzalloc(sizeof(*pred), GFP_KERNEL);
+		if (!pred)
+			goto oom;
+		pred->fn = filter_pred_none;
+		call->preds[i] = pred;
+	}
+
+	return 0;
+
+oom:
+	for (i = 0; i < MAX_FILTER_PRED; i++) {
+		if (call->preds[i])
 			filter_free_pred(call->preds[i]);
-		kfree(call->preds);
-		call->preds = NULL;
+	}
+	kfree(call->preds);
+	call->preds = NULL;
+
+	return -ENOMEM;
+}
+EXPORT_SYMBOL_GPL(init_preds);
+
+static void __filter_free_subsystem_preds(struct event_subsystem *system)
+{
+	struct ftrace_event_call *call;
+	int i;
+
+	if (system->n_preds) {
+		for (i = 0; i < system->n_preds; i++)
+			filter_free_pred(system->preds[i]);
+		kfree(system->preds);
+		system->preds = NULL;
+		system->n_preds = 0;
+	}
+
+	list_for_each_entry(call, &ftrace_events, list) {
+		if (!call->define_fields)
+			continue;
+
+		if (!strcmp(call->system, system->name))
+			__filter_disable_preds(call);
 	}
 }
 
 void filter_free_subsystem_preds(struct event_subsystem *system)
 {
-	struct ftrace_event_call *call = __start_ftrace_events;
-	int i;
-
-	if (system->preds) {
-		for (i = 0; i < MAX_FILTER_PRED; i++)
-			filter_free_pred(system->preds[i]);
-		kfree(system->preds);
-		system->preds = NULL;
-	}
-
-	events_for_each(call) {
-		if (!call->name || !call->regfunc)
-			continue;
-
-		if (!strcmp(call->system, system->name))
-			filter_free_preds(call);
-	}
+	mutex_lock(&filter_mutex);
+	__filter_free_subsystem_preds(system);
+	mutex_unlock(&filter_mutex);
 }
 
-static int __filter_add_pred(struct ftrace_event_call *call,
-			     struct filter_pred *pred)
+static int filter_add_pred_fn(struct ftrace_event_call *call,
+			      struct filter_pred *pred,
+			      filter_pred_fn_t fn)
 {
-	int i;
+	int idx, err;
 
-	if (call->preds && !pred->compound)
-		filter_free_preds(call);
+	if (call->n_preds && !pred->compound)
+		__filter_disable_preds(call);
 
-	if (!call->preds) {
-		call->preds = kzalloc(MAX_FILTER_PRED * sizeof(pred),
-				      GFP_KERNEL);
-		if (!call->preds)
-			return -ENOMEM;
-	}
+	if (call->n_preds == MAX_FILTER_PRED)
+		return -ENOSPC;
 
-	for (i = 0; i < MAX_FILTER_PRED; i++) {
-		if (!call->preds[i]) {
-			call->preds[i] = pred;
-			return 0;
-		}
-	}
+	idx = call->n_preds;
+	filter_clear_pred(call->preds[idx]);
+	err = filter_set_pred(call->preds[idx], pred, fn);
+	if (err)
+		return err;
 
-	return -ENOSPC;
+	call->n_preds++;
+
+	return 0;
 }
 
 static int is_string_field(const char *type)
@@ -226,129 +308,109 @@ static int is_string_field(const char *type)
 	return 0;
 }
 
-int filter_add_pred(struct ftrace_event_call *call, struct filter_pred *pred)
+static int __filter_add_pred(struct ftrace_event_call *call,
+			     struct filter_pred *pred)
 {
 	struct ftrace_event_field *field;
+	filter_pred_fn_t fn;
 
 	field = find_event_field(call, pred->field_name);
 	if (!field)
 		return -EINVAL;
 
+	pred->fn = filter_pred_none;
 	pred->offset = field->offset;
 
 	if (is_string_field(field->type)) {
-		if (!pred->str_val)
+		if (!pred->str_len)
 			return -EINVAL;
-		pred->fn = filter_pred_string;
+		fn = filter_pred_string;
 		pred->str_len = field->size;
-		return __filter_add_pred(call, pred);
+		return filter_add_pred_fn(call, pred, fn);
 	} else {
-		if (pred->str_val)
+		if (pred->str_len)
 			return -EINVAL;
 	}
 
 	switch (field->size) {
 	case 8:
-		pred->fn = filter_pred_64;
+		fn = filter_pred_64;
 		break;
 	case 4:
-		pred->fn = filter_pred_32;
+		fn = filter_pred_32;
 		break;
 	case 2:
-		pred->fn = filter_pred_16;
+		fn = filter_pred_16;
 		break;
 	case 1:
-		pred->fn = filter_pred_8;
+		fn = filter_pred_8;
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	return __filter_add_pred(call, pred);
+	return filter_add_pred_fn(call, pred, fn);
 }
 
-static struct filter_pred *copy_pred(struct filter_pred *pred)
+int filter_add_pred(struct ftrace_event_call *call, struct filter_pred *pred)
 {
-	struct filter_pred *new_pred = kmalloc(sizeof(*pred), GFP_KERNEL);
-	if (!new_pred)
-		return NULL;
+	int err;
 
-	memcpy(new_pred, pred, sizeof(*pred));
+	mutex_lock(&filter_mutex);
+	err = __filter_add_pred(call, pred);
+	mutex_unlock(&filter_mutex);
 
-	if (pred->field_name) {
-		new_pred->field_name = kstrdup(pred->field_name, GFP_KERNEL);
-		if (!new_pred->field_name) {
-			kfree(new_pred);
-			return NULL;
-		}
-	}
-
-	if (pred->str_val) {
-		new_pred->str_val = kstrdup(pred->str_val, GFP_KERNEL);
-		if (!new_pred->str_val) {
-			filter_free_pred(new_pred);
-			return NULL;
-		}
-	}
-
-	return new_pred;
+	return err;
 }
 
 int filter_add_subsystem_pred(struct event_subsystem *system,
 			      struct filter_pred *pred)
 {
-	struct ftrace_event_call *call = __start_ftrace_events;
-	struct filter_pred *event_pred;
-	int i;
+	struct ftrace_event_call *call;
 
-	if (system->preds && !pred->compound)
-		filter_free_subsystem_preds(system);
+	mutex_lock(&filter_mutex);
 
-	if (!system->preds) {
+	if (system->n_preds && !pred->compound)
+		__filter_free_subsystem_preds(system);
+
+	if (!system->n_preds) {
 		system->preds = kzalloc(MAX_FILTER_PRED * sizeof(pred),
 					GFP_KERNEL);
-		if (!system->preds)
+		if (!system->preds) {
+			mutex_unlock(&filter_mutex);
 			return -ENOMEM;
-	}
-
-	for (i = 0; i < MAX_FILTER_PRED; i++) {
-		if (!system->preds[i]) {
-			system->preds[i] = pred;
-			break;
 		}
 	}
 
-	if (i == MAX_FILTER_PRED)
+	if (system->n_preds == MAX_FILTER_PRED) {
+		mutex_unlock(&filter_mutex);
 		return -ENOSPC;
+	}
 
-	events_for_each(call) {
+	system->preds[system->n_preds] = pred;
+	system->n_preds++;
+
+	list_for_each_entry(call, &ftrace_events, list) {
 		int err;
 
-		if (!call->name || !call->regfunc)
+		if (!call->define_fields)
 			continue;
 
 		if (strcmp(call->system, system->name))
 			continue;
 
-		if (!find_event_field(call, pred->field_name))
-			continue;
-
-		event_pred = copy_pred(pred);
-		if (!event_pred)
-			goto oom;
-
-		err = filter_add_pred(call, event_pred);
-		if (err)
-			filter_free_pred(event_pred);
-		if (err == -ENOMEM)
-			goto oom;
+		err = __filter_add_pred(call, pred);
+		if (err == -ENOMEM) {
+			system->preds[system->n_preds] = NULL;
+			system->n_preds--;
+			mutex_unlock(&filter_mutex);
+			return err;
+		}
 	}
 
-	return 0;
+	mutex_unlock(&filter_mutex);
 
-oom:
-	system->preds[i] = NULL;
-	return -ENOMEM;
+	return 0;
 }
 
 int filter_parse(char **pbuf, struct filter_pred *pred)
@@ -410,7 +472,8 @@ int filter_parse(char **pbuf, struct filter_pred *pred)
 		}
 	}
 
-	if (!val_str) {
+	if (!val_str || !strlen(val_str)
+	    || strlen(val_str) >= MAX_FILTER_STR_VAL) {
 		pred->field_name = NULL;
 		return -EINVAL;
 	}
@@ -419,11 +482,12 @@ int filter_parse(char **pbuf, struct filter_pred *pred)
 	if (!pred->field_name)
 		return -ENOMEM;
 
+	pred->str_len = 0;
 	pred->val = simple_strtoull(val_str, &tmp, 0);
 	if (tmp == val_str) {
-		pred->str_val = kstrdup(val_str, GFP_KERNEL);
-		if (!pred->str_val)
-			return -ENOMEM;
+		strncpy(pred->str_val, val_str, MAX_FILTER_STR_VAL);
+		pred->str_len = strlen(val_str);
+		pred->str_val[pred->str_len] = '\0';
 	} else if (*tmp != '\0')
 		return -EINVAL;
 
