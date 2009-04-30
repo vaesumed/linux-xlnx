@@ -2519,7 +2519,7 @@ static struct file_system_type tmpfs_fs_type = {
 	.kill_sb	= kill_litter_super,
 };
 
-static int __init init_tmpfs(void)
+int __init init_tmpfs(void)
 {
 	int error;
 
@@ -2576,7 +2576,7 @@ static struct file_system_type tmpfs_fs_type = {
 	.kill_sb	= kill_litter_super,
 };
 
-static int __init init_tmpfs(void)
+int __init init_tmpfs(void)
 {
 	BUG_ON(register_filesystem(&tmpfs_fs_type) != 0);
 
@@ -2687,5 +2687,3 @@ int shmem_zero_setup(struct vm_area_struct *vma)
 	vma->vm_ops = &shmem_vm_ops;
 	return 0;
 }
-
-module_init(init_tmpfs)

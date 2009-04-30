@@ -955,9 +955,14 @@ static int hiddev_usbd_probe(struct usb_interface *intf,
 	return -ENODEV;
 }
 
+static char *hiddev_nodename(struct device *dev)
+{
+	return kasprintf(GFP_KERNEL, "usb/%s", dev_name(dev));
+}
 
 static /* const */ struct usb_driver hiddev_driver = {
 	.name =		"hiddev",
+	.nodename =	hiddev_nodename,
 	.probe =	hiddev_usbd_probe,
 };
 
