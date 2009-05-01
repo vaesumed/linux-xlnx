@@ -1455,17 +1455,20 @@ config KEXEC_JUMP
 
 config PHYSICAL_START
 	hex "Physical address where the kernel is loaded" if (EMBEDDED || CRASH_DUMP)
-	default "0x1000000" if X86_NUMAQ
-	default "0x200000" if X86_64
-	default "0x100000"
+	default "0x400000" if EMBEDDED
+	default "0x1000000"
 	---help---
 	  This gives the physical address where the kernel is loaded.
 
 	  If kernel is a not relocatable (CONFIG_RELOCATABLE=n) then
 	  bzImage will decompress itself to above physical address and
-	  run from there. Otherwise, bzImage will run from the address where
-	  it has been loaded by the boot loader and will ignore above physical
-	  address.
+	  run from there. Otherwise, bzImage will run from the either
+	  the above physical address or where it has been loaded by
+	  the boot loader, whichever is higher.
+
+	  For embedded machines with very small memory (less than
+	  about 24 MB) this may need to be adjusted downward from the
+	  default value of 0x1000000 (16 MB).
 
 	  In normal kdump cases one does not have to set/change this option
 	  as now bzImage can be compiled as a completely relocatable image
@@ -1516,8 +1519,8 @@ config RELOCATABLE
 config PHYSICAL_ALIGN
 	hex
 	prompt "Alignment value to which kernel should be aligned" if X86_32
-	default "0x100000" if X86_32
-	default "0x200000" if X86_64
+	default "0x200000" if X86_64 || X86_PAE
+	default "0x400000"
 	range 0x2000 0x400000
 	---help---
 	  This value puts the alignment restrictions on physical address
