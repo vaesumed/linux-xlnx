@@ -1076,7 +1076,7 @@ nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 		return;
 
 	nfsd4_release_respages(entry->ce_respages, entry->ce_resused);
-	entry->ce_opcnt = resp->opcnt;
+	slot->sl_opcnt = resp->opcnt;
 	entry->ce_status = resp->cstate.status;
 
 	/*
@@ -1186,7 +1186,7 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 	}
 
 	resp->rqstp->rq_resused = entry->ce_resused;
-	resp->opcnt = entry->ce_opcnt;
+	resp->opcnt = slot->sl_opcnt;
 	resp->cstate.iovlen = entry->ce_datav.iov_len + entry->ce_rpchdrlen;
 	status = entry->ce_status;
 
