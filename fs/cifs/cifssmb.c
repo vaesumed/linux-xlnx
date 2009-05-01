@@ -1,7 +1,7 @@
 /*
  *   fs/cifs/cifssmb.c
  *
- *   Copyright (C) International Business Machines  Corp., 2002,2008
+ *   Copyright (C) International Business Machines  Corp., 2002,2009
  *   Author(s): Steve French (sfrench@us.ibm.com)
  *
  *   Contains the routines for constructing the SMB PDUs themselves
@@ -80,41 +80,6 @@ static struct {
 #define CIFS_NUM_PROT 1
 #endif /* CONFIG_CIFS_WEAK_PW_HASH */
 #endif /* CIFS_POSIX */
-
-/* Allocates buffer into dst and copies smb string from src to it.
- * caller is responsible for freeing dst if function returned 0.
- * returns:
- * 	on success - 0
- *	on failure - errno
- */
-static int
-cifs_strncpy_to_host(char **dst, const char *src, const int maxlen,
-		 const bool is_unicode, const struct nls_table *nls_codepage)
-{
-	int plen;
-
-	if (is_unicode) {
-		plen = UniStrnlen((wchar_t *)src, maxlen);
-		*dst = kmalloc(plen + 2, GFP_KERNEL);
-		if (!*dst)
-			goto cifs_strncpy_to_host_ErrExit;
-		cifs_strfromUCS_le(*dst, (__le16 *)src, plen, nls_codepage);
-	} else {
-		plen = strnlen(src, maxlen);
-		*dst = kmalloc(plen + 2, GFP_KERNEL);
-		if (!*dst)
-			goto cifs_strncpy_to_host_ErrExit;
-		strncpy(*dst, src, plen);
-	}
-	(*dst)[plen] = 0;
-	(*dst)[plen+1] = 0; /* harmless for ASCII case, needed for Unicode */
-	return 0;
-
-cifs_strncpy_to_host_ErrExit:
-	cERROR(1, ("Failed to allocate buffer for string\n"));
-	return -ENOMEM;
-}
-
 
 /* Mark as invalid, all open files on tree connections since they
    were closed when session to server was lost */
@@ -2417,8 +2382,7 @@ winCreateHardLinkRetry:
 
 int
 CIFSSMBUnixQuerySymLink(const int xid, struct cifsTconInfo *tcon,
-			const unsigned char *searchName,
-			char *symlinkinfo, const int buflen,
+			const unsigned char *searchName, char **symlinkinfo,
 			const struct nls_table *nls_codepage)
 {
 /* SMB_QUERY_FILE_UNIX_LINK */
@@ -2428,6 +2392,7 @@ CIFSSMBUnixQuerySymLink(const int xid, struct cifsTconInfo *tcon,
 	int bytes_returned;
 	int name_len;
 	__u16 params, byte_count;
+	char *data_start;
 
 	cFYI(1, ("In QPathSymLinkInfo (Unix) for path %s", searchName));
 
@@ -2482,30 +2447,22 @@ querySymLinkRetry:
 		/* decode response */
 
 		rc = validate_t2((struct smb_t2_rsp *)pSMBr);
-		if (rc || (pSMBr->ByteCount < 2))
 		/* BB also check enough total bytes returned */
-			rc = -EIO;	/* bad smb */
+		if (rc || (pSMBr->ByteCount < 2))
+			rc = -EIO;
 		else {
-			__u16 data_offset = le16_to_cpu(pSMBr->t2.DataOffset);
-			__u16 count = le16_to_cpu(pSMBr->t2.DataCount);
+			u16 count = le16_to_cpu(pSMBr->t2.DataCount);
 
-			if (pSMBr->hdr.Flags2 & SMBFLG2_UNICODE) {
-				name_len = UniStrnlen((wchar_t *) ((char *)
-					&pSMBr->hdr.Protocol + data_offset),
-					min_t(const int, buflen, count) / 2);
+			data_start = ((char *) &pSMBr->hdr.Protocol) +
+					   le16_to_cpu(pSMBr->t2.DataOffset);
+
 			/* BB FIXME investigate remapping reserved chars here */
-				cifs_strfromUCS_le(symlinkinfo,
-					(__le16 *) ((char *)&pSMBr->hdr.Protocol
-							+ data_offset),
-					name_len, nls_codepage);
-			} else {
-				strncpy(symlinkinfo,
-					(char *) &pSMBr->hdr.Protocol +
-						data_offset,
-					min_t(const int, buflen, count));
-			}
-			symlinkinfo[buflen] = 0;
-	/* just in case so calling code does not go off the end of buffer */
+			*symlinkinfo = cifs_strndup_from_ucs(data_start, count,
+						    pSMBr->hdr.Flags2 &
+							SMBFLG2_UNICODE,
+						    nls_codepage);
+			if (!symlinkinfo)
+				rc = -ENOMEM;
 		}
 	}
 	cifs_buf_release(pSMB);
@@ -3928,27 +3885,6 @@ GetInodeNumOut:
 	return rc;
 }
 
-/* computes length of UCS string converted to host codepage
- * @src:	UCS string
- * @maxlen:	length of the input string in UCS characters
- * 		(not in bytes)
- *
- * return:	size of input string in host codepage
- */
-static int hostlen_fromUCS(const __le16 *src, const int maxlen,
-		const struct nls_table *nls_codepage) {
-	int i;
-	int hostlen = 0;
-	char to[4];
-	int charlen;
-	for (i = 0; (i < maxlen) && src[i]; ++i) {
-		charlen = nls_codepage->uni2char(le16_to_cpu(src[i]),
-				to, NLS_MAX_CHARSET_SIZE);
-		hostlen += charlen > 0 ? charlen : 1;
-	}
-	return hostlen;
-}
-
 /* parses DFS refferal V3 structure
  * caller is responsible for freeing target_nodes
  * returns:
@@ -4016,8 +3952,8 @@ parse_DFS_referrals(TRANSACTION2_GET_DFS_REFER_RSP *pSMBr,
 						GFP_KERNEL);
 			cifsConvertToUCS((__le16 *) tmp, searchName,
 					PATH_MAX, nls_codepage, remap);
-			node->path_consumed = hostlen_fromUCS(tmp,
-					le16_to_cpu(pSMBr->PathConsumed)/2,
+			node->path_consumed = cifs_ucs2_bytes(tmp,
+					le16_to_cpu(pSMBr->PathConsumed),
 					nls_codepage);
 			kfree(tmp);
 		} else
@@ -4029,20 +3965,24 @@ parse_DFS_referrals(TRANSACTION2_GET_DFS_REFER_RSP *pSMBr,
 		/* copy DfsPath */
 		temp = (char *)ref + le16_to_cpu(ref->DfsPathOffset);
 		max_len = data_end - temp;
-		rc = cifs_strncpy_to_host(&(node->path_name), temp,
-					max_len, is_unicode, nls_codepage);
-		if (rc)
+		node->path_name = cifs_strndup_from_ucs(temp, max_len,
+						      is_unicode, nls_codepage);
+		if (IS_ERR(node->path_name)) {
+			rc = PTR_ERR(node->path_name);
+			node->path_name = NULL;
 			goto parse_DFS_referrals_exit;
+		}
 
 		/* copy link target UNC */
 		temp = (char *)ref + le16_to_cpu(ref->NetworkAddressOffset);
 		max_len = data_end - temp;
-		rc = cifs_strncpy_to_host(&(node->node_name), temp,
-					max_len, is_unicode, nls_codepage);
-		if (rc)
+		node->node_name = cifs_strndup_from_ucs(temp, max_len,
+						      is_unicode, nls_codepage);
+		if (IS_ERR(node->node_name)) {
+			rc = PTR_ERR(node->node_name);
+			node->node_name = NULL;
 			goto parse_DFS_referrals_exit;
-
-		ref += le16_to_cpu(ref->Size);
+		}
 	}
 
 parse_DFS_referrals_exit:
