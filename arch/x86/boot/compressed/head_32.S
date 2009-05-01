@@ -70,8 +70,8 @@ ENTRY(startup_32)
 	jbe 1f
 	movl %eax, %ebx
 1:
-	addl $(CONFIG_PHYSICAL_ALIGN - 1), %ebx
-	andl $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebx
+	addl $(LOAD_PHYSICAL_ALIGN - 1), %ebx
+	andl $(~(LOAD_PHYSICAL_ALIGN - 1)), %ebx
 #else
 	movl $LOAD_PHYSICAL_ADDR, %ebx
 #endif

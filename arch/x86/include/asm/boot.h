@@ -8,10 +8,19 @@
 
 #ifdef __KERNEL__
 
+#include <asm/page_types.h>
+
+/* Permitted physical alignment of the kernel */
+#if defined(CONFIG_X86_64) && CONFIG_PHYSICAL_ALIGN < PMD_PAGE_SIZE
+#define LOAD_PHYSICAL_ALIGN	PMD_PAGE_SIZE
+#else
+#define LOAD_PHYSICAL_ALIGN	CONFIG_PHYSICAL_ALIGN
+#endif
+
 /* Physical address where kernel should be loaded. */
 #define LOAD_PHYSICAL_ADDR ((CONFIG_PHYSICAL_START \
-				+ (CONFIG_PHYSICAL_ALIGN - 1)) \
-				& ~(CONFIG_PHYSICAL_ALIGN - 1))
+				+ (LOAD_PHYSICAL_ALIGN - 1)) \
+				& ~(LOAD_PHYSICAL_ALIGN - 1))
 
 #ifdef CONFIG_KERNEL_BZIP2
 #define BOOT_HEAP_SIZE             0x400000

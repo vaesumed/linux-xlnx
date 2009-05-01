@@ -22,7 +22,6 @@
 #include <linux/linkage.h>
 #include <asm/segment.h>
 #include <asm/pgtable_types.h>
-#include <asm/page_types.h>
 #include <asm/boot.h>
 #include <asm/msr.h>
 #include <asm/processor-flags.h>
@@ -72,19 +71,17 @@ ENTRY(startup_32)
  * contains the address where we should move the kernel image temporarily
  * for safe in-place decompression.
  */
-ALIGN_MASK	= (CONFIG_PHYSICAL_ALIGN-1) | (PMD_PAGE_SIZE-1)
-
 #ifdef CONFIG_RELOCATABLE
-	movl	$CONFIG_PHYSICAL_START, %eax
+	movl	$LOAD_PHYSICAL_ADDR, %eax
 	movl	%ebp, %ebx
-	addl	$ALIGN_MASK, %ebx
-	andl	$~ALIGN_MASK, %ebx
+	addl	$(LOAD_PHYSICAL_ALIGN - 1), %ebx
+	andl	$~(LOAD_PHYSICAL_ALIGN - 1), %ebx
 	cmpl	%ebx, %eax
 	jbe	1f
 	movl	%eax, %ebx
 1:
 #else
-	movl	$CONFIG_PHYSICAL_START, %ebx
+	movl	$LOAD_PHYSICAL_ADDR, %ebx
 #endif
 
 	/* Replace the compressed data size with the uncompressed size */
@@ -216,21 +213,21 @@ ENTRY(startup_64)
 	 *
 	 * If it is a relocatable kernel then decompress and run the kernel
 	 * from load address aligned to 2MB addr, otherwise decompress and
-	 * run the kernel from CONFIG_PHYSICAL_START
+	 * run the kernel from LOAD_PHYSICAL_ADDR
 	 */
 
 	/* Start with the delta to where the kernel will run at. */
 #ifdef CONFIG_RELOCATABLE
 	leaq	startup_32(%rip) /* - $startup_32 */, %rbp
-	movq	$CONFIG_PHYSICAL_START, %rax
-	addq	$ALIGN_MASK, %rbp
-	andq	$~ALIGN_MASK, %rbp
+	movq	$LOAD_PHYSICAL_ADDR, %rax
+	addq	$(LOAD_PHYSICAL_ALIGN - 1), %rbp
+	andq	$~(LOAD_PHYSICAL_ALIGN - 1), %rbp
 	cmpq	%rbp, %rax
 	jbe	1f
 	movq	%rax, %rbp
 1:
 #else
-	movq	$CONFIG_PHYSICAL_START, %rbp
+	movq	$LOAD_PHYSICAL_ADDR, %rbp
 #endif
 	movq	%rbp, %rbx
 
