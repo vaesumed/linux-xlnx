@@ -42,6 +42,7 @@ SECTIONS
 		*(.data.*)
 		_edata = . ;
 	}
+	. = ALIGN(32);
 	.bss : {
 		_bss = . ;
 		*(.bss)
