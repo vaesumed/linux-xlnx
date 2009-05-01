@@ -39,11 +39,11 @@ ENTRY(startup_32)
 
 	cli
 	movl $(__BOOT_DS),%eax
-	movl %eax,%ds
-	movl %eax,%es
-	movl %eax,%fs
-	movl %eax,%gs
-	movl %eax,%ss
+	movl %eax, %ds
+	movl %eax, %es
+	movl %eax, %fs
+	movl %eax, %gs
+	movl %eax, %ss
 1:
 
 /* Calculate the delta between where we were compiled to run
@@ -64,12 +64,18 @@ ENTRY(startup_32)
  */
 
 #ifdef CONFIG_RELOCATABLE
-	movl 	%ebp, %ebx
-	addl    $(CONFIG_PHYSICAL_ALIGN - 1), %ebx
-	andl    $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebx
+	movl $LOAD_PHYSICAL_ADDR, %eax
+	movl %ebp, %ebx
+	cmpl %ebx, %eax
+	jbe 1f
+	movl %eax, %ebx
+1:
+	addl $(CONFIG_PHYSICAL_ALIGN - 1), %ebx
+	andl $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebx
 #else
 	movl $LOAD_PHYSICAL_ADDR, %ebx
 #endif
+	movl %ebx, %edi		/* Save kernel target address */
 
 	/* Replace the compressed data size with the uncompressed size */
 	subl input_len(%ebp), %ebx
@@ -84,27 +90,30 @@ ENTRY(startup_32)
 	addl $4095, %ebx
 	andl $~4095, %ebx
 
-/* Copy the compressed kernel to the end of our buffer
+/*
+ * Set up the stack
+ */
+	leal boot_stack_end(%ebx), %esp
+	pushl %edi		/* Saved kernel target address */
+
+/*
+ * Copy the compressed kernel to the end of our buffer
  * where decompression in place becomes safe.
  */
 	pushl %esi
-	leal _ebss(%ebp), %esi
-	leal _ebss(%ebx), %edi
-	movl $(_ebss - startup_32), %ecx
+	leal (_bss-4)(%ebp), %esi
+	leal (_bss-4)(%ebx), %edi
+	movl $(_bss - startup_32), %ecx
+	shrl $2, %ecx
 	std
-	rep
-	movsb
+	rep; movsl
 	cld
 	popl %esi
 
-/* Compute the kernel start address.
+/*
+ * %ebp -> kernel target address
  */
-#ifdef CONFIG_RELOCATABLE
-	addl    $(CONFIG_PHYSICAL_ALIGN - 1), %ebp
-	andl    $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebp
-#else
-	movl	$LOAD_PHYSICAL_ADDR, %ebp
-#endif
+	popl %ebp
 
 /*
  * Jump to the relocated address.
@@ -117,20 +126,14 @@ ENDPROC(startup_32)
 relocated:
 
 /*
- * Clear BSS
+ * Clear BSS - note: stack is currently empty
  */
-	xorl %eax,%eax
-	leal _edata(%ebx),%edi
-	leal _ebss(%ebx), %ecx
-	subl %edi,%ecx
-	cld
-	rep
-	stosb
-
-/*
- * Setup the stack for the decompressor
- */
-	leal boot_stack_end(%ebx), %esp
+	xorl %eax, %eax
+	leal _bss(%ebx), %edi
+	leal (_ebss+3)(%ebx), %ecx
+	subl %edi, %ecx
+	shrl $2, %ecx
+	rep; stosl
 
 /*
  * Do the decompression, and jump to the new kernel..
@@ -178,12 +181,12 @@ relocated:
 /*
  * Jump to the decompressed kernel.
  */
-	xorl %ebx,%ebx
+	xorl %ebx, %ebx
 	jmp *%ebp
 
-.bss
 /* Stack and heap for uncompression */
-.balign 4
+	.bss
+	.balign 4
 boot_heap:
 	.fill BOOT_HEAP_SIZE, 1, 0
 boot_stack:

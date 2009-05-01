@@ -7,11 +7,6 @@
 /*
  *  head.S contains the 32-bit startup code.
  *
- * NOTE!!! Startup happens at absolute address 0x00001000, which is also where
- * the page directory will exist. The startup code will be overwritten by
- * the page directory. [According to comments etc elsewhere on a compressed
- * kernel it will end up at 0x1000 + 1Mb I hope so as I assume this. - AC]
- *
  * Page 0 is deliberately kept safe, since System Management Mode code in 
  * laptops may need to access the BIOS data stored there.  This is also
  * useful for future device drivers that either access the BIOS via VM86 
@@ -77,11 +72,17 @@ ENTRY(startup_32)
  * contains the address where we should move the kernel image temporarily
  * for safe in-place decompression.
  */
+ALIGN_MASK	= (CONFIG_PHYSICAL_ALIGN-1) | (PMD_PAGE_SIZE-1)
 
 #ifdef CONFIG_RELOCATABLE
+	movl	$CONFIG_PHYSICAL_START, %eax
 	movl	%ebp, %ebx
-	addl	$(PMD_PAGE_SIZE -1), %ebx
-	andl	$PMD_PAGE_MASK, %ebx
+	addl	$ALIGN_MASK, %ebx
+	andl	$~ALIGN_MASK, %ebx
+	cmpl	%ebx, %eax
+	jbe	1f
+	movl	%eax, %ebx
+1:
 #else
 	movl	$CONFIG_PHYSICAL_START, %ebx
 #endif
@@ -221,13 +222,17 @@ ENTRY(startup_64)
 	/* Start with the delta to where the kernel will run at. */
 #ifdef CONFIG_RELOCATABLE
 	leaq	startup_32(%rip) /* - $startup_32 */, %rbp
-	addq	$(PMD_PAGE_SIZE - 1), %rbp
-	andq	$PMD_PAGE_MASK, %rbp
-	movq	%rbp, %rbx
+	movq	$CONFIG_PHYSICAL_START, %rax
+	addq	$ALIGN_MASK, %rbp
+	andq	$~ALIGN_MASK, %rbp
+	cmpq	%rbp, %rax
+	jbe	1f
+	movq	%rax, %rbp
+1:
 #else
 	movq	$CONFIG_PHYSICAL_START, %rbp
-	movq	%rbp, %rbx
 #endif
+	movq	%rbp, %rbx
 
 	/* Replace the compressed data size with the uncompressed size */
 	movl	input_len(%rip), %eax
@@ -266,13 +271,13 @@ relocated:
 /*
  * Clear BSS
  */
-	xorq	%rax, %rax
-	leaq    _edata(%rbx), %rdi
-	leaq    _end_before_pgt(%rbx), %rcx
+	xorl	%eax, %eax
+	leaq    _edata(%rip), %rdi
+	leaq    _end_before_pgt(%rip), %rcx
 	subq	%rdi, %rcx
+	shrq	$3, %rcx
 	cld
-	rep
-	stosb
+	rep	stosq
 
 	/* Setup the stack */
 	leaq	boot_stack_end(%rip), %rsp
