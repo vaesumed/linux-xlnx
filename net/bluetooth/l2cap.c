@@ -717,12 +717,16 @@ static void l2cap_sock_init(struct sock *sk, struct sock *parent)
 
 		pi->imtu = l2cap_pi(parent)->imtu;
 		pi->omtu = l2cap_pi(parent)->omtu;
+		pi->mode = l2cap_pi(parent)->mode;
+		pi->fcs  = l2cap_pi(parent)->fcs;
 		pi->sec_level = l2cap_pi(parent)->sec_level;
 		pi->role_switch = l2cap_pi(parent)->role_switch;
 		pi->force_reliable = l2cap_pi(parent)->force_reliable;
 	} else {
 		pi->imtu = L2CAP_DEFAULT_MTU;
 		pi->omtu = 0;
+		pi->mode = L2CAP_MODE_BASIC;
+		pi->fcs  = L2CAP_FCS_CRC16;
 		pi->sec_level = BT_SECURITY_LOW;
 		pi->role_switch = 0;
 		pi->force_reliable = 0;
@@ -957,6 +961,18 @@ static int l2cap_sock_connect(struct socket *sock, struct sockaddr *addr, int al
 		goto done;
 	}
 
+	switch (l2cap_pi(sk)->mode) {
+	case L2CAP_MODE_BASIC:
+		break;
+	case L2CAP_MODE_ERTM:
+		if (enable_ertm)
+			break;
+		/* fall through */
+	default:
+		err = -ENOTSUPP;
+		goto done;
+	}
+
 	switch (sk->sk_state) {
 	case BT_CONNECT:
 	case BT_CONNECT2:
@@ -1005,6 +1021,18 @@ static int l2cap_sock_listen(struct socket *sock, int backlog)
 
 	if (sk->sk_state != BT_BOUND || sock->type != SOCK_SEQPACKET) {
 		err = -EBADFD;
+		goto done;
+	}
+
+	switch (l2cap_pi(sk)->mode) {
+	case L2CAP_MODE_BASIC:
+		break;
+	case L2CAP_MODE_ERTM:
+		if (enable_ertm)
+			break;
+		/* fall through */
+	default:
+		err = -ENOTSUPP;
 		goto done;
 	}
 
@@ -1258,7 +1286,7 @@ static int l2cap_sock_setsockopt_old(struct socket *sock, int optname, char __us
 		opts.imtu     = l2cap_pi(sk)->imtu;
 		opts.omtu     = l2cap_pi(sk)->omtu;
 		opts.flush_to = l2cap_pi(sk)->flush_to;
-		opts.mode     = L2CAP_MODE_BASIC;
+		opts.mode     = l2cap_pi(sk)->mode;
 
 		len = min_t(unsigned int, sizeof(opts), optlen);
 		if (copy_from_user((char *) &opts, optval, len)) {
@@ -1266,8 +1294,9 @@ static int l2cap_sock_setsockopt_old(struct socket *sock, int optname, char __us
 			break;
 		}
 
-		l2cap_pi(sk)->imtu  = opts.imtu;
-		l2cap_pi(sk)->omtu  = opts.omtu;
+		l2cap_pi(sk)->imtu = opts.imtu;
+		l2cap_pi(sk)->omtu = opts.omtu;
+		l2cap_pi(sk)->mode = opts.mode;
 		break;
 
 	case L2CAP_LM:
@@ -1380,7 +1409,7 @@ static int l2cap_sock_getsockopt_old(struct socket *sock, int optname, char __us
 		opts.imtu     = l2cap_pi(sk)->imtu;
 		opts.omtu     = l2cap_pi(sk)->omtu;
 		opts.flush_to = l2cap_pi(sk)->flush_to;
-		opts.mode     = L2CAP_MODE_BASIC;
+		opts.mode     = l2cap_pi(sk)->mode;
 
 		len = min_t(unsigned int, len, sizeof(opts));
 		if (copy_to_user(optval, (char *) &opts, len))
