@@ -1845,7 +1845,8 @@ static int reiserfs_fill_super(struct super_block *s, void *data, int silent)
 			goto error;
 		}
 
-		if ((errval = reiserfs_xattr_init(s, s->s_flags))) {
+		if ((errval = reiserfs_lookup_privroot(s)) ||
+		    (errval = reiserfs_xattr_init(s, s->s_flags))) {
 			dput(s->s_root);
 			s->s_root = NULL;
 			goto error;
@@ -1858,7 +1859,8 @@ static int reiserfs_fill_super(struct super_block *s, void *data, int silent)
 			reiserfs_info(s, "using 3.5.x disk format\n");
 		}
 
-		if ((errval = reiserfs_xattr_init(s, s->s_flags))) {
+		if ((errval = reiserfs_lookup_privroot(s)) ||
+		    (errval = reiserfs_xattr_init(s, s->s_flags))) {
 			dput(s->s_root);
 			s->s_root = NULL;
 			goto error;
