@@ -922,7 +922,7 @@ void scsi_io_completion(struct scsi_cmnd *cmd, unsigned int good_bytes)
 			if (driver_byte(result) & DRIVER_SENSE)
 				scsi_print_sense("", cmd);
 		}
-		blk_end_request(req, -EIO, blk_rq_bytes(req));
+		blk_end_request_all(req, -EIO);
 		scsi_next_command(cmd);
 		break;
 	case ACTION_REPREP:
@@ -1088,7 +1088,6 @@ int scsi_setup_blk_pc_cmnd(struct scsi_device *sdev, struct request *req)
 			return ret;
 	} else {
 		BUG_ON(req->data_len);
-		BUG_ON(req->data);
 
 		memset(&cmd->sdb, 0, sizeof(cmd->sdb));
 		req->buffer = NULL;
