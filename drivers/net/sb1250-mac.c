@@ -2285,7 +2285,7 @@ static int sb1250_change_mtu(struct net_device *_dev, int new_mtu)
 
 static int sbmac_init(struct platform_device *pldev, long long base)
 {
-	struct net_device *dev = pldev->dev.driver_data;
+	struct net_device *dev = dev_get_drvdata(&pldev->dev);
 	int idx = pldev->id;
 	struct sbmac_softc *sc = netdev_priv(dev);
 	unsigned char *eaddr;
@@ -2726,7 +2726,7 @@ static int __init sbmac_probe(struct platform_device *pldev)
 		goto out_unmap;
 	}
 
-	pldev->dev.driver_data = dev;
+	dev_set_drvdata(&pldev->dev, dev);
 	SET_NETDEV_DEV(dev, &pldev->dev);
 
 	sc = netdev_priv(dev);
@@ -2751,7 +2751,7 @@ out_out:
 
 static int __exit sbmac_remove(struct platform_device *pldev)
 {
-	struct net_device *dev = pldev->dev.driver_data;
+	struct net_device *dev = dev_get_drvdata(&pldev->dev);
 	struct sbmac_softc *sc = netdev_priv(dev);
 
 	unregister_netdev(dev);
