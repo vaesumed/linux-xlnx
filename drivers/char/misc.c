@@ -168,6 +168,7 @@ static const struct file_operations misc_fops = {
 	.open		= misc_open,
 };
 
+
 /**
  *	misc_register	-	register a miscellaneous device
  *	@misc: device structure
@@ -216,8 +217,8 @@ int misc_register(struct miscdevice * misc)
 		misc_minors[misc->minor >> 3] |= 1 << (misc->minor & 7);
 	dev = MKDEV(MISC_MAJOR, misc->minor);
 
-	misc->this_device = device_create(misc_class, misc->parent, dev,
-					  misc, "%s", misc->name);
+	misc->this_device = device_create(misc_class, misc->parent, dev, NULL,
+					  "%s", misc->name);
 	if (IS_ERR(misc->this_device)) {
 		err = PTR_ERR(misc->this_device);
 		goto out;
@@ -263,15 +264,6 @@ int misc_deregister(struct miscdevice *misc)
 EXPORT_SYMBOL(misc_register);
 EXPORT_SYMBOL(misc_deregister);
 
-static char *misc_nodename(struct device *dev)
-{
-	struct miscdevice *c = dev_get_drvdata(dev);
-
-	if (c->devnode)
-		return kstrdup(c->devnode, GFP_KERNEL);
-	return NULL;
-}
-
 static int __init misc_init(void)
 {
 	int err;
@@ -287,7 +279,6 @@ static int __init misc_init(void)
 	err = -EIO;
 	if (register_chrdev(MISC_MAJOR,"misc",&misc_fops))
 		goto fail_printk;
-	misc_class->nodename = misc_nodename;
 	return 0;
 
 fail_printk:

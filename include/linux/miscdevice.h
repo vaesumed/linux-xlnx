@@ -37,7 +37,6 @@ struct device;
 struct miscdevice  {
 	int minor;
 	const char *name;
-	const char *devnode;
 	const struct file_operations *fops;
 	struct list_head list;
 	struct device *parent;
