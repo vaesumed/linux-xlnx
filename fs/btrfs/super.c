@@ -60,8 +60,12 @@ static void btrfs_put_super(struct super_block *sb)
 	struct btrfs_root *root = btrfs_sb(sb);
 	int ret;
 
+	lock_kernel();
+
 	ret = close_ctree(root);
 	sb->s_fs_info = NULL;
+
+	unlock_kernel();
 }
 
 enum {
