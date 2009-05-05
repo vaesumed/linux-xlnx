@@ -281,6 +281,8 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
+	lock_kernel();
+
 	fuse_send_destroy(fc);
 	spin_lock(&fc->lock);
 	fc->connected = 0;
@@ -297,6 +299,8 @@ static void fuse_put_super(struct super_block *sb)
 	mutex_unlock(&fuse_mutex);
 	bdi_destroy(&fc->bdi);
 	fuse_conn_put(fc);
+
+	unlock_kernel();
 }
 
 static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
