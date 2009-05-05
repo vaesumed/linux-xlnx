@@ -470,6 +470,9 @@ static void reiserfs_put_super(struct super_block *s)
 	struct reiserfs_transaction_handle th;
 	th.t_trans_id = 0;
 
+	if (s->s_dirt)
+		reiserfs_write_super(s);
+
 	/* change file system state to current state if it was mounted with read-write permissions */
 	if (!(s->s_flags & MS_RDONLY)) {
 		if (!journal_begin(&th, s, 10)) {
@@ -1842,7 +1845,8 @@ static int reiserfs_fill_super(struct super_block *s, void *data, int silent)
 			goto error;
 		}
 
-		if ((errval = reiserfs_xattr_init(s, s->s_flags))) {
+		if ((errval = reiserfs_lookup_privroot(s)) ||
+		    (errval = reiserfs_xattr_init(s, s->s_flags))) {
 			dput(s->s_root);
 			s->s_root = NULL;
 			goto error;
@@ -1855,7 +1859,8 @@ static int reiserfs_fill_super(struct super_block *s, void *data, int silent)
 			reiserfs_info(s, "using 3.5.x disk format\n");
 		}
 
-		if ((errval = reiserfs_xattr_init(s, s->s_flags))) {
+		if ((errval = reiserfs_lookup_privroot(s)) ||
+		    (errval = reiserfs_xattr_init(s, s->s_flags))) {
 			dput(s->s_root);
 			s->s_root = NULL;
 			goto error;
