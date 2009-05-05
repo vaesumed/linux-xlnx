@@ -1,7 +1,220 @@
 /*
+ * Stage 1 of the trace events.
+ *
+ * Override the macros in <trace/trace_events.h> to include the following:
+ *
+ * struct ftrace_raw_<call> {
+ *	struct trace_entry		ent;
+ *	<type>				<item>;
+ *	<type2>				<item2>[<len>];
+ *	[...]
+ * };
+ *
+ * The <type> <item> is created by the __field(type, item) macro or
+ * the __array(type2, item2, len) macro.
+ * We simply do "type item;", and that will create the fields
+ * in the structure.
+ */
+
+#include <linux/ftrace_event.h>
+
+#undef TRACE_FORMAT
+#define TRACE_FORMAT(call, proto, args, fmt)
+
+#undef __array
+#define __array(type, item, len)	type	item[len];
+
+#undef __field
+#define __field(type, item)		type	item;
+
+#undef TP_STRUCT__entry
+#define TP_STRUCT__entry(args...) args
+
+#undef TRACE_EVENT
+#define TRACE_EVENT(name, proto, args, tstruct, assign, print)	\
+	struct ftrace_raw_##name {				\
+		struct trace_entry	ent;			\
+		tstruct						\
+	};							\
+	static struct ftrace_event_call event_##name
+
+#include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
+
+/*
+ * Stage 2 of the trace events.
+ *
+ * Override the macros in <trace/trace_events.h> to include the following:
+ *
+ * enum print_line_t
+ * ftrace_raw_output_<call>(struct trace_iterator *iter, int flags)
+ * {
+ *	struct trace_seq *s = &iter->seq;
+ *	struct ftrace_raw_<call> *field; <-- defined in stage 1
+ *	struct trace_entry *entry;
+ *	int ret;
+ *
+ *	entry = iter->ent;
+ *
+ *	if (entry->type != event_<call>.id) {
+ *		WARN_ON_ONCE(1);
+ *		return TRACE_TYPE_UNHANDLED;
+ *	}
+ *
+ *	field = (typeof(field))entry;
+ *
+ *	ret = trace_seq_printf(s, <TP_printk> "\n");
+ *	if (!ret)
+ *		return TRACE_TYPE_PARTIAL_LINE;
+ *
+ *	return TRACE_TYPE_HANDLED;
+ * }
+ *
+ * This is the method used to print the raw event to the trace
+ * output format. Note, this is not needed if the data is read
+ * in binary.
+ */
+
+#undef __entry
+#define __entry field
+
+#undef TP_printk
+#define TP_printk(fmt, args...) fmt "\n", args
+
+#undef TRACE_EVENT
+#define TRACE_EVENT(call, proto, args, tstruct, assign, print)		\
+enum print_line_t							\
+ftrace_raw_output_##call(struct trace_iterator *iter, int flags)	\
+{									\
+	struct trace_seq *s = &iter->seq;				\
+	struct ftrace_raw_##call *field;				\
+	struct trace_entry *entry;					\
+	int ret;							\
+									\
+	entry = iter->ent;						\
+									\
+	if (entry->type != event_##call.id) {				\
+		WARN_ON_ONCE(1);					\
+		return TRACE_TYPE_UNHANDLED;				\
+	}								\
+									\
+	field = (typeof(field))entry;					\
+									\
+	ret = trace_seq_printf(s, #call ": " print);			\
+	if (!ret)							\
+		return TRACE_TYPE_PARTIAL_LINE;				\
+									\
+	return TRACE_TYPE_HANDLED;					\
+}
+	
+#include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
+
+/*
+ * Setup the showing format of trace point.
+ *
+ * int
+ * ftrace_format_##call(struct trace_seq *s)
+ * {
+ *	struct ftrace_raw_##call field;
+ *	int ret;
+ *
+ *	ret = trace_seq_printf(s, #type " " #item ";"
+ *			       " offset:%u; size:%u;\n",
+ *			       offsetof(struct ftrace_raw_##call, item),
+ *			       sizeof(field.type));
+ *
+ * }
+ */
+
+#undef TP_STRUCT__entry
+#define TP_STRUCT__entry(args...) args
+
+#undef __field
+#define __field(type, item)					\
+	ret = trace_seq_printf(s, "\tfield:" #type " " #item ";\t"	\
+			       "offset:%u;\tsize:%u;\n",		\
+			       (unsigned int)offsetof(typeof(field), item), \
+			       (unsigned int)sizeof(field.item));	\
+	if (!ret)							\
+		return 0;
+
+#undef __array
+#define __array(type, item, len)						\
+	ret = trace_seq_printf(s, "\tfield:" #type " " #item "[" #len "];\t"	\
+			       "offset:%u;\tsize:%u;\n",		\
+			       (unsigned int)offsetof(typeof(field), item), \
+			       (unsigned int)sizeof(field.item));	\
+	if (!ret)							\
+		return 0;
+
+#undef __entry
+#define __entry REC
+
+#undef TP_printk
+#define TP_printk(fmt, args...) "%s, %s\n", #fmt, __stringify(args)
+
+#undef TP_fast_assign
+#define TP_fast_assign(args...) args
+
+#undef TRACE_EVENT
+#define TRACE_EVENT(call, proto, args, tstruct, func, print)		\
+static int								\
+ftrace_format_##call(struct trace_seq *s)				\
+{									\
+	struct ftrace_raw_##call field __attribute__((unused));		\
+	int ret = 0;							\
+									\
+	tstruct;							\
+									\
+	trace_seq_printf(s, "\nprint fmt: " print);			\
+									\
+	return ret;							\
+}
+
+#include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
+
+#undef __field
+#define __field(type, item)						\
+	ret = trace_define_field(event_call, #type, #item,		\
+				 offsetof(typeof(field), item),		\
+				 sizeof(field.item));			\
+	if (ret)							\
+		return ret;
+
+#undef __array
+#define __array(type, item, len)					\
+	BUILD_BUG_ON(len > MAX_FILTER_STR_VAL);				\
+	ret = trace_define_field(event_call, #type "[" #len "]", #item,	\
+				 offsetof(typeof(field), item),		\
+				 sizeof(field.item));			\
+	if (ret)							\
+		return ret;
+
+#undef TRACE_EVENT
+#define TRACE_EVENT(call, proto, args, tstruct, func, print)		\
+int									\
+ftrace_define_fields_##call(void)					\
+{									\
+	struct ftrace_raw_##call field;					\
+	struct ftrace_event_call *event_call = &event_##call;		\
+	int ret;							\
+									\
+	__common_field(unsigned char, type);				\
+	__common_field(unsigned char, flags);				\
+	__common_field(unsigned char, preempt_count);			\
+	__common_field(int, pid);					\
+	__common_field(int, tgid);					\
+									\
+	tstruct;							\
+									\
+	return ret;							\
+}
+
+#include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
+
+/*
  * Stage 3 of the trace events.
  *
- * Override the macros in <trace/trace_event_types.h> to include the following:
+ * Override the macros in <trace/trace_events.h> to include the following:
  *
  * static void ftrace_event_<call>(proto)
  * {
@@ -222,11 +435,8 @@ static void ftrace_raw_event_##call(proto)				\
 									\
 	assign;								\
 									\
-	if (call->preds && !filter_match_preds(call, entry))		\
-		ring_buffer_event_discard(event);			\
-									\
-	trace_nowake_buffer_unlock_commit(event, irq_flags, pc);	\
-									\
+	if (!filter_current_check_discard(call, entry, event))		\
+		trace_nowake_buffer_unlock_commit(event, irq_flags, pc); \
 }									\
 									\
 static int ftrace_raw_reg_event_##call(void)				\
@@ -258,6 +468,7 @@ static int ftrace_raw_init_event_##call(void)				\
 		return -ENODEV;						\
 	event_##call.id = id;						\
 	INIT_LIST_HEAD(&event_##call.fields);				\
+	init_preds(&event_##call);					\
 	return 0;							\
 }									\
 									\
@@ -266,6 +477,7 @@ __attribute__((__aligned__(4)))						\
 __attribute__((section("_ftrace_events"))) event_##call = {		\
 	.name			= #call,				\
 	.system			= __stringify(TRACE_SYSTEM),		\
+	.event			= &ftrace_event_type_##call,		\
 	.raw_init		= ftrace_raw_init_event_##call,		\
 	.regfunc		= ftrace_raw_reg_event_##call,		\
 	.unregfunc		= ftrace_raw_unreg_event_##call,	\
@@ -274,7 +486,7 @@ __attribute__((section("_ftrace_events"))) event_##call = {		\
 	_TRACE_PROFILE_INIT(call)					\
 }
 
-#include <trace/trace_event_types.h>
+#include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
 
 #undef _TRACE_PROFILE
 #undef _TRACE_PROFILE_INIT
