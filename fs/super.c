@@ -320,8 +320,6 @@ void generic_shutdown_super(struct super_block *sb)
 			   "Self-destruct in 5 seconds.  Have a nice day...\n",
 			   sb->s_id);
 		}
-
-		unlock_kernel();
 		put_fs_excl();
 	}
 	spin_lock(&sb_lock);
