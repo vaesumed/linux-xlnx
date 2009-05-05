@@ -67,6 +67,7 @@ static struct ixgbe_stats ixgbe_gstrings_stats[] = {
 	{"rx_over_errors", IXGBE_STAT(net_stats.rx_over_errors)},
 	{"rx_crc_errors", IXGBE_STAT(net_stats.rx_crc_errors)},
 	{"rx_frame_errors", IXGBE_STAT(net_stats.rx_frame_errors)},
+	{"hw_rsc_count", IXGBE_STAT(rsc_count)},
 	{"rx_fifo_errors", IXGBE_STAT(net_stats.rx_fifo_errors)},
 	{"rx_missed_errors", IXGBE_STAT(net_stats.rx_missed_errors)},
 	{"tx_aborted_errors", IXGBE_STAT(net_stats.tx_aborted_errors)},
@@ -311,10 +312,17 @@ static u32 ixgbe_get_tx_csum(struct net_device *netdev)
 
 static int ixgbe_set_tx_csum(struct net_device *netdev, u32 data)
 {
-	if (data)
+	struct ixgbe_adapter *adapter = netdev_priv(netdev);
+
+	if (data) {
 		netdev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
-	else
+		if (adapter->hw.mac.type == ixgbe_mac_82599EB)
+			netdev->features |= NETIF_F_SCTP_CSUM;
+	} else {
 		netdev->features &= ~(NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
+		if (adapter->hw.mac.type == ixgbe_mac_82599EB)
+			netdev->features &= ~NETIF_F_SCTP_CSUM;
+	}
 
 	return 0;
 }
@@ -1120,6 +1128,27 @@ static int ixgbe_set_coalesce(struct net_device *netdev,
 	return 0;
 }
 
+static int ixgbe_set_flags(struct net_device *netdev, u32 data)
+{
+	struct ixgbe_adapter *adapter = netdev_priv(netdev);
+
+	ethtool_op_set_flags(netdev, data);
+
+	if (!(adapter->flags & IXGBE_FLAG_RSC_CAPABLE))
+		return 0;
+
+	/* if state changes we need to update adapter->flags and reset */
+	if ((!!(data & ETH_FLAG_LRO)) != 
+	    (!!(adapter->flags & IXGBE_FLAG_RSC_ENABLED))) {
+		adapter->flags ^= IXGBE_FLAG_RSC_ENABLED;
+		if (netif_running(netdev))
+			ixgbe_reinit_locked(adapter);
+		else
+			ixgbe_reset(adapter);
+	}
+	return 0;
+
+}
 
 static const struct ethtool_ops ixgbe_ethtool_ops = {
 	.get_settings           = ixgbe_get_settings,
@@ -1154,7 +1183,7 @@ static const struct ethtool_ops ixgbe_ethtool_ops = {
 	.get_coalesce           = ixgbe_get_coalesce,
 	.set_coalesce           = ixgbe_set_coalesce,
 	.get_flags              = ethtool_op_get_flags,
-	.set_flags              = ethtool_op_set_flags,
+	.set_flags              = ixgbe_set_flags,
 };
 
 void ixgbe_set_ethtool_ops(struct net_device *netdev)

@@ -2250,6 +2250,7 @@ static int at76_init_new_device(struct at76_priv *priv,
 
 	/* mac80211 initialisation */
 	priv->hw->wiphy->max_scan_ssids = 1;
+	priv->hw->wiphy->max_scan_ie_len = 0;
 	priv->hw->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION);
 	priv->hw->wiphy->bands[IEEE80211_BAND_2GHZ] = &at76_supported_band;
 	priv->hw->flags = IEEE80211_HW_RX_INCLUDES_FCS |
@@ -2311,8 +2312,7 @@ static void at76_delete_device(struct at76_priv *priv)
 
 	del_timer_sync(&ledtrig_tx_timer);
 
-	if (priv->rx_skb)
-		kfree_skb(priv->rx_skb);
+	kfree_skb(priv->rx_skb);
 
 	usb_put_dev(priv->udev);
 
