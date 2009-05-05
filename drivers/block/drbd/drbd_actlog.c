@@ -29,14 +29,14 @@
 #include "drbd_tracing.h"
 #include "drbd_wrappers.h"
 
-/* I do not believe that all storage medias can guarantee atomic
- * 512 byte write operations. When the journal is read, only
- * transactions with correct xor_sums are considered.
- * sizeof() = 512 byte */
-struct __attribute__((packed)) al_transaction {
+/* We maintain a trivial check sum in our on disk activity log.
+ * With that we can ensure correct operation even when the storage
+ * device might do a partial (last) sector write while loosing power.
+ */
+struct __packed al_transaction {
 	u32       magic;
 	u32       tr_number;
-	struct __attribute__((packed)) {
+	struct __packed {
 		u32 pos;
 		u32 extent; } updates[1 + AL_EXTENTS_PT];
 	u32       xor_sum;
@@ -133,7 +133,7 @@ STATIC int _drbd_md_sync_page_io(struct drbd_conf *mdev,
 int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 			 sector_t sector, int rw)
 {
-	int hardsect, mask, ok;
+	int hardsect_size, mask, ok;
 	int offset = 0;
 	struct page *iop = mdev->md_io_page;
 
@@ -141,34 +141,36 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 
 	BUG_ON(!bdev->md_bdev);
 
-	hardsect = drbd_get_hardsect(bdev->md_bdev);
-	if (hardsect == 0)
-		hardsect = MD_HARDSECT;
+	hardsect_size = drbd_get_hardsect_size(bdev->md_bdev);
+	if (hardsect_size == 0)
+		hardsect_size = MD_SECTOR_SIZE;
 
-	/* in case hardsect != 512 [ s390 only? ] */
-	if (hardsect != MD_HARDSECT) {
-		mask = (hardsect / MD_HARDSECT) - 1;
+	/* in case hardsect_size != 512 [ s390 only? ] */
+	if (hardsect_size != MD_SECTOR_SIZE) {
+		mask = (hardsect_size / MD_SECTOR_SIZE) - 1;
 		D_ASSERT(mask == 1 || mask == 3 || mask == 7);
-		D_ASSERT(hardsect == (mask+1) * MD_HARDSECT);
+		D_ASSERT(hardsect_size == (mask+1) * MD_SECTOR_SIZE);
 		offset = sector & mask;
 		sector = sector & ~mask;
 		iop = mdev->md_io_tmpp;
 
-		if (rw == WRITE) {
+		if (rw & WRITE) {
+			/* these are GFP_KERNEL pages, preallocated
+			 * on device initialization */
 			void *p = page_address(mdev->md_io_page);
 			void *hp = page_address(mdev->md_io_tmpp);
 
-			ok = _drbd_md_sync_page_io(mdev, bdev, iop,
-						   sector, READ, hardsect);
+			ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector,
+					READ, hardsect_size);
 
 			if (unlikely(!ok)) {
 				dev_err(DEV, "drbd_md_sync_page_io(,%llus,"
-				    "READ [hardsect!=512]) failed!\n",
+				    "READ [hardsect_size!=512]) failed!\n",
 				    (unsigned long long)sector);
 				return 0;
 			}
 
-			memcpy(hp + offset*MD_HARDSECT , p, MD_HARDSECT);
+			memcpy(hp + offset*MD_SECTOR_SIZE, p, MD_SECTOR_SIZE);
 		}
 	}
 
@@ -176,27 +178,26 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 	    sector > drbd_md_last_sector(bdev))
 		dev_alert(DEV, "%s [%d]:%s(,%llus,%s) out of range md access!\n",
 		     current->comm, current->pid, __func__,
-		     (unsigned long long)sector, rw ? "WRITE" : "READ");
+		     (unsigned long long)sector, (rw & WRITE) ? "WRITE" : "READ");
 
-	ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector, rw, hardsect);
+	ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector, rw, hardsect_size);
 	if (unlikely(!ok)) {
 		dev_err(DEV, "drbd_md_sync_page_io(,%llus,%s) failed!\n",
-		    (unsigned long long)sector, rw ? "WRITE" : "READ");
+		    (unsigned long long)sector, (rw & WRITE) ? "WRITE" : "READ");
 		return 0;
 	}
 
-	if (hardsect != MD_HARDSECT && rw == READ) {
+	if (hardsect_size != MD_SECTOR_SIZE && !(rw & WRITE)) {
 		void *p = page_address(mdev->md_io_page);
 		void *hp = page_address(mdev->md_io_tmpp);
 
-		memcpy(p, hp + offset*MD_HARDSECT, MD_HARDSECT);
+		memcpy(p, hp + offset*MD_SECTOR_SIZE, MD_SECTOR_SIZE);
 	}
 
 	return ok;
 }
 
-static inline
-struct lc_element *_al_get(struct drbd_conf *mdev, unsigned int enr)
+static struct lc_element *_al_get(struct drbd_conf *mdev, unsigned int enr)
 {
 	struct lc_element *al_ext;
 	struct bm_extent  *bm_ext;
@@ -229,7 +230,7 @@ struct lc_element *_al_get(struct drbd_conf *mdev, unsigned int enr)
 
 void drbd_al_begin_io(struct drbd_conf *mdev, sector_t sector)
 {
-	unsigned int enr = (sector >> (AL_EXTENT_SIZE_B-9));
+	unsigned int enr = (sector >> (AL_EXTENT_SHIFT-9));
 	struct lc_element *al_ext;
 	struct update_al_work al_work;
 
@@ -241,10 +242,11 @@ void drbd_al_begin_io(struct drbd_conf *mdev, sector_t sector)
 
 	if (al_ext->lc_number != enr) {
 		/* drbd_al_write_transaction(mdev,al_ext,enr);
-		   generic_make_request() are serialized on the
-		   current->bio_tail list now. Therefore we have
-		   to deligate writing something to AL to the
-		   worker thread. */
+		 * recurses into generic_make_request(), which
+		 * disalows recursion, bios being serialized on the
+		 * current->bio_tail list now.
+		 * we have to delegate updates to the activity log
+		 * to the worker thread. */
 		init_completion(&al_work.event);
 		al_work.al_ext = al_ext;
 		al_work.enr = enr;
@@ -264,7 +266,7 @@ void drbd_al_begin_io(struct drbd_conf *mdev, sector_t sector)
 
 void drbd_al_complete_io(struct drbd_conf *mdev, sector_t sector)
 {
-	unsigned int enr = (sector >> (AL_EXTENT_SIZE_B-9));
+	unsigned int enr = (sector >> (AL_EXTENT_SHIFT-9));
 	struct lc_element *extent;
 	unsigned long flags;
 
@@ -293,15 +295,14 @@ w_al_write_transaction(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 	struct lc_element *updated = aw->al_ext;
 	const unsigned int new_enr = aw->enr;
 	const unsigned int evicted = aw->old_enr;
-
 	struct al_transaction *buffer;
 	sector_t sector;
 	int i, n, mx;
 	unsigned int extent_nr;
 	u32 xor_sum = 0;
 
-	if (!inc_local(mdev)) {
-		dev_err(DEV, "inc_local() failed in w_al_write_transaction\n");
+	if (!get_ldev(mdev)) {
+		dev_err(DEV, "get_ldev() failed in w_al_write_transaction\n");
 		complete(&((struct update_al_work *)w)->event);
 		return 1;
 	}
@@ -363,13 +364,13 @@ w_al_write_transaction(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 	mutex_unlock(&mdev->md_io_mutex);
 
 	complete(&((struct update_al_work *)w)->event);
-	dec_local(mdev);
+	put_ldev(mdev);
 
 	return 1;
 }
 
 /**
- * drbd_al_read_tr: Reads a single transaction record form the
+ * drbd_al_read_tr: Reads a single transaction record from the
  * on disk activity log.
  * Returns -1 on IO error, 0 on checksum error and 1 if it is a valid
  * record.
@@ -543,10 +544,10 @@ STATIC void atodb_endio(struct bio *bio, int error)
 	put_page(page);
 	bio_put(bio);
 	mdev->bm_writ_cnt++;
-	dec_local(mdev);
+	put_ldev(mdev);
 }
 
-#define S2W(s)	((s)<<(BM_EXT_SIZE_B-BM_BLOCK_SIZE_B-LN2_BPL))
+#define S2W(s)	((s)<<(BM_EXT_SHIFT-BM_BLOCK_SHIFT-LN2_BPL))
 /* activity log to on disk bitmap -- prepare bio unless that sector
  * is already covered by previously prepared bios */
 STATIC int atodb_prepare_unless_covered(struct drbd_conf *mdev,
@@ -606,12 +607,12 @@ STATIC int atodb_prepare_unless_covered(struct drbd_conf *mdev,
 	bio->bi_bdev = mdev->bc->md_bdev;
 	bio->bi_sector = on_disk_sector;
 
-	if (bio_add_page(bio, page, MD_HARDSECT, page_offset) != MD_HARDSECT)
+	if (bio_add_page(bio, page, MD_SECTOR_SIZE, page_offset) != MD_SECTOR_SIZE)
 		goto out_put_page;
 
 	atomic_inc(&wc->count);
 	/* we already know that we may do this...
-	 * inc_local_if_state(mdev,D_ATTACHING);
+	 * get_ldev_if_state(mdev,D_ATTACHING);
 	 * just get the extra reference, so that the local_cnt reflects
 	 * the number of pending IO requests DRBD at its backing device.
 	 */
@@ -631,7 +632,8 @@ out_bio_put:
 
 /**
  * drbd_al_to_on_disk_bm:
- * Writes the areas of the bitmap which are covered by the AL.
+ * Writes the areas of the bitmap which are covered by the
+ * currently active extents of the activity log.
  * called when we detach (unconfigure) local storage,
  * or when we go from R_PRIMARY to R_SECONDARY state.
  */
@@ -642,7 +644,7 @@ void drbd_al_to_on_disk_bm(struct drbd_conf *mdev)
 	struct bio **bios;
 	struct drbd_atodb_wait wc;
 
-	ERR_IF (!inc_local_if_state(mdev, D_ATTACHING))
+	ERR_IF (!get_ldev_if_state(mdev, D_ATTACHING))
 		return; /* sorry, I don't have any act_log etc... */
 
 	wait_event(mdev->al_wait, lc_try_lock(mdev->act_log));
@@ -699,7 +701,7 @@ void drbd_al_to_on_disk_bm(struct drbd_conf *mdev)
 	if (atomic_read(&wc.count))
 		wait_for_completion(&wc.io_done);
 
-	dec_local(mdev);
+	put_ldev(mdev);
 
 	if (wc.error)
 		drbd_io_error(mdev, TRUE);
@@ -727,12 +729,12 @@ void drbd_al_to_on_disk_bm(struct drbd_conf *mdev)
 
 	lc_unlock(mdev->act_log);
 	wake_up(&mdev->al_wait);
-	dec_local(mdev);
+	put_ldev(mdev);
 }
 
 /**
- * drbd_al_apply_to_bm: Sets the bits in the bitmap that are described
- * by the active extents of the AL.
+ * drbd_al_apply_to_bm: Sets the bits in the in-memory bitmap
+ * which are described by the active extents of the activity log.
  */
 void drbd_al_apply_to_bm(struct drbd_conf *mdev)
 {
@@ -757,7 +759,7 @@ void drbd_al_apply_to_bm(struct drbd_conf *mdev)
 	     ppsize(ppb, Bit2KB(add)));
 }
 
-static inline int _try_lc_del(struct drbd_conf *mdev, struct lc_element *al_ext)
+static int _try_lc_del(struct drbd_conf *mdev, struct lc_element *al_ext)
 {
 	int rv;
 
@@ -771,8 +773,8 @@ static inline int _try_lc_del(struct drbd_conf *mdev, struct lc_element *al_ext)
 }
 
 /**
- * drbd_al_shrink: Removes all active extents form the AL. (but does not
- * write any transactions)
+ * drbd_al_shrink: Removes all active extents form the activity log.
+ * (but does not write any transactions)
  * You need to lock mdev->act_log with lc_try_lock() / lc_unlock()
  */
 void drbd_al_shrink(struct drbd_conf *mdev)
@@ -796,14 +798,14 @@ STATIC int w_update_odbm(struct drbd_conf *mdev, struct drbd_work *w, int unused
 {
 	struct update_odbm_work *udw = (struct update_odbm_work *)w;
 
-	if (!inc_local(mdev)) {
+	if (!get_ldev(mdev)) {
 		if (__ratelimit(&drbd_ratelimit_state))
 			dev_warn(DEV, "Can not update on disk bitmap, local IO disabled.\n");
 		return 1;
 	}
 
 	drbd_bm_write_sect(mdev, udw->enr);
-	dec_local(mdev);
+	put_ldev(mdev);
 
 	kfree(udw);
 
@@ -825,7 +827,7 @@ STATIC int w_update_odbm(struct drbd_conf *mdev, struct drbd_work *w, int unused
 
 /* ATTENTION. The AL's extents are 4MB each, while the extents in the
  * resync LRU-cache are 16MB each.
- * The caller of this function has to hold an inc_local() reference.
+ * The caller of this function has to hold an get_ldev() reference.
  *
  * TODO will be obsoleted once we have a caching lru of the on disk bitmap
  */
@@ -977,9 +979,9 @@ void __drbd_set_in_sync(struct drbd_conf *mdev, sector_t sector, int size,
 				mdev->rs_mark_left = drbd_bm_total_weight(mdev);
 			}
 		}
-		if (inc_local(mdev)) {
+		if (get_ldev(mdev)) {
 			drbd_try_clear_on_disk_bm(mdev, sector, count, TRUE);
-			dec_local(mdev);
+			put_ldev(mdev);
 		}
 		/* just wake_up unconditional now, various lc_chaged(),
 		 * lc_put() in drbd_try_clear_on_disk_bm(). */
@@ -1012,7 +1014,7 @@ void __drbd_set_out_of_sync(struct drbd_conf *mdev, sector_t sector, int size,
 		return;
 	}
 
-	if (!inc_local(mdev))
+	if (!get_ldev(mdev))
 		return; /* no disk, no metadata, no bitmap to set bits in */
 
 	nr_sectors = drbd_get_capacity(mdev->this_bdev);
@@ -1046,10 +1048,10 @@ void __drbd_set_out_of_sync(struct drbd_conf *mdev, sector_t sector, int size,
 	spin_unlock_irqrestore(&mdev->al_lock, flags);
 
 out:
-	dec_local(mdev);
+	put_ldev(mdev);
 }
 
-static inline
+static
 struct bm_extent *_bme_get(struct drbd_conf *mdev, unsigned int enr)
 {
 	struct bm_extent  *bm_ext;
@@ -1088,7 +1090,7 @@ struct bm_extent *_bme_get(struct drbd_conf *mdev, unsigned int enr)
 	return bm_ext;
 }
 
-static inline int _is_in_al(struct drbd_conf *mdev, unsigned int enr)
+static int _is_in_al(struct drbd_conf *mdev, unsigned int enr)
 {
 	struct lc_element *al_ext;
 	int rv = 0;
@@ -1330,9 +1332,9 @@ void drbd_rs_cancel_all(struct drbd_conf *mdev)
 
 	spin_lock_irq(&mdev->al_lock);
 
-	if (inc_local_if_state(mdev, D_FAILED)) { /* Makes sure ->resync is there. */
+	if (get_ldev_if_state(mdev, D_FAILED)) { /* Makes sure ->resync is there. */
 		lc_reset(mdev->resync);
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 	mdev->resync_locked = 0;
 	mdev->resync_wenr = LC_FREE;
@@ -1355,7 +1357,7 @@ int drbd_rs_del_all(struct drbd_conf *mdev)
 
 	spin_lock_irq(&mdev->al_lock);
 
-	if (inc_local_if_state(mdev, D_FAILED)) {
+	if (get_ldev_if_state(mdev, D_FAILED)) {
 		/* ok, ->resync is there. */
 		for (i = 0; i < mdev->resync->nr_elements; i++) {
 			bm_ext = (struct bm_extent *) lc_entry(mdev->resync, i);
@@ -1374,7 +1376,7 @@ int drbd_rs_del_all(struct drbd_conf *mdev)
 			if (bm_ext->lce.refcnt != 0) {
 				dev_info(DEV, "Retrying drbd_rs_del_all() later. "
 				     "refcnt=%d\n", bm_ext->lce.refcnt);
-				dec_local(mdev);
+				put_ldev(mdev);
 				spin_unlock_irq(&mdev->al_lock);
 				return -EAGAIN;
 			}
@@ -1383,7 +1385,7 @@ int drbd_rs_del_all(struct drbd_conf *mdev)
 			lc_del(mdev->resync, &bm_ext->lce);
 		}
 		D_ASSERT(mdev->resync->used == 0);
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 	spin_unlock_irq(&mdev->al_lock);
 
@@ -1443,9 +1445,9 @@ void drbd_rs_failed_io(struct drbd_conf *mdev, sector_t sector, int size)
 	if (count) {
 		mdev->rs_failed += count;
 
-		if (inc_local(mdev)) {
+		if (get_ldev(mdev)) {
 			drbd_try_clear_on_disk_bm(mdev, sector, count, FALSE);
-			dec_local(mdev);
+			put_ldev(mdev);
 		}
 
 		/* just wake_up unconditional now, various lc_chaged(),

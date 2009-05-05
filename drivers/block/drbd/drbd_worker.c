@@ -82,11 +82,7 @@ void drbd_md_io_complete(struct bio *bio, int error)
 {
 	struct drbd_md_io *md_io;
 
-	/* error parameter ignored:
-	 * drbd_md_sync_page_io explicitly tests bio_uptodate(bio); */
-
 	md_io = (struct drbd_md_io *)bio->bi_private;
-
 	md_io->error = error;
 
 	trace_drbd_bio(md_io->mdev, "Md", bio, 1, NULL);
@@ -128,7 +124,7 @@ void drbd_endio_read_sec(struct bio *bio, int error) __releases(local)
 
 	drbd_chk_io_error(mdev, error, FALSE);
 	drbd_queue_work(&mdev->data.work, &e->w);
-	dec_local(mdev);
+	put_ldev(mdev);
 
 	trace_drbd_ee(mdev, e, "read completed");
 }
@@ -214,7 +210,7 @@ void drbd_endio_write_sec(struct bio *bio, int error) __releases(local)
 		drbd_al_complete_io(mdev, e_sector);
 
 	wake_asender(mdev);
-	dec_local(mdev);
+	put_ldev(mdev);
 
 }
 
@@ -367,7 +363,7 @@ STATIC int read_for_csum(struct drbd_conf *mdev, sector_t sector, int size)
 {
 	struct drbd_epoch_entry *e;
 
-	if (!inc_local(mdev))
+	if (!get_ldev(mdev))
 		return 0;
 
 	if (FAULT_ACTIVE(mdev, DRBD_FAULT_AL_EE))
@@ -375,7 +371,7 @@ STATIC int read_for_csum(struct drbd_conf *mdev, sector_t sector, int size)
 
 	e = drbd_alloc_ee(mdev, DRBD_MAGIC+0xbeef, sector, size, GFP_TRY);
 	if (!e) {
-		dec_local(mdev);
+		put_ldev(mdev);
 		return 2;
 	}
 
@@ -441,16 +437,16 @@ int w_make_resync_request(struct drbd_conf *mdev,
 		dev_err(DEV, "%s in w_make_resync_request\n",
 			conns_to_name(mdev->state.conn));
 
-	if (!inc_local(mdev)) {
+	if (!get_ldev(mdev)) {
 		/* Since we only need to access mdev->rsync a
-		   inc_local_if_state(mdev,D_FAILED) would be sufficient, but
+		   get_ldev_if_state(mdev,D_FAILED) would be sufficient, but
 		   to continue resync with a broken disk makes no sense at
 		   all */
 		dev_err(DEV, "Disk broke down during resync!\n");
 		mdev->resync_work.cb = w_resync_inactive;
 		return 1;
 	}
-	/* All goto requeses have to happend after this block: inc_local() */
+	/* All goto requeses have to happend after this block: get_ldev() */
 
 	number = SLEEP_TIME*mdev->sync_conf.rate / ((BM_BLOCK_SIZE/1024)*HZ);
 
@@ -466,7 +462,7 @@ next_sector:
 		if (bit == -1UL) {
 			mdev->bm_resync_fo = drbd_bm_bits(mdev);
 			mdev->resync_work.cb = w_resync_inactive;
-			dec_local(mdev);
+			put_ldev(mdev);
 			return 1;
 		}
 
@@ -533,7 +529,7 @@ next_sector:
 		if (mdev->agreed_pro_version >= 89 && mdev->csums_tfm) {
 			switch (read_for_csum(mdev, sector, size)) {
 			case 0: /* Disk failure*/
-				dec_local(mdev);
+				put_ldev(mdev);
 				return 0;
 			case 2: /* Allocation failed */
 				drbd_rs_complete_io(mdev, sector);
@@ -547,7 +543,7 @@ next_sector:
 					       sector, size, ID_SYNCER)) {
 				dev_err(DEV, "drbd_send_drequest() failed, aborting...\n");
 				dec_rs_pending(mdev);
-				dec_local(mdev);
+				put_ldev(mdev);
 				return 0;
 			}
 		}
@@ -561,13 +557,13 @@ next_sector:
 		 * until then resync "work" is "inactive" ...
 		 */
 		mdev->resync_work.cb = w_resync_inactive;
-		dec_local(mdev);
+		put_ldev(mdev);
 		return 1;
 	}
 
  requeue:
 	mod_timer(&mdev->resync_timer, jiffies + SLEEP_TIME);
-	dec_local(mdev);
+	put_ldev(mdev);
 	return 1;
 }
 
@@ -677,7 +673,7 @@ int drbd_resync_finished(struct drbd_conf *mdev)
 	dbdt = Bit2KB(db/dt);
 	mdev->rs_paused /= HZ;
 
-	if (!inc_local(mdev))
+	if (!get_ldev(mdev))
 		goto out;
 
 	spin_lock_irq(&mdev->req_lock);
@@ -765,7 +761,7 @@ int drbd_resync_finished(struct drbd_conf *mdev)
 	_drbd_set_state(mdev, ns, CS_VERBOSE, NULL);
 out_unlock:
 	spin_unlock_irq(&mdev->req_lock);
-	dec_local(mdev);
+	put_ldev(mdev);
 out:
 	mdev->rs_total  = 0;
 	mdev->rs_failed = 0;
@@ -840,9 +836,9 @@ int w_e_end_rsdata_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 		return 1;
 	}
 
-	if (inc_local_if_state(mdev, D_FAILED)) {
+	if (get_ldev_if_state(mdev, D_FAILED)) {
 		drbd_rs_complete_io(mdev, e->sector);
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 
 	if (likely(drbd_bio_uptodate(e->private_bio))) {
@@ -1265,7 +1261,7 @@ void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side)
 
 	drbd_bm_recount_bits(mdev);
 
-	/* In case a previous resync run was aborted by an IO error... */
+	/* In case a previous resync run was aborted by an IO error/detach on the peer. */
 	drbd_rs_cancel_all(mdev);
 
 	if (side == C_SYNC_TARGET) {
@@ -1284,7 +1280,7 @@ void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side)
 
 	drbd_state_lock(mdev);
 
-	if (!inc_local_if_state(mdev, D_NEGOTIATING)) {
+	if (!get_ldev_if_state(mdev, D_NEGOTIATING)) {
 		drbd_state_unlock(mdev);
 		return;
 	}
@@ -1331,12 +1327,12 @@ void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side)
 	}
 	write_unlock_irq(&global_state_lock);
 	drbd_state_unlock(mdev);
-	dec_local(mdev);
+	put_ldev(mdev);
 
 	if (r == SS_SUCCESS) {
 		dev_info(DEV, "Began resync as %s (will sync %lu KB [%lu bits set]).\n",
 		     conns_to_name(ns.conn),
-		     (unsigned long) mdev->rs_total << (BM_BLOCK_SIZE_B-10),
+		     (unsigned long) mdev->rs_total << (BM_BLOCK_SHIFT-10),
 		     (unsigned long) mdev->rs_total);
 
 		if (mdev->rs_total == 0) {

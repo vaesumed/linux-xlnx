@@ -38,7 +38,7 @@
 #include <linux/mutex.h>
 #include <linux/major.h>
 #include <linux/blkdev.h>
-#include <linux/bio.h>
+#include <linux/genhd.h>
 #include <net/tcp.h>
 #include "lru_cache.h"
 
@@ -131,7 +131,7 @@ struct drbd_conf;
 
 #define ERR_IF(exp) if (({				\
 	int _b = (exp) != 0;				\
-	if (_b) dev_err(DEV, "%s: (%s) in %s:%d\n",		\
+	if (_b) dev_err(DEV, "%s: (%s) in %s:%d\n",	\
 		__func__, #exp, __FILE__, __LINE__);	\
 	 _b;						\
 	}))
@@ -350,7 +350,7 @@ struct p_header {
 	u16	  command;
 	u16	  length;	/* bytes of data after this header */
 	u8	  payload[0];
-} __attribute((packed));
+} __packed;
 /* 8 bytes. packet FIXED for the next century! */
 
 /*
@@ -380,7 +380,7 @@ struct p_data {
 	u64	    block_id;  /* to identify the request in protocol B&C */
 	u32	    seq_num;
 	u32	    dp_flags;
-} __attribute((packed));
+} __packed;
 
 /*
  * commands which share a struct:
@@ -396,7 +396,7 @@ struct p_block_ack {
 	u64	    block_id;
 	u32	    blksize;
 	u32	    seq_num;
-} __attribute((packed));
+} __packed;
 
 
 struct p_block_req {
@@ -405,7 +405,7 @@ struct p_block_req {
 	u64 block_id;
 	u32 blksize;
 	u32 pad;	/* to multiple of 8 Byte */
-} __attribute((packed));
+} __packed;
 
 /*
  * commands with their own struct for additional fields:
@@ -428,20 +428,20 @@ struct p_handshake {
 
 	u32 _pad;
 	u64 reserverd[7];
-} __attribute((packed));
+} __packed;
 /* 80 bytes, FIXED for the next century */
 
 struct p_barrier {
 	struct p_header head;
 	u32 barrier;	/* barrier number _handle_ only */
 	u32 pad;	/* to multiple of 8 Byte */
-} __attribute((packed));
+} __packed;
 
 struct p_barrier_ack {
 	struct p_header head;
 	u32 barrier;
 	u32 set_size;
-} __attribute((packed));
+} __packed;
 
 struct p_rs_param {
 	struct p_header head;
@@ -449,7 +449,7 @@ struct p_rs_param {
 
 	      /* Since protocol version 88 and higher. */
 	char verify_alg[0];
-} __attribute((packed));
+} __packed;
 
 struct p_rs_param_89 {
 	struct p_header head;
@@ -457,7 +457,7 @@ struct p_rs_param_89 {
         /* protocol version 89: */
 	char verify_alg[SHARED_SECRET_MAX];
 	char csums_alg[SHARED_SECRET_MAX];
-} __attribute((packed));
+} __packed;
 
 struct p_protocol {
 	struct p_header head;
@@ -471,17 +471,17 @@ struct p_protocol {
               /* Since protocol version 87 and higher. */
 	char integrity_alg[0];
 
-} __attribute((packed));
+} __packed;
 
 struct p_uuids {
 	struct p_header head;
 	u64 uuid[UI_EXTENDED_SIZE];
-} __attribute((packed));
+} __packed;
 
 struct p_rs_uuid {
 	struct p_header head;
 	u64	    uuid;
-} __attribute((packed));
+} __packed;
 
 struct p_sizes {
 	struct p_header head;
@@ -490,23 +490,23 @@ struct p_sizes {
 	u64	    c_size;  /* current exported size */
 	u32	    max_segment_size;  /* Maximal size of a BIO */
 	u32	    queue_order_type;
-} __attribute((packed));
+} __packed;
 
 struct p_state {
 	struct p_header head;
 	u32	    state;
-} __attribute((packed));
+} __packed;
 
 struct p_req_state {
 	struct p_header head;
 	u32	    mask;
 	u32	    val;
-} __attribute((packed));
+} __packed;
 
 struct p_req_state_reply {
 	struct p_header head;
 	u32	    retcode;
-} __attribute((packed));
+} __packed;
 
 struct p_drbd06_param {
 	u64	  size;
@@ -516,14 +516,14 @@ struct p_drbd06_param {
 	u32	  version;
 	u32	  gen_cnt[5];
 	u32	  bit_map_gen[5];
-} __attribute((packed));
+} __packed;
 
 struct p_discard {
 	struct p_header head;
 	u64	    block_id;
 	u32	    seq_num;
 	u32	    pad;
-} __attribute((packed));
+} __packed;
 
 /* Valid values for the encoding field.
  * Bump proto version when changing this. */
@@ -544,7 +544,7 @@ struct p_compressed_bm {
 	u8 encoding;
 
 	u8 code[0];
-} __attribute((packed));
+} __packed;
 
 static inline enum drbd_bitmap_code
 DCBP_get_code(struct p_compressed_bm *p)
@@ -612,7 +612,7 @@ union p_polymorph {
         struct p_req_state       req_state;
         struct p_req_state_reply req_state_reply;
         struct p_block_req       block_req;
-} __attribute((packed));
+} __packed;
 
 /**********************************************************************/
 enum drbd_thread_state {
@@ -889,7 +889,7 @@ struct drbd_conf {
 	unsigned long flags;
 
 	/* configured by drbdsetup */
-	struct net_conf *net_conf; /* protected by inc_net() and dec_net() */
+	struct net_conf *net_conf; /* protected by get_net_conf() and put_net_conf() */
 	struct syncer_conf sync_conf;
 	struct drbd_backing_dev *bc __protected_by(local);
 
@@ -994,7 +994,7 @@ struct drbd_conf {
 	atomic_t pp_in_use;
 	wait_queue_head_t ee_wait;
 	struct page *md_io_page;	/* one page buffer for md_io */
-	struct page *md_io_tmpp;	/* for hardsect != 512 [s390 only?] */
+	struct page *md_io_tmpp;	/* for hardsect_size != 512 [s390 only?] */
 	struct mutex md_io_mutex;	/* protects the md_io_buffer */
 	spinlock_t al_lock;
 	wait_queue_head_t al_wait;
@@ -1187,13 +1187,13 @@ extern int drbd_bitmap_io(struct drbd_conf *mdev, int (*io_fn)(struct drbd_conf 
 #define MD_BM_OFFSET (MD_AL_OFFSET + MD_AL_MAX_SIZE)
 
 /* Since the smalles IO unit is usually 512 byte */
-#define MD_HARDSECT_B	 9
-#define MD_HARDSECT	 (1<<MD_HARDSECT_B)
+#define MD_SECTOR_SHIFT	 9
+#define MD_SECTOR_SIZE	 (1<<MD_SECTOR_SHIFT)
 
 /* activity log */
-#define AL_EXTENTS_PT ((MD_HARDSECT-12)/8-1) /* 61 ; Extents per 512B sector */
-#define AL_EXTENT_SIZE_B 22		 /* One extent represents 4M Storage */
-#define AL_EXTENT_SIZE (1<<AL_EXTENT_SIZE_B)
+#define AL_EXTENTS_PT ((MD_SECTOR_SIZE-12)/8-1) /* 61 ; Extents per 512B sector */
+#define AL_EXTENT_SHIFT 22		 /* One extent represents 4M Storage */
+#define AL_EXTENT_SIZE (1<<AL_EXTENT_SHIFT)
 
 #if BITS_PER_LONG == 32
 #define LN2_BPL 5
@@ -1227,38 +1227,38 @@ struct bm_extent {
  * Bit 1 ==> local node thinks this block needs to be synced.
  */
 
-#define BM_BLOCK_SIZE_B  12			 /* 4k per bit */
-#define BM_BLOCK_SIZE	 (1<<BM_BLOCK_SIZE_B)
+#define BM_BLOCK_SHIFT  12			 /* 4k per bit */
+#define BM_BLOCK_SIZE	 (1<<BM_BLOCK_SHIFT)
 /* (9+3) : 512 bytes @ 8 bits; representing 16M storage
  * per sector of on disk bitmap */
-#define BM_EXT_SIZE_B	 (BM_BLOCK_SIZE_B + MD_HARDSECT_B + 3)  /* = 24 */
-#define BM_EXT_SIZE	 (1<<BM_EXT_SIZE_B)
+#define BM_EXT_SHIFT	 (BM_BLOCK_SHIFT + MD_SECTOR_SHIFT + 3)  /* = 24 */
+#define BM_EXT_SIZE	 (1<<BM_EXT_SHIFT)
 
-#if (BM_EXT_SIZE_B != 24) || (BM_BLOCK_SIZE_B != 12)
+#if (BM_EXT_SHIFT != 24) || (BM_BLOCK_SHIFT != 12)
 #error "HAVE YOU FIXED drbdmeta AS WELL??"
 #endif
 
 /* thus many _storage_ sectors are described by one bit */
-#define BM_SECT_TO_BIT(x)   ((x)>>(BM_BLOCK_SIZE_B-9))
-#define BM_BIT_TO_SECT(x)   ((sector_t)(x)<<(BM_BLOCK_SIZE_B-9))
+#define BM_SECT_TO_BIT(x)   ((x)>>(BM_BLOCK_SHIFT-9))
+#define BM_BIT_TO_SECT(x)   ((sector_t)(x)<<(BM_BLOCK_SHIFT-9))
 #define BM_SECT_PER_BIT     BM_BIT_TO_SECT(1)
 
 /* bit to represented kilo byte conversion */
-#define Bit2KB(bits) ((bits)<<(BM_BLOCK_SIZE_B-10))
+#define Bit2KB(bits) ((bits)<<(BM_BLOCK_SHIFT-10))
 
 /* in which _bitmap_ extent (resp. sector) the bit for a certain
  * _storage_ sector is located in */
-#define BM_SECT_TO_EXT(x)   ((x)>>(BM_EXT_SIZE_B-9))
+#define BM_SECT_TO_EXT(x)   ((x)>>(BM_EXT_SHIFT-9))
 
 /* how much _storage_ sectors we have per bitmap sector */
-#define BM_EXT_TO_SECT(x)   ((sector_t)(x) << (BM_EXT_SIZE_B-9))
+#define BM_EXT_TO_SECT(x)   ((sector_t)(x) << (BM_EXT_SHIFT-9))
 #define BM_SECT_PER_EXT     BM_EXT_TO_SECT(1)
 
 /* in one sector of the bitmap, we have this many activity_log extents. */
-#define AL_EXT_PER_BM_SECT  (1 << (BM_EXT_SIZE_B - AL_EXTENT_SIZE_B))
-#define BM_WORDS_PER_AL_EXT (1 << (AL_EXTENT_SIZE_B-BM_BLOCK_SIZE_B-LN2_BPL))
+#define AL_EXT_PER_BM_SECT  (1 << (BM_EXT_SHIFT - AL_EXTENT_SHIFT))
+#define BM_WORDS_PER_AL_EXT (1 << (AL_EXTENT_SHIFT-BM_BLOCK_SHIFT-LN2_BPL))
 
-#define BM_BLOCKS_PER_BM_EXT_B (BM_EXT_SIZE_B - BM_BLOCK_SIZE_B)
+#define BM_BLOCKS_PER_BM_EXT_B (BM_EXT_SHIFT - BM_BLOCK_SHIFT)
 #define BM_BLOCKS_PER_BM_EXT_MASK  ((1<<BM_BLOCKS_PER_BM_EXT_B) - 1)
 
 /* the extent in "PER_EXTENT" below is an activity log extent
@@ -1277,7 +1277,7 @@ struct bm_extent {
 
 #define DRBD_MAX_SECTORS_32 (0xffffffffLU)
 #define DRBD_MAX_SECTORS_BM \
-	  ((MD_RESERVED_SECT - MD_BM_OFFSET) * (1LL<<(BM_EXT_SIZE_B-9)))
+	  ((MD_RESERVED_SECT - MD_BM_OFFSET) * (1LL<<(BM_EXT_SHIFT-9)))
 #if DRBD_MAX_SECTORS_BM < DRBD_MAX_SECTORS_32
 #define DRBD_MAX_SECTORS      DRBD_MAX_SECTORS_BM
 #define DRBD_MAX_SECTORS_FLEX DRBD_MAX_SECTORS_BM
@@ -1902,35 +1902,35 @@ static inline void inc_unacked(struct drbd_conf *mdev)
 	ERR_IF_CNT_IS_NEGATIVE(unacked_cnt); } while (0)
 
 
-static inline void dec_net(struct drbd_conf *mdev)
+static inline void put_net_conf(struct drbd_conf *mdev)
 {
 	if (atomic_dec_and_test(&mdev->net_cnt))
 		wake_up(&mdev->misc_wait);
 }
 
 /**
- * inc_net: Returns TRUE when it is ok to access mdev->net_conf. You
- * should call dec_net() when finished looking at mdev->net_conf.
+ * get_net_conf: Returns TRUE when it is ok to access mdev->net_conf. You
+ * should call put_net_conf() when finished looking at mdev->net_conf.
  */
-static inline int inc_net(struct drbd_conf *mdev)
+static inline int get_net_conf(struct drbd_conf *mdev)
 {
 	int have_net_conf;
 
 	atomic_inc(&mdev->net_cnt);
 	have_net_conf = mdev->state.conn >= C_UNCONNECTED;
 	if (!have_net_conf)
-		dec_net(mdev);
+		put_net_conf(mdev);
 	return have_net_conf;
 }
 
 /**
- * inc_local: Returns TRUE when local IO is possible. If it returns
- * TRUE you should call dec_local() after IO is completed.
+ * get_ldev: Returns TRUE when local IO is possible. If it returns
+ * TRUE you should call put_ldev() after IO is completed.
  */
-#define inc_local_if_state(M,MINS) __cond_lock(local, _inc_local_if_state(M,MINS))
-#define inc_local(M) __cond_lock(local, _inc_local_if_state(M,D_INCONSISTENT))
+#define get_ldev_if_state(M,MINS) __cond_lock(local, _get_ldev_if_state(M,MINS))
+#define get_ldev(M) __cond_lock(local, _get_ldev_if_state(M,D_INCONSISTENT))
 
-static inline void dec_local(struct drbd_conf *mdev)
+static inline void put_ldev(struct drbd_conf *mdev)
 {
 	__release(local);
 	if (atomic_dec_and_test(&mdev->local_cnt))
@@ -1939,21 +1939,21 @@ static inline void dec_local(struct drbd_conf *mdev)
 }
 
 #ifndef __CHECKER__
-static inline int _inc_local_if_state(struct drbd_conf *mdev, enum drbd_disk_state mins)
+static inline int _get_ldev_if_state(struct drbd_conf *mdev, enum drbd_disk_state mins)
 {
 	int io_allowed;
 
 	atomic_inc(&mdev->local_cnt);
 	io_allowed = (mdev->state.disk >= mins);
 	if (!io_allowed)
-		dec_local(mdev);
+		put_ldev(mdev);
 	return io_allowed;
 }
 #else
-extern int _inc_local_if_state(struct drbd_conf *mdev, enum drbd_disk_state mins);
+extern int _get_ldev_if_state(struct drbd_conf *mdev, enum drbd_disk_state mins);
 #endif
 
-/* you must have an "inc_local" reference */
+/* you must have an "get_ldev" reference */
 static inline void drbd_get_syncer_progress(struct drbd_conf *mdev,
 		unsigned long *bits_left, unsigned int *per_mil_done)
 {
@@ -1997,9 +1997,9 @@ static inline void drbd_get_syncer_progress(struct drbd_conf *mdev,
 static inline int drbd_get_max_buffers(struct drbd_conf *mdev)
 {
 	int mxb = 1000000; /* arbitrary limit on open requests */
-	if (inc_net(mdev)) {
+	if (get_net_conf(mdev)) {
 		mxb = mdev->net_conf->max_buffers;
-		dec_net(mdev);
+		put_net_conf(mdev);
 	}
 	return mxb;
 }
@@ -2196,9 +2196,9 @@ static inline void drbd_blk_run_queue(struct request_queue *q)
 
 static inline void drbd_kick_lo(struct drbd_conf *mdev)
 {
-	if (inc_local(mdev)) {
+	if (get_ldev(mdev)) {
 		drbd_blk_run_queue(bdev_get_queue(mdev->bc->backing_bdev));
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 }
 

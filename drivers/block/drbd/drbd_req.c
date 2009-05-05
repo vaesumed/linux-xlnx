@@ -34,7 +34,7 @@
 
 
 /* Update disk stats at start of I/O request */
-static inline void _drbd_start_io_acct(struct drbd_conf *mdev, struct drbd_request *req, struct bio *bio)
+static void _drbd_start_io_acct(struct drbd_conf *mdev, struct drbd_request *req, struct bio *bio)
 {
 	const int rw = bio_data_dir(bio);
 	int cpu;
@@ -46,7 +46,7 @@ static inline void _drbd_start_io_acct(struct drbd_conf *mdev, struct drbd_reque
 }
 
 /* Update disk stats when completing request upwards */
-static inline void _drbd_end_io_acct(struct drbd_conf *mdev, struct drbd_request *req)
+static void _drbd_end_io_acct(struct drbd_conf *mdev, struct drbd_request *req)
 {
 	int rw = bio_data_dir(req->master_bio);
 	unsigned long duration = jiffies - req->start_time;
@@ -93,9 +93,9 @@ static void _req_is_done(struct drbd_conf *mdev, struct drbd_request *req, const
 		 * we would forget to resync the corresponding extent.
 		 */
 		if (s & RQ_LOCAL_MASK) {
-			if (inc_local_if_state(mdev, D_FAILED)) {
+			if (get_ldev_if_state(mdev, D_FAILED)) {
 				drbd_al_complete_io(mdev, req->sector);
-				dec_local(mdev);
+				put_ldev(mdev);
 			} else if (__ratelimit(&drbd_ratelimit_state)) {
 				dev_warn(DEV, "Should have called drbd_al_complete_io(, %llu), "
 				     "but my Disk seems to have failed :(\n",
@@ -338,7 +338,7 @@ STATIC int _req_conflicts(struct drbd_request *req)
 
 	D_ASSERT(hlist_unhashed(&req->colision));
 
-	if (!inc_net(mdev))
+	if (!get_net_conf(mdev))
 		return 0;
 
 	/* BUG_ON */
@@ -383,11 +383,11 @@ STATIC int _req_conflicts(struct drbd_request *req)
 out_no_conflict:
 	/* this is like it should be, and what we expected.
 	 * our users do behave after all... */
-	dec_net(mdev);
+	put_net_conf(mdev);
 	return 0;
 
 out_conflict:
-	dec_net(mdev);
+	put_net_conf(mdev);
 	return 1;
 }
 
@@ -402,9 +402,6 @@ out_conflict:
  *  happen "atomically" within the req_lock,
  *  and it enforces that we have to think in a very structured manner
  *  about the "events" that may happen to a request during its life time ...
- *
- * Though I think it is likely that we break this again into many
- * static inline void _req_mod_ ## what (req) ...
  */
 void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 {
@@ -453,7 +450,7 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 		req->rq_state &= ~RQ_LOCAL_PENDING;
 
 		_req_may_be_done(req, error);
-		dec_local(mdev);
+		put_ldev(mdev);
 		break;
 
 	case write_completed_with_error:
@@ -467,7 +464,7 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 		/* and now: check how to handle local io error. */
 		__drbd_chk_io_error(mdev, FALSE);
 		_req_may_be_done(req, error);
-		dec_local(mdev);
+		put_ldev(mdev);
 		break;
 
 	case read_completed_with_error:
@@ -482,19 +479,19 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
 		if (bio_rw(req->master_bio) == READA) {
 			/* it is legal to fail READA */
 			_req_may_be_done(req, error);
-			dec_local(mdev);
+			put_ldev(mdev);
 			break;
 		}
 		/* else */
 		dev_alert(DEV, "Local READ failed sec=%llus size=%u\n",
 		      (unsigned long long)req->sector, req->size);
-		/* _req_mod(req,to_be_send); oops, recursion in static inline */
+		/* _req_mod(req,to_be_send); oops, recursion... */
 		D_ASSERT(!(req->rq_state & RQ_NET_MASK));
 		req->rq_state |= RQ_NET_PENDING;
 		inc_ap_pending(mdev);
 
 		__drbd_chk_io_error(mdev, FALSE);
-		dec_local(mdev);
+		put_ldev(mdev);
 		/* NOTE: if we have no connection,
 		 * or know the peer has no good data either,
 		 * then we don't actually need to "queue_for_net_read",
@@ -739,7 +736,7 @@ STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 
 	trace_drbd_bio(mdev, "Rq", bio, 0, req);
 
-	local = inc_local(mdev);
+	local = get_ldev(mdev);
 	if (!local) {
 		bio_put(req->private_bio); /* or we get a bio leak */
 		req->private_bio = NULL;
@@ -758,7 +755,7 @@ STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 				local = 0;
 				bio_put(req->private_bio);
 				req->private_bio = NULL;
-				dec_local(mdev);
+				put_ldev(mdev);
 			}
 		}
 		remote = !local && mdev->state.pdsk >= D_UP_TO_DATE;
@@ -898,7 +895,7 @@ allocate_barrier:
 			bio_put(req->private_bio);
 			req->private_bio = NULL;
 			drbd_al_complete_io(mdev, req->sector);
-			dec_local(mdev);
+			put_ldev(mdev);
 			local = 0;
 		}
 		if (remote)
@@ -953,7 +950,7 @@ fail_and_free_req:
 	if (local) {
 		bio_put(req->private_bio);
 		req->private_bio = NULL;
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 	bio_endio(bio, err);
 	drbd_req_free(req);
@@ -1120,14 +1117,14 @@ int drbd_merge_bvec(struct request_queue *q, struct bvec_merge_data *bvm, struct
 	if (bio_size == 0) {
 		if (limit <= bvec->bv_len)
 			limit = bvec->bv_len;
-	} else if (limit && inc_local(mdev)) {
+	} else if (limit && get_ldev(mdev)) {
 		struct request_queue * const b =
 			mdev->bc->backing_bdev->bd_disk->queue;
 		if (b->merge_bvec_fn && mdev->bc->dc.use_bmbv) {
 			backing_limit = b->merge_bvec_fn(b, bvm, bvec);
 			limit = min(limit, backing_limit);
 		}
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 	return limit;
 }

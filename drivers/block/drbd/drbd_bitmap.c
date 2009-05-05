@@ -81,7 +81,7 @@ struct drbd_bitmap {
 #define BM_LOCKED       0
 #define BM_MD_IO_ERROR  1
 
-static inline int bm_is_locked(struct drbd_bitmap *b)
+static int bm_is_locked(struct drbd_bitmap *b)
 {
 	return test_bit(BM_LOCKED, &b->bm_flags);
 }
@@ -178,7 +178,7 @@ void bm_unmap(unsigned long *p_addr)
 }
 
 /* long word offset of _bitmap_ sector */
-#define S2W(s)	((s)<<(BM_EXT_SIZE_B-BM_BLOCK_SIZE_B-LN2_BPL))
+#define S2W(s)	((s)<<(BM_EXT_SHIFT-BM_BLOCK_SHIFT-LN2_BPL))
 /* word offset from start of bitmap to word number _in_page_
  * modulo longs per page
 #define MLPP(X) ((X) % (PAGE_SIZE/sizeof(long))
@@ -384,12 +384,12 @@ STATIC unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endia
 	return bits;
 }
 
-static inline unsigned long bm_count_bits(struct drbd_bitmap *b)
+static unsigned long bm_count_bits(struct drbd_bitmap *b)
 {
 	return __bm_count_bits(b, 0);
 }
 
-static inline unsigned long bm_count_bits_swap_endian(struct drbd_bitmap *b)
+static unsigned long bm_count_bits_swap_endian(struct drbd_bitmap *b)
 {
 	return __bm_count_bits(b, 1);
 }
@@ -498,9 +498,9 @@ int drbd_bm_resize(struct drbd_conf *mdev, sector_t capacity)
 	*/
 	words = ALIGN(bits, 64) >> LN2_BPL;
 
-	if (inc_local(mdev)) {
+	if (get_ldev(mdev)) {
 		D_ASSERT((u64)bits <= (((u64)mdev->bc->md.md_size_sect-MD_BM_OFFSET) << 12));
-		dec_local(mdev);
+		put_ldev(mdev);
 	}
 
 	/* one extra long to catch off by one errors */
@@ -580,7 +580,7 @@ unsigned long drbd_bm_total_weight(struct drbd_conf *mdev)
 	unsigned long flags;
 
 	/* if I don't have a disk, I don't know about out-of-sync status */
-	if (!inc_local_if_state(mdev, D_NEGOTIATING))
+	if (!get_ldev_if_state(mdev, D_NEGOTIATING))
 		return 0;
 
 	ERR_IF(!b) return 0;
@@ -590,7 +590,7 @@ unsigned long drbd_bm_total_weight(struct drbd_conf *mdev)
 	s = b->bm_set;
 	spin_unlock_irqrestore(&b->bm_lock, flags);
 
-	dec_local(mdev);
+	put_ldev(mdev);
 
 	return s;
 }
@@ -864,7 +864,7 @@ STATIC int bm_rw(struct drbd_conf *mdev, int rw) __must_hold(local)
 	now = b->bm_set;
 
 	dev_info(DEV, "%s (%lu bits) marked out-of-sync by on disk bit-map.\n",
-	     ppsize(ppb, now << (BM_BLOCK_SIZE_B-10)), now);
+	     ppsize(ppb, now << (BM_BLOCK_SHIFT-10)), now);
 
 	return err;
 }
@@ -908,7 +908,7 @@ int drbd_bm_write_sect(struct drbd_conf *mdev, unsigned long enr) __must_hold(lo
 	offset    = S2W(enr);	/* word offset into bitmap */
 	num_words = min(S2W(1), bm_words - offset);
 	if (num_words < S2W(1))
-		memset(page_address(mdev->md_io_page), 0, MD_HARDSECT);
+		memset(page_address(mdev->md_io_page), 0, MD_SECTOR_SIZE);
 	drbd_bm_get_lel(mdev, offset, num_words,
 			page_address(mdev->md_io_page));
 	if (!drbd_md_sync_page_io(mdev, mdev->bc, on_disk_sector, WRITE)) {
