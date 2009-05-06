@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 1999  Tetsuya Okada & Niibe Yutaka
  *  Copyright (C) 2000  Philipp Rumpf <prumpf@tux.org>
- *  Copyright (C) 2002 - 2008  Paul Mundt
+ *  Copyright (C) 2002 - 2009  Paul Mundt
  *  Copyright (C) 2002  M. R. Brown  <mrbrown@linux-sh.org>
  *
  *  Some code taken from i386 version.
@@ -17,7 +17,9 @@
 #include <linux/sched.h>
 #include <linux/clockchips.h>
 #include <linux/mc146818rtc.h>	/* for rtc_lock */
+#include <linux/platform_device.h>
 #include <linux/smp.h>
+#include <linux/rtc.h>
 #include <asm/clock.h>
 #include <asm/rtc.h>
 #include <asm/timer.h>
@@ -44,65 +46,42 @@ static int null_rtc_set_time(const time_t secs)
 void (*rtc_sh_get_time)(struct timespec *) = null_rtc_get_time;
 int (*rtc_sh_set_time)(const time_t) = null_rtc_set_time;
 
-#ifndef CONFIG_GENERIC_TIME
-void do_gettimeofday(struct timeval *tv)
+unsigned int get_rtc_time(struct rtc_time *tm)
 {
-	unsigned long flags;
-	unsigned long seq;
-	unsigned long usec, sec;
+	if (rtc_sh_get_time != null_rtc_get_time) {
+		struct timespec tv;
 
-	do {
-		/*
-		 * Turn off IRQs when grabbing xtime_lock, so that
-		 * the sys_timer get_offset code doesn't have to handle it.
-		 */
-		seq = read_seqbegin_irqsave(&xtime_lock, flags);
-		usec = get_timer_offset();
-		sec = xtime.tv_sec;
-		usec += xtime.tv_nsec / NSEC_PER_USEC;
-	} while (read_seqretry_irqrestore(&xtime_lock, seq, flags));
-
-	while (usec >= 1000000) {
-		usec -= 1000000;
-		sec++;
+		rtc_sh_get_time(&tv);
+		rtc_time_to_tm(tv.tv_sec, tm);
 	}
 
-	tv->tv_sec = sec;
-	tv->tv_usec = usec;
+	return RTC_24H;
 }
-EXPORT_SYMBOL(do_gettimeofday);
+EXPORT_SYMBOL(get_rtc_time);
 
-int do_settimeofday(struct timespec *tv)
+int set_rtc_time(struct rtc_time *tm)
 {
-	time_t wtm_sec, sec = tv->tv_sec;
-	long wtm_nsec, nsec = tv->tv_nsec;
+	unsigned long secs;
 
-	if ((unsigned long)tv->tv_nsec >= NSEC_PER_SEC)
-		return -EINVAL;
+	rtc_tm_to_time(tm, &secs);
+	return rtc_sh_set_time(secs);
+}
+EXPORT_SYMBOL(set_rtc_time);
 
-	write_seqlock_irq(&xtime_lock);
-	/*
-	 * This is revolting. We need to set "xtime" correctly. However, the
-	 * value in this location is the value at the most recent update of
-	 * wall time.  Discover what correction gettimeofday() would have
-	 * made, and then undo it!
-	 */
-	nsec -= get_timer_offset() * NSEC_PER_USEC;
+static int __init rtc_generic_init(void)
+{
+	struct platform_device *pdev;
 
-	wtm_sec  = wall_to_monotonic.tv_sec + (xtime.tv_sec - sec);
-	wtm_nsec = wall_to_monotonic.tv_nsec + (xtime.tv_nsec - nsec);
+	if (rtc_sh_get_time == null_rtc_get_time)
+		return -ENODEV;
 
-	set_normalized_timespec(&xtime, sec, nsec);
-	set_normalized_timespec(&wall_to_monotonic, wtm_sec, wtm_nsec);
-
-	ntp_clear();
-	write_sequnlock_irq(&xtime_lock);
-	clock_was_set();
+	pdev = platform_device_register_simple("rtc-generic", -1, NULL, 0);
+	if (IS_ERR(pdev))
+		return PTR_ERR(pdev);
 
 	return 0;
 }
-EXPORT_SYMBOL(do_settimeofday);
-#endif /* !CONFIG_GENERIC_TIME */
+module_init(rtc_generic_init);
 
 /* last time the RTC clock got updated */
 static long last_rtc_update;
@@ -199,7 +178,6 @@ struct clocksource clocksource_sh = {
 	.name		= "SuperH",
 };
 
-#ifdef CONFIG_GENERIC_TIME
 unsigned long long sched_clock(void)
 {
 	unsigned long long cycles;
@@ -211,7 +189,27 @@ unsigned long long sched_clock(void)
 	cycles = clocksource_sh.read(&clocksource_sh);
 	return cyc2ns(&clocksource_sh, cycles);
 }
-#endif
+
+static void __init sh_late_time_init(void)
+{
+	/*
+	 * Make sure all compiled-in early timers register themselves.
+	 * Run probe() for one "earlytimer" device.
+	 */
+	early_platform_driver_register_all("earlytimer");
+	if (early_platform_driver_probe("earlytimer", 1, 0))
+		return;
+
+	/*
+	 * Find the timer to use as the system timer, it will be
+	 * initialized for us.
+	 */
+	sys_timer = get_sys_timer();
+	if (unlikely(!sys_timer))
+		panic("System timer missing.\n");
+
+	printk(KERN_INFO "Using %s for system timer\n", sys_timer->name);
+}
 
 void __init time_init(void)
 {
@@ -228,13 +226,6 @@ void __init time_init(void)
 	local_timer_setup(smp_processor_id());
 #endif
 
-	/*
-	 * Find the timer to use as the system timer, it will be
-	 * initialized for us.
-	 */
-	sys_timer = get_sys_timer();
-	if (unlikely(!sys_timer))
-		panic("System timer missing.\n");
-
-	printk(KERN_INFO "Using %s for system timer\n", sys_timer->name);
+	late_time_init = sh_late_time_init;
 }
+
