@@ -942,6 +942,8 @@ int igb_up(struct igb_adapter *adapter)
 	rd32(E1000_ICR);
 	igb_irq_enable(adapter);
 
+	netif_tx_start_all_queues(adapter->netdev);
+
 	/* Fire a link change interrupt to start the watchdog. */
 	wr32(E1000_ICS, E1000_ICS_LSC);
 	return 0;
@@ -1343,6 +1345,9 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	if (pci_using_dac)
 		netdev->features |= NETIF_F_HIGHDMA;
 
+	if (adapter->hw.mac.type == e1000_82576)
+		netdev->features |= NETIF_F_SCTP_CSUM;
+
 	adapter->en_mng_pt = igb_enable_mng_pass_thru(&adapter->hw);
 
 	/* before reading the NVM, reset the controller to put the device in a
@@ -1442,14 +1447,13 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	 * driver. */
 	igb_get_hw_control(adapter);
 
-	/* tell the stack to leave us alone until igb_open() is called */
-	netif_carrier_off(netdev);
-	netif_tx_stop_all_queues(netdev);
-
 	strcpy(netdev->name, "eth%d");
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;
+
+	/* carrier off reporting is important to ethtool even BEFORE open */
+	netif_carrier_off(netdev);
 
 #ifdef CONFIG_IGB_DCA
 	if (dca_add_requester(&pdev->dev) == 0) {
@@ -1698,6 +1702,8 @@ static int igb_open(struct net_device *netdev)
 	/* disallow open during test */
 	if (test_bit(__IGB_TESTING, &adapter->state))
 		return -EBUSY;
+
+	netif_carrier_off(netdev);
 
 	/* allocate transmit descriptors */
 	err = igb_setup_all_tx_resources(adapter);
@@ -2233,28 +2239,24 @@ static void igb_configure_rx(struct igb_adapter *adapter)
 		mrqc |= (E1000_MRQC_RSS_FIELD_IPV6_UDP_EX |
 			 E1000_MRQC_RSS_FIELD_IPV6_TCP_EX);
 
-
 		wr32(E1000_MRQC, mrqc);
-
-		/* Multiqueue and raw packet checksumming are mutually
-		 * exclusive.  Note that this not the same as TCP/IP
-		 * checksumming, which works fine. */
-		rxcsum = rd32(E1000_RXCSUM);
-		rxcsum |= E1000_RXCSUM_PCSD;
-		wr32(E1000_RXCSUM, rxcsum);
-	} else {
+	} else if (adapter->vfs_allocated_count) {
 		/* Enable multi-queue for sr-iov */
-		if (adapter->vfs_allocated_count)
-			wr32(E1000_MRQC, E1000_MRQC_ENABLE_VMDQ);
-		/* Enable Receive Checksum Offload for TCP and UDP */
-		rxcsum = rd32(E1000_RXCSUM);
-		if (adapter->rx_csum)
-			rxcsum |= E1000_RXCSUM_TUOFL | E1000_RXCSUM_IPPCSE;
-		else
-			rxcsum &= ~(E1000_RXCSUM_TUOFL | E1000_RXCSUM_IPPCSE);
-
-		wr32(E1000_RXCSUM, rxcsum);
+		wr32(E1000_MRQC, E1000_MRQC_ENABLE_VMDQ);
 	}
+
+	/* Enable Receive Checksum Offload for TCP and UDP */
+	rxcsum = rd32(E1000_RXCSUM);
+	/* Disable raw packet checksumming */
+	rxcsum |= E1000_RXCSUM_PCSD;
+	/* Don't need to set TUOFL or IPOFL, they default to 1 */
+	if (!adapter->rx_csum)
+		rxcsum &= ~(E1000_RXCSUM_TUOFL | E1000_RXCSUM_IPOFL);
+	else if (adapter->hw.mac.type == e1000_82576)
+		/* Enable Receive Checksum Offload for SCTP */
+		rxcsum |= E1000_RXCSUM_CRCOFL;
+
+	wr32(E1000_RXCSUM, rxcsum);
 
 	/* Set the default pool for the PF's first queue */
 	igb_configure_vt_default_pool(adapter);
@@ -2663,7 +2665,6 @@ static void igb_watchdog_task(struct work_struct *work)
 			}
 
 			netif_carrier_on(netdev);
-			netif_tx_wake_all_queues(netdev);
 
 			igb_ping_all_vfs(adapter);
 
@@ -2680,7 +2681,6 @@ static void igb_watchdog_task(struct work_struct *work)
 			printk(KERN_INFO "igb: %s NIC Link is Down\n",
 			       netdev->name);
 			netif_carrier_off(netdev);
-			netif_tx_stop_all_queues(netdev);
 
 			igb_ping_all_vfs(adapter);
 
@@ -2897,13 +2897,13 @@ static void igb_set_itr(struct igb_adapter *adapter)
 	switch (current_itr) {
 	/* counts and packets in update_itr are dependent on these numbers */
 	case lowest_latency:
-		new_itr = 70000;
+		new_itr = 56;  /* aka 70,000 ints/sec */
 		break;
 	case low_latency:
-		new_itr = 20000; /* aka hwitr = ~200 */
+		new_itr = 196; /* aka 20,000 ints/sec */
 		break;
 	case bulk_latency:
-		new_itr = 4000;
+		new_itr = 980; /* aka 4,000 ints/sec */
 		break;
 	default:
 		break;
@@ -2922,7 +2922,8 @@ set_itr_now:
 		 * by adding intermediate steps when interrupt rate is
 		 * increasing */
 		new_itr = new_itr > adapter->itr ?
-			     min(adapter->itr + (new_itr >> 2), new_itr) :
+			     max((new_itr * adapter->itr) /
+			         (new_itr + (adapter->itr >> 2)), new_itr) :
 			     new_itr;
 		/* Don't write the value here; it resets the adapter's
 		 * internal timer, and causes us to delay far longer than
@@ -2931,7 +2932,7 @@ set_itr_now:
 		 * ends up being correct.
 		 */
 		adapter->itr = new_itr;
-		adapter->rx_ring->itr_val = 1000000000 / (new_itr * 256);
+		adapter->rx_ring->itr_val = new_itr;
 		adapter->rx_ring->set_itr = 1;
 	}
 
@@ -3070,11 +3071,15 @@ static inline bool igb_tx_csum_adv(struct igb_adapter *adapter,
 				tu_cmd |= E1000_ADVTXD_TUCMD_IPV4;
 				if (ip_hdr(skb)->protocol == IPPROTO_TCP)
 					tu_cmd |= E1000_ADVTXD_TUCMD_L4T_TCP;
+				else if (ip_hdr(skb)->protocol == IPPROTO_SCTP)
+					tu_cmd |= E1000_ADVTXD_TUCMD_L4T_SCTP;
 				break;
 			case cpu_to_be16(ETH_P_IPV6):
 				/* XXX what about other V6 headers?? */
 				if (ipv6_hdr(skb)->nexthdr == IPPROTO_TCP)
 					tu_cmd |= E1000_ADVTXD_TUCMD_L4T_TCP;
+				else if (ipv6_hdr(skb)->nexthdr == IPPROTO_SCTP)
+					tu_cmd |= E1000_ADVTXD_TUCMD_L4T_SCTP;
 				break;
 			default:
 				if (unlikely(net_ratelimit()))
@@ -4436,20 +4441,12 @@ static void igb_receive_skb(struct igb_ring *ring, u8 status,
 	bool vlan_extracted = (adapter->vlgrp && (status & E1000_RXD_STAT_VP));
 
 	skb_record_rx_queue(skb, ring->queue_index);
-	if (skb->ip_summed == CHECKSUM_UNNECESSARY) {
-		if (vlan_extracted)
-			vlan_gro_receive(&ring->napi, adapter->vlgrp,
-			                 le16_to_cpu(rx_desc->wb.upper.vlan),
-			                 skb);
-		else
-			napi_gro_receive(&ring->napi, skb);
-	} else {
-		if (vlan_extracted)
-			vlan_hwaccel_receive_skb(skb, adapter->vlgrp,
-			                  le16_to_cpu(rx_desc->wb.upper.vlan));
-		else
-			netif_receive_skb(skb);
-	}
+	if (vlan_extracted)
+		vlan_gro_receive(&ring->napi, adapter->vlgrp,
+		                 le16_to_cpu(rx_desc->wb.upper.vlan),
+		                 skb);
+	else
+		napi_gro_receive(&ring->napi, skb);
 }
 
 static inline void igb_rx_checksum_adv(struct igb_adapter *adapter,
@@ -4463,14 +4460,22 @@ static inline void igb_rx_checksum_adv(struct igb_adapter *adapter,
 	/* TCP/UDP checksum error bit is set */
 	if (status_err &
 	    (E1000_RXDEXT_STATERR_TCPE | E1000_RXDEXT_STATERR_IPE)) {
+		/*
+		 * work around errata with sctp packets where the TCPE aka
+		 * L4E bit is set incorrectly on 64 byte (60 byte w/o crc)
+		 * packets, (aka let the stack check the crc32c)
+		 */
+		if (!((adapter->hw.mac.type == e1000_82576) &&
+		      (skb->len == 60)))
+			adapter->hw_csum_err++;
 		/* let the stack verify checksum errors */
-		adapter->hw_csum_err++;
 		return;
 	}
 	/* It must be a TCP or UDP packet with a valid checksum */
 	if (status_err & (E1000_RXD_STAT_TCPCS | E1000_RXD_STAT_UDPCS))
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
+	dev_dbg(&adapter->pdev->dev, "cksum success: bits %08X\n", status_err);
 	adapter->hw_csum_good++;
 }
 
