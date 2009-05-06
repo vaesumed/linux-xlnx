@@ -17,6 +17,7 @@ endif
 
 obj-$(CONFIG_FUNCTION_TRACER) += libftrace.o
 obj-$(CONFIG_RING_BUFFER) += ring_buffer.o
+obj-$(CONFIG_RING_BUFFER_BENCHMARK) += ring_buffer_benchmark.o
 
 obj-$(CONFIG_TRACING) += trace.o
 obj-$(CONFIG_TRACING) += trace_clock.o
@@ -40,11 +41,10 @@ obj-$(CONFIG_POWER_TRACER) += trace_power.o
 obj-$(CONFIG_KMEMTRACE) += kmemtrace.o
 obj-$(CONFIG_WORKQUEUE_TRACER) += trace_workqueue.o
 obj-$(CONFIG_BLK_DEV_IO_TRACE)	+= blktrace.o
-obj-$(CONFIG_EVENT_TRACER) += trace_events.o
-obj-$(CONFIG_EVENT_TRACER) += events.o
-obj-$(CONFIG_EVENT_TRACER) += trace_export.o
+obj-$(CONFIG_EVENT_TRACING) += trace_events.o
+obj-$(CONFIG_EVENT_TRACING) += trace_export.o
 obj-$(CONFIG_FTRACE_SYSCALLS) += trace_syscalls.o
 obj-$(CONFIG_EVENT_PROFILE) += trace_event_profile.o
-obj-$(CONFIG_EVENT_TRACER) += trace_events_filter.o
+obj-$(CONFIG_EVENT_TRACING) += trace_events_filter.o
 
 libftrace-y := ftrace.o
