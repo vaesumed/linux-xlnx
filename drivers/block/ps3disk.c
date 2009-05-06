@@ -158,7 +158,7 @@ static int ps3disk_submit_request_sg(struct ps3_storage_device *dev,
 	if (res) {
 		dev_err(&dev->sbd.core, "%s:%u: %s failed %d\n", __func__,
 			__LINE__, op, res);
-		end_request(req, 0);
+		__blk_end_request_cur(req, -EIO);
 		return 0;
 	}
 
@@ -180,7 +180,7 @@ static int ps3disk_submit_flush_request(struct ps3_storage_device *dev,
 	if (res) {
 		dev_err(&dev->sbd.core, "%s:%u: sync cache failed 0x%llx\n",
 			__func__, __LINE__, res);
-		end_request(req, 0);
+		__blk_end_request_cur(req, -EIO);
 		return 0;
 	}
 
@@ -205,7 +205,7 @@ static void ps3disk_do_request(struct ps3_storage_device *dev,
 				break;
 		} else {
 			blk_dump_rq_flags(req, DEVICE_NAME " bad request");
-			end_request(req, 0);
+			__blk_end_request_cur(req, -EIO);
 			continue;
 		}
 	}
@@ -231,7 +231,6 @@ static irqreturn_t ps3disk_interrupt(int irq, void *data)
 	struct request *req;
 	int res, read, error;
 	u64 tag, status;
-	unsigned long num_sectors;
 	const char *op;
 
 	res = lv1_storage_get_async_status(dev->sbd.dev_id, &tag, &status);
@@ -261,11 +260,9 @@ static irqreturn_t ps3disk_interrupt(int irq, void *data)
 	if (req->cmd_type == REQ_TYPE_LINUX_BLOCK &&
 	    req->cmd[0] == REQ_LB_OP_FLUSH) {
 		read = 0;
-		num_sectors = req->hard_cur_sectors;
 		op = "flush";
 	} else {
 		read = !rq_data_dir(req);
-		num_sectors = req->nr_sectors;
 		op = read ? "read" : "write";
 	}
 	if (status) {
@@ -281,7 +278,7 @@ static irqreturn_t ps3disk_interrupt(int irq, void *data)
 	}
 
 	spin_lock(&priv->lock);
-	__blk_end_request(req, error, num_sectors << 9);
+	__blk_end_request_all(req, error);
 	priv->req = NULL;
 	ps3disk_do_request(dev, priv->queue);
 	spin_unlock(&priv->lock);
