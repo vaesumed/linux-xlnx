@@ -59,9 +59,9 @@ SECTIONS
   . = ALIGN(PAGE_SIZE);		/* Align data segment to page size boundary */
 				/* Data */
   .data : AT(ADDR(.data) - LOAD_OFFSET) {
+	_sdata = .;			/* Start of data section */
 	DATA_DATA
 	CONSTRUCTORS
-	_edata = .;			/* End of data section */
 	} :data
 
 
@@ -73,6 +73,7 @@ SECTIONS
   . = ALIGN(CONFIG_X86_INTERNODE_CACHE_BYTES);
   .data.read_mostly : AT(ADDR(.data.read_mostly) - LOAD_OFFSET) {
   	*(.data.read_mostly)
+	_edata = .;			/* End of data section */
   }
 
 #define VSYSCALL_ADDR (-10*1024*1024)
