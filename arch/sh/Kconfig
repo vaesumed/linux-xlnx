@@ -30,6 +30,7 @@ config SUPERH32
 	select HAVE_DYNAMIC_FTRACE
 	select HAVE_ARCH_KGDB
 	select ARCH_HIBERNATION_POSSIBLE if MMU
+	select RTC_LIB
 
 config SUPERH64
 	def_bool ARCH = "sh64"
@@ -74,10 +75,10 @@ config GENERIC_IOMAP
 	bool
 
 config GENERIC_TIME
-	def_bool n
+	def_bool y
 
 config GENERIC_CLOCKEVENTS
-	def_bool n
+	def_bool y
 
 config GENERIC_CLOCKEVENTS_BROADCAST
 	bool
@@ -110,6 +111,12 @@ config SYS_SUPPORTS_PCI
 	bool
 
 config SYS_SUPPORTS_CMT
+	bool
+
+config SYS_SUPPORTS_MTU2
+	bool
+
+config SYS_SUPPORTS_TMU
 	bool
 
 config STACKTRACE_SUPPORT
@@ -210,27 +217,32 @@ config CPU_SUBTYPE_SH7201
 	bool "Support SH7201 processor"
 	select CPU_SH2A
 	select CPU_HAS_FPU
+	select SYS_SUPPORTS_MTU2
  
 config CPU_SUBTYPE_SH7203
 	bool "Support SH7203 processor"
 	select CPU_SH2A
 	select CPU_HAS_FPU
 	select SYS_SUPPORTS_CMT
+	select SYS_SUPPORTS_MTU2
 
 config CPU_SUBTYPE_SH7206
 	bool "Support SH7206 processor"
 	select CPU_SH2A
 	select SYS_SUPPORTS_CMT
+	select SYS_SUPPORTS_MTU2
 
 config CPU_SUBTYPE_SH7263
 	bool "Support SH7263 processor"
 	select CPU_SH2A
 	select CPU_HAS_FPU
 	select SYS_SUPPORTS_CMT
+	select SYS_SUPPORTS_MTU2
 
 config CPU_SUBTYPE_MXG
 	bool "Support MX-G processor"
 	select CPU_SH2A
+	select SYS_SUPPORTS_MTU2
 	help
 	  Select MX-G if running on an R8A03022BG part.
 
@@ -347,6 +359,16 @@ config CPU_SUBTYPE_SH7723
 	help
 	  Select SH7723 if you have an SH-MobileR2 CPU.
 
+config CPU_SUBTYPE_SH7724
+	bool "Support SH7724 processor"
+	select CPU_SH4A
+	select CPU_SHX2
+	select ARCH_SHMOBILE
+	select ARCH_SPARSEMEM_ENABLE
+	select SYS_SUPPORTS_CMT
+	help
+	  Select SH7724 if you have an SH-MobileR2R CPU.
+
 config CPU_SUBTYPE_SH7763
 	bool "Support SH7763 processor"
 	select CPU_SH4A
@@ -401,6 +423,7 @@ config CPU_SUBTYPE_SH7722
 	select ARCH_SPARSEMEM_ENABLE
 	select SYS_SUPPORTS_NUMA
 	select SYS_SUPPORTS_CMT
+	select SYS_SUPPORTS_TMU
 
 config CPU_SUBTYPE_SH7366
 	bool "Support SH7366 processor"
@@ -446,33 +469,29 @@ config SH_TMU
 	bool "TMU timer support"
 	depends on CPU_SH3 || CPU_SH4
 	default y
-	select GENERIC_TIME
-	select GENERIC_CLOCKEVENTS
 	help
 	  This enables the use of the TMU as the system timer.
 
-config SH_CMT
-	bool "CMT timer support"
-	depends on SYS_SUPPORTS_CMT && CPU_SH2
+config SH_TIMER_TMU
+	bool "TMU timer driver"
+	depends on !SH_TMU && SYS_SUPPORTS_TMU
 	default y
 	help
-	  This enables the use of the CMT as the system timer.
+	  This enables the build of the TMU timer driver.
 
-#
-# Support for the new-style CMT driver. This will replace SH_CMT
-# once its other dependencies are merged.
-#
 config SH_TIMER_CMT
-	bool "CMT clockevents driver"
-	depends on SYS_SUPPORTS_CMT && !SH_CMT
-	select GENERIC_CLOCKEVENTS
-
-config SH_MTU2
-	bool "MTU2 timer support"
-	depends on CPU_SH2A
+	bool "CMT timer driver"
+	depends on SYS_SUPPORTS_CMT
 	default y
 	help
-	  This enables the use of the MTU2 as the system timer.
+	  This enables build of the CMT timer driver.
+
+config SH_TIMER_MTU2
+	bool "MTU2 timer driver"
+	depends on SYS_SUPPORTS_MTU2
+	default y
+	help
+	  This enables build of the MTU2 timer driver.
 
 config SH_TIMER_IRQ
 	int
@@ -495,6 +514,7 @@ config SH_PCLK_FREQ
 			      CPU_SUBTYPE_SH7203 || CPU_SUBTYPE_SH7206 || \
 			      CPU_SUBTYPE_SH7263 || CPU_SUBTYPE_MXG    || \
 			      CPU_SUBTYPE_SH7786
+	default "41666666" if CPU_SUBTYPE_SH7724
 	default "60000000" if CPU_SUBTYPE_SH7751 || CPU_SUBTYPE_SH7751R
 	default "66000000" if CPU_SUBTYPE_SH4_202
 	default "50000000"

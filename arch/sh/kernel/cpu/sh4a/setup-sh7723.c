@@ -13,7 +13,7 @@
 #include <linux/mm.h>
 #include <linux/serial_sci.h>
 #include <linux/uio_driver.h>
-#include <linux/sh_cmt.h>
+#include <linux/sh_timer.h>
 #include <asm/clock.h>
 #include <asm/mmzone.h>
 
@@ -101,7 +101,7 @@ static struct platform_device veu1_device = {
 	.num_resources	= ARRAY_SIZE(veu1_resources),
 };
 
-static struct sh_cmt_config cmt_platform_data = {
+static struct sh_timer_config cmt_platform_data = {
 	.name = "CMT",
 	.channel_offset = 0x60,
 	.timer_bit = 5,
@@ -279,6 +279,16 @@ static int __init sh7723_devices_setup(void)
 				    ARRAY_SIZE(sh7723_devices));
 }
 __initcall(sh7723_devices_setup);
+
+static struct platform_device *sh7723_early_devices[] __initdata = {
+	&cmt_device,
+};
+
+void __init plat_early_device_setup(void)
+{
+	early_platform_add_devices(sh7723_early_devices,
+				   ARRAY_SIZE(sh7723_early_devices));
+}
 
 enum {
 	UNUSED=0,
