@@ -276,10 +276,6 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	if (status)
 		goto out_err;
 
-	mutex_lock(&adap->clist_lock);
-	list_add_tail(&client->list, &adap->clients);
-	mutex_unlock(&adap->clist_lock);
-
 	dev_dbg(&adap->dev, "client [%s] registered with bus id %s\n",
 		client->name, dev_name(&client->dev));
 
@@ -301,12 +297,6 @@ EXPORT_SYMBOL_GPL(i2c_new_device);
  */
 void i2c_unregister_device(struct i2c_client *client)
 {
-	struct i2c_adapter	*adapter = client->adapter;
-
-	mutex_lock(&adapter->clist_lock);
-	list_del(&client->list);
-	mutex_unlock(&adapter->clist_lock);
-
 	device_unregister(&client->dev);
 }
 EXPORT_SYMBOL_GPL(i2c_unregister_device);
@@ -432,8 +422,6 @@ static int i2c_register_adapter(struct i2c_adapter *adap)
 		return -EAGAIN;
 
 	mutex_init(&adap->bus_lock);
-	mutex_init(&adap->clist_lock);
-	INIT_LIST_HEAD(&adap->clients);
 
 	mutex_lock(&core_lock);
 
