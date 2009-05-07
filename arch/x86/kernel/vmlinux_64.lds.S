@@ -59,6 +59,7 @@ SECTIONS
   . = ALIGN(PAGE_SIZE);		/* Align data segment to page size boundary */
 				/* Data */
   .data : AT(ADDR(.data) - LOAD_OFFSET) {
+	_sdata = .;			/* Start of data section */
 	DATA_DATA
 	CONSTRUCTORS
 	_edata = .;			/* End of data section */
