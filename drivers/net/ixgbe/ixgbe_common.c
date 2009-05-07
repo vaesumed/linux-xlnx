@@ -1653,6 +1653,7 @@ s32 ixgbe_fc_enable(struct ixgbe_hw *hw, s32 packetbuf_num)
 	}
 
 	/* Enable 802.3x based flow control settings. */
+	mflcn_reg |= IXGBE_MFLCN_DPF;
 	IXGBE_WRITE_REG(hw, IXGBE_MFLCN, mflcn_reg);
 	IXGBE_WRITE_REG(hw, IXGBE_FCCFG, fccfg_reg);
 
@@ -1859,9 +1860,11 @@ s32 ixgbe_setup_fc_generic(struct ixgbe_hw *hw, s32 packetbuf_num)
 	 * because it causes the controller to just blast out fc packets.
 	 */
 	if (!hw->fc.low_water || !hw->fc.high_water || !hw->fc.pause_time) {
-		hw_dbg(hw, "Invalid water mark configuration\n");
-		ret_val = IXGBE_ERR_INVALID_LINK_SETTINGS;
-		goto out;
+		if (hw->fc.requested_mode != ixgbe_fc_none) {
+			hw_dbg(hw, "Invalid water mark configuration\n");
+			ret_val = IXGBE_ERR_INVALID_LINK_SETTINGS;
+			goto out;
+		}
 	}
 
 	/*

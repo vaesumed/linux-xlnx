@@ -1735,8 +1735,12 @@ u16 skb_tx_hash(const struct net_device *dev, const struct sk_buff *skb)
 {
 	u32 hash;
 
-	if (skb_rx_queue_recorded(skb))
-		return skb_get_rx_queue(skb) % dev->real_num_tx_queues;
+	if (skb_rx_queue_recorded(skb)) {
+		hash = skb_get_rx_queue(skb);
+		while (unlikely (hash >= dev->real_num_tx_queues))
+			hash -= dev->real_num_tx_queues;
+		return hash;
+	}
 
 	if (skb->sk && skb->sk->sk_hash)
 		hash = skb->sk->sk_hash;
@@ -2379,18 +2383,13 @@ void *skb_gro_header(struct sk_buff *skb, unsigned int hlen)
 	unsigned int offset = skb_gro_offset(skb);
 
 	hlen += offset;
-	if (hlen <= skb_headlen(skb))
-		return skb->data + offset;
-
-	if (unlikely(!skb_shinfo(skb)->nr_frags ||
-		     skb_shinfo(skb)->frags[0].size <=
-		     hlen - skb_headlen(skb) ||
+	if (unlikely(skb_headlen(skb) ||
+		     skb_shinfo(skb)->frags[0].size < hlen ||
 		     PageHighMem(skb_shinfo(skb)->frags[0].page)))
 		return pskb_may_pull(skb, hlen) ? skb->data + offset : NULL;
 
 	return page_address(skb_shinfo(skb)->frags[0].page) +
-	       skb_shinfo(skb)->frags[0].page_offset +
-	       offset - skb_headlen(skb);
+	       skb_shinfo(skb)->frags[0].page_offset + offset;
 }
 EXPORT_SYMBOL(skb_gro_header);
 
@@ -2526,16 +2525,10 @@ void napi_reuse_skb(struct napi_struct *napi, struct sk_buff *skb)
 }
 EXPORT_SYMBOL(napi_reuse_skb);
 
-struct sk_buff *napi_fraginfo_skb(struct napi_struct *napi,
-				  struct napi_gro_fraginfo *info)
+struct sk_buff *napi_get_frags(struct napi_struct *napi)
 {
 	struct net_device *dev = napi->dev;
 	struct sk_buff *skb = napi->skb;
-	struct ethhdr *eth;
-	skb_frag_t *frag;
-	int i;
-
-	napi->skb = NULL;
 
 	if (!skb) {
 		skb = netdev_alloc_skb(dev, GRO_MAX_HEAD + NET_IP_ALIGN);
@@ -2543,47 +2536,14 @@ struct sk_buff *napi_fraginfo_skb(struct napi_struct *napi,
 			goto out;
 
 		skb_reserve(skb, NET_IP_ALIGN);
+
+		napi->skb = skb;
 	}
-
-	BUG_ON(info->nr_frags > MAX_SKB_FRAGS);
-	frag = info->frags;
-
-	for (i = 0; i < info->nr_frags; i++) {
-		skb_fill_page_desc(skb, i, frag->page, frag->page_offset,
-				   frag->size);
-		frag++;
-	}
-	skb_shinfo(skb)->nr_frags = info->nr_frags;
-
-	skb->data_len = info->len;
-	skb->len += info->len;
-	skb->truesize += info->len;
-
-	skb_reset_mac_header(skb);
-	skb_gro_reset_offset(skb);
-
-	eth = skb_gro_header(skb, sizeof(*eth));
-	if (!eth) {
-		napi_reuse_skb(napi, skb);
-		skb = NULL;
-		goto out;
-	}
-
-	skb_gro_pull(skb, sizeof(*eth));
-
-	/*
-	 * This works because the only protocols we care about don't require
-	 * special handling.  We'll fix it up properly at the end.
-	 */
-	skb->protocol = eth->h_proto;
-
-	skb->ip_summed = info->ip_summed;
-	skb->csum = info->csum;
 
 out:
 	return skb;
 }
-EXPORT_SYMBOL(napi_fraginfo_skb);
+EXPORT_SYMBOL(napi_get_frags);
 
 int napi_frags_finish(struct napi_struct *napi, struct sk_buff *skb, int ret)
 {
@@ -2613,9 +2573,39 @@ int napi_frags_finish(struct napi_struct *napi, struct sk_buff *skb, int ret)
 }
 EXPORT_SYMBOL(napi_frags_finish);
 
-int napi_gro_frags(struct napi_struct *napi, struct napi_gro_fraginfo *info)
+struct sk_buff *napi_frags_skb(struct napi_struct *napi)
 {
-	struct sk_buff *skb = napi_fraginfo_skb(napi, info);
+	struct sk_buff *skb = napi->skb;
+	struct ethhdr *eth;
+
+	napi->skb = NULL;
+
+	skb_reset_mac_header(skb);
+	skb_gro_reset_offset(skb);
+
+	eth = skb_gro_header(skb, sizeof(*eth));
+	if (!eth) {
+		napi_reuse_skb(napi, skb);
+		skb = NULL;
+		goto out;
+	}
+
+	skb_gro_pull(skb, sizeof(*eth));
+
+	/*
+	 * This works because the only protocols we care about don't require
+	 * special handling.  We'll fix it up properly at the end.
+	 */
+	skb->protocol = eth->h_proto;
+
+out:
+	return skb;
+}
+EXPORT_SYMBOL(napi_frags_skb);
+
+int napi_gro_frags(struct napi_struct *napi)
+{
+	struct sk_buff *skb = napi_frags_skb(napi);
 
 	if (!skb)
 		return NET_RX_DROP;
@@ -2719,7 +2709,7 @@ void netif_napi_del(struct napi_struct *napi)
 	struct sk_buff *skb, *next;
 
 	list_del_init(&napi->dev_list);
-	kfree_skb(napi->skb);
+	napi_free_frags(napi);
 
 	for (skb = napi->gro_list; skb; skb = next) {
 		next = skb->next;
