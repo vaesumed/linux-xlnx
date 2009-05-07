@@ -1,0 +1,82 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc4-git2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard a425a638c858fd10370b573bde81df3ba500e271
+HEAD is now at a425a63 Ignore madvise(MADV_WILLNEED) for hugetlbfs-backed regions
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+i2c-retry-on-arbitration-loss.patch
+i2c-tdfx-no-class.patch
+i2c-adapter-no-default-parent.patch
+i2c-chips-move-max6875-to-drivers-misc-eeprom.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+macintosh-windfarm-convert-to-new-style-i2c.patch
+macintosh-therm_adt746x-convert-to-new-style-i2c.patch
+macintosh-therm_windtunnel-convert-to-new-style-i2c.patch
+ir-kbd-i2c-conversion-ALL-IN-ONE.patch
+media-video-pvrusb2-dont-use-client-list.patch
+i2c-core-01-kill-client_register_unregister.patch
+i2c-core-02-kill-legacy-binding-model.patch
+i2c-core-03-kill-i2c_probe.patch
+i2c-core-04-merge-i2c_attach_client.patch
+i2c-core-05-kill-is_newstyle_driver.patch
+i2c-core-06-kill-per-adapter-client-list.patch
+i2c-sysfs-interface-to-instantiate-devices.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 38e44bd...a728bc4 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc4-git2
+$ cd ../quilt-tmp
+$ git reset --hard a425a638c858fd10370b573bde81df3ba500e271
+HEAD is now at a425a63 Ignore madvise(MADV_WILLNEED) for hugetlbfs-backed regions
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-asus_atk0110-fix-compiler-warning.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + ccb4f8d...e8db107 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing ttydev based on 27b1833279995e7c290a40cac4ef36ccea7e9283
+$ cd ../quilt-tmp
+$ git reset --hard 27b1833279995e7c290a40cac4ef36ccea7e9283
+HEAD is now at 27b1833 Remove unused support code for refok sections.
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+cyclades-firmware-ze
+cyclades-fw-dontreset
+cyclades-remove-spare-null-check
+tty-port-carrierclose
+tty-port-drain-delay
+tty-usb-use-port
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:306: trailing whitespace.
+	else 
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2195: trailing whitespace.
+	serial_do_down(port);		
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2221: trailing whitespace.
+	return 1;	
+warning: 3 lines add whitespace errors.
+tty-usb-acm-port
+synclink-pio-mode
+tty-cyclades-cast-clean
+tty-cyclades-cache-hw-ver
+tty-cyclades-macros-to-inlines
+tty-cyclades-kill-typedefs
+tty-cyclades-nports
+tty-cyclades-remove-unused-vars
+tty-usb-acm-kref
+tty-usb-acm-clean
+jsm-remove-unused-lock
+vt-clocks
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + daa1c6b...dd6f67c master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
