@@ -107,6 +107,7 @@ SECTIONS
 
 	/* Data */
 	. = ALIGN(PAGE_SIZE);
+	_sdata = .;			/* Start of data section */
 	.data : AT(ADDR(.data) - LOAD_OFFSET) {
 		DATA_DATA
 		CONSTRUCTORS
