@@ -606,6 +606,7 @@ static unsigned int azx_rirb_get_response(struct hda_bus *bus)
 		}
 		if (!chip->rirb.cmds) {
 			smp_rmb();
+			bus->rirb_error = 0;
 			return chip->rirb.res; /* the last value */
 		}
 		if (time_after(jiffies, timeout))
@@ -625,8 +626,10 @@ static unsigned int azx_rirb_get_response(struct hda_bus *bus)
 		chip->irq = -1;
 		pci_disable_msi(chip->pci);
 		chip->msi = 0;
-		if (azx_acquire_irq(chip, 1) < 0)
+		if (azx_acquire_irq(chip, 1) < 0) {
+			bus->rirb_error = 1;
 			return -1;
+		}
 		goto again;
 	}
 
@@ -646,14 +649,12 @@ static unsigned int azx_rirb_get_response(struct hda_bus *bus)
 		return -1;
 	}
 
-	snd_printk(KERN_ERR "hda_intel: azx_get_response timeout, "
-		   "switching to single_cmd mode: last cmd=0x%08x\n",
-		   chip->last_cmd);
-	chip->rirb.rp = azx_readb(chip, RIRBWP);
-	chip->rirb.cmds = 0;
-	/* switch to single_cmd mode */
-	chip->single_cmd = 1;
-	azx_free_cmd_io(chip);
+	snd_printk(KERN_ERR "hda_intel: azx_get_response timeout (ERROR): "
+		   "last cmd=0x%08x\n", chip->last_cmd);
+	spin_lock_irq(&chip->reg_lock);
+	chip->rirb.cmds = 0; /* reset the index */
+	bus->rirb_error = 1;
+	spin_unlock_irq(&chip->reg_lock);
 	return -1;
 }
 
@@ -1830,7 +1831,7 @@ azx_attach_pcm_stream(struct hda_bus *bus, struct hda_codec *codec,
 			  &pcm);
 	if (err < 0)
 		return err;
-	strcpy(pcm->name, cpcm->name);
+	strlcpy(pcm->name, cpcm->name, sizeof(pcm->name));
 	apcm = kzalloc(sizeof(*apcm), GFP_KERNEL);
 	if (apcm == NULL)
 		return -ENOMEM;
@@ -2358,9 +2359,11 @@ static int __devinit azx_create(struct snd_card *card, struct pci_dev *pci,
 	}
 
 	strcpy(card->driver, "HDA-Intel");
-	strcpy(card->shortname, driver_short_names[chip->driver_type]);
-	sprintf(card->longname, "%s at 0x%lx irq %i",
-		card->shortname, chip->addr, chip->irq);
+	strlcpy(card->shortname, driver_short_names[chip->driver_type],
+		sizeof(card->shortname));
+	snprintf(card->longname, sizeof(card->longname),
+		 "%s at 0x%lx irq %i",
+		 card->shortname, chip->addr, chip->irq);
 
 	*rchip = chip;
 	return 0;
@@ -2513,6 +2516,11 @@ static struct pci_device_id azx_ids[] = {
 	{ PCI_DEVICE(0x10de, 0x0d97), .driver_data = AZX_DRIVER_NVIDIA },
 	/* Teradici */
 	{ PCI_DEVICE(0x6549, 0x1200), .driver_data = AZX_DRIVER_TERA },
+	/* Creative X-Fi (CA0110-IBG) */
+	{ PCI_DEVICE(PCI_VENDOR_ID_CREATIVE, PCI_ANY_ID),
+	  .class = PCI_CLASS_MULTIMEDIA_HD_AUDIO << 8,
+	  .class_mask = 0xffffff,
+	  .driver_data = AZX_DRIVER_GENERIC },
 	/* AMD Generic, PCI class code and Vendor ID for HD Audio */
 	{ PCI_DEVICE(PCI_VENDOR_ID_ATI, PCI_ANY_ID),
 	  .class = PCI_CLASS_MULTIMEDIA_HD_AUDIO << 8,
