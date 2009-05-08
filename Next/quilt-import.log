@@ -1,0 +1,50 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc4-git3
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 413f81eba35d6ede9289b0c8a920c013a84fac71
+HEAD is now at 413f81e Merge branch 'drm-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+i2c-retry-on-arbitration-loss.patch
+i2c-tdfx-no-class.patch
+i2c-adapter-no-default-parent.patch
+i2c-chips-move-max6875-to-drivers-misc-eeprom.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+macintosh-windfarm-convert-to-new-style-i2c.patch
+macintosh-therm_adt746x-convert-to-new-style-i2c.patch
+macintosh-therm_windtunnel-convert-to-new-style-i2c.patch
+ir-kbd-i2c-conversion-ALL-IN-ONE.patch
+media-video-pvrusb2-dont-use-client-list.patch
+i2c-core-01-kill-client_register_unregister.patch
+i2c-core-02-kill-legacy-binding-model.patch
+i2c-core-03-kill-i2c_probe.patch
+i2c-core-04-merge-i2c_attach_client.patch
+i2c-core-05-kill-is_newstyle_driver.patch
+i2c-core-06-kill-per-adapter-client-list.patch
+i2c-sysfs-interface-to-instantiate-devices.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + a728bc4...e6e3499 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc4-git3
+$ cd ../quilt-tmp
+$ git reset --hard 413f81eba35d6ede9289b0c8a920c013a84fac71
+HEAD is now at 413f81e Merge branch 'drm-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-asus_atk0110-fix-compiler-warning.patch
+hwmon-w83781d-fix-w83782d-support.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + e8db107...3566e94 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
