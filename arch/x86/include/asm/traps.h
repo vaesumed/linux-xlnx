@@ -2,6 +2,7 @@
 #define _ASM_X86_TRAPS_H
 
 #include <asm/debugreg.h>
+#include <asm/siginfo.h>			/* TRAP_TRACE, ... */
 
 #ifdef CONFIG_X86_32
 #define dotraplinkage
@@ -74,7 +75,6 @@ static inline int get_si_code(unsigned long condition)
 }
 
 extern int panic_on_unrecovered_nmi;
-extern int kstack_depth_to_print;
 
 void math_error(void __user *);
 void math_emulate(struct math_emu_info *);
