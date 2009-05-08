@@ -915,13 +915,13 @@ static inline void setup_object_debug(struct kmem_cache *s,
 }
 
 static inline int alloc_debug_processing(struct kmem_cache *s,
-			void *object, void *addr)
+			void *object, unsigned long addr)
 {
 	return 0;
 }
 
 static inline int free_debug_processing(struct kmem_cache *s,
-			void *object, void *addr)
+			void *object, unsigned long addr)
 {
 	return 0;
 }
