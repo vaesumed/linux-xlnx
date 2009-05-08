@@ -174,6 +174,11 @@ static void jffs2_put_super (struct super_block *sb)
 
 	D2(printk(KERN_DEBUG "jffs2: jffs2_put_super()\n"));
 
+	lock_kernel();
+
+	if (sb->s_dirt)
+		jffs2_write_super(sb);
+
 	mutex_lock(&c->alloc_sem);
 	jffs2_flush_wbuf_pad(c);
 	mutex_unlock(&c->alloc_sem);
@@ -191,6 +196,8 @@ static void jffs2_put_super (struct super_block *sb)
 	jffs2_clear_xattr_subsystem(c);
 	if (c->mtd->sync)
 		c->mtd->sync(c->mtd);
+
+	unlock_kernel();
 
 	D1(printk(KERN_DEBUG "jffs2_put_super returning\n"));
 }

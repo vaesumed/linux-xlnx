@@ -2327,7 +2327,6 @@ err:
 	btrfs_update_inode(trans, root, dir);
 	btrfs_drop_nlink(inode);
 	ret = btrfs_update_inode(trans, root, inode);
-	dir->i_sb->s_dirt = 1;
 out:
 	return ret;
 }
@@ -2811,7 +2810,6 @@ error:
 				      pending_del_nr);
 	}
 	btrfs_free_path(path);
-	inode->i_sb->s_dirt = 1;
 	return ret;
 }
 
@@ -3749,7 +3747,6 @@ static int btrfs_mknod(struct inode *dir, struct dentry *dentry,
 		init_special_inode(inode, inode->i_mode, rdev);
 		btrfs_update_inode(trans, root, inode);
 	}
-	dir->i_sb->s_dirt = 1;
 	btrfs_update_inode_block_group(trans, inode);
 	btrfs_update_inode_block_group(trans, dir);
 out_unlock:
@@ -3814,7 +3811,6 @@ static int btrfs_create(struct inode *dir, struct dentry *dentry,
 		inode->i_op = &btrfs_file_inode_operations;
 		BTRFS_I(inode)->io_tree.ops = &btrfs_extent_io_ops;
 	}
-	dir->i_sb->s_dirt = 1;
 	btrfs_update_inode_block_group(trans, inode);
 	btrfs_update_inode_block_group(trans, dir);
 out_unlock:
@@ -3861,7 +3857,6 @@ static int btrfs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		drop_inode = 1;
 
-	dir->i_sb->s_dirt = 1;
 	btrfs_update_inode_block_group(trans, dir);
 	err = btrfs_update_inode(trans, root, inode);
 
@@ -3943,7 +3938,6 @@ static int btrfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 	d_instantiate(dentry, inode);
 	drop_on_err = 0;
-	dir->i_sb->s_dirt = 1;
 	btrfs_update_inode_block_group(trans, inode);
 	btrfs_update_inode_block_group(trans, dir);
 
@@ -4972,7 +4966,6 @@ static int btrfs_symlink(struct inode *dir, struct dentry *dentry,
 		inode->i_op = &btrfs_file_inode_operations;
 		BTRFS_I(inode)->io_tree.ops = &btrfs_extent_io_ops;
 	}
-	dir->i_sb->s_dirt = 1;
 	btrfs_update_inode_block_group(trans, inode);
 	btrfs_update_inode_block_group(trans, dir);
 	if (drop_inode)

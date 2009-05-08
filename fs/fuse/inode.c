@@ -19,6 +19,7 @@
 #include <linux/random.h>
 #include <linux/sched.h>
 #include <linux/exportfs.h>
+#include <linux/smp_lock.h>
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -259,7 +260,9 @@ struct inode *fuse_iget(struct super_block *sb, u64 nodeid,
 
 static void fuse_umount_begin(struct super_block *sb)
 {
+	lock_kernel();
 	fuse_abort_conn(get_fuse_conn_super(sb));
+	unlock_kernel();
 }
 
 static void fuse_send_destroy(struct fuse_conn *fc)
@@ -303,9 +306,13 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
+	lock_kernel();
+
 	fuse_send_destroy(fc);
 	fuse_conn_kill(fc);
 	fuse_conn_put(fc);
+
+	unlock_kernel();
 }
 
 static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
