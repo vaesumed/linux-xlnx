@@ -224,17 +224,6 @@ void __iomem *__ioremap(unsigned long offset, unsigned long size,
 			unsigned long flags);
 void __iounmap(void __iomem *addr);
 
-/* arch/sh/mm/ioremap_64.c */
-unsigned long onchip_remap(unsigned long addr, unsigned long size,
-			   const char *name);
-extern void onchip_unmap(unsigned long vaddr);
-#else
-#define __ioremap(offset, size, flags)	((void __iomem *)(offset))
-#define __iounmap(addr)			do { } while (0)
-#define onchip_remap(addr, size, name)	(addr)
-#define onchip_unmap(addr)		do { } while (0)
-#endif /* CONFIG_MMU */
-
 static inline void __iomem *
 __ioremap_mode(unsigned long offset, unsigned long size, unsigned long flags)
 {
@@ -268,6 +257,10 @@ __ioremap_mode(unsigned long offset, unsigned long size, unsigned long flags)
 
 	return __ioremap(offset, size, flags);
 }
+#else
+#define __ioremap_mode(offset, size, flags)	((void __iomem *)(offset))
+#define __iounmap(addr)				do { } while (0)
+#endif /* CONFIG_MMU */
 
 #define ioremap(offset, size)				\
 	__ioremap_mode((offset), (size), 0)
