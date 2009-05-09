@@ -43,7 +43,7 @@ static void trace_do_dump_pages(unsigned long pfn, struct page *page)
 }
 
 static ssize_t
-trace_mm_trigger_read(struct file *filp, char __user *ubuf, size_t cnt,
+trace_mm_dump_range_read(struct file *filp, char __user *ubuf, size_t cnt,
 		 loff_t *ppos)
 {
 	return simple_read_from_buffer(ubuf, cnt, ppos, "0\n", 2);
@@ -51,7 +51,7 @@ trace_mm_trigger_read(struct file *filp, char __user *ubuf, size_t cnt,
 
 
 static ssize_t
-trace_mm_trigger_write(struct file *filp, const char __user *ubuf, size_t cnt,
+trace_mm_dump_range_write(struct file *filp, const char __user *ubuf, size_t cnt,
 		       loff_t *ppos)
 {
 	unsigned long val, start, end;
@@ -91,8 +91,8 @@ trace_mm_trigger_write(struct file *filp, const char __user *ubuf, size_t cnt,
 
 static const struct file_operations trace_mm_fops = {
 	.open		= tracing_open_generic,
-	.read		= trace_mm_trigger_read,
-	.write		= trace_mm_trigger_write,
+	.read		= trace_mm_dump_range_read,
+	.write		= trace_mm_dump_range_write,
 };
 
 /* move this into trace_objects.c when that file is created */
@@ -164,7 +164,7 @@ static __init int trace_objects_mm_init(void)
 	if (!d_pages)
 		return 0;
 
-	trace_create_file("trigger", 0600, d_pages, NULL,
+	trace_create_file("dump_range", 0600, d_pages, NULL,
 			  &trace_mm_fops);
 
 	return 0;
