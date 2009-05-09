@@ -33,7 +33,7 @@ TRACE_EVENT(dump_pages,
 		__entry->pfn		= pfn;
 		__entry->flags		= page->flags;
 		__entry->count		= atomic_read(&page->_count);
-		__entry->mapcount	= atomic_read(&page->_mapcount);
+		__entry->mapcount	= page_mapcount(page);
 		__entry->index		= page->index;
 	),
 
