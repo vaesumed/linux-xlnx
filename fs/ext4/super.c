@@ -568,6 +568,11 @@ static void ext4_put_super(struct super_block *sb)
 	struct ext4_super_block *es = sbi->s_es;
 	int i, err;
 
+	lock_super(sb);
+	lock_kernel();
+	if (sb->s_dirt)
+		ext4_write_super(sb);
+
 	ext4_mb_release(sb);
 	ext4_ext_release(sb);
 	ext4_xattr_put_super(sb);
@@ -633,11 +638,8 @@ static void ext4_put_super(struct super_block *sb)
 	unlock_super(sb);
 	kobject_put(&sbi->s_kobj);
 	wait_for_completion(&sbi->s_kobj_unregister);
-	lock_super(sb);
-	lock_kernel();
 	kfree(sbi->s_blockgroup_lock);
 	kfree(sbi);
-	return;
 }
 
 static struct kmem_cache *ext4_inode_cachep;
@@ -3390,6 +3392,7 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data)
 #endif
 
 	/* Store the original options */
+	lock_super(sb);
 	old_sb_flags = sb->s_flags;
 	old_opts.s_mount_opt = sbi->s_mount_opt;
 	old_opts.s_resuid = sbi->s_resuid;
@@ -3525,6 +3528,7 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data)
 		    old_opts.s_qf_names[i] != sbi->s_qf_names[i])
 			kfree(old_opts.s_qf_names[i]);
 #endif
+	unlock_super(sb);
 	return 0;
 restore_opts:
 	sb->s_flags = old_sb_flags;
@@ -3543,6 +3547,7 @@ restore_opts:
 		sbi->s_qf_names[i] = old_opts.s_qf_names[i];
 	}
 #endif
+	unlock_super(sb);
 	return err;
 }
 
