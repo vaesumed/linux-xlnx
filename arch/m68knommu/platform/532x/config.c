@@ -20,7 +20,6 @@
 #include <linux/kernel.h>
 #include <linux/param.h>
 #include <linux/init.h>
-#include <linux/interrupt.h>
 #include <linux/io.h>
 #include <asm/machdep.h>
 #include <asm/coldfire.h>
@@ -30,8 +29,6 @@
 #include <asm/mcfwdebug.h>
 
 /***************************************************************************/
-
-void coldfire_reset(void);
 
 extern unsigned int mcf_timervector;
 extern unsigned int mcf_profilevector;
@@ -100,18 +97,11 @@ static struct platform_device *m532x_devices[] __initdata = {
 static void __init m532x_uart_init_line(int line, int irq)
 {
 	if (line == 0) {
-		MCF_INTC0_ICR26 = 0x3;
-		MCF_INTC0_CIMR = 26;
 		/* GPIO initialization */
 		MCF_GPIO_PAR_UART |= 0x000F;
 	} else if (line == 1) {
-		MCF_INTC0_ICR27 = 0x3;
-		MCF_INTC0_CIMR = 27;
 		/* GPIO initialization */
 		MCF_GPIO_PAR_UART |= 0x0FF0;
-	} else if (line == 2) {
-		MCF_INTC0_ICR28 = 0x3;
-		MCF_INTC0_CIMR = 28;
 	}
 }
 
@@ -127,14 +117,6 @@ static void __init m532x_uarts_init(void)
 
 static void __init m532x_fec_init(void)
 {
-	/* Unmask FEC interrupts at ColdFire interrupt controller */
-	MCF_INTC0_ICR36 = 0x2;
-	MCF_INTC0_ICR40 = 0x2;
-	MCF_INTC0_ICR42 = 0x2;
-
-	MCF_INTC0_IMRH &= ~(MCF_INTC_IMRH_INT_MASK36 |
-		MCF_INTC_IMRH_INT_MASK40 | MCF_INTC_IMRH_INT_MASK42);
-
 	/* Set multi-function pins to ethernet mode for fec0 */
 	MCF_GPIO_PAR_FECI2C |= (MCF_GPIO_PAR_FECI2C_PAR_MDC_EMDC |
 		MCF_GPIO_PAR_FECI2C_PAR_MDIO_EMDIO);
@@ -146,28 +128,20 @@ static void __init m532x_fec_init(void)
 
 void mcf_settimericr(unsigned int timer, unsigned int level)
 {
-	volatile unsigned char *icrp;
-	unsigned int icr;
-	unsigned char irq;
+}
 
-	if (timer <= 2) {
-		switch (timer) {
-		case 2:  irq = 33; icr = MCFSIM_ICR_TIMER2; break;
-		default: irq = 32; icr = MCFSIM_ICR_TIMER1; break;
-		}
-		
-		icrp = (volatile unsigned char *) (icr);
-		*icrp = level;
-		mcf_enable_irq0(irq);
-	}
+/***************************************************************************/
+
+static void m532x_cpu_reset(void)
+{
+	local_irq_disable();
+	__raw_writeb(MCF_RCR_SWRESET, MCF_RCR);
 }
 
 /***************************************************************************/
 
 void __init config_BSP(char *commandp, int size)
 {
-	mcf_setimr(MCFSIM_IMR_MASKALL);
-
 #if !defined(CONFIG_BOOTPARAM)
 	/* Copy command line from FLASH to local buffer... */
 	memcpy(commandp, (char *) 0x4000, 4);
@@ -181,7 +155,7 @@ void __init config_BSP(char *commandp, int size)
 
 	mcf_timervector = 64+32;
 	mcf_profilevector = 64+33;
-	mach_reset = coldfire_reset;
+	mach_reset = m532x_cpu_reset;
 
 #ifdef CONFIG_BDM_DISABLE
 	/*
