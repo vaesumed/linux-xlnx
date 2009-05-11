@@ -66,6 +66,7 @@ static int ext4_remount(struct super_block *sb, int *flags, char *data);
 static int ext4_statfs(struct dentry *dentry, struct kstatfs *buf);
 static int ext4_unfreeze(struct super_block *sb);
 static void ext4_write_super(struct super_block *sb);
+static void ext4_write_super_locked(struct super_block *sb);
 static int ext4_freeze(struct super_block *sb);
 
 
@@ -566,7 +567,7 @@ static void ext4_put_super(struct super_block *sb)
 	lock_super(sb);
 	lock_kernel();
 	if (sb->s_dirt)
-		ext4_write_super(sb);
+		ext4_write_super_locked(sb);
 
 	ext4_mb_release(sb);
 	ext4_ext_release(sb);
@@ -3273,7 +3274,7 @@ int ext4_force_commit(struct super_block *sb)
  * point.  (We can probably nuke this function altogether, and remove
  * any mention to sb->s_dirt in all of fs/ext4; eventual cleanup...)
  */
-static void ext4_write_super(struct super_block *sb)
+static void ext4_write_super_locked(struct super_block *sb)
 {
 	if (EXT4_SB(sb)->s_journal) {
 		if (mutex_trylock(&sb->s_lock) != 0)
@@ -3282,6 +3283,13 @@ static void ext4_write_super(struct super_block *sb)
 	} else {
 		ext4_commit_super(sb, EXT4_SB(sb)->s_es, 1);
 	}
+}
+
+static void ext4_write_super(struct super_block *sb)
+{
+	lock_super(sb);
+	ext4_write_super_locked(sb);
+	unlock_super(sb);
 }
 
 static int ext4_sync_fs(struct super_block *sb, int wait)
