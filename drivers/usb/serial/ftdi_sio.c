@@ -2093,6 +2093,7 @@ static void ftdi_process_read(struct work_struct *work)
 		if (data[packet_offset+1] & FTDI_RS_BI) {
 			error_flag = TTY_BREAK;
 			dbg("BREAK received");
+			usb_serial_handle_break(port);
 		}
 		if (data[packet_offset+1] & FTDI_RS_PE) {
 			error_flag = TTY_PARITY;
@@ -2107,8 +2108,11 @@ static void ftdi_process_read(struct work_struct *work)
 				/* Note that the error flag is duplicated for
 				   every character received since we don't know
 				   which character it applied to */
-				tty_insert_flip_char(tty,
-					data[packet_offset + i], error_flag);
+				if (!usb_serial_handle_sysrq_char(port,
+						data[packet_offset + i]))
+					tty_insert_flip_char(tty,
+						data[packet_offset + i],
+						error_flag);
 			}
 			need_flip = 1;
 		}
