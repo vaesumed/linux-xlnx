@@ -12,7 +12,7 @@
 #include <linux/serial.h>
 #include <linux/serial_sci.h>
 #include <linux/uio_driver.h>
-#include <linux/sh_cmt.h>
+#include <linux/sh_timer.h>
 #include <asm/clock.h>
 
 static struct resource iic0_resources[] = {
@@ -141,7 +141,7 @@ static struct platform_device jpu_device = {
 	.num_resources	= ARRAY_SIZE(jpu_resources),
 };
 
-static struct sh_cmt_config cmt_platform_data = {
+static struct sh_timer_config cmt_platform_data = {
 	.name = "CMT",
 	.channel_offset = 0x60,
 	.timer_bit = 5,
@@ -179,21 +179,25 @@ static struct plat_sci_port sci_platform_data[] = {
 		.flags		= UPF_BOOT_AUTOCONF,
 		.type		= PORT_SCIF,
 		.irqs		= { 80, 80, 80, 80 },
+		.clk		= "scif0",
 	}, {
 		.mapbase	= 0xffe10000,
 		.flags		= UPF_BOOT_AUTOCONF,
 		.type		= PORT_SCIF,
 		.irqs		= { 81, 81, 81, 81 },
+		.clk		= "scif1",
 	}, {
 		.mapbase	= 0xffe20000,
 		.flags		= UPF_BOOT_AUTOCONF,
 		.type		= PORT_SCIF,
 		.irqs		= { 82, 82, 82, 82 },
+		.clk		= "scif2",
 	}, {
 		.mapbase	= 0xffe30000,
 		.flags		= UPF_BOOT_AUTOCONF,
 		.type		= PORT_SCIF,
 		.irqs		= { 83, 83, 83, 83 },
+		.clk		= "scif3",
 	}, {
 		.flags = 0,
 	}
@@ -233,6 +237,16 @@ static int __init sh7343_devices_setup(void)
 				    ARRAY_SIZE(sh7343_devices));
 }
 __initcall(sh7343_devices_setup);
+
+static struct platform_device *sh7343_early_devices[] __initdata = {
+	&cmt_device,
+};
+
+void __init plat_early_device_setup(void)
+{
+	early_platform_add_devices(sh7343_early_devices,
+				   ARRAY_SIZE(sh7343_early_devices));
+}
 
 enum {
 	UNUSED = 0,
