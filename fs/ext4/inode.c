@@ -2318,11 +2318,21 @@ static int ext4_da_get_block_prep(struct inode *inode, sector_t iblock,
 			/* not enough space to reserve */
 			return ret;
 
-		map_bh(bh_result, inode->i_sb, 0);
+		map_bh(bh_result, inode->i_sb, ~0);
 		set_buffer_new(bh_result);
 		set_buffer_delay(bh_result);
 	} else if (ret > 0) {
 		bh_result->b_size = (ret << inode->i_blkbits);
+		/*
+		 * With sub-block writes into unwritten extents
+		 * we also need to mark the buffer as new so that
+		 * the unwritten parts of the buffer gets correctly zeroed.
+		 */
+		if (buffer_unwritten(bh_result)) {
+			bh_result->b_bdev = inode->i_sb->s_bdev;
+			set_buffer_new(bh_result);
+			bh_result->b_blocknr = ~0;
+		}
 		ret = 0;
 	}
 
@@ -4906,7 +4916,8 @@ static int ext4_index_trans_blocks(struct inode *inode, int nrblocks, int chunk)
  */
 int ext4_meta_trans_blocks(struct inode *inode, int nrblocks, int chunk)
 {
-	int groups, gdpblocks;
+	ext4_group_t groups, ngroups = ext4_get_groups_count(inode->i_sb);
+	int gdpblocks;
 	int idxblocks;
 	int ret = 0;
 
@@ -4933,8 +4944,8 @@ int ext4_meta_trans_blocks(struct inode *inode, int nrblocks, int chunk)
 		groups += nrblocks;
 
 	gdpblocks = groups;
-	if (groups > EXT4_SB(inode->i_sb)->s_groups_count)
-		groups = EXT4_SB(inode->i_sb)->s_groups_count;
+	if (groups > ngroups)
+		groups = ngroups;
 	if (groups > EXT4_SB(inode->i_sb)->s_gdb_count)
 		gdpblocks = EXT4_SB(inode->i_sb)->s_gdb_count;
 
