@@ -1857,11 +1857,6 @@ static void ftdi_write_bulk_callback(struct urb *urb)
 
 	dbg("%s - port %d", __func__, port->number);
 
-	if (status) {
-		dbg("nonzero write bulk status received: %d", status);
-		return;
-	}
-
 	priv = usb_get_serial_port_data(port);
 	if (!priv) {
 		dbg("%s - bad port private data pointer - exiting", __func__);
@@ -1878,6 +1873,11 @@ static void ftdi_write_bulk_callback(struct urb *urb)
 	--priv->tx_outstanding_urbs;
 	priv->tx_outstanding_bytes -= countback;
 	spin_unlock_irqrestore(&priv->tx_lock, flags);
+
+	if (status) {
+		dbg("nonzero write bulk status received: %d", status);
+		return;
+	}
 
 	usb_serial_port_softint(port);
 } /* ftdi_write_bulk_callback */
