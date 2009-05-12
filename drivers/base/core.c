@@ -22,6 +22,7 @@
 #include <linux/kallsyms.h>
 #include <linux/semaphore.h>
 #include <linux/mutex.h>
+#include <linux/async.h>
 
 #include "base.h"
 #include "power/power.h"
@@ -1662,4 +1663,5 @@ void device_shutdown(void)
 	kobject_put(sysfs_dev_char_kobj);
 	kobject_put(sysfs_dev_block_kobj);
 	kobject_put(dev_kobj);
+	async_synchronize_full();
 }
