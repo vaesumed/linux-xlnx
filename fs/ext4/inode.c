@@ -2049,7 +2049,7 @@ static int mpage_da_map_blocks(struct mpage_da_data *mpd)
 	if ((mpd->b_state  & (1 << BH_Mapped)) &&
 	    !(mpd->b_state & (1 << BH_Delay)))
 		return 0;
-	new.b_state = mpd->b_state;
+	new.b_state = 0;
 	new.b_blocknr = 0;
 	new.b_size = mpd->b_size;
 	next = mpd->b_blocknr;
