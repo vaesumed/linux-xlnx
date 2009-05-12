@@ -26,6 +26,7 @@
 		serial1 = &serial1;
 		pci0 = &pci0;
 		pci1 = &pci1;
+		rapidio0 = &rio0;
 	};
 
 	cpus {
@@ -62,8 +63,20 @@
 		device_type = "soc";
 		compatible = "simple-bus";
 		ranges = <0x0 0xe0000000 0x100000>;
-		reg = <0xe0000000 0x1000>;
 		bus-frequency = <0>;
+
+		ecm-law@0 {
+			compatible = "fsl,ecm-law";
+			reg = <0x0 0x1000>;
+			fsl,num-laws = <10>;
+		};
+
+		ecm@1000 {
+			compatible = "fsl,mpc8568-ecm", "fsl,ecm";
+			reg = <0x1000 0x1000>;
+			interrupts = <17 2>;
+			interrupt-parent = <&mpic>;
+		};
 
 		memory-controller@2000 {
 			compatible = "fsl,8568-memory-controller";
@@ -349,6 +362,8 @@
 		reg = <0xe0080000 0x480>;
 		brg-frequency = <0>;
 		bus-frequency = <396000000>;
+		fsl,qe-num-riscs = <2>;
+		fsl,qe-num-snums = <28>;
 
 		muram@10000 {
  			#address-cells = <1>;
@@ -459,7 +474,6 @@
 	};
 
 	pci0: pci@e0008000 {
-		cell-index = <0>;
 		interrupt-map-mask = <0xf800 0x0 0x0 0x7>;
 		interrupt-map = <
 			/* IDSEL 0x12 AD18 */
@@ -490,7 +504,6 @@
 
 	/* PCI Express */
 	pci1: pcie@e000a000 {
-		cell-index = <2>;
 		interrupt-map-mask = <0xf800 0x0 0x0 0x7>;
 		interrupt-map = <
 
@@ -525,5 +538,21 @@
 				  0x1000000 0x0 0x0
 				  0x0 0x800000>;
 		};
+	};
+
+	rio0: rapidio@e00c00000 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		compatible = "fsl,mpc8568-rapidio", "fsl,rapidio-delta";
+		reg = <0xe00c0000 0x20000>;
+		ranges = <0x0 0x0 0xc0000000 0x0 0x20000000>;
+		interrupts = <48 2 /* error     */
+			      49 2 /* bell_outb */
+			      50 2 /* bell_inb  */
+			      53 2 /* msg1_tx   */
+			      54 2 /* msg1_rx   */
+			      55 2 /* msg2_tx   */
+			      56 2 /* msg2_rx   */>;
+		interrupt-parent = <&mpic>;
 	};
 };
