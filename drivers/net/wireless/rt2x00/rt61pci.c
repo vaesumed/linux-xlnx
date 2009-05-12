@@ -2308,7 +2308,6 @@ static int rt61pci_init_eeprom(struct rt2x00_dev *rt2x00dev)
 	u32 reg;
 	u16 value;
 	u16 eeprom;
-	u16 device;
 
 	/*
 	 * Read EEPROM word for configuration.
@@ -2317,14 +2316,10 @@ static int rt61pci_init_eeprom(struct rt2x00_dev *rt2x00dev)
 
 	/*
 	 * Identify RF chipset.
-	 * To determine the RT chip we have to read the
-	 * PCI header of the device.
 	 */
-	pci_read_config_word(to_pci_dev(rt2x00dev->dev),
-			     PCI_CONFIG_HEADER_DEVICE, &device);
 	value = rt2x00_get_field16(eeprom, EEPROM_ANTENNA_RF_TYPE);
 	rt2x00pci_register_read(rt2x00dev, MAC_CSR0, &reg);
-	rt2x00_set_chip(rt2x00dev, device, value, reg);
+	rt2x00_set_chip_rf(rt2x00dev, value, reg);
 
 	if (!rt2x00_rf(&rt2x00dev->chip, RF5225) &&
 	    !rt2x00_rf(&rt2x00dev->chip, RF5325) &&
@@ -2740,7 +2735,6 @@ static const struct ieee80211_ops rt61pci_mac80211_ops = {
 	.add_interface		= rt2x00mac_add_interface,
 	.remove_interface	= rt2x00mac_remove_interface,
 	.config			= rt2x00mac_config,
-	.config_interface	= rt2x00mac_config_interface,
 	.configure_filter	= rt2x00mac_configure_filter,
 	.set_key		= rt2x00mac_set_key,
 	.get_stats		= rt2x00mac_get_stats,
