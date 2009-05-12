@@ -1149,6 +1149,7 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	int retval;
 
 	clear_buffer_mapped(bh);
+	clear_buffer_unwritten(bh);
 
 	/*
 	 * Try to see if we can get  the block without requesting
@@ -1177,6 +1178,12 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	 */
 	if (retval > 0 && buffer_mapped(bh))
 		return retval;
+
+	/*
+	 * The above get_blocks can cause the buffer to be
+	 * marked unwritten. So clear the same.
+	 */
+	clear_buffer_unwritten(bh);
 
 	/*
 	 * New blocks allocate and/or writing to uninitialized extent
