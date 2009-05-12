@@ -192,7 +192,7 @@ ramdisk_max:	.long 0x7fffffff
 					# but leave it at 2 GB to avoid
 					# possible bootloader bugs.
 
-kernel_alignment:  .long CONFIG_PHYSICAL_ALIGN	#physical addr alignment
+kernel_alignment:  .long LOAD_PHYSICAL_ALIGN	#physical addr alignment
 						#required for protected mode
 						#kernel
 #ifdef CONFIG_RELOCATABLE
@@ -221,7 +221,7 @@ setup_data:		.quad 0			# 64-bit physical pointer to
 
 # End of setup header #####################################################
 
-	.section ".inittext", "ax"
+	.section ".entrytext", "ax"
 start_of_setup:
 #ifdef SAFE_RESET_DISK_CONTROLLER
 # Reset the disk controller.
