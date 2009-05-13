@@ -19,6 +19,7 @@
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <crypto/rng.h>
 
 #include "internal.h"
 #include "testmgr.h"
@@ -84,6 +85,11 @@ struct hash_test_suite {
 	unsigned int count;
 };
 
+struct cprng_test_suite {
+	struct cprng_testvec *vecs;
+	unsigned int count;
+};
+
 struct alg_test_desc {
 	const char *alg;
 	int (*test)(const struct alg_test_desc *desc, const char *driver,
@@ -95,13 +101,11 @@ struct alg_test_desc {
 		struct comp_test_suite comp;
 		struct pcomp_test_suite pcomp;
 		struct hash_test_suite hash;
+		struct cprng_test_suite cprng;
 	} suite;
 };
 
 static unsigned int IDX[8] = { IDX1, IDX2, IDX3, IDX4, IDX5, IDX6, IDX7, IDX8 };
-
-static char *xbuf[XBUFSIZE];
-static char *axbuf[XBUFSIZE];
 
 static void hexdump(unsigned char *buf, unsigned int len)
 {
@@ -121,6 +125,33 @@ static void tcrypt_complete(struct crypto_async_request *req, int err)
 	complete(&res->completion);
 }
 
+static int testmgr_alloc_buf(char *buf[XBUFSIZE])
+{
+	int i;
+
+	for (i = 0; i < XBUFSIZE; i++) {
+		buf[i] = (void *)__get_free_page(GFP_KERNEL);
+		if (!buf[i])
+			goto err_free_buf;
+	}
+
+	return 0;
+
+err_free_buf:
+	while (i-- > 0)
+		free_page((unsigned long)buf[i]);
+
+	return -ENOMEM;
+}
+
+static void testmgr_free_buf(char *buf[XBUFSIZE])
+{
+	int i;
+
+	for (i = 0; i < XBUFSIZE; i++)
+		free_page((unsigned long)buf[i]);
+}
+
 static int test_hash(struct crypto_ahash *tfm, struct hash_testvec *template,
 		     unsigned int tcount)
 {
@@ -130,8 +161,12 @@ static int test_hash(struct crypto_ahash *tfm, struct hash_testvec *template,
 	char result[64];
 	struct ahash_request *req;
 	struct tcrypt_result tresult;
-	int ret;
 	void *hash_buff;
+	char *xbuf[XBUFSIZE];
+	int ret = -ENOMEM;
+
+	if (testmgr_alloc_buf(xbuf))
+		goto out_nobuf;
 
 	init_completion(&tresult.completion);
 
@@ -139,7 +174,6 @@ static int test_hash(struct crypto_ahash *tfm, struct hash_testvec *template,
 	if (!req) {
 		printk(KERN_ERR "alg: hash: Failed to allocate request for "
 		       "%s\n", algo);
-		ret = -ENOMEM;
 		goto out_noreq;
 	}
 	ahash_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
@@ -265,6 +299,8 @@ static int test_hash(struct crypto_ahash *tfm, struct hash_testvec *template,
 out:
 	ahash_request_free(req);
 out_noreq:
+	testmgr_free_buf(xbuf);
+out_nobuf:
 	return ret;
 }
 
@@ -273,7 +309,7 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 {
 	const char *algo = crypto_tfm_alg_driver_name(crypto_aead_tfm(tfm));
 	unsigned int i, j, k, n, temp;
-	int ret = 0;
+	int ret = -ENOMEM;
 	char *q;
 	char *key;
 	struct aead_request *req;
@@ -285,6 +321,13 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 	void *input;
 	void *assoc;
 	char iv[MAX_IVLEN];
+	char *xbuf[XBUFSIZE];
+	char *axbuf[XBUFSIZE];
+
+	if (testmgr_alloc_buf(xbuf))
+		goto out_noxbuf;
+	if (testmgr_alloc_buf(axbuf))
+		goto out_noaxbuf;
 
 	if (enc == ENCRYPT)
 		e = "encryption";
@@ -297,7 +340,6 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 	if (!req) {
 		printk(KERN_ERR "alg: aead: Failed to allocate request for "
 		       "%s\n", algo);
-		ret = -ENOMEM;
 		goto out;
 	}
 
@@ -363,6 +405,16 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 
 			switch (ret) {
 			case 0:
+				if (template[i].novrfy) {
+					/* verification was supposed to fail */
+					printk(KERN_ERR "alg: aead: %s failed "
+					       "on test %d for %s: ret was 0, "
+					       "expected -EBADMSG\n",
+					       e, j, algo);
+					/* so really, we got a bad message */
+					ret = -EBADMSG;
+					goto out;
+				}
 				break;
 			case -EINPROGRESS:
 			case -EBUSY:
@@ -372,6 +424,10 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 					INIT_COMPLETION(result.completion);
 					break;
 				}
+			case -EBADMSG:
+				if (template[i].novrfy)
+					/* verification failure was expected */
+					continue;
 				/* fall through */
 			default:
 				printk(KERN_ERR "alg: aead: %s failed on test "
@@ -481,6 +537,16 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 
 			switch (ret) {
 			case 0:
+				if (template[i].novrfy) {
+					/* verification was supposed to fail */
+					printk(KERN_ERR "alg: aead: %s failed "
+					       "on chunk test %d for %s: ret "
+					       "was 0, expected -EBADMSG\n",
+					       e, j, algo);
+					/* so really, we got a bad message */
+					ret = -EBADMSG;
+					goto out;
+				}
 				break;
 			case -EINPROGRESS:
 			case -EBUSY:
@@ -490,6 +556,10 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 					INIT_COMPLETION(result.completion);
 					break;
 				}
+			case -EBADMSG:
+				if (template[i].novrfy)
+					/* verification failure was expected */
+					continue;
 				/* fall through */
 			default:
 				printk(KERN_ERR "alg: aead: %s failed on "
@@ -546,6 +616,10 @@ static int test_aead(struct crypto_aead *tfm, int enc,
 
 out:
 	aead_request_free(req);
+	testmgr_free_buf(axbuf);
+out_noaxbuf:
+	testmgr_free_buf(xbuf);
+out_noxbuf:
 	return ret;
 }
 
@@ -554,10 +628,14 @@ static int test_cipher(struct crypto_cipher *tfm, int enc,
 {
 	const char *algo = crypto_tfm_alg_driver_name(crypto_cipher_tfm(tfm));
 	unsigned int i, j, k;
-	int ret;
 	char *q;
 	const char *e;
 	void *data;
+	char *xbuf[XBUFSIZE];
+	int ret = -ENOMEM;
+
+	if (testmgr_alloc_buf(xbuf))
+		goto out_nobuf;
 
 	if (enc == ENCRYPT)
 	        e = "encryption";
@@ -611,6 +689,8 @@ static int test_cipher(struct crypto_cipher *tfm, int enc,
 	ret = 0;
 
 out:
+	testmgr_free_buf(xbuf);
+out_nobuf:
 	return ret;
 }
 
@@ -620,7 +700,6 @@ static int test_skcipher(struct crypto_ablkcipher *tfm, int enc,
 	const char *algo =
 		crypto_tfm_alg_driver_name(crypto_ablkcipher_tfm(tfm));
 	unsigned int i, j, k, n, temp;
-	int ret;
 	char *q;
 	struct ablkcipher_request *req;
 	struct scatterlist sg[8];
@@ -628,6 +707,11 @@ static int test_skcipher(struct crypto_ablkcipher *tfm, int enc,
 	struct tcrypt_result result;
 	void *data;
 	char iv[MAX_IVLEN];
+	char *xbuf[XBUFSIZE];
+	int ret = -ENOMEM;
+
+	if (testmgr_alloc_buf(xbuf))
+		goto out_nobuf;
 
 	if (enc == ENCRYPT)
 	        e = "encryption";
@@ -640,7 +724,6 @@ static int test_skcipher(struct crypto_ablkcipher *tfm, int enc,
 	if (!req) {
 		printk(KERN_ERR "alg: skcipher: Failed to allocate request "
 		       "for %s\n", algo);
-		ret = -ENOMEM;
 		goto out;
 	}
 
@@ -825,6 +908,8 @@ static int test_skcipher(struct crypto_ablkcipher *tfm, int enc,
 
 out:
 	ablkcipher_request_free(req);
+	testmgr_free_buf(xbuf);
+out_nobuf:
 	return ret;
 }
 
@@ -837,7 +922,8 @@ static int test_comp(struct crypto_comp *tfm, struct comp_testvec *ctemplate,
 	int ret;
 
 	for (i = 0; i < ctcount; i++) {
-		int ilen, dlen = COMP_BUF_SIZE;
+		int ilen;
+		unsigned int dlen = COMP_BUF_SIZE;
 
 		memset(result, 0, sizeof (result));
 
@@ -869,7 +955,8 @@ static int test_comp(struct crypto_comp *tfm, struct comp_testvec *ctemplate,
 	}
 
 	for (i = 0; i < dtcount; i++) {
-		int ilen, dlen = COMP_BUF_SIZE;
+		int ilen;
+		unsigned int dlen = COMP_BUF_SIZE;
 
 		memset(result, 0, sizeof (result));
 
@@ -1057,6 +1144,68 @@ static int test_pcomp(struct crypto_pcomp *tfm,
 	}
 
 	return 0;
+}
+
+
+static int test_cprng(struct crypto_rng *tfm, struct cprng_testvec *template,
+		      unsigned int tcount)
+{
+	const char *algo = crypto_tfm_alg_driver_name(crypto_rng_tfm(tfm));
+	int err, i, j, seedsize;
+	u8 *seed;
+	char result[32];
+
+	seedsize = crypto_rng_seedsize(tfm);
+
+	seed = kmalloc(seedsize, GFP_KERNEL);
+	if (!seed) {
+		printk(KERN_ERR "alg: cprng: Failed to allocate seed space "
+		       "for %s\n", algo);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < tcount; i++) {
+		memset(result, 0, 32);
+
+		memcpy(seed, template[i].v, template[i].vlen);
+		memcpy(seed + template[i].vlen, template[i].key,
+		       template[i].klen);
+		memcpy(seed + template[i].vlen + template[i].klen,
+		       template[i].dt, template[i].dtlen);
+
+		err = crypto_rng_reset(tfm, seed, seedsize);
+		if (err) {
+			printk(KERN_ERR "alg: cprng: Failed to reset rng "
+			       "for %s\n", algo);
+			goto out;
+		}
+
+		for (j = 0; j < template[i].loops; j++) {
+			err = crypto_rng_get_bytes(tfm, result,
+						   template[i].rlen);
+			if (err != template[i].rlen) {
+				printk(KERN_ERR "alg: cprng: Failed to obtain "
+				       "the correct amount of random data for "
+				       "%s (requested %d, got %d)\n", algo,
+				       template[i].rlen, err);
+				goto out;
+			}
+		}
+
+		err = memcmp(result, template[i].result,
+			     template[i].rlen);
+		if (err) {
+			printk(KERN_ERR "alg: cprng: Test %d failed for %s\n",
+			       i, algo);
+			hexdump(result, template[i].rlen);
+			err = -EINVAL;
+			goto out;
+		}
+	}
+
+out:
+	kfree(seed);
+	return err;
 }
 
 static int alg_test_aead(const struct alg_test_desc *desc, const char *driver,
@@ -1258,9 +1407,38 @@ out:
 	return err;
 }
 
+static int alg_test_cprng(const struct alg_test_desc *desc, const char *driver,
+			  u32 type, u32 mask)
+{
+	struct crypto_rng *rng;
+	int err;
+
+	rng = crypto_alloc_rng(driver, type, mask);
+	if (IS_ERR(rng)) {
+		printk(KERN_ERR "alg: cprng: Failed to load transform for %s: "
+		       "%ld\n", driver, PTR_ERR(rng));
+		return PTR_ERR(rng);
+	}
+
+	err = test_cprng(rng, desc->suite.cprng.vecs, desc->suite.cprng.count);
+
+	crypto_free_rng(rng);
+
+	return err;
+}
+
 /* Please keep this list sorted by algorithm name. */
 static const struct alg_test_desc alg_test_descs[] = {
 	{
+		.alg = "ansi_cprng",
+		.test = alg_test_cprng,
+		.suite = {
+			.cprng = {
+				.vecs = ansi_cprng_aes_tv_template,
+				.count = ANSI_CPRNG_AES_TEST_VECTORS
+			}
+		}
+	}, {
 		.alg = "cbc(aes)",
 		.test = alg_test_skcipher,
 		.suite = {
@@ -1387,6 +1565,21 @@ static const struct alg_test_desc alg_test_descs[] = {
 			.hash = {
 				.vecs = crc32c_tv_template,
 				.count = CRC32C_TEST_VECTORS
+			}
+		}
+	}, {
+		.alg = "ctr(aes)",
+		.test = alg_test_skcipher,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = aes_ctr_enc_tv_template,
+					.count = AES_CTR_ENC_TEST_VECTORS
+				},
+				.dec = {
+					.vecs = aes_ctr_dec_tv_template,
+					.count = AES_CTR_DEC_TEST_VECTORS
+				}
 			}
 		}
 	}, {
@@ -1839,12 +2032,27 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.suite = {
 			.cipher = {
 				.enc = {
-					.vecs = aes_ctr_enc_tv_template,
-					.count = AES_CTR_ENC_TEST_VECTORS
+					.vecs = aes_ctr_rfc3686_enc_tv_template,
+					.count = AES_CTR_3686_ENC_TEST_VECTORS
 				},
 				.dec = {
-					.vecs = aes_ctr_dec_tv_template,
-					.count = AES_CTR_DEC_TEST_VECTORS
+					.vecs = aes_ctr_rfc3686_dec_tv_template,
+					.count = AES_CTR_3686_DEC_TEST_VECTORS
+				}
+			}
+		}
+	}, {
+		.alg = "rfc4309(ccm(aes))",
+		.test = alg_test_aead,
+		.suite = {
+			.aead = {
+				.enc = {
+					.vecs = aes_ccm_rfc4309_enc_tv_template,
+					.count = AES_CCM_4309_ENC_TEST_VECTORS
+				},
+				.dec = {
+					.vecs = aes_ccm_rfc4309_dec_tv_template,
+					.count = AES_CCM_4309_DEC_TEST_VECTORS
 				}
 			}
 		}
@@ -2077,7 +2285,8 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
 		if (i < 0)
 			goto notest;
 
-		return alg_test_cipher(alg_test_descs + i, driver, type, mask);
+		rc = alg_test_cipher(alg_test_descs + i, driver, type, mask);
+		goto test_done;
 	}
 
 	i = alg_find_test(alg);
@@ -2086,8 +2295,13 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
 
 	rc = alg_test_descs[i].test(alg_test_descs + i, driver,
 				      type, mask);
+test_done:
 	if (fips_enabled && rc)
 		panic("%s: %s alg self test failed in fips mode!\n", driver, alg);
+
+	if (fips_enabled && !rc)
+		printk(KERN_INFO "alg: self-tests for %s (%s) passed\n",
+		       driver, alg);
 
 	return rc;
 
@@ -2096,41 +2310,3 @@ notest:
 	return 0;
 }
 EXPORT_SYMBOL_GPL(alg_test);
-
-int __init testmgr_init(void)
-{
-	int i;
-
-	for (i = 0; i < XBUFSIZE; i++) {
-		xbuf[i] = (void *)__get_free_page(GFP_KERNEL);
-		if (!xbuf[i])
-			goto err_free_xbuf;
-	}
-
-	for (i = 0; i < XBUFSIZE; i++) {
-		axbuf[i] = (void *)__get_free_page(GFP_KERNEL);
-		if (!axbuf[i])
-			goto err_free_axbuf;
-	}
-
-	return 0;
-
-err_free_axbuf:
-	for (i = 0; i < XBUFSIZE && axbuf[i]; i++)
-		free_page((unsigned long)axbuf[i]);
-err_free_xbuf:
-	for (i = 0; i < XBUFSIZE && xbuf[i]; i++)
-		free_page((unsigned long)xbuf[i]);
-
-	return -ENOMEM;
-}
-
-void testmgr_exit(void)
-{
-	int i;
-
-	for (i = 0; i < XBUFSIZE; i++)
-		free_page((unsigned long)axbuf[i]);
-	for (i = 0; i < XBUFSIZE; i++)
-		free_page((unsigned long)xbuf[i]);
-}
