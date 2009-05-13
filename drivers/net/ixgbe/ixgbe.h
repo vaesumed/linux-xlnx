@@ -147,6 +147,7 @@ struct ixgbe_ring {
 
 	u16 work_limit;                /* max work per interrupt */
 	u16 rx_buf_len;
+	u64 rsc_count;                 /* stat for coalesced packets */
 };
 
 enum ixgbe_ring_f_enum {
@@ -186,6 +187,7 @@ struct ixgbe_q_vector {
 	u8 tx_itr;
 	u8 rx_itr;
 	u32 eitr;
+	u32 v_idx;        /* vector index in list */
 };
 
 /* Helper macros to switch between ints/sec and what the register uses.
@@ -229,7 +231,7 @@ struct ixgbe_adapter {
 	struct vlan_group *vlgrp;
 	u16 bd_number;
 	struct work_struct reset_task;
-	struct ixgbe_q_vector q_vector[MAX_MSIX_Q_VECTORS];
+	struct ixgbe_q_vector *q_vector[MAX_MSIX_Q_VECTORS];
 	char name[MAX_MSIX_COUNT][IFNAMSIZ + 9];
 	struct ixgbe_dcb_config dcb_cfg;
 	struct ixgbe_dcb_config temp_dcb_cfg;
@@ -294,6 +296,8 @@ struct ixgbe_adapter {
 #define IXGBE_FLAG_IN_WATCHDOG_TASK             (u32)(1 << 23)
 #define IXGBE_FLAG_IN_SFP_LINK_TASK             (u32)(1 << 24)
 #define IXGBE_FLAG_IN_SFP_MOD_TASK              (u32)(1 << 25)
+#define IXGBE_FLAG_RSC_CAPABLE                  (u32)(1 << 26)
+#define IXGBE_FLAG_RSC_ENABLED                  (u32)(1 << 27)
 
 /* default to trying for four seconds */
 #define IXGBE_TRY_LINK_TIMEOUT (4 * HZ)
@@ -325,6 +329,7 @@ struct ixgbe_adapter {
 	struct timer_list sfp_timer;
 	struct work_struct multispeed_fiber_task;
 	struct work_struct sfp_config_module_task;
+	u64 rsc_count;
 	u32 wol;
 	u16 eeprom_version;
 };
@@ -363,10 +368,8 @@ extern int ixgbe_setup_tx_resources(struct ixgbe_adapter *, struct ixgbe_ring *)
 extern void ixgbe_free_rx_resources(struct ixgbe_adapter *, struct ixgbe_ring *);
 extern void ixgbe_free_tx_resources(struct ixgbe_adapter *, struct ixgbe_ring *);
 extern void ixgbe_update_stats(struct ixgbe_adapter *adapter);
-extern void ixgbe_reset_interrupt_capability(struct ixgbe_adapter *adapter);
 extern int ixgbe_init_interrupt_scheme(struct ixgbe_adapter *adapter);
-void ixgbe_napi_add_all(struct ixgbe_adapter *adapter);
-void ixgbe_napi_del_all(struct ixgbe_adapter *adapter);
+extern void ixgbe_clear_interrupt_scheme(struct ixgbe_adapter *adapter);
 extern void ixgbe_write_eitr(struct ixgbe_adapter *, int, u32);
 
 #endif /* _IXGBE_H_ */
