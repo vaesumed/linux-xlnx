@@ -639,3 +639,38 @@ int nilfs_checkpoint_is_mounted(struct the_nilfs *nilfs, __u64 cno,
 	up_read(&nilfs->ns_sem);
 	return ret;
 }
+
+/**
+ * nilfs_current_mount_is_there - check if a non-snapshot mount is there
+ * @nilfs: nilfs object
+ * @ro_mount: mount type (0: ro-mount, otherwise: r/w-mount)
+ * @me: instance which should be excluded from the test
+ *
+ * nilfs_current_mount_is_there() returns a non-zero value if a
+ * current mount with the specified mount type exists.  Otherwise zero
+ * is returned.  The optional @me argument specifies the instance
+ * which should be excluded from this test.  if NULL is specified to
+ * @me, this will check every instance.
+ */
+int nilfs_current_mount_is_there(struct the_nilfs *nilfs, int ro_mount,
+				 struct nilfs_sb_info *me)
+{
+	struct nilfs_sb_info *sbi;
+	int found = 0;
+
+	down_read(&nilfs->ns_sem);
+	list_for_each_entry(sbi, &nilfs->ns_supers, s_list) {
+		/*
+		 * The SNAPSHOT flag and sb->s_flags are supposed to be
+		 * protected with nilfs->ns_sem.
+		 */
+		if (nilfs_test_opt(sbi, SNAPSHOT) || sbi == me)
+			continue; /* exclude snapshot mounts and self */
+		if (!ro_mount == !(sbi->s_super->s_flags & MS_RDONLY)) {
+			found++;
+			break;
+		}
+	}
+	up_read(&nilfs->ns_sem);
+	return found;
+}

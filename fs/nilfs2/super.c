@@ -66,8 +66,6 @@ MODULE_DESCRIPTION("A New Implementation of the Log-structured Filesystem "
 MODULE_LICENSE("GPL");
 
 static int nilfs_remount(struct super_block *sb, int *flags, char *data);
-static int test_exclusive_mount(struct file_system_type *fs_type,
-				struct block_device *bdev, int flags);
 
 /**
  * nilfs_error() - report failure condition on a filesystem
@@ -946,10 +944,9 @@ static int nilfs_remount(struct super_block *sb, int *flags, char *data)
 		 * by fsck since we originally mounted the partition.)
 		 */
 		down(&sb->s_bdev->bd_mount_sem);
-		/* Check existing RW-mount */
-		if (test_exclusive_mount(sb->s_type, sb->s_bdev, 0)) {
+		if (nilfs_current_mount_is_there(nilfs, 0, sbi)) {
 			printk(KERN_WARNING "NILFS (device %s): couldn't "
-			       "remount because a RW-mount exists.\n",
+			       "remount because an RW-mount exists.\n",
 			       sb->s_id);
 			err = -EBUSY;
 			goto rw_remount_failed;
@@ -1110,11 +1107,6 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 	 * while we are mounting
 	 */
 	down(&sd.bdev->bd_mount_sem);
-	if (!sd.cno &&
-	    (err = test_exclusive_mount(fs_type, sd.bdev, flags ^ MS_RDONLY))) {
-		err = (err < 0) ? : -EBUSY;
-		goto failed_unlock;
-	}
 
 	/*
 	 * Phase-1: search any existent instance and get the_nilfs
@@ -1139,6 +1131,14 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 		get_nilfs(nilfs);
 		up_write(&s->s_umount);
 
+		if (!sd.cno &&
+		    nilfs_current_mount_is_there(nilfs, !(flags & MS_RDONLY),
+						 NULL)) {
+			err = -EBUSY;
+			deactivate_super(s);
+			put_nilfs(nilfs);
+			goto failed_unlock;
+		}
 		/*
 		 * Phase-2: search specified snapshot or R/W mode super_block
 		 */
@@ -1208,57 +1208,6 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 	 * put_nilfs() and unlocking bd_mount_sem need the block device.
 	 */
 	return err;
-}
-
-static int nilfs_test_bdev_super3(struct super_block *s, void *data)
-{
-	struct nilfs_super_data *sd = data;
-	int ret;
-
-	if (s->s_bdev != sd->bdev)
-		return 0;
-	if (down_read_trylock(&s->s_umount)) {
-		ret = (s->s_flags & MS_RDONLY) && s->s_root &&
-			nilfs_test_opt(NILFS_SB(s), SNAPSHOT);
-		up_read(&s->s_umount);
-		if (ret)
-			return 0; /* ignore snapshot mounts */
-	}
-	return !((sd->flags ^ s->s_flags) & MS_RDONLY);
-}
-
-static int __false_bdev_super(struct super_block *s, void *data)
-{
-#if 0 /* XXX: workaround for lock debug. This is not good idea */
-	up_write(&s->s_umount);
-#endif
-	return -EFAULT;
-}
-
-/**
- * test_exclusive_mount - check whether an exclusive RW/RO mount exists or not.
- * fs_type: filesystem type
- * bdev: block device
- * flag: 0 (check rw-mount) or MS_RDONLY (check ro-mount)
- * res: pointer to an integer to store result
- *
- * This function must be called within a section protected by bd_mount_mutex.
- */
-static int test_exclusive_mount(struct file_system_type *fs_type,
-				struct block_device *bdev, int flags)
-{
-	struct super_block *s;
-	struct nilfs_super_data sd = { .flags = flags, .bdev = bdev };
-
-	s = sget(fs_type, nilfs_test_bdev_super3, __false_bdev_super, &sd);
-	if (IS_ERR(s)) {
-		if (PTR_ERR(s) != -EFAULT)
-			return PTR_ERR(s);
-		return 0;  /* Not found */
-	}
-	up_write(&s->s_umount);
-	deactivate_super(s);
-	return 1;  /* Found */
 }
 
 struct file_system_type nilfs_fs_type = {
