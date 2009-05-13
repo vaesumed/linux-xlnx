@@ -197,6 +197,8 @@ int init_nilfs(struct the_nilfs *, struct nilfs_sb_info *, char *);
 int load_nilfs(struct the_nilfs *, struct nilfs_sb_info *);
 int nilfs_count_free_blocks(struct the_nilfs *, sector_t *);
 int nilfs_checkpoint_is_mounted(struct the_nilfs *, __u64, int);
+int nilfs_current_mount_is_there(struct the_nilfs *, int,
+				 struct nilfs_sb_info *);
 int nilfs_near_disk_full(struct the_nilfs *);
 void nilfs_fall_back_super_block(struct the_nilfs *);
 void nilfs_swap_super_block(struct the_nilfs *);
