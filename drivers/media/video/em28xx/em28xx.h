@@ -104,7 +104,7 @@
 #define EM2820_BOARD_IODATA_GVMVP_SZ		  65
 #define EM2880_BOARD_EMPIRE_DUAL_TV		  66
 #define EM2860_BOARD_TERRATEC_GRABBY		  67
-#define EM2860_BOARD_TERRATEC_AV350		  68 
+#define EM2860_BOARD_TERRATEC_AV350		  68
 
 /* Limits minimum and default number of buffers */
 #define EM28XX_MIN_BUF 4
@@ -643,6 +643,7 @@ extern void em28xx_card_setup(struct em28xx *dev);
 extern struct em28xx_board em28xx_boards[];
 extern struct usb_device_id em28xx_id_table[];
 extern const unsigned int em28xx_bcount;
+void em28xx_register_i2c_ir(struct em28xx *dev);
 void em28xx_set_ir(struct em28xx *dev, struct IR_i2c *ir);
 int em28xx_tuner_callback(void *ptr, int component, int command, int arg);
 void em28xx_release_resources(struct em28xx *dev);
