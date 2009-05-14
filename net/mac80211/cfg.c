@@ -13,6 +13,7 @@
 #include <linux/rcupdate.h>
 #include <net/cfg80211.h>
 #include "ieee80211_i.h"
+#include "driver-ops.h"
 #include "cfg.h"
 #include "rate.h"
 #include "mesh.h"
@@ -245,12 +246,10 @@ static int ieee80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 		iv32 = key->u.tkip.tx.iv32;
 		iv16 = key->u.tkip.tx.iv16;
 
-		if (key->flags & KEY_FLAG_UPLOADED_TO_HARDWARE &&
-		    sdata->local->ops->get_tkip_seq)
-			sdata->local->ops->get_tkip_seq(
-				local_to_hw(sdata->local),
-				key->conf.hw_key_idx,
-				&iv32, &iv16);
+		if (key->flags & KEY_FLAG_UPLOADED_TO_HARDWARE)
+			drv_get_tkip_seq(sdata->local,
+					 key->conf.hw_key_idx,
+					 &iv32, &iv16);
 
 		seq[0] = iv16 & 0xff;
 		seq[1] = (iv16 >> 8) & 0xff;
@@ -451,18 +450,11 @@ static int ieee80211_config_beacon(struct ieee80211_sub_if_data *sdata,
 	 * This is a kludge. beacon interval should really be part
 	 * of the beacon information.
 	 */
-	if (params->interval && (sdata->local->hw.conf.beacon_int !=
-				 params->interval)) {
-		sdata->local->hw.conf.beacon_int = params->interval;
-		err = ieee80211_hw_config(sdata->local,
-					IEEE80211_CONF_CHANGE_BEACON_INTERVAL);
-		if (err < 0)
-			return err;
-		/*
-		 * We updated some parameter so if below bails out
-		 * it's not an error.
-		 */
-		err = 0;
+	if (params->interval &&
+	    (sdata->vif.bss_conf.beacon_int != params->interval)) {
+		sdata->vif.bss_conf.beacon_int = params->interval;
+		ieee80211_bss_info_change_notify(sdata,
+						 BSS_CHANGED_BEACON_INT);
 	}
 
 	/* Need to have a beacon head if we don't have one yet */
@@ -528,8 +520,9 @@ static int ieee80211_config_beacon(struct ieee80211_sub_if_data *sdata,
 
 	kfree(old);
 
-	return ieee80211_if_config(sdata, IEEE80211_IFCC_BEACON |
-					  IEEE80211_IFCC_BEACON_ENABLED);
+	ieee80211_bss_info_change_notify(sdata, BSS_CHANGED_BEACON_ENABLED |
+						BSS_CHANGED_BEACON);
+	return 0;
 }
 
 static int ieee80211_add_beacon(struct wiphy *wiphy, struct net_device *dev,
@@ -580,7 +573,8 @@ static int ieee80211_del_beacon(struct wiphy *wiphy, struct net_device *dev)
 	synchronize_rcu();
 	kfree(old);
 
-	return ieee80211_if_config(sdata, IEEE80211_IFCC_BEACON_ENABLED);
+	ieee80211_bss_info_change_notify(sdata, BSS_CHANGED_BEACON_ENABLED);
+	return 0;
 }
 
 /* Layer 2 Update frame (802.2 Type 1 LLC XID Update response) */
@@ -1120,7 +1114,7 @@ static int ieee80211_set_txq_params(struct wiphy *wiphy,
 	p.cw_max = params->cwmax;
 	p.cw_min = params->cwmin;
 	p.txop = params->txop;
-	if (local->ops->conf_tx(local_to_hw(local), params->queue, &p)) {
+	if (drv_conf_tx(local, params->queue, &p)) {
 		printk(KERN_DEBUG "%s: failed to set TX queue "
 		       "parameters for queue %d\n", local->mdev->name,
 		       params->queue);
@@ -1167,7 +1161,8 @@ static int ieee80211_scan(struct wiphy *wiphy,
 
 	if (sdata->vif.type != NL80211_IFTYPE_STATION &&
 	    sdata->vif.type != NL80211_IFTYPE_ADHOC &&
-	    sdata->vif.type != NL80211_IFTYPE_MESH_POINT)
+	    sdata->vif.type != NL80211_IFTYPE_MESH_POINT &&
+	    (sdata->vif.type != NL80211_IFTYPE_AP || sdata->u.ap.beacon))
 		return -EOPNOTSUPP;
 
 	return ieee80211_request_scan(sdata, req);
@@ -1267,23 +1262,57 @@ static int ieee80211_assoc(struct wiphy *wiphy, struct net_device *dev,
 static int ieee80211_deauth(struct wiphy *wiphy, struct net_device *dev,
 			    struct cfg80211_deauth_request *req)
 {
-	struct ieee80211_sub_if_data *sdata;
+	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 
-	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
-
-	/* TODO: req->ie */
+	/* TODO: req->ie, req->peer_addr */
 	return ieee80211_sta_deauthenticate(sdata, req->reason_code);
 }
 
 static int ieee80211_disassoc(struct wiphy *wiphy, struct net_device *dev,
 			      struct cfg80211_disassoc_request *req)
 {
-	struct ieee80211_sub_if_data *sdata;
+	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
 
-	sdata = IEEE80211_DEV_TO_SUB_IF(dev);
-
-	/* TODO: req->ie */
+	/* TODO: req->ie, req->peer_addr */
 	return ieee80211_sta_disassociate(sdata, req->reason_code);
+}
+
+static int ieee80211_join_ibss(struct wiphy *wiphy, struct net_device *dev,
+			       struct cfg80211_ibss_params *params)
+{
+	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
+
+	return ieee80211_ibss_join(sdata, params);
+}
+
+static int ieee80211_leave_ibss(struct wiphy *wiphy, struct net_device *dev)
+{
+	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
+
+	return ieee80211_ibss_leave(sdata);
+}
+
+static int ieee80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
+{
+	struct ieee80211_local *local = wiphy_priv(wiphy);
+	int err;
+
+	if (changed & WIPHY_PARAM_RTS_THRESHOLD) {
+		err = drv_set_rts_threshold(local, wiphy->rts_threshold);
+
+		if (err)
+			return err;
+	}
+
+	if (changed & WIPHY_PARAM_RETRY_SHORT)
+		local->hw.conf.short_frame_max_tx_count = wiphy->retry_short;
+	if (changed & WIPHY_PARAM_RETRY_LONG)
+		local->hw.conf.long_frame_max_tx_count = wiphy->retry_long;
+	if (changed &
+	    (WIPHY_PARAM_RETRY_SHORT | WIPHY_PARAM_RETRY_LONG))
+		ieee80211_hw_config(local, IEEE80211_CONF_CHANGE_RETRY_LIMITS);
+
+	return 0;
 }
 
 struct cfg80211_ops mac80211_config_ops = {
@@ -1322,4 +1351,7 @@ struct cfg80211_ops mac80211_config_ops = {
 	.assoc = ieee80211_assoc,
 	.deauth = ieee80211_deauth,
 	.disassoc = ieee80211_disassoc,
+	.join_ibss = ieee80211_join_ibss,
+	.leave_ibss = ieee80211_leave_ibss,
+	.set_wiphy_params = ieee80211_set_wiphy_params,
 };

@@ -49,8 +49,8 @@
 #include <asm/processor.h>
 
 #define DRV_NAME	"r6040"
-#define DRV_VERSION	"0.22"
-#define DRV_RELDATE	"25Mar2009"
+#define DRV_VERSION	"0.23"
+#define DRV_RELDATE	"05May2009"
 
 /* PHY CHIP Address */
 #define PHY1_ADDR	1	/* For MAC1 */
@@ -742,6 +742,14 @@ static int r6040_up(struct net_device *dev)
 	struct r6040_private *lp = netdev_priv(dev);
 	void __iomem *ioaddr = lp->base;
 	int ret;
+	u16 val;
+
+	/* Check presence of a second PHY */
+	val = r6040_phy_read(ioaddr, lp->phy_addr, 2);
+	if (val == 0xFFFF) {
+		printk(KERN_ERR DRV_NAME " no second PHY attached\n");
+		return -EIO;
+	}
 
 	/* Initialise and alloc RX/TX buffers */
 	r6040_init_txbufs(dev);
