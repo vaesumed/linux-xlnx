@@ -892,6 +892,10 @@ err_out:
 }
 
 /*
+ * The ext4_ind_get_blocks() function handles non-extents inodes
+ * (i.e., using the traditional indirect/double-indirect i_blocks
+ * scheme) for ext4_get_blocks().
+ *
  * Allocation strategy is simple: if we have to allocate something, we will
  * have to go the whole way to leaf. So let's do it before attaching anything
  * to tree, set linkage between the newborn blocks, write them if sync is
@@ -909,15 +913,16 @@ err_out:
  * return = 0, if plain lookup failed.
  * return < 0, error case.
  *
- *
- * Need to be called with
- * down_read(&EXT4_I(inode)->i_data_sem) if not allocating file system block
- * (ie, create is zero). Otherwise down_write(&EXT4_I(inode)->i_data_sem)
+ * The ext4_ind_get_blocks() function should be called with
+ * down_write(&EXT4_I(inode)->i_data_sem) if allocating filesystem
+ * blocks (i.e., flags has EXT4_GET_BLOCKS_CREATE set) or
+ * down_read(&EXT4_I(inode)->i_data_sem) if not allocating file system
+ * blocks.
  */
-static int ext4_get_blocks_handle(handle_t *handle, struct inode *inode,
+static int ext4_ind_get_blocks(handle_t *handle, struct inode *inode,
 				  ext4_lblk_t iblock, unsigned int maxblocks,
 				  struct buffer_head *bh_result,
-				  int create, int extend_disksize)
+				  int flags)
 {
 	int err = -EIO;
 	ext4_lblk_t offsets[4];
@@ -934,7 +939,7 @@ static int ext4_get_blocks_handle(handle_t *handle, struct inode *inode,
 
 
 	J_ASSERT(!(EXT4_I(inode)->i_flags & EXT4_EXTENTS_FL));
-	J_ASSERT(handle != NULL || create == 0);
+	J_ASSERT(handle != NULL || (flags & EXT4_GET_BLOCKS_CREATE) == 0);
 	depth = ext4_block_to_path(inode, iblock, offsets,
 					&blocks_to_boundary);
 
@@ -963,7 +968,7 @@ static int ext4_get_blocks_handle(handle_t *handle, struct inode *inode,
 	}
 
 	/* Next simple case - plain lookup or failed read of indirect block */
-	if (!create || err == -EIO)
+	if ((flags & EXT4_GET_BLOCKS_CREATE) == 0 || err == -EIO)
 		goto cleanup;
 
 	/*
@@ -1002,7 +1007,7 @@ static int ext4_get_blocks_handle(handle_t *handle, struct inode *inode,
 	 * protect it if you're about to implement concurrent
 	 * ext4_get_block() -bzzz
 	*/
-	if (!err && extend_disksize) {
+	if (!err && (flags & EXT4_GET_BLOCKS_EXTEND_DISKSIZE)) {
 		disksize = ((loff_t) iblock + count) << inode->i_blkbits;
 		if (disksize > i_size_read(inode))
 			disksize = i_size_read(inode);
@@ -1121,7 +1126,7 @@ static void ext4_da_update_reserve_space(struct inode *inode, int used)
 }
 
 /*
- * The ext4_get_blocks_wrap() function try to look up the requested blocks,
+ * The ext4_get_blocks() function tries to look up the requested blocks,
  * and returns if the blocks are already mapped.
  *
  * Otherwise it takes the write lock of the i_data_sem and allocate blocks
@@ -1129,7 +1134,7 @@ static void ext4_da_update_reserve_space(struct inode *inode, int used)
  * mapped.
  *
  * If file type is extents based, it will call ext4_ext_get_blocks(),
- * Otherwise, call with ext4_get_blocks_handle() to handle indirect mapping
+ * Otherwise, call with ext4_ind_get_blocks() to handle indirect mapping
  * based files
  *
  * On success, it returns the number of blocks being mapped or allocate.
@@ -1142,13 +1147,14 @@ static void ext4_da_update_reserve_space(struct inode *inode, int used)
  *
  * It returns the error in case of allocation failure.
  */
-int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
-			unsigned int max_blocks, struct buffer_head *bh,
-			int create, int extend_disksize, int flag)
+int ext4_get_blocks(handle_t *handle, struct inode *inode, sector_t block,
+		    unsigned int max_blocks, struct buffer_head *bh,
+		    int flags)
 {
 	int retval;
 
 	clear_buffer_mapped(bh);
+	clear_buffer_unwritten(bh);
 
 	/*
 	 * Try to see if we can get  the block without requesting
@@ -1157,15 +1163,15 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	down_read((&EXT4_I(inode)->i_data_sem));
 	if (EXT4_I(inode)->i_flags & EXT4_EXTENTS_FL) {
 		retval =  ext4_ext_get_blocks(handle, inode, block, max_blocks,
-				bh, 0, 0);
+				bh, 0);
 	} else {
-		retval = ext4_get_blocks_handle(handle,
-				inode, block, max_blocks, bh, 0, 0);
+		retval = ext4_ind_get_blocks(handle, inode, block, max_blocks,
+					     bh, 0);
 	}
 	up_read((&EXT4_I(inode)->i_data_sem));
 
 	/* If it is only a block(s) look up */
-	if (!create)
+	if ((flags & EXT4_GET_BLOCKS_CREATE) == 0)
 		return retval;
 
 	/*
@@ -1177,6 +1183,18 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	 */
 	if (retval > 0 && buffer_mapped(bh))
 		return retval;
+
+	/*
+	 * When we call get_blocks without the create flag, the
+	 * BH_Unwritten flag could have gotten set if the blocks
+	 * requested were part of a uninitialized extent.  We need to
+	 * clear this flag now that we are committed to convert all or
+	 * part of the uninitialized extent to be an initialized
+	 * extent.  This is because we need to avoid the combination
+	 * of BH_Unwritten and BH_Mapped flags being simultaneously
+	 * set on the buffer_head.
+	 */
+	clear_buffer_unwritten(bh);
 
 	/*
 	 * New blocks allocate and/or writing to uninitialized extent
@@ -1192,7 +1210,7 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	 * let the underlying get_block() function know to
 	 * avoid double accounting
 	 */
-	if (flag)
+	if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE)
 		EXT4_I(inode)->i_delalloc_reserved_flag = 1;
 	/*
 	 * We need to check for EXT4 here because migrate
@@ -1200,10 +1218,10 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 	 */
 	if (EXT4_I(inode)->i_flags & EXT4_EXTENTS_FL) {
 		retval =  ext4_ext_get_blocks(handle, inode, block, max_blocks,
-				bh, create, extend_disksize);
+					      bh, flags);
 	} else {
-		retval = ext4_get_blocks_handle(handle, inode, block,
-				max_blocks, bh, create, extend_disksize);
+		retval = ext4_ind_get_blocks(handle, inode, block,
+					     max_blocks, bh, flags);
 
 		if (retval > 0 && buffer_new(bh)) {
 			/*
@@ -1216,7 +1234,7 @@ int ext4_get_blocks_wrap(handle_t *handle, struct inode *inode, sector_t block,
 		}
 	}
 
-	if (flag) {
+	if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE) {
 		EXT4_I(inode)->i_delalloc_reserved_flag = 0;
 		/*
 		 * Update reserved blocks/metadata blocks
@@ -1255,8 +1273,8 @@ int ext4_get_block(struct inode *inode, sector_t iblock,
 		started = 1;
 	}
 
-	ret = ext4_get_blocks_wrap(handle, inode, iblock,
-					max_blocks, bh_result, create, 0, 0);
+	ret = ext4_get_blocks(handle, inode, iblock, max_blocks, bh_result,
+			      create ? EXT4_GET_BLOCKS_CREATE : 0);
 	if (ret > 0) {
 		bh_result->b_size = (ret << inode->i_blkbits);
 		ret = 0;
@@ -1275,17 +1293,19 @@ struct buffer_head *ext4_getblk(handle_t *handle, struct inode *inode,
 {
 	struct buffer_head dummy;
 	int fatal = 0, err;
+	int flags = EXT4_GET_BLOCKS_EXTEND_DISKSIZE;
 
 	J_ASSERT(handle != NULL || create == 0);
 
 	dummy.b_state = 0;
 	dummy.b_blocknr = -1000;
 	buffer_trace_init(&dummy.b_history);
-	err = ext4_get_blocks_wrap(handle, inode, block, 1,
-					&dummy, create, 1, 0);
+	if (create)
+		flags |= EXT4_GET_BLOCKS_CREATE;
+	err = ext4_get_blocks(handle, inode, block, 1, &dummy, flags);
 	/*
-	 * ext4_get_blocks_handle() returns number of blocks
-	 * mapped. 0 in case of a HOLE.
+	 * ext4_get_blocks() returns number of blocks mapped. 0 in
+	 * case of a HOLE.
 	 */
 	if (err > 0) {
 		if (err > 1)
@@ -1839,7 +1859,7 @@ static int mpage_da_submit_io(struct mpage_da_data *mpd)
  * @logical - first logical block to start assignment with
  *
  * the function goes through all passed space and put actual disk
- * block numbers into buffer heads, dropping BH_Delay
+ * block numbers into buffer heads, dropping BH_Delay and BH_Unwritten
  */
 static void mpage_put_bnr_to_bhs(struct mpage_da_data *mpd, sector_t logical,
 				 struct buffer_head *exbh)
@@ -1889,16 +1909,24 @@ static void mpage_put_bnr_to_bhs(struct mpage_da_data *mpd, sector_t logical,
 			do {
 				if (cur_logical >= logical + blocks)
 					break;
-				if (buffer_delay(bh)) {
-					bh->b_blocknr = pblock;
-					clear_buffer_delay(bh);
-					bh->b_bdev = inode->i_sb->s_bdev;
-				} else if (buffer_unwritten(bh)) {
-					bh->b_blocknr = pblock;
-					clear_buffer_unwritten(bh);
-					set_buffer_mapped(bh);
-					set_buffer_new(bh);
-					bh->b_bdev = inode->i_sb->s_bdev;
+
+				if (buffer_delay(bh) ||
+						buffer_unwritten(bh)) {
+
+					BUG_ON(bh->b_bdev != inode->i_sb->s_bdev);
+
+					if (buffer_delay(bh)) {
+						clear_buffer_delay(bh);
+						bh->b_blocknr = pblock;
+					} else {
+						/*
+						 * unwritten already should have
+						 * blocknr assigned. Verify that
+						 */
+						clear_buffer_unwritten(bh);
+						BUG_ON(bh->b_blocknr != pblock);
+					}
+
 				} else if (buffer_mapped(bh))
 					BUG_ON(bh->b_blocknr != pblock);
 
@@ -1977,9 +2005,14 @@ static void ext4_print_free_blocks(struct inode *inode)
 	return;
 }
 
-#define		EXT4_DELALLOC_RSVED	1
+/*
+ * This function is used by mpage_da_map_blocks().  We separate it out
+ * as a separate function just to make life easier, and because
+ * mpage_da_map_blocks() used to be a generic function that took a
+ * get_block_t.
+ */
 static int ext4_da_get_block_write(struct inode *inode, sector_t iblock,
-				   struct buffer_head *bh_result, int create)
+				   struct buffer_head *bh_result)
 {
 	int ret;
 	unsigned max_blocks = bh_result->b_size >> inode->i_blkbits;
@@ -1988,8 +2021,9 @@ static int ext4_da_get_block_write(struct inode *inode, sector_t iblock,
 
 	handle = ext4_journal_current_handle();
 	BUG_ON(!handle);
-	ret = ext4_get_blocks_wrap(handle, inode, iblock, max_blocks,
-				   bh_result, create, 0, EXT4_DELALLOC_RSVED);
+	ret = ext4_get_blocks(handle, inode, iblock, max_blocks,
+			      bh_result, EXT4_GET_BLOCKS_CREATE|
+			      EXT4_GET_BLOCKS_DELALLOC_RESERVE);
 	if (ret <= 0)
 		return ret;
 
@@ -2008,8 +2042,8 @@ static int ext4_da_get_block_write(struct inode *inode, sector_t iblock,
 
 	/*
 	 * Update on-disk size along with block allocation we don't
-	 * use 'extend_disksize' as size may change within already
-	 * allocated block -bzzz
+	 * use EXT4_GET_BLOCKS_EXTEND_DISKSIZE as size may change
+	 * within already allocated block -bzzz
 	 */
 	disksize = ((loff_t) iblock + ret) << inode->i_blkbits;
 	if (disksize > i_size_read(inode))
@@ -2040,9 +2074,23 @@ static int mpage_da_map_blocks(struct mpage_da_data *mpd)
 	 * We consider only non-mapped and non-allocated blocks
 	 */
 	if ((mpd->b_state  & (1 << BH_Mapped)) &&
-	    !(mpd->b_state & (1 << BH_Delay)))
+		!(mpd->b_state & (1 << BH_Delay)) &&
+		!(mpd->b_state & (1 << BH_Unwritten)))
 		return 0;
-	new.b_state = mpd->b_state;
+	/*
+	 * We need to make sure the BH_Delay flag is passed down to
+	 * ext4_da_get_block_write(), since it calls
+	 * ext4_get_blocks_wrap() with the EXT4_DELALLOC_RSVED flag.
+	 * This flag causes ext4_get_blocks_wrap() to call
+	 * ext4_da_update_reserve_space() if the passed buffer head
+	 * has the BH_Delay flag set.  In the future, once we clean up
+	 * the interfaces to ext4_get_blocks_wrap(), we should pass in
+	 * a separate flag which requests that the delayed allocation
+	 * statistics should be updated, instead of depending on the
+	 * state information getting passed down via the map_bh's
+	 * state bitmasks plus the magic EXT4_DELALLOC_RSVED flag.
+	 */
+	new.b_state = mpd->b_state & (1 << BH_Delay);
 	new.b_blocknr = 0;
 	new.b_size = mpd->b_size;
 	next = mpd->b_blocknr;
@@ -2053,7 +2101,7 @@ static int mpage_da_map_blocks(struct mpage_da_data *mpd)
 	if (!new.b_size)
 		return 0;
 
-	err = ext4_da_get_block_write(mpd->inode, next, &new, 1);
+	err = ext4_da_get_block_write(mpd->inode, next, &new);
 	if (err) {
 		/*
 		 * If get block returns with error we simply
@@ -2179,6 +2227,17 @@ flush_it:
 	return;
 }
 
+static int ext4_bh_unmapped_or_delay(handle_t *handle, struct buffer_head *bh)
+{
+	/*
+	 * unmapped buffer is possible for holes.
+	 * delay buffer is possible with delayed allocation.
+	 * We also need to consider unwritten buffer as unmapped.
+	 */
+	return (!buffer_mapped(bh) || buffer_delay(bh) ||
+				buffer_unwritten(bh)) && buffer_dirty(bh);
+}
+
 /*
  * __mpage_da_writepage - finds extent of pages and blocks
  *
@@ -2263,8 +2322,7 @@ static int __mpage_da_writepage(struct page *page,
 			 * Otherwise we won't make progress
 			 * with the page in ext4_da_writepage
 			 */
-			if (buffer_dirty(bh) &&
-			    (!buffer_mapped(bh) || buffer_delay(bh))) {
+			if (ext4_bh_unmapped_or_delay(NULL, bh)) {
 				mpage_add_bh_to_extent(mpd, logical,
 						       bh->b_size,
 						       bh->b_state);
@@ -2290,13 +2348,25 @@ static int __mpage_da_writepage(struct page *page,
 }
 
 /*
- * this is a special callback for ->write_begin() only
- * it's intention is to return mapped block or reserve space
+ * This is a special get_blocks_t callback which is used by
+ * ext4_da_write_begin().  It will either return mapped block or
+ * reserve space for a single block.
+ *
+ * For delayed buffer_head we have BH_Mapped, BH_New, BH_Delay set.
+ * We also have b_blocknr = -1 and b_bdev initialized properly
+ *
+ * For unwritten buffer_head we have BH_Mapped, BH_New, BH_Unwritten set.
+ * We also have b_blocknr = physicalblock mapping unwritten extent and b_bdev
+ * initialized properly.
  */
 static int ext4_da_get_block_prep(struct inode *inode, sector_t iblock,
 				  struct buffer_head *bh_result, int create)
 {
 	int ret = 0;
+	sector_t invalid_block = ~((sector_t) 0xffff);
+
+	if (invalid_block < ext4_blocks_count(EXT4_SB(inode->i_sb)->s_es))
+		invalid_block = ~0;
 
 	BUG_ON(create == 0);
 	BUG_ON(bh_result->b_size != inode->i_sb->s_blocksize);
@@ -2306,7 +2376,7 @@ static int ext4_da_get_block_prep(struct inode *inode, sector_t iblock,
 	 * preallocated blocks are unmapped but should treated
 	 * the same as allocated blocks.
 	 */
-	ret = ext4_get_blocks_wrap(NULL, inode, iblock, 1,  bh_result, 0, 0, 0);
+	ret = ext4_get_blocks(NULL, inode, iblock, 1,  bh_result, 0);
 	if ((ret == 0) && !buffer_delay(bh_result)) {
 		/* the block isn't (pre)allocated yet, let's reserve space */
 		/*
@@ -2318,38 +2388,58 @@ static int ext4_da_get_block_prep(struct inode *inode, sector_t iblock,
 			/* not enough space to reserve */
 			return ret;
 
-		map_bh(bh_result, inode->i_sb, 0);
+		map_bh(bh_result, inode->i_sb, invalid_block);
 		set_buffer_new(bh_result);
 		set_buffer_delay(bh_result);
 	} else if (ret > 0) {
 		bh_result->b_size = (ret << inode->i_blkbits);
+		if (buffer_unwritten(bh_result)) {
+			/* A delayed write to unwritten bh should
+			 * be marked new and mapped.  Mapped ensures
+			 * that we don't do get_block multiple times
+			 * when we write to the same offset and new
+			 * ensures that we do proper zero out for
+			 * partial write.
+			 */
+			set_buffer_new(bh_result);
+			set_buffer_mapped(bh_result);
+		}
 		ret = 0;
 	}
 
 	return ret;
 }
 
-static int ext4_bh_unmapped_or_delay(handle_t *handle, struct buffer_head *bh)
-{
-	/*
-	 * unmapped buffer is possible for holes.
-	 * delay buffer is possible with delayed allocation
-	 */
-	return ((!buffer_mapped(bh) || buffer_delay(bh)) && buffer_dirty(bh));
-}
-
-static int ext4_normal_get_block_write(struct inode *inode, sector_t iblock,
+/*
+ * This function is used as a standard get_block_t calback function
+ * when there is no desire to allocate any blocks.  It is used as a
+ * callback function for block_prepare_write(), nobh_writepage(), and
+ * block_write_full_page().  These functions should only try to map a
+ * single block at a time.
+ *
+ * Since this function doesn't do block allocations even if the caller
+ * requests it by passing in create=1, it is critically important that
+ * any caller checks to make sure that any buffer heads are returned
+ * by this function are either all already mapped or marked for
+ * delayed allocation before calling nobh_writepage() or
+ * block_write_full_page().  Otherwise, b_blocknr could be left
+ * unitialized, and the page write functions will be taken by
+ * surprise.
+ */
+static int noalloc_get_block_write(struct inode *inode, sector_t iblock,
 				   struct buffer_head *bh_result, int create)
 {
 	int ret = 0;
 	unsigned max_blocks = bh_result->b_size >> inode->i_blkbits;
 
+	BUG_ON(bh_result->b_size != inode->i_sb->s_blocksize);
+
 	/*
 	 * we don't want to do block allocation in writepage
 	 * so call get_block_wrap with create = 0
 	 */
-	ret = ext4_get_blocks_wrap(NULL, inode, iblock, max_blocks,
-				   bh_result, 0, 0, 0);
+	ret = ext4_get_blocks(NULL, inode, iblock, max_blocks, bh_result, 0);
+	BUG_ON(create && ret == 0);
 	if (ret > 0) {
 		bh_result->b_size = (ret << inode->i_blkbits);
 		ret = 0;
@@ -2412,7 +2502,7 @@ static int ext4_da_writepage(struct page *page,
 		 * do block allocation here.
 		 */
 		ret = block_prepare_write(page, 0, PAGE_CACHE_SIZE,
-						ext4_normal_get_block_write);
+					  noalloc_get_block_write);
 		if (!ret) {
 			page_bufs = page_buffers(page);
 			/* check whether all are mapped and non delay */
@@ -2437,11 +2527,10 @@ static int ext4_da_writepage(struct page *page,
 	}
 
 	if (test_opt(inode->i_sb, NOBH) && ext4_should_writeback_data(inode))
-		ret = nobh_writepage(page, ext4_normal_get_block_write, wbc);
+		ret = nobh_writepage(page, noalloc_get_block_write, wbc);
 	else
-		ret = block_write_full_page(page,
-						ext4_normal_get_block_write,
-						wbc);
+		ret = block_write_full_page(page, noalloc_get_block_write,
+					    wbc);
 
 	return ret;
 }
@@ -2753,7 +2842,7 @@ retry:
 	*pagep = page;
 
 	ret = block_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
-							ext4_da_get_block_prep);
+				ext4_da_get_block_prep);
 	if (ret < 0) {
 		unlock_page(page);
 		ext4_journal_stop(handle);
@@ -2791,7 +2880,7 @@ static int ext4_da_should_update_i_disksize(struct page *page,
 	for (i = 0; i < idx; i++)
 		bh = bh->b_this_page;
 
-	if (!buffer_mapped(bh) || (buffer_delay(bh)))
+	if (!buffer_mapped(bh) || (buffer_delay(bh)) || buffer_unwritten(bh))
 		return 0;
 	return 1;
 }
@@ -3061,12 +3150,10 @@ static int __ext4_normal_writepage(struct page *page,
 	struct inode *inode = page->mapping->host;
 
 	if (test_opt(inode->i_sb, NOBH))
-		return nobh_writepage(page,
-					ext4_normal_get_block_write, wbc);
+		return nobh_writepage(page, noalloc_get_block_write, wbc);
 	else
-		return block_write_full_page(page,
-						ext4_normal_get_block_write,
-						wbc);
+		return block_write_full_page(page, noalloc_get_block_write,
+					     wbc);
 }
 
 static int ext4_normal_writepage(struct page *page,
@@ -3118,7 +3205,7 @@ static int __ext4_journalled_writepage(struct page *page,
 	int err;
 
 	ret = block_prepare_write(page, 0, PAGE_CACHE_SIZE,
-					ext4_normal_get_block_write);
+				  noalloc_get_block_write);
 	if (ret != 0)
 		goto out_unlock;
 
@@ -3203,9 +3290,8 @@ static int ext4_journalled_writepage(struct page *page,
 		 * really know unless we go poke around in the buffer_heads.
 		 * But block_write_full_page will do the right thing.
 		 */
-		return block_write_full_page(page,
-						ext4_normal_get_block_write,
-						wbc);
+		return block_write_full_page(page, noalloc_get_block_write,
+					     wbc);
 	}
 no_write:
 	redirty_page_for_writepage(wbc, page);
@@ -4906,7 +4992,8 @@ static int ext4_index_trans_blocks(struct inode *inode, int nrblocks, int chunk)
  */
 int ext4_meta_trans_blocks(struct inode *inode, int nrblocks, int chunk)
 {
-	int groups, gdpblocks;
+	ext4_group_t groups, ngroups = ext4_get_groups_count(inode->i_sb);
+	int gdpblocks;
 	int idxblocks;
 	int ret = 0;
 
@@ -4933,8 +5020,8 @@ int ext4_meta_trans_blocks(struct inode *inode, int nrblocks, int chunk)
 		groups += nrblocks;
 
 	gdpblocks = groups;
-	if (groups > EXT4_SB(inode->i_sb)->s_groups_count)
-		groups = EXT4_SB(inode->i_sb)->s_groups_count;
+	if (groups > ngroups)
+		groups = ngroups;
 	if (groups > EXT4_SB(inode->i_sb)->s_gdb_count)
 		gdpblocks = EXT4_SB(inode->i_sb)->s_gdb_count;
 
@@ -4974,7 +5061,7 @@ int ext4_writepage_trans_blocks(struct inode *inode)
  * Calculate the journal credits for a chunk of data modification.
  *
  * This is called from DIO, fallocate or whoever calling
- * ext4_get_blocks_wrap() to map/allocate a chunk of contigous disk blocks.
+ * ext4_get_blocks() to map/allocate a chunk of contigous disk blocks.
  *
  * journal buffers for data blocks are not included here, as DIO
  * and fallocate do no need to journal data buffers.
