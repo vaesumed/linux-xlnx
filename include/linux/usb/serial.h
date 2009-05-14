@@ -15,6 +15,7 @@
 
 #include <linux/kref.h>
 #include <linux/mutex.h>
+#include <linux/sysrq.h>
 
 #define SERIAL_TTY_MAJOR	188	/* Nice legal number now */
 #define SERIAL_TTY_MINORS	254	/* loads of devices :) */
@@ -91,11 +92,15 @@ struct usb_serial_port {
 	int			write_urb_busy;
 	__u8			bulk_out_endpointAddress;
 
+	int			tx_bytes_flight;
+	int			urbs_in_flight;
+
 	wait_queue_head_t	write_wait;
 	struct work_struct	work;
 	char			throttled;
 	char			throttle_req;
 	char			console;
+	unsigned long		sysrq; /* sysrq timeout */
 	struct device		dev;
 };
 #define to_usb_serial_port(d) container_of(d, struct usb_serial_port, dev)
@@ -207,6 +212,7 @@ struct usb_serial_driver {
 	struct device_driver	driver;
 	struct usb_driver	*usb_driver;
 	struct usb_dynids	dynids;
+	int			max_in_flight_urbs;
 
 	int (*probe)(struct usb_serial *serial, const struct usb_device_id *id);
 	int (*attach)(struct usb_serial *serial);
@@ -297,6 +303,12 @@ extern void usb_serial_generic_unthrottle(struct tty_struct *tty);
 extern void usb_serial_generic_shutdown(struct usb_serial *serial);
 extern int usb_serial_generic_register(int debug);
 extern void usb_serial_generic_deregister(void);
+extern void usb_serial_generic_resubmit_read_urb(struct usb_serial_port *port,
+						 gfp_t mem_flags);
+extern int usb_serial_handle_sysrq_char(struct usb_serial_port *port,
+					unsigned int ch);
+extern int usb_serial_handle_break(struct usb_serial_port *port);
+
 
 extern int usb_serial_bus_register(struct usb_serial_driver *device);
 extern void usb_serial_bus_deregister(struct usb_serial_driver *device);
