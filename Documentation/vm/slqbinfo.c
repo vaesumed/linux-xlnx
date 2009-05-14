@@ -383,7 +383,6 @@ void slab_stats(struct slabinfo *s)
 {
 	unsigned long total_alloc;
 	unsigned long total_free;
-	unsigned long total;
 
 	total_alloc = s->alloc;
 	total_free = s->free;
@@ -501,7 +500,7 @@ void slabcache(struct slabinfo *s)
 		total_alloc = s->alloc;
 		total_free = s->free;
 
-		printf("%-21s %8ld %10ld %10ld %5ld %5ld %7ld %5d %7ld %8d\n",
+		printf("%-21s %8ld %10ld %10ld %5ld %5ld %7ld %5ld %7ld %8d\n",
 			s->name, s->objects,
 			total_alloc, total_free,
 			total_alloc ? (s->alloc_slab_fill * 100 / total_alloc) : 0,
@@ -512,7 +511,7 @@ void slabcache(struct slabinfo *s)
 			s->order);
 	}
 	else
-		printf("%-21s %8ld %7d %8s %4d %1d %3ld %4ld %s\n",
+		printf("%-21s %8ld %7d %8s %4d %1d %3ld %4d %s\n",
 			s->name, s->objects, s->object_size, size_str,
 			s->objs_per_slab, s->order,
 			s->slabs ? (s->objects * s->object_size * 100) /
@@ -640,10 +639,6 @@ void totals(void)
 
 	/* Object size */
 	unsigned long long min_objsize = max, max_objsize = 0, avg_objsize;
-
-	/* Number of partial slabs in a slabcache */
-	unsigned long long min_partial = max, max_partial = 0,
-				avg_partial, total_partial = 0;
 
 	/* Number of slabs in a slab cache */
 	unsigned long long min_slabs = max, max_slabs = 0,
@@ -855,9 +850,7 @@ void read_slab_dir(void)
 	DIR *dir;
 	struct dirent *de;
 	struct slabinfo *slab = slabinfo;
-	char *p;
 	char *t;
-	int count;
 
 	if (chdir("/sys/kernel/slab") && chdir("/sys/slab"))
 		fatal("SYSFS support for SLUB not active\n");
