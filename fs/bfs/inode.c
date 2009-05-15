@@ -30,6 +30,7 @@ MODULE_LICENSE("GPL");
 #define dprintf(x...)
 #endif
 
+static void bfs_write_super(struct super_block *s);
 void dump_imap(const char *prefix, struct super_block *s);
 
 struct inode *bfs_iget(struct super_block *sb, unsigned long ino)
@@ -216,11 +217,18 @@ static void bfs_put_super(struct super_block *s)
 	if (!info)
 		return;
 
+	lock_kernel();
+
+	if (s->s_dirt)
+		bfs_write_super(s);
+
 	brelse(info->si_sbh);
 	mutex_destroy(&info->bfs_lock);
 	kfree(info->si_imap);
 	kfree(info);
 	s->s_fs_info = NULL;
+
+	unlock_kernel();
 }
 
 static int bfs_statfs(struct dentry *dentry, struct kstatfs *buf)
