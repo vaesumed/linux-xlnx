@@ -113,6 +113,35 @@ static int soc_ac97_dev_register(struct snd_soc_codec *codec)
 }
 #endif
 
+static int soc_pcm_apply_symmetry(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_device *socdev = rtd->socdev;
+	struct snd_soc_card *card = socdev->card;
+	struct snd_soc_dai_link *machine = rtd->dai;
+	struct snd_soc_dai *cpu_dai = machine->cpu_dai;
+	struct snd_soc_dai *codec_dai = machine->codec_dai;
+	int ret;
+
+	if (codec_dai->symmetric_rates || cpu_dai->symmetric_rates ||
+	    machine->symmetric_rates) {
+		dev_dbg(card->dev, "Symmetry forces %dHz rate\n", 
+			machine->rate);
+
+		ret = snd_pcm_hw_constraint_minmax(substream->runtime,
+						   SNDRV_PCM_HW_PARAM_RATE,
+						   machine->rate,
+						   machine->rate);
+		if (ret < 0) {
+			dev_err(card->dev,
+				"Unable to apply rate symmetry constraint: %d\n", ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Called by ALSA when a PCM substream is opened, the runtime->hw record is
  * then initialized and any private data can be allocated. This also calls
@@ -219,6 +248,13 @@ static int soc_pcm_open(struct snd_pcm_substream *substream)
 		printk(KERN_ERR "asoc: %s <-> %s No matching channels\n",
 			codec_dai->name, cpu_dai->name);
 		goto machine_err;
+	}
+
+	/* Symmetry only applies if we've already got an active stream. */
+	if (cpu_dai->active || codec_dai->active) {
+		ret = soc_pcm_apply_symmetry(substream);
+		if (ret != 0)
+			goto machine_err;
 	}
 
 	pr_debug("asoc: %s <-> %s info:\n", codec_dai->name, cpu_dai->name);
@@ -520,6 +556,8 @@ static int soc_pcm_hw_params(struct snd_pcm_substream *substream,
 			goto platform_err;
 		}
 	}
+
+	machine->rate = params_rate(params);
 
 out:
 	mutex_unlock(&pcm_mutex);
@@ -953,6 +991,9 @@ static int soc_remove(struct platform_device *pdev)
 	struct snd_soc_card *card = socdev->card;
 	struct snd_soc_platform *platform = card->platform;
 	struct snd_soc_codec_device *codec_dev = socdev->codec_dev;
+
+	if (!card->instantiated)
+		return 0;
 
 	run_delayed_work(&card->delayed_work);
 
@@ -1741,7 +1782,7 @@ int snd_soc_info_volsw_ext(struct snd_kcontrol *kcontrol,
 {
 	int max = kcontrol->private_value;
 
-	if (max == 1)
+	if (max == 1 && !strstr(kcontrol->id.name, " Volume"))
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
 	else
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
@@ -1771,7 +1812,7 @@ int snd_soc_info_volsw(struct snd_kcontrol *kcontrol,
 	unsigned int shift = mc->shift;
 	unsigned int rshift = mc->rshift;
 
-	if (max == 1)
+	if (max == 1 && !strstr(kcontrol->id.name, " Volume"))
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
 	else
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
@@ -1878,7 +1919,7 @@ int snd_soc_info_volsw_2r(struct snd_kcontrol *kcontrol,
 		(struct soc_mixer_control *)kcontrol->private_value;
 	int max = mc->max;
 
-	if (max == 1)
+	if (max == 1 && !strstr(kcontrol->id.name, " Volume"))
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
 	else
 		uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
@@ -2062,7 +2103,7 @@ EXPORT_SYMBOL_GPL(snd_soc_put_volsw_s8);
 int snd_soc_dai_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 	unsigned int freq, int dir)
 {
-	if (dai->ops->set_sysclk)
+	if (dai->ops && dai->ops->set_sysclk)
 		return dai->ops->set_sysclk(dai, clk_id, freq, dir);
 	else
 		return -EINVAL;
@@ -2082,7 +2123,7 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_sysclk);
 int snd_soc_dai_set_clkdiv(struct snd_soc_dai *dai,
 	int div_id, int div)
 {
-	if (dai->ops->set_clkdiv)
+	if (dai->ops && dai->ops->set_clkdiv)
 		return dai->ops->set_clkdiv(dai, div_id, div);
 	else
 		return -EINVAL;
@@ -2101,7 +2142,7 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_clkdiv);
 int snd_soc_dai_set_pll(struct snd_soc_dai *dai,
 	int pll_id, unsigned int freq_in, unsigned int freq_out)
 {
-	if (dai->ops->set_pll)
+	if (dai->ops && dai->ops->set_pll)
 		return dai->ops->set_pll(dai, pll_id, freq_in, freq_out);
 	else
 		return -EINVAL;
@@ -2117,7 +2158,7 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_pll);
  */
 int snd_soc_dai_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 {
-	if (dai->ops->set_fmt)
+	if (dai->ops && dai->ops->set_fmt)
 		return dai->ops->set_fmt(dai, fmt);
 	else
 		return -EINVAL;
@@ -2136,7 +2177,7 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_fmt);
 int snd_soc_dai_set_tdm_slot(struct snd_soc_dai *dai,
 	unsigned int mask, int slots)
 {
-	if (dai->ops->set_sysclk)
+	if (dai->ops && dai->ops->set_tdm_slot)
 		return dai->ops->set_tdm_slot(dai, mask, slots);
 	else
 		return -EINVAL;
@@ -2152,7 +2193,7 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_tdm_slot);
  */
 int snd_soc_dai_set_tristate(struct snd_soc_dai *dai, int tristate)
 {
-	if (dai->ops->set_sysclk)
+	if (dai->ops && dai->ops->set_tristate)
 		return dai->ops->set_tristate(dai, tristate);
 	else
 		return -EINVAL;
@@ -2168,7 +2209,7 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_tristate);
  */
 int snd_soc_dai_digital_mute(struct snd_soc_dai *dai, int mute)
 {
-	if (dai->ops->digital_mute)
+	if (dai->ops && dai->ops->digital_mute)
 		return dai->ops->digital_mute(dai, mute);
 	else
 		return -EINVAL;
@@ -2349,6 +2390,39 @@ void snd_soc_unregister_platform(struct snd_soc_platform *platform)
 }
 EXPORT_SYMBOL_GPL(snd_soc_unregister_platform);
 
+static u64 codec_format_map[] = {
+	SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S16_BE,
+	SNDRV_PCM_FMTBIT_U16_LE | SNDRV_PCM_FMTBIT_U16_BE,
+	SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S24_BE,
+	SNDRV_PCM_FMTBIT_U24_LE | SNDRV_PCM_FMTBIT_U24_BE,
+	SNDRV_PCM_FMTBIT_S32_LE | SNDRV_PCM_FMTBIT_S32_BE,
+	SNDRV_PCM_FMTBIT_U32_LE | SNDRV_PCM_FMTBIT_U32_BE,
+	SNDRV_PCM_FMTBIT_S24_3LE | SNDRV_PCM_FMTBIT_U24_3BE,
+	SNDRV_PCM_FMTBIT_U24_3LE | SNDRV_PCM_FMTBIT_U24_3BE,
+	SNDRV_PCM_FMTBIT_S20_3LE | SNDRV_PCM_FMTBIT_S20_3BE,
+	SNDRV_PCM_FMTBIT_U20_3LE | SNDRV_PCM_FMTBIT_U20_3BE,
+	SNDRV_PCM_FMTBIT_S18_3LE | SNDRV_PCM_FMTBIT_S18_3BE,
+	SNDRV_PCM_FMTBIT_U18_3LE | SNDRV_PCM_FMTBIT_U18_3BE,
+	SNDRV_PCM_FMTBIT_FLOAT_LE | SNDRV_PCM_FMTBIT_FLOAT_BE,
+	SNDRV_PCM_FMTBIT_FLOAT64_LE | SNDRV_PCM_FMTBIT_FLOAT64_BE,
+	SNDRV_PCM_FMTBIT_IEC958_SUBFRAME_LE
+	| SNDRV_PCM_FMTBIT_IEC958_SUBFRAME_BE,
+};
+
+/* Fix up the DAI formats for endianness: codecs don't actually see
+ * the endianness of the data but we're using the CPU format
+ * definitions which do need to include endianness so we ensure that
+ * codec DAIs always have both big and little endian variants set.
+ */
+static void fixup_codec_formats(struct snd_soc_pcm_stream *stream)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(codec_format_map); i++)
+		if (stream->formats & codec_format_map[i])
+			stream->formats |= codec_format_map[i];
+}
+
 /**
  * snd_soc_register_codec - Register a codec with the ASoC core
  *
@@ -2356,6 +2430,8 @@ EXPORT_SYMBOL_GPL(snd_soc_unregister_platform);
  */
 int snd_soc_register_codec(struct snd_soc_codec *codec)
 {
+	int i;
+
 	if (!codec->name)
 		return -EINVAL;
 
@@ -2364,6 +2440,11 @@ int snd_soc_register_codec(struct snd_soc_codec *codec)
 		printk(KERN_WARNING "No device for codec %s\n", codec->name);
 
 	INIT_LIST_HEAD(&codec->list);
+
+	for (i = 0; i < codec->num_dai; i++) {
+		fixup_codec_formats(&codec->dai[i].playback);
+		fixup_codec_formats(&codec->dai[i].capture);
+	}
 
 	mutex_lock(&client_mutex);
 	list_add(&codec->list, &codec_list);
