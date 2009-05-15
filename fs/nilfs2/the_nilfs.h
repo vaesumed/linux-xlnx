@@ -48,6 +48,7 @@ enum {
  * @ns_bdi: backing dev info
  * @ns_writer: back pointer to writable nilfs_sb_info
  * @ns_sem: semaphore for shared states
+ * @ns_mount_mutex: mutex protecting mount/remount process of nilfs
  * @ns_writer_mutex: mutex protecting ns_writer attach/detach
  * @ns_writer_refcount: number of referrers on ns_writer
  * @ns_sbh: buffer heads of on-disk super blocks
@@ -95,6 +96,7 @@ struct the_nilfs {
 	struct backing_dev_info *ns_bdi;
 	struct nilfs_sb_info   *ns_writer;
 	struct rw_semaphore	ns_sem;
+	struct mutex		ns_mount_mutex;
 	struct mutex		ns_writer_mutex;
 	atomic_t		ns_writer_refcount;
 
