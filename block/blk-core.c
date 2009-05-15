@@ -2025,8 +2025,8 @@ static void blk_finish_request(struct request *req, int error)
  *     %false - we are done with this request
  *     %true  - still buffers pending for this request
  **/
-static bool blk_end_bidi_request(struct request *rq, int error,
-				 unsigned int nr_bytes, unsigned int bidi_bytes)
+bool blk_end_bidi_request(struct request *rq, int error,
+			  unsigned int nr_bytes, unsigned int bidi_bytes)
 {
 	struct request_queue *q = rq->q;
 	unsigned long flags;
@@ -2040,6 +2040,7 @@ static bool blk_end_bidi_request(struct request *rq, int error,
 
 	return false;
 }
+EXPORT_SYMBOL_GPL(blk_end_bidi_request);
 
 /**
  * __blk_end_bidi_request - Complete a bidi request with queue lock held
@@ -2056,8 +2057,8 @@ static bool blk_end_bidi_request(struct request *rq, int error,
  *     %false - we are done with this request
  *     %true  - still buffers pending for this request
  **/
-static bool __blk_end_bidi_request(struct request *rq, int error,
-				   unsigned int nr_bytes, unsigned int bidi_bytes)
+bool __blk_end_bidi_request(struct request *rq, int error,
+			    unsigned int nr_bytes, unsigned int bidi_bytes)
 {
 	if (blk_update_bidi_request(rq, error, nr_bytes, bidi_bytes))
 		return true;
@@ -2066,124 +2067,7 @@ static bool __blk_end_bidi_request(struct request *rq, int error,
 
 	return false;
 }
-
-/**
- * blk_end_request - Helper function for drivers to complete the request.
- * @rq:       the request being processed
- * @error:    %0 for success, < %0 for error
- * @nr_bytes: number of bytes to complete
- *
- * Description:
- *     Ends I/O on a number of bytes attached to @rq.
- *     If @rq has leftover, sets it up for the next range of segments.
- *
- * Return:
- *     %false - we are done with this request
- *     %true  - still buffers pending for this request
- **/
-bool blk_end_request(struct request *rq, int error, unsigned int nr_bytes)
-{
-	return blk_end_bidi_request(rq, error, nr_bytes, 0);
-}
-EXPORT_SYMBOL_GPL(blk_end_request);
-
-/**
- * blk_end_request_all - Helper function for drives to finish the request.
- * @rq: the request to finish
- * @err: %0 for success, < %0 for error
- *
- * Description:
- *     Completely finish @rq.
- */
-void blk_end_request_all(struct request *rq, int error)
-{
-	bool pending;
-	unsigned int bidi_bytes = 0;
-
-	if (unlikely(blk_bidi_rq(rq)))
-		bidi_bytes = blk_rq_bytes(rq->next_rq);
-
-	pending = blk_end_bidi_request(rq, error, blk_rq_bytes(rq), bidi_bytes);
-	BUG_ON(pending);
-}
-EXPORT_SYMBOL_GPL(blk_end_request_all);
-
-/**
- * blk_end_request_cur - Helper function to finish the current request chunk.
- * @rq: the request to finish the current chunk for
- * @err: %0 for success, < %0 for error
- *
- * Description:
- *     Complete the current consecutively mapped chunk from @rq.
- *
- * Return:
- *     %false - we are done with this request
- *     %true  - still buffers pending for this request
- */
-bool blk_end_request_cur(struct request *rq, int error)
-{
-	return blk_end_request(rq, error, blk_rq_cur_bytes(rq));
-}
-EXPORT_SYMBOL_GPL(blk_end_request_cur);
-
-/**
- * __blk_end_request - Helper function for drivers to complete the request.
- * @rq:       the request being processed
- * @error:    %0 for success, < %0 for error
- * @nr_bytes: number of bytes to complete
- *
- * Description:
- *     Must be called with queue lock held unlike blk_end_request().
- *
- * Return:
- *     %false - we are done with this request
- *     %true  - still buffers pending for this request
- **/
-bool __blk_end_request(struct request *rq, int error, unsigned int nr_bytes)
-{
-	return __blk_end_bidi_request(rq, error, nr_bytes, 0);
-}
-EXPORT_SYMBOL_GPL(__blk_end_request);
-
-/**
- * __blk_end_request_all - Helper function for drives to finish the request.
- * @rq: the request to finish
- * @err: %0 for success, < %0 for error
- *
- * Description:
- *     Completely finish @rq.  Must be called with queue lock held.
- */
-void __blk_end_request_all(struct request *rq, int error)
-{
-	bool pending;
-	unsigned int bidi_bytes = 0;
-
-	if (unlikely(blk_bidi_rq(rq)))
-		bidi_bytes = blk_rq_bytes(rq->next_rq);
-
-	pending = __blk_end_bidi_request(rq, error, blk_rq_bytes(rq), bidi_bytes);
-	BUG_ON(pending);
-}
-EXPORT_SYMBOL_GPL(__blk_end_request_all);
-
-/**
- * __blk_end_request_cur - Helper function to finish the current request chunk.
- * @rq: the request to finish the current chunk for
- * @err: %0 for success, < %0 for error
- *
- * Description:
- *     Complete the current consecutively mapped chunk from @rq.  Must
- *     be called with queue lock held.
- *
- * Return:
- *     %false - we are done with this request
- *     %true  - still buffers pending for this request
- */
-bool __blk_end_request_cur(struct request *rq, int error)
-{
-	return __blk_end_request(rq, error, blk_rq_cur_bytes(rq));
-}
-EXPORT_SYMBOL_GPL(__blk_end_request_cur);
+EXPORT_SYMBOL_GPL(__blk_end_bidi_request);
 
 void blk_rq_bio_prep(struct request_queue *q, struct request *rq,
 		     struct bio *bio)
