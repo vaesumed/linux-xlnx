@@ -1399,12 +1399,14 @@ static noinline void *__slab_alloc_page(struct kmem_cache *s,
 		page->list = l;
 
 		spin_lock(&n->list_lock);
+		spin_lock(&l->page_lock);
 		l->nr_slabs++;
 		l->nr_partial++;
 		list_add(&page->lru, &l->partial);
 		slqb_stat_inc(l, ALLOC);
 		slqb_stat_inc(l, ALLOC_SLAB_NEW);
 		object = __cache_list_get_page(s, l);
+		spin_unlock(&l->page_lock);
 		spin_unlock(&n->list_lock);
 #endif
 	}
