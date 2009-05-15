@@ -85,7 +85,13 @@ static struct drbd_epoch *previous_epoch(struct drbd_conf *mdev, struct drbd_epo
 #define GFP_TRY	(__GFP_HIGHMEM | __GFP_NOWARN)
 
 /**
- * drbd_bp_alloc: Returns a page. Fails only if a signal comes in.
+ * drbd_bp_alloc() - Returns a page, fails only if a signal comes in
+ * @mdev:	DRBD device.
+ * @gfp_mask:	Get free page allocation mask
+ *
+ * Allocates a page from the kernel or our own page pool. In case that
+ * allocation would go beyond the max_buffers setting, this function sleeps
+ * until DRBD frees a page somewhere else.
  */
 STATIC struct page *drbd_pp_alloc(struct drbd_conf *mdev, gfp_t gfp_mask)
 {
@@ -223,7 +229,7 @@ struct drbd_epoch_entry *drbd_alloc_ee(struct drbd_conf *mdev,
 		goto fail1;
 	}
 
-	bio->bi_bdev = mdev->bc->backing_bdev;
+	bio->bi_bdev = mdev->ldev->backing_bdev;
 	bio->bi_sector = sector;
 
 	ds = data_size;
@@ -703,9 +709,9 @@ STATIC enum drbd_packets drbd_recv_fp(struct drbd_conf *mdev, struct socket *soc
 }
 
 /**
- * drbd_socket_okay:
- * Tests if the connection behind the socket still exists. If not it frees
- * the socket.
+ * drbd_socket_okay() - Free the socket if its connection is not okay
+ * @mdev:	DRBD device.
+ * @sock:	pointer to the pointer to the socket.
  */
 static int drbd_socket_okay(struct drbd_conf *mdev, struct socket **sock)
 {
@@ -936,7 +942,7 @@ STATIC enum finish_epoch drbd_flush_after_epoch(struct drbd_conf *mdev, struct d
 	int rv;
 
 	if (mdev->write_ordering >= WO_bdev_flush && get_ldev(mdev)) {
-		rv = blkdev_issue_flush(mdev->bc->backing_bdev, NULL);
+		rv = blkdev_issue_flush(mdev->ldev->backing_bdev, NULL);
 		if (rv) {
 			dev_err(DEV, "local disk flush failed with status %d\n", rv);
 			/* would rather check on EOPNOTSUPP, but that is not reliable.
@@ -950,10 +956,6 @@ STATIC enum finish_epoch drbd_flush_after_epoch(struct drbd_conf *mdev, struct d
 	return drbd_may_finish_epoch(mdev, epoch, EV_BARRIER_DONE);
 }
 
-/**
- * w_flush: Checks if an epoch can be closed and therefore might
- * close and/or free the epoch object.
- */
 STATIC int w_flush(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
 	struct flush_work *fw = (struct flush_work *)w;
@@ -971,8 +973,10 @@ STATIC int w_flush(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 }
 
 /**
- * drbd_may_finish_epoch: Checks if an epoch can be closed and therefore might
- * close and/or free the epoch object.
+ * drbd_may_finish_epoch() - Applies an epoch_event to the epoch's state, eventually finishes it.
+ * @mdev:	DRBD device.
+ * @epoch:	Epoch object.
+ * @ev:		Epoch event.
  */
 STATIC enum finish_epoch drbd_may_finish_epoch(struct drbd_conf *mdev,
 					       struct drbd_epoch *epoch,
@@ -1088,8 +1092,9 @@ STATIC enum finish_epoch drbd_may_finish_epoch(struct drbd_conf *mdev,
 }
 
 /**
- * drbd_bump_write_ordering: It turned out that the current mdev->write_ordering
- * method does not work on the backing block device. Try the next allowed method.
+ * drbd_bump_write_ordering() - Fall back to an other write ordering method
+ * @mdev:	DRBD device.
+ * @wo:		Write ordering method to try.
  */
 void drbd_bump_write_ordering(struct drbd_conf *mdev, enum write_ordering_e wo) __must_hold(local)
 {
@@ -1103,11 +1108,11 @@ void drbd_bump_write_ordering(struct drbd_conf *mdev, enum write_ordering_e wo) 
 
 	pwo = mdev->write_ordering;
 	wo = min(pwo, wo);
-	if (wo == WO_bio_barrier && mdev->bc->dc.no_disk_barrier)
+	if (wo == WO_bio_barrier && mdev->ldev->dc.no_disk_barrier)
 		wo = WO_bdev_flush;
-	if (wo == WO_bdev_flush && mdev->bc->dc.no_disk_flush)
+	if (wo == WO_bdev_flush && mdev->ldev->dc.no_disk_flush)
 		wo = WO_drain_io;
-	if (wo == WO_drain_io && mdev->bc->dc.no_disk_drain)
+	if (wo == WO_drain_io && mdev->ldev->dc.no_disk_drain)
 		wo = WO_none;
 	mdev->write_ordering = wo;
 	if (pwo != mdev->write_ordering || wo == WO_bio_barrier)
@@ -1115,8 +1120,10 @@ void drbd_bump_write_ordering(struct drbd_conf *mdev, enum write_ordering_e wo) 
 }
 
 /**
- * w_e_reissue: In case the IO subsystem delivered an error for an BIO with the
- * BIO_RW_BARRIER flag set, retry that bio without the barrier flag set.
+ * w_e_reissue() - Worker callback; Resubmit a bio, without BIO_RW_BARRIER set
+ * @mdev:	DRBD device.
+ * @w:		work object.
+ * @cancel:	The connection will be closed anyways (unused in this callback)
  */
 int w_e_reissue(struct drbd_conf *mdev, struct drbd_work *w, int cancel) __releases(local)
 {
@@ -1140,7 +1147,7 @@ int w_e_reissue(struct drbd_conf *mdev, struct drbd_work *w, int cancel) __relea
 	 * re-init volatile members */
 	/* we still have a local reference,
 	 * get_ldev was done in receive_Data. */
-	bio->bi_bdev = mdev->bc->backing_bdev;
+	bio->bi_bdev = mdev->ldev->backing_bdev;
 	bio->bi_sector = e->sector;
 	bio->bi_size = e->size;
 	bio->bi_idx = 0;
@@ -2066,7 +2073,7 @@ STATIC int drbd_asb_recover_0p(struct drbd_conf *mdev) __must_hold(local)
 	int self, peer, rv = -100;
 	unsigned long ch_self, ch_peer;
 
-	self = mdev->bc->md.uuid[UI_BITMAP] & 1;
+	self = mdev->ldev->md.uuid[UI_BITMAP] & 1;
 	peer = mdev->p_uuid[UI_BITMAP] & 1;
 
 	ch_peer = mdev->p_uuid[UI_SIZE];
@@ -2137,7 +2144,7 @@ STATIC int drbd_asb_recover_1p(struct drbd_conf *mdev) __must_hold(local)
 {
 	int self, peer, hg, rv = -100;
 
-	self = mdev->bc->md.uuid[UI_BITMAP] & 1;
+	self = mdev->ldev->md.uuid[UI_BITMAP] & 1;
 	peer = mdev->p_uuid[UI_BITMAP] & 1;
 
 	switch (mdev->net_conf->after_sb_1p) {
@@ -2183,7 +2190,7 @@ STATIC int drbd_asb_recover_2p(struct drbd_conf *mdev) __must_hold(local)
 {
 	int self, peer, hg, rv = -100;
 
-	self = mdev->bc->md.uuid[UI_BITMAP] & 1;
+	self = mdev->ldev->md.uuid[UI_BITMAP] & 1;
 	peer = mdev->p_uuid[UI_BITMAP] & 1;
 
 	switch (mdev->net_conf->after_sb_2p) {
@@ -2250,7 +2257,7 @@ STATIC int drbd_uuid_compare(struct drbd_conf *mdev, int *rule_nr) __must_hold(l
 	u64 self, peer;
 	int i, j;
 
-	self = mdev->bc->md.uuid[UI_CURRENT] & ~((u64)1);
+	self = mdev->ldev->md.uuid[UI_CURRENT] & ~((u64)1);
 	peer = mdev->p_uuid[UI_CURRENT] & ~((u64)1);
 
 	*rule_nr = 1;
@@ -2299,20 +2306,20 @@ STATIC int drbd_uuid_compare(struct drbd_conf *mdev, int *rule_nr) __must_hold(l
 	}
 
 	*rule_nr = 7;
-	self = mdev->bc->md.uuid[UI_BITMAP] & ~((u64)1);
+	self = mdev->ldev->md.uuid[UI_BITMAP] & ~((u64)1);
 	peer = mdev->p_uuid[UI_CURRENT] & ~((u64)1);
 	if (self == peer)
 		return 1;
 
 	*rule_nr = 8;
 	for (i = UI_HISTORY_START; i <= UI_HISTORY_END; i++) {
-		self = mdev->bc->md.uuid[i] & ~((u64)1);
+		self = mdev->ldev->md.uuid[i] & ~((u64)1);
 		if (self == peer)
 			return 2;
 	}
 
 	*rule_nr = 9;
-	self = mdev->bc->md.uuid[UI_BITMAP] & ~((u64)1);
+	self = mdev->ldev->md.uuid[UI_BITMAP] & ~((u64)1);
 	peer = mdev->p_uuid[UI_BITMAP] & ~((u64)1);
 	if (self == peer && self != ((u64)0))
 		return 100;
@@ -2347,7 +2354,7 @@ STATIC enum drbd_conns drbd_sync_handshake(struct drbd_conf *mdev, enum drbd_rol
 	hg = drbd_uuid_compare(mdev, &rule_nr);
 
 	dev_info(DEV, "drbd_sync_handshake:\n");
-	drbd_uuid_dump(mdev, "self", mdev->bc->md.uuid,
+	drbd_uuid_dump(mdev, "self", mdev->ldev->md.uuid,
 		       mdev->state.disk >= D_NEGOTIATING ? drbd_bm_total_weight(mdev) : 0, 0);
 	drbd_uuid_dump(mdev, "peer", mdev->p_uuid,
 		       mdev->p_uuid[UI_SIZE], mdev->p_uuid[UI_FLAGS]);
@@ -2740,33 +2747,33 @@ STATIC int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
 #define min_not_zero(l, r) (l == 0) ? r : ((r == 0) ? l : min(l, r))
 	if (get_ldev(mdev)) {
 		warn_if_differ_considerably(mdev, "lower level device sizes",
-			   p_size, drbd_get_max_capacity(mdev->bc));
+			   p_size, drbd_get_max_capacity(mdev->ldev));
 		warn_if_differ_considerably(mdev, "user requested size",
-					    p_usize, mdev->bc->dc.disk_size);
+					    p_usize, mdev->ldev->dc.disk_size);
 
 		/* if this is the first connect, or an otherwise expected
 		 * param exchange, choose the minimum */
 		if (mdev->state.conn == C_WF_REPORT_PARAMS)
-			p_usize = min_not_zero((sector_t)mdev->bc->dc.disk_size,
+			p_usize = min_not_zero((sector_t)mdev->ldev->dc.disk_size,
 					     p_usize);
 
-		my_usize = mdev->bc->dc.disk_size;
+		my_usize = mdev->ldev->dc.disk_size;
 
-		if (mdev->bc->dc.disk_size != p_usize) {
-			mdev->bc->dc.disk_size = p_usize;
+		if (mdev->ldev->dc.disk_size != p_usize) {
+			mdev->ldev->dc.disk_size = p_usize;
 			dev_info(DEV, "Peer sets u_size to %lu sectors\n",
-			     (unsigned long)mdev->bc->dc.disk_size);
+			     (unsigned long)mdev->ldev->dc.disk_size);
 		}
 
 		/* Never shrink a device with usable data during connect.
 		   But allow online shrinking if we are connected. */
-		if (drbd_new_dev_size(mdev, mdev->bc) <
+		if (drbd_new_dev_size(mdev, mdev->ldev) <
 		   drbd_get_capacity(mdev->this_bdev) &&
 		   mdev->state.disk >= D_OUTDATED &&
 		   mdev->state.conn < C_CONNECTED) {
 			dev_err(DEV, "The peer's disk size is too small!\n");
 			drbd_force_state(mdev, NS(conn, C_DISCONNECTING));
-			mdev->bc->dc.disk_size = my_usize;
+			mdev->ldev->dc.disk_size = my_usize;
 			put_ldev(mdev);
 			return FALSE;
 		}
@@ -2802,8 +2809,8 @@ STATIC int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
 	}
 
 	if (get_ldev(mdev)) {
-		if (mdev->bc->known_size != drbd_get_capacity(mdev->bc->backing_bdev)) {
-			mdev->bc->known_size = drbd_get_capacity(mdev->bc->backing_bdev);
+		if (mdev->ldev->known_size != drbd_get_capacity(mdev->ldev->backing_bdev)) {
+			mdev->ldev->known_size = drbd_get_capacity(mdev->ldev->backing_bdev);
 			ldsc = 1;
 		}
 
@@ -2866,7 +2873,7 @@ STATIC int receive_uuids(struct drbd_conf *mdev, struct p_header *h)
 		int skip_initial_sync =
 			mdev->state.conn == C_CONNECTED &&
 			mdev->agreed_pro_version >= 90 &&
-			mdev->bc->md.uuid[UI_CURRENT] == UUID_JUST_CREATED &&
+			mdev->ldev->md.uuid[UI_CURRENT] == UUID_JUST_CREATED &&
 			(p_uuid[UI_FLAGS] & 8);
 		if (skip_initial_sync) {
 			dev_info(DEV, "Accepted new current UUID, preparing to skip initial sync\n");
@@ -2893,8 +2900,8 @@ STATIC int receive_uuids(struct drbd_conf *mdev, struct p_header *h)
 }
 
 /**
- * convert_state:
- * Switches the view of the state.
+ * convert_state() - Converts the peer's view of the cluster state to our point of view
+ * @ps:		The state as seen by the peer.
  */
 STATIC union drbd_state convert_state(union drbd_state ps)
 {
@@ -3519,7 +3526,7 @@ STATIC void drbd_disconnect(struct drbd_conf *mdev)
 
 	fp = FP_DONT_CARE;
 	if (get_ldev(mdev)) {
-		fp = mdev->bc->dc.fencing;
+		fp = mdev->ldev->dc.fencing;
 		put_ldev(mdev);
 	}
 

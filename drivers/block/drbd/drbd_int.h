@@ -40,7 +40,7 @@
 #include <linux/blkdev.h>
 #include <linux/genhd.h>
 #include <net/tcp.h>
-#include "lru_cache.h"
+#include <linux/lru_cache.h>
 
 #ifdef __CHECKER__
 # define __protected_by(x)       __attribute__((require_context(x,1,999,"rdwr")))
@@ -180,10 +180,7 @@ drbd_insert_fault(struct drbd_conf *mdev, unsigned int type) {
 extern struct drbd_conf **minor_table;
 extern struct ratelimit_state drbd_ratelimit_state;
 
-/***
- * on the wire
- *********************************************************************/
-
+/* on the wire */
 enum drbd_packets {
 	/* receiver (data socket) */
 	P_DATA		      = 0x00,
@@ -891,7 +888,7 @@ struct drbd_conf {
 	/* configured by drbdsetup */
 	struct net_conf *net_conf; /* protected by get_net_conf() and put_net_conf() */
 	struct syncer_conf sync_conf;
-	struct drbd_backing_dev *bc __protected_by(local);
+	struct drbd_backing_dev *ldev __protected_by(local);
 
 	sector_t p_size;     /* partner's disk size */
 	struct request_queue *rq_queue;
@@ -1148,7 +1145,7 @@ extern int drbd_send_ov_request(struct drbd_conf *mdev,sector_t sector,int size)
 extern int drbd_send_bitmap(struct drbd_conf *mdev);
 extern int _drbd_send_bitmap(struct drbd_conf *mdev);
 extern int drbd_send_sr_reply(struct drbd_conf *mdev, int retcode);
-extern void drbd_free_bc(struct drbd_backing_dev *bc);
+extern void drbd_free_bc(struct drbd_backing_dev *ldev);
 extern int drbd_io_error(struct drbd_conf *mdev, int forcedetach);
 extern void drbd_mdev_cleanup(struct drbd_conf *mdev);
 
@@ -1210,10 +1207,10 @@ extern int drbd_bitmap_io(struct drbd_conf *mdev, int (*io_fn)(struct drbd_conf 
 /* resync bitmap */
 /* 16MB sized 'bitmap extent' to track syncer usage */
 struct bm_extent {
-	struct lc_element lce;
 	int rs_left; /* number of bits set (out of sync) in this extent. */
 	int rs_failed; /* number of failed resync requests in this extent. */
 	unsigned long flags;
+	struct lc_element lce;
 };
 
 #define BME_NO_WRITES  0  /* bm_extent.flags: no more requests on this one! */
@@ -1536,7 +1533,9 @@ void drbd_bcast_ee(struct drbd_conf *mdev,
 		const struct drbd_epoch_entry* e);
 
 
-/** DRBD State macros:
+/**
+ * DOC: DRBD State macros
+ *
  * These macros are used to express state changes in easily readable form.
  *
  * The NS macros expand to a mask and a value, that can be bit ored onto the
@@ -1613,6 +1612,16 @@ static inline int _drbd_set_state(struct drbd_conf *mdev,
 	return rv;
 }
 
+/**
+ * drbd_request_state() - Reqest a state change
+ * @mdev:	DRBD device.
+ * @mask:	mask of state bits to change.
+ * @val:	value of new state bits.
+ *
+ * This is the most graceful way of requesting a state change. It is verbose
+ * quite verbose in case the state change is not possible, and all those
+ * state changes are globally serialized.
+ */
 static inline int drbd_request_state(struct drbd_conf *mdev,
 				     union drbd_state mask,
 				     union drbd_state val)
@@ -1620,13 +1629,9 @@ static inline int drbd_request_state(struct drbd_conf *mdev,
 	return _drbd_request_state(mdev, mask, val, CS_VERBOSE + CS_ORDERED);
 }
 
-/**
- * drbd_chk_io_error: Handles the on_io_error setting, should be called from
- * all io completion handlers. See also drbd_io_error().
- */
 static inline void __drbd_chk_io_error(struct drbd_conf *mdev, int forcedetach)
 {
-	switch (mdev->bc->dc.on_io_error) {
+	switch (mdev->ldev->dc.on_io_error) {
 	case EP_PASS_ON:
 		if (!forcedetach) {
 			if (printk_ratelimit())
@@ -1644,6 +1649,14 @@ static inline void __drbd_chk_io_error(struct drbd_conf *mdev, int forcedetach)
 	}
 }
 
+/**
+ * drbd_chk_io_error: Handle the on_io_error setting, should be called from all io completion handlers
+ * @mdev:	 DRBD device.
+ * @error:	 Error code passed to the IO completion callback
+ * @forcedetach: Force detach. I.e. the error happened while accessing the meta data
+ *
+ * See also drbd_io_error().
+ */
 static inline void drbd_chk_io_error(struct drbd_conf *mdev,
 	int error, int forcedetach)
 {
@@ -1655,9 +1668,13 @@ static inline void drbd_chk_io_error(struct drbd_conf *mdev,
 	}
 }
 
-/* Returns the first sector number of our meta data,
- * which, for internal meta data, happens to be the maximum capacity
- * we could agree upon with our peer
+
+/**
+ * drbd_md_first_sector() - Returns the first sector number of the meta data area
+ * @bdev:	Meta data block device.
+ *
+ * BTW, for internal meta data, this happens to be the maximum capacity
+ * we could agree upon with our peer node.
  */
 static inline sector_t drbd_md_first_sector(struct drbd_backing_dev *bdev)
 {
@@ -1671,8 +1688,10 @@ static inline sector_t drbd_md_first_sector(struct drbd_backing_dev *bdev)
 	}
 }
 
-/* returns the last sector number of our meta data,
- * to be able to catch out of band md access */
+/**
+ * drbd_md_last_sector() - Return the last sector number of the meta data area
+ * @bdev:	Meta data block device.
+ */
 static inline sector_t drbd_md_last_sector(struct drbd_backing_dev *bdev)
 {
 	switch (bdev->dc.meta_dev_idx) {
@@ -1685,16 +1704,19 @@ static inline sector_t drbd_md_last_sector(struct drbd_backing_dev *bdev)
 	}
 }
 
-/* Returns the number of 512 byte sectors of the device */
 static inline sector_t drbd_get_capacity(struct block_device *bdev)
 {
-	/* return bdev ? get_capacity(bdev->bd_disk) : 0; */
-	return bdev ? bdev->bd_inode->i_size >> 9 : 0;
+	return bdev ? get_capacity(bdev->bd_disk) : 0;
 }
 
-/* returns the capacity we announce to out peer.
- * we clip ourselves at the various MAX_SECTORS, because if we don't,
- * current implementation will oops sooner or later */
+/**
+ * drbd_get_max_capacity() - Returns the capacity we announce to out peer
+ * @bdev:	Meta data block device.
+ *
+ * returns the capacity we announce to out peer.  we clip ourselves at the
+ * various MAX_SECTORS, because if we don't, current implementation will
+ * oops sooner or later
+ */
 static inline sector_t drbd_get_max_capacity(struct drbd_backing_dev *bdev)
 {
 	sector_t s;
@@ -1721,7 +1743,11 @@ static inline sector_t drbd_get_max_capacity(struct drbd_backing_dev *bdev)
 	return s;
 }
 
-/* returns the sector number of our meta data 'super' block */
+/**
+ * drbd_md_ss__() - Return the sector number of our meta data super block
+ * @mdev:	DRBD device.
+ * @bdev:	Meta data block device.
+ */
 static inline sector_t drbd_md_ss__(struct drbd_conf *mdev,
 				    struct drbd_backing_dev *bdev)
 {
@@ -1909,8 +1935,10 @@ static inline void put_net_conf(struct drbd_conf *mdev)
 }
 
 /**
- * get_net_conf: Returns TRUE when it is ok to access mdev->net_conf. You
- * should call put_net_conf() when finished looking at mdev->net_conf.
+ * get_net_conf() - Increase ref count on mdev->net_conf; Returns 0 if nothing there
+ * @mdev:	DRBD device.
+ *
+ * You have to call put_net_conf() when finished working with mdev->net_conf.
  */
 static inline int get_net_conf(struct drbd_conf *mdev)
 {
@@ -1924,11 +1952,13 @@ static inline int get_net_conf(struct drbd_conf *mdev)
 }
 
 /**
- * get_ldev: Returns TRUE when local IO is possible. If it returns
- * TRUE you should call put_ldev() after IO is completed.
+ * get_ldev() - Increase the ref count on mdev->ldev. Returns 0 if there is no ldev
+ * @M:		DRBD device.
+ *
+ * You have to call put_ldev() when finished working with mdev->ldev.
  */
-#define get_ldev_if_state(M,MINS) __cond_lock(local, _get_ldev_if_state(M,MINS))
 #define get_ldev(M) __cond_lock(local, _get_ldev_if_state(M,D_INCONSISTENT))
+#define get_ldev_if_state(M,MINS) __cond_lock(local, _get_ldev_if_state(M,MINS))
 
 static inline void put_ldev(struct drbd_conf *mdev)
 {
@@ -2197,7 +2227,7 @@ static inline void drbd_blk_run_queue(struct request_queue *q)
 static inline void drbd_kick_lo(struct drbd_conf *mdev)
 {
 	if (get_ldev(mdev)) {
-		drbd_blk_run_queue(bdev_get_queue(mdev->bc->backing_bdev));
+		drbd_blk_run_queue(bdev_get_queue(mdev->ldev->backing_bdev));
 		put_ldev(mdev);
 	}
 }
@@ -2209,7 +2239,7 @@ static inline void drbd_md_flush(struct drbd_conf *mdev)
 	if (test_bit(MD_NO_BARRIER, &mdev->flags))
 		return;
 
-	r = blkdev_issue_flush(mdev->bc->md_bdev, NULL);
+	r = blkdev_issue_flush(mdev->ldev->md_bdev, NULL);
 	if (r) {
 		set_bit(MD_NO_BARRIER, &mdev->flags);
 		dev_err(DEV, "meta data flush failed with status %d, disabling md-flushes\n", r);

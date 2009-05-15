@@ -250,8 +250,8 @@ int w_io_error(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 	struct drbd_request *req = (struct drbd_request *)w;
 	int ok;
 
-	/* NOTE: mdev->bc can be NULL by the time we get here! */
-	/* D_ASSERT(mdev->bc->dc.on_io_error != EP_PASS_ON); */
+	/* NOTE: mdev->ldev can be NULL by the time we get here! */
+	/* D_ASSERT(mdev->ldev->dc.on_io_error != EP_PASS_ON); */
 
 	/* the only way this callback is scheduled is from _req_may_be_done,
 	 * when it is done and had a local write error, see comments there */
@@ -740,7 +740,7 @@ int drbd_resync_finished(struct drbd_conf *mdev)
 				int i;
 				for (i = UI_BITMAP ; i <= UI_HISTORY_END ; i++)
 					_drbd_uuid_set(mdev, i, mdev->p_uuid[i]);
-				drbd_uuid_set(mdev, UI_BITMAP, mdev->bc->md.uuid[UI_CURRENT]);
+				drbd_uuid_set(mdev, UI_BITMAP, mdev->ldev->md.uuid[UI_CURRENT]);
 				_drbd_uuid_set(mdev, UI_CURRENT, mdev->p_uuid[UI_CURRENT]);
 			} else {
 				dev_err(DEV, "mdev->p_uuid is NULL! BUG\n");
@@ -754,7 +754,7 @@ int drbd_resync_finished(struct drbd_conf *mdev)
 			 * know of the peer. */
 			int i;
 			for (i = UI_CURRENT ; i <= UI_HISTORY_END ; i++)
-				mdev->p_uuid[i] = mdev->bc->md.uuid[i];
+				mdev->p_uuid[i] = mdev->ldev->md.uuid[i];
 		}
 	}
 
@@ -781,7 +781,10 @@ out:
 }
 
 /**
- * w_e_end_data_req: Send the answer (P_DATA_REPLY) in response to a DataRequest.
+ * w_e_end_data_req() - Worker callback, to send a P_DATA_REPLY packet in response to a P_DATA_REQUEST
+ * @mdev:	DRBD device.
+ * @w:		work object.
+ * @cancel:	The connection will be closed anyways
  */
 int w_e_end_data_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
@@ -823,7 +826,10 @@ int w_e_end_data_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 }
 
 /**
- * w_e_end_rsdata_req: Send the answer (P_RS_DATA_REPLY) to a RSDataRequest.
+ * w_e_end_rsdata_req() - Worker callback to send a P_RS_DATA_REPLY packet in response to a P_RS_DATA_REQUESTRS
+ * @mdev:	DRBD device.
+ * @w:		work object.
+ * @cancel:	The connection will be closed anyways
  */
 int w_e_end_rsdata_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
@@ -1100,7 +1106,10 @@ int w_send_write_hint(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 }
 
 /**
- * w_send_dblock: Send a mirrored write request.
+ * w_send_dblock() - Worker callback to send a P_DATA packet in order to mirror a write request
+ * @mdev:	DRBD device.
+ * @w:		work object.
+ * @cancel:	The connection will be closed anyways
  */
 int w_send_dblock(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
@@ -1119,7 +1128,10 @@ int w_send_dblock(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 }
 
 /**
- * w_send_read_req: Send a read requests.
+ * w_send_read_req() - Worker callback to send a read request (P_DATA_REQUEST) packet
+ * @mdev:	DRBD device.
+ * @w:		work object.
+ * @cancel:	The connection will be closed anyways
  */
 int w_send_read_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
@@ -1163,9 +1175,9 @@ STATIC int _drbd_may_sync_now(struct drbd_conf *mdev)
 }
 
 /**
- * _drbd_pause_after:
- * Finds all devices that may not resync now, and causes them to
- * pause their resynchronisation.
+ * _drbd_pause_after() - Pause resync on all devices that may not resync now
+ * @mdev:	DRBD device.
+ *
  * Called from process context only (admin command and after_state_ch).
  */
 STATIC int _drbd_pause_after(struct drbd_conf *mdev)
@@ -1188,9 +1200,9 @@ STATIC int _drbd_pause_after(struct drbd_conf *mdev)
 }
 
 /**
- * _drbd_resume_next:
- * Finds all devices that can resume resynchronisation
- * process, and causes them to resume.
+ * _drbd_resume_next() - Resume resync on all devices that may resync now
+ * @mdev:	DRBD device.
+ *
  * Called from process context only (admin command and worker).
  */
 STATIC int _drbd_resume_next(struct drbd_conf *mdev)
@@ -1244,12 +1256,12 @@ void drbd_alter_sa(struct drbd_conf *mdev, int na)
 }
 
 /**
- * drbd_start_resync:
- * @side: Either C_SYNC_SOURCE or C_SYNC_TARGET
- * Start the resync process. Called from process context only,
- * either admin command or drbd_receiver.
- * Note, this function might bring you directly into one of the
- * PausedSync* states.
+ * drbd_start_resync() - Start the resync process
+ * @mdev:	DRBD device.
+ * @side:	Either C_SYNC_SOURCE or C_SYNC_TARGET
+ *
+ * This function might bring you directly into one of the
+ * C_PAUSED_SYNC_* states.
  */
 void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side)
 {
