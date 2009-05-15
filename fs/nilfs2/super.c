@@ -750,7 +750,7 @@ int nilfs_store_magic_and_option(struct super_block *sb,
  * @silent: silent mode flag
  * @nilfs: the_nilfs struct
  *
- * This function is called exclusively by bd_mount_mutex.
+ * This function is called exclusively by nilfs->ns_mount_mutex.
  * So, the recovery process is protected from other simultaneous mounts.
  */
 static int
@@ -943,7 +943,7 @@ static int nilfs_remount(struct super_block *sb, int *flags, char *data)
 		 * store the current valid flag.  (It may have been changed
 		 * by fsck since we originally mounted the partition.)
 		 */
-		down(&sb->s_bdev->bd_mount_sem);
+		mutex_lock(&nilfs->ns_mount_mutex);
 		if (nilfs_current_mount_is_there(nilfs, 0, sbi)) {
 			printk(KERN_WARNING "NILFS (device %s): couldn't "
 			       "remount because an RW-mount exists.\n",
@@ -971,13 +971,13 @@ static int nilfs_remount(struct super_block *sb, int *flags, char *data)
 		nilfs_setup_super(sbi);
 		up_write(&nilfs->ns_sem);
 
-		up(&sb->s_bdev->bd_mount_sem);
+		mutex_unlock(&nilfs->ns_mount_mutex);
 	}
  out:
 	return 0;
 
  rw_remount_failed:
-	up(&sb->s_bdev->bd_mount_sem);
+	mutex_unlock(&nilfs->ns_mount_mutex);
  restore_opts:
 	sb->s_flags = old_sb_flags;
 	sbi->s_mount_opt = old_opts.mount_opt;
@@ -1100,7 +1100,7 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 		goto failed;
 	}
 
-	down(&sd.bdev->bd_mount_sem);
+	mutex_lock(&nilfs->ns_mount_mutex);
 
 	if (!sd.cno &&
 	    nilfs_current_mount_is_there(nilfs, !(flags & MS_RDONLY), NULL)) {
@@ -1115,7 +1115,9 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 		/* trying to get the latest checkpoint.  */
 		sd.cno = nilfs_last_cno(nilfs);
 
+	down(&sd.bdev->bd_mount_sem);
 	s = sget(fs_type, nilfs_test_bdev_super, nilfs_set_bdev_super, &sd);
+	up(&sd.bdev->bd_mount_sem);
 	if (IS_ERR(s)) {
 		err = PTR_ERR(s);
 		goto failed_unlock;
@@ -1137,7 +1139,7 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 		need_to_close = 0;
 	}
 
-	up(&sd.bdev->bd_mount_sem);
+	mutex_unlock(&nilfs->ns_mount_mutex);
 	put_nilfs(nilfs);
 	if (need_to_close)
 		close_bdev_exclusive(sd.bdev, flags);
@@ -1145,7 +1147,7 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 	return 0;
 
  failed_unlock:
-	up(&sd.bdev->bd_mount_sem);
+	mutex_unlock(&nilfs->ns_mount_mutex);
 	put_nilfs(nilfs);
  failed:
 	close_bdev_exclusive(sd.bdev, flags);
@@ -1154,14 +1156,14 @@ nilfs_get_sb(struct file_system_type *fs_type, int flags,
 
  cancel_new:
 	/* Abandoning the newly allocated superblock */
-	up(&sd.bdev->bd_mount_sem);
+	mutex_unlock(&nilfs->ns_mount_mutex);
 	put_nilfs(nilfs);
 	up_write(&s->s_umount);
 	deactivate_super(s);
 	/*
 	 * deactivate_super() invokes close_bdev_exclusive().
 	 * We must finish all post-cleaning before this call;
-	 * put_nilfs() and unlocking bd_mount_sem need the block device.
+	 * put_nilfs() needs the block device.
 	 */
 	return err;
 }
