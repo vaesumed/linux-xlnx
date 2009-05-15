@@ -29,6 +29,7 @@
 #define _IXGBE_TYPE_H_
 
 #include <linux/types.h>
+#include <linux/mdio.h>
 
 /* Vendor ID */
 #define IXGBE_INTEL_VENDOR_ID   0x8086
@@ -443,6 +444,21 @@
 
 #define IXGBE_SECTXCTRL_STORE_FORWARD_ENABLE    0x4
 
+/* HW RSC registers */
+#define IXGBE_RSCCTL(_i) (((_i) < 64) ? (0x0102C + ((_i) * 0x40)) : \
+                          (0x0D02C + ((_i - 64) * 0x40)))
+#define IXGBE_RSCDBU      0x03028
+#define IXGBE_RSCCTL_RSCEN          0x01
+#define IXGBE_RSCCTL_MAXDESC_1      0x00
+#define IXGBE_RSCCTL_MAXDESC_4      0x04
+#define IXGBE_RSCCTL_MAXDESC_8      0x08
+#define IXGBE_RSCCTL_MAXDESC_16     0x0C
+#define IXGBE_RXDADV_RSCCNT_SHIFT     17
+#define IXGBE_GPIE_RSC_DELAY_SHIFT    11
+#define IXGBE_RXDADV_RSCCNT_MASK    0x001E0000
+#define IXGBE_RSCDBU_RSCACKDIS      0x00000080
+#define IXGBE_RDRXCTL_RSCFRSTSIZE   0x003E0000
+
 /* DCB registers */
 #define IXGBE_RTRPCS      0x02430
 #define IXGBE_RTTDCS      0x04900
@@ -833,13 +849,7 @@
 /* Omer bit masks */
 #define IXGBE_CORECTL_WRITE_CMD         0x00010000
 
-/* Device Type definitions for new protocol MDIO commands */
-#define IXGBE_MDIO_PMA_PMD_DEV_TYPE               0x1
-#define IXGBE_MDIO_PCS_DEV_TYPE                   0x3
-#define IXGBE_MDIO_PHY_XS_DEV_TYPE                0x4
-#define IXGBE_MDIO_AUTO_NEG_DEV_TYPE              0x7
-#define IXGBE_MDIO_VENDOR_SPECIFIC_1_DEV_TYPE     0x1E   /* Device 30 */
-#define IXGBE_TWINAX_DEV                          1
+/* MDIO definitions */
 
 #define IXGBE_MDIO_COMMAND_TIMEOUT     100 /* PHY Timeout for 1 GB mode */
 
@@ -850,30 +860,9 @@
 #define IXGBE_MDIO_VENDOR_SPECIFIC_1_10G_SPEED    0x0018
 #define IXGBE_MDIO_VENDOR_SPECIFIC_1_1G_SPEED     0x0010
 
-#define IXGBE_MDIO_AUTO_NEG_CONTROL    0x0 /* AUTO_NEG Control Reg */
-#define IXGBE_MDIO_AUTO_NEG_STATUS     0x1 /* AUTO_NEG Status Reg */
-#define IXGBE_MDIO_PHY_XS_CONTROL      0x0 /* PHY_XS Control Reg */
-#define IXGBE_MDIO_PHY_XS_RESET        0x8000 /* PHY_XS Reset */
-#define IXGBE_MDIO_PHY_ID_HIGH         0x2 /* PHY ID High Reg*/
-#define IXGBE_MDIO_PHY_ID_LOW          0x3 /* PHY ID Low Reg*/
-#define IXGBE_MDIO_PHY_SPEED_ABILITY   0x4 /* Speed Ability Reg */
-#define IXGBE_MDIO_PHY_SPEED_10G       0x0001 /* 10G capable */
-#define IXGBE_MDIO_PHY_SPEED_1G        0x0010 /* 1G capable */
-#define IXGBE_MDIO_PHY_EXT_ABILITY        0xB /* Ext Ability Reg */
-#define IXGBE_MDIO_PHY_10GBASET_ABILITY   0x0004 /* 10GBaseT capable */
-#define IXGBE_MDIO_PHY_1000BASET_ABILITY  0x0020 /* 1000BaseT capable */
-
 #define IXGBE_MDIO_PMA_PMD_SDA_SCL_ADDR     0xC30A /* PHY_XS SDA/SCL Addr Reg */
 #define IXGBE_MDIO_PMA_PMD_SDA_SCL_DATA     0xC30B /* PHY_XS SDA/SCL Data Reg */
 #define IXGBE_MDIO_PMA_PMD_SDA_SCL_STAT     0xC30C /* PHY_XS SDA/SCL Status Reg */
-
-/* MII clause 22/28 definitions */
-#define IXGBE_MDIO_PHY_LOW_POWER_MODE  0x0800
-
-#define IXGBE_MII_SPEED_SELECTION_REG  0x10
-#define IXGBE_MII_RESTART              0x200
-#define IXGBE_MII_AUTONEG_COMPLETE     0x20
-#define IXGBE_MII_AUTONEG_REG          0x0
 
 #define IXGBE_PHY_REVISION_MASK        0xFFFFFFF0
 #define IXGBE_MAX_PHY_ADDR             32
@@ -898,8 +887,6 @@
 #define IXGBE_CONTROL_NL         0x000F
 #define IXGBE_CONTROL_EOL_NL     0x0FFF
 #define IXGBE_CONTROL_SOL_NL     0x0000
-#define IXGBE_PHY_ENFORCE_INTEL_SFP_OFFSET 0x002C
-#define IXGBE_PHY_ALLOW_ANY_SFP            0x1
 
 /* General purpose Interrupt Enable */
 #define IXGBE_SDP0_GPIEN         0x00000001 /* SDP0 */
@@ -958,6 +945,8 @@
 #define IXGBE_VT_CTL_DIS_DEFPL  0x20000000 /* disable default pool */
 #define IXGBE_VT_CTL_REPLEN     0x40000000 /* replication enabled */
 #define IXGBE_VT_CTL_VT_ENABLE  0x00000001  /* Enable VT Mode */
+#define IXGBE_VT_CTL_POOL_SHIFT 7
+#define IXGBE_VT_CTL_POOL_MASK  (0x3F << IXGBE_VT_CTL_POOL_SHIFT)
 
 /* VMOLR bitmasks */
 #define IXGBE_VMOLR_AUPE        0x01000000 /* accept untagged packets */
@@ -1148,6 +1137,7 @@
 
 /* Interrupt Vector Allocation Registers */
 #define IXGBE_IVAR_REG_NUM      25
+#define IXGBE_IVAR_REG_NUM_82599       64
 #define IXGBE_IVAR_TXRX_ENTRY   96
 #define IXGBE_IVAR_RX_ENTRY     64
 #define IXGBE_IVAR_RX_QUEUE(_i)    (0 + (_i))
@@ -1382,6 +1372,7 @@
 #define IXGBE_FW_PTR            0x0F
 #define IXGBE_PBANUM0_PTR       0x15
 #define IXGBE_PBANUM1_PTR       0x16
+#define IXGBE_DEVICE_CAPS       0x2C
 #define IXGBE_PCIE_MSIX_82599_CAPS  0x72
 #define IXGBE_PCIE_MSIX_82598_CAPS  0x62
 
@@ -1424,6 +1415,8 @@
 /* Number of 5 microseconds we wait for EERD read to complete */
 #define IXGBE_EERD_ATTEMPTS 100000
 #endif
+
+#define IXGBE_DEVICE_CAPS_ALLOW_ANY_SFP  0x1
 
 /* PCI Bus Info */
 #define IXGBE_PCI_LINK_STATUS     0xB2
@@ -1553,7 +1546,8 @@
 #define IXGBE_MTQC_RT_ENA       0x1 /* DCB Enable */
 #define IXGBE_MTQC_VT_ENA       0x2 /* VMDQ2 Enable */
 #define IXGBE_MTQC_64Q_1PB      0x0 /* 64 queues 1 pack buffer */
-#define IXGBE_MTQC_64VF         0x8 /* 2 TX Queues per pool w/64VF's */
+#define IXGBE_MTQC_32VF         0x8 /* 4 TX Queues per pool w/32VF's */
+#define IXGBE_MTQC_64VF         0x4 /* 2 TX Queues per pool w/64VF's */
 #define IXGBE_MTQC_8TC_8TQ      0xC /* 8 TC if RT_ENA or 8 TQ if VT_ENA */
 
 /* Receive Descriptor bit definitions */
@@ -1610,6 +1604,7 @@
 #define IXGBE_PSRTYPE_UDPHDR    0x00000020
 #define IXGBE_PSRTYPE_IPV4HDR   0x00000100
 #define IXGBE_PSRTYPE_IPV6HDR   0x00000200
+#define IXGBE_PSRTYPE_L2HDR     0x00001000
 
 /* SRRCTL bit definitions */
 #define IXGBE_SRRCTL_BSIZEPKT_SHIFT     10     /* so many KBs */
@@ -1861,7 +1856,7 @@ typedef u32 ixgbe_physical_layer;
 #define IXGBE_PHYSICAL_LAYER_UNKNOWN      0
 #define IXGBE_PHYSICAL_LAYER_10GBASE_T    0x0001
 #define IXGBE_PHYSICAL_LAYER_1000BASE_T   0x0002
-#define IXGBE_PHYSICAL_LAYER_100BASE_T    0x0004
+#define IXGBE_PHYSICAL_LAYER_100BASE_TX   0x0004
 #define IXGBE_PHYSICAL_LAYER_SFP_PLUS_CU  0x0008
 #define IXGBE_PHYSICAL_LAYER_10GBASE_LR   0x0010
 #define IXGBE_PHYSICAL_LAYER_10GBASE_LRM  0x0020
@@ -1870,6 +1865,7 @@ typedef u32 ixgbe_physical_layer;
 #define IXGBE_PHYSICAL_LAYER_10GBASE_CX4  0x0100
 #define IXGBE_PHYSICAL_LAYER_1000BASE_KX  0x0200
 #define IXGBE_PHYSICAL_LAYER_1000BASE_BX  0x0400
+#define IXGBE_PHYSICAL_LAYER_10GBASE_KR   0x0800
 
 enum ixgbe_eeprom_type {
 	ixgbe_eeprom_uninitialized = 0,
@@ -1897,6 +1893,7 @@ enum ixgbe_phy_type {
 	ixgbe_phy_sfp_ftl,
 	ixgbe_phy_sfp_unknown,
 	ixgbe_phy_sfp_intel,
+	ixgbe_phy_sfp_unsupported,
 	ixgbe_phy_generic
 };
 
@@ -2101,6 +2098,7 @@ struct ixgbe_mac_operations {
 	enum ixgbe_media_type (*get_media_type)(struct ixgbe_hw *);
 	u32 (*get_supported_physical_layer)(struct ixgbe_hw *);
 	s32 (*get_mac_addr)(struct ixgbe_hw *, u8 *);
+	s32 (*get_device_caps)(struct ixgbe_hw *, u16 *);
 	s32 (*stop_adapter)(struct ixgbe_hw *);
 	s32 (*get_bus_info)(struct ixgbe_hw *);
 	void (*set_lan_id)(struct ixgbe_hw *);
@@ -2146,6 +2144,7 @@ struct ixgbe_mac_operations {
 struct ixgbe_phy_operations {
 	s32 (*identify)(struct ixgbe_hw *);
 	s32 (*identify_sfp)(struct ixgbe_hw *);
+	s32 (*init)(struct ixgbe_hw *);
 	s32 (*reset)(struct ixgbe_hw *);
 	s32 (*read_reg)(struct ixgbe_hw *, u32, u32, u16 *);
 	s32 (*write_reg)(struct ixgbe_hw *, u32, u32, u16);
@@ -2189,10 +2188,11 @@ struct ixgbe_mac_info {
 
 struct ixgbe_phy_info {
 	struct ixgbe_phy_operations     ops;
+	struct mdio_if_info		mdio;
 	enum ixgbe_phy_type             type;
-	u32                             addr;
 	u32                             id;
 	enum ixgbe_sfp_type             sfp_type;
+	bool                            sfp_setup_needed;
 	u32                             revision;
 	enum ixgbe_media_type           media_type;
 	bool                            reset_disable;
