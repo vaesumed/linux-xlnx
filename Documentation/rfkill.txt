@@ -293,7 +293,7 @@ E.g:
   [RFKILL slider switch] -- [GPIO hardware] -- [WLAN card rf-kill input]
                            (platform driver)    (wireless card driver)
 
-The user is closer to the RFKILL slide switch plaform driver, so the driver
+The user is closer to the RFKILL slide switch platform driver, so the driver
 which must issue input events is the platform driver looking at the GPIO
 hardware, and NEVER the wireless card driver (which is just a slave).  It is
 very likely that there are other leaves than just the WLAN card rf-kill input
@@ -548,7 +548,7 @@ The following sysfs entries will be created:
 			transmitter is forced off, but one can override it
 			by a write to the state attribute;
 		1: RFKILL_STATE_UNBLOCKED
-			transmiter is NOT forced off, and may operate if
+			transmitter is NOT forced off, and may operate if
 			all other conditions for such operation are met
 			(such as interface is up and configured, etc);
 		2: RFKILL_STATE_HARD_BLOCKED
