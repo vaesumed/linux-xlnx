@@ -29,20 +29,8 @@ int ima_initialized;
 char *ima_hash = "sha1";
 static int __init hash_setup(char *str)
 {
-	const char *op = "hash_setup";
-	const char *hash = "sha1";
-	int result = 0;
-	int audit_info = 0;
-
-	if (strncmp(str, "md5", 3) == 0) {
-		hash = "md5";
-		ima_hash = str;
-	} else if (strncmp(str, "sha1", 4) != 0) {
-		hash = "invalid_hash_type";
-		result = 1;
-	}
-	integrity_audit_msg(AUDIT_INTEGRITY_HASH, NULL, NULL, op, hash,
-			    result, audit_info);
+	if (strncmp(str, "md5", 3) == 0)
+		ima_hash = "md5";
 	return 1;
 }
 __setup("ima_hash=", hash_setup);
@@ -128,10 +116,6 @@ static int get_path_measurement(struct ima_iint_cache *iint, struct file *file,
 {
 	int rc = 0;
 
-	if (IS_ERR(file)) {
-		pr_info("%s dentry_open failed\n", filename);
-		return rc;
-	}
 	iint->opencount++;
 	iint->readcount++;
 
@@ -196,7 +180,14 @@ int ima_path_check(struct path *path, int mask)
 		struct dentry *dentry = dget(path->dentry);
 		struct vfsmount *mnt = mntget(path->mnt);
 
-		file = dentry_open(dentry, mnt, O_RDONLY, current->cred);
+		file = dentry_open(dentry, mnt, O_RDONLY | O_LARGEFILE,
+				   current_cred());
+		if (IS_ERR(file)) {
+			pr_info("%s dentry_open failed\n", dentry->d_name.name);
+			rc = PTR_ERR(file);
+			file = NULL;
+			goto out;
+		}
 		rc = get_path_measurement(iint, file, dentry->d_name.name);
 	}
 out:
