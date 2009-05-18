@@ -65,15 +65,7 @@ static void blk_done(struct virtqueue *vq)
 			break;
 		}
 
-		if (blk_pc_request(vbr->req)) {
-			vbr->req->data_len = vbr->in_hdr.residual;
-			nr_bytes = vbr->in_hdr.data_len;
-			vbr->req->sense_len = vbr->in_hdr.sense_len;
-			vbr->req->errors = vbr->in_hdr.errors;
-		} else
-			nr_bytes = blk_rq_bytes(vbr->req);
-
-		__blk_end_request(vbr->req, error, nr_bytes);
+		__blk_end_request_all(vbr->req, error);
 		list_del(&vbr->list);
 		mempool_free(vbr, vblk->pool);
 	}
@@ -96,7 +88,7 @@ static bool do_req(struct request_queue *q, struct virtio_blk *vblk,
 	vbr->req = req;
 	if (blk_fs_request(vbr->req)) {
 		vbr->out_hdr.type = 0;
-		vbr->out_hdr.sector = vbr->req->sector;
+		vbr->out_hdr.sector = blk_rq_pos(vbr->req);
 		vbr->out_hdr.ioprio = req_get_ioprio(vbr->req);
 	} else if (blk_pc_request(vbr->req)) {
 		vbr->out_hdr.type = VIRTIO_BLK_T_SCSI_CMD;
@@ -157,7 +149,7 @@ static void do_virtblk_request(struct request_queue *q)
 	struct request *req;
 	unsigned int issued = 0;
 
-	while ((req = elv_next_request(q)) != NULL) {
+	while ((req = blk_peek_request(q)) != NULL) {
 		BUG_ON(req->nr_phys_segments + 2 > vblk->sg_elems);
 
 		/* If this request fails, stop queue and wait for something to
@@ -166,7 +158,7 @@ static void do_virtblk_request(struct request_queue *q)
 			blk_stop_queue(q);
 			break;
 		}
-		blkdev_dequeue_request(req);
+		blk_start_request(req);
 		issued++;
 	}
 
