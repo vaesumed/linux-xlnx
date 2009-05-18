@@ -116,12 +116,16 @@ static void cx18_stream_init(struct cx18 *cx, int type)
 	s->buffers = cx->stream_buffers[type];
 	s->buf_size = cx->stream_buf_size[type];
 
-	mutex_init(&s->qlock);
 	init_waitqueue_head(&s->waitq);
 	s->id = -1;
+	spin_lock_init(&s->q_free.lock);
 	cx18_queue_init(&s->q_free);
+	spin_lock_init(&s->q_busy.lock);
 	cx18_queue_init(&s->q_busy);
+	spin_lock_init(&s->q_full.lock);
 	cx18_queue_init(&s->q_full);
+
+	INIT_WORK(&s->out_work_order, cx18_out_work_handler);
 }
 
 static int cx18_prep_dev(struct cx18 *cx, int type)
@@ -431,14 +435,16 @@ static void cx18_vbi_setup(struct cx18_stream *s)
 	cx18_api(cx, CX18_CPU_SET_RAW_VBI_PARAM, 6, data);
 }
 
-struct cx18_queue *cx18_stream_put_buf_fw(struct cx18_stream *s,
-					  struct cx18_buffer *buf)
+static
+struct cx18_queue *_cx18_stream_put_buf_fw(struct cx18_stream *s,
+					   struct cx18_buffer *buf)
 {
 	struct cx18 *cx = s->cx;
 	struct cx18_queue *q;
 
 	/* Don't give it to the firmware, if we're not running a capture */
 	if (s->handle == CX18_INVALID_TASK_HANDLE ||
+	    test_bit(CX18_F_S_STOPPING, &s->s_flags) ||
 	    !test_bit(CX18_F_S_STREAMING, &s->s_flags))
 		return cx18_enqueue(s, buf, &s->q_free);
 
@@ -453,7 +459,8 @@ struct cx18_queue *cx18_stream_put_buf_fw(struct cx18_stream *s,
 	return q;
 }
 
-void cx18_stream_load_fw_queue(struct cx18_stream *s)
+static
+void _cx18_stream_load_fw_queue(struct cx18_stream *s)
 {
 	struct cx18_queue *q;
 	struct cx18_buffer *buf;
@@ -467,9 +474,17 @@ void cx18_stream_load_fw_queue(struct cx18_stream *s)
 		buf = cx18_dequeue(s, &s->q_free);
 		if (buf == NULL)
 			break;
-		q = cx18_stream_put_buf_fw(s, buf);
+		q = _cx18_stream_put_buf_fw(s, buf);
 	} while (atomic_read(&s->q_busy.buffers) < CX18_MAX_FW_MDLS_PER_STREAM
 		 && q == &s->q_busy);
+}
+
+void cx18_out_work_handler(struct work_struct *work)
+{
+	struct cx18_stream *s =
+			 container_of(work, struct cx18_stream, out_work_order);
+
+	_cx18_stream_load_fw_queue(s);
 }
 
 int cx18_start_v4l2_encode_stream(struct cx18_stream *s)
@@ -600,19 +615,20 @@ int cx18_start_v4l2_encode_stream(struct cx18_stream *s)
 
 	/* Init all the cpu_mdls for this stream */
 	cx18_flush_queues(s);
-	mutex_lock(&s->qlock);
+	spin_lock(&s->q_free.lock);
 	list_for_each_entry(buf, &s->q_free.list, list) {
 		cx18_writel(cx, buf->dma_handle,
 					&cx->scb->cpu_mdl[buf->id].paddr);
 		cx18_writel(cx, s->buf_size, &cx->scb->cpu_mdl[buf->id].length);
 	}
-	mutex_unlock(&s->qlock);
-	cx18_stream_load_fw_queue(s);
+	spin_unlock(&s->q_free.lock);
+	_cx18_stream_load_fw_queue(s);
 
 	/* begin_capture */
 	if (cx18_vapi(cx, CX18_CPU_CAPTURE_START, 1, s->handle)) {
 		CX18_DEBUG_WARN("Error starting capture!\n");
 		/* Ensure we're really not capturing before releasing MDLs */
+		set_bit(CX18_F_S_STOPPING, &s->s_flags);
 		if (s->type == CX18_ENC_STREAM_TYPE_MPG)
 			cx18_vapi(cx, CX18_CPU_CAPTURE_STOP, 2, s->handle, 1);
 		else
@@ -622,6 +638,7 @@ int cx18_start_v4l2_encode_stream(struct cx18_stream *s)
 		cx18_vapi(cx, CX18_CPU_DE_RELEASE_MDL, 1, s->handle);
 		cx18_vapi(cx, CX18_DESTROY_TASK, 1, s->handle);
 		s->handle = CX18_INVALID_TASK_HANDLE;
+		clear_bit(CX18_F_S_STOPPING, &s->s_flags);
 		if (atomic_read(&cx->tot_capturing) == 0) {
 			set_bit(CX18_F_I_EOS, &cx->i_flags);
 			cx18_write_reg(cx, 5, CX18_DSP0_INTERRUPT_MASK);
@@ -666,6 +683,7 @@ int cx18_stop_v4l2_encode_stream(struct cx18_stream *s, int gop_end)
 	if (atomic_read(&cx->tot_capturing) == 0)
 		return 0;
 
+	set_bit(CX18_F_S_STOPPING, &s->s_flags);
 	if (s->type == CX18_ENC_STREAM_TYPE_MPG)
 		cx18_vapi(cx, CX18_CPU_CAPTURE_STOP, 2, s->handle, !gop_end);
 	else
@@ -689,6 +707,7 @@ int cx18_stop_v4l2_encode_stream(struct cx18_stream *s, int gop_end)
 
 	cx18_vapi(cx, CX18_DESTROY_TASK, 1, s->handle);
 	s->handle = CX18_INVALID_TASK_HANDLE;
+	clear_bit(CX18_F_S_STOPPING, &s->s_flags);
 
 	if (atomic_read(&cx->tot_capturing) > 0)
 		return 0;
