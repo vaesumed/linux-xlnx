@@ -29,6 +29,11 @@
 
 #define inode_to_bdi(inode)	((inode)->i_mapping->backing_dev_info)
 
+/*
+ * We don't actually have pdflush, but this one is exported though /proc...
+ */
+int nr_pdflush_threads;
+
 /**
  * writeback_acquire - attempt to get exclusive writeback access to a device
  * @bdi: the device's backing_dev_info structure
