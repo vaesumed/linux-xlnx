@@ -1,0 +1,85 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc6
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 1406de8e11eb043681297adf86d6892ff8efc27a
+HEAD is now at 1406de8 Linux 2.6.30-rc6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+i2c-retry-on-arbitration-loss.patch
+i2c-tdfx-no-class.patch
+i2c-adapter-no-default-parent.patch
+i2c-chips-move-max6875-to-drivers-misc-eeprom.patch
+i2c-viapro-add-new-pci-device-id-for-vx855.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+macintosh-windfarm-convert-to-new-style-i2c.patch
+macintosh-therm_adt746x-convert-to-new-style-i2c.patch
+macintosh-therm_windtunnel-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 38ac7b9...4982acf master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc6
+$ cd ../quilt-tmp
+$ git reset --hard 1406de8e11eb043681297adf86d6892ff8efc27a
+HEAD is now at 1406de8 Linux 2.6.30-rc6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-lm78-add-missing-__devexit_p.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 43b30e8...1df4581 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.30-rc6-26-g0f6f49a
+$ cd ../quilt-tmp
+$ git reset --hard 0f6f49a8cd0163fdb1723ed29f01fc65177108dc
+HEAD is now at 0f6f49a Fix caller information for warn_slowpath_null
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+module:invbool-takes-a-bool.patch
+module:param-flags.patch
+module:__same_type.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-ich.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-powernow-k8.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-centrino.c.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+virtio:fix-comment-on-virtio_driver-probe.patch
+virtio:no-access-until-finalized.patch
+virtio:virtqueue-linked-list-and-names.patch
+virtio:blk_don_t_blindly_derefence_req_rq_disk.patch
+virtio:blk_sg_io_passthru_support.patch
+virtio:find_vqs_del_vqs_operations.patch
+virtio:find_vqs_del_vqs_operations-fix.patch
+virtio:pci_split_up_vp_interrupt.patch
+virtio:pci_optional_msi_x_support.patch
+virtio:features-in-sysfs.patch
+virtio:teach_has_feature_about_transport_features.patch
+virtio:indirect_ring_entries_ring_f_indirect_desc.patch
+lguest:dont-trust-descriptors-in-guest.patch
+lguest:global-lguest_fd.patch
+lguest:clean-up-init_IRQ.patch
+lguest:launcher-wmb-real.patch
+misc:EXPORT_SYMBOL-kick_process.patch
+lguest:kick_process.patch
+lguest:remove-inflight-logic.patch
+lguest:raceless-halt.patch
+lguest:fix-interrupt-enable.patch
+lguest:optimize-irq_enable-and-popf.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 7a5e82c...63e0a17 master     -> quilt/rr  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
