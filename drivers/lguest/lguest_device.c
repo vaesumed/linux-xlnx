@@ -318,11 +318,11 @@ static void lg_del_vqs(struct virtio_device *vdev)
 	struct virtqueue *vq, *n;
 
 	list_for_each_entry_safe(vq, n, &vdev->vqs, list)
-		kvm_del_vq(vq);
+		lg_del_vq(vq);
 }
 
 static int lg_find_vqs(struct virtio_device *vdev, unsigned nvqs,
-		       struct virtqueue *vqs[]
+		       struct virtqueue *vqs[],
 		       vq_callback_t *callbacks[],
 		       const char *names[])
 {
@@ -331,7 +331,7 @@ static int lg_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 
 	/* We must have this many virtqueues. */
 	if (nvqs > ldev->desc->num_vq)
-		return ERR_PTR(-ENOENT);
+		return -ENOENT;
 
 	for (i = 0; i < nvqs; ++i) {
 		vqs[i] = lg_find_vq(vdev, i, callbacks[i], names[i]);
@@ -341,7 +341,7 @@ static int lg_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 	return 0;
 
 error:
-	vp_del_vqs(vdev);
+	lg_del_vqs(vdev);
 	return PTR_ERR(vqs[i]);
 }
 
