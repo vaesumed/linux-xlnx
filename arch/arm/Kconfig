@@ -303,6 +303,19 @@ config ARCH_MXC
 	help
 	  Support for Freescale MXC/iMX-based family of processors
 
+config ARCH_STMP3XXX
+	bool "Freescale STMP3xxx"
+	select CPU_ARM926T
+	select HAVE_CLK
+	select COMMON_CLKDEV
+	select ARCH_REQUIRE_GPIOLIB
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	select GENERIC_GPIO
+	select USB_ARCH_HAS_EHCI
+	help
+	  Support for systems based on the Freescale 3xxx CPUs.
+
 config ARCH_NETX
 	bool "Hilscher NetX based"
 	select CPU_ARM926T
@@ -584,6 +597,20 @@ config ARCH_LH7A40X
 	  core with a wide array of integrated devices for
 	  hand-held and low-power applications.
 
+config ARCH_U300
+	bool "ST-Ericsson U300 Series"
+	depends on MMU
+	select CPU_ARM926T
+	select ARM_AMBA
+	select ARM_VIC
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	select HAVE_CLK
+	select COMMON_CLKDEV
+	select GENERIC_GPIO
+	help
+	  Support for ST-Ericsson U300 series mobile platforms.
+
 config ARCH_DAVINCI
 	bool "TI DaVinci"
 	select CPU_ARM926T
@@ -671,6 +698,8 @@ source "arch/arm/mach-s3c6400/Kconfig"
 source "arch/arm/mach-s3c6410/Kconfig"
 endif
 
+source "arch/arm/plat-stmp3xxx/Kconfig"
+
 source "arch/arm/mach-lh7a40x/Kconfig"
 
 source "arch/arm/mach-h720x/Kconfig"
@@ -694,6 +723,8 @@ source "arch/arm/mach-davinci/Kconfig"
 source "arch/arm/mach-ks8695/Kconfig"
 
 source "arch/arm/mach-msm/Kconfig"
+
+source "arch/arm/mach-u300/Kconfig"
 
 source "arch/arm/mach-w90x900/Kconfig"
 
@@ -848,7 +879,9 @@ source "kernel/time/Kconfig"
 config SMP
 	bool "Symmetric Multi-Processing (EXPERIMENTAL)"
 	depends on EXPERIMENTAL && (REALVIEW_EB_ARM11MP || MACH_REALVIEW_PB11MP)
+	depends on GENERIC_CLOCKEVENTS
 	select USE_GENERIC_SMP_HELPERS
+	select HAVE_ARM_SCU if ARCH_REALVIEW
 	help
 	  This enables support for systems with more than one CPU. If you have
 	  a system with only one CPU, like most personal computers, say N. If
@@ -865,6 +898,18 @@ config SMP
 	  <http://www.linuxdoc.org/docs.html#howto>.
 
 	  If you don't know what to do here, say N.
+
+config HAVE_ARM_SCU
+	bool
+	depends on SMP
+	help
+	  This option enables support for the ARM system coherency unit
+
+config HAVE_ARM_TWD
+	bool
+	depends on SMP
+	help
+	  This options enables support for the ARM timer and watchdog unit
 
 choice
 	prompt "Memory split"
@@ -906,6 +951,7 @@ config LOCAL_TIMERS
 	bool "Use local timer interrupts"
 	depends on SMP && (REALVIEW_EB_ARM11MP || MACH_REALVIEW_PB11MP || REALVIEW_EB_A9MP)
 	default y
+	select HAVE_ARM_TWD if ARCH_REALVIEW
 	help
 	  Enable support for local timers on SMP platforms, rather then the
 	  legacy IPI broadcast method.  Local timers allows the system
