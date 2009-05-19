@@ -89,6 +89,12 @@
 #define	MCFSIM_PADAT		0x1c9		/* Parallel Port Value (r/w) */
 
 /*
+ *	Define system peripheral IRQ usage.
+ */
+#define	MCF_IRQ_TIMER		30		/* Timer0, Level 6 */
+#define	MCF_IRQ_PROFILER	31		/* Timer1, Level 7 */
+
+/*
  *	Some symbol defines for the Parallel Port Pin Assignment Register
  */
 #ifdef CONFIG_M5206e
@@ -110,12 +116,6 @@
 #define	MCFSIM_DMA1ICR		MCFSIM_ICR14	/* DMA 1 ICR */
 #define	MCFSIM_DMA2ICR		MCFSIM_ICR15	/* DMA 2 ICR */
 #endif
-
-/*
- * Let the common interrupt handler code know that the ColdFire 5206*
- * family of CPU's only has a 16bit sized IMR register.
- */
-#define	MCFSIM_IMR_IS_16BITS
 
 /****************************************************************************/
 #endif	/* m5206sim_h */
