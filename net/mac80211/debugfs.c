@@ -10,6 +10,7 @@
 #include <linux/debugfs.h>
 #include <linux/rtnetlink.h>
 #include "ieee80211_i.h"
+#include "driver-ops.h"
 #include "rate.h"
 #include "debugfs.h"
 
@@ -52,13 +53,13 @@ static const struct file_operations name## _ops = {			\
 DEBUGFS_READONLY_FILE(frequency, 20, "%d",
 		      local->hw.conf.channel->center_freq);
 DEBUGFS_READONLY_FILE(rts_threshold, 20, "%d",
-		      local->rts_threshold);
+		      local->hw.wiphy->rts_threshold);
 DEBUGFS_READONLY_FILE(fragmentation_threshold, 20, "%d",
-		      local->fragmentation_threshold);
+		      local->hw.wiphy->frag_threshold);
 DEBUGFS_READONLY_FILE(short_retry_limit, 20, "%d",
-		      local->hw.conf.short_frame_max_tx_count);
+		      local->hw.wiphy->retry_short);
 DEBUGFS_READONLY_FILE(long_retry_limit, 20, "%d",
-		      local->hw.conf.long_frame_max_tx_count);
+		      local->hw.wiphy->retry_long);
 DEBUGFS_READONLY_FILE(total_ps_buffered, 20, "%d",
 		      local->total_ps_buffered);
 DEBUGFS_READONLY_FILE(wep_iv, 20, "%#08x",
@@ -70,11 +71,10 @@ static ssize_t tsf_read(struct file *file, char __user *user_buf,
 			     size_t count, loff_t *ppos)
 {
 	struct ieee80211_local *local = file->private_data;
-	u64 tsf = 0;
+	u64 tsf;
 	char buf[100];
 
-	if (local->ops->get_tsf)
-		tsf = local->ops->get_tsf(local_to_hw(local));
+	tsf = drv_get_tsf(local);
 
 	snprintf(buf, sizeof(buf), "0x%016llx\n", (unsigned long long) tsf);
 
@@ -97,13 +97,13 @@ static ssize_t tsf_write(struct file *file,
 
 	if (strncmp(buf, "reset", 5) == 0) {
 		if (local->ops->reset_tsf) {
-			local->ops->reset_tsf(local_to_hw(local));
+			drv_reset_tsf(local);
 			printk(KERN_INFO "%s: debugfs reset TSF\n", wiphy_name(local->hw.wiphy));
 		}
 	} else {
 		tsf = simple_strtoul(buf, NULL, 0);
 		if (local->ops->set_tsf) {
-			local->ops->set_tsf(local_to_hw(local), tsf);
+			drv_set_tsf(local, tsf);
 			printk(KERN_INFO "%s: debugfs set TSF to %#018llx\n", wiphy_name(local->hw.wiphy), tsf);
 		}
 	}
@@ -150,14 +150,12 @@ static ssize_t format_devstat_counter(struct ieee80211_local *local,
 	char buf[20];
 	int res;
 
-	if (!local->ops->get_stats)
-		return -EOPNOTSUPP;
-
 	rtnl_lock();
-	res = local->ops->get_stats(local_to_hw(local), &stats);
+	res = drv_get_stats(local, &stats);
 	rtnl_unlock();
-	if (!res)
-		res = printvalue(&stats, buf, sizeof(buf));
+	if (res)
+		return res;
+	res = printvalue(&stats, buf, sizeof(buf));
 	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
 }
 
