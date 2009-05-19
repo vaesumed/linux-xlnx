@@ -100,21 +100,6 @@
 #define	MCFSIM2_IDECONFIG1	0x18c		/* IDEconfig1 */
 #define	MCFSIM2_IDECONFIG2	0x190		/* IDEconfig2 */
 
-
-/*
- *	Macro to set IMR register. It is 32 bits on the 5249.
- */
-#define	MCFSIM_IMR_MASKALL	0x7fffe		/* All SIM intr sources */
-
-#define	mcf_getimr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR))
-
-#define	mcf_setimr(imr)		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR)) = (imr);
-
-#define	mcf_getipr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IPR))
-
 /****************************************************************************/
 
 #ifdef __ASSEMBLER__
