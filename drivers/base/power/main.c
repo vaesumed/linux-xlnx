@@ -315,13 +315,13 @@ static void pm_dev_err(struct device *dev, pm_message_t state, char *info,
 /*------------------------- Resume routines -------------------------*/
 
 /**
- *	resume_device_noirq - Power on one device (early resume).
+ *	__device_resume_noirq - Power on one device (early resume).
  *	@dev:	Device.
  *	@state: PM transition of the system being carried out.
  *
  *	Must be called with interrupts disabled.
  */
-static int resume_device_noirq(struct device *dev, pm_message_t state)
+static int __device_resume_noirq(struct device *dev, pm_message_t state)
 {
 	int error = 0;
 
@@ -362,25 +362,25 @@ static void dpm_power_up(pm_message_t state)
 			int error;
 
 			dev->power.status = DPM_OFF;
-			error = resume_device_noirq(dev, state);
+			error = __device_resume_noirq(dev, state);
 			if (error)
 				pm_dev_err(dev, state, " early", error);
 		}
 }
 
 /**
- *	device_power_up - Turn on all devices that need special attention.
+ *	device_resume_noirq - Turn on all devices that need special attention.
  *	@state: PM transition of the system being carried out.
  *
  *	Call the "early" resume handlers and enable device drivers to receive
  *	interrupts.
  */
-void device_power_up(pm_message_t state)
+void device_resume_noirq(pm_message_t state)
 {
 	dpm_power_up(state);
 	resume_device_irqs();
 }
-EXPORT_SYMBOL_GPL(device_power_up);
+EXPORT_SYMBOL_GPL(device_resume_noirq);
 
 /**
  *	resume_device - Restore state for one device.
@@ -575,13 +575,13 @@ static pm_message_t resume_event(pm_message_t sleep_state)
 }
 
 /**
- *	suspend_device_noirq - Shut down one device (late suspend).
+ *	__device_suspend_noirq - Shut down one device (late suspend).
  *	@dev:	Device.
  *	@state: PM transition of the system being carried out.
  *
  *	This is called with interrupts off and only a single CPU running.
  */
-static int suspend_device_noirq(struct device *dev, pm_message_t state)
+static int __device_suspend_noirq(struct device *dev, pm_message_t state)
 {
 	int error = 0;
 
@@ -600,7 +600,7 @@ static int suspend_device_noirq(struct device *dev, pm_message_t state)
 }
 
 /**
- *	device_power_down - Shut down special devices.
+ *	device_suspend_noirq - Shut down special devices.
  *	@state: PM transition of the system being carried out.
  *
  *	Prevent device drivers from receiving interrupts and call the "late"
@@ -608,14 +608,14 @@ static int suspend_device_noirq(struct device *dev, pm_message_t state)
  *
  *	Must be called under dpm_list_mtx.
  */
-int device_power_down(pm_message_t state)
+int device_suspend_noirq(pm_message_t state)
 {
 	struct device *dev;
 	int error = 0;
 
 	suspend_device_irqs();
 	list_for_each_entry_reverse(dev, &dpm_list, power.entry) {
-		error = suspend_device_noirq(dev, state);
+		error = __device_suspend_noirq(dev, state);
 		if (error) {
 			pm_dev_err(dev, state, " late", error);
 			break;
@@ -623,10 +623,10 @@ int device_power_down(pm_message_t state)
 		dev->power.status = DPM_OFF_IRQ;
 	}
 	if (error)
-		device_power_up(resume_event(state));
+		device_resume_noirq(resume_event(state));
 	return error;
 }
-EXPORT_SYMBOL_GPL(device_power_down);
+EXPORT_SYMBOL_GPL(device_suspend_noirq);
 
 /**
  *	suspend_device - Save state of one device.
