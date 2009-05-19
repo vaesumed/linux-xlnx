@@ -301,11 +301,11 @@ static int ide_pci_check_iomem(struct pci_dev *dev, const struct ide_port_info *
 }
 
 /**
- *	ide_hw_configure	-	configure a hw_regs_t instance
+ *	ide_hw_configure	-	configure a struct ide_hw instance
  *	@dev: PCI device holding interface
  *	@d: IDE port info
  *	@port: port number
- *	@hw: hw_regs_t instance corresponding to this port
+ *	@hw: struct ide_hw instance corresponding to this port
  *
  *	Perform the initial set up for the hardware interface structure. This
  *	is done per interface port rather than per PCI device. There may be
@@ -315,7 +315,7 @@ static int ide_pci_check_iomem(struct pci_dev *dev, const struct ide_port_info *
  */
 
 static int ide_hw_configure(struct pci_dev *dev, const struct ide_port_info *d,
-			    unsigned int port, hw_regs_t *hw)
+			    unsigned int port, struct ide_hw *hw)
 {
 	unsigned long ctl = 0, base = 0;
 
@@ -344,7 +344,6 @@ static int ide_hw_configure(struct pci_dev *dev, const struct ide_port_info *d,
 
 	memset(hw, 0, sizeof(*hw));
 	hw->dev = &dev->dev;
-	hw->chipset = d->chipset ? d->chipset : ide_pci;
 	ide_std_init_ports(hw, base, ctl | 2);
 
 	return 0;
@@ -446,8 +445,8 @@ out:
  *	ide_pci_setup_ports	-	configure ports/devices on PCI IDE
  *	@dev: PCI device
  *	@d: IDE port info
- *	@hw: hw_regs_t instances corresponding to this PCI IDE device
- *	@hws: hw_regs_t pointers table to update
+ *	@hw: struct ide_hw instances corresponding to this PCI IDE device
+ *	@hws: struct ide_hw pointers table to update
  *
  *	Scan the interfaces attached to this device and do any
  *	necessary per port setup. Attach the devices and ask the
@@ -459,7 +458,7 @@ out:
  */
 
 void ide_pci_setup_ports(struct pci_dev *dev, const struct ide_port_info *d,
-			 hw_regs_t *hw, hw_regs_t **hws)
+			 struct ide_hw *hw, struct ide_hw **hws)
 {
 	int channels = (d->host_flags & IDE_HFLAG_SINGLE) ? 1 : 2, port;
 	u8 tmp;
@@ -539,7 +538,7 @@ int ide_pci_init_one(struct pci_dev *dev, const struct ide_port_info *d,
 		     void *priv)
 {
 	struct ide_host *host;
-	hw_regs_t hw[4], *hws[] = { NULL, NULL, NULL, NULL };
+	struct ide_hw hw[2], *hws[] = { NULL, NULL };
 	int ret;
 
 	ret = ide_setup_pci_controller(dev, d, 1);
@@ -548,7 +547,7 @@ int ide_pci_init_one(struct pci_dev *dev, const struct ide_port_info *d,
 
 	ide_pci_setup_ports(dev, d, &hw[0], &hws[0]);
 
-	host = ide_host_alloc(d, hws);
+	host = ide_host_alloc(d, hws, 2);
 	if (host == NULL) {
 		ret = -ENOMEM;
 		goto out;
@@ -587,7 +586,7 @@ int ide_pci_init_two(struct pci_dev *dev1, struct pci_dev *dev2,
 	struct pci_dev *pdev[] = { dev1, dev2 };
 	struct ide_host *host;
 	int ret, i;
-	hw_regs_t hw[4], *hws[] = { NULL, NULL, NULL, NULL };
+	struct ide_hw hw[4], *hws[] = { NULL, NULL, NULL, NULL };
 
 	for (i = 0; i < 2; i++) {
 		ret = ide_setup_pci_controller(pdev[i], d, !i);
@@ -597,7 +596,7 @@ int ide_pci_init_two(struct pci_dev *dev1, struct pci_dev *dev2,
 		ide_pci_setup_ports(pdev[i], d, &hw[i*2], &hws[i*2]);
 	}
 
-	host = ide_host_alloc(d, hws);
+	host = ide_host_alloc(d, hws, 4);
 	if (host == NULL) {
 		ret = -ENOMEM;
 		goto out;
