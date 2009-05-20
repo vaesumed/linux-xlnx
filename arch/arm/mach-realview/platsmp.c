@@ -19,10 +19,11 @@
 #include <asm/cacheflush.h>
 #include <mach/hardware.h>
 #include <asm/mach-types.h>
+#include <asm/localtimer.h>
 
 #include <mach/board-eb.h>
 #include <mach/board-pb11mp.h>
-#include <mach/scu.h>
+#include <asm/smp_scu.h>
 
 #include "core.h"
 
@@ -44,31 +45,12 @@ static void __iomem *scu_base_addr(void)
 		return (void __iomem *)0;
 }
 
-static unsigned int __init get_core_count(void)
+static inline unsigned int get_core_count(void)
 {
-	unsigned int ncores;
 	void __iomem *scu_base = scu_base_addr();
-
-	if (scu_base) {
-		ncores = __raw_readl(scu_base + SCU_CONFIG);
-		ncores = (ncores & 0x03) + 1;
-	} else
-		ncores = 1;
-
-	return ncores;
-}
-
-/*
- * Setup the SCU
- */
-static void scu_enable(void)
-{
-	u32 scu_ctrl;
-	void __iomem *scu_base = scu_base_addr();
-
-	scu_ctrl = __raw_readl(scu_base + SCU_CTRL);
-	scu_ctrl |= 1;
-	__raw_writel(scu_ctrl, scu_base + SCU_CTRL);
+	if (scu_base)
+		return scu_get_core_count(scu_base);
+	return 1;
 }
 
 static DEFINE_SPINLOCK(boot_lock);
@@ -217,13 +199,6 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	if (max_cpus > ncores)
 		max_cpus = ncores;
 
-#if defined(CONFIG_LOCAL_TIMERS) || defined(CONFIG_GENERIC_CLOCKEVENTS_BROADCAST)
-	/*
-	 * Enable the local timer or broadcast device for the boot CPU.
-	 */
-	local_timer_setup();
-#endif
-
 	/*
 	 * Initialise the present map, which describes the set of CPUs
 	 * actually populated at the present time.
@@ -239,7 +214,13 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	 * WFI
 	 */
 	if (max_cpus > 1) {
-		scu_enable();
+		/*
+		 * Enable the local timer or broadcast device for the
+		 * boot CPU, but only if we have more than one CPU.
+		 */
+		percpu_timer_setup();
+
+		scu_enable(scu_base_addr());
 		poke_milo();
 	}
 }
