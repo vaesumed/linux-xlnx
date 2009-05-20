@@ -3409,7 +3409,6 @@ fc_bsg_jobdone(struct fc_bsg_job *job)
 	struct request *req = job->req;
 	struct request *rsp = req->next_rq;
 	unsigned long flags;
-	unsigned rsp_len = 0, req_len = blk_rq_bytes(req);
 	int err;
 
 	spin_lock_irqsave(&job->job_lock, flags);
@@ -3425,16 +3424,17 @@ fc_bsg_jobdone(struct fc_bsg_job *job)
 		job->req->sense_len = job->reply_len;
 
 	/* we assume all request payload was transferred, residual == 0 */
-	req->data_len = 0;
+	req->resid_len = 0;
 
 	if (rsp) {
-		rsp_len = blk_rq_bytes(rsp);
-		BUG_ON(job->reply->reply_payload_rcv_len > rsp_len);
+		WARN_ON(job->reply->reply_payload_rcv_len > rsp->resid_len);
+
 		/* set reply (bidi) residual */
-		rsp->data_len = (rsp_len - job->reply->reply_payload_rcv_len);
+		rsp->resid_len -= min(job->reply->reply_payload_rcv_len, 
+				      rsp->resid_len);
 	}
 
-	blk_end_bidi_request(req, err, req_len, rsp_len);
+	blk_end_request_all(req, err);
 
 	fc_destroy_bsgjob(job);
 }
@@ -3496,7 +3496,7 @@ fc_bsg_map_buffer(struct fc_bsg_buffer *buf, struct request *req)
 		return -ENOMEM;
 	sg_init_table(buf->sg_list, req->nr_phys_segments);
 	buf->sg_cnt = blk_rq_map_sg(req->q, req, buf->sg_list);
-	buf->payload_len = req->data_len;
+	buf->payload_len = blk_rq_bytes(req);
 	return 0;
 }
 
@@ -3762,14 +3762,12 @@ fc_bsg_request_handler(struct request_queue *q, struct Scsi_Host *shost,
 		return;
 
 	while (!blk_queue_plugged(q)) {
-		req = elv_next_request(q);
-		if (!req)
-			break;
-
 		if (rport && (rport->port_state == FC_PORTSTATE_BLOCKED))
 				break;
 
-		blkdev_dequeue_request(req);
+		req = blk_fetch_request(q);
+		if (!req)
+			break;
 
 		if (rport && (rport->port_state != FC_PORTSTATE_ONLINE)) {
 			req->errors = -ENXIO;
