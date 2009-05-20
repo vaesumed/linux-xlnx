@@ -374,36 +374,20 @@ static void macvlan_ethtool_get_drvinfo(struct net_device *dev,
 static u32 macvlan_ethtool_get_rx_csum(struct net_device *dev)
 {
 	const struct macvlan_dev *vlan = netdev_priv(dev);
-	struct net_device *lowerdev = vlan->lowerdev;
-
-	if (lowerdev->ethtool_ops == NULL ||
-	    lowerdev->ethtool_ops->get_rx_csum == NULL)
-		return 0;
-	return lowerdev->ethtool_ops->get_rx_csum(lowerdev);
+	return dev_ethtool_get_rx_csum(vlan->lowerdev);
 }
 
 static int macvlan_ethtool_get_settings(struct net_device *dev,
 					struct ethtool_cmd *cmd)
 {
 	const struct macvlan_dev *vlan = netdev_priv(dev);
-	struct net_device *lowerdev = vlan->lowerdev;
-
-	if (!lowerdev->ethtool_ops ||
-	    !lowerdev->ethtool_ops->get_settings)
-		return -EOPNOTSUPP;
-
-	return lowerdev->ethtool_ops->get_settings(lowerdev, cmd);
+	return dev_ethtool_get_settings(vlan->lowerdev, cmd);
 }
 
 static u32 macvlan_ethtool_get_flags(struct net_device *dev)
 {
 	const struct macvlan_dev *vlan = netdev_priv(dev);
-	struct net_device *lowerdev = vlan->lowerdev;
-
-	if (!lowerdev->ethtool_ops ||
-	    !lowerdev->ethtool_ops->get_flags)
-		return 0;
-	return lowerdev->ethtool_ops->get_flags(lowerdev);
+	return dev_ethtool_get_flags(vlan->lowerdev);
 }
 
 static const struct ethtool_ops macvlan_ethtool_ops = {
@@ -430,6 +414,7 @@ static void macvlan_setup(struct net_device *dev)
 {
 	ether_setup(dev);
 
+	dev->priv_flags	       &= ~IFF_XMIT_DST_RELEASE;
 	dev->netdev_ops		= &macvlan_netdev_ops;
 	dev->destructor		= free_netdev;
 	dev->header_ops		= &macvlan_hard_header_ops,

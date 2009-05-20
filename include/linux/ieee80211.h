@@ -540,10 +540,10 @@ struct ieee80211_tim_ie {
 	u8 dtim_period;
 	u8 bitmap_ctrl;
 	/* variable size: 1 - 251 bytes */
-	u8 virtual_map[0];
+	u8 virtual_map[1];
 } __attribute__ ((packed));
 
-#define WLAN_SA_QUERY_TR_ID_LEN 16
+#define WLAN_SA_QUERY_TR_ID_LEN 2
 
 struct ieee80211_mgmt {
 	__le16 frame_control;
@@ -1068,8 +1068,12 @@ enum ieee80211_category {
 	WLAN_CATEGORY_DLS = 2,
 	WLAN_CATEGORY_BACK = 3,
 	WLAN_CATEGORY_PUBLIC = 4,
+	WLAN_CATEGORY_HT = 7,
 	WLAN_CATEGORY_SA_QUERY = 8,
+	WLAN_CATEGORY_PROTECTED_DUAL_OF_ACTION = 9,
 	WLAN_CATEGORY_WMM = 17,
+	WLAN_CATEGORY_VENDOR_SPECIFIC_PROTECTED = 126,
+	WLAN_CATEGORY_VENDOR_SPECIFIC = 127,
 };
 
 /* SPECTRUM_MGMT action code */
@@ -1261,7 +1265,9 @@ static inline bool ieee80211_is_robust_mgmt_frame(struct ieee80211_hdr *hdr)
 		if (ieee80211_has_protected(hdr->frame_control))
 			return true;
 		category = ((u8 *) hdr) + 24;
-		return *category != WLAN_CATEGORY_PUBLIC;
+		return *category != WLAN_CATEGORY_PUBLIC &&
+			*category != WLAN_CATEGORY_HT &&
+			*category != WLAN_CATEGORY_VENDOR_SPECIFIC;
 	}
 
 	return false;
@@ -1381,6 +1387,45 @@ static inline int ieee80211_freq_to_ofdm_chan(int s_freq, int freq)
 		return (freq + 2 - s_freq) / 5;
 	else
 		return -1;
+}
+
+/**
+ * ieee80211_tu_to_usec - convert time units (TU) to microseconds
+ * @tu: the TUs
+ */
+static inline unsigned long ieee80211_tu_to_usec(unsigned long tu)
+{
+	return 1024 * tu;
+}
+
+/**
+ * ieee80211_check_tim - check if AID bit is set in TIM
+ * @tim: the TIM IE
+ * @tim_len: length of the TIM IE
+ * @aid: the AID to look for
+ */
+static inline bool ieee80211_check_tim(struct ieee80211_tim_ie *tim,
+				       u8 tim_len, u16 aid)
+{
+	u8 mask;
+	u8 index, indexn1, indexn2;
+
+	if (unlikely(!tim || tim_len < sizeof(*tim)))
+		return false;
+
+	aid &= 0x3fff;
+	index = aid / 8;
+	mask  = 1 << (aid & 7);
+
+	indexn1 = tim->bitmap_ctrl & 0xfe;
+	indexn2 = tim_len + indexn1 - 4;
+
+	if (index < indexn1 || index > indexn2)
+		return false;
+
+	index -= indexn1;
+
+	return !!(tim->virtual_map[index] & mask);
 }
 
 #endif /* LINUX_IEEE80211_H */
