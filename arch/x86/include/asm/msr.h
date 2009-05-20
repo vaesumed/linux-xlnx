@@ -243,14 +243,14 @@ static inline int wrmsr_on_cpu(unsigned int cpu, u32 msr_no, u32 l, u32 h)
 	return 0;
 }
 static inline int rdmsr_on_cpus(const cpumask_t *m, u32 msr_no,
-				struct msr **msrs)
+				struct msr *msrs)
 {
-	return rdmsr_on_cpu(msr_no, &(msrs[0].l), &(msrs[0].h));
+	return rdmsr_on_cpu(0, msr_no, &(msrs[0].l), &(msrs[0].h));
 }
 static inline int wrmsr_on_cpus(const cpumask_t *m, u32 msr_no,
-				struct msr **msrs)
+				struct msr *msrs)
 {
-	return wrmsr_on_cpu(msr_no, msrs[0].l, msrs[0].h);
+	return wrmsr_on_cpu(0, msr_no, msrs[0].l, msrs[0].h);
 }
 static inline int rdmsr_safe_on_cpu(unsigned int cpu, u32 msr_no,
 				    u32 *l, u32 *h)
