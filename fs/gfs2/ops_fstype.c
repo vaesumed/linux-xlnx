@@ -17,6 +17,7 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/gfs2_ondisk.h>
+#include <linux/slow-work.h>
 
 #include "gfs2.h"
 #include "incore.h"
@@ -55,8 +56,6 @@ static void gfs2_tune_init(struct gfs2_tune *gt)
 	spin_lock_init(&gt->gt_spin);
 
 	gt->gt_incore_log_blocks = 1024;
-	gt->gt_log_flush_secs = 60;
-	gt->gt_recoverd_secs = 60;
 	gt->gt_logd_secs = 1;
 	gt->gt_quota_simul_sync = 64;
 	gt->gt_quota_warn_period = 10;
@@ -676,6 +675,7 @@ static int gfs2_jindex_hold(struct gfs2_sbd *sdp, struct gfs2_holder *ji_gh)
 			break;
 
 		INIT_LIST_HEAD(&jd->extent_list);
+		slow_work_init(&jd->jd_work, &gfs2_recover_ops);
 		jd->jd_inode = gfs2_lookupi(sdp->sd_jindex, &name, 1);
 		if (!jd->jd_inode || IS_ERR(jd->jd_inode)) {
 			if (!jd->jd_inode)
@@ -701,14 +701,13 @@ static int init_journal(struct gfs2_sbd *sdp, int undo)
 {
 	struct inode *master = sdp->sd_master_dir->d_inode;
 	struct gfs2_holder ji_gh;
-	struct task_struct *p;
 	struct gfs2_inode *ip;
 	int jindex = 1;
 	int error = 0;
 
 	if (undo) {
 		jindex = 0;
-		goto fail_recoverd;
+		goto fail_jinode_gh;
 	}
 
 	sdp->sd_jindex = gfs2_lookup_simple(master, "jindex");
@@ -801,18 +800,8 @@ static int init_journal(struct gfs2_sbd *sdp, int undo)
 	gfs2_glock_dq_uninit(&ji_gh);
 	jindex = 0;
 
-	p = kthread_run(gfs2_recoverd, sdp, "gfs2_recoverd");
-	error = IS_ERR(p);
-	if (error) {
-		fs_err(sdp, "can't start recoverd thread: %d\n", error);
-		goto fail_jinode_gh;
-	}
-	sdp->sd_recoverd_process = p;
-
 	return 0;
 
-fail_recoverd:
-	kthread_stop(sdp->sd_recoverd_process);
 fail_jinode_gh:
 	if (!sdp->sd_args.ar_spectator)
 		gfs2_glock_dq_uninit(&sdp->sd_jinode_gh);
@@ -1165,6 +1154,7 @@ static int fill_super(struct super_block *sb, void *data, int silent)
 
 	sdp->sd_args.ar_quota = GFS2_QUOTA_DEFAULT;
 	sdp->sd_args.ar_data = GFS2_DATA_DEFAULT;
+	sdp->sd_args.ar_commit = 60;
 
 	error = gfs2_mount_args(sdp, &sdp->sd_args, data);
 	if (error) {
@@ -1172,8 +1162,10 @@ static int fill_super(struct super_block *sb, void *data, int silent)
 		goto fail;
 	}
 
-	if (sdp->sd_args.ar_spectator)
+	if (sdp->sd_args.ar_spectator) {
                 sb->s_flags |= MS_RDONLY;
+		set_bit(SDF_NORECOVERY, &sdp->sd_flags);
+	}
 	if (sdp->sd_args.ar_posix_acl)
 		sb->s_flags |= MS_POSIXACL;
 
@@ -1190,6 +1182,8 @@ static int fill_super(struct super_block *sb, void *data, int silent)
 	sdp->sd_fsb2bb_shift = sdp->sd_sb.sb_bsize_shift -
                                GFS2_BASIC_BLOCK_SHIFT;
 	sdp->sd_fsb2bb = 1 << sdp->sd_fsb2bb_shift;
+
+	sdp->sd_tune.gt_log_flush_secs = sdp->sd_args.ar_commit;
 
 	error = init_names(sdp, silent);
 	if (error)
