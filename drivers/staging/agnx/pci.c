@@ -150,8 +150,7 @@ static int agnx_get_mac_address(struct agnx_priv *priv)
 	*((u32 *)(priv->mac_addr + 2)) = cpu_to_le32(reg);
 
 	if (!is_valid_ether_addr(priv->mac_addr)) {
-		DECLARE_MAC_BUF(mbuf);
-		printk(KERN_WARNING PFX "read mac %s\n", print_mac(mbuf, priv->mac_addr));
+		printk(KERN_WARNING PFX "read mac %pM\n", priv->mac_addr);
 		printk(KERN_WARNING PFX "Invalid hwaddr! Using random hwaddr\n");
 		random_ether_addr(priv->mac_addr);
 	}
@@ -455,47 +454,35 @@ static int __devinit agnx_pci_probe(struct pci_dev *pdev,
 {
 	struct ieee80211_hw *dev;
 	struct agnx_priv *priv;
-	u32 mem_addr0, mem_len0;
-	u32 mem_addr1, mem_len1;
 	int err;
-	DECLARE_MAC_BUF(mac);
 
 	err = pci_enable_device(pdev);
 	if (err) {
-		printk(KERN_ERR PFX "Can't enable new PCI device\n");
+		dev_err(&pdev->dev, "can't enable pci device\n");
 		return err;
 	}
 
-	/* get pci resource */
-	mem_addr0 = pci_resource_start(pdev, 0);
-	mem_len0 = pci_resource_len(pdev, 0);
-	mem_addr1 = pci_resource_start(pdev, 1);
-	mem_len1 = pci_resource_len(pdev, 1);
-	printk(KERN_DEBUG PFX "Memaddr0 is %x, length is %x\n", mem_addr0, mem_len0);
-	printk(KERN_DEBUG PFX "Memaddr1 is %x, length is %x\n", mem_addr1, mem_len1);
-
 	err = pci_request_regions(pdev, "agnx-pci");
 	if (err) {
-		printk(KERN_ERR PFX "Can't obtain PCI resource\n");
+		dev_err(&pdev->dev, "can't reserve PCI resources\n");
 		return err;
 	}
 
 	if (pci_set_dma_mask(pdev, DMA_BIT_MASK(32)) ||
 	    pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32))) {
-		printk(KERN_ERR PFX "No suitable DMA available\n");
+		dev_err(&pdev->dev, "no suitable DMA available\n");
+		err = -EIO;
 		goto err_free_reg;
 	}
 
 	pci_set_master(pdev);
-	printk(KERN_DEBUG PFX "pdev->irq is %d\n", pdev->irq);
 
 	dev = ieee80211_alloc_hw(sizeof(*priv), &agnx_ops);
 	if (!dev) {
-		printk(KERN_ERR PFX "ieee80211 alloc failed\n");
+		dev_err(&pdev->dev, "ieee80211 alloc failed\n");
 		err = -ENOMEM;
 		goto err_free_reg;
 	}
-	/* init priv  */
 	priv = dev->priv;
 	memset(priv, 0, sizeof(*priv));
 	priv->mode = NL80211_IFTYPE_MONITOR;
@@ -504,17 +491,17 @@ static int __devinit agnx_pci_probe(struct pci_dev *pdev,
 	spin_lock_init(&priv->lock);
 	priv->init_status = AGNX_UNINIT;
 
-	/* Map mem #1 and #2 */
-	priv->ctl = pci_iomap(pdev, 0, mem_len0);
-/*	printk(KERN_DEBUG PFX"MEM1 mapped address is 0x%p\n", priv->ctl); */
+	priv->ctl = pci_iomap(pdev, 0, 0);
+/*	dev_dbg(&pdev->dev, "MEM1 mapped address is 0x%p\n", priv->ctl); */
 	if (!priv->ctl) {
-		printk(KERN_ERR PFX "Can't map device memory\n");
+		dev_err(&pdev->dev, "can't map device memory\n");
+		err = -ENOMEM;
 		goto err_free_dev;
 	}
-	priv->data = pci_iomap(pdev, 1, mem_len1);
-	printk(KERN_DEBUG PFX "MEM2 mapped address is 0x%p\n", priv->data);
+	priv->data = pci_iomap(pdev, 1, 0);
 	if (!priv->data) {
-		printk(KERN_ERR PFX "Can't map device memory\n");
+		dev_err(&pdev->dev, "can't map device memory\n");
+		err = -ENOMEM;
 		goto err_iounmap2;
 	}
 
@@ -555,15 +542,15 @@ static int __devinit agnx_pci_probe(struct pci_dev *pdev,
 
 	err = ieee80211_register_hw(dev);
 	if (err) {
-		printk(KERN_ERR PFX "Can't register hardware\n");
+		dev_err(&pdev->dev, "can't register hardware\n");
 		goto err_iounmap;
 	}
 
 	agnx_hw_reset(priv);
 
-
-	printk(PFX "%s: hwaddr %s, Rev 0x%02x\n", wiphy_name(dev->wiphy),
-	       print_mac(mac, dev->wiphy->perm_addr), priv->revid);
+	dev_info(&pdev->dev, "%s: hwaddr %pM, Rev 0x%02x\n",
+		wiphy_name(dev->wiphy),
+		dev->wiphy->perm_addr, priv->revid);
 	return 0;
 
  err_iounmap:
