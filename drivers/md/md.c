@@ -444,8 +444,11 @@ static sector_t calc_num_sectors(mdk_rdev_t *rdev, unsigned chunk_size)
 {
 	sector_t num_sectors = rdev->sb_start;
 
-	if (chunk_size)
-		num_sectors &= ~((sector_t)chunk_size/512 - 1);
+	if (chunk_size) {
+		sector_t chunk_sects = chunk_size>>9;
+		sector_div(num_sectors, chunk_sects);
+		num_sectors *= chunk_sects;
+	}
 	return num_sectors;
 }
 
@@ -3518,7 +3521,8 @@ min_sync_store(mddev_t *mddev, const char *buf, size_t len)
 
 	/* Must be a multiple of chunk_size */
 	if (mddev->chunk_size) {
-		if (min & (sector_t)((mddev->chunk_size>>9)-1))
+		sector_t temp = min;
+		if (sector_div(temp, (mddev->chunk_size>>9)))
 			return -EINVAL;
 	}
 	mddev->resync_min = min;
@@ -3555,7 +3559,8 @@ max_sync_store(mddev_t *mddev, const char *buf, size_t len)
 
 		/* Must be a multiple of chunk_size */
 		if (mddev->chunk_size) {
-			if (max & (sector_t)((mddev->chunk_size>>9)-1))
+			sector_t temp = max;
+			if (sector_div(temp, (mddev->chunk_size>>9)))
 				return -EINVAL;
 		}
 		mddev->resync_max = max;
@@ -3996,14 +4001,6 @@ static int do_md_run(mddev_t * mddev)
 				chunk_size, MAX_CHUNK_SIZE);
 			return -EINVAL;
 		}
-		/*
-		 * chunk-size has to be a power of 2
-		 */
-		if ( (1 << ffz(~chunk_size)) != chunk_size) {
-			printk(KERN_ERR "chunk_size of %d not valid\n", chunk_size);
-			return -EINVAL;
-		}
-
 		/* devices must have minimum size of one chunk */
 		list_for_each_entry(rdev, &mddev->disks, same_set) {
 			if (test_bit(Faulty, &rdev->flags))
@@ -5557,7 +5554,7 @@ static struct block_device_operations md_fops =
 	.owner		= THIS_MODULE,
 	.open		= md_open,
 	.release	= md_release,
-	.locked_ioctl	= md_ioctl,
+	.ioctl		= md_ioctl,
 	.getgeo		= md_getgeo,
 	.media_changed	= md_media_changed,
 	.revalidate_disk= md_revalidate,
