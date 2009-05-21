@@ -36,6 +36,10 @@
 #include "ixgbe_type.h"
 #include "ixgbe_common.h"
 #include "ixgbe_dcb.h"
+#if defined(CONFIG_FCOE) || defined(CONFIG_FCOE_MODULE)
+#define IXGBE_FCOE
+#include "ixgbe_fcoe.h"
+#endif /* CONFIG_FCOE or CONFIG_FCOE_MODULE */
 #ifdef CONFIG_IXGBE_DCA
 #include <linux/dca.h>
 #endif
@@ -71,6 +75,8 @@
 #define IXGBE_RXBUFFER_128   128    /* Used for packet split */
 #define IXGBE_RXBUFFER_256   256    /* Used for packet split */
 #define IXGBE_RXBUFFER_2048  2048
+#define IXGBE_RXBUFFER_4096  4096
+#define IXGBE_RXBUFFER_8192  8192
 #define IXGBE_MAX_RXBUFFER   16384  /* largest size for a single descriptor */
 
 #define IXGBE_RX_HDR_SIZE IXGBE_RXBUFFER_256
@@ -84,6 +90,8 @@
 #define IXGBE_TX_FLAGS_VLAN		(u32)(1 << 1)
 #define IXGBE_TX_FLAGS_TSO		(u32)(1 << 2)
 #define IXGBE_TX_FLAGS_IPV4		(u32)(1 << 3)
+#define IXGBE_TX_FLAGS_FCOE		(u32)(1 << 4)
+#define IXGBE_TX_FLAGS_FSO		(u32)(1 << 5)
 #define IXGBE_TX_FLAGS_VLAN_MASK	0xffff0000
 #define IXGBE_TX_FLAGS_VLAN_PRIO_MASK   0x0000e000
 #define IXGBE_TX_FLAGS_VLAN_SHIFT	16
@@ -147,6 +155,7 @@ struct ixgbe_ring {
 
 	u16 work_limit;                /* max work per interrupt */
 	u16 rx_buf_len;
+	u64 rsc_count;                 /* stat for coalesced packets */
 };
 
 enum ixgbe_ring_f_enum {
@@ -154,6 +163,9 @@ enum ixgbe_ring_f_enum {
 	RING_F_DCB,
 	RING_F_VMDQ,
 	RING_F_RSS,
+#ifdef IXGBE_FCOE
+	RING_F_FCOE,
+#endif /* IXGBE_FCOE */
 
 	RING_F_ARRAY_SIZE      /* must be last in enum set */
 };
@@ -161,6 +173,9 @@ enum ixgbe_ring_f_enum {
 #define IXGBE_MAX_DCB_INDICES   8
 #define IXGBE_MAX_RSS_INDICES  16
 #define IXGBE_MAX_VMDQ_INDICES 16
+#ifdef IXGBE_FCOE
+#define IXGBE_MAX_FCOE_INDICES  8
+#endif /* IXGBE_FCOE */
 struct ixgbe_ring_feature {
 	int indices;
 	int mask;
@@ -186,6 +201,7 @@ struct ixgbe_q_vector {
 	u8 tx_itr;
 	u8 rx_itr;
 	u32 eitr;
+	u32 v_idx;        /* vector index in list */
 };
 
 /* Helper macros to switch between ints/sec and what the register uses.
@@ -208,6 +224,10 @@ struct ixgbe_q_vector {
 	(&(((struct ixgbe_adv_tx_context_desc *)((R).desc))[i]))
 
 #define IXGBE_MAX_JUMBO_FRAME_SIZE        16128
+#ifdef IXGBE_FCOE
+/* Use 3K as the baby jumbo frame size for FCoE */
+#define IXGBE_FCOE_JUMBO_FRAME_SIZE       3072
+#endif /* IXGBE_FCOE */
 
 #define OTHER_VECTOR 1
 #define NON_Q_VECTORS (OTHER_VECTOR)
@@ -229,11 +249,12 @@ struct ixgbe_adapter {
 	struct vlan_group *vlgrp;
 	u16 bd_number;
 	struct work_struct reset_task;
-	struct ixgbe_q_vector q_vector[MAX_MSIX_Q_VECTORS];
+	struct ixgbe_q_vector *q_vector[MAX_MSIX_Q_VECTORS];
 	char name[MAX_MSIX_COUNT][IFNAMSIZ + 9];
 	struct ixgbe_dcb_config dcb_cfg;
 	struct ixgbe_dcb_config temp_dcb_cfg;
 	u8 dcb_set_bitmap;
+	enum ixgbe_fc_mode last_lfc_mode;
 
 	/* Interrupt Throttle Rate */
 	u32 itr_setting;
@@ -294,6 +315,9 @@ struct ixgbe_adapter {
 #define IXGBE_FLAG_IN_WATCHDOG_TASK             (u32)(1 << 23)
 #define IXGBE_FLAG_IN_SFP_LINK_TASK             (u32)(1 << 24)
 #define IXGBE_FLAG_IN_SFP_MOD_TASK              (u32)(1 << 25)
+#define IXGBE_FLAG_RSC_CAPABLE                  (u32)(1 << 26)
+#define IXGBE_FLAG_RSC_ENABLED                  (u32)(1 << 27)
+#define IXGBE_FLAG_FCOE_ENABLED                 (u32)(1 << 29)
 
 /* default to trying for four seconds */
 #define IXGBE_TRY_LINK_TIMEOUT (4 * HZ)
@@ -325,6 +349,10 @@ struct ixgbe_adapter {
 	struct timer_list sfp_timer;
 	struct work_struct multispeed_fiber_task;
 	struct work_struct sfp_config_module_task;
+#ifdef IXGBE_FCOE
+	struct ixgbe_fcoe fcoe;
+#endif /* IXGBE_FCOE */
+	u64 rsc_count;
 	u32 wol;
 	u16 eeprom_version;
 };
@@ -363,10 +391,21 @@ extern int ixgbe_setup_tx_resources(struct ixgbe_adapter *, struct ixgbe_ring *)
 extern void ixgbe_free_rx_resources(struct ixgbe_adapter *, struct ixgbe_ring *);
 extern void ixgbe_free_tx_resources(struct ixgbe_adapter *, struct ixgbe_ring *);
 extern void ixgbe_update_stats(struct ixgbe_adapter *adapter);
-extern void ixgbe_reset_interrupt_capability(struct ixgbe_adapter *adapter);
 extern int ixgbe_init_interrupt_scheme(struct ixgbe_adapter *adapter);
-void ixgbe_napi_add_all(struct ixgbe_adapter *adapter);
-void ixgbe_napi_del_all(struct ixgbe_adapter *adapter);
+extern void ixgbe_clear_interrupt_scheme(struct ixgbe_adapter *adapter);
 extern void ixgbe_write_eitr(struct ixgbe_adapter *, int, u32);
+#ifdef IXGBE_FCOE
+extern void ixgbe_configure_fcoe(struct ixgbe_adapter *adapter);
+extern int ixgbe_fso(struct ixgbe_adapter *adapter,
+                     struct ixgbe_ring *tx_ring, struct sk_buff *skb,
+                     u32 tx_flags, u8 *hdr_len);
+extern void ixgbe_cleanup_fcoe(struct ixgbe_adapter *adapter);
+extern int ixgbe_fcoe_ddp(struct ixgbe_adapter *adapter,
+                          union ixgbe_adv_rx_desc *rx_desc,
+                          struct sk_buff *skb);
+extern int ixgbe_fcoe_ddp_get(struct net_device *netdev, u16 xid,
+                              struct scatterlist *sgl, unsigned int sgc);
+extern int ixgbe_fcoe_ddp_put(struct net_device *netdev, u16 xid);
+#endif /* IXGBE_FCOE */
 
 #endif /* _IXGBE_H_ */
