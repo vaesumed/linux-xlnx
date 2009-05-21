@@ -121,6 +121,12 @@ static int gfs2_make_fs_ro(struct gfs2_sbd *sdp)
 	return error;
 }
 
+static int gfs2_umount_recovery_wait(void *word)
+{
+	schedule();
+	return 0;
+}
+
 /**
  * gfs2_put_super - Unmount the filesystem
  * @sb: The VFS superblock
@@ -131,6 +137,7 @@ static void gfs2_put_super(struct super_block *sb)
 {
 	struct gfs2_sbd *sdp = sb->s_fs_info;
 	int error;
+	struct gfs2_jdesc *jd;
 
 	/*  Unfreeze the filesystem, if we need to  */
 
@@ -139,9 +146,25 @@ static void gfs2_put_super(struct super_block *sb)
 		gfs2_glock_dq_uninit(&sdp->sd_freeze_gh);
 	mutex_unlock(&sdp->sd_freeze_lock);
 
+	/* No more recovery requests */
+	set_bit(SDF_NORECOVERY, &sdp->sd_flags);
+	smp_mb();
+
+	/* Wait on outstanding recovery */
+restart:
+	spin_lock(&sdp->sd_jindex_spin);
+	list_for_each_entry(jd, &sdp->sd_jindex_list, jd_list) {
+		if (!test_bit(JDF_RECOVERY, &jd->jd_flags))
+			continue;
+		spin_unlock(&sdp->sd_jindex_spin);
+		wait_on_bit(&jd->jd_flags, JDF_RECOVERY,
+			    gfs2_umount_recovery_wait, TASK_UNINTERRUPTIBLE);
+		goto restart;
+	}
+	spin_unlock(&sdp->sd_jindex_spin);
+
 	kthread_stop(sdp->sd_quotad_process);
 	kthread_stop(sdp->sd_logd_process);
-	kthread_stop(sdp->sd_recoverd_process);
 
 	if (!(sb->s_flags & MS_RDONLY)) {
 		error = gfs2_make_fs_ro(sdp);
@@ -436,8 +459,12 @@ static int gfs2_remount_fs(struct super_block *sb, int *flags, char *data)
 {
 	struct gfs2_sbd *sdp = sb->s_fs_info;
 	struct gfs2_args args = sdp->sd_args; /* Default to current settings */
+	struct gfs2_tune *gt = &sdp->sd_tune;
 	int error;
 
+	spin_lock(&gt->gt_spin);
+	args.ar_commit = gt->gt_log_flush_secs;
+	spin_unlock(&gt->gt_spin);
 	error = gfs2_mount_args(sdp, &args, data);
 	if (error)
 		return error;
@@ -473,6 +500,10 @@ static int gfs2_remount_fs(struct super_block *sb, int *flags, char *data)
 		sb->s_flags |= MS_POSIXACL;
 	else
 		sb->s_flags &= ~MS_POSIXACL;
+	spin_lock(&gt->gt_spin);
+	gt->gt_log_flush_secs = args.ar_commit;
+	spin_unlock(&gt->gt_spin);
+
 	return 0;
 }
 
@@ -550,6 +581,7 @@ static int gfs2_show_options(struct seq_file *s, struct vfsmount *mnt)
 {
 	struct gfs2_sbd *sdp = mnt->mnt_sb->s_fs_info;
 	struct gfs2_args *args = &sdp->sd_args;
+	int lfsecs;
 
 	if (is_ancestor(mnt->mnt_root, sdp->sd_master_dir))
 		seq_printf(s, ",meta");
@@ -610,7 +642,9 @@ static int gfs2_show_options(struct seq_file *s, struct vfsmount *mnt)
 	}
 	if (args->ar_discard)
 		seq_printf(s, ",discard");
-
+	lfsecs = sdp->sd_tune.gt_log_flush_secs;
+	if (lfsecs != 60)
+		seq_printf(s, ",commit=%d", lfsecs);
 	return 0;
 }
 
@@ -680,7 +714,7 @@ out_unlock:
 		gfs2_glock_dq(&ip->i_iopen_gh);
 	gfs2_holder_uninit(&ip->i_iopen_gh);
 	gfs2_glock_dq_uninit(&gh);
-	if (error && error != GLR_TRYFAILED)
+	if (error && error != GLR_TRYFAILED && error != -EROFS)
 		fs_warn(sdp, "gfs2_delete_inode: %d\n", error);
 out:
 	truncate_inode_pages(&inode->i_data, 0);
