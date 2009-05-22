@@ -9,35 +9,6 @@
 
 #include "blk.h"
 
-void blk_recalc_rq_sectors(struct request *rq, int nsect)
-{
-	if (blk_fs_request(rq) || blk_discard_rq(rq)) {
-		rq->hard_sector += nsect;
-		rq->hard_nr_sectors -= nsect;
-
-		/*
-		 * Move the I/O submission pointers ahead if required.
-		 */
-		if ((rq->nr_sectors >= rq->hard_nr_sectors) &&
-		    (rq->sector <= rq->hard_sector)) {
-			rq->sector = rq->hard_sector;
-			rq->nr_sectors = rq->hard_nr_sectors;
-			rq->hard_cur_sectors = bio_cur_sectors(rq->bio);
-			rq->current_nr_sectors = rq->hard_cur_sectors;
-			rq->buffer = bio_data(rq->bio);
-		}
-
-		/*
-		 * if total number of sectors is less than the first segment
-		 * size, something has gone terribly wrong
-		 */
-		if (rq->nr_sectors < rq->current_nr_sectors) {
-			printk(KERN_ERR "blk: request botched\n");
-			rq->nr_sectors = rq->current_nr_sectors;
-		}
-	}
-}
-
 static unsigned int __blk_recalc_rq_segments(struct request_queue *q,
 					     struct bio *bio)
 {
@@ -199,8 +170,9 @@ new_segment:
 
 
 	if (unlikely(rq->cmd_flags & REQ_COPY_USER) &&
-	    (rq->data_len & q->dma_pad_mask)) {
-		unsigned int pad_len = (q->dma_pad_mask & ~rq->data_len) + 1;
+	    (blk_rq_bytes(rq) & q->dma_pad_mask)) {
+		unsigned int pad_len =
+			(q->dma_pad_mask & ~blk_rq_bytes(rq)) + 1;
 
 		sg->length += pad_len;
 		rq->extra_len += pad_len;
@@ -259,7 +231,7 @@ int ll_back_merge_fn(struct request_queue *q, struct request *req,
 	else
 		max_sectors = q->max_sectors;
 
-	if (req->nr_sectors + bio_sectors(bio) > max_sectors) {
+	if (blk_rq_sectors(req) + bio_sectors(bio) > max_sectors) {
 		req->cmd_flags |= REQ_NOMERGE;
 		if (req == q->last_merge)
 			q->last_merge = NULL;
@@ -284,7 +256,7 @@ int ll_front_merge_fn(struct request_queue *q, struct request *req,
 		max_sectors = q->max_sectors;
 
 
-	if (req->nr_sectors + bio_sectors(bio) > max_sectors) {
+	if (blk_rq_sectors(req) + bio_sectors(bio) > max_sectors) {
 		req->cmd_flags |= REQ_NOMERGE;
 		if (req == q->last_merge)
 			q->last_merge = NULL;
@@ -315,7 +287,7 @@ static int ll_merge_requests_fn(struct request_queue *q, struct request *req,
 	/*
 	 * Will it become too large?
 	 */
-	if ((req->nr_sectors + next->nr_sectors) > q->max_sectors)
+	if ((blk_rq_sectors(req) + blk_rq_sectors(next)) > q->max_sectors)
 		return 0;
 
 	total_phys_segments = req->nr_phys_segments + next->nr_phys_segments;
@@ -345,7 +317,7 @@ static void blk_account_io_merge(struct request *req)
 		int cpu;
 
 		cpu = part_stat_lock();
-		part = disk_map_sector_rcu(req->rq_disk, req->sector);
+		part = disk_map_sector_rcu(req->rq_disk, blk_rq_pos(req));
 
 		part_round_stats(cpu, part);
 		part_dec_in_flight(part);
@@ -366,7 +338,7 @@ static int attempt_merge(struct request_queue *q, struct request *req,
 	/*
 	 * not contiguous
 	 */
-	if (req->sector + req->nr_sectors != next->sector)
+	if (blk_rq_pos(req) + blk_rq_sectors(req) != blk_rq_pos(next))
 		return 0;
 
 	if (rq_data_dir(req) != rq_data_dir(next)
@@ -398,7 +370,7 @@ static int attempt_merge(struct request_queue *q, struct request *req,
 	req->biotail->bi_next = next->bio;
 	req->biotail = next->biotail;
 
-	req->nr_sectors = req->hard_nr_sectors += next->hard_nr_sectors;
+	req->__data_len += blk_rq_bytes(next);
 
 	elv_merge_requests(q, req, next);
 

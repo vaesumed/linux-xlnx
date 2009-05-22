@@ -166,19 +166,9 @@ struct request {
 	enum rq_cmd_type_bits cmd_type;
 	unsigned long atomic_flags;
 
-	/* Maintain bio traversal state for part by part I/O submission.
-	 * hard_* are block layer internals, no driver should touch them!
-	 */
-
-	sector_t sector;		/* next sector to submit */
-	sector_t hard_sector;		/* next sector to complete */
-	unsigned long nr_sectors;	/* no. of sectors left to submit */
-	unsigned long hard_nr_sectors;	/* no. of sectors left to complete */
-	/* no. of sectors left to submit in the current segment */
-	unsigned int current_nr_sectors;
-
-	/* no. of sectors left to complete in the current segment */
-	unsigned int hard_cur_sectors;
+	/* the following two fields are internal, NEVER access directly */
+	sector_t __sector;		/* sector cursor */
+	unsigned int __data_len;	/* total data len */
 
 	struct bio *bio;
 	struct bio *biotail;
@@ -211,8 +201,8 @@ struct request {
 
 	unsigned short ioprio;
 
-	void *special;
-	char *buffer;
+	void *special;		/* opaque pointer available for LLD use */
+	char *buffer;		/* kaddr of the current segment if available */
 
 	int tag;
 	int errors;
@@ -226,10 +216,9 @@ struct request {
 	unsigned char __cmd[BLK_MAX_CDB];
 	unsigned char *cmd;
 
-	unsigned int data_len;
 	unsigned int extra_len;	/* length of alignment and padding */
 	unsigned int sense_len;
-	void *data;
+	unsigned int resid_len;	/* residual count */
 	void *sense;
 
 	unsigned long deadline;
@@ -752,6 +741,8 @@ extern void blk_rq_init(struct request_queue *q, struct request *rq);
 extern void blk_put_request(struct request *);
 extern void __blk_put_request(struct request_queue *, struct request *);
 extern struct request *blk_get_request(struct request_queue *, int, gfp_t);
+extern struct request *blk_make_request(struct request_queue *, struct bio *,
+					gfp_t);
 extern void blk_insert_request(struct request_queue *, struct request *, int, void *);
 extern void blk_requeue_request(struct request_queue *, struct request *);
 extern int blk_rq_check_limits(struct request_queue *q, struct request *rq);
@@ -766,12 +757,6 @@ extern int scsi_cmd_ioctl(struct request_queue *, struct gendisk *, fmode_t,
 			  unsigned int, void __user *);
 extern int sg_scsi_ioctl(struct request_queue *, struct gendisk *, fmode_t,
 			 struct scsi_ioctl_command __user *);
-
-/*
- * Temporary export, until SCSI gets fixed up.
- */
-extern int blk_rq_append_bio(struct request_queue *q, struct request *rq,
-			     struct bio *bio);
 
 /*
  * A queue has just exitted congestion.  Note this in the global counter of
@@ -798,7 +783,6 @@ extern void blk_sync_queue(struct request_queue *q);
 extern void __blk_stop_queue(struct request_queue *q);
 extern void __blk_run_queue(struct request_queue *);
 extern void blk_run_queue(struct request_queue *);
-extern void blk_start_queueing(struct request_queue *);
 extern int blk_rq_map_user(struct request_queue *, struct request *,
 			   struct rq_map_data *, void __user *, unsigned long,
 			   gfp_t);
@@ -831,41 +815,73 @@ static inline void blk_run_address_space(struct address_space *mapping)
 		blk_run_backing_dev(mapping->backing_dev_info, NULL);
 }
 
-extern void blkdev_dequeue_request(struct request *req);
+/*
+ * blk_rq_pos()		: the current sector
+ * blk_rq_bytes()	: bytes left in the entire request
+ * blk_rq_cur_bytes()	: bytes left in the current segment
+ * blk_rq_sectors()	: sectors left in the entire request
+ * blk_rq_cur_sectors()	: sectors left in the current segment
+ */
+static inline sector_t blk_rq_pos(const struct request *rq)
+{
+	return rq->__sector;
+}
+
+static inline unsigned int blk_rq_bytes(const struct request *rq)
+{
+	return rq->__data_len;
+}
+
+static inline int blk_rq_cur_bytes(const struct request *rq)
+{
+	return rq->bio ? bio_cur_bytes(rq->bio) : 0;
+}
+
+static inline unsigned int blk_rq_sectors(const struct request *rq)
+{
+	return blk_rq_bytes(rq) >> 9;
+}
+
+static inline unsigned int blk_rq_cur_sectors(const struct request *rq)
+{
+	return blk_rq_cur_bytes(rq) >> 9;
+}
 
 /*
- * blk_end_request() and friends.
- * __blk_end_request() and end_request() must be called with
- * the request queue spinlock acquired.
+ * Request issue related functions.
+ */
+extern struct request *blk_peek_request(struct request_queue *q);
+extern void blk_start_request(struct request *rq);
+extern struct request *blk_fetch_request(struct request_queue *q);
+
+/*
+ * Request completion related functions.
+ *
+ * blk_update_request() completes given number of bytes and updates
+ * the request without completing it.
+ *
+ * blk_end_request() and friends.  __blk_end_request() must be called
+ * with the request queue spinlock acquired.
  *
  * Several drivers define their own end_request and call
  * blk_end_request() for parts of the original function.
  * This prevents code duplication in drivers.
  */
-extern int blk_end_request(struct request *rq, int error,
-				unsigned int nr_bytes);
-extern int __blk_end_request(struct request *rq, int error,
-				unsigned int nr_bytes);
-extern int blk_end_bidi_request(struct request *rq, int error,
-				unsigned int nr_bytes, unsigned int bidi_bytes);
-extern void end_request(struct request *, int);
-extern int blk_end_request_callback(struct request *rq, int error,
-				unsigned int nr_bytes,
-				int (drv_callback)(struct request *));
+extern bool blk_update_request(struct request *rq, int error,
+			       unsigned int nr_bytes);
+extern bool blk_end_request(struct request *rq, int error,
+			    unsigned int nr_bytes);
+extern void blk_end_request_all(struct request *rq, int error);
+extern bool blk_end_request_cur(struct request *rq, int error);
+extern bool __blk_end_request(struct request *rq, int error,
+			      unsigned int nr_bytes);
+extern void __blk_end_request_all(struct request *rq, int error);
+extern bool __blk_end_request_cur(struct request *rq, int error);
+
 extern void blk_complete_request(struct request *);
 extern void __blk_complete_request(struct request *);
 extern void blk_abort_request(struct request *);
 extern void blk_abort_queue(struct request_queue *);
-extern void blk_update_request(struct request *rq, int error,
-			       unsigned int nr_bytes);
-
-/*
- * blk_end_request() takes bytes instead of sectors as a complete size.
- * blk_rq_bytes() returns bytes left to complete in the entire request.
- * blk_rq_cur_bytes() returns bytes left to complete in the current segment.
- */
-extern unsigned int blk_rq_bytes(struct request *rq);
-extern unsigned int blk_rq_cur_bytes(struct request *rq);
 
 /*
  * Access functions for manipulating queue properties
