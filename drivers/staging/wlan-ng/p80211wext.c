@@ -1487,8 +1487,8 @@ static int p80211wext_set_encodeext(struct net_device *dev,
 	}
 
 	if (ext->ext_flags & IW_ENCODE_EXT_SET_TX_KEY) {
-		if (!(ext->alg & IW_ENCODE_ALG_WEP)) {
-			pr_debug("asked to set a non wep key :(");
+		if (ext->alg != IW_ENCODE_ALG_WEP) {
+			pr_debug("asked to set a non wep key :(\n");
 			return -EINVAL;
 		}
 		if (idx) {
@@ -1561,7 +1561,7 @@ static int p80211wext_get_encodeext(struct net_device *dev,
 
 	if (idx) {
 		if (idx < 1 || idx > NUM_WEPKEYS) {
-			printk(KERN_DEBUG
+			pr_debug(
 			       "get_encode_ext invalid key index [%d]\n", idx);
 			result = -EINVAL;
 			goto exit;
