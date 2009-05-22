@@ -1,10 +1,10 @@
 /*
  * Wireless utility functions
  *
- * Copyright 2007	Johannes Berg <johannes@sipsolutions.net>
+ * Copyright 2007-2009	Johannes Berg <johannes@sipsolutions.net>
  */
-#include <net/wireless.h>
-#include <asm/bitops.h>
+#include <linux/bitops.h>
+#include <net/cfg80211.h>
 #include "core.h"
 
 struct ieee80211_rate *
@@ -137,4 +137,49 @@ void ieee80211_set_bitrate_flags(struct wiphy *wiphy)
 	for (band = 0; band < IEEE80211_NUM_BANDS; band++)
 		if (wiphy->bands[band])
 			set_mandatory_flags_band(wiphy->bands[band], band);
+}
+
+int cfg80211_validate_key_settings(struct key_params *params, int key_idx,
+				   const u8 *mac_addr)
+{
+	if (key_idx > 5)
+		return -EINVAL;
+
+	/*
+	 * Disallow pairwise keys with non-zero index unless it's WEP
+	 * (because current deployments use pairwise WEP keys with
+	 * non-zero indizes but 802.11i clearly specifies to use zero)
+	 */
+	if (mac_addr && key_idx &&
+	    params->cipher != WLAN_CIPHER_SUITE_WEP40 &&
+	    params->cipher != WLAN_CIPHER_SUITE_WEP104)
+		return -EINVAL;
+
+	/* TODO: add definitions for the lengths to linux/ieee80211.h */
+	switch (params->cipher) {
+	case WLAN_CIPHER_SUITE_WEP40:
+		if (params->key_len != 5)
+			return -EINVAL;
+		break;
+	case WLAN_CIPHER_SUITE_TKIP:
+		if (params->key_len != 32)
+			return -EINVAL;
+		break;
+	case WLAN_CIPHER_SUITE_CCMP:
+		if (params->key_len != 16)
+			return -EINVAL;
+		break;
+	case WLAN_CIPHER_SUITE_WEP104:
+		if (params->key_len != 13)
+			return -EINVAL;
+		break;
+	case WLAN_CIPHER_SUITE_AES_CMAC:
+		if (params->key_len != 16)
+			return -EINVAL;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
 }

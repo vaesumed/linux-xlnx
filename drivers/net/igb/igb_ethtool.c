@@ -275,13 +275,17 @@ static int igb_set_pauseparam(struct net_device *netdev,
 static u32 igb_get_rx_csum(struct net_device *netdev)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
-	return adapter->rx_csum;
+	return !(adapter->flags & IGB_FLAG_RX_CSUM_DISABLED);
 }
 
 static int igb_set_rx_csum(struct net_device *netdev, u32 data)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
-	adapter->rx_csum = data;
+
+	if (data)
+		adapter->flags &= ~IGB_FLAG_RX_CSUM_DISABLED;
+	else
+		adapter->flags |= IGB_FLAG_RX_CSUM_DISABLED;
 
 	return 0;
 }
@@ -293,10 +297,16 @@ static u32 igb_get_tx_csum(struct net_device *netdev)
 
 static int igb_set_tx_csum(struct net_device *netdev, u32 data)
 {
-	if (data)
+	struct igb_adapter *adapter = netdev_priv(netdev);
+
+	if (data) {
 		netdev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
-	else
-		netdev->features &= ~(NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
+		if (adapter->hw.mac.type == e1000_82576)
+			netdev->features |= NETIF_F_SCTP_CSUM;
+	} else {
+		netdev->features &= ~(NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
+		                      NETIF_F_SCTP_CSUM);
+	}
 
 	return 0;
 }
