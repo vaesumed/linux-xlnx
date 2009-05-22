@@ -120,6 +120,7 @@ static inline void dmar_writeq(void __iomem *addr, u64 val)
 	(ecap_iotlb_offset(e) + ecap_niotlb_iunits(e) * 16)
 #define ecap_coherent(e)	((e) & 0x1)
 #define ecap_qis(e)		((e) & 0x2)
+#define ecap_pass_through(e)	((e >> 6) & 0x1)
 #define ecap_eim_support(e)	((e >> 4) & 0x1)
 #define ecap_ir_support(e)	((e >> 3) & 0x1)
 #define ecap_max_handle_mask(e) ((e >> 20) & 0xf)
@@ -280,10 +281,10 @@ struct ir_table {
 #endif
 
 struct iommu_flush {
-	int (*flush_context)(struct intel_iommu *iommu, u16 did, u16 sid, u8 fm,
-		u64 type, int non_present_entry_flush);
-	int (*flush_iotlb)(struct intel_iommu *iommu, u16 did, u64 addr,
-		unsigned int size_order, u64 type, int non_present_entry_flush);
+	void (*flush_context)(struct intel_iommu *iommu, u16 did, u16 sid,
+			      u8 fm, u64 type);
+	void (*flush_iotlb)(struct intel_iommu *iommu, u16 did, u64 addr,
+			    unsigned int size_order, u64 type);
 };
 
 enum {
@@ -302,6 +303,7 @@ struct intel_iommu {
 	spinlock_t	register_lock; /* protect register handling */
 	int		seq_id;	/* sequence id of the iommu */
 	int		agaw; /* agaw of this iommu */
+	int		msagaw; /* max sagaw of this iommu */
 	unsigned int 	irq;
 	unsigned char 	name[13];    /* Device Name */
 
@@ -337,11 +339,10 @@ extern void dmar_disable_qi(struct intel_iommu *iommu);
 extern int dmar_reenable_qi(struct intel_iommu *iommu);
 extern void qi_global_iec(struct intel_iommu *iommu);
 
-extern int qi_flush_context(struct intel_iommu *iommu, u16 did, u16 sid,
-			        u8 fm, u64 type, int non_present_entry_flush);
-extern int qi_flush_iotlb(struct intel_iommu *iommu, u16 did, u64 addr,
-			  unsigned int size_order, u64 type,
-			  int non_present_entry_flush);
+extern void qi_flush_context(struct intel_iommu *iommu, u16 did, u16 sid,
+			     u8 fm, u64 type);
+extern void qi_flush_iotlb(struct intel_iommu *iommu, u16 did, u64 addr,
+			  unsigned int size_order, u64 type);
 
 extern int qi_submit_sync(struct qi_desc *desc, struct intel_iommu *iommu);
 
