@@ -19,9 +19,17 @@
 #include <asm/mcfsim.h>
 
 /*
- * Define the vector numbers for the basic 7 interrupt sources.
- * These are often referred to as the "external" interrupts in
- * the ColdFire documentation (for the early ColdFire cores at least).
+ * The mapping of irq number to a mask register bit is not one-to-one.
+ * The irq numbers are either based on "level" of interrupt or fixed
+ * for an autovector-able interrupt. So we keep a local data structure
+ * that maps from irq to mask register. Not all interrupts will have
+ * an IMR bit.
+ */
+unsigned char mcf_irq2imr[NR_IRQS];
+
+/*
+ * Define the miniumun and maximum external interrupt numbers.
+ * This is also used as the "level" interrupt numbers.
  */
 #define	EIRQ1	25
 #define	EIRQ7	31
@@ -93,24 +101,26 @@ void mcf_maskimr(unsigned int mask)
  */
 void mcf_autovector(int irq)
 {
+#ifdef MCFSIM_AVR
         if ((irq >= EIRQ1) && (irq <= EIRQ7)) {
 		u8 avec;
 		avec = __raw_readb(MCF_MBAR + MCFSIM_AVR);
 		avec |= (0x1 << (irq - EIRQ1 + 1));
 		__raw_writeb(avec, MCF_MBAR + MCFSIM_AVR);
 	}
+#endif
 }
 
 static void intc_irq_mask(unsigned int irq)
 {
-	if ((irq >= EIRQ1) && (irq <= EIRQ7))
-		mcf_setimr(irq - EIRQ1 + 1);
+	if (mcf_irq2imr[irq])
+		mcf_setimr(mcf_irq2imr[irq]);
 }
 
 static void intc_irq_unmask(unsigned int irq)
 {
-	if ((irq >= EIRQ1) && (irq <= EIRQ7))
-		mcf_clrimr(irq - EIRQ1 + 1);
+	if (mcf_irq2imr[irq])
+		mcf_clrimr(mcf_irq2imr[irq]);
 }
 
 static int intc_irq_set_type(unsigned int irq, unsigned int type)
