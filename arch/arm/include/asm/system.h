@@ -248,6 +248,8 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 	unsigned int tmp;
 #endif
 
+	smp_mb();
+
 	switch (size) {
 #if __LINUX_ARM_ARCH__ >= 6
 	case 1:
@@ -258,7 +260,7 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 		"	bne	1b"
 			: "=&r" (ret), "=&r" (tmp)
 			: "r" (x), "r" (ptr)
-			: "memory", "cc");
+			: "cc");
 		break;
 	case 4:
 		asm volatile("@	__xchg4\n"
@@ -268,7 +270,7 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 		"	bne	1b"
 			: "=&r" (ret), "=&r" (tmp)
 			: "r" (x), "r" (ptr)
-			: "memory", "cc");
+			: "cc");
 		break;
 #elif defined(swp_is_buggy)
 #ifdef CONFIG_SMP
@@ -293,20 +295,21 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 		"	swpb	%0, %1, [%2]"
 			: "=&r" (ret)
 			: "r" (x), "r" (ptr)
-			: "memory", "cc");
+			: "cc");
 		break;
 	case 4:
 		asm volatile("@	__xchg4\n"
 		"	swp	%0, %1, [%2]"
 			: "=&r" (ret)
 			: "r" (x), "r" (ptr)
-			: "memory", "cc");
+			: "cc");
 		break;
 #endif
 	default:
 		__bad_xchg(ptr, size), ret = 0;
 		break;
 	}
+	smp_mb();
 
 	return ret;
 }
