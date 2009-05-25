@@ -2,6 +2,8 @@
 # Makefile for the Linux network (ethercard) device drivers.
 #
 
+obj-$(CONFIG_TI_DAVINCI_EMAC) += davinci_emac.o
+
 obj-$(CONFIG_E1000) += e1000/
 obj-$(CONFIG_E1000E) += e1000e/
 obj-$(CONFIG_IBM_NEW_EMAC) += ibm_newemac/
@@ -95,6 +97,7 @@ obj-$(CONFIG_SH_ETH) += sh_eth.o
 #
 
 obj-$(CONFIG_MII) += mii.o
+obj-$(CONFIG_MDIO) += mdio.o
 obj-$(CONFIG_PHYLIB) += phy/
 
 obj-$(CONFIG_SUNDANCE) += sundance.o
@@ -134,6 +137,8 @@ obj-$(CONFIG_AX88796) += ax88796.o
 
 obj-$(CONFIG_TSI108_ETH) += tsi108_eth.o
 obj-$(CONFIG_MV643XX_ETH) += mv643xx_eth.o
+ll_temac-objs := ll_temac_main.o ll_temac_mdio.o
+obj-$(CONFIG_XILINX_LL_TEMAC) += ll_temac.o
 obj-$(CONFIG_QLA3XXX) += qla3xxx.o
 obj-$(CONFIG_QLGE) += qlge/
 

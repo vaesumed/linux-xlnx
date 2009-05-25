@@ -39,9 +39,11 @@
 
 #include <linux/device.h>
 #include <linux/percpu.h>
+#include <linux/rculist.h>
 #include <linux/dmaengine.h>
 #include <linux/workqueue.h>
 
+#include <linux/ethtool.h>
 #include <net/net_namespace.h>
 #include <net/dsa.h>
 #ifdef CONFIG_DCB
@@ -49,7 +51,6 @@
 #endif
 
 struct vlan_group;
-struct ethtool_ops;
 struct netpoll_info;
 /* 802.11 specific */
 struct wireless_dev;
@@ -209,6 +210,16 @@ struct dev_addr_list
 #define dmi_addrlen	da_addrlen
 #define dmi_users	da_users
 #define dmi_gusers	da_gusers
+
+struct netdev_hw_addr {
+	struct list_head	list;
+	unsigned char		addr[MAX_ADDR_LEN];
+	unsigned char		type;
+#define NETDEV_HW_ADDR_T_LAN	1
+#define NETDEV_HW_ADDR_T_SAN	2
+#define NETDEV_HW_ADDR_T_SLAVE	3
+	struct rcu_head		rcu_head;
+};
 
 struct hh_cache
 {
@@ -447,12 +458,25 @@ enum netdev_queue_state_t
 };
 
 struct netdev_queue {
+/*
+ * read mostly part
+ */
 	struct net_device	*dev;
 	struct Qdisc		*qdisc;
 	unsigned long		state;
-	spinlock_t		_xmit_lock;
-	int			xmit_lock_owner;
 	struct Qdisc		*qdisc_sleeping;
+/*
+ * write mostly part
+ */
+	spinlock_t		_xmit_lock ____cacheline_aligned_in_smp;
+	int			xmit_lock_owner;
+	/*
+	 * please use this field instead of dev->trans_start
+	 */
+	unsigned long		trans_start;
+	unsigned long		tx_bytes;
+	unsigned long		tx_packets;
+	unsigned long		tx_dropped;
 } ____cacheline_aligned_in_smp;
 
 
@@ -670,7 +694,9 @@ struct net_device
 #define NETIF_F_GRO		16384	/* Generic receive offload */
 #define NETIF_F_LRO		32768	/* large receive offload */
 
+/* the GSO_MASK reserves bits 16 through 23 */
 #define NETIF_F_FCOE_CRC	(1 << 24) /* FCoE CRC32 */
+#define NETIF_F_SCTP_CSUM	(1 << 25) /* SCTP checksum offload */
 
 	/* Segmentation offload features */
 #define NETIF_F_GSO_SHIFT	16
@@ -776,8 +802,11 @@ struct net_device
  */
 	unsigned long		last_rx;	/* Time of last Rx	*/
 	/* Interface address info used in eth_type_trans() */
-	unsigned char		dev_addr[MAX_ADDR_LEN];	/* hw address, (before bcast
-							   because most packets are unicast) */
+	unsigned char		*dev_addr;	/* hw address, (before bcast
+						   because most packets are
+						   unicast) */
+
+	struct list_head	dev_addr_list; /* list of device hw addresses */
 
 	unsigned char		broadcast[MAX_ADDR_LEN];	/* hw bcast add	*/
 
@@ -797,6 +826,11 @@ struct net_device
  * One part is mostly used on xmit path (device)
  */
 	/* These may be needed for future network-power-down code. */
+
+	/*
+	 * trans_start here is expensive for high speed devices on SMP,
+	 * please use netdev_queue->trans_start instead.
+	 */
 	unsigned long		trans_start;	/* Time (in jiffies) of last Tx	*/
 
 	int			watchdog_timeo; /* used by dev_watchdog() */
@@ -1047,14 +1081,6 @@ struct packet_type {
 	struct list_head	list;
 };
 
-struct napi_gro_fraginfo {
-	skb_frag_t frags[MAX_SKB_FRAGS];
-	unsigned int nr_frags;
-	unsigned int ip_summed;
-	unsigned int len;
-	__wsum csum;
-};
-
 #include <linux/interrupt.h>
 #include <linux/notifier.h>
 
@@ -1145,9 +1171,16 @@ static inline void skb_gro_reset_offset(struct sk_buff *skb)
 
 static inline void *skb_gro_mac_header(struct sk_buff *skb)
 {
-	return skb_mac_header(skb) < skb->data ? skb_mac_header(skb) :
+	return skb_headlen(skb) ? skb_mac_header(skb) :
 	       page_address(skb_shinfo(skb)->frags[0].page) +
 	       skb_shinfo(skb)->frags[0].page_offset;
+}
+
+static inline void *skb_gro_network_header(struct sk_buff *skb)
+{
+	return skb_headlen(skb) ? skb_network_header(skb) :
+	       page_address(skb_shinfo(skb)->frags[0].page) +
+	       skb_shinfo(skb)->frags[0].page_offset + skb_network_offset(skb);
 }
 
 static inline int dev_hard_header(struct sk_buff *skb, struct net_device *dev,
@@ -1442,12 +1475,18 @@ extern int		napi_gro_receive(struct napi_struct *napi,
 					 struct sk_buff *skb);
 extern void		napi_reuse_skb(struct napi_struct *napi,
 				       struct sk_buff *skb);
-extern struct sk_buff *	napi_fraginfo_skb(struct napi_struct *napi,
-					  struct napi_gro_fraginfo *info);
+extern struct sk_buff *	napi_get_frags(struct napi_struct *napi);
 extern int		napi_frags_finish(struct napi_struct *napi,
 					  struct sk_buff *skb, int ret);
-extern int		napi_gro_frags(struct napi_struct *napi,
-				       struct napi_gro_fraginfo *info);
+extern struct sk_buff *	napi_frags_skb(struct napi_struct *napi);
+extern int		napi_gro_frags(struct napi_struct *napi);
+
+static inline void napi_free_frags(struct napi_struct *napi)
+{
+	kfree_skb(napi->skb);
+	napi->skb = NULL;
+}
+
 extern void		netif_nit_deliver(struct sk_buff *skb);
 extern int		dev_valid_name(const char *name);
 extern int		dev_ioctl(struct net *net, unsigned int cmd, void __user *);
@@ -1513,6 +1552,8 @@ static inline int netif_carrier_ok(const struct net_device *dev)
 {
 	return !test_bit(__LINK_STATE_NOCARRIER, &dev->state);
 }
+
+extern unsigned long dev_trans_start(struct net_device *dev);
 
 extern void __netdev_watchdog_up(struct net_device *dev);
 
@@ -1778,6 +1819,13 @@ static inline void netif_addr_unlock_bh(struct net_device *dev)
 	spin_unlock_bh(&dev->addr_list_lock);
 }
 
+/*
+ * dev_addr_list walker. Should be used only for read access. Call with
+ * rcu_read_lock held.
+ */
+#define for_each_dev_addr(dev, ha) \
+		list_for_each_entry_rcu(ha, &dev->dev_addr_list, list)
+
 /* These functions live elsewhere (drivers/net/net_init.c, but related) */
 
 extern void		ether_setup(struct net_device *dev);
@@ -1790,6 +1838,19 @@ extern struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 	alloc_netdev_mq(sizeof_priv, name, setup, 1)
 extern int		register_netdev(struct net_device *dev);
 extern void		unregister_netdev(struct net_device *dev);
+
+/* Functions used for device addresses handling */
+extern int dev_addr_add(struct net_device *dev, unsigned char *addr,
+			unsigned char addr_type);
+extern int dev_addr_del(struct net_device *dev, unsigned char *addr,
+			unsigned char addr_type);
+extern int dev_addr_add_multiple(struct net_device *to_dev,
+				 struct net_device *from_dev,
+				 unsigned char addr_type);
+extern int dev_addr_del_multiple(struct net_device *to_dev,
+				 struct net_device *from_dev,
+				 unsigned char addr_type);
+
 /* Functions used for secondary unicast and multicast support */
 extern void		dev_set_rx_mode(struct net_device *dev);
 extern void		__dev_set_rx_mode(struct net_device *dev);
@@ -1908,6 +1969,28 @@ static inline int skb_bond_should_drop(struct sk_buff *skb)
 }
 
 extern struct pernet_operations __net_initdata loopback_net_ops;
+
+static inline int dev_ethtool_get_settings(struct net_device *dev,
+					   struct ethtool_cmd *cmd)
+{
+	if (!dev->ethtool_ops || !dev->ethtool_ops->get_settings)
+		return -EOPNOTSUPP;
+	return dev->ethtool_ops->get_settings(dev, cmd);
+}
+
+static inline u32 dev_ethtool_get_rx_csum(struct net_device *dev)
+{
+	if (!dev->ethtool_ops || !dev->ethtool_ops->get_rx_csum)
+		return 0;
+	return dev->ethtool_ops->get_rx_csum(dev);
+}
+
+static inline u32 dev_ethtool_get_flags(struct net_device *dev)
+{
+	if (!dev->ethtool_ops || !dev->ethtool_ops->get_flags)
+		return 0;
+	return dev->ethtool_ops->get_flags(dev);
+}
 #endif /* __KERNEL__ */
 
 #endif	/* _LINUX_DEV_H */
