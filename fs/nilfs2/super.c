@@ -65,6 +65,7 @@ MODULE_DESCRIPTION("A New Implementation of the Log-structured Filesystem "
 		   "(NILFS)");
 MODULE_LICENSE("GPL");
 
+static void nilfs_write_super(struct super_block *sb);
 static int nilfs_remount(struct super_block *sb, int *flags, char *data);
 static int test_exclusive_mount(struct file_system_type *fs_type,
 				struct block_device *bdev, int flags);
@@ -315,6 +316,11 @@ static void nilfs_put_super(struct super_block *sb)
 	struct nilfs_sb_info *sbi = NILFS_SB(sb);
 	struct the_nilfs *nilfs = sbi->s_nilfs;
 
+	lock_kernel();
+
+	if (sb->s_dirt)
+		nilfs_write_super(sb);
+
 	nilfs_detach_segment_constructor(sbi);
 
 	if (!(sb->s_flags & MS_RDONLY)) {
@@ -329,6 +335,8 @@ static void nilfs_put_super(struct super_block *sb)
 	sbi->s_super = NULL;
 	sb->s_fs_info = NULL;
 	kfree(sbi);
+
+	unlock_kernel();
 }
 
 /**
