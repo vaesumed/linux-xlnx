@@ -108,7 +108,8 @@ static void combine_restrictions_low(struct io_restrictions *lhs,
 	lhs->max_hw_segments =
 		min_not_zero(lhs->max_hw_segments, rhs->max_hw_segments);
 
-	lhs->hardsect_size = max(lhs->hardsect_size, rhs->hardsect_size);
+	lhs->logical_block_size = max(lhs->logical_block_size,
+				      rhs->logical_block_size);
 
 	lhs->max_segment_size =
 		min_not_zero(lhs->max_segment_size, rhs->max_segment_size);
@@ -386,7 +387,7 @@ static int device_area_is_valid(struct dm_target *ti, struct block_device *bdev,
 			     sector_t start, sector_t len)
 {
 	sector_t dev_size = bdev->bd_inode->i_size >> SECTOR_SHIFT;
-	unsigned short hardsect_size_sectors = ti->limits.hardsect_size >>
+	unsigned short hardsect_size_sectors = ti->limits.logical_block_size >>
 					       SECTOR_SHIFT;
 	char b[BDEVNAME_SIZE];
 
@@ -413,7 +414,7 @@ static int device_area_is_valid(struct dm_target *ti, struct block_device *bdev,
 		DMWARN("%s: len=%llu not aligned to h/w sector size %hu of %s",
 		       dm_device_name(ti->table->md),
 		       (unsigned long long)len,
-		       ti->limits.hardsect_size, bdevname(bdev, b));
+		       ti->limits.logical_block_size, bdevname(bdev, b));
 		return 0;
 	}
 
@@ -527,7 +528,7 @@ void dm_set_device_limits(struct dm_target *ti, struct block_device *bdev)
 	 *        combine_restrictions_low()
 	 */
 	rs->max_sectors =
-		min_not_zero(rs->max_sectors, q->max_sectors);
+		min_not_zero(rs->max_sectors, queue_max_sectors(q));
 
 	/*
 	 * Check if merge fn is supported.
@@ -542,24 +543,25 @@ void dm_set_device_limits(struct dm_target *ti, struct block_device *bdev)
 
 	rs->max_phys_segments =
 		min_not_zero(rs->max_phys_segments,
-			     q->max_phys_segments);
+			     queue_max_phys_segments(q));
 
 	rs->max_hw_segments =
-		min_not_zero(rs->max_hw_segments, q->max_hw_segments);
+		min_not_zero(rs->max_hw_segments, queue_max_hw_segments(q));
 
-	rs->hardsect_size = max(rs->hardsect_size, q->hardsect_size);
+	rs->logical_block_size = max(rs->logical_block_size,
+				     queue_logical_block_size(q));
 
 	rs->max_segment_size =
-		min_not_zero(rs->max_segment_size, q->max_segment_size);
+		min_not_zero(rs->max_segment_size, queue_max_segment_size(q));
 
 	rs->max_hw_sectors =
-		min_not_zero(rs->max_hw_sectors, q->max_hw_sectors);
+		min_not_zero(rs->max_hw_sectors, queue_max_hw_sectors(q));
 
 	rs->seg_boundary_mask =
 		min_not_zero(rs->seg_boundary_mask,
-			     q->seg_boundary_mask);
+			     queue_segment_boundary(q));
 
-	rs->bounce_pfn = min_not_zero(rs->bounce_pfn, q->bounce_pfn);
+	rs->bounce_pfn = min_not_zero(rs->bounce_pfn, queue_bounce_pfn(q));
 
 	rs->no_cluster |= !test_bit(QUEUE_FLAG_CLUSTER, &q->queue_flags);
 }
@@ -709,8 +711,8 @@ static void check_for_valid_limits(struct io_restrictions *rs)
 		rs->max_phys_segments = MAX_PHYS_SEGMENTS;
 	if (!rs->max_hw_segments)
 		rs->max_hw_segments = MAX_HW_SEGMENTS;
-	if (!rs->hardsect_size)
-		rs->hardsect_size = 1 << SECTOR_SHIFT;
+	if (!rs->logical_block_size)
+		rs->logical_block_size = 1 << SECTOR_SHIFT;
 	if (!rs->max_segment_size)
 		rs->max_segment_size = MAX_SEGMENT_SIZE;
 	if (!rs->seg_boundary_mask)
@@ -733,7 +735,7 @@ static int validate_hardsect_alignment(struct dm_table *table)
 	 * (in units of 512-byte sectors).
 	 */
 	unsigned short device_hardsect_size_sects =
-			    table->limits.hardsect_size >> SECTOR_SHIFT;
+			    table->limits.logical_block_size >> SECTOR_SHIFT;
 
 	/*
 	 * Offset of the start of the next table entry, mod hardsect_size.
@@ -760,7 +762,7 @@ static int validate_hardsect_alignment(struct dm_table *table)
 		 * table entry are they compatible with its hardsect_size?
 		 */
 		if (remaining < ti->len &&
-		    remaining & ((ti->limits.hardsect_size >>
+		    remaining & ((ti->limits.logical_block_size >>
 				  SECTOR_SHIFT) - 1))
 			break;	/* Error */
 
@@ -777,7 +779,7 @@ static int validate_hardsect_alignment(struct dm_table *table)
 		       dm_device_name(table->md), i,
 		       (unsigned long long) ti->begin,
 		       (unsigned long long) ti->len,
-		       table->limits.hardsect_size);
+		       table->limits.logical_block_size);
 		return -EINVAL;
 	}
 
@@ -1007,13 +1009,13 @@ void dm_table_set_restrictions(struct dm_table *t, struct request_queue *q)
 	 * restrictions.
 	 */
 	blk_queue_max_sectors(q, t->limits.max_sectors);
-	q->max_phys_segments = t->limits.max_phys_segments;
-	q->max_hw_segments = t->limits.max_hw_segments;
-	q->hardsect_size = t->limits.hardsect_size;
-	q->max_segment_size = t->limits.max_segment_size;
-	q->max_hw_sectors = t->limits.max_hw_sectors;
-	q->seg_boundary_mask = t->limits.seg_boundary_mask;
-	q->bounce_pfn = t->limits.bounce_pfn;
+	blk_queue_max_phys_segments(q, t->limits.max_phys_segments);
+	blk_queue_max_hw_segments(q, t->limits.max_hw_segments);
+	blk_queue_logical_block_size(q, t->limits.logical_block_size);
+	blk_queue_max_segment_size(q, t->limits.max_segment_size);
+	blk_queue_max_hw_sectors(q, t->limits.max_hw_sectors);
+	blk_queue_segment_boundary(q, t->limits.seg_boundary_mask);
+	blk_queue_bounce_limit(q, t->limits.bounce_pfn);
 
 	if (t->limits.no_cluster)
 		queue_flag_clear_unlocked(QUEUE_FLAG_CLUSTER, q);
