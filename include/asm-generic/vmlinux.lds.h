@@ -336,11 +336,10 @@
 #define INIT_DATA							\
 	*(.init.data)							\
 	DEV_DISCARD(init.data)						\
-	CPU_DISCARD(init.data)						\
-	MEM_DISCARD(init.data)						\
-	*(.init.rodata)							\
 	DEV_DISCARD(init.rodata)					\
+	CPU_DISCARD(init.data)						\
 	CPU_DISCARD(init.rodata)					\
+	MEM_DISCARD(init.data)						\
 	MEM_DISCARD(init.rodata)
 
 #define INIT_TEXT							\
