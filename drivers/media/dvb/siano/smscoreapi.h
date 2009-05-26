@@ -46,13 +46,14 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
-#define SMS_ALLOC_ALIGNMENT					128
-#define SMS_DMA_ALIGNMENT					16
+#define SMS_PROTOCOL_MAX_RAOUNDTRIP_MS			(10000)
+#define SMS_ALLOC_ALIGNMENT				128
+#define SMS_DMA_ALIGNMENT				16
 #define SMS_ALIGN_ADDRESS(addr) \
 	((((uintptr_t)(addr)) + (SMS_DMA_ALIGNMENT-1)) & ~(SMS_DMA_ALIGNMENT-1))
 
-#define SMS_DEVICE_FAMILY2					1
-#define SMS_ROM_NO_RESPONSE					2
+#define SMS_DEVICE_FAMILY2				1
+#define SMS_ROM_NO_RESPONSE				2
 #define SMS_DEVICE_NOT_READY				0x8000000
 
 enum sms_device_type_st {
@@ -83,13 +84,13 @@ typedef void (*onremove_t)(void *context);
 struct smscore_buffer_t {
 	/* public members, once passed to clients can be changed freely */
 	struct list_head entry;
-	int				size;
-	int				offset;
+	int size;
+	int offset;
 
 	/* private members, read-only for clients */
-	void			*p;
-	dma_addr_t		phys;
-	unsigned long	offset_in_common;
+	void *p;
+	dma_addr_t phys;
+	unsigned long offset_in_common;
 };
 
 struct smsdevice_params_t {
@@ -116,8 +117,61 @@ struct smsclient_params_t {
 	int				data_type;
 	onresponse_t	onresponse_handler;
 	onremove_t		onremove_handler;
-
 	void			*context;
+};
+
+struct smscore_device_t {
+	struct list_head entry;
+
+	struct list_head clients;
+	struct list_head subclients;
+	spinlock_t clientslock;
+
+	struct list_head buffers;
+	spinlock_t bufferslock;
+	int num_buffers;
+
+	void *common_buffer;
+	int common_buffer_size;
+	dma_addr_t common_buffer_phys;
+
+	void *context;
+	struct device *device;
+
+	char devpath[32];
+	unsigned long device_flags;
+
+	setmode_t setmode_handler;
+	detectmode_t detectmode_handler;
+	sendrequest_t sendrequest_handler;
+	preload_t preload_handler;
+	postload_t postload_handler;
+
+	int mode, modes_supported;
+
+	/* host <--> device messages */
+	struct completion version_ex_done, data_download_done, trigger_done;
+	struct completion init_device_done, reload_start_done, resume_done;
+	struct completion gpio_configuration_done, gpio_set_level_done;
+	struct completion gpio_get_level_done, ir_init_done;
+
+	/* Buffer management */
+	wait_queue_head_t buffer_mng_waitq;
+
+	/* GPIO */
+	int gpio_get_res;
+
+	/* Target hardware board */
+	int board_id;
+
+	/* Firmware */
+	u8 *fw_buf;
+	u32 fw_buf_size;
+
+	/* Infrared (IR) */
+	/* struct ir_t ir; */
+
+	int led_state;
 };
 
 /* GPIO definitions for antenna frequency domain control (SMS8021) */
@@ -161,6 +215,7 @@ struct smsclient_params_t {
 #define MSG_SMS_GET_PID_FILTER_LIST_RES		609
 #define MSG_SMS_GET_STATISTICS_REQ			615
 #define MSG_SMS_GET_STATISTICS_RES			616
+#define MSG_SMS_HO_PER_SLICES_IND			630
 #define MSG_SMS_SET_ANTENNA_CONFIG_REQ		651
 #define MSG_SMS_SET_ANTENNA_CONFIG_RES		652
 #define MSG_SMS_GET_STATISTICS_EX_REQ		653
@@ -190,13 +245,30 @@ struct smsclient_params_t {
 #define MSG_SMS_GPIO_CONFIG_EX_RES			713
 #define MSG_SMS_ISDBT_TUNE_REQ				776
 #define MSG_SMS_ISDBT_TUNE_RES				777
+#define MSG_SMS_TRANSMISSION_IND			782
+#define MSG_SMS_START_IR_REQ				800
+#define MSG_SMS_START_IR_RES				801
+#define MSG_SMS_IR_SAMPLES_IND				802
+#define MSG_SMS_SIGNAL_DETECTED_IND			827
+#define MSG_SMS_NO_SIGNAL_IND				828
 
 #define SMS_INIT_MSG_EX(ptr, type, src, dst, len) do { \
 	(ptr)->msgType = type; (ptr)->msgSrcId = src; (ptr)->msgDstId = dst; \
 	(ptr)->msgLength = len; (ptr)->msgFlags = 0; \
 } while (0)
+
 #define SMS_INIT_MSG(ptr, type, len) \
 	SMS_INIT_MSG_EX(ptr, type, 0, HIF_TASK, len)
+
+enum SMS_DVB3_EVENTS {
+	DVB3_EVENT_INIT = 0,
+	DVB3_EVENT_SLEEP,
+	DVB3_EVENT_HOTPLUG,
+	DVB3_EVENT_FE_LOCK,
+	DVB3_EVENT_FE_UNLOCK,
+	DVB3_EVENT_UNC_OK,
+	DVB3_EVENT_UNC_ERR
+};
 
 enum SMS_DEVICE_MODE {
 	DEVICE_MODE_NONE = -1,
@@ -221,8 +293,13 @@ struct SmsMsgHdr_ST {
 };
 
 struct SmsMsgData_ST {
-	struct SmsMsgHdr_ST	xMsgHeader;
-	u32			msgData[1];
+	struct SmsMsgHdr_ST xMsgHeader;
+	u32 msgData[1];
+};
+
+struct SmsMsgData_ST2 {
+	struct SmsMsgHdr_ST xMsgHeader;
+	u32 msgData[2];
 };
 
 struct SmsDataDownload_ST {
@@ -238,11 +315,12 @@ struct SmsVersionRes_ST {
 	u8		Step; /* 0 - Step A */
 	u8		MetalFix; /* 0 - Metal 0 */
 
-	u8		FirmwareId; /* 0xFF � ROM, otherwise the
-				     * value indicated by
-				     * SMSHOSTLIB_DEVICE_MODES_E */
-	u8		SupportedProtocols; /* Bitwise OR combination of
+	/* FirmwareId 0xFF if ROM, otherwise the
+	 * value indicated by SMSHOSTLIB_DEVICE_MODES_E */
+	u8 FirmwareId;
+	/* SupportedProtocols Bitwise OR combination of
 					     * supported protocols */
+	u8 SupportedProtocols;
 
 	u8		VersionMajor;
 	u8		VersionMinor;
@@ -276,10 +354,12 @@ struct SMSHOSTLIB_STATISTICS_ST {
 	s32  SNR; /* dB */
 	u32 BER; /* Post Viterbi BER [1E-5] */
 	u32 FIB_CRC;	/* CRC errors percentage, valid only for DAB */
-	u32 TS_PER; /* Transport stream PER, 0xFFFFFFFF indicate N/A,
+	/* Transport stream PER, 0xFFFFFFFF indicate N/A,
 		     * valid only for DVB-T/H */
-	u32 MFER; /* DVB-H frame error rate in percentage,
+	u32 TS_PER;
+	/* DVB-H frame error rate in percentage,
 		   * 0xFFFFFFFF indicate N/A, valid only for DVB-H */
+	u32 MFER;
 	s32  RSSI; /* dBm */
 	s32  InBandPwr; /* In band power in dBM */
 	s32  CarrierOffset; /* Carrier Offset in bin/1024 */
@@ -287,8 +367,9 @@ struct SMSHOSTLIB_STATISTICS_ST {
 	/* Transmission parameters, valid only for DVB-T/H */
 	u32 Frequency; /* Frequency in Hz */
 	u32 Bandwidth; /* Bandwidth in MHz */
-	u32 TransmissionMode; /* Transmission Mode, for DAB modes 1-4,
+	/* Transmission Mode, for DAB modes 1-4,
 			       * for DVB-T/H FFT mode carriers in Kilos */
+	u32 TransmissionMode;
 	u32 ModemState; /* from SMS_DvbModemState_ET */
 	u32 GuardInterval; /* Guard Interval, 1 divided by value */
 	u32 CodeRate; /* Code Rate from SMS_DvbModemState_ET */
