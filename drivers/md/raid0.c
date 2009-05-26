@@ -240,7 +240,7 @@ static int create_strip_zones(mddev_t *mddev)
 	 * now since we have the hard sector sizes, we can make sure
 	 * chunk size is a multiple of that sector size
 	 */
-	if ((mddev->chunk_sectors << 9) % mddev->queue->hardsect_size) {
+	if ((mddev->chunk_sectors << 9) % queue_logical_block_size(mddev->queue)) {
 		printk(KERN_ERR "%s chunk_size of %d not valid\n",
 		       mdname(mddev),
 		       mddev->chunk_sectors << 9);
