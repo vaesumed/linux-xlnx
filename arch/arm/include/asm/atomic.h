@@ -49,6 +49,8 @@ static inline int atomic_add_return(int i, atomic_t *v)
 	unsigned long tmp;
 	int result;
 
+	smp_mb();
+
 	__asm__ __volatile__("@ atomic_add_return\n"
 "1:	ldrex	%0, [%2]\n"
 "	add	%0, %0, %3\n"
@@ -59,6 +61,8 @@ static inline int atomic_add_return(int i, atomic_t *v)
 	: "r" (&v->counter), "Ir" (i)
 	: "cc");
 
+	smp_mb();
+
 	return result;
 }
 
@@ -66,6 +70,8 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 {
 	unsigned long tmp;
 	int result;
+
+	smp_mb();
 
 	__asm__ __volatile__("@ atomic_sub_return\n"
 "1:	ldrex	%0, [%2]\n"
@@ -77,12 +83,16 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 	: "r" (&v->counter), "Ir" (i)
 	: "cc");
 
+	smp_mb();
+
 	return result;
 }
 
 static inline int atomic_cmpxchg(atomic_t *ptr, int old, int new)
 {
 	unsigned long oldval, res;
+
+	smp_mb();
 
 	do {
 		__asm__ __volatile__("@ atomic_cmpxchg\n"
@@ -94,6 +104,8 @@ static inline int atomic_cmpxchg(atomic_t *ptr, int old, int new)
 		    : "r" (&ptr->counter), "Ir" (old), "r" (new)
 		    : "cc");
 	} while (res);
+
+	smp_mb();
 
 	return oldval;
 }
