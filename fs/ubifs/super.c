@@ -360,6 +360,11 @@ static void ubifs_delete_inode(struct inode *inode)
 out:
 	if (ui->dirty)
 		ubifs_release_dirty_inode_budget(c, ui);
+	else {
+		/* We've deleted something - clean the "no space" flags */
+		c->nospace = c->nospace_rp = 0;
+		smp_wmb();
+	}
 	clear_inode(inode);
 }
 
@@ -1182,6 +1187,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (!ubifs_compr_present(c->default_compr)) {
 		ubifs_err("'compressor \"%s\" is not compiled in",
 			  ubifs_compr_name(c->default_compr));
+		err = -ENOTSUPP;
 		goto out_free;
 	}
 
