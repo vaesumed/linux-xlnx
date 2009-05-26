@@ -1375,6 +1375,9 @@ static void super_1_sync(mddev_t *mddev, mdk_rdev_t *rdev)
 
 	sb->raid_disks = cpu_to_le32(mddev->raid_disks);
 	sb->size = cpu_to_le64(mddev->dev_sectors);
+	sb->chunksize = cpu_to_le32(mddev->chunk_size >> 9);
+	sb->level = cpu_to_le32(mddev->level);
+	sb->layout = cpu_to_le32(mddev->layout);
 
 	if (mddev->bitmap && mddev->bitmap_file == NULL) {
 		sb->bitmap_offset = cpu_to_le32((__u32)mddev->bitmap_offset);
@@ -3303,7 +3306,9 @@ static ssize_t
 action_show(mddev_t *mddev, char *page)
 {
 	char *type = "idle";
-	if (test_bit(MD_RECOVERY_RUNNING, &mddev->recovery) ||
+	if (test_bit(MD_RECOVERY_FROZEN, &mddev->recovery))
+		type = "frozen";
+	else if (test_bit(MD_RECOVERY_RUNNING, &mddev->recovery) ||
 	    (!mddev->ro && test_bit(MD_RECOVERY_NEEDED, &mddev->recovery))) {
 		if (test_bit(MD_RECOVERY_RESHAPE, &mddev->recovery))
 			type = "reshape";
@@ -3326,7 +3331,12 @@ action_store(mddev_t *mddev, const char *page, size_t len)
 	if (!mddev->pers || !mddev->pers->sync_request)
 		return -EINVAL;
 
-	if (cmd_match(page, "idle")) {
+	if (cmd_match(page, "frozen"))
+		set_bit(MD_RECOVERY_FROZEN, &mddev->recovery);
+	else
+		clear_bit(MD_RECOVERY_FROZEN, &mddev->recovery);
+
+	if (cmd_match(page, "idle") || cmd_match(page, "frozen")) {
 		if (mddev->sync_thread) {
 			set_bit(MD_RECOVERY_INTR, &mddev->recovery);
 			md_unregister_thread(mddev->sync_thread);
@@ -3680,7 +3690,7 @@ array_size_store(mddev_t *mddev, const char *buf, size_t len)
 		if (strict_blocks_to_sectors(buf, &sectors) < 0)
 			return -EINVAL;
 		if (mddev->pers && mddev->pers->size(mddev, 0, 0) < sectors)
-			return -EINVAL;
+			return -E2BIG;
 
 		mddev->external_size = 1;
 	}
