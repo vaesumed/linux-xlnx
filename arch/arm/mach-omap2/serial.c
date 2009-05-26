@@ -469,9 +469,17 @@ static struct kobj_attribute sleep_timeout_attr =
 static inline void omap_uart_idle_init(struct omap_uart_state *uart) {}
 #endif /* CONFIG_PM */
 
+static struct platform_device serial_device = {
+	.name			= "serial8250",
+	.id			= PLAT8250_DEV_PLATFORM,
+	.dev			= {
+		.platform_data	= serial_platform_data,
+	},
+};
+
 void __init omap_serial_init(void)
 {
-	int i;
+	int i, ret;
 	const struct omap_uart_config *info;
 	char name[16];
 
@@ -520,21 +528,8 @@ void __init omap_serial_init(void)
 
 		omap_uart_enable_clocks(uart);
 		omap_uart_reset(uart);
-		omap_uart_idle_init(uart);
+		omap_uart_idle_init(uart);		
 	}
-}
-
-static struct platform_device serial_device = {
-	.name			= "serial8250",
-	.id			= PLAT8250_DEV_PLATFORM,
-	.dev			= {
-		.platform_data	= serial_platform_data,
-	},
-};
-
-static int __init omap_init(void)
-{
-	int ret;
 
 	ret = platform_device_register(&serial_device);
 
@@ -543,6 +538,5 @@ static int __init omap_init(void)
 		ret = sysfs_create_file(&serial_device.dev.kobj,
 					&sleep_timeout_attr.attr);
 #endif
-	return ret;
+
 }
-arch_initcall(omap_init);
