@@ -46,7 +46,7 @@
 #include <mach/mainstone.h>
 #include <mach/audio.h>
 #include <mach/pxafb.h>
-#include <mach/i2c.h>
+#include <plat/i2c.h>
 #include <mach/mmc.h>
 #include <mach/irda.h>
 #include <mach/ohci.h>
@@ -107,7 +107,12 @@ static unsigned long mainstone_pin_config[] = {
 	GPIO57_nIOIS16,
 
 	/* AC97 */
+	GPIO31_AC97_SYNC,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
 	GPIO45_AC97_SYSCLK,
+	GPIO113_AC97_nRESET,
 
 	/* Keypad */
 	GPIO93_KP_DKIN_0,
