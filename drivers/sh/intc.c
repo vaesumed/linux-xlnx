@@ -671,7 +671,7 @@ unsigned int intc_evt2irq(unsigned int vector)
 
 void __init register_intc_controller(struct intc_desc *desc)
 {
-	unsigned int i, k, smp;
+	unsigned int i, k, smp, cpu = smp_processor_id();
 	struct intc_desc_int *d;
 
 	d = alloc_bootmem(sizeof(*d));
@@ -770,11 +770,22 @@ void __init register_intc_controller(struct intc_desc *desc)
 	/* register the vectors one by one */
 	for (i = 0; i < desc->nr_vectors; i++) {
 		struct intc_vect *vect = desc->vectors + i;
-
+		unsigned int irq = evt2irq(vect->vect);
+#ifdef CONFIG_SPARSE_IRQ
+		struct irq_desc *irq_desc;
+#endif
 		if (!vect->enum_id)
 			continue;
 
-		intc_register_irq(desc, d, vect->enum_id, evt2irq(vect->vect));
+#ifdef CONFIG_SPARSE_IRQ
+		irq_desc = irq_to_desc_alloc_cpu(irq, cpu);
+		if (unlikely(!irq_desc)) {
+			printk(KERN_INFO "can not get irq_desc for %d\n", irq);
+			continue;
+		}
+#endif
+
+		intc_register_irq(desc, d, vect->enum_id, irq);
 	}
 }
 
