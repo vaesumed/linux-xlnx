@@ -1157,7 +1157,7 @@ int main(int argc, char *argv[]) {
 Note: Here we hard coded the path name. The debugfs mount is not
 guaranteed to be at /debug (and is more commonly at
 /sys/kernel/debug). For simple one time traces, the above is
-sufficent. For anything else, a search through /proc/mounts may
+sufficient. For anything else, a search through /proc/mounts may
 be needed to find where the debugfs file-system is mounted.
 
 
