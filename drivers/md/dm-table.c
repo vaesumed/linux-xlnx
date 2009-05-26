@@ -266,6 +266,8 @@ static void free_devices(struct list_head *devices)
 	list_for_each_safe(tmp, next, devices) {
 		struct dm_dev_internal *dd =
 		    list_entry(tmp, struct dm_dev_internal, list);
+		DMWARN("dm_table_destroy: dm_put_device call missing for %s",
+		       dd->dm_dev.name);
 		kfree(dd);
 	}
 }
@@ -295,12 +297,8 @@ void dm_table_destroy(struct dm_table *t)
 	vfree(t->highs);
 
 	/* free the device list */
-	if (t->devices.next != &t->devices) {
-		DMWARN("devices still present during destroy: "
-		       "dm_table_remove_device calls missing");
-
+	if (t->devices.next != &t->devices)
 		free_devices(&t->devices);
-	}
 
 	kfree(t);
 }
@@ -384,15 +382,42 @@ static void close_dev(struct dm_dev_internal *d, struct mapped_device *md)
 /*
  * If possible, this checks an area of a destination device is valid.
  */
-static int check_device_area(struct dm_dev_internal *dd, sector_t start,
-			     sector_t len)
+static int device_area_is_valid(struct dm_target *ti, struct block_device *bdev,
+			     sector_t start, sector_t len)
 {
-	sector_t dev_size = dd->dm_dev.bdev->bd_inode->i_size >> SECTOR_SHIFT;
+	sector_t dev_size = bdev->bd_inode->i_size >> SECTOR_SHIFT;
+	unsigned short hardsect_size_sectors = ti->limits.hardsect_size >>
+					       SECTOR_SHIFT;
+	char b[BDEVNAME_SIZE];
 
 	if (!dev_size)
 		return 1;
 
-	return ((start < dev_size) && (len <= (dev_size - start)));
+	if ((start >= dev_size) || (start + len > dev_size)) {
+		DMWARN("%s: %s too small for target",
+		       dm_device_name(ti->table->md), bdevname(bdev, b));
+		return 0;
+	}
+
+	if (hardsect_size_sectors <= 1)
+		return 1;
+
+	if (start & (hardsect_size_sectors - 1)) {
+		DMWARN("%s: start=%llu not aligned to h/w sector of %s",
+		       dm_device_name(ti->table->md),
+		       (unsigned long long)start, bdevname(bdev, b));
+		return 0;
+	}
+
+	if (len & (hardsect_size_sectors - 1)) {
+		DMWARN("%s: len=%llu not aligned to h/w sector size %hu of %s",
+		       dm_device_name(ti->table->md),
+		       (unsigned long long)len,
+		       ti->limits.hardsect_size, bdevname(bdev, b));
+		return 0;
+	}
+
+	return 1;
 }
 
 /*
@@ -478,14 +503,7 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 	}
 	atomic_inc(&dd->count);
 
-	if (!check_device_area(dd, start, len)) {
-		DMWARN("device %s too small for target", path);
-		dm_put_device(ti, &dd->dm_dev);
-		return -EINVAL;
-	}
-
 	*result = &dd->dm_dev;
-
 	return 0;
 }
 
@@ -553,8 +571,16 @@ int dm_get_device(struct dm_target *ti, const char *path, sector_t start,
 	int r = __table_get_device(ti->table, ti, path,
 				   start, len, mode, result);
 
-	if (!r)
-		dm_set_device_limits(ti, (*result)->bdev);
+	if (r)
+		return r;
+
+	dm_set_device_limits(ti, (*result)->bdev);
+
+	if (!device_area_is_valid(ti, (*result)->bdev, start, len)) {
+		dm_put_device(ti, *result);
+		*result = NULL;
+		return -EINVAL;
+	}
 
 	return r;
 }
@@ -693,6 +719,71 @@ static void check_for_valid_limits(struct io_restrictions *rs)
 		rs->bounce_pfn = -1;
 }
 
+/*
+ * Impose necessary and sufficient conditions on a devices's table such
+ * that any incoming bio which respects its hardsect_size can be
+ * processed successfully.  If it falls across the boundary between
+ * two or more targets, the size of each piece it gets split into must
+ * be compatible with the hardsect_size of the target processing it.
+ */
+static int validate_hardsect_alignment(struct dm_table *table)
+{
+	/*
+	 * This function uses arithmetic modulo the hardsect_size
+	 * (in units of 512-byte sectors).
+	 */
+	unsigned short device_hardsect_size_sects =
+			    table->limits.hardsect_size >> SECTOR_SHIFT;
+
+	/*
+	 * Offset of the start of the next table entry, mod hardsect_size.
+	 */
+	unsigned short next_target_start = 0;
+
+	/*
+	 * Given an aligned bio that extends beyond the end of a
+	 * target, how many sectors must the next target handle?
+	 */
+	unsigned short remaining = 0;
+
+	struct dm_target *uninitialized_var(ti);
+	unsigned i = 0;
+
+	/*
+	 * Check each entry in the table in turn.
+	 */
+	while (i < dm_table_get_num_targets(table)) {
+		ti = dm_table_get_target(table, i++);
+
+		/*
+		 * If the remaining sectors fall entirely within this
+		 * table entry are they compatible with its hardsect_size?
+		 */
+		if (remaining < ti->len &&
+		    remaining & ((ti->limits.hardsect_size >>
+				  SECTOR_SHIFT) - 1))
+			break;	/* Error */
+
+		next_target_start =
+		    (unsigned short) ((next_target_start + ti->len) &
+				      (device_hardsect_size_sects - 1));
+		remaining = next_target_start ?
+		    device_hardsect_size_sects - next_target_start : 0;
+	}
+
+	if (remaining) {
+		DMWARN("%s: table line %u (start sect %llu len %llu) "
+		       "not aligned to hardware sector size %hu",
+		       dm_device_name(table->md), i,
+		       (unsigned long long) ti->begin,
+		       (unsigned long long) ti->len,
+		       table->limits.hardsect_size);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int dm_table_add_target(struct dm_table *t, const char *type,
 			sector_t start, sector_t len, char *params)
 {
@@ -791,6 +882,10 @@ int dm_table_complete(struct dm_table *t)
 	unsigned int leaf_nodes;
 
 	check_for_valid_limits(&t->limits);
+
+	r = validate_hardsect_alignment(t);
+	if (r)
+		return r;
 
 	/* how many indexes will the btree have ? */
 	leaf_nodes = dm_div_up(t->num_targets, KEYS_PER_NODE);
