@@ -38,8 +38,8 @@
 #define OMAP1_SRAM_VA		VMALLOC_END
 #define OMAP2_SRAM_PA		0x40200000
 #define OMAP2_SRAM_PUB_PA	0x4020f800
-#define OMAP2_SRAM_VA		VMALLOC_END
-#define OMAP2_SRAM_PUB_VA	(VMALLOC_END + 0x800)
+#define OMAP2_SRAM_VA		0xe3000000
+#define OMAP2_SRAM_PUB_VA	(OMAP2_SRAM_VA + 0x800)
 #define OMAP3_SRAM_PA           0x40200000
 #define OMAP3_SRAM_VA           0xd7000000
 #define OMAP3_SRAM_PUB_PA       0x40208000
@@ -201,6 +201,15 @@ void __init omap_map_sram(void)
 		base = OMAP3_SRAM_PA;
 		base = ROUND_DOWN(base, PAGE_SIZE);
 		omap_sram_io_desc[0].pfn = __phys_to_pfn(base);
+
+		/*
+		 * SRAM must be marked as non-cached on OMAP3 since the
+		 * CORE DPLL M2 divider change code (in SRAM) runs with the
+		 * SDRAM controller disabled, and if it is marked cached,
+		 * the ARM may attempt to write cache lines back to SDRAM
+		 * which will cause the system to hang.
+		 */
+		omap_sram_io_desc[0].type = MT_MEMORY_NONCACHED;
 	}
 
 	omap_sram_io_desc[0].length = 1024 * 1024;	/* Use section desc */
@@ -242,20 +251,13 @@ void * omap_sram_push(void * start, unsigned long size)
 	return (void *)omap_sram_ceil;
 }
 
-static void omap_sram_error(void)
-{
-	panic("Uninitialized SRAM function\n");
-}
-
 #ifdef CONFIG_ARCH_OMAP1
 
 static void (*_omap_sram_reprogram_clock)(u32 dpllctl, u32 ckctl);
 
 void omap_sram_reprogram_clock(u32 dpllctl, u32 ckctl)
 {
-	if (!_omap_sram_reprogram_clock)
-		omap_sram_error();
-
+	BUG_ON(!_omap_sram_reprogram_clock);
 	_omap_sram_reprogram_clock(dpllctl, ckctl);
 }
 
@@ -280,9 +282,7 @@ static void (*_omap2_sram_ddr_init)(u32 *slow_dll_ctrl, u32 fast_dll_ctrl,
 void omap2_sram_ddr_init(u32 *slow_dll_ctrl, u32 fast_dll_ctrl,
 		   u32 base_cs, u32 force_unlock)
 {
-	if (!_omap2_sram_ddr_init)
-		omap_sram_error();
-
+	BUG_ON(!_omap2_sram_ddr_init);
 	_omap2_sram_ddr_init(slow_dll_ctrl, fast_dll_ctrl,
 			     base_cs, force_unlock);
 }
@@ -292,9 +292,7 @@ static void (*_omap2_sram_reprogram_sdrc)(u32 perf_level, u32 dll_val,
 
 void omap2_sram_reprogram_sdrc(u32 perf_level, u32 dll_val, u32 mem_type)
 {
-	if (!_omap2_sram_reprogram_sdrc)
-		omap_sram_error();
-
+	BUG_ON(!_omap2_sram_reprogram_sdrc);
 	_omap2_sram_reprogram_sdrc(perf_level, dll_val, mem_type);
 }
 
@@ -302,9 +300,7 @@ static u32 (*_omap2_set_prcm)(u32 dpll_ctrl_val, u32 sdrc_rfr_val, int bypass);
 
 u32 omap2_set_prcm(u32 dpll_ctrl_val, u32 sdrc_rfr_val, int bypass)
 {
-	if (!_omap2_set_prcm)
-		omap_sram_error();
-
+	BUG_ON(!_omap2_set_prcm);
 	return _omap2_set_prcm(dpll_ctrl_val, sdrc_rfr_val, bypass);
 }
 #endif
@@ -356,16 +352,15 @@ static inline int omap243x_sram_init(void)
 static u32 (*_omap3_sram_configure_core_dpll)(u32 sdrc_rfr_ctrl,
 					      u32 sdrc_actim_ctrla,
 					      u32 sdrc_actim_ctrlb,
-					      u32 m2);
+					      u32 m2, u32 unlock_dll);
 u32 omap3_configure_core_dpll(u32 sdrc_rfr_ctrl, u32 sdrc_actim_ctrla,
-			      u32 sdrc_actim_ctrlb, u32 m2)
+			      u32 sdrc_actim_ctrlb, u32 m2, u32 unlock_dll)
 {
-	if (!_omap3_sram_configure_core_dpll)
-		omap_sram_error();
-
+	BUG_ON(!_omap3_sram_configure_core_dpll);
 	return _omap3_sram_configure_core_dpll(sdrc_rfr_ctrl,
 					       sdrc_actim_ctrla,
-					       sdrc_actim_ctrlb, m2);
+					       sdrc_actim_ctrlb, m2,
+					       unlock_dll);
 }
 
 /* REVISIT: Should this be same as omap34xx_sram_init() after off-idle? */

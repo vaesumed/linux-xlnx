@@ -144,6 +144,10 @@
 #define OMAP343X_CONTROL_PBIAS_LITE	(OMAP2_CONTROL_GENERAL + 0x02b0)
 #define OMAP343X_CONTROL_TEMP_SENSOR	(OMAP2_CONTROL_GENERAL + 0x02b4)
 
+/* 34xx D2D idle-related pins, handled by PM core */
+#define OMAP3_PADCONF_SAD2D_MSTANDBY   0x250
+#define OMAP3_PADCONF_SAD2D_IDLEACK    0x254
+
 /*
  * REVISIT: This list of registers is not comprehensive - there are more
  * that should be added.
@@ -188,6 +192,15 @@
 #define OMAP2_PBIASSPEEDCTRL0		(1 << 2)
 #define OMAP2_PBIASLITEPWRDNZ0		(1 << 1)
 #define OMAP2_PBIASLITEVMODE0		(1 << 0)
+
+/* CONTROL_IVA2_BOOTMOD bits */
+#define OMAP3_IVA2_BOOTMOD_SHIFT	0
+#define OMAP3_IVA2_BOOTMOD_MASK		(0xf << 0)
+#define OMAP3_IVA2_BOOTMOD_IDLE		(0x1 << 0)
+
+/* CONTROL_PADCONF_X bits */
+#define OMAP3_PADCONF_WAKEUPEVENT0	(1 << 15)
+#define OMAP3_PADCONF_WAKEUPENABLE0	(1 << 14)
 
 #ifndef __ASSEMBLY__
 #if defined(CONFIG_ARCH_OMAP2) || defined(CONFIG_ARCH_OMAP3)
