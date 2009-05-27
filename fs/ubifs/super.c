@@ -360,6 +360,11 @@ static void ubifs_delete_inode(struct inode *inode)
 out:
 	if (ui->dirty)
 		ubifs_release_dirty_inode_budget(c, ui);
+	else {
+		/* We've deleted something - clean the "no space" flags */
+		c->nospace = c->nospace_rp = 0;
+		smp_wmb();
+	}
 	clear_inode(inode);
 }
 
@@ -1182,6 +1187,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	if (!ubifs_compr_present(c->default_compr)) {
 		ubifs_err("'compressor \"%s\" is not compiled in",
 			  ubifs_compr_name(c->default_compr));
+		err = -ENOTSUPP;
 		goto out_free;
 	}
 
@@ -1939,7 +1945,6 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_magic = UBIFS_SUPER_MAGIC;
 	sb->s_blocksize = UBIFS_BLOCK_SIZE;
 	sb->s_blocksize_bits = UBIFS_BLOCK_SHIFT;
-	sb->s_dev = c->vi.cdev;
 	sb->s_maxbytes = c->max_inode_sz = key_max_inode_size(c);
 	if (c->max_inode_sz > MAX_LFS_FILESIZE)
 		sb->s_maxbytes = c->max_inode_sz = MAX_LFS_FILESIZE;
@@ -1984,16 +1989,9 @@ out_free:
 static int sb_test(struct super_block *sb, void *data)
 {
 	dev_t *dev = data;
+	struct ubifs_info *c = sb->s_fs_info;
 
-	return sb->s_dev == *dev;
-}
-
-static int sb_set(struct super_block *sb, void *data)
-{
-	dev_t *dev = data;
-
-	sb->s_dev = *dev;
-	return 0;
+	return c->vi.cdev == *dev;
 }
 
 static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
@@ -2021,7 +2019,7 @@ static int ubifs_get_sb(struct file_system_type *fs_type, int flags,
 
 	dbg_gen("opened ubi%d_%d", vi.ubi_num, vi.vol_id);
 
-	sb = sget(fs_type, &sb_test, &sb_set, &vi.cdev);
+	sb = sget(fs_type, &sb_test, &set_anon_super, &vi.cdev);
 	if (IS_ERR(sb)) {
 		err = PTR_ERR(sb);
 		goto out_close;
@@ -2061,16 +2059,11 @@ out_close:
 	return err;
 }
 
-static void ubifs_kill_sb(struct super_block *sb)
-{
-	generic_shutdown_super(sb);
-}
-
 static struct file_system_type ubifs_fs_type = {
 	.name    = "ubifs",
 	.owner   = THIS_MODULE,
 	.get_sb  = ubifs_get_sb,
-	.kill_sb = ubifs_kill_sb
+	.kill_sb = kill_anon_super,
 };
 
 /*
