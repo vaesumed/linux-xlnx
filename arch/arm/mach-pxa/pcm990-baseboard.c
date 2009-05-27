@@ -28,7 +28,7 @@
 #include <media/soc_camera.h>
 
 #include <asm/gpio.h>
-#include <mach/i2c.h>
+#include <plat/i2c.h>
 #include <mach/camera.h>
 #include <asm/mach/map.h>
 #include <mach/pxa27x.h>
@@ -58,6 +58,13 @@ static unsigned long pcm990_pin_config[] __initdata = {
 	/* I2C */
 	GPIO117_I2C_SCL,
 	GPIO118_I2C_SDA,
+
+	/* AC97 */
+	GPIO31_AC97_SYNC,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
+	GPIO113_AC97_nRESET,
 };
 
 /*
