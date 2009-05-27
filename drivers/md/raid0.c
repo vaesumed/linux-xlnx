@@ -240,10 +240,10 @@ static int create_strip_zones(mddev_t *mddev)
 	 * now since we have the hard sector sizes, we can make sure
 	 * chunk size is a multiple of that sector size
 	 */
-	if (mddev->chunk_size % mddev->queue->hardsect_size) {
+	if ((mddev->chunk_sectors << 9) % mddev->queue->hardsect_size) {
 		printk(KERN_ERR "%s chunk_size of %d not valid\n",
 		       mdname(mddev),
-		       mddev->chunk_size);
+		       mddev->chunk_sectors << 9);
 		goto abort;
 	}
 	printk(KERN_INFO "raid0: done.\n");
@@ -272,10 +272,10 @@ static int raid0_mergeable_bvec(struct request_queue *q,
 	mddev_t *mddev = q->queuedata;
 	sector_t sector = bvm->bi_sector + get_start_sect(bvm->bi_bdev);
 	int max;
-	unsigned int chunk_sectors = mddev->chunk_size >> 9;
+	unsigned int chunk_sectors = mddev->chunk_sectors;
 	unsigned int bio_sectors = bvm->bi_size >> 9;
 
-	if (is_power_of_2(mddev->chunk_size))
+	if (is_power_of_2(mddev->chunk_sectors))
 		max =  (chunk_sectors - ((sector & (chunk_sectors-1))
 						+ bio_sectors)) << 9;
 	else
@@ -306,12 +306,12 @@ static int raid0_run(mddev_t *mddev)
 {
 	int ret;
 
-	if (mddev->chunk_size == 0 ||
-	    !is_power_of_2(mddev->chunk_size)) {
+	if (mddev->chunk_sectors == 0 ||
+	    !is_power_of_2(mddev->chunk_sectors)) {
 		printk(KERN_ERR "md/raid0: chunk size must be a power of 2.\n");
 		return -EINVAL;
 	}
-	blk_queue_max_sectors(mddev->queue, mddev->chunk_size >> 9);
+	blk_queue_max_sectors(mddev->queue, mddev->chunk_sectors);
 	mddev->queue->queue_lock = &mddev->queue->__queue_lock;
 
 	ret = create_strip_zones(mddev);
@@ -333,7 +333,8 @@ static int raid0_run(mddev_t *mddev)
 	 * chunksize should be used in that case.
 	 */
 	{
-		int stripe = mddev->raid_disks * mddev->chunk_size / PAGE_SIZE;
+		int stripe = mddev->raid_disks *
+			(mddev->chunk_sectors << 9) / PAGE_SIZE;
 		if (mddev->queue->backing_dev_info.ra_pages < 2* stripe)
 			mddev->queue->backing_dev_info.ra_pages = 2* stripe;
 	}
@@ -384,9 +385,9 @@ static mdk_rdev_t *map_sector(mddev_t *mddev, struct strip_zone *zone,
 	unsigned int sect_in_chunk;
 	sector_t chunk;
 	raid0_conf_t *conf = mddev->private;
-	unsigned int chunk_sects = mddev->chunk_size >> 9;
+	unsigned int chunk_sects = mddev->chunk_sectors;
 
-	if (is_power_of_2(mddev->chunk_size)) {
+	if (is_power_of_2(mddev->chunk_sectors)) {
 		int chunksect_bits = ffz(~chunk_sects);
 		/* find the sector offset inside the chunk */
 		sect_in_chunk  = sector & (chunk_sects - 1);
@@ -416,7 +417,7 @@ static mdk_rdev_t *map_sector(mddev_t *mddev, struct strip_zone *zone,
 static inline int is_io_in_chunk_boundary(mddev_t *mddev,
 			unsigned int chunk_sects, struct bio *bio)
 {
-	if (likely(is_power_of_2(mddev->chunk_size))) {
+	if (likely(is_power_of_2(mddev->chunk_sectors))) {
 		return chunk_sects >= ((bio->bi_sector & (chunk_sects-1))
 					+ (bio->bi_size >> 9));
 	} else{
@@ -447,7 +448,7 @@ static int raid0_make_request(struct request_queue *q, struct bio *bio)
 		      bio_sectors(bio));
 	part_stat_unlock();
 
-	chunk_sects = mddev->chunk_size >> 9;
+	chunk_sects = mddev->chunk_sectors;
 	if (unlikely(!is_io_in_chunk_boundary(mddev, chunk_sects, bio))) {
 		sector_t sector = bio->bi_sector;
 		struct bio_pair *bp;
@@ -458,7 +459,7 @@ static int raid0_make_request(struct request_queue *q, struct bio *bio)
 		/* This is a one page bio that upper layers
 		 * refuse to split for us, so we need to split it.
 		 */
-		if (likely(is_power_of_2(mddev->chunk_size)))
+		if (likely(is_power_of_2(mddev->chunk_sectors)))
 			bp = bio_split(bio, chunk_sects - (sector &
 							   (chunk_sects-1)));
 		else
@@ -522,7 +523,7 @@ static void raid0_status(struct seq_file *seq, mddev_t *mddev)
 		zone_start = conf->strip_zone[j].zone_end;
 	}
 #endif
-	seq_printf(seq, " %dk chunks", mddev->chunk_size/1024);
+	seq_printf(seq, " %dk chunks", mddev->chunk_sectors / 2);
 	return;
 }
 
