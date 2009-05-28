@@ -1,0 +1,89 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.30-rc7-git2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard cd86a536c81e9300d984327517548ca0652eebf9
+HEAD is now at cd86a53 Merge branch 'x86-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-lm78-add-missing-__devexit_p.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+hwmon-tmp401-01-new-driver.patch
+hwmon-tmp401-02-add-support-for-TI-TMP411.patch
+hwmon-tmp401-03-add-documentation.patch
+hwmon-w83627ehf-add-W83627DHG-P-support.patch
+hwmon-pci-quirk-for-MSI-7031.patch
+hwmon-updated-documentation-on-alarms.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 0d4bfbe...d2aaf17 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing ttydev based on 59a3759d0fe8d969888c741bb33f4946e4d3750d
+$ cd ../quilt-tmp
+$ git reset --hard 59a3759d0fe8d969888c741bb33f4946e4d3750d
+HEAD is now at 59a3759 Linux 2.6.30-rc7
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+cyclades-firmware-ze
+cyclades-fw-dontreset
+cyclades-remove-spare-null-check
+tty-port-carrierclose
+tty-port-drain-delay
+tty-usb-use-port
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:306: trailing whitespace.
+	else 
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2195: trailing whitespace.
+	serial_do_down(port);		
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2221: trailing whitespace.
+	return 1;	
+warning: 3 lines add whitespace errors.
+tty-usb-acm-port
+synclink-pio-mode
+tty-cyclades-cast-clean
+tty-cyclades-cache-hw-ver
+tty-cyclades-macros-to-inlines
+tty-cyclades-kill-typedefs
+tty-cyclades-nports
+tty-cyclades-remove-unused-vars
+tty-usb-acm-kref
+tty-usb-acm-clean
+net-slip-ttyfix
+serial-async-bitnum
+tty-rocket-fixbitops
+tty-epca-fixbitops
+serial-8250-pci-ex1370
+tty-x86-termio-line
+tty-throttle-race-fix
+serial-maintainer
+pty-fix-comment-1
+serial-8250-gsc-warn-fix
+tty-polling-open-oops
+tty-ldisc-extract
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:67: trailing whitespace.
+ *	In order to wait for any existing references to complete see 
+warning: 1 line adds whitespace errors.
+tty-ldisc-mutex
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:88: trailing whitespace.
+		if ( tty->ldisc->ops->flush_buffer )  
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:660: trailing whitespace.
+		
+warning: 2 lines add whitespace errors.
+tty-usb-iuu-lock
+tty-iuu-stopbits
+tty-iuu-termios
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:54: space before tab in indent.
+ 	if (old_termios)
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:55: space before tab in indent.
+ 		tty_termios_copy_hw(tty->termios, old_termios);
+warning: 2 lines add whitespace errors.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 28ec37e...5416b15 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
