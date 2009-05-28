@@ -17,6 +17,7 @@
 #include <linux/bio.h>
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/async.h>
 
 #include <asm/idals.h>
 #include <asm/ebcdic.h>
@@ -603,8 +604,14 @@ static struct dasd_discipline dasd_fba_discipline = {
 static int __init
 dasd_fba_init(void)
 {
+	int ret;
+
 	ASCEBC(dasd_fba_discipline.ebcname, 4);
-	return ccw_driver_register(&dasd_fba_driver);
+	ret = ccw_driver_register(&dasd_fba_driver);
+	if (!ret)
+		async_synchronize_full();
+
+	return ret;
 }
 
 static void __exit

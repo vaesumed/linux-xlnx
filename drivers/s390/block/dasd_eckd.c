@@ -20,6 +20,7 @@
 #include <linux/bio.h>
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/async.h>
 
 #include <asm/debug.h>
 #include <asm/idals.h>
@@ -3277,8 +3278,14 @@ static struct dasd_discipline dasd_eckd_discipline = {
 static int __init
 dasd_eckd_init(void)
 {
+	int ret;
+
 	ASCEBC(dasd_eckd_discipline.ebcname, 4);
-	return ccw_driver_register(&dasd_eckd_driver);
+	ret = ccw_driver_register(&dasd_eckd_driver);
+	if (!ret)
+		async_synchronize_full();
+
+	return ret;
 }
 
 static void __exit
