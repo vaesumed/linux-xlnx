@@ -2518,20 +2518,30 @@ struct sk_buff **tcp_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 	unsigned int thlen;
 	unsigned int flags;
 	unsigned int mss = 1;
+	unsigned int hlen;
+	unsigned int off;
 	int flush = 1;
 	int i;
 
-	th = skb_gro_header(skb, sizeof(*th));
-	if (unlikely(!th))
-		goto out;
+	off = skb_gro_offset(skb);
+	hlen = off + sizeof(*th);
+	th = skb_gro_header_fast(skb, off);
+	if (skb_gro_header_hard(skb, hlen)) {
+		th = skb_gro_header_slow(skb, hlen, off);
+		if (unlikely(!th))
+			goto out;
+	}
 
 	thlen = th->doff * 4;
 	if (thlen < sizeof(*th))
 		goto out;
 
-	th = skb_gro_header(skb, thlen);
-	if (unlikely(!th))
-		goto out;
+	hlen = off + thlen;
+	if (skb_gro_header_hard(skb, hlen)) {
+		th = skb_gro_header_slow(skb, hlen, off);
+		if (unlikely(!th))
+			goto out;
+	}
 
 	skb_gro_pull(skb, thlen);
 
@@ -2544,7 +2554,7 @@ struct sk_buff **tcp_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 
 		th2 = tcp_hdr(p);
 
-		if ((th->source ^ th2->source) | (th->dest ^ th2->dest)) {
+		if (*(u32 *)&th->source ^ *(u32 *)&th2->source) {
 			NAPI_GRO_CB(p)->same_flow = 0;
 			continue;
 		}
@@ -2559,14 +2569,14 @@ found:
 	flush |= flags & TCP_FLAG_CWR;
 	flush |= (flags ^ tcp_flag_word(th2)) &
 		  ~(TCP_FLAG_CWR | TCP_FLAG_FIN | TCP_FLAG_PSH);
-	flush |= (th->ack_seq ^ th2->ack_seq) | (th->window ^ th2->window);
-	for (i = sizeof(*th); !flush && i < thlen; i += 4)
+	flush |= th->ack_seq ^ th2->ack_seq;
+	for (i = sizeof(*th); i < thlen; i += 4)
 		flush |= *(u32 *)((u8 *)th + i) ^
 			 *(u32 *)((u8 *)th2 + i);
 
 	mss = skb_shinfo(p)->gso_size;
 
-	flush |= (len > mss) | !len;
+	flush |= (len - 1) >= mss;
 	flush |= (ntohl(th2->seq) + skb_gro_len(p)) ^ ntohl(th->seq);
 
 	if (flush || skb_gro_receive(head, skb)) {
