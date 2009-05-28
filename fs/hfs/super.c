@@ -49,11 +49,13 @@ MODULE_LICENSE("GPL");
  */
 static void hfs_write_super(struct super_block *sb)
 {
+	lock_super(sb);
 	sb->s_dirt = 0;
-	if (sb->s_flags & MS_RDONLY)
-		return;
+
 	/* sync everything to the buffers */
-	hfs_mdb_commit(sb);
+	if (!(sb->s_flags & MS_RDONLY))
+		hfs_mdb_commit(sb);
+	unlock_super(sb);
 }
 
 /*
@@ -65,9 +67,15 @@ static void hfs_write_super(struct super_block *sb)
  */
 static void hfs_put_super(struct super_block *sb)
 {
+	lock_kernel();
+
+	if (sb->s_dirt)
+		hfs_write_super(sb);
 	hfs_mdb_close(sb);
 	/* release the MDB's resources */
 	hfs_mdb_put(sb);
+
+	unlock_kernel();
 }
 
 /*

@@ -1062,6 +1062,8 @@ xfs_fs_put_super(
 	struct xfs_inode	*rip = mp->m_rootip;
 	int			unmount_event_flags = 0;
 
+	lock_kernel();
+
 	xfs_syncd_stop(mp);
 	xfs_sync_inodes(mp, SYNC_ATTR|SYNC_DELWRI);
 
@@ -1102,6 +1104,8 @@ xfs_fs_put_super(
 	xfs_dmops_put(mp);
 	xfs_free_fsname(mp);
 	kfree(mp);
+
+	unlock_kernel();
 }
 
 STATIC void

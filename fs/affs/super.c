@@ -29,6 +29,8 @@ affs_put_super(struct super_block *sb)
 	struct affs_sb_info *sbi = AFFS_SB(sb);
 	pr_debug("AFFS: put_super()\n");
 
+	lock_kernel();
+
 	if (!(sb->s_flags & MS_RDONLY)) {
 		AFFS_ROOT_TAIL(sb, sbi->s_root_bh)->bm_flag = cpu_to_be32(1);
 		secs_to_datestamp(get_seconds(),
@@ -42,7 +44,8 @@ affs_put_super(struct super_block *sb)
 	affs_brelse(sbi->s_root_bh);
 	kfree(sbi);
 	sb->s_fs_info = NULL;
-	return;
+
+	unlock_kernel();
 }
 
 static void
@@ -51,6 +54,7 @@ affs_write_super(struct super_block *sb)
 	int clean = 2;
 	struct affs_sb_info *sbi = AFFS_SB(sb);
 
+	lock_super(sb);
 	if (!(sb->s_flags & MS_RDONLY)) {
 		//	if (sbi->s_bitmap[i].bm_bh) {
 		//		if (buffer_dirty(sbi->s_bitmap[i].bm_bh)) {
@@ -63,6 +67,7 @@ affs_write_super(struct super_block *sb)
 		sb->s_dirt = !clean;	/* redo until bitmap synced */
 	} else
 		sb->s_dirt = 0;
+	unlock_super(sb);
 
 	pr_debug("AFFS: write_super() at %lu, clean=%d\n", get_seconds(), clean);
 }
