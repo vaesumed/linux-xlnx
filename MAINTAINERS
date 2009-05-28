@@ -4195,6 +4195,11 @@ P:	Matthew Garrett
 M:	mjg59@srcf.ucam.org
 S:	Maintained
 
+OQO WMI EXTRAS DRIVER
+P:	Matthew Garrett
+M:	mjg59@srcf.ucam.org
+S:	Maintained
+
 ORACLE CLUSTER FILESYSTEM 2 (OCFS2)
 P:	Mark Fasheh
 M:	mfasheh@suse.com
