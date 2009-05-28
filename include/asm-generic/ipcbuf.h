@@ -23,7 +23,8 @@ struct ipc64_perm {
 	__kernel_uid32_t	cuid;
 	__kernel_gid32_t	cgid;
 	__kernel_mode_t		mode;
-	unsigned short		__pad1;
+				/* pad if mode_t is u16: */
+	unsigned char		__pad1[4 - sizeof(__kernel_mode_t)];
 	unsigned short		seq;
 	unsigned short		__pad2;
 	unsigned long		__unused1;
