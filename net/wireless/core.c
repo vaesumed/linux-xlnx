@@ -1,7 +1,7 @@
 /*
  * This is the linux wireless configuration interface.
  *
- * Copyright 2006-2008		Johannes Berg <johannes@sipsolutions.net>
+ * Copyright 2006-2009		Johannes Berg <johannes@sipsolutions.net>
  */
 
 #include <linux/if.h>
@@ -14,10 +14,10 @@
 #include <linux/device.h>
 #include <net/genetlink.h>
 #include <net/cfg80211.h>
-#include <net/wireless.h>
 #include "nl80211.h"
 #include "core.h"
 #include "sysfs.h"
+#include "debugfs.h"
 
 /* name for sysfs, %d is appended */
 #define PHY_NAME "phy"
@@ -229,7 +229,7 @@ int cfg80211_dev_rename(struct cfg80211_registered_device *rdev,
 
 /* exported functions */
 
-struct wiphy *wiphy_new(struct cfg80211_ops *ops, int sizeof_priv)
+struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 {
 	static int wiphy_counter;
 
@@ -273,6 +273,16 @@ struct wiphy *wiphy_new(struct cfg80211_ops *ops, int sizeof_priv)
 	device_initialize(&drv->wiphy.dev);
 	drv->wiphy.dev.class = &ieee80211_class;
 	drv->wiphy.dev.platform_data = drv;
+
+	/*
+	 * Initialize wiphy parameters to IEEE 802.11 MIB default values.
+	 * Fragmentation and RTS threshold are disabled by default with the
+	 * special -1 value.
+	 */
+	drv->wiphy.retry_short = 7;
+	drv->wiphy.retry_long = 4;
+	drv->wiphy.frag_threshold = (u32) -1;
+	drv->wiphy.rts_threshold = (u32) -1;
 
 	return &drv->wiphy;
 }
@@ -366,6 +376,8 @@ int wiphy_register(struct wiphy *wiphy)
 		nl80211_send_reg_change_event(&request);
 	}
 
+	cfg80211_debugfs_drv_add(drv);
+
 	res = 0;
 out_unlock:
 	mutex_unlock(&cfg80211_mutex);
@@ -395,6 +407,8 @@ void wiphy_unregister(struct wiphy *wiphy)
 	mutex_lock(&drv->mtx);
 	/* unlock again before freeing */
 	mutex_unlock(&drv->mtx);
+
+	cfg80211_debugfs_drv_del(drv);
 
 	/* If this device got a regulatory hint tell core its
 	 * free to listen now to a new shiny device regulatory hint */
@@ -448,8 +462,28 @@ static int cfg80211_netdev_notifier_call(struct notifier_block * nb,
 				"symlink to netdev!\n");
 		}
 		dev->ieee80211_ptr->netdev = dev;
+#ifdef CONFIG_WIRELESS_EXT
+		dev->ieee80211_ptr->wext.default_key = -1;
+		dev->ieee80211_ptr->wext.default_mgmt_key = -1;
+#endif
 		mutex_unlock(&rdev->devlist_mtx);
 		break;
+	case NETDEV_GOING_DOWN:
+		if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_ADHOC)
+			break;
+		if (!dev->ieee80211_ptr->ssid_len)
+			break;
+		cfg80211_leave_ibss(rdev, dev, true);
+		break;
+	case NETDEV_UP:
+#ifdef CONFIG_WIRELESS_EXT
+		if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_ADHOC)
+			break;
+		if (!dev->ieee80211_ptr->wext.ibss.ssid_len)
+			break;
+		cfg80211_join_ibss(rdev, dev, &dev->ieee80211_ptr->wext.ibss);
+		break;
+#endif
 	case NETDEV_UNREGISTER:
 		mutex_lock(&rdev->devlist_mtx);
 		if (!list_empty(&dev->ieee80211_ptr->list)) {
