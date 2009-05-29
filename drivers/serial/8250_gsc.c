@@ -41,7 +41,7 @@ static int __init serial_init_chip(struct parisc_device *dev)
 			printk(KERN_INFO
 				"Serial: device 0x%lx not configured.\n"
 				"Enable support for Wax, Lasi, Asp or Dino.\n",
-				dev->hpa.start);
+				(unsigned long)dev->hpa.start);
 		return -ENODEV;
 	}
 
