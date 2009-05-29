@@ -85,6 +85,8 @@ source "drivers/staging/altpciechdma/Kconfig"
 
 source "drivers/staging/rtl8187se/Kconfig"
 
+source "drivers/staging/rtl8192su/Kconfig"
+
 source "drivers/staging/rspiusb/Kconfig"
 
 source "drivers/staging/mimio/Kconfig"
@@ -114,6 +116,8 @@ source "drivers/staging/heci/Kconfig"
 source "drivers/staging/line6/Kconfig"
 
 source "drivers/staging/serqt_usb/Kconfig"
+
+source "drivers/staging/cpc-usb/Kconfig"
 
 endif # !STAGING_EXCLUDE_BUILD
 endif # STAGING
