@@ -64,6 +64,7 @@ SECTIONS
   /* writeable */
   . = ALIGN(PAGE_SIZE);
   .data : AT(ADDR(.data) - LOAD_OFFSET) {	/* Data */
+	_sdata = .;		/* Start of data section */
 	DATA_DATA
 	CONSTRUCTORS
 	} :data
