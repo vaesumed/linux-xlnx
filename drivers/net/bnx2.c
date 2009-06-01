@@ -48,6 +48,7 @@
 #include <linux/cache.h>
 #include <linux/firmware.h>
 #include <linux/log2.h>
+#include <linux/list.h>
 
 #include "bnx2.h"
 #include "bnx2_fw.h"
@@ -2630,14 +2631,15 @@ bnx2_tx_int(struct bnx2 *bp, struct bnx2_napi *bnapi, int budget)
 		tx_buf = &txr->tx_buf_ring[sw_ring_cons];
 		skb = tx_buf->skb;
 
+		/* prefetch skb_end_pointer() to speedup skb_shinfo(skb) */
+		prefetch(&skb->end);
+
 		/* partial BD completions possible with TSO packets */
-		if (skb_is_gso(skb)) {
+		if (tx_buf->is_gso) {
 			u16 last_idx, last_ring_idx;
 
-			last_idx = sw_cons +
-				skb_shinfo(skb)->nr_frags + 1;
-			last_ring_idx = sw_ring_cons +
-				skb_shinfo(skb)->nr_frags + 1;
+			last_idx = sw_cons + tx_buf->nr_frags + 1;
+			last_ring_idx = sw_ring_cons + tx_buf->nr_frags + 1;
 			if (unlikely(last_ring_idx >= MAX_TX_DESC_CNT)) {
 				last_idx++;
 			}
@@ -2649,7 +2651,7 @@ bnx2_tx_int(struct bnx2 *bp, struct bnx2_napi *bnapi, int budget)
 		skb_dma_unmap(&bp->pdev->dev, skb, DMA_TO_DEVICE);
 
 		tx_buf->skb = NULL;
-		last = skb_shinfo(skb)->nr_frags;
+		last = tx_buf->nr_frags;
 
 		for (i = 0; i < last; i++) {
 			sw_cons = NEXT_TX_BD(sw_cons);
@@ -2662,7 +2664,8 @@ bnx2_tx_int(struct bnx2 *bp, struct bnx2_napi *bnapi, int budget)
 		if (tx_pkt == budget)
 			break;
 
-		hw_cons = bnx2_get_hw_tx_cons(bnapi);
+		if (hw_cons == sw_cons)
+			hw_cons = bnx2_get_hw_tx_cons(bnapi);
 	}
 
 	txr->hw_tx_cons = hw_cons;
@@ -3308,7 +3311,7 @@ bnx2_set_rx_mode(struct net_device *dev)
 {
 	struct bnx2 *bp = netdev_priv(dev);
 	u32 rx_mode, sort_mode;
-	struct dev_addr_list *uc_ptr;
+	struct netdev_hw_addr *ha;
 	int i;
 
 	if (!netif_running(dev))
@@ -3367,21 +3370,19 @@ bnx2_set_rx_mode(struct net_device *dev)
 		sort_mode |= BNX2_RPM_SORT_USER0_MC_HSH_EN;
 	}
 
-	uc_ptr = NULL;
 	if (dev->uc_count > BNX2_MAX_UNICAST_ADDRESSES) {
 		rx_mode |= BNX2_EMAC_RX_MODE_PROMISCUOUS;
 		sort_mode |= BNX2_RPM_SORT_USER0_PROM_EN |
 			     BNX2_RPM_SORT_USER0_PROM_VLAN;
 	} else if (!(dev->flags & IFF_PROMISC)) {
-		uc_ptr = dev->uc_list;
-
 		/* Add all entries into to the match filter list */
-		for (i = 0; i < dev->uc_count; i++) {
-			bnx2_set_mac_addr(bp, uc_ptr->da_addr,
+		i = 0;
+		list_for_each_entry(ha, &dev->uc_list, list) {
+			bnx2_set_mac_addr(bp, ha->addr,
 					  i + BNX2_START_UNICAST_ADDRESS_INDEX);
 			sort_mode |= (1 <<
 				      (i + BNX2_START_UNICAST_ADDRESS_INDEX));
-			uc_ptr = uc_ptr->next;
+			i++;
 		}
 
 	}
@@ -6179,6 +6180,8 @@ bnx2_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	txbd->tx_bd_vlan_tag_flags = vlan_tag_flags | TX_BD_FLAGS_START;
 
 	last_frag = skb_shinfo(skb)->nr_frags;
+	tx_buf->nr_frags = last_frag;
+	tx_buf->is_gso = skb_is_gso(skb);
 
 	for (i = 0; i < last_frag; i++) {
 		skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
@@ -6207,7 +6210,6 @@ bnx2_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	mmiowb();
 
 	txr->tx_prod = prod;
-	dev->trans_start = jiffies;
 
 	if (unlikely(bnx2_tx_avail(bp, txr) <= MAX_SKB_FRAGS)) {
 		netif_tx_stop_queue(txq);

@@ -1002,8 +1002,16 @@ static int lbs_setup_firmware(struct lbs_private *priv)
 {
 	int ret = -1;
 	s16 curlevel = 0, minlevel = 0, maxlevel = 0;
+	struct cmd_header cmd;
 
 	lbs_deb_enter(LBS_DEB_FW);
+
+	if (priv->fn_init_required) {
+		memset(&cmd, 0, sizeof(cmd));
+		if (__lbs_cmd(priv, CMD_FUNC_INIT, &cmd, sizeof(cmd),
+				lbs_cmd_copyback, (unsigned long) &cmd))
+			lbs_pr_alert("CMD_FUNC_INIT command failed\n");
+	}
 
 	/* Read MAC address from firmware */
 	memset(priv->current_addr, 0xff, ETH_ALEN);
@@ -1192,6 +1200,9 @@ struct lbs_private *lbs_add_card(void *card, struct device *dmdev)
 	priv->mesh_open = 0;
 	priv->infra_open = 0;
 
+	priv->fn_init_required = 0;
+	priv->fn_shutdown_required = 0;
+
 	/* Setup the OS Interface to our functions */
  	dev->netdev_ops = &lbs_netdev_ops;
 	dev->watchdog_timeo = 5 * HZ;
@@ -1307,8 +1318,10 @@ int lbs_start_card(struct lbs_private *priv)
 
 	lbs_update_channel(priv);
 
-	/* 5.0.16p0 is known to NOT support any mesh */
-	if (priv->fwrelease > 0x05001000) {
+	/* Check mesh FW version and appropriately send the mesh start
+	 * command
+	 */
+	if (priv->mesh_fw_ver == MESH_FW_OLD) {
 		/* Enable mesh, if supported, and work out which TLV it uses.
 		   0x100 + 291 is an unofficial value used in 5.110.20.pXX
 		   0x100 + 37 is the official value used in 5.110.21.pXX
@@ -1322,27 +1335,35 @@ int lbs_start_card(struct lbs_private *priv)
 		   It's just that 5.110.20.pXX will not have done anything
 		   useful */
 
-		priv->mesh_tlv = 0x100 + 291;
+		priv->mesh_tlv = TLV_TYPE_OLD_MESH_ID;
 		if (lbs_mesh_config(priv, CMD_ACT_MESH_CONFIG_START,
 				    priv->curbssparams.channel)) {
-			priv->mesh_tlv = 0x100 + 37;
+			priv->mesh_tlv = TLV_TYPE_MESH_ID;
 			if (lbs_mesh_config(priv, CMD_ACT_MESH_CONFIG_START,
 					    priv->curbssparams.channel))
 				priv->mesh_tlv = 0;
 		}
-		if (priv->mesh_tlv) {
-			lbs_add_mesh(priv);
+	} else if (priv->mesh_fw_ver == MESH_FW_NEW) {
+		/* 10.0.0.pXX new firmwares should succeed with TLV
+		 * 0x100+37; Do not invoke command with old TLV.
+		 */
+		priv->mesh_tlv = TLV_TYPE_MESH_ID;
+		if (lbs_mesh_config(priv, CMD_ACT_MESH_CONFIG_START,
+				    priv->curbssparams.channel))
+			priv->mesh_tlv = 0;
+	}
+	if (priv->mesh_tlv) {
+		lbs_add_mesh(priv);
 
-			if (device_create_file(&dev->dev, &dev_attr_lbs_mesh))
-				lbs_pr_err("cannot register lbs_mesh attribute\n");
+		if (device_create_file(&dev->dev, &dev_attr_lbs_mesh))
+			lbs_pr_err("cannot register lbs_mesh attribute\n");
 
-			/* While rtap isn't related to mesh, only mesh-enabled
-			 * firmware implements the rtap functionality via
-			 * CMD_802_11_MONITOR_MODE.
-			 */
-			if (device_create_file(&dev->dev, &dev_attr_lbs_rtap))
-				lbs_pr_err("cannot register lbs_rtap attribute\n");
-		}
+		/* While rtap isn't related to mesh, only mesh-enabled
+		 * firmware implements the rtap functionality via
+		 * CMD_802_11_MONITOR_MODE.
+		 */
+		if (device_create_file(&dev->dev, &dev_attr_lbs_rtap))
+			lbs_pr_err("cannot register lbs_rtap attribute\n");
 	}
 
 	lbs_debugfs_init_one(priv, dev);
@@ -1363,11 +1384,20 @@ void lbs_stop_card(struct lbs_private *priv)
 	struct net_device *dev;
 	struct cmd_ctrl_node *cmdnode;
 	unsigned long flags;
+	struct cmd_header cmd;
 
 	lbs_deb_enter(LBS_DEB_MAIN);
 
 	if (!priv)
 		goto out;
+
+	if (priv->fn_shutdown_required) {
+		memset(&cmd, 0, sizeof(cmd));
+		if (__lbs_cmd(priv, CMD_FUNC_SHUTDOWN, &cmd, sizeof(cmd),
+				lbs_cmd_copyback, (unsigned long) &cmd))
+			lbs_pr_alert("CMD_FUNC_SHUTDOWN command failed\n");
+	}
+
 	dev = priv->dev;
 
 	netif_stop_queue(dev);
