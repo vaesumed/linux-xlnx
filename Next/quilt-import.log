@@ -1,0 +1,115 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Importing i2c based on 2.6.30-rc7-git4
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 3218911f839b6c85acbf872ad264ea69aa4d89ad
+HEAD is now at 3218911 Merge git://git.infradead.org/~dwmw2/mtd-2.6.30
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+i2c-retry-on-arbitration-loss.patch
+i2c-tdfx-no-class.patch
+i2c-adapter-no-default-parent.patch
+i2c-chips-move-max6875-to-drivers-misc-eeprom.patch
+i2c-viapro-add-new-pci-device-id-for-vx855.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+macintosh-windfarm-convert-to-new-style-i2c.patch
+macintosh-therm_adt746x-convert-to-new-style-i2c.patch
+macintosh-therm_windtunnel-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 6ac6a5f...c632cc1 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-rc7-git4
+$ cd ../quilt-tmp
+$ git reset --hard 3218911f839b6c85acbf872ad264ea69aa4d89ad
+HEAD is now at 3218911 Merge git://git.infradead.org/~dwmw2/mtd-2.6.30
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-lm78-add-missing-__devexit_p.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+hwmon-tmp401-01-new-driver.patch
+hwmon-tmp401-02-add-support-for-TI-TMP411.patch
+hwmon-tmp401-03-add-documentation.patch
+hwmon-w83627ehf-add-W83627DHG-P-support.patch
+hwmon-pci-quirk-for-MSI-7031.patch
+hwmon-updated-documentation-on-alarms.patch
+hwmon-f71882fg-01-f8000-cleanup-pwm.patch
+hwmon-f71882fg-02-f8000-sanity-check-pwm.patch
+hwmon-f71882fg-03-f8000-temp_fault.patch
+hwmon-f71882fg-04-add-f71858fg-support-v2.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + d2aaf17...5654a64 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing ttydev based on 3218911f839b6c85acbf872ad264ea69aa4d89ad
+$ cd ../quilt-tmp
+$ git reset --hard 3218911f839b6c85acbf872ad264ea69aa4d89ad
+HEAD is now at 3218911 Merge git://git.infradead.org/~dwmw2/mtd-2.6.30
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+cyclades-firmware-ze
+cyclades-fw-dontreset
+cyclades-remove-spare-null-check
+tty-port-carrierclose
+tty-port-drain-delay
+tty-usb-use-port
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:306: trailing whitespace.
+	else 
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2195: trailing whitespace.
+	serial_do_down(port);		
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2221: trailing whitespace.
+	return 1;	
+warning: 3 lines add whitespace errors.
+tty-usb-acm-port
+synclink-pio-mode
+tty-cyclades-cast-clean
+tty-cyclades-cache-hw-ver
+tty-cyclades-macros-to-inlines
+tty-cyclades-kill-typedefs
+tty-cyclades-nports
+tty-cyclades-remove-unused-vars
+tty-usb-acm-kref
+tty-usb-acm-clean
+net-slip-ttyfix
+serial-async-bitnum
+tty-rocket-fixbitops
+tty-epca-fixbitops
+serial-8250-pci-ex1370
+tty-x86-termio-line
+tty-throttle-race-fix
+serial-maintainer
+pty-fix-comment-1
+tty-polling-open-oops
+tty-ldisc-extract
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:67: trailing whitespace.
+ *	In order to wait for any existing references to complete see 
+warning: 1 line adds whitespace errors.
+tty-ldisc-mutex
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:88: trailing whitespace.
+		if ( tty->ldisc->ops->flush_buffer )  
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:660: trailing whitespace.
+		
+warning: 2 lines add whitespace errors.
+tty-ldisc-move-flush
+tty-ldisc-style
+tty-usb-iuu-lock
+tty-usb-iuu-stopbits
+tty-usb-iuu-termios
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:54: space before tab in indent.
+ 	if (old_termios)
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:55: space before tab in indent.
+ 		tty_termios_copy_hw(tty->termios, old_termios);
+warning: 2 lines add whitespace errors.
+tty-usb-iuu-version
+tty-jsm-fix-4-8-port
+tty-icom-fix-spaghetti
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + fc35acf...4b70a78 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
