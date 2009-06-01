@@ -146,6 +146,7 @@ static int fcoe_lport_config(struct fc_lport *lp)
 	lp->link_up = 0;
 	lp->qfull = 0;
 	lp->max_retry_count = 3;
+	lp->max_rport_retry_count = 3;
 	lp->e_d_tov = 2 * 1000;	/* FC-FS default */
 	lp->r_a_tov = 2 * 2 * 1000;
 	lp->service_params = (FCP_SPPF_INIT_FCN | FCP_SPPF_RD_XRDY_DIS |
@@ -1350,13 +1351,13 @@ out:
 /**
  * fcoe_dev_setup() - setup link change notification interface
  */
-static void fcoe_dev_setup()
+static void fcoe_dev_setup(void)
 {
 	register_netdevice_notifier(&fcoe_notifier);
 }
 
 /**
- * fcoe_dev_setup() - cleanup link change notification interface
+ * fcoe_dev_cleanup() - cleanup link change notification interface
  */
 static void fcoe_dev_cleanup(void)
 {
