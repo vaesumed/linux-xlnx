@@ -15,7 +15,6 @@ endif
 
 # Generic drivers that other drivers may depend upon
 obj-$(CONFIG_PXA_SSP)		+= ssp.o
-obj-$(CONFIG_PXA_PWM)		+= pwm.o
 
 # SoC-specific code
 obj-$(CONFIG_PXA25x)		+= mfp-pxa2xx.o pxa2xx.o pxa25x.o
@@ -78,6 +77,7 @@ obj-$(CONFIG_MACH_CM_X300)      += cm-x300.o
 obj-$(CONFIG_PXA_EZX)           += ezx.o
 
 obj-$(CONFIG_MACH_INTELMOTE2)   += imote2.o
+obj-$(CONFIG_MACH_STARGATE2)	+= stargate2.o
 obj-$(CONFIG_MACH_CSB726)	+= csb726.o
 obj-$(CONFIG_CSB726_CSB701)	+= csb701.o
 

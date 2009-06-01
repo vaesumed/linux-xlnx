@@ -48,7 +48,7 @@
 #include <mach/mmc.h>
 #include <mach/udc.h>
 #include <mach/pxa27x-udc.h>
-#include <mach/i2c.h>
+#include <plat/i2c.h>
 #include <mach/camera.h>
 #include <mach/audio.h>
 #include <media/soc_camera.h>
@@ -154,6 +154,11 @@ static unsigned long mioa701_pin_config[] = {
 	GPIO41_FFUART_RTS,
 
 	/* Sound */
+	GPIO31_AC97_SYNC,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
+	GPIO95_AC97_nRESET,
 	GPIO89_AC97_SYSCLK,
 	MIO_CFG_IN(GPIO12_HPJACK_INSERT, AF0),
 
