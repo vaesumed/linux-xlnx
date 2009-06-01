@@ -214,6 +214,7 @@ static void exofs_write_super(struct super_block *sb)
 		return;
 	}
 
+	lock_super(sb);
 	lock_kernel();
 	sbi = sb->s_fs_info;
 	fscb->s_nextid = cpu_to_le64(sbi->s_nextid);
@@ -246,6 +247,7 @@ out:
 	if (or)
 		osd_end_request(or);
 	unlock_kernel();
+	unlock_super(sb);
 	kfree(fscb);
 }
 
@@ -257,6 +259,11 @@ static void exofs_put_super(struct super_block *sb)
 {
 	int num_pend;
 	struct exofs_sb_info *sbi = sb->s_fs_info;
+
+	lock_kernel();
+
+	if (sb->s_dirt)
+		exofs_write_super(sb);
 
 	/* make sure there are no pending commands */
 	for (num_pend = atomic_read(&sbi->s_curr_pending); num_pend > 0;
@@ -271,6 +278,8 @@ static void exofs_put_super(struct super_block *sb)
 	osduld_put_device(sbi->s_dev);
 	kfree(sb->s_fs_info);
 	sb->s_fs_info = NULL;
+
+	unlock_kernel();
 }
 
 /*
