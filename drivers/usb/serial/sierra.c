@@ -582,6 +582,43 @@ static void sierra_stop_rx_urbs(struct usb_serial_port *port)
 	usb_kill_urb(port->interrupt_in_urb);
 }
 
+static int sierra_submit_rx_urbs(struct usb_serial_port *port, gfp_t mem_flags)
+{
+	int ok_cnt;
+	int err = -EINVAL;
+	int i;
+	struct urb *urb;
+	struct sierra_port_private *portdata = usb_get_serial_port_data(port);
+
+	ok_cnt = 0;
+	for (i = 0; i < ARRAY_SIZE(portdata->in_urbs); i++) {
+		urb = portdata->in_urbs[i];
+		if (!urb)
+			continue;
+		err = usb_submit_urb(urb, mem_flags);
+		if (err) {
+			dev_err(&port->dev, "%s: submit urb failed: %d\n",
+				__func__, err);
+		} else {
+			ok_cnt++;
+		}
+	}
+
+	if (ok_cnt && port->interrupt_in_urb) {
+		err = usb_submit_urb(port->interrupt_in_urb, mem_flags);
+		if (err) {
+			dev_err(&port->dev, "%s: submit intr urb failed: %d\n",
+				__func__, err);
+		}
+	}
+
+	if (ok_cnt > 0) /* at least one rx urb submitted */
+		return 0;
+	else
+		return err;
+}
+
+
 static int sierra_open(struct tty_struct *tty,
 			struct usb_serial_port *port, struct file *filp)
 {
