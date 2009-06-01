@@ -618,6 +618,44 @@ static int sierra_submit_rx_urbs(struct usb_serial_port *port, gfp_t mem_flags)
 		return err;
 }
 
+static struct urb *sierra_setup_urb(struct usb_serial *serial, int endpoint,
+					int dir, void *ctx, int len,
+					gfp_t mem_flags,
+					usb_complete_t callback)
+{
+	struct urb	*urb;
+	u8		*buf;
+
+	if (endpoint == -1)
+		return NULL;
+
+	urb = usb_alloc_urb(0, mem_flags);
+	if (urb == NULL) {
+		dev_dbg(&serial->dev->dev, "%s: alloc for endpoint %d failed\n",
+			__func__, endpoint);
+		return NULL;
+	}
+
+	buf = kmalloc(len, mem_flags);
+	if (buf) {
+		/* Fill URB using supplied data */
+		usb_fill_bulk_urb(urb, serial->dev,
+			usb_sndbulkpipe(serial->dev, endpoint) | dir,
+			buf, len, callback, ctx);
+
+		/* debug */
+		dev_dbg(&serial->dev->dev, "%s %c u : %p d:%p\n", __func__,
+				dir == USB_DIR_IN ? 'i' : 'o', urb, buf);
+	} else {
+		dev_dbg(&serial->dev->dev, "%s %c u:%p d:%p\n", __func__,
+				dir == USB_DIR_IN ? 'i' : 'o', urb, buf);
+
+		sierra_release_urb(urb);
+		urb = NULL;
+	}
+
+	return urb;
+}
 
 static int sierra_open(struct tty_struct *tty,
 			struct usb_serial_port *port, struct file *filp)
