@@ -571,6 +571,17 @@ static int sierra_write_room(struct tty_struct *tty)
 	return 2048;
 }
 
+static void sierra_stop_rx_urbs(struct usb_serial_port *port)
+{
+	int i;
+	struct sierra_port_private *portdata = usb_get_serial_port_data(port);
+
+	for (i = 0; i < ARRAY_SIZE(portdata->in_urbs); i++)
+		usb_kill_urb(portdata->in_urbs[i]);
+
+	usb_kill_urb(port->interrupt_in_urb);
+}
+
 static int sierra_open(struct tty_struct *tty,
 			struct usb_serial_port *port, struct file *filp)
 {
