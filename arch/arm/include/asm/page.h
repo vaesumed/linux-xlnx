@@ -209,6 +209,6 @@ typedef struct page *pgtable_t;
 #define ARCH_SLAB_MINALIGN 8
 #endif
 
-#include <asm-generic/page.h>
+#include <asm-generic/getorder.h>
 
 #endif
