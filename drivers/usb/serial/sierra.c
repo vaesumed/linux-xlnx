@@ -29,12 +29,10 @@
 #include <linux/module.h>
 #include <linux/usb.h>
 #include <linux/usb/serial.h>
-#include <linux/usb/ch9.h>
 
 #define SWIMS_USB_REQUEST_SetPower	0x00
 #define SWIMS_USB_REQUEST_SetNmea	0x07
 
-/* per port private data */
 #define N_IN_URB	8
 #define N_OUT_URB	64
 #define IN_BUFLEN	4096
@@ -326,6 +324,17 @@ static int sierra_tiocmset(struct tty_struct *tty, struct file *file,
 	if (clear & TIOCM_DTR)
 		portdata->dtr_state = 0;
 	return sierra_send_setup(tty, port);
+}
+
+static void sierra_release_urb(struct urb *urb)
+{
+	struct usb_serial_port *port;
+	if (urb) {
+		port =  urb->context;
+		dev_dbg(&port->dev, "%s: %p\n", __func__, urb);
+		kfree(urb->transfer_buffer);
+		usb_free_urb(urb);
+	}
 }
 
 static void sierra_outdat_callback(struct urb *urb)
