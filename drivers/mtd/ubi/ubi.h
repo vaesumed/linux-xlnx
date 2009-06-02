@@ -305,9 +305,9 @@ struct ubi_wl_entry;
  * @vtbl_slots: how many slots are available in the volume table
  * @vtbl_size: size of the volume table in bytes
  * @vtbl: in-RAM volume table copy
- * @volumes_mutex: protects on-flash volume table and serializes volume
- *                 changes, like creation, deletion, update, re-size,
- *                 re-name and set property
+ * @device_mutex: protects on-flash volume table and serializes volume
+ *                creation, deletion, update, re-size, re-name and set
+ *                property
  *
  * @max_ec: current highest erase counter value
  * @mean_ec: current mean erase counter value
@@ -366,7 +366,6 @@ struct ubi_wl_entry;
  * @peb_buf2: another buffer of PEB size used for different purposes
  * @buf_mutex: protects @peb_buf1 and @peb_buf2
  * @ckvol_mutex: serializes static volume checking when opening
- * @mult_mutex: serializes operations on multiple volumes, like re-naming
  * @dbg_peb_buf: buffer of PEB size used for debugging
  * @dbg_buf_mutex: protects @dbg_peb_buf
  */
@@ -389,7 +388,7 @@ struct ubi_device {
 	int vtbl_slots;
 	int vtbl_size;
 	struct ubi_vtbl_record *vtbl;
-	struct mutex volumes_mutex;
+	struct mutex device_mutex;
 
 	int max_ec;
 	/* Note, mean_ec is not updated run-time - should be fixed */
@@ -444,8 +443,7 @@ struct ubi_device {
 	void *peb_buf2;
 	struct mutex buf_mutex;
 	struct mutex ckvol_mutex;
-	struct mutex mult_mutex;
-#ifdef CONFIG_MTD_UBI_DEBUG
+#ifdef CONFIG_MTD_UBI_DEBUG_PARANOID
 	void *dbg_peb_buf;
 	struct mutex dbg_buf_mutex;
 #endif
