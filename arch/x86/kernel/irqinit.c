@@ -181,8 +181,10 @@ static void __init apic_intr_init(void)
 {
 	smp_intr_init();
 
-#ifdef CONFIG_X86_64
+#ifdef CONFIG_X86_THERMAL_VECTOR
 	alloc_intr_gate(THERMAL_APIC_VECTOR, thermal_interrupt);
+#endif
+#ifdef CONFIG_X86_THRESHOLD
 	alloc_intr_gate(THRESHOLD_APIC_VECTOR, threshold_interrupt);
 #endif
 
@@ -203,13 +205,6 @@ static void __init apic_intr_init(void)
 	alloc_intr_gate(LOCAL_PENDING_VECTOR, perf_pending_interrupt);
 # endif
 
-#endif
-
-#ifdef CONFIG_X86_32
-#if defined(CONFIG_X86_LOCAL_APIC) && defined(CONFIG_X86_MCE_P4THERMAL)
-	/* thermal monitor LVT interrupt */
-	alloc_intr_gate(THERMAL_APIC_VECTOR, thermal_interrupt);
-#endif
 #endif
 }
 
