@@ -28,6 +28,8 @@
 #include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/sched.h>
+#include <linux/list.h>
+#include <linux/netdevice.h>
 
 #include "ixgbe.h"
 #include "ixgbe_common.h"
@@ -70,12 +72,6 @@ s32 ixgbe_start_hw_generic(struct ixgbe_hw *hw)
 
 	/* Identify the PHY */
 	hw->phy.ops.identify(hw);
-
-	/*
-	 * Store MAC address from RAR0, clear receive address registers, and
-	 * clear the multicast table
-	 */
-	hw->mac.ops.init_rx_addrs(hw);
 
 	/* Clear the VLAN filter table */
 	hw->mac.ops.clear_vfta(hw);
@@ -1362,15 +1358,14 @@ static void ixgbe_add_uc_addr(struct ixgbe_hw *hw, u8 *addr, u32 vmdq)
  *  Drivers using secondary unicast addresses must set user_set_promisc when
  *  manually putting the device into promiscuous mode.
  **/
-s32 ixgbe_update_uc_addr_list_generic(struct ixgbe_hw *hw, u8 *addr_list,
-                              u32 addr_count, ixgbe_mc_addr_itr next)
+s32 ixgbe_update_uc_addr_list_generic(struct ixgbe_hw *hw,
+				      struct list_head *uc_list)
 {
-	u8 *addr;
 	u32 i;
 	u32 old_promisc_setting = hw->addr_ctrl.overflow_promisc;
 	u32 uc_addr_in_use;
 	u32 fctrl;
-	u32 vmdq;
+	struct netdev_hw_addr *ha;
 
 	/*
 	 * Clear accounting of old secondary address list,
@@ -1388,10 +1383,9 @@ s32 ixgbe_update_uc_addr_list_generic(struct ixgbe_hw *hw, u8 *addr_list,
 	}
 
 	/* Add the new addresses */
-	for (i = 0; i < addr_count; i++) {
+	list_for_each_entry(ha, uc_list, list) {
 		hw_dbg(hw, " Adding the secondary addresses:\n");
-		addr = next(hw, &addr_list, &vmdq);
-		ixgbe_add_uc_addr(hw, addr, vmdq);
+		ixgbe_add_uc_addr(hw, ha->addr, 0);
 	}
 
 	if (hw->addr_ctrl.overflow_promisc) {
@@ -1595,6 +1589,13 @@ s32 ixgbe_fc_enable(struct ixgbe_hw *hw, s32 packetbuf_num)
 	u32 mflcn_reg;
 	u32 fccfg_reg;
 	u32 reg;
+	u32 rx_pba_size;
+
+#ifdef CONFIG_DCB
+	if (hw->fc.requested_mode == ixgbe_fc_pfc)
+		goto out;
+
+#endif /* CONFIG_DCB */
 
 	mflcn_reg = IXGBE_READ_REG(hw, IXGBE_MFLCN);
 	mflcn_reg &= ~(IXGBE_MFLCN_RFCE | IXGBE_MFLCN_RPFCE);
@@ -1653,24 +1654,45 @@ s32 ixgbe_fc_enable(struct ixgbe_hw *hw, s32 packetbuf_num)
 	}
 
 	/* Enable 802.3x based flow control settings. */
+	mflcn_reg |= IXGBE_MFLCN_DPF;
 	IXGBE_WRITE_REG(hw, IXGBE_MFLCN, mflcn_reg);
 	IXGBE_WRITE_REG(hw, IXGBE_FCCFG, fccfg_reg);
 
-	/* Set up and enable Rx high/low water mark thresholds, enable XON. */
-	if (hw->fc.current_mode & ixgbe_fc_tx_pause) {
-		if (hw->fc.send_xon)
-			IXGBE_WRITE_REG(hw, IXGBE_FCRTL_82599(packetbuf_num),
-			                (hw->fc.low_water | IXGBE_FCRTL_XONE));
-		else
-			IXGBE_WRITE_REG(hw, IXGBE_FCRTL_82599(packetbuf_num),
-			                hw->fc.low_water);
+	reg = IXGBE_READ_REG(hw, IXGBE_MTQC);
+	/* Thresholds are different for link flow control when in DCB mode */
+	if (reg & IXGBE_MTQC_RT_ENA) {
+		/* Always disable XON for LFC when in DCB mode */
+		IXGBE_WRITE_REG(hw, IXGBE_FCRTL_82599(packetbuf_num), 0);
 
-		IXGBE_WRITE_REG(hw, IXGBE_FCRTH_82599(packetbuf_num),
-		                (hw->fc.high_water | IXGBE_FCRTH_FCEN));
+		rx_pba_size = IXGBE_READ_REG(hw, IXGBE_RXPBSIZE(packetbuf_num));
+		reg = (rx_pba_size >> 2) & 0xFFE0;
+		if (hw->fc.current_mode & ixgbe_fc_tx_pause)
+			reg |= IXGBE_FCRTH_FCEN;
+		IXGBE_WRITE_REG(hw, IXGBE_FCRTH_82599(packetbuf_num), reg);
+	} else {
+		/*
+		 * Set up and enable Rx high/low water mark thresholds,
+		 * enable XON.
+		 */
+		if (hw->fc.current_mode & ixgbe_fc_tx_pause) {
+			if (hw->fc.send_xon) {
+				IXGBE_WRITE_REG(hw,
+				              IXGBE_FCRTL_82599(packetbuf_num),
+			                      (hw->fc.low_water |
+				              IXGBE_FCRTL_XONE));
+			} else {
+				IXGBE_WRITE_REG(hw,
+				              IXGBE_FCRTL_82599(packetbuf_num),
+				              hw->fc.low_water);
+			}
+
+			IXGBE_WRITE_REG(hw, IXGBE_FCRTH_82599(packetbuf_num),
+			               (hw->fc.high_water | IXGBE_FCRTH_FCEN));
+		}
 	}
 
 	/* Configure pause time (2 TCs per register) */
-	reg = IXGBE_READ_REG(hw, IXGBE_FCTTV(packetbuf_num));
+	reg = IXGBE_READ_REG(hw, IXGBE_FCTTV(packetbuf_num / 2));
 	if ((packetbuf_num & 1) == 0)
 		reg = (reg & 0xFFFF0000) | hw->fc.pause_time;
 	else
@@ -1859,9 +1881,11 @@ s32 ixgbe_setup_fc_generic(struct ixgbe_hw *hw, s32 packetbuf_num)
 	 * because it causes the controller to just blast out fc packets.
 	 */
 	if (!hw->fc.low_water || !hw->fc.high_water || !hw->fc.pause_time) {
-		hw_dbg(hw, "Invalid water mark configuration\n");
-		ret_val = IXGBE_ERR_INVALID_LINK_SETTINGS;
-		goto out;
+		if (hw->fc.requested_mode != ixgbe_fc_none) {
+			hw_dbg(hw, "Invalid water mark configuration\n");
+			ret_val = IXGBE_ERR_INVALID_LINK_SETTINGS;
+			goto out;
+		}
 	}
 
 	/*
