@@ -70,6 +70,14 @@ struct kvm_irqchip {
 	} chip;
 };
 
+/* for KVM_CREATE_PIT2 */
+struct kvm_pit_config {
+	__u32 flags;
+	__u32 pad[15];
+};
+
+#define KVM_PIT_SPEAKER_DUMMY     1
+
 #define KVM_EXIT_UNKNOWN          0
 #define KVM_EXIT_EXCEPTION        1
 #define KVM_EXIT_IO               2
@@ -119,7 +127,7 @@ struct kvm_run {
 			__u32 error_code;
 		} ex;
 		/* KVM_EXIT_IO */
-		struct kvm_io {
+		struct {
 #define KVM_EXIT_IO_IN  0
 #define KVM_EXIT_IO_OUT 1
 			__u8 direction;
@@ -224,10 +232,10 @@ struct kvm_interrupt {
 /* for KVM_GET_DIRTY_LOG */
 struct kvm_dirty_log {
 	__u32 slot;
-	__u32 padding;
+	__u32 padding1;
 	union {
 		void __user *dirty_bitmap; /* one bit per page */
-		__u64 padding;
+		__u64 padding2;
 	};
 };
 
@@ -409,8 +417,19 @@ struct kvm_trace_rec {
 #ifdef __KVM_HAVE_DEVICE_ASSIGNMENT
 #define KVM_CAP_DEVICE_DEASSIGNMENT 27
 #endif
+#ifdef __KVM_HAVE_MSIX
+#define KVM_CAP_DEVICE_MSIX 28
+#endif
+#define KVM_CAP_ASSIGN_DEV_IRQ 29
 /* Another bug in KVM_SET_USER_MEMORY_REGION fixed: */
 #define KVM_CAP_JOIN_MEMORY_REGIONS_WORKS 30
+#ifdef __KVM_HAVE_MCE
+#define KVM_CAP_MCE 31
+#endif
+#define KVM_CAP_IRQFD 32
+#ifdef __KVM_HAVE_PIT
+#define KVM_CAP_PIT2 33
+#endif
 
 #ifdef KVM_CAP_IRQ_ROUTING
 
@@ -450,6 +469,28 @@ struct kvm_irq_routing {
 
 #endif
 
+#ifdef KVM_CAP_MCE
+/* x86 MCE */
+struct kvm_x86_mce {
+	__u64 status;
+	__u64 addr;
+	__u64 misc;
+	__u64 mcg_status;
+	__u8 bank;
+	__u8 pad1[7];
+	__u64 pad2[3];
+};
+#endif
+
+#define KVM_IRQFD_FLAG_DEASSIGN (1 << 0)
+
+struct kvm_irqfd {
+	__u32 fd;
+	__u32 gsi;
+	__u32 flags;
+	__u8  pad[20];
+};
+
 /*
  * ioctls for VM fds
  */
@@ -482,11 +523,20 @@ struct kvm_irq_routing {
 #define KVM_ASSIGN_PCI_DEVICE _IOR(KVMIO, 0x69, \
 				   struct kvm_assigned_pci_dev)
 #define KVM_SET_GSI_ROUTING       _IOW(KVMIO, 0x6a, struct kvm_irq_routing)
+/* deprecated, replaced by KVM_ASSIGN_DEV_IRQ */
 #define KVM_ASSIGN_IRQ _IOR(KVMIO, 0x70, \
 			    struct kvm_assigned_irq)
+#define KVM_ASSIGN_DEV_IRQ        _IOW(KVMIO, 0x70, struct kvm_assigned_irq)
 #define KVM_REINJECT_CONTROL      _IO(KVMIO, 0x71)
 #define KVM_DEASSIGN_PCI_DEVICE _IOW(KVMIO, 0x72, \
 				     struct kvm_assigned_pci_dev)
+#define KVM_ASSIGN_SET_MSIX_NR \
+			_IOW(KVMIO, 0x73, struct kvm_assigned_msix_nr)
+#define KVM_ASSIGN_SET_MSIX_ENTRY \
+			_IOW(KVMIO, 0x74, struct kvm_assigned_msix_entry)
+#define KVM_DEASSIGN_DEV_IRQ       _IOW(KVMIO, 0x75, struct kvm_assigned_irq)
+#define KVM_IRQFD                  _IOW(KVMIO, 0x76, struct kvm_irqfd)
+#define KVM_CREATE_PIT2		   _IOW(KVMIO, 0x77, struct kvm_pit_config)
 
 /*
  * ioctls for vcpu fds
@@ -530,6 +580,10 @@ struct kvm_irq_routing {
 #define KVM_NMI                   _IO(KVMIO,  0x9a)
 /* Available with KVM_CAP_SET_GUEST_DEBUG */
 #define KVM_SET_GUEST_DEBUG       _IOW(KVMIO,  0x9b, struct kvm_guest_debug)
+/* MCE for x86 */
+#define KVM_X86_SETUP_MCE         _IOW(KVMIO,  0x9c, __u64)
+#define KVM_X86_GET_MCE_CAP_SUPPORTED _IOR(KVMIO,  0x9d, __u64)
+#define KVM_X86_SET_MCE           _IOW(KVMIO,  0x9e, struct kvm_x86_mce)
 
 /*
  * Deprecated interfaces
@@ -577,6 +631,8 @@ struct kvm_debug_guest {
 #define KVM_TRC_STLB_INVAL       (KVM_TRC_HANDLER + 0x18)
 #define KVM_TRC_PPC_INSTR        (KVM_TRC_HANDLER + 0x19)
 
+#define KVM_DEV_ASSIGN_ENABLE_IOMMU	(1 << 0)
+
 struct kvm_assigned_pci_dev {
 	__u32 assigned_dev_id;
 	__u32 busnr;
@@ -586,6 +642,17 @@ struct kvm_assigned_pci_dev {
 		__u32 reserved[12];
 	};
 };
+
+#define KVM_DEV_IRQ_HOST_INTX    (1 << 0)
+#define KVM_DEV_IRQ_HOST_MSI     (1 << 1)
+#define KVM_DEV_IRQ_HOST_MSIX    (1 << 2)
+
+#define KVM_DEV_IRQ_GUEST_INTX   (1 << 8)
+#define KVM_DEV_IRQ_GUEST_MSI    (1 << 9)
+#define KVM_DEV_IRQ_GUEST_MSIX   (1 << 10)
+
+#define KVM_DEV_IRQ_HOST_MASK	 0x00ff
+#define KVM_DEV_IRQ_GUEST_MASK   0xff00
 
 struct kvm_assigned_irq {
 	__u32 assigned_dev_id;
@@ -602,9 +669,19 @@ struct kvm_assigned_irq {
 	};
 };
 
-#define KVM_DEV_ASSIGN_ENABLE_IOMMU	(1 << 0)
 
-#define KVM_DEV_IRQ_ASSIGN_MSI_ACTION	KVM_DEV_IRQ_ASSIGN_ENABLE_MSI
-#define KVM_DEV_IRQ_ASSIGN_ENABLE_MSI	(1 << 0)
+struct kvm_assigned_msix_nr {
+	__u32 assigned_dev_id;
+	__u16 entry_nr;
+	__u16 padding;
+};
+
+#define KVM_MAX_MSIX_PER_DEV		256
+struct kvm_assigned_msix_entry {
+	__u32 assigned_dev_id;
+	__u32 gsi;
+	__u16 entry; /* The index of entry in the MSI-X table */
+	__u16 padding[3];
+};
 
 #endif
