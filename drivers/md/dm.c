@@ -973,7 +973,7 @@ static int dm_merge_bvec(struct request_queue *q,
 	 * entries.  So always set max_size to 0, and the code below allows
 	 * just one page.
 	 */
-	else if (q->max_hw_sectors <= PAGE_SIZE >> 9)
+	else if (queue_max_hw_sectors(q) <= PAGE_SIZE >> 9)
 		max_size = 0;
 
 out_table:

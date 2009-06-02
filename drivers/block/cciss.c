@@ -1299,7 +1299,6 @@ static void cciss_softirq_done(struct request *rq)
 {
 	CommandList_struct *cmd = rq->completion_data;
 	ctlr_info_t *h = hba[cmd->ctlr];
-	unsigned int nr_bytes;
 	unsigned long flags;
 	u64bit temp64;
 	int i, ddir;
@@ -1321,15 +1320,11 @@ static void cciss_softirq_done(struct request *rq)
 	printk("Done with %p\n", rq);
 #endif				/* CCISS_DEBUG */
 
-	/*
-	 * Store the full size and set the residual count for pc requests
-	 */
-	nr_bytes = blk_rq_bytes(rq);
+	/* set the residual count for pc requests */
 	if (blk_pc_request(rq))
-		rq->data_len = cmd->err_info->ResidualCnt;
+		rq->resid_len = cmd->err_info->ResidualCnt;
 
-	if (blk_end_request(rq, (rq->errors == 0) ? 0 : -EIO, nr_bytes))
-		BUG();
+	blk_end_request_all(rq, (rq->errors == 0) ? 0 : -EIO);
 
 	spin_lock_irqsave(&h->lock, flags);
 	cmd_free(h, cmd, 1);
@@ -1394,8 +1389,8 @@ static void cciss_add_disk(ctlr_info_t *h, struct gendisk *disk,
 
 	disk->queue->queuedata = h;
 
-	blk_queue_hardsect_size(disk->queue,
-				h->drv[drv_index].block_size);
+	blk_queue_logical_block_size(disk->queue,
+				     h->drv[drv_index].block_size);
 
 	/* Make sure all queue data is written out before */
 	/* setting h->drv[drv_index].queue, as setting this */
@@ -2303,7 +2298,7 @@ static int cciss_revalidate(struct gendisk *disk)
 	cciss_geometry_inquiry(h->ctlr, logvol, 1, total_size, block_size,
 			       inq_buff, drv);
 
-	blk_queue_hardsect_size(drv->queue, drv->block_size);
+	blk_queue_logical_block_size(drv->queue, drv->block_size);
 	set_capacity(disk, drv->nr_blocks);
 
 	kfree(inq_buff);
@@ -2691,7 +2686,7 @@ static inline void complete_command(ctlr_info_t *h, CommandList_struct *cmd,
 			printk(KERN_WARNING "cciss: cmd %p has"
 			       " completed with data underrun "
 			       "reported\n", cmd);
-			cmd->rq->data_len = cmd->err_info->ResidualCnt;
+			cmd->rq->resid_len = cmd->err_info->ResidualCnt;
 		}
 		break;
 	case CMD_DATA_OVERRUN:
@@ -2806,7 +2801,7 @@ static void do_cciss_request(struct request_queue *q)
 		goto startio;
 
       queue:
-	creq = elv_next_request(q);
+	creq = blk_peek_request(q);
 	if (!creq)
 		goto startio;
 
@@ -2815,7 +2810,7 @@ static void do_cciss_request(struct request_queue *q)
 	if ((c = cmd_alloc(h, 1)) == NULL)
 		goto full;
 
-	blkdev_dequeue_request(creq);
+	blk_start_request(creq);
 
 	spin_unlock_irq(q->queue_lock);
 
@@ -2840,10 +2835,10 @@ static void do_cciss_request(struct request_queue *q)
 	c->Request.Timeout = 0;	// Don't time out
 	c->Request.CDB[0] =
 	    (rq_data_dir(creq) == READ) ? h->cciss_read : h->cciss_write;
-	start_blk = creq->sector;
+	start_blk = blk_rq_pos(creq);
 #ifdef CCISS_DEBUG
-	printk(KERN_DEBUG "ciss: sector =%d nr_sectors=%d\n", (int)creq->sector,
-	       (int)creq->nr_sectors);
+	printk(KERN_DEBUG "ciss: sector =%d nr_sectors=%d\n",
+	       (int)blk_rq_pos(creq), (int)blk_rq_sectors(creq));
 #endif				/* CCISS_DEBUG */
 
 	sg_init_table(tmp_sg, MAXSGENTRIES);
@@ -2869,8 +2864,8 @@ static void do_cciss_request(struct request_queue *q)
 		h->maxSG = seg;
 
 #ifdef CCISS_DEBUG
-	printk(KERN_DEBUG "cciss: Submitting %lu sectors in %d segments\n",
-	       creq->nr_sectors, seg);
+	printk(KERN_DEBUG "cciss: Submitting %u sectors in %d segments\n",
+	       blk_rq_sectors(creq), seg);
 #endif				/* CCISS_DEBUG */
 
 	c->Header.SGList = c->Header.SGTotal = seg;
@@ -2882,8 +2877,8 @@ static void do_cciss_request(struct request_queue *q)
 			c->Request.CDB[4] = (start_blk >> 8) & 0xff;
 			c->Request.CDB[5] = start_blk & 0xff;
 			c->Request.CDB[6] = 0;	// (sect >> 24) & 0xff; MSB
-			c->Request.CDB[7] = (creq->nr_sectors >> 8) & 0xff;
-			c->Request.CDB[8] = creq->nr_sectors & 0xff;
+			c->Request.CDB[7] = (blk_rq_sectors(creq) >> 8) & 0xff;
+			c->Request.CDB[8] = blk_rq_sectors(creq) & 0xff;
 			c->Request.CDB[9] = c->Request.CDB[11] = c->Request.CDB[12] = 0;
 		} else {
 			u32 upper32 = upper_32_bits(start_blk);
@@ -2898,10 +2893,10 @@ static void do_cciss_request(struct request_queue *q)
 			c->Request.CDB[7]= (start_blk >> 16) & 0xff;
 			c->Request.CDB[8]= (start_blk >>  8) & 0xff;
 			c->Request.CDB[9]= start_blk & 0xff;
-			c->Request.CDB[10]= (creq->nr_sectors >>  24) & 0xff;
-			c->Request.CDB[11]= (creq->nr_sectors >>  16) & 0xff;
-			c->Request.CDB[12]= (creq->nr_sectors >>  8) & 0xff;
-			c->Request.CDB[13]= creq->nr_sectors & 0xff;
+			c->Request.CDB[10]= (blk_rq_sectors(creq) >> 24) & 0xff;
+			c->Request.CDB[11]= (blk_rq_sectors(creq) >> 16) & 0xff;
+			c->Request.CDB[12]= (blk_rq_sectors(creq) >>  8) & 0xff;
+			c->Request.CDB[13]= blk_rq_sectors(creq) & 0xff;
 			c->Request.CDB[14] = c->Request.CDB[15] = 0;
 		}
 	} else if (blk_pc_request(creq)) {
