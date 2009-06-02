@@ -115,8 +115,6 @@ source "drivers/staging/heci/Kconfig"
 
 source "drivers/staging/line6/Kconfig"
 
-source "drivers/staging/serqt_usb/Kconfig"
-
 source "drivers/staging/serqt_usb2/Kconfig"
 
 source "drivers/staging/vt6655/Kconfig"
