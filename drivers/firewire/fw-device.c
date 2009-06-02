@@ -292,8 +292,7 @@ static void init_fw_attribute_group(struct device *dev,
 		group->attrs[j++] = &attr->attr;
 	}
 
-	BUG_ON(j >= ARRAY_SIZE(group->attrs));
-	group->attrs[j++] = NULL;
+	group->attrs[j] = NULL;
 	group->groups[0] = &group->group;
 	group->groups[1] = NULL;
 	group->group.attrs = group->attrs;
@@ -356,9 +355,56 @@ static ssize_t guid_show(struct device *dev,
 	return ret;
 }
 
+static int units_sprintf(char *buf, u32 *directory)
+{
+	struct fw_csr_iterator ci;
+	int key, value;
+	int specifier_id = 0;
+	int version = 0;
+
+	fw_csr_iterator_init(&ci, directory);
+	while (fw_csr_iterator_next(&ci, &key, &value)) {
+		switch (key) {
+		case CSR_SPECIFIER_ID:
+			specifier_id = value;
+			break;
+		case CSR_VERSION:
+			version = value;
+			break;
+		}
+	}
+
+	return sprintf(buf, "0x%06x:0x%06x ", specifier_id, version);
+}
+
+static ssize_t units_show(struct device *dev,
+			  struct device_attribute *attr, char *buf)
+{
+	struct fw_device *device = fw_device(dev);
+	struct fw_csr_iterator ci;
+	int key, value, i = 0;
+
+	down_read(&fw_device_rwsem);
+	fw_csr_iterator_init(&ci, &device->config_rom[5]);
+	while (fw_csr_iterator_next(&ci, &key, &value)) {
+		if (key != (CSR_UNIT | CSR_DIRECTORY))
+			continue;
+		i += units_sprintf(&buf[i], ci.p + value - 1);
+		if (i >= PAGE_SIZE - (8 + 1 + 8 + 1))
+			break;
+	}
+	up_read(&fw_device_rwsem);
+
+	if (i)
+		buf[i - 1] = '\n';
+
+	return i;
+}
+
 static struct device_attribute fw_device_attributes[] = {
 	__ATTR_RO(config_rom),
 	__ATTR_RO(guid),
+	__ATTR_RO(units),
 	__ATTR_NULL,
 };
 
@@ -570,9 +616,13 @@ static void create_units(struct fw_device *device)
 		unit->device.parent = &device->device;
 		dev_set_name(&unit->device, "%s.%d", dev_name(&device->device), i++);
 
+		BUILD_BUG_ON(ARRAY_SIZE(unit->attribute_group.attrs) <
+				ARRAY_SIZE(fw_unit_attributes) +
+				ARRAY_SIZE(config_rom_attributes));
 		init_fw_attribute_group(&unit->device,
 					fw_unit_attributes,
 					&unit->attribute_group);
+
 		if (device_register(&unit->device) < 0)
 			goto skip_unit;
 
@@ -849,9 +899,13 @@ static void fw_device_init(struct work_struct *work)
 	device->device.devt = MKDEV(fw_cdev_major, minor);
 	dev_set_name(&device->device, "fw%d", minor);
 
+	BUILD_BUG_ON(ARRAY_SIZE(device->attribute_group.attrs) <
+			ARRAY_SIZE(fw_device_attributes) +
+			ARRAY_SIZE(config_rom_attributes));
 	init_fw_attribute_group(&device->device,
 				fw_device_attributes,
 				&device->attribute_group);
+
 	if (device_add(&device->device)) {
 		fw_error("Failed to add device.\n");
 		goto error_with_cdev;
@@ -993,6 +1047,9 @@ static void fw_device_refresh(struct work_struct *work)
 
 	create_units(device);
 
+	/* Userspace may want to re-read attributes. */
+	kobject_uevent(&device->device.kobj, KOBJ_CHANGE);
+
 	if (atomic_cmpxchg(&device->state,
 			   FW_DEVICE_INITIALIZING,
 			   FW_DEVICE_RUNNING) == FW_DEVICE_GONE)
@@ -1042,6 +1099,7 @@ void fw_node_event(struct fw_card *card, struct fw_node *node, int event)
 		device->node = fw_node_get(node);
 		device->node_id = node->node_id;
 		device->generation = card->generation;
+		device->is_local = node == card->local_node;
 		mutex_init(&device->client_list_mutex);
 		INIT_LIST_HEAD(&device->client_list);
 
@@ -1075,7 +1133,7 @@ void fw_node_event(struct fw_card *card, struct fw_node *node, int event)
 			    FW_DEVICE_INITIALIZING) == FW_DEVICE_RUNNING) {
 			PREPARE_DELAYED_WORK(&device->work, fw_device_refresh);
 			schedule_delayed_work(&device->work,
-				node == card->local_node ? 0 : INITIAL_DELAY);
+				device->is_local ? 0 : INITIAL_DELAY);
 		}
 		break;
 
