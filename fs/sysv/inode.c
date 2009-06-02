@@ -37,6 +37,7 @@ static void sysv_write_super(struct super_block *sb)
 	struct sysv_sb_info *sbi = SYSV_SB(sb);
 	unsigned long time = get_seconds(), old_time;
 
+	lock_super(sb);
 	lock_kernel();
 	if (sb->s_flags & MS_RDONLY)
 		goto clean;
@@ -56,21 +57,29 @@ static void sysv_write_super(struct super_block *sb)
 clean:
 	sb->s_dirt = 0;
 	unlock_kernel();
+	unlock_super(sb);
 }
 
 static int sysv_remount(struct super_block *sb, int *flags, char *data)
 {
 	struct sysv_sb_info *sbi = SYSV_SB(sb);
+	lock_super(sb);
 	if (sbi->s_forced_ro)
 		*flags |= MS_RDONLY;
 	if (!(*flags & MS_RDONLY))
 		sb->s_dirt = 1;
+	unlock_super(sb);
 	return 0;
 }
 
 static void sysv_put_super(struct super_block *sb)
 {
 	struct sysv_sb_info *sbi = SYSV_SB(sb);
+
+	lock_kernel();
+
+	if (sb->s_dirt)
+		sysv_write_super(sb);
 
 	if (!(sb->s_flags & MS_RDONLY)) {
 		/* XXX ext2 also updates the state here */
@@ -84,6 +93,8 @@ static void sysv_put_super(struct super_block *sb)
 		brelse(sbi->s_bh2);
 
 	kfree(sbi);
+
+	unlock_kernel();
 }
 
 static int sysv_statfs(struct dentry *dentry, struct kstatfs *buf)
