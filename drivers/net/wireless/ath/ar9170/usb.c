@@ -51,8 +51,13 @@ MODULE_AUTHOR("Johannes Berg <johannes@sipsolutions.net>");
 MODULE_AUTHOR("Christian Lamparter <chunkeey@web.de>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Atheros AR9170 802.11n USB wireless");
+MODULE_FIRMWARE("ar9170.fw");
 MODULE_FIRMWARE("ar9170-1.fw");
 MODULE_FIRMWARE("ar9170-2.fw");
+
+enum ar9170_requirements {
+	AR9170_REQ_FW1_ONLY = 1,
+};
 
 static struct usb_device_id ar9170_usb_ids[] = {
 	/* Atheros 9170 */
@@ -81,6 +86,10 @@ static struct usb_device_id ar9170_usb_ids[] = {
 	{ USB_DEVICE(0x2019, 0x5304) },
 	/* IO-Data WNGDNUS2 */
 	{ USB_DEVICE(0x04bb, 0x093f) },
+	/* AVM FRITZ!WLAN USB Stick N */
+	{ USB_DEVICE(0x057C, 0x8401) },
+	/* AVM FRITZ!WLAN USB Stick N 2.4 */
+	{ USB_DEVICE(0x057C, 0x8402), .driver_info = AR9170_REQ_FW1_ONLY },
 
 	/* terminate */
 	{}
@@ -504,17 +513,29 @@ static int ar9170_usb_request_firmware(struct ar9170_usb *aru)
 {
 	int err = 0;
 
+	err = request_firmware(&aru->firmware, "ar9170.fw",
+			       &aru->udev->dev);
+	if (!err) {
+		aru->init_values = NULL;
+		return 0;
+	}
+
+	if (aru->req_one_stage_fw) {
+		dev_err(&aru->udev->dev, "ar9170.fw firmware file "
+			"not found and is required for this device\n");
+		return -EINVAL;
+	}
+
+	dev_err(&aru->udev->dev, "ar9170.fw firmware file "
+		"not found, trying old firmware...\n");
+
 	err = request_firmware(&aru->init_values, "ar9170-1.fw",
 			       &aru->udev->dev);
-	if (err) {
-		dev_err(&aru->udev->dev, "file with init values not found.\n");
-		return err;
-	}
 
 	err = request_firmware(&aru->firmware, "ar9170-2.fw", &aru->udev->dev);
 	if (err) {
 		release_firmware(aru->init_values);
-		dev_err(&aru->udev->dev, "firmware file not found.\n");
+		dev_err(&aru->udev->dev, "file with init values not found.\n");
 		return err;
 	}
 
@@ -548,6 +569,9 @@ static int ar9170_usb_upload_firmware(struct ar9170_usb *aru)
 {
 	int err;
 
+	if (!aru->init_values)
+		goto upload_fw_start;
+
 	/* First, upload initial values to device RAM */
 	err = ar9170_usb_upload(aru, aru->init_values->data,
 				aru->init_values->size, 0x102800, false);
@@ -556,6 +580,8 @@ static int ar9170_usb_upload_firmware(struct ar9170_usb *aru)
 			"upload failed (%d).\n", err);
 		return err;
 	}
+
+upload_fw_start:
 
 	/* Then, upload the firmware itself and start it */
 	return ar9170_usb_upload(aru, aru->firmware->data, aru->firmware->size,
@@ -656,6 +682,15 @@ err_out:
 	return err;
 }
 
+static bool ar9170_requires_one_stage(const struct usb_device_id *id)
+{
+	if (!id->driver_info)
+		return false;
+	if (id->driver_info == AR9170_REQ_FW1_ONLY)
+		return true;
+	return false;
+}
+
 static int ar9170_usb_probe(struct usb_interface *intf,
 			const struct usb_device_id *id)
 {
@@ -675,6 +710,8 @@ static int ar9170_usb_probe(struct usb_interface *intf,
 	aru->udev = udev;
 	aru->intf = intf;
 	ar = &aru->common;
+
+	aru->req_one_stage_fw = ar9170_requires_one_stage(id);
 
 	usb_set_intfdata(intf, aru);
 	SET_IEEE80211_DEV(ar->hw, &udev->dev);
