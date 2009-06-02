@@ -1,0 +1,33 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series device-mapper
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.30-rc7-git4
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 3218911f839b6c85acbf872ad264ea69aa4d89ad
+HEAD is now at 3218911 Merge git://git.infradead.org/~dwmw2/mtd-2.6.30
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-lm78-add-missing-__devexit_p.patch
+hwmon-updated-documentation-on-alarms.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+hwmon-tmp401-01-new-driver.patch
+hwmon-tmp401-02-add-support-for-TI-TMP411.patch
+hwmon-tmp401-03-add-documentation.patch
+hwmon-w83627ehf-add-W83627DHG-P-support.patch
+hwmon-pci-quirk-for-MSI-7031.patch
+hwmon-f71882fg-01-f8000-cleanup-pwm.patch
+hwmon-f71882fg-02-f8000-sanity-check-pwm.patch
+hwmon-f71882fg-03-f8000-temp_fault.patch
+hwmon-f71882fg-04-add-f71858fg-support-v2.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 5654a64...a9a3352 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
