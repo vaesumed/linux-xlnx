@@ -798,15 +798,15 @@ unsigned long patch_espfix_desc(unsigned long uesp, unsigned long kesp)
 
 	return new_kesp;
 }
-#else
+#endif
+
 asmlinkage void __attribute__((weak)) smp_thermal_interrupt(void)
 {
 }
 
-asmlinkage void __attribute__((weak)) mce_threshold_interrupt(void)
+asmlinkage void __attribute__((weak)) smp_threshold_interrupt(void)
 {
 }
-#endif
 
 /*
  * 'math_state_restore()' saves the current math information in the
@@ -839,9 +839,6 @@ asmlinkage void math_state_restore(void)
 	}
 
 	clts();				/* Allow maths ops (or we recurse) */
-#ifdef CONFIG_X86_32
-	restore_fpu(tsk);
-#else
 	/*
 	 * Paranoid restore. send a SIGSEGV if we fail to restore the state.
 	 */
@@ -850,7 +847,7 @@ asmlinkage void math_state_restore(void)
 		force_sig(SIGSEGV, tsk);
 		return;
 	}
-#endif
+
 	thread->status |= TS_USEDFPU;	/* So we fnsave on switch_to() */
 	tsk->fpu_counter++;
 }
@@ -969,11 +966,8 @@ void __init trap_init(void)
 	for (i = 0; i < FIRST_EXTERNAL_VECTOR; i++)
 		set_bit(i, used_vectors);
 
-#ifdef CONFIG_X86_64
 	set_bit(IA32_SYSCALL_VECTOR, used_vectors);
-#else
-	set_bit(SYSCALL_VECTOR, used_vectors);
-#endif
+
 	/*
 	 * Should be a barrier for any external CPU state:
 	 */
