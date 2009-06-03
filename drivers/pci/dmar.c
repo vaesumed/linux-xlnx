@@ -515,6 +515,7 @@ int alloc_iommu(struct dmar_drhd_unit *drhd)
 	u32 ver;
 	static int iommu_allocated = 0;
 	int agaw = 0;
+	int msagaw = 0;
 
 	iommu = kzalloc(sizeof(*iommu), GFP_KERNEL);
 	if (!iommu)
@@ -535,12 +536,20 @@ int alloc_iommu(struct dmar_drhd_unit *drhd)
 	agaw = iommu_calculate_agaw(iommu);
 	if (agaw < 0) {
 		printk(KERN_ERR
-			"Cannot get a valid agaw for iommu (seq_id = %d)\n",
+		       "Cannot get a valid agaw for iommu (seq_id = %d)\n",
+		       iommu->seq_id);
+		goto error;
+	}
+	msagaw = iommu_calculate_max_sagaw(iommu);
+	if (msagaw < 0) {
+		printk(KERN_ERR
+			"Cannot get a valid max agaw for iommu (seq_id = %d)\n",
 			iommu->seq_id);
 		goto error;
 	}
 #endif
 	iommu->agaw = agaw;
+	iommu->msagaw = msagaw;
 
 	/* the registers might be more than one page */
 	map_size = max_t(int, ecap_max_iotlb_offset(iommu->ecap),
@@ -714,40 +723,25 @@ void qi_global_iec(struct intel_iommu *iommu)
 	qi_submit_sync(&desc, iommu);
 }
 
-int qi_flush_context(struct intel_iommu *iommu, u16 did, u16 sid, u8 fm,
-		     u64 type, int non_present_entry_flush)
+void qi_flush_context(struct intel_iommu *iommu, u16 did, u16 sid, u8 fm,
+		      u64 type)
 {
 	struct qi_desc desc;
-
-	if (non_present_entry_flush) {
-		if (!cap_caching_mode(iommu->cap))
-			return 1;
-		else
-			did = 0;
-	}
 
 	desc.low = QI_CC_FM(fm) | QI_CC_SID(sid) | QI_CC_DID(did)
 			| QI_CC_GRAN(type) | QI_CC_TYPE;
 	desc.high = 0;
 
-	return qi_submit_sync(&desc, iommu);
+	qi_submit_sync(&desc, iommu);
 }
 
-int qi_flush_iotlb(struct intel_iommu *iommu, u16 did, u64 addr,
-		   unsigned int size_order, u64 type,
-		   int non_present_entry_flush)
+void qi_flush_iotlb(struct intel_iommu *iommu, u16 did, u64 addr,
+		    unsigned int size_order, u64 type)
 {
 	u8 dw = 0, dr = 0;
 
 	struct qi_desc desc;
 	int ih = 0;
-
-	if (non_present_entry_flush) {
-		if (!cap_caching_mode(iommu->cap))
-			return 1;
-		else
-			did = 0;
-	}
 
 	if (cap_write_drain(iommu->cap))
 		dw = 1;
@@ -760,7 +754,7 @@ int qi_flush_iotlb(struct intel_iommu *iommu, u16 did, u64 addr,
 	desc.high = QI_IOTLB_ADDR(addr) | QI_IOTLB_IH(ih)
 		| QI_IOTLB_AM(size_order);
 
-	return qi_submit_sync(&desc, iommu);
+	qi_submit_sync(&desc, iommu);
 }
 
 /*
@@ -790,7 +784,6 @@ void dmar_disable_qi(struct intel_iommu *iommu)
 		cpu_relax();
 
 	iommu->gcmd &= ~DMA_GCMD_QIE;
-
 	writel(iommu->gcmd, iommu->reg + DMAR_GCMD_REG);
 
 	IOMMU_WAIT_OP(iommu, DMAR_GSTS_REG, readl,
@@ -804,7 +797,7 @@ end:
  */
 static void __dmar_enable_qi(struct intel_iommu *iommu)
 {
-	u32 cmd, sts;
+	u32 sts;
 	unsigned long flags;
 	struct q_inval *qi = iommu->qi;
 
@@ -818,9 +811,8 @@ static void __dmar_enable_qi(struct intel_iommu *iommu)
 
 	dmar_writeq(iommu->reg + DMAR_IQA_REG, virt_to_phys(qi->desc));
 
-	cmd = iommu->gcmd | DMA_GCMD_QIE;
 	iommu->gcmd |= DMA_GCMD_QIE;
-	writel(cmd, iommu->reg + DMAR_GCMD_REG);
+	writel(iommu->gcmd, iommu->reg + DMAR_GCMD_REG);
 
 	/* Make sure hardware complete it */
 	IOMMU_WAIT_OP(iommu, DMAR_GSTS_REG, readl, (sts & DMA_GSTS_QIES), sts);
@@ -1096,7 +1088,7 @@ int dmar_set_interrupt(struct intel_iommu *iommu)
 		set_irq_data(irq, NULL);
 		iommu->irq = 0;
 		destroy_irq(irq);
-		return 0;
+		return ret;
 	}
 
 	ret = request_irq(irq, dmar_fault, 0, iommu->name, iommu);
