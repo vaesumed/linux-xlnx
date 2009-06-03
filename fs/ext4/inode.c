@@ -1003,19 +1003,7 @@ static int ext4_ind_get_blocks(handle_t *handle, struct inode *inode,
 	if (!err)
 		err = ext4_splice_branch(handle, inode, iblock,
 					partial, indirect_blks, count);
-	/*
-	 * i_disksize growing is protected by i_data_sem.  Don't forget to
-	 * protect it if you're about to implement concurrent
-	 * ext4_get_block() -bzzz
-	*/
-	if (!err && (flags & EXT4_GET_BLOCKS_EXTEND_DISKSIZE)) {
-		disksize = ((loff_t) iblock + count) << inode->i_blkbits;
-		if (disksize > i_size_read(inode))
-			disksize = i_size_read(inode);
-		if (disksize > ei->i_disksize)
-			ei->i_disksize = disksize;
-	}
-	if (err)
+	else 
 		goto cleanup;
 
 	set_buffer_new(bh_result);
@@ -1321,7 +1309,7 @@ struct buffer_head *ext4_getblk(handle_t *handle, struct inode *inode,
 {
 	struct buffer_head dummy;
 	int fatal = 0, err;
-	int flags = EXT4_GET_BLOCKS_EXTEND_DISKSIZE;
+	int flags = 0;
 
 	J_ASSERT(handle != NULL || create == 0);
 
@@ -2153,9 +2141,7 @@ static int mpage_da_map_blocks(struct mpage_da_data *mpd)
 	}
 
 	/*
-	 * Update on-disk size along with block allocation we don't
-	 * use EXT4_GET_BLOCKS_EXTEND_DISKSIZE as size may change
-	 * within already allocated block -bzzz
+	 * Update on-disk size along with block allocation.
 	 */
 	disksize = ((loff_t) next + blks) << mpd->inode->i_blkbits;
 	if (disksize > i_size_read(mpd->inode))
