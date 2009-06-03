@@ -44,4 +44,4 @@ obj-$(CONFIG_USB_SERIAL_QUATECH2)	+= serqt_usb2/
 obj-$(CONFIG_VT6655)		+= vt6655/
 obj-$(CONFIG_USB_CPC)		+= cpc-usb/
 obj-$(CONFIG_MRST_NAND)		+= mrst_nand/
-
+obj-$(CONFIG_RDC_17F3101X)	+= pata_rdc/
