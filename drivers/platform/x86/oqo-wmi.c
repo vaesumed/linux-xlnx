@@ -592,7 +592,7 @@ static int __devinit oqo_kine_init(void)
 	    oqo_kine->absmax[ABS_Y] =
 	    oqo_kine->absmax[ABS_Z] = oqo_kine->absmax[ABS_MISC] = 32767;
 
-	dev_set_name(&oqo_kine->dev, "kine");
+	memcpy(oqo_kine->dev.bus_id, "kine", 4);
 
 	oqo_kine_polled = input_allocate_polled_device();
 	if (!oqo_kine_polled) {
