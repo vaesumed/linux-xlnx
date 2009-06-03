@@ -38,6 +38,7 @@
 #define KVM_REQ_UNHALT             6
 #define KVM_REQ_MMU_SYNC           7
 #define KVM_REQ_KVMCLOCK_UPDATE    8
+#define KVM_REQ_KICK               9
 
 #define KVM_USERSPACE_IRQ_SOURCE_ID	0
 
@@ -72,7 +73,6 @@ struct kvm_vcpu {
 	struct mutex mutex;
 	int   cpu;
 	struct kvm_run *run;
-	int guest_mode;
 	unsigned long requests;
 	unsigned long guest_debug;
 	int fpu_active;
@@ -134,6 +134,9 @@ struct kvm {
 	struct list_head vm_list;
 	struct kvm_io_bus mmio_bus;
 	struct kvm_io_bus pio_bus;
+#ifdef CONFIG_HAVE_KVM_EVENTFD
+	struct list_head irqfds;
+#endif
 	struct kvm_vm_stat stat;
 	struct kvm_arch arch;
 	atomic_t users_count;
@@ -241,8 +244,6 @@ long kvm_arch_dev_ioctl(struct file *filp,
 			unsigned int ioctl, unsigned long arg);
 long kvm_arch_vcpu_ioctl(struct file *filp,
 			 unsigned int ioctl, unsigned long arg);
-void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
-void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu);
 
 int kvm_dev_ioctl_check_extension(long ext);
 
@@ -298,6 +299,7 @@ int kvm_arch_hardware_setup(void);
 void kvm_arch_hardware_unsetup(void);
 void kvm_arch_check_processor_compat(void *rtn);
 int kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu);
+int kvm_arch_interrupt_allowed(struct kvm_vcpu *vcpu);
 
 void kvm_free_physmem(struct kvm *kvm);
 
@@ -319,6 +321,13 @@ struct kvm_irq_ack_notifier {
 	void (*irq_acked)(struct kvm_irq_ack_notifier *kian);
 };
 
+#define KVM_ASSIGNED_MSIX_PENDING		0x1
+struct kvm_guest_msix_entry {
+	u32 vector;
+	u16 entry;
+	u16 flags;
+};
+
 struct kvm_assigned_dev_kernel {
 	struct kvm_irq_ack_notifier ack_notifier;
 	struct work_struct interrupt_work;
@@ -326,18 +335,18 @@ struct kvm_assigned_dev_kernel {
 	int assigned_dev_id;
 	int host_busnr;
 	int host_devfn;
+	unsigned int entries_nr;
 	int host_irq;
 	bool host_irq_disabled;
+	struct msix_entry *host_msix_entries;
 	int guest_irq;
-#define KVM_ASSIGNED_DEV_GUEST_INTX	(1 << 0)
-#define KVM_ASSIGNED_DEV_GUEST_MSI	(1 << 1)
-#define KVM_ASSIGNED_DEV_HOST_INTX	(1 << 8)
-#define KVM_ASSIGNED_DEV_HOST_MSI	(1 << 9)
+	struct kvm_guest_msix_entry *guest_msix_entries;
 	unsigned long irq_requested_type;
 	int irq_source_id;
 	int flags;
 	struct pci_dev *dev;
 	struct kvm *kvm;
+	spinlock_t assigned_dev_lock;
 };
 
 struct kvm_irq_mask_notifier {
@@ -352,6 +361,11 @@ void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 				      struct kvm_irq_mask_notifier *kimn);
 void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, bool mask);
 
+#ifdef __KVM_HAVE_IOAPIC
+void kvm_get_intr_delivery_bitmask(struct kvm_ioapic *ioapic,
+				   union kvm_ioapic_redirect_entry *entry,
+				   unsigned long *deliver_bitmask);
+#endif
 int kvm_set_irq(struct kvm *kvm, int irq_source_id, int irq, int level);
 void kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin);
 void kvm_register_irq_ack_notifier(struct kvm *kvm,
@@ -359,6 +373,9 @@ void kvm_register_irq_ack_notifier(struct kvm *kvm,
 void kvm_unregister_irq_ack_notifier(struct kvm_irq_ack_notifier *kian);
 int kvm_request_irq_source_id(struct kvm *kvm);
 void kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id);
+
+/* For vcpu->arch.iommu_flags */
+#define KVM_IOMMU_CACHE_COHERENCY	0x1
 
 #ifdef CONFIG_IOMMU_API
 int kvm_iommu_map_pages(struct kvm *kvm, gfn_t base_gfn,
@@ -511,5 +528,23 @@ void kvm_free_irq_routing(struct kvm *kvm);
 static inline void kvm_free_irq_routing(struct kvm *kvm) {}
 
 #endif
+
+#ifdef CONFIG_HAVE_KVM_EVENTFD
+
+void kvm_irqfd_init(struct kvm *kvm);
+int kvm_irqfd(struct kvm *kvm, int fd, int gsi, int flags);
+void kvm_irqfd_release(struct kvm *kvm);
+
+#else
+
+static inline void kvm_irqfd_init(struct kvm *kvm) {}
+static inline int kvm_irqfd(struct kvm *kvm, int fd, int gsi, int flags)
+{
+	return -EINVAL;
+}
+
+static inline void kvm_irqfd_release(struct kvm *kvm) {}
+
+#endif /* CONFIG_HAVE_KVM_EVENTFD */
 
 #endif
