@@ -375,6 +375,7 @@ lookup_protocol:
 	inet->uc_ttl	= -1;
 	inet->mc_loop	= 1;
 	inet->mc_ttl	= 1;
+	inet->mc_all	= 1;
 	inet->mc_index	= 0;
 	inet->mc_list	= NULL;
 
@@ -1003,8 +1004,6 @@ void inet_register_protosw(struct inet_protosw *p)
 out:
 	spin_unlock_bh(&inetsw_lock);
 
-	synchronize_net();
-
 	return;
 
 out_permanent:
@@ -1248,13 +1247,20 @@ static struct sk_buff **inet_gro_receive(struct sk_buff **head,
 	struct sk_buff **pp = NULL;
 	struct sk_buff *p;
 	struct iphdr *iph;
+	unsigned int hlen;
+	unsigned int off;
+	unsigned int id;
 	int flush = 1;
 	int proto;
-	int id;
 
-	iph = skb_gro_header(skb, sizeof(*iph));
-	if (unlikely(!iph))
-		goto out;
+	off = skb_gro_offset(skb);
+	hlen = off + sizeof(*iph);
+	iph = skb_gro_header_fast(skb, off);
+	if (skb_gro_header_hard(skb, hlen)) {
+		iph = skb_gro_header_slow(skb, hlen, off);
+		if (unlikely(!iph))
+			goto out;
+	}
 
 	proto = iph->protocol & (MAX_INET_PROTOS - 1);
 
@@ -1269,9 +1275,9 @@ static struct sk_buff **inet_gro_receive(struct sk_buff **head,
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
 		goto out_unlock;
 
-	flush = ntohs(iph->tot_len) != skb_gro_len(skb) ||
-		iph->frag_off != htons(IP_DF);
-	id = ntohs(iph->id);
+	id = ntohl(*(u32 *)&iph->id);
+	flush = (u16)((ntohl(*(u32 *)iph) ^ skb_gro_len(skb)) | (id ^ IP_DF));
+	id >>= 16;
 
 	for (p = *head; p; p = p->next) {
 		struct iphdr *iph2;

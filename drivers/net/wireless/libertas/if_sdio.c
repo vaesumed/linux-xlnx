@@ -48,8 +48,11 @@ static char *lbs_fw_name = NULL;
 module_param_named(fw_name, lbs_fw_name, charp, 0644);
 
 static const struct sdio_device_id if_sdio_ids[] = {
-	{ SDIO_DEVICE(SDIO_VENDOR_ID_MARVELL, SDIO_DEVICE_ID_MARVELL_LIBERTAS) },
-	{ /* end: all zeroes */						},
+	{ SDIO_DEVICE(SDIO_VENDOR_ID_MARVELL,
+			SDIO_DEVICE_ID_MARVELL_LIBERTAS) },
+	{ SDIO_DEVICE(SDIO_VENDOR_ID_MARVELL,
+			SDIO_DEVICE_ID_MARVELL_8688WLAN) },
+	{ /* end: all zeroes */				},
 };
 
 MODULE_DEVICE_TABLE(sdio, if_sdio_ids);
@@ -58,20 +61,30 @@ struct if_sdio_model {
 	int model;
 	const char *helper;
 	const char *firmware;
+	struct if_sdio_card *card;
 };
 
 static struct if_sdio_model if_sdio_models[] = {
 	{
 		/* 8385 */
-		.model = 0x04,
+		.model = IF_SDIO_MODEL_8385,
 		.helper = "sd8385_helper.bin",
 		.firmware = "sd8385.bin",
+		.card = NULL,
 	},
 	{
 		/* 8686 */
-		.model = 0x0B,
+		.model = IF_SDIO_MODEL_8686,
 		.helper = "sd8686_helper.bin",
 		.firmware = "sd8686.bin",
+		.card = NULL,
+	},
+	{
+		/* 8688 */
+		.model = IF_SDIO_MODEL_8688,
+		.helper = "sd8688_helper.bin",
+		.firmware = "sd8688.bin",
+		.card = NULL,
 	},
 };
 
@@ -87,6 +100,7 @@ struct if_sdio_card {
 
 	int			model;
 	unsigned long		ioport;
+	unsigned int		scratch_reg;
 
 	const char		*helper;
 	const char		*firmware;
@@ -98,25 +112,29 @@ struct if_sdio_card {
 
 	struct workqueue_struct	*workqueue;
 	struct work_struct	packet_worker;
+
+	u8			rx_unit;
 };
 
 /********************************************************************/
 /* I/O                                                              */
 /********************************************************************/
 
+/*
+ *  For SD8385/SD8686, this function reads firmware status after
+ *  the image is downloaded, or reads RX packet length when
+ *  interrupt (with IF_SDIO_H_INT_UPLD bit set) is received.
+ *  For SD8688, this function reads firmware status only.
+ */
 static u16 if_sdio_read_scratch(struct if_sdio_card *card, int *err)
 {
-	int ret, reg;
+	int ret;
 	u16 scratch;
 
-	if (card->model == 0x04)
-		reg = IF_SDIO_SCRATCH_OLD;
-	else
-		reg = IF_SDIO_SCRATCH;
-
-	scratch = sdio_readb(card->func, reg, &ret);
+	scratch = sdio_readb(card->func, card->scratch_reg, &ret);
 	if (!ret)
-		scratch |= sdio_readb(card->func, reg + 1, &ret) << 8;
+		scratch |= sdio_readb(card->func, card->scratch_reg + 1,
+					&ret) << 8;
 
 	if (err)
 		*err = ret;
@@ -125,6 +143,46 @@ static u16 if_sdio_read_scratch(struct if_sdio_card *card, int *err)
 		return 0xffff;
 
 	return scratch;
+}
+
+static u8 if_sdio_read_rx_unit(struct if_sdio_card *card)
+{
+	int ret;
+	u8 rx_unit;
+
+	rx_unit = sdio_readb(card->func, IF_SDIO_RX_UNIT, &ret);
+
+	if (ret)
+		rx_unit = 0;
+
+	return rx_unit;
+}
+
+static u16 if_sdio_read_rx_len(struct if_sdio_card *card, int *err)
+{
+	int ret;
+	u16 rx_len;
+
+	switch (card->model) {
+	case IF_SDIO_MODEL_8385:
+	case IF_SDIO_MODEL_8686:
+		rx_len = if_sdio_read_scratch(card, &ret);
+		break;
+	case IF_SDIO_MODEL_8688:
+	default: /* for newer chipsets */
+		rx_len = sdio_readb(card->func, IF_SDIO_RX_LEN, &ret);
+		if (!ret)
+			rx_len <<= card->rx_unit;
+		else
+			rx_len = 0xffff;	/* invalid length */
+
+		break;
+	}
+
+	if (err)
+		*err = ret;
+
+	return rx_len;
 }
 
 static int if_sdio_handle_cmd(struct if_sdio_card *card,
@@ -207,7 +265,7 @@ static int if_sdio_handle_event(struct if_sdio_card *card,
 
 	lbs_deb_enter(LBS_DEB_SDIO);
 
-	if (card->model == 0x04) {
+	if (card->model == IF_SDIO_MODEL_8385) {
 		event = sdio_readb(card->func, IF_SDIO_EVENT, &ret);
 		if (ret)
 			goto out;
@@ -245,7 +303,7 @@ static int if_sdio_card_to_host(struct if_sdio_card *card)
 
 	lbs_deb_enter(LBS_DEB_SDIO);
 
-	size = if_sdio_read_scratch(card, &ret);
+	size = if_sdio_read_rx_len(card, &ret);
 	if (ret)
 		goto out;
 
@@ -488,7 +546,6 @@ static int if_sdio_prog_helper(struct if_sdio_card *card)
 	ret = 0;
 
 release:
-	sdio_set_block_size(card->func, 0);
 	sdio_release_host(card->func);
 	kfree(chunk_buffer);
 release_fw:
@@ -624,7 +681,6 @@ static int if_sdio_prog_real(struct if_sdio_card *card)
 	ret = 0;
 
 release:
-	sdio_set_block_size(card->func, 0);
 	sdio_release_host(card->func);
 	kfree(chunk_buffer);
 release_fw:
@@ -653,6 +709,8 @@ static int if_sdio_prog_firmware(struct if_sdio_card *card)
 	if (ret)
 		goto out;
 
+	lbs_deb_sdio("firmware status = %#x\n", scratch);
+
 	if (scratch == IF_SDIO_FIRMWARE_OK) {
 		lbs_deb_sdio("firmware already loaded\n");
 		goto success;
@@ -667,6 +725,9 @@ static int if_sdio_prog_firmware(struct if_sdio_card *card)
 		goto out;
 
 success:
+	sdio_claim_host(card->func);
+	sdio_set_block_size(card->func, IF_SDIO_BLOCK_SIZE);
+	sdio_release_host(card->func);
 	ret = 0;
 
 out:
@@ -820,10 +881,10 @@ static int if_sdio_probe(struct sdio_func *func,
 		if (sscanf(func->card->info[i],
 				"ID: %x", &model) == 1)
 			break;
-               if (!strcmp(func->card->info[i], "IBIS Wireless SDIO Card")) {
-                       model = 4;
-                       break;
-               }
+		if (!strcmp(func->card->info[i], "IBIS Wireless SDIO Card")) {
+			model = IF_SDIO_MODEL_8385;
+			break;
+		}
 	}
 
 	if (i == func->card->num_info) {
@@ -837,6 +898,20 @@ static int if_sdio_probe(struct sdio_func *func,
 
 	card->func = func;
 	card->model = model;
+
+	switch (card->model) {
+	case IF_SDIO_MODEL_8385:
+		card->scratch_reg = IF_SDIO_SCRATCH_OLD;
+		break;
+	case IF_SDIO_MODEL_8686:
+		card->scratch_reg = IF_SDIO_SCRATCH;
+		break;
+	case IF_SDIO_MODEL_8688:
+	default: /* for newer chipsets */
+		card->scratch_reg = IF_SDIO_FW_STATUS;
+		break;
+	}
+
 	spin_lock_init(&card->lock);
 	card->workqueue = create_workqueue("libertas_sdio");
 	INIT_WORK(&card->packet_worker, if_sdio_host_to_card_worker);
@@ -851,6 +926,8 @@ static int if_sdio_probe(struct sdio_func *func,
 		ret = -ENODEV;
 		goto free;
 	}
+
+	if_sdio_models[i].card = card;
 
 	card->helper = if_sdio_models[i].helper;
 	card->firmware = if_sdio_models[i].firmware;
@@ -914,14 +991,31 @@ static int if_sdio_probe(struct sdio_func *func,
 
 	priv->fw_ready = 1;
 
+	sdio_claim_host(func);
+
+	/*
+	 * Get rx_unit if the chip is SD8688 or newer.
+	 * SD8385 & SD8686 do not have rx_unit.
+	 */
+	if ((card->model != IF_SDIO_MODEL_8385)
+			&& (card->model != IF_SDIO_MODEL_8686))
+		card->rx_unit = if_sdio_read_rx_unit(card);
+	else
+		card->rx_unit = 0;
+
 	/*
 	 * Enable interrupts now that everything is set up
 	 */
-	sdio_claim_host(func);
 	sdio_writeb(func, 0x0f, IF_SDIO_H_INT_MASK, &ret);
 	sdio_release_host(func);
 	if (ret)
 		goto reclaim;
+
+	/*
+	 * FUNC_INIT is required for SD8688 WLAN/BT multiple functions
+	 */
+	priv->fn_init_required =
+		(card->model == IF_SDIO_MODEL_8688) ? 1 : 0;
 
 	ret = lbs_start_card(priv);
 	if (ret)
@@ -963,23 +1057,30 @@ static void if_sdio_remove(struct sdio_func *func)
 {
 	struct if_sdio_card *card;
 	struct if_sdio_packet *packet;
+	int ret;
 
 	lbs_deb_enter(LBS_DEB_SDIO);
 
 	card = sdio_get_drvdata(func);
 
+	lbs_stop_card(card->priv);
+
 	card->priv->surpriseremoved = 1;
 
 	lbs_deb_sdio("call remove card\n");
-	lbs_stop_card(card->priv);
 	lbs_remove_card(card->priv);
 
 	flush_workqueue(card->workqueue);
 	destroy_workqueue(card->workqueue);
 
 	sdio_claim_host(func);
+
+	/* Disable interrupts */
+	sdio_writeb(func, 0x00, IF_SDIO_H_INT_MASK, &ret);
+
 	sdio_release_irq(func);
 	sdio_disable_func(func);
+
 	sdio_release_host(func);
 
 	while (card->packets) {
@@ -1022,7 +1123,22 @@ static int __init if_sdio_init_module(void)
 
 static void __exit if_sdio_exit_module(void)
 {
+	int i;
+	struct if_sdio_card *card;
+
 	lbs_deb_enter(LBS_DEB_SDIO);
+
+	for (i = 0; i < ARRAY_SIZE(if_sdio_models); i++) {
+		card = if_sdio_models[i].card;
+
+		/*
+		 * FUNC_SHUTDOWN is required for SD8688 WLAN/BT
+		 * multiple functions
+		 */
+		if (card && card->priv)
+			card->priv->fn_shutdown_required =
+				(card->model == IF_SDIO_MODEL_8688) ? 1 : 0;
+	}
 
 	sdio_unregister_driver(&if_sdio_driver);
 

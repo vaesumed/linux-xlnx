@@ -2826,6 +2826,8 @@ int e1000e_up(struct e1000_adapter *adapter)
 		e1000_configure_msix(adapter);
 	e1000_irq_enable(adapter);
 
+	netif_wake_queue(adapter->netdev);
+
 	/* fire a link change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
 	return 0;
@@ -2848,7 +2850,7 @@ void e1000e_down(struct e1000_adapter *adapter)
 	ew32(RCTL, rctl & ~E1000_RCTL_EN);
 	/* flush and sleep below */
 
-	netif_tx_stop_all_queues(netdev);
+	netif_stop_queue(netdev);
 
 	/* disable transmits in the hardware */
 	tctl = er32(TCTL);
@@ -3072,6 +3074,8 @@ static int e1000_open(struct net_device *netdev)
 	if (test_bit(__E1000_TESTING, &adapter->state))
 		return -EBUSY;
 
+	netif_carrier_off(netdev);
+
 	/* allocate transmit descriptors */
 	err = e1000e_setup_tx_resources(adapter);
 	if (err)
@@ -3128,7 +3132,7 @@ static int e1000_open(struct net_device *netdev)
 
 	e1000_irq_enable(adapter);
 
-	netif_tx_start_all_queues(netdev);
+	netif_start_queue(netdev);
 
 	/* fire a link status change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
@@ -3598,7 +3602,6 @@ static void e1000_watchdog_task(struct work_struct *work)
 				phy->ops.cfg_on_link_up(hw);
 
 			netif_carrier_on(netdev);
-			netif_tx_wake_all_queues(netdev);
 
 			if (!test_bit(__E1000_DOWN, &adapter->state))
 				mod_timer(&adapter->phy_info_timer,
@@ -3612,7 +3615,6 @@ static void e1000_watchdog_task(struct work_struct *work)
 			printk(KERN_INFO "e1000e: %s NIC Link is Down\n",
 			       adapter->netdev->name);
 			netif_carrier_off(netdev);
-			netif_tx_stop_all_queues(netdev);
 			if (!test_bit(__E1000_DOWN, &adapter->state))
 				mod_timer(&adapter->phy_info_timer,
 					  round_jiffies(jiffies + 2 * HZ));
@@ -3649,6 +3651,8 @@ link_up:
 			 */
 			adapter->tx_timeout_count++;
 			schedule_work(&adapter->reset_task);
+			/* return immediately since reset is imminent */
+			return;
 		}
 	}
 
@@ -4145,7 +4149,6 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	count = e1000_tx_map(adapter, skb, first, max_per_txd, nr_frags, mss);
 	if (count) {
 		e1000_tx_queue(adapter, tx_flags, count);
-		netdev->trans_start = jiffies;
 		/* Make sure there is space in the ring for the next send. */
 		e1000_maybe_stop_tx(netdev, MAX_SKB_FRAGS + 2);
 
@@ -5037,14 +5040,13 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	if (!(adapter->flags & FLAG_HAS_AMT))
 		e1000_get_hw_control(adapter);
 
-	/* tell the stack to leave us alone until e1000_open() is called */
-	netif_carrier_off(netdev);
-	netif_tx_stop_all_queues(netdev);
-
 	strcpy(netdev->name, "eth%d");
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;
+
+	/* carrier off reporting is important to ethtool even BEFORE open */
+	netif_carrier_off(netdev);
 
 	e1000_print_device_info(adapter);
 

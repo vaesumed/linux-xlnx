@@ -203,6 +203,9 @@ struct skb_shared_info {
 #ifdef CONFIG_HAS_DMA
 	dma_addr_t	dma_maps[MAX_SKB_FRAGS + 1];
 #endif
+	/* Intermediate layers must ensure that destructor_arg
+	 * remains valid until skb destructor */
+	void *		destructor_arg;
 };
 
 /* We divide dataref into two halves.  The higher 16 bits hold references
@@ -1715,8 +1718,14 @@ extern int	       skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
 							struct iovec *iov);
 extern int	       skb_copy_datagram_from_iovec(struct sk_buff *skb,
 						    int offset,
-						    struct iovec *from,
+						    const struct iovec *from,
+						    int from_offset,
 						    int len);
+extern int	       skb_copy_datagram_const_iovec(const struct sk_buff *from,
+						     int offset,
+						     const struct iovec *to,
+						     int to_offset,
+						     int size);
 extern void	       skb_free_datagram(struct sock *sk, struct sk_buff *skb);
 extern int	       skb_kill_datagram(struct sock *sk, struct sk_buff *skb,
 					 unsigned int flags);

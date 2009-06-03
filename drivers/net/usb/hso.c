@@ -482,7 +482,7 @@ static ssize_t hso_sysfs_show_porttype(struct device *dev,
 				       struct device_attribute *attr,
 				       char *buf)
 {
-	struct hso_device *hso_dev = dev->driver_data;
+	struct hso_device *hso_dev = dev_get_drvdata(dev);
 	char *port_name;
 
 	if (!hso_dev)
@@ -2313,7 +2313,7 @@ static int hso_serial_common_create(struct hso_serial *serial, int num_urbs,
 	serial->parent->dev = tty_register_device(tty_drv, minor,
 					&serial->parent->interface->dev);
 	dev = serial->parent->dev;
-	dev->driver_data = serial->parent;
+	dev_set_drvdata(dev, serial->parent);
 	i = device_create_file(dev, &dev_attr_hsotype);
 
 	/* fill in specific data for later use */
@@ -2484,7 +2484,7 @@ static int add_net_device(struct hso_device *hso_dev)
 static int hso_radio_toggle(void *data, enum rfkill_state state)
 {
 	struct hso_device *hso_dev = data;
-	int enabled = (state == RFKILL_STATE_ON);
+	int enabled = (state == RFKILL_STATE_UNBLOCKED);
 	int rv;
 
 	mutex_lock(&hso_dev->mutex);
@@ -2522,7 +2522,7 @@ static void hso_create_rfkill(struct hso_device *hso_dev,
 	snprintf(rfkn, 20, "hso-%d",
 		 interface->altsetting->desc.bInterfaceNumber);
 	hso_net->rfkill->name = rfkn;
-	hso_net->rfkill->state = RFKILL_STATE_ON;
+	hso_net->rfkill->state = RFKILL_STATE_UNBLOCKED;
 	hso_net->rfkill->data = hso_dev;
 	hso_net->rfkill->toggle_radio = hso_radio_toggle;
 	if (rfkill_register(hso_net->rfkill) < 0) {
