@@ -32,7 +32,7 @@ enum cpu_type {
 
 	/* SH-4A types */
 	CPU_SH7763, CPU_SH7770, CPU_SH7780, CPU_SH7781, CPU_SH7785, CPU_SH7786,
-	CPU_SH7723, CPU_SHX3,
+	CPU_SH7723, CPU_SH7724, CPU_SHX3,
 
 	/* SH4AL-DSP types */
 	CPU_SH7343, CPU_SH7722, CPU_SH7366,
@@ -93,6 +93,10 @@ extern struct pt_regs fake_swapper_regs;
 /* arch/sh/kernel/setup.c */
 const char *get_cpu_subtype(struct sh_cpuinfo *c);
 extern const struct seq_operations cpuinfo_op;
+
+/* processor boot mode configuration */
+int generic_mode_pins(void);
+int test_mode_pin(int pin);
 
 #ifdef CONFIG_VSYSCALL
 int vsyscall_init(void);
