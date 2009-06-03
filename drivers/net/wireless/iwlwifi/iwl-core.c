@@ -1704,8 +1704,9 @@ static irqreturn_t iwl_isr(int irq, void *data)
 {
 	struct iwl_priv *priv = data;
 	u32 inta, inta_mask;
+#ifdef CONFIG_IWLWIFI_DEBUG
 	u32 inta_fh;
-
+#endif
 	if (!priv)
 		return IRQ_NONE;
 
@@ -2684,13 +2685,6 @@ int iwl_set_mode(struct iwl_priv *priv, int mode)
 	/* dont commit rxon if rf-kill is on*/
 	if (!iwl_is_ready_rf(priv))
 		return -EAGAIN;
-
-	cancel_delayed_work(&priv->scan_check);
-	if (iwl_scan_cancel_timeout(priv, 100)) {
-		IWL_WARN(priv, "Aborted scan still in progress after 100ms\n");
-		IWL_DEBUG_MAC80211(priv, "leaving - scan abort failed.\n");
-		return -EAGAIN;
-	}
 
 	iwlcore_commit_rxon(priv);
 
