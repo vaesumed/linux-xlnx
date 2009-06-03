@@ -43,6 +43,8 @@
 #include <linux/usb/serial.h>
 
 /* Function prototypes */
+static int  option_probe(struct usb_serial *serial,
+			const struct usb_device_id *id);
 static int  option_open(struct tty_struct *tty, struct usb_serial_port *port,
 							struct file *filp);
 static void option_close(struct usb_serial_port *port);
@@ -202,9 +204,9 @@ static int  option_resume(struct usb_serial *serial);
 #define NOVATELWIRELESS_PRODUCT_MC727		0x4100
 #define NOVATELWIRELESS_PRODUCT_MC950D		0x4400
 #define NOVATELWIRELESS_PRODUCT_U727		0x5010
+#define NOVATELWIRELESS_PRODUCT_MC760		0x6000
 
 /* FUTURE NOVATEL PRODUCTS */
-#define NOVATELWIRELESS_PRODUCT_EVDO_FULLSPEED	0X6000
 #define NOVATELWIRELESS_PRODUCT_EVDO_HIGHSPEED	0X6001
 #define NOVATELWIRELESS_PRODUCT_HSPA_FULLSPEED	0X7000
 #define NOVATELWIRELESS_PRODUCT_HSPA_HIGHSPEED	0X7001
@@ -426,7 +428,7 @@ static struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_MC950D) }, /* Novatel MC930D/MC950D */
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_MC727) }, /* Novatel MC727/U727/USB727 */
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_U727) }, /* Novatel MC727/U727/USB727 */
-	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_EVDO_FULLSPEED) }, /* Novatel EVDO product */
+	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_MC760) }, /* Novatel MC760/U760/USB760 */
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_HSPA_FULLSPEED) }, /* Novatel HSPA product */
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_EVDO_EMBEDDED_FULLSPEED) }, /* Novatel EVDO Embedded product */
 	{ USB_DEVICE(NOVATELWIRELESS_VENDOR_ID, NOVATELWIRELESS_PRODUCT_HSPA_EMBEDDED_FULLSPEED) }, /* Novatel HSPA Embedded product */
@@ -555,6 +557,7 @@ static struct usb_serial_driver option_1port_device = {
 	.usb_driver        = &option_driver,
 	.id_table          = option_ids,
 	.num_ports         = 1,
+	.probe             = option_probe,
 	.open              = option_open,
 	.close             = option_close,
 	.dtr_rts	   = option_dtr_rts,
@@ -630,6 +633,18 @@ static void __exit option_exit(void)
 
 module_init(option_init);
 module_exit(option_exit);
+
+static int option_probe(struct usb_serial *serial,
+			const struct usb_device_id *id)
+{
+	/* D-Link DWM 652 still exposes CD-Rom emulation interface in modem mode */
+	if (serial->dev->descriptor.idVendor == DLINK_VENDOR_ID &&
+		serial->dev->descriptor.idProduct == DLINK_PRODUCT_DWM_652 &&
+		serial->interface->cur_altsetting->desc.bInterfaceClass == 0x8)
+		return -ENODEV;
+
+	return 0;
+}
 
 static void option_set_termios(struct tty_struct *tty,
 		struct usb_serial_port *port, struct ktermios *old_termios)
