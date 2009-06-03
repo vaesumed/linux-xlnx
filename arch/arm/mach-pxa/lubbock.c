@@ -111,6 +111,12 @@ static unsigned long lubbock_pin_config[] __initdata = {
 
 	/* wakeup */
 	GPIO1_GPIO | WAKEUP_ON_EDGE_RISE,
+
+	/* AC97 */
+	GPIO31_AC97_SYNC,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
 };
 
 #define LUB_HEXLED		__LUB_REG(LUBBOCK_FPGA_PHYS + 0x010)
