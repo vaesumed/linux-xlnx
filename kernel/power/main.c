@@ -188,9 +188,6 @@ static void suspend_test_finish(const char *label)
 
 #endif
 
-/* This is just an arbitrary number */
-#define FREE_PAGE_NUMBER (100)
-
 static struct platform_suspend_ops *suspend_ops;
 
 /**
@@ -226,7 +223,6 @@ int suspend_valid_only_mem(suspend_state_t state)
 static int suspend_prepare(void)
 {
 	int error;
-	unsigned int free_pages;
 
 	if (!suspend_ops || !suspend_ops->enter)
 		return -EPERM;
@@ -241,24 +237,10 @@ static int suspend_prepare(void)
 	if (error)
 		goto Finish;
 
-	if (suspend_freeze_processes()) {
-		error = -EAGAIN;
-		goto Thaw;
-	}
-
-	free_pages = global_page_state(NR_FREE_PAGES);
-	if (free_pages < FREE_PAGE_NUMBER) {
-		pr_debug("PM: free some memory\n");
-		shrink_all_memory(FREE_PAGE_NUMBER - free_pages);
-		if (nr_free_pages() < FREE_PAGE_NUMBER) {
-			error = -ENOMEM;
-			printk(KERN_ERR "PM: No enough memory\n");
-		}
-	}
+	error = suspend_freeze_processes();
 	if (!error)
 		return 0;
 
- Thaw:
 	suspend_thaw_processes();
 	usermodehelper_enable();
  Finish:
@@ -295,7 +277,7 @@ static int suspend_enter(suspend_state_t state)
 			return error;
 	}
 
-	error = device_power_down(PMSG_SUSPEND);
+	error = dpm_suspend_noirq(PMSG_SUSPEND);
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to power down\n");
 		goto Platfrom_finish;
@@ -335,7 +317,7 @@ static int suspend_enter(suspend_state_t state)
 		suspend_ops->wake();
 
  Power_up_devices:
-	device_power_up(PMSG_RESUME);
+	dpm_resume_noirq(PMSG_RESUME);
 
  Platfrom_finish:
 	if (suspend_ops->finish)
@@ -363,7 +345,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 	}
 	suspend_console();
 	suspend_test_start();
-	error = device_suspend(PMSG_SUSPEND);
+	error = dpm_suspend_start(PMSG_SUSPEND);
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to suspend\n");
 		goto Recover_platform;
@@ -376,7 +358,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 
  Resume_devices:
 	suspend_test_start();
-	device_resume(PMSG_RESUME);
+	dpm_resume_end(PMSG_RESUME);
 	suspend_test_finish("resume devices");
 	resume_console();
  Close:
