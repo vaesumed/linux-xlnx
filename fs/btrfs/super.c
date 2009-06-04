@@ -60,8 +60,12 @@ static void btrfs_put_super(struct super_block *sb)
 	struct btrfs_root *root = btrfs_sb(sb);
 	int ret;
 
+	lock_kernel();
+
 	ret = close_ctree(root);
 	sb->s_fs_info = NULL;
+
+	unlock_kernel();
 }
 
 enum {
@@ -388,10 +392,6 @@ int btrfs_sync_fs(struct super_block *sb, int wait)
 	struct btrfs_root *root = btrfs_sb(sb);
 	int ret;
 
-	if (sb->s_flags & MS_RDONLY)
-		return 0;
-
-	sb->s_dirt = 0;
 	if (!wait) {
 		filemap_flush(root->fs_info->btree_inode->i_mapping);
 		return 0;
@@ -402,7 +402,6 @@ int btrfs_sync_fs(struct super_block *sb, int wait)
 
 	trans = btrfs_start_transaction(root, 1);
 	ret = btrfs_commit_transaction(trans, root);
-	sb->s_dirt = 0;
 	return ret;
 }
 
@@ -442,11 +441,6 @@ static int btrfs_show_options(struct seq_file *seq, struct vfsmount *vfs)
 	if (!(root->fs_info->sb->s_flags & MS_POSIXACL))
 		seq_puts(seq, ",noacl");
 	return 0;
-}
-
-static void btrfs_write_super(struct super_block *sb)
-{
-	sb->s_dirt = 0;
 }
 
 static int btrfs_test_super(struct super_block *s, void *data)
@@ -678,7 +672,6 @@ static int btrfs_unfreeze(struct super_block *sb)
 static struct super_operations btrfs_super_ops = {
 	.delete_inode	= btrfs_delete_inode,
 	.put_super	= btrfs_put_super,
-	.write_super	= btrfs_write_super,
 	.sync_fs	= btrfs_sync_fs,
 	.show_options	= btrfs_show_options,
 	.write_inode	= btrfs_write_inode,
