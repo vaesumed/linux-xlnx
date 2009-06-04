@@ -323,7 +323,7 @@ static int powernow_acpi_init(void)
 	}
 
 	if (!alloc_cpumask_var(&acpi_processor_perf->shared_cpu_map,
-								GFP_KERNEL)) {
+			       GFP_KERNEL | __GFP_ZERO)) {
 		retval = -ENOMEM;
 		goto err05;
 	}

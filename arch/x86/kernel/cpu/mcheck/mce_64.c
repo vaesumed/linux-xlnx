@@ -1163,7 +1163,7 @@ static __init int mce_init_device(void)
 	if (!mce_available(&boot_cpu_data))
 		return -EIO;
 
-	alloc_cpumask_var(&mce_device_initialized, GFP_KERNEL);
+	alloc_cpumask_var(&mce_device_initialized, GFP_KERNEL | __GFP_ZERO);
 
 	err = mce_init_banks();
 	if (err)

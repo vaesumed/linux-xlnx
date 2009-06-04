@@ -886,7 +886,8 @@ static int powernow_k8_cpu_init_acpi(struct powernow_k8_data *data)
 	/* notify BIOS that we exist */
 	acpi_processor_notify_smm(THIS_MODULE);
 
-	if (!alloc_cpumask_var(&data->acpi_data.shared_cpu_map, GFP_KERNEL)) {
+	if (!alloc_cpumask_var(&data->acpi_data.shared_cpu_map,
+			       GFP_KERNEL | __GFP_ZERO)) {
 		printk(KERN_ERR PFX
 				"unable to alloc powernow_k8_data cpumask\n");
 		ret_val = -ENOMEM;

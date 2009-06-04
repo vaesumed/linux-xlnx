@@ -471,7 +471,8 @@ static int centrino_target (struct cpufreq_policy *policy,
 
 	if (unlikely(!alloc_cpumask_var(&saved_mask, GFP_KERNEL)))
 		return -ENOMEM;
-	if (unlikely(!alloc_cpumask_var(&covered_cpus, GFP_KERNEL))) {
+	if (unlikely(!alloc_cpumask_var(&covered_cpus,
+					 GFP_KERNEL | __GFP_ZERO))) {
 		free_cpumask_var(saved_mask);
 		return -ENOMEM;
 	}
