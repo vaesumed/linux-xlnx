@@ -71,15 +71,18 @@ struct lg_cpu {
 	/* Virtual clock device */
 	struct hrtimer hrt;
 
-	/* Do we need to stop what we're doing and return to userspace? */
-	int break_out;
-	wait_queue_head_t break_wq;
+	/* Did the Guest tell us to halt? */
 	int halted;
 
 	/* Pending virtual interrupts */
 	DECLARE_BITMAP(irqs_pending, LGUEST_IRQS);
 
 	struct lg_cpu_arch arch;
+};
+
+struct lg_eventfds {
+	unsigned long addr;
+	struct file *event;
 };
 
 /* The private info the thread maintains about the guest. */
@@ -101,6 +104,9 @@ struct lguest
 
 	unsigned int stack_pages;
 	u32 tsc_khz;
+
+	unsigned int num_eventfds;
+	struct lg_eventfds *eventfds;
 
 	/* Dead? */
 	const char *dead;
@@ -139,7 +145,9 @@ int run_guest(struct lg_cpu *cpu, unsigned long __user *user);
 #define pgd_pfn(x)	(pgd_val(x) >> PAGE_SHIFT)
 
 /* interrupts_and_traps.c: */
-void maybe_do_interrupt(struct lg_cpu *cpu);
+unsigned int interrupt_pending(struct lg_cpu *cpu, bool *more);
+void try_deliver_interrupt(struct lg_cpu *cpu, unsigned int irq, bool more);
+void set_interrupt(struct lg_cpu *cpu, unsigned int irq);
 bool deliver_trap(struct lg_cpu *cpu, unsigned int num);
 void load_guest_idt_entry(struct lg_cpu *cpu, unsigned int i,
 			  u32 low, u32 hi);
@@ -150,6 +158,7 @@ void setup_default_idt_entries(struct lguest_ro_state *state,
 void copy_traps(const struct lg_cpu *cpu, struct desc_struct *idt,
 		const unsigned long *def);
 void guest_set_clockevent(struct lg_cpu *cpu, unsigned long delta);
+bool send_notify_to_eventfd(struct lg_cpu *cpu);
 void init_clockdev(struct lg_cpu *cpu);
 bool check_syscall_vector(struct lguest *lg);
 int init_interrupts(void);
