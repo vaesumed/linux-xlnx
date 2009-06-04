@@ -866,7 +866,6 @@ static struct tomoyo_profile *tomoyo_find_or_assign_new_profile(const unsigned
 
 	if (profile >= TOMOYO_MAX_PROFILES)
 		return NULL;
-	/***** EXCLUSIVE SECTION START *****/
 	mutex_lock(&lock);
 	ptr = tomoyo_profile_ptr[profile];
 	if (ptr)
@@ -880,7 +879,6 @@ static struct tomoyo_profile *tomoyo_find_or_assign_new_profile(const unsigned
 	tomoyo_profile_ptr[profile] = ptr;
  ok:
 	mutex_unlock(&lock);
-	/***** EXCLUSIVE SECTION END *****/
 	return ptr;
 }
 
@@ -1050,7 +1048,6 @@ static int tomoyo_update_manager_entry(const char *manager,
 	saved_manager = tomoyo_save_name(manager);
 	if (!saved_manager)
 		return -ENOMEM;
-	/***** EXCLUSIVE SECTION START *****/
 	down_write(&tomoyo_policy_manager_list_lock);
 	list_for_each_entry(ptr, &tomoyo_policy_manager_list, list) {
 		if (ptr->manager != saved_manager)
@@ -1072,7 +1069,6 @@ static int tomoyo_update_manager_entry(const char *manager,
 	error = 0;
  out:
 	up_write(&tomoyo_policy_manager_list_lock);
-	/***** EXCLUSIVE SECTION END *****/
 	return error;
 }
 
@@ -1117,10 +1113,9 @@ static int tomoyo_read_manager_policy(struct tomoyo_io_buffer *head)
 				 list);
 		if (ptr->is_deleted)
 			continue;
-		if (!tomoyo_io_printf(head, "%s\n", ptr->manager->name)) {
-			done = false;
+		done = tomoyo_io_printf(head, "%s\n", ptr->manager->name);
+		if (!done)
 			break;
-		}
 	}
 	up_read(&tomoyo_policy_manager_list_lock);
 	head->read_eof = done;
@@ -1197,13 +1192,11 @@ static bool tomoyo_is_select_one(struct tomoyo_io_buffer *head,
 
 	if (sscanf(data, "pid=%u", &pid) == 1) {
 		struct task_struct *p;
-		/***** CRITICAL SECTION START *****/
 		read_lock(&tasklist_lock);
 		p = find_task_by_vpid(pid);
 		if (p)
 			domain = tomoyo_real_domain(p);
 		read_unlock(&tasklist_lock);
-		/***** CRITICAL SECTION END *****/
 	} else if (!strncmp(data, "domain=", 7)) {
 		if (tomoyo_is_domain_def(data + 7)) {
 			down_read(&tomoyo_domain_list_lock);
@@ -1447,15 +1440,14 @@ static int tomoyo_read_domain_policy(struct tomoyo_io_buffer *head)
 		    TOMOYO_DOMAIN_FLAGS_IGNORE_GLOBAL_ALLOW_READ)
 			ignore_global_allow_read
 				= TOMOYO_KEYWORD_IGNORE_GLOBAL_ALLOW_READ "\n";
-		if (!tomoyo_io_printf(head,
-				      "%s\n" TOMOYO_KEYWORD_USE_PROFILE "%u\n"
-				      "%s%s%s\n", domain->domainname->name,
-				      domain->profile, quota_exceeded,
-				      transition_failed,
-				      ignore_global_allow_read)) {
-			done = false;
+		done = tomoyo_io_printf(head, "%s\n" TOMOYO_KEYWORD_USE_PROFILE
+					"%u\n%s%s%s\n",
+					domain->domainname->name,
+					domain->profile, quota_exceeded,
+					transition_failed,
+					ignore_global_allow_read);
+		if (!done)
 			break;
-		}
 		head->read_step = 2;
 acl_loop:
 		if (head->read_step == 3)
@@ -1463,24 +1455,22 @@ acl_loop:
 		/* Print ACL entries in the domain. */
 		down_read(&tomoyo_domain_acl_info_list_lock);
 		list_for_each_cookie(apos, head->read_var2,
-				      &domain->acl_info_list) {
+				     &domain->acl_info_list) {
 			struct tomoyo_acl_info *ptr
 				= list_entry(apos, struct tomoyo_acl_info,
-					      list);
-			if (!tomoyo_print_entry(head, ptr)) {
-				done = false;
+					     list);
+			done = tomoyo_print_entry(head, ptr);
+			if (!done)
 				break;
-			}
 		}
 		up_read(&tomoyo_domain_acl_info_list_lock);
 		if (!done)
 			break;
 		head->read_step = 3;
 tail_mark:
-		if (!tomoyo_io_printf(head, "\n")) {
-			done = false;
+		done = tomoyo_io_printf(head, "\n");
+		if (!done)
 			break;
-		}
 		head->read_step = 1;
 		if (head->read_single_domain)
 			break;
@@ -1550,11 +1540,10 @@ static int tomoyo_read_domain_profile(struct tomoyo_io_buffer *head)
 		domain = list_entry(pos, struct tomoyo_domain_info, list);
 		if (domain->is_deleted)
 			continue;
-		if (!tomoyo_io_printf(head, "%u %s\n", domain->profile,
-				      domain->domainname->name)) {
-			done = false;
+		done = tomoyo_io_printf(head, "%u %s\n", domain->profile,
+					domain->domainname->name);
+		if (!done)
 			break;
-		}
 	}
 	up_read(&tomoyo_domain_list_lock);
 	head->read_eof = done;
@@ -1594,13 +1583,11 @@ static int tomoyo_read_pid(struct tomoyo_io_buffer *head)
 		const int pid = head->read_step;
 		struct task_struct *p;
 		struct tomoyo_domain_info *domain = NULL;
-		/***** CRITICAL SECTION START *****/
 		read_lock(&tasklist_lock);
 		p = find_task_by_vpid(pid);
 		if (p)
 			domain = tomoyo_real_domain(p);
 		read_unlock(&tasklist_lock);
-		/***** CRITICAL SECTION END *****/
 		if (domain)
 			tomoyo_io_printf(head, "%d %u %s", pid, domain->profile,
 					 domain->domainname->name);
