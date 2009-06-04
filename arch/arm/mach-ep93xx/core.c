@@ -155,7 +155,7 @@ static unsigned char gpio_int_unmasked[3];
 static unsigned char gpio_int_enabled[3];
 static unsigned char gpio_int_type1[3];
 static unsigned char gpio_int_type2[3];
-static unsigned char gpio_int_debouce[3];
+static unsigned char gpio_int_debounce[3];
 
 /* Port ordering is: A B F */
 static const u8 int_type1_register_offset[3]	= { 0x90, 0xac, 0x4c };
@@ -192,11 +192,11 @@ void ep93xx_gpio_int_debounce(unsigned int irq, int enable)
 	int port_mask = 1 << (line & 7);
 
 	if (enable)
-		gpio_int_debouce[port] |= port_mask;
+		gpio_int_debounce[port] |= port_mask;
 	else
-		gpio_int_debouce[port] &= ~port_mask;
+		gpio_int_debounce[port] &= ~port_mask;
 
-	__raw_writeb(gpio_int_debouce[port],
+	__raw_writeb(gpio_int_debounce[port],
 		EP93XX_GPIO_REG(int_debounce_register_offset[port]));
 }
 EXPORT_SYMBOL(ep93xx_gpio_int_debounce);
@@ -362,8 +362,8 @@ void __init ep93xx_init_irq(void)
 {
 	int gpio_irq;
 
-	vic_init((void *)EP93XX_VIC1_BASE, 0, EP93XX_VIC1_VALID_IRQ_MASK);
-	vic_init((void *)EP93XX_VIC2_BASE, 32, EP93XX_VIC2_VALID_IRQ_MASK);
+	vic_init((void *)EP93XX_VIC1_BASE, 0, EP93XX_VIC1_VALID_IRQ_MASK, 0);
+	vic_init((void *)EP93XX_VIC2_BASE, 32, EP93XX_VIC2_VALID_IRQ_MASK, 0);
 
 	for (gpio_irq = gpio_to_irq(0);
 	     gpio_irq <= gpio_to_irq(EP93XX_GPIO_LINE_MAX_IRQ); ++gpio_irq) {
