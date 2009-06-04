@@ -731,7 +731,7 @@ static int if_spi_c2h_data(struct if_spi_card *card)
 		goto out;
 	} else if (len > MRVDRV_ETH_RX_PACKET_BUFFER_SIZE) {
 		lbs_pr_err("%s: error: card has %d bytes of data, but "
-			   "our maximum skb size is %u\n",
+			   "our maximum skb size is %lu\n",
 			   __func__, len, MRVDRV_ETH_RX_PACKET_BUFFER_SIZE);
 		err = -EINVAL;
 		goto out;
@@ -813,6 +813,13 @@ static void if_spi_e2h(struct if_spi_card *card)
 	err = spu_read_u32(card, IF_SPI_SCRATCH_3_REG, &cause);
 	if (err)
 		goto out;
+
+	/* re-enable the card event interrupt */
+	spu_write_u16(card, IF_SPI_HOST_INT_STATUS_REG,
+			~IF_SPI_HICU_CARD_EVENT);
+
+	/* generate a card interrupt */
+	spu_write_u16(card, IF_SPI_CARD_INT_CAUSE_REG, IF_SPI_CIC_HOST_EVENT);
 
 	spin_lock_irqsave(&priv->driver_lock, flags);
 	lbs_queue_event(priv, cause & 0xff);
@@ -1020,6 +1027,7 @@ static int __devinit if_spi_probe(struct spi_device *spi)
 	struct libertas_spi_platform_data *pdata = spi->dev.platform_data;
 	int err = 0;
 	u32 scratch;
+	struct sched_param param = { .sched_priority = 1 };
 
 	lbs_deb_enter(LBS_DEB_SPI);
 
@@ -1123,6 +1131,9 @@ static int __devinit if_spi_probe(struct spi_device *spi)
 		lbs_pr_err("error creating SPI thread: err=%d\n", err);
 		goto remove_card;
 	}
+	if (sched_setscheduler(card->spi_thread, SCHED_FIFO, &param))
+		lbs_pr_err("Error setting scheduler, using default.\n");
+
 	err = request_irq(spi->irq, if_spi_host_interrupt,
 			IRQF_TRIGGER_FALLING, "libertas_spi", card);
 	if (err) {

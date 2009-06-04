@@ -614,8 +614,18 @@ enum {
 
 #define RXON_FLG_CHANNEL_MODE_POS		(25)
 #define RXON_FLG_CHANNEL_MODE_MSK		cpu_to_le32(0x3 << 25)
-#define RXON_FLG_CHANNEL_MODE_PURE_40_MSK	cpu_to_le32(0x1 << 25)
-#define RXON_FLG_CHANNEL_MODE_MIXED_MSK		cpu_to_le32(0x2 << 25)
+
+/* channel mode */
+enum {
+	CHANNEL_MODE_LEGACY = 0,
+	CHANNEL_MODE_PURE_40 = 1,
+	CHANNEL_MODE_MIXED = 2,
+	CHANNEL_MODE_RESERVED = 3,
+};
+#define RXON_FLG_CHANNEL_MODE_LEGACY	cpu_to_le32(CHANNEL_MODE_LEGACY << RXON_FLG_CHANNEL_MODE_POS)
+#define RXON_FLG_CHANNEL_MODE_PURE_40	cpu_to_le32(CHANNEL_MODE_PURE_40 << RXON_FLG_CHANNEL_MODE_POS)
+#define RXON_FLG_CHANNEL_MODE_MIXED	cpu_to_le32(CHANNEL_MODE_MIXED << RXON_FLG_CHANNEL_MODE_POS)
+
 /* CTS to self (if spec allows) flag */
 #define RXON_FLG_SELF_CTS_EN			cpu_to_le32(0x1<<30)
 
@@ -2469,11 +2479,12 @@ struct iwl_ssid_ie {
 	u8 ssid[32];
 } __attribute__ ((packed));
 
-#define PROBE_OPTION_MAX_API1		0x4
-#define PROBE_OPTION_MAX        	0x14
+#define PROBE_OPTION_MAX_3945		4
+#define PROBE_OPTION_MAX		20
 #define TX_CMD_LIFE_TIME_INFINITE	cpu_to_le32(0xFFFFFFFF)
 #define IWL_GOOD_CRC_TH			cpu_to_le16(1)
 #define IWL_MAX_SCAN_SIZE 1024
+#define IWL_MAX_PROBE_REQUEST		200
 
 /*
  * REPLY_SCAN_CMD = 0x80 (command)
@@ -2552,7 +2563,7 @@ struct iwl3945_scan_cmd {
 	struct iwl3945_tx_cmd tx_cmd;
 
 	/* For directed active scans (set to all-0s otherwise) */
-	struct iwl_ssid_ie direct_scan[PROBE_OPTION_MAX_API1];
+	struct iwl_ssid_ie direct_scan[PROBE_OPTION_MAX_3945];
 
 	/*
 	 * Probe request frame, followed by channel list.

@@ -341,8 +341,10 @@ static s32 e1000_get_variants_82571(struct e1000_adapter *adapter)
 			if (e1000_read_nvm(&adapter->hw, NVM_INIT_3GIO_3, 1,
 				       &eeprom_data) < 0)
 				break;
-			if (eeprom_data & NVM_WORD1A_ASPM_MASK)
-				adapter->flags &= ~FLAG_HAS_JUMBO_FRAMES;
+			if (!(eeprom_data & NVM_WORD1A_ASPM_MASK)) {
+				adapter->flags |= FLAG_HAS_JUMBO_FRAMES;
+				adapter->max_hw_frame_size = DEFAULT_JUMBO;
+			}
 		}
 		break;
 	default:
@@ -1585,6 +1587,7 @@ static void e1000_clear_hw_cntrs_82571(struct e1000_hw *hw)
 static struct e1000_mac_operations e82571_mac_ops = {
 	/* .check_mng_mode: mac type dependent */
 	/* .check_for_link: media type dependent */
+	.id_led_init		= e1000e_id_led_init,
 	.cleanup_led		= e1000e_cleanup_led_generic,
 	.clear_hw_cntrs		= e1000_clear_hw_cntrs_82571,
 	.get_bus_info		= e1000e_get_bus_info_pcie,
@@ -1596,6 +1599,7 @@ static struct e1000_mac_operations e82571_mac_ops = {
 	.init_hw		= e1000_init_hw_82571,
 	.setup_link		= e1000_setup_link_82571,
 	/* .setup_physical_interface: media type dependent */
+	.setup_led		= e1000e_setup_led_generic,
 };
 
 static struct e1000_phy_operations e82_phy_ops_igp = {
@@ -1672,6 +1676,7 @@ struct e1000_info e1000_82571_info = {
 				  | FLAG_TARC_SPEED_MODE_BIT /* errata */
 				  | FLAG_APME_CHECK_PORT_B,
 	.pba			= 38,
+	.max_hw_frame_size	= DEFAULT_JUMBO,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,
 	.phy_ops		= &e82_phy_ops_igp,
@@ -1688,6 +1693,7 @@ struct e1000_info e1000_82572_info = {
 				  | FLAG_HAS_CTRLEXT_ON_LOAD
 				  | FLAG_TARC_SPEED_MODE_BIT, /* errata */
 	.pba			= 38,
+	.max_hw_frame_size	= DEFAULT_JUMBO,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,
 	.phy_ops		= &e82_phy_ops_igp,
@@ -1706,6 +1712,7 @@ struct e1000_info e1000_82573_info = {
 				  | FLAG_HAS_ERT
 				  | FLAG_HAS_SWSM_ON_LOAD,
 	.pba			= 20,
+	.max_hw_frame_size	= ETH_FRAME_LEN + ETH_FCS_LEN,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,
 	.phy_ops		= &e82_phy_ops_m88,
@@ -1724,6 +1731,7 @@ struct e1000_info e1000_82574_info = {
 				  | FLAG_HAS_AMT
 				  | FLAG_HAS_CTRLEXT_ON_LOAD,
 	.pba			= 20,
+	.max_hw_frame_size	= ETH_FRAME_LEN + ETH_FCS_LEN,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,
 	.phy_ops		= &e82_phy_ops_bm,
@@ -1740,6 +1748,7 @@ struct e1000_info e1000_82583_info = {
 				  | FLAG_HAS_AMT
 				  | FLAG_HAS_CTRLEXT_ON_LOAD,
 	.pba			= 20,
+	.max_hw_frame_size	= DEFAULT_JUMBO,
 	.get_variants		= e1000_get_variants_82571,
 	.mac_ops		= &e82571_mac_ops,
 	.phy_ops		= &e82_phy_ops_bm,

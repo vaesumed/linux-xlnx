@@ -291,6 +291,14 @@ struct mac80211_hwsim_data {
 	bool ps_poll_pending;
 	struct dentry *debugfs;
 	struct dentry *debugfs_ps;
+
+	/*
+	 * Only radios in the same group can communicate together (the
+	 * channel has to match too). Each bit represents a group. A
+	 * radio can be in more then one group.
+	 */
+	u64 group;
+	struct dentry *debugfs_group;
 };
 
 
@@ -412,7 +420,8 @@ static bool mac80211_hwsim_tx_frame(struct ieee80211_hw *hw,
 
 		if (!data2->started || !data2->radio_enabled ||
 		    !hwsim_ps_rx_ok(data2, skb) ||
-		    data->channel->center_freq != data2->channel->center_freq)
+		    data->channel->center_freq != data2->channel->center_freq ||
+		    !(data->group & data2->group))
 			continue;
 
 		nskb = skb_copy(skb, GFP_ATOMIC);
@@ -553,18 +562,15 @@ static int mac80211_hwsim_config(struct ieee80211_hw *hw, u32 changed)
 	struct mac80211_hwsim_data *data = hw->priv;
 	struct ieee80211_conf *conf = &hw->conf;
 
-	printk(KERN_DEBUG "%s:%s (freq=%d radio_enabled=%d beacon_int=%d)\n",
+	printk(KERN_DEBUG "%s:%s (freq=%d radio_enabled=%d idle=%d ps=%d)\n",
 	       wiphy_name(hw->wiphy), __func__,
 	       conf->channel->center_freq, conf->radio_enabled,
-	       conf->beacon_int);
+	       !!(conf->flags & IEEE80211_CONF_IDLE),
+	       !!(conf->flags & IEEE80211_CONF_PS));
 
 	data->channel = conf->channel;
 	data->radio_enabled = conf->radio_enabled;
-	data->beacon_int = 1024 * conf->beacon_int / 1000 * HZ / 1000;
-	if (data->beacon_int < 1)
-		data->beacon_int = 1;
-
-	if (!data->started || !data->radio_enabled)
+	if (!data->started || !data->radio_enabled || !data->beacon_int)
 		del_timer(&data->beacon_timer);
 	else
 		mod_timer(&data->beacon_timer, jiffies + data->beacon_int);
@@ -592,40 +598,39 @@ static void mac80211_hwsim_configure_filter(struct ieee80211_hw *hw,
 	*total_flags = data->rx_filter;
 }
 
-static int mac80211_hwsim_config_interface(struct ieee80211_hw *hw,
-					   struct ieee80211_vif *vif,
-					   struct ieee80211_if_conf *conf)
-{
-	struct hwsim_vif_priv *vp = (void *)vif->drv_priv;
-
-	hwsim_check_magic(vif);
-	if (conf->changed & IEEE80211_IFCC_BSSID) {
-		DECLARE_MAC_BUF(mac);
-		printk(KERN_DEBUG "%s:%s: BSSID changed: %pM\n",
-		       wiphy_name(hw->wiphy), __func__,
-		       conf->bssid);
-		memcpy(vp->bssid, conf->bssid, ETH_ALEN);
-	}
-	return 0;
-}
-
 static void mac80211_hwsim_bss_info_changed(struct ieee80211_hw *hw,
 					    struct ieee80211_vif *vif,
 					    struct ieee80211_bss_conf *info,
 					    u32 changed)
 {
 	struct hwsim_vif_priv *vp = (void *)vif->drv_priv;
+	struct mac80211_hwsim_data *data = hw->priv;
 
 	hwsim_check_magic(vif);
 
 	printk(KERN_DEBUG "%s:%s(changed=0x%x)\n",
 	       wiphy_name(hw->wiphy), __func__, changed);
 
+	if (changed & BSS_CHANGED_BSSID) {
+		printk(KERN_DEBUG "%s:%s: BSSID changed: %pM\n",
+		       wiphy_name(hw->wiphy), __func__,
+		       info->bssid);
+		memcpy(vp->bssid, info->bssid, ETH_ALEN);
+	}
+
 	if (changed & BSS_CHANGED_ASSOC) {
 		printk(KERN_DEBUG "  %s: ASSOC: assoc=%d aid=%d\n",
 		       wiphy_name(hw->wiphy), info->assoc, info->aid);
 		vp->assoc = info->assoc;
 		vp->aid = info->aid;
+	}
+
+	if (changed & BSS_CHANGED_BEACON_INT) {
+		printk(KERN_DEBUG "  %s: BCNINT: %d\n",
+		       wiphy_name(hw->wiphy), info->beacon_int);
+		data->beacon_int = 1024 * info->beacon_int / 1000 * HZ / 1000;
+		if (WARN_ON(!data->beacon_int))
+			data->beacon_int = 1;
 	}
 
 	if (changed & BSS_CHANGED_ERP_CTS_PROT) {
@@ -646,7 +651,7 @@ static void mac80211_hwsim_bss_info_changed(struct ieee80211_hw *hw,
 	if (changed & BSS_CHANGED_HT) {
 		printk(KERN_DEBUG "  %s: HT: op_mode=0x%x\n",
 		       wiphy_name(hw->wiphy),
-		       info->ht.operation_mode);
+		       info->ht_operation_mode);
 	}
 
 	if (changed & BSS_CHANGED_BASIC_RATES) {
@@ -704,7 +709,6 @@ static const struct ieee80211_ops mac80211_hwsim_ops =
 	.remove_interface = mac80211_hwsim_remove_interface,
 	.config = mac80211_hwsim_config,
 	.configure_filter = mac80211_hwsim_configure_filter,
-	.config_interface = mac80211_hwsim_config_interface,
 	.bss_info_changed = mac80211_hwsim_bss_info_changed,
 	.sta_notify = mac80211_hwsim_sta_notify,
 	.set_tim = mac80211_hwsim_set_tim,
@@ -725,6 +729,7 @@ static void mac80211_hwsim_free(void)
 	spin_unlock_bh(&hwsim_radio_lock);
 
 	list_for_each_entry(data, &tmplist, list) {
+		debugfs_remove(data->debugfs_group);
 		debugfs_remove(data->debugfs_ps);
 		debugfs_remove(data->debugfs);
 		ieee80211_unregister_hw(data->hw);
@@ -877,6 +882,24 @@ DEFINE_SIMPLE_ATTRIBUTE(hwsim_fops_ps, hwsim_fops_ps_read, hwsim_fops_ps_write,
 			"%llu\n");
 
 
+static int hwsim_fops_group_read(void *dat, u64 *val)
+{
+	struct mac80211_hwsim_data *data = dat;
+	*val = data->group;
+	return 0;
+}
+
+static int hwsim_fops_group_write(void *dat, u64 val)
+{
+	struct mac80211_hwsim_data *data = dat;
+	data->group = val;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(hwsim_fops_group,
+			hwsim_fops_group_read, hwsim_fops_group_write,
+			"%llx\n");
+
 static int __init init_mac80211_hwsim(void)
 {
 	int i, err = 0;
@@ -981,6 +1004,8 @@ static int __init init_mac80211_hwsim(void)
 
 			hw->wiphy->bands[band] = sband;
 		}
+		/* By default all radios are belonging to the first group */
+		data->group = 1;
 
 		/* Work to be done prior to ieee80211_register_hw() */
 		switch (regtest) {
@@ -1105,6 +1130,9 @@ static int __init init_mac80211_hwsim(void)
 		data->debugfs_ps = debugfs_create_file("ps", 0666,
 						       data->debugfs, data,
 						       &hwsim_fops_ps);
+		data->debugfs_group = debugfs_create_file("group", 0666,
+							data->debugfs, data,
+							&hwsim_fops_group);
 
 		setup_timer(&data->beacon_timer, mac80211_hwsim_beacon,
 			    (unsigned long) hw);

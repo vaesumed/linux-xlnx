@@ -101,6 +101,7 @@ struct lbs_mesh_stats {
 /** Private structure for the MV device */
 struct lbs_private {
 	int mesh_open;
+	int mesh_fw_ver;
 	int infra_open;
 	int mesh_autostart_enabled;
 
@@ -320,6 +321,8 @@ struct lbs_private {
 
 	u32 monitormode;
 	u8 fw_ready;
+	u8 fn_init_required;
+	u8 fn_shutdown_required;
 };
 
 extern struct cmd_confirm_sleep confirm_sleep;
