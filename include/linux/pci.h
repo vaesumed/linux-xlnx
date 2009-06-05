@@ -599,8 +599,6 @@ extern void pci_sort_breadthfirst(void);
 struct pci_dev __deprecated *pci_find_device(unsigned int vendor,
 					     unsigned int device,
 					     struct pci_dev *from);
-struct pci_dev __deprecated *pci_find_slot(unsigned int bus,
-					   unsigned int devfn);
 #endif /* CONFIG_PCI_LEGACY */
 
 enum pci_lost_interrupt_reason {
@@ -936,12 +934,6 @@ static inline struct pci_dev *pci_find_device(unsigned int vendor,
 	return NULL;
 }
 
-static inline struct pci_dev *pci_find_slot(unsigned int bus,
-					    unsigned int devfn)
-{
-	return NULL;
-}
-
 static inline struct pci_dev *pci_get_device(unsigned int vendor,
 					     unsigned int device,
 					     struct pci_dev *from)
@@ -1096,6 +1088,10 @@ static inline struct pci_dev *pci_get_bus_and_slot(unsigned int bus,
 /* Include architecture-dependent settings and functions */
 
 #include <asm/pci.h>
+
+#ifndef PCIBIOS_MAX_MEM_32
+#define PCIBIOS_MAX_MEM_32 (-1)
+#endif
 
 /* these helpers provide future and backwards compatibility
  * for accessing popular PCI BAR info */
