@@ -45,7 +45,7 @@
 #include <mach/pxa25x.h>
 #include <mach/audio.h>
 #include <mach/pxafb.h>
-#include <mach/i2c.h>
+#include <plat/i2c.h>
 #include <mach/regs-uart.h>
 #include <mach/viper.h>
 
@@ -744,6 +744,12 @@ static mfp_cfg_t viper_pin_config[] __initdata = {
 
 	/* PC/104 Interrupt */
 	GPIO1_GPIO | WAKEUP_ON_EDGE_RISE,	/* VIPER_CPLD_GPIO */
+
+	/* AC97 */
+	GPIO31_AC97_SYNC,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
 };
 
 static unsigned long viper_tpm;

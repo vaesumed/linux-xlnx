@@ -47,7 +47,7 @@
 #include <mach/mmc.h>
 #include <mach/irda.h>
 #include <mach/ohci.h>
-#include <mach/i2c.h>
+#include <plat/i2c.h>
 
 #include "generic.h"
 #include "devices.h"
@@ -145,6 +145,13 @@ static unsigned long trizeps4_pin_config[] __initdata = {
 	/* I2C */
 	GPIO117_I2C_SCL,
 	GPIO118_I2C_SDA,
+
+	/* AC97 */
+	GPIO31_AC97_SYNC,
+	GPIO30_AC97_SDATA_OUT,
+	GPIO28_AC97_BITCLK,
+	GPIO29_AC97_SDATA_IN_0,
+	GPIO113_AC97_nRESET,
 };
 
 static unsigned long trizeps4wl_pin_config[] __initdata = {
