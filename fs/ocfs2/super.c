@@ -128,7 +128,6 @@ static int ocfs2_get_sector(struct super_block *sb,
 			    struct buffer_head **bh,
 			    int block,
 			    int sect_size);
-static void ocfs2_write_super(struct super_block *sb);
 static struct inode *ocfs2_alloc_inode(struct super_block *sb);
 static void ocfs2_destroy_inode(struct inode *inode);
 static int ocfs2_susp_quotas(struct ocfs2_super *osb, int unsuspend);
@@ -143,7 +142,6 @@ static const struct super_operations ocfs2_sops = {
 	.clear_inode	= ocfs2_clear_inode,
 	.delete_inode	= ocfs2_delete_inode,
 	.sync_fs	= ocfs2_sync_fs,
-	.write_super	= ocfs2_write_super,
 	.put_super	= ocfs2_put_super,
 	.remount_fs	= ocfs2_remount,
 	.show_options   = ocfs2_show_options,
@@ -375,23 +373,11 @@ static struct file_operations ocfs2_osb_debug_fops = {
 	.llseek =	generic_file_llseek,
 };
 
-/*
- * write_super and sync_fs ripped right out of ext3.
- */
-static void ocfs2_write_super(struct super_block *sb)
-{
-	if (mutex_trylock(&sb->s_lock) != 0)
-		BUG();
-	sb->s_dirt = 0;
-}
-
 static int ocfs2_sync_fs(struct super_block *sb, int wait)
 {
 	int status;
 	tid_t target;
 	struct ocfs2_super *osb = OCFS2_SB(sb);
-
-	sb->s_dirt = 0;
 
 	if (ocfs2_is_hard_readonly(osb))
 		return -EROFS;
@@ -1575,8 +1561,12 @@ static void ocfs2_put_super(struct super_block *sb)
 {
 	mlog_entry("(0x%p)\n", sb);
 
+	lock_kernel();
+
 	ocfs2_sync_blockdev(sb);
 	ocfs2_dismount_volume(sb, 0);
+
+	unlock_kernel();
 
 	mlog_exit_void();
 }
