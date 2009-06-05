@@ -381,7 +381,7 @@ static int icside_dma_off_init(ide_hwif_t *hwif, const struct ide_port_info *d)
 	return -EOPNOTSUPP;
 }
 
-static void icside_setup_ports(hw_regs_t *hw, void __iomem *base,
+static void icside_setup_ports(struct ide_hw *hw, void __iomem *base,
 			       struct cardinfo *info, struct expansion_card *ec)
 {
 	unsigned long port = (unsigned long)base + info->dataoffset;
@@ -398,11 +398,11 @@ static void icside_setup_ports(hw_regs_t *hw, void __iomem *base,
 
 	hw->irq = ec->irq;
 	hw->dev = &ec->dev;
-	hw->chipset = ide_acorn;
 }
 
 static const struct ide_port_info icside_v5_port_info = {
 	.host_flags		= IDE_HFLAG_NO_DMA,
+	.chipset		= ide_acorn,
 };
 
 static int __devinit
@@ -410,7 +410,7 @@ icside_register_v5(struct icside_state *state, struct expansion_card *ec)
 {
 	void __iomem *base;
 	struct ide_host *host;
-	hw_regs_t hw, *hws[] = { &hw, NULL, NULL, NULL };
+	struct ide_hw hw, *hws[] = { &hw };
 	int ret;
 
 	base = ecardm_iomap(ec, ECARD_RES_MEMC, 0, 0);
@@ -431,7 +431,7 @@ icside_register_v5(struct icside_state *state, struct expansion_card *ec)
 
 	icside_setup_ports(&hw, base, &icside_cardinfo_v5, ec);
 
-	host = ide_host_alloc(&icside_v5_port_info, hws);
+	host = ide_host_alloc(&icside_v5_port_info, hws, 1);
 	if (host == NULL)
 		return -ENODEV;
 
@@ -457,6 +457,7 @@ static const struct ide_port_info icside_v6_port_info __initdata = {
 	.host_flags		= IDE_HFLAG_SERIALIZE | IDE_HFLAG_MMIO,
 	.mwdma_mask		= ATA_MWDMA2,
 	.swdma_mask		= ATA_SWDMA2,
+	.chipset		= ide_acorn,
 };
 
 static int __devinit
@@ -466,7 +467,7 @@ icside_register_v6(struct icside_state *state, struct expansion_card *ec)
 	struct ide_host *host;
 	unsigned int sel = 0;
 	int ret;
-	hw_regs_t hw[2], *hws[] = { &hw[0], &hw[1], NULL, NULL };
+	struct ide_hw hw[2], *hws[] = { &hw[0], &hw[1] };
 	struct ide_port_info d = icside_v6_port_info;
 
 	ioc_base = ecardm_iomap(ec, ECARD_RES_IOCFAST, 0, 0);
@@ -506,7 +507,7 @@ icside_register_v6(struct icside_state *state, struct expansion_card *ec)
 	icside_setup_ports(&hw[0], easi_base, &icside_cardinfo_v6_1, ec);
 	icside_setup_ports(&hw[1], easi_base, &icside_cardinfo_v6_2, ec);
 
-	host = ide_host_alloc(&d, hws);
+	host = ide_host_alloc(&d, hws, 2);
 	if (host == NULL)
 		return -ENODEV;
 
