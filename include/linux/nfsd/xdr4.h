@@ -51,8 +51,7 @@ struct nfsd4_compound_state {
 	/* For sessions DRC */
 	struct nfsd4_session	*session;
 	struct nfsd4_slot	*slot;
-	__be32			*statp;
-	size_t			iovlen;
+	__be32			*datap;
 	u32			minorversion;
 	u32			status;
 };
@@ -64,10 +63,13 @@ static inline bool nfsd4_has_session(struct nfsd4_compound_state *cs)
 
 struct nfsd4_change_info {
 	u32		atomic;
+	bool		change_supported;
 	u32		before_ctime_sec;
 	u32		before_ctime_nsec;
+	u64		before_change;
 	u32		after_ctime_sec;
 	u32		after_ctime_nsec;
+	u64		after_change;
 };
 
 struct nfsd4_access {
@@ -363,17 +365,6 @@ struct nfsd4_exchange_id {
 	int		spa_how;
 };
 
-struct nfsd4_channel_attrs {
-	u32		headerpadsz;
-	u32		maxreq_sz;
-	u32		maxresp_sz;
-	u32		maxresp_cached;
-	u32		maxops;
-	u32		maxreqs;
-	u32		nr_rdma_attrs;
-	u32		rdma_attrs;
-};
-
 struct nfsd4_create_session {
 	clientid_t		clientid;
 	struct nfs4_sessionid	sessionid;
@@ -467,7 +458,7 @@ struct nfsd4_compoundargs {
 	u32				minorversion;
 	u32				opcnt;
 	struct nfsd4_op			*ops;
-	struct nfsd4_op			iops[8];
+	struct nfsd4_op			iops[NFSD_MAX_OPS_PER_COMPOUND];
 };
 
 struct nfsd4_compoundres {
@@ -484,6 +475,13 @@ struct nfsd4_compoundres {
 	struct nfsd4_compound_state	cstate;
 };
 
+static inline bool nfsd4_is_failed_sequence(struct nfsd4_compoundres *resp)
+{
+	struct nfsd4_compoundargs *args = resp->rqstp->rq_argp;
+	return resp->opcnt == 1 && args->ops[0].opnum == OP_SEQUENCE &&
+		resp->cstate.status;
+}
+
 static inline bool nfsd4_is_solo_sequence(struct nfsd4_compoundres *resp)
 {
 	struct nfsd4_compoundargs *args = resp->rqstp->rq_argp;
@@ -492,8 +490,9 @@ static inline bool nfsd4_is_solo_sequence(struct nfsd4_compoundres *resp)
 
 static inline bool nfsd4_not_cached(struct nfsd4_compoundres *resp)
 {
-	return !resp->cstate.slot->sl_cache_entry.ce_cachethis ||
-			nfsd4_is_solo_sequence(resp);
+	return !resp->cstate.slot->sl_cachethis ||
+			nfsd4_is_solo_sequence(resp) ||
+			nfsd4_is_failed_sequence(resp);
 }
 
 #define NFS4_SVC_XDRSIZE		sizeof(struct nfsd4_compoundargs)
@@ -503,10 +502,16 @@ set_change_info(struct nfsd4_change_info *cinfo, struct svc_fh *fhp)
 {
 	BUG_ON(!fhp->fh_pre_saved || !fhp->fh_post_saved);
 	cinfo->atomic = 1;
-	cinfo->before_ctime_sec = fhp->fh_pre_ctime.tv_sec;
-	cinfo->before_ctime_nsec = fhp->fh_pre_ctime.tv_nsec;
-	cinfo->after_ctime_sec = fhp->fh_post_attr.ctime.tv_sec;
-	cinfo->after_ctime_nsec = fhp->fh_post_attr.ctime.tv_nsec;
+	cinfo->change_supported = IS_I_VERSION(fhp->fh_dentry->d_inode);
+	if (cinfo->change_supported) {
+		cinfo->before_change = fhp->fh_pre_change;
+		cinfo->after_change = fhp->fh_post_change;
+	} else {
+		cinfo->before_ctime_sec = fhp->fh_pre_ctime.tv_sec;
+		cinfo->before_ctime_nsec = fhp->fh_pre_ctime.tv_nsec;
+		cinfo->after_ctime_sec = fhp->fh_post_attr.ctime.tv_sec;
+		cinfo->after_ctime_nsec = fhp->fh_post_attr.ctime.tv_nsec;
+	}
 }
 
 int nfs4svc_encode_voidres(struct svc_rqst *, __be32 *, void *);
@@ -528,6 +533,10 @@ extern __be32 nfsd4_setclientid_confirm(struct svc_rqst *rqstp,
 extern void nfsd4_store_cache_entry(struct nfsd4_compoundres *resp);
 extern __be32 nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 		struct nfsd4_sequence *seq);
+extern void nfsd4_cache_create_session(struct nfsd4_create_session *cr_ses,
+		struct nfsd4_clid_slot *slot, int nfserr);
+extern __be32 nfsd4_replay_create_session(struct nfsd4_compoundres *resp,
+		struct nfsd4_clid_slot *slot);
 extern __be32 nfsd4_exchange_id(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *,
 struct nfsd4_exchange_id *);
