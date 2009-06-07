@@ -1660,6 +1660,15 @@ and is between 256 and 4096 characters. It is defined in the file
 	oprofile.timer=	[HW]
 			Use timer interrupt instead of performance counters
 
+	oprofile.cpu_type=	Force an oprofile cpu type
+			This might be useful if you have an older oprofile
+			userland or if you want common events.
+			Format: { archperfmon | core_2 }
+			archperfmon: [X86] Force use of architectural
+				perfmon on Intel CPUs instead of the
+				CPU specific event set.
+			core_2: [X86] On Intel systems: report core_2 CPU.
+
 	osst=		[HW,SCSI] SCSI Tape Driver
 			Format: <buffer_size>,<write_threshold>
 			See also Documentation/scsi/st.txt.
