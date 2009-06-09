@@ -402,6 +402,7 @@ nilfs_mdt_write_page(struct page *page, struct writeback_control *wbc)
 	struct inode *inode = container_of(page->mapping,
 					   struct inode, i_data);
 	struct super_block *sb = inode->i_sb;
+	struct the_nilfs *nilfs = NILFS_MDT(inode)->mi_nilfs;
 	struct nilfs_sb_info *writer = NULL;
 	int err = 0;
 
@@ -411,9 +412,12 @@ nilfs_mdt_write_page(struct page *page, struct writeback_control *wbc)
 	if (page->mapping->assoc_mapping)
 		return 0; /* Do not request flush for shadow page cache */
 	if (!sb) {
-		writer = nilfs_get_writer(NILFS_MDT(inode)->mi_nilfs);
-		if (!writer)
+		down_read(&nilfs->ns_writer_sem);
+		writer = nilfs->ns_writer;
+		if (!writer) {
+			up_read(&nilfs->ns_writer_sem);
 			return -EROFS;
+		}
 		sb = writer->s_super;
 	}
 
@@ -423,13 +427,14 @@ nilfs_mdt_write_page(struct page *page, struct writeback_control *wbc)
 		nilfs_flush_segment(sb, inode->i_ino);
 
 	if (writer)
-		nilfs_put_writer(NILFS_MDT(inode)->mi_nilfs);
+		up_read(&nilfs->ns_writer_sem);
 	return err;
 }
 
 
 static struct address_space_operations def_mdt_aops = {
 	.writepage		= nilfs_mdt_write_page,
+	.sync_page		= block_sync_page,
 };
 
 static struct inode_operations def_mdt_iops;
@@ -449,7 +454,7 @@ struct inode *
 nilfs_mdt_new_common(struct the_nilfs *nilfs, struct super_block *sb,
 		     ino_t ino, gfp_t gfp_mask)
 {
-	struct inode *inode = nilfs_alloc_inode(sb);
+	struct inode *inode = nilfs_alloc_inode_common(nilfs);
 
 	if (!inode)
 		return NULL;
