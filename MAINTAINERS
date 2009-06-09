@@ -1822,10 +1822,10 @@ F:	drivers/char/epca*
 F:	drivers/char/digi*
 
 DIRECTORY NOTIFICATION (DNOTIFY)
-P:	Stephen Rothwell
-M:	sfr@canb.auug.org.au
+P:	Eric Paris
+M:	eparis@parisplace.org
 L:	linux-kernel@vger.kernel.org
-S:	Supported
+S:	Maintained
 F:	Documentation/filesystems/dnotify.txt
 F:	fs/notify/dnotify/
 F:	include/linux/dnotify.h
@@ -2887,6 +2887,8 @@ P:	John McCutchan
 M:	john@johnmccutchan.com
 P:	Robert Love
 M:	rlove@rlove.org
+P:	Eric Paris
+M:	eparis@parisplace.org
 L:	linux-kernel@vger.kernel.org
 S:	Maintained
 F:	Documentation/filesystems/inotify.txt
