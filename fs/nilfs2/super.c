@@ -65,6 +65,7 @@ MODULE_DESCRIPTION("A New Implementation of the Log-structured Filesystem "
 		   "(NILFS)");
 MODULE_LICENSE("GPL");
 
+static void nilfs_write_super(struct super_block *sb);
 static int nilfs_remount(struct super_block *sb, int *flags, char *data);
 
 /**
@@ -318,6 +319,11 @@ static void nilfs_put_super(struct super_block *sb)
 	struct nilfs_sb_info *sbi = NILFS_SB(sb);
 	struct the_nilfs *nilfs = sbi->s_nilfs;
 
+	lock_kernel();
+
+	if (sb->s_dirt)
+		nilfs_write_super(sb);
+
 	nilfs_detach_segment_constructor(sbi);
 
 	if (!(sb->s_flags & MS_RDONLY)) {
@@ -336,6 +342,8 @@ static void nilfs_put_super(struct super_block *sb)
 	sbi->s_super = NULL;
 	sb->s_fs_info = NULL;
 	nilfs_put_sbinfo(sbi);
+
+	unlock_kernel();
 }
 
 /**
@@ -389,6 +397,8 @@ static void nilfs_write_super(struct super_block *sb)
 static int nilfs_sync_fs(struct super_block *sb, int wait)
 {
 	int err = 0;
+
+	nilfs_write_super(sb);
 
 	/* This function is called when super block should be written back */
 	if (wait)
@@ -911,6 +921,8 @@ static int nilfs_remount(struct super_block *sb, int *flags, char *data)
 	struct nilfs_mount_options old_opts;
 	int err;
 
+	lock_kernel();
+
 	down_write(&nilfs->ns_super_sem);
 	old_sb_flags = sb->s_flags;
 	old_opts.mount_opt = sbi->s_mount_opt;
@@ -990,6 +1002,7 @@ static int nilfs_remount(struct super_block *sb, int *flags, char *data)
 	}
  out:
 	up_write(&nilfs->ns_super_sem);
+	unlock_kernel();
 	return 0;
 
  restore_opts:
@@ -997,6 +1010,7 @@ static int nilfs_remount(struct super_block *sb, int *flags, char *data)
 	sbi->s_mount_opt = old_opts.mount_opt;
 	sbi->s_snapshot_cno = old_opts.snapshot_cno;
 	up_write(&nilfs->ns_super_sem);
+	unlock_kernel();
 	return err;
 }
 
