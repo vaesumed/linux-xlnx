@@ -381,7 +381,7 @@ static void kfree_skbmem(struct sk_buff *skb)
 
 static void skb_release_head_state(struct sk_buff *skb)
 {
-	dst_release(skb->dst);
+	skb_dst_drop(skb);
 #ifdef CONFIG_XFRM
 	secpath_put(skb->sp);
 #endif
@@ -521,13 +521,12 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 	new->transport_header	= old->transport_header;
 	new->network_header	= old->network_header;
 	new->mac_header		= old->mac_header;
-	new->dst		= dst_clone(old->dst);
+	skb_dst_set(new, dst_clone(skb_dst(old)));
 #ifdef CONFIG_XFRM
 	new->sp			= secpath_get(old->sp);
 #endif
 	memcpy(new->cb, old->cb, sizeof(old->cb));
-	new->csum_start		= old->csum_start;
-	new->csum_offset	= old->csum_offset;
+	new->csum		= old->csum;
 	new->local_df		= old->local_df;
 	new->pkt_type		= old->pkt_type;
 	new->ip_summed		= old->ip_summed;
@@ -538,6 +537,7 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 #endif
 	new->protocol		= old->protocol;
 	new->mark		= old->mark;
+	new->iif		= old->iif;
 	__nf_copy(new, old);
 #if defined(CONFIG_NETFILTER_XT_TARGET_TRACE) || \
     defined(CONFIG_NETFILTER_XT_TARGET_TRACE_MODULE)
@@ -550,10 +550,18 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 #endif
 #endif
 	new->vlan_tci		= old->vlan_tci;
+#if defined(CONFIG_MAC80211) || defined(CONFIG_MAC80211_MODULE)
+	new->do_not_encrypt	= old->do_not_encrypt;
+	new->requeue		= old->requeue;
+#endif
 
 	skb_copy_secmark(new, old);
 }
 
+/*
+ * You should not add any new code to this function.  Add it to
+ * __copy_skb_header above instead.
+ */
 static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 {
 #define C(x) n->x = skb->x
@@ -569,16 +577,11 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	n->cloned = 1;
 	n->nohdr = 0;
 	n->destructor = NULL;
-	C(iif);
 	C(tail);
 	C(end);
 	C(head);
 	C(data);
 	C(truesize);
-#if defined(CONFIG_MAC80211) || defined(CONFIG_MAC80211_MODULE)
-	C(do_not_encrypt);
-	C(requeue);
-#endif
 	atomic_set(&n->users, 1);
 
 	atomic_inc(&(skb_shinfo(skb)->dataref));
@@ -2661,30 +2664,40 @@ int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 {
 	struct sk_buff *p = *head;
 	struct sk_buff *nskb;
+	struct skb_shared_info *skbinfo = skb_shinfo(skb);
+	struct skb_shared_info *pinfo = skb_shinfo(p);
 	unsigned int headroom;
 	unsigned int len = skb_gro_len(skb);
+	unsigned int offset = skb_gro_offset(skb);
+	unsigned int headlen = skb_headlen(skb);
 
 	if (p->len + len >= 65536)
 		return -E2BIG;
 
-	if (skb_shinfo(p)->frag_list)
+	if (pinfo->frag_list)
 		goto merge;
-	else if (skb_headlen(skb) <= skb_gro_offset(skb)) {
-		if (skb_shinfo(p)->nr_frags + skb_shinfo(skb)->nr_frags >
-		    MAX_SKB_FRAGS)
+	else if (headlen <= offset) {
+		skb_frag_t *frag;
+		skb_frag_t *frag2;
+		int i = skbinfo->nr_frags;
+		int nr_frags = pinfo->nr_frags + i;
+
+		offset -= headlen;
+
+		if (nr_frags > MAX_SKB_FRAGS)
 			return -E2BIG;
 
-		skb_shinfo(skb)->frags[0].page_offset +=
-			skb_gro_offset(skb) - skb_headlen(skb);
-		skb_shinfo(skb)->frags[0].size -=
-			skb_gro_offset(skb) - skb_headlen(skb);
+		pinfo->nr_frags = nr_frags;
+		skbinfo->nr_frags = 0;
 
-		memcpy(skb_shinfo(p)->frags + skb_shinfo(p)->nr_frags,
-		       skb_shinfo(skb)->frags,
-		       skb_shinfo(skb)->nr_frags * sizeof(skb_frag_t));
+		frag = pinfo->frags + nr_frags;
+		frag2 = skbinfo->frags + i;
+		do {
+			*--frag = *--frag2;
+		} while (--i);
 
-		skb_shinfo(p)->nr_frags += skb_shinfo(skb)->nr_frags;
-		skb_shinfo(skb)->nr_frags = 0;
+		frag->page_offset += offset;
+		frag->size -= offset;
 
 		skb->truesize -= skb->data_len;
 		skb->len -= skb->data_len;
@@ -2715,7 +2728,7 @@ int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 
 	*NAPI_GRO_CB(nskb) = *NAPI_GRO_CB(p);
 	skb_shinfo(nskb)->frag_list = p;
-	skb_shinfo(nskb)->gso_size = skb_shinfo(p)->gso_size;
+	skb_shinfo(nskb)->gso_size = pinfo->gso_size;
 	skb_header_release(p);
 	nskb->prev = p;
 
@@ -2730,16 +2743,13 @@ int skb_gro_receive(struct sk_buff **head, struct sk_buff *skb)
 	p = nskb;
 
 merge:
-	if (skb_gro_offset(skb) > skb_headlen(skb)) {
-		skb_shinfo(skb)->frags[0].page_offset +=
-			skb_gro_offset(skb) - skb_headlen(skb);
-		skb_shinfo(skb)->frags[0].size -=
-			skb_gro_offset(skb) - skb_headlen(skb);
-		skb_gro_reset_offset(skb);
-		skb_gro_pull(skb, skb_headlen(skb));
+	if (offset > headlen) {
+		skbinfo->frags[0].page_offset += offset - headlen;
+		skbinfo->frags[0].size -= offset - headlen;
+		offset = headlen;
 	}
 
-	__skb_pull(skb, skb_gro_offset(skb));
+	__skb_pull(skb, offset);
 
 	p->prev->next = skb;
 	p->prev = skb;
@@ -3016,12 +3026,12 @@ EXPORT_SYMBOL_GPL(skb_tstamp_tx);
  */
 bool skb_partial_csum_set(struct sk_buff *skb, u16 start, u16 off)
 {
-	if (unlikely(start > skb->len - 2) ||
-	    unlikely((int)start + off > skb->len - 2)) {
+	if (unlikely(start > skb_headlen(skb)) ||
+	    unlikely((int)start + off > skb_headlen(skb) - 2)) {
 		if (net_ratelimit())
 			printk(KERN_WARNING
 			       "bad partial csum: csum=%u/%u len=%u\n",
-			       start, off, skb->len);
+			       start, off, skb_headlen(skb));
 		return false;
 	}
 	skb->ip_summed = CHECKSUM_PARTIAL;
