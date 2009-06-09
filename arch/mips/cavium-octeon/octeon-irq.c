@@ -179,7 +179,7 @@ static void octeon_irq_ciu0_disable(unsigned int irq)
 }
 
 #ifdef CONFIG_SMP
-static void octeon_irq_ciu0_set_affinity(unsigned int irq, const struct cpumask *dest)
+static int octeon_irq_ciu0_set_affinity(unsigned int irq, const struct cpumask *dest)
 {
 	int cpu;
 	int bit = irq - OCTEON_IRQ_WORKQ0;	/* Bit 0-63 of EN0 */
@@ -201,6 +201,8 @@ static void octeon_irq_ciu0_set_affinity(unsigned int irq, const struct cpumask 
 	 */
 	cvmx_read_csr(CVMX_CIU_INTX_EN0(cvmx_get_core_num() * 2));
 	write_unlock(&octeon_irq_ciu0_rwlock);
+
+	return 0;
 }
 #endif
 
@@ -294,7 +296,7 @@ static void octeon_irq_ciu1_disable(unsigned int irq)
 }
 
 #ifdef CONFIG_SMP
-static void octeon_irq_ciu1_set_affinity(unsigned int irq, const struct cpumask *dest)
+static int octeon_irq_ciu1_set_affinity(unsigned int irq, const struct cpumask *dest)
 {
 	int cpu;
 	int bit = irq - OCTEON_IRQ_WDOG0;	/* Bit 0-63 of EN1 */
@@ -317,6 +319,8 @@ static void octeon_irq_ciu1_set_affinity(unsigned int irq, const struct cpumask 
 	 */
 	cvmx_read_csr(CVMX_CIU_INTX_EN1(cvmx_get_core_num() * 2 + 1));
 	write_unlock(&octeon_irq_ciu1_rwlock);
+
+	return 0;
 }
 #endif
 
