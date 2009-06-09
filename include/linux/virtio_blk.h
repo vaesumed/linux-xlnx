@@ -15,6 +15,9 @@
 #define VIRTIO_BLK_F_GEOMETRY	4	/* Legacy geometry available  */
 #define VIRTIO_BLK_F_RO		5	/* Disk is read-only */
 #define VIRTIO_BLK_F_BLK_SIZE	6	/* Block size of disk is available*/
+#define VIRTIO_BLK_F_IDENTIFY	8	/* ATA IDENTIFY supported */
+
+#define VIRTIO_BLK_ID_BYTES	(sizeof(__u16[256]))	/* IDENTIFY DATA */
 
 struct virtio_blk_config
 {
@@ -32,6 +35,7 @@ struct virtio_blk_config
 	} geometry;
 	/* block size of device (if VIRTIO_BLK_F_BLK_SIZE) */
 	__u32 blk_size;
+	__u8 identify[VIRTIO_BLK_ID_BYTES];
 } __attribute__((packed));
 
 /* These two define direction. */

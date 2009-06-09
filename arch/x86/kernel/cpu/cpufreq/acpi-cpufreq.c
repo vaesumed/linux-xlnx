@@ -552,7 +552,7 @@ static int __init acpi_cpufreq_early_init(void)
 	for_each_possible_cpu(i) {
 		if (!alloc_cpumask_var_node(
 			&per_cpu_ptr(acpi_perf_data, i)->shared_cpu_map,
-			GFP_KERNEL, cpu_to_node(i))) {
+			GFP_KERNEL | __GFP_ZERO, cpu_to_node(i))) {
 
 			/* Freeing a NULL pointer is OK: alloc_percpu zeroes. */
 			free_acpi_perf_data();

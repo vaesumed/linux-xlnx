@@ -179,7 +179,7 @@ static void lguest_end_context_switch(struct task_struct *next)
 	paravirt_end_context_switch(next);
 }
 
-/*G:033
+/*G:032
  * After that diversion we return to our first native-instruction
  * replacements: four functions for interrupt control.
  *
@@ -199,30 +199,28 @@ static unsigned long save_fl(void)
 {
 	return lguest_data.irq_enabled;
 }
-PV_CALLEE_SAVE_REGS_THUNK(save_fl);
-
-/* restore_flags() just sets the flags back to the value given. */
-static void restore_fl(unsigned long flags)
-{
-	lguest_data.irq_enabled = flags;
-}
-PV_CALLEE_SAVE_REGS_THUNK(restore_fl);
 
 /* Interrupts go off... */
 static void irq_disable(void)
 {
 	lguest_data.irq_enabled = 0;
 }
+
+/* Let's pause a moment.  Remember how I said these are called so often?
+ * Jeremy Fitzhardinge optimized them so hard early in 2009 that he had to
+ * break some rules.  In particular, these functions are assumed to save their
+ * own registers if they need to: normal C functions assume they can trash the
+ * eax register.  To use normal C functions, we use
+ * PV_CALLEE_SAVE_REGS_THUNK(), which pushes %eax onto the stack, calls the
+ * C function, then restores it. */
+PV_CALLEE_SAVE_REGS_THUNK(save_fl);
 PV_CALLEE_SAVE_REGS_THUNK(irq_disable);
-
-/* Interrupts go on... */
-static void irq_enable(void)
-{
-	lguest_data.irq_enabled = X86_EFLAGS_IF;
-}
-PV_CALLEE_SAVE_REGS_THUNK(irq_enable);
-
 /*:*/
+
+/* These are in i386_head.S */
+extern void lg_irq_enable(void);
+extern void lg_restore_fl(unsigned long flags);
+
 /*M:003 Note that we don't check for outstanding interrupts when we re-enable
  * them (or when we unmask an interrupt).  This seems to work for the moment,
  * since interrupts are rare and we'll just get the interrupt on the next timer
@@ -537,7 +535,7 @@ static void lguest_set_pte_at(struct mm_struct *mm, unsigned long addr,
 static void lguest_set_pmd(pmd_t *pmdp, pmd_t pmdval)
 {
 	*pmdp = pmdval;
-	lazy_hcall2(LHCALL_SET_PMD, __pa(pmdp) & PAGE_MASK,
+	lazy_hcall2(LHCALL_SET_PGD, __pa(pmdp) & PAGE_MASK,
 		   (__pa(pmdp) & (PAGE_SIZE - 1)) / 4);
 }
 
@@ -628,13 +626,12 @@ static void __init lguest_init_IRQ(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < LGUEST_IRQS; i++) {
-		int vector = FIRST_EXTERNAL_VECTOR + i;
+	for (i = FIRST_EXTERNAL_VECTOR; i < NR_VECTORS; i++) {
 		/* Some systems map "vectors" to interrupts weirdly.  Lguest has
 		 * a straightforward 1 to 1 mapping, so force that here. */
-		__get_cpu_var(vector_irq)[vector] = i;
-		if (vector != SYSCALL_VECTOR)
-			set_intr_gate(vector, interrupt[i]);
+		__get_cpu_var(vector_irq)[i] = i - FIRST_EXTERNAL_VECTOR;
+		if (i != SYSCALL_VECTOR)
+			set_intr_gate(i, interrupt[i - FIRST_EXTERNAL_VECTOR]);
 	}
 	/* This call is required to set up for 4k stacks, where we have
 	 * separate stacks for hard and soft interrupts. */
@@ -973,10 +970,10 @@ static void lguest_restart(char *reason)
  *
  * Our current solution is to allow the paravirt back end to optionally patch
  * over the indirect calls to replace them with something more efficient.  We
- * patch the four most commonly called functions: disable interrupts, enable
- * interrupts, restore interrupts and save interrupts.  We usually have 6 or 10
- * bytes to patch into: the Guest versions of these operations are small enough
- * that we can fit comfortably.
+ * patch two of the simplest of the most commonly called functions: disable
+ * interrupts and save interrupts.  We usually have 6 or 10 bytes to patch
+ * into: the Guest versions of these operations are small enough that we can
+ * fit comfortably.
  *
  * First we need assembly templates of each of the patchable Guest operations,
  * and these are in i386_head.S. */
@@ -987,8 +984,6 @@ static const struct lguest_insns
 	const char *start, *end;
 } lguest_insns[] = {
 	[PARAVIRT_PATCH(pv_irq_ops.irq_disable)] = { lgstart_cli, lgend_cli },
-	[PARAVIRT_PATCH(pv_irq_ops.irq_enable)] = { lgstart_sti, lgend_sti },
-	[PARAVIRT_PATCH(pv_irq_ops.restore_fl)] = { lgstart_popf, lgend_popf },
 	[PARAVIRT_PATCH(pv_irq_ops.save_fl)] = { lgstart_pushf, lgend_pushf },
 };
 
@@ -1033,9 +1028,9 @@ __init void lguest_init(void)
 	/* interrupt-related operations */
 	pv_irq_ops.init_IRQ = lguest_init_IRQ;
 	pv_irq_ops.save_fl = PV_CALLEE_SAVE(save_fl);
-	pv_irq_ops.restore_fl = PV_CALLEE_SAVE(restore_fl);
+	pv_irq_ops.restore_fl = __PV_IS_CALLEE_SAVE(lg_restore_fl);
 	pv_irq_ops.irq_disable = PV_CALLEE_SAVE(irq_disable);
-	pv_irq_ops.irq_enable = PV_CALLEE_SAVE(irq_enable);
+	pv_irq_ops.irq_enable = __PV_IS_CALLEE_SAVE(lg_irq_enable);
 	pv_irq_ops.safe_halt = lguest_safe_halt;
 
 	/* init-time operations */

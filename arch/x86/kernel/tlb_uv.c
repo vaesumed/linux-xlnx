@@ -844,7 +844,8 @@ static int __init uv_bau_init(void)
 
 	for_each_possible_cpu(cur_cpu)
 		alloc_cpumask_var_node(&per_cpu(uv_flush_tlb_mask, cur_cpu),
-				       GFP_KERNEL, cpu_to_node(cur_cpu));
+				       GFP_KERNEL | __GFP_ZERO,
+				       cpu_to_node(cur_cpu));
 
 	uv_bau_retry_limit = 1;
 	uv_nshift = uv_hub_info->n_val;
