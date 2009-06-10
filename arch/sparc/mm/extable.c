@@ -28,10 +28,6 @@ search_extable(const struct exception_table_entry *start,
 	 *	word 3: last insn address + 4 bytes
 	 *	word 4: fixup code address
 	 *
-	 * Deleted entries are encoded as:
-	 *	word 1: unused
-	 *	word 2: -1
-	 *
 	 * See asm/uaccess.h for more details.
 	 */
 
@@ -42,10 +38,6 @@ search_extable(const struct exception_table_entry *start,
 			walk++;
 			continue;
 		}
-
-		/* A deleted entry; see trim_init_extable */
-		if (walk->fixup == -1)
-			continue;
 
 		if (walk->insn == value)
 			return walk;
@@ -63,25 +55,6 @@ search_extable(const struct exception_table_entry *start,
 	}
 
         return NULL;
-}
-
-/* We could memmove them around; easier to mark the trimmed ones. */
-void trim_init_extable(struct module *m)
-{
-	unsigned int i;
-	bool range;
-
-	for (i = 0; i < m->num_exentries; i += range ? 2 : 1) {
-		range = m->extable[i].fixup == 0;
-
-		if (within_module_init(m->extable[i].insn)) {
-			m->extable[i].fixup = -1;
-			if (range)
-				m->extable[i+1].fixup = -1;
-		}
-		if (range)
-			i++;
-	}
 }
 
 /* Special extable search, which handles ranges.  Returns fixup */
