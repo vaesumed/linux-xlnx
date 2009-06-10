@@ -146,12 +146,46 @@ static void do_virtblk_request(struct request_queue *q)
 		vblk->vq->vq_ops->kick(vblk->vq);
 }
 
+/* return ATA identify data
+ */
+static int virtblk_identify(struct gendisk *disk, void *argp)
+{
+	struct virtio_blk *vblk = disk->private_data;
+	void *opaque;
+	int err = -ENOMEM;
+
+	opaque = kmalloc(VIRTIO_BLK_ID_BYTES, GFP_KERNEL);
+	if (!opaque)
+		goto out;
+
+	err = virtio_config_buf(vblk->vdev, VIRTIO_BLK_F_IDENTIFY,
+		offsetof(struct virtio_blk_config, identify), opaque,
+		VIRTIO_BLK_ID_BYTES);
+
+	if (err)
+		goto out_kfree;
+
+	if (copy_to_user(argp, opaque, VIRTIO_BLK_ID_BYTES))
+		err = -EFAULT;
+
+out_kfree:
+	kfree(opaque);
+out:
+	return err;
+}
+
 static int virtblk_ioctl(struct block_device *bdev, fmode_t mode,
 			 unsigned cmd, unsigned long data)
 {
-	return scsi_cmd_ioctl(bdev->bd_disk->queue,
-			      bdev->bd_disk, mode, cmd,
-			      (void __user *)data);
+	struct gendisk *disk = bdev->bd_disk;
+	void __user *argp = (void __user *)data;
+
+	switch (cmd) {
+	case HDIO_GET_IDENTITY:
+		return virtblk_identify(disk, argp);
+	default:
+		return scsi_cmd_ioctl(disk->queue, disk, mode, cmd, argp);
+	}
 }
 
 /* We provide getgeo only to please some old bootloader/partitioning tools */
@@ -190,7 +224,7 @@ static int index_to_minor(int index)
 	return index << PART_BITS;
 }
 
-static int virtblk_probe(struct virtio_device *vdev)
+static int __devinit virtblk_probe(struct virtio_device *vdev)
 {
 	struct virtio_blk *vblk;
 	int err;
@@ -224,7 +258,7 @@ static int virtblk_probe(struct virtio_device *vdev)
 	sg_init_table(vblk->sg, vblk->sg_elems);
 
 	/* We expect one virtqueue, for output. */
-	vblk->vq = vdev->config->find_vq(vdev, 0, blk_done);
+	vblk->vq = virtio_find_single_vq(vdev, blk_done, "requests");
 	if (IS_ERR(vblk->vq)) {
 		err = PTR_ERR(vblk->vq);
 		goto out_free_vblk;
@@ -323,14 +357,14 @@ out_put_disk:
 out_mempool:
 	mempool_destroy(vblk->pool);
 out_free_vq:
-	vdev->config->del_vq(vblk->vq);
+	vdev->config->del_vqs(vdev);
 out_free_vblk:
 	kfree(vblk);
 out:
 	return err;
 }
 
-static void virtblk_remove(struct virtio_device *vdev)
+static void __devexit virtblk_remove(struct virtio_device *vdev)
 {
 	struct virtio_blk *vblk = vdev->priv;
 
@@ -344,7 +378,7 @@ static void virtblk_remove(struct virtio_device *vdev)
 	blk_cleanup_queue(vblk->disk->queue);
 	put_disk(vblk->disk);
 	mempool_destroy(vblk->pool);
-	vdev->config->del_vq(vblk->vq);
+	vdev->config->del_vqs(vdev);
 	kfree(vblk);
 }
 
@@ -356,6 +390,7 @@ static struct virtio_device_id id_table[] = {
 static unsigned int features[] = {
 	VIRTIO_BLK_F_BARRIER, VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_SIZE_MAX,
 	VIRTIO_BLK_F_GEOMETRY, VIRTIO_BLK_F_RO, VIRTIO_BLK_F_BLK_SIZE,
+	VIRTIO_BLK_F_IDENTIFY
 };
 
 static struct virtio_driver virtio_blk = {
