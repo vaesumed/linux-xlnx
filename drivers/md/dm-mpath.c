@@ -35,6 +35,7 @@ struct pgpath {
 
 	struct dm_path path;
 	struct work_struct deactivate_path;
+	struct work_struct activate_path;
 };
 
 #define path_to_pgpath(__pgp) container_of((__pgp), struct pgpath, path)
@@ -64,8 +65,6 @@ struct multipath {
 	spinlock_t lock;
 
 	const char *hw_handler_name;
-	struct work_struct activate_path;
-	struct pgpath *pgpath_to_activate;
 	unsigned nr_priority_groups;
 	struct list_head priority_groups;
 	unsigned pg_init_required;	/* pg_init needs calling? */
@@ -102,6 +101,7 @@ struct multipath {
 struct dm_mpath_io {
 	struct pgpath *pgpath;
 	struct dm_bio_details details;
+	size_t nr_bytes;
 };
 
 typedef int (*action_fn) (struct pgpath *pgpath);
@@ -128,6 +128,7 @@ static struct pgpath *alloc_pgpath(void)
 	if (pgpath) {
 		pgpath->is_active = 1;
 		INIT_WORK(&pgpath->deactivate_path, deactivate_path);
+		INIT_WORK(&pgpath->activate_path, activate_path);
 	}
 
 	return pgpath;
@@ -160,7 +161,6 @@ static struct priority_group *alloc_priority_group(void)
 
 static void free_pgpaths(struct list_head *pgpaths, struct dm_target *ti)
 {
-	unsigned long flags;
 	struct pgpath *pgpath, *tmp;
 	struct multipath *m = ti->private;
 
@@ -169,10 +169,6 @@ static void free_pgpaths(struct list_head *pgpaths, struct dm_target *ti)
 		if (m->hw_handler_name)
 			scsi_dh_detach(bdev_get_queue(pgpath->path.dev->bdev));
 		dm_put_device(ti, pgpath->path.dev);
-		spin_lock_irqsave(&m->lock, flags);
-		if (m->pgpath_to_activate == pgpath)
-			m->pgpath_to_activate = NULL;
-		spin_unlock_irqrestore(&m->lock, flags);
 		free_pgpath(pgpath);
 	}
 }
@@ -202,7 +198,6 @@ static struct multipath *alloc_multipath(struct dm_target *ti)
 		m->queue_io = 1;
 		INIT_WORK(&m->process_queued_ios, process_queued_ios);
 		INIT_WORK(&m->trigger_event, trigger_event);
-		INIT_WORK(&m->activate_path, activate_path);
 		m->mpio_pool = mempool_create_slab_pool(MIN_IOS, _mpio_cache);
 		if (!m->mpio_pool) {
 			kfree(m);
@@ -250,11 +245,12 @@ static void __switch_pg(struct multipath *m, struct pgpath *pgpath)
 	m->pg_init_count = 0;
 }
 
-static int __choose_path_in_pg(struct multipath *m, struct priority_group *pg)
+static int __choose_path_in_pg(struct multipath *m, struct priority_group *pg,
+			       size_t nr_bytes)
 {
 	struct dm_path *path;
 
-	path = pg->ps.type->select_path(&pg->ps, &m->repeat_count);
+	path = pg->ps.type->select_path(&pg->ps, &m->repeat_count, nr_bytes);
 	if (!path)
 		return -ENXIO;
 
@@ -266,7 +262,7 @@ static int __choose_path_in_pg(struct multipath *m, struct priority_group *pg)
 	return 0;
 }
 
-static void __choose_pgpath(struct multipath *m)
+static void __choose_pgpath(struct multipath *m, size_t nr_bytes)
 {
 	struct priority_group *pg;
 	unsigned bypassed = 1;
@@ -278,12 +274,12 @@ static void __choose_pgpath(struct multipath *m)
 	if (m->next_pg) {
 		pg = m->next_pg;
 		m->next_pg = NULL;
-		if (!__choose_path_in_pg(m, pg))
+		if (!__choose_path_in_pg(m, pg, nr_bytes))
 			return;
 	}
 
 	/* Don't change PG until it has no remaining paths */
-	if (m->current_pg && !__choose_path_in_pg(m, m->current_pg))
+	if (m->current_pg && !__choose_path_in_pg(m, m->current_pg, nr_bytes))
 		return;
 
 	/*
@@ -295,7 +291,7 @@ static void __choose_pgpath(struct multipath *m)
 		list_for_each_entry(pg, &m->priority_groups, list) {
 			if (pg->bypassed == bypassed)
 				continue;
-			if (!__choose_path_in_pg(m, pg))
+			if (!__choose_path_in_pg(m, pg, nr_bytes))
 				return;
 		}
 	} while (bypassed--);
@@ -326,6 +322,7 @@ static int map_io(struct multipath *m, struct bio *bio,
 		  struct dm_mpath_io *mpio, unsigned was_queued)
 {
 	int r = DM_MAPIO_REMAPPED;
+	size_t nr_bytes = bio->bi_size;
 	unsigned long flags;
 	struct pgpath *pgpath;
 
@@ -334,7 +331,7 @@ static int map_io(struct multipath *m, struct bio *bio,
 	/* Do we need to select a new pgpath? */
 	if (!m->current_pgpath ||
 	    (!m->queue_io && (m->repeat_count && --m->repeat_count == 0)))
-		__choose_pgpath(m);
+		__choose_pgpath(m, nr_bytes);
 
 	pgpath = m->current_pgpath;
 
@@ -359,6 +356,11 @@ static int map_io(struct multipath *m, struct bio *bio,
 		r = -EIO;	/* Failed */
 
 	mpio->pgpath = pgpath;
+	mpio->nr_bytes = nr_bytes;
+
+	if (r == DM_MAPIO_REMAPPED && pgpath->pg->ps.type->start_io)
+		pgpath->pg->ps.type->start_io(&pgpath->pg->ps, &pgpath->path,
+					      nr_bytes);
 
 	spin_unlock_irqrestore(&m->lock, flags);
 
@@ -427,8 +429,8 @@ static void process_queued_ios(struct work_struct *work)
 {
 	struct multipath *m =
 		container_of(work, struct multipath, process_queued_ios);
-	struct pgpath *pgpath = NULL;
-	unsigned init_required = 0, must_queue = 1;
+	struct pgpath *pgpath = NULL, *tmp;
+	unsigned must_queue = 1;
 	unsigned long flags;
 
 	spin_lock_irqsave(&m->lock, flags);
@@ -437,7 +439,7 @@ static void process_queued_ios(struct work_struct *work)
 		goto out;
 
 	if (!m->current_pgpath)
-		__choose_pgpath(m);
+		__choose_pgpath(m, 0);
 
 	pgpath = m->current_pgpath;
 
@@ -446,19 +448,15 @@ static void process_queued_ios(struct work_struct *work)
 		must_queue = 0;
 
 	if (m->pg_init_required && !m->pg_init_in_progress && pgpath) {
-		m->pgpath_to_activate = pgpath;
 		m->pg_init_count++;
 		m->pg_init_required = 0;
-		m->pg_init_in_progress = 1;
-		init_required = 1;
+		list_for_each_entry(tmp, &pgpath->pg->pgpaths, list) {
+			if (queue_work(kmpath_handlerd, &tmp->activate_path))
+				m->pg_init_in_progress++;
+		}
 	}
-
 out:
 	spin_unlock_irqrestore(&m->lock, flags);
-
-	if (init_required)
-		queue_work(kmpath_handlerd, &m->activate_path);
-
 	if (!must_queue)
 		dispatch_queued_ios(m);
 }
@@ -553,6 +551,12 @@ static int parse_path_selector(struct arg_set *as, struct priority_group *pg,
 		return -EINVAL;
 	}
 
+	if (ps_argc > as->argc) {
+		dm_put_path_selector(pst);
+		ti->error = "not enough arguments for path selector";
+		return -EINVAL;
+	}
+
 	r = pst->create(&pg->ps, ps_argc, as->argv);
 	if (r) {
 		dm_put_path_selector(pst);
@@ -591,9 +595,20 @@ static struct pgpath *parse_path(struct arg_set *as, struct path_selector *ps,
 	}
 
 	if (m->hw_handler_name) {
-		r = scsi_dh_attach(bdev_get_queue(p->path.dev->bdev),
-				   m->hw_handler_name);
+		struct request_queue *q = bdev_get_queue(p->path.dev->bdev);
+
+		r = scsi_dh_attach(q, m->hw_handler_name);
+		if (r == -EBUSY) {
+			/*
+			 * Already attached to different hw_handler,
+			 * try to reattach with correct one.
+			 */
+			scsi_dh_detach(q);
+			r = scsi_dh_attach(q, m->hw_handler_name);
+		}
+
 		if (r < 0) {
+			ti->error = "error attaching hardware handler";
 			dm_put_device(ti, p->path.dev);
 			goto bad;
 		}
@@ -698,6 +713,11 @@ static int parse_hw_handler(struct arg_set *as, struct multipath *m)
 
 	if (!hw_argc)
 		return 0;
+
+	if (hw_argc > as->argc) {
+		ti->error = "not enough arguments for hardware handler";
+		return -EINVAL;
+	}
 
 	m->hw_handler_name = kstrdup(shift(as), GFP_KERNEL);
 	request_module("scsi_dh_%s", m->hw_handler_name);
@@ -823,6 +843,8 @@ static int multipath_ctr(struct dm_target *ti, unsigned int argc,
 		goto bad;
 	}
 
+	ti->num_flush_requests = 1;
+
 	return 0;
 
  bad:
@@ -836,6 +858,7 @@ static void multipath_dtr(struct dm_target *ti)
 
 	flush_workqueue(kmpath_handlerd);
 	flush_workqueue(kmultipathd);
+	flush_scheduled_work();
 	free_multipath(m);
 }
 
@@ -924,9 +947,13 @@ static int reinstate_path(struct pgpath *pgpath)
 
 	pgpath->is_active = 1;
 
-	m->current_pgpath = NULL;
-	if (!m->nr_valid_paths++ && m->queue_size)
+	if (!m->nr_valid_paths++ && m->queue_size) {
+		m->current_pgpath = NULL;
 		queue_work(kmultipathd, &m->process_queued_ios);
+	} else if (m->hw_handler_name && (m->current_pg == pgpath->pg)) {
+		if (queue_work(kmpath_handlerd, &pgpath->activate_path))
+			m->pg_init_in_progress++;
+	}
 
 	dm_path_uevent(DM_UEVENT_PATH_REINSTATED, m->ti,
 		      pgpath->path.dev->name, m->nr_valid_paths);
@@ -1102,35 +1129,30 @@ static void pg_init_done(struct dm_path *path, int errors)
 
 	spin_lock_irqsave(&m->lock, flags);
 	if (errors) {
-		DMERR("Could not failover device. Error %d.", errors);
-		m->current_pgpath = NULL;
-		m->current_pg = NULL;
+		if (pgpath == m->current_pgpath) {
+			DMERR("Could not failover device. Error %d.", errors);
+			m->current_pgpath = NULL;
+			m->current_pg = NULL;
+		}
 	} else if (!m->pg_init_required) {
 		m->queue_io = 0;
 		pg->bypassed = 0;
 	}
 
-	m->pg_init_in_progress = 0;
-	queue_work(kmultipathd, &m->process_queued_ios);
+	m->pg_init_in_progress--;
+	if (!m->pg_init_in_progress)
+		queue_work(kmultipathd, &m->process_queued_ios);
 	spin_unlock_irqrestore(&m->lock, flags);
 }
 
 static void activate_path(struct work_struct *work)
 {
 	int ret;
-	struct multipath *m =
-		container_of(work, struct multipath, activate_path);
-	struct dm_path *path;
-	unsigned long flags;
+	struct pgpath *pgpath =
+		container_of(work, struct pgpath, activate_path);
 
-	spin_lock_irqsave(&m->lock, flags);
-	path = &m->pgpath_to_activate->path;
-	m->pgpath_to_activate = NULL;
-	spin_unlock_irqrestore(&m->lock, flags);
-	if (!path)
-		return;
-	ret = scsi_dh_activate(bdev_get_queue(path->dev->bdev));
-	pg_init_done(path, ret);
+	ret = scsi_dh_activate(bdev_get_queue(pgpath->path.dev->bdev));
+	pg_init_done(&pgpath->path, ret);
 }
 
 /*
@@ -1195,7 +1217,7 @@ static int multipath_end_io(struct dm_target *ti, struct bio *bio,
 	if (pgpath) {
 		ps = &pgpath->pg->ps;
 		if (ps->type->end_io)
-			ps->type->end_io(ps, &pgpath->path);
+			ps->type->end_io(ps, &pgpath->path, mpio->nr_bytes);
 	}
 	if (r != DM_ENDIO_INCOMPLETE)
 		mempool_free(mpio, m->mpio_pool);
@@ -1411,7 +1433,7 @@ static int multipath_ioctl(struct dm_target *ti, unsigned int cmd,
 	spin_lock_irqsave(&m->lock, flags);
 
 	if (!m->current_pgpath)
-		__choose_pgpath(m);
+		__choose_pgpath(m, 0);
 
 	if (m->current_pgpath) {
 		bdev = m->current_pgpath->path.dev->bdev;
