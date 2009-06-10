@@ -1,0 +1,176 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.30-rc8-git5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard ccc0d38ec13d4649d4168c1db590137df53ad783
+HEAD is now at ccc0d38 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jbarnes/pci-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+i2c-retry-on-arbitration-loss.patch
+i2c-tdfx-no-class.patch
+i2c-adapter-no-default-parent.patch
+i2c-chips-move-max6875-to-drivers-misc-eeprom.patch
+i2c-viapro-add-new-pci-device-id-for-vx855.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+macintosh-windfarm-convert-to-new-style-i2c.patch
+macintosh-therm_adt746x-convert-to-new-style-i2c.patch
+macintosh-therm_windtunnel-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + eb696a9...7e520f9 master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing device-mapper based on v2.6.30-rc7-227-gd9244b5
+$ cd ../quilt-tmp
+$ git reset --hard d9244b5d2fbfe9fa540024b410047af13ceec90f
+HEAD is now at d9244b5 Merge branch 'hwmon-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jdelvare/staging
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+dm-sysfs-skip-output-when-device-is-being-destroyed.patch
+dm-mpath-change-attached-scsi_dh.patch
+dm-mpath-call-activate-fn-for-each-path-in-pg_init.patch
+dm-raid1-keep-retrying-alloc-if-mempool_alloc-failed.patch
+dm-mpath-flush-keventd-queue-in-destructor.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries-fixup-for-linux-next.patch
+dm-use-i_size_read.patch
+Context reduced to (1/1) to apply fragment at 417
+dm-rename-suspended_bdev-to-bdev.patch
+dm-always-hold-bdev-reference.patch
+dm-make-dm_flush-return-void.patch
+dm-process-requeue-in-dm_wq_work.patch
+dm-store-only-first-barrier-error.patch
+dm-remove-EOPNOTSUPP-for-barriers.patch
+dm-remove-check-that-prevents-mapping-empty-bios.patch
+dm-introduce-num_flush_requests.patch
+dm-initialise-tio-in-alloc_tio.patch
+dm-send-empty-barriers-to-targets-in-dm_flush.patch
+dm-linear-support-flush.patch
+dm-stripe-support-flush.patch
+dm-crypt-support-flush.patch
+dm-delay-support-barriers.patch
+dm-mpath-support-barriers.patch
+dm-snapshot-support-barriers.patch
+dm-io-record-eopnotsupp.patch
+dm-io-retry-after-barrier-error.patch
+dm-snapshot-use-barrier-when-writing-exception-store.patch
+dm-mpath-add-start_io-and-nr_bytes-to-path-selectors.patch
+dm-mpath-add-queue-length-load-balancer.patch
+dm-table-improve-warning-message-when-devices-not-freed-before-destruction.patch
+dm-sysfs-add-suspended-attribute.patch
+dm-ioctl-support-cookies-for-udev.patch
+dm-table-ensure-targets-are-aligned-to-logical_block_size.patch
+dm-table-validate-device-logical_block_size.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 2e21810...dc99cb0 master     -> quilt/device-mapper  (forced update)
+Importing ttydev based on ccc0d38ec13d4649d4168c1db590137df53ad783
+$ cd ../quilt-tmp
+$ git reset --hard ccc0d38ec13d4649d4168c1db590137df53ad783
+HEAD is now at ccc0d38 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jbarnes/pci-2.6
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+cyclades-firmware-ze
+cyclades-fw-dontreset
+cyclades-remove-spare-null-check
+tty-port-carrierclose
+tty-port-drain-delay
+tty-usb-use-port
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:306: trailing whitespace.
+	else 
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2195: trailing whitespace.
+	serial_do_down(port);		
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:2221: trailing whitespace.
+	return 1;	
+warning: 3 lines add whitespace errors.
+tty-usb-acm-port
+synclink-pio-mode
+tty-cyclades-cast-clean
+tty-cyclades-cache-hw-ver
+tty-cyclades-macros-to-inlines
+tty-cyclades-kill-typedefs
+tty-cyclades-nports
+tty-cyclades-remove-unused-vars
+tty-usb-acm-kref
+tty-usb-acm-clean
+net-slip-ttyfix
+serial-async-bitnum
+tty-rocket-fixbitops
+tty-epca-fixbitops
+serial-8250-pci-ex1370
+tty-x86-termio-line
+tty-throttle-race-fix
+serial-maintainer
+pty-fix-comment-1
+tty-polling-open-oops
+tty-ldisc-extract
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:67: trailing whitespace.
+ *	In order to wait for any existing references to complete see 
+warning: 1 line adds whitespace errors.
+tty-ldisc-mutex
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:88: trailing whitespace.
+		if ( tty->ldisc->ops->flush_buffer )  
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:660: trailing whitespace.
+		
+warning: 2 lines add whitespace errors.
+tty-ldisc-move-flush
+tty-ldisc-style
+tty-usb-iuu-lock
+tty-usb-iuu-stopbits
+tty-usb-iuu-termios
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:54: space before tab in indent.
+ 	if (old_termios)
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:55: space before tab in indent.
+ 		tty_termios_copy_hw(tty->termios, old_termios);
+warning: 2 lines add whitespace errors.
+tty-usb-iuu-version
+tty-jsm-fix-4-8-port
+tty-icom-fix-spaghetti
+tty-simplify-buffer-alloc
+tty-simplify-buffer-clean
+parport_pc-array-fixes
+parport_pc-coding-style
+parport_pc-fix-loops
+icom-fix-trace
+tty-mxser-fix-isa-lookup
+serial-add-ar7
+tty-blackfin-uart-termios-typo
+tty-blackfin-sport-tfs
+tty-blackfin-rewrite-asm
+tty-blackfin-overrun-improve
+tty-blackfin-early-printkfix
+tty-blackfin-fix-missing-ssync
+tty-blackfin-fix-dma-rx
+tty-blackfin-document-anomolies
+tty-blackfin-fix-stb-anomoly
+tty-blackfin-latency
+cp210x-new-idents
+cp210x-fix-request-ids
+cp210x-func-renames
+tty-usb-ft232-latency
+tty-bluetooth-kill-lowlat
+tty-usb-ft232-modembits
+tty-blackfin-jtag-console
+tty-mutex-untangle
+devpts-unregister-error
+tty-maint-ttydev
+tty-serial-timbuart
+tty-serial-timbuart-termios
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:35: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-usb-sierra-resolve-merge
+tty-usb-sierra-add-urb-funcs
+tty-usb-sierra-blacklisting
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + f72eeb4...2453443 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
