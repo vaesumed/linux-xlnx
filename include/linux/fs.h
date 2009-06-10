@@ -764,10 +764,10 @@ struct inode {
 	struct mutex		inotify_mutex;	/* protects the watches list */
 #endif
 
+	unsigned long		i_state;
 	unsigned long		dirtied_when;	/* jiffies of first dirtying */
 
-	unsigned short		i_state;
-	unsigned short		i_flags;
+	unsigned int		i_flags;
 
 	atomic_t		i_writecount;
 #ifdef CONFIG_SECURITY
