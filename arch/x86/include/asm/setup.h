@@ -31,9 +31,8 @@ struct x86_quirks {
 	void (*smp_read_mpc_oem)(struct mpc_oemtable *oemtable,
 				unsigned short oemsize);
 	int (*setup_ioapic_ids)(void);
+	void (*prefill_possible_map)(void);
 };
-
-extern void x86_quirk_intr_init(void);
 
 extern void x86_quirk_trap_init(void);
 
@@ -86,12 +85,12 @@ extern unsigned long saved_video_mode;
 #define paravirt_post_allocator_init()	do {} while (0)
 #endif
 
-#ifndef _SETUP
-
 /*
  * This is set up by the setup-routine at boot-time
  */
 extern struct boot_params boot_params;
+
+#ifndef _SETUP
 
 /*
  * Do NOT EVER look at the BIOS memory size location.

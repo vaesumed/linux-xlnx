@@ -199,7 +199,7 @@ static void summit_init_apic_ldr(void)
 {
 	unsigned long val, id;
 	int count = 0;
-	u8 my_id = (u8)hard_smp_processor_id();
+	u8 my_id = (u8)read_apic_id();
 	u8 my_cluster = APIC_CLUSTER(my_id);
 #ifdef CONFIG_SMP
 	u8 lid;
@@ -326,7 +326,7 @@ static unsigned int summit_cpu_mask_to_apicid_and(const struct cpumask *inmask,
  */
 static int summit_phys_pkg_id(int cpuid_apic, int index_msb)
 {
-	return hard_smp_processor_id() >> index_msb;
+	return read_apic_id() >> index_msb;
 }
 
 static int probe_summit(void)

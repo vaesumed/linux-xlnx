@@ -238,6 +238,12 @@ static inline int apic_is_clustered_box(void)
 extern u8 setup_APIC_eilvt_mce(u8 vector, u8 msg_type, u8 mask);
 extern u8 setup_APIC_eilvt_ibs(u8 vector, u8 msg_type, u8 mask);
 
+static inline void disable_APIC(void)
+{
+	disable_local_APIC();
+	apic_disable();
+	disable_apic = 1;
+}
 
 #else /* !CONFIG_X86_LOCAL_APIC */
 static inline void lapic_shutdown(void) { }
@@ -245,6 +251,8 @@ static inline void lapic_shutdown(void) { }
 static inline void init_apic_mappings(void) { }
 static inline void disable_local_APIC(void) { }
 static inline void apic_disable(void) { }
+static inline void disable_APIC(void) { }
+
 #endif /* !CONFIG_X86_LOCAL_APIC */
 
 #ifdef CONFIG_X86_64

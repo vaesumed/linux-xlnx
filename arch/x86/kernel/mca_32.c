@@ -466,6 +466,13 @@ static int __kprobes mca_handle_nmi_callback(struct device *dev, void *data)
 	return 0;
 }
 
+/*
+ *     The MCA (Microchannel Architecture) has an NMI chain for NMI sources
+ *     along the MCA bus.  Use this to hook into that chain if you will need
+ *     it.
+ */
+void (*mca_nmi_hook)(void) = NULL;
+
 void __kprobes mca_handle_nmi(void)
 {
 	/*
@@ -473,4 +480,9 @@ void __kprobes mca_handle_nmi(void)
 	 * adapter was responsible for the error.
 	 */
 	bus_for_each_dev(&mca_bus_type, NULL, NULL, mca_handle_nmi_callback);
+
+	if (mca_nmi_hook)
+		mca_nmi_hook();
+	else
+		pr_warning("NMI generated from unknown source!\n");
 }

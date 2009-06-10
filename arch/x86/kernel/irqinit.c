@@ -248,15 +248,22 @@ void __init native_init_IRQ(void)
 			set_intr_gate(i, interrupt[i-FIRST_EXTERNAL_VECTOR]);
 	}
 
+#ifdef CONFIG_X86_64
 	if (!acpi_ioapic)
 		setup_irq(2, &irq2);
 
-#ifdef CONFIG_X86_32
+#else
 	/*
-	 * Call quirks after call gates are initialised (usually add in
-	 * the architecture specific gates):
+	 * setup after call gates are initialised (usually add in the
+	 * architecture specific gates).  Populating the
+	 * arch_intr_init x86_quirk allows final gate setup.  If the
+	 * quirk returns true, the cascade interrupt will not be setup
+	 * unless acpi_ioapic is zero
 	 */
-	x86_quirk_intr_init();
+
+	if ((x86_quirks->arch_intr_init && !x86_quirks->arch_intr_init()) ||
+	    (!x86_quirks->arch_intr_init && !acpi_ioapic))
+		setup_irq(2, &irq2);
 
 	/*
 	 * External FPU? Set up irq13 if so, for

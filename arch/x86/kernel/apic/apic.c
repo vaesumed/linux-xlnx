@@ -1578,6 +1578,9 @@ void __init init_apic_mappings(void)
 {
 	unsigned int new_apicid;
 
+	if (disable_apic)
+		return;
+
 	if (x2apic_mode) {
 		boot_cpu_physical_apicid = read_apic_id();
 		return;
@@ -1928,11 +1931,6 @@ void __cpuinit generic_processor_info(int apicid, int version)
 
 	set_cpu_possible(cpu, true);
 	set_cpu_present(cpu, true);
-}
-
-int hard_smp_processor_id(void)
-{
-	return read_apic_id();
 }
 
 void default_init_apic_ldr(void)

@@ -192,6 +192,11 @@ void smp_call_function_single_interrupt(struct pt_regs *regs)
 	irq_exit();
 }
 
+static int native_hard_smp_processor_id(void)
+{
+	return read_apic_id();
+}
+
 struct smp_ops smp_ops = {
 	.smp_prepare_boot_cpu	= native_smp_prepare_boot_cpu,
 	.smp_prepare_cpus	= native_smp_prepare_cpus,
@@ -207,5 +212,7 @@ struct smp_ops smp_ops = {
 
 	.send_call_func_ipi	= native_send_call_func_ipi,
 	.send_call_func_single_ipi = native_send_call_func_single_ipi,
+	.hard_smp_processor_id = native_hard_smp_processor_id,
+	.safe_smp_processor_id = apic_safe_smp_processor_id,
 };
 EXPORT_SYMBOL_GPL(smp_ops);

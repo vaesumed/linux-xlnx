@@ -25,6 +25,7 @@
 #include <linux/edd.h>
 #include <asm/boot.h>
 #include <asm/setup.h>
+#include <asm/voyager_boot.h>
 #include "bitops.h"
 #include <asm/cpufeature.h>
 #include <asm/processor-flags.h>
@@ -35,7 +36,6 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*(x)))
 
 extern struct setup_header hdr;
-extern struct boot_params boot_params;
 
 /* Basic port I/O */
 static inline void outb(u8 v, u16 port)
@@ -349,6 +349,9 @@ void probe_cards(int unsafe);
 
 /* video-vesa.c */
 void vesa_store_edid(void);
+
+/* voyager.c */
+int query_voyager(void);
 
 #endif /* __ASSEMBLY__ */
 

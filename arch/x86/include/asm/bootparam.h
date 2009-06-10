@@ -7,6 +7,7 @@
 #include <linux/edd.h>
 #include <asm/e820.h>
 #include <asm/ist.h>
+#include <asm/voyager_bios.h>
 #include <video/edid.h>
 
 /* setup data types */
@@ -106,7 +107,9 @@ struct boot_params {
 	struct e820entry e820_map[E820MAX];		/* 0x2d0 */
 	__u8  _pad8[48];				/* 0xcd0 */
 	struct edd_info eddbuf[EDDMAXNR];		/* 0xd00 */
-	__u8  _pad9[276];				/* 0xeec */
+	__u8  _pad9[20];				/* 0xeec */
+	struct voyager_bios_info voyager_bios_info;	/* 0xf00 */
+	__u8  _pad10[249];				/* 0xf07 */
 } __attribute__((packed));
 
 #endif /* _ASM_X86_BOOTPARAM_H */

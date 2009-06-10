@@ -82,7 +82,6 @@
 #include <asm/io_apic.h>
 #include <asm/ist.h>
 #include <asm/vmi.h>
-#include <asm/setup_arch.h>
 #include <asm/bios_ebda.h>
 #include <asm/cacheflush.h>
 #include <asm/processor.h>
@@ -100,16 +99,13 @@
 
 #include <asm/paravirt.h>
 #include <asm/hypervisor.h>
+#include <asm/voyager.h>
 
 #include <asm/percpu.h>
 #include <asm/topology.h>
 #include <asm/apicdef.h>
 #ifdef CONFIG_X86_64
 #include <asm/numa_64.h>
-#endif
-
-#ifndef ARCH_SETUP
-#define ARCH_SETUP
 #endif
 
 /*
@@ -689,6 +685,7 @@ void __init setup_arch(char **cmdline_p)
 #ifdef CONFIG_X86_32
 	memcpy(&boot_cpu_data, &new_cpu_data, sizeof(new_cpu_data));
 	visws_early_detect();
+	voyager_early_detect();
 #else
 	printk(KERN_INFO "Command line: %s\n", boot_command_line);
 #endif
@@ -738,8 +735,6 @@ void __init setup_arch(char **cmdline_p)
 		efi_reserve_early();
 	}
 #endif
-
-	ARCH_SETUP
 
 	setup_memory_map();
 	parse_setup_data();
@@ -791,9 +786,7 @@ void __init setup_arch(char **cmdline_p)
 	reserve_early_setup_data();
 
 	if (acpi_mps_check()) {
-#ifdef CONFIG_X86_LOCAL_APIC
-		disable_apic = 1;
-#endif
+		disable_APIC();
 		setup_clear_cpu_cap(X86_FEATURE_APIC);
 	}
 
@@ -978,7 +971,10 @@ void __init setup_arch(char **cmdline_p)
 		get_smp_config();
 #endif
 
-	prefill_possible_map();
+	if (x86_quirks->prefill_possible_map)
+		x86_quirks->prefill_possible_map();
+	else
+		prefill_possible_map();
 
 #ifdef CONFIG_X86_64
 	init_cpu_to_node();
@@ -1013,23 +1009,6 @@ void __init setup_arch(char **cmdline_p)
 }
 
 #ifdef CONFIG_X86_32
-
-/**
- * x86_quirk_intr_init - post gate setup interrupt initialisation
- *
- * Description:
- *	Fill in any interrupts that may have been left out by the general
- *	init_IRQ() routine.  interrupts having to do with the machine rather
- *	than the devices on the I/O bus (like APIC interrupts in intel MP
- *	systems) are started here.
- **/
-void __init x86_quirk_intr_init(void)
-{
-	if (x86_quirks->arch_intr_init) {
-		if (x86_quirks->arch_intr_init())
-			return;
-	}
-}
 
 /**
  * x86_quirk_trap_init - initialise system specific traps

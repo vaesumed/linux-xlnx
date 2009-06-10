@@ -54,6 +54,7 @@
 #include <asm/processor-flags.h>
 #include <asm/ftrace.h>
 #include <asm/irq_vectors.h>
+#include <asm/voyager_vectors.h>
 
 /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
@@ -809,8 +810,79 @@ ENDPROC(name)
 
 #define BUILD_INTERRUPT(name, nr)	BUILD_INTERRUPT3(name, nr, smp_##name)
 
-/* The include is where all of the SMP etc. interrupts come from */
-#include <asm/entry_arch.h>
+/*
+ * The following vectors are part of the Linux architecture, there
+ * is no hardware IRQ pin equivalent for them, they are triggered
+ * through the ICC by us (IPIs)
+ */
+#ifdef CONFIG_SMP
+BUILD_INTERRUPT(reschedule_interrupt,RESCHEDULE_VECTOR)
+BUILD_INTERRUPT(call_function_interrupt,CALL_FUNCTION_VECTOR)
+BUILD_INTERRUPT(call_function_single_interrupt,CALL_FUNCTION_SINGLE_VECTOR)
+BUILD_INTERRUPT(irq_move_cleanup_interrupt,IRQ_MOVE_CLEANUP_VECTOR)
+
+BUILD_INTERRUPT3(invalidate_interrupt0,INVALIDATE_TLB_VECTOR_START+0,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt1,INVALIDATE_TLB_VECTOR_START+1,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt2,INVALIDATE_TLB_VECTOR_START+2,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt3,INVALIDATE_TLB_VECTOR_START+3,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt4,INVALIDATE_TLB_VECTOR_START+4,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt5,INVALIDATE_TLB_VECTOR_START+5,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt6,INVALIDATE_TLB_VECTOR_START+6,
+		 smp_invalidate_interrupt)
+BUILD_INTERRUPT3(invalidate_interrupt7,INVALIDATE_TLB_VECTOR_START+7,
+		 smp_invalidate_interrupt)
+#endif
+
+BUILD_INTERRUPT(generic_interrupt, GENERIC_INTERRUPT_VECTOR)
+
+/*
+ * every pentium local APIC has two 'local interrupts', with a
+ * soft-definable vector attached to both interrupts, one of
+ * which is a timer interrupt, the other one is error counter
+ * overflow. Linux uses the local APIC timer interrupt to get
+ * a much simpler SMP time architecture:
+ */
+#ifdef CONFIG_X86_LOCAL_APIC
+
+BUILD_INTERRUPT(apic_timer_interrupt,LOCAL_TIMER_VECTOR)
+BUILD_INTERRUPT(error_interrupt,ERROR_APIC_VECTOR)
+BUILD_INTERRUPT(spurious_interrupt,SPURIOUS_APIC_VECTOR)
+
+#ifdef CONFIG_PERF_COUNTERS
+BUILD_INTERRUPT(perf_counter_interrupt, LOCAL_PERF_VECTOR)
+#endif
+
+#ifdef CONFIG_X86_THERMAL_VECTOR
+BUILD_INTERRUPT(thermal_interrupt,THERMAL_APIC_VECTOR)
+#endif
+
+#ifdef CONFIG_X86_MCE_THRESHOLD
+BUILD_INTERRUPT(threshold_interrupt,THRESHOLD_APIC_VECTOR)
+#endif
+
+#if defined(CONFIG_X86_VOYAGER) && defined(CONFIG_SMP)
+BUILD_INTERRUPT(vic_sys_interrupt, VIC_SYS_INT)
+BUILD_INTERRUPT(vic_cmn_interrupt, VIC_CMN_INT)
+BUILD_INTERRUPT(vic_cpi_interrupt, VIC_CPI_LEVEL0);
+
+/* do all the QIC interrupts */
+BUILD_INTERRUPT(qic_timer_interrupt, QIC_TIMER_CPI);
+BUILD_INTERRUPT(qic_invalidate_interrupt, QIC_INVALIDATE_CPI);
+BUILD_INTERRUPT(qic_reschedule_interrupt, QIC_RESCHEDULE_CPI);
+BUILD_INTERRUPT(qic_enable_irq_interrupt, QIC_ENABLE_IRQ_CPI);
+BUILD_INTERRUPT(qic_call_function_interrupt, QIC_CALL_FUNCTION_CPI);
+BUILD_INTERRUPT(qic_call_function_single_interrupt,
+		 QIC_CALL_FUNCTION_SINGLE_CPI);
+#endif
+
+#endif
+
 
 ENTRY(coprocessor_error)
 	RING0_INT_FRAME
