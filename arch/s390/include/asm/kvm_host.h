@@ -1,7 +1,7 @@
 /*
  * asm-s390/kvm_host.h - definition for kernel virtual machines on s390
  *
- * Copyright IBM Corp. 2008
+ * Copyright IBM Corp. 2008,2009
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License (version 2 only)
@@ -13,6 +13,8 @@
 
 #ifndef ASM_KVM_HOST_H
 #define ASM_KVM_HOST_H
+#include <linux/hrtimer.h>
+#include <linux/interrupt.h>
 #include <linux/kvm_host.h>
 #include <asm/debug.h>
 #include <asm/cpuid.h>
@@ -178,8 +180,9 @@ struct kvm_s390_interrupt_info {
 };
 
 /* for local_interrupt.action_flags */
-#define ACTION_STORE_ON_STOP 1
-#define ACTION_STOP_ON_STOP  2
+#define ACTION_STORE_ON_STOP		(1<<0)
+#define ACTION_STOP_ON_STOP		(1<<1)
+#define ACTION_RELOADVCPU_ON_STOP	(1<<2)
 
 struct kvm_s390_local_interrupt {
 	spinlock_t lock;
@@ -210,7 +213,8 @@ struct kvm_vcpu_arch {
 	s390_fp_regs      guest_fpregs;
 	unsigned int      guest_acrs[NUM_ACRS];
 	struct kvm_s390_local_interrupt local_int;
-	struct timer_list ckc_timer;
+	struct hrtimer    ckc_timer;
+	struct tasklet_struct tasklet;
 	union  {
 		cpuid_t	  cpu_id;
 		u64	  stidp_data;
@@ -222,8 +226,6 @@ struct kvm_vm_stat {
 };
 
 struct kvm_arch{
-	unsigned long guest_origin;
-	unsigned long guest_memsize;
 	struct sca_block *sca;
 	debug_info_t *dbf;
 	struct kvm_s390_float_interrupt float_int;
