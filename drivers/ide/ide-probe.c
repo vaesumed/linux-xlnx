@@ -97,7 +97,7 @@ static void ide_disk_init_mult_count(ide_drive_t *drive)
 		drive->mult_req = id[ATA_ID_MULTSECT] & 0xff;
 
 		if (drive->mult_req)
-			drive->special.b.set_multmode = 1;
+			drive->special_flags |= IDE_SFLAG_SET_MULTMODE;
 	}
 }
 
@@ -702,8 +702,14 @@ static int ide_probe_port(ide_hwif_t *hwif)
 	if (irqd)
 		disable_irq(hwif->irq);
 
-	if (ide_port_wait_ready(hwif) == -EBUSY)
-		printk(KERN_DEBUG "%s: Wait for ready failed before probe !\n", hwif->name);
+	rc = ide_port_wait_ready(hwif);
+	if (rc == -ENODEV) {
+		printk(KERN_INFO "%s: no devices on the port\n", hwif->name);
+		goto out;
+	} else if (rc == -EBUSY)
+		printk(KERN_ERR "%s: not ready before the probe\n", hwif->name);
+	else
+		rc = -ENODEV;
 
 	/*
 	 * Second drive should only exist if first drive was found,
@@ -714,7 +720,7 @@ static int ide_probe_port(ide_hwif_t *hwif)
 		if (drive->dev_flags & IDE_DFLAG_PRESENT)
 			rc = 0;
 	}
-
+out:
 	/*
 	 * Use cached IRQ number. It might be (and is...) changed by probe
 	 * code above
@@ -732,6 +738,8 @@ static void ide_port_tune_devices(ide_hwif_t *hwif)
 	int i;
 
 	ide_port_for_each_present_dev(i, drive, hwif) {
+		ide_check_nien_quirk_list(drive);
+
 		if (port_ops && port_ops->quirkproc)
 			port_ops->quirkproc(drive);
 	}
@@ -1035,6 +1043,15 @@ static void ide_port_init_devices(ide_hwif_t *hwif)
 		if (port_ops && port_ops->init_dev)
 			port_ops->init_dev(drive);
 	}
+
+	ide_port_for_each_dev(i, drive, hwif) {
+		/*
+		 * default to PIO Mode 0 before we figure out
+		 * the most suited mode for the attached device
+		 */
+		if (port_ops && port_ops->set_pio_mode)
+			port_ops->set_pio_mode(drive, 0);
+	}
 }
 
 static void ide_init_port(ide_hwif_t *hwif, unsigned int port,
@@ -1042,8 +1059,7 @@ static void ide_init_port(ide_hwif_t *hwif, unsigned int port,
 {
 	hwif->channel = port;
 
-	if (d->chipset)
-		hwif->chipset = d->chipset;
+	hwif->chipset = d->chipset ? d->chipset : ide_pci;
 
 	if (d->init_iops)
 		d->init_iops(hwif);
@@ -1132,8 +1148,8 @@ static void ide_port_init_devices_data(ide_hwif_t *hwif)
 		drive->hwif			= hwif;
 		drive->ready_stat		= ATA_DRDY;
 		drive->bad_wstat		= BAD_W_STAT;
-		drive->special.b.recalibrate	= 1;
-		drive->special.b.set_geometry	= 1;
+		drive->special_flags		= IDE_SFLAG_RECALIBRATE |
+						  IDE_SFLAG_SET_GEOMETRY;
 		drive->name[0]			= 'h';
 		drive->name[1]			= 'd';
 		drive->name[2]			= 'a' + j;
@@ -1168,11 +1184,10 @@ static void ide_init_port_data(ide_hwif_t *hwif, unsigned int index)
 	ide_port_init_devices_data(hwif);
 }
 
-static void ide_init_port_hw(ide_hwif_t *hwif, hw_regs_t *hw)
+static void ide_init_port_hw(ide_hwif_t *hwif, struct ide_hw *hw)
 {
 	memcpy(&hwif->io_ports, &hw->io_ports, sizeof(hwif->io_ports));
 	hwif->irq = hw->irq;
-	hwif->chipset = hw->chipset;
 	hwif->dev = hw->dev;
 	hwif->gendev.parent = hw->parent ? hw->parent : hw->dev;
 	hwif->ack_intr = hw->ack_intr;
@@ -1257,7 +1272,8 @@ out_nomem:
 	return -ENOMEM;
 }
 
-struct ide_host *ide_host_alloc(const struct ide_port_info *d, hw_regs_t **hws)
+struct ide_host *ide_host_alloc(const struct ide_port_info *d,
+				struct ide_hw **hws, unsigned int n_ports)
 {
 	struct ide_host *host;
 	struct device *dev = hws[0] ? hws[0]->dev : NULL;
@@ -1268,7 +1284,7 @@ struct ide_host *ide_host_alloc(const struct ide_port_info *d, hw_regs_t **hws)
 	if (host == NULL)
 		return NULL;
 
-	for (i = 0; i < MAX_HOST_PORTS; i++) {
+	for (i = 0; i < n_ports; i++) {
 		ide_hwif_t *hwif;
 		int idx;
 
@@ -1344,7 +1360,7 @@ static void ide_disable_port(ide_hwif_t *hwif)
 }
 
 int ide_host_register(struct ide_host *host, const struct ide_port_info *d,
-		      hw_regs_t **hws)
+		      struct ide_hw **hws)
 {
 	ide_hwif_t *hwif, *mate = NULL;
 	int i, j = 0;
@@ -1438,13 +1454,13 @@ int ide_host_register(struct ide_host *host, const struct ide_port_info *d,
 }
 EXPORT_SYMBOL_GPL(ide_host_register);
 
-int ide_host_add(const struct ide_port_info *d, hw_regs_t **hws,
-		 struct ide_host **hostp)
+int ide_host_add(const struct ide_port_info *d, struct ide_hw **hws,
+		 unsigned int n_ports, struct ide_host **hostp)
 {
 	struct ide_host *host;
 	int rc;
 
-	host = ide_host_alloc(d, hws);
+	host = ide_host_alloc(d, hws, n_ports);
 	if (host == NULL)
 		return -ENOMEM;
 
