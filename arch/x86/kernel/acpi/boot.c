@@ -44,11 +44,7 @@
 
 static int __initdata acpi_force = 0;
 u32 acpi_rsdt_forced;
-#ifdef	CONFIG_ACPI
 int acpi_disabled = 0;
-#else
-int acpi_disabled = 1;
-#endif
 EXPORT_SYMBOL(acpi_disabled);
 
 #ifdef	CONFIG_X86_64
@@ -1515,14 +1511,6 @@ static struct dmi_system_id __initdata acpi_dmi_table[] = {
 	 .matches = {
 		     DMI_MATCH(DMI_SYS_VENDOR, "Compaq"),
 		     DMI_MATCH(DMI_PRODUCT_NAME, "Workstation W8000"),
-		     },
-	 },
-	{
-	 .callback = force_acpi_ht,
-	 .ident = "ASUS P4B266",
-	 .matches = {
-		     DMI_MATCH(DMI_BOARD_VENDOR, "ASUSTeK Computer INC."),
-		     DMI_MATCH(DMI_BOARD_NAME, "P4B266"),
 		     },
 	 },
 	{
