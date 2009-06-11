@@ -2385,6 +2385,16 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 
 }
 
+#define MAX_DEBUG_SIZE (3 * sizeof(void *) + 2 * sizeof(struct track))
+
+static bool must_disable_debug(size_t size)
+{
+	/*
+	 * Disable debugging if it increases the minimum page order.
+	 */
+	return get_order(size + MAX_DEBUG_SIZE) > get_order(size);
+}
+
 static int kmem_cache_open(struct kmem_cache *s, gfp_t gfpflags,
 		const char *name, size_t size,
 		size_t align, unsigned long flags,
@@ -2396,6 +2406,9 @@ static int kmem_cache_open(struct kmem_cache *s, gfp_t gfpflags,
 	s->objsize = size;
 	s->align = align;
 	s->flags = kmem_cache_flags(size, flags, name, ctor);
+
+	if (must_disable_debug(size))
+		s->flags &= ~(SLAB_POISON|SLAB_RED_ZONE|SLAB_STORE_USER);
 
 	if (!calculate_sizes(s, -1))
 		goto error;
