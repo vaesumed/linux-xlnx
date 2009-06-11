@@ -62,8 +62,10 @@
 #include <linux/sched.h>
 #include <linux/signal.h>
 #include <linux/idr.h>
+#include <linux/kmemcheck.h>
 #include <linux/ftrace.h>
 #include <linux/async.h>
+#include <linux/kmemtrace.h>
 #include <trace/boot.h>
 
 #include <asm/io.h>
@@ -71,7 +73,6 @@
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
-#include <trace/kmemtrace.h>
 
 #ifdef CONFIG_X86_LOCAL_APIC
 #include <asm/smp.h>
@@ -784,6 +785,9 @@ static void __init do_basic_setup(void)
 static void __init do_pre_smp_initcalls(void)
 {
 	initcall_t *call;
+
+	/* kmemcheck must initialize before all early initcalls: */
+	kmemcheck_init();
 
 	for (call = __initcall_start; call < __early_initcall_end; call++)
 		do_one_initcall(*call);

@@ -147,27 +147,14 @@ END(ftrace_graph_caller)
 GLOBAL(return_to_handler)
 	subq  $80, %rsp
 
+	/* Save the return values */
 	movq %rax, (%rsp)
-	movq %rcx, 8(%rsp)
-	movq %rdx, 16(%rsp)
-	movq %rsi, 24(%rsp)
-	movq %rdi, 32(%rsp)
-	movq %r8, 40(%rsp)
-	movq %r9, 48(%rsp)
-	movq %r10, 56(%rsp)
-	movq %r11, 64(%rsp)
+	movq %rdx, 8(%rsp)
 
 	call ftrace_return_to_handler
 
 	movq %rax, 72(%rsp)
-	movq 64(%rsp), %r11
-	movq 56(%rsp), %r10
-	movq 48(%rsp), %r9
-	movq 40(%rsp), %r8
-	movq 32(%rsp), %rdi
-	movq 24(%rsp), %rsi
-	movq 16(%rsp), %rdx
-	movq 8(%rsp), %rcx
+	movq 8(%rsp), %rdx
 	movq (%rsp), %rax
 	addq $72, %rsp
 	retq
@@ -1007,7 +994,7 @@ apicinterrupt INVALIDATE_TLB_VECTOR_START+7 \
 #endif
 
 apicinterrupt THRESHOLD_APIC_VECTOR \
-	threshold_interrupt mce_threshold_interrupt
+	threshold_interrupt smp_threshold_interrupt
 apicinterrupt THERMAL_APIC_VECTOR \
 	thermal_interrupt smp_thermal_interrupt
 
@@ -1387,7 +1374,7 @@ errorentry xen_stack_segment do_stack_segment
 errorentry general_protection do_general_protection
 errorentry page_fault do_page_fault
 #ifdef CONFIG_X86_MCE
-paranoidzeroentry machine_check do_machine_check
+paranoidzeroentry machine_check *machine_check_vector(%rip)
 #endif
 
 	/*
