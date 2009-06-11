@@ -3034,6 +3034,41 @@ nfsd4_encode_create_session(struct nfsd4_compoundres *resp, int nfserr,
 	return 0;
 }
 
+/*
+ * Encode the create_session result into the create session single DRC
+ * slot cache. Do this for solo or embedded create session operations.
+ */
+void
+nfsd4_cache_create_session(struct nfsd4_create_session *cr_ses,
+			   struct nfsd4_clid_slot *slot, int nfserr)
+{
+	__be32 *p = (__be32 *)slot->sl_data;
+	struct nfsd4_compoundres tmp = {
+		.p = p,
+		.end = p + XDR_QUADLEN(CS_MAX_ENC_SZ),
+	}, *resp = &tmp;
+
+	slot->sl_status = nfsd4_encode_create_session(resp, nfserr, cr_ses);
+	slot->sl_datalen = (char *)resp->p - (char *)p;
+}
+
+__be32
+nfsd4_replay_create_session(struct nfsd4_compoundres *resp,
+			    struct nfsd4_clid_slot *slot)
+{
+	__be32 *p;
+
+	RESERVE_SPACE(8);
+	WRITE32(OP_CREATE_SESSION);
+	*p++ = slot->sl_status; /* already in network byte order */
+	ADJUST_ARGS();
+
+	memcpy(resp->p, slot->sl_data, slot->sl_datalen);
+	p += XDR_QUADLEN(slot->sl_datalen);
+	ADJUST_ARGS();
+	return slot->sl_status;
+}
+
 static __be32
 nfsd4_encode_destroy_session(struct nfsd4_compoundres *resp, int nfserr,
 			     struct nfsd4_destroy_session *destroy_session)
@@ -3064,6 +3099,7 @@ nfsd4_encode_sequence(struct nfsd4_compoundres *resp, int nfserr,
 	WRITE32(0);
 
 	ADJUST_ARGS();
+	resp->cstate.datap = p;	/* DRC cache data pointer */
 	return 0;
 }
 
@@ -3166,7 +3202,7 @@ static int nfsd4_check_drc_limit(struct nfsd4_compoundres *resp)
 		return status;
 
 	session = resp->cstate.session;
-	if (session == NULL || slot->sl_cache_entry.ce_cachethis == 0)
+	if (session == NULL || slot->sl_cachethis == 0)
 		return status;
 
 	if (resp->opcnt >= args->opcnt)
@@ -3183,7 +3219,7 @@ static int nfsd4_check_drc_limit(struct nfsd4_compoundres *resp)
 	dprintk("%s length %u, xb->page_len %u tlen %u pad %u\n", __func__,
 		length, xb->page_len, tlen, pad);
 
-	if (length <= session->se_fmaxresp_cached)
+	if (length <= session->se_fchannel.maxresp_cached)
 		return status;
 	else
 		return nfserr_rep_too_big_to_cache;
@@ -3291,6 +3327,7 @@ nfs4svc_encode_compoundres(struct svc_rqst *rqstp, __be32 *p, struct nfsd4_compo
 	/*
 	 * All that remains is to write the tag and operation count...
 	 */
+	struct nfsd4_compound_state *cs = &resp->cstate;
 	struct kvec *iov;
 	p = resp->tagp;
 	*p++ = htonl(resp->taglen);
@@ -3304,17 +3341,11 @@ nfs4svc_encode_compoundres(struct svc_rqst *rqstp, __be32 *p, struct nfsd4_compo
 		iov = &rqstp->rq_res.head[0];
 	iov->iov_len = ((char*)resp->p) - (char*)iov->iov_base;
 	BUG_ON(iov->iov_len > PAGE_SIZE);
-	if (nfsd4_has_session(&resp->cstate)) {
-		if (resp->cstate.status == nfserr_replay_cache &&
-				!nfsd4_not_cached(resp)) {
-			iov->iov_len = resp->cstate.iovlen;
-		} else {
-			nfsd4_store_cache_entry(resp);
-			dprintk("%s: SET SLOT STATE TO AVAILABLE\n", __func__);
-			resp->cstate.slot->sl_inuse = 0;
-		}
-		if (resp->cstate.session)
-			nfsd4_put_session(resp->cstate.session);
+	if (nfsd4_has_session(cs) && cs->status != nfserr_replay_cache) {
+		nfsd4_store_cache_entry(resp);
+		dprintk("%s: SET SLOT STATE TO AVAILABLE\n", __func__);
+		cs->slot->sl_inuse = 0;
+		nfsd4_put_session(cs->session);
 	}
 	return 1;
 }

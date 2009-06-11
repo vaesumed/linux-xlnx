@@ -92,27 +92,43 @@ struct nfs4_cb_conn {
 	struct rpc_cred	*	cb_cred;
 };
 
-/* Maximum number of slots per session. 128 is useful for long haul TCP */
-#define NFSD_MAX_SLOTS_PER_SESSION	128
-/* Maximum number of pages per slot cache entry */
-#define NFSD_PAGES_PER_SLOT	1
-/* Maximum number of operations per session compound */
-#define NFSD_MAX_OPS_PER_COMPOUND	16
-
-struct nfsd4_cache_entry {
-	__be32		ce_status;
-	struct kvec	ce_datav; /* encoded NFSv4.1 data in rq_res.head[0] */
-	struct page	*ce_respages[NFSD_PAGES_PER_SLOT + 1];
-	int		ce_cachethis;
-	short		ce_resused;
-	int		ce_opcnt;
-	int		ce_rpchdrlen;
-};
+#define NFSD_MAX_SLOTS_PER_SESSION	16
+#define NFSD_SLOT_CACHE_SIZE		512
+#define NFSD_MAX_OPS_PER_COMPOUND	8
 
 struct nfsd4_slot {
-	bool				sl_inuse;
-	u32				sl_seqid;
-	struct nfsd4_cache_entry	sl_cache_entry;
+	bool	sl_inuse;
+	u32	sl_seqid;
+	int	sl_cachethis;
+	int	sl_opcnt;
+	__be32	sl_status;
+	u32	sl_datalen;
+	char	sl_data[NFSD_SLOT_CACHE_SIZE];
+};
+
+/*
+* maximum encoded size of create session response
+* 16 - sessionid, 8 - sequence # and flags,
+* 32 - fore channel attrs, 32 - back channel attrs
+*/
+#define CS_MAX_ENC_SZ  88
+
+struct nfsd4_clid_slot {
+	u32		sl_seqid;
+	__be32		sl_status;
+	u32		sl_datalen;
+	char		sl_data[CS_MAX_ENC_SZ];
+};
+
+struct nfsd4_channel_attrs {
+	u32		headerpadsz;
+	u32		maxreq_sz;
+	u32		maxresp_sz;
+	u32		maxresp_cached;
+	u32		maxops;
+	u32		maxreqs;
+	u32		nr_rdma_attrs;
+	u32		rdma_attrs;
 };
 
 struct nfsd4_session {
@@ -122,11 +138,8 @@ struct nfsd4_session {
 	u32			se_flags;
 	struct nfs4_client	*se_client;	/* for expire_client */
 	struct nfs4_sessionid	se_sessionid;
-	u32			se_fmaxreq_sz;
-	u32			se_fmaxresp_sz;
-	u32			se_fmaxresp_cached;
-	u32			se_fmaxops;
-	u32			se_fnumslots;
+	struct nfsd4_channel_attrs se_fchannel;
+	struct nfsd4_channel_attrs se_bchannel;
 	struct nfsd4_slot	se_slots[];	/* forward channel slots */
 };
 
@@ -184,7 +197,7 @@ struct nfs4_client {
 
 	/* for nfs41 */
 	struct list_head	cl_sessions;
-	struct nfsd4_slot	cl_slot;	/* create_session slot */
+	struct nfsd4_clid_slot	cl_slot;	/* create_session slot */
 	u32			cl_exchange_flags;
 	struct nfs4_sessionid	cl_sessionid;
 };
