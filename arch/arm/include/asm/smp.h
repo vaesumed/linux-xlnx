@@ -98,7 +98,6 @@ extern void platform_cpu_enable(unsigned int cpu);
 
 extern void arch_send_call_function_single_ipi(int cpu);
 extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
-#define arch_send_call_function_ipi_mask arch_send_call_function_ipi_mask
 
 /*
  * Local timer interrupt handling function (can be IPI'ed).
