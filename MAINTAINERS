@@ -3376,7 +3376,7 @@ F:	scripts/Makefile.*
 KERNEL JANITORS
 P:	Several
 L:	kernel-janitors@vger.kernel.org
-W:	http://www.kerneljanitors.org/
+W:	http://janitor.kernelnewbies.org/
 S:	Maintained
 
 KERNEL NFSD, SUNRPC, AND LOCKD SERVERS
