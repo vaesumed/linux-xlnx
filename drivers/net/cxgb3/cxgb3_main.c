@@ -37,7 +37,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/if_vlan.h>
-#include <linux/mii.h>
+#include <linux/mdio.h>
 #include <linux/sockios.h>
 #include <linux/workqueue.h>
 #include <linux/proc_fs.h>
@@ -91,6 +91,8 @@ static const struct pci_device_id cxgb3_pci_tbl[] = {
 	CH_DEVICE(0x31, 3),	/* T3B20 */
 	CH_DEVICE(0x32, 1),	/* T3B02 */
 	CH_DEVICE(0x35, 6),	/* T3C20-derived T3C10 */
+	CH_DEVICE(0x36, 3),	/* S320E-CR */
+	CH_DEVICE(0x37, 7),	/* N320E-G2 */
 	{0,}
 };
 
@@ -1593,7 +1595,7 @@ static int get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 	}
 
 	cmd->port = (cmd->supported & SUPPORTED_TP) ? PORT_TP : PORT_FIBRE;
-	cmd->phy_address = p->phy.addr;
+	cmd->phy_address = p->phy.mdio.prtad;
 	cmd->transceiver = XCVR_EXTERNAL;
 	cmd->autoneg = p->link_config.autoneg;
 	cmd->maxtxpkt = 0;
@@ -2308,70 +2310,25 @@ static int cxgb_ioctl(struct net_device *dev, struct ifreq *req, int cmd)
 	struct mii_ioctl_data *data = if_mii(req);
 	struct port_info *pi = netdev_priv(dev);
 	struct adapter *adapter = pi->adapter;
-	int ret, mmd;
 
 	switch (cmd) {
-	case SIOCGMIIPHY:
-		data->phy_id = pi->phy.addr;
+	case SIOCGMIIREG:
+	case SIOCSMIIREG:
+		/* Convert phy_id from older PRTAD/DEVAD format */
+		if (is_10G(adapter) &&
+		    !mdio_phy_id_is_c45(data->phy_id) &&
+		    (data->phy_id & 0x1f00) &&
+		    !(data->phy_id & 0xe0e0))
+			data->phy_id = mdio_phy_id_c45(data->phy_id >> 8,
+						       data->phy_id & 0x1f);
 		/* FALLTHRU */
-	case SIOCGMIIREG:{
-		u32 val;
-		struct cphy *phy = &pi->phy;
-
-		if (!phy->mdio_read)
-			return -EOPNOTSUPP;
-		if (is_10G(adapter)) {
-			mmd = data->phy_id >> 8;
-			if (!mmd)
-				mmd = MDIO_DEV_PCS;
-			else if (mmd > MDIO_DEV_VEND2)
-				return -EINVAL;
-
-			ret =
-				phy->mdio_read(adapter, data->phy_id & 0x1f,
-						mmd, data->reg_num, &val);
-		} else
-			ret =
-				phy->mdio_read(adapter, data->phy_id & 0x1f,
-						0, data->reg_num & 0x1f,
-						&val);
-		if (!ret)
-			data->val_out = val;
-		break;
-	}
-	case SIOCSMIIREG:{
-		struct cphy *phy = &pi->phy;
-
-		if (!capable(CAP_NET_ADMIN))
-			return -EPERM;
-		if (!phy->mdio_write)
-			return -EOPNOTSUPP;
-		if (is_10G(adapter)) {
-			mmd = data->phy_id >> 8;
-			if (!mmd)
-				mmd = MDIO_DEV_PCS;
-			else if (mmd > MDIO_DEV_VEND2)
-				return -EINVAL;
-
-			ret =
-				phy->mdio_write(adapter,
-						data->phy_id & 0x1f, mmd,
-						data->reg_num,
-						data->val_in);
-		} else
-			ret =
-				phy->mdio_write(adapter,
-						data->phy_id & 0x1f, 0,
-						data->reg_num & 0x1f,
-						data->val_in);
-		break;
-	}
+	case SIOCGMIIPHY:
+		return mdio_mii_ioctl(&pi->phy.mdio, data, cmd);
 	case SIOCCHIOCTL:
 		return cxgb_extension_ioctl(dev, req->ifr_data);
 	default:
 		return -EOPNOTSUPP;
 	}
-	return ret;
 }
 
 static int cxgb_change_mtu(struct net_device *dev, int new_mtu)
@@ -3106,7 +3063,6 @@ static int __devinit init_one(struct pci_dev *pdev,
 		netdev->mem_start = mmio_start;
 		netdev->mem_end = mmio_start + mmio_len - 1;
 		netdev->features |= NETIF_F_SG | NETIF_F_IP_CSUM | NETIF_F_TSO;
-		netdev->features |= NETIF_F_LLTX;
 		netdev->features |= NETIF_F_GRO;
 		if (pci_using_dac)
 			netdev->features |= NETIF_F_HIGHDMA;

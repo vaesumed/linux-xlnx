@@ -337,13 +337,10 @@ static void be_tx_stats_update(struct be_adapter *adapter,
 /* Determine number of WRB entries needed to xmit data in an skb */
 static u32 wrb_cnt_for_skb(struct sk_buff *skb, bool *dummy)
 {
-	int cnt = 0;
-	while (skb) {
-		if (skb->len > skb->data_len)
-			cnt++;
-		cnt += skb_shinfo(skb)->nr_frags;
-		skb = skb_shinfo(skb)->frag_list;
-	}
+	int cnt = (skb->len > skb->data_len);
+
+	cnt += skb_shinfo(skb)->nr_frags;
+
 	/* to account for hdr wrb */
 	cnt++;
 	if (cnt & 1) {
@@ -409,31 +406,28 @@ static int make_tx_wrbs(struct be_adapter *adapter,
 	hdr = queue_head_node(txq);
 	queue_head_inc(txq);
 
-	while (skb) {
-		if (skb->len > skb->data_len) {
-			int len = skb->len - skb->data_len;
-			busaddr = pci_map_single(pdev, skb->data, len,
-					PCI_DMA_TODEVICE);
-			wrb = queue_head_node(txq);
-			wrb_fill(wrb, busaddr, len);
-			be_dws_cpu_to_le(wrb, sizeof(*wrb));
-			queue_head_inc(txq);
-			copied += len;
-		}
+	if (skb->len > skb->data_len) {
+		int len = skb->len - skb->data_len;
+		busaddr = pci_map_single(pdev, skb->data, len,
+					 PCI_DMA_TODEVICE);
+		wrb = queue_head_node(txq);
+		wrb_fill(wrb, busaddr, len);
+		be_dws_cpu_to_le(wrb, sizeof(*wrb));
+		queue_head_inc(txq);
+		copied += len;
+	}
 
-		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
-			struct skb_frag_struct *frag =
-				&skb_shinfo(skb)->frags[i];
-			busaddr = pci_map_page(pdev, frag->page,
-					frag->page_offset,
-					frag->size, PCI_DMA_TODEVICE);
-			wrb = queue_head_node(txq);
-			wrb_fill(wrb, busaddr, frag->size);
-			be_dws_cpu_to_le(wrb, sizeof(*wrb));
-			queue_head_inc(txq);
-			copied += frag->size;
-		}
-		skb = skb_shinfo(skb)->frag_list;
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		struct skb_frag_struct *frag =
+			&skb_shinfo(skb)->frags[i];
+		busaddr = pci_map_page(pdev, frag->page,
+				       frag->page_offset,
+				       frag->size, PCI_DMA_TODEVICE);
+		wrb = queue_head_node(txq);
+		wrb_fill(wrb, busaddr, frag->size);
+		be_dws_cpu_to_le(wrb, sizeof(*wrb));
+		queue_head_inc(txq);
+		copied += frag->size;
 	}
 
 	if (dummy_wrb) {
@@ -477,8 +471,6 @@ static int be_xmit(struct sk_buff *skb, struct net_device *netdev)
 	}
 
 	be_txq_notify(&adapter->ctrl, txq->id, wrb_cnt);
-
-	netdev->trans_start = jiffies;
 
 	be_tx_stats_update(adapter, wrb_cnt, copied, stopped);
 	return NETDEV_TX_OK;
@@ -637,6 +629,22 @@ static void be_rx_stats_update(struct be_adapter *adapter,
 	stats->be_rx_bytes += pktsize;
 }
 
+static inline bool do_pkt_csum(struct be_eth_rx_compl *rxcp, bool cso)
+{
+	u8 l4_cksm, ip_version, ipcksm, tcpf = 0, udpf = 0, ipv6_chk;
+
+	l4_cksm = AMAP_GET_BITS(struct amap_eth_rx_compl, l4_cksm, rxcp);
+	ipcksm = AMAP_GET_BITS(struct amap_eth_rx_compl, ipcksm, rxcp);
+	ip_version = AMAP_GET_BITS(struct amap_eth_rx_compl, ip_version, rxcp);
+	if (ip_version) {
+		tcpf = AMAP_GET_BITS(struct amap_eth_rx_compl, tcpf, rxcp);
+		udpf = AMAP_GET_BITS(struct amap_eth_rx_compl, udpf, rxcp);
+	}
+	ipv6_chk = (ip_version && (tcpf || udpf));
+
+	return ((l4_cksm && ipv6_chk && ipcksm) && cso) ? false : true;
+}
+
 static struct be_rx_page_info *
 get_rx_page_info(struct be_adapter *adapter, u16 frag_idx)
 {
@@ -752,9 +760,7 @@ static void be_rx_compl_process(struct be_adapter *adapter,
 {
 	struct sk_buff *skb;
 	u32 vtp, vid;
-	int l4_cksm;
 
-	l4_cksm = AMAP_GET_BITS(struct amap_eth_rx_compl, l4_cksm, rxcp);
 	vtp = AMAP_GET_BITS(struct amap_eth_rx_compl, vtp, rxcp);
 
 	skb = netdev_alloc_skb(adapter->netdev, BE_HDR_LEN + NET_IP_ALIGN);
@@ -769,10 +775,10 @@ static void be_rx_compl_process(struct be_adapter *adapter,
 
 	skb_fill_rx_data(adapter, skb, rxcp);
 
-	if (l4_cksm && adapter->rx_csum)
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
-	else
+	if (do_pkt_csum(rxcp, adapter->rx_csum))
 		skb->ip_summed = CHECKSUM_NONE;
+	else
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
 	skb->truesize = skb->len + sizeof(struct sk_buff);
 	skb->protocol = eth_type_trans(skb, adapter->netdev);
@@ -1626,9 +1632,11 @@ static void be_netdev_init(struct net_device *netdev)
 
 	netdev->features |= NETIF_F_SG | NETIF_F_HW_VLAN_RX | NETIF_F_TSO |
 		NETIF_F_HW_VLAN_TX | NETIF_F_HW_VLAN_FILTER | NETIF_F_IP_CSUM |
-		NETIF_F_IPV6_CSUM | NETIF_F_TSO6;
+		NETIF_F_IPV6_CSUM;
 
 	netdev->flags |= IFF_MULTICAST;
+
+	adapter->rx_csum = true;
 
 	BE_SET_NETDEV_OPS(netdev, &be_netdev_ops);
 

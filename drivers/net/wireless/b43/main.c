@@ -673,32 +673,6 @@ static void b43_short_slot_timing_disable(struct b43_wldev *dev)
 	b43_set_slot_time(dev, 20);
 }
 
-/* Enable a Generic IRQ. "mask" is the mask of which IRQs to enable.
- * Returns the _previously_ enabled IRQ mask.
- */
-static inline u32 b43_interrupt_enable(struct b43_wldev *dev, u32 mask)
-{
-	u32 old_mask;
-
-	old_mask = b43_read32(dev, B43_MMIO_GEN_IRQ_MASK);
-	b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, old_mask | mask);
-
-	return old_mask;
-}
-
-/* Disable a Generic IRQ. "mask" is the mask of which IRQs to disable.
- * Returns the _previously_ enabled IRQ mask.
- */
-static inline u32 b43_interrupt_disable(struct b43_wldev *dev, u32 mask)
-{
-	u32 old_mask;
-
-	old_mask = b43_read32(dev, B43_MMIO_GEN_IRQ_MASK);
-	b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, old_mask & ~mask);
-
-	return old_mask;
-}
-
 /* Synchronize IRQ top- and bottom-half.
  * IRQs must be masked before calling this.
  * This must not be called with the irq_lock held.
@@ -1593,7 +1567,7 @@ static void handle_irq_beacon(struct b43_wldev *dev)
 	/* This is the bottom half of the asynchronous beacon update. */
 
 	/* Ignore interrupt in the future. */
-	dev->irq_savedstate &= ~B43_IRQ_BEACON;
+	dev->irq_mask &= ~B43_IRQ_BEACON;
 
 	cmd = b43_read32(dev, B43_MMIO_MACCMD);
 	beacon0_valid = (cmd & B43_MACCMD_BEACON0_VALID);
@@ -1602,7 +1576,7 @@ static void handle_irq_beacon(struct b43_wldev *dev)
 	/* Schedule interrupt manually, if busy. */
 	if (beacon0_valid && beacon1_valid) {
 		b43_write32(dev, B43_MMIO_GEN_IRQ_REASON, B43_IRQ_BEACON);
-		dev->irq_savedstate |= B43_IRQ_BEACON;
+		dev->irq_mask |= B43_IRQ_BEACON;
 		return;
 	}
 
@@ -1641,11 +1615,9 @@ static void b43_beacon_update_trigger_work(struct work_struct *work)
 	if (likely(dev && (b43_status(dev) >= B43_STAT_INITIALIZED))) {
 		spin_lock_irq(&wl->irq_lock);
 		/* update beacon right away or defer to irq */
-		dev->irq_savedstate = b43_read32(dev, B43_MMIO_GEN_IRQ_MASK);
 		handle_irq_beacon(dev);
 		/* The handler might have updated the IRQ mask. */
-		b43_write32(dev, B43_MMIO_GEN_IRQ_MASK,
-			    dev->irq_savedstate);
+		b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, dev->irq_mask);
 		mmiowb();
 		spin_unlock_irq(&wl->irq_lock);
 	}
@@ -1879,7 +1851,7 @@ static void b43_interrupt_tasklet(struct b43_wldev *dev)
 	if (reason & B43_IRQ_TX_OK)
 		handle_irq_transmit_status(dev);
 
-	b43_interrupt_enable(dev, dev->irq_savedstate);
+	b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, dev->irq_mask);
 	mmiowb();
 	spin_unlock_irqrestore(&dev->wl->irq_lock, flags);
 }
@@ -1893,7 +1865,9 @@ static void b43_interrupt_ack(struct b43_wldev *dev, u32 reason)
 	b43_write32(dev, B43_MMIO_DMA2_REASON, dev->dma_reason[2]);
 	b43_write32(dev, B43_MMIO_DMA3_REASON, dev->dma_reason[3]);
 	b43_write32(dev, B43_MMIO_DMA4_REASON, dev->dma_reason[4]);
+/* Unused ring
 	b43_write32(dev, B43_MMIO_DMA5_REASON, dev->dma_reason[5]);
+*/
 }
 
 /* Interrupt handler top-half */
@@ -1903,18 +1877,19 @@ static irqreturn_t b43_interrupt_handler(int irq, void *dev_id)
 	struct b43_wldev *dev = dev_id;
 	u32 reason;
 
-	if (!dev)
-		return IRQ_NONE;
+	B43_WARN_ON(!dev);
 
 	spin_lock(&dev->wl->irq_lock);
 
-	if (b43_status(dev) < B43_STAT_STARTED)
+	if (unlikely(b43_status(dev) < B43_STAT_STARTED)) {
+		/* This can only happen on shared IRQ lines. */
 		goto out;
+	}
 	reason = b43_read32(dev, B43_MMIO_GEN_IRQ_REASON);
 	if (reason == 0xffffffff)	/* shared IRQ */
 		goto out;
 	ret = IRQ_HANDLED;
-	reason &= b43_read32(dev, B43_MMIO_GEN_IRQ_MASK);
+	reason &= dev->irq_mask;
 	if (!reason)
 		goto out;
 
@@ -1928,16 +1903,18 @@ static irqreturn_t b43_interrupt_handler(int irq, void *dev_id)
 	    & 0x0001DC00;
 	dev->dma_reason[4] = b43_read32(dev, B43_MMIO_DMA4_REASON)
 	    & 0x0000DC00;
+/* Unused ring
 	dev->dma_reason[5] = b43_read32(dev, B43_MMIO_DMA5_REASON)
 	    & 0x0000DC00;
+*/
 
 	b43_interrupt_ack(dev, reason);
 	/* disable all IRQs. They are enabled again in the bottom half. */
-	dev->irq_savedstate = b43_interrupt_disable(dev, B43_IRQ_ALL);
+	b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, 0);
 	/* save the reason code and call our bottom half. */
 	dev->irq_reason = reason;
 	tasklet_schedule(&dev->isr_tasklet);
-      out:
+out:
 	mmiowb();
 	spin_unlock(&dev->wl->irq_lock);
 
@@ -2980,6 +2957,7 @@ static void b43_security_init(struct b43_wldev *dev)
 	b43_clear_keys(dev);
 }
 
+#ifdef CONFIG_B43_HWRNG
 static int b43_rng_read(struct hwrng *rng, u32 *data)
 {
 	struct b43_wl *wl = (struct b43_wl *)rng->priv;
@@ -2995,17 +2973,21 @@ static int b43_rng_read(struct hwrng *rng, u32 *data)
 
 	return (sizeof(u16));
 }
+#endif /* CONFIG_B43_HWRNG */
 
 static void b43_rng_exit(struct b43_wl *wl)
 {
+#ifdef CONFIG_B43_HWRNG
 	if (wl->rng_initialized)
 		hwrng_unregister(&wl->rng);
+#endif /* CONFIG_B43_HWRNG */
 }
 
 static int b43_rng_init(struct b43_wl *wl)
 {
-	int err;
+	int err = 0;
 
+#ifdef CONFIG_B43_HWRNG
 	snprintf(wl->rng_name, ARRAY_SIZE(wl->rng_name),
 		 "%s_%s", KBUILD_MODNAME, wiphy_name(wl->hw->wiphy));
 	wl->rng.name = wl->rng_name;
@@ -3018,6 +3000,7 @@ static int b43_rng_init(struct b43_wl *wl)
 		b43err(wl, "Failed to register the random "
 		       "number generator (%d)\n", err);
 	}
+#endif /* CONFIG_B43_HWRNG */
 
 	return err;
 }
@@ -3485,14 +3468,9 @@ static int b43_op_config(struct ieee80211_hw *hw, u32 changed)
 	if (phy->ops->set_rx_antenna)
 		phy->ops->set_rx_antenna(dev, antenna);
 
-	/* Update templates for AP/mesh mode. */
-	if (b43_is_mode(wl, NL80211_IFTYPE_AP) ||
-	    b43_is_mode(wl, NL80211_IFTYPE_MESH_POINT))
-		b43_set_beacon_int(dev, conf->beacon_int);
-
 	if (!!conf->radio_enabled != phy->radio_on) {
 		if (conf->radio_enabled) {
-			b43_software_rfkill(dev, RFKILL_STATE_UNBLOCKED);
+			b43_software_rfkill(dev, false);
 			b43info(dev->wl, "Radio turned on by software\n");
 			if (!dev->radio_hw_enable) {
 				b43info(dev->wl, "The hardware RF-kill button "
@@ -3500,7 +3478,7 @@ static int b43_op_config(struct ieee80211_hw *hw, u32 changed)
 					"Press the button to turn it on.\n");
 			}
 		} else {
-			b43_software_rfkill(dev, RFKILL_STATE_SOFT_BLOCKED);
+			b43_software_rfkill(dev, true);
 			b43info(dev->wl, "Radio turned off by software\n");
 		}
 	}
@@ -3565,13 +3543,44 @@ static void b43_op_bss_info_changed(struct ieee80211_hw *hw,
 {
 	struct b43_wl *wl = hw_to_b43_wl(hw);
 	struct b43_wldev *dev;
+	unsigned long flags;
 
 	mutex_lock(&wl->mutex);
 
 	dev = wl->current_dev;
 	if (!dev || b43_status(dev) < B43_STAT_STARTED)
 		goto out_unlock_mutex;
+
+	B43_WARN_ON(wl->vif != vif);
+
+	spin_lock_irqsave(&wl->irq_lock, flags);
+	if (changed & BSS_CHANGED_BSSID) {
+		if (conf->bssid)
+			memcpy(wl->bssid, conf->bssid, ETH_ALEN);
+		else
+			memset(wl->bssid, 0, ETH_ALEN);
+	}
+
+	if (b43_status(dev) >= B43_STAT_INITIALIZED) {
+		if (changed & BSS_CHANGED_BEACON &&
+		    (b43_is_mode(wl, NL80211_IFTYPE_AP) ||
+		     b43_is_mode(wl, NL80211_IFTYPE_MESH_POINT) ||
+		     b43_is_mode(wl, NL80211_IFTYPE_ADHOC)))
+			b43_update_templates(wl);
+
+		if (changed & BSS_CHANGED_BSSID)
+			b43_write_mac_bssid_templates(dev);
+	}
+	spin_unlock_irqrestore(&wl->irq_lock, flags);
+
 	b43_mac_suspend(dev);
+
+	/* Update templates for AP/mesh mode. */
+	if (changed & BSS_CHANGED_BEACON_INT &&
+	    (b43_is_mode(wl, NL80211_IFTYPE_AP) ||
+	     b43_is_mode(wl, NL80211_IFTYPE_MESH_POINT) ||
+	     b43_is_mode(wl, NL80211_IFTYPE_ADHOC)))
+		b43_set_beacon_int(dev, conf->beacon_int);
 
 	if (changed & BSS_CHANGED_BASIC_RATES)
 		b43_update_basic_rates(dev, conf->basic_rates);
@@ -3586,8 +3595,6 @@ static void b43_op_bss_info_changed(struct ieee80211_hw *hw,
 	b43_mac_enable(dev);
 out_unlock_mutex:
 	mutex_unlock(&wl->mutex);
-
-	return;
 }
 
 static int b43_op_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
@@ -3630,7 +3637,7 @@ static int b43_op_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	err = -EINVAL;
 	switch (key->alg) {
 	case ALG_WEP:
-		if (key->keylen == LEN_WEP40)
+		if (key->keylen == WLAN_KEY_LEN_WEP40)
 			algorithm = B43_SEC_ALGO_WEP40;
 		else
 			algorithm = B43_SEC_ALGO_WEP104;
@@ -3745,41 +3752,6 @@ static void b43_op_configure_filter(struct ieee80211_hw *hw,
 	spin_unlock_irqrestore(&wl->irq_lock, flags);
 }
 
-static int b43_op_config_interface(struct ieee80211_hw *hw,
-				   struct ieee80211_vif *vif,
-				   struct ieee80211_if_conf *conf)
-{
-	struct b43_wl *wl = hw_to_b43_wl(hw);
-	struct b43_wldev *dev = wl->current_dev;
-	unsigned long flags;
-
-	if (!dev)
-		return -ENODEV;
-	mutex_lock(&wl->mutex);
-	spin_lock_irqsave(&wl->irq_lock, flags);
-	B43_WARN_ON(wl->vif != vif);
-	if (conf->bssid)
-		memcpy(wl->bssid, conf->bssid, ETH_ALEN);
-	else
-		memset(wl->bssid, 0, ETH_ALEN);
-	if (b43_status(dev) >= B43_STAT_INITIALIZED) {
-		if (b43_is_mode(wl, NL80211_IFTYPE_AP) ||
-		    b43_is_mode(wl, NL80211_IFTYPE_MESH_POINT)) {
-			B43_WARN_ON(vif->type != wl->if_type);
-			if (conf->changed & IEEE80211_IFCC_BEACON)
-				b43_update_templates(wl);
-		} else if (b43_is_mode(wl, NL80211_IFTYPE_ADHOC)) {
-			if (conf->changed & IEEE80211_IFCC_BEACON)
-				b43_update_templates(wl);
-		}
-		b43_write_mac_bssid_templates(dev);
-	}
-	spin_unlock_irqrestore(&wl->irq_lock, flags);
-	mutex_unlock(&wl->mutex);
-
-	return 0;
-}
-
 /* Locking: wl->mutex */
 static void b43_wireless_core_stop(struct b43_wldev *dev)
 {
@@ -3793,7 +3765,7 @@ static void b43_wireless_core_stop(struct b43_wldev *dev)
 	 * setting the status to INITIALIZED, as the interrupt handler
 	 * won't care about IRQs then. */
 	spin_lock_irqsave(&wl->irq_lock, flags);
-	dev->irq_savedstate = b43_interrupt_disable(dev, B43_IRQ_ALL);
+	b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, 0);
 	b43_read32(dev, B43_MMIO_GEN_IRQ_MASK);	/* flush */
 	spin_unlock_irqrestore(&wl->irq_lock, flags);
 	b43_synchronize_irq(dev);
@@ -3834,7 +3806,7 @@ static int b43_wireless_core_start(struct b43_wldev *dev)
 
 	/* Start data flow (TX/RX). */
 	b43_mac_enable(dev);
-	b43_interrupt_enable(dev, dev->irq_savedstate);
+	b43_write32(dev, B43_MMIO_GEN_IRQ_MASK, dev->irq_mask);
 
 	/* Start maintainance work */
 	b43_periodic_tasks_setup(dev);
@@ -3997,9 +3969,9 @@ static void setup_struct_wldev_for_init(struct b43_wldev *dev)
 	/* IRQ related flags */
 	dev->irq_reason = 0;
 	memset(dev->dma_reason, 0, sizeof(dev->dma_reason));
-	dev->irq_savedstate = B43_IRQ_MASKTEMPLATE;
+	dev->irq_mask = B43_IRQ_MASKTEMPLATE;
 	if (b43_modparam_verbose < B43_VERBOSITY_DEBUG)
-		dev->irq_savedstate &= ~B43_IRQ_PHY_TXERR;
+		dev->irq_mask &= ~B43_IRQ_PHY_TXERR;
 
 	dev->mac_suspended = 1;
 
@@ -4449,7 +4421,6 @@ static const struct ieee80211_ops b43_hw_ops = {
 	.remove_interface	= b43_op_remove_interface,
 	.config			= b43_op_config,
 	.bss_info_changed	= b43_op_bss_info_changed,
-	.config_interface	= b43_op_config_interface,
 	.configure_filter	= b43_op_configure_filter,
 	.set_key		= b43_op_set_key,
 	.get_stats		= b43_op_get_stats,
