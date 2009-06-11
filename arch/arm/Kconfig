@@ -298,6 +298,19 @@ config ARCH_MXC
 	help
 	  Support for Freescale MXC/iMX-based family of processors
 
+config ARCH_STMP3XXX
+	bool "Freescale STMP3xxx"
+	select CPU_ARM926T
+	select HAVE_CLK
+	select COMMON_CLKDEV
+	select ARCH_REQUIRE_GPIOLIB
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	select GENERIC_GPIO
+	select USB_ARCH_HAS_EHCI
+	help
+	  Support for systems based on the Freescale 3xxx CPUs.
+
 config ARCH_NETX
 	bool "Hilscher NetX based"
 	select CPU_ARM926T
@@ -585,6 +598,20 @@ config ARCH_LH7A40X
 	  core with a wide array of integrated devices for
 	  hand-held and low-power applications.
 
+config ARCH_U300
+	bool "ST-Ericsson U300 Series"
+	depends on MMU
+	select CPU_ARM926T
+	select ARM_AMBA
+	select ARM_VIC
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	select HAVE_CLK
+	select COMMON_CLKDEV
+	select GENERIC_GPIO
+	help
+	  Support for ST-Ericsson U300 series mobile platforms.
+
 config ARCH_DAVINCI
 	bool "TI DaVinci"
 	select CPU_ARM926T
@@ -673,6 +700,8 @@ source "arch/arm/mach-s3c6400/Kconfig"
 source "arch/arm/mach-s3c6410/Kconfig"
 endif
 
+source "arch/arm/plat-stmp3xxx/Kconfig"
+
 source "arch/arm/mach-lh7a40x/Kconfig"
 
 source "arch/arm/mach-h720x/Kconfig"
@@ -696,6 +725,8 @@ source "arch/arm/mach-davinci/Kconfig"
 source "arch/arm/mach-ks8695/Kconfig"
 
 source "arch/arm/mach-msm/Kconfig"
+
+source "arch/arm/mach-u300/Kconfig"
 
 source "arch/arm/mach-w90x900/Kconfig"
 
