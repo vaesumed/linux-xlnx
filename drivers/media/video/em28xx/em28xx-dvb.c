@@ -46,7 +46,6 @@ if (debug >= level) 						\
 } while (0)
 
 #define EM28XX_DVB_NUM_BUFS 5
-#define EM28XX_DVB_MAX_PACKETSIZE 564
 #define EM28XX_DVB_MAX_PACKETS 64
 
 struct em28xx_dvb {
@@ -142,14 +141,17 @@ static int start_streaming(struct em28xx_dvb *dvb)
 {
 	int rc;
 	struct em28xx *dev = dvb->adapter.priv;
+	int max_dvb_packet_size;
 
 	usb_set_interface(dev->udev, 0, 1);
 	rc = em28xx_set_mode(dev, EM28XX_DIGITAL_MODE);
 	if (rc < 0)
 		return rc;
 
+	max_dvb_packet_size = em28xx_isoc_dvb_max_packetsize(dev);
+
 	return em28xx_init_isoc(dev, EM28XX_DVB_MAX_PACKETS,
-				EM28XX_DVB_NUM_BUFS, EM28XX_DVB_MAX_PACKETSIZE,
+				EM28XX_DVB_NUM_BUFS, max_dvb_packet_size,
 				dvb_isoc_copy);
 }
 
@@ -431,6 +433,7 @@ static int dvb_init(struct em28xx *dev)
 	case EM2880_BOARD_HAUPPAUGE_WINTV_HVR_900:
 	case EM2880_BOARD_TERRATEC_HYBRID_XS:
 	case EM2880_BOARD_KWORLD_DVB_310U:
+	case EM2880_BOARD_EMPIRE_DUAL_TV:
 		dvb->frontend = dvb_attach(zl10353_attach,
 					   &em28xx_zl10353_with_xc3028,
 					   &dev->i2c_adap);
