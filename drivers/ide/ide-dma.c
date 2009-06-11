@@ -347,7 +347,6 @@ u8 ide_find_dma_mode(ide_drive_t *drive, u8 req_mode)
 
 	return mode;
 }
-EXPORT_SYMBOL_GPL(ide_find_dma_mode);
 
 static int ide_tune_dma(ide_drive_t *drive)
 {
@@ -510,23 +509,11 @@ ide_startstop_t ide_dma_timeout_retry(ide_drive_t *drive, int error)
 	/*
 	 * un-busy drive etc and make sure request is sane
 	 */
-
 	rq = hwif->rq;
-	if (!rq)
-		goto out;
-
-	hwif->rq = NULL;
-
-	rq->errors = 0;
-
-	if (!rq->bio)
-		goto out;
-
-	rq->sector = rq->bio->bi_sector;
-	rq->current_nr_sectors = bio_iovec(rq->bio)->bv_len >> 9;
-	rq->hard_cur_sectors = rq->current_nr_sectors;
-	rq->buffer = bio_data(rq->bio);
-out:
+	if (rq) {
+		hwif->rq = NULL;
+		rq->errors = 0;
+	}
 	return ret;
 }
 
