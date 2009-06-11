@@ -7,6 +7,8 @@
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
 #include <linux/sched.h>
+#include <linux/eventfd.h>
+#include <linux/file.h>
 #include "lg.h"
 
 /*L:055 When something happens, the Waker process needs a way to stop the
@@ -33,6 +35,76 @@ static int break_guest_out(struct lg_cpu *cpu, const unsigned long __user*input)
 		wake_up(&cpu->break_wq);
 		return 0;
 	}
+}
+
+bool send_notify_to_eventfd(struct lg_cpu *cpu)
+{
+	unsigned int i, num;
+	struct lg_eventfds *eventfds;
+
+	/* Make sure we grab the total number before accessing the array. */
+	cpu->lg->num_eventfds = num;
+	rmb();
+
+	/* lg->eventfds is RCU-protected */
+	rcu_read_lock();
+	eventfds = rcu_dereference(cpu->lg->eventfds);
+	for (i = 0; i < num; i++) {
+		if (eventfds[i].addr == cpu->pending_notify) {
+			eventfd_signal(eventfds[i].event, 1);
+			cpu->pending_notify = 0;
+			break;
+		}
+	}
+	rcu_read_unlock();
+	return cpu->pending_notify == 0;
+}
+
+static int add_eventfd(struct lguest *lg, unsigned long addr, int fd)
+{
+	struct lg_eventfds *new, *old;
+
+	if (!addr)
+		return -EINVAL;
+
+	/* Replace the old array with the new one, carefully: others can
+	 * be accessing it at the same time */
+	new = kmalloc(sizeof(*new) * (lg->num_eventfds + 1), GFP_KERNEL);
+	if (!new)
+		return -ENOMEM;
+
+	memcpy(new, lg->eventfds, sizeof(*new) * lg->num_eventfds);
+	old = lg->eventfds;
+	lg->eventfds = new;
+	synchronize_rcu();
+	kfree(old);
+
+	lg->eventfds[lg->num_eventfds].addr = addr;
+	lg->eventfds[lg->num_eventfds].event = eventfd_fget(fd);
+	if (IS_ERR(lg->eventfds[lg->num_eventfds].event))
+		return PTR_ERR(lg->eventfds[lg->num_eventfds].event);
+
+	wmb();
+	lg->num_eventfds++;
+	return 0;
+}
+
+static int attach_eventfd(struct lguest *lg, const unsigned long __user *input)
+{
+	unsigned long addr, fd;
+	int err;
+
+	if (get_user(addr, input) != 0)
+		return -EFAULT;
+	input++;
+	if (get_user(fd, input) != 0)
+		return -EFAULT;
+
+	mutex_lock(&lguest_lock);
+	err = add_eventfd(lg, addr, fd);
+	mutex_unlock(&lguest_lock);
+
+	return 0;
 }
 
 /*L:050 Sending an interrupt is done by writing LHREQ_IRQ and an interrupt
@@ -260,6 +332,8 @@ static ssize_t write(struct file *file, const char __user *in,
 		return user_send_irq(cpu, input);
 	case LHREQ_BREAK:
 		return break_guest_out(cpu, input);
+	case LHREQ_EVENTFD:
+		return attach_eventfd(lg, input);
 	default:
 		return -EINVAL;
 	}
@@ -297,6 +371,11 @@ static int close(struct inode *inode, struct file *file)
 		 * the Launcher's memory management structure. */
 		mmput(lg->cpus[i].mm);
 	}
+
+	/* Release any eventfds they registered. */
+	for (i = 0; i < lg->num_eventfds; i++)
+		fput(lg->eventfds[i].event);
+
 	/* If lg->dead doesn't contain an error code it will be NULL or a
 	 * kmalloc()ed string, either of which is ok to hand to kfree(). */
 	if (!IS_ERR(lg->dead))
