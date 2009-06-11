@@ -1,3 +1,4 @@
+
 /*
  *   (c) 2003-2006 Advanced Micro Devices, Inc.
  *  Your use of this code is subject to the terms and conditions of the
@@ -823,13 +824,14 @@ static void powernow_k8_acpi_pst_values(struct powernow_k8_data *data,
 	if (!data->acpi_data.state_count || (cpu_family == CPU_HW_PSTATE))
 		return;
 
-	control = data->acpi_data.states[index].control; data->irt = (control
-			>> IRT_SHIFT) & IRT_MASK; data->rvo = (control >>
-				RVO_SHIFT) & RVO_MASK; data->exttype = (control
-					>> EXT_TYPE_SHIFT) & EXT_TYPE_MASK;
-	data->plllock = (control >> PLL_L_SHIFT) & PLL_L_MASK; data->vidmvs = 1
-		<< ((control >> MVS_SHIFT) & MVS_MASK); data->vstable =
-		(control >> VST_SHIFT) & VST_MASK; }
+	control = data->acpi_data.states[index].control;
+	data->irt = (control >> IRT_SHIFT) & IRT_MASK;
+	data->rvo = (control >> RVO_SHIFT) & RVO_MASK;
+	data->exttype = (control >> EXT_TYPE_SHIFT) & EXT_TYPE_MASK;
+	data->plllock = (control >> PLL_L_SHIFT) & PLL_L_MASK;
+	data->vidmvs = 1 << ((control >> MVS_SHIFT) & MVS_MASK);
+	data->vstable = (control >> VST_SHIFT) & VST_MASK;
+}
 
 static int powernow_k8_cpu_init_acpi(struct powernow_k8_data *data)
 {
@@ -1045,6 +1047,19 @@ static int get_transition_latency(struct powernow_k8_data *data)
 			+ data->acpi_data.states[i].bus_master_latency;
 		if (cur_latency > max_latency)
 			max_latency = cur_latency;
+	}
+	if (max_latency == 0) {
+		/*
+		 * Fam 11h always returns 0 as transition latency.
+		 * This is intended and means "very fast". While cpufreq core
+		 * and governors currently can handle that gracefully, better
+		 * set it to 1 to avoid problems in the future.
+		 * For all others it's a BIOS bug.
+		 */
+		if (!boot_cpu_data.x86 == 0x11)
+			printk(KERN_ERR FW_WARN PFX "Invalid zero transition "
+				"latency\n");
+		max_latency = 1;
 	}
 	/* value in usecs, needs to be in nanoseconds */
 	return 1000 * max_latency;
