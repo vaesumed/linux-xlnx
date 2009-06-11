@@ -75,7 +75,7 @@ void trim_init_extable(struct module *m)
 	for (i = 0; i < m->num_exentries; i += range ? 2 : 1) {
 		range = m->extable[i].fixup == 0;
 
-		if (within_module_init(m->extable[i].insn)) {
+		if (within_module_init(m->extable[i].insn, m)) {
 			m->extable[i].fixup = -1;
 			if (range)
 				m->extable[i+1].fixup = -1;
