@@ -261,7 +261,7 @@ static int p9_virtio_probe(struct virtio_device *vdev)
 	return 0;
 
 out_free_vq:
-	vdev->config->del_vq(chan->vq);
+	vdev->config->del_vqs(vdev);
 fail:
 	mutex_lock(&virtio_9p_lock);
 	chan_index--;
@@ -332,7 +332,7 @@ static void p9_virtio_remove(struct virtio_device *vdev)
 	BUG_ON(chan->inuse);
 
 	if (chan->initialized) {
-		vdev->config->del_vq(chan->vq);
+		vdev->config->del_vqs(vdev);
 		chan->initialized = false;
 	}
 }
