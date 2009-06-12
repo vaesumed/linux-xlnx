@@ -1,3 +1,4 @@
+
 /*
  *   (c) 2003-2006 Advanced Micro Devices, Inc.
  *  Your use of this code is subject to the terms and conditions of the
@@ -117,20 +118,17 @@ static int query_current_values_with_pending_wait(struct powernow_k8_data *data)
 	u32 i = 0;
 
 	if (cpu_family == CPU_HW_PSTATE) {
-		if (data->currpstate == HW_PSTATE_INVALID) {
-			/* read (initial) hw pstate if not yet set */
-			rdmsr(MSR_PSTATE_STATUS, lo, hi);
-			i = lo & HW_PSTATE_MASK;
+		rdmsr(MSR_PSTATE_STATUS, lo, hi);
+		i = lo & HW_PSTATE_MASK;
+		data->currpstate = i;
 
-			/*
-			 * a workaround for family 11h erratum 311 might cause
-			 * an "out-of-range Pstate if the core is in Pstate-0
-			 */
-			if (i >= data->numps)
-				data->currpstate = HW_PSTATE_0;
-			else
-				data->currpstate = i;
-		}
+		/*
+		 * a workaround for family 11h erratum 311 might cause
+		 * an "out-of-range Pstate if the core is in Pstate-0
+		 */
+		if ((boot_cpu_data.x86 == 0x11) && (i >= data->numps))
+			data->currpstate = HW_PSTATE_0;
+
 		return 0;
 	}
 	do {
@@ -823,13 +821,14 @@ static void powernow_k8_acpi_pst_values(struct powernow_k8_data *data,
 	if (!data->acpi_data.state_count || (cpu_family == CPU_HW_PSTATE))
 		return;
 
-	control = data->acpi_data.states[index].control; data->irt = (control
-			>> IRT_SHIFT) & IRT_MASK; data->rvo = (control >>
-				RVO_SHIFT) & RVO_MASK; data->exttype = (control
-					>> EXT_TYPE_SHIFT) & EXT_TYPE_MASK;
-	data->plllock = (control >> PLL_L_SHIFT) & PLL_L_MASK; data->vidmvs = 1
-		<< ((control >> MVS_SHIFT) & MVS_MASK); data->vstable =
-		(control >> VST_SHIFT) & VST_MASK; }
+	control = data->acpi_data.states[index].control;
+	data->irt = (control >> IRT_SHIFT) & IRT_MASK;
+	data->rvo = (control >> RVO_SHIFT) & RVO_MASK;
+	data->exttype = (control >> EXT_TYPE_SHIFT) & EXT_TYPE_MASK;
+	data->plllock = (control >> PLL_L_SHIFT) & PLL_L_MASK;
+	data->vidmvs = 1 << ((control >> MVS_SHIFT) & MVS_MASK);
+	data->vstable = (control >> VST_SHIFT) & VST_MASK;
+}
 
 static int powernow_k8_cpu_init_acpi(struct powernow_k8_data *data)
 {
@@ -1046,6 +1045,19 @@ static int get_transition_latency(struct powernow_k8_data *data)
 		if (cur_latency > max_latency)
 			max_latency = cur_latency;
 	}
+	if (max_latency == 0) {
+		/*
+		 * Fam 11h always returns 0 as transition latency.
+		 * This is intended and means "very fast". While cpufreq core
+		 * and governors currently can handle that gracefully, better
+		 * set it to 1 to avoid problems in the future.
+		 * For all others it's a BIOS bug.
+		 */
+		if (!boot_cpu_data.x86 == 0x11)
+			printk(KERN_ERR FW_WARN PFX "Invalid zero transition "
+				"latency\n");
+		max_latency = 1;
+	}
 	/* value in usecs, needs to be in nanoseconds */
 	return 1000 * max_latency;
 }
@@ -1235,13 +1247,12 @@ static int powernowk8_verify(struct cpufreq_policy *pol)
 	return cpufreq_frequency_table_verify(pol, data->powernow_table);
 }
 
-static const char ACPI_PSS_BIOS_BUG_MSG[] =
-	KERN_ERR FW_BUG PFX "No compatible ACPI _PSS objects found.\n"
-	KERN_ERR FW_BUG PFX "Try again with latest BIOS.\n";
-
 /* per CPU init entry point to the driver */
 static int __cpuinit powernowk8_cpu_init(struct cpufreq_policy *pol)
 {
+	static const char ACPI_PSS_BIOS_BUG_MSG[] =
+		KERN_ERR FW_BUG PFX "No compatible ACPI _PSS objects found.\n"
+		KERN_ERR FW_BUG PFX "Try again with latest BIOS.\n";
 	struct powernow_k8_data *data;
 	cpumask_t oldmask;
 	int rc;
@@ -1374,13 +1385,9 @@ static int __devexit powernowk8_cpu_exit(struct cpufreq_policy *pol)
 
 static unsigned int powernowk8_get(unsigned int cpu)
 {
-	struct powernow_k8_data *data;
+	struct powernow_k8_data *data = per_cpu(powernow_data, cpu);
 	cpumask_t oldmask = current->cpus_allowed;
 	unsigned int khz = 0;
-	unsigned int first;
-
-	first = cpumask_first(cpu_core_mask(cpu));
-	data = per_cpu(powernow_data, first);
 
 	if (!data)
 		return -EINVAL;
