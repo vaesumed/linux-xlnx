@@ -56,47 +56,16 @@
 #define	MCFSIM_DMA3ICR		MCFSIM_ICR9	/* DMA 3 ICR */
 
 
-#define	MCFSIM_IMR_MASKALL	0xFFFFFFFF	/* All SIM intr sources */
-
-#define MCFSIM_IMR_SIMR0	0xFC04801C
-#define MCFSIM_IMR_SIMR1	0xFC04C01C
-#define MCFSIM_IMR_CIMR0	0xFC04801D
-#define MCFSIM_IMR_CIMR1	0xFC04C01D
+#define MCFINTC0_SIMR		0xFC04801C
+#define MCFINTC0_CIMR		0xFC04801D
+#define MCFINTC0_ICR0		0xFC048040
+#define MCFINTC1_SIMR		0xFC04C01C
+#define MCFINTC1_CIMR		0xFC04C01D
+#define MCFINTC1_ICR0		0xFC04C040
 
 #define MCFSIM_ICR_TIMER1	(0xFC048040+32)
 #define MCFSIM_ICR_TIMER2	(0xFC048040+33)
 
-
-/*
- *	Macro to set IMR register. It is 32 bits on the 5307.
- */
-#define	mcf_getimr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR))
-
-#define	mcf_setimr(imr)		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR)) = (imr);
-
-#define	mcf_getipr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IPR))
-
-#define	mcf_getiprl()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IPRL))
-
-#define	mcf_getiprh()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IPRH))
-
-
-#define mcf_enable_irq0(irq)		\
-	*((volatile unsigned char*) (MCFSIM_IMR_CIMR0)) = (irq);
-
-#define mcf_enable_irq1(irq)		\
-	*((volatile unsigned char*) (MCFSIM_IMR_CIMR1)) = (irq);
-
-#define mcf_disable_irq0(irq)		\
-	*((volatile unsigned char*) (MCFSIM_IMR_SIMR0)) = (irq);
-
-#define mcf_disable_irq1(irq)		\
-	*((volatile unsigned char*) (MCFSIM_IMR_SIMR1)) = (irq);
 
 /*
  *	Define the Cache register flags.
@@ -124,6 +93,18 @@
 #define	ACR_CM_OFF_PRE		(2<<5)
 #define	ACR_CM_OFF_IMP		(3<<5)
 #define	ACR_WPROTECT		(1<<2)
+
+/*********************************************************************
+ *
+ * Reset Controller Module
+ *
+ *********************************************************************/
+
+#define	MCF_RCR			0xFC0A0000
+#define	MCF_RSR			0xFC0A0001
+
+#define	MCF_RCR_SWRESET		0x80		/* Software reset bit */
+#define	MCF_RCR_FRCSTOUT	0x40		/* Force external reset */
 
 /*********************************************************************
  *
