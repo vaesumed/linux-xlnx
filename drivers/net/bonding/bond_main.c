@@ -695,6 +695,18 @@ static int bond_check_dev_link(struct bonding *bond, struct net_device *slave_de
 	if (bond->params.use_carrier)
 		return netif_carrier_ok(slave_dev) ? BMSR_LSTATUS : 0;
 
+	/* Try to get link status using Ethtool first. */
+	if (slave_dev->ethtool_ops) {
+		if (slave_dev->ethtool_ops->get_link) {
+			u32 link;
+
+			link = slave_dev->ethtool_ops->get_link(slave_dev);
+
+			return link ? BMSR_LSTATUS : 0;
+		}
+	}
+
+	/* Ethtool can't be used, fallback to MII ioclts. */
 	ioctl = slave_ops->ndo_do_ioctl;
 	if (ioctl) {
 		/* TODO: set pointer to correct ioctl on a per team member */
@@ -717,20 +729,6 @@ static int bond_check_dev_link(struct bonding *bond, struct net_device *slave_de
 			if (IOCTL(slave_dev, &ifr, SIOCGMIIREG) == 0) {
 				return (mii->val_out & BMSR_LSTATUS);
 			}
-		}
-	}
-
-	/*
-	 * Some drivers cache ETHTOOL_GLINK for a period of time so we only
-	 * attempt to get link status from it if the above MII ioctls fail.
-	 */
-	if (slave_dev->ethtool_ops) {
-		if (slave_dev->ethtool_ops->get_link) {
-			u32 link;
-
-			link = slave_dev->ethtool_ops->get_link(slave_dev);
-
-			return link ? BMSR_LSTATUS : 0;
 		}
 	}
 
@@ -2240,6 +2238,9 @@ static int bond_miimon_inspect(struct bonding *bond)
 {
 	struct slave *slave;
 	int i, link_state, commit = 0;
+	bool ignore_updelay;
+
+	ignore_updelay = !bond->curr_active_slave ? true : false;
 
 	bond_for_each_slave(bond, slave, i) {
 		slave->new_link = BOND_LINK_NOCHANGE;
@@ -2304,6 +2305,7 @@ static int bond_miimon_inspect(struct bonding *bond)
 				       ": %s: link status up for "
 				       "interface %s, enabling it in %d ms.\n",
 				       bond->dev->name, slave->dev->name,
+				       ignore_updelay ? 0 :
 				       bond->params.updelay *
 				       bond->params.miimon);
 			}
@@ -2322,9 +2324,13 @@ static int bond_miimon_inspect(struct bonding *bond)
 				continue;
 			}
 
+			if (ignore_updelay)
+				slave->delay = 0;
+
 			if (slave->delay <= 0) {
 				slave->new_link = BOND_LINK_UP;
 				commit++;
+				ignore_updelay = false;
 				continue;
 			}
 
@@ -2399,8 +2405,7 @@ static void bond_miimon_commit(struct bonding *bond)
 				bond_3ad_handle_link_change(slave,
 							    BOND_LINK_DOWN);
 
-			if (bond->params.mode == BOND_MODE_TLB ||
-			    bond->params.mode == BOND_MODE_ALB)
+			if (bond_is_lb(bond))
 				bond_alb_handle_link_change(bond, slave,
 							    BOND_LINK_DOWN);
 
@@ -2789,7 +2794,7 @@ void bond_loadbalance_arp_mon(struct work_struct *work)
 	 */
 	bond_for_each_slave(bond, slave, i) {
 		if (slave->link != BOND_LINK_UP) {
-			if (time_before_eq(jiffies, slave->dev->trans_start + delta_in_ticks) &&
+			if (time_before_eq(jiffies, dev_trans_start(slave->dev) + delta_in_ticks) &&
 			    time_before_eq(jiffies, slave->dev->last_rx + delta_in_ticks)) {
 
 				slave->link  = BOND_LINK_UP;
@@ -2821,7 +2826,7 @@ void bond_loadbalance_arp_mon(struct work_struct *work)
 			 * when the source ip is 0, so don't take the link down
 			 * if we don't know our ip yet
 			 */
-			if (time_after_eq(jiffies, slave->dev->trans_start + 2*delta_in_ticks) ||
+			if (time_after_eq(jiffies, dev_trans_start(slave->dev) + 2*delta_in_ticks) ||
 			    (time_after_eq(jiffies, slave->dev->last_rx + 2*delta_in_ticks))) {
 
 				slave->link  = BOND_LINK_DOWN;
@@ -2932,7 +2937,7 @@ static int bond_ab_arp_inspect(struct bonding *bond, int delta_in_ticks)
 		 *    the bond has an IP address)
 		 */
 		if ((slave->state == BOND_STATE_ACTIVE) &&
-		    (time_after_eq(jiffies, slave->dev->trans_start +
+		    (time_after_eq(jiffies, dev_trans_start(slave->dev) +
 				    2 * delta_in_ticks) ||
 		      (time_after_eq(jiffies, slave_last_rx(bond, slave)
 				     + 2 * delta_in_ticks)))) {
@@ -2976,7 +2981,7 @@ static void bond_ab_arp_commit(struct bonding *bond, int delta_in_ticks)
 			write_lock_bh(&bond->curr_slave_lock);
 
 			if (!bond->curr_active_slave &&
-			    time_before_eq(jiffies, slave->dev->trans_start +
+			    time_before_eq(jiffies, dev_trans_start(slave->dev) +
 					   delta_in_ticks)) {
 				slave->link = BOND_LINK_UP;
 				bond_change_active_slave(bond, slave);
@@ -3453,7 +3458,27 @@ static void bond_destroy_proc_dir(void)
 		bond_proc_dir = NULL;
 	}
 }
+
+#else /* !CONFIG_PROC_FS */
+
+static int bond_create_proc_entry(struct bonding *bond)
+{
+}
+
+static void bond_remove_proc_entry(struct bonding *bond)
+{
+}
+
+static void bond_create_proc_dir(void)
+{
+}
+
+static void bond_destroy_proc_dir(void)
+{
+}
+
 #endif /* CONFIG_PROC_FS */
+
 
 /*-------------------------- netdev event handling --------------------------*/
 
@@ -3462,10 +3487,8 @@ static void bond_destroy_proc_dir(void)
  */
 static int bond_event_changename(struct bonding *bond)
 {
-#ifdef CONFIG_PROC_FS
 	bond_remove_proc_entry(bond);
 	bond_create_proc_entry(bond);
-#endif
 	down_write(&(bonding_rwsem));
         bond_destroy_sysfs_entry(bond);
         bond_create_sysfs_entry(bond);
@@ -4631,9 +4654,7 @@ static int bond_init(struct net_device *bond_dev, struct bond_params *params)
 			       NETIF_F_HW_VLAN_RX |
 			       NETIF_F_HW_VLAN_FILTER);
 
-#ifdef CONFIG_PROC_FS
 	bond_create_proc_entry(bond);
-#endif
 	list_add_tail(&bond->bond_list, &bond_dev_list);
 
 	return 0;
@@ -4671,9 +4692,7 @@ static void bond_deinit(struct net_device *bond_dev)
 
 	bond_work_cancel_all(bond);
 
-#ifdef CONFIG_PROC_FS
 	bond_remove_proc_entry(bond);
-#endif
 }
 
 /* Unregister and free all bond devices.
@@ -4692,9 +4711,7 @@ static void bond_free_all(void)
 		bond_destroy(bond);
 	}
 
-#ifdef CONFIG_PROC_FS
 	bond_destroy_proc_dir();
-#endif
 }
 
 /*------------------------- Module initialization ---------------------------*/
@@ -5130,6 +5147,7 @@ int bond_create(char *name, struct bond_params *params)
 		goto out_rtnl;
 	}
 
+	bond_dev->priv_flags &= ~IFF_XMIT_DST_RELEASE;
 	if (!name) {
 		res = dev_alloc_name(bond_dev, "bond%d");
 		if (res < 0)
@@ -5189,9 +5207,7 @@ static int __init bonding_init(void)
 		goto out;
 	}
 
-#ifdef CONFIG_PROC_FS
 	bond_create_proc_dir();
-#endif
 
 	init_rwsem(&bonding_rwsem);
 

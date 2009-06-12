@@ -313,39 +313,22 @@ static int update_bl_status(struct backlight_device *bd)
  * Rfkill helpers
  */
 
-static int eeepc_wlan_rfkill_set(void *data, enum rfkill_state state)
-{
-	if (state == RFKILL_STATE_SOFT_BLOCKED)
-		return set_acpi(CM_ASL_WLAN, 0);
-	else
-		return set_acpi(CM_ASL_WLAN, 1);
-}
-
-static int eeepc_wlan_rfkill_state(void *data, enum rfkill_state *state)
+static bool eeepc_wlan_rfkill_blocked(void)
 {
 	if (get_acpi(CM_ASL_WLAN) == 1)
-		*state = RFKILL_STATE_UNBLOCKED;
-	else
-		*state = RFKILL_STATE_SOFT_BLOCKED;
-	return 0;
+		return false;
+	return true;
 }
 
-static int eeepc_bluetooth_rfkill_set(void *data, enum rfkill_state state)
+static int eeepc_rfkill_set(void *data, bool blocked)
 {
-	if (state == RFKILL_STATE_SOFT_BLOCKED)
-		return set_acpi(CM_ASL_BLUETOOTH, 0);
-	else
-		return set_acpi(CM_ASL_BLUETOOTH, 1);
+	unsigned long asl = (unsigned long)data;
+	return set_acpi(asl, !blocked);
 }
 
-static int eeepc_bluetooth_rfkill_state(void *data, enum rfkill_state *state)
-{
-	if (get_acpi(CM_ASL_BLUETOOTH) == 1)
-		*state = RFKILL_STATE_UNBLOCKED;
-	else
-		*state = RFKILL_STATE_SOFT_BLOCKED;
-	return 0;
-}
+static const struct rfkill_ops eeepc_rfkill_ops = {
+	.set_block = eeepc_rfkill_set,
+};
 
 /*
  * Sys helpers
@@ -558,9 +541,9 @@ static int eeepc_get_adapter_status(struct hotplug_slot *hotplug_slot,
 
 static void eeepc_rfkill_notify(acpi_handle handle, u32 event, void *data)
 {
-	enum rfkill_state state;
 	struct pci_dev *dev;
 	struct pci_bus *bus = pci_find_bus(0, 1);
+	bool blocked;
 
 	if (event != ACPI_NOTIFY_BUS_CHECK)
 		return;
@@ -570,9 +553,8 @@ static void eeepc_rfkill_notify(acpi_handle handle, u32 event, void *data)
 		return;
 	}
 
-	eeepc_wlan_rfkill_state(ehotk->eeepc_wlan_rfkill, &state);
-
-	if (state == RFKILL_STATE_UNBLOCKED) {
+	blocked = eeepc_wlan_rfkill_blocked();
+	if (!blocked) {
 		dev = pci_get_slot(bus, 0);
 		if (dev) {
 			/* Device already present */
@@ -593,7 +575,7 @@ static void eeepc_rfkill_notify(acpi_handle handle, u32 event, void *data)
 		}
 	}
 
-	rfkill_force_state(ehotk->eeepc_wlan_rfkill, state);
+	rfkill_set_sw_state(ehotk->eeepc_wlan_rfkill, blocked);
 }
 
 static void eeepc_hotk_notify(struct acpi_device *device, u32 event)
@@ -756,26 +738,17 @@ static int eeepc_hotk_add(struct acpi_device *device)
 	eeepc_register_rfkill_notifier("\\_SB.PCI0.P0P7");
 
 	if (get_acpi(CM_ASL_WLAN) != -1) {
-		ehotk->eeepc_wlan_rfkill = rfkill_allocate(&device->dev,
-							   RFKILL_TYPE_WLAN);
+		ehotk->eeepc_wlan_rfkill = rfkill_alloc("eeepc-wlan",
+							&device->dev,
+							RFKILL_TYPE_WLAN,
+							&eeepc_rfkill_ops,
+							(void *)CM_ASL_WLAN);
 
 		if (!ehotk->eeepc_wlan_rfkill)
 			goto wlan_fail;
 
-		ehotk->eeepc_wlan_rfkill->name = "eeepc-wlan";
-		ehotk->eeepc_wlan_rfkill->toggle_radio = eeepc_wlan_rfkill_set;
-		ehotk->eeepc_wlan_rfkill->get_state = eeepc_wlan_rfkill_state;
-		if (get_acpi(CM_ASL_WLAN) == 1) {
-			ehotk->eeepc_wlan_rfkill->state =
-				RFKILL_STATE_UNBLOCKED;
-			rfkill_set_default(RFKILL_TYPE_WLAN,
-					   RFKILL_STATE_UNBLOCKED);
-		} else {
-			ehotk->eeepc_wlan_rfkill->state =
-				RFKILL_STATE_SOFT_BLOCKED;
-			rfkill_set_default(RFKILL_TYPE_WLAN,
-					   RFKILL_STATE_SOFT_BLOCKED);
-		}
+		rfkill_set_sw_state(ehotk->eeepc_wlan_rfkill,
+				    get_acpi(CM_ASL_WLAN) != 1);
 		result = rfkill_register(ehotk->eeepc_wlan_rfkill);
 		if (result)
 			goto wlan_fail;
@@ -783,28 +756,17 @@ static int eeepc_hotk_add(struct acpi_device *device)
 
 	if (get_acpi(CM_ASL_BLUETOOTH) != -1) {
 		ehotk->eeepc_bluetooth_rfkill =
-			rfkill_allocate(&device->dev, RFKILL_TYPE_BLUETOOTH);
+			rfkill_alloc("eeepc-bluetooth",
+				     &device->dev,
+				     RFKILL_TYPE_BLUETOOTH,
+				     &eeepc_rfkill_ops,
+				     (void *)CM_ASL_BLUETOOTH);
 
 		if (!ehotk->eeepc_bluetooth_rfkill)
 			goto bluetooth_fail;
 
-		ehotk->eeepc_bluetooth_rfkill->name = "eeepc-bluetooth";
-		ehotk->eeepc_bluetooth_rfkill->toggle_radio =
-			eeepc_bluetooth_rfkill_set;
-		ehotk->eeepc_bluetooth_rfkill->get_state =
-			eeepc_bluetooth_rfkill_state;
-		if (get_acpi(CM_ASL_BLUETOOTH) == 1) {
-			ehotk->eeepc_bluetooth_rfkill->state =
-				RFKILL_STATE_UNBLOCKED;
-			rfkill_set_default(RFKILL_TYPE_BLUETOOTH,
-					   RFKILL_STATE_UNBLOCKED);
-		} else {
-			ehotk->eeepc_bluetooth_rfkill->state =
-				RFKILL_STATE_SOFT_BLOCKED;
-			rfkill_set_default(RFKILL_TYPE_BLUETOOTH,
-					   RFKILL_STATE_SOFT_BLOCKED);
-		}
-
+		rfkill_set_sw_state(ehotk->eeepc_bluetooth_rfkill,
+				    get_acpi(CM_ASL_BLUETOOTH) != 1);
 		result = rfkill_register(ehotk->eeepc_bluetooth_rfkill);
 		if (result)
 			goto bluetooth_fail;
@@ -826,13 +788,10 @@ static int eeepc_hotk_add(struct acpi_device *device)
 	if (ehotk->eeepc_bluetooth_rfkill)
 		rfkill_unregister(ehotk->eeepc_bluetooth_rfkill);
  bluetooth_fail:
-	if (ehotk->eeepc_bluetooth_rfkill)
-		rfkill_free(ehotk->eeepc_bluetooth_rfkill);
+	rfkill_destroy(ehotk->eeepc_bluetooth_rfkill);
 	rfkill_unregister(ehotk->eeepc_wlan_rfkill);
-	ehotk->eeepc_wlan_rfkill = NULL;
  wlan_fail:
-	if (ehotk->eeepc_wlan_rfkill)
-		rfkill_free(ehotk->eeepc_wlan_rfkill);
+	rfkill_destroy(ehotk->eeepc_wlan_rfkill);
 	eeepc_unregister_rfkill_notifier("\\_SB.PCI0.P0P6");
 	eeepc_unregister_rfkill_notifier("\\_SB.PCI0.P0P7");
  ehotk_fail:
