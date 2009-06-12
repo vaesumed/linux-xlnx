@@ -599,8 +599,6 @@ extern void pci_sort_breadthfirst(void);
 struct pci_dev __deprecated *pci_find_device(unsigned int vendor,
 					     unsigned int device,
 					     struct pci_dev *from);
-struct pci_dev __deprecated *pci_find_slot(unsigned int bus,
-					   unsigned int devfn);
 #endif /* CONFIG_PCI_LEGACY */
 
 enum pci_lost_interrupt_reason {
@@ -639,6 +637,7 @@ int pci_bus_write_config_word(struct pci_bus *bus, unsigned int devfn,
 			      int where, u16 val);
 int pci_bus_write_config_dword(struct pci_bus *bus, unsigned int devfn,
 			       int where, u32 val);
+struct pci_ops *pci_bus_set_ops(struct pci_bus *bus, struct pci_ops *ops);
 
 static inline int pci_read_config_byte(struct pci_dev *dev, int where, u8 *val)
 {
@@ -880,6 +879,17 @@ static inline int pcie_aspm_enabled(void)
 extern int pcie_aspm_enabled(void);
 #endif
 
+#ifndef CONFIG_PCIE_ECRC
+static inline void pcie_set_ecrc_checking(struct pci_dev *dev)
+{
+	return;
+}
+static inline void pcie_ecrc_get_policy(char *str) {};
+#else
+extern void pcie_set_ecrc_checking(struct pci_dev *dev);
+extern void pcie_ecrc_get_policy(char *str);
+#endif
+
 #define pci_enable_msi(pdev)	pci_enable_msi_block(pdev, 1)
 
 #ifdef CONFIG_HT_IRQ
@@ -932,12 +942,6 @@ _PCI_NOP_ALL(write,)
 static inline struct pci_dev *pci_find_device(unsigned int vendor,
 					      unsigned int device,
 					      struct pci_dev *from)
-{
-	return NULL;
-}
-
-static inline struct pci_dev *pci_find_slot(unsigned int bus,
-					    unsigned int devfn)
 {
 	return NULL;
 }
@@ -1096,6 +1100,10 @@ static inline struct pci_dev *pci_get_bus_and_slot(unsigned int bus,
 /* Include architecture-dependent settings and functions */
 
 #include <asm/pci.h>
+
+#ifndef PCIBIOS_MAX_MEM_32
+#define PCIBIOS_MAX_MEM_32 (-1)
+#endif
 
 /* these helpers provide future and backwards compatibility
  * for accessing popular PCI BAR info */
