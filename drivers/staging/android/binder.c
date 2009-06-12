@@ -2146,7 +2146,7 @@ static int binder_thread_read(struct binder_proc *proc,
 	void __user *end = buffer + size;
 
 	int ret = 0;
-	int wait_for_proc_work;
+	int wait_for_proc_work = 0;
 
 	if (*consumed == 0) {
 		if (put_user(BR_NOOP, (uint32_t __user *)ptr))
@@ -2155,8 +2155,8 @@ static int binder_thread_read(struct binder_proc *proc,
 	}
 
 retry:
-	wait_for_proc_work = thread->transaction_stack == NULL &&
-				list_empty(&thread->todo);
+	if (list_empty(&thread->todo) && thread->transaction_stack == NULL)
+		wait_for_proc_work = 1;
 
 	if (thread->return_error != BR_OK && ptr < end) {
 		if (thread->return_error2 != BR_OK) {
@@ -2539,13 +2539,15 @@ static unsigned int binder_poll(struct file *filp,
 {
 	struct binder_proc *proc = filp->private_data;
 	struct binder_thread *thread = NULL;
-	int wait_for_proc_work;
+	int wait_for_proc_work = 0;
 
 	mutex_lock(&binder_lock);
 	thread = binder_get_thread(proc);
 
-	wait_for_proc_work = thread->transaction_stack == NULL &&
-		list_empty(&thread->todo) && thread->return_error == BR_OK;
+	if (list_empty(&thread->todo) && thread->transaction_stack == NULL &&
+	    thread->return_error == BR_OK)
+		wait_for_proc_work = 1;
+
 	mutex_unlock(&binder_lock);
 
 	if (wait_for_proc_work) {
