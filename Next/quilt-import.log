@@ -1,0 +1,248 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.30-rc8-73-g3af968e
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 3af968e066d593bc4dacc021715f3e95ddf0996f
+HEAD is now at 3af968e async: Fix lack of boot-time console due to insufficient synchronization
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+cpumask:introduce_zalloc_cpumask_var.patch
+cpumask:alloc_zeroed_cpumask_for_static_cpumask_var_ts.patch
+kvm:fix_kvm_reboot_crash_when_maxsmp_is_used.patch
+module:cyber2000fb-stop-unload-for-CONFIG_ARCH_SHARK.patch
+module:invbool-takes-a-bool.patch
+module:param-flags.patch
+module:__same_type.patch
+module:bool-param-can-be-bool.patch
+uvesafb:param-cleanup.patch
+module:x86_merge_the_same_functions_in_32_c_and_64_c.patch
+module:x86_merge_the_rest_functions_with_macros.patch
+module:uml_fix_uml_build_process_due_to_this_merge.patch
+module:merge_alloc_finally.patch
+module:trim_exception_table_in_free.patch
+module:remove-module_free-init-trim-FIXMEs.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-ich.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-powernow-k8.c.patch
+cpumask:remove-cpumask-games-arch-x86-kernel-cpu-cpufreq-speedstep-centrino.c.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+virtio:fix-comment-on-virtio_driver-probe.patch
+virtio:no-access-until-finalized.patch
+virtio:virtqueue-linked-list-and-names.patch
+virtio:find_vqs_del_vqs_operations.patch
+virtio:find_vqs_del_vqs_operations-fix.patch
+virtio:pci_split_up_vp_interrupt.patch
+virtio:pci_optional_msi_x_support.patch
+virtio:features-in-sysfs.patch
+virtio:teach_has_feature_about_transport_features.patch
+virtio:indirect_ring_entries_ring_f_indirect_desc.patch
+virtio:blk_add_missing_dev_init_exit_markings.patch
+virtio:rng-handle-short-buffers.patch
+virtio:fix_id_matching_for_drivers.patch
+virtio:enhance_id_matching_for_drivers.patch
+virtio:net_set_correct_gso_hdr_len.patch
+lguest:dont-trust-descriptors-in-guest.patch
+lguest:global-lguest_fd.patch
+lguest:clean-up-init_IRQ.patch
+lguest:launcher-wmb-real.patch
+misc:EXPORT_SYMBOL-kick_process.patch
+lguest:kick_process.patch
+lguest:remove-inflight-logic.patch
+lguest:raceless-halt.patch
+lguest:fix-interrupt-enable.patch
+lguest:optimize-irq_enable-and-popf.patch
+lguest:clean-up-launcher-compile-flags.patch
+lguest:beyond_array_size_of_cpu_arch_gdt.patch
+lguest:should_lg_cpu_ssh1_be_u16.patch
+lguest:fix-console_output-used-value.patch
+lguest:fix-console_output-short-writev.patch
+lguest:map_switcher_with_executable_page_table_entries.patch
+lguest:use_native_set_macros_which_properly_handle_64_bit_entries_when_pae_is_activated.patch
+lguest:replace_hypercall_name_lhcall_set_pmd_with_lhcall_set_pgd.patch
+lguest:add_support_for_kvm_hypercall4.patch
+lguest:pae_support.patch
+lguest:pae-fix.patch
+lguest:other-process-interrupts.patch
+misc:EXPORT_SYMBOL-for-eventfd.patch
+lguest:eventfd-notify.patch
+lguest:virtqueues-serviced-by-threads.patch
+lguest:remove-BREAK.patch
+lguest:delay-interrupts.patch
+lguest:prevent-spurious-irqs.patch
+lguest:reduce_triggers-on-recv.patch
+lguest:suppress-notifications.patch
+lguest:add_support_for_indirect_ring_entries.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 35266e1...7d4ef75 master     -> quilt/rr  (forced update)
+Importing device-mapper based on v2.6.30-rc7-227-gd9244b5
+$ cd ../quilt-tmp
+$ git reset --hard d9244b5d2fbfe9fa540024b410047af13ceec90f
+HEAD is now at d9244b5 Merge branch 'hwmon-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jdelvare/staging
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+dm-sysfs-skip-output-when-device-is-being-destroyed.patch
+dm-mpath-change-attached-scsi_dh.patch
+dm-mpath-call-activate-fn-for-each-path-in-pg_init.patch
+dm-raid1-keep-retrying-alloc-if-mempool_alloc-failed.patch
+dm-mpath-flush-keventd-queue-in-destructor.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries-fixup-for-linux-next.patch
+dm-use-i_size_read.patch
+Context reduced to (1/1) to apply fragment at 417
+dm-rename-suspended_bdev-to-bdev.patch
+dm-always-hold-bdev-reference.patch
+dm-make-dm_flush-return-void.patch
+dm-process-requeue-in-dm_wq_work.patch
+dm-store-only-first-barrier-error.patch
+dm-remove-EOPNOTSUPP-for-barriers.patch
+dm-remove-check-that-prevents-mapping-empty-bios.patch
+dm-introduce-num_flush_requests.patch
+dm-initialise-tio-in-alloc_tio.patch
+dm-send-empty-barriers-to-targets-in-dm_flush.patch
+dm-linear-support-flush.patch
+dm-stripe-support-flush.patch
+dm-crypt-support-flush.patch
+dm-delay-support-barriers.patch
+dm-mpath-support-barriers.patch
+dm-snapshot-support-barriers.patch
+dm-io-record-eopnotsupp.patch
+dm-io-retry-after-barrier-error.patch
+dm-snapshot-use-barrier-when-writing-exception-store.patch
+dm-mpath-add-start_io-and-nr_bytes-to-path-selectors.patch
+dm-mpath-add-queue-length-load-balancer.patch
+dm-mpath-add-service-time-load-balancer.patch
+dm-table-improve-warning-message-when-devices-not-freed-before-destruction.patch
+dm-sysfs-add-suspended-attribute.patch
+dm-ioctl-support-cookies-for-udev.patch
+dm-table-ensure-targets-are-aligned-to-logical_block_size.patch
+dm-table-validate-device-logical_block_size.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + e0d6033...8b6ae10 master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
+Importing rr-latest-cpumask based on quilt/rr
+$ git branch quilt/rr-latest-cpumask 7d4ef75f397e37b481be3ec559066d48bac796c6
+$ cd ../quilt-tmp
+$ git reset --hard 7d4ef75f397e37b481be3ec559066d48bac796c6
+HEAD is now at 7d4ef75 lguest: add support for indirect ring entries
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr-latest-cpumask
+cpumask:remove-pcibus_to_cpumask-alpha.patch
+cpumask:remove-pcibus_to_cpumask-mips.patch
+cpumask:remove-pcibus_to_cpumask-powerpc.patch
+cpumask:remove-pcibus_to_cpumask-sh.patch
+cpumask:remove-node_to_cpumask.patch
+cpumask:remove-CPU_MASK_ALL_PTR.patch
+cpumask:remove-address-of-CPU_MASK_ALL-mips.patch
+cpumask:remove-cpu_mask_all.patch
+cpumask:remove-last-remaining-irqaction-mask.patch
+cpumask:irqaction-remove-mask.patch
+cpumask:remove-set_cpus_allowed.patch
+cpumask:remove-smp_call_function_mask.patch
+cpumask:arch_send_call_function_ipi_mask-alpha.patch
+cpumask:arch_send_call_function_ipi_mask-m32r.patch
+cpumask:arch_send_call_function_ipi_mask-mips.patch
+cpumask:arch_send_call_function_ipi_mask-powerpc.patch
+cpumask:arch_send_call_function_ipi_mask-sh.patch
+cpumask:arch_send_call_function_ipi_mask-s390.patch
+cpumask:remove-arch_send_call_function_ipi.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-core.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-sparc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-s390.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-powerpc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-ia64.patch
+cpumask:use-cpumap-accessors-arm.patch
+cpumask:use-cpumap-accessors-m32r.patch
+cpumask:use-cpumap-accessors-mips.patch
+cpumask:use-cpumap-accessors-powerpc.patch
+cpumask:use-cpumap-accessors-sh.patch
+cpumask:use-cpumap-accessors-um.patch
+cpumask:use-mm_cpumask-arm.patch
+cpumask:use-mm_cpumask-m32r.patch
+cpumask:use-mm_cpumask-mn10300.patch
+cpumask:use-mm_cpumask-mips.patch
+cpumask:use-mm_cpumask-sh.patch
+cpumask:use-mm_cpumask-um.patch
+cpumask:use-mm_cpumask-x86.patch
+cpumask:x86-cpufreq-powernow-k8.patch
+cpumask:mm_quicklist-new-cpumask-ops.patch
+cpumask:remove-unused-deprecated-functions.patch
+cpumask:move-obsolete-functions-to-end-of-header.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr-latest-cpumask
+From ../quilt-tmp
+   7d4ef75..234ae8c  master     -> quilt/rr-latest-cpumask
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard b0fd271d5fba0b2d00888363f3869e3f9b26caa9
+HEAD is now at b0fd271 block: add request clone interface (v2)
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+dm-sysfs-skip-output-when-device-is-being-destroyed.patch
+dm-mpath-change-attached-scsi_dh.patch
+dm-mpath-call-activate-fn-for-each-path-in-pg_init.patch
+dm-raid1-keep-retrying-alloc-if-mempool_alloc-failed.patch
+dm-mpath-flush-keventd-queue-in-destructor.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries-fixup-for-linux-next.patch
+dm-use-i_size_read.patch
+dm-rename-suspended_bdev-to-bdev.patch
+dm-always-hold-bdev-reference.patch
+dm-make-dm_flush-return-void.patch
+dm-process-requeue-in-dm_wq_work.patch
+dm-store-only-first-barrier-error.patch
+dm-remove-EOPNOTSUPP-for-barriers.patch
+dm-remove-check-that-prevents-mapping-empty-bios.patch
+dm-introduce-num_flush_requests.patch
+dm-initialise-tio-in-alloc_tio.patch
+dm-send-empty-barriers-to-targets-in-dm_flush.patch
+dm-linear-support-flush.patch
+dm-stripe-support-flush.patch
+dm-crypt-support-flush.patch
+dm-delay-support-barriers.patch
+dm-mpath-support-barriers.patch
+dm-snapshot-support-barriers.patch
+dm-io-record-eopnotsupp.patch
+dm-io-retry-after-barrier-error.patch
+dm-snapshot-use-barrier-when-writing-exception-store.patch
+dm-mpath-add-start_io-and-nr_bytes-to-path-selectors.patch
+dm-mpath-add-queue-length-load-balancer.patch
+dm-mpath-add-service-time-load-balancer.patch
+dm-table-improve-warning-message-when-devices-not-freed-before-destruction.patch
+dm-sysfs-add-suspended-attribute.patch
+dm-ioctl-support-cookies-for-udev.patch
+dm-table-ensure-targets-are-aligned-to-logical_block_size.patch
+dm-table-validate-device-logical_block_size.patch
+dm-table-replace-struct-io_restrictions-with-struct-queue_limits.patch
+dm-table-establish-queue-limits-by-copying-table-limits.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 8b6ae10...2a933f9 master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
+Unchanged quilt series rr-latest-cpumask
