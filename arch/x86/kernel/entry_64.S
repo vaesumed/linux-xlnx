@@ -994,7 +994,7 @@ apicinterrupt INVALIDATE_TLB_VECTOR_START+7 \
 #endif
 
 apicinterrupt THRESHOLD_APIC_VECTOR \
-	threshold_interrupt mce_threshold_interrupt
+	threshold_interrupt smp_threshold_interrupt
 apicinterrupt THERMAL_APIC_VECTOR \
 	thermal_interrupt smp_thermal_interrupt
 
@@ -1379,7 +1379,7 @@ errorentry xen_stack_segment do_stack_segment
 errorentry general_protection do_general_protection
 errorentry page_fault do_page_fault
 #ifdef CONFIG_X86_MCE
-paranoidzeroentry machine_check do_machine_check
+paranoidzeroentry machine_check *machine_check_vector(%rip)
 #endif
 
 	/*

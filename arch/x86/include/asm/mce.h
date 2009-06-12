@@ -1,8 +1,6 @@
 #ifndef _ASM_X86_MCE_H
 #define _ASM_X86_MCE_H
 
-#ifdef __x86_64__
-
 #include <linux/types.h>
 #include <asm/ioctls.h>
 
@@ -10,21 +8,25 @@
  * Machine Check support for x86
  */
 
-#define MCG_CTL_P	 (1UL<<8)   /* MCG_CAP register available */
-#define MCG_EXT_P	 (1ULL<<9)   /* Extended registers available */
-#define MCG_CMCI_P	 (1ULL<<10)  /* CMCI supported */
+#define MCG_BANKCNT_MASK	0xff         /* Number of Banks */
+#define MCG_CTL_P		(1ULL<<8)    /* MCG_CAP register available */
+#define MCG_EXT_P		(1ULL<<9)    /* Extended registers available */
+#define MCG_CMCI_P		(1ULL<<10)   /* CMCI supported */
+#define MCG_EXT_CNT_MASK	0xff0000     /* Number of Extended registers */
+#define MCG_EXT_CNT_SHIFT	16
+#define MCG_EXT_CNT(c)		(((c) & MCG_EXT_CNT_MASK) >> MCG_EXT_CNT_SHIFT)
 
-#define MCG_STATUS_RIPV  (1UL<<0)   /* restart ip valid */
-#define MCG_STATUS_EIPV  (1UL<<1)   /* ip points to correct instruction */
-#define MCG_STATUS_MCIP  (1UL<<2)   /* machine check in progress */
+#define MCG_STATUS_RIPV  (1ULL<<0)   /* restart ip valid */
+#define MCG_STATUS_EIPV  (1ULL<<1)   /* ip points to correct instruction */
+#define MCG_STATUS_MCIP  (1ULL<<2)   /* machine check in progress */
 
-#define MCI_STATUS_VAL   (1UL<<63)  /* valid error */
-#define MCI_STATUS_OVER  (1UL<<62)  /* previous errors lost */
-#define MCI_STATUS_UC    (1UL<<61)  /* uncorrected error */
-#define MCI_STATUS_EN    (1UL<<60)  /* error enabled */
-#define MCI_STATUS_MISCV (1UL<<59)  /* misc error reg. valid */
-#define MCI_STATUS_ADDRV (1UL<<58)  /* addr reg. valid */
-#define MCI_STATUS_PCC   (1UL<<57)  /* processor context corrupt */
+#define MCI_STATUS_VAL   (1ULL<<63)  /* valid error */
+#define MCI_STATUS_OVER  (1ULL<<62)  /* previous errors lost */
+#define MCI_STATUS_UC    (1ULL<<61)  /* uncorrected error */
+#define MCI_STATUS_EN    (1ULL<<60)  /* error enabled */
+#define MCI_STATUS_MISCV (1ULL<<59)  /* misc error reg. valid */
+#define MCI_STATUS_ADDRV (1ULL<<58)  /* addr reg. valid */
+#define MCI_STATUS_PCC   (1ULL<<57)  /* processor context corrupt */
 
 /* Fields are zero when not available */
 struct mce {
@@ -82,19 +84,15 @@ struct mce_log {
 #define K8_MCE_THRESHOLD_BANK_5    (MCE_THRESHOLD_BASE + 5 * 9)
 #define K8_MCE_THRESHOLD_DRAM_ECC  (MCE_THRESHOLD_BANK_4 + 0)
 
-#endif /* __x86_64__ */
-
 #ifdef __KERNEL__
 
-#ifdef CONFIG_X86_32
 extern int mce_disabled;
-#else /* CONFIG_X86_32 */
 
 #include <asm/atomic.h>
 
 void mce_setup(struct mce *m);
 void mce_log(struct mce *m);
-DECLARE_PER_CPU(struct sys_device, device_mce);
+DECLARE_PER_CPU(struct sys_device, mce_dev);
 extern void (*threshold_cpu_callback)(unsigned long action, unsigned int cpu);
 
 /*
@@ -123,13 +121,13 @@ void mce_amd_feature_init(struct cpuinfo_x86 *c);
 static inline void mce_amd_feature_init(struct cpuinfo_x86 *c) { }
 #endif
 
-extern int mce_available(struct cpuinfo_x86 *c);
+int mce_available(struct cpuinfo_x86 *c);
 
 void mce_log_therm_throt_event(__u64 status);
 
 extern atomic_t mce_entry;
 
-extern void do_machine_check(struct pt_regs *, long);
+void do_machine_check(struct pt_regs *, long);
 
 typedef DECLARE_BITMAP(mce_banks_t, MAX_NR_BANKS);
 DECLARE_PER_CPU(mce_banks_t, mce_poll_banks);
@@ -139,14 +137,15 @@ enum mcp_flags {
 	MCP_UC = (1 << 1),		/* log uncorrected errors */
 	MCP_DONTLOG = (1 << 2),		/* only clear, don't log */
 };
-extern void machine_check_poll(enum mcp_flags flags, mce_banks_t *b);
+void machine_check_poll(enum mcp_flags flags, mce_banks_t *b);
 
-extern int mce_notify_user(void);
+int mce_notify_user(void);
 
-#endif /* !CONFIG_X86_32 */
+DECLARE_PER_CPU(struct mce, injectm);
+extern struct file_operations mce_chrdev_ops;
 
 #ifdef CONFIG_X86_MCE
-extern void mcheck_init(struct cpuinfo_x86 *c);
+void mcheck_init(struct cpuinfo_x86 *c);
 #else
 #define mcheck_init(c) do { } while (0)
 #endif

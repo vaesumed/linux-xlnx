@@ -387,12 +387,20 @@ static int __init p4_init(char **cpu_type)
 	return 0;
 }
 
-static int force_arch_perfmon;
+static enum {
+	NONE = 0,
+	ARCH_PERFMON,
+	CORE_2,
+} forced_cpu;
+
 static int force_cpu_type(const char *str, struct kernel_param *kp)
 {
 	if (!strcmp(str, "archperfmon")) {
-		force_arch_perfmon = 1;
+		forced_cpu = ARCH_PERFMON;
 		printk(KERN_INFO "oprofile: forcing architectural perfmon\n");
+	} else if (!strcmp(str, "core_2")) {
+		forced_cpu = CORE_2;
+		printk(KERN_INFO "oprofile: forcing core_2\n");
 	}
 
 	return 0;
@@ -403,8 +411,11 @@ static int __init ppro_init(char **cpu_type)
 {
 	__u8 cpu_model = boot_cpu_data.x86_model;
 
-	if (force_arch_perfmon && cpu_has_arch_perfmon)
+	if (forced_cpu == ARCH_PERFMON && cpu_has_arch_perfmon)
 		return 0;
+
+	if (forced_cpu == CORE_2)
+		cpu_model = 15;
 
 	switch (cpu_model) {
 	case 0 ... 2:
