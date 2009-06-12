@@ -938,7 +938,7 @@ int em28xx_init_isoc(struct em28xx *dev, int max_packets,
 	dev->isoc_ctl.transfer_buffer = kzalloc(sizeof(void *)*num_bufs,
 					      GFP_KERNEL);
 	if (!dev->isoc_ctl.transfer_buffer) {
-		em28xx_errdev("cannot allocate memory for usbtransfer\n");
+		em28xx_errdev("cannot allocate memory for usb transfer\n");
 		kfree(dev->isoc_ctl.urb);
 		return -ENOMEM;
 	}
@@ -1011,6 +1011,41 @@ int em28xx_init_isoc(struct em28xx *dev, int max_packets,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(em28xx_init_isoc);
+
+/* Determine the packet size for the DVB stream for the given device
+   (underlying value programmed into the eeprom) */
+int em28xx_isoc_dvb_max_packetsize(struct em28xx *dev)
+{
+	unsigned int chip_cfg2;
+	unsigned int packet_size = 564;
+
+	if (dev->chip_id == CHIP_ID_EM2874) {
+		/* FIXME - for now assume 564 like it was before, but the
+		   em2874 code should be added to return the proper value... */
+		packet_size = 564;
+	} else {
+		/* TS max packet size stored in bits 1-0 of R01 */
+		chip_cfg2 = em28xx_read_reg(dev, EM28XX_R01_CHIPCFG2);
+		switch (chip_cfg2 & EM28XX_CHIPCFG2_TS_PACKETSIZE_MASK) {
+		case EM28XX_CHIPCFG2_TS_PACKETSIZE_188:
+			packet_size = 188;
+			break;
+		case EM28XX_CHIPCFG2_TS_PACKETSIZE_376:
+			packet_size = 376;
+			break;
+		case EM28XX_CHIPCFG2_TS_PACKETSIZE_564:
+			packet_size = 564;
+			break;
+		case EM28XX_CHIPCFG2_TS_PACKETSIZE_752:
+			packet_size = 752;
+			break;
+		}
+	}
+
+	em28xx_coredbg("dvb max packet size=%d\n", packet_size);
+	return packet_size;
+}
+EXPORT_SYMBOL_GPL(em28xx_isoc_dvb_max_packetsize);
 
 /*
  * em28xx_wake_i2c()
