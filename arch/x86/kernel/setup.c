@@ -1072,7 +1072,6 @@ void __init x86_quirk_time_init(void)
 			return;
 	}
 
-	irq0.mask = cpumask_of_cpu(0);
 	setup_irq(0, &irq0);
 }
 #endif /* CONFIG_X86_32 */
