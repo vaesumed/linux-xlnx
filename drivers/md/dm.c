@@ -25,6 +25,13 @@
 
 #define DM_MSG_PREFIX "core"
 
+/*
+ * Cookies are numeric values sent with CHANGE and REMOVE
+ * uevents while resuming, removing or renaming the device.
+ */
+#define DM_COOKIE_ENV_VAR_NAME "DM_COOKIE"
+#define DM_COOKIE_LENGTH 24
+
 static const char *_name = DM_NAME;
 
 static unsigned int major = 0;
@@ -158,13 +165,16 @@ struct mapped_device {
 	 * freeze/thaw support require holding onto a super block
 	 */
 	struct super_block *frozen_sb;
-	struct block_device *suspended_bdev;
+	struct block_device *bdev;
 
 	/* forced geometry settings */
 	struct hd_geometry geometry;
 
 	/* sysfs handle */
 	struct kobject kobj;
+
+	/* zero-length barrier that will be cloned and submitted to targets */
+	struct bio barrier_bio;
 };
 
 #define MIN_IOS 256
@@ -392,11 +402,6 @@ static void free_io(struct mapped_device *md, struct dm_io *io)
 	mempool_free(io, md->io_pool);
 }
 
-static struct dm_target_io *alloc_tio(struct mapped_device *md)
-{
-	return mempool_alloc(md->tio_pool, GFP_NOIO);
-}
-
 static void free_tio(struct mapped_device *md, struct dm_target_io *tio)
 {
 	mempool_free(tio, md->tio_pool);
@@ -537,9 +542,11 @@ static void dec_pending(struct dm_io *io, int error)
 			 * Target requested pushing back the I/O.
 			 */
 			spin_lock_irqsave(&md->deferred_lock, flags);
-			if (__noflush_suspending(md))
-				bio_list_add_head(&md->deferred, io->bio);
-			else
+			if (__noflush_suspending(md)) {
+				if (!bio_barrier(io->bio))
+					bio_list_add_head(&md->deferred,
+							  io->bio);
+			} else
 				/* noflush suspend was interrupted. */
 				io->error = -EIO;
 			spin_unlock_irqrestore(&md->deferred_lock, flags);
@@ -554,7 +561,8 @@ static void dec_pending(struct dm_io *io, int error)
 			 * a per-device variable for error reporting.
 			 * Note that you can't touch the bio after end_io_acct
 			 */
-			md->barrier_error = io_error;
+			if (!md->barrier_error && io_error != -EOPNOTSUPP)
+				md->barrier_error = io_error;
 			end_io_acct(io);
 		} else {
 			end_io_acct(io);
@@ -634,11 +642,6 @@ static void __map_bio(struct dm_target *ti, struct bio *clone,
 	int r;
 	sector_t sector;
 	struct mapped_device *md;
-
-	/*
-	 * Sanity checks.
-	 */
-	BUG_ON(!clone->bi_size);
 
 	clone->bi_end_io = clone_endio;
 	clone->bi_private = tio;
@@ -753,12 +756,57 @@ static struct bio *clone_bio(struct bio *bio, sector_t sector,
 	return clone;
 }
 
+static struct dm_target_io *alloc_tio(struct clone_info *ci,
+				      struct dm_target *ti)
+{
+	struct dm_target_io *tio = mempool_alloc(ci->md->tio_pool, GFP_NOIO);
+
+	tio->io = ci->io;
+	tio->ti = ti;
+	memset(&tio->info, 0, sizeof(tio->info));
+
+	return tio;
+}
+
+static void __flush_target(struct clone_info *ci, struct dm_target *ti,
+			  unsigned flush_nr)
+{
+	struct dm_target_io *tio = alloc_tio(ci, ti);
+	struct bio *clone;
+
+	tio->info.flush_request = flush_nr;
+
+	clone = bio_alloc_bioset(GFP_NOIO, 0, ci->md->bs);
+	__bio_clone(clone, ci->bio);
+	clone->bi_destructor = dm_bio_destructor;
+
+	__map_bio(ti, clone, tio);
+}
+
+static int __clone_and_map_empty_barrier(struct clone_info *ci)
+{
+	unsigned target_nr = 0, flush_nr;
+	struct dm_target *ti;
+
+	while ((ti = dm_table_get_target(ci->map, target_nr++)))
+		for (flush_nr = 0; flush_nr < ti->num_flush_requests;
+		     flush_nr++)
+			__flush_target(ci, ti, flush_nr);
+
+	ci->sector_count = 0;
+
+	return 0;
+}
+
 static int __clone_and_map(struct clone_info *ci)
 {
 	struct bio *clone, *bio = ci->bio;
 	struct dm_target *ti;
 	sector_t len = 0, max;
 	struct dm_target_io *tio;
+
+	if (unlikely(bio_empty_barrier(bio)))
+		return __clone_and_map_empty_barrier(ci);
 
 	ti = dm_table_find_target(ci->map, ci->sector);
 	if (!dm_target_is_valid(ti))
@@ -769,10 +817,7 @@ static int __clone_and_map(struct clone_info *ci)
 	/*
 	 * Allocate a target io object.
 	 */
-	tio = alloc_tio(ci->md);
-	tio->io = ci->io;
-	tio->ti = ti;
-	memset(&tio->info, 0, sizeof(tio->info));
+	tio = alloc_tio(ci, ti);
 
 	if (ci->sector_count <= max) {
 		/*
@@ -828,10 +873,7 @@ static int __clone_and_map(struct clone_info *ci)
 
 				max = max_io_len(ci->md, ci->sector, ti);
 
-				tio = alloc_tio(ci->md);
-				tio->io = ci->io;
-				tio->ti = ti;
-				memset(&tio->info, 0, sizeof(tio->info));
+				tio = alloc_tio(ci, ti);
 			}
 
 			len = min(remaining, max);
@@ -866,7 +908,8 @@ static void __split_and_process_bio(struct mapped_device *md, struct bio *bio)
 		if (!bio_barrier(bio))
 			bio_io_error(bio);
 		else
-			md->barrier_error = -EIO;
+			if (!md->barrier_error)
+				md->barrier_error = -EIO;
 		return;
 	}
 
@@ -879,6 +922,8 @@ static void __split_and_process_bio(struct mapped_device *md, struct bio *bio)
 	ci.io->md = md;
 	ci.sector = bio->bi_sector;
 	ci.sector_count = bio_sectors(bio);
+	if (unlikely(bio_empty_barrier(bio)))
+		ci.sector_count = 1;
 	ci.idx = bio->bi_idx;
 
 	start_io_acct(ci.io);
@@ -926,6 +971,16 @@ static int dm_merge_bvec(struct request_queue *q,
 	 */
 	if (max_size && ti->type->merge)
 		max_size = ti->type->merge(ti, bvm, biovec, max_size);
+	/*
+	 * If the target doesn't support merge method and some of the devices
+	 * provided their merge_bvec method (we know this by looking at
+	 * queue_max_hw_sectors), then we can't allow bios with multiple vector
+	 * entries.  So always set max_size to 0, and the code below allows
+	 * just one page.
+	 */
+	else if (queue_max_hw_sectors(q) <= PAGE_SIZE >> 9)
+
+		max_size = 0;
 
 out_table:
 	dm_table_put(map);
@@ -1171,6 +1226,10 @@ static struct mapped_device *alloc_dev(int minor)
 	if (!md->wq)
 		goto bad_thread;
 
+	md->bdev = bdget_disk(md->disk, 0);
+	if (!md->bdev)
+		goto bad_bdev;
+
 	/* Populate the mapping, nobody knows we exist yet */
 	spin_lock(&_minor_lock);
 	old_md = idr_replace(&_minor_idr, md, minor);
@@ -1180,6 +1239,8 @@ static struct mapped_device *alloc_dev(int minor)
 
 	return md;
 
+bad_bdev:
+	destroy_workqueue(md->wq);
 bad_thread:
 	put_disk(md->disk);
 bad_disk:
@@ -1205,10 +1266,8 @@ static void free_dev(struct mapped_device *md)
 {
 	int minor = MINOR(disk_devt(md->disk));
 
-	if (md->suspended_bdev) {
-		unlock_fs(md);
-		bdput(md->suspended_bdev);
-	}
+	unlock_fs(md);
+	bdput(md->bdev);
 	destroy_workqueue(md->wq);
 	mempool_destroy(md->tio_pool);
 	mempool_destroy(md->io_pool);
@@ -1250,9 +1309,9 @@ static void __set_size(struct mapped_device *md, sector_t size)
 {
 	set_capacity(md->disk, size);
 
-	mutex_lock(&md->suspended_bdev->bd_inode->i_mutex);
-	i_size_write(md->suspended_bdev->bd_inode, (loff_t)size << SECTOR_SHIFT);
-	mutex_unlock(&md->suspended_bdev->bd_inode->i_mutex);
+	mutex_lock(&md->bdev->bd_inode->i_mutex);
+	i_size_write(md->bdev->bd_inode, (loff_t)size << SECTOR_SHIFT);
+	mutex_unlock(&md->bdev->bd_inode->i_mutex);
 }
 
 static int __bind(struct mapped_device *md, struct dm_table *t)
@@ -1268,8 +1327,7 @@ static int __bind(struct mapped_device *md, struct dm_table *t)
 	if (size != get_capacity(md->disk))
 		memset(&md->geometry, 0, sizeof(md->geometry));
 
-	if (md->suspended_bdev)
-		__set_size(md, size);
+	__set_size(md, size);
 
 	if (!size) {
 		dm_table_destroy(t);
@@ -1427,34 +1485,36 @@ static int dm_wait_for_completion(struct mapped_device *md, int interruptible)
 	return r;
 }
 
-static int dm_flush(struct mapped_device *md)
+static void dm_flush(struct mapped_device *md)
 {
 	dm_wait_for_completion(md, TASK_UNINTERRUPTIBLE);
-	return 0;
+
+	bio_init(&md->barrier_bio);
+	md->barrier_bio.bi_bdev = md->bdev;
+	md->barrier_bio.bi_rw = WRITE_BARRIER;
+	__split_and_process_bio(md, &md->barrier_bio);
+
+	dm_wait_for_completion(md, TASK_UNINTERRUPTIBLE);
 }
 
 static void process_barrier(struct mapped_device *md, struct bio *bio)
 {
-	int error = dm_flush(md);
+	md->barrier_error = 0;
 
-	if (unlikely(error)) {
-		bio_endio(bio, error);
-		return;
+	dm_flush(md);
+
+	if (!bio_empty_barrier(bio)) {
+		__split_and_process_bio(md, bio);
+		dm_flush(md);
 	}
-	if (bio_empty_barrier(bio)) {
-		bio_endio(bio, 0);
-		return;
-	}
-
-	__split_and_process_bio(md, bio);
-
-	error = dm_flush(md);
-
-	if (!error && md->barrier_error)
-		error = md->barrier_error;
 
 	if (md->barrier_error != DM_ENDIO_REQUEUE)
-		bio_endio(bio, error);
+		bio_endio(bio, md->barrier_error);
+	else {
+		spin_lock_irq(&md->deferred_lock);
+		bio_list_add_head(&md->deferred, bio);
+		spin_unlock_irq(&md->deferred_lock);
+	}
 }
 
 /*
@@ -1511,11 +1571,6 @@ int dm_swap_table(struct mapped_device *md, struct dm_table *table)
 	if (!dm_suspended(md))
 		goto out;
 
-	/* without bdev, the device size cannot be changed */
-	if (!md->suspended_bdev)
-		if (get_capacity(md->disk) != dm_table_get_size(table))
-			goto out;
-
 	__unbind(md);
 	r = __bind(md, table);
 
@@ -1534,7 +1589,7 @@ static int lock_fs(struct mapped_device *md)
 
 	WARN_ON(md->frozen_sb);
 
-	md->frozen_sb = freeze_bdev(md->suspended_bdev);
+	md->frozen_sb = freeze_bdev(md->bdev);
 	if (IS_ERR(md->frozen_sb)) {
 		r = PTR_ERR(md->frozen_sb);
 		md->frozen_sb = NULL;
@@ -1543,9 +1598,6 @@ static int lock_fs(struct mapped_device *md)
 
 	set_bit(DMF_FROZEN, &md->flags);
 
-	/* don't bdput right now, we don't want the bdev
-	 * to go away while it is locked.
-	 */
 	return 0;
 }
 
@@ -1554,7 +1606,7 @@ static void unlock_fs(struct mapped_device *md)
 	if (!test_bit(DMF_FROZEN, &md->flags))
 		return;
 
-	thaw_bdev(md->suspended_bdev, md->frozen_sb);
+	thaw_bdev(md->bdev, md->frozen_sb);
 	md->frozen_sb = NULL;
 	clear_bit(DMF_FROZEN, &md->flags);
 }
@@ -1592,24 +1644,14 @@ int dm_suspend(struct mapped_device *md, unsigned suspend_flags)
 	/* This does not get reverted if there's an error later. */
 	dm_table_presuspend_targets(map);
 
-	/* bdget() can stall if the pending I/Os are not flushed */
-	if (!noflush) {
-		md->suspended_bdev = bdget_disk(md->disk, 0);
-		if (!md->suspended_bdev) {
-			DMWARN("bdget failed in dm_suspend");
-			r = -ENOMEM;
+	/*
+	 * Flush I/O to the device. noflush supersedes do_lockfs,
+	 * because lock_fs() needs to flush I/Os.
+	 */
+	if (!noflush && do_lockfs) {
+		r = lock_fs(md);
+		if (r)
 			goto out;
-		}
-
-		/*
-		 * Flush I/O to the device. noflush supersedes do_lockfs,
-		 * because lock_fs() needs to flush I/Os.
-		 */
-		if (do_lockfs) {
-			r = lock_fs(md);
-			if (r)
-				goto out;
-		}
 	}
 
 	/*
@@ -1666,11 +1708,6 @@ int dm_suspend(struct mapped_device *md, unsigned suspend_flags)
 	set_bit(DMF_SUSPENDED, &md->flags);
 
 out:
-	if (r && md->suspended_bdev) {
-		bdput(md->suspended_bdev);
-		md->suspended_bdev = NULL;
-	}
-
 	dm_table_put(map);
 
 out_unlock:
@@ -1699,19 +1736,10 @@ int dm_resume(struct mapped_device *md)
 
 	unlock_fs(md);
 
-	if (md->suspended_bdev) {
-		bdput(md->suspended_bdev);
-		md->suspended_bdev = NULL;
-	}
-
 	clear_bit(DMF_SUSPENDED, &md->flags);
 
 	dm_table_unplug_all(map);
-
-	dm_kobject_uevent(md);
-
 	r = 0;
-
 out:
 	dm_table_put(map);
 	mutex_unlock(&md->suspend_lock);
@@ -1722,9 +1750,19 @@ out:
 /*-----------------------------------------------------------------
  * Event notification.
  *---------------------------------------------------------------*/
-void dm_kobject_uevent(struct mapped_device *md)
+void dm_kobject_uevent(struct mapped_device *md, enum kobject_action action,
+		       unsigned cookie)
 {
-	kobject_uevent(&disk_to_dev(md->disk)->kobj, KOBJ_CHANGE);
+	char udev_cookie[DM_COOKIE_LENGTH];
+	char *envp[] = { udev_cookie, NULL };
+
+	if (!cookie)
+		kobject_uevent(&disk_to_dev(md->disk)->kobj, action);
+	else {
+		snprintf(udev_cookie, DM_COOKIE_LENGTH, "%s=%u",
+			 DM_COOKIE_ENV_VAR_NAME, cookie);
+		kobject_uevent_env(&disk_to_dev(md->disk)->kobj, action, envp);
+	}
 }
 
 uint32_t dm_next_uevent_seq(struct mapped_device *md)
@@ -1776,6 +1814,10 @@ struct mapped_device *dm_get_from_kobject(struct kobject *kobj)
 
 	md = container_of(kobj, struct mapped_device, kobj);
 	if (&md->kobj != kobj)
+		return NULL;
+
+	if (test_bit(DMF_FREEING, &md->flags) ||
+	    test_bit(DMF_DELETING, &md->flags))
 		return NULL;
 
 	dm_get(md);
