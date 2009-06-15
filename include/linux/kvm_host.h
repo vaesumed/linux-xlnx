@@ -123,17 +123,25 @@ struct kvm_kernel_irq_routing_entry {
 };
 
 struct kvm {
-	struct mutex lock; /* protects the vcpus array and APIC accesses */
 	spinlock_t mmu_lock;
 	struct rw_semaphore slots_lock;
 	struct mm_struct *mm; /* userspace tied to this vm */
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS +
 					KVM_PRIVATE_MEM_SLOTS];
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
+	u32 bsp_vcpu_id;
+	struct kvm_vcpu *bsp_vcpu;
+#endif
 	struct kvm_vcpu *vcpus[KVM_MAX_VCPUS];
+	atomic_t online_vcpus;
 	struct list_head vm_list;
+	struct mutex lock;
 	struct kvm_io_bus mmio_bus;
 	struct kvm_io_bus pio_bus;
+#ifdef CONFIG_HAVE_KVM_EVENTFD
+	struct list_head irqfds;
+#endif
 	struct kvm_vm_stat stat;
 	struct kvm_arch arch;
 	atomic_t users_count;
@@ -142,6 +150,7 @@ struct kvm {
 	struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
 #endif
 
+	struct mutex irq_lock;
 #ifdef CONFIG_HAVE_KVM_IRQCHIP
 	struct list_head irq_routing; /* of kvm_kernel_irq_routing_entry */
 	struct hlist_head mask_notifier_list;
@@ -164,6 +173,17 @@ struct kvm {
 
 #define kvm_printf(kvm, fmt ...) printk(KERN_DEBUG fmt)
 #define vcpu_printf(vcpu, fmt...) kvm_printf(vcpu->kvm, fmt)
+
+static inline struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
+{
+	smp_rmb();
+	return kvm->vcpus[i];
+}
+
+#define kvm_for_each_vcpu(idx, vcpup, kvm) \
+	for (idx = 0, vcpup = kvm_get_vcpu(kvm, idx); \
+	     idx < atomic_read(&kvm->online_vcpus) && vcpup; \
+	     vcpup = kvm_get_vcpu(kvm, ++idx))
 
 int kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id);
 void kvm_vcpu_uninit(struct kvm_vcpu *vcpu);
@@ -241,8 +261,6 @@ long kvm_arch_dev_ioctl(struct file *filp,
 			unsigned int ioctl, unsigned long arg);
 long kvm_arch_vcpu_ioctl(struct file *filp,
 			 unsigned int ioctl, unsigned long arg);
-void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
-void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu);
 
 int kvm_dev_ioctl_check_extension(long ext);
 
@@ -360,11 +378,17 @@ void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 				      struct kvm_irq_mask_notifier *kimn);
 void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, bool mask);
 
+#ifdef __KVM_HAVE_IOAPIC
+void kvm_get_intr_delivery_bitmask(struct kvm_ioapic *ioapic,
+				   union kvm_ioapic_redirect_entry *entry,
+				   unsigned long *deliver_bitmask);
+#endif
 int kvm_set_irq(struct kvm *kvm, int irq_source_id, int irq, int level);
 void kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin);
 void kvm_register_irq_ack_notifier(struct kvm *kvm,
 				   struct kvm_irq_ack_notifier *kian);
-void kvm_unregister_irq_ack_notifier(struct kvm_irq_ack_notifier *kian);
+void kvm_unregister_irq_ack_notifier(struct kvm *kvm,
+				   struct kvm_irq_ack_notifier *kian);
 int kvm_request_irq_source_id(struct kvm *kvm);
 void kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id);
 
@@ -523,4 +547,28 @@ static inline void kvm_free_irq_routing(struct kvm *kvm) {}
 
 #endif
 
+#ifdef CONFIG_HAVE_KVM_EVENTFD
+
+void kvm_irqfd_init(struct kvm *kvm);
+int kvm_irqfd(struct kvm *kvm, int fd, int gsi, int flags);
+void kvm_irqfd_release(struct kvm *kvm);
+
+#else
+
+static inline void kvm_irqfd_init(struct kvm *kvm) {}
+static inline int kvm_irqfd(struct kvm *kvm, int fd, int gsi, int flags)
+{
+	return -EINVAL;
+}
+
+static inline void kvm_irqfd_release(struct kvm *kvm) {}
+
+#endif /* CONFIG_HAVE_KVM_EVENTFD */
+
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
+static inline bool kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
+{
+	return vcpu->kvm->bsp_vcpu == vcpu;
+}
+#endif
 #endif

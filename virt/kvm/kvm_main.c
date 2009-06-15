@@ -62,6 +62,12 @@
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
+/*
+ * Ordering of locks:
+ *
+ * 		kvm->lock --> kvm->irq_lock
+ */
+
 DEFINE_SPINLOCK(kvm_lock);
 LIST_HEAD(vm_list);
 
@@ -120,17 +126,13 @@ static void kvm_assigned_dev_interrupt_work_handler(struct work_struct *work)
 {
 	struct kvm_assigned_dev_kernel *assigned_dev;
 	struct kvm *kvm;
-	int irq, i;
+	int i;
 
 	assigned_dev = container_of(work, struct kvm_assigned_dev_kernel,
 				    interrupt_work);
 	kvm = assigned_dev->kvm;
 
-	/* This is taken to safely inject irq inside the guest. When
-	 * the interrupt injection (or the ioapic code) uses a
-	 * finer-grained lock, update this
-	 */
-	mutex_lock(&kvm->lock);
+	mutex_lock(&kvm->irq_lock);
 	spin_lock_irq(&assigned_dev->assigned_dev_lock);
 	if (assigned_dev->irq_requested_type & KVM_DEV_IRQ_HOST_MSIX) {
 		struct kvm_guest_msix_entry *guest_entries =
@@ -143,23 +145,13 @@ static void kvm_assigned_dev_interrupt_work_handler(struct work_struct *work)
 			kvm_set_irq(assigned_dev->kvm,
 				    assigned_dev->irq_source_id,
 				    guest_entries[i].vector, 1);
-			irq = assigned_dev->host_msix_entries[i].vector;
-			if (irq != 0)
-				enable_irq(irq);
-			assigned_dev->host_irq_disabled = false;
 		}
-	} else {
+	} else
 		kvm_set_irq(assigned_dev->kvm, assigned_dev->irq_source_id,
 			    assigned_dev->guest_irq, 1);
-		if (assigned_dev->irq_requested_type &
-				KVM_DEV_IRQ_GUEST_MSI) {
-			enable_irq(assigned_dev->host_irq);
-			assigned_dev->host_irq_disabled = false;
-		}
-	}
 
 	spin_unlock_irq(&assigned_dev->assigned_dev_lock);
-	mutex_unlock(&assigned_dev->kvm->lock);
+	mutex_unlock(&assigned_dev->kvm->irq_lock);
 }
 
 static irqreturn_t kvm_assigned_dev_intr(int irq, void *dev_id)
@@ -179,8 +171,10 @@ static irqreturn_t kvm_assigned_dev_intr(int irq, void *dev_id)
 
 	schedule_work(&assigned_dev->interrupt_work);
 
-	disable_irq_nosync(irq);
-	assigned_dev->host_irq_disabled = true;
+	if (assigned_dev->irq_requested_type & KVM_DEV_IRQ_GUEST_INTX) {
+		disable_irq_nosync(irq);
+		assigned_dev->host_irq_disabled = true;
+	}
 
 out:
 	spin_unlock_irqrestore(&assigned_dev->assigned_dev_lock, flags);
@@ -215,7 +209,7 @@ static void kvm_assigned_dev_ack_irq(struct kvm_irq_ack_notifier *kian)
 static void deassign_guest_irq(struct kvm *kvm,
 			       struct kvm_assigned_dev_kernel *assigned_dev)
 {
-	kvm_unregister_irq_ack_notifier(&assigned_dev->ack_notifier);
+	kvm_unregister_irq_ack_notifier(kvm, &assigned_dev->ack_notifier);
 	assigned_dev->ack_notifier.gsi = -1;
 
 	if (assigned_dev->irq_source_id != -1)
@@ -417,6 +411,7 @@ static int assigned_device_enable_guest_msi(struct kvm *kvm,
 {
 	dev->guest_irq = irq->guest_irq;
 	dev->ack_notifier.gsi = -1;
+	dev->host_irq_disabled = false;
 	return 0;
 }
 #endif
@@ -427,6 +422,7 @@ static int assigned_device_enable_guest_msix(struct kvm *kvm,
 {
 	dev->guest_irq = irq->guest_irq;
 	dev->ack_notifier.gsi = -1;
+	dev->host_irq_disabled = false;
 	return 0;
 }
 #endif
@@ -693,11 +689,6 @@ out:
 }
 #endif
 
-static inline int valid_vcpu(int n)
-{
-	return likely(n >= 0 && n < KVM_MAX_VCPUS);
-}
-
 inline int kvm_is_mmio_pfn(pfn_t pfn)
 {
 	if (pfn_valid(pfn)) {
@@ -746,10 +737,7 @@ static bool make_all_cpus_request(struct kvm *kvm, unsigned int req)
 		cpumask_clear(cpus);
 
 	me = get_cpu();
-	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
-		vcpu = kvm->vcpus[i];
-		if (!vcpu)
-			continue;
+	kvm_for_each_vcpu(i, vcpu, kvm) {
 		if (test_and_set_bit(req, &vcpu->requests))
 			continue;
 		cpu = vcpu->cpu;
@@ -983,7 +971,9 @@ static struct kvm *kvm_create_vm(void)
 	atomic_inc(&kvm->mm->mm_count);
 	spin_lock_init(&kvm->mmu_lock);
 	kvm_io_bus_init(&kvm->pio_bus);
+	kvm_irqfd_init(kvm);
 	mutex_init(&kvm->lock);
+	mutex_init(&kvm->irq_lock);
 	kvm_io_bus_init(&kvm->mmio_bus);
 	init_rwsem(&kvm->slots_lock);
 	atomic_set(&kvm->users_count, 1);
@@ -1067,6 +1057,8 @@ EXPORT_SYMBOL_GPL(kvm_put_kvm);
 static int kvm_vm_release(struct inode *inode, struct file *filp)
 {
 	struct kvm *kvm = filp->private_data;
+
+	kvm_irqfd_release(kvm);
 
 	kvm_put_kvm(kvm);
 	return 0;
@@ -1709,24 +1701,18 @@ static struct file_operations kvm_vcpu_fops = {
  */
 static int create_vcpu_fd(struct kvm_vcpu *vcpu)
 {
-	int fd = anon_inode_getfd("kvm-vcpu", &kvm_vcpu_fops, vcpu, 0);
-	if (fd < 0)
-		kvm_put_kvm(vcpu->kvm);
-	return fd;
+	return anon_inode_getfd("kvm-vcpu", &kvm_vcpu_fops, vcpu, 0);
 }
 
 /*
  * Creates some virtual cpus.  Good luck creating more than one.
  */
-static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int n)
+static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 {
 	int r;
-	struct kvm_vcpu *vcpu;
+	struct kvm_vcpu *vcpu, *v;
 
-	if (!valid_vcpu(n))
-		return -EINVAL;
-
-	vcpu = kvm_arch_vcpu_create(kvm, n);
+	vcpu = kvm_arch_vcpu_create(kvm, id);
 	if (IS_ERR(vcpu))
 		return PTR_ERR(vcpu);
 
@@ -1737,23 +1723,38 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int n)
 		return r;
 
 	mutex_lock(&kvm->lock);
-	if (kvm->vcpus[n]) {
-		r = -EEXIST;
+	if (atomic_read(&kvm->online_vcpus) == KVM_MAX_VCPUS) {
+		r = -EINVAL;
 		goto vcpu_destroy;
 	}
-	kvm->vcpus[n] = vcpu;
-	mutex_unlock(&kvm->lock);
+
+	kvm_for_each_vcpu(r, v, kvm)
+		if (v->vcpu_id == id) {
+			r = -EEXIST;
+			goto vcpu_destroy;
+		}
+
+	BUG_ON(kvm->vcpus[atomic_read(&kvm->online_vcpus)]);
 
 	/* Now it's all set up, let userspace reach it */
 	kvm_get_kvm(kvm);
 	r = create_vcpu_fd(vcpu);
-	if (r < 0)
-		goto unlink;
+	if (r < 0) {
+		kvm_put_kvm(kvm);
+		goto vcpu_destroy;
+	}
+
+	kvm->vcpus[atomic_read(&kvm->online_vcpus)] = vcpu;
+	smp_wmb();
+	atomic_inc(&kvm->online_vcpus);
+
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
+	if (kvm->bsp_vcpu_id == id)
+		kvm->bsp_vcpu = vcpu;
+#endif
+	mutex_unlock(&kvm->lock);
 	return r;
 
-unlink:
-	mutex_lock(&kvm->lock);
-	kvm->vcpus[n] = NULL;
 vcpu_destroy:
 	mutex_unlock(&kvm->lock);
 	kvm_arch_vcpu_destroy(vcpu);
@@ -2194,6 +2195,7 @@ static long kvm_vm_ioctl(struct file *filp,
 		vfree(entries);
 		break;
 	}
+#endif /* KVM_CAP_IRQ_ROUTING */
 #ifdef __KVM_HAVE_MSIX
 	case KVM_ASSIGN_SET_MSIX_NR: {
 		struct kvm_assigned_msix_nr entry_nr;
@@ -2216,7 +2218,24 @@ static long kvm_vm_ioctl(struct file *filp,
 		break;
 	}
 #endif
-#endif /* KVM_CAP_IRQ_ROUTING */
+	case KVM_IRQFD: {
+		struct kvm_irqfd data;
+
+		r = -EFAULT;
+		if (copy_from_user(&data, argp, sizeof data))
+			goto out;
+		r = kvm_irqfd(kvm, data.fd, data.gsi, data.flags);
+		break;
+	}
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
+	case KVM_SET_BOOT_CPU_ID:
+		r = 0;
+		if (atomic_read(&kvm->online_vcpus) != 0)
+			r = -EBUSY;
+		else
+			kvm->bsp_vcpu_id = arg;
+		break;
+#endif
 	default:
 		r = kvm_arch_vm_ioctl(filp, ioctl, arg);
 	}
@@ -2283,6 +2302,9 @@ static long kvm_dev_ioctl_check_extension_generic(long arg)
 	case KVM_CAP_USER_MEMORY:
 	case KVM_CAP_DESTROY_MEMORY_REGION_WORKS:
 	case KVM_CAP_JOIN_MEMORY_REGIONS_WORKS:
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
+	case KVM_CAP_SET_BOOT_CPU_ID:
+#endif
 		return 1;
 #ifdef CONFIG_HAVE_KVM_IRQCHIP
 	case KVM_CAP_IRQ_ROUTING:
@@ -2452,7 +2474,7 @@ struct kvm_io_device *kvm_io_bus_find_dev(struct kvm_io_bus *bus,
 	for (i = 0; i < bus->dev_count; i++) {
 		struct kvm_io_device *pos = bus->devs[i];
 
-		if (pos->in_range(pos, addr, len, is_write))
+		if (kvm_iodevice_in_range(pos, addr, len, is_write))
 			return pos;
 	}
 
@@ -2496,11 +2518,9 @@ static int vcpu_stat_get(void *_offset, u64 *val)
 	*val = 0;
 	spin_lock(&kvm_lock);
 	list_for_each_entry(kvm, &vm_list, vm_list)
-		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
-			vcpu = kvm->vcpus[i];
-			if (vcpu)
-				*val += *(u32 *)((void *)vcpu + offset);
-		}
+		kvm_for_each_vcpu(i, vcpu, kvm)
+			*val += *(u32 *)((void *)vcpu + offset);
+
 	spin_unlock(&kvm_lock);
 	return 0;
 }

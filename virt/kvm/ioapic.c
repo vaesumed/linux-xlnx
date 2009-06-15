@@ -165,7 +165,9 @@ static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 	/* Always delivery PIT interrupt to vcpu 0 */
 	if (irq == 0) {
 		irqe.dest_mode = 0; /* Physical mode. */
-		irqe.dest_id = ioapic->kvm->vcpus[0]->vcpu_id;
+		/* need to read apic_id from apic regiest since
+		 * it can be rewritten */
+		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
 	}
 #endif
 	return kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe);
@@ -220,10 +222,15 @@ void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 			__kvm_ioapic_update_eoi(ioapic, i, trigger_mode);
 }
 
+static inline struct kvm_ioapic *to_ioapic(struct kvm_io_device *dev)
+{
+	return container_of(dev, struct kvm_ioapic, dev);
+}
+
 static int ioapic_in_range(struct kvm_io_device *this, gpa_t addr,
 			   int len, int is_write)
 {
-	struct kvm_ioapic *ioapic = (struct kvm_ioapic *)this->private;
+	struct kvm_ioapic *ioapic = to_ioapic(this);
 
 	return ((addr >= ioapic->base_address &&
 		 (addr < ioapic->base_address + IOAPIC_MEM_LENGTH)));
@@ -232,12 +239,13 @@ static int ioapic_in_range(struct kvm_io_device *this, gpa_t addr,
 static void ioapic_mmio_read(struct kvm_io_device *this, gpa_t addr, int len,
 			     void *val)
 {
-	struct kvm_ioapic *ioapic = (struct kvm_ioapic *)this->private;
+	struct kvm_ioapic *ioapic = to_ioapic(this);
 	u32 result;
 
 	ioapic_debug("addr %lx\n", (unsigned long)addr);
 	ASSERT(!(addr & 0xf));	/* check alignment */
 
+	mutex_lock(&ioapic->kvm->irq_lock);
 	addr &= 0xff;
 	switch (addr) {
 	case IOAPIC_REG_SELECT:
@@ -264,17 +272,20 @@ static void ioapic_mmio_read(struct kvm_io_device *this, gpa_t addr, int len,
 	default:
 		printk(KERN_WARNING "ioapic: wrong length %d\n", len);
 	}
+	mutex_unlock(&ioapic->kvm->irq_lock);
 }
 
 static void ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
 			      const void *val)
 {
-	struct kvm_ioapic *ioapic = (struct kvm_ioapic *)this->private;
+	struct kvm_ioapic *ioapic = to_ioapic(this);
 	u32 data;
 
 	ioapic_debug("ioapic_mmio_write addr=%p len=%d val=%p\n",
 		     (void*)addr, len, val);
 	ASSERT(!(addr & 0xf));	/* check alignment */
+
+	mutex_lock(&ioapic->kvm->irq_lock);
 	if (len == 4 || len == 8)
 		data = *(u32 *) val;
 	else {
@@ -300,6 +311,7 @@ static void ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
 	default:
 		break;
 	}
+	mutex_unlock(&ioapic->kvm->irq_lock);
 }
 
 void kvm_ioapic_reset(struct kvm_ioapic *ioapic)
@@ -314,6 +326,12 @@ void kvm_ioapic_reset(struct kvm_ioapic *ioapic)
 	ioapic->id = 0;
 }
 
+static const struct kvm_io_device_ops ioapic_mmio_ops = {
+	.read     = ioapic_mmio_read,
+	.write    = ioapic_mmio_write,
+	.in_range = ioapic_in_range,
+};
+
 int kvm_ioapic_init(struct kvm *kvm)
 {
 	struct kvm_ioapic *ioapic;
@@ -323,10 +341,7 @@ int kvm_ioapic_init(struct kvm *kvm)
 		return -ENOMEM;
 	kvm->arch.vioapic = ioapic;
 	kvm_ioapic_reset(ioapic);
-	ioapic->dev.read = ioapic_mmio_read;
-	ioapic->dev.write = ioapic_mmio_write;
-	ioapic->dev.in_range = ioapic_in_range;
-	ioapic->dev.private = ioapic;
+	kvm_iodevice_init(&ioapic->dev, &ioapic_mmio_ops);
 	ioapic->kvm = kvm;
 	kvm_io_bus_register_dev(&kvm->mmio_bus, &ioapic->dev);
 	return 0;
