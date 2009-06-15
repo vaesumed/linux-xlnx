@@ -1,0 +1,121 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.30-git3
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard a525890cb6a2949b644d212ae290b658967d3919
+HEAD is now at a525890 Merge git://git.kernel.org/pub/scm/linux/kernel/git/mason/btrfs-unstable
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-remove-void-casts.patch
+i2c-retry-on-arbitration-loss.patch
+i2c-tdfx-no-class.patch
+i2c-adapter-no-default-parent.patch
+i2c-chips-move-max6875-to-drivers-misc-eeprom.patch
+i2c-viapro-add-new-pci-device-id-for-vx855.patch
+macintosh-therm_pm72-convert-to-new-style-i2c.patch
+macintosh-windfarm-convert-to-new-style-i2c.patch
+macintosh-therm_adt746x-convert-to-new-style-i2c.patch
+macintosh-therm_windtunnel-convert-to-new-style-i2c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 7e520f9...3b3d4b8 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-git3
+$ cd ../quilt-tmp
+$ git reset --hard a525890cb6a2949b644d212ae290b658967d3919
+HEAD is now at a525890 Merge git://git.kernel.org/pub/scm/linux/kernel/git/mason/btrfs-unstable
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-more-__devexit-fixes.patch
+hwmon-ibmaem-automatically-load-on-hc10-blade.patch
+hwmon-tmp401-01-new-driver.patch
+hwmon-tmp401-02-add-support-for-TI-TMP411.patch
+hwmon-tmp401-03-add-documentation.patch
+hwmon-w83627ehf-add-W83627DHG-P-support.patch
+hwmon-pci-quirk-for-MSI-7031.patch
+hwmon-f71882fg-01-f8000-cleanup-pwm.patch
+hwmon-f71882fg-02-f8000-sanity-check-pwm.patch
+hwmon-f71882fg-03-f8000-temp_fault.patch
+hwmon-f71882fg-04-add-f71858fg-support-v2.patch
+hwmon-max6650-add-support-for-alarms.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 302dae7...5407178 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.30-3217-gf3ad116
+$ cd ../quilt-tmp
+$ git reset --hard f3ad116588151b3371ae4e092290e4f48e62b8bb
+HEAD is now at f3ad116 Merge branch 'upstream-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jlbec/configfs
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:fix-trim_extable_init-ia64.patch
+cpumask:remove-pcibus_to_cpumask-alpha.patch
+cpumask:remove-pcibus_to_cpumask-mips.patch
+cpumask:remove-pcibus_to_cpumask-powerpc.patch
+cpumask:remove-pcibus_to_cpumask-sh.patch
+cpumask:remove-node_to_cpumask.patch
+cpumask:remove-CPU_MASK_ALL_PTR.patch
+cpumask:remove-address-of-CPU_MASK_ALL-mips.patch
+cpumask:remove-cpu_mask_all.patch
+cpumask:remove-last-remaining-irqaction-mask.patch
+cpumask:irqaction-remove-mask.patch
+cpumask:remove-set_cpus_allowed.patch
+cpumask:ia64-smp_call_function_many.patch
+cpumask:remove-smp_call_function_mask.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-core.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-sparc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-s390.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-powerpc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-ia64.patch
+cpumask:arch_send_call_function_ipi_mask-alpha.patch
+cpumask:arch_send_call_function_ipi_mask-m32r.patch
+cpumask:arch_send_call_function_ipi_mask-mips.patch
+cpumask:arch_send_call_function_ipi_mask-powerpc.patch
+cpumask:arch_send_call_function_ipi_mask-sh.patch
+cpumask:arch_send_call_function_ipi_mask-s390.patch
+cpumask:remove-arch_send_call_function_ipi.patch
+cpumask:use-cpumap-accessors-m32r.patch
+cpumask:use-cpumap-accessors-mips.patch
+cpumask:use-cpumap-accessors-powerpc.patch
+cpumask:use-cpumap-accessors-sh.patch
+cpumask:use-cpumap-accessors-um.patch
+cpumask:use-mm_cpumask-arm.patch
+cpumask:use-mm_cpumask-m32r.patch
+cpumask:use-mm_cpumask-mn10300.patch
+cpumask:use-mm_cpumask-mips.patch
+cpumask:use-mm_cpumask-sh.patch
+cpumask:use-mm_cpumask-um.patch
+cpumask:use-mm_cpumask-x86.patch
+cpumask:mm_quicklist-new-cpumask-ops.patch
+cpumask:trace-new-cpumask-ops.patch
+cpumask:remove-unused-deprecated-functions.patch
+cpumask:move-obsolete-functions-to-end-of-header.patch
+cpumask:use-cpumap-accessors-arm.patch
+virtio:net_set_correct_gso_hdr_len.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 7d4ef75...f2eb056 master     -> quilt/rr  (forced update)
+Unchanged quilt series device-mapper
+Importing ttydev based on 8ebf975608aaebd7feb33d77f07ba21a6380e086
+$ cd ../quilt-tmp
+$ git reset --hard 8ebf975608aaebd7feb33d77f07ba21a6380e086
+HEAD is now at 8ebf975 block: fix kernel-doc in recent block/ changes
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-bfin-printk
+serial-maintainer-name
+tty-atmel-termios-hangfix
+serial-samsung-devexit
+tty-ldisc-leakfix
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 2453443...f5bc5ad master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
