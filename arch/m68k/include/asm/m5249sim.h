@@ -71,6 +71,12 @@
 #define	MCFSIM_DMA3ICR		MCFSIM_ICR9	/* DMA 3 ICR */
 
 /*
+ *	Define system peripheral IRQ usage.
+ */
+#define	MCF_IRQ_TIMER		30		/* Timer0, Level 6 */
+#define	MCF_IRQ_PROFILER	31		/* Timer1, Level 7 */
+
+/*
  *	General purpose IO registers (in MBAR2).
  */
 #define	MCFSIM2_GPIOREAD	0x0		/* GPIO read values */
@@ -100,20 +106,21 @@
 #define	MCFSIM2_IDECONFIG1	0x18c		/* IDEconfig1 */
 #define	MCFSIM2_IDECONFIG2	0x190		/* IDEconfig2 */
 
-
 /*
- *	Macro to set IMR register. It is 32 bits on the 5249.
+ * Define the base interrupt for the second interrupt controller.
+ * We set it to 128, out of the way of the base interrupts, and plenty
+ * of room for its 64 interrupts.
  */
-#define	MCFSIM_IMR_MASKALL	0x7fffe		/* All SIM intr sources */
+#define	MCFINTC2_VECBASE	128
 
-#define	mcf_getimr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR))
-
-#define	mcf_setimr(imr)		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR)) = (imr);
-
-#define	mcf_getipr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IPR))
+#define	MCFINTC2_GPIOIRQ0	(MCFINTC2_VECBASE + 32)
+#define	MCFINTC2_GPIOIRQ1	(MCFINTC2_VECBASE + 33)
+#define	MCFINTC2_GPIOIRQ2	(MCFINTC2_VECBASE + 34)
+#define	MCFINTC2_GPIOIRQ3	(MCFINTC2_VECBASE + 35)
+#define	MCFINTC2_GPIOIRQ4	(MCFINTC2_VECBASE + 36)
+#define	MCFINTC2_GPIOIRQ5	(MCFINTC2_VECBASE + 37)
+#define	MCFINTC2_GPIOIRQ6	(MCFINTC2_VECBASE + 38)
+#define	MCFINTC2_GPIOIRQ7	(MCFINTC2_VECBASE + 39)
 
 /****************************************************************************/
 
@@ -137,9 +144,9 @@
 	subql	#1,%a1				/* get MBAR2 address in a1 */
 
 	/*
-	 *      Move secondary interrupts to base at 128.
+	 *      Move secondary interrupts to their base (128).
 	 */
-	moveb	#0x80,%d0
+	moveb	#MCFINTC2_VECBASE,%d0
 	moveb	%d0,0x16b(%a1)			/* interrupt base register */
 
 	/*
