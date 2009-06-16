@@ -96,8 +96,7 @@ struct nfs4_cb_conn {
 #define NFSD_MAX_SLOTS_PER_SESSION	128
 /* Maximum number of pages per slot cache entry */
 #define NFSD_PAGES_PER_SLOT	1
-/* Maximum number of operations per session compound */
-#define NFSD_MAX_OPS_PER_COMPOUND	16
+#define NFSD_MAX_OPS_PER_COMPOUND	8
 
 struct nfsd4_cache_entry {
 	__be32		ce_status;
