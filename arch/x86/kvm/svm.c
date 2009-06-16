@@ -15,7 +15,6 @@
  */
 #include <linux/kvm_host.h>
 
-#include "kvm_svm.h"
 #include "irq.h"
 #include "mmu.h"
 #include "kvm_cache_regs.h"
@@ -56,6 +55,47 @@ MODULE_LICENSE("GPL");
 #else
 #define nsvm_printk(fmt, args...) do {} while(0)
 #endif
+
+static const u32 host_save_user_msrs[] = {
+#ifdef CONFIG_X86_64
+	MSR_STAR, MSR_LSTAR, MSR_CSTAR, MSR_SYSCALL_MASK, MSR_KERNEL_GS_BASE,
+	MSR_FS_BASE,
+#endif
+	MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_ESP, MSR_IA32_SYSENTER_EIP,
+};
+
+#define NR_HOST_SAVE_USER_MSRS ARRAY_SIZE(host_save_user_msrs)
+
+struct kvm_vcpu;
+
+struct vcpu_svm {
+	struct kvm_vcpu vcpu;
+	struct vmcb *vmcb;
+	unsigned long vmcb_pa;
+	struct svm_cpu_data *svm_data;
+	uint64_t asid_generation;
+	uint64_t sysenter_cs;
+	uint64_t sysenter_esp;
+	uint64_t sysenter_eip;
+
+	u64 next_rip;
+
+	u64 host_user_msrs[NR_HOST_SAVE_USER_MSRS];
+	u64 host_gs_base;
+	unsigned long host_cr2;
+
+	u32 *msrpm;
+	struct vmcb *hsave;
+	u64 hsave_msr;
+
+	u64 nested_vmcb;
+
+	/* These are the merged vectors */
+	u32 *nested_msrpm;
+
+	/* gpa pointers to the real vectors */
+	u64 nested_vmcb_msrpm;
+};
 
 /* enable NPT for AMD64 and X86 with PAE */
 #if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
@@ -605,7 +645,7 @@ static int svm_vcpu_reset(struct kvm_vcpu *vcpu)
 
 	init_vmcb(svm);
 
-	if (vcpu->vcpu_id != 0) {
+	if (!kvm_vcpu_is_bsp(vcpu)) {
 		kvm_rip_write(vcpu, 0);
 		svm->vmcb->save.cs.base = svm->vcpu.arch.sipi_vector << 12;
 		svm->vmcb->save.cs.selector = svm->vcpu.arch.sipi_vector << 8;
@@ -669,7 +709,7 @@ static struct kvm_vcpu *svm_create_vcpu(struct kvm *kvm, unsigned int id)
 	fx_init(&svm->vcpu);
 	svm->vcpu.fpu_active = 1;
 	svm->vcpu.arch.apic_base = 0xfee00000 | MSR_IA32_APICBASE_ENABLE;
-	if (svm->vcpu.vcpu_id == 0)
+	if (kvm_vcpu_is_bsp(&svm->vcpu))
 		svm->vcpu.arch.apic_base |= MSR_IA32_APICBASE_BSP;
 
 	return &svm->vcpu;
@@ -737,6 +777,18 @@ static unsigned long svm_get_rflags(struct kvm_vcpu *vcpu)
 static void svm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
 {
 	to_svm(vcpu)->vmcb->save.rflags = rflags;
+}
+
+static void svm_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
+{
+	switch (reg) {
+	case VCPU_EXREG_PDPTR:
+		BUG_ON(!npt_enabled);
+		load_pdptrs(vcpu, vcpu->arch.cr3);
+		break;
+	default:
+		BUG();
+	}
 }
 
 static void svm_set_vintr(struct vcpu_svm *svm)
@@ -1953,7 +2005,7 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 *data)
 	struct vcpu_svm *svm = to_svm(vcpu);
 
 	switch (ecx) {
-	case MSR_IA32_TIME_STAMP_COUNTER: {
+	case MSR_IA32_TSC: {
 		u64 tsc;
 
 		rdtscll(tsc);
@@ -1978,13 +2030,13 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 *data)
 		break;
 #endif
 	case MSR_IA32_SYSENTER_CS:
-		*data = svm->vmcb->save.sysenter_cs;
+		*data = svm->sysenter_cs;
 		break;
 	case MSR_IA32_SYSENTER_EIP:
-		*data = svm->vmcb->save.sysenter_eip;
+		*data = svm->sysenter_eip;
 		break;
 	case MSR_IA32_SYSENTER_ESP:
-		*data = svm->vmcb->save.sysenter_esp;
+		*data = svm->sysenter_esp;
 		break;
 	/* Nobody will change the following 5 values in the VMCB so
 	   we can safely return them on rdmsr. They will always be 0
@@ -2043,7 +2095,7 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data)
 	struct vcpu_svm *svm = to_svm(vcpu);
 
 	switch (ecx) {
-	case MSR_IA32_TIME_STAMP_COUNTER: {
+	case MSR_IA32_TSC: {
 		u64 tsc;
 
 		rdtscll(tsc);
@@ -2068,13 +2120,13 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data)
 		break;
 #endif
 	case MSR_IA32_SYSENTER_CS:
-		svm->vmcb->save.sysenter_cs = data;
+		svm->sysenter_cs = data;
 		break;
 	case MSR_IA32_SYSENTER_EIP:
-		svm->vmcb->save.sysenter_eip = data;
+		svm->sysenter_eip = data;
 		break;
 	case MSR_IA32_SYSENTER_ESP:
-		svm->vmcb->save.sysenter_esp = data;
+		svm->sysenter_esp = data;
 		break;
 	case MSR_IA32_DEBUGCTLMSR:
 		if (!svm_has(SVM_FEATURE_LBRV)) {
@@ -2090,22 +2142,6 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data)
 			svm_enable_lbrv(svm);
 		else
 			svm_disable_lbrv(svm);
-		break;
-	case MSR_K7_EVNTSEL0:
-	case MSR_K7_EVNTSEL1:
-	case MSR_K7_EVNTSEL2:
-	case MSR_K7_EVNTSEL3:
-	case MSR_K7_PERFCTR0:
-	case MSR_K7_PERFCTR1:
-	case MSR_K7_PERFCTR2:
-	case MSR_K7_PERFCTR3:
-		/*
-		 * Just discard all writes to the performance counters; this
-		 * should keep both older linux and windows 64-bit guests
-		 * happy
-		 */
-		pr_unimpl(vcpu, "unimplemented perfctr wrmsr: 0x%x data 0x%llx\n", ecx, data);
-
 		break;
 	case MSR_VM_HSAVE_PA:
 		svm->hsave_msr = data;
@@ -2246,12 +2282,6 @@ static int handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 		}
 		vcpu->arch.cr0 = svm->vmcb->save.cr0;
 		vcpu->arch.cr3 = svm->vmcb->save.cr3;
-		if (is_paging(vcpu) && is_pae(vcpu) && !is_long_mode(vcpu)) {
-			if (!load_pdptrs(vcpu, vcpu->arch.cr3)) {
-				kvm_inject_gp(vcpu, 0);
-				return 1;
-			}
-		}
 		if (mmu_reload) {
 			kvm_mmu_reset_context(vcpu);
 			kvm_mmu_load(vcpu);
@@ -2602,6 +2632,11 @@ static void svm_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 	svm->next_rip = 0;
 
+	if (npt_enabled) {
+		vcpu->arch.regs_avail &= ~(1 << VCPU_EXREG_PDPTR);
+		vcpu->arch.regs_dirty &= ~(1 << VCPU_EXREG_PDPTR);
+	}
+
 	svm_complete_interrupts(svm);
 }
 
@@ -2710,6 +2745,7 @@ static struct kvm_x86_ops svm_x86_ops = {
 	.set_gdt = svm_set_gdt,
 	.get_dr = svm_get_dr,
 	.set_dr = svm_set_dr,
+	.cache_reg = svm_cache_reg,
 	.get_rflags = svm_get_rflags,
 	.set_rflags = svm_set_rflags,
 
