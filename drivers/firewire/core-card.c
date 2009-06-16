@@ -16,18 +16,27 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <linux/bug.h>
 #include <linux/completion.h>
 #include <linux/crc-itu-t.h>
-#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/errno.h>
+#include <linux/firewire.h>
+#include <linux/firewire-constants.h>
+#include <linux/jiffies.h>
+#include <linux/kernel.h>
 #include <linux/kref.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/timer.h>
+#include <linux/workqueue.h>
 
-#include "fw-transaction.h"
-#include "fw-topology.h"
-#include "fw-device.h"
+#include <asm/atomic.h>
+#include <asm/byteorder.h>
+
+#include "core.h"
 
 int fw_compute_block_crc(u32 *block)
 {
@@ -167,6 +176,7 @@ int fw_core_add_descriptor(struct fw_descriptor *desc)
 
 	return 0;
 }
+EXPORT_SYMBOL(fw_core_add_descriptor);
 
 void fw_core_remove_descriptor(struct fw_descriptor *desc)
 {
@@ -180,12 +190,7 @@ void fw_core_remove_descriptor(struct fw_descriptor *desc)
 
 	mutex_unlock(&card_mutex);
 }
-
-static int set_broadcast_channel(struct device *dev, void *data)
-{
-	fw_device_set_broadcast_channel(fw_device(dev), (long)data);
-	return 0;
-}
+EXPORT_SYMBOL(fw_core_remove_descriptor);
 
 static void allocate_broadcast_channel(struct fw_card *card, int generation)
 {
@@ -196,7 +201,7 @@ static void allocate_broadcast_channel(struct fw_card *card, int generation)
 	if (channel == 31) {
 		card->broadcast_channel_allocated = true;
 		device_for_each_child(card->device, (void *)(long)generation,
-				      set_broadcast_channel);
+				      fw_device_set_broadcast_channel);
 	}
 }
 
