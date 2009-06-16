@@ -73,6 +73,11 @@
 #define	MCFSIM_PCDAT		0x96		/* Port C Data (r/w) */
 #define	MCFSIM_PDCNT		0x98		/* Port D Control (r/w) */
 
+/*
+ *	Define system peripheral IRQ usage.
+ */
+#define	MCF_IRQ_TIMER		69		/* Timer0, Level 6 */
+#define	MCF_IRQ_PROFILER	70		/* Timer1, Level 7 */
 
 /****************************************************************************/
 #endif	/* m5272sim_h */
