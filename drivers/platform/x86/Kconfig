@@ -143,20 +143,6 @@ config MSI_LAPTOP
 
 	  If you have an MSI S270 laptop, say Y or M here.
 
-config OQO_WMI
-       tristate "OQO WMI extras"
-       depends on ACPI_WMI
-       depends on INPUT
-       depends on RFKILL
-       depends on BACKLIGHT_CLASS_DEVICE
-	select INPUT_POLLDEV
-       help
-         Say Y here if you want to support rfkill and backlight control on
-         series 2 OQO handheld devices.
-
-         To compile this driver as a module, choose M here: the module will
-         be called oqo-wmi.
-
 config PANASONIC_LAPTOP
 	tristate "Panasonic Laptop Extras"
 	depends on INPUT && ACPI
