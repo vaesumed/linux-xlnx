@@ -480,6 +480,8 @@ static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
 		pmcsr &= ~PCI_PM_CTRL_STATE_MASK;
 		pmcsr |= state;
 		break;
+	case PCI_D3hot:
+	case PCI_D3cold:
 	case PCI_UNKNOWN: /* Boot-up */
 		if ((pmcsr & PCI_PM_CTRL_STATE_MASK) == PCI_D3hot
 		 && !(pmcsr & PCI_PM_CTRL_NO_SOFT_RESET))
@@ -1527,7 +1529,7 @@ pci_get_interrupt_pin(struct pci_dev *dev, struct pci_dev **bridge)
 	if (!pin)
 		return -1;
 
-	while (dev->bus->parent) {
+	while (!pci_is_root_bus(dev->bus)) {
 		pin = pci_swizzle_interrupt_pin(dev, pin);
 		dev = dev->bus->self;
 	}
@@ -1547,7 +1549,7 @@ u8 pci_common_swizzle(struct pci_dev *dev, u8 *pinp)
 {
 	u8 pin = *pinp;
 
-	while (dev->bus->parent) {
+	while (!pci_is_root_bus(dev->bus)) {
 		pin = pci_swizzle_interrupt_pin(dev, pin);
 		dev = dev->bus->self;
 	}
@@ -2586,6 +2588,8 @@ static int __init pci_setup(char *str)
 			} else if (!strncmp(str, "resource_alignment=", 19)) {
 				pci_set_resource_alignment_param(str + 19,
 							strlen(str + 19));
+			} else if (!strncmp(str, "ecrc=", 5)) {
+				pcie_ecrc_get_policy(str + 5);
 			} else {
 				printk(KERN_ERR "PCI: Unknown option `%s'\n",
 						str);
