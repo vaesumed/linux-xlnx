@@ -978,6 +978,7 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 	__be32			err = 0;
 	int			host_err;
 	int			stable = *stablep;
+	int			use_wgather;
 
 #ifdef MSNFS
 	err = nfserr_perm;
@@ -996,9 +997,10 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 	 *  -	the sync export option has been set, or
 	 *  -	the client requested O_SYNC behavior (NFSv3 feature).
 	 *  -   The file system doesn't support fsync().
-	 * When gathered writes have been configured for this volume,
+	 * When NFSv2 gathered writes have been configured for this volume,
 	 * flushing the data to disk is handled separately below.
 	 */
+	use_wgather = (rqstp->rq_vers == 2) && EX_WGATHER(exp);
 
 	if (!file->f_op->fsync) {/* COMMIT3 cannot work */
 	       stable = 2;
@@ -1007,7 +1009,7 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 
 	if (!EX_ISSYNC(exp))
 		stable = 0;
-	if (stable && !EX_WGATHER(exp)) {
+	if (stable && !use_wgather) {
 		spin_lock(&file->f_lock);
 		file->f_flags |= O_SYNC;
 		spin_unlock(&file->f_lock);
@@ -1043,7 +1045,7 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 		 * nice and simple solution (IMHO), and it seems to
 		 * work:-)
 		 */
-		if (EX_WGATHER(exp)) {
+		if (use_wgather) {
 			if (atomic_read(&inode->i_writecount) > 1
 			    || (last_ino == inode->i_ino && last_dev == inode->i_sb->s_dev)) {
 				dprintk("nfsd: write defer %d\n", task_pid_nr(current));

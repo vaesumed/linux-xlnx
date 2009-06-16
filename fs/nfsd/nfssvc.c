@@ -67,6 +67,16 @@ struct timeval			nfssvc_boot;
 DEFINE_MUTEX(nfsd_mutex);
 struct svc_serv 		*nfsd_serv;
 
+/*
+ * nfsd_drc_lock protects nfsd_drc_max_pages and nfsd_drc_pages_used.
+ * nfsd_drc_max_pages limits the total amount of memory available for
+ * version 4.1 DRC caches.
+ * nfsd_drc_pages_used tracks the current version 4.1 DRC memory usage.
+ */
+spinlock_t	nfsd_drc_lock;
+unsigned int	nfsd_drc_max_mem;
+unsigned int	nfsd_drc_mem_used;
+
 #if defined(CONFIG_NFSD_V2_ACL) || defined(CONFIG_NFSD_V3_ACL)
 static struct svc_stat	nfsd_acl_svcstats;
 static struct svc_version *	nfsd_acl_version[] = {
@@ -237,12 +247,14 @@ void nfsd_reset_versions(void)
 static void set_max_drc(void)
 {
 	/* The percent of nr_free_buffer_pages used by the V4.1 server DRC */
-	#define NFSD_DRC_SIZE_SHIFT	7
-	nfsd_serv->sv_drc_max_pages = nr_free_buffer_pages()
-						>> NFSD_DRC_SIZE_SHIFT;
-	nfsd_serv->sv_drc_pages_used = 0;
-	dprintk("%s svc_drc_max_pages %u\n", __func__,
-		nfsd_serv->sv_drc_max_pages);
+	#define NFSD_DRC_SIZE_SHIFT	10
+	nfsd_drc_max_mem = (nr_free_buffer_pages()
+					>> NFSD_DRC_SIZE_SHIFT) * PAGE_SIZE;
+	nfsd_drc_mem_used = 0;
+	spin_lock_init(&nfsd_drc_lock);
+	dprintk("%s svc_drc_max_mem %u [in pages %lu]\n", __func__,
+		nfsd_drc_max_mem,
+		nfsd_drc_max_mem / PAGE_SIZE);
 }
 
 int nfsd_create_serv(void)
@@ -559,10 +571,6 @@ nfsd_dispatch(struct svc_rqst *rqstp, __be32 *statp)
 	nfserrp = rqstp->rq_res.head[0].iov_base
 		+ rqstp->rq_res.head[0].iov_len;
 	rqstp->rq_res.head[0].iov_len += sizeof(__be32);
-
-	/* NFSv4.1 DRC requires statp */
-	if (rqstp->rq_vers == 4)
-		nfsd4_set_statp(rqstp, statp);
 
 	/* Now call the procedure handler, and encode NFS status. */
 	nfserr = proc->pc_func(rqstp, rqstp->rq_argp, rqstp->rq_resp);
