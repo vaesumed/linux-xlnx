@@ -37,6 +37,7 @@
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
 #include <linux/ctype.h>
+#include <linux/marker.h>
 #include <linux/log2.h>
 #include <linux/crc16.h>
 #include <asm/uaccess.h>
@@ -45,9 +46,6 @@
 #include "ext4_jbd2.h"
 #include "xattr.h"
 #include "acl.h"
-
-#define CREATE_TRACE_POINTS
-#include <trace/events/ext4.h>
 
 static int default_mb_history_length = 1000;
 
@@ -3350,7 +3348,7 @@ static int ext4_sync_fs(struct super_block *sb, int wait)
 	int ret = 0;
 	tid_t target;
 
-	trace_ext4_sync_fs(sb, wait);
+	trace_mark(ext4_sync_fs, "dev %s wait %d", sb->s_id, wait);
 	if (jbd2_journal_start_commit(EXT4_SB(sb)->s_journal, &target)) {
 		if (wait)
 			jbd2_log_wait_commit(EXT4_SB(sb)->s_journal, target);
