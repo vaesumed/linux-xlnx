@@ -1829,8 +1829,7 @@ ia64_mca_cpu_init(void *cpu_data)
 			data = mca_bootmem();
 			first_time = 0;
 		} else
-			data = page_address(alloc_pages_node(numa_node_id(),
-					GFP_KERNEL, get_order(sz)));
+			data = __get_free_pages(GFP_KERNEL, get_order(sz));
 		if (!data)
 			panic("Could not allocate MCA memory for cpu %d\n",
 					cpu);
@@ -2093,7 +2092,7 @@ ia64_mca_late_init(void)
 	cpe_poll_timer.function = ia64_mca_cpe_poll;
 
 	{
-		irq_desc_t *desc;
+		struct irq_desc *desc;
 		unsigned int irq;
 
 		if (cpe_vector >= 0) {
