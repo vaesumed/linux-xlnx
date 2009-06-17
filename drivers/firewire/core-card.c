@@ -16,18 +16,27 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <linux/bug.h>
 #include <linux/completion.h>
 #include <linux/crc-itu-t.h>
-#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/errno.h>
+#include <linux/firewire.h>
+#include <linux/firewire-constants.h>
+#include <linux/jiffies.h>
+#include <linux/kernel.h>
 #include <linux/kref.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/timer.h>
+#include <linux/workqueue.h>
 
-#include "fw-transaction.h"
-#include "fw-topology.h"
-#include "fw-device.h"
+#include <asm/atomic.h>
+#include <asm/byteorder.h>
+
+#include "core.h"
 
 int fw_compute_block_crc(u32 *block)
 {
@@ -167,6 +176,7 @@ int fw_core_add_descriptor(struct fw_descriptor *desc)
 
 	return 0;
 }
+EXPORT_SYMBOL(fw_core_add_descriptor);
 
 void fw_core_remove_descriptor(struct fw_descriptor *desc)
 {
@@ -180,12 +190,7 @@ void fw_core_remove_descriptor(struct fw_descriptor *desc)
 
 	mutex_unlock(&card_mutex);
 }
-
-static int set_broadcast_channel(struct device *dev, void *data)
-{
-	fw_device_set_broadcast_channel(fw_device(dev), (long)data);
-	return 0;
-}
+EXPORT_SYMBOL(fw_core_remove_descriptor);
 
 static void allocate_broadcast_channel(struct fw_card *card, int generation)
 {
@@ -196,7 +201,7 @@ static void allocate_broadcast_channel(struct fw_card *card, int generation)
 	if (channel == 31) {
 		card->broadcast_channel_allocated = true;
 		device_for_each_child(card->device, (void *)(long)generation,
-				      set_broadcast_channel);
+				      fw_device_set_broadcast_channel);
 	}
 }
 
@@ -456,11 +461,11 @@ EXPORT_SYMBOL(fw_card_add);
 
 
 /*
- * The next few functions implements a dummy driver that use once a
- * card driver shuts down an fw_card.  This allows the driver to
- * cleanly unload, as all IO to the card will be handled by the dummy
- * driver instead of calling into the (possibly) unloaded module.  The
- * dummy driver just fails all IO.
+ * The next few functions implement a dummy driver that is used once a card
+ * driver shuts down an fw_card.  This allows the driver to cleanly unload,
+ * as all IO to the card will be handled (and failed) by the dummy driver
+ * instead of calling into the module.  Only functions for iso context
+ * shutdown still need to be provided by the card driver.
  */
 
 static int dummy_enable(struct fw_card *card, u32 *config_rom, size_t length)
@@ -507,7 +512,7 @@ static int dummy_enable_phys_dma(struct fw_card *card,
 	return -ENODEV;
 }
 
-static struct fw_card_driver dummy_driver = {
+static const struct fw_card_driver dummy_driver_template = {
 	.enable          = dummy_enable,
 	.update_phy_reg  = dummy_update_phy_reg,
 	.set_config_rom  = dummy_set_config_rom,
@@ -526,6 +531,8 @@ void fw_card_release(struct kref *kref)
 
 void fw_core_remove_card(struct fw_card *card)
 {
+	struct fw_card_driver dummy_driver = dummy_driver_template;
+
 	card->driver->update_phy_reg(card, 4,
 				     PHY_LINK_ACTIVE | PHY_CONTENDER, 0);
 	fw_core_initiate_bus_reset(card, 1);
@@ -534,7 +541,9 @@ void fw_core_remove_card(struct fw_card *card)
 	list_del_init(&card->link);
 	mutex_unlock(&card_mutex);
 
-	/* Set up the dummy driver. */
+	/* Switch off most of the card driver interface. */
+	dummy_driver.free_iso_context	= card->driver->free_iso_context;
+	dummy_driver.stop_iso		= card->driver->stop_iso;
 	card->driver = &dummy_driver;
 
 	fw_destroy_nodes(card);

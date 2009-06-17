@@ -22,14 +22,16 @@
 
 #include <linux/dma-mapping.h>
 #include <linux/errno.h>
+#include <linux/firewire.h>
 #include <linux/firewire-constants.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/spinlock.h>
 #include <linux/vmalloc.h>
 
-#include "fw-topology.h"
-#include "fw-transaction.h"
+#include <asm/byteorder.h>
+
+#include "core.h"
 
 /*
  * Isochronous DMA context management
@@ -69,7 +71,7 @@ int fw_iso_buffer_init(struct fw_iso_buffer *buffer, struct fw_card *card,
 	for (j = 0; j < i; j++) {
 		address = page_private(buffer->pages[j]);
 		dma_unmap_page(card->device, address,
-			       PAGE_SIZE, DMA_TO_DEVICE);
+			       PAGE_SIZE, direction);
 		__free_page(buffer->pages[j]);
 	}
 	kfree(buffer->pages);
@@ -78,6 +80,7 @@ int fw_iso_buffer_init(struct fw_iso_buffer *buffer, struct fw_card *card,
 
 	return -ENOMEM;
 }
+EXPORT_SYMBOL(fw_iso_buffer_init);
 
 int fw_iso_buffer_map(struct fw_iso_buffer *buffer, struct vm_area_struct *vma)
 {
@@ -105,13 +108,14 @@ void fw_iso_buffer_destroy(struct fw_iso_buffer *buffer,
 	for (i = 0; i < buffer->page_count; i++) {
 		address = page_private(buffer->pages[i]);
 		dma_unmap_page(card->device, address,
-			       PAGE_SIZE, DMA_TO_DEVICE);
+			       PAGE_SIZE, buffer->direction);
 		__free_page(buffer->pages[i]);
 	}
 
 	kfree(buffer->pages);
 	buffer->pages = NULL;
 }
+EXPORT_SYMBOL(fw_iso_buffer_destroy);
 
 struct fw_iso_context *fw_iso_context_create(struct fw_card *card,
 		int type, int channel, int speed, size_t header_size,
@@ -134,6 +138,7 @@ struct fw_iso_context *fw_iso_context_create(struct fw_card *card,
 
 	return ctx;
 }
+EXPORT_SYMBOL(fw_iso_context_create);
 
 void fw_iso_context_destroy(struct fw_iso_context *ctx)
 {
@@ -141,12 +146,14 @@ void fw_iso_context_destroy(struct fw_iso_context *ctx)
 
 	card->driver->free_iso_context(ctx);
 }
+EXPORT_SYMBOL(fw_iso_context_destroy);
 
 int fw_iso_context_start(struct fw_iso_context *ctx,
 			 int cycle, int sync, int tags)
 {
 	return ctx->card->driver->start_iso(ctx, cycle, sync, tags);
 }
+EXPORT_SYMBOL(fw_iso_context_start);
 
 int fw_iso_context_queue(struct fw_iso_context *ctx,
 			 struct fw_iso_packet *packet,
@@ -157,11 +164,13 @@ int fw_iso_context_queue(struct fw_iso_context *ctx,
 
 	return card->driver->queue_iso(ctx, packet, buffer, payload);
 }
+EXPORT_SYMBOL(fw_iso_context_queue);
 
 int fw_iso_context_stop(struct fw_iso_context *ctx)
 {
 	return ctx->card->driver->stop_iso(ctx);
 }
+EXPORT_SYMBOL(fw_iso_context_stop);
 
 /*
  * Isochronous bus resource management (channels, bandwidth), client side
