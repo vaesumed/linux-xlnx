@@ -506,9 +506,17 @@ void bdi_writeback_all(struct super_block *sb, struct writeback_control *wbc)
 	struct bdi_work *work;
 	LIST_HEAD(list);
 
-restart:
-	spin_lock(&bdi_lock);
+	/*
+	 * If this isn't a data integrity writeback, just drop it if
+	 * someone is already holding the bdi_lock
+	 */
+	if (!spin_trylock(&bdi_lock)) {
+		if (!must_wait)
+			return;
+		spin_lock(&bdi_lock);
+	}
 
+restart:
 	list_for_each_entry(bdi, &bdi_list, bdi_list) {
 		struct bdi_work *work;
 
@@ -535,6 +543,7 @@ restart:
 			__wbc = *wbc;
 			__wbc.bdi = bdi;
 			generic_sync_bdi_inodes(sb, &__wbc);
+			spin_lock(&bdi_lock);
 			goto restart;
 		}
 		if (must_wait)
