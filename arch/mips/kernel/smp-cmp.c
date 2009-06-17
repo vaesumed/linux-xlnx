@@ -53,7 +53,10 @@ static int __init allowcpus(char *str)
 	cpus_clear(cpu_allow_map);
 	if (cpulist_parse(str, &cpu_allow_map) == 0) {
 		cpu_set(0, cpu_allow_map);
-		cpus_and(cpu_possible_map, cpu_possible_map, cpu_allow_map);
+		unsigned int i;
+		for (i = 1; i < nr_cpu_ids; i++)
+			if (!cpumask_test_cpu(i, cpu_allow_map))
+				set_cpu_possible(i, false);
 		len = cpulist_scnprintf(buf, sizeof(buf)-1, &cpu_possible_map);
 		buf[len] = '\0';
 		pr_debug("Allowable CPUs: %s\n", buf);
@@ -135,11 +138,11 @@ void cmp_send_ipi_single(int cpu, unsigned int action)
 	local_irq_restore(flags);
 }
 
-static void cmp_send_ipi_mask(cpumask_t mask, unsigned int action)
+static void cmp_send_ipi_mask(const struct cpumask *mask, unsigned int action)
 {
 	unsigned int i;
 
-	for_each_cpu_mask(i, mask)
+	for_each_cpu(i, mask)
 		cmp_send_ipi_single(i, action);
 }
 
