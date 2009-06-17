@@ -284,10 +284,10 @@ void bdi_start_writeback(struct backing_dev_info *bdi, struct super_block *sb,
  * older_than_this takes precedence over nr_to_write.  So we'll only write back
  * all dirty pages if they are all attached to "old" mappings.
  */
-static void wb_kupdated(struct bdi_writeback *wb)
+static long wb_kupdated(struct bdi_writeback *wb)
 {
 	unsigned long oldest_jif;
-	long nr_to_write;
+	long nr_to_write, wrote = 0;
 	struct writeback_control wbc = {
 		.bdi			= wb->bdi,
 		.sync_mode		= WB_SYNC_NONE,
@@ -308,10 +308,13 @@ static void wb_kupdated(struct bdi_writeback *wb)
 		wbc.encountered_congestion = 0;
 		wbc.nr_to_write = MAX_WRITEBACK_PAGES;
 		generic_sync_wb_inodes(wb, NULL, &wbc);
+		wrote += MAX_WRITEBACK_PAGES - wbc.nr_to_write;
 		if (wbc.nr_to_write > 0)
 			break;	/* All the old data is written */
 		nr_to_write -= MAX_WRITEBACK_PAGES;
 	}
+
+	return wrote;
 }
 
 static inline bool over_bground_thresh(void)
@@ -324,7 +327,7 @@ static inline bool over_bground_thresh(void)
 		global_page_state(NR_UNSTABLE_NFS) >= background_thresh);
 }
 
-static void __wb_writeback(struct bdi_writeback *wb, long nr_pages,
+static long __wb_writeback(struct bdi_writeback *wb, long nr_pages,
 			   struct super_block *sb,
 			   enum writeback_sync_modes sync_mode)
 {
@@ -334,6 +337,7 @@ static void __wb_writeback(struct bdi_writeback *wb, long nr_pages,
 		.older_than_this	= NULL,
 		.range_cyclic		= 1,
 	};
+	long wrote = 0;
 
 	for (;;) {
 		if (sync_mode == WB_SYNC_NONE && nr_pages <= 0 &&
@@ -346,6 +350,7 @@ static void __wb_writeback(struct bdi_writeback *wb, long nr_pages,
 		wbc.pages_skipped = 0;
 		generic_sync_wb_inodes(wb, sb, &wbc);
 		nr_pages -= MAX_WRITEBACK_PAGES - wbc.nr_to_write;
+		wrote += MAX_WRITEBACK_PAGES - wbc.nr_to_write;
 		/*
 		 * If we ran out of stuff to write, bail unless more_io got set
 		 */
@@ -355,6 +360,8 @@ static void __wb_writeback(struct bdi_writeback *wb, long nr_pages,
 			break;
 		}
 	}
+
+	return wrote;
 }
 
 /*
@@ -383,10 +390,11 @@ static struct bdi_work *get_next_work_item(struct backing_dev_info *bdi,
 /*
  * Retrieve work items and do the writeback they describe
  */
-static void wb_writeback(struct bdi_writeback *wb, int force_wait)
+static long wb_writeback(struct bdi_writeback *wb, int force_wait)
 {
 	struct backing_dev_info *bdi = wb->bdi;
 	struct bdi_work *work;
+	long wrote = 0;
 
 	while ((work = get_next_work_item(bdi, wb)) != NULL) {
 		struct super_block *sb = bdi_work_sb(work);
@@ -408,7 +416,7 @@ static void wb_writeback(struct bdi_writeback *wb, int force_wait)
 		if (sync_mode == WB_SYNC_NONE)
 			wb_clear_pending(wb, work);
 
-		__wb_writeback(wb, nr_pages, sb, sync_mode);
+		wrote += __wb_writeback(wb, nr_pages, sb, sync_mode);
 
 		/*
 		 * This is a data integrity writeback, so only do the
@@ -417,14 +425,18 @@ static void wb_writeback(struct bdi_writeback *wb, int force_wait)
 		if (sync_mode == WB_SYNC_ALL)
 			wb_clear_pending(wb, work);
 	}
+
+	return wrote;
 }
 
 /*
  * This will be inlined in bdi_writeback_task() once we get rid of any
  * dirty inodes on the default_backing_dev_info
  */
-void wb_do_writeback(struct bdi_writeback *wb, int force_wait)
+long wb_do_writeback(struct bdi_writeback *wb, int force_wait)
 {
+	long wrote;
+
 	/*
 	 * We get here in two cases:
 	 *
@@ -436,9 +448,11 @@ void wb_do_writeback(struct bdi_writeback *wb, int force_wait)
 	 *  items on the work_list. Process those.
 	 */
 	if (list_empty(&wb->bdi->work_list))
-		wb_kupdated(wb);
+		wrote = wb_kupdated(wb);
 	else
-		wb_writeback(wb, force_wait);
+		wrote = wb_writeback(wb, force_wait);
+
+	return wrote;
 }
 
 /*
@@ -447,10 +461,28 @@ void wb_do_writeback(struct bdi_writeback *wb, int force_wait)
  */
 int bdi_writeback_task(struct bdi_writeback *wb)
 {
-	while (!kthread_should_stop()) {
-		unsigned long wait_jiffies;
+	unsigned long last_active = jiffies;
+	unsigned long wait_jiffies = -1UL;
+	long pages_written;
 
-		wb_do_writeback(wb, 0);
+	while (!kthread_should_stop()) {
+		pages_written = wb_do_writeback(wb, 0);
+
+		if (pages_written)
+			last_active = jiffies;
+		else if (wait_jiffies != -1UL) {
+			unsigned long max_idle;
+
+			/*
+			 * Longest period of inactivity that we tolerate. If we
+			 * see dirty data again later, the task will get
+			 * recreated automatically.
+			 */
+			max_idle = max(5UL * 60 * HZ, wait_jiffies);
+			if (time_after(jiffies, max_idle + last_active) &&
+			    wb_is_default_task(wb))
+				break;
+		}
 
 		wait_jiffies = msecs_to_jiffies(dirty_writeback_interval * 10);
 		set_current_state(TASK_INTERRUPTIBLE);
