@@ -305,6 +305,12 @@ struct kmem_list3 {
 };
 
 /*
+ * The slab allocator is initialized with interrupts disabled. Therefore, make
+ * sure early boot allocations don't accidentally enable interrupts.
+ */
+static gfp_t slab_gfp_mask __read_mostly = SLAB_GFP_BOOT_MASK;
+
+/*
  * Need this for bootstrapping a per node allocator.
  */
 #define NUM_INIT_LISTS (3 * MAX_NUMNODES)
@@ -673,6 +679,7 @@ static enum {
 	NONE,
 	PARTIAL_AC,
 	PARTIAL_L3,
+	EARLY,
 	FULL
 } g_cpucache_up;
 
@@ -681,7 +688,7 @@ static enum {
  */
 int slab_is_available(void)
 {
-	return g_cpucache_up == FULL;
+	return g_cpucache_up >= EARLY;
 }
 
 static DEFINE_PER_CPU(struct delayed_work, reap_work);
@@ -811,7 +818,6 @@ static void __slab_error(const char *function, struct kmem_cache *cachep,
   */
 
 static int use_alien_caches __read_mostly = 1;
-static int numa_platform __read_mostly = 1;
 static int __init noaliencache_setup(char *s)
 {
 	use_alien_caches = 0;
@@ -1370,10 +1376,8 @@ void __init kmem_cache_init(void)
 	int order;
 	int node;
 
-	if (num_possible_nodes() == 1) {
+	if (num_possible_nodes() == 1)
 		use_alien_caches = 0;
-		numa_platform = 0;
-	}
 
 	for (i = 0; i < NUM_INIT_LISTS; i++) {
 		kmem_list3_init(&initkmem_list3[i]);
@@ -1545,19 +1549,27 @@ void __init kmem_cache_init(void)
 		}
 	}
 
-	/* 6) resize the head arrays to their final sizes */
-	{
-		struct kmem_cache *cachep;
-		mutex_lock(&cache_chain_mutex);
-		list_for_each_entry(cachep, &cache_chain, next)
-			if (enable_cpucache(cachep, GFP_NOWAIT))
-				BUG();
-		mutex_unlock(&cache_chain_mutex);
-	}
+	g_cpucache_up = EARLY;
 
 	/* Annotate slab for lockdep -- annotate the malloc caches */
 	init_lock_keys();
+}
 
+void __init kmem_cache_init_late(void)
+{
+	struct kmem_cache *cachep;
+
+	/*
+	 * Interrupts are enabled now so all GFP allocations are safe.
+	 */
+	slab_gfp_mask = __GFP_BITS_MASK;
+
+	/* 6) resize the head arrays to their final sizes */
+	mutex_lock(&cache_chain_mutex);
+	list_for_each_entry(cachep, &cache_chain, next)
+		if (enable_cpucache(cachep, GFP_NOWAIT))
+			BUG();
+	mutex_unlock(&cache_chain_mutex);
 
 	/* Done! */
 	g_cpucache_up = FULL;
@@ -1612,7 +1624,7 @@ static void *kmem_getpages(struct kmem_cache *cachep, gfp_t flags, int nodeid)
 	if (cachep->flags & SLAB_RECLAIM_ACCOUNT)
 		flags |= __GFP_RECLAIMABLE;
 
-	page = alloc_pages_node(nodeid, flags & ~__GFP_NOTRACK, cachep->gfporder);
+	page = alloc_pages_exact_node(nodeid, flags | __GFP_NOTRACK, cachep->gfporder);
 	if (!page)
 		return NULL;
 
@@ -2034,7 +2046,7 @@ static int __init_refok setup_cpu_cache(struct kmem_cache *cachep, gfp_t gfp)
 			for_each_online_node(node) {
 				cachep->nodelists[node] =
 				    kmalloc_node(sizeof(struct kmem_list3),
-						GFP_KERNEL, node);
+						gfp, node);
 				BUG_ON(!cachep->nodelists[node]);
 				kmem_list3_init(cachep->nodelists[node]);
 			}
@@ -3178,7 +3190,7 @@ retry:
 		if (local_flags & __GFP_WAIT)
 			local_irq_enable();
 		kmem_flagcheck(cache, flags);
-		obj = kmem_getpages(cache, local_flags, -1);
+		obj = kmem_getpages(cache, local_flags, numa_node_id());
 		if (local_flags & __GFP_WAIT)
 			local_irq_disable();
 		if (obj) {
@@ -3286,6 +3298,8 @@ __cache_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid,
 	unsigned long save_flags;
 	void *ptr;
 
+	flags &= slab_gfp_mask;
+
 	lockdep_trace_alloc(flags);
 
 	if (slab_should_failslab(cachep, flags))
@@ -3368,6 +3382,8 @@ __cache_alloc(struct kmem_cache *cachep, gfp_t flags, void *caller)
 {
 	unsigned long save_flags;
 	void *objp;
+
+	flags &= slab_gfp_mask;
 
 	lockdep_trace_alloc(flags);
 
@@ -3511,7 +3527,7 @@ static inline void __cache_free(struct kmem_cache *cachep, void *objp)
 	 * variable to skip the call, which is mostly likely to be present in
 	 * the cache.
 	 */
-	if (numa_platform && cache_free_alien(cachep, objp))
+	if (nr_online_nodes > 1 && cache_free_alien(cachep, objp))
 		return;
 
 	if (likely(ac->avail < ac->limit)) {

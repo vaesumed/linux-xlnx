@@ -79,20 +79,14 @@ static __init void *alloc_low_page(void)
 static pmd_t * __init one_md_table_init(pgd_t *pgd)
 {
 	pud_t *pud;
-	pmd_t *pmd_table = NULL;
+	pmd_t *pmd_table;
 
 #ifdef CONFIG_X86_PAE
 	if (!(pgd_val(*pgd) & _PAGE_PRESENT)) {
-		switch (bootmem_state) {
-		case DURING_BOOTMEM:
+		if (after_bootmem)
 			pmd_table = (pmd_t *)alloc_bootmem_low_pages(PAGE_SIZE);
-			break;
-		case BEFORE_BOOTMEM:
+		else
 			pmd_table = (pmd_t *)alloc_low_page();
-			break;
-		default:
-			panic("after bootmem call one_md_table_init\n");
-		}
 		paravirt_alloc_pmd(&init_mm, __pa(pmd_table) >> PAGE_SHIFT);
 		set_pgd(pgd, __pgd(__pa(pmd_table) | _PAGE_PRESENT));
 		pud = pud_offset(pgd, 0);
@@ -116,21 +110,15 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 	if (!(pmd_val(*pmd) & _PAGE_PRESENT)) {
 		pte_t *page_table = NULL;
 
-		switch (bootmem_state) {
-		case DURING_BOOTMEM:
+		if (after_bootmem) {
 #if defined(CONFIG_DEBUG_PAGEALLOC) || defined(CONFIG_KMEMCHECK)
 			page_table = (pte_t *) alloc_bootmem_pages(PAGE_SIZE);
 #endif
 			if (!page_table)
 				page_table =
 				(pte_t *)alloc_bootmem_low_pages(PAGE_SIZE);
-			break;
-		case BEFORE_BOOTMEM:
+		} else
 			page_table = (pte_t *)alloc_low_page();
-			break;
-		default:
-			panic("after bootmem call one_page_table_init\n");
-		}
 
 		paravirt_alloc_pte(&init_mm, __pa(page_table) >> PAGE_SHIFT);
 		set_pmd(pmd, __pmd(__pa(page_table) | _PAGE_TABLE));
@@ -178,7 +166,7 @@ static pte_t *__init page_table_kmap_check(pte_t *pte, pmd_t *pmd,
 		pte_t *newpte;
 		int i;
 
-		BUG_ON(bootmem_state != BEFORE_BOOTMEM);
+		BUG_ON(after_bootmem);
 		newpte = alloc_low_page();
 		for (i = 0; i < PTRS_PER_PTE; i++)
 			set_pte(newpte + i, pte[i]);
@@ -576,7 +564,7 @@ static inline void save_pg_dir(void)
 }
 #endif /* !CONFIG_ACPI_SLEEP */
 
-void zap_low_mappings(void)
+void zap_low_mappings(bool early)
 {
 	int i;
 
@@ -593,7 +581,11 @@ void zap_low_mappings(void)
 		set_pgd(swapper_pg_dir+i, __pgd(0));
 #endif
 	}
-	flush_tlb_all();
+
+	if (early)
+		__flush_tlb();
+	else
+		flush_tlb_all();
 }
 
 pteval_t __supported_pte_mask __read_mostly = ~(_PAGE_NX | _PAGE_GLOBAL | _PAGE_IOMAP);
@@ -812,6 +804,8 @@ void __init setup_bootmem_allocator(void)
 		bootmap = setup_node_bootmem(nodeid, start_pfn, end_pfn,
 						 bootmap);
 	}
+
+	after_bootmem = 1;
 }
 
 /*
@@ -877,8 +871,6 @@ void __init mem_init(void)
 #endif
 	/* this will put all low memory onto the freelists */
 	totalram_pages += free_all_bootmem();
-
-	bootmem_state = AFTER_BOOTMEM;
 
 	reservedpages = 0;
 	for (tmp = 0; tmp < max_low_pfn; tmp++)
@@ -968,7 +960,7 @@ void __init mem_init(void)
 		test_wp_bit();
 
 	save_pg_dir();
-	zap_low_mappings();
+	zap_low_mappings(true);
 }
 
 #ifdef CONFIG_MEMORY_HOTPLUG

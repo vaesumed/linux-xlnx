@@ -18,6 +18,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/kmemtrace.h>
+#include <linux/kmemcheck.h>
 #include <linux/cpu.h>
 #include <linux/cpuset.h>
 #include <linux/kmemleak.h>
@@ -27,7 +28,6 @@
 #include <linux/kallsyms.h>
 #include <linux/memory.h>
 #include <linux/math64.h>
-#include <linux/kmemcheck.h>
 #include <linux/fault-inject.h>
 
 /*
@@ -178,6 +178,12 @@ static enum {
 	UP,		/* Everything works but does not show up in sysfs */
 	SYSFS		/* Sysfs up */
 } slab_state = DOWN;
+
+/*
+ * The slab allocator is initialized with interrupts disabled. Therefore, make
+ * sure early boot allocations don't accidentally enable interrupts.
+ */
+static gfp_t slab_gfp_mask __read_mostly = SLAB_GFP_BOOT_MASK;
 
 /* A list of all slab caches on the system */
 static DECLARE_RWSEM(slub_lock);
@@ -1617,6 +1623,8 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	struct kmem_cache_cpu *c;
 	unsigned long flags;
 	unsigned int objsize;
+
+	gfpflags &= slab_gfp_mask;
 
 	lockdep_trace_alloc(gfpflags);
 	might_sleep_if(gfpflags & __GFP_WAIT);
@@ -3132,6 +3140,14 @@ void __init kmem_cache_init(void)
 		nr_cpu_ids, nr_node_ids);
 }
 
+void __init kmem_cache_init_late(void)
+{
+	/*
+	 * Interrupts are enabled now so all GFP allocations are safe.
+	 */
+	slab_gfp_mask = __GFP_BITS_MASK;
+}
+
 /*
  * Find a mergeable slab cache
  */
@@ -3749,7 +3765,7 @@ static int list_locations(struct kmem_cache *s, char *buf,
 						 to_cpumask(l->cpus));
 		}
 
-		if (num_online_nodes() > 1 && !nodes_empty(l->nodes) &&
+		if (nr_online_nodes > 1 && !nodes_empty(l->nodes) &&
 				len < PAGE_SIZE - 60) {
 			len += sprintf(buf + len, " nodes=");
 			len += nodelist_scnprintf(buf + len, PAGE_SIZE - len - 50,

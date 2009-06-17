@@ -19,7 +19,7 @@ unsigned long __initdata e820_table_start;
 unsigned long __meminitdata e820_table_end;
 unsigned long __meminitdata e820_table_top;
 
-enum bootmem_state bootmem_state = BEFORE_BOOTMEM;
+int after_bootmem;
 
 int direct_gbpages
 #ifdef CONFIG_DIRECT_GBPAGES
@@ -210,7 +210,7 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 
 	printk(KERN_INFO "init_memory_mapping: %016lx-%016lx\n", start, end);
 
-	if (bootmem_state == BEFORE_BOOTMEM)
+	if (!after_bootmem)
 		init_gbpages();
 
 #if defined(CONFIG_DEBUG_PAGEALLOC) || defined(CONFIG_KMEMCHECK)
@@ -346,7 +346,7 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 	 * memory mapped. Unfortunately this is done currently before the
 	 * nodes are discovered.
 	 */
-	if (bootmem_state == BEFORE_BOOTMEM)
+	if (!after_bootmem)
 		find_early_table_space(end, use_pse, use_gbpages);
 
 #ifdef CONFIG_X86_32
@@ -367,7 +367,7 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 #endif
 
 #ifdef CONFIG_X86_64
-	if (bootmem_state == BEFORE_BOOTMEM && !start) {
+	if (!after_bootmem && !start) {
 		pud_t *pud;
 		pmd_t *pmd;
 
@@ -387,12 +387,11 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 #endif
 	__flush_tlb_all();
 
-	if (bootmem_state == BEFORE_BOOTMEM &&
-	    e820_table_end > e820_table_start)
+	if (!after_bootmem && e820_table_end > e820_table_start)
 		reserve_early(e820_table_start << PAGE_SHIFT,
 				 e820_table_end << PAGE_SHIFT, "PGTABLE");
 
-	if (bootmem_state == BEFORE_BOOTMEM)
+	if (!after_bootmem)
 		early_memtest(start, end);
 
 	return ret >> PAGE_SHIFT;

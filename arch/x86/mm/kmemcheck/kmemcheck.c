@@ -47,7 +47,7 @@
 
 int kmemcheck_enabled = KMEMCHECK_ENABLED;
 
-void __init kmemcheck_init(void)
+int __init kmemcheck_init(void)
 {
 #ifdef CONFIG_SMP
 	/*
@@ -64,11 +64,14 @@ void __init kmemcheck_init(void)
 	if (!kmemcheck_selftest()) {
 		printk(KERN_INFO "kmemcheck: self-tests failed; disabling\n");
 		kmemcheck_enabled = 0;
-		return;
+		return -EINVAL;
 	}
 
 	printk(KERN_INFO "kmemcheck: Initialized\n");
+	return 0;
 }
+
+early_initcall(kmemcheck_init);
 
 /*
  * We need to parse the kmemcheck= option before any memory is allocated.

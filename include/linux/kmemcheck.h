@@ -7,8 +7,6 @@
 #ifdef CONFIG_KMEMCHECK
 extern int kmemcheck_enabled;
 
-void kmemcheck_init(void);
-
 /* The slab-related functions. */
 void kmemcheck_alloc_shadow(struct page *page, int order, gfp_t flags, int node);
 void kmemcheck_free_shadow(struct page *page, int order);
@@ -38,10 +36,6 @@ int kmemcheck_hide_addr(unsigned long address);
 
 #else
 #define kmemcheck_enabled 0
-
-static inline void kmemcheck_init(void)
-{
-}
 
 static inline void
 kmemcheck_alloc_shadow(struct page *page, int order, gfp_t flags, int node)
@@ -108,6 +102,8 @@ static inline void kmemcheck_mark_initialized_pages(struct page *p,
 #endif /* CONFIG_KMEMCHECK */
 
 /*
+ * Bitfield annotations
+ *
  * How to use: If you have a struct using bitfields, for example
  *
  *     struct a {

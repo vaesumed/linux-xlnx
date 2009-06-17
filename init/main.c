@@ -63,9 +63,9 @@
 #include <linux/sched.h>
 #include <linux/signal.h>
 #include <linux/idr.h>
-#include <linux/kmemcheck.h>
 #include <linux/ftrace.h>
 #include <linux/async.h>
+#include <linux/kmemcheck.h>
 #include <linux/kmemtrace.h>
 #include <trace/boot.h>
 
@@ -540,8 +540,14 @@ void __init __weak thread_info_cache_init(void)
  */
 static void __init mm_init(void)
 {
+	/*
+	 * page_cgroup requires countinous pages as memmap
+	 * and it's bigger than MAX_ORDER unless SPARSEMEM.
+	 */
+	page_cgroup_init_flatmem();
 	mem_init();
 	kmem_cache_init();
+	pgtable_cache_init();
 	vmalloc_init();
 }
 
@@ -636,6 +642,7 @@ asmlinkage void __init start_kernel(void)
 				 "enabled early\n");
 	early_boot_irqs_on();
 	local_irq_enable();
+	kmem_cache_init_late();
 
 	/*
 	 * HACK ALERT! This is early. We're enabling the console before
@@ -665,7 +672,6 @@ asmlinkage void __init start_kernel(void)
 		initrd_start = 0;
 	}
 #endif
-	cpuset_init_early();
 	page_cgroup_init();
 	enable_debug_pagealloc();
 	cpu_hotplug_init();
@@ -679,7 +685,6 @@ asmlinkage void __init start_kernel(void)
 		late_time_init();
 	calibrate_delay();
 	pidmap_init();
-	pgtable_cache_init();
 	anon_vma_init();
 #ifdef CONFIG_X86
 	if (efi_enabled)
@@ -802,9 +807,6 @@ static void __init do_pre_smp_initcalls(void)
 {
 	initcall_t *call;
 
-	/* kmemcheck must initialize before all early initcalls: */
-	kmemcheck_init();
-
 	for (call = __initcall_start; call < __early_initcall_end; call++)
 		do_one_initcall(*call);
 }
@@ -865,6 +867,11 @@ static noinline int init_post(void)
 static int __init kernel_init(void * unused)
 {
 	lock_kernel();
+
+	/*
+	 * init can allocate pages on any node
+	 */
+	set_mems_allowed(node_possible_map);
 	/*
 	 * init can run on any cpu.
 	 */
