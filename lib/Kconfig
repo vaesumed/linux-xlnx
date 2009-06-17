@@ -192,6 +192,6 @@ config NLATTR
 	bool
 
 config LRU_CACHE
-	bool
+	tristate
 
 endmenu
