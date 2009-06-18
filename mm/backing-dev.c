@@ -215,10 +215,45 @@ static int __init default_bdi_init(void)
 }
 subsys_initcall(default_bdi_init);
 
+static void bdi_wb_init(struct bdi_writeback *wb, struct backing_dev_info *bdi)
+{
+	memset(wb, 0, sizeof(*wb));
+
+	wb->bdi = bdi;
+	INIT_LIST_HEAD(&wb->b_dirty);
+	INIT_LIST_HEAD(&wb->b_io);
+	INIT_LIST_HEAD(&wb->b_more_io);
+}
+
+static int wb_assign_nr(struct backing_dev_info *bdi, struct bdi_writeback *wb)
+{
+	set_bit(0, &bdi->wb_mask);
+	wb->nr = 0;
+	return 0;
+}
+
+static void bdi_put_wb(struct backing_dev_info *bdi, struct bdi_writeback *wb)
+{
+	clear_bit(wb->nr, &bdi->wb_mask);
+	clear_bit(BDI_wb_alloc, &bdi->state);
+}
+
+static struct bdi_writeback *bdi_new_wb(struct backing_dev_info *bdi)
+{
+	struct bdi_writeback *wb;
+
+	set_bit(BDI_wb_alloc, &bdi->state);
+	wb = &bdi->wb;
+	wb_assign_nr(bdi, wb);
+	return wb;
+}
+
 static int bdi_start_fn(void *ptr)
 {
-	struct backing_dev_info *bdi = ptr;
+	struct bdi_writeback *wb = ptr;
+	struct backing_dev_info *bdi = wb->bdi;
 	struct task_struct *tsk = current;
+	int ret;
 
 	/*
 	 * Add us to the active bdi_list
@@ -242,7 +277,16 @@ static int bdi_start_fn(void *ptr)
 	smp_mb__after_clear_bit();
 	wake_up_bit(&bdi->state, BDI_pending);
 
-	return bdi_writeback_task(bdi);
+	ret = bdi_writeback_task(wb);
+
+	wb->task = NULL;
+	bdi_put_wb(bdi, wb);
+	return ret;
+}
+
+int bdi_has_dirty_io(struct backing_dev_info *bdi)
+{
+	return wb_has_dirty_io(&bdi->wb);
 }
 
 static void bdi_flush_io(struct backing_dev_info *bdi)
@@ -297,17 +341,18 @@ static void sync_supers_timer_fn(unsigned long unused)
 
 static int bdi_forker_task(void *ptr)
 {
-	struct backing_dev_info *me = ptr;
+	struct bdi_writeback *me = ptr;
 
 	for (;;) {
 		struct backing_dev_info *bdi, *tmp;
+		struct bdi_writeback *wb;
 
 		/*
 		 * Temporary measure, we want to make sure we don't see
 		 * dirty data on the default backing_dev_info
 		 */
-		if (bdi_has_dirty_io(me))
-			bdi_flush_io(me);
+		if (wb_has_dirty_io(me))
+			bdi_flush_io(me->bdi);
 
 		spin_lock(&bdi_lock);
 
@@ -316,7 +361,7 @@ static int bdi_forker_task(void *ptr)
 		 * a thread registered. If so, set that up.
 		 */
 		list_for_each_entry_safe(bdi, tmp, &bdi_list, bdi_list) {
-			if (bdi->task || !bdi_has_dirty_io(bdi))
+			if (bdi->wb.task || !bdi_has_dirty_io(bdi))
 				continue;
 
 			bdi_add_default_flusher_task(bdi);
@@ -345,17 +390,22 @@ static int bdi_forker_task(void *ptr)
 		list_del_init(&bdi->bdi_list);
 		spin_unlock(&bdi_lock);
 
-		BUG_ON(bdi->task);
+		wb = bdi_new_wb(bdi);
+		if (!wb)
+			goto readd_flush;
 
-		bdi->task = kthread_run(bdi_start_fn, bdi, "flush-%s",
+		wb->task = kthread_run(bdi_start_fn, wb, "flush-%s",
 					dev_name(bdi->dev));
+
 		/*
 		 * If task creation fails, then readd the bdi to
 		 * the pending list and force writeout of the bdi
 		 * from this forker thread. That will free some memory
 		 * and we can try again.
 		 */
-		if (!bdi->task) {
+		if (!wb->task) {
+			bdi_put_wb(bdi, wb);
+readd_flush:
 			/*
 			 * Add this 'bdi' to the back, so we get
 			 * a chance to flush other bdi's to free
@@ -378,6 +428,9 @@ static int bdi_forker_task(void *ptr)
  */
 static void bdi_add_default_flusher_task(struct backing_dev_info *bdi)
 {
+	if (!bdi_cap_writeback_dirty(bdi))
+		return;
+
 	/*
 	 * Someone already marked this pending for task creation
 	 */
@@ -388,7 +441,7 @@ static void bdi_add_default_flusher_task(struct backing_dev_info *bdi)
 	list_move_tail(&bdi->bdi_list, &bdi_pending_list);
 	spin_unlock(&bdi_lock);
 
-	wake_up_process(default_backing_dev_info.task);
+	wake_up_process(default_backing_dev_info.wb.task);
 }
 
 int bdi_register(struct backing_dev_info *bdi, struct device *parent,
@@ -421,13 +474,23 @@ int bdi_register(struct backing_dev_info *bdi, struct device *parent,
 	 * on-demand when they need it.
 	 */
 	if (bdi_cap_flush_forker(bdi)) {
-		bdi->task = kthread_run(bdi_forker_task, bdi, "bdi-%s",
+		struct bdi_writeback *wb;
+
+		wb = bdi_new_wb(bdi);
+		if (!wb) {
+			ret = -ENOMEM;
+			goto remove_err;
+		}
+
+		wb->task = kthread_run(bdi_forker_task, wb, "bdi-%s",
 						dev_name(dev));
-		if (!bdi->task) {
+		if (!wb->task) {
+			bdi_put_wb(bdi, wb);
+			ret = -ENOMEM;
+remove_err:
 			spin_lock(&bdi_lock);
 			list_del(&bdi->bdi_list);
 			spin_unlock(&bdi_lock);
-			ret = -ENOMEM;
 			goto exit;
 		}
 	}
@@ -451,10 +514,13 @@ static int sched_wait(void *word)
 }
 
 /*
- * Remove bdi from the global list
+ * Remove bdi from the global list and shutdown any threads we have running
  */
 static void bdi_wb_shutdown(struct backing_dev_info *bdi)
 {
+	if (!bdi_cap_writeback_dirty(bdi))
+		return;
+
 	/*
 	 * If setup is pending, wait for that to complete first
 	 */
@@ -466,18 +532,18 @@ static void bdi_wb_shutdown(struct backing_dev_info *bdi)
 	spin_lock(&bdi_lock);
 	list_del(&bdi->bdi_list);
 	spin_unlock(&bdi_lock);
+
+	/*
+	 * Finally, kill the kernel thread
+	 */
+	kthread_stop(bdi->wb.task);
 }
 
 void bdi_unregister(struct backing_dev_info *bdi)
 {
 	if (bdi->dev) {
-		if (!bdi_cap_flush_forker(bdi)) {
+		if (!bdi_cap_flush_forker(bdi))
 			bdi_wb_shutdown(bdi);
-			if (bdi->task) {
-				kthread_stop(bdi->task);
-				bdi->task = NULL;
-			}
-		}
 		bdi_debug_unregister(bdi);
 		device_unregister(bdi->dev);
 		bdi->dev = NULL;
@@ -495,9 +561,9 @@ int bdi_init(struct backing_dev_info *bdi)
 	bdi->max_ratio = 100;
 	bdi->max_prop_frac = PROP_FRAC_BASE;
 	INIT_LIST_HEAD(&bdi->bdi_list);
-	INIT_LIST_HEAD(&bdi->b_io);
-	INIT_LIST_HEAD(&bdi->b_dirty);
-	INIT_LIST_HEAD(&bdi->b_more_io);
+	bdi->wb_mask = bdi->wb_active = 0;
+
+	bdi_wb_init(&bdi->wb, bdi);
 
 	for (i = 0; i < NR_BDI_STAT_ITEMS; i++) {
 		err = percpu_counter_init(&bdi->bdi_stat[i], 0);
@@ -522,9 +588,7 @@ void bdi_destroy(struct backing_dev_info *bdi)
 {
 	int i;
 
-	WARN_ON(!list_empty(&bdi->b_dirty));
-	WARN_ON(!list_empty(&bdi->b_io));
-	WARN_ON(!list_empty(&bdi->b_more_io));
+	WARN_ON(bdi_has_dirty_io(bdi));
 
 	bdi_unregister(bdi);
 
