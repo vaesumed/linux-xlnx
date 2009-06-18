@@ -131,9 +131,6 @@ static inline __attribute_const__ u32 msi_enabled_mask(u16 control)
  * mask all MSI interrupts by clearing the MSI enable bit does not work
  * reliably as devices without an INTx disable bit will then generate a
  * level IRQ which will never be cleared.
- *
- * Returns 1 if it succeeded in masking the interrupt and 0 if the device
- * doesn't support MSI masking.
  */
 static void msi_mask_irq(struct msi_desc *desc, u32 mask, u32 flag)
 {
@@ -381,7 +378,7 @@ static int msi_capability_init(struct pci_dev *dev, int nvec)
 	entry->msi_attrib.default_irq = dev->irq;	/* Save IOAPIC IRQ */
 	entry->msi_attrib.pos = pos;
 
-	entry->mask_pos = msi_mask_bits_reg(pos, entry->msi_attrib.is_64);
+	entry->mask_pos = msi_mask_reg(pos, entry->msi_attrib.is_64);
 	/* All MSIs are unmasked by default, Mask them all */
 	if (entry->msi_attrib.maskbit)
 		pci_read_config_dword(dev, entry->mask_pos, &entry->masked);
@@ -691,8 +688,8 @@ int pci_msix_table_size(struct pci_dev *dev)
  * indicates the successful configuration of MSI-X capability structure
  * with new allocated MSI-X irqs. A return of < 0 indicates a failure.
  * Or a return of > 0 indicates that driver request is exceeding the number
- * of irqs available. Driver should use the returned value to re-send
- * its request.
+ * of irqs or MSI-X vectors available. Driver should use the returned value to
+ * re-send its request.
  **/
 int pci_enable_msix(struct pci_dev* dev, struct msix_entry *entries, int nvec)
 {
@@ -708,7 +705,7 @@ int pci_enable_msix(struct pci_dev* dev, struct msix_entry *entries, int nvec)
 
 	nr_entries = pci_msix_table_size(dev);
 	if (nvec > nr_entries)
-		return -EINVAL;
+		return nr_entries;
 
 	/* Check for any invalid entries */
 	for (i = 0; i < nvec; i++) {
