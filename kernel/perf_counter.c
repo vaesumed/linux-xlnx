@@ -1283,7 +1283,7 @@ static void perf_ctx_adjust_freq(struct perf_counter_context *ctx)
 		if (!interrupts) {
 			perf_disable();
 			counter->pmu->disable(counter);
-			atomic_set(&hwc->period_left, 0);
+			atomic64_set(&hwc->period_left, 0);
 			counter->pmu->enable(counter);
 			perf_enable();
 		}
@@ -1553,7 +1553,7 @@ static int perf_release(struct inode *inode, struct file *file)
 static ssize_t
 perf_read_hw(struct perf_counter *counter, char __user *buf, size_t count)
 {
-	u64 values[3];
+	u64 values[4];
 	int n;
 
 	/*
@@ -1620,22 +1620,6 @@ static void perf_counter_reset(struct perf_counter *counter)
 	perf_counter_update_userpage(counter);
 }
 
-static void perf_counter_for_each_sibling(struct perf_counter *counter,
-					  void (*func)(struct perf_counter *))
-{
-	struct perf_counter_context *ctx = counter->ctx;
-	struct perf_counter *sibling;
-
-	WARN_ON_ONCE(ctx->parent_ctx);
-	mutex_lock(&ctx->mutex);
-	counter = counter->group_leader;
-
-	func(counter);
-	list_for_each_entry(sibling, &counter->sibling_list, list_entry)
-		func(sibling);
-	mutex_unlock(&ctx->mutex);
-}
-
 /*
  * Holding the top-level counter's child_mutex means that any
  * descendant process that has inherited this counter will block
@@ -1658,14 +1642,18 @@ static void perf_counter_for_each_child(struct perf_counter *counter,
 static void perf_counter_for_each(struct perf_counter *counter,
 				  void (*func)(struct perf_counter *))
 {
-	struct perf_counter *child;
+	struct perf_counter_context *ctx = counter->ctx;
+	struct perf_counter *sibling;
 
-	WARN_ON_ONCE(counter->ctx->parent_ctx);
-	mutex_lock(&counter->child_mutex);
-	perf_counter_for_each_sibling(counter, func);
-	list_for_each_entry(child, &counter->child_list, child_list)
-		perf_counter_for_each_sibling(child, func);
-	mutex_unlock(&counter->child_mutex);
+	WARN_ON_ONCE(ctx->parent_ctx);
+	mutex_lock(&ctx->mutex);
+	counter = counter->group_leader;
+
+	perf_counter_for_each_child(counter, func);
+	func(counter);
+	list_for_each_entry(sibling, &counter->sibling_list, list_entry)
+		perf_counter_for_each_child(counter, func);
+	mutex_unlock(&ctx->mutex);
 }
 
 static int perf_counter_period(struct perf_counter *counter, u64 __user *arg)
