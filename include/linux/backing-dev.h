@@ -13,6 +13,7 @@
 #include <linux/proportions.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/writeback.h>
 #include <asm/atomic.h>
 
 struct page;
@@ -24,6 +25,7 @@ struct dentry;
  */
 enum bdi_state {
 	BDI_pdflush,		/* A pdflush thread is working this device */
+	BDI_pending,		/* On its way to being activated */
 	BDI_async_congested,	/* The async (write) queue is getting full */
 	BDI_sync_congested,	/* The sync queue is getting full */
 	BDI_unused,		/* Available bits start here */
@@ -38,6 +40,12 @@ enum bdi_stat_item {
 };
 
 #define BDI_STAT_BATCH (8*(1+ilog2(nr_cpu_ids)))
+
+struct bdi_writeback_arg {
+	unsigned long nr_pages;
+	struct super_block *sb;
+	enum writeback_sync_modes sync_mode;
+};
 
 struct backing_dev_info {
 	struct list_head bdi_list;
@@ -60,6 +68,8 @@ struct backing_dev_info {
 
 	struct device *dev;
 
+	struct task_struct	*task;		/* writeback task */
+	struct bdi_writeback_arg wb_arg;	/* protected by BDI_pdflush */
 	struct list_head	b_dirty;	/* dirty inodes */
 	struct list_head	b_io;		/* parked for writeback */
 	struct list_head	b_more_io;	/* parked for more writeback */
@@ -77,9 +87,20 @@ int bdi_register(struct backing_dev_info *bdi, struct device *parent,
 		const char *fmt, ...);
 int bdi_register_dev(struct backing_dev_info *bdi, dev_t dev);
 void bdi_unregister(struct backing_dev_info *bdi);
+void bdi_start_writeback(struct backing_dev_info *bdi, struct super_block *sb,
+			 long nr_pages, enum writeback_sync_modes sync_mode);
+int bdi_writeback_task(struct backing_dev_info *bdi);
+void bdi_writeback_all(struct super_block *sb, struct writeback_control *wbc);
 
-extern struct mutex bdi_lock;
+extern spinlock_t bdi_lock;
 extern struct list_head bdi_list;
+
+static inline int bdi_has_dirty_io(struct backing_dev_info *bdi)
+{
+	return !list_empty(&bdi->b_dirty) ||
+	       !list_empty(&bdi->b_io) ||
+	       !list_empty(&bdi->b_more_io);
+}
 
 static inline void __add_bdi_stat(struct backing_dev_info *bdi,
 		enum bdi_stat_item item, s64 amount)
@@ -263,6 +284,11 @@ static inline bool bdi_cap_account_writeback(struct backing_dev_info *bdi)
 static inline bool bdi_cap_swap_backed(struct backing_dev_info *bdi)
 {
 	return bdi->capabilities & BDI_CAP_SWAP_BACKED;
+}
+
+static inline bool bdi_cap_flush_forker(struct backing_dev_info *bdi)
+{
+	return bdi == &default_backing_dev_info;
 }
 
 static inline bool mapping_cap_writeback_dirty(struct address_space *mapping)
