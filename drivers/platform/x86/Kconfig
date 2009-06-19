@@ -37,7 +37,7 @@ config ACER_WMI
 config ASUS_LAPTOP
 	tristate "Asus Laptop Extras"
 	depends on ACPI
-	depends on EXPERIMENTAL && !ACPI_ASUS
+	depends on !ACPI_ASUS
 	select LEDS_CLASS
 	select NEW_LEDS
 	select BACKLIGHT_CLASS_DEVICE
@@ -340,6 +340,8 @@ config EEEPC_LAPTOP
 	depends on RFKILL || RFKILL = n
 	select BACKLIGHT_CLASS_DEVICE
 	select HWMON
+	select HOTPLUG
+	select HOTPLUG_PCI if PCI
 	---help---
 	  This driver supports the Fn-Fx keys on Eee PC laptops.
 
