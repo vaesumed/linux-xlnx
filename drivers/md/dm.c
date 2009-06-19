@@ -513,12 +513,13 @@ static void queue_io(struct mapped_device *md, struct bio *bio)
 struct dm_table *dm_get_table(struct mapped_device *md)
 {
 	struct dm_table *t;
+	unsigned long flags;
 
-	read_lock(&md->map_lock);
+	read_lock_irqsave(&md->map_lock, flags);
 	t = md->map;
 	if (t)
 		dm_table_get(t);
-	read_unlock(&md->map_lock);
+	read_unlock_irqrestore(&md->map_lock, flags);
 
 	return t;
 }
@@ -1966,6 +1967,7 @@ static int __bind(struct mapped_device *md, struct dm_table *t,
 {
 	struct request_queue *q = md->queue;
 	sector_t size;
+	unsigned long flags;
 
 	size = dm_table_get_size(t);
 
@@ -1996,10 +1998,10 @@ static int __bind(struct mapped_device *md, struct dm_table *t,
 
 	__bind_mempools(md, t);
 
-	write_lock(&md->map_lock);
+	write_lock_irqsave(&md->map_lock, flags);
 	md->map = t;
 	dm_table_set_restrictions(t, q, limits);
-	write_unlock(&md->map_lock);
+	write_unlock_irqrestore(&md->map_lock, flags);
 
 	return 0;
 }
@@ -2007,14 +2009,15 @@ static int __bind(struct mapped_device *md, struct dm_table *t,
 static void __unbind(struct mapped_device *md)
 {
 	struct dm_table *map = md->map;
+	unsigned long flags;
 
 	if (!map)
 		return;
 
 	dm_table_event_callback(map, NULL, NULL);
-	write_lock(&md->map_lock);
+	write_lock_irqsave(&md->map_lock, flags);
 	md->map = NULL;
-	write_unlock(&md->map_lock);
+	write_unlock_irqrestore(&md->map_lock, flags);
 	dm_table_destroy(map);
 }
 
