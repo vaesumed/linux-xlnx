@@ -4349,6 +4349,9 @@ L:	osd-dev@open-osd.org
 W:	http://open-osd.org
 T:	git git://git.open-osd.org/open-osd.git
 S:	Maintained
+F:	drivers/scsi/osd/
+F:	drivers/include/scsi/osd_*
+F:	fs/exofs/
 
 P54 WIRELESS DRIVER
 P:	Michael Wu
