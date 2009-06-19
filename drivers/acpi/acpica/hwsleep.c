@@ -610,15 +610,8 @@ acpi_status acpi_leave_sleep_state(u8 sleep_state)
 
 	/* Enable power button */
 
-	(void)
-	    acpi_write_bit_register(acpi_gbl_fixed_event_info
-			      [ACPI_EVENT_POWER_BUTTON].
-			      enable_register_id, ACPI_ENABLE_EVENT);
-
-	(void)
-	    acpi_write_bit_register(acpi_gbl_fixed_event_info
-			      [ACPI_EVENT_POWER_BUTTON].
-			      status_register_id, ACPI_CLEAR_STATUS);
+	acpi_enable_event(ACPI_EVENT_POWER_BUTTON, 0);
+	acpi_clear_event(ACPI_EVENT_POWER_BUTTON);
 
 	arg.integer.value = ACPI_SST_WORKING;
 	status = acpi_evaluate_object(NULL, METHOD_NAME__SST, &arg_list, NULL);
